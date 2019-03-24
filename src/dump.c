@@ -441,6 +441,10 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
         for(i=0; i < m->usings.len; i++) {
             jl_serialize_value(s, (jl_value_t*)m->usings.items[i]);
         }
+        write_int32(s->s, m->precompiles.len);
+        for(i=0; i < m->precompiles.len; i++) {
+            jl_serialize_value(s, (jl_value_t*)m->precompiles.items[i]);
+        }
     }
     write_uint8(s->s, m->istopmod);
     write_uint64(s->s, m->uuid.hi);
@@ -1800,6 +1804,14 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s) JL_GC_DIS
     ni += i;
     while (i < ni) {
         m->usings.items[i] = jl_deserialize_value(s, (jl_value_t**)&m->usings.items[i]);
+        i++;
+    }
+    i = m->precompiles.len;
+    ni = read_int32(s->s);
+    arraylist_grow(&m->precompiles, ni);
+    ni += i;
+    while (i < ni) {
+        m->precompiles.items[i] = jl_deserialize_value(s, (jl_value_t**)&m->precompiles.items[i]);
         i++;
     }
     m->istopmod = read_uint8(s->s);

@@ -1959,12 +1959,8 @@ jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types JL_PROPAGATES
     return nf;
 }
 
-JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
+static int _jl_compile_hint(jl_method_instance_t *li, jl_tupletype_t *types, size_t world)
 {
-    size_t world = jl_world_counter;
-    jl_method_instance_t *li = jl_get_specialization1(types, world, 1);
-    if (li == NULL)
-        return 0;
     if (jl_generating_output()) {
         jl_code_info_t *src = NULL;
         // If we are saving ji files (e.g. package pre-compilation or intermediate sysimg build steps),
@@ -2007,6 +2003,29 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
         // we should generate the native code immediately in preparation for use.
         (void)jl_compile_method_internal(&li, world);
     }
+    return 1;
+}
+
+JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
+{
+    size_t world = jl_world_counter;
+    jl_method_instance_t *li = jl_get_specialization1(types, world, 1);
+    if (li == NULL)
+        return 0;
+    _jl_compile_hint(li, types, world);
+    return 1;
+}
+
+JL_DLLEXPORT int jl_compile_hint_module(jl_module_t *m, jl_tupletype_t *types)
+{
+    size_t world = jl_world_counter;
+    jl_method_instance_t *li = jl_get_specialization1(types, world, 1);
+    if (li == NULL)
+        return 0;
+    _jl_compile_hint(li, types, world);
+    size_t i = m->precompiles.len;
+    arraylist_grow(&m->precompiles, 1);
+    m->precompiles.items[i] = li;
     return 1;
 }
 

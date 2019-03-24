@@ -460,7 +460,8 @@ typedef struct _jl_module_t {
     struct _jl_module_t *parent;
     // hidden fields:
     htable_t bindings;
-    arraylist_t usings;  // modules with all bindings potentially imported
+    arraylist_t usings;       // modules with all bindings potentially imported
+    arraylist_t precompiles;  // list of MethodInstances with explicit `precompile` statements
     uint64_t build_id;
     jl_uuid_t uuid;
     size_t primary_world;

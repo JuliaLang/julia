@@ -458,6 +458,7 @@ sizeof(x) = Core.sizeof(x)
     precompile(f, args::Tuple{Vararg{Any}})
 
 Compile the given function `f` for the argument tuple (of types) `args`, but do not execute it.
+Returns `false` if no such specialization could be found.
 """
 function precompile(@nospecialize(f), args::Tuple)
     ccall(:jl_compile_hint, Int32, (Any,), Tuple{Core.Typeof(f), args...}) != 0
@@ -465,6 +466,15 @@ end
 
 function precompile(argt::Type)
     ccall(:jl_compile_hint, Int32, (Any,), argt) != 0
+end
+
+"""
+    precompile(m::Module, f, args::Tuple{Vararg{Any}})
+
+Forcibly insert `f` into the precompiles for the specified module.
+"""
+function precompile(m::Module, @nospecialize(f), args::Tuple)
+    ccall(:jl_compile_hint_module, Int32, (Module, Any,), m, Tuple{Core.Typeof(f), args...}) != 0
 end
 
 """
