@@ -1477,3 +1477,16 @@ test27477() = ccall((:ctest, Pkg27477.libccalltest), Complex{Int}, (Complex{Int}
 end
 
 @test Test27477.test27477() == 2 + 0im
+
+# issue #31073
+let
+    a = ['0']
+    arr = Vector{Char}(undef, 2)
+    ptr = pointer(arr)
+    elsz = sizeof(Char)
+    na = length(a)
+    nba = na * elsz
+    ptr = eval(:(ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt), $(arr), $(a), $(nba))))
+    @test isa(ptr, Ptr{Cvoid})
+    @test arr[1] == '0'
+end
