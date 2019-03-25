@@ -10,11 +10,11 @@ Rational numbers are checked for overflow.
 struct Rational{T<:Integer} <: Real
     num::T
     den::T
-#=
+
     function Rational{T}(num::Integer, den::Integer) where T<:Integer
         num == den == zero(T) && __throw_rational_argerror(T)
         num2, den2 = (sign(den) < 0) ? divgcd(-num, -den) : divgcd(num, den)
-        new(num2, den2)
+        new{T}(num2, den2)
     end
 
     function Rational{T}(num::Integer, den::Integer) where T<:BitSigned
@@ -26,26 +26,10 @@ struct Rational{T<:Integer} <: Real
         if den2 < 0
             num2, den2 = -num2, -den2
         end
-        new(num2, den2)
+        new{T}(num2, den2)
     end
 end
-=#
-    function Rational{T}(num::Integer, den::Integer) where T<:Integer
-        num == den == zero(T) && __throw_rational_argerror(T)
-        if !(T <: BitSigned)
-            num2, den2 = (sign(den) < 0) ? divgcd(-num, -den) : divgcd(num, den)
-        else
-            if (num == typemin(T) && signbit(den) && isodd(den)) || (den == typemin(T) && signbit(num) && isodd(num))
-                __throw_rational_ovferror(num, den)
-            end
-            num2, den2 = divgcd(num, den)
-            if den2 < 0
-                num2, den2 = -num2, -den2
-            end
-        end
-        new(num2, den2)
-    end
-end
+
 @noinline __throw_rational_argerror(T) = throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
 @noinline __throw_rational_ovferror(num::T, den::T) where {T} =
     (num < den) ? throw(OverflowError("typemin($T)//$den")) : throw(OverflowError("$num//typemin($T)"))
@@ -58,7 +42,6 @@ function divgcd(x::Integer,y::Integer)
     g = gcd(x,y)
     div(x,g), div(y,g)
 end
-
 
 """
     //(num, den)
@@ -266,8 +249,8 @@ copysign(x::Rational, y::Rational) = copysign(x.num,y.num) // x.den
 
 abs(x::Rational) = Rational(abs(x.num), x.den)
 function abs(x::Rational{T}) where T<:BitSigned
-    x.num === typemin(T) && throw(OverflowError("rational numerator is typemin(T)"))
-    x.den === typemin(T) && throw(OverflowError("rational denominator is typemin(T)"))
+    x.num === typemin(T) && throw(OverflowError("rational numerator is typemin($T)"))
+    x.den === typemin(T) && throw(OverflowError("rational denominator is typemin($T)"))
     abs(x.num) // x.den
 end
 
@@ -278,8 +261,8 @@ isinteger(x::Rational) = x.den == 1
 
 -(x::Rational) = (-x.num) // x.den
 function -(x::Rational{T}) where T<:BitSigned
-    x.num === typemin(T) && throw(OverflowError("rational numerator is typemin(T)"))
-    x.den === typemin(T) && throw(OverflowError("rational denominator is typemin(T)"))
+    x.num === typemin(T) && throw(OverflowError("rational numerator is typemin($T)"))
+    x.den === typemin(T) && throw(OverflowError("rational denominator is typemin($T)"))
     (-x.num) // x.den
 end
 function -(x::Rational{T}) where T<:Unsigned
