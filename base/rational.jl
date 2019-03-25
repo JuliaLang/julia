@@ -260,7 +260,7 @@ typemax(::Type{Rational{T}}) where {T<:Integer} = one(T)//zero(T)
 
 isinteger(x::Rational) = x.den == 1
 
-function -(x::Rational{T}) where {T<:Integer} = (-x.num) // x.den
+-(x::Rational{T}) where {T<:Integer} = (-x.num) // x.den
 function -(x::Rational{T}) where {T<:BitSigned}
     x.num === Base.typemin(T) && throw(OverflowError("rational numerator is Base.typemin($T)"))
     x.den === Base.typemin(T) && throw(OverflowError("rational denominator is Base.typemin($T)"))
