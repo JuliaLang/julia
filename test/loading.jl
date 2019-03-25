@@ -45,13 +45,16 @@ include_string_test_func = include_string(@__MODULE__, "include_string_test() = 
 
 @test isdir(@__DIR__)
 @test @__DIR__() == dirname(@__FILE__)
+@test !endswith(@__DIR__, Base.Filesystem.path_separator)
 let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`,
-    wd = sprint(show, abspath(pwd(), "")),
-    s_dir = sprint(show, joinpath(realpath(tempdir()), ""))
+    wd = sprint(show, pwd())
+    s_dir = sprint(show, realpath(tempdir()))
     @test wd != s_dir
     @test readchomp(`$exename -E "@__DIR__" -i`) == wd
     @test readchomp(`$exename -E "cd(()->eval(:(@__DIR__)), $s_dir)" -i`) == s_dir
     @test readchomp(`$exename -E "@__DIR__"`) == wd # non-interactive
+    @test !endswith(wd, Base.Filesystem.path_separator)
+    @test !endswith(s_dir, Base.Filesystem.path_separator)
 end
 
 # Issue #5789 and PR #13542:
