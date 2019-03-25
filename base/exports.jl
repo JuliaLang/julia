@@ -124,7 +124,6 @@ export
     InvalidStateException,
     KeyError,
     MissingException,
-    ParseError,
     SystemError,
     StringIndexError,
 
@@ -297,7 +296,6 @@ export
     muladd,
     nextfloat,
     nextpow,
-    nextpow2,
     nextprod,
     numerator,
     one,
@@ -305,12 +303,11 @@ export
     powermod,
     prevfloat,
     prevpow,
-    prevpow2,
     rad2deg,
     rationalize,
     real,
-    realmax,
-    realmin,
+    floatmax,
+    floatmin,
     reim,
     reinterpret,
     rem,
@@ -368,7 +365,10 @@ export
     cumsum!,
     accumulate,
     accumulate!,
+    eachcol,
     eachindex,
+    eachrow,
+    eachslice,
     extrema,
     fill!,
     fill,
@@ -413,17 +413,14 @@ export
     rot180,
     rotl90,
     rotr90,
-    shuffle,
-    shuffle!,
     size,
     selectdim,
     sort!,
     sort,
-    sortcols,
     sortperm,
     sortperm!,
-    sortrows,
-    squeeze,
+    sortslices,
+    dropdims,
     step,
     stride,
     strides,
@@ -610,9 +607,6 @@ export
     summary,
 
 # logging
-    info,
-    logging,
-    warn,
     @debug,
     @info,
     @warn,
@@ -626,19 +620,7 @@ export
     get_zero_subnormals,
     set_zero_subnormals,
 
-# statistics
-    mean!,
-    mean,
-    median!,
-    median,
-    middle,
-    quantile!,
-    quantile,
-
 # iteration
-    done,
-    next,
-    start,
     iterate,
 
     enumerate,  # re-exported from Iterators
@@ -659,6 +641,7 @@ export
 
 # tasks and conditions
     Condition,
+    Event,
     current_task,
     islocked,
     istaskdone,
@@ -690,6 +673,7 @@ export
     missing,
     skipmissing,
     something,
+    isnothing,
 
 # time
     sleep,
@@ -715,7 +699,10 @@ export
     fieldname,
     fieldnames,
     fieldcount,
+    fieldtypes,
+    hasfield,
     propertynames,
+    hasproperty,
     isabstracttype,
     isbitstype,
     isprimitivetype,
@@ -751,6 +738,7 @@ export
     methods,
     nameof,
     parentmodule,
+    pathof,
     names,
     which,
     @isdefined,
@@ -852,6 +840,7 @@ export
     splitdir,
     splitdrive,
     splitext,
+    splitpath,
 
 # filesystem operations
     cd,
@@ -979,6 +968,7 @@ export
     @inline,
     @noinline,
     @nospecialize,
+    @specialize,
     @polly,
 
     @assert,

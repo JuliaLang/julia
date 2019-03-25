@@ -10,20 +10,20 @@ if !@isdefined(testenv_defined)
     if haskey(ENV, "JULIA_TEST_EXEFLAGS")
         const test_exeflags = `$(Base.shell_split(ENV["JULIA_TEST_EXEFLAGS"]))`
     else
-        inline_flag = Base.JLOptions().can_inline == 1 ? `` : `--inline=no`
-        cov_flag = ``
-        if Base.JLOptions().code_coverage == 1
-            cov_flag = `--code-coverage=user`
-        elseif Base.JLOptions().code_coverage == 2
-            cov_flag = `--code-coverage=all`
+        const test_exeflags = Base.julia_cmd()
+        filter!(test_exeflags.exec) do c
+            return !(startswith(c, "--depwarn") || startswith(c, "--check-bounds"))
         end
-        const test_exeflags = `$cov_flag $inline_flag --check-bounds=yes --startup-file=no --depwarn=error`
+        push!(test_exeflags.exec, "--check-bounds=yes")
+        push!(test_exeflags.exec, "--startup-file=no")
+        push!(test_exeflags.exec, "--depwarn=error")
     end
 
     if haskey(ENV, "JULIA_TEST_EXENAME")
+        popfirst!(test_exeflags.exec)
         const test_exename = `$(Base.shell_split(ENV["JULIA_TEST_EXENAME"]))`
     else
-        const test_exename = `$(joinpath(Sys.BINDIR, Base.julia_exename()))`
+        const test_exename = popfirst!(test_exeflags.exec)
     end
 
     addprocs_with_testenv(X; kwargs...) = addprocs(X; exename=test_exename, exeflags=test_exeflags, kwargs...)

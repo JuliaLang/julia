@@ -50,16 +50,18 @@ end
 # Base.compilecache only works from node 1, so precompile test is handled specially
 move_to_node1("precompile")
 move_to_node1("SharedArrays")
+# Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
+move_to_node1("stress")
 
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
 import LinearAlgebra
-cd(dirname(@__FILE__)) do
+cd(@__DIR__) do
     n = 1
     if net_on
-        n = min(Sys.CPU_CORES, length(tests))
+        n = min(Sys.CPU_THREADS, length(tests))
         n > 1 && addprocs_with_testenv(n)
         LinearAlgebra.BLAS.set_num_threads(1)
     end
@@ -110,9 +112,10 @@ cd(dirname(@__FILE__)) do
     local stdin_monitor
     all_tasks = Task[]
     try
-        if isa(stdin, Base.TTY)
+        # Monitor stdin and kill this task on ^C
+        # but don't do this on Windows, because it may deadlock in the kernel
+        if !Sys.iswindows() && isa(stdin, Base.TTY)
             t = current_task()
-            # Monitor stdin and kill this task on ^C
             stdin_monitor = @async begin
                 term = REPL.Terminals.TTYTerminal("xterm", stdin, stdout, stderr)
                 try
@@ -124,7 +127,7 @@ cd(dirname(@__FILE__)) do
                         end
                     end
                 catch e
-                    isa(e, InterruptException) || rethrow(e)
+                    isa(e, InterruptException) || rethrow()
                 finally
                     REPL.Terminals.raw!(term, false)
                 end
@@ -189,13 +192,21 @@ cd(dirname(@__FILE__)) do
             push!(results, (t, resp))
         end
     catch e
-        isa(e, InterruptException) || rethrow(e)
+        isa(e, InterruptException) || rethrow()
         # If the test suite was merely interrupted, still print the
         # summary, which can be useful to diagnose what's going on
-        foreach(task->try; schedule(task, InterruptException(); error=true); catch; end, all_tasks)
+        foreach(task -> begin
+                istaskstarted(task) || return
+                istaskdone(task) && return
+                try
+                    schedule(task, InterruptException(); error=true)
+                catch ex
+                    @error "InterruptException" exception=ex,catch_backtrace()
+                end
+            end, all_tasks)
         foreach(wait, all_tasks)
     finally
-        if isa(stdin, Base.TTY)
+        if @isdefined stdin_monitor
             schedule(stdin_monitor, InterruptException(); error=true)
         end
     end

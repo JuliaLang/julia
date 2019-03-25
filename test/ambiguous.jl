@@ -153,11 +153,7 @@ ambs = detect_ambiguities(Ambig5)
 
 # Test that Core and Base are free of ambiguities
 # not using isempty so this prints more information when it fails
-@test filter(detect_ambiguities(Core, Base; imported=true, recursive=true, ambiguous_bottom=false)) do meths
-    # start, next, done fallbacks have ambiguities, but the iteration
-    # protocol prevents those from arising in practice.
-    !(meths[1].name in (:start, :next, :done))
-end == []
+@test detect_ambiguities(Core, Base; imported=true, recursive=true, ambiguous_bottom=false) == []
 # some ambiguities involving Union{} type parameters are expected, but not required
 @test !isempty(detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=true))
 
@@ -244,7 +240,7 @@ catch err
     if isa(err, MethodError)
         error("Test correctly returned a MethodError, please change to @test_throws MethodError")
     else
-        rethrow(err)
+        rethrow()
     end
 end
 
@@ -275,8 +271,8 @@ end
         @test_broken need_to_handle_undef_sparam == Set()
         pop!(need_to_handle_undef_sparam, which(Core.Compiler._cat, Tuple{Any, AbstractArray}))
         pop!(need_to_handle_undef_sparam, first(methods(Core.Compiler.same_names)))
-        pop!(need_to_handle_undef_sparam, which(Core.Compiler.convert, (Type{Union{Core.Compiler.Some{T}, Nothing}} where T, Core.Compiler.Some)))
-        pop!(need_to_handle_undef_sparam, which(Core.Compiler.convert, (Type{Union{T, Nothing}} where T, Core.Compiler.Some)))
+        pop!(need_to_handle_undef_sparam, which(Core.Compiler.convert, Tuple{Type{Tuple{Vararg{Int}}}, Tuple{}}))
+        pop!(need_to_handle_undef_sparam, which(Core.Compiler.convert, Tuple{Type{Tuple{Vararg{Int}}}, Tuple{Int8}}))
         @test need_to_handle_undef_sparam == Set()
     end
     let need_to_handle_undef_sparam =
@@ -299,6 +295,14 @@ end
         pop!(need_to_handle_undef_sparam, which(Base.nonmissingtype, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.convert, (Type{Union{Some{T}, Nothing}} where T, Some)))
         pop!(need_to_handle_undef_sparam, which(Base.convert, (Type{Union{T, Nothing}} where T, Some)))
+        pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Tuple{Vararg{Int}}}, Tuple{}}))
+        pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Tuple{Vararg{Int}}}, Tuple{Int8}}))
+        pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Union{Nothing,T}},Union{Nothing,T}} where T))
+        pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Union{Missing,T}},Union{Missing,T}} where T))
+        pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Union{Missing,Nothing,T}},Union{Missing,Nothing,T}} where T))
+        pop!(need_to_handle_undef_sparam, which(Base.promote_rule, Tuple{Type{Union{Nothing,T}},Type{Any}} where T))
+        pop!(need_to_handle_undef_sparam, which(Base.promote_rule, Tuple{Type{Union{Missing,T}},Type{Any}} where T))
+        pop!(need_to_handle_undef_sparam, which(Base.promote_rule, Tuple{Type{Union{Missing,Nothing,T}},Type{Any}} where T))
         @test need_to_handle_undef_sparam == Set()
     end
 end

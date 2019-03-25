@@ -20,6 +20,13 @@ function _any(@nospecialize(f), a)
     return false
 end
 
+function _all(@nospecialize(f), a)
+    for x in a
+        f(x) || return false
+    end
+    return true
+end
+
 function contains_is(itr, @nospecialize(x))
     for y in itr
         if y === x
@@ -52,7 +59,7 @@ end
 
 # Meta expression head, these generally can't be deleted even when they are
 # in a dead branch but can be ignored when analyzing uses/liveness.
-is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :simdloop)
+is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :loopinfo)
 
 sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
 
@@ -68,26 +75,6 @@ end
 function is_inlineable_constant(@nospecialize(x))
     x isa Type && return true
     return isbits(x) && Core.sizeof(x) <= MAX_INLINE_CONST_SIZE
-end
-
-# count occurrences up to n+1
-function occurs_more(@nospecialize(e), pred, n)
-    if isa(e,Expr)
-        head = e.head
-        is_meta_expr_head(head) && return 0
-        c = 0
-        for a = e.args
-            c += occurs_more(a, pred, n)
-            if c>n
-                return c
-            end
-        end
-        return c
-    end
-    if pred(e)
-        return 1
-    end
-    return 0
 end
 
 ###########################
@@ -107,41 +94,32 @@ function get_staged(li::MethodInstance)
     end
 end
 
-# create copies of the CodeInfo definition, and any fields that type-inference might modify
-function copy_code_info(c::CodeInfo)
-    cnew = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), c)
-    cnew.code = copy_exprargs(cnew.code)
-    cnew.slotnames = copy(cnew.slotnames)
-    cnew.slotflags = copy(cnew.slotflags)
-    cnew.codelocs  = copy(cnew.codelocs)
-    cnew.linetable = copy(cnew.linetable)
-    return cnew
-end
-
 function retrieve_code_info(linfo::MethodInstance)
     m = linfo.def::Method
+    c = nothing
     if isdefined(m, :generator)
         # user code might throw errors – ignore them
-        return get_staged(linfo)
-    else
-        # TODO: post-inference see if we can swap back to the original arrays?
-        if isa(m.source, Array{UInt8,1})
-            c = ccall(:jl_uncompress_ast, Any, (Any, Any), m, m.source)
+        c = get_staged(linfo)
+    end
+    if c === nothing && isdefined(m, :source)
+        src = m.source
+        if isa(src, Array{UInt8,1})
+            c = ccall(:jl_uncompress_ast, Any, (Any, Any), m, src)
         else
-            c = copy_code_info(m.source)
+            c = copy(src::CodeInfo)
         end
     end
-    return c::CodeInfo
+    if c isa CodeInfo
+        c.parent = linfo
+        return c
+    end
 end
 
 function code_for_method(method::Method, @nospecialize(atypes), sparams::SimpleVector, world::UInt, preexisting::Bool=false)
-    if world < min_world(method)
+    if world < min_world(method) || world > max_world(method)
         return nothing
     end
-    if isdefined(method, :generator) && !isdispatchtuple(atypes)
-        # don't call staged functions on abstract types.
-        # (see issues #8504, #10230)
-        # we can't guarantee that their type behavior is monotonic.
+    if isdefined(method, :generator) && !may_invoke_generator(method, atypes, sparams)
         return nothing
     end
     if preexisting
@@ -172,20 +150,22 @@ function method_for_inference_heuristics(method::Method, @nospecialize(sig), spa
     return nothing
 end
 
-argextype(@nospecialize(x), state) = argextype(x, state.src, state.sp)
+argextype(@nospecialize(x), state) = argextype(x, state.src, state.sptypes, state.slottypes)
 
-function argextype(@nospecialize(x), src, spvals::SimpleVector)
+const empty_slottypes = Any[]
+
+function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vector{Any} = empty_slottypes)
     if isa(x, Expr)
         if x.head === :static_parameter
-            return sparam_type(spvals[x.args[1]])
+            return sptypes[x.args[1]]
         elseif x.head === :boundscheck
             return Bool
         elseif x.head === :copyast
-            return argextype(x.args[1], src, spvals)
+            return argextype(x.args[1], src, sptypes, slottypes)
         end
         @assert false "argextype only works on argument-position values"
     elseif isa(x, SlotNumber)
-        return src.slottypes[(x::SlotNumber).id]
+        return slottypes[(x::SlotNumber).id]
     elseif isa(x, TypedSlot)
         return (x::TypedSlot).typ
     elseif isa(x, SSAValue)

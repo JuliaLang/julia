@@ -1,11 +1,15 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include <llvm-c/Core.h>
+#include <llvm-c/Types.h>
+
 #include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/Analysis/CFG.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/ValueMap.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Dominators.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
@@ -32,7 +36,7 @@ using namespace llvm;
         in an untracked address space
       - Commuting GEPs and addrspace casts
 
-    This is most useful for removing superflous casts that can inhibit LLVM
+    This is most useful for removing superfluous casts that can inhibit LLVM
     optimizations.
 */
 
@@ -222,7 +226,7 @@ Value *PropagateJuliaAddrspaces::LiftPointer(Value *V, Type *LocTy, Instruction 
         }
     }
 
-    return CollapseCastsAndLift(V, cast<Instruction>(V));
+    return CollapseCastsAndLift(V, InsertPt);
 }
 
 void PropagateJuliaAddrspaces::visitLoadInst(LoadInst &LI) {
@@ -290,4 +294,9 @@ static RegisterPass<PropagateJuliaAddrspaces> X("PropagateJuliaAddrspaces", "Pro
 
 Pass *createPropagateJuliaAddrspaces() {
     return new PropagateJuliaAddrspaces();
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddPropagateJuliaAddrspaces(LLVMPassManagerRef PM)
+{
+    unwrap(PM)->add(createPropagateJuliaAddrspaces());
 }

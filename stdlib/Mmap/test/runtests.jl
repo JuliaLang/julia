@@ -59,7 +59,7 @@ close(s); finalize(m); m=nothing; GC.gc()
 
 s = open(file, "r")
 close(s)
-@test_throws Base.UVError Mmap.mmap(s) # closed IOStream
+@test_throws Base.IOError Mmap.mmap(s) # closed IOStream
 @test_throws ArgumentError Mmap.mmap(s,Vector{UInt8},12,0) # closed IOStream
 @test_throws SystemError Mmap.mmap("")
 

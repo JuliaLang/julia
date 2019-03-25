@@ -30,7 +30,6 @@ const excludedirs = [
 
 const skipfiles = [
     "../contrib/add_license_to_files.jl",
-    "../contrib/fixup_precompile.jl",
     # files to check - already copyright
     # see: https://github.com/JuliaLang/julia/pull/11073#issuecomment-98099389
     "../base/special/trig.jl",
@@ -163,7 +162,7 @@ end
 function abspaths(A::Vector)
     abs_A = []
     for p in A
-        abs_p = isabspath(p) ? normpath(p) : normpath(joinpath(dirname(@__FILE__), p))
+        abs_p = isabspath(p) ? normpath(p) : normpath(joinpath(@__DIR__, p))
         ispath(abs_p) || error(string("`abs_p` seems not to be an existing path. ",
                                       "Adjust your configuration: <", p, "> : ", abs_p, "\n"))
         push!(abs_A, abs_p)

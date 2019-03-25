@@ -6,7 +6,8 @@
 struct SymTridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     dv::V                        # diagonal
     ev::V                        # subdiagonal
-    function SymTridiagonal{T}(dv::V, ev::V) where {T,V<:AbstractVector{T}}
+    function SymTridiagonal{T,V}(dv, ev) where {T,V<:AbstractVector{T}}
+        require_one_based_indexing(dv, ev)
         if !(length(dv) - 1 <= length(ev) <= length(dv))
             throw(DimensionMismatch("subdiagonal has wrong length. Has length $(length(ev)), but should be either $(length(dv) - 1) or $(length(dv))."))
         end
@@ -46,6 +47,11 @@ julia> SymTridiagonal(dv, ev)
 ```
 """
 SymTridiagonal(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{T}(dv, ev)
+SymTridiagonal{T}(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{T,V}(dv, ev)
+function SymTridiagonal{T}(dv::AbstractVector, ev::AbstractVector) where {T}
+    SymTridiagonal(convert(AbstractVector{T}, dv)::AbstractVector{T},
+                   convert(AbstractVector{T}, ev)::AbstractVector{T})
+end
 
 """
     SymTridiagonal(A::AbstractMatrix)
@@ -76,10 +82,18 @@ function SymTridiagonal(A::AbstractMatrix)
     end
 end
 
+SymTridiagonal{T,V}(S::SymTridiagonal{T,V}) where {T,V<:AbstractVector{T}} = S
+SymTridiagonal{T,V}(S::SymTridiagonal) where {T,V<:AbstractVector{T}} =
+    SymTridiagonal(convert(V, S.dv)::V, convert(V, S.ev)::V)
+SymTridiagonal{T}(S::SymTridiagonal{T}) where {T} = S
 SymTridiagonal{T}(S::SymTridiagonal) where {T} =
-    SymTridiagonal(convert(AbstractVector{T}, S.dv), convert(AbstractVector{T}, S.ev))
+    SymTridiagonal(convert(AbstractVector{T}, S.dv)::AbstractVector{T},
+                   convert(AbstractVector{T}, S.ev)::AbstractVector{T})
+SymTridiagonal(S::SymTridiagonal) = S
+
 AbstractMatrix{T}(S::SymTridiagonal) where {T} =
-    SymTridiagonal(convert(AbstractVector{T}, S.dv), convert(AbstractVector{T}, S.ev))
+    SymTridiagonal(convert(AbstractVector{T}, S.dv)::AbstractVector{T},
+                   convert(AbstractVector{T}, S.ev)::AbstractVector{T})
 function Matrix{T}(M::SymTridiagonal) where T
     n = size(M, 1)
     Mf = zeros(T, n, n)
@@ -258,6 +272,9 @@ eigvecs(A::SymTridiagonal{<:BlasFloat}, eigvals::Vector{<:Real}) = LAPACK.stein!
 
 istriu(M::SymTridiagonal) = iszero(M.ev)
 istril(M::SymTridiagonal) = iszero(M.ev)
+iszero(M::SymTridiagonal) = iszero(M.ev) && iszero(M.dv)
+isone(M::SymTridiagonal) = iszero(M.ev) && all(isone, M.dv)
+isdiag(M::SymTridiagonal) = iszero(M.ev)
 
 function tril!(M::SymTridiagonal, k::Integer=0)
     n = length(M.dv)
@@ -306,57 +323,27 @@ function Base.replace_in_print_matrix(A::SymTridiagonal, i::Integer, j::Integer,
     i==j-1||i==j||i==j+1 ? s : Base.replace_with_centered_mark(s)
 end
 
-#Implements the inverse using the recurrence relation between principal minors
+# Implements the determinant using principal minors
 # a, b, c are assumed to be the subdiagonal, diagonal, and superdiagonal of
 # a tridiagonal matrix.
 #Reference:
 #    R. Usmani, "Inversion of a tridiagonal Jacobi matrix",
 #    Linear Algebra and its Applications 212-213 (1994), pp.413-414
 #    doi:10.1016/0024-3795(94)90414-6
-function inv_usmani(a::V, b::V, c::V) where {T,V<:AbstractVector{T}}
-    n = length(b)
-    θ = zeros(T, n+1) #principal minors of A
-    θ[1] = 1
-    n>=1 && (θ[2] = b[1])
-    for i=2:n
-        θ[i+1] = b[i]*θ[i]-a[i-1]*c[i-1]*θ[i-1]
-    end
-    φ = zeros(T, n+1)
-    φ[n+1] = 1
-    n>=1 && (φ[n] = b[n])
-    for i=n-1:-1:1
-        φ[i] = b[i]*φ[i+1]-a[i]*c[i]*φ[i+2]
-    end
-    α = Matrix{T}(undef, n, n)
-    for i=1:n, j=1:n
-        sign = (i+j)%2==0 ? (+) : (-)
-        if i<j
-            α[i,j]=(sign)(prod(c[i:j-1]))*θ[i]*φ[j+1]/θ[n+1]
-        elseif i==j
-            α[i,i]=                       θ[i]*φ[i+1]/θ[n+1]
-        else #i>j
-            α[i,j]=(sign)(prod(a[j:i-1]))*θ[j]*φ[i+1]/θ[n+1]
-        end
-    end
-    α
-end
-
-#Implements the determinant using principal minors
-#Inputs and reference are as above for inv_usmani()
 function det_usmani(a::V, b::V, c::V) where {T,V<:AbstractVector{T}}
+    require_one_based_indexing(a, b, c)
     n = length(b)
     θa = one(T)
     if n == 0
         return θa
     end
     θb = b[1]
-    for i=2:n
-        θb, θa = b[i]*θb-a[i-1]*c[i-1]*θa, θb
+    for i in 2:n
+        θb, θa = b[i]*θb - a[i-1]*c[i-1]*θa, θb
     end
     return θb
 end
 
-inv(A::SymTridiagonal) = inv_usmani(A.ev, A.dv, A.ev)
 det(A::SymTridiagonal) = det_usmani(A.ev, A.dv, A.ev)
 
 function getindex(A::SymTridiagonal{T}, i::Integer, j::Integer) where T
@@ -390,7 +377,8 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     d::V     # diagonal
     du::V    # sup-diagonal
     du2::V   # supsup-diagonal for pivoting in LU
-    function Tridiagonal{T}(dl::V, d::V, du::V) where {T,V<:AbstractVector{T}}
+    function Tridiagonal{T,V}(dl, d, du) where {T,V<:AbstractVector{T}}
+        require_one_based_indexing(dl, d, du)
         n = length(d)
         if (length(dl) != n-1 || length(du) != n-1)
             throw(ArgumentError(string("cannot construct Tridiagonal from incompatible ",
@@ -400,7 +388,9 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
         new{T,V}(dl, d, du)
     end
     # constructor used in lu!
-    function Tridiagonal{T,V}(dl::V, d::V, du::V, du2::V) where {T,V<:AbstractVector{T}}
+    function Tridiagonal{T,V}(dl, d, du, du2) where {T,V<:AbstractVector{T}}
+        require_one_based_indexing(dl, d, du, du2)
+        # length checks?
         new{T,V}(dl, d, du, du2)
     end
 end
@@ -430,7 +420,11 @@ julia> Tridiagonal(dl, d, du)
  ⋅  ⋅  3  0
 ```
 """
-Tridiagonal(dl::V, d::V, du::V) where {T,V<:AbstractVector{T}} = Tridiagonal{T}(dl, d, du)
+Tridiagonal(dl::V, d::V, du::V) where {T,V<:AbstractVector{T}} = Tridiagonal{T,V}(dl, d, du)
+Tridiagonal(dl::V, d::V, du::V, du2::V) where {T,V<:AbstractVector{T}} = Tridiagonal{T,V}(dl, d, du, du2)
+function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector) where {T}
+    Tridiagonal(map(x->convert(AbstractVector{T}, x), (dl, d, du))...)
+end
 
 """
     Tridiagonal(A)
@@ -456,6 +450,18 @@ julia> Tridiagonal(A)
 ```
 """
 Tridiagonal(A::AbstractMatrix) = Tridiagonal(diag(A,-1), diag(A,0), diag(A,1))
+
+Tridiagonal(A::Tridiagonal) = A
+Tridiagonal{T}(A::Tridiagonal{T}) where {T} = A
+function Tridiagonal{T}(A::Tridiagonal) where {T}
+    dl, d, du = map(x->convert(AbstractVector{T}, x)::AbstractVector{T},
+                    (A.dl, A.d, A.du))
+    if isdefined(A, :du2)
+        Tridiagonal(dl, d, du, convert(AbstractVector{T}, A.du2)::AbstractVector{T})
+    else
+        Tridiagonal(dl, d, du)
+    end
+end
 
 size(M::Tridiagonal) = (length(M.d), length(M.d))
 function size(M::Tridiagonal, d::Integer)
@@ -563,6 +569,8 @@ end
 
 #tril and triu
 
+iszero(M::Tridiagonal) = iszero(M.dl) && iszero(M.d) && iszero(M.du)
+isone(M::Tridiagonal) = iszero(M.dl) && all(isone, M.d) && iszero(M.du)
 istriu(M::Tridiagonal) = iszero(M.dl)
 istril(M::Tridiagonal) = iszero(M.du)
 
@@ -616,11 +624,8 @@ end
 ==(A::Tridiagonal, B::SymTridiagonal) = (A.dl==A.du==B.ev) && (A.d==B.dv)
 ==(A::SymTridiagonal, B::Tridiagonal) = (B.dl==B.du==A.ev) && (B.d==A.dv)
 
-inv(A::Tridiagonal) = inv_usmani(A.dl, A.d, A.du)
 det(A::Tridiagonal) = det_usmani(A.dl, A.d, A.du)
 
-Tridiagonal{T}(M::Tridiagonal) where {T} =
-    Tridiagonal(convert(AbstractVector{T}, M.dl), convert(AbstractVector{T}, M.d), convert(AbstractVector{T}, M.du))
 AbstractMatrix{T}(M::Tridiagonal) where {T} = Tridiagonal{T}(M)
 Tridiagonal{T}(M::SymTridiagonal{T}) where {T} = Tridiagonal(M)
 function SymTridiagonal{T}(M::Tridiagonal) where T

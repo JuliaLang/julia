@@ -96,7 +96,7 @@ string(hash::SHA1) = bytes2hex(hash.bytes)
 print(io::IO, hash::SHA1) = bytes2hex(io, hash.bytes)
 show(io::IO, hash::SHA1) = print(io, "SHA1(\"", hash, "\")")
 
-isless(a::SHA1, b::SHA1) = lexless(a.bytes, b.bytes)
+isless(a::SHA1, b::SHA1) = isless(a.bytes, b.bytes)
 hash(a::SHA1, h::UInt) = hash((SHA1, a.bytes), h)
 ==(a::SHA1, b::SHA1) = a.bytes == b.bytes
 
@@ -134,57 +134,16 @@ function slug(x::UInt32, p::Int)
     end
 end
 
-function package_slug(uuid::UUID, p::Int=4)
+function package_slug(uuid::UUID, p::Int=5)
     crc = _crc32c(uuid)
     return slug(crc, p)
 end
 
-function version_slug(uuid::UUID, sha1::SHA1, p::Int=4)
+function version_slug(uuid::UUID, sha1::SHA1, p::Int=5)
     crc = _crc32c(uuid)
     crc = _crc32c(sha1.bytes, crc)
     return slug(crc, p)
 end
-
-## load path expansion: turn LOAD_PATH entries into concrete paths ##
-
-function load_path_expand(env::AbstractString)::Union{String, Nothing}
-    # named environment?
-    if startswith(env, '@')
-        # `@` in JULIA_LOAD_PATH is expanded early (at startup time)
-        # if you put a `@` in LOAD_PATH manually, it's expanded late
-        (env == "@" || env == "@@") && return current_env()
-        env == "@stdlib" && return Sys.STDLIB
-        env = replace(env, '#' => VERSION.major, count=1)
-        env = replace(env, '#' => VERSION.minor, count=1)
-        env = replace(env, '#' => VERSION.patch, count=1)
-        name = env[2:end]
-        # look for named env in each depot
-        for depot in DEPOT_PATH
-            path = joinpath(depot, "environments", name)
-            isdir(path) || continue
-            for proj in project_names
-                file = abspath(path, proj)
-                isfile_casesensitive(file) && return file
-            end
-            return path
-        end
-        isempty(DEPOT_PATH) && return nothing
-        return abspath(DEPOT_PATH[1], "environments", name, project_names[end])
-    end
-    # otherwise, it's a path
-    path = abspath(env)
-    if isdir(path)
-        # directory with a project file?
-        for proj in project_names
-            file = joinpath(path, proj)
-            isfile_casesensitive(file) && return file
-        end
-    end
-    # package dir or path to project file
-    return path
-end
-
-load_path() = String[env for env in map(load_path_expand, LOAD_PATH) if env ≠ nothing]
 
 ## package identification: determine unique identity of package to be loaded ##
 
@@ -289,6 +248,21 @@ function locate_package(pkg::PkgId)::Union{Nothing,String}
     end
 end
 locate_package(::Nothing) = nothing
+
+"""
+    pathof(m::Module)
+
+Return the path of `m.jl` file that was used to `import` module `m`,
+or `nothing` if `m` was not imported from a package.
+
+Use [`dirname`](@ref) to get the directory part and [`basename`](@ref)
+to get the file name part of the path.
+"""
+function pathof(m::Module)
+    pkgid = get(Base.module_keys, m, nothing)
+    pkgid === nothing && return nothing
+    return Base.locate_package(pkgid)
+end
 
 ## generic project & manifest API ##
 
@@ -565,10 +539,12 @@ function explicit_manifest_uuid_path(manifest_file::String, pkg::PkgId)::Union{N
             return entry_path(path, name)
         end
         hash == nothing && return nothing
-        slug = joinpath(name, version_slug(uuid, hash))
-        for depot in DEPOT_PATH
-            path = abspath(depot, "packages", slug)
-            ispath(path) && return entry_path(path, name)
+        # Keep the 4 since it used to be the default
+        for slug in (version_slug(uuid, hash, 4), version_slug(uuid, hash))
+            for depot in DEPOT_PATH
+                path = abspath(depot, "packages", name, slug)
+                ispath(path) && return entry_path(path, name)
+            end
         end
     end
 end
@@ -638,7 +614,11 @@ end
 # or an Exception that describes why it couldn't be loaded
 # and it reconnects the Base.Docs.META
 function _include_from_serialized(path::String, depmods::Vector{Any})
-    restored = ccall(:jl_restore_incremental, Any, (Cstring, Any), path, depmods)
+    sv = ccall(:jl_restore_incremental, Any, (Cstring, Any), path, depmods)
+    if isa(sv, Exception)
+        return sv
+    end
+    restored = sv[1]
     if !isa(restored, Exception)
         for M in restored::Vector{Any}
             M = M::Module
@@ -650,6 +630,7 @@ function _include_from_serialized(path::String, depmods::Vector{Any})
             end
         end
     end
+    isassigned(sv, 2) && ccall(:jl_init_restored_modules, Cvoid, (Any,), sv[2])
     return restored
 end
 
@@ -775,7 +756,7 @@ In a module, declare that the file specified by `path` (relative or absolute) is
 dependency for precompilation; that is, the module will need to be recompiled if this file
 changes.
 
-This is only needed if your module depends on a file that is not used via `include`. It has
+This is only needed if your module depends on a file that is not used via [`include`](@ref). It has
 no effect outside of compilation.
 """
 function include_dependency(path::AbstractString)
@@ -783,70 +764,56 @@ function include_dependency(path::AbstractString)
     return nothing
 end
 
-# We throw PrecompilableError(true) when a module wants to be precompiled but isn't,
-# and PrecompilableError(false) when a module doesn't want to be precompiled but is
-struct PrecompilableError <: Exception
-    isprecompilable::Bool
-end
+# we throw PrecompilableError when a module doesn't want to be precompiled
+struct PrecompilableError <: Exception end
 function show(io::IO, ex::PrecompilableError)
-    if ex.isprecompilable
-        print(io, "Declaring __precompile__(true) is only allowed in module files being imported.")
-    else
-        print(io, "Declaring __precompile__(false) is not allowed in files that are being precompiled.")
-    end
+    print(io, "Declaring __precompile__(false) is not allowed in files that are being precompiled.")
 end
-precompilableerror(ex::PrecompilableError, c) = ex.isprecompilable == c
-precompilableerror(ex::WrappedException, c) = precompilableerror(ex.error, c)
-precompilableerror(ex, c) = false
+precompilableerror(ex::PrecompilableError) = true
+precompilableerror(ex::WrappedException) = precompilableerror(ex.error)
+precompilableerror(@nospecialize ex) = false
 
-# Call __precompile__ at the top of a file to force it to be precompiled (true), or
-# to be prevent it from being precompiled (false).  __precompile__(true) is
-# ignored except within "require" call.
+# Call __precompile__(false) at the top of a tile prevent it from being precompiled (false)
 """
-    __precompile__(isprecompilable::Bool=true)
+    __precompile__(isprecompilable::Bool)
 
-Specify whether the file calling this function is precompilable. If `isprecompilable` is
-`true`, then `__precompile__` throws an exception when the file is loaded by
-`using`/`import`/`require` *unless* the file is being precompiled, and in a module file it
-causes the module to be automatically precompiled when it is imported. Typically,
-`__precompile__()` should occur before the `module` declaration in the file.
-
+Specify whether the file calling this function is precompilable, defaulting to `true`.
 If a module or file is *not* safely precompilable, it should call `__precompile__(false)` in
 order to throw an error if Julia attempts to precompile it.
-
-`__precompile__()` should *not* be used in a module unless all of its dependencies are also
-using `__precompile__()`. Failure to do so can result in a runtime error when loading the module.
 """
-function __precompile__(isprecompilable::Bool=true)
-    if (JLOptions().use_compiled_modules != 0 &&
-        isprecompilable != (0 != ccall(:jl_generating_output, Cint, ())) &&
-        !(isprecompilable && toplevel_load[]))
-        throw(PrecompilableError(isprecompilable))
+@noinline function __precompile__(isprecompilable::Bool=true)
+    if !isprecompilable && ccall(:jl_generating_output, Cint, ()) != 0
+        throw(PrecompilableError())
     end
+    nothing
 end
 
 # require always works in Main scope and loads files from node 1
 const toplevel_load = Ref(true)
 
-"""
-    require(module::Symbol)
+const full_warning_showed = Ref(false)
+const modules_warned_for = Set{PkgId}()
 
-This function is part of the implementation of `using` / `import`, if a module is not
+"""
+    require(into::Module, module::Symbol)
+
+This function is part of the implementation of [`using`](@ref) / [`import`](@ref), if a module is not
 already defined in `Main`. It can also be called directly to force reloading a module,
 regardless of whether it has been loaded before (for example, when interactively developing
 libraries).
 
 Loads a source file, in the context of the `Main` module, on every active node, searching
 standard locations for files. `require` is considered a top-level operation, so it sets the
-current `include` path but does not use it to search for files (see help for `include`).
+current `include` path but does not use it to search for files (see help for [`include`](@ref)).
 This function is typically used to load library code, and is implicitly called by `using` to
 load packages.
 
 When searching for files, `require` first looks for package code in the global array
-`LOAD_PATH`. `require` is case-sensitive on all platforms, including those with
+[`LOAD_PATH`](@ref). `require` is case-sensitive on all platforms, including those with
 case-insensitive filesystems like macOS and Windows.
 
-For more details regarding code loading, see the manual.
+For more details regarding code loading, see the manual sections on [modules](@ref modules) and
+[parallel computing](@ref code-availability).
 """
 function require(into::Module, mod::Symbol)
     uuidkey = identify_package(into, String(mod))
@@ -856,16 +823,29 @@ function require(into::Module, mod::Symbol)
         if where.uuid === nothing
             throw(ArgumentError("""
                 Package $mod not found in current path:
-                 - Run `Pkg.add($(repr(String(mod))))` to install the $mod package.
+                - Run `import Pkg; Pkg.add($(repr(String(mod))))` to install the $mod package.
                 """))
         else
-            throw(ArgumentError("""
-                Package $(where.name) does not have $mod in its dependencies:
-                 - If you have $(where.name) checked out for development and have
-                   added $mod as a dependency but haven't updated your primary
-                   environment's manifest file, try `Pkg.resolve()`.
-                 - Otherwise you may need to report an issue with $(where.name).
-                """))
+            s = """
+            Package $(where.name) does not have $mod in its dependencies:
+            - If you have $(where.name) checked out for development and have
+              added $mod as a dependency but haven't updated your primary
+              environment's manifest file, try `Pkg.resolve()`.
+            - Otherwise you may need to report an issue with $(where.name)"""
+
+            uuidkey = identify_package(PkgId(string(into)), String(mod))
+            uuidkey === nothing && throw(ArgumentError(s))
+
+            # fall back to toplevel loading with a warning
+            if !(where in modules_warned_for)
+                @warn string(
+                    full_warning_showed[] ? "" : s, "\n",
+                    string("Loading $(mod) into $(where.name) from project dependency, ",
+                           "future warnings for $(where.name) are suppressed.")
+                ) _module = nothing _file = nothing _group = nothing
+                push!(modules_warned_for, where)
+            end
+            full_warning_showed[] = true
         end
     end
     if _track_dependencies[]
@@ -945,7 +925,6 @@ function _require(pkg::PkgId)
     try
         toplevel_load[] = false
         # perform the search operation to select the module file require intends to load
-        name = pkg.name
         path = locate_package(pkg)
         if path === nothing
             throw(ArgumentError("""
@@ -955,10 +934,9 @@ function _require(pkg::PkgId)
         end
 
         # attempt to load the module file via the precompile cache locations
-        doneprecompile = false
         if JLOptions().use_compiled_modules != 0
-            doneprecompile = _require_search_from_serialized(pkg, path)
-            if !isa(doneprecompile, Bool)
+            m = _require_search_from_serialized(pkg, path)
+            if !isa(m, Bool)
                 return
             end
         end
@@ -967,25 +945,36 @@ function _require(pkg::PkgId)
         # but it was not handled by the precompile loader, complain
         for (concrete_pkg, concrete_build_id) in _concrete_dependencies
             if pkg == concrete_pkg
-                @warn """Module $name with build ID $concrete_build_id is missing from the cache.
-                     This may mean module $name does not support precompilation but is imported by a module that does."""
+                @warn """Module $(pkg.name) with build ID $concrete_build_id is missing from the cache.
+                     This may mean $pkg does not support precompilation but is imported by a module that does."""
                 if JLOptions().incremental != 0
                     # during incremental precompilation, this should be fail-fast
-                    throw(PrecompilableError(false))
+                    throw(PrecompilableError())
                 end
             end
         end
 
-        if doneprecompile === true || JLOptions().incremental != 0
-            # spawn off a new incremental pre-compile task for recursive `require` calls
-            # or if the require search declared it was pre-compiled before (and therefore is expected to still be pre-compilable)
-            cachefile = compilecache(pkg)
-            m = _require_from_serialized(cachefile)
-            if isa(m, Exception)
-                @warn "The call to compilecache failed to create a usable precompiled cache file for module $name" exception=m
-                # fall-through, TODO: disable __precompile__(true) error so that the normal include will succeed
-            else
-                return
+        if JLOptions().use_compiled_modules != 0
+            if (0 == ccall(:jl_generating_output, Cint, ())) || (JLOptions().incremental != 0)
+                # spawn off a new incremental pre-compile task for recursive `require` calls
+                # or if the require search declared it was pre-compiled before (and therefore is expected to still be pre-compilable)
+                cachefile = compilecache(pkg, path)
+                if isa(cachefile, Exception)
+                    if precompilableerror(cachefile)
+                        verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+                        @logmsg verbosity "Skipping precompilation since __precompile__(false). Importing $pkg."
+                    else
+                        @warn "The call to compilecache failed to create a usable precompiled cache file for $pkg" exception=m
+                    end
+                    # fall-through to loading the file locally
+                else
+                    m = _require_from_serialized(cachefile)
+                    if isa(m, Exception)
+                        @warn "The call to compilecache failed to create a usable precompiled cache file for $pkg" exception=m
+                    else
+                        return
+                    end
+                end
             end
         end
 
@@ -1000,22 +989,6 @@ function _require(pkg::PkgId)
         try
             include_relative(__toplevel__, path)
             return
-        catch ex
-            if uuid !== old_uuid
-                ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
-            end
-            if doneprecompile === true || JLOptions().use_compiled_modules == 0 || !precompilableerror(ex, true)
-                rethrow() # rethrow non-precompilable=true errors
-            end
-            # the file requested `__precompile__`, so try to build a cache file and use that
-            cachefile = compilecache(pkg)
-            m = _require_from_serialized(cachefile)
-            if isa(m, Exception)
-                @warn """Module `$name` declares `__precompile__(true)` but `require` failed
-                         to create a usable precompiled cache file""" exception=m
-                # TODO: disable __precompile__(true) error and do normal include instead of error
-                error("Module $name declares __precompile__(true) but require failed to create a usable precompiled cache file.")
-            end
         finally
             if uuid !== old_uuid
                 ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
@@ -1034,7 +1007,7 @@ end
 """
     include_string(m::Module, code::AbstractString, filename::AbstractString="string")
 
-Like `include`, except reads code from the given string rather than from a file.
+Like [`include`](@ref), except reads code from the given string rather than from a file.
 """
 include_string(m::Module, txt::String, fname::String) =
     ccall(:jl_load_file_string, Any, (Ptr{UInt8}, Csize_t, Cstring, Any),
@@ -1044,22 +1017,16 @@ include_string(m::Module, txt::AbstractString, fname::AbstractString="string") =
     include_string(m, String(txt), String(fname))
 
 function source_path(default::Union{AbstractString,Nothing}="")
-    t = current_task()
-    while true
-        s = t.storage
-        if s !== nothing && haskey(s, :SOURCE_PATH)
-            return s[:SOURCE_PATH]
-        end
-        if t === t.parent
-            return default
-        end
-        t = t.parent
+    s = current_task().storage
+    if s !== nothing && haskey(s, :SOURCE_PATH)
+        return s[:SOURCE_PATH]
     end
+    return default
 end
 
 function source_dir()
     p = source_path(nothing)
-    p === nothing ? pwd() : dirname(p)
+    return p === nothing ? pwd() : dirname(p)
 end
 
 include_relative(mod::Module, path::AbstractString) = include_relative(mod, String(path))
@@ -1087,7 +1054,7 @@ end
     Base.include([m::Module,] path::AbstractString)
 
 Evaluate the contents of the input source file in the global scope of module `m`.
-Every module (except those defined with `baremodule`) has its own 1-argument
+Every module (except those defined with [`baremodule`](@ref)) has its own 1-argument
 definition of `include`, which evaluates the file in that module.
 Returns the result of the last evaluated expression of the input file. During including,
 a task-local include path is set to the directory containing the file. Nested calls to
@@ -1099,7 +1066,7 @@ Base.include # defined in sysimg.jl
 """
     evalfile(path::AbstractString, args::Vector{String}=String[])
 
-Load the file using [`Base.include`](@ref), evaluate all expressions,
+Load the file using [`include`](@ref), evaluate all expressions,
 and return the value of the last one.
 """
 function evalfile(path::AbstractString, args::Vector{String}=String[])
@@ -1107,11 +1074,29 @@ function evalfile(path::AbstractString, args::Vector{String}=String[])
         Expr(:toplevel,
              :(const ARGS = $args),
              :(eval(x) = $(Expr(:core, :eval))(__anon__, x)),
-             :(@deprecate eval(m, x) Core.eval(m, x)),
              :(include(x) = $(Expr(:top, :include))(__anon__, x)),
              :(include($path))))
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
+
+function load_path_setup_code(load_path::Bool=true)
+    code = """
+    append!(empty!(Base.DEPOT_PATH), $(repr(map(abspath, DEPOT_PATH))))
+    append!(empty!(Base.DL_LOAD_PATH), $(repr(map(abspath, DL_LOAD_PATH))))
+    """
+    if load_path
+        load_path = map(abspath, Base.load_path())
+        path_sep = Sys.iswindows() ? ';' : ':'
+        any(path -> path_sep in path, load_path) &&
+            error("LOAD_PATH entries cannot contain $(repr(path_sep))")
+        code *= """
+        append!(empty!(Base.LOAD_PATH), $(repr(load_path)))
+        ENV["JULIA_LOAD_PATH"] = $(repr(join(load_path, Sys.iswindows() ? ';' : ':')))
+        Base.HOME_PROJECT[] = Base.ACTIVE_PROJECT[] = nothing
+        """
+    end
+    return code
+end
 
 function create_expr_cache(input::String, output::String, concrete_deps::typeof(_concrete_dependencies), uuid::Union{Nothing,UUID})
     rm(output, force=true)   # Remove file if it exists
@@ -1130,24 +1115,18 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     in = io.in
     try
         write(in, """
-        begin
-        import OldPkg
-        empty!(Base.LOAD_PATH)
-        append!(Base.LOAD_PATH, $(repr(LOAD_PATH, context=:module=>nothing)))
-        empty!(Base.DEPOT_PATH)
-        append!(Base.DEPOT_PATH, $(repr(DEPOT_PATH)))
-        empty!(Base.DL_LOAD_PATH)
-        append!(Base.DL_LOAD_PATH, $(repr(DL_LOAD_PATH)))
-        Base._track_dependencies[] = true
-        empty!(Base._concrete_dependencies)
-        """)
+            begin
+                $(Base.load_path_setup_code())
+                Base._track_dependencies[] = true
+                Base.empty!(Base._concrete_dependencies)
+            """)
         for (pkg, build_id) in concrete_deps
             pkg_str = if pkg.uuid === nothing
                 "Base.PkgId($(repr(pkg.name)))"
             else
                 "Base.PkgId(Base.UUID(\"$(pkg.uuid)\"), $(repr(pkg.name)))"
             end
-            write(in, "push!(Base._concrete_dependencies, $pkg_str => $(repr(build_id)))\n")
+            write(in, "Base.push!(Base._concrete_dependencies, $pkg_str => $(repr(build_id)))\n")
         end
         write(io, "end\0")
         uuid_tuple = uuid === nothing ? (0, 0) : convert(NTuple{2, UInt64}, uuid)
@@ -1156,17 +1135,24 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
         if source !== nothing
             write(in, "task_local_storage()[:SOURCE_PATH] = $(repr(source))\0")
         end
-        write(in, "Base.include(Base.__toplevel__, $(repr(abspath(input))))\0")
+        write(in, """
+            try
+                Base.include(Base.__toplevel__, $(repr(abspath(input))))
+            catch ex
+                Base.precompilableerror(ex) || Base.rethrow()
+                Base.@debug "Aborting `createexprcache'" exception=(Base.ErrorException("Declaration of __precompile__(false) not allowed"), Base.catch_backtrace())
+                Base.exit(125) # we define status = 125 means PrecompileableError
+            end\0""")
         # TODO: cleanup is probably unnecessary here
         if source !== nothing
             write(in, "delete!(task_local_storage(), :SOURCE_PATH)\0")
         end
         write(in, "ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, (0, 0))\0")
         close(in)
-    catch ex
+    catch
         close(in)
         process_running(io) && Timer(t -> kill(io), 5.0) # wait a short time before killing the process to give it a chance to clean up on its own first
-        rethrow(ex)
+        rethrow()
     end
     return io
 end
@@ -1180,10 +1166,11 @@ This can be used to reduce package load times. Cache files are stored in
 for important notes.
 """
 function compilecache(pkg::PkgId)
-    # decide where to get the source file from
-    name = pkg.name
     path = locate_package(pkg)
     path === nothing && throw(ArgumentError("$pkg not found during precompilation"))
+    return compilecache(pkg, path)
+end
+function compilecache(pkg::PkgId, path::String)
     # decide where to put the resulting cache file
     cachefile = abspath(DEPOT_PATH[1], cache_file_entry(pkg))
     cachepath = dirname(cachefile)
@@ -1198,17 +1185,20 @@ function compilecache(pkg::PkgId)
     # run the expression and cache the result
     verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
     if isfile(cachefile)
-        @logmsg verbosity "Recompiling stale cache file $cachefile for module $name"
+        @logmsg verbosity "Recompiling stale cache file $cachefile for $pkg"
     else
-        @logmsg verbosity "Precompiling module $name"
+        @logmsg verbosity "Precompiling $pkg"
     end
-    if success(create_expr_cache(path, cachefile, concrete_deps, pkg.uuid))
+    p = create_expr_cache(path, cachefile, concrete_deps, pkg.uuid)
+    if success(p)
         # append checksum to the end of the .ji file:
         open(cachefile, "a+") do f
             write(f, _crc32c(seekstart(f)))
         end
+    elseif p.exitcode == 125
+        return PrecompilableError()
     else
-        error("Failed to precompile $name to $cachefile.")
+        error("Failed to precompile $pkg to $cachefile.")
     end
     return cachefile
 end
@@ -1341,7 +1331,7 @@ function stale_cachefile(modpath::String, cachefile::String)
         (modules, (includes, requires), required_modules) = parse_cache_header(io)
         modules = Dict{PkgId, UInt64}(modules)
 
-        # Check if transitive dependencies can be fullfilled
+        # Check if transitive dependencies can be fulfilled
         ndeps = length(required_modules)
         depmods = Vector{Any}(undef, ndeps)
         for i in 1:ndeps
@@ -1419,9 +1409,9 @@ end
 """
     @__FILE__ -> AbstractString
 
-`@__FILE__` expands to a string with the path to the file containing the
+Expand to a string with the path to the file containing the
 macrocall, or an empty string if evaluated by `julia -e <expr>`.
-Returns `nothing` if the macro was missing parser source information.
+Return `nothing` if the macro was missing parser source information.
 Alternatively see [`PROGRAM_FILE`](@ref).
 """
 macro __FILE__()
@@ -1432,9 +1422,9 @@ end
 """
     @__DIR__ -> AbstractString
 
-`@__DIR__` expands to a string with the absolute path to the directory of the file
+Expand to a string with the absolute path to the directory of the file
 containing the macrocall.
-Returns the current working directory if run from a REPL or if evaluated by `julia -e <expr>`.
+Return the current working directory if run from a REPL or if evaluated by `julia -e <expr>`.
 """
 macro __DIR__()
     __source__.file === nothing && return nothing

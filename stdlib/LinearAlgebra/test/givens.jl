@@ -25,7 +25,8 @@ using LinearAlgebra: rmul!, lmul!
                 @test lmul!(G,Matrix{elty}(I, 10, 10)) == [G[i,j] for i=1:10,j=1:10]
 
                 @testset "transposes" begin
-                    @test copy(G')*G*Matrix(elty(1)I, 10, 10) ≈ Matrix(I, 10, 10)
+                    @test G'*G*Matrix(elty(1)I, 10, 10)   ≈ Matrix(I, 10, 10)
+                    @test (G*Matrix(elty(1)I, 10, 10))*G' ≈ Matrix(I, 10, 10)
                     @test copy(R')*(R*Matrix(elty(1)I, 10, 10)) ≈ Matrix(I, 10, 10)
                     @test_throws ErrorException transpose(G)
                     @test_throws ErrorException transpose(R)

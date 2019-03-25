@@ -62,8 +62,9 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     jl_f_typeassert, jl_f__apply, jl_f__apply_pure, jl_f__apply_latest, jl_f_isdefined,
     jl_f_tuple, jl_f_svec, jl_f_intrinsic_call, jl_f_invoke_kwsorter,
     jl_f_getfield, jl_f_setfield, jl_f_fieldtype, jl_f_nfields,
-    jl_f_arrayref, jl_f_arrayset, jl_f_arraysize, jl_f_apply_type,
-    jl_f_applicable, jl_f_invoke, jl_f_sizeof, jl_f__expr, jl_f_ifelse,
+    jl_f_arrayref, jl_f_const_arrayref, jl_f_arrayset, jl_f_arraysize, jl_f_apply_type,
+    jl_f_applicable, jl_f_invoke, jl_f_sizeof, jl_f__expr, jl_f__typevar,
+    jl_f_ifelse,
     NULL };
 
 typedef enum _DUMP_MODES {
@@ -91,6 +92,8 @@ typedef struct {
 
 static jl_value_t *jl_idtable_type = NULL;
 static jl_typename_t *jl_idtable_typename = NULL;
+static jl_value_t *jl_bigint_type = NULL;
+static int gmp_limb_size = 0;
 static arraylist_t builtin_typenames;
 
 enum RefTags {
@@ -126,12 +129,12 @@ typedef enum {
 #define write_uint8(s, n) ios_putc((n), (s))
 #define read_uint8(s) ((uint8_t)ios_getc((s)))
 
-static void write_uint32(ios_t *s, uint32_t i)
+static void write_uint32(ios_t *s, uint32_t i) JL_NOTSAFEPOINT
 {
     ios_write(s, (char*)&i, 4);
 }
 
-static uint32_t read_uint32(ios_t *s)
+static uint32_t read_uint32(ios_t *s) JL_NOTSAFEPOINT
 {
     uint32_t x = 0;
     ios_read(s, (char*)&x, 4);
@@ -141,7 +144,6 @@ static uint32_t read_uint32(ios_t *s)
 
 // --- Static Compile ---
 
-extern int globalUnique;
 static void *jl_sysimg_handle = NULL;
 static uint64_t sysimage_base = 0;
 static uintptr_t *sysimg_gvars_base = NULL;
@@ -163,17 +165,16 @@ static void jl_load_sysimg_so(void)
     int imaging_mode = jl_generating_output() && !jl_options.incremental;
     // in --build mode only use sysimg data, not precompiled native code
     if (!imaging_mode && jl_options.use_sysimage_native_code==JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES) {
-        sysimg_gvars_base = (uintptr_t*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_base");
-        sysimg_gvars_offsets = (const int32_t*)jl_dlsym(jl_sysimg_handle,
-                                                        "jl_sysimg_gvars_offsets");
+        jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_base", (void **)&sysimg_gvars_base, 1);
+        jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_offsets", (void **)&sysimg_gvars_offsets, 1);
         sysimg_gvars_offsets += 1;
         assert(sysimg_fptrs.base);
-        globalUnique = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_globalUnique");
 #ifdef JULIA_ENABLE_THREADING
-        uintptr_t *tls_getter_slot = (uintptr_t*)jl_dlsym(jl_sysimg_handle,
-                                                          "jl_get_ptls_states_slot");
+        uintptr_t *tls_getter_slot;
+        jl_dlsym(jl_sysimg_handle, "jl_get_ptls_states_slot", (void **)&tls_getter_slot, 1);
         *tls_getter_slot = (uintptr_t)jl_get_ptls_states_getter();
-        size_t *tls_offset_idx = (size_t*)jl_dlsym(jl_sysimg_handle, "jl_tls_offset");
+        size_t *tls_offset_idx;
+        jl_dlsym(jl_sysimg_handle, "jl_tls_offset", (void **)&tls_offset_idx, 1);
         *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
 #endif
 
@@ -192,9 +193,11 @@ static void jl_load_sysimg_so(void)
     else {
         memset(&sysimg_fptrs, 0, sizeof(sysimg_fptrs));
     }
-    const char *sysimg_data = (const char*)jl_dlsym(jl_sysimg_handle, "jl_system_image_data");
-    size_t len = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_system_image_size");
-    jl_restore_system_image_data(sysimg_data, len);
+    const char *sysimg_data;
+    jl_dlsym(jl_sysimg_handle, "jl_system_image_data", (void **)&sysimg_data, 1);
+    size_t *plen;
+    jl_dlsym(jl_sysimg_handle, "jl_system_image_size", (void **)&plen, 1);
+    jl_restore_system_image_data(sysimg_data, *plen);
 }
 
 
@@ -303,7 +306,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
     }
 }
 
-static void ios_ensureroom(ios_t *s, size_t newsize)
+static void ios_ensureroom(ios_t *s, size_t newsize) JL_NOTSAFEPOINT
 {
     size_t prevsize = s->size;
     if (prevsize < newsize) {
@@ -313,7 +316,7 @@ static void ios_ensureroom(ios_t *s, size_t newsize)
     }
 }
 
-static void record_gvar(jl_serializer_state *s, int gid, uintptr_t reloc_id)
+static void record_gvar(jl_serializer_state *s, int gid, uintptr_t reloc_id) JL_NOTSAFEPOINT
 {
     if (gid == 0)
         return;
@@ -324,7 +327,7 @@ static void record_gvar(jl_serializer_state *s, int gid, uintptr_t reloc_id)
 }
 
 
-static void write_padding(ios_t *s, size_t nb)
+static void write_padding(ios_t *s, size_t nb) JL_NOTSAFEPOINT
 {
     static const char zeros[16] = {0};
     while (nb > 16) {
@@ -336,7 +339,7 @@ static void write_padding(ios_t *s, size_t nb)
 }
 
 
-static void write_pointer(ios_t *s)
+static void write_pointer(ios_t *s) JL_NOTSAFEPOINT
 {
     assert((ios_pos(s) & (sizeof(void*) - 1)) == 0 && "stream misaligned for writing a word-sized value");
     write_padding(s, sizeof(void*));
@@ -344,7 +347,7 @@ static void write_pointer(ios_t *s)
 
 
 #define backref_id(s, v) _backref_id(s, (jl_value_t*)(v))
-static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v)
+static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v) JL_NOTSAFEPOINT
 {
     assert(v != NULL && "cannot get backref to NULL object");
     void *idx = HT_NOTFOUND;
@@ -372,7 +375,7 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v)
 }
 
 
-static void write_pointerfield(jl_serializer_state *s, jl_value_t *fld)
+static void write_pointerfield(jl_serializer_state *s, jl_value_t *fld) JL_NOTSAFEPOINT
 {
     if (fld != NULL) {
         arraylist_push(&s->relocs_list, (void*)(uintptr_t)ios_pos(s->s));
@@ -381,7 +384,7 @@ static void write_pointerfield(jl_serializer_state *s, jl_value_t *fld)
     write_pointer(s->s);
 }
 
-static void write_gctaggedfield(jl_serializer_state *s, uintptr_t ref)
+static void write_gctaggedfield(jl_serializer_state *s, uintptr_t ref) JL_NOTSAFEPOINT
 {
     arraylist_push(&s->gctags_list, (void*)(uintptr_t)ios_pos(s->s));
     arraylist_push(&s->gctags_list, (void*)ref);
@@ -471,7 +474,7 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
                 write_pointer(s->s);
                 tot += sizeof(void*);
             }
-            newm = (jl_module_t*)&s->s->buf[reloc_offset];
+            // newm = (jl_module_t*)&s->s->buf[reloc_offset];
         }
     }
 }
@@ -566,8 +569,7 @@ static void jl_write_values(jl_serializer_state *s)
             // make some header modifications in-place
             jl_array_t *newa = (jl_array_t*)&s->s->buf[reloc_offset];
             size_t alen = jl_array_len(ar);
-            size_t extra = (!ar->flags.ptrarray && jl_is_uniontype(jl_tparam0(jl_typeof(ar)))) ? alen : 0;
-            size_t tot = alen * ar->elsize + extra;
+            size_t tot = alen * ar->elsize;
             if (newa->flags.ndims == 1)
                 newa->maxsize = alen;
             newa->offset = 0;
@@ -586,9 +588,12 @@ static void jl_write_values(jl_serializer_state *s)
                 assert(data < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "offset to constant data too large");
                 arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_array_t, data))); // relocation location
                 arraylist_push(&s->relocs_list, (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + data)); // relocation target
-                if (ar->elsize == 1)
+                int isbitsunion = jl_array_isbitsunion(ar);
+                if (ar->elsize == 1 && !isbitsunion)
                     tot += 1;
                 ios_write(s->const_data, (char*)jl_array_data(ar), tot);
+                if (isbitsunion)
+                    ios_write(s->const_data, jl_array_typetagdata(ar), alen);
             }
             else {
                 newa->data = (void*)tsz; // relocation offset
@@ -626,6 +631,23 @@ static void jl_write_values(jl_serializer_state *s)
             assert(t->layout->npointers == 0);
             if (t->size > 0)
                 ios_write(s->s, (char*)v, t->size);
+        }
+        else if (jl_bigint_type && jl_typeis(v, jl_bigint_type)) {
+            jl_value_t *sizefield = jl_get_nth_field(v, 1);
+            int32_t sz = jl_unbox_int32(sizefield);
+            int32_t nw = (sz == 0 ? 1 : (sz < 0 ? -sz : sz));
+            size_t nb = nw * gmp_limb_size;
+            ios_write(s->s, (char*)&nw, sizeof(int32_t));
+            ios_write(s->s, (char*)&sz, sizeof(int32_t));
+            uintptr_t data = LLT_ALIGN(ios_pos(s->const_data), 8);
+            write_padding(s->const_data, data - ios_pos(s->const_data));
+            data /= sizeof(void*);
+            assert(data < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "offset to constant data too large");
+            arraylist_push(&s->relocs_list, (void*)(reloc_offset + 8)); // relocation location
+            arraylist_push(&s->relocs_list, (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + data)); // relocation target
+            void *pdata = jl_unbox_voidpointer(jl_get_nth_field(v, 2));
+            ios_write(s->const_data, (char*)pdata, nb);
+            write_pointer(s->s);
         }
         else {
             size_t i, nf = jl_datatype_nfields(t);
@@ -994,6 +1016,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
     for (i = 0; i < sysimg_fvars_max; i++) {
         uintptr_t val = (uintptr_t)&linfos[i];
         uint32_t offset = load_uint32(&val);
+        linfos[i] = NULL;
         if (offset != 0) {
             int specfunc = 1;
             if (offset & ((uintptr_t)1 << (8 * sizeof(uint32_t) - 1))) {
@@ -1073,10 +1096,9 @@ static void jl_finalize_serializer(jl_serializer_state *s)
 }
 
 
-void jl_typemap_rehash(union jl_typemap_t ml, int8_t offs);
+void jl_typemap_rehash(jl_typemap_t *ml, int8_t offs);
 static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     JL_TRY {
         switch (how) {
             case 1: { // rehash IdDict
@@ -1149,7 +1171,7 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
         jl_printf(JL_STDERR, "WARNING: error while reinitializing value ");
         jl_static_show(JL_STDERR, v);
         jl_printf(JL_STDERR, ":\n");
-        jl_static_show(JL_STDERR, ptls->exception_in_transit);
+        jl_static_show(JL_STDERR, jl_current_exception());
         jl_printf(JL_STDERR, "\n");
     }
 }
@@ -1241,6 +1263,11 @@ static void jl_save_system_image_to_stream(ios_t *f)
 
     jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("IdDict")) : NULL;
     jl_idtable_typename = jl_base_module ? ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_idtable_type))->name : NULL;
+    jl_bigint_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("BigInt")) : NULL;
+    if (jl_bigint_type) {
+        gmp_limb_size = jl_unbox_long(jl_get_global((jl_module_t*)jl_get_global(jl_base_module, jl_symbol("GMP")),
+                                                    jl_symbol("BITS_PER_LIMB"))) / 8;
+    }
 
     { // step 1: record values (recursively) that need to go in the image
         jl_serialize_value(&s, jl_core_module);
@@ -1380,14 +1407,15 @@ JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 
     // Get handle to sys.so
     if (!is_ji) // .ji extension => load .ji file only
-        jl_set_sysimg_so(jl_load_dynamic_library(fname, JL_RTLD_LOCAL | JL_RTLD_NOW));
+        jl_set_sysimg_so(jl_load_dynamic_library(fname, JL_RTLD_LOCAL | JL_RTLD_NOW, 1));
 }
 
 // Allow passing in a module handle directly, rather than a path
 JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
 {
-    void* *jl_RTLD_DEFAULT_handle_pointer = (void**)jl_dlsym_e(handle, "jl_RTLD_DEFAULT_handle_pointer");
-    if (!jl_RTLD_DEFAULT_handle_pointer || (void*)&jl_RTLD_DEFAULT_handle != *jl_RTLD_DEFAULT_handle_pointer)
+    void* *jl_RTLD_DEFAULT_handle_pointer;
+    int symbol_found = jl_dlsym(handle, "jl_RTLD_DEFAULT_handle_pointer", (void **)&jl_RTLD_DEFAULT_handle_pointer, 0);
+    if (!symbol_found || (void*)&jl_RTLD_DEFAULT_handle != *jl_RTLD_DEFAULT_handle_pointer)
         jl_error("System image file failed consistency check: maybe opened the wrong version?");
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
@@ -1398,7 +1426,6 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
 static void jl_restore_system_image_from_stream(ios_t *f)
 {
     JL_TIMING(SYSIMG_LOAD);
-    jl_ptls_t ptls = jl_get_ptls_states();
     int en = jl_gc_enable(0);
     jl_init_serializer2(0);
     ios_t sysimg, const_data, symbols, relocs, gvar_record, fptr_record;
@@ -1413,6 +1440,11 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     s.ptls = jl_get_ptls_states();
     arraylist_new(&s.relocs_list, 0);
     arraylist_new(&s.gctags_list, 0);
+    jl_bigint_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("BigInt")) : NULL;
+    if (jl_bigint_type) {
+        gmp_limb_size = jl_unbox_long(jl_get_global((jl_module_t*)jl_get_global(jl_base_module, jl_symbol("GMP")),
+                                                    jl_symbol("BITS_PER_LIMB"))) / 8;
+    }
 
     // step 1: read section map and apply relocations
     assert(ios_pos(f) == 0 && f->bm == bm_mem);
@@ -1456,6 +1488,7 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     deser_tag.items[0] = (void*)const_data.buf;
     jl_read_relocations(&s, GC_OLD_MARKED); // gctags
     size_t sizeof_tags = ios_pos(&relocs);
+    (void)sizeof_tags;
     jl_read_relocations(&s, 0); // general relocs
     ios_close(&relocs);
     ios_close(&const_data);
@@ -1484,7 +1517,6 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     jl_module_init_order = jl_finalize_deserializer(&s, NULL);
     jl_main_module = (jl_module_t*)jl_read_value(&s);
     jl_top_module = (jl_module_t*)jl_read_value(&s);
-    jl_internal_main_module = jl_main_module;
 
     jl_typeinf_func = (jl_function_t*)jl_read_value(&s);
     jl_typeinf_world = read_uint32(f);
@@ -1505,12 +1537,11 @@ static void jl_restore_system_image_from_stream(ios_t *f)
         jl_gc_wb(tn, tn->cache);
         tn->linearcache = (jl_svec_t*)jl_read_value(&s);
         jl_gc_wb(tn, tn->linearcache);
-        jl_resort_type_cache(tn->cache);
+        jl_sort_types(jl_svec_data(tn->cache), jl_svec_len(tn->cache));
     }
 
     jl_core_module = (jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Core"));
     jl_base_module = (jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Base"));
-    ptls->current_module = jl_base_module; // run start_image in Base
 
     uint32_t uid_ctr = read_uint32(f);
     uint32_t gs_ctr = read_uint32(f);
@@ -1600,9 +1631,8 @@ static void jl_init_serializer2(int for_serialize)
                      jl_expr_type, jl_globalref_type, jl_string_type,
                      jl_module_type, jl_tvar_type, jl_method_instance_type, jl_method_type,
                      jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
-                     call_sym, invoke_sym, goto_ifnot_sym, return_sym, body_sym, line_sym,
-                     unreachable_sym,
-                     lambda_sym, jl_symbol("tuple"), assign_sym,
+                     call_sym, invoke_sym, goto_ifnot_sym, return_sym, jl_symbol("tuple"),
+                     unreachable_sym, jl_an_empty_string,
                      jl_linenumbernode_type, jl_lineinfonode_type,
                      jl_gotonode_type, jl_quotenode_type,
                      jl_pinode_type, jl_phinode_type, jl_phicnode_type, jl_upsilonnode_type,
@@ -1611,7 +1641,7 @@ static void jl_init_serializer2(int for_serialize)
                      jl_densearray_type, jl_void_type, jl_function_type, jl_typeofbottom_type,
                      jl_unionall_type, jl_typename_type, jl_builtin_type, jl_code_info_type,
                      jl_task_type, jl_uniontype_type, jl_typetype_type, jl_abstractstring_type,
-                     jl_ANY_flag, jl_array_any_type, jl_intrinsic_type, jl_abstractslot_type,
+                     jl_array_any_type, jl_intrinsic_type, jl_abstractslot_type,
                      jl_methtable_type, jl_typemap_level_type, jl_typemap_entry_type,
                      jl_voidpointer_type, jl_newvarnode_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
@@ -1637,6 +1667,7 @@ static void jl_init_serializer2(int for_serialize)
                      jl_namedtuple_type, jl_namedtuple_typename,
 
                      jl_int32_type, jl_int64_type, jl_bool_type, jl_uint8_type,
+                     jl_uint32_type, jl_uint64_type,
 
                      // empirical list of very common symbols
                      #include "common_symbols1.inc"

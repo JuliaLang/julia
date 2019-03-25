@@ -3,6 +3,8 @@
 eltype(::Type{<:AbstractSet{T}}) where {T} = @isdefined(T) ? T : Any
 sizehint!(s::AbstractSet, n) = nothing
 
+copy!(dst::AbstractSet, src::AbstractSet) = union!(empty!(dst), src)
+
 """
     union(s, itrs...)
     ∪(s, itrs...)
@@ -59,12 +61,19 @@ julia> a
 Set([7, 4, 3, 5, 1])
 ```
 """
-union!(s::AbstractSet, sets...) = foldl(union!, s, sets)
+function union!(s::AbstractSet, sets...)
+    for x in sets
+        union!(s, x)
+    end
+    return s
+end
 
 max_values(::Type) = typemax(Int)
-max_values(T::Type{<:Union{Nothing,BitIntegerSmall}}) = 1 << (8*sizeof(T))
-max_values(T::Union) = max(max_values(T.a), max_values(T.b))
+max_values(T::Union{map(X -> Type{X}, BitIntegerSmall_types)...}) = 1 << (8*sizeof(T))
+# saturated addition to prevent overflow with typemax(Int)
+max_values(T::Union) = max(max_values(T.a), max_values(T.b), max_values(T.a) + max_values(T.b))
 max_values(::Type{Bool}) = 2
+max_values(::Type{Nothing}) = 1
 
 function union!(s::AbstractSet{T}, itr) where T
     haslength(itr) && sizehint!(s, length(s) + length(itr))
@@ -109,7 +118,12 @@ const ∩ = intersect
 Intersect all passed in sets and overwrite `s` with the result.
 Maintain order with arrays.
 """
-intersect!(s::AbstractSet, itrs...) = foldl(intersect!, s, itrs)
+function intersect!(s::AbstractSet, itrs...)
+    for x in itrs
+        intersect!(s, x)
+    end
+    return s
+end
 intersect!(s::AbstractSet, s2::AbstractSet) = filter!(_in(s2), s)
 intersect!(s::AbstractSet, itr) =
     intersect!(s, union!(emptymutable(s, eltype(itr)), itr))
@@ -147,8 +161,18 @@ julia> a
 Set([4])
 ```
 """
-setdiff!(s::AbstractSet, itrs...) = foldl(setdiff!, s, itrs)
-setdiff!(s::AbstractSet, itr) = foldl(delete!, s, itr)
+function setdiff!(s::AbstractSet, itrs...)
+    for x in itrs
+        setdiff!(s, x)
+    end
+    return s
+end
+function setdiff!(s::AbstractSet, itr)
+    for x in itr
+        delete!(s, x)
+    end
+    return s
+end
 
 
 """
@@ -185,7 +209,12 @@ Construct the symmetric difference of the passed in sets, and overwrite `s` with
 When `s` is an array, the order is maintained.
 Note that in this case the multiplicity of elements matters.
 """
-symdiff!(s::AbstractSet, itrs...) = foldl(symdiff!, s, itrs)
+function symdiff!(s::AbstractSet, itrs...)
+    for x in itrs
+        symdiff!(s, x)
+    end
+    return s
+end
 
 function symdiff!(s::AbstractSet, itr)
     for x in itr
@@ -201,14 +230,15 @@ end
 <=(l::AbstractSet, r::AbstractSet) = l ⊆ r
 
 function issubset(l, r)
+    if haslength(r)
+        rlen = length(r)
+        #This threshold was empirically determined by repeatedly
+        #sampling using these two methods (see #26198)
+        lenthresh = 70
 
-    rlen = length(r)
-    #This threshold was empirically determined by repeatedly
-    #sampling using these two methods.
-    lenthresh = 70
-
-    if rlen > lenthresh && !isa(r, AbstractSet)
-       return issubset(l, Set(r))
+        if rlen > lenthresh && !isa(r, AbstractSet)
+            return issubset(l, Set(r))
+        end
     end
 
     for elt in l

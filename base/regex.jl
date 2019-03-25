@@ -4,9 +4,19 @@
 
 include("pcre.jl")
 
-const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.ALT_BSUX | PCRE.UCP
-const DEFAULT_MATCH_OPTS = zero(UInt32)
+const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.NO_UTF_CHECK | PCRE.ALT_BSUX | PCRE.UCP
+const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
 
+"""
+    Regex(pattern[, flags])
+
+A type representing a regular expression. `Regex` objects can be used to match strings
+with [`match`](@ref).
+
+`Regex` objects can be created using the [`@r_str`](@ref) string macro. The
+`Regex(pattern[, flags])` constructor is usually used if the `pattern` string needs
+to be interpolated. See the documentation of the string macro for details on flags.
+"""
 mutable struct Regex
     pattern::String
     compile_options::UInt32
@@ -80,6 +90,8 @@ listed after the ending quote, to change its behaviour:
 - `a` disables `UCP` mode (enables ASCII mode). By default `\\B`, `\\b`, `\\D`, `\\d`, `\\S`,
   `\\s`, `\\W`, `\\w`, etc. match based on Unicode character properties. With this option,
   these sequences only match ASCII characters.
+
+See `Regex` if interpolation is needed.
 
 # Examples
 ```jldoctest
@@ -159,6 +171,74 @@ end
 function occursin(r::Regex, s::SubString; offset::Integer=0)
     compile(r)
     return PCRE.exec(r.regex, s, offset, r.match_options,
+                     r.match_data)
+end
+
+"""
+    startswith(s::AbstractString, prefix::Regex)
+
+Return `true` if `s` starts with the regex pattern, `prefix`.
+
+!!! note
+    `startswith` does not compile the anchoring into the regular
+    expression, but instead passes the anchoring as
+    `match_option` to PCRE. If compile time is amortized,
+    `occursin(r"^...", s)` is faster than `startswith(s, r"...")`.
+
+See also [`occursin`](@ref) and [`endswith`](@ref).
+
+!!! compat "Julia 1.2"
+     This method requires at least Julia 1.2.
+
+# Examples
+```jldoctest
+julia> startswith("JuliaLang", r"Julia|Romeo")
+true
+```
+"""
+function startswith(s::AbstractString, r::Regex)
+    compile(r)
+    return PCRE.exec(r.regex, String(s), 0, r.match_options | PCRE.ANCHORED,
+                     r.match_data)
+end
+
+function startswith(s::SubString, r::Regex)
+    compile(r)
+    return PCRE.exec(r.regex, s, 0, r.match_options | PCRE.ANCHORED,
+                     r.match_data)
+end
+
+"""
+    endswith(s::AbstractString, suffix::Regex)
+
+Return `true` if `s` ends with the regex pattern, `suffix`.
+
+!!! note
+    `endswith` does not compile the anchoring into the regular
+    expression, but instead passes the anchoring as
+    `match_option` to PCRE. If compile time is amortized,
+    `occursin(r"...\$", s)` is faster than `endswith(s, r"...")`.
+
+See also [`occursin`](@ref) and [`startswith`](@ref).
+
+!!! compat "Julia 1.2"
+     This method requires at least Julia 1.2.
+
+# Examples
+```jldoctest
+julia> endswith("JuliaLang", r"Lang|Roberts")
+true
+```
+"""
+function endswith(s::AbstractString, r::Regex)
+    compile(r)
+    return PCRE.exec(r.regex, String(s), 0, r.match_options | PCRE.ENDANCHORED,
+                     r.match_data)
+end
+
+function endswith(s::SubString, r::Regex)
+    compile(r)
+    return PCRE.exec(r.regex, s, 0, r.match_options | PCRE.ENDANCHORED,
                      r.match_data)
 end
 
@@ -394,7 +474,7 @@ function iterate(itr::RegexMatchIterator, (offset,prevempty)=(1,false))
 end
 
 """
-    eachmatch(r::Regex, s::AbstractString; overlap::Bool=false])
+    eachmatch(r::Regex, s::AbstractString; overlap::Bool=false)
 
 Search for all matches of a the regular expression `r` in `s` and return a iterator over the
 matches. If overlap is `true`, the matching sequences are allowed to overlap indices in the

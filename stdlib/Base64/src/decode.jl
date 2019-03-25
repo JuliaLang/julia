@@ -109,6 +109,7 @@ function Base.read(pipe::Base64DecodePipe, ::Type{UInt8})
 end
 
 function Base.readbytes!(pipe::Base64DecodePipe, data::AbstractVector{UInt8}, nb::Integer=length(data))
+    require_one_based_indexing(data)
     filled::Int = 0
     while filled < nb && !eof(pipe)
         if length(data) == filled

@@ -136,7 +136,7 @@ function sqrmod!(f::GF2X, m::GF2X)::GF2X
         x2i = GF2X(1)
         GF2X[copy(mulxmod!(mulxmod!(x2i, m, d+1), m, d+1)) for i=1:d]
     end
-    foldl(GF2X(0), filter(i->coeff(f, i), 0:degree(f))) do g, i
+    foldl(filter(i->coeff(f, i), 0:degree(f)); init=GF2X(0)) do g, i
         i <= d÷2 ? # optimization for "simple" squares
             setcoeff!(g, 2i) :
             xor!(g, sqrs[i])
@@ -146,7 +146,7 @@ end
 # compute X^e mod m
 function powxmod(e::BigInt, m::GF2X)::GF2X
     e < 0 && throw(DomainError("e must be >= 0"))
-    foldl(GF2X(1), Base.ndigits0z(e, 2)-1:-1:0) do f, i
+    foldl(Base.ndigits0z(e, 2)-1:-1:0; init=GF2X(1)) do f, i
         MPZ.tstbit(e, i) ?
             mulxmod!(sqrmod!(f, m), m) :
             sqrmod!(f, m)
@@ -156,12 +156,13 @@ end
 "Cached jump polynomials for `MersenneTwister`."
 const JumpPolys = Dict{BigInt,GF2X}()
 
-const CharPoly = Ref{GF2X}()
-# Ref because it can not be initialized at compile time
-
-function __init__()
-    CharPoly[] = GF2X(Poly19937)
-    JumpPolys[big(10)^20] = GF2X(JPOLY1e20)
+const CharPoly_ref = Ref{GF2X}()
+# Ref because it can not be initialized at load time
+function CharPoly()
+    if !isassigned(CharPoly_ref)
+        CharPoly_ref[] = GF2X(Poly19937)
+    end
+    return CharPoly_ref[]
 end
 
 """
@@ -172,8 +173,11 @@ the Mersenne-Twister with exponent 19937). Note that `steps` should be
 less than the period (e.g. ``steps ≪ 2^19937-1``).
 """
 function calc_jump(steps::Integer,
-                   charpoly::GF2X=CharPoly[])::GF2X
-    steps < 0 && throw(DomainError("jump steps must be < 0 (got $steps)"))
+                   charpoly::GF2X=CharPoly())::GF2X
+    steps < 0 && throw(DomainError("jump steps must be >= 0 (got $steps)"))
+    if isempty(JumpPolys)
+        JumpPolys[big(10)^20] = GF2X(JPOLY1e20)
+    end
     get!(JumpPolys, steps) do
         powxmod(big(steps), charpoly)
     end
@@ -183,7 +187,7 @@ end
 ## dSFMT jump
 
 function dsfmt_jump(s::DSFMT_state, jp::GF2X)
-    degree(jp) < degree(CharPoly[]) || throw(DomainError("degree of jump polynomial must be < $(degree(CharPoly[])), got $(degree(jp))"))
+    degree(jp) < degree(CharPoly()) || throw(DomainError("degree of jump polynomial must be < $(degree(CharPoly())), got $(degree(jp))"))
 
     val = s.val
     nval = length(val)

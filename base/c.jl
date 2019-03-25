@@ -39,7 +39,7 @@ unsafe_convert(::Type{Ptr{Cvoid}}, cf::CFunction) = cf.ptr
     @cfunction(callable, ReturnType, (ArgumentTypes...,)) -> Ptr{Cvoid}
     @cfunction(\$callable, ReturnType, (ArgumentTypes...,)) -> CFunction
 
-Generate a C-callable function pointer from the Julia function `closure`
+Generate a C-callable function pointer from the Julia function `callable`
 for the given type signature.
 To pass the return value to a `ccall`, use the argument type `Ptr{Cvoid}` in the signature.
 
@@ -121,6 +121,31 @@ Culong
 Equivalent to the native `wchar_t` c-type ([`Int32`](@ref)).
 """
 Cwchar_t
+
+"""
+    Cwstring
+
+A C-style string composed of the native wide character type
+[`Cwchar_t`](@ref)s. `Cwstring`s are NUL-terminated. For
+C-style strings composed of the native character
+type, see [`Cstring`](@ref). For more information
+about string interopability with C, see the
+[manual](@ref man-bits-types).
+
+"""
+Cwstring
+
+"""
+    Cstring
+
+A C-style string composed of the native character type
+[`Cchar`](@ref)s. `Cstring`s are NUL-terminated. For
+C-style strings composed of the native wide character
+type, see [`Cwstring`](@ref). For more information
+about string interopability with C, see the
+[manual](@ref man-bits-types).
+"""
+Cstring
 
 @static if ccall(:jl_get_UNAME, Any, ()) !== :NT
     const sizeof_mode_t = ccall(:jl_sizeof_mode_t, Cint, ())
@@ -214,7 +239,7 @@ unsafe_convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, 
 
 Converts a string `s` to a NUL-terminated `Vector{Cwchar_t}`, suitable for passing to C
 functions expecting a `Ptr{Cwchar_t}`. The main advantage of using this over the implicit
-conversion provided by `Cwstring` is if the function is called multiple times with the
+conversion provided by [`Cwstring`](@ref) is if the function is called multiple times with the
 same argument.
 
 This is only available on Windows.
@@ -236,7 +261,7 @@ Convert string data between Unicode encodings. `src` is either a
 `String` or a `Vector{UIntXX}` of UTF-XX code units, where
 `XX` is 8, 16, or 32. `T` indicates the encoding of the return value:
 `String` to return a (UTF-8 encoded) `String` or `UIntXX`
-to return a `Vector{UIntXX}` of UTF-`XX` data.   (The alias `Cwchar_t`
+to return a `Vector{UIntXX}` of UTF-`XX` data. (The alias [`Cwchar_t`](@ref)
 can also be used as the integer type, for converting `wchar_t*` strings
 used by external C libraries.)
 
@@ -250,18 +275,24 @@ function transcode end
 
 transcode(::Type{T}, src::AbstractVector{T}) where {T<:Union{UInt8,UInt16,UInt32,Int32}} = src
 transcode(::Type{T}, src::String) where {T<:Union{Int32,UInt32}} = T[T(c) for c in src]
-transcode(::Type{T}, src::Union{Vector{UInt8},CodeUnits{UInt8,String}}) where {T<:Union{Int32,UInt32}} =
+transcode(::Type{T}, src::AbstractVector{UInt8}) where {T<:Union{Int32,UInt32}} =
+    transcode(T, String(Vector(src)))
+transcode(::Type{T}, src::CodeUnits{UInt8,String}) where {T<:Union{Int32,UInt32}} =
     transcode(T, String(src))
+
 function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
     buf = IOBuffer()
-    for c in src; print(buf, Char(c)); end
+    for c in src
+        print(buf, Char(c))
+    end
     take!(buf)
 end
 transcode(::Type{String}, src::String) = src
 transcode(T, src::String) = transcode(T, codeunits(src))
 transcode(::Type{String}, src) = String(transcode(UInt8, src))
 
-function transcode(::Type{UInt16}, src::Union{Vector{UInt8},CodeUnits{UInt8,String}})
+function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
+    require_one_based_indexing(src)
     dst = UInt16[]
     i, n = 1, length(src)
     n > 0 || return dst
@@ -311,7 +342,8 @@ function transcode(::Type{UInt16}, src::Union{Vector{UInt8},CodeUnits{UInt8,Stri
     return dst
 end
 
-function transcode(::Type{UInt8}, src::Vector{UInt16})
+function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
+    require_one_based_indexing(src)
     n = length(src)
     n == 0 && return UInt8[]
 
@@ -421,7 +453,7 @@ end
     reenable_sigint(f::Function)
 
 Re-enable Ctrl-C handler during execution of a function.
-Temporarily reverses the effect of `disable_sigint`.
+Temporarily reverses the effect of [`disable_sigint`](@ref).
 """
 function reenable_sigint(f::Function)
     sigatomic_end()

@@ -93,12 +93,24 @@ let shastr = "ab"^20
     @test "check $hash" == "check $shastr"
 end
 
+let shastr1 = "ab"^20, shastr2 = "ac"^20
+    hash1 = SHA1(shastr1)
+    hash2 = SHA1(shastr2)
+    @test isless(hash1, hash2)
+    @test !isless(hash2, hash1)
+    @test !isless(hash1, hash1)
+end
+
 let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
     uuid = UUID(uuidstr)
     @test uuid == eval(Meta.parse(repr(uuid))) # check show method
     @test string(uuid) == uuidstr == sprint(print, uuid)
     @test "check $uuid" == "check $uuidstr"
+    @test UUID(UInt128(uuid)) == uuid
+    @test UUID(convert(NTuple{2, UInt64}, uuid)) == uuid
+    @test UUID(convert(NTuple{4, UInt32}, uuid)) == uuid
 end
+@test_throws ArgumentError UUID("@"^4 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^6)
 
 function subset(v::Vector{T}, m::Int) where T
     T[v[j] for j = 1:length(v) if ((m >>> (j - 1)) & 1) == 1]
@@ -161,19 +173,24 @@ end
 
 saved_load_path = copy(LOAD_PATH)
 saved_depot_path = copy(DEPOT_PATH)
+saved_home_project = Base.HOME_PROJECT[]
+saved_active_project = Base.ACTIVE_PROJECT[]
+
 push!(empty!(LOAD_PATH), "project")
 push!(empty!(DEPOT_PATH), "depot")
+Base.HOME_PROJECT[] = nothing
+Base.ACTIVE_PROJECT[] = nothing
 
 @test load_path() == [abspath("project","Project.toml")]
 
 @testset "project & manifest identify_package & locate_package" begin
     local path
     for (names, uuid, path) in [
-        ("Foo",     "767738be-2f1f-45a9-b806-0234f3164144", "project/deps/Foo1/src/Foo.jl"      ),
-        ("Bar.Foo", "6f418443-bd2e-4783-b551-cdbac608adf2", "project/deps/Foo2.jl/src/Foo.jl"   ),
-        ("Bar",     "2a550a13-6bab-4a91-a4ee-dff34d6b99d0", "project/deps/Bar/src/Bar.jl"       ),
-        ("Foo.Baz", "6801f525-dc68-44e8-a4e8-cabd286279e7", "depot/packages/Baz/81oL/src/Baz.jl"),
-        ("Foo.Qux", "b5ec9b9c-e354-47fd-b367-a348bdc8f909", "project/deps/Qux.jl"               ),
+        ("Foo",     "767738be-2f1f-45a9-b806-0234f3164144", "project/deps/Foo1/src/Foo.jl"       ),
+        ("Bar.Foo", "6f418443-bd2e-4783-b551-cdbac608adf2", "project/deps/Foo2.jl/src/Foo.jl"    ),
+        ("Bar",     "2a550a13-6bab-4a91-a4ee-dff34d6b99d0", "project/deps/Bar/src/Bar.jl"        ),
+        ("Foo.Baz", "6801f525-dc68-44e8-a4e8-cabd286279e7", "depot/packages/Baz/81oLe/src/Baz.jl"),
+        ("Foo.Qux", "b5ec9b9c-e354-47fd-b367-a348bdc8f909", "project/deps/Qux.jl"                ),
     ]
         n = map(String, split(names, '.'))
         pkg = identify_package(n...)
@@ -213,6 +230,8 @@ push!(empty!(DEPOT_PATH), "depot")
     end
 end
 
+module NotPkgModule; end
+
 @testset "project & manifest import" begin
     @test !@isdefined Foo
     @test !@isdefined Bar
@@ -249,6 +268,12 @@ end
         end
     end
     @test Foo.which == "path"
+
+    @testset "pathof" begin
+        @test pathof(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1/src/Foo.jl"))
+        @test pathof(NotPkgModule) === nothing
+    end
+
 end
 
 ## systematic generation of test environments ##
@@ -524,6 +549,84 @@ end
 # normalization of paths by include (#26424)
 @test_throws ErrorException("could not open file $(joinpath(@__DIR__, "notarealfile.jl"))") include("./notarealfile.jl")
 
+old_act_proj = Base.ACTIVE_PROJECT[]
+pushfirst!(LOAD_PATH, "@")
+try
+    Base.ACTIVE_PROJECT[] = joinpath(@__DIR__, "TestPkg")
+    @eval using TestPkg
+finally
+    Base.ACTIVE_PROJECT[] = old_act_proj
+    popfirst!(LOAD_PATH)
+end
+
+@testset "--project and JULIA_PROJECT paths should be absolutified" begin
+    mktempdir() do dir; cd(dir) do
+        mkdir("foo")
+        script = """
+        using Test
+        old = Base.active_project()
+        cd("foo")
+        @test Base.active_project() == old
+        """
+        @test success(`$(Base.julia_cmd()) --project=foo -e $(script)`)
+        withenv("JULIA_PROJECT" => "foo") do
+            @test success(`$(Base.julia_cmd()) -e $(script)`)
+        end
+    end; end
+end
+
+# Base.active_project when version directory exist in depot, but contains no project file
+mktempdir() do dir
+    vdir = Base.DEFAULT_LOAD_PATH[2]
+    vdir = replace(vdir, "#" => VERSION.major, count = 1)
+    vdir = replace(vdir, "#" => VERSION.minor, count = 1)
+    vdir = replace(vdir, "#" => VERSION.patch, count = 1)
+    vdir = vdir[2:end] # remove @
+    vpath = joinpath(dir, "environments", vdir)
+    mkpath(vpath)
+    withenv("JULIA_DEPOT_PATH" => dir) do
+        script = "@assert startswith(Base.active_project(), $(repr(vpath)))"
+        @test success(`$(Base.julia_cmd()) -e $(script)`)
+    end
+end
+
+@testset "expansion of JULIA_LOAD_PATH" begin
+    s = Sys.iswindows() ? ';' : ':'
+    tmp = "/foo/bar"
+    cases = Dict{Any,Vector{String}}(
+        nothing => Base.DEFAULT_LOAD_PATH,
+        "" => [],
+        "$s" => Base.DEFAULT_LOAD_PATH,
+        "$tmp$s" => [tmp; Base.DEFAULT_LOAD_PATH],
+        "$s$tmp" => [Base.DEFAULT_LOAD_PATH; tmp],
+        )
+    for (env, result) in pairs(cases)
+        withenv("JULIA_LOAD_PATH" => env) do
+            script = "LOAD_PATH == $(repr(result)) || error()"
+            @test success(`$(Base.julia_cmd()) -e $script`)
+        end
+    end
+end
+
+@testset "expansion of JULIA_DEPOT_PATH" begin
+    s = Sys.iswindows() ? ';' : ':'
+    tmp = "/foo/bar"
+    DEFAULT = Base.append_default_depot_path!(String[])
+    cases = Dict{Any,Vector{String}}(
+        nothing => DEFAULT,
+        "" => [],
+        "$s" => DEFAULT,
+        "$tmp$s" => [tmp; DEFAULT],
+        "$s$tmp" => [DEFAULT; tmp],
+        )
+    for (env, result) in pairs(cases)
+        withenv("JULIA_DEPOT_PATH" => env) do
+            script = "DEPOT_PATH == $(repr(result)) || error()"
+            @test success(`$(Base.julia_cmd()) -e $script`)
+        end
+    end
+end
+
 ## cleanup after tests ##
 
 for env in keys(envs)
@@ -533,5 +636,12 @@ for depot in depots
     rm(depot, force=true, recursive=true)
 end
 
-append!(empty!(DEPOT_PATH), saved_depot_path)
 append!(empty!(LOAD_PATH), saved_load_path)
+append!(empty!(DEPOT_PATH), saved_depot_path)
+Base.HOME_PROJECT[] = saved_home_project
+Base.ACTIVE_PROJECT[] = saved_active_project
+
+# issue #28190
+module Foo; import Libdl; end
+import .Foo.Libdl; import Libdl
+@test Foo.Libdl === Libdl

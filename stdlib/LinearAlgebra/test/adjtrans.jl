@@ -271,8 +271,10 @@ end
 
 @testset "Adjoint and Transpose vector vec methods" begin
     intvec = [1, 2]
-    @test vec(Adjoint(intvec)) === intvec
+    @test vec(Adjoint(intvec)) == intvec
     @test vec(Transpose(intvec)) === intvec
+    cvec = [1 + 1im]
+    @test vec(cvec')[1] == cvec[1]'
 end
 
 @testset "horizontal concatenation of Adjoint/Transpose-wrapped vectors and Numbers" begin
@@ -479,6 +481,27 @@ end
                   "$t of "*sprint(show, parent(Fop))
     @test "LinearAlgebra."*sprint((io, t) -> show(io, MIME"text/plain"(), t), Fop) ==
                   "$t of "*sprint((io, t) -> show(io, MIME"text/plain"(), t), parent(Fop))
+end
+
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
+
+@testset "offset axes" begin
+    s = Base.Slice(-3:3)'
+    @test axes(s) === (Base.OneTo(1), Base.IdentityUnitRange(-3:3))
+    @test collect(LinearIndices(s)) == reshape(1:7, 1, 7)
+    @test collect(CartesianIndices(s)) == reshape([CartesianIndex(1,i) for i = -3:3], 1, 7)
+    @test s[1] == -3
+    @test s[7] ==  3
+    @test s[4] ==  0
+    @test_throws BoundsError s[0]
+    @test_throws BoundsError s[8]
+    @test s[1,-3] == -3
+    @test s[1, 3] ==  3
+    @test s[1, 0] ==  0
+    @test_throws BoundsError s[1,-4]
+    @test_throws BoundsError s[1, 4]
 end
 
 end # module TestAdjointTranspose

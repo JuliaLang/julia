@@ -33,7 +33,7 @@ abstract type AbstractLogger ; end
 
 Log a message to `logger` at `level`.  The logical location at which the
 message was generated is given by module `_module` and `group`; the source
-location by `file` and `line`. `id` is an arbitrary unique `Symbol` to be used
+location by `file` and `line`. `id` is an arbitrary unique [`Symbol`](@ref) to be used
 as a key to identify the log statement when filtering.
 """
 function handle_message end
@@ -70,7 +70,7 @@ logger type.
 catch_exceptions(logger) = true
 
 
-# The logger equivalent of /dev/null, for when a placeholder is needed
+
 """
     NullLogger()
 
@@ -150,7 +150,7 @@ formatted as markdown when presented.
 The optional list of `key=value` pairs supports arbitrary user defined
 metadata which will be passed through to the logging backend as part of the
 log record.  If only a `value` expression is supplied, a key representing the
-expression will be generated using `Symbol`. For example, `x` becomes `x=x`,
+expression will be generated using [`Symbol`](@ref). For example, `x` becomes `x=x`,
 and `foo(10)` becomes `Symbol("foo(10)")=foo(10)`.  For splatting a list of
 key value pairs, use the normal splatting syntax, `@info "blah" kws...`.
 
@@ -208,11 +208,11 @@ macro _sourceinfo()
     end)
 end
 
-macro logmsg(level, message, exs...) logmsg_code((@_sourceinfo)..., esc(level), message, exs...) end
-macro debug(message, exs...) logmsg_code((@_sourceinfo)..., :Debug, message, exs...) end
-macro  info(message, exs...) logmsg_code((@_sourceinfo)..., :Info,  message, exs...) end
-macro  warn(message, exs...) logmsg_code((@_sourceinfo)..., :Warn,  message, exs...) end
-macro error(message, exs...) logmsg_code((@_sourceinfo)..., :Error, message, exs...) end
+macro logmsg(level, exs...) logmsg_code((@_sourceinfo)..., esc(level), exs...) end
+macro debug(exs...) logmsg_code((@_sourceinfo)..., :Debug, exs...) end
+macro  info(exs...) logmsg_code((@_sourceinfo)..., :Info,  exs...) end
+macro  warn(exs...) logmsg_code((@_sourceinfo)..., :Warn,  exs...) end
+macro error(exs...) logmsg_code((@_sourceinfo)..., :Error, exs...) end
 
 # Logging macros share documentation
 @eval @doc $_logmsg_docs :(@logmsg)
@@ -222,17 +222,17 @@ macro error(message, exs...) logmsg_code((@_sourceinfo)..., :Error, message, exs
 @eval @doc $_logmsg_docs :(@error)
 
 _log_record_ids = Set{Symbol}()
-# Generate a unique, stable, short, human readable identifier for a logging
-# statement.  The idea here is to have a key against which log records can be
-# filtered and otherwise manipulated. The key should uniquely identify the
-# source location in the originating module, but should be stable across
-# versions of the originating module, provided the log generating statement
-# itself doesn't change.
-function log_record_id(_module, level, message_ex)
-    modname = join(fullname(_module), "_")
-    # Use (1<<31) to fit well within an (arbitriraly chosen) eight hex digits,
-    # as we increment h to resolve any collisions.
-    h = hash(string(modname, level, message_ex)) % (1<<31)
+# Generate a unique, stable, short, somewhat human readable identifier for a
+# logging *statement*. The idea here is to have a key against which log events
+# can be filtered and otherwise manipulated. The key should uniquely identify
+# the source location in the originating module, but ideally should be stable
+# across versions of the originating module, provided the log generating
+# statement itself doesn't change.
+function log_record_id(_module, level, message, log_kws)
+    modname = _module === nothing ?  "" : join(fullname(_module), "_")
+    # Use an arbitriraly chosen eight hex digits here. TODO: Figure out how to
+    # make the id exactly the same on 32 and 64 bit systems.
+    h = UInt32(hash(string(modname, level, message, log_kws)) & 0xFFFFFFFF)
     while true
         id = Symbol(modname, '_', string(h, base = 16, pad = 8))
         # _log_record_ids is a registry of log record ids for use during
@@ -249,7 +249,7 @@ end
 
 # Generate code for logging macros
 function logmsg_code(_module, file, line, level, message, exs...)
-    id = nothing
+    id = Expr(:quote, log_record_id(_module, level, message, exs))
     group = nothing
     kwargs = Any[]
     for ex in exs
@@ -288,9 +288,19 @@ function logmsg_code(_module, file, line, level, message, exs...)
             push!(kwargs, Expr(:kw, Symbol(ex), esc(ex)))
         end
     end
-    # Note that it may be necessary to set `id` and `group` manually during bootstrap
-    id !== nothing || (id = Expr(:quote, log_record_id(_module, level, exs)))
-    group !== nothing || (group = Expr(:quote, Symbol(splitext(basename(file))[1])))
+
+    if group == nothing
+        group = if isdefined(Base, :basename) && isa(file, String)
+            # precompute if we can
+            QuoteNode(splitext(basename(file))[1])
+        else
+            # memoized run-time execution
+            ref = Ref{Symbol}()
+            :(isassigned($ref) ? $ref[]
+                               : $ref[] = Symbol(splitext(basename(something($file, "")))[1]))
+        end
+    end
+
     quote
         level = $level
         std_level = convert(LogLevel, level)
@@ -329,7 +339,7 @@ end
         handle_message(logger, Error, msg, _module, :logevent_error, id, filepath, line; exception=(err,catch_backtrace()))
     catch err2
         try
-            # Give up and write to STDERR, in three independent calls to
+            # Give up and write to stderr, in three independent calls to
             # increase the odds of it getting through.
             print(stderr, "Exception handling log message: ")
             println(stderr, err)
@@ -484,7 +494,7 @@ with_logger(f::Function, logger::AbstractLogger) = with_logstate(f, LogState(log
     current_logger()
 
 Return the logger for the current task, or the global logger if none is
-is attached to the task.
+attached to the task.
 """
 current_logger() = current_logstate().logger
 
@@ -529,7 +539,8 @@ function handle_message(logger::SimpleLogger, level, message, _module, group, id
     for (key, val) in kwargs
         println(iob, "│   ", key, " = ", val)
     end
-    println(iob, "└ @ ", _module, " ", filepath, ":", line)
+    println(iob, "└ @ ", something(_module, "nothing"), " ",
+            something(filepath, "nothing"), ":", something(line, "nothing"))
     write(logger.stream, take!(buf))
     nothing
 end

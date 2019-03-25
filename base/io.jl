@@ -176,6 +176,19 @@ julia> write(io, "Sometimes those members") + write(io, " write documentation.")
 julia> String(take!(io))
 "Sometimes those members write documentation."
 ```
+User-defined plain-data types without `write` methods can be written when wrapped in a `Ref`:
+```jldoctest
+julia> struct MyStruct; x::Float64; end
+
+julia> io = IOBuffer()
+IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=0, maxsize=Inf, ptr=1, mark=-1)
+
+julia> write(io, Ref(MyStruct(42.0)))
+8
+
+julia> seekstart(io); read!(io, Ref(MyStruct(NaN)))
+Base.RefValue{MyStruct}(MyStruct(42.0))
+```
 """
 function write end
 
@@ -235,9 +248,14 @@ readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(
 readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io), target, keep, out)
 
-readavailable(io::AbstractPipe) = readavailable(pipe_reader(io))
+for f in (
+        # peek/mark interface
+        :peek, :mark, :unmark, :reset, :ismarked,
+        # Simple reader functions
+        :readavailable, :isreadable)
+    @eval $(f)(io::AbstractPipe) = $(f)(pipe_reader(io))
+end
 
-isreadable(io::AbstractPipe) = isreadable(pipe_reader(io))
 iswritable(io::AbstractPipe) = iswritable(pipe_writer(io))
 isopen(io::AbstractPipe) = isopen(pipe_writer(io)) || isopen(pipe_reader(io))
 close(io::AbstractPipe) = (close(pipe_writer(io)); close(pipe_reader(io)))
@@ -288,6 +306,8 @@ Open a file and read its contents. `args` is passed to `read`: this is equivalen
 Read the entire contents of a file as a string.
 """
 read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
+
+read(filename::AbstractString, ::Type{T}) where {T} = open(io->read(io, T), filename)
 
 """
     read!(stream::IO, array::Union{Array, BitArray})
@@ -353,21 +373,13 @@ julia> readline("my_file.txt", keep=true)
 julia> rm("my_file.txt")
 ```
 """
-function readline(filename::AbstractString; chomp=nothing, keep::Bool=false)
-    if chomp !== nothing
-        keep = !chomp
-        depwarn("The `chomp=$chomp` argument to `readline` is deprecated in favor of `keep=$keep`.", :readline)
-    end
+function readline(filename::AbstractString; keep::Bool=false)
     open(filename) do f
         readline(f, keep=keep)
     end
 end
 
-function readline(s::IO=stdin; chomp=nothing, keep::Bool=false)
-    if chomp !== nothing
-        keep = !chomp
-        depwarn("The `chomp=$chomp` argument to `readline` is deprecated in favor of `keep=$keep`.", :readline)
-    end
+function readline(s::IO=stdin; keep::Bool=false)::String
     line = readuntil(s, 0x0a, keep=true)
     i = length(line)
     if keep || i == 0 || line[i] != 0x0a
@@ -519,7 +531,7 @@ write(to::IO, p::Ptr) = write(to, convert(UInt, p))
 
 function write(s::IO, A::AbstractArray)
     if !isbitstype(eltype(A))
-        depwarn("Calling `write` on non-isbits arrays is deprecated. Use a loop or `serialize` instead.", :write)
+        error("`write` is not supported on non-isbits arrays")
     end
     nb = 0
     for a in A
@@ -532,17 +544,12 @@ function write(s::IO, a::Array)
     if isbitstype(eltype(a))
         return GC.@preserve a unsafe_write(s, pointer(a), sizeof(a))
     else
-        depwarn("Calling `write` on non-isbits arrays is deprecated. Use a loop or `serialize` instead.", :write)
-        nb = 0
-        for b in a
-            nb += write(s, b)
-        end
-        return nb
+        error("`write` is not supported on non-isbits arrays")
     end
 end
 
 function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
-    if !isbitstype(T)
+    if !isbitstype(T) || !isa(a, StridedArray)
         return invoke(write, Tuple{IO, AbstractArray}, s, a)
     end
     elsz = sizeof(T)
@@ -804,6 +811,7 @@ The size of `b` will be increased if needed (i.e. if `nb` is greater than `lengt
 and enough bytes could be read), but it will never be decreased.
 """
 function readbytes!(s::IO, b::AbstractArray{UInt8}, nb=length(b))
+    require_one_based_indexing(b)
     olb = lb = length(b)
     nr = 0
     while nr < nb && !eof(s)
@@ -839,13 +847,12 @@ read(s::IO, T::Type) = error("The IO stream does not support reading objects of 
 
 ## high-level iterator interfaces ##
 
-struct EachLine
-    stream::IO
+struct EachLine{IOT <: IO}
+    stream::IOT
     ondone::Function
     keep::Bool
-
     EachLine(stream::IO=stdin; ondone::Function=()->nothing, keep::Bool=false) =
-        new(stream, ondone, keep)
+        new{typeof(stream)}(stream, ondone, keep)
 end
 
 """
@@ -873,19 +880,11 @@ JuliaLang is a GitHub organization. It has many members.
 julia> rm("my_file.txt");
 ```
 """
-function eachline(stream::IO=stdin; chomp=nothing, keep::Bool=false)
-    if chomp !== nothing
-        keep = !chomp
-        depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
-    end
+function eachline(stream::IO=stdin; keep::Bool=false)
     EachLine(stream, keep=keep)::EachLine
 end
 
-function eachline(filename::AbstractString; chomp=nothing, keep::Bool=false)
-    if chomp !== nothing
-        keep = !chomp
-        depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
-    end
+function eachline(filename::AbstractString; keep::Bool=false)
     s = open(filename)
     EachLine(s, ondone=()->close(s), keep=keep)::EachLine
 end
@@ -895,9 +894,9 @@ function iterate(itr::EachLine, state=nothing)
     (readline(itr.stream, keep=itr.keep), nothing)
 end
 
-eltype(::Type{EachLine}) = String
+eltype(::Type{<:EachLine}) = String
 
-IteratorSize(::Type{EachLine}) = SizeUnknown()
+IteratorSize(::Type{<:EachLine}) = SizeUnknown()
 
 # IOStream Marking
 # Note that these functions expect that io.mark exists for
@@ -937,7 +936,7 @@ previously marked position. Throw an error if the stream is not marked.
 See also [`mark`](@ref), [`unmark`](@ref), [`ismarked`](@ref).
 """
 function reset(io::T) where T<:IO
-    ismarked(io) || throw(ArgumentError("$(T) not marked"))
+    ismarked(io) || throw(ArgumentError("$T not marked"))
     m = io.mark
     seek(io, m)
     io.mark = -1 # must be after seek, or seek may fail
@@ -988,7 +987,7 @@ function skipchars(predicate, io::IO; linecomment=nothing)
         if c === linecomment
             readline(io)
         elseif !predicate(c)
-            skip(io, -codelen(c))
+            skip(io, -ncodeunits(c))
             break
         end
     end

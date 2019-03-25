@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Core: LineInfoNode
-const NullLineInfo = LineInfoNode(@__MODULE__, Symbol(""), Symbol(""), 0, 0)
 
 if false
     import Base: Base, @show
@@ -16,7 +15,7 @@ include("compiler/ssair/domtree.jl")
 include("compiler/ssair/slot2ssa.jl")
 include("compiler/ssair/queries.jl")
 include("compiler/ssair/passes.jl")
-include("compiler/ssair/inlining2.jl")
+include("compiler/ssair/inlining.jl")
 include("compiler/ssair/verify.jl")
 include("compiler/ssair/legacy.jl")
 #@isdefined(Base) && include("compiler/ssair/show.jl")
@@ -50,7 +49,7 @@ function normalize(@nospecialize(stmt), meta::Vector{Any})
     return stmt
 end
 
-function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, spvals::SimpleVector)
+function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, sv::OptimizationState)
     # Go through and add an unreachable node after every
     # Union{} call. Then reindex labels.
     idx = 1
@@ -103,23 +102,22 @@ function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, spvals:
     defuse_insts = scan_slot_def_use(nargs, ci, code)
     @timeit "domtree 1" domtree = construct_domtree(cfg)
     ir = let code = Any[nothing for _ = 1:length(code)]
-             argtypes = ci.slottypes[1:(nargs+1)]
-            IRCode(code, Any[], ci.codelocs, flags, cfg, collect(LineInfoNode, ci.linetable), argtypes, meta, spvals)
+            IRCode(code, Any[], ci.codelocs, flags, cfg, collect(LineInfoNode, ci.linetable), sv.slottypes, meta, sv.sptypes)
         end
-    @timeit "construct_ssa" ir = construct_ssa!(ci, code, ir, domtree, defuse_insts, nargs, spvals)
+    @timeit "construct_ssa" ir = construct_ssa!(ci, code, ir, domtree, defuse_insts, nargs, sv.sptypes, sv.slottypes)
     return ir
 end
 
 function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
-    ir = just_construct_ssa(ci, copy_exprargs(ci.code), nargs, sv.sp)
+    ir = just_construct_ssa(ci, copy_exprargs(ci.code), nargs, sv)
     #@Base.show ("after_construct", ir)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)
     @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv)
     #@timeit "verify 2" verify_ir(ir)
-    @timeit "domtree 2" domtree = construct_domtree(ir.cfg)
     ir = compact!(ir)
     #@Base.show ("before_sroa", ir)
+    @timeit "domtree 2" domtree = construct_domtree(ir.cfg)
     @timeit "SROA" ir = getfield_elim_pass!(ir, domtree)
     #@Base.show ir.new_nodes
     #@Base.show ("after_sroa", ir)
@@ -128,6 +126,8 @@ function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     @timeit "type lift" ir = type_lift_pass!(ir)
     @timeit "compact 3" ir = compact!(ir)
     #@Base.show ir
-    @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
+    if JLOptions().debug_level == 2
+        @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
+    end
     return ir
 end

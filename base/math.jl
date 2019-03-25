@@ -27,7 +27,7 @@ using Core.Intrinsics: sqrt_llvm
 
 using .Base: IEEEFloat
 
-@noinline function throw_complex_domainerror(f, x)
+@noinline function throw_complex_domainerror(f::Symbol, x)
     throw(DomainError(x, string("$f will only return a complex result if called with a ",
                                 "complex argument. Try $f(Complex(x)).")))
 end
@@ -89,7 +89,10 @@ function clamp!(x::AbstractArray, lo, hi)
     x
 end
 
-# evaluate p[1] + x * (p[2] + x * (....)), i.e. a polynomial via Horner's rule
+"""
+    @horner(x, p...)
+    Evaluate p[1] + x * (p[2] + x * (....)), i.e. a polynomial via Horner's rule
+"""
 macro horner(x, p...)
     ex = esc(p[end])
     for i = length(p)-1:-1:1
@@ -195,17 +198,17 @@ julia> log(4,2)
 0.5
 
 julia> log(-2, 3)
-ERROR: DomainError with log:
--2.0 will only return a complex result if called with a complex argument. Try -2.0(Complex(x)).
+ERROR: DomainError with -2.0:
+log will only return a complex result if called with a complex argument. Try log(Complex(x)).
 Stacktrace:
- [1] throw_complex_domainerror(::Float64, ::Symbol) at ./math.jl:31
+ [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
 [...]
 
 julia> log(2, -3)
-ERROR: DomainError with log:
--3.0 will only return a complex result if called with a complex argument. Try -3.0(Complex(x)).
+ERROR: DomainError with -3.0:
+log will only return a complex result if called with a complex argument. Try log(Complex(x)).
 Stacktrace:
- [1] throw_complex_domainerror(::Float64, ::Symbol) at ./math.jl:31
+ [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
 [...]
 ```
 
@@ -277,33 +280,13 @@ asinh(x::Number)
 Accurately compute ``e^x-1``.
 """
 expm1(x)
-for f in (:cbrt, :exp2, :expm1)
+for f in (:exp2, :expm1)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
         ($f)(x::Real) = ($f)(float(x))
     end
 end
-# fallback definitions to prevent infinite loop from $f(x::Real) def above
-
-"""
-    cbrt(x::Real)
-
-Return the cube root of `x`, i.e. ``x^{1/3}``. Negative values are accepted
-(returning the negative real root when ``x < 0``).
-
-The prefix operator `∛` is equivalent to `cbrt`.
-
-# Examples
-```jldoctest
-julia> cbrt(big(27))
-3.0
-
-julia> cbrt(big(-27))
--3.0
-```
-"""
-cbrt(x::AbstractFloat) = x < 0 ? -(-x)^(1//3) : x^(1//3)
 
 """
     exp2(x)
@@ -342,11 +325,11 @@ end
     elseif x <= -1023
         # if -1073 < x <= -1023 then Result will be a subnormal number
         # Hex literal with padding must be used to work on 32bit machine
-        reinterpret(Float64, 0x0000_0000_0000_0001 << ((x + 1074)) % UInt)
+        reinterpret(Float64, 0x0000_0000_0000_0001 << ((x + 1074) % UInt))
     else
         # We will cast everything to Int64 to avoid errors in case of Int128
         # If x is a Int128, and is outside the range of Int64, then it is not -1023<x<=1023
-        reinterpret(Float64, (exponent_bias(Float64) + (x % Int64)) << (significand_bits(Float64)) % UInt)
+        reinterpret(Float64, (exponent_bias(Float64) + (x % Int64)) << (significand_bits(Float64) % UInt))
     end
 end
 
@@ -410,6 +393,19 @@ atanh(x::Number)
 
 Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments. Use complex negative arguments to obtain complex results.
+
+# Examples
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
+julia> log(2)
+0.6931471805599453
+
+julia> log(-3)
+ERROR: DomainError with -3.0:
+log will only return a complex result if called with a complex argument. Try log(Complex(x)).
+Stacktrace:
+ [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
+[...]
+```
 """
 log(x::Number)
 
@@ -476,10 +472,10 @@ julia> log1p(0)
 0.0
 
 julia> log1p(-2)
-ERROR: DomainError with log1p:
--2.0 will only return a complex result if called with a complex argument. Try -2.0(Complex(x)).
+ERROR: DomainError with -2.0:
+log1p will only return a complex result if called with a complex argument. Try log1p(Complex(x)).
 Stacktrace:
- [1] throw_complex_domainerror(::Float64, ::Symbol) at ./math.jl:31
+ [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
 [...]
 ```
 """
@@ -509,7 +505,7 @@ julia> sqrt(big(81))
 9.0
 
 julia> sqrt(big(-81))
-ERROR: DomainError with -8.1e+01:
+ERROR: DomainError with -81.0:
 NaN result for non-NaN input.
 Stacktrace:
  [1] sqrt(::BigFloat) at ./mpfr.jl:501
@@ -547,8 +543,8 @@ function hypot(x::T, y::T) where T<:Number
     if ax < ay
         ax, ay = ay, ax
     end
-    if ax == 0
-        r = ay / one(ax)
+    if iszero(ax)
+        r = ay / oneunit(ax)
     else
         r = ay / ax
     end
@@ -622,7 +618,7 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
     end
     n = e % Int
     k += n
-    # overflow, if k is larger than maximum posible exponent
+    # overflow, if k is larger than maximum possible exponent
     if k >= exponent_raw_max(T)
         return flipsign(T(Inf), x)
     end
@@ -726,18 +722,18 @@ according to the rounding mode `r`. In other words, the quantity
 without any intermediate rounding.
 
 - if `r == RoundNearest`, then the result is exact, and in the interval
-  ``[-|y|/2, |y|/2]``.
+  ``[-|y|/2, |y|/2]``. See also [`RoundNearest`](@ref).
 
 - if `r == RoundToZero` (default), then the result is exact, and in the interval
-  ``[0, |y|)`` if `x` is positive, or ``(-|y|, 0]`` otherwise.
+  ``[0, |y|)`` if `x` is positive, or ``(-|y|, 0]`` otherwise. See also [`RoundToZero`](@ref).
 
 - if `r == RoundDown`, then the result is in the interval ``[0, y)`` if `y` is positive, or
   ``(y, 0]`` otherwise. The result may not be exact if `x` and `y` have different signs, and
-  `abs(x) < abs(y)`.
+  `abs(x) < abs(y)`. See also[`RoundDown`](@ref).
 
 - if `r == RoundUp`, then the result is in the interval `(-y,0]` if `y` is positive, or
   `[0,-y)` otherwise. The result may not be exact if `x` and `y` have the same sign, and
-  `abs(x) < abs(y)`.
+  `abs(x) < abs(y)`. See also [`RoundUp`](@ref).
 
 """
 rem(x, y, ::RoundingMode{:ToZero}) = rem(x,y)
@@ -837,14 +833,15 @@ without any intermediate rounding. This internally uses a high precision approxi
 2π, and so will give a more accurate result than `rem(x,2π,r)`
 
 - if `r == RoundNearest`, then the result is in the interval ``[-π, π]``. This will generally
-  be the most accurate result.
+  be the most accurate result. See also [`RoundNearest`](@ref).
 
 - if `r == RoundToZero`, then the result is in the interval ``[0, 2π]`` if `x` is positive,.
-  or ``[-2π, 0]`` otherwise.
+  or ``[-2π, 0]`` otherwise. See also [`RoundToZero`](@ref).
 
 - if `r == RoundDown`, then the result is in the interval ``[0, 2π]``.
-
+  See also [`RoundDown`](@ref).
 - if `r == RoundUp`, then the result is in the interval ``[-2π, 0]``.
+  See also [`RoundUp`](@ref).
 
 # Examples
 ```jldoctest
@@ -1032,9 +1029,35 @@ end
 cbrt(a::Float16) = Float16(cbrt(Float32(a)))
 sincos(a::Float16) = Float16.(sincos(Float32(a)))
 
+# helper functions for Libm functionality
+
+"""
+    highword(x)
+
+Return the high word of `x` as a `UInt32`.
+"""
+@inline highword(x::Float64) = highword(reinterpret(UInt64, x))
+@inline highword(x::UInt64)  = (x >>> 32) % UInt32
+@inline highword(x::Float32) = reinterpret(UInt32, x)
+
+@inline fromhighword(::Type{Float64}, u::UInt32) = reinterpret(Float64, UInt64(u) << 32)
+@inline fromhighword(::Type{Float32}, u::UInt32) = reinterpret(Float32, u)
+
+
+"""
+    poshighword(x)
+
+Return positive part of the high word of `x` as a `UInt32`.
+"""
+@inline poshighword(x::Float64) = poshighword(reinterpret(UInt64, x))
+@inline poshighword(x::UInt64)  = highword(x) & 0x7fffffff
+@inline poshighword(x::Float32) = highword(x) & 0x7fffffff
+
 # More special functions
+include("special/cbrt.jl")
 include("special/exp.jl")
 include("special/exp10.jl")
+include("special/ldexp_exp.jl")
 include("special/hyperbolic.jl")
 include("special/trig.jl")
 include("special/rem_pio2.jl")

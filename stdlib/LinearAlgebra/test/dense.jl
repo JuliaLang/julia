@@ -15,7 +15,7 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-srand(1234321)
+Random.seed!(1234321)
 
 @testset "Matrix condition number" begin
     ainit = rand(n,n)
@@ -67,23 +67,44 @@ bimg  = randn(n,2)/2
             end
 
             @testset "Test nullspace" begin
-                a15null = nullspace(copy(a[:,1:n1]'))
+                a15null = nullspace(a[:,1:n1]')
                 @test rank([a[:,1:n1] a15null]) == 10
                 @test norm(a[:,1:n1]'a15null,Inf) ≈ zero(eltya) atol=300ε
                 @test norm(a15null'a[:,1:n1],Inf) ≈ zero(eltya) atol=400ε
                 @test size(nullspace(b), 2) == 0
+                @test size(nullspace(b, rtol=0.001), 2) == 0
+                @test size(nullspace(b, atol=100*εb), 2) == 0
                 @test size(nullspace(b, 100*εb), 2) == 0
                 @test nullspace(zeros(eltya,n)) == Matrix(I, 1, 1)
                 @test nullspace(zeros(eltya,n), 0.1) == Matrix(I, 1, 1)
+                # test empty cases
+                @test nullspace(zeros(n, 0)) == Matrix(I, 0, 0)
+                @test nullspace(zeros(0, n)) == Matrix(I, n, n)
             end
         end
     end # for eltyb
+
+@testset "Test diagm for vectors" begin
+    @test diagm(zeros(50)) == diagm(0 => zeros(50))
+    @test diagm(ones(50)) == diagm(0 => ones(50))
+    v = randn(500)
+    @test diagm(v) == diagm(0 => v)
+end
+
+@testset "Test pinv (rtol, atol)" begin
+    M = [1 0 0; 0 1 0; 0 0 0]
+    @test pinv(M,atol=1)== zeros(3,3)
+    @test pinv(M,rtol=0.5)== M
+end
 
     for (a, a2) in ((copy(ainit), copy(ainit2)), (view(ainit, 1:n, 1:n), view(ainit2, 1:n, 1:n)))
         @testset "Test pinv" begin
             pinva15 = pinv(a[:,1:n1])
             @test a[:,1:n1]*pinva15*a[:,1:n1] ≈ a[:,1:n1]
             @test pinva15*a[:,1:n1]*pinva15 ≈ pinva15
+            pinva15 = pinv(a[:,1:n1]') # the Adjoint case
+            @test a[:,1:n1]'*pinva15*a[:,1:n1]' ≈ a[:,1:n1]'
+            @test pinva15*a[:,1:n1]'*pinva15 ≈ pinva15
 
             @test size(pinv(Matrix{eltya}(undef,0,0))) == (0,0)
         end
@@ -141,15 +162,27 @@ bimg  = randn(n,2)/2
     end
 end # for eltya
 
-@testset "test triu/tril bounds checking" begin
+@testset "test out of bounds triu/tril" begin
     local m, n = 5, 7
     ainit = rand(m, n)
     for a in (copy(ainit), view(ainit, 1:m, 1:n))
-        @test_throws ArgumentError triu(a, -m)
-        @test_throws ArgumentError triu(a, n + 2)
-        @test_throws ArgumentError tril(a, -m - 2)
-        @test_throws ArgumentError tril(a, n)
+        @test triu(a, -m) == a
+        @test triu(a, n + 2) == zero(a)
+        @test tril(a, -m - 2) == zero(a)
+        @test tril(a, n) == a
     end
+end
+
+@testset "triu M > N case bug fix" begin
+    mat=[1 2;
+         3 4;
+         5 6;
+         7 8]
+    res=[1 2;
+         3 4;
+         0 6;
+         0 0]
+    @test triu(mat, -1) == res
 end
 
 @testset "Tests norms" begin
@@ -413,6 +446,13 @@ end
         end
     end
 
+    @testset "^ tests" for elty in (Float32, Float64, ComplexF32, ComplexF64, Int32, Int64)
+        # should all be exact as the lhs functions are simple aliases
+        @test ℯ^(fill(elty(2), (4,4))) == exp(fill(elty(2), (4,4)))
+        @test 2^(fill(elty(2), (4,4))) == exp(log(2)*fill(elty(2), (4,4)))
+        @test 2.0^(fill(elty(2), (4,4))) == exp(log(2.0)*fill(elty(2), (4,4)))
+    end
+
     A8 = 100 * [-1+1im 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1]
     @test exp(log(A8)) ≈ A8
 end
@@ -651,7 +691,7 @@ end
           2  6 10
           3  7 11
           4  8 12 ]
-    @test_throws ArgumentError diag(A, -5)
+    @test diag(A,-5) == []
     @test diag(A,-4) == []
     @test diag(A,-3) == [4]
     @test diag(A,-2) == [3,8]
@@ -660,21 +700,21 @@ end
     @test diag(A, 1) == [5,10]
     @test diag(A, 2) == [9]
     @test diag(A, 3) == []
-    @test_throws ArgumentError diag(A, 4)
+    @test diag(A, 4) == []
 
     @test diag(zeros(0,0)) == []
-    @test_throws ArgumentError diag(zeros(0,0),1)
-    @test_throws ArgumentError diag(zeros(0,0),-1)
+    @test diag(zeros(0,0),1) == []
+    @test diag(zeros(0,0),-1) == []
 
     @test diag(zeros(1,0)) == []
     @test diag(zeros(1,0),-1) == []
-    @test_throws ArgumentError diag(zeros(1,0),1)
-    @test_throws ArgumentError diag(zeros(1,0),-2)
+    @test diag(zeros(1,0),1) == []
+    @test diag(zeros(1,0),-2) == []
 
     @test diag(zeros(0,1)) == []
     @test diag(zeros(0,1),1) == []
-    @test_throws ArgumentError diag(zeros(0,1),-1)
-    @test_throws ArgumentError diag(zeros(0,1),2)
+    @test diag(zeros(0,1),-1) == []
+    @test diag(zeros(0,1),2) == []
 end
 
 @testset "Matrix to real power" for elty in (Float64, Complex{Float64})
@@ -823,43 +863,20 @@ end
 @testset "strides" begin
     a = rand(10)
     b = view(a,2:2:10)
-    A = rand(10,10)
-    B = view(A, 2:2:10, 2:2:10)
-
     @test LinearAlgebra.stride1(a) == 1
     @test LinearAlgebra.stride1(b) == 2
-
-    @test strides(a) == (1,)
-    @test strides(b) == (2,)
-    @test strides(A) == (1,10)
-    @test strides(B) == (2,20)
-
-    @test_deprecated strides(1:5)
-    @test_deprecated stride(1:5,1)
-
-    for M in (a, b, A, B)
-        @inferred strides(M)
-        strides_M = strides(M)
-
-        for (i, _stride) in enumerate(collect(strides_M))
-            @test _stride == stride(M, i)
-        end
-    end
 end
 
 @testset "inverse of Adjoint" begin
     A = randn(n, n)
 
-    @test inv(A')*A'                     ≈ I
-    @test inv(transpose(A))*transpose(A) ≈ I
+    @test @inferred(inv(A'))*A'                     ≈ I
+    @test @inferred(inv(transpose(A)))*transpose(A) ≈ I
 
     B = complex.(A, randn(n, n))
-    B = B + transpose(B)
 
-    # The following two cases fail because ldiv!(F::Adjoint/Transpose{BunchKaufman},b)
-    # isn't implemented yet
-    @test_broken inv(B')*B'                     ≈ I
-    @test_broken inv(transpose(B))*transpose(B) ≈ I
+    @test @inferred(inv(B'))*B'                     ≈ I
+    @test @inferred(inv(transpose(B)))*transpose(B) ≈ I
 end
 
 end # module TestDense

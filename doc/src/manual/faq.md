@@ -41,6 +41,49 @@ obj3 = MyModule.someotherfunction(obj2, c)
 ...
 ```
 
+## [Scripting](@id man-scripting)
+
+### How do I check if the current file is being run as the main script?
+
+When a file is run as the main script using `julia file.jl` one might want to activate extra
+functionality like command line argument handling. A way to determine that a file is run in
+this fashion is to check if `abspath(PROGRAM_FILE) == @__FILE__` is `true`.
+
+### How do I catch CTRL-C in a script?
+
+Running a Julia script using `julia file.jl` does not throw
+[`InterruptException`](@ref) when you try to terminate it with CTRL-C
+(SIGINT).  To run a certain code before terminating a Julia script,
+which may or may not be caused by CTRL-C, use [`atexit`](@ref).
+Alternatively, you can use `julia -e 'include(popfirst!(ARGS))'
+file.jl` to execute a script while being able to catch
+`InterruptException` in the [`try`](@ref) block.
+
+### How do I pass options to `julia` using `#!/usr/bin/env`?
+
+Passing options to `julia` in so-called shebang by, e.g.,
+`#!/usr/bin/env julia --startup-file=no` may not work in some
+platforms such as Linux.  This is because argument parsing in shebang
+is platform-dependent and not well-specified.  In a Unix-like
+environment, a reliable way to pass options to `julia` in an
+executable script would be to start the script as a `bash` script and
+use `exec` to replace the process to `julia`:
+
+```julia
+#!/bin/bash
+#=
+exec julia --color=yes --startup-file=no -e 'include(popfirst!(ARGS))' \
+    "${BASH_SOURCE[0]}" "$@"
+=#
+
+@show ARGS  # put any Julia code here
+```
+
+In the example above, the code between `#=` and `=#` is run as a `bash`
+script.  Julia ignores this part since it is a multi-line comment for
+Julia.  The Julia code after `=#` is ignored by `bash` since it stops
+parsing the file once it reaches to the `exec` statement.
+
 ## Functions
 
 ### I passed an argument `x` to a function, modified it inside that function, but on the outside, the variable `x` is still unchanged. Why?
@@ -97,7 +140,7 @@ julia> x
 Here we created a function `change_array!`, that assigns `5` to the first element of the passed
 array (bound to `x` at the call site, and bound to `A` within the function). Notice that, after
 the function call, `x` is still bound to the same array, but the content of that array changed:
-the variables `A` and `x` were distinct bindings refering to the same mutable `Array` object.
+the variables `A` and `x` were distinct bindings referring to the same mutable `Array` object.
 
 ### Can I use `using` or `import` inside a function?
 
@@ -575,7 +618,7 @@ Main               Module
 gvar_self 13 bytes String
 ```
 
-This does not apply to `function` or `type` declarations. However, anonymous functions bound to global
+This does not apply to `function` or `struct` declarations. However, anonymous functions bound to global
 variables are serialized as can be seen below.
 
 ```julia-repl
@@ -593,6 +636,17 @@ julia> anon_bar  = ()->1
 julia> remotecall_fetch(anon_bar, 2)
 1
 ```
+
+### Why does Julia use `*` for string concatenation? Why not `+` or something else?
+
+The [main argument](@ref man-concatenation) against `+` is that string concatenation is not
+commutative, while `+` is generally used as a commutative operator. While the Julia community
+recognizes that other languages use different operators and `*` may be unfamiliar for some
+users, it communicates certain algebraic properties.
+
+Note that you can also use `string(...)` to concatenate strings (and other values converted
+to strings); similarly, `repeat` can be used instead of `^` to repeat strings. The
+[interpolation syntax](@ref string-interpolation) is also useful for constructing strings.
 
 ## Packages and Modules
 
@@ -613,7 +667,7 @@ all/many future usages of the other functions in module Foo that depend on calli
 
 ## Nothingness and missing values
 
-### How does "null" or "nothingness" work in Julia?
+### [How does "null", "nothingness" or "missingness" work in Julia?](@id faq-nothing)
 
 Unlike many languages (for example, C and Java), Julia objects cannot be "null" by default.
 When a reference (variable, object field, or array element) is uninitialized, accessing it
@@ -627,10 +681,14 @@ this convention, and that the REPL does not print anything for it. Some language
 would not otherwise have a value also yield `nothing`, for example `if false; end`.
 
 For situations where a value `x` of type `T` exists only sometimes, the `Union{T, Nothing}`
-type can be used. If the value itself can be `nothing` (notably, when `T` is `Any`),
+type can be used for function arguments, object fields and array element types
+as the equivalent of [`Nullable`, `Option` or `Maybe`](https://en.wikipedia.org/wiki/Nullable_type)
+in other languages. If the value itself can be `nothing` (notably, when `T` is `Any`),
 the `Union{Some{T}, Nothing}` type is more appropriate since `x == nothing` then indicates
 the absence of a value, and `x == Some(nothing)` indicates the presence of a value equal
-to `nothing`.
+to `nothing`. The [`something`](@ref) function allows unwrapping `Some` objects and
+using a default value instead of `nothing` arguments. Note that the compiler is able to
+generate efficient code when working with `Union{T, Nothing}` arguments or fields.
 
 To represent missing data in the statistical sense (`NA` in R or `NULL` in SQL), use the
 [`missing`](@ref) object. See the [`Missing Values`](@ref missing) section for more details.
@@ -683,7 +741,7 @@ Because supporting generic programming is deemed more important than potential p
 that can be achieved by other means (e.g., using explicit loops), operators like `+=` and `*=`
 work by rebinding new values.
 
-## Asynchronous IO and concurrent synchronous writes
+## [Asynchronous IO and concurrent synchronous writes](@id faq-async-io)
 
 ### Why do concurrent writes to the same stream result in inter-mixed output?
 
@@ -716,8 +774,7 @@ julia> @sync for i in 1:3
 You can lock your writes with a `ReentrantLock` like this:
 
 ```jldoctest
-julia> l = ReentrantLock()
-ReentrantLock(nothing, Condition(Any[]), 0)
+julia> l = ReentrantLock();
 
 julia> @sync for i in 1:3
            @async begin
@@ -731,6 +788,50 @@ julia> @sync for i in 1:3
        end
 1 Foo  Bar 2 Foo  Bar 3 Foo  Bar
 ```
+
+## Arrays
+
+### What are the differences between zero-dimensional arrays and scalars?
+
+Zero-dimensional arrays are arrays of the form `Array{T,0}`. They behave similar
+to scalars, but there are important differences. They deserve a special mention
+because they are a special case which makes logical sense given the generic
+definition of arrays, but might be a bit unintuitive at first. The following
+line defines a zero-dimensional array:
+
+```
+julia> A = zeros()
+0-dimensional Array{Float64,0}:
+0.0
+```
+
+In this example, `A` is a mutable container that contains one element, which can
+be set by `A[] = 1.0` and retrieved with `A[]`. All zero-dimensional arrays have
+the same size (`size(A) == ()`), and length (`length(A) == 1`). In particular,
+zero-dimensional arrays are not empty. If you find this unintuitive, here are
+some ideas that might help to understand Julia's definition.
+
+* Zero-dimensional arrays are the "point" to vector's "line" and matrix's
+  "plane". Just as a line has no area (but still represents a set of things), a
+  point has no length or any dimensions at all (but still represents a thing).
+* We define `prod(())` to be 1, and the total number of elements in an array is
+  the product of the size. The size of a zero-dimensional array is `()`, and
+  therefore its length is `1`.
+* Zero-dimensional arrays don't natively have any dimensions into which you
+  index -- they’re just `A[]`. We can apply the same "trailing one" rule for them
+  as for all other array dimensionalities, so you can indeed index them as
+  `A[1]`, `A[1,1]`, etc.
+
+It is also important to understand the differences to ordinary scalars. Scalars
+are not mutable containers (even though they are iterable and define things
+like `length`, `getindex`, *e.g.* `1[] == 1`). In particular, if `x = 0.0` is
+defined as a scalar, it is an error to attempt to change its value via
+`x[] = 1.0`. A scalar `x` can be converted into a zero-dimensional array
+containing it via `fill(x)`, and conversely, a zero-dimensional array `a` can
+be converted to the contained scalar via `a[]`. Another difference is that
+a scalar can participate in linear algebra operations such as `2 * rand(2,2)`,
+but the analogous operation with a zero-dimensional array
+`fill(2) * rand(2,2)` is an error.
 
 ## Julia Releases
 

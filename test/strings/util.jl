@@ -53,6 +53,7 @@ end
     @test strip(" \u2009 hi \u2009 ") == "hi"
     @test strip("foobarfoo", ['f','o']) == "bar"
     @test strip("foobarfoo", ('f','o')) == "bar"
+    @test strip(ispunct, "¡Hola!") == "Hola"
 
     for s in ("", " ", " abc", "abc ", "  abc  "),
         f in (lstrip, rstrip, strip)
@@ -274,7 +275,7 @@ end
     # test replace with a count for String and GenericString
     # check that replace is a no-op if count==0
     for s in ["aaa", Test.GenericString("aaa")]
-        # @test replace("aaa", 'a' => 'z', count=0) == "aaa" # enable when undeprecated
+        @test replace("aaa", 'a' => 'z', count=0) == "aaa"
         @test replace(s, 'a' => 'z', count=1) == "zaa"
         @test replace(s, 'a' => 'z', count=2) == "zza"
         @test replace(s, 'a' => 'z', count=3) == "zzz"
@@ -301,6 +302,7 @@ end
     @test chomp("foo\r\n") == "foo"
     @test chomp("fo∀\r\n") == "fo∀"
     @test chomp("fo∀") == "fo∀"
+    @test chop("") == ""
     @test chop("fooε") == "foo"
     @test chop("foεo") == "foε"
     @test chop("∃∃∃∃") == "∃∃∃"

@@ -22,7 +22,7 @@ end
 function plain(io::IO, code::Code)
     # If the code includes a fenced block this will break parsing,
     # so it must be enclosed by a longer ````-sequence.
-    n = mapreduce(m -> length(m.match), max, 2, eachmatch(r"^`+"m, code.code)) + 1
+    n = mapreduce(m -> length(m.match), max, eachmatch(r"^`+"m, code.code); init=2) + 1
     println(io, "`" ^ n, code.language)
     println(io, code.code)
     println(io, "`" ^ n)

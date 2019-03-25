@@ -65,20 +65,24 @@ end
 
 ## Libuv error handling ##
 
-struct UVError <: Exception
-    prefix::AbstractString
+struct IOError <: Exception
+    msg::AbstractString
     code::Int32
-    UVError(p::AbstractString, code::Integer) = new(p,code)
+    IOError(msg::AbstractString, code::Integer) = new(msg, code)
+end
+
+showerror(io::IO, e::IOError) = print(io, "IOError: ", e.msg)
+
+function _UVError(pfx::AbstractString, code::Integer)
+    code = Int32(code)
+    IOError(string(pfx, ": ", struverror(code), " (", uverrorname(code), ")"), code)
 end
 
 struverror(err::Int32) = unsafe_string(ccall(:uv_strerror,Cstring,(Int32,),err))
-struverror(err::UVError) = struverror(err.code)
 uverrorname(err::Int32) = unsafe_string(ccall(:uv_err_name,Cstring,(Int32,),err))
-uverrorname(err::UVError) = uverrorname(err.code)
 
 uv_error(prefix::Symbol, c::Integer) = uv_error(string(prefix),c)
-uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(UVError(prefix,c)) : nothing
-show(io::IO, e::UVError) = print(io, e.prefix*": "*struverror(e)*" ("*uverrorname(e)*")")
+uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(_UVError(prefix,c)) : nothing
 
 ## event loop ##
 
@@ -116,9 +120,6 @@ function reinit_stdio()
     global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))
     global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))
     global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))
-    global STDIN = stdin
-    global STDOUT = stdout
-    global STDERR = stderr
 end
 
 """

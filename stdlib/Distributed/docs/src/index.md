@@ -18,8 +18,8 @@ Distributed.pmap
 Distributed.RemoteException
 Distributed.Future
 Distributed.RemoteChannel
-Distributed.wait
-Distributed.fetch(::Any)
+Distributed.fetch(::Future)
+Distributed.fetch(::RemoteChannel)
 Distributed.remotecall(::Any, ::Integer, ::Any...)
 Distributed.remotecall_wait(::Any, ::Integer, ::Any...)
 Distributed.remotecall_fetch(::Any, ::Integer, ::Any...)
@@ -38,13 +38,10 @@ Distributed.remotecall(::Any, ::AbstractWorkerPool, ::Any...)
 Distributed.remotecall_wait(::Any, ::AbstractWorkerPool, ::Any...)
 Distributed.remotecall_fetch(::Any, ::AbstractWorkerPool, ::Any...)
 Distributed.remote_do(::Any, ::AbstractWorkerPool, ::Any...)
-Distributed.timedwait
 Distributed.@spawn
 Distributed.@spawnat
 Distributed.@fetch
 Distributed.@fetchfrom
-Distributed.@async
-Distributed.@sync
 Distributed.@distributed
 Distributed.@everywhere
 Distributed.clear!(::Any, ::Any; ::Any)
@@ -63,6 +60,8 @@ same host, and `SSHManager`, for launching on remote hosts via `ssh`. TCP/IP soc
 and transport messages between processes. It is possible for Cluster Managers to provide a different transport.
 
 ```@docs
+Distributed.ClusterManager
+Distributed.WorkerConfig
 Distributed.launch
 Distributed.manage
 Distributed.kill(::ClusterManager, ::Int, ::WorkerConfig)

@@ -34,6 +34,7 @@ end
     @test promote_type(Union{Int, Missing}, Int) == Union{Int, Missing}
     @test promote_type(Int, Union{Int, Missing}) == Union{Int, Missing}
     @test promote_type(Any, Union{Int, Missing}) == Any
+    @test promote_type(Union{Nothing, Missing}, Any) == Any
     @test promote_type(Union{Int, Missing}, Union{Int, Missing}) == Union{Int, Missing}
     @test promote_type(Union{Float64, Missing}, Union{String, Missing}) == Any
     @test promote_type(Union{Float64, Missing}, Union{Int, Missing}) == Union{Float64, Missing}
@@ -69,6 +70,9 @@ end
     @test !isless(missing, missing)
     @test !isless(missing, 1)
     @test isless(1, missing)
+    @test (missing ≈ missing) === missing
+    @test isapprox(missing, 1.0, atol=1e-6) === missing
+    @test isapprox(1.0, missing, rtol=1e-6) === missing
 
     @test !any(T -> T === Union{Missing,Bool}, Base.return_types(isequal, Tuple{Any,Any}))
 end
@@ -175,6 +179,10 @@ Base.one(::Type{Unit}) = 1
         @test oneunit(Union{T, Missing}) === T(1)
     end
 
+    @test zero(Missing) === missing
+    @test one(Missing) === missing
+    @test oneunit(Missing) === missing
+
     @test_throws MethodError zero(Any)
     @test_throws MethodError one(Any)
     @test_throws MethodError oneunit(Any)
@@ -184,16 +192,25 @@ Base.one(::Type{Unit}) = 1
 end
 
 @testset "rounding functions" begin
-    rounding_functions = [ceil, floor, round, trunc]
-
     # All rounding functions return missing when evaluating missing as first argument
+
+    # Check that the RoundingMode argument is passed on correctly
+    @test round(Union{Int, Missing}, 0.9) === round(Int, 0.9)
+    @test round(Union{Int, Missing}, 0.9, RoundToZero) === round(Int, 0.9, RoundToZero)
+
+    # Test elementwise on mixed arrays to ensure signature of Missing methods matches that of Float methods
+    test_array = [1.0, missing]
+
+    @test isequal(round.(test_array, RoundNearest), test_array)
+    @test isequal(round.(Union{Int, Missing}, test_array, RoundNearest), test_array)
+
+    rounding_functions = [ceil, floor, round, trunc]
     for f in rounding_functions
-        @test ismissing(f(missing))
-        @test ismissing(f(missing, 1))
-        @test ismissing(f(missing, 1, 1))
-        @test ismissing(f(Union{Int, Missing}, missing))
-        @test f(Union{Int, Missing}, 1.0) === 1
         @test_throws MissingException f(Int, missing)
+        @test isequal(f.(test_array), test_array)
+        @test isequal(f.(test_array, digits=0, base=10), test_array)
+        @test isequal(f.(test_array, sigdigits=1, base=10), test_array)
+        @test isequal(f.(Union{Int, Missing}, test_array), test_array)
     end
 end
 
@@ -361,6 +378,110 @@ end
     @test eltype(x) === Any
     @test collect(x) == [1, 2, 4]
     @test collect(x) isa Vector{Int}
+
+    @testset "indexing" begin
+        x = skipmissing([1, missing, 2, missing, missing])
+        @test collect(eachindex(x)) == collect(keys(x)) == [1, 3]
+        @test x[1] === 1
+        @test x[3] === 2
+        @test_throws MissingException x[2]
+        @test_throws BoundsError x[6]
+        @test findfirst(==(2), x) == 3
+        @test findall(==(2), x) == [3]
+        @test argmin(x) == 1
+        @test findmin(x) == (1, 1)
+        @test argmax(x) == 3
+        @test findmax(x) == (2, 3)
+
+        x = skipmissing([missing 2; 1 missing])
+        @test collect(eachindex(x)) == [2, 3]
+        @test collect(keys(x)) == [CartesianIndex(2, 1), CartesianIndex(1, 2)]
+        @test x[2] === x[2, 1] === 1
+        @test x[3] === x[1, 2] === 2
+        @test_throws MissingException x[1]
+        @test_throws MissingException x[1, 1]
+        @test_throws BoundsError x[5]
+        @test_throws BoundsError x[3, 1]
+        @test findfirst(==(2), x) == CartesianIndex(1, 2)
+        @test findall(==(2), x) == [CartesianIndex(1, 2)]
+        @test argmin(x) == CartesianIndex(2, 1)
+        @test findmin(x) == (1, CartesianIndex(2, 1))
+        @test argmax(x) == CartesianIndex(1, 2)
+        @test findmax(x) == (2, CartesianIndex(1, 2))
+
+        for x in (skipmissing([]), skipmissing([missing, missing]))
+            @test isempty(collect(eachindex(x)))
+            @test isempty(collect(keys(x)))
+            @test_throws BoundsError x[3]
+            @test_throws BoundsError x[3, 1]
+            @test findfirst(==(2), x) === nothing
+            @test isempty(findall(==(2), x))
+            @test_throws ArgumentError argmin(x)
+            @test_throws ArgumentError findmin(x)
+            @test_throws ArgumentError argmax(x)
+            @test_throws ArgumentError findmax(x)
+        end
+    end
+
+    @testset "mapreduce" begin
+        # Vary size to test splitting blocks with several configurations of missing values
+        for T in (Int, Float64),
+            A in (rand(T, 10), rand(T, 1000), rand(T, 10000))
+            if T === Int
+                @test sum(A) === sum(skipmissing(A)) ===
+                    reduce(+, skipmissing(A)) === mapreduce(identity, +, skipmissing(A))
+            else
+                @test sum(A) ≈ sum(skipmissing(A)) ===
+                    reduce(+, skipmissing(A)) === mapreduce(identity, +, skipmissing(A))
+            end
+            @test mapreduce(cos, *, A) ≈ mapreduce(cos, *, skipmissing(A))
+
+            B = Vector{Union{T,Missing}}(A)
+            replace!(x -> rand(Bool) ? x : missing, B)
+            if T === Int
+                @test sum(collect(skipmissing(B))) === sum(skipmissing(B)) ===
+                    reduce(+, skipmissing(B)) === mapreduce(identity, +, skipmissing(B))
+            else
+                @test sum(collect(skipmissing(B))) ≈ sum(skipmissing(B)) ===
+                    reduce(+, skipmissing(B)) === mapreduce(identity, +, skipmissing(B))
+            end
+            @test mapreduce(cos, *, collect(skipmissing(A))) ≈ mapreduce(cos, *, skipmissing(A))
+
+            # Test block full of missing values
+            B[1:length(B)÷2] .= missing
+            if T === Int
+                @test sum(collect(skipmissing(B))) == sum(skipmissing(B)) ==
+                    reduce(+, skipmissing(B)) == mapreduce(identity, +, skipmissing(B))
+            else
+                @test sum(collect(skipmissing(B))) ≈ sum(skipmissing(B)) ==
+                    reduce(+, skipmissing(B)) == mapreduce(identity, +, skipmissing(B))
+            end
+
+            @test mapreduce(cos, *, collect(skipmissing(A))) ≈ mapreduce(cos, *, skipmissing(A))
+        end
+
+        # Patterns that exercize code paths for inputs with 1 or 2 non-missing values
+        @test sum(skipmissing([1, missing, missing, missing])) === 1
+        @test sum(skipmissing([missing, missing, missing, 1])) === 1
+        @test sum(skipmissing([1, missing, missing, missing, 2])) === 3
+        @test sum(skipmissing([missing, missing, missing, 1, 2])) === 3
+
+        for n in 0:3
+            itr = skipmissing(Vector{Union{Int,Missing}}(fill(missing, n)))
+            @test sum(itr) == reduce(+, itr) == mapreduce(identity, +, itr) === 0
+            @test_throws ArgumentError reduce(x -> x/2, itr)
+            @test_throws ArgumentError mapreduce(x -> x/2, +, itr)
+        end
+    end
+
+    @testset "filter" begin
+        allmiss = Vector{Union{Int,Missing}}(missing, 10)
+        @test isempty(filter(isodd, skipmissing(allmiss))::Vector{Int})
+        twod1 = [1.0f0 missing; 3.0f0 missing]
+        @test filter(x->x > 0, skipmissing(twod1))::Vector{Float32} == [1, 3]
+        twod2 = [1.0f0 2.0f0; 3.0f0 4.0f0]
+        @test filter(x->x > 0, skipmissing(twod2)) == reshape(twod2, (4,))
+    end
 end
 
 @testset "coalesce" begin
@@ -378,4 +499,19 @@ end
 
     @test coalesce(nothing, missing) === nothing
     @test coalesce(missing, nothing) === nothing
+end
+
+mutable struct Obj; x; end
+@testset "weak references" begin
+    @noinline function mk_wr(r, wr)
+        x = Obj(1)
+        push!(r, x)
+        push!(wr, WeakRef(x))
+        nothing
+    end
+    ref = []
+    wref = []
+    mk_wr(ref, wref)
+    @test ismissing(wref[1] == missing)
+    @test ismissing(missing == wref[1])
 end

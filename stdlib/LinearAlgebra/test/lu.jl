@@ -11,7 +11,7 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-srand(1234321)
+Random.seed!(1234321)
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
@@ -208,7 +208,7 @@ end
 end
 
 @testset "conversion" begin
-    srand(3)
+    Random.seed!(3)
     a = Tridiagonal(rand(9),rand(10),rand(9))
     fa = Array(a)
     falu = lu(fa)

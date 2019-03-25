@@ -37,7 +37,7 @@ Currently supported rounding modes are:
 - [`RoundNearestTiesAway`](@ref)
 - [`RoundNearestTiesUp`](@ref)
 - [`RoundToZero`](@ref)
-- `RoundFromZero` ([`BigFloat`](@ref) only)
+- [`RoundFromZero`](@ref) ([`BigFloat`](@ref) only)
 - [`RoundUp`](@ref)
 - [`RoundDown`](@ref)
 """
@@ -72,6 +72,18 @@ const RoundUp = RoundingMode{:Up}()
 """
 const RoundDown = RoundingMode{:Down}()
 
+"""
+    RoundFromZero
+
+Rounds away from zero.
+This rounding mode may only be used with `T == BigFloat` inputs to [`round`](@ref).
+
+# Examples
+```jldoctest
+julia> BigFloat("1.0000000000000001", 5, RoundFromZero)
+1.06
+```
+"""
 const RoundFromZero = RoundingMode{:FromZero}() # mpfr only
 
 """
@@ -116,7 +128,7 @@ Set the rounding mode of floating point type `T`, controlling the rounding of ba
 arithmetic functions ([`+`](@ref), [`-`](@ref), [`*`](@ref),
 [`/`](@ref) and [`sqrt`](@ref)) and type conversion. Other numerical
 functions may give incorrect or invalid values when using rounding modes other than the
-default `RoundNearest`.
+default [`RoundNearest`](@ref).
 
 Note that this is currently only supported for `T == BigFloat`.
 """
@@ -154,6 +166,15 @@ See [`RoundingMode`](@ref) for available rounding modes.
 function setrounding(f::Function, ::Type{T}, rounding::RoundingMode) where T
     old_rounding_raw = rounding_raw(T)
     setrounding(T,rounding)
+    try
+        return f()
+    finally
+        setrounding_raw(T,old_rounding_raw)
+    end
+end
+function setrounding_raw(f::Function, ::Type{T}, rounding) where T
+    old_rounding_raw = rounding_raw(T)
+    setrounding_raw(T,rounding)
     try
         return f()
     finally
@@ -206,7 +227,7 @@ set_zero_subnormals(yes::Bool) = ccall(:jl_set_zero_subnormals,Int32,(Int8,),yes
 """
     get_zero_subnormals() -> Bool
 
-Returns `false` if operations on subnormal floating-point values ("denormals") obey rules
+Return `false` if operations on subnormal floating-point values ("denormals") obey rules
 for IEEE arithmetic, and `true` if they might be converted to zeros.
 """
 get_zero_subnormals() = ccall(:jl_get_zero_subnormals,Int32,())!=0
