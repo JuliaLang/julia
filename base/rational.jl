@@ -14,22 +14,22 @@ struct Rational{T<:Integer} <: Real
     function Rational{T}(num::Integer, den::Integer) where T<:Integer
         num == den == zero(T) && __throw_rational_argerror(T)
         num2, den2 = (sign(den) < 0) ? divgcd(-num, -den) : divgcd(num, den)
-        new{T}(num2, den2)
+        new(num2, den2)
     end
 
-    function Rational{T}(num::BitSigned, den::BitSigned) where T<:BitSigned
+    function Rational{T}(num::T, den::T) where T<:BitSigned
         num == den == zero(T) && __throw_rational_argerror(T)
-        if (num == typemin(T) && signbit(den) && isodd(den)) || (den == typemin(T) && signbit(num) && isodd(num))
+        if (num == typemin(T) && signbit(den) && isodd(den)) ||
+           (den == typemin(T) && signbit(num) && isodd(num))
             __throw_rational_ovferror(num, den)
         end
         num2, den2 = divgcd(num, den)
         if den2 < 0
             num2, den2 = -num2, -den2
         end
-        new{T}(num2, den2)
+        new(num2, den2)
     end
 end
-
 @noinline __throw_rational_argerror(T) = throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
 @noinline __throw_rational_ovferror(num::T, den::T) where {T} =
     (num < den) ? throw(OverflowError("typemin($T)//$den")) : throw(OverflowError("$num//typemin($T)"))
@@ -42,6 +42,7 @@ function divgcd(x::Integer,y::Integer)
     g = gcd(x,y)
     div(x,g), div(y,g)
 end
+
 
 """
     //(num, den)
