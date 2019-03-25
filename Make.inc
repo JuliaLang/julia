@@ -1289,3 +1289,7 @@ endef
 # (hardened against any special characters appearing in the output)
 print-%:
 	@echo '$*=$(subst ','\'',$(subst $(newline),\n,$($*)))'
+
+# Literal values that are hard to use in Makefiles otherwise:
+COMMA:=,
+SPACE:=$(eval) $(eval)
