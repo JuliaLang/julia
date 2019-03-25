@@ -248,10 +248,10 @@ signbit(x::Rational) = signbit(x.num)
 copysign(x::Rational, y::Real) = copysign(x.num,y) // x.den
 copysign(x::Rational, y::Rational) = copysign(x.num,y.num) // x.den
 
-abs(x::Rational) = Rational(abs(x.num), x.den)
-function abs(x::Rational{T}) where T<:BitSigned
-    x.num === typemin(T) && throw(OverflowError("rational numerator is typemin($T)"))
-    x.den === typemin(T) && throw(OverflowError("rational denominator is typemin($T)"))
+abs(x::Rational{T}) where {T<:Integer} = Rational(abs(x.num), x.den)
+function abs(x::Rational{T}) where {T<:BitSigned}
+    x.num === Base.typemin(T) && throw(OverflowError("rational numerator is Base.typemin($T)"))
+    x.den === Base.typemin(T) && throw(OverflowError("rational denominator is Base.typemin($T)"))
     abs(x.num) // x.den
 end
 
@@ -260,10 +260,10 @@ typemax(::Type{Rational{T}}) where {T<:Integer} = one(T)//zero(T)
 
 isinteger(x::Rational) = x.den == 1
 
--(x::Rational) = (-x.num) // x.den
-function -(x::Rational{T}) where T<:BitSigned
-    x.num === typemin(T) && throw(OverflowError("rational numerator is typemin($T)"))
-    x.den === typemin(T) && throw(OverflowError("rational denominator is typemin($T)"))
+function -(x::Rational{T}) where {T<:Integer} = (-x.num) // x.den
+function -(x::Rational{T}) where {T<:BitSigned}
+    x.num === Base.typemin(T) && throw(OverflowError("rational numerator is Base.typemin($T)"))
+    x.den === Base.typemin(T) && throw(OverflowError("rational denominator is Base.typemin($T)"))
     (-x.num) // x.den
 end
 function -(x::Rational{T}) where T<:Unsigned
