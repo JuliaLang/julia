@@ -117,7 +117,7 @@ end
     dlopen_e(libfile::AbstractString [, flags::Integer])
 
 Similar to [`dlopen`](@ref), except returns `C_NULL` instead of raising errors.
-This method is now deprecated in favor of `dlsym(handle, sym; throw_error=false)`.
+This method is now deprecated in favor of `dlopen(libfile::AbstractString [, flags::Integer]; throw_error=false)`.
 """
 dlopen_e(args...) = something(dlopen(args...; throw_error=false), C_NULL)
 
