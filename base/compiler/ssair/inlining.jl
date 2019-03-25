@@ -923,12 +923,13 @@ end
 # functions.
 function process_simple!(ir::IRCode, idx::Int, params::Params)
     stmt = ir.stmts[idx]
-    if isexpr(stmt, :splatnew)
+    stmt isa Expr || return nothing
+    if stmt.head === :splatnew
         inline_splatnew!(ir, idx)
         return nothing
     end
 
-    isexpr(stmt, :call) || return nothing
+    stmt.head === :call || return nothing
 
     sig = call_sig(ir, stmt)
     sig === nothing && return nothing
