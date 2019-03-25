@@ -260,20 +260,20 @@ lmul!(A::Diagonal, B::Diagonal) = Diagonal(B.diag .= A.diag .* B.diag)
 
 function lmul!(adjA::Adjoint{<:Any,<:Diagonal}, B::AbstractMatrix)
     A = adjA.parent
-    return lmul!(conj(A), B)
+    return lmul!(adjoint(A), B)
 end
 function lmul!(transA::Transpose{<:Any,<:Diagonal}, B::AbstractMatrix)
     A = transA.parent
-    return lmul!(A, B)
+    return lmul!(transpose(A), B)
 end
 
 function rmul!(A::AbstractMatrix, adjB::Adjoint{<:Any,<:Diagonal})
     B = adjB.parent
-    return rmul!(A, conj(B))
+    return rmul!(A, adjoint(B))
 end
 function rmul!(A::AbstractMatrix, transB::Transpose{<:Any,<:Diagonal})
     B = transB.parent
-    return rmul!(A, B)
+    return rmul!(A, transpose(B))
 end
 
 # Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
