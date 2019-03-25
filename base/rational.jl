@@ -17,7 +17,7 @@ struct Rational{T<:Integer} <: Real
         new{T}(num2, den2)
     end
 
-    function Rational{T}(num::T, den::T) where T<:BitSigned
+    function Rational{T}(num::BitSigned, den::BitSigned) where T<:BitSigned
         num == den == zero(T) && __throw_rational_argerror(T)
         if (num == typemin(T) && signbit(den) && isodd(den)) || (den == typemin(T) && signbit(num) && isodd(num))
             __throw_rational_ovferror(num, den)
