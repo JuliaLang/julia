@@ -107,6 +107,9 @@ keytype(a::AbstractVector) = Int
 keytype(A::Type{<:AbstractArray}) = CartesianIndex{ndims(A)}
 keytype(A::Type{<:AbstractVector}) = Int
 
+valtype(a::AbstractArray) = eltype(a)
+valtype(A::Type{<:AbstractArray}) = eltype(A)
+
 prevind(::AbstractArray, i::Integer) = Int(i)-1
 nextind(::AbstractArray, i::Integer) = Int(i)+1
 
