@@ -121,6 +121,18 @@ static inline int jl_mutex_trylock_nogc(jl_mutex_t *lock)
     return 0;
 }
 
+static inline int jl_mutex_trylock(jl_mutex_t *lock)
+{
+    int got = jl_mutex_trylock_nogc(lock);
+    if (got) {
+        jl_ptls_t ptls = jl_get_ptls_states();
+        JL_SIGATOMIC_BEGIN();
+        jl_lock_frame_push(lock);
+        jl_gc_enable_finalizers(ptls, 0);
+    }
+    return got;
+}
+
 /* Call this function for code that could be called from either a managed
    or an unmanaged thread */
 static inline void jl_mutex_lock_maybe_nogc(jl_mutex_t *lock)
