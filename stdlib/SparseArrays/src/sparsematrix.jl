@@ -1370,8 +1370,6 @@ function sparse_sortedlinearindices!(I::Vector{Ti}, V::Vector, m::Int, n::Int) w
 end
 
 # findfirst/next/prev/last
-import Base: findfirst, findnext, findprev, findlast
-
 function _idxfirstnz(A::SparseMatrixCSC, ij::CartesianIndex{2})
     nzr = nzrange(A, ij[2])
     searchk = searchsortedfirst(A.rowval, ij[1], first(nzr), last(nzr), Forward)
@@ -1393,7 +1391,7 @@ function _idxnextnz(A::SparseMatrixCSC, idx::Integer)
         !isequal(nzv, z) && return idx, nzv
         idx += 1
     end
-    return zero(idx), zero(eltype(A))
+    return zero(idx), z
 end
 
 function _idxprevnz(A::SparseMatrixCSC, idx::Integer)
@@ -1404,11 +1402,18 @@ function _idxprevnz(A::SparseMatrixCSC, idx::Integer)
         !isequal(nzv, z) && return idx, nzv
         idx -= 1
     end
-    return zero(idx), zero(eltype(A))
+    return zero(idx), z
 end
 
-function findnext(pred::Function, A::SparseMatrixCSC, ij::CartesianIndex{2})
-    if pred(zero(eltype(A)))
+function _idx_to_cartesian(A::SparseMatrixCSC, idx::Integer)
+    rowval = rowvals(A)
+    i = rowval[idx]
+    j = searchsortedlast(A.colptr, idx, 1, size(A, 2), Base.Order.Forward)
+    return CartesianIndex(i, j)
+end
+
+function Base.findnext(pred::Function, A::SparseMatrixCSC, ij::CartesianIndex{2})
+    if nnz(A) == length(A) || pred(zero(eltype(A)))
         return invoke(findnext, Tuple{Function,Any,Any}, pred, A, ij)
     end
     idx, nzv = _idxfirstnz(A, ij)
@@ -1421,8 +1426,8 @@ function findnext(pred::Function, A::SparseMatrixCSC, ij::CartesianIndex{2})
     return nothing
 end
 
-function findprev(pred::Function, A::SparseMatrixCSC, ij::CartesianIndex{2})
-    if pred(zero(eltype(A)))
+function Base.findprev(pred::Function, A::SparseMatrixCSC, ij::CartesianIndex{2})
+    if nnz(A) == length(A) || pred(zero(eltype(A)))
         return invoke(findprev, Tuple{Function,Any,Any}, pred, A, ij)
     end
     idx, nzv = _idxlastnz(A, ij)
@@ -1433,13 +1438,6 @@ function findprev(pred::Function, A::SparseMatrixCSC, ij::CartesianIndex{2})
         idx, nzv = _idxprevnz(A, idx - 1)
     end
     return nothing
-end
-
-function _idx_to_cartesian(A::SparseMatrixCSC, idx::Integer)
-    rowval = rowvals(A)
-    i = rowval[idx]
-    j = searchsortedlast(A.colptr, idx, 1, size(A, 2), Base.Order.Forward)
-    return CartesianIndex(i, j)
 end
 
 """
