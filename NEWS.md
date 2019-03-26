@@ -12,6 +12,8 @@ New language features
     `findall`, `findfirst`, `argmin`/`argmax` and `findmin`/`findmax` to work with these
     objects, returning the index of matching non-missing elements in the parent ([#31008]).
 
+  * `inv(::Missing)` has now been added and returns `missing` ([#31408]).
+
 Multi-threading changes
 -----------------------
 
