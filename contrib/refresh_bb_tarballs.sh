@@ -40,8 +40,8 @@ for triplet in ${TRIPLETS}; do
     for proj in ${BB_GCC_EXPANDED_PROJECTS}; do
 		PROJ="$(echo ${proj} | tr [a-z] [A-Z])"
         for gcc in gcc4 gcc7 gcc8; do
-		    make -C "${CONTRIB_DIR}/../deps" USE_BINARYBUILDER_${PROJ}=1 ${PROJ}_BB_TRIPLET=${triplet}-${gcc} distclean-${proj}
-		    make -C "${CONTRIB_DIR}/../deps" USE_BINARYBUILDER_${PROJ}=1 ${PROJ}_BB_TRIPLET=${triplet}-${gcc} compile-${proj}
+		    make -C "${CONTRIB_DIR}/../deps" USE_BINARYBUILDER_${PROJ}=1 ${PROJ}_BB_TRIPLET=${triplet}-${gcc} BB_TRIPLET_CXXABI=${triplet} distclean-${proj}
+		    make -C "${CONTRIB_DIR}/../deps" USE_BINARYBUILDER_${PROJ}=1 ${PROJ}_BB_TRIPLET=${triplet}-${gcc} BB_TRIPLET_CXXABI=${triplet} compile-${proj}
         done
     done
 done
