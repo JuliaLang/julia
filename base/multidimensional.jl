@@ -341,31 +341,30 @@ module IteratorsMD
         iterfirst, iterfirst
     end
     @inline function iterate(iter::CartesianIndices, state)
-        valid, I = inc((), state.I, first(iter).I, last(iter).I)
+        valid, I = __inc(state.I, first(iter).I, last(iter).I)
         valid || return nothing
-        return I, I
+        return CartesianIndex(I...), CartesianIndex(I...)
     end
 
     # increment & carry
     @inline function inc(state, start, stop)
-        _, I = inc((), state, start, stop)
-        return I
+        _, I = __inc(state, start, stop)
+        return CartesianIndex(I...)
     end
 
     # increment post check to avoid integer overflow
-    @inline inc(out, ::Tuple{}, ::Tuple{}, ::Tuple{}) = false, CartesianIndex(out...)
-    @inline function inc(out, state::Tuple{Int}, start::Tuple{Int}, stop::Tuple{Int})
+    @inline __inc(::Tuple{}, ::Tuple{}, ::Tuple{}) = false, ()
+    @inline function __inc(state::Tuple{Int}, start::Tuple{Int}, stop::Tuple{Int})
         valid = state[1] < stop[1]
-        nextstate = CartesianIndex(out..., state[1]+1)
-        return valid, nextstate
+        return valid, (state[1]+1,)
     end
 
-    @inline function inc(out, state, start, stop)
+    @inline function __inc(state, start, stop)
         if state[1] < stop[1]
-            nextstate = CartesianIndex(out..., state[1]+1, tail(state)...)
-            return true, nextstate
+            return true, (state[1]+1, tail(state)...)
         end
-        return inc((out..., start[1]), tail(state), tail(start), tail(stop))
+        valid, I = __inc(tail(state), tail(start), tail(stop))
+        return valid, (start[1], I...)
     end
 
     # 0-d cartesian ranges are special-cased to iterate once and only once
@@ -432,31 +431,30 @@ module IteratorsMD
         iterfirst, iterfirst
     end
     @inline function iterate(r::Reverse{<:CartesianIndices}, state)
-        valid, I = dec((), state.I, last(r.itr).I, first(r.itr).I)
+        valid, I = __dec(state.I, last(r.itr).I, first(r.itr).I)
         valid || return nothing
-        return I, I
+        return CartesianIndex(I...), CartesianIndex(I...)
     end
 
     # decrement & carry
     @inline function dec(state, start, stop)
-        _, I = dec((), state, start, stop)
-        return I
+        _, I = __dec(state, start, stop)
+        return CartesianIndex(I...)
     end
 
     # decrement post check to avoid integer overflow
-    @inline dec(out, ::Tuple{}, ::Tuple{}, ::Tuple{}) = false, CartesianIndices(out...)
-    @inline function dec(out, state::Tuple{Int}, start::Tuple{Int}, stop::Tuple{Int})
+    @inline __dec(::Tuple{}, ::Tuple{}, ::Tuple{}) = false, ()
+    @inline function __dec(state::Tuple{Int}, start::Tuple{Int}, stop::Tuple{Int})
         valid = state[1] > stop[1]
-        nextstate = CartesianIndex(out..., state[1]-1)
-        return valid, nextstate
+        return valid, (state[1]-1,)
     end
 
-    @inline function dec(out, state, start, stop)
+    @inline function __dec(state, start, stop)
         if state[1] > stop[1]
-            nextstate = CartesianIndex(out..., state[1]-1, tail(state)...)
-            return true, nextstate
+            return true, (state[1]-1, tail(state)...)
         end
-        return dec((out..., start[1]), tail(state), tail(start), tail(stop))
+        valid, I = __dec(tail(state), tail(start), tail(stop))
+        return valid, (start[1], I...)
     end
 
     # 0-d cartesian ranges are special-cased to iterate once and only once
