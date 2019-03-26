@@ -1071,8 +1071,14 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         std::string ir_string = ir_stream.str();
         // Do not enable update debug info since it runs the verifier on the whole module
         // and will error on the function we are currently emitting.
+#if JL_LLVM_VERSION >= 70000
+        ModuleSummaryIndex index = ModuleSummaryIndex(true);
+        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string, "llvmcall"),
+                                        jl_Module, &index, Err, nullptr, /* UpdateDebugInfo */ false);
+#else
         bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string, "llvmcall"),
                                         *jl_Module, Err, nullptr, /* UpdateDebugInfo */ false);
+#endif
         if (failed) {
             std::string message = "Failed to parse LLVM Assembly: \n";
             llvm::raw_string_ostream stream(message);
@@ -1781,6 +1787,18 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         const jl_cgval_t &dst = argv[0];
         const jl_cgval_t &src = argv[1];
         const jl_cgval_t &n = argv[2];
+
+#if JL_LLVM_VERSION >= 70000
+        ctx.builder.CreateMemCpy(
+                ctx.builder.CreateIntToPtr(
+                    emit_unbox(ctx, T_size, dst, (jl_value_t*)jl_voidpointer_type), T_pint8),
+                1,
+                ctx.builder.CreateIntToPtr(
+                    emit_unbox(ctx, T_size, src, (jl_value_t*)jl_voidpointer_type), T_pint8),
+                0,
+                emit_unbox(ctx, T_size, n, (jl_value_t*)jl_ulong_type),
+                false);
+#else
         ctx.builder.CreateMemCpy(
                 ctx.builder.CreateIntToPtr(
                     emit_unbox(ctx, T_size, dst, (jl_value_t*)jl_voidpointer_type), T_pint8),
@@ -1788,6 +1806,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                     emit_unbox(ctx, T_size, src, (jl_value_t*)jl_voidpointer_type), T_pint8),
                 emit_unbox(ctx, T_size, n, (jl_value_t*)jl_ulong_type), 1,
                 false);
+#endif
         JL_GC_POP();
         return ghostValue(jl_void_type);
     }

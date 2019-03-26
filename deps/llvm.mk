@@ -433,9 +433,12 @@ $(eval $(call LLVM_PATCH,llvm-D57118-powerpc))
 $(eval $(call LLVM_PATCH,llvm-r355582-avxminmax)) # remove for 8.0
 endif # LLVM_VER
 
-# Independent to the llvm version add a JL prefix to the version map
-$(eval $(call LLVM_PATCH,llvm-symver-jlprefix)) # DO NOT REMOVE
-
+# Add a JL prefix to the version map. DO NOT REMOVE
+ifeq ($(LLVM_VER_SHORT), 6.0)
+$(eval $(call LLVM_PATCH,llvm6-symver-jlprefix))
+else
+$(eval $(call LLVM_PATCH,llvm7-symver-jlprefix))
+endif
 
 # declare that all patches must be applied before running ./configure
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(LLVM_PATCH_PREV)
