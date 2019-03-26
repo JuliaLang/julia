@@ -72,7 +72,8 @@ julia> [true; true; false] .⊻ [true; false; false]
  0
 ```
 """
-xor(x::Bool, y::Bool) = (x != y)
+xor(x::Bool, y::Bool) = xor_int(x, y)
+!=(x::Bool, y::Bool) = xor(x, y)
 
 >>(x::Bool, c::UInt) = Int(x) >> c
 <<(x::Bool, c::UInt) = Int(x) << c
