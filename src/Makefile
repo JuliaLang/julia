@@ -76,8 +76,9 @@ FLAGS += -DUSE_POLLY_ACC
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --src-root)/tools/polly/tools # Required to find GPURuntime/GPUJIT.h
 endif
 endif
-ifeq (${USE_TAPIR},1)
+ifeq ($(USE_TAPIR),1)
 FLAGS += -DUSE_TAPIR
+SRCS += llvm-tapir
 endif
 else
 SRCS += anticodegen
