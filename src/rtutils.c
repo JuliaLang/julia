@@ -371,10 +371,6 @@ JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a)
 {
     return a;
 }
-JL_DLLEXPORT void jl_gc_use(jl_value_t *a)
-{
-    (void)a;
-}
 
 // parsing --------------------------------------------------------------------
 
