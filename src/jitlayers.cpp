@@ -117,9 +117,6 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         if (opt_level == 1) {
             PM->add(createSROAPass());                 // Break up aggregate allocas
             PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
-#if JL_LLVM_VERSION < 70000
-            PM->add(createInstructionSimplifierPass()); ///////// ****
-#endif
             PM->add(createEarlyCSEPass());
         }
         PM->add(createMemCpyOptPass()); // Remove memcpy / form memset

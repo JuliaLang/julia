@@ -159,17 +159,41 @@ bool LowerSIMDLoop::markLoopInfo(Module &M, Function *marker)
         if (!L)
             continue;
 
-        LLVM_DEBUG(dbgs() << "LSL: simd_loop found\n");
-        LLVM_DEBUG(dbgs() << "LSL: ivdep is: " << ivdep << "\n");
+        LLVM_DEBUG(dbgs() << "LSL: loopinfo marker found\n");
+        bool simd = false;
+        bool ivdep = false;
+        SmallVector<Metadata *, 8> MDs;
+
         BasicBlock *Lh = L->getHeader();
         LLVM_DEBUG(dbgs() << "LSL: loop header: " << *Lh << "\n");
-        MDNode *n = L->getLoopID();
-        if (!n) {
-            // Loop does not have a LoopID yet, so give it one.
-            n = MDNode::get(Lh->getContext(), ArrayRef<Metadata *>(NULL));
-            n->replaceOperandWith(0, n);
-            L->setLoopID(n);
+
+        // Reserve first location for self reference to the LoopID metadata node.
+        TempMDTuple TempNode = MDNode::getTemporary(Lh->getContext(), None);
+        MDs.push_back(TempNode.get());
+
+        // Walk `julia.loopinfo` metadata and filter out `julia.simdloop` and `julia.ivdep`
+        if (I->hasMetadataOtherThanDebugLoc()) {
+            MDNode *JLMD= I->getMetadata("julia.loopinfo");
+            if (JLMD) {
+                LLVM_DEBUG(dbgs() << "LSL: has julia.loopinfo metadata with " << JLMD->getNumOperands() <<" operands\n");
+                for (unsigned i = 0, ie = JLMD->getNumOperands(); i < ie; ++i) {
+                    Metadata *Op = JLMD->getOperand(i);
+                    const MDString *S = dyn_cast<MDString>(Op);
+                    if (S) {
+                        LLVM_DEBUG(dbgs() << "LSL: found " << S->getString() << "\n");
+                        if (S->getString().startswith("julia")) {
+                            if (S->getString().equals("julia.simdloop"))
+                                simd = true;
+                            if (S->getString().equals("julia.ivdep"))
+                                ivdep = true;
+                            continue;
+                        }
+                    }
+                    MDs.push_back(Op);
+                }
+            }
         }
+
         LLVM_DEBUG(dbgs() << "LSL: simd: " << simd << " ivdep: " << ivdep << "\n");
 
         MDNode *n = L->getLoopID();
