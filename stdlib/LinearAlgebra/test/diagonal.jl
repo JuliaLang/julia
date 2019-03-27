@@ -237,10 +237,20 @@ Random.seed!(1)
     # factorize
     @test factorize(D) == D
 
+    #Block Diagonal
+    ddSizes = rand(1:100, n)
+    blockD = Diagonal([dd[i] * Matrix(I, ddSizes[i], ddSizes[i]) for i=1:n])
+
     @testset "Eigensystem" begin
         eigD = eigen(D)
         @test Diagonal(eigD.values) ≈ D
         @test eigD.vectors == Matrix(I, size(D))
+
+        eigBlockD = eigen(blockD)
+        for i=1:n
+            @test Diagonal(eigBlockD[i].values) = blockD.diag[i]
+            @test eigBlockD[i].vectors == Matrix(I, size(D.diag[i]))
+        end
     end
 
     @testset "ldiv" begin
