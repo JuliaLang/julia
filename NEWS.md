@@ -23,6 +23,8 @@ Multi-threading changes
 * The `Condition` type now has a thread-safe replacement, accessed as `Threads.Condition`.
     With that addition, task scheduling primitives such as `ReentrantLock` are now thread-safe ([#30061]).
 
+  * It is possible to schedule and switch Tasks during `@threads` loops, and perform limited I/O ([#31438]).
+
 Language changes
 ----------------
 * Empty entries in `JULIA_DEPOT_PATH` are now expanded to default depot entries ([#31009]).

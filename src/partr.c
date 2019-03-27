@@ -226,8 +226,9 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
         uv_cond_broadcast(&sleep_alarm); // TODO: make this uv_cond_signal / just wake up correct thread
         uv_mutex_unlock(&sleep_lock);
     }
-    /* stop the event loop too, if on thread 1 and alerting thread 1 */
-    if (ptls->tid == 0 && (tid == 0 || tid == -1))
+    if (_threadedregion && jl_uv_mutex.owner != jl_thread_self())
+        jl_wake_libuv();
+    else
         uv_stop(jl_global_event_loop());
 }
 
@@ -260,8 +261,8 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
         if (task)
             return task;
 
-        if (ptls->tid == 0) {
-            if (!_threadedregion) {
+        if (!_threadedregion) {
+            if (ptls->tid == 0) {
                 if (jl_run_once(jl_global_event_loop()) == 0) {
                     task = get_next_task(getsticky);
                     if (task)
@@ -274,12 +275,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
                 }
             }
             else {
-                jl_process_events(jl_global_event_loop());
-            }
-        }
-        else {
-            int sleepnow = 0;
-            if (!_threadedregion) {
+                int sleepnow = 0;
                 uv_mutex_lock(&sleep_lock);
                 if (!_threadedregion) {
                     sleepnow = 1;
@@ -287,15 +283,28 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
                 else {
                     uv_mutex_unlock(&sleep_lock);
                 }
+                if (sleepnow) {
+                    int8_t gc_state = jl_gc_safe_enter(ptls);
+                    uv_cond_wait(&sleep_alarm, &sleep_lock);
+                    uv_mutex_unlock(&sleep_lock);
+                    jl_gc_safe_leave(ptls, gc_state);
+                }
+            }
+        }
+        else {
+            if (jl_atomic_load(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
+                task = get_next_task(getsticky);
+                if (task) {
+                    JL_UV_UNLOCK();
+                    return task;
+                }
+                uv_loop_t *loop = jl_global_event_loop();
+                loop->stop_flag = 0;
+                uv_run(loop, UV_RUN_ONCE);
+                JL_UV_UNLOCK();
             }
             else {
                 jl_cpu_pause();
-            }
-            if (sleepnow) {
-                int8_t gc_state = jl_gc_safe_enter(ptls);
-                uv_cond_wait(&sleep_alarm, &sleep_lock);
-                uv_mutex_unlock(&sleep_lock);
-                jl_gc_safe_leave(ptls, gc_state);
             }
         }
     }
