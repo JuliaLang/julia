@@ -266,6 +266,14 @@ let s = "\"C:\\\\ \\alpha"
     @test length(c) == 1
 end
 
+# test latex symbol completion in getindex expressions (#24705)
+let s = "tuple[\\alpha"
+    c, r, res = test_complete_context(s)
+    @test c[1] == "α"
+    @test r == 7:12
+    @test length(c) == 1
+end
+
 let s = "\\a"
     c, r, res = test_complete(s)
     "\\alpha" in c
@@ -863,7 +871,7 @@ function test_dict_completion(dict_name)
     @test c == Any[":α]"]
     s = "$dict_name["
     c, r = test_complete(s)
-    @test !isempty(c)
+    @test c == sort!(repr.(keys(CompletionFoo.test_dict)))
 end
 test_dict_completion("CompletionFoo.test_dict")
 test_dict_completion("CompletionFoo.test_customdict")
