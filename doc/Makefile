@@ -23,12 +23,11 @@ help:
 DOCUMENTER_OPTIONS := linkcheck=$(linkcheck) doctest=$(doctest) buildroot=$(call cygpath_w,$(BUILDROOT)) \
     texplatform=$(texplatform)
 
-$(SRCCACHE)/UnicodeData.txt:
-	$(JLDOWNLOAD) "$@" http://www.unicode.org/Public/9.0.0/ucd/UnicodeData.txt
+UnicodeData.txt:
+	$(JLDOWNLOAD) http://www.unicode.org/Public/9.0.0/ucd/UnicodeData.txt
 
-deps: $(SRCCACHE)/UnicodeData.txt
-	$(JLCHECKSUM) "$<"
-	cp "$<" UnicodeData.txt
+deps: UnicodeData.txt
+	$(JLCHECKSUM) UnicodeData.txt
 
 clean:
 	-rm -rf _build/* deps/* docbuild.log UnicodeData.txt
