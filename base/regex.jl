@@ -363,6 +363,9 @@ macro s_str(string) SubstitutionString(string) end
 replace_err(repl) = error("Bad replacement string: $repl")
 
 function _write_capture(io, re, group)
+    # in the case of an optional group that doesn't match, don't write anything
+    # e.g. replace("The fox.", r"fox(es)?" => s"bus\1") 
+    isa(re.match_data, Ptr{Nothing}) && return
     len = PCRE.substring_length_bynumber(re.match_data, group)
     ensureroom(io, len+1)
     PCRE.substring_copy_bynumber(re.match_data, group,
