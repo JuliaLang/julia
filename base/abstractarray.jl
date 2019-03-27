@@ -101,13 +101,12 @@ unsafe_indices(r::AbstractRange) = (OneTo(unsafe_length(r)),) # Ranges use check
 keys(a::AbstractArray) = CartesianIndices(axes(a))
 keys(a::AbstractVector) = LinearIndices(a)
 
-keytype(a::AbstractArray) = CartesianIndex{ndims(a)}
-keytype(a::AbstractVector) = Int
+keytype(a::AbstractArray) = keytype(typeof(a))
 
 keytype(A::Type{<:AbstractArray}) = CartesianIndex{ndims(A)}
 keytype(A::Type{<:AbstractVector}) = Int
 
-valtype(a::AbstractArray) = eltype(a)
+valtype(a::AbstractArray) = valtype(typeof(a))
 valtype(A::Type{<:AbstractArray}) = eltype(A)
 
 prevind(::AbstractArray, i::Integer) = Int(i)-1
