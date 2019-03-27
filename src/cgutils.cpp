@@ -1282,32 +1282,32 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         data = ptr;
     if (idx_0based)
         data = ctx.builder.CreateInBoundsGEP(elty, data, idx_0based);
-    Value *elt;
+    Instruction *load;
     // TODO: can only lazy load if we can create a gc root for ptr for the lifetime of elt
     //if (elty->isAggregateType() && tbaa == tbaa_immut && !alignment) { // can lazy load on demand, no copy needed
     //    elt = data;
     //}
     //else {
-        Instruction *load = ctx.builder.CreateAlignedLoad(data,
+        load = ctx.builder.CreateAlignedLoad(data,
             isboxed || alignment ?  alignment : julia_alignment(jltype),
             false);
-        if (aliasscope) {
+        if (aliasscope)
             load->setMetadata("alias.scope", aliasscope);
-        }
-        if (isboxed) {
+        if (isboxed)
             load = maybe_mark_load_dereferenceable(load, true, jltype);
-        }
-        if (tbaa) {
-            elt = tbaa_decorate(tbaa, load);
-        }
-        else {
-            elt = load;
-        }
-        if (maybe_null_if_boxed && isboxed) {
-            null_pointer_check(ctx, elt);
-        }
+        if (tbaa)
+            load = tbaa_decorate(tbaa, load);
+        if (maybe_null_if_boxed && isboxed)
+            null_pointer_check(ctx, load);
     //}
-    return mark_julia_type(ctx, elt, isboxed, jltype);
+    if (jltype == (jl_value_t*)jl_bool_type) { // "freeze" undef memory to a valid value
+        // NOTE: if we zero-initialize arrays, this optimization should become valid
+        //load->setMetadata(LLVMContext::MD_range, MDNode::get(jl_LLVMContext, {
+        //    ConstantAsMetadata::get(ConstantInt::get(T_int8, 0)),
+        //    ConstantAsMetadata::get(ConstantInt::get(T_int8, 2)) }));
+        load = ctx.builder.Insert(CastInst::Create(Instruction::Trunc, load, T_int1));
+    }
+    return mark_julia_type(ctx, load, isboxed, jltype);
 }
 
 static void typed_store(jl_codectx_t &ctx,

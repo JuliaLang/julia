@@ -286,6 +286,10 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
         // bools may be stored internally as int8
         unboxed = ctx.builder.CreateZExt(unboxed, T_int8);
     }
+    else if (ty == T_int8 && to == T_int1) {
+        // bools may be stored internally as int8
+        unboxed = ctx.builder.CreateTrunc(unboxed, T_int1);
+    }
     else if (ty == T_void || DL.getTypeSizeInBits(ty) != DL.getTypeSizeInBits(to)) {
         // this can happen in dead code
         //emit_unreachable(ctx);
@@ -936,6 +940,15 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
             xtyp = INTT(xtyp);
         if (!xtyp)
             return emit_runtime_call(ctx, f, argv, nargs);
+        ////Bool are required to be in the range [0,1]
+        ////so while they are represented as i8,
+        ////the operations need to be done in mod 1
+        ////we can either do that now, or truncate them
+        ////later into mod 1.
+        ////LLVM seems to emit better code if we do the latter,
+        ////(more likely to fold away the cast) so that's what we'll do.
+        //if (xtyp == (jl_value_t*)jl_bool_type)
+        //    r = T_int1;
 
         Type **argt = (Type**)alloca(sizeof(Type*) * nargs);
         argt[0] = xtyp;
@@ -960,11 +973,12 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         }
 
         // call the intrinsic
-        jl_value_t *newtyp = NULL;
+        jl_value_t *newtyp = xinfo.typ;
         Value *r = emit_untyped_intrinsic(ctx, f, argvalues, nargs, (jl_datatype_t**)&newtyp, xinfo.typ);
-        if (r->getType() == T_int1)
-            r = ctx.builder.CreateZExt(r, T_int8);
-        return mark_julia_type(ctx, r, false, newtyp ? newtyp : xinfo.typ);
+        // Turn Bool operations into mod 1 now, if needed
+        if (newtyp == (jl_value_t*)jl_bool_type && r->getType() != T_int1)
+            r = ctx.builder.CreateTrunc(r, T_int1);
+        return mark_julia_type(ctx, r, false, newtyp);
     }
     }
     assert(0 && "unreachable");
