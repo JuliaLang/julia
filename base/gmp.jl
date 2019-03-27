@@ -396,7 +396,36 @@ function (::Type{T})(n::BigInt, ::RoundingMode{:Nearest}) where T<:CdoubleMax
     x
 end
 
-Float64(n::BigInt) = Float64(n, RoundNearest)
+function Float64(n::BigInt)
+    n == 0 && return 0.0
+    if Int == Int64
+        if abs(x.size) > 16
+            temp = Inf
+        elseif abs(x.size) == 1
+            temp = Float64(unsafe_load(x.d))
+        else
+            y1 = unsafe_load(x.d, x.size)
+            n = 64 - leading_zeros(y1)
+            if n > 53
+                y = (y1 >> (n-54))
+                y = (y + 1) >> 1
+                y &= ~UInt64(trailing_zeros(x) == (n-54 + (x.size-1)*64))
+                d = (n+1021) << 52
+            else
+                y = y1 << (54 - n) + unsafe_load(x.d, x.size-1) >> (10 + n)
+                y = (y + 1) >> 1
+                y &= ~UInt64(trailing_zeros(x) == (10+n + (x.size-2)*64))
+                d = (n+1021) << 52
+            end
+            temp = reinterpret(Float64, d+y)
+            temp = ldexp(temp, (x.size - 1)*64)
+        end
+        signbit(x.size) && return -temp
+        return temp
+    end
+    #TODO: implement for 32 bit machine
+end
+
 Float32(n::BigInt) = Float32(n, RoundNearest)
 Float16(n::BigInt) = Float16(n, RoundNearest)
 
