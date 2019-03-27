@@ -117,7 +117,7 @@
 
 // controls for when threads sleep
 #define THREAD_SLEEP_THRESHOLD_NAME     "JULIA_THREAD_SLEEP_THRESHOLD"
-#define DEFAULT_THREAD_SLEEP_THRESHOLD  1e9    // cycles (1e9==1sec@1GHz)
+#define DEFAULT_THREAD_SLEEP_THRESHOLD  4e9    // cycles (4e9==4sec@1GHz)
 
 // defaults for # threads
 #define NUM_THREADS_NAME                "JULIA_NUM_THREADS"
