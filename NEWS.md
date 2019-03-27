@@ -47,6 +47,8 @@ Standard library changes
 * A no-argument construct to `Ptr{T}` has been added which constructs a null pointer ([#30919])
 * `strip` now accepts a function argument in the same manner as `lstrip` and `rstrip` ([#31211])
 * `mktempdir` now accepts a `prefix` keyword argument to customize the file name ([#31230], [#22922])
+* `keytype` and `valtype` now work on `AbstractArray`, and return the `eltype` of `keys(...)` and
+  `values(...)` respectively ([#27749]).
 
 #### LinearAlgebra
 
