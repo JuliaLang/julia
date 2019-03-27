@@ -47,15 +47,24 @@ static int16_t heap_p;
 static uint64_t cong_unbias;
 
 /* for atomic snapshot */
-static uint64_t snapshot_id = -1;
+static uint64_t volatile snapshot_owner = -1;
 
 /* for thread sleeping */
+typedef struct thread_sleep_tag {
+    int16_t sleep_state;
+    uv_mutex_t sleep_lock;
+    uv_cond_t wake_signal;
+} thread_sleep_t;
+
+static thread_sleep_t **all_sleep_states;
+static int16_t n_threads_sleeping;
+
 static const int16_t not_sleeping = 0;
 static const int16_t checking_for_sleeping = 1;
 static const int16_t sleeping = 2;
-static int16_t sleep_state = not_sleeping;
-static uv_mutex_t **all_sleep_locks;
-static uv_cond_t **all_wake_signals;
+static int16_t volatile sleep_check_state;
+
+uint64_t sleep_threshold;
 
 
 /*  multiq_init()
@@ -185,26 +194,34 @@ static inline jl_task_t *multiq_deletemin(void)
 
 /*  just_sleep()
  */
-static void just_sleep(uv_mutex_t *lock, uv_cond_t *wakeup)
+static void just_sleep(void)
 {
-    pthread_mutex_lock(lock);
-    if (__atomic_load_n(&sleep_check_state, __ATOMIC_SEQ_CST) == sleeping)
-        pthread_cond_wait(wakeup, lock);
-    else
-        pthread_mutex_unlock(lock);
+    jl_atomic_fetch_add(&n_threads_sleeping, 1);
+
+    jl_ptls_t ptls = jl_get_ptls_states();
+    uv_mutex_lock(&all_sleep_states[ptls->tid]->sleep_lock);
+    if (sleep_check_state == sleeping) {
+        all_sleep_states[ptls->tid]->sleep_state = sleeping;
+        uv_cond_wait(&all_sleep_states[ptls->tid]->wake_signal,
+                     &all_sleep_states[ptls->tid]->sleep_lock);
+        uv_mutex_lock(&all_sleep_states[ptls->tid]->sleep_lock);
+        all_sleep_states[ptls->tid]->sleep_state = not_sleeping;
+    }
+    uv_mutex_unlock(&all_sleep_states[ptls->tid]->sleep_lock);
+
+    jl_atomic_fetch_add(&n_threads_sleeping, -1);
 }
 
 
 /*  snapshot_and_sleep()
  */
-static void snapshot_and_sleep(pthread_mutex_t *lock, pthread_cond_t *wakeup)
+static void snapshot_and_sleep(void)
 {
-    uint64_t snapshot_id = cong(UINT64_MAX, UINT64_MAX, &rngseed), previous = -1;
-    if (!__atomic_compare_exchange_n(&snapshot_owner, &previous, snapshot_id, 0,
-                                     __ATOMIC_SEQ_CST, __ATOMIC_RELAXED)) {
-        LOG_ERR(plog, "  snapshot has previous owner!\n");
-        return;
-    }
+    jl_ptls_t ptls = jl_get_ptls_states();
+    uint64_t snapshot_id = cong(UINT64_MAX, UINT64_MAX, &ptls->rngseed),
+             previous = -1;
+    assert(jl_atomic_bool_compare_exchange(&snapshot_owner, previous,
+                                           snapshot_id));
 
     int16_t i;
     for (i = 0;  i < heap_p;  ++i) {
@@ -212,58 +229,50 @@ static void snapshot_and_sleep(pthread_mutex_t *lock, pthread_cond_t *wakeup)
             break;
     }
     if (i != heap_p) {
-        LOG_INFO(plog, "  heap has tasks, snapshot aborted\n");
+        // heap has tasks, abort snapshot
+        snapshot_owner = previous;
         return;
     }
 
-    if (!__atomic_compare_exchange_n(&snapshot_owner, &snapshot_id, previous, 0,
-                                     __ATOMIC_SEQ_CST, __ATOMIC_RELAXED)) {
-        LOG_INFO(plog, "  snapshot owner changed, snapshot aborted\n");
+    if (!jl_atomic_bool_compare_exchange(&snapshot_owner,
+                                         snapshot_id, previous))
+        // snapshot id changed, abort snapshot
         return;
-    }
-    if (!__atomic_compare_exchange_n(&sleep_check_state, (int16_t *)&checking_for_sleeping,
-                                     sleeping, 0,
-                                     __ATOMIC_SEQ_CST, __ATOMIC_RELAXED)) {
-        LOG_ERR(plog, "  sleep aborted at snapshot end\n");
+    if (!jl_atomic_bool_compare_exchange(&sleep_check_state,
+                                         checking_for_sleeping, sleeping))
+        // sleep aborted
         return;
-    }
-    just_sleep(lock, wakeup);
+
+    just_sleep();
 }
 
 
 /*  multiq_sleep_if_empty()
  */
-void multiq_sleep_if_empty(pthread_mutex_t *lock, pthread_cond_t *wakeup)
+void multiq_sleep_if_empty(void)
 {
-    int16_t state;
-
 sleep_start:
-    state = __atomic_load_n(&sleep_check_state, __ATOMIC_SEQ_CST);
-    if (state == checking_for_sleeping) {
+    if (sleep_check_state == checking_for_sleeping) {
         for (; ;) {
-            cpu_pause();
-            state = __atomic_load_n(&sleep_check_state, __ATOMIC_SEQ_CST);
-            if (state == not_sleeping)
+            jl_cpu_pause();
+            if (sleep_check_state == not_sleeping)
                 break;
-            else if (state == sleeping) {
-                just_sleep(lock, wakeup);
-                break;
-            }
+            else if (sleep_check_state == sleeping)
+                goto sleep_start;
         }
     }
-    else if (state == not_sleeping) {
-        if (!__atomic_compare_exchange_n(&sleep_check_state, (int16_t *)&not_sleeping,
-                                         checking_for_sleeping, 0,
-                                         __ATOMIC_SEQ_CST, __ATOMIC_RELAXED))
+    else if (sleep_check_state == not_sleeping) {
+        if (!jl_atomic_bool_compare_exchange(&sleep_check_state, not_sleeping,
+                                             checking_for_sleeping))
             goto sleep_start;
-        snapshot_and_sleep(lock, wakeup);
-        if (!__atomic_compare_exchange_n(&sleep_check_state, (int16_t *)&sleeping,
-                                         not_sleeping, 0,
-                                         __ATOMIC_SEQ_CST, __ATOMIC_RELAXED))
-            LOG_ERR(plog, "  sleep check state update failed\n");
+        snapshot_and_sleep();
     }
-    else /* state == sleeping */
-        just_sleep(lock, wakeup);
+    else // state == sleeping
+        just_sleep();
+
+    // not racy; see just_sleep()
+    if (n_threads_sleeping == 0)
+        jl_atomic_bool_compare_exchange(&sleep_check_state, sleeping, not_sleeping);
 }
 
 
@@ -277,12 +286,21 @@ void jl_init_threadinginfra(void)
     multiq_init();
 
     /* initialize the sleep mechanism */
-    all_sleep_locks = (uv_mutex_t **)calloc(jl_n_threads, sizeof(uv_mutex_t *));
-    all_wake_signals = (uv_cond_t **)calloc(jl_n_threads, sizeof(uv_cond_t *));
-    all_sleep_locks[0] = (uv_mutex_t *)calloc(1, sizeof(uv_mutex_t));
-    all_wake_signals[0] = (uv_cond_t *)calloc(1, sizeof(uv_cond_t));
-    uv_mutex_init(all_sleep_locks[0]);
-    uv_cond_init(all_wake_signals[0]);
+    sleep_threshold = DEFAULT_THREAD_SLEEP_THRESHOLD;
+    char *cp = getenv(THREAD_SLEEP_THRESHOLD_NAME);
+    if (cp) {
+        if (!strncasecmp(cp, "infinite", 8))
+            sleep_threshold = 0;
+        else
+            sleep_threshold = (uint64_t)strtol(cp, NULL, 10);
+    }
+    all_sleep_states = (thread_sleep_t **)calloc(jl_n_threads, sizeof(thread_sleep_t *));
+    all_sleep_states[0] = (thread_sleep_t *)calloc(1, sizeof(thread_sleep_t));
+    all_sleep_states[0]->sleep_state = not_sleeping;
+    uv_mutex_init(&all_sleep_states[0]->sleep_lock);
+    uv_cond_init(&all_sleep_states[0]->wake_signal);
+    sleep_check_state = not_sleeping;
+    n_threads_sleeping = 0;
 }
 
 
@@ -301,11 +319,13 @@ void jl_threadfun(void *arg)
 
     jl_ptls_t ptls = jl_get_ptls_states();
 
-    all_sleep_locks[ptls->tid] = (uv_mutex_t *)calloc(1, sizeof(uv_mutex_t));
-    all_wake_signals[ptls->tid] = (uv_cond_t *)calloc(1, sizeof(uv_cond_t));
-    uv_mutex_init(all_sleep_locks[ptls->tid]);
-    uv_cond_init(all_wake_signals[ptls->tid]);
+    // set up sleep mechanism for this thread
+    all_sleep_states[ptls->tid] = (thread_sleep_t *)calloc(1, sizeof(thread_sleep_t));
+    all_sleep_states[ptls->tid]->sleep_state = not_sleeping;
+    uv_mutex_init(&all_sleep_states[ptls->tid]->sleep_lock);
+    uv_cond_init(&all_sleep_states[ptls->tid]->wake_signal);
 
+    // wait for all threads
     jl_gc_state_set(ptls, JL_GC_STATE_SAFE, 0);
     uv_barrier_wait(targ->barrier);
 
@@ -323,12 +343,12 @@ static void sleep_after_threshold(uint64_t *start_cycles)
 {
     if (sleep_threshold) {
         if (!(*start_cycles)) {
-            *start_cycles = rdtscp();
+            *start_cycles = jl_hrtime();
             return;
         }
-        uint64_t elapsed_cycles = rdtscp() - (*start_cycles);
+        uint64_t elapsed_cycles = jl_hrtime() - (*start_cycles);
         if (elapsed_cycles >= sleep_threshold) {
-            multiq_sleep_if_empty(sleep_lock, wake_signal);
+            multiq_sleep_if_empty();
             *start_cycles = 0;
         }
     }
@@ -337,12 +357,16 @@ static void sleep_after_threshold(uint64_t *start_cycles)
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
+
     /* ensure thread tid is awake if necessary */
-    if (ptls->tid != tid && !_threadedregion && tid != -1) {
-        uv_mutex_lock(all_sleep_locks[tid]);
-        uv_cond_signal(all_wake_signals[tid]);
-        uv_mutex_unlock(all_sleep_locks[tid]);
+    if (sleep_threshold && sleep_check_state == sleeping
+            && ptls->tid != tid && !_threadedregion && tid != -1) {
+        uv_mutex_lock(&all_sleep_states[tid]->sleep_lock);
+        if (all_sleep_states[tid]->sleep_state == sleeping)
+            uv_cond_signal(&all_sleep_states[tid]->wake_signal);
+        uv_mutex_unlock(&all_sleep_states[tid]->sleep_lock);
     }
+
     /* stop the event loop too, if on thread 1 and alerting thread 1 */
     if (ptls->tid == 0 && (tid == 0 || tid == -1))
         uv_stop(jl_global_event_loop());
