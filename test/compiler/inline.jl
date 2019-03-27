@@ -257,3 +257,11 @@ end
 let ci = code_typed(foo_apply_apply_type_svec, Tuple{})[1].first
     @test length(ci.code) == 1 && ci.code[1] == Expr(:return, NTuple{3, Float32})
 end
+
+# Test that inlining can eliminate noinline functions if they are proven pure
+# and their result is unused.
+@noinline noinline_add(x, y) = x + y
+noinline_unused(x, y) = (noinline_add(x, y); nothing)
+let ci = code_typed(noinline_unused, Tuple{Int, Int})[1].first
+    @test length(ci.code) == 1 && ci.code[1].head === :return
+end

@@ -117,7 +117,7 @@ function cache_result(result::InferenceResult, min_valid::UInt, max_valid::UInt)
             end
             if !toplevel && inferred_result isa CodeInfo
                 cache_the_tree = result.src.inferred &&
-                    (result.src.inlineable ||
+                    (result.src.inlineable || result.src.pure ||
                      ccall(:jl_isa_compileable_sig, Int32, (Any, Any), result.linfo.specTypes, def) != 0)
                 if cache_the_tree
                     # compress code for non-toplevel thunks

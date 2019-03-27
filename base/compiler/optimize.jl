@@ -82,6 +82,7 @@ const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 # const SLOT_CALLED      = 64
 
 const IR_FLAG_INBOUNDS = 0x01
+const IR_FLAG_EFFECT_FREE = 0x01 << 4
 
 # known to be always effect-free (in particular nothrow)
 const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
@@ -160,6 +161,18 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
     return true
 end
 
+function provably_pure(ir)
+    proven_pure = true
+    for i in 1:length(ir.stmts)
+        stmt = ir.stmts[i]
+        if stmt_affects_purity(stmt, ir) && !stmt_effect_free(stmt, ir.types[i], ir, ir.sptypes)
+            proven_pure = false
+            break
+        end
+    end
+    proven_pure
+end
+
 # run the optimization work
 function optimize(opt::OptimizationState, @nospecialize(result))
     def = opt.linfo.def
@@ -167,35 +180,26 @@ function optimize(opt::OptimizationState, @nospecialize(result))
     @timeit "optimizer" ir = run_passes(opt.src, nargs, opt)
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] == :noinline, ir.meta)
 
+    proven_pure = false
+    # must be proven pure to use const_api; otherwise we might skip throwing errors
+    # (issue #20704)
+    # TODO: Improve this analysis; if a function is marked @pure we should really
+    # only care about certain errors (e.g. method errors and type errors).
+    proven_pure = provably_pure(ir)
+    if proven_pure
+        for fl in opt.src.slotflags
+            if (fl & SLOT_USEDUNDEF) != 0
+                proven_pure = false
+                break
+            end
+        end
+    end
+    if proven_pure
+        opt.src.pure = true
+    end
+
     # compute inlining and other related optimizations
     if (isa(result, Const) || isconstType(result))
-        proven_pure = false
-        # must be proven pure to use const_api; otherwise we might skip throwing errors
-        # (issue #20704)
-        # TODO: Improve this analysis; if a function is marked @pure we should really
-        # only care about certain errors (e.g. method errors and type errors).
-        if length(ir.stmts) < 10
-            proven_pure = true
-            for i in 1:length(ir.stmts)
-                stmt = ir.stmts[i]
-                if stmt_affects_purity(stmt, ir) && !stmt_effect_free(stmt, ir.types[i], ir, ir.sptypes)
-                    proven_pure = false
-                    break
-                end
-            end
-            if proven_pure
-                for fl in opt.src.slotflags
-                    if (fl & SLOT_USEDUNDEF) != 0
-                        proven_pure = false
-                        break
-                    end
-                end
-            end
-        end
-        if proven_pure
-            opt.src.pure = true
-        end
-
         if proven_pure && !coverage_enabled()
             # use constant calling convention
             # Do not emit `jl_fptr_const_return` if coverage is enabled
