@@ -435,7 +435,7 @@ endif # LLVM_VER
 
 # Add a JL prefix to the version map. DO NOT REMOVE
 ifeq ($(LLVM_VER_SHORT), 6.0)
-$(eval $(call LLVM_PATCH,llvm6-symver-jlprefix))
+$(eval $(call LLVM_PATCH,llvm-symver-jlprefix))
 else
 $(eval $(call LLVM_PATCH,llvm7-symver-jlprefix))
 endif
