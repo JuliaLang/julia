@@ -272,6 +272,10 @@ end
     # Issue 13332
     @test replace("abc", 'b' => 2.1) == "a2.1c"
 
+    # Issue 31456
+    @test replace("The fox.", r"fox(es)?" => s"bus\1") == "The bus."
+    @test replace("The foxes.", r"fox(es)?" => s"bus\1") == "The buses."
+    
     # test replace with a count for String and GenericString
     # check that replace is a no-op if count==0
     for s in ["aaa", Test.GenericString("aaa")]
@@ -283,7 +287,7 @@ end
         @test replace(s, 'a' => 'z', count=typemax(Int)) == "zzz"
         @test replace(s, 'a' => 'z')    == "zzz"
     end
-
+    
     # Issue 25741
     @test replace("abc", ['a', 'd'] => 'A') == "Abc"
 
