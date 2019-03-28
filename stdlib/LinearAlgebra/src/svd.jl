@@ -1,6 +1,87 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Singular Value Decomposition
+"""
+    SVD <: Factorization
+Matrix factorization type of the SVD factorization of a real or complex 
+positive definite matrix `A`. This is the return type of [`SVD`](@ref),
+the corresponding matrix factorization function.
+The SVD factors can be obtained from the factorization `F::SVD`
+via `F.U`, `F.S` and `F.Vt`.
+# Examples
+```jldoctest
+julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
+4×5 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0  2.0
+ 0.0  0.0  3.0  0.0  0.0
+ 0.0  0.0  0.0  0.0  0.0
+ 0.0  2.0  0.0  0.0  0.0
+
+julia> F = svd!(A);
+
+julia> F.U
+4×4 Array{Float64,2}:
+ 0.0  1.0  0.0  0.0
+ 1.0  0.0  0.0  0.0
+ 0.0  0.0  0.0 -1.0
+ 0.0  0.0  1.0  0.0
+
+julia> F.S
+4-element Array{Float64,1}:
+ 3.0             
+ 2.23606797749979
+ 2.0             
+ 0.0
+
+julia> F.Vt
+4×5 Array{Float64,2}:
+ -0.0       0.0  1.0  -0.0  0.0     
+  0.447214  0.0  0.0   0.0  0.894427
+ -0.0       1.0  0.0  -0.0  0.0     
+  0.0       0.0  0.0   1.0  0.0 
+
+julia> F.U * Diagonal(F.S) * F.Vt
+4×5 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0  2.0
+ 0.0  0.0  3.0  0.0  0.0
+ 0.0  0.0  0.0  0.0  0.0
+ 0.0  2.0  0.0  0.0  0.0
+
+julia> U, S, Vt = svd(A);
+
+julia> U
+4×4 Array{Float64,2}:
+ 0.0  1.0  0.0   0.0
+ 1.0  0.0  0.0   0.0
+ 0.0  0.0  0.0  -1.0
+ 0.0  0.0  1.0   0.0
+
+julia> S
+4-element Array{Float64,1}:
+ 3.0             
+ 2.23606797749979
+ 2.0             
+ 0.0             
+
+julia> Vt
+5×4 Adjoint{Float64,Array{Float64,2}}:
+ -0.0  0.447214  -0.0  0.0
+  0.0  0.0        1.0  0.0
+  1.0  0.0        0.0  0.0
+ -0.0  0.0       -0.0  1.0
+  0.0  0.894427   0.0  0.0
+
+julia> 
+4×5 Array{Float64,2}:
+ -2.23607   0.0   0.0  0.0  0.618034
+  0.0      -3.0   1.0  0.0  0.0
+  0.0       0.0   0.0  0.0  0.0
+  0.0       0.0  -2.0  0.0  0.0
+
+julia> U == F.U && S == F.S && adjoint(Vt) == F.Vt
+ true
+```
+"""
 struct SVD{T,Tr,M<:AbstractArray{T}} <: Factorization{T}
     U::M
     S::Vector{Tr}

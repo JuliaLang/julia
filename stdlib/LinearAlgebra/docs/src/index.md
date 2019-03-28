@@ -352,6 +352,7 @@ LinearAlgebra.schur!
 LinearAlgebra.schur
 LinearAlgebra.ordschur
 LinearAlgebra.ordschur!
+LinearAlgebra.SVD
 LinearAlgebra.svd
 LinearAlgebra.svd!
 LinearAlgebra.svdvals
