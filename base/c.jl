@@ -183,7 +183,7 @@ Calling [`Ref(array[, index])`](@ref Ref) is generally preferable to this functi
 """
 function pointer end
 
-pointer(p::Cstring) = convert(Ptr{UInt8}, p)
+pointer(p::Cstring) = convert(Ptr{Cchar}, p)
 pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)
 
 # comparisons against pointers (mainly to support `cstr==C_NULL`)
@@ -203,7 +203,7 @@ function cconvert(::Type{Cwstring}, s::AbstractString)
     return v
 end
 
-eltype(::Type{Cstring}) = UInt8
+eltype(::Type{Cstring}) = Cchar
 eltype(::Type{Cwstring}) = Cwchar_t
 
 containsnul(p::Ptr, len) =

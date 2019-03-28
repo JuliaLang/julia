@@ -1428,5 +1428,6 @@ Return the current working directory if run from a REPL or if evaluated by `juli
 """
 macro __DIR__()
     __source__.file === nothing && return nothing
-    return abspath(dirname(String(__source__.file)))
+    _dirname = dirname(String(__source__.file))
+    return isempty(_dirname) ? pwd() : abspath(_dirname)
 end

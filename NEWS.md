@@ -12,6 +12,8 @@ New language features
     `findall`, `findfirst`, `argmin`/`argmax` and `findmin`/`findmax` to work with these
     objects, returning the index of matching non-missing elements in the parent ([#31008]).
 
+  * `inv(::Missing)` has now been added and returns `missing` ([#31408]).
+
 Multi-threading changes
 -----------------------
 
@@ -46,6 +48,7 @@ Standard library changes
 * `filter` now supports `SkipMissing`-wrapped arrays ([#31235]).
 * A no-argument construct to `Ptr{T}` has been added which constructs a null pointer ([#30919])
 * `strip` now accepts a function argument in the same manner as `lstrip` and `rstrip` ([#31211])
+* `mktempdir` now accepts a `prefix` keyword argument to customize the file name ([#31230], [#22922])
 
 #### LinearAlgebra
 

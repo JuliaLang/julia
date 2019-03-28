@@ -4,6 +4,7 @@
 #define JL_INTERNAL_H
 
 #include "options.h"
+#include "locks.h"
 #include <uv.h>
 #if !defined(_MSC_VER) && !defined(__MINGW32__)
 #include <unistd.h>
@@ -107,6 +108,15 @@ static inline void jl_assume_(int cond)
 #ifndef JL_USE_IFUNC
 #  define JL_USE_IFUNC 0
 #endif
+
+// If this is detected in a backtrace of segfault, it means the functions
+// that use this value must be reworked into their async form with cb arg
+// provided and with JL_UV_LOCK used around the calls
+static uv_loop_t *const unused_uv_loop_arg = (uv_loop_t *)0xBAD10;
+
+extern jl_mutex_t jl_uv_mutex;
+#define JL_UV_LOCK() JL_LOCK(&jl_uv_mutex)
+#define JL_UV_UNLOCK() JL_UNLOCK(&jl_uv_mutex)
 
 #ifdef __cplusplus
 extern "C" {
@@ -490,7 +500,7 @@ void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo);
 void jl_init_root_task(void *stack_lo, void *stack_hi);
 void jl_init_serializer(void);
 void jl_gc_init(void);
-void jl_init_signal_async(void);
+void jl_init_uv(void);
 void jl_init_debuginfo(void);
 void jl_init_thread_heap(jl_ptls_t ptls);
 
@@ -502,7 +512,6 @@ extern ssize_t jl_tls_offset;
 extern const int jl_tls_elf_support;
 void jl_init_threading(void);
 void jl_start_threads(void);
-void jl_shutdown_threading(void);
 
 // Whether the GC is running
 extern char *jl_safepoint_pages;
@@ -708,6 +717,24 @@ void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFEPOINT;
 // Returns time in nanosec
 JL_DLLEXPORT uint64_t jl_hrtime(void);
 
+// congruential random number generator
+// for a small amount of thread-local randomness
+// we could just use libc:`rand()`, but we want to ensure this is fast
+STATIC_INLINE void seed_cong(uint64_t *seed)
+{
+    *seed = rand();
+}
+STATIC_INLINE void unbias_cong(uint64_t max, uint64_t *unbias)
+{
+    *unbias = UINT64_MAX - ((UINT64_MAX % max) + 1);
+}
+STATIC_INLINE uint64_t cong(uint64_t max, uint64_t unbias, uint64_t *seed)
+{
+    while ((*seed = 69069 * (*seed) + 362437) > unbias)
+        ;
+    return *seed % max;
+}
+
 // libuv stuff:
 JL_DLLEXPORT extern void *jl_dl_handle;
 JL_DLLEXPORT extern void *jl_RTLD_DEFAULT_handle;
@@ -832,6 +859,8 @@ JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a);
 int jl_array_store_unboxed(jl_value_t *el_type);
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i);
+
+JL_DLLEXPORT void jl_uv_stop(uv_loop_t* loop);
 
 // -- synchronization utilities -- //
 

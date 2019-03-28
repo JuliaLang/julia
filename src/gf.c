@@ -521,20 +521,22 @@ size_t jl_typeinf_world = 0;
 JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
 {
     jl_typeinf_func = (jl_function_t*)f;
-    jl_typeinf_world = jl_get_tls_world_age();
-    ++jl_world_counter; // make type-inference the only thing in this world
-    // give type inference a chance to see all of these
-    // TODO: also reinfer if max_world != ~(size_t)0
-    jl_array_t *unspec = jl_alloc_vec_any(0);
-    JL_GC_PUSH1(&unspec);
-    jl_foreach_reachable_mtable(reset_mt_caches, (void*)unspec);
-    size_t i, l;
-    for (i = 0, l = jl_array_len(unspec); i < l; i++) {
-        jl_method_instance_t *li = (jl_method_instance_t*)jl_array_ptr_ref(unspec, i);
-        if (!jl_is_rettype_inferred(li))
-            jl_type_infer(&li, jl_world_counter, 1);
+    if (jl_typeinf_world == 0) {
+        jl_typeinf_world = jl_get_tls_world_age();
+        ++jl_world_counter; // make type-inference the only thing in this world
+        // give type inference a chance to see all of these
+        // TODO: also reinfer if max_world != ~(size_t)0
+        jl_array_t *unspec = jl_alloc_vec_any(0);
+        JL_GC_PUSH1(&unspec);
+        jl_foreach_reachable_mtable(reset_mt_caches, (void*)unspec);
+        size_t i, l;
+        for (i = 0, l = jl_array_len(unspec); i < l; i++) {
+            jl_method_instance_t *li = (jl_method_instance_t*)jl_array_ptr_ref(unspec, i);
+            if (!jl_is_rettype_inferred(li))
+                jl_type_infer(&li, jl_world_counter, 1);
+        }
+        JL_GC_POP();
     }
-    JL_GC_POP();
 }
 
 static int very_general_type(jl_value_t *t)
@@ -1735,30 +1737,6 @@ jl_tupletype_t *arg_type_tuple(jl_value_t **args, size_t nargs)
     return tt;
 }
 
-static jl_method_instance_t *jl_method_lookup_by_type(
-        jl_methtable_t *mt, jl_tupletype_t *types,
-        int cache, int allow_exec, size_t world)
-{
-    jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(mt->cache, (jl_value_t*)types, NULL, /*subtype*/1, jl_cachearg_offset(mt), world, /*max_world_mask*/0);
-    if (entry) {
-        jl_method_instance_t *linfo = (jl_method_instance_t*)entry->func.value;
-        assert(linfo->min_world <= entry->min_world && linfo->max_world >= entry->max_world &&
-                "typemap consistency error: MethodInstance doesn't apply to full range of its entry");
-        return linfo;
-    }
-    JL_LOCK(&mt->writelock);
-    if (jl_is_datatype((jl_value_t*)types) && types->isdispatchtuple)
-        cache = 1;
-    jl_method_instance_t *sf = jl_mt_assoc_by_type(mt, types, cache, allow_exec, world);
-    JL_UNLOCK(&mt->writelock);
-    return sf;
-}
-
-JL_DLLEXPORT int jl_method_exists(jl_methtable_t *mt, jl_tupletype_t *types, size_t world)
-{
-    return jl_method_lookup_by_type(mt, types, /*cache*/0, /*allow_exec*/1, world) != NULL;
-}
-
 jl_method_instance_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache, size_t world)
 {
     jl_typemap_entry_t *entry = jl_typemap_assoc_exact(mt->cache, args, nargs, jl_cachearg_offset(mt), world);
@@ -2501,7 +2479,7 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
     // for intersect(A, B) even though A is a dispatch tuple and !(A <: B).
     // For dispatch purposes in such a case we know there's no match. This check
     // fixes issue #30394.
-    if (jl_is_dispatch_tupletype(closure->match.type) && !closure->match.issubty)
+    if (!closure->match.issubty && jl_is_dispatch_tupletype(closure->match.type))
         return 1;
     // a method is shadowed if type <: S <: m->sig where S is the
     // signature of another applicable method
@@ -2511,7 +2489,6 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
     */
     jl_method_t *meth = ml->func.method;
     assert(meth);
-    int skip = 0;
     size_t len = jl_array_len(closure->t);
     if (closure->lim >= 0) {
         // we can skip this match if the types are already covered
@@ -2523,72 +2500,69 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
             // but we still need it in case an intersection was approximate.
             if (jl_is_datatype(prior_ti) && ((jl_datatype_t*)prior_ti)->isdispatchtuple &&
                     jl_subtype(closure->match.ti, prior_ti)) {
-                skip = 1;
-                break;
+                return 1;
             }
         }
     }
-    if (!skip) {
-        int done = closure0->issubty; // stop; signature fully covers queried type
-        // if we reach a definition that fully covers the arguments but there are
-        // ambiguities, then this method might not actually match, so we shouldn't
-        // add it to the results.
-        int return_this_match = 1;
-        if (meth->ambig != jl_nothing && (!closure->include_ambiguous || done)) {
-            jl_svec_t *env = NULL;
-            jl_value_t *mti = NULL;
-            JL_GC_PUSH2(&env, &mti);
-            for (size_t j = 0; j < jl_array_len(meth->ambig); j++) {
-                jl_method_t *mambig = (jl_method_t*)jl_array_ptr_ref(meth->ambig, j);
+    int done = closure0->issubty; // stop; signature fully covers queried type
+    // if we reach a definition that fully covers the arguments but there are
+    // ambiguities, then this method might not actually match, so we shouldn't
+    // add it to the results.
+    int return_this_match = 1;
+    if (meth->ambig != jl_nothing && (!closure->include_ambiguous || done)) {
+        jl_svec_t *env = NULL;
+        jl_value_t *mti = NULL;
+        JL_GC_PUSH2(&env, &mti);
+        for (size_t j = 0; j < jl_array_len(meth->ambig); j++) {
+            jl_method_t *mambig = (jl_method_t*)jl_array_ptr_ref(meth->ambig, j);
+            if (closure->include_ambiguous) {
                 env = jl_emptysvec;
                 mti = jl_type_intersection_env((jl_value_t*)closure->match.type,
                                                (jl_value_t*)mambig->sig, &env);
                 if (mti != (jl_value_t*)jl_bottom_type) {
-                    if (closure->include_ambiguous) {
-                        assert(done);
-                        int k;
-                        for (k = 0; k < len; k++) {
-                            if ((jl_value_t*)mambig == jl_svecref(jl_array_ptr_ref(closure->t, k), 2))
-                                break;
-                        }
-                        if (k >= len) {
-                            if (len == 0) {
-                                closure->t = (jl_value_t*)jl_alloc_vec_any(0);
-                            }
-                            mti = (jl_value_t*)jl_svec(3, mti, env, mambig);
-                            jl_array_ptr_1d_push((jl_array_t*)closure->t, mti);
-                            len++;
-                        }
-                    }
-                    else {
-                        // the current method definitely never matches if the intersection with this method
-                        // is also fully covered by an ambiguous method's signature
-                        if (jl_subtype(closure->match.ti, mambig->sig)) {
-                            return_this_match = 0;
+                    assert(done);
+                    int k;
+                    for (k = 0; k < len; k++) {
+                        if ((jl_value_t*)mambig == jl_svecref(jl_array_ptr_ref(closure->t, k), 2))
                             break;
+                    }
+                    if (k >= len) {
+                        if (len == 0) {
+                            closure->t = (jl_value_t*)jl_alloc_vec_any(0);
                         }
+                        mti = (jl_value_t*)jl_svec(3, mti, env, mambig);
+                        jl_array_ptr_1d_push((jl_array_t*)closure->t, mti);
+                        len++;
                     }
                 }
             }
-            JL_GC_POP();
-        }
-        if (return_this_match) {
-            if (closure->lim >= 0 && len >= closure->lim) {
-                closure->t = (jl_value_t*)jl_false;
-                return 0; // terminate search
-            }
-            closure->matc = jl_svec(3, closure->match.ti, closure->match.env, meth);
-            if (len == 0) {
-                closure->t = (jl_value_t*)jl_alloc_vec_any(1);
-                jl_array_ptr_set(closure->t, 0, (jl_value_t*)closure->matc);
-            }
             else {
-                jl_array_ptr_1d_push((jl_array_t*)closure->t, (jl_value_t*)closure->matc);
+                // the current method definitely never matches if the intersection with this method
+                // is also fully covered by an ambiguous method's signature
+                if (jl_subtype(closure->match.ti, mambig->sig)) {
+                    return_this_match = 0;
+                    break;
+                }
             }
         }
-        if (done)
-            return 0;
+        JL_GC_POP();
     }
+    if (return_this_match) {
+        if (closure->lim >= 0 && len >= closure->lim) {
+            closure->t = (jl_value_t*)jl_false;
+            return 0; // terminate search
+        }
+        closure->matc = jl_svec(3, closure->match.ti, closure->match.env, meth);
+        if (len == 0) {
+            closure->t = (jl_value_t*)jl_alloc_vec_any(1);
+            jl_array_ptr_set(closure->t, 0, (jl_value_t*)closure->matc);
+        }
+        else {
+            jl_array_ptr_1d_push((jl_array_t*)closure->t, (jl_value_t*)closure->matc);
+        }
+    }
+    if (done)
+        return 0;
     return 1;
 }
 

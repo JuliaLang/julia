@@ -171,6 +171,31 @@ static Value *stringConstPtr(IRBuilder<> &irbuilder, const std::string &txt)
     }
 }
 
+// --- MDNode ---
+Metadata *to_md_tree(jl_value_t *val) {
+    if (val == jl_nothing)
+        return nullptr;
+    Metadata *MD = nullptr;
+    if (jl_is_symbol(val)) {
+        MD = MDString::get(jl_LLVMContext, jl_symbol_name((jl_sym_t*)val));
+    } else if (jl_is_bool(val)) {
+        MD = ConstantAsMetadata::get(ConstantInt::get(T_int1, jl_unbox_bool(val)));
+    } else if (jl_is_long(val)) {
+        MD = ConstantAsMetadata::get(ConstantInt::get(T_int64, jl_unbox_long(val)));
+    } else if (jl_is_tuple(val)) {
+        SmallVector<Metadata *, 8> MDs;
+        for (int f = 0, nf = jl_nfields(val); f < nf; ++f) {
+            MD = to_md_tree(jl_fieldref(val, f));
+            if (MD)
+                MDs.push_back(MD);
+        }
+        MD = MDNode::get(jl_LLVMContext, MDs);
+    } else {
+        jl_error("LLVM metadata needs to Symbol/Bool/Int or Tuple thereof");
+    }
+    return MD;
+}
+
 // --- Debug info ---
 
 static DIType *julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed = false)

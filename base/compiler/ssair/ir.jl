@@ -53,7 +53,7 @@ struct CFG
     index::Vector{Int} # map from instruction => basic-block number
                        # TODO: make this O(1) instead of O(log(n_blocks))?
 end
-copy(c::CFG) = CFG(copy(c.blocks), copy(c.index))
+copy(c::CFG) = CFG(BasicBlock[copy(b) for b in c.blocks], copy(c.index))
 
 function block_for_inst(index::Vector{Int}, inst::Int)
     return searchsortedfirst(index, inst, lt=(<=))
@@ -229,7 +229,7 @@ struct IRCode
         return new(stmts, types, lines, flags, ir.argtypes, ir.sptypes, ir.linetable, cfg, new_nodes, ir.meta)
     end
 end
-copy(code::IRCode) = IRCode(code, copy(code.stmts), copy(code.types),
+copy(code::IRCode) = IRCode(code, copy_exprargs(code.stmts), copy(code.types),
     copy(code.lines), copy(code.flags), copy(code.cfg), copy(code.new_nodes))
 
 function getindex(x::IRCode, s::SSAValue)
@@ -780,8 +780,10 @@ function renumber_ssa2(val::SSAValue, ssanums::Vector{Any}, used_ssa::Vector{Int
     if do_rename_ssa
         val = ssanums[id]
     end
-    if isa(val, SSAValue) && used_ssa !== nothing
-        used_ssa[val.id] += 1
+    if isa(val, SSAValue)
+        if used_ssa !== nothing
+            used_ssa[val.id] += 1
+        end
     end
     return val
 end
@@ -904,7 +906,7 @@ function process_node!(compact::IncrementalCompact, result::Vector{Any},
     elseif isa(stmt, Expr)
         stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, late_fixup, result_idx, do_rename_ssa)::Expr
         if compact.allow_cfg_transforms && isexpr(stmt, :enter)
-            stmt.args[1] = compact.bb_rename[stmt.args[1]]
+            stmt.args[1] = compact.bb_rename[stmt.args[1]::Int]
         end
         result[result_idx] = stmt
         result_idx += 1
@@ -913,15 +915,18 @@ function process_node!(compact::IncrementalCompact, result::Vector{Any},
         # type equality. We may want to consider using == in either a separate pass or if
         # performance turns out ok
         stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, late_fixup, result_idx, do_rename_ssa)::PiNode
-        if !isa(stmt.val, AnySSAValue) && !isa(stmt.val, GlobalRef)
-            valtyp = isa(stmt.val, QuoteNode) ? typeof(stmt.val.value) : typeof(stmt.val)
-            if valtyp === stmt.typ
-                ssa_rename[idx] = stmt.val
+        pi_val = stmt.val
+        if isa(pi_val, SSAValue)
+            if stmt.typ === compact.result_types[pi_val.id]
+                ssa_rename[idx] = pi_val
                 return result_idx
             end
-        elseif isa(stmt.val, SSAValue) && stmt.typ === compact.result_types[stmt.val.id]
-            ssa_rename[idx] = stmt.val
-            return result_idx
+        elseif !isa(pi_val, AnySSAValue) && !isa(pi_val, GlobalRef)
+            valtyp = isa(pi_val, QuoteNode) ? typeof(pi_val.value) : typeof(pi_val)
+            if valtyp === stmt.typ
+                ssa_rename[idx] = pi_val
+                return result_idx
+            end
         end
         result[result_idx] = stmt
         result_idx += 1

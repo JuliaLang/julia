@@ -140,7 +140,11 @@ function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSA
             end
         elseif isa(def, AnySSAValue)
             pi_callback(def, defssa)
-            defssa = def
+            if isa(def, SSAValue) && is_old(compact, defssa)
+                defssa = OldSSAValue(def.id)
+            else
+                defssa = def
+            end
         elseif isa(def, Union{PhiNode, PhiCNode, Expr, GlobalRef})
             return defssa
         else
@@ -187,16 +191,16 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
         def = compact[defssa]
         if isa(def, PhiNode)
             push!(visited_phinodes, defssa)
-            possible_predecessors = let def=def, typeconstraint=typeconstraint
-                collect(Iterators.filter(1:length(def.edges)) do n
-                    isassigned(def.values, n) || return false
-                    val = def.values[n]
-                    if is_old(compact, defssa) && isa(val, SSAValue)
-                        val = OldSSAValue(val.id)
-                    end
-                    edge_typ = widenconst(compact_exprtype(compact, val))
-                    return typeintersect(edge_typ, typeconstraint) !== Union{}
-                end)
+            possible_predecessors = Int[]
+            for n in 1:length(def.edges)
+                isassigned(def.values, n) || continue
+                val = def.values[n]
+                if is_old(compact, defssa) && isa(val, SSAValue)
+                    val = OldSSAValue(val.id)
+                end
+                edge_typ = widenconst(compact_exprtype(compact, val))
+                typeintersect(edge_typ, typeconstraint) === Union{} && continue
+                push!(possible_predecessors, n)
             end
             for n in possible_predecessors
                 pred = def.edges[n]
@@ -292,7 +296,7 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                 lifted_leaves[leaf_key] = RefValue{Any}(lifted)
                 continue
             elseif isexpr(def, :new)
-                typ = types(compact)[leaf]
+                typ = widenconst(types(compact)[leaf])
                 if isa(typ, UnionAll)
                     typ = unwrap_unionall(typ)
                 end
@@ -825,15 +829,16 @@ function adce_erase!(phi_uses, extra_worklist, compact, idx)
     end
 end
 
-function count_uses(stmt, uses)
+function count_uses(@nospecialize(stmt), uses::Vector{Int})
     for ur in userefs(stmt)
-        if isa(ur[], SSAValue)
-            uses[ur[].id] += 1
+        use = ur[]
+        if isa(use, SSAValue)
+            uses[use.id] += 1
         end
     end
 end
 
-function mark_phi_cycles(compact, safe_phis, phi)
+function mark_phi_cycles(compact::IncrementalCompact, safe_phis::BitSet, phi::Int)
     worklist = Int[]
     push!(worklist, phi)
     while !isempty(worklist)
@@ -860,7 +865,7 @@ function adce_pass!(ir::IRCode)
     end
     non_dce_finish!(compact)
     for phi in all_phis
-        count_uses(compact.result[phi], phi_uses)
+        count_uses(compact.result[phi]::PhiNode, phi_uses)
     end
     # Perform simple DCE for unused values
     extra_worklist = Int[]
@@ -876,7 +881,7 @@ function adce_pass!(ir::IRCode)
     changed = true
     while changed
         changed = false
-        safe_phis = IdSet{Int}()
+        safe_phis = BitSet()
         for phi in all_phis
             # Save any phi cycles that have non-phi uses
             if compact.used_ssas[phi] - phi_uses[phi] != 0
@@ -894,7 +899,7 @@ function adce_pass!(ir::IRCode)
             end
         end
     end
-    complete(compact)
+    return complete(compact)
 end
 
 function type_lift_pass!(ir::IRCode)

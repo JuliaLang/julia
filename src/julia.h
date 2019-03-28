@@ -1612,8 +1612,8 @@ JL_DLLEXPORT void jl_sigatomic_end(void);
 
 // tasks and exceptions -------------------------------------------------------
 
-
 typedef struct _jl_timing_block_t jl_timing_block_t;
+
 // info describing an exception handler
 typedef struct _jl_handler_t {
     jl_jmp_buf eh_ctx;
@@ -1631,6 +1631,8 @@ typedef struct _jl_handler_t {
 
 typedef struct _jl_task_t {
     JL_DATA_TYPE
+    jl_value_t *next; // invasive linked list for scheduler
+    jl_value_t *queue; // invasive linked list for scheduler
     jl_value_t *tls;
     jl_sym_t *state;
     jl_value_t *donenotify;
@@ -1639,6 +1641,7 @@ typedef struct _jl_task_t {
     jl_value_t *backtrace;
     jl_value_t *logstate;
     jl_function_t *start;
+    uint8_t sticky; // record whether this Task can be migrated to a new thread
 
 // hidden state:
     jl_ucontext_t ctx; // saved thread state
@@ -1659,6 +1662,8 @@ typedef struct _jl_task_t {
     // id of owning thread
     // does not need to be defined until the task runs
     int16_t tid;
+    /* for the multiqueue */
+    int16_t prio;
 #ifdef JULIA_ENABLE_THREADING
     // This is statically initialized when the task is not holding any locks
     arraylist_t locks;
@@ -1666,7 +1671,7 @@ typedef struct _jl_task_t {
     jl_timing_block_t *timing_stack;
 } jl_task_t;
 
-JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
+JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t*, jl_value_t*, size_t);
 JL_DLLEXPORT void jl_switchto(jl_task_t **pt);
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);

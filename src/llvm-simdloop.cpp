@@ -15,7 +15,12 @@
 
 #include "llvm-version.h"
 #include "support/dtypes.h"
+
+#include <llvm-c/Core.h>
+#include <llvm-c/Types.h>
+
 #include <llvm/Analysis/LoopPass.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Metadata.h>
@@ -247,6 +252,11 @@ static RegisterPass<LowerSIMDLoop> X("LowerSIMDLoop", "LowerSIMDLoop Pass",
 JL_DLLEXPORT Pass *createLowerSimdLoopPass()
 {
     return new LowerSIMDLoop();
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddLowerSimdLoopPass(LLVMPassManagerRef PM)
+{
+    unwrap(PM)->add(createLowerSimdLoopPass());
 }
 
 } // namespace llvm

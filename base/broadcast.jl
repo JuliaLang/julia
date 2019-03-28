@@ -222,7 +222,8 @@ _eachindex(t::Tuple) = CartesianIndices(t)
 Base.ndims(::Broadcasted{<:Any,<:NTuple{N,Any}}) where {N} = N
 Base.ndims(::Type{<:Broadcasted{<:Any,<:NTuple{N,Any}}}) where {N} = N
 
-Base.length(bc::Broadcasted) = prod(map(length, axes(bc)))
+Base.size(bc::Broadcasted) = map(length, axes(bc))
+Base.length(bc::Broadcasted) = prod(size(bc))
 
 function Base.iterate(bc::Broadcasted)
     iter = eachindex(bc)

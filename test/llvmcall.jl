@@ -229,3 +229,11 @@ module LLVMCallFunctionTest
         @test really_complicated_identity(x) === x
     end
 end
+
+# support for calling external functions
+let
+    f() = ccall("time", llvmcall, Cvoid, (Ptr{Cvoid},), C_NULL)
+    @test_throws ErrorException f()
+    f() = ccall("extern time", llvmcall, Cvoid, (Ptr{Cvoid},), C_NULL)
+    f()
+end

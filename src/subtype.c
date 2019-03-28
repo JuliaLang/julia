@@ -976,15 +976,17 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
         return 1;
     jl_value_t *ux = jl_unwrap_unionall(x);
     jl_value_t *uy = jl_unwrap_unionall(y);
-    if ((x != ux || y != uy) && y != (jl_value_t*)jl_any_type && jl_is_datatype(ux) && jl_is_datatype(uy)) {
+    if ((x != ux || y != uy) && y != (jl_value_t*)jl_any_type && jl_is_datatype(ux) && jl_is_datatype(uy) &&
+        !jl_is_type_type(ux)) {
         assert(ux);
+        if (uy == (jl_value_t*)jl_any_type)
+            return 1;
         jl_datatype_t *xd = (jl_datatype_t*)ux, *yd = (jl_datatype_t*)uy;
         while (xd != NULL && xd != jl_any_type && xd->name != yd->name) {
             xd = xd->super;
         }
-        if (xd == jl_any_type && !jl_is_type_type(ux)) {
+        if (xd == jl_any_type)
             return 0;
-        }
     }
     // handle forall ("left") vars first
     if (jl_is_unionall(x)) {
@@ -1177,6 +1179,183 @@ JL_DLLEXPORT int jl_subtype_env_size(jl_value_t *t)
     return sz;
 }
 
+// quickly compute if x seems like a possible subtype of y
+// especially optimized for x isa concrete type
+// returns true if it could be easily determined, with the result in subtype
+// the approximation widens typevar bounds under the assumption they are bound
+// in the immediate caller--the caller must be conservative in handling the result
+JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
+{
+    if (x == y || y == (jl_value_t*)jl_any_type) {
+        *subtype = 1;
+        return 1;
+    }
+    if (jl_is_unionall(x))
+        x = jl_unwrap_unionall(x);
+    if (jl_is_unionall(y))
+        y = jl_unwrap_unionall(y);
+    if (x == y || y == (jl_value_t*)jl_any_type) {
+        *subtype = 1;
+        return 1;
+    }
+    if (jl_is_typevar(x)) {
+        if (((jl_tvar_t*)x)->lb != (jl_value_t*)jl_bottom_type)
+            return 0;
+        if (jl_obvious_subtype(((jl_tvar_t*)x)->ub, y, subtype) && *subtype)
+            return 1;
+        return 0;
+    }
+    if (jl_is_typevar(y)) {
+        if (((jl_tvar_t*)y)->lb != (jl_value_t*)jl_bottom_type)
+            return 0;
+        if (jl_obvious_subtype(x, ((jl_tvar_t*)y)->ub, subtype) && !*subtype)
+            return 1;
+        return 0;
+    }
+    if (x == (jl_value_t*)jl_bottom_type) {
+        *subtype = 1;
+        return 1;
+    }
+    if (y == (jl_value_t*)jl_bottom_type) {
+        *subtype = 0;
+        return 1;
+    }
+    if (!jl_is_type(x) || !jl_is_type(y)) {
+        *subtype = jl_egal(x, y);
+        return 1;
+    }
+    if (jl_is_uniontype(x)) {
+        // TODO: consider handling more LHS unions, being wary of covariance
+        if (jl_obvious_subtype(((jl_uniontype_t*)x)->a, y, subtype) && *subtype) {
+            if (jl_obvious_subtype(((jl_uniontype_t*)x)->b, y, subtype) && *subtype)
+                return 1;
+        }
+        //if (jl_obvious_subtype(((jl_uniontype_t*)x)->a, y, subtype)) {
+        //    if (!*subtype)
+        //        return 1;
+        //    if (jl_obvious_subtype(((jl_uniontype_t*)x)->b, y, subtype))
+        //        return 1;
+        //}
+        //else if (jl_obvious_subtype(((jl_uniontype_t*)x)->b, y, subtype)) {
+        //    if (!*subtype)
+        //        return 1;
+        //}
+        return 0;
+    }
+    if (jl_is_uniontype(y)) {
+        if (jl_obvious_subtype(x, ((jl_uniontype_t*)y)->a, subtype)) {
+            if (*subtype)
+                return 1;
+            if (jl_obvious_subtype(x, ((jl_uniontype_t*)y)->b, subtype))
+                return 1;
+        }
+        else if (jl_obvious_subtype(x, ((jl_uniontype_t*)y)->b, subtype)) {
+            if (*subtype)
+                return 1;
+        }
+        return 0;
+    }
+    if (x == (jl_value_t*)jl_any_type) {
+        *subtype = 0;
+        return 1;
+    }
+    if (jl_is_datatype(y)) {
+        int istuple = (((jl_datatype_t*)y)->name == jl_tuple_typename);
+        int iscov = istuple || (((jl_datatype_t*)y)->name == jl_vararg_typename);
+        // TODO: this would be a nice fast-path to have, unfortuanately,
+        //       datatype allocation fails to correctly cons them
+        //       and the subtyping tests include tests for this case
+        //if (!iscov && ((jl_datatype_t*)y)->isconcretetype && !jl_is_type_type(x)) {
+        //    *subtype = 0;
+        //    return 1;
+        //}
+        if (jl_is_datatype(x)) {
+            int uncertain = 0;
+            if (((jl_datatype_t*)x)->name != ((jl_datatype_t*)y)->name) {
+                if (jl_is_type_type(x) || jl_is_type_type(y))
+                    return 0;
+                jl_datatype_t *temp = (jl_datatype_t*)x;
+                while (temp->name != ((jl_datatype_t*)y)->name) {
+                    temp = temp->super;
+                    if (temp == NULL) // invalid state during type declaration
+                        return 0;
+                    if (temp == jl_any_type) {
+                        *subtype = 0;
+                        return 1;
+                    }
+                }
+                if (jl_obvious_subtype((jl_value_t*)temp, y, subtype) && *subtype)
+                    return 1;
+                return 0;
+            }
+            if (!iscov && !((jl_datatype_t*)x)->hasfreetypevars) {
+                // by transitivity, if `wrapper <: y`, then `x <: y` if x is a leaf type of its name
+                if (jl_obvious_subtype(((jl_datatype_t*)x)->name->wrapper, y, subtype) && *subtype)
+                    return 1;
+            }
+            int i, npx = jl_nparams(x), npy = jl_nparams(y);
+            int vx = 0, vy = 0;
+            if (istuple) {
+                vx = npx > 0 && jl_is_vararg_type(jl_tparam(x, npx - 1));
+                vy = npy > 0 && jl_is_vararg_type(jl_tparam(y, npy - 1));
+            }
+            if (npx != npy || vx || vy) {
+                if (!vy) {
+                    *subtype = 0;
+                    return 1;
+                }
+                if (npx - vx < npy - vy) {
+                    *subtype = 0;
+                    return 1; // number of fixed parameters in x could be fewer than in y
+                }
+                uncertain = 1;
+            }
+            for (i = 0; i < npy - vy; i++) {
+                jl_value_t *a = jl_tparam(x, i);
+                jl_value_t *b = jl_tparam(y, i);
+                if (iscov || jl_is_typevar(b)) {
+                    if (jl_obvious_subtype(a, b, subtype)) {
+                        if (!*subtype)
+                            return 1;
+                        if (jl_has_free_typevars(b)) // b is actually more constrained that this
+                            uncertain = 1;
+                    }
+                    else {
+                        uncertain = 1;
+                    }
+                }
+                else {
+                    if (!obviously_egal(a, b)) {
+                        if (jl_obvious_subtype(a, b, subtype)) {
+                            if (!*subtype)
+                                return 1;
+                            if (jl_has_free_typevars(b)) // b is actually more constrained that this
+                                uncertain = 1;
+                        }
+                        else {
+                            uncertain = 1;
+                        }
+                        if (!jl_has_free_typevars(b) && jl_obvious_subtype(b, a, subtype)) {
+                            if (!*subtype)
+                                return 1;
+                            if (jl_has_free_typevars(a)) // a is actually more constrained that this
+                                uncertain = 1;
+                        }
+                        else {
+                            uncertain = 1;
+                        }
+                    }
+                }
+            }
+            if (uncertain)
+                return 0;
+            *subtype = 1;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 // `env` is NULL if no typevar information is requested, or otherwise
 // points to a rooted array of length `jl_subtype_env_size(y)`.
 // This will be populated with the values of variables from unionall
@@ -1184,15 +1363,35 @@ JL_DLLEXPORT int jl_subtype_env_size(jl_value_t *t)
 JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, int envsz)
 {
     jl_stenv_t e;
-    if (envsz == 0 && (y == (jl_value_t*)jl_any_type || x == jl_bottom_type || x == y))
-        return 1;
-    if (envsz == 0 && ((jl_is_unionall(x) && jl_is_unionall(y)) ||
-                       (jl_is_uniontype(x) && jl_is_uniontype(y))) &&
-        jl_egal(x, y)) {
-        return 1;
+    if (envsz == 0) {
+        if (y == (jl_value_t*)jl_any_type || x == jl_bottom_type || x == y)
+            return 1;
+        if (jl_typeof(x) == jl_typeof(y) &&
+            (jl_is_unionall(y) || jl_is_uniontype(y)) &&
+            jl_egal(x, y))
+            return 1;
+    }
+    int obvious_subtype = 2;
+    if (jl_obvious_subtype(x, y, &obvious_subtype)) {
+#ifdef NDEBUG
+        if (obvious_subtype == 0)
+            return obvious_subtype;
+        else if (jl_has_free_typevars(y))
+            obvious_subtype = 3;
+        else if (envsz == 0)
+            return obvious_subtype;
+#else
+        if (jl_has_free_typevars(y))
+            obvious_subtype = 3;
+#endif
+    }
+    else {
+        obvious_subtype = 3;
     }
     init_stenv(&e, env, envsz);
-    return forall_exists_subtype(x, y, &e, 0);
+    int subtype = forall_exists_subtype(x, y, &e, 0);
+    assert(obvious_subtype == 3 || obvious_subtype == subtype);
+    return subtype;
 }
 
 static int subtype_in_env(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
