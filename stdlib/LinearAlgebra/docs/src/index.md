@@ -346,6 +346,7 @@ LinearAlgebra.eigmin
 LinearAlgebra.eigvecs
 LinearAlgebra.eigen
 LinearAlgebra.eigen!
+LinearAlgebra.Hessenberg
 LinearAlgebra.hessenberg
 LinearAlgebra.hessenberg!
 LinearAlgebra.schur!

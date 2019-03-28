@@ -4,7 +4,7 @@
 """
     SVD <: Factorization
 Matrix factorization type of the SVD factorization of a real or complex 
-positive definite matrix `A`. This is the return type of [`SVD`](@ref),
+positive definite matrix `A`. This has the return type of [`SVD`](@ref),
 the corresponding matrix factorization function.
 The SVD factors can be obtained from the factorization `F::SVD`
 via `F.U`, `F.S` and `F.Vt`.

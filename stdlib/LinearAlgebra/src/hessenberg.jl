@@ -1,5 +1,46 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    Hessenberg <: Factorization
+
+Matrix factorization type of the Hessenberg factorization of a general matrix `A`. 
+This has the return type of [`Hessenberg`](@ref), the corresponding matrix 
+factorization function. The Hessenberg factors can be obtained from the factorization 
+`F::Hessenberg` via `F.Q` and `F.H`.
+# Examples
+```jldoctest
+julia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]
+3×3 Array{Float64,2}:
+ 4.0  9.0  7.0
+ 4.0  4.0  1.0
+ 4.0  3.0  2.0
+
+julia> F = hessenberg(A);
+
+julia> F.Q
+3×3 LinearAlgebra.HessenbergQ{Float64,Array{Float64,2}}:
+ 1.0   0.0        0.0     
+ 0.0  -0.707107  -0.707107
+ 0.0  -0.707107   0.707107
+
+julia> F.H
+3×3 Array{Float64,2}:
+ 4.0      -11.3137       -1.41421
+-5.65685    5.0           2.0    
+ 0.0       -8.88178e-16   1.0 
+
+julia> F.Q * F.H * F.Q'
+3×3 Array{Float64,2}:
+ 4.0  9.0  7.0
+ 4.0  4.0  1.0
+ 4.0  3.0  2.0
+
+julia> q, h = hessenberg(A);
+
+julia> q == F.Q && h == F.H
+true
+```
+"""
 struct Hessenberg{T,S<:AbstractMatrix{T}} <: Factorization{T}
     factors::S
     τ::Vector{T}
