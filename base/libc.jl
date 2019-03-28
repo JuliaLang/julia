@@ -122,6 +122,12 @@ elseif Sys.iswindows()
 else
     error("systemsleep undefined for this OS")
 end
+"""
+    systemsleep(s::Real)
+
+Suspends execution for `s` seconds.
+"""
+systemsleep
 
 struct TimeVal
    sec::Int64
