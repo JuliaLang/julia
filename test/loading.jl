@@ -571,9 +571,9 @@ end
         cd("foo")
         @test Base.active_project() == old
         """
-        @test success(`$(Base.julia_cmd()) --project=foo -e $(script)`)
+        @test success(`$(Base.julia_cmd()) --startup-file=no --project=foo -e $(script)`)
         withenv("JULIA_PROJECT" => "foo") do
-            @test success(`$(Base.julia_cmd()) -e $(script)`)
+            @test success(`$(Base.julia_cmd()) --startup-file=no -e $(script)`)
         end
     end; end
 end
@@ -589,7 +589,7 @@ mktempdir() do dir
     mkpath(vpath)
     withenv("JULIA_DEPOT_PATH" => dir) do
         script = "@assert startswith(Base.active_project(), $(repr(vpath)))"
-        @test success(`$(Base.julia_cmd()) -e $(script)`)
+        @test success(`$(Base.julia_cmd()) --startup-file=no -e $(script)`)
     end
 end
 
@@ -606,7 +606,7 @@ end
     for (env, result) in pairs(cases)
         withenv("JULIA_LOAD_PATH" => env) do
             script = "LOAD_PATH == $(repr(result)) || error()"
-            @test success(`$(Base.julia_cmd()) -e $script`)
+            @test success(`$(Base.julia_cmd()) --startup-file=no -e $script`)
         end
     end
 end
@@ -625,7 +625,7 @@ end
     for (env, result) in pairs(cases)
         withenv("JULIA_DEPOT_PATH" => env) do
             script = "DEPOT_PATH == $(repr(result)) || error()"
-            @test success(`$(Base.julia_cmd()) -e $script`)
+            @test success(`$(Base.julia_cmd()) --startup-file=no -e $script`)
         end
     end
 end

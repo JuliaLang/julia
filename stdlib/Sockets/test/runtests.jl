@@ -446,7 +446,7 @@ end
             srv = listen(addr)
             s = connect(addr)
 
-            @test success(pipeline(`$(Base.julia_cmd()) -e "exit()" -i`, stdin=s))
+            @test success(pipeline(`$(Base.julia_cmd()) --startup-file=no -e "exit()" -i`, stdin=s))
 
             close(s)
             close(srv)
