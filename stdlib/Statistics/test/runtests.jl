@@ -476,6 +476,7 @@ end
     @test quantile([1, 2, 3, 4], (0.5,)) == (2.5,)
     @test quantile([4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11], (0.1, 0.2, 0.4, 0.9)) == (2.0, 3.0, 5.0, 11.0)
     @test quantile([1, 2, 3, 4], ()) == ()
+    @test quantile([1 2; 3 4],0.5) == 2.5
 
     @test_throws ArgumentError quantile([1, missing], 0.5)
     @test_throws ArgumentError quantile([1, NaN], 0.5)
