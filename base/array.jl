@@ -387,8 +387,22 @@ julia> fill(1.0, (5,5))
  1.0  1.0  1.0  1.0  1.0
 ```
 
-If `x` is an object reference, all elements will refer to the same object. `fill(Foo(),
-dims)` will return an array filled with the result of evaluating `Foo()` once.
+If `x` is an object reference, all elements will refer to the same object.
+
+# Examples
+```jldoctest
+julia> X = fill(zeros(2),2)
+2-element Array{Array{Float64,1},1}:
+ [0.0, 0.0]
+ [0.0, 0.0]
+julia> X[1][1] = 99;
+julia> X
+2-element Array{Array{Float64,1},1}:
+ [99.0, 0.0]
+ [99.0, 0.0]
+```
+
+`fill(Foo(),dims)` will return an array filled with the result of evaluating `Foo()` once.
 """
 fill(v, dims::DimOrInd...) = fill(v, dims)
 fill(v, dims::NTuple{N, Union{Integer, OneTo}}) where {N} = fill(v, map(to_dim, dims))
