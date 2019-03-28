@@ -248,8 +248,8 @@ Random.seed!(1)
 
         eigBlockD = eigen(blockD)
         for i=1:n
-            @test Diagonal(eigBlockD[i].values) = blockD.diag[i]
-            @test eigBlockD[i].vectors == Matrix(I, size(D.diag[i]))
+            @test Diagonal(eigBlockD[i].values) == blockD.diag[i]
+            @test eigBlockD[i].vectors == Matrix(I, size(blockD.diag[i]))
         end
     end
 
