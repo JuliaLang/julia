@@ -287,7 +287,7 @@ end
         @test replace(s, 'a' => 'z', count=typemax(Int)) == "zzz"
         @test replace(s, 'a' => 'z')    == "zzz"
     end
-    
+
     # Issue 25741
     @test replace("abc", ['a', 'd'] => 'A') == "Abc"
 
