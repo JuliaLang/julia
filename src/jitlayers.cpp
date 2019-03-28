@@ -209,6 +209,11 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // Run instcombine after redundancy elimination to exploit opportunities
     // opened up by them.
     PM->add(createSinkingPass()); ////////////// ****
+#if JL_LLVM_VERSION < 70000
+    // This pass is a subset of InstructionCombiningPass in LLVM 7
+    // and therefore not required.
+    PM->add(createInstructionSimplifierPass());///////// ****
+#endif
     PM->add(createInstructionCombiningPass());
     PM->add(createJumpThreadingPass());         // Thread jumps
     PM->add(createDeadStoreEliminationPass());  // Delete dead stores
@@ -538,10 +543,10 @@ JL_JITSymbol JuliaOJIT::resolveSymbol(const std::string& Name)
     // Step 2: Search the program symbols
     if (uint64_t addr = SectionMemoryManager::getSymbolAddressInProcess(Name))
         return JL_SymbolInfo(addr, JITSymbolFlags::Exported);
-                    #if defined(_OS_LINUX_) || defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
+#if defined(_OS_LINUX_) || defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
     if (uint64_t addr = resolve_atomic(Name.c_str()))
         return JL_SymbolInfo(addr, JITSymbolFlags::Exported);
-                #endif
+#endif
     // Return failure code
     return JL_SymbolInfo(nullptr);
 }
