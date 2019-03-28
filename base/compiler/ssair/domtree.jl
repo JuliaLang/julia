@@ -207,9 +207,8 @@ begin
                             v::DFSNumber, last_linked::DFSNumber)
         u = ancestors[v]
         @assert u < v
-        worklist = DFSNumber[]
         if u >= last_linked
-            snca_compress!(state, ancestors, u, last_linked),
+            snca_compress!(state, ancestors, u, last_linked)
             if state[u].label < state[v].label
                 state[v] = Node(state[v].semi, state[u].label)
             end
