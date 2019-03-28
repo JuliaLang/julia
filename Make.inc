@@ -401,7 +401,7 @@ $(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
 endif
 CC := $(CROSS_COMPILE)gcc
 CXX := $(CROSS_COMPILE)g++
-JCFLAGS := -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
+JCFLAGS := -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -fno-plt
 # AArch64 needs this flag to generate the .eh_frame used by libunwind
 JCPPFLAGS := -fasynchronous-unwind-tables
 JCXXFLAGS := -pipe $(fPIC) -fno-rtti
@@ -416,7 +416,7 @@ endif
 ifeq ($(USECLANG),1)
 CC := $(CROSS_COMPILE)clang
 CXX := $(CROSS_COMPILE)clang++
-JCFLAGS := -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
+JCFLAGS := -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -fno-plt
 # AArch64 needs this flag to generate the .eh_frame used by libunwind
 JCPPFLAGS := -fasynchronous-unwind-tables
 JCXXFLAGS := -pipe $(fPIC) -fno-rtti -pedantic
