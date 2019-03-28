@@ -367,3 +367,6 @@ end
 
 # issue #16282
 @test_throws MethodError 3 // 4.5im
+
+# issue #31396
+@test round(1//2, RoundNearestTiesUp) === 1//1
