@@ -89,16 +89,8 @@ uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(_UVError(prefix,c))
 eventloop() = uv_eventloop::Ptr{Cvoid}
 #mkNewEventLoop() = ccall(:jl_new_event_loop,Ptr{Cvoid},()) # this would probably be fine, but is nowhere supported
 
-function run_event_loop()
-    ccall(:jl_run_event_loop,Cvoid,(Ptr{Cvoid},),eventloop())
-end
-function process_events(block::Bool)
-    loop = eventloop()
-    if block
-        return ccall(:jl_run_once,Int32,(Ptr{Cvoid},),loop)
-    else
-        return ccall(:jl_process_events,Int32,(Ptr{Cvoid},),loop)
-    end
+function process_events()
+    return ccall(:jl_process_events, Int32, (Ptr{Cvoid},), eventloop())
 end
 
 function uv_alloc_buf end
