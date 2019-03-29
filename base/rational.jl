@@ -410,7 +410,12 @@ function round(::Type{T}, x::Rational{Tr}, ::RoundingMode{:Nearest}) where {T,Tr
     convert(T, s)
 end
 
-round(::Type{T}, x::Rational) where {T} = round(T, x, RoundNearest)
+function round(::Type{T}, x::Rational{Bool}, ::RoundingMode=RoundNearest) where T
+    if denominator(x) == false && (T <: Union{Integer, Bool})
+        throw(DivideError())
+    end
+    convert(T, x)
+end
 
 function round(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesAway}) where {T,Tr}
     if denominator(x) == zero(Tr) && T <: Integer
