@@ -50,10 +50,15 @@ is translated into:
 
 ```julia
 next = iterate(iter)
-while next !== nothing
-    (i, state) = next
-    # body
-    next = iterate(iter, state)
+if next !== nothing
+    while true
+        # The following 2 lines are roughly equivalent to `(i, state) = next`
+        i = Core.getfield(next,1)
+        state = Core.getfield(next,2)
+        # body
+        next = iterate(iter, state)
+        next === nothing && break
+    end
 end
 ```
 
