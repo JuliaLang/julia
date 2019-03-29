@@ -1788,7 +1788,7 @@ function findprev(A, start)
     while true
         A[i] && return i
         i == f && break
-        # prevind(A, l) can throw/underflow
+        # prevind(A, f) can throw/underflow
         i = prevind(A, i)
     end
     return nothing
@@ -1879,7 +1879,7 @@ function findprev(testf::Function, A, start)
     while true
         testf(A[i]) && return i
         i == f && break
-        # prevind(A, l) can throw/underflow
+        # prevind(A, f) can throw/underflow
         i = prevind(A, i)
     end
     return nothing
