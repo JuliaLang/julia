@@ -74,7 +74,7 @@ function convert(::Type{RoundingMode}, r::MPFRRoundingMode)
     elseif r == MPFRRoundFromZero
         return RoundFromZero
     else
-        throw(ArgumentError("invalid MPFR rounding mode code: $c"))
+        throw(ArgumentError("invalid MPFR rounding mode code: $r"))
     end
 end
 
