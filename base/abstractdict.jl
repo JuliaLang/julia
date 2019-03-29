@@ -563,7 +563,7 @@ end
 empty(d::IdDict, ::Type{K}, ::Type{V}) where {K, V} = IdDict{K,V}()
 
 function rehash!(d::IdDict, newsz = length(d.ht))
-    d.ht = ccall(:jl_idtable_rehash, Any, (Any, Csize_t), d.ht, newsz)
+    d.ht = ccall(:jl_idtable_rehash, Vector{Any}, (Any, Csize_t), d.ht, newsz)
     d
 end
 
