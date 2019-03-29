@@ -81,7 +81,7 @@ istril(::UniformScaling) = true
 issymmetric(::UniformScaling) = true
 ishermitian(J::UniformScaling) = isreal(J.λ)
 
-isposdef(J::UniformScaling) = isreal(J.λ) && J.λ > 0
+isposdef(J::UniformScaling) = isposdef(J.λ)
 
 (+)(J::UniformScaling, x::Number) = J.λ + x
 (+)(x::Number, J::UniformScaling) = x + J.λ
@@ -176,14 +176,16 @@ end
 *(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ*J2.λ)
 *(B::BitArray{2}, J::UniformScaling) = *(Array(B), J::UniformScaling)
 *(J::UniformScaling, B::BitArray{2}) = *(J::UniformScaling, Array(B))
-*(A::AbstractVecOrMat, J::UniformScaling) = A*J.λ
+*(A::AbstractMatrix, J::UniformScaling) = A*J.λ
+*(v::AbstractVector, J::UniformScaling) = reshape(v, length(v), 1) * J
 *(J::UniformScaling, A::AbstractVecOrMat) = J.λ*A
 *(x::Number, J::UniformScaling) = UniformScaling(x*J.λ)
 *(J::UniformScaling, x::Number) = UniformScaling(J.λ*x)
 
 /(J1::UniformScaling, J2::UniformScaling) = J2.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ/J2.λ)
 /(J::UniformScaling, A::AbstractMatrix) = lmul!(J.λ, inv(A))
-/(A::AbstractVecOrMat, J::UniformScaling) = J.λ == 0 ? throw(SingularException(1)) : A/J.λ
+/(A::AbstractMatrix, J::UniformScaling) = J.λ == 0 ? throw(SingularException(1)) : A/J.λ
+/(v::AbstractVector, J::UniformScaling) = reshape(v, length(v), 1) / J
 
 /(J::UniformScaling, x::Number) = UniformScaling(J.λ/x)
 
