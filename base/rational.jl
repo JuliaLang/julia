@@ -100,7 +100,7 @@ Bool(x::Rational) = x==0 ? false : x==1 ? true :
 (::Type{T})(x::Rational) where {T<:Integer} = (isinteger(x) ? convert(T, x.num) :
     throw(InexactError(nameof(T), T, x)))
 
-AbstractFloat(x::Rational) = float(x.num)/float(x.den)
+Base.AbstractFloat(x::Rational) = float(x.num)/float(x.den)
 function (::Type{T})(x::Rational{S}) where T<:AbstractFloat where S
     P = promote_type(T,S)
     convert(T, convert(P,x.num)/convert(P,x.den))
@@ -433,7 +433,7 @@ function _round_rational(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTies
     convert(T, s)
 end
 
-function round(::Type{T}, x::Rational{Bool}, ::RoundingMode=RoundNearest) where T
+function round(::Type{T}, x::Rational, ::RoundingMode=RoundNearest) where {T}
     if denominator(x) == false && (T <: Union{Integer, Bool})
         throw(DivideError())
     end
@@ -453,7 +453,7 @@ end
 ^(x::T, y::Rational) where {T<:AbstractFloat} = x^convert(T,y)
 ^(z::Complex{T}, p::Rational) where {T<:Real} = z^convert(typeof(one(T)^p), p)
 
-^(z::Complex{<:Rational}, n::Bool) = n ? z : one(z) # to resolve ambiguity
+^(z::Complex{<:Rational}, n) = (n===true) ? z : one(z) # to resolve ambiguity
 function ^(z::Complex{<:Rational}, n::Integer)
     n >= 0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
 end
