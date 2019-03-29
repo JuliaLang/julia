@@ -956,7 +956,7 @@ end
 # but which also means we should still be storing the inference result from inferring the cycle
 f21653() = f21653()
 @test code_typed(f21653, Tuple{}, optimize=false)[1] isa Pair{CodeInfo, typeof(Union{})}
-@test which(f21653, ()).specializations.func.rettype === Union{}
+@test which(f21653, ()).specializations.func.cache.rettype === Union{}
 
 # issue #22290
 f22290() = return 3
@@ -1086,27 +1086,25 @@ function get_linfo(@nospecialize(f), @nospecialize(t))
         throw(ArgumentError("argument is not a generic function"))
     end
     # get the MethodInstance for the method match
-    world = typemax(UInt)
     meth = which(f, t)
     t = Base.to_tuple_type(t)
     ft = isa(f, Type) ? Type{f} : typeof(f)
     tt = Tuple{ft, t.parameters...}
-    precompile(tt)
+    precompile(tt) # does inference (calls jl_type_infer) on this signature
     (ti, env) = ccall(:jl_type_intersection_with_env, Ref{Core.SimpleVector}, (Any, Any), tt, meth.sig)
-    meth = Base.func_for_method_checked(meth, tt, env)
     return ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance},
-                 (Any, Any, Any, UInt), meth, tt, env, world)
+                 (Any, Any, Any), meth, tt, env)
 end
 
 function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val))
-    linfo = get_linfo(f, t)
+    linfo = Core.Compiler.inf_for_methodinstance(get_linfo(f, t), Core.Compiler.get_world_counter())::Core.CodeInstance
     # If coverage is not enabled, make the check strict by requiring constant ABI
     # Otherwise, check the typed AST to make sure we return a constant.
     if Base.JLOptions().code_coverage == 0
         @test Core.Compiler.invoke_api(linfo) == 2
     end
     if Core.Compiler.invoke_api(linfo) == 2
-        @test linfo.inferred_const == val
+        @test linfo.rettype_const == val
         return
     end
     ct = code_typed(f, t)
@@ -1163,8 +1161,8 @@ test_const_return(()->sizeof(1), Tuple{}, sizeof(Int))
 test_const_return(()->sizeof(DataType), Tuple{}, sizeof(DataType))
 test_const_return(()->sizeof(1 < 2), Tuple{}, 1)
 test_const_return(()->fieldtype(Dict{Int64,Nothing}, :age), Tuple{}, UInt)
-@eval test_const_return(()->Core.sizeof($(Array{Int,0}(undef))), Tuple{}, sizeof(Int))
-@eval test_const_return(()->Core.sizeof($(Matrix{Float32}(undef, 2, 2))), Tuple{}, 4 * 2 * 2)
+test_const_return(@eval(()->Core.sizeof($(Array{Int,0}(undef)))), Tuple{}, sizeof(Int))
+test_const_return(@eval(()->Core.sizeof($(Matrix{Float32}(undef, 2, 2)))), Tuple{}, 4 * 2 * 2)
 
 # Make sure Core.sizeof with a ::DataType as inferred input type is inferred but not constant.
 function sizeof_typeref(typeref)
@@ -1392,7 +1390,7 @@ gg13183(x::X...) where {X} = (_false13183 ? gg13183(x, x) : 0)
 
 # test the external OptimizationState constructor
 let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
-    world = typemax(UInt),
+    world = UInt(23) # some small-numbered world that should be valid
     opt = Core.Compiler.OptimizationState(linfo, Core.Compiler.Params(world))
     # make sure the state of the properties look reasonable
     @test opt.src !== linfo.def.source
@@ -1400,8 +1398,8 @@ let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     @test opt.src.ssavaluetypes isa Vector{Any}
     @test !opt.src.inferred
     @test opt.mod === Base
-    @test opt.max_valid === typemax(UInt)
-    @test opt.min_valid === Core.Compiler.min_world(opt.linfo) > 2
+    @test opt.max_valid === Core.Compiler.get_world_counter()
+    @test opt.min_valid === Core.Compiler.min_world(opt.src) === UInt(1)
     @test opt.nargs == 3
 end
 

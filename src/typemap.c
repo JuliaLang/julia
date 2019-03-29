@@ -495,11 +495,25 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
 int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                                     struct typemap_intersection_env *closure)
 {
+    jl_value_t *ttypes = jl_unwrap_unionall(closure->type);
+    assert(jl_is_datatype(ttypes));
+    //TODO: fast-path for leaf-type tuples?
+    //if (ttypes->isdispatchtuple) {
+    //    register jl_typemap_intersection_visitor_fptr fptr = closure->fptr;
+    //    size_t world = jl_world_counter;
+    //    while (world > 0) {
+    //        jl_typemap_entry_t *ml = jl_typemap_assoc_by_type(map, ttypes, &closure->env, /*subtype*/1, offs, world, /*max_world_mask*/(~(size_t)0) >> 1);
+    //        if (!ml)
+    //            break;
+    //        if (!fptr(ml, closure))
+    //            return 0;
+    //        world = ml->min_world - 1;
+    //    }
+    //    return 1;
+    //}
     if (jl_typeof(map) == (jl_value_t *)jl_typemap_level_type) {
         jl_typemap_level_t *cache = (jl_typemap_level_t*)map;
         jl_value_t *ty = NULL;
-        jl_value_t *ttypes = jl_unwrap_unionall(closure->type);
-        assert(jl_is_datatype(ttypes));
         size_t l = jl_field_count(ttypes);
         if (closure->va && l <= offs + 1) {
             ty = closure->va;
@@ -1002,8 +1016,14 @@ jl_typemap_entry_t *jl_typemap_insert(jl_typemap_t **cache, jl_value_t *parent,
         if (ml && ml->simplesig == (void*)jl_nothing) {
             if (overwritten != NULL)
                 *overwritten = ml->func.value;
-            if (newvalue == ml->func.value) // no change. TODO: involve world in computation!
+            if (newvalue == ml->func.value) {
+                // just update the existing entry to reflect new knowledge
+                if (ml->min_world > min_world)
+                    ml->min_world = min_world;
+                if (ml->max_world < max_world)
+                    ml->max_world = max_world;
                 return ml;
+            }
             if (newvalue == NULL)  // don't overwrite with guard entries
                 return ml;
             ml->max_world = min_world - 1;
@@ -1071,7 +1091,8 @@ static void jl_typemap_list_insert_sorted(jl_typemap_entry_t **pml, jl_value_t *
         if (!l->isleafsig) { // quickly ignore all of the leafsig entries (these were handled by caller)
             if (jl_type_morespecific((jl_value_t*)newrec->sig, (jl_value_t*)l->sig)) {
                 if (l->simplesig == (void*)jl_nothing ||
-                    newrec->simplesig != (void*)jl_nothing || !jl_types_equal((jl_value_t*)l->sig, (jl_value_t*)newrec->sig)) {
+                    newrec->simplesig != (void*)jl_nothing ||
+                    !jl_types_equal((jl_value_t*)l->sig, (jl_value_t*)newrec->sig)) {
                     // might need to insert multiple entries for a lookup differing only by their simplesig
                     // when simplesig contains a kind
                     // TODO: make this test more correct or figure out a better way to compute this

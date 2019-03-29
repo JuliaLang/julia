@@ -770,15 +770,15 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
     end
     return map(method_instances(f, t)) do m
         if generated && isgenerated(m)
-            if isa(m, Core.MethodInstance)
-                return Core.Compiler.get_staged(m)
-            else # isa(m, Method)
+            if may_invoke_generator(m)
+                return ccall(:jl_code_for_staged, Any, (Any,), m)::CodeInfo
+            else
                 error("Could not expand generator for `@generated` method ", m, ". ",
                       "This can happen if the provided argument types (", t, ") are ",
                       "not leaf types, but the `generated` argument is `true`.")
             end
         end
-        code = uncompressed_ast(m)
+        code = uncompressed_ast(m.def::Method)
         debuginfo == :none && remove_linenums!(code)
         return code
     end
@@ -898,20 +898,20 @@ function length(mt::Core.MethodTable)
 end
 isempty(mt::Core.MethodTable) = (mt.defs === nothing)
 
-uncompressed_ast(m::Method) = isdefined(m, :source) ? uncompressed_ast(m, m.source) :
+uncompressed_ast(m::Method) = isdefined(m, :source) ? _uncompressed_ast(m, m.source) :
                               isdefined(m, :generator) ? error("Method is @generated; try `code_lowered` instead.") :
                               error("Code for this Method is not available.")
-uncompressed_ast(m::Method, s::CodeInfo) = copy(s)
-uncompressed_ast(m::Method, s::Array{UInt8,1}) = ccall(:jl_uncompress_ast, Any, (Any, Any), m, s)::CodeInfo
-uncompressed_ast(m::Core.MethodInstance) = uncompressed_ast(m.def)
+_uncompressed_ast(m::Method, s::CodeInfo) = copy(s)
+_uncompressed_ast(m::Method, s::Array{UInt8,1}) = ccall(:jl_uncompress_ast, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)::CodeInfo
+_uncompressed_ast(m::Core.CodeInstance, s::Array{UInt8,1}) = ccall(:jl_uncompress_ast, Any, (Any, Ptr{Cvoid}, Any), li.def.def::Method, li, s)::CodeInfo
 
 function method_instances(@nospecialize(f), @nospecialize(t), world::UInt = typemax(UInt))
     tt = signature_type(f, t)
-    results = Vector{Union{Method,Core.MethodInstance}}()
+    results = Core.MethodInstance[]
     for method_data in _methods_by_ftype(tt, -1, world)
         mtypes, msp, m = method_data
-        instance = Core.Compiler.code_for_method(m, mtypes, msp, world, false)
-        push!(results, ifelse(isa(instance, Core.MethodInstance), instance, m))
+        instance = ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), m, mtypes, msp)
+        push!(results, instance)
     end
     return results
 end
@@ -957,7 +957,13 @@ functions on concrete types. The one exception to this is that we allow calling
 generators with abstract types if the generator does not use said abstract type
 (and thus cannot incorrectly use it to break monotonicity). This function
 computes whether we are in either of these cases.
+
+Unlike normal functions, the compilation heuristics still can't generate good dispatch
+in some cases, but this may still allow inference not to fall over in some limited cases.
 """
+function may_invoke_generator(method::MethodInstance)
+    return may_invoke_generator(method.def::Method, method.specTypes, method.sparam_vals)
+end
 function may_invoke_generator(method::Method, @nospecialize(atypes), sparams::SimpleVector)
     # If we have complete information, we may always call the generator
     isdispatchtuple(atypes) && return true
@@ -999,7 +1005,7 @@ end
 
 # give a decent error message if we try to instantiate a staged function on non-leaf types
 function func_for_method_checked(m::Method, @nospecialize(types), sparams::SimpleVector)
-    if isdefined(m, :generator) && !Core.Compiler.may_invoke_generator(m, types, sparams)
+    if isdefined(m, :generator) && !may_invoke_generator(m, types, sparams)
         error("cannot call @generated function `", m, "` ",
               "with abstract argument types: ", types)
     end
@@ -1027,8 +1033,9 @@ The keyword `debuginfo` controls the amount of code metadata present in the outp
 possible options are `:source` or `:none`.
 """
 function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
-                    optimize=true, debuginfo::Symbol=:default,
-                    world = ccall(:jl_get_world_counter, UInt, ()),
+                    optimize=true,
+                    debuginfo::Symbol=:default,
+                    world = get_world_counter(),
                     params = Core.Compiler.Params(world))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
@@ -1061,7 +1068,7 @@ function return_types(@nospecialize(f), @nospecialize(types=Tuple))
     end
     types = to_tuple_type(types)
     rt = []
-    world = ccall(:jl_get_world_counter, UInt, ())
+    world = get_world_counter()
     params = Core.Compiler.Params(world)
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types, x[2])
@@ -1204,22 +1211,22 @@ julia> hasmethod(g, Tuple{}, (:a, :b, :c, :d))  # g accepts arbitrary kwargs
 true
 ```
 """
-function hasmethod(@nospecialize(f), @nospecialize(t); world = typemax(UInt))
+function hasmethod(@nospecialize(f), @nospecialize(t); world=typemax(UInt))
     t = to_tuple_type(t)
     t = signature_type(f, t)
     return ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), t, world) !== nothing
 end
 
 function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Symbol}}; world=typemax(UInt))
+    # TODO: this appears to be doing the wrong queries
     hasmethod(f, t, world=world) || return false
     isempty(kwnames) && return true
     m = which(f, t)
-    max_world(m) <= world || return false
     kws = kwarg_decl(m, Core.kwftype(typeof(f)))
     for kw in kws
         endswith(String(kw), "...") && return true
     end
-    issubset(kwnames, kws)
+    return issubset(kwnames, kws)
 end
 
 """
@@ -1302,10 +1309,12 @@ has_bottom_parameter(t::Union) = has_bottom_parameter(t.a) & has_bottom_paramete
 has_bottom_parameter(t::TypeVar) = t.ub == Bottom || has_bottom_parameter(t.ub)
 has_bottom_parameter(::Any) = false
 
-min_world(m::Method) = reinterpret(UInt, m.min_world)
-max_world(m::Method) = reinterpret(UInt, m.max_world)
-min_world(m::Core.MethodInstance) = reinterpret(UInt, m.min_world)
-max_world(m::Core.MethodInstance) = reinterpret(UInt, m.max_world)
+min_world(m::Core.CodeInstance) = reinterpret(UInt, m.min_world)
+max_world(m::Core.CodeInstance) = reinterpret(UInt, m.max_world)
+min_world(m::Core.CodeInfo) = reinterpret(UInt, m.min_world)
+max_world(m::Core.CodeInfo) = reinterpret(UInt, m.max_world)
+get_world_counter() = ccall(:jl_get_world_counter, UInt, ())
+
 
 """
     propertynames(x, private=false)
