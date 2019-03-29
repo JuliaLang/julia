@@ -413,8 +413,7 @@
 (define (return? e) (and (pair? e) (eq? (car e) 'return)))
 (define (complex-return? e) (and (return? e)
                                  (let ((x (cadr e)))
-                                   (not (or (simple-atom? x) (ssavalue? x)
-                                            (equal? x '(null)))))))
+                                   (not (simple-atom? x)))))
 
 (define (eq-sym? a b)
   (or (eq? a b) (and (ssavalue? a) (ssavalue? b) (eqv? (cdr a) (cdr b)))))
@@ -434,7 +433,7 @@
 (define (vinfo:capt v) (< 0 (logand (caddr v) 1)))
 (define (vinfo:asgn v) (< 0 (logand (caddr v) 2)))
 (define (vinfo:never-undef v) (< 0 (logand (caddr v) 4)))
-(define (vinfo:const v) (< 0 (logand (caddr v) 8)))
+(define (vinfo:read v) (< 0 (logand (caddr v) 8)))
 (define (vinfo:sa v) (< 0 (logand (caddr v) 16)))
 (define (set-bit x b val) (if val (logior x b) (logand x (lognot b))))
 ;; record whether var is captured
@@ -443,8 +442,8 @@
 (define (vinfo:set-asgn! v a)  (set-car! (cddr v) (set-bit (caddr v) 2 a)))
 ;; whether the assignments to var are known to dominate its usages
 (define (vinfo:set-never-undef! v a) (set-car! (cddr v) (set-bit (caddr v) 4 a)))
-;; whether var is const
-(define (vinfo:set-const! v a) (set-car! (cddr v) (set-bit (caddr v) 8 a)))
+;; whether var is ever read
+(define (vinfo:set-read! v a) (set-car! (cddr v) (set-bit (caddr v) 8 a)))
 ;; whether var is assigned once
 (define (vinfo:set-sa! v a)    (set-car! (cddr v) (set-bit (caddr v) 16 a)))
 ;; occurs undef: mask 32

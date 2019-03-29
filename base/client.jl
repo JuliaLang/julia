@@ -89,37 +89,25 @@ function ip_matches_func(ip, func::Symbol)
     return false
 end
 
+function scrub_repl_backtrace(bt)
+    if bt !== nothing
+        # remove REPL-related frames from interactive printing
+        eval_ind = findlast(addr->ip_matches_func(addr, :eval), bt)
+        if eval_ind !== nothing
+            return bt[1:eval_ind-1]
+        end
+    end
+    return bt
+end
+
 function display_error(io::IO, er, bt)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    # remove REPL-related frames from interactive printing
-    eval_ind = findlast(addr->ip_matches_func(addr, :eval), bt)
-    if eval_ind !== nothing
-        bt = bt[1:eval_ind-1]
-    end
-    showerror(IOContext(io, :limit => true), er, bt)
+    showerror(IOContext(io, :limit => true), er, scrub_repl_backtrace(bt))
     println(io)
 end
 function display_error(io::IO, stack::Vector)
-    nexc = length(stack)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    # Display exception stack with the top of the stack first.  This ordering
-    # means that the user doesn't have to scroll up in the REPL to discover the
-    # root cause.
-    for i = nexc:-1:1
-        if nexc != i
-            printstyled(io, "caused by [exception ", i, "]\n", color=:light_black)
-        end
-        exc,bt = stack[i]
-        if bt != nothing
-            # remove REPL-related (or other) frames
-            eval_ind = findlast(addr->ip_matches_func(addr, :eval), bt)
-            if eval_ind !== nothing
-                bt = bt[1:eval_ind-1]
-            end
-            showerror(io, exc, bt, backtrace=bt!==nothing)
-            println(io)
-        end
-    end
+    show_exception_stack(IOContext(io, :limit => true), Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ])
 end
 display_error(stack::Vector) = display_error(stderr, stack)
 display_error(er, bt) = display_error(stderr, er, bt)

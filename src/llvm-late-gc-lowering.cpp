@@ -1,5 +1,8 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include <llvm-c/Core.h>
+#include <llvm-c/Types.h>
+
 #include <llvm/ADT/BitVector.h>
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/ADT/SetVector.h>
@@ -12,6 +15,7 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/CallSite.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/MDBuilder.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
@@ -821,9 +825,9 @@ void LateLowerGCFrame::NoteUse(State &S, BBState &BBS, Value *V, BitVector &Uses
     else if (isSpecialPtrVec(V->getType())) {
         std::vector<int> Nums = NumberVector(S, V);
         for (int Num : Nums) {
-            MaybeResize(BBS, Num);
             if (Num < 0)
                 continue;
+            MaybeResize(BBS, Num);
             Uses[Num] = 1;
         }
     }
@@ -2179,4 +2183,9 @@ static RegisterPass<LateLowerGCFrame> X("LateLowerGCFrame", "Late Lower GCFrame 
 
 Pass *createLateLowerGCFramePass() {
     return new LateLowerGCFrame();
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddLateLowerGCFramePass(LLVMPassManagerRef PM)
+{
+    unwrap(PM)->add(createLateLowerGCFramePass());
 }

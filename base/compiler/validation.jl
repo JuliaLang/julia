@@ -26,7 +26,7 @@ const VALID_EXPR_HEADS = IdDict{Any,Any}(
     :foreigncall => 3:typemax(Int),
     :cfunction => 5:5,
     :isdefined => 1:1,
-    :simdloop => 1:1,
+    :loopinfo => 0:typemax(Int),
     :gc_preserve_begin => 0:typemax(Int),
     :gc_preserve_end => 0:typemax(Int),
     :thunk => 1:1,
@@ -41,7 +41,7 @@ const INVALID_RVALUE = "invalid RHS value"
 const INVALID_RETURN = "invalid argument to :return"
 const INVALID_CALL_ARG = "invalid :call argument"
 const EMPTY_SLOTNAMES = "slotnames field is empty"
-const SLOTFLAGS_MISMATCH = "length(slotnames) != length(slotflags)"
+const SLOTFLAGS_MISMATCH = "length(slotnames) < length(slotflags)"
 const SSAVALUETYPES_MISMATCH = "not all SSAValues in AST have a type in ssavaluetypes"
 const SSAVALUETYPES_MISMATCH_UNINFERRED = "uninferred CodeInfo ssavaluetypes field does not equal the number of present SSAValues"
 const NON_TOP_LEVEL_METHOD = "encountered `Expr` head `:method` in non-top-level code (i.e. `nargs` > 0)"
@@ -143,7 +143,7 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
                 head === :inbounds || head === :foreigncall || head === :cfunction ||
                 head === :const || head === :enter || head === :leave || head == :pop_exception ||
                 head === :method || head === :global || head === :static_parameter ||
-                head === :new || head === :splatnew || head === :thunk || head === :simdloop ||
+                head === :new || head === :splatnew || head === :thunk || head === :loopinfo ||
                 head === :throw_undef_if_not || head === :unreachable
                 validate_val!(x)
             else
@@ -168,7 +168,7 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
     nslotflags = length(c.slotflags)
     nssavals = length(c.code)
     !is_top_level && nslotnames == 0 && push!(errors, InvalidCodeError(EMPTY_SLOTNAMES))
-    nslotnames != nslotflags && push!(errors, InvalidCodeError(SLOTFLAGS_MISMATCH, (nslotnames, nslotflags)))
+    nslotnames < nslotflags && push!(errors, InvalidCodeError(SLOTFLAGS_MISMATCH, (nslotnames, nslotflags)))
     if c.inferred
         nssavaluetypes = length(c.ssavaluetypes)
         nssavaluetypes < nssavals && push!(errors, InvalidCodeError(SSAVALUETYPES_MISMATCH, (nssavals, nssavaluetypes)))

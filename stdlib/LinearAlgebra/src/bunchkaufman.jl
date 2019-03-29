@@ -154,8 +154,8 @@ end
 
 Extract the factors of the Bunch-Kaufman factorization `B`. The factorization can take the
 two forms `P'*L*D*L'*P` or `P'*U*D*U'*P` (or `L*D*transpose(L)` in the complex symmetric case)
-where `P` is a (symmetric) permutation matrix, `L` is a `UnitLowerTriangular` matrix, `U` is a
-`UnitUpperTriangular`, and `D` is a block diagonal symmetric or Hermitian matrix with
+where `P` is a (symmetric) permutation matrix, `L` is a [`UnitLowerTriangular`](@ref) matrix, `U` is a
+[`UnitUpperTriangular`](@ref), and `D` is a block diagonal symmetric or Hermitian matrix with
 1x1 or 2x2 blocks. The argument `d` can be
 
 - `:D`: the block diagonal matrix

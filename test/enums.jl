@@ -126,9 +126,11 @@ end
 @test_throws ArgumentError("overflow in value \"y\" of Enum EnumOvf") @macrocall(@enum EnumOvf x=typemax(Int32) y)
 
 # test for unique Enum values
-@test_throws ArgumentError("values for Enum Test14 are not unique") @macrocall(@enum(Test14, _zero_Test14, _one_Test14, _two_Test14=0))
+@test_throws ArgumentError("both _two_Test14 and _zero_Test14 have value 0 in Enum Test14; values must be unique") @macrocall(@enum(Test14, _zero_Test14, _one_Test14, _two_Test14=0))
+# and names
+@test_throws ArgumentError("name \"_zero_Test15\" in Enum Test15 is not unique") @macrocall(@enum(Test15, _zero_Test15, _one_Test15, _zero_Test15))
 
-@test repr(apple) == "apple::Fruit = 0"
+@test repr(apple) == "$(@__MODULE__).apple"
 @test string(apple) == "apple"
 
 @test repr("text/plain", Fruit) == "Enum $(string(Fruit)):\napple = 0\norange = 1\nkiwi = 2"

@@ -582,9 +582,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
             return jl_nothing;
         }
         if (jl_is_symbol(e)) {
-            char *n = jl_symbol_name((jl_sym_t*)e);
+            char *n = jl_symbol_name((jl_sym_t*)e), *n0 = n;
             while (*n == '_') ++n;
-            if (*n == 0)
+            if (*n == 0 && n > n0)
                 jl_error("all-underscore identifier used as rvalue");
         }
         return jl_interpret_toplevel_expr_in(m, e, NULL, NULL);

@@ -10,6 +10,7 @@
 #include <llvm/Analysis/Passes.h>
 #include <llvm/Analysis/BasicAliasAnalysis.h>
 #include <llvm/Analysis/TypeBasedAliasAnalysis.h>
+#include <llvm/Analysis/ScopedNoAliasAA.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/IR/Verifier.h>
@@ -91,7 +92,8 @@ void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
 
 // this defines the set of optimization passes defined for Julia at various optimization levels.
 // it assumes that the TLI and TTI wrapper passes have already been added.
-void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump_native)
+void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
+                           bool lower_intrinsics, bool dump_native)
 {
 #ifdef JL_DEBUG_BUILD
     PM->add(createGCInvariantVerifierPass(true));
@@ -113,17 +115,20 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
         }
         PM->add(createMemCpyOptPass()); // Remove memcpy / form memset
         PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
-        PM->add(createBarrierNoopPass());
-        PM->add(createLowerExcHandlersPass());
-        PM->add(createGCInvariantVerifierPass(false));
-        PM->add(createLateLowerGCFramePass());
-        PM->add(createLowerPTLSPass(dump_native));
-        PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "simdloop" as LLVM parallel loop
+        if (lower_intrinsics) {
+            PM->add(createBarrierNoopPass());
+            PM->add(createLowerExcHandlersPass());
+            PM->add(createGCInvariantVerifierPass(false));
+            PM->add(createLateLowerGCFramePass());
+            PM->add(createLowerPTLSPass(dump_native));
+        }
+        PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (dump_native)
             PM->add(createMultiVersioningPass());
         return;
     }
     PM->add(createPropagateJuliaAddrspaces());
+    PM->add(createScopedNoAliasAAWrapperPass());
     PM->add(createTypeBasedAAWrapperPass());
     if (opt_level >= 3) {
         PM->add(createBasicAAWrapperPass());
@@ -175,7 +180,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(polly::createCodegenCleanupPass());
 #endif
     // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards
-    PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "simdloop" as LLVM parallel loop
+    PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "loopinfo" as LLVM parallel loop
     PM->add(createLICMPass());                 // Hoist loop invariants
     PM->add(createLoopUnswitchPass());         // Unswitch loops.
     // Subsequent passes not stripping metadata from terminator
@@ -217,24 +222,27 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(createInstructionCombiningPass());  // Clean up after SLP loop vectorizer
     PM->add(createLoopVectorizePass());         // Vectorize loops
     PM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
-    // LowerPTLS removes an indirect call. As a result, it is likely to trigger
-    // LLVM's devirtualization heuristics, which would result in the entire
-    // pass pipeline being re-exectuted. Prevent this by inserting a barrier.
-    PM->add(createBarrierNoopPass());
-    PM->add(createLowerExcHandlersPass());
-    PM->add(createGCInvariantVerifierPass(false));
-    PM->add(createLateLowerGCFramePass());
-    // Remove dead use of ptls
-    PM->add(createDeadCodeEliminationPass());
-    PM->add(createLowerPTLSPass(dump_native));
-    // Clean up write barrier and ptls lowering
-    PM->add(createCFGSimplificationPass());
+
+    if (lower_intrinsics) {
+        // LowerPTLS removes an indirect call. As a result, it is likely to trigger
+        // LLVM's devirtualization heuristics, which would result in the entire
+        // pass pipeline being re-exectuted. Prevent this by inserting a barrier.
+        PM->add(createBarrierNoopPass());
+        PM->add(createLowerExcHandlersPass());
+        PM->add(createGCInvariantVerifierPass(false));
+        PM->add(createLateLowerGCFramePass());
+        // Remove dead use of ptls
+        PM->add(createDeadCodeEliminationPass());
+        PM->add(createLowerPTLSPass(dump_native));
+        // Clean up write barrier and ptls lowering
+        PM->add(createCFGSimplificationPass());
+    }
     PM->add(createCombineMulAddPass());
 }
 
 extern "C" JL_DLLEXPORT
-void jl_add_optimization_passes(LLVMPassManagerRef PM, int opt_level) {
-    addOptimizationPasses(unwrap(PM), opt_level);
+void jl_add_optimization_passes(LLVMPassManagerRef PM, int opt_level, int lower_intrinsics) {
+    addOptimizationPasses(unwrap(PM), opt_level, lower_intrinsics);
 }
 
 #if defined(_OS_LINUX_) || defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
@@ -944,7 +952,7 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
     if (unopt_bc_fname)
         PM.add(createBitcodeWriterPass(unopt_bc_OS));
     if (bc_fname || obj_fname)
-        addOptimizationPasses(&PM, jl_options.opt_level, true);
+        addOptimizationPasses(&PM, jl_options.opt_level, true, true);
     if (bc_fname)
         PM.add(createBitcodeWriterPass(bc_OS));
     if (obj_fname)

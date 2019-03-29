@@ -1011,6 +1011,15 @@ test_properties()
 test_intersection_properties()
 
 
+let S = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, [TypeVar(:T), Any], 2),
+    VS = TypeVar(:T),
+    T = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, [VS, VS], 2)
+    # check (T where T) == (Any where T)
+    # these types are not normally valid, but check them just to make sure subtyping is robust
+    @test T <: S
+    @test S <: T
+end
+
 # issue #20121
 @test NTuple{170,Matrix{Int}} <: (Tuple{Vararg{Union{Array{T,1},Array{T,2},Array{T,3}}}} where T)
 
@@ -1420,3 +1429,19 @@ let U = Tuple{Union{LT, LT1},Union{R, R1},Int} where LT1<:R1 where R1<:Tuple{Int
     @test U2 == V
     @test_broken U2 == V2
 end
+
+# issue #31082 and #30741
+@testintersect(Tuple{T, Ref{T}, T} where T,
+               Tuple{Ref{S}, S, S} where S,
+               Union{})
+@testintersect(Tuple{Pair{B,C},Union{C,Pair{B,C}},Union{B,Real}} where {B,C},
+               Tuple{Pair{B,C},C,C} where {B,C},
+               Tuple{Pair{B,C},C,C} where C<:Union{Real, B} where B)
+
+# issue #31115
+@testintersect(Tuple{Ref{Z} where Z<:(Ref{Y} where Y<:Tuple{<:B}), Int} where B,
+               Tuple{Ref{Z} where Z<:(Ref{Y} where Y<:Tuple{  B}), Any} where B<:AbstractMatrix,
+               Tuple{Ref{Z} where Z<:(Ref{Y} where Y<:Tuple{  B}), Int} where B<:AbstractMatrix)
+
+# issue #31190
+@test (Tuple{T} where T <: Union{Int,Bool}) <: Union{Tuple{Int}, Tuple{Bool}}

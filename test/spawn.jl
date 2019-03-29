@@ -519,7 +519,7 @@ end
 
 # Logging macros should not output to finalized streams (#26687)
 let
-    cmd = `$(Base.julia_cmd()) -e 'finalizer(x->@info(x), "Hello")'`
+    cmd = `$exename --startup-file=no -e 'finalizer(x->@info(x), "Hello")'`
     output = readchomp(pipeline(cmd, stderr=catcmd))
     @test occursin("Info: Hello", output)
 end
@@ -614,7 +614,7 @@ end
 
 let text = "input-test-text"
     b = PipeBuffer()
-    proc = open(Base.CmdRedirect(Base.CmdRedirect(```$(Base.julia_cmd()) -E '
+    proc = open(Base.CmdRedirect(Base.CmdRedirect(```$exename --startup-file=no -E '
                     in14 = Base.open(RawFD(14))
                     out15 = Base.open(RawFD(15))
                     write(out15, in14)'```,

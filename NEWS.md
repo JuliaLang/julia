@@ -7,6 +7,13 @@ New language features
   * Argument splatting (`x...`) can now be used in calls to the `new` pseudo-function in
     constructors ([#30577]).
 
+  * Objects created by calling `skipmissing` on an array can now be indexed using indices
+    from the parent at non-missing positions. This allows functions such as
+    `findall`, `findfirst`, `argmin`/`argmax` and `findmin`/`findmax` to work with these
+    objects, returning the index of matching non-missing elements in the parent ([#31008]).
+
+  * `inv(::Missing)` has now been added and returns `missing` ([#31408]).
+
 Multi-threading changes
 -----------------------
 
@@ -15,7 +22,7 @@ Multi-threading changes
 
 Language changes
 ----------------
-
+* Empty entries in `JULIA_DEPOT_PATH` are now expanded to default depot entries ([#31009]).
 * `Enum` now behaves like a scalar when used in broadcasting ([#30670]).
 
 Command-line option changes
@@ -33,10 +40,15 @@ New library functions
 Standard library changes
 ------------------------
 
-  * The `extrema` function now accepts a function argument in the same manner as `minimum` and
-    `maximum` ([#30323]).
-  * `hasmethod` can now check for matching keyword argument names ([#30712]).
-  * `startswith` and `endswith` now accept a `Regex` for the second argument ([#29790]).
+* The `extrema` function now accepts a function argument in the same manner as `minimum` and
+  `maximum` ([#30323]).
+* `hasmethod` can now check for matching keyword argument names ([#30712]).
+* `startswith` and `endswith` now accept a `Regex` for the second argument ([#29790]).
+* `retry` supports arbitrary callable objects ([#30382]).
+* `filter` now supports `SkipMissing`-wrapped arrays ([#31235]).
+* A no-argument construct to `Ptr{T}` has been added which constructs a null pointer ([#30919])
+* `strip` now accepts a function argument in the same manner as `lstrip` and `rstrip` ([#31211])
+* `mktempdir` now accepts a `prefix` keyword argument to customize the file name ([#31230], [#22922])
 
 #### LinearAlgebra
 
@@ -45,6 +57,7 @@ Standard library changes
 * Eigenvalues λ of general matrices are now sorted lexicographically by (Re λ, Im λ) ([#21598]).
 * `one` for structured matrices (`Diagonal`, `Bidiagonal`, `Tridiagonal`, `Symtridiagonal`) now preserves
   structure and type. ([#29777])
+* `diagm(v)` is now a shorthand for `diagm(0 => v)`. ([#31125]).
 
 #### SparseArrays
 
@@ -78,6 +91,7 @@ Deprecated or removed
 [#21598]: https://github.com/JuliaLang/julia/issues/21598
 [#24980]: https://github.com/JuliaLang/julia/issues/24980
 [#28850]: https://github.com/JuliaLang/julia/issues/28850
+[#29777]: https://github.com/JuliaLang/julia/issues/29777
 [#29790]: https://github.com/JuliaLang/julia/issues/29790
 [#29998]: https://github.com/JuliaLang/julia/issues/29998
 [#30061]: https://github.com/JuliaLang/julia/issues/30061
@@ -86,6 +100,8 @@ Deprecated or removed
 [#30323]: https://github.com/JuliaLang/julia/issues/30323
 [#30349]: https://github.com/JuliaLang/julia/issues/30349
 [#30372]: https://github.com/JuliaLang/julia/issues/30372
+[#30382]: https://github.com/JuliaLang/julia/issues/30382
+[#30577]: https://github.com/JuliaLang/julia/issues/30577
 [#30583]: https://github.com/JuliaLang/julia/issues/30583
 [#30584]: https://github.com/JuliaLang/julia/issues/30584
 [#30593]: https://github.com/JuliaLang/julia/issues/30593
@@ -94,3 +110,4 @@ Deprecated or removed
 [#30712]: https://github.com/JuliaLang/julia/issues/30712
 [#30724]: https://github.com/JuliaLang/julia/issues/30724
 [#30915]: https://github.com/JuliaLang/julia/issues/30915
+[#30919]: https://github.com/JuliaLang/julia/issues/30919

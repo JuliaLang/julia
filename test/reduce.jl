@@ -50,6 +50,7 @@ using .Main.OffsetArrays
 @test mapreduce(-, +, Vector(range(1.0, stop=10000.0, length=10000))) == -50005000.0
 # empty mr
 @test mapreduce(abs2, +, Float64[]) === 0.0
+@test mapreduce(abs2, *, Float64[]) === 1.0
 @test mapreduce(abs2, max, Float64[]) === 0.0
 @test mapreduce(abs, max, Float64[]) === 0.0
 @test_throws ArgumentError mapreduce(abs2, &, Float64[])
@@ -155,6 +156,7 @@ end
 
 @test prod([3]) === 3
 @test prod([Int8(3)]) === Int(3)
+@test prod([UInt8(3)]) === UInt(3)
 @test prod([3.0]) === 3.0
 
 @test prod(z) === 120

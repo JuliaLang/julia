@@ -291,6 +291,21 @@ function diagm_container(kv::Pair{<:Integer,<:BitVector}...)
     return falses(n, n)
 end
 
+"""
+    diagm(v::AbstractVector)
+
+Construct a square matrix with elements of the vector as diagonal elements.
+
+# Examples
+```jldoctest
+julia> diagm([1,2,3])
+3×3 Array{Int64,2}:
+ 1  0  0
+ 0  2  0
+ 0  0  3
+```
+"""
+diagm(v::AbstractVector) = diagm(0 => v)
 
 function tr(A::Matrix{T}) where T
     n = checksquare(A)
@@ -926,8 +941,8 @@ this function, see [^AH16_1].
 ```jldoctest
 julia> acos(cos([0.5 0.1; -0.2 0.3]))
 2×2 Array{Complex{Float64},2}:
-  0.5-5.55112e-17im  0.1-2.77556e-17im
- -0.2+2.498e-16im    0.3-3.46945e-16im
+  0.5-8.32667e-17im  0.1+0.0im
+ -0.2+2.63678e-16im  0.3-3.46945e-16im
 ```
 """
 function acos(A::AbstractMatrix)

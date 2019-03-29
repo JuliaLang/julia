@@ -171,6 +171,31 @@ static Value *stringConstPtr(IRBuilder<> &irbuilder, const std::string &txt)
     }
 }
 
+// --- MDNode ---
+Metadata *to_md_tree(jl_value_t *val) {
+    if (val == jl_nothing)
+        return nullptr;
+    Metadata *MD = nullptr;
+    if (jl_is_symbol(val)) {
+        MD = MDString::get(jl_LLVMContext, jl_symbol_name((jl_sym_t*)val));
+    } else if (jl_is_bool(val)) {
+        MD = ConstantAsMetadata::get(ConstantInt::get(T_int1, jl_unbox_bool(val)));
+    } else if (jl_is_long(val)) {
+        MD = ConstantAsMetadata::get(ConstantInt::get(T_int64, jl_unbox_long(val)));
+    } else if (jl_is_tuple(val)) {
+        SmallVector<Metadata *, 8> MDs;
+        for (int f = 0, nf = jl_nfields(val); f < nf; ++f) {
+            MD = to_md_tree(jl_fieldref(val, f));
+            if (MD)
+                MDs.push_back(MD);
+        }
+        MD = MDNode::get(jl_LLVMContext, MDs);
+    } else {
+        jl_error("LLVM metadata needs to Symbol/Bool/Int or Tuple thereof");
+    }
+    return MD;
+}
+
 // --- Debug info ---
 
 static DIType *julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed = false)
@@ -1240,7 +1265,8 @@ static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_v
 static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_value_t *jt, Value* dest = NULL, MDNode *tbaa_dest = nullptr, bool isVolatile = false);
 
 static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, jl_value_t *jltype,
-                             MDNode *tbaa, bool maybe_null_if_boxed = true, unsigned alignment = 0)
+                             MDNode *tbaa, MDNode *aliasscope,
+                             bool maybe_null_if_boxed = true, unsigned alignment = 0)
 {
     bool isboxed;
     Type *elty = julia_type_to_llvm(jltype, &isboxed);
@@ -1265,8 +1291,12 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         Instruction *load = ctx.builder.CreateAlignedLoad(data,
             isboxed || alignment ?  alignment : julia_alignment(jltype),
             false);
-        if (isboxed)
+        if (aliasscope) {
+            load->setMetadata("alias.scope", aliasscope);
+        }
+        if (isboxed) {
             load = maybe_mark_load_dereferenceable(load, true, jltype);
+        }
         if (tbaa) {
             elt = tbaa_decorate(tbaa, load);
         }
@@ -1282,7 +1312,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
 
 static void typed_store(jl_codectx_t &ctx,
         Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
-        jl_value_t *jltype, MDNode *tbaa,
+        jl_value_t *jltype, MDNode *tbaa, MDNode *aliasscope,
         Value *parent,  // for the write barrier, NULL if no barrier needed
         unsigned alignment = 0)
 {
@@ -1313,6 +1343,8 @@ static void typed_store(jl_codectx_t &ctx,
     if (idx_0based)
         data = ctx.builder.CreateInBoundsGEP(r->getType(), data, idx_0based);
     Instruction *store = ctx.builder.CreateAlignedStore(r, data, isboxed || alignment ? alignment : julia_alignment(jltype));
+    if (aliasscope)
+        store->setMetadata("noalias", aliasscope);
     if (tbaa)
         tbaa_decorate(tbaa, store);
 }
@@ -1465,7 +1497,7 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
                 *ret = mark_julia_slot(addr, jt, NULL, strct.tbaa);
                 return true;
             }
-            *ret = typed_load(ctx, ptr, idx, jt, strct.tbaa, false);
+            *ret = typed_load(ctx, ptr, idx, jt, strct.tbaa, nullptr, false);
             return true;
         }
         else if (strct.isboxed) {
@@ -1590,7 +1622,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             // just compute the pointer and let user load it when necessary
             return mark_julia_slot(addr, jfty, NULL, strct.tbaa);
         }
-        return typed_load(ctx, addr, NULL, jfty, strct.tbaa, true, align);
+        return typed_load(ctx, addr, NULL, jfty, strct.tbaa, nullptr, true, align);
     }
     else if (isa<UndefValue>(strct.V)) {
         return jl_cgval_t();
@@ -2424,7 +2456,7 @@ static void emit_setfield(jl_codectx_t &ctx,
         else {
             unsigned align = jl_field_align(sty, idx0);
             typed_store(ctx, addr, NULL, rhs, jfty,
-                strct.tbaa, maybe_bitcast(ctx,
+                strct.tbaa, nullptr, maybe_bitcast(ctx,
                 data_pointer(ctx, strct), T_pjlvalue), align);
         }
     }

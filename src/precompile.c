@@ -372,7 +372,7 @@ static void jl_compile_specializations(void)
     JL_GC_PUSH1(&m);
     jl_foreach_reachable_mtable(precompile_enq_all_specializations_, m);
     // Ensure stable ordering to make inference problems more reproducible (#29923)
-    jl_sort_types(jl_array_data(m), jl_array_len(m));
+    jl_sort_types((jl_value_t**)jl_array_data(m), jl_array_len(m));
     size_t i, l;
     for (i = 0, l = jl_array_len(m); i < l; i++) {
         jl_compile_hint((jl_tupletype_t*)jl_array_ptr_ref(m, i));

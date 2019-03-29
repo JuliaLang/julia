@@ -37,8 +37,11 @@ mutable struct OptimizationState
         if nssavalues isa Int
             src.ssavaluetypes = Any[ Any for i = 1:nssavalues ]
         end
-        nslots = length(src.slotnames)
-        slottypes = Any[ Any for i = 1:nslots ]
+        nslots = length(src.slotflags)
+        slottypes = src.slottypes
+        if slottypes === nothing
+            slottypes = Any[ Any for i = 1:nslots ]
+        end
         s_edges = []
         # cache some useful state computations
         toplevel = !isa(linfo.def, Method)
@@ -73,7 +76,7 @@ end
 # This is implied by `SLOT_USEDUNDEF`.
 # If this is not set, all the uses are (statically) dominated by the defs.
 # In particular, if a slot has `AssignedOnce && !StaticUndef`, it is an SSA.
-const SLOT_STATICUNDEF  = 1
+const SLOT_STATICUNDEF  = 1 # slot might be used before it is defined (structurally)
 const SLOT_ASSIGNEDONCE = 16 # slot is assigned to only once
 const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 # const SLOT_CALLED      = 64
@@ -86,7 +89,7 @@ const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
 # known to be effect-free if the are nothrow
 const _PURE_OR_ERROR_BUILTINS = [
     fieldtype, apply_type, isa, UnionAll,
-    getfield, arrayref, isdefined, Core.sizeof,
+    getfield, arrayref, const_arrayref, isdefined, Core.sizeof,
     Core.kwfunc, ifelse, Core._typevar, (<:)
 ]
 
@@ -152,7 +155,7 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
         return !(t ⊑ Bool)
     end
     if isa(stmt, Expr)
-        return stmt.head != :simdloop && stmt.head != :enter
+        return stmt.head != :loopinfo && stmt.head != :enter
     end
     return true
 end
@@ -260,13 +263,16 @@ function is_pure_intrinsic_infer(f::IntrinsicFunction)
              f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
 end
 
+# whether `f` is effect free if nothrow
+intrinsic_effect_free_if_nothrow(f) = f === Intrinsics.pointerref || is_pure_intrinsic_infer(f)
+
 ## Computing the cost of a function body
 
 # saturating sum (inputs are nonnegative), prevents overflow with typemax(Int) below
 plus_saturate(x::Int, y::Int) = max(x, y, x+y)
 
 # known return type
-isknowntype(@nospecialize T) = (T == Union{}) || isconcretetype(T)
+isknowntype(@nospecialize T) = (T === Union{}) || isconcretetype(T)
 
 function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}, slottypes::Vector{Any}, params::Params)
     head = ex.head
@@ -301,7 +307,7 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}
                 # tuple iteration/destructuring makes that impossible
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
                 return 0
-            elseif f === Main.Core.arrayref && length(ex.args) >= 3
+            elseif (f === Main.Core.arrayref || f === Main.Core.const_arrayref) && length(ex.args) >= 3
                 atyp = argextype(ex.args[3], src, sptypes, slottypes)
                 return isknowntype(atyp) ? 4 : params.inline_nonleaf_penalty
             end

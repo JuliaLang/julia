@@ -86,9 +86,6 @@
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 
 using namespace llvm;
-namespace llvm {
-    extern bool annotateSimdLoop(BasicBlock *latch);
-}
 
 #if defined(_OS_WINDOWS_) && !defined(NOMINMAX)
 #define NOMINMAX
@@ -296,8 +293,7 @@ static Function *jlegal_func;
 static Function *jl_alloc_obj_func;
 static Function *jl_newbits_func;
 static Function *jl_typeof_func;
-static Function *jl_simdloop_marker_func;
-static Function *jl_simdivdep_marker_func;
+static Function *jl_loopinfo_marker_func;
 static Function *jl_write_barrier_func;
 static Function *jlisa_func;
 static Function *jlsubtype_func;
@@ -523,6 +519,7 @@ public:
     Value *spvals_ptr = NULL;
     Value *argArray = NULL;
     Value *argCount = NULL;
+    MDNode *aliasscope = NULL;
     std::string funcName;
     int vaSlot = -1;        // name of vararg argument
     bool has_sret = false;
@@ -2521,7 +2518,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
     }
 
-    else if (f == jl_builtin_arrayref && nargs >= 3) {
+    else if ((f == jl_builtin_arrayref || f == jl_builtin_const_arrayref) && nargs >= 3) {
         const jl_cgval_t &ary = argv[2];
         bool indices_ok = true;
         for (size_t i = 3; i <= nargs; i++) {
@@ -2573,10 +2570,11 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     *ret = mark_julia_slot(lv, ety, ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1), tindex), tbaa_arraybuf);
                 }
                 else {
+                    MDNode *aliasscope = (f == jl_builtin_const_arrayref) ? ctx.aliasscope : nullptr;
                     *ret = typed_load(ctx,
                             emit_arrayptr(ctx, ary, ary_ex),
                             idx, ety,
-                            !isboxed ? tbaa_arraybuf : tbaa_ptrarraybuf);
+                            !isboxed ? tbaa_arraybuf : tbaa_ptrarraybuf, aliasscope);
                 }
                 return true;
             }
@@ -2677,7 +2675,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                         emit_arrayptr(ctx, ary, ary_ex, isboxed),
                                         idx, val, ety,
                                         !isboxed ? tbaa_arraybuf : tbaa_ptrarraybuf,
-                                        data_owner, 0);
+                                        ctx.aliasscope, data_owner, 0);
                         }
                     }
                     *ret = ary;
@@ -2760,7 +2758,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                 jl_true);
                         }
                         Value *ptr = maybe_decay_tracked(data_pointer(ctx, obj));
-                        *ret = typed_load(ctx, ptr, vidx, jt, obj.tbaa, false);
+                        *ret = typed_load(ctx, ptr, vidx, jt, obj.tbaa, nullptr, false);
                         return true;
                     }
                 }
@@ -3315,8 +3313,12 @@ static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
     Value *sp = tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(bp));
     Value *isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp),
             maybe_decay_untracked(literal_pointer_val(ctx, (jl_value_t*)jl_tvar_type)));
-    jl_sym_t *name = (jl_sym_t*)jl_svecref(ctx.linfo->def.method->sparam_syms, i);
-    undef_var_error_ifnot(ctx, isnull, name);
+    jl_unionall_t *sparam = (jl_unionall_t*)ctx.linfo->def.method->sig;
+    for (size_t j = 0; j < i; j++) {
+        sparam = (jl_unionall_t*)sparam->body;
+        assert(jl_is_unionall(sparam));
+    }
+    undef_var_error_ifnot(ctx, isnull, sparam->var->name);
     return mark_julia_type(ctx, sp, true, jl_any_type);
 }
 
@@ -3829,7 +3831,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
     jl_expr_t *ex = (jl_expr_t*)expr;
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     jl_sym_t *head = ex->head;
-    if (head == meta_sym || head == inbounds_sym) {
+    if (head == meta_sym || head == inbounds_sym || head == aliasscope_sym || head == popaliasscope_sym) {
         // some expression types are metadata and can be ignored
         // in statement position
         return;
@@ -4094,14 +4096,18 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
                 ctx.builder.CreateCall(prepare_call(jlcopyast_func),
                     maybe_decay_untracked(boxed(ctx, ast))), true, jl_expr_type);
     }
-    else if (head == simdloop_sym) {
-        jl_value_t *ivdep = args[0];
-        assert(jl_expr_nargs(ex) == 1 && jl_is_bool(ivdep));
-        if (ivdep == jl_false) {
-            ctx.builder.CreateCall(prepare_call(jl_simdloop_marker_func));
-        } else {
-            ctx.builder.CreateCall(prepare_call(jl_simdivdep_marker_func));
+    else if (head == loopinfo_sym) {
+        // parse Expr(:loopinfo, "julia.simdloop", ("llvm.loop.vectorize.width", 4))
+        SmallVector<Metadata *, 8> MDs;
+        for (int i = 0, ie = jl_expr_nargs(ex); i < ie; ++i) {
+            Metadata *MD = to_md_tree(args[i]);
+            if (MD)
+                MDs.push_back(MD);
         }
+
+        MDNode* MD = MDNode::get(jl_LLVMContext, MDs);
+        CallInst *I = ctx.builder.CreateCall(prepare_call(jl_loopinfo_marker_func));
+        I->setMetadata("julia.loopinfo", MD);
         return jl_cgval_t();
     }
     else if (head == goto_ifnot_sym) {
@@ -4118,6 +4124,12 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
     }
     else if (head == inbounds_sym) {
         jl_error("Expr(:inbounds) in value position");
+    }
+    else if (head == aliasscope_sym) {
+        jl_error("Expr(:aliasscope) in value position");
+    }
+    else if (head == popaliasscope_sym) {
+        jl_error("Expr(:popaliasscope) in value position");
     }
     else if (head == boundscheck_sym) {
         return mark_julia_const(bounds_check_enabled(ctx, jl_true) ? jl_true : jl_false);
@@ -5351,19 +5363,19 @@ static std::unique_ptr<Module> emit_function(
     if (!JL_FEAT_TEST(ctx, track_allocations))
         malloc_log_mode = JL_LOG_NONE;
 
-    ctx.file = "<missing>";
     StringRef dbgFuncName = ctx.name;
     int toplineno = -1;
     if (jl_is_method(lam->def.method)) {
         toplineno = lam->def.method->line;
-        if (lam->def.method->file != empty_sym)
-            ctx.file = jl_symbol_name(lam->def.method->file);
+        ctx.file = jl_symbol_name(lam->def.method->file);
     }
     else if (jl_array_len(src->linetable) > 0) {
         jl_value_t *locinfo = jl_array_ptr_ref(src->linetable, 0);
-        ctx.file = jl_symbol_name((jl_sym_t*)jl_fieldref_noalloc(locinfo, 2));
-        toplineno = jl_unbox_long(jl_fieldref(locinfo, 3));
+        ctx.file = jl_symbol_name((jl_sym_t*)jl_fieldref_noalloc(locinfo, 1));
+        toplineno = jl_unbox_long(jl_fieldref(locinfo, 2));
     }
+    if (ctx.file.empty())
+        ctx.file = "<missing>";
     // jl_printf(JL_STDERR, "\n*** compiling %s at %s:%d\n\n",
     //           jl_symbol_name(ctx.name), ctx.file.str().c_str(), toplineno);
 
@@ -5375,7 +5387,7 @@ static std::unique_ptr<Module> emit_function(
 
     // step 2. process var-info lists to see what vars need boxing
     int n_ssavalues = jl_is_long(src->ssavaluetypes) ? jl_unbox_long(src->ssavaluetypes) : jl_array_len(src->ssavaluetypes);
-    size_t vinfoslen = jl_array_dim0(src->slotnames);
+    size_t vinfoslen = jl_array_dim0(src->slotflags);
     ctx.slots.resize(vinfoslen);
     size_t nreq = ctx.nargs;
     int va = 0;
@@ -5397,7 +5409,7 @@ static std::unique_ptr<Module> emit_function(
 
     bool needsparams = false;
     if (jl_is_method(lam->def.method)) {
-        if (jl_svec_len(lam->def.method->sparam_syms) != jl_svec_len(lam->sparam_vals))
+        if ((size_t)jl_subtype_env_size(lam->def.method->sig) != jl_svec_len(lam->sparam_vals))
             needsparams = true;
         for (size_t i = 0; i < jl_svec_len(lam->sparam_vals); ++i) {
             if (jl_is_typevar(jl_svecref(lam->sparam_vals, i)))
@@ -5597,7 +5609,7 @@ static std::unique_ptr<Module> emit_function(
             for (i = 0; i < vinfoslen; i++) {
                 jl_sym_t *s = (jl_sym_t*)jl_array_ptr_ref(src->slotnames, i);
                 jl_varinfo_t &varinfo = ctx.slots[i];
-                if (varinfo.isArgument || s == compiler_temp_sym || s == unused_sym)
+                if (varinfo.isArgument || s == empty_sym || s == unused_sym)
                     continue;
                 // LLVM 4.0: Assume the variable has default alignment
                 varinfo.dinfo = dbuilder.createAutoVariable(
@@ -5932,25 +5944,36 @@ static std::unique_ptr<Module> emit_function(
         std::map<std::tuple<StringRef, StringRef>, DISubprogram*> subprograms;
         linetable.resize(nlocs + 1);
         for (size_t i = 0; i < nlocs; i++) {
-            // LineInfoNode(mod::Module, method::Symbol, file::Symbol, line::Int, inlined_at::Int)
+            // LineInfoNode(mod::Module, method::Any, file::Symbol, line::Int, inlined_at::Int)
             jl_value_t *locinfo = jl_array_ptr_ref(src->linetable, i);
             DebugLineTable &info = linetable[i + 1];
             assert(jl_typeis(locinfo, jl_lineinfonode_type));
-            jl_module_t *module = (jl_module_t*)jl_fieldref_noalloc(locinfo, 0);
-            if (module == ctx.module)
-                info.is_user_code = mod_is_user_mod;
-            else
-                info.is_user_code = in_user_mod(module);
-            jl_sym_t *method = (jl_sym_t*)jl_fieldref_noalloc(locinfo, 1);
-            jl_sym_t *filesym = (jl_sym_t*)jl_fieldref_noalloc(locinfo, 2);
-            info.line = jl_unbox_long(jl_fieldref(locinfo, 3));
-            info.inlined_at = jl_unbox_long(jl_fieldref(locinfo, 4));
+            jl_value_t *method = jl_fieldref_noalloc(locinfo, 0);
+            if (jl_is_method_instance(method))
+                method = ((jl_method_instance_t*)method)->def.value;
+            jl_sym_t *filesym = (jl_sym_t*)jl_fieldref_noalloc(locinfo, 1);
+            info.line = jl_unbox_long(jl_fieldref(locinfo, 2));
+            info.inlined_at = jl_unbox_long(jl_fieldref(locinfo, 3));
             assert(info.inlined_at <= i);
+            if (jl_is_method(method)) {
+                jl_module_t *module = ((jl_method_t*)method)->module;
+                if (module == ctx.module)
+                    info.is_user_code = mod_is_user_mod;
+                else
+                    info.is_user_code = in_user_mod(module);
+            }
+            else {
+                info.is_user_code = (info.inlined_at == 0) ? mod_is_user_mod : linetable.at(info.inlined_at).is_user_code;
+            }
             info.file = jl_symbol_name(filesym);
             if (info.file.empty())
                 info.file = "<missing>";
             if (ctx.debug_enabled) {
-                StringRef fname = jl_symbol_name(method);
+                StringRef fname;
+                if (jl_is_method(method))
+                    method = (jl_value_t*)((jl_method_t*)method)->name;
+                if (jl_is_symbol(method))
+                    fname = jl_symbol_name((jl_sym_t*)method);
                 if (fname.empty())
                     fname = "macro expansion";
                 if (info.inlined_at == 0 && info.file == ctx.file) { // if everything matches, emit a toplevel line number
@@ -5971,6 +5994,36 @@ static std::unique_ptr<Module> emit_function(
             }
         }
     }
+
+    std::vector<MDNode*> aliasscopes;
+    MDNode* current_aliasscope = nullptr;
+    std::vector<Metadata*> scope_stack;
+    std::vector<MDNode*> scope_list_stack;
+    {
+        size_t nstmts = jl_array_len(src->code);
+        aliasscopes.resize(nstmts + 1, nullptr);
+        static MDBuilder *mbuilder = new MDBuilder(jl_LLVMContext);
+        MDNode *alias_domain = mbuilder->createAliasScopeDomain(ctx.name);
+        for (i = 0; i < nstmts; i++) {
+            jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
+            jl_expr_t *expr = jl_is_expr(stmt) ? (jl_expr_t*)stmt : nullptr;
+            if (expr) {
+                if (expr->head == aliasscope_sym) {
+                    MDNode *scope = mbuilder->createAliasScope("aliasscope", alias_domain);
+                    scope_stack.push_back(scope);
+                    MDNode *scope_list = MDNode::get(jl_LLVMContext, ArrayRef<Metadata*>(scope_stack));
+                    scope_list_stack.push_back(scope_list);
+                    current_aliasscope = scope_list;
+                } else if (expr->head == popaliasscope_sym) {
+                    scope_stack.pop_back();
+                    scope_list_stack.pop_back();
+                    current_aliasscope = scope_list_stack.back();
+                }
+            }
+            aliasscopes[i+1] = current_aliasscope;
+        }
+    }
+
     Instruction &prologue_end = ctx.builder.GetInsertBlock()->back();
 
 
@@ -6027,14 +6080,14 @@ static std::unique_ptr<Module> emit_function(
             return;
         while (dbg) {
             new_lineinfo.push_back(dbg);
-            dbg = linetable[dbg].inlined_at;
+            dbg = linetable.at(dbg).inlined_at;
         }
         current_lineinfo.resize(new_lineinfo.size(), 0);
         for (dbg = 0; dbg < new_lineinfo.size(); dbg++) {
             unsigned newdbg = new_lineinfo[new_lineinfo.size() - dbg - 1];
             if (newdbg != current_lineinfo[dbg]) {
                 current_lineinfo[dbg] = newdbg;
-                const auto &info = linetable[newdbg];
+                const auto &info = linetable.at(newdbg);
                 if (do_coverage(info.is_user_code))
                     coverageVisitLine(ctx, info.file, info.line);
             }
@@ -6044,9 +6097,9 @@ static std::unique_ptr<Module> emit_function(
     auto mallocVisitStmt = [&] (unsigned dbg) {
         if (!do_malloc_log(mod_is_user_mod) || dbg == 0)
             return;
-        while (linetable[dbg].inlined_at)
-            dbg = linetable[dbg].inlined_at;
-        mallocVisitLine(ctx, ctx.file, linetable[dbg].line);
+        while (linetable.at(dbg).inlined_at)
+            dbg = linetable.at(dbg).inlined_at;
+        mallocVisitLine(ctx, ctx.file, linetable.at(dbg).line);
     };
 
     come_from_bb[0] = ctx.builder.GetInsertBlock();
@@ -6111,9 +6164,10 @@ static std::unique_ptr<Module> emit_function(
         int32_t debuginfoloc = ((int32_t*)jl_array_data(src->codelocs))[cursor];
         if (debuginfoloc > 0) {
             if (ctx.debug_enabled)
-                ctx.builder.SetCurrentDebugLocation(linetable[debuginfoloc].loc);
+                ctx.builder.SetCurrentDebugLocation(linetable.at(debuginfoloc).loc);
             coverageVisitStmt(debuginfoloc);
         }
+        ctx.aliasscope = aliasscopes[cursor];
         jl_value_t *stmt = jl_array_ptr_ref(stmts, cursor);
         jl_expr_t *expr = jl_is_expr(stmt) ? (jl_expr_t*)stmt : nullptr;
         if (expr && expr->head == unreachable_sym) {
@@ -7092,6 +7146,7 @@ static void init_julia_llvm_env(Module *m)
     builtin_func_map[jl_f__expr] = jlcall_func_to_llvm("jl_f__expr", &jl_f__expr, m);
     builtin_func_map[jl_f__typevar] = jlcall_func_to_llvm("jl_f__typevar", &jl_f__typevar, m);
     builtin_func_map[jl_f_arrayref] = jlcall_func_to_llvm("jl_f_arrayref", &jl_f_arrayref, m);
+    builtin_func_map[jl_f_const_arrayref] = jlcall_func_to_llvm("jl_f_const_arrayref", &jl_f_arrayref, m);
     builtin_func_map[jl_f_arrayset] = jlcall_func_to_llvm("jl_f_arrayset", &jl_f_arrayset, m);
     builtin_func_map[jl_f_arraysize] = jlcall_func_to_llvm("jl_f_arraysize", &jl_f_arraysize, m);
     builtin_func_map[jl_f_apply_type] = jlcall_func_to_llvm("jl_f_apply_type", &jl_f_apply_type, m);
@@ -7301,19 +7356,12 @@ static void init_julia_llvm_env(Module *m)
     add_return_attr(jl_newbits_func, Attribute::NonNull);
     add_named_global(jl_newbits_func, (void*)jl_new_bits);
 
-    jl_simdloop_marker_func = Function::Create(FunctionType::get(T_void, {}, false),
+    jl_loopinfo_marker_func = Function::Create(FunctionType::get(T_void, {}, false),
                                                Function::ExternalLinkage,
-                                               "julia.simdloop_marker");
-    jl_simdloop_marker_func->addFnAttr(Attribute::NoUnwind);
-    jl_simdloop_marker_func->addFnAttr(Attribute::NoRecurse);
-    jl_simdloop_marker_func->addFnAttr(Attribute::InaccessibleMemOnly);
-
-    jl_simdivdep_marker_func = Function::Create(FunctionType::get(T_void, {}, false),
-                                               Function::ExternalLinkage,
-                                               "julia.simdivdep_marker");
-    jl_simdivdep_marker_func->addFnAttr(Attribute::NoUnwind);
-    jl_simdivdep_marker_func->addFnAttr(Attribute::NoRecurse);
-    jl_simdivdep_marker_func->addFnAttr(Attribute::InaccessibleMemOnly);
+                                               "julia.loopinfo_marker");
+    jl_loopinfo_marker_func->addFnAttr(Attribute::NoUnwind);
+    jl_loopinfo_marker_func->addFnAttr(Attribute::NoRecurse);
+    jl_loopinfo_marker_func->addFnAttr(Attribute::InaccessibleMemOnly);
 
     jl_typeof_func = Function::Create(FunctionType::get(T_prjlvalue, {T_prjlvalue}, false),
                                       Function::ExternalLinkage,

@@ -1832,3 +1832,10 @@ end
     allocs = @allocated identity(p)
     @test allocs == 0
 end
+
+@test_throws UndefVarError eval(Symbol(""))
+@test_throws UndefVarError eval(:(1+$(Symbol(""))))
+
+# issue #31404
+f31404(a, b; kws...) = (a, b, kws.data)
+@test f31404(+, (Type{T} where T,); optimize=false) === (+, (Type,), (optimize=false,))

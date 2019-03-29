@@ -58,7 +58,7 @@ mutable struct InferenceState
         s_types = Any[ nothing for i = 1:n ]
 
         # initial types
-        nslots = length(src.slotnames)
+        nslots = length(src.slotflags)
         argtypes = result.argtypes
         nargs = length(argtypes)
         s_argtypes = VarTable(undef, nslots)
@@ -122,7 +122,7 @@ end
 
 function sptypes_from_meth_instance(linfo::MethodInstance)
     toplevel = !isa(linfo.def, Method)
-    if !toplevel && isempty(linfo.sparam_vals) && !isempty(linfo.def.sparam_syms)
+    if !toplevel && isempty(linfo.sparam_vals) && isa(linfo.def.sig, UnionAll)
         # linfo is unspecialized
         sp = Any[]
         sig = linfo.def.sig
@@ -136,43 +136,49 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
     for i = 1:length(sp)
         v = sp[i]
         if v isa TypeVar
-            ub = v.ub
-            while ub isa TypeVar
-                ub = ub.ub
+            fromArg = 0
+            # if this parameter came from arg::Type{T}, then `arg` is more precise than
+            # Type{T} where lb<:T<:ub
+            sig = linfo.def.sig
+            temp = sig
+            for j = 1:i-1
+                temp = temp.body
             end
-            if has_free_typevars(ub)
-                ub = Any
+            Pi = temp.var
+            while temp isa UnionAll
+                temp = temp.body
             end
-            lb = v.lb
-            while lb isa TypeVar
-                lb = lb.lb
-            end
-            if has_free_typevars(lb)
-                lb = Bottom
-            end
-            if Any <: ub && lb <: Bottom
-                ty = Any
-                # if this parameter came from arg::Type{T}, we know that T::Type
-                sig = linfo.def.sig
-                temp = sig
-                for j = 1:i-1
-                    temp = temp.body
+            sigtypes = temp.parameters
+            for j = 1:length(sigtypes)
+                tj = sigtypes[j]
+                if isType(tj) && tj.parameters[1] === Pi
+                    fromArg = j
+                    break
                 end
-                Pi = temp.var
-                while temp isa UnionAll
-                    temp = temp.body
-                end
-                sigtypes = temp.parameters
-                for j = 1:length(sigtypes)
-                    tj = sigtypes[j]
-                    if isType(tj) && tj.parameters[1] === Pi
-                        ty = Type
-                        break
-                    end
-                end
+            end
+            if fromArg > 0
+                ty = fieldtype(linfo.specTypes, fromArg)
             else
-                tv = TypeVar(v.name, lb, ub)
-                ty = UnionAll(tv, Type{tv})
+                ub = v.ub
+                while ub isa TypeVar
+                    ub = ub.ub
+                end
+                if has_free_typevars(ub)
+                    ub = Any
+                end
+                lb = v.lb
+                while lb isa TypeVar
+                    lb = lb.lb
+                end
+                if has_free_typevars(lb)
+                    lb = Bottom
+                end
+                if Any <: ub && lb <: Bottom
+                    ty = Any
+                else
+                    tv = TypeVar(v.name, lb, ub)
+                    ty = UnionAll(tv, Type{tv})
+                end
             end
         else
             ty = Const(v)

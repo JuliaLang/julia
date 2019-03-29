@@ -677,15 +677,6 @@ end
 
 ## end of triangular
 
-## symmetric/Hermitian wrappers of sparse matrices
-"""
-    SparseMatrixCSCSymmHerm
-
-`Symmetric` or `Hermitian` of a `SparseMatrixCSC` or `SparseMatrixCSCView`.
-"""
-const SparseMatrixCSCSymmHerm{Tv,Ti} = Union{Symmetric{Tv,<:SparseMatrixCSCUnion{Tv,Ti}},
-                                            Hermitian{Tv,<:SparseMatrixCSCUnion{Tv,Ti}}}
-
 # y .= A * x
 mul!(y::StridedVecOrMat, A::SparseMatrixCSCSymmHerm, x::StridedVecOrMat) = mul!(y,A,x,1,0)
 

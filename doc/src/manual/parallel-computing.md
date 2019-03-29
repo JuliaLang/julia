@@ -12,10 +12,10 @@ Julia also supports communication between `Tasks` through operations like [`wait
 Communication and data synchronization is managed through [`Channel`](@ref)s, which are the conduits
 that provide inter-`Tasks` communication.
 
-Julia also supports experimental multi-threading, where execution is forked and an anonymous function is run across all
+Julia also supports [experimental multi-threading](@ref man-multithreading), where execution is forked and an anonymous function is run across all
 threads.
 Known as the fork-join approach, parallel threads execute independently, and must ultimately be joined in Julia's main thread to allow serial execution to continue.
-Multi-threading is supported using the `Base.Threads` module that is still considered experimental, as Julia is
+Multi-threading is supported using the [`Base.Threads`](@ref lib-multithreading) module that is still considered experimental, as Julia is
 not yet fully thread-safe. In particular segfaults seem to occur during I/O operations and task switching.
 As an up-to-date reference, keep an eye on [the issue tracker](https://github.com/JuliaLang/julia/issues?q=is%3Aopen+is%3Aissue+label%3Amultithreading).
 Multi-Threading should only be used if you take into consideration global variables, locks and
@@ -80,51 +80,51 @@ A channel can be visualized as a pipe, i.e., it has a write end and a read end :
         @async foo()
     end
     ```
-* Channels are created via the `Channel{T}(sz)` constructor. The channel will only hold objects
-  of type `T`. If the type is not specified, the channel can hold objects of any type. `sz` refers
-  to the maximum number of elements that can be held in the channel at any time. For example, `Channel(32)`
-  creates a channel that can hold a maximum of 32 objects of any type. A `Channel{MyType}(64)` can
-  hold up to 64 objects of `MyType` at any time.
-* If a [`Channel`](@ref) is empty, readers (on a [`take!`](@ref) call) will block until data is available.
-* If a [`Channel`](@ref) is full, writers (on a [`put!`](@ref) call) will block until space becomes available.
-* [`isready`](@ref) tests for the presence of any object in the channel, while [`wait`](@ref)
-  waits for an object to become available.
-* A [`Channel`](@ref) is in an open state initially. This means that it can be read from and written to
-  freely via [`take!`](@ref) and [`put!`](@ref) calls. [`close`](@ref) closes a [`Channel`](@ref).
-  On a closed [`Channel`](@ref), [`put!`](@ref) will fail. For example:
+  * Channels are created via the `Channel{T}(sz)` constructor. The channel will only hold objects
+    of type `T`. If the type is not specified, the channel can hold objects of any type. `sz` refers
+    to the maximum number of elements that can be held in the channel at any time. For example, `Channel(32)`
+    creates a channel that can hold a maximum of 32 objects of any type. A `Channel{MyType}(64)` can
+    hold up to 64 objects of `MyType` at any time.
+  * If a [`Channel`](@ref) is empty, readers (on a [`take!`](@ref) call) will block until data is available.
+  * If a [`Channel`](@ref) is full, writers (on a [`put!`](@ref) call) will block until space becomes available.
+  * [`isready`](@ref) tests for the presence of any object in the channel, while [`wait`](@ref)
+    waits for an object to become available.
+  * A [`Channel`](@ref) is in an open state initially. This means that it can be read from and written to
+    freely via [`take!`](@ref) and [`put!`](@ref) calls. [`close`](@ref) closes a [`Channel`](@ref).
+    On a closed [`Channel`](@ref), [`put!`](@ref) will fail. For example:
 
-```julia-repl
-julia> c = Channel(2);
+    ```julia-repl
+    julia> c = Channel(2);
 
-julia> put!(c, 1) # `put!` on an open channel succeeds
-1
+    julia> put!(c, 1) # `put!` on an open channel succeeds
+    1
 
-julia> close(c);
+    julia> close(c);
 
-julia> put!(c, 2) # `put!` on a closed channel throws an exception.
-ERROR: InvalidStateException("Channel is closed.",:closed)
-Stacktrace:
-[...]
-```
+    julia> put!(c, 2) # `put!` on a closed channel throws an exception.
+    ERROR: InvalidStateException("Channel is closed.",:closed)
+    Stacktrace:
+    [...]
+    ```
 
   * [`take!`](@ref) and [`fetch`](@ref) (which retrieves but does not remove the value) on a closed
     channel successfully return any existing values until it is emptied. Continuing the above example:
 
-```julia-repl
-julia> fetch(c) # Any number of `fetch` calls succeed.
-1
+    ```julia-repl
+    julia> fetch(c) # Any number of `fetch` calls succeed.
+    1
 
-julia> fetch(c)
-1
+    julia> fetch(c)
+    1
 
-julia> take!(c) # The first `take!` removes the value.
-1
+    julia> take!(c) # The first `take!` removes the value.
+    1
 
-julia> take!(c) # No more data available on a closed channel.
-ERROR: InvalidStateException("Channel is closed.",:closed)
-Stacktrace:
-[...]
-```
+    julia> take!(c) # No more data available on a closed channel.
+    ERROR: InvalidStateException("Channel is closed.",:closed)
+    Stacktrace:
+    [...]
+    ```
 
 A `Channel` can be used as an iterable object in a `for` loop, in which case the loop runs as
 long as the `Channel` has data or is open. The loop variable takes on all values added to the
@@ -216,7 +216,7 @@ executed sequentially on a single OS thread. Future versions of Julia may suppor
 tasks on multiple threads, in which case compute bound tasks will see benefits of parallel execution
 too.
 
-# Multi-Threading (Experimental)
+# [Multi-Threading (Experimental)](@id man-multithreading)
 
 In addition to tasks Julia forwards natively supports multi-threading.
 Note that this section is experimental and the interfaces may change in the future.
@@ -638,7 +638,7 @@ the same time.
 
 
 
-## Code Availability and Loading Packages
+## [Code Availability and Loading Packages](@id code-availability)
 
 Your code must be available on any process that runs it. For example, type the following into
 the Julia prompt:

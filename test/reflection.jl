@@ -332,13 +332,13 @@ function g15714(array_var15714)
         array_var15714[index_var15714] += 0
     end
     let index_var15714
-        for index_var15714 in eachindex(array_var15714)
+        for outer index_var15714 in eachindex(array_var15714)
             array_var15714[index_var15714] += 0
         end
         index_var15714
     end
     let index_var15714
-        for index_var15714 in eachindex(array_var15714)
+        for outer index_var15714 in eachindex(array_var15714)
             array_var15714[index_var15714] += 0
         end
         index_var15714
@@ -350,11 +350,11 @@ import InteractiveUtils.code_warntype
 used_dup_var_tested15714 = false
 used_unique_var_tested15714 = false
 function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types), must_used_vars)
-    src, rettype = code_typed(f, types)[1]
+    src, rettype = code_typed(f, types, optimize=false)[1]
     dupnames = Set()
     slotnames = Set()
     for name in src.slotnames
-        if name in slotnames
+        if name in slotnames || name === Symbol("")
             push!(dupnames, name)
         else
             push!(slotnames, name)
@@ -368,7 +368,7 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
     for sym in must_used_vars
         must_used_checked[sym] = false
     end
-    for str in (sprint(code_warntype, f, types),
+    for str in (sprint(io -> code_warntype(io, f, types, optimize=false)),
                 repr("text/plain", src))
         for var in must_used_vars
             @test occursin(string(var), str)
@@ -410,9 +410,9 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
     end
 end
 test_typed_ast_printing(f15714, Tuple{Vector{Float32}},
-                        [:array_var15714])
+                        [:array_var15714,  :index_var15714])
 test_typed_ast_printing(g15714, Tuple{Vector{Float32}},
-                        [:array_var15714])
+                        [:array_var15714,  :index_var15714])
 #This test doesn't work with the new optimizer because we drop slotnames
 #We may want to test it against debug info eventually
 #@test used_dup_var_tested15715
@@ -820,6 +820,12 @@ end
 @test !hasmethod(g, Tuple{}, (:a, :b, :c, :d))
 @test hasmethod(h, Tuple{}, (:a, :b, :c, :d))
 end
+
+# issue #31353
+function f31353(f, x::Array{<:Dict})
+end
+@test  hasmethod(f31353, Tuple{Any, Array{D}} where D<:Dict)
+@test !hasmethod(f31353, Tuple{Any, Array{D}} where D<:AbstractDict)
 
 # issue #26267
 module M26267

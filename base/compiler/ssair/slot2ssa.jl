@@ -45,7 +45,7 @@ end
 
 @inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id : (s::TypedSlot).id
 function scan_slot_def_use(nargs::Int, ci::CodeInfo, code::Vector{Any})
-    nslots = length(ci.slotnames)
+    nslots = length(ci.slotflags)
     result = SlotInfo[SlotInfo() for i = 1:nslots]
     # Set defs for arguments
     for var in result[1:(1+nargs)]
@@ -580,13 +580,13 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
         end
     end
 
-    exc_handlers = IdDict{Int, Int}()
+    exc_handlers = IdDict{Int, Tuple{Int, Int}}()
     # Record the correct exception handler for all cricitcal sections
     for (enter_block, exc) in catch_entry_blocks
-        exc_handlers[enter_block+1] = exc
+        exc_handlers[enter_block+1] = (enter_block, exc)
         # TODO: Cut off here if the terminator is a leave corresponding to this enter
         for block in dominated(domtree, enter_block+1)
-            exc_handlers[block] = exc
+            exc_handlers[block] = (enter_block, exc)
         end
     end
 
@@ -654,7 +654,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
             undef_token
         else
             SSAValue(-1)
-        end for x in 1:length(ci.slotnames)
+        end for x in 1:length(ci.slotflags)
     ]
     worklist = Tuple{Int, Int, Vector{Any}}[(1, 0, initial_incoming_vals)]
     visited = BitSet()
@@ -752,8 +752,9 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
                         code[idx] = nothing
                         incoming_vals[id] = undef_token
                     end
-                    if haskey(exc_handlers, item)
-                        exc = exc_handlers[item]
+                    eidx = item
+                    while haskey(exc_handlers, eidx)
+                        (eidx, exc) = exc_handlers[eidx]
                         cidx = findfirst(x->slot_id(x[1]) == id, phicnodes[exc])
                         if cidx !== nothing
                             node = UpsilonNode(incoming_vals[id])

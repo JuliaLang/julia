@@ -4,6 +4,7 @@
 #define JL_INTERNAL_H
 
 #include "options.h"
+#include "locks.h"
 #include <uv.h>
 #if !defined(_MSC_VER) && !defined(__MINGW32__)
 #include <unistd.h>
@@ -107,6 +108,15 @@ static inline void jl_assume_(int cond)
 #ifndef JL_USE_IFUNC
 #  define JL_USE_IFUNC 0
 #endif
+
+// If this is detected in a backtrace of segfault, it means the functions
+// that use this value must be reworked into their async form with cb arg
+// provided and with JL_UV_LOCK used around the calls
+static uv_loop_t *const unused_uv_loop_arg = (uv_loop_t *)0xBAD10;
+
+extern jl_mutex_t jl_uv_mutex;
+#define JL_UV_LOCK() JL_LOCK(&jl_uv_mutex)
+#define JL_UV_UNLOCK() JL_UNLOCK(&jl_uv_mutex)
 
 #ifdef __cplusplus
 extern "C" {
@@ -316,6 +326,8 @@ jl_svec_t *jl_perm_symsvec(size_t n, ...);
 jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz);
 JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz);
 
+JL_DLLEXPORT void JL_NORETURN jl_throw_out_of_memory_error(void);
+
 jl_code_info_t *jl_type_infer(jl_method_instance_t **pli JL_ROOTS_TEMPORARILY, size_t world, int force);
 jl_callptr_t jl_generate_fptr(jl_method_instance_t **pli, jl_llvm_functions_t decls, size_t world);
 jl_llvm_functions_t jl_compile_linfo(
@@ -441,7 +453,7 @@ jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                           jl_svec_t *sparam_vals);
 int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT;
 jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module_t *inmodule);
-void jl_linenumber_to_lineinfo(jl_code_info_t *ci, jl_module_t *mod, jl_sym_t *name);
+void jl_linenumber_to_lineinfo(jl_code_info_t *ci, jl_value_t *name);
 
 jl_method_instance_t *jl_method_lookup(jl_methtable_t *mt JL_PROPAGATES_ROOT,
     jl_value_t **args, size_t nargs, int cache, size_t world);
@@ -488,7 +500,7 @@ void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo);
 void jl_init_root_task(void *stack_lo, void *stack_hi);
 void jl_init_serializer(void);
 void jl_gc_init(void);
-void jl_init_signal_async(void);
+void jl_init_uv(void);
 void jl_init_debuginfo(void);
 void jl_init_thread_heap(jl_ptls_t ptls);
 
@@ -500,7 +512,6 @@ extern ssize_t jl_tls_offset;
 extern const int jl_tls_elf_support;
 void jl_init_threading(void);
 void jl_start_threads(void);
-void jl_shutdown_threading(void);
 
 // Whether the GC is running
 extern char *jl_safepoint_pages;
@@ -706,6 +717,24 @@ void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFEPOINT;
 // Returns time in nanosec
 JL_DLLEXPORT uint64_t jl_hrtime(void);
 
+// congruential random number generator
+// for a small amount of thread-local randomness
+// we could just use libc:`rand()`, but we want to ensure this is fast
+STATIC_INLINE void seed_cong(uint64_t *seed)
+{
+    *seed = rand();
+}
+STATIC_INLINE void unbias_cong(uint64_t max, uint64_t *unbias)
+{
+    *unbias = UINT64_MAX - ((UINT64_MAX % max) + 1);
+}
+STATIC_INLINE uint64_t cong(uint64_t max, uint64_t unbias, uint64_t *seed)
+{
+    while ((*seed = 69069 * (*seed) + 362437) > unbias)
+        ;
+    return *seed % max;
+}
+
 // libuv stuff:
 JL_DLLEXPORT extern void *jl_dl_handle;
 JL_DLLEXPORT extern void *jl_RTLD_DEFAULT_handle;
@@ -830,6 +859,8 @@ JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a);
 int jl_array_store_unboxed(jl_value_t *el_type);
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i);
+
+JL_DLLEXPORT void jl_uv_stop(uv_loop_t* loop);
 
 // -- synchronization utilities -- //
 
@@ -999,20 +1030,21 @@ extern jl_sym_t *structtype_sym;   extern jl_sym_t *foreigncall_sym;
 extern jl_sym_t *global_sym; extern jl_sym_t *list_sym;
 extern jl_sym_t *dot_sym;    extern jl_sym_t *newvar_sym;
 extern jl_sym_t *boundscheck_sym; extern jl_sym_t *inbounds_sym;
+extern jl_sym_t *aliasscope_sym; extern jl_sym_t *popaliasscope_sym;
 extern jl_sym_t *copyast_sym; extern jl_sym_t *cfunction_sym;
-extern jl_sym_t *pure_sym; extern jl_sym_t *simdloop_sym;
-extern jl_sym_t *meta_sym; extern jl_sym_t *compiler_temp_sym;
-extern jl_sym_t *inert_sym;  extern jl_sym_t *polly_sym;
-extern jl_sym_t *unused_sym; extern jl_sym_t *static_parameter_sym;
-extern jl_sym_t *inline_sym; extern jl_sym_t *noinline_sym;
-extern jl_sym_t *generated_sym; extern jl_sym_t *generated_only_sym;
-extern jl_sym_t *isdefined_sym; extern jl_sym_t *propagate_inbounds_sym;
-extern jl_sym_t *specialize_sym; extern jl_sym_t *nospecialize_sym;
-extern jl_sym_t *macrocall_sym;  extern jl_sym_t *colon_sym;
-extern jl_sym_t *hygienicscope_sym; extern jl_sym_t *escape_sym;
-extern jl_sym_t *gc_preserve_begin_sym; extern jl_sym_t *gc_preserve_end_sym;
+extern jl_sym_t *pure_sym; extern jl_sym_t *loopinfo_sym;
+extern jl_sym_t *meta_sym; extern jl_sym_t *inert_sym;
+extern jl_sym_t *polly_sym; extern jl_sym_t *unused_sym;
+extern jl_sym_t *static_parameter_sym; extern jl_sym_t *inline_sym;
+extern jl_sym_t *noinline_sym; extern jl_sym_t *generated_sym;
+extern jl_sym_t *generated_only_sym; extern jl_sym_t *isdefined_sym;
+extern jl_sym_t *propagate_inbounds_sym; extern jl_sym_t *specialize_sym;
+extern jl_sym_t *nospecialize_sym; extern jl_sym_t *macrocall_sym;
+extern jl_sym_t *colon_sym; extern jl_sym_t *hygienicscope_sym;
 extern jl_sym_t *throw_undef_if_not_sym; extern jl_sym_t *getfield_undefref_sym;
+extern jl_sym_t *gc_preserve_begin_sym; extern jl_sym_t *gc_preserve_end_sym;
 extern jl_sym_t *failed_sym; extern jl_sym_t *done_sym; extern jl_sym_t *runnable_sym;
+extern jl_sym_t *escape_sym;
 
 struct _jl_sysimg_fptrs_t;
 

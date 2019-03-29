@@ -1398,9 +1398,9 @@
                            (begin (set! a (cons `(= ,g ,(caddr x)) a))
                                   `(kw ,(cadr x) ,g)))))
                     ((eq? (car x) 'tuple)
-                     (let ((tmp (map remove-argument-side-effects (cdr x))))
-                       (set! a (revappend (apply append (map cdr tmp)) a))
-                       `(tuple ,@(map car tmp))))
+                     (let ((tmp (remove-argument-side-effects x)))
+                       (set! a (revappend (cdr tmp) a))
+                       (car tmp)))
                     (else
                      (let ((g (make-ssavalue)))
                        (begin (set! a (cons `(= ,g ,x) a))
@@ -1442,21 +1442,29 @@
 
 ;; convert `a+=b` to `a=a+b`
 (define (expand-update-operator- op op= lhs rhs declT)
-  (let ((e (remove-argument-side-effects lhs)))
-    (let ((newlhs (car e)))
-      (if (and (pair? lhs) (eq? (car lhs) 'tuple))
-          (let loop ((a (cdr newlhs))
-                     (b (cdr lhs)))
-            (if (pair? a)
-                ;; if remove-argument-side-effects needed to replace an expression with
-                ;; an ssavalue, then it can't be updated by assignment. issue #30062
-                (begin (if (and (ssavalue? (car a)) (not (ssavalue? (car b))))
-                           (error (string "invalid multiple assignment location \"" (deparse (car b)) "\"")))
-                       (loop (cdr a) (cdr b))))))
-      `(block ,@(cdr e)
-              ,(if (null? declT)
-                   `(,op= ,newlhs (call ,op ,newlhs ,rhs))
-                   `(,op= ,newlhs (call ,op (:: ,newlhs ,(car declT)) ,rhs)))))))
+  (let* ((e      (remove-argument-side-effects lhs))
+         (newlhs (car e))
+         (temp   (and (eq? op= '|.=|) (pair? newlhs) (make-ssavalue)))
+         (newlhs (if (and temp (eq? (car newlhs) 'ref))
+                     (ref-to-view newlhs)
+                     newlhs))
+         (e      (if temp
+                     (cons temp (append (cdr e) (list `(= ,temp ,newlhs))))
+                     e))
+         (newlhs (or temp newlhs)))
+    (if (and (pair? lhs) (eq? (car lhs) 'tuple))
+        (let loop ((a (cdr newlhs))
+                   (b (cdr lhs)))
+          (if (pair? a)
+              ;; if remove-argument-side-effects needed to replace an expression with
+              ;; an ssavalue, then it can't be updated by assignment. issue #30062
+              (begin (if (and (ssavalue? (car a)) (not (ssavalue? (car b))))
+                         (error (string "invalid multiple assignment location \"" (deparse (car b)) "\"")))
+                     (loop (cdr a) (cdr b))))))
+    `(block ,@(cdr e)
+            ,(if (null? declT)
+                 `(,op= ,newlhs (call ,op ,newlhs ,rhs))
+                 `(,op= ,newlhs (call ,op (:: ,newlhs ,(car declT)) ,rhs))))))
 
 (define (partially-expand-ref e)
   (let ((a    (cadr e))
@@ -1488,7 +1496,7 @@
            `(block ,@(cdr e)
                    ,(expand-update-operator op op= (car e) rhs T))))
         (else
-         (if (and (pair? lhs)
+         (if (and (pair? lhs) (eq? op= '=)
                   (not (memq (car lhs) '(|.| tuple vcat typed_hcat typed_vcat))))
              (error (string "invalid assignment location \"" (deparse lhs) "\"")))
          (expand-update-operator- op op= lhs rhs declT))))
@@ -2641,7 +2649,12 @@
 ;; where var-info-lst is a list of var-info records
 (define (analyze-vars e env captvars sp)
   (if (or (atom? e) (quoted? e))
-      e
+      (begin
+        (if (symbol? e)
+            (let ((vi (var-info-for e env)))
+              (if vi
+                  (vinfo:set-read! vi #t))))
+        e)
       (case (car e)
         ((local-def) ;; a local that we know has an assignment that dominates all usages
          (let ((vi (var-info-for (cadr e) env)))
@@ -2946,9 +2959,9 @@ f(x) = yt(x)
 
 (define lambda-opt-ignored-exprs
   (Set '(quote top core line inert local local-def unnecessary copyast
-         meta inbounds boundscheck simdloop decl
+         meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          struct_type abstract_type primitive_type thunk with-static-parameters
-         implicit-global global globalref outerref const-if-global
+         global globalref outerref const-if-global
          const null ssavalue isdefined toplevel module lambda error
          gc_preserve_begin gc_preserve_end import using export)))
 
@@ -3882,7 +3895,6 @@ f(x) = yt(x)
             ((moved-local)
              (set-car! (lam:vinfo lam) (append (car (lam:vinfo lam)) `((,(cadr e) Any 2))))
              #f)
-            ((implicit-global) #f)
             ((const)
              (if (local-in? (cadr e) lam)
                  (error (string "unsupported `const` declaration on local variable" (format-loc current-loc)))
@@ -3966,7 +3978,7 @@ f(x) = yt(x)
                s))
 
             ;; metadata expressions
-            ((line meta inbounds simdloop gc_preserve_end)
+            ((line meta inbounds loopinfo gc_preserve_end aliasscope popaliasscope)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
                (cond ((eq? (car e) 'line)
                       (set! current-loc e)

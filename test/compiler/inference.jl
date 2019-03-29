@@ -1093,7 +1093,7 @@ function get_linfo(@nospecialize(f), @nospecialize(t))
     tt = Tuple{ft, t.parameters...}
     precompile(tt)
     (ti, env) = ccall(:jl_type_intersection_with_env, Ref{Core.SimpleVector}, (Any, Any), tt, meth.sig)
-    meth = Base.func_for_method_checked(meth, tt)
+    meth = Base.func_for_method_checked(meth, tt, env)
     return ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance},
                  (Any, Any, Any, UInt), meth, tt, env, world)
 end
@@ -1338,6 +1338,26 @@ let egal_tfunc
     @test egal_tfunc(Union{Int64, Float64}, AbstractArray) === Const(false)
 end
 
+using Core.Compiler: PartialStruct, nfields_tfunc, sizeof_tfunc, sizeof_nothrow
+let PT = PartialStruct(Tuple{Int64,UInt64}, Any[Const(10, false), UInt64])
+    @test sizeof_tfunc(PT) === Const(16, false)
+    @test nfields_tfunc(PT) === Const(2, false)
+    @test sizeof_nothrow(PT) === true
+end
+@test sizeof_nothrow(Const(Tuple)) === false
+
+using Core.Compiler: typeof_tfunc
+@test typeof_tfunc(Tuple{Vararg{Int}}) == Type{Tuple{Vararg{Int,N}}} where N
+@test typeof_tfunc(Tuple{Any}) == Type{<:Tuple{Any}}
+@test typeof_tfunc(Type{Array}) === DataType
+@test typeof_tfunc(Type{<:Array}) === DataType
+@test typeof_tfunc(Array{Int}) == Type{Array{Int,N}} where N
+@test typeof_tfunc(AbstractArray{Int}) == Type{<:AbstractArray{Int,N}} where N
+@test typeof_tfunc(Union{<:T, <:Real} where T<:Complex) == Union{Type{Complex{T}} where T<:Real, Type{<:Real}}
+
+f_typeof_tfunc(x) = typeof(x)
+@test Base.return_types(f_typeof_tfunc, (Union{<:T, Int} where T<:Complex,)) == Any[Union{Type{Int}, Type{Complex{T}} where T<:Real}]
+
 function f23024(::Type{T}, ::Int) where T
     1 + 1
 end
@@ -1376,7 +1396,7 @@ let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     opt = Core.Compiler.OptimizationState(linfo, Core.Compiler.Params(world))
     # make sure the state of the properties look reasonable
     @test opt.src !== linfo.def.source
-    @test length(opt.src.slotflags) == length(opt.src.slotnames)
+    @test length(opt.src.slotflags) == linfo.def.nargs <= length(opt.src.slotnames)
     @test opt.src.ssavaluetypes isa Vector{Any}
     @test !opt.src.inferred
     @test opt.mod === Base
@@ -2216,3 +2236,78 @@ _call_rttf_test() = Core.Compiler.return_type(_rttf_test, Tuple{Any})
 
 f_with_Type_arg(::Type{T}) where {T} = T
 @test Base.return_types(f_with_Type_arg, (Any,)) == Any[Type]
+@test Base.return_types(f_with_Type_arg, (Type{Vector{T}} where T,)) == Any[Type{Vector{T}} where T]
+
+# Generated functions that only reference some of their arguments
+@inline function my_ntuple(f::F, ::Val{N}) where {F,N}
+    N::Int
+    (N >= 0) || throw(ArgumentError(string("tuple length should be ≥0, got ", N)))
+    if @generated
+        quote
+            @Base.nexprs $N i -> t_i = f(i)
+            @Base.ncall $N tuple t
+        end
+    else
+        Tuple(f(i) for i = 1:N)
+    end
+end
+call_ntuple(a, b) = my_ntuple(i->(a+b; i), Val(4))
+@test Base.return_types(call_ntuple, Tuple{Any,Any}) == [NTuple{4, Int}]
+@test length(code_typed(my_ntuple, Tuple{Any, Val{4}})) == 1
+@test_throws ErrorException code_typed(my_ntuple, Tuple{Any, Val})
+
+@generated unionall_sig_generated(::Vector{T}, b::Vector{S}) where {T, S} = :($b)
+@test length(code_typed(unionall_sig_generated, Tuple{Any, Vector{Int}})) == 1
+
+# Test that we don't limit recursions on the number of arguments, even if the
+# arguments themselves are getting more complex
+f_incr(x::Tuple, y::Tuple, args...) = f_incr((x, y), args...)
+f_incr(x::Tuple) = x
+@test @inferred(f_incr((), (), (), (), (), (), (), ())) ==
+    ((((((((), ()), ()), ()), ()), ()), ()), ())
+
+# Test PartialStruct for closures
+@noinline use30783(x) = nothing
+function foo30783(b)
+    a = 1
+    f = ()->(use30783(b); Val(a))
+    f()
+end
+@test @inferred(foo30783(2)) == Val(1)
+
+# PartialStruct tmerge
+using Core.Compiler: PartialStruct, tmerge, Const, ⊑
+struct FooPartial
+    a::Int
+    b::Int
+    c::Int
+end
+let PT1 = PartialStruct(FooPartial, Any[Const(1), Const(2), Int]),
+    PT2 = PartialStruct(FooPartial, Any[Const(1), Int, Int]),
+    PT3 = PartialStruct(FooPartial, Any[Const(1), Int, Const(3)])
+
+    @test PT1 ⊑ PT2
+    @test !(PT1 ⊑ PT3) && !(PT2 ⊑ PT1)
+    let (==) = (a, b)->(a ⊑ b && b ⊑ a)
+        @test tmerge(PT1, PT3) == PT2
+    end
+end
+
+# issue 31164
+struct NoInit31164
+    a::Int
+    b::Any
+    NoInit31164(a::Int) = new(a)
+    NoInit31164(a::Int, b) = new(a, b)
+end
+
+@eval function foo31164(b, x)
+    if b
+       a = NoInit31164(1, x)
+    else
+       a = $(NoInit31164(1))
+    end
+    return a
+end
+
+@test_nowarn code_typed(foo31164, Tuple{Bool, Int}; optimize=false)

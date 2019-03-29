@@ -84,10 +84,10 @@ argument `init` will be used exactly once. In general, it will be necessary to p
 # Examples
 ```jldoctest
 julia> foldl(=>, 1:4)
-((1=>2)=>3) => 4
+((1 => 2) => 3) => 4
 
 julia> foldl(=>, 1:4; init=0)
-(((0=>1)=>2)=>3) => 4
+(((0 => 1) => 2) => 3) => 4
 ```
 """
 foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
@@ -138,10 +138,10 @@ argument `init` will be used exactly once. In general, it will be necessary to p
 # Examples
 ```jldoctest
 julia> foldr(=>, 1:4)
-1 => (2=>(3=>4))
+1 => (2 => (3 => 4))
 
 julia> foldr(=>, 1:4; init=0)
-1 => (2=>(3=>(4=>0)))
+1 => (2 => (3 => (4 => 0)))
 ```
 """
 foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
