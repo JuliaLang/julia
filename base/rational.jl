@@ -396,7 +396,7 @@ ceil(::Type{T}, x::Rational) where {T} = convert(T,cld(x.num,x.den))
 round(::Type{T}, x::Rational, r::RoundingMode=RoundNearest) where {T} = _round_rational(T, x, r)
 round(x::Rational, r::RoundingMode) = round(Rational, x, r)
 
-function round(::Type{T}, x::Rational{Tr}, ::RoundingMode{:Nearest}) where {T,Tr}
+function round(::Type{T}, x::Rational{Tr}, ::RoundingMode{:Nearest}) where {T,Tr<:Integer}
     if denominator(x) == zero(Tr) && T <: Integer
         throw(DivideError())
     elseif denominator(x) == zero(Tr)
@@ -417,7 +417,7 @@ function round(::Type{T}, x::Rational{Bool}, ::RoundingMode=RoundNearest) where 
     convert(T, x)
 end
 
-function round(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesAway}) where {T,Tr}
+function round(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesAway}) where {T,Tr<:Integer}
     if denominator(x) == zero(Tr) && T <: Integer
         throw(DivideError())
     elseif denominator(x) == zero(Tr)
@@ -431,7 +431,7 @@ function round(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesAway}) whe
     convert(T, s)
 end
 
-function round(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesUp}) where {T,Tr}
+function round(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesUp}) where {T,Tr<:Integer}
     if denominator(x) == zero(Tr) && T <: Integer
         throw(DivideError())
     elseif denominator(x) == zero(Tr)
