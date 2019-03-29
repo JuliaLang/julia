@@ -98,7 +98,8 @@ macro horner(x, p...)
     for i = length(p)-1:-1:1
         ex = :(muladd(t, $ex, $(esc(p[i]))))
     end
-    Expr(:block, :(t = $(esc(x))), ex)
+    ex = quote local r = $ex end # structure this to add exactly one line number node for the macro
+    return Expr(:block, :(local t = $(esc(x))), ex, :r)
 end
 
 # Evaluate p[1] + z*p[2] + z^2*p[3] + ... + z^(n-1)*p[n].  This uses
@@ -393,6 +394,19 @@ atanh(x::Number)
 
 Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments. Use complex negative arguments to obtain complex results.
+
+# Examples
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
+julia> log(2)
+0.6931471805599453
+
+julia> log(-3)
+ERROR: DomainError with -3.0:
+log will only return a complex result if called with a complex argument. Try log(Complex(x)).
+Stacktrace:
+ [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
+[...]
+```
 """
 log(x::Number)
 
@@ -492,7 +506,7 @@ julia> sqrt(big(81))
 9.0
 
 julia> sqrt(big(-81))
-ERROR: DomainError with -8.1e+01:
+ERROR: DomainError with -81.0:
 NaN result for non-NaN input.
 Stacktrace:
  [1] sqrt(::BigFloat) at ./mpfr.jl:501
@@ -709,18 +723,18 @@ according to the rounding mode `r`. In other words, the quantity
 without any intermediate rounding.
 
 - if `r == RoundNearest`, then the result is exact, and in the interval
-  ``[-|y|/2, |y|/2]``.
+  ``[-|y|/2, |y|/2]``. See also [`RoundNearest`](@ref).
 
 - if `r == RoundToZero` (default), then the result is exact, and in the interval
-  ``[0, |y|)`` if `x` is positive, or ``(-|y|, 0]`` otherwise.
+  ``[0, |y|)`` if `x` is positive, or ``(-|y|, 0]`` otherwise. See also [`RoundToZero`](@ref).
 
 - if `r == RoundDown`, then the result is in the interval ``[0, y)`` if `y` is positive, or
   ``(y, 0]`` otherwise. The result may not be exact if `x` and `y` have different signs, and
-  `abs(x) < abs(y)`.
+  `abs(x) < abs(y)`. See also[`RoundDown`](@ref).
 
 - if `r == RoundUp`, then the result is in the interval `(-y,0]` if `y` is positive, or
   `[0,-y)` otherwise. The result may not be exact if `x` and `y` have the same sign, and
-  `abs(x) < abs(y)`.
+  `abs(x) < abs(y)`. See also [`RoundUp`](@ref).
 
 """
 rem(x, y, ::RoundingMode{:ToZero}) = rem(x,y)
@@ -820,14 +834,15 @@ without any intermediate rounding. This internally uses a high precision approxi
 2π, and so will give a more accurate result than `rem(x,2π,r)`
 
 - if `r == RoundNearest`, then the result is in the interval ``[-π, π]``. This will generally
-  be the most accurate result.
+  be the most accurate result. See also [`RoundNearest`](@ref).
 
 - if `r == RoundToZero`, then the result is in the interval ``[0, 2π]`` if `x` is positive,.
-  or ``[-2π, 0]`` otherwise.
+  or ``[-2π, 0]`` otherwise. See also [`RoundToZero`](@ref).
 
 - if `r == RoundDown`, then the result is in the interval ``[0, 2π]``.
-
+  See also [`RoundDown`](@ref).
 - if `r == RoundUp`, then the result is in the interval ``[-2π, 0]``.
+  See also [`RoundUp`](@ref).
 
 # Examples
 ```jldoctest
@@ -1043,6 +1058,7 @@ Return positive part of the high word of `x` as a `UInt32`.
 include("special/cbrt.jl")
 include("special/exp.jl")
 include("special/exp10.jl")
+include("special/ldexp_exp.jl")
 include("special/hyperbolic.jl")
 include("special/trig.jl")
 include("special/rem_pio2.jl")

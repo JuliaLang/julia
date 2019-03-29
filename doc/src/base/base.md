@@ -37,6 +37,22 @@ ans
 
 ## Keywords
 
+This is the list of reserved keywords in Julia:
+`baremodule`, `begin`, `break`, `catch`, `const`, `continue`, `do`,
+`else`, `elseif`, `end`, `export`, `false`, `finally`, `for`, `function`,
+`global`, `if`, `import`, `let`, `local`, `macro`, `module`, `quote`,
+`return`, `struct`, `true`, `try`, `using`, `while`.
+Those keywords are not allowed to be used as variable names.
+
+The following two-word sequences are reserved:
+`abstract type`, `mutable struct`, `primitive type`.
+However, you can create variables with names:
+`abstract`, `mutable`, `primitive` and `type`.
+
+Finally,`where` is parsed as an infix operator for writing parametric method
+and type definitions. Also `in` and `isa` are parsed as infix operators.
+Creation of a variable named `where`, `in` or `isa` is allowed though.
+
 ```@docs
 module
 export
@@ -65,13 +81,21 @@ struct
 mutable struct
 abstract type
 primitive type
+where
 ...
 ;
+=
 ```
 
-## Base Modules
+## Standard Modules
 ```@docs
-Base.Base
+Main
+Core
+Base
+```
+
+## Base Submodules
+```@docs
 Base.Broadcast
 Base.Docs
 Base.Iterators
@@ -104,6 +128,7 @@ Base.deepcopy
 Base.getproperty
 Base.setproperty!
 Base.propertynames
+Base.hasproperty
 Core.getfield
 Core.setfield!
 Core.isdefined
@@ -140,6 +165,7 @@ Base.isstructtype
 Base.nameof(::DataType)
 Base.fieldnames
 Base.fieldname
+Base.hasfield
 ```
 
 ### Memory layout
@@ -150,6 +176,7 @@ Base.isconcretetype
 Base.isbits
 Base.isbitstype
 Core.fieldtype
+Base.fieldtypes
 Base.fieldcount
 Base.fieldoffset
 Base.datatype_alignment
@@ -182,9 +209,15 @@ Core.NamedTuple
 Base.Val
 Core.Vararg
 Core.Nothing
+Base.isnothing
 Base.Some
 Base.something
+Base.Enums.Enum
 Base.Enums.@enum
+Core.Expr
+Core.Symbol
+Core.Symbol(x...)
+Core.Module
 ```
 
 ## Generic Functions
@@ -210,6 +243,7 @@ Base.evalfile
 Base.esc
 Base.@inbounds
 Base.@boundscheck
+Base.@propagate_inbounds
 Base.@inline
 Base.@noinline
 Base.@nospecialize
@@ -222,6 +256,7 @@ Base.@simd
 Base.@polly
 Base.@generated
 Base.@pure
+Base.@deprecate
 ```
 
 ## Missing Values
@@ -266,8 +301,14 @@ Base.Sys.isunix
 Base.Sys.isapple
 Base.Sys.islinux
 Base.Sys.isbsd
+Base.Sys.isfreebsd
+Base.Sys.isopenbsd
+Base.Sys.isnetbsd
+Base.Sys.isdragonfly
 Base.Sys.iswindows
 Base.Sys.windows_version
+Base.Sys.free_memory
+Base.Sys.total_memory
 Base.@static
 ```
 
@@ -286,6 +327,7 @@ Core.throw
 Base.rethrow
 Base.backtrace
 Base.catch_backtrace
+Base.catch_stack
 Base.@assert
 Base.ArgumentError
 Base.AssertionError

@@ -139,23 +139,38 @@ end
     @test iszero([Base.ndigits0z(false, b) for b in [-20:-2;2:20]])
     @test all(n -> n == 1, Base.ndigits0z(true, b) for b in [-20:-2;2:20])
     @test all(n -> n == 1, ndigits(x, base=b) for b in [-20:-2;2:20] for x in [true, false])
+
+    # issue #29148
+    @test ndigits(typemax(UInt64), base=-2) == ndigits(big(typemax(UInt64)), base=-2)
+    for T in Base.BitInteger_types
+        n = rand(T)
+        b = -rand(2:100)
+        @test ndigits(n, base=b) == ndigits(big(n), base=b)
+    end
+
 end
 @testset "bin/oct/dec/hex/bits" begin
     @test string(UInt32('3'), base = 2) == "110011"
     @test string(UInt32('3'), pad = 7, base = 2) == "0110011"
     @test string(3, base = 2) == "11"
     @test string(3, pad = 2, base = 2) == "11"
+    @test string(3, pad = Int32(2), base = Int32(2)) == "11"
     @test string(3, pad = 3, base = 2) == "011"
     @test string(-3, base = 2) == "-11"
     @test string(-3, pad = 3, base = 2) == "-011"
 
     @test string(9, base = 8) == "11"
     @test string(-9, base = 8) == "-11"
+    @test string(-9, base = 8, pad = 5) == "-00011"
+    @test string(-9, base = 8, pad = Int32(5)) == "-00011"
 
     @test string(121, base = 10) == "121"
+    @test string(121, base = 10, pad = 5) == "00121"
+    @test string(121, base = 10, pad = 5) == "00121"
 
     @test string(12, base = 16) == "c"
     @test string(-12, pad = 3, base = 16) == "-00c"
+    @test string(-12, pad = Int32(3), base = Int32(16)) == "-00c"
 
     @test string(5, pad = 7, base = 2) == "0000101"
 
@@ -168,12 +183,22 @@ end
 @testset "digits/base" begin
     @test digits(4, base = 2) == [0, 0, 1]
     @test digits(5, base = 3) == [2, 1]
+    @test digits(5, base = Int32(2), pad=Int32(3)) == [1, 0, 1]
+    @test digits(5, pad = 3) == [5, 0, 0]
+    @test digits(5, pad = Int32(3)) == [5, 0, 0]
 
     @testset "digits/base with negative bases" begin
-        @testset "digits(n::$T, base = b)" for T in (Int, UInt, BigInt, Int32)
+        @testset "digits(n::$T, base = b)" for T in (Int, UInt, BigInt, Int32, UInt32)
             @test digits(T(8163), base = -10) == [3, 4, 2, 2, 1]
             if !(T<:Unsigned)
                 @test digits(T(-8163), base = -10) == [7, 7, 9, 9]
+            end
+            if T !== BigInt
+                b = rand(-32:-2)
+                for n = T[rand(T), typemax(T), typemin(T)]
+                    # issue #29183
+                    @test digits(n, base=b) == digits(signed(widen(n)), base=b)
+                end
             end
         end
         @test [string(n, base = b)

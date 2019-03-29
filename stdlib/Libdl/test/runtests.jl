@@ -10,7 +10,7 @@ dlls = Libdl.dllist()
 @test length(dlls) > 3 # at a bare minimum, probably have some version of libstdc, libgcc, libjulia, ...
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     for dl in dlls
-        if isfile(dl) && (Libdl.dlopen_e(dl) != C_NULL)
+        if isfile(dl) && (Libdl.dlopen(dl; throw_error=false) !== nothing)
             @test Base.samefile(Libdl.dlpath(dl), dl)
         end
     end
@@ -23,7 +23,7 @@ end
 @test_throws ArgumentError Libdl.dlsym(C_NULL, :foo)
 @test_throws ArgumentError Libdl.dlsym_e(C_NULL, :foo)
 
-cd(dirname(@__FILE__)) do
+cd(@__DIR__) do
 
 # Find the library directory by finding the path of libjulia (or libjulia-debug, as the case may be)
 # and then adding on /julia to that directory path to get the private library directory, if we need
@@ -45,8 +45,8 @@ end
 # dlopen should be able to handle absolute and relative paths, with and without dlext
 let dl = C_NULL
     try
-        dl = Libdl.dlopen_e(abspath(joinpath(private_libdir, "libccalltest")))
-        @test dl != C_NULL
+        dl = Libdl.dlopen(abspath(joinpath(private_libdir, "libccalltest")); throw_error=false)
+        @test dl !== nothing
     finally
         Libdl.dlclose(dl)
     end
@@ -54,8 +54,8 @@ end
 
 let dl = C_NULL
     try
-        dl = Libdl.dlopen_e(abspath(joinpath(private_libdir, "libccalltest.$(Libdl.dlext)")))
-        @test dl != C_NULL
+        dl = Libdl.dlopen(abspath(joinpath(private_libdir, "libccalltest.$(Libdl.dlext)")); throw_error=false)
+        @test dl !== nothing
     finally
         Libdl.dlclose(dl)
     end
@@ -63,8 +63,8 @@ end
 
 let dl = C_NULL
     try
-        dl = Libdl.dlopen_e(relpath(joinpath(private_libdir, "libccalltest")))
-        @test dl != C_NULL
+        dl = Libdl.dlopen(relpath(joinpath(private_libdir, "libccalltest")); throw_error=false)
+        @test dl !== nothing
     finally
         Libdl.dlclose(dl)
     end
@@ -72,8 +72,8 @@ end
 
 let dl = C_NULL
     try
-        dl = Libdl.dlopen_e(relpath(joinpath(private_libdir, "libccalltest.$(Libdl.dlext)")))
-        @test dl != C_NULL
+        dl = Libdl.dlopen(relpath(joinpath(private_libdir, "libccalltest.$(Libdl.dlext)")); throw_error=false)
+        @test dl !== nothing
     finally
         Libdl.dlclose(dl)
     end
@@ -81,8 +81,8 @@ end
 
 let dl = C_NULL
     try
-        dl = Libdl.dlopen_e("./foo")
-        @test dl == C_NULL
+        dl = Libdl.dlopen("./foo"; throw_error=false)
+        @test dl === nothing
     finally
         Libdl.dlclose(dl)
     end
@@ -91,8 +91,8 @@ end
 # unqualified names present in DL_LOAD_PATH
 let dl = C_NULL
     try
-        dl = Libdl.dlopen_e("libccalltest")
-        @test dl != C_NULL
+        dl = Libdl.dlopen("libccalltest"; throw_error=false)
+        @test dl !== nothing
     finally
         Libdl.dlclose(dl)
     end
@@ -100,8 +100,8 @@ end
 
 let dl = C_NULL
     try
-        dl = Libdl.dlopen_e(string("libccalltest",".",Libdl.dlext))
-        @test dl != C_NULL
+        dl = Libdl.dlopen(string("libccalltest",".",Libdl.dlext); throw_error=false)
+        @test dl !== nothing
     finally
         Libdl.dlclose(dl)
     end
@@ -114,7 +114,7 @@ let dl = C_NULL,
     fpath = joinpath(tmpdir,"libccalltest")
     try
         write(open(fpath,"w"))
-        push!(Libdl.DL_LOAD_PATH, dirname(@__FILE__))
+        push!(Libdl.DL_LOAD_PATH, @__DIR__)
         push!(Libdl.DL_LOAD_PATH, dirname(fpath))
         dl = Libdl.dlopen_e("libccalltest")
         @test dl != C_NULL
@@ -134,7 +134,7 @@ let dl = C_NULL,
     try
         write(open(fpath,"w"))
         push!(Libdl.DL_LOAD_PATH, dirname(fpath))
-        push!(Libdl.DL_LOAD_PATH, dirname(@__FILE__))
+        push!(Libdl.DL_LOAD_PATH, @__DIR__)
         dl = Libdl.dlopen_e("libccalltest")
         @test dl != C_NULL
     finally
@@ -149,8 +149,8 @@ end
 let dl = C_NULL
     try
         path = abspath(joinpath(private_libdir, "libccalltest"))
-        dl = Libdl.dlopen(path)
-        @test dl != C_NULL
+        dl = Libdl.dlopen(path; throw_error=false)
+        @test dl !== nothing
         @test Base.samefile(abspath(Libdl.dlpath(dl)),
                             abspath(Libdl.dlpath(path)))
         @test Base.samefile(abspath(Libdl.dlpath(dl)),
@@ -174,7 +174,7 @@ let dl = C_NULL
     try
         dl = Libdl.dlopen(abspath(joinpath(private_libdir, "libccalltest")))
         fptr = Libdl.dlsym(dl, :set_verbose)
-        @test fptr != C_NULL
+        @test fptr !== nothing
         @test_throws ErrorException Libdl.dlsym(dl, :foo)
 
         fptr = Libdl.dlsym_e(dl, :set_verbose)
@@ -193,8 +193,8 @@ let dl = C_NULL
     @test -1 == ccall(:jl_dlclose, Cint, (Ptr{Cvoid},), dl)
     @test !Libdl.dlclose(dl)
 
-    dl = Libdl.dlopen_e("libccalltest")
-    @test dl != C_NULL
+    dl = Libdl.dlopen("libccalltest"; throw_error=false)
+    @test dl !== nothing
 
     @test Libdl.dlclose(dl)
     @test_skip !Libdl.dlclose(dl)   # Syscall doesn't fail on Win32

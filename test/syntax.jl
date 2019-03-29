@@ -346,8 +346,8 @@ let b = IOBuffer("""
                  end
                  f()
                  """)
-    @test Base.parse_input_line(b) == Expr(:let, Expr(:(=), :x, :x), Expr(:block, LineNumberNode(2, :none), :x))
-    @test Base.parse_input_line(b) == Expr(:call, :f)
+    @test Base.parse_input_line(b).args[end] == Expr(:let, Expr(:(=), :x, :x), Expr(:block, LineNumberNode(2, :none), :x))
+    @test Base.parse_input_line(b).args[end] == Expr(:call, :f)
     @test Base.parse_input_line(b) === nothing
 end
 
@@ -736,8 +736,8 @@ end
     end
 end
 
-f1_ci = code_typed(f1, (Int,))[1][1]
-f2_ci = code_typed(f2, (Int,))[1][1]
+f1_ci = code_typed(f1, (Int,), debuginfo=:source)[1][1]
+f2_ci = code_typed(f2, (Int,), debuginfo=:source)[1][1]
 
 f1_exprs = get_expr_list(f1_ci)
 f2_exprs = get_expr_list(f2_ci)
@@ -759,7 +759,7 @@ end
 @test :(x`s\`"\x\$\\`) == :(@x_cmd "s`\"\\x\\\$\\")
 
 # Check multiline command literals
-@test :(@cmd "multiline\ncommand\n") == :```
+@test Expr(:macrocall, GlobalRef(Core, Symbol("@cmd")), LineNumberNode(@__LINE__, Symbol(@__FILE__)), "multiline\ncommand\n") == :```
 multiline
 command
 ```
@@ -1328,6 +1328,8 @@ end
 @test Meta.parse("+((1,2))")   == Expr(:call, :+, Expr(:tuple, 1, 2))
 
 @test_throws ParseError("space before \"(\" not allowed in \"+ (\"") Meta.parse("1 -+ (a=1, b=2)")
+# issue #29781
+@test_throws ParseError("space before \"(\" not allowed in \"sin. (\"") Meta.parse("sin. (1)")
 
 @test Meta.parse("1 -+(a=1, b=2)") == Expr(:call, :-, 1,
                                            Expr(:call, :+, Expr(:kw, :a, 1), Expr(:kw, :b, 2)))
@@ -1502,6 +1504,12 @@ function test27710()
 end
 @test test27710() === Int64
 
+# issue #29064
+struct X29064
+    X29064::Int
+end
+@test X29064(1) isa X29064
+
 # issue #27268
 function f27268()
     g(col::AbstractArray{<:Real}) = col
@@ -1548,21 +1556,13 @@ end
 end
 @test A27807.@m()(1,1.0) === (1, 0.0)
 
-# issue #27896
-let oldstderr = stderr, newstderr, errtxt
-    try
-        newstderr = redirect_stderr()
-        @eval function foo(a::A, b::B) where {A,B}
-            B = eltype(A)
-            return convert(B, b)
-        end
-        errtxt = @async read(newstderr[1], String)
-    finally
-        redirect_stderr(oldstderr)
-        close(newstderr[2])
+# issue #27896 / #29429
+@test Meta.lower(@__MODULE__, quote
+    function foo(a::A, b::B) where {A,B}
+        B = eltype(A)
+        return convert(B, b)
     end
-    @test occursin("WARNING: local variable B conflicts with a static parameter", fetch(errtxt))
-end
+end) == Expr(:error, "local variable name \"B\" conflicts with a static parameter")
 
 # issue #28044
 code28044(x) = 10x
@@ -1647,6 +1647,14 @@ end
 @test Meta.isexpr(Meta.parse("1 == 2 ?"), :incomplete)
 @test Meta.isexpr(Meta.parse("1 == 2 ? 3 :"), :incomplete)
 
+# issue #28991
+eval(Expr(:toplevel,
+          Expr(:module, true, :Mod28991,
+               Expr(:block,
+                    Expr(:export, :Inner),
+                    Expr(:abstract, :Inner)))))
+@test names(Mod28991) == Symbol[:Inner, :Mod28991]
+
 # issue #28593
 macro a28593()
     quote
@@ -1673,3 +1681,161 @@ end
 @test A28593.var.name === :S
 @test B28593.var.name === :S
 @test C28593.var.name === :S
+
+# issue #25955
+macro noeffect25955(e)
+    return e
+end
+
+struct foo25955
+end
+
+@noeffect25955 function (f::foo25955)()
+    42
+end
+
+@test foo25955()() == 42
+
+# issue #28833
+macro m28833(expr)
+    esc(:(global a28833))
+end
+@m28833 1+1
+
+# issue #28900
+macro foo28900(x)
+    quote
+        $x
+    end
+end
+f28900(; kwarg) = kwarg
+let g = @foo28900 f28900(kwarg = x->2x)
+    @test g(10) == 20
+end
+
+# issue #26037
+x26037() = 10
+function test_26037()
+    [x26037() for _ in 1:3]
+    for x26037 in 1:3
+       x26037 += x26037
+    end
+end
+@test test_26037() === nothing  # no UndefVarError
+
+# range and interval operators
+@test Meta.parse("1…2") == Expr(:call, :…, 1, 2)
+@test Meta.parse("1⁝2") == Expr(:call, :⁝, 1, 2)
+@test Meta.parse("1..2") == Expr(:call, :.., 1, 2)
+# we don't parse chains of these since the associativity and meaning aren't clear
+@test_throws ParseError Meta.parse("1..2..3")
+
+# issue #30048
+@test Meta.isexpr(Meta.lower(@__MODULE__, :(for a in b
+           c = try
+               try
+                   d() do
+                       if  GC.@preserve c begin
+                           end
+                       end
+                   end
+               finally
+               end
+           finally
+           end
+       end)), :thunk)
+
+# issue #28506
+@test Meta.isexpr(Meta.parse("1,"), :incomplete)
+@test Meta.isexpr(Meta.parse("1, "), :incomplete)
+@test Meta.isexpr(Meta.parse("1,\n"), :incomplete)
+@test Meta.isexpr(Meta.parse("1, \n"), :incomplete)
+@test_throws LoadError include_string(@__MODULE__, "1,")
+@test_throws LoadError include_string(@__MODULE__, "1,\n")
+
+# issue #30062
+let er = Meta.lower(@__MODULE__, quote if false end, b+=2 end)
+    @test Meta.isexpr(er, :error)
+    @test startswith(er.args[1], "invalid multiple assignment location \"if")
+end
+
+# issue #30030
+let x = 0
+    @test (a=1, b=2, c=(x=3)) == (a=1, b=2, c=3)
+    @test x == 3
+end
+
+function captured_and_shadowed_sp(x::T) where T
+    function g()
+        (T,
+         let T = 0
+             T
+         end)
+    end
+    g()
+end
+@test captured_and_shadowed_sp(1) === (Int, 0)
+
+function capture_with_conditional_label()
+    @goto foo
+    x = 1
+    if false
+        @label foo
+    end
+    return y->x
+end
+let f = capture_with_conditional_label()  # should not throw
+    @test_throws UndefVarError(:x) f(0)
+end
+
+# `_` should not create a global (or local)
+f30656(T) = (t, _)::Pair -> t >= T
+f30656(10)(11=>1)
+@test !isdefined(@__MODULE__, :_)
+
+# issue #30772
+function f30772(a::T) where T
+    function ()
+        function (b::T)
+        end
+    end
+end
+let f = f30772(1.0), g = f()
+    @test g(1.0) === nothing
+    @test_throws MethodError g(1)
+end
+
+@test_throws ErrorException("syntax: malformed \"using\" statement")  eval(Expr(:using, :X))
+@test_throws ErrorException("syntax: malformed \"import\" statement") eval(Expr(:import, :X))
+
+# eval'ing :const exprs
+eval(Expr(:const, :_var_30877))
+@test !isdefined(@__MODULE__, :_var_30877)
+@test isconst(@__MODULE__, :_var_30877)
+
+# anonymous kw function in value position at top level
+f30926 = function (;k=0)
+    k
+end
+@test f30926(k=2) == 2
+
+if false
+elseif false
+    g30926(x) = 1
+end
+@test !isdefined(@__MODULE__, :g30926)
+
+@testset "closure conversion in testsets" begin
+    p = (2, 3, 4)
+    @test p == (2, 3, 4)
+    identity(p)
+    allocs = @allocated identity(p)
+    @test allocs == 0
+end
+
+@test_throws UndefVarError eval(Symbol(""))
+@test_throws UndefVarError eval(:(1+$(Symbol(""))))
+
+# issue #31404
+f31404(a, b; kws...) = (a, b, kws.data)
+@test f31404(+, (Type{T} where T,); optimize=false) === (+, (Type,), (optimize=false,))

@@ -55,12 +55,15 @@ uint32_t jl_module_next_counter(jl_module_t *m)
 
 JL_DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, uint8_t std_imports)
 {
+    // TODO: should we prohibit this during incremental compilation?
     jl_module_t *m = jl_new_module(name);
     JL_GC_PUSH1(&m);
-    m->parent = jl_main_module;
+    m->parent = jl_main_module; // TODO: this is a lie
     jl_gc_wb(m, m->parent);
-    if (std_imports) jl_add_standard_imports(m);
+    if (std_imports)
+        jl_add_standard_imports(m);
     JL_GC_POP();
+    // TODO: should we somehow try to gc-root this correctly?
     return (jl_value_t*)m;
 }
 
@@ -111,7 +114,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var, int 
                 b->owner = m;
             }
             else if (error) {
-                jl_errorf("cannot assign variable %s.%s from module %s",
+                jl_errorf("cannot assign a value to variable %s.%s from module %s",
                           jl_symbol_name(b->owner->name), jl_symbol_name(var), jl_symbol_name(m->name));
             }
         }
@@ -531,8 +534,11 @@ JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var, int flag)
 
 JL_DLLEXPORT int jl_is_binding_deprecated(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t *b = jl_get_binding(m, var);
-    return b && b->deprecated;
+    if (jl_binding_resolved_p(m, var)) {
+        jl_binding_t *b = jl_get_binding(m, var);
+        return b && b->deprecated;
+    }
+    return 0;
 }
 
 extern const char *jl_filename;

@@ -10,7 +10,7 @@ using .Base: copymutable, LinearIndices, length, (:),
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
-    length, resize!, fill, Missing, has_offset_axes
+    length, resize!, fill, Missing, require_one_based_indexing
 
 using .Base: >>>, !==
 
@@ -19,7 +19,6 @@ import .Base:
     sort!,
     issorted,
     sortperm,
-    Slice,
     to_indices
 
 export # also exported by Base
@@ -223,7 +222,7 @@ function searchsorted(v::AbstractVector, x, ilo::Int, ihi::Int, o::Ordering)
 end
 
 function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -233,7 +232,7 @@ function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
 end
 
 function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if step(a) == 0
         lt(o, first(a), x) ? length(a) + 1 : 1
     else
@@ -243,7 +242,7 @@ function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
 end
 
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -252,7 +251,7 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderin
 end
 
 function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if step(a) == 0
         lt(o, first(a), x) ? length(a)+1 : 1
     else
@@ -261,7 +260,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderi
 end
 
 function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if lt(o, first(a), x)
         if step(a) == 0
             length(a) + 1
@@ -274,7 +273,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOr
 end
 
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if lt(o, x, first(a))
         0
     elseif step(a) == 0
@@ -306,18 +305,20 @@ if `a` does not contain values equal to `x`.
 
 # Examples
 ```jldoctest
-julia> a = [4, 3, 2, 1]
-4-element Array{Int64,1}:
- 4
- 3
- 2
- 1
+julia> searchsorted([1, 2, 4, 5, 5, 7], 4) # single match
+3:3
 
-julia> searchsorted(a, 4)
-5:4
+julia> searchsorted([1, 2, 4, 5, 5, 7], 5) # multiple matches
+4:5
 
-julia> searchsorted(a, 4, rev=true)
-1:1
+julia> searchsorted([1, 2, 4, 5, 5, 7], 3) # no match, insert in the middle
+3:2
+
+julia> searchsorted([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
+7:6
+
+julia> searchsorted([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
+1:0
 ```
 """ searchsorted
 
@@ -330,14 +331,20 @@ specified order. Return `length(a) + 1` if `x` is greater than all values in `a`
 
 # Examples
 ```jldoctest
-julia> searchsortedfirst([1, 2, 4, 5, 14], 4)
+julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 4) # single match
 3
 
-julia> searchsortedfirst([1, 2, 4, 5, 14], 4, rev=true)
-1
+julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 5) # multiple matches
+4
 
-julia> searchsortedfirst([1, 2, 4, 5, 14], 15)
-6
+julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 3) # no match, insert in the middle
+3
+
+julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
+7
+
+julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
+1
 ```
 """ searchsortedfirst
 
@@ -350,13 +357,19 @@ be sorted.
 
 # Examples
 ```jldoctest
-julia> searchsortedlast([1, 2, 4, 5, 14], 4)
+julia> searchsortedlast([1, 2, 4, 5, 5, 7], 4) # single match
 3
 
-julia> searchsortedlast([1, 2, 4, 5, 14], 4, rev=true)
+julia> searchsortedlast([1, 2, 4, 5, 5, 7], 5) # multiple matches
 5
 
-julia> searchsortedlast([1, 2, 4, 5, 14], -1)
+julia> searchsortedlast([1, 2, 4, 5, 5, 7], 3) # no match, insert in the middle
+2
+
+julia> searchsortedlast([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
+6
+
+julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 0
 ```
 """ searchsortedlast
@@ -477,26 +490,22 @@ end
     @inbounds begin
         mi = (lo+hi)>>>1
 
-        # sort the values in v[lo], v[mi], v[hi]
-
-        if lt(o, v[mi], v[lo])
+        # sort v[mi] <= v[lo] <= v[hi] such that the pivot is immediately in place
+        if lt(o, v[lo], v[mi])
             v[mi], v[lo] = v[lo], v[mi]
         end
-        if lt(o, v[hi], v[mi])
-            if lt(o, v[hi], v[lo])
-                v[lo], v[mi], v[hi] = v[hi], v[lo], v[mi]
+
+        if lt(o, v[hi], v[lo])
+            if lt(o, v[hi], v[mi])
+                v[hi], v[lo], v[mi] = v[lo], v[mi], v[hi]
             else
-                v[hi], v[mi] = v[mi], v[hi]
+                v[hi], v[lo] = v[lo], v[hi]
             end
         end
 
-        # move v[mi] to v[lo] and use it as the pivot
-        v[lo], v[mi] = v[mi], v[lo]
-        pivot = v[lo]
+        # return the pivot
+        return v[lo]
     end
-
-    # return the pivot
-    return pivot
 end
 
 # partition!
@@ -938,6 +947,8 @@ Sort a multidimensional array `A` along the given dimension.
 See [`sort!`](@ref) for a description of possible
 keyword arguments.
 
+To sort slices of an array, refer to [`sortslices`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [4 3; 1 2]
@@ -985,6 +996,56 @@ end
         sort!(Av, s, s+n-1, alg, order)
     end
     Av
+end
+
+"""
+    sort!(A; dims::Integer, alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+
+Sort the multidimensional array `A` along dimension `dims`.
+See [`sort!`](@ref) for a description of possible keyword arguments.
+
+To sort slices of an array, refer to [`sortslices`](@ref).
+
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1.
+
+# Examples
+```jldoctest
+julia> A = [4 3; 1 2]
+2×2 Array{Int64,2}:
+ 4  3
+ 1  2
+
+julia> sort!(A, dims = 1); A
+2×2 Array{Int64,2}:
+ 1  2
+ 4  3
+
+julia> sort!(A, dims = 2); A
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+```
+"""
+function sort!(A::AbstractArray;
+               dims::Integer,
+               alg::Algorithm=defalg(A),
+               lt=isless,
+               by=identity,
+               rev::Union{Bool,Nothing}=nothing,
+               order::Ordering=Forward)
+    ordr = ord(lt, by, rev, order)
+    nd = ndims(A)
+    k = dims
+
+    1 <= k <= nd || throw(ArgumentError("dimension out of range"))
+
+    remdims = ntuple(i -> i == k ? 1 : size(A, i), nd)
+    for idx in CartesianIndices(remdims)
+        Av = view(A, ntuple(i -> i == k ? Colon() : idx[i], nd)...)
+        sort!(Av, alg, ordr)
+    end
+    A
 end
 
 ## fast clever sorting for floats ##

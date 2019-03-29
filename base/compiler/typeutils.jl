@@ -5,9 +5,10 @@
 #####################
 
 function rewrap(@nospecialize(t), @nospecialize(u))
-    isa(t, Const) && return t
-    isa(t, Conditional) && return t
-    return rewrap_unionall(t, u)
+    if isa(t, TypeVar) || isa(t, Type)
+        return rewrap_unionall(t, u)
+    end
+    return t
 end
 
 isType(@nospecialize t) = isa(t, DataType) && t.name === _TYPE_NAME
@@ -29,6 +30,11 @@ function issingletontype(@nospecialize t)
         return _all(issingletontype, t.parameters)
     end
     return false
+end
+
+function has_nontrivial_const_info(@nospecialize t)
+    isa(t, PartialStruct) && return true
+    return isa(t, Const) && !isdefined(typeof(t.val), :instance) && !(isa(t.val, Type) && issingletontype(t.val))
 end
 
 # Subtyping currently intentionally answers certain queries incorrectly for kind types. For
@@ -140,10 +146,13 @@ end
 
 # unioncomplexity estimates the number of calls to `tmerge` to obtain the given type by
 # counting the Union instances, taking also into account those hidden in a Tuple or UnionAll
-unioncomplexity(u::Union) = 1 + unioncomplexity(u.a) + unioncomplexity(u.b)
+function unioncomplexity(u::Union)
+    inner = max(unioncomplexity(u.a), unioncomplexity(u.b))
+    return inner == 0 ? 0 : 1 + inner
+end
 function unioncomplexity(t::DataType)
     t.name === Tuple.name || return 0
-    c = 0
+    c = 1
     for ti in t.parameters
         ci = unioncomplexity(ti)
         if ci > c
@@ -154,3 +163,12 @@ function unioncomplexity(t::DataType)
 end
 unioncomplexity(u::UnionAll) = max(unioncomplexity(u.body), unioncomplexity(u.var.ub))
 unioncomplexity(@nospecialize(x)) = 0
+
+function improvable_via_constant_propagation(@nospecialize(t))
+    if isconcretetype(t) && t <: Tuple
+        for p in t.parameters
+            p === DataType && return true
+        end
+    end
+    return false
+end

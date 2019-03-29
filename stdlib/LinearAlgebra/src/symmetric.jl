@@ -6,7 +6,7 @@ struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
     uplo::Char
 
     function Symmetric{T,S}(data, uplo) where {T,S<:AbstractMatrix{<:T}}
-        @assert !has_offset_axes(data)
+        require_one_based_indexing(data)
         new{T,S}(data, uplo)
     end
 end
@@ -81,7 +81,7 @@ struct Hermitian{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
     uplo::Char
 
     function Hermitian{T,S}(data, uplo) where {T,S<:AbstractMatrix{<:T}}
-        @assert !has_offset_axes(data)
+        require_one_based_indexing(data)
         new{T,S}(data, uplo)
     end
 end
@@ -162,10 +162,15 @@ for (S, H) in ((:Symmetric, :Hermitian), (:Hermitian, :Symmetric))
                 throw(ArgumentError("Cannot construct $($S); uplo doesn't match"))
             end
         end
-        $S(A::$H) = $S(A.data, Symbol(A.uplo))
+        $S(A::$H) = $S(A, sym_uplo(A.uplo))
         function $S(A::$H, uplo::Symbol)
             if A.uplo == char_uplo(uplo)
-                return $S(A.data, Symbol(A.uplo))
+                if $H === Hermitian && !(eltype(A) <: Real) &&
+                    any(!isreal, A.data[i] for i in diagind(A.data))
+
+                    throw(ArgumentError("Cannot construct $($S)($($H))); diagonal contains complex values"))
+                end
+                return $S(A.data, sym_uplo(A.uplo))
             else
                 throw(ArgumentError("Cannot construct $($S); uplo doesn't match"))
             end
@@ -176,7 +181,8 @@ end
 convert(T::Type{<:Symmetric}, m::Union{Symmetric,Hermitian}) = m isa T ? m : T(m)
 convert(T::Type{<:Hermitian}, m::Union{Symmetric,Hermitian}) = m isa T ? m : T(m)
 
-const HermOrSym{T,S} = Union{Hermitian{T,S}, Symmetric{T,S}}
+const HermOrSym{T,        S} = Union{Hermitian{T,S}, Symmetric{T,S}}
+const RealHermSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}}
 const RealHermSymComplexHerm{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}
 const RealHermSymComplexSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Symmetric{Complex{T},S}}
 
@@ -185,7 +191,7 @@ size(A::HermOrSym) = size(A.data)
 @inline function getindex(A::Symmetric, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
     @inbounds if i == j
-        return symmetric(A.data[i, j], Symbol(A.uplo))::symmetric_type(eltype(A.data))
+        return symmetric(A.data[i, j], sym_uplo(A.uplo))::symmetric_type(eltype(A.data))
     elseif (A.uplo == 'U') == (i < j)
         return A.data[i, j]
     else
@@ -195,7 +201,7 @@ end
 @inline function getindex(A::Hermitian, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
     @inbounds if i == j
-        return hermitian(A.data[i, j], Symbol(A.uplo))::hermitian_type(eltype(A.data))
+        return hermitian(A.data[i, j], sym_uplo(A.uplo))::hermitian_type(eltype(A.data))
     elseif (A.uplo == 'U') == (i < j)
         return A.data[i, j]
     else
@@ -236,14 +242,14 @@ similar(A::Union{Symmetric,Hermitian}, ::Type{T}, dims::Dims{N}) where {T,N} = s
 function Matrix(A::Symmetric)
     B = copytri!(convert(Matrix, copy(A.data)), A.uplo)
     for i = 1:size(A, 1)
-        B[i,i] = symmetric(B[i,i], Symbol(A.uplo))::symmetric_type(eltype(A.data))
+        B[i,i] = symmetric(A[i,i], sym_uplo(A.uplo))::symmetric_type(eltype(A.data))
     end
     return B
 end
 function Matrix(A::Hermitian)
     B = copytri!(convert(Matrix, copy(A.data)), A.uplo, true)
     for i = 1:size(A, 1)
-        B[i,i] = hermitian(B[i,i], Symbol(A.uplo))::hermitian_type(eltype(A.data))
+        B[i,i] = hermitian(A[i,i], sym_uplo(A.uplo))::hermitian_type(eltype(A.data))
     end
     return B
 end
@@ -252,10 +258,10 @@ Array(A::Union{Symmetric,Hermitian}) = convert(Matrix, A)
 parent(A::HermOrSym) = A.data
 Symmetric{T,S}(A::Symmetric{T,S}) where {T,S<:AbstractMatrix} = A
 Symmetric{T,S}(A::Symmetric) where {T,S<:AbstractMatrix} = Symmetric{T,S}(convert(S,A.data),A.uplo)
-AbstractMatrix{T}(A::Symmetric) where {T} = Symmetric(convert(AbstractMatrix{T}, A.data), Symbol(A.uplo))
+AbstractMatrix{T}(A::Symmetric) where {T} = Symmetric(convert(AbstractMatrix{T}, A.data), sym_uplo(A.uplo))
 Hermitian{T,S}(A::Hermitian{T,S}) where {T,S<:AbstractMatrix} = A
 Hermitian{T,S}(A::Hermitian) where {T,S<:AbstractMatrix} = Hermitian{T,S}(convert(S,A.data),A.uplo)
-AbstractMatrix{T}(A::Hermitian) where {T} = Hermitian(convert(AbstractMatrix{T}, A.data), Symbol(A.uplo))
+AbstractMatrix{T}(A::Hermitian) where {T} = Hermitian(convert(AbstractMatrix{T}, A.data), sym_uplo(A.uplo))
 
 copy(A::Symmetric{T,S}) where {T,S} = (B = copy(A.data); Symmetric{T,typeof(B)}(B,A.uplo))
 copy(A::Hermitian{T,S}) where {T,S} = (B = copy(A.data); Hermitian{T,typeof(B)}(B,A.uplo))
@@ -329,6 +335,12 @@ transpose(A::Hermitian{<:Real}) = A
 adjoint(A::Symmetric) = Adjoint(A)
 transpose(A::Hermitian) = Transpose(A)
 
+real(A::Symmetric{<:Real}) = A
+real(A::Hermitian{<:Real}) = A
+real(A::Symmetric) = Symmetric(real(A.data), sym_uplo(A.uplo))
+real(A::Hermitian) = Hermitian(real(A.data), sym_uplo(A.uplo))
+imag(A::Symmetric) = Symmetric(imag(A.data), sym_uplo(A.uplo))
+
 Base.copy(A::Adjoint{<:Any,<:Hermitian}) = copy(A.parent)
 Base.copy(A::Transpose{<:Any,<:Symmetric}) = copy(A.parent)
 Base.copy(A::Adjoint{<:Any,<:Symmetric}) =
@@ -393,6 +405,14 @@ end
 (-)(A::Symmetric{Tv,S}) where {Tv,S} = Symmetric{Tv,S}(-A.data, A.uplo)
 (-)(A::Hermitian{Tv,S}) where {Tv,S} = Hermitian{Tv,S}(-A.data, A.uplo)
 
+## Addition/subtraction
+for f in (:+, :-)
+    @eval $f(A::Symmetric, B::Symmetric) = Symmetric($f(A.data, B), sym_uplo(A.uplo))
+    @eval $f(A::Hermitian, B::Hermitian) = Hermitian($f(A.data, B), sym_uplo(A.uplo))
+    @eval $f(A::Hermitian, B::Symmetric{<:Real}) = Hermitian($f(A.data, B), sym_uplo(A.uplo))
+    @eval $f(A::Symmetric{<:Real}, B::Hermitian) = Hermitian($f(A.data, B), sym_uplo(A.uplo))
+end
+
 ## Matvec
 mul!(y::StridedVector{T}, A::Symmetric{T,<:StridedMatrix}, x::StridedVector{T}) where {T<:BlasFloat} =
     BLAS.symv!(A.uplo, one(T), A.data, x, zero(T), y)
@@ -427,11 +447,17 @@ mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix}) 
 *(A::AbstractMatrix, adjB::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * adjB.parent
 
 # ambiguities with transposed AbstractMatrix methods in linalg/matmul.jl
+*(transA::Transpose{<:Any,<:RealHermSym}, transB::Transpose{<:Any,<:RealHermSym}) = transA * transB.parent
+*(transA::Transpose{<:Any,<:RealHermSym}, transB::Transpose{<:Any,<:RealHermSymComplexSym}) = transA * transB.parent
 *(transA::Transpose{<:Any,<:RealHermSymComplexSym}, transB::Transpose{<:Any,<:RealHermSymComplexSym}) = transA.parent * transB.parent
+*(transA::Transpose{<:Any,<:RealHermSymComplexSym}, transB::Transpose{<:Any,<:RealHermSym}) = transA.parent * transB
 *(transA::Transpose{<:Any,<:RealHermSymComplexSym}, transB::Transpose{<:Any,<:RealHermSymComplexHerm}) = transA.parent * transB
 *(transA::Transpose{<:Any,<:RealHermSymComplexHerm}, transB::Transpose{<:Any,<:RealHermSymComplexSym}) = transA * transB.parent
+*(adjA::Adjoint{<:Any,<:RealHermSym}, adjB::Adjoint{<:Any,<:RealHermSym}) = adjA * adjB.parent
 *(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, adjB::Adjoint{<:Any,<:RealHermSymComplexHerm}) = adjA.parent * adjB.parent
+*(adjA::Adjoint{<:Any,<:RealHermSym}, adjB::Adjoint{<:Any,<:RealHermSymComplexHerm}) = adjA * adjB.parent
 *(adjA::Adjoint{<:Any,<:RealHermSymComplexSym}, adjB::Adjoint{<:Any,<:RealHermSymComplexHerm}) = adjA * adjB.parent
+*(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, adjB::Adjoint{<:Any,<:RealHermSym}) = adjA.parent * adjB
 *(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, adjB::Adjoint{<:Any,<:RealHermSymComplexSym}) = adjA.parent * adjB
 
 # ambiguities with AbstractTriangular
@@ -440,12 +466,13 @@ mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix}) 
 *(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::AbstractTriangular) = adjA.parent * B
 *(A::AbstractTriangular, adjB::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * adjB.parent
 
-for T in (:Symmetric, :Hermitian), op in (:*, :/)
-    # Deal with an ambiguous case
-    @eval ($op)(A::$T, x::Bool) = ($T)(($op)(A.data, x), Symbol(A.uplo))
-    S = T == :Hermitian ? :Real : :Number
-    @eval ($op)(A::$T, x::$S) = ($T)(($op)(A.data, x), Symbol(A.uplo))
-end
+# Scaling with Number
+*(A::Symmetric, x::Number) = Symmetric(A.data*x, sym_uplo(A.uplo))
+*(x::Number, A::Symmetric) = Symmetric(x*A.data, sym_uplo(A.uplo))
+*(A::Hermitian, x::Real) = Hermitian(A.data*x, sym_uplo(A.uplo))
+*(x::Real, A::Hermitian) = Hermitian(x*A.data, sym_uplo(A.uplo))
+/(A::Symmetric, x::Number) = Symmetric(A.data/x, sym_uplo(A.uplo))
+/(A::Hermitian, x::Real) = Hermitian(A.data/x, sym_uplo(A.uplo))
 
 function factorize(A::HermOrSym{T}) where T
     TT = typeof(sqrt(oneunit(T)))
@@ -481,15 +508,15 @@ function _inv(A::HermOrSym)
     end
     B
 end
-inv(A::Hermitian{<:Any,<:StridedMatrix}) = Hermitian(_inv(A), Symbol(A.uplo))
-inv(A::Symmetric{<:Any,<:StridedMatrix}) = Symmetric(_inv(A), Symbol(A.uplo))
+inv(A::Hermitian{<:Any,<:StridedMatrix}) = Hermitian(_inv(A), sym_uplo(A.uplo))
+inv(A::Symmetric{<:Any,<:StridedMatrix}) = Symmetric(_inv(A), sym_uplo(A.uplo))
 
-eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)...)
+eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) = Eigen(sorteig!(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)..., sortby)...)
 
-function eigen(A::RealHermSymComplexHerm)
+function eigen(A::RealHermSymComplexHerm; sortby::Union{Function,Nothing}=nothing)
     T = eltype(A)
     S = eigtype(T)
-    eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A))
+    eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), sortby=sortby)
 end
 
 eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange) = Eigen(LAPACK.syevr!('V', 'I', A.uplo, A.data, 0.0, 0.0, irange.start, irange.stop, -1.0)...)
@@ -634,13 +661,13 @@ end
 eigmax(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}) = eigvals(A, size(A, 1):size(A, 1))[1]
 eigmin(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}) = eigvals(A, 1:1)[1]
 
-function eigen!(A::HermOrSym{T,S}, B::HermOrSym{T,S}) where {T<:BlasReal,S<:StridedMatrix}
+function eigen!(A::HermOrSym{T,S}, B::HermOrSym{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasReal,S<:StridedMatrix}
     vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))
-    GeneralizedEigen(vals, vecs)
+    GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
-function eigen!(A::Hermitian{T,S}, B::Hermitian{T,S}) where {T<:BlasComplex,S<:StridedMatrix}
+function eigen!(A::Hermitian{T,S}, B::Hermitian{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasComplex,S<:StridedMatrix}
     vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))
-    GeneralizedEigen(vals, vecs)
+    GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
 
 eigvals!(A::HermOrSym{T,S}, B::HermOrSym{T,S}) where {T<:BlasReal,S<:StridedMatrix} =

@@ -4,7 +4,6 @@
 
 ## BLAS cutoff threshold constants
 
-const SCAL_CUTOFF = 2048
 #TODO const DOT_CUTOFF = 128
 const ASUM_CUTOFF = 32
 const NRM2_CUTOFF = 32
@@ -13,27 +12,6 @@ const NRM2_CUTOFF = 32
 # L1 cache: 32K, L2 cache: 256K, L3 cache: 6144K
 # This constant should ideally be determined by the actual CPU cache size
 const ISONE_CUTOFF = 2^21 # 2M
-
-function rmul!(X::Array{T}, s::T) where T<:BlasFloat
-    s == 0 && return fill!(X, zero(T))
-    s == 1 && return X
-    if length(X) < SCAL_CUTOFF
-        generic_rmul!(X, s)
-    else
-        BLAS.scal!(length(X), s, X, 1)
-    end
-    X
-end
-
-lmul!(s::T, X::Array{T}) where {T<:BlasFloat} = rmul!(X, s)
-
-rmul!(X::Array{T}, s::Number) where {T<:BlasFloat} = rmul!(X, convert(T, s))
-function rmul!(X::Array{T}, s::Real) where T<:BlasComplex
-    R = typeof(real(zero(T)))
-    GC.@preserve X BLAS.scal!(2*length(X), convert(R,s), convert(Ptr{R},pointer(X)), 1)
-    X
-end
-
 
 function isone(A::StridedMatrix)
     m, n = size(A)
@@ -114,22 +92,6 @@ isposdef(A::AbstractMatrix) =
     ishermitian(A) && isposdef(cholesky(Hermitian(A); check = false))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
-# the definition of strides for Array{T,N} is tuple() if N = 0, otherwise it is
-# a tuple containing 1 and a cumulative product of the first N-1 sizes
-# this definition is also used for StridedReshapedArray and StridedReinterpretedArray
-# which have the same memory storage as Array
-function stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, i::Int)
-    if i > ndims(a)
-        return length(a)
-    end
-    s = 1
-    for n = 1:(i-1)
-        s *= size(a, n)
-    end
-    return s
-end
-strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
-
 function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasFloat,TI<:Integer}
     if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError(x, rx))
@@ -169,9 +131,9 @@ julia> triu!(M, 1)
 ```
 """
 function triu!(M::AbstractMatrix, k::Integer)
-    @assert !has_offset_axes(M)
+    require_one_based_indexing(M)
     m, n = size(M)
-    for j in 1:min(n, n + k)
+    for j in 1:min(n, m + k)
         for i in max(1, j - k + 1):m
             M[i,j] = zero(M[i,j])
         end
@@ -207,7 +169,7 @@ julia> tril!(M, 2)
 ```
 """
 function tril!(M::AbstractMatrix, k::Integer)
-    @assert !has_offset_axes(M)
+    require_one_based_indexing(M)
     m, n = size(M)
     for j in max(1, k + 1):n
         @inbounds for i in 1:min(j - k - 1, m)
@@ -224,7 +186,7 @@ tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 Fill the band between diagonals `l` and `u` with the value `x`.
 """
 function fillband!(A::AbstractMatrix{T}, x, l, u) where T
-    @assert !has_offset_axes(A)
+    require_one_based_indexing(A)
     m, n = size(A)
     xT = convert(T, x)
     for j in 1:n
@@ -256,7 +218,7 @@ julia> diagind(A,-1)
 ```
 """
 function diagind(A::AbstractMatrix, k::Integer=0)
-    @assert !has_offset_axes(A)
+    require_one_based_indexing(A)
     diagind(size(A,1), size(A,2), k)
 end
 
@@ -329,6 +291,21 @@ function diagm_container(kv::Pair{<:Integer,<:BitVector}...)
     return falses(n, n)
 end
 
+"""
+    diagm(v::AbstractVector)
+
+Construct a square matrix with elements of the vector as diagonal elements.
+
+# Examples
+```jldoctest
+julia> diagm([1,2,3])
+3×3 Array{Int64,2}:
+ 1  0  0
+ 0  2  0
+ 0  0  3
+```
+"""
+diagm(v::AbstractVector) = diagm(0 => v)
 
 function tr(A::Matrix{T}) where T
     n = checksquare(A)
@@ -365,14 +342,13 @@ julia> kron(A, B)
 ```
 """
 function kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
-    @assert !has_offset_axes(a, b)
+    require_one_based_indexing(a, b)
     R = Matrix{promote_op(*,T,S)}(undef, size(a,1)*size(b,1), size(a,2)*size(b,2))
-    m = 1
-    for j = 1:size(a,2), l = 1:size(b,2), i = 1:size(a,1)
+    m = 0
+    @inbounds for j = 1:size(a,2), l = 1:size(b,2), i = 1:size(a,1)
         aij = a[i,j]
         for k = 1:size(b,1)
-            R[m] = aij*b[k,l]
-            m += 1
+            R[m += 1] = aij*b[k,l]
         end
     end
     R
@@ -455,6 +431,20 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     # Otherwise, use Schur decomposition
     return schurpow(A, p)
 end
+
+"""
+    ^(A::AbstractMatrix, p::Number)
+
+Matrix power, equivalent to ``\\exp(p\\log(A))``
+
+# Examples
+```jldoctest
+julia> [1 2; 0 3]^3
+2×2 Array{Int64,2}:
+ 1  26
+ 0  27
+```
+"""
 (^)(A::AbstractMatrix, p::Number) = exp(p*log(A))
 
 # Matrix exponential
@@ -488,6 +478,32 @@ julia> exp(A)
 """
 exp(A::StridedMatrix{<:BlasFloat}) = exp!(copy(A))
 exp(A::StridedMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
+
+"""
+    ^(b::Number, A::AbstractMatrix)
+
+Matrix exponential, equivalent to ``\\exp(\\log(b)A)``.
+
+!!! compat "Julia 1.1"
+    Support for raising `Irrational` numbers (like `ℯ`)
+    to a matrix was added in Julia 1.1.
+
+# Examples
+```jldoctest
+julia> 2^[1 2; 0 3]
+2×2 Array{Float64,2}:
+ 2.0  6.0
+ 0.0  8.0
+
+julia> ℯ^[1 2; 0 3]
+2×2 Array{Float64,2}:
+ 2.71828  17.3673
+ 0.0      20.0855
+```
+"""
+Base.:^(b::Number, A::AbstractMatrix) = exp!(log(b)*A)
+# method for ℯ to explicitly elide the log(b) multiplication
+Base.:^(::Irrational{:ℯ}, A::AbstractMatrix) = exp(A)
 
 ## Destructive matrix exponential using algorithm from Higham, 2008,
 ## "Functions of Matrices: Theory and Computation", SIAM
@@ -541,10 +557,10 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         A2 = A * A
         A4 = A2 * A2
         A6 = A2 * A4
-        U  = A * (A6 * (CC[14]*A6 + CC[12]*A4 + CC[10]*A2) +
-                  CC[8]*A6 + CC[6]*A4 + CC[4]*A2 + CC[2]*Inn)
-        V  = A6 * (CC[13]*A6 + CC[11]*A4 + CC[9]*A2) +
-                   CC[7]*A6 + CC[5]*A4 + CC[3]*A2 + CC[1]*Inn
+        U  = A * (A6 * (CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2) .+
+                  CC[8].*A6 .+ CC[6].*A4 .+ CC[4].*A2 .+ CC[2].*Inn)
+        V  = A6 * (CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2) .+
+                   CC[7].*A6 .+ CC[5].*A4 .+ CC[3].*A2 .+ CC[1].*Inn
 
         X = V + U
         LAPACK.gesv!(V-U, X)
@@ -925,8 +941,8 @@ this function, see [^AH16_1].
 ```jldoctest
 julia> acos(cos([0.5 0.1; -0.2 0.3]))
 2×2 Array{Complex{Float64},2}:
-  0.5-5.55112e-17im  0.1-2.77556e-17im
- -0.2+2.498e-16im    0.3-3.46945e-16im
+  0.5-8.32667e-17im  0.1+0.0im
+ -0.2+2.63678e-16im  0.3-3.46945e-16im
 ```
 """
 function acos(A::AbstractMatrix)
@@ -1219,20 +1235,22 @@ factorize(A::Transpose) = transpose(factorize(parent(A)))
 ## Moore-Penrose pseudoinverse
 
 """
-    pinv(M[, tol::Real])
+    pinv(M; atol::Real=0, rtol::Real=atol>0 ? 0 : n*ϵ)
+    pinv(M, rtol::Real) = pinv(M; rtol=rtol) # to be deprecated in Julia 2.0
 
 Computes the Moore-Penrose pseudoinverse.
 
 For matrices `M` with floating point elements, it is convenient to compute
-the pseudoinverse by inverting only singular values above a given threshold,
-`tol`.
+the pseudoinverse by inverting only singular values greater than
+`max(atol, rtol*σ₁)` where `σ₁` is the largest singular value of `M`.
 
-The optimal choice of `tol` varies both with the value of `M` and the intended application
-of the pseudoinverse. The default value of `tol` is
-`eps(real(float(one(eltype(M)))))*minimum(size(M))`, which is essentially machine epsilon
-for the real part of a matrix element multiplied by the larger matrix dimension. For
-inverting dense ill-conditioned matrices in a least-squares sense,
-`tol = sqrt(eps(real(float(one(eltype(M))))))` is recommended.
+The optimal choice of absolute (`atol`) and relative tolerance (`rtol`) varies
+both with the value of `M` and the intended application of the pseudoinverse.
+The default relative tolerance is `n*ϵ`, where `n` is the size of the smallest
+dimension of `M`, and `ϵ` is the [`eps`](@ref) of the element type of `M`.
+
+For inverting dense ill-conditioned matrices in a least-squares sense,
+`rtol = sqrt(eps(real(float(one(eltype(M))))))` is recommended.
 
 For more information, see [^issue8859], [^B96], [^S84], [^KY88].
 
@@ -1262,7 +1280,7 @@ julia> M * N
 
 [^KY88]: Konstantinos Konstantinides and Kung Yao, "Statistical analysis of effective singular values in matrix rank determination", IEEE Transactions on Acoustics, Speech and Signal Processing, 36(5), 1988, 757-763. [doi:10.1109/29.1585](https://doi.org/10.1109/29.1585)
 """
-function pinv(A::StridedMatrix{T}, tol::Real) where T
+function pinv(A::AbstractMatrix{T}; atol::Real = 0.0, rtol::Real = (eps(real(float(one(T))))*min(size(A)...))*iszero(atol)) where T
     m, n = size(A)
     Tout = typeof(zero(T)/sqrt(one(T) + one(T)))
     if m == 0 || n == 0
@@ -1271,9 +1289,10 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
     if istril(A)
         if istriu(A)
             maxabsA = maximum(abs.(diag(A)))
+            tol = max(rtol*maxabsA, atol)
             B = zeros(Tout, n, m)
             for i = 1:min(m, n)
-                if abs(A[i,i]) > tol*maxabsA
+                if abs(A[i,i]) > tol
                     Aii = inv(A[i,i])
                     if isfinite(Aii)
                         B[i,i] = Aii
@@ -1284,16 +1303,13 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
         end
     end
     SVD         = svd(A, full = false)
+    tol         = max(rtol*maximum(SVD.S), atol)
     Stype       = eltype(SVD.S)
     Sinv        = zeros(Stype, length(SVD.S))
-    index       = SVD.S .> tol*maximum(SVD.S)
+    index       = SVD.S .> tol
     Sinv[index] = one(Stype) ./ SVD.S[index]
     Sinv[findall(.!isfinite.(Sinv))] .= zero(Stype)
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
-end
-function pinv(A::StridedMatrix{T}) where T
-    tol = eps(real(float(one(T))))*min(size(A)...)
-    return pinv(A, tol)
 end
 function pinv(x::Number)
     xi = inv(x)
@@ -1303,13 +1319,16 @@ end
 ## Basis for null space
 
 """
-    nullspace(M[, tol::Real])
+    nullspace(M; atol::Real=0, rtol::Rea=atol>0 ? 0 : n*ϵ)
+    nullspace(M, rtol::Real) = nullspace(M; rtol=rtol) # to be deprecated in Julia 2.0
 
 Computes a basis for the nullspace of `M` by including the singular
-vectors of A whose singular have magnitude are greater than `tol*σ₁`,
-where `σ₁` is `A`'s largest singular values. By default, the value of
-`tol` is the smallest dimension of `A` multiplied by the [`eps`](@ref)
-of the [`eltype`](@ref) of `A`.
+vectors of A whose singular have magnitude are greater than `max(atol, rtol*σ₁)`,
+where `σ₁` is `M`'s largest singularvalue.
+
+By default, the relative tolerance `rtol` is `n*ϵ`, where `n`
+is the size of the smallest dimension of `M`, and `ϵ` is the [`eps`](@ref) of
+the element type of `M`.
 
 # Examples
 ```jldoctest
@@ -1325,21 +1344,29 @@ julia> nullspace(M)
  0.0
  1.0
 
-julia> nullspace(M, 2)
+julia> nullspace(M, rtol=3)
 3×3 Array{Float64,2}:
  0.0  1.0  0.0
  1.0  0.0  0.0
  0.0  0.0  1.0
+
+julia> nullspace(M, atol=0.95)
+3×1 Array{Float64,2}:
+ 0.0
+ 0.0
+ 1.0
 ```
 """
-function nullspace(A::StridedMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
+function nullspace(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol))
     m, n = size(A)
-    (m == 0 || n == 0) && return Matrix{T}(I, n, n)
+    (m == 0 || n == 0) && return Matrix{eltype(A)}(I, n, n)
     SVD = svd(A, full=true)
-    indstart = sum(SVD.S .> SVD.S[1]*tol) + 1
+    tol = max(atol, SVD.S[1]*rtol)
+    indstart = sum(s -> s .> tol, SVD.S) + 1
     return copy(SVD.Vt[indstart:end,:]')
 end
-nullspace(a::StridedVector, tol::Real = min(size(a)...)*eps(real(float(one(eltype(a)))))) = nullspace(reshape(a, length(a), 1), tol)
+
+nullspace(A::AbstractVector; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol)) = nullspace(reshape(A, length(A), 1), rtol= rtol, atol= atol)
 
 """
     cond(M, p::Real=2)

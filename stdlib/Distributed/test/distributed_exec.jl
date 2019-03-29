@@ -8,7 +8,7 @@ import Distributed: launch, manage
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 
 @test Distributed.extract_imports(:(begin; import Foo, Bar; let; using Baz; end; end)) ==
-      [:Foo, :Bar, :Baz]
+      Any[:(import Foo, Bar), :(using Baz)]
 
 # Test a few "remote" invocations when no workers are present
 @test remote(myid)() == 1
@@ -492,7 +492,7 @@ end
 pmap_args = [
                 (:distributed, [:default, false]),
                 (:batch_size, [:default,2]),
-                (:on_error, [:default, e -> (e.msg == "foobar" ? true : rethrow(e))]),
+                (:on_error, [:default, e -> (e.msg == "foobar" ? true : rethrow())]),
                 (:retry_delays, [:default, fill(0.001, 1000)]),
                 (:retry_check, [:default, (s,e) -> (s,endswith(e.msg,"foobar"))]),
             ]
@@ -552,9 +552,9 @@ function walk_args(i)
 
         try
             results_test(pmap(mapf, data; kwargs...))
-        catch e
+        catch
             println("pmap executing with args : ", kwargs)
-            rethrow(e)
+            rethrow()
         end
 
         return
@@ -662,12 +662,12 @@ if Sys.isunix() # aka have ssh
             w_in_remote = sort(remotecall_fetch(workers, p))
             try
                 @test intersect(new_pids, w_in_remote) == new_pids
-            catch e
+            catch
                 print("p       :     $p\n")
                 print("newpids :     $new_pids\n")
                 print("w_in_remote : $w_in_remote\n")
                 print("intersect   : $(intersect(new_pids, w_in_remote))\n\n\n")
-                rethrow(e)
+                rethrow()
             end
         end
 
@@ -752,16 +752,20 @@ end
 # issue #13168
 function f13168(n)
     val = 0
-    for i=1:n val+=sum(rand(n,n)^2) end
-    val
+    for i = 1:n
+        val += sum(rand(n, n)^2)
+    end
+    return val
 end
 let t = schedule(@task f13168(100))
-    @test t.state == :queued
+    @test t.state == :runnable
+    @test t.queue !== nothing
     @test_throws ErrorException schedule(t)
     yield()
     @test t.state == :done
+    @test t.queue === nothing
     @test_throws ErrorException schedule(t)
-    @test isa(fetch(t),Float64)
+    @test isa(fetch(t), Float64)
 end
 
 # issue #13122
@@ -809,6 +813,26 @@ remote_do(fut->put!(fut, myid()), id_me, f)
 f=Future(id_other)
 remote_do(fut->put!(fut, myid()), id_other, f)
 @test fetch(f) == id_other
+
+# Github issue #29932
+rc_unbuffered = RemoteChannel(()->Channel{Vector{Float64}}(0))
+
+@async begin
+    # Trigger direct write (no buffering) of largish array
+    array_sz = Int(Base.SZ_UNBUFFERED_IO/8) + 1
+    largev = zeros(array_sz)
+    for i in 1:10
+        largev[1] = float(i)
+        put!(rc_unbuffered, largev)
+    end
+end
+
+@test remotecall_fetch(rc -> begin
+        for i in 1:10
+            take!(rc)[1] != float(i) && error("Failed")
+        end
+        return :OK
+    end, id_other, rc_unbuffered) == :OK
 
 # github PR #14456
 n = DoFullTest ? 6 : 5
@@ -1129,7 +1153,7 @@ for (addp_testf, expected_errstr, env) in testruns
     old_stdout = stdout
     stdout_out, stdout_in = redirect_stdout()
     stdout_txt = @async filter!(readlines(stdout_out)) do s
-            return !startswith(s, "\tFrom failed worker startup:\t")
+            return !startswith(s, "\tFrom worker startup:\t")
         end
     try
         withenv(env...) do
@@ -1473,6 +1497,42 @@ cluster_cookie("foobar") # custom cookie
 npids = addprocs_with_testenv(WorkerArgTester(`--worker=foobar`, false))
 @test remotecall_fetch(myid, npids[1]) == npids[1]
 
+# tests for start_worker options to retain stdio (issue #31035)
+struct RetainStdioTester <: ClusterManager
+    close_stdin::Bool
+    stderr_to_stdout::Bool
+end
+
+function launch(manager::RetainStdioTester, params::Dict, launched::Array, c::Condition)
+    dir = params[:dir]
+    exename = params[:exename]
+    exeflags = params[:exeflags]
+
+    jlcmd = "using Distributed; start_worker(\"\"; close_stdin=$(manager.close_stdin), stderr_to_stdout=$(manager.stderr_to_stdout));"
+    cmd = detach(setenv(`$exename $exeflags --bind-to $(Distributed.LPROC.bind_addr) -e $jlcmd`, dir=dir))
+    proc = open(cmd, "r+")
+
+    wconfig = WorkerConfig()
+    wconfig.process = proc
+    wconfig.io = proc.out
+    push!(launched, wconfig)
+
+    notify(c)
+end
+manage(::RetainStdioTester, ::Integer, ::WorkerConfig, ::Symbol) = nothing
+
+
+nprocs()>1 && rmprocs(workers())
+cluster_cookie("")
+
+for close_stdin in (true, false), stderr_to_stdout in (true, false)
+    npids = addprocs_with_testenv(RetainStdioTester(close_stdin,stderr_to_stdout))
+    @test remotecall_fetch(myid, npids[1]) == npids[1]
+    @test close_stdin != remotecall_fetch(()->isopen(stdin), npids[1])
+    @test stderr_to_stdout == remotecall_fetch(()->(stderr === stdout), npids[1])
+    rmprocs(npids)
+end
+
 # Issue # 22865
 # Must be run on a new cluster, i.e., all workers must be in the same state.
 rmprocs(workers())
@@ -1526,6 +1586,14 @@ end
 # issue #27933
 a27933 = :_not_defined_27933
 @test remotecall_fetch(()->a27933, first(workers())) === a27933
+
+# PR #28651
+for T in (UInt8, Int8, UInt16, Int16, UInt32, Int32, UInt64)
+    n = @distributed (+) for i in Base.OneTo(T(10))
+        i
+    end
+    @test n == 55
+end
 
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.

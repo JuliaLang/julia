@@ -44,8 +44,10 @@ struct ValueIterator{T<:AbstractDict}
     dict::T
 end
 
-summary(iter::T) where {T<:Union{KeySet,ValueIterator}} =
-    string(T.name, " for a ", summary(iter.dict))
+function summary(io::IO, iter::T) where {T<:Union{KeySet,ValueIterator}}
+    print(io, T.name, " for a ")
+    summary(io, iter.dict)
+end
 
 show(io::IO, iter::Union{KeySet,ValueIterator}) = show_vector(io, iter)
 
@@ -146,13 +148,8 @@ The default is to return an empty `Dict`.
 empty(a::AbstractDict) = empty(a, keytype(a), valtype(a))
 empty(a::AbstractDict, ::Type{V}) where {V} = empty(a, keytype(a), V) # Note: this is the form which makes sense for `Vector`.
 
-function copy(a::AbstractDict)
-    b = empty(a)
-    for (k,v) in a
-        b[k] = v
-    end
-    return b
-end
+copy(a::AbstractDict) = merge!(empty(a), a)
+copy!(dst::AbstractDict, src::AbstractDict) = merge!(empty!(dst), src)
 
 """
     merge!(d::AbstractDict, others::AbstractDict...)
@@ -405,7 +402,7 @@ function filter(f, d::AbstractDict)
                 end
             end
         else
-            rethrow(e)
+            rethrow()
         end
     end
     return df
@@ -553,12 +550,12 @@ end
 function IdDict(kv)
     try
         dict_with_eltype((K, V) -> IdDict{K, V}, kv, eltype(kv))
-    catch e
+    catch
         if !applicable(iterate, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
             throw(ArgumentError(
                 "IdDict(kv): kv needs to be an iterator of tuples or pairs"))
         else
-            rethrow(e)
+            rethrow()
         end
     end
 end
@@ -581,7 +578,7 @@ function sizehint!(d::IdDict, newsz)
 end
 
 function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
-    !isa(key, K) && throw(ArgumentError("$key is not a valid key for type $K"))
+    !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
     val = convert(V, val)
     if d.ndel >= ((3*length(d.ht))>>2)
         rehash!(d, max(length(d.ht)>>1, 32))
@@ -648,6 +645,23 @@ copy(d::IdDict) = typeof(d)(d)
 
 get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V} = (d[key] = get(d, key, default))::V
 
+function get(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
+    val = get(d, key, secret_table_token)
+    if val === secret_table_token
+        val = default()
+    end
+    return val
+end
+
+function get!(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
+    val = get(d, key, secret_table_token)
+    if val === secret_table_token
+        val = default()
+        setindex!(d, val, key)
+    end
+    return val
+end
+
 in(@nospecialize(k), v::KeySet{<:Any,<:IdDict}) = get(v.dict, k, secret_table_token) !== secret_table_token
 
 # For some AbstractDict types, it is safe to implement filter!
@@ -686,4 +700,34 @@ function iterate(s::IdSet, state...)
     y === nothing && return nothing
     ((k, _), i) = y
     return (k, i)
+end
+
+"""
+    map!(f, values(dict::AbstractDict))
+
+Modifies `dict` by transforming each value from `val` to `f(val)`.
+Note that the type of `dict` cannot be changed: if `f(val)` is not an instance of the key type
+of `dict` then it will be converted to the key type if possible and otherwise raise an error.
+
+# Examples
+```jldoctest
+julia> d = Dict(:a => 1, :b => 2)
+Dict{Symbol,Int64} with 2 entries:
+  :a => 1
+  :b => 2
+
+julia> map!(v -> v-1, values(d))
+Dict{Symbol,Int64} with 2 entries:
+  :a => 0
+  :b => 1
+ ```
+"""
+function map!(f, iter::ValueIterator)
+    # This is the naive fallback which requires hash evaluations
+    # Contrary to the example Dict has an implementation which does not require hash evaluations
+    dict = iter.dict
+    for (key, val) in pairs(dict)
+        dict[key] = f(val)
+    end
+    return iter
 end

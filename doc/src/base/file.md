@@ -62,4 +62,5 @@ Base.Filesystem.expanduser
 Base.Filesystem.splitdir
 Base.Filesystem.splitdrive
 Base.Filesystem.splitext
+Base.Filesystem.splitpath
 ```

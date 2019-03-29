@@ -4,6 +4,7 @@
 #ifndef JL_THREADS_H
 #define JL_THREADS_H
 
+#include <atomics.h>
 // threading ------------------------------------------------------------------
 
 // WARNING: Threading support is incomplete and experimental
@@ -12,6 +13,45 @@
 
 // JULIA_ENABLE_THREADING is switched on in Make.inc if JULIA_THREADS is
 // set (in Make.user)
+
+//  Options for task switching algorithm (in order of preference):
+// JL_HAVE_ASM -- mostly setjmp
+// JL_HAVE_UNW_CONTEXT -- hybrid of libunwind for start, setjmp for resume
+// JL_HAVE_UCONTEXT -- posix standard API, requires syscall for resume
+// JL_HAVE_SIGALTSTACK -- requires several syscall for start, setjmp for resume
+
+#ifdef _OS_WINDOWS_
+#define JL_HAVE_UCONTEXT
+typedef win32_ucontext_t jl_ucontext_t;
+#else
+#if !defined(JL_HAVE_UCONTEXT) && \
+    !defined(JL_HAVE_ASM) && \
+    !defined(JL_HAVE_UNW_CONTEXT) && \
+    !defined(JL_HAVE_SIGALTSTACK)
+#if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_) ||  \
+     defined(_CPU_ARM_) || defined(_CPU_PPC64_))
+#define JL_HAVE_ASM
+#elif defined(_OS_DARWIN_)
+#define JL_HAVE_UNW_CONTEXT
+#elif defined(_OS_LINUX_)
+#define JL_HAVE_UCONTEXT
+#else
+#define JL_HAVE_UNW_CONTEXT
+#endif
+#endif
+
+#if defined(JL_HAVE_ASM) || defined(JL_HAVE_SIGALTSTACK)
+typedef struct {
+    jl_jmp_buf uc_mcontext;
+} jl_ucontext_t;
+#endif
+#if defined(JL_HAVE_UCONTEXT) || defined(JL_HAVE_UNW_CONTEXT)
+#define UNW_LOCAL_ONLY
+#include <libunwind.h>
+typedef ucontext_t jl_ucontext_t;
+#endif
+#endif
+
 
 // Recursive spin lock
 typedef struct {
@@ -28,6 +68,9 @@ typedef struct {
 typedef struct {
     // variable for tracking weak references
     arraylist_t weak_refs;
+    // live tasks started on this thread
+    // that are holding onto a stack from the pool
+    arraylist_t live_tasks;
 
     // variables for tracking malloc'd arrays
     struct _mallocarray_t *mallocarrays;
@@ -53,11 +96,22 @@ typedef struct {
 #  define JL_GC_N_POOLS 43
 #endif
     jl_gc_pool_t norm_pools[JL_GC_N_POOLS];
+
+#define JL_N_STACK_POOLS 16
+    arraylist_t free_stacks[JL_N_STACK_POOLS];
 } jl_thread_heap_t;
 
 // Cache of thread local change to global metadata during GC
 // This is sync'd after marking.
 typedef union _jl_gc_mark_data jl_gc_mark_data_t;
+
+typedef struct {
+    void **pc; // Current stack address for the pc (up growing)
+    jl_gc_mark_data_t *data; // Current stack address for the data (up growing)
+    void **pc_start; // Cached value of `gc_cache->pc_stack`
+    void **pc_end; // Cached value of `gc_cache->pc_stack_end`
+} jl_gc_mark_sp_t;
+
 typedef struct {
     // thread local increment of `perm_scanned_bytes`
     size_t perm_scanned_bytes;
@@ -80,12 +134,15 @@ typedef struct {
     jl_gc_mark_data_t *data_stack;
 } jl_gc_mark_cache_t;
 
+typedef struct _jl_excstack_t jl_excstack_t;
 // This includes all the thread local states we care about for a thread.
+// Changes to TLS field types must be reflected in codegen.
 #define JL_MAX_BT_SIZE 80000
 struct _jl_tls_states_t {
     struct _jl_gcframe_t *pgcstack;
     size_t world_age;
-    struct _jl_value_t *exception_in_transit;
+    int16_t tid;
+    uint64_t rngseed;
     volatile size_t *safepoint;
     // Whether it is safe to execute GC at the same time.
 #define JL_GC_STATE_WAITING 1
@@ -98,18 +155,17 @@ struct _jl_tls_states_t {
     volatile int8_t in_finalizer;
     int8_t disable_gc;
     volatile sig_atomic_t defer_signal;
-    struct _jl_module_t *current_module;
     struct _jl_task_t *volatile current_task;
     struct _jl_task_t *root_task;
     void *stackbase;
-    char *stack_lo;
-    char *stack_hi;
-    jl_jmp_buf base_ctx; // base context of stack
+    size_t stacksize;
+    jl_ucontext_t base_ctx; // base context of stack
     jl_jmp_buf *safe_restore;
-    int16_t tid;
-    size_t bt_size;
-    // JL_MAX_BT_SIZE + 1 elements long
-    uintptr_t *bt_data;
+    // Temp storage for exception thrown in signal handler. Not rooted.
+    struct _jl_value_t *sig_exception;
+    // Temporary backtrace buffer. Scanned for gc roots when bt_size > 0.
+    uintptr_t *bt_data; // JL_MAX_BT_SIZE + 1 elements long
+    size_t bt_size;    // Size for backtrace in transit in bt_data
     // Atomically set by the sender, reset by the handler.
     volatile sig_atomic_t signal_request;
     // Allow the sigint to be raised asynchronously
@@ -122,6 +178,9 @@ struct _jl_tls_states_t {
     pthread_t system_id;
     void *signal_stack;
 #endif
+#ifdef _OS_WINDOWS_
+    int needs_resetstkoflw;
+#endif
     // execution of certain certain impure
     // statements is prohibited from certain
     // callbacks (such as generated functions)
@@ -131,6 +190,11 @@ struct _jl_tls_states_t {
     int finalizers_inhibited;
     arraylist_t finalizers;
     jl_gc_mark_cache_t gc_cache;
+    arraylist_t sweep_objs;
+    jl_gc_mark_sp_t gc_mark_sp;
+    // Saved exception for previous external API call or NULL if cleared.
+    // Access via jl_exception_occurred().
+    struct _jl_value_t *previous_exception;
 };
 
 // Update codegen version in `ccall.cpp` after changing either `pause` or `wake`

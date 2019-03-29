@@ -80,6 +80,8 @@ mutable struct PromptState <: ModeState
     refresh_lock::Threads.AbstractLock
     # this would better be Threads.Atomic{Float64}, but not supported on some platforms
     beeping::Float64
+    # this option is to detect when code is pasted in non-"bracketed paste mode" :
+    last_newline::Float64 # register when last newline was entered
 end
 
 options(s::PromptState) =
@@ -162,21 +164,26 @@ function beep(s::PromptState, duration::Real=options(s).beep_duration,
     s.beeping = min(s.beeping + duration, maxduration)
     @async begin
         trylock(s.refresh_lock) || return
-        orig_prefix = s.p.prompt_prefix
-        colors = Base.copymutable(colors)
-        use_current && push!(colors, orig_prefix)
-        i = 0
-        while s.beeping > 0.0
-            prefix = colors[mod1(i+=1, end)]
-            s.p.prompt_prefix = prefix
+        try
+            orig_prefix = s.p.prompt_prefix
+            colors = Base.copymutable(colors)
+            use_current && push!(colors, prompt_string(orig_prefix))
+            i = 0
+            while s.beeping > 0.0
+                prefix = colors[mod1(i+=1, end)]
+                s.p.prompt_prefix = prefix
+                refresh_multi_line(s, beeping=true)
+                sleep(blink)
+                s.beeping -= blink
+            end
+            s.p.prompt_prefix = orig_prefix
             refresh_multi_line(s, beeping=true)
-            sleep(blink)
-            s.beeping -= blink
+            s.beeping = 0.0
+        catch e
+            Base.showerror(stdout, e, catch_backtrace())
+        finally
+            unlock(s.refresh_lock)
         end
-        s.p.prompt_prefix = orig_prefix
-        refresh_multi_line(s, beeping=true)
-        s.beeping = 0.0
-        unlock(s.refresh_lock)
     end
     nothing
 end
@@ -680,6 +687,27 @@ edit_splice!(s, ins::AbstractString) = edit_splice!(s, region(s), ins)
 function edit_insert(s::PromptState, c)
     push_undo(s)
     buf = s.input_buffer
+
+    if ! options(s).auto_indent_bracketed_paste
+        pos=position(buf)
+        if pos > 0
+            if buf.data[pos] != _space && string(c) != " "
+                options(s).auto_indent_tmp_off = false
+            end
+            if buf.data[pos] == _space
+                #tabulators are already expanded to space
+                #this expansion may take longer than auto_indent_time_threshold which breaks the timing
+                s.last_newline = time()
+            else
+                #if characters after new line are coming in very fast
+                #its probably copy&paste => switch auto-indent off for the next coming new line
+                if ! options(s).auto_indent_tmp_off && time() - s.last_newline < options(s).auto_indent_time_threshold
+                    options(s).auto_indent_tmp_off = true
+                end
+            end
+        end
+    end
+
     str = string(c)
     edit_insert(buf, str)
     offset = s.ias.curs_row == 1 || s.indent < 0 ?
@@ -710,14 +738,23 @@ end
 function edit_insert_newline(s::PromptState, align::Int = 0 - options(s).auto_indent)
     push_undo(s)
     buf = buffer(s)
-    if align < 0
+    autoindent = align < 0
+    if autoindent && ! options(s).auto_indent_tmp_off
         beg = beginofline(buf)
         align = min(something(findnext(_notspace, buf.data[beg+1:buf.size], 1), 0) - 1,
                     position(buf) - beg) # indentation must not increase
         align < 0 && (align = buf.size-beg)
+    #else
+    #    align = 0
     end
+	align < 0 && (align = 0)
     edit_insert(buf, '\n' * ' '^align)
     refresh_line(s)
+    # updating s.last_newline should happen after refresh_line(s) which can take
+    # an unpredictable amount of time and makes "paste detection" unreliable
+    if ! options(s).auto_indent_bracketed_paste
+        s.last_newline = time()
+    end
 end
 
 # align: delete up to 4 spaces to align to a multiple of 4 chars
@@ -1546,23 +1583,26 @@ mutable struct SearchState <: ModeState
     backward::Bool
     query_buffer::IOBuffer
     response_buffer::IOBuffer
+    failed::Bool
     ias::InputAreaState
     #The prompt whose input will be replaced by the matched history
     parent::Prompt
     SearchState(terminal, histprompt, backward, query_buffer, response_buffer) =
-        new(terminal, histprompt, backward, query_buffer, response_buffer, InputAreaState(0,0))
+        new(terminal, histprompt, backward, query_buffer, response_buffer, false, InputAreaState(0,0))
 end
 
 terminal(s::SearchState) = s.terminal
 
 function update_display_buffer(s::SearchState, data)
-    history_search(data.histprompt.hp, data.query_buffer, data.response_buffer, data.backward, false) || beep(s)
+    s.failed = !history_search(data.histprompt.hp, data.query_buffer, data.response_buffer, data.backward, false)
+    s.failed && beep(s)
     refresh_line(s)
     nothing
 end
 
 function history_next_result(s::MIState, data::SearchState)
-    history_search(data.histprompt.hp, data.query_buffer, data.response_buffer, data.backward, true) || beep(s)
+    data.failed = !history_search(data.histprompt.hp, data.query_buffer, data.response_buffer, data.backward, true)
+    data.failed && beep(s)
     refresh_line(data)
     nothing
 end
@@ -1584,6 +1624,7 @@ function reset_state(s::SearchState)
         s.response_buffer.ptr = 1
     end
     reset_state(s.histprompt.hp)
+    s.failed = false
     nothing
 end
 
@@ -1688,7 +1729,9 @@ function refresh_multi_line(termbuf::TerminalBuffer, s::SearchState)
     write(buf, read(s.response_buffer, String))
     buf.ptr = offset + ptr - 1
     s.response_buffer.ptr = ptr
-    ias = refresh_multi_line(termbuf, s.terminal, buf, s.ias, s.backward ? "(reverse-i-search)`" : "(forward-i-search)`")
+    failed = s.failed ? "failed " : ""
+    ias = refresh_multi_line(termbuf, s.terminal, buf, s.ias,
+                             s.backward ? "($(failed)reverse-i-search)`" : "($(failed)forward-i-search)`")
     s.ias = ias
     return ias
 end
@@ -1744,6 +1787,7 @@ function enter_search(s::MIState, p::HistoryPrompt, backward::Bool)
         ss.parent = parent
         ss.backward = backward
         truncate(ss.query_buffer, 0)
+        ss.failed = false
         copybuf!(ss.response_buffer, buf)
     end
     nothing
@@ -1842,7 +1886,7 @@ function setup_search_keymap(hp)
         # Bracketed paste mode
         "\e[200~" => (s,data,c)-> begin
             ps = state(s, mode(s))
-            input = readuntil(ps.terminal, "\e[201~", keep=true)
+            input = readuntil(ps.terminal, "\e[201~", keep=false)
             edit_insert(data.query_buffer, input); update_display_buffer(s, data)
         end,
         "*"       => (s,data,c)->(edit_insert(data.query_buffer, c); update_display_buffer(s, data))
@@ -1910,6 +1954,7 @@ function commit_line(s)
 end
 
 function bracketed_paste(s; tabwidth=options(s).tabwidth)
+    options(s).auto_indent_bracketed_paste = true
     ps = state(s, mode(s))
     input = readuntil(ps.terminal, "\e[201~")
     input = replace(input, '\r' => '\n')
@@ -2240,7 +2285,7 @@ run_interface(::Prompt) = nothing
 
 init_state(terminal, prompt::Prompt) =
     PromptState(terminal, prompt, IOBuffer(), :off, IOBuffer[], 1, InputAreaState(1, 1),
-                #=indent(spaces)=# -1, Threads.SpinLock(), 0.0)
+                #=indent(spaces)=# -1, Threads.SpinLock(), 0.0, -Inf)
 
 function init_state(terminal, m::ModalInterface)
     s = MIState(m, m.modes[1], false, IdDict{Any,Any}())

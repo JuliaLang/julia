@@ -62,12 +62,13 @@ end
 (*)(a::AbstractVector, B::AbstractMatrix) = reshape(a,length(a),1)*B
 
 mul!(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T}) where {T<:BlasFloat} = gemv!(y, 'N', A, x)
+# Complex matrix times real vector. Reinterpret the matrix as a real matrix and do real matvec compuation.
 for elty in (Float32,Float64)
     @eval begin
         function mul!(y::StridedVector{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, x::StridedVector{$elty})
             Afl = reinterpret($elty,A)
             yfl = reinterpret($elty,y)
-            gemv!(yfl,'N',Afl,x)
+            mul!(yfl,Afl,x)
             return y
         end
     end
@@ -141,12 +142,14 @@ function (*)(A::AbstractMatrix, B::AbstractMatrix)
     mul!(similar(B, TS, (size(A,1), size(B,2))), A, B)
 end
 mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = gemm_wrapper!(C, 'N', 'N', A, B)
+# Complex Matrix times real matrix: We use that it is generally faster to reinterpret the
+# first matrix as a real matrix and carry out real matrix matrix multiply
 for elty in (Float32,Float64)
     @eval begin
         function mul!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, B::StridedVecOrMat{$elty})
             Afl = reinterpret($elty, A)
             Cfl = reinterpret($elty, C)
-            gemm_wrapper!(Cfl, 'N', 'N', Afl, B)
+            mul!(Cfl, Afl, B)
             return C
         end
     end
@@ -234,13 +237,13 @@ function mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, transB::Transpose{<:An
         return gemm_wrapper!(C, 'N', 'T', A, B)
     end
 end
+# Complex matrix times transposed real matrix. Reinterpret the first matrix to real for efficiency.
 for elty in (Float32,Float64)
     @eval begin
         function mul!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, transB::Transpose{<:Any,<:StridedVecOrMat{$elty}})
-            B = transB.parent
             Afl = reinterpret($elty, A)
             Cfl = reinterpret($elty, C)
-            gemm_wrapper!(Cfl, 'N', 'T', Afl, B)
+            mul!(Cfl,Afl,transB)
             return C
         end
     end
@@ -324,14 +327,16 @@ function mul!(C::AbstractMatrix, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, transB
 end
 # Supporting functions for matrix multiplication
 
-function copytri!(A::AbstractMatrix, uplo::AbstractChar, conjugate::Bool=false)
+# copy transposed(adjoint) of upper(lower) side-digonals. Optionally include diagonal.
+@inline function copytri!(A::AbstractMatrix, uplo::AbstractChar, conjugate::Bool=false, diag::Bool=false)
     n = checksquare(A)
+    off = diag ? 0 : 1
     if uplo == 'U'
-        for i = 1:(n-1), j = (i+1):n
+        for i = 1:n, j = (i+off):n
             A[j,i] = conjugate ? adjoint(A[i,j]) : transpose(A[i,j])
         end
     elseif uplo == 'L'
-        for i = 1:(n-1), j = (i+1):n
+        for i = 1:n, j = (i+off):n
             A[i,j] = conjugate ? adjoint(A[j,i]) : transpose(A[j,i])
         end
     else
@@ -492,7 +497,7 @@ end
 #       strides != 1 cases
 
 function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::AbstractVector) where R
-    @assert !has_offset_axes(C, A, B)
+    require_one_based_indexing(C, A, B)
     mB = length(B)
     mA, nA = lapack_size(tA, A)
     if mB != nA
@@ -581,7 +586,7 @@ end
 generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::AbstractVecOrMat, B::AbstractVecOrMat) = _generic_matmatmul!(C, tA, tB, A, B)
 
 function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S}) where {T,S,R}
-    @assert !has_offset_axes(C, A, B)
+    require_one_based_indexing(C, A, B)
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     if mB != nA
@@ -755,7 +760,7 @@ function matmul2x2(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,
 end
 
 function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
-    @assert !has_offset_axes(C, A, B)
+    require_one_based_indexing(C, A, B)
     if !(size(A) == size(B) == size(C) == (2,2))
         throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
     end
@@ -797,7 +802,7 @@ function matmul3x3(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,
 end
 
 function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
-    @assert !has_offset_axes(C, A, B)
+    require_one_based_indexing(C, A, B)
     if !(size(A) == size(B) == size(C) == (3,3))
         throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
     end

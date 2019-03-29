@@ -36,7 +36,7 @@ Passing arguments to functions is better style. It leads to more reusable code a
 
 !!! note
     All code in the REPL is evaluated in global scope, so a variable defined and assigned
-    at toplevel will be a **global** variable. Variables defined in at top level scope inside
+    at top level will be a **global** variable. Variables defined at top level scope inside
     modules are also global.
 
 In the following REPL session:
@@ -164,9 +164,9 @@ julia> a = Real[]
 
 julia> push!(a, 1); push!(a, 2.0); push!(a, π)
 3-element Array{Real,1}:
-  1
-  2.0
- π = 3.1415926535897...
+ 1
+ 2.0
+ π
 ```
 
 Because `a` is a an array of abstract type [`Real`](@ref), it must be able to hold any
@@ -467,7 +467,7 @@ end
 ```
 
 the annotation of `c` harms performance. To write performant code involving types constructed at
-run-time, use the [function-barrier technique](@ref kernal-functions) discussed below, and ensure
+run-time, use the [function-barrier technique](@ref kernel-functions) discussed below, and ensure
 that the constructed type appears among the argument types of the kernel function so that the kernel
 operations are properly specialized by the compiler. For example, in the above snippet, as soon as
 `b` is constructed, it can be passed to another function `k`, the kernel. If, for example, function
@@ -480,26 +480,6 @@ c = (b + 1.0f0)::Complex{T}
 
 does not hinder performance (but does not help either) since the compiler can determine the type of `c`
 at the time `k` is compiled.
-
-### Declare types of keyword arguments
-
-Keyword arguments can have declared types:
-
-```julia
-function with_keyword(x; name::Int = 1)
-    ...
-end
-```
-
-Functions are specialized on the types of keyword arguments, so these declarations will not affect
-performance of code inside the function. However, they will reduce the overhead of calls to the
-function that include keyword arguments.
-
-Functions with keyword arguments have near-zero overhead for call sites that pass only positional
-arguments.
-
-Passing dynamic lists of keyword arguments, as in `f(x; keywords...)`, can be slow and should
-be avoided in performance-sensitive code.
 
 ## Break functions into multiple definitions
 
@@ -576,7 +556,7 @@ optimize the body of the loop. There are several possible fixes:
   * Use an explicit conversion: `x = oneunit(Float64)`
   * Initialize with the first loop iteration, to `x = 1 / rand()`, then loop `for i = 2:10`
 
-## [Separate kernel functions (aka, function barriers)](@id kernal-functions)
+## [Separate kernel functions (aka, function barriers)](@id kernel-functions)
 
 Many functions follow a pattern of performing some set-up work, and then running many iterations
 to perform a core computation. Where possible, it is a good idea to put these core computations
@@ -675,7 +655,7 @@ does not (and cannot) predict its value in advance. This means that code using t
 function has to be conservative, checking the type on each access of `A`; such code will be very
 slow.
 
-Now, one very good way to solve such problems is by using the [function-barrier technique](@ref kernal-functions).
+Now, one very good way to solve such problems is by using the [function-barrier technique](@ref kernel-functions).
 However, in some cases you might want to eliminate the type-instability altogether. In such cases,
 one approach is to pass the dimensionality as a parameter, for example through `Val{T}()` (see
 ["Value types"](@ref)):
@@ -727,7 +707,7 @@ type-domain.
 
 ## The dangers of abusing multiple dispatch (aka, more on types with values-as-parameters)
 
-Once one learns to appreciate multiple dispatch, there's an understandable tendency to go crazy
+Once one learns to appreciate multiple dispatch, there's an understandable tendency to go overboard
 and try to use it for everything. For example, you might imagine using it to store information,
 e.g.
 
@@ -1091,7 +1071,7 @@ using Distributed
 responses = Vector{Any}(undef, nworkers())
 @sync begin
     for (idx, pid) in enumerate(workers())
-        @async responses[idx] = remotecall_fetch(pid, foo, args...)
+        @async responses[idx] = remotecall_fetch(foo, pid, args...)
     end
 end
 ```
@@ -1149,9 +1129,9 @@ Sometimes you can enable better optimization by promising certain program proper
 
 The common idiom of using 1:n to index into an AbstractArray is not safe if the Array uses unconventional indexing,
 and may cause a segmentation fault if bounds checking is turned off. Use `LinearIndices(x)` or `eachindex(x)`
-instead (see also [offset-arrays](https://docs.julialang.org/en/latest/devdocs/offset-arrays)).
+instead (see also [offset-arrays](https://docs.julialang.org/en/latest/devdocs/offset-arrays/)).
 
-!!!note
+!!! note
     While `@simd` needs to be placed directly in front of an innermost `for` loop, both `@inbounds` and `@fastmath`
     can be applied to either single expressions or all the expressions that appear within nested blocks of code, e.g.,
     using `@inbounds begin` or `@inbounds for ...`.
@@ -1231,7 +1211,7 @@ function mynorm(u::Vector)
     @fastmath @inbounds @simd for i in 1:n
         s += u[i]^2
     end
-    @fastmath @inbounds return sqrt(s/n)
+    @fastmath @inbounds return sqrt(s)
 end
 
 function main()
@@ -1382,29 +1362,21 @@ julia> @noinline pos(x) = x < 0 ? 0 : x;
 
 julia> function f(x)
            y = pos(x)
-           sin(y*x + 1)
+           return sin(y*x + 1)
        end;
 
 julia> @code_warntype f(3.2)
+Variables
+  #self#::Core.Compiler.Const(f, false)
+  x::Float64
+  y::Union{Float64, Int64}
+
 Body::Float64
-2 1 ─ %1  = invoke Main.pos(%%x::Float64)::UNION{FLOAT64, INT64}
-3 │   %2  = isa(%1, Float64)::Bool
-  └──       goto 3 if not %2
-  2 ─ %4  = π (%1, Float64)
-  │   %5  = Base.mul_float(%4, %%x)::Float64
-  └──       goto 6
-  3 ─ %7  = isa(%1, Int64)::Bool
-  └──       goto 5 if not %7
-  4 ─ %9  = π (%1, Int64)
-  │   %10 = Base.sitofp(Float64, %9)::Float64
-  │   %11 = Base.mul_float(%10, %%x)::Float64
-  └──       goto 6
-  5 ─       Base.error("fatal error in type inference (type bound)")
-  └──       unreachable
-  6 ┄ %15 = φ (2 => %5, 4 => %11)::Float64
-  │   %16 = Base.add_float(%15, 1.0)::Float64
-  │   %17 = invoke Main.sin(%16::Float64)::Float64
-  └──       return %17
+1 ─      (y = Main.pos(x))
+│   %2 = (y * x)::Float64
+│   %3 = (%2 + 1)::Float64
+│   %4 = Main.sin(%3)::Float64
+└──      return %4
 ```
 
 Interpreting the output of [`@code_warntype`](@ref), like that of its cousins [`@code_lowered`](@ref),

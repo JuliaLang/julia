@@ -632,4 +632,43 @@ end
     @test minimum(sparse([1, 2], [1, 2], ones(Int32, 2)), dims = 1) isa Matrix
 end
 
+@testset "Issue #30118" begin
+    @test ((_, x) -> x).(Int, spzeros(3)) == spzeros(3)
+    @test ((_, _, x) -> x).(Int, Int, spzeros(3)) == spzeros(3)
+    @test ((_, _, _, x) -> x).(Int, Int, Int, spzeros(3)) == spzeros(3)
+    @test_broken ((_, _, _, _, x) -> x).(Int, Int, Int, Int, spzeros(3)) == spzeros(3)
+end
+
+using SparseArrays.HigherOrderFns: SparseVecStyle
+
+@testset "Issue #30120: method ambiguity" begin
+    # HigherOrderFns._copy(f) was ambiguous.  It may be impossible to
+    # invoke this from dot notation and it is an error anyway.  But
+    # when someone invokes it by accident, we want it to produce a
+    # meaningful error.
+    err = try
+        copy(Broadcast.Broadcasted{SparseVecStyle}(rand, ()))
+    catch err
+        err
+    end
+    @test err isa MethodError
+    @test !occursin("is ambiguous", sprint(showerror, err))
+    @test occursin("no method matching _copy(::typeof(rand))", sprint(showerror, err))
+end
+
+@testset "Sparse outer product, for type $T and vector $op" for
+         op in (transpose, adjoint),
+         T in (Float64, ComplexF64)
+    m, n, p = 100, 250, 0.1
+    A = sprand(T, m, n, p)
+    a, b = view(A, :, 1), sprand(T, m, p)
+    av, bv = Vector(a), Vector(b)
+    v = @inferred a .* op(b)
+    w = @inferred b .* op(a)
+    @test issparse(v)
+    @test issparse(w)
+    @test v == av .* op(bv)
+    @test w == bv .* op(av)
+end
+
 end # module

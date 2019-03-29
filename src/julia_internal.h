@@ -4,6 +4,7 @@
 #define JL_INTERNAL_H
 
 #include "options.h"
+#include "locks.h"
 #include <uv.h>
 #if !defined(_MSC_VER) && !defined(__MINGW32__)
 #include <unistd.h>
@@ -108,6 +109,15 @@ static inline void jl_assume_(int cond)
 #  define JL_USE_IFUNC 0
 #endif
 
+// If this is detected in a backtrace of segfault, it means the functions
+// that use this value must be reworked into their async form with cb arg
+// provided and with JL_UV_LOCK used around the calls
+static uv_loop_t *const unused_uv_loop_arg = (uv_loop_t *)0xBAD10;
+
+extern jl_mutex_t jl_uv_mutex;
+#define JL_UV_LOCK() JL_LOCK(&jl_uv_mutex)
+#define JL_UV_UNLOCK() JL_UNLOCK(&jl_uv_mutex)
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -164,7 +174,7 @@ void gc_sweep_sysimg(void);
 
 
 // pools are 16376 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)
-static const int jl_gc_sizeclasses[JL_GC_N_POOLS] = {
+static const int jl_gc_sizeclasses[] = {
 #ifdef _P64
     8,
 #elif defined(_CPU_ARM_) || defined(_CPU_PPC_)
@@ -197,6 +207,7 @@ static const int jl_gc_sizeclasses[JL_GC_N_POOLS] = {
 //    15,   14,   13,   12,   11,   10,    9,    8, /pool
 //    64,   32,  160,   64,   16,   64,  112,  128, bytes lost
 };
+static_assert(sizeof(jl_gc_sizeclasses) / sizeof(jl_gc_sizeclasses[0]) == JL_GC_N_POOLS, "");
 
 STATIC_INLINE int jl_gc_alignment(size_t sz)
 {
@@ -220,35 +231,31 @@ STATIC_INLINE int jl_gc_alignment(size_t sz)
 }
 JL_DLLEXPORT int jl_alignment(size_t sz);
 
-STATIC_INLINE int JL_CONST_FUNC jl_gc_szclass(size_t sz)
+// the following table is computed from jl_gc_sizeclasses via the formula:
+// [searchsortedfirst(TABLE, i) for i = 0:16:table[end]]
+static const uint8_t szclass_table[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 20, 21, 21, 22, 22, 23, 23, 23, 24, 24, 24, 25, 25, 25, 26, 26, 27, 27, 27, 28, 28, 28, 29, 29, 29, 29, 30, 30, 30, 30, 30, 31, 31, 31, 31, 31, 32, 32, 32, 32, 32, 32, 32, 33, 33, 33, 33, 33, 34, 34, 34, 34, 34, 35, 35, 35, 35, 35, 36, 36, 36, 36, 36, 36, 36, 37, 37, 37, 37, 37, 37, 37, 37, 38, 38, 38, 38, 38, 38, 38, 38, 38, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40};
+static_assert(sizeof(szclass_table) == 128, "");
+
+STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass(unsigned sz)
 {
+    assert(sz <= 2032);
+    uint8_t klass = szclass_table[(sz + 15) / 16];
 #ifdef _P64
-    if (sz <=    8)
+    if (sz <= 8)
         return 0;
     const int N = 0;
 #elif defined(_CPU_ARM_) || defined(_CPU_PPC_)
-    if (sz <=    8)
-        return (sz + 3) / 4 - 1;
+    if (sz <= 8)
+        return (sz >= 4 ? 1 : 0);
     const int N = 1;
 #else
-    if (sz <=   12)
-        return (sz + 3) / 4 - 1;
+    if (sz <= 12)
+        return (sz >= 8 ? 2 : (sz >= 4 ? 1 : 0));
     const int N = 2;
 #endif
-    if (sz <=  256)
-        return (sz + 15) / 16 + N;
-    if (sz <=  496)
-        return 16 - 16376 / 4 / LLT_ALIGN(sz, 16 * 4) + 16 + N;
-    if (sz <= 1008)
-        return 16 - 16376 / 2 / LLT_ALIGN(sz, 16 * 2) + 24 + N;
-    return     16 - 16376 / 1 / LLT_ALIGN(sz, 16 * 1) + 32 + N;
+    return klass + N;
 }
 
-#ifdef __GNUC__
-#  define jl_is_constexpr(e) __builtin_constant_p(e)
-#else
-#  define jl_is_constexpr(e) (0)
-#endif
 #define JL_SMALL_BYTE_ALIGNMENT 16
 #define JL_CACHE_BYTE_ALIGNMENT 64
 // JL_HEAP_ALIGNMENT is the maximum alignment that the GC can provide
@@ -257,23 +264,17 @@ STATIC_INLINE int JL_CONST_FUNC jl_gc_szclass(size_t sz)
 
 STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
 {
-    const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
-    if (allocsz < sz) // overflow in adding offs, size was "negative"
-        jl_throw(jl_memory_exception);
     jl_value_t *v;
-    if (allocsz <= GC_MAX_SZCLASS + sizeof(jl_taggedvalue_t)) {
+    const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
+    if (sz <= GC_MAX_SZCLASS) {
         int pool_id = jl_gc_szclass(allocsz);
         jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
-        int osize;
-        if (jl_is_constexpr(allocsz)) {
-            osize = jl_gc_sizeclasses[pool_id];
-        }
-        else {
-            osize = p->osize;
-        }
+        int osize = jl_gc_sizeclasses[pool_id];
         v = jl_gc_pool_alloc(ptls, (char*)p - (char*)ptls, osize);
     }
     else {
+        if (allocsz < sz) // overflow in adding offs, size was "negative"
+            jl_throw(jl_memory_exception);
         v = jl_gc_big_alloc(ptls, allocsz);
     }
     jl_set_typeof(v, ty);
@@ -282,14 +283,17 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
 JL_DLLEXPORT jl_value_t *jl_gc_alloc(jl_ptls_t ptls, size_t sz, void *ty);
 // On GCC, only inline when sz is constant
 #ifdef __GNUC__
-#  define jl_gc_alloc(ptls, sz, ty)                             \
-    (__builtin_constant_p(sz) ? jl_gc_alloc_(ptls, sz, ty) :    \
+#  define jl_gc_alloc(ptls, sz, ty)  \
+    (__builtin_constant_p(sz) ?      \
+     jl_gc_alloc_(ptls, sz, ty) :    \
      (jl_gc_alloc)(ptls, sz, ty))
 #else
 #  define jl_gc_alloc(ptls, sz, ty) jl_gc_alloc_(ptls, sz, ty)
 #endif
 
-#define jl_buff_tag ((uintptr_t)0x4eade800)
+// jl_buff_tag must be a multiple of GC_PAGE_SZ so that it can't be
+// confused for an actual type reference.
+#define jl_buff_tag ((uintptr_t)0x4eadc000)
 typedef void jl_gc_tracked_buffer_t; // For the benefit of the static analyzer
 STATIC_INLINE jl_gc_tracked_buffer_t *jl_gc_alloc_buf(jl_ptls_t ptls, size_t sz)
 {
@@ -321,6 +325,8 @@ jl_svec_t *jl_perm_symsvec(size_t n, ...);
 
 jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz);
 JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz);
+
+JL_DLLEXPORT void JL_NORETURN jl_throw_out_of_memory_error(void);
 
 jl_code_info_t *jl_type_infer(jl_method_instance_t **pli JL_ROOTS_TEMPORARILY, size_t world, int force);
 jl_callptr_t jl_generate_fptr(jl_method_instance_t **pli, jl_llvm_functions_t decls, size_t world);
@@ -370,7 +376,7 @@ void jl_print_gc_stats(JL_STREAM *s);
 void jl_gc_reset_alloc_count(void);
 int jl_assign_type_uid(void);
 jl_value_t *jl_cache_type_(jl_datatype_t *type);
-void jl_resort_type_cache(jl_svec_t *c);
+void jl_sort_types(jl_value_t **types, size_t length);
 int  jl_get_t_uid_ctr(void);
 void jl_set_t_uid_ctr(int i);
 uint32_t jl_get_gs_ctr(void);
@@ -387,7 +393,6 @@ JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t);
 
 JL_CALLABLE(jl_f_tuple);
 JL_CALLABLE(jl_f_intrinsic_call);
-extern jl_function_t *jl_unprotect_stack_func;
 void jl_install_default_signal_handlers(void);
 void restore_signals(void);
 void jl_install_thread_signal_handler(jl_ptls_t ptls);
@@ -432,6 +437,7 @@ void jl_assign_bits(void *dest, jl_value_t *bits) JL_NOTSAFEPOINT;
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module);
 jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, int iskw);
+void jl_init_main_module(void);
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent);
 jl_array_t *jl_get_loaded_modules(void);
 
@@ -447,7 +453,7 @@ jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                           jl_svec_t *sparam_vals);
 int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT;
 jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module_t *inmodule);
-void jl_linenumber_to_lineinfo(jl_code_info_t *ci, jl_module_t *mod, jl_sym_t *name);
+void jl_linenumber_to_lineinfo(jl_code_info_t *ci, jl_value_t *name);
 
 jl_method_instance_t *jl_method_lookup(jl_methtable_t *mt JL_PROPAGATES_ROOT,
     jl_value_t **args, size_t nargs, int cache, size_t world);
@@ -463,10 +469,11 @@ JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt JL_PROPAGATES_ROO
 jl_value_t *jl_nth_slot_type(jl_value_t *sig JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 void jl_compute_field_offsets(jl_datatype_t *st);
 jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
-                                             int isunboxed, int elsz);
+                                             int isunboxed, int isunion, int elsz);
 void jl_module_run_initializer(jl_module_t *m);
 jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_NOTSAFEPOINT;
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
+extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
 extern jl_array_t *jl_cfunction_list JL_GLOBALLY_ROOTED;
 
 #ifdef JL_USE_INTEL_JITEVENTS
@@ -489,11 +496,11 @@ void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_intrinsic_properties(void);
 void jl_init_tasks(void) JL_GC_DISABLED;
-void jl_init_stack_limits(int ismaster);
-void jl_init_root_task(void *stack, size_t ssize);
+void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo);
+void jl_init_root_task(void *stack_lo, void *stack_hi);
 void jl_init_serializer(void);
 void jl_gc_init(void);
-void jl_init_signal_async(void);
+void jl_init_uv(void);
 void jl_init_debuginfo(void);
 void jl_init_thread_heap(jl_ptls_t ptls);
 
@@ -505,7 +512,6 @@ extern ssize_t jl_tls_offset;
 extern const int jl_tls_elf_support;
 void jl_init_threading(void);
 void jl_start_threads(void);
-void jl_shutdown_threading(void);
 
 // Whether the GC is running
 extern char *jl_safepoint_pages;
@@ -565,7 +571,7 @@ static inline void jl_set_gc_and_wait(void)
 }
 #endif
 
-JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant);
+JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char *asm_variant, const char *debuginfo);
 
 void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len);
 int32_t jl_get_llvm_gv(jl_value_t *p) JL_NOTSAFEPOINT;
@@ -625,7 +631,7 @@ extern volatile int jl_in_stackwalk;
 typedef unw_context_t bt_context_t;
 typedef unw_cursor_t bt_cursor_t;
 #  if (!defined(SYSTEM_LIBUNWIND) || UNW_VERSION_MAJOR > 1 ||   \
-       (UNW_VERSION_MAJOR == 1 && UNW_VERSION_MINOR > 1))
+       (UNW_VERSION_MAJOR == 1 && UNW_VERSION_MINOR != 0 && UNW_VERSION_MINOR != 1))
 // Enable our memory manager only for libunwind with our patch or
 // on a newer release
 #    define JL_UNW_HAS_FORMAT_IP 1
@@ -635,13 +641,14 @@ typedef unw_cursor_t bt_cursor_t;
 typedef int bt_context_t;
 typedef int bt_cursor_t;
 #endif
+// Special marker in backtrace data for encoding interpreter frames
+#define JL_BT_INTERP_FRAME (((uintptr_t)0)-1)
 size_t rec_backtrace(uintptr_t *data, size_t maxsize) JL_NOTSAFEPOINT;
 size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize, bt_context_t *ctx) JL_NOTSAFEPOINT;
 #ifdef LIBOSXUNWIND
 size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
 #endif
 JL_DLLEXPORT void jl_get_backtrace(jl_array_t **bt, jl_array_t **bt2);
-JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, uint32_t nargs, int drop_exceptions);
 void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_t *bt_size);
 JL_DLLEXPORT void jl_raise_debugger(void);
 int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline);
@@ -663,9 +670,70 @@ JL_DLLEXPORT int jl_is_interpreter_frame(uintptr_t ip);
 JL_DLLEXPORT int jl_is_enter_interpreter_frame(uintptr_t ip);
 JL_DLLEXPORT size_t jl_capture_interp_frame(uintptr_t *data, uintptr_t sp, uintptr_t fp, size_t space_remaining);
 
+// Exception stack: a stack of pairs of (exception,raw_backtrace).
+// The stack may be traversed and accessed with the functions below.
+typedef struct _jl_excstack_t {
+    size_t top;
+    size_t reserved_size;
+    // Pack all stack entries into a growable buffer to amortize allocation
+    // across repeated exception handling.
+    // Layout: [bt_data1... bt_size1 exc1  bt_data2... bt_size2 exc2  ..]
+    // uintptr_t data[]; // Access with jl_excstack_raw
+} jl_excstack_t;
+
+STATIC_INLINE uintptr_t *jl_excstack_raw(jl_excstack_t *stack) JL_NOTSAFEPOINT
+{
+    return (uintptr_t*)(stack + 1);
+}
+
+// Exception stack access
+STATIC_INLINE jl_value_t *jl_excstack_exception(jl_excstack_t *stack JL_PROPAGATES_ROOT,
+                                                size_t itr) JL_NOTSAFEPOINT
+{
+    return (jl_value_t*)(jl_excstack_raw(stack)[itr-1]);
+}
+STATIC_INLINE size_t jl_excstack_bt_size(jl_excstack_t *stack, size_t itr) JL_NOTSAFEPOINT
+{
+    return jl_excstack_raw(stack)[itr-2];
+}
+STATIC_INLINE uintptr_t *jl_excstack_bt_data(jl_excstack_t *stack, size_t itr) JL_NOTSAFEPOINT
+{
+    return jl_excstack_raw(stack) + itr-2 - jl_excstack_bt_size(stack, itr);
+}
+// Exception stack iteration (start at itr=stack->top, stop at itr=0)
+STATIC_INLINE size_t jl_excstack_next(jl_excstack_t *stack, size_t itr) JL_NOTSAFEPOINT
+{
+    return itr-2 - jl_excstack_bt_size(stack, itr);
+}
+// Exception stack manipulation
+void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
+                         size_t reserved_size);
+void jl_push_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
+                      jl_value_t *exception JL_ROOTED_ARGUMENT,
+                      uintptr_t *bt_data, size_t bt_size);
+void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFEPOINT;
+
 // timers
 // Returns time in nanosec
 JL_DLLEXPORT uint64_t jl_hrtime(void);
+
+// congruential random number generator
+// for a small amount of thread-local randomness
+// we could just use libc:`rand()`, but we want to ensure this is fast
+STATIC_INLINE void seed_cong(uint64_t *seed)
+{
+    *seed = rand();
+}
+STATIC_INLINE void unbias_cong(uint64_t max, uint64_t *unbias)
+{
+    *unbias = UINT64_MAX - ((UINT64_MAX % max) + 1);
+}
+STATIC_INLINE uint64_t cong(uint64_t max, uint64_t unbias, uint64_t *seed)
+{
+    while ((*seed = 69069 * (*seed) + 362437) > unbias)
+        ;
+    return *seed % max;
+}
 
 // libuv stuff:
 JL_DLLEXPORT extern void *jl_dl_handle;
@@ -791,6 +859,8 @@ JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a);
 int jl_array_store_unboxed(jl_value_t *el_type);
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i);
+
+JL_DLLEXPORT void jl_uv_stop(uv_loop_t* loop);
 
 // -- synchronization utilities -- //
 
@@ -952,25 +1022,29 @@ extern jl_sym_t *method_sym;  extern jl_sym_t *core_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;     extern jl_sym_t *error_sym;
 extern jl_sym_t *new_sym;     extern jl_sym_t *using_sym;
+extern jl_sym_t *splatnew_sym;
+extern jl_sym_t *pop_exception_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *primtype_sym;
 extern jl_sym_t *structtype_sym;   extern jl_sym_t *foreigncall_sym;
 extern jl_sym_t *global_sym; extern jl_sym_t *list_sym;
 extern jl_sym_t *dot_sym;    extern jl_sym_t *newvar_sym;
 extern jl_sym_t *boundscheck_sym; extern jl_sym_t *inbounds_sym;
+extern jl_sym_t *aliasscope_sym; extern jl_sym_t *popaliasscope_sym;
 extern jl_sym_t *copyast_sym; extern jl_sym_t *cfunction_sym;
-extern jl_sym_t *pure_sym; extern jl_sym_t *simdloop_sym;
-extern jl_sym_t *meta_sym; extern jl_sym_t *compiler_temp_sym;
-extern jl_sym_t *inert_sym;  extern jl_sym_t *polly_sym;
-extern jl_sym_t *unused_sym; extern jl_sym_t *static_parameter_sym;
-extern jl_sym_t *inline_sym; extern jl_sym_t *noinline_sym;
-extern jl_sym_t *generated_sym; extern jl_sym_t *generated_only_sym;
-extern jl_sym_t *isdefined_sym; extern jl_sym_t *propagate_inbounds_sym;
-extern jl_sym_t *specialize_sym; extern jl_sym_t *nospecialize_sym;
-extern jl_sym_t *macrocall_sym;  extern jl_sym_t *colon_sym;
-extern jl_sym_t *hygienicscope_sym; extern jl_sym_t *escape_sym;
-extern jl_sym_t *gc_preserve_begin_sym; extern jl_sym_t *gc_preserve_end_sym;
+extern jl_sym_t *pure_sym; extern jl_sym_t *loopinfo_sym;
+extern jl_sym_t *meta_sym; extern jl_sym_t *inert_sym;
+extern jl_sym_t *polly_sym; extern jl_sym_t *unused_sym;
+extern jl_sym_t *static_parameter_sym; extern jl_sym_t *inline_sym;
+extern jl_sym_t *noinline_sym; extern jl_sym_t *generated_sym;
+extern jl_sym_t *generated_only_sym; extern jl_sym_t *isdefined_sym;
+extern jl_sym_t *propagate_inbounds_sym; extern jl_sym_t *specialize_sym;
+extern jl_sym_t *nospecialize_sym; extern jl_sym_t *macrocall_sym;
+extern jl_sym_t *colon_sym; extern jl_sym_t *hygienicscope_sym;
 extern jl_sym_t *throw_undef_if_not_sym; extern jl_sym_t *getfield_undefref_sym;
+extern jl_sym_t *gc_preserve_begin_sym; extern jl_sym_t *gc_preserve_end_sym;
+extern jl_sym_t *failed_sym; extern jl_sym_t *done_sym; extern jl_sym_t *runnable_sym;
+extern jl_sym_t *escape_sym;
 
 struct _jl_sysimg_fptrs_t;
 
@@ -978,38 +1052,6 @@ void jl_register_fptrs(uint64_t sysimage_base, const struct _jl_sysimg_fptrs_t *
                        jl_method_instance_t **linfos, size_t n);
 
 extern arraylist_t partial_inst;
-
-STATIC_INLINE uint64_t jl_load_unaligned_i64(const void *ptr) JL_NOTSAFEPOINT
-{
-    uint64_t val;
-    memcpy(&val, ptr, 8);
-    return val;
-}
-STATIC_INLINE uint32_t jl_load_unaligned_i32(const void *ptr) JL_NOTSAFEPOINT
-{
-    uint32_t val;
-    memcpy(&val, ptr, 4);
-    return val;
-}
-STATIC_INLINE uint16_t jl_load_unaligned_i16(const void *ptr) JL_NOTSAFEPOINT
-{
-    uint16_t val;
-    memcpy(&val, ptr, 2);
-    return val;
-}
-
-STATIC_INLINE void jl_store_unaligned_i64(void *ptr, uint64_t val) JL_NOTSAFEPOINT
-{
-    memcpy(ptr, &val, 8);
-}
-STATIC_INLINE void jl_store_unaligned_i32(void *ptr, uint32_t val) JL_NOTSAFEPOINT
-{
-    memcpy(ptr, &val, 4);
-}
-STATIC_INLINE void jl_store_unaligned_i16(void *ptr, uint16_t val) JL_NOTSAFEPOINT
-{
-    memcpy(ptr, &val, 2);
-}
 
 #if jl_has_builtin(__builtin_assume_aligned) || defined(_COMPILER_GCC_)
 #define jl_assume_aligned(ptr, align) __builtin_assume_aligned(ptr, align)
@@ -1042,6 +1084,26 @@ jl_assume_aligned(T ptr, unsigned align)
 #else
 #  define jl_unreachable() ((void)jl_assume(0))
 #endif
+
+// Tools for locally disabling spurious compiler warnings
+//
+// Particular calls which are used elsewhere in the code include:
+//
+// * JL_GCC_IGNORE_START(-Wclobbered) - gcc misidentifies some variables which
+//   are used inside a JL_TRY as being "clobbered" if JL_CATCH is entered. This
+//   warning is spurious if the variable is not modified inside the JL_TRY.
+//   See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65041
+#ifdef _COMPILER_GCC_
+#define JL_DO_PRAGMA(s) _Pragma(#s)
+#define JL_GCC_IGNORE_START(warning) \
+    JL_DO_PRAGMA(GCC diagnostic push) \
+    JL_DO_PRAGMA(GCC diagnostic ignored warning)
+#define JL_GCC_IGNORE_STOP \
+    JL_DO_PRAGMA(GCC diagnostic pop)
+#else
+#define JL_GCC_IGNORE_START(w)
+#define JL_GCC_IGNORE_STOP
+#endif // _COMPILER_GCC_
 
 #ifdef __cplusplus
 }

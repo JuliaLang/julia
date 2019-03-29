@@ -1,12 +1,51 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    ClusterManager
+
+Supertype for cluster managers, which control workers processes as a cluster.
+Cluster managers implement how workers can be added, removed and communicated with.
+`SSHManager` and `LocalManager` are subtypes of this.
+"""
 abstract type ClusterManager end
 
+"""
+    WorkerConfig
+
+Type used by [`ClusterManager`](@ref)s to control workers added to their clusters. Some fields
+are used by all cluster managers to access a host:
+  * `io` -- the connection used to access the worker (a subtype of `IO` or `Nothing`)
+  * `host` -- the host address (either an `AbstractString` or `Nothing`)
+  * `port` -- the port on the host used to connect to the worker (either an `Int` or `Nothing`)
+
+Some are used by the cluster manager to add workers to an already-initialized host:
+  * `count` -- the number of workers to be launched on the host
+  * `exename` -- the path to the Julia executable on the host, defaults to `"\$(Sys.BINDIR)/julia"` or
+    `"\$(Sys.BINDIR)/julia-debug"`
+  * `exeflags` -- flags to use when lauching Julia remotely
+
+The `userdata` field is used to store information for each worker by external managers.
+
+Some fields are used by `SSHManager` and similar managers:
+  * `tunnel` -- `true` (use tunneling), `false` (do not use tunneling), or [`nothing`](@ref) (use default for the manager)
+  * `bind_addr` -- the address on the remote host to bind to
+  * `sshflags` -- flags to use in establishing the SSH connection
+  * `max_parallel` -- the maximum number of workers to connect to in parallel on the host
+
+Some fields are used by both `LocalManager`s and `SSHManager`s:
+  * `connect_at` -- determines whether this is a worker-to-worker or driver-to-worker setup call
+  * `process` -- the process which will be connected (usually the manager will assign this during [`addprocs`](@ref))
+  * `ospid` -- the process ID according to the host OS, used to interrupt worker processes
+  * `environ` -- private dictionary used to store temporary information by Local/SSH managers
+  * `ident` -- worker as identified by the [`ClusterManager`](@ref)
+  * `connect_idents` -- list of worker ids the worker must connect to if using a custom topology
+  * `enable_threaded_blas` -- `true`, `false`, or `nothing`, whether to use threaded BLAS or not on the workers
+"""
 mutable struct WorkerConfig
     # Common fields relevant to all cluster managers
     io::Union{IO, Nothing}
     host::Union{AbstractString, Nothing}
-    port::Union{Integer, Nothing}
+    port::Union{Int, Nothing}
 
     # Used when launching additional workers at a host
     count::Union{Int, Symbol, Nothing}
@@ -21,13 +60,13 @@ mutable struct WorkerConfig
     tunnel::Union{Bool, Nothing}
     bind_addr::Union{AbstractString, Nothing}
     sshflags::Union{Cmd, Nothing}
-    max_parallel::Union{Integer, Nothing}
+    max_parallel::Union{Int, Nothing}
 
     # Used by Local/SSH managers
     connect_at::Any
 
     process::Union{Process, Nothing}
-    ospid::Union{Integer, Nothing}
+    ospid::Union{Int, Nothing}
 
     # Private dictionary used to store temporary information by Local/SSH managers.
     environ::Union{Dict, Nothing}
@@ -67,6 +106,7 @@ mutable struct Worker
     manager::ClusterManager
     config::WorkerConfig
     version::Union{VersionNumber, Nothing}   # Julia version of the remote process
+    initialized::Event
 
     function Worker(id::Int, r_stream::IO, w_stream::IO, manager::ClusterManager;
                              version::Union{VersionNumber, Nothing}=nothing,
@@ -90,6 +130,7 @@ mutable struct Worker
             return map_pid_wrkr[id]
         end
         w=new(id, [], [], false, W_CREATED, Condition(), time(), conn_func)
+        w.initialized = Event()
         register_worker(w)
         w
     end
@@ -134,7 +175,7 @@ function exec_conn_func(w::Worker)
         f()
     catch e
         w.conn_func = () -> throw(e)
-        rethrow(e)
+        rethrow()
     end
     nothing
 end
@@ -161,18 +202,12 @@ mutable struct LocalProcess
     LocalProcess() = new(1)
 end
 
-
-import LinearAlgebra
-function disable_threaded_libs()
-    LinearAlgebra.BLAS.set_num_threads(1)
-end
-
 worker_timeout() = parse(Float64, get(ENV, "JULIA_WORKER_TIMEOUT", "60.0"))
 
 
 ## worker creation and setup ##
 """
-    start_worker([out::IO=stdout], cookie::AbstractString=readline(stdin))
+    start_worker([out::IO=stdout], cookie::AbstractString=readline(stdin); close_stdin::Bool=true, stderr_to_stdout::Bool=true)
 
 `start_worker` is an internal function which is the default entry point for
 worker processes connecting via TCP/IP. It sets up the process as a Julia cluster
@@ -180,18 +215,19 @@ worker.
 
 host:port information is written to stream `out` (defaults to stdout).
 
-The function closes stdin (after reading the cookie if required), redirects stderr to stdout,
-listens on a free port (or if specified, the port in the `--bind-to` command
-line option) and schedules tasks to process incoming TCP connections and requests.
+The function reads the cookie from stdin if required, and  listens on a free port
+(or if specified, the port in the `--bind-to` command line option) and schedules
+tasks to process incoming TCP connections and requests. It also (optionally)
+closes stdin and redirects stderr to stdout.
 
 It does not return.
 """
-start_worker(cookie::AbstractString=readline(stdin)) = start_worker(stdout, cookie)
-function start_worker(out::IO, cookie::AbstractString=readline(stdin))
+start_worker(cookie::AbstractString=readline(stdin); kwargs...) = start_worker(stdout, cookie; kwargs...)
+function start_worker(out::IO, cookie::AbstractString=readline(stdin); close_stdin::Bool=true, stderr_to_stdout::Bool=true)
     init_multi()
 
-    close(stdin) # workers will not use it
-    redirect_stderr(stdout)
+    close_stdin && close(stdin) # workers will not use it
+    stderr_to_stdout && redirect_stderr(stdout)
 
     init_worker(cookie)
     interface = IPv4(LPROC.bind_addr)
@@ -245,6 +281,11 @@ function redirect_worker_output(ident, stream)
     end
 end
 
+struct LaunchWorkerError <: Exception
+    msg::String
+end
+
+Base.showerror(io::IO, e::LaunchWorkerError) = print(io, e.msg)
 
 # The default TCP transport relies on the worker listening on a free
 # port available and printing its bind address and port.
@@ -276,7 +317,7 @@ function read_worker_host_port(io::IO)
 
             conninfo = fetch(readtask)
             if isempty(conninfo) && !isopen(io)
-                error("Unable to read host:port string from worker. Launch command exited with error?")
+                throw(LaunchWorkerError("Unable to read host:port string from worker. Launch command exited with error?"))
             end
 
             ntries -= 1
@@ -290,13 +331,13 @@ function read_worker_host_port(io::IO)
         end
         close(io)
         if ntries > 0
-            error("Timed out waiting to read host:port string from worker.")
+            throw(LaunchWorkerError("Timed out waiting to read host:port string from worker."))
         else
-            error("Unexpected output from worker launch command. Host:port string not found.")
+            throw(LaunchWorkerError("Unexpected output from worker launch command. Host:port string not found."))
         end
     finally
         for line in leader
-            println("\tFrom failed worker startup:\t", line)
+            println("\tFrom worker startup:\t", line)
         end
     end
 end
@@ -358,6 +399,34 @@ the package `ClusterManagers.jl`.
 The number of seconds a newly launched worker waits for connection establishment from the
 master can be specified via variable `JULIA_WORKER_TIMEOUT` in the worker process's
 environment. Relevant only when using TCP/IP as transport.
+
+To launch workers without blocking the REPL, or the containing function
+if launching workers programmatically, execute `addprocs` in its own task.
+
+# Examples
+
+```
+# On busy clusters, call `addprocs` asynchronously
+t = @async addprocs(...)
+```
+
+```
+# Utilize workers as and when they come online
+if nprocs() > 1   # Ensure at least one new worker is available
+   ....   # perform distributed execution
+end
+```
+
+```
+# Retrieve newly launched worker IDs, or any error messages
+if istaskdone(t)   # Check if `addprocs` has completed to ensure `fetch` doesn't block
+    if nworkers() == N
+        new_pids = fetch(t)
+    else
+        fetch(t)
+    end
+  end
+```
 """
 function addprocs(manager::ClusterManager; kwargs...)
     init_multi()
@@ -503,9 +572,13 @@ function create_worker(manager, wconfig)
     local r_s, w_s
     try
         (r_s, w_s) = connect(manager, w.id, wconfig)
-    catch e
-        deregister_worker(w.id)
-        rethrow(e)
+    catch ex
+        try
+            deregister_worker(w.id)
+            kill(manager, w.id, wconfig)
+        finally
+            rethrow(ex)
+        end
     end
 
     w = Worker(w.id, r_s, w_s, manager; config=wconfig)
@@ -720,6 +793,15 @@ const map_del_wrkr = Set{Int}()
     myid()
 
 Get the id of the current process.
+
+# Examples
+```julia-repl
+julia> myid()
+1
+
+julia> remotecall_fetch(() -> myid(), 4)
+4
+```
 """
 myid() = LPROC.id
 
@@ -727,6 +809,17 @@ myid() = LPROC.id
     nprocs()
 
 Get the number of available processes.
+
+# Examples
+```julia-repl
+julia> nprocs()
+3
+
+julia> workers()
+5-element Array{Int64,1}:
+ 2
+ 3
+```
 """
 function nprocs()
     if myid() == 1 || (PGRP.topology == :all_to_all && !isclusterlazy())
@@ -746,8 +839,19 @@ end
 """
     nworkers()
 
-Get the number of available worker processes. This is one less than `nprocs()`. Equal to
+Get the number of available worker processes. This is one less than [`nprocs()`](@ref). Equal to
 `nprocs()` if `nprocs() == 1`.
+
+# Examples
+```julia-repl
+\$ julia -p 5
+
+julia> nprocs()
+6
+
+julia> nworkers()
+5
+```
 """
 function nworkers()
     n = nprocs()
@@ -757,7 +861,18 @@ end
 """
     procs()
 
-Return a list of all process identifiers.
+Return a list of all process identifiers, including pid 1 (which is not included by [`workers()`](@ref)).
+
+# Examples
+```julia-repl
+\$ julia -p 5
+
+julia> procs()
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+```
 """
 function procs()
     if myid() == 1 || (PGRP.topology == :all_to_all  && !isclusterlazy())
@@ -809,6 +924,16 @@ end
     workers()
 
 Return a list of all worker process identifiers.
+
+# Examples
+```julia-repl
+\$ julia -p 5
+
+julia> workers()
+2-element Array{Int64,1}:
+ 2
+ 3
+```
 """
 function workers()
     allp = procs()
@@ -832,13 +957,29 @@ Remove the specified workers. Note that only process 1 can add or remove
 workers.
 
 Argument `waitfor` specifies how long to wait for the workers to shut down:
-    - If unspecified, `rmprocs` will wait until all requested `pids` are removed.
-    - An `ErrorException` is raised if all workers cannot be terminated before
-      the requested `waitfor` seconds.
-    - With a `waitfor` value of 0, the call returns immediately with the workers
-      scheduled for removal in a different task. The scheduled `Task` object is
-      returned. The user should call `wait` on the task before invoking any other
-      parallel calls.
+  - If unspecified, `rmprocs` will wait until all requested `pids` are removed.
+  - An [`ErrorException`](@ref) is raised if all workers cannot be terminated before
+    the requested `waitfor` seconds.
+  - With a `waitfor` value of 0, the call returns immediately with the workers
+    scheduled for removal in a different task. The scheduled [`Task`](@ref) object is
+    returned. The user should call [`wait`](@ref) on the task before invoking any other
+    parallel calls.
+
+# Examples
+```julia-repl
+\$ julia -p 5
+
+julia> t = rmprocs(2, 3, waitfor=0)
+Task (runnable) @0x0000000107c718d0
+
+julia> wait(t)
+
+julia> workers()
+3-element Array{Int64,1}:
+ 4
+ 5
+ 6
+```
 """
 function rmprocs(pids...; waitfor=typemax(Int))
     cluster_mgmt_from_master_check()
@@ -982,12 +1123,12 @@ function deregister_worker(pg, pid)
     ids = []
     tonotify = []
     lock(client_refs) do
-        for (id,rv) in pg.refs
-            if in(pid,rv.clientset)
+        for (id, rv) in pg.refs
+            if in(pid, rv.clientset)
                 push!(ids, id)
             end
             if rv.waitingfor == pid
-                push!(tonotify, (id,rv))
+                push!(tonotify, (id, rv))
             end
         end
         for id in ids
@@ -995,11 +1136,12 @@ function deregister_worker(pg, pid)
         end
 
         # throw exception to tasks waiting for this pid
-        for (id,rv) in tonotify
-            notify_error(rv.c, ProcessExitedException())
+        for (id, rv) in tonotify
+            close(rv.c, ProcessExitedException())
             delete!(pg.refs, id)
         end
     end
+    return
 end
 
 
@@ -1009,6 +1151,7 @@ function interrupt(pid::Integer)
     if isa(w, Worker)
         manage(w.manager, w.id, w.config, :interrupt)
     end
+    return
 end
 
 """

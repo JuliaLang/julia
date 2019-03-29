@@ -1,5 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    Random
+
+Support for generating random numbers. Provides [`rand`](@ref), [`randn`](@ref),
+[`AbstractRNG`](@ref), [`MersenneTwister`](@ref), and [`RandomDevice`](@ref).
+"""
 module Random
 
 include("DSFMT.jl")
@@ -8,7 +14,7 @@ using .DSFMT
 using Base.GMP.MPZ
 using Base.GMP: Limb
 
-using Base: BitInteger, BitInteger_types, BitUnsigned, has_offset_axes
+using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
 
 import Base: copymutable, copy, copy!, ==, hash, convert
 using Serialization
@@ -27,6 +33,11 @@ export rand!, randn!,
 
 ## general definitions
 
+"""
+    AbstractRNG
+
+Supertype for random number generators such as [`MersenneTwister`](@ref) and [`RandomDevice`](@ref).
+"""
 abstract type AbstractRNG end
 
 """
@@ -217,6 +228,8 @@ rand(rng::AbstractRNG, ::UniformT{T}) where {T} = rand(rng, T)
 #### scalars
 
 rand(rng::AbstractRNG, X)                                      = rand(rng, Sampler(rng, X, Val(1)))
+# this is needed to disambiguate
+rand(rng::AbstractRNG, X::Dims)                                = rand(rng, Sampler(rng, X, Val(1)))
 rand(rng::AbstractRNG=GLOBAL_RNG, ::Type{X}=Float64) where {X} = rand(rng, Sampler(rng, X, Val(1)))
 
 rand(X)                   = rand(GLOBAL_RNG, X)
@@ -249,9 +262,6 @@ rand(                X, d::Integer, dims::Integer...) = rand(X, Dims((d, dims...
 # rand(r, ()) would match both this method and rand(r, dims::Dims)
 # moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
 
-# this is needed to disambiguate
-rand(r::AbstractRNG, dims::Dims) = error("rand(rng, dims) is discontinued; try rand(rng, Float64, dims)")
-
 rand(r::AbstractRNG, ::Type{X}, dims::Dims) where {X} = rand!(r, Array{X}(undef, dims), X)
 rand(                ::Type{X}, dims::Dims) where {X} = rand(GLOBAL_RNG, X, dims)
 
@@ -283,15 +293,17 @@ include("misc.jl")
 Pick a random element or array of random elements from the set of values specified by `S`;
 `S` can be
 
-* an indexable collection (for example `1:n` or `['x','y','z']`),
+* an indexable collection (for example `1:9` or `('x', "y", :z)`),
 * an `AbstractDict` or `AbstractSet` object,
 * a string (considered as a collection of characters), or
 * a type: the set of values to pick from is then equivalent to `typemin(S):typemax(S)` for
   integers (this is not applicable to [`BigInt`](@ref)), and to ``[0, 1)`` for floating
   point numbers;
 
-`S` defaults to [`Float64`](@ref)
-(except when `dims` is a tuple of integers, in which case `S` must be specified).
+`S` defaults to [`Float64`](@ref).
+
+!!! compat "Julia 1.1"
+    Support for `S` as a tuple requires at least Julia 1.1.
 
 # Examples
 ```julia-repl
@@ -299,6 +311,8 @@ julia> rand(Int, 2)
 2-element Array{Int64,1}:
  1339893410598768192
  1575814717733606317
+
+julia> using Random
 
 julia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))
 1=>2

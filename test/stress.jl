@@ -17,7 +17,7 @@ if Sys.isunix()
                 @test false
             end
         catch ex
-            isa(ex, Base.IOError) || rethrow(ex)
+            isa(ex, Base.IOError) || rethrow()
             @test ex.code in (Base.UV_EMFILE, Base.UV_ENFILE)
         finally
             foreach(close, ps)

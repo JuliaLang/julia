@@ -4,7 +4,7 @@ struct LDLt{T,S<:AbstractMatrix{T}} <: Factorization{T}
     data::S
 
     function LDLt{T,S}(data) where {T,S<:AbstractMatrix{T}}
-        @assert !has_offset_axes(data)
+        require_one_based_indexing(data)
         new{T,S}(data)
     end
 end
@@ -48,13 +48,13 @@ julia> S
   ⋅        0.545455  3.90909
 ```
 """
-function ldlt!(S::SymTridiagonal{T,V}) where {T<:Real,V}
+function ldlt!(S::SymTridiagonal{T,V}) where {T,V}
     n = size(S,1)
     d = S.dv
     e = S.ev
     @inbounds @simd for i = 1:n-1
         e[i] /= d[i]
-        d[i+1] -= abs2(e[i])*d[i]
+        d[i+1] -= e[i]^2*d[i]
     end
     return LDLt{T,SymTridiagonal{T,V}}(S)
 end
@@ -99,7 +99,7 @@ end
 factorize(S::SymTridiagonal) = ldlt(S)
 
 function ldiv!(S::LDLt{T,M}, B::AbstractVecOrMat{T}) where {T,M<:SymTridiagonal{T}}
-    @assert !has_offset_axes(B)
+    require_one_based_indexing(B)
     n, nrhs = size(B, 1), size(B, 2)
     if size(S,1) != n
         throw(DimensionMismatch("Matrix has dimensions $(size(S)) but right hand side has first dimension $n"))

@@ -206,3 +206,34 @@ module CcallableRetTypeTest
     end
     @test do_the_call() === 42.0
 end
+
+# If this test breaks, you've probably broken Cxx.jl - please check
+module LLVMCallFunctionTest
+    using Base: llvmcall
+    using Test
+
+    function julia_to_llvm(@nospecialize x)
+        isboxed = Ref{UInt8}()
+        ccall(:julia_type_to_llvm,Ptr{Cvoid},(Any,Ref{UInt8}),x,isboxed)
+    end
+    const AnyTy = julia_to_llvm(Any)
+
+    const libllvmcalltest = "libllvmcalltest"
+    const the_f = ccall((:MakeIdentityFunction, libllvmcalltest), Ptr{Cvoid}, (Ptr{Cvoid},), AnyTy)
+
+    @eval really_complicated_identity(x) = llvmcall($(the_f), Any, Tuple{Any}, x)
+
+    mutable struct boxed_struct
+    end
+    let x = boxed_struct()
+        @test really_complicated_identity(x) === x
+    end
+end
+
+# support for calling external functions
+let
+    f() = ccall("time", llvmcall, Cvoid, (Ptr{Cvoid},), C_NULL)
+    @test_throws ErrorException f()
+    f() = ccall("extern time", llvmcall, Cvoid, (Ptr{Cvoid},), C_NULL)
+    f()
+end

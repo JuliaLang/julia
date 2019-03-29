@@ -45,13 +45,16 @@ include_string_test_func = include_string(@__MODULE__, "include_string_test() = 
 
 @test isdir(@__DIR__)
 @test @__DIR__() == dirname(@__FILE__)
+@test !endswith(@__DIR__, Base.Filesystem.path_separator)
 let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`,
-    wd = sprint(show, abspath(pwd(), "")),
-    s_dir = sprint(show, joinpath(realpath(tempdir()), ""))
+    wd = sprint(show, pwd())
+    s_dir = sprint(show, realpath(tempdir()))
     @test wd != s_dir
     @test readchomp(`$exename -E "@__DIR__" -i`) == wd
     @test readchomp(`$exename -E "cd(()->eval(:(@__DIR__)), $s_dir)" -i`) == s_dir
     @test readchomp(`$exename -E "@__DIR__"`) == wd # non-interactive
+    @test !endswith(wd, Base.Filesystem.path_separator)
+    @test !endswith(s_dir, Base.Filesystem.path_separator)
 end
 
 # Issue #5789 and PR #13542:
@@ -93,12 +96,24 @@ let shastr = "ab"^20
     @test "check $hash" == "check $shastr"
 end
 
+let shastr1 = "ab"^20, shastr2 = "ac"^20
+    hash1 = SHA1(shastr1)
+    hash2 = SHA1(shastr2)
+    @test isless(hash1, hash2)
+    @test !isless(hash2, hash1)
+    @test !isless(hash1, hash1)
+end
+
 let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
     uuid = UUID(uuidstr)
     @test uuid == eval(Meta.parse(repr(uuid))) # check show method
     @test string(uuid) == uuidstr == sprint(print, uuid)
     @test "check $uuid" == "check $uuidstr"
+    @test UUID(UInt128(uuid)) == uuid
+    @test UUID(convert(NTuple{2, UInt64}, uuid)) == uuid
+    @test UUID(convert(NTuple{4, UInt32}, uuid)) == uuid
 end
+@test_throws ArgumentError UUID("@"^4 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^6)
 
 function subset(v::Vector{T}, m::Int) where T
     T[v[j] for j = 1:length(v) if ((m >>> (j - 1)) & 1) == 1]
@@ -545,6 +560,74 @@ try
 finally
     Base.ACTIVE_PROJECT[] = old_act_proj
     popfirst!(LOAD_PATH)
+end
+
+@testset "--project and JULIA_PROJECT paths should be absolutified" begin
+    mktempdir() do dir; cd(dir) do
+        mkdir("foo")
+        script = """
+        using Test
+        old = Base.active_project()
+        cd("foo")
+        @test Base.active_project() == old
+        """
+        @test success(`$(Base.julia_cmd()) --startup-file=no --project=foo -e $(script)`)
+        withenv("JULIA_PROJECT" => "foo") do
+            @test success(`$(Base.julia_cmd()) --startup-file=no -e $(script)`)
+        end
+    end; end
+end
+
+# Base.active_project when version directory exist in depot, but contains no project file
+mktempdir() do dir
+    vdir = Base.DEFAULT_LOAD_PATH[2]
+    vdir = replace(vdir, "#" => VERSION.major, count = 1)
+    vdir = replace(vdir, "#" => VERSION.minor, count = 1)
+    vdir = replace(vdir, "#" => VERSION.patch, count = 1)
+    vdir = vdir[2:end] # remove @
+    vpath = joinpath(dir, "environments", vdir)
+    mkpath(vpath)
+    withenv("JULIA_DEPOT_PATH" => dir) do
+        script = "@assert startswith(Base.active_project(), $(repr(vpath)))"
+        @test success(`$(Base.julia_cmd()) --startup-file=no -e $(script)`)
+    end
+end
+
+@testset "expansion of JULIA_LOAD_PATH" begin
+    s = Sys.iswindows() ? ';' : ':'
+    tmp = "/foo/bar"
+    cases = Dict{Any,Vector{String}}(
+        nothing => Base.DEFAULT_LOAD_PATH,
+        "" => [],
+        "$s" => Base.DEFAULT_LOAD_PATH,
+        "$tmp$s" => [tmp; Base.DEFAULT_LOAD_PATH],
+        "$s$tmp" => [Base.DEFAULT_LOAD_PATH; tmp],
+        )
+    for (env, result) in pairs(cases)
+        withenv("JULIA_LOAD_PATH" => env) do
+            script = "LOAD_PATH == $(repr(result)) || error()"
+            @test success(`$(Base.julia_cmd()) --startup-file=no -e $script`)
+        end
+    end
+end
+
+@testset "expansion of JULIA_DEPOT_PATH" begin
+    s = Sys.iswindows() ? ';' : ':'
+    tmp = "/foo/bar"
+    DEFAULT = Base.append_default_depot_path!(String[])
+    cases = Dict{Any,Vector{String}}(
+        nothing => DEFAULT,
+        "" => [],
+        "$s" => DEFAULT,
+        "$tmp$s" => [tmp; DEFAULT],
+        "$s$tmp" => [DEFAULT; tmp],
+        )
+    for (env, result) in pairs(cases)
+        withenv("JULIA_DEPOT_PATH" => env) do
+            script = "DEPOT_PATH == $(repr(result)) || error()"
+            @test success(`$(Base.julia_cmd()) --startup-file=no -e $script`)
+        end
+    end
 end
 
 ## cleanup after tests ##

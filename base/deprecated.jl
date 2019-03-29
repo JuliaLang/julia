@@ -5,12 +5,8 @@
 # Please add new deprecations at the bottom of the file.
 # A function deprecated in a release will be removed in the next one.
 # Please also add a reference to the pull request which introduced the
-# deprecation.
-#
-# For simple cases where a direct replacement is available, use @deprecate:
-# the first argument is the signature of the deprecated method, the second one
-# is the call which replaces it. Remove the definition of the deprecated method
-# and unexport it, as @deprecate takes care of calling the replacement
+# deprecation. For simple cases where a direct replacement is available,
+# use @deprecate. @deprecate takes care of calling the replacement
 # and of exporting the function.
 #
 # For more complex cases, move the body of the deprecated method in this file,
@@ -18,6 +14,22 @@
 # the name of the function, which is used to ensure that the deprecation warning
 # is only printed the first time for each call place.
 
+"""
+    @deprecate old new [ex=true]
+
+The first argument `old` is the signature of the deprecated method, the second one
+`new` is the call which replaces it. `@deprecate` exports `old` unless the optional
+third argument is `false`.
+
+# Examples
+```jldoctest
+julia> @deprecate old(x) new(x)
+old (generic function with 1 method)
+
+julia> @deprecate old(x) new(x) false
+old (generic function with 1 method)
+```
+"""
 macro deprecate(old, new, ex=true)
     meta = Expr(:meta, :noinline)
     if isa(old, Symbol)
@@ -159,5 +171,20 @@ function promote_eltype_op end
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
+
+# @deprecate one(i::CartesianIndex) oneunit(i)
+# @deprecate one(::Type{I}) where I<:CartesianIndex oneunit(I)
+
+@deprecate reindex(V, idxs, subidxs) reindex(idxs, subidxs) false
+@deprecate substrides(parent::AbstractArray, strds::Tuple, I::Tuple) substrides(strds, I) false
+
+# TODO: deprecate these
+one(::CartesianIndex{N}) where {N} = one(CartesianIndex{N})
+one(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 1, Val(N)))
+
+MPFR.BigFloat(x, prec::Int) = BigFloat(x; precision=prec)
+MPFR.BigFloat(x, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding; precision=prec)
+MPFR.BigFloat(x::Real, prec::Int) = BigFloat(x; precision=prec)
+MPFR.BigFloat(x::Real, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding; precision=prec)
 
 # END 1.0 deprecations

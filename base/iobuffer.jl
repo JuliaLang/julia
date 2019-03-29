@@ -16,7 +16,7 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
 
     function GenericIOBuffer{T}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
                                 maxsize::Integer) where T<:AbstractVector{UInt8}
-        @assert !has_offset_axes(data)
+        require_one_based_indexing(data)
         new(data,readable,writable,seekable,append,length(data),maxsize,1,-1)
     end
 end
@@ -89,7 +89,7 @@ function IOBuffer(
         maxsize::Integer=typemax(Int),
         sizehint::Union{Integer,Nothing}=nothing)
     if maxsize < 0
-        throw(ArgumentError("negative maxsize: $(maxsize)"))
+        throw(ArgumentError("negative maxsize"))
     end
     if sizehint !== nothing
         sizehint!(data, sizehint)
@@ -167,8 +167,23 @@ function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     nothing
 end
 
+function read(from::GenericIOBuffer, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
+    from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
+    avail = bytesavailable(from)
+    nb = sizeof(T)
+    if nb > avail
+        throw(EOFError())
+    end
+    GC.@preserve from begin
+        ptr::Ptr{T} = pointer(from.data, from.ptr)
+        x = unsafe_load(ptr)
+    end
+    from.ptr += nb
+    return x
+end
+
 function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
-    @assert !has_offset_axes(a)
+    require_one_based_indexing(a)
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
@@ -274,11 +289,9 @@ function compact(io::GenericIOBuffer)
     return io
 end
 
-@inline ensureroom(io::GenericIOBuffer, nshort::Int) = ensureroom(io, UInt(nshort))
-@inline function ensureroom(io::GenericIOBuffer, nshort::UInt)
+@noinline function ensureroom_slowpath(io::GenericIOBuffer, nshort::UInt)
     io.writable || throw(ArgumentError("ensureroom failed, IOBuffer is not writeable"))
     if !io.seekable
-        nshort >= 0 || throw(ArgumentError("ensureroom failed, requested number of bytes must be ≥ 0, got $nshort"))
         if !ismarked(io) && io.ptr > 1 && io.size <= io.ptr - 1
             io.ptr = 1
             io.size = 0
@@ -293,9 +306,18 @@ end
             end
         end
     end
-    n = min(nshort + (io.append ? io.size : io.ptr-1), io.maxsize)
-    if n > length(io.data)
-        resize!(io.data, n)
+    return
+end
+
+@inline ensureroom(io::GenericIOBuffer, nshort::Int) = ensureroom(io, UInt(nshort))
+@inline function ensureroom(io::GenericIOBuffer, nshort::UInt)
+    if !io.writable || (!io.seekable && io.ptr > 1)
+        ensureroom_slowpath(io, nshort)
+    end
+    n = min((nshort % Int) + (io.append ? io.size : io.ptr-1), io.maxsize)
+    l = length(io.data)
+    if n > l
+        _growend!(io.data, (n - l) % UInt)
     end
     return io
 end
@@ -403,7 +425,7 @@ function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
 end
 
 function write_sub(to::GenericIOBuffer, a::AbstractArray{UInt8}, offs, nel)
-    @assert !has_offset_axes(a)
+    require_one_based_indexing(a)
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
@@ -483,7 +505,7 @@ end
 
 # copy-free crc32c of IOBuffer:
 function _crc32c(io::IOBuffer, nb::Integer, crc::UInt32=0x00000000)
-    nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0"))
+    nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0, got $nb"))
     io.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     n = min(nb, bytesavailable(io))
     n == 0 && return crc

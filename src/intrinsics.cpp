@@ -502,7 +502,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
 
 static jl_cgval_t generic_cast(
         jl_codectx_t &ctx,
-        intrinsic f, Value *(*generic)(jl_codectx_t&, Type*, Value*),
+        intrinsic f, Instruction::CastOps Op,
         const jl_cgval_t *argv, bool toint, bool fromint)
 {
     const jl_cgval_t &targ = argv[0];
@@ -523,64 +523,23 @@ static jl_cgval_t generic_cast(
     if (!to || !vt)
         return emit_runtime_call(ctx, f, argv, 2);
     Value *from = emit_unbox(ctx, vt, v, v.typ);
-    Value *ans = generic(ctx, to, from);
-    return mark_julia_type(ctx, ans, false, jlto);
-}
-
-static Value *generic_trunc(jl_codectx_t &ctx, Type *to, Value *x)
-{
-    return ctx.builder.CreateTrunc(x, to);
-}
-
-static Value *generic_sext(jl_codectx_t &ctx, Type *to, Value *x)
-{
-    return ctx.builder.CreateSExt(x, to);
-}
-
-static Value *generic_zext(jl_codectx_t &ctx, Type *to, Value *x)
-{
-    return ctx.builder.CreateZExt(x, to);
-}
-
-static Value *generic_uitofp(jl_codectx_t &ctx, Type *to, Value *x)
-{
-    return ctx.builder.CreateUIToFP(x, to);
-}
-
-static Value *generic_sitofp(jl_codectx_t &ctx, Type *to, Value *x)
-{
-    return ctx.builder.CreateSIToFP(x, to);
-}
-
-static Value *generic_fptoui(jl_codectx_t &ctx, Type *to, Value *x)
-{
-    return ctx.builder.CreateFPToUI(x, to);
-}
-
-static Value *generic_fptosi(jl_codectx_t &ctx, Type *to, Value *x)
-{
-    return ctx.builder.CreateFPToSI(x, to);
-}
-
-static Value *generic_fptrunc(jl_codectx_t &ctx, Type *to, Value *x)
-{
-    return ctx.builder.CreateFPTrunc(x, to);
-}
-
-static Value *generic_fpext(jl_codectx_t &ctx, Type *to, Value *x)
-{
+    if (!CastInst::castIsValid(Op, from, to))
+        return emit_runtime_call(ctx, f, argv, 2);
+    if (Op == Instruction::FPExt) {
 #ifdef JL_NEED_FLOATTEMP_VAR
-    // Target platform might carry extra precision.
-    // Force rounding to single precision first. The reason is that it's
-    // fine to keep working in extended precision as long as it's
-    // understood that everything is implicitly rounded to 23 bits,
-    // but if we start looking at more bits we need to actually do the
-    // rounding first instead of carrying around incorrect low bits.
-    Value *jlfloattemp_var = emit_static_alloca(ctx, x->getType());
-    ctx.builder.CreateStore(x, jlfloattemp_var);
-    x  = ctx.builder.CreateLoad(jlfloattemp_var, true);
+        // Target platform might carry extra precision.
+        // Force rounding to single precision first. The reason is that it's
+        // fine to keep working in extended precision as long as it's
+        // understood that everything is implicitly rounded to 23 bits,
+        // but if we start looking at more bits we need to actually do the
+        // rounding first instead of carrying around incorrect low bits.
+        Value *jlfloattemp_var = emit_static_alloca(ctx, from->getType());
+        ctx.builder.CreateStore(from, jlfloattemp_var);
+        from  = ctx.builder.CreateLoad(jlfloattemp_var, /*force this to load from the stack*/true);
 #endif
-    return ctx.builder.CreateFPExt(x, to);
+    }
+    Value *ans = ctx.builder.CreateCast(Op, from, to);
+    return mark_julia_type(ctx, ans, false, jlto);
 }
 
 static jl_cgval_t emit_runtime_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
@@ -641,8 +600,13 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         bool isboxed;
         Type *ptrty = julia_type_to_llvm(ety, &isboxed);
         assert(!isboxed);
-        Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
-        return typed_load(ctx, thePtr, im1, ety, tbaa_data, true, align_nb);
+        if (!type_is_ghost(ptrty)) {
+            Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
+            return typed_load(ctx, thePtr, im1, ety, tbaa_data, nullptr, true, align_nb);
+        }
+        else {
+            return ghostValue(ety);
+        }
     }
 }
 
@@ -675,7 +639,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         return emit_runtime_pointerset(ctx, argv);
     if (!jl_is_datatype(ety))
         ety = (jl_value_t*)jl_any_type;
-    emit_typecheck(ctx, x, ety, "pointerset: type mismatch in assign");
+    emit_typecheck(ctx, x, ety, "pointerset");
 
     Value *idx = emit_unbox(ctx, T_size, i, (jl_value_t*)jl_long_type);
     Value *im1 = ctx.builder.CreateSub(idx, ConstantInt::get(T_size, 1));
@@ -704,10 +668,12 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         bool isboxed;
         Type *ptrty = julia_type_to_llvm(ety, &isboxed);
         assert(!isboxed);
-        thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
-        typed_store(ctx, thePtr, im1, x, ety, tbaa_data, NULL, align_nb);
+        if (!type_is_ghost(ptrty)) {
+            thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
+            typed_store(ctx, thePtr, im1, x, ety, tbaa_data, nullptr, nullptr, align_nb);
+        }
     }
-    return mark_julia_type(ctx, thePtr, false, aty);
+    return e;
 }
 
 static Value *emit_checked_srem_int(jl_codectx_t &ctx, Value *x, Value *den)
@@ -924,23 +890,23 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
     case bitcast:
         return generic_bitcast(ctx, argv);
     case trunc_int:
-        return generic_cast(ctx, f, generic_trunc, argv, true, true);
+        return generic_cast(ctx, f, Instruction::Trunc, argv, true, true);
     case sext_int:
-        return generic_cast(ctx, f, generic_sext, argv, true, true);
+        return generic_cast(ctx, f, Instruction::SExt, argv, true, true);
     case zext_int:
-        return generic_cast(ctx, f, generic_zext, argv, true, true);
+        return generic_cast(ctx, f, Instruction::ZExt, argv, true, true);
     case uitofp:
-        return generic_cast(ctx, f, generic_uitofp, argv, false, true);
+        return generic_cast(ctx, f, Instruction::UIToFP, argv, false, true);
     case sitofp:
-        return generic_cast(ctx, f, generic_sitofp, argv, false, true);
+        return generic_cast(ctx, f, Instruction::SIToFP, argv, false, true);
     case fptoui:
-        return generic_cast(ctx, f, generic_fptoui, argv, true, false);
+        return generic_cast(ctx, f, Instruction::FPToUI, argv, true, false);
     case fptosi:
-        return generic_cast(ctx, f, generic_fptosi, argv, true, false);
+        return generic_cast(ctx, f, Instruction::FPToSI, argv, true, false);
     case fptrunc:
-        return generic_cast(ctx, f, generic_fptrunc, argv, false, false);
+        return generic_cast(ctx, f, Instruction::FPTrunc, argv, false, false);
     case fpext:
-        return generic_cast(ctx, f, generic_fpext, argv, false, false);
+        return generic_cast(ctx, f, Instruction::FPExt, argv, false, false);
 
     case not_int: {
         const jl_cgval_t &x = argv[0];

@@ -39,7 +39,7 @@ unsafe_convert(::Type{Ptr{Cvoid}}, cf::CFunction) = cf.ptr
     @cfunction(callable, ReturnType, (ArgumentTypes...,)) -> Ptr{Cvoid}
     @cfunction(\$callable, ReturnType, (ArgumentTypes...,)) -> CFunction
 
-Generate a C-callable function pointer from the Julia function `closure`
+Generate a C-callable function pointer from the Julia function `callable`
 for the given type signature.
 To pass the return value to a `ccall`, use the argument type `Ptr{Cvoid}` in the signature.
 
@@ -183,7 +183,7 @@ Calling [`Ref(array[, index])`](@ref Ref) is generally preferable to this functi
 """
 function pointer end
 
-pointer(p::Cstring) = convert(Ptr{UInt8}, p)
+pointer(p::Cstring) = convert(Ptr{Cchar}, p)
 pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)
 
 # comparisons against pointers (mainly to support `cstr==C_NULL`)
@@ -203,7 +203,7 @@ function cconvert(::Type{Cwstring}, s::AbstractString)
     return v
 end
 
-eltype(::Type{Cstring}) = UInt8
+eltype(::Type{Cstring}) = Cchar
 eltype(::Type{Cwstring}) = Cwchar_t
 
 containsnul(p::Ptr, len) =
@@ -292,7 +292,7 @@ transcode(T, src::String) = transcode(T, codeunits(src))
 transcode(::Type{String}, src) = String(transcode(UInt8, src))
 
 function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
-    @assert !has_offset_axes(src)
+    require_one_based_indexing(src)
     dst = UInt16[]
     i, n = 1, length(src)
     n > 0 || return dst
@@ -343,7 +343,7 @@ function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
 end
 
 function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
-    @assert !has_offset_axes(src)
+    require_one_based_indexing(src)
     n = length(src)
     n == 0 && return UInt8[]
 

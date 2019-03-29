@@ -2,8 +2,8 @@
 
 using Random, Sockets
 
-const STDLIB_DIR = joinpath(Sys.BINDIR, "..", "share", "julia", "stdlib", "v$(VERSION.major).$(VERSION.minor)")
-const STDLIBS = filter!(x -> isdir(joinpath(STDLIB_DIR, x)), readdir(STDLIB_DIR))
+const STDLIB_DIR = Sys.STDLIB
+const STDLIBS = filter!(x -> isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")), readdir(STDLIB_DIR))
 
 """
 
@@ -41,19 +41,19 @@ function choosetests(choices = [])
         "intfuncs", "simdloop", "vecelement", "rational",
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
         "operators", "path", "ccall", "parse", "loading", "bigint",
-        "bigfloat", "sorting", "spawn", "backtrace",
+        "sorting", "spawn", "backtrace", "exceptions",
         "file", "read", "version", "namedtuple",
         "mpfr", "broadcast", "complex",
         "floatapprox", "stdlib", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
-        "euler", "show",
+        "euler", "show", "client",
         "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "grisu",
         "some", "meta", "stacktraces", "docs",
         "misc", "threads", "stress",
         "enums", "cmdlineargs", "int",
-        "checked", "bitset", "floatfuncs", "precompile", "inline",
+        "checked", "bitset", "floatfuncs", "precompile",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
-        "channels", "iostream", "secretbuffer", "specificity", "codegen",
+        "channels", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "logging", "missing", "asyncmap"
     ]
 
@@ -107,7 +107,8 @@ function choosetests(choices = [])
         prepend!(tests, ["subarray"])
     end
 
-    compilertests = ["compiler/compiler", "compiler/validation"]
+    compilertests = ["compiler/inference", "compiler/validation", "compiler/ssair", "compiler/irpasses",
+                     "compiler/codegen", "compiler/inline"]
 
     if "compiler" in skip_tests
         filter!(x -> (x != "compiler" && !(x in compilertests)), tests)

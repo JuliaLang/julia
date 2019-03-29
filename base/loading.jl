@@ -96,7 +96,7 @@ string(hash::SHA1) = bytes2hex(hash.bytes)
 print(io::IO, hash::SHA1) = bytes2hex(io, hash.bytes)
 show(io::IO, hash::SHA1) = print(io, "SHA1(\"", hash, "\")")
 
-isless(a::SHA1, b::SHA1) = lexless(a.bytes, b.bytes)
+isless(a::SHA1, b::SHA1) = isless(a.bytes, b.bytes)
 hash(a::SHA1, h::UInt) = hash((SHA1, a.bytes), h)
 ==(a::SHA1, b::SHA1) = a.bytes == b.bytes
 
@@ -254,6 +254,9 @@ locate_package(::Nothing) = nothing
 
 Return the path of `m.jl` file that was used to `import` module `m`,
 or `nothing` if `m` was not imported from a package.
+
+Use [`dirname`](@ref) to get the directory part and [`basename`](@ref)
+to get the file name part of the path.
 """
 function pathof(m::Module)
     pkgid = get(Base.module_keys, m, nothing)
@@ -612,6 +615,9 @@ end
 # and it reconnects the Base.Docs.META
 function _include_from_serialized(path::String, depmods::Vector{Any})
     sv = ccall(:jl_restore_incremental, Any, (Cstring, Any), path, depmods)
+    if isa(sv, Exception)
+        return sv
+    end
     restored = sv[1]
     if !isa(restored, Exception)
         for M in restored::Vector{Any}
@@ -750,7 +756,7 @@ In a module, declare that the file specified by `path` (relative or absolute) is
 dependency for precompilation; that is, the module will need to be recompiled if this file
 changes.
 
-This is only needed if your module depends on a file that is not used via `include`. It has
+This is only needed if your module depends on a file that is not used via [`include`](@ref). It has
 no effect outside of compilation.
 """
 function include_dependency(path::AbstractString)
@@ -789,24 +795,25 @@ const full_warning_showed = Ref(false)
 const modules_warned_for = Set{PkgId}()
 
 """
-    require(module::Symbol)
+    require(into::Module, module::Symbol)
 
-This function is part of the implementation of `using` / `import`, if a module is not
+This function is part of the implementation of [`using`](@ref) / [`import`](@ref), if a module is not
 already defined in `Main`. It can also be called directly to force reloading a module,
 regardless of whether it has been loaded before (for example, when interactively developing
 libraries).
 
 Loads a source file, in the context of the `Main` module, on every active node, searching
 standard locations for files. `require` is considered a top-level operation, so it sets the
-current `include` path but does not use it to search for files (see help for `include`).
+current `include` path but does not use it to search for files (see help for [`include`](@ref)).
 This function is typically used to load library code, and is implicitly called by `using` to
 load packages.
 
 When searching for files, `require` first looks for package code in the global array
-`LOAD_PATH`. `require` is case-sensitive on all platforms, including those with
+[`LOAD_PATH`](@ref). `require` is case-sensitive on all platforms, including those with
 case-insensitive filesystems like macOS and Windows.
 
-For more details regarding code loading, see the manual.
+For more details regarding code loading, see the manual sections on [modules](@ref modules) and
+[parallel computing](@ref code-availability).
 """
 function require(into::Module, mod::Symbol)
     uuidkey = identify_package(into, String(mod))
@@ -953,7 +960,10 @@ function _require(pkg::PkgId)
                 # or if the require search declared it was pre-compiled before (and therefore is expected to still be pre-compilable)
                 cachefile = compilecache(pkg, path)
                 if isa(cachefile, Exception)
-                    if !precompilableerror(cachefile)
+                    if precompilableerror(cachefile)
+                        verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+                        @logmsg verbosity "Skipping precompilation since __precompile__(false). Importing $pkg."
+                    else
                         @warn "The call to compilecache failed to create a usable precompiled cache file for $pkg" exception=m
                     end
                     # fall-through to loading the file locally
@@ -997,7 +1007,7 @@ end
 """
     include_string(m::Module, code::AbstractString, filename::AbstractString="string")
 
-Like `include`, except reads code from the given string rather than from a file.
+Like [`include`](@ref), except reads code from the given string rather than from a file.
 """
 include_string(m::Module, txt::String, fname::String) =
     ccall(:jl_load_file_string, Any, (Ptr{UInt8}, Csize_t, Cstring, Any),
@@ -1007,22 +1017,16 @@ include_string(m::Module, txt::AbstractString, fname::AbstractString="string") =
     include_string(m, String(txt), String(fname))
 
 function source_path(default::Union{AbstractString,Nothing}="")
-    t = current_task()
-    while true
-        s = t.storage
-        if s !== nothing && haskey(s, :SOURCE_PATH)
-            return s[:SOURCE_PATH]
-        end
-        if t === t.parent
-            return default
-        end
-        t = t.parent
+    s = current_task().storage
+    if s !== nothing && haskey(s, :SOURCE_PATH)
+        return s[:SOURCE_PATH]
     end
+    return default
 end
 
 function source_dir()
     p = source_path(nothing)
-    p === nothing ? pwd() : dirname(p)
+    return p === nothing ? pwd() : dirname(p)
 end
 
 include_relative(mod::Module, path::AbstractString) = include_relative(mod, String(path))
@@ -1050,7 +1054,7 @@ end
     Base.include([m::Module,] path::AbstractString)
 
 Evaluate the contents of the input source file in the global scope of module `m`.
-Every module (except those defined with `baremodule`) has its own 1-argument
+Every module (except those defined with [`baremodule`](@ref)) has its own 1-argument
 definition of `include`, which evaluates the file in that module.
 Returns the result of the last evaluated expression of the input file. During including,
 a task-local include path is set to the directory containing the file. Nested calls to
@@ -1062,7 +1066,7 @@ Base.include # defined in sysimg.jl
 """
     evalfile(path::AbstractString, args::Vector{String}=String[])
 
-Load the file using [`Base.include`](@ref), evaluate all expressions,
+Load the file using [`include`](@ref), evaluate all expressions,
 and return the value of the last one.
 """
 function evalfile(path::AbstractString, args::Vector{String}=String[])
@@ -1135,7 +1139,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
             try
                 Base.include(Base.__toplevel__, $(repr(abspath(input))))
             catch ex
-                Base.precompilableerror(ex) || Base.rethrow(ex)
+                Base.precompilableerror(ex) || Base.rethrow()
                 Base.@debug "Aborting `createexprcache'" exception=(Base.ErrorException("Declaration of __precompile__(false) not allowed"), Base.catch_backtrace())
                 Base.exit(125) # we define status = 125 means PrecompileableError
             end\0""")
@@ -1145,10 +1149,10 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
         end
         write(in, "ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, (0, 0))\0")
         close(in)
-    catch ex
+    catch
         close(in)
         process_running(io) && Timer(t -> kill(io), 5.0) # wait a short time before killing the process to give it a chance to clean up on its own first
-        rethrow(ex)
+        rethrow()
     end
     return io
 end
@@ -1424,5 +1428,6 @@ Return the current working directory if run from a REPL or if evaluated by `juli
 """
 macro __DIR__()
     __source__.file === nothing && return nothing
-    return abspath(dirname(String(__source__.file)))
+    _dirname = dirname(String(__source__.file))
+    return isempty(_dirname) ? pwd() : abspath(_dirname)
 end

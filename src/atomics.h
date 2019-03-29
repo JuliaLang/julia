@@ -62,8 +62,12 @@
 // the __atomic builtins or c11 atomics with GNU extension or c11 _Generic
 #  define jl_atomic_compare_exchange(obj, expected, desired)    \
     __sync_val_compare_and_swap(obj, expected, desired)
+#  define jl_atomic_bool_compare_exchange(obj, expected, desired)          \
+    __sync_bool_compare_and_swap(obj, expected, desired)
 #  define jl_atomic_exchange(obj, desired)              \
     __atomic_exchange_n(obj, desired, __ATOMIC_SEQ_CST)
+#  define jl_atomic_exchange_generic(obj, desired, orig)\
+    __atomic_exchange(obj, desired, orig, __ATOMIC_SEQ_CST)
 #  define jl_atomic_exchange_relaxed(obj, desired)      \
     __atomic_exchange_n(obj, desired, __ATOMIC_RELAXED)
 // TODO: Maybe add jl_atomic_compare_exchange_weak for spin lock
@@ -115,6 +119,7 @@ jl_atomic_fetch_add(T *obj, T2 arg)
 {
     return (T)_InterlockedExchangeAdd64((volatile __int64*)obj, (__int64)arg);
 }
+// TODO: jl_atomic_exchange_generic
 #define jl_atomic_fetch_add_relaxed(obj, arg) jl_atomic_fetch_add(obj, arg)
 
 // and
@@ -200,6 +205,7 @@ jl_atomic_compare_exchange(volatile T *obj, T2 expected, T3 desired)
     return (T)_InterlockedCompareExchange64((volatile __int64*)obj,
                                             (__int64)desired, (__int64)expected);
 }
+// TODO: jl_atomic_bool_compare_exchange
 // atomic exchange
 template<typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 1, T>::type

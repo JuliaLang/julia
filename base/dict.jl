@@ -23,8 +23,7 @@ end
 
 function show(io::IO, t::AbstractDict{K,V}) where V where K
     recur_io = IOContext(io, :SHOWN_SET => t,
-                             :typeinfo => eltype(t),
-                             :compact => get(io, :compact, true))
+                             :typeinfo => eltype(t))
 
     limit::Bool = get(io, :limit, false)
     # show in a Julia-syntax-like form: Dict(k=>v, ...)
@@ -127,11 +126,11 @@ Dict(ps::Pair...)                  = Dict(ps)
 function Dict(kv)
     try
         dict_with_eltype((K, V) -> Dict{K, V}, kv, eltype(kv))
-    catch e
+    catch
         if !isiterable(typeof(kv)) || !all(x->isa(x,Union{Tuple,Pair}),kv)
             throw(ArgumentError("Dict(kv): kv needs to be an iterator of tuples or pairs"))
         else
-            rethrow(e)
+            rethrow()
         end
     end
 end
@@ -194,7 +193,7 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
     vals = Vector{V}(undef, newsz)
     age0 = h.age
     count = 0
-    maxprobe = h.maxprobe
+    maxprobe = 0
 
     for i = 1:sz
         @inbounds if olds[i] == 0x1
@@ -372,7 +371,7 @@ end
 function setindex!(h::Dict{K,V}, v0, key0) where V where K
     key = convert(K, key0)
     if !isequal(key, key0)
-        throw(ArgumentError("$key0 is not a valid key for type $K"))
+        throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
     end
     setindex!(h, v0, key)
 end
@@ -439,7 +438,7 @@ get!(f::Function, collection, key)
 function get!(default::Callable, h::Dict{K,V}, key0) where V where K
     key = convert(K, key0)
     if !isequal(key, key0)
-        throw(ArgumentError("$key0 is not a valid key for type $K"))
+        throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
     end
     return get!(default, h, key)
 end
@@ -571,7 +570,7 @@ function getkey(h::Dict{K,V}, key, default) where V where K
 end
 
 function _pop!(h::Dict, index)
-    val = h.vals[index]
+    @inbounds val = h.vals[index]
     _delete!(h, index)
     return val
 end
@@ -619,10 +618,10 @@ function pop!(h::Dict)
     key => val
 end
 
-function _delete!(h::Dict, index)
-    h.slots[index] = 0x2
-    ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.keys, index-1)
-    ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.vals, index-1)
+function _delete!(h::Dict{K,V}, index) where {K,V}
+    @inbounds h.slots[index] = 0x2
+    isbitstype(K) || isbitsunion(K) || ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.keys, index-1)
+    isbitstype(V) || isbitsunion(V) || ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.vals, index-1)
     h.ndel += 1
     h.count -= 1
     h.age += 1
@@ -686,6 +685,18 @@ length(t::Dict) = t.count
 end
 
 filter!(f, d::Dict) = filter_in_one_pass!(f, d)
+
+function map!(f, iter::ValueIterator{<:Dict})
+    dict = iter.dict
+    vals = dict.vals
+    # @inbounds is here so the it gets propigated to isslotfiled
+    @inbounds for i = dict.idxfloor:lastindex(vals)
+        if isslotfilled(dict, i)
+            vals[i] = f(vals[i])
+        end
+    end
+    return iter
+end
 
 struct ImmutableDict{K,V} <: AbstractDict{K,V}
     parent::ImmutableDict{K,V}
@@ -760,4 +771,5 @@ isempty(t::ImmutableDict) = !isdefined(t, :parent)
 empty(::ImmutableDict, ::Type{K}, ::Type{V}) where {K, V} = ImmutableDict{K,V}()
 
 _similar_for(c::Dict, ::Type{Pair{K,V}}, itr, isz) where {K, V} = empty(c, K, V)
-_similar_for(c::AbstractDict, T, itr, isz) = throw(ArgumentError("for AbstractDicts, similar requires an element type of Pair;\n  if calling map, consider a comprehension instead"))
+_similar_for(c::AbstractDict, ::Type{T}, itr, isz) where {T} =
+    throw(ArgumentError("for AbstractDicts, similar requires an element type of Pair;\n  if calling map, consider a comprehension instead"))

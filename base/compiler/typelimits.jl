@@ -5,6 +5,7 @@
 #########################
 
 const MAX_TYPEUNION_COMPLEXITY = 3
+const MAX_TYPEUNION_LENGTH = 3
 const MAX_INLINE_CONST_SIZE = 256
 
 #########################
@@ -233,6 +234,7 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         if isa(c, DataType) && t.name === c.name
             cP = c.parameters
             length(cP) < length(tP) && return true
+            length(cP) > length(tP) && !isvarargtype(tP[end]) && depth == 1 && return false
             ntail = length(cP) - length(tP) # assume parameters were dropped from the tuple head
             # allow creating variation within a nested tuple, but only so deep
             if t.name === Tuple.name && tupledepth > 0
@@ -315,6 +317,27 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         end
         return Bool
     end
+    if (isa(typea, PartialStruct) || isa(typea, Const)) &&
+       (isa(typeb, PartialStruct) || isa(typeb, Const)) &&
+        widenconst(typea) === widenconst(typeb)
+
+       typea_nfields = nfields_tfunc(typea)
+       typeb_nfields = nfields_tfunc(typeb)
+       if !isa(typea_nfields, Const) || !isa(typea_nfields, Const) || typea_nfields.val !== typeb_nfields.val
+            return widenconst(typea)
+       end
+
+       type_nfields = typea_nfields.val::Int
+       fields = Vector{Any}(undef, type_nfields)
+       anyconst = false
+       for i = 1:type_nfields
+            fields[i] = tmerge(getfield_tfunc(typea, Const(i)),
+                               getfield_tfunc(typeb, Const(i)))
+            anyconst |= has_nontrivial_const_info(fields[i])
+       end
+       return anyconst ? PartialStruct(widenconst(typea), fields) :
+            widenconst(typea)
+    end
     # no special type-inference lattice, join the types
     typea, typeb = widenconst(typea), widenconst(typeb)
     typea === typeb && return typea
@@ -373,7 +396,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         end
     end
     u = Union{types...}
-    if unioncomplexity(u) <= MAX_TYPEUNION_COMPLEXITY
+    if unionlen(u) <= MAX_TYPEUNION_LENGTH && unioncomplexity(u) <= MAX_TYPEUNION_COMPLEXITY
         # don't let type unions get too big, if the above didn't reduce it enough
         return u
     end
@@ -400,7 +423,7 @@ function tuplemerge(a::DataType, b::DataType)
     p = Vector{Any}(undef, lt + vt)
     for i = 1:lt
         ui = Union{ap[i], bp[i]}
-        if unioncomplexity(ui) < MAX_TYPEUNION_COMPLEXITY
+        if unionlen(ui) <= MAX_TYPEUNION_LENGTH && unioncomplexity(ui) <= MAX_TYPEUNION_COMPLEXITY
             p[i] = ui
         else
             p[i] = Any

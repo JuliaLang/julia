@@ -130,7 +130,7 @@ function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSA
                 return defssa
             end
             if isa(def.val, SSAValue)
-                if isa(defssa, OldSSAValue) && !already_inserted(compact, defssa)
+                if is_old(compact, defssa)
                     defssa = OldSSAValue(def.val.id)
                 else
                     defssa = def.val
@@ -140,7 +140,11 @@ function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSA
             end
         elseif isa(def, AnySSAValue)
             pi_callback(def, defssa)
-            defssa = def
+            if isa(def, SSAValue) && is_old(compact, defssa)
+                defssa = OldSSAValue(def.id)
+            else
+                defssa = def
+            end
         elseif isa(def, Union{PhiNode, PhiCNode, Expr, GlobalRef})
             return defssa
         else
@@ -187,21 +191,21 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
         def = compact[defssa]
         if isa(def, PhiNode)
             push!(visited_phinodes, defssa)
-            possible_predecessors = let def=def, typeconstraint=typeconstraint
-                collect(Iterators.filter(1:length(def.edges)) do n
-                    isassigned(def.values, n) || return false
-                    val = def.values[n]
-                    if isa(defssa, OldSSAValue) && isa(val, SSAValue)
-                        val = OldSSAValue(val.id)
-                    end
-                    edge_typ = widenconst(compact_exprtype(compact, val))
-                    return typeintersect(edge_typ, typeconstraint) !== Union{}
-                end)
+            possible_predecessors = Int[]
+            for n in 1:length(def.edges)
+                isassigned(def.values, n) || continue
+                val = def.values[n]
+                if is_old(compact, defssa) && isa(val, SSAValue)
+                    val = OldSSAValue(val.id)
+                end
+                edge_typ = widenconst(compact_exprtype(compact, val))
+                typeintersect(edge_typ, typeconstraint) === Union{} && continue
+                push!(possible_predecessors, n)
             end
             for n in possible_predecessors
                 pred = def.edges[n]
                 val = def.values[n]
-                if isa(defssa, OldSSAValue) && isa(val, SSAValue)
+                if is_old(compact, defssa) && isa(val, SSAValue)
                     val = OldSSAValue(val.id)
                 end
                 if isa(val, AnySSAValue)
@@ -279,9 +283,9 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
             else
                 def = compact[leaf]
             end
-            if is_tuple_call(compact.ir, def) && isa(field, Int) && 1 <= field < length(def.args)
+            if is_tuple_call(compact, def) && isa(field, Int) && 1 <= field < length(def.args)
                 lifted = def.args[1+field]
-                if isa(leaf, OldSSAValue) && isa(lifted, SSAValue)
+                if is_old(compact, leaf) && isa(lifted, SSAValue)
                     lifted = OldSSAValue(lifted.id)
                 end
                 if isa(lifted, GlobalRef) || isa(lifted, Expr)
@@ -292,7 +296,7 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                 lifted_leaves[leaf_key] = RefValue{Any}(lifted)
                 continue
             elseif isexpr(def, :new)
-                typ = types(compact)[leaf]
+                typ = widenconst(types(compact)[leaf])
                 if isa(typ, UnionAll)
                     typ = unwrap_unionall(typ)
                 end
@@ -320,7 +324,7 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                     compact[leaf] = def
                 end
                 lifted = def.args[1+field]
-                if isa(leaf, OldSSAValue) && isa(lifted, SSAValue)
+                if is_old(compact, leaf) && isa(lifted, SSAValue)
                     lifted = OldSSAValue(lifted.id)
                 end
                 if isa(lifted, GlobalRef) || isa(lifted, Expr)
@@ -339,7 +343,7 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                     # N.B.: This can be a bit dangerous because it can lead to
                     # infinite loops if we accidentally insert a node just ahead
                     # of where we are
-                    if isa(leaf, OldSSAValue) && (isa(field, Int) || isa(field, Symbol))
+                    if is_old(compact, leaf) && (isa(field, Int) || isa(field, Symbol))
                         (isa(typ, DataType) && (!typ.abstract)) || return nothing
                         @assert !typ.mutable
                         # If there's the potential for an undefref error on access, we cannot insert a getfield
@@ -425,6 +429,12 @@ struct LiftedPhi
     need_argupdate::Bool
 end
 
+function is_old(compact, @nospecialize(old_node_ssa))
+    isa(old_node_ssa, OldSSAValue) &&
+        !is_pending(compact, old_node_ssa) &&
+        !already_inserted(compact, old_node_ssa)
+end
+
 function perform_lifting!(compact::IncrementalCompact,
         visited_phinodes::Vector{Any}, @nospecialize(cache_key),
         lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
@@ -455,7 +465,7 @@ function perform_lifting!(compact::IncrementalCompact,
             isassigned(old_node.values, i) || continue
             val = old_node.values[i]
             orig_val = val
-            if isa(old_node_ssa, OldSSAValue) && !is_pending(compact, old_node_ssa) && !already_inserted(compact, old_node_ssa) && isa(val, SSAValue)
+            if is_old(compact, old_node_ssa) && isa(val, SSAValue)
                 val = OldSSAValue(val.id)
             end
             if isa(val, Union{NewSSAValue, SSAValue, OldSSAValue})
@@ -520,8 +530,10 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
         # Step 1: Check whether the statement we're looking at is a getfield/setfield!
         if is_known_call(stmt, setfield!, compact)
             is_setfield = true
+            4 <= length(stmt.args) <= 5 || continue
         elseif is_known_call(stmt, getfield, compact)
             is_getfield = true
+            3 <= length(stmt.args) <= 4 || continue
         elseif is_known_call(stmt, isa, compact)
             # TODO
             continue
@@ -688,10 +700,14 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
         compact[idx] = val === nothing ? nothing : val.x
     end
 
-    # Copy the use count, `finish` may modify it and for our predicate
-    # below we need it consistent with the state of the IR here.
+
+    non_dce_finish!(compact)
+    # Copy the use count, `simple_dce!` may modify it and for our predicate
+    # below we need it consistent with the state of the IR here (after tracking
+    # phi node arguments, but before dce).
     used_ssas = copy(compact.used_ssas)
-    ir = finish(compact)
+    simple_dce!(compact)
+    ir = complete(compact)
     # Now go through any mutable structs and see which ones we can eliminate
     for (idx, (intermediaries, defuse)) in defuses
         intermediaries = collect(intermediaries)
@@ -813,15 +829,16 @@ function adce_erase!(phi_uses, extra_worklist, compact, idx)
     end
 end
 
-function count_uses(stmt, uses)
+function count_uses(@nospecialize(stmt), uses::Vector{Int})
     for ur in userefs(stmt)
-        if isa(ur[], SSAValue)
-            uses[ur[].id] += 1
+        use = ur[]
+        if isa(use, SSAValue)
+            uses[use.id] += 1
         end
     end
 end
 
-function mark_phi_cycles(compact, safe_phis, phi)
+function mark_phi_cycles(compact::IncrementalCompact, safe_phis::BitSet, phi::Int)
     worklist = Int[]
     push!(worklist, phi)
     while !isempty(worklist)
@@ -848,7 +865,7 @@ function adce_pass!(ir::IRCode)
     end
     non_dce_finish!(compact)
     for phi in all_phis
-        count_uses(compact.result[phi], phi_uses)
+        count_uses(compact.result[phi]::PhiNode, phi_uses)
     end
     # Perform simple DCE for unused values
     extra_worklist = Int[]
@@ -864,7 +881,7 @@ function adce_pass!(ir::IRCode)
     changed = true
     while changed
         changed = false
-        safe_phis = IdSet{Int}()
+        safe_phis = BitSet()
         for phi in all_phis
             # Save any phi cycles that have non-phi uses
             if compact.used_ssas[phi] - phi_uses[phi] != 0
@@ -882,7 +899,7 @@ function adce_pass!(ir::IRCode)
             end
         end
     end
-    complete(compact)
+    return complete(compact)
 end
 
 function type_lift_pass!(ir::IRCode)

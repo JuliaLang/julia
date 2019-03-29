@@ -8,6 +8,8 @@ using LinearAlgebra
 using Base.Printf: @printf
 using Random
 using Test: guardseed
+using InteractiveUtils: @which
+using Dates
 
 @testset "issparse" begin
     @test issparse(sparse(fill(1,5,5)))
@@ -91,6 +93,10 @@ do33 = fill(1.,3)
     end
 end
 
+@testset "Issue #30006" begin
+    SparseMatrixCSC{Float64,Int32}(spzeros(3,3))[:, 1] == [1, 2, 3]
+end
+
 @testset "concatenation tests" begin
     sp33 = sparse(1.0I, 3, 3)
 
@@ -112,7 +118,7 @@ end
     sz34 = spzeros(3, 4)
     se77 = sparse(1.0I, 7, 7)
     @testset "h+v concatenation" begin
-        @test all([se44 sz42 sz41; sz34 se33] == se77)
+        @test [se44 sz42 sz41; sz34 se33] == se77
         @test length(([sp33 0I; 1I 0I]).nzval) == 6
     end
 
@@ -125,20 +131,20 @@ end
     @testset "concatenation promotion" begin
         sz41_f32 = spzeros(Float32, 4, 1)
         se33_i32 = sparse(Int32(1)I, 3, 3)
-        @test all([se44 sz42 sz41_f32; sz34 se33_i32] == se77)
+        @test [se44 sz42 sz41_f32; sz34 se33_i32] == se77
     end
 
     @testset "mixed sparse-dense concatenation" begin
         sz33 = spzeros(3, 3)
         de33 = Matrix(1.0I, 3, 3)
-        @test  all([se33 de33; sz33 se33] == Array([se33 se33; sz33 se33 ]))
+        @test [se33 de33; sz33 se33] == Array([se33 se33; sz33 se33 ])
     end
 
     # check splicing + concatenation on random instances, with nested vcat and also side-checks sparse ref
     @testset "splicing + concatenation on random instances" begin
         for i = 1 : 10
             a = sprand(5, 4, 0.5)
-            @test all([a[1:2,1:2] a[1:2,3:4]; a[3:5,1] [a[3:4,2:4]; a[5:5,2:4]]] == a)
+            @test [a[1:2,1:2] a[1:2,3:4]; a[3:5,1] [a[3:4,2:4]; a[5:5,2:4]]] == a
         end
     end
 end
@@ -178,6 +184,10 @@ end
         @test ndims(av) == 1
         @test all(av' .== am)
     end
+end
+
+@testset "Issue #28963" begin
+    @test_throws DimensionMismatch (spzeros(10,10)[:, :] = sprand(10,20,0.5))
 end
 
 @testset "matrix-vector multiplication (non-square)" begin
@@ -312,22 +322,44 @@ end
 end
 
 @testset "matrix multiplication" begin
-    for i = 1:5
-        a = sprand(10, 5, 0.7)
-        b = sprand(5, 15, 0.3)
-        @test maximum(abs.(a*b - Array(a)*Array(b))) < 100*eps()
-        @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:sortcols) - Array(a)*Array(b))) < 100*eps()
-        @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:doubletranspose) - Array(a)*Array(b))) < 100*eps()
-        f = Diagonal(rand(5))
+    for (m, p, n, q, k) in (
+                            (10, 0.7, 5, 0.3, 15),
+                            (100, 0.01, 100, 0.01, 20),
+                            (100, 0.1, 100, 0.2, 100),
+                           )
+        a = sprand(m, n, p)
+        b = sprand(n, k, q)
+        as = sparse(a')
+        bs = sparse(b')
+        ab = a * b
+        aab = Array(a) * Array(b)
+        @test maximum(abs.(ab - aab)) < 100*eps()
+        @test a*bs' == ab
+        @test as'*b == ab
+        @test as'*bs' == ab
+        f = Diagonal(rand(n))
         @test Array(a*f) == Array(a)*f
         @test Array(f*b) == f*Array(b)
+        A = rand(2n, 2n)
+        sA = view(A, 1:2:2n, 1:2:2n)
+        @test Array(sA*b) ≈ Array(sA)*Array(b)
+        @test Array(a*sA) ≈ Array(a)*Array(sA)
+        c = sprandn(ComplexF32, n, n, q)
+        @test Array(sA*c') ≈ Array(sA)*Array(c)'
+        @test Array(c'*sA) ≈ Array(c)'*Array(sA)
     end
+end
+
+@testset "Issue #30502" begin
+    @test nnz(sprand(UInt8(16), UInt8(16), 1.0)) == 256
+    @test nnz(sprand(UInt8(16), UInt8(16), 1.0, ones)) == 256
 end
 
 @testset "kronecker product" begin
     for (m,n) in ((5,10), (13,8), (14,10))
         a = sprand(m, 5, 0.4); a_d = Matrix(a)
         b = sprand(n, 6, 0.3); b_d = Matrix(b)
+        v = view(a, :, 1); v_d = Vector(v)
         x = sprand(m, 0.4); x_d = Vector(x)
         y = sprand(n, 0.3); y_d = Vector(y)
         # mat ⊗ mat
@@ -346,6 +378,11 @@ end
         @test Array(kron(x, b)) == kron(x_d, b_d)
         @test Array(kron(x_d, b)) == kron(x_d, b_d)
         @test Array(kron(x, b_d)) == kron(x_d, b_d)
+        # vec ⊗ vec'
+        @test issparse(kron(v, y'))
+        @test issparse(kron(x, y'))
+        @test Array(kron(v, y')) == kron(v_d, y_d')
+        @test Array(kron(x, y')) == kron(x_d, y_d')
         # test different types
         z = convert(SparseVector{Float16, Int8}, y); z_d = Vector(z)
         @test Vector(kron(x, z)) == kron(x_d, z_d)
@@ -362,6 +399,10 @@ end
     end
     @test_throws DimensionMismatch dot(sprand(5,5,0.2),sprand(5,6,0.2))
 end
+
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
 
 sA = sprandn(3, 7, 0.5)
 sC = similar(sA)
@@ -387,6 +428,12 @@ dA = Array(sA)
 
     @testset "inverse scaling with mul!" begin
         bi = inv.(b)
+        @test lmul!(Diagonal(bi), copy(dA)) ≈ ldiv!(Diagonal(b), copy(sA))
+        @test lmul!(Diagonal(bi), copy(dA)) ≈ ldiv!(transpose(Diagonal(b)), copy(sA))
+        @test lmul!(Diagonal(conj(bi)), copy(dA)) ≈ ldiv!(adjoint(Diagonal(b)), copy(sA))
+        @test_throws DimensionMismatch ldiv!(Diagonal(fill(1., length(b)+1)), copy(sA))
+        @test_throws LinearAlgebra.SingularException ldiv!(Diagonal(zeros(length(b))), copy(sA))
+
         dAt = copy(transpose(dA))
         sAt = copy(transpose(sA))
         @test rmul!(copy(dAt), Diagonal(bi)) ≈ rdiv!(copy(sAt), Diagonal(b))
@@ -394,6 +441,26 @@ dA = Array(sA)
         @test rmul!(copy(dAt), Diagonal(conj(bi))) ≈ rdiv!(copy(sAt), adjoint(Diagonal(b)))
         @test_throws DimensionMismatch rdiv!(copy(sAt), Diagonal(fill(1., length(b)+1)))
         @test_throws LinearAlgebra.SingularException rdiv!(copy(sAt), Diagonal(zeros(length(b))))
+    end
+
+    @testset "non-commutative multiplication" begin
+        # non-commutative multiplication
+        Avals = Quaternion.(randn(10), randn(10), randn(10), randn(10))
+        sA = sparse(rand(1:3, 10), rand(1:7, 10), Avals, 3, 7)
+        sC = copy(sA)
+        dA = Array(sA)
+
+        b = Quaternion.(randn(7), randn(7), randn(7), randn(7))
+        D = Diagonal(b)
+        @test Array(sA * D) ≈ dA * D
+        @test rmul!(copy(sA), D) ≈ dA * D
+        @test mul!(sC, copy(sA), D) ≈ dA * D
+
+        b = Quaternion.(randn(3), randn(3), randn(3), randn(3))
+        D = Diagonal(b)
+        @test Array(D * sA) ≈ D * dA
+        @test lmul!(D, copy(sA)) ≈ D * dA
+        @test mul!(sC, D, copy(sA)) ≈ D * dA
     end
 end
 
@@ -610,12 +677,12 @@ end
 
 @testset "issue #5853, sparse diff" begin
     for i=1:2, a=Any[[1 2 3], reshape([1, 2, 3],(3,1)), Matrix(1.0I, 3, 3)]
-        @test all(diff(sparse(a),dims=i) == diff(a,dims=i))
+        @test diff(sparse(a),dims=i) == diff(a,dims=i)
     end
 end
 
 @testset "access to undefined error types that initially allocate elements as #undef" begin
-    @test all(sparse(1:2, 1:2, Number[1,2])^2 == sparse(1:2, 1:2, [1,4]))
+    @test sparse(1:2, 1:2, Number[1,2])^2 == sparse(1:2, 1:2, [1,4])
     sd1 = diff(sparse([1,1,1], [1,2,3], Number[1,2,3]), dims=1)
 end
 
@@ -707,6 +774,8 @@ end
         ss116 = sparse(aa116)
 
         @test ss116[:,:] == copy(ss116)
+
+        @test convert(SparseMatrixCSC{Float32,Int32}, sd116)[2:5,:] == convert(SparseMatrixCSC{Float32,Int32}, sd116[2:5,:])
 
         # range indexing
         @test Array(ss116[i,:]) == aa116[i,:]
@@ -1445,7 +1514,7 @@ end
     local A = guardseed(1234321) do
         triu(sprand(10, 10, 0.2))
     end
-    @test SparseArrays.droptol!(A, 0.01).colptr == [1,1,1,2,2,3,4,6,6,7,9]
+    @test SparseArrays.droptol!(A, 0.01).colptr ==  [1, 2, 2, 3, 4, 5, 5, 6, 8, 10, 13]
     @test isequal(SparseArrays.droptol!(sparse([1], [1], [1]), 1), SparseMatrixCSC(1, 1, Int[1, 1], Int[], Int[]))
 end
 
@@ -1992,6 +2061,12 @@ end
     @test nnz(A) == 1
 end
 
+@testset "setindex with vector eltype (#29034)" begin
+    A = sparse([1], [1], [Vector{Float64}(undef, 3)], 3, 3)
+    A[1,1] = [1.0, 2.0, 3.0]
+    @test A[1,1] == [1.0, 2.0, 3.0]
+end
+
 @testset "show" begin
     io = IOBuffer()
     show(io, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
@@ -2037,18 +2112,20 @@ end
     show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5,6], Int64[1,1,2,2,3,3], [1.0,2.0,3.0,4.0,5.0,6.0]))
     @test String(take!(io)) ==  string("6×3 SparseArrays.SparseMatrixCSC{Float64,Int64} with 6 stored entries:\n  [1, 1]  =  1.0\n",
         "  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0\n  [5, 3]  =  5.0\n  [6, 3]  =  6.0")
+
+    # issue #30589
+    @test repr("text/plain", sparse([true true])) == "1×2 SparseArrays.SparseMatrixCSC{Bool,$Int} with 2 stored entries:\n  [1, 1]  =  1\n  [1, 2]  =  1"
 end
 
 @testset "check buffers" for n in 1:3
     local A
-    colptr = [1,2,3,4]
     rowval = [1,2,3]
     nzval1  = Int[]
     nzval2  = [1,1,1]
-    A = SparseMatrixCSC(n, n, colptr, rowval, nzval1)
+    A = SparseMatrixCSC(n, n, [1:n+1;], rowval, nzval1)
     @test nnz(A) == n
     @test_throws BoundsError A[n,n]
-    A = SparseMatrixCSC(n, n, colptr, rowval, nzval2)
+    A = SparseMatrixCSC(n, n, [1:n+1;], rowval, nzval2)
     @test nnz(A) == n
     @test A      == Matrix(I, n, n)
 end
@@ -2289,10 +2366,204 @@ end
     @test adjoint(MC) == copy(adjoint(SC))
 end
 
+begin
+    rng = Random.MersenneTwister(0)
+    n = 1000
+    B = ones(n)
+    A = sprand(rng, n, n, 0.01)
+    MA = Matrix(A)
+    @testset "triangular multiply with $tr($wr)" for tr in (identity, adjoint, transpose),
+    wr in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+        AW = tr(wr(A))
+        MAW = tr(wr(MA))
+        @test AW * B ≈ MAW * B
+    end
+    A = A - Diagonal(diag(A)) + 2I # avoid rounding errors by division
+    MA = Matrix(A)
+    @testset "triangular solver for $tr($wr)" for tr in (identity, adjoint, transpose),
+    wr in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+        AW = tr(wr(A))
+        MAW = tr(wr(MA))
+        @test AW \ B ≈ MAW \ B
+    end
+    @testset "triangular singular exceptions" begin
+        A = LowerTriangular(sparse([0 2.0;0 1]))
+        @test_throws SingularException(1) A \ ones(2)
+        A = UpperTriangular(sparse([1.0 0;0 0]))
+        @test_throws SingularException(2) A \ ones(2)
+    end
+end
+
 @testset "Issue #28634" begin
     a = SparseMatrixCSC{Int8, Int16}([1 2; 3 4])
     na = SparseMatrixCSC(a)
     @test typeof(a) === typeof(na)
+end
+
+#PR #29045
+@testset "Issue #28934" begin
+    A = sprand(5,5,0.5)
+    D = Diagonal(rand(5))
+    C = copy(A)
+    m1 = @which mul!(C,A,D)
+    m2 = @which mul!(C,D,A)
+    @test m1.module == SparseArrays
+    @test m2.module == SparseArrays
+end
+
+@testset "Symmetric of sparse matrix mul! dense vector" begin
+    rng = Random.MersenneTwister(1)
+    n = 1000
+    p = 0.02
+    q = 1 - sqrt(1-p)
+    Areal = sprandn(rng, n, n, p)
+    Breal = randn(rng, n)
+    Acomplex = sprandn(rng, n, n, q) + sprandn(rng, n, n, q) * im
+    Bcomplex = Breal + randn(rng, n) * im
+    @testset "symmetric/Hermitian sparse multiply with $S($U)" for S in (Symmetric, Hermitian), U in (:U, :L), (A, B) in ((Areal,Breal), (Acomplex,Bcomplex))
+        Asym = S(A, U)
+        As = sparse(Asym) # takes most time
+        @test which(mul!, (typeof(B), typeof(Asym), typeof(B))).module == SparseArrays
+        @test norm(Asym * B - As * B, Inf) <= eps() * n * p * 10
+    end
+end
+
+@testset "Symmetric of view of sparse matrix mul! dense vector" begin
+    rng = Random.MersenneTwister(1)
+    n = 1000
+    p = 0.02
+    q = 1 - sqrt(1-p)
+    Areal = view(sprandn(rng, n, n+10, p), :, 6:n+5)
+    Breal = randn(rng, n)
+    Acomplex = view(sprandn(rng, n, n+10, q) + sprandn(rng, n, n+10, q) * im, :, 6:n+5)
+    Bcomplex = Breal + randn(rng, n) * im
+    @testset "symmetric/Hermitian sparseview multiply with $S($U)" for S in (Symmetric, Hermitian), U in (:U, :L), (A, B) in ((Areal,Breal), (Acomplex,Bcomplex))
+        Asym = S(A, U)
+        As = sparse(Asym) # takes most time
+        @test which(mul!, (typeof(B), typeof(Asym), typeof(B))).module == SparseArrays
+        @test norm(Asym * B - As * B, Inf) <= eps() * n * p * 10
+    end
+end
+
+@testset "sprand" begin
+    p=0.3; m=1000; n=2000;
+    for s in 1:10
+        # build a (dense) random matrix with randsubset + rand
+        Random.seed!(s);
+        v = randsubseq(1:m*n,p);
+        x = zeros(m,n);
+        x[v] .= rand(length(v));
+        # redo the same with sprand
+        Random.seed!(s);
+        a = sprand(m,n,p);
+        @test x == a
+    end
+end
+
+@testset "sprandn with type $T" for T in (Float64, Float32, Float16, ComplexF64, ComplexF32, ComplexF16)
+    @test sprandn(T, 5, 5, 0.5) isa AbstractSparseMatrix{T}
+end
+@testset "sprandn with invalid type $T" for T in (AbstractFloat, BigFloat, Complex)
+    @test_throws MethodError sprandn(T, 5, 5, 0.5)
+end
+
+@testset "method ambiguity" begin
+    # Ambiguity test is run inside a clean process.
+    # https://github.com/JuliaLang/julia/issues/28804
+    script = joinpath(@__DIR__, "ambiguous_exec.jl")
+    cmd = `$(Base.julia_cmd()) --startup-file=no $script`
+    @test success(pipeline(cmd; stdout=stdout, stderr=stderr))
+end
+
+@testset "oneunit of sparse matrix" begin
+    A = sparse([Second(0) Second(0); Second(0) Second(0)])
+    @test oneunit(sprand(2, 2, 0.5)) isa SparseMatrixCSC{Float64}
+    @test oneunit(A) isa SparseMatrixCSC{Second}
+    @test one(sprand(2, 2, 0.5)) isa SparseMatrixCSC{Float64}
+    @test one(A) isa SparseMatrixCSC{Int}
+end
+
+@testset "circshift" begin
+    m,n = 17,15
+    A = sprand(m, n, 0.5)
+    for rshift in (-1, 0, 1, 10), cshift in (-1, 0, 1, 10)
+        shifts = (rshift, cshift)
+        # using dense circshift to compare
+        B = circshift(Matrix(A), shifts)
+        # sparse circshift
+        C = circshift(A, shifts)
+        @test C == B
+        # sparse circshift should not add structural zeros
+        @test nnz(C) == nnz(A)
+        # test circshift!
+        D = similar(A)
+        circshift!(D, A, shifts)
+        @test D == B
+        @test nnz(D) == nnz(A)
+        # test different in/out types
+        A2 = floor.(100A)
+        E1 = spzeros(Int64, m, n)
+        E2 = spzeros(Int64, m, n)
+        circshift!(E1, A2, shifts)
+        circshift!(E2, Matrix(A2), shifts)
+        @test E1 == E2
+    end
+end
+
+@testset "wrappers of sparse" begin
+    m = n = 10
+    A = spzeros(ComplexF64, m, n)
+    A[:,1] = 1:m
+    A[:,2] = [1 3 0 0 0 0 0 0 0 0]'
+    A[:,3] = [2 4 0 0 0 0 0 0 0 0]'
+    A[:,4] = [0 0 0 0 5 3 0 0 0 0]'
+    A[:,5] = [0 0 0 0 6 2 0 0 0 0]'
+    A[:,6] = [0 0 0 0 7 4 0 0 0 0]'
+    A[:,7:n] = rand(ComplexF64, m, n-6)
+    B = Matrix(A)
+    dowrap(wr, A) = wr(A)
+    dowrap(wr::Tuple, A) = (wr[1])(A, wr[2:end]...)
+
+    @testset "sparse($wr(A))" for wr in (
+                        Symmetric, (Symmetric, :L), Hermitian, (Hermitian, :L),
+                        Transpose, Adjoint,
+                        UpperTriangular, LowerTriangular,
+                        UnitUpperTriangular, UnitLowerTriangular,
+                        (view, 3:6, 2:5))
+
+        @test SparseMatrixCSC(dowrap(wr, A)) == Matrix(dowrap(wr, B))
+    end
+
+    @testset "sparse($at($wr))" for at = (Transpose, Adjoint), wr =
+        (UpperTriangular, LowerTriangular,
+         UnitUpperTriangular, UnitLowerTriangular)
+
+        @test SparseMatrixCSC(at(wr(A))) == Matrix(at(wr(B)))
+    end
+
+    @test sparse([1,2,3,4,5]') == SparseMatrixCSC([1 2 3 4 5])
+    @test sparse(UpperTriangular(A')) == UpperTriangular(B')
+    @test sparse(Adjoint(UpperTriangular(A'))) == Adjoint(UpperTriangular(B'))
+end
+
+@testset "Ti cannot store all potential values #31024" begin
+    @test_throws ArgumentError SparseMatrixCSC(128, 1, [Int8(1), Int8(1)], Int8[], Int[])
+    @test_throws ArgumentError SparseMatrixCSC(12, 12, [Int8(1), Int8(1)], Int8[], Int[])
+    I1 = [Int8(i) for i in 1:20 for _ in 1:20]
+    J1 = [Int8(i) for _ in 1:20 for i in 1:20]
+    @test_throws ArgumentError sparse(I1, J1, zero(length(I1)zero(length(I1))))
+end
+
+@testset "unary operations on matrices where length(nzval)>nnz" begin
+    # this should create a sparse matrix with length(nzval)>nnz
+    A = SparseMatrixCSC(Complex{BigInt}[1+im 2+2im]')'[1:1, 2:2]
+    # ...ensure it does! If necessary, the test needs to be updated to use
+    # another mechanism to create a suitable A.
+    @assert length(A.nzval) > nnz(A)
+    @test -A == fill(-2-2im, 1, 1)
+    @test conj(A) == fill(2-2im, 1, 1)
+    conj!(A)
+    @test A == fill(2-2im, 1, 1)
 end
 
 end # module

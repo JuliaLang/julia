@@ -111,7 +111,8 @@ static bool runtime_sym_gvs(const char *f_lib, const char *f_name, MT &&M,
         llvmgv = new GlobalVariable(*M, T_pvoidfunc, false,
                                     GlobalVariable::ExternalLinkage, NULL, name);
         llvmgv = global_proto(llvmgv);
-        void *addr = jl_dlsym_e(libsym, f_name);
+        void *addr;
+        jl_dlsym(libsym, f_name, &addr, 0);
         (*symMap)[f_name] = std::make_pair(llvmgv, addr);
         if (symaddr)
             *symaddr = addr;
@@ -655,9 +656,9 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
         jl_cgval_t arg1 = emit_expr(ctx, arg);
         jl_value_t *ptr_ty = arg1.typ;
         if (!jl_is_cpointer_type(ptr_ty)) {
-           const char *errmsg = !strcmp(fname, "ccall") ?
-               "ccall: first argument not a pointer or valid constant expression" :
-               "cglobal: first argument not a pointer or valid constant expression";
+            const char *errmsg = !strcmp(fname, "ccall") ?
+                "ccall: first argument not a pointer or valid constant expression" :
+                "cglobal: first argument not a pointer or valid constant expression";
             emit_cpointercheck(ctx, arg1, errmsg);
         }
         arg1 = update_julia_type(ctx, arg1, (jl_value_t*)jl_voidpointer_type);
@@ -776,8 +777,8 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
             res = ctx.builder.CreatePtrToInt(res, lrt);
         }
         else {
-            void *symaddr = jl_dlsym_e(jl_get_library(sym.f_lib), sym.f_name);
-            if (symaddr == NULL) {
+            void *symaddr;
+            if (!jl_dlsym(jl_get_library(sym.f_lib), sym.f_name, &symaddr, 0)) {
                 std::stringstream msg;
                 msg << "cglobal: could not find symbol ";
                 msg << sym.f_name;
@@ -998,7 +999,10 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         jl_value_t *tti = jl_svecref(tt,i);
         bool toboxed;
         Type *t = julia_type_to_llvm(tti, &toboxed);
-        argtypes.push_back(t);
+        if (toboxed)
+            argtypes.push_back(T_prjlvalue);
+        else
+            argtypes.push_back(t);
         if (4 + i > nargs) {
             jl_error("Missing arguments to llvmcall!");
         }
@@ -1013,6 +1017,8 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     Function *f;
     bool retboxed;
     Type *rettype = julia_type_to_llvm(rtt, &retboxed);
+    if (retboxed)
+        rettype = T_prjlvalue;
     if (isString) {
         // Make sure to find a unique name
         std::string ir_name;
@@ -1490,14 +1496,19 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     };
 #define is_libjulia_func(name) _is_libjulia_func((uintptr_t)&(name), #name)
 
+    static jl_ptls_t (*ptls_getter)(void) = [] {
+    // directly accessing the address of an ifunc can cause compile-time linker issues
+    // on some configurations (e.g. AArch64 + -Bsymbolic-functions), so we guard the
+    // `&jl_get_ptls_states` within this `#ifdef` guard, and use a more roundabout
+    // method involving `jl_dlsym()` on Linux platforms instead.
 #ifdef _OS_LINUX_
-    // directly accessing the address of an ifunc can cause linker issue on
-    // some configurations (e.g. AArch64 + -Bsymbolic-functions).
-    static const auto ptls_getter = jl_dlsym_e(jl_dlopen(nullptr, 0),
-                                               "jl_get_ptls_states");
+        jl_ptls_t (*p)(void);
+        jl_dlsym(jl_dlopen(nullptr, 0), "jl_get_ptls_states", (void **)&p, 0);
+        return p;
 #else
-    static const auto ptls_getter = &jl_get_ptls_states;
+        return &jl_get_ptls_states;
 #endif
+    }();
 
     // emit arguments
     jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nccallargs);
@@ -1938,8 +1949,14 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         }
         else {
             assert(symarg.f_name != NULL);
-            llvmf = jl_Module->getOrInsertFunction(symarg.f_name, functype);
-            if (!isa<Function>(llvmf) || cast<Function>(llvmf)->getIntrinsicID() == Intrinsic::not_intrinsic)
+            const char* f_name = symarg.f_name;
+            bool f_extern = (strncmp(f_name, "extern ", 7) == 0);
+            if (f_extern)
+                f_name += 7;
+            llvmf = jl_Module->getOrInsertFunction(f_name, functype);
+            if (!f_extern &&
+                (!isa<Function>(llvmf) ||
+                 cast<Function>(llvmf)->getIntrinsicID() == Intrinsic::not_intrinsic))
                 jl_error("llvmcall only supports intrinsic calls");
         }
     }
@@ -1967,8 +1984,8 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 llvmf = emit_plt(ctx, functype, attributes, cc, symarg.f_lib, symarg.f_name);
         }
         else {
-            void *symaddr = jl_dlsym_e(jl_get_library(symarg.f_lib), symarg.f_name);
-            if (symaddr == NULL) {
+            void *symaddr;
+            if (!jl_dlsym(jl_get_library(symarg.f_lib), symarg.f_name, &symaddr, 0)) {
                 std::stringstream msg;
                 msg << "ccall: could not find function ";
                 msg << symarg.f_name;

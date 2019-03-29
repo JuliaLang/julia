@@ -175,6 +175,74 @@ function occursin(r::Regex, s::SubString; offset::Integer=0)
 end
 
 """
+    startswith(s::AbstractString, prefix::Regex)
+
+Return `true` if `s` starts with the regex pattern, `prefix`.
+
+!!! note
+    `startswith` does not compile the anchoring into the regular
+    expression, but instead passes the anchoring as
+    `match_option` to PCRE. If compile time is amortized,
+    `occursin(r"^...", s)` is faster than `startswith(s, r"...")`.
+
+See also [`occursin`](@ref) and [`endswith`](@ref).
+
+!!! compat "Julia 1.2"
+     This method requires at least Julia 1.2.
+
+# Examples
+```jldoctest
+julia> startswith("JuliaLang", r"Julia|Romeo")
+true
+```
+"""
+function startswith(s::AbstractString, r::Regex)
+    compile(r)
+    return PCRE.exec(r.regex, String(s), 0, r.match_options | PCRE.ANCHORED,
+                     r.match_data)
+end
+
+function startswith(s::SubString, r::Regex)
+    compile(r)
+    return PCRE.exec(r.regex, s, 0, r.match_options | PCRE.ANCHORED,
+                     r.match_data)
+end
+
+"""
+    endswith(s::AbstractString, suffix::Regex)
+
+Return `true` if `s` ends with the regex pattern, `suffix`.
+
+!!! note
+    `endswith` does not compile the anchoring into the regular
+    expression, but instead passes the anchoring as
+    `match_option` to PCRE. If compile time is amortized,
+    `occursin(r"...\$", s)` is faster than `endswith(s, r"...")`.
+
+See also [`occursin`](@ref) and [`startswith`](@ref).
+
+!!! compat "Julia 1.2"
+     This method requires at least Julia 1.2.
+
+# Examples
+```jldoctest
+julia> endswith("JuliaLang", r"Lang|Roberts")
+true
+```
+"""
+function endswith(s::AbstractString, r::Regex)
+    compile(r)
+    return PCRE.exec(r.regex, String(s), 0, r.match_options | PCRE.ENDANCHORED,
+                     r.match_data)
+end
+
+function endswith(s::SubString, r::Regex)
+    compile(r)
+    return PCRE.exec(r.regex, s, 0, r.match_options | PCRE.ENDANCHORED,
+                     r.match_data)
+end
+
+"""
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
 
 Search for the first match of the regular expression `r` in `s` and return a `RegexMatch`
@@ -406,7 +474,7 @@ function iterate(itr::RegexMatchIterator, (offset,prevempty)=(1,false))
 end
 
 """
-    eachmatch(r::Regex, s::AbstractString; overlap::Bool=false])
+    eachmatch(r::Regex, s::AbstractString; overlap::Bool=false)
 
 Search for all matches of a the regular expression `r` in `s` and return a iterator over the
 matches. If overlap is `true`, the matching sequences are allowed to overlap indices in the

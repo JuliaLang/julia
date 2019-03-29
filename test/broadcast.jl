@@ -433,7 +433,7 @@ Base.getindex(A::ArrayData, i::Integer...) = A.data[i...]
 Base.setindex!(A::ArrayData, v::Any, i::Integer...) = setindex!(A.data, v, i...)
 Base.size(A::ArrayData) = size(A.data)
 Base.similar(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{A}}, ::Type{T}) where {A,T} =
-    A(Array{T}(undef, length.(axes(bc))))
+    A(Array{T}(undef, size(bc)))
 
 struct Array19745{T,N} <: ArrayData{T,N}
     data::Array{T,N}
@@ -497,7 +497,7 @@ struct AD2DimStyle <: Broadcast.AbstractArrayStyle{2}; end
 AD2DimStyle(::Val{2}) = AD2DimStyle()
 AD2DimStyle(::Val{N}) where {N} = Broadcast.DefaultArrayStyle{N}()
 Base.similar(bc::Broadcast.Broadcasted{AD2DimStyle}, ::Type{T}) where {T} =
-    AD2Dim(Array{T}(undef, length.(axes(bc))))
+    AD2Dim(Array{T}(undef, size(bc)))
 Base.BroadcastStyle(::Type{T}) where {T<:AD2Dim} = AD2DimStyle()
 
 @testset "broadcasting for custom AbstractArray" begin
@@ -709,7 +709,7 @@ struct T22053
     t
 end
 Broadcast.BroadcastStyle(::Type{T22053}) = Broadcast.Style{T22053}()
-Broadcast.broadcast_axes(::T22053) = ()
+Broadcast.axes(::T22053) = ()
 Broadcast.broadcastable(t::T22053) = t
 function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{T22053}})
     all(x->isa(x, T22053), bc.args) && return 1
@@ -742,6 +742,11 @@ let
     bc = Broadcasted(+, (Broadcasted(*, (1, Broadcasted(/, (2.0, 2.5)))), Broadcasted(*, (Broadcasted(*, (3, 4)), 5))))
     @test @inferred(Broadcast.cat_nested(bc)) == (1,2.0,2.5,3,4,5)
     @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == @inferred(Broadcast.materialize(bc)) == 60.8
+end
+
+let
+  bc = Broadcasted(+, (Broadcasted(*, ([1, 2, 3], 4)), 5))
+  @test isbits(Broadcast.flatten(bc).f)
 end
 
 # Issue #26127: multiple splats in a fused dot-expression
@@ -806,4 +811,10 @@ let
     @test copy(bc) == [v for v in bc] == collect(bc)
     @test eltype(copy(bc)) == eltype([v for v in bc]) == eltype(collect(bc))
     @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
+end
+
+# issue #31295
+let a = rand(5), b = rand(5), c = copy(a)
+    view(identity(a), 1:3) .+= view(b, 1:3)
+    @test a == [(c+b)[1:3]; c[4:5]]
 end

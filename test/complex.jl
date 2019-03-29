@@ -15,6 +15,17 @@ end
 @test sprint(show, complex(1, 0), context=:compact => true) == "1+0im"
 @test sprint(show, complex(true, true)) == "Complex(true,true)"
 
+@testset "unary operator on complex boolean" begin
+    @test +Complex(true, true) === Complex(1, 1)
+    @test +Complex(true, false) === Complex(1, 0)
+    @test +Complex(false, true) === Complex(0, 1)
+    @test +Complex(false, false) === Complex(0, 0)
+    @test -Complex(true, true) === Complex(-1, -1)
+    @test -Complex(true, false) === Complex(-1, 0)
+    @test -Complex(false, true) === Complex(0, -1)
+    @test -Complex(false, false) === Complex(0, 0)
+end
+
 @testset "arithmetic" begin
     @testset for T in (Float16, Float32, Float64, BigFloat)
         t = true
@@ -696,7 +707,9 @@ end
     @test isequal(atanh(complex(-0.0,-Inf)),complex(-0.0,-pi/2))
 
     @test isequal(atanh(complex( 1.0, 0.0)),complex( Inf, 0.0))
+    @test isequal(atanh(complex( 1.0,-0.0)),complex( Inf,-0.0))
     @test isequal(atanh(complex(-1.0, 0.0)),complex(-Inf, 0.0))
+    @test isequal(atanh(complex(-1.0,-0.0)),complex(-Inf,-0.0))
     @test isequal(atanh(complex( 5.0, Inf)),complex( 0.0, pi/2))
     @test isequal(atanh(complex( 5.0,-Inf)),complex( 0.0,-pi/2))
     @test isequal(atanh(complex( 5.0, NaN)),complex( NaN, NaN))
@@ -1064,4 +1077,11 @@ end
           (3+1im)^(Inf + 1im) ≟ (1e200+1e-200im)^Inf ≟ (1e200+1e-200im)^(Inf+1im)
 
     @test @inferred(2.0^(3.0+0im)) === @inferred((2.0+0im)^(3.0+0im)) === @inferred((2.0+0im)^3.0) === 8.0+0.0im
+end
+
+@testset "issue #31054" begin
+    @test tanh(atanh(complex(1.0,1.0))) == complex(1.0,1.0)
+    @test tanh(atanh(complex(1.0,-1.0))) == complex(1.0,-1.0)
+    @test tanh(atanh(complex(-1.0,1.0))) == complex(-1.0,1.0)
+    @test tanh(atanh(complex(-1.0,-1.0))) == complex(-1.0,-1.0)
 end

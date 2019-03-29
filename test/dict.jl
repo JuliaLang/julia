@@ -560,6 +560,27 @@ end
     @test_throws DomainError   IdDict((sqrt(p[1]), sqrt(p[2])) for p in zip(-1:2, -1:2))
 end
 
+@testset "issue 30165, get! for IdDict" begin
+    f(x) = x^2
+    d = IdDict(8=>19)
+    @test get!(d, 8, 5) == 19
+    @test get!(d, 19, 2) == 2
+
+    @test get!(d, 42) do  # d is updated with f(2)
+        f(2)
+    end == 4
+
+    @test get!(d, 42) do  # d is not updated
+        f(200)
+    end == 4
+
+    @test get(d, 13) do   # d is not updated
+        f(4)
+    end == 16
+
+    @test d == IdDict(8=>19, 19=>2, 42=>4)
+end
+
 @testset "issue #26833, deletion from IdDict" begin
     d = IdDict()
     i = 1
@@ -989,4 +1010,39 @@ end
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
         "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 3 entries. Keys:\n  5\n  ⋮"
+end
+
+@testset "copy!" begin
+    s = Dict(1=>2, 2=>3)
+    for a = ([3=>4], [0x3=>0x4], [3=>4, 5=>6, 7=>8], Pair{UInt,UInt}[3=>4, 5=>6, 7=>8])
+        @test s === copy!(s, Dict(a)) == Dict(a)
+        if length(a) == 1 # current limitation of Base.ImmutableDict
+            @test s === copy!(s, Base.ImmutableDict(a[])) == Dict(a[])
+        end
+    end
+end
+
+@testset "map!(f, values(dict))" begin
+    @testset "AbstractDict & Fallback" begin
+        mutable struct TestDict{K, V}  <: AbstractDict{K, V}
+            dict::Dict{K, V}
+            function TestDict(args...)
+                d = Dict(args...)
+                new{keytype(d), valtype(d)}(d)
+            end
+        end
+        Base.setindex!(td::TestDict, args...) = setindex!(td.dict, args...)
+        Base.getindex(td::TestDict, args...) = getindex(td.dict, args...)
+        Base.pairs(D::TestDict) = pairs(D.dict)
+        testdict = TestDict(:a=>1, :b=>2)
+        map!(v->v-1, values(testdict))
+        @test testdict[:a] == 0
+        @test testdict[:b] == 1
+    end
+    @testset "Dict" begin
+        testdict = Dict(:a=>1, :b=>2)
+        map!(v->v-1, values(testdict))
+        @test testdict[:a] == 0
+        @test testdict[:b] == 1
+    end
 end

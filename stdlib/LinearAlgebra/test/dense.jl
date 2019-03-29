@@ -67,23 +67,44 @@ bimg  = randn(n,2)/2
             end
 
             @testset "Test nullspace" begin
-                a15null = nullspace(copy(a[:,1:n1]'))
+                a15null = nullspace(a[:,1:n1]')
                 @test rank([a[:,1:n1] a15null]) == 10
                 @test norm(a[:,1:n1]'a15null,Inf) ≈ zero(eltya) atol=300ε
                 @test norm(a15null'a[:,1:n1],Inf) ≈ zero(eltya) atol=400ε
                 @test size(nullspace(b), 2) == 0
+                @test size(nullspace(b, rtol=0.001), 2) == 0
+                @test size(nullspace(b, atol=100*εb), 2) == 0
                 @test size(nullspace(b, 100*εb), 2) == 0
                 @test nullspace(zeros(eltya,n)) == Matrix(I, 1, 1)
                 @test nullspace(zeros(eltya,n), 0.1) == Matrix(I, 1, 1)
+                # test empty cases
+                @test nullspace(zeros(n, 0)) == Matrix(I, 0, 0)
+                @test nullspace(zeros(0, n)) == Matrix(I, n, n)
             end
         end
     end # for eltyb
+
+@testset "Test diagm for vectors" begin
+    @test diagm(zeros(50)) == diagm(0 => zeros(50))
+    @test diagm(ones(50)) == diagm(0 => ones(50))
+    v = randn(500)
+    @test diagm(v) == diagm(0 => v)
+end
+
+@testset "Test pinv (rtol, atol)" begin
+    M = [1 0 0; 0 1 0; 0 0 0]
+    @test pinv(M,atol=1)== zeros(3,3)
+    @test pinv(M,rtol=0.5)== M
+end
 
     for (a, a2) in ((copy(ainit), copy(ainit2)), (view(ainit, 1:n, 1:n), view(ainit2, 1:n, 1:n)))
         @testset "Test pinv" begin
             pinva15 = pinv(a[:,1:n1])
             @test a[:,1:n1]*pinva15*a[:,1:n1] ≈ a[:,1:n1]
             @test pinva15*a[:,1:n1]*pinva15 ≈ pinva15
+            pinva15 = pinv(a[:,1:n1]') # the Adjoint case
+            @test a[:,1:n1]'*pinva15*a[:,1:n1]' ≈ a[:,1:n1]'
+            @test pinva15*a[:,1:n1]'*pinva15 ≈ pinva15
 
             @test size(pinv(Matrix{eltya}(undef,0,0))) == (0,0)
         end
@@ -150,6 +171,18 @@ end # for eltya
         @test tril(a, -m - 2) == zero(a)
         @test tril(a, n) == a
     end
+end
+
+@testset "triu M > N case bug fix" begin
+    mat=[1 2;
+         3 4;
+         5 6;
+         7 8]
+    res=[1 2;
+         3 4;
+         0 6;
+         0 0]
+    @test triu(mat, -1) == res
 end
 
 @testset "Tests norms" begin
@@ -411,6 +444,13 @@ end
             A4float  = convert(Matrix{elty2}, A4int)
             @test exp(A4int) == exp(A4float)
         end
+    end
+
+    @testset "^ tests" for elty in (Float32, Float64, ComplexF32, ComplexF64, Int32, Int64)
+        # should all be exact as the lhs functions are simple aliases
+        @test ℯ^(fill(elty(2), (4,4))) == exp(fill(elty(2), (4,4)))
+        @test 2^(fill(elty(2), (4,4))) == exp(log(2)*fill(elty(2), (4,4)))
+        @test 2.0^(fill(elty(2), (4,4))) == exp(log(2.0)*fill(elty(2), (4,4)))
     end
 
     A8 = 100 * [-1+1im 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1]
@@ -823,40 +863,20 @@ end
 @testset "strides" begin
     a = rand(10)
     b = view(a,2:2:10)
-    A = rand(10,10)
-    B = view(A, 2:2:10, 2:2:10)
-
     @test LinearAlgebra.stride1(a) == 1
     @test LinearAlgebra.stride1(b) == 2
-
-    @test strides(a) == (1,)
-    @test strides(b) == (2,)
-    @test strides(A) == (1,10)
-    @test strides(B) == (2,20)
-
-    for M in (a, b, A, B)
-        @inferred strides(M)
-        strides_M = strides(M)
-
-        for (i, _stride) in enumerate(collect(strides_M))
-            @test _stride == stride(M, i)
-        end
-    end
 end
 
 @testset "inverse of Adjoint" begin
     A = randn(n, n)
 
-    @test inv(A')*A'                     ≈ I
-    @test inv(transpose(A))*transpose(A) ≈ I
+    @test @inferred(inv(A'))*A'                     ≈ I
+    @test @inferred(inv(transpose(A)))*transpose(A) ≈ I
 
     B = complex.(A, randn(n, n))
-    B = B + transpose(B)
 
-    # The following two cases fail because ldiv!(F::Adjoint/Transpose{BunchKaufman},b)
-    # isn't implemented yet
-    @test_broken inv(B')*B'                     ≈ I
-    @test_broken inv(transpose(B))*transpose(B) ≈ I
+    @test @inferred(inv(B'))*B'                     ≈ I
+    @test @inferred(inv(transpose(B)))*transpose(B) ≈ I
 end
 
 end # module TestDense

@@ -21,16 +21,16 @@ julia> rng = MersenneTwister(1234);
 
 julia> bitrand(rng, 10)
 10-element BitArray{1}:
- false
-  true
-  true
-  true
-  true
- false
-  true
- false
- false
-  true
+ 0
+ 1
+ 1
+ 1
+ 1
+ 0
+ 1
+ 0
+ 0
+ 1
 ```
 """
 bitrand(r::AbstractRNG, dims::Dims)   = rand!(r, BitArray(undef, dims))
@@ -85,7 +85,7 @@ end
 # (Note that this is different from the problem of finding a random
 #  size-m subset of A where m is fixed!)
 function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real)
-    @assert !has_offset_axes(S, A)
+    require_one_based_indexing(S, A)
     0 <= p <= 1 || throw(ArgumentError("probability $p not in [0,1]"))
     n = length(A)
     p == 1 && return copyto!(resize!(S, n), A)
@@ -121,10 +121,24 @@ function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real
 end
 
 """
-    randsubseq!(S, A, p)
+    randsubseq!([rng=GLOBAL_RNG,] S, A, p)
 
 Like [`randsubseq`](@ref), but the results are stored in `S`
 (which is resized as needed).
+
+# Examples
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> S = Int64[];
+
+julia> randsubseq!(rng, S, collect(1:8), 0.3);
+
+julia> S
+2-element Array{Int64,1}:
+ 7
+ 8
+```
 """
 randsubseq!(S::AbstractArray, A::AbstractArray, p::Real) = randsubseq!(GLOBAL_RNG, S, A, p)
 
@@ -132,12 +146,22 @@ randsubseq(r::AbstractRNG, A::AbstractArray{T}, p::Real) where {T} =
     randsubseq!(r, T[], A, p)
 
 """
-    randsubseq(A, p) -> Vector
+    randsubseq([rng=GLOBAL_RNG,] A, p) -> Vector
 
 Return a vector consisting of a random subsequence of the given array `A`, where each
 element of `A` is included (in order) with independent probability `p`. (Complexity is
 linear in `p*length(A)`, so this function is efficient even if `p` is small and `A` is
 large.) Technically, this process is known as "Bernoulli sampling" of `A`.
+
+# Examples
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> randsubseq(rng, collect(1:8), 0.3)
+2-element Array{Int64,1}:
+ 7
+ 8
+```
 """
 randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
 
@@ -180,7 +204,7 @@ julia> shuffle!(rng, Vector(1:16))
 ```
 """
 function shuffle!(r::AbstractRNG, a::AbstractArray)
-    @assert !has_offset_axes(a)
+    require_one_based_indexing(a)
     n = length(a)
     n <= 1 && return a # nextpow below won't work with n == 0
     @assert n <= Int64(2)^52
@@ -231,9 +255,16 @@ shuffle(a::AbstractArray) = shuffle(GLOBAL_RNG, a)
     randperm([rng=GLOBAL_RNG,] n::Integer)
 
 Construct a random permutation of length `n`. The optional `rng`
-argument specifies a random number generator (see [Random Numbers](@ref)).
-To randomly permute an arbitrary vector, see [`shuffle`](@ref)
-or [`shuffle!`](@ref).
+argument specifies a random number generator (see [Random
+Numbers](@ref)). The element type of the result is the same as the type
+of `n`.
+
+To randomly permute an arbitrary vector, see [`shuffle`](@ref) or
+[`shuffle!`](@ref).
+
+!!! compat "Julia 1.1"
+    In Julia 1.1 `randperm` returns a vector `v` with `eltype(v) == typeof(n)`
+    while in Julia 1.0 `eltype(v) == Int`.
 
 # Examples
 ```jldoctest
@@ -245,7 +276,7 @@ julia> randperm(MersenneTwister(1234), 4)
  3
 ```
 """
-randperm(r::AbstractRNG, n::Integer) = randperm!(r, Vector{Int}(undef, n))
+randperm(r::AbstractRNG, n::T) where {T <: Integer} = randperm!(r, Vector{T}(undef, n))
 randperm(n::Integer) = randperm(GLOBAL_RNG, n)
 
 """
@@ -293,6 +324,11 @@ randperm!(a::Array{<:Integer}) = randperm!(GLOBAL_RNG, a)
 
 Construct a random cyclic permutation of length `n`. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](@ref).
+The element type of the result is the same as the type of `n`.
+
+!!! compat "Julia 1.1"
+    In Julia 1.1 `randcycle` returns a vector `v` with `eltype(v) == typeof(n)`
+    while in Julia 1.0 `eltype(v) == Int`.
 
 # Examples
 ```jldoctest
@@ -306,7 +342,7 @@ julia> randcycle(MersenneTwister(1234), 6)
  2
 ```
 """
-randcycle(r::AbstractRNG, n::Integer) = randcycle!(r, Vector{Int}(undef, n))
+randcycle(r::AbstractRNG, n::T) where {T <: Integer} = randcycle!(r, Vector{T}(undef, n))
 randcycle(n::Integer) = randcycle(GLOBAL_RNG, n)
 
 """

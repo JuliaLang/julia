@@ -44,6 +44,9 @@ end
     @test occursin("1.25", string(spv_x1))
     @test occursin("-0.75", string(spv_x1))
     @test occursin("3.5", string(spv_x1))
+
+    # issue #30589
+    @test repr("text/plain", sparse([true])) == "1-element SparseArrays.SparseVector{Bool,$Int} with 1 stored entry:\n  [1]  =  1"
 end
 
 ### Comparison helper to ensure exact equality with internal structure
@@ -154,6 +157,11 @@ end
             end
         end
 
+        let xr = sprandn(ComplexF64, 1000, 0.9)
+            @test isa(xr, SparseVector{ComplexF64,Int})
+            @test length(xr) == 1000
+        end
+
         let xr = sprand(Bool, 1000, 0.9)
             @test isa(xr, SparseVector{Bool,Int})
             @test length(xr) == 1000
@@ -164,6 +172,22 @@ end
             @test sprand(r1, 100, .9) == sprand(r2, 100, .9)
             @test sprandn(r1, 100, .9) == sprandn(r2, 100, .9)
             @test sprand(r1, Bool, 100, .9) == sprand(r2,  Bool, 100, .9)
+        end
+
+        # test sprand with function inputs
+        let xr = sprand(1000, 0.9, rand)
+            @test isa(xr, SparseVector{Float64,Int})
+            @test length(xr) == 1000
+            if !isempty(nonzeros(xr))
+                @test all(nonzeros(xr) .> 0.0)
+            end
+        end
+        let xr = sprand(1000, 0.9, rand, Float32)
+            @test isa(xr, SparseVector{Float32,Int})
+            @test length(xr) == 1000
+            if !isempty(nonzeros(xr))
+                @test all(nonzeros(xr) .> 0.0)
+            end
         end
     end
 end
@@ -1257,6 +1281,28 @@ end
               LinearAlgebra.axpy!(1.0, Ajview, sparse(fill(1., n)))
         @test LinearAlgebra.lowrankupdate!(Matrix(1.0*I, n, n), fill(1.0, n), Aj) ==
               LinearAlgebra.lowrankupdate!(Matrix(1.0*I, n, n), fill(1.0, n), Ajview)
+    end
+end
+
+@testset "SparseVector circshift" begin
+    n = 100
+    v = sprand(n, 0.5)
+    for shift in (0,-1,1,5,-7,n+10)
+        x = circshift(Vector(v), shift)
+        w = circshift(v, shift)
+        @test nnz(v) == nnz(w)
+        @test w == x
+        # test circshift!
+        v1 = similar(v)
+        circshift!(v1, v, shift)
+        @test v1 == x
+        # test different in/out types
+        y1 = spzeros(Int64, n)
+        y2 = spzeros(Int64, n)
+        v2 = floor.(100v)
+        circshift!(y1, v2, shift)
+        circshift!(y2, Vector(v2), shift)
+        @test y1 == y2
     end
 end
 
