@@ -137,8 +137,8 @@ provided mainly for compatibility with the dictionary interface.
 
 # Examples
 ```jldoctest
-julia> valtype(Int32[1, 2, 3])
-Int32
+julia> valtype(["one", "two", "three"])
+String
 ```
 
 !!! compat "Julia 1.2"
