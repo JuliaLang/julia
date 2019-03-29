@@ -398,32 +398,59 @@ end
 
 function Float64(x::BigInt, ::RoundingMode{:Nearest})
     x == 0 && return 0.0
-    if Int == Int64
-        if abs(x.size) > 16
+    xsize = abs(x.size)
+    if Limb == UInt64
+        if xsize > 16
             temp = Inf
-        elseif abs(x.size) == 1
+        elseif xsize == 1
             temp = Float64(unsafe_load(x.d))
         else
-            y1 = unsafe_load(x.d, x.size)
+            y1 = unsafe_load(x.d, xsize)
             n = 64 - leading_zeros(y1)
             if n > 53
                 y = (y1 >> (n-54))
                 y = (y + 1) >> 1
-                y &= ~UInt64(trailing_zeros(x) == (n-54 + (x.size-1)*64))
+                y &= ~UInt64(trailing_zeros(x) == (n-54 + (xsize-1)*64))
             else
-                y = y1 << (54 - n) + unsafe_load(x.d, x.size-1) >> (10 + n)
+                y = y1 << (54 - n) + unsafe_load(x.d, xsize-1) >> (10 + n)
                 y = (y + 1) >> 1
-                y &= ~UInt64(trailing_zeros(x) == (10+n + (x.size-2)*64))
-                d = (n+1021) << 52
+                y &= ~UInt64(trailing_zeros(x) == (10+n + (xsize-2)*64))
             end
             d = (n+1021) << 52
             temp = reinterpret(Float64, d+y)
-            temp = ldexp(temp, (x.size - 1)*64)
+            temp = ldexp(temp, (xsize - 1)*64)
+        end
+        signbit(x.size) && return -temp
+        return temp
+    else
+        if xsize > 32
+            temp = Inf
+        elseif xsize == 1
+            temp = Float64(unsafe_load(x.d))
+        elseif xsize == 2
+            temp = Float64((unsafe_load(x.d, 2) % UInt64) << 32 + unsafe_load(x.d))
+        else
+            y1 = unsafe_load(x.d, xsize)
+            n = 32 - leading_zeros(y1)
+            if n < 22
+                y = (y1 % UInt64) << (n-54)
+                y += (unsafe_load(x.d, xsize-1) % UInt64) << (22 - n)
+                y += unsafe_load(x.d, xsize-2) >> (10 + n)
+                y = (y + 1) >> 1
+                y &= ~UInt64(trailing_zeros(x) == (10+n + (xsize-3)*32))
+            else
+                y = (y1 % UInt64) << (n-54)
+                y += unsafe_load(x.d, xsize-1) >> (n - 22)
+                y += (y + 1) >> 1
+                y &= ~UInt64(trailing_zeros(x) == (n-22 + (xsize-2)*32))
+            end
+            d = (n+1021) << 52
+            temp = reinterpret(Float64, d+y)
+            temp = ldexp(temp, (xsize - 1)*32)
         end
         signbit(x.size) && return -temp
         return temp
     end
-    #TODO: implement for 32 bit machine
 end
 
 Float64(n::BigInt) = Float64(n, RoundNearest)
