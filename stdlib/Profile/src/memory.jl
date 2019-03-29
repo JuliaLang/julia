@@ -22,7 +22,7 @@ clear_malloc_data() = ccall(:jl_clear_malloc_data, Cvoid, ())
 
 
 tag_lookup(d::Dict, s::Symbol) = d[s]
-tag_lookup(d::Dict, v::Vector{Symbol}) = reduce(|, [d[s] for s in v])
+tag_lookup(d::Dict, v::Vector{Symbol}) = mapreduce(s->d[s], |, v)
 tag_lookup(d::Dict, n::Number) = [t for (t, v) in d if (v & n == v) && (t != :all)]
 
 const memory_domain_map = Dict(
