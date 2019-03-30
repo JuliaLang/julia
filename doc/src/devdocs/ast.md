@@ -26,6 +26,8 @@ For example `(call f x)` corresponds to `Expr(:call, :f, :x)` in Julia.
 | `f(x, y=1, z=2)` | `(call f x (kw y 1) (kw z 2))`     |
 | `f(x; y=1)`      | `(call f (parameters (kw y 1)) x)` |
 | `f(x...)`        | `(call f (... x))`                 |
+| `f.(x)`          | `(. f (tuple x))`                  |
+| `for f.(x)`      | `(fordot (. f (tuple x)))`         |
 
 `do` syntax:
 
@@ -48,6 +50,7 @@ call. Finally, chains of comparisons have their own special expression structure
 | Input       | AST                       |
 |:----------- |:------------------------- |
 | `x+y`       | `(call + x y)`            |
+| `x.+y`      | `(call .+ x y)`           |
 | `a+b+c+d`   | `(call + a b c d)`        |
 | `2x`        | `(call * 2 x)`            |
 | `a&&b`      | `(&& a b)`                |
@@ -59,7 +62,6 @@ call. Finally, chains of comparisons have their own special expression structure
 | `a==b`      | `(call == a b)`           |
 | `1<i<=n`    | `(comparison 1 < i <= n)` |
 | `a.b`       | `(. a (quote b))`         |
-| `a.(b)`     | `(. a b)`                 |
 
 ### Bracketed forms
 
