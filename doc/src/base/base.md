@@ -210,7 +210,6 @@ Base.Val
 Core.Vararg
 Core.Nothing
 Base.isnothing
-Base.skipnothing
 Base.Some
 Base.something
 Base.Enums.Enum
@@ -266,6 +265,7 @@ Base.Missing
 Base.missing
 Base.coalesce
 Base.ismissing
+Base.skip
 Base.skipmissing
 ```
 

@@ -175,7 +175,7 @@ of the input.
 # Examples
 ```jldoctest
 julia> x = skipmissing([1, missing, 2])
-Base.Skip{Missing, Array{Union{Missing, Int64},1}}(Union{Missing, Int64}[1, missing, 2])
+Base.Skip{Missing,Array{Union{Missing, Int64},1}}(Union{Missing, Int64}[1, missing, 2])
 
 julia> sum(x)
 3
@@ -184,7 +184,7 @@ julia> x[1]
 1
 
 julia> x[2]
-ERROR: MissingException: the value at index (2,) is missing
+ERROR: MissingException: the value at index (2,) is of type Missing
 [...]
 
 julia> argmax(x)
