@@ -40,6 +40,32 @@ let m = Meta.@lower 1 + 1
     @test isa(ir.stmts[3], Core.PhiNode) && length(ir.stmts[3].edges) == 1
 end
 
+# test that we don't stack-overflow in SNCA with large functions.
+let m = Meta.@lower 1 + 1
+    @assert Meta.isexpr(m, :thunk)
+    src = m.args[1]::Core.CodeInfo
+    code = Any[]
+    N = 2^15
+    for i in 1:2:N
+        push!(code, Expr(:call, :opaque))
+        push!(code, Expr(:gotoifnot, Core.SSAValue(i), N+2)) # skip one block
+    end
+    # all goto here
+    push!(code, Expr(:call, :opaque))
+    push!(code, Expr(:return))
+    src.code = code
+
+    nstmts = length(src.code)
+    src.ssavaluetypes = nstmts
+    src.codelocs = fill(Int32(1), nstmts)
+    src.ssaflags = fill(Int32(0), nstmts)
+    ir = Core.Compiler.inflate_ir(src)
+    Core.Compiler.verify_ir(ir)
+    domtree = Core.Compiler.construct_domtree(ir.cfg)
+    ir = Core.Compiler.domsort_ssa!(ir, domtree)
+    Core.Compiler.verify_ir(ir)
+end
+
 # Tests for SROA
 
 mutable struct Foo30594; x::Float64; end

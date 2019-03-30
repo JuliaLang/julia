@@ -89,7 +89,8 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
                 this_rt === Any && break
             end
         else
-            this_rt, edgecycle, edge = abstract_call_method(method, sig, match[2]::SimpleVector, sv)
+            this_rt, edgecycle1, edge = abstract_call_method(method, sig, match[2]::SimpleVector, sv)
+            edgecycle |= edgecycle1::Bool
             if edge !== nothing
                 push!(edges, edge)
             end
@@ -170,45 +171,50 @@ function abstract_call_method_with_const_args(@nospecialize(rettype), @nospecial
     method.isva && (nargs -= 1)
     length(argtypes) >= nargs || return Any
     haveconst = false
+    allconst = true
+    # see if any or all of the arguments are constant and propagating constants may be worthwhile
     for a in argtypes
         a = widenconditional(a)
-        if has_nontrivial_const_info(a)
-            haveconst = const_prop_profitable(a)
-            haveconst && break
+        if allconst && !isa(a, Const) && !isconstType(a) && !isa(a, PartialStruct)
+            allconst = false
+        end
+        if !haveconst && has_nontrivial_const_info(a) && const_prop_profitable(a)
+            haveconst = true
+        end
+        if haveconst && !allconst
+            break
         end
     end
     haveconst || improvable_via_constant_propagation(rettype) || return Any
     sig = match[1]
     sparams = match[2]::SimpleVector
-    code = code_for_method(method, sig, sparams, sv.params.world)
-    code === nothing && return Any
-    code = code::MethodInstance
-    # decide if it's likely to be worthwhile
-    declared_inline = isdefined(method, :source) && ccall(:jl_ast_flag_inlineable, Bool, (Any,), method.source)
-    cache_inlineable = declared_inline
-    if isdefined(code, :inferred) && !cache_inlineable
-        cache_inf = code.inferred
-        if !(cache_inf === nothing)
-            cache_src_inferred = ccall(:jl_ast_flag_inferred, Bool, (Any,), cache_inf)
-            cache_src_inlineable = ccall(:jl_ast_flag_inlineable, Bool, (Any,), cache_inf)
-            cache_inlineable = cache_src_inferred && cache_src_inlineable
-        end
+    force_inference = allconst || sv.params.aggressive_constant_propagation
+    if istopfunction(f, :getproperty) || istopfunction(f, :setproperty!)
+        force_inference = true
     end
-    if !cache_inlineable && !sv.params.aggressive_constant_propagation
-        tm = _topmod(sv)
-        if !istopfunction(f, :getproperty) && !istopfunction(f, :setproperty!)
-            # in this case, see if all of the arguments are constants
-            for a in argtypes
-                a = widenconditional(a)
-                if !isa(a, Const) && !isconstType(a) && !isa(a, PartialStruct)
-                    return Any
-                end
+    mi = specialize_method(method, sig, sparams, !force_inference)
+    mi === nothing && return Any
+    mi = mi::MethodInstance
+    # decide if it's likely to be worthwhile
+    if !force_inference
+        code = inf_for_methodinstance(mi, sv.params.world)
+        declared_inline = isdefined(method, :source) && ccall(:jl_ast_flag_inlineable, Bool, (Any,), method.source)
+        cache_inlineable = declared_inline
+        if isdefined(code, :inferred) && !cache_inlineable
+            cache_inf = code.inferred
+            if !(cache_inf === nothing)
+                cache_src_inferred = ccall(:jl_ast_flag_inferred, Bool, (Any,), cache_inf)
+                cache_src_inlineable = ccall(:jl_ast_flag_inlineable, Bool, (Any,), cache_inf)
+                cache_inlineable = cache_src_inferred && cache_src_inlineable
             end
         end
+        if !cache_inlineable
+            return Any
+        end
     end
-    inf_result = cache_lookup(code, argtypes, sv.params.cache)
+    inf_result = cache_lookup(mi, argtypes, sv.params.cache)
     if inf_result === nothing
-        inf_result = InferenceResult(code, argtypes)
+        inf_result = InferenceResult(mi, argtypes)
         frame = InferenceState(inf_result, #=cache=#false, sv.params)
         frame.limited = true
         frame.parent = sv
@@ -216,7 +222,7 @@ function abstract_call_method_with_const_args(@nospecialize(rettype), @nospecial
         typeinf(frame) || return Any
     end
     result = inf_result.result
-    isa(result, InferenceState) && return Any # TODO: is this recursive constant inference?
+    isa(result, InferenceState) && return Any # TODO: unexpected, is this recursive constant inference?
     add_backedge!(inf_result.linfo, sv)
     return result
 end
@@ -237,7 +243,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
     # necessary in order to retrieve this field from the generated `CodeInfo`, if it exists.
     # The other `CodeInfo`s we inspect will already have this field inflated, so we just
     # access it directly instead (to avoid regeneration).
-    method2 = method_for_inference_heuristics(method, sig, sparams, sv.params.world) # Union{Method, Nothing}
+    method2 = method_for_inference_heuristics(method, sig, sparams) # Union{Method, Nothing}
     sv_method2 = sv.src.method_for_inference_limit_heuristics # limit only if user token match
     sv_method2 isa Method || (sv_method2 = nothing) # Union{Method, Nothing}
     while !(infstate === nothing)

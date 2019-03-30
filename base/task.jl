@@ -2,7 +2,6 @@
 
 ## basic task functions and TLS
 
-const ThreadSynchronizer = GenericCondition{Threads.SpinLock}
 Core.Task(@nospecialize(f), reserved_stack::Int=0) = Core._Task(f, reserved_stack, ThreadSynchronizer())
 
 # Container for a captured exception and its backtrace. Can be serialized.
@@ -341,40 +340,6 @@ function task_done_hook(t::Task)
     end
 end
 
-"""
-    timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
-
-Waits until `testcb` returns `true` or for `secs` seconds, whichever is earlier.
-`testcb` is polled every `pollint` seconds.
-"""
-function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
-    pollint > 0 || throw(ArgumentError("cannot set pollint to $pollint seconds"))
-    start = time()
-    done = Channel(1)
-    timercb(aw) = begin
-        try
-            if testcb()
-                put!(done, :ok)
-            elseif (time() - start) > secs
-                put!(done, :timed_out)
-            end
-        catch e
-            put!(done, :error)
-        finally
-            isready(done) && close(aw)
-        end
-    end
-
-    if !testcb()
-        t = Timer(timercb, pollint, interval = pollint)
-        ret = fetch(done)
-        close(t)
-    else
-        ret = :ok
-    end
-    ret
-end
-
 
 ## scheduler and work queue
 
@@ -504,19 +469,6 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     return t
 end
 
-# fast version of `schedule(t, arg); wait()`
-function schedule_and_wait(t::Task, @nospecialize(arg)=nothing)
-    (t.state == :runnable && t.queue === nothing) || error("schedule: Task not runnable")
-    W = Workqueues[Threads.threadid()]
-    if isempty(W)
-        return yieldto(t, arg)
-    else
-        t.result = arg
-        push!(W, t)
-    end
-    return wait()
-end
-
 """
     yield()
 
@@ -638,7 +590,7 @@ function wait()
     W = Workqueues[Threads.threadid()]
     reftask = poptaskref(W)
     result = try_yieldto(ensure_rescheduled, reftask)
-    process_events(false)
+    process_events()
     # return when we come out of the queue
     return result
 end

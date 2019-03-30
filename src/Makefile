@@ -119,8 +119,8 @@ SHIPFLAGS += $(FLAGS)
 SHIPFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys.$(SHLIB_EXT)\""
 DEBUGFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys-debug.$(SHLIB_EXT)\""
 
-FLISP_EXECUTABLE_debug := $(BUILDDIR)/flisp/flisp-debug
-FLISP_EXECUTABLE_release := $(BUILDDIR)/flisp/flisp
+FLISP_EXECUTABLE_debug := $(BUILDDIR)/flisp/flisp-debug$(EXE)
+FLISP_EXECUTABLE_release := $(BUILDDIR)/flisp/flisp$(EXE)
 ifeq ($(OS),WINNT)
 FLISP_EXECUTABLE := $(FLISP_EXECUTABLE_release)
 else

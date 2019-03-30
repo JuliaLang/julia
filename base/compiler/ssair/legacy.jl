@@ -11,7 +11,7 @@ function inflate_ir(ci::CodeInfo, linfo::MethodInstance)
 end
 
 function inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
-    code = copy_exprargs(ci.code)
+    code = copy_exprargs(ci.code) # TODO: this is a huge hot-spot
     for i = 1:length(code)
         if isa(code[i], Expr)
             code[i] = normalize_expr(code[i])

@@ -172,23 +172,11 @@ end
 
 Base.show(io::IO, S::SparseMatrixCSC) = Base.show(convert(IOContext, io), S::SparseMatrixCSC)
 function Base.show(io::IOContext, S::SparseMatrixCSC)
-    if nnz(S) == 0
-        return show(io, MIME("text/plain"), S)
-    end
-    limit::Bool = get(io, :limit, false)
-    rows = displaysize(io)[1] - 4 # -4 from [Prompt, header, newline after elements, new prompt]
-    will_fit = !limit || rows >= nnz(S) # Will the whole matrix fit when printed?
-
-    if rows <= 2 && !will_fit
-        print(io, "\n  \u22ee")
-        return
-    end
+    nnz(S) == 0 && return show(io, MIME("text/plain"), S)
 
     ioc = IOContext(io, :compact => true)
-    pad = ndigits(max(S.m, S.n))
-
-    function _format_line(r, col)
-        print(ioc, "\n  [", rpad(S.rowval[r], pad), ", ", lpad(col, pad), "]  =  ")
+    function _format_line(r, col, padr, padc)
+        print(ioc, "\n  [", rpad(S.rowval[r], padr), ", ", lpad(col, padc), "]  =  ")
         if isassigned(S.nzval, Int(r))
             show(ioc, S.nzval[r])
         else
@@ -196,31 +184,38 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
         end
     end
 
-    if will_fit
-        print_count = nnz(S)
+    function _get_cols(from, to)
+        idx = eltype(S.colptr)[]
+        c = searchsortedlast(S.colptr, from)
+        for i = from:to
+            while i == S.colptr[c+1]
+                c +=1
+            end
+            push!(idx, c)
+        end
+        idx
+    end
+
+    rows = displaysize(io)[1] - 4 # -4 from [Prompt, header, newline after elements, new prompt]
+    if !get(io, :limit, false) || rows >= nnz(S) # Will the whole matrix fit when printed?
+        cols = _get_cols(1, nnz(S))
+        padr, padc = ndigits.((maximum(S.rowval[1:nnz(S)]), cols[end]))
+        _format_line.(1:nnz(S), cols, padr, padc)
     else
-        print_count = div(rows-1, 2)
-    end
-
-    count = 0
-    for col = 1:S.n, r = nzrange(S, col)
-        count += 1
-        _format_line(r, col)
-        count == print_count && break
-    end
-
-    if !will_fit
+        if rows <= 2
+            print(io, "\n  \u22ee")
+            return
+        end
+        s1, e1 = 1, div(rows - 1, 2) # -1 accounts for \vdots
+        s2, e2 = nnz(S) - (rows - 1 - e1) + 1, nnz(S)
+        cols1, cols2 = _get_cols(s1, e1), _get_cols(s2, e2)
+        padr = ndigits(max(maximum(S.rowval[s1:e1]), maximum(S.rowval[s2:e2])))
+        padc = ndigits(cols2[end])
+        _format_line.(s1:e1, cols1, padr, padc)
         print(io, "\n  \u22ee")
-        # find the column to start printing in for the last print_count elements
-        nextcol = searchsortedfirst(S.colptr, nnz(S) - print_count + 1)
-        for r = (nnz(S) - print_count + 1) : (S.colptr[nextcol] - 1)
-            _format_line(r, nextcol - 1)
-        end
-        # print all of the remaining columns
-        for col = nextcol:S.n, r = nzrange(S, col)
-            _format_line(r, col)
-        end
+        _format_line.(s2:e2, cols2, padr, padc)
     end
+    return
 end
 
 ## Reshape
