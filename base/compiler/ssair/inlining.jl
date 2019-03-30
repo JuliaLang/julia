@@ -821,7 +821,7 @@ function is_valid_type_for_apply_rewrite(@nospecialize(typ), params::Params)
     end
 end
 
-function inline_splatnew!(ir::IRCode, idx)
+function inline_splatnew!(ir::IRCode, idx::Int)
     stmt = ir.stmts[idx]
     ty = ir.types[idx]
     nf = nfields_tfunc(ty)
@@ -830,7 +830,9 @@ function inline_splatnew!(ir::IRCode, idx)
         tup = eargs[2]
         tt = argextype(tup, ir, ir.sptypes)
         tnf = nfields_tfunc(tt)
-        if tnf isa Const && tnf.val <= nf.val
+        # TODO: hoisting this tnf.val == nf.val check into codegen
+        # would enable us to almost always do this transform
+        if tnf isa Const && tnf.val == nf.val
             n = tnf.val
             new_argexprs = Any[eargs[1]]
             for j = 1:n
@@ -843,6 +845,7 @@ function inline_splatnew!(ir::IRCode, idx)
             stmt.args = new_argexprs
         end
     end
+    nothing
 end
 
 function call_sig(ir::IRCode, stmt::Expr)
