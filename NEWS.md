@@ -35,7 +35,8 @@ Command-line option changes
 New library functions
 ---------------------
 
-* `getipaddrs()` function returns all the IP addresses of the local machine ([#30349])
+* `getipaddrs()` function returns all the IP addresses of the local machine, with IPv4 addresses sorting before IPv6 addresses ([#30349, #30604])
+* `getipaddr(addr_type)` and `getipaddrs(addr_type)` functions returns an IP address(es) of the desired type of the local machine ([#30604])
 * Added `Base.hasproperty` and `Base.hasfield` ([#28850]).
 * One argument `!=(x)`, `>(x)`, `>=(x)`, `<(x)`, `<=(x)` has been added for currying,
   similar to the existing `==(x)` and `isequal(x)` methods ([#30915]).
