@@ -81,26 +81,3 @@ something() = throw(ArgumentError("No value arguments present"))
 something(x::Nothing, y...) = something(y...)
 something(x::Some, y...) = x.value
 something(x::Any, y...) = x
-
-"""
-    skipnothing(itr)
-Return an iterator over the elements in `itr` skipping [`nothing`](@ref) values.
-Use [`collect`](@ref) to obtain an `Array` containing the non-`nothing` values in
-`itr`. Note that even if `itr` is a multidimensional array, the result will always
-be a `Vector` since it is not possible to remove nothings while preserving dimensions
-of the input.
-# Examples
-```jldoctest
-julia> sum(skipnothing([1, nothing, 2]))
-3
-julia> collect(skipnothing([1, nothing, 2]))
-2-element Array{Int64,1}:
- 1
- 2
-julia> collect(skipnothing([1 nothing; 2 nothing]))
-2-element Array{Int64,1}:
- 1
- 2
-```
-"""
-skipnothing(itr) = skipoftype(Nothing, itr)

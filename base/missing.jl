@@ -175,7 +175,7 @@ of the input.
 # Examples
 ```jldoctest
 julia> x = skipmissing([1, missing, 2])
-Base.SkipMissing{Array{Union{Missing, Int64},1}}(Union{Missing, Int64}[1, missing, 2])
+Base.Skip{Missing, Array{Union{Missing, Int64},1}}(Union{Missing, Int64}[1, missing, 2])
 
 julia> sum(x)
 3
@@ -206,38 +206,7 @@ julia> collect(skipmissing([1 missing; 2 missing]))
  2
 ```
 """
-skipmissing(itr) = skipoftype(Missing, itr)
-
-"""
-    filter(f, itr::SkipMissing{<:AbstractArray})
-
-Return a vector similar to the array wrapped by the given `SkipMissing` iterator
-but with all missing elements and those for which `f` returns `false` removed.
-
-!!! compat "Julia 1.2"
-    This method requires Julia 1.2 or later.
-
-# Examples
-```jldoctest
-julia> x = [1 2; missing 4]
-2×2 Array{Union{Missing, Int64},2}:
- 1         2
-  missing  4
-
-julia> filter(isodd, skipmissing(x))
-1-element Array{Int64,1}:
- 1
-```
-"""
-function filter(f, itr::SkipMissing{<:AbstractArray})
-    y = similar(itr.x, eltype(itr), 0)
-    for xi in itr.x
-        if xi !== missing && f(xi)
-            push!(y, xi)
-        end
-    end
-    y
-end
+skipmissing(itr) = skip(Missing, itr)
 
 """
     coalesce(x, y...)

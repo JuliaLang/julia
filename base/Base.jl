@@ -178,7 +178,7 @@ include("multimedia.jl")
 using .Multimedia
 
 # SkipOfType type
-include("skipoftype.jl")
+include("skip.jl")
 
 # Some type
 include("some.jl")
