@@ -677,6 +677,7 @@ export
     skipmissing,
     something,
     isnothing,
+    nonmissingtype,
 
 # time
     sleep,
