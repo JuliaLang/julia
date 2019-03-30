@@ -889,6 +889,20 @@ julia> string.(1:3, ". ", ["First", "Second", "Third"])
  "3. Third"
 ```
 
+Normal dot calls are evaluated (or _materialized_) immediately.  To construct an
+intermediate representation without invoking the computation, prepend `for` to
+the a dot calls.
+
+```jldoctest
+julia> bc = for (1:3).^2;
+
+julia> bc isa Broadcast.Broadcasted  # it's not an `Array`
+true
+
+julia> sum(bc)  # summation without allocating any arrays
+14
+```
+
 ## Implementation
 
 The base array type in Julia is the abstract type [`AbstractArray{T,N}`](@ref). It is parameterized by

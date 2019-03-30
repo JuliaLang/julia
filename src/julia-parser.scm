@@ -1330,11 +1330,18 @@
        ((while)  (begin0 (list 'while (parse-cond s) (parse-block s))
                          (expect-end s word)))
        ((for)
-        (let* ((ranges (parse-comma-separated-iters s))
-               (body   (parse-block s)))
-          (expect-end s word)
-          `(for ,(if (length= ranges 1) (car ranges) (cons 'block ranges))
-                ,body)))
+        (let ((r (parse-iteration-spec-or-dotcall s)))
+          (case (car r)
+            ;; for loop
+            ((for)
+             (let* ((ranges (parse-comma-separated-iters-continued s (list (cdr r))))
+                    (body   (parse-block s)))
+               (expect-end s word)
+               `(for ,(if (length= ranges 1) (car ranges) (cons 'block ranges))
+                     ,body)))
+            ;; lazy dotcall
+            (else
+             `(fordot ,(cdr r))))))
 
        ((let)
         (let ((binds (if (memv (peek-token s) '(#\newline #\;))
@@ -1622,6 +1629,12 @@
 
 ;; as above, but allows both "i=r" and "i in r"
 (define (parse-iteration-spec s)
+  (let ((r (parse-iteration-spec-or-dotcall s)))
+    (case (car r)
+      ((for) (cdr r))
+      (else (error "invalid iteration specification")))))
+
+(define (parse-iteration-spec-or-dotcall s)
   (let* ((outer? (if (eq? (peek-token s) 'outer)
                      (begin
                        (take-token s)
@@ -1643,19 +1656,40 @@
                  ;; should be: (error "invalid iteration specification")
                  (parser-depwarn s (string "for " (deparse `(= ,lhs ,rhs)) " " t)
                                  (string "for " (deparse `(= ,lhs ,rhs)) "; " t)))
-             (if outer?
+             (cons
+              'for
+              (if outer?
                  `(= (outer ,lhs) ,rhs)
-                 `(= ,lhs ,rhs))))
+                 `(= ,lhs ,rhs)))))
           ((and (eq? lhs ':) (closing-token? t))
-           ':)
-          (else (error "invalid iteration specification")))))
+           '(for . :))
+
+          (else
+           (if (dotcall? lhs)
+               (cons 'fordot lhs)
+               (error "invalid expression after `for`"))))))
+
+(define (dotcall? ex)
+  (and (pair? ex)
+       (case (car ex)
+         ((call)
+          (equal? (substring (string (cadr ex)) 0 1) "."))
+         ((|.|) (and (pair? (cdr ex))
+                     (pair? (cddr ex))
+                     (pair? (caddr ex))
+                     (eq? (caaddr ex) 'tuple)))
+         (else #f))))
 
 (define (parse-comma-separated-iters s)
-  (let loop ((ranges '()))
-    (let ((r (parse-iteration-spec s)))
-      (case (peek-token s)
-        ((#\,)  (take-token s) (loop (cons r ranges)))
-        (else   (reverse! (cons r ranges)))))))
+  (parse-comma-separated-iters-continued s (list (parse-iteration-spec s))))
+
+(define (parse-comma-separated-iters-continued s ranges)
+  (case (peek-token s)
+    ((#\,)
+     (take-token s)
+     (parse-comma-separated-iters-continued s (cons (parse-iteration-spec s) ranges)))
+    (else
+     (reverse! ranges))))
 
 (define (parse-space-separated-exprs s)
   (with-space-sensitive

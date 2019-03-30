@@ -1642,10 +1642,7 @@
         `(block ,@stmts ,nuref))
       expr))
 
-; lazily fuse nested calls to expr == f.(args...) into a single broadcast call,
-; or a broadcast! call if lhs is non-null.
-(define (expand-fuse-broadcast lhs rhs)
-  (define (fuse? e) (and (pair? e) (eq? (car e) 'fuse)))
+(define (expand-lazy-broadcast rhs)
   (define (dot-to-fuse e (top #f)) ; convert e == (. f (tuple args)) to (fuse f args)
     (define (make-fuse f args) ; check for nested (fuse f args) exprs and combine
       (define (split-kwargs args) ; return (cons keyword-args positional-args) extracted from args
@@ -1682,7 +1679,15 @@
                    (list '^ (car x) (expand-forms `(call (call (core apply_type) (top Val) ,(cadr x))))))
                  (make-fuse f x)))
             e)))
-  (let ((e (dot-to-fuse rhs #t)) ; an expression '(fuse func args) if expr is a dot call
+  (dot-to-fuse rhs #t))
+
+(define (fuse? e) (and (pair? e) (eq? (car e) 'fuse)))
+
+; lazily fuse nested calls to expr == f.(args...) into a single broadcast call,
+; or a broadcast! call if lhs is non-null.
+(define (expand-fuse-broadcast lhs rhs)
+  (let ((e ; an expression '(fuse func args) if expr is a dot call
+         (expand-lazy-broadcast rhs))
         (lhs-view (ref-to-view lhs))) ; x[...] expressions on lhs turn in to view(x, ...) to update x in-place
     (if (fuse? e)
         ; expanded to a fuse op call
@@ -1838,6 +1843,13 @@
    '.=
    (lambda (e)
      (expand-fuse-broadcast (cadr e) (caddr e)))
+
+   'fordot
+   (lambda (e)
+     (let ((x (expand-lazy-broadcast (cadr e))))
+       (if (fuse? x)
+           (expand-forms (cdr x))
+           (error "non-dot call after `for`"))))
 
    '|<:|
    (lambda (e) (expand-forms `(call |<:| ,@(cdr e))))

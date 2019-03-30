@@ -182,6 +182,14 @@ let x = [1, 3.2, 4.7],
     @test atan.(α, y') == broadcast(atan, α, y')
 end
 
+@testset "for f.(args...) syntax (#19198, #31088)" begin
+    let bc = for (1:3).^2
+        @test bc isa Broadcast.Broadcasted
+        @test sum(bc) == 14
+    end
+    @test sum(for (1:3).^2) == 14
+end
+
 # issue 14725
 let a = Number[2, 2.0, 4//2, 2+0im] / 2
     @test eltype(a) == Number

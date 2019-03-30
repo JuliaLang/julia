@@ -1341,6 +1341,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, head, ' ')
         show_list(io, args, ", ", indent)
 
+    elseif nargs == 1 && head == :fordot
+        print(io, "for ")
+        show_list(io, args, ", ", indent)
+
     elseif head === :macrocall && nargs >= 2
         # first show the line number argument as a comment
         if isa(args[2], LineNumberNode) || is_expr(args[2], :line)

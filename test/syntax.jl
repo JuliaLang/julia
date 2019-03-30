@@ -1839,3 +1839,66 @@ end
 # issue #31404
 f31404(a, b; kws...) = (a, b, kws.data)
 @test f31404(+, (Type{T} where T,); optimize=false) === (+, (Type,), (optimize=false,))
+
+# lazy dot call
+@test Meta.parse("for f.(x)") == Expr(:fordot, :(f.(x)))
+@test Meta.parse("for f.(g(x))") == Expr(:fordot, :(f.(g(x))))
+@test Meta.parse("for .+ x") == Expr(:fordot, :(.+ x))
+@test Meta.parse("for .+ g(x)") == Expr(:fordot, :(.+ g(x)))
+
+@test Meta.parse("""
+for x in for f.(xs)
+end
+""") == Expr(:for,
+             Expr(:(=), :x, Expr(:fordot, :(f.(xs)))),
+             Expr(:block, LineNumberNode(2, :none)))
+
+@test Meta.parse("""
+for x in for f.(xs), y in for g.(ys)
+end
+""") == Expr(:for,
+             Expr(:block,
+                  Expr(:(=), :x, Expr(:fordot, :(f.(xs)))),
+                  Expr(:(=), :y, Expr(:fordot, :(g.(ys))))),
+             Expr(:block, LineNumberNode(2, :none)))
+
+@testset for valid in [
+        "for f.(x)"
+        "for f.(g(x))"
+        "for .+ x"
+        "for .+ g(x)"
+        "for f.(args[1], args[2])"
+        "for f.(args...)"
+        ]
+    @test Meta.lower(@__MODULE__, Meta.parse(valid)).head == :thunk
+end
+
+@testset for invalid in [
+        "for x"
+        "for f(x)"
+        "for f(g.(x))"
+        "for + x"
+        "for + f.(x))"
+        ]
+    @test_throws ParseError Meta.parse(invalid)
+end
+
+@testset for code in [
+        "for f.(x)"
+        "for f.(g(x))"
+        "for (.+)(x)"
+        "for (.+)(g(x))"
+        ]
+    @test string(Meta.parse(code)) == code
+end
+
+@testset for nondot in [
+        :(f(x))
+        :(f(g.(x)))
+        :(+f.(x))
+        1
+        quote end
+        ]
+    @test Meta.lower(@__MODULE__, Expr(:fordot, nondot)) ==
+        Expr(:error, "non-dot call after `for`")
+end
