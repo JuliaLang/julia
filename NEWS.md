@@ -14,6 +14,8 @@ New language features
 
   * `inv(::Missing)` has now been added and returns `missing` ([#31408]).
 
+  * Support for Unicode 12.
+
 Multi-threading changes
 -----------------------
 
