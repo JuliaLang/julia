@@ -272,6 +272,7 @@ end
         @test keytype_is_correct(Int8(1):Int8(3):Int16(5))
         @test keytype_is_correct(Int64(1):Int64(5))
         @test keytype_is_correct(Int64(1):Int64(5))
+        @test keytype_is_correct(Int128(1):Int128(5))
         @test keytype_is_correct(Base.OneTo(4))
         @test keytype_is_correct(Base.OneTo(Int32(4)))
 
@@ -285,6 +286,7 @@ end
         @test valtype_is_correct(Int8(1):Int8(3):Int16(5))
         @test valtype_is_correct(Int64(1):Int64(5))
         @test valtype_is_correct(Int64(1):Int64(5))
+        @test valtype_is_correct(Int128(1):Int128(5))
         @test valtype_is_correct(Base.OneTo(4))
         @test valtype_is_correct(Base.OneTo(Int32(4)))
     end

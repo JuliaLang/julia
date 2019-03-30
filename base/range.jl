@@ -545,16 +545,11 @@ length(r::OneTo{T}) where {T<:Union{Int,Int64}} = T(r.stop)
 length(r::AbstractUnitRange{T}) where {T<:Union{UInt,UInt64,UInt128}} =
     r.stop < r.start ? zero(T) : checked_add(last(r) - first(r), one(T))
 
-keytype(::Type{<:StepRange{T}})         where T = T
-keytype(::Type{<:AbstractUnitRange{T}}) where T = T
-valtype(::Type{<:StepRange{T}})         where T = T
-valtype(::Type{<:AbstractUnitRange{T}}) where T = T
-
 # some special cases to favor default Int type
 let smallint = (Int === Int64 ?
                 Union{Int8,UInt8,Int16,UInt16,Int32,UInt32} :
                 Union{Int8,UInt8,Int16,UInt16})
-    global length, keytype
+    global length
 
     function length(r::StepRange{<:smallint})
         isempty(r) && return Int(0)
@@ -563,9 +558,6 @@ let smallint = (Int === Int64 ?
 
     length(r::AbstractUnitRange{<:smallint}) = Int(last(r)) - Int(first(r)) + 1
     length(r::OneTo{<:smallint}) = Int(r.stop)
-
-    keytype(r::Type{<:StepRange{<:smallint}})         = Int
-    keytype(r::Type{<:AbstractUnitRange{<:smallint}}) = Int
 end
 
 first(r::OrdinalRange{T}) where {T} = convert(T, r.start)
