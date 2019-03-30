@@ -34,7 +34,7 @@ New library functions
 * Added `Base.hasproperty` and `Base.hasfield` ([#28850]).
 * One argument `!=(x)`, `>(x)`, `>=(x)`, `<(x)`, `<=(x)` has been added for currying,
   similar to the existing `==(x)` and `isequal(x)` methods ([#30915]).
-* `skipnothing(itr)` function returns an iterator skipping `nothing` values ([#30549])
+* `skip(T, itr)` function returns an iterator skipping values of type T ([#30549]).
 
 Standard library changes
 ------------------------

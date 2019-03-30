@@ -671,10 +671,10 @@ export
     coalesce,
     ismissing,
     missing,
+    skip,
     skipmissing,
     something,
     isnothing,
-    skipnothing,
 
 # time
     sleep,
