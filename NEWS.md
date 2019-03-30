@@ -75,6 +75,9 @@ Standard library changes
 * Since environment variables on Windows are case-insensitive, `ENV` now converts its keys
   to uppercase for display, iteration, and copying ([#30593]).
 
+* Build system now prefers downloading prebuilt binary tarballs for most dependencies on
+  supported systems, disable by setting `USE_BINARYBUILDER=0` at `make` time ([#31441]).
+
 External dependencies
 ---------------------
 
