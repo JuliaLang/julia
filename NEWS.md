@@ -14,6 +14,9 @@ New language features
 
   * `inv(::Missing)` has now been added and returns `missing` ([#31408]).
 
+  * A new syntax `for f.(...)` is added to create a non-`materialize`d `Broadcasted` object
+    from a given "dot call" expression ([#19198]).
+
 Multi-threading changes
 -----------------------
 
