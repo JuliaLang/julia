@@ -202,7 +202,7 @@ julia> filter(isodd, skip(missing, x))
 ```
 """
 function filter(f, itr::Skip{T, <:AbstractArray}) where T
-    y = similar(itr.x, eltype(itr))
+    y = similar(itr.x, eltype(itr), length(itr.x))
     out_len = 0
     for xi in itr.x
         if !isa(xi, T) && f(xi)
