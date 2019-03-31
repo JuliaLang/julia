@@ -202,14 +202,11 @@ julia> filter(isodd, skip(missing, x))
 ```
 """
 function filter(f, itr::Skip{T, <:AbstractArray}) where T
-    y = similar(itr.x, eltype(itr), length(itr.x))
-    out_len = 0
+    y = similar(itr.x, eltype(itr), 0)
     for xi in itr.x
         if !isa(xi, T) && f(xi)
-            out_len += 1
-            y[out_len] = xi
+            push!(y, xi)
         end
     end
-    resize!(y, out_len)
     y
 end
