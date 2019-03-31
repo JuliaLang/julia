@@ -629,7 +629,6 @@ end
 
 function sourceinfo_slotnames(src::CodeInfo)
     slotnames = src.slotnames
-    isa(slotnames, Array) || return String[]
     names = Dict{String,Int}()
     printnames = Vector{String}(undef, length(slotnames))
     for i in eachindex(slotnames)

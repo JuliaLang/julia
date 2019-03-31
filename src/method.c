@@ -250,7 +250,7 @@ static void jl_code_info_set_ast(jl_code_info_t *li, jl_expr_t *ast)
     jl_value_t *ssavalue_types = jl_array_ptr_ref(vinfo, 2);
     assert(jl_is_long(ssavalue_types));
     size_t nssavalue = jl_unbox_long(ssavalue_types);
-    li->slotnames = jl_alloc_vec_any(nslots);
+    li->slotnames = jl_alloc_array_1d(jl_array_symbol_type, nslots);
     jl_gc_wb(li, li->slotnames);
     li->slotflags = jl_alloc_array_1d(jl_array_uint8_type, nslots);
     jl_gc_wb(li, li->slotflags);
