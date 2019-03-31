@@ -8,7 +8,8 @@ Module containing the broadcasting implementation.
 module Broadcast
 
 using .Base.Cartesian
-using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin,
+using .Base: Indices, OneTo, AxesStartStyle, AxesStart1, AxesStartAny
+using .Base: tail, to_shape, isoperator, promote_typejoin, require_one_based_indexing,
              _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias
 import .Base: copy, copyto!, axes
 export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__
@@ -491,7 +492,11 @@ _bcsm(a::Number, b::Number) = a == b || b == 1
 # (We may not want to define general promotion rules between, say, OneTo and Slice, but if
 #  we get here we know the axes are at least consistent for the purposes of broadcasting)
 axistype(a::T, b::T) where T = a
-axistype(a, b) = UnitRange{Int}(a)
+axistype(a, b) = _axistype(AxesStartStyle(a), AxesStartStyle(b), a, b)
+_axistype(::AxesStart1,   ::AxesStart1,   a, b) = OneTo{Int}(a)
+_axistype(::AxesStartAny, ::AxesStart1,   a, b) = a   # if we get here, b has length 1
+_axistype(::AxesStart1,   ::AxesStartAny, a, b) = error("mismatched axes, or specialize `Broadcast.axistype` for ", typeof(a), " and ", typeof(b), " axes")
+_axistype(::AxesStartAny, ::AxesStartAny, a, b) = error("mismatched axes, or specialize `Broadcast.axistype` for ", typeof(a), " and ", typeof(b), " axes")
 
 ## Check that all arguments are broadcast compatible with shape
 # comparing one input against a shape
@@ -1008,15 +1013,20 @@ broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::OrdinalRange) = r
 broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::StepRangeLen) = r
 broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::LinRange) = r
 
-broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::OrdinalRange) = range(-first(r), step=-step(r), length=length(r))
+broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::OrdinalRange) =
+    (require_one_based_indexing(r); range(-first(r), step=-step(r), length=length(r)))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::StepRangeLen) = StepRangeLen(-r.ref, -r.step, length(r), r.offset)
 broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::LinRange) = LinRange(-r.start, -r.stop, length(r))
 
-broadcasted(::DefaultArrayStyle{1}, ::typeof(+), x::Real, r::AbstractUnitRange) = range(x + first(r), length=length(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::AbstractUnitRange, x::Real) = range(first(r) + x, length=length(r))
+broadcasted(::DefaultArrayStyle{1}, ::typeof(+), x::Real, r::AbstractUnitRange) =
+    (require_one_based_indexing(r); range(x + first(r), length=length(r)))
+broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::AbstractUnitRange, x::Real) =
+    (require_one_based_indexing(r); range(first(r) + x, length=length(r)))
 # For #18336 we need to prevent promotion of the step type:
-broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::AbstractRange, x::Number) = range(first(r) + x, step=step(r), length=length(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(+), x::Number, r::AbstractRange) = range(x + first(r), step=step(r), length=length(r))
+broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::AbstractRange, x::Number) =
+    (require_one_based_indexing(r); range(first(r) + x, step=step(r), length=length(r)))
+broadcasted(::DefaultArrayStyle{1}, ::typeof(+), x::Number, r::AbstractRange) =
+    (require_one_based_indexing(r); range(x + first(r), step=step(r), length=length(r)))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::StepRangeLen{T}, x::Number) where T =
     StepRangeLen{typeof(T(r.ref)+x)}(r.ref + x, r.step, length(r), r.offset)
 broadcasted(::DefaultArrayStyle{1}, ::typeof(+), x::Number, r::StepRangeLen{T}) where T =
@@ -1025,9 +1035,12 @@ broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::LinRange, x::Number) = LinRa
 broadcasted(::DefaultArrayStyle{1}, ::typeof(+), x::Number, r::LinRange) = LinRange(x + r.start, x + r.stop, length(r))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r1::AbstractRange, r2::AbstractRange) = r1 + r2
 
-broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::AbstractUnitRange, x::Number) = range(first(r)-x, length=length(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::AbstractRange, x::Number) = range(first(r)-x, step=step(r), length=length(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(-), x::Number, r::AbstractRange) = range(x-first(r), step=-step(r), length=length(r))
+broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::AbstractUnitRange, x::Number) =
+    (require_one_based_indexing(r); range(first(r)-x, length=length(r)))
+broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::AbstractRange, x::Number) =
+    (require_one_based_indexing(r); range(first(r)-x, step=step(r), length=length(r)))
+broadcasted(::DefaultArrayStyle{1}, ::typeof(-), x::Number, r::AbstractRange) =
+    (require_one_based_indexing(r); range(x-first(r), step=-step(r), length=length(r)))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::StepRangeLen{T}, x::Number) where T =
     StepRangeLen{typeof(T(r.ref)-x)}(r.ref - x, r.step, length(r), r.offset)
 broadcasted(::DefaultArrayStyle{1}, ::typeof(-), x::Number, r::StepRangeLen{T}) where T =
@@ -1036,22 +1049,26 @@ broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::LinRange, x::Number) = LinRa
 broadcasted(::DefaultArrayStyle{1}, ::typeof(-), x::Number, r::LinRange) = LinRange(x - r.start, x - r.stop, length(r))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r1::AbstractRange, r2::AbstractRange) = r1 - r2
 
-broadcasted(::DefaultArrayStyle{1}, ::typeof(*), x::Number, r::AbstractRange) = range(x*first(r), step=x*step(r), length=length(r))
+broadcasted(::DefaultArrayStyle{1}, ::typeof(*), x::Number, r::AbstractRange) =
+    (require_one_based_indexing(r); range(x*first(r), step=x*step(r), length=length(r)))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(*), x::Number, r::StepRangeLen{T}) where {T} =
     StepRangeLen{typeof(x*T(r.ref))}(x*r.ref, x*r.step, length(r), r.offset)
 broadcasted(::DefaultArrayStyle{1}, ::typeof(*), x::Number, r::LinRange) = LinRange(x * r.start, x * r.stop, r.len)
 # separate in case of noncommutative multiplication
-broadcasted(::DefaultArrayStyle{1}, ::typeof(*), r::AbstractRange, x::Number) = range(first(r)*x, step=step(r)*x, length=length(r))
+broadcasted(::DefaultArrayStyle{1}, ::typeof(*), r::AbstractRange, x::Number) =
+    (require_one_based_indexing(r); range(first(r)*x, step=step(r)*x, length=length(r)))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(*), r::StepRangeLen{T}, x::Number) where {T} =
     StepRangeLen{typeof(T(r.ref)*x)}(r.ref*x, r.step*x, length(r), r.offset)
 broadcasted(::DefaultArrayStyle{1}, ::typeof(*), r::LinRange, x::Number) = LinRange(r.start * x, r.stop * x, r.len)
 
-broadcasted(::DefaultArrayStyle{1}, ::typeof(/), r::AbstractRange, x::Number) = range(first(r)/x, step=step(r)/x, length=length(r))
+broadcasted(::DefaultArrayStyle{1}, ::typeof(/), r::AbstractRange, x::Number) =
+    (require_one_based_indexing(r); range(first(r)/x, step=step(r)/x, length=length(r)))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(/), r::StepRangeLen{T}, x::Number) where {T} =
     StepRangeLen{typeof(T(r.ref)/x)}(r.ref/x, r.step/x, length(r), r.offset)
 broadcasted(::DefaultArrayStyle{1}, ::typeof(/), r::LinRange, x::Number) = LinRange(r.start / x, r.stop / x, r.len)
 
-broadcasted(::DefaultArrayStyle{1}, ::typeof(\), x::Number, r::AbstractRange) = range(x\first(r), step=x\step(r), length=length(r))
+broadcasted(::DefaultArrayStyle{1}, ::typeof(\), x::Number, r::AbstractRange) =
+    (require_one_based_indexing(r); range(x\first(r), step=x\step(r), length=length(r)))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(\), x::Number, r::StepRangeLen) = StepRangeLen(x\r.ref, x\r.step, length(r), r.offset)
 broadcasted(::DefaultArrayStyle{1}, ::typeof(\), x::Number, r::LinRange) = LinRange(x \ r.start, x \ r.stop, r.len)
 

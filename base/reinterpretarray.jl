@@ -109,7 +109,7 @@ function axes(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     paxs = axes(a.parent)
     f, l = first(paxs[1]), length(paxs[1])
     size1 = div(l*sizeof(S), sizeof(T))
-    tuple(oftype(paxs[1], f:f+size1-1), tail(paxs)...)
+    tuple(typeof(paxs[1])(f:f+size1-1), tail(paxs)...)
 end
 axes(a::ReinterpretArray{T,0}) where {T} = ()
 

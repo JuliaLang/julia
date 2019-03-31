@@ -140,7 +140,20 @@ abstract type AbstractRange{T} <: AbstractArray{T,1} end
 RangeStepStyle(::Type{<:AbstractRange}) = RangeStepIrregular()
 RangeStepStyle(::Type{<:AbstractRange{<:Integer}}) = RangeStepRegular()
 
-convert(::Type{T}, r::AbstractRange) where {T<:AbstractRange} = r isa T ? r : T(r)
+AxesStartStyle(::Type{<:AbstractRange}) = AxesStart1()  # opt-out of AxesStart1 for "weird" range types
+AxesStartStyle(r::AbstractRange) = AxesStartStyle(typeof(r))
+
+convert(::Type{AbstractRange}, r::AbstractRange) = r
+convert(::Type{T}, r::T) where {T<:AbstractRange} = r
+convert(::Type{T}, r::AbstractRange) where {T<:AbstractRange} = _convert(AxesStartStyle(T), AxesStartStyle(r), T, r)
+_convert(::AxesStart1, ::AxesStart1, ::Type{T}, r::AbstractRange) where {T<:AbstractRange} = T(r)
+_convert(::AxesStartStyle, ::AxesStartStyle, ::Type{T}, r::AbstractRange) where {T<:AbstractRange} =
+    throw(MethodError(convert, (T, r)))
+
+require_one_based_indexing(r::AbstractRange) = _require_one_based_indexing(AxesStartStyle(r), r)
+_require_one_based_indexing(::AxesStartStyle, r) =
+    !has_offset_axes(r) || throw(ArgumentError("offset arrays are not supported but got an array with index other than 1"))
+_require_one_based_indexing(::AxesStart1, r) = true
 
 ## ordinal ranges
 
@@ -157,6 +170,8 @@ type can represent values smaller than `oneunit(Float64)`.
 """
 abstract type OrdinalRange{T,S} <: AbstractRange{T} end
 
+convert(::Type{OrdinalRange{T,S}}, r::OrdinalRange{T,S}) where {T,S} = r
+
 """
     AbstractUnitRange{T} <: OrdinalRange{T, T}
 
@@ -164,6 +179,8 @@ Supertype for ranges with a step size of [`oneunit(T)`](@ref) with elements of t
 [`UnitRange`](@ref) and other types are subtypes of this.
 """
 abstract type AbstractUnitRange{T} <: OrdinalRange{T,T} end
+
+convert(::Type{AbstractUnitRange{T}}, r::AbstractUnitRange{T}) where {T} = r
 
 """
     StepRange{T, S} <: OrdinalRange{T, S}
@@ -307,15 +324,15 @@ be 1.
 struct OneTo{T<:Integer} <: AbstractUnitRange{T}
     stop::T
     OneTo{T}(stop) where {T<:Integer} = new(max(zero(T), stop))
-    function OneTo{T}(r::AbstractRange) where {T<:Integer}
-        throwstart(r) = (@_noinline_meta; throw(ArgumentError("first element must be 1, got $(first(r))")))
-        throwstep(r)  = (@_noinline_meta; throw(ArgumentError("step must be 1, got $(step(r))")))
-        first(r) == 1 || throwstart(r)
-        step(r)  == 1 || throwstep(r)
-        return new(max(zero(T), last(r)))
-    end
 end
 OneTo(stop::T) where {T<:Integer} = OneTo{T}(stop)
+function OneTo{T}(r::AbstractRange) where {T<:Integer}
+    throwstart(r) = (@_noinline_meta; throw(ArgumentError("first element must be 1, got $(first(r))")))
+    throwstep(r)  = (@_noinline_meta; throw(ArgumentError("step must be 1, got $(step(r))")))
+    first(r) == 1 || throwstart(r)
+    step(r)  == 1 || throwstep(r)
+    return OneTo{T}(last(r))
+end
 OneTo(r::AbstractRange{T}) where {T<:Integer} = OneTo{T}(r)
 
 ## Step ranges parameterized by length
@@ -713,10 +730,14 @@ show(io::IO, r::AbstractRange) = print(io, repr(first(r)), ':', repr(step(r)), '
 show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
 show(io::IO, r::OneTo) = print(io, "Base.OneTo(", r.stop, ")")
 
+range_axes_first_same(r, s) = _range_axes_first_same(AxesStartStyle(r), AxesStartStyle(s), r, s)
+_range_axes_first_same(::AxesStart1, ::AxesStart1, r, s) = true
+_range_axes_first_same(::AxesStartStyle, ::AxesStartStyle, r, s) = first(axes1(r)) == first(axes1(s))
+
 ==(r::T, s::T) where {T<:AbstractRange} =
-    (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
+    (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s)) & range_axes_first_same(r, s)
 ==(r::OrdinalRange, s::OrdinalRange) =
-    (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
+    (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s)) & range_axes_first_same(r, s)
 ==(r::T, s::T) where {T<:Union{StepRangeLen,LinRange}} =
     (first(r) == first(s)) & (length(r) == length(s)) & (last(r) == last(s))
 ==(r::Union{StepRange{T},StepRangeLen{T,T}}, s::Union{StepRange{T},StepRangeLen{T,T}}) where {T} =
@@ -727,6 +748,7 @@ function ==(r::AbstractRange, s::AbstractRange)
     if lr != length(s)
         return false
     end
+    range_axes_first_same(r, s) || return false
     yr, ys = iterate(r), iterate(s)
     while yr !== nothing
         yr[1] == ys[1] || return false
@@ -849,7 +871,7 @@ end
 
 ## linear operations on ranges ##
 
--(r::OrdinalRange) = range(-first(r), step=-step(r), length=length(r))
+-(r::OrdinalRange) = (require_one_based_indexing(r); range(-first(r), step=-step(r), length=length(r)))
 -(r::StepRangeLen{T,R,S}) where {T,R,S} =
     StepRangeLen{T,R,S}(-r.ref, -r.step, length(r), r.offset)
 -(r::LinRange) = LinRange(-r.start, -r.stop, length(r))
@@ -861,6 +883,9 @@ el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:AbstractArray{S,n}})
 el_same(::Type{T}, a::Type{<:AbstractArray{S,n}}, b::Type{<:AbstractArray{T,n}}) where {T,S,n} = b
 el_same(::Type, a, b) = promote_typejoin(a, b)
 
+# promote_rule and more constructors
+# Note: construction is distinct from conversion, convert should check require_one_based_indexing(r)
+# but construction should not.
 promote_rule(a::Type{UnitRange{T1}}, b::Type{UnitRange{T2}}) where {T1,T2} =
     el_same(promote_type(T1,T2), a, b)
 UnitRange{T}(r::UnitRange{T}) where {T<:Real} = r
@@ -944,7 +969,10 @@ end
 Array{T,1}(r::AbstractRange{T}) where {T} = vcat(r)
 collect(r::AbstractRange) = vcat(r)
 
-reverse(r::OrdinalRange) = (:)(last(r), -step(r), first(r))
+function reverse(r::OrdinalRange)
+    require_one_based_indexing(r)
+    (:)(last(r), -step(r), first(r))
+end
 function reverse(r::StepRangeLen)
     # If `r` is empty, `length(r) - r.offset + 1 will be nonpositive hence
     # invalid. As `reverse(r)` is also empty, any offset would work so we keep
@@ -964,8 +992,11 @@ sort!(r::AbstractUnitRange) = r
 
 sort(r::AbstractRange) = issorted(r) ? r : reverse(r)
 
-sortperm(r::AbstractUnitRange) = 1:length(r)
-sortperm(r::AbstractRange) = issorted(r) ? (1:1:length(r)) : (length(r):-1:1)
+sortperm(r::AbstractUnitRange) = (require_one_based_indexing(r); 1:length(r))
+function sortperm(r::AbstractRange)
+    require_one_based_indexing(r)
+    issorted(r) ? (1:1:length(r)) : (length(r):-1:1)
+end
 
 function sum(r::AbstractRange{<:Real})
     l = length(r)
@@ -1004,6 +1035,7 @@ function _define_range_op(@nospecialize f)
             r1l = length(r1)
             (r1l == length(r2) ||
              throw(DimensionMismatch("argument dimensions must match")))
+             require_one_based_indexing(r1, r2)
             range($f(first(r1), first(r2)), step=$f(step(r1), step(r2)), length=r1l)
         end
 
