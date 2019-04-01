@@ -11,6 +11,11 @@ struct BunchKaufman{T,S<:AbstractMatrix} <: Factorization{T}
     symmetric::Bool
     rook::Bool
     info::BlasInt
+
+    function BunchKaufman{T,S}(LD, ipiv, uplo, symmetric, rook, info) where {T,S<:AbstractMatrix}
+        require_one_based_indexing(LD)
+        new(LD, ipiv, uplo, symmetric, rook, info)
+    end
 end
 BunchKaufman(A::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::AbstractChar, symmetric::Bool,
              rook::Bool, info::BlasInt) where {T} =
@@ -107,7 +112,7 @@ true
 ```
 """
 bunchkaufman(A::AbstractMatrix{T}, rook::Bool=false; check::Bool = true) where {T} =
-    bunchkaufman!(copy_oftype(A, typeof(sqrt(one(T)))), rook; check = check)
+    bunchkaufman!(copy_oftype(A, typeof(sqrt(oneunit(T)))), rook; check = check)
 
 convert(::Type{BunchKaufman{T}}, B::BunchKaufman{T}) where {T} = B
 convert(::Type{BunchKaufman{T}}, B::BunchKaufman) where {T} =
@@ -121,6 +126,7 @@ issymmetric(B::BunchKaufman) = B.symmetric
 ishermitian(B::BunchKaufman) = !B.symmetric
 
 function _ipiv2perm_bk(v::AbstractVector{T}, maxi::Integer, uplo::AbstractChar) where T
+    require_one_based_indexing(v)
     p = T[1:maxi;]
     uploL = uplo == 'L'
     i = uploL ? 1 : maxi
@@ -148,8 +154,8 @@ end
 
 Extract the factors of the Bunch-Kaufman factorization `B`. The factorization can take the
 two forms `P'*L*D*L'*P` or `P'*U*D*U'*P` (or `L*D*transpose(L)` in the complex symmetric case)
-where `P` is a (symmetric) permutation matrix, `L` is a `UnitLowerTriangular` matrix, `U` is a
-`UnitUpperTriangular`, and `D` is a block diagonal symmetric or Hermitian matrix with
+where `P` is a (symmetric) permutation matrix, `L` is a [`UnitLowerTriangular`](@ref) matrix, `U` is a
+[`UnitUpperTriangular`](@ref), and `D` is a block diagonal symmetric or Hermitian matrix with
 1x1 or 2x2 blocks. The argument `d` can be
 
 - `:D`: the block diagonal matrix
@@ -244,7 +250,7 @@ issuccess(B::BunchKaufman) = B.info == 0
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, B::BunchKaufman)
     if issuccess(B)
-        println(io, summary(B))
+        summary(io, B); println(io)
         println(io, "D factor:")
         show(io, mime, B.D)
         println(io, "\n$(B.uplo) factor:")

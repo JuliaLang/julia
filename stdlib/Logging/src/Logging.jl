@@ -1,7 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
+"""
+Utilities for capturing, filtering and presenting streams of log events.
+Normally you don't need to import `Logging` to create log events; for this
+the standard logging macros such as `@info` are already exported by `Base`
+and available by default.
+"""
 module Logging
 
 # For now, simply import most names from Base - we don't want to fully
@@ -54,12 +58,6 @@ include("ConsoleLogger.jl")
 
 function __init__()
     global_logger(ConsoleLogger(stderr))
-    atexit() do
-        logger = global_logger()
-        if isa(logger, ConsoleLogger)
-            global_logger(ConsoleLogger(Core.stderr, min_enabled_level(logger)))
-        end
-    end
 end
 
 end

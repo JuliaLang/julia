@@ -161,6 +161,40 @@ end
     @test *(Asub, adjoint(Asub)) == *(Aref, adjoint(Aref))
 end
 
+@testset "Complex matrix x real MatOrVec etc (issue #29224)" for T1 in (Float32,Float64)
+    for T2 in (Float32,Float64)
+        for arg1_real in (true,false)
+            @testset "Combination $T1 $T2 $arg1_real $arg2_real" for arg2_real in (true,false)
+                A0 = reshape(Vector{T1}(1:25),5,5) .+
+                   (arg1_real ? 0 : 1im*reshape(Vector{T1}(-3:21),5,5))
+                A = view(A0,1:2,1:2)
+                B = Matrix{T2}([1.0 3.0; -1.0 2.0]).+
+                    (arg2_real ? 0 : 1im*Matrix{T2}([3.0 4; -1 10]))
+                AB_correct = copy(A)*B
+                AB = A*B;  # view times matrix
+                @test AB ≈ AB_correct
+                A1 = view(A0,:,1:2)  # rectangular view times matrix
+                @test A1*B ≈ copy(A1)*B
+                B1 = view(B,1:2,1:2);
+                AB1 = A*B1; # view times view
+                @test AB1 ≈ AB_correct
+                x = Vector{T2}([1.0;10.0]) .+ (arg2_real ? 0 : 1im*Vector{T2}([3;-1]))
+                Ax_exact = copy(A)*x
+                Ax = A*x  # view times vector
+                @test Ax ≈ Ax_exact
+                x1 = view(x,1:2)
+                Ax1 = A*x1  # view times viewed vector
+                @test Ax1 ≈ Ax_exact
+                @test copy(A)*x1 ≈ Ax_exact # matrix times viewed vector
+                # View times transposed matrix
+                Bt = transpose(B);
+                @test A*Bt ≈ A*copy(Bt)
+            end
+        end
+    end
+end
+
+
 @testset "issue #15286" begin
     A = reshape(map(Float64, 1:20), 5, 4)
     C = zeros(8, 8)
@@ -232,16 +266,18 @@ end
     @test dot(Z, Z) == convert(elty, 34.0)
 end
 
-dot_(x,y) = invoke(dot, Tuple{Any,Any}, x,y)
+dot1(x,y) = invoke(dot, Tuple{Any,Any}, x,y)
+dot2(x,y) = invoke(dot, Tuple{AbstractArray,AbstractArray}, x,y)
 @testset "generic dot" begin
     AA = [1+2im 3+4im; 5+6im 7+8im]
     BB = [2+7im 4+1im; 3+8im 6+5im]
     for A in (copy(AA), view(AA, 1:2, 1:2)), B in (copy(BB), view(BB, 1:2, 1:2))
-        @test dot(A,B) == dot(vec(A),vec(B)) == dot_(A,B) == dot(float.(A),float.(B))
-        @test dot(Int[], Int[]) == 0 == dot_(Int[], Int[])
+        @test dot(A,B) == dot(vec(A),vec(B)) == dot1(A,B) == dot2(A,B) == dot(float.(A),float.(B))
+        @test dot(Int[], Int[]) == 0 == dot1(Int[], Int[]) == dot2(Int[], Int[])
         @test_throws MethodError dot(Any[], Any[])
-        @test_throws MethodError dot_(Any[], Any[])
-        for n1 = 0:2, n2 = 0:2, d in (dot, dot_)
+        @test_throws MethodError dot1(Any[], Any[])
+        @test_throws MethodError dot2(Any[], Any[])
+        for n1 = 0:2, n2 = 0:2, d in (dot, dot1, dot2)
             if n1 != n2
                 @test_throws DimensionMismatch d(1:n1, 1:n2)
             else
@@ -264,6 +300,27 @@ end
 end
 
 @test_throws ArgumentError LinearAlgebra.copytri!(Matrix{Float64}(undef,10,10),'Z')
+
+@testset "Issue 30055" begin
+    B = [1+im 2+im 3+im; 4+im 5+im 6+im; 7+im 9+im im]
+    A = UpperTriangular(B)
+    @test copy(transpose(A)) == transpose(A)
+    @test copy(A') == A'
+    A = LowerTriangular(B)
+    @test copy(transpose(A)) == transpose(A)
+    @test copy(A') == A'
+    B = Matrix{Matrix{Complex{Int}}}(undef, 2, 2)
+    B[1,1] = [1+im 2+im; 3+im 4+im]
+    B[2,1] = [1+2im 1+3im;1+3im 1+4im]
+    B[1,2] = [7+im 8+2im; 9+3im 4im]
+    B[2,2] = [9+im 8+im; 7+im 6+im]
+    A = UpperTriangular(B)
+    @test copy(transpose(A)) == transpose(A)
+    @test copy(A') == A'
+    A = LowerTriangular(B)
+    @test copy(transpose(A)) == transpose(A)
+    @test copy(A') == A'
+end
 
 @testset "gemv! and gemm_wrapper for $elty" for elty in [Float32,Float64,ComplexF64,ComplexF32]
     A10x10, x10, x11 = Array{elty}.(undef, ((10,10), 10, 11))
@@ -441,6 +498,14 @@ end
     @test transpose(Xv1)*Xv3' ≈ XtXc
     @test Xv1'*Xv2' ≈ XcXc
     @test Xv1'*Xv3' ≈ XcXc
+end
+
+@testset "method ambiguity" begin
+    # Ambiguity test is run inside a clean process.
+    # https://github.com/JuliaLang/julia/issues/28804
+    script = joinpath(@__DIR__, "ambiguous_exec.jl")
+    cmd = `$(Base.julia_cmd()) --startup-file=no $script`
+    @test success(pipeline(cmd; stdout=stdout, stderr=stderr))
 end
 
 end # module TestMatmul

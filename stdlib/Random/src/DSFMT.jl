@@ -156,12 +156,13 @@ end
 "Cached jump polynomials for `MersenneTwister`."
 const JumpPolys = Dict{BigInt,GF2X}()
 
-const CharPoly = Ref{GF2X}()
-# Ref because it can not be initialized at compile time
-
-function __init__()
-    CharPoly[] = GF2X(Poly19937)
-    JumpPolys[big(10)^20] = GF2X(JPOLY1e20)
+const CharPoly_ref = Ref{GF2X}()
+# Ref because it can not be initialized at load time
+function CharPoly()
+    if !isassigned(CharPoly_ref)
+        CharPoly_ref[] = GF2X(Poly19937)
+    end
+    return CharPoly_ref[]
 end
 
 """
@@ -172,8 +173,11 @@ the Mersenne-Twister with exponent 19937). Note that `steps` should be
 less than the period (e.g. ``steps ≪ 2^19937-1``).
 """
 function calc_jump(steps::Integer,
-                   charpoly::GF2X=CharPoly[])::GF2X
+                   charpoly::GF2X=CharPoly())::GF2X
     steps < 0 && throw(DomainError("jump steps must be >= 0 (got $steps)"))
+    if isempty(JumpPolys)
+        JumpPolys[big(10)^20] = GF2X(JPOLY1e20)
+    end
     get!(JumpPolys, steps) do
         powxmod(big(steps), charpoly)
     end
@@ -183,7 +187,7 @@ end
 ## dSFMT jump
 
 function dsfmt_jump(s::DSFMT_state, jp::GF2X)
-    degree(jp) < degree(CharPoly[]) || throw(DomainError("degree of jump polynomial must be < $(degree(CharPoly[])), got $(degree(jp))"))
+    degree(jp) < degree(CharPoly()) || throw(DomainError("degree of jump polynomial must be < $(degree(CharPoly())), got $(degree(jp))"))
 
     val = s.val
     nval = length(val)

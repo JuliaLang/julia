@@ -6,7 +6,7 @@ using Test, LinearAlgebra, SparseArrays, Random
 using LinearAlgebra: mul!, rmul!, lmul!, ldiv!, rdiv!, BlasFloat, BlasComplex, SingularException
 
 n=12 #Size of matrix problem to test
-srand(1)
+Random.seed!(1)
 
 @testset for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     dd=convert(Vector{elty}, randn(n))
@@ -27,6 +27,11 @@ srand(1)
             @test Diagonal{elty}(x)::Diagonal{elty,typeof(x)} == DM
             @test Diagonal{elty}(x).diag === x
         end
+        @test eltype(Diagonal{elty}([1,2,3,4])) == elty
+        @test isa(Diagonal{elty,Vector{elty}}(GenericArray([1,2,3,4])), Diagonal{elty,Vector{elty}})
+        DI = Diagonal([1,2,3,4])
+        @test Diagonal(DI) === DI
+        @test isa(Diagonal{elty}(DI), Diagonal{elty})
         # issue #26178
         @test_throws MethodError convert(Diagonal, [1, 2, 3, 4])
     end
@@ -45,6 +50,9 @@ srand(1)
         @test D[1,2] == 0
 
         @test issymmetric(D)
+        @test isdiag(D)
+        @test isdiag(Diagonal([[1 0; 0 1], [1 0; 0 1]]))
+        @test !isdiag(Diagonal([[1 0; 0 1], [1 0; 1 1]]))
         @test istriu(D)
         @test istril(D)
         if elty <: Real
@@ -165,6 +173,11 @@ srand(1)
         @test D/D2 ≈ Diagonal(D.diag./D2.diag)
         @test D\D2 ≈ Diagonal(D2.diag./D.diag)
 
+        # QR \ Diagonal
+        A = rand(elty, n, n)
+        qrA = qr(A)
+        @test qrA \ D ≈ A \ D
+
         # Performance specialisations for A*_mul_B!
         vvv = similar(vv)
         @test (r = Matrix(D) * vv   ; mul!(vvv, D, vv)  ≈ r ≈ vvv)
@@ -191,9 +204,22 @@ srand(1)
         # kron
         D3 = Diagonal(convert(Vector{elty}, rand(n÷2)))
         DM3= Matrix(D3)
-        Matrix(kron(D, D3)) ≈ kron(DM, DM3)
+        @test Matrix(kron(D, D3)) ≈ kron(DM, DM3)
+        M4 = rand(elty, n÷2, n÷2)
+        @test kron(D3, M4) ≈ kron(DM3, M4)
+        @test kron(M4, D3) ≈ kron(M4, DM3)
     end
-    @testset "triu/tril" begin
+    @testset "iszero, isone, triu, tril" begin
+        Dzero = Diagonal(zeros(elty, 10))
+        Done = Diagonal(ones(elty, 10))
+        Dmix = Diagonal(zeros(elty, 10))
+        Dmix[end,end] = one(elty)
+        @test iszero(Dzero)
+        @test !isone(Dzero)
+        @test !iszero(Done)
+        @test isone(Done)
+        @test !iszero(Dmix)
+        @test !isone(Dmix)
         @test istriu(D)
         @test istril(D)
         @test iszero(triu(D,1))
@@ -272,17 +298,30 @@ srand(1)
         @test svdvals(D) == s
         @test svd(D).V == V
     end
+
 end
 
 @testset "svdvals and eigvals (#11120/#11247)" begin
     D = Diagonal(Matrix{Float64}[randn(3,3), randn(2,2)])
     @test sort([svdvals(D)...;], rev = true) ≈ svdvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
-    @test [eigvals(D)...;] ≈ eigvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
+    @test sort([eigvals(D)...;], by=LinearAlgebra.eigsortby) ≈ eigvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
+end
+
+@testset "eigmin (#27847)" begin
+    for _ in 1:100
+        d = randn(rand(1:10))
+        D = Diagonal(d)
+        @test eigmin(D) == minimum(d)
+    end
 end
 
 @testset "isposdef" begin
     @test isposdef(Diagonal(1.0 .+ rand(n)))
     @test !isposdef(Diagonal(-1.0 * rand(n)))
+    @test isposdef(Diagonal(complex(1.0, 0.0) .+ rand(n)))
+    @test !isposdef(Diagonal(complex(1.0, 1.0) .+ rand(n)))
+    @test isposdef(Diagonal([[1 0; 0 1], [1 0; 0 1]]))
+    @test !isposdef(Diagonal([[1 0; 0 1], [1 0; 1 1]]))
 end
 
 @testset "getindex" begin
@@ -397,6 +436,9 @@ end
     @test exp(D) == Diagonal([exp([1 2; 3 4]), exp([1 2; 3 4])])
     @test log(D) == Diagonal([log([1 2; 3 4]), log([1 2; 3 4])])
     @test sqrt(D) == Diagonal([sqrt([1 2; 3 4]), sqrt([1 2; 3 4])])
+
+    @test tr(D) == 10
+    @test det(D) == 4
 end
 
 @testset "multiplication with Symmetric/Hermitian" begin
@@ -443,6 +485,28 @@ end
     D = Diagonal(rand(5))
     @test x'*D*x == (x'*D)*x == (x'*Array(D))*x
     @test Transpose(x)*D*x == (Transpose(x)*D)*x == (Transpose(x)*Array(D))*x
+end
+
+@testset "Triangular division by Diagonal #27989" begin
+    K = 5
+    for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        U = UpperTriangular(randn(elty, K, K))
+        L = LowerTriangular(randn(elty, K, K))
+        D = Diagonal(randn(elty, K))
+        @test (U / D)::UpperTriangular{elty} == UpperTriangular(Matrix(U) / Matrix(D))
+        @test (L / D)::LowerTriangular{elty} == LowerTriangular(Matrix(L) / Matrix(D))
+        @test (D \ U)::UpperTriangular{elty} == UpperTriangular(Matrix(D) \ Matrix(U))
+        @test (D \ L)::LowerTriangular{elty} == LowerTriangular(Matrix(D) \ Matrix(L))
+    end
+end
+
+@testset "eigenvalue sorting" begin
+    D = Diagonal([0.4, 0.2, -1.3])
+    @test eigvals(D) == eigen(D).values == [0.4, 0.2, -1.3] # not sorted by default
+    @test eigvals(Matrix(D)) == eigen(Matrix(D)).values == [-1.3, 0.2, 0.4] # sorted even if diagonal special case is detected
+    E = eigen(D, sortby=abs) # sortby keyword supported for eigen(::Diagonal)
+    @test E.values == [0.2, 0.4, -1.3]
+    @test E.vectors == [0 1 0; 1 0 0; 0 0 1]
 end
 
 end # module TestDiagonal

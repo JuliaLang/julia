@@ -1,11 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Statistics, Test, Random, LinearAlgebra, SparseArrays
+using Test: guardseed
 
 @testset "middle" begin
     @test middle(3) === 3.0
     @test middle(2, 3) === 2.5
-    let x = ((realmax(1.0)/4)*3)
+    let x = ((floatmax(1.0)/4)*3)
         @test middle(x, x) === x
     end
     @test middle(1:8) === 4.5
@@ -40,16 +41,31 @@ end
     @test isnan(median([NaN]))
     @test isnan(median([0.0,NaN]))
     @test isnan(median([NaN,0.0]))
+    @test isnan(median([NaN,0.0,1.0]))
+    @test isnan(median(Any[NaN,0.0,1.0]))
     @test isequal(median([NaN 0.0; 1.2 4.5], dims=2), reshape([NaN; 2.85], 2, 1))
+
+    @test ismissing(median([1, missing]))
+    @test ismissing(median([1, 2, missing]))
+    @test ismissing(median([NaN, 2.0, missing]))
+    @test ismissing(median([NaN, missing]))
+    @test ismissing(median([missing, NaN]))
+    @test ismissing(median(Any[missing, 2.0, 3.0, 4.0, NaN]))
+    @test median(skipmissing([1, missing, 2])) === 1.5
 
     @test median!([1 2 3 4]) == 2.5
     @test median!([1 2; 3 4]) == 2.5
 
     @test invoke(median, Tuple{AbstractVector}, 1:10) == median(1:10) == 5.5
+
+    @test @inferred(median(Float16[1, 2, NaN])) === Float16(NaN)
+    @test @inferred(median(Float16[1, 2, 3]))   === Float16(2)
+    @test @inferred(median(Float32[1, 2, NaN])) === NaN32
+    @test @inferred(median(Float32[1, 2, 3]))   === 2.0f0
 end
 
 @testset "mean" begin
-    @test_throws ArgumentError mean(())
+    @test_throws MethodError mean(())
     @test mean((1,2,3)) === 2.
     @test mean([0]) === 0.
     @test mean([1.]) === 1.
@@ -70,6 +86,27 @@ end
     @test isnan(mean([-Inf,Inf]))
     @test isequal(mean([NaN 0.0; 1.2 4.5], dims=2), reshape([NaN; 2.85], 2, 1))
 
+    @test ismissing(mean([1, missing]))
+    @test ismissing(mean([NaN, missing]))
+    @test ismissing(mean([missing, NaN]))
+    @test isequal(mean([missing 1.0; 2.0 3.0], dims=1), [missing 2.0])
+    @test mean(skipmissing([1, missing, 2])) === 1.5
+    @test isequal(mean(Complex{Float64}[]), NaN+NaN*im)
+    @test mean(Complex{Float64}[]) isa Complex{Float64}
+    @test isequal(mean(skipmissing(Complex{Float64}[])), NaN+NaN*im)
+    @test mean(skipmissing(Complex{Float64}[])) isa Complex{Float64}
+    @test isequal(mean(abs, Complex{Float64}[]), NaN)
+    @test mean(abs, Complex{Float64}[]) isa Float64
+    @test isequal(mean(abs, skipmissing(Complex{Float64}[])), NaN)
+    @test mean(abs, skipmissing(Complex{Float64}[])) isa Float64
+    @test isequal(mean(Int[]), NaN)
+    @test mean(Int[]) isa Float64
+    @test isequal(mean(skipmissing(Int[])), NaN)
+    @test mean(skipmissing(Int[])) isa Float64
+    @test_throws MethodError mean([])
+    @test_throws MethodError mean(skipmissing([]))
+    @test_throws ArgumentError mean((1 for i in 2:1))
+
     # Check that small types are accumulated using wider type
     for T in (Int8, UInt8)
         x = [typemax(T) typemax(T)]
@@ -87,15 +124,17 @@ end
             @test f(2:0.1:n) ≈ f([2:0.1:n;])
         end
     end
+    @test mean(2:1) === NaN
+    @test mean(big(2):1) isa BigFloat
 end
 
 @testset "var & std" begin
     # edge case: empty vector
     # iterable; this has to throw for type stability
-    @test_throws ArgumentError var(())
-    @test_throws ArgumentError var((); corrected=false)
-    @test_throws ArgumentError var((); mean=2)
-    @test_throws ArgumentError var((); mean=2, corrected=false)
+    @test_throws MethodError var(())
+    @test_throws MethodError var((); corrected=false)
+    @test_throws MethodError var((); mean=2)
+    @test_throws MethodError var((); mean=2, corrected=false)
     # reduction
     @test isnan(var(Int[]))
     @test isnan(var(Int[]; corrected=false))
@@ -158,6 +197,9 @@ end
     @test var([1 2 3 4 5; 6 7 8 9 10], dims=2) ≈ [2.5 2.5]'
     @test var([1 2 3 4 5; 6 7 8 9 10], dims=2; corrected=false) ≈ [2.0 2.0]'
 
+    @test var(collect(1:99), dims=1) ≈ [825]
+    @test var(Matrix(transpose(collect(1:99))), dims=2) ≈ [825]
+
     @test stdm([1,2,3], 2) ≈ 1.
     @test std([1,2,3]) ≈ 1.
     @test std([1,2,3]; corrected=false) ≈ sqrt(2.0/3)
@@ -207,6 +249,36 @@ end
 
     # issue #6672
     @test std(AbstractFloat[1,2,3], dims=1) == [1.0]
+
+    for f in (var, std)
+        @test ismissing(f([1, missing]))
+        @test ismissing(f([NaN, missing]))
+        @test ismissing(f([missing, NaN]))
+        @test isequal(f([missing 1.0; 2.0 3.0], dims=1), [missing f([1.0, 3.0])])
+        @test f(skipmissing([1, missing, 2])) === f([1, 2])
+    end
+    for f in (varm, stdm)
+        @test ismissing(f([1, missing], 0))
+        @test ismissing(f([1, 2], missing))
+        @test ismissing(f([1, NaN], missing))
+        @test ismissing(f([NaN, missing], 0))
+        @test ismissing(f([missing, NaN], 0))
+        @test ismissing(f([NaN, missing], missing))
+        @test ismissing(f([missing, NaN], missing))
+        @test f(skipmissing([1, missing, 2]), 0) === f([1, 2], 0)
+    end
+
+    @test isequal(var(Complex{Float64}[]), NaN)
+    @test var(Complex{Float64}[]) isa Float64
+    @test isequal(var(skipmissing(Complex{Float64}[])), NaN)
+    @test var(skipmissing(Complex{Float64}[])) isa Float64
+    @test_throws MethodError var([])
+    @test_throws MethodError var(skipmissing([]))
+    @test_throws MethodError var((1 for i in 2:1))
+    @test isequal(var(Int[]), NaN)
+    @test var(Int[]) isa Float64
+    @test isequal(var(skipmissing(Int[])), NaN)
+    @test var(skipmissing(Int[])) isa Float64
 end
 
 function safe_cov(x, y, zm::Bool, cr::Bool)
@@ -297,6 +369,12 @@ Y = [6.0  2.0;
         @test size(C) == (k, k)
         @test C ≈ Cxy
         @inferred cov(X, Y, dims=vd, corrected=cr)
+    end
+
+    @testset "floating point accuracy for `cov` of large numbers" begin
+        A = [4.0, 7.0, 13.0, 16.0]
+        C = A .+ 1.0e10
+        @test cov(A, A) ≈ cov(C, C)
     end
 end
 
@@ -398,6 +476,10 @@ end
     @test quantile([1, 2, 3, 4], (0.5,)) == (2.5,)
     @test quantile([4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11], (0.1, 0.2, 0.4, 0.9)) == (2.0, 3.0, 5.0, 11.0)
     @test quantile([1, 2, 3, 4], ()) == ()
+
+    @test_throws ArgumentError quantile([1, missing], 0.5)
+    @test_throws ArgumentError quantile([1, NaN], 0.5)
+    @test quantile(skipmissing([1, missing, 2]), 0.5) === 1.5
 end
 
 # StatsBase issue 164
@@ -463,8 +545,8 @@ end
 
 # dimensional correctness
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
-using .Main.TestHelpers: Furlong
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
 
 Statistics.middle(x::Furlong{p}) where {p} = Furlong{p}(middle(x.val))
 Statistics.middle(x::Furlong{p}, y::Furlong{p}) where {p} = Furlong{p}(middle(x.val, y.val))
@@ -557,7 +639,7 @@ end
     n = 10
     p = 5
     np2 = div(n*p, 2)
-    nzvals, x_sparse = guardsrand(1) do
+    nzvals, x_sparse = guardseed(1) do
         if elty <: Real
             nzvals = randn(np2)
         else

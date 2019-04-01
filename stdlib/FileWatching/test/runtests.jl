@@ -110,7 +110,7 @@ for (i, intvl) in enumerate(intvls)
         end
         notify(ready_c, all=true)
         for idx in 1:n
-            Base._wait(t[idx])
+            Base.wait(t[idx])
         end
     end
 end
@@ -398,11 +398,17 @@ let changes = []
     @test pop!(changes) == ("" => FileWatching.FileEvent())
     if F_GETPATH
         Sys.iswindows() && @test pop!(changes) == (F_PATH => FileWatching.FileEvent(FileWatching.UV_CHANGE))
-        @test pop!(changes) == (F_PATH => FileWatching.FileEvent(FileWatching.UV_RENAME))
+        p = pop!(changes)
+        if !Sys.isapple()
+            @test p == (F_PATH => FileWatching.FileEvent(FileWatching.UV_RENAME))
+        end
         while changes[end][1] == F_PATH
             @test pop!(changes)[2] == FileWatching.FileEvent(FileWatching.UV_RENAME)
         end
-        @test pop!(changes) == (F_PATH * "~" => FileWatching.FileEvent(FileWatching.UV_RENAME))
+        p = pop!(changes)
+        if !Sys.isapple()
+            @test p == (F_PATH * "~" => FileWatching.FileEvent(FileWatching.UV_RENAME))
+        end
         while changes[end][1] == F_PATH * "~"
             @test pop!(changes)[2] == FileWatching.FileEvent(FileWatching.UV_RENAME)
         end
@@ -414,16 +420,19 @@ let changes = []
                 while changes[end - 1][1] == "$F_PATH$i"
                     @test let x = pop!(changes)[2]; x.changed ⊻ x.renamed; end
                 end
-                @test pop!(changes) == ("$F_PATH$i" => FileWatching.FileEvent(FileWatching.UV_RENAME))
+                p = pop!(changes)
+                if !Sys.isapple()
+                    @test p == ("$F_PATH$i" => FileWatching.FileEvent(FileWatching.UV_RENAME))
+                end
             end
         end
     end
     @test all(x -> (isa(x, Pair) && x[1] == F_PATH && (x[2].changed ⊻ x[2].renamed)), changes) || changes
 end
 
-@test_throws(Base.UVError("FileMonitor (start)", Base.UV_ENOENT),
+@test_throws(Base._UVError("FileMonitor (start)", Base.UV_ENOENT),
              watch_file("____nonexistent_file", 10))
-@test_throws(Base.UVError("FolderMonitor (start)", Base.UV_ENOENT),
+@test_throws(Base._UVError("FolderMonitor (start)", Base.UV_ENOENT),
              watch_folder("____nonexistent_file", 10))
 @test(@elapsed(
     @test(poll_file("____nonexistent_file", 1, 3.1) ===

@@ -2,12 +2,19 @@
 
 # LQ Factorizations
 
-struct LQ{T,S<:AbstractMatrix} <: Factorization{T}
+struct LQ{T,S<:AbstractMatrix{T}} <: Factorization{T}
     factors::S
     τ::Vector{T}
-    LQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
+
+    function LQ{T,S}(factors, τ) where {T,S<:AbstractMatrix{T}}
+        require_one_based_indexing(factors)
+        new{T,S}(factors, τ)
+    end
 end
 LQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQ{T,typeof(factors)}(factors, τ)
+function LQ{T}(factors::AbstractMatrix, τ::AbstractVector) where {T}
+    LQ(convert(AbstractMatrix{T}, factors), convert(Vector{T}, τ))
+end
 
 # iteration for destructuring into components
 Base.iterate(S::LQ) = (S.L, Val(:Q))
@@ -97,8 +104,9 @@ Base.propertynames(F::LQ, private::Bool=false) =
 getindex(A::LQPackedQ, i::Integer, j::Integer) =
     lmul!(A, setindex!(zeros(eltype(A), size(A, 2)), 1, j))[i]
 
-function show(io::IO, C::LQ)
-    println(io, "$(typeof(C)) with factors L and Q:")
+function show(io::IO, ::MIME"text/plain", C::LQ)
+    println(io, typeof(C), " with factors L and Q:")
+    io = IOContext(io, :compact => true)
     show(io, C.L)
     println(io)
     show(io, C.Q)
@@ -106,7 +114,9 @@ end
 
 LQPackedQ{T}(Q::LQPackedQ) where {T} = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
 AbstractMatrix{T}(Q::LQPackedQ) where {T} = LQPackedQ{T}(Q)
-Matrix(A::LQPackedQ) = LAPACK.orglq!(copy(A.factors),A.τ)
+Matrix{T}(A::LQPackedQ) where {T} = convert(Matrix{T}, LAPACK.orglq!(copy(A.factors),A.τ))
+Matrix(A::LQPackedQ{T}) where {T} = Matrix{T}(A)
+Array{T}(A::LQPackedQ{T}) where {T} = Matrix{T}(A)
 Array(A::LQPackedQ) = Matrix(A)
 
 size(F::LQ, dim::Integer) = size(getfield(F, :factors), dim)
@@ -277,6 +287,7 @@ end
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
 function (\)(F::LQ{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
+    require_one_based_indexing(B)
     c2r = reshape(copy(transpose(reinterpret(T, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
     x = ldiv!(F, c2r)
     return reshape(copy(reinterpret(Complex{T}, copy(transpose(reshape(x, div(length(x), 2), 2))))),

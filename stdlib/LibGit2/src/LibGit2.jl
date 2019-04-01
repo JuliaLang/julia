@@ -1,9 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 """
-Interface to [libgit2](https://libgit2.github.com/).
+Interface to [libgit2](https://libgit2.org/).
 """
 module LibGit2
 
@@ -14,9 +12,11 @@ using Base.Printf: @printf
 export with, GitRepo, GitConfig
 
 const GITHUB_REGEX =
-    r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
+    r"^(?:(?:ssh://)?git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
 
-const REFCOUNT = Threads.Atomic{UInt}()
+const REFCOUNT = Threads.Atomic{Int}(0)
+
+function ensure_initialized end
 
 include("utils.jl")
 include("consts.jl")
@@ -42,7 +42,6 @@ include("status.jl")
 include("tree.jl")
 include("gitcredential.jl")
 include("callbacks.jl")
-include("deprecated.jl")
 
 using .Error
 
@@ -268,8 +267,7 @@ Equivalent to `git fetch [<remoteurl>|<repo>] [<refspecs>]`.
 function fetch(repo::GitRepo; remote::AbstractString="origin",
                remoteurl::AbstractString="",
                refspecs::Vector{<:AbstractString}=AbstractString[],
-               payload::Creds=nothing,
-               credentials::Creds=payload,
+               credentials::Creds=nothing,
                callbacks::Callbacks=Callbacks())
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
@@ -277,7 +275,6 @@ function fetch(repo::GitRepo; remote::AbstractString="origin",
         GitRemoteAnon(repo, remoteurl)
     end
 
-    deprecate_payload_keyword(:fetch, "repo", payload)
     cred_payload = reset!(CredentialPayload(credentials), GitConfig(repo))
     if !haskey(callbacks, :credentials)
         callbacks[:credentials] = (credentials_cb(), cred_payload)
@@ -326,8 +323,7 @@ function push(repo::GitRepo; remote::AbstractString="origin",
               remoteurl::AbstractString="",
               refspecs::Vector{<:AbstractString}=AbstractString[],
               force::Bool=false,
-              payload::Creds=nothing,
-              credentials::Creds=payload,
+              credentials::Creds=nothing,
               callbacks::Callbacks=Callbacks())
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
@@ -335,7 +331,6 @@ function push(repo::GitRepo; remote::AbstractString="origin",
         GitRemoteAnon(repo, remoteurl)
     end
 
-    deprecate_payload_keyword(:push, "repo", payload)
     cred_payload = reset!(CredentialPayload(credentials), GitConfig(repo))
     if !haskey(callbacks, :credentials)
         callbacks[:credentials] = (credentials_cb(), cred_payload)
@@ -559,10 +554,8 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
                branch::AbstractString="",
                isbare::Bool = false,
                remote_cb::Ptr{Cvoid} = C_NULL,
-               payload::Creds=nothing,
-               credentials::Creds=payload,
+               credentials::Creds=nothing,
                callbacks::Callbacks=Callbacks())
-    deprecate_payload_keyword(:clone, "repo_url, repo_path", payload)
     cred_payload = reset!(CredentialPayload(credentials))
     if !haskey(callbacks, :credentials)
         callbacks[:credentials] = (credentials_cb(), cred_payload)
@@ -836,13 +829,13 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
             try
                 rbs = GitRebase(repo, head_ann, upst_ann, onto=onto_ann)
                 try
-                    while (rbs_op = next(rbs)) !== nothing
+                    for rbs_op in rbs
                         commit(rbs, sig)
                     end
                     finish(rbs, sig)
-                catch err
+                catch
                     abort(rbs)
-                    rethrow(err)
+                    rethrow()
                 finally
                     close(rbs)
                 end
@@ -963,22 +956,29 @@ function transact(f::Function, repo::GitRepo)
     end
 end
 
-function set_ssl_cert_locations(cert_loc)
-    cert_file = isfile(cert_loc) ? cert_loc : Cstring(C_NULL)
-    cert_dir  = isdir(cert_loc) ? cert_loc : Cstring(C_NULL)
-    cert_file == C_NULL && cert_dir == C_NULL && return
-    @check ccall((:git_libgit2_opts, :libgit2), Cint,
-          (Cint, Cstring, Cstring),
-          Cint(Consts.SET_SSL_CERT_LOCATIONS), cert_file, cert_dir)
+## lazy libgit2 initialization
+
+function ensure_initialized()
+    x = Threads.atomic_cas!(REFCOUNT, 0, 1)
+    if x < 0
+        negative_refcount_error(x)::Union{}
+    end
+    if x == 0
+        initialize()
+    end
+    return nothing
 end
 
-function __init__()
+@noinline function negative_refcount_error(x::Int)
+    error("Negative LibGit2 REFCOUNT $x\nThis shouldn't happen, please file a bug report!")
+end
+
+@noinline function initialize()
     @check ccall((:git_libgit2_init, :libgit2), Cint, ())
-    REFCOUNT[] = 1
 
     atexit() do
-        if Threads.atomic_sub!(REFCOUNT, UInt(1)) == 1
-            # refcount zero, no objects to be finalized
+        # refcount zero, no objects to be finalized
+        if Threads.atomic_sub!(REFCOUNT, 1) == 1
             ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
         end
     end
@@ -998,5 +998,13 @@ function __init__()
     end
 end
 
+function set_ssl_cert_locations(cert_loc)
+    cert_file = isfile(cert_loc) ? cert_loc : Cstring(C_NULL)
+    cert_dir  = isdir(cert_loc) ? cert_loc : Cstring(C_NULL)
+    cert_file == C_NULL && cert_dir == C_NULL && return
+    @check ccall((:git_libgit2_opts, :libgit2), Cint,
+          (Cint, Cstring...),
+          Cint(Consts.SET_SSL_CERT_LOCATIONS), cert_file, cert_dir)
+end
 
 end # module

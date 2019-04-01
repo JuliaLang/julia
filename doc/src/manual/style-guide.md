@@ -130,7 +130,7 @@ a = Vector{Union{Int,AbstractString,Tuple,Array}}(undef, n)
 In this case `Vector{Any}(undef, n)` is better. It is also more helpful to the compiler to annotate specific
 uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
 
-## Use naming conventions consistent with Julia's `base/`
+## Use naming conventions consistent with Julia `base/`
 
   * modules and type names use capitalization and camel case: `module SparseArrays`, `struct UnitRange`.
   * functions are lowercase ([`maximum`](@ref), [`convert`](@ref)) and, when readable, with multiple
@@ -143,7 +143,7 @@ uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
 If a function name requires multiple words, consider whether it might represent more than one
 concept and might be better split into pieces.
 
-## Write functions with argument ordering similar to Julia's Base
+## Write functions with argument ordering similar to Julia Base
 
 As a general rule, the Base library uses the following order of arguments to functions,
 as applicable:

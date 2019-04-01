@@ -4,7 +4,15 @@
 
 struct Diagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     diag::V
+
+    function Diagonal{T,V}(diag) where {T,V<:AbstractVector{T}}
+        require_one_based_indexing(diag)
+        new{T,V}(diag)
+    end
 end
+Diagonal(v::AbstractVector{T}) where {T} = Diagonal{T,typeof(v)}(v)
+Diagonal{T}(v::AbstractVector) where {T} = Diagonal(convert(AbstractVector{T}, v)::AbstractVector{T})
+
 """
     Diagonal(A::AbstractMatrix)
 
@@ -47,11 +55,10 @@ julia> Diagonal(V)
 """
 Diagonal(V::AbstractVector)
 
-Diagonal{T}(V::AbstractVector{T}) where {T} = Diagonal{T,typeof(V)}(V)
-Diagonal{T}(V::AbstractVector) where {T} = Diagonal{T}(convert(AbstractVector{T}, V))
-
+Diagonal(D::Diagonal) = D
 Diagonal{T}(D::Diagonal{T}) where {T} = D
-Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(convert(AbstractVector{T}, D.diag))
+Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(D.diag)
+
 AbstractMatrix{T}(D::Diagonal) where {T} = Diagonal{T}(D)
 Matrix(D::Diagonal) = diagm(0 => D.diag)
 Array(D::Diagonal) = Matrix(D)
@@ -109,13 +116,17 @@ ishermitian(D::Diagonal{<:Number}) = isreal(D.diag)
 ishermitian(D::Diagonal) = all(ishermitian, D.diag)
 issymmetric(D::Diagonal{<:Number}) = true
 issymmetric(D::Diagonal) = all(issymmetric, D.diag)
-isposdef(D::Diagonal) = all(x -> x > 0, D.diag)
+isposdef(D::Diagonal) = all(isposdef, D.diag)
 
 factorize(D::Diagonal) = D
 
 real(D::Diagonal) = Diagonal(real(D.diag))
 imag(D::Diagonal) = Diagonal(imag(D.diag))
 
+iszero(D::Diagonal) = all(iszero, D.diag)
+isone(D::Diagonal) = all(isone, D.diag)
+isdiag(D::Diagonal) = all(isdiag, D.diag)
+isdiag(D::Diagonal{<:Number}) = true
 istriu(D::Diagonal) = true
 istril(D::Diagonal) = true
 function triu!(D::Diagonal,k::Integer=0)
@@ -160,11 +171,13 @@ end
     lmul!(D, copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A))
 
 function rmul!(A::AbstractMatrix, D::Diagonal)
+    require_one_based_indexing(A)
     A .= A .* transpose(D.diag)
     return A
 end
 
 function lmul!(D::Diagonal, B::AbstractMatrix)
+    require_one_based_indexing(B)
     B .= D.diag .* B
     return B
 end
@@ -268,9 +281,9 @@ mul!(out::AbstractVector, A::Diagonal, in::AbstractVector) = out .= A.diag .* in
 mul!(out::AbstractVector, A::Adjoint{<:Any,<:Diagonal}, in::AbstractVector) = out .= adjoint.(A.parent.diag) .* in
 mul!(out::AbstractVector, A::Transpose{<:Any,<:Diagonal}, in::AbstractVector) = out .= transpose.(A.parent.diag) .* in
 
-mul!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix) = out .= A.diag .* in
-mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::AbstractMatrix) = out .= adjoint.(A.parent.diag) .* in
-mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::AbstractMatrix) = out .= transpose.(A.parent.diag) .* in
+mul!(out::AbstractMatrix, A::Diagonal, in::StridedMatrix) = out .= A.diag .* in
+mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::StridedMatrix) = out .= adjoint.(A.parent.diag) .* in
+mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::StridedMatrix) = out .= transpose.(A.parent.diag) .* in
 
 # ambiguities with Symmetric/Hermitian
 # RealHermSymComplex[Sym]/[Herm] only include Number; invariant to [c]transpose
@@ -282,7 +295,9 @@ mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::AbstractMatrix) = 
 *(transD::Transpose{<:Any,<:Diagonal}, transA::Transpose{<:Any,<:RealHermSymComplexSym}) = transD * transA.parent
 *(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, adjD::Adjoint{<:Any,<:Diagonal}) = adjA.parent * adjD
 *(adjD::Adjoint{<:Any,<:Diagonal}, adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}) = adjD * adjA.parent
+mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSym}) = mul!(C, A, B.parent)
 mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexHerm}) = mul!(C, A, B.parent)
+mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSym}) = mul!(C, A, B.parent)
 mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexSym}) = mul!(C, A, B.parent)
 mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexSym}) = C .= adjoint.(A.parent.diag) .* B
 mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexHerm}) = C .= transpose.(A.parent.diag) .* B
@@ -304,6 +319,7 @@ function ldiv!(D::Diagonal{T}, v::AbstractVector{T}) where {T}
     v
 end
 function ldiv!(D::Diagonal{T}, V::AbstractMatrix{T}) where {T}
+    require_one_based_indexing(V)
     if size(V,1) != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(V,1)) rows"))
     end
@@ -325,7 +341,13 @@ ldiv!(adjD::Adjoint{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
 ldiv!(transD::Transpose{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
     (D = transD.parent; ldiv!(D, B))
 
+function ldiv!(D::Diagonal, A::Union{LowerTriangular,UpperTriangular})
+    broadcast!(\, parent(A), D.diag, parent(A))
+    A
+end
+
 function rdiv!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
+    require_one_based_indexing(A)
     dd = D.diag
     m, n = size(A)
     if (k = length(dd)) ≠ n
@@ -343,11 +365,18 @@ function rdiv!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
     A
 end
 
+function rdiv!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal)
+    broadcast!(/, parent(A), parent(A), permutedims(D.diag))
+    A
+end
 
 rdiv!(A::AbstractMatrix{T}, adjD::Adjoint{<:Any,<:Diagonal{T}}) where {T} =
     (D = adjD.parent; rdiv!(A, conj(D)))
 rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
     (D = transD.parent; rdiv!(A, D))
+
+(/)(A::Union{StridedMatrix, AbstractTriangular}, D::Diagonal) =
+    rdiv!((typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A), D)
 
 (\)(F::Factorization, D::Diagonal) =
     ldiv!(F, Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D))
@@ -364,6 +393,44 @@ function kron(A::Diagonal{T1}, B::Diagonal{T2}) where {T1<:Number, T2<:Number}
         valC[(i-1)*nB+j] = valA[i] * valB[j]
     end
     return Diagonal(valC)
+end
+
+function kron(A::Diagonal{T}, B::AbstractMatrix{S}) where {T<:Number, S<:Number}
+    Base.require_one_based_indexing(B)
+    (mA, nA) = size(A); (mB, nB) = size(B)
+    R = zeros(Base.promote_op(*, T, S), mA * mB, nA * nB)
+    m = 1
+    for j = 1:nA
+        A_jj = A[j,j]
+        for k = 1:nB
+            for l = 1:mB
+                R[m] = A_jj * B[l,k]
+                m += 1
+            end
+            m += (nA - 1) * mB
+        end
+        m += mB
+    end
+    return R
+end
+
+function kron(A::AbstractMatrix{T}, B::Diagonal{S}) where {T<:Number, S<:Number}
+    require_one_based_indexing(A)
+    (mA, nA) = size(A); (mB, nB) = size(B)
+    R = zeros(promote_op(*, T, S), mA * mB, nA * nB)
+    m = 1
+    for j = 1:nA
+        for l = 1:mB
+            Bll = B[l,l]
+            for k = 1:mA
+                R[m] = A[k,j] * Bll
+                m += nB
+            end
+            m += 1
+        end
+        m -= nB
+    end
+    return R
 end
 
 conj(D::Diagonal) = Diagonal(conj(D.diag))
@@ -384,8 +451,8 @@ function diag(D::Diagonal, k::Integer=0)
             "and at most $(size(D, 2)) for an $(size(D, 1))-by-$(size(D, 2)) matrix")))
     end
 end
-tr(D::Diagonal) = sum(D.diag)
-det(D::Diagonal) = prod(D.diag)
+tr(D::Diagonal) = sum(tr, D.diag)
+det(D::Diagonal) = prod(det, D.diag)
 logdet(D::Diagonal{<:Real}) = sum(log, D.diag)
 function logdet(D::Diagonal{<:Complex}) # make sure branch cut is correct
     z = sum(log, D.diag)
@@ -419,7 +486,9 @@ function ldiv!(D::Diagonal, B::StridedVecOrMat)
     end
     return B
 end
-(\)(D::Diagonal, A::AbstractMatrix) = D.diag .\ A
+(\)(D::Diagonal, A::AbstractMatrix) =
+    ldiv!(D, (typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A))
+
 (\)(D::Diagonal, b::AbstractVector) = D.diag .\ b
 (\)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .\ Db.diag)
 
@@ -455,14 +524,15 @@ function pinv(D::Diagonal{T}, tol::Real) where T
 end
 
 #Eigensystem
-eigvals(D::Diagonal{<:Number}) = D.diag
-eigvals(D::Diagonal) = [eigvals(x) for x in D.diag] #For block matrices, etc.
+eigvals(D::Diagonal{<:Number}; permute::Bool=true, scale::Bool=true) = D.diag
+eigvals(D::Diagonal; permute::Bool=true, scale::Bool=true) =
+    [eigvals(x) for x in D.diag] #For block matrices, etc.
 eigvecs(D::Diagonal) = Matrix{eltype(D)}(I, size(D))
-function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true)
+function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=nothing)
     if any(!isfinite, D.diag)
         throw(ArgumentError("matrix contains Infs or NaNs"))
     end
-    Eigen(eigvals(D), eigvecs(D))
+    Eigen(sorteig!(eigvals(D), eigvecs(D), sortby)...)
 end
 
 #Singular system
@@ -486,3 +556,23 @@ end
 *(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) =
     mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
 # TODO: these methods will yield row matrices, rather than adjoint/transpose vectors
+
+function cholesky!(A::Diagonal, ::Val{false} = Val(false); check::Bool = true)
+    info = 0
+    diagonal = A.diag
+    for i in axes(diagonal, 1)
+        d = diagonal[i]
+        if !(d == 0 || (isreal(d) && d < 0))
+            diagonal[i] = √d
+        elseif check
+            throw(PosDefException(i))
+        else
+            info = i
+            break
+        end
+    end
+    Cholesky(A, 'U', convert(BlasInt, info))
+end
+
+cholesky(A::Diagonal, ::Val{false} = Val(false); check::Bool = true) =
+    cholesky!(cholcopy(A), Val(false); check = check)

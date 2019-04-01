@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Random
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
 
 # fold(l|r) & mapfold(l|r)
 @test foldl(+, Int64[]) === Int64(0) # In reference to issues #7465/#20144 (PR #20160)
@@ -48,6 +50,7 @@ using Random
 @test mapreduce(-, +, Vector(range(1.0, stop=10000.0, length=10000))) == -50005000.0
 # empty mr
 @test mapreduce(abs2, +, Float64[]) === 0.0
+@test mapreduce(abs2, *, Float64[]) === 1.0
 @test mapreduce(abs2, max, Float64[]) === 0.0
 @test mapreduce(abs, max, Float64[]) === 0.0
 @test_throws ArgumentError mapreduce(abs2, &, Float64[])
@@ -153,6 +156,7 @@ end
 
 @test prod([3]) === 3
 @test prod([Int8(3)]) === Int(3)
+@test prod([UInt8(3)]) === UInt(3)
 @test prod([3.0]) === 3.0
 
 @test prod(z) === 120
@@ -178,17 +182,94 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test maximum(5) == 5
 @test minimum(5) == 5
 @test extrema(5) == (5, 5)
+@test extrema(abs2, 5) == (25, 25)
 
-@test maximum([4, 3, 5, 2]) == 5
-@test minimum([4, 3, 5, 2]) == 2
-@test extrema([4, 3, 5, 2]) == (2, 5)
+let x = [4,3,5,2]
+    @test maximum(x) == 5
+    @test minimum(x) == 2
+    @test extrema(x) == (2, 5)
+
+    @test maximum(abs2, x) == 25
+    @test minimum(abs2, x) == 4
+    @test extrema(abs2, x) == (4, 25)
+end
+
+@test maximum([-0.,0.]) === 0.0
+@test maximum([0.,-0.]) === 0.0
+@test maximum([0.,-0.,0.]) === 0.0
+@test minimum([-0.,0.]) === -0.0
+@test minimum([0.,-0.]) === -0.0
+@test minimum([0.,-0.,0.]) === -0.0
+
+@testset "minimum/maximum checks all elements" begin
+    for N in [2:20;150;300]
+        for i in 1:N
+            arr = fill(0., N)
+            truth = rand()
+            arr[i] = truth
+            @test maximum(arr) == truth
+
+            truth = -rand()
+            arr[i] = truth
+            @test minimum(arr) == truth
+
+            arr[i] = NaN
+            @test isnan(maximum(arr))
+            @test isnan(minimum(arr))
+
+            arr = zeros(N)
+            @test minimum(arr) === 0.0
+            @test maximum(arr) === 0.0
+
+            arr[i] = -0.0
+            @test minimum(arr) === -0.0
+            @test maximum(arr) ===  0.0
+
+            arr = -zeros(N)
+            @test minimum(arr) === -0.0
+            @test maximum(arr) === -0.0
+            arr[i] = 0.0
+            @test minimum(arr) === -0.0
+            @test maximum(arr) === 0.0
+        end
+    end
+end
+
+@testset "maximum works on generic order #30320" begin
+    for n in [1:20;1500]
+        arr = randn(n)
+        @test GenericOrder(maximum(arr)) === maximum(map(GenericOrder, arr))
+        @test GenericOrder(minimum(arr)) === minimum(map(GenericOrder, arr))
+        f = x -> x
+        @test GenericOrder(maximum(f,arr)) === maximum(f,map(GenericOrder, arr))
+        @test GenericOrder(minimum(f,arr)) === minimum(f,map(GenericOrder, arr))
+    end
+end
+
+@testset "maximum no out of bounds access #30462" begin
+    arr = fill(-Inf, 128,128)
+    @test maximum(arr) == -Inf
+    arr = fill(Inf, 128^2)
+    @test minimum(arr) == Inf
+    for center in [256, 1024, 4096, 128^2]
+        for offset in -10:10
+            len = center + offset
+            x = randn()
+            arr = fill(x, len)
+            @test maximum(arr) === x
+            @test minimum(arr) === x
+        end
+    end
+end
 
 @test isnan(maximum([NaN]))
 @test isnan(minimum([NaN]))
 @test isequal(extrema([NaN]), (NaN, NaN))
 
 @test isnan(maximum([NaN, 2.]))
+@test isnan(maximum([2., NaN]))
 @test isnan(minimum([NaN, 2.]))
+@test isnan(minimum([2., NaN]))
 @test isequal(extrema([NaN, 2.]), (NaN,NaN))
 
 @test isnan(maximum([NaN, 2., 3.]))
@@ -209,22 +290,24 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 
 @test maximum(abs2, 3:7) == 49
 @test minimum(abs2, 3:7) == 9
+@test extrema(abs2, 3:7) == (9, 49)
 
 @test maximum(Int16[1]) === Int16(1)
 @test maximum(Vector(Int16(1):Int16(100))) === Int16(100)
 @test maximum(Int32[1,2]) === Int32(2)
 
 A = circshift(reshape(1:24,2,3,4), (0,1,1))
-@test extrema(A,1) == reshape([(23,24),(19,20),(21,22),(5,6),(1,2),(3,4),(11,12),(7,8),(9,10),(17,18),(13,14),(15,16)],1,3,4)
-@test extrema(A,2) == reshape([(19,23),(20,24),(1,5),(2,6),(7,11),(8,12),(13,17),(14,18)],2,1,4)
-@test extrema(A,3) == reshape([(5,23),(6,24),(1,19),(2,20),(3,21),(4,22)],2,3,1)
-@test extrema(A,(1,2)) == reshape([(19,24),(1,6),(7,12),(13,18)],1,1,4)
-@test extrema(A,(1,3)) == reshape([(5,24),(1,20),(3,22)],1,3,1)
-@test extrema(A,(2,3)) == reshape([(1,23),(2,24)],2,1,1)
-@test extrema(A,(1,2,3)) == reshape([(1,24)],1,1,1)
-@test size(extrema(A,1)) == size(maximum(A,dims=1))
-@test size(extrema(A,(1,2))) == size(maximum(A,dims=(1,2)))
-@test size(extrema(A,(1,2,3))) == size(maximum(A,dims=(1,2,3)))
+@test extrema(A,dims=1) == reshape([(23,24),(19,20),(21,22),(5,6),(1,2),(3,4),(11,12),(7,8),(9,10),(17,18),(13,14),(15,16)],1,3,4)
+@test extrema(A,dims=2) == reshape([(19,23),(20,24),(1,5),(2,6),(7,11),(8,12),(13,17),(14,18)],2,1,4)
+@test extrema(A,dims=3) == reshape([(5,23),(6,24),(1,19),(2,20),(3,21),(4,22)],2,3,1)
+@test extrema(A,dims=(1,2)) == reshape([(19,24),(1,6),(7,12),(13,18)],1,1,4)
+@test extrema(A,dims=(1,3)) == reshape([(5,24),(1,20),(3,22)],1,3,1)
+@test extrema(A,dims=(2,3)) == reshape([(1,23),(2,24)],2,1,1)
+@test extrema(A,dims=(1,2,3)) == reshape([(1,24)],1,1,1)
+@test size(extrema(A,dims=1)) == size(maximum(A,dims=1))
+@test size(extrema(A,dims=(1,2))) == size(maximum(A,dims=(1,2)))
+@test size(extrema(A,dims=(1,2,3))) == size(maximum(A,dims=(1,2,3)))
+@test extrema(x->div(x, 2), A, dims=(2,3)) == reshape([(0,11),(1,12)],2,1,1)
 
 # any & all
 
@@ -415,3 +498,11 @@ test18695(r) = sum( t^2 for t in r )
         @test typeof(X) === typeof(Y)
     end
 end
+
+# offset axes
+i = Base.Slice(-3:3)
+x = [j^2 for j in i]
+@test sum(x) == sum(x.parent) == 28
+i = Base.Slice(0:0)
+x = [j+7 for j in i]
+@test sum(x) == 7

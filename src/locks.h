@@ -105,6 +105,34 @@ static inline void jl_mutex_lock(jl_mutex_t *lock)
     jl_gc_enable_finalizers(ptls, 0);
 }
 
+static inline int jl_mutex_trylock_nogc(jl_mutex_t *lock)
+{
+    unsigned long self = jl_thread_self();
+    unsigned long owner = jl_atomic_load_acquire(&lock->owner);
+    if (owner == self) {
+        lock->count++;
+        return 1;
+    }
+    if (owner == 0 &&
+        jl_atomic_compare_exchange(&lock->owner, 0, self) == 0) {
+        lock->count = 1;
+        return 1;
+    }
+    return 0;
+}
+
+static inline int jl_mutex_trylock(jl_mutex_t *lock)
+{
+    int got = jl_mutex_trylock_nogc(lock);
+    if (got) {
+        jl_ptls_t ptls = jl_get_ptls_states();
+        JL_SIGATOMIC_BEGIN();
+        jl_lock_frame_push(lock);
+        jl_gc_enable_finalizers(ptls, 0);
+    }
+    return got;
+}
+
 /* Call this function for code that could be called from either a managed
    or an unmanaged thread */
 static inline void jl_mutex_lock_maybe_nogc(jl_mutex_t *lock)

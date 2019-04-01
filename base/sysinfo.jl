@@ -7,7 +7,7 @@ Provide methods for retrieving information about hardware and the operating syst
 
 export BINDIR,
        STDLIB,
-       CPU_CORES,
+       CPU_THREADS,
        CPU_NAME,
        WORD_SIZE,
        ARCH,
@@ -22,9 +22,14 @@ export BINDIR,
        total_memory,
        isapple,
        isbsd,
+       isdragonfly,
+       isfreebsd,
        islinux,
+       isnetbsd,
+       isopenbsd,
        isunix,
        iswindows,
+       isjsvm,
        isexecutable,
        which
 
@@ -47,15 +52,17 @@ STDLIB = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # fo
 
 # helper to avoid triggering precompile warnings
 
-global CPU_CORES
 """
-    Sys.CPU_CORES
+    Sys.CPU_THREADS
 
-The number of logical CPU cores available in the system.
+The number of logical CPU cores available in the system, i.e. the number of threads
+that the CPU can run concurrently. Note that this is not necessarily the number of
+CPU cores, for example, in the presence of
+[hyper-threading](https://en.wikipedia.org/wiki/Hyper-threading).
 
-See the Hwloc.jl package for extended information, including number of physical cores.
+See Hwloc.jl or CpuId.jl for extended information, including number of physical cores.
 """
-:CPU_CORES
+CPU_THREADS = 1 # for bootstrap, changed on startup
 
 """
     Sys.ARCH
@@ -87,16 +94,19 @@ Standard word size on the current machine, in bits.
 const WORD_SIZE = Core.sizeof(Int) * 8
 
 function __init__()
-    env_cores = get(ENV, "JULIA_CPU_CORES", "")
-    global CPU_CORES = if !isempty(env_cores)
-        env_cores = tryparse(Int, env_cores)
-        if !(env_cores isa Int && env_cores > 0)
-            Core.print(Core.stderr, "WARNING: couldn't parse `JULIA_CPU_CORES` environment variable. Defaulting Sys.CPU_CORES to 1.\n")
-            env_cores = 1
+    env_threads = nothing
+    if haskey(ENV, "JULIA_CPU_THREADS")
+        env_threads = ENV["JULIA_CPU_THREADS"]
+    end
+    global CPU_THREADS = if env_threads !== nothing
+        env_threads = tryparse(Int, env_threads)
+        if !(env_threads isa Int && env_threads > 0)
+            env_threads = Int(ccall(:jl_cpu_threads, Int32, ()))
+            Core.print(Core.stderr, "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $env_threads.\n")
         end
-        env_cores
+        env_threads
     else
-        Int(ccall(:jl_cpu_cores, Int32, ()))
+        Int(ccall(:jl_cpu_threads, Int32, ()))
     end
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
@@ -224,7 +234,18 @@ function loadavg()
     return loadavg_
 end
 
+"""
+    Sys.free_memory()
+
+Get the total free memory in RAM in kilobytes.
+"""
 free_memory() = ccall(:uv_get_free_memory, UInt64, ())
+
+"""
+    Sys.total_memory()
+
+Get the total memory in RAM (including that which is currently used) in kilobytes.
+"""
 total_memory() = ccall(:uv_get_total_memory, UInt64, ())
 
 """
@@ -270,6 +291,12 @@ function isunix(os::Symbol)
         return false
     elseif islinux(os) || isbsd(os)
         return true
+    elseif os === :Emscripten
+        # Emscripten implements the POSIX ABI and provides traditional
+        # Unix-style operating system functions such as file system support.
+        # Therefor, we consider it a unix, even though this need not be
+        # generally true for a jsvm embedding.
+        return true
     else
         throw(ArgumentError("unknown operating system \"$os\""))
     end
@@ -281,7 +308,7 @@ end
 Predicate for testing if the OS is a derivative of Linux.
 See documentation in [Handling Operating System Variation](@ref).
 """
-islinux(os::Symbol) = (os == :Linux)
+islinux(os::Symbol) = (os === :Linux)
 
 """
     Sys.isbsd([os])
@@ -294,7 +321,63 @@ See documentation in [Handling Operating System Variation](@ref).
     `true` on macOS systems. To exclude macOS from a predicate, use
     `Sys.isbsd() && !Sys.isapple()`.
 """
-isbsd(os::Symbol) = (os == :FreeBSD || os == :OpenBSD || os == :NetBSD || os == :DragonFly || os == :Darwin || os == :Apple)
+isbsd(os::Symbol) = (isfreebsd(os) || isopenbsd(os) || isnetbsd(os) || isdragonfly(os) || isapple(os))
+
+"""
+    Sys.isfreebsd([os])
+
+Predicate for testing if the OS is a derivative of FreeBSD.
+See documentation in [Handling Operating System Variation](@ref).
+
+!!! note
+    Not to be confused with `Sys.isbsd()`, which is `true` on FreeBSD but also on
+    other BSD-based systems. `Sys.isfreebsd()` refers only to FreeBSD.
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1.
+"""
+isfreebsd(os::Symbol) = (os === :FreeBSD)
+
+"""
+    Sys.isopenbsd([os])
+
+Predicate for testing if the OS is a derivative of OpenBSD.
+See documentation in [Handling Operating System Variation](@ref).
+
+!!! note
+    Not to be confused with `Sys.isbsd()`, which is `true` on OpenBSD but also on
+    other BSD-based systems. `Sys.isopenbsd()` refers only to OpenBSD.
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1.
+"""
+isopenbsd(os::Symbol) = (os === :OpenBSD)
+
+"""
+    Sys.isnetbsd([os])
+
+Predicate for testing if the OS is a derivative of NetBSD.
+See documentation in [Handling Operating System Variation](@ref).
+
+!!! note
+    Not to be confused with `Sys.isbsd()`, which is `true` on NetBSD but also on
+    other BSD-based systems. `Sys.isnetbsd()` refers only to NetBSD.
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1.
+"""
+isnetbsd(os::Symbol) = (os === :NetBSD)
+
+"""
+    Sys.isdragonfly([os])
+
+Predicate for testing if the OS is a derivative of DragonFly BSD.
+See documentation in [Handling Operating System Variation](@ref).
+
+!!! note
+    Not to be confused with `Sys.isbsd()`, which is `true` on DragonFly but also on
+    other BSD-based systems. `Sys.isdragonfly()` refers only to DragonFly.
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1.
+"""
+isdragonfly(os::Symbol) = (os === :DragonFly)
 
 """
     Sys.iswindows([os])
@@ -302,7 +385,7 @@ isbsd(os::Symbol) = (os == :FreeBSD || os == :OpenBSD || os == :NetBSD || os == 
 Predicate for testing if the OS is a derivative of Microsoft Windows NT.
 See documentation in [Handling Operating System Variation](@ref).
 """
-iswindows(os::Symbol) = (os == :Windows || os == :NT)
+iswindows(os::Symbol) = (os === :Windows || os === :NT)
 
 """
     Sys.isapple([os])
@@ -310,9 +393,20 @@ iswindows(os::Symbol) = (os == :Windows || os == :NT)
 Predicate for testing if the OS is a derivative of Apple Macintosh OS X or Darwin.
 See documentation in [Handling Operating System Variation](@ref).
 """
-isapple(os::Symbol) = (os == :Apple || os == :Darwin)
+isapple(os::Symbol) = (os === :Apple || os === :Darwin)
 
-for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows)
+"""
+    Sys.isjsvm([os])
+
+Predicate for testing if Julia is running in a JavaScript VM (JSVM),
+including e.g. a WebAssembly JavaScript embedding in a web browser.
+
+!!! compat "Julia 1.2"
+    This function requires at least Julia 1.2.
+"""
+isjsvm(os::Symbol) = (os === :Emscripten)
+
+for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
     @eval $f() = $(getfield(@__MODULE__, f)(KERNEL))
 end
 

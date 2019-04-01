@@ -21,15 +21,46 @@ import Logging: min_enabled_level, shouldlog, handle_message
     handle_message(logger, Logging.Info, "msg", Base, :group, :asdf, "somefile", 1, maxlog=2)
     @test shouldlog(logger, Logging.Info, Base, :group, :asdf) === false
 
+    # Check that maxlog works without an explicit ID (#28786)
+    buf = IOBuffer()
+    io = IOContext(buf, :displaysize=>(30,80), :color=>false)
+    logger = ConsoleLogger(io)
+    with_logger(logger) do
+        for i in 1:2
+            @info "test" maxlog=1
+        end
+    end
+    @test String(take!(buf)) ==
+    """
+    [ Info: test
+    """
+    with_logger(logger) do
+        for i in 1:2
+            @info "test" maxlog=0
+        end
+    end
+    @test String(take!(buf)) == ""
+
     @testset "Default metadata formatting" begin
-        @test Logging.default_metafmt(Logging.Debug, Base, :g, :i, "path/to/somefile.jl", 42) ==
-            (:blue,      "Debug:",   "@ Base somefile.jl:42")
+        @test Logging.default_metafmt(Logging.Debug, Base, :g, :i, expanduser("~/somefile.jl"), 42) ==
+            (:blue,      "Debug:",   "@ Base ~/somefile.jl:42")
         @test Logging.default_metafmt(Logging.Info,  Main, :g, :i, "a.jl", 1) ==
             (:cyan,      "Info:",    "")
         @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, "b.jl", 2) ==
             (:yellow,    "Warning:", "@ Main b.jl:2")
         @test Logging.default_metafmt(Logging.Error, Main, :g, :i, "", 0) ==
             (:light_red, "Error:",   "@ Main :0")
+        # formatting of nothing
+        @test Logging.default_metafmt(Logging.Warn,  nothing, :g, :i, "b.jl", 2) ==
+            (:yellow,    "Warning:", "@ b.jl:2")
+        @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, nothing, 2) ==
+            (:yellow,    "Warning:", "@ Main")
+        @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, "b.jl", nothing) ==
+            (:yellow,    "Warning:", "@ Main b.jl")
+        @test Logging.default_metafmt(Logging.Warn,  nothing, :g, :i, nothing, 2) ==
+            (:yellow,    "Warning:", "")
+        @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, "b.jl", 2:5) ==
+            (:yellow,    "Warning:", "@ Main b.jl:2-5")
     end
 
     function dummy_metafmt(level, _module, group, id, file, line)

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-world_counter() = ccall(:jl_get_world_counter, UInt, ())
+using Base: get_world_counter
 
 # DO NOT ALTER ORDER OR SPACING OF METHODS BELOW
 const lineoffset = @__LINE__
@@ -16,19 +16,17 @@ using LinearAlgebra, SparseArrays
 # For curmod_*
 include("testenv.jl")
 
-ambigs = Any[[], [3], [2,5], [], [3]]
-
-mt = methods(ambig)
-
+getline(m::Core.TypeMapEntry) = getline(m.func::Method)
 getline(m::Method) = m.line - lineoffset
 
-for m in mt
+ambigs = Any[[], [3], [2, 5], [], [3]]
+for m in methods(ambig)
     ln = getline(m)
     atarget = ambigs[ln]
     if isempty(atarget)
         @test m.ambig === nothing
     else
-        aln = Int[getline(a) for a in m.ambig]
+        aln = Int[getline(a::Core.TypeMapEntry) for a in m.ambig]
         @test sort(aln) == atarget
     end
 end
@@ -81,7 +79,7 @@ end
 let io = IOBuffer()
     @test precompile(ambig, (UInt8, Int)) == false
     cf = @eval @cfunction(ambig, Int, (UInt8, Int))  # test for a crash (doesn't throw an error)
-    @test_throws(MethodError(ambig, (UInt8(1), Int(2)), world_counter()),
+    @test_throws(MethodError(ambig, (UInt8(1), Int(2)), get_world_counter()),
                  ccall(cf, Int, (UInt8, Int), 1, 2))
     @test_throws(ErrorException("no unique matching method found for the specified argument types"),
                  which(ambig, (UInt8, Int)))
@@ -153,11 +151,7 @@ ambs = detect_ambiguities(Ambig5)
 
 # Test that Core and Base are free of ambiguities
 # not using isempty so this prints more information when it fails
-@test filter(detect_ambiguities(Core, Base; imported=true, recursive=true, ambiguous_bottom=false)) do meths
-    # start, next, done fallbacks have ambiguities, but the iteration
-    # protocol prevents those from arising in practice.
-    !(meths[1].name in (:start, :next, :done))
-end == []
+@test detect_ambiguities(Core, Base; imported=true, recursive=true, ambiguous_bottom=false) == []
 # some ambiguities involving Union{} type parameters are expected, but not required
 @test !isempty(detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=true))
 
@@ -244,7 +238,7 @@ catch err
     if isa(err, MethodError)
         error("Test correctly returned a MethodError, please change to @test_throws MethodError")
     else
-        rethrow(err)
+        rethrow()
     end
 end
 
@@ -275,8 +269,8 @@ end
         @test_broken need_to_handle_undef_sparam == Set()
         pop!(need_to_handle_undef_sparam, which(Core.Compiler._cat, Tuple{Any, AbstractArray}))
         pop!(need_to_handle_undef_sparam, first(methods(Core.Compiler.same_names)))
-        pop!(need_to_handle_undef_sparam, which(Core.Compiler.convert, (Type{Union{Core.Compiler.Some{T}, Nothing}} where T, Core.Compiler.Some)))
-        pop!(need_to_handle_undef_sparam, which(Core.Compiler.convert, (Type{Union{T, Nothing}} where T, Core.Compiler.Some)))
+        pop!(need_to_handle_undef_sparam, which(Core.Compiler.convert, Tuple{Type{Tuple{Vararg{Int}}}, Tuple{}}))
+        pop!(need_to_handle_undef_sparam, which(Core.Compiler.convert, Tuple{Type{Tuple{Vararg{Int}}}, Tuple{Int8}}))
         @test need_to_handle_undef_sparam == Set()
     end
     let need_to_handle_undef_sparam =
@@ -299,6 +293,14 @@ end
         pop!(need_to_handle_undef_sparam, which(Base.nonmissingtype, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.convert, (Type{Union{Some{T}, Nothing}} where T, Some)))
         pop!(need_to_handle_undef_sparam, which(Base.convert, (Type{Union{T, Nothing}} where T, Some)))
+        pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Tuple{Vararg{Int}}}, Tuple{}}))
+        pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Tuple{Vararg{Int}}}, Tuple{Int8}}))
+        pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Union{Nothing,T}},Union{Nothing,T}} where T))
+        pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Union{Missing,T}},Union{Missing,T}} where T))
+        pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Union{Missing,Nothing,T}},Union{Missing,Nothing,T}} where T))
+        pop!(need_to_handle_undef_sparam, which(Base.promote_rule, Tuple{Type{Union{Nothing,T}},Type{Any}} where T))
+        pop!(need_to_handle_undef_sparam, which(Base.promote_rule, Tuple{Type{Union{Missing,T}},Type{Any}} where T))
+        pop!(need_to_handle_undef_sparam, which(Base.promote_rule, Tuple{Type{Union{Missing,Nothing,T}},Type{Any}} where T))
         @test need_to_handle_undef_sparam == Set()
     end
 end

@@ -27,10 +27,10 @@ extern "C" {
 JL_DLLEXPORT int16_t jl_threadid(void);
 JL_DLLEXPORT void jl_threading_profile(void);
 
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void);
+JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 
 #ifndef JULIA_ENABLE_THREADING
-extern JL_DLLEXPORT jl_tls_states_t jl_tls_states;
+extern JL_DLLEXPORT jl_tls_states_t jl_tls_states JL_GLOBALLY_ROOTED;
 #define jl_get_ptls_states() (&jl_tls_states)
 #else // ifndef JULIA_ENABLE_THREADING
 typedef jl_ptls_t (*jl_get_ptls_states_func)(void);

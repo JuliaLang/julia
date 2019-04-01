@@ -9,8 +9,12 @@
 #include "support/dtypes.h"
 #include <sstream>
 
+#include <llvm-c/Core.h>
+#include <llvm-c/Types.h>
+
 #include <llvm/Pass.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Constants.h>
@@ -63,20 +67,15 @@ private:
 #else
     GlobalVariable *static_tls;
 #endif
-    void fix_ptls_use(CallInst *ptlsStates) const;
+    void fix_ptls_use(CallInst *ptlsStates);
     bool runOnModule(Module &M) override;
 };
 
 #ifdef JULIA_ENABLE_THREADING
 void LowerPTLS::set_ptls_attrs(CallInst *ptlsStates) const
 {
-#if JL_LLVM_VERSION >= 50000
     ptlsStates->addAttribute(AttributeList::FunctionIndex, Attribute::ReadNone);
     ptlsStates->addAttribute(AttributeList::FunctionIndex, Attribute::NoUnwind);
-#else
-    ptlsStates->addAttribute(AttributeSet::FunctionIndex, Attribute::ReadNone);
-    ptlsStates->addAttribute(AttributeSet::FunctionIndex, Attribute::NoUnwind);
-#endif
 }
 
 Instruction *LowerPTLS::emit_ptls_tp(Value *offset, Instruction *insertBefore) const
@@ -181,7 +180,7 @@ inline T *LowerPTLS::add_comdat(T *G) const
 }
 #endif
 
-void LowerPTLS::fix_ptls_use(CallInst *ptlsStates) const
+void LowerPTLS::fix_ptls_use(CallInst *ptlsStates)
 {
     if (ptlsStates->use_empty()) {
         ptlsStates->eraseFromParent();
@@ -197,6 +196,7 @@ void LowerPTLS::fix_ptls_use(CallInst *ptlsStates) const
             //     ptls = getter();
             auto offset = new LoadInst(T_size, ptls_offset, "", false, ptlsStates);
             offset->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+            offset->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(*ctx, None));
             auto cmp = new ICmpInst(ptlsStates, CmpInst::ICMP_NE, offset,
                                     Constant::getNullValue(offset->getType()));
             MDBuilder MDB(*ctx);
@@ -212,6 +212,7 @@ void LowerPTLS::fix_ptls_use(CallInst *ptlsStates) const
             ptlsStates->moveBefore(slowTerm);
             auto getter = new LoadInst(T_ptls_getter, ptls_slot, "", false, ptlsStates);
             getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+            getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(*ctx, None));
             ptlsStates->setCalledFunction(getter);
             set_ptls_attrs(ptlsStates);
 
@@ -226,6 +227,7 @@ void LowerPTLS::fix_ptls_use(CallInst *ptlsStates) const
         // since we may not know which getter function to use ahead of time.
         auto getter = new LoadInst(T_ptls_getter, ptls_slot, "", false, ptlsStates);
         getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+        getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(*ctx, None));
         ptlsStates->setCalledFunction(getter);
         set_ptls_attrs(ptlsStates);
     }
@@ -294,4 +296,9 @@ static RegisterPass<LowerPTLS> X("LowerPTLS", "LowerPTLS Pass",
 Pass *createLowerPTLSPass(bool imaging_mode)
 {
     return new LowerPTLS(imaging_mode);
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddLowerPTLSPass(LLVMPassManagerRef PM, bool imaging_mode)
+{
+    unwrap(PM)->add(createLowerPTLSPass(imaging_mode));
 }

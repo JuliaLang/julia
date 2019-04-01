@@ -176,9 +176,9 @@ close(f)
 
 rm(c_tmpdir, recursive=true)
 @test !isdir(c_tmpdir)
-@test_throws Base.UVError rm(c_tmpdir)
+@test_throws Base.IOError rm(c_tmpdir)
 @test rm(c_tmpdir, force=true) === nothing
-@test_throws Base.UVError rm(c_tmpdir, recursive=true)
+@test_throws Base.IOError rm(c_tmpdir, recursive=true)
 @test rm(c_tmpdir, force=true, recursive=true) === nothing
 
 if !Sys.iswindows()
@@ -193,8 +193,8 @@ if !Sys.iswindows()
         @test stat(file).gid ==0
         @test stat(file).uid ==0
     else
-        @test_throws Base.UVError chown(file, -2, -1)  # Non-root user cannot change ownership to another user
-        @test_throws Base.UVError chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
+        @test_throws Base.IOError chown(file, -2, -1)  # Non-root user cannot change ownership to another user
+        @test_throws Base.IOError chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
     end
 else
     # test that chown doesn't cause any errors for Windows
@@ -232,6 +232,17 @@ close(s)
 #######################################################################
 # This section tests temporary file and directory creation.           #
 #######################################################################
+
+@testset "quoting filenames" begin
+    @test try
+        open("this file is not expected to exist")
+        false
+    catch e
+        isa(e, SystemError) || rethrow()
+        @test sprint(showerror, e) == "SystemError: opening file \"this file is not expected to exist\": No such file or directory"
+        true
+    end
+end
 
 my_tempdir = tempdir()
 @test isdir(my_tempdir) == true
@@ -608,10 +619,10 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         @test_throws ArgumentError Base.cptree(none_existing_src,dst; force=true, follow_symlinks=false)
         @test_throws ArgumentError Base.cptree(none_existing_src,dst; force=true, follow_symlinks=true)
         # cp
-        @test_throws Base.UVError cp(none_existing_src,dst; force=true, follow_symlinks=false)
-        @test_throws Base.UVError cp(none_existing_src,dst; force=true, follow_symlinks=true)
+        @test_throws Base.IOError cp(none_existing_src,dst; force=true, follow_symlinks=false)
+        @test_throws Base.IOError cp(none_existing_src,dst; force=true, follow_symlinks=true)
         # mv
-        @test_throws Base.UVError mv(none_existing_src,dst; force=true)
+        @test_throws Base.IOError mv(none_existing_src,dst; force=true)
     end
 end
 
@@ -1004,17 +1015,45 @@ rm(dir)
 mktempdir() do dir
     name1 = joinpath(dir, "apples")
     name2 = joinpath(dir, "bannanas")
-    @test touch(name1)==name1
+    @test !ispath(name1)
+    @test touch(name1) == name1
+    @test isfile(name1)
+    @test touch(name1) == name1
+    @test isfile(name1)
+    @test !ispath(name2)
     @test mv(name1, name2) == name2
+    @test !ispath(name1)
+    @test isfile(name2)
     @test cp(name2, name1) == name1
+    @test isfile(name1)
+    @test isfile(name2)
     namedir = joinpath(dir, "chalk")
     namepath = joinpath(dir, "chalk","cheese","fresh")
+    @test !ispath(namedir)
     @test mkdir(namedir) == namedir
+    @test isdir(namedir)
+    @test !ispath(namepath)
     @test mkpath(namepath) == namepath
+    @test isdir(namepath)
+    @test mkpath(namepath) == namepath
+    @test isdir(namepath)
 end
 
-
-
+# issue #30588
+@test realpath(".") == realpath(pwd())
+mktempdir() do dir
+    cd(dir) do
+        path = touch("FooBar.txt")
+        @test ispath(realpath(path))
+        if ispath(uppercase(path)) # case-insensitive filesystem
+            @test realpath(path) == realpath(uppercase(path)) == realpath(lowercase(path)) ==
+                  realpath(uppercase(realpath(path))) == realpath(lowercase(realpath(path)))
+            @test basename(realpath(uppercase(path))) == path
+        end
+        rm(path)
+        @test_throws SystemError realpath(path)
+    end
+end
 
 # issue #9687
 let n = tempname()
@@ -1029,71 +1068,50 @@ let n = tempname()
     rm(n)
 end
 
-# issue 13559
-if !Sys.iswindows()
-function test_13559()
-    fn = tempname()
-    run(`mkfifo $fn`)
-    # use subprocess to write 127 bytes to FIFO
-    writer_cmds = """
-        using Test
-        x = open($(repr(fn)), "w")
-        for i in 1:120
-            write(x, 0xaa)
-        end
-        flush(x)
-        Test.@test read(stdin, Int8) == 31
-        for i in 1:7
-            write(x, 0xaa)
-        end
-        close(x)
-    """
-    p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $writer_cmds`, stderr=stderr), "w")
-    # quickly read FIFO, draining it and blocking but not failing with EOFError yet
-    r = open(fn, "r")
-    # 15 proper reads
-    for i in 1:15
-        @test read(r, UInt64) === 0xaaaaaaaaaaaaaaaa
-    end
-    write(p, 0x1f)
-    # last read should throw EOFError when FIFO closes, since there are only 7 bytes (or less) available.
-    @test_throws EOFError read(r, UInt64)
-    close(r)
-    @test success(p)
-    rm(fn)
-end
-test_13559()
-end
 @test_throws ArgumentError mkpath("fakepath", mode = -1)
 
-# issue #22566
-# issue #24037 (disabling on FreeBSD)
-if !Sys.iswindows() && !(Sys.isbsd() && !Sys.isapple())
-    function test_22566()
-        fn = tempname()
-        run(`mkfifo $fn`)
-
-        script = """
-            using Test
-            x = open($(repr(fn)), "w")
-            write(x, 0x42)
-            flush(x)
-            Test.@test read(stdin, Int8) == 21
-            close(x)
-        """
-        cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
-        p = open(pipeline(cmd, stderr=stderr), "w")
-
-        r = open(fn, "r")
-        @test read(r, Int8) == 66
-        write(p, 0x15)
-        close(r)
-        @test success(p)
-        rm(fn)
+@testset "mktempdir 'prefix' argument" begin
+    tmpdirbase = joinpath(tempdir(), "")
+    def_prefix = "jl_"
+    mktempdir() do tmpdir
+        @test isdir(tmpdir)
+        @test startswith(tmpdir, tmpdirbase * def_prefix)
+        @test sizeof(tmpdir) == sizeof(tmpdirbase) + sizeof(def_prefix) + 6
+        @test sizeof(basename(tmpdir)) == sizeof(def_prefix) + 6
+        cd(tmpdir) do
+            Sys.iswindows() || mkdir(".\\")
+            for relpath in (".", "./", ".\\", "")
+                mktempdir(relpath) do tmpdir2
+                    pfx = joinpath(relpath, def_prefix)
+                    @test sizeof(tmpdir2) == sizeof(pfx) + 6
+                    @test startswith(tmpdir2, pfx)
+                end
+            end
+        end
+    end
+    # Special character prefix tests
+    for tst_prefix in ("ABCDEF", "./pfx", ".\\pfx", "", "#!@%^&()-", "/", "\\", "////abc", "\\\\\\\\abc", "∃x∀y")
+        mktempdir(; prefix=tst_prefix) do tmpdir
+            @test isdir(tmpdir)
+            @test startswith(tmpdir, tmpdirbase * tst_prefix)
+            @test sizeof(basename(tmpdir)) == 6 + sizeof(basename(tst_prefix))
+        end
     end
 
-    # repeat opening/closing fifo file, ensure no EINTR popped out
-    for i ∈ 1:50
-        test_22566()
+    @test_throws Base.IOError mktempdir(; prefix="dir_notexisting/bar")
+    @test_throws Base.IOError mktempdir(; prefix="dir_notexisting/")
+    @test_throws Base.IOError mktempdir("dir_notexisting/")
+
+    # Behavioral differences across OS types
+    if Sys.iswindows()
+        # invalid file name
+        @test_throws Base.IOError mktempdir(; prefix="a*b")
+        @test_throws Base.IOError mktempdir("a*b")
     end
-end  # !Sys.iswindows
+
+    mktempdir(""; prefix=tmpdirbase) do tmpdir
+        @test startswith(tmpdir, tmpdirbase)
+        @test sizeof(tmpdir) == 6 + sizeof(tmpdirbase)
+        @test sizeof(basename(tmpdir)) == 6
+    end
+end

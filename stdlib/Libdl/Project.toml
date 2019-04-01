@@ -1,2 +1,8 @@
 name = "Libdl"
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

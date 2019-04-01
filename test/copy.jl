@@ -84,6 +84,9 @@ end
     @test c[1] === c[2]
 end
 
+# issue #30911
+@test deepcopy(Array{Int,N} where N) == Array{Int,N} where N
+
 # issue #14027
 struct Nullable14027{T}
     hasvalue::Bool

@@ -1,19 +1,26 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-struct LDLt{T,S<:AbstractMatrix} <: Factorization{T}
+struct LDLt{T,S<:AbstractMatrix{T}} <: Factorization{T}
     data::S
+
+    function LDLt{T,S}(data) where {T,S<:AbstractMatrix{T}}
+        require_one_based_indexing(data)
+        new{T,S}(data)
+    end
 end
+LDLt(data::AbstractMatrix{T}) where {T} = LDLt{T,typeof(data)}(data)
+LDLt{T}(data::AbstractMatrix) where {T} = LDLt(convert(AbstractMatrix{T}, data)::AbstractMatrix{T})
 
 size(S::LDLt) = size(S.data)
 size(S::LDLt, i::Integer) = size(S.data, i)
 
-LDLt{T,S}(F::LDLt) where {T,S<:AbstractMatrix} = LDLt{T,S}(convert(S, F.data))
-# NOTE: the annotaion <:AbstractMatrix shouldn't be necessary, it is introduced
-#       to avoid an ambiguity warning (see issue #6383)
-LDLt{T}(F::LDLt{S,U}) where {T,S,U<:AbstractMatrix} = LDLt{T,U}(F)
+LDLt{T,S}(F::LDLt{T,S}) where {T,S<:AbstractMatrix{T}} = F
+LDLt{T,S}(F::LDLt) where {T,S<:AbstractMatrix{T}} = LDLt{T,S}(convert(S, F.data)::S)
+LDLt{T}(F::LDLt{T}) where {T} = F
+LDLt{T}(F::LDLt) where {T} = LDLt(convert(AbstractMatrix{T}, F.data)::AbstractMatrix{T})
 
 Factorization{T}(F::LDLt{T}) where {T} = F
-Factorization{T}(F::LDLt{S,U}) where {T,S,U} = LDLt{T,U}(F)
+Factorization{T}(F::LDLt) where {T} = LDLt{T}(F)
 
 # SymTridiagonal
 """
@@ -41,13 +48,13 @@ julia> S
   ⋅        0.545455  3.90909
 ```
 """
-function ldlt!(S::SymTridiagonal{T,V}) where {T<:Real,V}
+function ldlt!(S::SymTridiagonal{T,V}) where {T,V}
     n = size(S,1)
     d = S.dv
     e = S.ev
     @inbounds @simd for i = 1:n-1
         e[i] /= d[i]
-        d[i+1] -= abs2(e[i])*d[i]
+        d[i+1] -= e[i]^2*d[i]
     end
     return LDLt{T,SymTridiagonal{T,V}}(S)
 end
@@ -92,6 +99,7 @@ end
 factorize(S::SymTridiagonal) = ldlt(S)
 
 function ldiv!(S::LDLt{T,M}, B::AbstractVecOrMat{T}) where {T,M<:SymTridiagonal{T}}
+    require_one_based_indexing(B)
     n, nrhs = size(B, 1), size(B, 2)
     if size(S,1) != n
         throw(DimensionMismatch("Matrix has dimensions $(size(S)) but right hand side has first dimension $n"))

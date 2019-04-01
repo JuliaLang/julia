@@ -41,6 +41,49 @@ obj3 = MyModule.someotherfunction(obj2, c)
 ...
 ```
 
+## [Scripting](@id man-scripting)
+
+### How do I check if the current file is being run as the main script?
+
+When a file is run as the main script using `julia file.jl` one might want to activate extra
+functionality like command line argument handling. A way to determine that a file is run in
+this fashion is to check if `abspath(PROGRAM_FILE) == @__FILE__` is `true`.
+
+### How do I catch CTRL-C in a script?
+
+Running a Julia script using `julia file.jl` does not throw
+[`InterruptException`](@ref) when you try to terminate it with CTRL-C
+(SIGINT).  To run a certain code before terminating a Julia script,
+which may or may not be caused by CTRL-C, use [`atexit`](@ref).
+Alternatively, you can use `julia -e 'include(popfirst!(ARGS))'
+file.jl` to execute a script while being able to catch
+`InterruptException` in the [`try`](@ref) block.
+
+### How do I pass options to `julia` using `#!/usr/bin/env`?
+
+Passing options to `julia` in so-called shebang by, e.g.,
+`#!/usr/bin/env julia --startup-file=no` may not work in some
+platforms such as Linux.  This is because argument parsing in shebang
+is platform-dependent and not well-specified.  In a Unix-like
+environment, a reliable way to pass options to `julia` in an
+executable script would be to start the script as a `bash` script and
+use `exec` to replace the process to `julia`:
+
+```julia
+#!/bin/bash
+#=
+exec julia --color=yes --startup-file=no -e 'include(popfirst!(ARGS))' \
+    "${BASH_SOURCE[0]}" "$@"
+=#
+
+@show ARGS  # put any Julia code here
+```
+
+In the example above, the code between `#=` and `=#` is run as a `bash`
+script.  Julia ignores this part since it is a multi-line comment for
+Julia.  The Julia code after `=#` is ignored by `bash` since it stops
+parsing the file once it reaches to the `exec` statement.
+
 ## Functions
 
 ### I passed an argument `x` to a function, modified it inside that function, but on the outside, the variable `x` is still unchanged. Why?
@@ -97,7 +140,7 @@ julia> x
 Here we created a function `change_array!`, that assigns `5` to the first element of the passed
 array (bound to `x` at the call site, and bound to `A` within the function). Notice that, after
 the function call, `x` is still bound to the same array, but the content of that array changed:
-the variables `A` and `x` were distinct bindings refering to the same mutable `Array` object.
+the variables `A` and `x` were distinct bindings referring to the same mutable `Array` object.
 
 ### Can I use `using` or `import` inside a function?
 
@@ -575,7 +618,7 @@ Main               Module
 gvar_self 13 bytes String
 ```
 
-This does not apply to `function` or `type` declarations. However, anonymous functions bound to global
+This does not apply to `function` or `struct` declarations. However, anonymous functions bound to global
 variables are serialized as can be seen below.
 
 ```julia-repl
@@ -593,6 +636,17 @@ julia> anon_bar  = ()->1
 julia> remotecall_fetch(anon_bar, 2)
 1
 ```
+
+### Why does Julia use `*` for string concatenation? Why not `+` or something else?
+
+The [main argument](@ref man-concatenation) against `+` is that string concatenation is not
+commutative, while `+` is generally used as a commutative operator. While the Julia community
+recognizes that other languages use different operators and `*` may be unfamiliar for some
+users, it communicates certain algebraic properties.
+
+Note that you can also use `string(...)` to concatenate strings (and other values converted
+to strings); similarly, `repeat` can be used instead of `^` to repeat strings. The
+[interpolation syntax](@ref string-interpolation) is also useful for constructing strings.
 
 ## Packages and Modules
 
@@ -687,7 +741,7 @@ Because supporting generic programming is deemed more important than potential p
 that can be achieved by other means (e.g., using explicit loops), operators like `+=` and `*=`
 work by rebinding new values.
 
-## Asynchronous IO and concurrent synchronous writes
+## [Asynchronous IO and concurrent synchronous writes](@id faq-async-io)
 
 ### Why do concurrent writes to the same stream result in inter-mixed output?
 
@@ -720,8 +774,7 @@ julia> @sync for i in 1:3
 You can lock your writes with a `ReentrantLock` like this:
 
 ```jldoctest
-julia> l = ReentrantLock()
-ReentrantLock(nothing, Condition(Any[]), 0)
+julia> l = ReentrantLock();
 
 julia> @sync for i in 1:3
            @async begin

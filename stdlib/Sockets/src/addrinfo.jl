@@ -16,7 +16,7 @@ function uv_getaddrinfocb(req::Ptr{Cvoid}, status::Cint, addrinfo::Ptr{Cvoid})
         t = unsafe_pointer_to_objref(data)::Task
         uv_req_set_data(req, C_NULL)
         if status != 0 || addrinfo == C_NULL
-            schedule(t, UVError("getaddrinfocb", status))
+            schedule(t, _UVError("getaddrinfocb", status))
         else
             freeaddrinfo = addrinfo
             addrs = IPAddr[]
@@ -57,7 +57,6 @@ julia> getalladdrinfo("google.com")
 ```
 """
 function getalladdrinfo(host::String)
-    isascii(host) || error("non-ASCII hostname: $host")
     req = Libc.malloc(Base._sizeof_uv_getaddrinfo)
     uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
     status = ccall(:jl_getaddrinfo, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}, Ptr{Cvoid}),
@@ -88,7 +87,7 @@ function getalladdrinfo(host::String)
         end
         unpreserve_handle(ct)
     end
-    if isa(r, UVError)
+    if isa(r, IOError)
         code = r.code
         if code in (UV_EAI_ADDRFAMILY, UV_EAI_AGAIN, UV_EAI_BADFLAGS,
                     UV_EAI_BADHINTS, UV_EAI_CANCELED, UV_EAI_FAIL,
@@ -99,7 +98,7 @@ function getalladdrinfo(host::String)
         elseif code == UV_EAI_MEMORY
             throw(OutOfMemoryError())
         else
-            throw(UVError("getaddrinfo", code))
+            throw(_UVError("getaddrinfo", code))
         end
     end
     return r::Vector{IPAddr}
@@ -130,7 +129,7 @@ function uv_getnameinfocb(req::Ptr{Cvoid}, status::Cint, hostname::Cstring, serv
         t = unsafe_pointer_to_objref(data)::Task
         uv_req_set_data(req, C_NULL)
         if status != 0
-            schedule(t, UVError("getnameinfocb", status))
+            schedule(t, _UVError("getnameinfocb", status))
         else
             schedule(t, unsafe_string(hostname))
         end
@@ -194,7 +193,7 @@ function getnameinfo(address::Union{IPv4, IPv6})
         end
         unpreserve_handle(ct)
     end
-    if isa(r, UVError)
+    if isa(r, IOError)
         code = r.code
         if code in (UV_EAI_ADDRFAMILY, UV_EAI_AGAIN, UV_EAI_BADFLAGS,
                     UV_EAI_BADHINTS, UV_EAI_CANCELED, UV_EAI_FAIL,
@@ -205,7 +204,7 @@ function getnameinfo(address::Union{IPv4, IPv6})
         elseif code == UV_EAI_MEMORY
             throw(OutOfMemoryError())
         else
-            throw(UVError("getnameinfo", code))
+            throw(_UVError("getnameinfo", code))
         end
     end
     return r::String
@@ -251,4 +250,45 @@ function getipaddr()
     end
     ccall(:uv_free_interface_addresses, Cvoid, (Ptr{UInt8}, Int32), addr, count)
     return lo_present ? localhost : error("No networking interface available")
+end
+
+"""
+    getipaddrs(include_lo::Bool=false) -> Vector{IPv4}
+
+Get the IP addresses of the local machine.
+
+!!! compat "Julia 1.2"
+    This function is available as of Julia 1.2.
+
+# Examples
+```julia-repl
+julia> getipaddrs()
+2-element Array{IPv4,1}:
+ ip"10.255.0.183"
+ ip"172.17.0.1"
+```
+"""
+function getipaddrs(include_lo::Bool=false)
+    addresses = IPv4[]
+    addr_ref = Ref{Ptr{UInt8}}(C_NULL)
+    count_ref = Ref{Int32}(1)
+    lo_present = false
+    err = ccall(:jl_uv_interface_addresses, Int32, (Ref{Ptr{UInt8}}, Ref{Int32}), addr_ref, count_ref)
+    uv_error("getlocalip", err)
+    addr, count = addr_ref[], count_ref[]
+    for i = 0:(count-1)
+        current_addr = addr + i*_sizeof_uv_interface_address
+        if 1 == ccall(:jl_uv_interface_address_is_internal, Int32, (Ptr{UInt8},), current_addr)
+            lo_present = true
+            if !include_lo
+                continue
+            end
+        end
+        sockaddr = ccall(:jl_uv_interface_address_sockaddr, Ptr{Cvoid}, (Ptr{UInt8},), current_addr)
+        if ccall(:jl_sockaddr_in_is_ip4, Int32, (Ptr{Cvoid},), sockaddr) == 1
+            push!(addresses, IPv4(ntoh(ccall(:jl_sockaddr_host4, UInt32, (Ptr{Cvoid},), sockaddr))))
+        end
+    end
+    ccall(:uv_free_interface_addresses, Cvoid, (Ptr{UInt8}, Int32), addr, count)
+    return addresses
 end

@@ -41,7 +41,6 @@ cache:
   - C:\cygdownloads
   - llvm-3.9.1-i686-w64-mingw32-juliadeps-r07.7z
   - llvm-3.9.1-x86_64-w64-mingw32-juliadeps-r07.7z
-  - usr/bin/busybox.exe
   - C:\ccache
 
 build_script:
@@ -63,6 +62,6 @@ test_script:
   - usr\bin\julia -e "Base.require(Main, :InteractiveUtils).versioninfo()"
   - usr\bin\julia --sysimage-native-code=no -e "true"
   - cd julia-* && .\bin\julia.exe --check-bounds=yes share\julia\test\runtests.jl all &&
-      .\bin\julia.exe --check-bounds=yes share\julia\test\runtests.jl LibGit2/online OldPkg/pkg Pkg/pkg download
+      .\bin\julia.exe --check-bounds=yes share\julia\test\runtests.jl LibGit2/online Pkg/pkg download
   - cd ..
   - usr\bin\julia usr\share\julia\test\embedding\embedding-test.jl test\embedding\embedding.exe

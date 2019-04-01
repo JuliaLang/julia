@@ -36,7 +36,7 @@ Core.Compiler.typeinf_code(m, atypes, sparams, optimize, cached, params)
 ```
 
 If your debugging adventures require a `MethodInstance`, you can look it up by
-calling `Core.Compiler.code_for_method` using many of the variables above.
+calling `Core.Compiler.specialize_method` using many of the variables above.
 A `CodeInfo` object may be obtained with
 ```julia
 # Returns the CodeInfo object for `convert(Int, ::UInt)`:
@@ -75,7 +75,7 @@ in CPU cycles) to each of Julia's intrinsic functions. These costs are
 based on
 [standard ranges for common architectures](http://ithare.com/wp-content/uploads/part101_infographics_v08.png)
 (see
-[Agner Fog's analysis](http://www.agner.org/optimize/instruction_tables.pdf)
+[Agner Fog's analysis](https://www.agner.org/optimize/instruction_tables.pdf)
 for more detail).
 
 We supplement this low-level lookup table with a number of special
@@ -90,15 +90,31 @@ dynamic dispatch, but a mere heuristic indicating that dynamic
 dispatch is extremely expensive.
 
 Each statement gets analyzed for its total cost in a function called
-`statement_cost`. You can run this yourself by following this example:
+`statement_cost`. You can run this yourself by following the sketch below,
+where `f` is your function and `tt` is the Tuple-type of the arguments:
 
-```julia
+```jldoctest
+# A demo on `fill(3.5, (2, 3))
+f = fill
+tt = Tuple{Float64, Tuple{Int,Int}}
+# Create the objects we need to interact with the compiler
 params = Core.Compiler.Params(typemax(UInt))
-# Get the CodeInfo object
-ci = (@code_typed fill(3, (5, 5)))[1]  # we'll try this on the code for `fill(3, (5, 5))`
+mi = Base.method_instances(f, tt)[1]
+ci = code_typed(f, tt)[1][1]
+opt = Core.Compiler.OptimizationState(mi, params)
 # Calculate cost of each statement
-cost(stmt) = Core.Compiler.statement_cost(stmt, ci, Base, params)
+cost(stmt::Expr) = Core.Compiler.statement_cost(stmt, -1, ci, opt.sptypes, opt.slottypes, opt.params)
+cost(stmt) = 0
 cst = map(cost, ci.code)
+
+# output
+
+5-element Array{Int64,1}:
+  0
+  0
+ 20
+ 20
+  0
 ```
 
 The output is a `Vector{Int}` holding the estimated cost of each

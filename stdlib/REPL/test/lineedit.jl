@@ -8,12 +8,10 @@ import REPL.LineEdit: edit_insert, buffer, content, setmark, getmark, region
 include("FakeTerminals.jl")
 import .FakeTerminals.FakeTerminal
 
-const BASE_TEST_PATH = joinpath(@__DIR__, "..", "..", "..", "test")
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
-import .Main.TestHelpers
-
 # no need to have animation in tests
-REPL.GlobalOptions.region_animation_duration=0.001
+REPL.GlobalOptions.region_animation_duration=0.0001
+# tests are inserting code much faster than humans
+REPL.GlobalOptions.auto_indent_time_threshold = -0.0
 
 ## helper functions
 
@@ -492,6 +490,20 @@ end
         "\r\e[0K\e[1A\r\e[0K\e[1A\r\e[0K\e[1m> \e[0m\r\e[2Cbegin\n" *
         "\r\e[2C    julia = :fun\n" *
         "\r\e[2Cend\r\e[5C"
+end
+
+@testset "shift selection" begin
+    s = new_state()
+    edit_insert(s, "αä🐨") # for issue #28183
+    s.current_action = :unknown
+    LineEdit.edit_shift_move(s, LineEdit.edit_move_left)
+    @test LineEdit.region(s) == (5=>9)
+    LineEdit.edit_shift_move(s, LineEdit.edit_move_left)
+    @test LineEdit.region(s) == (2=>9)
+    LineEdit.edit_shift_move(s, LineEdit.edit_move_left)
+    @test LineEdit.region(s) == (0=>9)
+    LineEdit.edit_shift_move(s, LineEdit.edit_move_right)
+    @test LineEdit.region(s) == (2=>9)
 end
 
 @testset "tab/backspace alignment feature" begin

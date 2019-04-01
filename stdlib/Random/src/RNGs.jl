@@ -65,7 +65,7 @@ The entropy is obtained from the operating system.
 RandomDevice
 
 RandomDevice(::Nothing) = RandomDevice()
-srand(rng::RandomDevice) = rng
+seed!(rng::RandomDevice) = rng
 
 
 ## MersenneTwister
@@ -110,7 +110,7 @@ of random numbers.
 The `seed` may be a non-negative integer or a vector of
 `UInt32` integers. If no seed is provided, a randomly generated one
 is created (using entropy from the system).
-See the [`srand`](@ref) function for reseeding an already existing
+See the [`seed!`](@ref) function for reseeding an already existing
 `MersenneTwister` object.
 
 
@@ -135,7 +135,7 @@ true
 ```
 """
 MersenneTwister(seed=nothing) =
-    srand(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
+    seed!(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
 
 
 function copy!(dst::MersenneTwister, src::MersenneTwister)
@@ -274,9 +274,9 @@ function make_seed(n::Integer)
     end
 end
 
-#### srand()
+#### seed!()
 
-function srand(r::MersenneTwister, seed::Vector{UInt32})
+function seed!(r::MersenneTwister, seed::Vector{UInt32})
     copyto!(resize!(r.seed, length(seed)), seed)
     dsfmt_init_by_array(r.state, r.seed)
     mt_setempty!(r)
@@ -285,12 +285,12 @@ function srand(r::MersenneTwister, seed::Vector{UInt32})
     return r
 end
 
-srand(r::MersenneTwister=GLOBAL_RNG) = srand(r, make_seed())
-srand(r::MersenneTwister, n::Integer) = srand(r, make_seed(n))
-srand(seed::Union{Integer,Vector{UInt32}}) = srand(GLOBAL_RNG, seed)
+seed!(r::MersenneTwister=GLOBAL_RNG) = seed!(r, make_seed())
+seed!(r::MersenneTwister, n::Integer) = seed!(r, make_seed(n))
+seed!(seed::Union{Integer,Vector{UInt32}}) = seed!(GLOBAL_RNG, seed)
 
 
-### Global RNG (must be defined after srand)
+### Global RNG (must be defined after seed!)
 
 const GLOBAL_RNG = MersenneTwister(0)
 
@@ -548,37 +548,14 @@ end
 #### from a range
 
 for T in BitInteger_types, R=(1, Inf) # eval because of ambiguity otherwise
-    @eval Sampler(rng::MersenneTwister, r::UnitRange{$T}, ::Val{$R}) =
+    @eval Sampler(::Type{MersenneTwister}, r::UnitRange{$T}, ::Val{$R}) =
         SamplerRangeFast(r)
 end
 
 
 ### randjump
 
-"""
-    randjump(r::MersenneTwister, steps::Integer, len::Integer) -> Vector{MersenneTwister}
-
-Create an array of size `len` of initialized `MersenneTwister` RNG objects. The
-first RNG object given as a parameter and following `MersenneTwister` RNGs in the array are
-initialized such that a state of the RNG object in the array would be moved forward (without
-generating numbers) from a previous RNG object array element by `steps` steps.
-One such step corresponds to the generation of two `Float64` numbers.
-For each different value of `steps`, a large polynomial has to be generated internally.
-One is already pre-computed for `steps=big(10)^20`.
-"""
-randjump(r::MersenneTwister, steps::Integer, len::Integer) =
-    _randjump(r, DSFMT.calc_jump(steps), len)
-
+# Old randjump methods are deprecated, the scalar version is in the Future module.
 
 _randjump(r::MersenneTwister, jumppoly::DSFMT.GF2X) =
     fillcache_zeros!(MersenneTwister(copy(r.seed), DSFMT.dsfmt_jump(r.state, jumppoly)))
-
-function _randjump(mt::MersenneTwister, jumppoly::DSFMT.GF2X, len::Integer)
-    mts = MersenneTwister[]
-    push!(mts, mt)
-    for i in 1:len-1
-        cmt = mts[end]
-        push!(mts, _randjump(cmt, jumppoly))
-    end
-    return mts
-end

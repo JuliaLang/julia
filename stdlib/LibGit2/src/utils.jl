@@ -21,7 +21,7 @@ const URL_REGEX = r"""
     :?
 )
 (?<path>
-    # Require path to be preceeded by '/'. Alternatively, ':' when using scp-like syntax.
+    # Require path to be preceded by '/'. Alternatively, ':' when using scp-like syntax.
     (?<=(?(<scheme>)/|:))
     .*
 )?

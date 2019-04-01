@@ -41,11 +41,11 @@ runtests(){
     export FORCE_ASSERTIONS=1
     export LLVM_ASSERTIONS=1
     export JULIA_TEST_MAXRSS_MB=600
-    export JULIA_CPU_CORES=$MAKE_JOBS_NUMBER
+    export JULIA_CPU_THREADS=$MAKE_JOBS_NUMBER
 
     ./usr/bin/julia --check-bounds=yes test/runtests.jl all
     ./usr/bin/julia --check-bounds=yes test/runtests.jl \
-        LibGit2/online OldPkg/pkg Pkg/pkg download
+        LibGit2/online Pkg/pkg download
 }
 
 test-embedding(){

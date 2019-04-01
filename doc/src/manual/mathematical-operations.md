@@ -356,16 +356,17 @@ Julia applies the following order and associativity of operations, from highest 
 |:-------------- |:------------------------------------------------------------------------------------------------- |:-------------------------- |
 | Syntax         | `.` followed by `::`                                                                              | Left                       |
 | Exponentiation | `^`                                                                                               | Right                      |
-| Unary          | `+ - √`                                                                                           | Right[^1]                   |
-| Fractions      | `//`                                                                                              | Left                       |
-| Multiplication | `* / % & \ ÷`                                                                                     | Left[^2]                    |
+| Unary          | `+ - √`                                                                                           | Right[^1]                  |
 | Bitshifts      | `<< >> >>>`                                                                                       | Left                       |
-| Addition       | `+ - \| ⊻`                                                                                        | Left[^2]                    |
+| Fractions      | `//`                                                                                              | Left                       |
+| Multiplication | `* / % & \ ÷`                                                                                     | Left[^2]                   |
+| Addition       | `+ - \| ⊻`                                                                                        | Left[^2]                   |
 | Syntax         | `: ..`                                                                                            | Left                       |
 | Syntax         | `\|>`                                                                                             | Left                       |
 | Syntax         | `<\|`                                                                                             | Right                      |
 | Comparisons    | `> < >= <= == === != !== <:`                                                                      | Non-associative            |
 | Control flow   | `&&` followed by `\|\|` followed by `?`                                                           | Right                      |
+| Pair           | `=>`                                                                                              | Right                      |
 | Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            | Right                      |
 
 [^1]:
@@ -431,12 +432,12 @@ julia> Int8(127.0)
 127
 
 julia> Int8(3.14)
-ERROR: InexactError: Int8(Int8, 3.14)
+ERROR: InexactError: Int8(3.14)
 Stacktrace:
 [...]
 
 julia> Int8(128.0)
-ERROR: InexactError: Int8(Int8, 128.0)
+ERROR: InexactError: Int8(128.0)
 Stacktrace:
 [...]
 

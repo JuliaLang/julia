@@ -103,7 +103,7 @@ end
 """
     cd(f::Function, dir::AbstractString=homedir())
 
-Temporarily change the current working directory, apply function `f` and
+Temporarily change the current working directory to `dir`, apply function `f` and
 finally return to the original directory.
 
 # Examples
@@ -206,13 +206,13 @@ julia> readdir("test")
 function mkpath(path::AbstractString; mode::Integer = 0o777)
     isdirpath(path) && (path = dirname(path))
     dir = dirname(path)
-    (path == dir || isdir(path)) && return
+    (path == dir || isdir(path)) && return path
     mkpath(dir, mode = checkmode(mode))
     try
         mkdir(path, mode = mode)
-    # If there is a problem with making the directory, but the directory
-    # does in fact exist, then ignore the error. Else re-throw it.
     catch err
+        # If there is a problem with making the directory, but the directory
+        # does in fact exist, then ignore the error. Else re-throw it.
         if !isa(err, SystemError) || !isdir(path)
             rethrow()
         end
@@ -236,7 +236,7 @@ julia> rm("my", recursive=true)
 julia> rm("this_file_does_not_exist", force=true)
 
 julia> rm("this_file_does_not_exist")
-ERROR: unlink: no such file or directory (ENOENT)
+ERROR: IOError: unlink: no such file or directory (ENOENT)
 Stacktrace:
 [...]
 ```
@@ -252,7 +252,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
             end
             unlink(path)
         catch err
-            if force && isa(err, UVError) && err.code==Base.UV_ENOENT
+            if force && isa(err, IOError) && err.code==Base.UV_ENOENT
                 return
             end
             rethrow()
@@ -273,7 +273,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
 end
 
 
-# The following use Unix command line facilites
+# The following use Unix command line facilities
 function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::AbstractString;
                                                           force::Bool=false)
     if ispath(dst)
@@ -297,14 +297,7 @@ function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::Ab
 end
 
 function cptree(src::AbstractString, dst::AbstractString; force::Bool=false,
-                                                          follow_symlinks::Bool=false,
-                                                          remove_destination::Union{Bool,Nothing}=nothing)
-    # TODO: Remove after 0.7
-    if remove_destination !== nothing
-        Base.depwarn("The `remove_destination` keyword argument is deprecated; use " *
-                     "`force` instead", :cptree)
-        force = remove_destination
-    end
+                                                          follow_symlinks::Bool=false)
     isdir(src) || throw(ArgumentError("'$src' is not a directory. Use `cp(src, dst)`"))
     checkfor_mv_cp_cptree(src, dst, "copying"; force=force)
     mkdir(dst)
@@ -324,7 +317,7 @@ end
 """
     cp(src::AbstractString, dst::AbstractString; force::Bool=false, follow_symlinks::Bool=false)
 
-Copy the file, link, or directory from `src` to `dest`.
+Copy the file, link, or directory from `src` to `dst`.
 `force=true` will first remove an existing `dst`.
 
 If `follow_symlinks=false`, and `src` is a symbolic link, `dst` will be created as a
@@ -333,14 +326,7 @@ of the file or directory `src` refers to.
 Return `dst`.
 """
 function cp(src::AbstractString, dst::AbstractString; force::Bool=false,
-                                                      follow_symlinks::Bool=false,
-                                                      remove_destination::Union{Bool,Nothing}=nothing)
-    # TODO: Remove after 0.7
-    if remove_destination !== nothing
-        Base.depwarn("The `remove_destination` keyword argument is deprecated; use " *
-                     "`force` instead", :cp)
-        force = remove_destination
-    end
+                                                      follow_symlinks::Bool=false)
     checkfor_mv_cp_cptree(src, dst, "copying"; force=force)
     if !follow_symlinks && islink(src)
         symlink(readlink(src), dst)
@@ -358,15 +344,36 @@ end
 Move the file, link, or directory from `src` to `dst`.
 `force=true` will first remove an existing `dst`.
 Return `dst`.
+
+# Examples
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
+julia> write("hello.txt", "world");
+
+julia> mv("hello.txt", "goodbye.txt")
+"goodbye.txt"
+
+julia> "hello.txt" in readdir()
+false
+
+julia> readline("goodbye.txt")
+"world"
+
+julia> write("hello.txt", "world2");
+
+julia> mv("hello.txt", "goodbye.txt")
+ERROR: ArgumentError: 'goodbye.txt' exists. `force=true` is required to remove 'goodbye.txt' before moving.
+Stacktrace:
+ [1] #checkfor_mv_cp_cptree#10(::Bool, ::Function, ::String, ::String, ::String) at ./file.jl:293
+[...]
+
+julia> mv("hello.txt", "goodbye.txt", force=true)
+"goodbye.txt"
+
+julia> rm("goodbye.txt");
+
+```
 """
-function mv(src::AbstractString, dst::AbstractString; force::Bool=false,
-                                                      remove_destination::Union{Bool,Nothing}=nothing)
-    # TODO: Remove after 0.7
-    if remove_destination !== nothing
-        Base.depwarn("The `remove_destination` keyword argument is deprecated; use " *
-                     "`force` instead", :mv)
-        force = remove_destination
-    end
+function mv(src::AbstractString, dst::AbstractString; force::Bool=false)
     checkfor_mv_cp_cptree(src, dst, "moving"; force=force)
     rename(src, dst)
     dst
@@ -396,58 +403,48 @@ We can see the [`mtime`](@ref) has been modified by `touch`.
 function touch(path::AbstractString)
     f = open(path, JL_O_WRONLY | JL_O_CREAT, 0o0666)
     try
-        t = time()
-        futime(f,t,t)
+        if Sys.isunix()
+            ret = ccall(:futimes, Cint, (Cint, Ptr{Cvoid}), fd(f), C_NULL)
+            systemerror(:futimes, ret != 0, extrainfo=path)
+        else
+            t = time()
+            futime(f,t,t)
+        end
     finally
         close(f)
     end
     path
 end
 
+const temp_prefix = "jl_"
+
 if Sys.iswindows()
 
 function tempdir()
     temppath = Vector{UInt16}(undef, 32767)
-    lentemppath = ccall(:GetTempPathW,stdcall,UInt32,(UInt32,Ptr{UInt16}),length(temppath),temppath)
-    if lentemppath >= length(temppath) || lentemppath == 0
-        error("GetTempPath failed: $(Libc.FormatMessage())")
-    end
-    resize!(temppath,lentemppath)
+    lentemppath = ccall(:GetTempPathW, stdcall, UInt32, (UInt32, Ptr{UInt16}), length(temppath), temppath)
+    windowserror("GetTempPath", lentemppath >= length(temppath) || lentemppath == 0)
+    resize!(temppath, lentemppath)
     return transcode(String, temppath)
 end
 
-const temp_prefix = cwstring("jl_")
 function _win_tempname(temppath::AbstractString, uunique::UInt32)
     tempp = cwstring(temppath)
+    temppfx = cwstring(temp_prefix)
     tname = Vector{UInt16}(undef, 32767)
-    uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32,Ptr{UInt16}), tempp,temp_prefix,uunique,tname)
-    lentname = something(findfirst(iszero,tname), 0)-1
-    if uunique == 0 || lentname <= 0
-        error("GetTempFileName failed: $(Libc.FormatMessage())")
-    end
-    resize!(tname,lentname)
+    uunique = ccall(:GetTempFileNameW, stdcall, UInt32,
+                    (Ptr{UInt16}, Ptr{UInt16}, UInt32, Ptr{UInt16}),
+                    tempp, temppfx, uunique, tname)
+    windowserror("GetTempFileName", uunique == 0)
+    lentname = something(findfirst(iszero, tname))
+    @assert lentname > 0
+    resize!(tname, lentname - 1)
     return transcode(String, tname)
 end
 
 function mktemp(parent=tempdir())
     filename = _win_tempname(parent, UInt32(0))
     return (filename, Base.open(filename, "r+"))
-end
-
-function mktempdir(parent=tempdir())
-    seed::UInt32 = Libc.rand(UInt32)
-    while true
-        if (seed & typemax(UInt16)) == 0
-            seed += 1
-        end
-        filename = _win_tempname(parent, seed)
-        ret = ccall(:_wmkdir, Int32, (Ptr{UInt16},), cwstring(filename))
-        if ret == 0
-            return filename
-        end
-        systemerror(:mktempdir, Libc.errno()!=Libc.EEXIST)
-        seed += 1
-    end
 end
 
 function tempname()
@@ -469,7 +466,7 @@ else # !windows
 # Obtain a temporary filename.
 function tempname()
     d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
-    p = ccall(:tempnam, Cstring, (Cstring,Cstring), d, :julia)
+    p = ccall(:tempnam, Cstring, (Cstring, Cstring), d, temp_prefix)
     systemerror(:tempnam, p == C_NULL)
     s = unsafe_string(p)
     Libc.free(p)
@@ -481,19 +478,12 @@ tempdir() = dirname(tempname())
 
 # Create and return the name of a temporary file along with an IOStream
 function mktemp(parent=tempdir())
-    b = joinpath(parent, "tmpXXXXXX")
+    b = joinpath(parent, temp_prefix * "XXXXXX")
     p = ccall(:mkstemp, Int32, (Cstring,), b) # modifies b
     systemerror(:mktemp, p == -1)
     return (b, fdio(p, true))
 end
 
-# Create and return the name of a temporary directory
-function mktempdir(parent=tempdir())
-    b = joinpath(parent, "tmpXXXXXX")
-    p = ccall(:mkdtemp, Cstring, (Cstring,), b)
-    systemerror(:mktempdir, p == C_NULL)
-    return unsafe_string(p)
-end
 
 end # os-test
 
@@ -528,12 +518,37 @@ is an open file object for this path.
 mktemp(parent)
 
 """
-    mktempdir(parent=tempdir())
+    mktempdir(parent=tempdir(); prefix=$(repr(temp_prefix)))
 
-Create a temporary directory in the `parent` directory and return its path.
+Create a temporary directory in the `parent` directory with a name
+constructed from the given prefix and a random suffix, and return its path.
+Additionally, any trailing `X` characters may be replaced with random characters.
 If `parent` does not exist, throw an error.
 """
-mktempdir(parent)
+function mktempdir(parent=tempdir(); prefix=temp_prefix)
+    if isempty(parent) || occursin(path_separator_re, parent[end:end])
+        # append a path_separator only if parent didn't already have one
+        tpath = "$(parent)$(prefix)XXXXXX"
+    else
+        tpath = "$(parent)$(path_separator)$(prefix)XXXXXX"
+    end
+
+    req = Libc.malloc(_sizeof_uv_fs)
+    try
+        ret = ccall(:uv_fs_mkdtemp, Int32,
+                    (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
+                    eventloop(), req, tpath, C_NULL)
+        if ret < 0
+            ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+            uv_error("mktempdir", ret)
+        end
+        path = unsafe_string(ccall(:jl_uv_fs_t_path, Cstring, (Ptr{Cvoid},), req))
+        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+        return path
+    finally
+        Libc.free(req)
+    end
+end
 
 
 """
@@ -558,13 +573,13 @@ function mktemp(fn::Function, parent=tempdir())
 end
 
 """
-    mktempdir(f::Function, parent=tempdir())
+    mktempdir(f::Function, parent=tempdir(); prefix=$(repr(temp_prefix)))
 
-Apply the function `f` to the result of [`mktempdir(parent)`](@ref) and remove the
-temporary directory upon completion.
+Apply the function `f` to the result of [`mktempdir(parent; prefix)`](@ref) and remove the
+temporary directory all of its contents upon completion.
 """
-function mktempdir(fn::Function, parent=tempdir())
-    tmpdir = mktempdir(parent)
+function mktempdir(fn::Function, parent=tempdir(); prefix=temp_prefix)
+    tmpdir = mktempdir(parent; prefix=prefix)
     try
         fn(tmpdir)
     finally
@@ -608,7 +623,7 @@ function readdir(path::AbstractString)
     uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
 
     # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
-    err = ccall(:uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{UInt8}, Cstring, Cint, Ptr{Cvoid}),
+    err = ccall(:jl_uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{UInt8}, Cstring, Cint, Ptr{Cvoid}),
                 eventloop(), uv_readdir_req, path, 0, C_NULL)
     err < 0 && throw(SystemError("unable to read directory $path", -err))
     #uv_error("unable to read directory $path", err)
@@ -793,7 +808,7 @@ Return the target location a symbolic link `path` points to.
 function readlink(path::AbstractString)
     req = Libc.malloc(_sizeof_uv_fs)
     try
-        ret = ccall(:uv_fs_readlink, Int32,
+        ret = ccall(:jl_uv_fs_readlink, Int32,
             (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
             eventloop(), req, path, C_NULL)
         if ret < 0
@@ -801,7 +816,7 @@ function readlink(path::AbstractString)
             uv_error("readlink", ret)
             @assert false
         end
-        tgt = unsafe_string(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Cvoid},), req))
+        tgt = unsafe_string(ccall(:jl_uv_fs_t_ptr, Cstring, (Ptr{Cvoid},), req))
         ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
         return tgt
     finally

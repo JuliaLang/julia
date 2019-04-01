@@ -12,6 +12,7 @@ Base.Filesystem.symlink
 Base.Filesystem.readlink
 Base.Filesystem.chmod
 Base.Filesystem.chown
+Base.RawFD
 Base.stat
 Base.Filesystem.lstat
 Base.Filesystem.ctime
@@ -61,4 +62,5 @@ Base.Filesystem.expanduser
 Base.Filesystem.splitdir
 Base.Filesystem.splitdrive
 Base.Filesystem.splitext
+Base.Filesystem.splitpath
 ```

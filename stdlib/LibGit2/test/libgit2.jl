@@ -7,8 +7,8 @@ using Test
 using Random, Serialization, Sockets
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
-import .Main.TestHelpers: with_fake_pty
+isdefined(Main, :FakePTYs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FakePTYs.jl"))
+import .Main.FakePTYs: with_fake_pty
 
 function challenge_prompt(code::Expr, challenges; timeout::Integer=60, debug::Bool=true)
     input_code = tempname()
@@ -47,8 +47,8 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
         "Process output found:\n\"\"\"\n$str\n\"\"\""
     end
     out = IOBuffer()
-    with_fake_pty() do slave, master
-        p = run(detach(cmd), slave, slave, slave, wait=false)
+    with_fake_pty() do pty_slave, pty_master
+        p = run(detach(cmd), pty_slave, pty_slave, pty_slave, wait=false)
 
         # Kill the process if it takes too long. Typically occurs when process is waiting
         # for input.
@@ -75,21 +75,21 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
                 process_running(p) && kill(p, Base.SIGKILL)
             end
 
-            close(master)
+            close(pty_master)
         end
 
         for (challenge, response) in challenges
-            write(out, readuntil(master, challenge, keep=true))
-            if !isopen(master)
+            write(out, readuntil(pty_master, challenge, keep=true))
+            if !isopen(pty_master)
                 error("Could not locate challenge: \"$challenge\". ",
                       format_output(out))
             end
-            write(master, response)
+            write(pty_master, response)
         end
 
         # Capture output from process until `master` is closed
-        while !eof(master)
-            write(out, readavailable(master))
+        while !eof(pty_master)
+            write(out, readavailable(pty_master))
         end
 
         status = fetch(timer)
@@ -462,6 +462,45 @@ end
         Base.shred!(expected_cred)
     end
 
+    @testset "extra newline" begin
+        # The "Git for Windows" installer will also install the "Git Credential Manager for
+        # Windows" (https://github.com/Microsoft/Git-Credential-Manager-for-Windows) (also
+        # known as "manager" in the .gitconfig files). This credential manager returns an
+        # additional newline when returning the results.
+        str = """
+            protocol=https
+            host=example.com
+            path=
+            username=bob
+            password=*****
+
+            """
+        expected_cred = LibGit2.GitCredential("https", "example.com", "", "bob", "*****")
+
+        cred = read!(IOBuffer(str), LibGit2.GitCredential())
+        @test cred == expected_cred
+        @test sprint(write, cred) * "\n" == str
+        Base.shred!(cred)
+        Base.shred!(expected_cred)
+    end
+
+    @testset "unknown attribute" begin
+        str = """
+            protocol=https
+            host=example.com
+            attribute=value
+            username=bob
+            password=*****
+            """
+        expected_cred = LibGit2.GitCredential("https", "example.com", nothing, "bob", "*****")
+        expected_log = (:warn, "Unknown git credential attribute found: \"attribute\"")
+
+        cred = @test_logs expected_log read!(IOBuffer(str), LibGit2.GitCredential())
+        @test cred == expected_cred
+        Base.shred!(cred)
+        Base.shred!(expected_cred)
+    end
+
     @testset "use http path" begin
         cred = LibGit2.GitCredential("https", "example.com", "dir/file", "alice", "*****")
         expected = """
@@ -530,6 +569,27 @@ end
         cred = LibGit2.GitCredential("https", "github.com", nothing, nothing)
         @test !LibGit2.ismatch("https://@github.com", cred)
         Base.shred!(cred)
+    end
+
+    @testset "GITHUB_REGEX" begin
+        github_regex_test = function(url, user, repo)
+            m = match(LibGit2.GITHUB_REGEX, url)
+            @test m !== nothing
+            @test m[1] == "$user/$repo"
+            @test m[2] == user
+            @test m[3] == repo
+        end
+        user = "User"
+        repo = "Repo"
+        github_regex_test("git@github.com/$user/$repo.git", user, repo)
+        github_regex_test("https://github.com/$user/$repo.git", user, repo)
+        github_regex_test("https://username@github.com/$user/$repo.git", user, repo)
+        github_regex_test("ssh://git@github.com/$user/$repo.git", user, repo)
+        github_regex_test("git@github.com/$user/$repo", user, repo)
+        github_regex_test("https://github.com/$user/$repo", user, repo)
+        github_regex_test("https://username@github.com/$user/$repo", user, repo)
+        github_regex_test("ssh://git@github.com/$user/$repo", user, repo)
+        @test !occursin(LibGit2.GITHUB_REGEX, "git@notgithub.com/$user/$repo.git")
     end
 end
 
@@ -1076,7 +1136,7 @@ mktempdir() do dir
                     if isa(err, LibGit2.Error.GitError) && err.class == LibGit2.Error.Invalid
                         @test false
                     else
-                        rethrow(err)
+                        rethrow()
                     end
                 end
             end
@@ -1275,8 +1335,8 @@ mktempdir() do dir
             LibGit2.commit(repo, "move file1")
             LibGit2.branch!(repo, "master")
             upst_ann = LibGit2.GitAnnotated(repo, "branch/merge_b")
-            rename_flag = 0
-            rename_flag = LibGit2.toggle(rename_flag, 0) # turns on the find renames opt
+            rename_flag = Cint(0)
+            rename_flag = LibGit2.toggle(rename_flag, Cint(0)) # turns on the find renames opt
             mos = LibGit2.MergeOptions(flags=rename_flag)
             @test_logs (:info,"Review and commit merged changes") LibGit2.merge!(repo, [upst_ann], merge_opts=mos)
         end
@@ -1610,7 +1670,7 @@ mktempdir() do dir
             rb = LibGit2.GitRebase(repo, head_ann, upst_ann)
             @test_throws BoundsError rb[3]
             @test_throws BoundsError rb[0]
-            rbo = next(rb)
+            rbo, _ = iterate(rb)
             rbo_str = sprint(show, rbo)
             @test rbo_str == "RebaseOperation($(string(rbo.id)))\nOperation type: REBASE_OPERATION_PICK\n"
             rb_str = sprint(show, rb)
@@ -1734,14 +1794,43 @@ mktempdir() do dir
         @test haskey(cache, cred_id)
         @test cache[cred_id] === cred
 
-        # Reject an approved should cause it to be removed
-        LibGit2.reject(cache, cred, url)
+        # Approve the same credential again which does not overwrite
+        LibGit2.approve(cache, cred, url)
+        @test haskey(cache, cred_id)
+        @test cache[cred_id] === cred
+
+        # Overwrite an already cached credential
+        dup_cred = deepcopy(cred)
+        LibGit2.approve(cache, dup_cred, url)  # Shreds overwritten `cred`
+        @test haskey(cache, cred_id)
+        @test cache[cred_id] === dup_cred
+        @test cred.user != "julia"
+        @test cred.pass != password
+        @test dup_cred.user == "julia"
+        @test dup_cred.pass == password
+
+        cred = dup_cred
+
+        # Reject an approved credential
+        @test cache[cred_id] === cred
+        LibGit2.reject(cache, cred, url)  # Avoids shredding the credential passed in
         @test !haskey(cache, cred_id)
         @test cred.user == "julia"
         @test cred.pass == password
 
+        # Reject and shred an approved credential
+        dup_cred = deepcopy(cred)
+        LibGit2.approve(cache, cred, url)
+
+        LibGit2.reject(cache, dup_cred, url)  # Shred `cred` but not passed in `dup_cred`
+        @test !haskey(cache, cred_id)
+        @test cred.user != "julia"
+        @test cred.pass != password
+        @test dup_cred.user == "julia"
+        @test dup_cred.pass == password
+
+        Base.shred!(dup_cred)
         Base.shred!(cache)
-        Base.shred!(cred)
         Base.shred!(password)
     end
 
@@ -2718,7 +2807,7 @@ mktempdir() do dir
                     """)
 
                 # Directly write to the cleartext credential store. Note: we are not using
-                # the LibGit2.approve message to avoid any posibility of the tests
+                # the LibGit2.approve message to avoid any possibility of the tests
                 # accidentally writing to a user's global store.
                 write(cred_file, "https://$valid_username:$valid_password@github.com")
 

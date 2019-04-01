@@ -41,9 +41,10 @@ Generator(::Type{T}, I1, I2, Is...) where {T} = Generator(a->T(a...), zip(I1, I2
 
 function iterate(g::Generator, s...)
     @_inline_meta
-    y = iterate(g.iter, s...)::Union{Tuple{Any, Any}, Nothing}
+    y = iterate(g.iter, s...)
     y === nothing && return nothing
-    g.f(y[1]), y[2]
+    y = y::Tuple{Any, Any} # try to give inference some idea of what to expect about the behavior of the next line
+    return (g.f(y[1]), y[2])
 end
 
 length(g::Generator) = length(g.iter)

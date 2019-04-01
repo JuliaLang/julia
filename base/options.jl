@@ -26,6 +26,7 @@ struct JLOptions
     warn_overwrite::Int8
     can_inline::Int8
     polly::Int8
+    trace_compile::Ptr{UInt8}
     fast_math::Int8
     worker::Int8
     cookie::Ptr{UInt8}
@@ -38,6 +39,7 @@ struct JLOptions
     outputjitbc::Ptr{UInt8}
     outputo::Ptr{UInt8}
     outputji::Ptr{UInt8}
+    output_code_coverage::Ptr{UInt8}
     incremental::Int8
 end
 

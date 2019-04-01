@@ -48,16 +48,42 @@ julia> [1 2im 3; 1im 2 3] * I
 """
 const I = UniformScaling(true)
 
+"""
+    (I::UniformScaling)(n::Integer)
+
+Construct a `Diagonal` matrix from a `UniformScaling`.
+
+!!! compat "Julia 1.2"
+     This method is available as of Julia 1.2.
+
+# Examples
+```jldoctest
+julia> I(3)
+3×3 Diagonal{Bool,Array{Bool,1}}:
+ 1  ⋅  ⋅
+ ⋅  1  ⋅
+ ⋅  ⋅  1
+
+julia> (0.7*I)(3)
+3×3 Diagonal{Float64,Array{Float64,1}}:
+ 0.7   ⋅    ⋅
+  ⋅   0.7   ⋅
+  ⋅    ⋅   0.7
+```
+"""
+(I::UniformScaling)(n::Integer) = Diagonal(fill(I.λ, n))
+
 eltype(::Type{UniformScaling{T}}) where {T} = T
 ndims(J::UniformScaling) = 2
+Base.has_offset_axes(::UniformScaling) = false
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
-function show(io::IO, J::UniformScaling)
+function show(io::IO, ::MIME"text/plain", J::UniformScaling)
     s = "$(J.λ)"
     if occursin(r"\w+\s*[\+\-]\s*\w+", s)
         s = "($s)"
     end
-    print(io, "$(typeof(J))\n$s*I")
+    print(io, typeof(J), "\n$s*I")
 end
 copy(J::UniformScaling) = UniformScaling(J.λ)
 
@@ -73,10 +99,12 @@ oneunit(J::UniformScaling{T}) where {T} = oneunit(UniformScaling{T})
 zero(::Type{UniformScaling{T}}) where {T} = UniformScaling(zero(T))
 zero(J::UniformScaling{T}) where {T} = zero(UniformScaling{T})
 
+isdiag(::UniformScaling) = true
 istriu(::UniformScaling) = true
 istril(::UniformScaling) = true
 issymmetric(::UniformScaling) = true
 ishermitian(J::UniformScaling) = isreal(J.λ)
+isposdef(J::UniformScaling) = isposdef(J.λ)
 
 (+)(J::UniformScaling, x::Number) = J.λ + x
 (+)(x::Number, J::UniformScaling) = x + J.λ
@@ -107,6 +135,31 @@ for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
             return ($t2)(ULnew)
         end
     end
+end
+
+# Adding a complex UniformScaling to the diagonal of a Hermitian
+# matrix breaks the hermiticity, if the UniformScaling is non-real.
+# However, to preserve type stability, we do not special-case a
+# UniformScaling{<:Complex} that happens to be real.
+function (+)(A::Hermitian{T,S}, J::UniformScaling{<:Complex}) where {T,S}
+    A_ = copytri!(copy(parent(A)), A.uplo)
+    B = convert(AbstractMatrix{Base._return_type(+, Tuple{eltype(A), typeof(J)})}, A_)
+    @inbounds for i in diagind(B)
+        B[i] += J
+    end
+    return B
+end
+
+function (-)(J::UniformScaling{<:Complex}, A::Hermitian{T,S}) where {T,S}
+    A_ = copytri!(copy(parent(A)), A.uplo)
+    B = convert(AbstractMatrix{Base._return_type(+, Tuple{eltype(A), typeof(J)})}, A_)
+    @inbounds for i in eachindex(B)
+        B[i] = -B[i]
+    end
+    @inbounds for i in diagind(B)
+        B[i] += J
+    end
+    return B
 end
 
 function (+)(A::AbstractMatrix, J::UniformScaling)
@@ -162,6 +215,13 @@ end
 
 \(x::Number, J::UniformScaling) = UniformScaling(x\J.λ)
 
+mul!(C::AbstractMatrix, A::AbstractMatrix, J::UniformScaling) = mul!(C, A, J.λ)
+mul!(C::AbstractVecOrMat, J::UniformScaling, B::AbstractVecOrMat) = mul!(C, J.λ, B)
+rmul!(A::AbstractMatrix, J::UniformScaling) = rmul!(A, J.λ)
+lmul!(J::UniformScaling, B::AbstractVecOrMat) = lmul!(J.λ, B)
+rdiv!(A::AbstractMatrix, J::UniformScaling) = rdiv!(A, J.λ)
+ldiv!(J::UniformScaling, B::AbstractVecOrMat) = ldiv!(J.λ, B)
+
 Broadcast.broadcasted(::typeof(*), x::Number,J::UniformScaling) = UniformScaling(x*J.λ)
 Broadcast.broadcasted(::typeof(*), J::UniformScaling,x::Number) = UniformScaling(J.λ*x)
 
@@ -172,6 +232,7 @@ Broadcast.broadcasted(::typeof(/), J::UniformScaling,x::Number) = UniformScaling
 ## equality comparison with UniformScaling
 ==(J::UniformScaling, A::AbstractMatrix) = A == J
 function ==(A::AbstractMatrix, J::UniformScaling)
+    require_one_based_indexing(A)
     size(A, 1) == size(A, 2) || return false
     iszero(J.λ) && return iszero(A)
     isone(J.λ) && return isone(A)
@@ -203,11 +264,20 @@ function isapprox(J::UniformScaling, A::AbstractMatrix;
 end
 isapprox(A::AbstractMatrix, J::UniformScaling; kwargs...) = isapprox(J, A; kwargs...)
 
+"""
+    copyto!(dest::AbstractMatrix, src::UniformScaling)
+
+Copies a [`UniformScaling`](@ref) onto a matrix.
+
+!!! compat "Julia 1.1"
+    In Julia 1.0 this method only supported a square destination matrix. Julia 1.1. added
+    support for a rectangular matrix.
+"""
 function copyto!(A::AbstractMatrix, J::UniformScaling)
-    size(A,1)==size(A,2) || throw(DimensionMismatch("a UniformScaling can only be copied to a square matrix"))
+    require_one_based_indexing(A)
     fill!(A, 0)
     λ = J.λ
-    for i = 1:size(A,1)
+    for i = 1:min(size(A,1),size(A,2))
         @inbounds A[i,i] = λ
     end
     return A
@@ -237,17 +307,18 @@ promote_to_array_type(A::Tuple{Vararg{Union{AbstractVecOrMat,UniformScaling}}}) 
 for (f,dim,name) in ((:hcat,1,"rows"), (:vcat,2,"cols"))
     @eval begin
         function $f(A::Union{AbstractVecOrMat,UniformScaling}...)
-            n = 0
+            n = -1
             for a in A
                 if !isa(a, UniformScaling)
+                    require_one_based_indexing(a)
                     na = size(a,$dim)
-                    n > 0 && n != na &&
+                    n >= 0 && n != na &&
                         throw(DimensionMismatch(string("number of ", $name,
                             " of each array must match (got ", n, " and ", na, ")")))
                     n = na
                 end
             end
-            n == 0 && throw(ArgumentError($("$f of only UniformScaling objects cannot determine the matrix size")))
+            n == -1 && throw(ArgumentError($("$f of only UniformScaling objects cannot determine the matrix size")))
             return $f(promote_to_arrays(fill(n,length(A)),1, promote_to_array_type(A), A...)...)
         end
     end
@@ -255,22 +326,23 @@ end
 
 
 function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScaling}...)
+    require_one_based_indexing(A...)
     nr = length(rows)
     sum(rows) == length(A) || throw(ArgumentError("mismatch between row sizes and number of arguments"))
-    n = zeros(Int, length(A))
+    n = fill(-1, length(A))
     needcols = false # whether we also need to infer some sizes from the column count
     j = 0
     for i = 1:nr # infer UniformScaling sizes from row counts, if possible:
-        ni = 0 # number of rows in this block-row
+        ni = -1 # number of rows in this block-row, -1 indicates unknown
         for k = 1:rows[i]
             if !isa(A[j+k], UniformScaling)
                 na = size(A[j+k], 1)
-                ni > 0 && ni != na &&
+                ni >= 0 && ni != na &&
                     throw(DimensionMismatch("mismatch in number of rows"))
                 ni = na
             end
         end
-        if ni > 0
+        if ni >= 0
             for k = 1:rows[i]
                 n[j+k] = ni
             end
@@ -280,21 +352,22 @@ function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScalin
         j += rows[i]
     end
     if needcols # some sizes still unknown, try to infer from column count
-        nc = j = 0
+        nc = -1
+        j = 0
         for i = 1:nr
             nci = 0
-            rows[i] > 0 && n[j+1] == 0 && continue # column count unknown in this row
+            rows[i] > 0 && n[j+1] == -1 && (j += rows[i]; continue)
             for k = 1:rows[i]
                 nci += isa(A[j+k], UniformScaling) ? n[j+k] : size(A[j+k], 2)
             end
-            nc > 0 && nc != nci && throw(DimensionMismatch("mismatch in number of columns"))
+            nc >= 0 && nc != nci && throw(DimensionMismatch("mismatch in number of columns"))
             nc = nci
             j += rows[i]
         end
-        nc == 0 && throw(ArgumentError("sizes of UniformScalings could not be inferred"))
+        nc == -1 && throw(ArgumentError("sizes of UniformScalings could not be inferred"))
         j = 0
         for i = 1:nr
-            if rows[i] > 0 && n[j+1] == 0 # this row consists entirely of UniformScalings
+            if rows[i] > 0 && n[j+1] == -1 # this row consists entirely of UniformScalings
                 nci = nc ÷ rows[i]
                 nci * rows[i] != nc && throw(DimensionMismatch("indivisible UniformScaling sizes"))
                 for k = 1:rows[i]

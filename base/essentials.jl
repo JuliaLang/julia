@@ -6,7 +6,20 @@ const Callable = Union{Function,Type}
 
 const Bottom = Union{}
 
+"""
+    AbstractSet{T}
+
+Supertype for set-like types whose elements are of type `T`.
+[`Set`](@ref), [`BitSet`](@ref) and other types are subtypes of this.
+"""
 abstract type AbstractSet{T} end
+
+"""
+    AbstractDict{K, V}
+
+Supertype for dictionary-like types with keys of type `K` and values of type `V`.
+[`Dict`](@ref), [`IdDict`](@ref) and other types are subtypes of this.
+"""
 abstract type AbstractDict{K,V} end
 
 # The real @inline macro is not available until after array.jl, so this
@@ -30,14 +43,20 @@ end
     @nospecialize
 
 Applied to a function argument name, hints to the compiler that the method
-should not be specialized for different types of that argument.
+should not be specialized for different types of that argument,
+but instead to use precisely the declared type for each argument.
 This is only a hint for avoiding excess code generation.
-Can be applied to an argument within a formal argument list, or in the
-function body.
-When applied to an argument, the macro must wrap the entire argument
-expression.
+Can be applied to an argument within a formal argument list,
+or in the function body.
+When applied to an argument, the macro must wrap the entire argument expression.
 When used in a function body, the macro must occur in statement position and
 before any code.
+
+When used without arguments, it applies to all arguments of the parent scope.
+In local scope, this means all arguments of the containing function.
+In global (top-level) scope, this means all methods subsequently defined in the current module.
+
+Specialization can reset back to the default by using [`@specialize`](@ref).
 
 ```julia
 function example_function(@nospecialize x)
@@ -52,21 +71,46 @@ function example_function(x, y, z)
     @nospecialize x y
     ...
 end
+
+@nospecialize
+f(y) = [x for x in y]
+@specialize
 ```
 """
-macro nospecialize(var, vars...)
-    if isa(var, Expr) && var.head === :(=)
-        var.head = :kw
+macro nospecialize(vars...)
+    if nfields(vars) === 1
+        # in argument position, need to fix `@nospecialize x=v` to `@nospecialize (kw x v)`
+        var = getfield(vars, 1)
+        if isa(var, Expr) && var.head === :(=)
+            var.head = :kw
+        end
     end
-    Expr(:meta, :nospecialize, var, vars...)
+    return Expr(:meta, :nospecialize, vars...)
+end
+
+"""
+    @specialize
+
+Reset the specialization hint for an argument back to the default.
+For details, see [`@nospecialize`](@ref).
+"""
+macro specialize(vars...)
+    if nfields(vars) === 1
+        # in argument position, need to fix `@specialize x=v` to `@specialize (kw x v)`
+        var = getfield(vars, 1)
+        if isa(var, Expr) && var.head === :(=)
+            var.head = :kw
+        end
+    end
+    return Expr(:meta, :specialize, vars...)
 end
 
 macro _pure_meta()
-    Expr(:meta, :pure)
+    return Expr(:meta, :pure)
 end
 # another version of inlining that propagates an inbounds context
 macro _propagate_inbounds_meta()
-    Expr(:meta, :inline, :propagate_inbounds)
+    return Expr(:meta, :inline, :propagate_inbounds)
 end
 
 """
@@ -84,7 +128,7 @@ julia> convert(Int, 3.0)
 3
 
 julia> convert(Int, 3.5)
-ERROR: InexactError: Int64(Int64, 3.5)
+ERROR: InexactError: Int64(3.5)
 Stacktrace:
 [...]
 ```
@@ -139,7 +183,23 @@ macro eval(mod, ex)
 end
 
 argtail(x, rest...) = rest
+
+"""
+    tail(x::Tuple)::Tuple
+
+Return a `Tuple` consisting of all but the first component of `x`.
+
+# Examples
+```jldoctest
+julia> Base.tail((1,2,3))
+(2, 3)
+
+julia> Base.tail(())
+ERROR: ArgumentError: Cannot call tail on an empty tuple.
+```
+"""
 tail(x::Tuple) = argtail(x...)
+tail(::Tuple{}) = throw(ArgumentError("Cannot call tail on an empty tuple."))
 
 tuple_type_head(T::Type) = (@_pure_meta; fieldtype(T::Type{<:Tuple}, 1))
 
@@ -233,10 +293,28 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
-convert(::Type{T}, x::T) where {T<:Tuple{Any, Vararg{Any}}} = x
-convert(::Type{Tuple{}}, x::Tuple{Any, Vararg{Any}}) = throw(MethodError(convert, (Tuple{}, x)))
-convert(::Type{T}, x::Tuple{Any, Vararg{Any}}) where {T<:Tuple} =
+const AtLeast1 = Tuple{Any, Vararg{Any}}
+
+# converting to empty tuple type
+convert(::Type{Tuple{}}, ::Tuple{}) = ()
+convert(::Type{Tuple{}}, x::AtLeast1) = throw(MethodError(convert, (Tuple{}, x)))
+
+# converting to tuple types with at least one element
+convert(::Type{T}, x::T) where {T<:AtLeast1} = x
+convert(::Type{T}, x::AtLeast1) where {T<:AtLeast1} =
     (convert(tuple_type_head(T), x[1]), convert(tuple_type_tail(T), tail(x))...)
+
+# converting to Vararg tuple types
+convert(::Type{Tuple{Vararg{V}}}, x::Tuple{Vararg{V}}) where {V} = x
+convert(T::Type{Tuple{Vararg{V}}}, x::Tuple) where {V} =
+    (convert(tuple_type_head(T), x[1]), convert(T, tail(x))...)
+
+# used for splatting in `new`
+convert_prefix(::Type{Tuple{}}, x::Tuple) = x
+convert_prefix(::Type{<:AtLeast1}, x::Tuple{}) = x
+convert_prefix(::Type{T}, x::T) where {T<:AtLeast1} = x
+convert_prefix(::Type{T}, x::AtLeast1) where {T<:AtLeast1} =
+    (convert(tuple_type_head(T), x[1]), convert_prefix(tuple_type_tail(T), tail(x))...)
 
 # TODO: the following definitions are equivalent (behaviorally) to the above method
 # I think they may be faster / more efficient for inference,
@@ -293,11 +371,6 @@ oftype(x, y) = convert(typeof(x), y)
 
 unsigned(x::Int) = reinterpret(UInt, x)
 signed(x::UInt) = reinterpret(Int, x)
-
-# conversions used by ccall
-ptr_arg_cconvert(::Type{Ptr{T}}, x) where {T} = cconvert(T, x)
-ptr_arg_unsafe_convert(::Type{Ptr{T}}, x) where {T} = unsafe_convert(T, x)
-ptr_arg_unsafe_convert(::Type{Ptr{Cvoid}}, x) = x
 
 """
     cconvert(T,x)
@@ -371,33 +444,12 @@ If `DataType` `T` does not have a specific size, an error is thrown.
 
 ```jldoctest
 julia> sizeof(AbstractArray)
-ERROR: argument is an abstract type; size is indeterminate
+ERROR: Abstract type AbstractArray does not have a definite size.
 Stacktrace:
 [...]
 ```
 """
 sizeof(x) = Core.sizeof(x)
-
-function append_any(xs...)
-    # used by apply() and quote
-    # must be a separate function from append(), since apply() needs this
-    # exact function.
-    out = Vector{Any}(undef, 4)
-    l = 4
-    i = 1
-    for x in xs
-        for y in x
-            if i > l
-                _growend!(out, 16)
-                l += 16
-            end
-            arrayset(true, out, y, i)
-            i += 1
-        end
-    end
-    _deleteend!(out, l-i+1)
-    out
-end
 
 # simple Array{Any} operations needed for bootstrap
 @eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = arrayset($(Expr(:boundscheck)), A, x, i)
@@ -418,7 +470,7 @@ end
 """
     esc(e)
 
-Only valid in the context of an `Expr` returned from a macro. Prevents the macro hygiene
+Only valid in the context of an [`Expr`](@ref) returned from a macro. Prevents the macro hygiene
 pass from turning embedded variables into gensym variables. See the [Macros](@ref man-macros)
 section of the Metaprogramming chapter of the manual for more details and examples.
 """
@@ -554,7 +606,7 @@ eltype(::Type{SimpleVector}) = Any
 keys(v::SimpleVector) = OneTo(length(v))
 isempty(v::SimpleVector) = (length(v) == 0)
 axes(v::SimpleVector) = (OneTo(length(v)),)
-axes(v::SimpleVector, d) = d <= 1 ? axes(v)[d] : OneTo(1)
+axes(v::SimpleVector, d::Integer) = d <= 1 ? axes(v)[d] : OneTo(1)
 
 function ==(v1::SimpleVector, v2::SimpleVector)
     length(v1)==length(v2) || return false
@@ -603,6 +655,84 @@ function isassigned(v::SimpleVector, i::Int)
     @_gc_preserve_end t
     return x != C_NULL
 end
+
+
+# used by ... syntax to access the `iterate` function from inside the Core._apply implementation
+# must be a separate function from append(), since Core._apply needs this exact function
+function append_any(xs...)
+    @nospecialize
+    lx = length(xs)
+    l = 4
+    i = 1
+    out = Vector{Any}(undef, l)
+    for xi in 1:lx
+        x = @inbounds xs[xi]
+        # handle some common cases, where we know the length
+        # and can inline the iterator because the runtime
+        # has an optimized version of the iterator
+        if x isa SimpleVector
+            lx = length(x)
+            if i + lx - 1 > l
+                ladd = lx > 16 ? lx : 16
+                _growend!(out, ladd)
+                l += ladd
+            end
+            for j in 1:lx
+                y = @inbounds x[j]
+                arrayset(false, out, y, i)
+                i += 1
+            end
+        elseif x isa Tuple
+            lx = nfields(x)
+            if i + lx - 1 > l
+                ladd = lx > 16 ? lx : 16
+                _growend!(out, ladd)
+                l += ladd
+            end
+            for j in 1:lx
+                y = getfield(x, j, false)
+                arrayset(false, out, y, i)
+                i += 1
+            end
+        elseif x isa NamedTuple
+            lx = nfields(x)
+            if i + lx - 1 > l
+                ladd = lx > 16 ? lx : 16
+                _growend!(out, ladd)
+                l += ladd
+            end
+            for j in 1:lx
+                y = getfield(x, j, false)
+                arrayset(false, out, y, i)
+                i += 1
+            end
+        elseif x isa Array
+            lx = length(x)
+            if i + lx - 1 > l
+                ladd = lx > 16 ? lx : 16
+                _growend!(out, ladd)
+                l += ladd
+            end
+            for j in 1:lx
+                y = arrayref(false, x, j)
+                arrayset(false, out, y, i)
+                i += 1
+            end
+        else
+            for y in x
+                if i > l
+                    _growend!(out, 16)
+                    l += 16
+                end
+                arrayset(false, out, y, i)
+                i += 1
+            end
+        end
+    end
+    _deleteend!(out, l - i + 1)
+    return out
+end
+
 
 """
     Colon()
@@ -663,43 +793,6 @@ function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
     inner() = f(args...; kwargs...)
     Core._apply_latest(inner)
 end
-
-# iteration protocol
-
-"""
-    next(iter, state) -> item, state
-
-For a given iterable object and iteration state, return the current item and the next iteration state.
-
-# Examples
-```jldoctest
-julia> next(1:5, 3)
-(3, 4)
-
-julia> next(1:5, 5)
-(5, 6)
-```
-"""
-function next end
-
-"""
-    start(iter) -> state
-
-Get initial iteration state for an iterable object.
-
-# Examples
-```jldoctest
-julia> start(1:5)
-1
-
-julia> start([1;2;3])
-1
-
-julia> start([4;2;3])
-1
-```
-"""
-function start end
 
 """
     isempty(collection) -> Bool
@@ -774,8 +867,8 @@ function peek end
 """
     @__LINE__ -> Int
 
-`@__LINE__` expands to the line number of the location of the macrocall.
-Returns `0` if the line number could not be determined.
+Expand to the line number of the location of the macrocall.
+Return `0` if the line number could not be determined.
 """
 macro __LINE__()
     return __source__.line
@@ -794,7 +887,7 @@ This function provides a fast-path hint for iterator completion.
 This is useful for mutable iterators that want to avoid having elements
 consumed, if they are not going to be exposed to the user (e.g. to check
 for done-ness in `isempty` or `zip`). Mutable iterators that want to
-opt into this feature shoud define an isdone method that returns
+opt into this feature should define an isdone method that returns
 true/false depending on whether the iterator is done or not. Stateless
 iterators need not implement this function. If the result is `missing`,
 callers may go ahead and compute `iterate(x, state...) === nothing` to
@@ -806,72 +899,17 @@ isdone(itr, state...) = missing
     iterate(iter [, state]) -> Union{Nothing, Tuple{Any, Any}}
 
 Advance the iterator to obtain the next element. If no elements
-remain, nothing should be returned. Otherwise, a 2-tuple of the
+remain, `nothing` should be returned. Otherwise, a 2-tuple of the
 next element and the new iteration state should be returned.
 """
 function iterate end
 
-# Compatibility with old iteration protocol
-function iterate(x, state)
-    @_inline_meta
-    done(x, state) && return nothing
-    return next(x, state)
-end
-const old_iterate_line_prev = (@__LINE__)
-iterate(x) = (@_inline_meta; iterate(x, start(x)))
+"""
+    isiterable(T) -> Bool
 
-struct LegacyIterationCompat{I,T,S}
-    done::Bool
-    nextval::T
-    state::S
-    LegacyIterationCompat{I,T,S}() where {I,T,S} = new{I,T,S}(true)
-    LegacyIterationCompat{I,T,S}(nextval::T, state::S) where {I,T,S} = new{I,T,S}(false, nextval, state)
-end
-
-function has_non_default_iterate(T)
-    world = ccall(:jl_get_world_counter, UInt, ())
-    mt = Base._methods(iterate, Tuple{T}, -1, world)
-    # Check if this is the above method
-    if (mt[1][3].file == @__FILE_SYMBOL__) && (mt[1][3].line == old_iterate_line_prev + 1)
-        return false
-    end
-    return true
-end
-
-const compat_start_line_prev = (@__LINE__)
-function start(itr::T) where {T}
-    has_non_default_iterate(T) || throw(MethodError(iterate, (itr,)))
-    y = iterate(itr)
-    y === nothing && return LegacyIterationCompat{T, Union{}, Union{}}()
-    val, state = y
-    LegacyIterationCompat{T, typeof(val), typeof(state)}(val, state)
-end
-
-function next(itr::I, state::LegacyIterationCompat{I,T,S}) where {I,T,S}
-    val, state = state.nextval, state.state
-    y = iterate(itr, state)
-    if y === nothing
-        return (val, LegacyIterationCompat{I,T,S}())
-    end
-    nextval, state = y
-    val, LegacyIterationCompat{I, typeof(nextval), typeof(state)}(nextval, state)
-end
-
-done(itr::I, state::LegacyIterationCompat{I,T,S}) where {I,T,S} = (@_inline_meta; state.done)
-# This is necessary to support the above compatibility layer,
-# eventually, this should just check for applicability of `iterate`
+Test if type `T` is an iterable collection type or not,
+that is whether it has an `iterate` method or not.
+"""
 function isiterable(T)::Bool
-    if !has_non_default_iterate(T)
-        world = ccall(:jl_get_world_counter, UInt, ())
-        mt = Base._methods(start, Tuple{T}, -1, world)
-        # Check if this is the fallback start method
-        if (mt[1][3].file == @__FILE_SYMBOL__) && (mt[1][3].line == compat_start_line_prev + 2)
-            return false
-        end
-    end
-    return true
+    return hasmethod(iterate, Tuple{T})
 end
-
-# This is required to avoid massive performance problems
-# due to the start(s::AbstractString) deprecation.
-iterate(s::AbstractString) = iterate(s, firstindex(s))

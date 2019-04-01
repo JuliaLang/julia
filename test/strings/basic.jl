@@ -29,6 +29,12 @@ using Random
     @test "ab"  !== "abc"
     @test string("ab", 'c') === "abc"
     @test string() === ""
+    @test string(SubString("123", 2)) === "23"
+    @test string("∀∃", SubString("1∀∃", 2)) === "∀∃∀∃"
+    @test string("∀∃", "1∀∃") === "∀∃1∀∃"
+    @test string(SubString("∀∃"), SubString("1∀∃", 2)) === "∀∃∀∃"
+    @test string(s"123") === s"123"
+    @test string("123", 'α', SubString("1∀∃", 2), 'a', "foo") === "123α∀∃afoo"
     codegen_egal_of_strings(x, y) = (x===y, x!==y)
     @test codegen_egal_of_strings(string("ab", 'c'), "abc") === (true, false)
     let strs = ["", "a", "a b c", "до свидания"]
@@ -125,7 +131,7 @@ end
 end
 
 # issue #3597
-@test string(GenericString("Test")[1:1], "X") == "TX"
+@test string(GenericString("Test")[1:1], "X") === "TX"
 
 @testset "parsing Int types" begin
     let b, n
@@ -144,7 +150,7 @@ end
     @test String(sym) == string(Char(0xdcdb))
     @test Meta.lower(Main, sym) === sym
     res = string(Meta.parse(string(Char(0xdcdb)," = 1"),1,raise=false)[1])
-    @test res == """\$(Expr(:error, "invalid character \\\"\\udcdb\\\"\"))"""
+    @test res == """\$(Expr(:error, "invalid character \\\"\\udcdb\\\" near column 1\"))"""
 end
 
 @testset "Symbol and gensym" begin
@@ -461,9 +467,17 @@ end
             end
         end
     end
+    # Check for short three-byte sequences
+    @test isvalid(String, UInt8[0xe0]) == false
+    for (rng, flg) in ((0x00:0x9f, false), (0xa0:0xbf, true), (0xc0:0xff, false))
+        for cont in rng
+            @test isvalid(String, UInt8[0xe0, cont]) == false
+            @test isvalid(String, UInt8[0xe0, cont, 0x80]) == flg
+        end
+    end
     # Check three-byte sequences
-    for r1 in (0xe0:0xec, 0xee:0xef)
-        for byt = r1
+    for r1 in (0xe1:0xec, 0xee:0xef)
+        for byt in r1
             # Check for short sequence
             @test isvalid(String, UInt8[byt]) == false
             for (rng,flg) in ((0x00:0x7f, false), (0x80:0xbf, true), (0xc0:0xff, false))
@@ -509,7 +523,8 @@ end
     end
     # Check seven-byte sequences, should be invalid
     @test isvalid(String, UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]) == false
-
+    @test isvalid(lstrip("blablabla")) == true
+    @test isvalid(SubString(String(UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]), 1,2)) == false
     # invalid Chars
     @test  isvalid('a')
     @test  isvalid('柒')
@@ -570,10 +585,10 @@ end
 
 @testset "repeat" begin
     @inferred repeat(GenericString("x"), 1)
-    @test repeat("xx",3) == repeat("x",6) == repeat('x',6) == repeat(GenericString("x"), 6) == "xxxxxx"
-    @test repeat("αα",3) == repeat("α",6) == repeat('α',6) == repeat(GenericString("α"), 6) == "αααααα"
-    @test repeat("x",1) == repeat('x',1) == "x"^1 == 'x'^1 == GenericString("x")^1 == "x"
-    @test repeat("x",0) == repeat('x',0) == "x"^0 == 'x'^0 == GenericString("x")^0 == ""
+    @test repeat("xx",3) === repeat(SubString("xx", 2),6) === repeat("x",6) === repeat('x',6) === repeat(GenericString("x"), 6) === "xxxxxx"
+    @test repeat("αα",3) === repeat(SubString("αα", 3),6) === repeat("α",6) === repeat('α',6) === repeat(GenericString("α"), 6) === "αααααα"
+    @test repeat("x",1) === repeat('x',1) === "x"^1 == 'x'^1 === GenericString("x")^1 === "x"
+    @test repeat("x",0) === repeat('x',0) === "x"^0 == 'x'^0 === GenericString("x")^0 === ""
 
     for S in ["xxx", "ååå", "∀∀∀", "🍕🍕🍕"]
         c = S[1]
@@ -581,15 +596,15 @@ end
         @test_throws ArgumentError repeat(c, -1)
         @test_throws ArgumentError repeat(s, -1)
         @test_throws ArgumentError repeat(S, -1)
-        @test repeat(c, 0) == ""
-        @test repeat(s, 0) == ""
-        @test repeat(S, 0) == ""
-        @test repeat(c, 1) == s
-        @test repeat(s, 1) == s
-        @test repeat(S, 1) == S
-        @test repeat(c, 3) == S
-        @test repeat(s, 3) == S
-        @test repeat(S, 3) == S*S*S
+        @test repeat(c, 0) === ""
+        @test repeat(s, 0) === ""
+        @test repeat(S, 0) === ""
+        @test repeat(c, 1) === s
+        @test repeat(s, 1) === s
+        @test repeat(S, 1) === S
+        @test repeat(c, 3) === S
+        @test repeat(s, 3) === S
+        @test repeat(S, 3) === S*S*S
     end
 end
 @testset "issue #12495: check that logical indexing attempt raises ArgumentError" begin
@@ -618,6 +633,7 @@ end
         for s in strs
             @test_throws BoundsError thisind(s, -2)
             @test_throws BoundsError thisind(s, -1)
+            @test thisind(s, Int8(0)) == 0
             @test thisind(s, 0) == 0
             @test thisind(s, 1) == 1
             @test thisind(s, 2) == 1
@@ -649,6 +665,7 @@ end
         @test_throws BoundsError prevind(s, 0, 0)
         @test_throws BoundsError prevind(s, 0, 1)
         @test prevind(s, 1) == 0
+        @test prevind(s, Int8(1), Int8(1)) == 0
         @test prevind(s, 1, 1) == 0
         @test prevind(s, 1, 0) == 1
         @test prevind(s, 2) == 1
@@ -680,9 +697,11 @@ end
         @test_throws BoundsError nextind(s, -1, 0)
         @test_throws BoundsError nextind(s, -1, 1)
         @test nextind(s, 0, 2) == 4
+        @test nextind(s, Int8(0), Int8(2)) == 4
         @test nextind(s, 0, 20) == 26
         @test nextind(s, 0, 10) == 15
         @test nextind(s, 1) == 4
+        @test nextind(s, Int8(1)) == 4
         @test nextind(s, 1, 1) == 4
         @test nextind(s, 1, 2) == 6
         @test nextind(s, 1, 9) == 15
@@ -907,6 +926,10 @@ let v = unsafe_wrap(Vector{UInt8}, "abc")
     s = String(v)
     @test_throws BoundsError v[1]
     push!(v, UInt8('x'))
+    @test s == "abc"
+    s = "abc"
+    v = Vector{UInt8}(s)
+    v[1] = 0x40
     @test s == "abc"
 end
 

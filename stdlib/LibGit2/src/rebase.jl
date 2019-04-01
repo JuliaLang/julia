@@ -3,6 +3,7 @@
 function GitRebase(repo::GitRepo, branch::GitAnnotated, upstream::GitAnnotated;
                    onto::Union{GitAnnotated, Nothing}=nothing,
                    opts::RebaseOptions = RebaseOptions())
+    ensure_initialized()
     rebase_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_rebase_init, :libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
@@ -13,6 +14,7 @@ function GitRebase(repo::GitRepo, branch::GitAnnotated, upstream::GitAnnotated;
 end
 
 function count(rb::GitRebase)
+    ensure_initialized()
     return ccall((:git_rebase_operation_entrycount, :libgit2), Csize_t, (Ptr{Cvoid},), rb.ptr)
 end
 
@@ -25,6 +27,7 @@ has not yet been called or iteration over `rb` has not yet begun), return
 `GIT_REBASE_NO_OPERATION`, which is equal to `typemax(Csize_t)`.
 """
 function current(rb::GitRebase)
+    ensure_initialized()
     return ccall((:git_rebase_operation_current, :libgit2), Csize_t, (Ptr{Cvoid},), rb.ptr)
 end
 
@@ -32,6 +35,7 @@ function Base.getindex(rb::GitRebase, i::Integer)
     if !(1 <= i <= count(rb))
         throw(BoundsError(rb, (i,)))
     end
+    ensure_initialized()
     GC.@preserve rb begin
         rb_op_ptr = ccall((:git_rebase_operation_byindex, :libgit2),
                           Ptr{RebaseOperation},
@@ -41,20 +45,21 @@ function Base.getindex(rb::GitRebase, i::Integer)
     return rb_op
 end
 
-function Base.next(rb::GitRebase)
+function Base.iterate(rb::GitRebase, state=nothing)
+    ensure_initialized()
     rb_op_ptr_ptr = Ref{Ptr{RebaseOperation}}(C_NULL)
     GC.@preserve rb begin
-        try
-            @check ccall((:git_rebase_next, :libgit2), Cint,
-                          (Ptr{Ptr{RebaseOperation}}, Ptr{Cvoid}),
-                           rb_op_ptr_ptr, rb.ptr)
-        catch err
-            err.code == Error.ITEROVER && return nothing
-            rethrow(err)
+        err = ccall((:git_rebase_next, :libgit2), Cint,
+                    (Ptr{Ptr{RebaseOperation}}, Ptr{Cvoid}),
+                    rb_op_ptr_ptr, rb.ptr)
+        if err == Cint(Error.GIT_OK)
+            return unsafe_load(rb_op_ptr_ptr[]), nothing
+        elseif err == Cint(Error.ITEROVER)
+            return nothing
+        else
+            throw(GitError(err))
         end
-        rb_op_ptr = unsafe_load(rb_op_ptr_ptr[])
     end
-    return rb_op_ptr
 end
 
 function Base.show(io::IO, rb::GitRebase)
@@ -70,6 +75,7 @@ Commit the current patch to the rebase `rb`, using `sig` as the committer. Is si
 the commit has already been applied.
 """
 function commit(rb::GitRebase, sig::GitSignature)
+    ensure_initialized()
     oid_ptr = Ref(GitHash())
     try
         @check ccall((:git_rebase_commit, :libgit2), Error.Code,
@@ -78,7 +84,7 @@ function commit(rb::GitRebase, sig::GitSignature)
     catch err
         # TODO: return current HEAD instead
         err.code == Error.EAPPLIED && return nothing
-        rethrow(err)
+        rethrow()
     end
     return oid_ptr[]
 end
@@ -93,6 +99,7 @@ the rebase was initiated. Return `0` if the abort is successful,
 rebase had completed), and `-1` for other errors.
 """
 function abort(rb::GitRebase)
+    ensure_initialized()
     return ccall((:git_rebase_abort, :libgit2), Csize_t,
                       (Ptr{Cvoid},), rb.ptr)
 end
@@ -105,6 +112,7 @@ to specify the identity of the user finishing the rebase. Return `0` if the
 rebase finishes successfully, `-1` if there is an error.
 """
 function finish(rb::GitRebase, sig::GitSignature)
+    ensure_initialized()
     return ccall((:git_rebase_finish, :libgit2), Csize_t,
                   (Ptr{Cvoid}, Ptr{SignatureStruct}),
                    rb.ptr, sig.ptr)

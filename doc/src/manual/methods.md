@@ -727,7 +727,7 @@ function matmul(a::AbstractMatrix, b::AbstractMatrix)
     output = similar(b, R, (size(a, 1), size(b, 2)))
     if size(a, 2) > 0
         for j in 1:size(b, 2)
-            for i in 1:size(b, 1)
+            for i in 1:size(a, 1)
                 ## here we don't use `ab = zero(R)`,
                 ## since `R` might be `Any` and `zero(Any)` is not defined
                 ## we also must declare `ab::R` to make the type of `ab` constant in the loop,
@@ -851,10 +851,13 @@ julia> function (p::Polynomial)(x)
            end
            return v
        end
+
+julia> (p::Polynomial)() = p(5)
 ```
 
-Notice that the function is specified by type instead of by name. In the function body, `p` will
-refer to the object that was called. A `Polynomial` can be used as follows:
+Notice that the function is specified by type instead of by name. As with normal functions
+there is a terse syntax form. In the function body, `p` will refer to the object that was
+called. A `Polynomial` can be used as follows:
 
 ```jldoctest polynomial
 julia> p = Polynomial([1,10,100])
@@ -862,6 +865,9 @@ Polynomial{Int64}([1, 10, 100])
 
 julia> p(3)
 931
+
+julia> p()
+2551
 ```
 
 This mechanism is also the key to how type constructors and closures (inner functions that refer

@@ -8,7 +8,7 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
-             bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0zpb,
+             bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
              hastypemax
 
@@ -81,6 +81,14 @@ julia> big"313"
 """
 BigInt(x)
 
+"""
+    ALLOC_OVERFLOW_FUNCTION
+
+A reference that holds a boolean, if true, indicating julia is linked with a patched GMP that
+does not abort on huge allocation and throws OutOfMemoryError instead.
+"""
+const ALLOC_OVERFLOW_FUNCTION = Ref(false)
+
 function __init__()
     try
         if version().major != VERSION.major || bits_per_limb() != BITS_PER_LIMB
@@ -95,11 +103,22 @@ function __init__()
               cglobal(:jl_gc_counted_malloc),
               cglobal(:jl_gc_counted_realloc_with_old_size),
               cglobal(:jl_gc_counted_free_with_size))
-
         ZERO.alloc, ZERO.size, ZERO.d = 0, 0, C_NULL
         ONE.alloc, ONE.size, ONE.d = 1, 1, pointer(_ONE)
     catch ex
         Base.showerror_nostdio(ex, "WARNING: Error during initialization of module GMP")
+    end
+    # This only works with a patched version of GMP, ignore otherwise
+    try
+        ccall((:__gmp_set_alloc_overflow_function, :libgmp), Cvoid,
+              (Ptr{Cvoid},),
+              cglobal(:jl_throw_out_of_memory_error))
+        ALLOC_OVERFLOW_FUNCTION[] = true
+    catch ex
+        # ErrorException("ccall: could not find function...")
+        if typeof(ex) != ErrorException
+            rethrow()
+        end
     end
 end
 
@@ -283,31 +302,22 @@ BigInt(x::Float16) = BigInt(Float64(x))
 BigInt(x::Float32) = BigInt(Float64(x))
 
 function BigInt(x::Integer)
-    if x < 0
-        if typemin(Clong) <= x
-            return BigInt(convert(Clong,x))
-        end
-        b = BigInt(0)
-        shift = 0
-        while x < -1
-            b += BigInt(~UInt32(x&0xffffffff))<<shift
-            x >>= 32
-            shift += 32
-        end
-        return -b-1
-    else
-        if x <= typemax(Culong)
-            return BigInt(convert(Culong,x))
-        end
-        b = BigInt(0)
-        shift = 0
-        while x > 0
-            b += BigInt(UInt32(x&0xffffffff))<<shift
-            x >>>= 32
-            shift += 32
-        end
-        return b
+    x == 0 && return BigInt(Culong(0))
+    nd = ndigits(x, base=2)
+    z = MPZ.realloc2(nd)
+    s = sign(x)
+    s == -1 && (x = -x)
+    x = unsigned(x)
+    size = 0
+    limbnbits = sizeof(Limb) << 3
+    while nd > 0
+        size += 1
+        unsafe_store!(z.d, x % Limb, size)
+        x >>>= limbnbits
+        nd -= limbnbits
     end
+    z.size = s*size
+    z
 end
 
 
@@ -330,7 +340,7 @@ function (::Type{T})(x::BigInt) where T<:Base.BitUnsigned
     if sizeof(T) < sizeof(Limb)
         convert(T, convert(Limb,x))
     else
-        0 <= x.size <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(Symbol(string(T)), T, x))
+        0 <= x.size <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(nameof(T), T, x))
         x % T
     end
 end
@@ -341,9 +351,9 @@ function (::Type{T})(x::BigInt) where T<:Base.BitSigned
         SLimb = typeof(Signed(one(Limb)))
         convert(T, convert(SLimb, x))
     else
-        0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(Symbol(string(T)), T, x))
+        0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(nameof(T), T, x))
         y = x % T
-        ispos(x) ⊻ (y > 0) && throw(InexactError(Symbol(string(T)), T, x)) # catch overflow
+        ispos(x) ⊻ (y > 0) && throw(InexactError(nameof(T), T, x)) # catch overflow
         y
     end
 end
@@ -402,6 +412,8 @@ function big end
 
 big(::Type{<:Integer})  = BigInt
 big(::Type{<:Rational}) = Rational{BigInt}
+
+big(n::Integer) = convert(BigInt, n)
 
 # Binary ops
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
@@ -487,13 +499,13 @@ count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
 
 divrem(x::BigInt, y::BigInt) = MPZ.tdiv_qr(x, y)
 
-cmp(x::BigInt, y::BigInt) = MPZ.cmp(x, y)
-cmp(x::BigInt, y::ClongMax) = MPZ.cmp_si(x, y)
-cmp(x::BigInt, y::CulongMax) = MPZ.cmp_ui(x, y)
+cmp(x::BigInt, y::BigInt) = sign(MPZ.cmp(x, y))
+cmp(x::BigInt, y::ClongMax) = sign(MPZ.cmp_si(x, y))
+cmp(x::BigInt, y::CulongMax) = sign(MPZ.cmp_ui(x, y))
 cmp(x::BigInt, y::Integer) = cmp(x, big(y))
 cmp(x::Integer, y::BigInt) = -cmp(y, x)
 
-cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? -1 : MPZ.cmp_d(x, y)
+cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? -1 : sign(MPZ.cmp_d(x, y))
 cmp(x::CdoubleMax, y::BigInt) = -cmp(y, x)
 
 isqrt(x::BigInt) = MPZ.sqrt(x)
@@ -600,7 +612,7 @@ function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
     base < 0 && return Base._base(Int(base), n, pad, (base>0) & (n.size<0))
     2 <= base <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $base"))
     iszero(n) && pad < 1 && return ""
-    nd1 = ndigits(n, base)
+    nd1 = ndigits(n, base=base)
     nd  = max(nd1, pad)
     sv  = Base.StringVector(nd + isneg(n))
     GC.@preserve sv MPZ.get_str!(pointer(sv) + nd - nd1, base, n)
@@ -618,7 +630,7 @@ function ndigits0zpb(x::BigInt, b::Integer)
         MPZ.sizeinbase(x, b)
     else
         # non-base 2 mpz_sizeinbase might return an answer 1 too big
-        # use property that log(b, x) < ndigits(x, b) <= log(b, x) + 1
+        # use property that log(b, x) < ndigits(x, base=b) <= log(b, x) + 1
         n = MPZ.sizeinbase(x, 2)
         lb = log2(b) # assumed accurate to <1ulp (true for openlibm)
         q,r = divrem(n,lb)
@@ -634,10 +646,11 @@ function ndigits0zpb(x::BigInt, b::Integer)
     end
 end
 
+# Fast paths for nextpow(2, x::BigInt)
 # below, ONE is always left-shifted by at least one digit, so a new BigInt is
 # allocated, which can be safely mutated
-prevpow2(x::BigInt) = -2 <= x <= 2 ? x : flipsign!(ONE << (ndigits(x, 2) - 1), x)
-nextpow2(x::BigInt) = count_ones_abs(x) <= 1 ? x : flipsign!(ONE << ndigits(x, 2), x)
+_prevpow2(x::BigInt) = -2 <= x <= 2 ? x : flipsign!(ONE << (ndigits(x, base=2) - 1), x)
+_nextpow2(x::BigInt) = count_ones_abs(x) <= 1 ? x : flipsign!(ONE << ndigits(x, base=2), x)
 
 Base.checked_abs(x::BigInt) = abs(x)
 Base.checked_neg(x::BigInt) = -x

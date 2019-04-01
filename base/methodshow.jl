@@ -43,12 +43,9 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
 end
 
 function method_argnames(m::Method)
-    if !isdefined(m, :source) && isdefined(m, :generator)
-        return m.generator.argnames
-    end
-    argnames = Vector{Any}(undef, m.nargs)
-    ccall(:jl_fill_argnames, Cvoid, (Any, Any), m.source, argnames)
-    return argnames
+    argnames = ccall(:jl_uncompress_argnames, Vector{Any}, (Any,), m.slot_syms)
+    isempty(argnames) && return argnames
+    return argnames[1:m.nargs]
 end
 
 function arg_decl_parts(m::Method)
@@ -60,8 +57,8 @@ function arg_decl_parts(m::Method)
     end
     file = m.file
     line = m.line
-    if isdefined(m, :source) || isdefined(m, :generator)
-        argnames = method_argnames(m)
+    argnames = method_argnames(m)
+    if length(argnames) >= m.nargs
         show_env = ImmutableDict{Symbol, Any}()
         for t in tv
             show_env = ImmutableDict(show_env, :unionall_env => t)
@@ -74,19 +71,23 @@ function arg_decl_parts(m::Method)
     return tv, decls, file, line
 end
 
+const empty_sym = Symbol("")
+
 function kwarg_decl(m::Method, kwtype::DataType)
     sig = rewrap_unionall(Tuple{kwtype, Any, unwrap_unionall(m.sig).parameters...}, m.sig)
-    kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, typemax(UInt))
+    kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, get_world_counter())
     if kwli !== nothing
         kwli = kwli::Method
-        src = uncompressed_ast(kwli)
-        kws = filter(x -> !('#' in string(x)), src.slotnames[(kwli.nargs + 1):end])
+        slotnames = ccall(:jl_uncompress_argnames, Vector{Any}, (Any,), kwli.slot_syms)
+        kws = filter(x -> !(x === empty_sym || '#' in string(x)), slotnames[(kwli.nargs + 1):end])
         # ensure the kwarg... is always printed last. The order of the arguments are not
         # necessarily the same as defined in the function
         i = findfirst(x -> endswith(string(x), "..."), kws)
-        i === nothing && return kws
-        push!(kws, kws[i])
-        return deleteat!(kws, i)
+        if i !== nothing
+            push!(kws, kws[i])
+            deleteat!(kws, i)
+        end
+        return kws
     end
     return ()
 end
@@ -97,10 +98,25 @@ function show_method_params(io::IO, tv)
         if length(tv) == 1
             show(io, tv[1])
         else
-            show_delim_array(io, tv, '{', ',', '}', false)
+            print(io, "{")
+            for i = 1:length(tv)
+                if i > 1
+                    print(io, ", ")
+                end
+                x = tv[i]
+                show(io, x)
+                io = IOContext(io, :unionall_env => x)
+            end
+            print(io, "}")
         end
     end
 end
+
+# In case the line numbers in the source code have changed since the code was compiled,
+# allow packages to set a callback function that corrects them.
+# (Used by Revise and perhaps other packages.)
+default_methodloc(method::Method) = method.file, method.line
+const methodloc_callback = Ref{Function}(default_methodloc)
 
 function show(io::IO, m::Method; kwtype::Union{DataType, Nothing}=nothing)
     tv, decls, file, line = arg_decl_parts(m)
@@ -140,6 +156,10 @@ function show(io::IO, m::Method; kwtype::Union{DataType, Nothing}=nothing)
     show_method_params(io, tv)
     print(io, " in ", m.module)
     if line > 0
+        try
+            file, line = invokelatest(methodloc_callback[], m)
+        catch
+        end
         print(io, " at ", file, ":", line)
     end
 end
@@ -163,12 +183,17 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
 
     resize!(LAST_SHOWN_LINE_INFOS, 0)
     for meth in ms
-       if max==-1 || n<max
+        if max==-1 || n<max
             n += 1
             println(io)
             print(io, "[$(n)] ")
             show(io, meth; kwtype=kwtype)
-            push!(LAST_SHOWN_LINE_INFOS, (string(meth.file), meth.line))
+            file, line = meth.file, meth.line
+            try
+                file, line = invokelatest(methodloc_callback[], meth)
+            catch
+            end
+            push!(LAST_SHOWN_LINE_INFOS, (string(file), line))
         else
             rest += 1
             last = meth
@@ -257,11 +282,6 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Union{DataType, Noth
     else
         print(io, "(", d1[1], "::<b>", d1[2], "</b>)")
     end
-    if !isempty(tv)
-        print(io,"<i>")
-        show_delim_array(io, tv, '{', ',', '}', false)
-        print(io,"</i>")
-    end
     print(io, "(")
     join(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
                       for d in decls[2:end]], ", ", ", ")
@@ -274,8 +294,17 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Union{DataType, Noth
         end
     end
     print(io, ")")
+    if !isempty(tv)
+        print(io,"<i>")
+        show_method_params(io, tv)
+        print(io,"</i>")
+    end
     print(io, " in ", m.module)
     if line > 0
+        try
+            file, line = invokelatest(methodloc_callback[], m)
+        catch
+        end
         u = url(m)
         if isempty(u)
             print(io, " at ", file, ":", line)
@@ -314,12 +343,17 @@ function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
         first = false
         print(io, "[$(i)] ")
         show(io, m)
-        push!(LAST_SHOWN_LINE_INFOS, (string(m.file), m.line))
+        file, line = m.file, m.line
+        try
+            file, line = invokelatest(methodloc_callback[], m)
+        catch
+        end
+        push!(LAST_SHOWN_LINE_INFOS, (string(file), line))
     end
 end
 
 function show(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
-    print(io, summary(mt))
+    summary(io, mt)
     if !isempty(mt)
         print(io, ":<ul>")
         for d in mt

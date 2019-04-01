@@ -1,4 +1,6 @@
 #!/bin/sh
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Usage: fixup-rpath.sh <patchelf path> <dir to process> <build libdir>
 
 if [ $# -ne 3 ]; then

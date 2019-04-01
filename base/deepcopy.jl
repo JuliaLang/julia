@@ -27,7 +27,7 @@ updated as appropriate before returning.
 """
 deepcopy(x) = deepcopy_internal(x, IdDict())::typeof(x)
 
-deepcopy_internal(x::Union{Symbol,Core.MethodInstance,Method,GlobalRef,DataType,Union,Task},
+deepcopy_internal(x::Union{Symbol,Core.MethodInstance,Method,GlobalRef,DataType,Union,UnionAll,Task},
                   stackdict::IdDict) = x
 deepcopy_internal(x::Tuple, stackdict::IdDict) =
     ntuple(i->deepcopy_internal(x[i], stackdict), length(x))
@@ -87,7 +87,7 @@ function _deepcopy_array_t(@nospecialize(x), T, stackdict::IdDict)
     for i = 1:(length(x)::Int)
         if ccall(:jl_array_isassigned, Cint, (Any, Csize_t), x, i-1) != 0
             xi = ccall(:jl_arrayref, Any, (Any, Csize_t), x, i-1)
-            if !isbitstype(typeof(xi))
+            if !isbits(xi)
                 xi = deepcopy_internal(xi, stackdict)
             end
             ccall(:jl_arrayset, Cvoid, (Any, Any, Csize_t), dest, xi, i-1)

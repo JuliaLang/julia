@@ -315,10 +315,12 @@ main_ex = quote
         seekstart(s)
         ds = Serializer(s)
         local g2 = deserialize(ds)
-        $Test.@test g2 !== g
-        $Test.@test g2() == :magic_token_anon_fun_test
-        $Test.@test g2() == :magic_token_anon_fun_test
-        $Test.@test deserialize(ds) === g2
+        Base.invokelatest() do
+            $Test.@test g2 !== g
+            $Test.@test g2() == :magic_token_anon_fun_test
+            $Test.@test g2() == :magic_token_anon_fun_test
+            $Test.@test deserialize(ds) === g2
+        end
 
         # issue #21793
         y = x -> (() -> x)
@@ -326,8 +328,10 @@ main_ex = quote
         serialize(s, y)
         seekstart(s)
         y2 = deserialize(s)
-        x2 = y2(2)
-        $Test.@test x2() == 2
+        Base.invokelatest() do
+            x2 = y2(2)
+            $Test.@test x2() == 2
+        end
     end
 end
 # This needs to be run on `Main` since the serializer treats it differently.
@@ -337,7 +341,7 @@ Core.eval(Main, main_ex)
 create_serialization_stream() do s # user-defined type array
     f = () -> begin task_local_storage(:v, 2); return 1+1 end
     t = Task(f)
-    Base._wait(schedule(t))
+    Base.wait(schedule(t))
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
@@ -349,7 +353,7 @@ end
 struct MyErrorTypeTest <: Exception end
 create_serialization_stream() do s # user-defined type array
     t = Task(()->throw(MyErrorTypeTest()))
-    @test_throws MyErrorTypeTest Base._wait(schedule(t))
+    @test_throws MyErrorTypeTest Base.wait(schedule(t))
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
@@ -531,4 +535,11 @@ let io = IOBuffer()
     seekstart(io)
     f2 = deserialize(io)
     @test f2(1) === 1f0
+end
+
+# using a filename; #30151
+let f = tempname(), x = [rand(2,2), :x, "hello"]
+    serialize(f, x)
+    @test deserialize(f) == x
+    rm(f)
 end

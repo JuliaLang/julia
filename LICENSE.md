@@ -3,7 +3,7 @@ of the compiler (the contents of src/), most of the standard library (base/),
 and some utilities (most of the rest of the files in this repository). See below
 for exceptions.
 
-> Copyright (c) 2009-2018: Jeff Bezanson, Stefan Karpinski, Viral B. Shah,
+> Copyright (c) 2009-2019: Jeff Bezanson, Stefan Karpinski, Viral B. Shah,
 > and other contributors:
 >
 > https://github.com/JuliaLang/julia/contributors
@@ -79,7 +79,6 @@ Julia's build process uses the following external tools:
 Julia bundles the following external programs and libraries on some platforms:
 
 - [7-Zip](http://www.7-zip.org/license.txt)
-- [BUSYBOX](https://github.com/rmyorston/busybox-w32/blob/master/LICENSE)
 - [ZLIB](http://zlib.net/zlib_license.html)
 - [LIBEXPAT](http://expat.cvs.sourceforge.net/viewvc/expat/expat/README)
 

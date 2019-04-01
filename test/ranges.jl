@@ -1,13 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Dates, Random
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
+isdefined(Main, :PhysQuantities) || @eval Main include("testhelpers/PhysQuantities.jl")
+using .Main.PhysQuantities
 
 # Compare precision in a manner sensitive to subnormals, which lose
 # precision compared to widening.
 function cmp_sn(w, hi, lo, slopbits=0)
     if !isfinite(hi)
-        if abs(w) > realmax(typeof(hi))
+        if abs(w) > floatmax(typeof(hi))
             return isinf(hi) && sign(w) == sign(hi)
         end
         if isnan(w) && isnan(hi)
@@ -121,7 +122,7 @@ astuple(x) = (x.hi, x.lo)
 
 function cmp_sn2(w, hi, lo, slopbits=0)
     if !isfinite(hi)
-        if abs(w) > realmax(typeof(hi))
+        if abs(w) > floatmax(typeof(hi))
             return isinf(hi) && sign(w) == sign(hi)
         end
         if isnan(w) && isnan(hi)
@@ -187,10 +188,10 @@ end
     @test isnan(Float64(x0/0))
     @test isnan(Float64(x0/0.0))
 
-    x = Base.TwicePrecision(Main.TestHelpers.PhysQuantity{1}(4.0))
-    @test x.hi*2 === Main.TestHelpers.PhysQuantity{1}(8.0)
+    x = Base.TwicePrecision(PhysQuantity{1}(4.0))
+    @test x.hi*2 === PhysQuantity{1}(8.0)
     @test_throws ErrorException("Int is incommensurate with PhysQuantity") x*2   # not a MethodError for convert
-    @test x.hi/2 === Main.TestHelpers.PhysQuantity{1}(2.0)
+    @test x.hi/2 === PhysQuantity{1}(2.0)
     @test_throws ErrorException("Int is incommensurate with PhysQuantity") x/2
 end
 @testset "ranges" begin
@@ -255,6 +256,8 @@ end
         @test length(1:0) == 0
         @test length(0.0:-0.5) == 0
         @test length(1:2:0) == 0
+        @test length(Char(0):Char(0x001fffff)) == 2097152
+        @test length(typemax(UInt64)//one(UInt64):1:typemax(UInt64)//one(UInt64)) == 1
     end
     @testset "findall(::Base.Fix2{typeof(in)}, ::Array)" begin
         @test findall(in(3:20), [5.2, 3.3]) == findall(in(Vector(3:20)), [5.2, 3.3])
@@ -265,6 +268,12 @@ end
             r = 15:-2:-38
             @test findall(in(span), r) == 1:6
         end
+    end
+    @testset "findfirst" begin
+        @test findfirst(isequal(7), 1:2:10) == 4
+        @test findfirst(==(7), 1:2:10) == 4
+        @test findfirst(==(10), 1:2:10) == nothing
+        @test findfirst(==(11), 1:2:10) == nothing
     end
     @testset "reverse" begin
         @test reverse(reverse(1:10)) == 1:10
@@ -397,9 +406,18 @@ end
 @test length(1:4:typemax(Int)) == div(typemax(Int),4) + 1
 
 @testset "overflow in length" begin
-    @test_throws OverflowError length(0:typemax(Int))
-    @test_throws OverflowError length(typemin(Int):typemax(Int))
-    @test_throws OverflowError length(-1:typemax(Int)-1)
+    Tset = Int === Int64 ? (Int,UInt,Int128,UInt128) :
+                           (Int,UInt,Int64,UInt64,Int128, UInt128)
+    for T in Tset
+        @test_throws OverflowError length(zero(T):typemax(T))
+        @test_throws OverflowError length(typemin(T):typemax(T))
+        @test_throws OverflowError length(zero(T):one(T):typemax(T))
+        @test_throws OverflowError length(typemin(T):one(T):typemax(T))
+        if T <: Signed
+            @test_throws OverflowError length(-one(T):typemax(T)-one(T))
+            @test_throws OverflowError length(-one(T):one(T):typemax(T)-one(T))
+        end
+    end
 end
 @testset "loops involving typemin/typemax" begin
     n = 0
@@ -670,11 +688,11 @@ end
 
 @testset "range with very large endpoints for type $T" for T = (Float32, Float64)
     largeint = Int(min(maxintfloat(T), typemax(Int)))
-    a = realmax()
+    a = floatmax()
     for i = 1:5
         @test [range(a, stop=a, length=1);] == [a]
         @test [range(-a, stop=-a, length=1);] == [-a]
-        b = realmax()
+        b = floatmax()
         for j = 1:5
             @test [range(-a, stop=b, length=0);] == []
             @test [range(-a, stop=b, length=2);] == [-a,b]
@@ -714,7 +732,7 @@ end
 @testset "comparing and hashing ranges" begin
     Rs = AbstractRange[1:1, 1:1:1, 1:2, 1:1:2,
                        map(Int32,1:3:17), map(Int64,1:3:17), 1:0, 1:-1:0, 17:-3:0,
-                       0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),
+                       0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),map(Float32,LinRange(0.0, 1.0, 11)),
                        1.0:eps():1.0 .+ 10eps(), 9007199254740990.:1.0:9007199254740994,
                        range(0, stop=1, length=20), map(Float32, range(0, stop=1, length=20))]
     for r in Rs
@@ -1143,6 +1161,15 @@ end
         @test findall(in(2:(length(r) - 1)), r) === 2:(length(r) - 1)
         @test findall(in(r), 2:(length(r) - 1)) === 1:(length(r) - 2)
     end
+    @test convert(Base.OneTo, 1:2) === Base.OneTo{Int}(2)
+    @test_throws ArgumentError("first element must be 1, got 2") convert(Base.OneTo, 2:3)
+    @test_throws ArgumentError("step must be 1, got 2") convert(Base.OneTo, 1:2:5)
+    @test Base.OneTo(1:2) === Base.OneTo{Int}(2)
+    @test Base.OneTo(1:1:2) === Base.OneTo{Int}(2)
+    @test Base.OneTo{Int32}(1:2) === Base.OneTo{Int32}(2)
+    @test Base.OneTo(Int32(1):Int32(2)) === Base.OneTo{Int32}(2)
+    @test Base.OneTo{Int16}(3.0) === Base.OneTo{Int16}(3)
+    @test_throws InexactError(:Int16, Int16, 3.2) Base.OneTo{Int16}(3.2)
 end
 
 @testset "range of other types" begin
@@ -1215,8 +1242,9 @@ Base.rem(x, y::NotReal) = rem(x, y.val)
 Base.isless(x, y::NotReal) = isless(x, y.val)
 @test (:)(1, NotReal(1), 5) isa StepRange{Int,NotReal}
 
-isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using .Main.TestHelpers: Furlong
+isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
+using .Main.Furlongs
+
 @testset "dimensional correctness" begin
     @test length(Vector(Furlong(2):Furlong(10))) == 9
     @test length(range(Furlong(2), length=9)) == 9
@@ -1359,4 +1387,83 @@ end # module NonStandardIntegerRangeTest
             end
         end
     end
+end
+
+@testset "constant-valued ranges (issues #10391 and #29052)" begin
+    for r in ((1:4), (1:1:4), (1.0:4.0))
+        if eltype(r) === Int
+            @test_broken @inferred(0 * r) == [0.0, 0.0, 0.0, 0.0]
+            @test_broken @inferred(0 .* r) == [0.0, 0.0, 0.0, 0.0]
+            @test_broken @inferred(r + (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
+            @test_broken @inferred(r .+ (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
+        else
+            @test @inferred(0 * r) == [0.0, 0.0, 0.0, 0.0]
+            @test @inferred(0 .* r) == [0.0, 0.0, 0.0, 0.0]
+            @test @inferred(r + (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
+            @test @inferred(r .+ (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
+        end
+        @test @inferred(r .+ (4.0:-1:1)) == [5.0, 5.0, 5.0, 5.0]
+        @test @inferred(0.0 * r) == [0.0, 0.0, 0.0, 0.0]
+        @test @inferred(0.0 .* r) == [0.0, 0.0, 0.0, 0.0]
+        @test @inferred(r / Inf) == [0.0, 0.0, 0.0, 0.0]
+        @test @inferred(r ./ Inf) == [0.0, 0.0, 0.0, 0.0]
+    end
+
+    @test_broken @inferred(range(0, step=0, length=4)) == [0, 0, 0, 0]
+    @test @inferred(range(0, stop=0, length=4)) == [0, 0, 0, 0]
+    @test @inferred(range(0.0, step=0.0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+    @test @inferred(range(0.0, stop=0.0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+    @test @inferred(range(0, step=0.0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+    @test @inferred(range(0.0, step=0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+    @test @inferred(range(0, stop=0.0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+    @test @inferred(range(0.0, stop=0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+
+    z4 = 0.0 * (1:4)
+    @test @inferred(z4 .+ (1:4)) === 1.0:1.0:4.0
+    @test @inferred(z4 .+ z4) === z4
+end
+
+@testset "getindex" begin
+    @test getindex((typemax(UInt64)//one(UInt64):typemax(UInt64)//one(UInt64)), 1) == typemax(UInt64)//one(UInt64)
+end
+
+@testset "Issue #30006" begin
+    @test Base.Slice(Base.OneTo(5))[Int32(1)] == Int32(1)
+    @test Base.Slice(Base.OneTo(3))[Int8(2)] == Int8(2)
+    @test Base.Slice(1:10)[Int32(2)] == Int32(2)
+    @test Base.Slice(1:10)[Int8(2)] == Int8(2)
+end
+
+@testset "allocation of TwicePrecision call" begin
+    0:286.493442:360
+    0:286:360
+    @test @allocated(0:286.493442:360) == 0
+    @test @allocated(0:286:360) == 0
+end
+
+@testset "range with start and stop" begin
+    for starts in [-1, 0, 1, 10]
+        for stops in [-2, 0, 2, 100]
+            for lengths in [2, 10, 100]
+                if stops >= starts
+                    @test range(starts, stops, length=lengths) == range(starts, stop=stops, length=lengths)
+                end
+            end
+            for steps in [0.01, 1, 2]
+                @test range(starts, stops, step=steps) == range(starts, stop=stops, step=steps)
+            end
+        end
+    end
+    # require a keyword arg
+    @test_throws ArgumentError range(1, 100)
+end
+
+@testset "Reverse empty ranges" begin
+    @test reverse(1:0) === 0:-1:1
+    @test reverse(Base.OneTo(0)) === 0:-1:1
+    # Almost `1.0:-1.0:2.0`, only different is the step which is
+    # `Base.TwicePrecision(-1.0, 0.0)`
+    @test reverse(1.0:0.0) === StepRangeLen(Base.TwicePrecision(1.0, 0.0),
+                                            Base.TwicePrecision(-1.0, -0.0), 0)
+    @test reverse(reverse(1.0:0.0)) === 1.0:0.0
 end

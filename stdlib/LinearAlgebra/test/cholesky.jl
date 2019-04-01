@@ -39,7 +39,7 @@ end
     n1 = div(n, 2)
     n2 = 2*n1
 
-    srand(1234321)
+    Random.seed!(1234321)
 
     areal = randn(n,n)/2
     aimg  = randn(n,n)/2
@@ -73,7 +73,7 @@ end
 
         #these tests were failing on 64-bit linux when inside the inner loop
         #for eltya = ComplexF32 and eltyb = Int. The E[i,j] had NaN32 elements
-        #but only with srand(1234321) set before the loops.
+        #but only with Random.seed!(1234321) set before the loops.
         E = abs.(apd - r'*r)
         for i=1:n, j=1:n
             @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
@@ -269,6 +269,67 @@ end
 
 @testset "fail for non-BLAS element types" begin
     @test_throws ArgumentError cholesky!(Hermitian(rand(Float16, 5,5)), Val(true))
+end
+
+@testset "cholesky Diagonal" begin
+    # real
+    d = abs.(randn(3)) .+ 0.1
+    D = Diagonal(d)
+    CD = cholesky(D)
+    @test CD isa Cholesky{Float64}
+    @test CD.U isa UpperTriangular{Float64}
+    @test CD.U == Diagonal(.√d)
+    @test CD.info == 0
+
+    # real, failing
+    @test_throws PosDefException cholesky(Diagonal([1.0, -2.0]))
+    Dnpd = cholesky(Diagonal([1.0, -2.0]); check = false)
+    @test Dnpd.info == 2
+
+    # complex
+    d = cis.(rand(3) .* 2*π)
+    d .*= abs.(randn(3) .+ 0.1)
+    D = Diagonal(d)
+    CD = cholesky(D)
+    @test CD isa Cholesky{Complex{Float64}}
+    @test CD.U isa UpperTriangular{Complex{Float64}}
+    @test CD.U == Diagonal(.√d)
+    @test CD.info == 0
+
+    # complex, failing
+    D[2, 2] = 0.0 + 0im
+    @test_throws PosDefException cholesky(D)
+    Dnpd = cholesky(D; check = false)
+    @test Dnpd.info == 2
+
+    # InexactError for Int
+    @test_throws InexactError cholesky!(Diagonal([2, 1]))
+end
+
+@testset "constructor with non-BlasInt arguments" begin
+
+    x = rand(5,5)
+    chol = cholesky(x'x)
+
+    factors, uplo, info = chol.factors, chol.uplo, chol.info
+
+    @test Cholesky(factors, uplo, Int32(info)) == chol
+    @test Cholesky(factors, uplo, Int64(info)) == chol
+
+    cholp = cholesky(x'x, Val(true))
+
+    factors, uplo, piv, rank, tol, info =
+        cholp.factors, cholp.uplo, cholp.piv, cholp.rank, cholp.tol, cholp.info
+
+    @test CholeskyPivoted(factors, uplo, Vector{Int32}(piv), rank, tol, info) == cholp
+    @test CholeskyPivoted(factors, uplo, Vector{Int64}(piv), rank, tol, info) == cholp
+
+    @test CholeskyPivoted(factors, uplo, piv, Int32(rank), tol, info) == cholp
+    @test CholeskyPivoted(factors, uplo, piv, Int64(rank), tol, info) == cholp
+
+    @test CholeskyPivoted(factors, uplo, piv, rank, tol, Int32(info)) == cholp
+    @test CholeskyPivoted(factors, uplo, piv, rank, tol, Int64(info)) == cholp
+
 end
 
 end # module TestCholesky

@@ -19,7 +19,7 @@ nodes as well as PhiC nodes and Upsilon nodes (the latter two are only used for 
 
 ### Phi nodes and Pi nodes
 
-Phi nodes are part of generic SSA abstraction (see the link above if you're not familar with
+Phi nodes are part of generic SSA abstraction (see the link above if you're not familiar with
 the concept). In the Julia IR, these nodes are represented as:
 ```
 struct PhiNode
@@ -151,7 +151,7 @@ catch blocks are considered to have an invisible control flow edge
 from outside the function. As a result, no SSA value dominates the
 catch blocks, and all incoming values have to come through a `φᶜ` node.
 
-# Main SSA data structure
+## Main SSA data structure
 
 The main `SSAIR` data structure is worthy of discussion. It draws inspiration from LLVM and Webkit's B3 IR.
 The core of the data structure is a flat vector of statements. Each statement is implicitly assigned
@@ -184,5 +184,5 @@ and return the new index of the node, as well as the node itself. It is legal at
 as well as make any modifications or deletions to the IR (insertions are disallowed however).
 
 The idea behind this arrangement is that, since the optimization passes need to touch the corresponding memory anyway,
-and incur the corresponding memory access penalty, performing the extra housekeeping should have comparitively little
+and incur the corresponding memory access penalty, performing the extra housekeeping should have comparatively little
 overhead (and save the overhead of maintaining these data structures during IR modification).

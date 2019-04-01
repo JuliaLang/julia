@@ -64,7 +64,7 @@ specified, other workers will connect to this worker at the specified `bind_addr
 `port`.
 
 `count` is the number of workers to be launched on the specified host. If specified as
-`:auto` it will launch as many workers as the number of cores on the specific host.
+`:auto` it will launch as many workers as the number of CPU threads on the specific host.
 
 Keyword arguments:
 
@@ -124,7 +124,7 @@ function launch(manager::SSHManager, params::Dict, launched::Array, launch_ntfy:
     # Wait for all launches to complete.
     launch_tasks = Vector{Any}(undef, length(manager.machines))
 
-    for (i,(machine, cnt)) in enumerate(manager.machines)
+    for (i, (machine, cnt)) in enumerate(manager.machines)
         let machine=machine, cnt=cnt
             launch_tasks[i] = @async try
                     launch_on_machine(manager, machine, cnt, params, launched, launch_ntfy)
@@ -135,7 +135,7 @@ function launch(manager::SSHManager, params::Dict, launched::Array, launch_ntfy:
     end
 
     for t in launch_tasks
-        wait(t)
+        wait(t::Task)
     end
 
     notify(launch_ntfy)
@@ -287,20 +287,20 @@ end
 
 # LocalManager
 struct LocalManager <: ClusterManager
-    np::Integer
+    np::Int
     restrict::Bool  # Restrict binding to 127.0.0.1 only
 end
 
 """
     addprocs(; kwargs...) -> List of process identifiers
 
-Equivalent to `addprocs(Sys.CPU_CORES; kwargs...)`
+Equivalent to `addprocs(Sys.CPU_THREADS; kwargs...)`
 
 Note that workers do not run a `.julia/config/startup.jl` startup script, nor do they synchronize
 their global state (such as global variables, new method definitions, and loaded modules) with any
 of the other running processes.
 """
-addprocs(; kwargs...) = addprocs(Sys.CPU_CORES; kwargs...)
+addprocs(; kwargs...) = addprocs(Sys.CPU_THREADS; kwargs...)
 
 """
     addprocs(np::Integer; restrict=true, kwargs...) -> List of process identifiers
@@ -373,7 +373,7 @@ manage
 struct DefaultClusterManager <: ClusterManager
 end
 
-const tunnel_hosts_map = Dict{AbstractString, Semaphore}()
+const tunnel_hosts_map = Dict{String, Semaphore}()
 
 """
     connect(manager::ClusterManager, pid::Int, config::WorkerConfig) -> (instrm::IO, outstrm::IO)

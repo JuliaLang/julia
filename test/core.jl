@@ -27,6 +27,9 @@ f47(x::Vector{Vector{T}}) where {T} = 0
 @test_throws TypeError TypeVar(:T) <: Any
 @test_throws TypeError TypeVar(:T) >: Any
 
+# issue #28673
+@test_throws TypeError Array{2}(undef, 1, 2)
+
 # issue #12939
 module Issue12939
 abstract type Abs; end
@@ -140,6 +143,10 @@ end
 # typejoin with Vararg{T,N}
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Int,Int,Int}) === Tuple{Int,Int,Vararg{Int}}
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Vararg{Int}}) === Tuple{Vararg{Int}}
+
+@test typejoin(NTuple{3,Tuple}, NTuple{2,T} where T) == Tuple{Any,Any,Vararg{Tuple}}
+@test typejoin(Tuple{Tuple{T, T, Any}} where T, Tuple{T, T, Vector{T}} where T) == Tuple{Any,Vararg{Any}}
+@test typejoin(Tuple{T, T, T} where T, Tuple{T, T, Vector{T}} where T) == Tuple{Any,Any,Any}
 
 # issue #26321
 struct T26321{N,S<:NTuple{N}}
@@ -629,7 +636,8 @@ let
     @test !isdefined(a, :foo)
     @test !isdefined(2, :a)
 
-    @test_throws TypeError isdefined(2)
+    @test_throws TypeError isdefined(Base, 2)
+    @test_throws ArgumentError isdefined(2)
 end
 
 let
@@ -1066,9 +1074,9 @@ let
     strct = LoadError("yofile", 0, "bad")
     @test nfields(strct) == 3 # sanity test
     @test_throws BoundsError(strct, 10) getfield(strct, 10)
-    @test_throws ErrorException("type LoadError is immutable") setfield!(strct, 0, "")
-    @test_throws ErrorException("type LoadError is immutable") setfield!(strct, 4, "")
-    @test_throws ErrorException("type is immutable") setfield!(strct, :line, 0)
+    @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, 0, "")
+    @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, 4, "")
+    @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, :line, 0)
     @test strct.file == "yofile"
     @test strct.line === 0
     @test strct.error == "bad"
@@ -1077,13 +1085,13 @@ let
     @test getfield(strct, 3) == "bad"
 
     mstrct = TestMutable("melm", 1, nothing)
-    Base.setproperty!(mstrct, :line, 8.0)
+    @test Base.setproperty!(mstrct, :line, 8.0) === 8
     @test mstrct.line === 8
     @test_throws TypeError(:setfield!, "", Int, 8.0) setfield!(mstrct, :line, 8.0)
     @test_throws TypeError(:setfield!, "", Int, 8.0) setfield!(mstrct, 2, 8.0)
-    setfield!(mstrct, 3, "hi")
+    @test setfield!(mstrct, 3, "hi") == "hi"
     @test mstrct.error == "hi"
-    setfield!(mstrct, 1, "yo")
+    @test setfield!(mstrct, 1, "yo") == "yo"
     @test mstrct.file == "yo"
     @test_throws BoundsError(mstrct, 10) getfield(mstrct, 10)
     @test_throws BoundsError(mstrct, 0) setfield!(mstrct, 0, "")
@@ -1095,7 +1103,7 @@ function Base.getproperty(mstrct::TestMutable, p::Symbol)
     return (p, getfield(mstrct, :error))
 end
 function Base.setproperty!(mstrct::TestMutable, p::Symbol, v)
-    setfield!(mstrct, :error, (p, v))
+    return setfield!(mstrct, :error, (p, v))
 end
 
 let
@@ -1113,6 +1121,20 @@ let
     @test mstrct.bar === (:bar, (:line, 8.0))
     @test mstrct.error === (:error, (:line, 8.0))
 end
+
+struct S29761
+    x
+end
+function S29761_world(i)
+    x = S29761(i)
+    @eval function Base.getproperty(x::S29761, sym::Symbol)
+        return sym => getfield(x, sym)
+    end
+    # ensure world updates are handled correctly for simple x.y expressions:
+    return x.x, @eval($x.x), x.x
+end
+@test S29761_world(1) == (1, :x => 1, 1)
+
 
 # allow typevar in Union to match as long as the arguments contain
 # sufficient information
@@ -2261,15 +2283,18 @@ a7652 = A7652(0)
 t_a7652 = A7652
 f7652() = fieldtype(t_a7652, :a) <: Int
 @test f7652() == (fieldtype(A7652, :a) <: Int) == true
+
 g7652() = fieldtype(DataType, :types)
 @test g7652() == fieldtype(DataType, :types) == Core.SimpleVector
 @test fieldtype(t_a7652, 1) == Int
+
 h7652() = setfield!(a7652, 1, 2)
-h7652()
-@test a7652.a == 2
+@test h7652() === 2
+@test a7652.a === 2
+
 i7652() = Base.setproperty!(a7652, :a, 3.0)
-i7652()
-@test a7652.a == 3
+@test i7652() === 3
+@test a7652.a === 3
 
 # issue #7679
 @test map(f->f(), Any[ ()->i for i=1:3 ]) == Any[1,2,3]
@@ -2412,6 +2437,20 @@ const T24460 = Tuple{T,T} where T
 g24460() = invoke(f24460, T24460, 1, 2)
 @test @inferred(g24460()) === 2.0
 
+# issue #30679
+@noinline function f30679(::DataType)
+    b = IOBuffer()
+    write(b, 0x00)
+    2
+end
+@noinline function f30679(t::Type{Int})
+    x = invoke(f30679, Tuple{DataType}, t)
+    b = IOBuffer()
+    write(b, 0x00)
+    return x + 40
+end
+@test f30679(Int) == 42
+
 call_lambda1() = (()->x)(1)
 call_lambda2() = ((x)->x)()
 call_lambda3() = ((x)->x)(1,2)
@@ -2436,18 +2475,6 @@ let x = [1,2,3]
     @test (ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), Tuple{Int16,Tuple{Cvoid},Int8,Tuple{},Int,Cvoid,Int}, x)::Tuple)[[2,4,5,6,7]] === ((nothing,),(),2,nothing,3)
 end
 
-# sig 2 is SIGINT per the POSIX.1-1990 standard
-if !Sys.iswindows()
-    ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 0)
-    @test_throws InterruptException begin
-        ccall(:kill, Cvoid, (Cint, Cint,), getpid(), 2)
-        for i in 1:10
-            Libc.systemsleep(0.1)
-            ccall(:jl_gc_safepoint, Cvoid, ()) # wait for SIGINT to arrive
-        end
-    end
-    ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
-end
 let
     # Exception frame automatically restores sigatomic counter.
     Base.sigatomic_begin()
@@ -2462,7 +2489,7 @@ end
 # pull request #9534
 @test_throws BoundsError((1, 2), 3) begin; a, b, c = 1, 2; end
 let a = []
-    @test_broken try; a[]; catch ex; (ex::BoundsError).a === a && ex.i == (1,); end # TODO: Re-enable after PLI
+    @test try; a[]; catch ex; (ex::BoundsError).a === a && ex.i == (); end
     @test_throws BoundsError(a, (1, 2)) a[1, 2]
     @test_throws BoundsError(a, (10,)) a[10]
 end
@@ -2522,16 +2549,20 @@ mutable struct Obj; x; end
         x = Obj(1)
         push!(r, x)
         push!(wr, WeakRef(x))
+        nothing
     end
-    test_wr(r,wr) = @test r[1] == wr[1].value
+    @noinline test_wr(r, wr) = @test r[1] == wr[1].value
     function test_wr()
+        # we need to be very careful here that we never
+        # use the value directly in this function, so we aren't dependent
+        # on optimizations deleting the root for it before reaching the test
         ref = []
         wref = []
         mk_wr(ref, wref)
         test_wr(ref, wref)
         GC.gc()
         test_wr(ref, wref)
-        pop!(ref)
+        empty!(ref)
         GC.gc()
         @test wref[1].value === nothing
     end
@@ -3265,7 +3296,7 @@ let
     @test forouter() == 3
 end
 
-@test_throws ErrorException("syntax: no outer variable declaration exists for \"for outer\"") @eval function f()
+@test_throws ErrorException("syntax: no outer local variable declaration exists for \"for outer\"") @eval function f()
     for outer i = 1:2
     end
 end
@@ -3398,7 +3429,7 @@ let
         @test false
     catch err
         @test isa(err, TypeError)
-        @test err.func == :apply_type
+        @test err.func == :Vararg
         @test err.expected == Int
         @test err.got == Int
     end
@@ -3408,7 +3439,7 @@ let
         @test false
     catch err
         @test isa(err, TypeError)
-        @test err.func == :apply_type
+        @test err.func == :Vararg
         @test err.expected == Int
         @test err.got == 0x1
     end
@@ -3764,7 +3795,7 @@ let
 end
 
 # issue #14323
-@test eval(Expr(:body, :(1))) === 1
+@test eval(Expr(:block, :(1))) === 1
 
 # issue #14339
 f14339(x::T, y::T) where {T<:Union{}} = 0
@@ -5492,6 +5523,11 @@ f_isdefined_tv(::T) where {T} = @isdefined T
 f_isdefined_va(::T...) where {T} = @isdefined T
 @test !f_isdefined_va()
 @test f_isdefined_va(1, 2, 3)
+function f_unused_undefined_sp(::T...) where T
+    T
+    return 0
+end
+@test_throws UndefVarError(:T) f_unused_undefined_sp()
 
 # note: the constant `5` here should be > DataType.ninitialized.
 # This tests that there's no crash due to accessing Type.body.layout.
@@ -5727,6 +5763,13 @@ let x5 = UnionField5(nothing, Int8(3))
     @test hash(x5) === hash(x5copy)
 end
 
+struct UnionField6
+    alignment::Int32
+    padding::NTuple{3, UInt8}
+    #= implicit-padding::UInt8 =#
+    maybe_val::Union{UInt16, Nothing} # offset = 8, align = 8, size = 2
+end
+@test UnionField6(1,(1,1,1),2018).maybe_val == 2018
 
 # PR #23367
 struct A23367
@@ -5981,12 +6024,373 @@ for U in unboxedunions
     end
 end
 
+@testset "jl_array_grow_at_end" begin
+
+# start w/ array, set & check elements, grow it, check that elements stayed correct, set & check elements
+A = Vector{Union{Missing, UInt8}}(undef, 2)
+Base.arrayset(true, A, 0x01, 1)
+Base.arrayset(true, A, missing, 2)
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === missing
+
+# grow_at_end 2
+resize!(A, 5)
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === missing
+Base.arrayset(true, A, 0x03, 3)
+Base.arrayset(true, A, missing, 4)
+Base.arrayset(true, A, 0x05, 5)
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === 0x03
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === 0x05
+
+# grow_at_end 1
+Base._growat!(A, 4, 1)
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === 0x03
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === missing
+@test Base.arrayref(true, A, 6) === 0x05
+
+Base.arrayset(true, A, missing, 1)
+Base.arrayset(true, A, 0x02, 2)
+Base.arrayset(true, A, missing, 3)
+Base.arrayset(true, A, 0x04, 4)
+Base.arrayset(true, A, missing, 5)
+Base.arrayset(true, A, 0x06, 6)
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === 0x02
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === 0x04
+@test Base.arrayref(true, A, 5) === missing
+@test Base.arrayref(true, A, 6) === 0x06
+
+# grow_at_end 5
+Base._growat!(A, 4, 1)
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === 0x02
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === 0x04
+@test Base.arrayref(true, A, 6) === missing
+@test Base.arrayref(true, A, 7) === 0x06
+
+# grow_at_end 6
+resize!(A, 8)
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === 0x02
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === 0x04
+@test Base.arrayref(true, A, 6) === missing
+@test Base.arrayref(true, A, 7) === 0x06
+@test Base.arrayref(true, A, 8) === missing
+
+# grow_at_end 4
+resize!(A, 1048576)
+resize!(A, 1048577)
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === 0x02
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === 0x04
+@test Base.arrayref(true, A, 6) === missing
+@test Base.arrayref(true, A, 7) === 0x06
+@test Base.arrayref(true, A, 8) === missing
+foreach(9:1048577) do i
+    @test Base.arrayref(true, A, i) === missing
+end
+foreach(9:1048577) do i
+    Base.arrayset(true, A, i % UInt8, i)
+    @test Base.arrayref(true, A, i) === i % UInt8
+end
+
+# grow_at_end 3
+A = Vector{Union{Missing, UInt8}}(undef, 1048577)
+foreach(1:1048577) do i
+    @test Base.arrayref(true, A, i) === missing
+    Base.arrayset(true, A, i % UInt8, i)
+    @test Base.arrayref(true, A, i) === i % UInt8
+end
+Base._growat!(A, 1048576, 1)
+@test length(A) == 1048578
+foreach(1:1048575) do i
+    @test Base.arrayref(true, A, i) === i % UInt8
+    @test A[i] === i % UInt8
+end
+@test Base.arrayref(true, A, 1048576) === missing
+@test Base.arrayref(true, A, 1048577) === 1048576 % UInt8
+@test Base.arrayref(true, A, 1048578) === 1048577 % UInt8
+
+end # @testset
+
+@testset "jl_array_grow_at_beg" begin
+
+# grow_at_beg 4
+A = Vector{Union{Missing, UInt8}}(undef, 5)
+Base.arrayset(true, A, 0x01, 1)
+Base.arrayset(true, A, missing, 2)
+Base.arrayset(true, A, 0x03, 3)
+Base.arrayset(true, A, missing, 4)
+Base.arrayset(true, A, 0x05, 5)
+Base._growat!(A, 1, 1)
+
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === 0x01
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === 0x03
+@test Base.arrayref(true, A, 5) === missing
+@test Base.arrayref(true, A, 6) === 0x05
+
+# grow_at_beg 2
+Base._growat!(A, 1, 1)
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === 0x01
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === 0x03
+@test Base.arrayref(true, A, 6) === missing
+@test Base.arrayref(true, A, 7) === 0x05
+
+# grow_at_beg 1
+Base._growat!(A, 2, 1)
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === 0x01
+@test Base.arrayref(true, A, 5) === missing
+@test Base.arrayref(true, A, 6) === 0x03
+@test Base.arrayref(true, A, 7) === missing
+@test Base.arrayref(true, A, 8) === 0x05
+
+# grow_at_beg 9
+Base._growat!(A, 1, 1)
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === 0x01
+@test Base.arrayref(true, A, 6) === missing
+@test Base.arrayref(true, A, 7) === 0x03
+@test Base.arrayref(true, A, 8) === missing
+@test Base.arrayref(true, A, 9) === 0x05
+
+# grow_at_beg 8
+A = Vector{Union{Missing, UInt8}}(undef, 5)
+Base.arrayset(true, A, 0x01, 1)
+Base.arrayset(true, A, missing, 2)
+Base.arrayset(true, A, 0x03, 3)
+Base.arrayset(true, A, missing, 4)
+Base.arrayset(true, A, 0x05, 5)
+Base._growat!(A, 2, 1)
+Base._growat!(A, 2, 1)
+
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === 0x03
+@test Base.arrayref(true, A, 6) === missing
+@test Base.arrayref(true, A, 7) === 0x05
+
+# grow_at_beg 5
+A = Vector{Union{Missing, UInt8}}(undef, 5)
+Base.arrayset(true, A, 0x01, 1)
+Base.arrayset(true, A, missing, 2)
+Base.arrayset(true, A, 0x03, 3)
+Base.arrayset(true, A, missing, 4)
+Base.arrayset(true, A, 0x05, 5)
+Base._growat!(A, 4, 1)
+Base._growat!(A, 4, 1)
+
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === 0x03
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === missing
+@test Base.arrayref(true, A, 6) === missing
+@test Base.arrayref(true, A, 7) === 0x05
+
+# grow_at_beg 6
+Base._growat!(A, 2, 3)
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === missing
+@test Base.arrayref(true, A, 6) === 0x03
+@test Base.arrayref(true, A, 7) === missing
+@test Base.arrayref(true, A, 8) === missing
+@test Base.arrayref(true, A, 9) === missing
+@test Base.arrayref(true, A, 10) === 0x05
+
+# grow_at_beg 3
+A = Vector{Union{Missing, UInt8}}(undef, 1048577)
+Base.arrayset(true, A, 0x01, 1)
+Base.arrayset(true, A, missing, 2)
+Base.arrayset(true, A, 0x03, 3)
+Base.arrayset(true, A, missing, 4)
+Base.arrayset(true, A, 0x05, 5)
+Base._growat!(A, 2, 1)
+
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === 0x03
+@test Base.arrayref(true, A, 5) === missing
+@test Base.arrayref(true, A, 6) === 0x05
+
+foreach(7:length(A)) do i
+    @test Base.arrayref(true, A, i) === missing
+    Base.arrayset(true, A, i % UInt8, i)
+    @test Base.arrayref(true, A, i) === i % UInt8
+end
+
+end # @testset
+
+@testset "jl_array_del_at_beg" begin
+
+A = Vector{Union{Missing, UInt8}}(undef, 5)
+Base.arrayset(true, A, 0x01, 1)
+Base.arrayset(true, A, missing, 2)
+Base.arrayset(true, A, 0x03, 3)
+Base.arrayset(true, A, missing, 4)
+Base.arrayset(true, A, 0x05, 5)
+Base._deleteat!(A, 2, 1)
+
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === 0x03
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === 0x05
+
+Base._deleteat!(A, 1, 1)
+@test Base.arrayref(true, A, 1) === 0x03
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === 0x05
+
+A = Vector{Union{Missing, UInt8}}(undef, 5)
+Base.arrayset(true, A, 0x01, 1)
+Base.arrayset(true, A, missing, 2)
+Base.arrayset(true, A, 0x03, 3)
+Base.arrayset(true, A, missing, 4)
+Base.arrayset(true, A, 0x05, 5)
+Base._growat!(A, 1, 1)
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === 0x01
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === 0x03
+@test Base.arrayref(true, A, 5) === missing
+@test Base.arrayref(true, A, 6) === 0x05
+Base._deleteat!(A, 2, 1)
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === 0x03
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === 0x05
+Base._deleteat!(A, 1, 2)
+@test Base.arrayref(true, A, 1) === 0x03
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === 0x05
+Base._deleteat!(A, 1, 1)
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === 0x05
+
+end # @testset
+
+@testset "jl_array_del_at_end" begin
+
+A = Vector{Union{Missing, UInt8}}(undef, 5)
+Base.arrayset(true, A, 0x01, 1)
+Base.arrayset(true, A, missing, 2)
+Base.arrayset(true, A, 0x03, 3)
+Base.arrayset(true, A, missing, 4)
+Base.arrayset(true, A, 0x05, 5)
+Base._deleteat!(A, 5, 1)
+
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === 0x03
+@test Base.arrayref(true, A, 4) === missing
+
+Base._deleteat!(A, 3, 1)
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === missing
+
+end # @testset
+
 # issue #27767
 let A=Vector{Union{Int, Missing}}(undef, 1)
     resize!(A, 2)
     @test length(A) == 2
     @test A[2] === missing
 end
+
+# issue #27809
+let A=Vector{Union{Int, Missing}}(undef, 0)
+    while length(A) < 2^17
+        push!(A, 0.0)
+    end
+    push!(A, 0.0)
+    @test !any(ismissing, A)
+end
+
+# jl_array_shrink
+let A=Vector{Union{UInt8, Missing}}(undef, 1048577)
+    Base.arrayset(true, A, 0x01, 1)
+    Base.arrayset(true, A, missing, 2)
+    Base.arrayset(true, A, 0x03, 3)
+    Base.arrayset(true, A, missing, 4)
+    Base.arrayset(true, A, 0x05, 5)
+    deleteat!(A, 6:1048577)
+    @test Base.arrayref(true, A, 1) === 0x01
+    @test Base.arrayref(true, A, 2) === missing
+    @test Base.arrayref(true, A, 3) === 0x03
+    @test Base.arrayref(true, A, 4) === missing
+    @test Base.arrayref(true, A, 5) === 0x05
+    sizehint!(A, 5)
+    @test Base.arrayref(true, A, 1) === 0x01
+    @test Base.arrayref(true, A, 2) === missing
+    @test Base.arrayref(true, A, 3) === 0x03
+    @test Base.arrayref(true, A, 4) === missing
+    @test Base.arrayref(true, A, 5) === 0x05
+end
+
+# copyto!/vcat w/ internal padding
+let A=[0, missing], B=[missing, 0], C=Vector{Union{Int, Missing}}(undef, 6)
+    push!(A, missing)
+    push!(B, missing)
+    @test isequal(vcat(A, B), [0, missing, missing, missing, 0, missing])
+    copyto!(C, 1, A)
+    copyto!(C, 4, B)
+    @test isequal(C, [0, missing, missing, missing, 0, missing])
+end
+
+# issue #29718
+function f29718()
+    nt = NamedTuple{(:a, :b, :c, :d, :e, :f,),
+                    Tuple{Union{Missing, Float64},
+                          Tuple{UInt8},
+                          Union{Missing, Int8},
+                          Int8,
+                          Tuple{UInt8,UInt8},
+                          Union{Missing, Int16}}
+                    }((missing,
+                       (1,),
+                       1,
+                       41,
+                       (1,2),
+                       1915,
+                       ))
+    return Ref{Any}(nt)[].f
+end
+@test f29718() == 1915
 
 end # module UnionOptimizations
 
@@ -6045,8 +6449,8 @@ end
 
 # issue #21004
 const PTuple_21004{N,T} = NTuple{N,VecElement{T}}
-@test_throws ArgumentError PTuple_21004(1)
-@test_throws UndefVarError PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
+@test_throws ArgumentError("too few elements for tuple type $PTuple_21004") PTuple_21004(1)
+@test_throws UndefVarError(:T) PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
 
 #issue #22792
 foo_22792(::Type{<:Union{Int8,Int,UInt}}) = 1;
@@ -6088,23 +6492,6 @@ end
 @test !Base.isvatuple(Tuple{Float64,Vararg{Int,1}})
 @test !Base.isvatuple(Tuple{T,Vararg{Int,2}} where T)
 @test !Base.isvatuple(Tuple{Int,Int,Vararg{Int,2}})
-
-# The old iteration protocol shims deprecation test
-struct DelegateIterator{T}
-    x::T
-end
-Base.start(itr::DelegateIterator) = start(itr.x)
-Base.next(itr::DelegateIterator, state) = next(itr.x, state)
-Base.done(itr::DelegateIterator, state) = done(itr.x, state)
-let A = [1], B = [], C = DelegateIterator([1]), D = DelegateIterator([]), E = Any[1,"abc"]
-    @test next(A, start(A))[1] == 1
-    @test done(A, next(A, start(A))[2])
-    @test done(B, start(B))
-    @test next(C, start(C))[1] == 1
-    @test done(C, next(C, start(C))[2])
-    @test done(D, start(D))
-    @test next(E, next(E, start(E))[2])[1] == "abc"
-end
 
 # Issue 27103
 function f27103()
@@ -6270,3 +6657,229 @@ foo27770() = get27770(Nullable27770(), Handle27770())
 
 bar27770() = Nullable27770().value
 @test_throws UndefRefError bar27770()
+
+# Issue 27910
+f27910() = ((),)[2]
+@test_throws BoundsError f27910()
+
+# Issue 9765
+f9765(::Bool) = 1
+g9765() = f9765(isa(1, 1))
+@test_throws TypeError g9765()
+
+# Issue 28102
+struct HasPlain28102
+    plain::Int
+    HasPlain28102() = new()
+end
+@noinline function bam28102()
+    x = HasPlain28102()
+    if isdefined(x,:plain)
+        x.plain
+    end
+end
+@test isa(bam28102(), Int)
+
+# Check that the tfunc for fieldtype is correct
+struct FooFieldType; x::Int; end
+f_fieldtype(b) = fieldtype(b ? Int : FooFieldType, 1)
+
+@test @inferred(f_fieldtype(false)) == Int
+@test_throws BoundsError f_fieldtype(true)
+
+# Issue #28224
+@noinline make_error28224(n) = n == 5 ? error() : true
+function foo28224()
+    z = 0
+    try
+        while make_error28224(z)
+            z+=1
+        end
+    catch end
+    return z
+end
+@test foo28224() == 5
+
+# Issue #28208
+@noinline function foo28208(a::Bool, b::Bool)
+    x = (1, 2)
+    if a
+        if b
+            y = nothing
+        else
+            y = missing
+        end
+        x = y
+    end
+    x
+end
+@test isa(foo28208(false, true), Tuple)
+@test foo28208(true, false) === missing
+@test foo28208(true, true) === nothing
+
+# Issue #28326
+function foo28326(a)
+    try
+        @inbounds a[1]
+        return false
+    catch
+        return true
+    end
+end
+@test foo28326(Vector(undef, 1))
+
+# Issue #28392
+struct Foo28392; end
+@test_throws MethodError iterate(Foo28392())
+
+# issue #28399
+function g28399(n)
+    for a = 1:n
+        c28399 = 1
+    end
+    ()->c28399
+end
+function f28399()
+    for a = __undef_28399__
+        c28399 = 1
+    end
+    ()->c28399
+end
+c28399 = 42
+@test g28399(0)() == 42
+@test g28399(1)() == 42
+@test_throws UndefVarError(:__undef_28399__) f28399()
+
+# issue #28445
+mutable struct foo28445
+    x::Int
+end
+
+@noinline make_foo28445() = (foo28445(1), foo28445(rand(1:10)), foo28445(rand(1:10)))
+@noinline function use_tuple28445(c)
+    @test isa(c[2], foo28445)
+    @test isa(c[3], foo28445)
+end
+
+function repackage28445()
+    (_, a, b) = make_foo28445()
+    GC.gc()
+    c = (foo28445(1), foo28445(2), a, b)
+    use_tuple28445(c)
+    true
+end
+@test repackage28445()
+
+# issue #28597
+@test_throws ErrorException Array{Int, 2}(undef, 0, -10)
+@test_throws ErrorException Array{Int, 2}(undef, -10, 0)
+@test_throws ErrorException Array{Int, 2}(undef, -1, -1)
+
+# issue #28812
+@test Tuple{Vararg{Array{T},3} where T} === Tuple{Array,Array,Array}
+@test Tuple{Vararg{Array{T} where T,3}} === Tuple{Array,Array,Array}
+
+# issue #29145
+struct T29145{A,B}
+    function T29145()
+        new{S,Ref{S}}() where S
+    end
+end
+@test_throws TypeError T29145()
+
+# interpreted but inferred/optimized top-level expressions with vars
+let code = """
+           while true
+               try
+                   this_is_undefined_29213
+                   ed = 0
+                   break
+               finally
+                   break
+               end
+           end
+           print(42)
+           """
+    @test read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String) == "42"
+end
+
+# issue #29175
+function f29175(tuple::T) where {T<:Tuple}
+    prefix::Tuple{T.parameters[1:end-1]...} = tuple[1:length(T.parameters)-1]
+    x = prefix
+    prefix = x  # force another conversion to declared type
+    return prefix
+end
+@test f29175((1,2,3)) === (1,2)
+
+# issue #29306
+let a = [1,2,3,4,missing,6,7]
+    @test_throws TypeError [ (x>6 ? missing : x)  for x in a]
+    foo(x) = x > 0 ? x : missing
+    @test_throws TypeError foo(missing)
+end
+
+# issue #29152
+function f29152()
+    try
+        g29152()
+    finally
+    end
+end
+g29152() = (_true29152 ? error() : _true29152 ? 0 : false)
+_true29152 = true;
+@test_throws ErrorException f29152()
+
+# issue #29828
+f29828() = 2::String
+g29828() = 2::Any[String][1]
+@test_throws TypeError(:typeassert, String, 2) f29828()
+@test_throws TypeError(:typeassert, String, 2) g29828()
+
+# splatting in `new`
+struct SplatNew{T}
+    x::Int8
+    y::T
+    SplatNew{T}(args...) where {T} = new(0,args...,1)
+    SplatNew(args...) = new{Float32}(args...)
+    SplatNew{Any}(args...) = new(args...)
+    SplatNew{Tuple{Int16}}(args...) = new([2]..., args...)
+    SplatNew{Int8}() = new(1,2,3)
+end
+let x = SplatNew{Int16}()
+    @test x.x === Int8(0)
+    @test x.y === Int16(1)
+end
+@test_throws ArgumentError SplatNew{Int16}(1)
+let x = SplatNew(3,2)
+    @test x.x === Int8(3)
+    @test x.y === 2.0f0
+end
+@test_throws ArgumentError SplatNew(1,2,3)
+let x = SplatNew{Any}(1)
+    @test x.x === Int8(1)
+    @test !isdefined(x, :y)
+end
+let x = SplatNew{Tuple{Int16}}((1,))
+    @test x.x === Int8(2)
+    @test x.y === (Int16(1),)
+end
+@test_throws ArgumentError SplatNew{Int8}()
+
+# Issue #31357 - Missed assignment in nested try/catch
+function foo31357(b::Bool)
+    x = nothing
+    try
+        try
+            x = 12345
+            if !b
+               throw("hi")
+            end
+        finally
+        end
+    catch
+    end
+    return x
+end
+@test foo31357(true) == 12345
+@test foo31357(false) == 12345

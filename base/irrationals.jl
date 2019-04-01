@@ -17,7 +17,11 @@ symbol `sym`.
 """
 struct Irrational{sym} <: AbstractIrrational end
 
-show(io::IO, x::Irrational{sym}) where {sym} = print(io, "$sym = $(string(float(x))[1:15])...")
+show(io::IO, x::Irrational{sym}) where {sym} = print(io, sym)
+
+function show(io::IO, ::MIME"text/plain", x::Irrational{sym}) where {sym}
+    print(io, sym, " = ", string(float(x))[1:15], "...")
+end
 
 promote_rule(::Type{<:AbstractIrrational}, ::Type{Float16}) = Float16
 promote_rule(::Type{<:AbstractIrrational}, ::Type{Float32}) = Float32
@@ -136,18 +140,29 @@ end
 
 round(x::Irrational, r::RoundingMode) = round(float(x), r)
 
+"""
+	@irrational sym val def
+	@irrational(sym, val, def)
+
+Define a new `Irrational` value, `sym`, with pre-computed `Float64` value `val`,
+and arbitrary-precision definition in terms of `BigFloat`s given be the expression `def`.
+"""
 macro irrational(sym, val, def)
     esym = esc(sym)
     qsym = esc(Expr(:quote, sym))
     bigconvert = isa(def,Symbol) ? quote
-        function Base.BigFloat(::Irrational{$qsym})
-            c = BigFloat()
+        function Base.BigFloat(::Irrational{$qsym}, r::MPFR.MPFRRoundingMode=MPFR.ROUNDING_MODE[]; precision=precision(BigFloat))
+            c = BigFloat(;precision=precision)
             ccall(($(string("mpfr_const_", def)), :libmpfr),
-                  Cint, (Ref{BigFloat}, Int32), c, MPFR.ROUNDING_MODE[])
+                  Cint, (Ref{BigFloat}, MPFR.MPFRRoundingMode), c, r)
             return c
         end
     end : quote
-        Base.BigFloat(::Irrational{$qsym}) = $(esc(def))
+        function Base.BigFloat(::Irrational{$qsym}; precision=precision(BigFloat))
+            setprecision(BigFloat, precision) do
+                $(esc(def))
+            end
+        end
     end
     quote
         const $esym = Irrational{$qsym}()
@@ -165,8 +180,10 @@ big(::Type{<:AbstractIrrational}) = BigFloat
 
 # align along = for nice Array printing
 function alignment(io::IO, x::AbstractIrrational)
-    ctx = IOContext(io, :compact=>true)
-    m = match(r"^(.*?)(=.*)$", sprint(show, x, context=ctx, sizehint=0))
-    m === nothing ? (length(sprint(show, x, context=ctx, sizehint=0)), 0) :
+    m = match(r"^(.*?)(=.*)$", sprint(show, x, context=io, sizehint=0))
+    m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
     (length(m.captures[1]), length(m.captures[2]))
 end
+
+# inv
+inv(x::AbstractIrrational) = 1/x

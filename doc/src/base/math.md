@@ -119,6 +119,7 @@ Base.Rounding.RoundNearest
 Base.Rounding.RoundNearestTiesAway
 Base.Rounding.RoundNearestTiesUp
 Base.Rounding.RoundToZero
+Base.Rounding.RoundFromZero
 Base.Rounding.RoundUp
 Base.Rounding.RoundDown
 Base.round(::Complex{<: AbstractFloat}, ::RoundingMode, ::RoundingMode)
@@ -165,8 +166,6 @@ Base.gcd
 Base.lcm
 Base.gcdx
 Base.ispow2
-Base.nextpow2
-Base.prevpow2
 Base.nextpow
 Base.prevpow
 Base.nextprod

@@ -8,6 +8,7 @@ ifeq ($(USE_SYSTEM_MBEDTLS), 0)
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/mbedtls
 endif
 
+ifneq ($(USE_BINARYBUILDER_LIBSSH2), 1)
 LIBSSH2_OPTS := $(CMAKE_COMMON) -DBUILD_SHARED_LIBS=ON -DBUILD_EXAMPLES=OFF \
 		-DCMAKE_BUILD_TYPE=Release
 
@@ -22,6 +23,10 @@ endif
 
 ifneq (,$(findstring $(OS),Linux FreeBSD))
 LIBSSH2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+endif
+
+ifeq ($(LIBSSH2_ENABLE_TESTS), 0)
+LIBSSH2_OPTS += -DBUILD_TESTING=OFF
 endif
 
 $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied: $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/source-extracted
@@ -66,3 +71,11 @@ configure-libssh2: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured
 compile-libssh2: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled
 fastcheck-libssh2: check-libssh2
 check-libssh2: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-checked
+
+else # USE_BINARYBUILDER_LIBSSH2
+
+LIBSSH2_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LibSSH2-v$(LIBSSH2_VER)-$(LIBSSH2_BB_REL)
+LIBSSH2_BB_NAME := LibSSH2.v$(LIBSSH2_VER)
+
+$(eval $(call bb-install,libssh2,LIBSSH2,false))
+endif

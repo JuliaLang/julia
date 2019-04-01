@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base: @propagate_inbounds, _return_type, _default_type, @_inline_meta
+using Base: @propagate_inbounds, @_inline_meta
 import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, convert, similar
 
 ### basic definitions (types, aliases, constructors, abstractarray interface, sundry similar)
@@ -8,6 +8,30 @@ import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, c
 # note that Adjoint and Transpose must be able to wrap not only vectors and matrices
 # but also factorizations, rotations, and other linear algebra objects, including
 # user-defined such objects. so do not restrict the wrapped type.
+"""
+    Adjoint
+
+Lazy wrapper type for an adjoint view of the underlying linear algebra object,
+usually an `AbstractVector`/`AbstractMatrix`, but also some `Factorization`, for instance.
+Usually, the `Adjoint` constructor should not be called directly, use [`adjoint`](@ref)
+instead. To materialize the view use [`copy`](@ref).
+
+This type is intended for linear algebra usage - for general data manipulation see
+[`permutedims`](@ref Base.permutedims).
+
+# Examples
+```jldoctest
+julia> A = [3+2im 9+2im; 8+7im  4+6im]
+2×2 Array{Complex{Int64},2}:
+ 3+2im  9+2im
+ 8+7im  4+6im
+
+julia> adjoint(A)
+2×2 Adjoint{Complex{Int64},Array{Complex{Int64},2}}:
+ 3-2im  8-7im
+ 9-2im  4-6im
+```
+"""
 struct Adjoint{T,S} <: AbstractMatrix{T}
     parent::S
     function Adjoint{T,S}(A::S) where {T,S}
@@ -15,6 +39,30 @@ struct Adjoint{T,S} <: AbstractMatrix{T}
         new(A)
     end
 end
+"""
+    Transpose
+
+Lazy wrapper type for a transpose view of the underlying linear algebra object,
+usually an `AbstractVector`/`AbstractMatrix`, but also some `Factorization`, for instance.
+Usually, the `Transpose` constructor should not be called directly, use [`transpose`](@ref)
+instead. To materialize the view use [`copy`](@ref).
+
+This type is intended for linear algebra usage - for general data manipulation see
+[`permutedims`](@ref Base.permutedims).
+
+# Examples
+```jldoctest
+julia> A = [3+2im 9+2im; 8+7im  4+6im]
+2×2 Array{Complex{Int64},2}:
+ 3+2im  9+2im
+ 8+7im  4+6im
+
+julia> transpose(A)
+2×2 Transpose{Complex{Int64},Array{Complex{Int64},2}}:
+ 3+2im  8+7im
+ 9+2im  4+6im
+```
+"""
 struct Transpose{T,S} <: AbstractMatrix{T}
     parent::S
     function Transpose{T,S}(A::S) where {T,S}
@@ -126,9 +174,9 @@ axes(v::AdjOrTransAbsVec) = (Base.OneTo(1), axes(v.parent)...)
 axes(A::AdjOrTransAbsMat) = reverse(axes(A.parent))
 IndexStyle(::Type{<:AdjOrTransAbsVec}) = IndexLinear()
 IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
-@propagate_inbounds getindex(v::AdjOrTransAbsVec, i::Int) = wrapperop(v)(v.parent[i])
+@propagate_inbounds getindex(v::AdjOrTransAbsVec, i::Int) = wrapperop(v)(v.parent[i-1+first(axes(v.parent)[1])])
 @propagate_inbounds getindex(A::AdjOrTransAbsMat, i::Int, j::Int) = wrapperop(A)(A.parent[j, i])
-@propagate_inbounds setindex!(v::AdjOrTransAbsVec, x, i::Int) = (setindex!(v.parent, wrapperop(v)(x), i); v)
+@propagate_inbounds setindex!(v::AdjOrTransAbsVec, x, i::Int) = (setindex!(v.parent, wrapperop(v)(x), i-1+first(axes(v.parent)[1])); v)
 @propagate_inbounds setindex!(A::AdjOrTransAbsMat, x, i::Int, j::Int) = (setindex!(A.parent, wrapperop(A)(x), j, i); A)
 # AbstractArray interface, additional definitions to retain wrapper over vectors where appropriate
 @propagate_inbounds getindex(v::AdjOrTransAbsVec, ::Colon, is::AbstractArray{Int}) = wrapperop(v)(v.parent[is])
@@ -144,13 +192,13 @@ similar(A::AdjOrTransAbsVec) = wrapperop(A)(similar(A.parent))
 similar(A::AdjOrTransAbsVec, ::Type{T}) where {T} = wrapperop(A)(similar(A.parent, Base.promote_op(wrapperop(A), T)))
 # for matrices, the semantics of the wrapped and unwrapped types are generally the same
 # and as you are allocating with similar anyway, you might as well get something unwrapped
-similar(A::AdjOrTrans) = similar(A.parent, eltype(A), size(A))
-similar(A::AdjOrTrans, ::Type{T}) where {T} = similar(A.parent, T, size(A))
+similar(A::AdjOrTrans) = similar(A.parent, eltype(A), axes(A))
+similar(A::AdjOrTrans, ::Type{T}) where {T} = similar(A.parent, T, axes(A))
 similar(A::AdjOrTrans, ::Type{T}, dims::Dims{N}) where {T,N} = similar(A.parent, T, dims)
 
 # sundry basic definitions
 parent(A::AdjOrTrans) = A.parent
-vec(v::AdjOrTransAbsVec) = v.parent
+vec(v::TransposeAbsVec) = parent(v)
 
 cmp(A::AdjOrTransAbsVec, B::AdjOrTransAbsVec) = cmp(parent(A), parent(B))
 isless(A::AdjOrTransAbsVec, B::AdjOrTransAbsVec) = isless(parent(A), parent(B))
@@ -197,6 +245,7 @@ broadcast(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...
 *(u::AdjointAbsVec, v::AbstractVector) = dot(u.parent, v)
 *(u::TransposeAbsVec{T}, v::AbstractVector{T}) where {T<:Real} = dot(u.parent, v)
 function *(u::TransposeAbsVec, v::AbstractVector)
+    require_one_based_indexing(u, v)
     @boundscheck length(u) == length(v) || throw(DimensionMismatch())
     return sum(@inbounds(u[k]*v[k]) for k in 1:length(u))
 end
