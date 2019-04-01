@@ -228,4 +228,10 @@ end
     @test Dates.Date(Dates.DateTime(Dates.Date(2012, 7, 1))) == Dates.Date(2012, 7, 1)
 end
 
+@testset "issue #31524" begin
+    dt = DateTime(Libc.strptime("%Y-%M-%dT%H:%M:%SZ", "2018-11-16T10:26:14Z"))
+    @test typeof(dt) == Time
+    @test dt == Dates.Time(10, 26, 14)
+end
+
 end
