@@ -940,6 +940,15 @@ $(foreach proj,$(BB_PROJECTS),$(eval USE_BINARYBUILDER_$(proj) = $(USE_BINARYBUI
 # Use the Assertions build
 BINARYBUILDER_LLVM_ASSERTS := 0
 
+# If we're running on Linux, and our `ld` is known to be bad (2.24),
+# disable USE_BINARYBUILDER_LIBUV by setting it to zero:
+ifeq ($(OS),Linux)
+LD_VERSION := $(lastword $(shell ld --version | head -1))
+ifneq ($(findstring .24,$(LD_VERSION)),)
+$(warning Linker version $(LD_VERSION) known to cause problems with libuv BB tarball, compiling from scratch by automatically setting USE_BINARYBUILDER_LIBUV=0)
+USE_BINARYBUILDER_LIBUV := 0
+endif
+endif
 
 
 # OS specific stuff
