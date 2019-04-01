@@ -197,6 +197,8 @@ function validargs(::Type{DateTime}, y::Int64, m::Int64, d::Int64,
     return argerror()
 end
 
+DateTime(dt::Base.Libc.TmStruct) = Time(dt.hour, dt.min, dt.sec)
+
 """
     Date(y, [m, d]) -> Date
 
