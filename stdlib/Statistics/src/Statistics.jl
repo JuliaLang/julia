@@ -74,6 +74,7 @@ function mean(f, itr)
     return total/count
 end
 mean(f, A::AbstractArray) = sum(f, A) / length(A)
+mean(f, A; dims = 1) = sum(f, A, dims = dims) / size(A, dims)
 
 """
     mean!(r, v)
