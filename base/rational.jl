@@ -14,8 +14,20 @@ struct Rational{T<:Integer} <: Real
         num2, den2 = (sign(den) < 0) ? divgcd(-num, -den) : divgcd(num, den)
         new(num2, den2)
     end
+
+    function Rational{T}(num::Integer, den::Integer) where T<:BitSigned
+        num == den == zero(T) && __throw_rational_argerror(T)
+        if (num == typemin(T) && signbit(den) && isodd(den)) ||
+           (den == typemin(T) && signbit(num) && isodd(num))
+            __throw_rational_ovferror(num, den)
+        end
+        num2, den2 = (sign(den) < 0) ? divgcd(-num, -den) : divgcd(num, den)
+        new(num2, den2)
+    end
 end
 @noinline __throw_rational_argerror(T) = throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
+@noinline __throw_rational_ovferror(num::T, den::T) where {T<:BitSigned} =
+    (num < den) ? throw(OverflowError("typemin($T)//$den")) : throw(OverflowError("$num//typemin($T)"))
 
 Rational(n::T, d::T) where {T<:Integer} = Rational{T}(n,d)
 Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
@@ -231,6 +243,11 @@ copysign(x::Rational, y::Real) = copysign(x.num,y) // x.den
 copysign(x::Rational, y::Rational) = copysign(x.num,y.num) // x.den
 
 abs(x::Rational) = Rational(abs(x.num), x.den)
+function abs(x::Rational{T}) where{T<:BitSigned}
+    (x.den == typemin(T) || x.num == typemin(T)) &&
+        throw(OverflowError("cannot take abs of typemin($T)"))
+    abs(x.num) // x.den
+end
 
 typemin(::Type{Rational{T}}) where {T<:Integer} = -one(T)//zero(T)
 typemax(::Type{Rational{T}}) where {T<:Integer} = one(T)//zero(T)
@@ -238,13 +255,13 @@ typemax(::Type{Rational{T}}) where {T<:Integer} = one(T)//zero(T)
 isinteger(x::Rational) = x.den == 1
 
 -(x::Rational) = (-x.num) // x.den
-function -(x::Rational{T}) where T<:BitSigned
-    x.num == typemin(T) && throw(OverflowError("rational numerator is typemin(T)"))
-    (-x.num) // x.den
-end
 function -(x::Rational{T}) where T<:Unsigned
-    x.num != zero(T) && throw(OverflowError("cannot negate unsigned number"))
+    x.num !== zero(T) && throw(OverflowError("cannot negate an unsigned rational"))
     x
+end
+function -(x::Rational{T}) where T<:BitSigned
+    x.num === typemin(T) && throw(OverflowError("rational numerator is typemin($T)"))
+    (-x.num) // x.den
 end
 
 for (op,chop) in ((:+,:checked_add), (:-,:checked_sub),
@@ -445,4 +462,4 @@ function lerpi(j::Integer, d::Integer, a::Rational, b::Rational)
     ((d-j)*a)/d + (j*b)/d
 end
 
-float(::Type{Rational{T}}) w
+float(::Type{Rational{T}}) where {T<:Integer} = float(T)
