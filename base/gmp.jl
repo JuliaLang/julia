@@ -425,6 +425,28 @@ function Float64(x::BigInt, ::RoundingMode{:Nearest})
     return flipsign(z, x.size)
 end
 
+function Float32(x::BigInt, ::RoundingMode{:Nearest})
+    x == 0 && return 0f0
+    xsize = abs(x.size)
+    if xsize*BITS_PER_LIMB > 128
+        z = Inf32
+    elseif xsize == 1
+        z = Float32(unsafe_load(x.d))
+    else
+        y1 = unsafe_load(x.d, xsize)
+        n = BITS_PER_LIMB - leading_zeros(y1)
+        # load first 25(1 + 23 bits of fraction + 1 for rounding)
+        y = (y1 >> (n - (precision(Float32)+1))) % UInt32
+        y += (n > precision(Float32) ? 0 : unsafe_load(x.d, xsize-1) >> (BITS_PER_LIMB - (25-n))) % UInt32
+        y = (y + one(UInt32)) >> 1 # round, ties up
+        y &= ~UInt32(trailing_zeros(x) == (n-25 + (xsize-1)*BITS_PER_LIMB)) # fix last bit to round to even
+        d = ((n+125) % UInt32) << 23
+        z = reinterpret(Float32, d+y)
+        z = ldexp(z, (xsize-1)*BITS_PER_LIMB)
+    end
+    return flipsign(z, x.size)
+end
+
 Float64(n::BigInt) = Float64(n, RoundNearest)
 Float32(n::BigInt) = Float32(n, RoundNearest)
 Float16(n::BigInt) = Float16(n, RoundNearest)
