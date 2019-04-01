@@ -70,6 +70,10 @@ Standard library changes
 
 * Fixed `repr` such that it displays `DateTime` as it would be entered in Julia ([#30200]).
 
+#### Statistics
+
+* `quantile` now accepts in all cases collections whose `eltype` is not a subtype of `Number` ([#30938]).
+
 #### Miscellaneous
 
 * Since environment variables on Windows are case-insensitive, `ENV` now converts its keys

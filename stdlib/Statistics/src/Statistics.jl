@@ -853,18 +853,17 @@ function quantile!(q::AbstractArray, v::AbstractVector, p::AbstractArray;
     return q
 end
 
-quantile!(v::AbstractVector, p::AbstractArray; sorted::Bool=false) =
-    quantile!(similar(p,float(eltype(v))), v, p; sorted=sorted)
+function quantile!(v::AbstractVector, p::Union{AbstractArray, Tuple{Vararg{Real}}};
+                   sorted::Bool=false)
+    if !isempty(p)
+        minp, maxp = extrema(p)
+        _quantilesort!(v, sorted, minp, maxp)
+    end
+    return map(x->_quantile(v, x), p)
+end
 
 quantile!(v::AbstractVector, p::Real; sorted::Bool=false) =
     _quantile(_quantilesort!(v, sorted, p, p), p)
-
-function quantile!(v::AbstractVector, p::Tuple{Vararg{Real}}; sorted::Bool=false)
-    isempty(p) && return ()
-    minp, maxp = extrema(p)
-    _quantilesort!(v, sorted, minp, maxp)
-    return map(x->_quantile(v, x), p)
-end
 
 # Function to perform partial sort of v for quantiles in given range
 function _quantilesort!(v::AbstractArray, sorted::Bool, minp::Real, maxp::Real)
@@ -895,18 +894,12 @@ end
     h  = f0 - t0
     i  = trunc(Int,t0) + 1
 
-    T  = promote_type(eltype(v), typeof(v[1]*h))
-
-    if h == 0
-        return convert(T, v[i])
+    a = v[i]
+    b = v[i + (h > 0)]
+    if isfinite(a) && isfinite(b)
+        return a + h*(b-a)
     else
-        a = v[i]
-        b = v[i+1]
-        if isfinite(a) && isfinite(b)
-            return convert(T, a + h*(b-a))
-        else
-            return convert(T, (1-h)*a + h*b)
-        end
+        return (1-h)*a + h*b
     end
 end
 
