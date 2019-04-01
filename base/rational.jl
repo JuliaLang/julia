@@ -2,8 +2,8 @@
 
 """
     Rational{T<:Integer} <: Real
+
 Rational number type, with numerator and denominator of type `T`.
-Rational numbers are checked for overflow.
 """
 struct Rational{T<:Integer} <: Real
     num::T
@@ -14,21 +14,8 @@ struct Rational{T<:Integer} <: Real
         num2, den2 = (sign(den) < 0) ? divgcd(-num, -den) : divgcd(num, den)
         new(num2, den2)
     end
-
-    function Rational{T}(num::BitSigned, den::BitSigned) where T<:BitSigned
-        num == den == zero(T) && __throw_rational_argerror(T)
-        if (num == typemin(T) && signbit(den) && isodd(den)) || (den == typemin(T) && signbit(num) && isodd(num))
-            __throw_rational_ovferror(num, den)
-        end
-        num2, den2 = divgcd(num, den)
-        num2, den2 = flipsign(num2, den2), abs(den2)
-        new(num2, den2)
-    end
 end
-
 @noinline __throw_rational_argerror(T) = throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
-@noinline __throw_rational_ovferror(num::T, den::T) where {T} =
-    (num < den) ? throw(OverflowError("typemin($T)//$den")) : throw(OverflowError("$num//typemin($T)"))
 
 Rational(n::T, d::T) where {T<:Integer} = Rational{T}(n,d)
 Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
@@ -100,7 +87,7 @@ Bool(x::Rational) = x==0 ? false : x==1 ? true :
 (::Type{T})(x::Rational) where {T<:Integer} = (isinteger(x) ? convert(T, x.num) :
     throw(InexactError(nameof(T), T, x)))
 
-Base.AbstractFloat(x::Rational) = float(x.num)/float(x.den)
+AbstractFloat(x::Rational) = float(x.num)/float(x.den)
 function (::Type{T})(x::Rational{S}) where T<:AbstractFloat where S
     P = promote_type(T,S)
     convert(T, convert(P,x.num)/convert(P,x.den))
@@ -244,11 +231,6 @@ copysign(x::Rational, y::Real) = copysign(x.num,y) // x.den
 copysign(x::Rational, y::Rational) = copysign(x.num,y.num) // x.den
 
 abs(x::Rational) = Rational(abs(x.num), x.den)
-function abs(x::Rational{T}) where {T<:BitSigned}
-    x.den === Base.typemin(T) || x.num === Base.typemin &&
-        throw(OverflowError("cannot take abs(typemin($T))"))
-    (-x.num) // x.den
-end
 
 typemin(::Type{Rational{T}}) where {T<:Integer} = -one(T)//zero(T)
 typemax(::Type{Rational{T}}) where {T<:Integer} = one(T)//zero(T)
@@ -256,16 +238,14 @@ typemax(::Type{Rational{T}}) where {T<:Integer} = one(T)//zero(T)
 isinteger(x::Rational) = x.den == 1
 
 -(x::Rational) = (-x.num) // x.den
-function -(x::Rational{T}) where {T<:BitSigned}
-    x.den === Base.typemin(T) || x.num === Base.typemin &&
-        throw(OverflowError("cannot negate typemin($T)"))
+function -(x::Rational{T}) where T<:BitSigned
+    x.num == typemin(T) && throw(OverflowError("rational numerator is typemin(T)"))
     (-x.num) // x.den
 end
-function -(x::Rational{T}) where {T<:Unsigned}
+function -(x::Rational{T}) where T<:Unsigned
     x.num != zero(T) && throw(OverflowError("cannot negate unsigned number"))
     x
 end
-
 
 for (op,chop) in ((:+,:checked_add), (:-,:checked_sub),
                   (:rem,:rem), (:mod,:mod))
@@ -433,7 +413,7 @@ function _round_rational(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTies
     convert(T, s)
 end
 
-function round(::Type{T}, x::Rational, ::RoundingMode=RoundNearest) where {T}
+function round(::Type{T}, x::Rational{Bool}, ::RoundingMode=RoundNearest) where T
     if denominator(x) == false && (T <: Union{Integer, Bool})
         throw(DivideError())
     end
@@ -453,7 +433,7 @@ end
 ^(x::T, y::Rational) where {T<:AbstractFloat} = x^convert(T,y)
 ^(z::Complex{T}, p::Rational) where {T<:Real} = z^convert(typeof(one(T)^p), p)
 
-^(z::Complex{<:Rational}, n) = (n===true) ? z : one(z) # to resolve ambiguity
+^(z::Complex{<:Rational}, n::Bool) = n ? z : one(z) # to resolve ambiguity
 function ^(z::Complex{<:Rational}, n::Integer)
     n >= 0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
 end
@@ -465,4 +445,4 @@ function lerpi(j::Integer, d::Integer, a::Rational, b::Rational)
     ((d-j)*a)/d + (j*b)/d
 end
 
-float(::Type{Rational{T}}) where {T<:Integer} = float(T)
+float(::Type{Rational{T}}) w
