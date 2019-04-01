@@ -1,2 +1,4 @@
 # treat patches as files that should not be modified
 *.patch -text
+
+*.sh text eol=lf
