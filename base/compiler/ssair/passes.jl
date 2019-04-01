@@ -155,7 +155,7 @@ end
 
 function simple_walk_constraint(compact::IncrementalCompact, @nospecialize(defidx), @nospecialize(typeconstraint) = types(compact)[defidx])
     callback = function (@nospecialize(pi), @nospecialize(idx))
-        isa(pi, PiNode) && (typeconstraint = typeintersect(typeconstraint, pi.typ))
+        isa(pi, PiNode) && (typeconstraint = typeintersect(typeconstraint, widenconst(pi.typ)))
         return false
     end
     def = simple_walk(compact, defidx, callback)

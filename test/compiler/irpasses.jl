@@ -184,6 +184,15 @@ let m = Meta.@lower 1 + 1
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
+# Issue #31546 - missing widenconst in SROA
+function f_31546(x)
+    (a, b) = x == "r"  ? (false, false) :
+             x == "r+" ? (true, false) :
+             x == "w"  ? (true, true) : error()
+    return a, b
+end
+@test f_31546("w") == (true, true)
+
 # Tests for cfg simplification
 let src = code_typed(gcd, Tuple{Int, Int})[1].first
     # Test that cfg_simplify doesn't mangle IR on code with loops
