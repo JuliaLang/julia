@@ -1,13 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Eigendecomposition
-struct Eigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
+struct Eigen{T,V,S<:AbstractArray,U<:AbstractVector} <: Factorization{T}
     values::U
     vectors::S
-    Eigen{T,V,S,U}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V,S,U} =
+    Eigen{T,V,S,U}(values::AbstractVector{V}, vectors::AbstractArray{T}) where {T,V,S,U} =
         new(values, vectors)
 end
-Eigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V} =
+Eigen(values::AbstractVector{V}, vectors::AbstractArray{T}) where {T,V} =
     Eigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
 
 # Generalized eigenvalue problem.
