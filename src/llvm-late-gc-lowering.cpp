@@ -32,6 +32,9 @@
 #include "julia_assert.h"
 
 #define DEBUG_TYPE "late_lower_gcroot"
+#if JL_LLVM_VERSION < 70000
+#define LLVM_DEBUG DEBUG
+#endif
 
 using namespace llvm;
 
@@ -1980,12 +1983,20 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
         tempSlot_i8->insertAfter(gcframe);
         Type *argsT[2] = {tempSlot_i8->getType(), T_int32};
         Function *memset = Intrinsic::getDeclaration(F->getParent(), Intrinsic::memset, makeArrayRef(argsT));
+#if JL_LLVM_VERSION >= 70000
+        Value *args[4] = {
+            tempSlot_i8, // dest
+            ConstantInt::get(Type::getInt8Ty(F->getContext()), 0), // val
+            ConstantInt::get(T_int32, sizeof(jl_value_t*)*(NRoots+2)), // len
+            ConstantInt::get(Type::getInt1Ty(F->getContext()), 0)}; // volatile
+#else
         Value *args[5] = {
             tempSlot_i8, // dest
             ConstantInt::get(Type::getInt8Ty(F->getContext()), 0), // val
             ConstantInt::get(T_int32, sizeof(jl_value_t*)*(NRoots+2)), // len
             ConstantInt::get(T_int32, 0), // align
             ConstantInt::get(Type::getInt1Ty(F->getContext()), 0)}; // volatile
+#endif
         CallInst *zeroing = CallInst::Create(memset, makeArrayRef(args));
         zeroing->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
         zeroing->insertAfter(tempSlot_i8);
@@ -2152,7 +2163,7 @@ bool LateLowerGCFrame::doFinalization(Module &M)
 }
 
 bool LateLowerGCFrame::runOnFunction(Function &F) {
-    DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
+    LLVM_DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
     // Check availability of functions again since they might have been deleted.
     reinitFunctions(*F.getParent());
     if (!ptls_getter)

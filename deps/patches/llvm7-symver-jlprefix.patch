@@ -12,7 +12,7 @@ index e9515fe7862..af082581627 100644
 --- a/tools/llvm-shlib/simple_version_script.map.in
 +++ b/tools/llvm-shlib/simple_version_script.map.in
 @@ -1 +1 @@
--LLVM_@LLVM_VERSION_MAJOR@.@LLVM_VERSION_MINOR@ { global: *; };
+-LLVM_@LLVM_VERSION_MAJOR@ { global: *; };
 +JL_LLVM_@LLVM_VERSION_MAJOR@.@LLVM_VERSION_MINOR@ { global: *; };
 --
 2.15.1
