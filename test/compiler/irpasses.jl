@@ -183,3 +183,66 @@ let m = Meta.@lower 1 + 1
     ir = @test_nowarn Core.Compiler.getfield_elim_pass!(ir, domtree)
     @test Core.Compiler.verify_ir(ir) === nothing
 end
+
+# Tests for cfg simplification
+let src = code_typed(gcd, Tuple{Int, Int})[1].first
+    # Test that cfg_simplify doesn't mangle IR on code with loops
+    ir = Core.Compiler.inflate_ir(src)
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+end
+
+let m = Meta.@lower 1 + 1
+    # Test that CFG simplify combines redundant basic blocks
+    @assert Meta.isexpr(m, :thunk)
+    src = m.args[1]::Core.CodeInfo
+    src.code = Any[
+        Core.Compiler.GotoNode(2),
+        Core.Compiler.GotoNode(3),
+        Core.Compiler.GotoNode(4),
+        Core.Compiler.GotoNode(5),
+        Core.Compiler.GotoNode(6),
+        Core.Compiler.GotoNode(7),
+        Expr(:return, 2)
+    ]
+    nstmts = length(src.code)
+    src.ssavaluetypes = nstmts
+    src.codelocs = fill(Int32(1), nstmts)
+    src.ssaflags = fill(Int32(0), nstmts)
+    ir = Core.Compiler.inflate_ir(src)
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.compact!(ir)
+    @test length(ir.cfg.blocks) == 1 && length(ir.stmts) == 1
+end
+
+let m = Meta.@lower 1 + 1
+    # Test that CFG simplify doesn't mess up when chaining past return blocks
+    @assert Meta.isexpr(m, :thunk)
+    src = m.args[1]::Core.CodeInfo
+    src.code = Any[
+        Core.Compiler.GotoIfNot(Core.Compiler.Argument(2), 3),
+        Core.Compiler.GotoNode(4),
+        Expr(:return, 1),
+        Core.Compiler.GotoNode(5),
+        Core.Compiler.GotoIfNot(Core.Compiler.Argument(2), 7),
+        # This fall through block of the previous GotoIfNot
+        # must be moved up along with it, when we merge it
+        # into the goto 4 block.
+        Expr(:return, 2),
+        Expr(:return, 3)
+    ]
+    nstmts = length(src.code)
+    src.ssavaluetypes = nstmts
+    src.codelocs = fill(Int32(1), nstmts)
+    src.ssaflags = fill(Int32(0), nstmts)
+    ir = Core.Compiler.inflate_ir(src)
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    @test length(ir.cfg.blocks) == 5
+    ret_2 = ir.stmts[ir.cfg.blocks[3].stmts[end]]
+    @test isa(ret_2, Core.Compiler.ReturnNode) && ret_2.val == 2
+end
