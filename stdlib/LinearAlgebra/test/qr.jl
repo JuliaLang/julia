@@ -149,13 +149,14 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test_throws DimensionMismatch LinearAlgebra.lmul!(q,zeros(eltya,n1+1))
                 @test_throws DimensionMismatch LinearAlgebra.lmul!(adjoint(q), zeros(eltya,n1+1))
 
+                b = similar(a); rand!(b)
                 c = similar(a)
                 @test mul!(c, q, b) ≈ q*b
                 @test mul!(c, q', b) ≈ q'*b
-                @test mul!(c, a, q) ≈ a*q
-                @test mul!(c, b, a') ≈ b*a'
-                @test_throws DimensionMismatch mul!(Matrix(eltya, n+1, n), q, b)
-                @test_throws DimensionMismatch mul!(c, q, Matrix(eltya, n+1, n)))
+                @test mul!(c, b, q) ≈ b*q
+                @test mul!(c, b, q') ≈ b*q'
+                @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n), q, b)
+                @test_throws DimensionMismatch mul!(c, q, Matrix{eltya}(I, n+1, n))
 
                 qra = qr(a[:,1:n1], Val(false))
                 q, r = qra.Q, qra.R
@@ -166,13 +167,12 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test_throws ErrorException size(q,-1)
                 @test_throws DimensionMismatch q * Matrix{Int8}(I, n+4, n+4)
 
-                c = similar(a)
                 @test mul!(c, q, b) ≈ q*b
                 @test mul!(c, q', b) ≈ q'*b
-                @test mul!(c, a, q) ≈ a*q
-                @test mul!(c, b, a') ≈ b*a'
-                @test_throws DimensionMismatch mul!(Matrix(eltya, n+1, n), q, b)
-                @test_throws DimensionMismatch mul!(c, q, Matrix(eltya, n+1, n)))
+                @test mul!(c, b, q) ≈ b*q
+                @test mul!(c, b, q') ≈ b*q'
+                @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n), q, b)
+                @test_throws DimensionMismatch mul!(c, q, Matrix{eltya}(I, n+1, n))
             end
         end
     end
