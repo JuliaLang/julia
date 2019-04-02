@@ -171,14 +171,14 @@ let
     @testset "binary ops with vectors" begin
         v = complex.(randn(3), randn(3))
         # As shown in #20423@GitHub, vector acts like x1 matrix when participating in linear algebra
-        @test all(v  * J == v  * λ)
-        @test all(v' * J == v' * λ)
-        @test all(J * v  == λ * v )
-        @test all(J * v' == λ * v')
-        @test all(v  / J == v  / λ)
-        @test all(v' / J == v' / λ)
-        @test all(J \ v  == λ \ v )
-        @test all(J \ v' == λ \ v')
+        @test all(v  * J .== v  * λ)
+        @test all(v' * J .== v' * λ)
+        @test all(J * v  .== λ * v )
+        @test all(J * v' .== λ * v')
+        @test all(v  / J .== v  / λ)
+        @test all(v' / J .== v' / λ)
+        @test all(J \ v  .== λ \ v )
+        @test all(J \ v' .== λ \ v')
     end
 
     @testset "binary ops with matrices" begin
