@@ -275,7 +275,8 @@ end
     # Issue 31456
     @test replace("The fox.", r"fox(es)?" => s"bus\1") == "The bus."
     @test replace("The foxes.", r"fox(es)?" => s"bus\1") == "The buses."
-    
+    @test replace("The quick fox quickly.", r"(quick)?\sfox(es)?\s(run)?" => s"\1 bus\2 \3") == "The quick bus quickly."
+
     # test replace with a count for String and GenericString
     # check that replace is a no-op if count==0
     for s in ["aaa", Test.GenericString("aaa")]
