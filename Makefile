@@ -270,7 +270,11 @@ endif
 
 
 install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index.html
+ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	@$(MAKE) $(QUIET_MAKE) all
+else
+	@$(MAKE) $(QUIET_MAKE) release
+endif
 	@for subdir in $(bindir) $(datarootdir)/julia/stdlib/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
 		mkdir -p $(DESTDIR)$$subdir; \
 	done

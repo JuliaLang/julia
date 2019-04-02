@@ -2695,7 +2695,7 @@ JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms)
         remaining -= namelen + 1;
     }
     namestr = jl_string_data(syms);
-    jl_array_t *names = jl_alloc_vec_any(len);
+    jl_array_t *names = jl_alloc_array_1d(jl_array_symbol_type, len);
     JL_GC_PUSH1(&names);
     for (i = 0; i < len; i++) {
         size_t namelen = strlen(namestr);
