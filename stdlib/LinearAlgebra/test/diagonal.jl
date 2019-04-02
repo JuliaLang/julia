@@ -493,18 +493,22 @@ end
 @testset "Multiplication with Adjoint and Transpose vectors (#26863)" begin
     K = 5
     x = rand(ComplexF64, K)
+    xt = transpose(x)
     D = Diagonal(rand(ComplexF64, K))
-    @test x'*D == x'*Array(D) == copy(x')*D == copy(x')*Array(D)
+    @test x'*D ≈ x'*Array(D) ≈ copy(x')*D ≈ copy(x')*Array(D)
+    @test xt*D ≈ xt*Array(D) ≈ copy(xt)*D ≈ copy(xt)*Array(D)
     @test x'*D*x ≈ (x'*D)*x ≈ (x'*Array(D))*x
-    @test transpose(x)*D*x ≈ (transpose(x)*D)*x ≈ (transpose(x)*Array(D))*x
+    @test xt*D*x ≈ (xt*D)*x ≈ (xt*Array(D))*x
     # non-commutative eltype
-    x = [rand(2) for _ in 1:K]
-    dd = [rand(2,2) for _ in 1:K]
+    x = [rand(ComplexF64, 2) for _ in 1:K]
+    xt = transpose(x)
+    dd = [rand(ComplexF64, 2, 2) for _ in 1:K]
     D = Diagonal(dd)
-    DM = fill(zeros(2,2), K, K); DM[diagind(DM)] .= dd
-    @test x'*D == x'*DM == copy(x')*D == copy(x')*DM
+    DM = fill(zeros(ComplexF64, 2, 2), K, K); DM[diagind(DM)] .= dd
+    @test x'*D ≈ x'*DM ≈ copy(x')*D ≈ copy(x')*DM
+    @test xt*D ≈ xt*DM ≈ copy(xt)*D ≈ copy(xt)*DM
     @test x'*D*x == (x'*D)*x == (x'*DM)*x
-    @test transpose(x)*D*x == (transpose(x)*D)*x == (transpose(x)*DM)*x
+    @test xt*D*x == (xt*D)*x == (xt*DM)*x
 end
 
 @testset "Triangular division by Diagonal #27989" begin
