@@ -229,7 +229,7 @@ end
 end
 
 @testset "issue #31524" begin
-    dt = DateTime(Libc.strptime("%Y-%M-%dT%H:%M:%SZ", "2018-11-16T10:26:14Z"))
+    dt = Time(Libc.strptime("%Y-%M-%dT%H:%M:%SZ", "2018-11-16T10:26:14Z"))
     @test typeof(dt) == Time
     @test dt == Dates.Time(10, 26, 14)
 end

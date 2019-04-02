@@ -197,7 +197,7 @@ function validargs(::Type{DateTime}, y::Int64, m::Int64, d::Int64,
     return argerror()
 end
 
-DateTime(dt::Base.Libc.TmStruct) = Time(dt.hour, dt.min, dt.sec)
+DateTime(dt::Base.Libc.TmStruct) = DateTime(dt.year, dt.month, dt.mday, dt.hour, dt.min, dt.sec)
 
 """
     Date(y, [m, d]) -> Date
@@ -215,6 +215,8 @@ function validargs(::Type{Date}, y::Int64, m::Int64, d::Int64)
     0 < d < daysinmonth(y, m) + 1 || return argerror("Day: $d out of range (1:$(daysinmonth(y, m)))")
     return argerror()
 end
+
+Date(dt::Base.Libc.TmStruct) = Time(dt.year, dt.month, dt.mday)
 
 """
     Time(h, [mi, s, ms, us, ns]) -> Time
@@ -236,6 +238,8 @@ function validargs(::Type{Time}, h::Int64, mi::Int64, s::Int64, ms::Int64, us::I
     -1 < ns < 1000 || return argerror("Nanosecond: $ns out of range (0:999)")
     return argerror()
 end
+
+Time(dt::Base.Libc.TmStruct) = Time(dt.hour, dt.min, dt.sec)
 
 # Convenience constructors from Periods
 function DateTime(y::Year, m::Month=Month(1), d::Day=Day(1),
