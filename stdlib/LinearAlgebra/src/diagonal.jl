@@ -524,25 +524,55 @@ function pinv(D::Diagonal{T}, tol::Real) where T
 end
 
 #Eigensystem
-eigvals(D::Diagonal{<:Number}; permute::Bool=true, scale::Bool=true) = D.diag
-# eigvals(D::Diagonal; permute::Bool=true, scale::Bool=true) =
-#     [eigvals(x) for x in D.diag] #For block matrices, etc.
-function eigvals(D::Diagonal; permute::Bool=true, scale::Bool=true)
-    vec = Array{eltype(D.diag[1]), 1}(undef, 0)
-    for x in D.diag
-        vec = vcat(vec, diag(x))
+function eigvecs(D::Diagonal)
+    vec = vcat([vcat([zeros(size(x,2)) for x in D.diag]) for i=1:length(test(D))])
+    ind = 0
+    for i=1:length(D.diag)
+        s = size(D.diag[i],2)
+        x = eigvecs(D.diag[i])
+        indices = findall(m -> m==D.diag[i], D)
+
+        for j in indices
+            if j[1] == i
+                for k=1:s
+                    ind = ind + 1
+                    vec[ind][j[1]] = x[k,:]
+                end
+            end
+        end
+
     end
-    return eigvals(Diagonal(vec))
+    return vec
 end
+eigvals(D::Diagonal{<:Number}; permute::Bool=true, scale::Bool=true) = D.diag
+eigvals(D::Diagonal; permute::Bool=true, scale::Bool=true) = vcat([eigvals(d; permute=permute, scale=scale) for d in D.diag]...)
 eigvecs(D::Diagonal{<:Number}) = Matrix{eltype(D)}(I, size(D))
-eigvecs(D::Diagonal) = [eigvecs(x) for x in D.diag]
+function eigvecs(D::Diagonal)
+    vec = vcat([vcat([zeros(size(x,2)) for x in D.diag]) for i=1:length(eigvals(D))])
+    ind = 0
+    for i=1:length(D.diag)
+        s = size(D.diag[i],2)
+        x = eigvecs(D.diag[i])
+        indices = findall(m -> m==D.diag[i], D)
+
+        for j in indices
+            if j[1] == i
+                for k=1:s
+                    ind = ind + 1
+                    vec[ind][j[1]] = x[k,:]
+                end
+            end
+        end
+
+    end
+    return vec
+end
 function eigen(D::Diagonal{<:Number}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=nothing)
     if any(!isfinite, D.diag)
         throw(ArgumentError("matrix contains Infs or NaNs"))
     end
     Eigen(sorteig!(eigvals(D), eigvecs(D), sortby)...)
 end
-eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=nothing) = [eigen(x) for x in D.diag]
 
 #Singular system
 svdvals(D::Diagonal{<:Number}) = sort!(abs.(D.diag), rev = true)
