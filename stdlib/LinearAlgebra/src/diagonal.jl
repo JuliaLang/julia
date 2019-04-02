@@ -525,8 +525,15 @@ end
 
 #Eigensystem
 eigvals(D::Diagonal{<:Number}; permute::Bool=true, scale::Bool=true) = D.diag
-eigvals(D::Diagonal; permute::Bool=true, scale::Bool=true) =
-    [eigvals(x) for x in D.diag] #For block matrices, etc.
+# eigvals(D::Diagonal; permute::Bool=true, scale::Bool=true) =
+#     [eigvals(x) for x in D.diag] #For block matrices, etc.
+function eigvals(D::Diagonal; permute::Bool=true, scale::Bool=true)
+    vec = Array{eltype(D.diag[1]), 1}(undef, 0)
+    for x in D.diag
+        vec = vcat(vec, diag(x))
+    end
+    return eigvals(Diagonal(vec))
+end
 eigvecs(D::Diagonal{<:Number}) = Matrix{eltype(D)}(I, size(D))
 eigvecs(D::Diagonal) = [eigvecs(x) for x in D.diag]
 function eigen(D::Diagonal{<:Number}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=nothing)
