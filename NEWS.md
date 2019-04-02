@@ -12,6 +12,11 @@ New language features
     `findall`, `findfirst`, `argmin`/`argmax` and `findmin`/`findmax` to work with these
     objects, returning the index of matching non-missing elements in the parent ([#31008]).
 
+  * `inv(::Missing)` has now been added and returns `missing` ([#31451]).
+
+  * `nextfloat(::BigFloat, n::Integer)` and `prevfloat(::BigFloat, n::Integer)` methods
+    have been added ([#31310]).
+
 Multi-threading changes
 -----------------------
 
@@ -47,6 +52,9 @@ Standard library changes
 * A no-argument construct to `Ptr{T}` has been added which constructs a null pointer ([#30919])
 * `strip` now accepts a function argument in the same manner as `lstrip` and `rstrip` ([#31211])
 * `mktempdir` now accepts a `prefix` keyword argument to customize the file name ([#31230], [#22922])
+* `nextfloat(::BigFloat)` and `prevfloat(::BigFloat)` now returns a value with the same precision
+  as their argument, which means that (in particular) `nextfloat(prevfloat(x)) == x` whereas
+  previously this could result in a completely different value with a different precision ([#31310])
 
 #### LinearAlgebra
 
@@ -68,10 +76,17 @@ Standard library changes
 
 * Fixed `repr` such that it displays `DateTime` as it would be entered in Julia ([#30200]).
 
+#### Statistics
+
+* `quantile` now accepts in all cases collections whose `eltype` is not a subtype of `Number` ([#30938]).
+
 #### Miscellaneous
 
 * Since environment variables on Windows are case-insensitive, `ENV` now converts its keys
   to uppercase for display, iteration, and copying ([#30593]).
+
+* Build system now prefers downloading prebuilt binary tarballs for most dependencies on
+  supported systems, disable by setting `USE_BINARYBUILDER=0` at `make` time ([#31441]).
 
 External dependencies
 ---------------------

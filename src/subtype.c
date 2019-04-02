@@ -1696,10 +1696,7 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     if (jl_is_typevar(a))
         return (jl_value_t*)b;
     if (ub == a) {
-        if (bb->lb == jl_bottom_type ||
-            // if the var has an equality constraint then make sure bounds stay consistent.
-            // TODO: try to use this check in more cases
-            bb->ub != bb->lb || try_subtype_in_env(bb->lb, ub, e)) {
+        if (bb->lb == jl_bottom_type) {
             set_bound(&bb->ub, ub, b, e);
             return (jl_value_t*)b;
         }
@@ -1947,7 +1944,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
     save_env(e, &save, &se);
     res = intersect_unionall_(t, u, e, R, param, &vb);
     if (res != jl_bottom_type) {
-        if (vb.concrete || vb.occurs_inv>1 || (vb.occurs_inv && vb.occurs_cov)) {
+        if (vb.concrete || vb.occurs_inv>1 || u->var->lb != jl_bottom_type || (vb.occurs_inv && vb.occurs_cov)) {
             restore_env(e, NULL, &se);
             vb.occurs_cov = vb.occurs_inv = 0;
             vb.constraintkind = 3;
@@ -1958,13 +1955,13 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
             restore_env(e, save, &se);
             vb.occurs_cov = vb.occurs_inv = 0;
             vb.lb = u->var->lb; vb.ub = u->var->ub;
-            vb.constraintkind = 2;
+            vb.constraintkind = 1;
             res2 = intersect_unionall_(t, u, e, R, param, &vb);
             if (res2 == jl_bottom_type) {
                 restore_env(e, save, &se);
                 vb.occurs_cov = vb.occurs_inv = 0;
                 vb.lb = u->var->lb; vb.ub = u->var->ub;
-                vb.constraintkind = 1;
+                vb.constraintkind = 2;
                 res2 = intersect_unionall_(t, u, e, R, param, &vb);
                 if (res2 == jl_bottom_type)
                     restore_env(e, save2, &se2);

@@ -1186,7 +1186,7 @@ static void add_builtin(const char *name, jl_value_t *v)
 jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b)
 {
     assert(jl_isa(b, (jl_value_t*)jl_builtin_type));
-    return ((jl_typemap_entry_t*)jl_gf_mtable(b)->cache)->func.linfo->specptr.fptr1;
+    return ((jl_typemap_entry_t*)jl_gf_mtable(b)->cache)->func.linfo->cache->specptr.fptr1;
 }
 
 static void add_builtin_func(const char *name, jl_fptr_args_t fptr)
@@ -1256,6 +1256,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("Module", (jl_value_t*)jl_module_type);
     add_builtin("MethodTable", (jl_value_t*)jl_methtable_type);
     add_builtin("Method", (jl_value_t*)jl_method_type);
+    add_builtin("CodeInstance", (jl_value_t*)jl_code_instance_type);
     add_builtin("TypeMapEntry", (jl_value_t*)jl_typemap_entry_type);
     add_builtin("TypeMapLevel", (jl_value_t*)jl_typemap_level_type);
     add_builtin("Symbol", (jl_value_t*)jl_sym_type);

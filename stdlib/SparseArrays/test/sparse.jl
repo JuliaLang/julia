@@ -2088,11 +2088,11 @@ end
 
     show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5], Int64[1,1,2,2,3], [1.0,2.0,3.0,4.0,5.0]))
     @test String(take!(io)) ==  string("5×3 SparseArrays.SparseMatrixCSC{Float64,Int64} with 5 stored entries:\n  [1, 1]",
-                                       "  =  1.0\n  ⋮\n  [5, 3]  =  5.0")
+                                       "  =  1.0\n  ⋮\n  [4, 2]  =  4.0\n  [5, 3]  =  5.0")
 
     show(ioc, MIME"text/plain"(), sparse(fill(1.,5,3)))
     @test String(take!(io)) ==  string("5×3 SparseArrays.SparseMatrixCSC{Float64,$Int} with 15 stored entries:\n  [1, 1]",
-                                       "  =  1.0\n  ⋮\n  [5, 3]  =  1.0")
+                                       "  =  1.0\n  ⋮\n  [4, 3]  =  1.0\n  [5, 3]  =  1.0")
 
     # odd number of rows
     ioc = IOContext(io, :displaysize => (9, 80), :limit => true)

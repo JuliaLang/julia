@@ -99,10 +99,12 @@ function generate_precompile_statements()
                         pty_slave, pty_slave, pty_slave; wait=false)
                 readuntil(pty_master, "julia>", keep=true)
                 t = @async begin
+                    s = ""
                     while true
                         sleep(0.5)
-                        s = String(readavailable(pty_master))
-                        write(repl_output_buffer, s)
+                        news = String(readavailable(pty_master))
+                        write(repl_output_buffer, news)
+                        s *= news
                         if occursin("__PRECOMPILE_END__", s)
                             break
                         end

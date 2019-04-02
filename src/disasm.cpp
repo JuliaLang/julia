@@ -791,22 +791,38 @@ static void jl_dump_asm_internal(
     MCInstPrinter *IP =
         TheTarget->createMCInstPrinter(TheTriple, OutputAsmVariant, *MAI, *MCII, *MRI);
     //IP->setPrintImmHex(true); // prefer hex or decimal immediates
-    MCCodeEmitter *CE = 0;
-    MCAsmBackend *MAB = 0;
+#if JL_LLVM_VERSION >= 70000
+    std::unique_ptr<MCCodeEmitter> CE = 0;
+    std::unique_ptr<MCAsmBackend> MAB = 0;
+    if (ShowEncoding) {
+        CE = std::unique_ptr<MCCodeEmitter>(TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx));
+        MCTargetOptions Options;
+        MAB = std::unique_ptr<MCAsmBackend>(TheTarget->createMCAsmBackend(*STI, *MRI, Options));
+    }
+#else
+    MCCodeEmitter* CE = 0;
+    MCAsmBackend* MAB = 0;
     if (ShowEncoding) {
         CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx);
         MCTargetOptions Options;
         MAB = TheTarget->createMCAsmBackend(*STI, *MRI, Options);
     }
+#endif
 
     // createAsmStreamer expects a unique_ptr to a formatted stream, which means
     // it will destruct the stream when it is done. We cannot have this, so we
     // start out with a raw stream, and create formatted stream from it here.
     // LLVM will desctruct the formatted stream, and we keep the raw stream.
     auto ustream = llvm::make_unique<formatted_raw_ostream>(rstream);
+#if JL_LLVM_VERSION >= 70000
+    Streamer.reset(TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/true,
+                                                /*useDwarfDirectory*/ true,
+                                                IP, std::move(CE), std::move(MAB), /*ShowInst*/ false));
+#else
     Streamer.reset(TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/true,
                                                 /*useDwarfDirectory*/ true,
                                                 IP, CE, MAB, /*ShowInst*/ false));
+#endif
     Streamer->InitSections(true);
 
     // Make the MemoryObject wrapper

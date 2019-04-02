@@ -483,8 +483,8 @@ JL_DLLEXPORT void jl_threading_run(jl_value_t *func)
     size_t world = jl_world_counter;
     jl_method_instance_t *mfunc = jl_lookup_generic(&func, 1, jl_int32hash_fast(jl_return_address()), world);
     // Ignore constant return value for now.
-    jl_callptr_t fptr = jl_compile_method_internal(&mfunc, world);
-    if (fptr == jl_fptr_const_return)
+    jl_code_instance_t *fptr = jl_compile_method_internal(mfunc, world);
+    if (fptr->invoke == jl_fptr_const_return)
         return;
 
     size_t nthreads = jl_n_threads;

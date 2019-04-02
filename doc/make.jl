@@ -162,6 +162,8 @@ else
     Documenter.HTML(
         prettyurls = ("deploy" in ARGS),
         canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/v1/" : nothing,
+        assets = ["assets/julia-manual.css", ],
+        analytics = "UA-28835595-6",
     )
 end
 
@@ -177,9 +179,7 @@ makedocs(
     format    = format,
     sitename  = "The Julia Language",
     authors   = "The Julia Project",
-    analytics = "UA-28835595-6",
     pages     = PAGES,
-    assets = ["assets/julia-manual.css", ]
 )
 
 # Only deploy docs from 64bit Linux to avoid committing multiple versions of the same

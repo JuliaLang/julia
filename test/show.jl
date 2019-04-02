@@ -617,6 +617,18 @@ else
     @test occursin("https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/special/trig.jl#L", Base.url(which(sin, (Float64,))))
 end
 
+# Method location correction (Revise integration)
+methloc = Base.methodloc_callback[]
+dummyloc(m::Method) = :nofile, 123456789
+Base.methodloc_callback[] = dummyloc
+let repr = sprint(show, "text/plain", methods(Base.inbase))
+    @test occursin("nofile:123456789", repr)
+end
+let repr = sprint(show, "text/html", methods(Base.inbase))
+    @test occursin("nofile:123456789", repr)
+end
+Base.methodloc_callback[] = methloc
+
 # print_matrix should be able to handle small and large objects easily, test by
 # calling show. This also indirectly tests print_matrix_row, which
 # is used repeatedly by print_matrix.

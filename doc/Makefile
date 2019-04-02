@@ -5,6 +5,7 @@ default: html
 # You can set these variables from the command line.
 SRCDIR           := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 JULIAHOME        := $(abspath $(SRCDIR)/..)
+SRCCACHE         := $(abspath $(JULIAHOME)/deps/srccache)
 include $(JULIAHOME)/Make.inc
 JULIA_EXECUTABLE := $(call spawn,$(build_bindir)/julia) --startup-file=no
 
@@ -23,11 +24,13 @@ help:
 DOCUMENTER_OPTIONS := linkcheck=$(linkcheck) doctest=$(doctest) buildroot=$(call cygpath_w,$(BUILDROOT)) \
     texplatform=$(texplatform)
 
-UnicodeData.txt:
-	$(JLDOWNLOAD) http://www.unicode.org/Public/9.0.0/ucd/UnicodeData.txt
+$(SRCCACHE)/UnicodeData.txt:
+	@mkdir -p "$(SRCCACHE)"
+	$(JLDOWNLOAD) "$@" http://www.unicode.org/Public/9.0.0/ucd/UnicodeData.txt
 
-deps: UnicodeData.txt
-	$(JLCHECKSUM) UnicodeData.txt
+deps: $(SRCCACHE)/UnicodeData.txt
+	$(JLCHECKSUM) "$<"
+	cp "$<" UnicodeData.txt
 
 clean:
 	-rm -rf _build/* deps/* docbuild.log UnicodeData.txt

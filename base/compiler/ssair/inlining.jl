@@ -168,14 +168,18 @@ function cfg_inline_item!(item::InliningTodo, state::CFGInliningState, from_unio
     for (old_block, new_block) in enumerate(bb_rename_range)
         if old_block != 1 || need_split_before
             p = state.new_cfg_blocks[new_block].preds
-            map!(p, p) do old_pred_block
-                return old_pred_block == 0 ? 0 : bb_rename_range[old_pred_block]
+            let bb_rename_range = bb_rename_range
+                map!(p, p) do old_pred_block
+                    return old_pred_block == 0 ? 0 : bb_rename_range[old_pred_block]
+                end
             end
         end
         if new_block != last(new_block_range)
             s = state.new_cfg_blocks[new_block].succs
-            map!(s, s) do old_succ_block
-                return bb_rename_range[old_succ_block]
+            let bb_rename_range = bb_rename_range
+                map!(s, s) do old_succ_block
+                    return bb_rename_range[old_succ_block]
+                end
             end
         end
     end
@@ -569,21 +573,21 @@ function batch_inline!(todo::Vector{Any}, ir::IRCode, linetable::Vector{LineInfo
     return ir
 end
 
-function _spec_lambda(@nospecialize(atype), sv::OptimizationState, @nospecialize(invoke_data))
+function spec_lambda(@nospecialize(atype), sv::OptimizationState, @nospecialize(invoke_data))
+    min_valid = UInt[typemin(UInt)]
+    max_valid = UInt[typemax(UInt)]
     if invoke_data === nothing
-        return ccall(:jl_get_spec_lambda, Any, (Any, UInt), atype, sv.params.world)
+        mi = ccall(:jl_get_spec_lambda, Any, (Any, UInt, Ptr{UInt}, Ptr{UInt}), atype, sv.params.world, min_valid, max_valid)
     else
         invoke_data = invoke_data::InvokeData
         atype <: invoke_data.types0 || return nothing
-        return ccall(:jl_get_invoke_lambda, Any, (Any, Any, Any, UInt),
-                     invoke_data.mt, invoke_data.entry, atype, sv.params.world)
+        mi = ccall(:jl_get_invoke_lambda, Any, (Any, Any, Any, UInt),
+                invoke_data.mt, invoke_data.entry, atype, sv.params.world)
+        #XXX: compute min/max_valid
     end
-end
-
-function spec_lambda(@nospecialize(atype), sv::OptimizationState, @nospecialize(invoke_data))
-    linfo = _spec_lambda(atype, sv, invoke_data)
-    linfo !== nothing && add_backedge!(linfo, sv)
-    linfo
+    mi !== nothing && add_backedge!(mi::MethodInstance, sv)
+    update_valid_age!(min_valid[1], max_valid[1], sv)
+    return mi
 end
 
 # This assumes the caller has verified that all arguments to the _apply call are Tuples.
@@ -680,52 +684,43 @@ function analyze_method!(idx::Int, sig::Signature, @nospecialize(metharg), meths
         isa(methsp[i], TypeVar) && return nothing
     end
 
-    # Find the linfo for this methods
-    linfo = code_for_method(method, metharg, methsp, sv.params.world, true) # Union{Nothing, MethodInstance}
-    if !isa(linfo, MethodInstance)
+    # See if there exists a specialization for this method signature
+    mi = specialize_method(method, metharg, methsp, true) # Union{Nothing, MethodInstance}
+    if !isa(mi, MethodInstance)
         return spec_lambda(atype_unlimited, sv, invoke_data)
     end
 
-    if invoke_api(linfo) == 2
-        # in this case function can be inlined to a constant
-        add_backedge!(linfo, sv)
-        return ConstantCase(quoted(linfo.inferred_const), method, Any[methsp...], metharg)
-    end
-
-    isconst, inferred = find_inferred(linfo, atypes, sv, stmttyp)
+    isconst, src = find_inferred(mi, atypes, sv, stmttyp)
     if isconst
-        return ConstantCase(inferred, method, Any[methsp...], metharg)
+        add_backedge!(mi, sv)
+        return ConstantCase(src, method, Any[methsp...], metharg)
     end
-    if inferred === nothing
+    if src === nothing
         return spec_lambda(atype_unlimited, sv, invoke_data)
     end
 
-    src_inferred = ccall(:jl_ast_flag_inferred, Bool, (Any,), inferred)
-    src_inlineable = ccall(:jl_ast_flag_inlineable, Bool, (Any,), inferred)
+    src_inferred = ccall(:jl_ast_flag_inferred, Bool, (Any,), src)
+    src_inlineable = ccall(:jl_ast_flag_inlineable, Bool, (Any,), src)
 
     if !(src_inferred && src_inlineable)
         return spec_lambda(atype_unlimited, sv, invoke_data)
     end
 
     # At this point we're committed to performing the inlining, add the backedge
-    add_backedge!(linfo, sv)
+    add_backedge!(mi, sv)
 
-    if isa(inferred, CodeInfo)
-        src = inferred
-        ast = copy_exprargs(inferred.code)
-    else
-        src = ccall(:jl_uncompress_ast, Any, (Any, Any), method, inferred::Vector{UInt8})::CodeInfo
-        ast = src.code
+    if !isa(src, CodeInfo)
+        src = ccall(:jl_uncompress_ast, Any, (Any, Ptr{Cvoid}, Any), method, C_NULL, src::Vector{UInt8})::CodeInfo
     end
 
     @timeit "inline IR inflation" begin
-        ir2 = inflate_ir(src, linfo)
+        ir2 = inflate_ir(src, mi)
         # prepare inlining linetable with method instance information
         inline_linetable = Vector{LineInfoNode}(undef, length(src.linetable))
         for i = 1:length(src.linetable)
             entry = src.linetable[i]
             if entry.inlined_at === 0 && entry.method === method
-                entry = LineInfoNode(linfo, entry.file, entry.line, entry.inlined_at)
+                entry = LineInfoNode(mi, entry.file, entry.line, entry.inlined_at)
             end
             inline_linetable[i] = entry
         end
@@ -998,6 +993,7 @@ function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
             # No applicable method, or too many applicable methods
             continue
         end
+        update_valid_age!(min_valid[1], max_valid[1], sv)
 
         cases = Pair{Any, Any}[]
         # TODO: This could be better
@@ -1117,6 +1113,7 @@ function compute_invoke_data(@nospecialize(atypes), params::Params)
     invoke_entry = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt),
                          invoke_types, params.world)
     invoke_entry === nothing && return nothing
+    #XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
     invoke_data = InvokeData(mt, invoke_entry, invoke_types)
     atype0 = atypes[2]
     atypes = atypes[4:end]
@@ -1261,7 +1258,7 @@ function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
     return urs[]
 end
 
-function find_inferred(linfo::MethodInstance, @nospecialize(atypes), sv::OptimizationState, @nospecialize(rettype))
+function find_inferred(mi::MethodInstance, @nospecialize(atypes), sv::OptimizationState, @nospecialize(rettype))
     # see if the method has a InferenceResult in the current cache
     # or an existing inferred code info store in `.inferred`
     haveconst = false
@@ -1273,22 +1270,28 @@ function find_inferred(linfo::MethodInstance, @nospecialize(atypes), sv::Optimiz
         end
     end
     if haveconst || improvable_via_constant_propagation(rettype)
-        inf_result = cache_lookup(linfo, atypes, sv.params.cache) # Union{Nothing, InferenceResult}
+        inf_result = cache_lookup(mi, atypes, sv.params.cache) # Union{Nothing, InferenceResult}
     else
         inf_result = nothing
     end
+    #XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
     if isa(inf_result, InferenceResult)
         let inferred_src = inf_result.src
             if isa(inferred_src, CodeInfo)
                 return svec(false, inferred_src)
             end
             if isa(inferred_src, Const) && is_inlineable_constant(inferred_src.val)
-                add_backedge!(linfo, sv)
                 return svec(true, quoted(inferred_src.val),)
             end
         end
     end
-    if isdefined(linfo, :inferred)
+
+    linfo = inf_for_methodinstance(mi, sv.params.world)
+    if linfo isa CodeInstance
+        if invoke_api(linfo) == 2
+            # in this case function can be inlined to a constant
+            return svec(true, quoted(linfo.rettype_const))
+        end
         return svec(false, linfo.inferred)
     end
     return svec(false, nothing)

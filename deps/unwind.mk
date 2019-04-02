@@ -1,5 +1,6 @@
 ## UNWIND ##
 
+ifneq ($(USE_BINARYBUILDER_UNWIND),1)
 LIBUNWIND_CFLAGS := -U_FORTIFY_SOURCE $(fPIC)
 LIBUNWIND_CPPFLAGS :=
 
@@ -100,3 +101,17 @@ compile-osxunwind: $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/build-compiled
 fastcheck-osxunwind: check-osxunwind
 check-osxunwind: compile-osxunwind
 install-osxunwind: $(build_prefix)/manifest/osxunwind
+
+else # USE_BINARYBUILDER_UNWIND
+
+UNWIND_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LibUnwind-v$(UNWIND_VER)-$(UNWIND_BB_REL)
+UNWIND_BB_NAME := LibUnwind.v$(UNWIND_VER)
+
+$(eval $(call bb-install,unwind,UNWIND,false))
+
+OSXUNWIND_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LibOSXUnwind-$(OSXUNWIND_VER)-$(OSXUNWIND_BB_REL)
+OSXUNWIND_BB_NAME := LibOSXUnwind.v$(OSXUNWIND_VER)
+
+$(eval $(call bb-install,osxunwind,OSXUNWIND,false))
+
+endif

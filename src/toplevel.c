@@ -514,7 +514,7 @@ void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *spar
 static jl_method_instance_t *method_instance_for_thunk(jl_code_info_t *src, jl_module_t *module)
 {
     jl_method_instance_t *li = jl_new_method_instance_uninit();
-    li->inferred = (jl_value_t*)src;
+    li->uninferred = (jl_value_t*)src;
     li->specTypes = (jl_value_t*)jl_emptytuple_type;
     li->def.module = module;
     return li;
@@ -785,10 +785,10 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         size_t world = jl_world_counter;
         ptls->world_age = world;
         if (!has_defs) {
-            jl_type_infer(&li, world, 0);
+            (void)jl_type_infer(li, world, 0);
         }
         jl_value_t *dummy_f_arg = NULL;
-        result = li->invoke(li, &dummy_f_arg, 1);
+        result = jl_invoke(li, &dummy_f_arg, 1);
         ptls->world_age = last_age;
     }
     else {
@@ -818,7 +818,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
             if (m != jl_main_module) { // TODO: this was grand-fathered in
                 jl_printf(JL_STDERR, "WARNING: eval into closed module %s:\n", jl_symbol_name(m->name));
                 jl_static_show(JL_STDERR, ex);
-                jl_printf(JL_STDERR, "\n  ** incremental compilation may be broken for this module **\n\n");
+                jl_printf(JL_STDERR, "\n  ** incremental compilation may be fatally broken for this module **\n\n");
             }
         }
     }
@@ -839,9 +839,11 @@ JL_DLLEXPORT jl_value_t *jl_infer_thunk(jl_code_info_t *thk, jl_module_t *m)
     jl_method_instance_t *li = method_instance_for_thunk(thk, m);
     JL_GC_PUSH1(&li);
     jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
-    jl_type_infer(&li, jl_get_ptls_states()->world_age, 0);
+    jl_code_info_t *src = jl_type_infer(li, jl_get_ptls_states()->world_age, 0);
     JL_GC_POP();
-    return li->rettype;
+    if (src)
+        return src->rettype;
+    return (jl_value_t*)jl_any_type;
 }
 
 JL_DLLEXPORT jl_value_t *jl_load(jl_module_t *module, const char *fname)

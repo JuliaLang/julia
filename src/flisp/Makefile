@@ -42,9 +42,9 @@ SHIPFLAGS += $(FLAGS)
 
 default: release
 
-release: $(BUILDDIR)/$(EXENAME)
+release: $(BUILDDIR)/$(EXENAME)$(EXE)
 
-debug: $(BUILDDIR)/$(EXENAME)-debug
+debug: $(BUILDDIR)/$(EXENAME)-debug$(EXE)
 
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
@@ -78,10 +78,10 @@ else
 CCLD := $(LD)
 endif
 
-$(BUILDDIR)/$(EXENAME)-debug: $(DOBJS) $(LIBFILES_debug) $(BUILDDIR)/$(LIBTARGET)-debug.a $(BUILDDIR)/flmain.dbg.obj | $(BUILDDIR)/flisp.boot
+$(BUILDDIR)/$(EXENAME)-debug$(EXE): $(DOBJS) $(LIBFILES_debug) $(BUILDDIR)/$(LIBTARGET)-debug.a $(BUILDDIR)/flmain.dbg.obj | $(BUILDDIR)/flisp.boot
 	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(JLDFLAGS) $(DOBJS) $(BUILDDIR)/flmain.dbg.obj -o $@ $(BUILDDIR)/$(LIBTARGET)-debug.a $(LIBFILES_debug) $(LIBS) $(OSLIBS))
 
-$(BUILDDIR)/$(EXENAME): $(OBJS) $(LIBFILES_release) $(BUILDDIR)/$(LIBTARGET).a $(BUILDDIR)/flmain.o | $(BUILDDIR)/flisp.boot
+$(BUILDDIR)/$(EXENAME)$(EXE): $(OBJS) $(LIBFILES_release) $(BUILDDIR)/$(LIBTARGET).a $(BUILDDIR)/flmain.o | $(BUILDDIR)/flisp.boot
 	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(JLDFLAGS) $(OBJS) $(BUILDDIR)/flmain.o -o $@ $(BUILDDIR)/$(LIBTARGET).a $(LIBFILES_release) $(LIBS) $(OSLIBS))
 
 ifneq ($(BUILDDIR),.)
@@ -91,12 +91,12 @@ endif
 
 test:
 ifneq ($(USEMSVC), 1)
-	$(call spawn,./$(EXENAME)) unittest.lsp
+	$(call spawn,./$(EXENAME)$(EXE)) unittest.lsp
 endif
 
 clean:
 	rm -f $(BUILDDIR)/*.o
 	rm -f $(BUILDDIR)/*.dbg.obj
 	rm -f $(BUILDDIR)/*.a
-	rm -f $(BUILDDIR)/$(EXENAME)
-	rm -f $(BUILDDIR)/$(EXENAME)-debug
+	rm -f $(BUILDDIR)/$(EXENAME)$(EXE)
+	rm -f $(BUILDDIR)/$(EXENAME)-debug$(EXE)
