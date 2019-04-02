@@ -21,7 +21,13 @@ $(SRCCACHE)/gmp-$(GMP_VER)/build-patched: $(SRCCACHE)/gmp-$(GMP_VER)/source-extr
 	cd $(dir $@) && patch < $(SRCDIR)/patches/gmp-exception.patch
 	echo 1 > $@
 
-$(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted $(SRCCACHE)/gmp-$(GMP_VER)/build-patched
+$(SRCCACHE)/gmp-$(GMP_VER)/gmp-config-ldflags.patch-applied: | $(SRCCACHE)/gmp-$(GMP_VER)/build-patched
+	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/gmp-config-ldflags.patch
+	echo 1 > $@
+
+$(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/gmp-config-ldflags.patch-applied
+
+$(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) F77= --enable-shared --disable-static $(GMP_CONFIGURE_OPTS)
