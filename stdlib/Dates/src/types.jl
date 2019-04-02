@@ -105,7 +105,12 @@ Gregorian calendar.
 struct DateTime <: AbstractDateTime
     instant::UTInstant{Millisecond}
     DateTime(instant::UTInstant{Millisecond}) = new(instant)
+    function DateTime(tm::Base.Libc.TmStruct)
+        ts = ccall(:mktime, Int64, (Ref{Libc.TmStruct},), t)
+        return new(UTM(ts))
+    end
 end
+
 
 """
     Date

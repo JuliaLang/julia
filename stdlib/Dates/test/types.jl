@@ -228,4 +228,8 @@ end
     @test Dates.Date(Dates.DateTime(Dates.Date(2012, 7, 1))) == Dates.Date(2012, 7, 1)
 end
 
+@testset "TmStruct to DateTime conversion" begin
+    
+end
+
 end
