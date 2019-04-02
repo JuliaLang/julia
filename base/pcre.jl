@@ -155,7 +155,11 @@ function substring_length_bynumber(match_data, number)
     s = RefValue{Csize_t}()
     rc = ccall((:pcre2_substring_length_bynumber_8, PCRE_LIB), Cint,
           (Ptr{Cvoid}, UInt32, Ref{Csize_t}), match_data, number, s)
-    rc < 0 && error("PCRE error: $(err_message(rc))")
+    if rc < 0
+        # PCRE2_ERROR_UNSET see https://code.woboq.org/qt5/qtbase/src/3rdparty/pcre2/src/pcre2_substring.c.html
+        rc == -55 && return 0
+        error("PCRE error: $(err_message(rc))")
+    end
     convert(Int, s[])
 end
 
