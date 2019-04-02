@@ -855,7 +855,7 @@ Since operations like this are very thin wrappers over the relevant BLAS functio
 
 Julia compiles and uses its own copy of OpenBLAS, with threads currently capped at `8` (or the number of your cores).
 
-Modifying OpenBLAS settings or compiling Julia with a different BLAS library, eg [Intel MKL](https://software.intel.com/en-us/mkl), may provide performance improvements. Search the discussion forum for suggestions on how to do this. Note that Intel MKL cannot be bundled with Julia, as it is not open source.
+Modifying OpenBLAS settings or compiling Julia with a different BLAS library, eg [Intel MKL](https://software.intel.com/en-us/mkl), may provide performance improvements. You can use [MKL.jl](https://github.com/JuliaComputing/MKL.jl), a package that makes Julia's linear algebra use Intel MKL BLAS and LAPACK instead of OpenBLAS, or search the discussion forum for suggestions on how to set this up manually. Note that Intel MKL cannot be bundled with Julia, as it is not open source.
 
 ## Julia Releases
 
