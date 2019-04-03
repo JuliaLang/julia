@@ -271,7 +271,34 @@ struct InetAddr{T<:IPAddr}
     port::UInt16
 end
 
+"""
+    InetAddr(ip::IPAddr, port) -> InetAddr
+
+Returns an InetAddr object from ip address `ip` and port number `port`.
+
+# Examples
+```jldoctest
+julia> Sockets.InetAddr(ip"127.0.0.1", 8000)
+Sockets.InetAddr{IPv4}(ip"127.0.0.1", 8000)
+```
+"""
 InetAddr(ip::IPAddr, port) = InetAddr{typeof(ip)}(ip, port)
+
+"""
+    InetAddr(str::AbstractString, port) -> InetAddr
+
+Returns an InetAddr object from ip address `str` formatted as [`AbstractString`](@ref)
+and port number `port`.
+
+!!! compat "Julia 1.2"
+    constructor from `AbstractString` requires at least Julia 1.2.
+
+# Examples
+```jldoctest
+julia> Sockets.InetAddr("127.0.0.1", 8000)
+Sockets.InetAddr{IPv4}(ip"127.0.0.1", 8000)
+```
+"""
 InetAddr(str::AbstractString, port) = InetAddr(parse(IPAddr, str), port)
 function show(io::IO, addr::InetAddr)
     show(io, typeof(addr))
