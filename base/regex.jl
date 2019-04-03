@@ -559,6 +559,8 @@ function *(r1::Union{Regex,AbstractString,AbstractChar}, rs::Union{Regex,Abstrac
     Regex(string(unwrap_string(r1, unshared), unwrap_string.(rs, Ref(unshared))...), compile_opts | shared, match_opts)
 end
 
+*(r::Regex) = r # avoids wrapping r in a useless subpattern
+
 unwrap_string(r::Regex, unshared::UInt32) = string("(?", regex_opts_str(r.compile_options & unshared), ':', r.pattern, ')')
 unwrap_string(s::Union{AbstractString,AbstractChar}, ::UInt32) = string("(?:", s, ')')
 

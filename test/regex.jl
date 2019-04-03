@@ -79,6 +79,8 @@
     @test endswith("abc", r"C"i)
 
     @testset "multiplication & exponentiation" begin
+        @test *(r"a") == r"a"
+
         @test r"a" * r"b" == r"(?:a)(?:b)"
         @test r"a" * "b"  == r"(?:a)(?:b)"
         @test r"a" * 'b'  == r"(?:a)(?:b)"
