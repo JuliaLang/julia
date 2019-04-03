@@ -102,7 +102,7 @@
                                       0))
 
 (define unary-ops (append! '(|<:| |>:|)
-                           (add-dots '(+ - ! ~ ¬ √ ∛ ∜))))
+                           (add-dots '(+ - ! ~ ¬ √ ∛ ∜ ⋆))))
 
 (define unary-op? (Set unary-ops))
 
