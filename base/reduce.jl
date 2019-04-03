@@ -179,9 +179,9 @@ mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer) =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
 """
-    mapreduce(f, op, itr; [init])
+    mapreduce(f, op, itrs...; [init])
 
-Apply function `f` to each element in `itr`, and then reduce the result using the binary
+Apply function `f` to each element(s) in `itrs`, and then reduce the result using the binary
 function `op`. If provided, `init` must be a neutral element for `op` that will be returned
 for empty collections. It is unspecified whether `init` is used for non-empty collections.
 In general, it will be necessary to provide `init` to work with empty collections.
@@ -190,6 +190,9 @@ In general, it will be necessary to provide `init` to work with empty collection
 `reduce(op, map(f, itr); init=init)`, but will in general execute faster since no
 intermediate collection needs to be created. See documentation for [`reduce`](@ref) and
 [`map`](@ref).
+
+!!! compat "Julia 1.2"
+    `mapreduce` with multiple iterators requires Julia 1.2 or later.
 
 # Examples
 ```jldoctest
@@ -203,6 +206,7 @@ implementations may reuse the return value of `f` for elements that appear multi
 guaranteed left or right associativity and invocation of `f` for every value.
 """
 mapreduce(f, op, itr; kw...) = mapfoldl(f, op, itr; kw...)
+mapreduce(f, op, itrs...; kw...) = reduce(op, Generator(f, itrs...); kw...)
 
 # Note: sum_seq usually uses four or more accumulators after partial
 # unrolling, so each accumulator gets at most 256 numbers
