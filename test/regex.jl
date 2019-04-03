@@ -82,25 +82,25 @@
         @test *(r"a") == r"a"
 
         @test r"a" * r"b" == r"(?:a)(?:b)"
-        @test r"a" * "b"  == r"(?:a)(?:b)"
-        @test r"a" * 'b'  == r"(?:a)(?:b)"
-        @test "a"  * r"b" == r"(?:a)(?:b)"
-        @test 'a'  * r"b" == r"(?:a)(?:b)"
+        @test r"a" * "b"  == r"(?:a)b"
+        @test r"a" * 'b'  == r"(?:a)b"
+        @test "a"  * r"b" == r"a(?:b)"
+        @test 'a'  * r"b" == r"a(?:b)"
         for a = (r"a", "a", 'a'),
             b = (r"b", "b", 'b'),
             c = (r"c", "c", 'c')
             a isa Regex || b isa Regex || c isa Regex || continue
-            @test a * b * c == r"(?:a)(?:b)(?:c)"
+            @test match(a * b * c, "abc") !== nothing
         end
         for s = ["thiscat", "thishat", "thatcat", "thathat"]
             @test match(r"this|that" * r"cat|hat", s) !== nothing
         end
 
         @test r"a"i * r"b"i == r"(?:a)(?:b)"i
-        @test r"a"i * "b"   == r"(?:a)(?:b)"i
-        @test r"a"i * 'b'   == r"(?:a)(?:b)"i
-        @test "a"   * r"b"i == r"(?:a)(?:b)"i
-        @test 'a'   * r"b"i == r"(?:a)(?:b)"i
+        @test r"a"i * "b"   == r"(?:a)b"i
+        @test r"a"i * 'b'   == r"(?:a)b"i
+        @test "a"   * r"b"i == r"a(?:b)"i
+        @test 'a'   * r"b"i == r"a(?:b)"i
 
         @test r"a"i  * r"b"m  == r"(?i:a)(?m:b)"
         @test r"a"im * r"b"m  == r"(?i:a)(?:b)"m

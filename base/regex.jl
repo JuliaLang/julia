@@ -531,21 +531,18 @@ Concatenate regexes, strings and/or characters, producing a [`Regex`](@ref).
 
 # Examples
 ```jldoctest
-julia> r"Hello " * "world"
-r"Hello world"
-
-julia> 'j' * r"ulia"
-r"julia"
+julia> r"Hello|Good bye" * ' ' * "world"
+r"(?:Hello|Good bye) world"
 ```
 """
 function *(r1::Union{Regex,AbstractString,AbstractChar}, rs::Union{Regex,AbstractString,AbstractChar}...)
     mask = PCRE.CASELESS | PCRE.MULTILINE | PCRE.DOTALL | PCRE.EXTENDED # imsx
-    match_opts   = typemax(UInt32) # all args must agree on this
-    compile_opts = typemax(UInt32) # all args must agree on this
+    match_opts   = nothing # all args must agree on this
+    compile_opts = nothing # all args must agree on this
     shared = mask
     for r in (r1, rs...)
         r isa Regex || continue
-        if match_opts == typemax(UInt32)
+        if match_opts == nothing
             match_opts = r.match_options
             compile_opts = r.compile_options & ~mask
         else
@@ -562,7 +559,7 @@ end
 *(r::Regex) = r # avoids wrapping r in a useless subpattern
 
 unwrap_string(r::Regex, unshared::UInt32) = string("(?", regex_opts_str(r.compile_options & unshared), ':', r.pattern, ')')
-unwrap_string(s::Union{AbstractString,AbstractChar}, ::UInt32) = string("(?:", s, ')')
+unwrap_string(s::Union{AbstractString,AbstractChar}, ::UInt32) = s # no need to wrap in subpattern
 
 regex_opts_str(opts) = (isassigned(_regex_opts_str) ? _regex_opts_str[] : init_regex())[opts]
 
@@ -605,7 +602,7 @@ Repeat a regex `n` times.
 # Examples
 ```jldoctest
 julia> r"Test "^3
-r"Test Test Test "
+r"(?:Test ){3}"
 ```
 """
 ^(r::Regex, i::Integer) = Regex(string("(?:", r.pattern, "){$i}"), r.compile_options, r.match_options)
