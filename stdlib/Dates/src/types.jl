@@ -197,7 +197,7 @@ function validargs(::Type{DateTime}, y::Int64, m::Int64, d::Int64,
     return argerror()
 end
 
-DateTime(dt::Base.Libc.TmStruct) = DateTime(dt.year, dt.month, dt.mday, dt.hour, dt.min, dt.sec)
+DateTime(dt::Base.Libc.TmStruct) = DateTime(1900 + dt.year, 1 + dt.month, dt.mday, dt.hour, dt.min, dt.sec)
 
 """
     Date(y, [m, d]) -> Date
@@ -216,7 +216,7 @@ function validargs(::Type{Date}, y::Int64, m::Int64, d::Int64)
     return argerror()
 end
 
-Date(dt::Base.Libc.TmStruct) = Time(dt.year, dt.month, dt.mday)
+Date(dt::Base.Libc.TmStruct) = Date(1900 + dt.year, 1 + dt.month, dt.mday)
 
 """
     Time(h, [mi, s, ms, us, ns]) -> Time
