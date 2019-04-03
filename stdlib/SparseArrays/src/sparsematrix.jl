@@ -1232,6 +1232,13 @@ tril!(A::SparseMatrixCSC, k::Integer = 0, trim::Bool = true) =
 triu!(A::SparseMatrixCSC, k::Integer = 0, trim::Bool = true) =
     fkeep!(A, (i, j, x) -> j >= i + k, trim)
 
+"""
+    droptol!(A::SparseMatrixCSC, tol; trim::Bool = true)
+
+Removes stored values from `A` whose absolute value is (strictly) larger than `tol`,
+optionally trimming resulting excess space from `A.rowval` and `A.nzval` when `trim`
+is `true`.
+"""
 droptol!(A::SparseMatrixCSC, tol; trim::Bool = true) =
     fkeep!(A, (i, j, x) -> abs(x) > tol, trim)
 
