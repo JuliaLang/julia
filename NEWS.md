@@ -81,6 +81,11 @@ Standard library changes
 
 * `quantile` now accepts in all cases collections whose `eltype` is not a subtype of `Number` ([#30938]).
 
+#### Sockets
+
+* Added `InetAddr` constructor from `AbstractString`, representing IP address, and `Integer`,
+  representing port number ([#31459]).
+
 #### Miscellaneous
 
 * Since environment variables on Windows are case-insensitive, `ENV` now converts its keys
