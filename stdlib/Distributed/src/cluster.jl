@@ -1031,13 +1031,13 @@ end
 
 
 """
-    ProcessExitedException(pid::Int)
+    ProcessExitedException(worker_id::Int)
 
 After a client Julia process has exited, further attempts to reference the dead child will
 throw this exception.
 """
 struct ProcessExitedException <: Exception
-    pid::Int
+    worker_id::Int
 end
 
 worker_from_id(i) = worker_from_id(PGRP, i)
