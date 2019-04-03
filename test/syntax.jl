@@ -1839,3 +1839,7 @@ end
 # issue #31404
 f31404(a, b; kws...) = (a, b, kws.data)
 @test f31404(+, (Type{T} where T,); optimize=false) === (+, (Type,), (optimize=false,))
+
+# issue #31596
+f31596(x; kw...) = x
+@test f31596((a=1,), b = 1.0) === (a=1,)
