@@ -1044,17 +1044,26 @@ const char *name_from_method_instance(jl_method_instance_t *mi)
 
 struct CompileTiming {
   CompileTiming(jl_method_instance_t *mi) :mi(mi) {
-    if (jl_is_method(mi->def.method)) {
-      JULIA_COMPILE_START(jl_symbol_name(mi->def.method->name),
-      jl_symbol_name(mi->def.method->module->name));
-    }
+    //if (jl_is_method(mi->def.method)) {
+      JULIA_COMPILE_START();
+    //}
   }
   ~CompileTiming() {
-    if (jl_is_method(mi->def.method)) {
-      JULIA_COMPILE_END(jl_symbol_name(mi->def.method->name),
-        jl_symbol_name(mi->def.method->name),
-      jl_symbol_name(mi->def.method->module->name));
-    }
+    //if (jl_is_method(mi->def.method)) {
+      ios_t str_;
+      ios_mem(&str_, 300);
+      JL_STREAM* str = (JL_STREAM*)&str_;
+
+      //jl_printf(str, "%s.%s, ", jl_symbol_name(mi->def.method->module->name), jl_symbol_name(mi->def.method->name));
+
+      //jl_static_show_func_sig(str, mi->specTypes);
+      jl_static_show(str, mi->specTypes);
+
+      str_.buf[str_.size] = 0;
+      JULIA_COMPILE_END(str_.buf);
+
+      ios_close(&str_);
+    //}
   }
   jl_method_instance_t *mi;
 };

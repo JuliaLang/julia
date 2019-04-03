@@ -1111,6 +1111,19 @@ function which(m::Module, s::Symbol)
     return binding_module(m, s)
 end
 
+"""
+    which(tt::TupleType)
+"""
+function which(tt::Type{Tuple})
+    m = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tt, typemax(UInt))
+    if m === nothing
+        error("no unique matching method found for the specified signature")
+    end
+    return m.func::Method
+end
+
+
+
 # function reflection
 """
     nameof(f::Function) -> Symbol
