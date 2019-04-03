@@ -98,6 +98,8 @@ using namespace llvm;
 #include "processor.h"
 #include "julia_assert.h"
 
+#include "uprobes.h"
+
 // LLVM version compatibility macros
 legacy::PassManager *jl_globalPM;
 
@@ -1047,6 +1049,11 @@ const char *name_from_method_instance(jl_method_instance_t *mi)
 extern "C"
 jl_code_instance_t *jl_compile_linfo(jl_method_instance_t *mi, jl_code_info_t *src, size_t world, const jl_cgparams_t *params)
 {
+    if (jl_is_method(mi->def.method)) {
+      JULIA_COMPILE_START(jl_symbol_name(mi->def.method->name),
+                          jl_symbol_name(mi->def.method->module->name));
+    }
+
     // N.B.: `src` may have not been rooted by the caller.
     JL_TIMING(CODEGEN);
     assert(jl_is_method_instance(mi));
