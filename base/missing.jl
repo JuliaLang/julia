@@ -18,11 +18,7 @@ end
 showerror(io::IO, ex::MissingException) =
     print(io, "MissingException: ", ex.msg)
 
-
-nonmissingtype(::Type{Union{T, Missing}}) where {T} = T
-nonmissingtype(::Type{Missing}) = Union{}
-nonmissingtype(::Type{T}) where {T} = T
-nonmissingtype(::Type{Any}) = Any
+nonmissingtype(::Type{T}) where {T} = Core.Compiler.typesubtract(T, Missing)
 
 for U in (:Nothing, :Missing)
     @eval begin

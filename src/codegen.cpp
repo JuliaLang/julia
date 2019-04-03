@@ -2388,7 +2388,13 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
     int ptr_comparable = 0; // whether this type is unique'd by pointer
     if (rt1 == (jl_value_t*)jl_sym_type || rt2 == (jl_value_t*)jl_sym_type)
         ptr_comparable = 1;
-    if (jl_is_mutable_datatype(rt1) || jl_is_mutable_datatype(rt2)) // excludes abstract types
+    if (jl_is_mutable_datatype(rt1) && // excludes abstract types
+        rt1 != (jl_value_t*)jl_string_type && // technically mutable, but compared by contents
+        rt1 != (jl_value_t*)jl_simplevector_type)
+        ptr_comparable = 1;
+    if (jl_is_mutable_datatype(rt2) && // excludes abstract types
+        rt2 != (jl_value_t*)jl_string_type && // technically mutable, but compared by contents
+        rt2 != (jl_value_t*)jl_simplevector_type)
         ptr_comparable = 1;
     if (jl_subtype(rt1, (jl_value_t*)jl_type_type) ||
         jl_subtype(rt2, (jl_value_t*)jl_type_type)) {
@@ -2400,9 +2406,6 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
             ptr_comparable = 1;
         }
     }
-    if ((rt1 == (jl_value_t*)jl_string_type && rt2 == (jl_value_t*)jl_string_type) ||
-        (rt1 == (jl_value_t*)jl_simplevector_type && rt2 == (jl_value_t*)jl_simplevector_type))
-        ptr_comparable = 0; // technically mutable, but compared by contents
     if (ptr_comparable) {
         Value *varg1 = arg1.constant ? literal_pointer_val(ctx, arg1.constant) : arg1.V;
         Value *varg2 = arg2.constant ? literal_pointer_val(ctx, arg2.constant) : arg2.V;
@@ -3655,7 +3658,11 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             Value *isboxed = ctx.builder.CreateICmpNE(
                     ctx.builder.CreateAnd(Tindex_phi, ConstantInt::get(T_int8, 0x80)),
                     ConstantInt::get(T_int8, 0));
+#if JL_LLVM_VERSION >= 70000
+            ctx.builder.CreateMemCpy(phi, min_align, dest, 0, nbytes, false);
+#else
             ctx.builder.CreateMemCpy(phi, dest, nbytes, min_align, false);
+#endif
             ctx.builder.CreateLifetimeEnd(dest);
             ptr = ctx.builder.CreateSelect(isboxed,
                 maybe_bitcast(ctx, decay_derived(ptr_phi), T_pint8),
@@ -3695,8 +3702,14 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
     if (vtype->isAggregateType()) {
         dest = emit_static_alloca(ctx, vtype);
         Value *phi = emit_static_alloca(ctx, vtype);
+#if JL_LLVM_VERSION >= 70000
+        ctx.builder.CreateMemCpy(phi, jl_datatype_align(phiType),
+             dest, 0,
+             jl_datatype_size(phiType), false);
+#else
         ctx.builder.CreateMemCpy(phi, dest, jl_datatype_size(phiType),
-            jl_datatype_align(phiType), false);
+             jl_datatype_align(phiType), false);
+#endif
         ctx.builder.CreateLifetimeEnd(dest);
         slot = mark_julia_slot(phi, phiType, NULL, tbaa_stack);
     }
@@ -6574,11 +6587,20 @@ static std::unique_ptr<Module> emit_function(
                     VN->addIncoming(V, ctx.builder.GetInsertBlock());
                     assert(!TindexN);
                 } else if (dest && val.typ != (jl_value_t*)jl_bottom_type) {
+#if JL_LLVM_VERSION >= 70000
                     ctx.builder.CreateMemCpy(maybe_decay_tracked(dest),
+                        jl_datatype_align(phiType),
+                        maybe_decay_tracked(data_pointer(ctx, val)),
+                        0,
+                        jl_datatype_size(phiType),
+                        false);
+#else
+                     ctx.builder.CreateMemCpy(maybe_decay_tracked(dest),
                         maybe_decay_tracked(data_pointer(ctx, val)),
                         jl_datatype_size(phiType),
                         jl_datatype_align(phiType),
                         false);
+#endif
                 }
             }
             else {
@@ -7723,11 +7745,19 @@ extern "C" void jl_dump_llvm_debugloc(void *v)
 extern void jl_write_bitcode_func(void *F, char *fname) {
     std::error_code EC;
     raw_fd_ostream OS(fname, EC, sys::fs::F_None);
+#if JL_LLVM_VERSION >= 70000
+    llvm::WriteBitcodeToFile(*((llvm::Function*)F)->getParent(), OS);
+#else
     llvm::WriteBitcodeToFile(((llvm::Function*)F)->getParent(), OS);
+#endif
 }
 
 extern void jl_write_bitcode_module(void *M, char *fname) {
     std::error_code EC;
     raw_fd_ostream OS(fname, EC, sys::fs::F_None);
+#if JL_LLVM_VERSION >= 70000
+    llvm::WriteBitcodeToFile(*(llvm::Module*)M, OS);
+#else
     llvm::WriteBitcodeToFile((llvm::Module*)M, OS);
+#endif
 }

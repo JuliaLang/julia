@@ -258,7 +258,7 @@ static int type_parameter_recursively_external(jl_value_t *p0) JL_NOTSAFEPOINT
         return 0;
     if (module_in_worklist(p->name->module))
         return 0;
-    if (jl_unwrap_unionall(p->name->wrapper) != (jl_value_t*)p) {
+    if (p->name->wrapper != (jl_value_t*)p0) {
         if (!type_recursively_external(p))
             return 0;
     }
@@ -328,11 +328,8 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
 
     write_uint8(s->s, TAG_DATATYPE);
     write_uint8(s->s, tag);
-    if (tag == 6) {
-        jl_serialize_value(s, dt->name);
-        return;
-    }
-    if (tag == 7) {
+    if (tag == 6 || tag == 7) {
+        // for tag==6, copy its typevars in case there are references to them elsewhere
         jl_serialize_value(s, dt->name);
         jl_serialize_value(s, dt->parameters);
         return;
@@ -746,7 +743,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
     else if (jl_is_unionall(v)) {
         write_uint8(s->s, TAG_UNIONALL);
         jl_datatype_t *d = (jl_datatype_t*)jl_unwrap_unionall(v);
-        if (jl_is_datatype(d) && jl_unwrap_unionall(d->name->wrapper) == (jl_value_t*)d &&
+        if (jl_is_datatype(d) && d->name->wrapper == v &&
             !module_in_worklist(d->name->module)) {
             write_uint8(s->s, 1);
             jl_serialize_value(s, d->name->module);
@@ -1346,13 +1343,8 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     if (tag == 6 || tag == 7) {
         jl_typename_t *name = (jl_typename_t*)jl_deserialize_value(s, NULL);
         jl_value_t *dtv = name->wrapper;
-        if (tag == 7) {
-            jl_svec_t *parameters = (jl_svec_t*)jl_deserialize_value(s, NULL);
-            dtv = jl_apply_type(dtv, jl_svec_data(parameters), jl_svec_len(parameters));
-        }
-        else {
-            dtv = jl_unwrap_unionall(dtv);
-        }
+        jl_svec_t *parameters = (jl_svec_t*)jl_deserialize_value(s, NULL);
+        dtv = jl_apply_type(dtv, jl_svec_data(parameters), jl_svec_len(parameters));
         backref_list.items[pos] = dtv;
         return dtv;
     }
@@ -2695,7 +2687,7 @@ JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms)
         remaining -= namelen + 1;
     }
     namestr = jl_string_data(syms);
-    jl_array_t *names = jl_alloc_vec_any(len);
+    jl_array_t *names = jl_alloc_array_1d(jl_array_symbol_type, len);
     JL_GC_PUSH1(&names);
     for (i = 0; i < len; i++) {
         size_t namelen = strlen(namestr);

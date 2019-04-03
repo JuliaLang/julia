@@ -1282,32 +1282,32 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         data = ptr;
     if (idx_0based)
         data = ctx.builder.CreateInBoundsGEP(elty, data, idx_0based);
-    Value *elt;
+    Instruction *load;
     // TODO: can only lazy load if we can create a gc root for ptr for the lifetime of elt
     //if (elty->isAggregateType() && tbaa == tbaa_immut && !alignment) { // can lazy load on demand, no copy needed
     //    elt = data;
     //}
     //else {
-        Instruction *load = ctx.builder.CreateAlignedLoad(data,
+        load = ctx.builder.CreateAlignedLoad(data,
             isboxed || alignment ?  alignment : julia_alignment(jltype),
             false);
-        if (aliasscope) {
+        if (aliasscope)
             load->setMetadata("alias.scope", aliasscope);
-        }
-        if (isboxed) {
+        if (isboxed)
             load = maybe_mark_load_dereferenceable(load, true, jltype);
-        }
-        if (tbaa) {
-            elt = tbaa_decorate(tbaa, load);
-        }
-        else {
-            elt = load;
-        }
-        if (maybe_null_if_boxed && isboxed) {
-            null_pointer_check(ctx, elt);
-        }
+        if (tbaa)
+            load = tbaa_decorate(tbaa, load);
+        if (maybe_null_if_boxed && isboxed)
+            null_pointer_check(ctx, load);
     //}
-    return mark_julia_type(ctx, elt, isboxed, jltype);
+    if (jltype == (jl_value_t*)jl_bool_type) { // "freeze" undef memory to a valid value
+        // NOTE: if we zero-initialize arrays, this optimization should become valid
+        //load->setMetadata(LLVMContext::MD_range, MDNode::get(jl_LLVMContext, {
+        //    ConstantAsMetadata::get(ConstantInt::get(T_int8, 0)),
+        //    ConstantAsMetadata::get(ConstantInt::get(T_int8, 2)) }));
+        load = ctx.builder.Insert(CastInst::Create(Instruction::Trunc, load, T_int1));
+    }
+    return mark_julia_type(ctx, load, isboxed, jltype);
 }
 
 static void typed_store(jl_codectx_t &ctx,
@@ -1423,7 +1423,11 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Va
     // for the load part (x.tbaa) and the store part (tbaa_stack).
     // since the tbaa lattice has to be a tree we have unfortunately
     // x.tbaa ∪ tbaa_stack = tbaa_root if x.tbaa != tbaa_stack
+#if JL_LLVM_VERSION >= 70000
+    ctx.builder.CreateMemCpy(dst, align, src, 0, sz, is_volatile, MDNode::getMostGenericTBAA(tbaa_dst, tbaa_src));
+#else
     ctx.builder.CreateMemCpy(dst, src, sz, align, is_volatile, MDNode::getMostGenericTBAA(tbaa_dst, tbaa_src));
+#endif
 }
 
 static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Value *src, MDNode *tbaa_src,
@@ -1433,7 +1437,11 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Va
         emit_memcpy_llvm(ctx, dst, tbaa_dst, src, tbaa_src, const_sz->getZExtValue(), align, is_volatile);
         return;
     }
+#if JL_LLVM_VERSION >= 70000
+    ctx.builder.CreateMemCpy(dst, align, src, 0, sz, is_volatile, MDNode::getMostGenericTBAA(tbaa_dst, tbaa_src));
+#else
     ctx.builder.CreateMemCpy(dst, src, sz, align, is_volatile, MDNode::getMostGenericTBAA(tbaa_dst, tbaa_src));
+#endif
 }
 
 template<typename T1>

@@ -433,9 +433,17 @@ end
 
 @testset "getipaddrs" begin
     @test getipaddr() in getipaddrs()
+    try
+        getipaddr(IPv6) in getipaddrs(IPv6)
+    catch
+        if !isempty(getipaddrs(IPv6))
+            @test "getipaddr(IPv6) errored when it shouldn't have!"
+        end
+    end
 
     @testset "include lo" begin
         @test issubset(getipaddrs(), getipaddrs(true))
+        @test issubset(getipaddrs(IPv6), getipaddrs(IPv6, true))
     end
 end
 

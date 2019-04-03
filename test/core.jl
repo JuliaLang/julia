@@ -1829,6 +1829,13 @@ for x in xs5165
     println(b5165, x)   # segfaulted
 end
 
+# issue #31486
+f31486(x::Bool, y::Bool, z::Bool) = Core.Intrinsics.bitcast(UInt8, Core.Intrinsics.add_int(x, Core.Intrinsics.add_int(y, z)))
+@test f31486(false, false, true) == 0x01
+@test f31486(false, true, true) == 0x00
+@test f31486(true, true, true) == 0x01
+
+
 # support tuples as type parameters
 
 mutable struct TupleParam{P}
@@ -5827,6 +5834,13 @@ for U in boxedunions
         @test !isassigned(A, 1)
     end
 end
+
+# issue 31583
+a31583 = "a"
+f31583() = a31583 === "a"
+@test f31583()
+a31583 = "b"
+@test !f31583()
 
 # unsafe_wrap
 let

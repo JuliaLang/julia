@@ -530,7 +530,7 @@ function typeinf_ext(mi::MethodInstance, params::Params)
                 tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
                 tree.code = Any[ Expr(:return, quoted(code.rettype_const)) ]
                 nargs = Int(method.nargs)
-                tree.slotnames = ccall(:jl_uncompress_argnames, Any, (Any,), method.slot_syms)
+                tree.slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), method.slot_syms)
                 tree.slotflags = fill(0x00, nargs)
                 tree.ssavaluetypes = 1
                 tree.codelocs = Int32[1]

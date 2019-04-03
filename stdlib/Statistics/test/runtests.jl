@@ -474,12 +474,45 @@ end
     @test quantile([0,1],1e-18) == 1e-18
     @test quantile([1, 2, 3, 4],[]) == []
     @test quantile([1, 2, 3, 4], (0.5,)) == (2.5,)
-    @test quantile([4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11], (0.1, 0.2, 0.4, 0.9)) == (2.0, 3.0, 5.0, 11.0)
+    @test quantile([4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   (0.1, 0.2, 0.4, 0.9)) == (2.0, 3.0, 5.0, 11.0)
+    @test quantile(Union{Int, Missing}[4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   [0.1, 0.2, 0.4, 0.9]) == [2.0, 3.0, 5.0, 11.0]
+    @test quantile(Any[4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   [0.1, 0.2, 0.4, 0.9]) == [2.0, 3.0, 5.0, 11.0]
+    @test quantile([4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   Any[0.1, 0.2, 0.4, 0.9]) == [2.0, 3.0, 5.0, 11.0]
+    @test quantile([4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   Any[0.1, 0.2, 0.4, 0.9]) isa Vector{Float64}
+    @test quantile(Any[4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   Any[0.1, 0.2, 0.4, 0.9]) == [2, 3, 5, 11]
+    @test quantile(Any[4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   Any[0.1, 0.2, 0.4, 0.9]) isa Vector{Float64}
     @test quantile([1, 2, 3, 4], ()) == ()
+    @test isempty(quantile([1, 2, 3, 4], Float64[]))
+    @test quantile([1, 2, 3, 4], Float64[]) isa Vector{Float64}
+    @test quantile([1, 2, 3, 4], []) isa Vector{Any}
+    @test quantile([1, 2, 3, 4], [0, 1]) isa Vector{Int}
+
+    @test quantile(Any[1, 2, 3], 0.5) isa Float64
+    @test quantile(Any[1, big(2), 3], 0.5) isa BigFloat
+    @test quantile(Any[1, 2, 3], Float16(0.5)) isa Float16
+    @test quantile(Any[1, Float16(2), 3], Float16(0.5)) isa Float16
+    @test quantile(Any[1, big(2), 3], Float16(0.5)) isa BigFloat
 
     @test_throws ArgumentError quantile([1, missing], 0.5)
     @test_throws ArgumentError quantile([1, NaN], 0.5)
     @test quantile(skipmissing([1, missing, 2]), 0.5) === 1.5
+
+    # make sure that type inference works correctly in normal cases
+    for T in [Int, BigInt, Float64, Float16, BigFloat, Rational{Int}, Rational{BigInt}]
+        for S in [Float64, Float16, BigFloat, Rational{Int}, Rational{BigInt}]
+            @inferred quantile(T[1, 2, 3], S(0.5))
+            @inferred quantile(T[1, 2, 3], S(0.6))
+            @inferred quantile(T[1, 2, 3], S[0.5, 0.6])
+            @inferred quantile(T[1, 2, 3], (S(0.5), S(0.6)))
+        end
+    end
 end
 
 # StatsBase issue 164

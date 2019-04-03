@@ -2245,16 +2245,20 @@ end
         @test findprev(!iszero, x,i) == findprev(!iszero, x_sp,i)
     end
 
-    y = [0 0 0 0 0;
+    y = [7 0 0 0 0;
          1 0 1 0 0;
-         1 0 0 0 1;
+         1 7 0 7 1;
          0 0 1 0 0;
-         1 0 1 1 0]
-    y_sp = sparse(y)
+         1 0 1 1 0.0]
+    y_sp = [x == 7 ? -0.0 : x for x in sparse(y)]
+    y = Array(y_sp)
+    @test isequal(y_sp[1,1], -0.0)
 
     for i in keys(y)
         @test findnext(!iszero, y,i) == findnext(!iszero, y_sp,i)
         @test findprev(!iszero, y,i) == findprev(!iszero, y_sp,i)
+        @test findnext(iszero, y,i) == findnext(iszero, y_sp,i)
+        @test findprev(iszero, y,i) == findprev(iszero, y_sp,i)
     end
 
     z_sp = sparsevec(Dict(1=>1, 5=>1, 8=>0, 10=>1))
@@ -2264,6 +2268,17 @@ end
         @test findnext(!iszero, z,i) == findnext(!iszero, z_sp,i)
         @test findprev(!iszero, z,i) == findprev(!iszero, z_sp,i)
     end
+
+    w = [ "a" ""; "" "b"]
+    w_sp = sparse(w)
+
+    for i in keys(w)
+        @test findnext(!isequal(""), w,i) == findnext(!isequal(""), w_sp,i)
+        @test findprev(!isequal(""), w,i) == findprev(!isequal(""), w_sp,i)
+        @test findnext(isequal(""), w,i) == findnext(isequal(""), w_sp,i)
+        @test findprev(isequal(""), w,i) == findprev(isequal(""), w_sp,i)
+    end
+
 end
 
 # #20711

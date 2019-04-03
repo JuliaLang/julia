@@ -36,7 +36,7 @@ Core.Compiler.typeinf_code(m, atypes, sparams, optimize, cached, params)
 ```
 
 If your debugging adventures require a `MethodInstance`, you can look it up by
-calling `Core.Compiler.code_for_method` using many of the variables above.
+calling `Core.Compiler.specialize_method` using many of the variables above.
 A `CodeInfo` object may be obtained with
 ```julia
 # Returns the CodeInfo object for `convert(Int, ::UInt)`:

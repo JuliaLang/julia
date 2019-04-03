@@ -2053,7 +2053,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_array_uint8_type,
                             jl_any_type,
                             jl_any_type,
-                            jl_any_type,
+                            jl_array_symbol_type,
                             jl_array_uint8_type,
                             jl_any_type,
                             jl_any_type,
