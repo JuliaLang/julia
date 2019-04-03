@@ -243,13 +243,15 @@ getipaddr() = getipaddr(IPv4)
 
 
 """
-    getipaddrs(include_lo::Bool=false) -> Vector{IPAddr}
+    getipaddrs(; loopback::Bool=false) -> Vector{IPAddr}
 
 Get the IPv4 addresses of the local machine.
 
-    getipaddrs(addr_type::Type{T}, include_lo::Bool=false) where T<:IPAddr -> Vector{T}
+    getipaddrs(addr_type::Type{T}; loopback::Bool=false) where T<:IPAddr -> Vector{T}
 
 Get the IP addresses of the local machine of the specified type.
+
+The `loopback` keyword argument dictates whether loopback addresses are included.
 
 !!! compat "Julia 1.2"
     This function is available as of Julia 1.2.
@@ -267,7 +269,7 @@ julia> getipaddrs(IPv6)
  ip"fe80::445e:5fff:fe5d:5500"
 ```
 """
-function getipaddrs(addr_type::Type{T}, include_lo::Bool=false) where T<:IPAddr
+function getipaddrs(addr_type::Type{T}=IPAddr; loopback::Bool=false) where T<:IPAddr
     addresses = T[]
     addr_ref = Ref{Ptr{UInt8}}(C_NULL)
     count_ref = Ref{Int32}(1)
@@ -279,7 +281,7 @@ function getipaddrs(addr_type::Type{T}, include_lo::Bool=false) where T<:IPAddr
         current_addr = addr + i*_sizeof_uv_interface_address
         if 1 == ccall(:jl_uv_interface_address_is_internal, Int32, (Ptr{UInt8},), current_addr)
             lo_present = true
-            if !include_lo
+            if !loopback
                 continue
             end
         end
@@ -304,4 +306,3 @@ function getipaddrs(addr_type::Type{T}, include_lo::Bool=false) where T<:IPAddr
     end)
     return addresses
 end
-getipaddrs(include_lo::Bool=false) = getipaddrs(IPAddr, include_lo)
