@@ -520,9 +520,6 @@ end
 
 ## String operations ##
 
-unwrap_string(r::Regex) = r.pattern
-unwrap_string(s::Union{AbstractString,AbstractChar}) = s
-
 """
     *(s::Regex, t::Union{Regex,AbstractString,AbstractChar}) -> Regex
     *(s::Union{Regex,AbstractString,AbstractChar}, t::Regex) -> Regex
@@ -542,11 +539,58 @@ r"julia"
 ```
 """
 function *(r1::Union{Regex,AbstractString,AbstractChar}, rs::Union{Regex,AbstractString,AbstractChar}...)
-    opts = unique((r.compile_options, r.match_options) for r in (r1, rs...) if r isa Regex)
-    length(opts) == 1 ||
-        throw(ArgumentError("cannot multiply regexes with incompatible options"))
-    Regex(string(unwrap_string(r1), unwrap_string.(rs)...), opts[1][1], opts[1][2])
+    mask = PCRE.CASELESS | PCRE.MULTILINE | PCRE.DOTALL | PCRE.EXTENDED # imsx
+    match_opts   = typemax(UInt32) # all args must agree on this
+    compile_opts = typemax(UInt32) # all args must agree on this
+    shared = mask
+    for r in (r1, rs...)
+        r isa Regex || continue
+        if match_opts == typemax(UInt32)
+            match_opts = r.match_options
+            compile_opts = r.compile_options & ~mask
+        else
+            r.match_options == match_opts &&
+                r.compile_options & ~mask == compile_opts ||
+                throw(ArgumentError("cannot multiply regexes: incompatible options"))
+        end
+        shared &= r.compile_options & mask
+    end
+    unshared = mask & ~shared
+    Regex(string(unwrap_string(r1, unshared), unwrap_string.(rs, Ref(unshared))...), compile_opts | shared, match_opts)
 end
+
+unwrap_string(r::Regex, unshared::UInt32) = string("(?", regex_opts_str(r.compile_options & unshared), ':', r.pattern, ')')
+unwrap_string(s::Union{AbstractString,AbstractChar}, ::UInt32) = string("(?:", s, ')')
+
+regex_opts_str(opts) = (isassigned(_regex_opts_str) ? _regex_opts_str[] : init_regex())[opts]
+
+# UInt32 to String mapping for some compile options
+const _regex_opts_str = Ref{ImmutableDict{UInt32,String}}()
+
+init_regex() = _regex_opts_str[] = foldl(0:15, init=ImmutableDict{UInt32,String}()) do d, o
+    opt = UInt32(0)
+    str = ""
+    if o & 1 != 0
+        opt |= PCRE.CASELESS
+        str *= 'i'
+    end
+    if o & 2 != 0
+        opt |= PCRE.MULTILINE
+        str *= 'm'
+    end
+    if o & 4 != 0
+        opt |= PCRE.DOTALL
+        str *= 's'
+    end
+    if o & 8 != 0
+        opt |= PCRE.EXTENDED
+        str *= 'x'
+    end
+    ImmutableDict(d, opt => str)
+end
+
+
+
 
 """
     ^(s::Regex, n::Integer)
@@ -562,4 +606,4 @@ julia> r"Test "^3
 r"Test Test Test "
 ```
 """
-^(r::Regex, i::Integer) = Regex(r.pattern^i, r.compile_options, r.match_options)
+^(r::Regex, i::Integer) = Regex(string("(?:", r.pattern, "){$i}"), r.compile_options, r.match_options)

@@ -79,26 +79,37 @@
     @test endswith("abc", r"C"i)
 
     @testset "multiplication & exponentiation" begin
-        @test r"a" * r"b" == r"ab"
-        @test r"a" * "b" == r"ab"
-        @test r"a" * 'b' == r"ab"
-        @test "a" * r"b" == r"ab"
-        @test 'a' * r"b" == r"ab"
+        @test r"a" * r"b" == r"(?:a)(?:b)"
+        @test r"a" * "b"  == r"(?:a)(?:b)"
+        @test r"a" * 'b'  == r"(?:a)(?:b)"
+        @test "a"  * r"b" == r"(?:a)(?:b)"
+        @test 'a'  * r"b" == r"(?:a)(?:b)"
         for a = (r"a", "a", 'a'),
             b = (r"b", "b", 'b'),
             c = (r"c", "c", 'c')
             a isa Regex || b isa Regex || c isa Regex || continue
-            @test a * b * c == r"abc"
+            @test a * b * c == r"(?:a)(?:b)(?:c)"
         end
-        @test r"a"i * r"b"i == r"ab"i
-        @test r"a"i * "b" == r"ab"i
-        @test r"a"i * 'b' == r"ab"i
-        @test "a" * r"b"i == r"ab"i
-        @test 'a' * r"b"i == r"ab"i
-        @test_throws ArgumentError r"a"i * r"b"
-        @test_throws ArgumentError r"a" * r"b"i
+        for s = ["thiscat", "thishat", "thatcat", "thathat"]
+            @test match(r"this|that" * r"cat|hat", s) !== nothing
+        end
 
-        @test r"abc"^ 2 == r"abcabc"
+        @test r"a"i * r"b"i == r"(?:a)(?:b)"i
+        @test r"a"i * "b"   == r"(?:a)(?:b)"i
+        @test r"a"i * 'b'   == r"(?:a)(?:b)"i
+        @test "a"   * r"b"i == r"(?:a)(?:b)"i
+        @test 'a'   * r"b"i == r"(?:a)(?:b)"i
+
+        @test r"a"i  * r"b"m  == r"(?i:a)(?m:b)"
+        @test r"a"im * r"b"m  == r"(?i:a)(?:b)"m
+        @test r"a"im * r"b"im == r"(?:a)(?:b)"im
+        @test r"a"im * r"b"i  == r"(?m:a)(?:b)"i
+
+        # error for really incompatible options
+        @test_throws ArgumentError r"a" * Regex("b", Base.DEFAULT_COMPILER_OPTS & ~Base.PCRE.UCP, Base.DEFAULT_MATCH_OPTS)
+        @test_throws ArgumentError r"a" * Regex("b", Base.DEFAULT_COMPILER_OPTS, Base.DEFAULT_MATCH_OPTS & ~Base.PCRE.NO_UTF_CHECK)
+
+        @test r"this|that"^2 == r"(?:this|that){2}"
     end
 
     # Test that PCRE throws the correct kind of error
