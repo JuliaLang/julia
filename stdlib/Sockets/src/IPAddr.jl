@@ -274,7 +274,7 @@ end
 """
     InetAddr(ip::IPAddr, port) -> InetAddr
 
-Returns an InetAddr object from ip address `ip` and port number `port`.
+Return an `InetAddr` object from ip address `ip` and port number `port`.
 
 # Examples
 ```jldoctest
@@ -287,11 +287,11 @@ InetAddr(ip::IPAddr, port) = InetAddr{typeof(ip)}(ip, port)
 """
     InetAddr(str::AbstractString, port) -> InetAddr
 
-Returns an InetAddr object from ip address `str` formatted as [`AbstractString`](@ref)
+Return an `InetAddr` object from ip address `str` formatted as [`AbstractString`](@ref)
 and port number `port`.
 
 !!! compat "Julia 1.2"
-    constructor from `AbstractString` requires at least Julia 1.2.
+    This constructor requires at least Julia 1.2.
 
 # Examples
 ```jldoctest
