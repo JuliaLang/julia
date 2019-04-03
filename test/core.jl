@@ -5835,6 +5835,13 @@ for U in boxedunions
     end
 end
 
+# issue 31583
+a31583 = "a"
+f31583() = a31583 === "a"
+@test f31583()
+a31583 = "b"
+@test !f31583()
+
 # unsafe_wrap
 let
     A4 = [1, 2, 3]

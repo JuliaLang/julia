@@ -2388,7 +2388,13 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
     int ptr_comparable = 0; // whether this type is unique'd by pointer
     if (rt1 == (jl_value_t*)jl_sym_type || rt2 == (jl_value_t*)jl_sym_type)
         ptr_comparable = 1;
-    if (jl_is_mutable_datatype(rt1) || jl_is_mutable_datatype(rt2)) // excludes abstract types
+    if (jl_is_mutable_datatype(rt1) && // excludes abstract types
+        rt1 != (jl_value_t*)jl_string_type && // technically mutable, but compared by contents
+        rt1 != (jl_value_t*)jl_simplevector_type)
+        ptr_comparable = 1;
+    if (jl_is_mutable_datatype(rt2) && // excludes abstract types
+        rt2 != (jl_value_t*)jl_string_type && // technically mutable, but compared by contents
+        rt2 != (jl_value_t*)jl_simplevector_type)
         ptr_comparable = 1;
     if (jl_subtype(rt1, (jl_value_t*)jl_type_type) ||
         jl_subtype(rt2, (jl_value_t*)jl_type_type)) {
@@ -2400,9 +2406,6 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
             ptr_comparable = 1;
         }
     }
-    if ((rt1 == (jl_value_t*)jl_string_type && rt2 == (jl_value_t*)jl_string_type) ||
-        (rt1 == (jl_value_t*)jl_simplevector_type && rt2 == (jl_value_t*)jl_simplevector_type))
-        ptr_comparable = 0; // technically mutable, but compared by contents
     if (ptr_comparable) {
         Value *varg1 = arg1.constant ? literal_pointer_val(ctx, arg1.constant) : arg1.V;
         Value *varg2 = arg2.constant ? literal_pointer_val(ctx, arg2.constant) : arg2.V;
