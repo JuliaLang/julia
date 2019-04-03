@@ -79,6 +79,9 @@ SRCS += anticodegen
 LLVM_LIBS := support
 endif
 
+uprobes.h : uprobes.d
+	dtrace -h -s uprobes.d
+
 # headers are used for dependency tracking, while public headers will be part of the dist
 UV_HEADERS :=
 HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h uprobes.h julia_assert.h julia_threads.h tls.h locks.h atomics.h julia_internal.h options.h timing.h)

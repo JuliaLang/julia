@@ -1042,6 +1042,23 @@ const char *name_from_method_instance(jl_method_instance_t *mi)
     return jl_is_method(mi->def.method) ? jl_symbol_name(mi->def.method->name) : "top-level scope";
 }
 
+struct CompileTiming {
+  CompileTiming(jl_method_instance_t *mi) :mi(mi) {
+    if (jl_is_method(mi->def.method)) {
+      JULIA_COMPILE_START(jl_symbol_name(mi->def.method->name),
+      jl_symbol_name(mi->def.method->module->name));
+    }
+  }
+  ~CompileTiming() {
+    if (jl_is_method(mi->def.method)) {
+      JULIA_COMPILE_END(jl_symbol_name(mi->def.method->name),
+        jl_symbol_name(mi->def.method->name),
+      jl_symbol_name(mi->def.method->module->name));
+    }
+  }
+  jl_method_instance_t *mi;
+};
+
 // this generates llvm code for the lambda info
 // and adds the result to the jitlayers
 // (and the shadow module), but doesn't yet compile
@@ -1049,10 +1066,7 @@ const char *name_from_method_instance(jl_method_instance_t *mi)
 extern "C"
 jl_code_instance_t *jl_compile_linfo(jl_method_instance_t *mi, jl_code_info_t *src, size_t world, const jl_cgparams_t *params)
 {
-    if (jl_is_method(mi->def.method)) {
-      JULIA_COMPILE_START(jl_symbol_name(mi->def.method->name),
-                          jl_symbol_name(mi->def.method->module->name));
-    }
+    CompileTiming _c(mi);
 
     // N.B.: `src` may have not been rooted by the caller.
     JL_TIMING(CODEGEN);
