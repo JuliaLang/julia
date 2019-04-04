@@ -1044,12 +1044,12 @@ const char *name_from_method_instance(jl_method_instance_t *mi)
 
 struct CompileTiming {
   CompileTiming(jl_method_instance_t *mi) :mi(mi) {
-    //if (jl_is_method(mi->def.method)) {
+    if (jl_is_method(mi->def.method)) {
       JULIA_COMPILE_START();
-    //}
+    }
   }
   ~CompileTiming() {
-    //if (jl_is_method(mi->def.method)) {
+    if (jl_is_method(mi->def.method)) {
       ios_t str_;
       ios_mem(&str_, 300);
       JL_STREAM* str = (JL_STREAM*)&str_;
@@ -1063,7 +1063,7 @@ struct CompileTiming {
       JULIA_COMPILE_END(str_.buf);
 
       ios_close(&str_);
-    //}
+    }
   }
   jl_method_instance_t *mi;
 };
@@ -1075,8 +1075,6 @@ struct CompileTiming {
 extern "C"
 jl_code_instance_t *jl_compile_linfo(jl_method_instance_t *mi, jl_code_info_t *src, size_t world, const jl_cgparams_t *params)
 {
-    CompileTiming _c(mi);
-
     // N.B.: `src` may have not been rooted by the caller.
     JL_TIMING(CODEGEN);
     assert(jl_is_method_instance(mi));
@@ -1110,6 +1108,9 @@ jl_code_instance_t *jl_compile_linfo(jl_method_instance_t *mi, jl_code_info_t *s
 
     // Codegen lock held in this block
     {
+        // Instrument the time spent in this block for this method instance
+        CompileTiming _c(mi);
+
         // Step 1: Re-check if this was already compiled (it may have been while
         // we waited at the lock).
         if (!jl_is_method(mi->def.method)) {
