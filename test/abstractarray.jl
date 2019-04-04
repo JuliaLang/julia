@@ -864,6 +864,9 @@ for A in (rand(2), rand(2,3))
         @test A[i] == v
     end
     @test Array(values(A)) == A
+
+    @test keytype(A) == eltype(keys(A))
+    @test valtype(A) == eltype(values(A))
 end
 
 # nextind and prevind
