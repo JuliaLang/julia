@@ -562,7 +562,7 @@ function *(r1::Union{Regex,AbstractString,AbstractChar}, rs::Union{Regex,Abstrac
                 r.compile_options & ~mask == compile_opts ||
                 throw(ArgumentError("cannot multiply regexes: incompatible options"))
         end
-        shared &= r.compile_options & mask
+        shared &= r.compile_options
     end
     unshared = mask & ~shared
     Regex(string(unwrap_string(r1, unshared), unwrap_string.(rs, Ref(unshared))...), compile_opts | shared, match_opts)
