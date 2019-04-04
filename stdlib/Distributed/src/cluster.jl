@@ -1040,6 +1040,9 @@ struct ProcessExitedException <: Exception
     worker_id::Int
 end
 
+# No-arg constructor added for compatibility with Julia 1.0 & 1.1, should be deprecated in the future
+ProcessExitedException() = ProcessExitedException(-1)
+
 worker_from_id(i) = worker_from_id(PGRP, i)
 function worker_from_id(pg::ProcessGroup, i)
     if !isempty(map_del_wrkr) && in(i, map_del_wrkr)
