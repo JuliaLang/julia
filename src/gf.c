@@ -18,7 +18,7 @@
 #include "julia_assert.h"
 
 // Dtrace Timings
-#include "uprobes.h"
+#include "uprobes.h.gen"
 void compile_end(jl_method_instance_t *mi);
 
 

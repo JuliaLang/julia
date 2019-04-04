@@ -21,6 +21,7 @@
 *.so
 *.dylib
 *.dSYM
+*.h.gen
 *.jl.cov
 *.jl.*.cov
 *.jl.mem
