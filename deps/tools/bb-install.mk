@@ -24,30 +24,32 @@ $$(BUILDDIR)/$$($(2)_BB_NAME):
 $$(SRCCACHE)/$$($(2)_BB_BASENAME): | $$(SRCCACHE)
 	$$(JLDOWNLOAD) $$@ $$($(2)_BB_URL)
 
-$$(BUILDDIR)/$$($(2)_BB_NAME)/build-compiled: $$(BUILDDIR)/$$($(2)_BB_NAME) | $$(SRCCACHE)/$$($(2)_BB_BASENAME)
-	$$(JLCHECKSUM) $$(SRCCACHE)/$$($(2)_BB_BASENAME)
-	echo 1 > $$@
+stage-$(strip $1): $$(SRCCACHE)/$$($(2)_BB_BASENAME)
+install-$(strip $1): $$(build_prefix)/manifest/$(strip $1)
+uninstall-$(strip $1):
+	-rm $$(build_prefix)/manifest/$(strip $1)
+	-cd $$(build_prefix) && rm -dv -- $$$$($(TAR) -tzf $$(SRCCACHE)/$$($(2)_BB_BASENAME) --exclude './$$$$')
 
-$$(eval $$(call staged-install,$(1),$$($(2)_BB_NAME),,,,))
+reinstall-$(strip $1):
+	+$$(MAKE) uninstall-$(strip $1)
+	+$$(MAKE) stage-$(strip $1)
+	+$$(MAKE) install-$(strip $1)
 
-#Override provision of stage tarball
-$$(build_staging)/$$($(2)_BB_NAME).tgz: $$(SRCCACHE)/$$($(2)_BB_BASENAME) | $$(build_staging)
-	cp $$< $$@
-
-clean-bb-$(1):
-	rm -f $$(build_staging)/$$($(2)_BB_BASENAME)
-	rm -f $$(BUILDDIR)/$$($(2)_BB_NAME)/build-compiled
+$$(build_prefix)/manifest/$(strip $1): $$(SRCCACHE)/$$($(2)_BB_BASENAME) | $(build_prefix)/manifest
+	$$(JLCHECKSUM) $$<
+	mkdir -p $$(build_prefix)
+	$(UNTAR) $$< -C $$(build_prefix)
+	echo $2 > $$@
 
 clean-bb-download-$(1):
 	rm -f $$(SRCCACHE)/$$($(2)_BB_BASENAME)
 
-clean-$(1): clean-bb-$(1)
-distclean-$(1): clean-bb-$(1) clean-bb-download-$(1)
+clean-$(1):
+distclean-$(1): clean-bb-download-$(1)
 get-$(1): $$(SRCCACHE)/$$($(2)_BB_BASENAME)
 extract-$(1):
 configure-$(1):
-compile-$(1): $$(BUILDDIR)/$$($(2)_BB_NAME)/build-compiled
-install-$(1): compile-$(1)
+compile-$(1): get-$(1)
 fastcheck-$(1):
 check-$(1):
 
