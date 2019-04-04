@@ -1,5 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    Random
+
+Support for generating random numbers. Provides [`rand`](@ref), [`randn`](@ref),
+[`AbstractRNG`](@ref), [`MersenneTwister`](@ref), and [`RandomDevice`](@ref).
+"""
 module Random
 
 include("DSFMT.jl")
@@ -27,6 +33,11 @@ export rand!, randn!,
 
 ## general definitions
 
+"""
+    AbstractRNG
+
+Supertype for random number generators such as [`MersenneTwister`](@ref) and [`RandomDevice`](@ref).
+"""
 abstract type AbstractRNG end
 
 """

@@ -132,16 +132,24 @@ isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(
 """
     isless(x, y)
 
-Test whether `x` is less than `y`, according to a canonical total order. Values that are
-normally unordered, such as `NaN`, are ordered in an arbitrary but consistent fashion.
+Test whether `x` is less than `y`, according to a fixed total order.
+`isless` is not defined on all pairs of values `(x, y)`. However, if it
+is defined, it is expected to satisfy the following:
+- If `isless(x, y)` is defined, then so is `isless(y, x)` and `isequal(x, y)`,
+  and exactly one of those three yields `true`.
+- The relation defined by `isless` is transitive, i.e.,
+  `isless(x, y) && isless(y, z)` implies `isless(x, z)`.
+
+Values that are normally unordered, such as `NaN`,
+are ordered in an arbitrary but consistent fashion.
 [`missing`](@ref) values are ordered last.
 
 This is the default comparison used by [`sort`](@ref).
 
 # Implementation
-Non-numeric types with a canonical total order should implement this function.
+Non-numeric types with a total order should implement this function.
 Numeric types only need to implement it if they have special values such as `NaN`.
-Types with a canonical partial order should implement [`<`](@ref).
+Types with a partial order should implement [`<`](@ref).
 """
 function isless end
 

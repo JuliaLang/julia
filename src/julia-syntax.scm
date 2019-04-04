@@ -46,10 +46,10 @@
          (arg2  (if (and (pair? arg)
                          (pair? (cdddr e)))
                     (make-ssavalue) arg)))
-    (if (and (not (dotop? (cadr e)))
+    (if (and (not (dotop-named? (cadr e)))
              (length> e 5)
              (pair? (cadddr (cdr e)))
-             (dotop? (cadddr (cddr e))))
+             (dotop-named? (cadddr (cddr e))))
         ;; look ahead: if the 2nd argument of the next comparison is also
         ;; an argument to an eager (dot) op, make sure we don't skip the
         ;; initialization of its variable by short-circuiting
@@ -68,7 +68,7 @@
 (define (expand-scalar-compare e)
   (comp-accum e
               (lambda (a b) `(&& ,a ,b))
-              (lambda (x) (or (not (length> x 2)) (dotop? (cadr x))))
+              (lambda (x) (or (not (length> x 2)) (dotop-named? (cadr x))))
               compare-one))
 
 ;; convert a series of scalar and vector comparisons into & calls,
@@ -79,7 +79,7 @@
               (lambda (a b) `(call .& ,a ,b))
               (lambda (x) (not (length> x 2)))
               (lambda (e)
-                (if (dotop? (cadr e))
+                (if (dotop-named? (cadr e))
                     (compare-one e)
                     (expand-scalar-compare e)))))
 
@@ -1375,7 +1375,7 @@
 ;; for example a[f(x)] => (temp=f(x); a[temp])
 ;; returns a pair (expr . assignments)
 ;; where 'assignments' is a list of needed assignment statements
-(define (remove-argument-side-effects e)
+(define (remove-argument-side-effects e (tup #f))
   (if
    (not (pair? e))
    (cons e '())
@@ -1391,16 +1391,16 @@
                          (let ((g (make-ssavalue)))
                            (begin (set! a (cons `(= ,g ,(cadr x)) a))
                                   `(,(car x) ,g)))))
-                    ((eq? (car x) 'kw)
+                    ((or (eq? (car x) 'kw) (and tup (eq? (car x) '=)))
                      (if (effect-free? (caddr x))
                          x
                          (let ((g (make-ssavalue)))
                            (begin (set! a (cons `(= ,g ,(caddr x)) a))
-                                  `(kw ,(cadr x) ,g)))))
+                                  `(,(car x) ,(cadr x) ,g)))))
                     ((eq? (car x) 'tuple)
-                     (let ((tmp (map remove-argument-side-effects (cdr x))))
-                       (set! a (revappend (apply append (map cdr tmp)) a))
-                       `(tuple ,@(map car tmp))))
+                     (let ((tmp (remove-argument-side-effects x #t)))
+                       (set! a (revappend (cdr tmp) a))
+                       (car tmp)))
                     (else
                      (let ((g (make-ssavalue)))
                        (begin (set! a (cons `(= ,g ,x) a))
@@ -1442,21 +1442,29 @@
 
 ;; convert `a+=b` to `a=a+b`
 (define (expand-update-operator- op op= lhs rhs declT)
-  (let ((e (remove-argument-side-effects lhs)))
-    (let ((newlhs (car e)))
-      (if (and (pair? lhs) (eq? (car lhs) 'tuple))
-          (let loop ((a (cdr newlhs))
-                     (b (cdr lhs)))
-            (if (pair? a)
-                ;; if remove-argument-side-effects needed to replace an expression with
-                ;; an ssavalue, then it can't be updated by assignment. issue #30062
-                (begin (if (and (ssavalue? (car a)) (not (ssavalue? (car b))))
-                           (error (string "invalid multiple assignment location \"" (deparse (car b)) "\"")))
-                       (loop (cdr a) (cdr b))))))
-      `(block ,@(cdr e)
-              ,(if (null? declT)
-                   `(,op= ,newlhs (call ,op ,newlhs ,rhs))
-                   `(,op= ,newlhs (call ,op (:: ,newlhs ,(car declT)) ,rhs)))))))
+  (let* ((e      (remove-argument-side-effects lhs))
+         (newlhs (car e))
+         (temp   (and (eq? op= '|.=|) (pair? newlhs) (make-ssavalue)))
+         (newlhs (if (and temp (eq? (car newlhs) 'ref))
+                     (ref-to-view newlhs)
+                     newlhs))
+         (e      (if temp
+                     (cons temp (append (cdr e) (list `(= ,temp ,newlhs))))
+                     e))
+         (newlhs (or temp newlhs)))
+    (if (and (pair? lhs) (eq? (car lhs) 'tuple))
+        (let loop ((a (cdr newlhs))
+                   (b (cdr lhs)))
+          (if (pair? a)
+              ;; if remove-argument-side-effects needed to replace an expression with
+              ;; an ssavalue, then it can't be updated by assignment. issue #30062
+              (begin (if (and (ssavalue? (car a)) (not (ssavalue? (car b))))
+                         (error (string "invalid multiple assignment location \"" (deparse (car b)) "\"")))
+                     (loop (cdr a) (cdr b))))))
+    `(block ,@(cdr e)
+            ,(if (null? declT)
+                 `(,op= ,newlhs (call ,op ,newlhs ,rhs))
+                 `(,op= ,newlhs (call ,op (:: ,newlhs ,(car declT)) ,rhs))))))
 
 (define (partially-expand-ref e)
   (let ((a    (cadr e))
@@ -1488,7 +1496,7 @@
            `(block ,@(cdr e)
                    ,(expand-update-operator op op= (car e) rhs T))))
         (else
-         (if (and (pair? lhs)
+         (if (and (pair? lhs) (eq? op= '=)
                   (not (memq (car lhs) '(|.| tuple vcat typed_hcat typed_vcat))))
              (error (string "invalid assignment location \"" (deparse lhs) "\"")))
          (expand-update-operator- op op= lhs rhs declT))))
@@ -1590,7 +1598,7 @@
     (if (and (null? splat)
              (length= expr 3) (eq? (car expr) 'call)
              (eq? (caddr expr) argname)
-             (not (dotop? (cadr expr)))
+             (not (dotop-named? (cadr expr)))
              (not (expr-contains-eq argname (cadr expr))))
         (cadr expr)  ;; eta reduce `x->f(x)` => `f`
         (let ((expr (cond ((and flat (pair? expr) (eq? (car expr) 'generator))
@@ -1661,18 +1669,18 @@
           (cond ((or (atom? x) (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
                  `(call (top getproperty) ,f ,x))
                 ((eq? (car x) 'tuple)
-                 (if (and (eq? f '^) (length= x 3) (integer? (caddr x)))
-                  (make-fuse (expand-forms '(top literal_pow))
-                    (list '^ (cadr x) (expand-forms `(call (call (core apply_type) (top Val) ,(caddr x))))))
-                  (make-fuse f (cdr x))))
+                 (if (and (eq? (identifier-name f) '^) (length= x 3) (integer? (caddr x)))
+                     (make-fuse '(top literal_pow)
+                                (list f (cadr x) (expand-forms `(call (call (core apply_type) (top Val) ,(caddr x))))))
+                     (make-fuse f (cdr x))))
                 (else
                  (error (string "invalid syntax \"" (deparse e) "\"")))))
-        (if (and (pair? e) (eq? (car e) 'call) (dotop? (cadr e)))
+        (if (and (pair? e) (eq? (car e) 'call) (dotop-named? (cadr e)))
             (let ((f (undotop (cadr e))) (x (cddr e)))
-                (if (and (eq? f '^) (length= x 2) (integer? (cadr x)))
-                 (make-fuse (expand-forms '(top literal_pow))
-                   (list '^ (car x) (expand-forms `(call (call (core apply_type) (top Val) ,(cadr x))))))
-                 (make-fuse f x)))
+              (if (and (eq? (identifier-name f) '^) (length= x 2) (integer? (cadr x)))
+                  (make-fuse '(top literal_pow)
+                             (list f (car x) (expand-forms `(call (call (core apply_type) (top Val) ,(cadr x))))))
+                  (make-fuse f x)))
             e)))
   (let ((e (dot-to-fuse rhs #t)) ; an expression '(fuse func args) if expr is a dot call
         (lhs-view (ref-to-view lhs))) ; x[...] expressions on lhs turn in to view(x, ...) to update x in-place
@@ -2027,7 +2035,7 @@
    (lambda (e)
      (if (length> e 2)
          (let ((f (cadr e)))
-           (cond ((dotop? f)
+           (cond ((dotop-named? f)
                   (expand-fuse-broadcast '() `(|.| ,(undotop f) (tuple ,@(cddr e)))))
                  ((eq? f 'ccall)
                   (if (not (length> e 4)) (error "too few arguments to ccall"))
@@ -2077,9 +2085,9 @@
                     (expand-forms
                      `(call (core _apply) ,f ,@(tuple-wrap argl '())))))
 
-                 ((and (eq? f '^) (length= e 4) (integer? (cadddr e)))
+                 ((and (eq? (identifier-name f) '^) (length= e 4) (integer? (cadddr e)))
                   (expand-forms
-                   `(call (top literal_pow) ^ ,(caddr e) (call (call (core apply_type) (top Val) ,(cadddr e))))))
+                   `(call (top literal_pow) ,f ,(caddr e) (call (call (core apply_type) (top Val) ,(cadddr e))))))
                  (else
                   (map expand-forms e))))
          (map expand-forms e)))
@@ -2951,9 +2959,9 @@ f(x) = yt(x)
 
 (define lambda-opt-ignored-exprs
   (Set '(quote top core line inert local local-def unnecessary copyast
-         meta inbounds boundscheck simdloop decl
+         meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          struct_type abstract_type primitive_type thunk with-static-parameters
-         implicit-global global globalref outerref const-if-global
+         global globalref outerref const-if-global
          const null ssavalue isdefined toplevel module lambda error
          gc_preserve_begin gc_preserve_end import using export)))
 
@@ -3887,7 +3895,6 @@ f(x) = yt(x)
             ((moved-local)
              (set-car! (lam:vinfo lam) (append (car (lam:vinfo lam)) `((,(cadr e) Any 2))))
              #f)
-            ((implicit-global) #f)
             ((const)
              (if (local-in? (cadr e) lam)
                  (error (string "unsupported `const` declaration on local variable" (format-loc current-loc)))
@@ -3971,7 +3978,7 @@ f(x) = yt(x)
                s))
 
             ;; metadata expressions
-            ((line meta inbounds simdloop gc_preserve_end)
+            ((line meta inbounds loopinfo gc_preserve_end aliasscope popaliasscope)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
                (cond ((eq? (car e) 'line)
                       (set! current-loc e)

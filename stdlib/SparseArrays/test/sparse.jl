@@ -2088,11 +2088,11 @@ end
 
     show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5], Int64[1,1,2,2,3], [1.0,2.0,3.0,4.0,5.0]))
     @test String(take!(io)) ==  string("5×3 SparseArrays.SparseMatrixCSC{Float64,Int64} with 5 stored entries:\n  [1, 1]",
-                                       "  =  1.0\n  ⋮\n  [5, 3]  =  5.0")
+                                       "  =  1.0\n  ⋮\n  [4, 2]  =  4.0\n  [5, 3]  =  5.0")
 
     show(ioc, MIME"text/plain"(), sparse(fill(1.,5,3)))
     @test String(take!(io)) ==  string("5×3 SparseArrays.SparseMatrixCSC{Float64,$Int} with 15 stored entries:\n  [1, 1]",
-                                       "  =  1.0\n  ⋮\n  [5, 3]  =  1.0")
+                                       "  =  1.0\n  ⋮\n  [4, 3]  =  1.0\n  [5, 3]  =  1.0")
 
     # odd number of rows
     ioc = IOContext(io, :displaysize => (9, 80), :limit => true)
@@ -2245,16 +2245,20 @@ end
         @test findprev(!iszero, x,i) == findprev(!iszero, x_sp,i)
     end
 
-    y = [0 0 0 0 0;
+    y = [7 0 0 0 0;
          1 0 1 0 0;
-         1 0 0 0 1;
+         1 7 0 7 1;
          0 0 1 0 0;
-         1 0 1 1 0]
-    y_sp = sparse(y)
+         1 0 1 1 0.0]
+    y_sp = [x == 7 ? -0.0 : x for x in sparse(y)]
+    y = Array(y_sp)
+    @test isequal(y_sp[1,1], -0.0)
 
     for i in keys(y)
         @test findnext(!iszero, y,i) == findnext(!iszero, y_sp,i)
         @test findprev(!iszero, y,i) == findprev(!iszero, y_sp,i)
+        @test findnext(iszero, y,i) == findnext(iszero, y_sp,i)
+        @test findprev(iszero, y,i) == findprev(iszero, y_sp,i)
     end
 
     z_sp = sparsevec(Dict(1=>1, 5=>1, 8=>0, 10=>1))
@@ -2264,6 +2268,17 @@ end
         @test findnext(!iszero, z,i) == findnext(!iszero, z_sp,i)
         @test findprev(!iszero, z,i) == findprev(!iszero, z_sp,i)
     end
+
+    w = [ "a" ""; "" "b"]
+    w_sp = sparse(w)
+
+    for i in keys(w)
+        @test findnext(!isequal(""), w,i) == findnext(!isequal(""), w_sp,i)
+        @test findprev(!isequal(""), w,i) == findprev(!isequal(""), w_sp,i)
+        @test findnext(isequal(""), w,i) == findnext(isequal(""), w_sp,i)
+        @test findprev(isequal(""), w,i) == findprev(isequal(""), w_sp,i)
+    end
+
 end
 
 # #20711
@@ -2508,6 +2523,62 @@ end
         circshift!(E2, Matrix(A2), shifts)
         @test E1 == E2
     end
+end
+
+@testset "wrappers of sparse" begin
+    m = n = 10
+    A = spzeros(ComplexF64, m, n)
+    A[:,1] = 1:m
+    A[:,2] = [1 3 0 0 0 0 0 0 0 0]'
+    A[:,3] = [2 4 0 0 0 0 0 0 0 0]'
+    A[:,4] = [0 0 0 0 5 3 0 0 0 0]'
+    A[:,5] = [0 0 0 0 6 2 0 0 0 0]'
+    A[:,6] = [0 0 0 0 7 4 0 0 0 0]'
+    A[:,7:n] = rand(ComplexF64, m, n-6)
+    B = Matrix(A)
+    dowrap(wr, A) = wr(A)
+    dowrap(wr::Tuple, A) = (wr[1])(A, wr[2:end]...)
+
+    @testset "sparse($wr(A))" for wr in (
+                        Symmetric, (Symmetric, :L), Hermitian, (Hermitian, :L),
+                        Transpose, Adjoint,
+                        UpperTriangular, LowerTriangular,
+                        UnitUpperTriangular, UnitLowerTriangular,
+                        (view, 3:6, 2:5))
+
+        @test SparseMatrixCSC(dowrap(wr, A)) == Matrix(dowrap(wr, B))
+    end
+
+    @testset "sparse($at($wr))" for at = (Transpose, Adjoint), wr =
+        (UpperTriangular, LowerTriangular,
+         UnitUpperTriangular, UnitLowerTriangular)
+
+        @test SparseMatrixCSC(at(wr(A))) == Matrix(at(wr(B)))
+    end
+
+    @test sparse([1,2,3,4,5]') == SparseMatrixCSC([1 2 3 4 5])
+    @test sparse(UpperTriangular(A')) == UpperTriangular(B')
+    @test sparse(Adjoint(UpperTriangular(A'))) == Adjoint(UpperTriangular(B'))
+end
+
+@testset "Ti cannot store all potential values #31024" begin
+    @test_throws ArgumentError SparseMatrixCSC(128, 1, [Int8(1), Int8(1)], Int8[], Int[])
+    @test_throws ArgumentError SparseMatrixCSC(12, 12, [Int8(1), Int8(1)], Int8[], Int[])
+    I1 = [Int8(i) for i in 1:20 for _ in 1:20]
+    J1 = [Int8(i) for _ in 1:20 for i in 1:20]
+    @test_throws ArgumentError sparse(I1, J1, zero(length(I1)zero(length(I1))))
+end
+
+@testset "unary operations on matrices where length(nzval)>nnz" begin
+    # this should create a sparse matrix with length(nzval)>nnz
+    A = SparseMatrixCSC(Complex{BigInt}[1+im 2+2im]')'[1:1, 2:2]
+    # ...ensure it does! If necessary, the test needs to be updated to use
+    # another mechanism to create a suitable A.
+    @assert length(A.nzval) > nnz(A)
+    @test -A == fill(-2-2im, 1, 1)
+    @test conj(A) == fill(2-2im, 1, 1)
+    conj!(A)
+    @test A == fill(2-2im, 1, 1)
 end
 
 end # module

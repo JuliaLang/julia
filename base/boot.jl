@@ -65,6 +65,9 @@
 #mutable struct MethodInstance
 #end
 
+#mutable struct CodeInstance
+#end
+
 #mutable struct CodeInfo
 #end
 
@@ -90,8 +93,7 @@
 #end
 
 #struct LineInfoNode
-#    mod::Module
-#    method::Symbol
+#    method::Any
 #    file::Symbol
 #    line::Int
 #    inlined_at::Int
@@ -375,13 +377,13 @@ eval(Core, :(PiNode(val, typ) = $(Expr(:new, :PiNode, :val, :typ))))
 eval(Core, :(PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))))
 eval(Core, :(UpsilonNode(val) = $(Expr(:new, :UpsilonNode, :val))))
 eval(Core, :(UpsilonNode() = $(Expr(:new, :UpsilonNode))))
-eval(Core, :(LineInfoNode(mod::Module, method::Symbol, file::Symbol, line::Int, inlined_at::Int) =
-             $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))))
+eval(Core, :(LineInfoNode(@nospecialize(method), file::Symbol, line::Int, inlined_at::Int) =
+             $(Expr(:new, :LineInfoNode, :method, :file, :line, :inlined_at))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
-function Task(@nospecialize(f), reserved_stack::Int=0)
-    return ccall(:jl_new_task, Ref{Task}, (Any, Int), f, reserved_stack)
+function _Task(@nospecialize(f), reserved_stack::Int, completion_future)
+    return ccall(:jl_new_task, Ref{Task}, (Any, Any, Int), f, completion_future, reserved_stack)
 end
 
 # simple convert for use by constructors of types in Core
@@ -443,11 +445,11 @@ Symbol(s::Symbol) = s
 
 # module providing the IR object model
 module IR
-export CodeInfo, MethodInstance, GotoNode,
+export CodeInfo, MethodInstance, CodeInstance, GotoNode,
     NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode
 
-import Core: CodeInfo, MethodInstance, GotoNode,
+import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode,
     NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode
 
@@ -722,6 +724,7 @@ Int64(x::Ptr) = Int64(UInt32(x))
 UInt64(x::Ptr) = UInt64(UInt32(x))
 end
 Ptr{T}(x::Union{Int,UInt,Ptr}) where {T} = bitcast(Ptr{T}, x)
+Ptr{T}() where {T} = Ptr{T}(0)
 
 Signed(x::UInt8)    = Int8(x)
 Unsigned(x::Int8)   = UInt8(x)

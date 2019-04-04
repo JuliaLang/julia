@@ -16,17 +16,21 @@ CHOLMOD_CONFIG += -DNPARTITION
 
 ifneq ($(USE_BINARYBUILDER_SUITESPARSE), 1)
 
-SUITE_SPARSE_LIB := -lm
-ifneq ($(OS), Darwin)
-ifneq ($(OS), WINNT)
-SUITE_SPARSE_LIB += -lrt
-endif
-endif
+SUITESPARSE_PROJECTS := AMD CAMD CCOLAMD COLAMD CHOLMOD UMFPACK SPQR
+SUITESPARSE_LIBS := $(addsuffix .*$(SHLIB_EXT)*,suitesparseconfig amd camd ccolamd colamd cholmod umfpack spqr)
+
+SUITE_SPARSE_LIB := $(LDFLAGS) -L"$(abspath $(BUILDDIR))/SuiteSparse-$(SUITESPARSE_VER)/lib"
+ifeq ($(OS), Darwin)
 SUITE_SPARSE_LIB += $(RPATH_ESCAPED_ORIGIN)
+endif
 SUITESPARSE_MFLAGS := CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" \
-	  INSTALL_LIB="$(build_libdir)" INSTALL_INCLUDE="$(build_includedir)" LIB="$(SUITE_SPARSE_LIB)" \
-	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)" SPQR_CONFIG="$(SPQR_CONFIG)" \
-	  CFOPENMP=""
+	  LDFLAGS="$(SUITE_SPARSE_LIB)" CFOPENMP="" CUDA=no CUDA_PATH="" \
+	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)" SPQR_CONFIG="$(SPQR_CONFIG)"
+ifeq ($(OS),WINNT)
+SUITESPARSE_MFLAGS += UNAME=Windows
+else
+SUITESPARSE_MFLAGS += UNAME=$(OS)
+endif
 
 $(SRCCACHE)/SuiteSparse-$(SUITESPARSE_VER).tar.gz: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ http://faculty.cse.tamu.edu/davis/SuiteSparse/$(notdir $@)
@@ -40,59 +44,54 @@ $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted: $(SRCCACHE)/SuiteSp
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-winclang.patch-applied: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted
 	cd $(dir $@) && patch -p0 < $(SRCDIR)/patches/SuiteSparse-winclang.patch
 	echo 1 > $@
+$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-shlib.patch-applied: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted
+	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/SuiteSparse-shlib.patch
+	echo 1 > $@
+$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-winclang.patch-applied
+$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-shlib.patch-applied
 
 ifeq ($(USE_SYSTEM_BLAS), 0)
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: | $(build_prefix)/manifest/openblas
 else ifeq ($(USE_SYSTEM_LAPACK), 0)
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: | $(build_prefix)/manifest/lapack
 endif
-$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-winclang.patch-applied
-	$(MAKE) -C $(dir $<)/SuiteSparse_config library config $(SUITESPARSE_MFLAGS)
-	for proj in AMD BTF CAMD CCOLAMD COLAMD CHOLMOD LDL KLU UMFPACK RBio SPQR; do \
-		$(MAKE) -C $(dir $<)/$${proj} library $(SUITESPARSE_MFLAGS); \
+
+$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted
+	$(MAKE) -C $(dir $<)SuiteSparse_config library config $(SUITESPARSE_MFLAGS)
+	$(INSTALL_NAME_CMD)libsuitesparseconfig.$(SHLIB_EXT) $(dir $<)lib/libsuitesparseconfig.$(SHLIB_EXT)
+	for PROJ in $(SUITESPARSE_PROJECTS); do \
+		$(MAKE) -C $(dir $<)$${PROJ} library $(SUITESPARSE_MFLAGS) || exit 1; \
+		$(INSTALL_NAME_CMD)lib`echo $${PROJ} | tr A-Z a-z`.$(SHLIB_EXT) $(dir $<)lib/lib`echo $${PROJ} | tr A-Z a-z`.$(SHLIB_EXT) || exit 1; \
 	done
 	echo 1 > $@
 
+ifeq ($(OS),WINNT)
+SUITESPARSE_SHLIB_ENV:=PATH="$(abspath $(dir $<))lib:$(build_bindir):$(PATH)"
+else
+SUITESPARSE_SHLIB_ENV:=LD_LIBRARY_PATH="$(build_shlibdir)"
+endif
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-checked: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled
-	for proj in AMD BTF CAMD CCOLAMD COLAMD CHOLMOD LDL KLU UMFPACK RBio SPQR; do \
-		$(MAKE) -C $(dir $<)/$${proj} default $(SUITESPARSE_MFLAGS); \
+	for PROJ in $(SUITESPARSE_PROJECTS); do \
+		$(SUITESPARSE_SHLIB_ENV) $(MAKE) -C $(dir $<)$${PROJ} default $(SUITESPARSE_MFLAGS) || exit 1; \
 	done
 	echo 1 > $@
 
-$(build_prefix)/manifest/suitesparse: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled | $(build_prefix)/manifest
-	mkdir -p $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/lib && \
-	cd $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/lib && \
-	rm -f *.a && \
-	cp -f `find .. -name libamd.a -o -name libcolamd.a -o -name libcamd.a -o -name libccolamd.a -o -name libcholmod.a -o -name libumfpack.a -o -name libsuitesparseconfig.a -o -name libspqr.a 2>/dev/null` . && \
-	$(CC) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libsuitesparseconfig.$(SHLIB_EXT) && \
-	$(INSTALL_NAME_CMD)libsuitesparseconfig.$(SHLIB_EXT) $(build_shlibdir)/libsuitesparseconfig.$(SHLIB_EXT) && \
-	$(CC) -shared $(WHOLE_ARCHIVE) libamd.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libamd.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lsuitesparseconfig $(RPATH_ORIGIN) && \
-	$(INSTALL_NAME_CMD)libamd.$(SHLIB_EXT) $(build_shlibdir)/libamd.$(SHLIB_EXT) && \
-	$(CC) -shared $(WHOLE_ARCHIVE) libcolamd.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libcolamd.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lsuitesparseconfig $(RPATH_ORIGIN) && \
-	$(INSTALL_NAME_CMD)libcolamd.$(SHLIB_EXT) $(build_shlibdir)/libcolamd.$(SHLIB_EXT) && \
-	$(CC) -shared $(WHOLE_ARCHIVE) libcamd.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libcamd.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lsuitesparseconfig $(RPATH_ORIGIN) && \
-	$(INSTALL_NAME_CMD)libcamd.$(SHLIB_EXT) $(build_shlibdir)/libcamd.$(SHLIB_EXT) && \
-	$(CC) -shared $(WHOLE_ARCHIVE) libccolamd.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libccolamd.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lsuitesparseconfig $(RPATH_ORIGIN) && \
-	$(INSTALL_NAME_CMD)libccolamd.$(SHLIB_EXT) $(build_shlibdir)/libccolamd.$(SHLIB_EXT) && \
-	$(CXX) -shared $(WHOLE_ARCHIVE) libcholmod.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libcholmod.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lcolamd -lamd -lcamd -lccolamd -lsuitesparseconfig $(LIBLAPACK) $(LIBBLAS) $(RPATH_ORIGIN) && \
-	$(INSTALL_NAME_CMD)libcholmod.$(SHLIB_EXT) $(build_shlibdir)/libcholmod.$(SHLIB_EXT) && \
-	$(CXX) -shared $(WHOLE_ARCHIVE) libumfpack.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libumfpack.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lcholmod -lcolamd -lamd -lsuitesparseconfig $(LIBBLAS) $(RPATH_ORIGIN) && \
-	$(INSTALL_NAME_CMD)libumfpack.$(SHLIB_EXT) $(build_shlibdir)/libumfpack.$(SHLIB_EXT) && \
-	$(CXX) -shared $(WHOLE_ARCHIVE) libspqr.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libspqr.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lcholmod -lcolamd -lamd -lsuitesparseconfig $(LIBLAPACK) $(LIBBLAS) $(RPATH_ORIGIN) && \
-	$(INSTALL_NAME_CMD)libspqr.$(SHLIB_EXT) $(build_shlibdir)/libspqr.$(SHLIB_EXT)
+$(build_prefix)/manifest/suitesparse: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled | $(build_prefix)/manifest $(build_shlibdir)
+	for lib in $(SUITESPARSE_LIBS); do \
+		cp -a $(dir $<)lib/lib$${lib} $(build_shlibdir) || exit 1; \
+	done
+	#cp -a $(dir $<)lib/* $(build_shlibdir)
+	#cp -a $(dir $<)include/* $(build_includedir)
 	echo $(SUITESPARSE_VER) > $@
 
-clean-suitesparse: clean-suitesparse-wrapper
-	-rm $(build_prefix)/manifest/suitesparse $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled
-	-rm $(build_shlibdir)/libsuitesparseconfig.$(SHLIB_EXT) \
-		$(build_shlibdir)/libamd.$(SHLIB_EXT) \
-		$(build_shlibdir)/libcolamd.$(SHLIB_EXT) \
-		$(build_shlibdir)/libcamd.$(SHLIB_EXT) \
-		$(build_shlibdir)/libccolamd.$(SHLIB_EXT) \
-		$(build_shlibdir)/libcholmod.$(SHLIB_EXT) \
-		$(build_shlibdir)/libumfpack.$(SHLIB_EXT) \
-		$(build_shlibdir)/libspqr.$(SHLIB_EXT)
+uninstall-suitesparse:
+	-rm $(build_prefix)/manifest/suitesparse
+	-rm $(addprefix $(build_shlibdir)/lib, $(SUITESPARSE_LIBS))
+
+clean-suitesparse: clean-suitesparse-wrapper uninstall-suitesparse
+	-rm $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled
 	-rm -fr $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/lib
+	-rm -fr $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/include
 	-$(MAKE) -C $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER) clean
 
 distclean-suitesparse: clean-suitesparse-wrapper

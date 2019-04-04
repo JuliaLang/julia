@@ -274,18 +274,7 @@ end
         redirect_stderr(oldstderr)
         close(newstderr[2])
     end
-    @test fetch(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :queued\n"
-end
-
-@testset "schedule_and_wait" begin
-    t = @async(nothing)
-    ct = current_task()
-    testobject = "testobject"
-    # note: there is a low probability this test could fail, due to receiving network traffic simultaneously
-    @test length(Base.Workqueue) == 1
-    @test Base.schedule_and_wait(ct, 8) == 8
-    @test isempty(Base.Workqueue)
-    @test Base.schedule_and_wait(ct, testobject) === testobject
+    @test fetch(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :runnable\n"
 end
 
 @testset "throwto" begin
@@ -307,7 +296,7 @@ end
         tc[] += 1
     end
     @test isopen(t)
-    Base.process_events(false)
+    Base.process_events()
     @test !isopen(t)
     @test tc[] == 0
     yield()
@@ -329,9 +318,9 @@ end
     end
     @test isopen(async)
     ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-    Base.process_events(false) # schedule event
+    Base.process_events() # schedule event
     ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-    Sys.iswindows() && Base.process_events(false) # schedule event (windows?)
+    Sys.iswindows() && Base.process_events() # schedule event (windows?)
     @test tc[] == 0
     yield() # consume event
     @test tc[] == 1
@@ -342,8 +331,8 @@ end
     close(async)
     @test !isopen(async)
     @test tc[] == 1
-    Base.process_events(false) # schedule event & then close
-    Sys.iswindows() && Base.process_events(false) # schedule event (windows?)
+    Base.process_events() # schedule event & then close
+    Sys.iswindows() && Base.process_events() # schedule event (windows?)
     yield() # consume event & then close
     @test tc[] == 2
     sleep(0.1) # no further events
@@ -357,8 +346,8 @@ end
     ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
     close(async)
     @test !isopen(async)
-    Base.process_events(false) # schedule event & then close
-    Sys.iswindows() && Base.process_events(false) # schedule event (windows)
+    Base.process_events() # schedule event & then close
+    Sys.iswindows() && Base.process_events() # schedule event (windows)
     @test tc[] == 0
     yield() # consume event & then close
     @test tc[] == 1

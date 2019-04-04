@@ -4,10 +4,13 @@
 Determine whether a statement is side-effect-free, i.e. may be removed if it has no uses.
 """
 function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src, sptypes::Vector{Any})
-    isa(stmt, Union{PiNode, PhiNode}) && return true
-    isa(stmt, Union{ReturnNode, GotoNode, GotoIfNot}) && return false
-    isa(stmt, GlobalRef) && return isdefined(stmt.mod, stmt.name)
+    isa(stmt, PiNode) && return true
+    isa(stmt, PhiNode) && return true
+    isa(stmt, ReturnNode) && return false
+    isa(stmt, GotoNode) && return false
+    isa(stmt, GotoIfNot) && return false
     isa(stmt, Slot) && return false # Slots shouldn't occur in the IR at this point, but let's be defensive here
+    isa(stmt, GlobalRef) && return isdefined(stmt.mod, stmt.name)
     if isa(stmt, Expr)
         e = stmt::Expr
         head = e.head
@@ -50,7 +53,7 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src, sptypes::
         elseif head === :isdefined || head === :the_exception || head === :copyast || head === :inbounds || head === :boundscheck
             return true
         else
-            # e.g. :simdloop
+            # e.g. :loopinfo
             return false
         end
     end

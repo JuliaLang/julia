@@ -49,7 +49,7 @@ volatile int jl_in_stackwalk = 0;
 #endif
 #endif
 
-// empirically, finish_task needs about 64k stack space to infer/run
+// empirically, jl_finish_task needs about 64k stack space to infer/run
 // and additionally, gc-stack reserves 64k for the guard pages
 #if defined(MINSIGSTKSZ) && MINSIGSTKSZ > 131072
 #define MINSTKSZ MINSIGSTKSZ
@@ -101,6 +101,7 @@ static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt
     }
     *pt = lastt; // clear the gc-root for the target task before copying the stack for saving
     lastt->copy_stack = nb;
+    lastt->sticky = 1;
     memcpy_a16((uint64_t*)buf, (uint64_t*)frame_addr, nb);
     // this task's stack could have been modified after
     // it was marked by an incremental collection
@@ -139,7 +140,7 @@ static void restore_stack2(jl_ptls_t ptls, jl_task_t *lastt)
 
 static jl_function_t *task_done_hook_func = NULL;
 
-static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval JL_MAYBE_UNROOTED)
+void JL_NORETURN jl_finish_task(jl_task_t *t, jl_value_t *resultval JL_MAYBE_UNROOTED)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_SIGATOMIC_BEGIN();
@@ -155,15 +156,7 @@ static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval JL_MAYBE
     ptls->in_finalizer = 0;
     ptls->in_pure_callback = 0;
     jl_get_ptls_states()->world_age = jl_world_counter;
-    if (ptls->tid != 0) {
-        // For now, only thread 0 runs the task scheduler.
-        // The others return to the thread loop
-        ptls->root_task->result = jl_nothing;
-        jl_task_t *task = ptls->root_task;
-        jl_switchto(&task);
-        gc_debug_critical_error();
-        abort();
-    }
+    // let the runtime know this task is dead and find a new task to run
     if (task_done_hook_func == NULL) {
         task_done_hook_func = (jl_function_t*)jl_get_global(jl_base_module,
                                                             jl_symbol("task_done_hook"));
@@ -254,6 +247,7 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
 #ifdef COPY_STACKS
                 // fall back to stack copying if mmap fails
                 t->copy_stack = 1;
+                t->sticky = 1;
                 t->bufsz = 0;
                 memcpy(&t->ctx, &ptls->base_ctx, sizeof(t->ctx));
 #else
@@ -276,6 +270,7 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
         if (lastt->copy_stack) { // save the old copy-stack
             save_stack(ptls, lastt, pt); // allocates (gc-safepoint, and can also fail)
             if (jl_setjmp(lastt->ctx.uc_mcontext, 0)) {
+                // TODO: mutex unlock the thread we just switched from
 #ifdef ENABLE_TIMINGS
                 assert(blk == ptls->current_task->timing_stack);
                 if (blk)
@@ -296,6 +291,10 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
     ptls->world_age = t->world_age;
     t->gcstack = NULL;
     ptls->current_task = t;
+    if (!lastt->sticky)
+        // release lastt to run on any tid
+        lastt->tid = -1;
+    t->tid = ptls->tid;
 
     jl_ucontext_t *lastt_ctx = (killed ? NULL : &lastt->ctx);
 #ifdef COPY_STACKS
@@ -326,6 +325,7 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
     else {
         jl_start_fiber(lastt_ctx, &t->ctx);
     }
+    // TODO: mutex unlock the thread we just switched from
 #ifdef ENABLE_TIMINGS
     assert(blk == ptls->current_task->timing_stack);
     if (blk)
@@ -452,7 +452,7 @@ JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
     throw_internal(NULL);
 }
 
-JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
+JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion_future, size_t ssize)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_task_t *t = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t), jl_task_type);
@@ -475,23 +475,26 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
         if (t->stkbuf == NULL)
             jl_throw(jl_memory_exception);
     }
+    t->next = jl_nothing;
+    t->queue = jl_nothing;
     t->tls = jl_nothing;
     t->state = runnable_sym;
     t->start = start;
     t->result = jl_nothing;
-    t->donenotify = jl_nothing;
+    t->donenotify = completion_future;
     t->exception = jl_nothing;
     t->backtrace = jl_nothing;
     // Inherit logger state from parent task
     t->logstate = ptls->current_task->logstate;
     // there is no active exception handler available on this stack yet
     t->eh = NULL;
-    t->tid = 0;
+    t->sticky = 1;
     t->gcstack = NULL;
     t->excstack = NULL;
     t->stkbuf = NULL;
-    t->tid = 0;
     t->started = 0;
+    t->prio = -1;
+    t->tid = 0;
 #ifdef ENABLE_TIMINGS
     t->timing_stack = NULL;
 #endif
@@ -524,7 +527,9 @@ void jl_init_tasks(void) JL_GC_DISABLED
                         NULL,
                         jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(8,
+                        jl_perm_symsvec(11,
+                                        "next",
+                                        "queue",
                                         "storage",
                                         "state",
                                         "donenotify",
@@ -532,8 +537,11 @@ void jl_init_tasks(void) JL_GC_DISABLED
                                         "exception",
                                         "backtrace",
                                         "logstate",
-                                        "code"),
-                        jl_svec(8,
+                                        "code",
+                                        "sticky"),
+                        jl_svec(11,
+                                jl_any_type,
+                                jl_any_type,
                                 jl_any_type,
                                 jl_sym_type,
                                 jl_any_type,
@@ -541,8 +549,11 @@ void jl_init_tasks(void) JL_GC_DISABLED
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
-                                jl_any_type),
-                        0, 1, 7);
+                                jl_any_type,
+                                jl_bool_type),
+                        0, 1, 9);
+    jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_void_type);
+    jl_svecset(jl_task_type->types, 0, listt);
     done_sym = jl_symbol("done");
     failed_sym = jl_symbol("failed");
     runnable_sym = jl_symbol("runnable");
@@ -579,7 +590,7 @@ static void NOINLINE JL_NORETURN start_task(void)
         }
 skip_pop_exception:;
     }
-    finish_task(t, res);
+    jl_finish_task(t, res);
     gc_debug_critical_error();
     abort();
 }
@@ -923,6 +934,8 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     ptls->current_task->stkbuf = stack;
     ptls->current_task->bufsz = ssize;
     ptls->current_task->started = 1;
+    ptls->current_task->next = jl_nothing;
+    ptls->current_task->queue = jl_nothing;
     ptls->current_task->tls = jl_nothing;
     ptls->current_task->state = runnable_sym;
     ptls->current_task->start = NULL;
@@ -935,6 +948,7 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     ptls->current_task->gcstack = NULL;
     ptls->current_task->excstack = NULL;
     ptls->current_task->tid = ptls->tid;
+    ptls->current_task->sticky = 1;
 #ifdef JULIA_ENABLE_THREADING
     arraylist_new(&ptls->current_task->locks, 0);
 #endif
@@ -948,6 +962,12 @@ JL_DLLEXPORT int jl_is_task_started(jl_task_t *t)
 {
     return t->started;
 }
+
+JL_DLLEXPORT int16_t jl_get_task_tid(jl_task_t *t)
+{
+    return t->tid;
+}
+
 
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_)

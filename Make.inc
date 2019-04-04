@@ -231,12 +231,6 @@ includedir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(incl
 INSTALL_F := $(JULIAHOME)/contrib/install.sh 644
 INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
 
-# BinaryBuilder options
-USE_BINARYBUILDER_OPENBLAS := 0
-USE_BINARYBUILDER_LLVM := 0
-# Use the Assertions build
-BINARYBUILDER_LLVM_ASSERTS := 0
-
 # LLVM Options
 LLVMROOT := $(build_prefix)
 LLVM_ASSERTIONS := 0
@@ -285,7 +279,9 @@ override CROSS_COMPILE:=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
 override OS := WINNT
 else
-$(error "unknown XC_HOST variable set")
+ifeq (,$(OS))
+$(error "unknown XC_HOST variable set, please set OS")
+endif
 endif
 endif
 
@@ -930,6 +926,26 @@ else
   UTF8PROC_INC := $(build_includedir)
 endif
 
+# BinaryBuilder options.  We default to "on" for all the projects listed in BB_PROJECTS,
+# but only if contrib/normalize_triplet.py works for our requested triplet
+ifeq ($(shell python $(JULIAHOME)/contrib/normalize_triplet.py $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) >/dev/null 2>/dev/null; echo $$?),0)
+USE_BINARYBUILDER := 1
+else
+ifneq ($(shell python $(JULIAHOME)/contrib/normalize_triplet.py x86_64-linux-gnu),x86_64-linux-gnu)
+$(warning python normalize_triplet.py appears to be non-functional, so BinaryBuilder disabled)
+endif
+USE_BINARYBUILDER := 0
+endif
+
+# This is the set of projects that BinaryBuilder dependencies are hooked up for.
+BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 MPFR CURL LIBGIT2 PCRE LIBUV UNWIND
+$(foreach proj,$(BB_PROJECTS),$(if $(USE_BINARYBUILDER_$(proj)),,$(eval USE_BINARYBUILDER_$(proj) := $(USE_BINARYBUILDER))))
+
+# Use the Assertions build
+BINARYBUILDER_LLVM_ASSERTS := 0
+
+
+
 # OS specific stuff
 
 # install_name_tool
@@ -1277,3 +1293,7 @@ endef
 # (hardened against any special characters appearing in the output)
 print-%:
 	@echo '$*=$(subst ','\'',$(subst $(newline),\n,$($*)))'
+
+# Literal values that are hard to use in Makefiles otherwise:
+COMMA:=,
+SPACE:=$(eval) $(eval)

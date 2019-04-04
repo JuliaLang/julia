@@ -430,11 +430,15 @@ $(eval $(call LLVM_PATCH,llvm-windows-race))
 endif
 $(eval $(call LLVM_PATCH,llvm-D51842-win64-byval-cc))
 $(eval $(call LLVM_PATCH,llvm-D57118-powerpc))
+$(eval $(call LLVM_PATCH,llvm-r355582-avxminmax)) # remove for 8.0
 endif # LLVM_VER
 
-# Independent to the llvm version add a JL prefix to the version map
-$(eval $(call LLVM_PATCH,llvm-symver-jlprefix)) # DO NOT REMOVE
-
+# Add a JL prefix to the version map. DO NOT REMOVE
+ifeq ($(LLVM_VER_SHORT), 6.0)
+$(eval $(call LLVM_PATCH,llvm-symver-jlprefix))
+else
+$(eval $(call LLVM_PATCH,llvm7-symver-jlprefix))
+endif
 
 # declare that all patches must be applied before running ./configure
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(LLVM_PATCH_PREV)
@@ -514,12 +518,13 @@ ifeq ($(USE_POLLY),1)
 endif
 endif
 else # USE_BINARYBUILDER_LLVM
-LLVM_BB_URL_BASE := https://github.com/staticfloat/LLVMBuilder/releases/download/v$(LLVM_VER)-$(LLVM_BB_REL)
+LLVM_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LLVM-v$(LLVM_VER)-$(LLVM_BB_REL)
 ifneq ($(BINARYBUILDER_LLVM_ASSERTS), 1)
 LLVM_BB_NAME := LLVM.v$(LLVM_VER)
 else
 LLVM_BB_NAME := LLVM.asserts.v$(LLVM_VER)
 endif
 
-$(eval $(call bb-install,llvm,LLVM,false))
+$(eval $(call bb-install,llvm,LLVM,true))
+
 endif # USE_BINARYBUILDER_LLVM

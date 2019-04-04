@@ -752,16 +752,20 @@ end
 # issue #13168
 function f13168(n)
     val = 0
-    for i=1:n val+=sum(rand(n,n)^2) end
-    val
+    for i = 1:n
+        val += sum(rand(n, n)^2)
+    end
+    return val
 end
 let t = schedule(@task f13168(100))
-    @test t.state == :queued
+    @test t.state == :runnable
+    @test t.queue !== nothing
     @test_throws ErrorException schedule(t)
     yield()
     @test t.state == :done
+    @test t.queue === nothing
     @test_throws ErrorException schedule(t)
-    @test isa(fetch(t),Float64)
+    @test isa(fetch(t), Float64)
 end
 
 # issue #13122
@@ -1492,6 +1496,42 @@ rmprocs(npids)
 cluster_cookie("foobar") # custom cookie
 npids = addprocs_with_testenv(WorkerArgTester(`--worker=foobar`, false))
 @test remotecall_fetch(myid, npids[1]) == npids[1]
+
+# tests for start_worker options to retain stdio (issue #31035)
+struct RetainStdioTester <: ClusterManager
+    close_stdin::Bool
+    stderr_to_stdout::Bool
+end
+
+function launch(manager::RetainStdioTester, params::Dict, launched::Array, c::Condition)
+    dir = params[:dir]
+    exename = params[:exename]
+    exeflags = params[:exeflags]
+
+    jlcmd = "using Distributed; start_worker(\"\"; close_stdin=$(manager.close_stdin), stderr_to_stdout=$(manager.stderr_to_stdout));"
+    cmd = detach(setenv(`$exename $exeflags --bind-to $(Distributed.LPROC.bind_addr) -e $jlcmd`, dir=dir))
+    proc = open(cmd, "r+")
+
+    wconfig = WorkerConfig()
+    wconfig.process = proc
+    wconfig.io = proc.out
+    push!(launched, wconfig)
+
+    notify(c)
+end
+manage(::RetainStdioTester, ::Integer, ::WorkerConfig, ::Symbol) = nothing
+
+
+nprocs()>1 && rmprocs(workers())
+cluster_cookie("")
+
+for close_stdin in (true, false), stderr_to_stdout in (true, false)
+    npids = addprocs_with_testenv(RetainStdioTester(close_stdin,stderr_to_stdout))
+    @test remotecall_fetch(myid, npids[1]) == npids[1]
+    @test close_stdin != remotecall_fetch(()->isopen(stdin), npids[1])
+    @test stderr_to_stdout == remotecall_fetch(()->(stderr === stdout), npids[1])
+    rmprocs(npids)
+end
 
 # Issue # 22865
 # Must be run on a new cluster, i.e., all workers must be in the same state.

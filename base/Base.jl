@@ -14,6 +14,8 @@ getproperty(x::Module, f::Symbol) = getfield(x, f)
 setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v)
 getproperty(x::Type, f::Symbol) = getfield(x, f)
 setproperty!(x::Type, f::Symbol, v) = setfield!(x, f, v)
+getproperty(x::Tuple, f::Int) = getfield(x, f)
+setproperty!(x::Tuple, f::Int, v) = setfield!(x, f, v) # to get a decent error
 
 getproperty(Core.@nospecialize(x), f::Symbol) = getfield(x, f)
 setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
@@ -207,6 +209,7 @@ include("shell.jl")
 include("regex.jl")
 include("show.jl")
 include("arrayshow.jl")
+include("methodshow.jl")
 
 # multidimensional arrays
 include("cartesian.jl")
@@ -239,11 +242,11 @@ end
 include("env.jl")
 
 # Scheduling
-include("libuv.jl")
-include("event.jl")
-include("task.jl")
+include("linked_list.jl")
+include("condition.jl")
 include("threads.jl")
 include("lock.jl")
+include("task.jl")
 include("weakkeydict.jl")
 
 # Logging
@@ -255,12 +258,13 @@ function rand end
 function randn end
 
 # I/O
+include("libuv.jl")
+include("asyncevent.jl")
 include("stream.jl")
 include("filesystem.jl")
 using .Filesystem
 include("process.jl")
 include("grisu/grisu.jl")
-include("methodshow.jl")
 include("secretbuffer.jl")
 
 # core math functions

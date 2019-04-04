@@ -104,10 +104,10 @@ julia> I = [1, 4, 3, 5]; J = [4, 7, 18, 9]; V = [1, 2, -5, 3];
 
 julia> S = sparse(I,J,V)
 5×18 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
-  [1 ,  4]  =  1
-  [4 ,  7]  =  2
-  [5 ,  9]  =  3
-  [3 , 18]  =  -5
+  [1,  4]  =  1
+  [4,  7]  =  2
+  [5,  9]  =  3
+  [3, 18]  =  -5
 
 julia> R = sparsevec(I,V)
 5-element SparseVector{Int64,Int64} with 4 stored entries:
@@ -202,6 +202,9 @@ section of the standard library reference.
 # [Sparse Arrays](@id stdlib-sparse-arrays)
 
 ```@docs
+SparseArrays.AbstractSparseArray
+SparseArrays.AbstractSparseVector
+SparseArrays.AbstractSparseMatrix
 SparseArrays.SparseVector
 SparseArrays.SparseMatrixCSC
 SparseArrays.sparse
@@ -217,6 +220,7 @@ SparseArrays.sprandn
 SparseArrays.nonzeros
 SparseArrays.rowvals
 SparseArrays.nzrange
+SparseArrays.droptol!
 SparseArrays.dropzeros!
 SparseArrays.dropzeros
 SparseArrays.permute

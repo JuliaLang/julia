@@ -124,7 +124,7 @@ eltype(::Type) = Any
 eltype(::Type{Bottom}) = throw(ArgumentError("Union{} does not have elements"))
 eltype(x) = eltype(typeof(x))
 
-import Core: arraysize, arrayset, arrayref
+import Core: arraysize, arrayset, arrayref, const_arrayref
 
 vect() = Vector{Any}()
 vect(X::T...) where {T} = T[ X[i] for i = 1:length(X) ]
@@ -1003,7 +1003,7 @@ function resize!(a::Vector, nl::Integer)
         _growend!(a, nl-l)
     elseif nl != l
         if nl < 0
-            throw(ArgumentError("new length must be ≥ 0, got $nl"))
+            throw(ArgumentError("new length must be ≥ 0"))
         end
         _deleteend!(a, l-nl)
     end
@@ -1604,10 +1604,11 @@ CartesianIndex(2, 1)
 function findnext(A, start)
     l = last(keys(A))
     i = start
-    while i <= l
-        if A[i]
-            return i
-        end
+    i > l && return nothing
+    while true
+        A[i] && return i
+        i == l && break
+        # nextind(A, l) can throw/overflow
         i = nextind(A, i)
     end
     return nothing
@@ -1685,10 +1686,11 @@ CartesianIndex(1, 1)
 function findnext(testf::Function, A, start)
     l = last(keys(A))
     i = start
-    while i <= l
-        if testf(A[i])
-            return i
-        end
+    i > l && return nothing
+    while true
+        testf(A[i]) && return i
+        i == l && break
+        # nextind(A, l) can throw/overflow
         i = nextind(A, i)
     end
     return nothing
@@ -1781,8 +1783,12 @@ CartesianIndex(2, 1)
 """
 function findprev(A, start)
     i = start
-    while i >= first(keys(A))
+    f = first(keys(A))
+    i < f && return nothing
+    while true
         A[i] && return i
+        i == f && break
+        # prevind(A, f) can throw/underflow
         i = prevind(A, i)
     end
     return nothing
@@ -1868,8 +1874,12 @@ CartesianIndex(2, 1)
 """
 function findprev(testf::Function, A, start)
     i = start
-    while i >= first(keys(A))
+    f = first(keys(A))
+    i < f && return nothing
+    while true
         testf(A[i]) && return i
+        i == f && break
+        # prevind(A, f) can throw/underflow
         i = prevind(A, i)
     end
     return nothing

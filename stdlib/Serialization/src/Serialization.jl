@@ -65,7 +65,7 @@ const TAGS = Any[
     :sub_int, :mul_int, :add_float, :sub_float, :new, :mul_float, :bitcast, :start, :done, :next,
     :indexed_iterate, :getfield, :meta, :eq_int, :slt_int, :sle_int, :ne_int, :push_loc, :pop_loc,
     :pop, :arrayset, :arrayref, :apply_type, :inbounds, :getindex, :setindex!, :Core, :!, :+,
-    :Base, :static_parameter, :convert, :colon, Symbol("#self#"), Symbol("#temp#"), :tuple,
+    :Base, :static_parameter, :convert, :colon, Symbol("#self#"), Symbol(""), :tuple,
 
     fill(:_reserved_, n_reserved_slots)...,
 
@@ -390,17 +390,16 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.file)
     serialize(s, meth.line)
     serialize(s, meth.sig)
-    serialize(s, meth.sparam_syms)
-    serialize(s, meth.ambig)
+    serialize(s, meth.slot_syms)
     serialize(s, meth.nargs)
     serialize(s, meth.isva)
     if isdefined(meth, :source)
-        serialize(s, uncompressed_ast(meth, meth.source))
+        serialize(s, Base._uncompressed_ast(meth, meth.source))
     else
         serialize(s, nothing)
     end
     if isdefined(meth, :generator)
-        serialize(s, uncompressed_ast(meth, meth.generator.inferred))
+        serialize(s, Base._uncompressed_ast(meth, meth.generator.inferred)) # XXX: what was this supposed to do?
     else
         serialize(s, nothing)
     end
@@ -411,14 +410,8 @@ function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     serialize_cycle(s, linfo) && return
     isa(linfo.def, Module) || error("can only serialize toplevel MethodInstance objects")
     writetag(s.io, METHODINSTANCE_TAG)
-    serialize(s, linfo.inferred)
-    if isdefined(linfo, :inferred_const)
-        serialize(s, linfo.inferred_const)
-    else
-        writetag(s.io, UNDEFREF_TAG)
-    end
+    serialize(s, linfo.uninferred)
     serialize(s, linfo.sparam_vals)
-    serialize(s, linfo.rettype)
     serialize(s, linfo.specTypes)
     serialize(s, linfo.def)
     nothing
@@ -429,11 +422,7 @@ function serialize(s::AbstractSerializer, t::Task)
     if istaskstarted(t) && !istaskdone(t)
         error("cannot serialize a running Task")
     end
-    state = [t.code,
-        t.storage,
-        t.state == :queued || t.state == :runnable ? (:runnable) : t.state,
-        t.result,
-        t.exception]
+    state = [t.code, t.storage, t.state, t.result, t.exception]
     writetag(s.io, TASK_TAG)
     for fld in state
         serialize(s, fld)
@@ -913,8 +902,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     file = deserialize(s)::Symbol
     line = deserialize(s)::Int32
     sig = deserialize(s)::Type
-    sparam_syms = deserialize(s)::SimpleVector
-    ambig = deserialize(s)::Union{Array{Any,1}, Nothing}
+    slot_syms = deserialize(s)::String
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
     template = deserialize(s)
@@ -925,13 +913,12 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.file = file
         meth.line = line
         meth.sig = sig
-        meth.sparam_syms = sparam_syms
-        meth.ambig = ambig
+        meth.slot_syms = slot_syms
         meth.nargs = nargs
         meth.isva = isva
-        # TODO: compress template
         if template !== nothing
-            meth.source = template
+            # TODO: compress template
+            meth.source = template::CodeInfo
             meth.pure = template.pure
         end
         if generator !== nothing
@@ -953,13 +940,8 @@ end
 function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
     linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, (Ptr{Cvoid},), C_NULL)
     deserialize_cycle(s, linfo)
-    linfo.inferred = deserialize(s)::CodeInfo
-    tag = Int32(read(s.io, UInt8)::UInt8)
-    if tag != UNDEFREF_TAG
-        linfo.inferred_const = handle_deserialize(s, tag)
-    end
+    linfo.uninferred = deserialize(s)::CodeInfo
     linfo.sparam_vals = deserialize(s)::SimpleVector
-    linfo.rettype = deserialize(s)
     linfo.specTypes = deserialize(s)
     linfo.def = deserialize(s)::Module
     return linfo
@@ -1085,6 +1067,9 @@ function deserialize_typename(s::AbstractSerializer, number)
         maxa = deserialize(s)::Int
         if makenew
             tn.mt = ccall(:jl_new_method_table, Any, (Any, Any), name, tn.module)
+            if !isempty(parameters)
+                tn.mt.offs = 0
+            end
             tn.mt.name = mtname
             tn.mt.max_args = maxa
             for def in defs

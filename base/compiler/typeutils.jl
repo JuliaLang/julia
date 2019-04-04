@@ -33,7 +33,7 @@ function issingletontype(@nospecialize t)
 end
 
 function has_nontrivial_const_info(@nospecialize t)
-    isa(t, PartialTuple) && return true
+    isa(t, PartialStruct) && return true
     return isa(t, Const) && !isdefined(typeof(t.val), :instance) && !(isa(t.val, Type) && issingletontype(t.val))
 end
 

@@ -222,7 +222,8 @@ _eachindex(t::Tuple) = CartesianIndices(t)
 Base.ndims(::Broadcasted{<:Any,<:NTuple{N,Any}}) where {N} = N
 Base.ndims(::Type{<:Broadcasted{<:Any,<:NTuple{N,Any}}}) where {N} = N
 
-Base.length(bc::Broadcasted) = prod(map(length, axes(bc)))
+Base.size(bc::Broadcasted) = map(length, axes(bc))
+Base.length(bc::Broadcasted) = prod(size(bc))
 
 function Base.iterate(bc::Broadcasted)
     iter = eachindex(bc)
@@ -963,6 +964,15 @@ end
 @noinline throwdm(axdest, axsrc) =
     throw(DimensionMismatch("destination axes $axdest are not compatible with source axes $axsrc"))
 
+function restart_copyto_nonleaf!(newdest, dest, bc, val, I, iter, state, count)
+    # Function barrier that makes the copying to newdest type stable
+    for II in Iterators.take(iter, count)
+        newdest[II] = dest[II]
+    end
+    newdest[I] = val
+    return copyto_nonleaf!(newdest, bc, iter, state, count+1)
+end
+
 function copyto_nonleaf!(dest, bc::Broadcasted, iter, state, count)
     T = eltype(dest)
     while true
@@ -976,11 +986,7 @@ function copyto_nonleaf!(dest, bc::Broadcasted, iter, state, count)
             # This element type doesn't fit in dest. Allocate a new dest with wider eltype,
             # copy over old values, and continue
             newdest = Base.similar(dest, promote_typejoin(T, typeof(val)))
-            for II in Iterators.take(iter, count)
-                newdest[II] = dest[II]
-            end
-            newdest[I] = val
-            return copyto_nonleaf!(newdest, bc, iter, state, count+1)
+            return restart_copyto_nonleaf!(newdest, dest, bc, val, I, iter, state, count)
         end
         count += 1
     end

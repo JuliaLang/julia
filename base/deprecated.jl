@@ -15,10 +15,20 @@
 # is only printed the first time for each call place.
 
 """
-    @deprecate old new
+    @deprecate old new [ex=true]
 
 The first argument `old` is the signature of the deprecated method, the second one
-`new` is the call which replaces it. @deprecate exports the function.
+`new` is the call which replaces it. `@deprecate` exports `old` unless the optional
+third argument is `false`.
+
+# Examples
+```jldoctest
+julia> @deprecate old(x) new(x)
+old (generic function with 1 method)
+
+julia> @deprecate old(x) new(x) false
+old (generic function with 1 method)
+```
 """
 macro deprecate(old, new, ex=true)
     meta = Expr(:meta, :noinline)
@@ -165,8 +175,8 @@ function promote_eltype_op end
 # @deprecate one(i::CartesianIndex) oneunit(i)
 # @deprecate one(::Type{I}) where I<:CartesianIndex oneunit(I)
 
-@deprecate reindex(V, idxs, subidxs) reindex(idxs, subidxs)
-@deprecate substrides(parent::AbstractArray, strds::Tuple, I::Tuple) substrides(strds, I)
+@deprecate reindex(V, idxs, subidxs) reindex(idxs, subidxs) false
+@deprecate substrides(parent::AbstractArray, strds::Tuple, I::Tuple) substrides(strds, I) false
 
 # TODO: deprecate these
 one(::CartesianIndex{N}) where {N} = one(CartesianIndex{N})

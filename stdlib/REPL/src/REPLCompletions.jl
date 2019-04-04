@@ -375,7 +375,7 @@ function get_type_call(expr::Expr)
         found ? push!(args, typ) : push!(args, Any)
     end
     # use _methods_by_ftype as the function is supplied as a type
-    world = ccall(:jl_get_world_counter, UInt, ())
+    world = Base.get_world_counter()
     mt = Base._methods_by_ftype(Tuple{ft, args...}, -1, world)
     length(mt) == 1 || return (Any, false)
     m = first(mt)
@@ -544,10 +544,10 @@ function project_deps_get_completion_candidates(pkgstarts::String, project_file:
     open(project_file) do io
         state = :top
         for line in eachline(io)
-            if state == :top
-                if occursin(Base.re_section, line)
-                    state = occursin(Base.re_section_deps, line) ? :deps : :other
-                elseif (m = match(Base.re_name_to_string, line)) != nothing
+            if occursin(Base.re_section, line)
+                state = occursin(Base.re_section_deps, line) ? :deps : :other
+            elseif state == :top
+                if (m = match(Base.re_name_to_string, line)) != nothing
                     root_name = String(m.captures[1])
                     startswith(root_name, pkgstarts) && push!(loading_candidates, root_name)
                 end
@@ -556,8 +556,6 @@ function project_deps_get_completion_candidates(pkgstarts::String, project_file:
                     dep_name = m.captures[1]
                     startswith(dep_name, pkgstarts) && push!(loading_candidates, dep_name)
                 end
-            elseif occursin(Base.re_section, line)
-                state = occursin(Base.re_section_deps, line) ? :deps : :other
             end
         end
     end

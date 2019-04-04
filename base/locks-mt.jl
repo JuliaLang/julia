@@ -1,8 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import .Base: _uv_hook_close, unsafe_convert,
-    lock, trylock, unlock, islocked, wait, notify,
-    AbstractLock
+import .Base: unsafe_convert, lock, trylock, unlock, islocked, wait, notify, AbstractLock
 
 # Important Note: these low-level primitives defined here
 #   are typically not for general usage
@@ -88,14 +86,14 @@ mutable struct Mutex <: AbstractLock
     function Mutex()
         m = new(zero(Int16), Libc.malloc(UV_MUTEX_SIZE))
         ccall(:uv_mutex_init, Cvoid, (Ptr{Cvoid},), m.handle)
-        finalizer(_uv_hook_close, m)
+        finalizer(mutex_destroy, m)
         return m
     end
 end
 
 unsafe_convert(::Type{Ptr{Cvoid}}, m::Mutex) = m.handle
 
-function _uv_hook_close(x::Mutex)
+function mutex_destroy(x::Mutex)
     h = x.handle
     if h != C_NULL
         x.handle = C_NULL

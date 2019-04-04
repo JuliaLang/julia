@@ -3,11 +3,15 @@
 // This LLVM pass verifies invariants required for correct GC root placement.
 // See the devdocs for a description of these invariants.
 
+#include <llvm-c/Core.h>
+#include <llvm-c/Types.h>
+
 #include <llvm/ADT/BitVector.h>
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/Analysis/CFG.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Constants.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -185,4 +189,9 @@ static RegisterPass<GCInvariantVerifier> X("GCInvariantVerifier", "GC Invariant 
 
 Pass *createGCInvariantVerifierPass(bool Strong) {
     return new GCInvariantVerifier(Strong);
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddGCInvariantVerifierPass(LLVMPassManagerRef PM, LLVMBool Strong)
+{
+    unwrap(PM)->add(createGCInvariantVerifierPass(Strong));
 }
