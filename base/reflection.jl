@@ -1114,7 +1114,7 @@ end
 """
     which(tt::TupleType)
 """
-function which(tt::Type{Tuple})
+function which(tt::Type{T}) where T<:Tuple
     m = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tt, typemax(UInt))
     if m === nothing
         error("no unique matching method found for the specified signature")
