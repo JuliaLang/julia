@@ -319,7 +319,7 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
     end
 
     if i₊ == 0 # purely real or imaginary value
-        if iᵢ > 0 # purely imaginary
+        if iᵢ > i && !(iᵢ == i+1 && s[i] in ('+','-')) # purely imaginary (not "±inf")
             x = tryparse_internal(T, s, i, iᵢ-1, raise)
             x === nothing && return nothing
             return Complex{T}(zero(x),x)
