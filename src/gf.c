@@ -19,11 +19,7 @@
 
 // Dtrace Timings
 #include "uprobes.h"
-// From codegen.cpp
-const char *name_from_method_instance(jl_method_instance_t *mi)
-{
-    return jl_is_method(mi->def.method) ? jl_symbol_name(mi->def.method->name) : "top-level scope";
-}
+void compile_end(jl_method_instance_t *mi);
 
 
 // The compilation signature is not used to cache the method if the number of overlapping methods is greater than this
@@ -1805,9 +1801,29 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
       // Instrument the time spent in this block for this method instance
       JULIA_COMPILE_START();
       jl_generate_fptr(codeinst);
-      JULIA_COMPILE_END(name_from_method_instance(mi));
+      compile_end(mi);
     }
     return codeinst;
+}
+void compile_end(jl_method_instance_t *mi)
+{
+    if (jl_is_method(mi->def.method)) {
+      ios_t str_;
+      ios_mem(&str_, 300);
+      JL_STREAM* str = (JL_STREAM*)&str_;
+
+      //jl_printf(str, "%s.%s, ", jl_symbol_name(mi->def.method->module->name), jl_symbol_name(mi->def.method->name));
+
+      //jl_static_show_func_sig(str, mi->specTypes);
+      jl_static_show(str, mi->specTypes);
+
+      str_.buf[str_.size] = 0;
+      JULIA_COMPILE_END(str_.buf);
+
+      ios_close(&str_);
+    } else {
+      JULIA_COMPILE_END("top-level scope");
+    }
 }
 
 JL_DLLEXPORT jl_value_t *jl_fptr_const_return(jl_code_instance_t *m, jl_value_t **args, uint32_t nargs)
