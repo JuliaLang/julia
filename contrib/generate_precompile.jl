@@ -183,7 +183,7 @@ function generate_precompile_statements()
     return
 end
 
-#generate_precompile_statements()
+generate_precompile_statements()
 
 end # @eval
 end # let
