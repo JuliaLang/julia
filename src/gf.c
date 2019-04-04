@@ -1809,7 +1809,7 @@ void compile_end(jl_method_instance_t *mi)
 {
     if (jl_is_method(mi->def.method)) {
       ios_t str_;
-      ios_mem(&str_, 300);
+      ios_mem(&str_, 10000);
       JL_STREAM* str = (JL_STREAM*)&str_;
 
       //jl_printf(str, "%s.%s, ", jl_symbol_name(mi->def.method->module->name), jl_symbol_name(mi->def.method->name));
