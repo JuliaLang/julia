@@ -1375,7 +1375,7 @@
 ;; for example a[f(x)] => (temp=f(x); a[temp])
 ;; returns a pair (expr . assignments)
 ;; where 'assignments' is a list of needed assignment statements
-(define (remove-argument-side-effects e)
+(define (remove-argument-side-effects e (tup #f))
   (if
    (not (pair? e))
    (cons e '())
@@ -1391,14 +1391,14 @@
                          (let ((g (make-ssavalue)))
                            (begin (set! a (cons `(= ,g ,(cadr x)) a))
                                   `(,(car x) ,g)))))
-                    ((eq? (car x) 'kw)
+                    ((or (eq? (car x) 'kw) (and tup (eq? (car x) '=)))
                      (if (effect-free? (caddr x))
                          x
                          (let ((g (make-ssavalue)))
                            (begin (set! a (cons `(= ,g ,(caddr x)) a))
-                                  `(kw ,(cadr x) ,g)))))
+                                  `(,(car x) ,(cadr x) ,g)))))
                     ((eq? (car x) 'tuple)
-                     (let ((tmp (remove-argument-side-effects x)))
+                     (let ((tmp (remove-argument-side-effects x #t)))
                        (set! a (revappend (cdr tmp) a))
                        (car tmp)))
                     (else
