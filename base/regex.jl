@@ -534,13 +534,13 @@ meaning that the contained characters are devoid of any special meaning
 
 # Examples
 ```jldoctest
-julia> r"Hello|Good bye" * ' ' * "world"
-r"(?:Hello|Good bye) world"
+julia> match(r"Hello|Good bye" * ' ' * "world", "Hello world")
+RegexMatch("Hello world")
 
 julia> r = r"a|b" * "c|d"
 r"(?:a|b)\\Qc|d\\E"
 
-match(r, "ac") == nothing
+julia> match(r, "ac") == nothing
 true
 
 julia> match(r, "ac|d")
