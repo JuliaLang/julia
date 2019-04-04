@@ -140,7 +140,7 @@ static inline jl_task_t *multiq_deletemin(void)
     uint64_t rn1 = 0, rn2;
     int16_t i, prio1, prio2;
     jl_task_t *task;
-
+ retry:
     for (i = 0; i < heap_p; ++i) {
         rn1 = cong(heap_p, cong_unbias, &ptls->rngseed);
         rn2 = cong(heap_p, cong_unbias, &ptls->rngseed);
@@ -162,6 +162,12 @@ static inline jl_task_t *multiq_deletemin(void)
         return NULL;
 
     task = heaps[rn1].tasks[0];
+    if (jl_atomic_load_acquire(&task->tid) != ptls->tid) {
+        if (jl_atomic_compare_exchange(&task->tid, -1, ptls->tid) != -1) {
+            jl_mutex_unlock_nogc(&heaps[rn1].lock);
+            goto retry;
+        }
+    }
     heaps[rn1].tasks[0] = heaps[rn1].tasks[--heaps[rn1].ntasks];
     heaps[rn1].tasks[heaps[rn1].ntasks] = NULL;
     prio1 = INT16_MAX;
@@ -244,8 +250,13 @@ JL_DLLEXPORT void jl_enqueue_task(jl_task_t *task)
 static jl_task_t *get_next_task(jl_value_t *getsticky)
 {
     jl_task_t *task = (jl_task_t*)jl_apply(&getsticky, 1);
-    if (jl_typeis(task, jl_task_type))
+    if (jl_typeis(task, jl_task_type)) {
+        int self = jl_get_ptls_states()->tid;
+        if (jl_atomic_load_acquire(&task->tid) != self) {
+            jl_atomic_compare_exchange(&task->tid, -1, self);
+        }
         return task;
+    }
     return multiq_deletemin();
 }
 
