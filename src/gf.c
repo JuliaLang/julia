@@ -19,8 +19,8 @@
 
 // Dtrace Timings
 #include "uprobes.h.gen"
-void compile_end(jl_method_instance_t *mi);
-
+void DTRACE__COMPILE_START(void);
+void DTRACE__COMPILE_END(jl_method_instance_t *mi);
 
 // The compilation signature is not used to cache the method if the number of overlapping methods is greater than this
 #define MAX_UNSPECIALIZED_CONFLICTS 32
@@ -1799,30 +1799,38 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
 
     {
       // Instrument the time spent in this block for this method instance
-      JULIA_COMPILE_START();
+      DTRACE__COMPILE_START();
       jl_generate_fptr(codeinst);
-      compile_end(mi);
+      DTRACE__COMPILE_END(mi);
     }
     return codeinst;
 }
-void compile_end(jl_method_instance_t *mi)
+void DTRACE__COMPILE_START(void)
 {
-    if (jl_is_method(mi->def.method)) {
-      ios_t str_;
-      ios_mem(&str_, 10000);
-      JL_STREAM* str = (JL_STREAM*)&str_;
+    if (JULIA_COMPILE_START_ENABLED()) {
+        JULIA_COMPILE_START();
+    }
+}
+void DTRACE__COMPILE_END(jl_method_instance_t *mi)
+{
+    if (JULIA_COMPILE_START_ENABLED()) {
+        if (jl_is_method(mi->def.method)) {
+          ios_t str_;
+          ios_mem(&str_, 10000);
+          JL_STREAM* str = (JL_STREAM*)&str_;
 
-      //jl_printf(str, "%s.%s, ", jl_symbol_name(mi->def.method->module->name), jl_symbol_name(mi->def.method->name));
+          //jl_printf(str, "%s.%s, ", jl_symbol_name(mi->def.method->module->name), jl_symbol_name(mi->def.method->name));
 
-      //jl_static_show_func_sig(str, mi->specTypes);
-      jl_static_show(str, mi->specTypes);
+          //jl_static_show_func_sig(str, mi->specTypes);
+          jl_static_show(str, mi->specTypes);
 
-      str_.buf[str_.size] = 0;
-      JULIA_COMPILE_END(str_.buf);
+          str_.buf[str_.size] = 0;
+          JULIA_COMPILE_END(str_.buf);
 
-      ios_close(&str_);
-    } else {
-      JULIA_COMPILE_END("top-level scope");
+          ios_close(&str_);
+        } else {
+          JULIA_COMPILE_END("top-level scope");
+        }
     }
 }
 
