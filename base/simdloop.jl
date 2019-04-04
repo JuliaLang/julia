@@ -56,7 +56,15 @@ simd_outer_range(r) = 0:0
 # Compile Expr x in context of @simd.
 function compile(x, ivdep)
     (isa(x, Expr) && x.head == :for) || throw(SimdError("for loop expected"))
-    length(x.args) == 2 || throw(SimdError("1D for loop expected"))
+    if !isa(x.args[1].args[1], Symbol)
+        # this is a multidimensional for loop. Flatten it, and apply @simd to the innermost loop
+        outerrange = copy(x.args[1])
+        outerrange.args = outerrange.args[1:end-1]
+        inner_loop = Expr(:for, x.args[1].args[end], x.args[2])
+        return Expr(:for,
+             outerrange,
+             compile(inner_loop, ivdep))
+    end
     check_body!(x)
 
     var,range = parse_iteration_space(x.args[1])
@@ -96,7 +104,8 @@ Annotate a `for` loop to allow the compiler to take extra liberties to allow loo
     This feature is experimental and could change or disappear in future versions of Julia.
     Incorrect use of the `@simd` macro may cause unexpected results.
 
-The object iterated over in a `@simd for` loop should be a one-dimensional range.
+The object iterated over in a `@simd for` loop should be a range.
+In the case of multiple nested loops (`for i=1:n, j=1:n`), `@simd` is applied to the inner loop.
 By using `@simd`, you are asserting several properties of the loop:
 
 * It is safe to execute iterations in arbitrary or overlapping order, with special consideration for reduction variables.

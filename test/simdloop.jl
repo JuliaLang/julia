@@ -174,3 +174,13 @@ Base.SimdLoop.simd_index(v::iter31113, j, i) = j
 Base.SimdLoop.simd_inner_length(v::iter31113, j) = 1
 Base.SimdLoop.simd_outer_range(v::iter31113) = v
 @test 2001000 == simd_sum_over_array(iter31113(Vector(1:2000)))
+
+# nested loops
+function nested_loops()
+    res = 0
+    @simd for i=1:2,j=1:2
+        res += i+j
+    end
+    res
+end
+@test nested_loops() == 12
