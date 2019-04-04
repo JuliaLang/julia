@@ -81,7 +81,7 @@
 // #define ENABLE_TIMINGS
 
 // Automatic Instrumenting Profiler
-#define ENABLE_TRACING_PROBES
+// #define ENABLE_TRACING_PROBES
 
 
 // method dispatch profiling --------------------------------------------------
