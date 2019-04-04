@@ -63,9 +63,6 @@ using namespace llvm;
 #include "jitlayers.h"
 #include "julia_assert.h"
 
-// Dtrace Timings
-#include "uprobes.h"
-
 RTDyldMemoryManager* createRTDyldMemoryManager(void);
 
 static IntegerType *T_uint32;
@@ -339,21 +336,9 @@ void JuliaOJIT::DebugObjectRegistrar::operator()(RTDyldObjHandleT H,
                    static_cast<const RuntimeDyld::LoadedObjectInfo*>(&LOS));
 }
 
-struct CompileTiming {
-  CompileTiming(std::string name) :name(name) {
-      JULIA_COMPILE_START();
-  }
-  ~CompileTiming() {
-      JULIA_COMPILE_END(name.c_str());
-  }
-  std::string name;
-};
 
 object::OwningBinary<object::ObjectFile> JuliaOJIT::CompilerT::operator()(Module &M)
 {
-    // Instrument the time spent in this block for this method instance
-    CompileTiming _c(M.getName().str());
-
     JL_TIMING(LLVM_OPT);
     jit.PM.run(M);
     std::unique_ptr<MemoryBuffer> ObjBuffer(

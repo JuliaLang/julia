@@ -17,6 +17,15 @@
 #endif
 #include "julia_assert.h"
 
+// Dtrace Timings
+#include "uprobes.h"
+// From codegen.cpp
+const char *name_from_method_instance(jl_method_instance_t *mi)
+{
+    return jl_is_method(mi->def.method) ? jl_symbol_name(mi->def.method->name) : "top-level scope";
+}
+
+
 // The compilation signature is not used to cache the method if the number of overlapping methods is greater than this
 #define MAX_UNSPECIALIZED_CONFLICTS 32
 
@@ -1792,7 +1801,12 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         }
     }
 
-    jl_generate_fptr(codeinst);
+    {
+      // Instrument the time spent in this block for this method instance
+      JULIA_COMPILE_START();
+      jl_generate_fptr(codeinst);
+      JULIA_COMPILE_END(name_from_method_instance(mi));
+    }
     return codeinst;
 }
 
