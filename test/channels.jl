@@ -129,7 +129,6 @@ using Distributed
     # Multiple tasks, first one to terminate closes the channel
     nth = rand(1:5)
     ref = Ref(0)
-    cond = Condition()
     tf3(i) = begin
         if i == nth
             ref[] = i
