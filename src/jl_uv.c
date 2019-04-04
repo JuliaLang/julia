@@ -57,6 +57,20 @@ void jl_init_uv(void)
     JL_MUTEX_INIT(&jl_uv_mutex); // a file-scope initializer can be used instead
 }
 
+int jl_uv_n_waiters = 0;
+
+void JL_UV_LOCK(void)
+{
+    if (jl_mutex_trylock(&jl_uv_mutex)) {
+    }
+    else {
+        jl_atomic_fetch_add(&jl_uv_n_waiters, 1);
+        jl_wake_libuv();
+        JL_LOCK(&jl_uv_mutex);
+        jl_atomic_fetch_add(&jl_uv_n_waiters, -1);
+    }
+}
+
 void jl_uv_call_close_callback(jl_value_t *val)
 {
     jl_value_t *args[2];
@@ -188,18 +202,6 @@ JL_DLLEXPORT int jl_run_once(uv_loop_t *loop)
         return r;
     }
     return 0;
-}
-
-JL_DLLEXPORT void jl_run_event_loop(uv_loop_t *loop)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (loop) {
-        jl_gc_safepoint_(ptls);
-        JL_UV_LOCK();
-        loop->stop_flag = 0;
-        uv_run(loop,UV_RUN_DEFAULT);
-        JL_UV_UNLOCK();
-    }
 }
 
 JL_DLLEXPORT int jl_process_events(uv_loop_t *loop)
