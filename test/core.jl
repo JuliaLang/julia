@@ -6854,31 +6854,28 @@ g29828() = 2::Any[String][1]
 struct SplatNew{T}
     x::Int8
     y::T
-    SplatNew{T}(args...) where {T} = new(0,args...,1)
+    SplatNew{T}(args...) where {T} = new(0, args..., 1)
     SplatNew(args...) = new{Float32}(args...)
     SplatNew{Any}(args...) = new(args...)
     SplatNew{Tuple{Int16}}(args...) = new([2]..., args...)
-    SplatNew{Int8}() = new(1,2,3)
+    SplatNew{Int8}() = new(1, 2, 3)
 end
 let x = SplatNew{Int16}()
     @test x.x === Int8(0)
     @test x.y === Int16(1)
 end
-@test_throws ArgumentError SplatNew{Int16}(1)
-let x = SplatNew(3,2)
+@test_throws ArgumentError("new: too many arguments (expected 2)") SplatNew{Int16}(1)
+let x = SplatNew(3, 2)
     @test x.x === Int8(3)
     @test x.y === 2.0f0
 end
-@test_throws ArgumentError SplatNew(1,2,3)
-let x = SplatNew{Any}(1)
-    @test x.x === Int8(1)
-    @test !isdefined(x, :y)
-end
+@test_throws ArgumentError("new: too many arguments (expected 2)") SplatNew(1, 2, 3)
+@test_throws ArgumentError("new: too few arguments (expected 2)") SplatNew{Any}(1)
 let x = SplatNew{Tuple{Int16}}((1,))
     @test x.x === Int8(2)
     @test x.y === (Int16(1),)
 end
-@test_throws ArgumentError SplatNew{Int8}()
+@test_throws ArgumentError("new: too many arguments (expected 2)")  SplatNew{Int8}()
 
 # Issue #31357 - Missed assignment in nested try/catch
 function foo31357(b::Bool)

@@ -4153,6 +4153,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         Value *typ = boxed(ctx, argv[0]);
         Value *tup = boxed(ctx, argv[1]);
         Value *val = ctx.builder.CreateCall(prepare_call(jlsplatnew_func), { typ, tup });
+        // temporarily mark as `Any`, expecting `emit_ssaval_assign` to update
+        // it to the inferred type.
         return mark_julia_type(ctx, val, true, (jl_value_t*)jl_any_type);
     }
     else if (head == exc_sym) {
