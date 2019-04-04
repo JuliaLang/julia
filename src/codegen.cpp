@@ -98,8 +98,6 @@ using namespace llvm;
 #include "processor.h"
 #include "julia_assert.h"
 
-#include "uprobes.h"
-
 // LLVM version compatibility macros
 legacy::PassManager *jl_globalPM;
 
@@ -1042,32 +1040,6 @@ const char *name_from_method_instance(jl_method_instance_t *mi)
     return jl_is_method(mi->def.method) ? jl_symbol_name(mi->def.method->name) : "top-level scope";
 }
 
-struct CompileTiming {
-  CompileTiming(jl_method_instance_t *mi) :mi(mi) {
-    if (jl_is_method(mi->def.method)) {
-      JULIA_COMPILE_START();
-    }
-  }
-  ~CompileTiming() {
-    if (jl_is_method(mi->def.method)) {
-      ios_t str_;
-      ios_mem(&str_, 300);
-      JL_STREAM* str = (JL_STREAM*)&str_;
-
-      //jl_printf(str, "%s.%s, ", jl_symbol_name(mi->def.method->module->name), jl_symbol_name(mi->def.method->name));
-
-      //jl_static_show_func_sig(str, mi->specTypes);
-      jl_static_show(str, mi->specTypes);
-
-      str_.buf[str_.size] = 0;
-      JULIA_COMPILE_END(str_.buf);
-
-      ios_close(&str_);
-    }
-  }
-  jl_method_instance_t *mi;
-};
-
 // this generates llvm code for the lambda info
 // and adds the result to the jitlayers
 // (and the shadow module), but doesn't yet compile
@@ -1108,9 +1080,6 @@ jl_code_instance_t *jl_compile_linfo(jl_method_instance_t *mi, jl_code_info_t *s
 
     // Codegen lock held in this block
     {
-        // Instrument the time spent in this block for this method instance
-        CompileTiming _c(mi);
-
         // Step 1: Re-check if this was already compiled (it may have been while
         // we waited at the lock).
         if (!jl_is_method(mi->def.method)) {
