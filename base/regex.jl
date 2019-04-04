@@ -525,6 +525,9 @@ end
     *(s::Union{Regex,AbstractString,AbstractChar}, t::Regex) -> Regex
 
 Concatenate regexes, strings and/or characters, producing a [`Regex`](@ref).
+String and character arguments must be matched exactly in the resulting regex,
+meaning that the contained characters are devoid of any special meaning
+(they are quoted with "\\Q" and "\\E").
 
 !!! compat "Julia 1.2"
      This method requires at least Julia 1.2.
@@ -533,6 +536,15 @@ Concatenate regexes, strings and/or characters, producing a [`Regex`](@ref).
 ```jldoctest
 julia> r"Hello|Good bye" * ' ' * "world"
 r"(?:Hello|Good bye) world"
+
+julia> r = r"a|b" * "c|d"
+r"(?:a|b)\\Qc|d\\E"
+
+match(r, "ac") == nothing
+true
+
+julia> match(r, "ac|d")
+RegexMatch("ac|d")
 ```
 """
 function *(r1::Union{Regex,AbstractString,AbstractChar}, rs::Union{Regex,AbstractString,AbstractChar}...)
@@ -559,7 +571,7 @@ end
 *(r::Regex) = r # avoids wrapping r in a useless subpattern
 
 unwrap_string(r::Regex, unshared::UInt32) = string("(?", regex_opts_str(r.compile_options & unshared), ':', r.pattern, ')')
-unwrap_string(s::Union{AbstractString,AbstractChar}, ::UInt32) = s # no need to wrap in subpattern
+unwrap_string(s::Union{AbstractString,AbstractChar}, ::UInt32) = string("\\Q", s, "\\E")
 
 regex_opts_str(opts) = (isassigned(_regex_opts_str) ? _regex_opts_str[] : init_regex())[opts]
 

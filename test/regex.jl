@@ -82,10 +82,10 @@
         @test *(r"a") == r"a"
 
         @test r"a" * r"b" == r"(?:a)(?:b)"
-        @test r"a" * "b"  == r"(?:a)b"
-        @test r"a" * 'b'  == r"(?:a)b"
-        @test "a"  * r"b" == r"a(?:b)"
-        @test 'a'  * r"b" == r"a(?:b)"
+        @test r"a" * "b"  == r"(?:a)\Qb\E"
+        @test r"a" * 'b'  == r"(?:a)\Qb\E"
+        @test "a"  * r"b" == r"\Qa\E(?:b)"
+        @test 'a'  * r"b" == r"\Qa\E(?:b)"
         for a = (r"a", "a", 'a'),
             b = (r"b", "b", 'b'),
             c = (r"c", "c", 'c')
@@ -97,10 +97,10 @@
         end
 
         @test r"a"i * r"b"i == r"(?:a)(?:b)"i
-        @test r"a"i * "b"   == r"(?:a)b"i
-        @test r"a"i * 'b'   == r"(?:a)b"i
-        @test "a"   * r"b"i == r"a(?:b)"i
-        @test 'a'   * r"b"i == r"a(?:b)"i
+        @test r"a"i * "b"   == r"(?:a)\Qb\E"i
+        @test r"a"i * 'b'   == r"(?:a)\Qb\E"i
+        @test "a"   * r"b"i == r"\Qa\E(?:b)"i
+        @test 'a'   * r"b"i == r"\Qa\E(?:b)"i
 
         @test r"a"i  * r"b"m  == r"(?i:a)(?m:b)"
         @test r"a"im * r"b"m  == r"(?i:a)(?:b)"m
