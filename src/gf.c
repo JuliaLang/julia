@@ -17,8 +17,10 @@
 #endif
 #include "julia_assert.h"
 
+#ifdef ENABLE_TRACING_PROBES
 // Dtrace Timings
 #include "uprobes.h.gen"
+#endif
 void DTRACE__COMPILE_START(void);
 void DTRACE__COMPILE_END(jl_method_instance_t *mi);
 
@@ -1807,12 +1809,15 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
 }
 void DTRACE__COMPILE_START(void)
 {
+#ifdef ENABLE_TRACING_PROBES
     if (JULIA_COMPILE_START_ENABLED()) {
         JULIA_COMPILE_START();
     }
+#endif
 }
 void DTRACE__COMPILE_END(jl_method_instance_t *mi)
 {
+#ifdef ENABLE_TRACING_PROBES
     if (JULIA_COMPILE_START_ENABLED()) {
         if (jl_is_method(mi->def.method)) {
           ios_t str_;
@@ -1832,6 +1837,7 @@ void DTRACE__COMPILE_END(jl_method_instance_t *mi)
           JULIA_COMPILE_END("top-level scope");
         }
     }
+#endif
 }
 
 JL_DLLEXPORT jl_value_t *jl_fptr_const_return(jl_code_instance_t *m, jl_value_t **args, uint32_t nargs)

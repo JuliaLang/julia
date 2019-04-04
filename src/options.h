@@ -63,7 +63,7 @@
 // be considered untrusted, but can be helpful during development
 // #define SEGV_EXCEPTION
 
-// profiling options
+// profiling options ----------------------------------------------------------
 
 // GC_FINAL_STATS prints total GC stats at exit
 // #define GC_FINAL_STATS
@@ -79,6 +79,9 @@
 
 // Automatic Instrumenting Profiler
 // #define ENABLE_TIMINGS
+
+// Automatic Instrumenting Profiler
+#define ENABLE_TRACING_PROBES
 
 
 // method dispatch profiling --------------------------------------------------
