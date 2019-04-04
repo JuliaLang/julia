@@ -565,13 +565,13 @@ function *(r1::Union{Regex,AbstractString,AbstractChar}, rs::Union{Regex,Abstrac
         shared &= r.compile_options
     end
     unshared = mask & ~shared
-    Regex(string(unwrap_string(r1, unshared), unwrap_string.(rs, Ref(unshared))...), compile_opts | shared, match_opts)
+    Regex(string(wrap_string(r1, unshared), wrap_string.(rs, Ref(unshared))...), compile_opts | shared, match_opts)
 end
 
 *(r::Regex) = r # avoids wrapping r in a useless subpattern
 
-unwrap_string(r::Regex, unshared::UInt32) = string("(?", regex_opts_str(r.compile_options & unshared), ':', r.pattern, ')')
-unwrap_string(s::Union{AbstractString,AbstractChar}, ::UInt32) = string("\\Q", s, "\\E")
+wrap_string(r::Regex, unshared::UInt32) = string("(?", regex_opts_str(r.compile_options & unshared), ':', r.pattern, ')')
+wrap_string(s::Union{AbstractString,AbstractChar}, ::UInt32) = string("\\Q", s, "\\E")
 
 regex_opts_str(opts) = (isassigned(_regex_opts_str) ? _regex_opts_str[] : init_regex())[opts]
 
@@ -601,8 +601,6 @@ init_regex() = _regex_opts_str[] = foldl(0:15, init=ImmutableDict{UInt32,String}
 end
 
 
-
-
 """
     ^(s::Regex, n::Integer)
 
@@ -613,8 +611,11 @@ Repeat a regex `n` times.
 
 # Examples
 ```jldoctest
-julia> r"Test "^3
-r"(?:Test ){3}"
+julia> r"Test "^2
+r"(?:Test ){2}"
+
+julia> match(r"Test "^2, "Test Test ")
+RegexMatch("Test Test ")
 ```
 """
 ^(r::Regex, i::Integer) = Regex(string("(?:", r.pattern, "){$i}"), r.compile_options, r.match_options)
