@@ -1140,7 +1140,7 @@ function deregister_worker(pg, pid)
 
         # throw exception to tasks waiting for this pid
         for (id, rv) in tonotify
-            close(rv.c, ProcessExitedException(id))
+            close(rv.c, ProcessExitedException(pid))
             delete!(pg.refs, id)
         end
     end
