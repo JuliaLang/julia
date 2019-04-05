@@ -571,7 +571,9 @@ end
 *(r::Regex) = r # avoids wrapping r in a useless subpattern
 
 wrap_string(r::Regex, unshared::UInt32) = string("(?", regex_opts_str(r.compile_options & unshared), ':', r.pattern, ')')
-wrap_string(s::Union{AbstractString,AbstractChar}, ::UInt32) = string("\\Q", s, "\\E")
+# if s contains raw"\E", split '\' and 'E' within two distinct \Q...\E groups:
+wrap_string(s::AbstractString, ::UInt32) =  string("\\Q", replace(s, raw"\E" => raw"\\E\QE"), "\\E")
+wrap_string(s::AbstractChar, ::UInt32) = string("\\Q", s, "\\E")
 
 regex_opts_str(opts) = (isassigned(_regex_opts_str) ? _regex_opts_str[] : init_regex())[opts]
 
