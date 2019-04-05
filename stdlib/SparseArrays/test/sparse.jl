@@ -2581,4 +2581,17 @@ end
     @test A == fill(2-2im, 1, 1)
 end
 
+@testset "issue #31453" for T in [UInt8, Int8, UInt16, Int16, UInt32, Int32]
+    i = Int[1, 2]
+    j = Int[2, 1]
+    i2 = T.(i)
+    j2 = T.(j)
+    v = [500, 600]
+    x1 = sparse(i, j, v)
+    x2 = sparse(i2, j2, v)
+    @test sum(x1) == sum(x2) == 1100
+    @test sum(x1, dims=1) == sum(x2, dims=1)
+    @test sum(x1, dims=2) == sum(x2, dims=2)
+end
+
 end # module

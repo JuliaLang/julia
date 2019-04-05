@@ -1650,7 +1650,7 @@ function Base.reducedim_initarray(A::SparseMatrixCSC, region, v0, ::Type{R}) whe
 end
 
 # General mapreduce
-function _mapreducezeros(f, op, ::Type{T}, nzeros::Int, v0) where T
+function _mapreducezeros(f, op, ::Type{T}, nzeros::Integer, v0) where T
     nzeros == 0 && return v0
 
     # Reduce over first zero
@@ -1684,9 +1684,9 @@ function Base._mapreduce(f, op, ::Base.IndexCartesian, A::SparseMatrixCSC{T}) wh
 end
 
 # Specialized mapreduce for +/*
-_mapreducezeros(f, ::typeof(+), ::Type{T}, nzeros::Int, v0) where {T} =
+_mapreducezeros(f, ::typeof(+), ::Type{T}, nzeros::Integer, v0) where {T} =
     nzeros == 0 ? v0 : f(zero(T))*nzeros + v0
-_mapreducezeros(f, ::typeof(*), ::Type{T}, nzeros::Int, v0) where {T} =
+_mapreducezeros(f, ::typeof(*), ::Type{T}, nzeros::Integer, v0) where {T} =
     nzeros == 0 ? v0 : f(zero(T))^nzeros * v0
 
 function Base._mapreduce(f, op::typeof(*), A::SparseMatrixCSC{T}) where T
