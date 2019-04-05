@@ -1,13 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Symmetric and Hermitian matrices
-struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
+struct Symmetric{T,S<:AbstractMatrix{<:T},B} <: AbstractWrappedArray{T,2,S,B}
     data::S
     uplo::Char
 
-    function Symmetric{T,S}(data, uplo) where {T,S<:AbstractMatrix{<:T}}
+    function Symmetric{T,S,B}(data, uplo) where {T,S<:AbstractMatrix{<:T},B}
         require_one_based_indexing(data)
-        new{T,S}(data, uplo)
+        new(data, uplo)
+    end
+    function Symmetric{T,S}(data, uplo) where {T,S<:AbstractMatrix{<:T}}
+        Symmetric{T,S,basetype(S)}(data, uplo)
     end
 end
 """
@@ -76,13 +79,16 @@ function symmetric_type(::Type{T}) where {S, T<:AbstractMatrix{S}}
 end
 symmetric_type(::Type{T}) where {T<:Number} = T
 
-struct Hermitian{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
+struct Hermitian{T,S<:AbstractMatrix{<:T},B} <: AbstractWrappedArray{T,2,S,B}
     data::S
     uplo::Char
 
-    function Hermitian{T,S}(data, uplo) where {T,S<:AbstractMatrix{<:T}}
+    function Hermitian{T,S,B}(data, uplo) where {T,S<:AbstractMatrix{<:T},B}
         require_one_based_indexing(data)
-        new{T,S}(data, uplo)
+        new(data, uplo)
+    end
+    function Hermitian{T,S}(data, uplo) where {T,S<:AbstractMatrix{<:T}}
+        Hermitian{T,S,basetype(S)}(data, uplo)
     end
 end
 """
