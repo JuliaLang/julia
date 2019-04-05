@@ -1532,6 +1532,21 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
                            sv::Union{InferenceState,Nothing})
     if f === tuple
         return tuple_tfunc(argtypes)
+    elseif f === Core.arrayfreeze || f === Core.arraythaw
+        if length(argtypes) != 1
+            isva && return Any
+            return Bottom
+        end
+        a = widenconst(argtypes[1])
+        at = (f === Core.arrayfreeze ? Array : ImmutableArray)
+        rt = (f === Core.arrayfreeze ? ImmutableArray : Array)
+        if a <: at
+            unw = unwrap_unionall(a)
+            if isa(unw, DataType)
+                return rewrap_unionall(rt{unw.parameters[1], unw.parameters[2]}, a)
+            end
+        end
+        return rt
     end
     if isa(f, IntrinsicFunction)
         if is_pure_intrinsic_infer(f) && _all(@nospecialize(a) -> isa(a, Const), argtypes)

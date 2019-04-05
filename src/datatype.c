@@ -222,7 +222,8 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
 
 STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d) JL_NOTSAFEPOINT
 {
-    return (!d->name->abstract && jl_datatype_size(d) == 0 && d != jl_symbol_type && d->name != jl_array_typename &&
+    return (!d->name->abstract && jl_datatype_size(d) == 0 && d != jl_symbol_type &&
+            d->name != jl_array_typename && d->name != jl_immutable_array_typename &&
             d->isconcretetype && !d->name->mutabl);
 }
 
@@ -389,7 +390,9 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             st->layout = &opaque_byte_layout;
             return;
         }
-        else if (st == jl_simplevector_type || st == jl_module_type || st->name == jl_array_typename) {
+        else if (st == jl_simplevector_type || st == jl_module_type ||
+                 st->name == jl_array_typename ||
+                 st->name == jl_immutable_array_typename) {
             static const jl_datatype_layout_t opaque_ptr_layout = {0, 1, -1, sizeof(void*), 0, 0};
             st->layout = &opaque_ptr_layout;
             return;

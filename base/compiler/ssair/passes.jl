@@ -1255,3 +1255,77 @@ function cfg_simplify!(ir::IRCode)
     compact.active_result_bb = length(bb_starts)
     return finish(compact)
 end
+
+function is_allocation(stmt)
+    isexpr(stmt, :foreigncall) || return false
+    s = stmt.args[1]
+    isa(s, QuoteNode) && (s = s.value)
+    return s === :jl_alloc_array_1d
+end
+
+function memory_opt!(ir::IRCode)
+    compact = IncrementalCompact(ir, false)
+    uses = IdDict{Int, Vector{Int}}()
+    relevant = IdSet{Int}()
+    revisit = Int[]
+    function mark_val(val)
+        isa(val, SSAValue) || return
+        val.id in relevant && pop!(relevant, val.id)
+    end
+    for ((_, idx), stmt) in compact
+        if isa(stmt, ReturnNode)
+            isdefined(stmt, :val) || continue
+            val = stmt.val
+            if isa(val, SSAValue) && val.id in relevant
+                (haskey(uses, val.id)) || (uses[val.id] = Int[])
+                push!(uses[val.id], idx)
+            end
+            continue
+        end
+        (isexpr(stmt, :call) || isexpr(stmt, :foreigncall)) || continue
+        if is_allocation(stmt)
+            push!(relevant, idx)
+            # TODO: Mark everything else here
+            continue
+        end
+        # TODO: Replace this by interprocedural escape analysis
+        if is_known_call(stmt, arrayset, compact)
+            # The value being set escapes, everything else doesn't
+            mark_val(stmt.args[4])
+            arr = stmt.args[3]
+            if isa(arr, SSAValue) && arr.id in relevant
+                (haskey(uses, arr.id)) || (uses[arr.id] = Int[])
+                push!(uses[arr.id], idx)
+            end
+        elseif is_known_call(stmt, Core.arrayfreeze, compact) && isa(stmt.args[2], SSAValue)
+            push!(revisit, idx)
+        else
+            # For now we assume everything escapes
+            # TODO: We could handle PhiNodes specially and improve this
+            for ur in userefs(stmt)
+                mark_val(ur[])
+            end
+        end
+    end
+    ir = finish(compact)
+    isempty(revisit) && return ir
+    domtree = construct_domtree(ir.cfg.blocks)
+    for idx in revisit
+        # Make sure that the value we reference didn't escape
+        id = ir.stmts[idx][:inst].args[2].id
+        (id in relevant) || continue
+
+        # We're ok to steal the memory if we don't dominate any uses
+        ok = true
+        for use in uses[id]
+            if ssadominates(ir, domtree, idx, use)
+                ok = false
+                break
+            end
+        end
+        ok || continue
+
+        ir.stmts[idx][:inst].args[1] = Core.mutating_arrayfreeze
+    end
+    return ir
+end

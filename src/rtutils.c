@@ -988,8 +988,8 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             n += jl_printf(out, ")");
         }
     }
-    else if (jl_array_type && jl_is_array_type(vt)) {
-        n += jl_printf(out, "Array{");
+    else if (jl_array_type && jl_is_arrayish_type(vt)) {
+        n += jl_printf(out, jl_is_array_type(vt) ? "Array{" : "ImmutableArray{");
         n += jl_static_show_x(out, (jl_value_t*)jl_tparam0(vt), depth);
         n += jl_printf(out, ", (");
         size_t i, ndims = jl_array_ndims(v);

@@ -500,7 +500,7 @@ static Type *_julia_type_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, bool 
     if (isboxed) *isboxed = false;
     if (jt == (jl_value_t*)jl_bottom_type)
         return T_void;
-    if (jl_is_concrete_immutable(jt)) {
+    if (jl_is_concrete_immutable(jt) && !jl_is_arrayish_type(jt)) {
         if (jl_datatype_nbits(jt) == 0)
             return T_void;
         Type *t = _julia_struct_to_llvm(ctx, jt, isboxed);

@@ -1073,7 +1073,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
     case arraylen: {
         const jl_cgval_t &x = argv[0];
         jl_value_t *typ = jl_unwrap_unionall(x.typ);
-        if (!jl_is_datatype(typ) || ((jl_datatype_t*)typ)->name != jl_array_typename)
+        if (!jl_is_arrayish_type(typ))
             return emit_runtime_call(ctx, f, argv, nargs);
         return mark_julia_type(ctx, emit_arraylen(ctx, x), false, jl_long_type);
     }

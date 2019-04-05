@@ -657,6 +657,8 @@ extern JL_DLLIMPORT jl_unionall_t *jl_abstractarray_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_unionall_t *jl_densearray_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_unionall_t *jl_array_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_typename_t *jl_array_typename JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_unionall_t *jl_immutable_array_type JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_typename_t *jl_immutable_array_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_weakref_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_abstractstring_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_string_type JL_GLOBALLY_ROOTED;
@@ -1200,11 +1202,25 @@ STATIC_INLINE int jl_is_primitivetype(void *v) JL_NOTSAFEPOINT
             jl_datatype_size(v) > 0);
 }
 
+STATIC_INLINE int jl_is_array_type(void *t) JL_NOTSAFEPOINT
+{
+    return (jl_is_datatype(t) &&
+            (((jl_datatype_t*)(t))->name == jl_array_typename));
+}
+
+STATIC_INLINE int jl_is_arrayish_type(void *t) JL_NOTSAFEPOINT
+{
+    return (jl_is_datatype(t) &&
+            (((jl_datatype_t*)(t))->name == jl_array_typename ||
+             ((jl_datatype_t*)(t))->name == jl_immutable_array_typename));
+}
+
 STATIC_INLINE int jl_is_structtype(void *v) JL_NOTSAFEPOINT
 {
     return (jl_is_datatype(v) &&
             !((jl_datatype_t*)(v))->name->abstract &&
-            !jl_is_primitivetype(v));
+            !jl_is_primitivetype(v) &&
+            !jl_is_arrayish_type(v));
 }
 
 STATIC_INLINE int jl_isbits(void *t) JL_NOTSAFEPOINT // corresponding to isbits() in julia
@@ -1222,16 +1238,16 @@ STATIC_INLINE int jl_is_abstracttype(void *v) JL_NOTSAFEPOINT
     return (jl_is_datatype(v) && ((jl_datatype_t*)(v))->name->abstract);
 }
 
-STATIC_INLINE int jl_is_array_type(void *t) JL_NOTSAFEPOINT
-{
-    return (jl_is_datatype(t) &&
-            ((jl_datatype_t*)(t))->name == jl_array_typename);
-}
-
 STATIC_INLINE int jl_is_array(void *v) JL_NOTSAFEPOINT
 {
     jl_value_t *t = jl_typeof(v);
     return jl_is_array_type(t);
+}
+
+STATIC_INLINE int jl_is_arrayish(void *v) JL_NOTSAFEPOINT
+{
+    jl_value_t *t = jl_typeof(v);
+    return jl_is_arrayish_type(t);
 }
 
 
@@ -1500,6 +1516,7 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a);
 JL_DLLEXPORT jl_array_t *jl_alloc_vec_any(size_t n);
 JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
 JL_DLLEXPORT jl_value_t *jl_ptrarrayref(jl_array_t *a JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;  // 0-indexed
+JL_DLLEXPORT jl_array_t *jl_array_copy(jl_array_t *ary);
 JL_DLLEXPORT void jl_arrayset(jl_array_t *a JL_ROOTING_ARGUMENT, jl_value_t *v JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, size_t i);  // 0-indexed
 JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i);  // 0-indexed
 JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i);  // 0-indexed

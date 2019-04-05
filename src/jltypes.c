@@ -2218,6 +2218,15 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_nonfunction_mt->leafcache = (jl_array_t*)jl_an_empty_vec_any;
     jl_type_type_mt->leafcache = (jl_array_t*)jl_an_empty_vec_any;
 
+    tv = jl_svec2(tvar("T"), tvar("N"));
+    jl_immutable_array_type = (jl_unionall_t*)
+        jl_new_datatype(jl_symbol("ImmutableArray"), core,
+                        (jl_datatype_t*)
+                        jl_apply_type((jl_value_t*)jl_densearray_type, jl_svec_data(tv), 2),
+                        tv, jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 0, 0)->name->wrapper;
+    jl_immutable_array_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_immutable_array_type))->name;
+    jl_compute_field_offsets((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_immutable_array_type));
+
     jl_expr_type =
         jl_new_datatype(jl_symbol("Expr"), core,
                         jl_any_type, jl_emptysvec,
@@ -2629,6 +2638,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     // override the preferred layout for a couple types
     jl_lineinfonode_type->name->mayinlinealloc = 0; // FIXME: assumed to be a pointer by codegen
+    jl_immutable_array_typename->mayinlinealloc = 0;
     // It seems like we probably usually end up needing the box for kinds (used in an Any context)--but is that true?
     jl_uniontype_type->name->mayinlinealloc = 0;
     jl_unionall_type->name->mayinlinealloc = 0;

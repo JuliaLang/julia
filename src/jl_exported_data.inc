@@ -15,6 +15,8 @@
     XX(jl_array_symbol_type) \
     XX(jl_array_type) \
     XX(jl_array_typename) \
+    XX(jl_immutable_array_type) \
+    XX(jl_immutable_array_typename) \
     XX(jl_array_uint8_type) \
     XX(jl_atomicerror_type) \
     XX(jl_base_module) \

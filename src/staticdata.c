@@ -30,7 +30,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    150
+#define NUM_TAGS    155
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -50,6 +50,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_slotnumber_type);
         INSERT_TAG(jl_simplevector_type);
         INSERT_TAG(jl_array_type);
+        INSERT_TAG(jl_immutable_array_type);
         INSERT_TAG(jl_typedslot_type);
         INSERT_TAG(jl_expr_type);
         INSERT_TAG(jl_globalref_type);
@@ -133,6 +134,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_pointer_typename);
         INSERT_TAG(jl_llvmpointer_typename);
         INSERT_TAG(jl_array_typename);
+        INSERT_TAG(jl_immutable_array_typename);
         INSERT_TAG(jl_type_typename);
         INSERT_TAG(jl_namedtuple_typename);
         INSERT_TAG(jl_vecelement_typename);
@@ -200,6 +202,9 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin__expr);
         INSERT_TAG(jl_builtin_ifelse);
         INSERT_TAG(jl_builtin__typebody);
+        INSERT_TAG(jl_builtin_arrayfreeze);
+        INSERT_TAG(jl_builtin_mutating_arrayfreeze);
+        INSERT_TAG(jl_builtin_arraythaw);
 
         // All optional tags must be placed at the end, so that we
         // don't accidentally have a `NULL` in the middle
@@ -250,7 +255,9 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_applicable, &jl_f_invoke, &jl_f_sizeof, &jl_f__expr, &jl_f__typevar,
     &jl_f_ifelse, &jl_f__structtype, &jl_f__abstracttype, &jl_f__primitivetype,
     &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_opaque_closure_call,
-    NULL };
+    &jl_f_arrayfreeze, &jl_f_mutating_arrayfreeze, &jl_f_arraythaw,
+    NULL
+};
 
 typedef struct {
     ios_t *s;

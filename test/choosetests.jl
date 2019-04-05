@@ -100,7 +100,7 @@ function choosetests(choices = [])
     filtertests!(tests, "subarray")
     filtertests!(tests, "compiler", ["compiler/inference", "compiler/validation",
         "compiler/ssair", "compiler/irpasses", "compiler/codegen",
-        "compiler/inline", "compiler/contextual"])
+        "compiler/inline", "compiler/contextual", "compiler/immutablearray"])
     filtertests!(tests, "stdlib", STDLIBS)
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests
     filtertests!(tests, "ambiguous")

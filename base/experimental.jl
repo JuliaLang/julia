@@ -11,6 +11,8 @@ module Experimental
 
 using Base: Threads, sync_varname
 using Base.Meta
+using Base: ImmutableArray
+
 
 """
     Const(A::Array)

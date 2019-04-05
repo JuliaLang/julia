@@ -1330,7 +1330,9 @@ JL_CALLABLE(jl_f__typevar)
 JL_CALLABLE(jl_f_arraysize)
 {
     JL_NARGS(arraysize, 2, 2);
-    JL_TYPECHK(arraysize, array, args[0]);
+    if (!jl_is_arrayish(args[0])) {
+        jl_type_error("arraysize", (jl_value_t*)jl_array_type, args[0]);
+    }
     jl_array_t *a = (jl_array_t*)args[0];
     size_t nd = jl_array_ndims(a);
     JL_TYPECHK(arraysize, long, args[1]);
@@ -1369,7 +1371,9 @@ JL_CALLABLE(jl_f_arrayref)
 {
     JL_NARGSV(arrayref, 3);
     JL_TYPECHK(arrayref, bool, args[0]);
-    JL_TYPECHK(arrayref, array, args[1]);
+    if (!jl_is_arrayish(args[1])) {
+        jl_type_error("arrayref", (jl_value_t*)jl_array_type, args[1]);
+    }
     jl_array_t *a = (jl_array_t*)args[1];
     size_t i = array_nd_index(a, &args[2], nargs - 2, "arrayref");
     return jl_arrayref(a, i);
@@ -1645,6 +1649,54 @@ JL_CALLABLE(jl_f__equiv_typedef)
     return equiv_type(args[0], args[1]) ? jl_true : jl_false;
 }
 
+JL_CALLABLE(jl_f_arrayfreeze)
+{
+    JL_NARGSV(arrayfreeze, 1);
+    JL_TYPECHK(arrayfreeze, array, args[0]);
+    jl_array_t *a = (jl_array_t*)args[0];
+    jl_datatype_t *it = (jl_datatype_t *)jl_apply_type2((jl_value_t*)jl_immutable_array_type,
+        jl_tparam0(jl_typeof(a)), jl_tparam1(jl_typeof(a)));
+    JL_GC_PUSH1(&it);
+    // The idea is to elide this copy if the compiler or runtime can prove that
+    // doing so is safe to do.
+    jl_array_t *na = jl_array_copy(a);
+    jl_set_typeof(na, it);
+    JL_GC_POP();
+    return (jl_value_t*)na;
+}
+
+JL_CALLABLE(jl_f_mutating_arrayfreeze)
+{
+    // N.B.: These error checks pretend to be arrayfreeze since this is a drop
+    // in replacement and we don't want to change the visible error type in the
+    // optimizer
+    JL_NARGSV(arrayfreeze, 1);
+    JL_TYPECHK(arrayfreeze, array, args[0]);
+    jl_array_t *a = (jl_array_t*)args[0];
+    jl_datatype_t *it = (jl_datatype_t *)jl_apply_type2((jl_value_t*)jl_immutable_array_type,
+        jl_tparam0(jl_typeof(a)), jl_tparam1(jl_typeof(a)));
+    jl_set_typeof(a, it);
+    return (jl_value_t*)a;
+}
+
+JL_CALLABLE(jl_f_arraythaw)
+{
+    JL_NARGSV(arraythaw, 1);
+    if (((jl_datatype_t*)jl_typeof(args[0]))->name != jl_immutable_array_typename) {
+        jl_type_error("arraythaw", (jl_value_t*)jl_immutable_array_type, args[0]);
+    }
+    jl_array_t *a = (jl_array_t*)args[0];
+    jl_datatype_t *it = (jl_datatype_t *)jl_apply_type2((jl_value_t*)jl_array_type,
+        jl_tparam0(jl_typeof(a)), jl_tparam1(jl_typeof(a)));
+    JL_GC_PUSH1(&it);
+    // The idea is to elide this copy if the compiler or runtime can prove that
+    // doing so is safe to do.
+    jl_array_t *na = jl_array_copy(a);
+    jl_set_typeof(na, it);
+    JL_GC_POP();
+    return (jl_value_t*)na;
+}
+
 // IntrinsicFunctions ---------------------------------------------------------
 
 static void (*runtime_fp[num_intrinsics])(void);
@@ -1797,6 +1849,10 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_arrayset = add_builtin_func("arrayset", jl_f_arrayset);
     jl_builtin_arraysize = add_builtin_func("arraysize", jl_f_arraysize);
 
+    jl_builtin_arrayfreeze = add_builtin_func("arrayfreeze", jl_f_arrayfreeze);
+    jl_builtin_mutating_arrayfreeze = add_builtin_func("mutating_arrayfreeze", jl_f_mutating_arrayfreeze);
+    jl_builtin_arraythaw = add_builtin_func("arraythaw", jl_f_arraythaw);
+
     // method table utils
     jl_builtin_applicable = add_builtin_func("applicable", jl_f_applicable);
     jl_builtin_invoke = add_builtin_func("invoke", jl_f_invoke);
@@ -1868,6 +1924,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("AbstractArray", (jl_value_t*)jl_abstractarray_type);
     add_builtin("DenseArray", (jl_value_t*)jl_densearray_type);
     add_builtin("Array", (jl_value_t*)jl_array_type);
+    add_builtin("ImmutableArray", (jl_value_t*)jl_immutable_array_type);
 
     add_builtin("Expr", (jl_value_t*)jl_expr_type);
     add_builtin("LineNumberNode", (jl_value_t*)jl_linenumbernode_type);

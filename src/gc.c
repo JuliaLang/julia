@@ -856,7 +856,8 @@ void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT
         size_t l = jl_svec_len(v);
         dtsz = l * sizeof(void*) + sizeof(jl_svec_t);
     }
-    else if (dt->name == jl_array_typename) {
+    else if (dt->name == jl_array_typename ||
+             dt->name == jl_immutable_array_typename) {
         jl_array_t *a = (jl_array_t*)v;
         if (!a->flags.pooled)
             dtsz = GC_MAX_SZCLASS + 1;
@@ -2520,7 +2521,8 @@ mark: {
             objary = (gc_mark_objarray_t*)sp.data;
             goto objarray_loaded;
         }
-        else if (vt->name == jl_array_typename) {
+        else if (vt->name == jl_array_typename ||
+                 vt->name == jl_immutable_array_typename) {
             jl_array_t *a = (jl_array_t*)new_obj;
             jl_array_flags_t flags = a->flags;
             if (update_meta) {

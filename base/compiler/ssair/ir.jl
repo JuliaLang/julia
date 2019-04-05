@@ -319,6 +319,13 @@ function setindex!(x::IRCode, @nospecialize(repl), s::SSAValue)
     return x
 end
 
+function ssadominates(ir::IRCode, domtree::DomTree, ssa1::Int, ssa2::Int)
+    bb1 = block_for_inst(ir.cfg, ssa1)
+    bb2 = block_for_inst(ir.cfg, ssa2)
+    bb1 == bb2 && return ssa1 < ssa2
+    return dominates(domtree, bb1, bb2)
+end
+
 # SSA values that need renaming
 struct OldSSAValue
     id::Int
