@@ -25,6 +25,13 @@ function dominates(domtree::DomTree, bb1::Int, bb2::Int)
     return bb1 == bb2
 end
 
+function ssadominates(ir::IRCode, domtree::DomTree, ssa1::Int, ssa2::Int)
+    bb1 = block_for_inst(ir.cfg, ssa1)
+    bb2 = block_for_inst(ir.cfg, ssa2)
+    bb1 == bb2 && return ssa1 < ssa2
+    return dominates(domtree, bb1, bb2)
+end
+
 bb_unreachable(domtree::DomTree, bb::Int) = bb != 1 && domtree.nodes[bb].level == 1
 
 function update_level!(domtree::Vector{DomTreeNode}, node::Int, level::Int)

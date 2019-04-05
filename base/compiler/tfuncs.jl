@@ -1266,6 +1266,21 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
             end
         end
         return Any
+    elseif f === Core.arrayfreeze || f === Core.arraymelt
+        if length(argtypes) != 1
+            isva && return Any
+            return Bottom
+        end
+        a = widenconst(argtypes[1])
+        at = (f === Core.arrayfreeze ? Array : ImmutableArray)
+        rt = (f === Core.arrayfreeze ? ImmutableArray : Array)
+        if a <: at
+            unw = unwrap_unionall(a)
+            if isa(unw, DataType)
+                return rewrap_unionall(rt{unw.parameters[1], unw.parameters[2]}, a)
+            end
+        end
+        return rt
     elseif f === Expr
         if length(argtypes) < 1 && !isva
             return Bottom

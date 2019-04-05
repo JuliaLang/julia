@@ -367,7 +367,7 @@ static MDNode *best_tbaa(jl_value_t *jt) {
 // note that this is guaranteed to include jl_isbits
 static bool jl_justbits(jl_value_t* t)
 {
-    return jl_is_immutable_datatype(t) && ((jl_datatype_t*)t)->layout && ((jl_datatype_t*)t)->layout->npointers == 0;
+    return jl_is_immutable_datatype(t) && !jl_is_arrayish_type(t) && ((jl_datatype_t*)t)->layout && ((jl_datatype_t*)t)->layout->npointers == 0;
 }
 
 // metadata tracking for a llvm Value* during codegen
@@ -7244,6 +7244,9 @@ static void init_julia_llvm_env(Module *m)
     builtin_func_map[jl_f_const_arrayref] = jlcall_func_to_llvm("jl_f_const_arrayref", &jl_f_arrayref, m);
     builtin_func_map[jl_f_arrayset] = jlcall_func_to_llvm("jl_f_arrayset", &jl_f_arrayset, m);
     builtin_func_map[jl_f_arraysize] = jlcall_func_to_llvm("jl_f_arraysize", &jl_f_arraysize, m);
+    builtin_func_map[jl_f_arrayfreeze] = jlcall_func_to_llvm("jl_f_arrayfreeze", &jl_f_arrayfreeze, m);
+    builtin_func_map[jl_f_mutating_arrayfreeze] = jlcall_func_to_llvm("jl_f_mutating_arrayfreeze", &jl_f_mutating_arrayfreeze, m);
+    builtin_func_map[jl_f_arraymelt] = jlcall_func_to_llvm("jl_f_arraymelt", &jl_f_arraymelt, m);
     builtin_func_map[jl_f_apply_type] = jlcall_func_to_llvm("jl_f_apply_type", &jl_f_apply_type, m);
     jltuple_func = builtin_func_map[jl_f_tuple];
     jlgetfield_func = builtin_func_map[jl_f_getfield];

@@ -151,12 +151,20 @@ function vect(X...)
     return copyto!(Vector{T}(undef, length(X)), X)
 end
 
-size(a::Array, d::Integer) = arraysize(a, convert(Int, d))
-size(a::Vector) = (arraysize(a,1),)
-size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
-size(a::Array{<:Any,N}) where {N} = (@_inline_meta; ntuple(M -> size(a, M), Val(N)))
+const ImmutableArray = Core.ImmutableArray
+const IMArray{T,N} = Union{Array{T, N}, ImmutableArray{T,N}}
+const IMVector{T} = IMArray{T, 1}
+const IMMatrix{T} = IMArray{T, 2}
 
-asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
+freeze(a::Array) = Core.arrayfreeze(a)
+melt(a::ImmutableArray) = Core.arraymelt(a)
+
+size(a::IMArray, d::Integer) = arraysize(a, convert(Int, d))
+size(a::IMVector) = (arraysize(a,1),)
+size(a::IMMatrix) = (arraysize(a,1), arraysize(a,2))
+size(a::IMArray{<:Any,N}) where {N} = (@_inline_meta; ntuple(M -> size(a, M), Val(N)))
+
+asize_from(a::IMArray, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
 """
     Base.isbitsunion(::Type{T})
@@ -202,6 +210,13 @@ elsize(::Type{<:Array{T}}) where {T} = isbitstype(T) ? sizeof(T) : (isbitsunion(
 sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
+    @_inline_meta
+    ii = (_sub2ind(size(a), i...) % UInt) - 1
+    @boundscheck ii < length(a) % UInt || return false
+    ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
+end
+
+function isassigned(a::ImmutableArray, i::Int...)
     @_inline_meta
     ii = (_sub2ind(size(a), i...) % UInt) - 1
     @boundscheck ii < length(a) % UInt || return false
@@ -727,6 +742,9 @@ function getindex end
 # This is more complicated than it needs to be in order to get Win64 through bootstrap
 @eval getindex(A::Array, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)
 @eval getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
+
+@eval getindex(A::ImmutableArray, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)
+@eval getindex(A::ImmutableArray, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
 
 # Faster contiguous indexing using copyto! for UnitRange and Colon
 function getindex(A::Array, I::UnitRange{Int})
