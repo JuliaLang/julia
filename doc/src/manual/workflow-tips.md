@@ -72,6 +72,12 @@ See the package home for details.
 Whether you're at the REPL or in IJulia, you can typically improve
 your development experience with
 [Revise](https://github.com/timholy/Revise.jl).
+It is common to setup Revise to start whenever julia is started,
+as per the instructions in the [Revise documentation](https://timholy.github.io/Revise.jl/stable/).
+With this setup Revise will track changes to files in any loaded modules,
+and to any files loaded in to the REPL with `includet` (but not with plain `include`);
+and will reevalute them if there are any changes.
+This allows you to edit the files and see the changes without restarting your julia session.
 A standard workflow is similar to the REPL-based workflow above, with
 the following modifications:
 
