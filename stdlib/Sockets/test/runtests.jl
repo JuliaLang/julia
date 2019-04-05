@@ -441,9 +441,9 @@ end
         end
     end
 
-    @testset "include lo" begin
-        @test issubset(getipaddrs(), getipaddrs(true))
-        @test issubset(getipaddrs(IPv6), getipaddrs(IPv6, true))
+    @testset "including loopback addresses" begin
+        @test issubset(getipaddrs(), getipaddrs(loopback=true))
+        @test issubset(getipaddrs(IPv6), getipaddrs(IPv6, loopback=true))
     end
 end
 
