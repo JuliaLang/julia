@@ -547,12 +547,12 @@ function project_deps_get_completion_candidates(pkgstarts::String, project_file:
             if occursin(Base.re_section, line)
                 state = occursin(Base.re_section_deps, line) ? :deps : :other
             elseif state == :top
-                if (m = match(Base.re_name_to_string, line)) != nothing
+                if (m = match(Base.re_name_to_string, line)) !== nothing
                     root_name = String(m.captures[1])
                     startswith(root_name, pkgstarts) && push!(loading_candidates, root_name)
                 end
             elseif state == :deps
-                if (m = match(Base.re_key_to_string, line)) != nothing
+                if (m = match(Base.re_key_to_string, line)) !== nothing
                     dep_name = m.captures[1]
                     startswith(dep_name, pkgstarts) && push!(loading_candidates, dep_name)
                 end

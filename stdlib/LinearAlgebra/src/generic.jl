@@ -419,7 +419,7 @@ function generic_normp(x, p)
         sum = (norm(v)/maxabs)^spp
         while true
             y = iterate(x, s)
-            y == nothing && break
+            y === nothing && break
             (v, s) = y
             sum += (norm(v)/maxabs)^spp
         end
