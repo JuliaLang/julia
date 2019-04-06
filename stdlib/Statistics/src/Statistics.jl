@@ -42,9 +42,9 @@ julia> mean(skipmissing([1, missing, 3]))
 mean(itr) = mean(identity, itr)
 
 """
-    mean(f::Function, itr, [dims = 1])
+    mean(f::Function, itr)
 
-Apply the function `f` to each element of collection `itr` across `dims` and take the mean.
+Apply the function `f` to each element of collection `itr` and take the mean.
 
 ```jldoctest
 julia> mean(√, [1, 2, 3])
@@ -73,8 +73,29 @@ function mean(f, itr)
     end
     return total/count
 end
-mean(f, A::AbstractArray) = sum(f, A) / length(A)
-mean(f, A::AbstractArray; dims = 1) = sum(f, A, dims = dims) / prod(size(A, i) for i in dims)
+
+"""
+    mean(f::Function, A::AbstractArray, [dims])
+
+Apply the function `f` to each element of `A` across `dims` and take the mean.
+
+```jldoctest
+julia> mean(√, [1, 2, 3])
+1.3820881233139908
+
+julia> mean([√1, √2, √3])
+1.3820881233139908
+
+julia> mean(√, [1 2 3; 4 5 6], dims = 2)
+2×1 Array{Float64,2}:
+ 1.3820881233139908
+ 2.2285192400943226
+```
+"""
+mean(f, A::AbstractArray; dims = :) = _mean(f, A, dims)
+
+_mean(f, A::AbstractArray, ::Colon) = sum(f, A) / length(A)
+_mean(f, A::AbstractArray, dims) = sum(f, A, dims = dims) / prod(size(A, i) for i in dims)
 
 """
     mean!(r, v)
