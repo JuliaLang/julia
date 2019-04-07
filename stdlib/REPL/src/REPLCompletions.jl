@@ -353,7 +353,7 @@ get_value(sym, fn) = (sym, true)
 function get_value_getfield(ex::Expr, fn)
     # Example :((top(getfield))(Base,:max))
     val, found = get_value_getfield(ex.args[2],fn) #Look up Base in Main and returns the module
-    found || return (nothing, false)
+    (found && length(ex.args) >= 3) || return (nothing, false)
     return get_value_getfield(ex.args[3], val) #Look up max in Base and returns the function if found.
 end
 get_value_getfield(sym, fn) = get_value(sym, fn)
@@ -407,7 +407,7 @@ function try_get_type(sym::Expr, fn::Module)
     elseif sym.head === :ref
         # some simple cases of `expand`
         return try_get_type(Expr(:call, GlobalRef(Base, :getindex), sym.args...), fn)
-    elseif sym.head === :.
+    elseif sym.head === :.  && sym.args[2] isa QuoteNode # second check catches broadcasting
         return try_get_type(Expr(:call, GlobalRef(Core, :getfield), sym.args...), fn)
     end
     return (Any, false)
@@ -432,10 +432,21 @@ function complete_methods(ex_org::Expr, context_module=Main)::Vector{Completion}
     args_ex = Any[]
     func, found = get_value(ex_org.args[1], context_module)
     !found && return Completion[]
-    for ex in ex_org.args[2:end]
-        val, found = get_type(ex, context_module)
-        push!(args_ex, val)
+
+    funargs = ex_org.args[2:end]
+    # handle broadcasting, but only handle number of arguments instead of
+    # argument types
+    if ex_org.head === :. && ex_org.args[2] isa Expr
+        for _ in ex_org.args[2].args
+            push!(args_ex, Any)
+        end
+    else
+        for ex in funargs
+            val, found = get_type(ex, context_module)
+            push!(args_ex, val)
+        end
     end
+
     out = Completion[]
     t_in = Tuple{Core.Typeof(func), args_ex...} # Input types
     na = length(args_ex)+1
@@ -608,12 +619,16 @@ function completions(string, pos, context_module=Main)::Completions
 
     # Make sure that only bslash_completions is working on strings
     inc_tag==:string && return String[], 0:-1, false
-
     if inc_tag == :other && should_method_complete(partial)
         frange, method_name_end = find_start_brace(partial)
         ex = Meta.parse(partial[frange] * ")", raise=false, depwarn=false)
-        if isa(ex, Expr) && ex.head==:call
-            return complete_methods(ex, context_module), first(frange):method_name_end, false
+
+        if isa(ex, Expr)
+            if ex.head==:call
+                return complete_methods(ex, context_module), first(frange):method_name_end, false
+            elseif ex.head==:. && ex.args[2] isa Expr && ex.args[2].head==:tuple
+                return complete_methods(ex, context_module), first(frange):(method_name_end - 1), false
+            end
         end
     elseif inc_tag == :comment
         return Completion[], 0:-1, false
