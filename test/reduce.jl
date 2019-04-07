@@ -526,6 +526,27 @@ test18695(r) = sum( t^2 for t in r )
     end
 end
 
+@testset "optimized reduce(vcat/hcat, A) for iterators" begin
+    v_v_same = [rand(128) for ii in 1:100]
+    # the following 2 are not optimized, but we want to make sure
+    # that they still hit the normal reduce methods
+    v_v_diff = [rand(128), rand(Float32,128), rand(Int, 128)]
+    v_v_diff_typed = Union{Vector{Float64},Vector{Float32},Vector{Int}}[rand(128), rand(Float32,128), rand(Int, 128)]
+
+    for v_v in (v_v_same, v_v_diff_typed, v_v_diff_typed)
+        # Cover all combinations of iterator traits.
+        g_v = (x for x in v_v)
+        f_g_v = Iterators.filter(x->true, g_v)
+        f_v_v = Iterators.filter(x->true, v_v);
+        hcat_expected = hcat(v_v...)
+        vcat_expected = vcat(v_v...)
+        @testset "$(typeof(data))" for data in (v_v, g_v, f_g_v, f_g_v)
+            @test reduce(hcat, data) == hcat_expected
+            @test reduce(vcat, data) == vcat_expected
+        end
+    end
+end
+
 # offset axes
 i = Base.Slice(-3:3)
 x = [j^2 for j in i]
