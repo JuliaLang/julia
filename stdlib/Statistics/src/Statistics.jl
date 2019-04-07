@@ -141,7 +141,7 @@ function _mean!(R::AbstractArray, A::AbstractArray, weights::Nothing)
 end
 
 _mean!(R::AbstractArray, A::AbstractArray, w::AbstractArray) =
-    rmul!(wsum!(R, A, w), inv(sum(w)))
+    rmul!(sum!(R, A, weights=w), inv(sum(w)))
 
 """
     mean(A::AbstractArray; [dims], [weights::AbstractArray])
@@ -192,10 +192,10 @@ end
 
 _mean(A::AbstractArray, dims, weights::Nothing) =
     _mean!(Base.reducedim_init(t -> t/2, +, A, dims), A, nothing)
-_mean(A::AbstractArray, ::Colon, weights::Nothing) = sum(A) / length(A)
+_mean(A::AbstractArray, dims::Colon, weights::Nothing) = sum(A) / length(A)
 
 _mean(A::AbstractArray, dims::Colon, w::AbstractArray) =
-    wsum(A, w) / sum(w)
+    sum(A, weights=w) / sum(w)
 
 _mean(A::AbstractArray, dims, w::AbstractArray) =
     _mean!(Base.reducedim_init(t -> (t*zero(eltype(w)))/2, +, A, dims), A, w)
