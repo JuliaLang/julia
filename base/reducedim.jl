@@ -349,7 +349,7 @@ julia> reduce(max, a, dims=1)
  4  8  12  16
 ```
 """
-reduce(op, A::AbstractArray; kw...) = mapreduce(identity, op, A; kw...)
+reduce(op, A::AbstractArray; kw...)
 
 ##### Specific reduction functions #####
 """
