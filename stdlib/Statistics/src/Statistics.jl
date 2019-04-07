@@ -98,7 +98,7 @@ julia> mean(√, [1 2 3; 4 5 6], dims=2)
 mean(f, A::AbstractArray; dims = :) = _mean(f, A, dims)
 
 _mean(f, A::AbstractArray, ::Colon) = sum(f, A) / length(A)
-_mean(f, A::AbstractArray, dims) = sum(f, A, dims = dims) / prod(size(A, i) for i in dims)
+_mean(f, A::AbstractArray, dims) = sum(f, A, dims = dims) / mapreduce(i -> size(A, i), *, unique(dims); init=1)
 
 """
     mean!(r, v)
