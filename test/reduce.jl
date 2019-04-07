@@ -533,14 +533,14 @@ end
     v_v_diff = [rand(128), rand(Float32,128), rand(Int, 128)]
     v_v_diff_typed = Union{Vector{Float64},Vector{Float32},Vector{Int}}[rand(128), rand(Float32,128), rand(Int, 128)]
 
-    for v_v in (v_v_same, v_v_diff_typed, v_v_diff_typed)
+    for v_v in (v_v_same, v_v_diff, v_v_diff_typed)
         # Cover all combinations of iterator traits.
         g_v = (x for x in v_v)
         f_g_v = Iterators.filter(x->true, g_v)
         f_v_v = Iterators.filter(x->true, v_v);
         hcat_expected = hcat(v_v...)
         vcat_expected = vcat(v_v...)
-        @testset "$(typeof(data))" for data in (v_v, g_v, f_g_v, f_g_v)
+        @testset "$(typeof(data))" for data in (v_v, g_v, f_g_v, f_v_v)
             @test reduce(hcat, data) == hcat_expected
             @test reduce(vcat, data) == vcat_expected
         end
