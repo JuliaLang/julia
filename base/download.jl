@@ -40,7 +40,7 @@ function download_curl(curl_exe::AbstractString, url::AbstractString, filename::
     process = run(pipeline(`$curl_exe -s -S -g -L -f -o $filename $url`, stderr=err), wait=false)
     if !success(process)
         error_msg = readline(err)
-        @error "Download Failed" error_msg
+        @error "Download failed: $error_msg"
         pipeline_error(process)
     end
     return filename
