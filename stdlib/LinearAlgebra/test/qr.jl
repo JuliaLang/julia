@@ -156,7 +156,6 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test mul!(c, b, q) ≈ b*q
                 @test mul!(c, b, q') ≈ b*q'
                 @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n), q, b)
-                @test_throws DimensionMismatch mul!(c, q, Matrix{eltya}(I, n+1, n))
 
                 qra = qr(a[:,1:n1], Val(false))
                 q, r = qra.Q, qra.R
@@ -172,7 +171,6 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test mul!(c, b, q) ≈ b*q
                 @test mul!(c, b, q') ≈ b*q'
                 @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n), q, b)
-                @test_throws DimensionMismatch mul!(c, q, Matrix{eltya}(I, n+1, n))
             end
         end
     end
