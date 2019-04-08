@@ -738,19 +738,19 @@ function *(adjA::Adjoint{<:Any,<:StridedVecOrMat}, adjQ::Adjoint{<:Any,<:Abstrac
 end
 
 ### mul!
-function mul!(C::StridedVecOrMat{T}, Q::AbstractQ{T}, B::AbstractMatrix{T}) where T<:BlasFloat
+function mul!(C::StridedVecOrMat{T}, Q::AbstractQ{T}, B::AbstractVecOrMat{T}) where T<:BlasFloat
     lmul!(Q, copyto!(C, B))
 end
 
-function mul!(C::StridedVecOrMat{T}, A::AbstractMatrix{T}, Q::AbstractQ{T}) where T<:BlasFloat
+function mul!(C::StridedVecOrMat{T}, A::AbstractVecOrMat{T}, Q::AbstractQ{T}) where T<:BlasFloat
     rmul!(copyto!(C, A), Q)
 end
 
-function mul!(C::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}, B::AbstractMatrix{T}) where T<:BlasFloat
+function mul!(C::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}, B::AbstractVecOrMat{T}) where T<:BlasFloat
     lmul!(adjQ, copyto!(C, B))
 end
 
-function mul!(C::StridedVecOrMat{T}, A::AbstractMatrix{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}) where T<:BlasFloat
+function mul!(C::StridedVecOrMat{T}, A::AbstractVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}) where T<:BlasFloat
     rmul!(copyto!(C, A), adjQ)
 end
 
