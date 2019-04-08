@@ -973,6 +973,7 @@ export
     @polly,
 
     @assert,
+    @chain,
     @__dot__,
     @enum,
     @label,

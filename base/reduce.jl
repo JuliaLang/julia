@@ -61,6 +61,33 @@ function mapfoldl_impl(f, op, nt::NamedTuple{()}, itr)
     return mapfoldl_impl(f, op, (init=init,), itr, i)
 end
 
+"""
+    chain(coll, [op, callable]...)
+
+Allows one to chain together functions which operate on collections:
+
+@chain(1:20,
+map, x -> x^2,
+filter, x -> x%2 == 0,
+map, x -> x^0.5,
+map, x -> Int64(x),
+reduce, (a,b) -> a+b)
+"""
+macro chain(ex...)
+    res = ex[1]
+    i = 2
+    while i <= length(ex)-1
+        op = ex[i]
+        callable = ex[i+1]
+        res = :($op($callable, $res))
+        i += 2
+    end
+    if i == length(ex)
+        op = ex[i]
+        error("operation '$op' doesn't have a matching callable")
+    end
+    return res
+end
 
 """
     mapfoldl(f, op, itr; [init])
