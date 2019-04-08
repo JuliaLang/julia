@@ -380,15 +380,15 @@ function reduce(::typeof(vcat), xs, T::Type{<:AbstractVector}, isize)
     x_state = iterate(xs)
     x_state === nothing && return T() # New empty instance
     x1, state = x_state
-    
+
     ret = copy(x1)  # this is **Not** going to work for StaticArrays
-    
+
     if !(isize isa SizeUnknown)
         # Assume first element has representitive size, unless that would make this too large
         SIZEHINT_CAP = 10^6
         sizehint!(ret, min(SIZEHINT_CAP, length(xs)*length(x1)))
     end
-    
+
     x_state = iterate(xs, state)
     while(x_state !== nothing)
         x, state =  x_state
@@ -404,20 +404,20 @@ function reduce(::typeof(hcat), xs, T::Type{<:AbstractVector}, isize::SizeUnknow
     x_state = iterate(xs)
     x_state === nothing && return et() # New empty instance
     x1, state = x_state
-    
+
     dim1_size = length(x1)
     dim2_size = 1
     ret_vec = copy(x1)  # this is **Not** going to work for StaticArrays
-        
+
     x_state = iterate(xs, state)
-    
+
     while(x_state !== nothing)
         x, state =  x_state
         append!(ret_vec, x)
         dim2_size += 1
         x_state = iterate(xs, state)
     end
-    
+
     # Reshape will throw errors if anything was the wrong size
     return reshape(ret_vec, (dim1_size, dim2_size))
 end
@@ -427,13 +427,13 @@ function reduce(::typeof(hcat), xs, T::Type{<:AbstractVector}, isize)
     x_state = iterate(xs)
     x_state === nothing && return T() # New empty instance
     x1, state = x_state
-    
+
     dim1_size = size(x1,1)
     dim2_size = length(xs)
 
     ret = similar(x1, eltype(x1), (dim1_size, dim2_size))
     copyto!(ret, 1, x1, 1)
-    
+
     x_state = iterate(xs, state)
     offset =  length(x1)+1
     while(x_state !== nothing)
