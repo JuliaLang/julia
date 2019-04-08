@@ -1372,10 +1372,10 @@ end
 
 typed_vcat(::Type{T}, A::AbstractVecOrMat...) where {T} = _typed_vcat(T, A)
 
-reduce(::typeof(vcat), A::AbstractVector{<:AbstractVecOrMat}, et, isize) =
+reduce(::typeof(vcat), A::AbstractVector{<:AbstractVecOrMat}) =
     _typed_vcat(mapreduce(eltype, promote_type, A), A)
 
-reduce(::typeof(hcat), A::AbstractVector{<:AbstractVecOrMat}, et, isize) =
+reduce(::typeof(hcat), A::AbstractVector{<:AbstractVecOrMat}) =
     _typed_hcat(mapreduce(eltype, promote_type, A), A)
 
 ## cat: general case
