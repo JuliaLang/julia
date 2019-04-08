@@ -82,6 +82,7 @@ export
     eigvals!,
     eigvecs,
     factorize,
+    fillband!,
     givens,
     hessenberg,
     hessenberg!,
