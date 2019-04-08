@@ -738,38 +738,19 @@ function *(adjA::Adjoint{<:Any,<:StridedVecOrMat}, adjQ::Adjoint{<:Any,<:Abstrac
 end
 
 ### mul!
-function check_dimensions(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar,
-    A::Union{StridedVecOrMat{T}, AbstractQ{T}},
-    B::Union{AbstractQ{T}, StridedVecOrMat{T}}) where T<:BlasFloat
-    # Auxiliary function used in mul! with StridedVecOrMat and Q matrices from QR decompositions
-    mA, nA = lapack_size(tA, A)
-    mB, nB = lapack_size(tB, B)
-
-    if nA != mB
-        throw(DimensionMismatch("A has dimensions ($mA,$nA) but B has dimensions ($mB,$nB)"))
-    end
-    if lapack_size('N', C) != (mA, nB)
-        throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
-    end
-end
-
-function mul!(C::StridedVecOrMat{T}, Q::AbstractQ{T}, B::StridedVecOrMat{T}) where T<:BlasFloat
-    check_dimensions(C, 'N', 'N', Q, B)
+function mul!(C::StridedVecOrMat{T}, Q::AbstractQ{T}, B::AbstractMatrix{T}) where T<:BlasFloat
     lmul!(Q, copyto!(C, B))
 end
 
-function mul!(C::StridedVecOrMat{T}, A::StridedVecOrMat{T}, Q::AbstractQ{T}) where T<:BlasFloat
-    check_dimensions(C, 'N', 'N', A, Q)
+function mul!(C::StridedVecOrMat{T}, A::AbstractMatrix{T}, Q::AbstractQ{T}) where T<:BlasFloat
     rmul!(copyto!(C, A), Q)
 end
 
-function mul!(C::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}, B::StridedVecOrMat{T}) where T<:BlasFloat
-    check_dimensions(C, 'T', 'N', adjQ.parent, B)
+function mul!(C::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}, B::AbstractMatrix{T}) where T<:BlasFloat
     lmul!(adjQ, copyto!(C, B))
 end
 
-function mul!(C::StridedVecOrMat{T}, A::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}) where T<:BlasFloat
-    check_dimensions(C, 'N', 'T', A, adjQ.parent)
+function mul!(C::StridedVecOrMat{T}, A::AbstractMatrix{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}) where T<:BlasFloat
     rmul!(copyto!(C, A), adjQ)
 end
 
