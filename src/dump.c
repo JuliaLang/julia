@@ -545,6 +545,10 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             return;
         }
     }
+    else if (jl_typeis(v, jl_string_type) && jl_string_len(v) == 0) {
+        jl_serialize_value(s, jl_an_empty_string);
+        return;
+    }
     else if (!jl_is_uint8(v)) {
         void **bp = ptrhash_bp(&backref_table, v);
         if (*bp != HT_NOTFOUND) {
@@ -877,14 +881,9 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         jl_error("Task cannot be serialized");
     }
     else if (jl_typeis(v, jl_string_type)) {
-        if (jl_string_len(v) == 0) {
-            jl_serialize_value(s, jl_an_empty_string);
-        }
-        else {
-            write_uint8(s->s, TAG_STRING);
-            write_int32(s->s, jl_string_len(v));
-            ios_write(s->s, jl_string_data(v), jl_string_len(v));
-        }
+        write_uint8(s->s, TAG_STRING);
+        write_int32(s->s, jl_string_len(v));
+        ios_write(s->s, jl_string_data(v), jl_string_len(v));
     }
     else if (jl_typeis(v, jl_typemap_entry_type)) {
         write_uint8(s->s, TAG_TYPEMAP_ENTRY);
