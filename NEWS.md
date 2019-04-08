@@ -17,6 +17,8 @@ New language features
   * `nextfloat(::BigFloat, n::Integer)` and `prevfloat(::BigFloat, n::Integer)` methods
     have been added ([#31310]).
 
+  * Support for Unicode 12.0.0 ([#31561]).
+
 Multi-threading changes
 -----------------------
 
