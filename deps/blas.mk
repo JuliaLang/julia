@@ -99,7 +99,13 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-skylakexdgemm.patch-applied: $(BUILDDIR
 		patch -p1 -f < $(SRCDIR)/patches/openblas-skylakexdgemm.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-skylakexdgemm.patch-applied
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-avx512_sgemm.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-skylakexdgemm.patch-applied
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/openblas-avx512_sgemm.patch
+	echo 1 > $@
+
+# Fix `sgemm_kernel_direct_performant` problems, safe to drop once we upgrade to v0.3.6
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-avx512_sgemm.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured
