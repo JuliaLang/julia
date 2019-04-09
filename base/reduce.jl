@@ -518,7 +518,30 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
     return v
 end
 
+"""
+    maximum(f, itr)
+
+Returns the largest result of calling function `f` on each element of `itr`.
+
+# Examples
+```jldoctest
+julia> maximum(length, ["Julion", "Julia", "Jule"])
+6
+```
+"""
 maximum(f, a) = mapreduce(f, max, a)
+
+"""
+    minimum(f, itr)
+
+Returns the smallest result of calling function `f` on each element of `itr`.
+
+# Examples
+```jldoctest
+julia> minimum(length, ["Julion", "Julia", "Jule"])
+4
+```
+"""
 minimum(f, a) = mapreduce(f, min, a)
 
 """
