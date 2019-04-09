@@ -2563,7 +2563,9 @@ end
 
 @testset "Ti cannot store all potential values #31024" begin
     @test_throws ArgumentError SparseMatrixCSC(128, 1, [Int8(1), Int8(1)], Int8[], Int[])
-    @test_throws ArgumentError SparseMatrixCSC(12, 12, [Int8(1), Int8(1)], Int8[], Int[])
+    A = SparseMatrixCSC(12, 12, fill(Int8(1),13), Int8[], Int[])
+    @test size(A) == (12,12)
+    @test nnz(A) == 0
     I1 = [Int8(i) for i in 1:20 for _ in 1:20]
     J1 = [Int8(i) for _ in 1:20 for i in 1:20]
     @test_throws ArgumentError sparse(I1, J1, zero(length(I1)zero(length(I1))))
