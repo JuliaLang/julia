@@ -246,10 +246,13 @@ julia> diag(A,1)
 diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
 
 """
-    diagm(kv::Pair{<:Integer,<:AbstractVector}...)
+    diagm(kv::Pair{<:Integer,<:AbstractVector}...; size=nothing)
 
-Construct a square matrix from `Pair`s of diagonals and vectors.
+Construct a matrix from `Pair`s of diagonals and vectors.
 Vector `kv.second` will be placed on the `kv.first` diagonal.
+By default (if `size=nothing`), the matrix is square and its size is inferred
+from `kv`, but a non-square size `m`×`n` can be passed as a tuple via `size=(m,n)`.
+
 `diagm` constructs a full matrix; if you want storage-efficient
 versions with fast arithmetic, see [`Diagonal`](@ref), [`Bidiagonal`](@ref)
 [`Tridiagonal`](@ref) and [`SymTridiagonal`](@ref).
@@ -271,8 +274,8 @@ julia> diagm(1 => [1,2,3], -1 => [4,5])
  0  0  0  0
 ```
 """
-function diagm(kv::Pair{<:Integer,<:AbstractVector}...)
-    A = diagm_container(kv...)
+function diagm(kv::Pair{<:Integer,<:AbstractVector}...; size::Union{Nothing,Tuple{<:Integer,<:Integer}}=nothing)
+    A = diagm_container(kv...; size=size)
     for p in kv
         inds = diagind(A, p.first)
         for (i, val) in enumerate(p.second)
@@ -281,20 +284,31 @@ function diagm(kv::Pair{<:Integer,<:AbstractVector}...)
     end
     return A
 end
-function diagm_container(kv::Pair{<:Integer,<:AbstractVector}...)
+function diagm_size(size::Union{Nothing,Tuple{<:Integer,<:Integer}}, kv::Pair{<:Integer,<:AbstractVector}...)
+    if isnothing(size)
+        mnmax = mapreduce(x -> length(x.second) + abs(Int(x.first)), max, kv)
+        return mnmax, mnmax
+    else
+        mmax = mapreduce(x -> length(x.second) - min(0,Int(x.first)), max, kv; init=0)
+        nmax = mapreduce(x -> length(x.second) + max(0,Int(x.first)), max, kv; init=0)
+        m, n = size
+        (m ≥ mmax && n ≥ nmax) || throw(DimensionMismatch("invalid size=$size"))
+        return m, n
+    end
+end
+function diagm_container(kv::Pair{<:Integer,<:AbstractVector}...; size::Union{Nothing,Tuple{<:Integer,<:Integer}}=nothing)
     T = promote_type(map(x -> eltype(x.second), kv)...)
-    n = mapreduce(x -> length(x.second) + abs(x.first), max, kv)
-    return zeros(T, n, n)
+    return zeros(T, diagm_size(size, kv...)...)
 end
-function diagm_container(kv::Pair{<:Integer,<:BitVector}...)
-    n = mapreduce(x -> length(x.second) + abs(x.first), max, kv)
-    return falses(n, n)
-end
+diagm_container(kv::Pair{<:Integer,<:BitVector}...; size::Union{Nothing,Tuple{<:Integer,<:Integer}}=nothing) =
+    return falses(diagm_size(size, kv...)...)
 
 """
-    diagm(v::AbstractVector)
+    diagm(v::AbstractVector; size=nothing)
 
-Construct a square matrix with elements of the vector as diagonal elements.
+Construct a matrix with elements of the vector as diagonal elements.
+By default (if `size=nothing`), the matrix is square and its size is given by
+`length(v)`, but a non-square size `m`×`n` can be passed as a tuple via `size=(m,n)`.
 
 # Examples
 ```jldoctest
@@ -305,7 +319,7 @@ julia> diagm([1,2,3])
  0  0  3
 ```
 """
-diagm(v::AbstractVector) = diagm(0 => v)
+diagm(v::AbstractVector; size::Union{Nothing,Tuple{<:Integer,<:Integer}}=nothing) = diagm(0 => v; size=size)
 
 function tr(A::Matrix{T}) where T
     n = checksquare(A)

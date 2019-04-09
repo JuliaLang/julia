@@ -1583,6 +1583,17 @@ end
     end
     # promotion
     @test spdiagm(0 => [1,2], 1 => [3.5], -1 => [4+5im]) == [1 3.5; 4+5im 2]
+
+    # non-square:
+    for m=1:4, n=2:4
+        if m < 2 || n < 3
+            @test_throws DimensionMismatch spdiagm(0 => x,  1 => x, size=(m,n))
+        else
+            M = zeros(m,n)
+            M[1:2,1:3] = [1 1 0; 0 1 1]
+            @test spdiagm(0 => x,  1 => x, size=(m,n)) == M
+        end
+    end
 end
 
 @testset "diag" begin

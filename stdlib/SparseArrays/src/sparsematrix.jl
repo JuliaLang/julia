@@ -3356,10 +3356,12 @@ function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
 end
 
 """
-    spdiagm(kv::Pair{<:Integer,<:AbstractVector}...)
+    spdiagm(kv::Pair{<:Integer,<:AbstractVector}...; size=nothing)
 
-Construct a square sparse diagonal matrix from `Pair`s of vectors and diagonals.
-Vector `kv.second` will be placed on the `kv.first` diagonal.
+Construct a sparse diagonal matrix from `Pair`s of vectors and diagonals.
+Each vector `kv.second` will be placed on the `kv.first` diagonal.  By
+default (if `size=nothing`), the matrix is square and its size is inferred
+from `kv`, but a non-square size `m`×`n` can be passed as a tuple via `size=(m,n)`.
 
 # Examples
 ```jldoctest
@@ -3375,10 +3377,13 @@ julia> spdiagm(-1 => [1,2,3,4], 1 => [4,3,2,1])
   [4, 5]  =  1
 ```
 """
-function spdiagm(kv::Pair{<:Integer,<:AbstractVector}...)
+function spdiagm(kv::Pair{<:Integer,<:AbstractVector}...; size::Union{Nothing,Tuple{<:Integer,<:Integer}}=nothing)
     I, J, V = spdiagm_internal(kv...)
-    n = max(dimlub(I), dimlub(J))
-    return sparse(I, J, V, n, n)
+    mmax, nmax = dimlub(I), dimlub(J)
+    mnmax = max(mmax, nmax)
+    m, n = something(size, (mnmax,mnmax))
+    (m ≥ mmax && n ≥ nmax) || throw(DimensionMismatch("invalid size=$size"))
+    return sparse(I, J, V, m, n)
 end
 
 ## expand a colptr or rowptr into a dense index vector
