@@ -36,6 +36,7 @@ is thrown, rather than a `ErrorException` ([#27900]).
 * Functions that invoke commands (e.g. `run(::Cmd)`) now throw a `ProcessFailedException`
 rather than an `ErrorException`, if those commands exit with non-zero exit code.
 ([#27900]).
+* Added `⋆` (`\star`) as unary operator ([#31604]).
 
 Command-line option changes
 ---------------------------
