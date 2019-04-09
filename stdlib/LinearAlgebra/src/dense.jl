@@ -286,7 +286,7 @@ function diagm(kv::Pair{<:Integer,<:AbstractVector}...; size::Union{Nothing,Tupl
 end
 function diagm_size(size::Union{Nothing,Tuple{<:Integer,<:Integer}}, kv::Pair{<:Integer,<:AbstractVector}...)
     if isnothing(size)
-        mnmax = mapreduce(x -> length(x.second) + abs(Int(x.first)), max, kv)
+        mnmax = mapreduce(x -> length(x.second) + abs(Int(x.first)), max, kv; init=0)
         return mnmax, mnmax
     else
         mmax = mapreduce(x -> length(x.second) - min(0,Int(x.first)), max, kv; init=0)
