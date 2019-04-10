@@ -1466,6 +1466,14 @@ end
     @test_throws ArgumentError reverse(a,dims=3)
 end
 
+@testset "revese multiple dims" begin
+    @test isequal(reverse([1 2; 3 4], dims=(1,2)), [4 3; 2 1])
+    @test isequal(reverse(reshape(1:24, (3, 4, 2)), dims=1:3),
+                  reshape(24:-1:1, (3, 4, 2), dims=1:3))
+    @test isequal(reverse(reshape(1:8, (2, 2, 2)), dims=(1,3)),
+                  reshape([6, 5, 8, 7, 2, 1, 4, 3], (2, 2, 2)))
+end
+
 @testset "isdiag, istril, istriu" begin
     @test isdiag(3)
     @test istril(4)
