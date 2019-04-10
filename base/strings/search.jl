@@ -114,7 +114,8 @@ Find the first occurrence of `ch` in `string`. Equivalent to
 julia> findfirst('a', "happy")
 2
 
-julia> findfirst('z', "happy") # returns nothing, but not printed in the REPL
+julia> findfirst('z', "happy") === nothing
+true
 ```
 """
 findfirst(ch::Char, string::AbstractString) = findfirst(isequal(ch), string)
@@ -299,7 +300,8 @@ Find the last occurrence of `ch` in `string`. Equivalent to
 julia> findlast('p', "happy")
 4
 
-julia> findlast('z', "happy") # returns nothing, but not printed in the REPL
+julia> findlast('z', "happy") === nothing
+true
 ```
 """
 findlast(ch::Char, string::AbstractString) = findlast(isequal(ch), string)
