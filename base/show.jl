@@ -326,7 +326,10 @@ show(x) = show(stdout::IO, x)
 
 show(io::IO, @nospecialize(x)) = show_default(io, x)
 
-function show_default(io::IO, @nospecialize(x))
+# avoid inferring show_default on the type of `x`
+show_default(io::IO, @nospecialize(x)) = _show_default(io, inferencebarrier(x))
+
+function _show_default(io::IO, @nospecialize(x))
     t = typeof(x)::DataType
     show(io, t)
     print(io, '(')

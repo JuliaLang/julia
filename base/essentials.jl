@@ -794,6 +794,9 @@ function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
     Core._apply_latest(inner)
 end
 
+# TODO: possibly make this an intrinsic
+inferencebarrier(@nospecialize(x)) = Ref{Any}(x)[]
+
 """
     isempty(collection) -> Bool
 

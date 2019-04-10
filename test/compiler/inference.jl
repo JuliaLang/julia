@@ -2325,3 +2325,26 @@ h28762(::Type{X}) where {X} = Array{f28762(X)}(undef, 0)
     @inferred g28762(Array)
     @inferred h28762(Array)
 end
+
+# issue #31663
+module I31663
+abstract type AbstractNode end
+
+struct Node{N1<:AbstractNode, N2<:AbstractNode} <: AbstractNode
+    a::N1
+    b::N2
+end
+
+struct Leaf <: AbstractNode
+end
+
+function gen_nodes(qty::Integer) :: AbstractNode
+    @assert qty > 0
+    result = Leaf()
+    for i in 1:qty
+        result = Node(result, Leaf())
+    end
+    return result
+end
+end
+@test count(==('}'), string(I31663.gen_nodes(50))) == 1275
