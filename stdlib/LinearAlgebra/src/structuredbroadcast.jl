@@ -102,7 +102,7 @@ function Base.similar(bc::Broadcasted{StructuredMatrixStyle{T}}, ::Type{ElType})
 end
 
 function copyto!(dest::Diagonal, bc::Broadcasted{<:StructuredMatrixStyle})
-    !isstructurepreserving(bc) && !fzeropreserving(bc) && copyto!(dest, convert(Broadcasted{Nothing}, bc))
+    !isstructurepreserving(bc) && !fzeropreserving(bc) && return copyto!(dest, convert(Broadcasted{Nothing}, bc))
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for i in axs[1]
@@ -112,7 +112,7 @@ function copyto!(dest::Diagonal, bc::Broadcasted{<:StructuredMatrixStyle})
 end
 
 function copyto!(dest::Bidiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
-    !isstructurepreserving(bc) && !fzeropreserving(bc) && copyto!(dest, convert(Broadcasted{Nothing}, bc))
+    !isstructurepreserving(bc) && !fzeropreserving(bc) && return copyto!(dest, convert(Broadcasted{Nothing}, bc))
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for i in axs[1]
@@ -131,7 +131,7 @@ function copyto!(dest::Bidiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
 end
 
 function copyto!(dest::SymTridiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
-    !isstructurepreserving(bc) && !fzeropreserving(bc) && copyto!(dest, convert(Broadcasted{Nothing}, bc))
+    !isstructurepreserving(bc) && !fzeropreserving(bc) && return copyto!(dest, convert(Broadcasted{Nothing}, bc))
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for i in axs[1]
@@ -146,7 +146,7 @@ function copyto!(dest::SymTridiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
 end
 
 function copyto!(dest::Tridiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
-    !isstructurepreserving(bc) && !fzeropreserving(bc) && copyto!(dest, convert(Broadcasted{Nothing}, bc))
+    !isstructurepreserving(bc) && !fzeropreserving(bc) && return copyto!(dest, convert(Broadcasted{Nothing}, bc))
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for i in axs[1]
@@ -160,7 +160,7 @@ function copyto!(dest::Tridiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
 end
 
 function copyto!(dest::LowerTriangular, bc::Broadcasted{<:StructuredMatrixStyle})
-    !isstructurepreserving(bc) && !fzeropreserving(bc) && copyto!(dest, convert(Broadcasted{Nothing}, bc))
+    !isstructurepreserving(bc) && !fzeropreserving(bc) && return copyto!(dest, convert(Broadcasted{Nothing}, bc))
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for j in axs[2]
@@ -172,7 +172,7 @@ function copyto!(dest::LowerTriangular, bc::Broadcasted{<:StructuredMatrixStyle}
 end
 
 function copyto!(dest::UpperTriangular, bc::Broadcasted{<:StructuredMatrixStyle})
-    !isstructurepreserving(bc) && !fzeropreserving(bc) && copyto!(dest, convert(Broadcasted{Nothing}, bc))
+    !isstructurepreserving(bc) && !fzeropreserving(bc) && return copyto!(dest, convert(Broadcasted{Nothing}, bc))
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for j in axs[2]
