@@ -24,25 +24,25 @@ end
 
 # ascii forward search
 for str in [astr, GenericString(astr)]
-        @test_throws BoundsError findnext(isequal('z'), str, 0)
-        @test_throws BoundsError findnext(isequal('∀'), str, 0)
-        @test findfirst('x', str) == nothing
-        @test findfirst('\0', str) == nothing
-        @test findfirst('\u80', str) == nothing
-        @test findfirst('∀', str) == nothing
-        @test findfirst('H', str) == 1
-        @test findfirst('l', str) == 3
-        @test findfirst('e', str) == 2
-        @test findfirst('u', str) == nothing
-        @test findnext(isequal('l'), str, 4) == 4
-        @test findnext(isequal('l'), str, 5) == 11
-        @test findnext(isequal('l'), str, 12) == nothing
-        @test findfirst(',', str) == 6
-        @test findnext(isequal(','), str, 7) == nothing
-        @test findfirst('\n', str) == 14
-        @test findnext(isequal('\n'), str, 15) == nothing
-        @test_throws BoundsError findnext(isequal('ε'), str, nextind(str,lastindex(str))+1)
-        @test_throws BoundsError findnext(isequal('a'), str, nextind(str,lastindex(str))+1)
+    @test_throws BoundsError findnext(isequal('z'), str, 0)
+    @test_throws BoundsError findnext(isequal('∀'), str, 0)
+    @test findfirst('x', str) == nothing
+    @test findfirst('\0', str) == nothing
+    @test findfirst('\u80', str) == nothing
+    @test findfirst('∀', str) == nothing
+    @test findfirst('H', str) == 1
+    @test findfirst('l', str) == 3
+    @test findfirst('e', str) == 2
+    @test findfirst('u', str) == nothing
+    @test findnext(isequal('l'), str, 4) == 4
+    @test findnext(isequal('l'), str, 5) == 11
+    @test findnext(isequal('l'), str, 12) == nothing
+    @test findfirst(',', str) == 6
+    @test findnext(isequal(','), str, 7) == nothing
+    @test findfirst('\n', str) == 14
+    @test findnext(isequal('\n'), str, 15) == nothing
+    @test_throws BoundsError findnext(isequal('ε'), str, nextind(str,lastindex(str))+1)
+    @test_throws BoundsError findnext(isequal('a'), str, nextind(str,lastindex(str))+1)
 end
 
 # ascii backward search
