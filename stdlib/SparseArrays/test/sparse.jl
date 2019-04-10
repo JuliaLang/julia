@@ -2561,14 +2561,6 @@ end
     @test sparse(Adjoint(UpperTriangular(A'))) == Adjoint(UpperTriangular(B'))
 end
 
-@testset "Ti cannot store all potential values #31024" begin
-    @test_throws ArgumentError SparseMatrixCSC(128, 1, [Int8(1), Int8(1)], Int8[], Int[])
-    @test_throws ArgumentError SparseMatrixCSC(12, 12, [Int8(1), Int8(1)], Int8[], Int[])
-    I1 = [Int8(i) for i in 1:20 for _ in 1:20]
-    J1 = [Int8(i) for _ in 1:20 for i in 1:20]
-    @test_throws ArgumentError sparse(I1, J1, zero(length(I1)zero(length(I1))))
-end
-
 @testset "unary operations on matrices where length(nzval)>nnz" begin
     # this should create a sparse matrix with length(nzval)>nnz
     A = SparseMatrixCSC(Complex{BigInt}[1+im 2+2im]')'[1:1, 2:2]
