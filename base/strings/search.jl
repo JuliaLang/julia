@@ -101,8 +101,23 @@ julia> findfirst("Julia", "JuliaLang")
 1:5
 ```
 """
-findfirst(pattern::AbstractString, string::AbstractString) =
-    findnext(pattern, string, firstindex(string))
+findfirst(pattern::AbstractString, string::AbstractString) = findnext(pattern, string, firstindex(string))
+
+"""
+    findfirst(ch::Char, string::AbstractString)
+
+Find the first occurrence of `ch` in `string`. Equivalent to
+[`findfirst(isequal(ch), string)`](@ref).
+
+# Examples
+```jldoctest
+julia> findfirst('a', "happy")
+2
+
+julia> findfirst('z', "happy") # returns nothing, but not printed in the REPL
+```
+"""
+findfirst(ch::Char, string::AbstractString) = findfirst(isequal(ch), string)
 
 # AbstractString implementation of the generic findnext interface
 function findnext(testf::Function, s::AbstractString, i::Integer)
@@ -272,6 +287,22 @@ julia> findfirst("Julia", "JuliaLang")
 """
 findlast(pattern::AbstractString, string::AbstractString) =
     findprev(pattern, string, lastindex(string))
+
+"""
+    findlast(ch::Char, string::AbstractString)
+
+Find the last occurrence of `ch` in `string`. Equivalent to
+[`findlast(isequal(ch), string)`](@ref).
+
+# Examples
+```jldoctest
+julia> findlast('p', "happy")
+4
+
+julia> findlast('z', "happy") # returns nothing, but not printed in the REPL
+```
+"""
+findlast(ch::Char, string::AbstractString) = findlast(isequal(ch), string)
 
 # AbstractString implementation of the generic findprev interface
 function findprev(testf::Function, s::AbstractString, i::Integer)
