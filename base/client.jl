@@ -324,7 +324,7 @@ function load_julia_startup()
     else
         include_ifexists(Main, abspath(BINDIR, "..", "etc", "julia", "startup.jl"))
     end
-    include_ifexists(Main, abspath(homedir(), ".julia", "config", "startup.jl"))
+    include_ifexists(Main, abspath(DEPOT_PATH[1], "config", "startup.jl"))
     return nothing
 end
 
