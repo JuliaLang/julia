@@ -90,38 +90,38 @@ endif
 frameworknoinstall: $(DESTDIR)$(prefix)/$(framework_infoplist) | $(framework_current_symlinks) $(framework_version_symlink) $(framework_destdirs) hier_symlinks
 
 	$(INSTALL_NAME_CHANGE_CMD) @rpath/libjulia.dylib @rpath/$(FRAMEWORK_NAME) $(DESTDIR)$(bindir)/julia
-	$(JULIAHOME)/contrib/mac/framework/delete-all-rpaths.sh $(DESTDIR)$(bindir)/julia
+	$(JULIAHOME)/contrib/delete-all-rpaths.sh $(DESTDIR)$(bindir)/julia
 	install_name_tool -add_rpath @executable_path/$(libdir_rel) $(DESTDIR)$(bindir)/julia
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	$(INSTALL_NAME_CHANGE_CMD) @rpath/libjulia-debug.dylib @rpath/$(FRAMEWORK_NAME)_debug $(DESTDIR)$(bindir)/julia-debug
-	$(JULIAHOME)/contrib/mac/framework/delete-all-rpaths.sh $(DESTDIR)$(bindir)/julia-debug
+	$(JULIAHOME)/contrib/delete-all-rpaths.sh $(DESTDIR)$(bindir)/julia-debug
 	install_name_tool -add_rpath @executable_path/$(libdir_rel) $(DESTDIR)$(bindir)/julia-debug
 endif
 
 	# fix libjulia paths
 	$(INSTALL_NAME_CMD)$(framework_dylib) $(DESTDIR)$(prefix)/$(framework_dylib)
-	$(JULIAHOME)/contrib/mac/framework/delete-all-rpaths.sh $(DESTDIR)$(prefix)/$(framework_dylib)
+	$(JULIAHOME)/contrib/delete-all-rpaths.sh $(DESTDIR)$(prefix)/$(framework_dylib)
 	install_name_tool -add_rpath @loader_path/Frameworks $(DESTDIR)$(prefix)/$(framework_dylib)
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	# Install name should be the non-debug variant.
 	# Julia_debug variant is selected with DYLD_IMAGE_SUFFIX (man 1 dyld).
 	# julia-debug explicitly links to Julia_debug so no need to manipulate DYLD_IMAGE_SUFFIX for it.
 	$(INSTALL_NAME_CMD)$(framework_dylib) $(DESTDIR)$(prefix)/$(framework_dylib)_debug
-	$(JULIAHOME)/contrib/mac/framework/delete-all-rpaths.sh $(DESTDIR)$(prefix)/$(framework_dylib)_debug
+	$(JULIAHOME)/contrib/delete-all-rpaths.sh $(DESTDIR)$(prefix)/$(framework_dylib)_debug
 	install_name_tool -add_rpath @loader_path/Frameworks $(DESTDIR)$(prefix)/$(framework_dylib)_debug
 endif
 
 	$(INSTALL_NAME_CHANGE_CMD) @rpath/libjulia.dylib @rpath/$(FRAMEWORK_NAME) $(DESTDIR)$(prefix)/$(framework_frameworks)/sys.dylib
-	$(JULIAHOME)/contrib/mac/framework/delete-all-rpaths.sh $(DESTDIR)$(prefix)/$(framework_frameworks)/sys.dylib
+	$(JULIAHOME)/contrib/delete-all-rpaths.sh $(DESTDIR)$(prefix)/$(framework_frameworks)/sys.dylib
 	install_name_tool -add_rpath @loader_path/.. $(DESTDIR)$(prefix)/$(framework_frameworks)/sys.dylib
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	$(INSTALL_NAME_CHANGE_CMD) @rpath/libjulia-debug.dylib @rpath/$(FRAMEWORK_NAME)_debug $(DESTDIR)$(prefix)/$(framework_frameworks)/sys-debug.dylib
-	$(JULIAHOME)/contrib/mac/framework/delete-all-rpaths.sh $(DESTDIR)$(prefix)/$(framework_frameworks)/sys-debug.dylib
+	$(JULIAHOME)/contrib/delete-all-rpaths.sh $(DESTDIR)$(prefix)/$(framework_frameworks)/sys-debug.dylib
 	install_name_tool -add_rpath @loader_path/.. $(DESTDIR)$(prefix)/$(framework_frameworks)/sys-debug.dylib
 endif
 
 	# fix private lib paths
-	$(JULIAHOME)/contrib/mac/framework/delete-all-rpaths.sh $(DESTDIR)$(prefix)/$(framework_frameworks)/*
+	$(JULIAHOME)/contrib/delete-all-rpaths.sh $(DESTDIR)$(prefix)/$(framework_frameworks)/*
 
 	$(JULIAHOME)/contrib/fixup-libgfortran.sh $(DESTDIR)$(prefix)/$(framework_frameworks)
 

@@ -1,4 +1,6 @@
-#!/usr/bin/env bash
+#!/bin/sh
+
+[ "$(uname)" = Darwin ] || { echo "Requires Darwin." 2>&1; exit 1; }
 
 if [ $# -lt 1 ]; then
   echo "usage: $(basename $0) lib1 [lib2 ...]" 2>&1
