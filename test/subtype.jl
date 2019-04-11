@@ -1464,3 +1464,10 @@ end
 @testintersect(Tuple{Type{Val{T}},Integer,T} where T>:Integer,
                Tuple{Type,Int,Int},
                Tuple{Type{Val{T}},Int,Int} where T>:Integer)
+
+# issue #31496
+CovType{T} = Union{AbstractArray{T,2},
+                   Vector{UpperTriangular{T,Matrix{T}}}}
+@testintersect(Pair{<:Any, <:AbstractMatrix},
+               Pair{T,     <:CovType{T}} where T<:AbstractFloat,
+               Pair{T,S} where S<:AbstractArray{T,2} where T<:AbstractFloat)
