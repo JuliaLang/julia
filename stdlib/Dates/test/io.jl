@@ -199,15 +199,15 @@ end
     @test Dates.format(dt - Dates.Day(14), "yyyy m d") == f2
 
     j = "1996-01-15"
-    f = "yyyy-mm-dd zzz"
+    f = "yyyy-mm-dd[ zzz]"
     @test Dates.DateTime(j, f) == dt
     @test Dates.format(dt, f) == j * " zzz"
     k = "1996-01-15 10:00:00"
-    f = "yyyy-mm-dd HH:MM:SS zzz"
+    f = "yyyy-mm-dd HH:MM:SS[ zzz]"
     @test Dates.DateTime(k, f) == dt + Dates.Hour(10)
     @test Dates.format(dt + Dates.Hour(10), f) == k * " zzz"
     l = "1996-01-15 10:10:10.25"
-    f = "yyyy-mm-dd HH:MM:SS.ss zzz"
+    f = "yyyy-mm-dd HH:MM:SS.ss[ zzz]"
     @test Dates.DateTime(l, f) == dt + Dates.Hour(10) + Dates.Minute(10) + Dates.Second(10) + Dates.Millisecond(250)
     @test Dates.format(dt + Dates.Hour(10) + Dates.Minute(10) + Dates.Second(10) + Dates.Millisecond(250), f) == l * " zzz"
 
@@ -216,7 +216,7 @@ end
     @test Dates.DateTime(r, f) == dt
     @test Dates.format(dt, f) == r
     s = "19960115"
-    f = "yyyymmdd"
+    f = "yyyy!mm!dd!"
     @test Dates.DateTime(s, f) == dt
     @test Dates.format(dt, f) == s
     v = "1996-01-15 10:00:00"
@@ -224,7 +224,7 @@ end
     @test Dates.DateTime(v, f) == dt + Dates.Hour(10)
     @test Dates.format(dt + Dates.Hour(10), f) == v
     w = "1996-01-15T10:00:00"
-    f = "yyyy-mm-ddTHH:MM:SS zzz"
+    f = "yyyy-mm-ddTHH:MM:SS[ zzz]"
     @test Dates.DateTime(w, f) == dt + Dates.Hour(10)
     @test Dates.format(dt + Dates.Hour(10), f) == w * " zzz"
 
@@ -256,15 +256,15 @@ end
     @test Dates.DateTime(bb, f) == dt - Dates.Day(10)
     @test Dates.format(dt - Dates.Day(10), f) == bb
     cc = "01151996"
-    f = "mmddyyyy"
+    f = "mm!dd!yyyy!"
     @test Dates.DateTime(cc, f) == dt
     @test Dates.format(dt, f) == cc
     dd = "15011996"
-    f = "ddmmyyyy"
+    f = "dd!mm!yyyy!"
     @test Dates.DateTime(dd, f) == dt
     @test Dates.format(dt, f) == dd
     ee = "01199615"
-    f = "mmyyyydd"
+    f = "mm!yyyy!dd!"
     @test Dates.DateTime(ee, f) == dt
     @test Dates.format(dt, f) == ee
     ff = "1996-15-Jan"
@@ -280,11 +280,11 @@ end
     @test Dates.DateTime(hh, f) == dt
     @test Dates.format(dt, f) == hh
 
-    f = "ymd"
+    f = "y![m![d!]]"
     @test Dates.Date("111", f) == Dates.Date(1)
     @test Dates.Date("1", f) == Dates.Date(1)
 
-    @test Dates.DateTime("20140529 120000", "yyyymmdd HHMMSS") == Dates.DateTime(2014, 5, 29, 12)
+    @test Dates.DateTime("20140529 120000", "yyyy!mm!dd! HH!MM!SS!") == Dates.DateTime(2014, 5, 29, 12)
 
     @test Dates.Date(string(Dates.Date(dt))) == Dates.Date(dt)
     @test Dates.DateTime(string(dt)) == dt
@@ -332,7 +332,7 @@ end
 
     f = "dd u yyyy"
     @test Dates.Date("28 avril 2014", f; locale="french") == Dates.Date(2014, 4, 28)
-    f = "dduuuuyyyy"
+    f = "dduuuu!yyyy"
     # parses 3 and 4 character month names
     @test Dates.Date("28mai2014", f; locale="french") == Dates.Date(2014, 5, 28)
     @test Dates.Date("28août2014", f; locale="french") == Dates.Date(2014, 8, 28)
@@ -367,7 +367,7 @@ end
     # Date string has different delimiters than format string
     @test_throws ArgumentError Dates.DateTime("18:05:2009", "mm/dd/yyyy")
 
-    f = "y m d"
+    f = "y[ [m[[ d]]]]"
     @test Dates.Date("1 1 1", f) == Dates.Date(1)
     @test Dates.Date("10000000000 1 1", f) == Dates.Date(10000000000)
     @test_throws ArgumentError Dates.Date("1 13 1", f)
@@ -396,12 +396,12 @@ end
 end
 @testset "Issue 13" begin
     t = Dates.DateTime(1, 1, 1, 14, 51, 0, 118)
-    @test Dates.DateTime("[14:51:00.118]", "[HH:MM:SS.sss]") == t
+    @test Dates.DateTime("[14:51:00.118]", "\\[HH:MM:SS.sss\\]") == t
     @test Dates.DateTime("14:51:00.118", "HH:MM:SS.sss") == t
-    @test Dates.DateTime("[14:51:00.118?", "[HH:MM:SS.sss?") == t
+    @test Dates.DateTime("[14:51:00.118?", "\\[HH:MM:SS.sss?") == t
     @test Dates.DateTime("?14:51:00.118?", "?HH:MM:SS.sss?") == t
     @test Dates.DateTime("x14:51:00.118", "xHH:MM:SS.sss") == t
-    @test Dates.DateTime("14:51:00.118]", "HH:MM:SS.sss]") == t
+    @test Dates.DateTime("14:51:00.118]", "HH:MM:SS.sss\\]") == t
 end
 @testset "RFC1123Format" begin
     dt = Dates.DateTime(2014, 8, 23, 17, 22, 15)
@@ -533,7 +533,7 @@ end
         @test time_tuple(t) == (21, 7, 0, 0, 0, 0)
         t = Dates.Time("4.02", DateFormat("H.MM"))
         @test time_tuple(t) == (4, 2, 0, 0, 0, 0)
-        t = Dates.Time("1725", DateFormat("HHMM"))
+        t = Dates.Time("1725", DateFormat("HH!MM!"))
         @test time_tuple(t) == (17, 25, 0, 0, 0, 0)
 
         ## exceptions
@@ -543,6 +543,25 @@ end
         @test_throws ArgumentError Dates.Time("20:03:20", DateFormat("HH:MM"))  # too much precision
         @test_throws ArgumentError Dates.Time("10:33:51", DateFormat("YYYY-MM-DD HH:MM:SS"))  # Time can't hold year/month/day
     end
+end
+@testset "fixed width / optional" begin
+    f = DateFormat("yyyy!")
+    @test Dates.year(Dates.Date("2000", f)) == 2000
+    @test_throws ArgumentError Dates.Date("1", f)
+    @test_throws ArgumentError Dates.Date("10000", f)
+    @test Dates.year(Dates.Date("2000", DateFormat("[y]"))) == 2000
+    @test_throws ArgumentError Dates.Date("", DateFormat("y"))
+    @test_throws ArgumentError DateFormat("[y")
+    @test_throws ArgumentError DateFormat("y]")
+    @test Dates.month(Dates.Date("2000-2", "y-[m-]d")) == 1
+    # "-2" matches both the optional part and the part after it
+    @test_throws ArgumentError Dates.Date("2000-2", "y[-m]-d")
+    f = DateFormat("yyyy![[-]mm!]")
+    d = Dates.Date(2000, 2, 1)
+    @test Dates.Date("2000-02", f) == d
+    @test Dates.Date("200002", f) == d
+    @test Dates.Date("2000", f) + Dates.Month(1) == d
+    @test_throws ArgumentError Dates.Date("2000-", f)
 end
 
 @testset "midnight" begin
@@ -554,4 +573,4 @@ end
     @test_throws ArgumentError DateTime(2018, 1, 1, 24, 0, 0, 1)
 end
 
-end
+end # module

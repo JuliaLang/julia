@@ -55,28 +55,54 @@ If successful, return a 3-element tuple `(values, pos, num_parsed)`:
 
     vi = 1
     parsers = Expr[]
-    for i = 1:length(directives)
-        if directives[i] <: DatePart
+    symbols = Tuple{Symbol, Symbol, Symbol, Vector{Int}}[(:error, :pos, :num_parsed, Int[])]
+    for (i, d) = enumerate(directives)
+        if d <: DatePart
+            label, _, _, stack = symbols[end]
             name = value_names[vi]
+            push!(stack, vi)
             vi += 1
             push!(parsers, quote
-                pos > len && @goto done
+                pos > len && @goto $label
                 let val = tryparsenext(directives[$i], str, pos, len, locale)
-                    val === nothing && @goto error
+                    val === nothing && @goto $label
                     $name, pos = val
                 end
                 num_parsed += 1
                 directive_index += 1
             end)
-        else
+        elseif d <: OptionalStart
+            label, pos0, np0 = gensym("error"), gensym("pos"), gensym("np0")
             push!(parsers, quote
-                pos > len && @goto done
+                $pos0 = pos
+                $np0 = num_parsed
+                directive_index += 1
+            end)
+            push!(symbols, (label, pos0, np0, Int[]))
+        elseif d <: OptionalEnd
+            label, pos0, np0, stack = pop!(symbols)
+            append!(symbols[end][4], stack)
+            push!(parsers, quote
+                if false
+                    @label $label
+                    $([:($(value_names[i]) = $(value_defaults[i])) for i in stack]...)
+                    pos = $pos0
+                    num_parsed = $np0
+                end
+                directive_index += 1
+            end)
+        elseif d <: Delim
+            label = symbols[end][1]
+            push!(parsers, quote
+                pos > len && @goto $label
                 let val = tryparsenext(directives[$i], str, pos, len, locale)
-                    val === nothing && @goto error
+                    val === nothing && @goto $label
                     delim, pos = val
                 end
                 directive_index += 1
             end)
+        else
+            throw(ArgumentError("Unexpected directive $d"))
         end
     end
 
