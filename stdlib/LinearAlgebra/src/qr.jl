@@ -738,21 +738,10 @@ function *(adjA::Adjoint{<:Any,<:StridedVecOrMat}, adjQ::Adjoint{<:Any,<:Abstrac
 end
 
 ### mul!
-function mul!(C::StridedVecOrMat{T}, Q::AbstractQ{T}, B::AbstractVecOrMat{T}) where {T}
-    lmul!(Q, copyto!(C, B))
-end
-
-function mul!(C::StridedVecOrMat{T}, A::AbstractVecOrMat{T}, Q::AbstractQ{T}) where {T}
-    rmul!(copyto!(C, A), Q)
-end
-
-function mul!(C::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}, B::AbstractVecOrMat{T}) where {T}
-    lmul!(adjQ, copyto!(C, B))
-end
-
-function mul!(C::StridedVecOrMat{T}, A::AbstractVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}) where {T}
-    rmul!(copyto!(C, A), adjQ)
-end
+mul!(C::StridedVecOrMat{T}, Q::AbstractQ{T}, B::StridedVecOrMat{T}) where {T} = lmul!(Q, copyto!(C, B))
+mul!(C::StridedVecOrMat{T}, A::StridedVecOrMat{T}, Q::AbstractQ{T}) where {T} = rmul!(copyto!(C, A), Q)
+mul!(C::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}, B::StridedVecOrMat{T}) where {T} = lmul!(adjQ, copyto!(C, B))
+mul!(C::StridedVecOrMat{T}, A::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}) where {T} = rmul!(copyto!(C, A), adjQ)
 
 ldiv!(A::QRCompactWY{T}, b::StridedVector{T}) where {T<:BlasFloat} =
     (ldiv!(UpperTriangular(A.R), view(lmul!(adjoint(A.Q), b), 1:size(A, 2))); b)
