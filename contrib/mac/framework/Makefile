@@ -11,6 +11,18 @@ default: framework
 # The default "-" makes an ad-hoc signature.
 DARWIN_CODESIGN_KEYCHAIN_IDENTITY ?= -
 
+# Set DARWIN_CODESIGN_TIMESTAMP = 1 to add a timestamp when codesigning (useful for notarization).
+DARWIN_CODESIGN_TIMESTAMP ?= 0
+ifeq ($(DARWIN_CODESIGN_TIMESTAMP),1)
+darwin_codesign_options=--timestamp
+endif
+
+# Set DARWIN_HARDENED_RUNTIME = 1 to enable the hardened runtime on macOS.
+DARWIN_HARDENED_RUNTIME ?= 0
+ifeq ($(DARWIN_HARDENED_RUNTIME),1)
+darwin_codesign_julia_options=-o runtime --entitlements $(JULIAHOME)/contrib/mac/framework/julia.entitlements
+endif
+
 # framework directory structure targets
 framework_destdirs := $(sort $(addprefix $(DESTDIR)$(prefix)/,$(framework_currver) $(framework_headers) $(framework_headers)/julia $(framework_documentation) $(framework_resources) $(framework_frameworks) $(framework_modules) $(framework_helpers) $(framework_currver)/lib))
 
@@ -140,7 +152,8 @@ endif
 	# Add the module map file.
 	sed -e 's/Julia/$(FRAMEWORK_NAME)/' $(JULIAHOME)/contrib/mac/framework/module.modulemap > $(DESTDIR)$(prefix)/$(framework_modules)/module.modulemap
 
-	# Make sure EUID:EGID owns the framework
+	# Make sure EUID:EGID owns the framework and permissions are set.
+	chmod -R u+w $(DESTDIR)$(prefix)/$(framework_directory)
 	chown -R $$(id -un):$$(id -gn) $(DESTDIR)$(prefix)/$(framework_directory)
 
 	# ad-hoc codesigning
@@ -148,16 +161,16 @@ endif
 
 	# Codesign should look at the embedded Info.plist to get the signing identifier.
 	# See JLDFLAGS in Make.inc for Darwin platform and Info.plist target in ui/Makefile.
-	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(DESTDIR)$(prefix)/$(framework_helpers)/julia
+	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(darwin_codesign_options) $(darwin_codesign_julia_options) $(DESTDIR)$(prefix)/$(framework_helpers)/julia
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
-	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(DESTDIR)$(prefix)/$(framework_helpers)/julia-debug
+	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(darwin_codesign_options) $(darwin_codesign_julia_options) $(DESTDIR)$(prefix)/$(framework_helpers)/julia-debug
 endif
 
 	# Append the library name to the base codesigning id.
 	for file in $(DESTDIR)$(prefix)/$(framework_frameworks)/*.dylib* ; do \
 		if [ -f "$$file" -a ! -L "$$file" -a -w "$$file" -a -x "$$file" ]; then \
 			idsuffix=$$(basename $${file%%.dylib*}) ; \
-			codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v -i $(darwin_codesign_id_julia_deps).$${idsuffix} -f $$file ; \
+			codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(darwin_codesign_options) -i $(darwin_codesign_id_julia_deps).$${idsuffix} -f $$file ; \
 		fi \
 	done
 
@@ -166,10 +179,10 @@ endif
 	# Sign the (current version) framework bundle.
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	# Don't forget to sign Frameworks/Julia_debug
-	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v -i $(DARWIN_CODESIGN_ID_BASE).lib -f \
+	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(darwin_codesign_options) -i $(DARWIN_CODESIGN_ID_BASE).lib -f \
 	    $(DESTDIR)$(prefix)/$(framework_dylib)_debug
 endif
-	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(DESTDIR)$(prefix)/$(framework_currver)
+	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(darwin_codesign_options) $(DESTDIR)$(prefix)/$(framework_currver)
 
 framework: toplevelinstall
 
