@@ -317,10 +317,7 @@ else
 	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/$(FRAMEWORK_NAME).dSYM $(DESTDIR)$(prefix)/$(framework_dylib)
 	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/sys.dylib.dSYM $(build_private_libdir)/sys.dylib
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
-	# Codesign fails if Julia_debug is at root of framework next to Julia dylib.
-	# Solution: Move Julia_debug inside Frameworks and symlink to it.
-	$(INSTALL_M) $(build_libdir)/libjulia-debug.$(SOMAJOR).$(SOMINOR).dylib $(DESTDIR)$(prefix)/$(framework_frameworks)/$(FRAMEWORK_NAME)_debug
-	-ln -s Frameworks/$(FRAMEWORK_NAME)_debug $(DESTDIR)$(prefix)/$(framework_dylib)_debug
+	$(INSTALL_M) $(build_libdir)/libjulia-debug.$(SOMAJOR).$(SOMINOR).dylib $(DESTDIR)$(prefix)/$(framework_dylib)_debug
 	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/$(FRAMEWORK_NAME)_debug.dSYM $(DESTDIR)$(prefix)/$(framework_dylib)_debug
 	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/sys-debug.dylib.dSYM $(build_private_libdir)/sys-debug.dylib
 endif
@@ -347,7 +344,7 @@ ifeq ($(BUNDLE_DEBUG_LIBS),1)
 endif
 
 	# Copy in all .jl sources as well
-	mkdir -p $(DESTDIR)$(datarootdir)/julia/{base,test}
+	mkdir -p $(DESTDIR)$(datarootdir)/julia/base $(DESTDIR)$(datarootdir)/julia/test
 	cp -R -L $(JULIAHOME)/base/* $(DESTDIR)$(datarootdir)/julia/base
 	cp -R -L $(JULIAHOME)/test/* $(DESTDIR)$(datarootdir)/julia/test
 	cp -R -L $(build_datarootdir)/julia/* $(DESTDIR)$(datarootdir)/julia
@@ -389,17 +386,17 @@ else ifneq (,$(findstring $(OS),Linux FreeBSD))
 endif
 
 	# Overwrite JL_SYSTEM_IMAGE_PATH in julia library
-ifneq ($(DARWIN_FRAMEWORK),1)
-	$(call stringreplace,$(DESTDIR)$(libdir)/libjulia.$(SHLIB_EXT),sys.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys.$(SHLIB_EXT))
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
-	$(call stringreplace,$(DESTDIR)$(libdir)/libjulia-debug.$(SHLIB_EXT),sys-debug.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys-debug.$(SHLIB_EXT))
-endif
-else
-	$(call stringreplace,$(DESTDIR)$(prefix)/$(framework_dylib),sys.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys.$(SHLIB_EXT))
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
-	$(call stringreplace,$(DESTDIR)$(prefix)/$(framework_dylib)_debug,sys-debug.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys-debug.$(SHLIB_EXT))
-endif
-endif
+	if [ $(DARWIN_FRAMEWORK) == 0 ]; then \
+		RELEASE_TARGET=$(DESTDIR)$(libdir)/libjulia.$(SHLIB_EXT); \
+		DEBUG_TARGET=$(DESTDIR)$(libdir)/libjulia-debug.$(SHLIB_EXT); \
+	else \
+		RELEASE_TARGET=$(DESTDIR)$(prefix)/$(framework_dylib); \
+		DEBUG_TARGET=$(DESTDIR)$(prefix)/$(framework_dylib)_debug; \
+	fi; \
+	$(call stringreplace,$${RELEASE_TARGET},sys.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys.$(SHLIB_EXT)); \
+	if [ $(BUNDLE_DEBUG_LIBS) == 1 ]; then \
+		$(call stringreplace,$${DEBUG_TARGET},sys-debug.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys-debug.$(SHLIB_EXT)); \
+	fi;
 
 endif
 	# On FreeBSD, remove the build's libdir from each library's RPATH

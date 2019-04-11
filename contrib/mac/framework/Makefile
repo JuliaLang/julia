@@ -95,7 +95,7 @@ frameworknoinstall: $(DESTDIR)$(prefix)/$(framework_infoplist) | $(framework_cur
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	$(INSTALL_NAME_CHANGE_CMD) @rpath/libjulia-debug.dylib @rpath/$(FRAMEWORK_NAME)_debug $(DESTDIR)$(bindir)/julia-debug
 	$(JULIAHOME)/contrib/mac/framework/delete-all-rpaths.sh $(DESTDIR)$(bindir)/julia-debug
-	install_name_tool -add_rpath @executable_path/$(private_libdir_rel) $(DESTDIR)$(bindir)/julia-debug
+	install_name_tool -add_rpath @executable_path/$(libdir_rel) $(DESTDIR)$(bindir)/julia-debug
 endif
 
 	# fix libjulia paths
@@ -103,12 +103,12 @@ endif
 	$(JULIAHOME)/contrib/mac/framework/delete-all-rpaths.sh $(DESTDIR)$(prefix)/$(framework_dylib)
 	install_name_tool -add_rpath @loader_path/Frameworks $(DESTDIR)$(prefix)/$(framework_dylib)
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
-	# Julia_debug is inside Frameworks subdirectory.
-	# Install name should be the non-debug variant as above and rpath should drop
-	# the Frameworks component since Julia_debug is already in Frameworks.
+	# Install name should be the non-debug variant.
+	# Julia_debug variant is selected with DYLD_IMAGE_SUFFIX (man 1 dyld).
+	# julia-debug explicitly links to Julia_debug so no need to manipulate DYLD_IMAGE_SUFFIX for it.
 	$(INSTALL_NAME_CMD)$(framework_dylib) $(DESTDIR)$(prefix)/$(framework_dylib)_debug
-	$(JULIAHOME)/contrib/mac/framework/delete-all-rpaths.sh $(DESTDIR)$(prefix)/$(framework_frameworks)/$(FRAMEWORK_NAME)_debug
-	install_name_tool -add_rpath @loader_path/ $(DESTDIR)$(prefix)/$(framework_dylib)_debug
+	$(JULIAHOME)/contrib/mac/framework/delete-all-rpaths.sh $(DESTDIR)$(prefix)/$(framework_dylib)_debug
+	install_name_tool -add_rpath @loader_path/Frameworks $(DESTDIR)$(prefix)/$(framework_dylib)_debug
 endif
 
 	$(INSTALL_NAME_CHANGE_CMD) @rpath/libjulia.dylib @rpath/$(FRAMEWORK_NAME) $(DESTDIR)$(prefix)/$(framework_frameworks)/sys.dylib
@@ -167,7 +167,7 @@ endif
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	# Don't forget to sign Frameworks/Julia_debug
 	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v -i $(DARWIN_CODESIGN_ID_BASE).lib -f \
-	    $(DESTDIR)$(prefix)/$(framework_frameworks)/$(FRAMEWORK_NAME)_debug
+	    $(DESTDIR)$(prefix)/$(framework_dylib)_debug
 endif
 	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(DESTDIR)$(prefix)/$(framework_currver)
 
