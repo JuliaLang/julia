@@ -2586,4 +2586,12 @@ end
     @test sum(x1, dims=2) == sum(x2, dims=2)
 end
 
+@testset "Ti cannot store all potential values #31024" begin
+    @test_throws ArgumentError SparseMatrixCSC(128, 1, [Int8(1), Int8(1)], Int8[], Int[])
+    @test_throws ArgumentError SparseMatrixCSC(12, 12, [Int8(1), Int8(1)], Int8[], Int[])
+    I1 = [Int8(i) for i in 1:20 for _ in 1:20]
+    J1 = [Int8(i) for _ in 1:20 for i in 1:20]
+    @test_throws ArgumentError sparse(I1, J1, zero(length(I1)zero(length(I1))))
+end
+
 end # module
