@@ -35,6 +35,11 @@ ifeq ($(OS),WINNT)
 JLDFLAGS += -municode
 endif
 
+ifeq ($(DARWIN_FRAMEWORK),1)
+# Embed an Info.plist in the julia executable
+JLDFLAGS += -Wl,-sectcreate,__TEXT,__info_plist,Info.plist
+endif
+
 default: release
 all: release debug
 release debug :  % : julia-%
