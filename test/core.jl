@@ -6894,3 +6894,24 @@ function foo31357(b::Bool)
 end
 @test foo31357(true) == 12345
 @test foo31357(false) == 12345
+
+# Issue #31406
+abstract type Shape31406 end
+struct ValueOf31406 <: Shape31406
+    ty::Type
+end
+struct TupleOf31406 <: Shape31406
+    cols::Vector{Shape31406}
+end
+TupleOf31406(cols::Union{Shape31406,Type}...) = TupleOf31406(collect(Shape31406, cols))
+@test (TupleOf31406(ValueOf31406(Int64), ValueOf31406(Float64))::TupleOf31406).cols ==
+    Shape31406[ValueOf31406(Int64), ValueOf31406(Float64)]
+@test try
+        TupleOf31406(ValueOf31406(Int64), Float64)
+        false
+    catch ex
+        if !(ex isa MethodError && ex.f === convert && ex.args == (Shape31406, Float64))
+            rethrow(ex)
+        end
+        true
+    end

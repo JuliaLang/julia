@@ -415,7 +415,7 @@ JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
 
 static int very_general_type(jl_value_t *t)
 {
-    return (t == (jl_value_t*)jl_any_type || t == (jl_value_t*)jl_type_type || jl_types_equal(t, (jl_value_t*)jl_type_type));
+    return (t == (jl_value_t*)jl_any_type || jl_types_equal(t, (jl_value_t*)jl_type_type));
 }
 
 jl_value_t *jl_nth_slot_type(jl_value_t *sig, size_t i)
@@ -528,17 +528,17 @@ static void jl_compilation_sig(
             }
         }
 
-        if (jl_types_equal(elt, (jl_value_t*)jl_typetype_type)) {
+        if (jl_types_equal(elt, (jl_value_t*)jl_typetype_type)) { // elt == Type{T} where T
             // not triggered for isdispatchtuple(tt), this attempts to handle
             // some cases of adapting a random signature into a compilation signature
         }
-        else if (!jl_is_datatype(elt) && !jl_has_empty_intersection((jl_value_t*)jl_type_type, elt)) {
+        else if (!jl_is_datatype(elt) && jl_subtype(elt, (jl_value_t*)jl_type_type)) { // elt <: Type{T}
             // not triggered for isdispatchtuple(tt), this attempts to handle
             // some cases of adapting a random signature into a compilation signature
             if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
             jl_svecset(*newparams, i, jl_typetype_type);
         }
-        else if (jl_is_type_type(elt)) {
+        else if (jl_is_type_type(elt)) { // elt isa Type{T}
             if (very_general_type(decl_i)) {
                 /*
                   here's a fairly simple heuristic: if this argument slot's
