@@ -1094,8 +1094,7 @@ SHLIB_EXT := dylib
 OSLIBS += -framework CoreFoundation $(LIBUNWIND)
 WHOLE_ARCHIVE := -Xlinker -all_load
 NO_WHOLE_ARCHIVE :=
-# Embed an Info.plist in the julia executable
-JLDFLAGS := -Wl,-sectcreate,__TEXT,__info_plist,Info.plist
+JLDFLAGS :=
 HAVE_SSP := 1
 JLIBLDFLAGS := -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
 endif
