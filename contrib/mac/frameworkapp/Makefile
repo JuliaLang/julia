@@ -41,7 +41,6 @@ PRODUCTARCHIVE := $(BUILDROOT)/$(FRAMEWORK_NAME)-$(JULIA_VERSION).pkg
 
 $(JULIA_FRAMEWORK_LIB):
 	$(MAKE) -C $(JULIAHOME) DARWIN_FRAMEWORK=1 prefix=$(FRAMEWORK_DESTDIR) darwinframework
-	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -f --preserve-metadata=identifier --deep --timestamp $(JULIA_FRAMEWORK_PATH)
 
 $(XCARCHIVE)/Info.plist: $(JULIA_FRAMEWORK_LIB)
 	xcodebuild \
