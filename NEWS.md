@@ -103,6 +103,8 @@ External dependencies
 [#21598]: https://github.com/JuliaLang/julia/issues/21598
 [#22922]: https://github.com/JuliaLang/julia/issues/22922
 [#24980]: https://github.com/JuliaLang/julia/issues/24980
+[#27749]: https://github.com/JuliaLang/julia/issues/27749
+[#27900]: https://github.com/JuliaLang/julia/issues/27900
 [#28850]: https://github.com/JuliaLang/julia/issues/28850
 [#29777]: https://github.com/JuliaLang/julia/issues/29777
 [#29790]: https://github.com/JuliaLang/julia/issues/29790
@@ -132,6 +134,9 @@ External dependencies
 [#31230]: https://github.com/JuliaLang/julia/issues/31230
 [#31235]: https://github.com/JuliaLang/julia/issues/31235
 [#31310]: https://github.com/JuliaLang/julia/issues/31310
+[#31438]: https://github.com/JuliaLang/julia/issues/31438
 [#31441]: https://github.com/JuliaLang/julia/issues/31441
 [#31451]: https://github.com/JuliaLang/julia/issues/31451
 [#31532]: https://github.com/JuliaLang/julia/issues/31532
+[#31561]: https://github.com/JuliaLang/julia/issues/31561
+[#31604]: https://github.com/JuliaLang/julia/issues/31604
