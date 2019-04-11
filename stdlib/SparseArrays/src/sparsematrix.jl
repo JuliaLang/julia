@@ -23,6 +23,7 @@ struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     function SparseMatrixCSC{Tv,Ti}(m::Integer, n::Integer, colptr::Vector{Ti}, rowval::Vector{Ti},
                                     nzval::Vector{Tv}) where {Tv,Ti<:Integer}
 
+        sparse_check_Ti(m, n, Ti)
         new(Int(m), Int(n), colptr, rowval, nzval)
     end
 end
