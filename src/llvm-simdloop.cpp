@@ -207,8 +207,9 @@ bool LowerSIMDLoop::markSIMDLoop(Module &M, Function *marker, bool ivdep)
         MDNode *n = L->getLoopID();
         if (!n) {
             // Loop does not have a LoopID yet, so give it one.
-            n = MDNode::get(Lh->getContext(), ArrayRef<Metadata *>(NULL));
-            n->replaceOperandWith(0, n);
+            auto temp_n = MDNode::getTemporary(Lh->getContext(), ArrayRef<Metadata *>(NULL));
+            temp_n->replaceOperandWith(0, temp_n.get());
+            n = MDNode::replaceWithPermanent(std::move(temp_n));
             L->setLoopID(n);
         }
 
