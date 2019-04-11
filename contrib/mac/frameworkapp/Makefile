@@ -70,7 +70,7 @@ $(XCEXPORT)/Julia.app/Contents/MacOS/Julia: $(XCARCHIVE)/Info.plist $(BUILDROOT)
 
 appexport: $(XCEXPORT)/Julia.app/Contents/MacOS/Julia
 
-$(BUILDROOT)/framework-component.plist: $(JULIAHOME)/contrib/mac/newapp/framework-component.plist
+$(BUILDROOT)/framework-component.plist: $(JULIAHOME)/contrib/mac/frameworkapp/framework-component.plist
 	sed -e 's/FRAMEWORK_VERSION/$(FRAMEWORK_VERSION)/g' -e 's/FRAMEWORK_NAME/$(FRAMEWORK_NAME)/g' $< > $@
 
 # This target makes a component package for the framework. It has some
@@ -100,13 +100,13 @@ $(BUILDROOT)/launcher.pkg: $(XCEXPORT)/Julia.app/Contents/MacOS/Julia
 		--component $(XCEXPORT)/Julia.app \
 		$@
 
-$(BUILDROOT)/$(FRAMEWORK_NAME).dist: $(JULIAHOME)/contrib/mac/newapp/Julia.dist
+$(BUILDROOT)/$(FRAMEWORK_NAME).dist: $(JULIAHOME)/contrib/mac/frameworkapp/Julia.dist
 	sed -e 's/MINVERSION/$(MACOSX_VERSION_MIN)/g' -e 's/FRAMEWORK_NAME/$(FRAMEWORK_NAME)/g' $< > $@
 
-$(PRODUCTARCHIVE): $(BUILDROOT)/launcher.pkg $(BUILDROOT)/$(FRAMEWORK_NAME)-framework.pkg $(BUILDROOT)/$(FRAMEWORK_NAME).dist $(JULIAHOME)/contrib/mac/newapp/installresources
+$(PRODUCTARCHIVE): $(BUILDROOT)/launcher.pkg $(BUILDROOT)/$(FRAMEWORK_NAME)-framework.pkg $(BUILDROOT)/$(FRAMEWORK_NAME).dist $(JULIAHOME)/contrib/mac/frameworkapp/installresources
 	productbuild \
 		--package-path $(BUILDROOT) \
-		--resources $(JULIAHOME)/contrib/mac/newapp/installresources \
+		--resources $(JULIAHOME)/contrib/mac/frameworkapp/installresources \
 		--distribution $(BUILDROOT)/$(FRAMEWORK_NAME).dist \
 		$@
 
