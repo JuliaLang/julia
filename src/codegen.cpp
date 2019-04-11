@@ -5948,10 +5948,13 @@ static std::unique_ptr<Module> emit_function(
                 vi.value = theArg;
                 if (specsig && theArg.V && ctx.debug_enabled && vi.dinfo) {
                     SmallVector<uint64_t, 8> addr;
-                    if ((Metadata*)vi.dinfo->getType() != jl_pvalue_dillvmt && theArg.ispointer())
-                        addr.push_back(llvm::dwarf::DW_OP_deref);
-                    AllocaInst *parg = dyn_cast<AllocaInst>(theArg.V);
-                    if (!parg) {
+                    Value *parg;
+                    if (theArg.ispointer()) {
+                        parg = theArg.V;
+                        if ((Metadata*)vi.dinfo->getType() != jl_pvalue_dillvmt)
+                            addr.push_back(llvm::dwarf::DW_OP_deref);
+                    }
+                    else {
                         parg = ctx.builder.CreateAlloca(theArg.V->getType(), NULL, jl_symbol_name(s));
                         ctx.builder.CreateStore(theArg.V, parg);
                     }
