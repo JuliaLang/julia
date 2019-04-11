@@ -338,15 +338,6 @@ struct VaFieldLayout
     padding::UInt32
 end
 
-struct DataTypeLayout
-    nfields::UInt32
-    alignment::UInt32
-    # alignment  : 9
-    # haspadding : 1
-    # npointers : 20
-    # fielddesc_type : 2
-end
-
 struct DTLayout
     dt::DataType
 end
@@ -401,6 +392,16 @@ function Base.getindex(l::DTLayout, i::Int)
         unsafe_load(Ptr{T}(ptr), 2))
 end
 =#
+
+struct DataTypeLayout
+    nfields::UInt32
+    alignment::UInt32
+    # alignment  : 9
+    # haspadding : 1
+    # npointers : 20
+    # fielddesc_type : 2
+end
+
 
 """
     Base.datatype_alignment(dt::DataType) -> Int

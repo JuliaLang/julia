@@ -981,10 +981,10 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt)
     size_t i, l = jl_nparams(dt);
     for (i = 0; i < l; i++) {
         jl_value_t *p = jl_tparam(dt, i);
-        if (jl_is_vararg_type(p))
-            p = jl_unwrap_vararg(p);
         if (!dt->hasfreetypevars)
             dt->hasfreetypevars = jl_has_free_typevars(p);
+        if (jl_is_vararg_type(p))
+            p = jl_unwrap_vararg(p);
         if (istuple && dt->isconcretetype)
             dt->isconcretetype = (jl_is_datatype(p) && ((jl_datatype_t*)p)->isconcretetype) || p == jl_bottom_type;
         if (dt->isdispatchtuple)
