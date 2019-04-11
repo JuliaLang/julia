@@ -981,6 +981,8 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt)
     size_t i, l = jl_nparams(dt);
     for (i = 0; i < l; i++) {
         jl_value_t *p = jl_tparam(dt, i);
+        if (jl_is_vararg_type(p))
+            p = jl_unwrap_vararg(p);
         if (!dt->hasfreetypevars)
             dt->hasfreetypevars = jl_has_free_typevars(p);
         if (istuple && dt->isconcretetype)
@@ -1124,9 +1126,11 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     jl_value_t *last = iparams[ntp - 1];
     JL_GC_PUSH3(&p, &ndt, &last);
 
-    int isvatuple = 0;
-    if (istuple && ntp > 0 && jl_is_vararg_type(last)) {
-        isvatuple = 1;
+    //int isvatuple = istuple && ntp > 0 && jl_is_vararg_type(last);
+
+    int isvatuple = istuple && ntp > 0 && jl_is_vararg_type(last);
+#if 0 // NEW_NTUPLE_LAYOUT
+    if (isvatuple) {
         // normalize Tuple{..., Vararg{Int, 3}} to Tuple{..., Int, Int, Int}
         jl_value_t *va = jl_unwrap_unionall(last);
         jl_value_t *va0 = jl_tparam0(va), *va1 = jl_tparam1(va);
@@ -1176,6 +1180,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             jl_svecset(p, ntp-1, last);
         }
     }
+#endif
 
     // move array of instantiated parameters to heap; we need to keep it
     if (p == NULL) {
@@ -1364,6 +1369,7 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
     size_t ntp = jl_svec_len(tp);
     // Instantiate NTuple{3,Int}
     // Note this does not instantiate Tuple{Vararg{Int,3}}; that's done in inst_datatype
+/*
     if (jl_is_va_tuple(tt) && ntp == 1) {
         // If this is a Tuple{Vararg{T,N}} with known N, expand it to
         // a fixed-length tuple
@@ -1386,6 +1392,7 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
             return (jl_value_t*)jl_tupletype_fill(nt, T);
         }
     }
+*/
     jl_value_t **iparams;
     int onstack = ntp < jl_page_size/sizeof(jl_value_t*);
     JL_GC_PUSHARGS(iparams, onstack ? ntp : 1);
@@ -1395,16 +1402,15 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
         iparams[0] = (jl_value_t*)ip_heap;
         iparams = jl_svec_data(ip_heap);
     }
-    int cacheable = 1;
-    if (jl_is_va_tuple(tt))
-        cacheable = 0;
-    int i;
+    int i, cacheable = 1;
     for (i = 0; i < ntp; i++) {
         jl_value_t *elt = jl_svecref(tp, i);
         jl_value_t *pi = (jl_value_t*)inst_type_w_(elt, env, stack, 0);
         iparams[i] = pi;
         if (ip_heap)
             jl_gc_wb(ip_heap, pi);
+        if (jl_is_vararg_type(pi))
+            pi = jl_unwrap_vararg(pi);
         if (cacheable && !jl_is_concrete_type(pi))
             cacheable = 0;
     }

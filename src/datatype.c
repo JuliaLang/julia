@@ -92,6 +92,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
 static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
                                            uint32_t alignment,
                                            int haspadding,
+                                           jl_vafield_layout valayout,
                                            jl_fielddesc32_t desc[]) JL_NOTSAFEPOINT
 {
     // compute the smallest fielddesc type that can hold the layout description
@@ -128,13 +129,16 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
         }
     }
 
+    int isva = valayout.nvafields != 0;
+
     // allocate a new descriptor
     uint32_t fielddesc_size = jl_fielddesc_size(fielddesc_type);
     int has_padding = nfields && npointers;
     jl_datatype_layout_t *flddesc =
         (jl_datatype_layout_t*)jl_gc_perm_alloc(sizeof(jl_datatype_layout_t) +
                                                 nfields * fielddesc_size +
-                                                (has_padding ? sizeof(uint32_t) : 0), 0, 4, 0);
+                                                (has_padding ? sizeof(uint32_t) : 0) +
+                                                (isva ? sizeof(jl_vafield_layout) : 0), 0, 4, 0);
     if (has_padding) {
         if (first_ptr > UINT16_MAX)
             first_ptr = UINT16_MAX;
@@ -148,6 +152,9 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
     flddesc->alignment = alignment;
     flddesc->haspadding = haspadding;
     flddesc->fielddesc_type = fielddesc_type;
+    flddesc->isva = isva;
+    if (isva)
+        memcpy(jl_dt_valayout(flddesc), &valayout, sizeof(jl_vafield_layout));
 
     // fill out the fields of the new descriptor
     jl_fielddesc8_t* desc8 = (jl_fielddesc8_t*)jl_dt_layout_fields(flddesc);
@@ -185,7 +192,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
 // A non-zero result *must* match the LLVM rules for a vector type <nfields x t>.
 // For sake of Ahead-Of-Time (AOT) compilation, this routine has to work
 // without LLVM being available.
-unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
+unsigned jl_special_vector_alignment(size_t nfields, jl_datatype_t *t)
 {
     if (!jl_is_vecelement_type(t))
         return 0;
@@ -339,16 +346,16 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     if (nfields == 0) {
         if (st == jl_sym_type || st == jl_string_type) {
             // opaque layout - heap-allocated blob
-            static const jl_datatype_layout_t opaque_byte_layout = {0, 1, 0, 1, 0};
+            static const jl_datatype_layout_t opaque_byte_layout = {0, 0, 1, 0, 1, 0};
             st->layout = &opaque_byte_layout;
         }
         else if (st == jl_simplevector_type || st->name == jl_array_typename) {
-            static const jl_datatype_layout_t opaque_ptr_layout = {0, sizeof(void*), 0, 1, 0};
+            static const jl_datatype_layout_t opaque_ptr_layout = {0, 0, sizeof(void*), 0, 1, 0};
             st->layout = &opaque_ptr_layout;
         }
         else {
             // reuse the same layout for all singletons
-            static const jl_datatype_layout_t singleton_layout = {0, 1, 0, 0, 0};
+            static const jl_datatype_layout_t singleton_layout = {0, 0, 1, 0, 0, 0};
             st->layout = &singleton_layout;
             jl_allocate_singleton_instance(st);
         }
@@ -361,6 +368,9 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                 return;
         }
     }
+
+    jl_vafield_layout valayout;
+    valayout.nvafields = 0;
 
     size_t descsz = nfields * sizeof(jl_fielddesc32_t);
     jl_fielddesc32_t *desc;
@@ -375,14 +385,21 @@ void jl_compute_field_offsets(jl_datatype_t *st)
            st == jl_simplevector_type ||
            nfields != 0);
 
+    int isva = 0;
     for (size_t i = 0; i < nfields; i++) {
-        jl_value_t *ty = jl_field_type(st, i);
+        jl_value_t *ety = jl_tfield(st, i);
+        jl_value_t *ty = ety;
         size_t fsz = 0, al = 1;
+        int isptr = 0;
+        isva = jl_is_vararg_type(ty);
+        if (isva) {
+            assert(i == nfields - 1);
+            ty = jl_unwrap_vararg(ety);
+        }
         if (jl_islayout_inline(ty, &fsz, &al)) {
             if (__unlikely(fsz > max_size))
                 // Should never happen
                 goto throw_ovf;
-            desc[i].isptr = 0;
             if (jl_is_uniontype(ty)) {
                 haspadding = 1;
                 fsz += 1; // selector byte
@@ -397,11 +414,12 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             if (fsz > MAX_ALIGN)
                 fsz = MAX_ALIGN;
             al = fsz;
-            desc[i].isptr = 1;
+            isptr = 1;
         }
         assert(al <= JL_HEAP_ALIGNMENT && (JL_HEAP_ALIGNMENT % al) == 0);
+        size_t alsz = sz;
         if (al != 0) {
-            size_t alsz = LLT_ALIGN(sz, al);
+            alsz = LLT_ALIGN(sz, al);
             if (sz & (al - 1))
                 haspadding = 1;
             sz = alsz;
@@ -410,11 +428,23 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         }
         homogeneous &= lastty==NULL || lastty==ty;
         lastty = ty;
-        desc[i].offset = sz;
-        desc[i].size = fsz;
-        if (__unlikely(max_offset - sz < fsz))
-            goto throw_ovf;
-        sz += fsz;
+        if (isva) {
+            valayout.vafielddesc.offset = sz;
+            valayout.vafielddesc.size = fsz;
+            valayout.vafielddesc.isptr = isptr;
+            valayout.padding = alsz - sz;
+            if (!jl_is_long(jl_tparam1(ety)))
+                return;
+            valayout.nvafields = jl_unbox_long(jl_tparam1(ety));
+            sz += valayout.nvafields * valayout.vafielddesc.size;
+        } else {
+            desc[i].offset = sz;
+            desc[i].size = fsz;
+            desc[i].isptr = isptr;
+            if (__unlikely(max_offset - sz < fsz))
+                goto throw_ovf;
+            sz += fsz;
+        }
     }
     if (homogeneous && lastty != NULL && jl_is_tuple_type(st)) {
         // Some tuples become LLVM vectors with stronger alignment than what was calculated above.
@@ -429,7 +459,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     st->size = LLT_ALIGN(sz, alignm);
     if (st->size > sz)
         haspadding = 1;
-    st->layout = jl_get_layout(nfields, alignm, haspadding, desc);
+    st->layout = jl_get_layout(nfields - (isva ? 1 : 0), alignm, haspadding, valayout, desc);
     if (should_malloc) free(desc);
     jl_allocate_singleton_instance(st);
     return;
@@ -523,9 +553,11 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
     uint32_t alignm = next_power_of_two(nbytes);
     if (alignm > MAX_ALIGN)
         alignm = MAX_ALIGN;
+    jl_vafield_layout layout;
+    layout.nvafields = 0;
     bt->isbitstype = bt->isinlinealloc = (parameters == jl_emptysvec);
     bt->size = nbytes;
-    bt->layout = jl_get_layout(0, alignm, 0, NULL);
+    bt->layout = jl_get_layout(0, alignm, 0, layout, NULL);
     bt->instance = NULL;
     return bt;
 }
@@ -548,6 +580,7 @@ JL_DLLEXPORT jl_datatype_t * jl_new_foreign_type(jl_sym_t *name,
     layout->alignment = sizeof(void *);
     layout->haspadding = 1;
     layout->npointers = haspointers;
+    layout->isva = 0;
     layout->fielddesc_type = 3;
     jl_fielddescdyn_t * desc =
       (jl_fielddescdyn_t *) ((char *)layout + sizeof(*layout));
@@ -834,8 +867,9 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, 
     JL_GC_PUSH1(&jv);
     for (size_t i = 0; i < na; i++) {
         jl_value_t *ft = jl_field_type(type, i);
-        if (!jl_isa(args[i], ft))
+        if (!jl_isa(args[i], ft)) {
             jl_type_error("new", ft, args[i]);
+        }
         jl_set_nth_field(jv, i, args[i]);
     }
     init_struct_tail(type, jv, na);
@@ -908,7 +942,7 @@ JL_DLLEXPORT int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err)
 JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
-    assert(i < jl_datatype_nfields(st));
+    assert(i < jl_datatype_count_fields(st));
     size_t offs = jl_field_offset(st, i);
     if (jl_field_isptr(st, i)) {
         return *(jl_value_t**)((char*)v + offs);
@@ -990,7 +1024,7 @@ JL_DLLEXPORT int jl_field_isdefined(jl_value_t *v, size_t i)
 
 JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
 {
-    if (ty->layout == NULL || field > jl_datatype_nfields(ty) || field < 1)
+    if (ty->layout == NULL || field > jl_datatype_count_fields(ty) || field < 1)
         jl_bounds_error_int((jl_value_t*)ty, field);
     return jl_field_offset(ty, field - 1);
 }

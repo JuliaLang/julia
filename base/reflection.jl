@@ -313,14 +313,94 @@ objectid(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
 
 # concrete datatype predicates
 
+#=
+# In reality, these are stored compressed as either 8, 16 or 32 
+struct FieldDesc
+    sizeisptr::UInt32
+    # size : 31
+    # isptr : 1
+    offset::UInt32
+end
+
+function Base.getproperty(fd::FieldDesc, s::Symbol)
+    if s === :isptr
+        return (getfield(fd, :sizeisptr) & 0x1) != 0
+    elseif s === :size
+        return getfield(fd, :sizeisptr) >> 1
+    elseif s === :offset
+        return getfield(fd, :offset)
+    end
+end
+
+struct VaFieldLayout
+    nvafields::UInt32
+    desc::FieldDesc
+    padding::UInt32
+end
+
 struct DataTypeLayout
     nfields::UInt32
     alignment::UInt32
-    # alignment : 28;
-    # haspadding : 1;
-    # pointerfree : 1;
-    # fielddesc_type : 2;
+    # alignment  : 9
+    # haspadding : 1
+    # npointers : 20
+    # fielddesc_type : 2
 end
+
+struct DTLayout
+    dt::DataType
+end
+
+const ISVA_MASK = UInt32(1) << 31
+function Base.getproperty(l::DTLayout, s::Symbol)
+    @_pure_meta
+    dt = getfield(l, :dt)
+    dt.layout == C_NULL && throw(UndefRefError())
+    ldtptr = convert(Ptr{DataTypeLayout}, dt.layout)
+    ll = @GC.preserve dt unsafe_load(ldtptr)
+    if s === :nfields
+        return ll.nfields & ~ISVA_MASK
+    elseif s === :isva
+        return (ll.nfields & ISVA_MASK) != 0
+    elseif s === :alignment
+        return Int(ll.alignment & 0x1FF)
+    elseif s === :haspadding
+        return (ll.alignment >> 9) & 1 == 1
+    elseif s === :npointers
+        return (ll.alignment >> 10) & 0xFFFFF
+    elseif s === :fielddesc_type
+        return (ll.alignment >> 30)
+    elseif s === :valayout
+        @assert l.isva
+        return unsafe_load(convert(Ptr{VaFieldLayout}, ldtptr + sizeof(DataTypeLayout)))
+    else
+        error()
+    end
+end
+
+fielddesc_type(kind) = return kind == 0 ? UInt8  :
+                              kind == 1 ? UInt16 :
+                              kind == 2 ? UInt32 :
+                              error()
+
+function descptr(l::DTLayout)
+    dt = getfield(l, :dt)
+    dt.layout == C_NULL && throw(UndefRefError())
+    ptr = convert(Ptr{Cvoid}, dt.layout)
+    return ptr + sizeof(DataTypeLayout) + (l.isva ? sizeof(VaFieldLayout) : 0)
+end
+
+function Base.getindex(l::DTLayout, i::Int)
+    @_pure_meta
+    fdesc = l.fielddesc_type
+    1 <= i <= l.nfields || throw(BoundsError(l, i))
+    T = fielddesc_type(fdesc)
+    ptr = descptr(l) + (i - 1)*2*sizeof(T)
+    return @GC.preserve l FieldDesc(
+        unsafe_load(Ptr{T}(ptr), 1),
+        unsafe_load(Ptr{T}(ptr), 2))
+end
+=#
 
 """
     Base.datatype_alignment(dt::DataType) -> Int

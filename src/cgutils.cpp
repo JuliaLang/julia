@@ -667,7 +667,7 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
                 decl = latypes[0];
             }
             else if (isTuple && isarray && lasttype != T_int1 && !type_is_ghost(lasttype)) {
-                if (isvector && jl_special_vector_alignment(ntypes, jlasttype) != 0)
+                if (isvector && jl_special_vector_alignment(ntypes, (jl_datatype_t*)jlasttype) != 0)
                     decl = VectorType::get(lasttype, ntypes);
                 else
                     decl = ArrayType::get(lasttype, ntypes);
@@ -705,11 +705,14 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
 
 static bool is_datatype_all_pointers(jl_datatype_t *dt)
 {
-    size_t i, l = jl_datatype_nfields(dt);
-    for (i = 0; i < l; i++) {
+    assert(dt->layout);
+    for (size_t i = 0; i < dt->layout->nfields; i++) {
         if (!jl_field_isptr(dt, i)) {
             return false;
         }
+    }
+    if (dt->layout->isva) {
+        return jl_dt_valayout(dt->layout)->vafielddesc.isptr;
     }
     return true;
 }
@@ -1464,7 +1467,7 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
         jl_cgval_t *ret, const jl_cgval_t &strct,
         Value *idx, jl_datatype_t *stt, jl_value_t *inbounds)
 {
-    size_t nfields = jl_datatype_nfields(stt);
+    size_t nfields = jl_datatype_count_fields(stt);
     bool maybe_null = (unsigned)stt->ninitialized != nfields;
     if (strct.ispointer()) { // boxed or stack
         if (is_datatype_all_pointers(stt)) {

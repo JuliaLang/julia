@@ -30,7 +30,7 @@ static int sig_match_by_type_leaf(jl_value_t **types, jl_tupletype_t *sig, size_
 {
     size_t i;
     for (i = 0; i < n; i++) {
-        jl_value_t *decl = jl_field_type(sig, i);
+        jl_value_t *decl = jl_tfield(sig, i);
         jl_value_t *a = types[i];
         if (jl_is_type_type(a)) // decl is not Type, because it wouldn't be leafsig
             a = jl_typeof(jl_tparam0(a));
@@ -45,7 +45,7 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
     size_t i;
     if (va) lensig -= 1;
     for (i = 0; i < lensig; i++) {
-        jl_value_t *decl = jl_field_type(sig, i);
+        jl_value_t *decl = jl_tfield(sig, i);
         jl_value_t *a = types[i];
         jl_value_t *unw = jl_is_unionall(decl) ? ((jl_unionall_t*)decl)->body : decl;
         if (jl_is_type_type(unw)) {
@@ -78,7 +78,7 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
         }
     }
     if (va) {
-        jl_value_t *decl = jl_unwrap_unionall(jl_field_type(sig, i));
+        jl_value_t *decl = jl_unwrap_unionall(jl_tfield(sig, i));
         if (jl_vararg_kind(decl) == JL_VARARG_INT) {
             if (n - i != jl_unbox_long(jl_tparam1(decl)))
                 return 0;
@@ -258,7 +258,7 @@ jl_typemap_t *mtcache_hash_lookup(const struct jl_ordereddict_t *a JL_PROPAGATES
             t = ((jl_typemap_level_t*)ml)->key;
         }
         else {
-            t = jl_field_type(jl_unwrap_unionall(jl_typemap_entry_sig(ml)), offs);
+            t = jl_tfield(jl_unwrap_unionall(jl_typemap_entry_sig(ml)), offs);
             if (tparam)
                 t = jl_tparam0(t);
         }
@@ -281,7 +281,7 @@ static void mtcache_rehash(struct jl_ordereddict_t *pa, size_t newlen, jl_value_
             t = ((jl_typemap_level_t*)ml)->key;
         }
         else {
-            t = jl_field_type(jl_unwrap_unionall(jl_typemap_entry_sig(ml)), offs);
+            t = jl_tfield(jl_unwrap_unionall(jl_typemap_entry_sig(ml)), offs);
             if (tparam)
                 t = jl_tparam0(t);
         }
@@ -359,7 +359,7 @@ static jl_typemap_t **mtcache_hash_bp(struct jl_ordereddict_t *pa JL_PROPAGATES_
                 t = ((jl_typemap_level_t*)*pml)->key;
             }
             else {
-                t = jl_field_type(jl_unwrap_unionall(
+                t = jl_tfield(jl_unwrap_unionall(
                     jl_typemap_entry_sig(*pml)),
                     offs);
                 if (tparam)
@@ -437,7 +437,7 @@ static int jl_typemap_intersection_array_visitor(struct jl_ordereddict_t *a, jl_
             t = ((jl_typemap_level_t*)ml)->key;
         }
         else {
-            t = jl_field_type(jl_unwrap_unionall(jl_typemap_entry_sig(ml)), offs);
+            t = jl_tfield(jl_unwrap_unionall(jl_typemap_entry_sig(ml)), offs);
             if (tparam)
                 t = jl_tparam0(t);
         }
@@ -1048,7 +1048,7 @@ jl_typemap_entry_t *jl_typemap_insert(jl_typemap_t **cache, jl_value_t *parent,
     assert(jl_is_tuple_type(ttype));
     size_t i, l;
     for (i = 0, l = jl_field_count(ttype); i < l && newrec->issimplesig; i++) {
-        jl_value_t *decl = jl_field_type(ttype, i);
+        jl_value_t *decl = jl_tfield(ttype, i);
         if (jl_is_kind(decl))
             newrec->isleafsig = 0; // Type{} may have a higher priority than a kind
         else if (jl_is_type_type(decl))

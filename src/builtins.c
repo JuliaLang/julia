@@ -659,7 +659,7 @@ JL_CALLABLE(jl_f_getfield)
     size_t idx;
     if (jl_is_long(args[1])) {
         idx = jl_unbox_long(args[1])-1;
-        if (idx >= jl_datatype_nfields(st))
+        if (idx >= jl_datatype_count_fields(st))
             jl_bounds_error(args[0], args[1]);
     }
     else {
@@ -791,7 +791,7 @@ JL_CALLABLE(jl_f_nfields)
 {
     JL_NARGS(nfields, 1, 1);
     jl_value_t *x = args[0];
-    return jl_box_long(jl_field_count(jl_typeof(x)));
+    return jl_box_long(jl_datatype_count_fields(jl_typeof(x)));
 }
 
 JL_CALLABLE(jl_f_isdefined)

@@ -409,11 +409,21 @@ typedef struct {
 } jl_fielddesc32_t;
 
 typedef struct {
-    uint32_t nfields;
-    uint32_t alignment : 9; // strictest alignment over all fields
+    uint32_t nvafields;             // Total number of va fields
+    jl_fielddesc32_t vafielddesc;   // description of first va field (others are identical up to offset)
+    uint32_t padding;               // number of bytes of padding between fields
+} jl_vafield_layout;
+
+typedef struct {
+    uint32_t nfields   : 31; // Number of non-va fields (i.e. )
+    uint32_t isva       : 1; // has trailing vararg field
+    uint32_t alignment  : 9; // strictest alignment over all fields
     uint32_t haspadding : 1; // has internal undefined bytes
     uint32_t npointers : 20; // number of pointer fields, top 4 bits are exponent (under-approximation)
     uint32_t fielddesc_type : 2; // 0 -> 8, 1 -> 16, 2 -> 32
+    // if .isva == 1
+    //     jl_vafield_layout valayout;
+    // end
     // union {
     //     jl_fielddesc8_t field8[];
     //     jl_fielddesc16_t field16[];
@@ -903,16 +913,29 @@ STATIC_INLINE jl_svec_t *jl_field_names(jl_datatype_t *st) JL_NOTSAFEPOINT
         names = st->name->names;
     return names;
 }
-STATIC_INLINE jl_sym_t *jl_field_name(jl_datatype_t *st, size_t i) JL_NOTSAFEPOINT
-{
-    return (jl_sym_t*)jl_svecref(jl_field_names(st), i);
-}
-#define jl_field_type(st,i)    jl_svecref(((jl_datatype_t*)st)->types, (i))
+
 #define jl_field_count(st)     jl_svec_len(((jl_datatype_t*)st)->types)
 #define jl_datatype_size(t)    (((jl_datatype_t*)t)->size)
 #define jl_datatype_align(t)   (((jl_datatype_t*)t)->layout->alignment)
 #define jl_datatype_nbits(t)   ((((jl_datatype_t*)t)->size)*8)
 #define jl_datatype_nfields(t) (((jl_datatype_t*)(t))->layout->nfields)
+
+STATIC_INLINE int jl_is_vararg_type(jl_value_t *v) JL_NOTSAFEPOINT;
+STATIC_INLINE size_t jl_vararg_length(jl_value_t *v) JL_NOTSAFEPOINT;
+
+// Like nfields, but if the type is vararg, counts those fields as well
+STATIC_INLINE size_t jl_datatype_count_fields(jl_datatype_t *dt) JL_NOTSAFEPOINT
+{
+    size_t nf = jl_field_count(dt);
+    if (nf == 0)
+        return nf;
+    jl_value_t *last = jl_svecref(dt->types, nf - 1);
+    if (jl_is_vararg_type(last)) {
+        return nf + jl_vararg_length(last) - 1;
+    }
+    return nf;
+}
+
 
 // inline version with strong type check to detect typos in a `->name` chain
 STATIC_INLINE char *jl_symbol_name_(jl_sym_t *s) JL_NOTSAFEPOINT
@@ -921,13 +944,29 @@ STATIC_INLINE char *jl_symbol_name_(jl_sym_t *s) JL_NOTSAFEPOINT
 }
 #define jl_symbol_name(s) jl_symbol_name_(s)
 
-#define jl_dt_layout_fields(d) ((const char*)(d) + sizeof(jl_datatype_layout_t))
+STATIC_INLINE const jl_vafield_layout *jl_dt_valayout(const jl_datatype_layout_t *layout)
+{
+    assert(layout->isva);
+    return (const jl_vafield_layout*)(((const char*)(layout) + sizeof(jl_datatype_layout_t)));
+}
 
-#define DEFINE_FIELD_ACCESSORS(f)                                             \
+STATIC_INLINE const char *jl_dt_layout_fields(const jl_datatype_layout_t *layout) {
+    return (((const char*)(layout) + sizeof(jl_datatype_layout_t)) +
+             (layout->isva ? sizeof(jl_vafield_layout) : 0));
+}
+
+#define DEFINE_FIELD_ACCESSORS(f, vaexpr)                                     \
     static inline uint32_t jl_field_##f(jl_datatype_t *st,                    \
                                         int i) JL_NOTSAFEPOINT                \
     {                                                                         \
         const jl_datatype_layout_t *ly = st->layout;                          \
+        assert(i >= 0);                                                       \
+        if (ly->isva && i >= ly->nfields) {                                   \
+            jl_vafield_layout vafield = *jl_dt_valayout(ly);                  \
+            i -= ly->nfields;                                                 \
+            assert((size_t)i < vafield.nvafields);                            \
+            return vaexpr;                                                    \
+        }                                                                     \
         assert(i >= 0 && (size_t)i < ly->nfields);                            \
         if (ly->fielddesc_type == 0) {                                        \
             return ((const jl_fielddesc8_t*)jl_dt_layout_fields(ly))[i].f;    \
@@ -940,14 +979,9 @@ STATIC_INLINE char *jl_symbol_name_(jl_sym_t *s) JL_NOTSAFEPOINT
         }                                                                     \
     }                                                                         \
 
-DEFINE_FIELD_ACCESSORS(offset)
-DEFINE_FIELD_ACCESSORS(size)
-static inline int jl_field_isptr(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
-{
-    const jl_datatype_layout_t *ly = st->layout;
-    assert(i >= 0 && (size_t)i < ly->nfields);
-    return ((const jl_fielddesc8_t*)(jl_dt_layout_fields(ly) + (i << (ly->fielddesc_type + 1))))->isptr;
-}
+DEFINE_FIELD_ACCESSORS(offset, vafield.vafielddesc.offset + i*(vafield.vafielddesc.size + vafield.padding))
+DEFINE_FIELD_ACCESSORS(size, vafield.vafielddesc.size)
+DEFINE_FIELD_ACCESSORS(isptr, vafield.vafielddesc.isptr)
 
 static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type) JL_NOTSAFEPOINT
 {
@@ -1036,7 +1070,7 @@ STATIC_INLINE int jl_is_primitivetype(void *v) JL_NOTSAFEPOINT
 {
     return (jl_is_datatype(v) && jl_is_immutable(v) &&
             ((jl_datatype_t*)(v))->layout &&
-            jl_datatype_nfields(v) == 0 &&
+            jl_field_count(v) == 0 &&
             jl_datatype_size(v) > 0);
 }
 
@@ -1324,6 +1358,31 @@ STATIC_INLINE jl_vararg_kind_t jl_va_tuple_kind(jl_datatype_t *t) JL_NOTSAFEPOIN
 // structs
 JL_DLLEXPORT int         jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err);
 JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i);
+STATIC_INLINE jl_sym_t *jl_field_name(jl_datatype_t *st, size_t i) JL_NOTSAFEPOINT
+{
+    return (jl_sym_t*)jl_svecref(jl_field_names(st), i);
+}
+
+#define jl_tfield(st, i) jl_svecref( ((jl_datatype_t*)st)->types, i)
+STATIC_INLINE jl_value_t *jl_field_type(jl_datatype_t *st, size_t i) JL_NOTSAFEPOINT
+{   
+    size_t len = jl_svec_len(st->types);
+    if (i + 2 < len) {
+        return jl_tfield(st, i);
+    } else {
+        jl_value_t *vt = jl_tfield(st, len - 1);
+        if (jl_is_vararg_type(vt)) {
+#ifndef NDEBUG
+            if (jl_vararg_kind(vt) == JL_VARARG_INT)
+                assert(i < jl_vararg_length(vt) + len - 1);
+#endif
+            return jl_unwrap_vararg(vt);            
+        } else {
+            return jl_tfield(st, i);
+        }
+    }
+}
+
 // Like jl_get_nth_field above, but asserts if it needs to allocate
 JL_DLLEXPORT jl_value_t *jl_get_nth_field_noalloc(jl_value_t *v JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i);

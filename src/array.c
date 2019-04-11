@@ -173,7 +173,7 @@ static inline int is_ntuple_long(jl_value_t *v)
         return 0;
     size_t nfields = jl_nfields(v);
     for (size_t i = 0; i < nfields; i++) {
-        if (jl_field_type(jl_typeof(v), i) != (jl_value_t*)jl_long_type) {
+        if (jl_field_type((jl_datatype_t*)jl_typeof(v), i) != (jl_value_t*)jl_long_type) {
             return 0;
         }
     }
