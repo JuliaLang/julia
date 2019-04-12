@@ -650,6 +650,18 @@ let
     @test isassigned(a,1)
     @test isassigned(a)
     @test !isassigned(a,2)
+    a = Array{Float64}(undef, 2, 2, 2)
+    @test isassigned(a,1)
+    @test isassigned(a)
+    @test !isassigned(a,9)
+    a = Array{Float64}(undef, 1)
+    @test isassigned(a,1)
+    @test isassigned(a)
+    @test !isassigned(a,2)
+    a = Array{Float64}(undef, 2, 2, 2, 2)
+    @test isassigned(a,1)
+    @test isassigned(a)
+    @test !isassigned(a,17)
 end
 
 # isassigned, issue #11167
