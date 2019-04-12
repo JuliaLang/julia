@@ -910,7 +910,7 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
                     isconst = false
                 end
             end
-            if isconst
+            if isconst && fieldcount(t) == length(e.args) - 1
                 t = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), t, args, length(args)))
             end
         end
