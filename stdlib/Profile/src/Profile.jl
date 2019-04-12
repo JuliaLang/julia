@@ -547,9 +547,13 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
         end
     end
     function cleanup!(node::StackFrameTree)
-        empty!(node.builder_key)
-        empty!(node.builder_value)
-        foreach(cleanup!, values(node.down))
+        stack = StackFrameTree[node]
+        while !isempty(stack)
+            node = pop!(stack)
+            empty!(node.builder_key)
+            empty!(node.builder_value)
+            append!(stack, values(node.down))
+        end
         nothing
     end
     cleanup!(root)
