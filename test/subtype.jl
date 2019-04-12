@@ -1548,4 +1548,11 @@ let X = LinearAlgebra.Symmetric{T, S} where S<:(AbstractArray{U, 2} where U<:T) 
 end
 
 # Various nasty varargs
-@assert issub_strict(Tuple{Int, Tuple{T}, Vararg{T, 3}} where T<:Int, Tuple{Int, Any, Any, Any, Integer})
+let T1 = Tuple{Int, Tuple{T}, Vararg{T, 3}} where T <: Int,
+    T2 = Tuple{Int, Any, Any, Any, Integer},
+    T3 = Tuple{Int, Any, Any, Any, Integer, Vararg{Integer, N} where N}
+
+    @test issub_strict(T1, T2)
+    @test issub_strict(T2, T3)
+    @test issub_strict(T1, T3)
+end
