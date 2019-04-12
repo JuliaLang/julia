@@ -1295,24 +1295,37 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
                     return 1;
             }
             int i, npx = jl_nparams(x), npy = jl_nparams(y);
-            int vx = 0, vy = 0;
+            jl_vararg_kind_t vx = JL_VARARG_NONE;
+            jl_value_t *vxt = NULL;
+            int vy = 0;
+            int vnpx = npx;
             if (istuple) {
-                vx = npx > 0 && jl_is_vararg_type(jl_tparam(x, npx - 1));
+                if (npx > 0) {
+                    jl_value_t *xva = jl_tparam(x, npx - 1);
+                    vx = jl_vararg_kind(xva);
+                    if (vx != JL_VARARG_NONE) {
+                        vxt = jl_unwrap_vararg(xva);
+                        vnpx -= 1;
+                        if (vx == JL_VARARG_INT)
+                            vnpx += jl_vararg_length(xva);
+                    }
+                }
                 vy = npy > 0 && jl_is_vararg_type(jl_tparam(y, npy - 1));
             }
-            if (npx != npy || vx || vy) {
-                if (!vy) {
+            if (npx != npy || vx != JL_VARARG_NONE || vy) {
+                if ((vx == JL_VARARG_NONE || vx == JL_VARARG_UNBOUND) && !vy) {
                     *subtype = 0;
                     return 1;
                 }
-                if (npx - vx < npy - vy) {
+                if ((vx == JL_VARARG_NONE || vx == JL_VARARG_INT) && vnpx < npy - vy) {
                     *subtype = 0;
                     return 1; // number of fixed parameters in x could be fewer than in y
                 }
+                // TODO: Can do better here for the JL_VARARG_INT case.
                 uncertain = 1;
             }
             for (i = 0; i < npy - vy; i++) {
-                jl_value_t *a = jl_tparam(x, i);
+                jl_value_t *a = i >= (npx - (vx == JL_VARARG_NONE ? 0 : 1)) ? vxt : jl_tparam(x, i);
                 jl_value_t *b = jl_tparam(y, i);
                 if (iscov || jl_is_typevar(b)) {
                     if (jl_obvious_subtype(a, b, subtype)) {

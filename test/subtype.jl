@@ -1471,3 +1471,6 @@ CovType{T} = Union{AbstractArray{T,2},
 @testintersect(Pair{<:Any, <:AbstractMatrix},
                Pair{T,     <:CovType{T}} where T<:AbstractFloat,
                Pair{T,S} where S<:AbstractArray{T,2} where T<:AbstractFloat)
+
+# Various nasty varargs
+@assert issub_strict(Tuple{Int, Tuple{T}, Vararg{T, 3}} where T<:Int, Tuple{Int, Any, Any, Any, Integer})
