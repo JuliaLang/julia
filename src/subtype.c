@@ -796,11 +796,16 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
     if (lx == 0 && ly == 0)
         return 1;
     size_t i=0, j=0;
-    int vx=0, vy=0, vvx = (lx > 0 && jl_is_vararg_type(jl_tparam(xd, lx-1)));
+    int vx=0, vy=0;
+    jl_vararg_kind_t vvx = JL_VARARG_NONE;
+    if (lx > 0)
+        vvx = jl_vararg_kind(jl_tparam(xd, lx-1));
     int vvy = (ly > 0 && jl_is_vararg_type(jl_tparam(yd, ly-1)));
-    if (vvx) {
-        if ((vvy && ly > lx) || (!vvy && ly < lx-1))
-            return 0;
+    if (vvx != JL_VARARG_NONE) {
+        if (vvx == JL_VARARG_UNBOUND) {
+            if (!vvy && ly < lx - 1)
+                return 0;
+        }
     }
     else if ((vvy && ly > lx+1) || (!vvy && lx != ly)) {
         return 0;
@@ -809,14 +814,16 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
     jl_value_t *lastx=NULL, *lasty=NULL;
     while (i < lx) {
         jl_value_t *xi = jl_tparam(xd, i);
-        if (i == lx-1 && vvx) vx = 1;
+        if (i == lx-1 && vvx) {
+            vx += 1;
+        }
         jl_value_t *yi = NULL;
         if (j < ly) {
             yi = jl_tparam(yd, j);
-            if (j == ly-1 && vvy) vy = 1;
+            if (j == ly-1 && vvy) vy += 1;
         }
         if (vx && !vy) {
-            if (!check_vararg_length(xi, ly+1-lx, e))
+            if (!check_vararg_length(xi, ly-lx+(vvy ? 0 : 1), e))
                 return 0;
             jl_tvar_t *p1=NULL, *p2=NULL;
             xi = unwrap_2_unionall(xi, &p1, &p2);
@@ -858,9 +865,11 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
                 jl_value_t *xl = jl_tparam1(xi);
                 if (jl_is_typevar(xl)) {
                     jl_varbinding_t *xlv = lookup(e, (jl_tvar_t*)xl);
-                    if (xlv && jl_is_long(xlv->lb) && jl_unbox_long(xlv->lb) == 0)
-                        break;
+                    if (xlv)
+                        xl = xlv->lb;
                 }
+                if (jl_is_long(xl) && jl_unbox_long(xl) + 1 == vx)
+                    return 1;
             }
             if (jl_is_datatype(yi)) {
                 jl_value_t *yl = jl_tparam1(yi);
