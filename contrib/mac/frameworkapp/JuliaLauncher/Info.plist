@@ -30,5 +30,29 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.script</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Julia source code</string>
+			<key>UTTypeIconFile</key>
+			<string>AppIcon.icns</string>
+			<key>UTTypeIdentifier</key>
+			<string>org.julialang.julia.text</string>
+			<key>UTTypeReferenceURL</key>
+			<string></string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>jl</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
 </dict>
 </plist>
