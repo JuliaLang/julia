@@ -311,3 +311,10 @@ end
     @test eltype([tryparse(Float64, s) for s in String[]]) == Union{Nothing, Float64}
     @test eltype([tryparse(Complex{Int}, s) for s in String[]]) == Union{Nothing, Complex{Int}}
 end
+
+@testset "inf and nan parsing" begin
+    for (v,vs) in ((NaN,"nan"), (Inf,"inf"), (Inf,"infinity")), sbefore in ("", "  "), safter in ("", "  "), sign in (+, -), case in (lowercase, uppercase)
+        s = case(string(sbefore, sign, vs, safter))
+        @test isequal(parse(Float64, s), sign(v))
+    end
+end
