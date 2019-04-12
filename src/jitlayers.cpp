@@ -1061,7 +1061,7 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
     // Reset the target triple to make sure it matches the new target machine
     shadow_output->setTargetTriple(TM->getTargetTriple().str());
     DataLayout DL = TM->createDataLayout();
-    DL.reset(DL.getStringRepresentation() + "-ni:10:11:12:13");
+    DL.reset(DL.getStringRepresentation() + "-ni:100:101:102:103");
     shadow_output->setDataLayout(DL);
 
     // add metadata information

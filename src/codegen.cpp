@@ -7737,7 +7737,7 @@ extern "C" void *jl_init_llvm(void)
 
     // Mark our address spaces as non-integral
     jl_data_layout = jl_ExecutionEngine->getDataLayout();
-    std::string DL = jl_data_layout.getStringRepresentation() + "-ni:10:11:12:13";
+    std::string DL = jl_data_layout.getStringRepresentation() + "-ni:100:101:102:103";
     jl_data_layout.reset(DL);
 
 // Register GDB event listener

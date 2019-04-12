@@ -4,14 +4,14 @@ Date: Mon, 18 Mar 2019 16:18:40 -0400
 Subject: [PATCH] AMDGPU ignore custom AS
 
 ---
- llvm/lib/Target/AMDGPU/AMDGPU.h           | 1 +
- llvm/lib/Target/AMDGPU/SIISelLowering.cpp | 4 ++--
+ lib/Target/AMDGPU/AMDGPU.h           | 1 +
+ lib/Target/AMDGPU/SIISelLowering.cpp | 4 ++--
  2 files changed, 3 insertions(+), 2 deletions(-)
 
-diff --git a/llvm/lib/Target/AMDGPU/AMDGPU.h b/llvm/lib/Target/AMDGPU/AMDGPU.h
+diff --git a/lib/Target/AMDGPU/AMDGPU.h b/lib/Target/AMDGPU/AMDGPU.h
 index 0ddc43ad503..6065abf6732 100644
---- a/llvm/lib/Target/AMDGPU/AMDGPU.h
-+++ b/llvm/lib/Target/AMDGPU/AMDGPU.h
+--- a/lib/Target/AMDGPU/AMDGPU.h
++++ b/lib/Target/AMDGPU/AMDGPU.h
 @@ -251,6 +251,7 @@ struct AMDGPUAS {
      CONSTANT_BUFFER_13 = 21,
      CONSTANT_BUFFER_14 = 22,
@@ -20,10 +20,10 @@ index 0ddc43ad503..6065abf6732 100644
  
      // Some places use this if the address space can't be determined.
      UNKNOWN_ADDRESS_SPACE = ~0u,
-diff --git a/llvm/lib/Target/AMDGPU/SIISelLowering.cpp b/llvm/lib/Target/AMDGPU/SIISelLowering.cpp
+diff --git a/lib/Target/AMDGPU/SIISelLowering.cpp b/lib/Target/AMDGPU/SIISelLowering.cpp
 index 41ca7fe8bfa..90108c8be98 100644
---- a/llvm/lib/Target/AMDGPU/SIISelLowering.cpp
-+++ b/llvm/lib/Target/AMDGPU/SIISelLowering.cpp
+--- a/lib/Target/AMDGPU/SIISelLowering.cpp
++++ b/lib/Target/AMDGPU/SIISelLowering.cpp
 @@ -1063,8 +1063,8 @@ static bool isFlatGlobalAddrSpace(unsigned AS, AMDGPUAS AMDGPUASI) {
  
  bool SITargetLowering::isNoopAddrSpaceCast(unsigned SrcAS,
