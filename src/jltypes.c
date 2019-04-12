@@ -1138,6 +1138,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         }
         int did_normalize = 0;
         jl_value_t *last2 = normalize_vararg(last);
+        assert(!jl_is_unionall(last2) || !jl_is_unionall(((jl_unionall_t*)last2)->body));
         if (last2 != last) {
             last = last2;
             did_normalize = 1;

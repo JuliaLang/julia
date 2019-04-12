@@ -765,30 +765,26 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     return ans;
 }
 
-// unwrap <=2 layers of UnionAlls, leaving the vars in *p1 and *p2 and returning the body
-static jl_value_t *unwrap_2_unionall(jl_value_t *t, jl_tvar_t **p1, jl_tvar_t **p2) JL_NOTSAFEPOINT
+// unwrap <=1 layers of UnionAlls, leaving the var in *p1 the body
+static jl_value_t *unwrap_1_unionall(jl_value_t *t, jl_tvar_t **p1) JL_NOTSAFEPOINT
 {
     assert(t);
     if (jl_is_unionall(t)) {
         *p1 = ((jl_unionall_t*)t)->var;
         t = ((jl_unionall_t*)t)->body;
-        if (jl_is_unionall(t)) {
-            *p2 = ((jl_unionall_t*)t)->var;
-            t = ((jl_unionall_t*)t)->body;
-        }
     }
+    assert(jl_is_datatype(t));
     return t;
 }
 
 // check n <: (length of vararg type v)
 static int check_vararg_length(jl_value_t *v, ssize_t n, jl_stenv_t *e)
 {
-    jl_tvar_t *va_p1=NULL, *va_p2=NULL;
-    jl_value_t *tail = unwrap_2_unionall(v, &va_p1, &va_p2);
-    assert(jl_is_datatype(tail));
+    jl_tvar_t *va_p1=NULL;
+    jl_value_t *tail = unwrap_1_unionall(v, &va_p1);
     jl_value_t *N = jl_tparam1(tail);
     // only do the check if N is free in the tuple type's last parameter
-    if (N != (jl_value_t*)va_p1 && N != (jl_value_t*)va_p2) {
+    if (N != (jl_value_t*)va_p1) {
         jl_value_t *nn = jl_box_long(n);
         JL_GC_PUSH1(&nn);
         e->invdepth++;
@@ -836,10 +832,10 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
         if (vx && !vy) {
             if (!vvy && !check_vararg_length(xi, ly-lx+1, e))
                 return 0;
-            jl_tvar_t *p1=NULL, *p2=NULL;
-            xi = unwrap_2_unionall(xi, &p1, &p2);
+            jl_tvar_t *p1=NULL;
+            xi = unwrap_1_unionall(xi, &p1);
             jl_value_t *N = jl_tparam1(xi);
-            if (N == (jl_value_t*)p1 || N == (jl_value_t*)p2)
+            if (N == (jl_value_t*)p1)
                 return 0;
             if (j >= ly) return 1;
             xi = jl_tparam0(xi);
@@ -848,19 +844,19 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
             return 0;
         }
         if (!vx && vy) {
-            jl_tvar_t *p1=NULL, *p2=NULL;
-            yi = jl_tparam0(unwrap_2_unionall(yi, &p1, &p2));
-            if (yi == (jl_value_t*)p1 || yi == (jl_value_t*)p2)
+            jl_tvar_t *p1=NULL;
+            yi = jl_tparam0(unwrap_1_unionall(yi, &p1));
+            if (yi == (jl_value_t*)p1)
                 yi = ((jl_tvar_t*)yi)->ub;
             if (!vvx && yi == (jl_value_t*)jl_any_type)
                 break;  // if y ends in `Vararg{Any}` skip checking everything
         }
         if (vx && vy) {
-            jl_tvar_t *yp1=NULL, *yp2=NULL;
-            jl_value_t *yva = unwrap_2_unionall(yi, &yp1, &yp2);
-            jl_tvar_t *xp1=NULL, *xp2=NULL;
-            jl_value_t *xva = unwrap_2_unionall(xi, &xp1, &xp2);
-            if ((jl_value_t*)xp1 == jl_tparam1(xva) || (jl_value_t*)xp2 == jl_tparam1(xva)) {
+            jl_tvar_t *yp1=NULL;
+            jl_value_t *yva = unwrap_1_unionall(yi, &yp1);
+            jl_tvar_t *xp1=NULL;
+            jl_value_t *xva = unwrap_1_unionall(xi, &xp1);
+            if ((jl_value_t*)xp1 == jl_tparam1(xva)) {
                 // check for unconstrained vararg on left, constrained on right
                 if (jl_is_long(jl_tparam1(yva)))
                     return 0;
@@ -2059,12 +2055,12 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
 // check n = (length of vararg type v)
 static int intersect_vararg_length(jl_value_t *v, ssize_t n, jl_stenv_t *e, int8_t R)
 {
-    jl_tvar_t *va_p1=NULL, *va_p2=NULL;
-    jl_value_t *tail = unwrap_2_unionall(v, &va_p1, &va_p2);
+    jl_tvar_t *va_p1=NULL;
+    jl_value_t *tail = unwrap_1_unionall(v, &va_p1);
     assert(jl_is_datatype(tail));
     jl_value_t *N = jl_tparam1(tail);
     // only do the check if N is free in the tuple type's last parameter
-    if (jl_is_typevar(N) && N != (jl_value_t*)va_p1 && N != (jl_value_t*)va_p2) {
+    if (jl_is_typevar(N) && N != (jl_value_t*)va_p1) {
         jl_value_t *len = jl_box_long(n);
         JL_GC_PUSH1(&len);
         jl_value_t *il = R ? intersect(len, N, e, 2) : intersect(N, len, e, 2);
