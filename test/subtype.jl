@@ -1546,3 +1546,6 @@ let X = LinearAlgebra.Symmetric{T, S} where S<:(AbstractArray{U, 2} where U<:T) 
               LinearAlgebra.Symmetric{T, S} where S<:(AbstractArray{U, 2} where U<:T) where T}
     @test X <: Y
 end
+
+# Various nasty varargs
+@assert issub_strict(Tuple{Int, Tuple{T}, Vararg{T, 3}} where T<:Int, Tuple{Int, Any, Any, Any, Integer})
