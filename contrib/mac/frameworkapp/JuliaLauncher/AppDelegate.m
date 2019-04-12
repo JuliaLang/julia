@@ -8,84 +8,199 @@ NSString static const *const terminalBundleID = @"com.apple.Terminal";
 static bool launchTerminalApp(void);
 static void execJuliaInTerminal(NSURL *julia);
 
+/// Location of an installed variant of Julia (frameowrk or nix hier).
+@interface JuliaVariant : NSObject
+@property(readonly, nullable) NSBundle *bundle;
+@property(readonly, nonnull) NSURL *juliaexe;
+@property(readonly, nonnull) NSString *version;
+- (instancetype)initWithJulia:(NSURL *)exe bundle:(NSBundle *)b;
+/// (major,minor,patch) components parsed from version.
+@property(readonly, nullable) NSArray<NSNumber *> *versionComponents;
+@end
+
+@implementation JuliaVariant
+
+- (instancetype)initWithJulia:(NSURL *)exe bundle:(NSBundle *)b {
+  self = [super init];
+  if (!self) {
+    return nil;
+  }
+  NSAssert(exe != nil, @"juliaexe cannot be nil.");
+  _juliaexe = exe;
+  _bundle = b;
+  if (_bundle == nil) {
+    // Try to locate the framework bundle.
+    NSURL *frameworkURL =
+        [[exe URLByDeletingLastPathComponent] URLByDeletingLastPathComponent];
+    NSBundle *bundle = [NSBundle bundleWithURL:frameworkURL];
+    if (bundle &&
+        [[bundle bundleIdentifier] isEqual:@"org.julialang.julia.lib"]) {
+      _bundle = bundle;
+    }
+  }
+  if (_bundle) {
+    // Extract version from framework bundle.
+    _version = _bundle.infoDictionary[(NSString *)kCFBundleVersionKey];
+  } else {
+    // TODO: shell out and make julia tell us its version.
+    _version = @"?";
+  }
+  return self;
+}
+
+- (NSArray<NSNumber *> *)versionComponents {
+  NSNumber *compsi[3];
+  NSArray<NSString *> *c = [self.version componentsSeparatedByString:@"."];
+  if (c.count < 3) {
+    return nil;
+  }
+  NSInteger i = 0;
+  for (NSString *vn in c) {
+    compsi[i++] = @(vn.integerValue);
+  }
+  if ([compsi[0] isEqual:@(0)] && [compsi[1] isEqual:@(0)] &&
+      [compsi[2] isEqual:@(0)]) {
+    return nil;
+  }
+  return [NSArray arrayWithObjects:compsi count:3];
+}
+
+@end
+
 @interface AppDelegate ()
 @property NSMetadataQuery *mdq;
+@property NSMutableDictionary<NSURL *, JuliaVariant *> *juliaVariants;
+@property JuliaVariant *latestKnownTaggedJulia;
 @end
 
 @implementation AppDelegate
+
+- (instancetype)init {
+  self = [super init];
+  if (!self) {
+    return nil;
+  }
+  self.juliaVariants = [[NSMutableDictionary alloc] init];
+  return self;
+}
 
 - (void)dealloc {
   [self stopFindJuliaWithSpotlight];
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
-  NSURL *juliaexe = [self findJuliaInLinkedFramework];
-  if (juliaexe != nil) {
-    execJuliaInTerminal(juliaexe);
-  } else {
-    [self findJuliaWithSpotlight];
-  }
+  [self findJuliaWithSpotlight];
 }
 
-- (NSURL *_Nullable)findJuliaInLinkedFramework {
-  // Try NSBundle's search by bundle ID for the Julia framework.
-  NSBundle *b = [NSBundle bundleWithIdentifier:@"org.julialang.julia.lib"];
-  if (b != nil) {
-    return [b URLForAuxiliaryExecutable:@"julia"];
+- (void)addJuliaVariant:(JuliaVariant *)jv {
+  if ([self.juliaVariants objectForKey:jv.juliaexe]) {
+    // Don't overwrite.
+    return;
   }
-  return nil;
+  [self.juliaVariants setObject:jv forKey:jv.juliaexe];
+
+  // Track the latest known tagged variant.
+  if (self.latestKnownTaggedJulia == nil) {
+    self.latestKnownTaggedJulia = jv;
+  } else {
+    JuliaVariant *latestJv = self.latestKnownTaggedJulia;
+    NSArray<NSNumber *> *latestV = latestJv.versionComponents;
+    NSArray<NSNumber *> *vc = jv.versionComponents;
+    if (vc != nil) {
+      // Compare version tuple.
+      if (vc[0] > latestV[0] || (vc[0] == latestV[0] && vc[1] > latestV[1]) ||
+          (vc[0] == latestV[0] && vc[1] == latestV[1] && vc[2] > latestV[2])) {
+        latestJv = jv;
+        latestV = vc;
+      }
+    }
+  }
 }
 
 - (void)findJuliaQueryDidUpdate:(NSNotification *)sender {
+  if (sender.object != self.mdq) {
+    return;
+  }
+
   // Disable updates while enumerating results.
   [self.mdq disableUpdates];
 
   for (NSUInteger i = 0; i < self.mdq.resultCount; ++i) {
-    // Grab the path attribute from the item.
     NSMetadataItem *item = [self.mdq resultAtIndex:i];
-    NSURL *frameworkPath = [[NSURL alloc]
-        initFileURLWithPath:[item valueForAttribute:NSMetadataItemPathKey]
-                isDirectory:true];
-    NSLog(@"Found Julia framework %@", frameworkPath);
+    // Grab the path attribute from the item.
+    NSString *itemPath = [item valueForAttribute:NSMetadataItemPathKey];
+    NSString *contentType =
+        [item valueForAttribute:(NSString *)kMDItemContentType];
 
-    NSURL *frameworkVersions =
-        [frameworkPath URLByAppendingPathComponent:@"Versions"];
+    if ([contentType isEqual:@"public.unix-executable"]) {
+      // TODO: Verify the executable is actually a Julia.
+      NSURL *juliaexe =
+          [[[NSURL alloc] initFileURLWithPath:itemPath
+                                  isDirectory:false] URLByStandardizingPath];
+      NSLog(@"Found Julia %@", juliaexe);
+      JuliaVariant *jv = [[JuliaVariant alloc] initWithJulia:juliaexe
+                                                      bundle:nil];
+      [self addJuliaVariant:jv];
+    } else if ([contentType isEqual:@"com.apple.framework"]) {
+      NSURL *frameworkPath = [[NSURL alloc] initFileURLWithPath:itemPath
+                                                    isDirectory:true];
+      NSLog(@"Found Julia framework %@", frameworkPath);
 
-    NSFileManager *fm = NSFileManager.defaultManager;
-    NSArray<NSURL *> *versions =
-        [fm contentsOfDirectoryAtURL:frameworkVersions
-            includingPropertiesForKeys:@[ NSURLIsDirectoryKey ]
-                               options:0
-                                 error:nil];
+      // Iterate over versions within the framework.
 
-    for (NSURL *frameworkVersion in versions) {
-      NSNumber *isDir;
-      if (![frameworkVersion getResourceValue:&isDir
-                                       forKey:NSURLIsDirectoryKey
-                                        error:nil] ||
-          !isDir.boolValue) {
-        continue;
+      NSFileManager *fm = NSFileManager.defaultManager;
+      NSURL *frameworkVersions =
+          [frameworkPath URLByAppendingPathComponent:@"Versions"
+                                         isDirectory:true];
+      NSArray<NSURL *> *versions =
+          [fm contentsOfDirectoryAtURL:frameworkVersions
+              includingPropertiesForKeys:@[ NSURLIsDirectoryKey ]
+                                 options:0
+                                   error:nil];
+
+      for (NSURL *frameworkVersion in versions) {
+        NSNumber *isDir;
+        if (![frameworkVersion getResourceValue:&isDir
+                                         forKey:NSURLIsDirectoryKey
+                                          error:nil] ||
+            !isDir.boolValue) {
+          // Version is a symink (probably Current) so skip it.
+          continue;
+        }
+
+        NSBundle *bundle = [NSBundle bundleWithURL:frameworkVersion];
+
+        // Form the path to julia in the framework's Helpers directory.
+        NSURL *juliaexe = [[[[bundle.executableURL URLByStandardizingPath]
+            URLByDeletingLastPathComponent]
+            URLByAppendingPathComponent:@"Helpers"
+                            isDirectory:true]
+            URLByAppendingPathComponent:@"julia"
+                            isDirectory:false];
+
+        if (juliaexe == nil) {
+          continue;
+        }
+
+        NSLog(@"Found Julia %@ (%@) at %@",
+              bundle.infoDictionary[@"CFBundleShortVersionString"],
+              bundle.infoDictionary[(NSString *)kCFBundleVersionKey], juliaexe);
+
+        JuliaVariant *jv = [[JuliaVariant alloc] initWithJulia:juliaexe
+                                                        bundle:bundle];
+        [self addJuliaVariant:jv];
       }
+    } else {
+      NSLog(@"Ignoring Julia at %@ with content type %@", itemPath,
+            contentType);
+    }
+  }
 
-      NSBundle *bundle = [NSBundle bundleWithURL:frameworkVersion];
-
-      NSString *frameworkVersion =
-          bundle.infoDictionary[(NSString *)kCFBundleVersionKey];
-      NSString *frameworkShortVersion =
-          bundle.infoDictionary[@"CFBundleShortVersionString"];
-
-      // Form the path to julia in the framework's Helpers directory.
-      NSURL *juliaexe = [[[[bundle.executableURL URLByResolvingSymlinksInPath]
-          URLByDeletingLastPathComponent] URLByAppendingPathComponent:@"Helpers"
-                                                          isDirectory:true]
-          URLByAppendingPathComponent:@"julia"
-                          isDirectory:false];
-
-      if (juliaexe != nil) {
-        NSLog(@"Found Julia %@ (%@) at %@", frameworkShortVersion,
-              frameworkVersion, juliaexe.path);
-        execJuliaInTerminal(juliaexe);
-      }
+  if (sender.name == NSMetadataQueryDidFinishGatheringNotification) {
+    // Initial search is complete after app launch so exec julia.
+    NSURL *juliaexe = self.latestKnownTaggedJulia.juliaexe;
+    if (juliaexe) {
+      execJuliaInTerminal(juliaexe);
     }
   }
 
@@ -105,11 +220,10 @@ static void execJuliaInTerminal(NSURL *julia);
   // Search for the framework bundle identifier.
   NSPredicate *searchPredicate = [NSPredicate
       predicateWithFormat:
-          @"kMDItemCFBundleIdentifier == 'org.julialang.julia.lib'"];
+          @"(kMDItemCFBundleIdentifier == 'org.julialang.julia.lib' && "
+          @"kMDItemContentType == 'com.apple.framework') || (kMDItemFSName == "
+          @"'julia' && kMDItemContentType == 'public.unix-executable')"];
   self.mdq.predicate = searchPredicate;
-
-  // Include the framework's path as metadata.
-  self.mdq.valueListAttributes = @[ NSMetadataItemPathKey ];
 
   // Observe the query's notifications.
   [[NSNotificationCenter defaultCenter]
