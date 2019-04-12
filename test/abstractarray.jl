@@ -979,3 +979,11 @@ end
     @test Base.IndexStyle(UpperTriangular(rand(3, 3)), rand(3, 3), [1; 2; 3]) == IndexCartesian()
     @test Base.IndexStyle(rand(3, 3), [1; 2; 3]) == IndexLinear()
 end
+
+@testset "promote_shape for Tuples and Dims" begin
+    @test promote_shape((2, 1), (2,)) == (2, 1)
+    @test_throws DimensionMismatch promote_shape((2, 3), (2,))
+    @test promote_shape(Dims((2, 1)), Dims((2,))) == (2, 1)
+    @test_throws DimensionMismatch promote_shape(Dims((2, 2)), Dims((2,)))
+    @test_throws DimensionMismatch promote_shape(Dims((2, 3, 1)), Dims((2,2)))
+end
