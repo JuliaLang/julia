@@ -5202,7 +5202,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
         idx++;
         break;
     }
-    for (size_t i = 0; i < jl_nparams(lam->specTypes) && idx < nfargs; ++i) {
+    for (size_t i = 0; i < jl_datatype_count_fields((jl_datatype_t*)lam->specTypes) && idx < nfargs; ++i) {
         jl_value_t *ty = jl_nth_slot_type(lam->specTypes, i);
         bool isboxed;
         Type *lty = julia_type_to_llvm(ty, &isboxed);
@@ -5341,8 +5341,8 @@ static jl_returninfo_t get_specsig_function(Module *M, const std::string &name, 
         attributes = attributes.addAttribute(jl_LLVMContext, 1, Attribute::NoAlias);
         attributes = attributes.addAttribute(jl_LLVMContext, 1, Attribute::NoCapture);
     }
-    for (size_t i = 0; i < jl_nparams(sig); i++) {
-        jl_value_t *jt = jl_tparam(sig, i);
+    for (size_t i = 0; i < jl_datatype_count_fields((jl_datatype_t*)sig); i++) {
+        jl_value_t *jt = jl_field_type((jl_datatype_t*)sig, i);
         bool isboxed;
         Type *ty = julia_type_to_llvm(jt, &isboxed);
         if (type_is_ghost(ty))

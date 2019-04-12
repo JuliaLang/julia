@@ -879,7 +879,7 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x) JL_NOTSAFEPO
 
 #define jl_fieldref(s,i) jl_get_nth_field(((jl_value_t*)(s)),i)
 #define jl_fieldref_noalloc(s,i) jl_get_nth_field_noalloc(((jl_value_t*)(s)),i)
-#define jl_nfields(v)    jl_datatype_nfields(jl_typeof(v))
+#define jl_nfields(v)    jl_datatype_count_fields((jl_datatype_t*)jl_typeof(v))
 
 // Not using jl_fieldref to avoid allocations
 #define jl_linenode_line(x) (((intptr_t*)(x))[0])
@@ -1367,7 +1367,7 @@ STATIC_INLINE jl_sym_t *jl_field_name(jl_datatype_t *st, size_t i) JL_NOTSAFEPOI
 STATIC_INLINE jl_value_t *jl_field_type(jl_datatype_t *st, size_t i) JL_NOTSAFEPOINT
 {   
     size_t len = jl_svec_len(st->types);
-    if (i + 2 < len) {
+    if (i + 2 <= len) {
         return jl_tfield(st, i);
     } else {
         jl_value_t *vt = jl_tfield(st, len - 1);

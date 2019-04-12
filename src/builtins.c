@@ -791,7 +791,7 @@ JL_CALLABLE(jl_f_nfields)
 {
     JL_NARGS(nfields, 1, 1);
     jl_value_t *x = args[0];
-    return jl_box_long(jl_datatype_count_fields(jl_typeof(x)));
+    return jl_box_long(jl_datatype_count_fields((jl_datatype_t*)jl_typeof(x)));
 }
 
 JL_CALLABLE(jl_f_isdefined)

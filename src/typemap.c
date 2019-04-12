@@ -588,14 +588,17 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
 static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_value_t *types,
                                                      jl_svec_t **penv, size_t world, size_t max_world_mask)
 {
-    jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)types);
+    jl_datatype_t *unw = (jl_datatype_t *)jl_unwrap_unionall((jl_value_t*)types);
     int isua = jl_is_unionall(types);
     size_t n = jl_field_count(unw);
     int typesisva = n == 0 ? 0 : jl_is_vararg_type(jl_tparam(unw, n-1));
+    if (typesisva && jl_va_tuple_kind(unw) == JL_VARARG_INT)
+        n += jl_vararg_length(jl_tparam(unw, n-1)) - 1;
     for (; ml != (void*)jl_nothing; ml = ml->next) {
         if (world < ml->min_world || world > (ml->max_world | max_world_mask))
             continue; // ignore replaced methods
-        size_t lensig = jl_field_count(jl_unwrap_unionall((jl_value_t*)ml->sig));
+        jl_datatype_t *sig_unw = (jl_datatype_t *)jl_unwrap_unionall((jl_value_t*)ml->sig);
+        size_t lensig = jl_va_tuple_kind(sig_unw) == JL_VARARG_INT ? jl_datatype_count_fields(sig_unw) : jl_field_count(sig_unw);
         if (lensig == n || (ml->va && lensig <= n+1)) {
             int resetenv = 0, ismatch = 1;
             if (ml->simplesig != (void*)jl_nothing && !isua) {
