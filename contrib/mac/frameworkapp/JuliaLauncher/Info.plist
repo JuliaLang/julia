@@ -36,6 +36,7 @@
 			<key>UTTypeConformsTo</key>
 			<array>
 				<string>public.script</string>
+				<string>public.utf8-plain-text </string>
 			</array>
 			<key>UTTypeDescription</key>
 			<string>Julia source code</string>
