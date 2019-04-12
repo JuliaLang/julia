@@ -66,6 +66,8 @@ Standard library changes
 * `inv(::Missing)` has now been added and returns `missing` ([#31451]).
 * `nextfloat(::BigFloat, n::Integer)` and `prevfloat(::BigFloat, n::Integer)` methods
   have been added ([#31310]).
+* `complex(::Array, ::Array)` method has been added to maintain consistency with
+  `complex(::Array)` ([#31676]).
 
 #### LinearAlgebra
 * Added keyword arguments `rtol`, `atol` to `pinv` and `nullspace` ([#29998]).

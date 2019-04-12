@@ -148,11 +148,14 @@ Convert real numbers or arrays to complex. `i` defaults to zero.
 julia> complex(7)
 7 + 0im
 
-julia> complex([1, 2, 3])
+julia> complex([1, 2, 3], [4, 5, 6])
 3-element Array{Complex{Int64},1}:
- 1 + 0im
- 2 + 0im
- 3 + 0im
+ 1 + 4im
+ 2 + 5im
+ 3 + 6im
+
+ !!! compat "Julia 1.3"
+    The two-array method of `complex` requires at least Julia 1.3.
 ```
 """
 complex(z::Complex) = z
@@ -1011,7 +1014,11 @@ big(z::Complex{T}) where {T<:Real} = Complex{big(T)}(z)
 
 ## Array operations on complex numbers ##
 
+complex(A::AbstractArray) = map(complex, A)
 complex(A::AbstractArray{<:Complex}) = A
+<<<<<<< HEAD
+complex(R::AbstractArray{<:Any,N}, I::AbstractArray{<:Any,N}) where {N} = map(complex, R, I)
+=======
 
 function complex(A::AbstractArray{T}) where T
     if !isconcretetype(T)
@@ -1019,3 +1026,12 @@ function complex(A::AbstractArray{T}) where T
     end
     convert(AbstractArray{typeof(complex(zero(T)))}, A)
 end
+
+function complex(A::AbstractArray{T1}, B::AbstractArray{T2}) where {T1, T2}
+    if !isconcretetype(T1) || !isconcretetype(T2)
+        error("`complex` not defined on abstractly-typed arrays; please convert to a more specific type")
+    end
+    size(A) == size(B) || throw(DimensionMismatch("real and imaginary array dimensions do not match"))
+    Complex.(A, B)
+end
+>>>>>>> 8bdee56391... fix #31676: add complex(::Array, ::Array) method
