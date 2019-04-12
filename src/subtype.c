@@ -834,7 +834,7 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
             if (j == ly-1 && vvy) vy += 1;
         }
         if (vx && !vy) {
-            if (!check_vararg_length(xi, ly-lx+(vvy ? 0 : 1), e))
+            if (!vvy && !check_vararg_length(xi, ly-lx+1, e))
                 return 0;
             jl_tvar_t *p1=NULL, *p2=NULL;
             xi = unwrap_2_unionall(xi, &p1, &p2);
@@ -912,13 +912,14 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
             j++;
     }
     // TODO: handle Vararg with explicit integer length parameter
-    vy = vy || (j < ly && jl_is_vararg_type(jl_tparam(yd,j)));
+    if (!vy && j < ly && jl_is_vararg_type(jl_tparam(yd,j)))
+        vy += 1;
     if (vy && !vx && lx+1 >= ly) {
         // in Tuple{...,tn} <: Tuple{...,Vararg{T,N}}, check (lx+1-ly) <: N
         if (!check_vararg_length(jl_tparam(yd,ly-1), lx+1-ly, e))
             return 0;
     }
-    return (lx==ly && vx==vy) || (vy && (lx >= (vx ? ly : (ly-1))));
+    return (lx + vx == ly + vy) || (vy && (lx >= (vx ? ly : (ly-1))));
 }
 
 static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e);

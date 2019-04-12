@@ -1556,3 +1556,13 @@ let T1 = Tuple{Int, Tuple{T}, Vararg{T, 3}} where T <: Int,
     @test issub_strict(T2, T3)
     @test issub_strict(T1, T3)
 end
+let A = Tuple{Float64, Vararg{Int64, 2}},
+    B1 = Tuple{Float64, Vararg{T, 2}} where T <: Int64,
+    B2 = Tuple{Float64, T, T} where T <: Int64,
+    C = Tuple{Float64, Any, Vararg{Integer, N} where N}
+
+    @test A == B1 == B2
+    @test issub_strict(A, C)
+    @test issub_strict(B1, C)
+    @test issub_strict(B2, C)
+end
