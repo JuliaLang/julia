@@ -2451,6 +2451,7 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     save_env(e, saved, &se);
     int lastset = 0, niter = 0, total_iter = 0;
     jl_value_t *ii = intersect(x, y, e, 0);
+    is[0] = ii;  // root
     if (ii == jl_bottom_type) {
         restore_env(e, *saved, &se);
     }

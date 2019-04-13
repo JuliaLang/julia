@@ -6101,7 +6101,11 @@ static std::unique_ptr<Module> emit_function(
                 } else if (expr->head == popaliasscope_sym) {
                     scope_stack.pop_back();
                     scope_list_stack.pop_back();
-                    current_aliasscope = scope_list_stack.back();
+                    if (scope_list_stack.empty()) {
+                        current_aliasscope = NULL;
+                    } else {
+                        current_aliasscope = scope_list_stack.back();
+                    }
                 }
             }
             aliasscopes[i+1] = current_aliasscope;
