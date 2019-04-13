@@ -1079,7 +1079,7 @@ tand(x::Real) = sind(x) / cosd(x)
 Simultaneously compute the sine and cosine of `x`, where `x` is in degrees.
 
 """
-@inline function sincosd(x::Real)
+function sincosd(x::Real)
     if isinf(x)
         return throw(DomainError(x, "sincosd(x) is only defined for finite `x`."))
     elseif isnan(x)
