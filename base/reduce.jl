@@ -383,10 +383,15 @@ function reduce(::typeof(vcat), xs, T::Type{<:AbstractVector}, isize)
 
     ret = copy(x1)  # this is **Not** going to work for StaticArrays
 
+    hinted_size = 0
     if !(isize isa SizeUnknown)
         # Assume first element has representitive size, unless that would make this too large
-        SIZEHINT_CAP = 10^6
-        sizehint!(ret, min(SIZEHINT_CAP, length(xs)*length(x1)))
+        SIZEHINT_CAP = 10^5
+        expected_size = length(xs)*length(x1)
+        if expected_size < SIZEHINT_CAP
+            hinted_size = expected_size
+            sizehint!(ret, hinted_size)
+        end
     end
 
     x_state = iterate(xs, state)
@@ -395,6 +400,11 @@ function reduce(::typeof(vcat), xs, T::Type{<:AbstractVector}, isize)
         append!(ret, x)
         x_state = iterate(xs, state)
     end
+
+    if length(ret) < hinted_size/2  # it is only allowable to be at most 2x to much memory
+        sizehint!(ret, length(ret))
+    end
+
     return ret
 end
 
