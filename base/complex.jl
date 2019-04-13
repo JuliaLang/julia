@@ -1016,22 +1016,4 @@ big(z::Complex{T}) where {T<:Real} = Complex{big(T)}(z)
 
 complex(A::AbstractArray) = map(complex, A)
 complex(A::AbstractArray{<:Complex}) = A
-<<<<<<< HEAD
 complex(R::AbstractArray{<:Any,N}, I::AbstractArray{<:Any,N}) where {N} = map(complex, R, I)
-=======
-
-function complex(A::AbstractArray{T}) where T
-    if !isconcretetype(T)
-        error("`complex` not defined on abstractly-typed arrays; please convert to a more specific type")
-    end
-    convert(AbstractArray{typeof(complex(zero(T)))}, A)
-end
-
-function complex(A::AbstractArray{T1}, B::AbstractArray{T2}) where {T1, T2}
-    if !isconcretetype(T1) || !isconcretetype(T2)
-        error("`complex` not defined on abstractly-typed arrays; please convert to a more specific type")
-    end
-    size(A) == size(B) || throw(DimensionMismatch("real and imaginary array dimensions do not match"))
-    Complex.(A, B)
-end
->>>>>>> 8bdee56391... fix #31676: add complex(::Array, ::Array) method
