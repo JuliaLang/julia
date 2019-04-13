@@ -1,5 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-using Test
+
 # Array test
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
