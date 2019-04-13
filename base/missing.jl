@@ -18,11 +18,7 @@ end
 showerror(io::IO, ex::MissingException) =
     print(io, "MissingException: ", ex.msg)
 
-
-nonmissingtype(::Type{Union{T, Missing}}) where {T} = T
-nonmissingtype(::Type{Missing}) = Union{}
-nonmissingtype(::Type{T}) where {T} = T
-nonmissingtype(::Type{Any}) = Any
+nonmissingtype(::Type{T}) where {T} = Core.Compiler.typesubtract(T, Missing)
 
 for U in (:Nothing, :Missing)
     @eval begin
@@ -79,7 +75,7 @@ for f in (:(!), :(~), :(+), :(-), :(zero), :(one), :(oneunit),
           :(isinteger), :(isreal), :(isnan),
           :(iszero), :(transpose), :(adjoint), :(float), :(conj),
           :(abs), :(abs2), :(iseven), :(ispow2),
-          :(real), :(imag), :(sign))
+          :(real), :(imag), :(sign), :(inv))
     @eval ($f)(::Missing) = missing
 end
 for f in (:(Base.zero), :(Base.one), :(Base.oneunit))

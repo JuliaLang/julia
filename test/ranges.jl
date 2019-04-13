@@ -259,6 +259,37 @@ end
         @test length(Char(0):Char(0x001fffff)) == 2097152
         @test length(typemax(UInt64)//one(UInt64):1:typemax(UInt64)//one(UInt64)) == 1
     end
+    @testset "keys/values" begin
+        keytype_is_correct(r) = keytype(r) == eltype(keys(r))
+        valtype_is_correct(r) = valtype(r) == eltype(values(r))
+        @test keytype_is_correct(1:3)
+        @test keytype_is_correct(1:.3:4)
+        @test keytype_is_correct(.1:.1:.3)
+        @test keytype_is_correct(Int8(1):Int8(5))
+        @test keytype_is_correct(Int16(1):Int8(5))
+        @test keytype_is_correct(Int16(1):Int8(3):Int8(5))
+        @test keytype_is_correct(Int8(1):Int16(3):Int8(5))
+        @test keytype_is_correct(Int8(1):Int8(3):Int16(5))
+        @test keytype_is_correct(Int64(1):Int64(5))
+        @test keytype_is_correct(Int64(1):Int64(5))
+        @test keytype_is_correct(Int128(1):Int128(5))
+        @test keytype_is_correct(Base.OneTo(4))
+        @test keytype_is_correct(Base.OneTo(Int32(4)))
+
+        @test valtype_is_correct(1:3)
+        @test valtype_is_correct(1:.3:4)
+        @test valtype_is_correct(.1:.1:.3)
+        @test valtype_is_correct(Int8(1):Int8(5))
+        @test valtype_is_correct(Int16(1):Int8(5))
+        @test valtype_is_correct(Int16(1):Int8(3):Int8(5))
+        @test valtype_is_correct(Int8(1):Int16(3):Int8(5))
+        @test valtype_is_correct(Int8(1):Int8(3):Int16(5))
+        @test valtype_is_correct(Int64(1):Int64(5))
+        @test valtype_is_correct(Int64(1):Int64(5))
+        @test valtype_is_correct(Int128(1):Int128(5))
+        @test valtype_is_correct(Base.OneTo(4))
+        @test valtype_is_correct(Base.OneTo(Int32(4)))
+    end
     @testset "findall(::Base.Fix2{typeof(in)}, ::Array)" begin
         @test findall(in(3:20), [5.2, 3.3]) == findall(in(Vector(3:20)), [5.2, 3.3])
 

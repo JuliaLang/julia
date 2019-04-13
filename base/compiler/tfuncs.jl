@@ -410,7 +410,7 @@ add_tfunc(pointerref, 3, 3,
 add_tfunc(pointerset, 4, 4, (@nospecialize(a), @nospecialize(v), @nospecialize(i), @nospecialize(align)) -> a, 5)
 
 # more accurate typeof_tfunc for vararg tuples abstract only in length
-function typeof_concrete_vararg(@nospecialize(t))
+function typeof_concrete_vararg(t::DataType)
     np = length(t.parameters)
     for i = 1:np
         p = t.parameters[i]
@@ -450,7 +450,7 @@ function typeof_tfunc(@nospecialize(t))
         a = widenconst(typeof_tfunc(t.a))
         b = widenconst(typeof_tfunc(t.b))
         return Union{a, b}
-    elseif isa(t, TypeVar) && !(Any <: t.ub)
+    elseif isa(t, TypeVar) && !(Any === t.ub)
         return typeof_tfunc(t.ub)
     elseif isa(t, UnionAll)
         u = unwrap_unionall(t)
@@ -1094,6 +1094,7 @@ function invoke_tfunc(@nospecialize(ft), @nospecialize(types), @nospecialize(arg
     if entry === nothing
         return Any
     end
+    # XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
     meth = entry.func
     (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), argtype, meth.sig)::SimpleVector
     rt, edge = typeinf_edge(meth::Method, ti, env, sv)

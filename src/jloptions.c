@@ -296,13 +296,13 @@ restart_switch:
             break;
         case 'v': // version
             jl_printf(JL_STDOUT, "julia version %s\n", JULIA_VERSION_STRING);
-            jl_exit(0);
+            exit(0);
         case 'h': // help
             jl_printf(JL_STDOUT, "%s%s", usage, opts);
-            jl_exit(0);
+            exit(0);
         case opt_help_hidden:
             jl_printf(JL_STDOUT, "%s%s", usage, opts_hidden);
-            jl_exit(0);
+            exit(0);
         case 'g': // debug info
             if (optarg != NULL) {
                 if (!strcmp(optarg,"0"))

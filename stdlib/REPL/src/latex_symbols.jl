@@ -111,6 +111,7 @@ const latex_symbols = Dict(
     "\\impliedby" => "⟸",
     "\\to" => "→",
     "\\euler" => "ℯ",
+    "\\ohm" => "Ω",
 
     # Superscripts
     "\\^0" => "⁰",

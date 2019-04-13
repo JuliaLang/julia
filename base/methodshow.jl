@@ -75,7 +75,7 @@ const empty_sym = Symbol("")
 
 function kwarg_decl(m::Method, kwtype::DataType)
     sig = rewrap_unionall(Tuple{kwtype, Any, unwrap_unionall(m.sig).parameters...}, m.sig)
-    kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, max_world(m))
+    kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, get_world_counter())
     if kwli !== nothing
         kwli = kwli::Method
         slotnames = ccall(:jl_uncompress_argnames, Vector{Any}, (Any,), kwli.slot_syms)
@@ -111,6 +111,12 @@ function show_method_params(io::IO, tv)
         end
     end
 end
+
+# In case the line numbers in the source code have changed since the code was compiled,
+# allow packages to set a callback function that corrects them.
+# (Used by Revise and perhaps other packages.)
+default_methodloc(method::Method) = method.file, method.line
+const methodloc_callback = Ref{Function}(default_methodloc)
 
 function show(io::IO, m::Method; kwtype::Union{DataType, Nothing}=nothing)
     tv, decls, file, line = arg_decl_parts(m)
@@ -150,6 +156,10 @@ function show(io::IO, m::Method; kwtype::Union{DataType, Nothing}=nothing)
     show_method_params(io, tv)
     print(io, " in ", m.module)
     if line > 0
+        try
+            file, line = invokelatest(methodloc_callback[], m)
+        catch
+        end
         print(io, " at ", file, ":", line)
     end
 end
@@ -173,12 +183,17 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
 
     resize!(LAST_SHOWN_LINE_INFOS, 0)
     for meth in ms
-       if max==-1 || n<max
+        if max==-1 || n<max
             n += 1
             println(io)
             print(io, "[$(n)] ")
             show(io, meth; kwtype=kwtype)
-            push!(LAST_SHOWN_LINE_INFOS, (string(meth.file), meth.line))
+            file, line = meth.file, meth.line
+            try
+                file, line = invokelatest(methodloc_callback[], meth)
+            catch
+            end
+            push!(LAST_SHOWN_LINE_INFOS, (string(file), line))
         else
             rest += 1
             last = meth
@@ -286,6 +301,10 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Union{DataType, Noth
     end
     print(io, " in ", m.module)
     if line > 0
+        try
+            file, line = invokelatest(methodloc_callback[], m)
+        catch
+        end
         u = url(m)
         if isempty(u)
             print(io, " at ", file, ":", line)
@@ -324,7 +343,12 @@ function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
         first = false
         print(io, "[$(i)] ")
         show(io, m)
-        push!(LAST_SHOWN_LINE_INFOS, (string(m.file), m.line))
+        file, line = m.file, m.line
+        try
+            file, line = invokelatest(methodloc_callback[], m)
+        catch
+        end
+        push!(LAST_SHOWN_LINE_INFOS, (string(file), line))
     end
 end
 

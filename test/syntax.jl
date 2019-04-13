@@ -1493,7 +1493,7 @@ end
 # issue #27129
 f27129(x = 1) = (@Base._inline_meta; x)
 for meth in methods(f27129)
-    @test ccall(:jl_uncompress_ast, Any, (Any, Any), meth, meth.source).inlineable
+    @test ccall(:jl_uncompress_ast, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source).inlineable
 end
 
 # issue #27710
@@ -1835,3 +1835,19 @@ end
 
 @test_throws UndefVarError eval(Symbol(""))
 @test_throws UndefVarError eval(:(1+$(Symbol(""))))
+
+# issue #31404
+f31404(a, b; kws...) = (a, b, kws.data)
+@test f31404(+, (Type{T} where T,); optimize=false) === (+, (Type,), (optimize=false,))
+
+# issue #28992
+macro id28992(x) x end
+@test @id28992(1 .+ 2) == 3
+@test Meta.isexpr(Meta.lower(@__MODULE__, :(@id28992((.+)(a,b) = 0))), :error)
+@test @id28992([1] .< [2] .< [3]) == [true]
+@test @id28992(2 ^ -2) == 0.25
+@test @id28992(2 .^ -2) == 0.25
+
+# issue #31596
+f31596(x; kw...) = x
+@test f31596((a=1,), b = 1.0) === (a=1,)

@@ -268,7 +268,7 @@ run(pipeline(`update`, stdout="log.txt", append=true))
 """
 function pipeline(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, append::Bool=false)
     if append && stdout === nothing && stderr === nothing
-        error("append set to true, but no output redirections specified")
+        throw(ArgumentError("append set to true, but no output redirections specified"))
     end
     if stdin !== nothing
         cmd = redir_out(stdin, cmd)
@@ -783,9 +783,34 @@ An exception is raised if the process cannot be started.
 """
 success(cmd::AbstractCmd) = success(_spawn(cmd))
 
+
+"""
+    ProcessFailedException
+
+Indicates problematic exit status of a process.
+When running commands or pipelines, this is thrown to indicate
+a nonzero exit code was returned (i.e. that the invoked process failed).
+"""
+struct ProcessFailedException <: Exception
+    procs::Vector{Process}
+end
+ProcessFailedException(proc::Process) = ProcessFailedException([proc])
+
+function showerror(io::IO, err::ProcessFailedException)
+    if length(err.procs) == 1
+        proc = err.procs[1]
+        println(io, "failed process: ", proc, " [", proc.exitcode, "]")
+    else
+        println(io, "failed processes:")
+        for proc in err.procs
+            println(io, "  ", proc, " [", proc.exitcode, "]")
+        end
+    end
+end
+
 function pipeline_error(proc::Process)
     if !proc.cmd.ignorestatus
-        error("failed process: ", proc, " [", proc.exitcode, "]")
+        throw(ProcessFailedException(proc))
     end
     nothing
 end
@@ -798,12 +823,7 @@ function pipeline_error(procs::ProcessChain)
         end
     end
     isempty(failed) && return nothing
-    length(failed) == 1 && pipeline_error(failed[1])
-    msg = "failed processes:"
-    for proc in failed
-        msg = string(msg, "\n  ", proc, " [", proc.exitcode, "]")
-    end
-    error(msg)
+    throw(ProcessFailedException(failed))
 end
 
 """

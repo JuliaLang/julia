@@ -2,7 +2,6 @@
 
 ## basic task functions and TLS
 
-const ThreadSynchronizer = GenericCondition{Threads.SpinLock}
 Core.Task(@nospecialize(f), reserved_stack::Int=0) = Core._Task(f, reserved_stack, ThreadSynchronizer())
 
 # Container for a captured exception and its backtrace. Can be serialized.
@@ -341,40 +340,6 @@ function task_done_hook(t::Task)
     end
 end
 
-"""
-    timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
-
-Waits until `testcb` returns `true` or for `secs` seconds, whichever is earlier.
-`testcb` is polled every `pollint` seconds.
-"""
-function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
-    pollint > 0 || throw(ArgumentError("cannot set pollint to $pollint seconds"))
-    start = time()
-    done = Channel(1)
-    timercb(aw) = begin
-        try
-            if testcb()
-                put!(done, :ok)
-            elseif (time() - start) > secs
-                put!(done, :timed_out)
-            end
-        catch e
-            put!(done, :error)
-        finally
-            isready(done) && close(aw)
-        end
-    end
-
-    if !testcb()
-        t = Timer(timercb, pollint, interval = pollint)
-        ret = fetch(done)
-        close(t)
-    else
-        ret = :ok
-    end
-    ret
-end
-
 
 ## scheduler and work queue
 
@@ -444,12 +409,17 @@ end
 
 function enq_work(t::Task)
     (t.state == :runnable && t.queue === nothing) || error("schedule: Task not runnable")
-    tid = (t.sticky ? Threads.threadid(t) : 0)
-    if tid == 0
-        tid = Threads.threadid()
+    if t.sticky
+        tid = Threads.threadid(t)
+        if tid == 0
+            tid = Threads.threadid()
+        end
+        push!(Workqueues[tid], t)
+    else
+        tid = 0
+        ccall(:jl_enqueue_task, Cvoid, (Any,), t)
     end
-    push!(Workqueues[tid], t)
-    tid == 1 && ccall(:uv_stop, Cvoid, (Ptr{Cvoid},), eventloop())
+    ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
     return t
 end
 
@@ -497,19 +467,6 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     end
     enq_work(t)
     return t
-end
-
-# fast version of `schedule(t, arg); wait()`
-function schedule_and_wait(t::Task, @nospecialize(arg)=nothing)
-    (t.state == :runnable && t.queue === nothing) || error("schedule: Task not runnable")
-    W = Workqueues[Threads.threadid()]
-    if isempty(W)
-        return yieldto(t, arg)
-    else
-        t.result = arg
-        push!(W, t)
-    end
-    return wait()
 end
 
 """
@@ -603,35 +560,37 @@ function trypoptask(W::StickyWorkqueue)
 end
 
 @noinline function poptaskref(W::StickyWorkqueue)
-    local task
-    while true
-        task = trypoptask(W)
-        task === nothing || break
-        if !Threads.in_threaded_loop[] && Threads.threadid() == 1
-            if process_events(true) == 0
-                task = trypoptask(W)
-                task === nothing || break
-                # if there are no active handles and no runnable tasks, just
-                # wait for signals.
-                pause()
-            end
-        else
-            if Threads.threadid() == 1
-                process_events(false)
-            end
-            ccall(:jl_gc_safepoint, Cvoid, ())
-            ccall(:jl_cpu_pause, Cvoid, ())
-        end
-    end
+    gettask = () -> trypoptask(W)
+    task = ccall(:jl_task_get_next, Any, (Any,), gettask)
+    ## Below is a reference implementation for `jl_task_get_next`, which currently lives in C
+    #local task
+    #while true
+    #    task = trypoptask(W)
+    #    task === nothing || break
+    #    if !Threads.in_threaded_loop[] && Threads.threadid() == 1
+    #        if process_events(true) == 0
+    #            task = trypoptask(W)
+    #            task === nothing || break
+    #            # if there are no active handles and no runnable tasks, just
+    #            # wait for signals.
+    #            pause()
+    #        end
+    #    else
+    #        if Threads.threadid() == 1
+    #            process_events(false)
+    #        end
+    #        ccall(:jl_gc_safepoint, Cvoid, ())
+    #        ccall(:jl_cpu_pause, Cvoid, ())
+    #    end
+    #end
     return Ref(task)
 end
-
 
 function wait()
     W = Workqueues[Threads.threadid()]
     reftask = poptaskref(W)
     result = try_yieldto(ensure_rescheduled, reftask)
-    process_events(false)
+    process_events()
     # return when we come out of the queue
     return result
 end

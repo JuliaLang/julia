@@ -481,7 +481,7 @@ let ex
     @test length(bt) > 1
     frame, repeated = bt[1]::Tuple{Base.StackTraces.StackFrame, Int}
     @test frame.func == :foo
-    @test frame.linfo == nothing
+    @test frame.linfo === nothing
     @test repeated == 1
 end
 

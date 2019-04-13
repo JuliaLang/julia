@@ -848,31 +848,32 @@ JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup)
     jl_ptls_t ptls = jl_get_ptls_states();
     if (!jl_is_tuple(tup))
         jl_type_error("new", (jl_value_t*)jl_tuple_type, tup);
-    size_t na = jl_nfields(tup);
+    size_t nargs = jl_nfields(tup);
     size_t nf = jl_datatype_nfields(type);
-    if (na > nf)
-        jl_too_many_args("new", nf);
+    JL_NARGS(new, nf, nf);
     if (type->instance != NULL) {
-        for (size_t i = 0; i < na; i++) {
+        jl_datatype_t *tupt = (jl_datatype_t*)jl_typeof(tup);
+        for (size_t i = 0; i < nargs; i++) {
             jl_value_t *ft = jl_field_type(type, i);
-            jl_value_t *fi = jl_get_nth_field(tup, i);
-            if (!jl_isa(fi, ft))
-                jl_type_error("new", ft, fi);
+            jl_value_t *et = jl_field_type(tupt, i);
+            assert(jl_is_concrete_type(ft) && jl_is_concrete_type(et));
+            if (et != ft)
+                jl_type_error("new", ft, jl_get_nth_field(tup, i));
         }
         return type->instance;
     }
     if (type->layout == NULL)
         jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
     jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
-    JL_GC_PUSH1(&jv);
-    for (size_t i = 0; i < na; i++) {
+    jl_value_t *fi = NULL;
+    JL_GC_PUSH2(&jv, &fi);
+    for (size_t i = 0; i < nargs; i++) {
         jl_value_t *ft = jl_field_type(type, i);
-        jl_value_t *fi = jl_get_nth_field(tup, i);
+        fi = jl_get_nth_field(tup, i);
         if (!jl_isa(fi, ft))
             jl_type_error("new", ft, fi);
         jl_set_nth_field(jv, i, fi);
     }
-    init_struct_tail(type, jv, na);
     JL_GC_POP();
     return jv;
 }

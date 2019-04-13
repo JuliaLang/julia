@@ -177,6 +177,8 @@ end
     wait(c::Condition)
 end
 
+const ThreadSynchronizer = GenericCondition{Threads.SpinLock}
+
 """
     Semaphore(sem_size)
 

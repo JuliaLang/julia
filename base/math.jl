@@ -98,7 +98,8 @@ macro horner(x, p...)
     for i = length(p)-1:-1:1
         ex = :(muladd(t, $ex, $(esc(p[i]))))
     end
-    Expr(:block, :(t = $(esc(x))), ex)
+    ex = quote local r = $ex end # structure this to add exactly one line number node for the macro
+    return Expr(:block, :(local t = $(esc(x))), ex, :r)
 end
 
 # Evaluate p[1] + z*p[2] + z^2*p[3] + ... + z^(n-1)*p[n].  This uses

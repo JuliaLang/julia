@@ -323,3 +323,11 @@ let
     @test cstring != C_NULL
     @test C_NULL != cstring
 end
+
+# issue #31381: eltype(Cstring) != Cchar
+let
+    s = Cstring(C_NULL)
+    @test eltype(Cstring) == Cchar
+    @test eltype(s) == Cchar
+    @test pointer(s) isa Ptr{Cchar}
+end

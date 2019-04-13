@@ -1829,6 +1829,13 @@ for x in xs5165
     println(b5165, x)   # segfaulted
 end
 
+# issue #31486
+f31486(x::Bool, y::Bool, z::Bool) = Core.Intrinsics.bitcast(UInt8, Core.Intrinsics.add_int(x, Core.Intrinsics.add_int(y, z)))
+@test f31486(false, false, true) == 0x01
+@test f31486(false, true, true) == 0x00
+@test f31486(true, true, true) == 0x01
+
+
 # support tuples as type parameters
 
 mutable struct TupleParam{P}
@@ -5828,6 +5835,13 @@ for U in boxedunions
     end
 end
 
+# issue 31583
+a31583 = "a"
+f31583() = a31583 === "a"
+@test f31583()
+a31583 = "b"
+@test !f31583()
+
 # unsafe_wrap
 let
     A4 = [1, 2, 3]
@@ -6840,31 +6854,28 @@ g29828() = 2::Any[String][1]
 struct SplatNew{T}
     x::Int8
     y::T
-    SplatNew{T}(args...) where {T} = new(0,args...,1)
+    SplatNew{T}(args...) where {T} = new(0, args..., 1)
     SplatNew(args...) = new{Float32}(args...)
     SplatNew{Any}(args...) = new(args...)
     SplatNew{Tuple{Int16}}(args...) = new([2]..., args...)
-    SplatNew{Int8}() = new(1,2,3)
+    SplatNew{Int8}() = new(1, 2, 3)
 end
 let x = SplatNew{Int16}()
     @test x.x === Int8(0)
     @test x.y === Int16(1)
 end
-@test_throws ArgumentError SplatNew{Int16}(1)
-let x = SplatNew(3,2)
+@test_throws ArgumentError("new: too many arguments (expected 2)") SplatNew{Int16}(1)
+let x = SplatNew(3, 2)
     @test x.x === Int8(3)
     @test x.y === 2.0f0
 end
-@test_throws ArgumentError SplatNew(1,2,3)
-let x = SplatNew{Any}(1)
-    @test x.x === Int8(1)
-    @test !isdefined(x, :y)
-end
+@test_throws ArgumentError("new: too many arguments (expected 2)") SplatNew(1, 2, 3)
+@test_throws ArgumentError("new: too few arguments (expected 2)") SplatNew{Any}(1)
 let x = SplatNew{Tuple{Int16}}((1,))
     @test x.x === Int8(2)
     @test x.y === (Int16(1),)
 end
-@test_throws ArgumentError SplatNew{Int8}()
+@test_throws ArgumentError("new: too many arguments (expected 2)")  SplatNew{Int8}()
 
 # Issue #31357 - Missed assignment in nested try/catch
 function foo31357(b::Bool)
@@ -6883,3 +6894,24 @@ function foo31357(b::Bool)
 end
 @test foo31357(true) == 12345
 @test foo31357(false) == 12345
+
+# Issue #31406
+abstract type Shape31406 end
+struct ValueOf31406 <: Shape31406
+    ty::Type
+end
+struct TupleOf31406 <: Shape31406
+    cols::Vector{Shape31406}
+end
+TupleOf31406(cols::Union{Shape31406,Type}...) = TupleOf31406(collect(Shape31406, cols))
+@test (TupleOf31406(ValueOf31406(Int64), ValueOf31406(Float64))::TupleOf31406).cols ==
+    Shape31406[ValueOf31406(Int64), ValueOf31406(Float64)]
+@test try
+        TupleOf31406(ValueOf31406(Int64), Float64)
+        false
+    catch ex
+        if !(ex isa MethodError && ex.f === convert && ex.args == (Shape31406, Float64))
+            rethrow(ex)
+        end
+        true
+    end

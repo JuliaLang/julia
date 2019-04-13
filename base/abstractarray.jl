@@ -101,6 +101,51 @@ unsafe_indices(r::AbstractRange) = (OneTo(unsafe_length(r)),) # Ranges use check
 keys(a::AbstractArray) = CartesianIndices(axes(a))
 keys(a::AbstractVector) = LinearIndices(a)
 
+"""
+    keytype(T::Type{<:AbstractArray})
+    keytype(A::AbstractArray)
+
+Return the key type of an array. This is equal to the
+`eltype` of the result of `keys(...)`, and is provided
+mainly for compatibility with the dictionary interface.
+
+# Examples
+```jldoctest
+julia> keytype([1, 2, 3]) == Int
+true
+
+julia> keytype([1 2; 3 4])
+CartesianIndex{2}
+```
+
+!!! compat "Julia 1.2"
+     For arrays, this function requires at least Julia 1.2.
+"""
+keytype(a::AbstractArray) = keytype(typeof(a))
+
+keytype(A::Type{<:AbstractArray}) = CartesianIndex{ndims(A)}
+keytype(A::Type{<:AbstractVector}) = Int
+
+valtype(a::AbstractArray) = valtype(typeof(a))
+
+"""
+    valtype(T::Type{<:AbstractArray})
+    valtype(A::AbstractArray)
+
+Return the value type of an array. This is identical to `eltype` and is
+provided mainly for compatibility with the dictionary interface.
+
+# Examples
+```jldoctest
+julia> valtype(["one", "two", "three"])
+String
+```
+
+!!! compat "Julia 1.2"
+     For arrays, this function requires at least Julia 1.2.
+"""
+valtype(A::Type{<:AbstractArray}) = eltype(A)
+
 prevind(::AbstractArray, i::Integer) = Int(i)-1
 nextind(::AbstractArray, i::Integer) = Int(i)+1
 
@@ -710,7 +755,7 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer)
                                    "expected at least ",sstart,", got ",sstart-1)))
     end
     i = Int(dstart)
-    while y != nothing
+    while y !== nothing
         val, st = y
         dest[i] = val
         i += 1

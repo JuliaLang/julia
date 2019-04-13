@@ -209,6 +209,7 @@ include("shell.jl")
 include("regex.jl")
 include("show.jl")
 include("arrayshow.jl")
+include("methodshow.jl")
 
 # multidimensional arrays
 include("cartesian.jl")
@@ -241,9 +242,8 @@ end
 include("env.jl")
 
 # Scheduling
-include("libuv.jl")
 include("linked_list.jl")
-include("event.jl")
+include("condition.jl")
 include("threads.jl")
 include("lock.jl")
 include("task.jl")
@@ -258,12 +258,13 @@ function rand end
 function randn end
 
 # I/O
+include("libuv.jl")
+include("asyncevent.jl")
 include("stream.jl")
 include("filesystem.jl")
 using .Filesystem
 include("process.jl")
 include("grisu/grisu.jl")
-include("methodshow.jl")
 include("secretbuffer.jl")
 
 # core math functions
@@ -347,6 +348,9 @@ include("loading.jl")
 include("util.jl")
 
 include("asyncmap.jl")
+
+# experimental API's
+include("experimental.jl")
 
 # deprecated functions
 include("deprecated.jl")

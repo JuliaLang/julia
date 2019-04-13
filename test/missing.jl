@@ -6,6 +6,7 @@ end
 
 @testset "nonmissingtype" begin
     @test Base.nonmissingtype(Union{Int, Missing}) == Int
+    @test Base.nonmissingtype(Union{Rational, Missing}) == Rational
     @test Base.nonmissingtype(Any) == Any
     @test Base.nonmissingtype(Missing) == Union{}
 end
@@ -156,7 +157,7 @@ Base.one(::Type{Unit}) = 1
                             identity, zero, one, oneunit,
                             iseven, isodd, ispow2,
                             isfinite, isinf, isnan, iszero,
-                            isinteger, isreal, transpose, adjoint, float]
+                            isinteger, isreal, transpose, adjoint, float, inv]
 
     # All elementary functions return missing when evaluating missing
     for f in elementary_functions

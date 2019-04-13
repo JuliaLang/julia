@@ -74,7 +74,7 @@ function convert(::Type{RoundingMode}, r::MPFRRoundingMode)
     elseif r == MPFRRoundFromZero
         return RoundFromZero
     else
-        throw(ArgumentError("invalid MPFR rounding mode code: $c"))
+        throw(ArgumentError("invalid MPFR rounding mode code: $r"))
     end
 end
 
@@ -191,6 +191,11 @@ function BigFloat(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::I
     end
 end
 
+function _duplicate(x::BigFloat)
+    z = BigFloat(;precision=precision(x))
+    ccall((:mpfr_set, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Int32), z, x, 0)
+    return z
+end
 
 # convert to BigFloat
 for (fJ, fC) in ((:si,:Clong), (:ui,:Culong))
@@ -889,21 +894,24 @@ isone(x::BigFloat) = x == Clong(1)
 @eval typemax(::Type{BigFloat}) = $(BigFloat(Inf))
 @eval typemin(::Type{BigFloat}) = $(BigFloat(-Inf))
 
-function nextfloat(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_set, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode),
-          z, x, ROUNDING_MODE[])
-    ccall((:mpfr_nextabove, :libmpfr), Int32, (Ref{BigFloat},), z) != 0
-    return z
+function nextfloat!(x::BigFloat, n::Integer=1)
+    signbit(n) && return prevfloat!(x, abs(n))
+    for i = 1:n
+        ccall((:mpfr_nextabove, :libmpfr), Int32, (Ref{BigFloat},), x)
+    end
+    return x
 end
 
-function prevfloat(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_set, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode),
-          z, x, ROUNDING_MODE[])
-    ccall((:mpfr_nextbelow, :libmpfr), Int32, (Ref{BigFloat},), z) != 0
-    return z
+function prevfloat!(x::BigFloat, n::Integer=1)
+    signbit(n) && return nextfloat!(x, abs(n))
+    for i = 1:n
+        ccall((:mpfr_nextbelow, :libmpfr), Int32, (Ref{BigFloat},), x)
+    end
+    return x
 end
+
+nextfloat(x::BigFloat, n::Integer=1) = n == 0 ? x : nextfloat!(_duplicate(x), n)
+prevfloat(x::BigFloat, n::Integer=1) = n == 0 ? x : prevfloat!(_duplicate(x), n)
 
 eps(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
 
@@ -922,6 +930,9 @@ It is logically equivalent to:
     setprecision(BigFloat, old)
 
 Often used as `setprecision(T, precision) do ... end`
+
+Note: `nextfloat()`, `prevfloat()` do not use the precision mentioned by
+`setprecision`
 """
 function setprecision(f::Function, ::Type{T}, prec::Integer) where T
     old_prec = precision(T)

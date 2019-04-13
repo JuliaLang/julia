@@ -9,8 +9,12 @@
 #include "support/dtypes.h"
 #include <sstream>
 
+#include <llvm-c/Core.h>
+#include <llvm-c/Types.h>
+
 #include <llvm/Pass.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Constants.h>
@@ -292,4 +296,9 @@ static RegisterPass<LowerPTLS> X("LowerPTLS", "LowerPTLS Pass",
 Pass *createLowerPTLSPass(bool imaging_mode)
 {
     return new LowerPTLS(imaging_mode);
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddLowerPTLSPass(LLVMPassManagerRef PM, LLVMBool imaging_mode)
+{
+    unwrap(PM)->add(createLowerPTLSPass(imaging_mode));
 }

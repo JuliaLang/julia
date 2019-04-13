@@ -822,9 +822,9 @@ end
     sortperm(v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Return a permutation vector `I` that puts `v[I]` in sorted order. The order is specified
-using the same keywords as `sort!`. The permutation is guaranteed to be stable even if the
-sorting algorithm is unstable, meaning that indices of equal elements appear in ascending
-order.
+using the same keywords as [`sort!`](@ref). The permutation is guaranteed to be stable even
+if the sorting algorithm is unstable, meaning that indices of equal elements appear in
+ascending order.
 
 See also [`sortperm!`](@ref).
 

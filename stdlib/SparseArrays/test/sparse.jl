@@ -2088,11 +2088,11 @@ end
 
     show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5], Int64[1,1,2,2,3], [1.0,2.0,3.0,4.0,5.0]))
     @test String(take!(io)) ==  string("5×3 SparseArrays.SparseMatrixCSC{Float64,Int64} with 5 stored entries:\n  [1, 1]",
-                                       "  =  1.0\n  ⋮\n  [5, 3]  =  5.0")
+                                       "  =  1.0\n  ⋮\n  [4, 2]  =  4.0\n  [5, 3]  =  5.0")
 
     show(ioc, MIME"text/plain"(), sparse(fill(1.,5,3)))
     @test String(take!(io)) ==  string("5×3 SparseArrays.SparseMatrixCSC{Float64,$Int} with 15 stored entries:\n  [1, 1]",
-                                       "  =  1.0\n  ⋮\n  [5, 3]  =  1.0")
+                                       "  =  1.0\n  ⋮\n  [4, 3]  =  1.0\n  [5, 3]  =  1.0")
 
     # odd number of rows
     ioc = IOContext(io, :displaysize => (9, 80), :limit => true)
@@ -2245,16 +2245,20 @@ end
         @test findprev(!iszero, x,i) == findprev(!iszero, x_sp,i)
     end
 
-    y = [0 0 0 0 0;
+    y = [7 0 0 0 0;
          1 0 1 0 0;
-         1 0 0 0 1;
+         1 7 0 7 1;
          0 0 1 0 0;
-         1 0 1 1 0]
-    y_sp = sparse(y)
+         1 0 1 1 0.0]
+    y_sp = [x == 7 ? -0.0 : x for x in sparse(y)]
+    y = Array(y_sp)
+    @test isequal(y_sp[1,1], -0.0)
 
     for i in keys(y)
         @test findnext(!iszero, y,i) == findnext(!iszero, y_sp,i)
         @test findprev(!iszero, y,i) == findprev(!iszero, y_sp,i)
+        @test findnext(iszero, y,i) == findnext(iszero, y_sp,i)
+        @test findprev(iszero, y,i) == findprev(iszero, y_sp,i)
     end
 
     z_sp = sparsevec(Dict(1=>1, 5=>1, 8=>0, 10=>1))
@@ -2264,6 +2268,17 @@ end
         @test findnext(!iszero, z,i) == findnext(!iszero, z_sp,i)
         @test findprev(!iszero, z,i) == findprev(!iszero, z_sp,i)
     end
+
+    w = [ "a" ""; "" "b"]
+    w_sp = sparse(w)
+
+    for i in keys(w)
+        @test findnext(!isequal(""), w,i) == findnext(!isequal(""), w_sp,i)
+        @test findprev(!isequal(""), w,i) == findprev(!isequal(""), w_sp,i)
+        @test findnext(isequal(""), w,i) == findnext(isequal(""), w_sp,i)
+        @test findprev(isequal(""), w,i) == findprev(isequal(""), w_sp,i)
+    end
+
 end
 
 # #20711
@@ -2546,14 +2561,6 @@ end
     @test sparse(Adjoint(UpperTriangular(A'))) == Adjoint(UpperTriangular(B'))
 end
 
-@testset "Ti cannot store all potential values #31024" begin
-    @test_throws ArgumentError SparseMatrixCSC(128, 1, [Int8(1), Int8(1)], Int8[], Int[])
-    @test_throws ArgumentError SparseMatrixCSC(12, 12, [Int8(1), Int8(1)], Int8[], Int[])
-    I1 = [Int8(i) for i in 1:20 for _ in 1:20]
-    J1 = [Int8(i) for _ in 1:20 for i in 1:20]
-    @test_throws ArgumentError sparse(I1, J1, zero(length(I1)zero(length(I1))))
-end
-
 @testset "unary operations on matrices where length(nzval)>nnz" begin
     # this should create a sparse matrix with length(nzval)>nnz
     A = SparseMatrixCSC(Complex{BigInt}[1+im 2+2im]')'[1:1, 2:2]
@@ -2564,6 +2571,19 @@ end
     @test conj(A) == fill(2-2im, 1, 1)
     conj!(A)
     @test A == fill(2-2im, 1, 1)
+end
+
+@testset "issue #31453" for T in [UInt8, Int8, UInt16, Int16, UInt32, Int32]
+    i = Int[1, 2]
+    j = Int[2, 1]
+    i2 = T.(i)
+    j2 = T.(j)
+    v = [500, 600]
+    x1 = sparse(i, j, v)
+    x2 = sparse(i2, j2, v)
+    @test sum(x1) == sum(x2) == 1100
+    @test sum(x1, dims=1) == sum(x2, dims=1)
+    @test sum(x1, dims=2) == sum(x2, dims=2)
 end
 
 end # module

@@ -56,6 +56,8 @@ struct Params
                    tuple_splat)
     end
     function Params(world::UInt)
+        world == typemax(UInt) && (world = get_world_counter()) # workaround for bad callers
+        @assert world <= get_world_counter()
         inlining = inlining_enabled()
         return new(Vector{InferenceResult}(),
                    world, true,

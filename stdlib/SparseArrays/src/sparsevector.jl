@@ -1911,6 +1911,13 @@ function fkeep!(x::SparseVector, f, trim::Bool = true)
     x
 end
 
+"""
+    droptol!(x::SparseVector, tol; trim::Bool = true)
+
+Removes stored values from `x` whose absolute value is (strictly) larger than `tol`,
+optionally trimming resulting excess space from `A.rowval` and `A.nzval` when `trim`
+is `true`.
+"""
 droptol!(x::SparseVector, tol; trim::Bool = true) = fkeep!(x, (i, x) -> abs(x) > tol, trim)
 
 """

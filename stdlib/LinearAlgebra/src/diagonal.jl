@@ -172,7 +172,7 @@ end
 
 function rmul!(A::AbstractMatrix, D::Diagonal)
     require_one_based_indexing(A)
-    A .= A .* transpose(D.diag)
+    A .= A .* permutedims(D.diag)
     return A
 end
 
@@ -260,20 +260,20 @@ lmul!(A::Diagonal, B::Diagonal) = Diagonal(B.diag .= A.diag .* B.diag)
 
 function lmul!(adjA::Adjoint{<:Any,<:Diagonal}, B::AbstractMatrix)
     A = adjA.parent
-    return lmul!(conj(A.diag), B)
+    return lmul!(adjoint(A), B)
 end
 function lmul!(transA::Transpose{<:Any,<:Diagonal}, B::AbstractMatrix)
     A = transA.parent
-    return lmul!(A.diag, B)
+    return lmul!(transpose(A), B)
 end
 
 function rmul!(A::AbstractMatrix, adjB::Adjoint{<:Any,<:Diagonal})
     B = adjB.parent
-    return rmul!(A, conj(B.diag))
+    return rmul!(A, adjoint(B))
 end
 function rmul!(A::AbstractMatrix, transB::Transpose{<:Any,<:Diagonal})
     B = transB.parent
-    return rmul!(A, B.diag)
+    return rmul!(A, transpose(B))
 end
 
 # Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
@@ -552,10 +552,9 @@ end
 *(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal) = Adjoint(map((t,s) -> t'*s, D.diag, parent(x)))
 *(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) =
     mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
-*(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal) = Transpose(map(*, D.diag, parent(x)))
+*(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal) = Transpose(map((t,s) -> transpose(t)*s, D.diag, parent(x)))
 *(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) =
     mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
-# TODO: these methods will yield row matrices, rather than adjoint/transpose vectors
 
 function cholesky!(A::Diagonal, ::Val{false} = Val(false); check::Bool = true)
     info = 0

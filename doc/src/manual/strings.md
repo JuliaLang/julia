@@ -747,7 +747,7 @@ are given in the [Metaprogramming](@ref) section.
 ## Regular Expressions
 
 Julia has Perl-compatible regular expressions (regexes), as provided by the [PCRE](http://www.pcre.org/)
-library. Regular expressions are related to strings in two ways: the obvious connection is that
+library (a description of the syntax can be found [here](http://www.pcre.org/current/doc/html/pcre2syntax.html)). Regular expressions are related to strings in two ways: the obvious connection is that
 regular expressions are used to find regular patterns in strings; the other connection is that
 regular expressions are themselves input as strings, which are parsed into a state machine that
 can be used to efficiently search for patterns in strings. In Julia, regular expressions are input

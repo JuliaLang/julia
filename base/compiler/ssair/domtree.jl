@@ -28,9 +28,13 @@ end
 bb_unreachable(domtree::DomTree, bb::Int) = bb != 1 && domtree.nodes[bb].level == 1
 
 function update_level!(domtree::Vector{DomTreeNode}, node::Int, level::Int)
-    domtree[node] = DomTreeNode(level, domtree[node].children)
-    foreach(domtree[node].children) do child
-        update_level!(domtree, child, level+1)
+    worklist = Tuple{Int, Int}[(node, level)]
+    while !isempty(worklist)
+        (node, level) = pop!(worklist)
+        domtree[node] = DomTreeNode(level, domtree[node].children)
+        foreach(domtree[node].children) do child
+            push!(worklist, (child, level+1))
+        end
     end
 end
 
@@ -213,6 +217,29 @@ begin
         nothing
     end
 
+    function snca_compress_worklist!(
+            state::Vector{Node}, ancestors::Vector{DFSNumber},
+            v::DFSNumber, last_linked::DFSNumber)
+        # TODO: There is a smarter way to do this
+        u = ancestors[v]
+        worklist = Tuple{Int, Int}[(u,v)]
+        @assert u < v
+        while !isempty(worklist)
+            u, v = last(worklist)
+            if u >= last_linked
+                if ancestors[u] >= last_linked
+                    push!(worklist, (ancestors[u], u))
+                    continue
+                end
+                if state[u].label < state[v].label
+                    state[v] = Node(state[v].semi, state[u].label)
+                end
+                ancestors[v] = ancestors[u]
+            end
+            pop!(worklist)
+        end
+    end
+
     """
     The main Semi-NCA algrithm. Matches Figure 2.8 in [LG05].
     Note that the pseudocode in [LG05] is not entirely accurate.
@@ -255,7 +282,13 @@ begin
                 # `ancestor[v] != 0` check in the `eval` implementation in
                 # figure 2.6
                 if vdfs >= last_linked
-                    snca_compress!(state, ancestors, vdfs, last_linked)
+                    # For performance, if the number of ancestors is small
+                    # avoid the extra allocation of the worklist.
+                    if length(ancestors) <= 32
+                        snca_compress!(state, ancestors, vdfs, last_linked)
+                    else
+                        snca_compress_worklist!(state, ancestors, vdfs, last_linked)
+                    end
                 end
                 semi_w = min(semi_w, state[vdfs].label)
             end

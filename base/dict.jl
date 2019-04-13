@@ -657,18 +657,22 @@ end
 
 function skip_deleted(h::Dict, i)
     L = length(h.slots)
-    @inbounds while i<=L && !isslotfilled(h,i)
-        i += 1
+    for i = i:L
+        @inbounds if isslotfilled(h,i)
+            return  i
+        end
     end
-    return i
+    return nothing
 end
 function skip_deleted_floor!(h::Dict)
     idx = skip_deleted(h, h.idxfloor)
-    h.idxfloor = idx
+    if idx !== nothing
+        h.idxfloor = idx
+    end
     idx
 end
 
-@propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} = i > length(t.vals) ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i+1)
+@propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} = i === nothing  ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i == typemax(Int) ? nothing : i+1)
 @propagate_inbounds function iterate(t::Dict)
     _iterate(t, skip_deleted_floor!(t))
 end
@@ -677,14 +681,21 @@ end
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
-@propagate_inbounds function iterate(v::Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}},
-                                     i=v.dict.idxfloor)
+@propagate_inbounds function Base.iterate(v::T, i::Union{Int,Nothing}=v.dict.idxfloor) where T <: Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}}
+    i === nothing && return nothing # This is to catch nothing returned when i = typemax
     i = skip_deleted(v.dict, i)
-    i > length(v.dict.vals) && return nothing
-    (v isa KeySet ? v.dict.keys[i] : v.dict.vals[i], i+1)
+    i === nothing && return nothing # This is to catch nothing returned by skip_deleted
+    vals = T <: KeySet ? v.dict.keys : v.dict.vals
+    (@inbounds vals[i], i == typemax(Int) ? nothing : i+1)
 end
 
 filter!(f, d::Dict) = filter_in_one_pass!(f, d)
+
+function reduce(::typeof(merge), items::Vector{<:Dict})
+    K = mapreduce(keytype, promote_type, items)
+    V = mapreduce(valtype, promote_type, items)
+    return reduce(merge!, items; init=Dict{K,V}())
+end
 
 function map!(f, iter::ValueIterator{<:Dict})
     dict = iter.dict
