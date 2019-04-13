@@ -525,6 +525,8 @@ JL_DLLEXPORT void jl_threading_run(jl_value_t *func)
         jl_apply(args, 2);
     }
     _threadedregion -= 1;
+    // make sure no threads are sitting in the event loop
+    jl_wake_libuv();
     JL_GC_POP();
     jl_gc_unsafe_leave(ptls, gc_state);
 }
