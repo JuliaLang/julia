@@ -162,6 +162,8 @@ using .SimdLoop
 
 # map-reduce operators
 include("reduce.jl")
+include("reductions.jl")
+
 
 ## core structures
 include("reshapedarray.jl")
