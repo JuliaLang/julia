@@ -139,25 +139,22 @@ julia> b = [1 2; 3 4]
  1  2
  3  4
 
-julia> reverse(b, dims=1,2)
+julia> reverse(b, dims=(1,2))
 2×2 Array{Int64,2}:
  4  3
  2  1
 ```
 """
 function reverse(A::AbstractArray; dims)
-    # dims can in theory be any iterable, how do we type that?
-    # TODO: add tests for duplicate dims, too many dims, empty dims
     if length(dims) == 1
-        print("one dim")
-        return _reverse(A, dims[1])
+        return _reverse(A, dims=dims[1])
     else
-        return reverse(_reverse(A, dims[1]), dims[2:end])
+        return reverse(_reverse(A, dims=dims[1]), dims=dims[2:end])
     end
 end
- 
-function _reverse(A::AbstractArray, d::Integer)
-    nd = ndims(A)
+
+function _reverse(A::AbstractArray; dims::Integer)
+    nd = ndims(A); d = dims
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     if isempty(A)
         return copy(A)
