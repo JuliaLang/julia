@@ -944,7 +944,6 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
         end
     elseif e.head === :splatnew
         t = instanceof_tfunc(abstract_eval(e.args[1], vtypes, sv))[1]
-        # TODO: improve
     elseif e.head === :&
         abstract_eval(e.args[1], vtypes, sv)
         t = Any

@@ -833,6 +833,30 @@ a scalar can participate in linear algebra operations such as `2 * rand(2,2)`,
 but the analogous operation with a zero-dimensional array
 `fill(2) * rand(2,2)` is an error.
 
+### Why are my Julia benchmarks for linear algebra operations different from other languages?
+
+You may find that simple benchmarks of linear algebra building blocks like
+
+```julia
+using BenchmarkTools
+A = randn(1000, 1000)
+B = randn(1000, 1000)
+@btime $A \ $B
+@btime $A * $B
+```
+
+can be different when compared to other languages like Matlab or R.
+
+Since operations like this are very thin wrappers over the relevant BLAS functions, the reason for the discrepancy is very likely to be
+
+1. the BLAS library each language is using,
+
+2. the number of concurrent threads.
+
+Julia compiles and uses its own copy of OpenBLAS, with threads currently capped at `8` (or the number of your cores).
+
+Modifying OpenBLAS settings or compiling Julia with a different BLAS library, eg [Intel MKL](https://software.intel.com/en-us/mkl), may provide performance improvements. You can use [MKL.jl](https://github.com/JuliaComputing/MKL.jl), a package that makes Julia's linear algebra use Intel MKL BLAS and LAPACK instead of OpenBLAS, or search the discussion forum for suggestions on how to set this up manually. Note that Intel MKL cannot be bundled with Julia, as it is not open source.
+
 ## Julia Releases
 
 ### Do I want to use a release, beta, or nightly version of Julia?

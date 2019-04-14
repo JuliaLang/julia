@@ -88,19 +88,20 @@ using Distributed
 @testset "channels bound to tasks" for N in [0, 10]
     # Normal exit of task
     c = Channel(N)
-    bind(c, @async (yield(); nothing))
+    bind(c, @async (GC.gc(); yield(); nothing))
     @test_throws InvalidStateException take!(c)
     @test !isopen(c)
 
     # Error exception in task
     c = Channel(N)
-    bind(c, @async (yield(); error("foo")))
+    bind(c, @async (GC.gc(); yield(); error("foo")))
     @test_throws ErrorException take!(c)
     @test !isopen(c)
 
     # Multiple channels closed by the same bound task
     cs = [Channel(N) for i in 1:5]
-    tf2 = () -> begin
+    tf2() = begin
+        GC.gc()
         if N > 0
             foreach(c -> (@assert take!(c) === 2), cs)
         end
@@ -129,8 +130,8 @@ using Distributed
     # Multiple tasks, first one to terminate closes the channel
     nth = rand(1:5)
     ref = Ref(0)
-    cond = Condition()
     tf3(i) = begin
+        GC.gc()
         if i == nth
             ref[] = i
         else
@@ -138,7 +139,7 @@ using Distributed
         end
     end
 
-    tasks = [Task(()->tf3(i)) for i in 1:5]
+    tasks = [Task(() -> tf3(i)) for i in 1:5]
     c = Channel(N)
     foreach(t -> bind(c, t), tasks)
     foreach(schedule, tasks)

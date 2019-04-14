@@ -737,6 +737,19 @@ function resolve_ref_immediately(s::AbstractSerializer, @nospecialize(x))
     nothing
 end
 
+function gettable(s::AbstractSerializer, id::Int)
+    get(s.table, id) do
+        errmsg = """Inconsistent Serializer state when deserializing.
+            Attempt to access internal table with key $id failed.
+
+            This might occur if the Serializer contexts when serializing and deserializing are inconsistent.
+            In particular, if multiple serialize calls use the same Serializer object then
+            the corresponding deserialize calls should also use the same Serializer object.
+        """
+        error(errmsg)
+    end
+end
+
 # deserialize_ is an internal function to dispatch on the tag
 # describing the serialized representation. the number of
 # representations is fixed, so deserialize_ does not get extended.
@@ -750,10 +763,10 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return deserialize_tuple(s, Int(read(s.io, UInt8)::UInt8))
     elseif b == SHORTBACKREF_TAG
         id = read(s.io, UInt16)::UInt16
-        return s.table[Int(id)]
+        return gettable(s, Int(id))
     elseif b == BACKREF_TAG
         id = read(s.io, Int32)::Int32
-        return s.table[Int(id)]
+        return gettable(s, Int(id))
     elseif b == ARRAY_TAG
         return deserialize_array(s)
     elseif b == DATATYPE_TAG
@@ -800,7 +813,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return deserialize_expr(s, Int(read(s.io, Int32)::Int32))
     elseif b == LONGBACKREF_TAG
         id = read(s.io, Int64)::Int64
-        return s.table[Int(id)]
+        return gettable(s, Int(id))
     elseif b == LONGSYMBOL_TAG
         return deserialize_symbol(s, Int(read(s.io, Int32)::Int32))
     elseif b == HEADER_TAG

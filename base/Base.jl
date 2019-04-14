@@ -349,6 +349,9 @@ include("util.jl")
 
 include("asyncmap.jl")
 
+# experimental API's
+include("experimental.jl")
+
 # deprecated functions
 include("deprecated.jl")
 

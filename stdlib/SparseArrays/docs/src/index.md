@@ -202,6 +202,9 @@ section of the standard library reference.
 # [Sparse Arrays](@id stdlib-sparse-arrays)
 
 ```@docs
+SparseArrays.AbstractSparseArray
+SparseArrays.AbstractSparseVector
+SparseArrays.AbstractSparseMatrix
 SparseArrays.SparseVector
 SparseArrays.SparseMatrixCSC
 SparseArrays.sparse
@@ -217,6 +220,7 @@ SparseArrays.sprandn
 SparseArrays.nonzeros
 SparseArrays.rowvals
 SparseArrays.nzrange
+SparseArrays.droptol!
 SparseArrays.dropzeros!
 SparseArrays.dropzeros
 SparseArrays.permute

@@ -258,7 +258,7 @@ static int type_parameter_recursively_external(jl_value_t *p0) JL_NOTSAFEPOINT
         return 0;
     if (module_in_worklist(p->name->module))
         return 0;
-    if (jl_unwrap_unionall(p->name->wrapper) != (jl_value_t*)p) {
+    if (p->name->wrapper != (jl_value_t*)p0) {
         if (!type_recursively_external(p))
             return 0;
     }
@@ -328,11 +328,8 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
 
     write_uint8(s->s, TAG_DATATYPE);
     write_uint8(s->s, tag);
-    if (tag == 6) {
-        jl_serialize_value(s, dt->name);
-        return;
-    }
-    if (tag == 7) {
+    if (tag == 6 || tag == 7) {
+        // for tag==6, copy its typevars in case there are references to them elsewhere
         jl_serialize_value(s, dt->name);
         jl_serialize_value(s, dt->parameters);
         return;
@@ -548,6 +545,10 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             return;
         }
     }
+    else if (jl_typeis(v, jl_string_type) && jl_string_len(v) == 0) {
+        jl_serialize_value(s, jl_an_empty_string);
+        return;
+    }
     else if (!jl_is_uint8(v)) {
         void **bp = ptrhash_bp(&backref_table, v);
         if (*bp != HT_NOTFOUND) {
@@ -746,7 +747,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
     else if (jl_is_unionall(v)) {
         write_uint8(s->s, TAG_UNIONALL);
         jl_datatype_t *d = (jl_datatype_t*)jl_unwrap_unionall(v);
-        if (jl_is_datatype(d) && jl_unwrap_unionall(d->name->wrapper) == (jl_value_t*)d &&
+        if (jl_is_datatype(d) && d->name->wrapper == v &&
             !module_in_worklist(d->name->module)) {
             write_uint8(s->s, 1);
             jl_serialize_value(s, d->name->module);
@@ -880,14 +881,9 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         jl_error("Task cannot be serialized");
     }
     else if (jl_typeis(v, jl_string_type)) {
-        if (jl_string_len(v) == 0) {
-            jl_serialize_value(s, jl_an_empty_string);
-        }
-        else {
-            write_uint8(s->s, TAG_STRING);
-            write_int32(s->s, jl_string_len(v));
-            ios_write(s->s, jl_string_data(v), jl_string_len(v));
-        }
+        write_uint8(s->s, TAG_STRING);
+        write_int32(s->s, jl_string_len(v));
+        ios_write(s->s, jl_string_data(v), jl_string_len(v));
     }
     else if (jl_typeis(v, jl_typemap_entry_type)) {
         write_uint8(s->s, TAG_TYPEMAP_ENTRY);
@@ -1346,13 +1342,8 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     if (tag == 6 || tag == 7) {
         jl_typename_t *name = (jl_typename_t*)jl_deserialize_value(s, NULL);
         jl_value_t *dtv = name->wrapper;
-        if (tag == 7) {
-            jl_svec_t *parameters = (jl_svec_t*)jl_deserialize_value(s, NULL);
-            dtv = jl_apply_type(dtv, jl_svec_data(parameters), jl_svec_len(parameters));
-        }
-        else {
-            dtv = jl_unwrap_unionall(dtv);
-        }
+        jl_svec_t *parameters = (jl_svec_t*)jl_deserialize_value(s, NULL);
+        dtv = jl_apply_type(dtv, jl_svec_data(parameters), jl_svec_len(parameters));
         backref_list.items[pos] = dtv;
         return dtv;
     }

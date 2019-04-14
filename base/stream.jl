@@ -120,7 +120,7 @@ mutable struct PipeEndpoint <: LibuvStream
     buffer::IOBuffer
     readnotify::Condition
     connectnotify::Condition
-    closenotify::Condition
+    closenotify::ThreadSynchronizer
     sendbuf::Union{IOBuffer, Nothing}
     lock::ReentrantLock
     throttle::Int
@@ -130,7 +130,7 @@ mutable struct PipeEndpoint <: LibuvStream
                 PipeBuffer(),
                 Condition(),
                 Condition(),
-                Condition(),
+                ThreadSynchronizer(),
                 nothing,
                 ReentrantLock(),
                 DEFAULT_READ_BUFFER_SZ)
@@ -165,7 +165,7 @@ mutable struct TTY <: LibuvStream
     status::Int
     buffer::IOBuffer
     readnotify::Condition
-    closenotify::Condition
+    closenotify::ThreadSynchronizer
     sendbuf::Union{IOBuffer, Nothing}
     lock::ReentrantLock
     throttle::Int
@@ -176,7 +176,7 @@ mutable struct TTY <: LibuvStream
             status,
             PipeBuffer(),
             Condition(),
-            Condition(),
+            ThreadSynchronizer(),
             nothing,
             ReentrantLock(),
             DEFAULT_READ_BUFFER_SZ)
@@ -380,8 +380,13 @@ function wait_readnb(x::LibuvStream, nb::Int)
 end
 
 function wait_close(x::Union{LibuvStream, LibuvServer})
-    if isopen(x)
-        stream_wait(x, x.closenotify)
+    lock(x.closenotify)
+    try
+        if isopen(x)
+            stream_wait(x, x.closenotify)
+        end
+    finally
+        unlock(x.closenotify)
     end
     nothing
 end
@@ -389,16 +394,24 @@ end
 function close(stream::Union{LibuvStream, LibuvServer})
     if stream.status == StatusInit
         ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
-    elseif isopen(stream)
-        if stream.status != StatusClosing
-            ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
-            stream.status = StatusClosing
-        end
-        if uv_handle_data(stream) != C_NULL
-            stream_wait(stream, stream.closenotify)
-        end
+        return nothing
     end
-    nothing
+    lock(stream.closenotify)
+    try
+        if isopen(stream)
+            should_wait = uv_handle_data(stream) != C_NULL
+            if stream.status != StatusClosing
+                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
+                stream.status = StatusClosing
+            end
+            if should_wait
+                stream_wait(stream, stream.closenotify)
+            end
+        end
+    finally
+        unlock(stream.closenotify)
+    end
+    return nothing
 end
 
 function uvfinalize(uv::Union{LibuvStream, LibuvServer})
@@ -547,7 +560,12 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
                 if isa(stream, TTY)
                     stream.status = StatusEOF # libuv called uv_stop_reading already
                     notify(stream.readnotify)
-                    notify(stream.closenotify)
+                    lock(stream.closenotify)
+                    try
+                        notify(stream.closenotify)
+                    finally
+                        unlock(stream.closenotify)
+                    end
                 elseif stream.status != StatusClosing
                     # begin shutdown of the stream
                     ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
@@ -589,10 +607,15 @@ function reseteof(x::TTY)
 end
 
 function _uv_hook_close(uv::Union{LibuvStream, LibuvServer})
-    uv.handle = C_NULL
-    uv.status = StatusClosed
-    # notify any listeners that exist on this libuv stream type
-    notify(uv.closenotify)
+    lock(uv.closenotify)
+    try
+        uv.handle = C_NULL
+        uv.status = StatusClosed
+        # notify any listeners that exist on this libuv stream type
+        notify(uv.closenotify)
+    finally
+        unlock(uv.closenotify)
+    end
     isdefined(uv, :readnotify) && notify(uv.readnotify)
     isdefined(uv, :connectnotify) && notify(uv.connectnotify)
     nothing
@@ -842,14 +865,13 @@ end
 uv_write(s::LibuvStream, p::Vector{UInt8}) = uv_write(s, pointer(p), UInt(sizeof(p)))
 
 function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
-    uvw = uv_write_async(s, p, n)
     ct = current_task()
+    uvw = uv_write_async(s, p, n, ct)
     preserve_handle(ct)
     try
         # wait for the last chunk to complete (or error)
         # assume that any errors would be sticky,
         # (so we don't need to monitor the error status of the intermediate writes)
-        uv_req_set_data(uvw, ct)
         wait()
     finally
         if uv_req_data(uvw) != C_NULL
@@ -867,11 +889,11 @@ end
 
 # helper function for uv_write that returns the uv_write_t struct for the write
 # rather than waiting on it
-function uv_write_async(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
+function uv_write_async(s::LibuvStream, p::Ptr{UInt8}, n::UInt, reqdata)
     check_open(s)
     while true
         uvw = Libc.malloc(_sizeof_uv_write)
-        uv_req_set_data(uvw, C_NULL) # in case we get interrupted before arriving at the wait call
+        uv_req_set_data(uvw, reqdata)
         nwrite = min(n, MAX_OS_WRITE) # split up the write into chunks the OS can handle.
         # TODO: use writev, when that is added to uv-win
         err = ccall(:jl_uv_write,

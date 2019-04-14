@@ -121,7 +121,6 @@ precompile(Tuple{getfield(Distributed, Symbol("#kw##remote_do")), Array{Any, 1},
 precompile(Tuple{Type{Distributed.ResultMsg}, Distributed.RemoteException})
 precompile(Tuple{Type{Distributed.ResultMsg}, Symbol})
 precompile(Tuple{typeof(Distributed.send_msg_now), Sockets.TCPSocket, Distributed.MsgHeader, Distributed.ResultMsg})
-precompile(Tuple{typeof(Base.notify), Base.Condition, Distributed.ProcessExitedException, Bool, Bool})
 precompile(Tuple{typeof(Base.pop!), Base.Dict{Int64, Union{Distributed.Worker, Distributed.LocalProcess}}, Int64, Nothing})
 precompile(Tuple{typeof(Distributed.deregister_worker), Distributed.ProcessGroup, Int64})
 precompile(Tuple{typeof(Distributed.process_hdr), Sockets.TCPSocket, Bool})

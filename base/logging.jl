@@ -289,7 +289,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
         end
     end
 
-    if group == nothing
+    if group === nothing
         group = if isdefined(Base, :basename) && isa(file, String)
             # precompute if we can
             QuoteNode(splitext(basename(file))[1])
@@ -523,7 +523,7 @@ catch_exceptions(logger::SimpleLogger) = false
 
 function handle_message(logger::SimpleLogger, level, message, _module, group, id,
                         filepath, line; maxlog=nothing, kwargs...)
-    if maxlog != nothing && maxlog isa Integer
+    if maxlog !== nothing && maxlog isa Integer
         remaining = get!(logger.message_limits, id, maxlog)
         logger.message_limits[id] = remaining - 1
         remaining > 0 || return

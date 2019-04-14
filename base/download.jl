@@ -15,7 +15,7 @@ if Sys.iswindows()
             if proc.exitcode % Int32 == -393216
                 # appears to be "wrong version" exit code, based on
                 # https://docs.microsoft.com/en-us/azure/cloud-services/cloud-services-startup-tasks-common
-                error("Downloading files requires Windows Management Framework 3.0 or later.")
+                @error "Downloading files requires Windows Management Framework 3.0 or later."
             end
             pipeline_error(proc)
         end
@@ -39,8 +39,9 @@ function download_curl(curl_exe::AbstractString, url::AbstractString, filename::
     err = PipeBuffer()
     process = run(pipeline(`$curl_exe -s -S -g -L -f -o $filename $url`, stderr=err), wait=false)
     if !success(process)
-        stderr = readline(err)
-        error(stderr)
+        error_msg = readline(err)
+        @error "Download failed: $error_msg"
+        pipeline_error(process)
     end
     return filename
 end
