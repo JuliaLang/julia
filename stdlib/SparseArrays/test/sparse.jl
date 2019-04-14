@@ -2587,11 +2587,44 @@ end
 end
 
 @testset "Ti cannot store all potential values #31024" begin
-    @test_throws ArgumentError SparseMatrixCSC(128, 1, [Int8(1), Int8(1)], Int8[], Int[])
-    @test_throws ArgumentError SparseMatrixCSC(12, 12, [Int8(1), Int8(1)], Int8[], Int[])
+    A = SparseMatrixCSC(12, 12, fill(Int8(1),13), Int8[], Int[])
+    @test size(A) == (12,12)
+    @test nnz(A) == 0
     I1 = [Int8(i) for i in 1:20 for _ in 1:20]
     J1 = [Int8(i) for _ in 1:20 for i in 1:20]
     @test_throws ArgumentError sparse(I1, J1, zero(length(I1)zero(length(I1))))
+end
+
+@testset "Typecheck too strict #31435" begin
+    A = SparseMatrixCSC{Int,Int8}(70, 2, fill(Int8(1), 3), Int8[], Int[])
+    A[5:67,1:2] .= ones(Int, 63, 2)
+    @test nnz(A) == 126
+    # nnz >= typemax
+    @test_throws ArgumentError A[2,1] = 42
+
+    # colptr short
+    @test_throws ArgumentError SparseMatrixCSC(1, 1, Int[], Int[], Float64[])
+    # colptr[1] must be 1
+    @test_throws ArgumentError SparseMatrixCSC(10, 3, [0,1,1,1], Int[], Float64[])
+    # colptr not ascending
+    @test_throws ArgumentError SparseMatrixCSC(10, 3, [1,2,1,2], Int[], Float64[])
+    # rowwal (and nzval) short
+    @test_throws ArgumentError SparseMatrixCSC(10, 3, [1,2,2,4], [1,2], Float64[])
+    # nzval short
+    @test SparseMatrixCSC(10, 3, [1,2,2,4], [1,2,3], Float64[]) !== nothing
+    # length(rowval) >= typemax
+    @test_throws ArgumentError SparseMatrixCSC{Int,Int8}(5, 1, Int8[1,2], fill(Int8(1),127), Int[1,2,3])
+    # length(nzval) >= typemax
+    @test_throws ArgumentError SparseMatrixCSC{Int,Int8}(5, 1, Int8[1,2], Int8[1], fill(7, 127))
+
+    # length(I) >= typemax
+    @test_throws ArgumentError sparse(UInt8.(1:255), fill(UInt8(1), 255), fill(1, 255))
+    # m > typemax
+    @test_throws ArgumentError sparse(UInt8.(1:254), fill(UInt8(1), 254), fill(1, 254), 256, 1)
+    # n > typemax
+    @test_throws ArgumentError sparse(UInt8.(1:254), fill(UInt8(1), 254), fill(1, 254), 255, 256)
+    # n, m maximal
+    @test sparse(UInt8.(1:254), fill(UInt8(1), 254), fill(1, 254), 255, 255) !== nothing
 end
 
 end # module

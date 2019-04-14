@@ -1,9 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Compressed sparse columns data structure
-# Assumes that no zeros are stored in the data structure
+# No assumptions about stored zeros in the data structure
 # Assumes that row values in rowval for each column are sorted
 #      issorted(rowval[colptr[i]:(colptr[i+1]-1)]) == true
+# Assumes that 1 <= colptr[i] <= colptr[i+1] for i in 1..n
+# Assumes that nnz <= length(rowval) < typemax(Ti)
+# Assumes that nnz <= length(nzval) < typemax(Ti)
 
 """
     SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
@@ -24,6 +27,7 @@ struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
                                     nzval::Vector{Tv}) where {Tv,Ti<:Integer}
 
         sparse_check_Ti(m, n, Ti)
+        sparse_check(n, colptr, rowval, nzval)
         new(Int(m), Int(n), colptr, rowval, nzval)
     end
 end
@@ -33,7 +37,7 @@ function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector, rowval::Vector,
     SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
 end
 
-function sparse_check_Ti(m::Integer, n::Integer, Ti::Type)
+ @noinline function sparse_check_Ti(m::Integer, n::Integer, Ti::Type)
         @noinline throwsz(str, lbl, k) =
             throw(ArgumentError("number of $str ($lbl) must be ≥ 0, got $k"))
         @noinline throwTi(str, lbl, k) =
@@ -42,7 +46,28 @@ function sparse_check_Ti(m::Integer, n::Integer, Ti::Type)
         n < 0 && throwsz("columns", 'n', n)
         !isbitstype(Ti) || m ≤ typemax(Ti) || throwTi("number of rows", "m", m)
         !isbitstype(Ti) || n ≤ typemax(Ti) || throwTi("number of columns", "n", n)
-        !isbitstype(Ti) || n*m+1 ≤ typemax(Ti) || throwTi("maximal nnz+1", "m*n+1", n*m+1)
+end
+
+@noinline function sparse_check(n::Integer, colptr::Vector{Ti}, rowval, nzval) where Ti
+    nc = length(colptr)
+    sparse_check_length("colptr", colptr, n+1, String) # don't check upper bound
+    ckp = Ti(1)
+    ckp == colptr[1] || throw(ArgumentError("$ckp == colptr[1] != 1"))
+    k = 1
+    while k <= n + 1
+        ck = colptr[k]
+        ckp <= ck || throw(ArgumentError("$ckp == colptr[$(k-1)] > colptr[$k] == $ck"))
+        ckp = ck
+        k += 1
+    end
+    sparse_check_length("rowval", rowval, ckp-1, Ti)
+    sparse_check_length("nzval", nzval, 0, Ti) # we allow empty nzval !!!
+end
+@noinline function sparse_check_length(rowstr, rowval, minlen, Ti)
+    len = length(rowval)
+    len >= minlen || throw(ArgumentError("$len == length($rowstr) < $minlen"))
+    !isbitstype(Ti) || len < typemax(Ti) ||
+        throw(ArgumentError("$len == length($rowstr) >= $(typemax(Ti))"))
 end
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
@@ -596,9 +621,12 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
 
     require_one_based_indexing(I, J, V)
     sparse_check_Ti(m, n, Ti)
+    sparse_check_length("I", I, 0, Ti)
     # Compute the CSR form's row counts and store them shifted forward by one in csrrowptr
     fill!(csrrowptr, Ti(0))
     coolen = length(I)
+    min(length(J), length(V)) >= coolen || throw(ArgumentError("I and V need length >= length(I) = $coolen"))
+    coolen < typemax(Ti) || throw(ArgumentError("length(I) exceeds typemax($Ti)"))
     @inbounds for k in 1:coolen
         Ik = I[k]
         if 1 > Ik || m < Ik
@@ -624,6 +652,9 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
             throw(ArgumentError("column indices J[k] must satisfy 1 <= J[k] <= n"))
         end
         csrk = csrrowptr[Ik+1]
+        if csrk < Ti(1)
+            throw(ArgumentError("count of nonzeros in row $Ik exceeds $(typemax(Ti))"))
+        end
         csrrowptr[Ik+1] = csrk + Ti(1)
         csrcolval[csrk] = Jk
         csrnzval[csrk] = V[k]
@@ -837,7 +868,7 @@ adjoint!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = f
 
 function ftranspose(A::SparseMatrixCSC{Tv,Ti}, f::Function) where {Tv,Ti}
     X = SparseMatrixCSC(A.n, A.m,
-                        Vector{Ti}(undef, A.m+1),
+                        ones(Ti, A.m+1),
                         Vector{Ti}(undef, nnz(A)),
                         Vector{Tv}(undef, nnz(A)))
     halfperm!(X, A, 1:A.n, f)
@@ -1056,7 +1087,7 @@ function permute!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
     _checkargs_sourcecompatdest_permute!(A, X)
     _checkargs_sourcecompatperms_permute!(A, p, q)
     C = SparseMatrixCSC(A.n, A.m,
-                        Vector{Ti}(undef, A.m + 1),
+                        ones(Ti, A.m + 1),
                         Vector{Ti}(undef, nnz(A)),
                         Vector{Tv}(undef, nnz(A)))
     _checkargs_permutationsvalid_permute!(p, C.colptr, q, X.colptr)
@@ -1075,7 +1106,7 @@ function permute!(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
         q::AbstractVector{<:Integer}) where {Tv,Ti}
     _checkargs_sourcecompatperms_permute!(A, p, q)
     C = SparseMatrixCSC(A.n, A.m,
-                        Vector{Ti}(undef, A.m + 1),
+                        ones(Ti, A.m + 1),
                         Vector{Ti}(undef, nnz(A)),
                         Vector{Tv}(undef, nnz(A)))
     workcolptr = Vector{Ti}(undef, A.n + 1)
@@ -1146,11 +1177,11 @@ function permute(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
         q::AbstractVector{<:Integer}) where {Tv,Ti}
     _checkargs_sourcecompatperms_permute!(A, p, q)
     X = SparseMatrixCSC(A.m, A.n,
-                        Vector{Ti}(undef, A.n + 1),
+                        ones(Ti, A.n + 1),
                         Vector{Ti}(undef, nnz(A)),
                         Vector{Tv}(undef, nnz(A)))
     C = SparseMatrixCSC(A.n, A.m,
-                        Vector{Ti}(undef, A.m + 1),
+                        ones(Ti, A.m + 1),
                         Vector{Ti}(undef, nnz(A)),
                         Vector{Tv}(undef, nnz(A)))
     _checkargs_permutationsvalid_permute!(p, C.colptr, q, X.colptr)
@@ -2415,6 +2446,11 @@ function _setindex_scalar!(A::SparseMatrixCSC{Tv,Ti}, _v, _i::Integer, _j::Integ
     # Column j does not contain entry A[i,j]. If v is nonzero, insert entry A[i,j] = v
     # and return. If to the contrary v is zero, then simply return.
     if v != 0
+        # throw exception before state is partially modified
+        !isbitstype(Ti) || A.colptr[A.n+1] < typemax(Ti) ||
+            throw(ArgumentError("nnz(A) going to exceed typemax(Ti) = $(typemax(Ti))"))
+
+        # TODO if nnz(A) < length(rowval/nzval): no need to grow rowval and preserve values
         insert!(A.rowval, searchk, i)
         insert!(A.nzval, searchk, v)
         @simd for m in (j + 1):(A.n + 1)
