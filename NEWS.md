@@ -24,8 +24,6 @@ New library functions
 Standard library changes
 ------------------------
 
-* `mean` now calculates average for a function over dimensions ([#31576]).
-
 #### LinearAlgebra
 
 
@@ -37,6 +35,7 @@ Standard library changes
 
 #### Statistics
 
+* `mean` now calculates average for a function over dimensions ([#31576]).
 
 #### Miscellaneous
 
