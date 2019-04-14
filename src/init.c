@@ -222,6 +222,9 @@ static void jl_close_item_atexit(uv_handle_t *handle)
 
 JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 {
+    if (jl_all_tls_states == NULL)
+        return;
+
     jl_ptls_t ptls = jl_get_ptls_states();
 
     if (exitcode == 0)
