@@ -50,6 +50,7 @@ New library functions
 * Added `Base.hasproperty` and `Base.hasfield` ([#28850]).
 * One argument `!=(x)`, `>(x)`, `>=(x)`, `<(x)`, `<=(x)` has been added for currying,
   similar to the existing `==(x)` and `isequal(x)` methods ([#30915]).
+* `findfirst` and `findlast` now addresses search for a character in a string ([#31664]).
 
 Standard library changes
 ------------------------
