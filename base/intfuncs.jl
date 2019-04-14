@@ -755,9 +755,15 @@ function digits!(a::AbstractVector{T}, n::Integer; base::Integer = 10) where T<:
     isempty(a) && return a
 
     if base > 0
-        for i in eachindex(a)
-            n, d = divrem(n, base)
-            a[i] = d
+        if base == 2
+            for i in eachindex(a)
+                a[i] = (n >> (i - firstindex(a))) & 1
+            end
+        else
+            for i in eachindex(a)
+                n, d = divrem(n, base)
+                a[i] = d
+            end
         end
     else
         # manually peel one loop iteration for type stability
