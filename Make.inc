@@ -980,7 +980,7 @@ else
 endif
 
 # BinaryBuilder options.  We default to "on" for all the projects listed in BB_PROJECTS,
-# but only if contrib/normalize_triplet.py works for our requested triplet
+# but only if contrib/normalize_triplet.py works for our requested triplet.
 ifeq ($(shell python $(JULIAHOME)/contrib/normalize_triplet.py $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) >/dev/null 2>/dev/null; echo $$?),0)
 USE_BINARYBUILDER ?= 1
 else
@@ -991,8 +991,34 @@ USE_BINARYBUILDER ?= 0
 endif
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
-BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 MPFR CURL LIBGIT2 PCRE LIBUV UNWIND DSFMT OBJCONV
-$(foreach proj,$(BB_PROJECTS),$(if $(USE_BINARYBUILDER_$(proj)),,$(eval USE_BINARYBUILDER_$(proj) ?= $(USE_BINARYBUILDER))))
+BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV
+define SET_BB_DEFAULT
+# First, check to see if BB is disabled on a global setting
+ifeq ($$(USE_BINARYBUILDER),0)
+USE_BINARYBUILDER_$(1) ?= 0
+else
+# If it's not, check to see if it's disabled by a USE_SYSTEM_xxx flag
+ifeq ($$(USE_SYSTEM_$(1)),1)
+USE_BINARYBUILDER_$(1) ?= 0
+else
+USE_BINARYBUILDER_$(1) ?= 1
+endif
+endif
+endef
+$(foreach proj,$(BB_PROJECTS),$(eval $(call SET_BB_DEFAULT,$(proj))))
+
+# Some special restrictions on BB usage:
+ifeq ($(USE_SYSTEM_BLAS),1)
+# Since the names don't line up (`BLAS` vs. `OPENBLAS`), manually gate:
+USE_BINARYBUILDER_OPENBLAS ?= 0
+# Disable BB SuiteSparse if we're using system BLAS
+USE_BINARYBUILDER_SUITESPARSE ?= 0
+endif
+
+ifeq ($(USE_SYSTEM_LIBM),1)
+# If we're using system libm, disable BB OpenLibm
+USE_BINARYBUILDER_OPENLIBM ?= 0
+endif
 
 # Use the Assertions build
 BINARYBUILDER_LLVM_ASSERTS ?= 0
