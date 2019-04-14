@@ -20,7 +20,7 @@ Build system changes
 New library functions
 ---------------------
 
-* `findfirst` and `findlast` now addresses search for a character in a string ([#31664]).
+* `findfirst`, `findlast`, `findnext` and `findprev` now addresses search for a character in a string ([#31664]).
 
 Standard library changes
 ------------------------
