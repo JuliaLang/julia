@@ -109,6 +109,9 @@ findfirst(pattern::AbstractString, string::AbstractString) = findnext(pattern, s
 Find the first occurrence of `ch` in `string`. Equivalent to
 [`findfirst(isequal(ch), string)`](@ref).
 
+!!! compat "Julia 1.3"
+    This function requires at least Julia 1.3.
+
 # Examples
 ```jldoctest
 julia> findfirst('a', "happy")
@@ -294,6 +297,9 @@ findlast(pattern::AbstractString, string::AbstractString) =
 
 Find the last occurrence of `ch` in `string`. Equivalent to
 [`findlast(isequal(ch), string)`](@ref).
+
+!!! compat "Julia 1.3"
+    This function requires at least Julia 1.3.
 
 # Examples
 ```jldoctest
