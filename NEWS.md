@@ -35,7 +35,7 @@ Standard library changes
 
 #### Statistics
 
-* `mean` now calculates average for a function over dimensions ([#31576]).
+* `mean` now accepts both a function argument and a `dims` keyword ([#31576]).
 
 #### Miscellaneous
 
