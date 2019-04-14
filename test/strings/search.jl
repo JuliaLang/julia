@@ -24,8 +24,8 @@ end
 
 # ascii forward search
 for str in [astr, GenericString(astr)]
-    @test_throws BoundsError findnext(isequal('z'), str, 0)
-    @test_throws BoundsError findnext(isequal('∀'), str, 0)
+    @test_throws BoundsError findnext('z', str, 0)
+    @test_throws BoundsError findnext('∀', str, 0)
     @test findfirst('x', str) == nothing
     @test findfirst('\0', str) == nothing
     @test findfirst('\u80', str) == nothing
@@ -34,15 +34,15 @@ for str in [astr, GenericString(astr)]
     @test findfirst('l', str) == 3
     @test findfirst('e', str) == 2
     @test findfirst('u', str) == nothing
-    @test findnext(isequal('l'), str, 4) == 4
-    @test findnext(isequal('l'), str, 5) == 11
-    @test findnext(isequal('l'), str, 12) == nothing
+    @test findnext('l', str, 4) == 4
+    @test findnext('l', str, 5) == 11
+    @test findnext('l', str, 12) == nothing
     @test findfirst(',', str) == 6
-    @test findnext(isequal(','), str, 7) == nothing
+    @test findnext(',', str, 7) == nothing
     @test findfirst('\n', str) == 14
-    @test findnext(isequal('\n'), str, 15) == nothing
-    @test_throws BoundsError findnext(isequal('ε'), str, nextind(str,lastindex(str))+1)
-    @test_throws BoundsError findnext(isequal('a'), str, nextind(str,lastindex(str))+1)
+    @test findnext('\n', str, 15) == nothing
+    @test_throws BoundsError findnext('ε', str, nextind(str,lastindex(str))+1)
+    @test_throws BoundsError findnext('a', str, nextind(str,lastindex(str))+1)
 end
 
 # ascii backward search
@@ -52,14 +52,14 @@ for str in [astr]
     @test findlast('\u80', str) == nothing
     @test findlast('∀', str) == nothing
     @test findlast('H', str) == 1
-    @test findprev(isequal('H'), str, 0) == nothing
+    @test findprev('H', str, 0) == nothing
     @test findlast('l', str) == 11
-    @test findprev(isequal('l'), str, 5) == 4
-    @test findprev(isequal('l'), str, 4) == 4
-    @test findprev(isequal('l'), str, 3) == 3
-    @test findprev(isequal('l'), str, 2) == nothing
+    @test findprev('l', str, 5) == 4
+    @test findprev('l', str, 4) == 4
+    @test findprev('l', str, 3) == 3
+    @test findprev('l', str, 2) == nothing
     @test findlast(',', str) == 6
-    @test findprev(isequal(','), str, 5) == nothing
+    @test findprev(',', str, 5) == nothing
     @test findlast('\n', str) == 14
 end
 
