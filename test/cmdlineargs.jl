@@ -172,7 +172,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     # --procs
     @test readchomp(`$exename -q -p 2 -e "println(nworkers())"`) == "2"
     @test !success(`$exename -p 0`)
-    @test !success(`$exename --procs=1.0`)
+    let p = run(`$exename --procs=1.0`, wait=false)
+        wait(p)
+        @test p.exitcode == 1 && p.termsignal == 0
+    end
 
     # --machine-file
     # this does not check that machine file works,
