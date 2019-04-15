@@ -820,19 +820,22 @@ function fieldtype_nothrow(@nospecialize(s0), @nospecialize(name))
                fieldtype_nothrow(rewrap_unionall(su.b, s0), name)
     end
 
-    s = instanceof_tfunc(s0)[1]
+    s, exact = instanceof_tfunc(s0)
     s === Bottom && return false # always
-    return _fieldtype_nothrow(s, name)
+    return _fieldtype_nothrow(s, exact, name)
 end
 
-function _fieldtype_nothrow(@nospecialize(s), name::Const)
+function _fieldtype_nothrow(@nospecialize(s), exact::Bool, name::Const)
     u = unwrap_unionall(s)
     if isa(u, Union)
-        return _fieldtype_nothrow(u.a, name) && _fieldtype_nothrow(u.b, name)
+        a = _fieldtype_nothrow(u.a, exact, name)
+        b = _fieldtype_nothrow(u.b, exact, name)
+        return exact ? (a || b) : (a && b)
     end
     u isa DataType || return false
-    u.abstract && return true
+    u.abstract && return false
     if u.name === _NAMEDTUPLE_NAME && !isconcretetype(u)
+        # TODO: better approximate inference
         return false
     end
     fld = name.val
@@ -887,6 +890,7 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
     u isa DataType || return Type
     u.abstract && return Type
     if u.name === _NAMEDTUPLE_NAME && !isconcretetype(u)
+        # TODO: better approximate inference
         return Type
     end
     ftypes = u.types
@@ -904,7 +908,15 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
             ft1 = unwrapva(ftypes[i])
             exactft1 = exact || !has_free_typevars(ft1)
             ft1 = rewrap_unionall(ft1, s)
-            ft1 = exactft1 ? Const(ft1) : Type{ft} where ft<:ft1
+            if exactft1
+                if issingletontype(ft1)
+                    ft1 = Const(ft1) # ft unique via type cache
+                else
+                    ft1 = Type{ft1}
+                end
+            else
+                ft1 = Type{ft} where ft<:ft1
+            end
             t = tmerge(t, ft1)
             t === Any && break
         end
@@ -930,7 +942,10 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
     exactft = exact || !has_free_typevars(ft)
     ft = rewrap_unionall(ft, s)
     if exactft
-        return Const(ft)
+        if issingletontype(ft)
+            return Const(ft) # ft unique via type cache
+        end
+        return Type{ft}
     end
     return Type{<:ft}
 end
