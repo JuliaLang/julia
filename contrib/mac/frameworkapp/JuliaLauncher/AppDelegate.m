@@ -95,12 +95,12 @@ static void execJuliaInTerminal(NSURL *_Nonnull julia);
                                                     relativeToURL:nil
                                                             error:nil];
 
-    _updatingVersion = true;
+    _updatingVersion = YES;
 
     id<ExecSandboxProtocol> remote = [[ExecSandboxController sharedController]
         remoteObjectProxyWithErrorHandler:^(NSError *error) {
           [self willChangeValueForKey:@"updatingVersion"];
-          self->_updatingVersion = false;
+          self->_updatingVersion = NO;
           [self didChangeValueForKey:@"updatingVersion"];
         }];
 
@@ -118,13 +118,13 @@ static void execJuliaInTerminal(NSURL *_Nonnull julia);
                    [self willChangeValueForKey:@"version"];
                    [self willChangeValueForKey:@"updatingVersion"];
                    self->_version = vout;
-                   self->_updatingVersion = false;
+                   self->_updatingVersion = NO;
                    [self didChangeValueForKey:@"updatingVersion"];
                    [self didChangeValueForKey:@"version"];
 
                  } else {
                    [self willChangeValueForKey:@"updatingVersion"];
-                   self->_updatingVersion = false;
+                   self->_updatingVersion = NO;
                    [self didChangeValueForKey:@"updatingVersion"];
                  }
                }];
@@ -241,14 +241,14 @@ static void execJuliaInTerminal(NSURL *_Nonnull julia);
       // TODO: Verify the executable is actually a Julia.
       NSURL *juliaexe =
           [[[NSURL alloc] initFileURLWithPath:itemPath
-                                  isDirectory:false] URLByStandardizingPath];
+                                  isDirectory:NO] URLByStandardizingPath];
       NSLog(@"Found Julia %@", juliaexe);
       JuliaVariant *jv = [[JuliaVariant alloc] initWithJulia:juliaexe
                                                       bundle:nil];
       [self addJuliaVariant:jv];
     } else if ([contentType isEqual:@"com.apple.framework"]) {
       NSURL *frameworkPath = [[NSURL alloc] initFileURLWithPath:itemPath
-                                                    isDirectory:true];
+                                                    isDirectory:YES];
       NSLog(@"Found Julia framework %@", frameworkPath);
 
       // Iterate over versions within the framework.
@@ -256,7 +256,7 @@ static void execJuliaInTerminal(NSURL *_Nonnull julia);
       NSFileManager *fm = NSFileManager.defaultManager;
       NSURL *frameworkVersions =
           [frameworkPath URLByAppendingPathComponent:@"Versions"
-                                         isDirectory:true];
+                                         isDirectory:YES];
       NSArray<NSURL *> *versions =
           [fm contentsOfDirectoryAtURL:frameworkVersions
               includingPropertiesForKeys:@[ NSURLIsDirectoryKey ]
@@ -279,9 +279,9 @@ static void execJuliaInTerminal(NSURL *_Nonnull julia);
         NSURL *juliaexe = [[[[bundle.executableURL URLByStandardizingPath]
             URLByDeletingLastPathComponent]
             URLByAppendingPathComponent:@"Helpers"
-                            isDirectory:true]
+                            isDirectory:YES]
             URLByAppendingPathComponent:@"julia"
-                            isDirectory:false];
+                            isDirectory:NO];
 
         if (juliaexe == nil) {
           continue;
@@ -430,7 +430,7 @@ void execJuliaInTerminal(NSURL *_Nonnull julia) {
 
     do {
       s = AEDeterminePermissionToAutomateTarget(
-          aedTarget.aeDesc, aevShellCmd.eventClass, aevShellCmd.eventID, true);
+          aedTarget.aeDesc, aevShellCmd.eventClass, aevShellCmd.eventID, TRUE);
       retry = s == procNotFound && !retry && launchTerminalApp();
     } while (retry);
 

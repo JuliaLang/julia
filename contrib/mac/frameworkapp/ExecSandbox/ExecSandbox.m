@@ -105,10 +105,10 @@
       [[NSProcessInfo processInfo] globallyUniqueString];
   NSURL *temporaryFileURL =
       [temporaryDirectoryURL URLByAppendingPathComponent:temporaryFilename
-                                             isDirectory:false];
+                                             isDirectory:NO];
 
   [[p dataUsingEncoding:NSUTF8StringEncoding] writeToURL:temporaryFileURL
-                                              atomically:false];
+                                              atomically:NO];
 
   NSMutableArray<NSString *> *args = [[NSMutableArray alloc] init];
   [args addObjectsFromArray:baseArgs];
