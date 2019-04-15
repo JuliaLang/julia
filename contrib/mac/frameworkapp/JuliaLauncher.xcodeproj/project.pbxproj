@@ -7,13 +7,50 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DC69B3E6226152320004C981 /* ExecSandbox.m in Sources */ = {isa = PBXBuildFile; fileRef = DC69B3E5226152320004C981 /* ExecSandbox.m */; };
+		DC69B3E8226152320004C981 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = DC69B3E7226152320004C981 /* main.m */; };
+		DC69B3EC226152320004C981 /* ExecSandbox.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = DC69B3E1226152320004C981 /* ExecSandbox.xpc */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		DC69B3F322628ABC0004C981 /* ExecSandboxProtocol.m in Sources */ = {isa = PBXBuildFile; fileRef = DC69B3F222628ABC0004C981 /* ExecSandboxProtocol.m */; };
+		DC69B3F422628ABC0004C981 /* ExecSandboxProtocol.m in Sources */ = {isa = PBXBuildFile; fileRef = DC69B3F222628ABC0004C981 /* ExecSandboxProtocol.m */; };
 		DCECD36721B6461B0099A8C3 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = DCECD36621B6461B0099A8C3 /* AppDelegate.m */; };
 		DCECD36921B6461C0099A8C3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DCECD36821B6461C0099A8C3 /* Assets.xcassets */; };
 		DCECD36C21B6461C0099A8C3 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = DCECD36A21B6461C0099A8C3 /* MainMenu.xib */; };
 		DCECD36F21B6461C0099A8C3 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = DCECD36E21B6461C0099A8C3 /* main.m */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		DC69B3EA226152320004C981 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DCECD35A21B6461B0099A8C3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DC69B3E0226152320004C981;
+			remoteInfo = ExecSandbox;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		DC69B3F0226152320004C981 /* Embed XPC Services */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/XPCServices";
+			dstSubfolderSpec = 16;
+			files = (
+				DC69B3EC226152320004C981 /* ExecSandbox.xpc in Embed XPC Services */,
+			);
+			name = "Embed XPC Services";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		DC69B3E1226152320004C981 /* ExecSandbox.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = ExecSandbox.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
+		DC69B3E3226152320004C981 /* ExecSandboxProtocol.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ExecSandboxProtocol.h; sourceTree = "<group>"; };
+		DC69B3E4226152320004C981 /* ExecSandbox.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ExecSandbox.h; sourceTree = "<group>"; };
+		DC69B3E5226152320004C981 /* ExecSandbox.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ExecSandbox.m; sourceTree = "<group>"; };
+		DC69B3E7226152320004C981 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		DC69B3E9226152320004C981 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		DC69B3F1226152410004C981 /* ExecSandbox.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ExecSandbox.entitlements; sourceTree = "<group>"; };
+		DC69B3F222628ABC0004C981 /* ExecSandboxProtocol.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ExecSandboxProtocol.m; sourceTree = "<group>"; };
 		DCECD36221B6461B0099A8C3 /* Julia.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Julia.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCECD36521B6461B0099A8C3 /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
 		DCECD36621B6461B0099A8C3 /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
@@ -25,6 +62,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		DC69B3DE226152320004C981 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		DCECD35F21B6461B0099A8C3 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -35,10 +79,25 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		DC69B3E2226152320004C981 /* ExecSandbox */ = {
+			isa = PBXGroup;
+			children = (
+				DC69B3E3226152320004C981 /* ExecSandboxProtocol.h */,
+				DC69B3F222628ABC0004C981 /* ExecSandboxProtocol.m */,
+				DC69B3E4226152320004C981 /* ExecSandbox.h */,
+				DC69B3E5226152320004C981 /* ExecSandbox.m */,
+				DC69B3E7226152320004C981 /* main.m */,
+				DC69B3E9226152320004C981 /* Info.plist */,
+				DC69B3F1226152410004C981 /* ExecSandbox.entitlements */,
+			);
+			path = ExecSandbox;
+			sourceTree = "<group>";
+		};
 		DCECD35921B6461B0099A8C3 = {
 			isa = PBXGroup;
 			children = (
 				DCECD36421B6461B0099A8C3 /* JuliaLauncher */,
+				DC69B3E2226152320004C981 /* ExecSandbox */,
 				DCECD36321B6461B0099A8C3 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -47,6 +106,7 @@
 			isa = PBXGroup;
 			children = (
 				DCECD36221B6461B0099A8C3 /* Julia.app */,
+				DC69B3E1226152320004C981 /* ExecSandbox.xpc */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -68,6 +128,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		DC69B3E0226152320004C981 /* ExecSandbox */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DC69B3EF226152320004C981 /* Build configuration list for PBXNativeTarget "ExecSandbox" */;
+			buildPhases = (
+				DC69B3DD226152320004C981 /* Sources */,
+				DC69B3DE226152320004C981 /* Frameworks */,
+				DC69B3DF226152320004C981 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ExecSandbox;
+			productName = ExecSandbox;
+			productReference = DC69B3E1226152320004C981 /* ExecSandbox.xpc */;
+			productType = "com.apple.product-type.xpc-service";
+		};
 		DCECD36121B6461B0099A8C3 /* JuliaLauncher */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = DCECD37321B6461C0099A8C3 /* Build configuration list for PBXNativeTarget "JuliaLauncher" */;
@@ -75,10 +152,12 @@
 				DCECD35E21B6461B0099A8C3 /* Sources */,
 				DCECD35F21B6461B0099A8C3 /* Frameworks */,
 				DCECD36021B6461B0099A8C3 /* Resources */,
+				DC69B3F0226152320004C981 /* Embed XPC Services */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				DC69B3EB226152320004C981 /* PBXTargetDependency */,
 			);
 			name = JuliaLauncher;
 			productName = JuliaLauncher;
@@ -94,6 +173,17 @@
 				LastUpgradeCheck = 1010;
 				ORGANIZATIONNAME = JuliaLang;
 				TargetAttributes = {
+					DC69B3E0226152320004C981 = {
+						CreatedOnToolsVersion = 10.2;
+						SystemCapabilities = {
+							com.apple.HardenedRuntime = {
+								enabled = 1;
+							};
+							com.apple.Sandbox = {
+								enabled = 1;
+							};
+						};
+					};
 					DCECD36121B6461B0099A8C3 = {
 						CreatedOnToolsVersion = 10.1;
 						SystemCapabilities = {
@@ -121,11 +211,19 @@
 			projectRoot = "";
 			targets = (
 				DCECD36121B6461B0099A8C3 /* JuliaLauncher */,
+				DC69B3E0226152320004C981 /* ExecSandbox */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		DC69B3DF226152320004C981 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		DCECD36021B6461B0099A8C3 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -138,16 +236,35 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		DC69B3DD226152320004C981 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DC69B3E8226152320004C981 /* main.m in Sources */,
+				DC69B3E6226152320004C981 /* ExecSandbox.m in Sources */,
+				DC69B3F422628ABC0004C981 /* ExecSandboxProtocol.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		DCECD35E21B6461B0099A8C3 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				DCECD36F21B6461C0099A8C3 /* main.m in Sources */,
 				DCECD36721B6461B0099A8C3 /* AppDelegate.m in Sources */,
+				DC69B3F322628ABC0004C981 /* ExecSandboxProtocol.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		DC69B3EB226152320004C981 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DC69B3E0226152320004C981 /* ExecSandbox */;
+			targetProxy = DC69B3EA226152320004C981 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		DCECD36A21B6461C0099A8C3 /* MainMenu.xib */ = {
@@ -161,6 +278,32 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		DC69B3ED226152320004C981 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ExecSandbox/ExecSandbox.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = ExecSandbox/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = org.julialang.ExecSandbox;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+		DC69B3EE226152320004C981 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ExecSandbox/ExecSandbox.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = ExecSandbox/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = org.julialang.ExecSandbox;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
 		DCECD37121B6461C0099A8C3 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -311,6 +454,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		DC69B3EF226152320004C981 /* Build configuration list for PBXNativeTarget "ExecSandbox" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DC69B3ED226152320004C981 /* Debug */,
+				DC69B3EE226152320004C981 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		DCECD35D21B6461B0099A8C3 /* Build configuration list for PBXProject "JuliaLauncher" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
