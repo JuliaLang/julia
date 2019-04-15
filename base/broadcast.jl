@@ -1113,7 +1113,7 @@ end
 # explicit calls to view.   (All of this can go away if slices
 # are changed to generate views by default.)
 
-Base.@propagate_inbounds dotview(args...) = Base.maybeview(args...)
+Base.@propagate_inbounds dotview(args...; kwargs...) = Base.maybeview(args...; kwargs...)
 
 ############################################################
 # The parser turns @. into a call to the __dot__ macro,
