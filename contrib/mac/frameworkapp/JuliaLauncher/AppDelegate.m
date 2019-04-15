@@ -1,19 +1,64 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+@import AppKit;
 #import "AppDelegate.h"
+#import "ExecSandboxProtocol.h"
 
 /// Terminal's bundle ID.
 NSString static const *const terminalBundleID = @"com.apple.Terminal";
 
 static bool launchTerminalApp(void);
-static void execJuliaInTerminal(NSURL *julia);
+static void execJuliaInTerminal(NSURL *_Nonnull julia);
+
+/// Controller for an XPC connection to the ExecSandbox service.
+///
+/// The ExecSandbox service allows Julia code to be run within a restricted App
+/// Sandbox environment.
+@interface ExecSandboxController : NSObject {
+  NSXPCConnection *_Nonnull _execSandboxCnx;
+}
+- (id<ExecSandboxProtocol> _Nonnull)remoteObjectProxyWithErrorHandler:
+    (void (^_Nonnull)(NSError *_Nullable error))handler;
++ (ExecSandboxController *_Nonnull)sharedController;
+@end
+
+@implementation ExecSandboxController
+
+- (instancetype)init {
+  self = [super init];
+  if (self == nil)
+    return nil;
+  _execSandboxCnx = [[NSXPCConnection alloc]
+      initWithServiceName:@"org.julialang.ExecSandbox"];
+  _execSandboxCnx.remoteObjectInterface = CreateExecSandboxXPCInterface();
+  [_execSandboxCnx resume];
+  return self;
+}
+
+- (id<ExecSandboxProtocol>)remoteObjectProxyWithErrorHandler:
+    (void (^_Nonnull)(NSError *_Nullable error))handler {
+  return [_execSandboxCnx remoteObjectProxyWithErrorHandler:handler];
+}
+
++ (ExecSandboxController *)sharedController {
+  static ExecSandboxController *s = nil;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    s = [[ExecSandboxController alloc] init];
+  });
+  return s;
+}
+
+@end
 
 /// Location of an installed variant of Julia (frameowrk or nix hier).
 @interface JuliaVariant : NSObject
 @property(readonly, nullable) NSBundle *bundle;
 @property(readonly, nonnull) NSURL *juliaexe;
-@property(readonly, nonnull) NSString *version;
-- (instancetype)initWithJulia:(NSURL *)exe bundle:(NSBundle *)b;
+@property(readonly, nullable) NSString *version;
+@property(readonly) BOOL updatingVersion;
+- (instancetype)initWithJulia:(NSURL *_Nonnull)exe
+                       bundle:(NSBundle *_Nullable)b;
 /// (major,minor,patch) components parsed from version.
 @property(readonly, nullable) NSArray<NSNumber *> *versionComponents;
 @end
@@ -28,6 +73,7 @@ static void execJuliaInTerminal(NSURL *julia);
   NSAssert(exe != nil, @"juliaexe cannot be nil.");
   _juliaexe = exe;
   _bundle = b;
+  _version = nil;
   if (_bundle == nil) {
     // Try to locate the framework bundle.
     NSURL *frameworkURL =
@@ -42,8 +88,48 @@ static void execJuliaInTerminal(NSURL *julia);
     // Extract version from framework bundle.
     _version = _bundle.infoDictionary[(NSString *)kCFBundleVersionKey];
   } else {
-    // TODO: shell out and make julia tell us its version.
-    _version = @"?";
+    // Exec the julia and have it tell us its version.
+
+    NSData *juliaexeBookmark = [_juliaexe bookmarkDataWithOptions:0
+                                   includingResourceValuesForKeys:nil
+                                                    relativeToURL:nil
+                                                            error:nil];
+
+    _updatingVersion = true;
+
+    id<ExecSandboxProtocol> remote = [[ExecSandboxController sharedController]
+        remoteObjectProxyWithErrorHandler:^(NSError *error) {
+          [self willChangeValueForKey:@"updatingVersion"];
+          self->_updatingVersion = false;
+          [self didChangeValueForKey:@"updatingVersion"];
+        }];
+
+    [remote eval:@"print(\"$(Base.VERSION.major).$(Base.VERSION.minor).$(Base."
+                 @"VERSION.patch)\")"
+        withJulia:juliaexeBookmark
+        arguments:nil
+             task:^(id<TaskProtocol> task, NSFileHandle *stdIn,
+                    NSFileHandle *stdOut, NSFileHandle *stdErr) {
+               [task launch:^(int status) {
+                 NSString *vout =
+                     [[NSString alloc] initWithData:[stdOut readDataToEndOfFile]
+                                           encoding:NSUTF8StringEncoding];
+                 if (status == 0 && vout) {
+                   [self willChangeValueForKey:@"version"];
+                   [self willChangeValueForKey:@"updatingVersion"];
+                   self->_version = vout;
+                   self->_updatingVersion = false;
+                   [self didChangeValueForKey:@"updatingVersion"];
+                   [self didChangeValueForKey:@"version"];
+
+                 } else {
+                   [self willChangeValueForKey:@"updatingVersion"];
+                   self->_updatingVersion = false;
+                   [self didChangeValueForKey:@"updatingVersion"];
+                 }
+               }];
+             }];
+    NSLog(@"Getting version by execing %@", exe);
   }
   return self;
 }
@@ -67,10 +153,11 @@ static void execJuliaInTerminal(NSURL *julia);
 
 @end
 
-@interface AppDelegate ()
-@property NSMetadataQuery *mdq;
-@property NSMutableDictionary<NSURL *, JuliaVariant *> *juliaVariants;
-@property JuliaVariant *latestKnownTaggedJulia;
+@interface AppDelegate () {
+  NSMetadataQuery *_Nullable _mdq;
+}
+@property NSMutableDictionary<NSURL *, JuliaVariant *> *_Nonnull juliaVariants;
+@property JuliaVariant *_Nullable latestKnownTaggedJulia;
 @end
 
 @implementation AppDelegate
@@ -80,7 +167,7 @@ static void execJuliaInTerminal(NSURL *julia);
   if (!self) {
     return nil;
   }
-  self.juliaVariants = [[NSMutableDictionary alloc] init];
+  _juliaVariants = [[NSMutableDictionary alloc] init];
   return self;
 }
 
@@ -118,15 +205,15 @@ static void execJuliaInTerminal(NSURL *julia);
 }
 
 - (void)findJuliaQueryDidUpdate:(NSNotification *)sender {
-  if (sender.object != self.mdq) {
+  if (sender.object != _mdq) {
     return;
   }
 
   // Disable updates while enumerating results.
-  [self.mdq disableUpdates];
+  [_mdq disableUpdates];
 
-  for (NSUInteger i = 0; i < self.mdq.resultCount; ++i) {
-    NSMetadataItem *item = [self.mdq resultAtIndex:i];
+  for (NSUInteger i = 0; i < _mdq.resultCount; ++i) {
+    NSMetadataItem *item = [_mdq resultAtIndex:i];
     // Grab the path attribute from the item.
     NSString *itemPath = [item valueForAttribute:NSMetadataItemPathKey];
     NSString *contentType =
@@ -205,17 +292,17 @@ static void execJuliaInTerminal(NSURL *julia);
   }
 
   // Safe to enable updates now.
-  [self.mdq enableUpdates];
+  [_mdq enableUpdates];
 }
 
 /// Start a Spotlight query for Julia frameworks.
 - (void)findJuliaWithSpotlight {
-  if (self.mdq != nil) {
+  if (_mdq != nil) {
     // Query exists so return.
     return;
   }
 
-  self.mdq = [[NSMetadataQuery alloc] init];
+  _mdq = [[NSMetadataQuery alloc] init];
 
   // Search for the framework bundle identifier.
   NSPredicate *searchPredicate = [NSPredicate
@@ -223,21 +310,21 @@ static void execJuliaInTerminal(NSURL *julia);
           @"(kMDItemCFBundleIdentifier == 'org.julialang.julia.lib' && "
           @"kMDItemContentType == 'com.apple.framework') || (kMDItemFSName == "
           @"'julia' && kMDItemContentType == 'public.unix-executable')"];
-  self.mdq.predicate = searchPredicate;
+  _mdq.predicate = searchPredicate;
 
   // Observe the query's notifications.
   [[NSNotificationCenter defaultCenter]
       addObserver:self
          selector:@selector(findJuliaQueryDidUpdate:)
              name:NSMetadataQueryDidUpdateNotification
-           object:self.mdq];
+           object:_mdq];
   [[NSNotificationCenter defaultCenter]
       addObserver:self
          selector:@selector(findJuliaQueryDidUpdate:)
              name:NSMetadataQueryDidFinishGatheringNotification
-           object:self.mdq];
+           object:_mdq];
 
-  if (![self.mdq startQuery]) {
+  if (![_mdq startQuery]) {
     NSAlert *a = [[NSAlert alloc] init];
     a.alertStyle = NSAlertStyleCritical;
     a.messageText = NSLocalizedString(@"Cannot find the Julia framework.", );
@@ -253,27 +340,27 @@ static void execJuliaInTerminal(NSURL *julia);
 }
 
 - (void)stopFindJuliaWithSpotlight {
-  if (self.mdq == nil) {
+  if (_mdq == nil) {
     return;
   }
 
-  [self.mdq stopQuery];
+  [_mdq stopQuery];
 
   [[NSNotificationCenter defaultCenter]
       removeObserver:self
                 name:NSMetadataQueryDidUpdateNotification
-              object:self.mdq];
+              object:_mdq];
   [[NSNotificationCenter defaultCenter]
       removeObserver:self
                 name:NSMetadataQueryDidFinishGatheringNotification
-              object:self.mdq];
+              object:_mdq];
 
-  self.mdq = nil;
+  _mdq = nil;
 }
 
 @end
 
-void execJuliaInTerminal(NSURL *julia) {
+void execJuliaInTerminal(NSURL *_Nonnull julia) {
   OSStatus s;
   NSAlert *a = [[NSAlert alloc] init];
   a.alertStyle = NSAlertStyleCritical;
