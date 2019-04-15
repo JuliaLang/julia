@@ -1119,7 +1119,9 @@ end
 
 # TODO some of this could be optimized
 
-function reverse(A::BitArray; dims::Integer)
+function _reverse(A::BitArray; dims::Integer)
+    # TODO: some more duplicate code with arraymath.jl and abstractArray.jl
+    #       maybe we should consider moving reverse methods to some reverse.jl
     nd = ndims(A); d = dims
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     sd = size(A, d)

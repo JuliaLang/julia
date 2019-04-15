@@ -58,7 +58,9 @@ end
 
 ## data movement ##
 
-function reverse(A::Array{T}; dims::Integer) where T
+function _reverse(A::Array{T}; dims::Integer) where T
+    # TODO: there seems to be a lot of duplicate code between this and
+    #       _revese in abstractArrayMath
     nd = ndims(A); d = dims
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     sd = size(A, d)
