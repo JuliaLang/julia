@@ -101,7 +101,7 @@ julia> findfirst("Julia", "JuliaLang")
 1:5
 ```
 """
-findfirst(pattern::AbstractString, string::AbstractString) = 
+findfirst(pattern::AbstractString, string::AbstractString) =
     findnext(pattern, string, firstindex(string))
 
 """
