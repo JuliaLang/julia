@@ -85,12 +85,10 @@ void GCInvariantVerifier::visitStoreInst(StoreInst &SI) {
     if (VTy->isPointerTy()) {
         /* We currently don't obey this for arguments. That's ok - they're
            externally rooted. */
-        if (!isa<Argument>(SI.getValueOperand())) {
-            unsigned AS = cast<PointerType>(VTy)->getAddressSpace();
-            Check(AS != AddressSpace::CalleeRooted &&
-                  AS != AddressSpace::Derived,
-                  "Illegal store of decayed value", &SI);
-        }
+        unsigned AS = cast<PointerType>(VTy)->getAddressSpace();
+        Check(AS != AddressSpace::CalleeRooted &&
+              AS != AddressSpace::Derived,
+              "Illegal store of decayed value", &SI);
     }
     VTy = SI.getPointerOperand()->getType();
     if (VTy->isPointerTy()) {
