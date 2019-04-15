@@ -195,11 +195,18 @@ static void execJuliaInTerminal(NSURL *_Nonnull julia);
     NSArray<NSNumber *> *vc = jv.versionComponents;
     if (vc != nil) {
       // Compare version tuple.
-      if (vc[0] > latestV[0] || (vc[0] == latestV[0] && vc[1] > latestV[1]) ||
-          (vc[0] == latestV[0] && vc[1] == latestV[1] && vc[2] > latestV[2])) {
+      if ([vc[0] isGreaterThan:latestV[0]] ||
+          ([vc[0] isEqualToNumber:latestV[0]] &&
+           [vc[1] isGreaterThan:latestV[1]]) ||
+          ([vc[0] isEqualToNumber:latestV[0]] &&
+           [vc[1] isEqualToNumber:latestV[1]] &&
+           [vc[2] isGreaterThan:latestV[2]])) {
         latestJv = jv;
         latestV = vc;
       }
+    }
+    if (latestJv != self.latestKnownTaggedJulia) {
+      self.latestKnownTaggedJulia = latestJv;
     }
   }
 }
