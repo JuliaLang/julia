@@ -1050,13 +1050,13 @@ copy_dims_out(out) = ()
 copy_dims_out(out, dim::Int, tail...) =  copy_dims_out((out..., dim), tail...)
 copy_dims_out(out, dim::Colon, tail...) = copy_dims_out((out..., dim), tail...)
 @test Base.return_types(copy_dims_out, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
-@test all(m -> 20 < count_specializations(m) < 45, methods(copy_dims_out))
+@test all(m -> 4 < count_specializations(m) < 15, methods(copy_dims_out)) # currently about 5
 
 copy_dims_pair(out) = ()
 copy_dims_pair(out, dim::Int, tail...) =  copy_dims_pair(out => dim, tail...)
 copy_dims_pair(out, dim::Colon, tail...) = copy_dims_pair(out => dim, tail...)
 @test Base.return_types(copy_dims_pair, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
-@test all(m -> 10 < count_specializations(m) < 35, methods(copy_dims_pair))
+@test all(m -> 5 < count_specializations(m) < 15, methods(copy_dims_pair)) # currently about 7
 
 @test isdefined_tfunc(typeof(NamedTuple()), Const(0)) === Const(false)
 @test isdefined_tfunc(typeof(NamedTuple()), Const(1)) === Const(false)
@@ -2348,3 +2348,40 @@ function gen_nodes(qty::Integer) :: AbstractNode
 end
 end
 @test count(==('}'), string(I31663.gen_nodes(50))) == 1275
+
+# issue #31572
+struct MixedKeyDict{T<:Tuple} #<: AbstractDict{Any,Any}
+    dicts::T
+end
+Base.merge(f::Function, d::MixedKeyDict, others::MixedKeyDict...) = _merge(f, (), d.dicts, (d->d.dicts).(others)...)
+Base.merge(f, d::MixedKeyDict, others::MixedKeyDict...) = _merge(f, (), d.dicts, (d->d.dicts).(others)...)
+function _merge(f, res, d, others...)
+    ofsametype, remaining = _alloftype(Base.heads(d), ((),), others...)
+    return _merge(f, (res..., merge(f, ofsametype...)), Base.tail(d), remaining...)
+end
+_merge(f, res, ::Tuple{}, others...) = _merge(f, res, others...)
+_merge(f, res, d) = MixedKeyDict((res..., d...))
+_merge(f, res, ::Tuple{}) = MixedKeyDict(res)
+function _alloftype(ofdesiredtype::Tuple{Vararg{D}}, accumulated, d::Tuple{D,Vararg}, others...) where D
+    return _alloftype((ofdesiredtype..., first(d)),
+                      (Base.front(accumulated)..., (last(accumulated)..., Base.tail(d)...), ()),
+                      others...)
+end
+function _alloftype(ofdesiredtype, accumulated, d, others...)
+    return _alloftype(ofdesiredtype,
+                      (Base.front(accumulated)..., (last(accumulated)..., first(d))),
+                      Base.tail(d), others...)
+end
+function _alloftype(ofdesiredtype, accumulated, ::Tuple{}, others...)
+    return _alloftype(ofdesiredtype,
+                      (accumulated..., ()),
+                      others...)
+end
+_alloftype(ofdesiredtype, accumulated) = ofdesiredtype, Base.front(accumulated)
+let
+    d = MixedKeyDict((Dict(1 => 3), Dict(4. => 2)))
+    e = MixedKeyDict((Dict(1 => 7), Dict(5. => 9)))
+    @test merge(+, d, e).dicts == (Dict(1 => 10), Dict(4.0 => 2, 5.0 => 9))
+    f = MixedKeyDict((Dict(2 => 7), Dict(5. => 11)))
+    @test merge(+, d, e, f).dicts == (Dict(1 => 10, 2 => 7), Dict(4.0 => 2, 5.0 => 20))
+end
