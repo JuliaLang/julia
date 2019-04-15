@@ -6,7 +6,7 @@
 #      issorted(rowval[colptr[i]:(colptr[i+1]-1)]) == true
 # Assumes that 1 <= colptr[i] <= colptr[i+1] for i in 1..n
 # Assumes that nnz <= length(rowval) < typemax(Ti)
-# Assumes that nnz <= length(nzval) < typemax(Ti)
+# Assumes that 0   <= length(nzval) < typemax(Ti)
 
 """
     SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
@@ -621,7 +621,7 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
 
     require_one_based_indexing(I, J, V)
     sparse_check_Ti(m, n, Ti)
-    sparse_check_length("I", I, 0, Ti)
+    widemul(m, n) < typemax(Ti) || sparse_check_length("I", I, 0, Ti)
     # Compute the CSR form's row counts and store them shifted forward by one in csrrowptr
     fill!(csrrowptr, Ti(0))
     coolen = length(I)
