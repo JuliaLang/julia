@@ -179,6 +179,17 @@ static void execJuliaInTerminal(NSURL *_Nonnull julia);
   [self findJuliaWithSpotlight];
 }
 
+- (BOOL)applicationShouldHandleReopen:(NSApplication *)sender
+                    hasVisibleWindows:(BOOL)flag {
+  if (!_mdq.gathering) {
+    NSURL *juliaexe = self.latestKnownTaggedJulia.juliaexe;
+    if (juliaexe) {
+      execJuliaInTerminal(juliaexe);
+    }
+  }
+  return NO;
+}
+
 - (void)addJuliaVariant:(JuliaVariant *)jv {
   if ([self.juliaVariants objectForKey:jv.juliaexe]) {
     // Don't overwrite.
