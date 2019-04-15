@@ -107,8 +107,7 @@ findfirst(pattern::AbstractString, string::AbstractString) =
 """
     findfirst(ch::Char, string::AbstractString)
 
-Find the first occurrence of `ch` in `string`. Equivalent to
-[`findfirst(isequal(ch), string)`](@ref).
+Find the first occurrence of `ch` in `string`.
 
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
@@ -315,8 +314,7 @@ findlast(pattern::AbstractString, string::AbstractString) =
 """
     findlast(ch::Char, string::AbstractString)
 
-Find the last occurrence of `ch` in `string`. Equivalent to
-[`findlast(isequal(ch), string)`](@ref).
+Find the last occurrence of `ch` in `string`.
 
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
