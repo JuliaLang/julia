@@ -2587,12 +2587,25 @@ end
 end
 
 @testset "Ti cannot store all potential values #31024" begin
+    # m * n >= typemax(Ti) but nnz < typemax(Ti)
     A = SparseMatrixCSC(12, 12, fill(Int8(1),13), Int8[], Int[])
-    @test size(A) == (12,12)
-    @test nnz(A) == 0
+    @test size(A) == (12,12) && nnz(A) == 0
     I1 = [Int8(i) for i in 1:20 for _ in 1:20]
     J1 = [Int8(i) for _ in 1:20 for i in 1:20]
-    @test_throws ArgumentError sparse(I1, J1, zero(length(I1)zero(length(I1))))
+    # m * n >= typemax(Ti) and nnz >= typemax(Ti)
+    @test_throws ArgumentError sparse(I1, J1, ones(length(I1)))
+    I1 = Int8.(rand(1:10, 500))
+    J1 = Int8.(rand(1:10, 500))
+    V1 = ones(500)
+    # m * n < typemax(Ti) and length(I) >= typemax(Ti) - combining values
+    @test_throws ArgumentError sparse(I1, J1, V1, 10, 10)
+    # m * n >= typemax(Ti) and length(I) >= typemax(Ti)
+    @test_throws ArgumentError sparse(I1, J1, V1, 12, 13)
+    I1 = Int8.(rand(1:10, 126))
+    J1 = Int8.(rand(1:10, 126))
+    V1 = ones(126)
+    # m * n >= typemax(Ti) and length(I) < typemax(Ti)
+    @test sparse(I1, J1, V1, 100, 100) !== nothing
 end
 
 @testset "Typecheck too strict #31435" begin
@@ -2601,7 +2614,6 @@ end
     @test nnz(A) == 126
     # nnz >= typemax
     @test_throws ArgumentError A[2,1] = 42
-
     # colptr short
     @test_throws ArgumentError SparseMatrixCSC(1, 1, Int[], Int[], Float64[])
     # colptr[1] must be 1

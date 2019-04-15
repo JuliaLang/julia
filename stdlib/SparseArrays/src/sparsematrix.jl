@@ -621,12 +621,11 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
 
     require_one_based_indexing(I, J, V)
     sparse_check_Ti(m, n, Ti)
-    widemul(m, n) < typemax(Ti) || sparse_check_length("I", I, 0, Ti)
+    sparse_check_length("I", I, 0, Ti)
     # Compute the CSR form's row counts and store them shifted forward by one in csrrowptr
     fill!(csrrowptr, Ti(0))
     coolen = length(I)
     min(length(J), length(V)) >= coolen || throw(ArgumentError("I and V need length >= length(I) = $coolen"))
-    coolen < typemax(Ti) || throw(ArgumentError("length(I) exceeds typemax($Ti)"))
     @inbounds for k in 1:coolen
         Ik = I[k]
         if 1 > Ik || m < Ik
@@ -652,9 +651,7 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
             throw(ArgumentError("column indices J[k] must satisfy 1 <= J[k] <= n"))
         end
         csrk = csrrowptr[Ik+1]
-        if csrk < Ti(1)
-            throw(ArgumentError("count of nonzeros in row $Ik exceeds $(typemax(Ti))"))
-        end
+        @assert csrk >= Ti(1) "index into csrcolval exceeds typemax(Ti)"
         csrrowptr[Ik+1] = csrk + Ti(1)
         csrcolval[csrk] = Jk
         csrnzval[csrk] = V[k]
