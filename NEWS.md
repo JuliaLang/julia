@@ -24,6 +24,8 @@ New library functions
 Standard library changes
 ------------------------
 
+* `complex(::Array, ::Array)` method has been added to maintain consistency with
+  `complex(::Array)` ([#31676]).
 
 #### LinearAlgebra
 
