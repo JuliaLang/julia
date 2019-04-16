@@ -17,6 +17,9 @@ abstract type AbstractRemoteRef end
 
 Create a `Future` on process `pid`.
 The default `pid` is the current process.
+A `Future` is a placeholder for a single computation
+of unknown termination status and time.
+For multiple potential computations, see `RemoteChannel`.
 """
 mutable struct Future <: AbstractRemoteRef
     where::Int
