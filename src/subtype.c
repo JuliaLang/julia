@@ -193,6 +193,7 @@ static int obviously_egal(jl_value_t *a, jl_value_t *b)
     if (jl_is_datatype(a)) {
         jl_datatype_t *ad = (jl_datatype_t*)a, *bd = (jl_datatype_t*)b;
         if (ad->name != bd->name) return 0;
+        if (ad->isconcretetype || bd->isconcretetype) return 0;
         size_t i, np = jl_nparams(ad);
         if (np != jl_nparams(bd)) return 0;
         for(i=0; i < np; i++) {
