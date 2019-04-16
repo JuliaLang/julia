@@ -105,9 +105,9 @@ findfirst(pattern::AbstractString, string::AbstractString) =
     findnext(pattern, string, firstindex(string))
 
 """
-    findfirst(ch::Char, string::AbstractString)
+    findfirst(ch::AbstractChar, string::AbstractString)
 
-Find the first occurrence of `ch` in `string`.
+Find the first occurrence of character `ch` in `string`.
 
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
@@ -121,7 +121,7 @@ julia> findfirst('z', "happy") === nothing
 true
 ```
 """
-findfirst(ch::Char, string::AbstractString) = findfirst(==(ch), string)
+findfirst(ch::AbstractChar, string::AbstractString) = findfirst(==(ch), string)
 
 # AbstractString implementation of the generic findnext interface
 function findnext(testf::Function, s::AbstractString, i::Integer)
@@ -275,9 +275,9 @@ julia> findnext("Lang", "JuliaLang", 2)
 findnext(t::AbstractString, s::AbstractString, i::Integer) = _search(s, t, i)
 
 """
-    findnext(ch::Char, string::AbstractString, start::Integer)
+    findnext(ch::AbstractChar, string::AbstractString, start::Integer)
 
-Find the next occurrence of `ch` in `string` starting at position `start`.
+Find the next occurrence of character `ch` in `string` starting at position `start`.
 
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
@@ -291,7 +291,8 @@ julia> findnext(`o`, "Hello to the world", 6)
 8
 ```
 """
-findnext(ch::Char, string::AbstractString, ind::Integer) = findnext(==(ch), string, ind)
+findnext(ch::AbstractChar, string::AbstractString, ind::Integer) =
+    findnext(==(ch), string, ind)
 
 """
     findlast(pattern::AbstractString, string::AbstractString)
@@ -312,9 +313,9 @@ findlast(pattern::AbstractString, string::AbstractString) =
     findprev(pattern, string, lastindex(string))
 
 """
-    findlast(ch::Char, string::AbstractString)
+    findlast(ch::AbstractChar, string::AbstractString)
 
-Find the last occurrence of `ch` in `string`.
+Find the last occurrence of character `ch` in `string`.
 
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
@@ -328,7 +329,7 @@ julia> findlast('z', "happy") === nothing
 true
 ```
 """
-findlast(ch::Char, string::AbstractString) = findlast(==(ch), string)
+findlast(ch::AbstractChar, string::AbstractString) = findlast(==(ch), string)
 
 # AbstractString implementation of the generic findprev interface
 function findprev(testf::Function, s::AbstractString, i::Integer)
@@ -486,9 +487,9 @@ julia> findprev("Julia", "JuliaLang", 6)
 findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, i)
 
 """
-    findprev(ch::Char, string::AbstractString, start::Integer)
+    findprev(ch::AbstractChar, string::AbstractString, start::Integer)
 
-Find the previous occurrence of `ch` in `string` starting at position `start`.
+Find the previous occurrence of character `ch` in `string` starting at position `start`.
 
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
@@ -502,7 +503,8 @@ julia> findprev('o', "Hello to the world", 18)
 15
 ```
 """
-findprev(ch::Char, string::AbstractString, ind::Integer) = findprev(==(ch), string, ind)
+findprev(ch::AbstractChar, string::AbstractString, ind::Integer) =
+    findprev(==(ch), string, ind)
 
 """
     occursin(needle::Union{AbstractString,Regex,AbstractChar}, haystack::AbstractString)
