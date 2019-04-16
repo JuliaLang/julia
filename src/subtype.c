@@ -646,29 +646,17 @@ static jl_value_t *fix_inferred_var_bound(jl_tvar_t *var, jl_value_t *ty JL_MAYB
 
 static int var_occurs_inside(jl_value_t *v, jl_tvar_t *var, int inside, int want_inv) JL_NOTSAFEPOINT;
 
-// compare UnionAll type `u` to `t`. `R==1` if `u` came from the right side of A <: B.
-static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, int param)
+typedef int (*tvar_callback)(void*, int8_t, jl_stenv_t *, int);
+
+static int with_tvar(tvar_callback callback, void *context, jl_unionall_t *u, int8_t R, jl_stenv_t *e, int param)
 {
-    jl_varbinding_t *btemp = e->vars;
-    // if the var for this unionall (based on identity) already appears somewhere
-    // in the environment, rename to get a fresh var.
-    while (btemp != NULL) {
-        if (btemp->var == u->var ||
-            // outer var can only refer to inner var if bounds changed
-            (btemp->lb != btemp->var->lb && jl_has_typevar(btemp->lb, u->var)) ||
-            (btemp->ub != btemp->var->ub && jl_has_typevar(btemp->ub, u->var))) {
-            u = rename_unionall(u);
-            break;
-        }
-        btemp = btemp->prev;
-    }
     jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, NULL, 0, 0, 0, 0, e->invdepth, 0, NULL, e->vars };
     JL_GC_PUSH4(&u, &vb.lb, &vb.ub, &vb.innervars);
     e->vars = &vb;
     int ans;
     if (R) {
         e->envidx++;
-        ans = subtype(t, u->body, e, param);
+        ans = callback(context, R, e, param);
         e->envidx--;
         // widen Type{x} to typeof(x) in argument position
         if (!vb.occurs_inv)
@@ -699,7 +687,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         }
     }
     else {
-        ans = subtype(u->body, t, e, param);
+        ans = callback(context, R, e, param);
     }
 
     // handle the "diagonal dispatch" rule, which says that a type var occurring more
@@ -746,7 +734,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         return 0;
     }
 
-    btemp = e->vars;
+    jl_varbinding_t *btemp = e->vars;
     if (vb.lb != vb.ub) {
         while (btemp != NULL) {
             jl_value_t *vu = btemp->ub;
@@ -765,8 +753,46 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     return ans;
 }
 
+static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e) {
+    jl_varbinding_t *btemp = e->vars;
+    // if the var for this unionall (based on identity) already appears somewhere
+    // in the environment, rename to get a fresh var.
+    while (btemp != NULL) {
+        if (btemp->var == u->var ||
+            // outer var can only refer to inner var if bounds changed
+            (btemp->lb != btemp->var->lb && jl_has_typevar(btemp->lb, u->var)) ||
+            (btemp->ub != btemp->var->ub && jl_has_typevar(btemp->ub, u->var))) {
+            u = rename_unionall(u);
+            break;
+        }
+        btemp = btemp->prev;
+    }
+    return u;
+}
+
+struct subtype_unionall_env {
+    jl_value_t *t;
+    jl_value_t *ubody;
+};
+
+static int subtype_unionall_callback(struct subtype_unionall_env *env, int8_t R, jl_stenv_t *s, int param) {
+    if (R) {
+        return subtype(env->t, env->ubody, s, param);
+    } else {
+        return subtype(env->ubody, env->t, s, param);
+    }
+}
+
+// compare UnionAll type `u` to `t`. `R==1` if `u` came from the right side of A <: B.
+static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, int param)
+{
+    u = unalias_unionall(u, e);
+    struct subtype_unionall_env env = {t, u->body};
+    return with_tvar((tvar_callback)subtype_unionall_callback, (void*)&env, u, R, e, param);
+}
+
 // unwrap <=1 layers of UnionAlls, leaving the var in *p1 the body
-static jl_value_t *unwrap_1_unionall(jl_value_t *t, jl_tvar_t **p1) JL_NOTSAFEPOINT
+static jl_datatype_t *unwrap_1_unionall(jl_value_t *t, jl_tvar_t **p1) JL_NOTSAFEPOINT
 {
     assert(t);
     if (jl_is_unionall(t)) {
@@ -774,14 +800,14 @@ static jl_value_t *unwrap_1_unionall(jl_value_t *t, jl_tvar_t **p1) JL_NOTSAFEPO
         t = ((jl_unionall_t*)t)->body;
     }
     assert(jl_is_datatype(t));
-    return t;
+    return (jl_datatype_t*)t;
 }
 
 // check n <: (length of vararg type v)
 static int check_vararg_length(jl_value_t *v, ssize_t n, jl_stenv_t *e)
 {
     jl_tvar_t *va_p1=NULL;
-    jl_value_t *tail = unwrap_1_unionall(v, &va_p1);
+    jl_datatype_t *tail = unwrap_1_unionall(v, &va_p1);
     jl_value_t *N = jl_tparam1(tail);
     // only do the check if N is free in the tuple type's last parameter
     if (N != (jl_value_t*)va_p1) {
@@ -797,99 +823,186 @@ static int check_vararg_length(jl_value_t *v, ssize_t n, jl_stenv_t *e)
     return 1;
 }
 
-static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, int param)
+static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e);
+
+struct subtype_tuple_env {
+    jl_datatype_t *xd, *yd;
+    jl_value_t *lastx, *lasty;
+    size_t lx, ly;
+    size_t i, j;
+    int vx, vy;
+    jl_value_t *vtx;
+    jl_value_t *vty;
+    jl_vararg_kind_t vvx, vvy;
+};
+
+static int subtype_tuple_varargs(struct subtype_tuple_env *env, jl_stenv_t *e, int param)
 {
-    size_t lx = jl_nparams(xd), ly = jl_nparams(yd);
-    if (lx == 0 && ly == 0)
-        return 1;
-    size_t i=0, j=0;
-    int vx=0, vy=0;
-    jl_vararg_kind_t vvx = JL_VARARG_NONE;
-    if (lx > 0)
-        vvx = jl_vararg_kind(jl_tparam(xd, lx-1));
-    int vvy = (ly > 0 && jl_is_vararg_type(jl_tparam(yd, ly-1)));
-    if (vvx != JL_VARARG_NONE) {
-        if (vvx == JL_VARARG_UNBOUND) {
-            if (!vvy && ly < lx - 1)
-                return 0;
+    jl_tvar_t *yv1=NULL;
+    jl_datatype_t *yva = unwrap_1_unionall(env->vty, &yv1);
+    jl_tvar_t *xv1=NULL;
+    jl_datatype_t *xva = unwrap_1_unionall(env->vtx, &xv1);
+
+    jl_value_t *xp0 = jl_tparam0(xva); jl_value_t *xp1 = jl_tparam1(xva);
+    jl_value_t *yp0 = jl_tparam0(yva); jl_value_t *yp1 = jl_tparam1(yva);
+
+    if (!jl_is_datatype(env->vtx)) {
+        // Unconstrained on the left, constrained on the right
+        jl_value_t *yl = yp1;
+        if (jl_is_typevar(yl)) {
+            jl_varbinding_t *ylv = lookup(e, (jl_tvar_t*)yl);
+            if (ylv)
+                yl = ylv->lb;
         }
-    }
-    else if ((vvy && ly > lx+1) || (!vvy && lx != ly)) {
-        return 0;
-    }
-    param = (param == 0 ? 1 : param);
-    jl_value_t *lastx=NULL, *lasty=NULL;
-    while (i < lx) {
-        jl_value_t *xi = jl_tparam(xd, i);
-        if (i == lx-1 && vvx) {
-            vx += 1;
-        }
-        jl_value_t *yi = NULL;
-        if (j < ly) {
-            yi = jl_tparam(yd, j);
-            if (j == ly-1 && vvy) vy += 1;
-        }
-        if (vx && !vy) {
-            if (!vvy && !check_vararg_length(xi, ly-lx+1, e))
-                return 0;
-            jl_tvar_t *p1=NULL;
-            xi = unwrap_1_unionall(xi, &p1);
-            jl_value_t *N = jl_tparam1(xi);
-            if (N == (jl_value_t*)p1)
-                return 0;
-            if (j >= ly) return 1;
-            xi = jl_tparam0(xi);
-        }
-        else if (j >= ly) {
+        if (jl_is_long(yl)) {
             return 0;
         }
-        if (!vx && vy) {
-            jl_tvar_t *p1=NULL;
-            yi = jl_tparam0(unwrap_1_unionall(yi, &p1));
-            if (yi == (jl_value_t*)p1)
-                yi = ((jl_tvar_t*)yi)->ub;
-            if (!vvx && yi == (jl_value_t*)jl_any_type)
-                break;  // if y ends in `Vararg{Any}` skip checking everything
+    } else {
+        jl_value_t *xl = jl_tparam1(env->vtx);
+        if (jl_is_typevar(xl)) {
+            jl_varbinding_t *xlv = lookup(e, (jl_tvar_t*)xl);
+            if (xlv)
+                xl = xlv->lb;
         }
-        if (vx && vy) {
-            jl_tvar_t *yp1=NULL;
-            jl_value_t *yva = unwrap_1_unionall(yi, &yp1);
-            jl_tvar_t *xp1=NULL;
-            jl_value_t *xva = unwrap_1_unionall(xi, &xp1);
-            if ((jl_value_t*)xp1 == jl_tparam1(xva)) {
-                // check for unconstrained vararg on left, constrained on right
-                if (jl_is_long(jl_tparam1(yva)))
-                    return 0;
-                if (jl_is_typevar(jl_tparam1(yva))) {
-                    jl_varbinding_t *ylv = lookup(e, (jl_tvar_t*)jl_tparam1(yva));
-                    if (ylv && jl_is_long(ylv->lb))
-                        return 0;
+        if (jl_is_long(xl)) {
+            if (jl_unbox_long(xl) + 1 == env->vx) {
+                // LHS is exhausted. We're a subtype if the LHS is either
+                // exhausted as well or unbounded (in which case we need to
+                // set it to 0.
+                if (jl_is_datatype(env->vty)) {
+                    jl_value_t *yl = jl_tparam1(env->vty);
+                    if (jl_is_typevar(yl)) {
+                        jl_varbinding_t *ylv = lookup(e, (jl_tvar_t*)yl);
+                        if (ylv)
+                            yl = ylv->lb;
+                    }
+                    if (jl_is_long(yl)) {
+                        return jl_unbox_long(yl) + 1 == env->vy;
+                    }
+                } else {
+                    // We can skip the subtype check, but we still
+                    // need to make sure to constrain the length of y
+                    // to 0.
+                    goto constrain_length;
                 }
             }
+        }
+    }
 
-            // skip testing element type if vararg lengths are 0
-            if (jl_is_datatype(xi)) {
-                jl_value_t *xl = jl_tparam1(xi);
-                if (jl_is_typevar(xl)) {
-                    jl_varbinding_t *xlv = lookup(e, (jl_tvar_t*)xl);
-                    if (xlv)
-                        xl = xlv->lb;
+    // in Vararg{T1} <: Vararg{T2}, need to check subtype twice to
+    // simulate the possibility of multiple arguments, which is needed
+    // to implement the diagonal rule correctly.
+    if (!subtype(xp0, yp0, e, 1)) return 0;
+    if (!subtype(xp0, yp0, e, 1)) return 0;
+
+constrain_length:
+    if (jl_is_long(xp1) && jl_is_long(yp1)) {
+        return env->lx + jl_unbox_long(xp1) == env->ly + jl_unbox_long(yp1);
+    }
+
+    if (!jl_is_datatype(env->vtx)) {
+        jl_value_t *yl = yp1;
+        if (jl_is_typevar(yl)) {
+            jl_varbinding_t *ylv = lookup(e, (jl_tvar_t*)yl);
+            if (ylv)
+                yl = ylv->lb;
+        }
+        if (jl_is_long(yl)) {
+            // The length of the x tuple is unconstrained, but the
+            // length of the y tuple is now fixed (this could have happened
+            // as a result of the subtype call above).
+            return 0;
+        }
+    }
+
+    // Vararg{T,N} <: Vararg{T2,N2}; equate N and N2
+    e->invdepth++;
+    if (jl_is_long(xp1) && env->vx != 1)
+        xp1 = jl_box_long(jl_unbox_long(xp1) - env->vx + 1);
+    if (jl_is_long(yp1) && env->vy != 1)
+        yp1 = jl_box_long(jl_unbox_long(yp1) - env->vy + 1);
+    int ans = forall_exists_equal(xp1, yp1, e);
+    e->invdepth--;
+    return ans;
+}
+
+static int subtype_tuple_tail(struct subtype_tuple_env *env, int8_t R, jl_stenv_t *e, int param)
+{
+loop:
+    // while (i <= lx) {
+        if (env->i >= env->lx)
+            goto done;
+
+        /* Get the type in the current index. If necessary introduce tvars for
+           varargs */
+        jl_value_t *xi = NULL;
+        if (env->i == env->lx-1 && env->vvx) {
+            if (!env->vtx) {
+                xi = jl_tparam(env->xd, env->i);
+                // Unbounded vararg on the LHS without vararg on the LHS should
+                // have been caught earlier.
+                assert(env->vvy || !jl_is_unionall(xi));
+                if (jl_is_unionall(xi)) {
+                    // TODO: If !var_occurs_inside(jl_tparam0(xid), p1, 0, 1),
+                    // we could avoid introducing the tvar into the environment
+                    jl_unionall_t *u = (jl_unionall_t*)xi;
+                    u = unalias_unionall(u, e);
+                    env->vtx = (jl_value_t*)u;
+                    // goto loop, but with the tvar introduced
+                    return with_tvar((tvar_callback)subtype_tuple_tail, env, u, 0, e, param);
                 }
-                if (jl_is_long(xl) && jl_unbox_long(xl) + 1 == vx)
-                    return 1;
+                env->vtx = xi;
             }
-            if (jl_is_datatype(yi)) {
-                jl_value_t *yl = jl_tparam1(yi);
-                if (jl_is_typevar(yl)) {
-                    jl_varbinding_t *ylv = lookup(e, (jl_tvar_t*)yl);
-                    if (ylv && jl_is_long(ylv->lb) && jl_unbox_long(ylv->lb) == 0)
-                        break;
+            xi = env->vtx;
+        } else {
+            xi = jl_tparam(env->xd, env->i);
+        }
+
+        jl_value_t *yi = NULL;
+        if (env->j < env->ly) {
+            if (env->j == env->ly-1 && env->vvy) {
+                if (!env->vty) {
+                    yi = jl_tparam(env->yd, env->j);
+                    if (jl_is_unionall(yi)) {
+                        jl_unionall_t *u = (jl_unionall_t*)yi;
+                        u = unalias_unionall(u, e);
+                        env->vty = (jl_value_t*)u;
+                        // goto loop, but with the tvar introduced
+                        return with_tvar((tvar_callback)subtype_tuple_tail, env, u, 1, e, param);
+                    }
+                    env->vty = yi;
                 }
+                yi = env->vty;
+            } else {
+                yi = jl_tparam(env->yd, env->j);
             }
         }
-        if (xi == lastx &&
-            ((yi == lasty && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) ||
-             (yi == lasty && !vx && vy && jl_is_concrete_type(xi)))) {
+
+        if (env->vtx)
+            env->vx += 1;
+        if (env->vty)
+            env->vy += 1;
+
+        if (env->vx && env->vy) {
+            return subtype_tuple_varargs(env, e, param);
+        }
+
+        if (env->vx) {
+            xi = jl_tparam0(jl_unwrap_unionall(env->vtx));
+            if (env->j >= env->ly)
+               return 1;
+        }
+        else if (env->j >= env->ly) {
+            return 0;
+        }
+        if (env->vy) {
+            yi = jl_tparam0(jl_unwrap_unionall(env->vty));
+            if (!env->vvx && yi == (jl_value_t*)jl_any_type)
+                goto done;  // if y ends in `Vararg{Any}` skip checking everything
+        }
+        if (xi == env->lastx &&
+            ((yi == env->lasty && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) ||
+             (yi == env->lasty && !env->vx && env->vy && jl_is_concrete_type(xi)))) {
             // fast path for repeated elements
         }
         else if (e->Runions.depth == 0 && e->Lunions.depth == 0 && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) {
@@ -900,25 +1013,79 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
         else if (!subtype(xi, yi, e, param)) {
             return 0;
         }
-        if (vx && vy) break;
-        lastx = xi; lasty = yi;
-        if (i < lx-1 || !vx)
-            i++;
-        if (j < ly-1 || !vy)
-            j++;
-    }
+        env->lastx = xi; env->lasty = yi;
+        if (env->i < env->lx-1 || !env->vx)
+            env->i++;
+        if (env->j < env->ly-1 || !env->vy)
+            env->j++;
+
+        goto loop;
+    // }
+
+done:
     // TODO: handle Vararg with explicit integer length parameter
-    if (!vy && j < ly && jl_is_vararg_type(jl_tparam(yd,j)))
-        vy += 1;
-    if (vy && !vx && lx+1 >= ly) {
+    if (!env->vy && env->j < env->ly && jl_is_vararg_type(jl_tparam(env->yd, env->j)))
+        env->vy += 1;
+    if (env->vy && !env->vx && env->lx+1 >= env->ly) {
         // in Tuple{...,tn} <: Tuple{...,Vararg{T,N}}, check (lx+1-ly) <: N
-        if (!check_vararg_length(jl_tparam(yd,ly-1), lx+1-ly, e))
+        if (!check_vararg_length(jl_tparam(env->yd,env->ly-1), env->lx+1-env->ly, e))
             return 0;
     }
-    return (lx + vx == ly + vy) || (vy && (lx >= (vx ? ly : (ly-1))));
+    return (env->lx + env->vx == env->ly + env->vy) || (env->vy && (env->lx >= (env->vx ? env->ly : (env->ly-1))));
 }
 
-static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e);
+static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, int param)
+{
+    struct subtype_tuple_env env;
+    env.xd = xd; env.yd = yd;
+    env.lx = jl_nparams(xd); env.ly = jl_nparams(yd);
+    if (env.lx == 0 && env.ly == 0)
+        return 1;
+    env.i=0; env.j=0;
+    env.vx=0; env.vy=0;
+    env.vvx = env.vvy = JL_VARARG_NONE;
+    if (env.lx > 0)
+        env.vvx = jl_vararg_kind(jl_tparam(env.xd, env.lx-1));
+    if (env.ly > 0)
+        env.vvy = jl_vararg_kind(jl_tparam(env.yd, env.ly-1));
+    if (env.vvx != JL_VARARG_NONE && env.vvx != JL_VARARG_INT) {
+        jl_varbinding_t *bb = NULL;
+        if (env.vvx == JL_VARARG_BOUND)
+            bb = lookup(e, (jl_tvar_t*)jl_tparam1(jl_tparam(env.xd, env.lx-1)));
+        if (env.vvx == JL_VARARG_UNBOUND || (bb && !bb->right)) {
+            // Unbounded on the LHS, bounded on the RHS
+            if (env.vvy == JL_VARARG_NONE || env.vvy == JL_VARARG_INT)
+                return 0;
+            else if (env.lx < env.ly) // Unbounded includes N == 0
+                return 0;
+        } else if (env.vvy == JL_VARARG_NONE && !check_vararg_length(jl_tparam(env.xd, env.lx-1), env.ly+1-env.lx, e)) {
+            return 0;
+        }
+    } else {
+        size_t nx = env.lx;
+        if (env.vvx == JL_VARARG_INT)
+            nx += jl_vararg_length(jl_tparam(env.xd, env.lx-1)) - 1;
+        else
+            assert(env.vvx == JL_VARARG_NONE);
+        size_t ny = env.ly;
+        if (env.vvy == JL_VARARG_INT)
+            ny += jl_vararg_length(jl_tparam(env.yd, env.ly-1)) - 1;
+        else if (env.vvy != JL_VARARG_NONE)
+            ny -= 1;
+        if (env.vvy == JL_VARARG_NONE || env.vvy == JL_VARARG_INT) {
+            if (nx != ny)
+                return 0;
+        } else {
+            if (ny > nx)
+                return 0;
+        }
+    }
+
+    param = (param == 0 ? 1 : param);
+    env.lastx=NULL; env.lasty=NULL;
+    env.vtx=NULL; env.vty=NULL;
+    return subtype_tuple_tail(&env, 0, e, param);
+}
 
 // `param` means we are currently looking at a parameter of a type constructor
 // (as opposed to being outside any type constructor, or comparing variable bounds).
@@ -1045,20 +1212,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
         if (xd == jl_any_type) return 0;
         if (xd->name == jl_tuple_typename)
             return subtype_tuple(xd, yd, e, param);
-        if (xd->name == jl_vararg_typename) {
-            // Vararg: covariant in first parameter, invariant in second
-            jl_value_t *xp1=jl_tparam0(xd), *xp2=jl_tparam1(xd), *yp1=jl_tparam0(yd), *yp2=jl_tparam1(yd);
-            // in Vararg{T1} <: Vararg{T2}, need to check subtype twice to
-            // simulate the possibility of multiple arguments, which is needed
-            // to implement the diagonal rule correctly.
-            if (!subtype(xp1, yp1, e, 1)) return 0;
-            if (!subtype(xp1, yp1, e, 1)) return 0;
-            // Vararg{T,N} <: Vararg{T2,N2}; equate N and N2
-            e->invdepth++;
-            int ans = forall_exists_equal(xp2, yp2, e);
-            e->invdepth--;
-            return ans;
-        }
+        assert(xd->name != jl_vararg_typename);
         size_t i, np = jl_nparams(xd);
         int ans = 1;
         e->invdepth++;
@@ -2056,8 +2210,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
 static int intersect_vararg_length(jl_value_t *v, ssize_t n, jl_stenv_t *e, int8_t R)
 {
     jl_tvar_t *va_p1=NULL;
-    jl_value_t *tail = unwrap_1_unionall(v, &va_p1);
-    assert(jl_is_datatype(tail));
+    jl_datatype_t *tail = unwrap_1_unionall(v, &va_p1);
     jl_value_t *N = jl_tparam1(tail);
     // only do the check if N is free in the tuple type's last parameter
     if (jl_is_typevar(N) && N != (jl_value_t*)va_p1) {
@@ -2382,7 +2535,7 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
         record_var_occurrence(lookup(e, (jl_tvar_t*)y), e, param);
         return intersect_var((jl_tvar_t*)y, x, e, 1, param);
     }
-    if (!jl_has_free_typevars(x) && !jl_has_free_typevars(y)) {
+    if (!jl_has_free_typevars(x) && !jl_has_free_typevars(y) && !jl_is_vararg_type(x) && !jl_is_vararg_type(y)) {
         if (jl_subtype(x, y)) return x;
         if (jl_subtype(y, x)) return y;
     }
