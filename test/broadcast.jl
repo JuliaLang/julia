@@ -818,3 +818,9 @@ let a = rand(5), b = rand(5), c = copy(a)
     view(identity(a), 1:3) .+= view(b, 1:3)
     @test a == [(c+b)[1:3]; c[4:5]]
 end
+
+# issue #31729
+struct DummyNamedDimsArray <: AbstractArray end
+Base.getindex(::DummyNamedDimsArray; x) = x
+@test Base.dotview(DummyNamedsDimArray(); x=5) == 5
+
