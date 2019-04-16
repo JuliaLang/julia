@@ -13,13 +13,12 @@ const client_refs = WeakKeyDict{Any, Nothing}() # used as a WeakKeySet
 abstract type AbstractRemoteRef end
 
 """
-    Future(pid::Integer=myid())
+    Future(w::Int, rrid::RRID, v::Union{Some, Nothing}=nothing)
 
-Create a `Future` on process `pid`.
-The default `pid` is the current process.
 A `Future` is a placeholder for a single computation
 of unknown termination status and time.
 For multiple potential computations, see `RemoteChannel`.
+See `remoteref_id` for identifying an `AbstractRemoteRef`.
 """
 mutable struct Future <: AbstractRemoteRef
     where::Int
@@ -101,9 +100,15 @@ function finalize_ref(r::AbstractRemoteRef)
     nothing
 end
 
+"""
+    Future(pid::Integer=myid())
+
+Create a `Future` on process `pid`.
+The default `pid` is the current process.
+"""
+Future(pid::Integer=myid()) = Future(pid, RRID())
 Future(w::LocalProcess) = Future(w.id)
 Future(w::Worker) = Future(w.id)
-Future(pid::Integer=myid()) = Future(pid, RRID())
 
 RemoteChannel(pid::Integer=myid()) = RemoteChannel{Channel{Any}}(pid, RRID())
 
