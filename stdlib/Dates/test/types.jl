@@ -228,4 +228,13 @@ end
     @test Dates.Date(Dates.DateTime(Dates.Date(2012, 7, 1))) == Dates.Date(2012, 7, 1)
 end
 
+@testset "TmStruct to DateTime conversion" begin
+    for i = 1:10
+        secs = rand()*2000000000 # can this throw inexact error
+        tm = Libc.TmStruct(secs)
+        rev = Dates.DateTime(tm)
+        @test -1 < rev.instant.periods.value - secs < 1
+    end
+end
+
 end
