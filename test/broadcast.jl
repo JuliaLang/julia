@@ -820,7 +820,7 @@ let a = rand(5), b = rand(5), c = copy(a)
 end
 
 # issue #31729
-struct DummyNamedDimsArray <: AbstractArray end
+struct DummyNamedDimsArray <: AbstractArray{Int,2} end
 Base.getindex(::DummyNamedDimsArray; x) = x
 @test Base.dotview(DummyNamedsDimArray(); x=5) == 5
 
