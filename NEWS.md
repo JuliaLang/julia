@@ -24,7 +24,6 @@ New library functions
 Standard library changes
 ------------------------
 
-
 #### LinearAlgebra
 
 
@@ -36,6 +35,7 @@ Standard library changes
 
 #### Statistics
 
+* `mean` now accepts both a function argument and a `dims` keyword ([#31576]).
 
 #### Miscellaneous
 
