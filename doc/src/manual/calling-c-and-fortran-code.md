@@ -813,7 +813,7 @@ end
 
 The C function wrapped returns an integer error code; the results of the actual evaluation of
 the Bessel J function populate the Julia array `result_array`. This variable is declared as a
-`Ref{Cdouble}`, since its memory is allocated and managed by Julia. The implicit call to 
+`Ref{Cdouble}`, since its memory is allocated and managed by Julia. The implicit call to
 [`Base.cconvert(Ref{Cdouble}, result_array)`](@ref) unpacks
 the Julia pointer to a Julia array data structure into a form understandable by C.
 
