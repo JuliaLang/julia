@@ -260,12 +260,22 @@ to the specified type. For example, the following call:
 ccall((:foo, "libfoo"), Cvoid, (Int32, Float64), x, y)
 ```
 
-will behave as if the following were written[^3]:
+will behave as if the following were written:
 
 ```julia
 ccall((:foo, "libfoo"), Cvoid, (Int32, Float64),
-      Base.convert(Int32, x), Base.convert(Float64, y))
+      Base.unsafe_convert(Int32, Base.cconvert(Int32, x)),
+      Base.unsafe_convert(Float64, Base.cconvert(Float64, y)))
 ```
+
+[`Base.cconvert`](@ref) normally just calls [`convert`](@ref), but can be defined to return an
+arbitrary new object more appropriate for passing to C.
+This should be used to perform all allocations of memory that will be accessed by the C code.
+For example, this is used to convert an `Array` of objects (e.g. strings) to an array of pointers.
+
+[`Base.unsafe_convert`](@ref) handles conversion to [`Ptr`](@ref) types. It is considered unsafe because
+converting an object to a native pointer can hide the object from the garbage collector, causing
+it to be freed prematurely.
 
 ### Type Correspondences
 
@@ -742,12 +752,12 @@ function `gsl_permutation_alloc`. As user code never has to look inside the `gsl
 struct, the corresponding Julia wrapper simply needs a new type declaration, `gsl_permutation`,
 that has no internal fields and whose sole purpose is to be placed in the type parameter of a
 `Ptr` type.  The return type of the [`ccall`](@ref) is declared as `Ptr{gsl_permutation}`, since
-the memory allocated and pointed to by `output_ptr` is controlled by C (and not Julia).
+the memory allocated and pointed to by `output_ptr` is controlled by C.
 
 The input `n` is passed by value, and so the function's input signature is
 simply declared as `(Csize_t,)` without any `Ref` or `Ptr` necessary. (If the
 wrapper was calling a Fortran function instead, the corresponding function input
-signature should instead be `(Ref{Csize_t},)`, since Fortran variables are
+signature would instead be `(Ref{Csize_t},)`, since Fortran variables are
 passed by pointers.) Furthermore, `n` can be any type that is convertible to a
 `Csize_t` integer; the [`ccall`](@ref) implicitly calls [`Base.cconvert(Csize_t,
 n)`](@ref).
@@ -768,13 +778,9 @@ end
 ```
 
 Here, the input `p` is declared to be of type `Ref{gsl_permutation}`, meaning that the memory
-that `p` points to may be managed by Julia or by C. A pointer to memory allocated by C should
+that `p` points to may be managed by Julia or by C. A pointer to memory allocated by C should generally
 be of type `Ptr{gsl_permutation}`, but it is convertible using [`Base.cconvert`](@ref) and therefore
-can be used in the same (covariant) context of the input argument to a [`ccall`](@ref). A pointer
-to memory allocated by Julia must be of type `Ref{gsl_permutation}`, to ensure that the memory
-address pointed to is valid and that Julia's garbage collector manages the chunk of memory pointed
-to correctly. Therefore, the `Ref{gsl_permutation}` declaration allows pointers managed by C or
-Julia to be used.
+can be used in the same (covariant) context of the input argument to a [`ccall`](@ref).
 
 If the C wrapper never expects the user to pass pointers to memory managed by Julia, then using
 `p::Ptr{gsl_permutation}` for the method signature of the wrapper and similarly in the [`ccall`](@ref)
@@ -805,19 +811,10 @@ end
 ```
 
 The C function wrapped returns an integer error code; the results of the actual evaluation of
-the Bessel J function populate the Julia array `result_array`. This variable can only be used
-with corresponding input type declaration `Ref{Cdouble}`, since its memory is allocated and managed
-by Julia, not C. The implicit call to [`Base.cconvert(Ref{Cdouble}, result_array)`](@ref) unpacks
+the Bessel J function populate the Julia array `result_array`. This variable is declared as a
+`Ref{Cdouble}`, since its memory is allocated and managed by Julia. The implicit call to 
+[`Base.cconvert(Ref{Cdouble}, result_array)`](@ref) unpacks
 the Julia pointer to a Julia array data structure into a form understandable by C.
-
-Note that for this code to work correctly, `result_array` must be declared to be of type `Ref{Cdouble}`
-and not `Ptr{Cdouble}`. The memory is managed by Julia and the `Ref` signature alerts Julia's
-garbage collector to keep managing the memory for `result_array` while the [`ccall`](@ref) executes.
-If `Ptr{Cdouble}` were used instead, the [`ccall`](@ref) may still work, but Julia's garbage
-collector would not be aware that the memory declared for `result_array` is being used by the
-external C function. As a result, the code may produce a memory leak if `result_array` never gets
-freed by the garbage collector, or if the garbage collector prematurely frees `result_array`,
-the C function may end up throwing an invalid memory access exception.
 
 ## Fortran Wrapper Example
 
@@ -1073,20 +1070,3 @@ bindings, see the [CxxWrap](https://github.com/JuliaInterop/CxxWrap.jl) package.
 
 [^2]: The [Clang package](https://github.com/ihnorton/Clang.jl) can be used to auto-generate Julia code
     from a C header file.
-
-[^3]: For the conversion of ccall parameters, the actual conversion would look something like this:
-
-    ```julia
-    ccall((:foo, "libfoo"), Cvoid, (Int32, Float64),
-        Base.unsafe_convert(Int32, Base.cconvert(Int32, x)),
-        Base.unsafe_convert(Float64, Base.cconvert(Float64, y)))
-    ```
-
-    [`Base.cconvert`](@ref) normally just calls [`convert`](@ref), but can be defined to return an
-    arbitrary new object more appropriate for passing to C.
-    This should be used to perform all allocations of memory that will be accessed by the C code.
-    For example, this is used to convert an `Array` of objects (e.g. strings) to an array of pointers.
-
-    [`Base.unsafe_convert`](@ref) handles conversion to [`Ptr`](@ref) types. It is considered unsafe because
-    converting an object to a native pointer can hide the object from the garbage collector, causing
-    it to be freed prematurely.
