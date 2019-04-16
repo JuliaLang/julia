@@ -185,9 +185,10 @@ If the argument `Future` is owned by a different node, this call will block to w
 It is recommended to wait for `rr` in a separate task instead
 or to use a local [`Channel`](@ref) as a proxy:
 
-    c = Channel(1)
-    @async put!(c, remotecall_fetch(long_computation, p))
-    isready(c)  # will not block
+	p = 1
+    f = Future(p)
+    @async put!(f, remotecall_fetch(long_computation, p))
+    isready(f)  # will not block
 """
 function isready(rr::Future)
     rr.v === nothing || return true
