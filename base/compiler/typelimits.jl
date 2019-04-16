@@ -66,7 +66,10 @@ function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
             # it cannot have a reference cycle in the type graph
             cF = c.types
             for f in cF
-                is_derived_type(t, f, mindepth) && return true
+                # often a parameter is also a field type; avoid searching twice
+                if !contains_is(c.parameters, f)
+                    is_derived_type(t, f, mindepth) && return true
+                end
             end
         end
     end
