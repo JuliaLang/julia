@@ -165,18 +165,20 @@ typedef returntype (*functiontype)(argumenttype, ...)
 The macro [`@cfunction`](@ref) generates the C-compatible function pointer for a call to a
 Julia function. The arguments to [`@cfunction`](@ref) are:
 
-1. A Julia Function
-2. The return type
-3. A literal tuple of input types
+1. A Julia function
+2. The function's return type
+3. A tuple of input types, corresponding to the function signature
 
-As with `ccall`, all of these arguments will be evaluated at compile-time when the containing method is defined.
+!!! note
+    As with `ccall`, the return type and tuple of input types must be literal constants.
 
-Currently, only the platform-default C calling convention is supported. This means that
-`@cfunction`-generated pointers cannot be used in calls where WINAPI expects `stdcall`
-function on 32-bit windows, but can be used on WIN64 (where `stdcall` is unified with the
-C calling convention).
+!!! note
+    Currently, only the platform-default C calling convention is supported. This means that
+    `@cfunction`-generated pointers cannot be used in calls where WINAPI expects `stdcall`
+    function on 32-bit windows, but can be used on WIN64 (where `stdcall` is unified with the
+    C calling convention).
 
-As a classic example, consider the standard C library `qsort` function, declared as:
+A classic example is the standard C library `qsort` function, declared as:
 
 ```c
 void qsort(void *base, size_t nmemb, size_t size,
@@ -779,8 +781,7 @@ end
 
 Here, the input `p` is declared to be of type `Ref{gsl_permutation}`, meaning that the memory
 that `p` points to may be managed by Julia or by C. A pointer to memory allocated by C should
-be of type `Ptr{gsl_permutation}`.  Because `Ptr` is a subtype of `Ref`, `gsl_permutation_free` will accept
-`Ptr` arguments (or any other subtype of `Ref`).  Using `Ref` as the argument type additionally makes it possible to pass a handle to memory that has been allocated by Julia.
+be of type `Ptr{gsl_permutation}`, but it is convertible using [`Base.cconvert`](@ref) and therefore
 
 Now if you look closely enough at this example, you may notice that it is incorrect, given our explanation above of preferred declaration types. Do you see it? The function we are calling is going to free the memory. This type of operation cannot be given a Julia object (it will crash or cause memory corruption). Therefore, it may be preferable to declare the `p` type as `Ptr{gsl_permutation }`, to make it harder for the user to mistakenly pass another sort of object there than one obtained via `gsl_permutation_alloc`.
 
