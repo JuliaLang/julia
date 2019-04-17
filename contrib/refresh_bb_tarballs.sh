@@ -34,14 +34,14 @@ for triplet in ${TRIPLETS}; do
 	for proj in ${BB_PROJECTS}; do
 		PROJ="$(echo ${proj} | tr [a-z] [A-Z])"
         make -C "${CONTRIB_DIR}/../deps" USE_BINARYBUILDER_${PROJ}=1 ${PROJ}_BB_TRIPLET=${triplet} distclean-${proj}
-		make -C "${CONTRIB_DIR}/../deps" USE_BINARYBUILDER_${PROJ}=1 ${PROJ}_BB_TRIPLET=${triplet} compile-${proj}
+		make -C "${CONTRIB_DIR}/../deps" USE_BINARYBUILDER_${PROJ}=1 ${PROJ}_BB_TRIPLET=${triplet} install-${proj}
 	done
 
     for proj in ${BB_GCC_EXPANDED_PROJECTS}; do
 		PROJ="$(echo ${proj} | tr [a-z] [A-Z])"
         for gcc in gcc4 gcc7 gcc8; do
 		    make -C "${CONTRIB_DIR}/../deps" USE_BINARYBUILDER_${PROJ}=1 ${PROJ}_BB_TRIPLET=${triplet}-${gcc} BB_TRIPLET_CXXABI=${triplet} distclean-${proj}
-		    make -C "${CONTRIB_DIR}/../deps" USE_BINARYBUILDER_${PROJ}=1 ${PROJ}_BB_TRIPLET=${triplet}-${gcc} BB_TRIPLET_CXXABI=${triplet} compile-${proj}
+		    make -C "${CONTRIB_DIR}/../deps" USE_BINARYBUILDER_${PROJ}=1 ${PROJ}_BB_TRIPLET=${triplet}-${gcc} BB_TRIPLET_CXXABI=${triplet} install-${proj}
         done
     done
 done
