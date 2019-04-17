@@ -691,7 +691,7 @@ function return_callback(s)
 end
 
 find_hist_file() = get(ENV, "JULIA_HISTORY",
-    joinpath(homedir(), ".julia", "logs", "repl_history.jl"))
+    !isempty(DEPOT_PATH) ? joinpath(DEPOT_PATH[1], "logs", "repl_history.jl") : "")
 
 backend(r::AbstractREPL) = r.backendref
 
