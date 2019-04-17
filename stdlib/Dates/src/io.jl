@@ -393,9 +393,52 @@ macro dateformat_str(str)
 end
 
 # Standard formats
+
+"""
+ISO8601 'DateTime' Format for 'date' and 'time' formatting. Default Format.
+Example    
+```jldoctest
+
+julia> Dates.ISODateTimeFormat
+dateformat"yyyy-mm-ddTHH:MM:SS.s"
+
+julia> Dates.format(Dates.now(), Dates.ISODateFormat)
+"2019-04-15T17:18:05.439"
+"""
+
 const ISODateTimeFormat = DateFormat("yyyy-mm-dd\\THH:MM:SS.s")
+
+"""
+ISO8601 'Date' Format for 'date' formatting. 
+Example
+```jldoctest
+
+julia> Dates.ISODateFormat
+dateformat"yyyy-mm-dd"
+"""
+
 const ISODateFormat = DateFormat("yyyy-mm-dd")
+
+"""
+Default ISO8601 Time Format for time formatting.
+Example
+```jldoctest
+
+julia> Dates.ISOTimeFormat
+dateformat"HH:MM:SS.s"
+"""
+
 const ISOTimeFormat = DateFormat("HH:MM:SS.s")
+
+"""
+Traditional RFC1123 Format for date/time formatting.
+Example
+```jldoctest
+
+julia> Dates.format(Dates.now(), RFC1123Format)
+"Mon, 15 Apr 2019 17:26:57"
+"""
+
 const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
 
 default_format(::Type{DateTime}) = ISODateTimeFormat
