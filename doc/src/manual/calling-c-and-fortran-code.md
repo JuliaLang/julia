@@ -421,11 +421,11 @@ checks and is only meant to improve readability of the call.
     (`void`) but do return, use `Cvoid` instead.
 
 !!! note
-    For `wchar_t*` arguments, the Julia type should be [`Cwstring`](@ref) (if the C routine expects a NUL-terminated
-    string) or `Ptr{Cwchar_t}` otherwise. Note also that UTF-8 string data in Julia is internally
-    NUL-terminated, so it can be passed to C functions expecting NUL-terminated data without making
-    a copy (but using the `Cwstring` type will cause an error to be thrown if the string itself contains
-    NUL characters).
+    For `wchar_t*` arguments, the Julia type should be [`Cwstring`](@ref) (if the C routine expects a
+    NUL-terminated string) or `Ptr{Cwchar_t}` otherwise. Note also that UTF-8 string data in Julia is
+    internally NUL-terminated, so it can be passed to C functions expecting NUL-terminated data without
+    making a copy (but using the `Cwstring` type will cause an error to be thrown if the string itself
+    contains NUL characters).
 
 !!! note
     C functions that take an argument of the type `char**` can be called by using a `Ptr{Ptr{UInt8}}`
@@ -512,8 +512,8 @@ end
 b_a_2 = B.A[3]  # note the difference in indexing (1-based in Julia, 0-based in C)
 ```
 
-Arrays of unknown size (C99-compliant variable length structs specified by `[]` or `[0]`) are not directly supported.
-Often the best way to deal with these is to deal with the byte offsets directly.
+Arrays of unknown size (C99-compliant variable length structs specified by `[]` or `[0]`) are not directly
+supported. Often the best way to deal with these is to deal with the byte offsets directly.
 For example, if a C library declared a proper string type and returned a pointer to it:
 
 ```c
@@ -698,8 +698,8 @@ For translating a C return type to Julia:
       * If the memory is already owned by Julia, or is an `isbits` type, and is known to be non-null:
 
           * `Ref{T}`, where `T` is the Julia type corresponding to `T`
-          * a return type of `Ref{Any}` is invalid, it should either be `Any` (corresponding to `jl_value_t*`)
-            or `Ptr{Any}` (corresponding to `jl_value_t**`)
+          * a return type of `Ref{Any}` is invalid, it should either be `Any` (corresponding to
+            `jl_value_t*`) or `Ptr{Any}` (corresponding to `jl_value_t**`)
           * C **MUST NOT** modify the memory returned via `Ref{T}` if `T` is an `isbits` type
       * If the memory is owned by C:
 
@@ -783,7 +783,11 @@ Here, the input `p` is declared to be of type `Ref{gsl_permutation}`, meaning th
 that `p` points to may be managed by Julia or by C. A pointer to memory allocated by C should
 be of type `Ptr{gsl_permutation}`, but it is convertible using [`Base.cconvert`](@ref) and therefore
 
-Now if you look closely enough at this example, you may notice that it is incorrect, given our explanation above of preferred declaration types. Do you see it? The function we are calling is going to free the memory. This type of operation cannot be given a Julia object (it will crash or cause memory corruption). Therefore, it may be preferable to declare the `p` type as `Ptr{gsl_permutation }`, to make it harder for the user to mistakenly pass another sort of object there than one obtained via `gsl_permutation_alloc`.
+Now if you look closely enough at this example, you may notice that it is incorrect, given our explanation
+above of preferred declaration types. Do you see it? The function we are calling is going to free the
+memory. This type of operation cannot be given a Julia object (it will crash or cause memory corruption).
+Therefore, it may be preferable to declare the `p` type as `Ptr{gsl_permutation }`, to make it harder for the
+user to mistakenly pass another sort of object there than one obtained via `gsl_permutation_alloc`.
 
 If the C wrapper never expects the user to pass pointers to memory managed by Julia, then using
 `p::Ptr{gsl_permutation}` for the method signature of the wrapper and similarly in the [`ccall`](@ref)
@@ -821,8 +825,12 @@ the Julia pointer to a Julia array data structure into a form understandable by 
 
 ## Fortran Wrapper Example
 
-The following example utilizes ccall to call a function in a common Fortran library (libBLAS) to computes a dot product. Notice that the argument mapping is a bit different here than above, as we need to map from Julia to Fortran.
-On every argument type, we specify `Ref` or `Ptr`. This mangling convention may be specific to your fortran compiler and operating system, and is likely undocumented. However, wrapping each in a `Ref` (or `Ptr`, where equivalent) is a frequent requirement of Fortran compiler implementations:
+The following example utilizes ccall to call a function in a common Fortran library (libBLAS) to
+computes a dot product. Notice that the argument mapping is a bit different here than above, as
+we need to map from Julia to Fortran.  On every argument type, we specify `Ref` or `Ptr`. This
+mangling convention may be specific to your fortran compiler and operating system, and is likely
+undocumented. However, wrapping each in a `Ref` (or `Ptr`, where equivalent) is a frequent
+requirement of Fortran compiler implementations:
 
 ```julia
 function compute_dot(DX::Vector{Float64}, DY::Vector{Float64})
@@ -851,8 +859,9 @@ the C library notifies you that it is finished with them.
 Whenever you have created a pointer to Julia data, you must ensure the original data exists until
 you are done with using the pointer. Many methods in Julia such as [`unsafe_load`](@ref) and
 [`String`](@ref) make copies of data instead of taking ownership of the buffer, so that it is
-safe to free (or alter) the original data without affecting Julia. A notable exception is [`unsafe_wrap`](@ref)
-which, for performance reasons, shares (or can be told to take ownership of) the underlying buffer.
+safe to free (or alter) the original data without affecting Julia. A notable exception is
+[`unsafe_wrap`](@ref) which, for performance reasons, shares (or can be told to take ownership of) the
+underlying buffer.
 
 The garbage collector does not guarantee any order of finalization. That is, if `a` contained
 a reference to `b` and both `a` and `b` are due for garbage collection, there is no guarantee
@@ -875,8 +884,8 @@ with `$`). For this reason, `eval` is typically only used to form top-level defi
 when wrapping libraries that contain many similar functions.
 A similar example can be constructed for [`@cfunction`](@ref).
 
-However, doing this will also be very slow and leak memory, so you should usually avoid this and instead keep reading.
-The next section discusses how to use indirect calls to efficiently accomplish a similar effect.
+However, doing this will also be very slow and leak memory, so you should usually avoid this and instead keep
+reading.  The next section discusses how to use indirect calls to efficiently accomplish a similar effect.
 
 ## Indirect Calls
 
@@ -945,8 +954,8 @@ and load in the new changes. One can either restart Julia or use the
 ```julia
 lib = Libdl.dlopen("./my_lib.so") # Open the library explicitly.
 sym = Libdl.dlsym(lib, :my_fcn)   # Get a symbol for the function to call.
-ccall(sym, ...) # Use the pointer `sym` instead of the (symbol, library) tuple (remaining arguments are the same).
-Libdl.dlclose(lib) # Close the library explicitly.
+ccall(sym, ...) # Use the pointer `sym` instead of the (symbol, library) tuple (remaining arguments are the
+same).  Libdl.dlclose(lib) # Close the library explicitly.
 ```
 
 Note that when using `ccall` with the tuple input
@@ -957,8 +966,8 @@ and it may not be explicitly closed.
 
 The second argument to [`ccall`](@ref) can optionally be a calling convention specifier (immediately
 preceding return type). Without any specifier, the platform-default C calling convention is used.
-Other supported conventions are: `stdcall`, `cdecl`, `fastcall`, and `thiscall` (no-op on 64-bit Windows). For example (from
-`base/libc.jl`) we see the same `gethostname`[`ccall`](@ref) as above, but with the correct
+Other supported conventions are: `stdcall`, `cdecl`, `fastcall`, and `thiscall` (no-op on 64-bit Windows).
+For example (from `base/libc.jl`) we see the same `gethostname`[`ccall`](@ref) as above, but with the correct
 signature for Windows:
 
 ```julia
@@ -1019,12 +1028,14 @@ back to a Julia object reference by [`unsafe_pointer_to_objref(ptr)`](@ref). (Ju
 can be converted to `jl_value_t*` pointers, as `Ptr{Cvoid}`, by calling [`pointer_from_objref(v)`](@ref).)
 
 The reverse operation (writing data to a `Ptr{T}`), can be performed using [`unsafe_store!(ptr, value, [index])`](@ref).
-Currently, this is only supported for primitive types or other pointer-free (`isbits`) immutable struct types.
+Currently, this is only supported for primitive types or other pointer-free (`isbits`) immutable struct
+types.
 
 Any operation that throws an error is probably currently unimplemented and should be posted as
 a bug so that it can be resolved.
 
-If the pointer of interest is a plain-data array (primitive type or immutable struct), the function [`unsafe_wrap(Array, ptr,dims, own = false)`](@ref)
+If the pointer of interest is a plain-data array (primitive type or immutable struct), the function
+[`unsafe_wrap(Array, ptr,dims, own = false)`](@ref)
 may be more useful. The final parameter should be true if Julia should "take ownership" of the
 underlying buffer and call `free(ptr)` when the returned `Array` object is finalized.  If the
 `own` parameter is omitted or false, the caller must ensure the buffer remains in existence until
