@@ -105,20 +105,23 @@ $(BUILDROOT)/framework-component.plist: $(JULIAHOME)/contrib/mac/frameworkapp/fr
 # bundle instead of the parent directory Julia.framework.  We want the
 # installer to treat each version as an atomic unit/bundle and not the overall
 # framework.
-$(BUILDROOT)/$(FRAMEWORK_NAME)-framework.pkg: $(JULIA_FRAMEWORK_LIB) $(BUILDROOT)/framework-component.plist
+$(BUILDROOT)/$(FRAMEWORK_NAME)-framework.pkg: $(BUILDROOT)/framework-component.plist $(JULIA_FRAMEWORK_LIB)
 	pkgbuild \
 		--install-location /Library/Frameworks \
 		--version $(JULIA_VERSION_MAJOR_MINOR_PATCH) \
 		--root $(FRAMEWORK_DESTDIR) \
-		--component-plist $(BUILDROOT)/framework-component.plist \
+		--component-plist $< \
 		--identifier org.julialang.julia.lib.v$(FRAMEWORK_VERSION) \
 		$@
 
-$(BUILDROOT)/launcher.pkg: $(XCEXPORT)/Julia.app/Contents/MacOS/Julia
+$(BUILDROOT)/launcher.pkg: $(JULIAHOME)/contrib/mac/frameworkapp/launcher-component.plist $(XCEXPORT)/Julia.app/Contents/MacOS/Julia
+	find $(XCEXPORT) -not -name Julia.app -d 1 -delete
 	pkgbuild \
 		--install-location /Applications \
 		--version $(JULIA_VERSION_MAJOR_MINOR_PATCH) \
-		--component $(XCEXPORT)/Julia.app \
+		--root $(XCEXPORT) \
+		--component-plist $< \
+		--identifier org.julialang.JuliaLauncher \
 		$@
 
 $(BUILDROOT)/$(FRAMEWORK_NAME).dist: $(JULIAHOME)/contrib/mac/frameworkapp/Julia.dist
