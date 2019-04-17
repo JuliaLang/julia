@@ -736,6 +736,11 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
 
     e->vars = vb.prev;
 
+    if (!ans) {
+        JL_GC_POP();
+        return 0;
+    }
+
     btemp = e->vars;
     if (vb.lb != vb.ub) {
         while (btemp != NULL) {
