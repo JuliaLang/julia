@@ -56,7 +56,7 @@ to [`ccall`](@ref) are:
     The `(:function, "library")` pair, return type, and input types must be literal constants
     (i.e., they can't be variables, but see [Non-constant Function Specifications](@ref) below).
 
-    The remaining parameters are evaulated at compile time.
+    The remaining parameters are evaluated at compile time, when the containing method is defined.
 
 !!! note
     See below for how to [map C types to Julia types](@ref mapping-c-types-to-julia).
@@ -779,7 +779,8 @@ end
 
 Here, the input `p` is declared to be of type `Ref{gsl_permutation}`, meaning that the memory
 that `p` points to may be managed by Julia or by C. A pointer to memory allocated by C should
-be of type `Ptr{gsl_permutation}`, but it is convertible using [`Base.cconvert`](@ref) and therefore
+be of type `Ptr{gsl_permutation}`.  Because `Ptr` is a subtype of `Ref`, `gsl_permutation_free` will accept
+`Ptr` arguments (or any other subtype of `Ref`).  Using `Ref` as the argument type additionally makes it possible to pass a handle to memory that has been allocated by Julia.
 
 Now if you look closely enough at this example, you may notice that it is incorrect, given our explanation above of preferred declaration types. Do you see it? The function we are calling is going to free the memory. This type of operation cannot be given a Julia object (it will crash or cause memory corruption). Therefore, it may be preferable to declare the `p` type as `Ptr{gsl_permutation }`, to make it harder for the user to mistakenly pass another sort of object there than one obtained via `gsl_permutation_alloc`.
 
