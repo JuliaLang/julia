@@ -28,6 +28,11 @@ struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
 
         sparse_check_Ti(m, n, Ti)
         sparse_check(n, colptr, rowval, nzval)
+        # silently shorten rowval and nzval to usable index positions.
+        maxlen = widemul(m, n)
+        isbitstype(Ti) && (maxlen = min(maxlen, typemax(Ti) - 1))
+        length(rowval) > maxlen && resize!(rowval, maxlen)
+        length(nzval) > maxlen && resize!(nzval, maxlen)
         new(Int(m), Int(n), colptr, rowval, nzval)
     end
 end
@@ -532,7 +537,10 @@ function sparse(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{
               "length(I) (=$(length(I))) == length(J) (= $(length(J))) == length(V) (= ",
               "$(length(V)))")))
     end
-
+    Tj = Ti
+    while isbitstype(Tj) && coolen >= typemax(Tj)
+        Tj = widen(Tj)
+    end
     if m == 0 || n == 0 || coolen == 0
         if coolen != 0
             if n == 0
@@ -544,13 +552,13 @@ function sparse(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{
         SparseMatrixCSC(m, n, fill(one(Ti), n+1), Vector{Ti}(), Vector{Tv}())
     else
         # Allocate storage for CSR form
-        csrrowptr = Vector{Ti}(undef, m+1)
+        csrrowptr = Vector{Tj}(undef, m+1)
         csrcolval = Vector{Ti}(undef, coolen)
         csrnzval = Vector{Tv}(undef, coolen)
 
         # Allocate storage for the CSC form's column pointers and a necessary workspace
         csccolptr = Vector{Ti}(undef, n+1)
-        klasttouch = Vector{Ti}(undef, n)
+        klasttouch = Vector{Tj}(undef, n)
 
         # Allocate empty arrays for the CSC form's row and nonzero value arrays
         # The parent method called below automagically resizes these arrays
@@ -615,15 +623,15 @@ transposition," ACM TOMS 4(3), 250-269 (1978) inspired this method's use of a pa
 counting sorts.
 """
 function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
-        V::AbstractVector{Tv}, m::Integer, n::Integer, combine, klasttouch::Vector{Ti},
-        csrrowptr::Vector{Ti}, csrcolval::Vector{Ti}, csrnzval::Vector{Tv},
-        csccolptr::Vector{Ti}, cscrowval::Vector{Ti}, cscnzval::Vector{Tv}) where {Tv,Ti<:Integer}
+        V::AbstractVector{Tv}, m::Integer, n::Integer, combine, klasttouch::Vector{Tj},
+        csrrowptr::Vector{Tj}, csrcolval::Vector{Ti}, csrnzval::Vector{Tv},
+        csccolptr::Vector{Ti}, cscrowval::Vector{Ti}, cscnzval::Vector{Tv}) where {Tv,Ti<:Integer,Tj<:Integer}
 
     require_one_based_indexing(I, J, V)
     sparse_check_Ti(m, n, Ti)
-    sparse_check_length("I", I, 0, Ti)
+    sparse_check_length("I", I, 0, Tj)
     # Compute the CSR form's row counts and store them shifted forward by one in csrrowptr
-    fill!(csrrowptr, Ti(0))
+    fill!(csrrowptr, Tj(0))
     coolen = length(I)
     min(length(J), length(V)) >= coolen || throw(ArgumentError("I and V need length >= length(I) = $coolen"))
     @inbounds for k in 1:coolen
@@ -631,12 +639,12 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
         if 1 > Ik || m < Ik
             throw(ArgumentError("row indices I[k] must satisfy 1 <= I[k] <= m"))
         end
-        csrrowptr[Ik+1] += Ti(1)
+        csrrowptr[Ik+1] += Tj(1)
     end
 
     # Compute the CSR form's rowptrs and store them shifted forward by one in csrrowptr
-    countsum = Ti(1)
-    csrrowptr[1] = Ti(1)
+    countsum = Tj(1)
+    csrrowptr[1] = Tj(1)
     @inbounds for i in 2:(m+1)
         overwritten = csrrowptr[i]
         csrrowptr[i] = countsum
@@ -651,8 +659,8 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
             throw(ArgumentError("column indices J[k] must satisfy 1 <= J[k] <= n"))
         end
         csrk = csrrowptr[Ik+1]
-        @assert csrk >= Ti(1) "index into csrcolval exceeds typemax(Ti)"
-        csrrowptr[Ik+1] = csrk + Ti(1)
+        @assert csrk >= Tj(1) "index into csrcolval exceeds typemax(Ti)"
+        csrrowptr[Ik+1] = csrk + Tj(1)
         csrcolval[csrk] = Jk
         csrnzval[csrk] = V[k]
     end
@@ -665,13 +673,13 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     # Minimizing extraneous communication and nonlocality of reference, primarily by using
     # only a single auxiliary array in this step, is the key to this method's performance.
     fill!(csccolptr, Ti(0))
-    fill!(klasttouch, Ti(0))
-    writek = Ti(1)
+    fill!(klasttouch, Tj(0))
+    writek = Tj(1)
     newcsrrowptri = Ti(1)
-    origcsrrowptri = Ti(1)
+    origcsrrowptri = Tj(1)
     origcsrrowptrip1 = csrrowptr[2]
     @inbounds for i in 1:m
-        for readk in origcsrrowptri:(origcsrrowptrip1-Ti(1))
+        for readk in origcsrrowptri:(origcsrrowptrip1-Tj(1))
             j = csrcolval[readk]
             if klasttouch[j] < newcsrrowptri
                 klasttouch[j] = writek
@@ -679,7 +687,7 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
                     csrcolval[writek] = j
                     csrnzval[writek] = csrnzval[readk]
                 end
-                writek += Ti(1)
+                writek += Tj(1)
                 csccolptr[j+1] += Ti(1)
             else
                 klt = klasttouch[j]
@@ -693,23 +701,24 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     end
 
     # Compute the CSC form's colptrs and store them shifted forward by one in csccolptr
-    countsum = Ti(1)
+    countsum = Tj(1)
     csccolptr[1] = Ti(1)
     @inbounds for j in 2:(n+1)
         overwritten = csccolptr[j]
         csccolptr[j] = countsum
         countsum += overwritten
+        countsum <= typemax(Ti) || throw(ArgumentError("more than typemax(Ti)-1 == $(typemax(Ti)-1) entries"))
     end
 
     # Now knowing the CSC form's entry count, resize cscrowval and cscnzval if necessary
-    cscnnz = countsum - Ti(1)
+    cscnnz = countsum - Tj(1)
     length(cscrowval) < cscnnz && resize!(cscrowval, cscnnz)
     length(cscnzval) < cscnnz && resize!(cscnzval, cscnnz)
 
     # Finally counting-sort the row and nonzero values from the CSR form into cscrowval and
     # cscnzval. Tracking write positions in csccolptr corrects the column pointers.
     @inbounds for i in 1:m
-        for csrk in csrrowptr[i]:(csrrowptr[i+1]-Ti(1))
+        for csrk in csrrowptr[i]:(csrrowptr[i+1]-Tj(1))
             j = csrcolval[csrk]
             x = csrnzval[csrk]
             csck = csccolptr[j+1]
@@ -722,16 +731,16 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     SparseMatrixCSC(m, n, csccolptr, cscrowval, cscnzval)
 end
 function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
-        V::AbstractVector{Tv}, m::Integer, n::Integer, combine, klasttouch::Vector{Ti},
-        csrrowptr::Vector{Ti}, csrcolval::Vector{Ti}, csrnzval::Vector{Tv},
-        csccolptr::Vector{Ti}) where {Tv,Ti<:Integer}
+        V::AbstractVector{Tv}, m::Integer, n::Integer, combine, klasttouch::Vector{Tj},
+        csrrowptr::Vector{Tj}, csrcolval::Vector{Ti}, csrnzval::Vector{Tv},
+        csccolptr::Vector{Ti}) where {Tv,Ti<:Integer,Tj<:Integer}
     sparse!(I, J, V, m, n, combine, klasttouch,
             csrrowptr, csrcolval, csrnzval,
             csccolptr, Vector{Ti}(), Vector{Tv}())
 end
 function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
-        V::AbstractVector{Tv}, m::Integer, n::Integer, combine, klasttouch::Vector{Ti},
-        csrrowptr::Vector{Ti}, csrcolval::Vector{Ti}, csrnzval::Vector{Tv}) where {Tv,Ti<:Integer}
+        V::AbstractVector{Tv}, m::Integer, n::Integer, combine, klasttouch::Vector{Tj},
+        csrrowptr::Vector{Tj}, csrcolval::Vector{Ti}, csrnzval::Vector{Tv}) where {Tv,Ti<:Integer,Tj<:Integer}
     sparse!(I, J, V, m, n, combine, klasttouch,
             csrrowptr, csrcolval, csrnzval,
             Vector{Ti}(undef, n+1), Vector{Ti}(), Vector{Tv}())
@@ -2443,18 +2452,30 @@ function _setindex_scalar!(A::SparseMatrixCSC{Tv,Ti}, _v, _i::Integer, _j::Integ
     # Column j does not contain entry A[i,j]. If v is nonzero, insert entry A[i,j] = v
     # and return. If to the contrary v is zero, then simply return.
     if v != 0
+        nz = A.colptr[A.n+1]
         # throw exception before state is partially modified
-        !isbitstype(Ti) || A.colptr[A.n+1] < typemax(Ti) ||
+        !isbitstype(Ti) || nz < typemax(Ti) ||
             throw(ArgumentError("nnz(A) going to exceed typemax(Ti) = $(typemax(Ti))"))
 
-        # TODO if nnz(A) < length(rowval/nzval): no need to grow rowval and preserve values
-        insert!(A.rowval, searchk, i)
-        insert!(A.nzval, searchk, v)
+        # if nnz(A) < length(rowval/nzval): no need to grow rowval and preserve values
+        _insert!(A.rowval, searchk, i, nz)
+        _insert!(A.nzval, searchk, v, nz)
         @simd for m in (j + 1):(A.n + 1)
-            @inbounds A.colptr[m] += 1
+            @inbounds A.colptr[m] += Ti(1)
         end
     end
     return A
+end
+
+# insert item at position pos, shifting only from pos+1 to nz
+function _insert!(v::Vector, pos::Integer, item, nz::Integer)
+    if nz > length(v)
+        insert!(v, pos, item)
+    else # nz < length(v)
+        Base.unsafe_copyto!(v, pos+1, v, pos, nz - pos)
+        v[pos] = item
+        v
+    end
 end
 
 function Base.fill!(V::SubArray{Tv, <:Any, <:SparseMatrixCSC, Tuple{Vararg{Union{Integer, AbstractVector{<:Integer}},2}}}, x) where Tv
