@@ -228,6 +228,18 @@ module LLVMCallFunctionTest
     let x = boxed_struct()
         @test really_complicated_identity(x) === x
     end
+
+    # Define two functions that each compute the address of a dedicated internal global variable.
+    # The names of these globals are the same, so if their linkages are overwritten, then the
+    # linker will merge the globals. Consequently, we can test that linkage is preserved by testing
+    # that the addresses of the globals differ. The next few lines of code do just that.
+    const the_other_f1 = ccall((:MakeLoadGlobalFunction, libllvmcalltest), Ptr{Cvoid}, (Ptr{Cvoid},), AnyTy)
+    const the_other_f2 = ccall((:MakeLoadGlobalFunction, libllvmcalltest), Ptr{Cvoid}, (Ptr{Cvoid},), AnyTy)
+
+    @eval global_value_address1() = llvmcall($(the_other_f1), Int64, Tuple{})
+    @eval global_value_address2() = llvmcall($(the_other_f2), Int64, Tuple{})
+
+    @test global_value_address1() != global_value_address2()
 end
 
 # support for calling external functions

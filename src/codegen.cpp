@@ -1177,16 +1177,12 @@ jl_code_instance_t *jl_compile_linfo(jl_method_instance_t *mi, jl_code_info_t *s
             jl_ptls_t ptls = jl_get_ptls_states();
             jl_code_instance_t *uncached = (jl_code_instance_t*)jl_gc_alloc(ptls, sizeof(jl_code_instance_t),
                     jl_code_instance_type);
-            uncached->min_world = codeinst->min_world;
-            uncached->max_world = codeinst->max_world;
+            *uncached = *codeinst;
             uncached->functionObjectsDecls.functionObject = NULL;
             uncached->functionObjectsDecls.specFunctionObject = NULL;
-            uncached->rettype = codeinst->rettype;
             uncached->inferred = jl_nothing;
-            uncached->rettype_const = codeinst->rettype_const;
-            uncached->invoke = NULL;
-            if (codeinst->invoke == jl_fptr_const_return)
-                uncached->invoke = jl_fptr_const_return;
+            if (uncached->invoke != jl_fptr_const_return)
+                uncached->invoke = NULL;
             uncached->specptr.fptr = NULL;
             codeinst = uncached;
         }
@@ -3204,6 +3200,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
         assert(jl_is_method_instance(mi));
         jl_code_instance_t *codeinst = jl_compile_linfo(mi, NULL, ctx.world, ctx.params);
         if (codeinst && codeinst->inferred) {
+            JL_GC_PUSH1(&codeinst);
             const jl_llvm_functions_t &decls = codeinst->functionObjectsDecls;
             if (codeinst->invoke == jl_fptr_const_return) {
                 assert(codeinst->rettype_const);
@@ -3219,6 +3216,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
                     handled = true;
                 }
             }
+            JL_GC_POP();
         }
     }
     if (!handled) {
@@ -5950,10 +5948,13 @@ static std::unique_ptr<Module> emit_function(
                 vi.value = theArg;
                 if (specsig && theArg.V && ctx.debug_enabled && vi.dinfo) {
                     SmallVector<uint64_t, 8> addr;
-                    if ((Metadata*)vi.dinfo->getType() != jl_pvalue_dillvmt && theArg.ispointer())
-                        addr.push_back(llvm::dwarf::DW_OP_deref);
-                    AllocaInst *parg = dyn_cast<AllocaInst>(theArg.V);
-                    if (!parg) {
+                    Value *parg;
+                    if (theArg.ispointer()) {
+                        parg = theArg.V;
+                        if ((Metadata*)vi.dinfo->getType() != jl_pvalue_dillvmt)
+                            addr.push_back(llvm::dwarf::DW_OP_deref);
+                    }
+                    else {
                         parg = ctx.builder.CreateAlloca(theArg.V->getType(), NULL, jl_symbol_name(s));
                         ctx.builder.CreateStore(theArg.V, parg);
                     }
@@ -6103,7 +6104,11 @@ static std::unique_ptr<Module> emit_function(
                 } else if (expr->head == popaliasscope_sym) {
                     scope_stack.pop_back();
                     scope_list_stack.pop_back();
-                    current_aliasscope = scope_list_stack.back();
+                    if (scope_list_stack.empty()) {
+                        current_aliasscope = NULL;
+                    } else {
+                        current_aliasscope = scope_list_stack.back();
+                    }
                 }
             }
             aliasscopes[i+1] = current_aliasscope;

@@ -1138,6 +1138,7 @@ static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, in
         int set = e->Lunions.more;
         if (!sub || !set)
             break;
+        free(se.buf);
         save_env(e, &saved, &se);
         for (int i = set; i <= lastset; i++)
             statestack_set(&e->Lunions, i, 0);
@@ -2444,11 +2445,23 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     e->Runions.more = 0;
     memset(e->Runions.stack, 0, sizeof(e->Runions.stack));
     jl_value_t **is;
-    JL_GC_PUSHARGS(is, 2);
+    JL_GC_PUSHARGS(is, 3);
+    jl_value_t **saved = &is[2];
+    jl_savedenv_t se;
+    save_env(e, saved, &se);
     int lastset = 0, niter = 0, total_iter = 0;
     jl_value_t *ii = intersect(x, y, e, 0);
+    is[0] = ii;  // root
+    if (ii == jl_bottom_type) {
+        restore_env(e, *saved, &se);
+    }
+    else {
+        free(se.buf);
+        save_env(e, saved, &se);
+    }
     while (e->Runions.more) {
         if (e->emptiness_only && ii != jl_bottom_type) {
+            free(se.buf);
             JL_GC_POP();
             return ii;
         }
@@ -2462,6 +2475,13 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 
         is[0] = ii;
         is[1] = intersect(x, y, e, 0);
+        if (is[1] == jl_bottom_type) {
+            restore_env(e, *saved, &se);
+        }
+        else {
+            free(se.buf);
+            save_env(e, saved, &se);
+        }
         if (is[0] == jl_bottom_type)
             ii = is[1];
         else if (is[1] == jl_bottom_type)
@@ -2473,10 +2493,12 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         }
         total_iter++;
         if (niter > 3 || total_iter > 400000) {
+            free(se.buf);
             JL_GC_POP();
             return y;
         }
     }
+    free(se.buf);
     JL_GC_POP();
     return ii;
 }
