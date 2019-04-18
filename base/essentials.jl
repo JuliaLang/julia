@@ -212,7 +212,9 @@ function tuple_type_tail(T::Type)
     else
         T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
         if isvatuple(T) && length(T.parameters) == 1
-            return T
+            va = T.parameters[1]
+            (isa(va, DataType) && isa(va.parameters[2], Int)) || return T
+            return Tuple{Vararg{va.parameters[1], va.parameters[2]-1}}
         end
         return Tuple{argtail(T.parameters...)...}
     end
