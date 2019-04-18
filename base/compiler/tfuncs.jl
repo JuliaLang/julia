@@ -511,7 +511,7 @@ function fieldcount_noerror(@nospecialize t)
 end
 
 
-function try_compute_fieldidx(@nospecialize(typ), @nospecialize(field))
+function try_compute_fieldidx(typ::DataType, @nospecialize(field))
     if isa(field, Symbol)
         field = fieldindex(typ, field, false)
         field == 0 && return nothing
@@ -710,6 +710,7 @@ fieldtype_tfunc(@nospecialize(s0), @nospecialize(name), @nospecialize(inbounds))
     fieldtype_tfunc(s0, name)
 
 function fieldtype_nothrow(@nospecialize(s0), @nospecialize(name))
+    s0 === Bottom && return true # unreachable
     if s0 === Any || s0 === Type || DataType ⊑ s0 || UnionAll ⊑ s0
         # We have no idea
         return false
@@ -721,14 +722,29 @@ function fieldtype_nothrow(@nospecialize(s0), @nospecialize(name))
         return false
     end
 
-    s = instanceof_tfunc(s0)[1]
-    u = unwrap_unionall(s)
-    return _fieldtype_nothrow(u, name)
+    su = unwrap_unionall(s0)
+    if isa(su, Union)
+        return fieldtype_nothrow(rewrap_unionall(su.a, s0), name) &&
+               fieldtype_nothrow(rewrap_unionall(su.b, s0), name)
+    end
+
+    s, exact = instanceof_tfunc(s0)
+    s === Bottom && return false # always
+    return _fieldtype_nothrow(s, exact, name)
 end
 
-function _fieldtype_nothrow(@nospecialize(u), name::Const)
+function _fieldtype_nothrow(@nospecialize(s), exact::Bool, name::Const)
+    u = unwrap_unionall(s)
     if isa(u, Union)
-        return _fieldtype_nothrow(u.a, name) && _fieldtype_nothrow(u.b, name)
+        a = _fieldtype_nothrow(u.a, exact, name)
+        b = _fieldtype_nothrow(u.b, exact, name)
+        return exact ? (a || b) : (a && b)
+    end
+    u isa DataType || return false
+    u.abstract && return false
+    if u.name === _NAMEDTUPLE_NAME && !isconcretetype(u)
+        # TODO: better approximate inference
+        return false
     end
     fld = name.val
     if isa(fld, Symbol)
@@ -747,6 +763,9 @@ function _fieldtype_nothrow(@nospecialize(u), name::Const)
 end
 
 function fieldtype_tfunc(@nospecialize(s0), @nospecialize(name))
+    if s0 === Bottom
+        return Bottom
+    end
     if s0 === Any || s0 === Type || DataType ⊑ s0 || UnionAll ⊑ s0
         return Type
     end
@@ -758,18 +777,28 @@ function fieldtype_tfunc(@nospecialize(s0), @nospecialize(name))
         return Bottom
     end
 
-    s = instanceof_tfunc(s0)[1]
+    su = unwrap_unionall(s0)
+    if isa(su, Union)
+        return tmerge(fieldtype_tfunc(rewrap(su.a, s0), name),
+                      fieldtype_tfunc(rewrap(su.b, s0), name))
+    end
+
+    s, exact = instanceof_tfunc(s0)
+    s === Bottom && return Bottom
+    return _fieldtype_tfunc(s, exact, name)
+end
+
+function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
+    exact = exact && !has_free_typevars(s)
     u = unwrap_unionall(s)
-
     if isa(u, Union)
-        return tmerge(rewrap(fieldtype_tfunc(Type{u.a}, name), s),
-                      rewrap(fieldtype_tfunc(Type{u.b}, name), s))
+        return tmerge(_fieldtype_tfunc(rewrap(u.a, s), exact, name),
+                      _fieldtype_tfunc(rewrap(u.b, s), exact, name))
     end
-
-    if !isa(u, DataType) || u.abstract
-        return Type
-    end
+    u isa DataType || return Type
+    u.abstract && return Type
     if u.name === _NAMEDTUPLE_NAME && !isconcretetype(u)
+        # TODO: better approximate inference
         return Type
     end
     ftypes = u.types
@@ -778,12 +807,25 @@ function fieldtype_tfunc(@nospecialize(s0), @nospecialize(name))
     end
 
     if !isa(name, Const)
+        name = widenconst(name)
         if !(Int <: name || Symbol <: name)
             return Bottom
         end
         t = Bottom
         for i in 1:length(ftypes)
-            t = tmerge(t, fieldtype_tfunc(s0, Const(i)))
+            ft1 = unwrapva(ftypes[i])
+            exactft1 = exact || !has_free_typevars(ft1)
+            ft1 = rewrap_unionall(ft1, s)
+            if exactft1
+                if issingletontype(ft1)
+                    ft1 = Const(ft1) # ft unique via type cache
+                else
+                    ft1 = Type{ft1}
+                end
+            else
+                ft1 = Type{ft} where ft<:ft1
+            end
+            t = tmerge(t, ft1)
             t === Any && break
         end
         return t
@@ -805,10 +847,13 @@ function fieldtype_tfunc(@nospecialize(s0), @nospecialize(name))
         ft = ftypes[fld]
     end
 
-    exact = (isa(s0, Const) || isType(s0)) && !has_free_typevars(s)
+    exactft = exact || !has_free_typevars(ft)
     ft = rewrap_unionall(ft, s)
-    if exact
-        return Const(ft)
+    if exactft
+        if issingletontype(ft)
+            return Const(ft) # ft unique via type cache
+        end
+        return Type{ft}
     end
     return Type{<:ft}
 end
