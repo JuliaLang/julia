@@ -16,7 +16,7 @@ TRIPLET_VAR := $$(TRIPLET_VAR)_CXXABI
 endif
 $(2)_BB_TRIPLET := $$($$(TRIPLET_VAR))
 $(2)_BB_URL := $$($(2)_BB_URL_BASE)/$$($(2)_BB_NAME).$$($(2)_BB_TRIPLET).tar.gz
-$(2)_BB_BASENAME := $$(shell basename $$($(2)_BB_URL))
+$(2)_BB_BASENAME := $$($(2)_BB_NAME)-$$($(2)_BB_REL).$$($(2)_BB_TRIPLET).tar.gz
 
 $$(BUILDDIR)/$$($(2)_BB_NAME):
 	mkdir -p $$@
