@@ -662,17 +662,17 @@ function skip_deleted(h::Dict, i)
             return  i
         end
     end
-    return nothing
+    return 0
 end
 function skip_deleted_floor!(h::Dict)
     idx = skip_deleted(h, h.idxfloor)
-    if idx !== nothing
+    if idx != 0
         h.idxfloor = idx
     end
     idx
 end
 
-@propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} = i === nothing  ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i == typemax(Int) ? nothing : i+1)
+@propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} = i == 0 ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i == typemax(Int) ? 0 : i+1)
 @propagate_inbounds function iterate(t::Dict)
     _iterate(t, skip_deleted_floor!(t))
 end
@@ -681,12 +681,12 @@ end
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
-@propagate_inbounds function Base.iterate(v::T, i::Union{Int,Nothing}=v.dict.idxfloor) where T <: Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}}
-    i === nothing && return nothing # This is to catch nothing returned when i = typemax
+@propagate_inbounds function Base.iterate(v::T, i::Int = v.dict.idxfloor) where T <: Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}}
+    i == 0 && return nothing
     i = skip_deleted(v.dict, i)
-    i === nothing && return nothing # This is to catch nothing returned by skip_deleted
+    i == 0 && return nothing
     vals = T <: KeySet ? v.dict.keys : v.dict.vals
-    (@inbounds vals[i], i == typemax(Int) ? nothing : i+1)
+    (@inbounds vals[i], i == typemax(Int) ? 0 : i+1)
 end
 
 filter!(f, d::Dict) = filter_in_one_pass!(f, d)
