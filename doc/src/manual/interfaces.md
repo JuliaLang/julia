@@ -17,6 +17,7 @@ to generically build upon those behaviors.
 | `eltype(IterType)`             | `Any`                  | The type of the first entry of the tuple returned by `iterate()`                      |
 | `length(iter)`                 | (*undefined*)          | The number of items, if known                                                         |
 | `size(iter, [dim])`            | (*undefined*)          | The number of items in each dimension, if known                                       |
+| `indexed_iterate(iter, i, [s])`| `iterate(iter, s)`     | Tuple-like destructuring                                                              |
 
 | Value returned by `IteratorSize(IterType)` | Required Methods                           |
 |:------------------------------------------ |:------------------------------------------ |
@@ -157,6 +158,43 @@ julia> collect(Iterators.reverse(Squares(4)))
   4
   1
 ```
+### Destructuring
+Expressions like `a,b,c = rhs` (equivalently: `(a,b,c) = rhs`) are somewhere between indexing and iteration. The default
+implementation iterates `rhs` and fills `a`, `b`, `c` with the first three values; later values are silently discarded.
+This syntax is most commonly used for destructuring tuples, e.g. from functions with multiple return values.
+
+In actuality, this is translated into something close to
+```julia
+(x, s) = Base.indexed_iterate(rhs, 1)
+a = x
+(x, s) = Base.indexed_iterate(rhs, 2, s)
+b = x
+(x, s) = Base.indexed_iterate(rhs, 3, s)
+c = x
+```
+By default, `Base.indexed_iterate(rhs, idx, state)` falls back on `iterate(rhs, state)`.
+
+This construction has two advantages: First, it helps the compiler for types like tuples, arrays and pairs that support
+indexing. Second, it allows users to define custom destructuring. For example, we may have a type like
+```julia
+struct PartionedList{T}
+  x::Vector{T}
+  y::Vector{T}
+end
+```
+Suppose that we want iteration for this type to iterate first over all values in `x`, and then over all values in `y`. Nevertheless, `x, y = some_PartionedList` is good syntax, and can be obtained by
+```
+function Base.indexed_iterate(p::PartionedList, i, s = nothing)
+  if i == 1
+    return (p.x, nothing)
+  elseif i == 2
+    return (p.y, nothing)
+  else
+    throw(ArgumentError("PartionedList permits to destructure only up to two variables"))
+  end
+end
+```
+Splatting, like `(x...,)`, does not use the destructuring interface.
 
 ## Indexing
 
