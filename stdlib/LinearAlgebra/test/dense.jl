@@ -96,12 +96,12 @@ end
     for m=1:4, n=2:4
         if m < 2 || n < 3
             @test_throws DimensionMismatch diagm(m,n, 0 => x,  1 => x)
-            @test_throws DimensionMismatch diagm(m,n, 0 => x,  -1 => x)
+            @test_throws DimensionMismatch diagm(n,m, 0 => x,  -1 => x)
         else
             M = zeros(m,n)
             M[1:2,1:3] = [7 7 0; 0 8 8]
             @test diagm(m,n, 0 => x,  1 => x) == M
-            @test diagm(m,n, 0 => x,  -1 => x) == M'
+            @test diagm(n,m, 0 => x,  -1 => x) == M'
         end
     end
 end
