@@ -3356,12 +3356,14 @@ function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
 end
 
 """
-    spdiagm(kv::Pair{<:Integer,<:AbstractVector}...; size=nothing)
+    spdiagm(kv::Pair{<:Integer,<:AbstractVector}...)
+    spdiagm(m::Integer, n::Ingeger, kv::Pair{<:Integer,<:AbstractVector}...)
 
 Construct a sparse diagonal matrix from `Pair`s of vectors and diagonals.
 Each vector `kv.second` will be placed on the `kv.first` diagonal.  By
 default (if `size=nothing`), the matrix is square and its size is inferred
-from `kv`, but a non-square size `m`×`n` can be passed as a tuple via `size=(m,n)`.
+from `kv`, but a non-square size `m`×`n` (padded with zeros as needed)
+can be specified by passing `m,n` as the first arguments.
 
 # Examples
 ```jldoctest
@@ -3377,7 +3379,9 @@ julia> spdiagm(-1 => [1,2,3,4], 1 => [4,3,2,1])
   [4, 5]  =  1
 ```
 """
-function spdiagm(kv::Pair{<:Integer,<:AbstractVector}...; size::Union{Nothing,Tuple{<:Integer,<:Integer}}=nothing)
+_spdiagm(kv::Pair{<:Integer,<:AbstractVector}...) = _spdiagm(nothing, kv...)
+_spdiagm(m::Integer, n::Integer, kv::Pair{<:Integer,<:AbstractVector}...) = _spdiagm((Int(m),Int(n)), kv...)
+function _spdiagm(size, kv::Pair{<:Integer,<:AbstractVector}...)
     I, J, V = spdiagm_internal(kv...)
     mmax, nmax = dimlub(I), dimlub(J)
     mnmax = max(mmax, nmax)
