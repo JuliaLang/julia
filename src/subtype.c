@@ -1087,6 +1087,22 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
     return subtype_tuple_tail(&env, 0, e, param);
 }
 
+static int subtype_naked_vararg(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, int param)
+{
+    // Vararg: covariant in first parameter, invariant in second
+    jl_value_t *xp1=jl_tparam0(xd), *xp2=jl_tparam1(xd), *yp1=jl_tparam0(yd), *yp2=jl_tparam1(yd);
+    // in Vararg{T1} <: Vararg{T2}, need to check subtype twice to
+    // simulate the possibility of multiple arguments, which is needed
+    // to implement the diagonal rule correctly.
+    if (!subtype(xp1, yp1, e, 1)) return 0;
+    if (!subtype(xp1, yp1, e, 1)) return 0;
+    e->invdepth++;
+    // Vararg{T,N} <: Vararg{T2,N2}; equate N and N2
+    int ans = forall_exists_equal(xp2, yp2, e);
+    e->invdepth--;
+    return ans;
+}
+
 // `param` means we are currently looking at a parameter of a type constructor
 // (as opposed to being outside any type constructor, or comparing variable bounds).
 // this is used to record the positions where type variables occur for the
@@ -1212,7 +1228,13 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
         if (xd == jl_any_type) return 0;
         if (xd->name == jl_tuple_typename)
             return subtype_tuple(xd, yd, e, param);
-        assert(xd->name != jl_vararg_typename);
+        if (xd->name == jl_vararg_typename) {
+            // N.B.: This case is only used for raw varargs that are not part
+            // of a tuple (those that are have special handling in subtype_tuple).
+            // Vararg isn't really a proper type, but it does sometimes show up
+            // as e.g. Type{Vararg}, so we'd like to handle that correctly.
+            return subtype_naked_vararg(xd, yd, e, param);
+        }
         size_t i, np = jl_nparams(xd);
         int ans = 1;
         e->invdepth++;
