@@ -85,14 +85,26 @@ function invoke_api(li::CodeInstance)
     return ccall(:jl_invoke_api, Cint, (Any,), li)
 end
 
-function get_staged(li::MethodInstance)
-    may_invoke_generator(li) || return nothing
+function get_staged(mi::MethodInstance)
+    may_invoke_generator(mi) || return nothing
     try
-        # user code might throw errors – ignore them
-        return ccall(:jl_code_for_staged, Any, (Any,), li)::CodeInfo
-    catch
-        return nothing
-    end
+       return ccall(:jl_code_for_staged, Any, (Any,), mi)::CodeInfo
+    catch e
+        m = mi.def
+        g = m.generator
+
+        # generate an expression that embeds the error in the code and avoid
+        # dynamically dispatching to the generator to throw the same error
+        ex = Expr(:call, :throw, e)
+
+        # create a new CodeInfo for this expression
+        lam = Expr(:lambda, g.argnames, Expr(:return, ex))
+        ci = ccall(:jl_expand, Any, (Any, Any), lam, m.module)::Core.CodeInfo
+        ci.linetable = [LineInfoNode(m, m.file, Int(m.line), 0)]
+        ci.inlineable = true
+
+        return ci
+     end
 end
 
 function retrieve_code_info(linfo::MethodInstance)
