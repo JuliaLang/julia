@@ -183,7 +183,11 @@ macro assert(ex, msgs...)
         msg = Main.Base.string(msg)
     else
         # string() might not be defined during bootstrap
-        msg = :(Main.Base.string($(Expr(:quote,msg))))
+        msg = quote
+            msg = $(Expr(:quote,msg))
+            isdefined(Main, :Base) ? Main.Base.string(msg) :
+                (Core.println(msg); "Error during bootstrap. See stdout.")
+        end
     end
     return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end
