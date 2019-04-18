@@ -355,7 +355,7 @@ static bool is_native_simd_type(jl_datatype_t *dt) {
             // Not homogeneous
             return false;
     // Type is homogeneous.  Check if it maps to LLVM vector.
-    return jl_special_vector_alignment(n, ft0) != 0;
+    return jl_special_vector_alignment(n, (jl_datatype_t*)ft0) != 0;
 }
 
 #include "abi_llvm.cpp"

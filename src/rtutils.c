@@ -948,7 +948,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (jl_datatype_type && jl_is_datatype(vt)) {
         int istuple = jl_is_tuple_type(vt), isnamedtuple = jl_is_namedtuple_type(vt);
-        size_t tlen = jl_datatype_nfields(vt);
+        size_t tlen = jl_datatype_count_fields(vt);
         if (isnamedtuple) {
             if (tlen == 0)
                 n += jl_printf(out, "NamedTuple");

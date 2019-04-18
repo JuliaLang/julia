@@ -366,6 +366,7 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
         }
         write_uint8(s->s, layout);
         if (layout == 0) {
+            assert(!dt->layout->isva);
             uint32_t nf = dt->layout->nfields;
             write_int32(s->s, nf);
             uint32_t alignment = ((uint32_t*)dt->layout)[1];

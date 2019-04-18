@@ -2775,7 +2775,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             jl_datatype_t *utt = (jl_datatype_t*)jl_unwrap_unionall(obj.typ);
             if (jl_is_datatype(utt) && utt->layout) {
                 if ((jl_is_structtype(utt) || jl_is_tuple_type(utt)) && !jl_subtype((jl_value_t*)jl_module_type, obj.typ)) {
-                    size_t nfields = jl_datatype_nfields(utt);
+                    size_t nfields = jl_datatype_count_fields(utt);
                     // integer index
                     size_t idx;
                     if (fld.constant && (idx = jl_unbox_long(fld.constant) - 1) < nfields) {
@@ -2865,7 +2865,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (jl_is_type_type(obj.typ)) {
             jl_value_t *tp0 = jl_tparam0(obj.typ);
             if (jl_is_concrete_type(tp0)) {
-                *ret = mark_julia_type(ctx, ConstantInt::get(T_size, jl_datatype_nfields(tp0)), false, jl_long_type);
+                *ret = mark_julia_type(ctx, ConstantInt::get(T_size, jl_datatype_count_fields((jl_datatype_t*)tp0)), false, jl_long_type);
                 return true;
             }
         }
@@ -2873,16 +2873,16 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             Value *sz;
             if (obj.constant) {
                 if (jl_typeof(obj.constant) == (jl_value_t*)jl_datatype_type)
-                    sz = ConstantInt::get(T_size, jl_datatype_nfields(obj.constant));
+                    sz = ConstantInt::get(T_size, jl_datatype_count_fields((jl_datatype_t*)obj.constant));
                 else
-                    sz = ConstantInt::get(T_size, jl_datatype_nfields(obj.typ));
+                    sz = ConstantInt::get(T_size, jl_datatype_count_fields((jl_datatype_t*)obj.typ));
             }
             else if (obj.typ == (jl_value_t*)jl_datatype_type) {
                 sz = emit_datatype_nfields(ctx, boxed(ctx, obj));
             }
             else {
                 assert(jl_is_datatype(obj.typ));
-                sz = ConstantInt::get(T_size, jl_datatype_nfields(obj.typ));
+                sz = ConstantInt::get(T_size, jl_datatype_count_fields((jl_datatype_t*)obj.typ));
             }
             *ret = mark_julia_type(ctx, sz, false, jl_long_type);
             return true;
@@ -5200,7 +5200,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
         idx++;
         break;
     }
-    for (size_t i = 0; i < jl_nparams(lam->specTypes) && idx < nfargs; ++i) {
+    for (size_t i = 0; i < jl_datatype_count_fields((jl_datatype_t*)lam->specTypes) && idx < nfargs; ++i) {
         jl_value_t *ty = jl_nth_slot_type(lam->specTypes, i);
         bool isboxed;
         Type *lty = julia_type_to_llvm(ty, &isboxed);
@@ -5339,8 +5339,8 @@ static jl_returninfo_t get_specsig_function(Module *M, const std::string &name, 
         attributes = attributes.addAttribute(jl_LLVMContext, 1, Attribute::NoAlias);
         attributes = attributes.addAttribute(jl_LLVMContext, 1, Attribute::NoCapture);
     }
-    for (size_t i = 0; i < jl_nparams(sig); i++) {
-        jl_value_t *jt = jl_tparam(sig, i);
+    for (size_t i = 0; i < jl_datatype_count_fields((jl_datatype_t*)sig); i++) {
+        jl_value_t *jt = jl_field_type((jl_datatype_t*)sig, i);
         bool isboxed;
         Type *ty = julia_type_to_llvm(jt, &isboxed);
         if (type_is_ghost(ty))
