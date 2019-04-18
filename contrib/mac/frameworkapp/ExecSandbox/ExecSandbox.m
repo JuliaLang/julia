@@ -124,6 +124,11 @@
     t.launchPath = executableURL.path;
   }
   t.arguments = args;
+  if (@available(macOS 10.13, *)) {
+    t.currentDirectoryURL = temporaryDirectoryURL;
+  } else {
+    t.currentDirectoryPath = temporaryFileURL.path;
+  }
   t.standardInput = stdIn;
   t.standardOutput = stdOut;
   t.standardError = stdErr;
