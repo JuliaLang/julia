@@ -153,15 +153,123 @@ static void execJuliaInTerminal(NSURL *_Nonnull julia);
 
 @end
 
+@interface JuliaServiceController : NSObject {
+}
+- (void)execProgram:(NSPasteboard *)pboard
+           userData:(NSString *)userData
+              error:(NSString **)error;
+- (void)evalProgram:(NSPasteboard *)pboard
+           userData:(NSString *)userData
+              error:(NSString **)error;
+@end
+
+@implementation JuliaServiceController
+
+/// Execute the Julia program on the pasteboard in a new julia instance.
+- (void)execProgram:(NSPasteboard *)pboard
+           userData:(NSString *)userData
+              error:(NSString **)error {
+  NSArray *classes = @ [[NSURL class], [NSString class]];
+  NSDictionary *options = @{
+    NSPasteboardURLReadingFileURLsOnlyKey : @(YES),
+    NSPasteboardURLReadingContentsConformToTypesKey :
+        @[ @"org.julialang.julia.text" ]
+  };
+
+  NSArray *pbObjects = [pboard readObjectsForClasses:classes options:options];
+  if (pbObjects == nil) {
+    NSLog(@"Error retrieving the requested items from service pasteboard.");
+    return;
+  }
+
+  if (pbObjects.count == 0) {
+    NSLog(@"No retrievable URLs or strings on service pasteboard. %@",
+          pboard.types);
+    return;
+  }
+
+  for (id pbItem in pbObjects) {
+    if ([pbItem isKindOfClass:[NSURL class]]) {
+      NSURL *programURL = pbItem;
+      if (![programURL isFileURL]) {
+        NSLog(@"Cannot exec Julia program because the URL is not a file: %@",
+              programURL);
+        return;
+      }
+      programURL = programURL.filePathURL;
+      NSLog(@"Exec Julia program %@", programURL);
+    } else if ([pbItem isKindOfClass:[NSString class]]) {
+      NSString *program = pbItem;
+      long argMaxSize = sysconf(_SC_ARG_MAX);
+      if (argMaxSize == -1 || strlen(program.UTF8String) >= argMaxSize) {
+        // FIXME convert to temp file for running.
+        NSLog(@"Cannot exec Julia program because string is too long and "
+              @"unimplemented file conversion. %lu %ld",
+              strlen(program.UTF8String), argMaxSize);
+        return;
+      }
+      NSLog(@"Exec Julia program:\n%@", program);
+    } else {
+      NSLog(@"Unexpected item type %@", [pbItem class]);
+    }
+  }
+
+  // FIXME: Run Julia program
+}
+
+/// Evaluate the Julia program on the pasteboard and send back the result.
+- (void)evalProgram:(NSPasteboard *)pboard
+           userData:(NSString *)userData
+              error:(NSString **)error {
+  NSArray *classes = @ [[NSURL class], [NSString class]];
+  NSDictionary *options = @{
+    NSPasteboardURLReadingFileURLsOnlyKey : @(YES),
+    NSPasteboardURLReadingContentsConformToTypesKey :
+        @[ @"org.julialang.julia.text" ]
+  };
+
+  NSArray *pbObjects = [pboard readObjectsForClasses:classes options:options];
+  if (pbObjects == nil) {
+    NSLog(@"Error retrieving the requested items from service pasteboard.");
+    return;
+  }
+
+  if (pbObjects.count == 0) {
+    NSLog(@"No retrievable URLs or strings on service pasteboard. %@",
+          pboard.types);
+    return;
+  }
+
+  NSString *printedResult = nil;
+
+  for (id pbItem in pbObjects) {
+    if ([pbItem isKindOfClass:[NSURL class]]) {
+      printedResult = @"URL";
+    } else if ([pbItem isKindOfClass:[NSString class]]) {
+      printedResult = @"String";
+    } else {
+      NSLog(@"Unexpected item type %@", [pbItem class]);
+    }
+  }
+
+  // FIXME: Eval Julia program
+
+  if (printedResult == nil) {
+    // FIXME: handle error
+    return;
+  }
+
+  [pboard clearContents];
+  [pboard writeObjects:@[ printedResult ]];
+}
+
+@end
+
 @interface AppDelegate () {
   NSMetadataQuery *_Nullable _mdq;
 }
 @property NSMutableDictionary<NSURL *, JuliaVariant *> *_Nonnull juliaVariants;
 @property JuliaVariant *_Nullable latestKnownTaggedJulia;
-- (void)execProgram:(NSPasteboard *)pboard
-           userData:(NSString *)userData error:(NSString **)error;
-- (void)evalProgram:(NSPasteboard *)pboard
-           userData:(NSString *)userData error:(NSString **)error;
 @end
 
 @implementation AppDelegate
@@ -242,7 +350,6 @@ static void execJuliaInTerminal(NSURL *_Nonnull julia);
         [item valueForAttribute:(NSString *)kMDItemContentType];
 
     if ([contentType isEqual:@"public.unix-executable"]) {
-      // TODO: Verify the executable is actually a Julia.
       NSURL *juliaexe =
           [[[NSURL alloc] initFileURLWithPath:itemPath
                                   isDirectory:NO] URLByStandardizingPath];
@@ -311,8 +418,7 @@ static void execJuliaInTerminal(NSURL *_Nonnull julia);
     if (juliaexe) {
       execJuliaInTerminal(juliaexe);
     }
-    // FIXME Factor out a service provider class.
-    NSApp.servicesProvider = self;
+    NSApp.servicesProvider = [[JuliaServiceController alloc] init];
   }
 
   // Safe to enable updates now.
@@ -380,89 +486,6 @@ static void execJuliaInTerminal(NSURL *_Nonnull julia);
               object:_mdq];
 
   _mdq = nil;
-}
-
-/// Execute the Julia program on the pasteboard in a new julia instance.
-- (void)execProgram:(NSPasteboard *)pboard
-           userData:(NSString *)userData error:(NSString **)error {
-  NSArray *classes = @[[NSURL class], [NSString class]];
-  NSDictionary *options = @{ NSPasteboardURLReadingFileURLsOnlyKey:@(YES), NSPasteboardURLReadingContentsConformToTypesKey: @[@"org.julialang.julia.text"] };
-
-  NSArray* pbObjects = [pboard readObjectsForClasses:classes options:options];
-  if (pbObjects == nil) {
-    NSLog(@"Error retrieving the requested items from service pasteboard.");
-    return;
-  }
-
-  if (pbObjects.count == 0) {
-    NSLog(@"No retrievable URLs or strings on service pasteboard. %@", pboard.types);
-    return;
-  }
-
-  for (id pbItem in pbObjects) {
-    if ([pbItem isKindOfClass:[NSURL class]]) {
-      NSURL* programURL = pbItem;
-      if (![programURL isFileURL]) {
-        NSLog(@"Cannot exec Julia program because the URL is not a file: %@", programURL);
-        return;
-      }
-      programURL = programURL.filePathURL;
-      NSLog(@"Exec Julia program %@", programURL);
-    } else if ([pbItem isKindOfClass:[NSString class]]) {
-      NSString* program = pbItem;
-      long argMaxSize = sysconf(_SC_ARG_MAX);
-      if (argMaxSize == -1 || strlen(program.UTF8String) >= argMaxSize) {
-        // FIXME convert to temp file for running.
-        NSLog(@"Cannot exec Julia program because string is too long and unimplemented file conversion. %lu %ld", strlen(program.UTF8String), argMaxSize);
-        return;
-      }
-      NSLog(@"Exec Julia program:\n%@", program);
-    } else {
-      NSLog(@"Unexpected item type %@", [pbItem class]);
-    }
-  }
-
-  // FIXME: Run Julia program
-}
-
-/// Evaluate the Julia program on the pasteboard and send back the result.
-- (void)evalProgram:(NSPasteboard *)pboard
-           userData:(NSString *)userData error:(NSString **)error {
-  NSArray *classes = @[[NSURL class], [NSString class]];
-  NSDictionary *options = @{ NSPasteboardURLReadingFileURLsOnlyKey:@(YES), NSPasteboardURLReadingContentsConformToTypesKey: @[@"org.julialang.julia.text"] };
-
-  NSArray* pbObjects = [pboard readObjectsForClasses:classes options:options];
-  if (pbObjects == nil) {
-    NSLog(@"Error retrieving the requested items from service pasteboard.");
-    return;
-  }
-
-  if (pbObjects.count == 0) {
-    NSLog(@"No retrievable URLs or strings on service pasteboard. %@", pboard.types);
-    return;
-  }
-
-  NSString *printedResult = nil;
-
-  for (id pbItem in pbObjects) {
-    if ([pbItem isKindOfClass:[NSURL class]]) {
-      printedResult = @"URL";
-    } else if ([pbItem isKindOfClass:[NSString class]]) {
-      printedResult = @"String";
-    } else {
-      NSLog(@"Unexpected item type %@", [pbItem class]);
-    }
-  }
-
-  // FIXME: Eval Julia program
-
-  if (printedResult == nil) {
-    // FIXME: handle error
-    return;
-  }
-
-  [pboard clearContents];
-  [pboard writeObjects:@[printedResult]];
 }
 
 @end
