@@ -30,6 +30,102 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>Run Julia script</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>execProgram</string>
+			<key>NSPortName</key>
+			<string>Julia</string>
+			<key>NSRestricted</key>
+			<true/>
+			<key>NSSendFileTypes</key>
+			<array>
+				<string>org.julialang.julia.text</string>
+			</array>
+			<key>NSRequiredContext</key>
+			<dict>
+				<key>NSServiceCategory</key>
+				<string>public.source-code</string>
+				<key>NSTextContent</key>
+				<array>
+					<string>FilePath</string>
+					<string>URL</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>Run as Julia program</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>execProgram</string>
+			<key>NSPortName</key>
+			<string>Julia</string>
+			<key>NSRestricted</key>
+			<true/>
+			<key>NSSendTypes</key>
+			<array>
+				<string>public.utf8-plain-text</string>
+				<string>public.plain-text</string>
+				<string>NSStringPboardType</string>
+				<string>NSPasteboardTypeString</string>
+			</array>
+			<key>NSRequiredContext</key>
+			<dict>
+				<key>NSServiceCategory</key>
+				<string>public.source-code</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>Get result of Julia program</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>evalProgram</string>
+			<key>NSPortName</key>
+			<string>Julia</string>
+			<key>NSRestricted</key>
+			<true/>
+			<key>NSSendFileTypes</key>
+			<array>
+				<string>org.julialang.julia.text</string>
+			</array>
+			<key>NSReturnTypes</key>
+			<array>
+				<string>public.utf8-plain-text</string>
+				<string>public.plain-text</string>
+				<string>NSStringPboardType</string>
+				<string>NSPasteboardTypeString</string>
+			</array>
+			<key>NSSendTypes</key>
+			<array>
+				<string>public.utf8-plain-text</string>
+				<string>public.plain-text</string>
+				<string>NSStringPboardType</string>
+				<string>NSPasteboardTypeString</string>
+				<string>public.file-url</string>
+				<string>NSURLPboardType</string>
+				<string>NSPasteboardTypeFileURL</string>
+			</array>
+			<key>NSUserData</key>
+			<string>print</string>
+			<key>NSRequiredContext</key>
+			<dict>
+				<key>NSServiceCategory</key>
+				<string>public.source-code</string>
+			</dict>
+		</dict>
+	</array>
 	<key>NSSupportsAutomaticTermination</key>
 	<true/>
 	<key>NSSupportsSuddenTermination</key>
@@ -48,8 +144,6 @@
 			<string>AppIcon.icns</string>
 			<key>UTTypeIdentifier</key>
 			<string>org.julialang.julia.text</string>
-			<key>UTTypeReferenceURL</key>
-			<string></string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>
