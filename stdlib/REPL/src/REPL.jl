@@ -691,7 +691,7 @@ function return_callback(s)
 end
 
 find_hist_file() = get(ENV, "JULIA_HISTORY",
-    !isempty(DEPOT_PATH) ? joinpath(DEPOT_PATH[1], "logs", "repl_history.jl") : "")
+    !isempty(DEPOT_PATH) ? joinpath(DEPOT_PATH[1], "logs", "repl_history.jl") : nothing)
 
 backend(r::AbstractREPL) = r.backendref
 
@@ -849,6 +849,7 @@ function setup_interface(
     if repl.history_file
         try
             hist_path = find_hist_file()
+            hist_path === nothing && throw("No valid history file")
             mkpath(dirname(hist_path))
             f = open(hist_path, read=true, write=true, create=true)
             finalizer(replc) do replc

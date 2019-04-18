@@ -143,7 +143,7 @@ The absolute path `REPL.find_hist_file()` of the REPL's history file. If
 `$JULIA_HISTORY` is not set, then `REPL.find_hist_file()` defaults to
 
 ```
-DEPOT_PATH[1]/logs/repl_history.jl
+$(DEPOT_PATH[1])/logs/repl_history.jl
 ```
 
 ### `JULIA_PKGRESOLVE_ACCURACY`
