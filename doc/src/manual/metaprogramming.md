@@ -330,7 +330,7 @@ However, in some situations it is necessary to quote code *without* performing i
 This kind of quoting does not yet have syntax, but is represented internally
 as an object of type `QuoteNode`:
 ```jldoctest interp1
-julia> quot(Expr(:$, :(1+2))) |> eval
+julia> eval(quot(Expr(:$, :(1+2))))
 3
 
 julia> QuoteNode(Expr(:$, :(1+2))) |> eval
