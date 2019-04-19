@@ -5,7 +5,7 @@ module Libc
 Interface to libc, the C standard library.
 """ Libc
 
-import Base: transcode
+import Base: transcode, windowserror
 import Core.Intrinsics: bitcast
 
 export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
@@ -54,7 +54,7 @@ if Sys.iswindows()
         status = ccall(:DuplicateHandle, stdcall, Int32,
             (Ptr{Cvoid}, WindowsRawSocket, Ptr{Cvoid}, Ptr{WindowsRawSocket}, UInt32, Int32, UInt32),
             my_process, src, my_process, new_handle, 0, false, DUPLICATE_SAME_ACCESS)
-        status == 0 && error("dup failed: $(FormatMessage())")
+        windowserror("dup failed", status == 0)
         return new_handle[]
     end
     function dup(src::WindowsRawSocket, target::RawFD)
@@ -122,6 +122,16 @@ elseif Sys.iswindows()
 else
     error("systemsleep undefined for this OS")
 end
+"""
+    systemsleep(s::Real)
+
+Suspends execution for `s` seconds.
+This function does not yield to Julia's scheduler and therefore blocks
+the Julia thread that it is running on for the duration of the sleep time.
+
+See also: [`sleep`](@ref)
+"""
+systemsleep
 
 struct TimeVal
    sec::Int64

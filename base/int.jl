@@ -184,11 +184,7 @@ fld(x::Unsigned, y::Signed) = div(x, y) - (signbit(y) & (rem(x, y) != 0))
     rem(x, y, RoundDown)
 
 The reduction of `x` modulo `y`, or equivalently, the remainder of `x` after floored
-division by `y`, i.e.
-```julia
-x - y*fld(x,y)
-```
-if computed without intermediate rounding.
+division by `y`, i.e. `x - y*fld(x,y)` if computed without intermediate rounding.
 
 The result will have the same sign as `y`, and magnitude less than `abs(y)` (with some
 exceptions, see note below).
@@ -763,19 +759,97 @@ if Core.sizeof(Int) == 4
         return (lolo & 0xffffffffffffffff) + UInt128(w1) << 64
     end
 
+    function _setbit(x::UInt128, i)
+        # faster version of `return x | (UInt128(1) << i)`
+        j = i >> 5
+        y = UInt128(one(UInt32) << (i & 0x1f))
+        if j == 0
+            return x | y
+        elseif j == 1
+            return x | (y << 32)
+        elseif j == 2
+            return x | (y << 64)
+        elseif j == 3
+            return x | (y << 96)
+        end
+        return x
+    end
+
+    function divrem(x::UInt128, y::UInt128)
+        iszero(y) && throw(DivideError())
+        if (x >> 64) % UInt64 == 0
+            if (y >> 64) % UInt64 == 0
+                # fast path: upper 64 bits are zero, so we can fallback to UInt64 division
+                q64, x64 = divrem(x % UInt64, y % UInt64)
+                return UInt128(q64), UInt128(x64)
+            else
+                # this implies y>x, so
+                return zero(UInt128), x
+            end
+        end
+        n = leading_zeros(y) - leading_zeros(x)
+        q = zero(UInt128)
+        ys = y << n
+        while n >= 0
+            # ys == y * 2^n
+            if ys <= x
+                x -= ys
+                q = _setbit(q, n)
+                if (x >> 64) % UInt64 == 0
+                    # exit early, similar to above fast path
+                    if (y >> 64) % UInt64 == 0
+                        q64, x64 = divrem(x % UInt64, y % UInt64)
+                        q |= q64
+                        x = UInt128(x64)
+                    end
+                    return q, x
+                end
+            end
+            ys >>>= 1
+            n -= 1
+        end
+        return q, x
+    end
+
     function div(x::Int128, y::Int128)
         (x == typemin(Int128)) & (y == -1) && throw(DivideError())
         return Int128(div(BigInt(x), BigInt(y)))::Int128
     end
-    function div(x::UInt128, y::UInt128)
-        return UInt128(div(BigInt(x), BigInt(y)))::UInt128
-    end
+    div(x::UInt128, y::UInt128) = divrem(x, y)[1]
 
     function rem(x::Int128, y::Int128)
         return Int128(rem(BigInt(x), BigInt(y)))::Int128
     end
+
     function rem(x::UInt128, y::UInt128)
-        return UInt128(rem(BigInt(x), BigInt(y)))::UInt128
+        iszero(y) && throw(DivideError())
+        if (x >> 64) % UInt64 == 0
+            if (y >> 64) % UInt64 == 0
+                # fast path: upper 64 bits are zero, so we can fallback to UInt64 division
+                return UInt128(rem(x % UInt64, y % UInt64))
+            else
+                # this implies y>x, so
+                return x
+            end
+        end
+        n = leading_zeros(y) - leading_zeros(x)
+        ys = y << n
+        while n >= 0
+            # ys == y * 2^n
+            if ys <= x
+                x -= ys
+                if (x >> 64) % UInt64 == 0
+                    # exit early, similar to above fast path
+                    if (y >> 64) % UInt64 == 0
+                        x = UInt128(rem(x % UInt64, y % UInt64))
+                    end
+                    return x
+                end
+            end
+            ys >>>= 1
+            n -= 1
+        end
+        return x
     end
 
     function mod(x::Int128, y::Int128)

@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+Support for sockets. Provides [`IPAddr`](@ref) and subtypes, [`TCPSocket`](@ref), and [`UDPSocket`](@ref).
+"""
 module Sockets
 
 export
@@ -10,6 +13,7 @@ export
     getalladdrinfo,
     getnameinfo,
     getipaddr,
+    getipaddrs,
     getpeername,
     getsockname,
     listen,

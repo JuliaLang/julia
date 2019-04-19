@@ -244,7 +244,7 @@ Date
       value: Int64 735264
 
 julia> t.instant
-Dates.UTInstant{Day}(735264 days)
+Dates.UTInstant{Day}(Day(735264))
 
 julia> Dates.value(t)
 735264
@@ -347,7 +347,7 @@ The `Dates` module approach tries to follow the simple principle of trying to ch
 little as possible when doing [`Period`](@ref) arithmetic. This approach is also often known as
 *calendrical* arithmetic or what you would probably guess if someone were to ask you the same
 calculation in a conversation. Why all the fuss about this? Let's take a classic example: add
-1 month to January 31st, 2014. What's the answer? Javascript will say [March 3](http://www.markhneedham.com/blog/2009/01/07/javascript-add-a-month-to-a-date/)
+1 month to January 31st, 2014. What's the answer? Javascript will say [March 3](https://markhneedham.com/blog/2009/01/07/javascript-add-a-month-to-a-date/)
 (assumes 31 days). PHP says [March 2](https://stackoverflow.com/questions/5760262/php-adding-months-to-a-date-while-not-exceeding-the-last-day-of-the-month)
 (assumes 30 days). The fact is, there is no right answer. In the `Dates` module, it gives
 the result of February 28th. How does it figure that out? I like to think of the classic 7-7-7
@@ -400,7 +400,7 @@ As a bonus, all period arithmetic objects work directly with ranges:
 
 ```jldoctest
 julia> dr = Date(2014,1,29):Day(1):Date(2014,2,3)
-Date(2014, 1, 29):1 day:Date(2014, 2, 3)
+Date(2014, 1, 29):Day(1):Date(2014, 2, 3)
 
 julia> collect(dr)
 6-element Array{Date,1}:
@@ -412,7 +412,7 @@ julia> collect(dr)
  Date(2014, 2, 3)
 
 julia> dr = Date(2014,1,29):Dates.Month(1):Date(2014,07,29)
-Date(2014, 1, 29):1 month:Date(2014, 7, 29)
+Date(2014, 1, 29):Month(1):Date(2014, 7, 29)
 
 julia> collect(dr)
 7-element Array{Date,1}:

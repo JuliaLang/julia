@@ -104,7 +104,7 @@ let src = Meta.lower(Main, quote let x = 1 end end).args[1]::Core.CodeInfo,
     li = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ()),
     sf
 
-    li.inferred = src
+    li.uninferred = src
     li.specTypes = Tuple{}
     li.def = @__MODULE__
     sf = StackFrame(:a, :b, 3, li, false, false, 0)
@@ -156,4 +156,15 @@ catch
     bt = stacktrace(catch_backtrace())
 end
 @test bt[1].line == topline+4
+end
+
+# issue #28990
+let bt
+try
+    eval(Expr(:toplevel, LineNumberNode(42, :foo), :(error("blah"))))
+catch
+    bt = stacktrace(catch_backtrace())
+end
+@test bt[2].line == 42
+@test bt[2].file === :foo
 end

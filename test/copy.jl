@@ -84,6 +84,18 @@ end
     @test c[1] === c[2]
 end
 
+@testset "issue #31309" begin
+    rgx1 = match(deepcopy(r""), "")
+    @test rgx1.regex == r""
+    @test rgx1.offset == 1
+    @test rgx1.match == ""
+    @test isempty(rgx1.offsets)
+    @test isempty(rgx1.captures)
+end
+
+# issue #30911
+@test deepcopy(Array{Int,N} where N) == Array{Int,N} where N
+
 # issue #14027
 struct Nullable14027{T}
     hasvalue::Bool

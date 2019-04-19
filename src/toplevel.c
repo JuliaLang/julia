@@ -28,7 +28,7 @@ extern "C" {
 // current line number in a file
 JL_DLLEXPORT int jl_lineno = 0; // need to update jl_critical_error if this is TLS
 // current file name
-JL_DLLEXPORT const char *jl_filename = "no file"; // need to update jl_critical_error if this is TLS
+JL_DLLEXPORT const char *jl_filename = "none"; // need to update jl_critical_error if this is TLS
 
 htable_t jl_current_modules;
 
@@ -63,6 +63,7 @@ static jl_function_t *jl_module_get_initializer(jl_module_t *m JL_PROPAGATES_ROO
 
 void jl_module_run_initializer(jl_module_t *m)
 {
+    JL_TIMING(INIT_MODULE);
     jl_function_t *f = jl_module_get_initializer(m);
     if (f == NULL)
         return;
@@ -77,8 +78,8 @@ void jl_module_run_initializer(jl_module_t *m)
             jl_rethrow();
         }
         else {
-            jl_rethrow_other(jl_new_struct(jl_initerror_type, m->name,
-                                           jl_current_exception()));
+            jl_throw(jl_new_struct(jl_initerror_type, m->name,
+                                   jl_current_exception()));
         }
     }
 }
@@ -174,7 +175,7 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
     for (int i = 0; i < jl_array_len(exprs); i++) {
         // process toplevel form
         ptls->world_age = jl_world_counter;
-        form = jl_expand_stmt(jl_array_ptr_ref(exprs, i), newm);
+        form = jl_expand_stmt_with_loc(jl_array_ptr_ref(exprs, i), newm, jl_filename, jl_lineno);
         ptls->world_age = jl_world_counter;
         (void)jl_toplevel_eval_flex(newm, form, 1, 1);
     }
@@ -409,6 +410,8 @@ static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_RO
 static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from JL_PROPAGATES_ROOT,
                                      jl_array_t *args, jl_sym_t **name, const char *keyword) JL_GLOBALLY_ROOTED
 {
+    if (jl_array_len(args) == 0)
+        jl_errorf("malformed \"%s\" statement", keyword);
     jl_sym_t *var = (jl_sym_t*)jl_array_ptr_ref(args, 0);
     size_t i = 1;
     jl_module_t *m = NULL;
@@ -476,6 +479,7 @@ int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT
          ((jl_expr_t*)e)->head == export_sym ||
          ((jl_expr_t*)e)->head == thunk_sym ||
          ((jl_expr_t*)e)->head == global_sym ||
+         ((jl_expr_t*)e)->head == const_sym ||
          ((jl_expr_t*)e)->head == toplevel_sym ||
          ((jl_expr_t*)e)->head == error_sym ||
          ((jl_expr_t*)e)->head == jl_incomplete_sym);
@@ -492,7 +496,7 @@ int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
         head == error_sym || head == jl_incomplete_sym || head == method_sym) {
         return 0;
     }
-    if (head == global_sym) {
+    if (head == global_sym || head == const_sym) {
         size_t i, l = jl_array_len(ex->args);
         for (i = 0; i < l; i++) {
             jl_value_t *a = jl_exprarg(ex, i);
@@ -510,7 +514,7 @@ void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *spar
 static jl_method_instance_t *method_instance_for_thunk(jl_code_info_t *src, jl_module_t *module)
 {
     jl_method_instance_t *li = jl_new_method_instance_uninit();
-    li->inferred = (jl_value_t*)src;
+    li->uninferred = (jl_value_t*)src;
     li->specTypes = (jl_value_t*)jl_emptytuple_type;
     li->def.module = module;
     return li;
@@ -549,7 +553,7 @@ static jl_module_t *eval_import_from(jl_module_t *m JL_PROPAGATES_ROOT, jl_expr_
                 jl_expr_t *path = (jl_expr_t*)jl_exprarg(fr, 0);
                 if (((jl_expr_t*)path)->head == dot_sym) {
                     jl_sym_t *name = NULL;
-                    jl_module_t *from = eval_import_path(m, NULL, path->args, &name, "import");
+                    jl_module_t *from = eval_import_path(m, NULL, path->args, &name, keyword);
                     if (name != NULL) {
                         from = (jl_module_t*)jl_eval_global_var(from, name);
                         if (!jl_is_module(from))
@@ -558,7 +562,7 @@ static jl_module_t *eval_import_from(jl_module_t *m JL_PROPAGATES_ROOT, jl_expr_
                     return from;
                 }
             }
-            jl_errorf("malformed \"%s:\" expression", keyword);
+            jl_errorf("malformed \"%s:\" statement", keyword);
         }
     }
     return NULL;
@@ -570,12 +574,17 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
     if (!jl_is_expr(e)) {
         if (jl_is_linenode(e)) {
             jl_lineno = jl_linenode_line(e);
+            jl_value_t *file = jl_linenode_file(e);
+            if (file != jl_nothing) {
+                assert(jl_is_symbol(file));
+                jl_filename = jl_symbol_name((jl_sym_t*)file);
+            }
             return jl_nothing;
         }
         if (jl_is_symbol(e)) {
-            char *n = jl_symbol_name((jl_sym_t*)e);
+            char *n = jl_symbol_name((jl_sym_t*)e), *n0 = n;
             while (*n == '_') ++n;
-            if (*n == 0)
+            if (*n == 0 && n > n0)
                 jl_error("all-underscore identifier used as rvalue");
         }
         return jl_interpret_toplevel_expr_in(m, e, NULL, NULL);
@@ -605,7 +614,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
     size_t last_age = ptls->world_age;
     if (!expanded && jl_needs_lowering(e)) {
         ptls->world_age = jl_world_counter;
-        ex = (jl_expr_t*)jl_expand(e, m);
+        ex = (jl_expr_t*)jl_expand_with_loc(e, m, jl_filename, jl_lineno);
         ptls->world_age = last_age;
     }
     jl_sym_t *head = jl_is_expr(ex) ? ex->head : NULL;
@@ -647,6 +656,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                     }
                 }
             }
+            else {
+                jl_error("syntax: malformed \"using\" statement");
+            }
         }
         JL_GC_POP();
         return jl_nothing;
@@ -670,6 +682,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                 else {
                     jl_module_import(m, import, name);
                 }
+            }
+            else {
+                jl_error("syntax: malformed \"import\" statement");
             }
         }
         JL_GC_POP();
@@ -703,6 +718,24 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
             }
             jl_get_binding_wr(gm, gs, 0);
         }
+        JL_GC_POP();
+        return jl_nothing;
+    }
+    else if (head == const_sym) {
+        jl_sym_t *arg = (jl_sym_t*)jl_exprarg(ex, 0);
+        jl_module_t *gm;
+        jl_sym_t *gs;
+        if (jl_is_globalref(arg)) {
+            gm = jl_globalref_mod(arg);
+            gs = jl_globalref_name(arg);
+        }
+        else {
+            assert(jl_is_symbol(arg));
+            gm = m;
+            gs = (jl_sym_t*)arg;
+        }
+        jl_binding_t *b = jl_get_binding_wr(gm, gs, 1);
+        jl_declare_constant(b);
         JL_GC_POP();
         return jl_nothing;
     }
@@ -752,10 +785,10 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         size_t world = jl_world_counter;
         ptls->world_age = world;
         if (!has_defs) {
-            jl_type_infer(&li, world, 0);
+            (void)jl_type_infer(li, world, 0);
         }
         jl_value_t *dummy_f_arg = NULL;
-        result = li->invoke(li, &dummy_f_arg, 1);
+        result = jl_invoke(li, &dummy_f_arg, 1);
         ptls->world_age = last_age;
     }
     else {
@@ -785,7 +818,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
             if (m != jl_main_module) { // TODO: this was grand-fathered in
                 jl_printf(JL_STDERR, "WARNING: eval into closed module %s:\n", jl_symbol_name(m->name));
                 jl_static_show(JL_STDERR, ex);
-                jl_printf(JL_STDERR, "\n  ** incremental compilation may be broken for this module **\n\n");
+                jl_printf(JL_STDERR, "\n  ** incremental compilation may be fatally broken for this module **\n\n");
             }
         }
     }
@@ -806,9 +839,11 @@ JL_DLLEXPORT jl_value_t *jl_infer_thunk(jl_code_info_t *thk, jl_module_t *m)
     jl_method_instance_t *li = method_instance_for_thunk(thk, m);
     JL_GC_PUSH1(&li);
     jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
-    jl_type_infer(&li, jl_get_ptls_states()->world_age, 0);
+    jl_code_info_t *src = jl_type_infer(li, jl_get_ptls_states()->world_age, 0);
     JL_GC_POP();
-    return li->rettype;
+    if (src)
+        return src->rettype;
+    return (jl_value_t*)jl_any_type;
 }
 
 JL_DLLEXPORT jl_value_t *jl_load(jl_module_t *module, const char *fname)

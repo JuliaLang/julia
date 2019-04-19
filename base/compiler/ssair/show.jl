@@ -153,6 +153,12 @@ function default_expr_type_printer(io::IO, @nospecialize(typ), used::Bool)
     nothing
 end
 
+normalize_method_name(m::Method) = m.name
+normalize_method_name(m::MethodInstance) = (m.def::Method).name
+normalize_method_name(m::Symbol) = m
+normalize_method_name(m) = Symbol("")
+@noinline method_name(m::LineInfoNode) = normalize_method_name(m.method)
+
 # converts the linetable for line numbers
 # into a list in the form:
 #   1 outer-most-frame
@@ -266,7 +272,7 @@ function compute_ir_line_annotations(code::Union{IRCode, CodeInfo})
                 # be a line number mismatch in inner most frame. Ignore those
                 if length(last_stack) == length(stack) && first_mismatch == length(stack)
                     last_entry, entry = linetable[last_stack[end]], linetable[stack[end]]
-                    if last_entry.method == entry.method && last_entry.file == entry.file
+                    if method_name(last_entry) === method_name(entry) && last_entry.file === entry.file
                         first_mismatch = nothing
                     end
                 end
@@ -274,7 +280,7 @@ function compute_ir_line_annotations(code::Union{IRCode, CodeInfo})
                 if min(depth, last_depth) > last_printed_depth
                     printing_depth = min(depth, last_printed_depth + 1)
                     last_printed_depth = printing_depth
-                elseif length(stack) > length(last_stack) || first_mismatch != nothing
+                elseif length(stack) > length(last_stack) || first_mismatch !== nothing
                     printing_depth = min(depth, last_depth + 1)
                     last_printed_depth = printing_depth
                 else
@@ -299,13 +305,14 @@ function compute_ir_line_annotations(code::Union{IRCode, CodeInfo})
                         print(buf, "│")
                     end
                 end
-                print(buf, "╷"^max(0,depth-last_depth-stole_one))
+                print(buf, "╷"^max(0, depth - last_depth - stole_one))
                 if printing_depth != 0
                     if length(stack) == printing_depth
-                        loc_method = String(linetable[line].method)
+                        loc_method = line
                     else
-                        loc_method = String(linetable[stack[printing_depth+1]].method)
+                        loc_method = stack[printing_depth + 1]
                     end
+                    loc_method = method_name(linetable[loc_method])
                 end
                 loc_method = string(" "^printing_depth, loc_method)
             end
@@ -326,14 +333,14 @@ Base.show(io::IO, code::IRCode) = show_ir(io, code)
 
 lineinfo_disabled(io::IO, linestart::String, lineidx::Int32) = ""
 
-function DILineInfoPrinter(linetable::Vector)
+function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
     context = LineInfoNode[]
     context_depth = Ref(0)
     indent(s::String) = s^(max(context_depth[], 1) - 1)
     function emit_lineinfo_update(io::IO, linestart::String, lineidx::Int32)
         # internal configuration options:
         linecolor = :yellow
-        collapse = true
+        collapse = showtypes ? false : true
         indent_all = true
         # convert lineidx to a vector
         if lineidx < 0
@@ -373,11 +380,11 @@ function DILineInfoPrinter(linetable::Vector)
                 # if so, drop all existing calls to it from the top of the context
                 # AND check if instead the context was previously printed that way
                 # but now has removed the recursive frames
-                let method = context[nctx].method
-                    if (nctx < nframes && DI[nframes - nctx].method === method) ||
-                       (nctx < length(context) && context[nctx + 1].method === method)
+                let method = method_name(context[nctx])
+                    if (nctx < nframes && method_name(DI[nframes - nctx]) === method) ||
+                       (nctx < length(context) && method_name(context[nctx + 1]) === method)
                         update_line_only = true
-                        while nctx > 0 && context[nctx].method === method
+                        while nctx > 0 && method_name(context[nctx]) === method
                             nctx -= 1
                         end
                     end
@@ -388,9 +395,9 @@ function DILineInfoPrinter(linetable::Vector)
                 # compute the new inlining depth
                 if collapse
                     npops = 1
-                    let Prev = context[nctx + 1].method
+                    let Prev = method_name(context[nctx + 1])
                         for i = (nctx + 2):length(context)
-                            Next = context[i].method
+                            Next = method_name(context[i])
                             Prev === Next || (npops += 1)
                             Prev = Next
                         end
@@ -402,9 +409,8 @@ function DILineInfoPrinter(linetable::Vector)
                 if !update_line_only && nctx < nframes
                     let CtxLine = context[nctx + 1],
                         FrameLine = DI[nframes - nctx]
-                        if CtxLine.file == FrameLine.file &&
-                                CtxLine.method == FrameLine.method &&
-                                CtxLine.mod == FrameLine.mod
+                        if CtxLine.file === FrameLine.file &&
+                                method_name(CtxLine) === method_name(FrameLine)
                             update_line_only = true
                         end
                     end
@@ -426,12 +432,12 @@ function DILineInfoPrinter(linetable::Vector)
                 if frame.line != typemax(frame.line) && frame.line != 0
                     print(io, linestart)
                     Base.with_output_color(linecolor, io) do io
-                        print(io, indent("│"), " @ ", frame.file, ":", frame.line, " within `", frame.method, "'")
+                        print(io, indent("│"), " @ ", frame.file, ":", frame.line, " within `", method_name(frame), "'")
                         if collapse
-                            method = frame.method
+                            method = method_name(frame)
                             while nctx < nframes
                                 frame = DI[nframes - nctx]
-                                frame.method === method || break
+                                method_name(frame) === method || break
                                 nctx += 1
                                 push!(context, frame)
                                 print(io, " @ ", frame.file, ":", frame.line)
@@ -444,23 +450,33 @@ function DILineInfoPrinter(linetable::Vector)
             # now print the rest of the new frames
             while nctx < nframes
                 frame = DI[nframes - nctx]
+                nctx += 1
+                started = false
+                if showtypes && !isa(frame.method, Symbol) && nctx != 1
+                    print(io, linestart)
+                    Base.with_output_color(linecolor, io) do io
+                        print(io, indent("│"))
+                        print(io, "┌ invoke ", frame.method)
+                        println(io)
+                    end
+                    started = true
+                end
                 print(io, linestart)
                 Base.with_output_color(linecolor, io) do io
                     print(io, indent("│"))
-                    nctx += 1
                     push!(context, frame)
                     context_depth[] += 1
-                    nctx != 1 && print(io, "┌")
+                    nctx != 1 && print(io, started ? "│" : "┌")
                     print(io, " @ ", frame.file)
                     if frame.line != typemax(frame.line) && frame.line != 0
                         print(io, ":", frame.line)
                     end
-                    print(io, " within `", frame.method, "'")
+                    print(io, " within `", method_name(frame), "'")
                     if collapse
-                        method = frame.method
+                        method = method_name(frame)
                         while nctx < nframes
                             frame = DI[nframes - nctx]
-                            frame.method === method || break
+                            method_name(frame) === method || break
                             nctx += 1
                             push!(context, frame)
                             print(io, " @ ", frame.file, ":", frame.line)
@@ -471,10 +487,10 @@ function DILineInfoPrinter(linetable::Vector)
             end
             # FOR DEBUGGING `collapse`:
             # this double-checks the computation of context_depth
-            #let Prev = context[1].method,
+            #let Prev = method_name(context[1]),
             #    depth2 = 1
             #    for i = 2:nctx
-            #        Next = context[i].method
+            #        Next = method_name(context[i])
             #        (collapse && Prev === Next) || (depth2 += 1)
             #        Prev = Next
             #    end
@@ -535,7 +551,7 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
         # Compute BB guard rail
         if bb_idx > length(cfg.blocks)
             # Even if invariants are violated, try our best to still print
-            bbrange = (last(cfg.blocks[end].stmts) + 1):typemax(Int)
+            bbrange = (length(cfg.blocks) == 0 ? 1 : last(cfg.blocks[end].stmts) + 1):typemax(Int)
             bb_idx_str = "!"
             bb_type = "─"
         else
@@ -565,7 +581,7 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
                     printstyled(io, "\e[$(start_column)G$(rail)\e[1G", color = :light_black)
                     print(io, bb_guard_rail)
                     ssa_guard = " "^(maxlength_idx + 4 + (i - 1))
-                    entry_label = "$(ssa_guard)$(entry.method) at $(entry.file):$(entry.line) "
+                    entry_label = "$(ssa_guard)$(method_name(entry)) at $(entry.file):$(entry.line) "
                     hline = string("─"^(start_column-length(entry_label)-length(bb_guard_rail)+max_depth-i), "┐")
                     printstyled(io, string(entry_label, hline), "\n"; color=:light_black)
                     bb_guard_rail = bb_guard_rail_cont

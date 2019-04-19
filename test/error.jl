@@ -77,4 +77,7 @@ end
     foo_kwargs(x; y=5) = x + y
     @test retry(foo_kwargs)(3) == 8
     @test retry(foo_kwargs)(3; y=4) == 7
+
+    # non-Functions
+    @test retry(Float64)(1) === 1.0
 end

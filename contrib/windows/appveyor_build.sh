@@ -45,7 +45,6 @@ if [ "$ARCH" = x86_64 ]; then
   echo 'USE_BLAS64 = 1' >> Make.user
   echo 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas64_' >> Make.user
   echo 'LIBBLASNAME = libopenblas64_' >> Make.user
-  echo 'BINARYBUILDER_TRIPLET = x86_64-w64-mingw32' >> Make.user
 else
   bits=32
   archsuffix=86
@@ -53,7 +52,6 @@ else
   echo "override MARCH = pentium4" >> Make.user
   echo 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas' >> Make.user
   echo 'LIBBLASNAME = libopenblas' >> Make.user
-  echo 'BINARYBUILDER_TRIPLET = i686-w64-mingw32' >> Make.user
 fi
 echo "override JULIA_CPU_TARGET=generic;native" >> Make.user
 
@@ -198,8 +196,10 @@ if [ -n "$USEMSVC" ]; then
 else
   # Use BinaryBuilder
   echo 'USE_BINARYBUILDER_LLVM = 1' >> Make.user
+  echo 'USE_BINARYBUILDER_OPENBLAS = 1' >> Make.user
+  echo 'USE_BINARYBUILDER_SUITESPARSE = 1' >> Make.user
   echo 'BINARYBUILDER_LLVM_ASSERTS = 1' >> Make.user
-  echo 'override DEP_LIBS += llvm openlibm' >> Make.user
+  echo 'override DEP_LIBS += llvm openlibm openblas suitesparse' >> Make.user
   export CCACHE_DIR=/cygdrive/c/ccache
   echo 'USECCACHE=1' >> Make.user
   make check-whitespace

@@ -135,6 +135,8 @@ try
 
               const x28297 = Result(missing)
 
+              const d29936a = UnionAll(Dict.var, UnionAll(Dict.body.var, Dict.body.body))
+              const d29936b = UnionAll(Dict.body.var, UnionAll(Dict.var, Dict.body.body))
 
               # issue #28998
               const x28998 = [missing, 2, missing, 6, missing,
@@ -156,6 +158,11 @@ try
               const abigfloat_x = big"43.21"
               const abigint_f() = big"123"
               const abigint_x = big"124"
+
+              # issue #31488
+              _v31488 = Base.StringVector(2)
+              resize!(_v31488, 0)
+              const a31488 = fill(String(_v31488), 100)
           end
           """)
     @test_throws ErrorException Core.kwfunc(Base.nothing) # make sure `nothing` didn't have a kwfunc (which would invalidate the attempted test)
@@ -187,7 +194,12 @@ try
 
         @test Foo.x28297.result === missing
 
+        @test Foo.d29936a === Dict
+        @test Foo.d29936b === Dict{K,V} where {V,K}
+
         @test Foo.x28998[end] == 6
+
+        @test Foo.a31488 == fill("", 100)
     end
 
     cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")
@@ -359,7 +371,7 @@ try
           error("break me")
           end
           """)
-    @test_warn "ERROR: LoadError: break me\nStacktrace:\n [1] error" try
+    @test_warn r"ERROR: Error while loading expression starting at.*FooBar2.*caused by.*break me"s try
         Base.require(Main, :FooBar2)
         error("\"LoadError: break me\" test failed")
     catch exc
@@ -744,5 +756,27 @@ let
     end
 end
 
+# issue #29936
+let
+    load_path = mktempdir()
+    load_cache_path = mktempdir()
+    try
+        write(joinpath(load_path, "Foo29936.jl"),
+              """
+              module Foo29936
+              const global m = Val{nothing}()
+              const global h = Val{:hey}()
+              wab = [("a", m), ("b", h),]
+              end
+              """)
+        pushfirst!(LOAD_PATH, load_path)
+        pushfirst!(DEPOT_PATH, load_cache_path)
+        @eval using Foo29936
+        @test [("Plan", Foo29936.m), ("Plan", Foo29936.h),] isa Vector{Tuple{String,Val}}
+    finally
+        rm(load_path, recursive=true)
+        rm(load_cache_path, recursive=true)
+    end
+end
 
 end # !withenv

@@ -204,8 +204,8 @@ end
 """
     rotl90(A, k)
 
-Rotate matrix `A` left 90 degrees an integer `k` number of times.
-If `k` is zero or a multiple of four, this is equivalent to a `copy`.
+Left-rotate matrix `A` 90 degrees counterclockwise an integer `k` number of times.
+If `k` is a multiple of four (including zero), this is equivalent to a `copy`.
 
 # Examples
 ```jldoctest
@@ -244,8 +244,8 @@ end
 """
     rotr90(A, k)
 
-Rotate matrix `A` right 90 degrees an integer `k` number of times. If `k` is zero or a
-multiple of four, this is equivalent to a `copy`.
+Right-rotate matrix `A` 90 degrees clockwise an integer `k` number of times.
+If `k` is a multiple of four (including zero), this is equivalent to a `copy`.
 
 # Examples
 ```jldoctest

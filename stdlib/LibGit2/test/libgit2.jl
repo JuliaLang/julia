@@ -570,6 +570,27 @@ end
         @test !LibGit2.ismatch("https://@github.com", cred)
         Base.shred!(cred)
     end
+
+    @testset "GITHUB_REGEX" begin
+        github_regex_test = function(url, user, repo)
+            m = match(LibGit2.GITHUB_REGEX, url)
+            @test m !== nothing
+            @test m[1] == "$user/$repo"
+            @test m[2] == user
+            @test m[3] == repo
+        end
+        user = "User"
+        repo = "Repo"
+        github_regex_test("git@github.com/$user/$repo.git", user, repo)
+        github_regex_test("https://github.com/$user/$repo.git", user, repo)
+        github_regex_test("https://username@github.com/$user/$repo.git", user, repo)
+        github_regex_test("ssh://git@github.com/$user/$repo.git", user, repo)
+        github_regex_test("git@github.com/$user/$repo", user, repo)
+        github_regex_test("https://github.com/$user/$repo", user, repo)
+        github_regex_test("https://username@github.com/$user/$repo", user, repo)
+        github_regex_test("ssh://git@github.com/$user/$repo", user, repo)
+        @test !occursin(LibGit2.GITHUB_REGEX, "git@notgithub.com/$user/$repo.git")
+    end
 end
 
 mktempdir() do dir

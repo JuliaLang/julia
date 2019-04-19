@@ -84,6 +84,13 @@ bimg  = randn(n,2)/2
         end
     end # for eltyb
 
+@testset "Test diagm for vectors" begin
+    @test diagm(zeros(50)) == diagm(0 => zeros(50))
+    @test diagm(ones(50)) == diagm(0 => ones(50))
+    v = randn(500)
+    @test diagm(v) == diagm(0 => v)
+end
+
 @testset "Test pinv (rtol, atol)" begin
     M = [1 0 0; 0 1 0; 0 0 0]
     @test pinv(M,atol=1)== zeros(3,3)
@@ -856,25 +863,8 @@ end
 @testset "strides" begin
     a = rand(10)
     b = view(a,2:2:10)
-    A = rand(10,10)
-    B = view(A, 2:2:10, 2:2:10)
-
     @test LinearAlgebra.stride1(a) == 1
     @test LinearAlgebra.stride1(b) == 2
-
-    @test strides(a) == (1,)
-    @test strides(b) == (2,)
-    @test strides(A) == (1,10)
-    @test strides(B) == (2,20)
-
-    for M in (a, b, A, B)
-        @inferred strides(M)
-        strides_M = strides(M)
-
-        for (i, _stride) in enumerate(collect(strides_M))
-            @test _stride == stride(M, i)
-        end
-    end
 end
 
 @testset "inverse of Adjoint" begin

@@ -1432,7 +1432,7 @@ struct Foo2509; foo::Int; end
 # issue #2517
 struct Foo2517; end
 @test repr(Foo2517()) == "$(curmod_prefix)Foo2517()"
-@test repr(Vector{Foo2517}(undef, 1)) == "$(curmod_prefix)Foo2517[Foo2517()]"
+@test repr(Vector{Foo2517}(undef, 1)) == "$(curmod_prefix)Foo2517[$(curmod_prefix)Foo2517()]"
 @test Foo2517() === Foo2517()
 
 # issue #1474
@@ -1828,6 +1828,13 @@ b5165 = IOBuffer()
 for x in xs5165
     println(b5165, x)   # segfaulted
 end
+
+# issue #31486
+f31486(x::Bool, y::Bool, z::Bool) = Core.Intrinsics.bitcast(UInt8, Core.Intrinsics.add_int(x, Core.Intrinsics.add_int(y, z)))
+@test f31486(false, false, true) == 0x01
+@test f31486(false, true, true) == 0x00
+@test f31486(true, true, true) == 0x01
+
 
 # support tuples as type parameters
 
@@ -2436,6 +2443,20 @@ f24460(x::Int, y::Int) = "3"
 const T24460 = Tuple{T,T} where T
 g24460() = invoke(f24460, T24460, 1, 2)
 @test @inferred(g24460()) === 2.0
+
+# issue #30679
+@noinline function f30679(::DataType)
+    b = IOBuffer()
+    write(b, 0x00)
+    2
+end
+@noinline function f30679(t::Type{Int})
+    x = invoke(f30679, Tuple{DataType}, t)
+    b = IOBuffer()
+    write(b, 0x00)
+    return x + 40
+end
+@test f30679(Int) == 42
 
 call_lambda1() = (()->x)(1)
 call_lambda2() = ((x)->x)()
@@ -5509,6 +5530,11 @@ f_isdefined_tv(::T) where {T} = @isdefined T
 f_isdefined_va(::T...) where {T} = @isdefined T
 @test !f_isdefined_va()
 @test f_isdefined_va(1, 2, 3)
+function f_unused_undefined_sp(::T...) where T
+    T
+    return 0
+end
+@test_throws UndefVarError(:T) f_unused_undefined_sp()
 
 # note: the constant `5` here should be > DataType.ninitialized.
 # This tests that there's no crash due to accessing Type.body.layout.
@@ -5808,6 +5834,13 @@ for U in boxedunions
         @test !isassigned(A, 1)
     end
 end
+
+# issue 31583
+a31583 = "a"
+f31583() = a31583 === "a"
+@test f31583()
+a31583 = "b"
+@test !f31583()
 
 # unsafe_wrap
 let
@@ -6430,8 +6463,8 @@ end
 
 # issue #21004
 const PTuple_21004{N,T} = NTuple{N,VecElement{T}}
-@test_throws ArgumentError PTuple_21004(1)
-@test_throws UndefVarError PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
+@test_throws ArgumentError("too few elements for tuple type $PTuple_21004") PTuple_21004(1)
+@test_throws UndefVarError(:T) PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
 
 #issue #22792
 foo_22792(::Type{<:Union{Int8,Int,UInt}}) = 1;
@@ -6816,3 +6849,69 @@ f29828() = 2::String
 g29828() = 2::Any[String][1]
 @test_throws TypeError(:typeassert, String, 2) f29828()
 @test_throws TypeError(:typeassert, String, 2) g29828()
+
+# splatting in `new`
+struct SplatNew{T}
+    x::Int8
+    y::T
+    SplatNew{T}(args...) where {T} = new(0, args..., 1)
+    SplatNew(args...) = new{Float32}(args...)
+    SplatNew{Any}(args...) = new(args...)
+    SplatNew{Tuple{Int16}}(args...) = new([2]..., args...)
+    SplatNew{Int8}() = new(1, 2, 3)
+end
+let x = SplatNew{Int16}()
+    @test x.x === Int8(0)
+    @test x.y === Int16(1)
+end
+@test_throws ArgumentError("new: too many arguments (expected 2)") SplatNew{Int16}(1)
+let x = SplatNew(3, 2)
+    @test x.x === Int8(3)
+    @test x.y === 2.0f0
+end
+@test_throws ArgumentError("new: too many arguments (expected 2)") SplatNew(1, 2, 3)
+@test_throws ArgumentError("new: too few arguments (expected 2)") SplatNew{Any}(1)
+let x = SplatNew{Tuple{Int16}}((1,))
+    @test x.x === Int8(2)
+    @test x.y === (Int16(1),)
+end
+@test_throws ArgumentError("new: too many arguments (expected 2)")  SplatNew{Int8}()
+
+# Issue #31357 - Missed assignment in nested try/catch
+function foo31357(b::Bool)
+    x = nothing
+    try
+        try
+            x = 12345
+            if !b
+               throw("hi")
+            end
+        finally
+        end
+    catch
+    end
+    return x
+end
+@test foo31357(true) == 12345
+@test foo31357(false) == 12345
+
+# Issue #31406
+abstract type Shape31406 end
+struct ValueOf31406 <: Shape31406
+    ty::Type
+end
+struct TupleOf31406 <: Shape31406
+    cols::Vector{Shape31406}
+end
+TupleOf31406(cols::Union{Shape31406,Type}...) = TupleOf31406(collect(Shape31406, cols))
+@test (TupleOf31406(ValueOf31406(Int64), ValueOf31406(Float64))::TupleOf31406).cols ==
+    Shape31406[ValueOf31406(Int64), ValueOf31406(Float64)]
+@test try
+        TupleOf31406(ValueOf31406(Int64), Float64)
+        false
+    catch ex
+        if !(ex isa MethodError && ex.f === convert && ex.args == (Shape31406, Float64))
+            rethrow(ex)
+        end
+        true
+    end

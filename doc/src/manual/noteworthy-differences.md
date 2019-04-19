@@ -18,9 +18,9 @@ may trip up Julia users accustomed to MATLAB:
     which grow `Vector`s much more efficiently than MATLAB's `a(end+1) = val`.
   * The imaginary unit `sqrt(-1)` is represented in Julia as [`im`](@ref), not `i` or `j` as in MATLAB.
   * In Julia, literal numbers without a decimal point (such as `42`) create integers instead of floating
-    point numbers. Arbitrarily large integer literals are supported. As a result, some operations
-    such as `2^-1` will throw a domain error as the result is not an integer (see [the FAQ entry on domain errors](@ref faq-domain-errors)
-    for details).
+    point numbers. As a result, some operations can throw
+    a domain error if they expect a float; for example, `julia> a = -1; 2^a` throws a domain error, as the
+    result is not an integer (see [the FAQ entry on domain errors](@ref faq-domain-errors) for details).
   * In Julia, multiple values are returned and assigned as tuples, e.g. `(a, b) = (1, 2)` or `a, b = 1, 2`.
     MATLAB's `nargout`, which is often used in MATLAB to do optional work based on the number of returned
     values, does not exist in Julia. Instead, users can use optional and keyword arguments to achieve
@@ -144,7 +144,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     For example:
 
       * Functions pertaining to probability distributions are provided by the [Distributions package](https://github.com/JuliaStats/Distributions.jl).
-      * The [DataFrames package](https://github.com/JuliaStats/DataFrames.jl) provides data frames.
+      * The [DataFrames package](https://github.com/JuliaData/DataFrames.jl) provides data frames.
       * Generalized linear models are provided by the [GLM package](https://github.com/JuliaStats/GLM.jl).
   * Julia provides tuples and real hash tables, but not R-style lists. When returning multiple items,
     you should typically use a tuple or a named tuple: instead of `list(a = 1, b = 2)`, use `(1, 2)`
@@ -220,6 +220,9 @@ For users coming to Julia from R, these are some noteworthy differences:
     On the other hand, the function `g(x=[1,2]) = push!(x,3)` returns `[1,2,3]` every time it is called
     as `g()`.
   * In Julia `%` is the remainder operator, whereas in Python it is the modulus.
+  * The commonly used `Int` type corresponds to the machine integer type (`Int32` or `Int64`).
+    This means it will overflow, such that `2^64 == 0`. If you need larger values use another appropriate type,
+    such as `Int128`, [`BigInt`](@ref) or a floating point type like `Float64`.
 
 ## Noteworthy differences from C/C++
 

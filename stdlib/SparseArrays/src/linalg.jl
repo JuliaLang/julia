@@ -314,7 +314,7 @@ const TriangularSparse{T} = Union{
 
 ## triangular multipliers
 function lmul!(A::TriangularSparse{T}, B::StridedVecOrMat{T}) where T
-    @assert !has_offset_axes(A, B)
+    require_one_based_indexing(A, B)
     nrowB, ncolB  = size(B, 1), size(B, 2)
     ncol = LinearAlgebra.checksquare(A)
     if nrowB != ncol
@@ -487,7 +487,7 @@ end
 
 ## triangular solvers
 function ldiv!(A::TriangularSparse{T}, B::StridedVecOrMat{T}) where T
-    @assert !has_offset_axes(A, B)
+    require_one_based_indexing(A, B)
     nrowB, ncolB  = size(B, 1), size(B, 2)
     ncol = LinearAlgebra.checksquare(A)
     if nrowB != ncol
@@ -677,6 +677,63 @@ end
 
 ## end of triangular
 
+# y .= A * x
+mul!(y::StridedVecOrMat, A::SparseMatrixCSCSymmHerm, x::StridedVecOrMat) = mul!(y,A,x,1,0)
+
+# C .= α * A * B + β * C
+function mul!(C::StridedVecOrMat{T}, sA::SparseMatrixCSCSymmHerm, B::StridedVecOrMat,
+              α::Number, β::Number) where T
+
+    fuplo = sA.uplo == 'U' ? nzrangeup : nzrangelo
+    _mul!(fuplo, C, sA, B, T(α), T(β))
+end
+
+function _mul!(nzrang::Function, C::StridedVecOrMat{T}, sA, B, α, β) where T
+    A = sA.data
+    n = size(A, 2)
+    m = size(B, 2)
+    n == size(B, 1) == size(C, 1) && m == size(C, 2) || throw(DimensionMismatch())
+    rv = rowvals(A)
+    nzv = nonzeros(A)
+    let z = T(0), sumcol=z, αxj=z, aarc=z, α = α
+        if β != 1
+            β != 0 ? rmul!(C, β) : fill!(C, z)
+        end
+        @inbounds for k = 1:m
+            for col = 1:n
+                αxj = B[col,k] * α
+                sumcol = z
+                for j = nzrang(A, col)
+                    row = rv[j]
+                    aarc = nzv[j]
+                    if row == col
+                        sumcol += (sA isa Hermitian ? real : identity)(aarc) * B[row,k]
+                    else
+                        C[row,k] += aarc * αxj
+                        sumcol += (sA isa Hermitian ? adjoint : transpose)(aarc) * B[row,k]
+                    end
+                end
+                C[col,k] += α * sumcol
+            end
+        end
+    end
+    C
+end
+
+# row range up to and including diagonal
+function nzrangeup(A, i)
+    r = nzrange(A, i); r1 = r.start; r2 = r.stop
+    rv = rowvals(A)
+    @inbounds r2 < r1 || rv[r2] <= i ? r : r1:searchsortedlast(rv, i, r1, r2, Forward)
+end
+# row range from diagonal (included) to end
+function nzrangelo(A, i)
+    r = nzrange(A, i); r1 = r.start; r2 = r.stop
+    rv = rowvals(A)
+    @inbounds r2 < r1 || rv[r1] >= i ? r : searchsortedfirst(rv, i, r1, r2, Forward):r2
+end
+## end of symmetric/Hermitian
+
 \(A::Transpose{<:Real,<:Hermitian{<:Real,<:SparseMatrixCSC}}, B::Vector) = A.parent \ B
 \(A::Transpose{<:Complex,<:Hermitian{<:Complex,<:SparseMatrixCSC}}, B::Vector) = copy(A) \ B
 \(A::Transpose{<:Number,<:Symmetric{<:Number,<:SparseMatrixCSC}}, B::Vector) = A.parent \ B
@@ -705,7 +762,7 @@ rdiv!(A::SparseMatrixCSC{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
     (D = transD.parent; rdiv!(A, D))
 
 function ldiv!(D::Diagonal{T}, A::SparseMatrixCSC{T}) where {T}
-    # @assert !has_offset_axes(A)
+    # require_one_based_indexing(A)
     if A.m != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(A.m) rows"))
     end
@@ -1198,6 +1255,9 @@ kron(x::SparseVector, A::SparseMatrixCSC) = kron(SparseMatrixCSC(x), A)
 kron(A::Union{SparseVector,SparseMatrixCSC}, B::VecOrMat) = kron(A, sparse(B))
 kron(A::VecOrMat, B::Union{SparseVector,SparseMatrixCSC}) = kron(sparse(A), B)
 
+# sparse outer product
+kron(A::SparseVectorUnion, B::AdjOrTransSparseVectorUnion) = A .* B
+
 ## det, inv, cond
 
 inv(A::SparseMatrixCSC) = error("The inverse of a sparse matrix can often be dense and can cause the computer to run out of memory. If you are sure you have enough memory, please convert your matrix to a dense matrix.")
@@ -1296,7 +1356,7 @@ function lmul!(D::Diagonal, A::SparseMatrixCSC)
 end
 
 function \(A::SparseMatrixCSC, B::AbstractVecOrMat)
-    @assert !has_offset_axes(A, B)
+    require_one_based_indexing(A, B)
     m, n = size(A)
     if m == n
         if istril(A)
@@ -1320,7 +1380,7 @@ for (xformtype, xformop) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
     @eval begin
         function \(xformA::($xformtype){<:Any,<:SparseMatrixCSC}, B::AbstractVecOrMat)
             A = xformA.parent
-            @assert !has_offset_axes(A, B)
+            require_one_based_indexing(A, B)
             m, n = size(A)
             if m == n
                 if istril(A)

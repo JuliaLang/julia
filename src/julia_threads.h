@@ -4,6 +4,7 @@
 #ifndef JL_THREADS_H
 #define JL_THREADS_H
 
+#include <atomics.h>
 // threading ------------------------------------------------------------------
 
 // WARNING: Threading support is incomplete and experimental
@@ -27,7 +28,8 @@ typedef win32_ucontext_t jl_ucontext_t;
     !defined(JL_HAVE_ASM) && \
     !defined(JL_HAVE_UNW_CONTEXT) && \
     !defined(JL_HAVE_SIGALTSTACK)
-#if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_) || defined(_CPU_ARM_))
+#if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_) ||  \
+     defined(_CPU_ARM_) || defined(_CPU_PPC64_))
 #define JL_HAVE_ASM
 #elif defined(_OS_DARWIN_)
 #define JL_HAVE_UNW_CONTEXT
@@ -139,6 +141,8 @@ typedef struct _jl_excstack_t jl_excstack_t;
 struct _jl_tls_states_t {
     struct _jl_gcframe_t *pgcstack;
     size_t world_age;
+    int16_t tid;
+    uint64_t rngseed;
     volatile size_t *safepoint;
     // Whether it is safe to execute GC at the same time.
 #define JL_GC_STATE_WAITING 1
@@ -157,7 +161,6 @@ struct _jl_tls_states_t {
     size_t stacksize;
     jl_ucontext_t base_ctx; // base context of stack
     jl_jmp_buf *safe_restore;
-    int16_t tid;
     // Temp storage for exception thrown in signal handler. Not rooted.
     struct _jl_value_t *sig_exception;
     // Temporary backtrace buffer. Scanned for gc roots when bt_size > 0.

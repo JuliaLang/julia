@@ -28,6 +28,7 @@ function kill_timer(delay)
         # **DON'T COPY ME.**
         # The correct way to handle timeouts is to close the handle:
         # e.g. `close(stdout_read); close(stdin_write)`
+        test_task.queue === nothing || Base.list_deletefirst!(test_task.queue, test_task)
         schedule(test_task, "hard kill repl test"; error=true)
         print(stderr, "WARNING: attempting hard kill of repl test after exceeding timeout\n")
     end
@@ -759,7 +760,8 @@ mutable struct Error19864 <: Exception; end
 function test19864()
     @eval Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
     buf = IOBuffer()
-    REPL.print_response(buf, Error19864(), [], false, false, nothing)
+    fake_response = (Any[(Error19864(),[])],true)
+    REPL.print_response(buf, fake_response, false, false, nothing)
     return String(take!(buf))
 end
 @test occursin("correct19864", test19864())
@@ -972,6 +974,12 @@ for (line, expr) in Pair[
     @test Base.eval(REPL._helpmode(buf, line)) isa Union{Markdown.MD,Nothing}
 end
 
+# PR 30754, Issues #22013, #24871, #26933, #29282, #29361, #30348
+for line in ["′", "abstract", "type", "|=", ".="]
+    @test occursin("No documentation found.",
+        sprint(show, Base.eval(REPL._helpmode(IOBuffer(), line))::Union{Markdown.MD,Nothing}))
+end
+
 # PR #27562
 fake_repl() do stdin_write, stdout_read, repl
     repltask = @async begin
@@ -979,11 +987,28 @@ fake_repl() do stdin_write, stdout_read, repl
     end
     write(stdin_write, "Expr(:call, GlobalRef(Base.Math, :float), Core.SlotNumber(1))\n")
     readline(stdout_read)
-    @test readline(stdout_read) == "\e[0m:((Base.Math.float)(_1))"
+    @test readline(stdout_read) == "\e[0m:(Base.Math.float(_1))"
     write(stdin_write, "ans\n")
     readline(stdout_read)
     readline(stdout_read)
-    @test readline(stdout_read) == "\e[0m:((Base.Math.float)(_1))"
+    @test readline(stdout_read) == "\e[0m:(Base.Math.float(_1))"
     write(stdin_write, '\x04')
     Base.wait(repltask)
+end
+
+# issue #31352
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "struct Errs end\n")
+    readline(stdout_read)
+    readline(stdout_read)
+    write(stdin_write, "Base.show(io::IO, ::Errs) = throw(Errs())\n")
+    readline(stdout_read)
+    readline(stdout_read)
+    write(stdin_write, "Errs()\n")
+    write(stdin_write, '\x04')
+    wait(repltask)
+    @test istaskdone(repltask)
 end

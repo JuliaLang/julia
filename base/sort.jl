@@ -10,7 +10,7 @@ using .Base: copymutable, LinearIndices, length, (:),
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
-    length, resize!, fill, Missing, has_offset_axes
+    length, resize!, fill, Missing, require_one_based_indexing
 
 using .Base: >>>, !==
 
@@ -222,7 +222,7 @@ function searchsorted(v::AbstractVector, x, ilo::Int, ihi::Int, o::Ordering)
 end
 
 function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -232,7 +232,7 @@ function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
 end
 
 function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if step(a) == 0
         lt(o, first(a), x) ? length(a) + 1 : 1
     else
@@ -242,7 +242,7 @@ function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
 end
 
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -251,7 +251,7 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderin
 end
 
 function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if step(a) == 0
         lt(o, first(a), x) ? length(a)+1 : 1
     else
@@ -260,7 +260,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderi
 end
 
 function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if lt(o, first(a), x)
         if step(a) == 0
             length(a) + 1
@@ -273,7 +273,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOr
 end
 
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if lt(o, x, first(a))
         0
     elseif step(a) == 0
@@ -305,18 +305,20 @@ if `a` does not contain values equal to `x`.
 
 # Examples
 ```jldoctest
-julia> a = [4, 3, 2, 1]
-4-element Array{Int64,1}:
- 4
- 3
- 2
- 1
+julia> searchsorted([1, 2, 4, 5, 5, 7], 4) # single match
+3:3
 
-julia> searchsorted(a, 4)
-5:4
+julia> searchsorted([1, 2, 4, 5, 5, 7], 5) # multiple matches
+4:5
 
-julia> searchsorted(a, 4, rev=true)
-1:1
+julia> searchsorted([1, 2, 4, 5, 5, 7], 3) # no match, insert in the middle
+3:2
+
+julia> searchsorted([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
+7:6
+
+julia> searchsorted([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
+1:0
 ```
 """ searchsorted
 
@@ -329,14 +331,20 @@ specified order. Return `length(a) + 1` if `x` is greater than all values in `a`
 
 # Examples
 ```jldoctest
-julia> searchsortedfirst([1, 2, 4, 5, 14], 4)
+julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 4) # single match
 3
 
-julia> searchsortedfirst([1, 2, 4, 5, 14], 4, rev=true)
-1
+julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 5) # multiple matches
+4
 
-julia> searchsortedfirst([1, 2, 4, 5, 14], 15)
-6
+julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 3) # no match, insert in the middle
+3
+
+julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
+7
+
+julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
+1
 ```
 """ searchsortedfirst
 
@@ -349,13 +357,19 @@ be sorted.
 
 # Examples
 ```jldoctest
-julia> searchsortedlast([1, 2, 4, 5, 14], 4)
+julia> searchsortedlast([1, 2, 4, 5, 5, 7], 4) # single match
 3
 
-julia> searchsortedlast([1, 2, 4, 5, 14], 4, rev=true)
+julia> searchsortedlast([1, 2, 4, 5, 5, 7], 5) # multiple matches
 5
 
-julia> searchsortedlast([1, 2, 4, 5, 14], -1)
+julia> searchsortedlast([1, 2, 4, 5, 5, 7], 3) # no match, insert in the middle
+2
+
+julia> searchsortedlast([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
+6
+
+julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 0
 ```
 """ searchsortedlast
@@ -808,9 +822,9 @@ end
     sortperm(v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Return a permutation vector `I` that puts `v[I]` in sorted order. The order is specified
-using the same keywords as `sort!`. The permutation is guaranteed to be stable even if the
-sorting algorithm is unstable, meaning that indices of equal elements appear in ascending
-order.
+using the same keywords as [`sort!`](@ref). The permutation is guaranteed to be stable even
+if the sorting algorithm is unstable, meaning that indices of equal elements appear in
+ascending order.
 
 See also [`sortperm!`](@ref).
 

@@ -9,7 +9,7 @@ struct LU{T,S<:AbstractMatrix{T}} <: Factorization{T}
     info::BlasInt
 
     function LU{T,S}(factors, ipiv, info) where {T,S<:AbstractMatrix{T}}
-        @assert !has_offset_axes(factors)
+        require_one_based_indexing(factors)
         new{T,S}(factors, ipiv, info)
     end
 end
@@ -273,7 +273,7 @@ size(A::LU)    = size(getfield(A, :factors))
 size(A::LU, i) = size(getfield(A, :factors), i)
 
 function ipiv2perm(v::AbstractVector{T}, maxi::Integer) where T
-    @assert !has_offset_axes(v)
+    require_one_based_indexing(v)
     p = T[1:maxi;]
     @inbounds for i in 1:length(v)
         p[i], p[v[i]] = p[v[i]], p[i]
@@ -315,10 +315,10 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, F::LU)
     end
 end
 
-_apply_ipiv!(A::LU, B::StridedVecOrMat) = _ipiv!(A, 1 : length(A.ipiv), B)
-_apply_inverse_ipiv!(A::LU, B::StridedVecOrMat) = _ipiv!(A, length(A.ipiv) : -1 : 1, B)
+_apply_ipiv_rows!(A::LU, B::StridedVecOrMat) = _ipiv_rows!(A, 1 : length(A.ipiv), B)
+_apply_inverse_ipiv_rows!(A::LU, B::StridedVecOrMat) = _ipiv_rows!(A, length(A.ipiv) : -1 : 1, B)
 
-function _ipiv!(A::LU, order::OrdinalRange, B::StridedVecOrMat)
+function _ipiv_rows!(A::LU, order::OrdinalRange, B::StridedVecOrMat)
     for i = order
         if i != A.ipiv[i]
             _swap_rows!(B, i, A.ipiv[i])
@@ -339,11 +339,39 @@ function _swap_rows!(B::StridedMatrix, i::Integer, j::Integer)
     B
 end
 
+_apply_ipiv_cols!(A::LU, B::StridedVecOrMat) = _ipiv_cols!(A, 1 : length(A.ipiv), B)
+_apply_inverse_ipiv_cols!(A::LU, B::StridedVecOrMat) = _ipiv_cols!(A, length(A.ipiv) : -1 : 1, B)
+
+function _ipiv_cols!(A::LU, order::OrdinalRange, B::StridedVecOrMat)
+    for i = order
+        if i != A.ipiv[i]
+            _swap_cols!(B, i, A.ipiv[i])
+        end
+    end
+    B
+end
+
+function _swap_cols!(B::StridedVector, i::Integer, j::Integer)
+    _swap_rows!(B, i, j)
+end
+
+function _swap_cols!(B::StridedMatrix, i::Integer, j::Integer)
+    for row = 1 : size(B, 1)
+        B[row,i], B[row,j] = B[row,j], B[row,i]
+    end
+    B
+end
+
+function rdiv!(A::StridedVecOrMat, B::LU{<:Any,<:StridedMatrix})
+    rdiv!(rdiv!(A, UpperTriangular(B.factors)), UnitLowerTriangular(B.factors))
+    _apply_inverse_ipiv_cols!(B, A)
+end
+
 ldiv!(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     LAPACK.getrs!('N', A.factors, A.ipiv, B)
 
 function ldiv!(A::LU{<:Any,<:StridedMatrix}, B::StridedVecOrMat)
-    _apply_ipiv!(A, B)
+    _apply_ipiv_rows!(A, B)
     ldiv!(UpperTriangular(A.factors), ldiv!(UnitLowerTriangular(A.factors), B))
 end
 
@@ -353,7 +381,7 @@ ldiv!(transA::Transpose{T,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where
 function ldiv!(transA::Transpose{<:Any,<:LU{<:Any,<:StridedMatrix}}, B::StridedVecOrMat)
     A = transA.parent
     ldiv!(transpose(UnitLowerTriangular(A.factors)), ldiv!(transpose(UpperTriangular(A.factors)), B))
-    _apply_inverse_ipiv!(A, B)
+    _apply_inverse_ipiv_rows!(A, B)
 end
 
 ldiv!(adjF::Adjoint{T,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:Real} =
@@ -364,7 +392,7 @@ ldiv!(adjA::Adjoint{T,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<
 function ldiv!(adjA::Adjoint{<:Any,<:LU{<:Any,<:StridedMatrix}}, B::StridedVecOrMat)
     A = adjA.parent
     ldiv!(adjoint(UnitLowerTriangular(A.factors)), ldiv!(adjoint(UpperTriangular(A.factors)), B))
-    _apply_inverse_ipiv!(A, B)
+    _apply_inverse_ipiv_rows!(A, B)
 end
 
 \(A::Adjoint{<:Any,<:LU}, B::Adjoint{<:Any,<:StridedVecOrMat}) = A \ copy(B)
@@ -520,7 +548,7 @@ end
 
 # See dgtts2.f
 function ldiv!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V}
-    @assert !has_offset_axes(B)
+    require_one_based_indexing(B)
     n = size(A,1)
     if n != size(B,1)
         throw(DimensionMismatch("matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
@@ -552,7 +580,7 @@ function ldiv!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V}
 end
 
 function ldiv!(transA::Transpose{<:Any,<:LU{T,Tridiagonal{T,V}}}, B::AbstractVecOrMat) where {T,V}
-    @assert !has_offset_axes(B)
+    require_one_based_indexing(B)
     A = transA.parent
     n = size(A,1)
     if n != size(B,1)
@@ -589,7 +617,7 @@ end
 
 # Ac_ldiv_B!(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat) where {T<:Real} = At_ldiv_B!(A,B)
 function ldiv!(adjA::Adjoint{<:Any,LU{T,Tridiagonal{T,V}}}, B::AbstractVecOrMat) where {T,V}
-    @assert !has_offset_axes(B)
+    require_one_based_indexing(B)
     A = adjA.parent
     n = size(A,1)
     if n != size(B,1)

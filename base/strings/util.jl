@@ -96,6 +96,9 @@ julia> chop(a, head = 5, tail = 5)
 ```
 """
 function chop(s::AbstractString; head::Integer = 0, tail::Integer = 1)
+    if isempty(s)
+        return SubString(s)
+    end
     SubString(s, nextind(s, firstindex(s), head), prevind(s, lastindex(s), tail))
 end
 
@@ -170,7 +173,7 @@ lstrip(s::AbstractString, chars::Chars) = lstrip(in(chars), s)
 Remove trailing characters from `str`, either those specified by `chars` or those for
 which the function `pred` returns `true`.
 
-The default behaviour is to remove leading whitespace and delimiters: see
+The default behaviour is to remove trailing whitespace and delimiters: see
 [`isspace`](@ref) for precise details.
 
 The optional `chars` argument specifies which characters to remove: it can be a single
@@ -195,15 +198,20 @@ rstrip(s::AbstractString) = rstrip(isspace, s)
 rstrip(s::AbstractString, chars::Chars) = rstrip(in(chars), s)
 
 """
-    strip(str::AbstractString, [chars])
+    strip([pred=isspace,] str::AbstractString)
+    strip(str::AbstractString, chars)
 
-Remove leading and trailing characters from `str`.
+Remove leading and trailing characters from `str`, either those specified by `chars` or
+those for which the function `pred` returns `true`.
 
 The default behaviour is to remove leading whitespace and delimiters: see
 [`isspace`](@ref) for precise details.
 
-The optional `chars` argument specifies which characters to remove: it can be a single character,
-vector or set of characters, or a predicate function.
+The optional `chars` argument specifies which characters to remove: it can be a single
+character, vector or set of characters.
+
+!!! compat "Julia 1.2"
+    The method which accepts a predicate function requires Julia 1.2 or later.
 
 # Examples
 ```jldoctest
@@ -212,7 +220,8 @@ julia> strip("{3, 5}\\n", ['{', '}', '\\n'])
 ```
 """
 strip(s::AbstractString) = lstrip(rstrip(s))
-strip(s::AbstractString, chars) = lstrip(rstrip(s, chars), chars)
+strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
+strip(f, s::AbstractString) = lstrip(f, rstrip(f, s))
 
 ## string padding functions ##
 
@@ -602,7 +611,7 @@ function ascii(s::String)
     end
     return s
 end
-@noinline __throw_invalid_ascii(s, i) = throw(ArgumentError("invalid ASCII at index $i in $(repr(s))"))
+@noinline __throw_invalid_ascii(s::String, i::Int) = throw(ArgumentError("invalid ASCII at index $i in $(repr(s))"))
 
 """
     ascii(s::AbstractString)

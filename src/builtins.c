@@ -373,18 +373,22 @@ JL_CALLABLE(jl_f_sizeof)
         if (isinline)
             return jl_box_long(elsize);
         if (!jl_is_datatype(x))
-            jl_error("argument is an abstract type; size is indeterminate");
+            jl_error("Argument is an abstract type and does not have a definite size.");
     }
     if (jl_is_datatype(x)) {
         jl_datatype_t *dx = (jl_datatype_t*)x;
-        if (dx->layout == NULL)
-            jl_error("argument is an abstract type; size is indeterminate");
+        if (dx->layout == NULL) {
+            if (dx->abstract)
+                jl_errorf("Abstract type %s does not have a definite size.", jl_symbol_name(dx->name->name));
+            else
+                jl_errorf("Argument is an incomplete %s type and does not have a definite size.", jl_symbol_name(dx->name->name));
+        }
         if (jl_is_layout_opaque(dx->layout))
-            jl_error("type does not have a fixed size");
+            jl_errorf("Type %s does not have a definite size.", jl_symbol_name(dx->name->name));
         return jl_box_long(jl_datatype_size(x));
     }
     if (x == jl_bottom_type)
-        jl_error("The empty type does not have a well-defined size since it does not have instances.");
+        jl_error("The empty type does not have a definite size since it does not have instances.");
     if (jl_is_array(x)) {
         return jl_box_long(jl_array_len(x) * ((jl_array_t*)x)->elsize);
     }
@@ -462,13 +466,16 @@ JL_CALLABLE(jl_f__apply)
                 return (jl_value_t*)t;
             }
         }
+        else if (f == jl_builtin_tuple && jl_is_tuple(args[1])) {
+            return args[1];
+        }
     }
     size_t n=0, i, j;
     for(i=1; i < nargs; i++) {
         if (jl_is_svec(args[i])) {
             n += jl_svec_len(args[i]);
         }
-        else if (jl_is_tuple(args[i])) {
+        else if (jl_is_tuple(args[i]) || jl_is_namedtuple(args[i])) {
             n += jl_nfields(args[i]);
         }
         else if (jl_is_array(args[i])) {
@@ -521,7 +528,7 @@ JL_CALLABLE(jl_f__apply)
             for(j=0; j < al; j++)
                 newargs[n++] = jl_svecref(t, j);
         }
-        else if (jl_is_tuple(ai)) {
+        else if (jl_is_tuple(ai) || jl_is_namedtuple(ai)) {
             size_t al = jl_nfields(ai);
             for(j=0; j < al; j++) {
                 // jl_fieldref may allocate.
@@ -696,12 +703,12 @@ JL_CALLABLE(jl_f_setfield)
     return args[2];
 }
 
-static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f)
+static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow)
 {
     if (jl_is_unionall(t)) {
         jl_value_t *u = t;
         JL_GC_PUSH1(&u);
-        u = get_fieldtype(((jl_unionall_t*)t)->body, f);
+        u = get_fieldtype(((jl_unionall_t*)t)->body, f, dothrow);
         u = jl_type_unionall(((jl_unionall_t*)t)->var, u);
         JL_GC_POP();
         return u;
@@ -710,8 +717,13 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f)
         jl_value_t **u;
         jl_value_t *r;
         JL_GC_PUSHARGS(u, 2);
-        u[0] = get_fieldtype(((jl_uniontype_t*)t)->a, f);
-        u[1] = get_fieldtype(((jl_uniontype_t*)t)->b, f);
+        u[0] = get_fieldtype(((jl_uniontype_t*)t)->a, f, 0);
+        u[1] = get_fieldtype(((jl_uniontype_t*)t)->b, f, 0);
+        if (u[0] == jl_bottom_type && u[1] == jl_bottom_type && dothrow) {
+            // error if all types in the union might have
+            get_fieldtype(((jl_uniontype_t*)t)->a, f, 1);
+            get_fieldtype(((jl_uniontype_t*)t)->b, f, 1);
+        }
         r = jl_type_union(u, 2);
         JL_GC_POP();
         return r;
@@ -726,15 +738,19 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f)
             jl_value_t *nm = jl_tparam0(st);
             if (jl_is_tuple(nm)) {
                 int nf = jl_nfields(nm);
-                if (field_index < 0 || field_index >= nf)
-                    jl_bounds_error(t, f);
+                if (field_index < 0 || field_index >= nf) {
+                    if (dothrow)
+                        jl_bounds_error(t, f);
+                    else
+                        return jl_bottom_type;
+                }
             }
             jl_value_t *tt = jl_tparam1(st);
             while (jl_is_typevar(tt))
                 tt = ((jl_tvar_t*)tt)->ub;
             if (tt == (jl_value_t*)jl_any_type)
                 return (jl_value_t*)jl_any_type;
-            return get_fieldtype(tt, f);
+            return get_fieldtype(tt, f, dothrow);
         }
         int nf = jl_field_count(st);
         if (nf > 0 && field_index >= nf-1 && st->name == jl_tuple_typename) {
@@ -742,12 +758,18 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f)
             if (jl_is_vararg_type(ft))
                 return jl_unwrap_vararg(ft);
         }
-        if (field_index < 0 || field_index >= nf)
-            jl_bounds_error(t, f);
+        if (field_index < 0 || field_index >= nf) {
+            if (dothrow)
+                jl_bounds_error(t, f);
+            else
+                return jl_bottom_type;
+        }
     }
     else {
         JL_TYPECHK(fieldtype, symbol, f);
-        field_index = jl_field_index(st, (jl_sym_t*)f, 1);
+        field_index = jl_field_index(st, (jl_sym_t*)f, dothrow);
+        if (field_index == -1)
+            return jl_bottom_type;
     }
     return jl_field_type(st, field_index);
 }
@@ -762,7 +784,7 @@ JL_CALLABLE(jl_f_fieldtype)
     jl_datatype_t *st = (jl_datatype_t*)args[0];
     if (st == jl_module_type)
         jl_error("cannot assign variables in other modules");
-    return get_fieldtype(args[0], args[1]);
+    return get_fieldtype(args[0], args[1], 1);
 }
 
 JL_CALLABLE(jl_f_nfields)
@@ -1037,6 +1059,11 @@ JL_CALLABLE(jl_f_arrayref)
     return jl_arrayref(a, i);
 }
 
+JL_CALLABLE(jl_f_const_arrayref)
+{
+    return jl_f_arrayref(F, args, nargs);
+}
+
 JL_CALLABLE(jl_f_arrayset)
 {
     JL_NARGSV(arrayset, 4);
@@ -1159,7 +1186,7 @@ static void add_builtin(const char *name, jl_value_t *v)
 jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b)
 {
     assert(jl_isa(b, (jl_value_t*)jl_builtin_type));
-    return ((jl_typemap_entry_t*)jl_gf_mtable(b)->cache)->func.linfo->specptr.fptr1;
+    return ((jl_typemap_entry_t*)jl_gf_mtable(b)->cache)->func.linfo->cache->specptr.fptr1;
 }
 
 static void add_builtin_func(const char *name, jl_fptr_args_t fptr)
@@ -1188,6 +1215,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     // array primitives
     add_builtin_func("arrayref", jl_f_arrayref);
+    add_builtin_func("const_arrayref", jl_f_arrayref);
     add_builtin_func("arrayset", jl_f_arrayset);
     add_builtin_func("arraysize", jl_f_arraysize);
 
@@ -1228,6 +1256,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("Module", (jl_value_t*)jl_module_type);
     add_builtin("MethodTable", (jl_value_t*)jl_methtable_type);
     add_builtin("Method", (jl_value_t*)jl_method_type);
+    add_builtin("CodeInstance", (jl_value_t*)jl_code_instance_type);
     add_builtin("TypeMapEntry", (jl_value_t*)jl_typemap_entry_type);
     add_builtin("TypeMapLevel", (jl_value_t*)jl_typemap_level_type);
     add_builtin("Symbol", (jl_value_t*)jl_sym_type);

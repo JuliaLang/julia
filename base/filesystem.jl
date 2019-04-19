@@ -42,7 +42,7 @@ import .Base:
     IOError, _UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
     bytesavailable, position, read, read!, readavailable, seek, seekend, show,
     skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
-    rawhandle, OS_HANDLE, INVALID_OS_HANDLE
+    rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror
 
 if Sys.iswindows()
     import .Base: cwstring
@@ -73,7 +73,7 @@ function open(path::AbstractString, flags::Integer, mode::Integer=0)
     req = Libc.malloc(_sizeof_uv_fs)
     local handle
     try
-        ret = ccall(:uv_fs_open, Int32,
+        ret = ccall(:jl_uv_fs_open, Int32,
                     (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Int32, Int32, Ptr{Cvoid}),
                     eventloop(), req, path, flags, mode, C_NULL)
         handle = ccall(:jl_uv_fs_result, Cssize_t, (Ptr{Cvoid},), req)
@@ -102,13 +102,19 @@ function close(f::File)
     return nothing
 end
 
-# sendfile is the most efficient way to copy a file (or any file descriptor)
+# sendfile is the most efficient way to copy from a file descriptor
 function sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
     check_open(dst)
     check_open(src)
-    err = ccall(:jl_fs_sendfile, Int32, (OS_HANDLE, OS_HANDLE, Int64, Csize_t),
-                src.handle, dst.handle, src_offset, bytes)
-    uv_error("sendfile", err)
+    while true
+        result = ccall(:jl_fs_sendfile, Int32, (OS_HANDLE, OS_HANDLE, Int64, Csize_t),
+                       src.handle, dst.handle, src_offset, bytes)
+        uv_error("sendfile", result)
+        nsent = result
+        bytes -= nsent
+        src_offset += nsent
+        bytes <= 0 && break
+    end
     nothing
 end
 
@@ -125,7 +131,7 @@ write(f::File, c::UInt8) = write(f, Ref{UInt8}(c))
 function truncate(f::File, n::Integer)
     check_open(f)
     req = Libc.malloc(_sizeof_uv_fs)
-    err = ccall(:uv_fs_ftruncate, Int32,
+    err = ccall(:jl_uv_fs_ftruncate, Int32,
                 (Ptr{Cvoid}, Ptr{Cvoid}, OS_HANDLE, Int64, Ptr{Cvoid}),
                 eventloop(), req, f.handle, n, C_NULL)
     Libc.free(req)
@@ -136,7 +142,7 @@ end
 function futime(f::File, atime::Float64, mtime::Float64)
     check_open(f)
     req = Libc.malloc(_sizeof_uv_fs)
-    err = ccall(:uv_fs_futime, Int32,
+    err = ccall(:jl_uv_fs_futime, Int32,
                 (Ptr{Cvoid}, Ptr{Cvoid}, OS_HANDLE, Float64, Float64, Ptr{Cvoid}),
                 eventloop(), req, f.handle, atime, mtime, C_NULL)
     Libc.free(req)

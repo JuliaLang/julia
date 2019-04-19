@@ -9,7 +9,9 @@ include("FakeTerminals.jl")
 import .FakeTerminals.FakeTerminal
 
 # no need to have animation in tests
-REPL.GlobalOptions.region_animation_duration=0.001
+REPL.GlobalOptions.region_animation_duration=0.0001
+# tests are inserting code much faster than humans
+REPL.GlobalOptions.auto_indent_time_threshold = -0.0
 
 ## helper functions
 

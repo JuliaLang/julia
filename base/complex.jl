@@ -35,7 +35,7 @@ const ComplexF16  = Complex{Float16}
 Complex{T}(x::Real) where {T<:Real} = Complex{T}(x,0)
 Complex{T}(z::Complex) where {T<:Real} = Complex{T}(real(z),imag(z))
 (::Type{T})(z::Complex) where {T<:Real} =
-    isreal(z) ? T(real(z))::T : throw(InexactError(Symbol(string(T)), T, z))
+    isreal(z) ? T(real(z))::T : throw(InexactError(nameof(T), T, z))
 
 Complex(z::Complex) = z
 
@@ -262,6 +262,7 @@ abs2(z::Complex) = real(z)*real(z) + imag(z)*imag(z)
 inv(z::Complex)  = conj(z)/abs2(z)
 inv(z::Complex{<:Integer}) = inv(float(z))
 
++(z::Complex) = Complex(+real(z), +imag(z))
 -(z::Complex) = Complex(-real(z), -imag(z))
 +(z::Complex, w::Complex) = Complex(real(z) + real(w), imag(z) + imag(w))
 -(z::Complex, w::Complex) = Complex(real(z) - real(w), imag(z) - imag(w))
@@ -952,10 +953,14 @@ function atanh(z::Complex{T}) where T<:AbstractFloat
             return Complex(copysign(zero(x),x), copysign(oftype(y,pi)/2, y))
         end
         return Complex(real(1/z), copysign(oftype(y,pi)/2, y))
-    elseif ax==1
+    end
+    β = copysign(one(T), x)
+    z *= β
+    x, y = reim(z)
+    if x == 1
         if y == 0
-            ξ = copysign(oftype(x,Inf),x)
-            η = zero(y)
+            ξ = oftype(x, Inf)
+            η = y
         else
             ym = ay+ρ
             ξ = log(sqrt(sqrt(4+y*y))/sqrt(ym))
@@ -970,7 +975,7 @@ function atanh(z::Complex{T}) where T<:AbstractFloat
         end
         η = angle(Complex((1-x)*(1+x)-ysq, 2y))/2
     end
-    Complex(ξ, η)
+    β * Complex(ξ, η)
 end
 atanh(z::Complex) = atanh(float(z))
 

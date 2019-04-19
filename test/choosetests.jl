@@ -2,7 +2,7 @@
 
 using Random, Sockets
 
-const STDLIB_DIR = joinpath(Sys.BINDIR, "..", "share", "julia", "stdlib", "v$(VERSION.major).$(VERSION.minor)")
+const STDLIB_DIR = Sys.STDLIB
 const STDLIBS = filter!(x -> isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")), readdir(STDLIB_DIR))
 
 """
@@ -46,7 +46,7 @@ function choosetests(choices = [])
         "mpfr", "broadcast", "complex",
         "floatapprox", "stdlib", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
-        "euler", "show",
+        "euler", "show", "client",
         "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "grisu",
         "some", "meta", "stacktraces", "docs",
         "misc", "threads", "stress",

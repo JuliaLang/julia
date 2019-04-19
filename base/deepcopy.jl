@@ -27,7 +27,7 @@ updated as appropriate before returning.
 """
 deepcopy(x) = deepcopy_internal(x, IdDict())::typeof(x)
 
-deepcopy_internal(x::Union{Symbol,Core.MethodInstance,Method,GlobalRef,DataType,Union,Task},
+deepcopy_internal(x::Union{Symbol,Core.MethodInstance,Method,GlobalRef,DataType,Union,UnionAll,Task,Regex},
                   stackdict::IdDict) = x
 deepcopy_internal(x::Tuple, stackdict::IdDict) =
     ntuple(i->deepcopy_internal(x[i], stackdict), length(x))

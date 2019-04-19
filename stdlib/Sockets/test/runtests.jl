@@ -413,10 +413,37 @@ end
     end
 end
 
+@testset "iswritable" begin
+    let addr = Sockets.InetAddr(ip"127.0.0.1", 4445)
+        srv = listen(addr)
+        s = Sockets.TCPSocket()
+        Sockets.connect!(s, addr)
+        @test iswritable(s)
+        close(s)
+        @test !iswritable(s)
+    end
+end
+
 @testset "TCPServer constructor" begin
     s = Sockets.TCPServer(; delay=false)
     if ccall(:jl_has_so_reuseport, Int32, ()) == 1
         @test 0 == ccall(:jl_tcp_reuseport, Int32, (Ptr{Cvoid},), s.handle)
+    end
+end
+
+@testset "getipaddrs" begin
+    @test getipaddr() in getipaddrs()
+    try
+        getipaddr(IPv6) in getipaddrs(IPv6)
+    catch
+        if !isempty(getipaddrs(IPv6))
+            @test "getipaddr(IPv6) errored when it shouldn't have!"
+        end
+    end
+
+    @testset "including loopback addresses" begin
+        @test issubset(getipaddrs(), getipaddrs(loopback=true))
+        @test issubset(getipaddrs(IPv6), getipaddrs(IPv6, loopback=true))
     end
 end
 
@@ -427,7 +454,7 @@ end
             srv = listen(addr)
             s = connect(addr)
 
-            @test success(pipeline(`$(Base.julia_cmd()) -e "exit()" -i`, stdin=s))
+            @test success(pipeline(`$(Base.julia_cmd()) --startup-file=no -e "exit()" -i`, stdin=s))
 
             close(s)
             close(srv)

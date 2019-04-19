@@ -98,7 +98,8 @@ macro horner(x, p...)
     for i = length(p)-1:-1:1
         ex = :(muladd(t, $ex, $(esc(p[i]))))
     end
-    Expr(:block, :(t = $(esc(x))), ex)
+    ex = quote local r = $ex end # structure this to add exactly one line number node for the macro
+    return Expr(:block, :(local t = $(esc(x))), ex, :r)
 end
 
 # Evaluate p[1] + z*p[2] + z^2*p[3] + ... + z^(n-1)*p[n].  This uses
@@ -1057,6 +1058,7 @@ Return positive part of the high word of `x` as a `UInt32`.
 include("special/cbrt.jl")
 include("special/exp.jl")
 include("special/exp10.jl")
+include("special/ldexp_exp.jl")
 include("special/hyperbolic.jl")
 include("special/trig.jl")
 include("special/rem_pio2.jl")

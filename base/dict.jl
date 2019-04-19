@@ -23,8 +23,7 @@ end
 
 function show(io::IO, t::AbstractDict{K,V}) where V where K
     recur_io = IOContext(io, :SHOWN_SET => t,
-                             :typeinfo => eltype(t),
-                             :compact => get(io, :compact, true))
+                             :typeinfo => eltype(t))
 
     limit::Bool = get(io, :limit, false)
     # show in a Julia-syntax-like form: Dict(k=>v, ...)
@@ -194,7 +193,7 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
     vals = Vector{V}(undef, newsz)
     age0 = h.age
     count = 0
-    maxprobe = h.maxprobe
+    maxprobe = 0
 
     for i = 1:sz
         @inbounds if olds[i] == 0x1
@@ -372,7 +371,7 @@ end
 function setindex!(h::Dict{K,V}, v0, key0) where V where K
     key = convert(K, key0)
     if !isequal(key, key0)
-        throw(ArgumentError("$key0 is not a valid key for type $K"))
+        throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
     end
     setindex!(h, v0, key)
 end
@@ -439,7 +438,7 @@ get!(f::Function, collection, key)
 function get!(default::Callable, h::Dict{K,V}, key0) where V where K
     key = convert(K, key0)
     if !isequal(key, key0)
-        throw(ArgumentError("$key0 is not a valid key for type $K"))
+        throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
     end
     return get!(default, h, key)
 end
@@ -658,18 +657,22 @@ end
 
 function skip_deleted(h::Dict, i)
     L = length(h.slots)
-    @inbounds while i<=L && !isslotfilled(h,i)
-        i += 1
+    for i = i:L
+        @inbounds if isslotfilled(h,i)
+            return  i
+        end
     end
-    return i
+    return 0
 end
 function skip_deleted_floor!(h::Dict)
     idx = skip_deleted(h, h.idxfloor)
-    h.idxfloor = idx
+    if idx != 0
+        h.idxfloor = idx
+    end
     idx
 end
 
-@propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} = i > length(t.vals) ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i+1)
+@propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} = i == 0 ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i == typemax(Int) ? 0 : i+1)
 @propagate_inbounds function iterate(t::Dict)
     _iterate(t, skip_deleted_floor!(t))
 end
@@ -678,14 +681,33 @@ end
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
-@propagate_inbounds function iterate(v::Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}},
-                                     i=v.dict.idxfloor)
+@propagate_inbounds function Base.iterate(v::T, i::Int = v.dict.idxfloor) where T <: Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}}
+    i == 0 && return nothing
     i = skip_deleted(v.dict, i)
-    i > length(v.dict.vals) && return nothing
-    (v isa KeySet ? v.dict.keys[i] : v.dict.vals[i], i+1)
+    i == 0 && return nothing
+    vals = T <: KeySet ? v.dict.keys : v.dict.vals
+    (@inbounds vals[i], i == typemax(Int) ? 0 : i+1)
 end
 
 filter!(f, d::Dict) = filter_in_one_pass!(f, d)
+
+function reduce(::typeof(merge), items::Vector{<:Dict})
+    K = mapreduce(keytype, promote_type, items)
+    V = mapreduce(valtype, promote_type, items)
+    return reduce(merge!, items; init=Dict{K,V}())
+end
+
+function map!(f, iter::ValueIterator{<:Dict})
+    dict = iter.dict
+    vals = dict.vals
+    # @inbounds is here so the it gets propigated to isslotfiled
+    @inbounds for i = dict.idxfloor:lastindex(vals)
+        if isslotfilled(dict, i)
+            vals[i] = f(vals[i])
+        end
+    end
+    return iter
+end
 
 struct ImmutableDict{K,V} <: AbstractDict{K,V}
     parent::ImmutableDict{K,V}

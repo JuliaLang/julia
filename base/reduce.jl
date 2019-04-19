@@ -81,10 +81,10 @@ argument `init` will be used exactly once. In general, it will be necessary to p
 # Examples
 ```jldoctest
 julia> foldl(=>, 1:4)
-((1=>2)=>3) => 4
+((1 => 2) => 3) => 4
 
 julia> foldl(=>, 1:4; init=0)
-(((0=>1)=>2)=>3) => 4
+(((0 => 1) => 2) => 3) => 4
 ```
 """
 foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
@@ -135,10 +135,10 @@ argument `init` will be used exactly once. In general, it will be necessary to p
 # Examples
 ```jldoctest
 julia> foldr(=>, 1:4)
-1 => (2=>(3=>4))
+1 => (2 => (3 => 4))
 
 julia> foldr(=>, 1:4; init=0)
-1 => (2=>(3=>(4=>0)))
+1 => (2 => (3 => (4 => 0)))
 ```
 """
 foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
@@ -179,9 +179,9 @@ mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer) =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
 """
-    mapreduce(f, op, itr; [init])
+    mapreduce(f, op, itrs...; [init])
 
-Apply function `f` to each element in `itr`, and then reduce the result using the binary
+Apply function `f` to each element(s) in `itrs`, and then reduce the result using the binary
 function `op`. If provided, `init` must be a neutral element for `op` that will be returned
 for empty collections. It is unspecified whether `init` is used for non-empty collections.
 In general, it will be necessary to provide `init` to work with empty collections.
@@ -190,6 +190,9 @@ In general, it will be necessary to provide `init` to work with empty collection
 `reduce(op, map(f, itr); init=init)`, but will in general execute faster since no
 intermediate collection needs to be created. See documentation for [`reduce`](@ref) and
 [`map`](@ref).
+
+!!! compat "Julia 1.2"
+    `mapreduce` with multiple iterators requires Julia 1.2 or later.
 
 # Examples
 ```jldoctest
@@ -203,6 +206,7 @@ implementations may reuse the return value of `f` for elements that appear multi
 guaranteed left or right associativity and invocation of `f` for every value.
 """
 mapreduce(f, op, itr; kw...) = mapfoldl(f, op, itr; kw...)
+mapreduce(f, op, itrs...; kw...) = reduce(op, Generator(f, itrs...); kw...)
 
 # Note: sum_seq usually uses four or more accumulators after partial
 # unrolling, so each accumulator gets at most 256 numbers
@@ -466,8 +470,6 @@ function _fast(::typeof(min),x::AbstractFloat, y::AbstractFloat)
         ifelse(x < y, x, y))
 end
 
-_isnan(x) = false
-_isnan(x::Real) = isnan(x)
 isbadzero(::typeof(max), x::AbstractFloat) = (x == zero(x)) & signbit(x)
 isbadzero(::typeof(min), x::AbstractFloat) = (x == zero(x)) & !signbit(x)
 isbadzero(op, x) = false
@@ -480,27 +482,28 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
     v1 = mapreduce_first(f, op, a1)
     v2 = v3 = v4 = v1
     chunk_len = 256
-    start = first
-    stop  = start + chunk_len - 4
-    while stop <= last
-        _isnan(v1) && return v1
-        _isnan(v2) && return v2
-        _isnan(v3) && return v3
-        _isnan(v4) && return v4
-        @inbounds for i in start:4:stop
-            v1 = _fast(op, v1, f(A[i+1]))
-            v2 = _fast(op, v2, f(A[i+2]))
-            v3 = _fast(op, v3, f(A[i+3]))
-            v4 = _fast(op, v4, f(A[i+4]))
+    start = first + 1
+    simdstop  = start + chunk_len - 4
+    while simdstop <= last - 3
+        # short circuit in case of NaN
+        v1 == v1 || return v1
+        v2 == v2 || return v2
+        v3 == v3 || return v3
+        v4 == v4 || return v4
+        @inbounds for i in start:4:simdstop
+            v1 = _fast(op, v1, f(A[i+0]))
+            v2 = _fast(op, v2, f(A[i+1]))
+            v3 = _fast(op, v3, f(A[i+2]))
+            v4 = _fast(op, v4, f(A[i+3]))
         end
-        start = stop
-        stop = start + chunk_len - 4
+        checkbounds(A, simdstop+3)
+        start += chunk_len
+        simdstop += chunk_len
     end
     v = op(op(v1,v2),op(v3,v4))
-    start += 1
     for i in start:last
         @inbounds ai = A[i]
-        v = op(v, f(A[i]))
+        v = op(v, f(ai))
     end
 
     # enforce correct order of 0.0 and -0.0
@@ -515,7 +518,30 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
     return v
 end
 
+"""
+    maximum(f, itr)
+
+Returns the largest result of calling function `f` on each element of `itr`.
+
+# Examples
+```jldoctest
+julia> maximum(length, ["Julion", "Julia", "Jule"])
+6
+```
+"""
 maximum(f, a) = mapreduce(f, max, a)
+
+"""
+    minimum(f, itr)
+
+Returns the smallest result of calling function `f` on each element of `itr`.
+
+# Examples
+```jldoctest
+julia> minimum(length, ["Julion", "Julia", "Jule"])
+4
+```
+"""
 minimum(f, a) = mapreduce(f, min, a)
 
 """
@@ -566,10 +592,10 @@ values are `false` (or equivalently, if the input contains no `true` value), fol
 ```jldoctest
 julia> a = [true,false,false,true]
 4-element Array{Bool,1}:
-  true
- false
- false
-  true
+ 1
+ 0
+ 0
+ 1
 
 julia> any(a)
 true
@@ -601,10 +627,10 @@ values are `true` (or equivalently, if the input contains no `false` value), fol
 ```jldoctest
 julia> a = [true,false,false,true]
 4-element Array{Bool,1}:
-  true
- false
- false
-  true
+ 1
+ 0
+ 0
+ 1
 
 julia> all(a)
 false

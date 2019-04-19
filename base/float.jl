@@ -594,7 +594,7 @@ uabs(x::BitSigned) = unsigned(abs(x))
 
 
 """
-    nextfloat(x::IEEEFloat, n::Integer)
+    nextfloat(x::AbstractFloat, n::Integer)
 
 The result of `n` iterative applications of `nextfloat` to `x` if `n >= 0`, or `-n`
 applications of `prevfloat` if `n < 0`.
@@ -841,8 +841,7 @@ eps(::AbstractFloat)
 
 
 ## byte order swaps for arbitrary-endianness serialization/deserialization ##
-bswap(x::Float32) = bswap_int(x)
-bswap(x::Float64) = bswap_int(x)
+bswap(x::IEEEFloat) = bswap_int(x)
 
 # bit patterns
 reinterpret(::Type{Unsigned}, x::Float64) = reinterpret(UInt64, x)

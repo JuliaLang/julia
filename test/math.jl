@@ -43,8 +43,11 @@ end
 
     @test Float16(3.0) < pi
     @test pi < Float16(4.0)
-    @test occursin("3.14159", sprint(show, π))
     @test widen(pi) === pi
+
+    @test occursin("3.14159", sprint(show, MIME"text/plain"(), π))
+    @test repr(Any[pi ℯ; ℯ pi]) == "Any[π ℯ; ℯ π]"
+    @test string(pi) == "π"
 end
 
 @testset "frexp,ldexp,significand,exponent" begin

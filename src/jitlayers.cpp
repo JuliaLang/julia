@@ -10,6 +10,7 @@
 #include <llvm/Analysis/Passes.h>
 #include <llvm/Analysis/BasicAliasAnalysis.h>
 #include <llvm/Analysis/TypeBasedAliasAnalysis.h>
+#include <llvm/Analysis/ScopedNoAliasAA.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/IR/Verifier.h>
@@ -30,6 +31,11 @@
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 
+#if JL_LLVM_VERSION >= 70000
+#include <llvm/Transforms/InstCombine/InstCombine.h>
+#include <llvm/Support/SmallVectorMemoryBuffer.h>
+#endif
+
 namespace llvm {
     extern Pass *createLowerSimdLoopPass();
 }
@@ -47,6 +53,7 @@ namespace llvm {
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/IR/DataLayout.h>
 #include <llvm/Support/DynamicLibrary.h>
+
 
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/FormattedStream.h>
@@ -91,7 +98,8 @@ void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
 
 // this defines the set of optimization passes defined for Julia at various optimization levels.
 // it assumes that the TLI and TTI wrapper passes have already been added.
-void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump_native)
+void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
+                           bool lower_intrinsics, bool dump_native)
 {
 #ifdef JL_DEBUG_BUILD
     PM->add(createGCInvariantVerifierPass(true));
@@ -113,17 +121,20 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
         }
         PM->add(createMemCpyOptPass()); // Remove memcpy / form memset
         PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
-        PM->add(createBarrierNoopPass());
-        PM->add(createLowerExcHandlersPass());
-        PM->add(createGCInvariantVerifierPass(false));
-        PM->add(createLateLowerGCFramePass());
-        PM->add(createLowerPTLSPass(dump_native));
-        PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "simdloop" as LLVM parallel loop
+        if (lower_intrinsics) {
+            PM->add(createBarrierNoopPass());
+            PM->add(createLowerExcHandlersPass());
+            PM->add(createGCInvariantVerifierPass(false));
+            PM->add(createLateLowerGCFramePass());
+            PM->add(createLowerPTLSPass(dump_native));
+        }
+        PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (dump_native)
             PM->add(createMultiVersioningPass());
         return;
     }
     PM->add(createPropagateJuliaAddrspaces());
+    PM->add(createScopedNoAliasAAWrapperPass());
     PM->add(createTypeBasedAAWrapperPass());
     if (opt_level >= 3) {
         PM->add(createBasicAAWrapperPass());
@@ -175,7 +186,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(polly::createCodegenCleanupPass());
 #endif
     // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards
-    PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "simdloop" as LLVM parallel loop
+    PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "loopinfo" as LLVM parallel loop
     PM->add(createLICMPass());                 // Hoist loop invariants
     PM->add(createLoopUnswitchPass());         // Unswitch loops.
     // Subsequent passes not stripping metadata from terminator
@@ -198,7 +209,11 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     // Run instcombine after redundancy elimination to exploit opportunities
     // opened up by them.
     PM->add(createSinkingPass()); ////////////// ****
+#if JL_LLVM_VERSION < 70000
+    // This pass is a subset of InstructionCombiningPass in LLVM 7
+    // and therefore not required.
     PM->add(createInstructionSimplifierPass());///////// ****
+#endif
     PM->add(createInstructionCombiningPass());
     PM->add(createJumpThreadingPass());         // Thread jumps
     PM->add(createDeadStoreEliminationPass());  // Delete dead stores
@@ -217,24 +232,27 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(createInstructionCombiningPass());  // Clean up after SLP loop vectorizer
     PM->add(createLoopVectorizePass());         // Vectorize loops
     PM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
-    // LowerPTLS removes an indirect call. As a result, it is likely to trigger
-    // LLVM's devirtualization heuristics, which would result in the entire
-    // pass pipeline being re-exectuted. Prevent this by inserting a barrier.
-    PM->add(createBarrierNoopPass());
-    PM->add(createLowerExcHandlersPass());
-    PM->add(createGCInvariantVerifierPass(false));
-    PM->add(createLateLowerGCFramePass());
-    // Remove dead use of ptls
-    PM->add(createDeadCodeEliminationPass());
-    PM->add(createLowerPTLSPass(dump_native));
-    // Clean up write barrier and ptls lowering
-    PM->add(createCFGSimplificationPass());
+
+    if (lower_intrinsics) {
+        // LowerPTLS removes an indirect call. As a result, it is likely to trigger
+        // LLVM's devirtualization heuristics, which would result in the entire
+        // pass pipeline being re-exectuted. Prevent this by inserting a barrier.
+        PM->add(createBarrierNoopPass());
+        PM->add(createLowerExcHandlersPass());
+        PM->add(createGCInvariantVerifierPass(false));
+        PM->add(createLateLowerGCFramePass());
+        // Remove dead use of ptls
+        PM->add(createDeadCodeEliminationPass());
+        PM->add(createLowerPTLSPass(dump_native));
+        // Clean up write barrier and ptls lowering
+        PM->add(createCFGSimplificationPass());
+    }
     PM->add(createCombineMulAddPass());
 }
 
 extern "C" JL_DLLEXPORT
-void jl_add_optimization_passes(LLVMPassManagerRef PM, int opt_level) {
-    addOptimizationPasses(unwrap(PM), opt_level);
+void jl_add_optimization_passes(LLVMPassManagerRef PM, int opt_level, int lower_intrinsics) {
+    addOptimizationPasses(unwrap(PM), opt_level, lower_intrinsics);
 }
 
 #if defined(_OS_LINUX_) || defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
@@ -273,9 +291,15 @@ JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
                                          RTDyldMemoryManager *memmgr);
 
 template <typename ObjT, typename LoadResult>
-void JuliaOJIT::DebugObjectRegistrar::registerObject(RTDyldObjHandleT H, const ObjT &Object,
+void JuliaOJIT::DebugObjectRegistrar::registerObject(RTDyldObjHandleT H, const ObjT &Obj,
                                                      const LoadResult &LO)
 {
+#if JL_LLVM_VERSION >= 70000
+    const ObjT* Object = &Obj;
+#else
+    const ObjT& Object = Obj;
+#endif
+
     object::OwningBinary<object::ObjectFile> SavedObject = LO->getObjectForDebug(*Object);
 
     // If the debug object is unavailable, save (a copy of) the original object
@@ -322,19 +346,29 @@ void JuliaOJIT::DebugObjectRegistrar::registerObject(RTDyldObjHandleT H, const O
 
 template <typename ObjSetT, typename LoadResult>
 void JuliaOJIT::DebugObjectRegistrar::operator()(RTDyldObjHandleT H,
-                const ObjSetT &Objects, const LoadResult &LOS)
+                const ObjSetT &Object, const LoadResult &LOS)
 {
-    registerObject(H, Objects->getBinary(),
+#if JL_LLVM_VERSION >= 70000
+    registerObject(H, Object,
                    static_cast<const RuntimeDyld::LoadedObjectInfo*>(&LOS));
+#else
+    registerObject(H, Object->getBinary(),
+                   static_cast<const RuntimeDyld::LoadedObjectInfo*>(&LOS));
+#endif
 }
 
 
-object::OwningBinary<object::ObjectFile> JuliaOJIT::CompilerT::operator()(Module &M)
+CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
 {
     JL_TIMING(LLVM_OPT);
     jit.PM.run(M);
+#if JL_LLVM_VERSION >= 70000
+    std::unique_ptr<MemoryBuffer> ObjBuffer(
+        new SmallVectorMemoryBuffer(std::move(jit.ObjBufferSV)));
+#else
     std::unique_ptr<MemoryBuffer> ObjBuffer(
         new ObjectMemoryBuffer(std::move(jit.ObjBufferSV)));
+#endif
     auto Obj = object::ObjectFile::createObjectFile(ObjBuffer->getMemBufferRef());
 
     if (!Obj) {
@@ -347,7 +381,11 @@ object::OwningBinary<object::ObjectFile> JuliaOJIT::CompilerT::operator()(Module
                                  "The module's content was printed above. Please file a bug report");
     }
 
+#if JL_LLVM_VERSION >= 70000
+    return ObjBuffer;
+#else
     return OwningObj(std::move(*Obj), std::move(ObjBuffer));
+#endif
 }
 
 JuliaOJIT::JuliaOJIT(TargetMachine &TM)
@@ -356,10 +394,32 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
     ObjStream(ObjBufferSV),
     MemMgr(createRTDyldMemoryManager()),
     registrar(*this),
+#if JL_LLVM_VERSION >= 70000
+    ES(),
+    SymbolResolver(llvm::orc::createLegacyLookupResolver(
+          ES,
+          [this](const std::string& name) -> llvm::JITSymbol {
+            return this->resolveSymbol(name);
+          },
+          [](llvm::Error Err) {
+            cantFail(std::move(Err), "resolveSymbol failed");
+          })),
+    ObjectLayer(
+        ES,
+        [this](RTDyldObjHandleT) {
+                      ObjLayerT::Resources result;
+                      result.MemMgr = MemMgr;
+                      result.Resolver = SymbolResolver;
+                      return result;
+                    },
+        std::ref(registrar)
+        ),
+#else
     ObjectLayer(
         [&] { return MemMgr; },
         std::ref(registrar)
         ),
+#endif
     CompileLayer(
             ObjectLayer,
             CompilerT(this)
@@ -427,34 +487,23 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
     }
 #endif
     JL_TIMING(LLVM_MODULE_FINISH);
-    // We need a memory manager to allocate memory and resolve symbols for this
-    // new module. Create one that resolves symbols by looking back into the JIT.
+
+#if JL_LLVM_VERSION >= 70000
+    auto key = ES.allocateVModule();
+    cantFail(CompileLayer.addModule(key, std::move(M)));
+#else
     auto Resolver = orc::createLambdaResolver(
-                      [&](const std::string &Name) {
-                        // TODO: consider moving the FunctionMover resolver here
-                        // Step 0: ObjectLinkingLayer has checked whether it is in the current module
-                        // Step 1: See if it's something known to the ExecutionEngine
-                        if (auto Sym = findSymbol(Name, true)) {
-                            // `findSymbol` already eagerly resolved the address
-                            // return it directly.
-                            return Sym;
-                        }
-                        // Step 2: Search the program symbols
-                        if (uint64_t addr = SectionMemoryManager::getSymbolAddressInProcess(Name))
-                            return JL_SymbolInfo(addr, JITSymbolFlags::Exported);
-#if defined(_OS_LINUX_) || defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
-                        if (uint64_t addr = resolve_atomic(Name.c_str()))
-                            return JL_SymbolInfo(addr, JITSymbolFlags::Exported);
-#endif
-                        // Return failure code
-                        return JL_SymbolInfo(nullptr);
-                      },
-                      [](const std::string &S) { return nullptr; }
+                        [&](const std::string &Name) {
+                            return this->resolveSymbol(Name);
+                        },
+                        [](const std::string &S) { return nullptr; }
                     );
-    auto modset = cantFail(CompileLayer.addModule(std::move(M), std::move(Resolver)));
+
+    auto key = cantFail(CompileLayer.addModule(std::move(M), std::move(Resolver)));
+#endif
     // Force LLVM to emit the module so that we can register the symbols
     // in our lookup table.
-    auto Err = CompileLayer.emitAndFinalize(modset);
+    auto Err = CompileLayer.emitAndFinalize(key);
     // Check for errors to prevent LLVM from crashing the program.
     assert(!Err);
 }
@@ -480,6 +529,26 @@ JL_JITSymbol JuliaOJIT::findSymbol(const std::string &Name, bool ExportedSymbols
 JL_JITSymbol JuliaOJIT::findUnmangledSymbol(const std::string Name)
 {
     return findSymbol(getMangledName(Name), true);
+}
+
+JL_JITSymbol JuliaOJIT::resolveSymbol(const std::string& Name)
+{
+    // Step 0: ObjectLinkingLayer has checked whether it is in the current module
+    // Step 1: See if it's something known to the ExecutionEngine
+    if (auto Sym = findSymbol(Name, true)) {
+        // `findSymbol` already eagerly resolved the address
+        // return it directly.
+        return Sym;
+    }
+    // Step 2: Search the program symbols
+    if (uint64_t addr = SectionMemoryManager::getSymbolAddressInProcess(Name))
+        return JL_SymbolInfo(addr, JITSymbolFlags::Exported);
+#if defined(_OS_LINUX_) || defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
+    if (uint64_t addr = resolve_atomic(Name.c_str()))
+        return JL_SymbolInfo(addr, JITSymbolFlags::Exported);
+#endif
+    // Return failure code
+    return JL_SymbolInfo(nullptr);
 }
 
 uint64_t JuliaOJIT::getGlobalValueAddress(const std::string &Name)
@@ -841,7 +910,11 @@ void jl_add_to_shadow(Module *m)
         return;
 #endif
     ValueToValueMapTy VMap;
+#if JL_LLVM_VERSION >= 70000
+    std::unique_ptr<Module> clone(CloneModule(*m, VMap));
+#else
     std::unique_ptr<Module> clone(CloneModule(m, VMap));
+#endif
     for (Module::iterator I = clone->begin(), E = clone->end(); I != E; ++I) {
         Function *F = &*I;
         if (!F->isDeclaration()) {
@@ -944,12 +1017,18 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
     if (unopt_bc_fname)
         PM.add(createBitcodeWriterPass(unopt_bc_OS));
     if (bc_fname || obj_fname)
-        addOptimizationPasses(&PM, jl_options.opt_level, true);
+        addOptimizationPasses(&PM, jl_options.opt_level, true, true);
     if (bc_fname)
         PM.add(createBitcodeWriterPass(bc_OS));
+#if JL_LLVM_VERSION >= 70000
+    if (obj_fname)
+        if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, TargetMachine::CGFT_ObjectFile, false))
+            jl_safe_printf("ERROR: target does not support generation of object files\n");
+#else
     if (obj_fname)
         if (TM->addPassesToEmitFile(PM, obj_OS, TargetMachine::CGFT_ObjectFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
+#endif
 
     // Reset the target triple to make sure it matches the new target machine
     shadow_output->setTargetTriple(TM->getTargetTriple().str());

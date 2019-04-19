@@ -371,10 +371,6 @@ JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a)
 {
     return a;
 }
-JL_DLLEXPORT void jl_gc_use(jl_value_t *a)
-{
-    (void)a;
-}
 
 // parsing --------------------------------------------------------------------
 
@@ -636,7 +632,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         else {
             n += jl_static_show_x(out, (jl_value_t*)li->def.module, depth);
             n += jl_printf(out, ".<toplevel thunk> -> ");
-            n += jl_static_show_x(out, li->inferred, depth);
+            n += jl_static_show_x(out, li->uninferred, depth);
         }
     }
     else if (vt == jl_simplevector_type) {

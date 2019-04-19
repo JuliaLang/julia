@@ -584,4 +584,12 @@ end
     @test (A / x)::Matrix == Matrix(A) / x
 end
 
+@testset "issue #30814: Symmetric of Hermitian if diag is not real" begin
+    A = [1 2; 3 4] * (1 + im)
+    B = Hermitian(A)
+    @test_throws ArgumentError Symmetric(B) == Symmetric(Matrix(B))
+    A[1,1] = 1; A[2,2] = 4
+    @test Symmetric(B) == Symmetric(Matrix(B))
+end
+
 end # module TestSymmetric

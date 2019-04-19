@@ -116,6 +116,11 @@ end
             @test_throws DimensionMismatch rmul!(a, Diagonal(Vector{Float64}(undef,an+1)))
         end
 
+        @testset "Scaling with rdiv! and ldiv!" begin
+            @test rdiv!(copy(a), 5.) == a/5
+            @test ldiv!(5., copy(a)) == a/5
+        end
+
         @testset "Scaling with 3-argument mul!" begin
             @test mul!(similar(a), 5., a) == a*5
             @test mul!(similar(a), a, 5.) == a*5
@@ -163,11 +168,15 @@ end
         @test issymmetric(a)
         @test ishermitian(one(elty))
         @test det(a) == a
+        @test norm(a) == abs(a)
+        @test norm(a, 0) == 1
     end
 
     @test !issymmetric(NaN16)
     @test !issymmetric(NaN32)
     @test !issymmetric(NaN)
+    @test norm(NaN)    === NaN
+    @test norm(NaN, 0) === NaN
 end
 
 @test rank(fill(0, 0, 0)) == 0
@@ -223,6 +232,11 @@ end
             @test isempty(normalize!(T[]))
         end
     end
+end
+
+@testset "Issue #30466" begin
+    @test norm([typemin(Int), typemin(Int)], Inf) == -float(typemin(Int))
+    @test norm([typemin(Int), typemin(Int)], 1) == -2float(typemin(Int))
 end
 
 @testset "potential overflow in normalize!" begin
@@ -299,6 +313,10 @@ LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
     @test A*(lu(A, Val(true))\b) == b
 end
 
+@testset "Issue 18742" begin
+    @test_throws DimensionMismatch ones(4,5)/zeros(3,6)
+    @test_throws DimensionMismatch ones(4,5)\zeros(3,6)
+end
 @testset "fallback throws properly for AbstractArrays with dimension > 2" begin
     @test_throws ErrorException adjoint(rand(2,2,2,2))
     @test_throws ErrorException transpose(rand(2,2,2,2))

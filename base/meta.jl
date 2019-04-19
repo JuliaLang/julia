@@ -128,10 +128,6 @@ function parse(str::AbstractString, pos::Integer; greedy::Bool=true, raise::Bool
     if raise && isa(ex,Expr) && ex.head === :error
         throw(ParseError(ex.args[1]))
     end
-    if ex === ()
-        raise && throw(ParseError("end of input"))
-        ex = Expr(:error, "end of input")
-    end
     return ex, pos+1 # C is zero-based, Julia is 1-based
 end
 
@@ -297,6 +293,6 @@ end
 
 _instantiate_type_in_env(x, spsig, spvals) = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), x, spsig, spvals)
 
-is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :simdloop)
+is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :loopinfo)
 
 end # module

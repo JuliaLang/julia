@@ -33,7 +33,7 @@ abstract type AbstractLogger ; end
 
 Log a message to `logger` at `level`.  The logical location at which the
 message was generated is given by module `_module` and `group`; the source
-location by `file` and `line`. `id` is an arbitrary unique `Symbol` to be used
+location by `file` and `line`. `id` is an arbitrary unique [`Symbol`](@ref) to be used
 as a key to identify the log statement when filtering.
 """
 function handle_message end
@@ -150,7 +150,7 @@ formatted as markdown when presented.
 The optional list of `key=value` pairs supports arbitrary user defined
 metadata which will be passed through to the logging backend as part of the
 log record.  If only a `value` expression is supplied, a key representing the
-expression will be generated using `Symbol`. For example, `x` becomes `x=x`,
+expression will be generated using [`Symbol`](@ref). For example, `x` becomes `x=x`,
 and `foo(10)` becomes `Symbol("foo(10)")=foo(10)`.  For splatting a list of
 key value pairs, use the normal splatting syntax, `@info "blah" kws...`.
 
@@ -289,7 +289,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
         end
     end
 
-    if group == nothing
+    if group === nothing
         group = if isdefined(Base, :basename) && isa(file, String)
             # precompute if we can
             QuoteNode(splitext(basename(file))[1])
@@ -523,7 +523,7 @@ catch_exceptions(logger::SimpleLogger) = false
 
 function handle_message(logger::SimpleLogger, level, message, _module, group, id,
                         filepath, line; maxlog=nothing, kwargs...)
-    if maxlog != nothing && maxlog isa Integer
+    if maxlog !== nothing && maxlog isa Integer
         remaining = get!(logger.message_limits, id, maxlog)
         logger.message_limits[id] = remaining - 1
         remaining > 0 || return
