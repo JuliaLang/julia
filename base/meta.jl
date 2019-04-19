@@ -69,6 +69,8 @@ isexpr(@nospecialize(ex), heads, n::Int) = isexpr(ex, heads) && length(ex.args) 
     show_sexpr([io::IO,], ex)
 
 Show expression `ex` as a lisp style S-expression.
+
+# Examples
 ```jldoctest
 julia> show_sexpr(:(f(x, g(y,z))))
 (:call, :f, :x, (:call, :g, :y, :z))
