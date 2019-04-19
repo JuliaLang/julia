@@ -16,6 +16,7 @@ export quot,
     quot(ex)::Expr
 
 Quote expression `ex` to produce an expression with head `quote`. This can for instance be used to represent objects of type `Expr` in the AST.
+See also the manual section about [QuoteNode](@ref man-quote-node).
 
 # Examples
 ```jldoctest
@@ -31,7 +32,6 @@ Expr
 julia> eval(quot(:(1+2)))
 :(1 + 2)
 ```
-See also the manual section about [QuoteNode](@ref man-quote-node).
 """
 quot(ex) = Expr(:quote, ex)
 
