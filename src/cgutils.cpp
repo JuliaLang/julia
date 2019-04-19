@@ -1362,6 +1362,7 @@ static Value *julia_bool(jl_codectx_t &ctx, Value *cond)
 static Constant *julia_const_to_llvm(jl_value_t *e);
 static Value *data_pointer(jl_codectx_t &ctx, const jl_cgval_t &x)
 {
+    assert(x.ispointer());
     Value *data = x.V;
     if (x.constant) {
         Constant *val = julia_const_to_llvm(x.constant);
