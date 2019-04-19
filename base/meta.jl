@@ -39,6 +39,8 @@ quot(ex) = Expr(:quote, ex)
     isexpr(ex, head[, n])::Bool
 
 Check if `ex` is an expression with head `head` and `n` arguments.
+
+# Examples
 ```jldoctest
 julia> ex = :(f(x))
 :(f(x))
