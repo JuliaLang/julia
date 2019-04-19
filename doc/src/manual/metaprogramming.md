@@ -333,7 +333,7 @@ as an object of type `QuoteNode`:
 julia> eval(quot(Expr(:$, :(1+2))))
 3
 
-julia> QuoteNode(Expr(:$, :(1+2))) |> eval
+julia> eval(QuoteNode(Expr(:$, :(1+2))))
 :($(Expr(:$, :(1 + 2))))
 ```
 The parser yields `QuoteNode`s for simple quoted items like symbols:
