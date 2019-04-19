@@ -63,6 +63,7 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
     nonbot = 0  # the index of the only non-Bottom inference result if > 0
     seen = 0    # number of signatures actually inferred
     istoplevel = sv.linfo.def isa Module
+    multiple_matches = napplicable > 1
     for i in 1:napplicable
         match = applicable[i]::SimpleVector
         method = match[3]::Method
@@ -80,7 +81,7 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
         if splitunions
             splitsigs = switchtupleunion(sig)
             for sig_n in splitsigs
-                rt, edgecycle1, edge = abstract_call_method(method, sig_n, svec(), sv)
+                rt, edgecycle1, edge = abstract_call_method(method, sig_n, svec(), multiple_matches, sv)
                 if edge !== nothing
                     push!(edges, edge)
                 end
@@ -89,7 +90,7 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
                 this_rt === Any && break
             end
         else
-            this_rt, edgecycle1, edge = abstract_call_method(method, sig, match[2]::SimpleVector, sv)
+            this_rt, edgecycle1, edge = abstract_call_method(method, sig, match[2]::SimpleVector, multiple_matches, sv)
             edgecycle |= edgecycle1::Bool
             if edge !== nothing
                 push!(edges, edge)
@@ -227,7 +228,7 @@ function abstract_call_method_with_const_args(@nospecialize(rettype), @nospecial
     return result
 end
 
-function abstract_call_method(method::Method, @nospecialize(sig), sparams::SimpleVector, sv::InferenceState)
+function abstract_call_method(method::Method, @nospecialize(sig), sparams::SimpleVector, hardlimit::Bool, sv::InferenceState)
     if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
         return Any, false, nothing
     end
@@ -266,30 +267,36 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
             inf_method2 = infstate.src.method_for_inference_limit_heuristics # limit only if user token match
             inf_method2 isa Method || (inf_method2 = nothing) # Union{Method, Nothing}
             if topmost === nothing && method2 === inf_method2
-                # inspect the parent of this edge,
-                # to see if they are the same Method as sv
-                # in which case we'll need to ensure it is convergent
-                # otherwise, we don't
-                for parent in infstate.callers_in_cycle
-                    # check in the cycle list first
-                    # all items in here are mutual parents of all others
-                    parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
-                    parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
-                    if parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
-                        topmost = infstate
-                        edgecycle = true
-                        break
-                    end
-                end
-                let parent = infstate.parent
-                    # then check the parent link
-                    if topmost === nothing && parent !== nothing
-                        parent = parent::InferenceState
+                if hardlimit
+                    topmost = infstate
+                    edgecycle = true
+                else
+                    # if this is a soft limit,
+                    # also inspect the parent of this edge,
+                    # to see if they are the same Method as sv
+                    # in which case we'll need to ensure it is convergent
+                    # otherwise, we don't
+                    for parent in infstate.callers_in_cycle
+                        # check in the cycle list first
+                        # all items in here are mutual parents of all others
                         parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
                         parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
-                        if (parent.cached || parent.limited) && parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
+                        if parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
                             topmost = infstate
                             edgecycle = true
+                            break
+                        end
+                    end
+                    let parent = infstate.parent
+                        # then check the parent link
+                        if topmost === nothing && parent !== nothing
+                            parent = parent::InferenceState
+                            parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
+                            parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
+                            if (parent.cached || parent.limited) && parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
+                                topmost = infstate
+                                edgecycle = true
+                            end
                         end
                     end
                 end
@@ -321,7 +328,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
             comparison = method.sig
         end
         # see if the type is actually too big (relative to the caller), and limit it if required
-        newsig = limit_type_size(sig, comparison, sv.linfo.specTypes, sv.params.TUPLE_COMPLEXITY_LIMIT_DEPTH, spec_len)
+        newsig = limit_type_size(sig, comparison, hardlimit ? comparison : sv.linfo.specTypes, sv.params.TUPLE_COMPLEXITY_LIMIT_DEPTH, spec_len)
 
         if newsig !== sig
             # continue inference, but note that we've limited parameter complexity
