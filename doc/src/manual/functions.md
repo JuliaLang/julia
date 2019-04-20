@@ -347,7 +347,7 @@ not work.
 
 It is often convenient to be able to write functions taking an arbitrary number of arguments.
 Such functions are traditionally known as "varargs" functions, which is short for "variable number
-of arguments". You can define a varargs function by following the last argument with an ellipsis:
+of arguments". You can define a varargs function by following the last non-keyword argument with an ellipsis:
 
 ```jldoctest barfunc
 julia> bar(a,b,x...) = (a,b,x)
@@ -524,6 +524,14 @@ only for passing varargs or computed keywords as described below.
 Keyword argument default values are evaluated only when necessary (when a corresponding keyword
 argument is not passed), and in left-to-right order. Therefore default expressions may refer to
 prior keyword arguments.
+
+Keyword arguments can also be used in varargs functions:
+
+```julia
+function plot(x... ; style="solid")
+    ###
+end
+```
 
 The types of keyword arguments can be made explicit as follows:
 
