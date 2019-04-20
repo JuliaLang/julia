@@ -36,7 +36,7 @@ mul_prod(x::Real, y::Real)::Real = x * y
 
 ## foldl && mapfoldl
 
-@noinline function mapfoldl_impl(f, op, nt::NamedTuple{(:init,)}, itr, i...)
+function mapfoldl_impl(f, op, nt::NamedTuple{(:init,)}, itr, i...)
     init = nt.init
     # Unroll the while loop once; if init is known, the call to op may
     # be evaluated at compile time
@@ -96,10 +96,11 @@ mapfoldr_impl(f, op, nt::NamedTuple{(:init,)}, ritr, i...) =
 
 # we can't just call mapfoldl_impl with (x,y) -> op(y,x), because
 # we need to use the type of op for mapreduce_empty_iter and mapreduce_first.
-function mapfoldr_impl(f, op, nt::NamedTuple{()}, ritr)
+function mapfoldr_impl(f, op, nt::NamedTuple{()}, itr)
+    ritr = Iterators.reverse(itr)
     y = iterate(ritr)
     if y === nothing
-        return Base.mapreduce_empty_iter(f, op, ritr, IteratorEltype(ritr))
+        return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
     (x, i) = y
     init = mapreduce_first(f, op, x)
@@ -113,7 +114,7 @@ Like [`mapreduce`](@ref), but with guaranteed right associativity, as in [`foldr
 provided, the keyword argument `init` will be used exactly once. In general, it will be
 necessary to provide `init` to work with empty collections.
 """
-mapfoldr(f, op, itr; kw...) = mapfoldr_impl(f, op, kw.data, Iterators.reverse(itr))
+mapfoldr(f, op, itr; kw...) = mapfoldr_impl(f, op, kw.data, itr)
 
 
 """
