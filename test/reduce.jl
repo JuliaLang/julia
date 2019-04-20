@@ -31,7 +31,7 @@ using .Main.OffsetArrays
 @test Base.mapfoldr(abs2, -, 2:5) == -14
 @test Base.mapfoldr(abs2, -, 2:5; init=10) == -4
 
-@test foldr((x, y) -> ('⟨' * x * '|' * y * '⟩'), "⟨λ|⟨ |⟨x|⟨.|y⟩⟩⟩⟩" # issue #31780
+@test foldr((x, y) -> ('⟨' * x * '|' * y * '⟩'), "λ 🐨.α") == "⟨λ|⟨ |⟨🐨|⟨.|α⟩⟩⟩⟩" # issue #31780
 
 # reduce
 @test reduce(+, Int64[]) === Int64(0) # In reference to issue #20144 (PR #20160)
