@@ -246,21 +246,24 @@ IOBuffer(s::SubString{String}) = IOBuffer(view(unsafe_wrap(Vector{UInt8}, s.stri
 # join is implemented using IO
 
 """
-    join([io::IO,] strings, delim, [last])
+    join([io::IO,] strings [, delim [, last]])
 
-Join an array of `strings` into a single string, inserting the given delimiter between
+Join an array of `strings` into a single string, inserting the given delimiter (if any) between
 adjacent strings. If `last` is given, it will be used instead of `delim` between the last
 two strings. If `io` is given, the result is written to `io` rather than returned as
 as a `String`.
+
+`strings` can be any iterable over elements `x` which are convertible to strings
+via `print(io::IOBuffer, x)`. `strings` will be printed to `io`.
 
 # Examples
 ```jldoctest
 julia> join(["apples", "bananas", "pineapples"], ", ", " and ")
 "apples, bananas and pineapples"
-```
 
-`strings` can be any iterable over elements `x` which are convertible to strings
-via `print(io::IOBuffer, x)`. `strings` will be printed to `io`.
+julia> join([1,2,3,4,5])
+"12345"
+```
 """
 function join(io::IO, strings, delim, last)
     first = true
