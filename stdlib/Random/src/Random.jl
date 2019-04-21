@@ -137,6 +137,23 @@ const Repetition = Union{Val{1},Val{Inf}}
 # Sampler(::AbstractRNG, X, ::Val{Inf}) = Sampler(X)
 # Sampler(::AbstractRNG, ::Type{X}, ::Val{Inf}) where {X} = Sampler(X)
 
+"""
+    Sampler(rng, x, repetition = Val(Inf))
+
+Return a sampler object that can be used to generate random values from `rng` for `x`.
+
+When `s = Sampler(rng, x, repetition)`, `rand(rng, s)` will be used to draw random values,
+and should be defined accordingly.
+
+`repetition` can be `Val(1)` or `Val(Inf)`, and should be used as a suggestion for deciding
+the amount of precomputation, if applicable.
+
+[`Random.SamplerType`](@ref) and [`Random.SamplerTrivial`](@ref) are default fallbacks for
+*types* and *values*, respectively. [`Random.SamplerSimple`](@ref) can be used to store
+pre-computed values without defining extra types for only this purpose.
+
+See also [`Random.gentype`](@ref), which should be defined for `typeof(x)`.
+"""
 Sampler(rng::AbstractRNG, x, r::Repetition=Val(Inf)) = Sampler(typeof(rng), x, r)
 Sampler(rng::AbstractRNG, ::Type{X}, r::Repetition=Val(Inf)) where {X} = Sampler(typeof(rng), X, r)
 
@@ -149,18 +166,30 @@ Sampler(::Type{RNG}, ::Type{X}) where {RNG<:AbstractRNG,X} = Sampler(RNG, X, Val
 
 #### pre-defined useful Sampler types
 
-# default fall-back for types
+"""
+    SamplerType{T}()
+
+A sampler for types, containing no other information. The default fallback for `Sampler`
+when called with types. `Random.gentype` is not used.
+"""
 struct SamplerType{T} <: Sampler{T} end
 
 Sampler(::Type{<:AbstractRNG}, ::Type{T}, ::Repetition) where {T} = SamplerType{T}()
 
 Base.getindex(::SamplerType{T}) where {T} = T
 
-# default fall-back for values
 struct SamplerTrivial{T,E} <: Sampler{E}
     self::T
 end
 
+"""
+    SamplerTrivial(x)
+
+Create a sampler that just wraps the given value `x`, with the type information from
+`Random.gentype(x)` (which should be defined).
+
+The recommended use case is sampling from values without precomputed data.
+"""
 SamplerTrivial(x::T) where {T} = SamplerTrivial{T,gentype(T)}(x)
 
 Sampler(::Type{<:AbstractRNG}, x, ::Repetition) = SamplerTrivial(x)
@@ -173,6 +202,15 @@ struct SamplerSimple{T,S,E} <: Sampler{E}
     data::S
 end
 
+"""
+    SamplerSimple(x, data)
+
+Create a sampler that wraps the given value `x` and the `data`, with the type information
+from `Random.gentype(x)` (which should be defined). This is the default fall-back for
+values.
+
+The recommended use case is sampling from values with precomputed data.
+"""
 SamplerSimple(x::T, data::S) where {T,S} = SamplerSimple{T,S,gentype(T)}(x, data)
 
 Base.getindex(sp::SamplerSimple) = sp.self
