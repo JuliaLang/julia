@@ -91,8 +91,8 @@ foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
 
 ## foldr & mapfoldr
 
-mapfoldr_impl(f, op, nt::NamedTuple{(:init,)}, itr, i...) =
-    mapfoldl_impl(f, (x,y) -> op(y,x), nt, Iterators.reverse(itr), i...)
+mapfoldr_impl(f, op, nt::NamedTuple{(:init,)}, itr) =
+    mapfoldl_impl(f, (x,y) -> op(y,x), nt, Iterators.reverse(itr))
 
 # we can't just call mapfoldl_impl with (x,y) -> op(y,x), because
 # we need to use the type of op for mapreduce_empty_iter and mapreduce_first.
@@ -104,7 +104,7 @@ function mapfoldr_impl(f, op, nt::NamedTuple{()}, itr)
     end
     (x, i) = y
     init = mapreduce_first(f, op, x)
-    return mapfoldr_impl(f, op, (init=init,), ritr, i)
+    return mapfoldl_impl(f, (x,y) -> op(y,x), (init=init,), ritr, i)
 end
 
 """
