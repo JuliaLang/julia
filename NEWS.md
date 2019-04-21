@@ -39,7 +39,7 @@ Standard library changes
 
 #### Miscellaneous
 
-
+* `foldr` and `mapfoldr` now work on any iterator that supports `Iterators.reverse`, not just arrays ([#31781]).
 
 External dependencies
 ---------------------
