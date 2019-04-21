@@ -56,7 +56,7 @@ function mapfoldl_impl(f, op, nt::NamedTuple{()}, itr)
     if y === nothing
         return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
-    (x, i) = y
+    x, i = y
     init = mapreduce_first(f, op, x)
     return mapfoldl_impl(f, op, (init=init,), itr, i)
 end
@@ -102,7 +102,7 @@ function mapfoldr_impl(f, op, nt::NamedTuple{()}, itr)
     if y === nothing
         return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
-    (x, i) = y
+    x, i = y
     init = mapreduce_first(f, op, x)
     return mapfoldl_impl(f, (x,y) -> op(y,x), (init=init,), ritr, i)
 end
