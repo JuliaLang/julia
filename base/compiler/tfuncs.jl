@@ -1020,7 +1020,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
                 end
             else
                 if !isType(ai)
-                    if !isa(ai, Type) || typeintersect(ai, Type) !== Bottom
+                    if !isa(ai, Type) || typeintersect(ai, Type) !== Bottom || typeintersect(ai, TypeVar) !== Bottom
                         hasnonType = true
                     else
                         return Bottom
