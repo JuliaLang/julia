@@ -12,10 +12,15 @@
 		DC69B3EC226152320004C981 /* ExecSandbox.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = DC69B3E1226152320004C981 /* ExecSandbox.xpc */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		DC69B3F322628ABC0004C981 /* ExecSandboxProtocol.m in Sources */ = {isa = PBXBuildFile; fileRef = DC69B3F222628ABC0004C981 /* ExecSandboxProtocol.m */; };
 		DC69B3F422628ABC0004C981 /* ExecSandboxProtocol.m in Sources */ = {isa = PBXBuildFile; fileRef = DC69B3F222628ABC0004C981 /* ExecSandboxProtocol.m */; };
+		DCB785BE2269752E00BC3942 /* VariantViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = DCF55ABB22693B3C004BC248 /* VariantViewController.m */; };
+		DCB785BF226975B200BC3942 /* VariantViewController.xib in Resources */ = {isa = PBXBuildFile; fileRef = DCB785C1226975B200BC3942 /* VariantViewController.xib */; };
 		DCECD36721B6461B0099A8C3 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = DCECD36621B6461B0099A8C3 /* AppDelegate.m */; };
 		DCECD36921B6461C0099A8C3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DCECD36821B6461C0099A8C3 /* Assets.xcassets */; };
 		DCECD36C21B6461C0099A8C3 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = DCECD36A21B6461C0099A8C3 /* MainMenu.xib */; };
 		DCECD36F21B6461C0099A8C3 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = DCECD36E21B6461C0099A8C3 /* main.m */; };
+		DCF55AC122694ADF004BC248 /* JuliaVariant.m in Sources */ = {isa = PBXBuildFile; fileRef = DCF55AC022694ADF004BC248 /* JuliaVariant.m */; };
+		DCF55AC422694B3F004BC248 /* ExecSandbox.m in Sources */ = {isa = PBXBuildFile; fileRef = DCF55AC322694B3F004BC248 /* ExecSandbox.m */; };
+		DCF55AC722694C10004BC248 /* JuliaServiceController.m in Sources */ = {isa = PBXBuildFile; fileRef = DCF55AC622694C10004BC248 /* JuliaServiceController.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -40,6 +45,16 @@
 			name = "Embed XPC Services";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DCF55ACE22697080004BC248 /* Embed PlugIns */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+			);
+			name = "Embed PlugIns";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -51,6 +66,7 @@
 		DC69B3E9226152320004C981 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		DC69B3F1226152410004C981 /* ExecSandbox.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ExecSandbox.entitlements; sourceTree = "<group>"; };
 		DC69B3F222628ABC0004C981 /* ExecSandboxProtocol.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ExecSandboxProtocol.m; sourceTree = "<group>"; };
+		DCB785C0226975B200BC3942 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/VariantViewController.xib; sourceTree = "<group>"; };
 		DCECD36221B6461B0099A8C3 /* Julia.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Julia.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCECD36521B6461B0099A8C3 /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
 		DCECD36621B6461B0099A8C3 /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
@@ -59,6 +75,14 @@
 		DCECD36D21B6461C0099A8C3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		DCECD36E21B6461C0099A8C3 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		DCECD37021B6461C0099A8C3 /* JuliaLauncher.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = JuliaLauncher.entitlements; sourceTree = "<group>"; };
+		DCF55ABA22693B3C004BC248 /* VariantViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = VariantViewController.h; sourceTree = "<group>"; };
+		DCF55ABB22693B3C004BC248 /* VariantViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = VariantViewController.m; sourceTree = "<group>"; };
+		DCF55ABF22694ADF004BC248 /* JuliaVariant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JuliaVariant.h; sourceTree = "<group>"; };
+		DCF55AC022694ADF004BC248 /* JuliaVariant.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JuliaVariant.m; sourceTree = "<group>"; };
+		DCF55AC222694B3F004BC248 /* ExecSandbox.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ExecSandbox.h; sourceTree = "<group>"; };
+		DCF55AC322694B3F004BC248 /* ExecSandbox.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ExecSandbox.m; sourceTree = "<group>"; };
+		DCF55AC522694C10004BC248 /* JuliaServiceController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JuliaServiceController.h; sourceTree = "<group>"; };
+		DCF55AC622694C10004BC248 /* JuliaServiceController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JuliaServiceController.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -117,6 +141,15 @@
 				DCECD36E21B6461C0099A8C3 /* main.m */,
 				DCECD36521B6461B0099A8C3 /* AppDelegate.h */,
 				DCECD36621B6461B0099A8C3 /* AppDelegate.m */,
+				DCF55ABF22694ADF004BC248 /* JuliaVariant.h */,
+				DCF55AC022694ADF004BC248 /* JuliaVariant.m */,
+				DCF55AC222694B3F004BC248 /* ExecSandbox.h */,
+				DCF55AC322694B3F004BC248 /* ExecSandbox.m */,
+				DCF55AC522694C10004BC248 /* JuliaServiceController.h */,
+				DCF55AC622694C10004BC248 /* JuliaServiceController.m */,
+				DCF55ABA22693B3C004BC248 /* VariantViewController.h */,
+				DCF55ABB22693B3C004BC248 /* VariantViewController.m */,
+				DCB785C1226975B200BC3942 /* VariantViewController.xib */,
 				DCECD36821B6461C0099A8C3 /* Assets.xcassets */,
 				DCECD36A21B6461C0099A8C3 /* MainMenu.xib */,
 				DCECD36D21B6461C0099A8C3 /* Info.plist */,
@@ -153,6 +186,7 @@
 				DCECD35F21B6461B0099A8C3 /* Frameworks */,
 				DCECD36021B6461B0099A8C3 /* Resources */,
 				DC69B3F0226152320004C981 /* Embed XPC Services */,
+				DCF55ACE22697080004BC248 /* Embed PlugIns */,
 			);
 			buildRules = (
 			);
@@ -230,6 +264,7 @@
 			files = (
 				DCECD36921B6461C0099A8C3 /* Assets.xcassets in Resources */,
 				DCECD36C21B6461C0099A8C3 /* MainMenu.xib in Resources */,
+				DCB785BF226975B200BC3942 /* VariantViewController.xib in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -250,9 +285,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DCF55AC422694B3F004BC248 /* ExecSandbox.m in Sources */,
+				DCF55AC722694C10004BC248 /* JuliaServiceController.m in Sources */,
 				DCECD36F21B6461C0099A8C3 /* main.m in Sources */,
 				DCECD36721B6461B0099A8C3 /* AppDelegate.m in Sources */,
 				DC69B3F322628ABC0004C981 /* ExecSandboxProtocol.m in Sources */,
+				DCB785BE2269752E00BC3942 /* VariantViewController.m in Sources */,
+				DCF55AC122694ADF004BC248 /* JuliaVariant.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -267,6 +306,14 @@
 /* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
+		DCB785C1226975B200BC3942 /* VariantViewController.xib */ = {
+			isa = PBXVariantGroup;
+			children = (
+				DCB785C0226975B200BC3942 /* Base */,
+			);
+			name = VariantViewController.xib;
+			sourceTree = "<group>";
+		};
 		DCECD36A21B6461C0099A8C3 /* MainMenu.xib */ = {
 			isa = PBXVariantGroup;
 			children = (
@@ -337,6 +384,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_IDENTITY = "-";
+				COMBINE_HIDPI_IMAGES = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -396,6 +444,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_IDENTITY = "-";
+				COMBINE_HIDPI_IMAGES = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;

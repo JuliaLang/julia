@@ -32,12 +32,14 @@
   return self;
 }
 
-- (void)launch:(void (^_Nullable)(int status))onTermination {
+- (void)launch:(void (^_Nullable)(int status, BOOL crashed))onTermination {
   dispatch_block_t onCleanup = _onCleanup;
   JuliaTask __weak *weakSelf = self;
   _task.terminationHandler = ^(NSTask *_Nonnull t) {
     if (onTermination != nil) {
-      onTermination(t.terminationStatus);
+      onTermination(t.terminationStatus,
+                    t.terminationReason ==
+                        NSTaskTerminationReasonUncaughtSignal);
     }
     if (onCleanup != nil) {
       onCleanup();
@@ -81,26 +83,43 @@
          task:(void (^)(id<TaskProtocol> task, NSFileHandle *stdIn,
                         NSFileHandle *stdOut, NSFileHandle *stdErr))reply {
 
+  NSError *error = nil;
   NSURL *executableURL =
       [NSURL URLByResolvingBookmarkData:executableBookmark
                                 options:NSURLBookmarkResolutionWithoutUI
                           relativeToURL:nil
                     bookmarkDataIsStale:nil
-                                  error:nil];
+                                  error:&error];
   if (executableURL == nil) {
     reply(nil, nil, nil, nil);
+    NSLog(@"Failed resolving executable bookmark. %@", error);
     return;
   }
 
   for (NSString *arg in baseArgs) {
-    if ([arg isEqual:@"--"]) {
+    if ([arg isEqualToString:@"--"]) {
       reply(nil, nil, nil, nil);
+      NSLog(@"Arguments cannot contain '--'.");
       return;
     }
   }
 
   NSURL *temporaryDirectoryURL = [NSURL fileURLWithPath:NSTemporaryDirectory()
                                             isDirectory:YES];
+  temporaryDirectoryURL = [temporaryDirectoryURL
+      URLByAppendingPathComponent:[[NSProcessInfo processInfo]
+                                      globallyUniqueString]
+                      isDirectory:true];
+  if (!
+      [[NSFileManager defaultManager] createDirectoryAtURL:temporaryDirectoryURL
+                               withIntermediateDirectories:YES
+                                                attributes:nil
+                                                     error:&error]) {
+    NSLog(@"Failed creating temporary directory %@\n%@", temporaryDirectoryURL,
+          error);
+    return;
+  }
+
   NSString *temporaryFilename =
       [[NSProcessInfo processInfo] globallyUniqueString];
   NSURL *temporaryFileURL =
@@ -127,7 +146,7 @@
   if (@available(macOS 10.13, *)) {
     t.currentDirectoryURL = temporaryDirectoryURL;
   } else {
-    t.currentDirectoryPath = temporaryFileURL.path;
+    t.currentDirectoryPath = temporaryDirectoryURL.path;
   }
   t.standardInput = stdIn;
   t.standardOutput = stdOut;

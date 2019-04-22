@@ -651,6 +651,13 @@
                                     <action selector="performZoom:" target="-1" id="DIl-cC-cCs"/>
                                 </connections>
                             </menuItem>
+                            <menuItem isSeparatorItem="YES" id="5uk-Ln-jFF"/>
+                            <menuItem title="Version Manager" keyEquivalent="0" id="ex3-gA-ZBz">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                <connections>
+                                    <action selector="showVersionManager:" target="Voe-Tx-rLC" id="luL-gz-LTV"/>
+                                </connections>
+                            </menuItem>
                             <menuItem isSeparatorItem="YES" id="eu3-7i-yIM"/>
                             <menuItem title="Bring All to Front" id="LE2-aR-0XJ">
                                 <modifierMask key="keyEquivalentModifierMask"/>
