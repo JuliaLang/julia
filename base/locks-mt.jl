@@ -104,7 +104,7 @@ function mutex_destroy(x::Mutex)
 end
 
 function lock(m::Mutex)
-    m.ownertid == threadid() && error("concurrency violation detected") # deadlock
+    m.ownertid == threadid() && concurrency_violation() # deadlock
     # Temporary solution before we have gc transition support in codegen.
     # This could mess up gc state when we add codegen support.
     gc_state = ccall(:jl_gc_safe_enter, Int8, ())
@@ -115,7 +115,7 @@ function lock(m::Mutex)
 end
 
 function trylock(m::Mutex)
-    m.ownertid == threadid() && error("concurrency violation detected") # deadlock
+    m.ownertid == threadid() && concurrency_violation() # deadlock
     r = ccall(:uv_mutex_trylock, Cint, (Ptr{Cvoid},), m)
     if r == 0
         m.ownertid = threadid()
@@ -124,7 +124,7 @@ function trylock(m::Mutex)
 end
 
 function unlock(m::Mutex)
-    m.ownertid == threadid() || error("concurrency violation detected")
+    m.ownertid == threadid() || concurrency_violation()
     m.ownertid = 0
     ccall(:uv_mutex_unlock, Cvoid, (Ptr{Cvoid},), m)
     return

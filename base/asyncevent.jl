@@ -13,11 +13,11 @@ Use [`isopen`](@ref) to check whether it is still active.
 """
 mutable struct AsyncCondition
     handle::Ptr{Cvoid}
-    cond::Condition
+    cond::ThreadSynchronizer
     isopen::Bool
 
     function AsyncCondition()
-        this = new(Libc.malloc(_sizeof_uv_async), Condition(), true)
+        this = new(Libc.malloc(_sizeof_uv_async), ThreadSynchronizer(), true)
         associate_julia_struct(this.handle, this)
         finalizer(uvfinalize, this)
         err = ccall(:uv_async_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
@@ -41,14 +41,22 @@ the async condition object itself.
 function AsyncCondition(cb::Function)
     async = AsyncCondition()
     waiter = Task(function()
-        while isopen(async)
-            success = try
-                wait(async)
-                true
-            catch exc # ignore possible exception on close()
-                isa(exc, EOFError) || rethrow()
+        lock(async.cond)
+        try
+            while isopen(async)
+                success = try
+                    stream_wait(async, async.cond)
+                    true
+                catch exc # ignore possible exception on close()
+                    isa(exc, EOFError) || rethrow()
+                finally
+                    unlock(async.cond)
+                end
+                success && cb(async)
+                lock(async.cond)
             end
-            success && cb(async)
+        finally
+            unlock(async.cond)
         end
     end)
     # must start the task right away so that it can wait for the AsyncCondition before
@@ -71,14 +79,14 @@ to check whether a timer is still active.
 """
 mutable struct Timer
     handle::Ptr{Cvoid}
-    cond::Condition
+    cond::ThreadSynchronizer
     isopen::Bool
 
     function Timer(timeout::Real; interval::Real = 0.0)
         timeout ≥ 0 || throw(ArgumentError("timer cannot have negative timeout of $timeout seconds"))
         interval ≥ 0 || throw(ArgumentError("timer cannot have negative repeat interval of $interval seconds"))
 
-        this = new(Libc.malloc(_sizeof_uv_timer), Condition(), true)
+        this = new(Libc.malloc(_sizeof_uv_timer), ThreadSynchronizer(), true)
         err = ccall(:uv_timer_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}), eventloop(), this)
         if err != 0
             #TODO: this codepath is currently not tested
@@ -102,8 +110,13 @@ unsafe_convert(::Type{Ptr{Cvoid}}, t::Timer) = t.handle
 unsafe_convert(::Type{Ptr{Cvoid}}, async::AsyncCondition) = async.handle
 
 function wait(t::Union{Timer, AsyncCondition})
-    isopen(t) || throw(EOFError())
-    stream_wait(t, t.cond)
+    lock(t.cond)
+    try
+        isopen(t) || throw(EOFError())
+        stream_wait(t, t.cond)
+    finally
+        unlock(t.cond)
+    end
 end
 
 isopen(t::Union{Timer, AsyncCondition}) = t.isopen
@@ -128,24 +141,39 @@ function uvfinalize(t::Union{Timer, AsyncCondition})
 end
 
 function _uv_hook_close(t::Union{Timer, AsyncCondition})
-    uvfinalize(t)
-    notify_error(t.cond, EOFError())
+    lock(t.cond)
+    try
+        uvfinalize(t)
+        notify_error(t.cond, EOFError())
+    finally
+        unlock(t.cond)
+    end
     nothing
 end
 
 function uv_asynccb(handle::Ptr{Cvoid})
     async = @handle_as handle AsyncCondition
-    notify(async.cond)
+    lock(async.cond)
+    try
+        notify(async.cond)
+    finally
+        unlock(async.cond)
+    end
     nothing
 end
 
 function uv_timercb(handle::Ptr{Cvoid})
     t = @handle_as handle Timer
-    if ccall(:uv_timer_get_repeat, UInt64, (Ptr{Cvoid},), t) == 0
-        # timer is stopped now
-        close(t)
+    lock(t.cond)
+    try
+        if ccall(:uv_timer_get_repeat, UInt64, (Ptr{Cvoid},), t) == 0
+            # timer is stopped now
+            close(t)
+        end
+        notify(t.cond)
+    finally
+        unlock(t.cond)
     end
-    notify(t.cond)
     nothing
 end
 
