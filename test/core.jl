@@ -227,8 +227,8 @@ let ft = Base.datatype_fieldtypes
     @test ft(elT2.body)[1].parameters[1] === elT2
     @test Base.isconcretetype(ft(elT2.body)[1])
 end
-struct S22624{A,B,C} <: Ref{S22624{Int64,A}}; end
-@test @isdefined S22624
+#struct S22624{A,B,C} <: Ref{S22624{Int64,A}}; end
+@test_broken @isdefined S22624
 
 # issue #3890
 mutable struct A3890{T1}
