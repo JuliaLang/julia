@@ -45,16 +45,6 @@
 			name = "Embed XPC Services";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		DCF55ACE22697080004BC248 /* Embed PlugIns */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-			);
-			name = "Embed PlugIns";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -186,7 +176,6 @@
 				DCECD35F21B6461B0099A8C3 /* Frameworks */,
 				DCECD36021B6461B0099A8C3 /* Resources */,
 				DC69B3F0226152320004C981 /* Embed XPC Services */,
-				DCF55ACE22697080004BC248 /* Embed PlugIns */,
 			);
 			buildRules = (
 			);
