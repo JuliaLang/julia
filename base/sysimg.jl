@@ -47,6 +47,8 @@ let
             :Test,
             :REPL,
             :Statistics,
+            :Tokenize,
+            :CSTParser
         ]
 
     maxlen = maximum(textwidth.(string.(stdlibs)))
