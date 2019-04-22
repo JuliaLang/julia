@@ -6915,3 +6915,10 @@ TupleOf31406(cols::Union{Shape31406,Type}...) = TupleOf31406(collect(Shape31406,
         end
         true
     end
+
+# Issue #31783
+struct LL31783{T}
+    x::T
+end
+foo31783(tv::TypeVar) = tv.ub == Any ? Union{tv,LL31783{tv}} : tv
+@test isa(foo31783(TypeVar(:T)),Union)
