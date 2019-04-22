@@ -1,0 +1,6 @@
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+*.junk.jl
+.vscode
+*.ignore.*

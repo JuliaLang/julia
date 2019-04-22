@@ -1,0 +1,15 @@
+language: julia
+os:
+  - linux
+  - osx
+julia:
+  - 1.0
+  - 1.1
+  - nightly
+notifications:
+  email: false
+matrix:
+  allow_failures:
+  - julia: nightly
+after_success:
+  - julia -e 'using Pkg; cd(Pkg.dir("CSTParser")); Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder())'
