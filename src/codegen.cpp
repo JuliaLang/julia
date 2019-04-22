@@ -298,6 +298,7 @@ static Function *jl_write_barrier_func;
 static Function *jlisa_func;
 static Function *jlsubtype_func;
 static Function *jlapplytype_func;
+static Function *jl_object_id__func;
 static Function *setjmp_func;
 static Function *memcmp_derived_func;
 static Function *box_int8_func;
@@ -7433,6 +7434,15 @@ static void init_julia_llvm_env(Module *m)
                          "jl_instantiate_type_in_env", m);
     add_return_attr(jlapplytype_func, Attribute::NonNull);
     add_named_global(jlapplytype_func, &jl_instantiate_type_in_env);
+
+    std::vector<Type *> objectid__args(0);
+    objectid__args.push_back(T_prjlvalue);
+    objectid__args.push_back(T_pint8_derived);
+    jl_object_id__func =
+        Function::Create(FunctionType::get(T_size, objectid__args, false),
+                         Function::ExternalLinkage,
+                         "jl_object_id_", m);
+    add_named_global(jl_object_id__func, &jl_object_id_);
 
     std::vector<Type*> gc_alloc_args(0);
     gc_alloc_args.push_back(T_pint8);
