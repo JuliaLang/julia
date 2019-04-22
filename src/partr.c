@@ -253,6 +253,8 @@ static jl_task_t *get_next_task(jl_value_t *getsticky)
 JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
+    // spin briefly before blocking when the workqueue is empty
+    size_t spin_count = 0;
     jl_task_t *task;
 
     while (1) {
@@ -262,6 +264,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
             return task;
 
         if (!_threadedregion) {
+            spin_count = 0;
             if (ptls->tid == 0) {
                 if (jl_run_once(jl_global_event_loop()) == 0) {
                     task = get_next_task(getsticky);
@@ -292,7 +295,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
             }
         }
         else {
-            if (jl_atomic_load(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
+            if (++spin_count > 1000 && jl_atomic_load(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
                 task = get_next_task(getsticky);
                 if (task) {
                     JL_UV_UNLOCK();

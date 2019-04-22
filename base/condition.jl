@@ -2,6 +2,12 @@
 
 ## thread/task locking abstraction
 
+@noinline function concurrency_violation()
+    # can be useful for debugging
+    #try; error(); catch; ccall(:jlbacktrace, Cvoid, ()); end
+    error("concurrency violation detected")
+end
+
 """
     AbstractLock
 
@@ -18,10 +24,10 @@ unlockall(l::AbstractLock) = unlock(l) # internal function for implementing `wai
 relockall(l::AbstractLock, token::Nothing) = lock(l) # internal function for implementing `wait`
 assert_havelock(l::AbstractLock) = assert_havelock(l, Threads.threadid())
 assert_havelock(l::AbstractLock, tid::Integer) =
-    (islocked(l) && tid == Threads.threadid()) ? nothing : error("concurrency violation detected")
+    (islocked(l) && tid == Threads.threadid()) ? nothing : concurrency_violation()
 assert_havelock(l::AbstractLock, tid::Task) =
-    (islocked(l) && tid === current_task()) ? nothing : error("concurrency violation detected")
-assert_havelock(l::AbstractLock, tid::Nothing) = error("concurrency violation detected")
+    (islocked(l) && tid === current_task()) ? nothing : concurrency_violation()
+assert_havelock(l::AbstractLock, tid::Nothing) = concurrency_violation()
 
 """
     AlwaysLockedST
