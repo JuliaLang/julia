@@ -133,8 +133,8 @@ import Base: lowerbound, upperbound
 @test upperbound(v"4.3.2+") == v"4.3.2+"
 
 # advanced comparison & manipulation
-import Base: thispatch, thisminor, thismajor,
-             nextpatch, nextminor, nextmajor
+import Base: thispatch, thisminor, thismajor
+
 @test v"1.2.3" == thispatch(v"1.2.3-")
 @test v"1.2.3" == thispatch(v"1.2.3-pre")
 @test v"1.2.3" == thispatch(v"1.2.3")
@@ -153,42 +153,6 @@ import Base: thispatch, thisminor, thismajor,
 @test v"1" == thismajor(v"1.2.3+post")
 @test v"1" == thismajor(v"1.2.3+")
 
-@test v"1.2.3" == nextpatch(v"1.2.3-")
-@test v"1.2.3" == nextpatch(v"1.2.3-pre")
-@test v"1.2.4" == nextpatch(v"1.2.3")
-@test v"1.2.4" == nextpatch(v"1.2.3+post")
-@test v"1.2.4" == nextpatch(v"1.2.3+")
-
-@test v"1.2" == nextminor(v"1.2-")
-@test v"1.2" == nextminor(v"1.2-pre")
-@test v"1.3" == nextminor(v"1.2")
-@test v"1.3" == nextminor(v"1.2+post")
-@test v"1.3" == nextminor(v"1.2+")
-
-@test v"1.3" == nextminor(v"1.2.3-")
-@test v"1.3" == nextminor(v"1.2.3-pre")
-@test v"1.3" == nextminor(v"1.2.3")
-@test v"1.3" == nextminor(v"1.2.3+post")
-@test v"1.3" == nextminor(v"1.2.3+")
-
-@test v"1" == nextmajor(v"1-")
-@test v"1" == nextmajor(v"1-pre")
-@test v"2" == nextmajor(v"1")
-@test v"2" == nextmajor(v"1+post")
-@test v"2" == nextmajor(v"1+")
-
-@test v"2" == nextmajor(v"1.2-")
-@test v"2" == nextmajor(v"1.2-pre")
-@test v"2" == nextmajor(v"1.2")
-@test v"2" == nextmajor(v"1.2+post")
-@test v"2" == nextmajor(v"1.2+")
-
-@test v"2" == nextmajor(v"1.2.3-")
-@test v"2" == nextmajor(v"1.2.3-pre")
-@test v"2" == nextmajor(v"1.2.3")
-@test v"2" == nextmajor(v"1.2.3+post")
-@test v"2" == nextmajor(v"1.2.3+")
-
 for major=0:3, minor=0:3, patch=0:3
     a = VersionNumber(major,minor,patch,("",),())
     b = VersionNumber(major,minor,patch,("pre",),())
@@ -200,10 +164,6 @@ for major=0:3, minor=0:3, patch=0:3
         @test thispatch(x) == VersionNumber(major,minor,patch)
         @test thisminor(x) == VersionNumber(major,minor,0)
         @test thismajor(x) == VersionNumber(major,0,0)
-        @test x < nextpatch(x) <= nextminor(x) <= nextmajor(x)
-        @test x < thispatch(x) ? nextpatch(x) == thispatch(x) : thispatch(x) < nextpatch(x)
-        @test x < thisminor(x) ? nextminor(x) == thisminor(x) : thisminor(x) < nextminor(x)
-        @test x < thismajor(x) ? nextmajor(x) == thismajor(x) : thismajor(x) < nextmajor(x)
     end
 end
 
