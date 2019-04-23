@@ -304,7 +304,7 @@ function diagm_container(size, kv::Pair{<:Integer,<:AbstractVector}...)
     return zeros(T, diagm_size(size, kv...)...)
 end
 diagm_container(size, kv::Pair{<:Integer,<:BitVector}...) =
-    return falses(diagm_size(size, kv...)...)
+    falses(diagm_size(size, kv...)...)
 
 """
     diagm(v::AbstractVector)
