@@ -200,9 +200,6 @@ function hash(v::VersionNumber, h::UInt)
     h = hash(v.build, ~h)
 end
 
-lowerbound(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch, ("",), ())
-upperbound(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch, (), ("",))
-
 ## julia version info
 
 """

@@ -123,15 +123,6 @@ VersionNumber(2, 3, 1) == VersionNumber(Int8(2), UInt32(3), Int32(1)) == v"2.3.1
 @test v"2.3.0" < v"2.3.1" < v"2.4.8" < v"3.7.2"
 @test v"0.6.0-" < v"0.6.0-dev" < v"0.6.0-dev.123" < v"0.6.0-dev.unknown" < v"0.6.0-pre" < v"0.6.0"
 
-#lowerbound and upperbound
-import Base: lowerbound, upperbound
-@test lowerbound(v"4.3.2") == v"4.3.2-"
-@test lowerbound(v"4.3.2-") == v"4.3.2-"
-@test lowerbound(v"4.3.2+") == v"4.3.2-"
-@test upperbound(v"4.3.2") == v"4.3.2+"
-@test upperbound(v"4.3.2-") == v"4.3.2+"
-@test upperbound(v"4.3.2+") == v"4.3.2+"
-
 # advanced comparison & manipulation
 for major=0:3, minor=0:3, patch=0:3
     a = VersionNumber(major,minor,patch,("",),())
