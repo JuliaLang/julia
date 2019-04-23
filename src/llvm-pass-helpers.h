@@ -18,7 +18,7 @@ namespace jl_intrinsics {
     // intrinsics and materialize new intrinsics if necessary.
     struct IntrinsicDescription final {
         // The type of function that defines a new intrinsic.
-        typedef llvm::Function *(*DefinitionFunction)(llvm::Module &M, const JuliaPassContext&);
+        typedef llvm::Function *(*DefinitionFunction)(llvm::Module&, const JuliaPassContext&);
 
         // Creates an intrinsic description with a particular
         // name and definition function.
@@ -61,15 +61,15 @@ struct JuliaPassContext {
     llvm::Function *typeof_func;
     llvm::Function *write_barrier_func;
 
-    // Creates a GC lowering refs structure. Type and function pointers
+    // Creates a pass context. Type and function pointers
     // are set to `nullptr`. Metadata nodes are initialized.
     JuliaPassContext();
 
-    // Populates a GC lowering refs structure by inspecting a module.
+    // Populates a pass context by inspecting a module.
     // Also sets the current module to the given module.
     void initAll(llvm::Module &M);
 
-    // Initializes a GC lowering refs structure's functions only.
+    // Initializes a pass context's functions only.
     // Also sets the current module to the given module.
     void initFunctions(llvm::Module &M);
 
@@ -99,6 +99,9 @@ namespace jl_intrinsics {
 
     // An intrinsic that pops a GC frame.
     extern const IntrinsicDescription popGCFrame;
+
+    // An intrinsic that creates a pointer to a GC frame slot.
+    extern const IntrinsicDescription getGCFrameSlot;
 }
 
 #endif

@@ -126,6 +126,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             PM->add(createLowerExcHandlersPass());
             PM->add(createGCInvariantVerifierPass(false));
             PM->add(createLateLowerGCFramePass());
+            PM->add(createFinalLowerGCPass());
             PM->add(createLowerPTLSPass(dump_native));
         }
         PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "loopinfo" as LLVM parallel loop
@@ -241,6 +242,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createLowerExcHandlersPass());
         PM->add(createGCInvariantVerifierPass(false));
         PM->add(createLateLowerGCFramePass());
+        PM->add(createFinalLowerGCPass());
         // Remove dead use of ptls
         PM->add(createDeadCodeEliminationPass());
         PM->add(createLowerPTLSPass(dump_native));

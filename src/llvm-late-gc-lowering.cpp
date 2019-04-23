@@ -345,8 +345,6 @@ private:
     State LocalScan(Function &F);
     void ComputeLiveness(State &S);
     void ComputeLiveSets(State &S);
-    void PushGCFrame(AllocaInst *gcframe, unsigned NRoots, Instruction *InsertAfter);
-    void PopGCFrame(AllocaInst *gcframe, Instruction *InsertBefore);
     std::vector<int> ColorRoots(const State &S);
     void PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame, Instruction *InsertionPoint);
     void PlaceGCFrameStores(State &S, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame);
@@ -354,7 +352,6 @@ private:
     bool doInitialization(Module &M) override;
     bool doFinalization(Module &) override;
     bool runOnFunction(Function &F) override;
-    Instruction *get_pgcstack(Instruction *ptlsStates);
     bool CleanupIR(Function &F, State *S=nullptr);
     void NoteUseChain(State &S, BBState &BBS, User *TheUser);
     SmallVector<int, 1> GetPHIRefinements(PHINode *phi, State &S);
@@ -1594,44 +1591,6 @@ std::vector<int> LateLowerGCFrame::ColorRoots(const State &S) {
     return Colors;
 }
 
-Instruction *LateLowerGCFrame::get_pgcstack(Instruction *ptlsStates)
-{
-    Constant *offset = ConstantInt::getSigned(T_int32, offsetof(jl_tls_states_t, pgcstack) / sizeof(void*));
-    return GetElementPtrInst::Create(nullptr,
-                                     ptlsStates,
-                                     ArrayRef<Value*>(offset),
-                                     "jl_pgcstack");
-}
-
-void LateLowerGCFrame::PushGCFrame(AllocaInst *gcframe, unsigned NRoots, Instruction *InsertAfter) {
-    IRBuilder<> builder(gcframe->getContext());
-    builder.SetInsertPoint(&*(++BasicBlock::iterator(InsertAfter)));
-    Instruction *inst =
-        builder.CreateStore(ConstantInt::get(T_size, NRoots << 1),
-                          builder.CreateBitCast(builder.CreateConstGEP1_32(gcframe, 0), T_size->getPointerTo()));
-    inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
-    Value *pgcstack = builder.Insert(get_pgcstack(ptlsStates));
-    inst = builder.CreateStore(builder.CreateLoad(pgcstack),
-                               builder.CreatePointerCast(builder.CreateConstGEP1_32(gcframe, 1), PointerType::get(T_ppjlvalue,0)));
-    inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
-    builder.CreateStore(gcframe, builder.CreateBitCast(pgcstack,
-        PointerType::get(PointerType::get(T_prjlvalue, 0), 0)));
-}
-
-void LateLowerGCFrame::PopGCFrame(AllocaInst *gcframe, Instruction *InsertBefore) {
-    IRBuilder<> builder(InsertBefore->getContext());
-    builder.SetInsertPoint(InsertBefore); // set insert *before* Ret
-    Instruction *gcpop =
-        (Instruction*)builder.CreateConstGEP1_32(gcframe, 1);
-    Instruction *inst = builder.CreateLoad(gcpop);
-    inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
-    inst = builder.CreateStore(inst,
-                               builder.CreateBitCast(
-                                 builder.Insert(get_pgcstack(ptlsStates)),
-                                 PointerType::get(T_prjlvalue, 0)));
-    inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
-}
-
 // Size of T is assumed to be `sizeof(void*)`
 Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Value *V)
 {
@@ -1901,18 +1860,21 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
                                          const std::vector<int> &Colors, Value *GCFrame,
                                          Instruction *InsertionPoint) {
     Value *Val = GetPtrForNumber(S, R, InsertionPoint);
-    Value *args[1] = {
-        ConstantInt::get(T_int32, Colors[R]+MinColorRoot)
-    };
-    GetElementPtrInst *gep = GetElementPtrInst::Create(T_prjlvalue, GCFrame, makeArrayRef(args));
-    gep->insertBefore(InsertionPoint);
+
+    // Get the slot address.
+    auto slotAddress = CallInst::Create(
+        getOrDefine(jl_intrinsics::getGCFrameSlot),
+        {GCFrame, ConstantInt::get(T_int32, Colors[R] + MinColorRoot)});
+
+    slotAddress->insertBefore(InsertionPoint);
+
     Val = MaybeExtractUnion(std::make_pair(Val, -1), InsertionPoint);
     // Pointee types don't have semantics, so the optimizer is
     // free to rewrite them if convenient. We need to change
     // it back here for the store.
     if (Val->getType() != T_prjlvalue)
         Val = new BitCastInst(Val, T_prjlvalue, "", InsertionPoint);
-    new StoreInst(Val, gep, InsertionPoint);
+    new StoreInst(Val, slotAddress, InsertionPoint);
 }
 
 void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
@@ -1949,43 +1911,28 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
     // Insert instructions for the actual gc frame
     if (MaxColor != -1 || S.Allocas.size() != 0) {
         unsigned NRoots = MaxColor + 1 + S.Allocas.size();
-        // Create GC Frame
-        AllocaInst *gcframe = new AllocaInst(T_prjlvalue, 0,
-            ConstantInt::get(T_int32, NRoots + 2), "gcframe");
+        // Create and push a GC frame.
+        auto gcframe = CallInst::Create(
+            getOrDefine(jl_intrinsics::newGCFrame),
+            {ConstantInt::get(T_int32, NRoots)},
+            "gcframe");
         gcframe->insertBefore(&*F->getEntryBlock().begin());
-        // Zero out gcframe
-        BitCastInst *tempSlot_i8 = new BitCastInst(gcframe, Type::getInt8PtrTy(F->getContext()), "");
-        tempSlot_i8->insertAfter(gcframe);
-        Type *argsT[2] = {tempSlot_i8->getType(), T_int32};
-        Function *memset = Intrinsic::getDeclaration(F->getParent(), Intrinsic::memset, makeArrayRef(argsT));
-#if JL_LLVM_VERSION >= 70000
-        Value *args[4] = {
-            tempSlot_i8, // dest
-            ConstantInt::get(Type::getInt8Ty(F->getContext()), 0), // val
-            ConstantInt::get(T_int32, sizeof(jl_value_t*)*(NRoots+2)), // len
-            ConstantInt::get(Type::getInt1Ty(F->getContext()), 0)}; // volatile
-#else
-        Value *args[5] = {
-            tempSlot_i8, // dest
-            ConstantInt::get(Type::getInt8Ty(F->getContext()), 0), // val
-            ConstantInt::get(T_int32, sizeof(jl_value_t*)*(NRoots+2)), // len
-            ConstantInt::get(T_int32, 0), // align
-            ConstantInt::get(Type::getInt1Ty(F->getContext()), 0)}; // volatile
-#endif
-        CallInst *zeroing = CallInst::Create(memset, makeArrayRef(args));
-        zeroing->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
-        zeroing->insertAfter(tempSlot_i8);
-        // Push GC Frame
-        PushGCFrame(gcframe, NRoots, ptlsStates);
+
+        auto pushGcframe = CallInst::Create(
+            getOrDefine(jl_intrinsics::pushGCFrame),
+            {gcframe, ConstantInt::get(T_int32, NRoots)});
+        pushGcframe->insertAfter(ptlsStates);
+
         // Replace Allocas
-        unsigned AllocaSlot = 2;
+        unsigned AllocaSlot = 0;
         for (AllocaInst *AI : S.Allocas) {
-            Value *args[1] = {
-                ConstantInt::get(T_int32, AllocaSlot++)
-            };
-            GetElementPtrInst *gep = GetElementPtrInst::Create(T_prjlvalue, gcframe, makeArrayRef(args));
-            gep->insertAfter(gcframe);
-            gep->takeName(AI);
+            // Pick a slot for the alloca.
+            auto slotAddress = CallInst::Create(
+                getOrDefine(jl_intrinsics::getGCFrameSlot),
+                {gcframe, ConstantInt::get(T_int32, AllocaSlot++)});
+            slotAddress->insertAfter(gcframe);
+            slotAddress->takeName(AI);
+
             // Check for lifetime intrinsics on this alloca, we can't keep them
             // because we're changing the semantics
             std::vector<CallInst*> ToDelete;
@@ -1998,7 +1945,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
             }, AI);
             for (CallInst *II : ToDelete)
                 II->eraseFromParent();
-            AI->replaceAllUsesWith(gep);
+            AI->replaceAllUsesWith(slotAddress);
             AI->eraseFromParent();
         }
         unsigned MinColorRoot = AllocaSlot;
@@ -2007,7 +1954,10 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
         // Insert GCFrame pops
         for(Function::iterator I = F->begin(), E = F->end(); I != E; ++I) {
             if (isa<ReturnInst>(I->getTerminator())) {
-                PopGCFrame(gcframe, I->getTerminator());
+                auto popGcframe = CallInst::Create(
+                    getOrDefine(jl_intrinsics::popGCFrame),
+                    {gcframe});
+                popGcframe->insertBefore(I->getTerminator());
             }
         }
     }
