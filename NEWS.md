@@ -28,6 +28,7 @@ Standard library changes
 
 #### LinearAlgebra
 
+* `diagm` and `spdiagm` now accept optional `m,n` initial arguments to specify a size ([#31654]).
 
 #### SparseArrays
 
