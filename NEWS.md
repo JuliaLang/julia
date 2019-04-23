@@ -24,10 +24,11 @@ New library functions
 Standard library changes
 ------------------------
 
-* `diagm` and `spdiagm` now accept optional `m,n` initial arguments to specify a size ([#31654]).
+* Cmd interpolation (``` `$(x::Cmd) a b c` ``` where) now propagates `x`'s process flags (environment, flags, working directory, etc) if `x` is the first interpolant and errors otherwise ([#24353]).
 
 #### LinearAlgebra
 
+* `diagm` and `spdiagm` now accept optional `m,n` initial arguments to specify a size ([#31654]).
 
 #### SparseArrays
 

@@ -1617,6 +1617,33 @@ static void set_bound(jl_value_t **bound, jl_value_t *val, jl_tvar_t *v, jl_sten
     *bound = val;
 }
 
+// subtype, treating all vars as existential
+static int subtype_in_env_existential(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
+{
+    jl_varbinding_t *v = e->vars;
+    int len = 0;
+    while (v != NULL) {
+        len++;
+        v = v->prev;
+    }
+    int8_t *rs = (int8_t*)malloc(len);
+    int n = 0;
+    v = e->vars;
+    while (v != NULL) {
+        rs[n++] = v->right;
+        v->right = 1;
+        v = v->prev;
+    }
+    int issub = subtype_in_env(x, y, e);
+    n = 0; v = e->vars;
+    while (v != NULL) {
+        v->right = rs[n++];
+        v = v->prev;
+    }
+    free(rs);
+    return issub;
+}
+
 static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int8_t R, int param)
 {
     jl_varbinding_t *bb = lookup(e, b);
@@ -1629,30 +1656,19 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     int d = bb->depth0;
     jl_value_t *root=NULL; jl_savedenv_t se;
     if (param == 2) {
-        jl_value_t *ub = R ? intersect_aside(a, bb->ub, e, d) : intersect_aside(bb->ub, a, e, d);
-        JL_GC_PUSH2(&ub, &root);
-        if (!jl_has_free_typevars(ub) && !jl_has_free_typevars(bb->lb)) {
-            save_env(e, &root, &se);
-            int issub = subtype_in_env(bb->lb, ub, e);
-            restore_env(e, root, &se);
-            free(se.buf);
-            if (!issub) {
-                JL_GC_POP();
-                return jl_bottom_type;
-            }
-        }
+        if (!(subtype_in_env_existential(bb->lb, a, e) && subtype_in_env_existential(a, bb->ub, e)))
+            return jl_bottom_type;
+        jl_value_t *ub = a;
         if (ub != (jl_value_t*)b) {
             if (jl_has_free_typevars(ub)) {
                 // constraint X == Ref{X} is unsatisfiable. also check variables set equal to X.
                 if (var_occurs_inside(ub, b, 0, 0)) {
-                    JL_GC_POP();
                     return jl_bottom_type;
                 }
                 jl_varbinding_t *btemp = e->vars;
                 while (btemp != NULL) {
                     if (btemp->lb == (jl_value_t*)b && btemp->ub == (jl_value_t*)b &&
                         var_occurs_inside(ub, btemp->var, 0, 0)) {
-                        JL_GC_POP();
                         return jl_bottom_type;
                     }
                     btemp = btemp->prev;
@@ -1661,7 +1677,6 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
             bb->ub = ub;
             bb->lb = ub;
         }
-        JL_GC_POP();
         return ub;
     }
     else if (bb->constraintkind == 0) {
@@ -1768,7 +1783,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         // given x<:T<:x, substitute x for T
         varval = vb->ub;
     }
-    else if (!var_occurs_inside(res, vb->var, 0, 1) && is_leaf_bound(vb->ub)) {
+    else if (!vb->occurs_inv && is_leaf_bound(vb->ub)) {
         // replace T<:x with x in covariant position when possible
         varval = vb->ub;
     }
@@ -2517,7 +2532,7 @@ static jl_value_t *intersect_types(jl_value_t *x, jl_value_t *y, int emptiness_o
     if (obviously_disjoint(x, y, 0))
         return jl_bottom_type;
     init_stenv(&e, NULL, 0);
-    e.intersection = 1;
+    e.intersection = e.ignore_free = 1;
     e.emptiness_only = emptiness_only;
     return intersect_all(x, y, &e);
 }
@@ -2637,7 +2652,7 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
             goto bot;
         jl_stenv_t e;
         init_stenv(&e, NULL, 0);
-        e.intersection = 1;
+        e.intersection = e.ignore_free = 1;
         e.envout = env;
         if (szb)
             memset(env, 0, szb*sizeof(void*));

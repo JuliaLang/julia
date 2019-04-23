@@ -387,7 +387,7 @@ function _map_zeropres!(f::Tf, C::SparseVecOrMat, As::Vararg{SparseVecOrMat,N}) 
             vals, ks, rows = _fusedupdate_all(rowsentinel, activerow, rows, ks, stopks, As)
             Cx = f(vals...)
             if !_iszero(Cx)
-                Ck > spaceC && (spaceC = expandstorage!(C, Ck + min(length(C), _sumnnzs(As...)) - (sum(ks) - N)))
+                Ck > spaceC && (spaceC = expandstorage!(C, min(length(C), Ck + _sumnnzs(As...) - (sum(ks) - N))))
                 storedinds(C)[Ck] = activerow
                 storedvals(C)[Ck] = Cx
                 Ck += 1

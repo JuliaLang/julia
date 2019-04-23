@@ -622,3 +622,21 @@ end
     @test isempty(t)
     @test collect(t2) == [5, 6, 7, 2, 3, 4, 1]
 end
+
+let t = Timer(identity, 0.025, interval=0.025)
+    out = stdout
+    rd, wr = redirect_stdout()
+    @async while isopen(rd)
+        readline(rd)
+    end
+    try
+        for i in 1:10000
+            Threads.@threads for j in 1:1000
+            end
+            @show i
+        end
+    finally
+        redirect_stdout(out)
+        close(t)
+    end
+end

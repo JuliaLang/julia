@@ -1713,6 +1713,27 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         JL_GC_POP();
         return ghostValue(jl_void_type);
     }
+    else if (is_libjulia_func(jl_object_id) && nargt == 1 &&
+            rt == (jl_value_t*)jl_ulong_type) {
+        jl_cgval_t val = argv[0];
+        if (!val.isboxed) {
+            // If the value is not boxed, try to compute the object id without
+            // reboxing it.
+            auto T_pint8_derived = PointerType::get(T_int8, AddressSpace::Derived);
+            if (!val.isghost && !val.ispointer())
+                val = value_to_pointer(ctx, val);
+            Value *args[] = {
+                emit_typeof_boxed(ctx, val),
+                val.isghost ? ConstantPointerNull::get(T_pint8_derived) :
+                    ctx.builder.CreateBitCast(
+                        decay_derived(data_pointer(ctx, val)),
+                        T_pint8_derived)
+            };
+            Value *ret = ctx.builder.CreateCall(prepare_call(jl_object_id__func), makeArrayRef(args));
+            JL_GC_POP();
+            return mark_or_box_ccall_result(ctx, ret, retboxed, rt, unionall, static_rt);
+        }
+    }
 
     jl_cgval_t retval = sig.emit_a_ccall(
             ctx,

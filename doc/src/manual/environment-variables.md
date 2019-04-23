@@ -20,7 +20,7 @@ those for which `JULIA` appears in the name.
     starts, therefore adding these to `~/.julia/config/startup.jl` is too late in the startup process.
     In Bash, environment variables can either be set manually by running, e.g.,
     `export JULIA_NUM_THREADS=4` before starting Julia, or by adding the same command to
-    `-/.bashrc` or `~/.bash_profile` to set the variable each time Bash is started.
+    `~/.bashrc` or `~/.bash_profile` to set the variable each time Bash is started.
 
 ## File locations
 

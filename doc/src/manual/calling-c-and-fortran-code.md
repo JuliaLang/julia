@@ -36,11 +36,11 @@ commonly passed in registers when using C or Julia calling conventions.
 Finally, you can use [`ccall`](@ref) to actually generate a call to the library function. The arguments
 to [`ccall`](@ref) are:
 
-1. A `(:function, "library")` pair,
+1. A `(:function, "library")` pair (most common),
 
    OR
 
-   a `:function` name symbol or `"function"` name string,
+   a `:function` name symbol or `"function"` name string (for symbols in the current process or libc),
 
    OR
 
@@ -62,10 +62,10 @@ to [`ccall`](@ref) are:
     See below for how to [map C types to Julia types](@ref mapping-c-types-to-julia).
 
 As a complete but simple example, the following calls the `clock` function from the standard C
-library:
+library on most Unix-derived systems:
 
 ```julia-repl
-julia> t = ccall((:clock, "libc"), Int32, ())
+julia> t = ccall(:clock, Int32, ())
 2292761
 
 julia> t
@@ -75,12 +75,12 @@ julia> typeof(ans)
 Int32
 ```
 
-`clock` takes no arguments and returns an [`Int32`](@ref). One common gotcha is that a 1-tuple must be
-written with a trailing comma. For example, to call the `getenv` function to get a pointer to
-the value of an environment variable, one makes a call like this:
+`clock` takes no arguments and returns an [`Int32`](@ref). One common gotcha is that a 1-tuple of
+argument types must be written with a trailing comma. For example, to call the `getenv` function
+to get a pointer to the value of an environment variable, one makes a call like this:
 
 ```julia-repl
-julia> path = ccall((:getenv, "libc"), Cstring, (Cstring,), "SHELL")
+julia> path = ccall(:getenv, Cstring, (Cstring,), "SHELL")
 Cstring(@0x00007fff5fbffc45)
 
 julia> unsafe_string(path)
@@ -108,12 +108,11 @@ which is a simplified version of the actual definition from [`env.jl`](https://g
 
 ```julia
 function getenv(var::AbstractString)
-    val = ccall((:getenv, "libc"),
-                Cstring, (Cstring,), var)
+    val = ccall(:getenv, Cstring, (Cstring,), var)
     if val == C_NULL
         error("getenv: undefined variable: ", var)
     end
-    unsafe_string(val)
+    return unsafe_string(val)
 end
 ```
 
@@ -130,15 +129,19 @@ julia> getenv("FOOBAR")
 getenv: undefined variable: FOOBAR
 ```
 
-Here is a slightly more complex example that discovers the local machine's hostname:
+Here is a slightly more complex example that discovers the local machine's hostname.
+In this example, the networking library code is assumed to be in a shared library named "libc".
+In practice, this function is usually part of the C standard library, and so the "libc"
+portion should be omitted, but we wish to show here the usage of this syntax.
 
 ```julia
 function gethostname()
-    hostname = Vector{UInt8}(undef, 128)
-    ccall((:gethostname, "libc"), Int32,
-          (Ptr{UInt8}, Csize_t),
-          hostname, sizeof(hostname))
-    hostname[end] = 0; # ensure null-termination
+    hostname = Vector{UInt8}(undef, 256) # MAXHOSTNAMELEN
+    err = ccall((:gethostname, "libc"), Int32,
+                (Ptr{UInt8}, Csize_t),
+                hostname, sizeof(hostname))
+    Base.systemerror("gethostname", err != 0)
+    hostname[end] = 0 # ensure null-termination
     return unsafe_string(pointer(hostname))
 end
 ```
@@ -599,7 +602,7 @@ work on hosts without AVX support.
 Memory allocation and deallocation of such objects must be handled by calls to the appropriate
 cleanup routines in the libraries being used, just like in any C program. Do not try to free an
 object received from a C library with [`Libc.free`](@ref) in Julia, as this may result in the `free` function
-being called via the wrong `libc` library and cause Julia to crash. The reverse (passing an object
+being called via the wrong library and cause the process to abort. The reverse (passing an object
 allocated in Julia to be freed by an external library) is equally invalid.
 
 ### When to use T, Ptr{T} and Ref{T}
@@ -1004,6 +1007,15 @@ Ptr{Int32} @0x00007f418d0816b8
 
 The result is a pointer giving the address of the value. The value can be manipulated through
 this pointer using [`unsafe_load`](@ref) and [`unsafe_store!`](@ref).
+
+!!! note
+    This `errno` symbol may not be found in a library named "libc", as this is an implementation detail of
+    your system compiler. Typically standard library symbols should be accessed just by name,
+    allowing the compiler to fill in the correct one.
+    Also, however, the `errno` symbol shown in this example is special in most compilers, and so the value
+    seen here is probably not what you expect or want. Compiling the equivalent code in C on any
+    multi-threaded-capable system would typically actually call a different function (via macro preprocessor
+    overloading), and may give a different result than the legacy value printed here.
 
 ## Accessing Data through a Pointer
 
