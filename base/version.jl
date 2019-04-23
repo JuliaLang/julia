@@ -203,10 +203,6 @@ end
 lowerbound(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch, ("",), ())
 upperbound(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch, (), ("",))
 
-thispatch(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch)
-thisminor(v::VersionNumber) = VersionNumber(v.major, v.minor, 0)
-thismajor(v::VersionNumber) = VersionNumber(v.major, 0, 0)
-
 ## julia version info
 
 """

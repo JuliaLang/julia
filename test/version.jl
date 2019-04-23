@@ -133,26 +133,6 @@ import Base: lowerbound, upperbound
 @test upperbound(v"4.3.2+") == v"4.3.2+"
 
 # advanced comparison & manipulation
-import Base: thispatch, thisminor, thismajor
-
-@test v"1.2.3" == thispatch(v"1.2.3-")
-@test v"1.2.3" == thispatch(v"1.2.3-pre")
-@test v"1.2.3" == thispatch(v"1.2.3")
-@test v"1.2.3" == thispatch(v"1.2.3+post")
-@test v"1.2.3" == thispatch(v"1.2.3+")
-
-@test v"1.2" == thisminor(v"1.2.3-")
-@test v"1.2" == thisminor(v"1.2.3-pre")
-@test v"1.2" == thisminor(v"1.2.3")
-@test v"1.2" == thisminor(v"1.2.3+post")
-@test v"1.2" == thisminor(v"1.2.3+")
-
-@test v"1" == thismajor(v"1.2.3-")
-@test v"1" == thismajor(v"1.2.3-pre")
-@test v"1" == thismajor(v"1.2.3")
-@test v"1" == thismajor(v"1.2.3+post")
-@test v"1" == thismajor(v"1.2.3+")
-
 for major=0:3, minor=0:3, patch=0:3
     a = VersionNumber(major,minor,patch,("",),())
     b = VersionNumber(major,minor,patch,("pre",),())
@@ -160,11 +140,6 @@ for major=0:3, minor=0:3, patch=0:3
     d = VersionNumber(major,minor,patch,(),("post",))
     e = VersionNumber(major,minor,patch,(),("",))
     @test a < b < c < d < e
-    for x in [a,b,c,d,e]
-        @test thispatch(x) == VersionNumber(major,minor,patch)
-        @test thisminor(x) == VersionNumber(major,minor,0)
-        @test thismajor(x) == VersionNumber(major,0,0)
-    end
 end
 
 # banner
