@@ -361,6 +361,11 @@ function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
     limit = get(io, :limit, false)::Bool
     indr, indc = axes(X,1), axes(X,2)
     nr, nc = length(indr), length(indc)
+    if nc == 1
+        print(io, prefix, "hcat(")
+        _show_nonempty(io, X, "")
+        return print(io, ")")
+    end
     rdots, cdots = false, false
     rr1, rr2 = UnitRange{Int}(indr), 1:0
     cr1, cr2 = UnitRange{Int}(indc), 1:0

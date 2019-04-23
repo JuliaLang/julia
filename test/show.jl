@@ -1475,5 +1475,11 @@ end
 Z = Array{Float64}(undef,0,0)
 @test eval(Meta.parse(repr(Z))) == Z
 
+
 # issue #31065, do not print parentheses for nested dot expressions
 @test sprint(Base.show_unquoted, :(foo.x.x)) == "foo.x.x"
+
+# issue #31019: printing of single column matrix
+Z = ones(3,1)
+@test eval(Meta.parse(repr(Z))) == Z
+
