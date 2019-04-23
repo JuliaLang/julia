@@ -258,7 +258,7 @@ close(d::TextDisplay) = close(d.io)
 # this stays as is for now and represents all displays of priority 0 for
 # backwards compatibility
 const displays = AbstractDisplay[]
-const display_stack = IdDict{Int, Vector{AbstractDisplay}}()
+const display_stack = Vector{Pair{Int, Vector{AbstractDisplay}}}()
 
 """
     pushdisplay(d::AbstractDisplay, priority=0)
@@ -275,14 +275,15 @@ is expected to use a slightly higher priority. If a display needs to catch all
 functionality.
 """
 function pushdisplay(d::AbstractDisplay, priority::Int=0)
-    local _displays
-    if haskey(display_stack, priority)
-        _displays = display_stack[priority]
+    display_ind = findfirst(p -> first(p) == priority, display_stack)
+    if display_ind === nothing
+        prio_displays = AbstractDisplay[]
+        push!(display_stack, priority => prio_displays)
     else
-        _displays = AbstractDisplay[]
-        display_stack[priority] = _displays
+        prio_displays = display_stack[display_ind][2]
     end
-    push!(_displays, d)
+    push!(prio_displays, d)
+    sort!(display_stack, lt = (a, b) -> first(a) < first(b), rev = true)
     d
 end
 
@@ -297,32 +298,43 @@ second variant. `popdisplay` will only search through displays with priority `pr
 if that argument is specified.
 """
 function popdisplay()
-    nonempties = filter(x -> !isempty(display_stack[x]), sort(collect(keys(display_stack)), rev=true))
-    isempty(nonempties) && throw(ArgumentError("display stack is empty"))
-    _displays = display_stack[first(nonempties)]
-    pop!(_displays)
+    scrub_display_stack()
+    isempty(display_stack) && throw(ArgumentError("display stack is empty"))
+    highest_prio_displays = first(display_stack)[2]
+    pop!(highest_prio_displays)
 end
-popdisplay(priority::Int) = pop!(get(display_stack, priority, []))
+function popdisplay(priority::Int)
+    scrub_display_stack()
+    display_ind = findfirst(p -> first(p) == priority, display_stack)
+    display_ind === nothing && throw(ArgumentError("display stack is empty"))
+    pop!(display_stack[display_ind][2])
+end
 function popdisplay(d::AbstractDisplay)
-    for priority in sort(collect(keys(display_stack)), rev=true)
-        _displays = display_stack[priority]
-        for i = length(_displays):-1:1
-            if d == _displays[i]
-                return splice!(_displays, i)
+    scrub_display_stack()
+    for (_, prio_displays) in display_stack
+        for i = length(prio_displays):-1:1
+            if d == prio_displays[i]
+                return splice!(prio_displays, i)
             end
         end
     end
     throw(KeyError(d))
 end
 function popdisplay(d::AbstractDisplay, priority::Int)
-    _displays = get(display_stack, priority, [])
-    for i = length(_displays):-1:1
-        if d == _displays[i]
-            return splice!(_displays, i)
+    scrub_display_stack()
+    display_ind = findfirst(p -> first(p) == priority, display_stack)
+    display_ind === nothing && throw(KeyError(d))
+    prio_displays = display_stack[display_ind][2]
+    for i = length(prio_displays):-1:1
+        if d == prio_displays[i]
+            return splice!(prio_displays, i)
         end
     end
     throw(KeyError(d))
 end
+
+scrub_display_stack(stack=display_stack) = filter!(p -> !isempty(p[2]), display_stack)
+
 function reinit_displays()
     global display_stack, displays
     empty!(displays)
@@ -357,12 +369,11 @@ variants, one can also supply the "raw" data in the requested MIME type by passi
 application/postscript) or `x::Vector{UInt8}` (for binary MIME types).
 """
 function display(@nospecialize x)
-    for priority in sort(collect(keys(display_stack)), rev=true)
-        _displays = display_stack[priority]
-        for i = length(_displays):-1:1
-            if xdisplayable(_displays[i], x)
+    for (_, prio_displays) in display_stack
+        for i = length(prio_displays):-1:1
+            if xdisplayable(prio_displays[i], x)
                 try
-                    return display(_displays[i], x)
+                    return display(prio_displays[i], x)
                 catch e
                     isa(e, MethodError) && e.f in (display, show) ||
                         rethrow()
@@ -374,20 +385,18 @@ function display(@nospecialize x)
 end
 
 function display(m::MIME, @nospecialize x)
-    for priority in sort(collect(keys(display_stack)), rev=true)
-        _displays = display_stack[priority]
-        for i = length(_displays):-1:1
-            if xdisplayable(_displays[i], m, x)
+    for (_, prio_displays) in display_stack
+        for i = length(prio_displays):-1:1
+            if xdisplayable(prio_displays[i], m, x)
                 try
-                    return display(_displays[i], m, x)
+                    return display(prio_displays[i], x)
                 catch e
-                    isa(e, MethodError) && e.f == display ||
+                    isa(e, MethodError) && e.f in (display, show) ||
                         rethrow()
                 end
             end
         end
     end
-
     throw(MethodError(display, (m, x)))
 end
 
@@ -395,9 +404,8 @@ displayable(d::D, ::MIME{mime}) where {D<:AbstractDisplay,mime} =
     hasmethod(display, Tuple{D,MIME{mime},Any})
 
 function displayable(m::MIME)
-    for priority in sort(collect(keys(display_stack)), rev=true)
-        _displays = display_stack[priority]
-        for d in _displays
+    for (_, prio_displays) in display_stack
+        for d in prio_displays
             displayable(d, m) && return true
         end
     end
@@ -426,14 +434,13 @@ several times, and the backend may choose to defer the display until
 (for example) the next interactive prompt.
 """
 function redisplay(@nospecialize x)
-    for priority in sort(collect(keys(display_stack)), rev=true)
-        _displays = display_stack[priority]
-        for i = length(_displays):-1:1
-            if xdisplayable(_displays[i], x)
+    for (_, prio_displays) in display_stack
+        for i = length(prio_displays):-1:1
+            if xdisplayable(prio_displays[i], x)
                 try
-                    return redisplay(_displays[i], x)
+                    return redisplay(prio_displays[i], x)
                 catch e
-                    isa(e, MethodError) && e.f in (redisplay, display, show) ||
+                    isa(e, MethodError) && e.f in (display, show) ||
                         rethrow()
                 end
             end
@@ -443,14 +450,13 @@ function redisplay(@nospecialize x)
 end
 
 function redisplay(m::Union{MIME,AbstractString}, @nospecialize x)
-    for priority in sort(collect(keys(display_stack)), rev=true)
-        _displays = display_stack[priority]
-        for i = length(_displays):-1:1
-            if xdisplayable(_displays[i], m, x)
+    for (_, prio_displays) in display_stack
+        for i = length(prio_displays):-1:1
+            if xdisplayable(prio_displays[i], m, x)
                 try
-                    return redisplay(_displays[i], m, x)
+                    return redisplay(prio_displays[i], x)
                 catch e
-                    isa(e, MethodError) && e.f in (redisplay, display) ||
+                    isa(e, MethodError) && e.f in (display, show) ||
                         rethrow()
                 end
             end
