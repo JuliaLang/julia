@@ -7239,6 +7239,17 @@ struct AVL35416{K,V}
 end
 @test AVL35416(Node35416{AVL35416{Integer,AbstractString},Int,String}()) isa AVL35416{Integer,AbstractString}
 
+# issue #31696
+foo31696(x::Int8, y::Int8) = 1
+foo31696(x::T, y::T) where {T <: Int8} = 2
+@test length(methods(foo31696)) == 1
+let T1 = Tuple{Int8}, T2 = Tuple{T} where T<:Int8, a = T1[(1,)], b = T2[(1,)]
+    b .= a
+    @test b[1] == (1,)
+    a .= b
+    @test a[1] == (1,)
+end
+
 # issue #36104
 module M36104
 struct T36104
