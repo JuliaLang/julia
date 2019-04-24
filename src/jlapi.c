@@ -394,6 +394,12 @@ JL_DLLEXPORT jl_value_t *(jl_typeof)(jl_value_t *v)
     return jl_typeof(v);
 }
 
+JL_DLLEXPORT jl_value_t *(jl_get_fieldtypes)(jl_value_t *v)
+{
+    return (jl_value_t*)jl_get_fieldtypes((jl_datatype_t*)v);
+}
+
+
 #ifndef __clang_analyzer__
 JL_DLLEXPORT int8_t (jl_gc_unsafe_enter)(void)
 {

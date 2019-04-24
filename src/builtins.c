@@ -752,7 +752,8 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow)
                 return (jl_value_t*)jl_any_type;
             return get_fieldtype(tt, f, dothrow);
         }
-        int nf = jl_field_count(st);
+        jl_svec_t *types = jl_get_fieldtypes(st);
+        int nf = jl_svec_len(types);
         if (nf > 0 && field_index >= nf-1 && st->name == jl_tuple_typename) {
             jl_value_t *ft = jl_field_type(st, nf-1);
             if (jl_is_vararg_type(ft))
@@ -790,8 +791,8 @@ JL_CALLABLE(jl_f_fieldtype)
 JL_CALLABLE(jl_f_nfields)
 {
     JL_NARGS(nfields, 1, 1);
-    jl_value_t *x = args[0];
-    return jl_box_long(jl_field_count(jl_typeof(x)));
+    jl_datatype_t *xt = (jl_datatype_t*)jl_typeof(args[0]);
+    return jl_box_long(jl_datatype_nfields(xt));
 }
 
 JL_CALLABLE(jl_f_isdefined)

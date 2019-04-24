@@ -1458,7 +1458,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     dt->super = (jl_datatype_t*)jl_deserialize_value(s, (jl_value_t**)&dt->super);
     jl_gc_wb(dt, dt->super);
     dt->types = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&dt->types);
-    jl_gc_wb(dt, dt->types);
+    if (dt->types) jl_gc_wb(dt, dt->types);
 
     return (jl_value_t*)dt;
 }

@@ -2791,7 +2791,7 @@ static int num_occurs(jl_tvar_t *v, jl_typeenv_t *env);
 
 static jl_value_t *nth_tuple_elt(jl_datatype_t *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
 {
-    size_t len = jl_field_count(t);
+    size_t len = jl_nparams(t);
     if (len == 0)
         return NULL;
     if (i < len-1)
