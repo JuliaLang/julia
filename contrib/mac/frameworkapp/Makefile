@@ -23,6 +23,19 @@ XCEXPORT_METHOD ?= developer-id
 DARWIN_CODESIGN_PRODUCT_ARCHIVE_KEYCHAIN_IDENTITY ?= Developer ID Installer
 endif
 
+# Julia.app is versioned independently of Julia because it's not Julia itself.
+#
+ifeq ($(JULIA_APP_SHORT_VERSION_STRING),)
+$(error JULIA_APP_SHORT_VERSION_STRING not defined)
+#https://developer.apple.com/documentation/bundleresources/information_property_list/cfbundleshortversionstring
+# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html#//apple_ref/doc/uid/20001431-111349
+endif
+ifeq ($(JULIA_APP_VERSION),)
+$(error JULIA_APP_VERSION not defined)
+# https://developer.apple.com/documentation/bundleresources/information_property_list/cfbundleversion
+# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html#//apple_ref/doc/uid/20001431-102364
+endif
+
 # X.Y.Z
 JULIA_VERSION_MAJOR_MINOR_PATCH := $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
 
@@ -49,7 +62,7 @@ PRODUCTARCHIVE := $(BUILDROOT)/Julia-$(JULIA_COMMIT).pkg
 $(JULIA_FRAMEWORK_LIB):
 	$(MAKE) -C $(JULIAHOME) DARWIN_FRAMEWORK=1 prefix=$(FRAMEWORK_DESTDIR) darwinframework
 
-$(XCARCHIVE)/Info.plist: $(JULIA_FRAMEWORK_LIB)
+$(XCARCHIVE)/Info.plist:
 	env DEVELOPER_DIR=/Applications/Xcode.app xcrun xcodebuild \
 		-project JuliaLauncher.xcodeproj \
 		-scheme JuliaLauncher \
@@ -60,9 +73,8 @@ $(XCARCHIVE)/Info.plist: $(JULIA_FRAMEWORK_LIB)
 		CODE_SIGN_STYLE=Manual \
 		DEVELOPMENT_TEAM="$(APPLE_DEVELOPMENT_TEAM)" \
 		CODE_SIGN_IDENTITY="$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" \
-		JULIA_FRAMEWORK_PATH="$(JULIA_FRAMEWORK_PATH)" \
-		APP_SHORT_VERSION_STRING="$(JULIA_VERSION_MAJOR_MINOR_PATCH)" \
-		APP_VERSION="$(JULIA_COMMIT)"
+		APP_SHORT_VERSION_STRING="$(JULIA_APP_SHORT_VERSION_STRING)" \
+		APP_VERSION="$(JULIA_APP_VERSION)"
 
 $(BUILDROOT)/xcodebuild-export.plist:
 	/usr/libexec/PlistBuddy -x -c "Clear dict" $@
