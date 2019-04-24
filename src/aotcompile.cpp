@@ -37,6 +37,18 @@
 #endif
 #endif
 
+// IR building
+#include <llvm/IR/IntrinsicInst.h>
+#include <llvm/Object/ObjectFile.h>
+#include <llvm/IR/DIBuilder.h>
+#include <llvm/AsmParser/Parser.h>
+#include <llvm/DebugInfo/DIContext.h>
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/Intrinsics.h>
+#include <llvm/IR/Attributes.h>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/MDBuilder.h>
+
 // for outputting assembly
 #include <llvm/Bitcode/BitcodeWriter.h>
 #include <llvm/Bitcode/BitcodeWriterPass.h>
@@ -165,7 +177,8 @@ static void emit_offset_table(Module &mod, const std::vector<GlobalValue*> &vars
 {
     // Emit a global variable with all the variable addresses.
     // The cloning pass will convert them into offsets.
-    assert(!vars.empty());
+    if (!standalone_aot_mode) 
+        assert(!vars.empty());
     size_t nvars = vars.size();
     std::vector<Constant*> addrs(nvars);
     for (size_t i = 0; i < nvars; i++) {
@@ -178,6 +191,85 @@ static void emit_offset_table(Module &mod, const std::vector<GlobalValue*> &vars
                        ConstantArray::get(vars_type, addrs),
                        name);
 }
+
+// Export a globals table and a mini sysimage with strings, symbols, and other global data.
+
+extern "C" JL_DLLEXPORT
+void jl_emit_globals_table(void *native_code, jl_array_t *gvararray) {
+// void jl_emit_globals_table(void *native_code) {
+    
+    jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
+    LLVMContext &Context = data->M->getContext();
+
+    Type *T_size;
+    if (sizeof(size_t) == 8)
+        T_size = Type::getInt64Ty(Context);
+    else
+        T_size = Type::getInt32Ty(Context);
+    Type *T_psize = T_size->getPointerTo();
+
+    // add metadata information
+    emit_offset_table(*data->M, data->jl_sysimg_gvars, "jl_sysimg_gvars", T_psize);
+        
+    // jl_printf(JL_STDERR,"  jegt, gvarvalues pointers: %p, %p\n", gvarvalues[0], gvarvalues[1]);
+
+    // add system image data
+    ios_t ff;
+    ios_t *f = &ff;
+    ios_mem(f, 100);
+
+    jl_save_mini_image_to_stream(f, gvararray);
+
+    Constant *dataarray = ConstantDataArray::get(Context,
+        ArrayRef<uint8_t>((const unsigned char*)f->buf, (size_t)f->size));
+    addComdat(new GlobalVariable(*data->M, dataarray->getType(), false,
+                                 GlobalVariable::ExternalLinkage,
+                                 dataarray, "jl_system_image_data"))->setAlignment(64);
+    Constant *len = ConstantInt::get(T_size, (size_t)f->size);
+    addComdat(new GlobalVariable(*data->M, len->getType(), true,
+                                 GlobalVariable::ExternalLinkage,
+                                 len, "jl_system_image_size"));
+    ios_close(f);
+
+    // add a function to initialize Julia types and globals
+        // Function template to create inside the module
+        
+        // void init_lib(void) {
+        //     jl_init_basics();
+        //     jl_restore_mini_sysimg(@jl_sysimg_gvars, @jl_system_image_data, @jl_system_image_size);
+        // }
+    Module *M = data->M.get();
+    Function* init_lib_f = cast<Function>(
+        M->getOrInsertFunction("init_lib", Type::getVoidTy(Context), NULL));
+    init_lib_f->setCallingConv(CallingConv::C);
+    BasicBlock* block = BasicBlock::Create(Context, "entry", init_lib_f);
+    IRBuilder<> builder(block);
+    // jl_init_basics call
+    FunctionType *FT = FunctionType::get(Type::getVoidTy(Context), false);
+    Function* jl_init_basics_f = Function::Create(FT, Function::ExternalLinkage, 
+                                                  "jl_init_basics", M);
+    builder.CreateCall(jl_init_basics_f, None);
+    // jl_restore_mini_sysimg call
+    std::vector<Type*> argtypes;
+    // argtypes.push_back(ArrayType::get(T_psize, jl_array_len(gvararray)));
+    // argtypes.push_back(dataarray->getType());
+    // argtypes.push_back(len->getType());
+    argtypes.push_back(M->getGlobalVariable("jl_sysimg_gvars")->getType());
+    argtypes.push_back(M->getGlobalVariable("jl_system_image_data")->getType());
+    argtypes.push_back(M->getGlobalVariable("jl_system_image_size")->getType());
+    FunctionType *FT2 = FunctionType::get(Type::getVoidTy(Context), argtypes, false);
+    Function* jl_restore_mini_sysimg_f = Function::Create(FT2, Function::ExternalLinkage, 
+                                                          "jl_restore_mini_sysimg", M);
+    std::vector<Value*> args;
+    args.push_back(M->getGlobalVariable("jl_sysimg_gvars"));
+    args.push_back(M->getGlobalVariable("jl_system_image_data"));
+    args.push_back(M->getGlobalVariable("jl_system_image_size"));
+    builder.CreateCall(jl_restore_mini_sysimg_f, args, None);
+
+    builder.CreateRetVoid();
+
+}
+
 
 static bool is_safe_char(unsigned char c)
 {
@@ -239,6 +331,113 @@ static void makeSafeName(GlobalObject &G)
         G.setName(StringRef(SafeName.data(), SafeName.size()));
 }
 
+bool isinlibjulia(std::string name) {
+    std::vector<std::string> array {
+        "jl_typeofbottom_type", 
+        "jl_datatype_type", 
+        "jl_uniontype_type", 
+        "jl_unionall_type", 
+        "jl_tvar_type", 
+        "jl_any_type", 
+        "jl_type_type", 
+        "jl_typetype_type", 
+        "jl_typename_type", 
+        "jl_type_typename", 
+        "jl_sym_type", 
+        "jl_symbol_type", 
+        "jl_ssavalue_type", 
+        "jl_abstractslot_type", 
+        "jl_slotnumber_type", 
+        "jl_typedslot_type", 
+        "jl_simplevector_type", 
+        "jl_tuple_typename", 
+        "jl_vecelement_typename", 
+        "jl_anytuple_type", 
+        "jl_emptytuple_type", 
+        "jl_anytuple_type_type", 
+        "jl_vararg_type", 
+        "jl_vararg_typename", 
+        "jl_task_type", 
+        "jl_function_type", 
+        "jl_builtin_type", 
+        "jl_bottom_type", 
+        "jl_method_instance_type", 
+        "jl_code_info_type", 
+        "jl_method_type", 
+        "jl_module_type", 
+        "jl_abstractarray_type", 
+        "jl_densearray_type", 
+        "jl_array_type", 
+        "jl_array_typename", 
+        "jl_weakref_type", 
+        "jl_abstractstring_type", 
+        "jl_string_type", 
+        "jl_errorexception_type", 
+        "jl_argumenterror_type", 
+        "jl_loaderror_type", 
+        "jl_initerror_type", 
+        "jl_typeerror_type", 
+        "jl_methoderror_type", 
+        "jl_undefvarerror_type", 
+        "jl_lineinfonode_type", 
+        "jl_stackovf_exception", 
+        "jl_memory_exception", 
+        "jl_readonlymemory_exception", 
+        "jl_diverror_exception", 
+        "jl_undefref_exception", 
+        "jl_interrupt_exception", 
+        "jl_boundserror_type", 
+        "jl_an_empty_vec_any", 
+        "jl_an_empty_string", 
+        "jl_bool_type", 
+        "jl_char_type", 
+        "jl_int8_type", 
+        "jl_uint8_type", 
+        "jl_int16_type", 
+        "jl_uint16_type", 
+        "jl_int32_type", 
+        "jl_uint32_type", 
+        "jl_int64_type", 
+        "jl_uint64_type", 
+        "jl_float16_type", 
+        "jl_float32_type", 
+        "jl_float64_type", 
+        "jl_floatingpoint_type", 
+        "jl_number_type", 
+        "jl_void_type", 
+        "jl_signed_type", 
+        "jl_voidpointer_type", 
+        "jl_pointer_type", 
+        "jl_ref_type", 
+        "jl_pointer_typename", 
+        "jl_namedtuple_typename", 
+        "jl_namedtuple_type", 
+        "jl_array_uint8_type", 
+        "jl_array_any_type", 
+        "jl_array_symbol_type", 
+        "jl_array_int32_type", 
+        "jl_expr_type", 
+        "jl_globalref_type", 
+        "jl_linenumbernode_type", 
+        "jl_gotonode_type", 
+        "jl_phinode_type", 
+        "jl_pinode_type", 
+        "jl_phicnode_type", 
+        "jl_upsilonnode_type", 
+        "jl_quotenode_type", 
+        "jl_newvarnode_type", 
+        "jl_intrinsic_type", 
+        "jl_methtable_type", 
+        "jl_typemap_level_type", 
+        "jl_typemap_entry_type", 
+        "jl_emptysvec", 
+        "jl_emptytuple", 
+        "jl_true", 
+        "jl_false", 
+        "jl_nothing", 
+        "jl_incomplete_sym"};
+    return std::find(array.begin(), array.end(), name) != array.end();
+}
 
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
@@ -251,10 +450,12 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
     std::map<jl_code_instance_t*, jl_compile_result_t> emitted;
     jl_method_instance_t *mi = NULL;
     jl_code_info_t *src = NULL;
-    JL_GC_PUSH1(&src);
+    jl_array_t *gvararray = NULL;
+    JL_GC_PUSH2(&src, &gvararray);
     JL_LOCK(&codegen_lock);
 
     // compile all methods for the current world and type-inference world
+    std::vector<std::string> fun_list;
     size_t compile_for[] = { jl_typeinf_world, jl_world_counter };
     for (int worlds = 0; worlds < 2; worlds++) {
         params.world = compile_for[worlds];
@@ -287,21 +488,30 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
                 if (src && !emitted.count(codeinst)) {
                     // now add it to our compilation results
                     jl_compile_result_t result = jl_emit_code(mi, src, codeinst->rettype, params);
-                    if (std::get<0>(result))
+                    if (std::get<0>(result)) {
                         emitted[codeinst] = std::move(result);
+                        fun_list.push_back(std::get<1>(emitted[codeinst]).specFunctionObject);
+                    }
                 }
             }
         }
         // finally, make sure all referenced methods also get compiled or fixed up
         jl_compile_workqueue(emitted, params);
     }
-    JL_GC_POP();
 
     // process the globals array, before jl_merge_module destroys them
     std::vector<std::string> gvars;
+    std::vector<std::string> allgvars;
+    gvararray = jl_alloc_vec_any(0);
     for (auto &global : params.globals) {
-        gvars.push_back(global.second->getName());
-        data->jl_value_to_llvm[global.first] = gvars.size();
+        allgvars.push_back(global.second->getName());
+        data->jl_value_to_llvm[global.first] = allgvars.size();
+        if (standalone_aot_mode && 
+            !jl_isa((jl_value_t *)global.first, (jl_value_t*)jl_function_type) && 
+            !jl_isa((jl_value_t *)global.first, (jl_value_t*)jl_method_instance_type)) {
+            gvars.push_back(global.second->getName());
+            jl_array_ptr_1d_push(gvararray, (jl_value_t *)global.first);
+        }
     }
 
     // clones the contents of the module `m` to the shadow_output collector
@@ -311,13 +521,15 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
     std::unique_ptr<Module> clone(CloneModule(*shadow_output, VMap));
 #else
     std::unique_ptr<Module> clone(CloneModule(shadow_output, VMap));
-#endif
+#endif 
+    std::map<std::string, std::string> fun_table;
     for (auto &def : emitted) {
         jl_merge_module(clone.get(), std::move(std::get<0>(def.second)));
         jl_code_instance_t *this_code = def.first;
         jl_llvm_functions_t decls = std::get<1>(def.second);
         StringRef func = decls.functionObject;
         StringRef cfunc = decls.specFunctionObject;
+        fun_table[cfunc] = jl_symbol_name(def.first->def->def.method->name);
         uint32_t func_id = 0;
         uint32_t cfunc_id = 0;
         if (func == "jl_fptr_args") {
@@ -339,10 +551,18 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
 
     // now get references to the globals in the merged module
     // and set them to be internalized and initialized at startup
+    for (auto &global : allgvars) {
+        GlobalVariable *G = cast<GlobalVariable>(clone->getNamedValue(global));
+        if (!standalone_aot_mode || !isinlibjulia(global)) {
+            G->setInitializer(ConstantPointerNull::get(cast<PointerType>(G->getValueType())));
+            G->setLinkage(GlobalVariable::InternalLinkage);
+        }
+        if (!standalone_aot_mode) {
+            data->jl_sysimg_gvars.push_back(G);
+        }
+    }
     for (auto &global : gvars) {
         GlobalVariable *G = cast<GlobalVariable>(clone->getNamedValue(global));
-        G->setInitializer(ConstantPointerNull::get(cast<PointerType>(G->getValueType())));
-        G->setLinkage(GlobalVariable::InternalLinkage);
         data->jl_sysimg_gvars.push_back(G);
     }
 
@@ -361,6 +581,8 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
     for (GlobalObject &G : clone->global_objects()) {
         if (!G.isDeclaration()) {
             G.setLinkage(Function::InternalLinkage);
+            if (standalone_aot_mode)     // TODO: find a better way to do this
+                G.setLinkage(Function::ExternalLinkage);
             makeSafeName(G);
             addComdat(&G);
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
@@ -373,6 +595,15 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
 
     data->M = std::move(clone);
 
+    if (standalone_aot_mode) {
+        jl_emit_globals_table((void*)data, gvararray);
+        // rename the functions meant to be exported
+        for (auto &tbl : fun_table) {
+            if (std::find(fun_list.begin(), fun_list.end(), tbl.first) != fun_list.end())
+                cast<Function>(data->M->getNamedValue(tbl.first))->setName(tbl.second);
+        }
+    }
+    JL_GC_POP();
     JL_UNLOCK(&codegen_lock); // Might GC
     return (void*)data;
 }
@@ -549,6 +780,83 @@ void jl_dump_native(void *native_code,
         handleAllErrors(writeArchive(obj_fname, obj_Archive, true,
                     Kind, true, false), reportWriterError);
 
+    delete data;
+}
+
+extern "C" JL_DLLEXPORT
+void jl_dump_native_lib(void *native_code, const char *obj_fname)
+{
+    JL_TIMING(NATIVE_DUMP);
+    jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
+    LLVMContext &Context = data->M->getContext();
+    // We don't want to use MCJIT's target machine because
+    // it uses the large code model and we may potentially
+    // want less optimizations there.
+    Triple TheTriple = Triple(jl_TargetMachine->getTargetTriple());
+    // make sure to emit the native object format, even if FORCE_ELF was set in codegen
+#if defined(_OS_WINDOWS_)
+    TheTriple.setObjectFormat(Triple::COFF);
+#elif defined(_OS_DARWIN_)
+    TheTriple.setObjectFormat(Triple::MachO);
+    TheTriple.setOS(llvm::Triple::MacOSX);
+#endif
+    std::unique_ptr<TargetMachine> TM(
+        jl_TargetMachine->getTarget().createTargetMachine(
+            TheTriple.getTriple(),
+            jl_TargetMachine->getTargetCPU(),
+            jl_TargetMachine->getTargetFeatureString(),
+            jl_TargetMachine->Options,
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+            Reloc::PIC_,
+#else
+            Optional<Reloc::Model>(),
+#endif
+#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
+            // On PPC the small model is limited to 16bit offsets
+            CodeModel::Medium,
+#else
+            // Use small model so that we can use signed 32bits offset in the function and GV tables
+            CodeModel::Small,
+#endif
+            CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
+            ));
+
+    legacy::PassManager PM;
+    addTargetPasses(&PM, TM.get());
+
+    // set up optimization passes
+    SmallVector<char, 128> obj_Buffer;
+    std::error_code EC;
+    raw_fd_ostream obj_OS(obj_fname, EC, sys::fs::F_None);
+    if (EC) {
+        errs() << "Could not open file: " << EC.message();
+        return;
+    }
+    addOptimizationPasses(&PM, jl_options.opt_level, true, false);
+#if JL_LLVM_VERSION >= 70000
+    if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, TargetMachine::CGFT_ObjectFile, false))
+#else
+    if (TM->addPassesToEmitFile(PM, obj_OS, TargetMachine::CGFT_ObjectFile, false))
+#endif
+        jl_safe_printf("ERROR: target does not support generation of object files\n");
+
+    // Reset the target triple to make sure it matches the new target machine
+    data->M->setTargetTriple(TM->getTargetTriple().str());
+    DataLayout DL = TM->createDataLayout();
+    DL.reset(DL.getStringRepresentation() + "-ni:10:11:12:13");
+    data->M->setDataLayout(DL);
+    Type *T_size;
+    if (sizeof(size_t) == 8)
+        T_size = Type::getInt64Ty(Context);
+    else
+        T_size = Type::getInt32Ty(Context);
+    Type *T_psize = T_size->getPointerTo();
+
+    PM.run(*data->M);
+
+    obj_OS.flush();
+
+    data->M.reset(); // free memory for data->M
     delete data;
 }
 

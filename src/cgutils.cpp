@@ -142,7 +142,7 @@ static Value *stringConstPtr(IRBuilder<> &irbuilder, const std::string &txt)
     StringMap<GlobalVariable*>::iterator pooledval =
         stringConstants.insert(std::pair<StringRef, GlobalVariable*>(ctxt, NULL)).first;
     StringRef pooledtxt = pooledval->getKey();
-    if (imaging_mode) {
+    if (imaging_mode || standalone_aot_mode) {
         if (pooledval->second == NULL) {
             static int strno = 0;
             std::stringstream ssno;
@@ -288,7 +288,10 @@ static Value *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
     if (!gv) {
         // otherwise emit a new GlobalVariable for a jl_value_t named "cname"
         std::stringstream gvname;
-        gvname << cname << globalUnique++;
+        if (standalone_aot_mode)
+            gvname << cname;
+        else
+            gvname << cname << globalUnique++;
         // no existing GlobalVariable, create one and store it
         gv = new GlobalVariable(*M, T_pjlvalue,
                                 false, GlobalVariable::ExternalLinkage,
@@ -330,12 +333,121 @@ static Value *julia_pgv(jl_codectx_t &ctx, const char *prefix, jl_sym_t *name, j
     return julia_pgv(ctx, fullname, addr);
 }
 
+#define CRNAME(x) if (p == (void *)x) return #x
+
+static std::string jl_name_from_type(void *p) {
+    CRNAME(jl_typeofbottom_type);
+    CRNAME(jl_datatype_type);
+    CRNAME(jl_uniontype_type);
+    CRNAME(jl_unionall_type);
+    CRNAME(jl_tvar_type);
+    CRNAME(jl_any_type);
+    CRNAME(jl_type_type);
+    CRNAME(jl_typetype_type);
+    CRNAME(jl_typename_type);
+    CRNAME(jl_type_typename);
+    CRNAME(jl_sym_type);
+    CRNAME(jl_symbol_type);
+    CRNAME(jl_ssavalue_type);
+    CRNAME(jl_abstractslot_type);
+    CRNAME(jl_slotnumber_type);
+    CRNAME(jl_typedslot_type);
+    CRNAME(jl_simplevector_type);
+    CRNAME(jl_tuple_typename);
+    CRNAME(jl_vecelement_typename);
+    CRNAME(jl_anytuple_type);
+    CRNAME(jl_emptytuple_type);
+    CRNAME(jl_anytuple_type_type);
+    CRNAME(jl_vararg_type);
+    CRNAME(jl_vararg_typename);
+    CRNAME(jl_task_type);
+    CRNAME(jl_function_type);
+    CRNAME(jl_builtin_type);
+    CRNAME(jl_bottom_type);
+    CRNAME(jl_method_instance_type);
+    CRNAME(jl_code_info_type);
+    CRNAME(jl_method_type);
+    CRNAME(jl_module_type);
+    CRNAME(jl_abstractarray_type);
+    CRNAME(jl_densearray_type);
+    CRNAME(jl_array_type);
+    CRNAME(jl_array_typename);
+    CRNAME(jl_weakref_type);
+    CRNAME(jl_abstractstring_type);
+    CRNAME(jl_string_type);
+    CRNAME(jl_errorexception_type);
+    CRNAME(jl_argumenterror_type);
+    CRNAME(jl_loaderror_type);
+    CRNAME(jl_initerror_type);
+    CRNAME(jl_typeerror_type);
+    CRNAME(jl_methoderror_type);
+    CRNAME(jl_undefvarerror_type);
+    CRNAME(jl_lineinfonode_type);
+    CRNAME(jl_stackovf_exception);
+    CRNAME(jl_memory_exception);
+    CRNAME(jl_readonlymemory_exception);
+    CRNAME(jl_diverror_exception);
+    CRNAME(jl_undefref_exception);
+    CRNAME(jl_interrupt_exception);
+    CRNAME(jl_boundserror_type);
+    CRNAME(jl_an_empty_vec_any);
+    CRNAME(jl_an_empty_string);
+    CRNAME(jl_bool_type);
+    CRNAME(jl_char_type);
+    CRNAME(jl_int8_type);
+    CRNAME(jl_uint8_type);
+    CRNAME(jl_int16_type);
+    CRNAME(jl_uint16_type);
+    CRNAME(jl_int32_type);
+    CRNAME(jl_uint32_type);
+    CRNAME(jl_int64_type);
+    CRNAME(jl_uint64_type);
+    CRNAME(jl_float16_type);
+    CRNAME(jl_float32_type);
+    CRNAME(jl_float64_type);
+    CRNAME(jl_floatingpoint_type);
+    CRNAME(jl_number_type);
+    CRNAME(jl_void_type);
+    CRNAME(jl_signed_type);
+    CRNAME(jl_voidpointer_type);
+    CRNAME(jl_pointer_type);
+    CRNAME(jl_ref_type);
+    CRNAME(jl_pointer_typename);
+    CRNAME(jl_namedtuple_typename);
+    CRNAME(jl_namedtuple_type);
+    CRNAME(jl_array_uint8_type);
+    CRNAME(jl_array_any_type);
+    CRNAME(jl_array_symbol_type);
+    CRNAME(jl_array_int32_type);
+    CRNAME(jl_expr_type);
+    CRNAME(jl_globalref_type);
+    CRNAME(jl_linenumbernode_type);
+    CRNAME(jl_gotonode_type);
+    CRNAME(jl_phinode_type);
+    CRNAME(jl_pinode_type);
+    CRNAME(jl_phicnode_type);
+    CRNAME(jl_upsilonnode_type);
+    CRNAME(jl_quotenode_type);
+    CRNAME(jl_newvarnode_type);
+    CRNAME(jl_intrinsic_type);
+    CRNAME(jl_methtable_type);
+    CRNAME(jl_typemap_level_type);
+    CRNAME(jl_typemap_entry_type);
+    CRNAME(jl_emptysvec);
+    CRNAME(jl_emptytuple);
+    CRNAME(jl_true);
+    CRNAME(jl_false);
+    CRNAME(jl_nothing);
+    return "";
+}
+
+
 static GlobalVariable *julia_const_gv(jl_value_t *val);
 static Value *literal_pointer_val_slot(jl_codectx_t &ctx, jl_value_t *p)
 {
     // emit a pointer to a jl_value_t* which will allow it to be valid across reloading code
     // also, try to give it a nice name for gdb, for easy identification
-    if (!imaging_mode) {
+    if (!imaging_mode && !standalone_aot_mode) {
         Module *M = jl_Module;
         GlobalVariable *gv = new GlobalVariable(
                 *M, T_pjlvalue, true, GlobalVariable::PrivateLinkage,
@@ -349,6 +461,11 @@ static Value *literal_pointer_val_slot(jl_codectx_t &ctx, jl_value_t *p)
     }
     if (jl_is_datatype(p)) {
         jl_datatype_t *addr = (jl_datatype_t*)p;
+        if (standalone_aot_mode) {
+            std::string name = jl_name_from_type(addr);
+            if (!name.empty())
+                return julia_pgv(ctx, name.c_str(), p);
+        }
         // DataTypes are prefixed with a +
         return julia_pgv(ctx, "+", addr->name->name, addr->name->module, p);
     }
@@ -445,7 +562,7 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p)
 {
     if (p == NULL)
         return V_null;
-    if (!imaging_mode)
+    if (!imaging_mode && !standalone_aot_mode)
         return literal_static_pointer_val(p);
     Value *pgv = literal_pointer_val_slot(ctx, p);
     return tbaa_decorate(tbaa_const, maybe_mark_load_dereferenceable(
@@ -457,7 +574,7 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_binding_t *p)
     // emit a pointer to any jl_value_t which will be valid across reloading code
     if (p == NULL)
         return V_null;
-    if (!imaging_mode)
+    if (!imaging_mode && !standalone_aot_mode)
         return literal_static_pointer_val(p);
     // bindings are prefixed with jl_bnd#
     Value *pgv = julia_pgv(ctx, "jl_bnd#", p->name, p->owner, p);
@@ -498,12 +615,22 @@ static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
 {
     // emit a literal_pointer_val to the value field of a jl_binding_t
     // binding->value are prefixed with *
+    if (b && standalone_aot_mode && jl_is_datatype(b->value)) {
+        std::string name = jl_name_from_type((jl_datatype_t*)b->value);
+        if (!name.empty())
+            return julia_binding_gv(ctx, emit_bitcast(ctx,
+                       tbaa_decorate(tbaa_const,
+                              ctx.builder.CreateLoad(T_pjlvalue, julia_pgv(ctx, name.c_str(), b->value))),
+                       T_pprjlvalue));
+    }
     Value *bv;
-    if (imaging_mode)
+    if (imaging_mode || standalone_aot_mode) {
         bv = emit_bitcast(ctx,
                 tbaa_decorate(tbaa_const,
-                              ctx.builder.CreateLoad(T_pjlvalue, julia_pgv(ctx, "*", b->name, b->owner, b))),
+                              ctx.builder.CreateLoad(T_pjlvalue, julia_pgv(ctx, "*", b->name, b->owner, 
+                                                                           standalone_aot_mode ? b->value : (jl_value_t*)b))),
                 T_pprjlvalue);
+    }
     else
         bv = ConstantExpr::getBitCast(literal_static_pointer_val(b), T_pprjlvalue);
     return julia_binding_gv(ctx, bv);
@@ -869,14 +996,14 @@ static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
                 [&](unsigned idx, jl_datatype_t *jt) { },
                 p.typ,
                 counter);
-        Value *datatype_or_p = (imaging_mode ? Constant::getNullValue(T_ppjlvalue) :
+        Value *datatype_or_p = (imaging_mode || standalone_aot_mode ? Constant::getNullValue(T_ppjlvalue) :
                                 Constant::getNullValue(T_prjlvalue));
         counter = 0;
         for_each_uniontype_small(
             [&](unsigned idx, jl_datatype_t *jt) {
                 Value *cmp = ctx.builder.CreateICmpEQ(tindex, ConstantInt::get(T_int8, idx));
                 Value *ptr;
-                if (imaging_mode) {
+                if (imaging_mode || standalone_aot_mode) {
                     ptr = literal_pointer_val_slot(ctx, (jl_value_t*)jt);
                 }
                 else {
@@ -887,7 +1014,7 @@ static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
             p.typ,
             counter);
         auto emit_unboxty = [&] () -> Value* {
-            if (imaging_mode)
+            if (imaging_mode || standalone_aot_mode)
                 return maybe_decay_untracked(
                     tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(T_pjlvalue, datatype_or_p)));
             return datatype_or_p;

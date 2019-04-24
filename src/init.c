@@ -832,6 +832,180 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_install_sigint_handler();
 }
 
+void jl_init_types2(void) JL_GC_DISABLED
+{
+    jl_module_t *core = NULL; // will need to be assigned later
+
+    jl_char_type = jl_new_primitivetype((jl_value_t*)jl_symbol("Char"), core,
+                                         jl_any_type, jl_emptysvec, 32);
+    jl_int8_type = jl_new_primitivetype((jl_value_t*)jl_symbol("Int8"), core,
+                                         jl_any_type, jl_emptysvec, 8);
+    jl_int16_type = jl_new_primitivetype((jl_value_t*)jl_symbol("Int16"), core,
+                                         jl_any_type, jl_emptysvec, 16);
+    jl_uint16_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt16"), core,
+                                         jl_any_type, jl_emptysvec, 16);
+    jl_float16_type = jl_new_primitivetype((jl_value_t*)jl_symbol("Float16"), core,
+                                         jl_any_type, jl_emptysvec, 16);
+    jl_float32_type = jl_new_primitivetype((jl_value_t*)jl_symbol("Float32"), core,
+                                         jl_any_type, jl_emptysvec, 32);
+    jl_float64_type = jl_new_primitivetype((jl_value_t*)jl_symbol("Float64"), core,
+                                         jl_any_type, jl_emptysvec, 64);
+    jl_errorexception_type = jl_new_datatype(jl_symbol("ErrorException"), core, jl_type_type, jl_emptysvec,
+                                             jl_perm_symsvec(1, "msg"), jl_svec(1, jl_string_type), 0, 0, 1);
+}
+
+// Basic initialization that doesn't load a system image
+JL_DLLEXPORT void jl_init_basics(void) {
+    // jl_init();
+    if (jl_float64_type)    // already initialized
+        return;
+    jl_init_timing();
+#ifdef JULIA_ENABLE_THREADING
+    // Make sure we finalize the tls callback before starting any threads.
+    jl_get_ptls_states_getter();
+#endif
+    jl_ptls_t ptls = jl_get_ptls_states();
+    (void)ptls; assert(ptls); // make sure early that we have initialized ptls
+    jl_safepoint_init();
+    libsupport_init();
+    htable_new(&jl_current_modules, 0);
+    ios_set_io_wait_func = jl_set_io_wait;
+    jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
+                                    // best to call this first, since it also initializes libuv
+    jl_init_uv();
+    restore_signals();
+
+    jl_page_size = jl_getpagesize();
+    uint64_t total_mem = uv_get_total_memory();
+    if (total_mem >= (size_t)-1) {
+        total_mem = (size_t)-1;
+    }
+    jl_arr_xtralloc_limit = total_mem / 100;  // Extra allocation limited to 1% of total RAM
+    jl_prep_sanitizers();
+    void *stack_lo, *stack_hi;
+    jl_init_stack_limits(1, &stack_lo, &stack_hi);
+    jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT, 1);
+#ifdef _OS_WINDOWS_
+    jl_ntdll_handle = jl_dlopen("ntdll.dll", 0); // bypass julia's pathchecking for system dlls
+    jl_kernel32_handle = jl_dlopen("kernel32.dll", 0);
+#if defined(_MSC_VER) && _MSC_VER == 1800
+    jl_crtdll_handle = jl_dlopen("msvcr120.dll", 0);
+#else
+    jl_crtdll_handle = jl_dlopen("msvcrt.dll", 0);
+#endif
+    jl_winsock_handle = jl_dlopen("ws2_32.dll", 0);
+    jl_exe_handle = GetModuleHandleA(NULL);
+    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
+    if (!SymInitialize(GetCurrentProcess(), NULL, 1)) {
+        jl_printf(JL_STDERR, "WARNING: failed to initialize stack walk info\n");
+    }
+    needsSymRefreshModuleList = 0;
+    HMODULE jl_dbghelp = (HMODULE) jl_dlopen("dbghelp.dll", 0);
+    if (jl_dbghelp)
+        jl_dlsym(jl_dbghelp, "SymRefreshModuleList", (void **)&hSymRefreshModuleList, 1);
+#else
+    jl_exe_handle = jl_dlopen(NULL, JL_RTLD_NOW);
+#ifdef RTLD_DEFAULT
+    jl_RTLD_DEFAULT_handle = RTLD_DEFAULT;
+#else
+    jl_RTLD_DEFAULT_handle = jl_exe_handle;
+#endif
+#endif
+
+#if defined(JL_USE_INTEL_JITEVENTS)
+    const char *jit_profiling = getenv("ENABLE_JITPROFILING");
+    if (jit_profiling && atoi(jit_profiling)) {
+        jl_using_intel_jitevents = 1;
+    }
+#endif
+
+#if defined(JL_USE_OPROFILE_JITEVENTS)
+    const char *jit_profiling = getenv("ENABLE_JITPROFILING");
+    if (jit_profiling && atoi(jit_profiling)) {
+        jl_using_oprofile_jitevents = 1;
+    }
+#endif
+
+#if defined(JL_USE_PERF_JITEVENTS)
+    const char *jit_profiling = getenv("ENABLE_JITPROFILING");
+    if (jit_profiling && atoi(jit_profiling)) {
+        jl_using_perf_jitevents= 1;
+    }
+#endif
+
+#if defined(__linux__)
+    int ncores = jl_cpu_threads();
+    if (ncores > 1) {
+        cpu_set_t cpumask;
+        CPU_ZERO(&cpumask);
+        for(int i=0; i < ncores; i++) {
+            CPU_SET(i, &cpumask);
+        }
+        sched_setaffinity(0, sizeof(cpu_set_t), &cpumask);
+    }
+#endif
+
+    jl_init_threading();
+
+    // loads sysimg if available, and conditionally sets jl_options.cpu_target
+    if (jl_options.cpu_target == NULL)
+        jl_options.cpu_target = "native";
+
+    jl_gc_init();
+    jl_gc_enable(0);
+    jl_init_types();
+    jl_init_types2();
+    jl_init_frontend();
+    jl_init_tasks();
+    jl_init_root_task(stack_lo, stack_hi);
+
+#ifdef ENABLE_TIMINGS
+    jl_root_task->timing_stack = jl_root_timing;
+#endif
+
+    init_stdio();
+    // libuv stdio cleanup depends on jl_init_tasks() because JL_TRY is used in jl_atexit_hook()
+
+    // jl_init_codegen();
+
+    jl_an_empty_vec_any = (jl_value_t*)jl_alloc_vec_any(0);
+    jl_init_serializer();
+    jl_init_intrinsic_properties();
+
+    jl_core_module = jl_new_module(jl_symbol("Core"));
+    jl_type_typename->mt->module = jl_core_module;
+    jl_top_module = jl_core_module;
+    jl_init_intrinsic_functions();
+    jl_init_primitives();
+    jl_init_main_module();
+
+    jl_init_box_caches();
+    
+    // // set module field of primitive types
+    // int i;
+    // void **table = jl_core_module->bindings.table;
+    // for(i=1; i < jl_core_module->bindings.size; i+=2) {
+    //     if (table[i] != HT_NOTFOUND) {
+    //         jl_binding_t *b = (jl_binding_t*)table[i];
+    //         jl_value_t *v = b->value;
+    //         if (v) {
+    //             if (jl_is_unionall(v))
+    //                 v = jl_unwrap_unionall(v);
+    //             if (jl_is_datatype(v)) {
+    //                 jl_datatype_t *tt = (jl_datatype_t*)v;
+    //                 tt->name->module = jl_core_module;
+    //                 if (tt->name->mt)
+    //                     tt->name->mt->module = jl_core_module;
+    //             }
+    //         }
+    //     }
+    // }
+
+    // jl_start_threads();
+
+    jl_gc_enable(1);
+}
+
 static jl_value_t *core(const char *name)
 {
     return jl_get_global(jl_core_module, jl_symbol(name));

@@ -147,6 +147,9 @@ extern JITEventListener *CreateJuliaJITEventListener();
 // for image reloading
 bool imaging_mode = false;
 
+// for standalone compilation meant for linking with libjulia 
+bool standalone_aot_mode = false;
+
 // shared llvm state
 static LLVMContext jl_LLVMContext;
 TargetMachine *jl_TargetMachine;
@@ -2654,6 +2657,10 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
     if (!handled) {
         Value *r = emit_jlcall(ctx, prepare_call(jlinvoke_func), boxed(ctx, lival), argv, nargs, JLCALL_F2_CC);
         result = mark_julia_type(ctx, r, true, rt);
+        if (standalone_aot_mode) {
+            jl_printf(JL_STDERR, "Warning: jl_invoke() used for `%s` in `%s`.\n", 
+                jl_symbol_name(jl_globalref_name(args[1])), ctx.name);
+        }
     }
     if (result.typ == jl_bottom_type)
         CreateTrap(ctx.builder);
@@ -2698,6 +2705,16 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
         }
     }
 
+    if (standalone_aot_mode) {
+        if (jl_is_globalref(args[0])) {
+            jl_printf(JL_STDERR, "Warning: jl_apply_generic() used for `%s` in `%s`.\n", 
+                jl_symbol_name(jl_globalref_name(args[0])), ctx.name);
+        }
+        else if (jl_is_ssavalue(args[0])) {
+            jl_printf(JL_STDERR, "Warning: jl_apply_generic() used for an SSAValue in `%s`.\n", 
+                ctx.name);
+        }
+    }
     // emit function and arguments
     Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, nargs, JLCALL_F_CC);
     return mark_julia_type(ctx, callval, true, rt);

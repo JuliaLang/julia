@@ -22,6 +22,7 @@ extern "C" {
 extern TargetMachine *jl_TargetMachine;
 extern Module *shadow_output;
 extern bool imaging_mode;
+extern bool standalone_aot_mode;
 
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false);

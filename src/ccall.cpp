@@ -41,6 +41,16 @@ lazyModule(Func &&func)
         std::forward<Func>(func));
 }
 
+extern "C" JL_DLLEXPORT void jl_set_standalone_aot_mode(void)
+{
+    standalone_aot_mode = true;
+}
+
+extern "C" JL_DLLEXPORT void jl_clear_standalone_aot_mode(void)
+{
+    standalone_aot_mode = false;
+}
+
 
 // global variables to pointers are pretty common,
 // so this method is available as a convenience for emitting them.
@@ -55,7 +65,7 @@ lazyModule(Func &&func)
 void** jl_emit_and_add_to_shadow(GlobalVariable *gv)
 {
     // make a copy in the shadow_output
-    assert(imaging_mode);
+    assert(imaging_mode || standalone_aot_mode);
     PointerType *T = cast<PointerType>(gv->getValueType()); // pointer is the only supported type here
     GlobalVariable *shadowvar = global_proto(gv, shadow_output);
     shadowvar->setInitializer(ConstantPointerNull::get(T));
@@ -326,7 +336,7 @@ static Value *emit_plt(
        const AttributeList &attrs,
        CallingConv::ID cc, const char *f_lib, const char *f_name)
 {
-    assert(imaging_mode);
+    assert(imaging_mode || standalone_aot_mode);
     // Don't do this for vararg functions so that the `musttail` is only
     // an optimization and is not required to function correctly.
     assert(!functype->isVarArg());
@@ -599,6 +609,11 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
     const char *&f_lib = out.f_lib;
 
     jl_value_t *ptr = static_eval(ctx, arg, true);
+    if (ptr == NULL && standalone_aot_mode && jl_is_expr(arg)) {
+        jl_expr_t *ex = (jl_expr_t*)arg;
+        jl_value_t **eargs = (jl_value_t**)jl_array_data(ex->args);
+        ptr = static_eval(ctx, eargs[1], true);
+    }
     if (ptr == NULL) {
         jl_cgval_t arg1 = emit_expr(ctx, arg);
         jl_value_t *ptr_ty = arg1.typ;
@@ -728,7 +743,10 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
 
     interpret_symbol_arg(ctx, sym, args[1], "cglobal", false);
 
-    if (sym.jl_ptr != NULL) {
+    if (standalone_aot_mode) {
+        res = jl_Module->getOrInsertGlobal(sym.f_name, lrt);
+    }
+    else if (sym.jl_ptr != NULL) {
         res = ctx.builder.CreateBitCast(sym.jl_ptr, lrt);
     }
     else if (sym.fptr != NULL) {
@@ -1937,6 +1955,11 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 jl_error("llvmcall only supports intrinsic calls");
         }
     }
+    else if (standalone_aot_mode) {
+        assert(symarg.f_name != NULL);
+        llvmf = jl_Module->getOrInsertFunction(symarg.f_name, functype);
+        cast<Function>(llvmf)->setLinkage(Function::ExternalLinkage);
+    }
     else if (symarg.jl_ptr != NULL) {
         null_pointer_check(ctx, symarg.jl_ptr);
         Type *funcptype = PointerType::get(functype, 0);
@@ -1983,6 +2006,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     }
 
     OperandBundleDef OpBundle("jl_roots", gc_uses);
+
     // the actual call
     Value *ret = ctx.builder.CreateCall(prepare_call(llvmf),
                                     ArrayRef<Value*>(&argvals[0], nargs + sret),
@@ -2066,3 +2090,4 @@ jl_cgval_t function_sig_t::emit_a_ccall(
 
     return mark_or_box_ccall_result(ctx, result, jlretboxed, rt, unionall_env, static_rt);
 }
+
