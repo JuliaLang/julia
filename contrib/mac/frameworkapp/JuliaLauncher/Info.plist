@@ -122,8 +122,6 @@
 				<string>NSURLPboardType</string>
 				<string>NSPasteboardTypeFileURL</string>
 			</array>
-			<key>NSUserData</key>
-			<string>print</string>
 		</dict>
 	</array>
 	<key>NSSupportsAutomaticTermination</key>
