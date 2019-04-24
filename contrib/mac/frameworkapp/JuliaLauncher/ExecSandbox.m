@@ -14,7 +14,7 @@
   if (self == nil)
     return nil;
   _execSandboxCnx = [[NSXPCConnection alloc]
-      initWithServiceName:@"org.julialang.ExecSandbox"];
+      initWithServiceName:@"org.julialang.JuliaLauncher.ExecSandbox"];
   _execSandboxCnx.remoteObjectInterface = CreateExecSandboxXPCInterface();
   [_execSandboxCnx resume];
   return self;

@@ -320,8 +320,9 @@
 				CODE_SIGN_ENTITLEMENTS = ExecSandbox/ExecSandbox.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_HARDENED_RUNTIME = YES;
+				EXECUTABLE_PREFIX = org.julialang.JuliaLauncher.;
 				INFOPLIST_FILE = ExecSandbox/Info.plist;
-				PRODUCT_BUNDLE_IDENTIFIER = org.julialang.ExecSandbox;
+				PRODUCT_BUNDLE_IDENTIFIER = org.julialang.JuliaLauncher.ExecSandbox;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 			};
@@ -333,8 +334,9 @@
 				CODE_SIGN_ENTITLEMENTS = ExecSandbox/ExecSandbox.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_HARDENED_RUNTIME = YES;
+				EXECUTABLE_PREFIX = org.julialang.JuliaLauncher.;
 				INFOPLIST_FILE = ExecSandbox/Info.plist;
-				PRODUCT_BUNDLE_IDENTIFIER = org.julialang.ExecSandbox;
+				PRODUCT_BUNDLE_IDENTIFIER = org.julialang.JuliaLauncher.ExecSandbox;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 			};
