@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# RUN: julia --startup-file=no %s | opt -load libjulia%shlibext -AllocOpt -LateLowerGCFrame -S - | FileCheck %s
+# RUN: julia --startup-file=no %s | opt -load libjulia%shlibext -AllocOpt -LateLowerGCFrame -FinalLowerGC -S - | FileCheck %s
 
 isz = sizeof(UInt) == 8 ? "i64" : "i32"
 

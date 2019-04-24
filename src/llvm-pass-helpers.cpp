@@ -125,6 +125,7 @@ namespace jl_intrinsics {
     static const char *PUSH_GC_FRAME_NAME = "julia.push_gc_frame";
     static const char *POP_GC_FRAME_NAME = "julia.pop_gc_frame";
     static const char *GET_GC_FRAME_SLOT_NAME = "julia.get_gc_frame_slot";
+    static const char *GC_ALLOC_BYTES_NAME = "julia.gc_alloc_bytes";
 
     const IntrinsicDescription newGCFrame(
         NEW_GC_FRAME_NAME,
@@ -181,6 +182,24 @@ namespace jl_intrinsics {
                 Function::ExternalLinkage,
                 GET_GC_FRAME_SLOT_NAME,
                 &M);
+
+            return intrinsic;
+        });
+
+    const IntrinsicDescription GCAllocBytes(
+        GC_ALLOC_BYTES_NAME,
+        [](llvm::Module &M, const JuliaPassContext &context) {
+            auto intrinsic = Function::Create(
+                FunctionType::get(
+                    context.T_prjlvalue,
+                    { context.T_pint8, context.T_size },
+                    false),
+                Function::ExternalLinkage,
+                GC_ALLOC_BYTES_NAME,
+                &M);
+            intrinsic->addAttribute(AttributeList::ReturnIndex, Attribute::NoAlias);
+            intrinsic->addAttribute(AttributeList::ReturnIndex, Attribute::NonNull);
+            intrinsic->addFnAttr(Attribute::getWithAllocSizeArgs(M.getContext(), 1, None)); // returns %1 bytes
 
             return intrinsic;
         });

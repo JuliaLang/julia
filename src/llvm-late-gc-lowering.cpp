@@ -1689,30 +1689,36 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 UpdatePtrNumbering(CI, ASCI, S);
             } else if (alloc_obj_func && callee == alloc_obj_func) {
                 assert(CI->getNumArgOperands() == 3);
-                auto sz = (size_t)cast<ConstantInt>(CI->getArgOperand(1))->getZExtValue();
-                // This is strongly architecture and OS dependent
-                int osize;
-                int offset = jl_gc_classify_pools(sz, &osize);
+
+                // Initialize an IR builder.
                 IRBuilder<> builder(CI);
                 builder.SetCurrentDebugLocation(CI->getDebugLoc());
-                auto ptls = CI->getArgOperand(0);
-                CallInst *newI;
-                if (offset < 0) {
-                    newI = builder.CreateCall(big_alloc_func,
-                                              {ptls, ConstantInt::get(T_size,
-                                                                      sz + sizeof(void*))});
-                }
-                else {
-                    auto pool_offs = ConstantInt::get(T_int32, offset);
-                    auto pool_osize = ConstantInt::get(T_int32, osize);
-                    newI = builder.CreateCall(pool_alloc_func, {ptls, pool_offs, pool_osize});
-                }
-                newI->setAttributes(newI->getCalledFunction()->getAttributes());
+
+                // Create a call to the `julia.gc_alloc_bytes` intrinsic, which is like
+                // `julia.gc_alloc_obj` except it doesn't set the tag.
+                auto allocBytesIntrinsic = getOrDefine(jl_intrinsics::GCAllocBytes);
+                auto newI = builder.CreateCall(
+                    allocBytesIntrinsic,
+                    {
+                        CI->getArgOperand(0),
+                        builder.CreateIntCast(
+                            CI->getArgOperand(1),
+                            allocBytesIntrinsic->getFunctionType()->getParamType(1),
+                            false)
+                    });
                 newI->takeName(CI);
-                auto store = builder.CreateStore(CI->getArgOperand(2),
-                                                 EmitTagPtr(builder, T_prjlvalue, newI));
+
+                // Set the tag.
+                auto store = builder.CreateStore(
+                    CI->getArgOperand(2),
+                    EmitTagPtr(builder, T_prjlvalue, newI));
                 store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
+
+                // Replace uses of the call to `julia.gc_alloc_obj` with the call to
+                // `julia.gc_alloc_bytes`.
                 CI->replaceAllUsesWith(newI);
+
+                // Update the pointer numbering.
                 UpdatePtrNumbering(CI, newI, S);
             } else if (typeof_func && callee == typeof_func) {
                 assert(CI->getNumArgOperands() == 1);

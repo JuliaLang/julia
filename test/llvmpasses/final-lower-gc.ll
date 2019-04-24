@@ -1,6 +1,7 @@
 ; RUN: opt -load libjulia%shlibext -FinalLowerGC -S %s | FileCheck %s
 
 %jl_value_t = type opaque
+@tag = external addrspace(10) global %jl_value_t
 
 declare void @boxed_simple(%jl_value_t addrspace(10)*, %jl_value_t addrspace(10)*)
 declare %jl_value_t addrspace(10)* @jl_box_int64(i64)
@@ -12,6 +13,9 @@ declare noalias nonnull %jl_value_t addrspace(10)** @julia.new_gc_frame(i32)
 declare void @julia.push_gc_frame(%jl_value_t addrspace(10)**, i32)
 declare %jl_value_t addrspace(10)** @julia.get_gc_frame_slot(%jl_value_t addrspace(10)**, i32)
 declare void @julia.pop_gc_frame(%jl_value_t addrspace(10)**)
+declare noalias nonnull %jl_value_t addrspace(10)* @julia.gc_alloc_bytes(i8*, i64) #0
+
+attributes #0 = { allocsize(1) }
 
 define void @gc_frame_lowering(i64 %a, i64 %b) {
 top:
@@ -49,6 +53,19 @@ top:
   call void @julia.pop_gc_frame(%jl_value_t addrspace(10)** %gcframe)
 ; CHECK-NEXT: ret void
   ret void
+}
+
+define %jl_value_t addrspace(10)* @gc_alloc_lowering() {
+top:
+; CHECK-LABEL: @gc_alloc_lowering
+  %ptls = call %jl_value_t*** @julia.ptls_states()
+  %ptls_i8 = bitcast %jl_value_t*** %ptls to i8*
+; CHECK: %v = call noalias nonnull %jl_value_t addrspace(10)* @jl_gc_pool_alloc
+  %v = call %jl_value_t addrspace(10)* @julia.gc_alloc_bytes(i8* %ptls_i8, i64 8)
+  %0 = bitcast %jl_value_t addrspace(10)* %v to %jl_value_t addrspace(10)* addrspace(10)*
+  %1 = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)* addrspace(10)* %0, i64 -1
+  store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* %1, !tbaa !0
+  ret %jl_value_t addrspace(10)* %v
 }
 
 !0 = !{!1, !1, i64 0}

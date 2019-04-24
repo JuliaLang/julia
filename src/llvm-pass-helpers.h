@@ -91,17 +91,26 @@ struct JuliaPassContext {
 };
 
 namespace jl_intrinsics {
-    // An intrinsic that creates a new GC frame.
+    // `julia.new_gc_frame`: an intrinsic that creates a new GC frame.
     extern const IntrinsicDescription newGCFrame;
 
-    // An intrinsic that pushes a GC frame.
+    // `julia.push_gc_frame`: an intrinsic that pushes a GC frame.
     extern const IntrinsicDescription pushGCFrame;
 
-    // An intrinsic that pops a GC frame.
+    // `julia.pop_gc_frame`: an intrinsic that pops a GC frame.
     extern const IntrinsicDescription popGCFrame;
 
-    // An intrinsic that creates a pointer to a GC frame slot.
+    // `julia.get_gc_frame_slot`: an intrinsic that creates a
+    // pointer to a GC frame slot.
     extern const IntrinsicDescription getGCFrameSlot;
+
+    // `julia.gc_alloc_bytes`: an intrinsic that allocates
+    // the bytes for an object, but does not initialize the
+    // tag field. That is, its semantics and signature are
+    // the same as for `julia.gc_alloc_obj`, except that
+    // the object's tag field is neither initialized nor
+    // passed as an argument.
+    extern const IntrinsicDescription GCAllocBytes;
 }
 
 #endif
