@@ -206,12 +206,22 @@ NSString static const *const terminalBundleID = @"com.apple.Terminal";
       retry = s == procNotFound && !retry && [AppDelegate launchTerminalApp];
     } while (retry);
 
+    // TODO: Explain how to enable Apple events in the Automation privacy
+    // preferences.
     if (s == errAEEventNotPermitted) {
       a.informativeText = NSLocalizedString(
           @"The system prevented running the Julia REPL in the Terminal.", );
+      [[NSWorkspace sharedWorkspace]
+          openURL:[NSURL
+                      URLWithString:@"x-apple.systempreferences:com.apple."
+                                    @"preference.security?Privacy_Automation"]];
     } else if (s == errAETargetAddressNotPermitted) {
       a.informativeText = NSLocalizedString(
           @"The system prevented sending AppleEvents to Terminal.", );
+      [[NSWorkspace sharedWorkspace]
+          openURL:[NSURL
+                      URLWithString:@"x-apple.systempreferences:com.apple."
+                                    @"preference.security?Privacy_Automation"]];
     } else if (s == procNotFound) {
       a.informativeText = NSLocalizedString(
           @"Terminal is not running and could not be launched.", );
