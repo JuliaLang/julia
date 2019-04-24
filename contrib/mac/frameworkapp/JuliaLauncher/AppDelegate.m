@@ -45,6 +45,7 @@ NSString static const *const terminalBundleID = @"com.apple.Terminal";
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
+  [NSApp disableRelaunchOnLogin];
   [_jvman readFromDefaults];
   [self execBestJulia];
   [_jvman findJuliaWithSpotlight];
