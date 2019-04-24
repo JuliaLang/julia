@@ -39,7 +39,7 @@ sudo apt-get install libblas3gf liblapack3gf libgmp3-dev \
                      g++-4.8 gfortran libgfortran3 m4 libedit-dev
 ````
 
-If you run into issues building LLVM, see [these notes](http://llvm.org/docs/HowToBuildOnARM.html).
+If you run into issues building LLVM, see [these notes](https://llvm.org/docs/HowToBuildOnARM.html).
 
 
 ## 32-bit (ARMv6, ARMv7)
@@ -48,7 +48,7 @@ Julia has been successfully compiled on several variants of the following ARMv6 
 
 * ARMv7 / Cortex A15 Samsung Chromebooks running Ubuntu Linux under Crouton;
 * [Raspberry Pi](https://www.raspberrypi.org).
-* [Odroid](http://www.hardkernel.com/main/main.php).
+* [Odroid](https://www.hardkernel.com).
 
 
 Julia requires at least the `armv6` and `vfpv2` instruction sets. It's recommended to use  `armv7-a`.
@@ -100,7 +100,7 @@ due to unsupported inline assembly. In that case, add `MARCH=armv7-a` to
 
 If building LLVM fails, you can download binaries from the LLVM website:
 
-1.  Download the [LLVM 3.9.0 binaries for ARMv7a] (http://llvm.org/releases/3.9.0/clang+llvm-3.9.0-armv7a-linux-gnueabihf.tar.xz) and extract them in a local directory.
+1.  Download the [LLVM 3.9.0 binaries for ARMv7a] (https://llvm.org/releases/3.9.0/clang+llvm-3.9.0-armv7a-linux-gnueabihf.tar.xz) and extract them in a local directory.
 2. Add the following to `Make.user` (adjusting the path to the `llvm-config` binary):
 
     ```
@@ -116,8 +116,8 @@ On Chromebooks, you have to first install Crouton. If you do not have
 an Ubuntu chroot running on your Chromebook using Crouton, you can do
 so by following these tutorials.
 
-- [Crouton Tutorial 1](http://www.howtogeek.com/162120/how-to-install-ubuntu-linux-on-your-chromebook-with-crouton/)
-- [Crouton Tutorial 2](http://lifehacker.com/how-to-install-linux-on-a-chromebook-and-unlock-its-ful-509039343)
+- [Crouton Tutorial 1](https://www.howtogeek.com/162120/how-to-install-ubuntu-linux-on-your-chromebook-with-crouton/)
+- [Crouton Tutorial 2](https://lifehacker.com/how-to-install-linux-on-a-chromebook-and-unlock-its-ful-509039343)
 
 These tutorials will end up installing Ubuntu 12.04, and you have to
 upgrade to Ubuntu 14.04, or install Ubuntu 14.04 from scratch by
@@ -125,17 +125,17 @@ finding appropriate `crouton` help.
 
 #### Scaleway cloud hosted ARM servers
 
-On the current [Scaleway](http://scaleway.com) ARM servers, the Julia
+On the current [Scaleway](https://scaleway.com) ARM servers, the Julia
 build works out of the box.
 
 ## AArch64 (ARMv8)
 
 Julia has been successfully built on the following ARMv8 devices:
 
-* [nVidia Jetson TX1 & TX2](http://www.nvidia.com/object/embedded-systems-dev-kits-modules.html);
+* [nVidia Jetson TX1 & TX2](https://www.nvidia.com/object/embedded-systems-dev-kits-modules.html);
 * [X-Gene 1](https://www.apm.com/products/data-center/x-gene-family/x-gene/);
 * [Overdrive 3000](https://softiron.com/products/overdrive-3000/);
-* [Cavium ThunderX](http://www.cavium.com/ThunderX_ARM_Processors.html) on [packet.net](https://www.packet.net).
+* [Cavium ThunderX](https://www.cavium.com/ThunderX_ARM_Processors.html) on [packet.net](https://www.packet.net).
 
 Compilation on `ARMv8-A` requires that `Make.user` is configured as follows:
 
@@ -147,7 +147,7 @@ MARCH=armv8-a
 
 #### nVidia Jetson TX2
 
-Julia builds and runs on the [nVidia Jetson TX2](http://www.nvidia.com/object/embedded-systems-dev-kits-modules.html)
+Julia builds and runs on the [nVidia Jetson TX2](https://www.nvidia.com/object/embedded-systems-dev-kits-modules.html)
 platform with minimal configuration changes.
 
 After configuring `Make.user` as per the `AArch64` instructions in this document,

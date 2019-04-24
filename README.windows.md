@@ -77,7 +77,7 @@ The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise re
 ### Cygwin-to-MinGW cross-compiling
 
 The recommended way of compiling Julia from source on Windows is by cross
-compiling from [Cygwin](http://www.cygwin.com), using versions of the
+compiling from [Cygwin](https://www.cygwin.com), using versions of the
 MinGW-w64 compilers available through Cygwin's package manager.
 
  1. Download and run Cygwin setup for [32 bit](https://cygwin.com/setup-x86.exe)
@@ -172,7 +172,7 @@ For maximum compatibility with packages that use [WinRPM.jl](
 https://github.com/JuliaLang/WinRPM.jl) for binary dependencies on Windows, it
 is recommended that you use OpenSUSE 42.2 for cross-compiling a Windows build
 of Julia.  If you use a different Linux distribution or OS X, install
-[Vagrant](http://www.vagrantup.com/downloads) and use the following `Vagrantfile`:
+[Vagrant](https://www.vagrantup.com/downloads.html) and use the following `Vagrantfile`:
 
 ```
 # Vagrantfile for MinGW-w64 cross-compilation of Julia
@@ -182,7 +182,7 @@ $script = <<SCRIPT
 export XC_HOST=x86_64-w64-mingw32
 # Change the following to 32 for 32 bit Julia:
 export BITS=64
-zypper addrepo http://download.opensuse.org/repositories/windows:mingw:win$BITS/openSUSE_Leap_42.2/windows:mingw:win$BITS.repo
+zypper addrepo https://download.opensuse.org/repositories/windows:mingw:win$BITS/openSUSE_Leap_42.2/windows:mingw:win$BITS.repo
 zypper --gpg-auto-import-keys refresh
 zypper -n install --no-recommends git make cmake tar wine which curl \
     python python-xml patch gcc-c++ m4 p7zip.i586 libxml2-tools winbind
@@ -224,7 +224,7 @@ apt-get install wine subversion cvs gcc wget p7zip-full winbind mingw-w64
 ```
 
 **On Mac**: Install XCode, XCode command line tools, X11 (now [XQuartz](
-http://xquartz.macosforge.org/)), and [MacPorts](http://www.macports.org/install.php)
+https://www.xquartz.org/)), and [MacPorts](https://www.macports.org/install.php)
 or [Homebrew](https://brew.sh/).  Then run `port install wine wget mingw-w64`,
 or `brew install wine wget mingw-w64`, as appropriate.
 
@@ -255,7 +255,7 @@ be worked around by prepending `wineconsole` to the regular GDB invocation.
 
 ## Using a Windows VM
 
-[Vagrant](http://www.vagrantup.com/downloads) can also be used with a Windows
+[Vagrant](https://www.vagrantup.com/downloads.html) can also be used with a Windows
 guest VM via the `Vagrantfile` in [contrib/windows](contrib/windows/Vagrantfile),
 just run `vagrant up` from that folder.
 
@@ -298,7 +298,7 @@ running the resulting installer.
 
  - Disable the Windows [Superfetch](https://en.wikipedia.org/wiki/Windows_Vista_I/O_technologies#SuperFetch)
    and [Program Compatibility Assistant](
-   http://blogs.msdn.com/b/cjacks/archive/2011/11/22/managing-the-windows-7-program-compatibility-assistant-pca.aspx)
+   https://blogs.msdn.com/b/cjacks/archive/2011/11/22/managing-the-windows-7-program-compatibility-assistant-pca.aspx)
    services, as they are known to have [spurious interactions](
    https://cygwin.com/ml/cygwin/2011-12/msg00058.html) with MinGW/Cygwin.
 
@@ -308,7 +308,7 @@ running the resulting installer.
    one-by-one until a culprit is found.
 
  - Beware of [BLODA](https://cygwin.com/faq/faq.html#faq.using.bloda).
-   The [vmmap](http://technet.microsoft.com/en-us/sysinternals/dd535533.aspx)
+   The [vmmap](https://technet.microsoft.com/en-us/sysinternals/dd535533.aspx)
    tool is indispensable for identifying such software conflicts. Use vmmap to
    inspect the list of loaded DLLs for bash, mintty, or another persistent
    process used to drive the build. Essentially *any* DLL outside of the Windows
