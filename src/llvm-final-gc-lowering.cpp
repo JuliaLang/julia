@@ -214,9 +214,9 @@ bool FinalLowerGC::doInitialization(Module &M) {
     initAll(M);
 
     // Initialize platform-specific references.
-    queueRootFunc = getOrDefine(jl_well_known::GCQueueRoot);
-    poolAllocFunc = getOrDefine(jl_well_known::GCPoolAlloc);
-    bigAllocFunc = getOrDefine(jl_well_known::GCBigAlloc);
+    queueRootFunc = getOrDeclare(jl_well_known::GCQueueRoot);
+    poolAllocFunc = getOrDeclare(jl_well_known::GCPoolAlloc);
+    bigAllocFunc = getOrDeclare(jl_well_known::GCBigAlloc);
 
     GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc};
     unsigned j = 0;

@@ -1692,7 +1692,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
 
                 // Create a call to the `julia.gc_alloc_bytes` intrinsic, which is like
                 // `julia.gc_alloc_obj` except it doesn't set the tag.
-                auto allocBytesIntrinsic = getOrDefine(jl_intrinsics::GCAllocBytes);
+                auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
                 auto newI = builder.CreateCall(
                     allocBytesIntrinsic,
                     {
@@ -1811,7 +1811,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
         auto trigTerm = SplitBlockAndInsertIfThen(chldNotMarked, mayTrigTerm, false,
                                                   MDB.createBranchWeights(Weights));
         builder.SetInsertPoint(trigTerm);
-        builder.CreateCall(getOrDefine(jl_intrinsics::queueGCRoot), parent);
+        builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);
         CI->eraseFromParent();
     }
     if (maxframeargs == 0 && Frame) {
@@ -1865,7 +1865,7 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
 
     // Get the slot address.
     auto slotAddress = CallInst::Create(
-        getOrDefine(jl_intrinsics::getGCFrameSlot),
+        getOrDeclare(jl_intrinsics::getGCFrameSlot),
         {GCFrame, ConstantInt::get(T_int32, Colors[R] + MinColorRoot)});
 
     slotAddress->insertBefore(InsertionPoint);
@@ -1915,13 +1915,13 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
         unsigned NRoots = MaxColor + 1 + S.Allocas.size();
         // Create and push a GC frame.
         auto gcframe = CallInst::Create(
-            getOrDefine(jl_intrinsics::newGCFrame),
+            getOrDeclare(jl_intrinsics::newGCFrame),
             {ConstantInt::get(T_int32, NRoots)},
             "gcframe");
         gcframe->insertBefore(&*F->getEntryBlock().begin());
 
         auto pushGcframe = CallInst::Create(
-            getOrDefine(jl_intrinsics::pushGCFrame),
+            getOrDeclare(jl_intrinsics::pushGCFrame),
             {gcframe, ConstantInt::get(T_int32, NRoots)});
         pushGcframe->insertAfter(ptlsStates);
 
@@ -1930,7 +1930,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
         for (AllocaInst *AI : S.Allocas) {
             // Pick a slot for the alloca.
             auto slotAddress = CallInst::Create(
-                getOrDefine(jl_intrinsics::getGCFrameSlot),
+                getOrDeclare(jl_intrinsics::getGCFrameSlot),
                 {gcframe, ConstantInt::get(T_int32, AllocaSlot++)});
             slotAddress->insertAfter(gcframe);
             slotAddress->takeName(AI);
@@ -1957,7 +1957,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
         for(Function::iterator I = F->begin(), E = F->end(); I != E; ++I) {
             if (isa<ReturnInst>(I->getTerminator())) {
                 auto popGcframe = CallInst::Create(
-                    getOrDefine(jl_intrinsics::popGCFrame),
+                    getOrDeclare(jl_intrinsics::popGCFrame),
                     {gcframe});
                 popGcframe->insertBefore(I->getTerminator());
             }

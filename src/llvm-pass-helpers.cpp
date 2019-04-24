@@ -106,7 +106,7 @@ llvm::Function *JuliaPassContext::getOrNull(
     return module->getFunction(desc.name);
 }
 
-llvm::Function *JuliaPassContext::getOrDefine(
+llvm::Function *JuliaPassContext::getOrDeclare(
     const jl_intrinsics::IntrinsicDescription &desc) const
 {
     auto local = getOrNull(desc);
@@ -114,7 +114,7 @@ llvm::Function *JuliaPassContext::getOrDefine(
         return local;
     }
     else {
-        return desc.define(*module, *this);
+        return desc.declare(*module, *this);
     }
 }
 
@@ -221,8 +221,8 @@ namespace jl_well_known {
     const WellKnownFunctionDescription GCBigAlloc(
         GC_BIG_ALLOC_NAME,
         [](llvm::Module &M, const JuliaPassContext &context) {
-            // Get or define `julia.gc_alloc_bytes` so we can copy its attributes.
-            auto allocBytes = context.getOrDefine(jl_intrinsics::GCAllocBytes);
+            // Get or declare `julia.gc_alloc_bytes` so we can copy its attributes.
+            auto allocBytes = context.getOrDeclare(jl_intrinsics::GCAllocBytes);
 
             auto bigAllocFunc = Function::Create(
                 FunctionType::get(
@@ -244,8 +244,8 @@ namespace jl_well_known {
     const WellKnownFunctionDescription GCPoolAlloc(
         GC_POOL_ALLOC_NAME,
         [](llvm::Module &M, const JuliaPassContext &context) {
-            // Get or define `julia.gc_alloc_bytes` so we can copy its attributes.
-            auto allocBytes = context.getOrDefine(jl_intrinsics::GCAllocBytes);
+            // Get or declare `julia.gc_alloc_bytes` so we can copy its attributes.
+            auto allocBytes = context.getOrDeclare(jl_intrinsics::GCAllocBytes);
 
             auto poolAllocFunc = Function::Create(
                 FunctionType::get(

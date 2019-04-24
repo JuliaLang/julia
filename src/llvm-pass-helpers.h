@@ -15,23 +15,23 @@ struct JuliaPassContext;
 // A namespace for Julia intrinsic descriptions.
 namespace jl_intrinsics {
     // A description of an intrinsic that can be used to find existing
-    // intrinsics and materialize new intrinsics if necessary.
+    // intrinsics and declare new intrinsics if necessary.
     struct IntrinsicDescription final {
-        // The type of function that defines a new intrinsic.
-        typedef llvm::Function *(*DefinitionFunction)(llvm::Module&, const JuliaPassContext&);
+        // The type of function that declares an intrinsic.
+        typedef llvm::Function *(*DeclarationFunction)(llvm::Module&, const JuliaPassContext&);
 
         // Creates an intrinsic description with a particular
-        // name and definition function.
+        // name and declaration function.
         IntrinsicDescription(
             const llvm::StringRef &name,
-            const DefinitionFunction &define)
-            : name(name), define(define)
+            const DeclarationFunction &declare)
+            : name(name), declare(declare)
         { }
 
         // The intrinsic's name.
         llvm::StringRef name;
-        // A function that defines the intrinsic in a module.
-        DefinitionFunction define;
+        // A function that declares the intrinsic in a module.
+        DeclarationFunction declare;
     };
 }
 
@@ -94,8 +94,9 @@ struct JuliaPassContext {
 
     // Gets the intrinsic or well-known function that conforms to
     // the given description if it exists in the module. If not,
-    // creates the intrinsic and adds it to the module.
-    llvm::Function *getOrDefine(
+    // declares the intrinsic or well-known function and adds it
+    // to the module.
+    llvm::Function *getOrDeclare(
         const jl_intrinsics::IntrinsicDescription &desc) const;
 };
 
