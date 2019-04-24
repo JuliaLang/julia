@@ -101,6 +101,8 @@ end
     fa, fA = Array(a), Array(A)
     @test broadcast(sin, a) == sparse(broadcast(sin, fa))
     @test broadcast(sin, A) == sparse(broadcast(sin, fA))
+    # also test the typed broadcast
+    @test broadcast(convert, Float32, A) == sparse(broadcast(convert, Float32, fA))
 end
 
 @testset "broadcast! implementation specialized for a single (input) sparse vector/matrix" begin
@@ -639,7 +641,7 @@ end
     @test_broken ((_, _, _, _, x) -> x).(Int, Int, Int, Int, spzeros(3)) == spzeros(3)
 end
 
-using SparseArrays.HigherOrderFns: SparseVecStyle
+using SparseArrays.HigherOrderFns: SparseVecStyle, SparseMatStyle
 
 @testset "Issue #30120: method ambiguity" begin
     # HigherOrderFns._copy(f) was ambiguous.  It may be impossible to
@@ -679,6 +681,17 @@ end
     f(x, y, z) = x == y == z == 0 ? 0.0 : NaN
     y .= f.(x1, x2, x3)
     @test all(isnan, y)
+end
+
+@testset "Vec/Mat Style" begin
+    @test SparseVecStyle(Val(0)) == SparseVecStyle()
+    @test SparseVecStyle(Val(1)) == SparseVecStyle()
+    @test SparseVecStyle(Val(2)) == SparseMatStyle()
+    @test SparseVecStyle(Val(3)) == Broadcast.DefaultArrayStyle{3}()
+    @test SparseMatStyle(Val(0)) == SparseMatStyle()
+    @test SparseMatStyle(Val(1)) == SparseMatStyle()
+    @test SparseMatStyle(Val(2)) == SparseMatStyle()
+    @test SparseMatStyle(Val(3)) == Broadcast.DefaultArrayStyle{3}()
 end
 
 end # module
