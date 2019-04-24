@@ -22,10 +22,10 @@
 	<string>$(APP_VERSION)</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
-	<key>NSHumanReadableCopyright</key>
-	<string>Copyright © 2009-2019 Julia project contributors (https://github.com/JuliaLang/julia/contributors). See LICENSE.md.</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Apple events are sent to the Terminal to execute the Julia REPL.</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2019 Julia project contributors (https://github.com/JuliaLang/julia/contributors).</string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
@@ -42,12 +42,6 @@
 			<string>execProgram</string>
 			<key>NSPortName</key>
 			<string>Julia</string>
-			<key>NSRestricted</key>
-			<true/>
-			<key>NSSendFileTypes</key>
-			<array>
-				<string>org.julialang.julia.text</string>
-			</array>
 			<key>NSRequiredContext</key>
 			<dict>
 				<key>NSServiceCategory</key>
@@ -58,6 +52,12 @@
 					<string>URL</string>
 				</array>
 			</dict>
+			<key>NSRestricted</key>
+			<true/>
+			<key>NSSendFileTypes</key>
+			<array>
+				<string>org.julialang.julia.text</string>
+			</array>
 		</dict>
 		<dict>
 			<key>NSMenuItem</key>
@@ -69,6 +69,11 @@
 			<string>execProgram</string>
 			<key>NSPortName</key>
 			<string>Julia</string>
+			<key>NSRequiredContext</key>
+			<dict>
+				<key>NSServiceCategory</key>
+				<string>public.source-code</string>
+			</dict>
 			<key>NSRestricted</key>
 			<true/>
 			<key>NSSendTypes</key>
@@ -78,11 +83,6 @@
 				<string>NSStringPboardType</string>
 				<string>NSPasteboardTypeString</string>
 			</array>
-			<key>NSRequiredContext</key>
-			<dict>
-				<key>NSServiceCategory</key>
-				<string>public.source-code</string>
-			</dict>
 		</dict>
 		<dict>
 			<key>NSMenuItem</key>
@@ -94,18 +94,23 @@
 			<string>evalProgram</string>
 			<key>NSPortName</key>
 			<string>Julia</string>
+			<key>NSRequiredContext</key>
+			<dict>
+				<key>NSServiceCategory</key>
+				<string>public.source-code</string>
+			</dict>
 			<key>NSRestricted</key>
 			<true/>
-			<key>NSSendFileTypes</key>
-			<array>
-				<string>org.julialang.julia.text</string>
-			</array>
 			<key>NSReturnTypes</key>
 			<array>
 				<string>public.utf8-plain-text</string>
 				<string>public.plain-text</string>
 				<string>NSStringPboardType</string>
 				<string>NSPasteboardTypeString</string>
+			</array>
+			<key>NSSendFileTypes</key>
+			<array>
+				<string>org.julialang.julia.text</string>
 			</array>
 			<key>NSSendTypes</key>
 			<array>
@@ -119,11 +124,6 @@
 			</array>
 			<key>NSUserData</key>
 			<string>print</string>
-			<key>NSRequiredContext</key>
-			<dict>
-				<key>NSServiceCategory</key>
-				<string>public.source-code</string>
-			</dict>
 		</dict>
 	</array>
 	<key>NSSupportsAutomaticTermination</key>
