@@ -389,3 +389,9 @@ let a = Ref(0)
     GC.gc()
     @test a[] == 1
 end
+
+# trying to `schedule` a finished task
+let t = @async nothing
+    wait(t)
+    @test_throws ErrorException("schedule: Task not runnable") schedule(t, nothing)
+end
