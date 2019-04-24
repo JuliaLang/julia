@@ -96,6 +96,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->zeroinit = 0;
     t->isinlinealloc = 0;
     t->has_concrete_subtype = 1;
+    t->cached_by_hash = 0;
     t->layout = NULL;
     t->names = NULL;
     t->types = NULL;

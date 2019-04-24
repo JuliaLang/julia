@@ -457,6 +457,7 @@ typedef struct _jl_datatype_t {
     uint8_t zeroinit; // if one or more fields requires zero-initialization
     uint8_t isinlinealloc; // if this is allocated inline
     uint8_t has_concrete_subtype; // If clear, no value will have this datatype
+    uint8_t cached_by_hash; // stored in hash-based set cache (instead of linear cache)
 } jl_datatype_t;
 
 typedef struct {
