@@ -237,7 +237,9 @@ typemax(::Type{Rational{T}}) where {T<:Integer} = one(T)//zero(T)
 
 isinteger(x::Rational) = x.den == 1
 
++(x::Rational) = (+x.num) // x.den
 -(x::Rational) = (-x.num) // x.den
+
 function -(x::Rational{T}) where T<:BitSigned
     x.num == typemin(T) && throw(OverflowError("rational numerator is typemin(T)"))
     (-x.num) // x.den

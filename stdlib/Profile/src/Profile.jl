@@ -34,7 +34,7 @@ end
 ####
 
 """
-    init(; n::Integer, delay::Float64)
+    init(; n::Integer, delay::Real))
 
 Configure the `delay` between backtraces (measured in seconds), and the number `n` of
 instruction pointers that may be stored. Each instruction pointer corresponds to a single
@@ -42,7 +42,7 @@ line of code; backtraces generally consist of a long list of instruction pointer
 settings can be obtained by calling this function with no arguments, and each can be set
 independently using keywords or in the order `(n, delay)`.
 """
-function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Float64} = nothing)
+function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n === nothing && delay === nothing
@@ -53,7 +53,7 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Float6
     init(nnew, delaynew)
 end
 
-function init(n::Integer, delay::Float64)
+function init(n::Integer, delay::Real)
     status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), n, round(UInt64,10^9*delay))
     if status == -1
         error("could not allocate space for ", n, " instruction pointers")

@@ -63,7 +63,8 @@ a2img  = randn(n,n)/2
             @test_throws ErrorException usv.Z
             b = rand(eltya,n)
             @test usv\b ≈ a\b
-
+            @test Base.propertynames(usv) == (:U, :S, :V, :Vt)
+            @test size(usv) == size(a)
             if eltya <: BlasFloat
                 svdz = svd!(Matrix{eltya}(undef,0,0))
                 @test svdz.U ≈ Matrix{eltya}(I, 0, 0)

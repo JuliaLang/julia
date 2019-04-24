@@ -611,6 +611,27 @@ mutable struct HasAbstractlyTypedField
 end
 f_infer_abstract_fieldtype() = fieldtype(HasAbstractlyTypedField, :x)
 @test Base.return_types(f_infer_abstract_fieldtype, ()) == Any[Type{Union{Int,String}}]
+let fieldtype_tfunc = Core.Compiler.fieldtype_tfunc,
+    fieldtype_nothrow = Core.Compiler.fieldtype_nothrow
+    @test fieldtype_tfunc(Union{}, :x) == Union{}
+    @test fieldtype_tfunc(Union{Type{Int32}, Int32}, Const(:x)) == Union{}
+    @test fieldtype_tfunc(Union{Type{Base.RefValue{T}}, Type{Int32}} where {T<:Array}, Const(:x)) == Type{<:Array}
+    @test fieldtype_tfunc(Union{Type{Base.RefValue{T}}, Type{Int32}} where {T<:Real}, Const(:x)) == Type{<:Real}
+    @test fieldtype_tfunc(Union{Type{Base.RefValue{<:Array}}, Type{Int32}}, Const(:x)) == Type{Array}
+    @test fieldtype_tfunc(Union{Type{Base.RefValue{<:Real}}, Type{Int32}}, Const(:x)) == Const(Real)
+    @test fieldtype_tfunc(Const(Union{Base.RefValue{<:Real}, Type{Int32}}), Const(:x)) == Type
+    @test fieldtype_tfunc(Type{Union{Base.RefValue{T}, Type{Int32}}} where {T<:Real}, Const(:x)) == Type
+    @test fieldtype_nothrow(Type{Base.RefValue{<:Real}}, Const(:x))
+    @test !fieldtype_nothrow(Type{Union{}}, Const(:x))
+    @test !fieldtype_nothrow(Union{Type{Base.RefValue{T}}, Int32} where {T<:Real}, Const(:x))
+    @test !fieldtype_nothrow(Union{Type{Base.RefValue{<:Real}}, Int32}, Const(:x))
+    @test fieldtype_nothrow(Const(Union{Base.RefValue{<:Real}, Int32}), Const(:x))
+    @test !fieldtype_nothrow(Type{Union{Base.RefValue{T}, Int32}} where {T<:Real}, Const(:x)) # improvable?
+    @test fieldtype_nothrow(Union{Type{Base.RefValue{T}}, Type{Base.RefValue{Any}}} where {T<:Real}, Const(:x))
+    @test fieldtype_nothrow(Union{Type{Base.RefValue{<:Real}}, Type{Base.RefValue{Any}}}, Const(:x))
+    @test fieldtype_nothrow(Const(Union{Base.RefValue{<:Real}, Base.RefValue{Any}}), Const(:x))
+    @test fieldtype_nothrow(Type{Union{Base.RefValue{T}, Base.RefValue{Any}}} where {T<:Real}, Const(:x))
+end
 
 # issue #11480
 @noinline f11480(x,y) = x
@@ -1050,13 +1071,13 @@ copy_dims_out(out) = ()
 copy_dims_out(out, dim::Int, tail...) =  copy_dims_out((out..., dim), tail...)
 copy_dims_out(out, dim::Colon, tail...) = copy_dims_out((out..., dim), tail...)
 @test Base.return_types(copy_dims_out, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
-@test all(m -> 20 < count_specializations(m) < 45, methods(copy_dims_out))
+@test all(m -> 4 < count_specializations(m) < 15, methods(copy_dims_out)) # currently about 5
 
 copy_dims_pair(out) = ()
 copy_dims_pair(out, dim::Int, tail...) =  copy_dims_pair(out => dim, tail...)
 copy_dims_pair(out, dim::Colon, tail...) = copy_dims_pair(out => dim, tail...)
 @test Base.return_types(copy_dims_pair, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
-@test all(m -> 10 < count_specializations(m) < 35, methods(copy_dims_pair))
+@test all(m -> 5 < count_specializations(m) < 15, methods(copy_dims_pair)) # currently about 7
 
 @test isdefined_tfunc(typeof(NamedTuple()), Const(0)) === Const(false)
 @test isdefined_tfunc(typeof(NamedTuple()), Const(1)) === Const(false)
@@ -2324,4 +2345,64 @@ h28762(::Type{X}) where {X} = Array{f28762(X)}(undef, 0)
     @inferred h28762(Array{Int})
     @inferred g28762(Array)
     @inferred h28762(Array)
+end
+
+# issue #31663
+module I31663
+abstract type AbstractNode end
+
+struct Node{N1<:AbstractNode, N2<:AbstractNode} <: AbstractNode
+    a::N1
+    b::N2
+end
+
+struct Leaf <: AbstractNode
+end
+
+function gen_nodes(qty::Integer) :: AbstractNode
+    @assert qty > 0
+    result = Leaf()
+    for i in 1:qty
+        result = Node(result, Leaf())
+    end
+    return result
+end
+end
+@test count(==('}'), string(I31663.gen_nodes(50))) == 1275
+
+# issue #31572
+struct MixedKeyDict{T<:Tuple} #<: AbstractDict{Any,Any}
+    dicts::T
+end
+Base.merge(f::Function, d::MixedKeyDict, others::MixedKeyDict...) = _merge(f, (), d.dicts, (d->d.dicts).(others)...)
+Base.merge(f, d::MixedKeyDict, others::MixedKeyDict...) = _merge(f, (), d.dicts, (d->d.dicts).(others)...)
+function _merge(f, res, d, others...)
+    ofsametype, remaining = _alloftype(Base.heads(d), ((),), others...)
+    return _merge(f, (res..., merge(f, ofsametype...)), Base.tail(d), remaining...)
+end
+_merge(f, res, ::Tuple{}, others...) = _merge(f, res, others...)
+_merge(f, res, d) = MixedKeyDict((res..., d...))
+_merge(f, res, ::Tuple{}) = MixedKeyDict(res)
+function _alloftype(ofdesiredtype::Tuple{Vararg{D}}, accumulated, d::Tuple{D,Vararg}, others...) where D
+    return _alloftype((ofdesiredtype..., first(d)),
+                      (Base.front(accumulated)..., (last(accumulated)..., Base.tail(d)...), ()),
+                      others...)
+end
+function _alloftype(ofdesiredtype, accumulated, d, others...)
+    return _alloftype(ofdesiredtype,
+                      (Base.front(accumulated)..., (last(accumulated)..., first(d))),
+                      Base.tail(d), others...)
+end
+function _alloftype(ofdesiredtype, accumulated, ::Tuple{}, others...)
+    return _alloftype(ofdesiredtype,
+                      (accumulated..., ()),
+                      others...)
+end
+_alloftype(ofdesiredtype, accumulated) = ofdesiredtype, Base.front(accumulated)
+let
+    d = MixedKeyDict((Dict(1 => 3), Dict(4. => 2)))
+    e = MixedKeyDict((Dict(1 => 7), Dict(5. => 9)))
+    @test merge(+, d, e).dicts == (Dict(1 => 10), Dict(4.0 => 2, 5.0 => 9))
+    f = MixedKeyDict((Dict(2 => 7), Dict(5. => 11)))
+    @test merge(+, d, e, f).dicts == (Dict(1 => 10, 2 => 7), Dict(4.0 => 2, 5.0 => 20))
 end

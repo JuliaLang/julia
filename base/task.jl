@@ -457,12 +457,12 @@ true
 """
 function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
-    t.state == :runnable || error("schedule: Task not runnable")
+    t.state == :runnable || Base.error("schedule: Task not runnable")
     if error
         t.queue === nothing || Base.list_deletefirst!(t.queue, t)
         t.exception = arg
     else
-        t.queue === nothing || error("schedule: Task not runnable")
+        t.queue === nothing || Base.error("schedule: Task not runnable")
         t.result = arg
     end
     enq_work(t)

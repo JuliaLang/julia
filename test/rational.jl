@@ -370,3 +370,10 @@ end
 
 # issue #31396
 @test round(1//2, RoundNearestTiesUp) === 1//1
+
+@testset "Unary plus on Rational (issue #30749)" begin
+   @test +Rational(true) == 1//1
+   @test +Rational(false) == 0//1
+   @test -Rational(true) == -1//1
+   @test -Rational(false) == 0//1
+end

@@ -901,7 +901,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 if (jl_field_size(jl_typemap_entry_type, i) > 0) {
                     jl_serialize_value(s, jl_get_nth_field((jl_value_t*)te, i));
                     if (!jl_field_isptr(jl_typemap_entry_type, i))
-                        write_int8(s->s, 0);
+                        write_int8(s->s, 0); // union-selector byte
                 }
             }
             te = te->next;
@@ -1886,14 +1886,17 @@ static void jl_deserialize_struct(jl_serializer_state *s, jl_value_t *v, size_t 
         tn->linearcache = jl_emptysvec; // the cache is refilled later (tag 5)
     }
     if (dt == jl_typemap_entry_type) {
-        if (((jl_typemap_entry_t*)v)->max_world == ~(size_t)0) {
-            // update world validity to reflect current state of the counter
-            ((jl_typemap_entry_t*)v)->min_world = jl_world_counter;
+        jl_typemap_entry_t *entry = (jl_typemap_entry_t*)v;
+        if (entry->max_world == ~(size_t)0) {
+            if (entry->min_world > 1) {
+                // update world validity to reflect current state of the counter
+                entry->min_world = jl_world_counter;
+            }
         }
         else {
             // garbage entry - delete it :(
-            ((jl_typemap_entry_t*)v)->min_world = 1;
-            ((jl_typemap_entry_t*)v)->max_world = 0;
+            entry->min_world = 1;
+            entry->max_world = 0;
         }
     }
 }

@@ -3,13 +3,14 @@
 mutable struct PipeServer <: LibuvServer
     handle::Ptr{Cvoid}
     status::Int
-    connectnotify::Condition
-    closenotify::Condition
+    cond::Base.ThreadSynchronizer
+    closenotify::Base.ThreadSynchronizer
     function PipeServer(handle::Ptr{Cvoid}, status)
+        lock = Threads.SpinLock()
         p = new(handle,
                 status,
-                Condition(),
-                Condition())
+                Base.ThreadSynchronizer(lock),
+                Base.ThreadSynchronizer(lock))
         associate_julia_struct(p.handle, p)
         finalizer(uvfinalize, p)
         return p

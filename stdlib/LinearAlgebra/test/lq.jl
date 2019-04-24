@@ -51,6 +51,11 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
                     @test size(lqa,1) == size(a,1)
                     @test size(lqa,3) == 1
                     @test size(lqa.Q,3) == 1
+                    @test Base.propertynames(lqa) == (:L, :Q)
+                    ref_obs = (l, q)
+                    for (ii, lq_obj) in enumerate(lqa)
+                        @test ref_obs[ii] == lq_obj
+                    end
                     @test_throws ErrorException lqa.Z
                     @test Array(copy(adjoint(lqa))) ≈ a'
                     @test q*squareQ(q)' ≈ Matrix(I, n, n)
@@ -60,6 +65,8 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
                     lstring = sprint(show, l, context = :compact=>true)
                     qstring = sprint(show, q, context = :compact=>true)
                     @test sprint(show,MIME"text/plain"(),lqa) == "$(typeof(lqa)) with factors L and Q:\n$lstring\n$qstring"
+                    @test LinearAlgebra.Factorization{eltya}(lqa) === lqa
+                    @test Matrix{eltya}(q) isa Matrix{eltya}
                 end
                 @testset "Binary ops" begin
                     @test a*(lqa\b) ≈ b atol=3000ε
