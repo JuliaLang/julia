@@ -85,7 +85,7 @@
       programURL = programURL.filePathURL;
       givenFileURL = programURL;
       workingDirectoryURL = [programURL URLByDeletingLastPathComponent];
-      NSLog(@"Exec Julia program %@", programURL);
+      NSLog(@"Exec Julia program file %@", programURL);
     } else if ([pbItem isKindOfClass:[NSString class]]) {
       workingDirectoryURL = [NSURL fileURLWithPath:NSTemporaryDirectory()
                                        isDirectory:YES];
@@ -105,7 +105,7 @@
       }
 
       NSString *program = pbItem;
-      NSLog(@"Exec Julia program:\n%@", program);
+      NSLog(@"Exec Julia program");
 
       NSString *temporaryFilename =
           [[NSProcessInfo processInfo] globallyUniqueString];
