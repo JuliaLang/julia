@@ -44,6 +44,38 @@ NSString static const *const terminalBundleID = @"com.apple.Terminal";
   }
 }
 
+// MARK: Responder -
+
+- (IBAction)newDocument:(id)sender {
+  if (!_jvman.defaultJuliaVariant) {
+    [_jvman askForDefault];
+    return;
+  }
+
+  [self execBestJulia];
+}
+
+- (IBAction)showHelp:(id)sender {
+  JuliaVariant *jv = _jvman.defaultJuliaVariant;
+  if (!jv) {
+    [NSApp showHelp:sender];
+    return;
+  }
+
+  NSURL *helpURL =
+      [[[[jv.bundle.bundleURL URLByAppendingPathComponent:@"Documentation"
+                                              isDirectory:true]
+          URLByAppendingPathComponent:@"html"
+                          isDirectory:true] URLByAppendingPathComponent:@"en"
+                                                            isDirectory:true]
+          URLByAppendingPathComponent:@"index.html"
+                          isDirectory:false];
+
+  [[NSWorkspace sharedWorkspace] openURL:helpURL];
+}
+
+// MARK: App Delegate -
+
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
   [NSApp disableRelaunchOnLogin];
   [_jvman readFromDefaults];

@@ -240,6 +240,11 @@ NSString *const HiddenJuliaVariantsKey = @"HiddenJuliaVariantsKey";
   [self didChangeValueForKey:@"defaultJuliaVariant"];
 }
 
+- (void)askForDefault {
+  [self.variantsWindow makeKeyAndOrderFront:nil];
+  [_variantsVC askForDefault];
+}
+
 - (BOOL)addJuliaVariant:(JuliaVariant *_Nonnull)jv
                 persist:(BOOL)persist
                  unhide:(BOOL)unhide {
@@ -344,8 +349,7 @@ NSString *const HiddenJuliaVariantsKey = @"HiddenJuliaVariantsKey";
   [_variantsVC reload];
 
   if (self.defaultJuliaVariant == nil) {
-    [self.variantsWindow makeKeyAndOrderFront:nil];
-    [_variantsVC askForDefault];
+    [self askForDefault];
   }
 }
 

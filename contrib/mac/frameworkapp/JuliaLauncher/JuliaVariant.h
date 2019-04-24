@@ -27,6 +27,7 @@
 @property(readonly, nullable) JuliaVariant *latestKnownTaggedJulia;
 @property(readonly, nullable) NSWindow *variantsWindow;
 
+- (void)askForDefault;
 - (BOOL)addJuliaVariant:(JuliaVariant *_Nonnull)jv
                 persist:(BOOL)persist
                  unhide:(BOOL)unhide;
