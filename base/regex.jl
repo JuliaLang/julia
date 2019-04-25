@@ -529,8 +529,8 @@ String and character arguments must be matched exactly in the resulting regex,
 meaning that the contained characters are devoid of any special meaning
 (they are quoted with "\\Q" and "\\E").
 
-!!! compat "Julia 1.2"
-     This method requires at least Julia 1.2.
+!!! compat "Julia 1.3"
+     This method requires at least Julia 1.3.
 
 # Examples
 ```jldoctest
@@ -608,8 +608,8 @@ end
 
 Repeat a regex `n` times.
 
-!!! compat "Julia 1.2"
-     This method requires at least Julia 1.2.
+!!! compat "Julia 1.3"
+     This method requires at least Julia 1.3.
 
 # Examples
 ```jldoctest
