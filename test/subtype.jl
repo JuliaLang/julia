@@ -136,6 +136,24 @@ function test_diagonal()
     @test  issub(Tuple{Tuple{T, T}} where T>:Int, Tuple{Tuple{T, T} where T>:Int})
     @test  issub(Vector{Tuple{T, T} where Number<:T<:Number},
                  Vector{Tuple{Number, Number}})
+
+    @test !issub(Type{Tuple{T,Any} where T},   Type{Tuple{T,T}} where T)
+    @test !issub(Type{Tuple{T,Any,T} where T}, Type{Tuple{T,T,T}} where T)
+    @test  issub(Type{Tuple{T} where T},       Type{Tuple{T}} where T)
+    @test  issub(Ref{Tuple{T} where T},        Ref{Tuple{T}} where T)
+    @test !issub(Type{Tuple{T,T} where T},     Type{Tuple{T,T}} where T)
+    @test !issub(Type{Tuple{T,T,T} where T},   Type{Tuple{T,T,T}} where T)
+    @test  isequal_type(Ref{Tuple{T, T} where Int<:T<:Int},
+                        Ref{Tuple{S, S}} where Int<:S<:Int)
+
+    let A = Tuple{Int,Int8,Vector{Integer}},
+        B = Tuple{T,T,Vector{T}} where T>:Integer,
+        C = Tuple{T,T,Vector{Union{Integer,T}}} where T
+        @test A <: B
+        @test B == C
+        @test A <: C
+        @test Tuple{Int,Int8,Vector{Any}} <: C
+    end
 end
 
 # level 3: UnionAll
@@ -1475,12 +1493,23 @@ let U = Tuple{Union{LT, LT1},Union{R, R1},Int} where LT1<:R1 where R1<:Tuple{Int
 end
 
 # issue #31082 and #30741
-@testintersect(Tuple{T, Ref{T}, T} where T,
-               Tuple{Ref{S}, S, S} where S,
-               Union{})
+# NOTE: these types are no longer diagonal
+#@testintersect(Tuple{T, Ref{T}, T} where T,
+#               Tuple{Ref{S}, S, S} where S,
+#               Union{})
+@test typeintersect(Tuple{T, Ref{T}, T} where T,
+                    Tuple{Ref{S}, S, S} where S) != Union{}
 @testintersect(Tuple{Pair{B,C},Union{C,Pair{B,C}},Union{B,Real}} where {B,C},
                Tuple{Pair{B,C},C,C} where {B,C},
                Tuple{Pair{B,C},C,C} where C<:Union{Real, B} where B)
+f31082(::Pair{B, C}, ::Union{C, Pair{B, C}}, ::Union{B, Real}) where {B, C} = 0
+f31082(::Pair{B, C}, ::C, ::C) where {B, C} = 1
+@test f31082(""=>1, 2, 3) == 1
+@test f31082(""=>1, 2, "") == 0
+@test f31082(""=>1, 2, 3.0) == 0
+@test f31082(Pair{Any,Any}(1,2), 1, 2) == 1
+@test f31082(Pair{Any,Any}(1,2), Pair{Any,Any}(1,2), 2) == 1
+@test f31082(Pair{Any,Any}(1,2), 1=>2, 2.0) == 1
 
 # issue #31115
 @testintersect(Tuple{Ref{Z} where Z<:(Ref{Y} where Y<:Tuple{<:B}), Int} where B,

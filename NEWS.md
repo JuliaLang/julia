@@ -18,6 +18,10 @@ Language changes
 
 * Calling `show` or `repr` on a 0-dimensional `AbstractArray` now shows valid code for creating an equivalent 0-dimensional array, instead of only showing the contained value. ([#33206])
 
+* Converting arbitrary tuples to `NTuple`, e.g. `convert(NTuple, (1, ""))` now gives an error,
+  where it used to be incorrectly allowed. This is because `NTuple` refers only to homogeneous
+  tuples (this meaning has not changed) ([#31833]).
+
 Multi-threading changes
 -----------------------
 

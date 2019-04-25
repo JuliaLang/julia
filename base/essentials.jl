@@ -309,10 +309,18 @@ convert(::Type{T}, x::T) where {T<:AtLeast1} = x
 convert(::Type{T}, x::AtLeast1) where {T<:AtLeast1} =
     (convert(tuple_type_head(T), x[1]), convert(tuple_type_tail(T), tail(x))...)
 
-# converting to Vararg tuple types
-convert(::Type{Tuple{Vararg{V}}}, x::Tuple{Vararg{V}}) where {V} = x
-convert(T::Type{Tuple{Vararg{V}}}, x::Tuple) where {V} =
-    (convert(tuple_type_head(T), x[1]), convert(T, tail(x))...)
+# converting to other tuple types, including Vararg tuple types
+_bad_tuple_conversion(T, x) = (@_noinline_meta; throw(MethodError(convert, (T, x))))
+function convert(::Type{T}, x::AtLeast1) where {T<:Tuple}
+    if x isa T
+        return x
+    end
+    y = (convert(tuple_type_head(T), x[1]), convert(tuple_type_tail(T), tail(x))...)
+    if !(y isa T)
+        _bad_tuple_conversion(T, x)
+    end
+    return y
+end
 
 # TODO: the following definitions are equivalent (behaviorally) to the above method
 # I think they may be faster / more efficient for inference,

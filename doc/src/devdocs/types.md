@@ -403,16 +403,37 @@ f(nothing, 2.0)
 These examples are telling us something: when `x` is `nothing::Nothing`, there are no
 extra constraints on `y`.
 It is as if the method signature had `y::Any`.
-This means that whether a variable is diagonal is not a static property based on
-where it appears in a type.
-Rather, it depends on where a variable appears when the subtyping algorithm *uses* it.
-When `x` has type `Nothing`, we don't need to use the `T` in `Union{Nothing,T}`, so `T`
-does not "occur".
 Indeed, we have the following type equivalence:
 
 ```julia
 (Tuple{Union{Nothing,T},T} where T) == Union{Tuple{Nothing,Any}, Tuple{T,T} where T}
 ```
+
+The general rule is: a concrete variable in covariant position acts like it's
+not concrete if the subtyping algorithm only *uses* it once.
+When `x` has type `Nothing`, we don't need to use the `T` in `Union{Nothing,T}`;
+we only use it in the second slot.
+This arises naturally from the observation that in `Tuple{T} where T` restricting
+`T` to concrete types makes no difference; the type is equal to `Tuple{Any}` either way.
+
+However, appearing in *invariant* position disqualifies a variable from being concrete
+whether that appearance of the variable is used or not.
+Otherwise types become incoherent, behaving differently depending on which other types
+they are compared to. For example, consider
+
+Tuple{Int,Int8,Vector{Integer}} <: Tuple{T,T,Vector{Union{Integer,T}}} where T
+
+If the `T` inside the Union is ignored, then `T` is concrete and the answer is "false"
+since the first two types aren't the same.
+But consider instead
+
+Tuple{Int,Int8,Vector{Any}} <: Tuple{T,T,Vector{Union{Integer,T}}} where T
+
+Now we cannot ignore the `T` in the Union (we must have T == Any), so `T` is not
+concrete and the answer is "true".
+That would make the concreteness of `T` depend on the other type, which is not
+acceptable since a type must have a clear meaning on its own.
+Therefore the appearance of `T` inside `Vector` is considered in both cases.
 
 ## Subtyping diagonal variables
 
@@ -420,10 +441,11 @@ The subtyping algorithm for diagonal variables has two components:
 (1) identifying variable occurrences, and (2) ensuring that diagonal
 variables range over concrete types only.
 
-The first task is accomplished by keeping counters `occurs_inv` and `occurs_cov`
+The first task is accomplished by keeping the counter `occurs_cov`
 (in `src/subtype.c`) for each variable in the environment, tracking the number
-of invariant and covariant occurrences, respectively.
-A variable is diagonal when `occurs_inv == 0 && occurs_cov > 1`.
+of covariant occurrences.
+A variable is diagonal when `occurs_cov > 1` and the variable does not appear
+in invariant position anywhere in the type.
 
 The second task is accomplished by imposing a condition on a variable's lower bound.
 As the subtyping algorithm runs, it narrows the bounds of each variable
