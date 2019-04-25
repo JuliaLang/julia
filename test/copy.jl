@@ -186,3 +186,10 @@ end
         end
     end
 end
+
+# issue #17149
+mutable struct Bar17149
+end
+let x = Bar17149()
+    @test deepcopy(x) !== x
+end
