@@ -608,6 +608,9 @@ function getindex(v::UnitRange{T}, i::Integer) where T
     val
 end
 
+getindex(v::UnitRange{T}, i::Bool) where T =
+    throw(ArgumentError("invalid index: $i of type Bool"))
+
 const OverflowSafe = Union{Bool,Int8,Int16,Int32,Int64,Int128,
                            UInt8,UInt16,UInt32,UInt64,UInt128}
 
@@ -618,11 +621,17 @@ function getindex(v::UnitRange{T}, i::Integer) where {T<:OverflowSafe}
     val % T
 end
 
+getindex(v::UnitRange{T}, i::Bool) where {T<:OverflowSafe} =
+    throw(ArgumentError("invalid index: $i of type Bool"))
+
 function getindex(v::OneTo{T}, i::Integer) where T
     @_inline_meta
     @boundscheck ((i > 0) & (i <= v.stop)) || throw_boundserror(v, i)
     convert(T, i)
 end
+
+getindex(v::OneTo{T}, i::Bool) where T =
+    throw(ArgumentError("invalid index: $i of type Bool"))
 
 function getindex(v::AbstractRange{T}, i::Integer) where T
     @_inline_meta
@@ -634,11 +643,17 @@ function getindex(v::AbstractRange{T}, i::Integer) where T
     ret
 end
 
+getindex(v::AbstractRange{T}, i::Integer) where T =
+    throw(ArgumentError("invalid index: $i of type Bool"))
+
 function getindex(r::Union{StepRangeLen,LinRange}, i::Integer)
     @_inline_meta
     @boundscheck checkbounds(r, i)
     unsafe_getindex(r, i)
 end
+
+getindex(r::Union{StepRangeLen,LinRange}, i::Bool) =
+    throw(ArgumentError("invalid index: $i of type Bool"))
 
 # This is separate to make it useful even when running with --check-bounds=yes
 function unsafe_getindex(r::StepRangeLen{T}, i::Integer) where T
@@ -671,10 +686,40 @@ function getindex(r::AbstractUnitRange, s::AbstractUnitRange{<:Integer})
     range(st, length=length(s))
 end
 
+function getindex(r::AbstractUnitRange, s::AbstractUnitRange{Bool})
+    @_inline_meta
+    @boundscheck checkbounds(r, s)
+    if length(s) == 0
+        return r
+    elseif length(s) == 1
+        if s[1]
+            return r
+        else
+            return range(r[1], length=0)
+        end
+    else # length(s) == 2
+        return range(r[2], length=1)
+    end
+end
+
 function getindex(r::OneTo{T}, s::OneTo) where T
     @_inline_meta
     @boundscheck checkbounds(r, s)
     OneTo(T(s.stop))
+end
+
+function getindex(r::OneTo{T}, s::OneTo{Bool}) where T
+    @_inline_meta
+    @boundscheck checkbounds(r, s)
+    if length(s) == 0
+        return r
+    else # length(s) == 1
+        if s[1]
+            return r
+        else
+            return OneTo{T}(zero(T))
+        end
+    end
 end
 
 function getindex(r::AbstractUnitRange, s::StepRange{<:Integer})
@@ -684,11 +729,43 @@ function getindex(r::AbstractUnitRange, s::StepRange{<:Integer})
     range(st, step=step(s), length=length(s))
 end
 
+function getindex(r::AbstractUnitRange, s::StepRange{Bool})
+    @_inline_meta
+    @boundscheck checkbounds(r, s)
+    if length(s) == 0
+        return range(r[1], step=one(eltype(r)), length=0)
+    elseif length(s) == 1
+        if s[1]
+            return range(r[1], step=one(eltype(r)), length=1)
+        else
+            return range(r[1], step=one(eltype(r)), length=0)
+        end
+    else # length(s) == 2
+        return range(r[2], step=one(eltype(r)), length=1)
+    end
+end
+
 function getindex(r::StepRange, s::AbstractRange{<:Integer})
     @_inline_meta
     @boundscheck checkbounds(r, s)
     st = oftype(r.start, r.start + (first(s)-1)*step(r))
     range(st, step=step(r)*step(s), length=length(s))
+end
+
+function getindex(r::StepRange, s::AbstractRange{Bool})
+    @_inline_meta
+    @boundscheck checkbounds(r, s)
+    if length(s) == 0
+        return range(r[1], step=step(r), length=0)
+    elseif length(s) == 1
+        if s[1]
+            return range(r[1], step=step(r), length=1)
+        else
+            return range(r[1], step=step(r), length=0)
+        end
+    else # length(s) == 2
+        return range(r[2], step=step(r), length=1)
+    end
 end
 
 function getindex(r::StepRangeLen{T}, s::OrdinalRange{<:Integer}) where {T}
@@ -701,12 +778,46 @@ function getindex(r::StepRangeLen{T}, s::OrdinalRange{<:Integer}) where {T}
     return StepRangeLen{T}(ref, r.step*step(s), length(s), offset)
 end
 
+function getindex(r::StepRangeLen{T}, s::OrdinalRange{Bool}) where {T}
+    @_inline_meta
+    @boundscheck checkbounds(r, s)
+
+    if length(s) == 0
+        return StepRangeLen{T}(r[1], step(r), 0, 1)
+    elseif length(s) == 1
+        if s[1]
+            return StepRangeLen{T}(r[1], step(r), 1, 1)
+        else
+            return StepRangeLen{T}(r[1], step(r), 0, 1)
+        end
+    else # length(s) == 2
+        return StepRangeLen{T}(r[2], step(r), 1, 1)
+    end
+end
+
 function getindex(r::LinRange, s::OrdinalRange{<:Integer})
     @_inline_meta
     @boundscheck checkbounds(r, s)
     vfirst = unsafe_getindex(r, first(s))
     vlast  = unsafe_getindex(r, last(s))
     return LinRange(vfirst, vlast, length(s))
+end
+
+function getindex(r::LinRange, s::OrdinalRange{Bool})
+    @_inline_meta
+    @boundscheck checkbounds(r, s)
+
+    if length(s) == 0
+        return LinRange(r[1], r[1], 0)
+    elseif length(s) == 1
+        if s[1]
+            return LinRange(r[1], r[1], 1)
+        else
+            return LinRange(r[1], r[1], 0)
+        end
+    else # length(s) == 2
+        return LinRange(r[2], r[2], 1)
+    end
 end
 
 show(io::IO, r::AbstractRange) = print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
