@@ -4,6 +4,12 @@ module TestSymmetric
 
 using Test, LinearAlgebra, SparseArrays, Random
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+if !isdefined(Main, :OffsetArrays)
+    @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+end
+using .Main.OffsetArrays
+
 Random.seed!(1010)
 
 @testset "Pauli σ-matrices: $σ" for σ in map(Hermitian,
@@ -773,6 +779,67 @@ end
             @test op(TR, H) isa Hermitian
             @test op(H, TR) isa Hermitian
         end
+    end
+end
+
+@testset "symmetrize" begin
+    @testset "in-place" begin
+        for T in [Float32, Complex{Float32}], conj in [true, false], offset in [true, false]
+            X = rand(T, 4, 4)
+            offset && (X = OffsetArray(X, -2, -2))
+            Y = copy(X)
+            symmetrize!(X, conjugate=conj)
+            if conj
+                @test X ≈ (Y + Y') / 2
+                @test ishermitian(X)
+            else
+                @test X ≈ (Y + transpose(Y)) / 2
+                @test issymmetric(X)
+            end
+        end
+    end
+    @testset "out-of-place" begin
+        for conj in [true, false]
+            for T in [Float32, Complex{Float32}], offset in [true, false]
+                X = randn(T, 4, 4)
+                offset && (X = OffsetArray(X, -2, -2))
+                Y = symmetrize(X, conjugate=conj)
+                @test eltype(Y) === T
+                if conj
+                    @test Y ≈ (X + X') / 2
+                    @test ishermitian(Y)
+                else
+                    @test Y ≈ (X + transpose(X)) / 2
+                    @test issymmetric(Y)
+                end
+            end
+            for T in [Int32, Rational{Int32}, Complex{Int32}, Complex{Rational{Int32}}]
+                X = T[1 2 3; 4 5 6; 7 8 9]
+                Y = symmetrize(X, conjugate=conj)
+                @test Y ≈ T[1 3 5; 3 5 7; 5 7 9]
+            end
+        end
+    end
+    @testset "Symmetric and Hermitian" begin
+        S = Symmetric([1 2; 2 1])
+        @test symmetrize(S) === S
+        @test symmetrize(S, conjugate=false) === S
+        SC = Symmetric([1+1im 2+2im; 2+2im 1+1im])
+        @test symmetrize(SC) == Hermitian(SC)
+        @test symmetrize(SC, conjugate=false) === SC
+        H = Hermitian([1 2; 2 1])
+        @test symmetrize(H) === H
+        @test symmetrize(H, conjugate=false) === H
+        HC = Hermitian([1+1im 2+2im; 2+2im 1+1im])
+        @test symmetrize(HC) === HC
+        @test symmetrize(HC, conjugate=false) === HC
+    end
+    @testset "error conditions" begin
+        # Not square
+        @test_throws DimensionMismatch symmetrize!([1.0 2.0 3.0; 4.0 5.0 6.0])
+        # Mismatched indexing
+        bad = OffsetArray([1.0 2.0; 2.0 1.0], 0, 1)
+        @test_throws DimensionMismatch symmetrize!(bad)
     end
 end
 

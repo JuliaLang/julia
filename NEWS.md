@@ -90,6 +90,7 @@ Standard library changes
 #### Package Manager
 
 #### LinearAlgebra
+* New functions `symmetrize` and `symmetrize!` for constructing symmetric matrices ([#31836]).
 
 #### Markdown
 
