@@ -1177,7 +1177,7 @@ end
 struct TT20103{X,Y} end
 f20103(::Type{TT20103{X,Y}},x::X,y::Y) where {X,Y} = 1
 f20103(::Type{TT20103{X,X}},x::X) where {X} = 100
-@test typeintersect(Type{NTuple{N,E}} where E where N, Type{NTuple{N,E} where N} where E) == Union{} # use @testintersect once fixed
+@testintersect(Type{NTuple{N,E}} where E where N, Type{NTuple{N,E} where N} where E, Union{})
 let ints = (Int, Int32, UInt, UInt32)
     Ints = Union{ints...}
     vecs = []
