@@ -25,7 +25,10 @@ so far within the recursion. Within the definition, `deepcopy_internal` should b
 in place of `deepcopy`, and the `dict` variable should be
 updated as appropriate before returning.
 """
-deepcopy(x) = deepcopy_internal(x, IdDict())::typeof(x)
+function deepcopy(x)
+    isbitstype(typeof(x)) && return x
+    return deepcopy_internal(x, IdDict())::typeof(x)
+end
 
 deepcopy_internal(x::Union{Symbol,Core.MethodInstance,Method,GlobalRef,DataType,Union,UnionAll,Task,Regex},
                   stackdict::IdDict) = x
