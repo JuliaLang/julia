@@ -226,6 +226,14 @@ let elT = T22624.body.body.body.types[1].parameters[1]
     @test elT2.body.types[1].parameters[1] === elT2
     @test Base.isconcretetype(elT2.body.types[1])
 end
+struct T22624b{A,B,C}; v::Vector{T22624b{Integer,A}}; end
+let elT = T22624b.body.body.body.types[1].parameters[1]
+    @test elT == T22624b{Integer, T22624b.var, C} where C
+    elT2 = elT.body.types[1].parameters[1]
+    @test elT2 == T22624b{Integer, Integer, C} where C
+    @test elT2.body.types[1].parameters[1] === elT2
+    @test Base.isconcretetype(elT2.body.types[1])
+end
 
 # issue #3890
 mutable struct A3890{T1}

@@ -1068,6 +1068,7 @@ static jl_value_t *normalize_vararg(jl_value_t *va)
     return va;
 }
 
+int obviously_egal(jl_value_t *a, jl_value_t *b);
 static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
                                        int cacheable, jl_typestack_t *stack, jl_typeenv_t *env)
 {
@@ -1088,7 +1089,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             // normalize types equal to wrappers (prepare for wrapper_id)
             jl_value_t *tw = extract_wrapper(pi);
             if (tw && tw != pi && (tn != jl_type_typename || jl_typeof(pi) == jl_typeof(tw)) &&
-                    jl_types_equal(pi, tw)) {
+                    obviously_egal(pi, tw)) {
                 iparams[i] = tw;
                 if (p) jl_gc_wb(p, tw);
             }

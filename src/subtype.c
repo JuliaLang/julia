@@ -186,7 +186,7 @@ static void restore_env(jl_stenv_t *e, jl_value_t *root, jl_savedenv_t *se) JL_N
 // type utilities
 
 // quickly test that two types are identical
-static int obviously_egal(jl_value_t *a, jl_value_t *b)
+int obviously_egal(jl_value_t *a, jl_value_t *b)
 {
     if (a == b) return 1;
     if (jl_typeof(a) != jl_typeof(b)) return 0;
