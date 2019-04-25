@@ -20,6 +20,7 @@ Build system changes
 New library functions
 ---------------------
 
+* New `findall(pattern, string)` method where `pattern` is a string or regex.
 
 Standard library changes
 ------------------------
