@@ -30,11 +30,9 @@ $(error JULIA_APP_SHORT_VERSION_STRING not defined)
 #https://developer.apple.com/documentation/bundleresources/information_property_list/cfbundleshortversionstring
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html#//apple_ref/doc/uid/20001431-111349
 endif
-ifeq ($(JULIA_APP_VERSION),)
-$(error JULIA_APP_VERSION not defined)
-# https://developer.apple.com/documentation/bundleresources/information_property_list/cfbundleversion
-# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html#//apple_ref/doc/uid/20001431-102364
-endif
+
+# Match build string (i.e. CFBundleVersion) to framework's build string.
+JULIA_APP_VERSION=$(shell /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" $(FRAMEWORK_DESTDIR)/$(framework_infoplist))
 
 # X.Y.Z
 JULIA_VERSION_MAJOR_MINOR_PATCH := $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
