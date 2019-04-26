@@ -218,9 +218,9 @@ codesign: addgitversioninfo
 
 	# Codesign should look at the embedded Info.plist to get the signing identifier.
 	# See JLDFLAGS in Make.inc for Darwin platform and Info.plist target in cli/Makefile.
-	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(darwin_codesign_options) $(darwin_codesign_julia_options) $(DESTDIR)$(prefix)/$(framework_helpers)/julia
+	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -f -v $(darwin_codesign_options) $(darwin_codesign_julia_options) $(DESTDIR)$(prefix)/$(framework_helpers)/julia
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
-	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(darwin_codesign_options) $(darwin_codesign_julia_options) $(DESTDIR)$(prefix)/$(framework_helpers)/julia-debug
+	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -f -v $(darwin_codesign_options) $(darwin_codesign_julia_options) $(DESTDIR)$(prefix)/$(framework_helpers)/julia-debug
 endif
 
 	# Append the library name to the base codesigning id.
@@ -237,7 +237,7 @@ ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(darwin_codesign_options) -i $(DARWIN_CODESIGN_ID_BASE).lib -f \
 	    $(DESTDIR)$(prefix)/$(framework_dylib)_debug
 endif
-	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(darwin_codesign_options) $(DESTDIR)$(prefix)/$(framework_currver)
+	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -f -v $(darwin_codesign_options) $(DESTDIR)$(prefix)/$(framework_currver)
 
 	touch -c $(DESTDIR)$(prefix)/$(framework_directory)
 
