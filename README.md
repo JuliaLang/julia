@@ -221,6 +221,10 @@ Julia does not install anything outside the directory it was cloned into. Julia 
 * The `USE_SYSTEM_*` flags should be used with caution. These are meant only for troubleshooting, porting, and packaging, where package maintainers work closely with the Julia developers to make sure that Julia is built correctly. Production use cases should use the officially provided binaries. Issues arising from the use of these flags will generally not be accepted.
 * See also the [external dependencies](#required-build-tools-and-external-libraries).
 
+### ARM (Linux)
+
+See [README.arm](https://github.com/JuliaLang/julia/blob/master/doc/README.arm.md) for building ARM processors.
+
 #### Architecture Customization
 
 Julia can be built for a non-generic architecture by configuring the `ARCH` Makefile variable. See the appropriate section of `Make.inc` for additional customization options, such as `MARCH` and `JULIA_CPU_TARGET`.
@@ -266,7 +270,7 @@ set `JULIA_THREADS=0` in your `Make.user` if you're on a 32-bit system.
 
 ### Windows
 
-In order to build Julia on Windows, see [README.windows](https://github.com/JuliaLang/julia/blob/master/README.windows.md).
+In order to build Julia on Windows, see [README.windows](https://github.com/JuliaLang/julia/blob/master/doc/README.windows.md).
 
 ### Vagrant
 
