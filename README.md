@@ -207,7 +207,7 @@ latest version.
 
 
 
-## Uninstalling Julia
+### Uninstalling Julia
 
 Julia does not install anything outside the directory it was cloned into. Julia can be completely uninstalled by deleting this directory. Julia packages are installed in `~/.julia` by default, and can be uninstalled by deleting `~/.julia`.
 
@@ -223,7 +223,7 @@ Julia does not install anything outside the directory it was cloned into. Julia 
 
 ### ARM (Linux)
 
-See [README.arm](https://github.com/JuliaLang/julia/blob/master/doc/README.arm.md) for building ARM processors.
+See [README.arm](https://github.com/JuliaLang/julia/blob/master/doc/README.arm.md) for building on ARM processors.
 
 #### Architecture Customization
 
