@@ -23,6 +23,42 @@ ifeq ($(DARWIN_HARDENED_RUNTIME),1)
 darwin_codesign_julia_options=-o runtime --entitlements $(JULIAHOME)/contrib/mac/framework/julia.entitlements
 endif
 
+# Extract Git version info from julia.
+GIT_COMMIT=$(shell $(DESTDIR)$(bindir)/julia -e "print(Base.GIT_VERSION_INFO.commit)")
+GIT_COMMIT_SHORT=$(shell $(DESTDIR)$(bindir)/julia -e "print(Base.GIT_VERSION_INFO.commit_short)")
+GIT_BRANCH=$(shell $(DESTDIR)$(bindir)/julia -e "print(Base.GIT_VERSION_INFO.branch)")
+GIT_BUILD_NUMBER=$(shell $(DESTDIR)$(bindir)/julia -e "print(Base.GIT_VERSION_INFO.build_number)")
+GIT_DATE_STRING=$(shell $(DESTDIR)$(bindir)/julia -e "print(Base.GIT_VERSION_INFO.date_string)")
+GIT_TAGGED_COMMIT=$(shell $(DESTDIR)$(bindir)/julia -e 'print("$$(Base.GIT_VERSION_INFO.tagged_commit ? 1 : 0)")')
+GIT_FORK_MASTER_DISTANCE=$(shell $(DESTDIR)$(bindir)/julia -e "print(Base.GIT_VERSION_INFO.fork_master_distance)")
+GIT_FORK_MASTER_TIMESTAMP=$(shell $(DESTDIR)$(bindir)/julia -e "print(Base.GIT_VERSION_INFO.fork_master_timestamp)")
+
+# Apple's documentation gives poor guidance on how to set CFBundleVersion
+# because it's documented differently depending on the age and producer of the
+# docs page.  It seems modern docs refer to it as a build string unique to a
+# released or unreleased iteration of the bundle.  The common theme is a string
+# made of up to three unsigned integers separated by a period.  We derive a
+# hopefully unique build string from the Git DAG.
+ifeq ($(NO_GIT), 1)
+ifeq ($(BUNDLE_VERS),)
+$(error If NO_GIT=1, BUNDLE_VERS must be provided)
+endif
+endif
+GIT_MASTER_COUNT:=$(shell git rev-list $(shell git merge-base HEAD master) --count)
+GIT_BRANCH_COUNT:=$(shell git rev-list $(shell git merge-base HEAD master)..HEAD --count)
+# Use commit time as final disambiguator.
+GIT_CTIME:=$(shell git log -1 --pretty=format:%ct)
+ifeq ($(GIT_MASTER_COUNT),)
+GIT_MASTER_COUNT=0
+endif
+ifeq ($(GIT_BRANCH_COUNT),)
+GIT_BRANCH_COUNT=0
+endif
+ifeq ($(GIT_CTIME),)
+GIT_CTIME=0
+endif
+BUNDLE_VERS?=$(GIT_MASTER_COUNT).$(GIT_BRANCH_COUNT).$(GIT_CTIME)
+
 # framework directory structure targets
 framework_destdirs := $(sort $(addprefix $(DESTDIR)$(prefix)/,$(framework_currver) $(framework_headers) $(framework_headers)/julia $(framework_documentation) $(framework_resources) $(framework_frameworks) $(framework_modules) $(framework_helpers) $(framework_currver)/lib))
 
@@ -85,7 +121,8 @@ $(DESTDIR)$(prefix)/$(framework_infoplist): | $(framework_destdirs)
 	/usr/libexec/PlistBuddy -x -c "Add :CFBundleName string $(FRAMEWORK_NAME)" $@
 	/usr/libexec/PlistBuddy -x -c "Add :CFBundleExecutable string $(FRAMEWORK_NAME)" $@
 	/usr/libexec/PlistBuddy -x -c "Add :CFBundleIdentifier string $(DARWIN_CODESIGN_ID_BASE).lib" $@
-	/usr/libexec/PlistBuddy -x -c "Add :CFBundleVersion string $(JULIA_COMMIT)" $@
+	/usr/libexec/PlistBuddy -x -c "Add :CFBundleVersion string $(BUNDLE_VERS)" $@
+	# Short version string is x.y.z and is basiclly a marketing version number/id.
 	/usr/libexec/PlistBuddy -x -c "Add :CFBundleShortVersionString string $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)" $@
 	/usr/libexec/PlistBuddy -x -c "Add :CFBundleSignature string ???" $@
 	/usr/libexec/PlistBuddy -x -c "Add :CFBundlePackageType string FMWK" $@
@@ -98,8 +135,8 @@ ifneq ($(DARWIN_FRAMEWORK),1)
 endif
 	$(MAKE) -C $(BUILDROOT) install
 
-# frameworknoinstall assumes `make install` was already completed.
-frameworknoinstall: $(DESTDIR)$(prefix)/$(framework_infoplist) | $(framework_current_symlinks) $(framework_version_symlink) $(framework_destdirs) hier_symlinks
+# frameworkbundle assumes `make install` was already completed.
+frameworkbundle: $(DESTDIR)$(prefix)/$(framework_infoplist) | $(framework_current_symlinks) $(framework_version_symlink) $(framework_destdirs) hier_symlinks
 
 	$(INSTALL_NAME_CHANGE_CMD) @rpath/libjulia.dylib @rpath/$(FRAMEWORK_NAME) $(DESTDIR)$(bindir)/julia
 	$(JULIAHOME)/contrib/delete-all-rpaths.sh $(DESTDIR)$(bindir)/julia
@@ -155,6 +192,27 @@ endif
 	chmod -R u+w $(DESTDIR)$(prefix)/$(framework_directory)
 	chown -R $$(id -un):$$(id -gn) $(DESTDIR)$(prefix)/$(framework_directory)
 
+# Add GIT_VERSION_INFO to the Info.plist as a supplement to the potentially ambiguous CFBundleVersion.
+# recipe is after framework bundle is formed so we can use the julia inside the framework
+addgitversioninfo: $(DESTDIR)$(prefix)/$(framework_infoplist) frameworkbundle
+	# Add Git info
+	# Temporarily remove write bit to avoid somehow chaning the bundle while running julia to get GIT_VERSION_INFO.
+	chmod -R ugo-w $(DESTDIR)$(prefix)/$(framework_directory)
+	chmod u+w $<
+	-/usr/libexec/PlistBuddy -x -c "Delete :JuliaGitVersionInfo dict" $<
+	/usr/libexec/PlistBuddy -x -c "Add :JuliaGitVersionInfo dict" $<
+	/usr/libexec/PlistBuddy -x -c "Add :JuliaGitVersionInfo:commit string $(GIT_COMMIT)" $<
+	/usr/libexec/PlistBuddy -x -c "Add :JuliaGitVersionInfo:commit_short string $(GIT_COMMIT_SHORT)" $<
+	/usr/libexec/PlistBuddy -x -c "Add :JuliaGitVersionInfo:branch string $(GIT_BRANCH)" $<
+	/usr/libexec/PlistBuddy -x -c "Add :JuliaGitVersionInfo:build_number integer $(GIT_BUILD_NUMBER)" $<
+	/usr/libexec/PlistBuddy -x -c "Add :JuliaGitVersionInfo:date_string string $(GIT_DATE_STRING)" $<
+	/usr/libexec/PlistBuddy -x -c "Add :JuliaGitVersionInfo:tagged_commit bool $(GIT_TAGGED_COMMIT)" $<
+	/usr/libexec/PlistBuddy -x -c "Add :JuliaGitVersionInfo:fork_master_distance integer $(GIT_FORK_MASTER_DISTANCE)" $<
+	/usr/libexec/PlistBuddy -x -c "Add :JuliaGitVersionInfo:fork_master_timestamp string $(GIT_FORK_MASTER_TIMESTAMP)" $<
+	# Make sure EUID:EGID owns the framework and permissions are set.
+	chmod -R u+w $(DESTDIR)$(prefix)/$(framework_directory)
+
+codesign: addgitversioninfo
 	# ad-hoc codesigning
 	#NB: must be the last lines of the recipe, else signature may be invalidated.
 
@@ -173,8 +231,6 @@ endif
 		fi \
 	done
 
-	touch -c $(DESTDIR)$(prefix)/$(framework_directory)
-
 	# Sign the (current version) framework bundle.
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	# Don't forget to sign Frameworks/Julia_debug
@@ -183,6 +239,9 @@ ifeq ($(BUNDLE_DEBUG_LIBS),1)
 endif
 	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(darwin_codesign_options) $(DESTDIR)$(prefix)/$(framework_currver)
 
-framework: toplevelinstall
+	touch -c $(DESTDIR)$(prefix)/$(framework_directory)
 
-.PHONY: toplevelinstall framework frameworknoinstall hier_symlinks
+framework: toplevelinstall
+frameworknoinstall: codesign
+
+.PHONY: toplevelinstall framework frameworknoinstall codesign addgitversioninfo frameworkbundle hier_symlinks
