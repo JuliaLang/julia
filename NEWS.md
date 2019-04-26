@@ -8,6 +8,7 @@ New language features
 Language changes
 ----------------
 
+* `reduce`/`mapreduce` using `&` and `|` as an operator over empty collections of unknown element type will throw an error instead of returning `true`/`false` ([#31635], [#31837]).
 
 Multi-threading changes
 -----------------------

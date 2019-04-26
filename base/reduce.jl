@@ -255,14 +255,12 @@ mapreduce_empty(f, op, T) = _empty_reduce_error()
 mapreduce_empty(::typeof(identity), op, T) = reduce_empty(op, T)
 mapreduce_empty(::typeof(abs), op, T)      = abs(reduce_empty(op, T))
 mapreduce_empty(::typeof(abs2), op, T)     = abs2(reduce_empty(op, T))
-
-mapreduce_empty(f::typeof(abs),  ::typeof(max), T) = abs(zero(T))
-mapreduce_empty(f::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
+mapreduce_empty(::typeof(abs),  ::typeof(max), T) = abs(zero(T))
+mapreduce_empty(::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
 
 mapreduce_empty_iter(f, op, itr, ::HasEltype) = mapreduce_empty(f, op, eltype(itr))
-mapreduce_empty_iter(f, op::typeof(&), itr, ::EltypeUnknown) = true
-mapreduce_empty_iter(f, op::typeof(|), itr, ::EltypeUnknown) = false
-mapreduce_empty_iter(f, op, itr, ::EltypeUnknown) = _empty_reduce_error()
+mapreduce_empty_iter(f, op, itr, ::EltypeUnknown) = mapreduce_empty(f, op, Any)
+
 
 # handling of single-element iterators
 """

@@ -110,7 +110,7 @@ end
     @test mean(skipmissing(Int[])) isa Float64
     @test_throws MethodError mean([])
     @test_throws MethodError mean(skipmissing([]))
-    @test_throws ArgumentError mean((1 for i in 2:1))
+    @test_throws MethodError mean((1 for i in 2:1))
 
     # Check that small types are accumulated using wider type
     for T in (Int8, UInt8)
