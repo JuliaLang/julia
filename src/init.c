@@ -824,7 +824,17 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         int i, l = jl_array_len(init_order);
         for (i = 0; i < l; i++) {
             jl_value_t *mod = jl_array_ptr_ref(init_order, i);
-            jl_module_run_initializer((jl_module_t*)mod);
+            JL_TRY {
+                jl_module_run_initializer((jl_module_t*)mod);
+            }
+            JL_CATCH {
+                jl_printf(JL_STDERR, "error during sysimg module initializer:\n");
+                jl_static_show(JL_STDERR, jl_current_exception());
+                jl_printf(JL_STDERR, "\nWhen initializing module: ");
+                jl_static_show(JL_STDERR, mod);
+                jl_printf(JL_STDERR, "\n");
+                jl_exit(1);
+            }
         }
         JL_GC_POP();
     }
