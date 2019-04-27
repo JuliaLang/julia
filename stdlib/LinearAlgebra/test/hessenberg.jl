@@ -39,10 +39,14 @@ let n = 10
 
         b = convert(Vector{eltype(H)}, b_)
         B = convert(Matrix{eltype(H)}, B_)
-        @test H \ b ≈ A \ b
-        @test H \ B ≈ A \ B
+        @test H \ b ≈ A \ b ≈ H \ complex(b)
+        @test H \ B ≈ A \ B ≈ H \ complex(B)
         @test (H - I) \ B ≈ (A - I) \ B
         @test (H - (3+4im)I) \ B ≈ (A - (3+4im)I) \ B
+        @test b' / H ≈ b' / A ≈ complex.(b') / H
+        @test B' / H ≈ B' / A ≈ complex(B') / H
+        @test B' / (H - I) ≈ B' / (A - I)
+        @test B' / (H - (3+4im)I) ≈ B' / (A - (3+4im)I)
     end
 end
 

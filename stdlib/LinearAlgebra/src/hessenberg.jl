@@ -188,7 +188,7 @@ end
 -(F::Hessenberg, J::UniformScaling) = Hessenberg(F, F.μ - J.λ)
 -(J::UniformScaling, F::Hessenberg) = Hessenberg(-F, J.λ - F.μ)
 
-# Solving (H-µI)x = b: we can do this in O(n²) time and O(n) memory
+# Solving (H+µI)x = b: we can do this in O(n²) time and O(n) memory
 # (in-place in x) by the RQ algorithm from:
 #
 #    G. Henry, "The shifted Hessenberg system solve computation," Tech. Rep. 94–163,
@@ -202,13 +202,13 @@ end
 # (Note, however, that there is apparently a typo in Algorithm 1 of the
 #  Beattie paper: the Givens rotation uses u(k), not H(k,k) - σ.)
 #
-# Essentially, it works by doing a Givens RQ factorization of H-µI from
+# Essentially, it works by doing a Givens RQ factorization of H+µI from
 # right to left, and doing backsubstitution *simultaneously*.
 
-# solve (H+μ)X = B, storing result in B
+# solve (H+μI)X = B, storing result in B
 function ldiv_H!(F::Hessenberg, B::AbstractVecOrMat)
     m = size(F,1)
-    m != size(B,1) && throw(DimensionMismatch("wrong right-hand-side length != $m"))
+    m != size(B,1) && throw(DimensionMismatch("wrong right-hand-side # rows != $m"))
     require_one_based_indexing(B)
     n = size(B,2)
     H = F.factors
@@ -247,9 +247,63 @@ function ldiv_H!(F::Hessenberg, B::AbstractVecOrMat)
     return X
 end
 
+# solve X(H+μI) = B, storing result in B
+#
+# Note: this can be derived from the Henry (1994) algorithm
+# by transformation to F(Hᵀ+µI)F FXᵀ = FBᵀ, where
+# F is the permutation matrix that reverses the order
+# of rows/cols.  Essentially, we take the ldiv_H! algorithm,
+# swap indices of H and X to transpose, and reverse the
+# order of the H indices (or the order of the loops).
+function rdiv_H!(B::AbstractMatrix, F::Hessenberg)
+    m = size(F,1)
+    m != size(B,2) && throw(DimensionMismatch("wrong right-hand-side # cols != $m"))
+    require_one_based_indexing(B)
+    n = size(B,1)
+    H = F.factors
+    μ = F.μ
+    u = Vector{typeof(zero(eltype(H))+μ)}(undef, m) # for last rotated row of H-μI
+    u .= @view H[1,:]
+    u[1] += μ
+    X = B # not a copy, just rename to match paper
+    cs = Vector{Tuple{real(eltype(u)),eltype(u)}}(undef, length(u)) # store Givens rotations
+    @inbounds for k = 1:m-1
+        c, s, ρ = givensAlgorithm(u[k], H[k+1,k])
+        cs[k] = (c, s)
+        for i = 1:n
+            X[i,k] /= ρ
+            t₁ = s * X[i,k]; t₂ = c * X[i,k]
+            @simd for j = k+2:m
+                X[i,j] -= u[j]*t₂ + H[k+1,j]*t₁
+            end
+            X[i,k+1] -= u[k+1]*t₂ + (H[k+1,k+1] + μ) * t₁
+        end
+        @simd for j = k+2:m
+            u[j] = H[k+1,j]*c - u[j]*s'
+        end
+        u[k+1] = (H[k+1,k+1] + μ) * c - u[k+1]*s'
+    end
+    for i = 1:n
+        τ₁ = X[i,m] / u[m]
+        @inbounds for j = m-1:-1:1
+            τ₂ = X[i,j]
+            c, s = cs[j]
+            X[i,j+1] = c*τ₁ + s*τ₂
+            τ₁ = c*τ₂ - s'τ₁
+        end
+        X[i,1] = τ₁
+    end
+    return X
+end
+
 function ldiv!(F::Hessenberg, B::AbstractVecOrMat)
     Q = F.Q
     return lmul!(Q, ldiv_H!(F, lmul!(Q', B)))
+end
+
+function rdiv!(B::AbstractMatrix, F::Hessenberg)
+    Q = F.Q
+    return rmul!(rdiv_H!(rmul!(B, Q), F), Q')
 end
 
 # handle case of real H and complex μ — we need to work around the
@@ -261,5 +315,14 @@ function ldiv!(F::Hessenberg{<:Complex,<:Real}, B::AbstractVecOrMat{<:Complex})
     ldiv_H!(F, B .= Complex.(Br,Bi))
     Br = lmul!(Q, real(B))
     Bi = lmul!(Q, imag(B))
+    return B .= Complex.(Br,Bi)
+end
+function rdiv!(B::AbstractVecOrMat{<:Complex}, F::Hessenberg{<:Complex,<:Real})
+    Q = F.Q
+    Br = rmul!(real(B), Q)
+    Bi = rmul!(imag(B), Q)
+    rdiv_H!(B .= Complex.(Br,Bi), F)
+    Br = rmul!(real(B), Q')
+    Bi = rmul!(imag(B), Q')
     return B .= Complex.(Br,Bi)
 end
