@@ -3,11 +3,11 @@
 struct Hessenberg{T,S<:AbstractMatrix{T},V<:Number} <: Factorization{T}
     factors::S
     τ::Vector{T}
-    μ::V # represents a shifted Hessenberg matrix H-μI
+    μ::V # represents a shifted Hessenberg matrix H+μI
 
     function Hessenberg{T,S,V}(factors, τ, μ::V=zero(V)) where {T,S<:AbstractMatrix{T},V<:Number}
         require_one_based_indexing(factors, τ)
-        new{T,S}(factors, τ, μ)
+        new{T,S,V}(factors, τ, μ)
     end
 end
 Hessenberg(factors::AbstractMatrix{T}, τ::Vector{T}, μ::V=false) where {T,V<:Number} = Hessenberg{T,typeof(factors),V}(factors, τ, μ)
@@ -48,8 +48,8 @@ matrix with `F.H`. When `Q` is extracted, the resulting type is the `HessenbergQ
 and may be converted to a regular matrix with [`convert(Array, _)`](@ref)
  (or `Array(_)` for short).
 
-Note that the shifted factorization `A-μI = Q (H - μI) Q'` can be
-constructed efficiently by `F - μ*I` using the [`UniformScaling`](@ref)
+Note that the shifted factorization `A+μI = Q (H - μI) Q'` can be
+constructed efficiently by `F + μ*I` using the [`UniformScaling`](@ref)
 object [`I`](@ref), which creates a new `Hessenberg` with the same `Q` and `H`
 (shared storage) and a modified shift.   The shift of a given `F` is
 obtained by `F.μ`.
@@ -108,17 +108,17 @@ AbstractArray(F::Hessenberg) = AbstractMatrix(F)
 Matrix(F::Hessenberg) = Array(AbstractArray(F))
 Array(F::Hessenberg) = Matrix(F)
 function AbstractMatrix(F::Hessenberg{T,S,V}) where {T,S,V}
-    fq = Array(F.Q)
+    fq = F.Q
     A = rmul!(lmul!(fq, F.H), fq')
     if iszero(F.μ)
         return A
     elseif promote_type(T,V) <: T # can shift A in-place
         for i = 1:size(A,1)
-            @inbounds A[i,i] -= F.μ
+            @inbounds A[i,i] += F.μ
         end
         return A
     else
-        return A - F.μ*I # allocate another matrix, e.g. if A is real and μ is complex
+        return A + F.μ*I # allocate another matrix, e.g. if A is real and μ is complex
     end
 end
 
@@ -153,8 +153,8 @@ end
 # multiply Hessenberg by scalar
 rmul!(F::Hessenberg{T}, x::T) where {T} = Hessenberg(rmul_triu!(F.factors, x, -1), F.τ, F.μ*x)
 lmul!(x::T, F::Hessenberg{T}) where {T} = Hessenberg(lmul_triu!(x, F.factors, -1), F.τ, x*F.μ)
-(*)(F::Hessenberg{T}, x::T) where {T} = rmul!(copy(F), x)
-(*)(x::T, F::Hessenberg{T}) where {T} = lmul!(x, copy(F))
+*(F::Hessenberg{T}, x::T) where {T} = rmul!(copy(F), x)
+*(x::T, F::Hessenberg{T}) where {T} = lmul!(x, copy(F))
 function (*)(F::Hessenberg{T}, x::S) where {T,S}
     TS = typeof(zero(T) * x)
     rmul!(Hessenberg{TS}(F), convert(TS, x))
@@ -163,13 +163,13 @@ function (*)(x::S, F::Hessenberg{T}) where {T,S}
     TS = typeof(zero(T) * x)
     return lmul!(convert(TS, x), Hessenberg{TS}(F))
 end
-(-)(F::Hessenberg{T}) where {T} = F * -one(T)
+-(F::Hessenberg{T}) where {T} = F * -one(T)
 
 # shift Hessenberg by λI
-(+)(F::Hessenberg, J::UniformScaling) = Hessenberg(F, F.μ + J.λ)
-(+)(J::UniformScaling, F::Hessenberg) = Hessenberg(F, J.λ + F.μ)
-(-)(F::Hessenberg, J::UniformScaling) = Hessenberg(F, F.μ - J.λ)
-(-)(J::UniformScaling, F::Hessenberg{T}) where {T} = Hessenberg(-F, J.λ - F.μ)
++(F::Hessenberg, J::UniformScaling) = Hessenberg(F, F.μ + J.λ)
++(J::UniformScaling, F::Hessenberg) = Hessenberg(F, J.λ + F.μ)
+-(F::Hessenberg, J::UniformScaling) = Hessenberg(F, F.μ - J.λ)
+-(J::UniformScaling, F::Hessenberg{T}) where {T} = Hessenberg(-F, J.λ - F.μ)
 
 # Solving (H-µI)x = b: we can do this in O(n²) time and O(n) memory
 # (in-place in x) by the RQ algorithm from:
@@ -182,10 +182,13 @@ end
 #    C. Beattie et al., "A note on shifted Hessenberg systems and frequency
 #    response computation," ACM Trans. Math. Soft. 38, pp. 12:6–12:16 (2011)
 #
+# (Note, however, that there is apparently a typo in Algorithm 1 of the
+#  Beattie paper: the Givens rotation uses u(k), not H(k,k) - σ.)
+#
 # Essentially, it works by doing a Givens RQ factorization of H-µI from
 # right to left, and doing backsubstitution *simultaneously*.
 
-# solve (H-μ)X = B, storing result in B
+# solve (H+μ)X = B, storing result in B
 function ldiv_H!(F::Hessenberg, B::AbstractVecOrMat)
     m = size(F,1)
     m != size(B,1) && throw(DimensionMismatch("wrong right-hand-side length != $m"))
@@ -193,9 +196,9 @@ function ldiv_H!(F::Hessenberg, B::AbstractVecOrMat)
     n = size(B,2)
     H = F.factors
     μ = F.μ
-    u = Vector{typeof(zero(eltype(H))-μ)}(undef, m) # for last rotated col of H-μI
+    u = Vector{typeof(zero(eltype(H))+μ)}(undef, m) # for last rotated col of H-μI
     copyto!(u, 1, H, m*(m-1)+1, m) # u .= H[:,m]
-    u[m] -= μ
+    u[m] += μ
     X = B # not a copy, just rename to match paper
     cs = Vector{Tuple{real(eltype(u)),eltype(u)}}(undef, length(u)) # store Givens rotations
     @inbounds for k = m:-1:2
@@ -207,12 +210,12 @@ function ldiv_H!(F::Hessenberg, B::AbstractVecOrMat)
             @simd for j = 1:k-2
                 X[j,i] -= u[j]*t₂ + H[j,k-1]*t₁
             end
-            X[k-1,i] -= u[k-1]*t₂ + (H[k-1,k-1] - μ) * t₁
+            X[k-1,i] -= u[k-1]*t₂ + (H[k-1,k-1] + μ) * t₁
         end
         @simd for j = 1:k-2
             u[j] = H[j,k-1]*c - u[j]*s'
         end
-        u[k-1] = (H[k-1,k-1] - μ) * c - u[k-1]*s'
+        u[k-1] = (H[k-1,k-1] + μ) * c - u[k-1]*s'
     end
     for i = 1:n
         τ₁ = X[1,i] / u[1]
