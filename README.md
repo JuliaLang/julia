@@ -272,10 +272,6 @@ set `JULIA_THREADS=0` in your `Make.user` if you're on a 32-bit system.
 
 In order to build Julia on Windows, see [README.windows](https://github.com/JuliaLang/julia/blob/master/doc/README.windows.md).
 
-### Vagrant
-
-Julia can be developed in an isolated Vagrant environment. See [the Vagrant README](https://github.com/JuliaLang/julia/blob/master/contrib/vagrant/README.md) for details.
-
 ## Required Build Tools and External Libraries
 
 Building Julia requires that the following software be installed:
