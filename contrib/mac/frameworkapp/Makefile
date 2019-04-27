@@ -117,7 +117,7 @@ $(BUILDROOT)/framework-component.plist: $(JULIAHOME)/contrib/mac/frameworkapp/fr
 $(BUILDROOT)/$(FRAMEWORK_NAME)-framework.pkg: $(BUILDROOT)/framework-component.plist $(JULIA_FRAMEWORK_LIB)
 	pkgbuild \
 		--install-location /Library/Frameworks \
-		--version $(JULIA_VERSION_MAJOR_MINOR_PATCH) \
+		--version $(JULIA_APP_VERSION) \
 		--root $(FRAMEWORK_DESTDIR) \
 		--component-plist $< \
 		--identifier org.julialang.julia.lib.v$(FRAMEWORK_VERSION) \
@@ -127,7 +127,7 @@ $(BUILDROOT)/launcher.pkg: $(JULIAHOME)/contrib/mac/frameworkapp/launcher-compon
 	find $(XCEXPORT) -not -name Julia.app -d 1 -delete
 	pkgbuild \
 		--install-location /Applications \
-		--version $(JULIA_VERSION_MAJOR_MINOR_PATCH) \
+		--version $(JULIA_APP_VERSION) \
 		--root $(XCEXPORT) \
 		--component-plist $< \
 		--identifier org.julialang.JuliaLauncher \
