@@ -33,7 +33,7 @@ let n = 10
 
         @test convert(Array, 2 * H) ≈ 2 * A ≈ convert(Array, H * 2)
         @test convert(Array, H + 2I) ≈ A + 2I ≈ convert(Array, 2I + H)
-        @test convert(Array, H + (2+4im)*I) ≈ A + (2+4im)*I ≈ convert(Array, (2+4im)*I + H)
+        @test convert(Array, H + (2+4im)I) ≈ A + (2+4im)I ≈ convert(Array, (2+4im)I + H)
         @test convert(Array, H - 2I) ≈ A - 2I ≈ -convert(Array, 2I - H)
         @test convert(Array, -H) == -convert(Array, H)
 
@@ -42,6 +42,7 @@ let n = 10
         @test H \ b ≈ A \ b
         @test H \ B ≈ A \ B
         @test (H - I) \ B ≈ (A - I) \ B
+        @test (H - (3+4im)I) \ B ≈ (A - (3+4im)I) \ B
     end
 end
 

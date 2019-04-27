@@ -77,6 +77,20 @@ true
 hessenberg(A::StridedMatrix{T}) where T =
     hessenberg!(copy_oftype(A, eigtype(T)))
 
+
+function show(io::IO, mime::MIME"text/plain", F::Hessenberg)
+    summary(io, F); println(io)
+    if iszero(F.μ)
+        println(io, "Factorization QHQ': ")
+    else
+        println(io, "Factorization Q(H+μI)Q' for shift μ = ", F.μ, ':')
+    end
+    println(io, "Q factor:")
+    show(io, mime, F.Q)
+    println(io, "\nH factor:")
+    show(io, mime, F.H)
+end
+
 struct HessenbergQ{T,S<:AbstractMatrix} <: AbstractQ{T}
     factors::S
     τ::Vector{T}
@@ -236,4 +250,16 @@ end
 function ldiv!(F::Hessenberg, B::AbstractVecOrMat)
     Q = F.Q
     return lmul!(Q, ldiv_H!(F, lmul!(Q', B)))
+end
+
+# handle case of real H and complex μ — we need to work around the
+# fact that we can't multiple a real F.Q by a complex matrix directly in LAPACK
+function ldiv!(F::Hessenberg{<:Complex,<:Real}, B::AbstractVecOrMat{<:Complex})
+    Q = F.Q
+    Br = lmul!(Q', real(B))
+    Bi = lmul!(Q', imag(B))
+    ldiv_H!(F, B .= Complex.(Br,Bi))
+    Br = lmul!(Q, real(B))
+    Bi = lmul!(Q, imag(B))
+    return B .= Complex.(Br,Bi)
 end
