@@ -6922,3 +6922,17 @@ struct LL31783{T}
 end
 foo31783(tv::TypeVar) = tv.ub == Any ? Union{tv,LL31783{tv}} : tv
 @test isa(foo31783(TypeVar(:T)),Union)
+
+# Issue #31649
+struct sparse_t31649
+    val::Vector{Float64}
+    sub::Vector{Int64}
+end
+Base.convert(::Any, v::sparse_t31649) = copy(v.val)
+let spvec = sparse_t31649(zeros(Float64,5), Vector{Int64}())
+    @test_throws MethodError repr(spvec)
+    # Try manually putting the problematic method into the cache (in
+    # the original issue compiling the showerror method caused this to happen)
+    @test convert(Any, nothing) === nothing
+    @test_throws MethodError repr(spvec)
+end
