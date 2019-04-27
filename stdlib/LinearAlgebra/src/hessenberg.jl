@@ -156,11 +156,11 @@ lmul!(x::T, F::Hessenberg{T}) where {T} = Hessenberg(lmul_triu!(x, F.factors, -1
 (*)(F::Hessenberg{T}, x::T) where {T} = rmul!(copy(F), x)
 (*)(x::T, F::Hessenberg{T}) where {T} = lmul!(x, copy(F))
 function (*)(F::Hessenberg{T}, x::S) where {T,S}
-    TS = promote_type(T, S)
+    TS = typeof(zero(T) * x)
     rmul!(Hessenberg{TS}(F), convert(TS, x))
 end
 function (*)(x::S, F::Hessenberg{T}) where {T,S}
-    TS = promote_type(T, S)
+    TS = typeof(zero(T) * x)
     return lmul!(convert(TS, x), Hessenberg{TS}(F))
 end
 (-)(F::Hessenberg{T}) where {T} = F * -one(T)
@@ -185,41 +185,49 @@ end
 # Essentially, it works by doing a Givens RQ factorization of H-µI from
 # right to left, and doing backsubstitution *simultaneously*.
 
-# solve (H-μ)x = b, storing result in b
-function ldiv_H!(F::Hessenberg, b::AbstractVector)
-    n = size(F, 1)
-    n != length(b) = throw(DimensionMismatch("wrong right-hand-side length != $n"))
-    require_one_based_indexing(b)
+# solve (H-μ)X = B, storing result in B
+function ldiv_H!(F::Hessenberg, B::AbstractVecOrMat)
+    m = size(F,1)
+    m != size(B,1) && throw(DimensionMismatch("wrong right-hand-side length != $m"))
+    require_one_based_indexing(B)
+    n = size(B,2)
     H = F.factors
     μ = F.μ
-    u = H[:,n] # temporary vector
-    cs = Vector{Tuple{eltype(u),eltype(u)}}(undef, length(u)) # store Givens rotations
-    x = b # not a copy, just rename to match paper
-    u[n] -= μ
-    @inbounds for k = n:-1:2
-        Φ, ρ = givens(H[k,k] - μ, H[k,k-1], 1,2)
-        cs[k] = c, s = Φ.c, Φ.s
-        x[k] /= ρ
-        t₁ = s * x[k]; t₂ = c * x[k]
-        @simd for j = 1:k-2
-            x[j] -= u[j]*t₂ + H[j,k-1]*t₁
-            u[j] = H[j,k-1]*c - s'u[j]
+    u = Vector{typeof(zero(eltype(H))-μ)}(undef, m) # for last rotated col of H-μI
+    copyto!(u, 1, H, m*(m-1)+1, m) # u .= H[:,m]
+    u[m] -= μ
+    X = B # not a copy, just rename to match paper
+    cs = Vector{Tuple{real(eltype(u)),eltype(u)}}(undef, length(u)) # store Givens rotations
+    @inbounds for k = m:-1:2
+        c, s, ρ = givensAlgorithm(u[k], H[k,k-1])
+        cs[k] = (c, s)
+        for i = 1:n
+            X[k,i] /= ρ
+            t₁ = s * X[k,i]; t₂ = c * X[k,i]
+            @simd for j = 1:k-2
+                X[j,i] -= u[j]*t₂ + H[j,k-1]*t₁
+            end
+            X[k-1,i] -= u[k-1]*t₂ + (H[k-1,k-1] - μ) * t₁
         end
-        x[k-1] -= u[k-1]*t₂ + (H[k-1,k-1] - μ) * t₁
-        u[k-1] = (H[k-1,k-1] - μ) * c - s'u[k-1]
+        @simd for j = 1:k-2
+            u[j] = H[j,k-1]*c - u[j]*s'
+        end
+        u[k-1] = (H[k-1,k-1] - μ) * c - u[k-1]*s'
     end
-    τ₁ = x[1] / u[1]
-    @inbounds for k = 2:n
-        τ₂ = x[k]
-        c, s = cs[k]
-        x[k-1] = c*τ₁ + s*τ₂
-        τ₁ = c*τ₂ - s'τ₁
+    for i = 1:n
+        τ₁ = X[1,i] / u[1]
+        @inbounds for j = 2:m
+            τ₂ = X[j,i]
+            c, s = cs[j]
+            X[j-1,i] = c*τ₁ + s*τ₂
+            τ₁ = c*τ₂ - s'τ₁
+        end
+        X[m,i] = τ₁
     end
-    x[n] = τ₁
-    return x
+    return X
 end
 
-function ldiv!(F::Hessenberg, b::AbstractVector)
+function ldiv!(F::Hessenberg, B::AbstractVecOrMat)
     Q = F.Q
-    return lmul!(Q, ldiv_H!(F, lmul!(Q', b)))
+    return lmul!(Q, ldiv_H!(F, lmul!(Q', B)))
 end
