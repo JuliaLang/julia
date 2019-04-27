@@ -160,10 +160,10 @@ function lmul_triu!(x, M::AbstractMatrix, k::Integer=0)
 end
 
 # multiply Hessenberg by scalar
-rmul!(F::Hessenberg{<:Any,T}, x::T) where {T} = Hessenberg(rmul_triu!(F.factors, x, -1), F.τ, F.μ*x)
-lmul!(x::T, F::Hessenberg{<:Any,T}) where {T} = Hessenberg(lmul_triu!(x, F.factors, -1), F.τ, x*F.μ)
-*(F::Hessenberg{<:Any,T}, x::T) where {T} = rmul!(copy(F), x)
-*(x::T, F::Hessenberg{<:Any,T}) where {T} = lmul!(x, copy(F))
+rmul!(F::Hessenberg{<:Any,T}, x::T) where {T<:Number} = Hessenberg(rmul_triu!(F.factors, x, -1), F.τ, F.μ*x)
+lmul!(x::T, F::Hessenberg{<:Any,T}) where {T<:Number} = Hessenberg(lmul_triu!(x, F.factors, -1), F.τ, x*F.μ)
+*(F::Hessenberg{<:Any,T}, x::T) where {T<:Number} = rmul!(copy(F), x)
+*(x::T, F::Hessenberg{<:Any,T}) where {T<:Number} = lmul!(x, copy(F))
 function (*)(F::Hessenberg{<:Any,T}, x::S) where {T,S<:Number}
     TS = typeof(zero(T) * x)
     if TS === T
