@@ -1,22 +1,17 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-struct Hessenberg{T,S<:AbstractMatrix{T},V<:Number} <: Factorization{T}
+struct Hessenberg{T,TH,S<:AbstractMatrix{TH},V<:Number} <: Factorization{T}
     factors::S
-    τ::Vector{T}
+    τ::Vector{TH}
     μ::V # represents a shifted Hessenberg matrix H+μI
 
-    function Hessenberg{T,S,V}(factors, τ, μ::V=zero(V)) where {T,S<:AbstractMatrix{T},V<:Number}
+    function Hessenberg{T,TH,S,V}(factors, τ, μ::V=zero(V)) where {T,TH,S<:AbstractMatrix{TH},V<:Number}
         require_one_based_indexing(factors, τ)
-        new{T,S,V}(factors, τ, μ)
+        new{T,TH,S,V}(factors, τ, μ)
     end
 end
-Hessenberg(factors::AbstractMatrix{T}, τ::Vector{T}, μ::V=false) where {T,V<:Number} = Hessenberg{T,typeof(factors),V}(factors, τ, μ)
-function Hessenberg{T}(factors::AbstractMatrix, τ::AbstractVector, μ::V=false) where {T,V<:Number}
-    Hessenberg(convert(AbstractMatrix{T}, factors), convert(Vector{T}, v), μ)
-end
+Hessenberg(factors::AbstractMatrix{T}, τ::Vector{T}, μ::V=false) where {T,V<:Number} = Hessenberg{promote_type(T,V),T,typeof(factors),V}(factors, τ, μ)
 Hessenberg(F::Hessenberg, μ::Number=F.μ) = Hessenberg(F.factors, F.τ, μ)
-Hessenberg{T}(F::Hessenberg{T}) where {T} = copy(F) # copying simplifies promotion logic below
-Hessenberg{T}(F::Hessenberg) where {T} = Hessenberg{T}(F.factors, F.τ, F.μ)
 
 Hessenberg(A::StridedMatrix, μ::Number=false) = Hessenberg(LAPACK.gehrd!(A)..., μ)
 
@@ -107,12 +102,12 @@ Matrix{T}(Q::HessenbergQ) where {T} = convert(Matrix{T}, LAPACK.orghr!(1, size(Q
 AbstractArray(F::Hessenberg) = AbstractMatrix(F)
 Matrix(F::Hessenberg) = Array(AbstractArray(F))
 Array(F::Hessenberg) = Matrix(F)
-function AbstractMatrix(F::Hessenberg{T,S,V}) where {T,S,V}
-    fq = F.Q
-    A = rmul!(lmul!(fq, F.H), fq')
+function AbstractMatrix(F::Hessenberg)
+    Q = F.Q
+    A = rmul!(lmul!(Q, F.H), Q')
     if iszero(F.μ)
         return A
-    elseif promote_type(T,V) <: T # can shift A in-place
+    elseif typeof(zero(eltype(A))+F.μ) <: eltype(A) # can shift A in-place
         for i = 1:size(A,1)
             @inbounds A[i,i] += F.μ
         end
@@ -151,25 +146,33 @@ function lmul_triu!(x, M::AbstractMatrix, k::Integer=0)
 end
 
 # multiply Hessenberg by scalar
-rmul!(F::Hessenberg{T}, x::T) where {T} = Hessenberg(rmul_triu!(F.factors, x, -1), F.τ, F.μ*x)
-lmul!(x::T, F::Hessenberg{T}) where {T} = Hessenberg(lmul_triu!(x, F.factors, -1), F.τ, x*F.μ)
-*(F::Hessenberg{T}, x::T) where {T} = rmul!(copy(F), x)
-*(x::T, F::Hessenberg{T}) where {T} = lmul!(x, copy(F))
-function (*)(F::Hessenberg{T}, x::S) where {T,S}
+rmul!(F::Hessenberg{<:Any,T}, x::T) where {T} = Hessenberg(rmul_triu!(F.factors, x, -1), F.τ, F.μ*x)
+lmul!(x::T, F::Hessenberg{<:Any,T}) where {T} = Hessenberg(lmul_triu!(x, F.factors, -1), F.τ, x*F.μ)
+*(F::Hessenberg{<:Any,T}, x::T) where {T} = rmul!(copy(F), x)
+*(x::T, F::Hessenberg{<:Any,T}) where {T} = lmul!(x, copy(F))
+function (*)(F::Hessenberg{<:Any,T}, x::S) where {T,S}
     TS = typeof(zero(T) * x)
-    rmul!(Hessenberg{TS}(F), convert(TS, x))
+    if TS === T
+        return rmul!(copy(F), convert(T, x))
+    else
+        return rmul!(Hessenberg(Matrix{TS}(F.factors), Vector{TS}(F.τ), F.μ), convert(TS, x))
+    end
 end
-function (*)(x::S, F::Hessenberg{T}) where {T,S}
+function (*)(x::S, F::Hessenberg{<:Any,T}) where {T,S}
     TS = typeof(zero(T) * x)
-    return lmul!(convert(TS, x), Hessenberg{TS}(F))
+    if TS === T
+        return lmul!(convert(T, x), copy(F))
+    else
+        return lmul!(convert(TS, x), Hessenberg(Matrix{TS}(F.factors), Vector{TS}(F.τ), F.μ))
+    end
 end
--(F::Hessenberg{T}) where {T} = F * -one(T)
+-(F::Hessenberg{<:Any,T}) where {T} = F * -one(T)
 
 # shift Hessenberg by λI
 +(F::Hessenberg, J::UniformScaling) = Hessenberg(F, F.μ + J.λ)
 +(J::UniformScaling, F::Hessenberg) = Hessenberg(F, J.λ + F.μ)
 -(F::Hessenberg, J::UniformScaling) = Hessenberg(F, F.μ - J.λ)
--(J::UniformScaling, F::Hessenberg{T}) where {T} = Hessenberg(-F, J.λ - F.μ)
+-(J::UniformScaling, F::Hessenberg) = Hessenberg(-F, J.λ - F.μ)
 
 # Solving (H-µI)x = b: we can do this in O(n²) time and O(n) memory
 # (in-place in x) by the RQ algorithm from:
