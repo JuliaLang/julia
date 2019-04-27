@@ -150,7 +150,7 @@ rmul!(F::Hessenberg{<:Any,T}, x::T) where {T} = Hessenberg(rmul_triu!(F.factors,
 lmul!(x::T, F::Hessenberg{<:Any,T}) where {T} = Hessenberg(lmul_triu!(x, F.factors, -1), F.τ, x*F.μ)
 *(F::Hessenberg{<:Any,T}, x::T) where {T} = rmul!(copy(F), x)
 *(x::T, F::Hessenberg{<:Any,T}) where {T} = lmul!(x, copy(F))
-function (*)(F::Hessenberg{<:Any,T}, x::S) where {T,S}
+function (*)(F::Hessenberg{<:Any,T}, x::S) where {T,S<:Number}
     TS = typeof(zero(T) * x)
     if TS === T
         return rmul!(copy(F), convert(T, x))
@@ -158,7 +158,7 @@ function (*)(F::Hessenberg{<:Any,T}, x::S) where {T,S}
         return rmul!(Hessenberg(Matrix{TS}(F.factors), Vector{TS}(F.τ), F.μ), convert(TS, x))
     end
 end
-function (*)(x::S, F::Hessenberg{<:Any,T}) where {T,S}
+function (*)(x::S, F::Hessenberg{<:Any,T}) where {T,S<:Number}
     TS = typeof(zero(T) * x)
     if TS === T
         return lmul!(convert(T, x), copy(F))
