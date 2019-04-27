@@ -32,7 +32,8 @@ $(error JULIA_APP_SHORT_VERSION_STRING not defined)
 endif
 
 # Match build string (i.e. CFBundleVersion) to framework's build string.
-JULIA_APP_VERSION=$(shell /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" $(FRAMEWORK_DESTDIR)/$(framework_infoplist))
+include $(JULIAHOME)/contrib/mac/vers.mk
+JULIA_APP_VERSION:=$(BUNDLE_VERS)
 
 # X.Y.Z
 JULIA_VERSION_MAJOR_MINOR_PATCH := $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
@@ -117,7 +118,7 @@ $(BUILDROOT)/framework-component.plist: $(JULIAHOME)/contrib/mac/frameworkapp/fr
 $(BUILDROOT)/$(FRAMEWORK_NAME)-framework.pkg: $(BUILDROOT)/framework-component.plist $(JULIA_FRAMEWORK_LIB)
 	pkgbuild \
 		--install-location /Library/Frameworks \
-		--version $(JULIA_APP_VERSION) \
+		--version $(BUNDLE_VERS) \
 		--root $(FRAMEWORK_DESTDIR) \
 		--component-plist $< \
 		--identifier org.julialang.julia.lib.v$(FRAMEWORK_VERSION) \
@@ -127,7 +128,7 @@ $(BUILDROOT)/launcher.pkg: $(JULIAHOME)/contrib/mac/frameworkapp/launcher-compon
 	find $(XCEXPORT) -not -name Julia.app -d 1 -delete
 	pkgbuild \
 		--install-location /Applications \
-		--version $(JULIA_APP_VERSION) \
+		--version $(BUNDLE_VERS) \
 		--root $(XCEXPORT) \
 		--component-plist $< \
 		--identifier org.julialang.JuliaLauncher \

@@ -33,31 +33,7 @@ GIT_TAGGED_COMMIT=$(shell $(DESTDIR)$(bindir)/julia -e 'print("$$(Base.GIT_VERSI
 GIT_FORK_MASTER_DISTANCE=$(shell $(DESTDIR)$(bindir)/julia -e "print(Base.GIT_VERSION_INFO.fork_master_distance)")
 GIT_FORK_MASTER_TIMESTAMP=$(shell $(DESTDIR)$(bindir)/julia -e "print(Base.GIT_VERSION_INFO.fork_master_timestamp)")
 
-# Apple's documentation gives poor guidance on how to set CFBundleVersion
-# because it's documented differently depending on the age and producer of the
-# docs page.  It seems modern docs refer to it as a build string unique to a
-# released or unreleased iteration of the bundle.  The common theme is a string
-# made of up to three unsigned integers separated by a period.  We derive a
-# hopefully unique build string from the Git DAG.
-ifeq ($(NO_GIT), 1)
-ifeq ($(BUNDLE_VERS),)
-$(error If NO_GIT=1, BUNDLE_VERS must be provided)
-endif
-endif
-GIT_MASTER_COUNT:=$(shell git rev-list $(shell git merge-base HEAD master) --count)
-GIT_BRANCH_COUNT:=$(shell git rev-list $(shell git merge-base HEAD master)..HEAD --count)
-# Use commit time as final disambiguator.
-GIT_CTIME:=$(shell git log -1 --pretty=format:%ct)
-ifeq ($(GIT_MASTER_COUNT),)
-GIT_MASTER_COUNT=0
-endif
-ifeq ($(GIT_BRANCH_COUNT),)
-GIT_BRANCH_COUNT=0
-endif
-ifeq ($(GIT_CTIME),)
-GIT_CTIME=0
-endif
-BUNDLE_VERS?=$(GIT_MASTER_COUNT).$(GIT_BRANCH_COUNT).$(GIT_CTIME)
+include $(JULIAHOME)/contrib/mac/vers.mk
 
 # framework directory structure targets
 framework_destdirs := $(sort $(addprefix $(DESTDIR)$(prefix)/,$(framework_currver) $(framework_headers) $(framework_headers)/julia $(framework_documentation) $(framework_resources) $(framework_frameworks) $(framework_modules) $(framework_helpers) $(framework_currver)/lib))
