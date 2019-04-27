@@ -2,7 +2,7 @@
 
 """
 Interface to BLAS subroutines.
-""" 
+"""
 module BLAS
 
 import ..axpy!, ..axpby!
@@ -72,13 +72,13 @@ import Libdl
 # utility routines
 const VENDOR_REF = Ref{Symbol}(:unkown)
 let lib = Libdl.dlopen(libblas; throw_error=false)
-if lib !== nothing
-    if Libdl.dlsym(lib, :openblas_set_num_threads; throw_error=false) !== nothing
-        VENDOR_REF[] = :openblas
-    elseif Libdl.dlsym(lib, :openblas_set_num_threads64_; throw_error=false) !== nothing
-        VENDOR_REF[] = :openblas64
-    elseif Libdl.dlsym(lib, :MKL_Set_Num_Threads; throw_error=false) !== nothing
-        VENDOR_REF[] = :mkl
+if !isnothing(lib)
+    VENDOR_REF[] = if !isnothing(Libdl.dlsym(lib, :openblas_set_num_threads; throw_error=false))
+         :openblas
+    elseif !isnothing(Libdl.dlsym(lib, :openblas_set_num_threads64_; throw_error=false))
+        :openblas64
+    elseif !isnothing(Libdl.dlsym(lib, :MKL_Set_Num_Threads; throw_error=false))
+        :mkl
     end
 end
 end
