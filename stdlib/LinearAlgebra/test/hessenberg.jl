@@ -47,6 +47,8 @@ let n = 10
         @test B' / H ≈ B' / A ≈ complex(B') / H
         @test B' / (H - I) ≈ B' / (A - I)
         @test B' / (H - (3+4im)I) ≈ B' / (A - (3+4im)I)
+        @test (H - (3+4im)I)' \ B ≈ (A - (3+4im)I)' \ B
+        @test B' / (H - (3+4im)I)' ≈ B' / (A - (3+4im)I)'
     end
 end
 

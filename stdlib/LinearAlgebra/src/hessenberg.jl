@@ -19,6 +19,8 @@ copy(F::Hessenberg) = Hessenberg(copy(F.factors), copy(F.τ), F.μ)
 size(F::Hessenberg, d) = size(F.factors, d)
 size(F::Hessenberg) = size(F.factors)
 
+adjoint(F::Hessenberg) = Adjoint(F)
+
 # iteration for destructuring into components
 Base.iterate(S::Hessenberg) = (S.Q, Val(:H))
 Base.iterate(S::Hessenberg, ::Val{:H}) = (S.H, Val(:done))
@@ -43,11 +45,13 @@ matrix with `F.H`. When `Q` is extracted, the resulting type is the `HessenbergQ
 and may be converted to a regular matrix with [`convert(Array, _)`](@ref)
  (or `Array(_)` for short).
 
-Note that the shifted factorization `A+μI = Q (H - μI) Q'` can be
+Note that the shifted factorization `A+μI = Q (H+μI) Q'` can be
 constructed efficiently by `F + μ*I` using the [`UniformScaling`](@ref)
 object [`I`](@ref), which creates a new `Hessenberg` with the same `Q` and `H`
 (shared storage) and a modified shift.   The shift of a given `F` is
-obtained by `F.μ`.
+obtained by `F.μ`.  This is useful because multiple shifted solves `(F + μ*I) \\ b`
+(for different `μ` and/or `b`) can be performed efficiently once `F` is created.
+
 
 Iterating the decomposition produces the factors `F.Q` and `F.H` (not including
 the shift `F.μ`).
@@ -139,6 +143,11 @@ lmul!(adjQ::Adjoint{<:Any,<:HessenbergQ{T}}, X::StridedVecOrMat{T}) where {T<:Bl
     (Q = adjQ.parent; LAPACK.ormhr!('L', ifelse(T<:Real, 'T', 'C'), 1, size(Q.factors, 1), Q.factors, Q.τ, X))
 rmul!(X::StridedMatrix{T}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) where {T<:BlasFloat} =
     (Q = adjQ.parent; LAPACK.ormhr!('R', ifelse(T<:Real, 'T', 'C'), 1, size(Q.factors, 1), Q.factors, Q.τ, X))
+
+lmul!(Q::HessenbergQ{T}, X::Adjoint{T,<:StridedVecOrMat{T}}) where {T<:BlasFloat} = rmul!(X', Q')'
+rmul!(X::Adjoint{T,<:StridedMatrix{T}}, Q::HessenbergQ{T}) where {T<:BlasFloat} = lmul!(Q', X')'
+lmul!(adjQ::Adjoint{<:Any,<:HessenbergQ{T}}, X::Adjoint{T,<:StridedVecOrMat{T}}) where {T<:BlasFloat}  = rmul!(X', adjQ')'
+rmul!(X::Adjoint{T,<:StridedMatrix{T}}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) where {T<:BlasFloat} = lmul!(adjQ', X')'
 
 # multiply x by the entries of M in the upper-k triangle, which contains
 # the entries of the upper-Hessenberg matrix H for k=-1
@@ -326,3 +335,6 @@ function rdiv!(B::AbstractVecOrMat{<:Complex}, F::Hessenberg{<:Complex,<:Real})
     Bi = rmul!(imag(B), Q')
     return B .= Complex.(Br,Bi)
 end
+
+ldiv!(F::Adjoint{<:Any,<:Hessenberg}, B::AbstractVecOrMat) = rdiv!(B', F')'
+rdiv!(B::AbstractMatrix, F::Adjoint{<:Any,<:Hessenberg}) = ldiv!(F', B')'
