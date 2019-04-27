@@ -95,6 +95,7 @@
                                                         </textFieldCell>
                                                         <connections>
                                                             <binding destination="b7E-C6-kCO" name="value" keyPath="objectValue.version" id="u5X-Um-1B7"/>
+                                                            <binding destination="b7E-C6-kCO" name="toolTip" keyPath="objectValue.gitVersionInfoString" id="6ye-Oo-oAT"/>
                                                         </connections>
                                                     </textField>
                                                 </subviews>

@@ -28,6 +28,10 @@ NSString *const HiddenJuliaVariantsKey = @"HiddenJuliaVariantsKey";
   return _bundle ? _bundle.bundleURL : _juliaexe;
 }
 
+- (NSString *)gitVersionInfoString {
+  return [self.gitVersionInfo description];
+}
+
 - (instancetype)initWithJulia:(NSURL *)exe bundle:(NSBundle *)b {
   self = [super init];
   if (!self) {
@@ -44,6 +48,7 @@ NSString *const HiddenJuliaVariantsKey = @"HiddenJuliaVariantsKey";
   _bundle = b;
   _defaultVariant = NO;
   _version = nil;
+  _gitVersionInfo = nil;
   _status = @"";
   _statusImage = [NSImage imageNamed:NSImageNameStatusNone];
   if (_bundle == nil) {
@@ -58,7 +63,10 @@ NSString *const HiddenJuliaVariantsKey = @"HiddenJuliaVariantsKey";
   }
   if (_bundle) {
     // Extract version from framework bundle.
-    _version = _bundle.infoDictionary[(NSString *)kCFBundleVersionKey];
+    _gitVersionInfo = _bundle.infoDictionary[@"JuliaGitVersionInfo"];
+    if (![_gitVersionInfo isKindOfClass:[NSDictionary class]]) {
+      _gitVersionInfo = nil;
+    }
   }
 
   // Exec the julia and have it tell us its version.
@@ -80,8 +88,7 @@ NSString *const HiddenJuliaVariantsKey = @"HiddenJuliaVariantsKey";
         NSLog(@"ExecSandbox remote failed: %@", error);
       }];
 
-  [remote eval:@"print(\"$(Base.VERSION.major).$(Base.VERSION.minor).$(Base."
-               @"VERSION.patch)\")"
+  [remote eval:@"print(Base.VERSION)"
       withJulia:juliaexeBookmark
       arguments:nil
            task:^(id<TaskProtocol> task, NSFileHandle *stdIn,
@@ -96,14 +103,21 @@ NSString *const HiddenJuliaVariantsKey = @"HiddenJuliaVariantsKey";
                                            encoding:NSUTF8StringEncoding];
                  if (status == 0) {
                    if (vout && [vout length] > 0) {
-                     if ([vout isEqualToString:self->_version]) {
+                     if (!self->_version || [vout isEqualToString:self->_version]) {
                        [self willChangeValueForKey:@"statusImage"];
                        [self willChangeValueForKey:@"status"];
                        [self willChangeValueForKey:@"updatingVersion"];
+                       if (!self->_version) {
+                         [self willChangeValueForKey:@"version"];
+                       }
                        self->_statusImage =
                            [NSImage imageNamed:NSImageNameStatusAvailable];
                        self->_status = @"Consistent";
                        self->_updatingVersion = NO;
+                       if (!self->_version) {
+                         self->_version = vout;
+                         [self didChangeValueForKey:@"version"];
+                       }
                        [self didChangeValueForKey:@"updatingVersion"];
                        [self didChangeValueForKey:@"status"];
                        [self didChangeValueForKey:@"statusImage"];

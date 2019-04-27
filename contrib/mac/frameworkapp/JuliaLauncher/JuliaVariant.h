@@ -11,6 +11,8 @@
 @property(readonly, nonnull) NSString *status;
 @property(readonly, nonnull) NSImage *statusImage;
 @property(readonly, nullable) NSString *version;
+@property(readonly, nullable) NSDictionary *gitVersionInfo;
+@property(readonly, nullable) NSString *gitVersionInfoString;
 @property(readonly) BOOL updatingVersion;
 - (instancetype _Nonnull)initWithJulia:(NSURL *_Nonnull)exe
                                 bundle:(NSBundle *_Nullable)b;
