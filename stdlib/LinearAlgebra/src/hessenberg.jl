@@ -373,3 +373,35 @@ function det(F::Hessenberg)
     end
     return determinant
 end
+
+# O(m²) determinant based on first doing Givens rotations to put H into upper-triangular form and then
+# taking the product of the diagonal entries.   The trick is that we only need O(m) temporary storage,
+# because we don't need to store the whole Givens-rotated matrix, only the most recent row.
+# (Slightly slower than the Cahill algorithm above, but useful to compute logdet.)
+function logabsdet(F::Hessenberg)
+    H = F.factors
+    m = size(H,1)
+    μ = F.μ
+    P = one(zero(eltype(H)) + μ)
+    logdeterminant = zero(real(P))
+    m == 0 && return (logdeterminant, P)
+    g = Vector{typeof(P)}(undef, m)
+    g .= @view H[1,:] # below, g is the i-th row of Givens-rotated H+μI matrix
+    g[1] += μ
+    @inbounds for i = 1:m-1
+        c, s, ρ = givensAlgorithm(g[i], H[i+1,i])
+        logdeterminant += log(abs(ρ))
+        P *= sign(ρ)
+        g[i+1] = c*(H[i+1,i+1] + μ) - s'*g[i+1]
+        @simd for j = i+2:m
+            g[j] = c*H[i+1,j] - s'*g[j]
+        end
+    end
+    logdeterminant += log(abs(g[m]))
+    P *= sign(g[m])
+    return (logdeterminant, P)
+end
+function logdet(F::Hessenberg)
+    d,s = logabsdet(F)
+    return d + log(s)
+end

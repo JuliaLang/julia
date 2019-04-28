@@ -4,6 +4,9 @@ module TestHessenberg
 
 using Test, LinearAlgebra, Random
 
+# for tuple tests below
+≅(x,y) = all(p -> p[1] ≈ p[2], zip(x,y))
+
 let n = 10
     Random.seed!(1234321)
 
@@ -50,10 +53,16 @@ let n = 10
         @test (H - (3+4im)I)' \ B ≈ (A - (3+4im)I)' \ B
         @test B' / (H - (3+4im)I)' ≈ B' / (A - (3+4im)I)'
 
-        @test det(H) ≈ det(A)
-        @test det(H + I) ≈ det(A + I)
-        @test det(H - (3+4im)I) ≈ det(A - (3+4im)I)
+        for shift in (0,1,3+4im)
+            @test det(H + shift*I) ≈ det(A + shift*I)
+            @test logabsdet(H + shift*I) ≅ logabsdet(A + shift*I)
+        end
     end
+end
+
+# check logdet on a matrix that has a positive determinant
+let A = [0.5 0.1 0.9 0.4; 0.9 0.7 0.5 0.4; 0.3 0.4 0.9 0.0; 0.4 0.0 0.0 0.5]
+    @test logdet(hessenberg(A)) ≈ logdet(A) ≈ -3.5065578973199822
 end
 
 end # module TestHessenberg
