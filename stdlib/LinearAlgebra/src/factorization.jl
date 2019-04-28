@@ -115,6 +115,8 @@ function /(B::AbstractMatrix, adjF::Adjoint{<:Any,<:Factorization})
     copyto!(BB, B)
     rdiv!(BB, adjoint(F))
 end
+/(adjB::AdjointAbsVec, adjF::Adjoint{<:Any,<:Factorization}) = adjoint(adjF.parent \ adjB.parent)
+/(B::TransposeAbsVec, adjF::Adjoint{<:Any,<:Factorization}) = adjoint(adjF.parent \ adjoint(B))
 
 # support the same 3-arg idiom as in our other in-place A_*_B functions:
 function ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat)
@@ -144,3 +146,7 @@ end
 
 /(B::AbstractMatrix, F::Transpose{<:Any,<:Factorization{<:Real}}) = B / adjoint(F.parent)
 /(B::AbstractMatrix, F::Transpose{<:Any,<:Factorization}) = conj.(conj.(B) / adjoint(F.parent))
+/(B::AdjointAbsVec, F::Transpose{<:Any,<:Factorization{<:Real}}) = B / adjoint(F.parent)
+/(B::TransposeAbsVec, F::Transpose{<:Any,<:Factorization{<:Real}}) = B / adjoint(F.parent)
+/(B::AdjointAbsVec, F::Transpose{<:Any,<:Factorization}) = conj.(conj.(B) / adjoint(F.parent))
+/(B::TransposeAbsVec, F::Transpose{<:Any,<:Factorization}) = conj.(conj.(B) / adjoint(F.parent))

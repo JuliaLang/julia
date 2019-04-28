@@ -652,7 +652,9 @@ function ldiv!(adjA::Adjoint{<:Any,LU{T,Tridiagonal{T,V}}}, B::AbstractVecOrMat)
     return B
 end
 
-/(B::AbstractMatrix, A::LU) = copy(transpose(transpose(A) \ transpose(B)))
+rdiv!(B::AbstractMatrix, A::LU) = transpose(ldiv!(transpose(A), transpose(B)))
+rdiv!(B::AbstractMatrix, A::Transpose{<:Any,<:LU}) = transpose(ldiv!(A.parent, transpose(B)))
+rdiv!(B::AbstractMatrix, A::Adjoint{<:Any,<:LU}) = adjoint(ldiv!(A.parent, adjoint(B)))
 
 # Conversions
 AbstractMatrix(F::LU) = (F.L * F.U)[invperm(F.p),:]
