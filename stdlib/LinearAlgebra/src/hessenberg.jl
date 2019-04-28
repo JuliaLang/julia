@@ -339,15 +339,16 @@ end
 ldiv!(F::Adjoint{<:Any,<:Hessenberg}, B::AbstractVecOrMat) = rdiv!(B', F')'
 rdiv!(B::AbstractMatrix, F::Adjoint{<:Any,<:Hessenberg}) = ldiv!(F', B')'
 
-# Hessenberg-matrix determinant formula based on Theorem 2.1 of
+# Hessenberg-matrix determinant formula based on:
+#
+#    N. D. Cahill, J. R. D’Errico, D. A. Narayan, and J. Y. Narayan, "Fibonacci determinants,"
+#    College Math. J. 33, pp. 221-225 (2003).
+#
+# as reviewed in Theorem 2.1 of:
 #
 #    K. Kaygisiz and A. Sahin, "Determinant and permanent of Hessenberg matrix and generalized Lucas polynomials,"
 #    arXiv:1111.4067 (2011).
 #
-# which in turn cites:
-#
-#    N. D. Cahill, J. R. D’Errico, D. A. Narayan, and J. Y. Narayan, "Fibonacci determinants,"
-#    College Math. J. 33, pp. 221-225 (2003).
 #
 # Cost is O(n²) with O(n) storage.
 function det(F::Hessenberg)
