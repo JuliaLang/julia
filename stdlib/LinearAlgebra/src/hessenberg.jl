@@ -377,7 +377,7 @@ end
 # O(m²) log-determinant based on first doing Givens RQ to put H into upper-triangular form and then
 # taking the product of the diagonal entries.   The trick is that we only need O(m) temporary storage,
 # because we don't need to store the whole Givens-rotated matrix, only the most recent column.
-# We do RQ (column rotations rather than QR (row rotations) for more consecutive memory access.
+# We do RQ (column rotations) rather than QR (row rotations) for more consecutive memory access.
 # (We could also use it for det instead of the Cahill algorithm above.  Cahill is slightly faster
 #  for very small matrices where you are likely to use det, and also uses only ± and * so it can
 #  be applied to Hessenberg matrices over other number fields.)
