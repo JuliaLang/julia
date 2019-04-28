@@ -197,7 +197,7 @@ end
 -(F::Hessenberg, J::UniformScaling) = Hessenberg(F, F.μ - J.λ)
 -(J::UniformScaling, F::Hessenberg) = Hessenberg(-F, J.λ - F.μ)
 
-# Solving (H+µI)x = b: we can do this in O(n²) time and O(n) memory
+# Solving (H+µI)x = b: we can do this in O(m²) time and O(m) memory
 # (in-place in x) by the RQ algorithm from:
 #
 #    G. Henry, "The shifted Hessenberg system solve computation," Tech. Rep. 94–163,
@@ -349,8 +349,7 @@ rdiv!(B::AbstractMatrix, F::Adjoint{<:Any,<:Hessenberg}) = ldiv!(F', B')'
 #    K. Kaygisiz and A. Sahin, "Determinant and permanent of Hessenberg matrix and generalized Lucas polynomials,"
 #    arXiv:1111.4067 (2011).
 #
-#
-# Cost is O(n²) with O(n) storage.
+# Cost is O(m²) with O(m) storage.
 function det(F::Hessenberg)
     H = F.factors
     m = size(H,1)
