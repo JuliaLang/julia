@@ -5618,6 +5618,10 @@ static std::unique_ptr<Module> emit_function(
         f->addFnAttr(Attribute::NoInline);
     }
 
+    if (jl_has_meta(stmts, nonans_sym)) {
+        f->addFnAttr("no-nans-fp-math", "true");
+    }
+
     if (returninfo.cc == jl_returninfo_t::Union) {
         f->addAttribute(1, Attribute::getWithDereferenceableBytes(jl_LLVMContext, returninfo.union_bytes));
         f->addAttribute(1, Attribute::getWithAlignment(jl_LLVMContext, returninfo.union_align));

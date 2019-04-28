@@ -256,6 +256,23 @@ macro polly(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :polly) : ex)
 end
 
+"""
+    @nonans
+
+Allows the compiler to assume no NaNs on floating-point operations.
+
+```julia
+@nonans function mathfunc(x)
+    #=
+        Function Definition
+    =#
+end
+```
+"""
+macro nonans(ex)
+    esc(isa(ex, Expr) ? pushmeta!(ex, :nonans) : ex)
+end
+
 ## some macro utilities ##
 
 function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
