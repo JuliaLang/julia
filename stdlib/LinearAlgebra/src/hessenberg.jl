@@ -113,7 +113,7 @@ function getproperty(F::Hessenberg, d::Symbol)
 end
 
 Base.propertynames(F::Hessenberg, private::Bool=false) =
-    (:Q, :H, (private ? fieldnames(typeof(F)) : ())...)
+    (:Q, :H, :μ, (private ? (:factors, :τ) : ())...)
 
 ## reconstruct the original matrix
 Matrix{T}(Q::HessenbergQ) where {T} = convert(Matrix{T}, LAPACK.orghr!(1, size(Q.factors, 1), copy(Q.factors), Q.τ))
