@@ -374,10 +374,13 @@ function det(F::Hessenberg)
     return determinant
 end
 
-# O(m²) determinant based on first doing Givens rotations to put H into upper-triangular form and then
+# O(m²) log-determinant based on first doing Givens RQ to put H into upper-triangular form and then
 # taking the product of the diagonal entries.   The trick is that we only need O(m) temporary storage,
-# because we don't need to store the whole Givens-rotated matrix, only the most recent row.
-# (Slightly slower than the Cahill algorithm above, but useful to compute logdet.)
+# because we don't need to store the whole Givens-rotated matrix, only the most recent column.
+# We do RQ (column rotations rather than QR (row rotations) for more consecutive memory access.
+# (We could also use it for det instead of the Cahill algorithm above.  Cahill is slightly faster
+#  for very small matrices where you are likely to use det, and also uses only ± and * so it can
+#  be applied to Hessenberg matrices over other number fields.)
 function logabsdet(F::Hessenberg)
     H = F.factors
     m = size(H,1)
@@ -385,20 +388,20 @@ function logabsdet(F::Hessenberg)
     P = one(zero(eltype(H)) + μ)
     logdeterminant = zero(real(P))
     m == 0 && return (logdeterminant, P)
-    g = Vector{typeof(P)}(undef, m)
-    g .= @view H[1,:] # below, g is the i-th row of Givens-rotated H+μI matrix
-    g[1] += μ
-    @inbounds for i = 1:m-1
-        c, s, ρ = givensAlgorithm(g[i], H[i+1,i])
+    g = Vector{typeof(P)}(undef, m) # below, g is the k-th col of Givens-rotated H+μI matrix
+    copyto!(g, 1, H, m*(m-1)+1, m) # g .= H[:,m]
+    g[m] += μ
+    @inbounds for k = m:-1:2
+        c, s, ρ = givensAlgorithm(g[k], H[k,k-1])
         logdeterminant += log(abs(ρ))
         P *= sign(ρ)
-        g[i+1] = c*(H[i+1,i+1] + μ) - s'*g[i+1]
-        @simd for j = i+2:m
-            g[j] = c*H[i+1,j] - s'*g[j]
+        g[k-1] = c*(H[k-1,k-1] + μ) - s'*g[k-1]
+        @simd for j = 1:k-2
+            g[j] = c*H[j,k-1] - s'*g[j]
         end
     end
-    logdeterminant += log(abs(g[m]))
-    P *= sign(g[m])
+    logdeterminant += log(abs(g[1]))
+    P *= sign(g[1])
     return (logdeterminant, P)
 end
 function logdet(F::Hessenberg)
