@@ -333,3 +333,13 @@ end
 s_18109 = "fooα🐨βcd3"
 @test findlast(isequal('o'), s_18109) == 3
 @test findfirst(isequal('d'), s_18109) == 13
+
+# findall (issue #31788)
+@testset "findall" begin
+    @test findall("fooo", "foo") == UnitRange{Int}[]
+    @test findall("ing", "Spinning laughing dancing") == [6:8, 15:17, 23:25]
+    @test findall("", "foo") == [1:0, 2:1, 3:2, 4:3]
+    @test findall("αβ", "blαh blαβ blαββy") == findall("αβ", "blαh blαβ blαββy", overlap=true) == [9:11, 16:18]
+    @test findall("aa", "aaaaaa") == [1:2, 3:4, 5:6]
+    @test findall("aa", "aaaaaa", overlap=true) == [1:2, 2:3, 3:4, 4:5, 5:6]
+end

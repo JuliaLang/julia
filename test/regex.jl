@@ -46,6 +46,12 @@
     @test_throws ArgumentError match(r"test", GenericString("this is a test"))
     @test_throws ArgumentError findfirst(r"test", GenericString("this is a test"))
 
+    # findall:
+    @test findall(r"\w+", "foo bar") == [1:3, 5:7]
+    @test findall(r"\w+", "foo bar", overlap=true) == [1:3, 2:3, 3:3, 5:7, 6:7, 7:7]
+    @test findall(r"\w*", "foo bar") == [1:3, 4:3, 5:7, 8:7]
+    @test findall(r"\b", "foo bar") == [1:0, 4:3, 5:4, 8:7]
+
     # Named subpatterns
     let m = match(r"(?<a>.)(.)(?<b>.)", "xyz")
         @test (m[:a], m[2], m["b"]) == ("x", "y", "z")
