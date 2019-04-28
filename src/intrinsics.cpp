@@ -787,18 +787,22 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
             Value *y_vboxed = y.Vboxed;
             Value *x_ptr = (x.isghost ? NULL : data_pointer(ctx, x));
             Value *y_ptr = (y.isghost ? NULL : data_pointer(ctx, y));
+            MDNode *ifelse_tbaa;
             if (!x.isghost && x.constant)
                 x_vboxed = boxed(ctx, x);
             if (!y.isghost && y.constant)
                 y_vboxed = boxed(ctx, y);
-            if (!x_ptr && !y_ptr) {
+            if (!x_ptr && !y_ptr) { // both ghost
                 ifelse_result = NULL;
+                ifelse_tbaa = tbaa_stack;
             }
             else if (!x_ptr) {
                 ifelse_result = y_ptr;
+                ifelse_tbaa = y.tbaa;
             }
             else if (!y_ptr) {
                 ifelse_result = x_ptr;
+                ifelse_tbaa = x.tbaa;
             }
             else {
                 x_ptr = decay_derived(x_ptr);
@@ -806,6 +810,13 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 if (x_ptr->getType() != y_ptr->getType())
                     y_ptr = ctx.builder.CreateBitCast(y_ptr, x_ptr->getType());
                 ifelse_result = ctx.builder.CreateSelect(isfalse, y_ptr, x_ptr);
+                ifelse_tbaa = MDNode::getMostGenericTBAA(x.tbaa, y.tbaa);
+                if (ifelse_tbaa == NULL) {
+                    // LLVM won't return a TBAA result for the root, but mark_julia_struct requires it: make it now
+                    auto *OffsetNode = ConstantAsMetadata::get(ConstantInt::get(T_int64, 0));
+                    Metadata *Ops[] = {tbaa_root, tbaa_root, OffsetNode};
+                    ifelse_tbaa = MDNode::get(jl_LLVMContext, Ops);
+                }
             }
             Value *tindex;
             if (!x_tindex && x.constant) {
@@ -843,7 +854,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 ctx.builder.Insert(ret);
                 tindex = ret;
             }
-            jl_cgval_t ret = mark_julia_slot(ifelse_result, rt_hint, tindex, tbaa_data);
+            jl_cgval_t ret = mark_julia_slot(ifelse_result, rt_hint, tindex, ifelse_tbaa);
             if (x_vboxed || y_vboxed) {
                 if (!x_vboxed)
                     x_vboxed = ConstantPointerNull::get(cast<PointerType>(y_vboxed->getType()));

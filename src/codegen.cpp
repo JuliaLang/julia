@@ -209,6 +209,7 @@ static Type *T_pppint8;
 static Type *T_void;
 
 // type-based alias analysis nodes.  Indentation of comments indicates hierarchy.
+static MDNode *tbaa_root;     // Everything
 static MDNode *tbaa_gcframe;    // GC frame
 // LLVM should have enough info for alias analysis of non-gcframe stack slot
 // this is mainly a place holder for `jl_cgval_t::tbaa`
@@ -3666,7 +3667,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             ptr = ctx.builder.CreateSelect(isboxed,
                 maybe_bitcast(ctx, decay_derived(ptr_phi), T_pint8),
                 maybe_bitcast(ctx, decay_derived(phi), T_pint8));
-            jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, tbaa_stack);
+            jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, tbaa_stack); // XXX: this TBAA is wrong for ptr_phi
             val.Vboxed = ptr_phi;
             ctx.PhiNodes.push_back(std::make_tuple(val, BB, dest, ptr_phi, r));
             ctx.SAvalues.at(idx) = val;
@@ -4802,6 +4803,7 @@ static Function* gen_cfun_wrapper(
                                          ctx.builder.CreateExtractValue(call, 1),
                                          tbaa_stack);
                 // note that the value may not be rooted here (on the return path)
+                // XXX: should have a root if we need to emit a typeassert abort
                 break;
             case jl_returninfo_t::Ghosts:
                 retval = mark_julia_slot(NULL, astrt, call, tbaa_stack);
@@ -5233,7 +5235,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
         retval = mark_julia_slot(result, jlretty, NULL, tbaa_stack);
         break;
     case jl_returninfo_t::Union:
-        // result is technically not right here, but we only need to look at it
+        // result is technically not right here, but `boxed` will only look at it
         // for the unboxed values, so it's ok.
         retval = mark_julia_slot(result,
                                  jlretty,
@@ -6090,14 +6092,14 @@ static std::unique_ptr<Module> emit_function(
     {
         size_t nstmts = jl_array_len(src->code);
         aliasscopes.resize(nstmts + 1, nullptr);
-        static MDBuilder *mbuilder = new MDBuilder(jl_LLVMContext);
-        MDNode *alias_domain = mbuilder->createAliasScopeDomain(ctx.name);
+        MDBuilder mbuilder(jl_LLVMContext);
+        MDNode *alias_domain = mbuilder.createAliasScopeDomain(ctx.name);
         for (i = 0; i < nstmts; i++) {
             jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
             jl_expr_t *expr = jl_is_expr(stmt) ? (jl_expr_t*)stmt : nullptr;
             if (expr) {
                 if (expr->head == aliasscope_sym) {
-                    MDNode *scope = mbuilder->createAliasScope("aliasscope", alias_domain);
+                    MDNode *scope = mbuilder.createAliasScope("aliasscope", alias_domain);
                     scope_stack.push_back(scope);
                     MDNode *scope_list = MDNode::get(jl_LLVMContext, ArrayRef<Metadata*>(scope_stack));
                     scope_list_stack.push_back(scope_list);
@@ -6814,12 +6816,11 @@ static std::unique_ptr<Module> emit_function(
 
 std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr, bool isConstant=false)
 {
-    static MDBuilder *mbuilder = new MDBuilder(jl_LLVMContext);
-    static MDNode *tbaa_root = mbuilder->createTBAARoot("jtbaa");
-    if (!parent)
-        parent = tbaa_root;
-    MDNode *scalar = mbuilder->createTBAAScalarTypeNode(name, parent);
-    MDNode *n = mbuilder->createTBAAStructTagNode(scalar, scalar, 0, isConstant);
+    MDBuilder mbuilder(jl_LLVMContext);
+    if (tbaa_root == nullptr)
+        tbaa_root = mbuilder.createTBAARoot("jtbaa");
+    MDNode *scalar = mbuilder.createTBAAScalarTypeNode(name, parent ? parent : tbaa_root);
+    MDNode *n = mbuilder.createTBAAStructTagNode(scalar, scalar, 0, isConstant);
     return std::make_pair(n, scalar);
 }
 

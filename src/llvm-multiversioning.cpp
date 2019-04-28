@@ -22,7 +22,6 @@
 #include <llvm/Analysis/LoopInfo.h>
 #include <llvm/Analysis/CallGraph.h>
 #include <llvm/IR/LegacyPassManager.h>
-#include <llvm/IR/MDBuilder.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
 #include <llvm/Transforms/Utils/Cloning.h>
