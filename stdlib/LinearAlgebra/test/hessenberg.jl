@@ -49,6 +49,10 @@ let n = 10
         @test B' / (H - (3+4im)I) ≈ B' / (A - (3+4im)I)
         @test (H - (3+4im)I)' \ B ≈ (A - (3+4im)I)' \ B
         @test B' / (H - (3+4im)I)' ≈ B' / (A - (3+4im)I)'
+
+        @test det(H) ≈ det(A)
+        @test det(H + I) ≈ det(A + I)
+        @test det(H - (3+4im)I) ≈ det(A - (3+4im)I)
     end
 end
 
