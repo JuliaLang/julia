@@ -906,7 +906,7 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
         t = Bottom
         for i in 1:length(ftypes)
             ft1 = unwrapva(ftypes[i])
-            exactft1 = exact || !has_free_typevars(ft1)
+            exactft1 = exact || (!has_free_typevars(ft1) && u.name !== Tuple.name)
             ft1 = rewrap_unionall(ft1, s)
             if exactft1
                 if issingletontype(ft1)
@@ -939,7 +939,7 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
         ft = ftypes[fld]
     end
 
-    exactft = exact || !has_free_typevars(ft)
+    exactft = exact || (!has_free_typevars(ft) && u.name !== Tuple.name)
     ft = rewrap_unionall(ft, s)
     if exactft
         if issingletontype(ft)
