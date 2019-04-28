@@ -365,8 +365,7 @@ function det(F::Hessenberg)
         determinant *= H[n,n] + μ
         h = H[n,n-1]
         @simd for r = n-1:-2:2
-            determinant -= H[r,n] * (prods[r] *= h)
-            determinant += H[r-1,n] * (prods[r-1] *= h)
+            determinant -= H[r,n] * (prods[r] *= h) - H[r-1,n] * (prods[r-1] *= h)
         end
         if iseven(n)
             determinant -= H[1,n] * (prods[1] *= h)
