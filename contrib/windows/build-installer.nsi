@@ -4,7 +4,8 @@
 
 Name "The Julia Language"
 OutFile "julia-installer.exe"
-SetCompress off
+SetCompressor /SOLID lzma
+SetCompressorDictSize 64
 CRCCheck on
 SetDataBlockOptimize on
 ShowInstDetails show
@@ -153,5 +154,3 @@ FunctionEnd
 Function ShowInstallFolder
     ExecShell "open" $INSTDIR
 FunctionEnd
-
-
