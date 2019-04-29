@@ -678,6 +678,17 @@ function analyze_method!(idx::Int, sig::Signature, @nospecialize(metharg), meths
         return nothing
     end
 
+    # Check if we intersect any of this method's ambiguities
+    # TODO: We could split out the ambiguous case as another "union split" case.
+    # For now, we just reject the method
+    if method.ambig !== nothing
+        for entry::Core.TypeMapEntry in method.ambig
+            if typeintersect(sig.atype, entry.sig) !== Bottom
+                return nothing
+            end
+        end
+    end
+
     # Bail out if any static parameters are left as TypeVar
     ok = true
     for i = 1:length(methsp)

@@ -200,9 +200,6 @@ similar(A::AdjOrTrans, ::Type{T}, dims::Dims{N}) where {T,N} = similar(A.parent,
 parent(A::AdjOrTrans) = A.parent
 vec(v::TransposeAbsVec) = parent(v)
 
-cmp(A::AdjOrTransAbsVec, B::AdjOrTransAbsVec) = cmp(parent(A), parent(B))
-isless(A::AdjOrTransAbsVec, B::AdjOrTransAbsVec) = isless(parent(A), parent(B))
-
 ### concatenation
 # preserve Adjoint/Transpose wrapper around vectors
 # to retain the associated semantics post-concatenation

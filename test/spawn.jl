@@ -456,6 +456,15 @@ end
 @test Set([``, echocmd]) != Set([``, ``])
 @test Set([echocmd, ``, ``, echocmd]) == Set([echocmd, ``])
 
+# test for interpolation of Cmd
+let c = setenv(`x`, "A"=>true)
+    @test (`$c a`).env == String["A=true"]
+    @test (`"$c" a`).env == String["A=true"]
+    @test_throws ArgumentError `a $c`
+    @test (`$(c.exec) a`).env === nothing
+    @test_throws ArgumentError `"$c "`
+end
+
 # equality tests for AndCmds
 @test Base.AndCmds(`$echocmd abc`, `$echocmd def`) == Base.AndCmds(`$echocmd abc`, `$echocmd def`)
 @test Base.AndCmds(`$echocmd abc`, `$echocmd def`) != Base.AndCmds(`$echocmd abc`, `$echocmd xyz`)

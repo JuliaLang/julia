@@ -182,6 +182,7 @@ endif
 	@## because we want to test the non-default debug configuration
 	@#rm -r $@.dSYM && mv $@.tmp.dSYM $@.dSYM
 	mv $@.tmp $@
+	$(INSTALL_NAME_CMD)libccalltest.$(SHLIB_EXT) $@
 
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvmcalltest.cpp
 	@$(call PRINT_CC, $(CXX) $(shell $(LLVM_CONFIG_HOST) --cxxflags) $(JCXXFLAGS) $(JCPPFLAGS) $(DEBUGFLAGS) -O3 $< $(fPIC) -shared -o $@ $(JLDFLAGS) -L$(build_shlibdir) -L$(build_libdir) $(NO_WHOLE_ARCHIVE) $(LLVMLINK))

@@ -1225,7 +1225,7 @@ triu!(A::SparseMatrixCSC, k::Integer = 0, trim::Bool = true) =
 """
     droptol!(A::SparseMatrixCSC, tol; trim::Bool = true)
 
-Removes stored values from `A` whose absolute value is (strictly) larger than `tol`,
+Removes stored values from `A` whose absolute value is less than or equal to `tol`,
 optionally trimming resulting excess space from `A.rowval` and `A.nzval` when `trim`
 is `true`.
 """
@@ -3357,9 +3357,13 @@ end
 
 """
     spdiagm(kv::Pair{<:Integer,<:AbstractVector}...)
+    spdiagm(m::Integer, n::Ingeger, kv::Pair{<:Integer,<:AbstractVector}...)
 
-Construct a square sparse diagonal matrix from `Pair`s of vectors and diagonals.
-Vector `kv.second` will be placed on the `kv.first` diagonal.
+Construct a sparse diagonal matrix from `Pair`s of vectors and diagonals.
+Each vector `kv.second` will be placed on the `kv.first` diagonal.  By
+default (if `size=nothing`), the matrix is square and its size is inferred
+from `kv`, but a non-square size `m`×`n` (padded with zeros as needed)
+can be specified by passing `m,n` as the first arguments.
 
 # Examples
 ```jldoctest
@@ -3375,10 +3379,15 @@ julia> spdiagm(-1 => [1,2,3,4], 1 => [4,3,2,1])
   [4, 5]  =  1
 ```
 """
-function spdiagm(kv::Pair{<:Integer,<:AbstractVector}...)
+spdiagm(kv::Pair{<:Integer,<:AbstractVector}...) = _spdiagm(nothing, kv...)
+spdiagm(m::Integer, n::Integer, kv::Pair{<:Integer,<:AbstractVector}...) = _spdiagm((Int(m),Int(n)), kv...)
+function _spdiagm(size, kv::Pair{<:Integer,<:AbstractVector}...)
     I, J, V = spdiagm_internal(kv...)
-    n = max(dimlub(I), dimlub(J))
-    return sparse(I, J, V, n, n)
+    mmax, nmax = dimlub(I), dimlub(J)
+    mnmax = max(mmax, nmax)
+    m, n = something(size, (mnmax,mnmax))
+    (m ≥ mmax && n ≥ nmax) || throw(DimensionMismatch("invalid size=$size"))
+    return sparse(I, J, V, m, n)
 end
 
 ## expand a colptr or rowptr into a dense index vector

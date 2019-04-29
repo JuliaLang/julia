@@ -1471,3 +1471,41 @@ CovType{T} = Union{AbstractArray{T,2},
 @testintersect(Pair{<:Any, <:AbstractMatrix},
                Pair{T,     <:CovType{T}} where T<:AbstractFloat,
                Pair{T,S} where S<:AbstractArray{T,2} where T<:AbstractFloat)
+
+# issue #31703
+@testintersect(Pair{<:Any, Ref{Tuple{Ref{Ref{Tuple{Int}}},Ref{Float64}}}},
+               Pair{T, S} where S<:(Ref{A} where A<:(Tuple{C,Ref{T}} where C<:(Ref{D} where D<:(Ref{E} where E<:Tuple{FF}) where FF<:B)) where B) where T,
+               Pair{Float64, Ref{Tuple{Ref{Ref{Tuple{Int}}},Ref{Float64}}}})
+
+module I31703
+using Test, LinearAlgebra
+import Base: OneTo, Slice
+
+struct BandedMatrix{T, CONTAINER, RAXIS} end
+struct Ones{T, N, Axes} end
+const RestrictionMatrix = BandedMatrix{<:Int, <:Ones}
+struct Applied{Style, Args<:Tuple} end
+const Mul = Applied{Style,Factors} where Factors<:Tuple where Style
+const RestrictedBasis{B} = Mul{<:Any,<:Tuple{B, <:RestrictionMatrix}}
+struct ApplyQuasiArray{T, N, App<:Applied} end
+const MulQuasiArray = ApplyQuasiArray{T,N,MUL} where MUL<:(Applied{Style,Factors} where Factors<:Tuple where Style) where N where T
+const RestrictedQuasiArray{T,N,B} = MulQuasiArray{T,N,<:RestrictedBasis{B}}
+const BasisOrRestricted{B} = Union{B,RestrictedBasis{<:B},<:RestrictedQuasiArray{<:Any,<:Any,<:B}}
+struct QuasiAdjoint{T,S} end
+const AdjointRestrictedBasis{B} = Mul{<:Any,<:Tuple{<:Adjoint{<:Any,<:RestrictionMatrix}, <:QuasiAdjoint{<:Any,B}}}
+const AdjointRestrictedQuasiArray{T,N,B} = MulQuasiArray{T,N,<:AdjointRestrictedBasis{B}}
+const AdjointBasisOrRestricted{B} = Union{<:QuasiAdjoint{<:Any,B},AdjointRestrictedBasis{<:B},<:AdjointRestrictedQuasiArray{<:Any,<:Any,<:B}}
+const RadialOperator{T,B,M<:AbstractMatrix{T}} = Mul{<:Any,<:Tuple{<:BasisOrRestricted{B},M,<:AdjointBasisOrRestricted{B}}}
+const HFPotentialOperator{T,B} = RadialOperator{T,B,Diagonal{T,Vector{T}}}
+struct HFPotential{kind,T,B,RO<:HFPotentialOperator{T,B},P<:Integer} end
+
+T = HFPotential{_A,Float64,Any,Applied{Int,Tuple{ApplyQuasiArray{Float64,2,Applied{Int,Tuple{Any,BandedMatrix{Int,Ones{Int,2,Tuple{OneTo{Int},OneTo{Int}}},OneTo{Int}}}}},Diagonal{Float64,Array{Float64,1}},ApplyQuasiArray{Float64,2,Applied{Int,Tuple{Adjoint{Int,BandedMatrix{Int,Ones{Int,2,Tuple{OneTo{Int},OneTo{Int}}},OneTo{Int}}},QuasiAdjoint{Float64,Any}}}}}},_B} where _B where _A
+
+let A = typeintersect(HFPotential, T),
+    B = typeintersect(T, HFPotential)
+    @test A == B == HFPotential{kind,Float64,Any,Applied{Int,Tuple{ApplyQuasiArray{Float64,2,Applied{Int,Tuple{Any,BandedMatrix{Int,Ones{Int,2,Tuple{OneTo{Int},OneTo{Int}}},OneTo{Int}}}}},Diagonal{Float64,Array{Float64,1}},ApplyQuasiArray{Float64,2,Applied{Int,Tuple{Adjoint{Int,BandedMatrix{Int,Ones{Int,2,Tuple{OneTo{Int},OneTo{Int}}},OneTo{Int}}},QuasiAdjoint{Float64,Any}}}}}},P} where P<:Integer where kind
+end
+end
+
+# issue #26083
+@testintersect(Base.RefValue{<:Tuple}, Ref{Tuple{M}} where M, Base.RefValue{Tuple{M}} where M)

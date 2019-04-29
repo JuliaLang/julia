@@ -11,7 +11,7 @@ Build status:
 
 Code coverage:
 [![coveralls][coveralls-img]](https://coveralls.io/r/JuliaLang/julia?branch=master)
-[![codecov][codecov-img]](http://codecov.io/github/JuliaLang/julia?branch=master)
+[![codecov][codecov-img]](https://codecov.io/github/JuliaLang/julia?branch=master)
 
 [travis-img]: https://img.shields.io/travis/JuliaLang/julia/master.svg?label=Linux+/+macOS
 [appveyor-img]: https://img.shields.io/appveyor/ci/JuliaLang/julia/master.svg?label=Windows
@@ -42,7 +42,7 @@ New developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang
 - [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
 - [**Youtube**](https://www.youtube.com/channel/UC9IuUwwE2xdjQUT_LMLONoA)
 - [**Twitter**](https://twitter.com/JuliaLanguage)
-- [**Meetup**](http://julia.meetup.com/)
+- [**Meetup**](https://julia.meetup.com/)
 
 ## Currently Supported Platforms
 
@@ -207,7 +207,7 @@ latest version.
 
 
 
-## Uninstalling Julia
+### Uninstalling Julia
 
 Julia does not install anything outside the directory it was cloned into. Julia can be completely uninstalled by deleting this directory. Julia packages are installed in `~/.julia` by default, and can be uninstalled by deleting `~/.julia`.
 
@@ -220,6 +220,10 @@ Julia does not install anything outside the directory it was cloned into. Julia 
   * Instead of setting `LDFLAGS`, putting the library directory into the environment variable `LD_LIBRARY_PATH` (at both compile and run time) also works.
 * The `USE_SYSTEM_*` flags should be used with caution. These are meant only for troubleshooting, porting, and packaging, where package maintainers work closely with the Julia developers to make sure that Julia is built correctly. Production use cases should use the officially provided binaries. Issues arising from the use of these flags will generally not be accepted.
 * See also the [external dependencies](#required-build-tools-and-external-libraries).
+
+### ARM (Linux)
+
+See [README.arm](https://github.com/JuliaLang/julia/blob/master/doc/README.arm.md) for building on ARM processors.
 
 #### Architecture Customization
 
@@ -266,11 +270,7 @@ set `JULIA_THREADS=0` in your `Make.user` if you're on a 32-bit system.
 
 ### Windows
 
-In order to build Julia on Windows, see [README.windows](https://github.com/JuliaLang/julia/blob/master/README.windows.md).
-
-### Vagrant
-
-Julia can be developed in an isolated Vagrant environment. See [the Vagrant README](https://github.com/JuliaLang/julia/blob/master/contrib/vagrant/README.md) for details.
+In order to build Julia on Windows, see [README.windows](https://github.com/JuliaLang/julia/blob/master/doc/README.windows.md).
 
 ## Required Build Tools and External Libraries
 
@@ -315,35 +315,35 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[utf8proc]** (>= 2.1)    — a library for processing UTF-8 encoded Unicode strings.
 - **[libosxunwind]**         — clone of [libunwind], a library that determines the call-chain of a program.
 
-[GNU make]:     http://www.gnu.org/software/make
-[patch]:        http://www.gnu.org/software/patch
-[wget]:         http://www.gnu.org/software/wget
-[m4]:           http://www.gnu.org/software/m4
-[awk]:          http://www.gnu.org/software/gawk
-[gcc]:          http://gcc.gnu.org
-[clang]:        http://clang.llvm.org
+[GNU make]:     https://www.gnu.org/software/make
+[patch]:        https://www.gnu.org/software/patch
+[wget]:         https://www.gnu.org/software/wget
+[m4]:           https://www.gnu.org/software/m4
+[awk]:          https://www.gnu.org/software/gawk
+[gcc]:          https://gcc.gnu.org
+[clang]:        https://clang.llvm.org
 [python]:       https://www.python.org/
 [gfortran]:     https://gcc.gnu.org/fortran/
-[curl]:         http://curl.haxx.se
-[fetch]:        http://www.freebsd.org/cgi/man.cgi?fetch(1)
-[perl]:         http://www.perl.org
-[cmake]:        http://www.cmake.org
+[curl]:         https://curl.haxx.se
+[fetch]:        https://www.freebsd.org/cgi/man.cgi?fetch(1)
+[perl]:         https://www.perl.org
+[cmake]:        https://www.cmake.org
 [OpenLibm]:     https://github.com/JuliaLang/openlibm
 [DSFMT]:        http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS
-[LAPACK]:       http://www.netlib.org/lapack
-[MKL]:          http://software.intel.com/en-us/articles/intel-mkl
+[LAPACK]:       https://www.netlib.org/lapack
+[MKL]:          https://software.intel.com/en-us/articles/intel-mkl
 [SuiteSparse]:  http://faculty.cse.tamu.edu/davis/suitesparse.html
-[PCRE]:         http://www.pcre.org
-[LLVM]:         http://www.llvm.org
+[PCRE]:         https://www.pcre.org
+[LLVM]:         https://www.llvm.org
 [FemtoLisp]:    https://github.com/JeffBezanson/femtolisp
-[GMP]:          http://gmplib.org
-[MPFR]:         http://www.mpfr.org
+[GMP]:          https://gmplib.org
+[MPFR]:         https://www.mpfr.org
 [libuv]:        https://github.com/JuliaLang/libuv
 [libgit2]:      https://libgit2.org/
 [utf8proc]:     https://julialang.org/utf8proc/
 [libosxunwind]: https://github.com/JuliaLang/libosxunwind
-[libunwind]:    http://www.nongnu.org/libunwind
+[libunwind]:    https://www.nongnu.org/libunwind
 [libssh2]:      https://www.libssh2.org
 [mbedtls]:      https://tls.mbed.org/
 [pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
@@ -440,7 +440,7 @@ others such as Textmate, Notepad++, and Kate, are in
 Two major IDEs are supported for Julia: [Juno](http://junolab.org/)
 which is based on [Atom](https://atom.io/) and
 [julia-vscode](https://github.com/JuliaEditorSupport/julia-vscode)
-based on [VS Code](https://code.visualstudio.com/). A [Jupyter](http://jupyter.org/) notebooks interface
+based on [VS Code](https://code.visualstudio.com/). A [Jupyter](https://jupyter.org/) notebooks interface
 is available through
 [IJulia](https://github.com/JuliaLang/IJulia.jl).
 

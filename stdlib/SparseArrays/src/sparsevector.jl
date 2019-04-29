@@ -1914,7 +1914,7 @@ end
 """
     droptol!(x::SparseVector, tol; trim::Bool = true)
 
-Removes stored values from `x` whose absolute value is (strictly) larger than `tol`,
+Removes stored values from `x` whose absolute value is less than or equal to `tol`,
 optionally trimming resulting excess space from `A.rowval` and `A.nzval` when `trim`
 is `true`.
 """

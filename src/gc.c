@@ -189,6 +189,8 @@ NOINLINE uintptr_t gc_get_stack_ptr(void)
 #ifdef JULIA_ENABLE_THREADING
 static void jl_gc_wait_for_the_world(void)
 {
+    if (jl_n_threads > 1)
+        jl_wake_libuv();
     for (int i = 0;i < jl_n_threads;i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
         // FIXME: The acquire load pairs with the release stores

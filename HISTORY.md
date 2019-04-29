@@ -3594,7 +3594,7 @@ Library improvements
 
     * The `MathConst` type has been renamed `Irrational` ([#11922]).
 
-    * `isapprox` now has simpler and more sensible default tolerances ([#12393]), supports arrays, and has synonyms `≈` ([U+2248](http://www.fileformat.info/info/unicode/char/2248/index.htm), LaTeX `\approx`) and `≉` ([U+2249](http://www.fileformat.info/info/unicode/char/2249/index.htm), LaTeX `\napprox`) for `isapprox` and `!isapprox`, respectively ([#12472]).
+    * `isapprox` now has simpler and more sensible default tolerances ([#12393]), supports arrays, and has synonyms `≈` ([U+2248](https://www.fileformat.info/info/unicode/char/2248/index.htm), LaTeX `\approx`) and `≉` ([U+2249](https://www.fileformat.info/info/unicode/char/2249/index.htm), LaTeX `\napprox`) for `isapprox` and `!isapprox`, respectively ([#12472]).
 
   * Numbers
 

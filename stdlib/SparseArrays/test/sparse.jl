@@ -39,6 +39,13 @@ end
     @test SparseArrays.indtype(sparse(Int8[1,1],Int8[1,1],[1,1])) == Int8
 end
 
+@testset "conversion to AbstractMatrix/SparseMatrix of same eltype" begin
+    a = sprand(5, 5, 0.2)
+    @test AbstractMatrix{eltype(a)}(a) == a
+    @test SparseMatrixCSC{eltype(a)}(a) == a
+    @test SparseMatrixCSC{eltype(a), Int}(a) == a
+end
+
 @testset "sparse matrix construction" begin
     @test (A = fill(1.0+im,5,5); isequal(Array(sparse(A)), A))
     @test_throws ArgumentError sparse([1,2,3], [1,2], [1,2,3], 3, 3)
@@ -1583,6 +1590,17 @@ end
     end
     # promotion
     @test spdiagm(0 => [1,2], 1 => [3.5], -1 => [4+5im]) == [1 3.5; 4+5im 2]
+
+    # non-square:
+    for m=1:4, n=2:4
+        if m < 2 || n < 3
+            @test_throws DimensionMismatch spdiagm(m,n, 0 => x,  1 => x)
+        else
+            M = zeros(m,n)
+            M[1:2,1:3] = [1 1 0; 0 1 1]
+            @test spdiagm(m,n, 0 => x,  1 => x) == M
+        end
+    end
 end
 
 @testset "diag" begin
@@ -2339,6 +2357,15 @@ end
     @test SparseMatrixCSC(A') isa SparseMatrixCSC
     @test transpose(A) == SparseMatrixCSC(transpose(A))
     @test SparseMatrixCSC(transpose(A)) isa SparseMatrixCSC
+    @test SparseMatrixCSC{eltype(A)}(transpose(A)) == transpose(A)
+    @test SparseMatrixCSC{eltype(A), Int}(transpose(A)) == transpose(A)
+    @test SparseMatrixCSC{Float16}(transpose(A)) == transpose(SparseMatrixCSC{Float16}(A))
+    @test SparseMatrixCSC{Float16, Int}(transpose(A)) == transpose(SparseMatrixCSC{Float16}(A))
+    B = sprand(ComplexF64, 10, 10, 0.75)
+    @test SparseMatrixCSC{eltype(B)}(adjoint(B)) == adjoint(B)
+    @test SparseMatrixCSC{eltype(B), Int}(adjoint(B)) == adjoint(B)
+    @test SparseMatrixCSC{ComplexF16}(adjoint(B)) == adjoint(SparseMatrixCSC{ComplexF16}(B))
+    @test SparseMatrixCSC{ComplexF16, Int8}(adjoint(B)) == adjoint(SparseMatrixCSC{ComplexF16, Int8}(B))
 end
 
 # PR 28242

@@ -519,14 +519,27 @@ JL_DLLEXPORT void jl_threading_run(jl_value_t *func)
         uv_mutex_unlock(&sleep_lock);
     }
     // join with all tasks
-    for (int i = 0; i < nthreads; i++) {
-        jl_value_t *t = jl_svecref(ts, i);
-        jl_value_t *args[2] = { wait_func, t };
-        jl_apply(args, 2);
+    JL_TRY {
+        for (int i = 0; i < nthreads; i++) {
+            jl_value_t *t = jl_svecref(ts, i);
+            jl_value_t *args[2] = { wait_func, t };
+            jl_apply(args, 2);
+        }
+    }
+    JL_CATCH {
+        _threadedregion -= 1;
+        jl_wake_libuv();
+        JL_UV_LOCK();
+        JL_UV_UNLOCK();
+        jl_rethrow();
     }
     _threadedregion -= 1;
     // make sure no threads are sitting in the event loop
     jl_wake_libuv();
+    // make sure no more callbacks will run while user code continues
+    // outside thread region and might touch an I/O object.
+    JL_UV_LOCK();
+    JL_UV_UNLOCK();
     JL_GC_POP();
     jl_gc_unsafe_leave(ptls, gc_state);
 }

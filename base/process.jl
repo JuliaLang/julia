@@ -30,6 +30,12 @@ struct Cmd <: AbstractCmd
     end
 end
 
+has_nondefault_cmd_flags(c::Cmd) =
+    c.ignorestatus ||
+    c.flags != 0x00 ||
+    c.env !== nothing ||
+    c.dir !== ""
+
 """
     Cmd(cmd::Cmd; ignorestatus, detach, windows_verbatim, windows_hide, env, dir)
 
@@ -901,7 +907,12 @@ end
 
 arg_gen() = String[]
 arg_gen(x::AbstractString) = String[cstr(x)]
-arg_gen(cmd::Cmd) = cmd.exec
+function arg_gen(cmd::Cmd)
+    if has_nondefault_cmd_flags(cmd)
+        throw(ArgumentError("Non-default environment behavior is only permitted for the first interpolant."))
+    end
+    cmd.exec
+end
 
 function arg_gen(head)
     if isiterable(typeof(head))
@@ -927,10 +938,20 @@ end
 
 function cmd_gen(parsed)
     args = String[]
-    for arg in parsed
-        append!(args, arg_gen(arg...))
+    if length(parsed) >= 1 && isa(parsed[1], Tuple{Cmd})
+        cmd = parsed[1][1]
+        (ignorestatus, flags, env, dir) = (cmd.ignorestatus, cmd.flags, cmd.env, cmd.dir)
+        append!(args, cmd.exec)
+        for arg in tail(parsed)
+            append!(args, arg_gen(arg...))
+        end
+        return Cmd(Cmd(args), ignorestatus, flags, env, dir)
+    else
+        for arg in parsed
+            append!(args, arg_gen(arg...))
+        end
+        return Cmd(args)
     end
-    return Cmd(args)
 end
 
 """
