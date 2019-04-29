@@ -39,6 +39,7 @@ let n = 10
         @test convert(Array, H + (2+4im)I) ≈ A + (2+4im)I ≈ convert(Array, (2+4im)I + H)
         @test convert(Array, H - 2I) ≈ A - 2I ≈ -convert(Array, 2I - H)
         @test convert(Array, -H) == -convert(Array, H)
+        @test convert(Array, 2*(H + (2+4im)I)) ≈ 2A + (4+8im)I
 
         b = convert(Vector{eltype(H)}, b_)
         B = convert(Matrix{eltype(H)}, B_)
