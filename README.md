@@ -112,13 +112,6 @@ Once it is built, you can run the `julia` executable after you enter your julia 
 
     ./julia
 
-If everything works correctly, you will see a Julia banner and an
-interactive prompt into which you can enter expressions for
-evaluation. (Errors related to libraries might be caused by old,
-incompatible libraries sitting around in your PATH. In this case, try
-moving the `julia` directory earlier in the PATH). Note that most of
-the instructions above apply to unix systems.
-
 Your first test of Julia determines whether your build is working
 properly. From the UNIX/Windows command prompt inside the `julia`
 source directory, type `make testall`. You should see output that
@@ -129,91 +122,28 @@ You can read about [getting
 started](https://docs.julialang.org/en/stable/manual/getting-started/)
 in the manual.
 
-## Uninstalling Julia
+### Uninstalling Julia
 
 Julia does not install anything outside the directory it was cloned
 into. Julia can be completely uninstalled by deleting this
 directory. Julia packages are installed in `~/.julia` by default, and
 can be uninstalled by deleting `~/.julia`.
 
-## Required Build Tools and External Libraries
+## Binary Installation
 
-Building Julia requires that the following software be installed:
+If  you  would  rather  not  compile the  latest  Julia  from  source,
+platform-specific  tarballs   with  pre-compiled  binaries   are  also
+[available for download](https://julialang.org/downloads/).
 
-- **[GNU make]**                — building dependencies.
-- **[gcc & g++][gcc]** (>= 4.7) or **[Clang][clang]** (>= 3.1, Xcode 4.3.3 on macOS) — compiling and linking C, C++.
-- **[libatomic][gcc]**          — provided by **[gcc]** and needed to support atomic operations.
-- **[python]** (>=2.7)          — needed to build LLVM.
-- **[gfortran]**                — compiling and linking Fortran libraries.
-- **[perl]**                    — preprocessing of header files of libraries.
-- **[wget]**, **[curl]**, or **[fetch]** (FreeBSD) — to automatically download external libraries.
-- **[m4]**                      — needed to build GMP.
-- **[awk]**                     — helper tool for Makefiles.
-- **[patch]**                   — for modifying source code.
-- **[cmake]** (>= 3.4.3)        — needed to build `libgit2`.
-- **[pkg-config]**              — needed to build `libgit2` correctly, especially for proxy support.
+If everything works correctly, you will see a Julia banner and an
+interactive prompt into which you can enter expressions for
+evaluation.  You can read about [getting
+started](https://julialang.org/manual/getting-started) in the manual.
 
-On Debian-based distributions (e.g. Ubuntu), you can easily install them with `apt-get`:
-```
-sudo apt-get install build-essential libatomic1 python gfortran perl wget m4 cmake pkg-config
-```
-
-Julia uses the following external libraries, which are automatically
-downloaded (or in a few cases, included in the Julia source
-repository) and then compiled from source the first time you run
-`make`:
-
-- **[LLVM]** (6.0 + [patches](https://github.com/JuliaLang/julia/tree/master/deps/patches)) — compiler infrastructure (see [note below](#llvm)).
-- **[FemtoLisp]**            — packaged with Julia source, and used to implement the compiler front-end.
-- **[libuv]**  (custom fork) — portable, high-performance event-based I/O library.
-- **[OpenLibm]**             — portable libm library containing elementary math functions.
-- **[DSFMT]**                — fast Mersenne Twister pseudorandom number generator library.
-- **[OpenBLAS]**             — fast, open, and maintained [basic linear algebra subprograms (BLAS)](https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](https://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](https://www.tacc.utexas.edu/research-development/tacc-software/gotoblas2) (see [note below](#blas-and-lapack)).
-- **[LAPACK]** (>= 3.5)      — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
-- **[MKL]** (optional)       – OpenBLAS and LAPACK may be replaced by Intel's MKL library.
-- **[SuiteSparse]** (>= 4.1) — library of linear algebra routines for sparse matrices.
-- **[PCRE]** (>= 10.00)      — Perl-compatible regular expressions library.
-- **[GMP]** (>= 5.0)         — GNU multiple precision arithmetic library, needed for `BigInt` support.
-- **[MPFR]** (>= 4.0)        — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
-- **[libgit2]** (>= 0.23)    — Git linkable library, used by Julia's package manager.
-- **[curl]** (>= 7.50)       — libcurl provides download and proxy support for Julia's package manager.
-- **[libssh2]** (>= 1.7)     — library for SSH transport, used by libgit2 for packages with SSH remotes.
-- **[mbedtls]** (>= 2.2)     — library used for cryptography and transport layer security, used by libssh2
-- **[utf8proc]** (>= 2.1)    — a library for processing UTF-8 encoded Unicode strings.
-- **[libosxunwind]**         — fork of [libunwind], a library that determines the call-chain of a program.
-
-[GNU make]:     https://www.gnu.org/software/make
-[patch]:        https://www.gnu.org/software/patch
-[wget]:         https://www.gnu.org/software/wget
-[m4]:           https://www.gnu.org/software/m4
-[awk]:          https://www.gnu.org/software/gawk
-[gcc]:          https://gcc.gnu.org
-[clang]:        https://clang.llvm.org
-[python]:       https://www.python.org/
-[gfortran]:     https://gcc.gnu.org/fortran/
-[curl]:         https://curl.haxx.se
-[fetch]:        https://www.freebsd.org/cgi/man.cgi?fetch(1)
-[perl]:         https://www.perl.org
-[cmake]:        https://www.cmake.org
-[OpenLibm]:     https://github.com/JuliaLang/openlibm
-[DSFMT]:        http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT
-[OpenBLAS]:     https://github.com/xianyi/OpenBLAS
-[LAPACK]:       https://www.netlib.org/lapack
-[MKL]:          https://software.intel.com/en-us/articles/intel-mkl
-[SuiteSparse]:  http://faculty.cse.tamu.edu/davis/suitesparse.html
-[PCRE]:         https://www.pcre.org
-[LLVM]:         https://www.llvm.org
-[FemtoLisp]:    https://github.com/JeffBezanson/femtolisp
-[GMP]:          https://gmplib.org
-[MPFR]:         https://www.mpfr.org
-[libuv]:        https://github.com/JuliaLang/libuv
-[libgit2]:      https://libgit2.org/
-[utf8proc]:     https://julialang.org/utf8proc/
-[libosxunwind]: https://github.com/JuliaLang/libosxunwind
-[libunwind]:    https://www.nongnu.org/libunwind
-[libssh2]:      https://www.libssh2.org
-[mbedtls]:      https://tls.mbed.org/
-[pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
+**Note**: Although some system package managers provide Julia, such
+installations are neither maintained nor endorsed by the Julia
+project. They may be outdated and/or unmaintained. We recommend you
+use the official Julia binaries instead.
 
 ## Source Code Organization
 
@@ -228,36 +158,6 @@ The Julia source code is organized as follows:
     test/          test suites
     ui/            source for various front ends
     usr/           binaries and shared libraries loaded by Julia's standard libraries
-
-## Binary Installation
-
-If  you  would  rather  not  compile the  latest  Julia  from  source,
-platform-specific  tarballs   with  pre-compiled  binaries   are  also
-[available for download](https://julialang.org/downloads/).
-
-You can either run the `julia` executable using its full path in the
-directory created above, or add that directory to your executable path
-so that you can run the Julia program from anywhere (in the current
-shell session):
-
-```sh
-export PATH="$(pwd)/julia:$PATH"
-```
-Now you should be able to run Julia like this:
-
-    julia
-
-On Windows, double-click `usr/bin/julia.exe`.
-
-If everything works correctly, you will see a Julia banner and an
-interactive prompt into which you can enter expressions for
-evaluation.  You can read about [getting
-started](https://julialang.org/manual/getting-started) in the manual.
-
-**Note**: Although some system package managers provide Julia, such
-installations are neither maintained nor endorsed by the Julia
-project. They may be outdated and/or unmaintained. We recommend you
-use the official Julia binaries instead.
 
 ## Editor and Terminal Setup
 

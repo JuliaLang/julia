@@ -7,26 +7,53 @@
 
 ## Downloading the Julia source code
 
-(If you are behind a firewall, you may need to use the `https` protocol instead of the `git` protocol:
+If you are behind a firewall, you may need to use the `https` protocol instead of the `git` protocol:
+
 ```sh
 git config --global url."https://".insteadOf git://
 ```
-Be sure to also configure your system to use the appropriate proxy settings, e.g. by setting the `https_proxy` and `http_proxy` variables.)
+
+Be sure to also configure your system to use the appropriate proxy
+settings, e.g. by setting the `https_proxy` and `http_proxy`
+variables.
 
 ## Building Julia
 
-When compiled the first time, the build will automatically download pre-built [external dependencies](#required-build-tools-and-external-libraries). If you prefer to build all the dependencies on your own, add the following in `Make.user`
+When compiled the first time, the build will automatically download
+pre-built [external
+dependencies](#required-build-tools-and-external-libraries). If you
+prefer to build all the dependencies on your own, add the following in
+`Make.user`
+
 ```
 USE_BINARYBUILDER=0
 ```
 
 Building Julia requires 5GiB if building all dependencies and approximately 4GiB of virtual memory.
 
-To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes. (See [Platform Specific Build Notes](https://github.com/JuliaLang/julia#platform-specific-build-notes) for details.) If the defaults in the build do not work for you, and you need to set specific make parameters, you can save them in `Make.user`, and place the file in the root of your Julia source. The build will automatically check for the existence of `Make.user` and use it if it exists.
+To perform a parallel build, use `make -j N` and supply the maximum
+number of concurrent processes. (See [Platform Specific Build
+Notes](https://github.com/JuliaLang/julia#platform-specific-build-notes)
+for details.) If the defaults in the build do not work for you, and
+you need to set specific make parameters, you can save them in
+`Make.user`, and place the file in the root of your Julia source. The
+build will automatically check for the existence of `Make.user` and
+use it if it exists.
 
-You can create out-of-tree builds of Julia by specifying `make O=<build-directory> configure` on the command line. This will create a directory mirror, with all of the necessary Makefiles to build Julia, in the specified directory. These builds will share the source files in Julia and `deps/srccache`. Each out-of-tree build directory can have its own `Make.user` file to override the global `Make.user` file in the top-level folder.
+You can create out-of-tree builds of Julia by specifying `make
+O=<build-directory> configure` on the command line. This will create a
+directory mirror, with all of the necessary Makefiles to build Julia,
+in the specified directory. These builds will share the source files
+in Julia and `deps/srccache`. Each out-of-tree build directory can
+have its own `Make.user` file to override the global `Make.user` file
+in the top-level folder.
 
-If you need to build Julia on a machine without internet access, use `make -C deps getall` to download all the necessary files. Then, copy the `julia` directory over to the target environment and build with `make`.
+If everything works correctly, you will see a Julia banner and an
+interactive prompt into which you can enter expressions for
+evaluation. (Errors related to libraries might be caused by old,
+incompatible libraries sitting around in your PATH. In this case, try
+moving the `julia` directory earlier in the PATH). Note that most of
+the instructions above apply to unix systems.
 
 To run julia from anywhere you can:
 - add an alias (in `bash`: `echo "alias julia='/path/to/install/folder/bin/julia'" >> ~/.bashrc && source ~/.bashrc`), or
@@ -112,7 +139,7 @@ latest version.
 
 * GCC version 4.7 or later is required to build Julia.
 * To use external shared libraries not in the system library search path, set `USE_SYSTEM_XXX=1` and `LDFLAGS=-Wl,-rpath,/path/to/dir/contains/libXXX.so` in `Make.user`.
-  * Instead of setting `LDFLAGS`, putting the library directory into the environment variable `LD_LIBRARY_PATH` (at both compile and run time) also works.
+* Instead of setting `LDFLAGS`, putting the library directory into the environment variable `LD_LIBRARY_PATH` (at both compile and run time) also works.
 * The `USE_SYSTEM_*` flags should be used with caution. These are meant only for troubleshooting, porting, and packaging, where package maintainers work closely with the Julia developers to make sure that Julia is built correctly. Production use cases should use the officially provided binaries. Issues arising from the use of these flags will generally not be accepted.
 * See also the [external dependencies](#required-build-tools-and-external-libraries).
 
@@ -210,3 +237,82 @@ Add the following to the `Make.user` file:
     USE_INTEL_MKL = 1
 
 It is highly recommended to start with a fresh clone of the Julia repository.
+
+## Required Build Tools and External Libraries
+
+Building Julia requires that the following software be installed:
+
+- **[GNU make]**                — building dependencies.
+- **[gcc & g++][gcc]** (>= 4.7) or **[Clang][clang]** (>= 3.1, Xcode 4.3.3 on macOS) — compiling and linking C, C++.
+- **[libatomic][gcc]**          — provided by **[gcc]** and needed to support atomic operations.
+- **[python]** (>=2.7)          — needed to build LLVM.
+- **[gfortran]**                — compiling and linking Fortran libraries.
+- **[perl]**                    — preprocessing of header files of libraries.
+- **[wget]**, **[curl]**, or **[fetch]** (FreeBSD) — to automatically download external libraries.
+- **[m4]**                      — needed to build GMP.
+- **[awk]**                     — helper tool for Makefiles.
+- **[patch]**                   — for modifying source code.
+- **[cmake]** (>= 3.4.3)        — needed to build `libgit2`.
+- **[pkg-config]**              — needed to build `libgit2` correctly, especially for proxy support.
+
+On Debian-based distributions (e.g. Ubuntu), you can easily install them with `apt-get`:
+```
+sudo apt-get install build-essential libatomic1 python gfortran perl wget m4 cmake pkg-config
+```
+
+Julia uses the following external libraries, which are automatically
+downloaded (or in a few cases, included in the Julia source
+repository) and then compiled from source the first time you run
+`make`:
+
+- **[LLVM]** (6.0 + [patches](https://github.com/JuliaLang/julia/tree/master/deps/patches)) — compiler infrastructure (see [note below](#llvm)).
+- **[FemtoLisp]**            — packaged with Julia source, and used to implement the compiler front-end.
+- **[libuv]**  (custom fork) — portable, high-performance event-based I/O library.
+- **[OpenLibm]**             — portable libm library containing elementary math functions.
+- **[DSFMT]**                — fast Mersenne Twister pseudorandom number generator library.
+- **[OpenBLAS]**             — fast, open, and maintained [basic linear algebra subprograms (BLAS)](https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](https://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](https://www.tacc.utexas.edu/research-development/tacc-software/gotoblas2) (see [note below](#blas-and-lapack)).
+- **[LAPACK]** (>= 3.5)      — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
+- **[MKL]** (optional)       – OpenBLAS and LAPACK may be replaced by Intel's MKL library.
+- **[SuiteSparse]** (>= 4.1) — library of linear algebra routines for sparse matrices.
+- **[PCRE]** (>= 10.00)      — Perl-compatible regular expressions library.
+- **[GMP]** (>= 5.0)         — GNU multiple precision arithmetic library, needed for `BigInt` support.
+- **[MPFR]** (>= 4.0)        — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
+- **[libgit2]** (>= 0.23)    — Git linkable library, used by Julia's package manager.
+- **[curl]** (>= 7.50)       — libcurl provides download and proxy support for Julia's package manager.
+- **[libssh2]** (>= 1.7)     — library for SSH transport, used by libgit2 for packages with SSH remotes.
+- **[mbedtls]** (>= 2.2)     — library used for cryptography and transport layer security, used by libssh2
+- **[utf8proc]** (>= 2.1)    — a library for processing UTF-8 encoded Unicode strings.
+- **[libosxunwind]**         — fork of [libunwind], a library that determines the call-chain of a program.
+
+[GNU make]:     https://www.gnu.org/software/make
+[patch]:        https://www.gnu.org/software/patch
+[wget]:         https://www.gnu.org/software/wget
+[m4]:           https://www.gnu.org/software/m4
+[awk]:          https://www.gnu.org/software/gawk
+[gcc]:          https://gcc.gnu.org
+[clang]:        https://clang.llvm.org
+[python]:       https://www.python.org/
+[gfortran]:     https://gcc.gnu.org/fortran/
+[curl]:         https://curl.haxx.se
+[fetch]:        https://www.freebsd.org/cgi/man.cgi?fetch(1)
+[perl]:         https://www.perl.org
+[cmake]:        https://www.cmake.org
+[OpenLibm]:     https://github.com/JuliaLang/openlibm
+[DSFMT]:        http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT
+[OpenBLAS]:     https://github.com/xianyi/OpenBLAS
+[LAPACK]:       https://www.netlib.org/lapack
+[MKL]:          https://software.intel.com/en-us/articles/intel-mkl
+[SuiteSparse]:  http://faculty.cse.tamu.edu/davis/suitesparse.html
+[PCRE]:         https://www.pcre.org
+[LLVM]:         https://www.llvm.org
+[FemtoLisp]:    https://github.com/JeffBezanson/femtolisp
+[GMP]:          https://gmplib.org
+[MPFR]:         https://www.mpfr.org
+[libuv]:        https://github.com/JuliaLang/libuv
+[libgit2]:      https://libgit2.org/
+[utf8proc]:     https://julialang.org/utf8proc/
+[libosxunwind]: https://github.com/JuliaLang/libosxunwind
+[libunwind]:    https://www.nongnu.org/libunwind
+[libssh2]:      https://www.libssh2.org
+[mbedtls]:      https://tls.mbed.org/
+[pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
