@@ -170,11 +170,12 @@ partialsort(v::AbstractVector, k::Union{Int,OrdinalRange}; kws...) =
 
 # index of the first value of vector a that is greater than or equal to x;
 # returns length(v)+1 if x is greater than all values in v.
-function searchsortedfirst(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
-    lo = lo-1
-    hi = hi+1
-    @inbounds while lo < hi-1
-        m = (lo+hi)>>>1
+function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering) where T<:Integer
+    u = T(1)
+    lo = lo - u
+    hi = hi + u
+    @inbounds while lo < hi - u
+        m = (lo + hi) >>> 1
         if lt(o, v[m], x)
             lo = m
         else
@@ -186,11 +187,12 @@ end
 
 # index of the last value of vector a that is less than or equal to x;
 # returns 0 if x is less than all values of v.
-function searchsortedlast(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
-    lo = lo-1
-    hi = hi+1
-    @inbounds while lo < hi-1
-        m = (lo+hi)>>>1
+function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering) where T<:Integer
+    u = T(1)
+    lo = lo - u
+    hi = hi + u
+    @inbounds while lo < hi - u
+        m = (lo + hi) >>> 1
         if lt(o, x, v[m])
             hi = m
         else
@@ -203,11 +205,12 @@ end
 # returns the range of indices of v equal to x
 # if v does not contain x, returns a 0-length range
 # indicating the insertion point of x
-function searchsorted(v::AbstractVector, x, ilo::Int, ihi::Int, o::Ordering)
-    lo = ilo-1
-    hi = ihi+1
-    @inbounds while lo < hi-1
-        m = (lo+hi)>>>1
+function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering) where T<:Integer
+    u = T(1)
+    lo = ilo - u
+    hi = ihi + u
+    @inbounds while lo < hi - u
+        m = (lo + hi) >>> 1
         if lt(o, v[m], x)
             lo = m
         elseif lt(o, x, v[m])
