@@ -109,7 +109,8 @@ end
         for f in (:+, :-, :abs, :abs2, :conj, :inv, :sign,
                   :acos, :asin, :asinh, :atan, :atanh, :cbrt, :cos, :cosh,
                   :exp10, :exp2, :exp, :log10, :log1p,
-                  :log2, :log, :sin, :sinh, :sqrt, :tan, :tanh)
+                  :log2, :log, :sin, :sinh, :sqrt, :tan, :tanh,
+                  :min, :max)
             @eval begin
                 @test @fastmath($f($half)) ≈ $f($half)
                 @test @fastmath($f($third)) ≈ $f($third)
@@ -142,6 +143,14 @@ end
                 @test @fastmath($f($third, $half)) ≈ $f($third, $half)
             end
         end
+
+        # issue 31795
+        for f in (:min, :max)
+            @eval begin
+                @test @fastmath($f($half, $third, 1+$half)) ≈ $f($half, $third, 1+$half)
+            end
+        end
+
         for f in (:minmax,)
             @eval begin
                 @test @fastmath($f($half, $third)[1]) ≈ $f($half, $third)[1]
