@@ -52,7 +52,6 @@ object [`I`](@ref), which creates a new `Hessenberg` with the same `Q` and `H`
 obtained by `F.μ`.  This is useful because multiple shifted solves `(F + μ*I) \\ b`
 (for different `μ` and/or `b`) can be performed efficiently once `F` is created.
 
-
 Iterating the decomposition produces the factors `F.Q` and `F.H` (not including
 the shift `F.μ`).
 
@@ -339,7 +338,7 @@ end
 ldiv!(F::Adjoint{<:Any,<:Hessenberg}, B::AbstractVecOrMat) = rdiv!(B', F')'
 rdiv!(B::AbstractMatrix, F::Adjoint{<:Any,<:Hessenberg}) = ldiv!(F', B')'
 
-# Hessenberg-matrix determinant formula based on:
+# Hessenberg-matrix determinant formula for H+μI based on:
 #
 #    N. D. Cahill, J. R. D’Errico, D. A. Narayan, and J. Y. Narayan, "Fibonacci determinants,"
 #    College Math. J. 33, pp. 221-225 (2003).
@@ -374,7 +373,7 @@ function det(F::Hessenberg)
     return determinant
 end
 
-# O(m²) log-determinant based on first doing Givens RQ to put H into upper-triangular form and then
+# O(m²) log-determinant based on first doing Givens RQ to put H+μI into upper-triangular form and then
 # taking the product of the diagonal entries.   The trick is that we only need O(m) temporary storage,
 # because we don't need to store the whole Givens-rotated matrix, only the most recent column.
 # We do RQ (column rotations) rather than QR (row rotations) for more consecutive memory access.
