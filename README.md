@@ -122,6 +122,9 @@ You can read about [getting
 started](https://docs.julialang.org/en/stable/manual/getting-started/)
 in the manual.
 
+In case this default build path did not work, detailed build instructions
+are included in the [build documentation](https://github.com/JuliaLang/julia/blob/master/doc/build).
+
 ### Uninstalling Julia
 
 Julia does not install anything outside the directory it was cloned
