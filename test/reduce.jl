@@ -366,6 +366,12 @@ A = circshift(reshape(1:24,2,3,4), (0,1,1))
 @test @inferred all(x->x>0, [4]) == true
 @test @inferred all(x->x>0, [-3, 4, 5]) == false
 
+# issues #31635/#31837
+@test_throws ArgumentError reduce(&,[])
+@test reduce(&,Bool[]) == true
+@test_throws ArgumentError reduce(|,[])
+@test reduce(|,Bool[]) == false
+
 @test reduce((a, b) -> a .| b, fill(trues(5), 24))  == trues(5)
 @test reduce((a, b) -> a .| b, fill(falses(5), 24)) == falses(5)
 @test reduce((a, b) -> a .& b, fill(trues(5), 24))  == trues(5)
