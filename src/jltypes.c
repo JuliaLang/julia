@@ -108,7 +108,6 @@ jl_datatype_t *jl_errorexception_type;
 jl_datatype_t *jl_argumenterror_type;
 jl_datatype_t *jl_typeerror_type;
 jl_datatype_t *jl_methoderror_type;
-jl_datatype_t *jl_loaderror_type;
 jl_datatype_t *jl_initerror_type;
 jl_datatype_t *jl_undefvarerror_type;
 jl_datatype_t *jl_lineinfonode_type;

@@ -918,3 +918,10 @@ end
     end
 end
 
+@testset "Soft deprecation of @test_throws LoadError expr" begin
+    # Undecorated LoadError can stand in for the wrapped error (ie, any Exception)
+    @test_throws LoadError throw(ErrorException("Real error"))
+    # Expected LoadError instances are unwrapped as necessary
+    @test_throws LoadError("file", 111, ErrorException("Real error")) throw(ErrorException("Real error"))
+    @test_throws LoadError("file", 111, ErrorException("Real error")) LoadError("file", 111, throw(ErrorException("Real error")))
+end

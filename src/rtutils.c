@@ -954,15 +954,6 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         }
         n += jl_printf(out, "]");
     }
-    else if (vt == jl_loaderror_type) {
-        n += jl_printf(out, "LoadError(at ");
-        n += jl_static_show_x(out, *(jl_value_t**)v, depth);
-        // Access the field directly to avoid allocation
-        n += jl_printf(out, " line %" PRIdPTR, ((intptr_t*)v)[1]);
-        n += jl_printf(out, ": ");
-        n += jl_static_show_x(out, ((jl_value_t**)v)[2], depth);
-        n += jl_printf(out, ")");
-    }
     else if (vt == jl_errorexception_type) {
         n += jl_printf(out, "ErrorException(");
         n += jl_static_show_x(out, *(jl_value_t**)v, depth);

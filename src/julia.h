@@ -591,7 +591,6 @@ extern JL_DLLEXPORT jl_datatype_t *jl_abstractstring_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_string_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_errorexception_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_argumenterror_type JL_GLOBALLY_ROOTED;
-extern JL_DLLEXPORT jl_datatype_t *jl_loaderror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_initerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_typeerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_methoderror_type JL_GLOBALLY_ROOTED;

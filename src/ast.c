@@ -1054,33 +1054,15 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
     size_t world = jl_world_counter;
     ptls->world_age = world;
     jl_value_t *result;
-    JL_TRY {
-        margs[0] = jl_toplevel_eval(*ctx, margs[0]);
-        jl_method_instance_t *mfunc = jl_method_lookup(margs, nargs, 1, world);
-        JL_GC_PROMISE_ROOTED(mfunc);
-        if (mfunc == NULL) {
-            jl_method_error(margs[0], &margs[1], nargs, world);
-            // unreachable
-        }
-        *ctx = mfunc->def.method->module;
-        result = jl_invoke(margs[0], &margs[1], nargs - 1, mfunc);
+    margs[0] = jl_toplevel_eval(*ctx, margs[0]);
+    jl_method_instance_t *mfunc = jl_method_lookup(margs, nargs, 1, world);
+    JL_GC_PROMISE_ROOTED(mfunc);
+    if (mfunc == NULL) {
+        jl_method_error(margs[0], &margs[1], nargs, world);
+        // unreachable
     }
-    JL_CATCH {
-        if (jl_loaderror_type == NULL) {
-            jl_rethrow();
-        }
-        else {
-            jl_value_t *lno = margs[1];
-            jl_value_t *file = jl_fieldref(lno, 1);
-            if (jl_is_symbol(file))
-                margs[0] = jl_cstr_to_string(jl_symbol_name((jl_sym_t*)file));
-            else
-                margs[0] = jl_cstr_to_string("<macrocall>");
-            margs[1] = jl_fieldref(lno, 0); // extract and allocate line number
-            jl_rethrow_other(jl_new_struct(jl_loaderror_type, margs[0], margs[1],
-                                           jl_current_exception()));
-        }
-    }
+    *ctx = mfunc->def.method->module;
+    result = jl_invoke(margs[0], &margs[1], nargs - 1, mfunc);
     ptls->world_age = last_age;
     JL_GC_POP();
     return result;

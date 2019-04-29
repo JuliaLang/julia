@@ -62,7 +62,7 @@ static void *const _tags[] = {
          &jl_vecelement_typename,
          // special exceptions
          &jl_errorexception_type, &jl_argumenterror_type, &jl_typeerror_type,
-         &jl_methoderror_type, &jl_loaderror_type, &jl_initerror_type,
+         &jl_methoderror_type, &jl_initerror_type,
          &jl_undefvarerror_type, &jl_stackovf_exception, &jl_diverror_exception,
          &jl_interrupt_exception, &jl_boundserror_type, &jl_memory_exception,
          &jl_undefref_exception, &jl_readonlymemory_exception,
