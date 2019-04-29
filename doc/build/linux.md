@@ -14,7 +14,7 @@ For example, to build for Pentium 4, set `MARCH=pentium4` and install the necess
 
 You can also set `MARCH=native` for a maximum-performance build customized for the current machine CPU.
 
-#### Linux Build Troubleshooting
+### Linux Build Troubleshooting
 
  Problem              | Possible Solution
 ------------------------|---------------------
