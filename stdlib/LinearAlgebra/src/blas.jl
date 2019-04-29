@@ -70,10 +70,10 @@ import LinearAlgebra: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismat
 import Libdl
 
 # utility routines
-const VENDOR_REF = Ref{Symbol}(:unkown)
+const VENDOR = Ref{Symbol}(:unkown)
 let lib = Libdl.dlopen(libblas; throw_error=false)
 if !isnothing(lib)
-    VENDOR_REF[] = if !isnothing(Libdl.dlsym(lib, :openblas_set_num_threads; throw_error=false))
+    VENDOR[] = if !isnothing(Libdl.dlsym(lib, :openblas_set_num_threads; throw_error=false))
          :openblas
     elseif !isnothing(Libdl.dlsym(lib, :openblas_set_num_threads64_; throw_error=false))
         :openblas64
@@ -83,9 +83,9 @@ if !isnothing(lib)
 end
 end
 
-vendor() = VENDOR_REF[]
+vendor() = VENDOR[]
 
-if VENDOR_REF[] == :openblas64
+if VENDOR[] == :openblas64
     macro blasfunc(x)
         return Expr(:quote, Symbol(x, "64_"))
     end
@@ -103,7 +103,7 @@ openblas_get_config() = strip(unsafe_string(ccall((@blasfunc(openblas_get_config
 Set the number of threads the BLAS library should use.
 """
 function set_num_threads(n::Integer)
-    blas = VENDOR_REF[]
+    blas = VENDOR[]
     if blas == :openblas
         return ccall((:openblas_set_num_threads, libblas), Cvoid, (Int32,), n)
     elseif blas == :openblas64
@@ -123,7 +123,7 @@ end
 
 const _testmat = [1.0 0.0; 0.0 -1.0]
 function check()
-    blas = vendor()
+    blas = VENDOR[]
     if blas == :openblas || blas == :openblas64
         openblas_config = openblas_get_config()
         openblas64 = occursin(r".*USE64BITINT.*", openblas_config)
