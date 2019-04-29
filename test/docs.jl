@@ -722,18 +722,7 @@ end
 )
 
 # Issue #13905.
-let err = try; @macroexpand(@doc "" f() = @x); false; catch ex; ex; end
-    __source__ = LineNumberNode(@__LINE__() -  1, Symbol(@__FILE__))
-    err::LoadError
-    @test err.file === string(__source__.file)
-    @test err.line === __source__.line
-    err = err.error::LoadError
-    @test err.file === string(__source__.file)
-    @test err.line === __source__.line
-    err = err.error::UndefVarError
-    @test err.var == Symbol("@x")
- end
-
+@test_throws UndefVarError(Symbol("@x")) @macroexpand(@doc "" f() = @x)
 
 # Undocumented DataType Summaries.
 
@@ -1089,7 +1078,7 @@ macro mdoc22098 end
 @test docstrings_equal(@doc(:@mdoc22098), doc"an empty macro")
 
 # issue #24468
-let ex = try
+let trace = try
     include_string(@__MODULE__, """
 
     \"\"\"
@@ -1098,10 +1087,12 @@ let ex = try
     function hello(param::Vector{In64_nOt_DeFiNeD__})
     end
     """)
-catch e
-    e
+catch
+    stacktrace(catch_backtrace())
 end
-    @test ex.line == 2
+    @test trace[1].func == Symbol("top-level scope")
+    @test trace[1].file == :string
+    @test trace[1].line == 2
 end
 
 struct t_docs_abc end

@@ -372,12 +372,12 @@ try
           error("break me")
           end
           """)
-    @test_warn "ERROR: LoadError: break me\nStacktrace:\n [1] error" try
+    @test_warn r"ERROR: break me.*at .*FooBar2\.jl"s try
         Base.require(Main, :FooBar2)
-        error("\"LoadError: break me\" test failed")
+        error("\"break me\" test failed")
     catch exc
         isa(exc, ErrorException) || rethrow()
-        occursin("ERROR: LoadError: break me", exc.msg) && rethrow()
+        occursin("ERROR: break me", exc.msg) && rethrow()
     end
 
     # Test transitive dependency for #21266

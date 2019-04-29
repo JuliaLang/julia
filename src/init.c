@@ -902,7 +902,6 @@ void jl_get_builtin_hooks(void)
 #endif
     jl_argumenterror_type  = (jl_datatype_t*)core("ArgumentError");
     jl_methoderror_type    = (jl_datatype_t*)core("MethodError");
-    jl_loaderror_type      = (jl_datatype_t*)core("LoadError");
     jl_initerror_type      = (jl_datatype_t*)core("InitError");
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
