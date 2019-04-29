@@ -1,4 +1,4 @@
-## ARM (Linux)
+# ARM (Linux)
 
 Julia fully supports ARMv8 (AArch64) processors, and supports ARMv7 and ARMv6
 (AArch32) with some caveats. This file provides general guidelines for compilation,
@@ -8,7 +8,7 @@ A list of [known issues](https://github.com/JuliaLang/julia/labels/arm) for ARM 
 available. If you encounter difficulties, please create an issue including the output
 from `cat /proc/cpuinfo`.
 
-### 32-bit (ARMv6, ARMv7)
+## 32-bit (ARMv6, ARMv7)
 
 Julia has been successfully compiled on several variants of the following ARMv6 & ARMv7 devices:
 
@@ -53,7 +53,7 @@ Depending on the exact compiler and distribution, there might be a build failure
 due to unsupported inline assembly. In that case, add `MARCH=armv7-a` to
 `Make.user`.
 
-### AArch64 (ARMv8)
+## AArch64 (ARMv8)
 
 Julia has been successfully built on the following ARMv8 devices:
 
@@ -68,7 +68,7 @@ Compilation on `ARMv8-A` requires that `Make.user` is configured as follows:
 MARCH=armv8-a
 ```
 
-#### nVidia Jetson TX2
+### nVidia Jetson TX2
 
 Julia builds and runs on the [nVidia Jetson TX2](https://www.nvidia.com/object/embedded-systems-dev-kits-modules.html)
 platform with minimal configuration changes.
