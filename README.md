@@ -87,7 +87,7 @@ It is possible that Julia will build and work on other platforms too,
 and we're always looking to improve our platform coverage.  If you're
 using Julia on a platform not listed here, let us know!
 
-## Source Download and Compilation
+## Building Julia
 
 First, make sure you have all the [required
 dependencies](#required-build-tools-and-external-libraries) installed.
