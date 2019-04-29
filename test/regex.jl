@@ -84,6 +84,46 @@
     @test !endswith("abc", r"C")
     @test endswith("abc", r"C"i)
 
+    @testset "multiplication & exponentiation" begin
+        @test *(r"a") == r"a"
+
+        @test r"a" * r"b" == r"(?:a)(?:b)"
+        @test r"a" * "b"  == r"(?:a)\Qb\E"
+        @test r"a" * 'b'  == r"(?:a)\Qb\E"
+        @test "a"  * r"b" == r"\Qa\E(?:b)"
+        @test 'a'  * r"b" == r"\Qa\E(?:b)"
+        for a = (r"a", "a", 'a'),
+            b = (r"b", "b", 'b'),
+            c = (r"c", "c", 'c')
+            a isa Regex || b isa Regex || c isa Regex || continue
+            @test match(a * b * c, "abc") !== nothing
+        end
+        for s = ["thiscat", "thishat", "thatcat", "thathat"]
+            @test match(r"this|that" * r"cat|hat", s) !== nothing
+        end
+
+        @test r"a"i * r"b"i == r"(?:a)(?:b)"i
+        @test r"a"i * "b"   == r"(?:a)\Qb\E"i
+        @test r"a"i * 'b'   == r"(?:a)\Qb\E"i
+        @test "a"   * r"b"i == r"\Qa\E(?:b)"i
+        @test 'a'   * r"b"i == r"\Qa\E(?:b)"i
+
+        @test r"a"i  * r"b"m  == r"(?i:a)(?m:b)"
+        @test r"a"im * r"b"m  == r"(?i:a)(?:b)"m
+        @test r"a"im * r"b"im == r"(?:a)(?:b)"im
+        @test r"a"im * r"b"i  == r"(?m:a)(?:b)"i
+
+        r = r"" * raw"a\Eb|c"
+        @test match(r, raw"a\Eb|c").match == raw"a\Eb|c"
+        @test match(r, raw"c") == nothing
+
+        # error for really incompatible options
+        @test_throws ArgumentError r"a" * Regex("b", Base.DEFAULT_COMPILER_OPTS & ~Base.PCRE.UCP, Base.DEFAULT_MATCH_OPTS)
+        @test_throws ArgumentError r"a" * Regex("b", Base.DEFAULT_COMPILER_OPTS, Base.DEFAULT_MATCH_OPTS & ~Base.PCRE.NO_UTF_CHECK)
+
+        @test r"this|that"^2 == r"(?:this|that){2}"
+    end
+
     # Test that PCRE throws the correct kind of error
     # TODO: Uncomment this once the corresponding change has propagated to CI
     #@test_throws ErrorException Base.PCRE.info(C_NULL, Base.PCRE.INFO_NAMECOUNT, UInt32)
