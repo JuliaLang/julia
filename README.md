@@ -163,27 +163,23 @@ The Julia source code is organized as follows:
     ui/            source for various front ends
     usr/           binaries and shared libraries loaded by Julia's standard libraries
 
-## Editor and Terminal Setup
+## Terminal, Editors and IDEs
 
-Currently, Julia editing mode support is available for a number of
-editors. While Julia modes for
-[Emacs](https://github.com/JuliaLang/julia-emacs),
-[Sublime Text](https://github.com/JuliaEditorSupport/Julia-sublime), and
-[Vim](https://github.com/JuliaLang/julia-vim) have their own repos,
-others such as Textmate, Notepad++, and Kate, are in
-`contrib/`.
+The Julia REPL is quite powerful.  See the section in the manual on
+[the Julia REPL](https://docs.julialang.org/en/latest/stdlib/REPL/)
+for more details.
 
-Two major IDEs are supported for Julia: [Juno](http://junolab.org/)
-which is based on [Atom](https://atom.io/) and
-[julia-vscode](https://github.com/JuliaEditorSupport/julia-vscode)
-based on [VS Code](https://code.visualstudio.com/). A
-[Jupyter](https://jupyter.org/) notebooks interface is available
-through [IJulia](https://github.com/JuliaLang/IJulia.jl).
+Support for editing Julia is available for many
+[widely used editors](https://github.com/JuliaEditorSupport):
+[Emacs](https://github.com/JuliaEditorSupport/julia-emacs),
+[Vim](https://github.com/JuliaEditorSupport/julia-vim),
+[Sublime Text](https://github.com/JuliaEditorSupport/Julia-sublime), and many
+others.
 
-In the terminal, Julia makes great use of both control-key and
-meta-key bindings. To make the meta-key bindings more accessible, many
-terminal emulator programs (e.g., `Terminal`, `iTerm`, `xterm`, etc.)
-allow you to use the alt or option key as meta.  See the section in
-the manual on [the Julia
-REPL](https://docs.julialang.org/en/latest/stdlib/REPL/) for more
-details.
+Supported IDEs include: [Juno](http://junolab.org/) (Atom plugin),
+[julia-vscode](https://github.com/JuliaEditorSupport/julia-vscode) (VS
+Code plugin), and
+[julia-intellij](https://github.com/JuliaEditorSupport/julia-intellij)
+(IntelliJ IDEA plugin). The popular [Jupyter](https://jupyter.org/)
+notebook interface is available through
+[IJulia](https://github.com/JuliaLang/IJulia.jl).
