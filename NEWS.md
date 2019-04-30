@@ -26,7 +26,7 @@ Standard library changes
 ------------------------
 
 * `Regex` can now be multiplied (`*`) and exponentiated (`^`), like strings ([#23422]).
-* Cmd interpolation (``` `$(x::Cmd) a b c` ``` where) now propagates `x`'s process flags
+* Cmd interpolation (`` `$(x::Cmd) a b c` `` where) now propagates `x`'s process flags
   (environment, flags, working directory, etc) if `x` is the first interpolant and errors
   otherwise ([#24353]).
 
