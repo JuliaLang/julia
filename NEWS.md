@@ -26,6 +26,9 @@ Standard library changes
 ------------------------
 
 * `Regex` can now be multiplied (`*`) and exponentiated (`^`), like strings ([#23422]).
+* Cmd interpolation (`` `$(x::Cmd) a b c` `` where) now propagates `x`'s process flags
+  (environment, flags, working directory, etc) if `x` is the first interpolant and errors
+  otherwise ([#24353]).
 
 #### LinearAlgebra
 
@@ -43,7 +46,7 @@ Standard library changes
 
 #### Miscellaneous
 
-
+* `foldr` and `mapfoldr` now work on any iterator that supports `Iterators.reverse`, not just arrays ([#31781]).
 
 External dependencies
 ---------------------
