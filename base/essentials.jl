@@ -113,6 +113,11 @@ macro _propagate_inbounds_meta()
     return Expr(:meta, :inline, :propagate_inbounds)
 end
 
+# Alternative to `@nonans`.
+macro _nonans_meta()
+    return Expr(:meta, :nonans)
+end
+
 """
     convert(T, x)
 
