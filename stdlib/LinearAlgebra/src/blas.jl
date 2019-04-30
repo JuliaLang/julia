@@ -15,7 +15,6 @@ export
     axpy!,
     axpby!,
     blascopy!,
-    dot,
     dotc,
     dotu,
     scal!,

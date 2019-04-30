@@ -20,14 +20,19 @@ Build system changes
 New library functions
 ---------------------
 
+* New `findall(pattern, string)` method where `pattern` is a string or regex ([#31834]).
 
 Standard library changes
 ------------------------
 
-* Cmd interpolation (``` `$(x::Cmd) a b c` ``` where) now propagates `x`'s process flags (environment, flags, working directory, etc) if `x` is the first interpolant and errors otherwise ([#24353]).
+* `Regex` can now be multiplied (`*`) and exponentiated (`^`), like strings ([#23422]).
+* Cmd interpolation (`` `$(x::Cmd) a b c` `` where) now propagates `x`'s process flags
+  (environment, flags, working directory, etc) if `x` is the first interpolant and errors
+  otherwise ([#24353]).
 
 #### LinearAlgebra
 
+* The BLAS submodule no longer exports `dot`, which conflicts with that in LinearAlgebra ([#31838]).
 * `diagm` and `spdiagm` now accept optional `m,n` initial arguments to specify a size ([#31654]).
 
 #### SparseArrays
@@ -42,7 +47,7 @@ Standard library changes
 
 #### Miscellaneous
 
-
+* `foldr` and `mapfoldr` now work on any iterator that supports `Iterators.reverse`, not just arrays ([#31781]).
 
 External dependencies
 ---------------------
