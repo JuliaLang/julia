@@ -8,6 +8,8 @@ New language features
 Language changes
 ----------------
 
+* `Ref`s now compare equal under `==`, `isequal`, and `isapprox` when their wrapped values
+  compare equal ([#31813]).
 
 Multi-threading changes
 -----------------------

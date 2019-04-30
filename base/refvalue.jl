@@ -31,3 +31,7 @@ unsafe_convert(::Type{Ptr{Cvoid}}, b::RefValue{T}) where {T} = convert(Ptr{Cvoid
 
 getindex(b::RefValue) = b.x
 setindex!(b::RefValue, x) = (b.x = x; b)
+
+(==)(a::RefValue, b::RefValue) = a.x == b.x
+isequal(a::RefValue, b::RefValue) = isequal(a.x, b.x)
+isapprox(a::RefValue, b::RefValue; kwargs...) = isapprox(a.x, b.x; kwargs...)

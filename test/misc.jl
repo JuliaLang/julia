@@ -733,3 +733,11 @@ end
 
 # Pointer 0-arg constructor
 @test Ptr{Cvoid}() == C_NULL
+
+@testset "Ref equality" begin
+    a = Ref(1)
+    b = Ref(1.0)
+    @test a == b
+    @test isequal(a, b)
+    @test a ≈ b
+end
