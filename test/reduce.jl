@@ -31,6 +31,12 @@ using .Main.OffsetArrays
 @test Base.mapfoldr(abs2, -, 2:5) == -14
 @test Base.mapfoldr(abs2, -, 2:5; init=10) == -4
 
+@test foldr((x, y) -> ('⟨' * x * '|' * y * '⟩'), "λ 🐨.α") == "⟨λ|⟨ |⟨🐨|⟨.|α⟩⟩⟩⟩" # issue #31780
+let x = rand(10)
+    @test 0 == @allocated(sum(Iterators.reverse(x)))
+    @test 0 == @allocated(foldr(-, x))
+end
+
 # reduce
 @test reduce(+, Int64[]) === Int64(0) # In reference to issue #20144 (PR #20160)
 @test reduce(+, Int16[]) === Int16(0) # In reference to issues #21536
