@@ -90,7 +90,7 @@ using Julia on a platform not listed here, let us know!
 ## Building Julia
 
 First, make sure you have all the [required
-dependencies](#required-build-tools-and-external-libraries) installed.
+dependencies](https://github.com/JuliaLang/julia/blob/master/doc/build/build.md#required-build-tools-and-external-libraries) installed.
 Then, acquire the source code by cloning the git repository:
 
     git clone git://github.com/JuliaLang/julia.git
