@@ -32,6 +32,7 @@ Standard library changes
 
 #### LinearAlgebra
 
+* The BLAS submodule no longer exports `dot`, which conflicts with that in LinearAlgebra ([#31838]).
 * `diagm` and `spdiagm` now accept optional `m,n` initial arguments to specify a size ([#31654]).
 
 #### SparseArrays
