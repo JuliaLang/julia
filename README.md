@@ -58,7 +58,7 @@ helpful to start contributing to the Julia codebase.
 | FreeBSD 11.0+    | x86-64 (64-bit)  | [✓](https://build.julialang.org/#/builders/68)  | ✓        | Tier 1        |
 | Linux 2.6.18+    | x86-64 (64-bit)  | ✓  | ✓        | Tier 1        |
 |                  | i686 (32-bit)    | ✓  | ✓        | Tier 1        |
-|                  | ARM v7 (32-bit)  |    | ✓        | Tier 2        |
+|                  | ARM v7 (32-bit)  |    |          | Tier 3        |
 |                  | ARM v8 (64-bit)  |    |          | Tier 3        |
 |                  | x86-64 musl libc |    |          | Tier 3        |
 |                  | PowerPC (64-bit) |    |          | Tier 4        |
