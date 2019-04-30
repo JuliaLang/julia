@@ -31,3 +31,12 @@ f(a,b) = a >: b
 code_typed(f, Tuple{Any, Any})
 
 end
+
+# Issue #27104
+# Test whether meta nodes are still present after code optimization.
+let
+    @noinline f(x, y) = x + y
+    @test any(code_typed(f)[1][1].code) do ex
+        Meta.isexpr(ex, :meta)
+    end
+end
