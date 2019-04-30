@@ -437,6 +437,45 @@ function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym)
     C
 end
 
+function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::Diagonal)
+    check_A_mul_B!_sizes(C, A, B)
+    n = size(A,1)
+    n <= 3 && return mul!(C, Array(A), Array(B))
+    fill!(C, zero(eltype(C)))
+    Al = _diag(A, -1)
+    Ad = _diag(A, 0)
+    Au = _diag(A, 1)
+    Bd = B.diag
+    @inbounds begin
+        # first row of C
+        C[1,1] = A[1,1]*B[1,1]
+        C[1,2] = A[1,2]*B[2,2]
+        # second row of C
+        C[2,1] = A[2,1]*B[1,1]
+        C[2,2] = A[2,2]*B[2,2]
+        C[2,3] = A[2,3]*B[3,3]
+        for j in 3:n-2
+            Ajj₋1   = Al[j-1]
+            Ajj     = Ad[j]
+            Ajj₊1   = Au[j]
+            Bj₋1j₋1 = Bd[j-1]
+            Bjj     = Bd[j]
+            Bj₊1j₊1 = Bd[j+1]
+            C[j, j-1] = Ajj₋1*Bj₋1j₋1
+            C[j, j  ] = Ajj*Bjj
+            C[j, j+1] = Ajj₊1*Bj₊1j₊1
+        end
+        # row before last of C
+        C[n-1,n-2] = A[n-1,n-2]*B[n-2,n-2]
+        C[n-1,n-1] = A[n-1,n-1]*B[n-1,n-1]
+        C[n-1,n  ] = A[n-1,  n]*B[n  ,n  ]
+        # last row of C
+        C[n,n-1] = A[n,n-1]*B[n-1,n-1]
+        C[n,n  ] =  A[n,n]*B[n,n  ]
+    end # inbounds
+    C
+end
+
 function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat)
     require_one_based_indexing(C)
     require_one_based_indexing(B)
@@ -545,7 +584,7 @@ function *(A::Bidiagonal, B::LowerTriangular)
     end
 end
 
-function *(A::Bidiagonal, B::Diagonal)
+function *(A::BiTri, B::Diagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
     A_mul_B_td!(similar(A, TS), A, B)
 end

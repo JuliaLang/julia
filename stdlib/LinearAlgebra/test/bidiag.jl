@@ -297,6 +297,23 @@ Random.seed!(1)
             # test pass-through of mul! for AbstractTriangular*Bidiagonal
             Tri = UpperTriangular(diagm(1 => T.ev))
             @test Array(Tri*T) ≈ Array(Tri)*Array(T)
+
+            # Issue #31870
+            # Bi/Tri/Sym times Diagonal
+            Diag = Diagonal(rand(elty, 10))
+            BidiagU = Bidiag(rand(elty, 10), rand(elty, 9), 'U')
+            BidiagL = Bidiag(rand(elty, 10), rand(elty, 9), 'L')
+            Tridiag = Tridiagonakl(rand(elty, 9), rand(elty, 10), rand(elty, 9))
+            SymTri = SymTridiagonal(rand(elty, 10), rand(elty, 9))
+            print("yo")
+            @test BidiagU*Diag ≈ Matrix(BidiagU)*Matrix(Diag)
+            @test typeof(BidiagU*Diag) isa Bidiagonal
+            @test BidiagL*Diag ≈ Matrix(BidiagL)*Matrix(Diag)
+            @test typeof(BidiagL*Diag) isa Bidiagonal
+            @test Tridiag*Diag ≈ Matrix(Tridiag)*Matrix(Diag)
+            @test typeof(Tridiag*Diag) isa Tridiag
+            @test SymTri*Diag ≈ Matrix(SymTri)*Matrix(Diag)
+            @test typeof(SymTri*Diag) isa Tridiag
         end
 
         @test inv(T)*Tfull ≈ Matrix(I, n, n)
