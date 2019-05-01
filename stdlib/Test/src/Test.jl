@@ -60,6 +60,10 @@ function scrub_backtrace(bt)
     return bt
 end
 
+function scrub_exc_stack(stack)
+    return Any[ (x[1], scrub_backtrace(x[2])) for x in stack ]
+end
+
 """
     Result
 
@@ -145,10 +149,10 @@ mutable struct Error <: Result
 
     function Error(test_type, orig_expr, value, bt, source)
         if test_type === :test_error
-            bt = scrub_backtrace(bt)
+            bt = scrub_exc_stack(bt)
         end
         if test_type === :test_error || test_type === :nontest_error
-            bt_str = sprint(showerror, value, bt)
+            bt_str = sprint(Base.show_exception_stack, bt)
         else
             bt_str = ""
         end
@@ -486,7 +490,7 @@ function get_test_result(ex, source)
             $testret
         catch _e
             _e isa InterruptException && rethrow()
-            Threw(_e, catch_backtrace(), $(QuoteNode(source)))
+            Threw(_e, Base.catch_stack(), $(QuoteNode(source)))
         end
     end
     Base.remove_linenums!(result)
@@ -584,7 +588,7 @@ function do_test_throws(result::ExecutionResult, @nospecialize(orig_expr), @nosp
             if isa(exc, typeof(extype))
                 success = true
                 for fld in 1:nfields(extype)
-                    if !(getfield(extype, fld) == getfield(exc, fld))
+                    if !isequal(getfield(extype, fld), getfield(exc, fld))
                         success = false
                         break
                     end
@@ -1111,7 +1115,7 @@ function testset_beginend(args, tests, source)
             err isa InterruptException && rethrow()
             # something in the test block threw an error. Count that as an
             # error in this test set
-            record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
+            record(ts, Error(:nontest_error, :(), err, Base.catch_stack(), $(QuoteNode(source))))
         finally
             copy!(GLOBAL_RNG, oldrng)
         end
@@ -1184,7 +1188,7 @@ function testset_forloop(args, testloop, source)
             err isa InterruptException && rethrow()
             # Something in the test block threw an error. Count that as an
             # error in this test set
-            record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
+            record(ts, Error(:nontest_error, :(), err, Base.catch_stack(), $(QuoteNode(source))))
         end
     end
     quote
@@ -1407,12 +1411,12 @@ function detect_ambiguities(mods...;
                             imported::Bool = false,
                             recursive::Bool = false,
                             ambiguous_bottom::Bool = false)
-    function sortdefs(m1, m2)
+    function sortdefs(m1::Method, m2::Method)
         ord12 = m1.file < m2.file
         if !ord12 && (m1.file == m2.file)
             ord12 = m1.line < m2.line
         end
-        ord12 ? (m1, m2) : (m2, m1)
+        return ord12 ? (m1, m2) : (m2, m1)
     end
     ambs = Set{Tuple{Method,Method}}()
     for mod in mods
@@ -1432,8 +1436,8 @@ function detect_ambiguities(mods...;
                 for m in mt
                     if m.ambig !== nothing
                         for m2 in m.ambig
-                            if Base.isambiguous(m, m2, ambiguous_bottom=ambiguous_bottom)
-                                push!(ambs, sortdefs(m, m2))
+                            if Base.isambiguous(m, m2.func, ambiguous_bottom=ambiguous_bottom)
+                                push!(ambs, sortdefs(m, m2.func))
                             end
                         end
                     end

@@ -48,18 +48,23 @@ disassociate_julia_struct(handle::Ptr{Cvoid}) =
 # A dict of all libuv handles that are being waited on somewhere in the system
 # and should thus not be garbage collected
 const uvhandles = IdDict()
+const preserve_handle_lock = Threads.SpinLock()
 function preserve_handle(x)
+    lock(preserve_handle_lock)
     v = get(uvhandles, x, 0)::Int
     uvhandles[x] = v + 1
+    unlock(preserve_handle_lock)
     nothing
 end
 function unpreserve_handle(x)
+    lock(preserve_handle_lock)
     v = uvhandles[x]::Int
     if v == 1
         pop!(uvhandles, x)
     else
         uvhandles[x] = v - 1
     end
+    unlock(preserve_handle_lock)
     nothing
 end
 
@@ -89,16 +94,8 @@ uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(_UVError(prefix,c))
 eventloop() = uv_eventloop::Ptr{Cvoid}
 #mkNewEventLoop() = ccall(:jl_new_event_loop,Ptr{Cvoid},()) # this would probably be fine, but is nowhere supported
 
-function run_event_loop()
-    ccall(:jl_run_event_loop,Cvoid,(Ptr{Cvoid},),eventloop())
-end
-function process_events(block::Bool)
-    loop = eventloop()
-    if block
-        return ccall(:jl_run_once,Int32,(Ptr{Cvoid},),loop)
-    else
-        return ccall(:jl_process_events,Int32,(Ptr{Cvoid},),loop)
-    end
+function process_events()
+    return ccall(:jl_process_events, Int32, (Ptr{Cvoid},), eventloop())
 end
 
 function uv_alloc_buf end

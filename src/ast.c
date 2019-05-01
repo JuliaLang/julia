@@ -49,7 +49,7 @@ jl_sym_t *global_sym; jl_sym_t *list_sym;
 jl_sym_t *dot_sym;    jl_sym_t *newvar_sym;
 jl_sym_t *boundscheck_sym; jl_sym_t *inbounds_sym;
 jl_sym_t *copyast_sym; jl_sym_t *cfunction_sym;
-jl_sym_t *pure_sym; jl_sym_t *simdloop_sym;
+jl_sym_t *pure_sym; jl_sym_t *loopinfo_sym;
 jl_sym_t *meta_sym; jl_sym_t *inert_sym;
 jl_sym_t *polly_sym; jl_sym_t *unused_sym;
 jl_sym_t *static_parameter_sym; jl_sym_t *inline_sym;
@@ -61,6 +61,7 @@ jl_sym_t *colon_sym; jl_sym_t *hygienicscope_sym;
 jl_sym_t *throw_undef_if_not_sym; jl_sym_t *getfield_undefref_sym;
 jl_sym_t *gc_preserve_begin_sym; jl_sym_t *gc_preserve_end_sym;
 jl_sym_t *escape_sym;
+jl_sym_t *aliasscope_sym; jl_sym_t *popaliasscope_sym;
 
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -340,7 +341,7 @@ void jl_init_frontend(void)
     inbounds_sym = jl_symbol("inbounds");
     newvar_sym = jl_symbol("newvar");
     copyast_sym = jl_symbol("copyast");
-    simdloop_sym = jl_symbol("simdloop");
+    loopinfo_sym = jl_symbol("loopinfo");
     pure_sym = jl_symbol("pure");
     meta_sym = jl_symbol("meta");
     list_sym = jl_symbol("list");
@@ -364,6 +365,8 @@ void jl_init_frontend(void)
     throw_undef_if_not_sym = jl_symbol("throw_undef_if_not");
     getfield_undefref_sym = jl_symbol("##getfield##");
     do_sym = jl_symbol("do");
+    aliasscope_sym = jl_symbol("aliasscope");
+    popaliasscope_sym = jl_symbol("popaliasscope");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)
@@ -1033,7 +1036,7 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
             // unreachable
         }
         *ctx = mfunc->def.method->module;
-        result = mfunc->invoke(mfunc, margs, nargs);
+        result = jl_invoke(mfunc, margs, nargs);
     }
     JL_CATCH {
         if (jl_loaderror_type == NULL) {

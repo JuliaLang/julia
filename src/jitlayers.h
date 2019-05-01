@@ -11,8 +11,11 @@
 #include "llvm/ExecutionEngine/Orc/LambdaResolver.h"
 #include "llvm/ExecutionEngine/Orc/LazyEmittingLayer.h"
 #include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
-#include "llvm/ExecutionEngine/ObjectMemoryBuffer.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
+
+#if JL_LLVM_VERSION < 70000
+#include "llvm/ExecutionEngine/ObjectMemoryBuffer.h"
+#endif
 
 #include "llvm/IR/LegacyPassManager.h"
 extern legacy::PassManager *jl_globalPM;
@@ -34,7 +37,7 @@ extern Function *juliapersonality_func;
 typedef struct {Value *gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
 
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
-void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump_native=false);
+void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false);
 void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit = NULL);
 void* jl_get_globalvar(GlobalVariable *gv);
 GlobalVariable *jl_get_global_for(const char *cname, void *addr, Module *M);
@@ -86,7 +89,18 @@ typedef JITSymbol JL_JITSymbol;
 // `JITEvaluatedSymbol`. However, we only use this type when a JITSymbol
 // is expected.
 typedef JITSymbol JL_SymbolInfo;
+
+#if JL_LLVM_VERSION >= 70000
+using RTDyldObjHandleT = orc::VModuleKey;
+#else
 using RTDyldObjHandleT = orc::RTDyldObjectLinkingLayerBase::ObjHandleT;
+#endif
+
+#if JL_LLVM_VERSION >= 70000
+using CompilerResultT = std::unique_ptr<llvm::MemoryBuffer>;
+#else
+using CompilerResultT = object::OwningBinary<object::ObjectFile>;
+#endif
 
 class JuliaOJIT {
     // Custom object emission notification handler for the JuliaOJIT
@@ -94,10 +108,10 @@ class JuliaOJIT {
     public:
         DebugObjectRegistrar(JuliaOJIT &JIT);
         template <typename ObjSetT, typename LoadResult>
-        void operator()(RTDyldObjHandleT H, const ObjSetT &Objects, const LoadResult &LOS);
+        void operator()(RTDyldObjHandleT H, const ObjSetT &Object, const LoadResult &LOS);
     private:
         template <typename ObjT, typename LoadResult>
-        void registerObject(RTDyldObjHandleT H, const ObjT &Object, const LoadResult &LO);
+        void registerObject(RTDyldObjHandleT H, const ObjT &Obj, const LoadResult &LO);
         std::vector<object::OwningBinary<object::ObjectFile>> SavedObjects;
         std::unique_ptr<JITEventListener> JuliaListener;
         JuliaOJIT &JIT;
@@ -107,7 +121,7 @@ class JuliaOJIT {
         CompilerT(JuliaOJIT *pjit)
             : jit(*pjit)
         {}
-        object::OwningBinary<object::ObjectFile> operator()(Module &M);
+        CompilerResultT operator()(Module &M);
     private:
         JuliaOJIT &jit;
     };
@@ -115,7 +129,11 @@ class JuliaOJIT {
 public:
     typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
     typedef orc::IRCompileLayer<ObjLayerT,CompilerT> CompileLayerT;
+    #if JL_LLVM_VERSION >= 70000
+    typedef orc::VModuleKey ModuleHandleT;
+    #else
     typedef CompileLayerT::ModuleHandleT ModuleHandleT;
+    #endif
     typedef StringMap<void*> SymbolTableT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
 
@@ -132,6 +150,7 @@ public:
     void removeModule(ModuleHandleT H);
     JL_JITSymbol findSymbol(const std::string &Name, bool ExportedSymbolsOnly);
     JL_JITSymbol findUnmangledSymbol(const std::string Name);
+    JL_JITSymbol resolveSymbol(const std::string& Name);
     uint64_t getGlobalValueAddress(const std::string &Name);
     uint64_t getFunctionAddress(const std::string &Name);
     Function *FindFunctionNamed(const std::string &Name);
@@ -151,8 +170,15 @@ private:
     MCContext *Ctx;
     std::shared_ptr<RTDyldMemoryManager> MemMgr;
     DebugObjectRegistrar registrar;
+
+#if JL_LLVM_VERSION >= 70000
+    llvm::orc::ExecutionSession ES;
+    std::shared_ptr<llvm::orc::SymbolResolver> SymbolResolver;
+#endif
+
     ObjLayerT ObjectLayer;
     CompileLayerT CompileLayer;
+
     SymbolTableT GlobalSymbolTable;
     SymbolTableT LocalSymbolTable;
 };

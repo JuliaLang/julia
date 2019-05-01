@@ -211,27 +211,6 @@ nextpatch(v::VersionNumber) = v < thispatch(v) ? thispatch(v) : VersionNumber(v.
 nextminor(v::VersionNumber) = v < thisminor(v) ? thisminor(v) : VersionNumber(v.major, v.minor+1, 0)
 nextmajor(v::VersionNumber) = v < thismajor(v) ? thismajor(v) : VersionNumber(v.major+1, 0, 0)
 
-function check_new_version(existing::Vector{VersionNumber}, ver::VersionNumber)
-    if isempty(existing)
-        for v in [v"0.0.1", v"0.1", v"1"]
-            lowerbound(v) <= ver <= v && return
-        end
-        error("version $ver is invalid initial version (try 0.0.1, 0.1, 1.0)")
-    end
-    issorted(existing) || (existing = sort(existing))
-    idx = searchsortedlast(existing, ver)
-    idx > 0 || error("version $ver less than least existing version $(existing[1])")
-    prv = existing[idx]
-    ver == prv && error("version $ver already exists")
-    nxt = thismajor(ver) != thismajor(prv) ? nextmajor(prv) :
-          thisminor(ver) != thisminor(prv) ? nextminor(prv) : nextpatch(prv)
-    ver <= nxt || error("version $ver skips over $nxt")
-    thispatch(ver) <= ver && return # regular or build release
-    idx < length(existing) && thispatch(existing[idx+1]) <= nxt &&
-        error("version $ver is pre-release of existing version $(existing[idx+1])")
-    return # acceptable new version
-end
-
 ## julia version info
 
 """

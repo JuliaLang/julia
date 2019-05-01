@@ -468,9 +468,19 @@ end
         fullBB = copyto!(Matrix{Matrix{T}}(undef, 2, 2), BB)
         for (transform1, transform2) in ((identity,  identity),
                 (identity,  adjoint  ), (adjoint,   identity ), (adjoint,   adjoint  ),
-                (identity,  transpose), (transpose, identity ), (transpose, transpose) )
+                (identity,  transpose), (transpose, identity ), (transpose, transpose),
+                (identity,  Adjoint  ), (Adjoint,   identity ), (Adjoint,   Adjoint  ),
+                (identity,  Transpose), (Transpose, identity ), (Transpose, Transpose))
             @test *(transform1(D), transform2(B))::typeof(D) ≈ *(transform1(Matrix(D)), transform2(Matrix(B))) atol=2 * eps()
             @test *(transform1(DD), transform2(BB))::typeof(DD) == *(transform1(fullDD), transform2(fullBB))
+        end
+        M = randn(T, 5, 5)
+        MM = [randn(T, 2, 2) for _ in 1:2, _ in 1:2]
+        for transform in (identity, adjoint, transpose, Adjoint, Transpose)
+            @test lmul!(transform(D), copy(M)) == *(transform(Matrix(D)), M)
+            @test rmul!(copy(M), transform(D)) == *(M, transform(Matrix(D)))
+            @test lmul!(transform(DD), copy(MM)) == *(transform(fullDD), MM)
+            @test rmul!(copy(MM), transform(DD)) == *(MM, transform(fullDD))
         end
     end
 end
@@ -481,10 +491,16 @@ end
 end
 
 @testset "Multiplication with Adjoint and Transpose vectors (#26863)" begin
-    x = rand(5)
-    D = Diagonal(rand(5))
-    @test x'*D*x == (x'*D)*x == (x'*Array(D))*x
-    @test Transpose(x)*D*x == (Transpose(x)*D)*x == (Transpose(x)*Array(D))*x
+    x = collect(1:2)
+    xt = transpose(x)
+    A = reshape([[1 2; 3 4], zeros(Int,2,2), zeros(Int, 2, 2), [5 6; 7 8]], 2, 2)
+    D = Diagonal(A)
+    @test x'*D == x'*A == copy(x')*D == copy(x')*A
+    @test xt*D == xt*A == copy(xt)*D == copy(xt)*A
+    y = [x, x]
+    yt = transpose(y)
+    @test y'*D*y == (y'*D)*y == (y'*A)*y
+    @test yt*D*y == (yt*D)*y == (yt*A)*y
 end
 
 @testset "Triangular division by Diagonal #27989" begin

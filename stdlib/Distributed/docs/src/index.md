@@ -29,6 +29,7 @@ Distributed.put!(::Future, ::Any)
 Distributed.take!(::RemoteChannel, ::Any...)
 Distributed.isready(::RemoteChannel, ::Any...)
 Distributed.isready(::Future)
+Distributed.AbstractWorkerPool
 Distributed.WorkerPool
 Distributed.CachingPool
 Distributed.default_worker_pool
@@ -60,6 +61,8 @@ same host, and `SSHManager`, for launching on remote hosts via `ssh`. TCP/IP soc
 and transport messages between processes. It is possible for Cluster Managers to provide a different transport.
 
 ```@docs
+Distributed.ClusterManager
+Distributed.WorkerConfig
 Distributed.launch
 Distributed.manage
 Distributed.kill(::ClusterManager, ::Int, ::WorkerConfig)

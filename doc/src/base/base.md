@@ -87,9 +87,15 @@ where
 =
 ```
 
-## Base Modules
+## Standard Modules
 ```@docs
-Base.Base
+Main
+Core
+Base
+```
+
+## Base Submodules
+```@docs
 Base.Broadcast
 Base.Docs
 Base.Iterators
@@ -211,6 +217,7 @@ Base.Enums.@enum
 Core.Expr
 Core.Symbol
 Core.Symbol(x...)
+Core.Module
 ```
 
 ## Generic Functions
@@ -236,6 +243,7 @@ Base.evalfile
 Base.esc
 Base.@inbounds
 Base.@boundscheck
+Base.@propagate_inbounds
 Base.@inline
 Base.@noinline
 Base.@nospecialize
@@ -248,6 +256,7 @@ Base.@simd
 Base.@polly
 Base.@generated
 Base.@pure
+Base.@deprecate
 ```
 
 ## Missing Values
@@ -298,6 +307,8 @@ Base.Sys.isnetbsd
 Base.Sys.isdragonfly
 Base.Sys.iswindows
 Base.Sys.windows_version
+Base.Sys.free_memory
+Base.Sys.total_memory
 Base.@static
 ```
 
@@ -336,6 +347,7 @@ Base.MissingException
 Core.OutOfMemoryError
 Core.ReadOnlyMemoryError
 Core.OverflowError
+Base.ProcessFailedException
 Core.StackOverflowError
 Base.SystemError
 Core.TypeError

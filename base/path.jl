@@ -145,12 +145,16 @@ end
 """
     dirname(path::AbstractString) -> AbstractString
 
-Get the directory part of a path.
+Get the directory part of a path. Trailing characters ('/' or '\\') in the path are
+counted as part of the path.
 
 # Examples
 ```jldoctest
 julia> dirname("/home/myuser")
 "/home"
+
+julia> dirname("/home/myuser/")
+"/home/myuser"
 ```
 
 See also: [`basename`](@ref)
@@ -339,7 +343,7 @@ function realpath(path::AbstractString)
                 path, 0, 0x03, C_NULL, 3, 0x02000000, 0)
     windowserror(:realpath, h == -1)
     try
-        buf = Array{UInt16}(undef, 256)
+        buf = Vector{UInt16}(undef, 256)
         oldlen = len = length(buf)
         while len >= oldlen
             len = ccall(:GetFinalPathNameByHandleW, stdcall, UInt32, (Int, Ptr{UInt16}, UInt32, UInt32),

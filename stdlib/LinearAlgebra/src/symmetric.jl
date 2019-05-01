@@ -162,9 +162,14 @@ for (S, H) in ((:Symmetric, :Hermitian), (:Hermitian, :Symmetric))
                 throw(ArgumentError("Cannot construct $($S); uplo doesn't match"))
             end
         end
-        $S(A::$H) = $S(A.data, sym_uplo(A.uplo))
+        $S(A::$H) = $S(A, sym_uplo(A.uplo))
         function $S(A::$H, uplo::Symbol)
             if A.uplo == char_uplo(uplo)
+                if $H === Hermitian && !(eltype(A) <: Real) &&
+                    any(!isreal, A.data[i] for i in diagind(A.data))
+
+                    throw(ArgumentError("Cannot construct $($S)($($H))); diagonal contains complex values"))
+                end
                 return $S(A.data, sym_uplo(A.uplo))
             else
                 throw(ArgumentError("Cannot construct $($S); uplo doesn't match"))
@@ -340,7 +345,7 @@ Base.copy(A::Adjoint{<:Any,<:Hermitian}) = copy(A.parent)
 Base.copy(A::Transpose{<:Any,<:Symmetric}) = copy(A.parent)
 Base.copy(A::Adjoint{<:Any,<:Symmetric}) =
     Symmetric(copy(adjoint(A.parent.data)), ifelse(A.parent.uplo == 'U', :L, :U))
-Base.collect(A::Transpose{<:Any,<:Hermitian}) =
+Base.copy(A::Transpose{<:Any,<:Hermitian}) =
     Hermitian(copy(transpose(A.parent.data)), ifelse(A.parent.uplo == 'U', :L, :U))
 
 tr(A::Hermitian) = real(tr(A.data))

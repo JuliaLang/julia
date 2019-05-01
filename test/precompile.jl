@@ -135,6 +135,8 @@ try
 
               const x28297 = Result(missing)
 
+              const d29936a = UnionAll(Dict.var, UnionAll(Dict.body.var, Dict.body.body))
+              const d29936b = UnionAll(Dict.body.var, UnionAll(Dict.var, Dict.body.body))
 
               # issue #28998
               const x28998 = [missing, 2, missing, 6, missing,
@@ -156,6 +158,11 @@ try
               const abigfloat_x = big"43.21"
               const abigint_f() = big"123"
               const abigint_x = big"124"
+
+              # issue #31488
+              _v31488 = Base.StringVector(2)
+              resize!(_v31488, 0)
+              const a31488 = fill(String(_v31488), 100)
           end
           """)
     @test_throws ErrorException Core.kwfunc(Base.nothing) # make sure `nothing` didn't have a kwfunc (which would invalidate the attempted test)
@@ -187,7 +194,12 @@ try
 
         @test Foo.x28297.result === missing
 
+        @test Foo.d29936a === Dict
+        @test Foo.d29936b === Dict{K,V} where {V,K}
+
         @test Foo.x28998[end] == 6
+
+        @test Foo.a31488 == fill("", 100)
     end
 
     cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")

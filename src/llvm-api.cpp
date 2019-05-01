@@ -86,6 +86,12 @@ extern "C" JL_DLLEXPORT LLVMBool LLVMExtraInitializeNativeDisassembler()
     return InitializeNativeTargetDisassembler();
 }
 
+// Exporting the Barrier LLVM pass
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddBarrierNoopPass(LLVMPassManagerRef PM)
+{
+    unwrap(PM)->add(createBarrierNoopPass());
+}
 
 // Infrastructure for writing LLVM passes in Julia
 
@@ -215,9 +221,9 @@ extern "C" JL_DLLEXPORT LLVMContextRef LLVMExtraGetValueContext(LLVMValueRef V)
 }
 
 extern ModulePass *createNVVMReflectPass();
-extern "C" JL_DLLEXPORT void LLVMExtraAddMVVMReflectPass(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddNVVMReflectPass(LLVMPassManagerRef PM)
 {
-    createNVVMReflectPass();
+    unwrap(PM)->add(createNVVMReflectPass());
 }
 
 extern "C" JL_DLLEXPORT void

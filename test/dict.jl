@@ -931,6 +931,23 @@ end
     @test d1 == Dict("A" => 1, "B" => 15, "C" => 28)
 end
 
+@testset "Dict reduce merge" begin
+    function check_merge(i::Vector{<:Dict}, o)
+        r1 = reduce(merge, i)
+        r2 = merge(i...)
+        t = typeof(o)
+        @test r1 == o
+        @test r2 == o
+        @test typeof(r1) == t
+        @test typeof(r2) == t
+    end
+    check_merge([Dict(1=>2), Dict(1.0=>2.0)], Dict(1.0=>2.0))
+    check_merge([Dict(1=>2), Dict(2=>Complex(1.0, 1.0))],
+      Dict(2=>Complex(1.0, 1.0), 1=>Complex(2.0, 0.0)))
+    check_merge([Dict(1=>2), Dict(3=>4)], Dict(3=>4, 1=>2))
+    check_merge([Dict(3=>4), Dict(:a=>5)], Dict(:a => 5, 3 => 4))
+end
+
 @testset "misc error/io" begin
     d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
     @test_throws ErrorException 'a' in d
@@ -1019,5 +1036,30 @@ end
         if length(a) == 1 # current limitation of Base.ImmutableDict
             @test s === copy!(s, Base.ImmutableDict(a[])) == Dict(a[])
         end
+    end
+end
+
+@testset "map!(f, values(dict))" begin
+    @testset "AbstractDict & Fallback" begin
+        mutable struct TestDict{K, V}  <: AbstractDict{K, V}
+            dict::Dict{K, V}
+            function TestDict(args...)
+                d = Dict(args...)
+                new{keytype(d), valtype(d)}(d)
+            end
+        end
+        Base.setindex!(td::TestDict, args...) = setindex!(td.dict, args...)
+        Base.getindex(td::TestDict, args...) = getindex(td.dict, args...)
+        Base.pairs(D::TestDict) = pairs(D.dict)
+        testdict = TestDict(:a=>1, :b=>2)
+        map!(v->v-1, values(testdict))
+        @test testdict[:a] == 0
+        @test testdict[:b] == 1
+    end
+    @testset "Dict" begin
+        testdict = Dict(:a=>1, :b=>2)
+        map!(v->v-1, values(testdict))
+        @test testdict[:a] == 0
+        @test testdict[:b] == 1
     end
 end

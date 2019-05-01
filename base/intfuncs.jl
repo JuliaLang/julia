@@ -175,8 +175,9 @@ to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
            "\nConvert input to float.")))
 @noinline throw_domerr_powbysq(::Integer, p) = throw(DomainError(p,
    string("Cannot raise an integer x to a negative power ", p, '.',
-          "\nMake x a float by adding a zero decimal (e.g., 2.0^$p instead ",
-          "of 2^$p), or write 1/x^$(-p), float(x)^$p, or (x//1)^$p")))
+          "\nMake x or $p a float by adding a zero decimal ",
+          "(e.g., 2.0^$p or 2^$(float(p)) instead of 2^$p), ",
+          "or write 1/x^$(-p), float(x)^$p, x^float($p) or (x//1)^$p")))
 @noinline throw_domerr_powbysq(::AbstractMatrix, p) = throw(DomainError(p,
    string("Cannot raise an integer matrix x to a negative power ", p, '.',
           "\nMake x a float matrix by adding a zero decimal ",
@@ -806,7 +807,7 @@ julia> factorial(6)
 720
 
 julia> factorial(21)
-ERROR: OverflowError: 21 is too large to look up in the table
+ERROR: OverflowError: 21 is too large to look up in the table; consider using `factorial(big(21))` instead
 Stacktrace:
 [...]
 

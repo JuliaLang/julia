@@ -163,23 +163,11 @@ end
 
 Base.show(io::IO, S::SparseMatrixCSC) = Base.show(convert(IOContext, io), S::SparseMatrixCSC)
 function Base.show(io::IOContext, S::SparseMatrixCSC)
-    if nnz(S) == 0
-        return show(io, MIME("text/plain"), S)
-    end
-    limit::Bool = get(io, :limit, false)
-    rows = displaysize(io)[1] - 4 # -4 from [Prompt, header, newline after elements, new prompt]
-    will_fit = !limit || rows >= nnz(S) # Will the whole matrix fit when printed?
-
-    if rows <= 2 && !will_fit
-        print(io, "\n  \u22ee")
-        return
-    end
+    nnz(S) == 0 && return show(io, MIME("text/plain"), S)
 
     ioc = IOContext(io, :compact => true)
-    pad = ndigits(max(S.m, S.n))
-
-    function _format_line(r, col)
-        print(ioc, "\n  [", rpad(S.rowval[r], pad), ", ", lpad(col, pad), "]  =  ")
+    function _format_line(r, col, padr, padc)
+        print(ioc, "\n  [", rpad(S.rowval[r], padr), ", ", lpad(col, padc), "]  =  ")
         if isassigned(S.nzval, Int(r))
             show(ioc, S.nzval[r])
         else
@@ -187,31 +175,38 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
         end
     end
 
-    if will_fit
-        print_count = nnz(S)
+    function _get_cols(from, to)
+        idx = eltype(S.colptr)[]
+        c = searchsortedlast(S.colptr, from)
+        for i = from:to
+            while i == S.colptr[c+1]
+                c +=1
+            end
+            push!(idx, c)
+        end
+        idx
+    end
+
+    rows = displaysize(io)[1] - 4 # -4 from [Prompt, header, newline after elements, new prompt]
+    if !get(io, :limit, false) || rows >= nnz(S) # Will the whole matrix fit when printed?
+        cols = _get_cols(1, nnz(S))
+        padr, padc = ndigits.((maximum(S.rowval[1:nnz(S)]), cols[end]))
+        _format_line.(1:nnz(S), cols, padr, padc)
     else
-        print_count = div(rows-1, 2)
-    end
-
-    count = 0
-    for col = 1:S.n, r = nzrange(S, col)
-        count += 1
-        _format_line(r, col)
-        count == print_count && break
-    end
-
-    if !will_fit
+        if rows <= 2
+            print(io, "\n  \u22ee")
+            return
+        end
+        s1, e1 = 1, div(rows - 1, 2) # -1 accounts for \vdots
+        s2, e2 = nnz(S) - (rows - 1 - e1) + 1, nnz(S)
+        cols1, cols2 = _get_cols(s1, e1), _get_cols(s2, e2)
+        padr = ndigits(max(maximum(S.rowval[s1:e1]), maximum(S.rowval[s2:e2])))
+        padc = ndigits(cols2[end])
+        _format_line.(s1:e1, cols1, padr, padc)
         print(io, "\n  \u22ee")
-        # find the column to start printing in for the last print_count elements
-        nextcol = searchsortedfirst(S.colptr, nnz(S) - print_count + 1)
-        for r = (nnz(S) - print_count + 1) : (S.colptr[nextcol] - 1)
-            _format_line(r, nextcol - 1)
-        end
-        # print all of the remaining columns
-        for col = nextcol:S.n, r = nzrange(S, col)
-            _format_line(r, col)
-        end
+        _format_line.(s2:e2, cols2, padr, padc)
     end
+    return
 end
 
 ## Reshape
@@ -1227,6 +1222,13 @@ tril!(A::SparseMatrixCSC, k::Integer = 0, trim::Bool = true) =
 triu!(A::SparseMatrixCSC, k::Integer = 0, trim::Bool = true) =
     fkeep!(A, (i, j, x) -> j >= i + k, trim)
 
+"""
+    droptol!(A::SparseMatrixCSC, tol; trim::Bool = true)
+
+Removes stored values from `A` whose absolute value is less than or equal to `tol`,
+optionally trimming resulting excess space from `A.rowval` and `A.nzval` when `trim`
+is `true`.
+"""
 droptol!(A::SparseMatrixCSC, tol; trim::Bool = true) =
     fkeep!(A, (i, j, x) -> abs(x) > tol, trim)
 
@@ -1357,6 +1359,77 @@ function sparse_sortedlinearindices!(I::Vector{Ti}, V::Vector, m::Int, n::Int) w
         colm += m
     end
     return SparseMatrixCSC(m, n, colptr, I, V)
+end
+
+# findfirst/next/prev/last
+function _idxfirstnz(A::SparseMatrixCSC, ij::CartesianIndex{2})
+    nzr = nzrange(A, ij[2])
+    searchk = searchsortedfirst(A.rowval, ij[1], first(nzr), last(nzr), Forward)
+    return _idxnextnz(A, searchk)
+end
+
+function _idxlastnz(A::SparseMatrixCSC, ij::CartesianIndex{2})
+    nzr = nzrange(A, ij[2])
+    searchk = searchsortedlast(A.rowval, ij[1], first(nzr), last(nzr), Forward)
+    return _idxprevnz(A, searchk)
+end
+
+function _idxnextnz(A::SparseMatrixCSC, idx::Integer)
+    nnza = nnz(A)
+    nzval = nonzeros(A)
+    z = zero(eltype(A))
+    while idx <= nnza
+        nzv = nzval[idx]
+        !isequal(nzv, z) && return idx, nzv
+        idx += 1
+    end
+    return zero(idx), z
+end
+
+function _idxprevnz(A::SparseMatrixCSC, idx::Integer)
+    nzval = nonzeros(A)
+    z = zero(eltype(A))
+    while idx > 0
+        nzv = nzval[idx]
+        !isequal(nzv, z) && return idx, nzv
+        idx -= 1
+    end
+    return zero(idx), z
+end
+
+function _idx_to_cartesian(A::SparseMatrixCSC, idx::Integer)
+    rowval = rowvals(A)
+    i = rowval[idx]
+    j = searchsortedlast(A.colptr, idx, 1, size(A, 2), Base.Order.Forward)
+    return CartesianIndex(i, j)
+end
+
+function Base.findnext(pred::Function, A::SparseMatrixCSC, ij::CartesianIndex{2})
+    if nnz(A) == length(A) || pred(zero(eltype(A)))
+        return invoke(findnext, Tuple{Function,Any,Any}, pred, A, ij)
+    end
+    idx, nzv = _idxfirstnz(A, ij)
+    while idx > 0
+        if pred(nzv)
+            return _idx_to_cartesian(A, idx)
+        end
+        idx, nzv = _idxnextnz(A, idx + 1)
+    end
+    return nothing
+end
+
+function Base.findprev(pred::Function, A::SparseMatrixCSC, ij::CartesianIndex{2})
+    if nnz(A) == length(A) || pred(zero(eltype(A)))
+        return invoke(findprev, Tuple{Function,Any,Any}, pred, A, ij)
+    end
+    idx, nzv = _idxlastnz(A, ij)
+    while idx > 0
+        if pred(nzv)
+            return _idx_to_cartesian(A, idx)
+        end
+        idx, nzv = _idxprevnz(A, idx - 1)
+    end
+    return nothing
 end
 
 """
@@ -1493,12 +1566,22 @@ sparse(s::UniformScaling, dims::Dims{2}) = SparseMatrixCSC(s, dims)
 sparse(s::UniformScaling, m::Integer, n::Integer) = sparse(s, Dims((m, n)))
 
 # TODO: More appropriate location?
-conj!(A::SparseMatrixCSC) = (@inbounds broadcast!(conj, A.nzval, A.nzval); A)
-(-)(A::SparseMatrixCSC) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), map(-, A.nzval))
+function conj!(A::SparseMatrixCSC)
+    map!(conj, nzvalview(A), nzvalview(A))
+    return A
+end
+function (-)(A::SparseMatrixCSC)
+    nzval = similar(A.nzval)
+    map!(-, view(nzval, 1:nnz(A)), nzvalview(A))
+    return SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), nzval)
+end
 
 # the rest of real, conj, imag are handled correctly via AbstractArray methods
-conj(A::SparseMatrixCSC{<:Complex}) =
-    SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), conj(A.nzval))
+function conj(A::SparseMatrixCSC{<:Complex})
+    nzval = similar(A.nzval)
+    map!(conj, view(nzval, 1:nnz(A)), nzvalview(A))
+    return SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), nzval)
+end
 imag(A::SparseMatrixCSC{Tv,Ti}) where {Tv<:Real,Ti} = spzeros(Tv, Ti, A.m, A.n)
 
 ## Binary arithmetic and boolean operators
@@ -1557,7 +1640,7 @@ function Base.reducedim_initarray(A::SparseMatrixCSC, region, v0, ::Type{R}) whe
 end
 
 # General mapreduce
-function _mapreducezeros(f, op, ::Type{T}, nzeros::Int, v0) where T
+function _mapreducezeros(f, op, ::Type{T}, nzeros::Integer, v0) where T
     nzeros == 0 && return v0
 
     # Reduce over first zero
@@ -1591,9 +1674,9 @@ function Base._mapreduce(f, op, ::Base.IndexCartesian, A::SparseMatrixCSC{T}) wh
 end
 
 # Specialized mapreduce for +/*
-_mapreducezeros(f, ::typeof(+), ::Type{T}, nzeros::Int, v0) where {T} =
+_mapreducezeros(f, ::typeof(+), ::Type{T}, nzeros::Integer, v0) where {T} =
     nzeros == 0 ? v0 : f(zero(T))*nzeros + v0
-_mapreducezeros(f, ::typeof(*), ::Type{T}, nzeros::Int, v0) where {T} =
+_mapreducezeros(f, ::typeof(*), ::Type{T}, nzeros::Integer, v0) where {T} =
     nzeros == 0 ? v0 : f(zero(T))^nzeros * v0
 
 function Base._mapreduce(f, op::typeof(*), A::SparseMatrixCSC{T}) where T
@@ -3274,9 +3357,13 @@ end
 
 """
     spdiagm(kv::Pair{<:Integer,<:AbstractVector}...)
+    spdiagm(m::Integer, n::Ingeger, kv::Pair{<:Integer,<:AbstractVector}...)
 
-Construct a square sparse diagonal matrix from `Pair`s of vectors and diagonals.
-Vector `kv.second` will be placed on the `kv.first` diagonal.
+Construct a sparse diagonal matrix from `Pair`s of vectors and diagonals.
+Each vector `kv.second` will be placed on the `kv.first` diagonal.  By
+default (if `size=nothing`), the matrix is square and its size is inferred
+from `kv`, but a non-square size `m`×`n` (padded with zeros as needed)
+can be specified by passing `m,n` as the first arguments.
 
 # Examples
 ```jldoctest
@@ -3292,10 +3379,15 @@ julia> spdiagm(-1 => [1,2,3,4], 1 => [4,3,2,1])
   [4, 5]  =  1
 ```
 """
-function spdiagm(kv::Pair{<:Integer,<:AbstractVector}...)
+spdiagm(kv::Pair{<:Integer,<:AbstractVector}...) = _spdiagm(nothing, kv...)
+spdiagm(m::Integer, n::Integer, kv::Pair{<:Integer,<:AbstractVector}...) = _spdiagm((Int(m),Int(n)), kv...)
+function _spdiagm(size, kv::Pair{<:Integer,<:AbstractVector}...)
     I, J, V = spdiagm_internal(kv...)
-    n = max(dimlub(I), dimlub(J))
-    return sparse(I, J, V, n, n)
+    mmax, nmax = dimlub(I), dimlub(J)
+    mnmax = max(mmax, nmax)
+    m, n = something(size, (mnmax,mnmax))
+    (m ≥ mmax && n ≥ nmax) || throw(DimensionMismatch("invalid size=$size"))
+    return sparse(I, J, V, m, n)
 end
 
 ## expand a colptr or rowptr into a dense index vector

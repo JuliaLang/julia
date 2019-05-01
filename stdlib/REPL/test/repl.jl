@@ -28,6 +28,7 @@ function kill_timer(delay)
         # **DON'T COPY ME.**
         # The correct way to handle timeouts is to close the handle:
         # e.g. `close(stdout_read); close(stdin_write)`
+        test_task.queue === nothing || Base.list_deletefirst!(test_task.queue, test_task)
         schedule(test_task, "hard kill repl test"; error=true)
         print(stderr, "WARNING: attempting hard kill of repl test after exceeding timeout\n")
     end
@@ -993,4 +994,21 @@ fake_repl() do stdin_write, stdout_read, repl
     @test readline(stdout_read) == "\e[0m:(Base.Math.float(_1))"
     write(stdin_write, '\x04')
     Base.wait(repltask)
+end
+
+# issue #31352
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "struct Errs end\n")
+    readline(stdout_read)
+    readline(stdout_read)
+    write(stdin_write, "Base.show(io::IO, ::Errs) = throw(Errs())\n")
+    readline(stdout_read)
+    readline(stdout_read)
+    write(stdin_write, "Errs()\n")
+    write(stdin_write, '\x04')
+    wait(repltask)
+    @test istaskdone(repltask)
 end

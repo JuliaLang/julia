@@ -11,7 +11,7 @@ function inflate_ir(ci::CodeInfo, linfo::MethodInstance)
 end
 
 function inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
-    code = copy_exprargs(ci.code)
+    code = copy_exprargs(ci.code) # TODO: this is a huge hot-spot
     for i = 1:length(code)
         if isa(code[i], Expr)
             code[i] = normalize_expr(code[i])
@@ -57,6 +57,12 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
     ci.linetable = ir.linetable
     ci.ssavaluetypes = ir.types
     ci.ssaflags = ir.flags
+    for metanode in ir.meta
+        push!(ci.code, metanode)
+        push!(ci.codelocs, 1)
+        push!(ci.ssavaluetypes, Any)
+        push!(ci.ssaflags, 0x00)
+    end
     # Translate BB Edges to statement edges
     # (and undo normalization for now)
     for i = 1:length(ci.code)

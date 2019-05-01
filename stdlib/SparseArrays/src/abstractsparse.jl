@@ -1,8 +1,26 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+"""
+    AbstractSparseArray{Tv,Ti,N}
 
+Supertype for `N`-dimensional sparse arrays (or array-like types) with elements
+of type `Tv` and index type `Ti`. [`SparseMatrixCSC`](@ref), [`SparseVector`](@ref)
+and `SuiteSparse.CHOLMOD.Sparse` are subtypes of this.
+"""
 abstract type AbstractSparseArray{Tv,Ti,N} <: AbstractArray{Tv,N} end
 
+"""
+    AbstractSparseVector{Tv,Ti}
+
+Supertype for one-dimensional sparse arrays (or array-like types) with elements
+of type `Tv` and index type `Ti`. Alias for `AbstractSparseArray{Tv,Ti,1}``.
+"""
 const AbstractSparseVector{Tv,Ti} = AbstractSparseArray{Tv,Ti,1}
+"""
+    AbstractSparseMatrix{Tv,Ti}
+
+Supertype for two-dimensional sparse arrays (or array-like types) with elements
+of type `Tv` and index type `Ti`. Alias for `AbstractSparseArray{Tv,Ti,2}`.
+"""
 const AbstractSparseMatrix{Tv,Ti} = AbstractSparseArray{Tv,Ti,2}
 
 """

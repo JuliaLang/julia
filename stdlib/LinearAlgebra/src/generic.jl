@@ -104,6 +104,58 @@ function lmul!(s::Number, X::AbstractArray)
 end
 
 """
+    rdiv!(A::AbstractArray, b::Number)
+
+Divide each entry in an array `A` by a scalar `b` overwriting `A`
+in-place.  Use [`ldiv!`](@ref) to divide scalar from left.
+
+# Examples
+```jldoctest
+julia> A = [1.0 2.0; 3.0 4.0]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> rdiv!(A, 2.0)
+2×2 Array{Float64,2}:
+ 0.5  1.0
+ 1.5  2.0
+```
+"""
+function rdiv!(X::AbstractArray, s::Number)
+    @simd for I in eachindex(X)
+        @inbounds X[I] /= s
+    end
+    X
+end
+
+"""
+    ldiv!(a::Number, B::AbstractArray)
+
+Divide each entry in an array `B` by a scalar `a` overwriting `B`
+in-place.  Use [`rdiv!`](@ref) to divide scalar from right.
+
+# Examples
+```jldoctest
+julia> B = [1.0 2.0; 3.0 4.0]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> ldiv!(2.0, B)
+2×2 Array{Float64,2}:
+ 0.5  1.0
+ 1.5  2.0
+```
+"""
+function ldiv!(s::Number, X::AbstractArray)
+    @simd for I in eachindex(X)
+        @inbounds X[I] = s\X[I]
+    end
+    X
+end
+
+"""
     cross(x, y)
     ×(x,y)
 
@@ -367,7 +419,7 @@ function generic_normp(x, p)
         sum = (norm(v)/maxabs)^spp
         while true
             y = iterate(x, s)
-            y == nothing && break
+            y === nothing && break
             (v, s) = y
             sum += (norm(v)/maxabs)^spp
         end
@@ -1429,7 +1481,7 @@ end
     normalize(v::AbstractVector, p::Real=2)
 
 Normalize the vector `v` so that its `p`-norm equals unity,
-i.e. `norm(v, p) == vecnorm(v, p) == 1`.
+i.e. `norm(v, p) == 1`.
 See also [`normalize!`](@ref) and [`norm`](@ref).
 
 # Examples
