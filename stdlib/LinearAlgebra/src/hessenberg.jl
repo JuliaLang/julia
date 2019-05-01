@@ -308,11 +308,11 @@ end
 A `Hessenberg` object represents the Hessenberg factorization `QHQ'` of a square
 matrix, and is produced by the [`hessenberg`](@ref) function.
 """
-struct Hessenberg{T,TH,S<:UpperHessenberg{T,<:AbstractMatrix{TH}},W<:AbstractVector{TH}} <: Factorization{T}
+struct Hessenberg{T,TH,S<:UpperHessenberg{T,<:AbstractMatrix{TH}},W<:AbstractVector} <: Factorization{T}
     H::S # upper triangle is H, lower triangle is Q data (reflectors)
     τ::W # more Q (reflector) data
 
-    function Hessenberg{T,TH,S,W}(H, τ) where {T,TH,S<:UpperHessenberg{T,<:AbstractMatrix{TH}},W<:AbstractVector{TH}}
+    function Hessenberg{T,TH,S,W}(H, τ) where {T,TH,S<:UpperHessenberg{T,<:AbstractMatrix{TH}},W<:AbstractVector}
         require_one_based_indexing(τ)
         new{T,TH,S,W}(H, τ)
     end
@@ -406,15 +406,14 @@ matrix `Q` in the Hessenberg factorization `QHQ'` represented by `F`.
 This `F.Q` object can be efficiently multiplied by matrices or vectors,
 and can be converted to an ordinary matrix type with `Matrix(F.Q)`.
 """
-struct HessenbergQ{T,S<:AbstractMatrix} <: AbstractQ{T}
+struct HessenbergQ{T,S<:AbstractMatrix,W<:AbstractVector} <: AbstractQ{T}
     factors::S
-    τ::Vector{T}
-    function HessenbergQ{T,S}(factors, τ) where {T,S<:AbstractMatrix}
-        require_one_based_indexing(factors)
+    τ::W
+    function HessenbergQ{T,S,W}(factors, τ) where {T,S<:AbstractMatrix,W<:AbstractVector}
         new(factors, τ)
     end
 end
-HessenbergQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = HessenbergQ{T,typeof(factors)}(factors, τ)
+HessenbergQ(factors::AbstractMatrix{T}, τ::AbstractVector) where {T} = HessenbergQ{T,typeof(factors),typeof(τ)}(factors, τ)
 HessenbergQ(F::Hessenberg) = HessenbergQ(F.H.data, F.τ)
 
 function getproperty(F::Hessenberg, d::Symbol)
@@ -425,8 +424,11 @@ end
 Base.propertynames(F::Hessenberg, private::Bool=false) =
     (:Q, :H, (private ? (:τ,) : ())...)
 
+# HessenbergQ from LAPACK/BLAS (as opposed to Julia libraries like GenericLinearAlgebra)
+const BlasHessenbergQ{T} = HessenbergQ{T,<:StridedMatrix{T},<:StridedVector{T}} where {T<:BlasFloat}
+
 ## reconstruct the original matrix
-Matrix{T}(Q::HessenbergQ) where {T} = convert(Matrix{T}, LAPACK.orghr!(1, size(Q.factors, 1), copy(Q.factors), Q.τ))
+Matrix{T}(Q::BlasHessenbergQ) where {T} = convert(Matrix{T}, LAPACK.orghr!(1, size(Q.factors, 1), copy(Q.factors), Q.τ))
 AbstractArray(F::Hessenberg) = AbstractMatrix(F)
 Matrix(F::Hessenberg) = Array(AbstractArray(F))
 Array(F::Hessenberg) = Matrix(F)
@@ -445,19 +447,19 @@ function AbstractMatrix(F::Hessenberg)
     end
 end
 
-lmul!(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
+lmul!(Q::BlasHessenbergQ{T}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
     LAPACK.ormhr!('L', 'N', 1, size(Q.factors, 1), Q.factors, Q.τ, X)
-rmul!(X::StridedMatrix{T}, Q::HessenbergQ{T}) where {T<:BlasFloat} =
+rmul!(X::StridedMatrix{T}, Q::BlasHessenbergQ{T}) where {T<:BlasFloat} =
     LAPACK.ormhr!('R', 'N', 1, size(Q.factors, 1), Q.factors, Q.τ, X)
-lmul!(adjQ::Adjoint{<:Any,<:HessenbergQ{T}}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
+lmul!(adjQ::Adjoint{<:Any,<:BlasHessenbergQ{T}}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
     (Q = adjQ.parent; LAPACK.ormhr!('L', ifelse(T<:Real, 'T', 'C'), 1, size(Q.factors, 1), Q.factors, Q.τ, X))
-rmul!(X::StridedMatrix{T}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) where {T<:BlasFloat} =
+rmul!(X::StridedMatrix{T}, adjQ::Adjoint{<:Any,<:BlasHessenbergQ{T}}) where {T<:BlasFloat} =
     (Q = adjQ.parent; LAPACK.ormhr!('R', ifelse(T<:Real, 'T', 'C'), 1, size(Q.factors, 1), Q.factors, Q.τ, X))
 
-lmul!(Q::HessenbergQ{T}, X::Adjoint{T,<:StridedVecOrMat{T}}) where {T<:BlasFloat} = rmul!(X', Q')'
-rmul!(X::Adjoint{T,<:StridedMatrix{T}}, Q::HessenbergQ{T}) where {T<:BlasFloat} = lmul!(Q', X')'
-lmul!(adjQ::Adjoint{<:Any,<:HessenbergQ{T}}, X::Adjoint{T,<:StridedVecOrMat{T}}) where {T<:BlasFloat}  = rmul!(X', adjQ')'
-rmul!(X::Adjoint{T,<:StridedMatrix{T}}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) where {T<:BlasFloat} = lmul!(adjQ', X')'
+lmul!(Q::HessenbergQ{T}, X::Adjoint{T,<:StridedVecOrMat{T}}) where {T} = rmul!(X', Q')'
+rmul!(X::Adjoint{T,<:StridedMatrix{T}}, Q::HessenbergQ{T}) where {T} = lmul!(Q', X')'
+lmul!(adjQ::Adjoint{<:Any,<:HessenbergQ{T}}, X::Adjoint{T,<:StridedVecOrMat{T}}) where {T}  = rmul!(X', adjQ')'
+rmul!(X::Adjoint{T,<:StridedMatrix{T}}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) where {T} = lmul!(adjQ', X')'
 
 # multiply x by the entries of M in the upper-k triangle, which contains
 # the entries of the upper-Hessenberg matrix H for k=-1
