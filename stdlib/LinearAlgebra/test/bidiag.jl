@@ -301,19 +301,19 @@ Random.seed!(1)
             # Issue #31870
             # Bi/Tri/Sym times Diagonal
             Diag = Diagonal(rand(elty, 10))
-            BidiagU = Bidiag(rand(elty, 10), rand(elty, 9), 'U')
-            BidiagL = Bidiag(rand(elty, 10), rand(elty, 9), 'L')
-            Tridiag = Tridiagonakl(rand(elty, 9), rand(elty, 10), rand(elty, 9))
+            BidiagU = Bidiagonal(rand(elty, 10), rand(elty, 9), 'U')
+            BidiagL = Bidiagonal(rand(elty, 10), rand(elty, 9), 'L')
+            Tridiag = Tridiagonal(rand(elty, 9), rand(elty, 10), rand(elty, 9))
             SymTri = SymTridiagonal(rand(elty, 10), rand(elty, 9))
-            print("yo")
+
             @test BidiagU*Diag ≈ Matrix(BidiagU)*Matrix(Diag)
-            @test typeof(BidiagU*Diag) isa Bidiagonal
+            @test typeof(BidiagU*Diag) <: Bidiagonal
             @test BidiagL*Diag ≈ Matrix(BidiagL)*Matrix(Diag)
-            @test typeof(BidiagL*Diag) isa Bidiagonal
+            @test typeof(BidiagL*Diag) <: Bidiagonal
             @test Tridiag*Diag ≈ Matrix(Tridiag)*Matrix(Diag)
-            @test typeof(Tridiag*Diag) isa Tridiag
+            @test typeof(Tridiag*Diag) <: Tridiagonal
             @test SymTri*Diag ≈ Matrix(SymTri)*Matrix(Diag)
-            @test typeof(SymTri*Diag) isa Tridiag
+            @test typeof(SymTri*Diag) <: Tridiagonal
         end
 
         @test inv(T)*Tfull ≈ Matrix(I, n, n)
