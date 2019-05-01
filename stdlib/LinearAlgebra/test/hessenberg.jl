@@ -15,6 +15,27 @@ let n = 10
     b_ = randn(n)
     B_ = randn(n,3)
 
+    # UpperHessenberg methods not covered by the tests below
+    @testset "UpperHessenberg" begin
+        A = Areal
+        H = UpperHessenberg(A)
+        AH = triu(A,-1)
+        @test Matrix(H) == H == AH
+        for x in (2,2+3im)
+            @test x*H == H*x == x*AH
+            for op in (+,-)
+                @test op(H,x*I) == op(AH,x*I) == op(op(x*I,H))
+                @test op(H,x*I).data === H.data
+                @test op(H,x*I)*x == op(AH,x*I)*x == x*op(H,x*I)
+                @test op(H+x*I, 2H+I) ≈ UpperHessenberg(op(1,2)*H, op(x,1))
+            end
+        end
+        @test UpperHessenberg(H+I, 3) == H+4I
+        H1 = LinearAlgebra.fillstored!(copy(H), 1)
+        @test H1 == triu(fill(1, n,n), -1)
+        @test tril(H1.data,-2) == tril(H.data,-2)
+    end
+
     @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
         A = eltya == Int ?
                 rand(1:7, n, n) :
@@ -33,6 +54,11 @@ let n = 10
         @test (H.Q' *A) * H.Q ≈ H.H
         #getindex for HessenbergQ
         @test H.Q[1,1] ≈ Array(H.Q)[1,1]
+
+        #iterate
+        q,h = H
+        @test q == H.Q
+        @test h == H.H
 
         @test convert(Array, 2 * H) ≈ 2 * A ≈ convert(Array, H * 2)
         @test convert(Array, H + 2I) ≈ A + 2I ≈ convert(Array, 2I + H)

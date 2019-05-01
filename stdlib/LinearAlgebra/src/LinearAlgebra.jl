@@ -52,6 +52,7 @@ export
     UpperTriangular,
     UnitLowerTriangular,
     UnitUpperTriangular,
+    UpperHessenberg,
     Diagonal,
     UniformScaling,
 
