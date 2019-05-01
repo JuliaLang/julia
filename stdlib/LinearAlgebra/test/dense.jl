@@ -898,7 +898,9 @@ end
 @testset "Factorize fallback for Adjoint/Transpose" begin
     a = rand(Complex{Int8}, n, n)
     @test Array(transpose(factorize(Transpose(a)))) ≈ Array(factorize(a))
+    @test transpose(factorize(transpose(a))) == factorize(a)
     @test Array(adjoint(factorize(Adjoint(a)))) ≈ Array(factorize(a))
+    @test adjoint(factorize(adjoint(a))) == factorize(a)
 end
 
 end # module TestDense
