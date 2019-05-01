@@ -62,7 +62,6 @@ $(build_private_libdir)/corecompiler.ji: $(COMPILER_SRCS)
 		--startup-file=no -g0 -O0 compiler/compiler.jl)
 	@mv $@.tmp $@
 
-COMMA:=,
 $(build_private_libdir)/sys.ji: $(build_private_libdir)/corecompiler.ji $(JULIAHOME)/VERSION $(BASE_SRCS) $(STDLIB_SRCS)
 	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
 	if ! $(call spawn,$(JULIA_EXECUTABLE)) -g1 -O0 -C "$(JULIA_CPU_TARGET)" --output-ji $(call cygpath_w,$@).tmp $(JULIA_SYSIMG_BUILD_FLAGS) \

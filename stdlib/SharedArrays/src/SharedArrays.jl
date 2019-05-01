@@ -275,7 +275,17 @@ function finalize_refs(S::SharedArray{T,N}) where T where N
     S
 end
 
+"""
+    SharedVector
+
+A one-dimensional [`SharedArray`](@ref).
+"""
 const SharedVector{T} = SharedArray{T,1}
+"""
+    SharedMatrix
+
+A two-dimensional [`SharedArray`](@ref).
+"""
 const SharedMatrix{T} = SharedArray{T,2}
 
 SharedVector(A::Vector) = SharedArray(A)

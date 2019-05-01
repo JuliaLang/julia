@@ -81,6 +81,14 @@ julia> big"313"
 """
 BigInt(x)
 
+"""
+    ALLOC_OVERFLOW_FUNCTION
+
+A reference that holds a boolean, if true, indicating julia is linked with a patched GMP that
+does not abort on huge allocation and throws OutOfMemoryError instead.
+"""
+const ALLOC_OVERFLOW_FUNCTION = Ref(false)
+
 function __init__()
     try
         if version().major != VERSION.major || bits_per_limb() != BITS_PER_LIMB
@@ -95,11 +103,22 @@ function __init__()
               cglobal(:jl_gc_counted_malloc),
               cglobal(:jl_gc_counted_realloc_with_old_size),
               cglobal(:jl_gc_counted_free_with_size))
-
         ZERO.alloc, ZERO.size, ZERO.d = 0, 0, C_NULL
         ONE.alloc, ONE.size, ONE.d = 1, 1, pointer(_ONE)
     catch ex
         Base.showerror_nostdio(ex, "WARNING: Error during initialization of module GMP")
+    end
+    # This only works with a patched version of GMP, ignore otherwise
+    try
+        ccall((:__gmp_set_alloc_overflow_function, :libgmp), Cvoid,
+              (Ptr{Cvoid},),
+              cglobal(:jl_throw_out_of_memory_error))
+        ALLOC_OVERFLOW_FUNCTION[] = true
+    catch ex
+        # ErrorException("ccall: could not find function...")
+        if typeof(ex) != ErrorException
+            rethrow()
+        end
     end
 end
 
@@ -321,7 +340,7 @@ function (::Type{T})(x::BigInt) where T<:Base.BitUnsigned
     if sizeof(T) < sizeof(Limb)
         convert(T, convert(Limb,x))
     else
-        0 <= x.size <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(Symbol(string(T)), T, x))
+        0 <= x.size <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(nameof(T), T, x))
         x % T
     end
 end
@@ -332,9 +351,9 @@ function (::Type{T})(x::BigInt) where T<:Base.BitSigned
         SLimb = typeof(Signed(one(Limb)))
         convert(T, convert(SLimb, x))
     else
-        0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(Symbol(string(T)), T, x))
+        0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(nameof(T), T, x))
         y = x % T
-        ispos(x) ⊻ (y > 0) && throw(InexactError(Symbol(string(T)), T, x)) # catch overflow
+        ispos(x) ⊻ (y > 0) && throw(InexactError(nameof(T), T, x)) # catch overflow
         y
     end
 end
@@ -355,26 +374,72 @@ function (::Type{T})(n::BigInt, ::RoundingMode{:Up}) where T<:CdoubleMax
     x < n ? nextfloat(x) : x
 end
 
-function (::Type{T})(n::BigInt, ::RoundingMode{:Nearest}) where T<:CdoubleMax
-    x = T(n,RoundToZero)
-    if maxintfloat(T) <= abs(x) < T(Inf)
-        r = n-BigInt(x)
-        h = eps(x)/2
-        if iseven(reinterpret(Unsigned,x)) # check if last bit is odd/even
-            if r < -h
-                return prevfloat(x)
-            elseif r > h
-                return nextfloat(x)
-            end
+function Float64(x::BigInt, ::RoundingMode{:Nearest})
+    x == 0 && return 0.0
+    xsize = abs(x.size)
+    if xsize*BITS_PER_LIMB > 1024
+        z = Inf64
+    elseif xsize == 1
+        z = Float64(unsafe_load(x.d))
+    elseif Limb == UInt32 && xsize == 2
+        z = Float64((unsafe_load(x.d, 2) % UInt64) << BITS_PER_LIMB + unsafe_load(x.d))
+    else
+        y1 = unsafe_load(x.d, xsize) % UInt64
+        n = 64 - leading_zeros(y1)
+        # load first 54(1 + 52 bits of fraction + 1 for rounding)
+        y = y1 >> (n - (precision(Float64)+1))
+        if Limb == UInt64
+            y += n > precision(Float64) ? 0 : (unsafe_load(x.d, xsize-1) >> (10+n))
         else
-            if r <= -h
-                return prevfloat(x)
-            elseif r >= h
-                return nextfloat(x)
-            end
+            y += (unsafe_load(x.d, xsize-1) % UInt64) >> (n-22)
+            y += n > (precision(Float64) - 32) ? 0 : (unsafe_load(x.d, xsize-2) >> (10+n))
         end
+        y = (y + 1) >> 1 # round, ties up
+        y &= ~UInt64(trailing_zeros(x) == (n-54 + (xsize-1)*BITS_PER_LIMB)) # fix last bit to round to even
+        d = ((n+1021) % UInt64) << 52
+        z = reinterpret(Float64, d+y)
+        z = ldexp(z, (xsize-1)*BITS_PER_LIMB)
     end
-    x
+    return flipsign(z, x.size)
+end
+
+function Float32(x::BigInt, ::RoundingMode{:Nearest})
+    x == 0 && return 0f0
+    xsize = abs(x.size)
+    if xsize*BITS_PER_LIMB > 128
+        z = Inf32
+    elseif xsize == 1
+        z = Float32(unsafe_load(x.d))
+    else
+        y1 = unsafe_load(x.d, xsize)
+        n = BITS_PER_LIMB - leading_zeros(y1)
+        # load first 25(1 + 23 bits of fraction + 1 for rounding)
+        y = (y1 >> (n - (precision(Float32)+1))) % UInt32
+        y += (n > precision(Float32) ? 0 : unsafe_load(x.d, xsize-1) >> (BITS_PER_LIMB - (25-n))) % UInt32
+        y = (y + one(UInt32)) >> 1 # round, ties up
+        y &= ~UInt32(trailing_zeros(x) == (n-25 + (xsize-1)*BITS_PER_LIMB)) # fix last bit to round to even
+        d = ((n+125) % UInt32) << 23
+        z = reinterpret(Float32, d+y)
+        z = ldexp(z, (xsize-1)*BITS_PER_LIMB)
+    end
+    return flipsign(z, x.size)
+end
+
+function Float16(x::BigInt, ::RoundingMode{:Nearest})
+    x == 0 && return Float16(0.0)
+    y1 = unsafe_load(x.d)
+    n = BITS_PER_LIMB - leading_zeros(y1)
+    if n > 16 || abs(x.size) > 1
+        z = Inf16
+    else
+        # load first 12(1 + 10 bits for fraction + 1 for rounding)
+        y = (y1 >> (n - (precision(Float16)+1))) % UInt16
+        y = (y + one(UInt16)) >> 1 # round, ties up
+        y &= ~UInt16(trailing_zeros(x) == (n-12)) # fix last bit to round to even
+        d = ((n+13) % UInt16) << 10
+        z = reinterpret(Float16, d+y)
+    end
+    return flipsign(z, x.size)
 end
 
 Float64(n::BigInt) = Float64(n, RoundNearest)

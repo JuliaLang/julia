@@ -578,11 +578,13 @@ static void gc_scrub_task(jl_task_t *ta)
 {
     int16_t tid = ta->tid;
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_ptls_t ptls2 = jl_all_tls_states[tid];
+    jl_ptls_t ptls2 = NULL;
+    if (tid != -1)
+        ptls2 = jl_all_tls_states[tid];
 
     char *low;
     char *high;
-    if (ta->copy_stack && ta == ptls2->current_task) {
+    if (ta->copy_stack && ptls2 && ta == ptls2->current_task) {
         low  = (char*)ptls2->stackbase - ptls2->stacksize;
         high = (char*)ptls2->stackbase;
     }
@@ -593,7 +595,7 @@ static void gc_scrub_task(jl_task_t *ta)
     else
         return;
 
-    if (ptls == ptls2 && ta == ptls2->current_task) {
+    if (ptls == ptls2 && ptls2 && ta == ptls2->current_task) {
         // scan up to current `sp` for current thread and task
         low = (char*)jl_get_frame_addr();
     }

@@ -14,6 +14,8 @@
 # Set to zero to turn off extra precompile (e.g. for the REPL)
 JULIA_PRECOMPILE ?= 1
 
+FORCE_ASSERTIONS ?= 0
+
 # OPENBLAS build options
 OPENBLAS_TARGET_ARCH:=
 OPENBLAS_SYMBOLSUFFIX:=
@@ -182,8 +184,46 @@ endif
 # Whether to use GPL libraries or not.
 USE_GPL_LIBS ?= 1
 
+# Whether to install Julia as a framework on Darwin (Apple) platforms.
+DARWIN_FRAMEWORK ?= 0
+
+# Override in Make.user to customize the framework:
+FRAMEWORK_NAME ?= Julia
+FRAMEWORK_VERSION ?= $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION)
+
+# The prefix for all code sign identifiers.
+DARWIN_CODESIGN_ID_BASE ?= org.julialang.julia
+# The codesign id for the ui/repl (also embedded in Info.plist).
+darwin_codesign_id_julia_ui := $(DARWIN_CODESIGN_ID_BASE).ui
+# The prefix for all deps.
+darwin_codesign_id_julia_deps := $(DARWIN_CODESIGN_ID_BASE).deps
+
+# Directories and file structure of a Darwin framework:
+framework_directory:=$(FRAMEWORK_NAME).framework
+framework_versions:=$(framework_directory)/Versions
+framework_currver:=$(framework_versions)/$(FRAMEWORK_VERSION)
+framework_dylib:=$(framework_currver)/$(FRAMEWORK_NAME)
+framework_headers:=$(framework_currver)/Headers
+framework_documentation:=$(framework_currver)/Documentation
+framework_resources:=$(framework_currver)/Resources
+framework_frameworks:=$(framework_currver)/Frameworks
+framework_modules:=$(framework_currver)/Modules
+framework_helpers:=$(framework_currver)/Helpers
+framework_infoplist:=$(framework_resources)/Info.plist
+
 # Directories where said libraries get installed to
 prefix ?= $(BUILDROOT)/julia-$(JULIA_COMMIT)
+ifeq ($(DARWIN_FRAMEWORK), 1)
+bindir := $(prefix)/$(framework_helpers)
+libdir := $(prefix)/$(framework_currver)
+libexecdir := $(prefix)/$(framework_helpers)
+datarootdir := $(prefix)/$(framework_resources)
+docdir := $(prefix)/$(framework_documentation)
+mandir := $(datarootdir)/man
+man1dir := $(mandir)/man1
+includedir := $(prefix)/$(framework_headers)
+sysconfdir := $(prefix)/$(framework_resources)
+else
 bindir := $(prefix)/bin
 libdir := $(prefix)/lib
 libexecdir := $(prefix)/libexec
@@ -193,6 +233,7 @@ mandir := $(datarootdir)/man
 man1dir := $(mandir)/man1
 includedir := $(prefix)/include
 sysconfdir := $(prefix)/etc
+endif
 
 # Directories where things get built into
 build_prefix := $(BUILDROOT)/usr
@@ -215,7 +256,11 @@ build_libdir := $(build_prefix)/lib/$(MULTIARCH)
 endif
 
 # Private library directories
+ifeq ($(DARWIN_FRAMEWORK), 1)
+private_libdir := $(prefix)/$(framework_frameworks)
+else
 private_libdir := $(libdir)/julia
+endif
 build_private_libdir := $(build_libdir)/julia
 
 # Calculate relative paths to libdir, private_libdir, datarootdir, and sysconfdir
@@ -230,12 +275,6 @@ includedir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(incl
 
 INSTALL_F := $(JULIAHOME)/contrib/install.sh 644
 INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
-
-# BinaryBuilder options
-USE_BINARYBUILDER_OPENBLAS := 0
-USE_BINARYBUILDER_LLVM := 0
-# Use the Assertions build
-BINARYBUILDER_LLVM_ASSERTS := 0
 
 # LLVM Options
 LLVMROOT := $(build_prefix)
@@ -285,7 +324,9 @@ override CROSS_COMPILE:=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
 override OS := WINNT
 else
-$(error "unknown XC_HOST variable set")
+ifeq (,$(OS))
+$(error "unknown XC_HOST variable set, please set OS")
+endif
 endif
 endif
 
@@ -433,6 +474,8 @@ MACOSX_VERSION_MIN := 10.6
 CC += $(STDLIBCPP_FLAG) -mmacosx-version-min=$(MACOSX_VERSION_MIN)
 CXX += $(STDLIBCPP_FLAG) -mmacosx-version-min=$(MACOSX_VERSION_MIN)
 endif
+# export MACOSX_DEPLOYMENT_TARGET so that ld picks it up, especially for deps
+export MACOSX_DEPLOYMENT_TARGET=$(MACOSX_VERSION_MIN)
 JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
@@ -564,6 +607,12 @@ endif # FreeBSD
 
 ifneq ($(CC_BASE)$(CXX_BASE),$(shell echo $(CC) | cut -d' ' -f1)$(shell echo $(CXX) | cut -d' ' -f1))
     $(error Forgot override directive on CC or CXX in Make.user? Cowardly refusing to build)
+endif
+
+ifeq ($(DARWIN_FRAMEWORK),1)
+ifneq ($(OS), Darwin)
+	$(error Darwin framework cannot be enabled for non-Darwin OS)
+endif
 endif
 
 ifeq ($(SANITIZE),1)
@@ -930,6 +979,26 @@ else
   UTF8PROC_INC := $(build_includedir)
 endif
 
+# BinaryBuilder options.  We default to "on" for all the projects listed in BB_PROJECTS,
+# but only if contrib/normalize_triplet.py works for our requested triplet
+ifeq ($(shell python $(JULIAHOME)/contrib/normalize_triplet.py $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) >/dev/null 2>/dev/null; echo $$?),0)
+USE_BINARYBUILDER := 1
+else
+ifneq ($(shell python $(JULIAHOME)/contrib/normalize_triplet.py x86_64-linux-gnu),x86_64-linux-gnu)
+$(warning python normalize_triplet.py appears to be non-functional, so BinaryBuilder disabled)
+endif
+USE_BINARYBUILDER := 0
+endif
+
+# This is the set of projects that BinaryBuilder dependencies are hooked up for.
+BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 MPFR CURL LIBGIT2 PCRE LIBUV UNWIND DSFMT OBJCONV
+$(foreach proj,$(BB_PROJECTS),$(if $(USE_BINARYBUILDER_$(proj)),,$(eval USE_BINARYBUILDER_$(proj) := $(USE_BINARYBUILDER))))
+
+# Use the Assertions build
+BINARYBUILDER_LLVM_ASSERTS := 0
+
+
+
 # OS specific stuff
 
 # install_name_tool
@@ -996,19 +1065,19 @@ OSLIBS += -Wl,--version-script=$(JULIAHOME)/src/julia.expmap
 endif
 endif
 endif
-JLDFLAGS := -Wl,-Bdynamic
+JLDFLAGS := -Wl,-Bdynamic -Wl,-no-undefined
 ifeq (-Bsymbolic-functions, $(shell $(LD) --help | grep -o -e "-Bsymbolic-functions"))
 JLIBLDFLAGS := -Wl,-Bsymbolic-functions
 else
 JLIBLDFLAGS :=
 endif
-else #Linux
+else ifneq ($(OS), Darwin)
 JLIBLDFLAGS :=
 endif
 
 ifeq ($(OS), FreeBSD)
 JLDFLAGS := -Wl,-Bdynamic
-OSLIBS += -lelf -lkvm -lrt
+OSLIBS += -lelf -lkvm -lrt -lpthread
 
 # Tweak order of libgcc_s in DT_NEEDED,
 # make it loaded first to
@@ -1024,11 +1093,12 @@ ifeq ($(OS), Darwin)
 INSTALL_NAME_CMD := install_name_tool -id $(INSTALL_NAME_ID_DIR)
 INSTALL_NAME_CHANGE_CMD := install_name_tool -change
 SHLIB_EXT := dylib
-OSLIBS += -ldl -Wl,-w -framework CoreFoundation -framework CoreServices $(LIBUNWIND)
+OSLIBS += -framework CoreFoundation $(LIBUNWIND)
 WHOLE_ARCHIVE := -Xlinker -all_load
 NO_WHOLE_ARCHIVE :=
 JLDFLAGS :=
 HAVE_SSP := 1
+JLIBLDFLAGS := -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
 endif
 
 ifeq ($(OS), WINNT)
@@ -1277,3 +1347,7 @@ endef
 # (hardened against any special characters appearing in the output)
 print-%:
 	@echo '$*=$(subst ','\'',$(subst $(newline),\n,$($*)))'
+
+# Literal values that are hard to use in Makefiles otherwise:
+COMMA:=,
+SPACE:=$(eval) $(eval)

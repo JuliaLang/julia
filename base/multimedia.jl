@@ -35,7 +35,7 @@ struct MIME{mime} end
     @MIME_str
 
 A convenience macro for writing [`MIME`](@ref) types, typically used when
-adding methods to `show`.
+adding methods to [`show`](@ref).
 For example the syntax `show(io::IO, ::MIME"text/html", x::MyType) = ...`
 could be used to define how to write an HTML representation of `MyType`.
 """
@@ -202,6 +202,12 @@ end
 # cannot be displayed.  The return value of display(...) is up to the
 # AbstractDisplay type.
 
+"""
+    AbstractDisplay
+
+Abstract supertype for rich display output devices. [`TextDisplay`](@ref) is a subtype
+of this.
+"""
 abstract type AbstractDisplay end
 
 # it is convenient to accept strings instead of ::MIME

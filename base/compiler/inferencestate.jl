@@ -5,7 +5,7 @@ const LineNum = Int
 mutable struct InferenceState
     params::Params # describes how to compute the result
     result::InferenceResult # remember where to put the result
-    linfo::MethodInstance   # used here for the tuple (specTypes, env, Method) and world-age validity
+    linfo::MethodInstance
     sptypes::Vector{Any}    # types of static parameter
     slottypes::Vector{Any}
     mod::Module
@@ -58,7 +58,7 @@ mutable struct InferenceState
         s_types = Any[ nothing for i = 1:n ]
 
         # initial types
-        nslots = length(src.slotnames)
+        nslots = length(src.slotflags)
         argtypes = result.argtypes
         nargs = length(argtypes)
         s_argtypes = VarTable(undef, nslots)
@@ -87,13 +87,8 @@ mutable struct InferenceState
             inmodule = linfo.def::Module
         end
 
-        if cached && !toplevel
-            min_valid = min_world(linfo.def)
-            max_valid = max_world(linfo.def)
-        else
-            min_valid = typemax(UInt)
-            max_valid = typemin(UInt)
-        end
+        min_valid = UInt(1)
+        max_valid = get_world_counter()
         frame = new(
             params, result, linfo,
             sp, slottypes, inmodule, 0,
@@ -122,7 +117,7 @@ end
 
 function sptypes_from_meth_instance(linfo::MethodInstance)
     toplevel = !isa(linfo.def, Method)
-    if !toplevel && isempty(linfo.sparam_vals) && !isempty(linfo.def.sparam_syms)
+    if !toplevel && isempty(linfo.sparam_vals) && isa(linfo.def.sig, UnionAll)
         # linfo is unspecialized
         sp = Any[]
         sig = linfo.def.sig
@@ -136,43 +131,49 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
     for i = 1:length(sp)
         v = sp[i]
         if v isa TypeVar
-            ub = v.ub
-            while ub isa TypeVar
-                ub = ub.ub
+            fromArg = 0
+            # if this parameter came from arg::Type{T}, then `arg` is more precise than
+            # Type{T} where lb<:T<:ub
+            sig = linfo.def.sig
+            temp = sig
+            for j = 1:i-1
+                temp = temp.body
             end
-            if has_free_typevars(ub)
-                ub = Any
+            Pi = temp.var
+            while temp isa UnionAll
+                temp = temp.body
             end
-            lb = v.lb
-            while lb isa TypeVar
-                lb = lb.lb
-            end
-            if has_free_typevars(lb)
-                lb = Bottom
-            end
-            if Any <: ub && lb <: Bottom
-                ty = Any
-                # if this parameter came from arg::Type{T}, we know that T::Type
-                sig = linfo.def.sig
-                temp = sig
-                for j = 1:i-1
-                    temp = temp.body
+            sigtypes = temp.parameters
+            for j = 1:length(sigtypes)
+                tj = sigtypes[j]
+                if isType(tj) && tj.parameters[1] === Pi
+                    fromArg = j
+                    break
                 end
-                Pi = temp.var
-                while temp isa UnionAll
-                    temp = temp.body
-                end
-                sigtypes = temp.parameters
-                for j = 1:length(sigtypes)
-                    tj = sigtypes[j]
-                    if isType(tj) && tj.parameters[1] === Pi
-                        ty = Type
-                        break
-                    end
-                end
+            end
+            if fromArg > 0
+                ty = fieldtype(linfo.specTypes, fromArg)
             else
-                tv = TypeVar(v.name, lb, ub)
-                ty = UnionAll(tv, Type{tv})
+                ub = v.ub
+                while ub isa TypeVar
+                    ub = ub.ub
+                end
+                if has_free_typevars(ub)
+                    ub = Any
+                end
+                lb = v.lb
+                while lb isa TypeVar
+                    lb = lb.lb
+                end
+                if has_free_typevars(lb)
+                    lb = Bottom
+                end
+                if Any <: ub && lb <: Bottom
+                    ty = Any
+                else
+                    tv = TypeVar(v.name, lb, ub)
+                    ty = UnionAll(tv, Type{tv})
+                end
             end
         else
             ty = Const(v)
@@ -188,15 +189,12 @@ _topmod(sv::InferenceState) = _topmod(sv.mod)
 function update_valid_age!(min_valid::UInt, max_valid::UInt, sv::InferenceState)
     sv.min_valid = max(sv.min_valid, min_valid)
     sv.max_valid = min(sv.max_valid, max_valid)
-    @assert(!isa(sv.linfo.def, Method) ||
-            !sv.cached ||
-            sv.min_valid <= sv.params.world <= sv.max_valid,
+    @assert(sv.min_valid <= sv.params.world <= sv.max_valid,
             "invalid age range update")
     nothing
 end
 
 update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(edge.min_valid, edge.max_valid, sv)
-update_valid_age!(li::MethodInstance, sv::InferenceState) = update_valid_age!(min_world(li), max_world(li), sv)
 
 function record_ssa_assign(ssa_id::Int, @nospecialize(new), frame::InferenceState)
     old = frame.src.ssavaluetypes[ssa_id]
@@ -220,6 +218,7 @@ function add_cycle_backedge!(frame::InferenceState, caller::InferenceState, curr
     update_valid_age!(frame, caller)
     backedge = (caller, currpc)
     contains_is(frame.cycle_backedges, backedge) || push!(frame.cycle_backedges, backedge)
+    add_backedge!(frame.linfo, caller)
     return frame
 end
 
@@ -230,7 +229,6 @@ function add_backedge!(li::MethodInstance, caller::InferenceState)
         caller.stmt_edges[caller.currpc] = []
     end
     push!(caller.stmt_edges[caller.currpc], li)
-    update_valid_age!(li, caller)
     nothing
 end
 

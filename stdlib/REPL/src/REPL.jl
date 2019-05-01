@@ -166,8 +166,17 @@ function print_response(errio::IO, @nospecialize(response), show_value::Bool, ha
             break
         catch
             if iserr
+                println(errio) # an error during printing is likely to leave us mid-line
                 println(errio, "SYSTEM (REPL): showing an error caused an error")
-                println(errio, catch_stack())
+                try
+                    Base.invokelatest(Base.display_error, errio, catch_stack())
+                catch e
+                    # at this point, only print the name of the type as a Symbol to
+                    # minimize the possibility of further errors.
+                    println(errio)
+                    println(errio, "SYSTEM (REPL): caught exception of type ", typeof(e).name.name,
+                            " while trying to handle a nested exception; giving up")
+                end
                 break
             end
             val = catch_stack()
@@ -270,6 +279,10 @@ mutable struct Options
     backspace_adjust::Bool
     confirm_exit::Bool # ^D must be repeated to confirm exit
     auto_indent::Bool # indent a newline like line above
+    auto_indent_tmp_off::Bool # switch auto_indent temporarily off if copy&paste
+    auto_indent_bracketed_paste::Bool # set to true if terminal knows paste mode
+    # cancel auto-indent when next character is entered within this time frame :
+    auto_indent_time_threshold::Float64
 end
 
 Options(;
@@ -283,12 +296,16 @@ Options(;
         beep_use_current = true,
         backspace_align = true, backspace_adjust = backspace_align,
         confirm_exit = false,
-        auto_indent = true) =
+        auto_indent = true,
+        auto_indent_tmp_off = false,
+        auto_indent_bracketed_paste = false,
+        auto_indent_time_threshold = 0.005) =
             Options(hascolor, extra_keymap, tabwidth,
                     kill_ring_max, region_animation_duration,
                     beep_duration, beep_blink, beep_maxduration,
                     beep_colors, beep_use_current,
-                    backspace_align, backspace_adjust, confirm_exit, auto_indent)
+                    backspace_align, backspace_adjust, confirm_exit,
+                    auto_indent, auto_indent_tmp_off, auto_indent_bracketed_paste, auto_indent_time_threshold)
 
 # for use by REPLs not having an options field
 const GlobalOptions = Options()
@@ -908,6 +925,7 @@ function setup_interface(
             oldpos = firstindex(input)
             firstline = true
             isprompt_paste = false
+            jl_prompt_len = 7 # "julia> "
             while oldpos <= lastindex(input) # loop until all lines have been executed
                 if JL_PROMPT_PASTE[]
                     # Check if the next statement starts with "julia> ", in that case
@@ -917,7 +935,6 @@ function setup_interface(
                         oldpos >= sizeof(input) && return
                     end
                     # Check if input line starts with "julia> ", remove it if we are in prompt paste mode
-                    jl_prompt_len = 7
                     if (firstline || isprompt_paste) && startswith(SubString(input, oldpos), JULIA_PROMPT)
                         isprompt_paste = true
                         oldpos += jl_prompt_len
@@ -942,7 +959,7 @@ function setup_interface(
                         tail = lstrip(tail)
                     end
                     if isprompt_paste # remove indentation spaces corresponding to the prompt
-                        tail = replace(tail, r"^ {7}"m => "") # 7: jl_prompt_len
+                        tail = replace(tail, r"^"m * ' '^jl_prompt_len => "")
                     end
                     LineEdit.replace_line(s, tail, true)
                     LineEdit.refresh_line(s)
@@ -952,7 +969,7 @@ function setup_interface(
                 line = strip(input[oldpos:prevind(input, pos)])
                 if !isempty(line)
                     if isprompt_paste # remove indentation spaces corresponding to the prompt
-                        line = replace(line, r"^ {7}"m => "") # 7: jl_prompt_len
+                        line = replace(line, r"^"m * ' '^jl_prompt_len => "")
                     end
                     # put the line on the screen and history
                     LineEdit.replace_line(s, line)

@@ -91,7 +91,7 @@ showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
 
 showerror(io::IO, ex::InitError) = print(io, "InitError during initialization of module ", ex.mod)
 
-function showerror(io::IO, ex::DomainError, bt; backtrace=true)
+function showerror(io::IO, ex::DomainError)
     if isa(ex.val, AbstractArray)
         compact = get(io, :compact, true)
         limit = get(io, :limit, true)
@@ -103,7 +103,6 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
     if isdefined(ex, :msg)
         print(io, ":\n", ex.msg)
     end
-    backtrace && show_backtrace(io, bt)
     nothing
 end
 
@@ -239,7 +238,7 @@ function showerror(io::IO, ex::MethodError)
     end
     if (ex.world != typemax(UInt) && hasmethod(ex.f, arg_types) &&
         !hasmethod(ex.f, arg_types, world = ex.world))
-        curworld = ccall(:jl_get_world_counter, UInt, ())
+        curworld = get_world_counter()
         println(io)
         print(io, "The applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
     end
@@ -439,9 +438,9 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                         end
                     end
                 end
-                if ex.world < min_world(method)
+                if ex.world < reinterpret(UInt, method.primary_world)
                     print(iob, " (method too new to be called from this world context.)")
-                elseif ex.world > max_world(method)
+                elseif ex.world > reinterpret(UInt, method.deleted_world)
                     print(iob, " (method deleted before this world age.)")
                 end
                 # TODO: indicate if it's in the wrong world
@@ -633,9 +632,17 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     return ret
 end
 
-@noinline function throw_eachindex_mismatch(::IndexLinear, A...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(LinearIndices.(A), ", ", " and "))"))
-end
-@noinline function throw_eachindex_mismatch(::IndexCartesian, A...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same axes, got $(join(axes.(A), ", ", " and "))"))
+function show_exception_stack(io::IO, stack::Vector)
+    # Display exception stack with the top of the stack first.  This ordering
+    # means that the user doesn't have to scroll up in the REPL to discover the
+    # root cause.
+    nexc = length(stack)
+    for i = nexc:-1:1
+        if nexc != i
+            printstyled(io, "caused by [exception ", i, "]\n", color=:light_black)
+        end
+        exc, bt = stack[i]
+        showerror(io, exc, bt, backtrace = bt!==nothing)
+        println(io)
+    end
 end

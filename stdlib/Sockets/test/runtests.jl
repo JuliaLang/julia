@@ -433,9 +433,17 @@ end
 
 @testset "getipaddrs" begin
     @test getipaddr() in getipaddrs()
+    try
+        getipaddr(IPv6) in getipaddrs(IPv6)
+    catch
+        if !isempty(getipaddrs(IPv6))
+            @test "getipaddr(IPv6) errored when it shouldn't have!"
+        end
+    end
 
-    @testset "include lo" begin
-        @test issubset(getipaddrs(), getipaddrs(true))
+    @testset "including loopback addresses" begin
+        @test issubset(getipaddrs(), getipaddrs(loopback=true))
+        @test issubset(getipaddrs(IPv6), getipaddrs(IPv6, loopback=true))
     end
 end
 
@@ -446,7 +454,7 @@ end
             srv = listen(addr)
             s = connect(addr)
 
-            @test success(pipeline(`$(Base.julia_cmd()) -e "exit()" -i`, stdin=s))
+            @test success(pipeline(`$(Base.julia_cmd()) --startup-file=no -e "exit()" -i`, stdin=s))
 
             close(s)
             close(srv)

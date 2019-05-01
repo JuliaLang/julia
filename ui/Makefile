@@ -35,6 +35,11 @@ ifeq ($(OS),WINNT)
 JLDFLAGS += -municode
 endif
 
+ifeq ($(DARWIN_FRAMEWORK),1)
+# Embed an Info.plist in the julia executable
+JLDFLAGS += -Wl,-sectcreate,__TEXT,__info_plist,Info.plist
+endif
+
 default: release
 all: release debug
 release debug :  % : julia-%
@@ -60,16 +65,30 @@ endif
 julia-release: $(build_bindir)/julia$(EXE)
 julia-debug: $(build_bindir)/julia-debug$(EXE)
 
+# Create an intermediate target Info.plist for Darwin code signing.
+$(BUILDDIR)/Info.plist:
+ifeq ($(OS),Darwin)
+	/usr/libexec/PlistBuddy -x -c "Clear dict" $@
+	/usr/libexec/PlistBuddy -x -c "Add :CFBundleName string julia" $@
+	/usr/libexec/PlistBuddy -x -c "Add :CFBundleIdentifier string $(darwin_codesign_id_julia_ui)" $@
+	/usr/libexec/PlistBuddy -x -c "Add :CFBundleInfoDictionaryVersion string 6.0" $@
+	/usr/libexec/PlistBuddy -x -c "Add :CFBundleVersion string $(JULIA_COMMIT)" $@
+	/usr/libexec/PlistBuddy -x -c "Add :CFBundleShortVersionString string $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)" $@
+else
+	touch $@
+endif
+.INTERMEDIATE: $(BUILDDIR)/Info.plist
+
 ifneq ($(USEMSVC), 1)
 CXXLD := $(CXX)
 else
 CXXLD := $(LD)
 endif
 
-$(build_bindir)/julia$(EXE): $(OBJS)
-	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia $(JLDFLAGS) $(CXXLDFLAGS))
-$(build_bindir)/julia-debug$(EXE): $(DOBJS)
-	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia-debug $(JLDFLAGS) $(CXXLDFLAGS))
+$(build_bindir)/julia$(EXE): $(OBJS) $(BUILDDIR)/Info.plist
+	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(LINK_FLAGS) $(SHIPFLAGS) $(OBJS) -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia $(JLDFLAGS) $(CXXLDFLAGS))
+$(build_bindir)/julia-debug$(EXE): $(DOBJS) $(BUILDDIR)/Info.plist
+	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(LINK_FLAGS) $(DEBUGFLAGS) $(DOBJS) -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia-debug $(JLDFLAGS) $(CXXLDFLAGS))
 
 clean: | $(CLEAN_TARGETS)
 	rm -f *.o *.dbg.obj

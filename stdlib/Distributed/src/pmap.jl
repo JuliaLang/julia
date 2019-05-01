@@ -15,7 +15,7 @@ For multiple collection arguments, apply `f` elementwise.
 Results are returned in order as they become available.
 
 Note that `f` must be made available to all worker processes; see
-[Code Availability and Loading Packages](@ref)
+[Code Availability and Loading Packages](@ref code-availability)
 for details.
 """
 function pgenerate(p::WorkerPool, f, c)
@@ -38,7 +38,7 @@ workers and tasks.
 For multiple collection arguments, apply `f` elementwise.
 
 Note that `f` must be made available to all worker processes; see
-[Code Availability and Loading Packages](@ref) for details.
+[Code Availability and Loading Packages](@ref code-availability) for details.
 
 If a worker pool is not specified, all available workers, i.e., the default worker pool
 is used.
@@ -212,9 +212,9 @@ function process_batch_errors!(p, f, results, on_error, retry_delays, retry_chec
         errors = [x[2] for x in reprocess]
         exceptions = [x.ex for x in errors]
         state = iterate(retry_delays)
-        state != nothing && (state = state[2])
+        state !== nothing && (state = state[2])
         if (length(retry_delays) > 0) &&
-                (retry_check==nothing || all([retry_check(state,ex)[2] for ex in exceptions]))
+                (retry_check === nothing || all([retry_check(state,ex)[2] for ex in exceptions]))
             # BatchProcessingError.data is a tuple of original args
             error_processed = pmap(x->f(x...), p, [x.data for x in errors];
                     on_error = on_error, retry_delays = collect(retry_delays)[2:end], retry_check = retry_check)
@@ -260,11 +260,11 @@ function head_and_tail(c, n)
     n == 0 && return (head, c)
     i = 1
     y = iterate(c)
-    y == nothing && return (resize!(head, 0), ())
+    y === nothing && return (resize!(head, 0), ())
     head[i] = y[1]
     while i < n
         y = iterate(c, y[2])
-        y == nothing && return (resize!(head, i), ())
+        y === nothing && return (resize!(head, i), ())
         i += 1
         head[i] = y[1]
     end

@@ -26,6 +26,10 @@ unbounded integers, the interval must be specified (e.g. `rand(big.(1:6))`).
 Additionally, normal and exponential distributions are implemented for some `AbstractFloat` and
 `Complex` types, see [`randn`](@ref) and [`randexp`](@ref) for details.
 
+## Random numbers module
+```@docs
+Random.Random
+```
 
 ## Random generation functions
 
@@ -57,6 +61,7 @@ Random.shuffle!
 
 ```@docs
 Random.seed!
+Random.AbstractRNG
 Random.MersenneTwister
 Random.RandomDevice
 ```

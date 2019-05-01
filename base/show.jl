@@ -91,8 +91,8 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         rows -= 1 # Subtract the summary
 
         # determine max key width to align the output, caching the strings
-        ks = Vector{AbstractString}(undef, min(rows, length(t)))
-        vs = Vector{AbstractString}(undef, min(rows, length(t)))
+        ks = Vector{String}(undef, min(rows, length(t)))
+        vs = Vector{String}(undef, min(rows, length(t)))
         keylen = 0
         vallen = 0
         for (i, (k, v)) in enumerate(t)
@@ -326,7 +326,10 @@ show(x) = show(stdout::IO, x)
 
 show(io::IO, @nospecialize(x)) = show_default(io, x)
 
-function show_default(io::IO, @nospecialize(x))
+# avoid inferring show_default on the type of `x`
+show_default(io::IO, @nospecialize(x)) = _show_default(io, inferencebarrier(x))
+
+function _show_default(io::IO, @nospecialize(x))
     t = typeof(x)::DataType
     show(io, t)
     print(io, '(')
@@ -390,17 +393,15 @@ function show(io::IO, f::Function)
     end
 end
 
+print(io::IO, f::Function) = print(io, nameof(f))
+
 function show(io::IO, x::Core.IntrinsicFunction)
     name = ccall(:jl_intrinsic_name, Cstring, (Core.IntrinsicFunction,), x)
     print(io, unsafe_string(name))
 end
 
 show(io::IO, ::Core.TypeofBottom) = print(io, "Union{}")
-
-function show(io::IO, x::Union)
-    print(io, "Union")
-    show_delim_array(io, uniontypes(x), '{', ',', '}', false)
-end
+show(io::IO, ::MIME"text/plain", ::Core.TypeofBottom) = print(io, "Union{}")
 
 function print_without_params(@nospecialize(x))
     if isa(x,UnionAll)
@@ -422,7 +423,17 @@ function io_has_tvar_name(io::IOContext, name::Symbol, @nospecialize(x))
 end
 io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
-function show(io::IO, x::UnionAll)
+function show(io::IO, @nospecialize(x::Type))
+    if x isa DataType
+        show_datatype(io, x)
+        return
+    elseif x isa Union
+        print(io, "Union")
+        show_delim_array(io, uniontypes(x), '{', ',', '}', false)
+        return
+    end
+    x::UnionAll
+
     if print_without_params(x)
         return show(io, unwrap_unionall(x).name)
     end
@@ -444,8 +455,6 @@ function show(io::IO, x::UnionAll)
     print(io, " where ")
     show(io, x.var)
 end
-
-show(io::IO, x::DataType) = show_datatype(io, x)
 
 # Check whether 'sym' (defined in module 'parent') is visible from module 'from'
 # If an object with this name exists in 'from', we need to check that it's the same binding
@@ -558,7 +567,7 @@ show_supertypes(typ::DataType) = show_supertypes(stdout, typ)
 """
     @show
 
-Show an expression and result, returning the result.
+Show an expression and result, returning the result. See also [`show`](@ref).
 """
 macro show(exs...)
     blk = Expr(:block)
@@ -602,11 +611,10 @@ function gettypeinfos(io::IO, p::Pair)
 end
 
 function show(io::IO, p::Pair)
-    iocompact = IOContext(io, :compact => get(io, :compact, true))
-    isdelimited(io, p) && return show_default(iocompact, p)
+    isdelimited(io, p) && return show_default(io, p)
     typeinfos = gettypeinfos(io, p)
     for i = (1, 2)
-        io_i = IOContext(iocompact, :typeinfo => typeinfos[i])
+        io_i = IOContext(io, :typeinfo => typeinfos[i])
         isdelimited(io_i, p[i]) || print(io, "(")
         show(io_i, p[i])
         isdelimited(io_i, p[i]) || print(io, ")")
@@ -624,13 +632,12 @@ end
 
 function sourceinfo_slotnames(src::CodeInfo)
     slotnames = src.slotnames
-    isa(slotnames, Array) || return String[]
     names = Dict{String,Int}()
     printnames = Vector{String}(undef, length(slotnames))
     for i in eachindex(slotnames)
         name = string(slotnames[i])
         idx = get!(names, name, i)
-        if idx != i
+        if idx != i || isempty(name)
             printname = "$name@_$i"
             idx > 0 && (printnames[idx] = "$name@_$idx")
             names[name] = 0
@@ -969,7 +976,8 @@ end
 function show_call(io::IO, head, func, func_args, indent)
     op, cl = expr_calls[head]
     if (isa(func, Symbol) && func !== :(:) && !(head === :. && isoperator(func))) ||
-            (isa(func, Expr) && (func.head == :. || func.head == :curly))
+            (isa(func, Expr) && (func.head == :. || func.head == :curly)) ||
+            isa(func, GlobalRef)
         show_unquoted(io, func, indent)
     else
         print(io, '(')
@@ -999,7 +1007,7 @@ show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto %", ex
 function show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)
     print(io, ex.mod)
     print(io, '.')
-    quoted = !isidentifier(ex.name)
+    quoted = !isidentifier(ex.name) && !startswith(string(ex.name), "@")
     parens = quoted && (!isoperator(ex.name) || (ex.name in quoted_syms))
     quoted && print(io, ':')
     parens && print(io, '(')
@@ -1114,7 +1122,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             item = args[1]
             # field
             field = unquoted(args[2])
-            parens = !is_quoted(item) && !(item isa Symbol && isidentifier(item))
+            parens = !is_quoted(item) && !(item isa Symbol && isidentifier(item)) && !Meta.isexpr(item, :(.))
             parens && print(io, '(')
             show_unquoted(io, item, indent)
             parens && print(io, ')')
@@ -1220,8 +1228,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
 
     # new expr
-    elseif head === :new
-        show_enclosed_list(io, "%new(", args, ", ", ")", indent)
+    elseif head === :new || head === :splatnew
+        show_enclosed_list(io, "%$head(", args, ", ", ")", indent)
 
     # other call-like expressions ("A[1,2]", "T{X,Y}", "f.(X,Y)")
     elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl/:(.)
@@ -1573,6 +1581,7 @@ module IRShow
     using Core.IR
     import ..Base
     import .Compiler: IRCode, ReturnNode, GotoIfNot, CFG, scan_ssa_use!, Argument, isexpr, compute_basic_blocks, block_for_inst
+    Base.getindex(r::Compiler.StmtRange, ind::Integer) = Compiler.getindex(r, ind)
     Base.size(r::Compiler.StmtRange) = Compiler.size(r)
     Base.first(r::Compiler.StmtRange) = Compiler.first(r)
     Base.last(r::Compiler.StmtRange) = Compiler.last(r)
@@ -1801,10 +1810,9 @@ end
 function alignment(io::IO, x::Pair)
     s = sprint(show, x, context=io, sizehint=0)
     if !isdelimited(io, x) # i.e. use "=>" for display
-        iocompact = IOContext(io, :compact => get(io, :compact, true),
-                                  :typeinfo => gettypeinfos(io, x)[1])
-        left = length(sprint(show, x.first, context=iocompact, sizehint=0))
-        left += 2 * !isdelimited(iocompact, x.first) # for parens around p.first
+        ctx = IOContext(io, :typeinfo => gettypeinfos(io, x)[1])
+        left = length(sprint(show, x.first, context=ctx, sizehint=0))
+        left += 2 * !isdelimited(ctx, x.first) # for parens around p.first
         left += !get(io, :compact, false) # spaces are added around "=>"
         (left+1, length(s)-left-1) # +1 for the "=" part of "=>"
     else

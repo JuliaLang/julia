@@ -6,7 +6,20 @@ const Callable = Union{Function,Type}
 
 const Bottom = Union{}
 
+"""
+    AbstractSet{T}
+
+Supertype for set-like types whose elements are of type `T`.
+[`Set`](@ref), [`BitSet`](@ref) and other types are subtypes of this.
+"""
 abstract type AbstractSet{T} end
+
+"""
+    AbstractDict{K, V}
+
+Supertype for dictionary-like types with keys of type `K` and values of type `V`.
+[`Dict`](@ref), [`IdDict`](@ref) and other types are subtypes of this.
+"""
 abstract type AbstractDict{K,V} end
 
 # The real @inline macro is not available until after array.jl, so this
@@ -170,7 +183,23 @@ macro eval(mod, ex)
 end
 
 argtail(x, rest...) = rest
+
+"""
+    tail(x::Tuple)::Tuple
+
+Return a `Tuple` consisting of all but the first component of `x`.
+
+# Examples
+```jldoctest
+julia> Base.tail((1,2,3))
+(2, 3)
+
+julia> Base.tail(())
+ERROR: ArgumentError: Cannot call tail on an empty tuple.
+```
+"""
 tail(x::Tuple) = argtail(x...)
+tail(::Tuple{}) = throw(ArgumentError("Cannot call tail on an empty tuple."))
 
 tuple_type_head(T::Type) = (@_pure_meta; fieldtype(T::Type{<:Tuple}, 1))
 
@@ -183,7 +212,9 @@ function tuple_type_tail(T::Type)
     else
         T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
         if isvatuple(T) && length(T.parameters) == 1
-            return T
+            va = T.parameters[1]
+            (isa(va, DataType) && isa(va.parameters[2], Int)) || return T
+            return Tuple{Vararg{va.parameters[1], va.parameters[2]-1}}
         end
         return Tuple{argtail(T.parameters...)...}
     end
@@ -279,6 +310,13 @@ convert(::Type{T}, x::AtLeast1) where {T<:AtLeast1} =
 convert(::Type{Tuple{Vararg{V}}}, x::Tuple{Vararg{V}}) where {V} = x
 convert(T::Type{Tuple{Vararg{V}}}, x::Tuple) where {V} =
     (convert(tuple_type_head(T), x[1]), convert(T, tail(x))...)
+
+# used for splatting in `new`
+convert_prefix(::Type{Tuple{}}, x::Tuple) = x
+convert_prefix(::Type{<:AtLeast1}, x::Tuple{}) = x
+convert_prefix(::Type{T}, x::T) where {T<:AtLeast1} = x
+convert_prefix(::Type{T}, x::AtLeast1) where {T<:AtLeast1} =
+    (convert(tuple_type_head(T), x[1]), convert_prefix(tuple_type_tail(T), tail(x))...)
 
 # TODO: the following definitions are equivalent (behaviorally) to the above method
 # I think they may be faster / more efficient for inference,
@@ -758,6 +796,9 @@ function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
     Core._apply_latest(inner)
 end
 
+# TODO: possibly make this an intrinsic
+inferencebarrier(@nospecialize(x)) = Ref{Any}(x)[]
+
 """
     isempty(collection) -> Bool
 
@@ -868,6 +909,12 @@ next element and the new iteration state should be returned.
 """
 function iterate end
 
+"""
+    isiterable(T) -> Bool
+
+Test if type `T` is an iterable collection type or not,
+that is whether it has an `iterate` method or not.
+"""
 function isiterable(T)::Bool
     return hasmethod(iterate, Tuple{T})
 end
