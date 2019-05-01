@@ -349,7 +349,7 @@ hessenberg(A::StridedMatrix{<:BlasFloat}) = hessenberg!(copy(A))
     hessenberg(A) -> Hessenberg
 
 Compute the Hessenberg decomposition of `A` and return a `Hessenberg` object. If `F` is the
-factorization object, the unitary matrix can be accessed with `F.Q` (of type [`HessenbergQ`](@ref))
+factorization object, the unitary matrix can be accessed with `F.Q` (of type `LinearAlgebra.HessenbergQ`)
 and the Hessenberg matrix with `F.H` (of type [`UpperHessenberg`](@ref)), either of
 which may be converted to a regular matrix with `Matrix(F.H)` or `Matrix(F.Q)`.
 
