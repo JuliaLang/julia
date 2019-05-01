@@ -320,11 +320,12 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
 SECT_INTERP static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s)
 {
     jl_value_t **argv;
+    assert(nargs >= 1);
     JL_GC_PUSHARGS(argv, nargs);
     size_t i;
     for (i = 0; i < nargs; i++)
         argv[i] = eval_value(args[i], s);
-    jl_value_t *result = jl_apply_generic(argv, nargs);
+    jl_value_t *result = jl_apply(argv, nargs);
     JL_GC_POP();
     return result;
 }
@@ -332,13 +333,14 @@ SECT_INTERP static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpre
 SECT_INTERP static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state *s)
 {
     jl_value_t **argv;
+    assert(nargs >= 2);
     JL_GC_PUSHARGS(argv, nargs - 1);
     size_t i;
     for (i = 1; i < nargs; i++)
         argv[i - 1] = eval_value(args[i], s);
     jl_method_instance_t *meth = (jl_method_instance_t*)args[0];
     assert(jl_is_method_instance(meth));
-    jl_value_t *result = jl_invoke(meth, argv, nargs - 1);
+    jl_value_t *result = jl_invoke(argv[1], &argv[2], nargs - 2, meth);
     JL_GC_POP();
     return result;
 }
@@ -813,6 +815,7 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi)
 
 struct jl_interpret_call_args {
     jl_method_instance_t *mi;
+    jl_value_t *f;
     jl_value_t **args;
     uint32_t nargs;
 };
@@ -830,6 +833,7 @@ SECT_INTERP CALLBACK_ABI void *jl_interpret_call_callback(interpreter_state *s, 
     JL_GC_PUSHARGS(locals, jl_source_nslots(src) + jl_source_nssavalues(src) + 2);
     locals[0] = (jl_value_t*)src;
     locals[1] = (jl_value_t*)stmts;
+    s->locals = locals + 2;
     s->src = src;
     size_t nargs;
     int isva;
@@ -841,28 +845,28 @@ SECT_INTERP CALLBACK_ABI void *jl_interpret_call_callback(interpreter_state *s, 
     else {
         s->module = args->mi->def.method->module;
         nargs = args->mi->def.method->nargs;
-        isva = args->mi->def.method->isva;
+        isva = args->mi->def.method->isva ? 1 : 0;
+        size_t i;
+        s->locals[0] = args->f;
+        for (i = 1; i < nargs - isva; i++)
+            s->locals[i] = args->args[i - 1];
+        if (isva) {
+            assert(nargs >= 2);
+            s->locals[nargs - 1] = jl_f_tuple(NULL, &args->args[nargs - 2], args->nargs + 2 - nargs);
+        }
     }
-    s->locals = locals + 2;
     s->sparam_vals = args->mi->sparam_vals;
     s->preevaluation = 0;
     s->continue_at = 0;
     s->mi = args->mi;
-    size_t i;
-    for (i = 0; i < nargs; i++) {
-        if (isva && i == nargs - 1)
-            s->locals[i] = jl_f_tuple(NULL, &args->args[i], args->nargs - i);
-        else
-            s->locals[i] = args->args[i];
-    }
     jl_value_t *r = eval_body(stmts, s, 0, 0);
     JL_GC_POP();
     return (void*)r;
 }
 
-SECT_INTERP jl_value_t *jl_fptr_interpret_call(jl_code_instance_t *codeinst, jl_value_t **args, uint32_t nargs)
+SECT_INTERP jl_value_t *jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
 {
-    struct jl_interpret_call_args callback_args = { codeinst->def, args, nargs };
+    struct jl_interpret_call_args callback_args = { codeinst->def, f, args, nargs };
     return (jl_value_t*)enter_interpreter_frame(jl_interpret_call_callback, (void *)&callback_args);
 }
 

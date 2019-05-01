@@ -203,7 +203,7 @@ struct _jl_code_instance_t;
 // otherwise the leaf entries are stored sorted, linearly
 typedef jl_value_t jl_typemap_t;
 
-typedef jl_value_t *(jl_call_t)(struct _jl_code_instance_t*, jl_value_t**, uint32_t);
+typedef jl_value_t *(jl_call_t)(jl_value_t*, jl_value_t**, uint32_t, struct _jl_code_instance_t*);
 typedef jl_call_t *jl_callptr_t;
 
 // "speccall" calling convention signatures.
@@ -214,7 +214,7 @@ typedef jl_value_t *(*jl_fptr_args_t)(jl_value_t*, jl_value_t**, uint32_t);
 JL_DLLEXPORT extern jl_call_t jl_fptr_const_return;
 
 JL_DLLEXPORT extern jl_call_t jl_fptr_sparam;
-typedef jl_value_t *(*jl_fptr_sparam_t)(jl_svec_t*, jl_value_t*, jl_value_t**, uint32_t);
+typedef jl_value_t *(*jl_fptr_sparam_t)(jl_value_t*, jl_value_t**, uint32_t, jl_svec_t*);
 
 JL_DLLEXPORT extern jl_call_t jl_fptr_interpret_call;
 
@@ -1600,14 +1600,14 @@ STATIC_INLINE int jl_vinfo_usedundef(uint8_t vi)
 
 // calling into julia ---------------------------------------------------------
 
-JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs);
-JL_DLLEXPORT jl_value_t *jl_invoke(jl_method_instance_t *meth, jl_value_t **args, uint32_t nargs);
+JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs);
+JL_DLLEXPORT jl_value_t *jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *meth);
 JL_DLLEXPORT int32_t jl_invoke_api(jl_code_instance_t *linfo);
 
 STATIC_INLINE
 jl_value_t *jl_apply(jl_value_t **args, uint32_t nargs)
 {
-    return jl_apply_generic(args, nargs);
+    return jl_apply_generic(args[0], &args[1], nargs - 1);
 }
 
 JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs);

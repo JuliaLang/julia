@@ -671,18 +671,19 @@ JL_CALLABLE(jl_f__apply_latest)
 JL_CALLABLE(jl_f_tuple)
 {
     size_t i;
-    if (nargs == 0) return (jl_value_t*)jl_emptytuple;
+    if (nargs == 0)
+        return (jl_value_t*)jl_emptytuple;
     jl_datatype_t *tt;
-    if (nargs < jl_page_size/sizeof(jl_value_t*)) {
-        jl_value_t **types = (jl_value_t**)alloca(nargs*sizeof(jl_value_t*));
-        for(i=0; i < nargs; i++)
+    if (nargs < jl_page_size / sizeof(jl_value_t*)) {
+        jl_value_t **types = (jl_value_t**)alloca(nargs * sizeof(jl_value_t*));
+        for (i = 0; i < nargs; i++)
             types[i] = jl_typeof(args[i]);
         tt = jl_inst_concrete_tupletype_v(types, nargs);
     }
     else {
         jl_svec_t *types = jl_alloc_svec_uninit(nargs);
         JL_GC_PUSH1(&types);
-        for(i=0; i < nargs; i++)
+        for (i = 0; i < nargs; i++)
             jl_svecset(types, i, jl_typeof(args[i]));
         tt = jl_inst_concrete_tupletype(types);
         JL_GC_POP();
@@ -955,7 +956,7 @@ JL_CALLABLE(jl_f_applicable)
 {
     JL_NARGSV(applicable, 1);
     size_t world = jl_get_ptls_states()->world_age;
-    return jl_method_lookup(jl_gf_mtable(args[0]), args, nargs, 1, world) != NULL ?
+    return jl_method_lookup(args, nargs, 1, world) != NULL ?
         jl_true : jl_false;
 }
 
@@ -966,10 +967,9 @@ JL_CALLABLE(jl_f_invoke)
     JL_GC_PUSH1(&argtypes);
     if (!jl_is_tuple_type(jl_unwrap_unionall(args[1])))
         jl_type_error("invoke", (jl_value_t*)jl_anytuple_type_type, args[1]);
-    if (!jl_tuple_isa(&args[2], nargs-2, (jl_datatype_t*)argtypes))
+    if (!jl_tuple_isa(&args[2], nargs - 2, (jl_datatype_t*)argtypes))
         jl_error("invoke: argument type error");
-    args[1] = args[0];  // move function directly in front of arguments
-    jl_value_t *res = jl_gf_invoke(argtypes, &args[1], nargs-1);
+    jl_value_t *res = jl_gf_invoke(argtypes, args[0], &args[2], nargs - 1);
     JL_GC_POP();
     return res;
 }
