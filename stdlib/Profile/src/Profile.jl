@@ -562,12 +562,11 @@ end
 
 # Print the stack frame tree starting at a particular root. Uses a worklist to
 # avoid stack overflows.
-function tree(io::IO, bt::StackFrameTree, level::Int, cols::Int, fmt::ProfileFormat, noisefloor::Int)
-    worklist = Tuple{StackFrameTree, Int, Int, Union{String, Nothing}}[
-        (bt, level, noisefloor, nothing)]
+function tree(io::IO, bt::StackFrameTree, cols::Int, fmt::ProfileFormat)
+    worklist = [(bt, 0, 0, "")]
     while !isempty(worklist)
         (bt, level, noisefloor, str) = popfirst!(worklist)
-        str !== nothing && println(io, str)
+        isempty(str) || println(io, str)
         level > fmt.maxdepth && continue
         isempty(bt.down) && continue
         # Order the line information
@@ -577,7 +576,7 @@ function tree(io::IO, bt::StackFrameTree, level::Int, cols::Int, fmt::ProfileFor
         # Generate the string for each line
         strs = tree_format(lilist, counts, level, cols)
         # Recurse to the next level
-        for i in liperm(lilist)
+        for i in reverse(liperm(lilist))
             down = nexts[i]
             count = down.count
             count < fmt.mincount && continue
@@ -585,10 +584,9 @@ function tree(io::IO, bt::StackFrameTree, level::Int, cols::Int, fmt::ProfileFor
             str = strs[i]
             isempty(str) && (str = "$count unknown stackframe")
             noisefloor_down = fmt.noisefloor > 0 ? floor(Int, fmt.noisefloor * sqrt(count)) : 0
-            push!(worklist, (down, level+1, noisefloor_down, str))
+            pushfirst!(worklist, (down, level + 1, noisefloor_down, str))
         end
     end
-    nothing
 end
 
 function tree(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoFlatDict, LineInfoDict}, cols::Int, fmt::ProfileFormat)
@@ -601,8 +599,7 @@ function tree(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoFlatDict, Line
         warning_empty()
         return
     end
-    level = 0
-    tree(io, root, level, cols, fmt, 0)
+    tree(io, root, cols, fmt)
     nothing
 end
 
