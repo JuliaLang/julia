@@ -228,7 +228,7 @@ function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
     else
         A.data[i,j] = x
     end
-    return A
+    return x
 end
 
 function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
@@ -241,7 +241,7 @@ function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
     else
         A.data[i,j] = x
     end
-    return A
+    return x
 end
 
 function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
@@ -251,7 +251,7 @@ function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
     else
         A.data[i,j] = x
     end
-    return A
+    return x
 end
 
 function setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer)
@@ -264,7 +264,7 @@ function setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer)
     else
         A.data[i,j] = x
     end
-    return A
+    return x
 end
 
 
