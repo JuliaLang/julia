@@ -1430,6 +1430,8 @@ JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void);
 JL_DLLEXPORT jl_value_t *jl_environ(int i);
 
 // throwing common exceptions
+JL_DLLEXPORT jl_value_t *jl_vexceptionf(jl_datatype_t *exception_type,
+                                        const char *fmt, va_list args);
 JL_DLLEXPORT void JL_NORETURN jl_error(const char *str);
 JL_DLLEXPORT void JL_NORETURN jl_errorf(const char *fmt, ...);
 JL_DLLEXPORT void JL_NORETURN jl_exceptionf(jl_datatype_t *ty,
