@@ -314,6 +314,15 @@ Random.seed!(1)
             @test typeof(Tridiag*Diag) <: Tridiagonal
             @test SymTri*Diag ≈ Matrix(SymTri)*Matrix(Diag)
             @test typeof(SymTri*Diag) <: Tridiagonal
+
+            @test Diag*BidiagU ≈ Matrix(Diag)*Matrix(BidiagU)
+            @test typeof(BidiagU*Diag) <: Bidiagonal
+            @test Diag*BidiagL ≈ Matrix(Diag)*Matrix(BidiagL)
+            @test typeof(Diag*BidiagL) <: Bidiagonal
+            @test Diag*Tridiag ≈ Matrix(Diag)*Matrix(Tridiag)
+            @test typeof(Diag*Tridiag) <: Tridiagonal
+            @test Diag*SymTri ≈ Matrix(Diag)*Matrix(SymTri)
+            @test typeof(Diag*SymTri) <: Tridiagonal
         end
 
         @test inv(T)*Tfull ≈ Matrix(I, n, n)
