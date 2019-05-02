@@ -638,11 +638,6 @@ function fieldindex(T::DataType, name::Symbol, err::Bool=true)
 end
 
 argument_datatype(@nospecialize t) = ccall(:jl_argument_datatype, Any, (Any,), t)
-function argument_mt(@nospecialize t)
-    dt = argument_datatype(t)
-    (dt === nothing || !isdefined(dt.name, :mt)) && return nothing
-    dt.name.mt
-end
 
 """
     fieldcount(t::Type)
@@ -1295,8 +1290,7 @@ function delete_method(m::Method)
 end
 
 function get_methodtable(m::Method)
-    ft = ccall(:jl_first_argument_datatype, Any, (Any,), m.sig)
-    (ft::DataType).name.mt
+    return ccall(:jl_method_table_for, Any, (Any,), m.sig)::Core.MethodTable
 end
 
 """

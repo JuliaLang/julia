@@ -1431,7 +1431,7 @@ function detect_ambiguities(mods...;
                 subambs = detect_ambiguities(f,
                     imported=imported, recursive=recursive, ambiguous_bottom=ambiguous_bottom)
                 union!(ambs, subambs)
-            elseif isa(f, DataType) && isdefined(f.name, :mt)
+            elseif isa(f, DataType) && isdefined(f.name, :mt) && f.name.mt !== Symbol.name.mt
                 mt = Base.MethodList(f.name.mt)
                 for m in mt
                     if m.ambig !== nothing
@@ -1441,6 +1441,24 @@ function detect_ambiguities(mods...;
                             end
                         end
                     end
+                end
+            end
+        end
+    end
+    function is_in_mods(m::Module)
+        while true
+            m in mods && return true
+            recursive || return false
+            p = parentmodule(m)
+            p === m && return false
+            m = parent
+        end
+    end
+    for m in Base.MethodList(Symbol.name.mt)
+        if m.ambig !== nothing && is_in_mods(m.module)
+            for m2 in m.ambig
+                if Base.isambiguous(m, m2.func, ambiguous_bottom=ambiguous_bottom)
+                    push!(ambs, sortdefs(m, m2.func))
                 end
             end
         end

@@ -19,7 +19,7 @@ call_result_unused(frame::InferenceState, pc::LineNum=frame.currpc) =
 function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState,
                                   max_methods = sv.params.MAX_METHODS)
     atype_params = unwrap_unionall(atype).parameters
-    ft = unwrap_unionall(atype_params[1]) # TODO: ccall jl_first_argument_datatype here
+    ft = unwrap_unionall(atype_params[1]) # TODO: ccall jl_method_table_for here
     isa(ft, DataType) || return Any # the function being called is unknown. can't properly handle this backedge right now
     ftname = ft.name
     isdefined(ftname, :mt) || return Any # not callable. should be Bottom, but can't track this backedge right now

@@ -72,7 +72,7 @@ static void *const _tags[] = {
          // other special values
          &jl_emptysvec, &jl_emptytuple, &jl_false, &jl_true, &jl_nothing, &jl_an_empty_string,
          &jl_module_init_order, &jl_core_module, &jl_base_module, &jl_main_module, &jl_top_module,
-         &jl_typeinf_func, &jl_type_type_mt,
+         &jl_typeinf_func, &jl_type_type_mt, &jl_nonfunction_mt,
          // some Core.Builtin Functions that we want to be able to reference:
          &jl_builtin_throw, &jl_builtin_is, &jl_builtin_typeof, &jl_builtin_sizeof,
          &jl_builtin_issubtype, &jl_builtin_isa, &jl_builtin_typeassert, &jl_builtin__apply,
@@ -1622,18 +1622,15 @@ static void jl_init_serializer2(int for_serialize)
         htable_new(&fptr_to_id, sizeof(id_to_fptrs) / sizeof(*id_to_fptrs));
         htable_new(&backref_table, 0);
         arraylist_new(&builtin_typenames, 0);
-    }
-    else {
-        arraylist_new(&deser_sym, 0);
-    }
-    nsym_tag = 0;
-
-    if (for_serialize) {
         uintptr_t i;
         for (i = 0; id_to_fptrs[i] != NULL; i++) {
             ptrhash_put(&fptr_to_id, (void*)(uintptr_t)id_to_fptrs[i], (void*)(i + 2));
         }
     }
+    else {
+        arraylist_new(&deser_sym, 0);
+    }
+    nsym_tag = 0;
 }
 
 static void jl_cleanup_serializer2(void)

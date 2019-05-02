@@ -113,10 +113,11 @@ SECT_INTERP void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
     if (!jl_is_datatype(super) || !jl_is_abstracttype(super) ||
         tt->name == ((jl_datatype_t*)super)->name ||
-        jl_subtype(super,(jl_value_t*)jl_vararg_type) ||
-        jl_is_tuple_type(super) || jl_is_namedtuple_type(super) ||
-        jl_subtype(super,(jl_value_t*)jl_type_type) ||
-        super == (jl_value_t*)jl_builtin_type) {
+        jl_subtype(super, (jl_value_t*)jl_vararg_type) ||
+        jl_is_tuple_type(super) ||
+        jl_is_namedtuple_type(super) ||
+        jl_subtype(super, (jl_value_t*)jl_type_type) ||
+        jl_subtype(super, (jl_value_t*)jl_builtin_type)) {
         jl_errorf("invalid subtyping in definition of %s",
                   jl_symbol_name(tt->name->name));
     }

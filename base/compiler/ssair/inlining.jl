@@ -1,9 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 struct InvokeData
-    mt::Core.MethodTable
     entry::Core.TypeMapEntry
     types0
+    min_valid::UInt
+    max_valid::UInt
 end
 
 struct Signature
@@ -581,9 +582,9 @@ function spec_lambda(@nospecialize(atype), sv::OptimizationState, @nospecialize(
     else
         invoke_data = invoke_data::InvokeData
         atype <: invoke_data.types0 || return nothing
-        mi = ccall(:jl_get_invoke_lambda, Any, (Any, Any, Any, UInt),
-                invoke_data.mt, invoke_data.entry, atype, sv.params.world)
-        #XXX: compute min/max_valid
+        mi = ccall(:jl_get_invoke_lambda, Any, (Any, Any), invoke_data.entry, atype)
+        min_valid[1] = invoke_data.min_valid
+        max_valid[1] = invoke_data.max_valid
     end
     mi !== nothing && add_backedge!(mi::MethodInstance, sv)
     update_valid_age!(min_valid[1], max_valid[1], sv)
@@ -924,6 +925,7 @@ function inline_invoke!(ir::IRCode, idx::Int, sig::Signature, invoke_data::Invok
     result = analyze_method!(idx, sig, metharg, methsp, method, stmt, sv, true, invoke_data,
                              calltype)
     handle_single_case!(ir, stmt, idx, result, true, todo, sv)
+    update_valid_age!(invoke_data.min_valid, invoke_data.max_valid, sv)
     return nothing
 end
 
@@ -1109,26 +1111,26 @@ end
 
 function compute_invoke_data(@nospecialize(atypes), params::Params)
     ft = widenconst(atypes[2])
-    invoke_tt = widenconst(atypes[3])
-    mt = argument_mt(ft)
-    if mt === nothing || !isType(invoke_tt) || has_free_typevars(invoke_tt) ||
-            has_free_typevars(ft) || (ft <: Builtin)
+    if !isdispatchelem(ft) || has_free_typevars(ft) || (ft <: Builtin)
         # TODO: this can be rather aggressive at preventing inlining of closures
-        # XXX: this is wrong for `ft <: Type`, since we are failing to check that
-        #      the result doesn't have subtypes, or to do an intersection lookup
+        # but we need to check that `ft` can't have a subtype at runtime before using the supertype lookup below
         return nothing
     end
-    if !(isa(invoke_tt.parameters[1], Type) &&
-            invoke_tt.parameters[1] <: Tuple)
+    invoke_tt = widenconst(atypes[3])
+    if !isType(invoke_tt) || has_free_typevars(invoke_tt)
         return nothing
     end
     invoke_tt = invoke_tt.parameters[1]
+    if !(isa(unwrap_unionall(invoke_tt), DataType) && invoke_tt <: Tuple)
+        return nothing
+    end
     invoke_types = rewrap_unionall(Tuple{ft, unwrap_unionall(invoke_tt).parameters...}, invoke_tt)
+    min_valid = UInt[typemin(UInt)]
+    max_valid = UInt[typemax(UInt)]
     invoke_entry = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt),
-                         invoke_types, params.world)
+                         invoke_types, params.world) # XXX: min_valid, max_valid
     invoke_entry === nothing && return nothing
-    #XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
-    invoke_data = InvokeData(mt, invoke_entry, invoke_types)
+    invoke_data = InvokeData(invoke_entry, invoke_types, min_valid[1], max_valid[1])
     atype0 = atypes[2]
     atypes = atypes[4:end]
     pushfirst!(atypes, atype0)

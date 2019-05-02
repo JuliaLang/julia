@@ -466,7 +466,7 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, primary.abstract)
     serialize(s, primary.mutable)
     serialize(s, primary.ninitialized)
-    if isdefined(t, :mt)
+    if isdefined(t, :mt) && t.mt !== Symbol.name.mt
         serialize(s, t.mt.name)
         serialize(s, collect(Base.MethodList(t.mt)))
         serialize(s, t.mt.max_args)
@@ -941,9 +941,9 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
             linfo.def = meth
             meth.generator = linfo
         end
-        ftype = ccall(:jl_first_argument_datatype, Any, (Any,), sig)::DataType
-        if isdefined(ftype.name, :mt) && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), ftype.name.mt, sig, typemax(UInt))
-            ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), ftype.name.mt, meth, C_NULL)
+        mt = ccall(:jl_method_table_for, Any, (Any,), sig)
+        if mt !== nothing && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), mt, sig, typemax(UInt))
+            ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, meth, C_NULL)
         end
         remember_object(s, meth, lnumber)
     end
