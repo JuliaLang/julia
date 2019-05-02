@@ -189,3 +189,34 @@ let bt, found = false
     end
     @test found
 end
+
+# Syntax error locations appear in backtraces
+let trace = try
+        include_string(@__MODULE__,
+            """
+
+            )
+
+            """, "a_filename")
+    catch
+        stacktrace(Base.catch_stack()[end-1][2]) # Ignore LoadError
+    end
+    @test trace[1].func == Symbol("top-level scope")
+    @test trace[1].file == :a_filename
+    @test trace[1].line == 2
+end
+let trace = try
+        include_string(@__MODULE__,
+            """
+
+            incomplete_syntax(
+
+            """, "a_filename")
+    catch
+        stacktrace(Base.catch_stack()[end-1][2]) # Ignore LoadError
+    end
+    @test trace[1].func == Symbol("top-level scope")
+    @test trace[1].file == :a_filename
+    @test trace[1].line == 2
+end
+
