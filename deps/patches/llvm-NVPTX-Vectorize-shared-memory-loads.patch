@@ -1,0 +1,317 @@
+From 9c6d9c649ad529a0a764bf5493e192d875cf549f Mon Sep 17 00:00:00 2001
+From: Valentin Churavy <v.churavy@gmail.com>
+Date: Thu, 2 May 2019 11:33:52 -0400
+Subject: [PATCH 1/2] [NVPTX] Vectorize shared memory loads
+
+Original patch from https://github.com/JuliaGPU/CUDAnative.jl/issues/206#issuecomment-402161131
+
+Co-authored-by: Tim Besard <tim.besard@gmail.com>
+---
+ .../Target/NVPTX/MCTargetDesc/NVPTXBaseInfo.h |  2 +
+ llvm/lib/Target/NVPTX/NVPTXInstrFormats.td    |  1 +
+ llvm/lib/Target/NVPTX/NVPTXInstrInfo.cpp      | 55 +++++++++++++++++++
+ llvm/lib/Target/NVPTX/NVPTXInstrInfo.h        | 19 +++++++
+ llvm/lib/Target/NVPTX/NVPTXInstrInfo.td       |  8 +--
+ llvm/lib/Target/NVPTX/NVPTXIntrinsics.td      |  9 ++-
+ llvm/lib/Target/NVPTX/NVPTXSubtarget.h        |  2 +
+ llvm/lib/Target/NVPTX/NVPTXTargetMachine.cpp  |  9 +++
+ 8 files changed, 100 insertions(+), 5 deletions(-)
+
+diff --git a/llvm/lib/Target/NVPTX/MCTargetDesc/NVPTXBaseInfo.h b/llvm/lib/Target/NVPTX/MCTargetDesc/NVPTXBaseInfo.h
+index 1cb92005979..ad45eb78593 100644
+--- a/llvm/lib/Target/NVPTX/MCTargetDesc/NVPTXBaseInfo.h
++++ b/llvm/lib/Target/NVPTX/MCTargetDesc/NVPTXBaseInfo.h
+@@ -33,6 +33,8 @@ enum AddressSpace {
+ namespace NVPTXII {
+ enum {
+   // These must be kept in sync with TSFlags in NVPTXInstrFormats.td
++  IsLoadFlag = 0x20,
++  IsStoreFlag = 0x40,
+   IsTexFlag = 0x80,
+   IsSuldMask = 0x300,
+   IsSuldShift = 8,
+diff --git a/llvm/lib/Target/NVPTX/NVPTXInstrFormats.td b/llvm/lib/Target/NVPTX/NVPTXInstrFormats.td
+index ffcb5d5273a..532e7689a92 100644
+--- a/llvm/lib/Target/NVPTX/NVPTXInstrFormats.td
++++ b/llvm/lib/Target/NVPTX/NVPTXInstrFormats.td
+@@ -29,6 +29,7 @@ class NVPTXInst<dag outs, dag ins, string asmstr, list<dag> pattern>
+   dag InOperandList = ins;
+   let AsmString = asmstr;
+   let Pattern = pattern;
++  let UseNamedOperandTable = 1;
+ 
+   // TSFlagFields
+   bits<4> VecInstType = VecNOP.Value;
+diff --git a/llvm/lib/Target/NVPTX/NVPTXInstrInfo.cpp b/llvm/lib/Target/NVPTX/NVPTXInstrInfo.cpp
+index da563f0531d..8e052a8007a 100644
+--- a/llvm/lib/Target/NVPTX/NVPTXInstrInfo.cpp
++++ b/llvm/lib/Target/NVPTX/NVPTXInstrInfo.cpp
+@@ -23,6 +23,7 @@
+ using namespace llvm;
+ 
+ #define GET_INSTRINFO_CTOR_DTOR
++#define GET_INSTRINFO_NAMED_OPS
+ #include "NVPTXGenInstrInfo.inc"
+ 
+ // Pin the vtable to this file.
+@@ -30,6 +31,15 @@ void NVPTXInstrInfo::anchor() {}
+ 
+ NVPTXInstrInfo::NVPTXInstrInfo() : NVPTXGenInstrInfo(), RegInfo() {}
+ 
++MachineOperand *NVPTXInstrInfo::getNamedOperand(MachineInstr &MI,
++                                             unsigned OperandName) const {
++  int Idx = NVPTX::getNamedOperandIdx(MI.getOpcode(), OperandName);
++  if (Idx == -1)
++    return nullptr;
++
++  return &MI.getOperand(Idx);
++}
++
+ void NVPTXInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
+                                  MachineBasicBlock::iterator I,
+                                  const DebugLoc &DL, unsigned DestReg,
+@@ -251,3 +261,48 @@ unsigned NVPTXInstrInfo::insertBranch(MachineBasicBlock &MBB,
+   BuildMI(&MBB, DL, get(NVPTX::GOTO)).addMBB(FBB);
+   return 2;
+ }
++
++bool NVPTXInstrInfo::getMemOpBaseRegImmOfs(MachineInstr &LdSt, unsigned &BaseReg,
++                                           int64_t &OffsetValue,
++                                           const TargetRegisterInfo *TRI) const {\
++  const MCInstrDesc &MCID = LdSt.getDesc();
++  // TODO: identify vector loads
++  if (MCID.TSFlags & NVPTXII::IsLoadFlag) {
++    const MachineOperand *Offset = getNamedOperand(LdSt, NVPTX::OpName::offset);
++    const MachineOperand *Base = getNamedOperand(LdSt, NVPTX::OpName::addr);
++    // FIXME: this is a WIP, need to match up with the tablegen defs
++
++    if (Offset) {
++      OffsetValue = Offset->getImm();
++    } else {
++      OffsetValue = 0; // XXX: is this correct? eg. LDV_f32_v4_avar, no offset
++      // TODO: make sure all offset args are actually named offset.
++      // TODO: check for special instrs (eg. amdgpu has instr with two offsets)
++    }
++
++    assert(Base && "Cannot handle load without address argument");
++    if (Base->isReg()) {
++      BaseReg = Base->getReg();
++    }
++    else if (Base->isGlobal()) {
++      // HACK: NVPTX demotes global variables to shared memory during ISel...
++      //        let's try with a pseudo register, this is only used to unique.
++      BaseReg = (unsigned)(uintptr_t)Base->getGlobal();
++    } else {
++      // FIXME: other cases, eg. load from param mem
++      return false;
++    }
++    return true;
++  }
++  else if (MCID.TSFlags & NVPTXII::IsStoreFlag) {
++    // TODO
++  }
++  return false;
++}
++
++bool NVPTXInstrInfo::shouldClusterMemOps(MachineInstr &FirstLdSt, unsigned BaseReg1,
++                                         MachineInstr &SecondLdSt, unsigned BaseReg2,
++                                         unsigned NumLoads) const {
++  // nvcc is crazy aggressive
++  return true;
++}
+diff --git a/llvm/lib/Target/NVPTX/NVPTXInstrInfo.h b/llvm/lib/Target/NVPTX/NVPTXInstrInfo.h
+index 18ba7684ae5..fe4c288efd3 100644
+--- a/llvm/lib/Target/NVPTX/NVPTXInstrInfo.h
++++ b/llvm/lib/Target/NVPTX/NVPTXInstrInfo.h
+@@ -19,6 +19,7 @@
+ #include "llvm/CodeGen/TargetInstrInfo.h"
+ 
+ #define GET_INSTRINFO_HEADER
++#define GET_INSTRINFO_OPERAND_ENUM
+ #include "NVPTXGenInstrInfo.inc"
+ 
+ namespace llvm {
+@@ -31,6 +32,17 @@ public:
+ 
+   const NVPTXRegisterInfo &getRegisterInfo() const { return RegInfo; }
+ 
++  /// Returns the operand named \p Op.  If \p MI does not have an
++  /// operand named \c Op, this function returns nullptr.
++  LLVM_READONLY
++  MachineOperand *getNamedOperand(MachineInstr &MI, unsigned OperandName) const;
++
++  LLVM_READONLY
++  const MachineOperand *getNamedOperand(const MachineInstr &MI,
++                                        unsigned OpName) const {
++    return getNamedOperand(const_cast<MachineInstr &>(MI), OpName);
++  }
++
+   /* The following virtual functions are used in register allocation.
+    * They are not implemented because the existing interface and the logic
+    * at the caller side do not work for the elementized vector load and store.
+@@ -72,6 +84,13 @@ public:
+     return MI.getOperand(2).getImm();
+   }
+ 
++  // memop clustering
++  bool getMemOpBaseRegImmOfs(MachineInstr &LdSt, unsigned &BaseReg,
++                             int64_t &Offset,
++                             const TargetRegisterInfo *TRI) const final;
++  bool shouldClusterMemOps(MachineInstr &FirstLdSt, unsigned BaseReg1,
++                           MachineInstr &SecondLdSt, unsigned BaseReg2,
++                           unsigned NumLoads) const override;
+ };
+ 
+ } // namespace llvm
+diff --git a/llvm/lib/Target/NVPTX/NVPTXInstrInfo.td b/llvm/lib/Target/NVPTX/NVPTXInstrInfo.td
+index 92152a64e52..66a300114e6 100644
+--- a/llvm/lib/Target/NVPTX/NVPTXInstrInfo.td
++++ b/llvm/lib/Target/NVPTX/NVPTXInstrInfo.td
+@@ -2309,7 +2309,7 @@ multiclass LD<NVPTXRegClass regclass> {
+     "\t$dst, [$addr+$offset];", []>;
+ }
+ 
+-let mayLoad=1, hasSideEffects=0 in {
++let IsLoad=1, mayLoad=1, hasSideEffects=0 in {
+   defm LD_i8  : LD<Int16Regs>;
+   defm LD_i16 : LD<Int16Regs>;
+   defm LD_i32 : LD<Int32Regs>;
+@@ -2359,7 +2359,7 @@ multiclass ST<NVPTXRegClass regclass> {
+     " \t[$addr+$offset], $src;", []>;
+ }
+ 
+-let mayStore=1, hasSideEffects=0 in {
++let IsStore=1, mayStore=1, hasSideEffects=0 in {
+   defm ST_i8  : ST<Int16Regs>;
+   defm ST_i16 : ST<Int16Regs>;
+   defm ST_i32 : ST<Int32Regs>;
+@@ -2447,7 +2447,7 @@ multiclass LD_VEC<NVPTXRegClass regclass> {
+     "ld${isVol:volatile}${addsp:addsp}${Vec:vec}.${Sign:sign}$fromWidth "
+     "\t{{$dst1, $dst2, $dst3, $dst4}}, [$addr+$offset];", []>;
+ }
+-let mayLoad=1, hasSideEffects=0 in {
++let IsLoad=1, mayLoad=1, hasSideEffects=0 in {
+   defm LDV_i8  : LD_VEC<Int16Regs>;
+   defm LDV_i16 : LD_VEC<Int16Regs>;
+   defm LDV_i32 : LD_VEC<Int32Regs>;
+@@ -2542,7 +2542,7 @@ multiclass ST_VEC<NVPTXRegClass regclass> {
+     "$fromWidth \t[$addr+$offset], {{$src1, $src2, $src3, $src4}};", []>;
+ }
+ 
+-let mayStore=1, hasSideEffects=0 in {
++let IsStore=1, mayStore=1, hasSideEffects=0 in {
+   defm STV_i8  : ST_VEC<Int16Regs>;
+   defm STV_i16 : ST_VEC<Int16Regs>;
+   defm STV_i32 : ST_VEC<Int32Regs>;
+diff --git a/llvm/lib/Target/NVPTX/NVPTXIntrinsics.td b/llvm/lib/Target/NVPTX/NVPTXIntrinsics.td
+index c932758bd0a..0712fd85b85 100644
+--- a/llvm/lib/Target/NVPTX/NVPTXIntrinsics.td
++++ b/llvm/lib/Target/NVPTX/NVPTXIntrinsics.td
+@@ -1731,6 +1731,7 @@ multiclass LDU_G<string TyStr, NVPTXRegClass regclass> {
+                         []>, Requires<[hasLDU]>;
+ }
+ 
++let IsLoad = 1 in {
+ defm INT_PTX_LDU_GLOBAL_i8  : LDU_G<"u8 \t$result, [$src];", Int16Regs>;
+ defm INT_PTX_LDU_GLOBAL_i16 : LDU_G<"u16 \t$result, [$src];", Int16Regs>;
+ defm INT_PTX_LDU_GLOBAL_i32 : LDU_G<"u32 \t$result, [$src];", Int32Regs>;
+@@ -1741,6 +1742,7 @@ defm INT_PTX_LDU_GLOBAL_f32 : LDU_G<"f32 \t$result, [$src];", Float32Regs>;
+ defm INT_PTX_LDU_GLOBAL_f64 : LDU_G<"f64 \t$result, [$src];", Float64Regs>;
+ defm INT_PTX_LDU_GLOBAL_p32 : LDU_G<"u32 \t$result, [$src];", Int32Regs>;
+ defm INT_PTX_LDU_GLOBAL_p64 : LDU_G<"u64 \t$result, [$src];", Int64Regs>;
++}
+ 
+ // vector
+ 
+@@ -1781,6 +1783,7 @@ multiclass VLDU_G_ELE_V4<string TyStr, NVPTXRegClass regclass> {
+                !strconcat("ldu.global.", TyStr), []>;
+ }
+ 
++let IsLoad = 1 in {
+ defm INT_PTX_LDU_G_v2i8_ELE
+   : VLDU_G_ELE_V2<"v2.u8 \t{{$dst1, $dst2}}, [$src];",  Int16Regs>;
+ defm INT_PTX_LDU_G_v2i16_ELE
+@@ -1814,6 +1817,7 @@ defm INT_PTX_LDU_G_v4f16x2_ELE
+ defm INT_PTX_LDU_G_v4f32_ELE
+   : VLDU_G_ELE_V4<"v4.f32 \t{{$dst1, $dst2, $dst3, $dst4}}, [$src];",
+     Float32Regs>;
++}
+ 
+ 
+ //-----------------------------------
+@@ -1842,6 +1846,7 @@ multiclass LDG_G<string TyStr, NVPTXRegClass regclass> {
+                         []>, Requires<[hasLDG]>;
+ }
+ 
++let IsLoad = 1 in {
+ defm INT_PTX_LDG_GLOBAL_i8
+   : LDG_G<"u8 \t$result, [$src];", Int16Regs>;
+ defm INT_PTX_LDG_GLOBAL_i16
+@@ -1862,6 +1867,7 @@ defm INT_PTX_LDG_GLOBAL_p32
+   : LDG_G<"u32 \t$result, [$src];", Int32Regs>;
+ defm INT_PTX_LDG_GLOBAL_p64
+   : LDG_G<"u64 \t$result, [$src];", Int64Regs>;
++}
+ 
+ // vector
+ 
+@@ -1903,6 +1909,7 @@ multiclass VLDG_G_ELE_V4<string TyStr, NVPTXRegClass regclass> {
+ }
+ 
+ // FIXME: 8-bit LDG should be fixed once LDG/LDU nodes are made into proper loads.
++let IsLoad = 1 in {
+ defm INT_PTX_LDG_G_v2i8_ELE
+   : VLDG_G_ELE_V2<"v2.u8 \t{{$dst1, $dst2}}, [$src];",  Int16Regs>;
+ defm INT_PTX_LDG_G_v2i16_ELE
+@@ -1931,7 +1938,7 @@ defm INT_PTX_LDG_G_v4f16x2_ELE
+   : VLDG_G_ELE_V4<"v4.b32 \t{{$dst1, $dst2, $dst3, $dst4}}, [$src];", Float16x2Regs>;
+ defm INT_PTX_LDG_G_v4f32_ELE
+   : VLDG_G_ELE_V4<"v4.f32 \t{{$dst1, $dst2, $dst3, $dst4}}, [$src];", Float32Regs>;
+-
++}
+ 
+ multiclass NG_TO_G<string Str, Intrinsic Intrin> {
+    def _yes : NVPTXInst<(outs Int32Regs:$result), (ins Int32Regs:$src),
+diff --git a/llvm/lib/Target/NVPTX/NVPTXSubtarget.h b/llvm/lib/Target/NVPTX/NVPTXSubtarget.h
+index 3a0bfd221b0..12d748d1fe1 100644
+--- a/llvm/lib/Target/NVPTX/NVPTXSubtarget.h
++++ b/llvm/lib/Target/NVPTX/NVPTXSubtarget.h
+@@ -111,6 +111,8 @@ public:
+ 
+   NVPTXSubtarget &initializeSubtargetDependencies(StringRef CPU, StringRef FS);
+   void ParseSubtargetFeatures(StringRef CPU, StringRef FS);
++
++  bool enableMachineScheduler() const override { return true; }
+ };
+ 
+ } // End llvm namespace
+diff --git a/llvm/lib/Target/NVPTX/NVPTXTargetMachine.cpp b/llvm/lib/Target/NVPTX/NVPTXTargetMachine.cpp
+index cb8cc7bb347..fa87679dd69 100644
+--- a/llvm/lib/Target/NVPTX/NVPTXTargetMachine.cpp
++++ b/llvm/lib/Target/NVPTX/NVPTXTargetMachine.cpp
+@@ -21,6 +21,7 @@
+ #include "llvm/ADT/Triple.h"
+ #include "llvm/Analysis/TargetTransformInfo.h"
+ #include "llvm/CodeGen/Passes.h"
++#include "llvm/CodeGen/MachineScheduler.h"
+ #include "llvm/CodeGen/TargetPassConfig.h"
+ #include "llvm/IR/LegacyPassManager.h"
+ #include "llvm/Pass.h"
+@@ -163,6 +164,14 @@ public:
+   void addFastRegAlloc(FunctionPass *RegAllocPass) override;
+   void addOptimizedRegAlloc(FunctionPass *RegAllocPass) override;
+ 
++  ScheduleDAGInstrs *
++  createMachineScheduler(MachineSchedContext *C) const override {
++    ScheduleDAGMILive *DAG = createGenericSchedLive(C);
++    DAG->addMutation(createLoadClusterDAGMutation(DAG->TII, DAG->TRI));
++    DAG->addMutation(createStoreClusterDAGMutation(DAG->TII, DAG->TRI));
++    return DAG;
++  }
++
+ private:
+   // If the opt level is aggressive, add GVN; otherwise, add EarlyCSE. This
+   // function is only called in opt mode.
+-- 
+2.21.0
+

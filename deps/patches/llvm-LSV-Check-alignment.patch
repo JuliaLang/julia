@@ -1,0 +1,53 @@
+From 050652d5265cddefa1ac48171f2e81a18e536029 Mon Sep 17 00:00:00 2001
+From: Valentin Churavy <v.churavy@gmail.com>
+Date: Thu, 2 May 2019 11:38:44 -0400
+Subject: [PATCH 2/2] [LSV] Check alignment
+
+Original patch at https://github.com/JuliaGPU/CUDAnative.jl/issues/206#issuecomment-402075607
+
+Co-authored-by: Tim Besard <tim.besard@gmail.com>
+---
+ .../Transforms/Vectorize/LoadStoreVectorizer.cpp | 16 ++++++++++------
+ 1 file changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/llvm/lib/Transforms/Vectorize/LoadStoreVectorizer.cpp b/llvm/lib/Transforms/Vectorize/LoadStoreVectorizer.cpp
+index dc83b6d4d29..f3e0ea6e06d 100644
+--- a/llvm/lib/Transforms/Vectorize/LoadStoreVectorizer.cpp
++++ b/llvm/lib/Transforms/Vectorize/LoadStoreVectorizer.cpp
+@@ -830,11 +830,13 @@ bool Vectorizer::vectorizeStoreChain(
+   Chain = NewChain;
+   ChainSize = Chain.size();
+ 
+-  // Check if it's legal to vectorize this chain. If not, split the chain and
+-  // try again.
++  // Check if it's legal to vectorize this chain, and whether it's aligned.
++  // If not, split the chain and try again.
+   unsigned EltSzInBytes = Sz / 8;
+   unsigned SzInBytes = EltSzInBytes * ChainSize;
+-  if (!TTI.isLegalToVectorizeStoreChain(SzInBytes, Alignment, AS)) {
++  if (!TTI.isLegalToVectorizeStoreChain(SzInBytes, Alignment, AS) ||
++      (S0->getPointerAddressSpace() != 0 &&
++       accessIsMisaligned(SzInBytes, AS, Alignment))) {
+     auto Chains = splitOddVectorElts(Chain, Sz);
+     return vectorizeStoreChain(Chains.first, InstructionsProcessed) |
+            vectorizeStoreChain(Chains.second, InstructionsProcessed);
+@@ -978,11 +980,13 @@ bool Vectorizer::vectorizeLoadChain(
+   Chain = NewChain;
+   ChainSize = Chain.size();
+ 
+-  // Check if it's legal to vectorize this chain. If not, split the chain and
+-  // try again.
++  // Check if it's legal to vectorize this chain, and whether it's aligned.
++  // If not, split the chain and try again.
+   unsigned EltSzInBytes = Sz / 8;
+   unsigned SzInBytes = EltSzInBytes * ChainSize;
+-  if (!TTI.isLegalToVectorizeLoadChain(SzInBytes, Alignment, AS)) {
++  if (!TTI.isLegalToVectorizeLoadChain(SzInBytes, Alignment, AS) ||
++      (L0->getPointerAddressSpace() != 0 &&
++       accessIsMisaligned(SzInBytes, AS, Alignment))) {
+     auto Chains = splitOddVectorElts(Chain, Sz);
+     return vectorizeLoadChain(Chains.first, InstructionsProcessed) |
+            vectorizeLoadChain(Chains.second, InstructionsProcessed);
+-- 
+2.21.0
+
