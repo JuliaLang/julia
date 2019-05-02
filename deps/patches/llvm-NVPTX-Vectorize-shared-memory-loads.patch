@@ -19,8 +19,8 @@ Co-authored-by: Tim Besard <tim.besard@gmail.com>
 
 diff --git a/llvm/lib/Target/NVPTX/MCTargetDesc/NVPTXBaseInfo.h b/llvm/lib/Target/NVPTX/MCTargetDesc/NVPTXBaseInfo.h
 index 1cb92005979..ad45eb78593 100644
---- a/llvm/lib/Target/NVPTX/MCTargetDesc/NVPTXBaseInfo.h
-+++ b/llvm/lib/Target/NVPTX/MCTargetDesc/NVPTXBaseInfo.h
+--- a/lib/Target/NVPTX/MCTargetDesc/NVPTXBaseInfo.h
++++ b/lib/Target/NVPTX/MCTargetDesc/NVPTXBaseInfo.h
 @@ -33,6 +33,8 @@ enum AddressSpace {
  namespace NVPTXII {
  enum {
@@ -32,8 +32,8 @@ index 1cb92005979..ad45eb78593 100644
    IsSuldShift = 8,
 diff --git a/llvm/lib/Target/NVPTX/NVPTXInstrFormats.td b/llvm/lib/Target/NVPTX/NVPTXInstrFormats.td
 index ffcb5d5273a..532e7689a92 100644
---- a/llvm/lib/Target/NVPTX/NVPTXInstrFormats.td
-+++ b/llvm/lib/Target/NVPTX/NVPTXInstrFormats.td
+--- a/lib/Target/NVPTX/NVPTXInstrFormats.td
++++ b/lib/Target/NVPTX/NVPTXInstrFormats.td
 @@ -29,6 +29,7 @@ class NVPTXInst<dag outs, dag ins, string asmstr, list<dag> pattern>
    dag InOperandList = ins;
    let AsmString = asmstr;
@@ -44,8 +44,8 @@ index ffcb5d5273a..532e7689a92 100644
    bits<4> VecInstType = VecNOP.Value;
 diff --git a/llvm/lib/Target/NVPTX/NVPTXInstrInfo.cpp b/llvm/lib/Target/NVPTX/NVPTXInstrInfo.cpp
 index da563f0531d..8e052a8007a 100644
---- a/llvm/lib/Target/NVPTX/NVPTXInstrInfo.cpp
-+++ b/llvm/lib/Target/NVPTX/NVPTXInstrInfo.cpp
+--- a/lib/Target/NVPTX/NVPTXInstrInfo.cpp
++++ b/lib/Target/NVPTX/NVPTXInstrInfo.cpp
 @@ -23,6 +23,7 @@
  using namespace llvm;
  
@@ -121,8 +121,8 @@ index da563f0531d..8e052a8007a 100644
 +}
 diff --git a/llvm/lib/Target/NVPTX/NVPTXInstrInfo.h b/llvm/lib/Target/NVPTX/NVPTXInstrInfo.h
 index 18ba7684ae5..fe4c288efd3 100644
---- a/llvm/lib/Target/NVPTX/NVPTXInstrInfo.h
-+++ b/llvm/lib/Target/NVPTX/NVPTXInstrInfo.h
+--- a/lib/Target/NVPTX/NVPTXInstrInfo.h
++++ b/lib/Target/NVPTX/NVPTXInstrInfo.h
 @@ -19,6 +19,7 @@
  #include "llvm/CodeGen/TargetInstrInfo.h"
  
@@ -165,8 +165,8 @@ index 18ba7684ae5..fe4c288efd3 100644
  } // namespace llvm
 diff --git a/llvm/lib/Target/NVPTX/NVPTXInstrInfo.td b/llvm/lib/Target/NVPTX/NVPTXInstrInfo.td
 index 92152a64e52..66a300114e6 100644
---- a/llvm/lib/Target/NVPTX/NVPTXInstrInfo.td
-+++ b/llvm/lib/Target/NVPTX/NVPTXInstrInfo.td
+--- a/lib/Target/NVPTX/NVPTXInstrInfo.td
++++ b/lib/Target/NVPTX/NVPTXInstrInfo.td
 @@ -2309,7 +2309,7 @@ multiclass LD<NVPTXRegClass regclass> {
      "\t$dst, [$addr+$offset];", []>;
  }
@@ -205,8 +205,8 @@ index 92152a64e52..66a300114e6 100644
    defm STV_i32 : ST_VEC<Int32Regs>;
 diff --git a/llvm/lib/Target/NVPTX/NVPTXIntrinsics.td b/llvm/lib/Target/NVPTX/NVPTXIntrinsics.td
 index c932758bd0a..0712fd85b85 100644
---- a/llvm/lib/Target/NVPTX/NVPTXIntrinsics.td
-+++ b/llvm/lib/Target/NVPTX/NVPTXIntrinsics.td
+--- a/lib/Target/NVPTX/NVPTXIntrinsics.td
++++ b/lib/Target/NVPTX/NVPTXIntrinsics.td
 @@ -1731,6 +1731,7 @@ multiclass LDU_G<string TyStr, NVPTXRegClass regclass> {
                          []>, Requires<[hasLDU]>;
  }
@@ -274,8 +274,8 @@ index c932758bd0a..0712fd85b85 100644
     def _yes : NVPTXInst<(outs Int32Regs:$result), (ins Int32Regs:$src),
 diff --git a/llvm/lib/Target/NVPTX/NVPTXSubtarget.h b/llvm/lib/Target/NVPTX/NVPTXSubtarget.h
 index 3a0bfd221b0..12d748d1fe1 100644
---- a/llvm/lib/Target/NVPTX/NVPTXSubtarget.h
-+++ b/llvm/lib/Target/NVPTX/NVPTXSubtarget.h
+--- a/lib/Target/NVPTX/NVPTXSubtarget.h
++++ b/lib/Target/NVPTX/NVPTXSubtarget.h
 @@ -111,6 +111,8 @@ public:
  
    NVPTXSubtarget &initializeSubtargetDependencies(StringRef CPU, StringRef FS);
@@ -287,8 +287,8 @@ index 3a0bfd221b0..12d748d1fe1 100644
  } // End llvm namespace
 diff --git a/llvm/lib/Target/NVPTX/NVPTXTargetMachine.cpp b/llvm/lib/Target/NVPTX/NVPTXTargetMachine.cpp
 index cb8cc7bb347..fa87679dd69 100644
---- a/llvm/lib/Target/NVPTX/NVPTXTargetMachine.cpp
-+++ b/llvm/lib/Target/NVPTX/NVPTXTargetMachine.cpp
+--- a/lib/Target/NVPTX/NVPTXTargetMachine.cpp
++++ b/lib/Target/NVPTX/NVPTXTargetMachine.cpp
 @@ -21,6 +21,7 @@
  #include "llvm/ADT/Triple.h"
  #include "llvm/Analysis/TargetTransformInfo.h"

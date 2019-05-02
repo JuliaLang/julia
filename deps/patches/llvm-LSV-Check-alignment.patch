@@ -12,8 +12,8 @@ Co-authored-by: Tim Besard <tim.besard@gmail.com>
 
 diff --git a/llvm/lib/Transforms/Vectorize/LoadStoreVectorizer.cpp b/llvm/lib/Transforms/Vectorize/LoadStoreVectorizer.cpp
 index dc83b6d4d29..f3e0ea6e06d 100644
---- a/llvm/lib/Transforms/Vectorize/LoadStoreVectorizer.cpp
-+++ b/llvm/lib/Transforms/Vectorize/LoadStoreVectorizer.cpp
+--- a/lib/Transforms/Vectorize/LoadStoreVectorizer.cpp
++++ b/lib/Transforms/Vectorize/LoadStoreVectorizer.cpp
 @@ -830,11 +830,13 @@ bool Vectorizer::vectorizeStoreChain(
    Chain = NewChain;
    ChainSize = Chain.size();
