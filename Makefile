@@ -606,7 +606,6 @@ else
 	$(error no win-extras target for ARCH=$(ARCH))
 endif
 	cd $(JULIAHOME)/dist-extras && \
-	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z1900-extra.7z && \
 	$(JLDOWNLOAD) https://sourceforge.net/projects/nsis/files/NSIS%203/3.04/nsis-3.04-setup.exe && \
 	chmod a+x 7z.exe && \
 	chmod a+x 7z.dll && \
