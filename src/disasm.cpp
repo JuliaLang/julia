@@ -737,6 +737,7 @@ static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Si
 }
 } // namespace
 
+
 static void jl_dump_asm_internal(
         uintptr_t Fptr, size_t Fsize, int64_t slide,
         const object::ObjectFile *object,
@@ -831,7 +832,7 @@ static void jl_dump_asm_internal(
 
     DILineInfoTable di_lineinfo;
     if (di_ctx)
-        di_lineinfo = di_ctx->getLineInfoForAddressRange(Fptr+slide, Fsize);
+        di_lineinfo = di_ctx->getLineInfoForAddressRange(makeAddress(Fptr + slide), Fsize);
     if (!di_lineinfo.empty()) {
         auto cur_addr = di_lineinfo[0].first;
         auto nlineinfo = di_lineinfo.size();
@@ -901,7 +902,7 @@ static void jl_dump_asm_internal(
                     std::string buf;
                     DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::Default,
                                                  DILineInfoSpecifier::FunctionNameKind::ShortName);
-                    DIInliningInfo dbg = di_ctx->getInliningInfoForAddress(Index + Fptr + slide, infoSpec);
+                    DIInliningInfo dbg = di_ctx->getInliningInfoForAddress(makeAddress(Index + Fptr + slide), infoSpec);
                     if (dbg.getNumberOfFrames()) {
                         dbgctx.emit_lineinfo(buf, dbg);
                     }

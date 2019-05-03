@@ -492,7 +492,7 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
     DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath,
                                  DILineInfoSpecifier::FunctionNameKind::ShortName);
 
-    auto inlineInfo = context->getInliningInfoForAddress(pointer, infoSpec);
+    auto inlineInfo = context->getInliningInfoForAddress(makeAddress(pointer), infoSpec);
 
     int fromC = (*frames)[0].fromC;
     int n_frames = inlineInfo.getNumberOfFrames();
@@ -516,7 +516,7 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
             info = inlineInfo.getFrame(i);
         }
         else {
-            info = context->getLineInfoForAddress(pointer, infoSpec);
+            info = context->getLineInfoForAddress(makeAddress(pointer), infoSpec);
         }
 
         jl_frame_t *frame = &(*frames)[i];

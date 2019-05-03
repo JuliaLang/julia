@@ -789,7 +789,12 @@ public:
         Function *F = dyn_cast<Function>(V);
         if (F) {
             if (isIntrinsicFunction(F)) {
-                return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
+                auto Fcopy = destModule->getOrInsertFunction(F->getName(), F->getFunctionType());
+#if JL_LLVM_VERSION >= 90000
+                return Fcopy.getCallee();
+#else
+                return Fcopy;
+#endif
             }
             if (F->isDeclaration() || F->getParent() != destModule) {
                 if (F->getName().empty())
@@ -1880,7 +1885,12 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             bool f_extern = (strncmp(f_name, "extern ", 7) == 0);
             if (f_extern)
                 f_name += 7;
-            llvmf = jl_Module->getOrInsertFunction(f_name, functype);
+            llvmf = jl_Module->getOrInsertFunction(f_name, functype)
+#if JL_LLVM_VERSION >= 90000
+                .getCallee();
+#else
+                ;
+#endif
             if (!f_extern &&
                 (!isa<Function>(llvmf) ||
                  cast<Function>(llvmf)->getIntrinsicID() == Intrinsic::not_intrinsic))
