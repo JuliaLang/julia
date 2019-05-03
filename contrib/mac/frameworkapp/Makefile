@@ -29,7 +29,9 @@ JULIA_VERSION_MAJOR_MINOR_PATCH := $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION)
 # X.Y.Z or X.Y.Z-hash
 JULIA_VERSION_OPT_COMMIT:=$(shell [ $$(git describe --tags --exact-match 2>/dev/null) ] && echo $(JULIA_VERSION) || echo $(JULIA_VERSION)-$(JULIA_COMMIT))
 DMGROOT := $(BUILDROOT)/dmg
+APP_NAME:=Julia-$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).app
 DMG_NAME:=$(BUILDROOT)/$(JULIA_BINARYDIST_FILENAME).dmg
+VOL_NAME:=Julia-$(JULIA_VERSION_OPT_COMMIT)
 
 FRAMEWORK_DESTDIR := $(BUILDROOT)/julia-$(JULIA_COMMIT)-framework
 JULIA_FRAMEWORK_PATH := $(FRAMEWORK_DESTDIR)/$(framework_directory)
@@ -78,11 +80,11 @@ $(DMG_NAME): $(JULIA_FRAMEWORK_LIB) $(XCEXPORT)/Julia.app/Contents/MacOS/Julia
 	-rm -rf $(DMGROOT)
 	mkdir -p $(DMGROOT)
 	cp -a $(JULIA_FRAMEWORK_PATH) $(DMGROOT)
-	cp -a $(XCEXPORT)/Julia.app $(DMGROOT)
+	cp -a $(XCEXPORT)/Julia.app $(DMGROOT)/$(APP_NAME)
 	# Temporary hack to see how the framework does on the buildbots with CI
 	# NB: This invalidates the code signature of Julia.app.
-	ln -s ../../../$(framework_currver) $(DMGROOT)/Julia.app/Contents/Resources/julia
-	hdiutil create $@ -size 1t -fs HFS+ -ov -volname Julia -imagekey zlib-level=9 -srcfolder $(DMGROOT)
+	ln -s ../../../$(framework_currver) $(DMGROOT)/$(APP_NAME)/Contents/Resources/julia
+	hdiutil create $@ -size 1t -fs HFS+ -ov -volname "$(VOL_NAME)" -imagekey zlib-level=9 -srcfolder $(DMGROOT)
 ifeq ($(APPLE_DISTRIBUTE_DEVID),1)
 	codesign -s $(DARWIN_CODESIGN_KEYCHAIN_IDENTITY) $@
 endif
