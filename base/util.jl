@@ -21,6 +21,11 @@ end
 
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
 
+# TODO(tkluck): not sure if it's necessary to expose these; we can alternatively just use
+# ccall in the Profile module.
+gc_get_statprofile_sample() = ccall(:jl_gc_get_statprofile_sample, Cdouble, ())
+gc_set_statprofile_sample!(n) = ccall(:jl_gc_set_statprofile_sample, Cvoid, (Cdouble,), n)
+
 # This type is to represent differences in the counters, so fields may be negative
 struct GC_Diff
     allocd      ::Int64 # Bytes allocated

@@ -42,7 +42,7 @@ line of code; backtraces generally consist of a long list of instruction pointer
 settings can be obtained by calling this function with no arguments, and each can be set
 independently using keywords or in the order `(n, delay)`.
 """
-function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing)
+function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing, alloc_rate::Real=0)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n === nothing && delay === nothing
@@ -53,11 +53,12 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
     init(nnew, delaynew)
 end
 
-function init(n::Integer, delay::Real)
+function init(n::Integer, delay::Real, alloc_rate::Real=0)
     status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), n, round(UInt64,10^9*delay))
     if status == -1
         error("could not allocate space for ", n, " instruction pointers")
     end
+    Base.gc_set_statprofile_sample!(alloc_rate)
 end
 
 # init with default values

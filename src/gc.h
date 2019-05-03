@@ -655,6 +655,9 @@ static inline void gc_scrub(void)
 }
 #endif
 
+double jl_gc_get_statprofile_sample(void);
+void jl_gc_set_statprofile_sample(double);
+
 #ifdef OBJPROFILE
 void objprofile_count(void *ty, int old, int sz) JL_NOTSAFEPOINT;
 void objprofile_printall(void);

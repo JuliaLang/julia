@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include <stdlib.h> // for rand
+
 #include "gc.h"
 #include "julia_gcext.h"
 #include "julia_assert.h"
@@ -7,6 +9,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// declaration rom signals-unix.c
+int jl_profile_record_trace(bt_context_t *ctx);
 
 // Linked list of callback functions
 
@@ -165,6 +170,7 @@ static int support_conservative_marking = 0;
 
 jl_gc_num_t gc_num = {0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 static size_t last_long_collect_interval;
+static int gc_statprofile_sample_rate = 0;
 
 pagetable_t memory_map;
 
@@ -882,6 +888,8 @@ JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz)
     gc_num.allocd += allocsz;
 #endif
     gc_num.bigalloc++;
+    if(gc_statprofile_sample_rate && rand() < gc_statprofile_sample_rate)
+        jl_profile_record_trace(NULL);
 #ifdef MEMDEBUG
     memset(v, 0xee, allocsz);
 #endif
@@ -1108,6 +1116,8 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
         jl_gc_safepoint_(ptls);
     }
     gc_num.poolalloc++;
+    if(gc_statprofile_sample_rate && rand() < gc_statprofile_sample_rate)
+        jl_profile_record_trace(NULL);
     // first try to use the freelist
     jl_taggedvalue_t *v = p->freelist;
     if (v) {
@@ -2613,6 +2623,14 @@ JL_DLLEXPORT jl_gc_num_t jl_gc_num(void)
 {
     return gc_num;
 }
+JL_DLLEXPORT double jl_gc_get_statprofile_sample(void)
+{
+    return gc_statprofile_sample_rate / (double)(RAND_MAX);
+}
+JL_DLLEXPORT void jl_gc_set_statprofile_sample(double s)
+{
+    gc_statprofile_sample_rate = (int)(s * RAND_MAX);
+}
 
 JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void)
 {
@@ -2999,6 +3017,8 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
     maybe_collect(ptls);
     gc_num.allocd += sz;
     gc_num.malloc++;
+    if(gc_statprofile_sample_rate && rand() < gc_statprofile_sample_rate)
+        jl_profile_record_trace(NULL);
     void *b = malloc(sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
@@ -3011,6 +3031,8 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
     maybe_collect(ptls);
     gc_num.allocd += nm*sz;
     gc_num.malloc++;
+    if(gc_statprofile_sample_rate && rand() < gc_statprofile_sample_rate)
+        jl_profile_record_trace(NULL);
     void *b = calloc(nm, sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
@@ -3039,6 +3061,8 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
     else
         gc_num.allocd += (sz - old);
     gc_num.realloc++;
+    if(gc_statprofile_sample_rate && rand() < gc_statprofile_sample_rate)
+        jl_profile_record_trace(NULL);
     void *b = realloc(p, sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
@@ -3100,6 +3124,8 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
         jl_throw(jl_memory_exception);
     gc_num.allocd += allocsz;
     gc_num.malloc++;
+    if(gc_statprofile_sample_rate && rand() < gc_statprofile_sample_rate)
+        jl_profile_record_trace(NULL);
     void *b = malloc_cache_align(allocsz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
@@ -3125,6 +3151,8 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
     else
         gc_num.allocd += (allocsz - oldsz);
     gc_num.realloc++;
+    if(gc_statprofile_sample_rate && rand() < gc_statprofile_sample_rate)
+        jl_profile_record_trace(NULL);
 
     void *b;
     if (isaligned)
