@@ -115,10 +115,10 @@ include("mycode.jl")
 end
 ```
 
-Modules can be loaded without explicitly including their code if the code can be found in 
-[`Base.LOAD_PATH`](@ref). To work, there must be one module per file and the file name be identical 
-to the module name. Note that this is case sensitive (see [`Base.require`](@ref)). For example, 
-module `Foo` above would need to be placed in file `Foo.jl` in a directory contained in 
+Modules can be loaded without explicitly including their code if the code can be found in
+[`Base.LOAD_PATH`](@ref). To work, there must be one module per file and the file name be identical
+to the module name. Note that this is case sensitive (see [`Base.require`](@ref)). For example,
+module `Foo` above would need to be placed in file `Foo.jl` in a directory contained in
 `Base.LOAD_PATH`.
 
 ### Standard modules
