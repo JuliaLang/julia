@@ -25,15 +25,18 @@ let n = 10
             @test x*H == H*x == x*AH
             for op in (+,-)
                 @test op(H,x*I) == op(AH,x*I) == op(op(x*I,H))
-                @test op(H,x*I).data === H.data
                 @test op(H,x*I)*x == op(AH,x*I)*x == x*op(H,x*I)
-                @test op(H+x*I, 2H+I) ≈ UpperHessenberg(op(1,2)*H, op(x,1))
             end
         end
-        @test UpperHessenberg(H+I, 3) == H+4I
+        @test [H[i,j] for i=1:size(H,1), j=1:size(H,2)] == triu(A,-1)
         H1 = LinearAlgebra.fillstored!(copy(H), 1)
         @test H1 == triu(fill(1, n,n), -1)
         @test tril(H1.data,-2) == tril(H.data,-2)
+        A2, H2 = copy(A), copy(H)
+        A2[1:4,3]=H2[1:4,3]=1:4
+        H2[5,3]=0
+        @test H2 == triu(A2,-1)
+        @test_throws ArgumentError H[5,3]=1
     end
 
     @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
