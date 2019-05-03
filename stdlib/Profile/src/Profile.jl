@@ -50,7 +50,7 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
     end
     nnew = (n === nothing) ? n_cur : n
     delaynew = (delay === nothing) ? delay_cur : delay
-    init(nnew, delaynew)
+    init(nnew, delaynew, alloc_rate)
 end
 
 function init(n::Integer, delay::Real, alloc_rate::Real=0)
