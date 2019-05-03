@@ -2,7 +2,6 @@
 
 ######################################################################################
 # Upper-Hessenberg matrices H+μI, analogous to the UpperTriangular type
-# but including a shift μ.
 
 """
     UpperHessenberg(A::AbstractMatrix)
