@@ -1103,8 +1103,6 @@ OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expma
 endif
 
 ifeq ($(OS), Darwin)
-INSTALL_NAME_CMD := install_name_tool -id $(INSTALL_NAME_ID_DIR)
-INSTALL_NAME_CHANGE_CMD := install_name_tool -change
 SHLIB_EXT := dylib
 OSLIBS += -framework CoreFoundation $(LIBUNWIND)
 WHOLE_ARCHIVE := -Xlinker -all_load
