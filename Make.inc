@@ -1091,7 +1091,7 @@ endif
 
 ifeq ($(OS), Darwin)
 SHLIB_EXT := dylib
-OSLIBS += -framework CoreFoundation $(LIBUNWIND)
+OSLIBS += -ldl -framework CoreFoundation $(LIBUNWIND)
 WHOLE_ARCHIVE := -Xlinker -all_load
 NO_WHOLE_ARCHIVE :=
 JLDFLAGS :=
