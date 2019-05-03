@@ -523,6 +523,12 @@ sqrt(x::Real) = sqrt(float(x))
 
 Compute the hypotenuse ``\\sqrt{x^2+y^2}`` avoiding overflow and underflow.
 
+This code is an implementation of the algorithm described in:
+An Improved Algorithm for `hypot(a,b)`
+by Carlos F. Borges
+The article is available online at ArXiv at the link
+  https://arxiv.org/abs/1904.09481
+
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> a = 10^10;
@@ -538,6 +544,37 @@ Stacktrace:
 ```
 """
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
+hypot(x::Integer, y::Integer) = hypot(promote(float(x), float(y))...)
+function hypot(x::T,y::T) where T<:AbstractFloat
+    #Return Inf if either or both imputs is Inf (Compliance with IEEE754)
+    if isinf(x) || isinf(y)
+        return convert(T,Inf)
+    end
+
+    ax,ay = abs(x), abs(y)
+    if ay > ax
+        ax,ay = ay,ax
+    end
+
+    if ay <= ax*sqrt(eps(T)/2)  #Note: This also gets ay == 0
+        return ax
+    end
+
+    if (ax > sqrt(floatmax(T)/2)) || (ay < sqrt(floatmin(T)))
+        rescale = eps(sqrt(floatmin(T)))
+        if ax > sqrt(floatmax(T)/2)
+            ax = ax*rescale
+            ay = ay*rescale
+            return sqrt(muladd(ax,ax,ay*ay))/rescale
+        else
+            ax = ax/rescale
+            ay = ay/rescale
+            return sqrt(muladd(ax,ax,ay*ay))*rescale
+        end
+    else
+        return sqrt(muladd(ax,ax,ay*ay))
+    end
+end
 function hypot(x::T, y::T) where T<:Number
     ax = abs(x)
     ay = abs(y)
