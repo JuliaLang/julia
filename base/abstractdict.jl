@@ -709,6 +709,9 @@ Modifies `dict` by transforming each value from `val` to `f(val)`.
 Note that the type of `dict` cannot be changed: if `f(val)` is not an instance of the key type
 of `dict` then it will be converted to the key type if possible and otherwise raise an error.
 
+!!! compat "Julia 1.3"
+    This method requires at least Julia 1.3.
+
 # Examples
 ```jldoctest
 julia> d = Dict(:a => 1, :b => 2)
@@ -717,10 +720,10 @@ Dict{Symbol,Int64} with 2 entries:
   :b => 2
 
 julia> map!(v -> v-1, values(d))
-Dict{Symbol,Int64} with 2 entries:
-  :a => 0
-  :b => 1
- ```
+Base.ValueIterator for a Dict{Symbol,Int64} with 2 entries. Values:
+  0
+  1
+```
 """
 function map!(f, iter::ValueIterator)
     # This is the naive fallback which requires hash evaluations
