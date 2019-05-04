@@ -50,8 +50,7 @@ function startswith(a::Union{String, SubString{String}},
     cub = ncodeunits(b)
     if ncodeunits(a) < cub
         false
-    elseif ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-                 pointer(a), pointer(b), sizeof(b)) == 0
+    elseif _memcmp(a, b, sizeof(b)) == 0
         nextind(a, cub) == cub + 1
     else
         false
@@ -64,8 +63,7 @@ function endswith(a::Union{String, SubString{String}},
     astart = ncodeunits(a) - ncodeunits(b) + 1
     if astart < 1
         false
-    elseif ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-                 pointer(a, astart), pointer(b), sizeof(b)) == 0
+    elseif GC.@preserve(a, _memcmp(pointer(a, astart), b, sizeof(b))) == 0
         thisind(a, astart) == astart
     else
         false

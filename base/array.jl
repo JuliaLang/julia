@@ -1387,7 +1387,7 @@ function empty!(a::Vector)
     return a
 end
 
-_memcmp(a, b, len) = ccall(:memcmp, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), a, b, len) % Int
+_memcmp(a, b, len) = ccall(:memcmp, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), a, b, len % Csize_t) % Int
 
 # use memcmp for cmp on byte arrays
 function cmp(a::Array{UInt8,1}, b::Array{UInt8,1})
