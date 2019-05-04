@@ -224,6 +224,7 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
 STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d)
 {
     return (!d->abstract && jl_datatype_size(d) == 0 && d != jl_sym_type && d->name != jl_array_typename &&
+            d->name != jl_immutable_array_typename &&
             d->uid != 0 && !d->mutabl);
 }
 
@@ -300,7 +301,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         // compute whether this type can be inlined
         // based on whether its definition is self-referential
         if (w->types != NULL) {
-            st->isbitstype = st->isconcretetype && !st->mutabl;
+            st->isbitstype = st->isconcretetype && !st->mutabl && st->name != jl_immutable_array_typename;
             size_t i, nf = jl_field_count(st);
             for (i = 0; i < nf; i++) {
                 jl_value_t *fld = jl_field_type(st, i);

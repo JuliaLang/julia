@@ -122,6 +122,7 @@ function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     #@Base.show ir.new_nodes
     #@Base.show ("after_sroa", ir)
     ir = adce_pass!(ir)
+    ir = memory_opt!(ir)
     #@Base.show ("after_adce", ir)
     @timeit "type lift" ir = type_lift_pass!(ir)
     @timeit "compact 3" ir = compact!(ir)

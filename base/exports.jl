@@ -916,6 +916,10 @@ export
     rand,
     randn,
 
+# mutation
+    freeze,
+    melt,
+
 # Macros
     # parser internal
     @__FILE__,

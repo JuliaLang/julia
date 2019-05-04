@@ -61,7 +61,8 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     jl_f_throw, jl_f_is, jl_f_typeof, jl_f_issubtype, jl_f_isa,
     jl_f_typeassert, jl_f__apply, jl_f__apply_pure, jl_f__apply_latest, jl_f_isdefined,
     jl_f_tuple, jl_f_svec, jl_f_intrinsic_call, jl_f_invoke_kwsorter,
-    jl_f_getfield, jl_f_setfield, jl_f_fieldtype, jl_f_nfields,
+    jl_f_getfield, jl_f_setfield, jl_f_fieldtype, jl_f_nfields, jl_f_arrayfreeze,
+    jl_f_mutating_arrayfreeze, jl_f_arraymelt,
     jl_f_arrayref, jl_f_const_arrayref, jl_f_arrayset, jl_f_arraysize, jl_f_apply_type,
     jl_f_applicable, jl_f_invoke, jl_f_sizeof, jl_f__expr, jl_f__typevar,
     jl_f_ifelse,
@@ -1282,6 +1283,7 @@ static void jl_save_system_image_to_stream(ios_t *f)
         jl_serialize_value(&s, jl_intrinsic_type->name->mt);
         jl_serialize_value(&s, jl_sym_type->name->mt);
         jl_serialize_value(&s, jl_array_typename->mt);
+        jl_serialize_value(&s, jl_immutable_array_typename->mt);
         jl_serialize_value(&s, jl_module_type->name->mt);
 
         jl_prune_type_cache(jl_tuple_typename->cache);
@@ -1352,6 +1354,7 @@ static void jl_save_system_image_to_stream(ios_t *f)
         jl_write_value(&s, jl_intrinsic_type->name->mt);
         jl_write_value(&s, jl_sym_type->name->mt);
         jl_write_value(&s, jl_array_typename->mt);
+        jl_write_value(&s, jl_immutable_array_typename->mt);
         jl_write_value(&s, jl_module_type->name->mt);
         uintptr_t i;
         for (i = 0; i < builtin_typenames.len; i++) {
@@ -1529,6 +1532,7 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     jl_intrinsic_type->name->mt = (jl_methtable_t*)jl_read_value(&s);
     jl_sym_type->name->mt = (jl_methtable_t*)jl_read_value(&s);
     jl_array_typename->mt = (jl_methtable_t*)jl_read_value(&s);
+    jl_immutable_array_typename->mt = (jl_methtable_t*)jl_read_value(&s);
     jl_module_type->name->mt = (jl_methtable_t*)jl_read_value(&s);
 
     uintptr_t i;
@@ -1628,7 +1632,7 @@ static void jl_init_serializer2(int for_serialize)
 
     void *tags[] = { ptls->root_task,
                      jl_symbol_type, jl_ssavalue_type, jl_datatype_type, jl_slotnumber_type,
-                     jl_simplevector_type, jl_array_type, jl_typedslot_type,
+                     jl_simplevector_type, jl_array_type, jl_immutable_array_type, jl_typedslot_type,
                      jl_expr_type, jl_globalref_type, jl_string_type,
                      jl_module_type, jl_tvar_type, jl_method_instance_type, jl_method_type, jl_code_instance_type,
                      jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
@@ -1651,6 +1655,7 @@ static void jl_init_serializer2(int for_serialize)
                      ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_ref_type))->name,
                      jl_pointer_typename, jl_simplevector_type->name,
                      jl_datatype_type->name, jl_uniontype_type->name, jl_array_typename,
+                     jl_immutable_array_typename,
                      jl_expr_type->name, jl_typename_type->name, jl_type_typename,
                      jl_methtable_type->name, jl_typemap_level_type->name, jl_typemap_entry_type->name, jl_tvar_type->name,
                      ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_abstractarray_type))->name,
@@ -1730,6 +1735,7 @@ static void jl_init_serializer2(int for_serialize)
     }
 
     arraylist_push(&builtin_typenames, jl_array_typename);
+    arraylist_push(&builtin_typenames, jl_immutable_array_typename);
     arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_ref_type->body)->name);
     arraylist_push(&builtin_typenames, jl_pointer_typename);
     arraylist_push(&builtin_typenames, jl_type_typename);
