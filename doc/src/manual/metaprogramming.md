@@ -308,7 +308,7 @@ The intuition behind this behavior is that `x` is evaluated once for each `$`:
 one `$` works similarly to `eval(:x)`, giving `x`'s value, while two `$`s do the
 equivalent of `eval(eval(:x))`.
 
-### QuoteNode
+### [QuoteNode](@id man-quote-node)
 
 The usual representation of a `quote` form in an AST is an [`Expr`](@ref) with head `:quote`:
 
@@ -328,9 +328,15 @@ Expr
 As we have seen, such expressions support interpolation with `$`.
 However, in some situations it is necessary to quote code *without* performing interpolation.
 This kind of quoting does not yet have syntax, but is represented internally
-as an object of type `QuoteNode`.
-The parser yields `QuoteNode`s for simple quoted items like symbols:
+as an object of type `QuoteNode`:
+```jldoctest interp1
+julia> eval(quot(Expr(:$, :(1+2))))
+3
 
+julia> eval(QuoteNode(Expr(:$, :(1+2))))
+:($(Expr(:$, :(1 + 2))))
+```
+The parser yields `QuoteNode`s for simple quoted items like symbols:
 ```jldoctest interp1
 julia> dump(Meta.parse(":x"))
 QuoteNode

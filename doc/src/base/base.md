@@ -397,10 +397,18 @@ Meta.@lower
 Meta.parse(::AbstractString, ::Int)
 Meta.parse(::AbstractString)
 Meta.ParseError
+Core.QuoteNode
 Base.macroexpand
 Base.@macroexpand
 Base.@macroexpand1
 Base.code_lowered
 Base.code_typed
 Base.precompile
+```
+
+## Meta
+```@docs
+Meta.quot
+Meta.isexpr
+Meta.show_sexpr
 ```
