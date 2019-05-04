@@ -533,3 +533,23 @@ x = [j^2 for j in i]
 i = Base.Slice(0:0)
 x = [j+7 for j in i]
 @test sum(x) == 7
+
+@testset "weighted sum" begin
+    for a in (rand(3), rand(Int, 3), rand(Int8, 3))
+        for wt in ([1.0, 1.0, 1.0], [2, 1, 3], Int8[1, 2, 3], [1.1, 0.2, 0.0])
+            res = @inferred sum(a, weights=wt)
+            expected = sum(a.*wt)
+            @test res ≈ expected
+            @test typeof(res) == typeof(expected)
+        end
+    end
+    for a in (rand(3, 5), rand(Int, 3, 5), rand(Int8, 3, 5))
+        for wt in ([1.0, 1.0, 1.0], [2, 1, 3], Int8[1, 2, 3], [1.1, 0.2, 0.0])
+            wtr = repeat(wt, outer=(1, 5))
+            res = @inferred sum(a, weights=wtr)
+            expected = sum(a.*wtr)
+            @test res ≈ expected
+            @test typeof(res) == typeof(expected)
+        end
+    end
+end

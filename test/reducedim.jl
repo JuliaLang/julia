@@ -398,3 +398,27 @@ end
     @test_throws DimensionMismatch maximum!(fill(0, 1, 1, 2, 1), B)
     @test_throws DimensionMismatch minimum!(fill(0, 1, 1, 2, 1), B)
 end
+
+@testset "weighted sum over region" begin
+    for a in (rand(3, 3, 3), rand(Int, 3, 3, 3), rand(Int8, 3, 3, 3))
+        for wt in ([1.0, 1.0, 1.0], [2, 1, 3], Int8[1, 2, 3], [1.1, 0.2, 0.0])
+            for (d, rw) in ((1, reshape(wt, :, 1, 1)),
+                            (2, reshape(wt, 1, :, 1)),
+                            (3, reshape(wt, 1, 1, :)))
+                expected = sum(a.*rw, dims=d)
+                res = @inferred sum(a, weights=wt, dims=d)
+                @test res ≈ expected
+                @test typeof(res) == typeof(expected)
+                x = rand!(similar(expected))
+                y = copy(x)
+                @inferred sum!(y, a, weights=wt)
+                @test y ≈ expected
+                y = copy(x)
+                @inferred sum!(y, a, weights=wt, init=false)
+                @test y ≈ x + expected
+            end
+
+            @test_throws DimensionMismatch sum(a, weights=wt, dims=4)
+        end
+    end
+end
