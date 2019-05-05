@@ -2364,7 +2364,34 @@ function filter!(f, a::AbstractVector)
     return a
 end
 
-filter(f, a::Vector) = mapfilter(f, push!, a, empty(a))
+function filter!(f, a::Vector)
+    i = j = 1
+    L = length(a)
+    @inbounds while i <= L
+        p = f(a[i])
+        a[j] = a[i]
+        j = ifelse(p, j+1, j)
+        i += 1
+    end
+    deleteat!(a, j:L)
+    sizehint!(a, j-1)
+    a
+end
+
+function filter(f, a::Vector{T}) where T
+    i = j = 1
+    L = length(a)    
+    b = Vector{T}(undef, L)
+    @inbounds while i <= L
+        p = f(a[i])
+        b[j] = a[i]
+        j = ifelse(p, j+1, j)
+        i += 1
+    end
+    deleteat!(b, j:L)
+    sizehint!(b, j-1)
+    b
+end
 
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.
