@@ -3479,7 +3479,7 @@ f(x) = yt(x)
         (label-map (table))   ;; maps label names to generated addresses
         (label-nesting (table)) ;; exception handler and catch block nesting of each label
         (finally-handler #f)  ;; `(var label map level)` where `map` is a list of `(tag . action)`.
-                              ;; to exit the current finally block, set `var` to integer `tag`,
+                              ;; To exit the current finally block, set `var` to integer `tag`,
                               ;; jump to `label`, and put `(tag . action)` in the map, where `action`
                               ;; is `(return x)`, `(break x)`, or a call to rethrow.
         (handler-goto-fixups '())  ;; `goto`s that might need `leave` exprs added
@@ -3542,11 +3542,11 @@ f(x) = yt(x)
     (define (emit-break labl)
       (let ((lvl (caddr labl))
             (dest-tokens (cadddr labl)))
+        (let ((pexc (pop-exc-expr catch-token-stack dest-tokens)))
+          (if pexc (emit pexc)))
         (if (and finally-handler (> (cadddr finally-handler) lvl))
             (leave-finally-block `(break ,labl))
             (begin
-              (let ((pexc (pop-exc-expr catch-token-stack dest-tokens)))
-                (if pexc (emit pexc)))
               (if (> handler-level lvl)
                   (emit `(leave ,(- handler-level lvl))))
               (emit `(goto ,(cadr labl)))))))
