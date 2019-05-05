@@ -2380,7 +2380,7 @@ end
 
 function filter(f, a::Vector{T}) where T
     i = j = 1
-    L = length(a)    
+    L = length(a)
     b = Vector{T}(undef, L)
     @inbounds while i <= L
         p = f(a[i])
