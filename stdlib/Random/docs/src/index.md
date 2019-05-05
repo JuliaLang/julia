@@ -86,13 +86,13 @@ The `Random` module defines a customizable framework for obtaining random values
 
 The object returned by `Sampler` is then used to generate the random values, by a method of `rand` defined for this purpose. Samplers can be arbitrary values, but for most applications the following predefined samplers may be sufficient:
 
-1. `SamplerType{T}()` can be used for implementing samplers that draw from `T` (e.g. `rand(Int)`),
+1. `SamplerType{T}()` can be used for implementing samplers that draw from type `T` (e.g. `rand(Int)`),
 
 2. `SamplerTrivial(self)` is a simple wrapper for `self`, which can be accessed with `[]`. This is the recommended sampler when no pre-computed information is needed (e.g. `rand(1:3)`)
 
 3. `SamplerSimple(self, data)` also contains the additional `data` field, which can be used to store arbitrary pre-computed values.
 
-In addition, [`Random.gentype`](@ref) should be defined so that element types can be computed for containers.
+In addition, [`Random.gentype`](@ref), which falls back to [`eltype`](@ref) is used for computing element types for containers. A method should be defined in case `eltype` is not defined, or a different element type is desired.
 
 We provide examples for each of these. We assume here that the choice of algorithm is independent of the RNG, so we use `AbstractRNG` in our signatures.
 
@@ -108,7 +108,7 @@ Decoupling pre-computation from actually generating the values is part of the AP
 
 ```julia
 rng = MersenneTwister()
-sp = Random.Sampler(rng, 1:20) # or Random.Sampler(MersenneTwister,1:20)
+sp = Random.Sampler(rng, 1:20) # or Random.Sampler(MersenneTwister, 1:20)
 for x in X
     n = rand(rng, sp) # similar to n = rand(rng, 1:20)
     # use n
@@ -119,7 +119,7 @@ This is the mechanism that is also used in the standard library, e.g. by the def
 
 #### Generating values from a type
 
-Given a type `T`, it's currently assumed that if `rand(T)` is defined, an object of type `T` will be produced. `SamplerType` is the default sampler for types. In order to define random generation of values of type `T`, the `rand(rng::AbstractRNG, ::Random.SamplerType{T})` method should be defined, and should return values what `rand(rng, T)` is expected to return. `Random.gentype` does not need to be defined explicitly for this case, as the fallback method works.
+Given a type `T`, it's currently assumed that if `rand(T)` is defined, an object of type `T` will be produced. `SamplerType` is the *default sampler for types*. In order to define random generation of values of type `T`, the `rand(rng::AbstractRNG, ::Random.SamplerType{T})` method should be defined, and should return values what `rand(rng, T)` is expected to return. `Random.gentype` should *not* need to be defined explicitly for this case, as the type is `T`.
 
 Let's take the following example: we implement a `Die` type, with a variable number `n` of sides, numbered from `1` to `n`. We want `rand(Die)` to produce a `Die` with a random number of up to 20 sides (and at least 4):
 
@@ -158,7 +158,7 @@ julia> a = Vector{Die}(undef, 3); rand!(a)
 
 #### A simple sampler without pre-computed data
 
-Here we define a sampler for a collection. If no specialized algorithm or pre-computed data is required, it may be simplest to just return a random element, which can be implemented with a `SamplerTrivial` sampler, which is in fact the *default* fallback for values.
+Here we define a sampler for a collection. If no pre-computed data is required, it can be implemented with a `SamplerTrivial` sampler, which is in fact the *default fallback for values*.
 
 In order to define random generation out of objects of type `S`, the following method should be defined: `rand(rng::AbstractRNG, sp::Random.SamplerTrivial{S})`. Here, `sp` simply wraps an object of type `S`, which can be accessed via `sp[]`. Continuing the `Die` example, we want now to define `rand(d::Die)` to produce an `Int` corresponding to one of `d`'s sides:
 
@@ -206,15 +206,17 @@ end
 ```
 should be defined to return a sampler with pre-computed data, then
 ```julia
-function rand(rng::AbstractRNG, sampler::SamplerSimple{<:DiscreteDistribution})
-    draw_number(rng, sampler.data)
+function rand(rng::AbstractRNG, sp::SamplerSimple{<:DiscreteDistribution})
+    draw_number(rng, sp.data)
 end
 ```
 will be used to draw the values.
 
 #### Custom sampler types
 
-In order to implement this decoupling for a custom type, a custom helper type can be used. Going back to our `Die` example: `rand(::Die)` uses random generation from a range, so there is an opportunity for this optimization:
+The `SamplerSimple` type is sufficient for most use cases with precomputed data. However, in order to demonstrate how to use custom sampler types, here we implement something similar to `SamplerSimple`.
+
+Going back to our `Die` example: `rand(::Die)` uses random generation from a range, so there is an opportunity for this optimization. We call our custom sampler `SamplerDie`.
 
 ```julia
 import Random: Sampler, rand
@@ -233,7 +235,7 @@ rand(rng::AbstractRNG, sp::SamplerDie) = rand(rng, sp.sp)
 
 It's now possible to get a sampler with `sp = Sampler(rng, die)`, and use `sp` instead of `die` in any `rand` call involving `rng`. In the simplistic example above, `die` doesn't need to be stored in `SamplerDie` but this is often the case in practice.
 
-This pattern is so frequent that a helper type used above, named `Random.SamplerSimple`, is available,
+Of course, this pattern is so frequent that a helper type used above, named `Random.SamplerSimple`, is available,
 saving us the definition of `SamplerDie`: we could have implemented our decoupling with:
 
 ```julia
@@ -264,7 +266,7 @@ Sampler(RNG::Type{<:AbstractRNG}, die::Die, ::Val{1}) = SamplerDie1(...)
 Sampler(RNG::Type{<:AbstractRNG}, die::Die, ::Val{Inf}) = SamplerDieMany(...)
 ```
 
-Of course, `rand` must also be defined on those types (i.e. `rand(::AbstractRNG, ::SamplerDie1)` and `rand(::AbstractRNG, ::SamplerDieMany)`). Alternatively, `SamplerTrivial` and `SamplerSimple` can be used if custom types are not necessary.
+Of course, `rand` must also be defined on those types (i.e. `rand(::AbstractRNG, ::SamplerDie1)` and `rand(::AbstractRNG, ::SamplerDieMany)`). Note that, as usual, `SamplerTrivial` and `SamplerSimple` can be used if custom types are not necessary.
 
 Note: `Sampler(rng, x)` is simply a shorthand for `Sampler(rng, x, Val(Inf))`, and
 `Random.Repetition` is an alias for `Union{Val{1}, Val{Inf}}`.

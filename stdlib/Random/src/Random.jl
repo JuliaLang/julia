@@ -142,7 +142,7 @@ const Repetition = Union{Val{1},Val{Inf}}
 
 Return a sampler object that can be used to generate random values from `rng` for `x`.
 
-When `s = Sampler(rng, x, repetition)`, `rand(rng, s)` will be used to draw random values,
+When `sp = Sampler(rng, x, repetition)`, `rand(rng, sp)` will be used to draw random values,
 and should be defined accordingly.
 
 `repetition` can be `Val(1)` or `Val(Inf)`, and should be used as a suggestion for deciding
@@ -186,7 +186,8 @@ end
     SamplerTrivial(x)
 
 Create a sampler that just wraps the given value `x`, with the type information from
-`Random.gentype(x)` (which should be defined).
+`Random.gentype(x)` (which should be defined). This is the default fall-back for
+values.
 
 The recommended use case is sampling from values without precomputed data.
 """
@@ -206,8 +207,7 @@ end
     SamplerSimple(x, data)
 
 Create a sampler that wraps the given value `x` and the `data`, with the type information
-from `Random.gentype(x)` (which should be defined). This is the default fall-back for
-values.
+from `Random.gentype(x)` (which should be defined).
 
 The recommended use case is sampling from values with precomputed data.
 """
