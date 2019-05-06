@@ -83,6 +83,7 @@ abstract type Calendar <: AbstractTime end
 # ISOCalendar provides interpretation rules for UTInstants to civil date and time parts
 struct ISOCalendar <: Calendar end
 
+#Time Zones in ISO 8601 are represented as an offset from UTC
 abstract type TimeZone end
 struct UTC <: TimeZone end
 

@@ -50,7 +50,8 @@ include("io.jl")
 include("parse.jl")
 include("deprecated.jl")
 
-export Period, DatePeriod, TimePeriod,
+export #types.jl
+       Period, DatePeriod, TimePeriod,
        Year, Month, Week, Day, Hour, Minute, Second, Millisecond,
        Microsecond, Nanosecond,
        TimeZone, UTC, TimeType, DateTime, Date, Time,
