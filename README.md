@@ -48,6 +48,22 @@ helpful to start contributing to the Julia codebase.
 - [**Twitter**](https://twitter.com/JuliaLanguage)
 - [**Meetup**](https://julia.meetup.com/)
 
+## Binary Installation
+
+If you would rather not compile the latest Julia from source,
+platform-specific tarballs with pre-compiled binaries are also
+[available for download](https://julialang.org/downloads/).
+
+If everything works correctly, you will see a Julia banner and an
+interactive prompt into which you can enter expressions for
+evaluation.  You can read about [getting
+started](https://julialang.org/manual/getting-started) in the manual.
+
+**Note**: Although some system package managers provide Julia, such
+installations are neither maintained nor endorsed by the Julia
+project. They may be outdated, broken and/or unmaintained. We
+recommend you use the official Julia binaries instead.
+
 ## Currently Supported Platforms
 
 | Operating System | Architecture     | CI | Binaries | Support Level |
@@ -131,22 +147,6 @@ Julia does not install anything outside the directory it was cloned
 into. Julia can be completely uninstalled by deleting this
 directory. Julia packages are installed in `~/.julia` by default, and
 can be uninstalled by deleting `~/.julia`.
-
-## Binary Installation
-
-If  you  would  rather  not  compile the  latest  Julia  from  source,
-platform-specific  tarballs   with  pre-compiled  binaries   are  also
-[available for download](https://julialang.org/downloads/).
-
-If everything works correctly, you will see a Julia banner and an
-interactive prompt into which you can enter expressions for
-evaluation.  You can read about [getting
-started](https://julialang.org/manual/getting-started) in the manual.
-
-**Note**: Although some system package managers provide Julia, such
-installations are neither maintained nor endorsed by the Julia
-project. They may be outdated and/or unmaintained. We recommend you
-use the official Julia binaries instead.
 
 ## Source Code Organization
 

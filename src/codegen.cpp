@@ -3,14 +3,9 @@
 #include "llvm-version.h"
 #include "platform.h"
 #include "options.h"
-#if defined(_OS_WINDOWS_) && JL_LLVM_VERSION < 70000
-// trick llvm into skipping the generation of _chkstk calls
-//   since it has some codegen issues associated with them:
-//   (a) assumed to be within 32-bit offset
-//   (b) bad asm is generated for certain code patterns:
-//       see https://github.com/JuliaLang/julia/pull/11644#issuecomment-112276813
-// also, use ELF because RuntimeDyld COFF I686 support didn't exist
-// also, use ELF because RuntimeDyld COFF X86_64 doesn't seem to work (fails to generate function pointers)?
+#if defined(_OS_WINDOWS_)
+// use ELF because RuntimeDyld COFF i686 support didn't exist
+// use ELF because RuntimeDyld COFF X86_64 doesn't seem to work (fails to generate function pointers)?
 #define FORCE_ELF
 #endif
 #if defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
@@ -86,6 +81,10 @@
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 
 using namespace llvm;
+
+#if JL_LLVM_VERSION >= 80000
+typedef Instruction TerminatorInst;
+#endif
 
 #if defined(_OS_WINDOWS_) && !defined(NOMINMAX)
 #define NOMINMAX
@@ -209,6 +208,7 @@ static Type *T_pppint8;
 static Type *T_void;
 
 // type-based alias analysis nodes.  Indentation of comments indicates hierarchy.
+static MDNode *tbaa_root;     // Everything
 static MDNode *tbaa_gcframe;    // GC frame
 // LLVM should have enough info for alias analysis of non-gcframe stack slot
 // this is mainly a place holder for `jl_cgval_t::tbaa`
@@ -3170,7 +3170,12 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_code_instance_t 
 static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, StringRef specFunctionObject,
                                           jl_cgval_t *argv, size_t nargs, jl_value_t *inferred_retty)
 {
-    auto theFptr = jl_Module->getOrInsertFunction(specFunctionObject, jl_func_sig);
+    auto theFptr = jl_Module->getOrInsertFunction(specFunctionObject, jl_func_sig)
+#if JL_LLVM_VERSION >= 90000
+                .getCallee();
+#else
+                ;
+#endif
     if (auto F = dyn_cast<Function>(theFptr->stripPointerCasts())) {
         add_return_attr(F, Attribute::NonNull);
         F->addFnAttr(Thunk);
@@ -3666,7 +3671,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             ptr = ctx.builder.CreateSelect(isboxed,
                 maybe_bitcast(ctx, decay_derived(ptr_phi), T_pint8),
                 maybe_bitcast(ctx, decay_derived(phi), T_pint8));
-            jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, tbaa_stack);
+            jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, tbaa_stack); // XXX: this TBAA is wrong for ptr_phi
             val.Vboxed = ptr_phi;
             ctx.PhiNodes.push_back(std::make_tuple(val, BB, dest, ptr_phi, r));
             ctx.SAvalues.at(idx) = val;
@@ -4802,6 +4807,7 @@ static Function* gen_cfun_wrapper(
                                          ctx.builder.CreateExtractValue(call, 1),
                                          tbaa_stack);
                 // note that the value may not be rooted here (on the return path)
+                // XXX: should have a root if we need to emit a typeassert abort
                 break;
             case jl_returninfo_t::Ghosts:
                 retval = mark_julia_slot(NULL, astrt, call, tbaa_stack);
@@ -5233,7 +5239,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
         retval = mark_julia_slot(result, jlretty, NULL, tbaa_stack);
         break;
     case jl_returninfo_t::Union:
-        // result is technically not right here, but we only need to look at it
+        // result is technically not right here, but `boxed` will only look at it
         // for the unboxed values, so it's ok.
         retval = mark_julia_slot(result,
                                  jlretty,
@@ -5647,18 +5653,28 @@ static std::unique_ptr<Module> emit_function(
         else {
             subrty = get_specsig_di(jlrettype, lam->specTypes, topfile, dbuilder);
         }
-        SP = dbuilder.createFunction(CU,
-                                     dbgFuncName,      // Name
-                                     f->getName(),     // LinkageName
-                                     topfile,          // File
-                                     toplineno,        // LineNo
-                                     subrty,           // Ty
-                                     false,            // isLocalToUnit
-                                     true,             // isDefinition
-                                     toplineno,        // ScopeLine
-                                     DIFlagZero,       // Flags
-                                     true,             // isOptimized
-                                     nullptr);         // Template Parameters
+        SP = dbuilder.createFunction(CU
+                                     ,dbgFuncName      // Name
+                                     ,f->getName()     // LinkageName
+                                     ,topfile          // File
+                                     ,toplineno        // LineNo
+                                     ,subrty           // Ty
+#if JL_LLVM_VERSION < 80000
+                                     ,false            // isLocalToUnit
+                                     ,true             // isDefinition
+#endif
+                                     ,toplineno        // ScopeLine
+                                     ,DIFlagZero       // Flags
+#if JL_LLVM_VERSION < 80000
+                                     ,true             // isOptimized
+                                     ,nullptr          // Template Parameters
+#else
+                                     ,DISubprogram::SPFlagDefinition | DISubprogram::SPFlagOptimized // SPFlags
+                                     ,nullptr          // Template Parameters
+                                     ,nullptr          // Template Declaration
+                                     ,nullptr          // ThrownTypes
+#endif
+                                     );
         topdebugloc = DebugLoc::get(toplineno, 0, SP, NULL);
         f->setSubprogram(SP);
         if (jl_options.debug_level >= 2) {
@@ -6071,10 +6087,28 @@ static std::unique_ptr<Module> emit_function(
                     DISubprogram *&inl_SP = subprograms[std::make_tuple(fname, info.file)];
                     if (inl_SP == NULL) {
                         DIFile *difile = dbuilder.createFile(info.file, ".");
-                        inl_SP = dbuilder.createFunction(
-                                difile, std::string(fname) + ";",
-                                fname, difile, 0, jl_di_func_null_sig,
-                                false, true, 0, DIFlagZero, true, nullptr);
+                        inl_SP = dbuilder.createFunction(difile
+                                                     ,std::string(fname) + ";" // Name
+                                                     ,fname            // LinkageName
+                                                     ,difile           // File
+                                                     ,0                // LineNo
+                                                     ,jl_di_func_null_sig // Ty
+#if JL_LLVM_VERSION < 80000
+                                                     ,false            // isLocalToUnit
+                                                     ,true             // isDefinition
+#endif
+                                                     ,0                // ScopeLine
+                                                     ,DIFlagZero       // Flags
+#if JL_LLVM_VERSION < 80000
+                                                     ,true             // isOptimized
+                                                     ,nullptr          // Template Parameters
+#else
+                                                     ,DISubprogram::SPFlagDefinition | DISubprogram::SPFlagOptimized // SPFlags
+                                                     ,nullptr          // Template Parameters
+                                                     ,nullptr          // Template Declaration
+                                                     ,nullptr          // ThrownTypes
+#endif
+                                                     );
                     }
                     DebugLoc inl_loc = (info.inlined_at == 0) ? DebugLoc::get(0, 0, SP, NULL) : linetable.at(info.inlined_at).loc;
                     info.loc = DebugLoc::get(info.line, 0, inl_SP, inl_loc);
@@ -6090,14 +6124,14 @@ static std::unique_ptr<Module> emit_function(
     {
         size_t nstmts = jl_array_len(src->code);
         aliasscopes.resize(nstmts + 1, nullptr);
-        static MDBuilder *mbuilder = new MDBuilder(jl_LLVMContext);
-        MDNode *alias_domain = mbuilder->createAliasScopeDomain(ctx.name);
+        MDBuilder mbuilder(jl_LLVMContext);
+        MDNode *alias_domain = mbuilder.createAliasScopeDomain(ctx.name);
         for (i = 0; i < nstmts; i++) {
             jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
             jl_expr_t *expr = jl_is_expr(stmt) ? (jl_expr_t*)stmt : nullptr;
             if (expr) {
                 if (expr->head == aliasscope_sym) {
-                    MDNode *scope = mbuilder->createAliasScope("aliasscope", alias_domain);
+                    MDNode *scope = mbuilder.createAliasScope("aliasscope", alias_domain);
                     scope_stack.push_back(scope);
                     MDNode *scope_list = MDNode::get(jl_LLVMContext, ArrayRef<Metadata*>(scope_stack));
                     scope_list_stack.push_back(scope_list);
@@ -6814,12 +6848,11 @@ static std::unique_ptr<Module> emit_function(
 
 std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr, bool isConstant=false)
 {
-    static MDBuilder *mbuilder = new MDBuilder(jl_LLVMContext);
-    static MDNode *tbaa_root = mbuilder->createTBAARoot("jtbaa");
-    if (!parent)
-        parent = tbaa_root;
-    MDNode *scalar = mbuilder->createTBAAScalarTypeNode(name, parent);
-    MDNode *n = mbuilder->createTBAAStructTagNode(scalar, scalar, 0, isConstant);
+    MDBuilder mbuilder(jl_LLVMContext);
+    if (tbaa_root == nullptr)
+        tbaa_root = mbuilder.createTBAARoot("jtbaa");
+    MDNode *scalar = mbuilder.createTBAAScalarTypeNode(name, parent ? parent : tbaa_root);
+    MDNode *n = mbuilder.createTBAAStructTagNode(scalar, scalar, 0, isConstant);
     return std::make_pair(n, scalar);
 }
 
@@ -7593,6 +7626,12 @@ extern "C" void *jl_init_llvm(void)
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
     const char *const argv_copyprop[] = {"", "-disable-copyprop"}; // llvm bug 21743
     cl::ParseCommandLineOptions(sizeof(argv_copyprop)/sizeof(argv_copyprop[0]), argv_copyprop, "disable-copyprop\n");
+#endif
+#if JL_LLVM_VERSION >= 70000
+#if defined(_CPU_X86_) || defined(_CPU_X86_64_)
+    const char *const argv_avoidsfb[] = {"", "-x86-disable-avoid-SFB"}; // llvm bug 41629, see https://gist.github.com/vtjnash/192cab72a6cfc00256ff118238163b55
+    cl::ParseCommandLineOptions(sizeof(argv_avoidsfb)/sizeof(argv_avoidsfb[0]), argv_avoidsfb, "disable-avoidsfb\n");
+#endif
 #endif
     cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
 
