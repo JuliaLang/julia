@@ -119,7 +119,7 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
     int std_imports = (jl_exprarg(ex, 0) == jl_true);
     jl_sym_t *name = (jl_sym_t*)jl_exprarg(ex, 1);
     if (!jl_is_symbol(name)) {
-        jl_type_error("module", (jl_value_t*)jl_sym_type, (jl_value_t*)name);
+        jl_type_error("module", (jl_value_t*)jl_symbol_type, (jl_value_t*)name);
     }
 
     jl_module_t *newm = jl_new_module(name);
@@ -418,7 +418,7 @@ static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from JL_PR
     jl_module_t *m = NULL;
     *name = NULL;
     if (!jl_is_symbol(var))
-        jl_type_error(keyword, (jl_value_t*)jl_sym_type, (jl_value_t*)var);
+        jl_type_error(keyword, (jl_value_t*)jl_symbol_type, (jl_value_t*)var);
 
     if (from != NULL) {
         m = from;
@@ -456,7 +456,7 @@ static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from JL_PR
     while (1) {
         var = (jl_sym_t*)jl_array_ptr_ref(args, i);
         if (!jl_is_symbol(var))
-            jl_type_error(keyword, (jl_value_t*)jl_sym_type, (jl_value_t*)var);
+            jl_type_error(keyword, (jl_value_t*)jl_symbol_type, (jl_value_t*)var);
         if (var == dot_sym)
             jl_errorf("invalid %s path: \".\" in identifier path", keyword);
         if (i == jl_array_len(args)-1)

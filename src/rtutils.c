@@ -600,7 +600,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (v == (jl_value_t*)jl_typename_type) {
         n += jl_printf(out, "Core.TypeName");
     }
-    else if (v == (jl_value_t*)jl_sym_type) {
+    else if (v == (jl_value_t*)jl_symbol_type) {
         n += jl_printf(out, "Symbol");
     }
     else if (v == (jl_value_t*)jl_methtable_type) {
@@ -820,7 +820,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         }
         n += jl_printf(out, "%s", jl_symbol_name(m->name));
     }
-    else if (vt == jl_sym_type) {
+    else if (vt == jl_symbol_type) {
         char *sn = jl_symbol_name((jl_sym_t*)v);
         int quoted = !jl_is_identifier(sn) && jl_operator_precedence(sn) == 0;
         if (quoted)

@@ -133,7 +133,7 @@ JL_DLLEXPORT jl_code_instance_t* jl_set_method_inferred(
         jl_value_t *inferred_const, jl_value_t *inferred,
         int32_t const_flags, size_t min_world, size_t max_world);
 
-void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr) JL_GC_DISABLED
+jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr) JL_GC_DISABLED
 {
     jl_sym_t *sname = jl_symbol(name);
     if (dt == NULL) {
@@ -164,6 +164,7 @@ void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr
     jl_typemap_insert(&mt->cache, (jl_value_t*)mt, jl_anytuple_type,
         NULL, jl_emptysvec, (jl_value_t*)mi, 0, &lambda_cache, 1, ~(size_t)0, NULL);
     JL_GC_POP();
+    return dt;
 }
 
 // run type inference on lambda "mi" for given argument types.
@@ -1695,7 +1696,7 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int
         return jl_false; // indeterminate - ml_matches can't deal with this case
     jl_methtable_t *mt = dt->name->mt;
     if (mt == NULL)
-        return (jl_value_t*)jl_alloc_vec_any(0);
+        return (jl_value_t*)jl_an_empty_vec_any;
     return ml_matches(mt->defs, 0, types, lim, include_ambiguous, world, min_valid, max_valid);
 }
 
