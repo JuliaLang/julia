@@ -104,7 +104,7 @@ kw"module"
     """
     __init__
 
-`__init_()` function in your module would executes immediately *after* the module is loaded at
+`__init__()` function in your module would executes immediately *after* the module is loaded at
 runtime for the first time (i.e., it is only called once and only after all statements in the
 module have been executed). Because it is called *after* fully importing the module, `__init__`
 functions of submodules will be executed *first*. Two typical uses of __init__ are calling
