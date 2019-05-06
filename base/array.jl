@@ -2334,16 +2334,17 @@ function filter(f, a::Vector{T}) where T
         @inbounds b[j] = ai
         j = ifelse(f(ai), j+1, j)
     end
-    deleteat!(b, j:length(b))
+    resize!(b, j-1)
     sizehint!(b, length(b))
     b
 end
 
 function filter(f, a::AbstractVector)
-    j = Int(firstindex(a))
+    j=1
+    offset = Int(firstindex(a))-1
     idxs = Vector{Int}(undef, length(a))
     for ai in a
-        @inbounds idxs[j] = j
+        @inbounds idxs[j] = j + offset
         j = ifelse(f(ai), j+1, j)
     end
     resize!(idxs, j-1)
