@@ -212,7 +212,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
         helperdir = joinpath(@__DIR__, "testhelpers")
         inputfile = joinpath(helperdir, "coverage_file.jl")
         expected = replace(read(joinpath(helperdir, "coverage_file.info"), String),
-            "<FILENAME>" => inputfile)
+            "<FILENAME>" => realpath(inputfile))
         covfile = replace(joinpath(dir, "coverage.info"), "%" => "%%")
         @test !isfile(covfile)
         defaultcov = readchomp(`$exename -E "Bool(Base.JLOptions().code_coverage)" -L $inputfile`)
