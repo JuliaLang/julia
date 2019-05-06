@@ -2365,31 +2365,25 @@ function filter!(f, a::AbstractVector)
 end
 
 function filter!(f, a::Vector)
-    i = j = 1
-    L = length(a)
-    @inbounds while i <= L
-        p = f(a[i])
-        a[j] = a[i]
-        j = ifelse(p, j+1, j)
-        i += 1
+    j = 1
+    for ai in a
+        @inbounds a[j] = ai
+        j = ifelse(f(ai), j+1, j)
     end
-    deleteat!(a, j:L)
-    sizehint!(a, j-1)
+    deleteat!(a, j:length(a))
+    sizehint!(a, length(a))
     a
 end
 
 function filter(f, a::Vector{T}) where T
-    i = j = 1
-    L = length(a)
-    b = Vector{T}(undef, L)
-    @inbounds while i <= L
-        p = f(a[i])
-        b[j] = a[i]
-        j = ifelse(p, j+1, j)
-        i += 1
+    j = 1
+    b = Vector{T}(undef, length(a))
+    for ai in a
+        @inbounds b[j] = ai
+        j = ifelse(f(ai), j+1, j)
     end
-    deleteat!(b, j:L)
-    sizehint!(b, j-1)
+    deleteat!(b, j:length(b))
+    sizehint!(b, length(b))
     b
 end
 
