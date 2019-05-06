@@ -47,11 +47,11 @@ SECT_INTERP static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
           dta->ninitialized == dtb->ninitialized &&
           jl_egal((jl_value_t*)jl_field_names(dta), (jl_value_t*)jl_field_names(dtb)) &&
           jl_nparams(dta) == jl_nparams(dtb) &&
-          jl_field_count(dta) == jl_field_count(dtb)))
+          jl_svec_len(dta->types) == jl_svec_len(dtb->types)))
         return 0;
     jl_value_t *a=NULL, *b=NULL;
     int ok = 1;
-    size_t i, nf = jl_field_count(dta);
+    size_t i, nf = jl_svec_len(dta->types);
     JL_GC_PUSH2(&a, &b);
     a = jl_rewrap_unionall((jl_value_t*)dta->super, dta->name->wrapper);
     b = jl_rewrap_unionall((jl_value_t*)dtb->super, dtb->name->wrapper);
@@ -63,7 +63,8 @@ SECT_INTERP static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
     JL_CATCH {
         ok = 0;
     }
-    if (!ok) goto no;
+    if (!ok)
+        goto no;
     assert(jl_is_datatype(a));
     a = dta->name->wrapper;
     b = dtb->name->wrapper;
@@ -77,9 +78,11 @@ SECT_INTERP static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
         b = ub->body;
     }
     assert(jl_is_datatype(a) && jl_is_datatype(b));
-    for (i=0; i < nf; i++) {
-        jl_value_t *ta = jl_svecref(((jl_datatype_t*)a)->types, i);
-        jl_value_t *tb = jl_svecref(((jl_datatype_t*)b)->types, i);
+    a = (jl_value_t*)jl_get_fieldtypes((jl_datatype_t*)a);
+    b = (jl_value_t*)jl_get_fieldtypes((jl_datatype_t*)b);
+    for (i = 0; i < nf; i++) {
+        jl_value_t *ta = jl_svecref(a, i);
+        jl_value_t *tb = jl_svecref(b, i);
         if (jl_has_free_typevars(ta)) {
             if (!jl_has_free_typevars(tb) || !jl_egal(ta, tb))
                 goto no;

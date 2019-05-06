@@ -569,9 +569,10 @@ static bool julia_struct_has_layout(jl_datatype_t *dt, jl_unionall_t *ua)
     if (dt->layout || dt->struct_decl || jl_justbits((jl_value_t*)dt))
         return true;
     if (ua) {
-        size_t i, ntypes = jl_svec_len(dt->types);
+        jl_svec_t *types = jl_get_fieldtypes(dt);
+        size_t i, ntypes = jl_svec_len(types);
         for (i = 0; i < ntypes; i++) {
-            jl_value_t *ty = jl_svecref(dt->types, i);
+            jl_value_t *ty = jl_svecref(types, i);
             if (jl_has_typevar_from_unionall(ty, ua))
                 return false;
         }
@@ -603,7 +604,8 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
         if (jst->struct_decl != NULL)
             return (Type*)jst->struct_decl;
         if (jl_is_structtype(jt) && !(jst->layout && jl_is_layout_opaque(jst->layout))) {
-            size_t i, ntypes = jl_svec_len(jst->types);
+            jl_svec_t *ftypes = jl_get_fieldtypes(jst);
+            size_t i, ntypes = jl_svec_len(ftypes);
             if (ntypes == 0 || (jst->layout && jl_datatype_nbits(jst) == 0))
                 return T_void;
             if (!julia_struct_has_layout(jst, ua))
@@ -615,7 +617,7 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
             Type *lasttype = NULL;
             bool allghost = true;
             for (i = 0; i < ntypes; i++) {
-                jl_value_t *ty = jl_svecref(jst->types, i);
+                jl_value_t *ty = jl_svecref(ftypes, i);
                 if (jlasttype != NULL && ty != jlasttype)
                     isvector = false;
                 jlasttype = ty;
@@ -1496,7 +1498,7 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
         }
         else if (is_tupletype_homogeneous(stt->types)) {
             assert(nfields > 0); // nf == 0 trapped by all_pointers case
-            jl_value_t *jt = jl_field_type(stt, 0);
+            jl_value_t *jt = jl_svecref(stt->types, 0);
             idx = emit_bounds_check(ctx, strct, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields), inbounds);
             Value *ptr = maybe_decay_tracked(data_pointer(ctx, strct));
             if (!stt->mutabl && !(maybe_null && jt == (jl_value_t*)jl_bool_type)) {
@@ -1526,7 +1528,7 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
             return true;
         }
         assert(!jl_field_isptr(stt, 0));
-        jl_value_t *jt = jl_field_type(stt, 0);
+        jl_value_t *jt = jl_svecref(stt->types, 0);
         Value *idx0 = emit_bounds_check(ctx, strct, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields), inbounds);
         if (strct.isghost) {
             *ret = ghostValue(jt);

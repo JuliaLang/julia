@@ -293,13 +293,14 @@ try
                     some_method, Tuple{typeof(Base.include), String}, Core.svec(), typemax(UInt))
         @test Foo.some_linfo::Core.MethodInstance === some_linfo
 
-        PV = Foo.Value18343{Some}.body.types[1]
-        VR = PV.types[1].parameters[1]
-        @test PV.types[1] === Array{VR,1}
-        @test pointer_from_objref(PV.types[1]) ===
-              pointer_from_objref(PV.types[1].parameters[1].types[1].types[1])
-        @test PV === PV.types[1].parameters[1].types[1]
-        @test pointer_from_objref(PV) === pointer_from_objref(PV.types[1].parameters[1].types[1])
+        ft = Base.datatype_fieldtypes
+        PV = ft(Foo.Value18343{Some}.body)[1]
+        VR = ft(PV)[1].parameters[1]
+        @test ft(PV)[1] === Array{VR,1}
+        @test pointer_from_objref(ft(PV)[1]) ===
+              pointer_from_objref(ft(ft(ft(PV)[1].parameters[1])[1])[1])
+        @test PV === ft(ft(PV)[1].parameters[1])[1]
+        @test pointer_from_objref(PV) === pointer_from_objref(ft(ft(PV)[1].parameters[1])[1])
     end
 
     Baz_file = joinpath(dir, "Baz.jl")

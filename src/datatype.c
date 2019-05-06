@@ -202,7 +202,7 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
     if (mask)
         return 0;               // nfields has more than two 1s
     assert(jl_datatype_nfields(t)==1);
-    jl_value_t *ty = jl_field_type(t, 0);
+    jl_value_t *ty = jl_field_type((jl_datatype_t*)t, 0);
     if (!jl_is_primitivetype(ty))
         // LLVM requires that a vector element be a primitive type.
         // LLVM allows pointer types as vector elements, but until a
@@ -301,9 +301,9 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         // based on whether its definition is self-referential
         if (w->types != NULL) {
             st->isbitstype = st->isconcretetype && !st->mutabl;
-            size_t i, nf = jl_field_count(st);
+            size_t i, nf = jl_svec_len(st->types);
             for (i = 0; i < nf; i++) {
-                jl_value_t *fld = jl_field_type(st, i);
+                jl_value_t *fld = jl_svecref(st->types, i);
                 if (st->isbitstype)
                     st->isbitstype = jl_is_datatype(fld) && ((jl_datatype_t*)fld)->isbitstype;
                 if (!st->zeroinit)
@@ -311,9 +311,9 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             }
             if (st->isbitstype) {
                 st->isinlinealloc = 1;
-                size_t i, nf = jl_field_count(w);
+                size_t i, nf = jl_svec_len(w->types);
                 for (i = 0; i < nf; i++) {
-                    jl_value_t *fld = jl_field_type(w, i);
+                    jl_value_t *fld = jl_svecref(w->types, i);
                     if (references_name(fld, w->name)) {
                         st->isinlinealloc = 0;
                         st->isbitstype = 0;

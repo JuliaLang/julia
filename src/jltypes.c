@@ -921,7 +921,7 @@ JL_EXTENSION struct _jl_typestack_t {
 };
 
 static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t *stack, int check);
-static jl_svec_t *inst_all(jl_svec_t *p, jl_typeenv_t *env, jl_typestack_t *stack, int check);
+static jl_svec_t *inst_ftypes(jl_svec_t *p, jl_typeenv_t *env, jl_typestack_t *stack);
 
 JL_DLLEXPORT jl_value_t *jl_instantiate_unionall(jl_unionall_t *u, jl_value_t *p)
 {
@@ -1251,6 +1251,9 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         ndt->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)dt->super, env, stack, 1);
         jl_gc_wb(ndt, ndt->super);
     }
+    if (cacheable) {
+        jl_cache_type_(ndt);
+    }
     jl_svec_t *ftypes = dt->types;
     if (ftypes == NULL || dt->super == NULL) {
         // in the process of creating this type definition:
@@ -1258,12 +1261,15 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         assert(inside_typedef && !istuple && !isnamedtuple);
         arraylist_push(&partial_inst, ndt);
     }
-    else {
-        assert(ftypes != jl_emptysvec || jl_field_names(ndt) == jl_emptysvec || isnamedtuple);
+    else if (!isnamedtuple && !istuple) {
+        assert(ftypes != jl_emptysvec || jl_field_names(ndt) == jl_emptysvec);
         assert(ftypes == jl_emptysvec || !ndt->abstract);
-        if (!istuple && !isnamedtuple) {
+        if (ftypes == jl_emptysvec) {
+            ndt->types = ftypes;
+        }
+        else if (cacheable) {
             // recursively instantiate the types of the fields
-            ndt->types = inst_all(ftypes, env, stack, 1);
+            ndt->types = inst_ftypes(ftypes, env, stack);
             jl_gc_wb(ndt, ndt->types);
         }
     }
@@ -1284,7 +1290,6 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         ndt->ninitialized = dt->ninitialized;
 
     if (cacheable) {
-        jl_cache_type_(ndt);
         JL_UNLOCK(&typecache_lock); // Might GC
     }
 
@@ -1344,14 +1349,21 @@ jl_datatype_t *jl_inst_concrete_tupletype_v(jl_value_t **p, size_t np)
     return (jl_datatype_t*)inst_datatype(jl_anytuple_type, NULL, p, np, 1, NULL);
 }
 
-static jl_svec_t *inst_all(jl_svec_t *p, jl_typeenv_t *env, jl_typestack_t *stack, int check)
+static jl_svec_t *inst_ftypes(jl_svec_t *p, jl_typeenv_t *env, jl_typestack_t *stack)
 {
     size_t i;
     size_t lp = jl_svec_len(p);
     jl_svec_t *np = jl_alloc_svec(lp);
     JL_GC_PUSH1(&np);
-    for(i=0; i < lp; i++) {
-        jl_svecset(np, i, (jl_value_t*)inst_type_w_(jl_svecref(p,i), env, stack, check));
+    for (i = 0; i < lp; i++) {
+        jl_value_t *pi = jl_svecref(p, i);
+        JL_TRY {
+            pi = inst_type_w_(pi, env, stack, 1);
+        }
+        JL_CATCH {
+            pi = jl_bottom_type;
+        }
+        jl_svecset(np, i, pi);
     }
     JL_GC_POP();
     return np;
@@ -1401,7 +1413,7 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
     int i;
     for (i = 0; i < ntp; i++) {
         jl_value_t *elt = jl_svecref(tp, i);
-        jl_value_t *pi = (jl_value_t*)inst_type_w_(elt, env, stack, 0);
+        jl_value_t *pi = inst_type_w_(elt, env, stack, 0);
         iparams[i] = pi;
         if (ip_heap)
             jl_gc_wb(ip_heap, pi);
@@ -1492,7 +1504,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
     int cacheable = 1, bound = 0;
     for(i=0; i < ntp; i++) {
         jl_value_t *elt = jl_svecref(tp, i);
-        iparams[i] = (jl_value_t*)inst_type_w_(elt, env, stack, check);
+        iparams[i] = inst_type_w_(elt, env, stack, check);
         bound |= (iparams[i] != elt);
         if (cacheable && jl_has_free_typevars(iparams[i]))
             cacheable = 0;
@@ -1505,18 +1517,18 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
     return result;
 }
 
-jl_value_t *instantiate_with(jl_value_t *t, jl_value_t **env, size_t n, jl_typeenv_t *te, jl_typestack_t *stack)
+static jl_value_t *instantiate_with(jl_value_t *t, jl_value_t **env, size_t n, jl_typeenv_t *te)
 {
     if (n > 0) {
         jl_typeenv_t en = { (jl_tvar_t*)env[0], env[1], te };
-        return instantiate_with(t, &env[2], n-1, &en, stack);
+        return instantiate_with(t, &env[2], n-1, &en );
     }
-    return inst_type_w_(t, te, stack, 1);
+    return inst_type_w_(t, te, NULL, 1);
 }
 
 jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n)
 {
-    return instantiate_with(t, env, n, NULL, NULL);
+    return instantiate_with(t, env, n, NULL);
 }
 
 static jl_value_t *_jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals, jl_typeenv_t *prev)
@@ -1562,6 +1574,30 @@ jl_value_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n)
     return vn;
 }
 
+JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st)
+{
+    assert(st->name != jl_namedtuple_typename && st->name != jl_tuple_typename);
+    jl_datatype_t *wt = (jl_datatype_t*)jl_unwrap_unionall(st->name->wrapper);
+    size_t i, n = jl_svec_len(wt->parameters);
+    assert(n > 0 && "expected empty case to be handled during construction");
+    //if (n == 0)
+    //    return ((st->types = jl_emptysvec));
+    jl_typeenv_t *env = (jl_typeenv_t*)alloca(n * sizeof(jl_typeenv_t));
+    for (i = 0; i < n; i++) {
+        env[i].var = (jl_tvar_t*)jl_svecref(wt->parameters, i);
+        env[i].val = jl_svecref(st->parameters, i);
+        env[i].prev = i == 0 ? NULL : &env[i - 1];
+    }
+    jl_typestack_t top;
+    top.tt = st;
+    top.prev = NULL;
+    st->types = inst_ftypes(wt->types, &env[n - 1], &top);
+    jl_gc_wb(st, st->types);
+    JL_GC_POP();
+    return st->types;
+}
+
+
 void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
 {
     inside_typedef = 0;
@@ -1575,19 +1611,20 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
         return;
     }
 
-    jl_value_t **env = (jl_value_t**)alloca(n * 2 * sizeof(void*));
+    jl_typeenv_t *env = (jl_typeenv_t*)alloca(n * sizeof(jl_typeenv_t));
     for (i = 0; i < n; i++) {
-        env[i * 2] = jl_svecref(t->parameters, i);
-        env[i * 2 + 1] = NULL;
+        env[i].var = (jl_tvar_t*)jl_svecref(t->parameters, i);
+        env[i].val = NULL;
+        env[i].prev = i == 0 ? NULL : &env[i - 1];
     }
 
     for (j = 0; j < partial_inst.len; j++) {
         jl_datatype_t *ndt = (jl_datatype_t*)partial_inst.items[j];
         assert(jl_unwrap_unionall(ndt->name->wrapper) == (jl_value_t*)t);
         for (i = 0; i < n; i++)
-            env[i * 2 + 1] = jl_svecref(ndt->parameters, i);
+            env[i].val = jl_svecref(ndt->parameters, i);
 
-        ndt->super = (jl_datatype_t*)instantiate_with((jl_value_t*)t->super, env, n, NULL, &top);
+        ndt->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)t->super, env, &top, 1);
         jl_gc_wb(ndt, ndt->super);
     }
 
@@ -1595,15 +1632,10 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
         for (j = 0; j < partial_inst.len; j++) {
             jl_datatype_t *ndt = (jl_datatype_t*)partial_inst.items[j];
             for (i = 0; i < n; i++)
-                env[i * 2 + 1] = jl_svecref(ndt->parameters, i);
-
-            int k;
+                env[i].val = jl_svecref(ndt->parameters, i);
             assert(ndt->types == NULL);
-            ndt->types = jl_alloc_svec(jl_svec_len(t->types));
+            ndt->types = inst_ftypes(t->types, env, &top);
             jl_gc_wb(ndt, ndt->types);
-            for (k=0; k < jl_svec_len(t->types); k++) {
-                jl_svecset(ndt->types, k, instantiate_with(jl_svecref(t->types,k), env, n, NULL, &top));
-            }
             if (ndt->uid) { // cacheable
                 jl_compute_field_offsets(ndt);
             }
@@ -1707,7 +1739,7 @@ void jl_init_types(void) JL_GC_DISABLED
     // NOTE: types should not really be mutable, but the instance and
     // struct_decl fields are basically caches, which are mutated.
     jl_datatype_type->mutabl = 1;
-    jl_datatype_type->ninitialized = 4;
+    jl_datatype_type->ninitialized = 3;
     jl_precompute_memoized_dt(jl_datatype_type);
 
     jl_typename_type->name = jl_new_typename_in(jl_symbol("TypeName"), core);
