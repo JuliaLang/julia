@@ -302,25 +302,25 @@ function sizeof_nothrow(@nospecialize(x))
     else
         x = widenconst(x)
     end
+    isconstType(x) && (x = x.parameters[1])
     if isa(x, Union)
         return sizeof_nothrow(x.a) && sizeof_nothrow(x.b)
     end
-    isconstType(x) && (x = x.parameters[1]) # since sizeof(typeof(x)) == sizeof(x)
     x === DataType && return false
-    return isconcretetype(x) || isprimitivetype(x)
+    return isconcretetype(x)
 end
 function _const_sizeof(@nospecialize(x))
     # Constant Vector does not have constant size
     isa(x, Vector) && return Int
     size = try
-            Core.sizeof(x)
-        catch ex
-            # Might return
-            # "argument is an abstract type; size is indeterminate" or
-            # "type does not have a fixed size"
-            isa(ex, ErrorException) || rethrow()
-            return Int
-        end
+        Core.sizeof(x)
+    catch ex
+        # Might return
+        # "argument is an abstract type; size is indeterminate" or
+        # "type does not have a fixed size"
+        isa(ex, ErrorException) || rethrow()
+        return Int
+    end
     return Const(size)
 end
 function sizeof_tfunc(@nospecialize(x),)
@@ -328,11 +328,7 @@ function sizeof_tfunc(@nospecialize(x),)
     isa(x, Conditional) && return _const_sizeof(Bool)
     isconstType(x) && return _const_sizeof(x.parameters[1])
     x = widenconst(x)
-    if isa(x, Union)
-        return tmerge(sizeof_tfunc(x.a), sizeof_tfunc(x.b))
-    end
     x !== DataType && isconcretetype(x) && return _const_sizeof(x)
-    isprimitivetype(x) && return _const_sizeof(x)
     return Int
 end
 add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 0)
