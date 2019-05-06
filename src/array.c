@@ -48,7 +48,7 @@ typedef __uint128_t wideint_t;
 typedef uint64_t wideint_t;
 #endif
 
-size_t jl_arr_xtralloc_limit = 0;
+size_t jl_arr_xtralloc_threshold = 0;
 
 #define MAXINTVAL (((size_t)-1)>>1)
 
@@ -695,16 +695,15 @@ static void NOINLINE array_try_unshare(jl_array_t *a)
     }
 }
 
-static size_t limit_overallocation(jl_array_t *a, size_t alen, size_t newlen, size_t inc)
+static size_t limit_arraygrowth_scale(jl_array_t *a, size_t curlen)
 {
-    // Limit overallocation to jl_arr_xtralloc_limit
+    // Shrink overallocation growth rate once over jl_arr_xtralloc_threshold
     size_t es = a->elsize;
-    size_t xtra_elems_mem = (newlen - a->offset - alen - inc) * es;
-    if (xtra_elems_mem > jl_arr_xtralloc_limit) {
-        // prune down
-        return alen + inc + a->offset + (jl_arr_xtralloc_limit / es);
+    size_t curlen_mem = curlen * es;
+    if (curlen_mem > jl_arr_xtralloc_threshold) {
+        return curlen * 1.4142;  // sqrt(2)
     }
-    return newlen;
+    return curlen * 2;
 }
 
 STATIC_INLINE void jl_array_grow_at_beg(jl_array_t *a, size_t idx, size_t inc,
@@ -752,10 +751,11 @@ STATIC_INLINE void jl_array_grow_at_beg(jl_array_t *a, size_t idx, size_t inc,
         size_t nb1 = idx * elsz;
         if (inc > (a->maxsize - n) / 2 - (a->maxsize - n) / 20) {
             // not enough room for requested growth from end of array
-            size_t newlen = a->maxsize == 0 ? inc * 2 : a->maxsize * 2;
-            while (n + 2 * inc > newlen - a->offset)
-                newlen *= 2;
-            newlen = limit_overallocation(a, n, newlen, 2 * inc);
+            size_t scaled_size = limit_arraygrowth_scale(a, a->maxsize);
+            size_t newlen = a->maxsize == 0 ? inc * 2 : scaled_size;
+            while (n + 2 * inc > newlen - a->offset) {
+                newlen = limit_arraygrowth_scale(a, newlen);
+            }
             size_t newoffset = (newlen - newnrows) / 2;
             if (!array_resize_buffer(a, newlen)) {
                 data = (char*)a->data + oldoffsnb;
@@ -842,10 +842,10 @@ STATIC_INLINE void jl_array_grow_at_end(jl_array_t *a, size_t idx,
         size_t nbinc = inc * elsz;
         // if the requested size is more than 2x current maxsize, grow exactly
         // otherwise double the maxsize
-        size_t newmaxsize = reqmaxsize >= a->maxsize * 2
+        size_t scaled_size = limit_arraygrowth_scale(a, a->maxsize);
+        size_t newmaxsize = reqmaxsize >= scaled_size
                           ? (reqmaxsize < 4 ? 4 : reqmaxsize)
-                          : a->maxsize * 2;
-        newmaxsize = limit_overallocation(a, n, newmaxsize, inc);
+                          : scaled_size;
         size_t oldmaxsize = a->maxsize;
         int newbuf = array_resize_buffer(a, newmaxsize);
         char *newdata = (char*)a->data + a->offset * elsz;
