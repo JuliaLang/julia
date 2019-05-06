@@ -2375,7 +2375,7 @@ function filter!(f, a::Vector)
     a
 end
 
-function filter(f, a::Vector{T}) where T
+function filter(f, a::AbstractVector{T}) where T
     j = 1
     b = Vector{T}(undef, length(a))
     for ai in a
