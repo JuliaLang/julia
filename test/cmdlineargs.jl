@@ -97,6 +97,11 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
         @test startswith(read(`$exename --help`, String), header)
     end
 
+    # --project
+    let expanded = abspath(expanduser("~/foo"))
+        @test occursin(expanded, readchomp(`$exename --project='~/foo' -E 'Base.active_project()'`))
+    end
+
     # --quiet, --banner
     let t(q,b) = "Base.JLOptions().quiet == $q && Base.JLOptions().banner == $b"
         @test success(`$exename                 -e $(t(0, -1))`)
