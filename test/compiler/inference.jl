@@ -1360,12 +1360,18 @@ let egal_tfunc
 end
 
 using Core.Compiler: PartialStruct, nfields_tfunc, sizeof_tfunc, sizeof_nothrow
+@test sizeof_tfunc(Const(Ptr)) === sizeof_tfunc(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}}) === Const(Sys.WORD_SIZE ÷ 8)
+@test sizeof_tfunc(Type{Ptr}) === Int
+@test sizeof_nothrow(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}})
+@test sizeof_nothrow(Const(Ptr))
+@test !sizeof_nothrow(Type{Ptr})
+@test !sizeof_nothrow(Type{Union{Ptr{Int}, Int}})
+@test !sizeof_nothrow(Const(Tuple))
 let PT = PartialStruct(Tuple{Int64,UInt64}, Any[Const(10, false), UInt64])
-    @test sizeof_tfunc(PT) === Const(16, false)
-    @test nfields_tfunc(PT) === Const(2, false)
-    @test sizeof_nothrow(PT) === true
+    @test sizeof_tfunc(PT) === Const(16)
+    @test nfields_tfunc(PT) === Const(2)
+    @test sizeof_nothrow(PT)
 end
-@test sizeof_nothrow(Const(Tuple)) === false
 
 using Core.Compiler: typeof_tfunc
 @test typeof_tfunc(Tuple{Vararg{Int}}) == Type{Tuple{Vararg{Int,N}}} where N
