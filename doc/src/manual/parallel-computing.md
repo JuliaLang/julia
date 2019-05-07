@@ -531,11 +531,11 @@ A remote reference is an object that can be used from any process to refer to an
 on a particular process. A remote call is a request by one process to call a certain function
 on certain arguments on another (possibly the same) process.
 
-Remote references come in two flavors: [`Future`](@ref) and [`RemoteChannel`](@ref).
+Remote references come in two flavors: [`Future`](@ref Distributed.Future) and [`RemoteChannel`](@ref).
 
-A remote call returns a [`Future`](@ref) to its result. Remote calls return immediately; the process
+A remote call returns a [`Future`](@ref Distributed.Future) to its result. Remote calls return immediately; the process
 that made the call proceeds to its next operation while the remote call happens somewhere else.
-You can wait for a remote call to finish by calling [`wait`](@ref) on the returned [`Future`](@ref),
+You can wait for a remote call to finish by calling [`wait`](@ref) on the returned [`Future`](@ref Distributed.Future),
 and you can obtain the full value of the result using [`fetch`](@ref).
 
 On the other hand, [`RemoteChannel`](@ref) s are rewritable. For example, multiple processes can
@@ -615,8 +615,8 @@ on the process that owns `r`, so the [`fetch`](@ref) will be a no-op (no work is
 (It is worth noting that [`@spawn`](@ref) is not built-in but defined in Julia as a [macro](@ref man-macros).
 It is possible to define your own such constructs.)
 
-An important thing to remember is that, once fetched, a [`Future`](@ref) will cache its value
-locally. Further [`fetch`](@ref) calls do not entail a network hop. Once all referencing [`Future`](@ref)s
+An important thing to remember is that, once fetched, a [`Future`](@ref Distributed.Future) will cache its value
+locally. Further [`fetch`](@ref) calls do not entail a network hop. Once all referencing [`Future`](@ref Distributed.Future)s
 have fetched, the remote stored value is deleted.
 
 [`@async`](@ref) is similar to [`@spawn`](@ref), but only runs tasks on the local process. We
@@ -981,8 +981,8 @@ Here each iteration applies `f` to a randomly-chosen sample from a vector `a` sh
 
 As you could see, the reduction operator can be omitted if it is not needed. In that case, the
 loop executes asynchronously, i.e. it spawns independent tasks on all available workers and returns
-an array of [`Future`](@ref) immediately without waiting for completion. The caller can wait for
-the [`Future`](@ref) completions at a later point by calling [`fetch`](@ref) on them, or wait
+an array of [`Future`](@ref Distributed.Future) immediately without waiting for completion. The caller can wait for
+the [`Future`](@ref Distributed.Future) completions at a later point by calling [`fetch`](@ref) on them, or wait
 for completion at the end of the loop by prefixing it with [`@sync`](@ref), like `@sync @distributed for`.
 
 In some cases no reduction operator is needed, and we merely wish to apply a function to all integers
@@ -1008,7 +1008,7 @@ Remote references always refer to an implementation of an `AbstractChannel`.
 
 A concrete implementation of an `AbstractChannel` (like `Channel`), is required to implement
 [`put!`](@ref), [`take!`](@ref), [`fetch`](@ref), [`isready`](@ref) and [`wait`](@ref).
-The remote object referred to by a [`Future`](@ref) is stored in a `Channel{Any}(1)`, i.e., a
+The remote object referred to by a [`Future`](@ref Distributed.Future) is stored in a `Channel{Any}(1)`, i.e., a
 `Channel` of size 1 capable of holding objects of `Any` type.
 
 [`RemoteChannel`](@ref), which is rewritable, can point to any type and size of channels, or any
@@ -1111,9 +1111,9 @@ Objects referred to by remote references can be freed only when *all* held refer
 in the cluster are deleted.
 
 The node where the value is stored keeps track of which of the workers have a reference to it.
-Every time a [`RemoteChannel`](@ref) or a (unfetched) [`Future`](@ref) is serialized to a worker,
+Every time a [`RemoteChannel`](@ref) or a (unfetched) [`Future`](@ref Distributed.Future) is serialized to a worker,
 the node pointed to by the reference is notified. And every time a [`RemoteChannel`](@ref) or
-a (unfetched) [`Future`](@ref) is garbage collected locally, the node owning the value is again
+a (unfetched) [`Future`](@ref Distributed.Future) is garbage collected locally, the node owning the value is again
 notified. This is implemented in an internal cluster aware serializer. Remote references are only
 valid in the context of a running cluster. Serializing and deserializing references to and from
 regular `IO` objects is not supported.
@@ -1122,12 +1122,12 @@ The notifications are done via sending of "tracking" messages--an "add reference
 a reference is serialized to a different process and a "delete reference" message when a reference
 is locally garbage collected.
 
-Since [`Future`](@ref)s are write-once and cached locally, the act of [`fetch`](@ref)ing a
-[`Future`](@ref) also updates reference tracking information on the node owning the value.
+Since [`Future`](@ref Distributed.Future)s are write-once and cached locally, the act of [`fetch`](@ref)ing a
+[`Future`](@ref Distributed.Future) also updates reference tracking information on the node owning the value.
 
 The node which owns the value frees it once all references to it are cleared.
 
-With [`Future`](@ref)s, serializing an already fetched [`Future`](@ref) to a different node also
+With [`Future`](@ref Distributed.Future)s, serializing an already fetched [`Future`](@ref Distributed.Future) to a different node also
 sends the value since the original remote store may have collected the value by this time.
 
 It is important to note that *when* an object is locally garbage collected depends on the size
@@ -1136,9 +1136,9 @@ of the object and the current memory pressure in the system.
 In case of remote references, the size of the local reference object is quite small, while the
 value stored on the remote node may be quite large. Since the local object may not be collected
 immediately, it is a good practice to explicitly call [`finalize`](@ref) on local instances
-of a [`RemoteChannel`](@ref), or on unfetched [`Future`](@ref)s. Since calling [`fetch`](@ref)
-on a [`Future`](@ref) also removes its reference from the remote store, this is not required on
-fetched [`Future`](@ref)s. Explicitly calling [`finalize`](@ref) results in an immediate message
+of a [`RemoteChannel`](@ref), or on unfetched [`Future`](@ref Distributed.Future)s. Since calling [`fetch`](@ref)
+on a [`Future`](@ref Distributed.Future) also removes its reference from the remote store, this is not required on
+fetched [`Future`](@ref Distributed.Future)s. Explicitly calling [`finalize`](@ref) results in an immediate message
 sent to the remote node to go ahead and remove its reference to the value.
 
 Once finalized, a reference becomes invalid and cannot be used in any further calls.
@@ -1147,7 +1147,7 @@ Once finalized, a reference becomes invalid and cannot be used in any further ca
 ## Local invocations(@id man-distributed-local-invocations)
 
 Data is necessarily copied over to the remote node for execution. This is the case for both
-remotecalls and when data is stored to a[`RemoteChannel`](@ref) / [`Future`](@ref) on
+remotecalls and when data is stored to a[`RemoteChannel`](@ref) / [`Future`](@ref Distributed.Future) on
 a different node. As expected, this results in a copy of the serialized objects
 on the remote node. However, when the destination node is the local node, i.e.
 the calling process id is the same as the remote node id, it is executed
