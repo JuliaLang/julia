@@ -544,6 +544,7 @@ Stacktrace:
 ```
 """
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
+hypot(x::Complex, y::Complex) = hypot(promote(abs(x),abs(y))...)
 hypot(x::Integer, y::Integer) = hypot(promote(float(x), float(y))...)
 function hypot(x::T,y::T) where T<:AbstractFloat
     #Return Inf if either or both imputs is Inf (Compliance with IEEE754)
