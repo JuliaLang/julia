@@ -2327,12 +2327,12 @@ julia> filter(isodd, a)
 """
 filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
 
-function filter(f, a::Vector{T}) where T
+function filter(f, a::Vector{T, N}) where {T,N}
     j = 1
     b = Vector{T}(undef, length(a))
     for ai in a
         @inbounds b[j] = ai
-        j = ifelse(f(ai), j+1, j)
+        j += f(ai)::Bool
     end
     resize!(b, j-1)
     sizehint!(b, length(b))
@@ -2340,11 +2340,12 @@ function filter(f, a::Vector{T}) where T
 end
 
 function filter(f, a::AbstractVector)
-    j=1
+    j = 1
     idxs = Vector{Int}(undef, length(a))
     for idx in eachindex(a)
         @inbounds idxs[j] = idx
-        j = ifelse(f(@inbounds a[idx]), j+1, j)
+        ai = @inbounds a[idx]
+        j += f(ai)::Bool
     end
     resize!(idxs, j-1)
     return a[idxs]
@@ -2367,19 +2368,25 @@ julia> filter!(isodd, Vector(1:10))
  9
 ```
 """
-function filter!(f, a::AbstractVector)
-    j = Int(firstindex(a))
+function filter!(f, a::Vector)
+    j = 1
     for ai in a
         @inbounds a[j] = ai
-        j = ifelse(f(ai), j+1, j)
+        j += f(ai)::Bool
     end
-    if a isa Vector
-        resize!(a, j-1)
-        sizehint!(a, j-1)
-    else
-        Int(lastindex(a)) < j && deleteat!(a, j:Int(lastindex(a)))
+    resize!(a, j-1)
+    sizehint!(a, j-1)
+    return a
+end
+
+function filter!(f, a::AbstractVector)
+    j = firstindex(a)
+    for ai in a
+        @inbounds a[j] = ai
+        j = ifelse(f(ai), nextind(a, j), j)
     end
-    a
+    j<= lastindex(a) && deleteat!(a, j:lastindex(a))
+    return a
 end
 
 # set-like operators for vectors
