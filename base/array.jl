@@ -2341,11 +2341,10 @@ end
 
 function filter(f, a::AbstractVector)
     j=1
-    offset = Int(firstindex(a))-1
     idxs = Vector{Int}(undef, length(a))
-    for ai in a
-        @inbounds idxs[j] = j + offset
-        j = ifelse(f(ai), j+1, j)
+    for idx in eachindex(a)
+        @inbounds idxs[j] = idx
+        j = ifelse(f(@inbounds a[idx]), j+1, j)
     end
     resize!(idxs, j-1)
     return a[idxs]
