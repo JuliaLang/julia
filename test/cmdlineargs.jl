@@ -100,6 +100,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     # --project
     let expanded = abspath(expanduser("~/foo"))
         @test occursin(expanded, readchomp(`$exename --project='~/foo' -E 'Base.active_project()'`))
+        @test occursin(expanded, readchomp(setenv(`$exename -E 'Base.active_project()'`, "JULIA_PROJECT"=>"~/foo")))
     end
 
     # --quiet, --banner
