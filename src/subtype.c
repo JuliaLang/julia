@@ -1307,11 +1307,13 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
                 vy = npy > 0 && jl_is_vararg_type(jl_tparam(y, npy - 1));
             }
             if (npx != npy || vx || vy) {
-                if (!vy) {
+                if (!vy && (!vx || jl_vararg_kind(jl_tparam(x, npx - 1)) == JL_VARARG_UNBOUND)) {
                     *subtype = 0;
                     return 1;
                 }
                 if (npx - vx < npy - vy) {
+                    if (vx)
+                        return 0;
                     *subtype = 0;
                     return 1; // number of fixed parameters in x could be fewer than in y
                 }

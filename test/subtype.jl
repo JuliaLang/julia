@@ -1509,3 +1509,9 @@ end
 
 # issue #26083
 @testintersect(Base.RefValue{<:Tuple}, Ref{Tuple{M}} where M, Base.RefValue{Tuple{M}} where M)
+
+let A = Tuple{T, Vararg{T, 1}} where T<:Int64,
+    B = Tuple{Int, Int}
+    @test A <: B
+    @test B <: A
+end
