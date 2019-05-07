@@ -440,7 +440,24 @@ function unescape_string(io, s::AbstractString)
 end
 unescape_string(s::AbstractString) = sprint(unescape_string, s, sizehint=lastindex(s))
 
+"""
+    @b_str
 
+Create an immutable byte (`UInt8`) vector using string syntax.
+
+# Examples
+```jldoctest
+julia> v = b"12\\x01\\x02"
+4-element Base.CodeUnits{UInt8,String}:
+ 0x31
+ 0x32
+ 0x01
+ 0x02
+
+julia> v[2]
+0x32
+```
+"""
 macro b_str(s)
     v = codeunits(unescape_string(s))
     QuoteNode(v)

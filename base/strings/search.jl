@@ -259,7 +259,7 @@ findnext(t::AbstractString, s::AbstractString, i::Integer) = _search(s, t, i)
     findlast(pattern::AbstractString, string::AbstractString)
 
 Find the last occurrence of `pattern` in `string`. Equivalent to
-[`findlast(pattern, string, lastindex(s))`](@ref).
+[`findprev(pattern, string, lastindex(string))`](@ref).
 
 # Examples
 ```jldoctest

@@ -9,7 +9,9 @@
     SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
 
 Matrix type for storing sparse matrices in the
-[Compressed Sparse Column](@ref man-csc) format.
+[Compressed Sparse Column](@ref man-csc) format. The standard way
+of constructing SparseMatrixCSC is through the [`sparse`](@ref) function.
+See also [`spzeros`](@ref), [`spdiagm`](@ref) and [`sprand`](@ref).
 """
 struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     m::Int                  # Number of rows
@@ -1564,12 +1566,22 @@ sparse(s::UniformScaling, dims::Dims{2}) = SparseMatrixCSC(s, dims)
 sparse(s::UniformScaling, m::Integer, n::Integer) = sparse(s, Dims((m, n)))
 
 # TODO: More appropriate location?
-conj!(A::SparseMatrixCSC) = (@inbounds broadcast!(conj, A.nzval, A.nzval); A)
-(-)(A::SparseMatrixCSC) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), map(-, A.nzval))
+function conj!(A::SparseMatrixCSC)
+    map!(conj, nzvalview(A), nzvalview(A))
+    return A
+end
+function (-)(A::SparseMatrixCSC)
+    nzval = similar(A.nzval)
+    map!(-, view(nzval, 1:nnz(A)), nzvalview(A))
+    return SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), nzval)
+end
 
 # the rest of real, conj, imag are handled correctly via AbstractArray methods
-conj(A::SparseMatrixCSC{<:Complex}) =
-    SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), conj(A.nzval))
+function conj(A::SparseMatrixCSC{<:Complex})
+    nzval = similar(A.nzval)
+    map!(conj, view(nzval, 1:nnz(A)), nzvalview(A))
+    return SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), nzval)
+end
 imag(A::SparseMatrixCSC{Tv,Ti}) where {Tv<:Real,Ti} = spzeros(Tv, Ti, A.m, A.n)
 
 ## Binary arithmetic and boolean operators
