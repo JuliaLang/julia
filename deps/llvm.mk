@@ -460,10 +460,12 @@ $(eval $(call LLVM_PATCH,llvm-D57118-powerpc)) # remove for 9.0
 endif # LLVM_VER 8.0
 
 # Add a JL prefix to the version map. DO NOT REMOVE
+ifneq ($(LLVM_VER), svn)
 ifeq ($(LLVM_VER_SHORT), 6.0)
 $(eval $(call LLVM_PATCH,llvm-symver-jlprefix))
 else
 $(eval $(call LLVM_PATCH,llvm7-symver-jlprefix))
+endif
 endif
 
 # declare that all patches must be applied before running ./configure
