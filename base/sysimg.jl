@@ -48,7 +48,8 @@ let
             :REPL,
             :Statistics,
             :Tokenize,
-            :CSTParser
+            :CSTParser,
+            :FancyDiagnostics
         ]
 
     maxlen = maximum(textwidth.(string.(stdlibs)))
@@ -69,8 +70,12 @@ let
     Base._track_dependencies[] = false
 
     print_time("Stdlibs total", Base.tot_time_stdlib[])
+
+    # If CSTParser is loaded, switch over the builtin parser
+    (:FancyDiagnostics in stdlibs) && Core.include(Base, "jlfrontend.jl")
 end
 end
+
 
 # Clear global state
 empty!(Core.ARGS)
