@@ -103,7 +103,7 @@ julia> ; # upon typing ;, the prompt changes (in place) to: shell>
 shell> echo hello
 hello
 ```
-See [`JULIA_SHELL`](@ref) in the Environment Variables section of the manual.
+See `JULIA_SHELL` in the Environment Variables section of the Julia manual.
 
 ### Search modes
 
