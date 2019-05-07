@@ -2377,7 +2377,7 @@ function filter!(f, a::AbstractVector)
         resize!(a, j-1)
         sizehint!(a, j-1)
     else
-        deleteat!(a, j:Int(lastindex(a)))
+        Int(lastindex(a)) < j && deleteat!(a, j:Int(lastindex(a)))
     end
     a
 end
