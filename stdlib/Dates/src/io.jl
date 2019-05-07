@@ -530,11 +530,7 @@ end
 # show
 
 function Base.show(io::IO, p::P) where P <: Period
-    if get(io, :compact, false)
-        print(io, p)
-    else
-        print(io, P, '(', p.value, ')')
-    end
+    print(io, P, '(', p.value, ')')
 end
 
 function Base.show(io::IO, dt::DateTime)

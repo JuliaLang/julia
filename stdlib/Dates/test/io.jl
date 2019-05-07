@@ -25,6 +25,7 @@ using Dates
     @test sprint(show, Dates.Day(12)) == "Dates.Day(12)"
     @test sprint(print,Dates.Day(12)) == "12 days"
     @test repr(Dates.Day(12)) == "Dates.Day(12)"
+    @test occursin("Day(1)", repr(MIME("text/plain"), [Day(1) Day(2)]))
 
     @test string(Dates.Hour(12)) == "12 hours"
     @test sprint(show, Dates.Hour(12)) == "Dates.Hour(12)"
