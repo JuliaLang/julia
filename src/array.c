@@ -697,12 +697,14 @@ static void NOINLINE array_try_unshare(jl_array_t *a)
 
 static size_t limit_arraygrowth_scale(jl_array_t *a, size_t curlen)
 {
-    // Shrink overallocation growth rate once over jl_arr_xtralloc_threshold
-    size_t es = a->elsize;
-    size_t curlen_mem = curlen * es;
-    if (curlen_mem > jl_arr_xtralloc_threshold) {
-        return curlen * 1.4142;  // sqrt(2)
-    }
+    // // Shrink overallocation growth rate once over jl_arr_xtralloc_threshold
+    // size_t es = a->elsize;
+    // size_t curlen_mem = curlen * es;
+    // if (curlen_mem > jl_arr_xtralloc_threshold) {
+    //     return curlen * 1.4142;  // sqrt(2)
+    // }
+
+    // Always double when growing an array.
     return curlen * 2;
 }
 
