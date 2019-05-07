@@ -399,7 +399,7 @@ for f in (:log,:log1p)
     end
 end
 
-# Below is line are log10 and log2 ports from Openlibm. The following copyright
+# Below this line are log10 and log2 ports from Openlibm. The following copyright
 # notice is taken from there, but the original source is FDLIBM (see LICENSE.md).
 # ====================================================
 # Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
