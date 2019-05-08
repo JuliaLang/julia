@@ -611,11 +611,11 @@ else
 	$(error no win-extras target for ARCH=$(ARCH))
 endif
 	cd $(JULIAHOME)/dist-extras && \
-	$(JLDOWNLOAD) https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/unsis/nsis-2.46.5-Unicode-setup.exe && \
-	$(JLCHECKSUM) nsis-2.46.5-Unicode-setup.exe && \
+	$(JLDOWNLOAD) https://sourceforge.net/projects/nsis/files/NSIS%203/3.04/nsis-3.04-setup.exe && \
+	$(JLCHECKSUM) nsis-3.04-setup.exe && \
 	chmod a+x 7z.exe && \
 	chmod a+x 7z.dll && \
-	$(call spawn,./7z.exe) x -y -onsis nsis-2.46.5-Unicode-setup.exe && \
+	$(call spawn,./7z.exe) x -y -onsis nsis-3.04-setup.exe && \
 	chmod a+x ./nsis/makensis.exe
 
 # various statistics about the build that may interest the user

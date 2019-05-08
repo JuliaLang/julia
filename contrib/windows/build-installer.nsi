@@ -1,3 +1,5 @@
+Unicode true
+
 !include "MUI2.nsh"
 !include "nsDialogs.nsh"
 !include "winmessages.nsh"
@@ -153,5 +155,3 @@ FunctionEnd
 Function ShowInstallFolder
     ExecShell "open" $INSTDIR
 FunctionEnd
-
-
