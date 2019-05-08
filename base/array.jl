@@ -2325,9 +2325,7 @@ julia> filter(isodd, a)
  9
 ```
 """
-filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
-
-function filter(f, a::Vector{T}) where {T}
+function filter(f, a::Array{T, N}) where {T, N}
     j = 1
     b = Vector{T}(undef, length(a))
     for ai in a
@@ -2339,7 +2337,9 @@ function filter(f, a::Vector{T}) where {T}
     b
 end
 
-function filter(f, a::AbstractVector)
+function filter(f, a::AbstractArray)
+    (IndexStyle(a) != IndexLinear()) && return a[map(f, a)::AbstractArray{Bool}]
+    
     j = 1
     idxs = Vector{Int}(undef, length(a))
     for idx in eachindex(a)
@@ -2348,7 +2348,10 @@ function filter(f, a::AbstractVector)
         j = ifelse(f(ai), j+1, j)
     end
     resize!(idxs, j-1)
-    return a[idxs]
+    res = a[idxs]
+    empty!(idxs)
+    sizehint!(idxs, 0)
+    return res
 end
 
 """
@@ -2368,24 +2371,19 @@ julia> filter!(isodd, Vector(1:10))
  9
 ```
 """
-function filter!(f, a::Vector)
-    j = 1
-    for ai in a
-        @inbounds a[j] = ai
-        j += f(ai)::Bool
-    end
-    resize!(a, j-1)
-    sizehint!(a, j-1)
-    return a
-end
-
 function filter!(f, a::AbstractVector)
     j = firstindex(a)
     for ai in a
         @inbounds a[j] = ai
         j = ifelse(f(ai), nextind(a, j), j)
     end
-    j<= lastindex(a) && deleteat!(a, j:lastindex(a))
+    j > lastindex(a) && return a
+    if a isa Vector
+        resize!(a, j-1)
+        sizehint!(a, j-1)
+    else
+        deleteat!(a, j:lastindex(a))
+    end
     return a
 end
 
