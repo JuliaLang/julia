@@ -195,14 +195,14 @@ function _mean(r::AbstractRange{<:Real}, dims::Colon, weights::Nothing)
 end
 
 _mean(A::AbstractArray, dims, weights::Nothing) =
-    _mean!(Base.reducedim_init(t -> t/2, +, A, dims), A, nothing)
+    _mean!(Base.reducedim_init(t -> t/2, Base.add_sum, A, dims), A, nothing)
 _mean(A::AbstractArray, dims::Colon, weights::Nothing) = sum(A) / length(A)
 
 _mean(A::AbstractArray, dims::Colon, w::AbstractArray) =
     sum(A, weights=w) / sum(w)
 
 _mean(A::AbstractArray, dims, w::AbstractArray) =
-    _mean!(Base.reducedim_init(t -> (t*zero(eltype(w)))/2, +, A, dims), A, w)
+    _mean!(Base.reducedim_init(t -> (t*zero(eltype(w)))/2, Base.add_sum, A, dims), A, w)
 
 ##### variances #####
 

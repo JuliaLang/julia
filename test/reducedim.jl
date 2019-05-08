@@ -481,4 +481,7 @@ end
             @test_throws DimensionMismatch sum(a, weights=w, dims=4)
         end
     end
+
+    @test_throws ArgumentError sum(exp, [1 2], weights=[1, 10], dims=1)
+    @test_throws ArgumentError sum([1 2], weights=[1 10], dims=1)
 end

@@ -724,9 +724,12 @@ sum!(f::Function, r::AbstractArray, A::AbstractArray;
     _sum!(f, r, A, weights; init=init)
 _sum!(f, r::AbstractArray, A::AbstractArray, ::Nothing; init::Bool=true) =
     mapreducedim!(f, add_sum, initarray!(r, add_sum, init, A), A)
-_sum(f, A, dims, ::Nothing) = mapreduce(f, add_sum, A, dims=dims)
-_sum(A::AbstractArray, dims, w::AbstractArray) =
+_sum(A::AbstractArray, dims, weights) = _sum(identity, A, dims, weights)
+_sum(f, A::AbstractArray, dims, ::Nothing) = mapreduce(f, add_sum, A, dims=dims)
+_sum(::typeof(identity), A::AbstractArray, dims, w::AbstractArray) =
     _sum!(identity, reducedim_init(t -> t*zero(eltype(w)), add_sum, A, dims), A, w)
+_sum(f, A::AbstractArray, dims, w::AbstractArray) =
+    throw(ArgumentError("Passing a function is not supported with `weights`"))
 
 
 # Weighted sum
@@ -832,8 +835,11 @@ _wsum!(R::AbstractArray, A::AbstractArray, w::AbstractVector,
        dim::Int, init::Bool) =
     _wsum_general!(R, A, w, dim, init)
 
-function _sum!(::typeof(identity), R::AbstractArray, A::AbstractArray{T,N}, w::AbstractVector;
+function _sum!(f, R::AbstractArray, A::AbstractArray{T,N}, w::AbstractArray;
                init::Bool=true) where {T,N}
+    f === identity || throw(ArgumentError("Passing a function is not supported with `weights`"))
+    w isa AbstractVector || throw(ArgumentError("Only vector `weights` are supported"))
+
     check_reducedims(R,A)
     reddims = size(R) .!= size(A)
     dim = something(findfirst(reddims), ndims(R)+1)
@@ -848,6 +854,7 @@ function _sum!(::typeof(identity), R::AbstractArray, A::AbstractArray{T,N}, w::A
     end
     _wsum!(R, A, w, dim, init)
 end
+
 
 ##### findmin & findmax #####
 # The initial values of Rval are not used if the corresponding indices in Rind are 0.

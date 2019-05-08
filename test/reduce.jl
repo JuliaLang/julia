@@ -563,4 +563,8 @@ x = [j+7 for j in i]
             @test typeof(res) == typeof(expected)
         end
     end
+
+    @test_throws ArgumentError sum(exp, [1], weights=[1])
+    @test_throws ArgumentError sum!(exp, [0 0], [1 2], weights=[1, 10])
+    @test_throws ArgumentError sum!([0 0], [1 2], weights=[1 10])
 end
