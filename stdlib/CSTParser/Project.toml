@@ -1,0 +1,11 @@
+name = "CSTParser"
+uuid = "00ebfdb7-1f24-5e51-bd34-a7502290713f"
+
+[deps]
+Tokenize = "0796e94c-ce3b-5d07-9a54-7f471281c624"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

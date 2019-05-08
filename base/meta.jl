@@ -146,7 +146,7 @@ The expression passed to the [`parse`](@ref) function could not be interpreted a
 expression.
 """
 struct ParseError <: Exception
-    msg::AbstractString
+    msg
 end
 
 """

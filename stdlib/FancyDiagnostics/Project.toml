@@ -1,0 +1,11 @@
+name = "FancyDiagnostics"
+uuid = "29b9fc01-2d52-5901-8357-88823a8aad60"
+
+[deps]
+CSTParser = "00ebfdb7-1f24-5e51-bd34-a7502290713f"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

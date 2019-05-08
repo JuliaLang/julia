@@ -45,7 +45,7 @@ SRCS := \
 	simplevector APInt-C runtime_intrinsics runtime_ccall precompile \
 	threading partr stackwalk gc gc-debug gc-pages gc-stacks method \
 	jlapi signal-handling safepoint jloptions timing subtype rtutils \
-	crc32c processor
+	crc32c processor flispfrontend
 
 ifeq ($(USEMSVC), 1)
 SRCS += getopt
