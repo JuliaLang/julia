@@ -722,3 +722,4 @@ end
 end
 
 include("weights.jl")
+include("moments.jl")

@@ -322,6 +322,12 @@ function varm!(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray, w::Nothi
     return R
 end
 
+function varm!(R::AbstractArray, A::AbstractArray, m::AbstractArray, w::AbstractArray;
+               corrected::Bool=true)
+    rmul!(centralize_sumabs2!(R, A, m, values(w)),
+          varcorrection(w, corrected))
+end
+
 """
     varm(itr, m; dims, corrected::Bool=true)
 

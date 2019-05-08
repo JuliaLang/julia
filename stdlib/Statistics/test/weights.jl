@@ -28,13 +28,6 @@ weight_funcs = (weights, aweights, fweights, pweights)
     @test values(bv) === b
     @test sum(bv)    === 3
     @test !isempty(bv)
-
-    ba = BitArray([true, false, true])
-    sa = sparsevec([1., 0., 2.])
-
-    # TODO: keep?
-    #@test sum(ba, wv) === 4.0
-    #@test sum(sa, wv) === 7.0
 end
 
 @testset "$f, setindex!" for f in weight_funcs
