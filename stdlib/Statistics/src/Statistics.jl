@@ -369,6 +369,78 @@ function _varm(A::AbstractArray{T}, m, corrected::Bool, dims::Colon,
 end
 
 """
+    varcorrection(n::Integer, corrected=false)
+
+Compute a bias correction factor for calculating `var`, `std` and `cov` with
+`n` observations. Returns ``\\frac{1}{n - 1}`` when `corrected=true`
+(i.e. [Bessel's correction](https://en.wikipedia.org/wiki/Bessel's_correction)),
+otherwise returns ``\\frac{1}{n}`` (i.e. no correction).
+"""
+@inline varcorrection(n::Integer, corrected::Bool=false) = 1 / (n - Int(corrected))
+
+"""
+    varcorrection(w::Weights, corrected=false)
+
+Returns ``\\frac{1}{\\sum w}`` when `corrected=false` and throws an `ArgumentError`
+if `corrected=true`.
+"""
+@inline function varcorrection(w::Weights, corrected::Bool=false)
+    corrected && throw(ArgumentError("Weights type does not support bias correction: " *
+                                     "use FrequencyWeights, AnalyticWeights or ProbabilityWeights if applicable."))
+    1 / w.sum
+end
+
+"""
+    varcorrection(w::AnalyticWeights, corrected=false)
+
+* `corrected=true`: ``\\frac{1}{\\sum w - \\sum {w^2} / \\sum w}``
+* `corrected=false`: ``\\frac{1}{\\sum w}``
+"""
+@inline function varcorrection(w::AnalyticWeights, corrected::Bool=false)
+    s = w.sum
+
+    if corrected
+        sum_sn = sum(x -> (x / s) ^ 2, w)
+        1 / (s * (1 - sum_sn))
+    else
+        1 / s
+    end
+end
+
+"""
+    varcorrection(w::FrequencyWeights, corrected=false)
+
+* `corrected=true`: ``\\frac{1}{\\sum{w} - 1}``
+* `corrected=false`: ``\\frac{1}{\\sum w}``
+"""
+@inline function varcorrection(w::FrequencyWeights, corrected::Bool=false)
+    s = w.sum
+
+    if corrected
+        1 / (s - 1)
+    else
+        1 / s
+    end
+end
+
+"""
+    varcorrection(w::ProbabilityWeights, corrected=false)
+
+* `corrected=true`: ``\\frac{n}{(n - 1) \\sum w}`` where ``n`` equals `count(!iszero, w)`
+* `corrected=false`: ``\\frac{1}{\\sum w}``
+"""
+@inline function varcorrection(w::ProbabilityWeights, corrected::Bool=false)
+    s = w.sum
+
+    if corrected
+        n = count(!iszero, w)
+        n / (s * (n - 1))
+    else
+        1 / s
+    end
+end
+
+"""
     var(itr; corrected::Bool=true, [weights::AbstractWeights], [mean], [dims])
 
 Compute the sample variance of collection `itr`.
