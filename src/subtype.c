@@ -980,6 +980,8 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
         return var_gt((jl_tvar_t*)y, x, e, param);
     if (y == (jl_value_t*)jl_any_type && !jl_has_free_typevars(x))
         return 1;
+    if (x == jl_bottom_type && !jl_has_free_typevars(y))
+        return 1;
     jl_value_t *ux = jl_unwrap_unionall(x);
     jl_value_t *uy = jl_unwrap_unionall(y);
     if ((x != ux || y != uy) && y != (jl_value_t*)jl_any_type && jl_is_datatype(ux) && jl_is_datatype(uy) &&
@@ -1779,7 +1781,10 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     jl_tvar_t *newvar = vb->var;
     JL_GC_PUSH2(&res, &newvar);
     // try to reduce var to a single value
-    if (obviously_egal(vb->lb, vb->ub)) {
+    if (jl_is_long(vb->ub) && jl_is_typevar(vb->lb)) {
+        varval = vb->ub;
+    }
+    else if (obviously_egal(vb->lb, vb->ub)) {
         // given x<:T<:x, substitute x for T
         varval = vb->ub;
     }

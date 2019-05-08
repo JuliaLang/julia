@@ -1509,3 +1509,23 @@ end
 
 # issue #26083
 @testintersect(Base.RefValue{<:Tuple}, Ref{Tuple{M}} where M, Base.RefValue{Tuple{M}} where M)
+
+# issue #31899
+struct SA{N,L}
+end
+@testintersect(Tuple{Type{SA{Int, L} where L}, Type{SA{Int, Int8}}},
+               Tuple{Type{<:SA{N, L}}, Type{<:SA{N, L}}} where {N,L},
+               Union{})
+@testintersect(Tuple{Type{SA{2, L} where L}, Type{SA{2, 16}}},
+               Tuple{Type{<:SA{N, L}}, Type{<:SA{N, L}}} where {L,N},
+               Union{})
+@testintersect(Tuple{Type{SA{2, L} where L}, Type{SA{2, 16}}},
+               Tuple{Type{<:SA{N, L}}, Type{<:SA{N, L}}} where {N,L},
+               Union{})
+@testintersect(Tuple{Type{SA{2, L}}, Type{SA{2, L}}} where L,
+               Tuple{Type{<:SA{N, L}}, Type{<:SA{N, L}}} where {N,L},
+               Tuple{Type{SA{2, L}}, Type{SA{2, L}}} where L)
+@testintersect(Tuple{Type{SA{2, L}}, Type{SA{2, 16}}} where L,
+               Tuple{Type{<:SA{N, L}}, Type{<:SA{N, L}}} where {N,L},
+               # TODO: this could be narrower
+               Tuple{Type{SA{2, L}}, Type{SA{2, 16}}} where L)
