@@ -1,4 +1,10 @@
-# Optimized methods for weighted sum over dimensions
+# Optimized method for weighted sum with BlasReal
+# dot cannot be used for other types as it uses + rather than add_sum for accumulation,
+# and therefore does not return the correct type
+Base._sum(A::AbstractArray{T}, dims::Colon, w::AbstractArray{T}) where {T<:BlasReal} =
+    dot(vec(A), vec(w))
+
+# Optimized methods for weighted sum over dimensions with BlasReal
 # (generic method is defined in base/reducedim.jl)
 #
 #  _wsum! is specialized for following cases:
@@ -75,10 +81,14 @@ function _wsumN!(R::StridedArray{T}, A::DenseArray{T,N}, w::StridedVector{T},
     return R
 end
 
-_wsum!(R::StridedArray{T}, A::DenseArray{T,2}, w::StridedVector{T},
-       dim::Int, init::Bool) where {T<:BlasReal} =
+Base._wsum!(R::StridedArray{T}, A::DenseMatrix{T}, w::StridedVector{T},
+            dim::Int, init::Bool) where {T<:BlasReal} =
     _wsum2_blas!(view(R,:), A, w, dim, init)
 
-_wsum!(R::StridedArray{T}, A::DenseArray{T}, w::StridedVector{T},
-       dim::Int, init::Bool) where {T<:BlasReal} =
+Base._wsum!(R::StridedArray{T}, A::DenseArray{T}, w::StridedVector{T},
+            dim::Int, init::Bool) where {T<:BlasReal} =
     _wsumN!(R, A, w, dim, init)
+
+Base._wsum!(R::StridedVector{T}, A::DenseArray{T}, w::StridedVector{T},
+            dim::Int, init::Bool) where {T<:BlasReal} =
+    Base._wsum1!(R, A, w, init)

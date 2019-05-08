@@ -762,7 +762,7 @@ end
 #         (in LinearAlgebra/src/wsum.jl)
 
 function _wsum1!(R::AbstractArray, A::AbstractVector, w::AbstractVector, init::Bool)
-    r = wsum(A, w)
+    r = _sum(A, :, w)
     if init
         R[1] = r
     else
@@ -801,7 +801,7 @@ function _wsum_general!(R::AbstractArray{S}, A::AbstractArray, w::AbstractVector
     return R
 end
 
-_wsum!(R::AbstractArray, A::AbstractArray, w::AbstractVector,
+_wsum!(R::AbstractArray, A::AbstractVector, w::AbstractVector,
        dim::Int, init::Bool) =
     _wsum1!(R, A, w, init)
 
