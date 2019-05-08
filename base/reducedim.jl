@@ -843,6 +843,12 @@ function _sum!(f, R::AbstractArray, A::AbstractArray{T,N}, w::AbstractArray;
     check_reducedims(R,A)
     reddims = size(R) .!= size(A)
     dim = something(findfirst(reddims), ndims(R)+1)
+    if dim > N
+        dim1 = findfirst(==(1), size(A))
+        if dim1 !== nothing
+            dim = dim1
+        end
+    end
     if findnext(reddims, dim+1) !== nothing
         throw(ArgumentError("reducing over more than one dimension is not supported with weights"))
     end

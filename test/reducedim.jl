@@ -482,6 +482,9 @@ end
         end
     end
 
+    # Corner case with a single row
+    @test sum([1 2], weights=[2], dims=1) == [2 4]
+
     @test_throws ArgumentError sum(exp, [1 2], weights=[1, 10], dims=1)
     @test_throws ArgumentError sum([1 2], weights=[1 10], dims=1)
 end
