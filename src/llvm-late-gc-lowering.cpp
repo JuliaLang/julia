@@ -183,11 +183,11 @@ using namespace llvm;
       in:
 
       A:
-        %Abase = load addrspace(10) *...
-        %Aderived = addrspacecast %Abase to addrspace(11)
+        %Abase = load addrspace(100) *...
+        %Aderived = addrspacecast %Abase to addrspace(101)
       B:
-        %Bbase = load addrspace(10) *...
-        %Bderived = addrspacecast %Bbase to addrspace(11)
+        %Bbase = load addrspace(100) *...
+        %Bderived = addrspacecast %Bbase to addrspace(101)
       C:
         %phi = phi [%Aderived, %A
                     %Bderived, %B]

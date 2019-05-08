@@ -285,7 +285,7 @@ duration of this [`ccall`](@ref). We then take this information and represent
 it in an "operand bundle" at the IR level. An operand bundle is essentially a fake
 use that is attached to the call site. At the IR level, this looks like so:
 ```llvm
-call void inttoptr (i64 ... to void (double*)*)(double* %5) [ "jl_roots"(%jl_value_t addrspace(10)* %A) ]
+call void inttoptr (i64 ... to void (double*)*)(double* %5) [ "jl_roots"(%jl_value_t addrspace(100)* %A) ]
 ```
 The GC root placement pass will treat the `jl_roots` operand bundle as if it were
 a regular operand. However, as a final step, after the GC roots are inserted,
@@ -298,7 +298,7 @@ explicit control of GC rooting. By our above invariants, this function is illega
 because it performs an address space cast from 10 to 0. However, it can be useful,
 in certain situations, so we provide a special intrinsic:
 ```llvm
-declared %jl_value_t *julia.pointer_from_objref(%jl_value_t addrspace(10)*)
+declared %jl_value_t *julia.pointer_from_objref(%jl_value_t addrspace(100)*)
 ```
 which is lowered to the corresponding address space cast after GC root lowering.
 Do note however that by using this intrinsic, the caller assumes all responsibility
