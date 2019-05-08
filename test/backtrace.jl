@@ -199,7 +199,7 @@ let trace = try
 
             """, "a_filename")
     catch
-        stacktrace(Base.catch_stack()[end-1][2]) # Ignore LoadError
+        stacktrace(catch_backtrace())
     end
     @test trace[1].func == Symbol("top-level scope")
     @test trace[1].file == :a_filename
@@ -213,7 +213,7 @@ let trace = try
 
             """, "a_filename")
     catch
-        stacktrace(Base.catch_stack()[end-1][2]) # Ignore LoadError
+        stacktrace(catch_backtrace())
     end
     @test trace[1].func == Symbol("top-level scope")
     @test trace[1].file == :a_filename

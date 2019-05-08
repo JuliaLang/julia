@@ -372,7 +372,7 @@ try
           error("break me")
           end
           """)
-    @test_warn r"ERROR: Error while loading expression starting at.*FooBar2.*caused by.*break me"s try
+    @test_warn "ERROR: LoadError: break me\nStacktrace:\n [1] error" try
         Base.require(Main, :FooBar2)
         error("\"LoadError: break me\" test failed")
     catch exc
