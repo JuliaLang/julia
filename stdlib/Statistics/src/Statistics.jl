@@ -351,9 +351,12 @@ varm(A::AbstractArray, m; corrected::Bool=true, dims=:,
 varm(iterable, m; corrected::Bool=true) =
     _var(iterable, corrected, m)
 
-# TODO: choose element type based on weights type too?
-_varm(A::AbstractArray, m, corrected::Bool, dims, w::Union{AbstractWeights, Nothing}) =
-    varm!(Base.reducedim_init(t -> abs2(t)/2, +, A, dims), A, m, w; corrected=corrected)
+_varm(A::AbstractArray, m, corrected::Bool, dims, w::Nothing) =
+    varm!(Base.reducedim_init(t -> abs2(t)/2, +, A, dims), A, m, w, corrected=corrected)
+
+_varm(A::AbstractArray, m, corrected::Bool, dims, w::AbstractWeights{T}) where {T<:Real} =
+    varm!(Base.reducedim_init(t -> (abs2(t)*zero(T))/2, +, A, dims), A, m, w,
+          corrected=corrected)
 
 function _varm(A::AbstractArray{T}, m, corrected::Bool, dims::Colon, w::Nothing) where T
     n = length(A)
