@@ -156,16 +156,15 @@ end
 macro except_strbt(expr, err_type)
     errmsg = "expected failure, but no exception thrown for $expr"
     return quote
-        let err = nothing, bt = nothing
+        let err = nothing
             try
                 $(esc(expr))
             catch err
-                bt = catch_backtrace()
             end
             err === nothing && error($errmsg)
             @test typeof(err) === $(esc(err_type))
             buf = IOBuffer()
-            showerror(buf, err, bt)
+            showerror(buf, err, catch_backtrace())
             String(take!(buf))
         end
     end
@@ -554,13 +553,4 @@ struct NoMethodsDefinedHere; end
 let buf = IOBuffer()
     Base.show_method_candidates(buf, Base.MethodError(sin, Tuple{NoMethodsDefinedHere}))
     @test length(take!(buf)) !== 0
-end
-
-@testset "Nested errors" begin
-    # LoadError and InitError used to print the nested exception.
-    # This is now dealt with via the exception stack so these print very simply:
-    @test sprint(Base.showerror, LoadError("somefile.jl", 10, ErrorException("retained for backward compat"))) ==
-          "Error while loading expression starting at somefile.jl:10"
-    @test sprint(Base.showerror, InitError(:some_module, ErrorException("retained for backward compat"))) ==
-          "InitError during initialization of module some_module"
 end
