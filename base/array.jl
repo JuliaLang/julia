@@ -2327,12 +2327,12 @@ julia> filter(isodd, a)
 """
 filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
 
-function filter(f, a::Vector{T, N}) where {T,N}
+function filter(f, a::Vector{T}) where {T}
     j = 1
     b = Vector{T}(undef, length(a))
     for ai in a
         @inbounds b[j] = ai
-        j += f(ai)::Bool
+        j = ifelse(f(ai), j+1, j)
     end
     resize!(b, j-1)
     sizehint!(b, length(b))
@@ -2345,7 +2345,7 @@ function filter(f, a::AbstractVector)
     for idx in eachindex(a)
         @inbounds idxs[j] = idx
         ai = @inbounds a[idx]
-        j += f(ai)::Bool
+        j = ifelse(f(ai), j+1, j)
     end
     resize!(idxs, j-1)
     return a[idxs]
