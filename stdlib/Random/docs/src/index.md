@@ -195,8 +195,10 @@ end
 ```
 and that we *always* want to build an a alias table, regardless of the number of values needed (we learn how to customize this below). The methods
 ```julia
+Random.eltype(::Type{<:DiscreteDistribution}) = Int
+
 function Random.Sampler(::AbstractRng, distribution::DiscreteDistribution, ::Repetition)
-    SamplerSimple(disribution, make_alias_table(probabilities))
+    SamplerSimple(disribution, make_alias_table(distribution.probabilities))
 end
 ```
 should be defined to return a sampler with pre-computed data, then
