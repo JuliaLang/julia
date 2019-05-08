@@ -107,10 +107,14 @@ _mean(f, A::AbstractArray, ::Colon) = sum(f, A) / length(A)
 _mean(f, A::AbstractArray, dims) = sum(f, A, dims=dims) / mapreduce(i -> size(A, i), *, unique(dims); init=1)
 
 """
-    mean!(r, v; weights::AbstractArray)
+    mean!(r, v; [weights::AbstractVector])
 
 Compute the mean of `v` over the singleton dimensions of `r`, and write results to `r`.
-Weights can be provided via an array of the same size as `A`.
+If `r` has only one singleton dimension `i`, `weights` can be a vector of length
+`size(v, i)` to compute the weighted mean.
+
+!!! compat "Julia 1.3"
+    The `weights`  argument requires at least Julia 1.3.
 
 # Examples
 ```jldoctest
@@ -155,8 +159,8 @@ or a vector with the same length as `size(A, dims)` if `dims` is provided.
 !!! compat "Julia 1.1"
     `mean` for empty arrays requires at least Julia 1.1.
 
-!!! compat "Julia 1.2"
-    The `weights` keyword argument requires at least Julia 1.2.
+!!! compat "Julia 1.3"
+    The `weights` keyword argument requires at least Julia 1.3.
 
 # Examples
 ```jldoctest
@@ -575,8 +579,8 @@ weights used:
     Use the [`skipmissing`](@ref) function to omit `missing` entries and compute the
     standard deviation of non-missing values.
 
-!!! compat "Julia 1.2"
-    The `weights` keyword argument requires at least Julia 1.2.
+!!! compat "Julia 1.3"
+    The `weights` keyword argument requires at least Julia 1.3.
 """
 std(A::AbstractArray;
     corrected::Bool=true, mean=nothing, dims=:,
@@ -987,8 +991,8 @@ at the same time.
 
 See the documentation for [`quantile`](@ref) for more details.
 
-!!! compat "Julia 1.2"
-    The `weights` keyword argument requires at least Julia 1.2.
+!!! compat "Julia 1.3"
+    The `weights` keyword argument requires at least Julia 1.3c.
 
 # Examples
 ```jldoctest

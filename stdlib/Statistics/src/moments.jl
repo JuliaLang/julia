@@ -51,8 +51,8 @@ specifying a pre-computed `mean`.
 If `x` is an `AbstractArray`, a `weights` array of the same length as `x`
 can be specified to compute the weighted skewness.
 
-!!! compat "Julia 1.2"
-    This function requires at least Julia 1.2.
+!!! compat "Julia 1.3"
+    This function requires at least Julia 1.3.
 """
 skewness(A; mean::Union{Real, Nothing}=nothing) = _skewness(A, nothing, mean)
 
@@ -125,8 +125,8 @@ specifying a pre-computed `mean`.
 If `x` is an `AbstractArray`, a `weights` array of the same length as `x`
 can be specified to compute the weighted kurtosis.
 
-!!! compat "Julia 1.2"
-    This function requires at least Julia 1.2.
+!!! compat "Julia 1.3"
+    This function requires at least Julia 1.3.
 """
 kurtosis(A; mean::Union{Real, Nothing}=nothing) = _kurtosis(A, nothing, mean)
 

@@ -13,8 +13,8 @@ Concrete `AbstractWeights` type indicates what correction
 has to be applied when computing statistics which depend on the
 meaning of weights.
 
-!!! compat "Julia 1.2"
-    This type requires at least Julia 1.2.
+!!! compat "Julia 1.3"
+    This type requires at least Julia 1.3.
 """
 abstract type AbstractWeights{S<:Real, T<:Real, V<:AbstractVector{T}} <: AbstractVector{T} end
 
@@ -62,8 +62,8 @@ The `Weights` type describes a generic weights vector which does not support
 all operations possible for [`FrequencyWeights`](@ref), [`AnalyticWeights`](@ref)
 and [`ProbabilityWeights`](@ref).
 
-!!! compat "Julia 1.2"
-    This type requires at least Julia 1.2.
+!!! compat "Julia 1.3"
+    This type requires at least Julia 1.3.
 """ Weights
 
 """
@@ -88,8 +88,8 @@ for each observation. These weights may also be referred to as reliability weigh
 precision weights or inverse variance weights. These are typically used when the observations
 being weighted are aggregate values (e.g., averages) with differing variances.
 
-!!! compat "Julia 1.2"
-    This type requires at least Julia 1.2.
+!!! compat "Julia 1.3"
+    This type requires at least Julia 1.3.
 """ AnalyticWeights
 
 """
@@ -98,8 +98,8 @@ being weighted are aggregate values (e.g., averages) with differing variances.
 Construct an `AnalyticWeights` vector from array `vs`.
 See the documentation for [`AnalyticWeights`](@ref) for more details.
 
-!!! compat "Julia 1.2"
-    This function requires at least Julia 1.2.
+!!! compat "Julia 1.3"
+    This function requires at least Julia 1.3.
 """
 aweights(vs::AbstractVector{<:Real}) = AnalyticWeights(vs)
 aweights(vs::AbstractArray{<:Real}) = AnalyticWeights(vec(vs))
@@ -115,8 +115,8 @@ A precomputed sum may be provided as `wsum`.
 Frequency weights describe the number of times (or frequency) each observation
 was observed. These weights may also be referred to as case weights or repeat weights.
 
-!!! compat "Julia 1.2"
-    This type requires at least Julia 1.2.
+!!! compat "Julia 1.3"
+    This type requires at least Julia 1.3.
 """ FrequencyWeights
 
 """
@@ -125,8 +125,8 @@ was observed. These weights may also be referred to as case weights or repeat we
 Construct a `FrequencyWeights` vector from a given array.
 See the documentation for [`FrequencyWeights`](@ref) for more details.
 
-!!! compat "Julia 1.2"
-    This function requires at least Julia 1.2.
+!!! compat "Julia 1.3"
+    This function requires at least Julia 1.3.
 """
 fweights(vs::AbstractVector{<:Real}) = FrequencyWeights(vs)
 fweights(vs::AbstractArray{<:Real}) = FrequencyWeights(vec(vs))
@@ -143,8 +143,8 @@ Probability weights represent the inverse of the sampling probability for each o
 providing a correction mechanism for under- or over-sampling certain population groups.
 These weights may also be referred to as sampling weights.
 
-!!! compat "Julia 1.2"
-    This type requires at least Julia 1.2.
+!!! compat "Julia 1.3"
+    This type requires at least Julia 1.3.
 """ ProbabilityWeights
 
 """
@@ -153,8 +153,8 @@ These weights may also be referred to as sampling weights.
 Construct a `ProbabilityWeights` vector from a given array.
 See the documentation for [`ProbabilityWeights`](@ref) for more details.
 
-!!! compat "Julia 1.2"
-    This function requires at least Julia 1.2.
+!!! compat "Julia 1.3"
+    This function requires at least Julia 1.3.
 """
 pweights(vs::AbstractVector{<:Real}) = ProbabilityWeights(vs)
 pweights(vs::AbstractArray{<:Real}) = ProbabilityWeights(vec(vs))

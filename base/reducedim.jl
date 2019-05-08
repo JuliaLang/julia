@@ -353,9 +353,19 @@ reduce(op, A::AbstractArray; kw...) = mapreduce(identity, op, A; kw...)
 
 ##### Specific reduction functions #####
 """
-    sum(A::AbstractArray; dims)
+    sum(A::AbstractArray; [dims], [weights::AbstractArray])
 
-Sum elements of an array over the given dimensions.
+Compute the sum of array `A`.
+If `dims` is provided, return an array of sums over these dimensions.
+If `weights` is provided, return the weighted sum(s). `weights` must be
+either an array of the same size as `A` if `dims` is omitted,
+or a vector with the same length as `size(A, dims)` if `dims` is provided.
+
+!!! compat "Julia 1.1"
+    `mean` for empty arrays requires at least Julia 1.1.
+
+!!! compat "Julia 1.3"
+    The `weights` keyword argument requires at least Julia 1.3.
 
 # Examples
 ```jldoctest
@@ -372,14 +382,26 @@ julia> sum(A, dims=2)
 2×1 Array{Int64,2}:
  3
  7
+
+julia> sum(A, weights=[2 1; 2 1])
+14
+
+julia> sum(A, weights=[2, 1], dims=1)
+1×2 Array{Int64,2}:
+ 5  8
 ```
 """
 sum(A::AbstractArray; dims)
 
 """
-    sum!(r, A)
+    sum!(r, A; [weights::AbstractVector])
 
 Sum elements of `A` over the singleton dimensions of `r`, and write results to `r`.
+If `r` has only one singleton dimension `i`, `weights` can be a vector of length
+`size(v, i)` to compute the weighted mean.
+
+!!! compat "Julia 1.3"
+    The `weights` keyword argument requires at least Julia 1.3.
 
 # Examples
 ```jldoctest
