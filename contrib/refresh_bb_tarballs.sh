@@ -1,4 +1,5 @@
 #!/bin/sh
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Get this list via:
 #    using BinaryBuilder
