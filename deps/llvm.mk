@@ -459,7 +459,7 @@ $(eval $(call LLVM_PATCH,llvm-6.0-D63688-wasm-isLocal))
 $(eval $(call LLVM_PATCH,llvm-6.0-D64032-cmake-cross))
 $(eval $(call LLVM_PATCH,llvm-6.0-D64225-cmake-cross2))
 $(eval $(call LLVM_PATCH,llvm6-WASM-addrspaces)) # WebAssembly
-$(eval $(call LLVM_PATCH,llvm-AMDGPU-addrspaces)) # AMDGPU
+$(eval $(call LLVM_PATCH,llvm6-AMDGPU-addrspaces)) # AMDGPU
 endif # LLVM_VER 6.0
 
 ifeq ($(LLVM_VER_SHORT),7.0)
@@ -477,6 +477,7 @@ $(eval $(call LLVM_PATCH,llvm-D57118-powerpc))
 $(eval $(call LLVM_PATCH,llvm-rL349068-llvm-config)) # remove for 8.0
 $(eval $(call LLVM_PATCH,llvm7-WASM-addrspaces)) # WebAssembly
 $(eval $(call LLVM_PATCH,llvm7-revert-D44485))
+$(eval $(call LLVM_PATCH,llvm7-AMDGPU-addrspaces)) # AMDGPU
 endif # LLVM_VER 7.0
 
 ifeq ($(LLVM_VER_SHORT),8.0)
@@ -494,6 +495,7 @@ $(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm-8.0-D66401-mingw-reloc)) # remove for 9.0
 $(eval $(call LLVM_PATCH,llvm7-revert-D44485))
+$(eval $(call LLVM_PATCH,llvm8-AMDGPU-addrspaces)) # AMDGPU
 endif # LLVM_VER 8.0
 
 ifeq ($(LLVM_VER_SHORT),9.0)

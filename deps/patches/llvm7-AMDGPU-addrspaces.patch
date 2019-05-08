@@ -1,0 +1,56 @@
+From 86d8f85b0157aa8ce17840adc1121dbc7ae35262 Mon Sep 17 00:00:00 2001
+From: Valentin Churavy <v.churavy@gmail.com>
+Date: Mon, 18 Mar 2019 16:18:40 -0400
+Subject: [PATCH] AMDGPU ignore custom AS
+
+---
+ lib/Target/AMDGPU/AMDGPU.h           | 5 +++++
+ lib/Target/AMDGPU/SIISelLowering.cpp | 9 +++++++--
+ 2 files changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/lib/Target/AMDGPU/AMDGPU.h b/lib/Target/AMDGPU/AMDGPU.h
+index 2b49c2ea88e..6992ae5e51d 100644
+--- a/lib/Target/AMDGPU/AMDGPU.h
++++ b/lib/Target/AMDGPU/AMDGPU.h
+@@ -264,6 +264,11 @@ struct AMDGPUAS {
+     CONSTANT_BUFFER_13 = 21,
+     CONSTANT_BUFFER_14 = 22,
+     CONSTANT_BUFFER_15 = 23,
++    JULIA_TRACKED = 100,
++    JULIA_DERIVED = 101,
++    JULIA_CALLEE_ROOTED = 102,
++    JULIA_LOADED = 103,
++    LAST = JULIA_LOADED,
+ 
+     // Some places use this if the address space can't be determined.
+     UNKNOWN_ADDRESS_SPACE = ~0u,
+diff --git a/lib/Target/AMDGPU/SIISelLowering.cpp b/lib/Target/AMDGPU/SIISelLowering.cpp
+index 25007861fd1..c59016453a2 100644
+--- a/lib/Target/AMDGPU/SIISelLowering.cpp
++++ b/lib/Target/AMDGPU/SIISelLowering.cpp
+@@ -1009,6 +1009,11 @@ bool SITargetLowering::isLegalAddressingMode(const DataLayout &DL,
+     // addressing modes, so treat them as having no offset like flat
+     // instructions.
+     return isLegalFlatAddressingMode(AM);
++  } else if (AS == AMDGPUASI.JULIA_TRACKED ||
++             AS == AMDGPUASI.JULIA_DERIVED ||
++             AS == AMDGPUASI.JULIA_CALLEE_ROOTED ||
++             AS == AMDGPUASI.JULIA_LOADED) {
++    return true;
+   } else {
+     llvm_unreachable("unhandled address space");
+   }
+@@ -1118,8 +1123,8 @@ static bool isFlatGlobalAddrSpace(unsigned AS, AMDGPUAS AMDGPUASI) {
+ 
+ bool SITargetLowering::isNoopAddrSpaceCast(unsigned SrcAS,
+                                            unsigned DestAS) const {
+-  return isFlatGlobalAddrSpace(SrcAS, AMDGPUASI) &&
+-         isFlatGlobalAddrSpace(DestAS, AMDGPUASI);
++  return (isFlatGlobalAddrSpace(SrcAS, AMDGPUASI) || SrcAS > AMDGPUASI.LAST) &&
++         (isFlatGlobalAddrSpace(DestAS, AMDGPUASI) || DestAS > AMDGPUASI.LAST);
+ }
+ 
+ bool SITargetLowering::isMemOpHasNoClobberedMemOperand(const SDNode *N) const {
+-- 
+2.21.0
+
