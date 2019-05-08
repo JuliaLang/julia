@@ -230,7 +230,7 @@ rand(rng::AbstractRNG, sp::SamplerDie) = rand(rng, sp.sp)
 
 It's now possible to get a sampler with `sp = Sampler(rng, die)`, and use `sp` instead of `die` in any `rand` call involving `rng`. In the simplistic example above, `die` doesn't need to be stored in `SamplerDie` but this is often the case in practice.
 
-Of course, this pattern is so frequent that a helper type used above, named `Random.SamplerSimple`, is available,
+Of course, this pattern is so frequent that the helper type used above, namely `Random.SamplerSimple`, is available,
 saving us the definition of `SamplerDie`: we could have implemented our decoupling with:
 
 ```julia
