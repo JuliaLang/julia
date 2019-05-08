@@ -1506,3 +1506,23 @@ let A = typeintersect(HFPotential, T),
     @test A == B == HFPotential{kind,Float64,Any,Applied{Int,Tuple{ApplyQuasiArray{Float64,2,Applied{Int,Tuple{Any,BandedMatrix{Int,Ones{Int,2,Tuple{OneTo{Int},OneTo{Int}}},OneTo{Int}}}}},Diagonal{Float64,Array{Float64,1}},ApplyQuasiArray{Float64,2,Applied{Int,Tuple{Adjoint{Int,BandedMatrix{Int,Ones{Int,2,Tuple{OneTo{Int},OneTo{Int}}},OneTo{Int}}},QuasiAdjoint{Float64,Any}}}}}},P} where P<:Integer where kind
 end
 end
+
+# issue #31899
+struct SA{N,L}
+end
+@testintersect(Tuple{Type{SA{Int, L} where L}, Type{SA{Int, Int8}}},
+               Tuple{Type{<:SA{N, L}}, Type{<:SA{N, L}}} where {N,L},
+               Union{})
+@testintersect(Tuple{Type{SA{2, L} where L}, Type{SA{2, 16}}},
+               Tuple{Type{<:SA{N, L}}, Type{<:SA{N, L}}} where {L,N},
+               Union{})
+@testintersect(Tuple{Type{SA{2, L} where L}, Type{SA{2, 16}}},
+               Tuple{Type{<:SA{N, L}}, Type{<:SA{N, L}}} where {N,L},
+               Union{})
+@testintersect(Tuple{Type{SA{2, L}}, Type{SA{2, L}}} where L,
+               Tuple{Type{<:SA{N, L}}, Type{<:SA{N, L}}} where {N,L},
+               Tuple{Type{SA{2, L}}, Type{SA{2, L}}} where L)
+@testintersect(Tuple{Type{SA{2, L}}, Type{SA{2, 16}}} where L,
+               Tuple{Type{<:SA{N, L}}, Type{<:SA{N, L}}} where {N,L},
+               # TODO: this could be narrower
+               Tuple{Type{SA{2, L}}, Type{SA{2, 16}}} where L)
