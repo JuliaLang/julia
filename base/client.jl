@@ -75,7 +75,7 @@ function repl_cmd(cmd, out)
                 command = cmd
             elseif shell_name == "cmd"
                 command = Cmd(`$shell /s /c $(string('"', cmd, '"'))`, windows_verbatim=true)
-            elseif shell_name == "powershell"
+            elseif shell_name == "powershell" || shell_name == "pwsh"
                 command = `$shell -Command $cmd`
             elseif shell_name == "busybox"
                 command = `$shell sh -c $(shell_escape_posixly(cmd))`
