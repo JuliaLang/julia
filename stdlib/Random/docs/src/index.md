@@ -86,13 +86,11 @@ The `Random` module defines a customizable framework for obtaining random values
 
 The object returned by `Sampler` is then used to generate the random values, by a method of `rand` defined for this purpose. Samplers can be arbitrary values, but for most applications the following predefined samplers may be sufficient:
 
-1. `SamplerType{T}()` can be used for implementing samplers that draw from type `T` (e.g. `rand(Int)`),
+1. `SamplerType{T}()` can be used for implementing samplers that draw from type `T` (e.g. `rand(Int)`).
 
-2. `SamplerTrivial(self)` is a simple wrapper for `self`, which can be accessed with `[]`. This is the recommended sampler when no pre-computed information is needed (e.g. `rand(1:3)`)
+2. `SamplerTrivial(self)` is a simple wrapper for `self`, which can be accessed with `[]`. This is the recommended sampler when no pre-computed information is needed (e.g. `rand(1:3)`).
 
 3. `SamplerSimple(self, data)` also contains the additional `data` field, which can be used to store arbitrary pre-computed values.
-
-In addition, [`Random.gentype`](@ref), which falls back to [`eltype`](@ref) is used for computing element types for containers. A method should be defined in case `eltype` is not defined, or a different element type is desired.
 
 We provide examples for each of these. We assume here that the choice of algorithm is independent of the RNG, so we use `AbstractRNG` in our signatures.
 
@@ -101,7 +99,6 @@ Random.Sampler
 Random.SamplerType
 Random.SamplerTrivial
 Random.SamplerSimple
-Random.gentype
 ```
 
 Decoupling pre-computation from actually generating the values is part of the API, and is also available to the user. As an example, assume that `rand(rng, 1:20)` has to be called repeatedly in a loop: the way to take advantage of this decoupling is as follows:
@@ -119,7 +116,7 @@ This is the mechanism that is also used in the standard library, e.g. by the def
 
 #### Generating values from a type
 
-Given a type `T`, it's currently assumed that if `rand(T)` is defined, an object of type `T` will be produced. `SamplerType` is the *default sampler for types*. In order to define random generation of values of type `T`, the `rand(rng::AbstractRNG, ::Random.SamplerType{T})` method should be defined, and should return values what `rand(rng, T)` is expected to return. `Random.gentype` should *not* need to be defined explicitly for this case, as the type is `T`.
+Given a type `T`, it's currently assumed that if `rand(T)` is defined, an object of type `T` will be produced. `SamplerType` is the *default sampler for types*. In order to define random generation of values of type `T`, the `rand(rng::AbstractRNG, ::Random.SamplerType{T})` method should be defined, and should return values what `rand(rng, T)` is expected to return.
 
 Let's take the following example: we implement a `Die` type, with a variable number `n` of sides, numbered from `1` to `n`. We want `rand(Die)` to produce a `Die` with a random number of up to 20 sides (and at least 4):
 
@@ -198,8 +195,6 @@ end
 ```
 and that we *always* want to build an a alias table, regardless of the number of values needed (we learn how to customize this below). The methods
 ```julia
-Random.gentype(::Type{<:DiscreteDistribution}) = Int
-
 function Random.Sampler(::AbstractRng, distribution::DiscreteDistribution, ::Repetition)
     SamplerSimple(disribution, make_alias_table(probabilities))
 end
