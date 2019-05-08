@@ -724,8 +724,9 @@ sum!(f::Function, r::AbstractArray, A::AbstractArray;
     _sum!(f, r, A, weights; init=init)
 _sum!(f, r::AbstractArray, A::AbstractArray, ::Nothing; init::Bool=true) =
     mapreducedim!(f, add_sum, initarray!(r, add_sum, init, A), A)
-_sum(A, dims, weights) = _sum(identity, A, dims, weights)
 _sum(f, A, dims, ::Nothing) = mapreduce(f, add_sum, A, dims=dims)
+_sum(A::AbstractArray, dims, w::AbstractArray) =
+    _sum!(identity, reducedim_init(t -> t*zero(eltype(w)), add_sum, A, dims), A, w)
 
 
 # Weighted sum
@@ -807,7 +808,7 @@ function _wsum_general!(R::AbstractArray{S}, A::AbstractArray, w::AbstractVector
         for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             r = R[i1,IR]
-            @simd for i in axes(A, 1)
+            @inbounds @simd for i in axes(A, 1)
                 r += A[i,IA] * w[dim > 1 ? IA[dim-1] : i]
             end
             R[i1,IR] = r
@@ -815,7 +816,7 @@ function _wsum_general!(R::AbstractArray{S}, A::AbstractArray, w::AbstractVector
     else
         for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
-            @simd for i in axes(A, 1)
+            @inbounds @simd for i in axes(A, 1)
                 R[i,IR] += A[i,IA] * w[dim > 1 ? IA[dim-1] : i]
             end
         end
@@ -847,9 +848,6 @@ function _sum!(::typeof(identity), R::AbstractArray, A::AbstractArray{T,N}, w::A
     end
     _wsum!(R, A, w, dim, init)
 end
-
-_sum(A::AbstractArray, dims, w::AbstractArray) =
-    _sum!(identity, reducedim_init(t -> t*zero(eltype(w)), add_sum, A, dims), A, w)
 
 ##### findmin & findmax #####
 # The initial values of Rval are not used if the corresponding indices in Rind are 0.
