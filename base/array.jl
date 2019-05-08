@@ -2339,7 +2339,7 @@ end
 
 function filter(f, a::AbstractArray)
     (IndexStyle(a) != IndexLinear()) && return a[map(f, a)::AbstractArray{Bool}]
-    
+
     j = 1
     idxs = Vector{Int}(undef, length(a))
     for idx in eachindex(a)
