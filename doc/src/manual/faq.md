@@ -865,10 +865,9 @@ The Stable version of Julia is the latest released version of Julia,
 this is the version most people will want to run.
 It has the latest features, including improved performance.
 The Stable version of Julia will always be versioned according to SemVer as v1.x.y.
-A new minor release of Julia corresponding to a new Stable version is made approximately every 4 months.
-After a few weeks of testing as a release candidate.
+A new minor release of Julia corresponding to a new Stable version is made approximately every 4 months after a few weeks of testing as a release candidate.
 Unlike the LTS version the a Stable version will not normally recieve bugfixes after another Stable version of Julia has been released.
-However, upgrading to the next Stable release will always be possible: as each release of Julia v1.x
+However, upgrading to the next Stable release will always be possible as each release of Julia v1.x
 will continue to run code written for earlier versions.
 
 You may prefer the LTS (Long Term Support) version of Julia if you are looking for a very stable code base.
@@ -893,10 +892,3 @@ describes you, you may also be interested in reading our [guidelines for contrib
 
 Links to each of these download types can be found on the download page at [https://julialang.org/downloads/](https://julialang.org/downloads/).
 Note that not all versions of Julia are available for all platforms.
-
-### When are deprecated functions removed?
-
-Deprecated functions are removed after the subsequent major release.
-At time of writing, there is no concrete timeline for the next major release of julia.
-For example, functions marked as
-deprecated in the 1.1 release will not be available starting with the 2.0 release.
