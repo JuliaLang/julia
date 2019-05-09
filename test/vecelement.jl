@@ -119,3 +119,10 @@ for T in (Float64, Float32, Int64, Int32)
         @test b == result
     end
 end
+
+# conversions
+@test convert(VecElement, 2) === VecElement(2)
+@test convert(VecElement, VecElement(3.1)) === VecElement(3.1)
+@test convert(VecElement{Float32}, 2) === VecElement(2.0f0)
+@test convert(VecElement{Int}, VecElement(2)) === VecElement(2)
+@test convert(VecElement{Float32}, VecElement(2)) === VecElement(2.0f0)
