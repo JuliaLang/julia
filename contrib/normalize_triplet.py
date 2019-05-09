@@ -36,6 +36,7 @@ gcc_version_mapping = {
     'gcc4': "-gcc4",
     'gcc7': "-gcc7",
     'gcc8': "-gcc8",
+    'gcc9': "-gcc8",
 }
 cxx_abi_mapping = {
     'blank_cxx_abi': "",
@@ -115,6 +116,7 @@ if gcc_version == "blank_gcc":
             "6": "gcc4",
             "7": "gcc7",
             "8": "gcc8",
+            "9": "gcc8",
         }[list(filter(lambda x: re.match("\d+\.\d+\.\d+", x), sys.argv[2].split()))[-1][0]]
 
 if cxx_abi == "blank_cxx_abi":
