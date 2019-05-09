@@ -256,18 +256,11 @@ function emit(l::Lexer{IO_t,Token}, kind::Kind, err::TokenError = Tokens.NO_ERR)
     else
         str = ""
     end
-    if l.dotop
-        tok = Token(kind, (l.token_start_row, l.token_start_col-1),
-                (l.current_row, l.current_col - 1),
-                startpos(l)-1, position(l) - 1,
-                str, err, true)
-        l.dotop = false
-    else
-        tok = Token(kind, (l.token_start_row, l.token_start_col),
-                (l.current_row, l.current_col - 1),
-                startpos(l), position(l) - 1,
-                str, err,false)
-    end
+    tok = Token(kind, (l.token_start_row, l.token_start_col),
+            (l.current_row, l.current_col - 1),
+            startpos(l), position(l) - 1,
+            str, err, l.dotop)
+    l.dotop = false
     l.last_token = kind
     readoff(l)
     return tok
@@ -280,17 +273,11 @@ function emit(l::Lexer{IO_t,RawToken}, kind::Kind, err::TokenError = Tokens.NO_E
         end
     end
 
-    if l.dotop
-        tok = RawToken(kind, (l.token_start_row, l.token_start_col),
-        (l.current_row, l.current_col - 1),
-        startpos(l), position(l) - 1, err, true)
-        l.dotop = false
-    else
-        tok = RawToken(kind, (l.token_start_row, l.token_start_col),
-        (l.current_row, l.current_col - 1),
-        startpos(l), position(l) - 1, err, false)
-    end
-
+    tok = RawToken(kind, (l.token_start_row, l.token_start_col),
+                  (l.current_row, l.current_col - 1),
+                  startpos(l), position(l) - 1, err, l.dotop)
+    
+    l.dotop = false
     l.last_token = kind
     readoff(l)
     return tok
