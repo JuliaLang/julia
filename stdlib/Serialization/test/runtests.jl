@@ -289,8 +289,12 @@ let A = rand(3,4)
 end
 
 # Function
-serialize_test_function() = 1
-serialize_test_function2 = ()->1
+module DefinitelyNotMain
+    serialize_test_function() = 1
+    serialize_test_function2 = ()->1
+end
+serialize_test_function = DefinitelyNotMain.serialize_test_function
+serialize_test_function2 = DefinitelyNotMain.serialize_test_function2
 create_serialization_stream() do s # Base generic function
     serialize(s, sin)
     serialize(s, typeof)
@@ -300,8 +304,12 @@ create_serialization_stream() do s # Base generic function
     seek(s, 0)
     @test deserialize(s) === sin
     @test deserialize(s) === typeof
-    @test deserialize(s)() === 1
-    @test deserialize(s)() === 1
+    f1 = deserialize(s)
+    f2 = deserialize(s)
+    @test first(methods(f1)).module === DefinitelyNotMain
+    @test first(methods(f2)).module === DefinitelyNotMain
+    @test f1() === 1
+    @test f2() === 1
 end
 
 # Anonymous Functions
@@ -379,11 +387,11 @@ end
 # cycles
 module CycleFoo
     echo(x)=x
-end
-create_serialization_stream() do s
-    echo(x) = x
     afunc = (x)->x
-    A = Any[1,2,3,abs,abs,afunc,afunc,echo,echo,CycleFoo.echo,CycleFoo.echo,4,5]
+end
+echo(x) = x
+create_serialization_stream() do s
+    A = Any[1,2,3,abs,abs,CycleFoo.afunc,CycleFoo.afunc,echo,echo,CycleFoo.echo,CycleFoo.echo,4,5]
     A[3] = A
     serialize(s, A)
     seekstart(s)
