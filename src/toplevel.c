@@ -322,7 +322,7 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs) J
             jl_module_t *mod = jl_globalref_mod(f);
             jl_sym_t *name = jl_globalref_name(f);
             if (jl_binding_resolved_p(mod, name)) {
-                jl_binding_t *b = jl_get_module_binding(mod, name);
+                jl_binding_t *b = jl_get_binding(mod, name);
                 if (b && b->value && b->constp)
                     called = b->value;
             }

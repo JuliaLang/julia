@@ -124,7 +124,7 @@ using Base.Meta
 is_loc_meta(expr, kind) = isexpr(expr, :meta) && length(expr.args) >= 1 && expr.args[1] === kind
 function lookup(ip::Base.InterpreterIP)
     if ip.code isa Core.MethodInstance && ip.code.def isa Method
-        codeinfo = ip.code.inferred
+        codeinfo = ip.code.uninferred
         func = ip.code.def.name
         file = ip.code.def.file
         line = ip.code.def.line
