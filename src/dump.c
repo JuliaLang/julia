@@ -68,10 +68,6 @@ static jl_array_t *serializer_worklist JL_GLOBALLY_ROOTED;
 // (only used by the incremental serializer in MODE_MODULE)
 htable_t edges_map;
 
-// list of modules being deserialized with __init__ methods
-// (not used in MODE_IR)
-extern jl_array_t *jl_module_init_order;
-
 #define TAG_SYMBOL              2
 #define TAG_SSAVALUE            3
 #define TAG_DATATYPE            4

@@ -279,7 +279,7 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
 
 JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT
 {
-    if (tv == (jl_value_t*)jl_sym_type)
+    if (tv == (jl_value_t*)jl_symbol_type)
         return ((jl_sym_t*)v)->hash;
     if (tv == (jl_value_t*)jl_simplevector_type)
         return hash_svec((jl_svec_t*)v);
@@ -899,7 +899,7 @@ static int valid_type_param(jl_value_t *v)
         size_t i, l = jl_nparams(tt);
         for(i=0; i < l; i++) {
             jl_value_t *pi = jl_tparam(tt,i);
-            if (!(pi == (jl_value_t*)jl_sym_type || jl_isbits(pi)))
+            if (!(pi == (jl_value_t*)jl_symbol_type || jl_isbits(pi)))
                 return 0;
         }
         return 1;
@@ -1253,54 +1253,53 @@ jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b)
     return ((jl_typemap_entry_t*)jl_gf_mtable(b)->cache)->func.linfo->cache->specptr.fptr1;
 }
 
-static void add_builtin_func(const char *name, jl_fptr_args_t fptr)
+static jl_value_t *add_builtin_func(const char *name, jl_fptr_args_t fptr)
 {
-    jl_mk_builtin_func(NULL, name, fptr);
+    return jl_mk_builtin_func(NULL, name, fptr)->instance;
 }
 
 void jl_init_primitives(void) JL_GC_DISABLED
 {
-    add_builtin_func("===", jl_f_is);
-    add_builtin_func("typeof", jl_f_typeof);
-    add_builtin_func("sizeof", jl_f_sizeof);
-    add_builtin_func("<:", jl_f_issubtype);
-    add_builtin_func("isa", jl_f_isa);
-    add_builtin_func("typeassert", jl_f_typeassert);
-    add_builtin_func("throw", jl_f_throw);
-    add_builtin_func("tuple", jl_f_tuple);
-    add_builtin_func("ifelse", jl_f_ifelse);
+    jl_builtin_is = add_builtin_func("===", jl_f_is);
+    jl_builtin_typeof = add_builtin_func("typeof", jl_f_typeof);
+    jl_builtin_sizeof = add_builtin_func("sizeof", jl_f_sizeof);
+    jl_builtin_issubtype = add_builtin_func("<:", jl_f_issubtype);
+    jl_builtin_isa = add_builtin_func("isa", jl_f_isa);
+    jl_builtin_typeassert = add_builtin_func("typeassert", jl_f_typeassert);
+    jl_builtin_throw = add_builtin_func("throw", jl_f_throw);
+    jl_builtin_tuple = add_builtin_func("tuple", jl_f_tuple);
+    jl_builtin_ifelse = add_builtin_func("ifelse", jl_f_ifelse);
 
     // field access
-    add_builtin_func("getfield",  jl_f_getfield);
-    add_builtin_func("setfield!",  jl_f_setfield);
-    add_builtin_func("fieldtype", jl_f_fieldtype);
-    add_builtin_func("nfields", jl_f_nfields);
-    add_builtin_func("isdefined", jl_f_isdefined);
+    jl_builtin_getfield = add_builtin_func("getfield",  jl_f_getfield);
+    jl_builtin_setfield = add_builtin_func("setfield!",  jl_f_setfield);
+    jl_builtin_fieldtype = add_builtin_func("fieldtype", jl_f_fieldtype);
+    jl_builtin_nfields = add_builtin_func("nfields", jl_f_nfields);
+    jl_builtin_isdefined = add_builtin_func("isdefined", jl_f_isdefined);
 
     // array primitives
-    add_builtin_func("arrayref", jl_f_arrayref);
-    add_builtin_func("const_arrayref", jl_f_arrayref);
-    add_builtin_func("arrayset", jl_f_arrayset);
-    add_builtin_func("arraysize", jl_f_arraysize);
+    jl_builtin_arrayref = add_builtin_func("arrayref", jl_f_arrayref);
+    jl_builtin_const_arrayref = add_builtin_func("const_arrayref", jl_f_arrayref);
+    jl_builtin_arrayset = add_builtin_func("arrayset", jl_f_arrayset);
+    jl_builtin_arraysize = add_builtin_func("arraysize", jl_f_arraysize);
 
     // method table utils
-    add_builtin_func("applicable", jl_f_applicable);
-    add_builtin_func("invoke", jl_f_invoke);
-    jl_value_t *invokef = jl_get_global(jl_core_module, jl_symbol("invoke"));
-    jl_typename_t *itn = ((jl_datatype_t*)jl_typeof(invokef))->name;
+    jl_builtin_applicable = add_builtin_func("applicable", jl_f_applicable);
+    jl_builtin_invoke = add_builtin_func("invoke", jl_f_invoke);
+    jl_typename_t *itn = ((jl_datatype_t*)jl_typeof(jl_builtin_invoke))->name;
     jl_value_t *ikws = jl_new_generic_function_with_supertype(itn->name, jl_core_module, jl_builtin_type, 1);
     itn->mt->kwsorter = ikws;
     jl_gc_wb(itn->mt, ikws);
     jl_mk_builtin_func((jl_datatype_t*)jl_typeof(ikws), jl_symbol_name(jl_gf_name(ikws)), jl_f_invoke_kwsorter);
 
     // internal functions
-    add_builtin_func("apply_type", jl_f_apply_type);
-    add_builtin_func("_apply", jl_f__apply);
+    jl_builtin_apply_type = add_builtin_func("apply_type", jl_f_apply_type);
+    jl_builtin__apply = add_builtin_func("_apply", jl_f__apply);
+    jl_builtin__expr = add_builtin_func("_expr", jl_f__expr);
+    jl_builtin_svec = add_builtin_func("svec", jl_f_svec);
     add_builtin_func("_apply_pure", jl_f__apply_pure);
     add_builtin_func("_apply_latest", jl_f__apply_latest);
-    add_builtin_func("_expr", jl_f__expr);
     add_builtin_func("_typevar", jl_f__typevar);
-    add_builtin_func("svec", jl_f_svec);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
@@ -1323,7 +1322,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("CodeInstance", (jl_value_t*)jl_code_instance_type);
     add_builtin("TypeMapEntry", (jl_value_t*)jl_typemap_entry_type);
     add_builtin("TypeMapLevel", (jl_value_t*)jl_typemap_level_type);
-    add_builtin("Symbol", (jl_value_t*)jl_sym_type);
+    add_builtin("Symbol", (jl_value_t*)jl_symbol_type);
     add_builtin("SSAValue", (jl_value_t*)jl_ssavalue_type);
     add_builtin("Slot", (jl_value_t*)jl_abstractslot_type);
     add_builtin("SlotNumber", (jl_value_t*)jl_slotnumber_type);

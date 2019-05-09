@@ -2477,7 +2477,6 @@ mark: {
     }
 }
 
-extern jl_array_t *jl_module_init_order;
 extern jl_typemap_entry_t *call_cache[N_CALL_CACHE];
 extern jl_array_t *jl_all_methods;
 
