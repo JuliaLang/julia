@@ -49,9 +49,8 @@ include("rounding.jl")
 include("io.jl")
 include("parse.jl")
 include("deprecated.jl")
-
-export #types.jl
-       Period, DatePeriod, TimePeriod,
+	
+export Period, DatePeriod, TimePeriod,
        Year, Month, Week, Day, Hour, Minute, Second, Millisecond,
        Microsecond, Nanosecond,
        TimeZone, UTC, TimeType, DateTime, Date, Time,
