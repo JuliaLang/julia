@@ -30,6 +30,10 @@ Standard library changes
   (environment, flags, working directory, etc) if `x` is the first interpolant and errors
   otherwise ([#24353]).
 
+#### Libdl
+
+* `dlopen()` can now be invoked in `do`-block syntax, similar to `open()`.
+
 #### LinearAlgebra
 
 * The BLAS submodule no longer exports `dot`, which conflicts with that in LinearAlgebra ([#31838]).
