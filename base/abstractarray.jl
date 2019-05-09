@@ -934,7 +934,8 @@ end
 pointer(x::AbstractArray{T}) where {T} = unsafe_convert(Ptr{T}, x)
 function pointer(x::AbstractArray{T}, i::Integer) where T
     @_inline_meta
-    unsafe_convert(Ptr{T}, x) + (i - first(LinearIndices(x)))*elsize(x)
+    ptrtype = isbitstype(T) || isbitsunion(T) ? Ptr{T} : Ptr{Ptr{T}}
+    unsafe_convert(ptrtype, x) + (i - first(LinearIndices(x)))*elsize(x)
 end
 
 ## Approach:
