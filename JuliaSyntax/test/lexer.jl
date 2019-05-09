@@ -523,3 +523,7 @@ end
 @testset "outer" begin 
     @test tok("outer", 1).kind==T.OUTER
 end
+
+@testset "dot startpos" begin
+    @test Tokenize.Tokens.startpos(tok("./")) == (1,1)
+end
