@@ -96,6 +96,9 @@ julia> chop(a, head = 5, tail = 5)
 ```
 """
 function chop(s::AbstractString; head::Integer = 0, tail::Integer = 1)
+    if isempty(s)
+        return SubString(s)
+    end
     SubString(s, nextind(s, firstindex(s), head), prevind(s, lastindex(s), tail))
 end
 

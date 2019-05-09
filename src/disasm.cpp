@@ -628,24 +628,23 @@ static void jl_dump_asm_internal(
 {
     // GC safe
     // Get the host information
-    std::string TripleName = sys::getDefaultTargetTriple();
-    Triple TheTriple(Triple::normalize(TripleName));
+    Triple TheTriple(sys::getProcessTriple());
 
     const auto &target = jl_get_llvm_disasm_target();
     const auto &cpu = target.first;
     const auto &features = target.second;
 
     std::string err;
-    const Target *TheTarget = TargetRegistry::lookupTarget(TripleName, err);
+    const Target *TheTarget = TargetRegistry::lookupTarget(TheTriple.str(), err);
 
     // Set up required helpers and streamer
     std::unique_ptr<MCStreamer> Streamer;
     SourceMgr SrcMgr;
 
-    std::unique_ptr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TripleName),TripleName));
+    std::unique_ptr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TheTriple.str()), TheTriple.str()));
     assert(MAI && "Unable to create target asm info!");
 
-    std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TripleName));
+    std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TheTriple.str()));
     assert(MRI && "Unable to create target register info!");
 
     std::unique_ptr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
@@ -659,16 +658,15 @@ static void jl_dump_asm_internal(
 
     // Set up Subtarget and Disassembler
     std::unique_ptr<MCSubtargetInfo>
-        STI(TheTarget->createMCSubtargetInfo(TripleName, cpu, features));
+        STI(TheTarget->createMCSubtargetInfo(TheTriple.str(), cpu, features));
     std::unique_ptr<MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI, Ctx));
     if (!DisAsm) {
-        jl_printf(JL_STDERR, "ERROR: no disassembler for target %s\n",
-                  TripleName.c_str());
+        rstream << "ERROR: no disassembler for target " << TheTriple.str();
         return;
     }
     unsigned OutputAsmVariant = 0; // ATT or Intel-style assembly
 
-    if (strcmp(asm_variant, "intel")==0) {
+    if (strcmp(asm_variant, "intel") == 0) {
         OutputAsmVariant = 1;
     }
     bool ShowEncoding = false;

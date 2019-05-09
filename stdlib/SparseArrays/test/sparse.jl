@@ -92,6 +92,10 @@ do33 = fill(1.,3)
     end
 end
 
+@testset "Issue #30006" begin
+    SparseMatrixCSC{Float64,Int32}(spzeros(3,3))[:, 1] == [1, 2, 3]
+end
+
 @testset "concatenation tests" begin
     sp33 = sparse(1.0I, 3, 3)
 
@@ -708,6 +712,8 @@ end
         ss116 = sparse(aa116)
 
         @test ss116[:,:] == copy(ss116)
+
+        @test convert(SparseMatrixCSC{Float32,Int32}, sd116)[2:5,:] == convert(SparseMatrixCSC{Float32,Int32}, sd116[2:5,:])
 
         # range indexing
         @test Array(ss116[i,:]) == aa116[i,:]
@@ -2305,6 +2311,18 @@ end
     m2 = @which mul!(C,D,A)
     @test m1.module == SparseArrays
     @test m2.module == SparseArrays
+end
+
+@testset "unary operations on matrices where length(nzval)>nnz" begin
+    # this should create a sparse matrix with length(nzval)>nnz
+    A = SparseMatrixCSC(Complex{BigInt}[1+im 2+2im]')'[1:1, 2:2]
+    # ...ensure it does! If necessary, the test needs to be updated to use
+    # another mechanism to create a suitable A.
+    @assert length(A.nzval) > nnz(A)
+    @test -A == fill(-2-2im, 1, 1)
+    @test conj(A) == fill(2-2im, 1, 1)
+    conj!(A)
+    @test A == fill(2-2im, 1, 1)
 end
 
 end # module

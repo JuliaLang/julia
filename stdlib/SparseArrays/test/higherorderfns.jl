@@ -632,4 +632,14 @@ end
     @test minimum(sparse([1, 2], [1, 2], ones(Int32, 2)), dims = 1) isa Matrix
 end
 
+@testset "issue #31758: out of bounds write in _map_zeropres!" begin
+    y = sparsevec([2,7], [1., 2.], 10)
+    x1 = sparsevec(fill(1.0, 10))
+    x2 = sparsevec([2,7], [1., 2.], 10)
+    x3 = sparsevec(fill(1.0, 10))
+    f(x, y, z) = x == y == z == 0 ? 0.0 : NaN
+    y .= f.(x1, x2, x3)
+    @test all(isnan, y)
+end
+
 end # module

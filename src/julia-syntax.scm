@@ -396,6 +396,8 @@
          (vararg (let ((l (if (null? pargl) '() (last pargl))))
                    (if (or (vararg? l) (varargexpr? l))
                        (list l) '())))
+         ;; positional args with vararg
+         (pargl-all pargl)
          ;; positional args without vararg
          (pargl (if (null? vararg) pargl (butlast pargl)))
          ;; positional args with everything required; for use by the core function
@@ -424,13 +426,7 @@
                            (filter nospecialize-meta? kargl)))
          ;; body statements
          (stmts (cdr body))
-         (positional-sparams
-          (filter (lambda (s)
-                    (let ((name (car s)))
-                      (or (expr-contains-eq name (cons 'list pargl))
-                          (and (pair? vararg) (expr-contains-eq name (car vararg)))
-                          (not (expr-contains-eq name (cons 'list kargl))))))
-                  sparams))
+         (positional-sparams (filter-sparams (cons 'list pargl-all) sparams))
          (keyword-sparams
           (filter (lambda (s)
                     (not (any (lambda (p) (eq? (car p) (car s)))
@@ -462,7 +458,7 @@
 
         ;; call with no keyword args
         ,(method-def-expr-
-          name positional-sparams (append pargl vararg)
+          name positional-sparams pargl-all
           `(block
             ,@(without-generated prologue)
             ,(let (;; call mangled(vals..., [rest_kw,] pargs..., [vararg]...)
@@ -478,9 +474,7 @@
 
         ;; call with unsorted keyword args. this sorts and re-dispatches.
         ,(method-def-expr-
-          name
-          ;; remove sparams that don't occur, to avoid printing the warning twice
-          (filter-sparams (cons 'list argl) positional-sparams)
+          name positional-sparams
           `((|::|
              ;; if there are optional positional args, we need to be able to reference the function name
              ,(if (any kwarg? pargl) (gensy) UNUSED)
@@ -2998,7 +2992,9 @@ f(x) = yt(x)
                          (kill))
                        (cdr e)))
             (else
-             (mark-used e)
+             (if (eq? (car e) '=)
+                 (visit (caddr e))
+                 (mark-used e))
              (if (and (or (eq? (car e) '=)
                           (and (eq? (car e) 'method) (length> e 2)))
                       (has? unused (cadr e)))

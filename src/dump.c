@@ -255,7 +255,7 @@ static int type_parameter_recursively_external(jl_value_t *p0)
         return 0;
     if (module_in_worklist(p->name->module))
         return 0;
-    if (p->name->wrapper != (jl_value_t*)p0) {
+    if (jl_unwrap_unionall(p->name->wrapper) != (jl_value_t*)p) {
         if (!type_recursively_external(p))
             return 0;
     }
@@ -743,7 +743,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
     else if (jl_is_unionall(v)) {
         write_uint8(s->s, TAG_UNIONALL);
         jl_datatype_t *d = (jl_datatype_t*)jl_unwrap_unionall(v);
-        if (jl_is_datatype(d) && d->name->wrapper == v &&
+        if (jl_is_datatype(d) && jl_unwrap_unionall(d->name->wrapper) == (jl_value_t*)d &&
             !module_in_worklist(d->name->module)) {
             write_uint8(s->s, 1);
             jl_serialize_value(s, d->name->module);
