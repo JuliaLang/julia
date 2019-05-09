@@ -288,12 +288,6 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
     if (v == NULL || jl_is_symbol(v)) {
         return;
     }
-    else if (jl_typeis(v, jl_task_type)) {
-        if (v == (jl_value_t*)s->ptls->root_task) {
-            jl_serialize_value(s, ((jl_task_t*)v)->tls);
-            return;
-        }
-    }
     else if (jl_typeis(v, jl_int64_type)) {
         int64_t i64 = *(int64_t*)v + NBOX_C / 2;
         if ((uint64_t)i64 < NBOX_C)
@@ -1329,6 +1323,7 @@ static void jl_save_system_image_to_stream(ios_t *f)
             jl_serialize_value(&s, tn->cache);
             jl_serialize_value(&s, tn->linearcache);
         }
+        jl_serialize_value(&s, s.ptls->root_task->tls);
     }
 
     { // step 2: build all the sysimg sections

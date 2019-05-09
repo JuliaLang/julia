@@ -28,8 +28,6 @@ the keyboard shortcut `^D`.
 exit(n) = ccall(:jl_exit, Cvoid, (Int32,), n)
 exit() = exit(0)
 
-const roottask = current_task()
-
 is_interactive = false
 
 """
