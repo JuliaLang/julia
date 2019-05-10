@@ -89,7 +89,7 @@ The object returned by `Sampler` is then used to generate the random values. Whe
 ```julia
 rand(rng, sampler)
 ```
-for the particular sampler returned by `Sampler(rng, X, repetition)`
+for the particular sampler returned by `Sampler(rng, X, repetition)`.
 
 Samplers can be arbitrary values that implement `rand(rng, sampler)`, but for most applications the following predefined samplers may be sufficient:
 
@@ -98,6 +98,12 @@ Samplers can be arbitrary values that implement `rand(rng, sampler)`, but for mo
 2. `SamplerTrivial(self)` is a simple wrapper for `self`, which can be accessed with `[]`. This is the recommended sampler when no pre-computed information is needed (e.g. `rand(1:3)`), and is the default returned by `Sampler` for *values*.
 
 3. `SamplerSimple(self, data)` also contains the additional `data` field, which can be used to store arbitrary pre-computed values, which should be computed in a *custom method* of `Sampler`.
+
+For `SamplerTrivial` and `SamplerSimple`,
+```julia
+eltype(::Type{T})
+```
+should be defined to determine the returned type for custom random distributions of type `T`. This is used for pre-allocated containers, eg sampling an array of values.
 
 We provide examples for each of these. We assume here that the choice of algorithm is independent of the RNG, so we use `AbstractRNG` in our signatures.
 
@@ -169,17 +175,19 @@ In order to define random generation out of objects of type `S`, the following m
 ```jldoctest Die; setup = :(Random.seed!(1))
 julia> Random.rand(rng::AbstractRNG, d::Random.SamplerTrivial{Die}) = rand(rng, 1:d[].nsides);
 
+julia> Base.eltype(::Type{Die}) = Int
+
 julia> rand(Die(4))
 3
 
 julia> rand(Die(4), 3)
-3-element Array{Any,1}:
+3-element Array{Int,1}:
  3
  4
  2
 ```
 
-Given a collection type `S`, it's currently assumed that if `rand(::S)` is defined, an object of type `eltype(S)` will be produced. In the last example, a `Vector{Any}` is produced; the reason is that `eltype(Die) == Any`. The remedy is to define `Base.eltype(::Type{Die}) = Int`.
+Given a collection type `S`, if `rand(::S)` is defined, an object of type `eltype(S)` will be produced. In this example, if we did not define a method for `eltype`, a `Vector{Any}` would have been produced.
 
 #### An optimized sampler with pre-computed data
 
