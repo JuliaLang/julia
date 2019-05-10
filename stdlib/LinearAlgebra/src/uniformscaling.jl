@@ -141,18 +141,18 @@ end
 # matrix breaks the hermiticity, if the UniformScaling is non-real.
 # However, to preserve type stability, we do not special-case a
 # UniformScaling{<:Complex} that happens to be real.
-function (+)(A::Hermitian{T,S}, J::UniformScaling{<:Complex}) where {T,S}
-    A_ = copytri!(copy(parent(A)), A.uplo)
-    B = convert(AbstractMatrix{Base._return_type(+, Tuple{eltype(A), typeof(J)})}, A_)
+function (+)(A::Hermitian, J::UniformScaling{<:Complex})
+    TS = Base._return_type(+, Tuple{eltype(A), typeof(J)})
+    B = copytri!(copy_oftype(parent(A), TS), A.uplo, true)
     @inbounds for i in diagind(B)
         B[i] += J
     end
     return B
 end
 
-function (-)(J::UniformScaling{<:Complex}, A::Hermitian{T,S}) where {T,S}
-    A_ = copytri!(copy(parent(A)), A.uplo)
-    B = convert(AbstractMatrix{Base._return_type(+, Tuple{eltype(A), typeof(J)})}, A_)
+function (-)(J::UniformScaling{<:Complex}, A::Hermitian)
+    TS = Base._return_type(+, Tuple{eltype(A), typeof(J)})
+    B = copytri!(copy_oftype(parent(A), TS), A.uplo, true)
     @inbounds for i in eachindex(B)
         B[i] = -B[i]
     end
