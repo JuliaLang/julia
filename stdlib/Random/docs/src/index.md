@@ -84,13 +84,20 @@ Generating random values for some distributions may involve various trade-offs. 
 
 The `Random` module defines a customizable framework for obtaining random values that can address these issues. Each invocation of `rand` generates a *sampler* which can be customized with the above trade-offs in mind, by adding methods to `Sampler`, which in turn can dispatch on the random number generator, the object that characterizes the distribution, and a suggestion for the number of repetitions. Currently, for the latter, `Val{1}` (for a single sample) and `Val{Inf}` (for an arbitrary number) are used, with `Random.Repetition` an alias for both.
 
-The object returned by `Sampler` is then used to generate the random values, by a method of `rand` defined for this purpose. Samplers can be arbitrary values, but for most applications the following predefined samplers may be sufficient:
+The object returned by `Sampler` is then used to generate the random values. When implementing the random generation interface for a value `X::T` that can be sampled from, the implementor should define the method
 
-1. `SamplerType{T}()` can be used for implementing samplers that draw from type `T` (e.g. `rand(Int)`).
+```julia
+rand(rng, sampler)
+```
+for the particular sampler returned by `Sampler(rng, X, repetition)`
 
-2. `SamplerTrivial(self)` is a simple wrapper for `self`, which can be accessed with `[]`. This is the recommended sampler when no pre-computed information is needed (e.g. `rand(1:3)`).
+Samplers can be arbitrary values that implement `rand(rng, sampler)`, but for most applications the following predefined samplers may be sufficient:
 
-3. `SamplerSimple(self, data)` also contains the additional `data` field, which can be used to store arbitrary pre-computed values.
+1. `SamplerType{T}()` can be used for implementing samplers that draw from type `T` (e.g. `rand(Int)`). This is the default returned by `Sampler` for *types*.
+
+2. `SamplerTrivial(self)` is a simple wrapper for `self`, which can be accessed with `[]`. This is the recommended sampler when no pre-computed information is needed (e.g. `rand(1:3)`), and is the default returned by `Sampler` for *values*.
+
+3. `SamplerSimple(self, data)` also contains the additional `data` field, which can be used to store arbitrary pre-computed values, which should be computed in a *custom method* of `Sampler`.
 
 We provide examples for each of these. We assume here that the choice of algorithm is independent of the RNG, so we use `AbstractRNG` in our signatures.
 
@@ -185,7 +192,7 @@ is defined to return `SamplerTrivial` with a `Random.CloseOpen01{T}}` type defin
 
 #### An optimized sampler with pre-computed data
 
-Consider a discrete distribution, where numbers `1:n` are drawn with given probabilities that some to one. When many values are needed from this distribution, the fastest method if using an [alias table](https://en.wikipedia.org/wiki/Alias_method). We don't provide the algorithm for building such a table here, but suppose it is available in `make_alias_table(probabilities)` instead, and `draw_number(rng, alias_table)` can be used to draw a random number from it.
+Consider a discrete distribution, where numbers `1:n` are drawn with given probabilities that sum to one. When many values are needed from this distribution, the fastest method is using an [alias table](https://en.wikipedia.org/wiki/Alias_method). We don't provide the algorithm for building such a table here, but suppose it is available in `make_alias_table(probabilities)` instead, and `draw_number(rng, alias_table)` can be used to draw a random number from it.
 
 Suppose that the distribution is described by
 ```julia
