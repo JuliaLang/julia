@@ -1691,15 +1691,15 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         JL_GC_POP();
         return mark_or_box_ccall_result(ctx, strp, retboxed, rt, unionall, static_rt);
     }
-    else if (is_libjulia_func(memcpy)) {
+    else if (is_libjulia_func(memcpy) && (rt == (jl_value_t*)jl_void_type || jl_is_cpointer_type(rt))) {
         const jl_cgval_t &dst = argv[0];
         const jl_cgval_t &src = argv[1];
         const jl_cgval_t &n = argv[2];
+        Value *destp = emit_unbox(ctx, T_size, dst, (jl_value_t*)jl_voidpointer_type);
 
 #if JL_LLVM_VERSION >= 70000
         ctx.builder.CreateMemCpy(
-                ctx.builder.CreateIntToPtr(
-                    emit_unbox(ctx, T_size, dst, (jl_value_t*)jl_voidpointer_type), T_pint8),
+                ctx.builder.CreateIntToPtr(destp, T_pint8),
                 1,
                 ctx.builder.CreateIntToPtr(
                     emit_unbox(ctx, T_size, src, (jl_value_t*)jl_voidpointer_type), T_pint8),
@@ -1708,15 +1708,15 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 false);
 #else
         ctx.builder.CreateMemCpy(
-                ctx.builder.CreateIntToPtr(
-                    emit_unbox(ctx, T_size, dst, (jl_value_t*)jl_voidpointer_type), T_pint8),
+                ctx.builder.CreateIntToPtr(destp, T_pint8),
                 ctx.builder.CreateIntToPtr(
                     emit_unbox(ctx, T_size, src, (jl_value_t*)jl_voidpointer_type), T_pint8),
                 emit_unbox(ctx, T_size, n, (jl_value_t*)jl_ulong_type), 1,
                 false);
 #endif
         JL_GC_POP();
-        return ghostValue(jl_void_type);
+        return rt == (jl_value_t*)jl_void_type ? ghostValue(jl_void_type) :
+            mark_or_box_ccall_result(ctx, destp, retboxed, rt, unionall, static_rt);
     }
     else if (is_libjulia_func(jl_object_id) && nargt == 1 &&
             rt == (jl_value_t*)jl_ulong_type) {
