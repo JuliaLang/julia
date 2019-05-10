@@ -300,7 +300,8 @@ Hessenberg(factors::AbstractMatrix, τ::AbstractVector, H::AbstractMatrix=UpperH
 Hessenberg(F::Hessenberg) = F
 Hessenberg(F::Hessenberg, μ::Number) = Hessenberg(F.factors, F.τ, F.H, F.uplo; μ=μ)
 
-copy(F::Hessenberg) = Hessenberg(copy(F.factors), copy(F.τ); μ=F.μ)
+copy(F::Hessenberg{<:Any,<:UpperHessenberg}) = Hessenberg(copy(F.factors), copy(F.τ); μ=F.μ)
+copy(F::Hessenberg{<:Any,<:SymTridiagonal}) = Hessenberg(copy(F.factors), copy(F.τ), copy(F.H), F.uplo; μ=F.μ)
 size(F::Hessenberg, d) = size(F.H, d)
 size(F::Hessenberg) = size(F.H)
 
@@ -484,6 +485,9 @@ end
 rmul!(F::Hessenberg{<:Any,<:UpperHessenberg{T}}, x::T) where {T<:Number} = Hessenberg(rmul_triu!(F.factors, x, -1), F.τ; μ=F.μ*x)
 lmul!(x::T, F::Hessenberg{<:Any,<:UpperHessenberg{T}}) where {T<:Number} = Hessenberg(lmul_triu!(x, F.factors, -1), F.τ; μ=x*F.μ)
 
+rmul!(F::Hessenberg{<:Any,<:SymTridiagonal{T}}, x::T) where {T<:Number} = Hessenberg(F.factors, F.τ, SymTridiagonal(F.H.dv*x, F.H.ev*x), F.uplo; μ=F.μ*x)
+lmul!(x::T, F::Hessenberg{<:Any,<:SymTridiagonal{T}}) where {T<:Number} = Hessenberg(F.factors, F.τ, SymTridiagonal(x*F.H.dv, x*F.H.ev), F.uplo; μ=x*F.μ)
+
 # Promote F * x or x * F.  In general, we don't know how to do promotions
 # that would change the element type of F.H, however.
 function (*)(F::Hessenberg{<:Any,<:AbstractMatrix{T}}, x::S) where {T,S<:Number}
@@ -521,47 +525,37 @@ end
 
 function rdiv!(B::AbstractMatrix, F::Hessenberg)
     Q = F.Q
-    if iszero(F.μ)
-        return rmul!(rdiv!(rmul!(B, Q), F.H), Q')
-    else
-        return rmul!(rdiv!(rmul!(B, Q), F.H; shift=F.μ), Q')
-    end
+    return rmul!(rdiv!(rmul!(B, Q), F.H; shift=F.μ), Q')
 end
 
 # handle case of real H and complex μ — we need to work around the
 # fact that we can't multiple a real F.Q by a complex matrix directly in LAPACK
-function ldiv!(F::Hessenberg{<:Complex,<:AbstractMatrix{<:Real}}, B::AbstractVecOrMat{<:Complex})
+function ldiv!(F::Hessenberg{<:Complex,<:Any,<:AbstractMatrix{<:Real}}, B::AbstractVecOrMat{<:Complex})
     Q = F.Q
     Br = lmul!(Q', real(B))
     Bi = lmul!(Q', imag(B))
-    if iszero(F.μ)
-        ldiv!(F.H, B .= Complex.(Br,Bi))
-    else
-        ldiv!(F.H, B .= Complex.(Br,Bi); shift=F.μ)
-    end
-    Br = lmul!(Q, real(B))
-    Bi = lmul!(Q, imag(B))
+    ldiv!(F.H, B .= Complex.(Br,Bi); shift=F.μ)
+    Br .= real.(B); Bi .= imag.(B)
+    Br = lmul!(Q, Br)
+    Bi = lmul!(Q, Bi)
     return B .= Complex.(Br,Bi)
 end
-function rdiv!(B::AbstractVecOrMat{<:Complex}, F::Hessenberg{<:Complex,<:AbstractMatrix{<:Real}})
+function rdiv!(B::AbstractVecOrMat{<:Complex}, F::Hessenberg{<:Complex,<:Any,<:AbstractMatrix{<:Real}})
     Q = F.Q
     Br = rmul!(real(B), Q)
     Bi = rmul!(imag(B), Q)
-    if iszero(F.μ)
-        rdiv!(B .= Complex.(Br,Bi), F.H)
-    else
-        rdiv!(B .= Complex.(Br,Bi), F.H; shift=F.μ)
-    end
-    Br = rmul!(real(B), Q')
-    Bi = rmul!(imag(B), Q')
+    rdiv!(B .= Complex.(Br,Bi), F.H; shift=F.μ)
+    Br .= real.(B); Bi .= imag.(B)
+    Br = rmul!(Br, Q')
+    Bi = rmul!(Bi, Q')
     return B .= Complex.(Br,Bi)
 end
 
 ldiv!(F::Adjoint{<:Any,<:Hessenberg}, B::AbstractVecOrMat) = rdiv!(B', F')'
 rdiv!(B::AbstractMatrix, F::Adjoint{<:Any,<:Hessenberg}) = ldiv!(F', B')'
 
-det(F::Hessenberg) = iszero(F.μ) ? det(F.H) : det(F.H; shift=F.μ)
-logabsdet(F::Hessenberg) = iszero(F.μ) ? logabsdet(F.H) : logabsdet(F.H; shift=F.μ)
+det(F::Hessenberg) = det(F.H; shift=F.μ)
+logabsdet(F::Hessenberg) = logabsdet(F.H; shift=F.μ)
 function logdet(F::Hessenberg)
     d,s = logabsdet(F)
     return d + log(s)

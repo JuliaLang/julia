@@ -39,12 +39,13 @@ let n = 10
         @test_throws ArgumentError H[5,3]=1
     end
 
-    @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
-        A = eltya == Int ?
+    @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int), herm in (false, true)
+        A_ = eltya == Int ?
                 rand(1:7, n, n) :
                 convert(Matrix{eltya}, eltya <: Complex ?
                     complex.(Areal, Aimg) :
                     Areal)
+        A = herm ? Hermitian(A_ + A_') : A_
 
         H = hessenberg(A)
         eltyh = eltype(H)
