@@ -14,17 +14,6 @@
 extern "C" {
 #endif
 
-typedef struct {
-    jl_code_info_t *src; // contains the names and number of slots
-    jl_method_instance_t *mi; // MethodInstance we're executing, or NULL if toplevel
-    jl_module_t *module; // context for globals
-    jl_value_t **locals; // slots for holding local slots and ssavalues
-    jl_svec_t *sparam_vals; // method static parameters, if eval-ing a method body
-    size_t ip; // Leak the currently-evaluating statement index to backtrace capture
-    int preevaluation; // use special rules for pre-evaluating expressions (deprecated--only for ccall handling)
-    int continue_at; // statement index to jump to after leaving exception handler (0 if none)
-} interpreter_state;
-
 #include "interpreter-stacktrace.c"
 
 static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s);
@@ -816,7 +805,7 @@ struct jl_interpret_call_args {
     uint32_t nargs;
 };
 
-SECT_INTERP CALLBACK_ABI void *jl_interpret_call_callback(interpreter_state *s, void *vargs)
+SECT_INTERP INTERP_CALLBACK_ABI void *jl_interpret_call_callback(interpreter_state *s, void *vargs)
 {
     struct jl_interpret_call_args *args =
         (struct jl_interpret_call_args *)vargs;
@@ -869,7 +858,7 @@ struct jl_interpret_toplevel_thunk_args {
     jl_module_t *m;
     jl_code_info_t *src;
 };
-SECT_INTERP CALLBACK_ABI void *jl_interpret_toplevel_thunk_callback(interpreter_state *s, void *vargs) {
+SECT_INTERP INTERP_CALLBACK_ABI void *jl_interpret_toplevel_thunk_callback(interpreter_state *s, void *vargs) {
     struct jl_interpret_toplevel_thunk_args *args =
         (struct jl_interpret_toplevel_thunk_args*)vargs;
     JL_GC_PROMISE_ROOTED(args);
@@ -906,7 +895,7 @@ struct interpret_toplevel_expr_in_args {
     jl_svec_t *sparam_vals;
 };
 
-SECT_INTERP CALLBACK_ABI void *jl_interpret_toplevel_expr_in_callback(interpreter_state *s, void *vargs)
+SECT_INTERP INTERP_CALLBACK_ABI void *jl_interpret_toplevel_expr_in_callback(interpreter_state *s, void *vargs)
 {
     struct interpret_toplevel_expr_in_args *args =
         (struct interpret_toplevel_expr_in_args*)vargs;

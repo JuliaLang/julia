@@ -121,8 +121,6 @@ asm(
     ASM_END
     );
 
-#define CALLBACK_ABI
-
 #elif defined(_CPU_X86_)
 
 #define MAX_INTERP_STATE_SIZE 36
@@ -206,7 +204,6 @@ asm(
      ASM_END
      );
 
-#define CALLBACK_ABI  __attribute__((fastcall))
 static_assert(sizeof(interpreter_state) <= MAX_INTERP_STATE_SIZE, "Update assembly code above");
 
 #elif defined(_CPU_AARCH64_)
@@ -253,8 +250,6 @@ asm(
     ASM_END
     );
 
-#define CALLBACK_ABI
-
 #elif defined(_CPU_ARM_)
 
 #define MAX_INTERP_STATE_SIZE 48
@@ -295,8 +290,6 @@ asm(
     "\t.fnend\n"
     ASM_END
     );
-
-#define CALLBACK_ABI
 
 #elif defined(_CPU_PPC64_)
 /**
@@ -367,8 +360,6 @@ asm(
     ASM_END
     );
 
-#define CALLBACK_ABI
-
 #else
 #warning "Interpreter backtraces not implemented for this platform"
 #define NO_INTERP_BT
@@ -406,7 +397,6 @@ JL_DLLEXPORT size_t jl_capture_interp_frame(uintptr_t *data, uintptr_t sp, uintp
     return 2;
 }
 
-extern void * CALLBACK_ABI enter_interpreter_frame(void * CALLBACK_ABI (*callback)(interpreter_state *, void *), void *arg);
 #else
 JL_DLLEXPORT int jl_is_interpreter_frame(uintptr_t ip)
 {
@@ -422,7 +412,6 @@ JL_DLLEXPORT size_t jl_capture_interp_frame(uintptr_t *data, uintptr_t sp, uintp
 {
     return 0;
 }
-#define CALLBACK_ABI
 void *NOINLINE enter_interpreter_frame(void *(*callback)(interpreter_state *, void *), void *arg) {
     interpreter_state state = {};
     return callback(&state, arg);

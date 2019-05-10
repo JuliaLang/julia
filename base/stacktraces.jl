@@ -131,6 +131,9 @@ function lookup(ip::Base.InterpreterIP)
     elseif ip.code === nothing
         # interpreted top-level expression with no CodeInfo
         return [StackFrame(top_level_scope_sym, empty_sym, 0, nothing, false, false, 0)]
+    elseif ip.code isa Symbol
+        # top-level expression during macro expansion pass
+        return [StackFrame(top_level_scope_sym, ip.code, ip.stmt, nothing, false, false, 0)]
     else
         @assert ip.code isa Core.CodeInfo
         codeinfo = ip.code
