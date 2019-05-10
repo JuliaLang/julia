@@ -1529,3 +1529,16 @@ end
                Tuple{Type{<:SA{N, L}}, Type{<:SA{N, L}}} where {N,L},
                # TODO: this could be narrower
                Tuple{Type{SA{2, L}}, Type{SA{2, 16}}} where L)
+
+# issue #31993
+@testintersect(Tuple{Type{<:AbstractVector{T}}, Int} where T,
+               Tuple{Type{Vector}, Any},
+               Union{})
+@testintersect(Tuple{Type{<:AbstractVector{T}}, Int} where T,
+               Tuple{Type{Vector{T} where Int<:T<:Int}, Any},
+               Tuple{Type{Vector{Int}}, Int})
+let X = LinearAlgebra.Symmetric{T, S} where S<:(AbstractArray{U, 2} where U<:T) where T,
+    Y = Union{LinearAlgebra.Hermitian{T, S} where S<:(AbstractArray{U, 2} where U<:T) where T,
+              LinearAlgebra.Symmetric{T, S} where S<:(AbstractArray{U, 2} where U<:T) where T}
+    @test X <: Y
+end
