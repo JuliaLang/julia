@@ -181,15 +181,6 @@ julia> rand(Die(4), 3)
 
 Given a collection type `S`, it's currently assumed that if `rand(::S)` is defined, an object of type `eltype(S)` will be produced. In the last example, a `Vector{Any}` is produced; the reason is that `eltype(Die) == Any`. The remedy is to define `Base.eltype(::Type{Die}) = Int`.
 
-A `SamplerTrivial` does not have to wrap the original object. For example, in `Random`, `AbstractFloat` types are special-cased, because by default random values are not produced in the whole type domain, but rather in `[0,1)`.
-
-Consequently, a method
-```julia
-Sampler(::Type{RNG}, ::Type{T}, n::Repetition) where {RNG<:AbstractRNG,T<:AbstractFloat} =
-    Sampler(RNG, CloseOpen01(T), n)
-```
-is defined to return `SamplerTrivial` with a `Random.CloseOpen01{T}}` type defined for this purpose, which has an appropriate `rand` method defined for it.
-
 #### An optimized sampler with pre-computed data
 
 Consider a discrete distribution, where numbers `1:n` are drawn with given probabilities that sum to one. When many values are needed from this distribution, the fastest method is using an [alias table](https://en.wikipedia.org/wiki/Alias_method). We don't provide the algorithm for building such a table here, but suppose it is available in `make_alias_table(probabilities)` instead, and `draw_number(rng, alias_table)` can be used to draw a random number from it.
