@@ -287,7 +287,9 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
     ptls->pgcstack = t->gcstack;
     ptls->world_age = t->world_age;
     t->gcstack = NULL;
+#ifdef MIGRATE_TASKS
     ptls->previous_task = lastt;
+#endif
     ptls->current_task = t;
 
     jl_ucontext_t *lastt_ctx = (killed ? NULL : &lastt->ctx);
@@ -366,11 +368,16 @@ JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
 
     ctx_switch(ptls, pt);
 
+#ifdef MIGRATE_TASKS
     ptls = refetch_ptls();
     t = ptls->previous_task;
     assert(t->tid == ptls->tid);
     if (!t->sticky && !t->copy_stack)
         t->tid = -1;
+#else
+    assert(ptls == refetch_ptls());
+#endif
+
     ct = ptls->current_task;
 
 #ifdef ENABLE_TIMINGS
@@ -561,9 +568,11 @@ static void NOINLINE JL_NORETURN start_task(void)
     jl_task_t *t = ptls->current_task;
     jl_value_t *res;
 
+#ifdef MIGRATE_TASKS
     jl_task_t *pt = ptls->previous_task;
     if (!pt->sticky && !pt->copy_stack)
         pt->tid = -1;
+#endif
 
     t->started = 1;
     if (t->exception != jl_nothing) {
