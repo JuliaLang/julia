@@ -218,6 +218,9 @@ Random.seed!(1)
                 tx = Tfull \ b
                 @test_throws DimensionMismatch LinearAlgebra.naivesub!(T,Vector{elty}(undef,n+1))
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+                x = transpose(T) \ b
+                tx = transpose(Tfull) \ b
+                @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
                 @testset "Generic Mat-vec ops" begin
                     @test T*b ≈ Tfull*b
                     @test T'*b ≈ Tfull'*b
@@ -297,9 +300,14 @@ Random.seed!(1)
             # test pass-through of mul! for AbstractTriangular*Bidiagonal
             Tri = UpperTriangular(diagm(1 => T.ev))
             @test Array(Tri*T) ≈ Array(Tri)*Array(T)
+            # test mul! for Diagonal*Bidiagonal
+            C = Matrix{elty}(undef, n, n)
+            Dia = Diagonal(T.dv)
+            @test mul!(C, Dia, T) ≈ Array(Dia)*Array(T)
         end
 
         @test inv(T)*Tfull ≈ Matrix(I, n, n)
+        @test factorize(T) === T
     end
     BD = Bidiagonal(dv, ev, :U)
     @test Matrix{Complex{Float64}}(BD) == BD
