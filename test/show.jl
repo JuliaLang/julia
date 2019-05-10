@@ -1071,8 +1071,8 @@ end
 @testset "arrays printing follows the :compact property when specified" begin
     x = 3.141592653589793
     @test showstr(x) == "3.141592653589793"
-    @test showstr([x, x], :compact => true) == showstr([x, x], :compact => true) == "[3.14159, 3.14159]"
-    @test showstr([x, x], :compact => false) == "[3.141592653589793, 3.141592653589793]"
+    @test showstr([x, x], :compact => true) == "[3.14159, 3.14159]"
+    @test showstr([x, x]) == showstr([x, x], :compact => false) == "[3.141592653589793, 3.141592653589793]"
     @test showstr([x x; x x], :compact => true) ==
         "[3.14159 3.14159; 3.14159 3.14159]"
     @test showstr([x x; x x]) == showstr([x x; x x], :compact => false) ==
