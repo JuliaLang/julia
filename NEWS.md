@@ -81,9 +81,6 @@ Standard library changes
   form `kron(u, v')`, `u * v'`, and `u .* v'` where `u` and `v` are sparse vectors or column
   views ([#24980]).
 
-#### Dates
-* Fixed `repr` such that it displays `DateTime` as it would be entered in Julia ([#30200]).
-
 #### Statistics
 * `quantile` now accepts in all cases collections whose `eltype` is not a subtype of `Number` ([#30938]).
 
@@ -110,7 +107,6 @@ External dependencies
 [#29790]: https://github.com/JuliaLang/julia/issues/29790
 [#29998]: https://github.com/JuliaLang/julia/issues/29998
 [#30061]: https://github.com/JuliaLang/julia/issues/30061
-[#30200]: https://github.com/JuliaLang/julia/issues/30200
 [#30298]: https://github.com/JuliaLang/julia/issues/30298
 [#30323]: https://github.com/JuliaLang/julia/issues/30323
 [#30372]: https://github.com/JuliaLang/julia/issues/30372
