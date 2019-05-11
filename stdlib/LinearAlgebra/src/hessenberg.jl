@@ -97,8 +97,6 @@ fillstored!(H::UpperHessenberg, x) = (fillband!(H.data, x, -1, size(H,2)-1); H)
 
 # shift Hessenberg by λI
 +(H::UpperHessenberg, J::UniformScaling) = UpperHessenberg(H.data + J)
-+(J::UniformScaling, H::UpperHessenberg) = UpperHessenberg(J + H.data)
--(H::UpperHessenberg, J::UniformScaling) = UpperHessenberg(H.data - J)
 -(J::UniformScaling, H::UpperHessenberg) = UpperHessenberg(J - H.data)
 
 # Solving (H+µI)x = b: we can do this in O(m²) time and O(m) memory
