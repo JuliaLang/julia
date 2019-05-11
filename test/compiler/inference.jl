@@ -2414,3 +2414,10 @@ let
     f = MixedKeyDict((Dict(2 => 7), Dict(5. => 11)))
     @test merge(+, d, e, f).dicts == (Dict(1 => 10, 2 => 7), Dict(4.0 => 2, 5.0 => 20))
 end
+
+# Issue #31974
+f31974(a::UnitRange) = (if first(a) <= last(a); f31974((first(a)+1):last(a)); end; a)
+f31974(n::Int) = f31974(1:n)
+# This query hangs if type inference improperly attempts to const prop
+# call cycles.
+@test code_typed(f31974, Tuple{Int}) !== nothing
