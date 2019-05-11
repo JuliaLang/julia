@@ -1049,7 +1049,7 @@ end
 function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, prec::Int)
     if isa(value, Symbol) && !(value in quoted_syms)
         s = string(value)
-        if isidentifier(s) || isoperator(value)
+        if (isidentifier(s) || isoperator(value)) && !(s == "true" || s == "false")
             print(io, ":")
             print(io, value)
         else

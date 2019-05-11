@@ -1612,3 +1612,9 @@ end
     @test startswith(showstr(Array{Int32, 0}(undef)), "fill(")
     @test startswith(replstr(Array{Int32, 0}(undef)), "0-dimensional Array{Int32,0}:\n")
 end
+
+# issue #31402, Print Symbol("true") as Symbol("true") instead of :true
+@test sprint(show, Symbol(true)) == "Symbol(\"true\")"
+@test sprint(show, Symbol("true")) == "Symbol(\"true\")"
+@test sprint(show, Symbol(false)) == "Symbol(\"false\")"
+@test sprint(show, Symbol("false")) == "Symbol(\"false\")"
