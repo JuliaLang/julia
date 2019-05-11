@@ -46,6 +46,7 @@ let n = 10
                     complex.(Areal, Aimg) :
                     Areal)
         A = herm ? Hermitian(A_ + A_') : A_
+        Am = Matrix(A) # workaround for #32001
 
         H = hessenberg(A)
         eltyh = eltype(H)
@@ -66,27 +67,27 @@ let n = 10
 
         @test convert(Array, 2 * H) ≈ 2 * A ≈ convert(Array, H * 2)
         @test convert(Array, H + 2I) ≈ A + 2I ≈ convert(Array, 2I + H)
-        @test convert(Array, H + (2+4im)I) ≈ A + (2+4im)I ≈ convert(Array, (2+4im)I + H)
+        @test convert(Array, H + (2+4im)I) ≈ Am + (2+4im)I ≈ convert(Array, (2+4im)I + H)
         @test convert(Array, H - 2I) ≈ A - 2I ≈ -convert(Array, 2I - H)
         @test convert(Array, -H) == -convert(Array, H)
-        @test convert(Array, 2*(H + (2+4im)I)) ≈ 2A + (4+8im)I
+        @test convert(Array, 2*(H + (2+4im)I)) ≈ 2Am + (4+8im)I
 
         b = convert(Vector{eltype(H)}, b_)
         B = convert(Matrix{eltype(H)}, B_)
         @test H \ b ≈ A \ b ≈ H \ complex(b)
         @test H \ B ≈ A \ B ≈ H \ complex(B)
         @test (H - I) \ B ≈ (A - I) \ B
-        @test (H - (3+4im)I) \ B ≈ (A - (3+4im)I) \ B
+        @test (H - (3+4im)I) \ B ≈ (Am - (3+4im)I) \ B
         @test b' / H ≈ b' / A ≈ complex.(b') / H
         @test B' / H ≈ B' / A ≈ complex(B') / H
         @test B' / (H - I) ≈ B' / (A - I)
-        @test B' / (H - (3+4im)I) ≈ B' / (A - (3+4im)I)
-        @test (H - (3+4im)I)' \ B ≈ (A - (3+4im)I)' \ B
-        @test B' / (H - (3+4im)I)' ≈ B' / (A - (3+4im)I)'
+        @test B' / (H - (3+4im)I) ≈ B' / (Am - (3+4im)I)
+        @test (H - (3+4im)I)' \ B ≈ (Am - (3+4im)I)' \ B
+        @test B' / (H - (3+4im)I)' ≈ B' / (Am - (3+4im)I)'
 
         for shift in (0,1,3+4im)
-            @test det(H + shift*I) ≈ det(A + shift*I)
-            @test logabsdet(H + shift*I) ≅ logabsdet(A + shift*I)
+            @test det(H + shift*I) ≈ det(Am + shift*I)
+            @test logabsdet(H + shift*I) ≅ logabsdet(Am + shift*I)
         end
     end
 end
