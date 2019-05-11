@@ -1312,36 +1312,34 @@ function findnz(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     return (I, J, V)
 end
 
-function _sparse_findnextnz(m::SparseMatrixCSC, i::Integer)
-    if i > length(m)
-        return nothing
-    end
-    row, col = Tuple(CartesianIndices(m)[i])
+function _sparse_findnextnz(m::SparseMatrixCSC, ij::CartesianIndex{2})
+    row, col = Tuple(ij)
+    col > m.n && return nothing
+
     lo, hi = m.colptr[col], m.colptr[col+1]
     n = searchsortedfirst(m.rowval, row, lo, hi-1, Base.Order.Forward)
     if lo <= n <= hi-1
-        return LinearIndices(m)[m.rowval[n], col]
+        return CartesianIndex(m.rowval[n], col)
     end
     nextcol = findnext(c->(c>hi), m.colptr, col+1)
     nextcol === nothing && return nothing
     nextlo = m.colptr[nextcol-1]
-    return LinearIndices(m)[m.rowval[nextlo], nextcol-1]
+    return CartesianIndex(m.rowval[nextlo], nextcol - 1)
 end
 
-function _sparse_findprevnz(m::SparseMatrixCSC, i::Integer)
-    if iszero(i)
-        return nothing
-    end
-    row, col = Tuple(CartesianIndices(m)[i])
+function _sparse_findprevnz(m::SparseMatrixCSC, ij::CartesianIndex{2})
+    row, col = Tuple(ij)
+    iszero(col) && return nothing
+
     lo, hi = m.colptr[col], m.colptr[col+1]
     n = searchsortedlast(m.rowval, row, lo, hi-1, Base.Order.Forward)
     if lo <= n <= hi-1
-        return LinearIndices(m)[m.rowval[n], col]
+        return CartesianIndex(m.rowval[n], col)
     end
     prevcol = findprev(c->(c<lo), m.colptr, col-1)
     prevcol === nothing && return nothing
     prevhi = m.colptr[prevcol+1]
-    return LinearIndices(m)[m.rowval[prevhi-1], prevcol]
+    return CartesianIndex(m.rowval[prevhi-1], prevcol)
 end
 
 
