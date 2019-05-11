@@ -89,7 +89,7 @@ The object returned by `Sampler` is then used to generate the random values. Whe
 ```julia
 rand(rng, sampler)
 ```
-for the particular sampler returned by `Sampler(rng, X, repetition)`
+for the particular `sampler` returned by `Sampler(rng, X, repetition)`.
 
 Samplers can be arbitrary values that implement `rand(rng, sampler)`, but for most applications the following predefined samplers may be sufficient:
 
@@ -180,6 +180,10 @@ julia> rand(Die(4), 3)
 ```
 
 Given a collection type `S`, it's currently assumed that if `rand(::S)` is defined, an object of type `eltype(S)` will be produced. In the last example, a `Vector{Any}` is produced; the reason is that `eltype(Die) == Any`. The remedy is to define `Base.eltype(::Type{Die}) = Int`.
+
+#### Generating values for an `AbstractFloat` type
+
+`AbstractFloat` types are special-cased, because by default random values are not produced in the whole type domain, but rather in `[0,1)`. The following method should be implemented for `T <: AbstractFloat`: `Random.rand(::AbstractRNG, ::Random.SamplerTrivial{Random.CloseOpen01{T}})`
 
 #### An optimized sampler with pre-computed data
 
