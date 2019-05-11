@@ -4,6 +4,7 @@ Julia v1.3 Release Notes
 New language features
 ---------------------
 
+* Support for Unicode 12.1.0 ([#32002]).
 
 Language changes
 ----------------
