@@ -203,7 +203,7 @@ end
         @test digits(321, base = 8) == [1, 0, 5]
         @test digits(0x123456789abcdef, base = 16) == 15:-1:1
         @test digits(0x2b1a210a750, base = 64) == [16, 29, 10, 4, 34, 6, 43]
-        @test digits(0x02a01407, base = 1024) == [7, 5, 42]
+        @test digits(0x02a01407, base = Int128(1024)) == [7, 5, 42]
     end
 
     @testset "digits/base with negative bases" begin

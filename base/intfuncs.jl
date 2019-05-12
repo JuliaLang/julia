@@ -759,7 +759,8 @@ function digits!(a::AbstractVector{T}, n::Integer; base::Integer = 10) where T<:
     isempty(a) && return a
 
     if base > 0
-        if ispow2(base) && n >= 0 && n isa Base.BitInteger
+        if ispow2(base) && n >= 0 && n isa Base.BitInteger && base <= typemax(Int)
+            base = Int(base)
             k = trailing_zeros(base)
             c = base - 1
             for i in eachindex(a)
