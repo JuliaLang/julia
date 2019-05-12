@@ -16,7 +16,7 @@ using Base.GMP: Limb
 
 using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
 
-import Base: copymutable, copy, copy!, ==, hash, convert
+import Base: copymutable, copy, copy!, ==, hash, convert, eltype
 using Serialization
 import Serialization: serialize, deserialize
 import Base: rand, randn
@@ -39,10 +39,6 @@ export rand!, randn!,
 Supertype for random number generators such as [`MersenneTwister`](@ref) and [`RandomDevice`](@ref).
 """
 abstract type AbstractRNG end
-
-gentype(::Type{X}) where {X} = eltype(X)
-gentype(x) = gentype(typeof(x))
-
 
 ### integers
 
@@ -81,7 +77,7 @@ for UI = (:UInt10, :UInt10Raw, :UInt23, :UInt23Raw, :UInt52, :UInt52Raw,
     end
 end
 
-gentype(::Type{<:UniformBits{T}}) where {T} = T
+eltype(::Type{<:UniformBits{T}}) where {T} = T
 
 ### floats
 
@@ -97,7 +93,7 @@ const CloseOpen12_64   = CloseOpen12{Float64}
 CloseOpen01(::Type{T}=Float64) where {T<:AbstractFloat} = CloseOpen01{T}()
 CloseOpen12(::Type{T}=Float64) where {T<:AbstractFloat} = CloseOpen12{T}()
 
-gentype(::Type{<:FloatInterval{T}}) where {T<:AbstractFloat} = T
+eltype(::Type{<:FloatInterval{T}}) where {T<:AbstractFloat} = T
 
 const BitFloatType = Union{Type{Float16},Type{Float32},Type{Float64}}
 
@@ -105,7 +101,7 @@ const BitFloatType = Union{Type{Float16},Type{Float32},Type{Float64}}
 
 abstract type Sampler{E} end
 
-gentype(::Type{<:Sampler{E}}) where {E} = E
+eltype(::Type{<:Sampler{E}}) where {E} = E
 
 # temporarily for BaseBenchmarks
 RangeGenerator(x) = Sampler(GLOBAL_RNG, x)
@@ -135,6 +131,10 @@ the amount of precomputation, if applicable.
 [`Random.SamplerType`](@ref) and [`Random.SamplerTrivial`](@ref) are default fallbacks for
 *types* and *values*, respectively. [`Random.SamplerSimple`](@ref) can be used to store
 pre-computed values without defining extra types for only this purpose.
+
+Generally, for most custom types that yield random values, defining a new method for
+`Sampler` is *not* required, as the above solutions should be sufficient. See the manual for
+details and examples.
 """
 Sampler(rng::AbstractRNG, x, r::Repetition=Val(Inf)) = Sampler(typeof(rng), x, r)
 Sampler(rng::AbstractRNG, ::Type{X}, r::Repetition=Val(Inf)) where {X} = Sampler(typeof(rng), X, r)
@@ -170,9 +170,11 @@ end
 Create a sampler that just wraps the given value `x`. This is the default fall-back for
 values.
 
+`eltype(x)` is used to determine the types returned by this sampler, and should be defined.
+
 The recommended use case is sampling from values without precomputed data.
 """
-SamplerTrivial(x::T) where {T} = SamplerTrivial{T,gentype(T)}(x)
+SamplerTrivial(x::T) where {T} = SamplerTrivial{T,eltype(T)}(x)
 
 Sampler(::Type{<:AbstractRNG}, x, ::Repetition) = SamplerTrivial(x)
 
@@ -189,16 +191,18 @@ end
 
 Create a sampler that wraps the given value `x` and the `data`.
 
+`eltype(x)` is used to determine the types returned by this sampler, and should be defined.
+
 The recommended use case is sampling from values with precomputed data.
 """
-SamplerSimple(x::T, data::S) where {T,S} = SamplerSimple{T,S,gentype(T)}(x, data)
+SamplerSimple(x::T, data::S) where {T,S} = SamplerSimple{T,S,eltype(T)}(x, data)
 
 Base.getindex(sp::SamplerSimple) = sp.self
 
 # simple sampler carrying a (type) tag T and data
 struct SamplerTag{T,S,E} <: Sampler{E}
     data::S
-    SamplerTag{T}(s::S) where {T,S} = new{T,S,gentype(T)}(s)
+    SamplerTag{T}(s::S) where {T,S} = new{T,S,eltype(T)}(s)
 end
 
 
@@ -271,7 +275,7 @@ end
 rand(r::AbstractRNG, dims::Integer...) = rand(r, Float64, Dims(dims))
 rand(                dims::Integer...) = rand(Float64, Dims(dims))
 
-rand(r::AbstractRNG, X, dims::Dims)  = rand!(r, Array{gentype(X)}(undef, dims), X)
+rand(r::AbstractRNG, X, dims::Dims)  = rand!(r, Array{eltype(X)}(undef, dims), X)
 rand(                X, dims::Dims)  = rand(GLOBAL_RNG, X, dims)
 
 rand(r::AbstractRNG, X, d::Integer, dims::Integer...) = rand(r, X, Dims((d, dims...)))

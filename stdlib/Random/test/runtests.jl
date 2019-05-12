@@ -689,10 +689,10 @@ end
     end
 end
 
-@testset "gentype for UniformBits" begin
-    @test Random.gentype(Random.UInt52()) == UInt64
-    @test Random.gentype(Random.UInt52(UInt128)) == UInt128
-    @test Random.gentype(Random.UInt104()) == UInt128
+@testset "eltype for UniformBits" begin
+    @test eltype(Random.UInt52()) == UInt64
+    @test eltype(Random.UInt52(UInt128)) == UInt128
+    @test eltype(Random.UInt104()) == UInt128
 end
 
 @testset "shuffle[!]" begin
