@@ -142,42 +142,68 @@ end
 # However, to preserve type stability, we do not special-case a
 # UniformScaling{<:Complex} that happens to be real.
 function (+)(A::Hermitian, J::UniformScaling{<:Complex})
-    TS = Base._return_type(+, Tuple{eltype(A), typeof(J)})
-    B = copytri!(copy_oftype(parent(A), TS), A.uplo, true)
-    for i = 1:size(A, 1)
-        B[i,i] = A[i,i] + J
+    if isempty(A)
+        return similar(A, Base._return_type(+, Tuple{eltype(A), typeof(J)}))
+    else
+        B11 = A[first(diagind(A))] + J
+        B = copytri!(copy_oftype(parent(A), typeof(B11)), A.uplo, true)
+        ax = diagind(B)
+        B[first(ax)] = B11
+        for i in Iterators.drop(ax, 1)
+            B[i] = A[i] + J
+        end
+        return B
+        return B
     end
-    return B
 end
 
 function (-)(J::UniformScaling{<:Complex}, A::Hermitian)
-    TS = Base._return_type(+, Tuple{eltype(A), typeof(J)})
-    B = copytri!(copy_oftype(parent(A), TS), A.uplo, true)
-    @inbounds for i in eachindex(B)
-        B[i] = -B[i]
+    if isempty(A)
+        return similar(A, Base._return_type(-, Tuple{typeof(J), eltype(A)}))
+    else
+        B11 = J - A[first(diagind(A))]
+        B = copytri!(copy_oftype(parent(A), typeof(B11)), A.uplo, true)
+        B .= .-B
+        ax = diagind(B)
+        B[first(ax)] = B11
+        for i in Iterators.drop(ax, 1)
+            B[i] = J - A[i]
+        end
+        return B
     end
-    for i = 1:size(A, 1)
-        B[i,i] = J - A[i,i]
-    end
-    return B
 end
 
 function (+)(A::AbstractMatrix, J::UniformScaling)
     checksquare(A)
-    B = copy_oftype(A, Base._return_type(+, Tuple{eltype(A), typeof(J)}))
-    @inbounds for i in axes(A, 1)
-        B[i,i] += J
+    if isempty(A)
+        return similar(A, Base._return_type(+, Tuple{eltype(A), typeof(J)}))
+    else
+        B11 = A[first(diagind(A))] + J
+        B = copy_oftype(A, typeof(B11))
+        ax = diagind(B)
+        B[first(ax)] = B11
+        @inbounds for i in Iterators.drop(ax, 1)
+            B[i] += J
+        end
+        return B
     end
-    return B
 end
 
 function (-)(J::UniformScaling, A::AbstractMatrix)
     checksquare(A)
-    B = convert(AbstractMatrix{Base._return_type(+, Tuple{eltype(A), typeof(J)})}, -A)
-    @inbounds for i in axes(A, 1)
-        B[i,i] += J
+    if isempty(A)
+        return similar(A, Base._return_type(-, Tuple{typeof(J), eltype(A)}))
+    else
+        B11 = J - A[first(diagind(A))]
+        B = copy_oftype(A, typeof(B11))
+        B .= .-B
+        ax = diagind(B)
+        B[first(ax)] = B11
+        @inbounds for i in Iterators.drop(ax, 1)
+            B[i] += J
+        end
+        return B
     end
-    return B
 end
 
 inv(J::UniformScaling) = UniformScaling(inv(J.λ))
