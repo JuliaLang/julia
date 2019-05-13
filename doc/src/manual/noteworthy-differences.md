@@ -323,7 +323,7 @@ For users coming to Julia from R, these are some noteworthy differences:
 
 - Modules (namespaces) can be hierarchical. [`import`](@ref) and [`using`](@ref) have a dual role: they load the code and make it available in the namespace. `import` for only the module name is possible (roughly equivalent to `ASDF:LOAD-OP`). Slot names don't need to be exported separately. Global variables can't be assigned to from outside the module (except with `eval(mod, :(var = val))` as an escape hatch).
 
-- Macros start with `@`, and are not as seamlessly integrated into the language as Common Lisp, consequently macro usage is not as widespread as in the latter. A form of hygiene for [macros](@ref Metaprogramming) is supported by the language. Because of the different surface syntax, there is no equivalent to `COMMON-LISP:&BODY`.
+- Macros start with `@`, and are not as seamlessly integrated into the language as Common Lisp; consequently, macro usage is not as widespread as in the latter. A form of hygiene for [macros](@ref Metaprogramming) is supported by the language. Because of the different surface syntax, there is no equivalent to `COMMON-LISP:&BODY`.
 
 - *All* functions are generic and use multiple dispatch. Argument lists don't have to follow the same template, which leads to a powerful idiom (see [`do`](@ref)). Optional and keyword arguments are handled differently. Method ambiguities are not resolved like in the Common Lisp Object System, necessitating the definition of a more specific method for the intersection.
 
