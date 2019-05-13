@@ -144,8 +144,8 @@ end
 function (+)(A::Hermitian, J::UniformScaling{<:Complex})
     TS = Base._return_type(+, Tuple{eltype(A), typeof(J)})
     B = copytri!(copy_oftype(parent(A), TS), A.uplo, true)
-    for i = 1:size(A, 1)
-        B[i,i] = A[i,i] + J
+    for i in diagind(B)
+        B[i] = A[i] + J
     end
     return B
 end
@@ -153,11 +153,9 @@ end
 function (-)(J::UniformScaling{<:Complex}, A::Hermitian)
     TS = Base._return_type(+, Tuple{eltype(A), typeof(J)})
     B = copytri!(copy_oftype(parent(A), TS), A.uplo, true)
-    @inbounds for i in eachindex(B)
-        B[i] = -B[i]
-    end
-    for i = 1:size(A, 1)
-        B[i,i] = J - A[i,i]
+    B .= .-B
+    for i in diagind(B)
+        B[i] = J - A[i]
     end
     return B
 end
