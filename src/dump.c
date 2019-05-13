@@ -68,10 +68,6 @@ static jl_array_t *serializer_worklist JL_GLOBALLY_ROOTED;
 // (only used by the incremental serializer in MODE_MODULE)
 htable_t edges_map;
 
-// list of modules being deserialized with __init__ methods
-// (not used in MODE_IR)
-extern jl_array_t *jl_module_init_order;
-
 #define TAG_SYMBOL              2
 #define TAG_SSAVALUE            3
 #define TAG_DATATYPE            4
@@ -1458,7 +1454,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     dt->super = (jl_datatype_t*)jl_deserialize_value(s, (jl_value_t**)&dt->super);
     jl_gc_wb(dt, dt->super);
     dt->types = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&dt->types);
-    jl_gc_wb(dt, dt->types);
+    if (dt->types) jl_gc_wb(dt, dt->types);
 
     return (jl_value_t*)dt;
 }

@@ -302,25 +302,25 @@ function sizeof_nothrow(@nospecialize(x))
     else
         x = widenconst(x)
     end
-    isconstType(x) && (x = x.parameters[1])
     if isa(x, Union)
         return sizeof_nothrow(x.a) && sizeof_nothrow(x.b)
     end
+    isconstType(x) && (x = x.parameters[1]) # since sizeof(typeof(x)) == sizeof(x)
     x === DataType && return false
-    return isconcretetype(x)
+    return isconcretetype(x) || isprimitivetype(x)
 end
 function _const_sizeof(@nospecialize(x))
     # Constant Vector does not have constant size
     isa(x, Vector) && return Int
     size = try
-        Core.sizeof(x)
-    catch ex
-        # Might return
-        # "argument is an abstract type; size is indeterminate" or
-        # "type does not have a fixed size"
-        isa(ex, ErrorException) || rethrow()
-        return Int
-    end
+            Core.sizeof(x)
+        catch ex
+            # Might return
+            # "argument is an abstract type; size is indeterminate" or
+            # "type does not have a fixed size"
+            isa(ex, ErrorException) || rethrow()
+            return Int
+        end
     return Const(size)
 end
 function sizeof_tfunc(@nospecialize(x),)
@@ -328,7 +328,11 @@ function sizeof_tfunc(@nospecialize(x),)
     isa(x, Conditional) && return _const_sizeof(Bool)
     isconstType(x) && return _const_sizeof(x.parameters[1])
     x = widenconst(x)
+    if isa(x, Union)
+        return tmerge(sizeof_tfunc(x.a), sizeof_tfunc(x.b))
+    end
     x !== DataType && isconcretetype(x) && return _const_sizeof(x)
+    isprimitivetype(x) && return _const_sizeof(x)
     return Int
 end
 add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 0)
@@ -338,7 +342,7 @@ function nfields_tfunc(@nospecialize(x))
     x = widenconst(x)
     if isa(x, DataType) && !x.abstract && !(x.name === Tuple.name && isvatuple(x))
         if !(x.name === _NAMEDTUPLE_NAME && !isconcretetype(x))
-            return Const(length(x.types))
+            return Const(isdefined(x, :types) ? length(x.types) : length(x.name.names))
         end
     end
     return Int
@@ -588,7 +592,7 @@ function fieldcount_noerror(@nospecialize t)
     if abstr
         return nothing
     end
-    return length(t.types)
+    return isdefined(t, :types) ? length(t.types) : length(t.name.names)
 end
 
 
@@ -744,7 +748,8 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         # TODO: better approximate inference
         return Any
     end
-    if isempty(s.types)
+    ftypes = datatype_fieldtypes(s)
+    if isempty(ftypes)
         return Bottom
     end
     if isa(name, Conditional)
@@ -754,27 +759,27 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         if !(Int <: name || Symbol <: name)
             return Bottom
         end
-        if length(s.types) == 1
-            return rewrap_unionall(unwrapva(s.types[1]), s00)
+        if length(ftypes) == 1
+            return rewrap_unionall(unwrapva(ftypes[1]), s00)
         end
         # union together types of all fields
         t = Bottom
-        for _ft in s.types
+        for _ft in ftypes
             t = tmerge(t, rewrap_unionall(unwrapva(_ft), s00))
             t === Any && break
         end
         return t
     end
     fld = name.val
-    if isa(fld,Symbol)
+    if isa(fld, Symbol)
         fld = fieldindex(s, fld, false)
     end
-    if !isa(fld,Int)
+    if !isa(fld, Int)
         return Bottom
     end
-    nf = length(s.types)
-    if s <: Tuple && fld >= nf && isvarargtype(s.types[nf])
-        return rewrap_unionall(unwrapva(s.types[nf]), s00)
+    nf = length(ftypes)
+    if s <: Tuple && fld >= nf && isvarargtype(ftypes[nf])
+        return rewrap_unionall(unwrapva(ftypes[nf]), s00)
     end
     if fld < 1 || fld > nf
         return Bottom
@@ -790,7 +795,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         t = const_datatype_getfield_tfunc(sp, fld)
         t !== nothing && return t
     end
-    R = s.types[fld]
+    R = ftypes[fld]
     if isempty(s.parameters)
         return R
     end
@@ -843,7 +848,7 @@ function _fieldtype_nothrow(@nospecialize(s), exact::Bool, name::Const)
         fld = fieldindex(u, fld, false)
     end
     isa(fld, Int) || return false
-    ftypes = u.types
+    ftypes = datatype_fieldtypes(u)
     nf = length(ftypes)
     (fld >= 1 && fld <= nf) || return false
     if u.name === Tuple.name && fld >= nf && isvarargtype(ftypes[nf])
@@ -893,7 +898,7 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
         # TODO: better approximate inference
         return Type
     end
-    ftypes = u.types
+    ftypes = datatype_fieldtypes(u)
     if isempty(ftypes)
         return Bottom
     end

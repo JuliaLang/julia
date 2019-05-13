@@ -258,7 +258,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                     # we have a self-cycle in the call-graph, but not in the inference graph (typically):
                     # break this edge now (before we record it) by returning early
                     # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
-                    return Any, false, nothing
+                    return Any, true, nothing
                 end
                 topmost = nothing
                 edgecycle = true
@@ -339,7 +339,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                 # since it's very unlikely that we'll try to inline this,
                 # or want make an invoke edge to its calling convention return type.
                 # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
-                return Any, false, nothing
+                return Any, true, nothing
             end
             poison_callstack(sv, topmost::InferenceState, true)
             sig = newsig
@@ -547,7 +547,7 @@ function abstract_apply(@nospecialize(aft), aargtypes::Vector{Any}, vtypes::VarT
                     tail = tuple_tail_elem(unwrapva(ct[end]), cti)
                     push!(ctypes´, push!(ct[1:(end - 1)], tail))
                 else
-                    push!(ctypes´, append_any(ct, cti))
+                    push!(ctypes´, append!(ct[:], cti))
                 end
             end
         end

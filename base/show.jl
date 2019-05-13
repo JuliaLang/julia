@@ -1729,7 +1729,7 @@ function dump(io::IOContext, x::DataType, n::Int, indent)
             end
         end
         fields = fieldnames(x)
-        fieldtypes = x.types
+        fieldtypes = datatype_fieldtypes(x)
         for idx in 1:length(fields)
             println(io)
             print(io, indent, "  ", fields[idx], "::")

@@ -202,7 +202,7 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
     if (mask)
         return 0;               // nfields has more than two 1s
     assert(jl_datatype_nfields(t)==1);
-    jl_value_t *ty = jl_field_type(t, 0);
+    jl_value_t *ty = jl_field_type((jl_datatype_t*)t, 0);
     if (!jl_is_primitivetype(ty))
         // LLVM requires that a vector element be a primitive type.
         // LLVM allows pointer types as vector elements, but until a
@@ -223,7 +223,7 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
 
 STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d)
 {
-    return (!d->abstract && jl_datatype_size(d) == 0 && d != jl_sym_type && d->name != jl_array_typename &&
+    return (!d->abstract && jl_datatype_size(d) == 0 && d != jl_symbol_type && d->name != jl_array_typename &&
             d->uid != 0 && !d->mutabl);
 }
 
@@ -301,9 +301,9 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         // based on whether its definition is self-referential
         if (w->types != NULL) {
             st->isbitstype = st->isconcretetype && !st->mutabl;
-            size_t i, nf = jl_field_count(st);
+            size_t i, nf = jl_svec_len(st->types);
             for (i = 0; i < nf; i++) {
-                jl_value_t *fld = jl_field_type(st, i);
+                jl_value_t *fld = jl_svecref(st->types, i);
                 if (st->isbitstype)
                     st->isbitstype = jl_is_datatype(fld) && ((jl_datatype_t*)fld)->isbitstype;
                 if (!st->zeroinit)
@@ -311,9 +311,9 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             }
             if (st->isbitstype) {
                 st->isinlinealloc = 1;
-                size_t i, nf = jl_field_count(w);
+                size_t i, nf = jl_svec_len(w->types);
                 for (i = 0; i < nf; i++) {
-                    jl_value_t *fld = jl_field_type(w, i);
+                    jl_value_t *fld = jl_svecref(w->types, i);
                     if (references_name(fld, w->name)) {
                         st->isinlinealloc = 0;
                         st->isbitstype = 0;
@@ -337,7 +337,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         return;
     uint32_t nfields = jl_svec_len(st->types);
     if (nfields == 0) {
-        if (st == jl_sym_type || st == jl_string_type) {
+        if (st == jl_symbol_type || st == jl_string_type) {
             // opaque layout - heap-allocated blob
             static const jl_datatype_layout_t opaque_byte_layout = {0, 1, 0, 1, 0};
             st->layout = &opaque_byte_layout;
@@ -371,7 +371,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         desc = (jl_fielddesc32_t*)alloca(descsz);
     int haspadding = 0;
     assert(st->name == jl_tuple_typename ||
-           st == jl_sym_type ||
+           st == jl_symbol_type ||
            st == jl_simplevector_type ||
            nfields != 0);
 
@@ -623,8 +623,7 @@ void jl_assign_bits(void *dest, jl_value_t *bits)
 
 #define PERMBOXN_FUNC(nb,nw)                                            \
     jl_value_t *jl_permbox##nb(jl_datatype_t *t, int##nb##_t x)         \
-    {                                                                   \
-        assert(jl_isbits(t));                                           \
+    {   /* NOTE: t must be a concrete isbits datatype */                \
         assert(jl_datatype_size(t) == sizeof(x));                       \
         jl_value_t *v = jl_gc_permobj(nw * sizeof(void*), t);           \
         *(int##nb##_t*)jl_data_ptr(v) = x;                              \

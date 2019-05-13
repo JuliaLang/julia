@@ -15,7 +15,6 @@ jl_module_t *jl_main_module = NULL;
 jl_module_t *jl_core_module = NULL;
 jl_module_t *jl_base_module = NULL;
 jl_module_t *jl_top_module = NULL;
-extern jl_function_t *jl_append_any_func;
 
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
 {
@@ -77,7 +76,6 @@ JL_DLLEXPORT void jl_set_istopmod(jl_module_t *self, uint8_t isprimary)
     self->istopmod = 1;
     if (isprimary) {
         jl_top_module = self;
-        jl_append_any_func = NULL;
     }
 }
 
