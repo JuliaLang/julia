@@ -155,7 +155,7 @@ function Base.show(io::IO, ::MIME"text/plain", S::SparseMatrixCSC)
     xnnz = nnz(S)
     print(io, S.m, "×", S.n, " ", typeof(S), " with ", xnnz, " stored ",
               xnnz == 1 ? "entry" : "entries")
-    if xnnz != 0
+    if !iszero(xnnz)
         print(io, ":")
         show(IOContext(io, :typeinfo => eltype(S)), S)
     end
@@ -385,7 +385,7 @@ function SparseMatrixCSC{Tv,Ti}(M::AbstractMatrix) where {Tv,Ti}
 end
 
 function SparseMatrixCSC{Tv,Ti}(M::StridedMatrix) where {Tv,Ti}
-    nz = count(t -> t != 0, M)
+    nz = count(!iszero, M)
     colptr = zeros(Ti, size(M, 2) + 1)
     nzval = Vector{Tv}(undef, nz)
     rowval = Vector{Ti}(undef, nz)
@@ -394,7 +394,7 @@ function SparseMatrixCSC{Tv,Ti}(M::StridedMatrix) where {Tv,Ti}
     @inbounds for j in 1:size(M, 2)
         for i in 1:size(M, 1)
             v = M[i, j]
-            if v != 0
+            if !iszero(v)
                 rowval[cnt] = i
                 nzval[cnt] = v
                 cnt += 1
@@ -499,7 +499,7 @@ function sparse(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{
     end
 
     if m == 0 || n == 0 || coolen == 0
-        if coolen != 0
+        if !iszero(coolen)
             if n == 0
                 throw(ArgumentError("column indices J[k] must satisfy 1 <= J[k] <= n"))
             elseif m == 0
@@ -1241,7 +1241,7 @@ Removes stored numerical zeros from `A`, optionally trimming resulting excess sp
 For an out-of-place version, see [`dropzeros`](@ref). For
 algorithmic information, see `fkeep!`.
 """
-dropzeros!(A::SparseMatrixCSC; trim::Bool = true) = fkeep!(A, (i, j, x) -> x != 0, trim)
+dropzeros!(A::SparseMatrixCSC; trim::Bool = true) = fkeep!(A, (i, j, x) -> !iszero(x), trim)
 """
     dropzeros(A::SparseMatrixCSC; trim::Bool = true)
 
@@ -1802,7 +1802,7 @@ function _mapreducecols!(f, op::typeof(+), R::AbstractArray, A::SparseMatrixCSC{
                 end
             end
         else
-            # Case where f(0) != 0
+            # Case where !iszero(f(0))
             rownz = fill(convert(Ti, n), m)
             @inbounds for col = 1:size(A, 2)
                 @simd for j = colptr[col]:colptr[col+1]-1
@@ -1852,7 +1852,7 @@ function _findr(op, A, region, Tv)
     N = nnz(A)
     L = length(A)
     if L == 0
-        if prod(map(length, Base.reduced_indices(A, region))) != 0
+        if !iszero(prod(map(length, Base.reduced_indices(A, region))))
             throw(ArgumentError("array slices must be non-empty"))
         else
             ri = Base.reduced_indices0(A, region)
@@ -2403,7 +2403,7 @@ function _setindex_scalar!(A::SparseMatrixCSC{Tv,Ti}, _v, _i::Integer, _j::Integ
     end
     # Column j does not contain entry A[i,j]. If v is nonzero, insert entry A[i,j] = v
     # and return. If to the contrary v is zero, then simply return.
-    if v != 0
+    if !iszero(v)
         insert!(A.rowval, searchk, i)
         insert!(A.nzval, searchk, v)
         @simd for m in (j + 1):(A.n + 1)
@@ -2782,7 +2782,7 @@ function setindex!(A::SparseMatrixCSC, x::AbstractArray, I::AbstractMatrix{Bool}
             end # if I[row, col]
         end # for row in 1:A.m
 
-        if (nadd != 0)
+        if (!iszero(nadd))
             l = r2-r1+1
             if l > 0
                 copyto!(rowvalB, bidx, rowvalA, r1, l)
@@ -2809,7 +2809,7 @@ function setindex!(A::SparseMatrixCSC, x::AbstractArray, I::AbstractMatrix{Bool}
         (xidx > n) && break
     end # for col in 1:A.n
 
-    if (nadd != 0)
+    if (!iszero(nadd))
         n = length(nzvalB)
         if n > (bidx-1)
             deleteat!(nzvalB, bidx:n)
@@ -3257,7 +3257,7 @@ function is_hermsym(A::SparseMatrixCSC, check::Function)
                 # We therefore "catch up" here while making sure that
                 # the elements are actually zero.
                 while row2 < col
-                    if nzval[offset] != 0
+                    if !iszero(nzval[offset])
                         return false
                     end
                     offset += 1
@@ -3295,7 +3295,7 @@ function istriu(A::SparseMatrixCSC)
             if rowval[l1-i] <= col
                 break
             end
-            if nzval[l1-i] != 0
+            if !iszero(nzval[l1-i]
                 return false
             end
         end
@@ -3314,7 +3314,7 @@ function istril(A::SparseMatrixCSC)
             if rowval[i] >= col
                 break
             end
-            if nzval[i] != 0
+            if !iszero(nzval[i])
                 return false
             end
         end
