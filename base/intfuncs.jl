@@ -460,6 +460,10 @@ function ndigits0zpb(x::Integer, b::Integer)
         b == 8  && return (sizeof(x)<<3 - leading_zeros(x) + 2) ÷ 3
         b == 16 && return sizeof(x)<<1 - leading_zeros(x)>>2
         b == 10 && return bit_ndigits0z(x)
+        if ispow2(b)
+            dv, rm = divrem(sizeof(x)<<3 - leading_zeros(x), trailing_zeros(b))
+            return iszero(rm) ? dv : dv + 1
+        end
     end
 
     d = 0
@@ -755,9 +759,18 @@ function digits!(a::AbstractVector{T}, n::Integer; base::Integer = 10) where T<:
     isempty(a) && return a
 
     if base > 0
-        for i in eachindex(a)
-            n, d = divrem(n, base)
-            a[i] = d
+        if ispow2(base) && n >= 0 && n isa Base.BitInteger && base <= typemax(Int)
+            base = Int(base)
+            k = trailing_zeros(base)
+            c = base - 1
+            for i in eachindex(a)
+                a[i] = (n >> (k * (i - firstindex(a)))) & c
+            end
+        else
+            for i in eachindex(a)
+                n, d = divrem(n, base)
+                a[i] = d
+            end
         end
     else
         # manually peel one loop iteration for type stability
