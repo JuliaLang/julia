@@ -797,10 +797,38 @@ would be called only when the number of `indices` matches the dimensionality of 
 When only the type of supplied arguments needs to be constrained `Vararg{T}` can be equivalently
 written as `T...`. For instance `f(x::Int...) = x` is a shorthand for `f(x::Vararg{Int}) = x`.
 
-## Note on Optional and keyword Arguments
+## Note on Optional/Default Positional and Keyword Arguments
 
-As mentioned briefly in [Functions](@ref man-functions), optional arguments are implemented as syntax for multiple
-method definitions. For example, this definition:
+There are two styles for setting optional agruments (a.k.a default values).  
+
+1. Using position arguments.
+1. Using keyword arguments. 
+
+Keyword arguments behave differently from ordinary positional arguments. 
+Specifically, they do not participate in method dispatch. 
+
+!!! note Function methods are dispatched based *only* on positional arguments. 
+Keyword arguments are processed after the matching method is identified.
+
+!!! warning A consequence of the above note on dispatch: 
+If a function, say `f`, has a method that uses position based default values and elsewhere in your 
+code you have the same function name with a method defined to use keyword based default values; 
+then the default value returned by `f()` will be the last definition Julia processed.  
+**There will be no ambiguity warning**
+```jldoctest
+julia> f(a=1,b=2)=5
+f (generic function with 3 methods)
+
+julia> f(;a=1,b=2)=10
+f (generic function with 3 methods)
+
+julia> f()
+10
+```
+
+**Position** based default/optional arguments are implemented as a shorthand for multiple method 
+definitions (this was mentioned briefly in [Functions](@ref man-functions)). 
+For example, this definition:
 
 ```julia
 f(a=1,b=2) = a+2b
@@ -827,9 +855,23 @@ to a function, not to any specific method of that function. It depends on the ty
 arguments which method is invoked. When optional arguments are defined in terms of a global variable,
 the type of the optional argument may even change at run-time.
 
-Keyword arguments behave quite differently from ordinary positional arguments. In particular,
-they do not participate in method dispatch. Methods are dispatched based only on positional arguments,
-with keyword arguments processed after the matching method is identified.
+**Keyword** based default/optional arguments create only one method. 
+For example, consider this definition (note the leading `;`), in a new REPL:
+
+```jldoctest
+julia> f(;a=1,b=2) = 2a+4b
+f (generic function with 1 method)
+julia> f(a=2)
+12
+
+julia> f(b=4)
+18
+
+julia> f()
+10
+```
+
+This means that calling `f()` is equivalent to calling `f(;a=1,b=2)` or `f(a=1,b=2)`. In all cases the result is `10`.
 
 ## Function-like objects
 
