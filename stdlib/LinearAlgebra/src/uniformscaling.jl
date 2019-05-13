@@ -153,7 +153,6 @@ function (+)(A::Hermitian, J::UniformScaling{<:Complex})
             B[i] = A[i] + J
         end
         return B
-        return B
     end
 end
 
