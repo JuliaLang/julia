@@ -677,6 +677,17 @@ eigvals!(A::Hermitian{T,S}, B::Hermitian{T,S}) where {T<:BlasComplex,S<:StridedM
 
 eigvecs(A::HermOrSym) = eigvecs(eigen(A))
 
+function svd(A::RealHermSymComplexHerm, full::Bool=false)
+    vals, vecs = eigen(A)
+    σ = map(x -> x >= 0 ? 1 : -1, vals)
+    vals .= abs.(vals)
+    I = sortperm(vals; rev=true)
+    permute!(vals, I)
+    Σ = Diagonal(σ[I])
+    Base.permutecols!!(vecs, I)
+    return SVD(vecs, vals, (vecs*Σ)')
+end
+
 function svdvals!(A::RealHermSymComplexHerm)
     vals = eigvals!(A)
     for i = 1:length(vals)

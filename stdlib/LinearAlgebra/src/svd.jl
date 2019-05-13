@@ -119,15 +119,6 @@ function svd(A::Transpose; full::Bool = false)
     s = svd(A.parent, full = full)
     return SVD(transpose(s.Vt), s.S, transpose(s.U))
 end
-function svd(A::Union{Hermitian,Symmetric{<:Real}}, full::Bool=false)
-    s = eigen(A)
-    vals = s.values
-    σ = map(x -> x >= 0 ? 1 : -1, vals)
-    vals .*= σ
-    I = sortperm(vals; rev=true)
-    vecs = s.vectors[:,I]
-    return SVD(vecs, vals[I], (vecs*Diagonal(σ[I]))')
-end
 
 function getproperty(F::SVD, d::Symbol)
     if d == :V
