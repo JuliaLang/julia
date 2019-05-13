@@ -92,6 +92,26 @@ a2img  = randn(n,n)/2
             b = rand(eltya,n)
             @test usv\b ≈ transpose(a)\b
         end
+        usv = svd(Symmetric(real(asym)))
+        @testset "singular value decomposition of real Symmetric" begin
+            @test usv.S === svdvals(usv)
+            @test usv.U * (Diagonal(usv.S) * usv.Vt) ≈ real(asym)
+            @test convert(Array, usv) ≈ real(asym)
+            @test usv.Vt' ≈ usv.V
+            @test_throws ErrorException usv.Z
+            b = rand(eltya,n)
+            @test usv\b ≈ real(asym)\b
+        end
+        usv = svd(Hermitian(asym))
+        @testset "singular value decomposition of Hermitian" begin
+            @test usv.S === svdvals(usv)
+            @test usv.U * (Diagonal(usv.S) * usv.Vt) ≈ Hermitian(asym)
+            @test convert(Array, usv) ≈ Hermitian(asym)
+            @test usv.Vt' ≈ usv.V
+            @test_throws ErrorException usv.Z
+            b = rand(eltya,n)
+            @test usv\b ≈ Hermitian(asym)\b
+        end
         @testset "Generalized svd" begin
             a_svd = a[1:n1, :]
             gsvd = svd(a,a_svd)
