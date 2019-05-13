@@ -219,13 +219,16 @@ struct D21923{T,N}; v::D21923{T}; end
 
 # issue #22624, more circular definitions
 struct T22624{A,B,C}; v::Vector{T22624{Int64,A}}; end
-let elT = T22624.body.body.body.types[1].parameters[1]
+let ft = Base.datatype_fieldtypes
+    elT = T22624.body.body.body.types[1].parameters[1]
     @test elT == T22624{Int64, T22624.var, C} where C
-    elT2 = elT.body.types[1].parameters[1]
+    elT2 = ft(elT.body)[1].parameters[1]
     @test elT2 == T22624{Int64, Int64, C} where C
-    @test elT2.body.types[1].parameters[1] === elT2
-    @test Base.isconcretetype(elT2.body.types[1])
+    @test ft(elT2.body)[1].parameters[1] === elT2
+    @test Base.isconcretetype(ft(elT2.body)[1])
 end
+struct S22624{A,B,C} <: Ref{S22624{Int64,A}}; end
+@test @isdefined S22624
 
 # issue #3890
 mutable struct A3890{T1}
@@ -3471,15 +3474,22 @@ end
 mutable struct FooNTuple{N}
     z::Tuple{Integer, Vararg{Int, N}}
 end
-@test_throws ErrorException FooNTuple{-1}
-@test_throws ErrorException FooNTuple{typemin(Int)}
-@test_throws TypeError FooNTuple{0x01}
+for i in (-1, typemin(Int), 0x01)
+    T = FooNTuple{i}
+    @test T.parameters[1] == i
+    @test fieldtypes(T) == (Union{},)
+end
 @test fieldtype(FooNTuple{0}, 1) == Tuple{Integer}
 
 mutable struct FooTupleT{T}
     z::Tuple{Int, T, Int}
 end
-@test_throws TypeError FooTupleT{Vararg{Int, 2}}
+let R = Vararg{Int, 2}
+    @test_throws TypeError Val{R}
+    @test_throws TypeError Ref{R}
+    @test_throws TypeError FooTupleT{R}
+    @test_throws TypeError Union{R}
+end
 @test fieldtype(FooTupleT{Int}, 1) == NTuple{3, Int}
 
 @test Tuple{} === NTuple{0, Any}
@@ -4631,7 +4641,9 @@ mutable struct B12238{T,S}
 end
 @test B12238.body.body.types[1] === A12238{B12238{Int}.body}
 @test isa(A12238{B12238{Int}}.instance, A12238{B12238{Int}})
-@test !isdefined(B12238.body.body.types[1], :instance)  # has free type vars
+let ft = Base.datatype_fieldtypes
+    @test !isdefined(ft(B12238.body.body)[1], :instance)  # has free type vars
+end
 
 # issue #16315
 let a = Any[]
@@ -4744,8 +4756,10 @@ end
 mutable struct C16767{T}
     b::A16767{C16767{:a}}
 end
-@test B16767.body.types[1].types[1].parameters[1].types[1] === A16767{B16767.body}
-@test C16767.body.types[1].types[1].parameters[1].types[1] === A16767{C16767{:a}}
+let ft = Base.datatype_fieldtypes
+    @test ft(ft(B16767.body.types[1])[1].parameters[1])[1] === A16767{B16767.body}
+    @test ft(C16767.body.types[1].types[1].parameters[1])[1] === A16767{C16767{:a}}
+end
 
 # issue #16340
 function f16340(x::T) where T
@@ -6820,22 +6834,6 @@ struct T29145{A,B}
     end
 end
 @test_throws TypeError T29145()
-
-# interpreted but inferred/optimized top-level expressions with vars
-let code = """
-           while true
-               try
-                   this_is_undefined_29213
-                   ed = 0
-                   break
-               finally
-                   break
-               end
-           end
-           print(42)
-           """
-    @test read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String) == "42"
-end
 
 # issue #29175
 function f29175(tuple::T) where {T<:Tuple}

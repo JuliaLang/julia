@@ -79,8 +79,8 @@ void jl_module_run_initializer(jl_module_t *m)
             jl_rethrow();
         }
         else {
-            jl_throw(jl_new_struct(jl_initerror_type, m->name,
-                                   jl_current_exception()));
+            jl_rethrow_other(jl_new_struct(jl_initerror_type, m->name,
+                                           jl_current_exception()));
         }
     }
 }
@@ -119,7 +119,7 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
     int std_imports = (jl_exprarg(ex, 0) == jl_true);
     jl_sym_t *name = (jl_sym_t*)jl_exprarg(ex, 1);
     if (!jl_is_symbol(name)) {
-        jl_type_error("module", (jl_value_t*)jl_sym_type, (jl_value_t*)name);
+        jl_type_error("module", (jl_value_t*)jl_symbol_type, (jl_value_t*)name);
     }
 
     jl_module_t *newm = jl_new_module(name);
@@ -322,7 +322,7 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs) J
             jl_module_t *mod = jl_globalref_mod(f);
             jl_sym_t *name = jl_globalref_name(f);
             if (jl_binding_resolved_p(mod, name)) {
-                jl_binding_t *b = jl_get_module_binding(mod, name);
+                jl_binding_t *b = jl_get_binding(mod, name);
                 if (b && b->value && b->constp)
                     called = b->value;
             }
@@ -418,7 +418,7 @@ static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from JL_PR
     jl_module_t *m = NULL;
     *name = NULL;
     if (!jl_is_symbol(var))
-        jl_type_error(keyword, (jl_value_t*)jl_sym_type, (jl_value_t*)var);
+        jl_type_error(keyword, (jl_value_t*)jl_symbol_type, (jl_value_t*)var);
 
     if (from != NULL) {
         m = from;
@@ -456,7 +456,7 @@ static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from JL_PR
     while (1) {
         var = (jl_sym_t*)jl_array_ptr_ref(args, i);
         if (!jl_is_symbol(var))
-            jl_type_error(keyword, (jl_value_t*)jl_sym_type, (jl_value_t*)var);
+            jl_type_error(keyword, (jl_value_t*)jl_symbol_type, (jl_value_t*)var);
         if (var == dot_sym)
             jl_errorf("invalid %s path: \".\" in identifier path", keyword);
         if (i == jl_array_len(args)-1)

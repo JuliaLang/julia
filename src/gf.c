@@ -133,7 +133,7 @@ JL_DLLEXPORT jl_code_instance_t* jl_set_method_inferred(
         jl_value_t *inferred_const, jl_value_t *inferred,
         int32_t const_flags, size_t min_world, size_t max_world);
 
-void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr) JL_GC_DISABLED
+jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr) JL_GC_DISABLED
 {
     jl_sym_t *sname = jl_symbol(name);
     if (dt == NULL) {
@@ -164,6 +164,7 @@ void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr
     jl_typemap_insert(&mt->cache, (jl_value_t*)mt, jl_anytuple_type,
         NULL, jl_emptysvec, (jl_value_t*)mi, 0, &lambda_cache, 1, ~(size_t)0, NULL);
     JL_GC_POP();
+    return dt;
 }
 
 // run type inference on lambda "mi" for given argument types.
@@ -421,13 +422,13 @@ static int very_general_type(jl_value_t *t)
 jl_value_t *jl_nth_slot_type(jl_value_t *sig, size_t i)
 {
     sig = jl_unwrap_unionall(sig);
-    size_t len = jl_field_count(sig);
+    size_t len = jl_nparams(sig);
     if (len == 0)
         return NULL;
     if (i < len-1)
         return jl_tparam(sig, i);
-    if (jl_is_vararg_type(jl_tparam(sig,len-1)))
-        return jl_unwrap_vararg(jl_tparam(sig,len-1));
+    if (jl_is_vararg_type(jl_tparam(sig, len-1)))
+        return jl_unwrap_vararg(jl_tparam(sig, len-1));
     if (i == len-1)
         return jl_tparam(sig, i);
     return NULL;
@@ -473,7 +474,7 @@ static void jl_compilation_sig(
     jl_value_t *decl = definition->sig;
     assert(jl_is_tuple_type(tt));
     size_t i, np = jl_nparams(tt);
-    size_t nargs = definition->nargs; // == jl_field_count(jl_unwrap_unionall(decl));
+    size_t nargs = definition->nargs; // == jl_nparams(jl_unwrap_unionall(decl));
     for (i = 0; i < np; i++) {
         jl_value_t *elt = jl_tparam(tt, i);
         jl_value_t *decl_i = jl_nth_slot_type(decl, i);
@@ -678,7 +679,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
         return 0;
 
     size_t i, np = jl_nparams(type);
-    size_t nargs = definition->nargs; // == jl_field_count(jl_unwrap_unionall(decl));
+    size_t nargs = definition->nargs; // == jl_nparams(jl_unwrap_unionall(decl));
     if (np == 0)
         return nargs == 0;
 
@@ -1695,7 +1696,7 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int
         return jl_false; // indeterminate - ml_matches can't deal with this case
     jl_methtable_t *mt = dt->name->mt;
     if (mt == NULL)
-        return (jl_value_t*)jl_alloc_vec_any(0);
+        return (jl_value_t*)jl_an_empty_vec_any;
     return ml_matches(mt->defs, 0, types, lim, include_ambiguous, world, min_valid, max_valid);
 }
 
@@ -2565,7 +2566,7 @@ int jl_has_concrete_subtype(jl_value_t *typ)
         return 1;
     if (((jl_datatype_t*)typ)->name == jl_namedtuple_typename)
         return jl_has_concrete_subtype(jl_tparam1(typ));
-    jl_svec_t *fields = ((jl_datatype_t*)typ)->types;
+    jl_svec_t *fields = jl_get_fieldtypes((jl_datatype_t*)typ);
     size_t i, l = jl_svec_len(fields);
     if (l != ((jl_datatype_t*)typ)->ninitialized)
         if (((jl_datatype_t*)typ)->name != jl_tuple_typename)

@@ -15,7 +15,7 @@ BB_PROJECTS="gmp mbedtls libssh2 mpfr curl libgit2 pcre libuv unwind osxunwind d
 BB_GCC_EXPANDED_PROJECTS="llvm openblas suitesparse openlibm"
 
 # If we've been given a project name, filter down to that one:
-if [ -n ${1} ]; then
+if [ -n "${1}" ]; then
     case "${BB_PROJECTS}" in
         *${1}*) BB_PROJECTS="${1}" ;;
         *) BB_PROJECTS="" ;;

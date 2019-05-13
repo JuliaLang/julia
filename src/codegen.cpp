@@ -345,6 +345,7 @@ static std::map<jl_fptr_args_t, Function*> builtin_func_map;
 // --- code generation ---
 extern "C" {
     int globalUnique = 0;
+    jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 0, NULL, NULL, NULL, NULL, NULL};
 }
 
 template<typename T>
@@ -2383,7 +2384,7 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
     //   TODO: handle with emit_bitsunion_compare
 
     int ptr_comparable = 0; // whether this type is unique'd by pointer
-    if (rt1 == (jl_value_t*)jl_sym_type || rt2 == (jl_value_t*)jl_sym_type)
+    if (rt1 == (jl_value_t*)jl_symbol_type || rt2 == (jl_value_t*)jl_symbol_type)
         ptr_comparable = 1;
     if (jl_is_mutable_datatype(rt1) && // excludes abstract types
         rt1 != (jl_value_t*)jl_string_type && // technically mutable, but compared by contents
@@ -7637,6 +7638,11 @@ extern "C" void *jl_init_llvm(void)
 
     jl_page_size = jl_getpagesize();
     imaging_mode = jl_generating_output() && !jl_options.incremental;
+    jl_default_cgparams.module_setup = jl_nothing;
+    jl_default_cgparams.module_activation = jl_nothing;
+    jl_default_cgparams.raise_exception = jl_nothing;
+    jl_default_cgparams.emit_function = jl_nothing;
+    jl_default_cgparams.emitted_function = jl_nothing;
     jl_init_debuginfo();
 
 #ifdef USE_POLLY

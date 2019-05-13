@@ -409,8 +409,8 @@ end
 
 function enq_work(t::Task)
     (t.state == :runnable && t.queue === nothing) || error("schedule: Task not runnable")
-    if t.sticky
-        tid = Threads.threadid(t)
+    tid = Threads.threadid(t)
+    if t.sticky || tid != 0
         if tid == 0
             tid = Threads.threadid()
         end

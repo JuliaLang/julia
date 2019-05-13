@@ -313,6 +313,8 @@ objectid(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
 
 # concrete datatype predicates
 
+datatype_fieldtypes(x::DataType) = ccall(:jl_get_fieldtypes, Any, (Any,), x)
+
 struct DataTypeLayout
     nfields::UInt32
     alignment::UInt32
@@ -407,7 +409,8 @@ function isstructtype(@nospecialize(t::Type))
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
-    return length(t.types) != 0 || (t.size == 0 && !t.abstract)
+    hasfield = !isdefined(t, :types) || !isempty(t.types)
+    return hasfield || (t.size == 0 && !t.abstract)
 end
 
 """
@@ -421,7 +424,8 @@ function isprimitivetype(@nospecialize(t::Type))
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
-    return length(t.types) == 0 && t.size != 0 && !t.abstract
+    hasfield = !isdefined(t, :types) || !isempty(t.types)
+    return !hasfield && t.size != 0 && !t.abstract
 end
 
 """
@@ -674,7 +678,10 @@ function fieldcount(@nospecialize t)
     if abstr
         throw(ArgumentError("type does not have a definite number of fields"))
     end
-    return length(t.types)
+    if isdefined(t, :types)
+        return length(t.types)
+    end
+    return length(t.name.names)
 end
 
 """
