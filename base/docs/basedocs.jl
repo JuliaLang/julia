@@ -1937,6 +1937,9 @@ AssertionError
 
 An error occurred while [`include`](@ref Base.include)ing, [`require`](@ref Base.require)ing, or [`using`](@ref) a file. The error specifics
 should be available in the `.error` field.
+
+!!! compat "Julia 1.3"
+    LoadError is deprecated because it is no longer emitted by the runtime as of Julia 1.3.
 """
 LoadError
 

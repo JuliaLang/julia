@@ -400,12 +400,6 @@ let
     @test (@macroexpand @fastmath +      ) == :(Base.FastMath.add_fast)
     @test (@macroexpand @fastmath min(1) ) == :(Base.FastMath.min_fast(1))
     let err = try; @macroexpand @doc "" f() = @x; catch ex; ex; end
-        file, line = @__FILE__, @__LINE__() - 1
-        err = err::LoadError
-        @test err.file == file && err.line == line
-        err = err.error::LoadError
-        @test err.file == file && err.line == line
-        err = err.error::UndefVarError
         @test err == UndefVarError(Symbol("@x"))
     end
     @test (@macroexpand @seven_dollar $bar) == 7
