@@ -462,10 +462,10 @@ ifeq ($(OS), WINNT)
 	cd $(BUILDROOT)/julia-$(JULIA_COMMIT) && find * | sed -e 's/\//\\/g' -e 's/$$/\r/g' > etc/uninstall.log
 
 	# build nsis package
-	cd $(BUILDROOT) && $(call spawn,$(JULIAHOME)/dist-extras/nsis/makensis.exe) -NOCD -DVersion=$(JULIA_VERSION) -DArch=$(ARCH) -DCommit=$(JULIA_COMMIT) -DMUI_ICON="$(call cygpath_w,$(JULIAHOME)/contrib/windows/julia.ico)" $(call cygpath_w,$(JULIAHOME)/contrib/windows/build-installer.nsi) | iconv -f latin1
+	cd $(BUILDROOT) && $(call spawn,$(JULIAHOME)/dist-extras/nsis/makensis.exe) -NOCD -DVersion=$(JULIA_VERSION) -DArch=$(ARCH) -DCommit=$(JULIA_COMMIT) -DJULIAHOME="$(call cygpath_w,$(JULIAHOME))" $(call cygpath_w,$(JULIAHOME)/contrib/windows/build-installer.nsi) | iconv -f latin1
 
 	# compress nsis installer and combine with 7zip self-extracting header
-	cd $(BUILDROOT) && $(JULIAHOME)/dist-extras/7z a -mx9 "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" julia-installer.exe
+	cd $(BUILDROOT) && $(JULIAHOME)/dist-extras/7z a -mx=9 "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" julia-installer.exe
 	cd $(BUILDROOT) && cat $(JULIAHOME)/contrib/windows/7zS.sfx $(JULIAHOME)/contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "$(JULIA_BINARYDIST_FILENAME).exe"
 	chmod a+x "$(BUILDROOT)/$(JULIA_BINARYDIST_FILENAME).exe"
 	-rm -f $(BUILDROOT)/julia-install-$(JULIA_COMMIT)-$(ARCH).7z
@@ -593,17 +593,17 @@ endif
 endif
 ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	cd $(JULIAHOME)/dist-extras && \
-	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z1900.exe && \
+	$(JLDOWNLOAD) https://sourceforge.net/projects/sevenzip/files/7-Zip/19.00/7z1900.exe && \
+	$(JLCHECKSUM) 7z1900.exe && \
 	7z x -y 7z1900.exe 7z.exe 7z.dll && \
 	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_Leap_42.2 \
 		"mingw32-libexpat1 mingw32-zlib1" && \
 	cp usr/i686-w64-mingw32/sys-root/mingw/bin/*.dll .
 else ifeq ($(ARCH),x86_64)
 	cd $(JULIAHOME)/dist-extras && \
-	$(JLDOWNLOAD) 7z1900-x64.msi http://downloads.sourceforge.net/sevenzip/7z1900-x64.msi && \
-	7z x -y 7z1900-x64.msi _7z.exe _7z.dll && \
-	mv _7z.dll 7z.dll && \
-	mv _7z.exe 7z.exe && \
+	$(JLDOWNLOAD) https://downloads.sourceforge.net/project/sevenzip/7-Zip/19.00/7z1900-x64.exe && \
+	$(JLCHECKSUM) 7z1900-x64.exe && \
+	7z x -y 7z1900-x64.exe 7z.exe 7z.dll && \
 	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_Leap_42.2 \
 		"mingw64-libexpat1 mingw64-zlib1" && \
 	cp usr/x86_64-w64-mingw32/sys-root/mingw/bin/*.dll .
@@ -611,11 +611,11 @@ else
 	$(error no win-extras target for ARCH=$(ARCH))
 endif
 	cd $(JULIAHOME)/dist-extras && \
-	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z1900-extra.7z && \
-	$(JLDOWNLOAD) https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/unsis/nsis-2.46.5-Unicode-setup.exe && \
+	$(JLDOWNLOAD) https://sourceforge.net/projects/nsis/files/NSIS%203/3.04/nsis-3.04-setup.exe && \
+	$(JLCHECKSUM) nsis-3.04-setup.exe && \
 	chmod a+x 7z.exe && \
 	chmod a+x 7z.dll && \
-	$(call spawn,./7z.exe) x -y -onsis nsis-2.46.5-Unicode-setup.exe && \
+	$(call spawn,./7z.exe) x -y -onsis nsis-3.04-setup.exe && \
 	chmod a+x ./nsis/makensis.exe
 
 # various statistics about the build that may interest the user

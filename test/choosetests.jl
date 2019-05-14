@@ -50,7 +50,7 @@ function choosetests(choices = [])
         "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "grisu",
         "some", "meta", "stacktraces", "docs",
         "misc", "threads", "stress",
-        "enums", "cmdlineargs", "int",
+        "enums", "cmdlineargs", "int", "interpreter",
         "checked", "bitset", "floatfuncs", "precompile",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
         "channels", "iostream", "secretbuffer", "specificity",
