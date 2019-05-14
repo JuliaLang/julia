@@ -1273,8 +1273,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_block(io, head, Expr(:calldecl, args[1].args...), args[2], indent)
         print(io, "end")
 
-    elseif head === :function && nargs == 1
-        print(io, "function ", args[1], " end")
+    elseif (head === :function || head === :macro) && nargs == 1
+        print(io, head, ' ', args[1], " end")
 
     elseif head === :do && nargs == 2
         show_unquoted(io, args[1], indent, -1)
@@ -1288,7 +1288,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, "end")
 
     # block with argument
-    elseif head in (:for,:while,:function,:if,:elseif,:let) && nargs==2
+    elseif head in (:for,:while,:function,:macro,:if,:elseif,:let) && nargs==2
         show_block(io, head, args[1], args[2], indent)
         print(io, "end")
 

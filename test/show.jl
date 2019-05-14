@@ -741,6 +741,23 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T,N}, indices::Vararg{$Int,N})")
 @test sprint(show, :(function f end)) == ":(function f end)"
 @test_repr "function g end"
 
+# Printing of macro definitions
+@test sprint(show, :(macro m end)) == ":(macro m end)"
+@test_repr "macro m end"
+@test sprint(show, Expr(:macro, Expr(:call, :m, :ex), Expr(:block, :m))) ==
+      ":(macro m(ex)\n      m\n  end)"
+@test_repr """macro identity(ex)
+    # line meta
+    esc(ex)
+end"""
+@test_repr """macro m(a,b)
+    # line meta
+    quote
+        # line meta
+        \$a + \$b
+    end
+end"""
+
 # Issue #15765 printing of continue and break
 @test sprint(show, :(continue)) == ":(continue)"
 @test sprint(show, :(break)) == ":(break)"
