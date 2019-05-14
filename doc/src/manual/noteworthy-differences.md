@@ -198,7 +198,7 @@ For users coming to Julia from R, these are some noteworthy differences:
 
   * Julia requires `end` to end a block. Unlike Python, Julia has no `pass` keyword.
   * In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.
-  * Julia's slice indexing includes the last element, unlike in Python. `a[2:3]` in Julia is `a[1:3]`
+  * Julia's slice indexing includes the last element, unlike in Python. `a[2:3]` in Julia is `a[2:4]`
     in Python.
   * Julia does not support negative indices. In particular, the last element of a list or array is
     indexed with `end` in Julia, not `-1` as in Python.
