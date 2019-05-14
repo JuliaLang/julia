@@ -797,10 +797,78 @@ would be called only when the number of `indices` matches the dimensionality of 
 When only the type of supplied arguments needs to be constrained `Vararg{T}` can be equivalently
 written as `T...`. For instance `f(x::Int...) = x` is a shorthand for `f(x::Vararg{Int}) = x`.
 
-## Note on Optional and keyword Arguments
+## Note on Optional/Default Positional and Keyword Arguments(@id man-note-default-arguments)
 
-As mentioned briefly in [Functions](@ref man-functions), optional arguments are implemented as syntax for multiple
-method definitions. For example, this definition:
+There are two styles for setting optional agruments (a.k.a default values).  
+
+1. Using position arguments.
+1. Using keyword arguments. 
+
+[Keyword arguments](@ref man-keyword-arguments) behave differently from ordinary positional arguments. 
+Specifically, they do not participate in method dispatch. 
+Function methods are dispatched based *only* on positional arguments. 
+Keyword arguments are processed after the matching method is identified.
+
+However, an existing issue means that function method dispatch behaves differently when 
+doing a function call with or without keyword arguments.  
+This issue is currently scheduled to be fixed in Julia 2.0. 
+See [Issue #9498](https://github.com/JuliaLang/julia/issues/9498) for further details.
+
+One consequence of keyword arguments not influencing dispatch decisions is that the default 
+method executed will be the last defined: 
+If a function, say `f`, has a method that uses position based default values and elsewhere in your 
+code you have the same function name with a method defined to use keyword based default values; 
+then the default value returned by `f()` will be the last definition Julia processed.  
+*There will be no ambiguity warning*
+
+```jldoctest
+julia> f(a=1,b=2)=5
+f (generic function with 3 methods)
+
+julia> f(;a=1,b=2)=10
+f (generic function with 3 methods)
+
+julia> f()
+10
+```
+An example of [Issue #9498](https://github.com/JuliaLang/julia/issues/9498), which works when methods are defined in one order:
+
+```jldoctest
+julia> bar(x, y; c) = x + y + c
+bar (generic function with 1 method)
+
+julia> bar(x, y) = x / y
+bar (generic function with 1 method)
+
+julia> bar(3,4)
+0.75
+
+julia> bar(3,4, c=5)
+12
+```
+
+Yet, throws an error if the code is defined in a different order
+
+```jldoctest
+julia> bar(x, y) = x / y
+bar (generic function with 1 method)
+
+julia> bar(x, y; c) = x + y + c
+bar (generic function with 1 method)
+
+julia> bar(3,4,c=5)
+12
+
+julia> bar(3,4)
+ERROR: UndefKeywordError: keyword argument c not assigned
+Stacktrace:
+ [1] bar(::Int64, ::Int64) at ./REPL[2]:1
+ [2] top-level scope at none:0
+```
+
+**Position** based default/optional arguments are implemented as a shorthand for multiple method 
+definitions (this was mentioned briefly in [Functions](@ref man-functions)). 
+For example, this definition:
 
 ```julia
 f(a=1,b=2) = a+2b
@@ -827,9 +895,23 @@ to a function, not to any specific method of that function. It depends on the ty
 arguments which method is invoked. When optional arguments are defined in terms of a global variable,
 the type of the optional argument may even change at run-time.
 
-Keyword arguments behave quite differently from ordinary positional arguments. In particular,
-they do not participate in method dispatch. Methods are dispatched based only on positional arguments,
-with keyword arguments processed after the matching method is identified.
+**Keyword** based default/optional arguments create only one method. 
+For example, consider this definition (note the leading `;`), in a new REPL:
+
+```jldoctest
+julia> f(;a=1,b=2) = 2a+4b
+f (generic function with 1 method)
+julia> f(a=2)
+12
+
+julia> f(b=4)
+18
+
+julia> f()
+10
+```
+
+This means that calling `f()` is equivalent to calling `f(;a=1,b=2)` or `f(a=1,b=2)`. In all cases the result is `10`.
 
 ## Function-like objects
 
