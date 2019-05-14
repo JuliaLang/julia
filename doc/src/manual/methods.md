@@ -797,7 +797,7 @@ would be called only when the number of `indices` matches the dimensionality of 
 When only the type of supplied arguments needs to be constrained `Vararg{T}` can be equivalently
 written as `T...`. For instance `f(x::Int...) = x` is a shorthand for `f(x::Vararg{Int}) = x`.
 
-## Note on Optional/Default Positional and Keyword Arguments(@id note-default-arguments)
+## Note on Optional/Default Positional and Keyword Arguments(@id man-note-default-arguments)
 
 There are two styles for setting optional agruments (a.k.a default values).  
 
