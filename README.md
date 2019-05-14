@@ -36,7 +36,6 @@ and installing Julia, below.
 - **Discussion forum:** <https://discourse.julialang.org>
 - **Slack:** <https://julialang.slack.com> (get an invite from <https://slackinvite.julialang.org>)
 - **YouTube:** <https://www.youtube.com/user/JuliaLanguage>
-- **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
 New developers may find the notes in
 [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md)
