@@ -1027,9 +1027,19 @@ int jl_has_meta(jl_array_t *body, jl_sym_t *sym)
     return 0;
 }
 
-static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule, jl_module_t **ctx,
-                                         interpreter_state* istate)
+typedef struct {
+    jl_array_t *args;
+    jl_module_t *inmodule;
+    jl_module_t **ctx;
+} jl_invoke_julia_macro_args;
+
+INTERP_CALLBACK_ABI void *jl_invoke_julia_macro_callback(interpreter_state *istate, void* vargs)
 {
+    jl_invoke_julia_macro_args *targs = (jl_invoke_julia_macro_args*)vargs;
+    jl_array_t *args      = targs->args;
+    jl_module_t *inmodule = targs->inmodule;
+    jl_module_t **ctx     = targs->ctx;
+
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_TIMING(MACRO_INVOCATION);
     size_t nargs = jl_array_len(args) + 1;
@@ -1044,10 +1054,7 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
     if (!jl_typeis(lno, jl_linenumbernode_type)) {
         margs[1] = jl_new_struct(jl_linenumbernode_type, jl_box_long(0), jl_nothing);
     }
-    if (istate) { // FIXME??
-        istate->ip  = jl_unbox_long(jl_fieldref(margs[1], 0));
-        istate->src = jl_fieldref(margs[1], 1); // FIXME!
-    }
+    istate->src = margs[1]; // FIXME conversion warning
     margs[2] = (jl_value_t*)inmodule;
     for (i = 3; i < nargs; i++)
         margs[i] = jl_array_ptr_ref(args, i - 1);
@@ -1067,6 +1074,15 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
     ptls->world_age = last_age;
     JL_GC_POP();
     return result;
+}
+
+static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule, jl_module_t **ctx)
+{
+    jl_invoke_julia_macro_args vargs = {
+        args, inmodule, ctx
+    };
+    // Add an interpeter frame so that the macro caller will appear in stacktraces.
+    return (jl_value_t*)enter_interpreter_frame(jl_invoke_julia_macro_callback, (void*)&vargs);
 }
 
 static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, interpreter_state* istate, struct macroctx_stack *macroctx, int onelevel)
@@ -1108,7 +1124,7 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, int
         struct macroctx_stack newctx;
         newctx.m = macroctx ? macroctx->m : inmodule;
         newctx.parent = macroctx;
-        jl_value_t *result = jl_invoke_julia_macro(e->args, inmodule, &newctx.m, istate);
+        jl_value_t *result = jl_invoke_julia_macro(e->args, inmodule, &newctx.m);
         jl_value_t *wrap = NULL;
         JL_GC_PUSH3(&result, &wrap, &newctx.m);
         // copy and wrap the result in `(hygienic-scope ,result ,newctx)

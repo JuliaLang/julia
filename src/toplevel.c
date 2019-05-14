@@ -841,7 +841,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
         }
     }
     JL_TRY {
-        v = jl_toplevel_eval(m, ex);
+        v = jl_toplevel_eval_flex(m, ex, 1, 0);
     }
     JL_CATCH {
         jl_lineno = last_lineno;

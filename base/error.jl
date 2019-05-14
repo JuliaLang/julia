@@ -52,7 +52,7 @@ rethrow() = ccall(:jl_rethrow, Bottom, ())
 rethrow(e) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
 
 struct InterpreterIP
-    code::Union{CodeInfo,Core.MethodInstance,Symbol,Nothing}
+    code::Union{CodeInfo,Core.MethodInstance,Symbol,LineNumberNode,Nothing}
     stmt::Csize_t
 end
 
@@ -63,7 +63,14 @@ function _reformat_bt(bt, bt2)
     while i <= length(bt)
         ip = bt[i]::Ptr{Cvoid}
         if ip == Ptr{Cvoid}(-1%UInt)
-            # The next one is really a CodeInfo
+            # bt2[j] contains a julia object related to the code being run by
+            # the interpreter:
+            #   * MethodInstance => The current method being interpreted.
+            #                       bt[i+2] is the instruction index
+            #   * CodeInfo       => The top-level thunk being interpreted
+            #                       bt[i+2] is the instruction index
+            #   * LineNumberNode => Line being interpreted by toplevel handler
+            #
             push!(ret, InterpreterIP(
                 bt2[j],
                 bt[i+2]))
