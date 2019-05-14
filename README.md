@@ -52,7 +52,10 @@ helpful to start contributing to the Julia codebase.
 
 If you would rather not compile the latest Julia from source,
 platform-specific tarballs with pre-compiled binaries are also
-[available for download](https://julialang.org/downloads/).
+[available for download](https://julialang.org/downloads/). The
+downloads page also provides details on the
+[different tiers of support](https://julialang.org/downloads/#support-tiers)
+for OS and platform combinations.
 
 If everything works correctly, you will see a Julia banner and an
 interactive prompt into which you can enter expressions for
@@ -63,45 +66,6 @@ started](https://julialang.org/manual/getting-started) in the manual.
 installations are neither maintained nor endorsed by the Julia
 project. They may be outdated, broken and/or unmaintained. We
 recommend you use the official Julia binaries instead.
-
-## Currently Supported Platforms
-
-| Operating System | Architecture     | CI | Binaries | Support Level |
-|:----------------:|:----------------:|:--:|:--------:|:-------------:|
-| macOS 10.8+      | x86-64 (64-bit)  | ✓  | ✓        | Tier 1        |
-| Windows 7+       | x86-64 (64-bit)  | ✓  | ✓        | Tier 1        |
-|                  | i686 (32-bit)    | ✓  | ✓        | Tier 1        |
-| FreeBSD 11.0+    | x86-64 (64-bit)  | [✓](https://build.julialang.org/#/builders/68)  | ✓        | Tier 1        |
-| Linux 2.6.18+    | x86-64 (64-bit)  | ✓  | ✓        | Tier 1        |
-|                  | i686 (32-bit)    | ✓  | ✓        | Tier 1        |
-|                  | ARM v7 (32-bit)  |    |          | Tier 3        |
-|                  | ARM v8 (64-bit)  |    |          | Tier 3        |
-|                  | x86-64 musl libc |    |          | Tier 3        |
-|                  | PowerPC (64-bit) |    |          | Tier 4        |
-|                  | PTX (64-bit)     | [✓](https://gitlab.com/JuliaGPU/CUDAnative.jl/pipelines)  |          | [External](https://github.com/JuliaGPU/CUDAnative.jl)     |
-
-All systems marked with ✓ for CI are tested using continuous integration for every commit.
-Systems with ✓ for binaries have official binaries available on the
-[downloads](https://julialang.org/downloads) page and are tested regularly.
-The PTX backend is supported by the [JuliaGPU](https://github.com/JuliaGPU) organization and
-requires the [CUDAnative.jl](https://github.com/JuliaGPU/CUDAnative.jl) package.
-
-### Support Tiers
-
-* Tier 1: Julia is guaranteed to build from source and pass all tests on these platforms
-  when built with default options. Official binaries are available for releases and CI is
-  run on every commit.
-
-* Tier 2: Julia is guaranteed to build from source using default build options, but may
-  or may not pass all tests. Official binaries are available on a case-by-case basis.
-
-* Tier 3: Julia may or may not build. If it does, it is unlikely to pass tests.
-
-* Tier 4: Julia is known not to build.
-
-It is possible that Julia will build and work on other platforms too,
-and we're always looking to improve our platform coverage.  If you're
-using Julia on a platform not listed here, let us know!
 
 ## Building Julia
 
