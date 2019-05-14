@@ -52,7 +52,7 @@ helpful to start contributing to the Julia codebase.
 
 If you would rather not compile the latest Julia from source,
 platform-specific tarballs with pre-compiled binaries are also
-[available for download](https://julialang.org/downloads/). The 
+[available for download](https://julialang.org/downloads/). The
 downloads page also provides details on the
 [different tiers of support](https://julialang.org/downloads/#support-tiers)
 for OS and platform combinations.
