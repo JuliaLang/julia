@@ -806,15 +806,21 @@ There are two styles for setting optional agruments (a.k.a default values).
 
 Keyword arguments behave differently from ordinary positional arguments.
 Specifically, they do not participate in method dispatch.
-
-!!! note Function methods are dispatched based *only* on positional arguments.
+Function methods are dispatched based *only* on positional arguments.
 Keyword arguments are processed after the matching method is identified.
 
-!!! warning A consequence of the above note on dispatch:
+However, an existing issue means that function method dispatch behaves differently when
+doing a function call with or without keyword arguments.
+This issue is currently scheduled to be fixed in Julia 2.0.
+See [Issue #9498](https://github.com/JuliaLang/julia/issues/9498) for further details.
+
+One consequence of keyword arguments not influencing dispatch decisions is that the default
+method executed will be the last defined:
 If a function, say `f`, has a method that uses position based default values and elsewhere in your
 code you have the same function name with a method defined to use keyword based default values;
 then the default value returned by `f()` will be the last definition Julia processed.
-**There will be no ambiguity warning**
+*There will be no ambiguity warning*
+
 ```jldoctest
 julia> f(a=1,b=2)=5
 f (generic function with 3 methods)
@@ -824,6 +830,40 @@ f (generic function with 3 methods)
 
 julia> f()
 10
+```
+An example of [Issue #9498](https://github.com/JuliaLang/julia/issues/9498), which works when methods are defined in one order:
+
+```jldoctest
+julia> bar(x, y; c) = x + y + c
+bar (generic function with 1 method)
+
+julia> bar(x, y) = x / y
+bar (generic function with 1 method)
+
+julia> bar(3,4)
+0.75
+
+julia> bar(3,4, c=5)
+12
+```
+
+Yet, throws an error if the code is defined in a different order
+
+```jldoctest
+julia> bar(x, y) = x / y
+bar (generic function with 1 method)
+
+julia> bar(x, y; c) = x + y + c
+bar (generic function with 1 method)
+
+julia> bar(3,4,c=5)
+12
+
+julia> bar(3,4)
+ERROR: UndefKeywordError: keyword argument c not assigned
+Stacktrace:
+ [1] bar(::Int64, ::Int64) at ./REPL[2]:1
+ [2] top-level scope at none:0
 ```
 
 **Position** based default/optional arguments are implemented as a shorthand for multiple method
