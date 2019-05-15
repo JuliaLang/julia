@@ -163,6 +163,7 @@ jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_a
     jl_methtable_t *mt = dt->name->mt;
     jl_typemap_insert(&mt->cache, (jl_value_t*)mt, jl_anytuple_type,
         NULL, jl_emptysvec, (jl_value_t*)mi, 0, &lambda_cache, 1, ~(size_t)0, NULL);
+    mt->frozen = 1;
     JL_GC_POP();
     return dt;
 }
@@ -696,11 +697,11 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
     if (definition->isva) {
         unsigned nspec_min = nargs + 1; // min number of non-vararg values before vararg
         unsigned nspec_max = INT32_MAX; // max number of non-vararg values before vararg
-        jl_datatype_t *gf = jl_first_argument_datatype(decl);
-        if (gf != NULL && jl_is_datatype(gf) && gf->name->mt != NULL) {
+        jl_methtable_t *mt = jl_method_table_for(decl);
+        if ((jl_value_t*)mt != jl_nothing) {
             // try to refine estimate of min and max
-            if (gf->name->mt != jl_type_type_mt)
-                nspec_min = gf->name->mt->max_args + 2;
+            if (mt != jl_type_type_mt && mt != jl_nonfunction_mt)
+                nspec_min = mt->max_args + 2;
             else
                 nspec_max = nspec_min;
         }
@@ -861,7 +862,7 @@ static jl_method_instance_t *cache_method(
 
     int cache_with_orig = 1;
     jl_tupletype_t *compilationsig = tt;
-    intptr_t nspec = (mt == NULL || mt == jl_type_type_mt ? definition->nargs + 1 : mt->max_args + 2);
+    intptr_t nspec = (mt == NULL || mt == jl_type_type_mt || mt == jl_nonfunction_mt ? definition->nargs + 1 : mt->max_args + 2);
     jl_compilation_sig(tt, sparams, definition, nspec, &newparams);
     if (newparams) {
         cache_with_orig = 0;
@@ -1265,7 +1266,7 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
 
 static void update_max_args(jl_methtable_t *mt, jl_value_t *type)
 {
-    if (mt == jl_type_type_mt)
+    if (mt == jl_type_type_mt || mt == jl_nonfunction_mt)
         return;
     type = jl_unwrap_unionall(type);
     assert(jl_is_datatype(type));
@@ -1690,13 +1691,10 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int
     JL_TIMING(METHOD_MATCH);
     jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)types);
     if (jl_is_tuple_type(unw) && jl_tparam0(unw) == jl_bottom_type)
-        return (jl_value_t*)jl_alloc_vec_any(0);
-    jl_datatype_t *dt = jl_first_argument_datatype(unw);
-    if (dt == NULL || !jl_is_datatype(dt))
-        return jl_false; // indeterminate - ml_matches can't deal with this case
-    jl_methtable_t *mt = dt->name->mt;
-    if (mt == NULL)
         return (jl_value_t*)jl_an_empty_vec_any;
+    jl_methtable_t *mt = jl_method_table_for(unw);
+    if ((jl_value_t*)mt == jl_nothing)
+        return jl_false; // indeterminate - ml_matches can't deal with this case
     return ml_matches(mt->defs, 0, types, lim, include_ambiguous, world, min_valid, max_valid);
 }
 
@@ -1853,22 +1851,20 @@ jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types JL_PROPAGATES
     jl_tupletype_t *ti = (jl_tupletype_t*)jl_svecref(match, 0);
     jl_method_instance_t *nf = NULL;
     if (jl_is_datatype(ti)) {
-        jl_datatype_t *dt = jl_first_argument_datatype((jl_value_t*)ti);
-        if (dt && jl_is_datatype(dt)) {
+        jl_methtable_t *mt = jl_method_table_for((jl_value_t*)ti);
+        if ((jl_value_t*)mt != jl_nothing) {
             // get the specialization without caching it
-            jl_methtable_t *mt = dt->name->mt;
             if (mt_cache && ((jl_datatype_t*)ti)->isdispatchtuple) {
                 // Since we also use this presence in the cache
                 // to trigger compilation when producing `.ji` files,
                 // inject it there now if we think it will be
                 // used via dispatch later (e.g. because it was hinted via a call to `precompile`)
-                jl_methtable_t *mt = dt->name->mt;
                 JL_LOCK(&mt->writelock);
                 nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, ti, m, world, env);
                 JL_UNLOCK(&mt->writelock);
             }
             else {
-                intptr_t nspec = (mt == jl_type_type_mt ? m->nargs + 1 : mt->max_args + 2);
+                intptr_t nspec = (mt == jl_type_type_mt || mt == jl_nonfunction_mt ? m->nargs + 1 : mt->max_args + 2);
                 jl_compilation_sig(ti, env, m, nspec, &newparams);
                 tt = (newparams ? jl_apply_tuple_type(newparams) : ti);
                 int is_compileable = ((jl_datatype_t*)ti)->isdispatchtuple ||
@@ -2201,7 +2197,9 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
 
 JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT, size_t world)
 {
-    jl_methtable_t *mt = jl_first_argument_datatype(types)->name->mt;
+    jl_methtable_t *mt = jl_method_table_for(types);
+    if ((jl_value_t*)mt == jl_nothing)
+        return jl_nothing;
     jl_svec_t *env = jl_emptysvec;
     JL_GC_PUSH1(&env);
     jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(
@@ -2362,15 +2360,13 @@ jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_
 
 JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_value_t *ty)
 {
-    jl_datatype_t *dt = (jl_datatype_t*)jl_argument_datatype(ty);
-    if ((jl_value_t*)dt == jl_nothing)
+    jl_methtable_t *mt = jl_argument_method_table(ty);
+    if ((jl_value_t*)mt == jl_nothing)
         jl_error("cannot get keyword sorter for abstract type");
-    jl_typename_t *tn = dt->name;
-    jl_methtable_t *mt = tn->mt;
     if (!mt->kwsorter) {
         JL_LOCK(&mt->writelock);
         if (!mt->kwsorter) {
-            mt->kwsorter = jl_new_generic_function_with_supertype(tn->name, mt->module, jl_function_type, 1);
+            mt->kwsorter = jl_new_generic_function_with_supertype(mt->name, mt->module, jl_function_type, 1);
             jl_gc_wb(mt, mt->kwsorter);
         }
         JL_UNLOCK(&mt->writelock);

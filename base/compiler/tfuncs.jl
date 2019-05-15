@@ -1128,11 +1128,10 @@ end
 add_tfunc(apply_type, 1, INT_INF, apply_type_tfunc, 10)
 
 function invoke_tfunc(@nospecialize(ft), @nospecialize(types), @nospecialize(argtype), sv::InferenceState)
-    argument_mt(ft) === nothing && return Any
     argtype = typeintersect(types, argtype)
-    if argtype === Bottom
-        return Bottom
-    end
+    argtype === Bottom && return Bottom
+    argtype isa DataType || return Any # other cases are not implemented below
+    isdispatchelem(ft) || return Any # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
     types = rewrap_unionall(Tuple{ft, unwrap_unionall(types).parameters...}, types)
     argtype = Tuple{ft, argtype.parameters...}
     entry = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), types, sv.params.world)

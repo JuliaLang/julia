@@ -48,6 +48,7 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
     mt->backedges = NULL;
     JL_MUTEX_INIT(&mt->writelock);
     mt->offs = 1;
+    mt->frozen = 0;
     return mt;
 }
 
@@ -452,11 +453,8 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     jl_typename_t *tn = NULL;
     JL_GC_PUSH2(&t, &tn);
 
-    if (t == NULL)
-        t = jl_new_uninitialized_datatype();
-    else
-        tn = t->name;
-    // init before possibly calling jl_new_typename_in
+    // init enough before possibly calling jl_new_typename_in
+    t = jl_new_uninitialized_datatype();
     t->super = super;
     if (super != NULL) jl_gc_wb(t, t->super);
     t->parameters = parameters;
@@ -471,23 +469,28 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     t->ditype = NULL;
     t->size = 0;
 
-    if (tn == NULL) {
-        t->name = NULL;
-        if (jl_is_typename(name)) {
-            tn = (jl_typename_t*)name;
+    t->name = NULL;
+    if (jl_is_typename(name)) {
+        // This code-path is used by the Serialization module to by-pass normal expectations
+        tn = (jl_typename_t*)name;
+    }
+    else {
+        tn = jl_new_typename_in((jl_sym_t*)name, module);
+        if (super == jl_function_type || super == jl_builtin_type || jl_symbol_name(name)[0] == '#') {
+            // Callable objects (including compiler-generated closures) get independent method tables
+            // as an optimization
+            tn->mt = jl_new_method_table(name, module);
+            jl_gc_wb(tn, tn->mt);
+            if (jl_svec_len(parameters) > 0)
+                tn->mt->offs = 0;
         }
         else {
-            tn = jl_new_typename_in((jl_sym_t*)name, module);
-            if (!abstract) {
-                tn->mt = jl_new_method_table(name, module);
-                jl_gc_wb(tn, tn->mt);
-                if (jl_svec_len(parameters) > 0)
-                    tn->mt->offs = 0;
-            }
+            // Everything else, gets to use the unified table
+            tn->mt = jl_nonfunction_mt;
         }
-        t->name = tn;
-        jl_gc_wb(t, t->name);
     }
+    t->name = tn;
+    jl_gc_wb(t, t->name);
     t->name->names = fnames;
     jl_gc_wb(t->name, t->name->names);
 

@@ -149,6 +149,7 @@ STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
 
 // useful constants
 extern jl_methtable_t *jl_type_type_mt JL_GLOBALLY_ROOTED;
+extern jl_methtable_t *jl_nonfunction_mt JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT extern size_t jl_world_counter;
 
 typedef void (*tracer_cb)(jl_value_t *tracee);
@@ -468,9 +469,11 @@ jl_method_instance_t *jl_lookup_generic(jl_value_t **args, uint32_t nargs, uint3
 JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int include_ambiguous,
                                              size_t world, size_t *min_valid, size_t *max_valid);
 
-JL_DLLEXPORT jl_datatype_t *jl_first_argument_datatype(
+JL_DLLEXPORT jl_datatype_t *jl_first_argument_datatype(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_methtable_t *jl_method_table_for(
     jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt JL_PROPAGATES_ROOT);
+jl_methtable_t *jl_argument_method_table(jl_value_t *argt JL_PROPAGATES_ROOT);
 
 jl_value_t *jl_nth_slot_type(jl_value_t *sig JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 void jl_compute_field_offsets(jl_datatype_t *st);

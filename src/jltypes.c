@@ -23,6 +23,7 @@ jl_datatype_t *jl_any_type;
 jl_unionall_t *jl_type_type;
 jl_typename_t *jl_type_typename;
 jl_methtable_t *jl_type_type_mt;
+jl_methtable_t *jl_nonfunction_mt;
 jl_datatype_t *jl_typename_type;
 jl_datatype_t *jl_symbol_type;
 jl_datatype_t *jl_ssavalue_type;
@@ -1678,6 +1679,10 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_any_type = (jl_datatype_t*)jl_new_abstracttype((jl_value_t*)jl_symbol("Any"), core, NULL, jl_emptysvec);
     jl_any_type->super = jl_any_type;
+    jl_nonfunction_mt = jl_any_type->name->mt;
+    jl_any_type->name->mt = NULL;
+    jl_nonfunction_mt->offs = 0;
+
     jl_type_type = (jl_unionall_t*)jl_new_abstracttype((jl_value_t*)jl_symbol("Type"), core, jl_any_type, jl_emptysvec);
     jl_type_typename = ((jl_datatype_t*)jl_type_type)->name;
     jl_type_type_mt = jl_new_method_table(jl_type_typename->name, core);
@@ -1732,7 +1737,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_typename_type->name = jl_new_typename_in(jl_symbol("TypeName"), core);
     jl_typename_type->name->wrapper = (jl_value_t*)jl_typename_type;
-    jl_typename_type->name->mt = jl_new_method_table(jl_typename_type->name->name, core);
+    jl_typename_type->name->mt = jl_nonfunction_mt;
     jl_typename_type->super = jl_any_type;
     jl_typename_type->parameters = jl_emptysvec;
     jl_typename_type->name->names = jl_perm_symsvec(8, "name", "module",
@@ -1753,17 +1758,17 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_methtable_type->name = jl_new_typename_in(jl_symbol("MethodTable"), core);
     jl_methtable_type->name->wrapper = (jl_value_t*)jl_methtable_type;
-    jl_methtable_type->name->mt = jl_new_method_table(jl_methtable_type->name->name, core);
+    jl_methtable_type->name->mt = jl_nonfunction_mt;
     jl_methtable_type->super = jl_any_type;
     jl_methtable_type->parameters = jl_emptysvec;
-    jl_methtable_type->name->names = jl_perm_symsvec(10, "name", "defs",
+    jl_methtable_type->name->names = jl_perm_symsvec(11, "name", "defs",
                                                      "cache", "max_args",
                                                      "kwsorter", "module",
-                                                     "backedges", "", "", "offs");
-    jl_methtable_type->types = jl_svec(10, jl_symbol_type, jl_any_type, jl_any_type, jl_any_type/*jl_long*/,
+                                                     "backedges", "", "", "offs", "");
+    jl_methtable_type->types = jl_svec(11, jl_symbol_type, jl_any_type, jl_any_type, jl_any_type/*jl_long*/,
                                        jl_any_type, jl_any_type/*module*/,
                                        jl_any_type/*any vector*/, jl_any_type/*long*/, jl_any_type/*int32*/,
-                                       jl_any_type/*uint8*/);
+                                       jl_any_type/*uint8*/, jl_any_type/*uint8*/);
     jl_methtable_type->uid = jl_assign_type_uid();
     jl_methtable_type->instance = NULL;
     jl_methtable_type->struct_decl = NULL;
@@ -1775,7 +1780,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_symbol_type->name = jl_new_typename_in(jl_symbol("Symbol"), core);
     jl_symbol_type->name->wrapper = (jl_value_t*)jl_symbol_type;
-    jl_symbol_type->name->mt = jl_new_method_table(jl_symbol_type->name->name, core);
+    jl_symbol_type->name->mt = jl_nonfunction_mt;
     jl_symbol_type->super = jl_any_type;
     jl_symbol_type->parameters = jl_emptysvec;
     jl_symbol_type->name->names = jl_emptysvec;
@@ -1792,7 +1797,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_simplevector_type->name = jl_new_typename_in(jl_symbol("SimpleVector"), core);
     jl_simplevector_type->name->wrapper = (jl_value_t*)jl_simplevector_type;
-    jl_simplevector_type->name->mt = jl_new_method_table(jl_simplevector_type->name->name, core);
+    jl_simplevector_type->name->mt = jl_nonfunction_mt;
     jl_simplevector_type->super = jl_any_type;
     jl_simplevector_type->parameters = jl_emptysvec;
     jl_simplevector_type->name->names = jl_emptysvec;
@@ -1956,6 +1961,8 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_function_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Function"), core, jl_any_type, jl_emptysvec);
     jl_builtin_type  = jl_new_abstracttype((jl_value_t*)jl_symbol("Builtin"), core, jl_function_type, jl_emptysvec);
+    jl_function_type->name->mt = NULL; // subtypes of Function have independent method tables
+    jl_builtin_type->name->mt = NULL;  // so they don't share the Any type table
 
     tv = jl_svec2(tvar("T"), tvar("N"));
     jl_abstractarray_type = (jl_unionall_t*)
@@ -2184,9 +2191,9 @@ void jl_init_types(void) JL_GC_DISABLED
                         0, 1, 1);
     jl_svecset(jl_code_instance_type->types, 1, jl_code_instance_type);
 
-    // all kinds of types share a method table
+    // all Kinds share the Type method table (not the nonfunction one)
     jl_unionall_type->name->mt = jl_uniontype_type->name->mt = jl_datatype_type->name->mt =
-        jl_type_typename->mt;
+        jl_type_type_mt;
 
     jl_intrinsic_type = jl_new_primitivetype((jl_value_t*)jl_symbol("IntrinsicFunction"), core,
                                              jl_builtin_type, jl_emptysvec, 32);
@@ -2288,6 +2295,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_methtable_type->types, 8, jl_int32_type); // uint32_t
 #endif
     jl_svecset(jl_methtable_type->types, 9, jl_uint8_type);
+    jl_svecset(jl_methtable_type->types, 10, jl_uint8_type);
     jl_svecset(jl_method_type->types, 11, jl_method_instance_type);
     jl_svecset(jl_method_instance_type->types, 5, jl_code_instance_type);
     jl_svecset(jl_code_instance_type->types, 7, jl_voidpointer_type);

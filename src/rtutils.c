@@ -575,6 +575,51 @@ JL_DLLEXPORT int jl_is_identifier(char *str) JL_NOTSAFEPOINT
     return 1;
 }
 
+static jl_datatype_t *first_arg_datatype(jl_value_t *a JL_PROPAGATES_ROOT, int got_tuple1) JL_NOTSAFEPOINT
+{
+    if (jl_is_datatype(a)) {
+        if (got_tuple1)
+            return (jl_datatype_t*)a;
+        if (jl_is_tuple_type(a)) {
+            if (jl_nparams(a) < 1)
+                return NULL;
+            return first_arg_datatype(jl_tparam0(a), 1);
+        }
+        return NULL;
+    }
+    else if (jl_is_typevar(a)) {
+        return first_arg_datatype(((jl_tvar_t*)a)->ub, got_tuple1);
+    }
+    else if (jl_is_unionall(a)) {
+        return first_arg_datatype(((jl_unionall_t*)a)->body, got_tuple1);
+    }
+    else if (jl_is_uniontype(a)) {
+        jl_uniontype_t *u = (jl_uniontype_t*)a;
+        jl_datatype_t *d1 = first_arg_datatype(u->a, got_tuple1);
+        if (d1 == NULL) return NULL;
+        jl_datatype_t *d2 = first_arg_datatype(u->b, got_tuple1);
+        if (d2 == NULL || d1->name != d2->name)
+            return NULL;
+        return d1;
+    }
+    return NULL;
+}
+
+// get DataType of first tuple element (if present), or NULL if cannot be determined
+JL_DLLEXPORT jl_datatype_t *jl_first_argument_datatype(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    return first_arg_datatype(argtypes, 0);
+}
+
+// get DataType implied by a single given type, or `nothing`
+JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_datatype_t *dt = first_arg_datatype(argt, 1);
+    if (dt == NULL)
+        return jl_nothing;
+    return (jl_value_t*)dt;
+}
+
 // `v` might be pointing to a field inlined in a structure therefore
 // `jl_typeof(v)` may not be the same with `vt` and only `vt` should be
 // used to determine the type of the value.
@@ -650,7 +695,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             !strchr(jl_symbol_name(globname), '@') && dv->name->module &&
             jl_binding_resolved_p(dv->name->module, globname)) {
             jl_binding_t *b = jl_get_module_binding(dv->name->module, globname);
-            if (b && jl_typeof(b->value) == v)
+            if (b && b->value && jl_typeof(b->value) == v)
                 globfunc = 1;
         }
         jl_sym_t *sym = globfunc ? globname : dv->name->name;

@@ -621,49 +621,47 @@ JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
     return gf;
 }
 
-static jl_datatype_t *first_arg_datatype(jl_value_t *a JL_PROPAGATES_ROOT, int got_tuple1) JL_NOTSAFEPOINT
+static jl_methtable_t *first_methtable(jl_value_t *a JL_PROPAGATES_ROOT, int got_tuple1) JL_NOTSAFEPOINT
 {
     if (jl_is_datatype(a)) {
-        if (got_tuple1)
-            return (jl_datatype_t*)a;
-        if (jl_is_tuple_type(a)) {
-            if (jl_nparams(a) < 1)
-                return NULL;
-            return first_arg_datatype(jl_tparam0(a), 1);
+        if (got_tuple1) {
+            jl_methtable_t *mt = ((jl_datatype_t*)a)->name->mt;
+            if (mt != NULL)
+                return mt;
         }
-        return NULL;
+        if (jl_is_tuple_type(a)) {
+            if (jl_nparams(a) >= 1)
+                return first_methtable(jl_tparam0(a), 1);
+        }
     }
     else if (jl_is_typevar(a)) {
-        return first_arg_datatype(((jl_tvar_t*)a)->ub, got_tuple1);
+        return first_methtable(((jl_tvar_t*)a)->ub, got_tuple1);
     }
     else if (jl_is_unionall(a)) {
-        return first_arg_datatype(((jl_unionall_t*)a)->body, got_tuple1);
+        return first_methtable(((jl_unionall_t*)a)->body, got_tuple1);
     }
     else if (jl_is_uniontype(a)) {
         jl_uniontype_t *u = (jl_uniontype_t*)a;
-        jl_datatype_t *d1 = first_arg_datatype(u->a, got_tuple1);
-        if (d1 == NULL) return NULL;
-        jl_datatype_t *d2 = first_arg_datatype(u->b, got_tuple1);
-        if (d2 == NULL || d1->name != d2->name)
-            return NULL;
-        return d1;
+        jl_methtable_t *m1 = first_methtable(u->a, got_tuple1);
+        if ((jl_value_t*)m1 != jl_nothing) {
+            jl_methtable_t *m2 = first_methtable(u->b, got_tuple1);
+            if (m1 == m2)
+                return m1;
+        }
     }
-    return NULL;
+    return (jl_methtable_t*)jl_nothing;
 }
 
-// get DataType of first tuple element, or NULL if cannot be determined
-JL_DLLEXPORT jl_datatype_t *jl_first_argument_datatype(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+// get the MethodTable for dispatch, or `nothing` if cannot be determined
+JL_DLLEXPORT jl_methtable_t *jl_method_table_for(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    return first_arg_datatype(argtypes, 0);
+    return first_methtable(argtypes, 0);
 }
 
-// get DataType implied by a single given type, or `nothing`
-JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+// get the MethodTable implied by a single given type, or `nothing`
+JL_DLLEXPORT jl_methtable_t *jl_argument_method_table(jl_value_t *argt JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    jl_datatype_t *dt = first_arg_datatype(argt, 1);
-    if (dt == NULL)
-        return jl_nothing;
-    return (jl_value_t*)dt;
+    return first_methtable(argt, 1);
 }
 
 extern tracer_cb jl_newmeth_tracer;
@@ -683,7 +681,6 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     assert(jl_is_svec(tvars));
     if (!jl_is_type(jl_svecref(atypes, 0)) || (isva && nargs == 1))
         jl_error("function type in method definition is not a type");
-    jl_methtable_t *mt;
     jl_sym_t *name;
     jl_method_t *m = NULL;
     jl_value_t *argtype = NULL;
@@ -698,16 +695,28 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
         argtype = jl_new_struct(jl_unionall_type, tv, argtype);
     }
 
-    jl_datatype_t *ftype = jl_first_argument_datatype(argtype);
-    if (ftype == NULL ||
-        ((!jl_is_type_type((jl_value_t*)ftype)) &&
-         (!jl_is_datatype(ftype) || ftype->abstract || ftype->name->mt == NULL)))
-        jl_error("cannot add methods to an abstract type");
-    if (jl_subtype((jl_value_t*)ftype, (jl_value_t*)jl_builtin_type))
+    jl_methtable_t *mt = jl_method_table_for(argtype);
+    if ((jl_value_t*)mt == jl_nothing)
+        jl_error("Method dispatch is unimplemented currently for this method signature");
+    if (mt->frozen)
         jl_error("cannot add methods to a builtin function");
 
-    mt = ftype->name->mt;
+    // TODO: derive our debug name from the syntax instead of the type
     name = mt->name;
+    if (mt == jl_type_type_mt || mt == jl_nonfunction_mt) {
+        // our value for `name` is bad, try to guess what the syntax might have had,
+        // like `jl_static_show_func_sig` might have come up with
+        jl_datatype_t *dt = jl_first_argument_datatype(argtype);
+        if (dt != NULL) {
+            name = dt->name->name;
+            if (jl_is_type_type((jl_value_t*)dt)) {
+                dt = (jl_datatype_t*)jl_argument_datatype(jl_tparam0(dt));
+                if ((jl_value_t*)dt != jl_nothing) {
+                    name = dt->name->name;
+                }
+            }
+        }
+    }
     if (!jl_is_code_info(f)) {
         // this occurs when there is a closure being added to an out-of-scope function
         // the user should only do this at the toplevel
