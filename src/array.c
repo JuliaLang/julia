@@ -48,7 +48,7 @@ typedef __uint128_t wideint_t;
 typedef uint64_t wideint_t;
 #endif
 
-size_t jl_arr_xtralloc_threshold = 0;
+size_t jl_arr_xtralloc_total_mem = 0;
 
 #define MAXINTVAL (((size_t)-1)>>1)
 
@@ -697,15 +697,15 @@ static void NOINLINE array_try_unshare(jl_array_t *a)
 
 static size_t limit_arraygrowth_scale(jl_array_t *a, size_t curlen)
 {
-    // // Shrink overallocation growth rate once over jl_arr_xtralloc_threshold
-    // size_t es = a->elsize;
-    // size_t curlen_mem = curlen * es;
-    // if (curlen_mem > jl_arr_xtralloc_threshold) {
-    //     return curlen * 1.4142;  // sqrt(2)
-    // }
-
-    // Always double when growing an array.
-    return curlen * 2;
+    // Shrink overallocation growth rate as we approach jl_arr_xtralloc_total_mem
+    size_t es = a->elsize;
+    size_t curlen_mem = curlen * es;
+    if (curlen_mem >= jl_arr_xtralloc_total_mem / 4) {
+        return curlen * 1.4142;  // sqrt(2)
+    } else {
+      // Normally, double when growing an array.
+      return curlen * 2;
+    }
 }
 
 STATIC_INLINE void jl_array_grow_at_beg(jl_array_t *a, size_t idx, size_t inc,

@@ -673,7 +673,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     if (total_mem >= (size_t)-1) {
         total_mem = (size_t)-1;
     }
-    jl_arr_xtralloc_threshold = total_mem * .3;  // Extra allocation lowers rate at 30% of total RAM
+    jl_arr_xtralloc_total_mem = total_mem * .3;  // Extra allocation lowers rate at 30% of total RAM
     jl_prep_sanitizers();
     void *stack_lo, *stack_hi;
     jl_init_stack_limits(1, &stack_lo, &stack_hi);
