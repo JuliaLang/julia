@@ -2782,7 +2782,7 @@ function setindex!(A::SparseMatrixCSC, x::AbstractArray, I::AbstractMatrix{Bool}
             end # if I[row, col]
         end # for row in 1:A.m
 
-        if (!iszero(nadd))
+        if !iszero(nadd)
             l = r2-r1+1
             if l > 0
                 copyto!(rowvalB, bidx, rowvalA, r1, l)
