@@ -679,13 +679,18 @@ eigvecs(A::HermOrSym) = eigvecs(eigen(A))
 
 function svd(A::RealHermSymComplexHerm, full::Bool=false)
     vals, vecs = eigen(A)
-    σ = map(x -> x >= 0 ? 1 : -1, vals)
-    vals .= abs.(vals)
-    I = sortperm(vals; rev=true)
+    I = sortperm(vals; by=abs, rev=true)
     permute!(vals, I)
-    Σ = Diagonal(σ[I])
-    Base.permutecols!!(vecs, I)
-    return SVD(vecs, vals, (vecs*Σ)')
+    Base.permutecols!!(vecs, I)         # left-singular vectors
+    V = copy(vecs)                      # right-singular vectors
+    # shifting -1 from singular values to right-singular vectors
+    @inbounds for i = 1:length(vals)
+        if vals[i] < 0
+            vals[i] = -vals[i]
+            for j = 1:size(V,1); V[j,i] = -V[j,i]; end
+        end
+    end
+    return SVD(vecs, vals, V')
 end
 
 function svdvals!(A::RealHermSymComplexHerm)
