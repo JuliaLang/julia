@@ -2809,7 +2809,7 @@ function setindex!(A::SparseMatrixCSC, x::AbstractArray, I::AbstractMatrix{Bool}
         (xidx > n) && break
     end # for col in 1:A.n
 
-    if (!iszero(nadd))
+    if !iszero(nadd)
         n = length(nzvalB)
         if n > (bidx-1)
             deleteat!(nzvalB, bidx:n)
