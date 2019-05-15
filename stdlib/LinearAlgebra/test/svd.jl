@@ -92,18 +92,6 @@ a2img  = randn(n,n)/2
             b = rand(eltya,n)
             @test usv\b ≈ transpose(a)\b
         end
-        @testset "singular value decomposition of Hermitian/real-Symmetric" begin
-            for T in (eltya <: Real ? (Symmetric, Hermitian) : (Hermitian,))
-                usv = svd(T(asym))
-                @test usv.S === svdvals(usv)
-                @test usv.U * (Diagonal(usv.S) * usv.Vt) ≈ T(asym)
-                @test convert(Array, usv) ≈ T(asym)
-                @test usv.Vt' ≈ usv.V
-                @test_throws ErrorException usv.Z
-                b = rand(eltya,n)
-                @test usv\b ≈ T(asym)\b
-            end
-        end
         @testset "Generalized svd" begin
             a_svd = a[1:n1, :]
             gsvd = svd(a,a_svd)
@@ -131,6 +119,18 @@ a2img  = randn(n,n)/2
             gsvd = svd(b,c)
             @test gsvd.U*gsvd.D1*gsvd.R*gsvd.Q' ≈ b
             @test gsvd.V*gsvd.D2*gsvd.R*gsvd.Q' ≈ c
+        end
+    end
+    @testset "singular value decomposition of Hermitian/real-Symmetric" begin
+        for T in (eltya <: Real ? (Symmetric, Hermitian) : (Hermitian,))
+            usv = svd(T(asym))
+            @test usv.S === svdvals(usv)
+            @test usv.U * (Diagonal(usv.S) * usv.Vt) ≈ T(asym)
+            @test convert(Array, usv) ≈ T(asym)
+            @test usv.Vt' ≈ usv.V
+            @test_throws ErrorException usv.Z
+            b = rand(eltya,n)
+            @test usv\b ≈ T(asym)\b
         end
     end
     if eltya <: LinearAlgebra.BlasReal
