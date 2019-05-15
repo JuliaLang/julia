@@ -310,6 +310,53 @@ else
     end
 end
 
+
+function test_stat_error(stat::Function, pth)
+    if stat === lstat && !(pth isa AbstractString)
+        return # no lstat for fd handles
+    end
+    ex = try; stat(pth); false; catch ex; ex; end::Base.IOError
+    @test ex.code == (pth isa AbstractString ? Base.UV_EACCES : Base.UV_EBADF)
+    @test startswith(ex.msg, "stat: ")
+    pth isa AbstractString || (pth = Base.INVALID_OS_HANDLE)
+    @test endswith(ex.msg, repr(pth))
+    nothing
+end
+@testset "stat errors" begin # PR 32031
+    mktempdir() do dir
+        cd(dir) do
+            touch("afile")
+            try
+                # remove permission to access this folder
+                # to cause cause EACCESS-denied errors
+                @static if Sys.iswindows()
+                    @test ccall((:ImpersonateAnonymousToken, "Advapi32.dll"), stdcall, Cint, (Libc.WindowsRawSocket,),
+                                ccall(:GetCurrentThread, Libc.WindowsRawSocket, ())) != 0
+                else
+                    chmod(dir, 0o000)
+                end
+                for pth in ("afile",
+                            joinpath("afile", "not_file"),
+                            SubString(joinpath(dir, "afile")),
+                            Base.RawFD(-1),
+                            -1)
+                    test_stat_error(stat, pth)
+                    test_stat_error(lstat, pth)
+                end
+            finally
+                # restore permissions
+                # to let us cleanup afile
+                @static if Sys.iswindows()
+                    ccall((:RevertToSelf, "advapi32.dll"), stdcall, Cint, ()) == 0 && exit(1)
+                else
+                    chmod(dir, 0o777)
+                end
+            end
+        end
+    end
+end
+
+
 # On windows the filesize of a folder is the accumulation of all the contained
 # files and is thus zero in this case.
 if Sys.iswindows()
