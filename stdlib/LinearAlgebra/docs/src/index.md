@@ -271,10 +271,10 @@ Stacktrace:
 [...]
 ```
 
-If you need to solve many systems of the form `(A+μI)x = b`, it might be beneficial
+If you need to solve many systems of the form `(A+μI)x = b` for the same `A` and different `μ`, it might be beneficial
 to first compute the Hessenberg factorization `F` of `A` via the [`hessenberg`](@ref) function.
-Given `F`, Julia employs an efficient algorithm for `(F+μ*I) \ b` and related
-operations.
+Given `F`, Julia employs an efficient algorithm for `(F+μ*I) \ b` (equivalent to `(A+μ*I)x \ b`) and related
+operations like determinants.
 
 
 ## [Matrix factorizations](@id man-linalg-factorizations)
