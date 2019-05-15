@@ -48,8 +48,6 @@ typedef __uint128_t wideint_t;
 typedef uint64_t wideint_t;
 #endif
 
-size_t jl_arr_xtralloc_total_mem = 0;
-
 #define MAXINTVAL (((size_t)-1)>>1)
 
 static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
@@ -695,17 +693,9 @@ static void NOINLINE array_try_unshare(jl_array_t *a)
     }
 }
 
-static size_t limit_arraygrowth_scale(jl_array_t *a, size_t curlen)
+static size_t array_grow_newsize(size_t curlen)
 {
-    // Shrink overallocation growth rate as we approach jl_arr_xtralloc_total_mem
-    size_t es = a->elsize;
-    size_t curlen_mem = curlen * es;
-    if (curlen_mem >= jl_arr_xtralloc_total_mem / 4) {
-        return curlen * 1.4142;  // sqrt(2)
-    } else {
-      // Normally, double when growing an array.
-      return curlen * 2;
-    }
+    return curlen <= 10 ? curlen * 2 : curlen * 1.5;
 }
 
 STATIC_INLINE void jl_array_grow_at_beg(jl_array_t *a, size_t idx, size_t inc,
@@ -753,10 +743,10 @@ STATIC_INLINE void jl_array_grow_at_beg(jl_array_t *a, size_t idx, size_t inc,
         size_t nb1 = idx * elsz;
         if (inc > (a->maxsize - n) / 2 - (a->maxsize - n) / 20) {
             // not enough room for requested growth from end of array
-            size_t scaled_size = limit_arraygrowth_scale(a, a->maxsize);
+            size_t scaled_size = array_grow_newsize(a->maxsize);
             size_t newlen = a->maxsize == 0 ? inc * 2 : scaled_size;
             while (n + 2 * inc > newlen - a->offset) {
-                newlen = limit_arraygrowth_scale(a, newlen);
+                newlen = array_grow_newsize(newlen);
             }
             size_t newoffset = (newlen - newnrows) / 2;
             if (!array_resize_buffer(a, newlen)) {
@@ -844,7 +834,7 @@ STATIC_INLINE void jl_array_grow_at_end(jl_array_t *a, size_t idx,
         size_t nbinc = inc * elsz;
         // if the requested size is more than 2x current maxsize, grow exactly
         // otherwise double the maxsize
-        size_t scaled_size = limit_arraygrowth_scale(a, a->maxsize);
+        size_t scaled_size = array_grow_newsize(a->maxsize);
         size_t newmaxsize = reqmaxsize >= scaled_size
                           ? (reqmaxsize < 4 ? 4 : reqmaxsize)
                           : scaled_size;

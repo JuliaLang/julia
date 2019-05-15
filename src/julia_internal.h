@@ -491,7 +491,6 @@ extern char jl_using_oprofile_jitevents;
 #ifdef JL_USE_PERF_JITEVENTS
 extern char jl_using_perf_jitevents;
 #endif
-extern size_t jl_arr_xtralloc_total_mem;
 
 void jl_init_types(void) JL_GC_DISABLED;
 void jl_init_box_caches(void);
