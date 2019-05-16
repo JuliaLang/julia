@@ -982,20 +982,20 @@ endif
 # BinaryBuilder options.  We default to "on" for all the projects listed in BB_PROJECTS,
 # but only if contrib/normalize_triplet.py works for our requested triplet
 ifeq ($(shell python $(JULIAHOME)/contrib/normalize_triplet.py $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) >/dev/null 2>/dev/null; echo $$?),0)
-USE_BINARYBUILDER := 1
+USE_BINARYBUILDER ?= 1
 else
 ifneq ($(shell python $(JULIAHOME)/contrib/normalize_triplet.py x86_64-linux-gnu),x86_64-linux-gnu)
 $(warning python normalize_triplet.py appears to be non-functional, so BinaryBuilder disabled)
 endif
-USE_BINARYBUILDER := 0
+USE_BINARYBUILDER ?= 0
 endif
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
 BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 MPFR CURL LIBGIT2 PCRE LIBUV UNWIND DSFMT OBJCONV
-$(foreach proj,$(BB_PROJECTS),$(if $(USE_BINARYBUILDER_$(proj)),,$(eval USE_BINARYBUILDER_$(proj) := $(USE_BINARYBUILDER))))
+$(foreach proj,$(BB_PROJECTS),$(if $(USE_BINARYBUILDER_$(proj)),,$(eval USE_BINARYBUILDER_$(proj) ?= $(USE_BINARYBUILDER))))
 
 # Use the Assertions build
-BINARYBUILDER_LLVM_ASSERTS := 0
+BINARYBUILDER_LLVM_ASSERTS ?= 0
 
 
 
