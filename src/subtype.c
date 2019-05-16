@@ -917,7 +917,7 @@ constrain_length:
 
     // Vararg{T,N} <: Vararg{T2,N2}; equate N and N2
     e->invdepth++;
-    JL_GC_PUSH2(xp1, yp1);
+    JL_GC_PUSH2(&xp1, &yp1);
     if (jl_is_long(xp1) && env->vx != 1)
         xp1 = jl_box_long(jl_unbox_long(xp1) - env->vx + 1);
     if (jl_is_long(yp1) && env->vy != 1)
