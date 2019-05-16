@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Random, Serialization
+using Test, Random, Serialization, Base64
 
 # Check that serializer hasn't gone out-of-frame
 @test Serialization.sertag(Symbol) == 1
@@ -550,4 +550,15 @@ let f = tempname(), x = [rand(2,2), :x, "hello"]
     serialize(f, x)
     @test deserialize(f) == x
     rm(f)
+end
+
+let f_data
+    # a serialized function from v1.0/v1.1
+    if Int === Int64
+        f_data = "N0pMBwQAAAA0MxMAAAAAAAAAAAEFIyM1IzYiAAAAABBYH04BBE1haW6bRCIAAAAAIgAAAABNTEy+AQIjNRUAI+AjAQAAAAAAAAAfTgEETWFpbkQBAiM1AQdSRVBMWzNdvxBTH04BBE1haW6bRAMAAAAzLAAARkYiAAAAAE7BTBsVRuIWA1YkH04BBE1haW5EAQEq4SXhFgNWJB9OAQRNYWluRJ0o4CXiFgFVKOEVAAbiAQAAAAEAAAABAAAATuIVRuA0EAEMTGluZUluZm9Ob2RlH04BBE1haW6bRB9OAQRNYWluRAECIzUBB1JFUExbM13g3xXfFeIAAAAVRuKifX5MTExMTuIp"
+    else
+        f_data = "N0pMBwAAAAA0MxMAAAAAAAAAAAEFIyM1IzYiAAAAABBYH04BBE1haW6bRCIAAAAAIgAAAABNTEy+AQIjNRUAI78jAQAAAAAAAAAfTgEETWFpbkQBAiM1AQdSRVBMWzJdvxBTH04BBE1haW6bRAMAAAAzLAAARkYiAAAAAE7BTBsVRsEWA1YkH04BBE1haW5EAQEqwCXAFgNWJB9OAQRNYWluRJ0ovyXBFgFVKMAVAAbBAQAAAAEAAAABAAAATsEVRr80EAEMTGluZUluZm9Ob2RlH04BBE1haW6bRB9OAQRNYWluRAECIzUBB1JFUExbMl2/vhW+FcEAAAAVRsGifX5MTExMTsEp"
+    end
+    f = deserialize(IOBuffer(base64decode(f_data)))
+    @test f(10,3) == 23
 end
