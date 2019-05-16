@@ -1500,16 +1500,16 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
             jl_vararg_kind_t vx = JL_VARARG_NONE;
             jl_value_t *vxt = NULL;
             int vy = 0;
-            int vnpx = npx;
+            int nparams_expanded_x = npx;
             if (istuple) {
                 if (npx > 0) {
                     jl_value_t *xva = jl_tparam(x, npx - 1);
                     vx = jl_vararg_kind(xva);
                     if (vx != JL_VARARG_NONE) {
                         vxt = jl_unwrap_vararg(xva);
-                        vnpx -= 1;
+                        nparams_expanded_x -= 1;
                         if (vx == JL_VARARG_INT)
-                            vnpx += jl_vararg_length(xva);
+                            nparams_expanded_x += jl_vararg_length(xva);
                     }
                 }
                 vy = npy > 0 && jl_is_vararg_type(jl_tparam(y, npy - 1));
@@ -1519,7 +1519,8 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
                     *subtype = 0;
                     return 1;
                 }
-                if ((vx == JL_VARARG_NONE || vx == JL_VARARG_INT) && vnpx < npy - vy) {
+                if ((vx == JL_VARARG_NONE || vx == JL_VARARG_INT) && nparams_expanded_x < npy - vy)
+                {
                     *subtype = 0;
                     return 1; // number of fixed parameters in x could be fewer than in y
                 }
