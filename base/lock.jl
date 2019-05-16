@@ -274,3 +274,8 @@ function notify(e::Event)
     end
     nothing
 end
+
+@eval Threads begin
+    import .Base: Event
+    export Event
+end
