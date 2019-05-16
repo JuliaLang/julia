@@ -1506,10 +1506,18 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
                 if (((jl_datatype_t*)t2)->name == jl_type_typename) {
                     jl_value_t *tp = jl_tparam0(t2);
                     if (jl_is_typevar(tp)) {
-                        while (jl_is_typevar(tp))
-                            tp = ((jl_tvar_t*)tp)->ub;
-                        if (!jl_has_free_typevars(tp))
-                            return jl_subtype(x, tp);
+                        if (((jl_tvar_t*)tp)->lb == jl_bottom_type) {
+                            while (jl_is_typevar(tp))
+                                tp = ((jl_tvar_t*)tp)->ub;
+                            if (!jl_has_free_typevars(tp))
+                                return jl_subtype(x, tp);
+                        }
+                        else if (((jl_tvar_t*)tp)->ub == (jl_value_t*)jl_any_type) {
+                            while (jl_is_typevar(tp))
+                                tp = ((jl_tvar_t*)tp)->lb;
+                            if (!jl_has_free_typevars(tp))
+                                return jl_subtype(tp, x);
+                        }
                     }
                 }
                 else {
