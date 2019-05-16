@@ -334,7 +334,7 @@ julia> sqrt(-2.0+0im)
 0.0 + 1.4142135623730951im
 ```
 
-### Why does Julia use native machine integer arithmetic?
+### [Why does Julia use native machine integer arithmetic?](@id faq-integer-arithmetic)
 
 Julia uses machine arithmetic for integer computations. This means that the range of `Int` values
 is bounded and wraps around at either end so that adding, subtracting and multiplying integers
