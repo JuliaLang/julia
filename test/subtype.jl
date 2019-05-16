@@ -488,6 +488,10 @@ function test_Type()
     @test !(Tuple{Int,} <: (@UnionAll T<:Tuple Type{T}))
     @test isa(Tuple{Int}, (@UnionAll T<:Tuple Type{T}))
 
+    @test !isa(Int, Type{>:String})
+    @test  isa(Union{Int,String}, Type{>:String})
+    @test  isa(Any, Type{>:String})
+
     # this matches with T==DataType, since DataType is concrete
     @test  issub(Tuple{Type{Int},Type{Int8}}, Tuple{T,T} where T)
     @test !issub(Tuple{Type{Int},Type{Union{}}}, Tuple{T,T} where T)
