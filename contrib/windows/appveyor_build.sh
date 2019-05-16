@@ -23,7 +23,8 @@ echo "override XC_HOST = $MINGW_ARCH-w64-mingw32" >> Make.user
 echo "override JULIA_CPU_TARGET = generic;native" >> Make.user
 
 echo 'USE_BINARYBUILDER = 1' >> Make.user
-echo 'BINARYBUILDER_LLVM_ASSERTS = 1' >> Make.user
+# This is pending the binaries actually being available
+#echo 'BINARYBUILDER_LLVM_ASSERTS = 1' >> Make.user
 echo 'FORCE_ASSERTIONS = 1' >> Make.user
 echo 'USECCACHE = 1' >> Make.user
 echo 'VERBOSE = 1' >> Make.user
