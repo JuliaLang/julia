@@ -116,8 +116,8 @@ environment variable or if it must have a value, set it to the string `:`.
 The `JULIA_DEPOT_PATH` environment variable is used to populate the global Julia
 [`DEPOT_PATH`](@ref) variable, which controls where the package manager, as well
 as Julia's code loading mechanisms, look for package registries, installed
-packages, named environments, repo clones, cached compiled package images, and
-configuration files.
+packages, named environments, repo clones, cached compiled package images,
+configuration files, and the default location of the REPL's history file.
 
 Unlike the shell `PATH` variable but similar to `JULIA_LOAD_PATH`, empty entries in
 `JULIA_DEPOT_PATH` are expanded to the default value of `DEPOT_PATH`. This allows
@@ -143,7 +143,7 @@ The absolute path `REPL.find_hist_file()` of the REPL's history file. If
 `$JULIA_HISTORY` is not set, then `REPL.find_hist_file()` defaults to
 
 ```
-$HOME/.julia/logs/repl_history.jl
+$(DEPOT_PATH[1])/logs/repl_history.jl
 ```
 
 ### `JULIA_PKGRESOLVE_ACCURACY`
