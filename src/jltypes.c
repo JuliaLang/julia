@@ -1104,8 +1104,17 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
 
     if (!istuple) {
         if (jl_is_vararg_type((jl_value_t*)dt) && ntp == 2) {
-            if (!jl_is_long(iparams[1]) && !jl_is_typevar(iparams[1])) {
-                jl_type_error_rt("Vararg", "count", (jl_value_t*)jl_long_type, iparams[1]);
+            jl_value_t *lenparam = iparams[1];
+            if (jl_is_typevar(lenparam)) {
+                jl_tvar_t *N = (jl_tvar_t*)lenparam;
+                if (!(N->lb == jl_bottom_type && N->ub == (jl_value_t*)jl_any_type))
+                    jl_error("TypeVar in Vararg length must have bounds Union{} and Any");
+            }
+            else if (!jl_is_long(lenparam)) {
+                jl_type_error_rt("Vararg", "count", (jl_value_t*)jl_long_type, lenparam);
+            }
+            else if (jl_unbox_long(lenparam) < 0) {
+                jl_errorf("Vararg length is negative: %zd", jl_unbox_long(lenparam));
             }
         }
         // check parameters against bounds in type definition
@@ -1146,8 +1155,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         }
         if (jl_is_long(va1)) {
             ssize_t nt = jl_unbox_long(va1);
-            if (nt < 0)
-                jl_errorf("apply_type: Vararg length N is negative: %zd", nt);
+            assert(nt >= 0);
             if (nt == 0 || !jl_has_free_typevars(va0)) {
                 if (cacheable) JL_UNLOCK(&typecache_lock); // Might GC
                 if (ntp == 1) {
