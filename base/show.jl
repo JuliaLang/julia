@@ -1848,6 +1848,7 @@ function summary(x)
     summary(io, x)
     String(take!(io))
 end
+summary(io::IO, t::Tuple) = print(io, t)
 
 ## `summary` for AbstractArrays
 # sizes such as 0-dimensional, 4-dimensional, 2x3
