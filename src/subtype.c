@@ -753,7 +753,8 @@ static int with_tvar(tvar_callback callback, void *context, jl_unionall_t *u, in
     return ans;
 }
 
-static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e) {
+static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e)
+{
     jl_varbinding_t *btemp = e->vars;
     // if the var for this unionall (based on identity) already appears somewhere
     // in the environment, rename to get a fresh var.
@@ -868,9 +869,9 @@ static int subtype_tuple_varargs(struct subtype_tuple_env *env, jl_stenv_t *e, i
         }
         if (jl_is_long(xl)) {
             if (jl_unbox_long(xl) + 1 == env->vx) {
-                // LHS is exhausted. We're a subtype if the LHS is either
+                // LHS is exhausted. We're a subtype if the RHS is either
                 // exhausted as well or unbounded (in which case we need to
-                // set it to 0.
+                // set it to 0).
                 if (jl_is_datatype(env->vty)) {
                     jl_value_t *yl = jl_tparam1(env->vty);
                     if (jl_is_typevar(yl)) {
@@ -899,10 +900,6 @@ static int subtype_tuple_varargs(struct subtype_tuple_env *env, jl_stenv_t *e, i
     if (!subtype(xp0, yp0, e, 1)) return 0;
 
 constrain_length:
-    if (jl_is_long(xp1) && jl_is_long(yp1)) {
-        return env->lx + jl_unbox_long(xp1) == env->ly + jl_unbox_long(yp1);
-    }
-
     if (!jl_is_datatype(env->vtx)) {
         jl_value_t *yl = yp1;
         if (jl_is_typevar(yl)) {
@@ -920,11 +917,13 @@ constrain_length:
 
     // Vararg{T,N} <: Vararg{T2,N2}; equate N and N2
     e->invdepth++;
+    JL_GC_PUSH2(xp1, yp1);
     if (jl_is_long(xp1) && env->vx != 1)
         xp1 = jl_box_long(jl_unbox_long(xp1) - env->vx + 1);
     if (jl_is_long(yp1) && env->vy != 1)
         yp1 = jl_box_long(jl_unbox_long(yp1) - env->vy + 1);
     int ans = forall_exists_equal(xp1, yp1, e);
+    JL_GC_POP();
     e->invdepth--;
     return ans;
 }
@@ -941,7 +940,7 @@ loop: // while (i <= lx) {
         if (env->i == env->lx-1 && env->vvx) {
             if (!env->vtx) {
                 xi = jl_tparam(env->xd, env->i);
-                // Unbounded vararg on the LHS without vararg on the LHS should
+                // Unbounded vararg on the LHS without vararg on the RHS should
                 // have been caught earlier.
                 assert(env->vvy || !jl_is_unionall(xi));
                 if (jl_is_unionall(xi)) {
@@ -1027,7 +1026,6 @@ loop: // while (i <= lx) {
     // } (from loop:)
 
 done:
-    // TODO: handle Vararg with explicit integer length parameter
     if (!env->vy && env->j < env->ly && jl_is_vararg_type(jl_tparam(env->yd, env->j)))
         env->vy += 1;
     if (env->vy && !env->vx && env->lx+1 >= env->ly) {
@@ -1041,12 +1039,14 @@ done:
 static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, int param)
 {
     struct subtype_tuple_env env;
-    env.xd = xd; env.yd = yd;
-    env.lx = jl_nparams(xd); env.ly = jl_nparams(yd);
+    env.xd = xd;
+    env.yd = yd;
+    env.lx = jl_nparams(xd);
+    env.ly = jl_nparams(yd);
     if (env.lx == 0 && env.ly == 0)
         return 1;
-    env.i=0; env.j=0;
-    env.vx=0; env.vy=0;
+    env.i = env.j = 0;
+    env.vx = env.vy = 0;
     env.vvx = env.vvy = JL_VARARG_NONE;
     if (env.lx > 0)
         env.vvx = jl_vararg_kind(jl_tparam(env.xd, env.lx-1));
@@ -1089,8 +1089,8 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
     }
 
     param = (param == 0 ? 1 : param);
-    env.lastx=NULL; env.lasty=NULL;
-    env.vtx=NULL; env.vty=NULL;
+    env.lastx = env.lasty=NULL;
+    env.vtx = env.vty=NULL;
     return subtype_tuple_tail(&env, 0, e, param);
 }
 
@@ -1519,8 +1519,8 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
                     *subtype = 0;
                     return 1;
                 }
-                if ((vx == JL_VARARG_NONE || vx == JL_VARARG_INT) && nparams_expanded_x < npy - vy)
-                {
+                if ((vx == JL_VARARG_NONE || vx == JL_VARARG_INT) &&
+                        nparams_expanded_x < npy - vy) {
                     *subtype = 0;
                     return 1; // number of fixed parameters in x could be fewer than in y
                 }
