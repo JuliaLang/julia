@@ -9,6 +9,7 @@ SetCompress off
 CRCCheck off
 SetDataBlockOptimize on
 ShowInstDetails nevershow
+ShowUninstDetails nevershow
 RequestExecutionLevel user
 BrandingText " "
 
@@ -29,6 +30,9 @@ Caption "Julia Installer" # title bar
 !define MUI_ICON "${JULIAHOME}\contrib\windows\julia.ico"
 !define MUI_UNICON "${JULIAHOME}\contrib\windows\julia.ico"
 !define MUI_WELCOMEFINISHPAGE_BITMAP "${JULIAHOME}\contrib\windows\julia-banner.bmp"
+!define MUI_HEADERIMAGE
+!define MUI_HEADERIMAGE_BITMAP "${JULIAHOME}\contrib\windows\julia-header.bmp"
+!define MUI_HEADERIMAGE_RIGHT
 
 # Uninstall settings
 !define UninstLog "uninstall.log"
