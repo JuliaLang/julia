@@ -890,15 +890,14 @@ preprocess_args(dest, args::Tuple{}) = ()
     return dest
 end
 
-# Performance optimization: for BitArray outputs, we cache the result
-# in a "small" Vector{Bool}, and then copy in chunks into the output
-@inline function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
+# Performance optimization: for BitVector outputs, we cache the result
+# in a 64-bit register before writing into memory (to bypass LSQ)
+@inline function copyto!(dest::BitVector, bc::Broadcasted{Nothing})
     axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
     ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
     destc = dest.chunks
-    ind = cind = 1
+    length(destc)<=0 && return dest
     bcp = preprocess(dest, bc)
-    length(bcp)<=0 && return dest
     @inbounds for i = 0:Base.num_bit_chunks(length(bcp))-2
         z = UInt64(0)
         for j=0:63
@@ -912,6 +911,31 @@ end
          z |= (bcp[i*64 + j + 1]::Bool) << (j&63)
     end
     @inbounds destc[i+1] = z
+    return dest
+end
+
+# Performance optimization: for BitArray outputs, we cache the result
+# in a "small" Vector{Bool}, and then copy in chunks into the output
+@inline function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
+    axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
+    ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
+    tmp = Vector{Bool}(undef, bitcache_size)
+    destc = dest.chunks
+    ind = cind = 1
+    bc′ = preprocess(dest, bc)
+    @simd for I in eachindex(bc′)
+        @inbounds tmp[ind] = bc′[I]
+        ind += 1
+        if ind > bitcache_size
+            dumpbitcache(destc, cind, tmp)
+            cind += bitcache_chunks
+            ind = 1
+        end
+    end
+    if ind > 1
+        @inbounds tmp[ind:bitcache_size] .= false
+        dumpbitcache(destc, cind, tmp)
+    end
     return dest
 end
 
