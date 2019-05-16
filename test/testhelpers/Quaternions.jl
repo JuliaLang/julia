@@ -12,7 +12,6 @@ struct Quaternion{T<:Real} <: Number
 end
 Quaternion(s::Real, v1::Real, v2::Real, v3::Real) = Quaternion(promote(s, v1, v2, v3)...)
 Base.abs2(q::Quaternion) = q.s*q.s + q.v1*q.v1 + q.v2*q.v2 + q.v3*q.v3
-Base.float(z::Quaternion{T}) where T = Quaternion(float(z.s), float(z.v1), float(z.v2), float(z.v3))
 Base.abs(q::Quaternion) = sqrt(abs2(q))
 Base.real(::Type{Quaternion{T}}) where {T} = T
 Base.conj(q::Quaternion) = Quaternion(q.s, -q.v1, -q.v2, -q.v3)

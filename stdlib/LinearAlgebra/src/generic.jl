@@ -540,7 +540,7 @@ julia> norm(-2, Inf)
 ```
 """
 @inline function norm(x::Number, p::Real=2)
-    afx = abs(float(x))
+    afx = x isa Integer ? abs(float(x)) : abs(x)
     if p == 0
         if x == 0
             return zero(afx)
