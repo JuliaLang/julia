@@ -540,7 +540,7 @@ function lex_minus(l::Lexer)
         if accept(l, '>')
             return emit(l, Tokens.RIGHT_ARROW)
         else
-            return emit_error(l) # "--" is an invalid operator
+            return emit_error(l, Tokens.INVALID_OPERATOR) # "--" is an invalid operator
         end
     elseif accept(l, '>')
         return emit(l, Tokens.ANON_FUNC)
@@ -552,7 +552,7 @@ end
 
 function lex_star(l::Lexer)
     if accept(l, '*')
-        return emit_error(l) # "**" is an invalid operator use ^
+        return emit_error(l, Tokens.INVALID_OPERATOR) # "**" is an invalid operator use ^
     elseif accept(l, '=')
         return emit(l, Tokens.STAR_EQ)
     end
@@ -639,14 +639,14 @@ function lex_digit(l::Lexer, kind)
             accept(l, "+-")
             if accept_batch(l, isdigit)
                 if accept(l, '.') # 1.2e2.3 -> [ERROR, 3]
-                    return emit_error(l)
+                    return emit_error(l, Tokens.INVALID_NUMERIC_CONSTANT)
                 end
             else
                 return emit_error(l)
             end
         elseif pc == '.' && (is_identifier_start_char(ppc) || eof(ppc))
             readchar(l)
-            return emit_error(l)
+            return emit_error(l, Tokens.INVALID_NUMERIC_CONSTANT)
         end
 
     elseif (pc == 'e' || pc == 'E' || pc == 'f') && (isdigit(ppc) || ppc == '+' || ppc == '-')
@@ -655,7 +655,7 @@ function lex_digit(l::Lexer, kind)
         accept(l, "+-")
         if accept_batch(l, isdigit)
             if accept(l, '.') # 1.2e2.3 -> [ERROR, 3]
-                return emit_error(l)
+                return emit_error(l, Tokens.INVALID_NUMERIC_CONSTANT)
             end
         else
             return emit_error(l)
@@ -665,7 +665,7 @@ function lex_digit(l::Lexer, kind)
         if pc == 'x'
             kind = Tokens.HEX_INT
             readchar(l)
-            !(ishex(ppc) || ppc =='.') && return emit_error(l)
+            !(ishex(ppc) || ppc =='.') && return emit_error(l, Tokens.INVALID_NUMERIC_CONSTANT)
             accept_number(l, ishex)
             if accept(l, '.')
                 accept_number(l, ishex)
@@ -676,12 +676,12 @@ function lex_digit(l::Lexer, kind)
                 accept_number(l, isdigit)
             end
         elseif pc == 'b'
-            !isbinary(ppc) && return emit_error(l)
+            !isbinary(ppc) && return emit_error(l, Tokens.INVALID_NUMERIC_CONSTANT)
             readchar(l)
             accept_number(l, isbinary)
             kind = Tokens.BIN_INT
         elseif pc == 'o'
-            !isoctal(ppc) && return emit_error(l)
+            !isoctal(ppc) && return emit_error(l, Tokens.INVALID_NUMERIC_CONSTANT)
             readchar(l)
             accept_number(l, isoctal)
             kind = Tokens.OCT_INT

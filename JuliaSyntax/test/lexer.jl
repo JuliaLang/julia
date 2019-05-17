@@ -527,3 +527,14 @@ end
 @testset "dot startpos" begin
     @test Tokenize.Tokens.startpos(tok("./")) == (1,1)
 end
+
+@testset "token errors" begin
+    @test tok("1.2e2.3",1).token_error === Tokens.INVALID_NUMERIC_CONSTANT
+    @test tok("1.2.",1).token_error === Tokens.INVALID_NUMERIC_CONSTANT
+    @test tok("1.2.f",1).token_error === Tokens.INVALID_NUMERIC_CONSTANT
+    @test tok("0xv",1).token_error === Tokens.INVALID_NUMERIC_CONSTANT
+    @test tok("0b3",1).token_error === Tokens.INVALID_NUMERIC_CONSTANT
+    @test tok("0op",1).token_error === Tokens.INVALID_NUMERIC_CONSTANT
+    @test tok("--",1).token_error === Tokens.INVALID_OPERATOR
+    @test tok("1**2",2).token_error === Tokens.INVALID_OPERATOR
+end

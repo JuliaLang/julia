@@ -30,6 +30,8 @@ _add_kws()
     EOF_STRING,
     EOF_CHAR,
     EOF_CMD,
+    INVALID_NUMERIC_CONSTANT,
+    INVALID_OPERATOR,
     UNKNOWN,
 )
 
@@ -39,6 +41,8 @@ TOKEN_ERROR_DESCRIPTION = Dict{TokenError, String}(
     EOF_STRING => "unterminated string literal",
     EOF_CHAR => "unterminated character literal",
     EOF_CMD => "unterminated cmd literal",
+    INVALID_NUMERIC_CONSTANT => "invalid numeric constant",
+    INVALID_OPERATOR => "invalid operator",
     UNKNOWN => "unknown",
 )
 
