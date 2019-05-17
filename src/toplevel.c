@@ -624,9 +624,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         jl_eval_errorf(m, "eval cannot be used in a generated function");
     }
 
-    jl_method_instance_t *li = NULL;
+    jl_method_instance_t *mfunc = NULL;
     jl_code_info_t *thk = NULL;
-    JL_GC_PUSH3(&li, &thk, &ex);
+    JL_GC_PUSH3(&mfunc, &thk, &ex);
 
     size_t last_age = ptls->world_age;
     if (!expanded && jl_needs_lowering(e)) {
@@ -794,7 +794,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                            jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF &&
                            jl_options.compile_enabled != JL_OPTIONS_COMPILE_MIN)) {
         // use codegen
-        li = method_instance_for_thunk(thk, m);
+        mfunc = method_instance_for_thunk(thk, m);
         jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
         // Don't infer blocks containing e.g. method definitions, since it's probably not
         // worthwhile and also unsound (see #24316).
@@ -803,10 +803,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         size_t world = jl_world_counter;
         ptls->world_age = world;
         if (!has_defs) {
-            (void)jl_type_infer(li, world, 0);
+            (void)jl_type_infer(mfunc, world, 0);
         }
-        jl_value_t *dummy_f_arg = NULL;
-        result = jl_invoke(li, &dummy_f_arg, 1);
+        result = jl_invoke(/*func*/NULL, /*args*/NULL, /*nargs*/0, mfunc);
         ptls->world_age = last_age;
     }
     else {
