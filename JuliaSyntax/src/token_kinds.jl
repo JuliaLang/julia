@@ -34,6 +34,7 @@
         MACRO,
         MODULE,
         MUTABLE,
+        NEW,
         OUTER,
         PRIMITIVE,
         QUOTE,
