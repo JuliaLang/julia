@@ -91,14 +91,18 @@ julia> S \\ b
  1.3488372093023255
 ```
 """
-function ldlt(M::SymTridiagonal{T}) where T
-    S = typeof(zero(T)/one(T))
-    return S == T ? ldlt!(copy(M)) : ldlt!(SymTridiagonal{S}(M))
+function ldlt(M::SymTridiagonal{T}; shift::Number=false) where T
+    S = typeof((zero(T)+shift)/one(T))
+    Mₛ = SymTridiagonal{S}(copy_oftype(M.dv, S), copy_oftype(M.ev, S))
+    if !iszero(shift)
+        Mₛ.dv .+= shift
+    end
+    return ldlt!(Mₛ)
 end
 
 factorize(S::SymTridiagonal) = ldlt(S)
 
-function ldiv!(S::LDLt{T,M}, B::AbstractVecOrMat{T}) where {T,M<:SymTridiagonal{T}}
+function ldiv!(S::LDLt{<:Any,<:SymTridiagonal}, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     n, nrhs = size(B, 1), size(B, 2)
     if size(S,1) != n
@@ -128,6 +132,9 @@ function ldiv!(S::LDLt{T,M}, B::AbstractVecOrMat{T}) where {T,M<:SymTridiagonal{
     end
     return B
 end
+
+rdiv!(B::AbstractVecOrMat, S::LDLt{<:Any,<:SymTridiagonal}) =
+    transpose(ldiv!(S, transpose(B)))
 
 function logabsdet(F::LDLt{<:Any,<:SymTridiagonal})
     it = (F.data[i,i] for i in 1:size(F, 1))

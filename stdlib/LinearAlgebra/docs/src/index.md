@@ -168,8 +168,9 @@ as well as whether hooks to various optimized methods for them in LAPACK are ava
 | [`Hermitian`](@ref)           | [Hermitian matrix](https://en.wikipedia.org/wiki/Hermitian_matrix)                            |
 | [`UpperTriangular`](@ref)     | Upper [triangular matrix](https://en.wikipedia.org/wiki/Triangular_matrix)                    |
 | [`UnitUpperTriangular`](@ref) | Upper [triangular matrix](https://en.wikipedia.org/wiki/Triangular_matrix) with unit diagonal |
-| [`LowerTriangular`](@ref)     | Lower [triangular matrix](https://en.wikipedia.org/wiki/Triangular_matrix)                    |
+| [`LowerTriangular`](@ref)     | Lower [triangular matrix](https://en.wikipedia.org/wiki/Triangular_matrix)                    |     |
 | [`UnitLowerTriangular`](@ref) | Lower [triangular matrix](https://en.wikipedia.org/wiki/Triangular_matrix) with unit diagonal |
+| [`UpperHessenberg`](@ref)     | Upper [Hessenberg matrix](https://en.wikipedia.org/wiki/Hessenberg_matrix)
 | [`Tridiagonal`](@ref)         | [Tridiagonal matrix](https://en.wikipedia.org/wiki/Tridiagonal_matrix)                        |
 | [`SymTridiagonal`](@ref)      | Symmetric tridiagonal matrix                                                                  |
 | [`Bidiagonal`](@ref)          | Upper/lower [bidiagonal matrix](https://en.wikipedia.org/wiki/Bidiagonal_matrix)              |
@@ -186,6 +187,7 @@ as well as whether hooks to various optimized methods for them in LAPACK are ava
 | [`UnitUpperTriangular`](@ref) |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref)                                |
 | [`LowerTriangular`](@ref)     |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref)                                |
 | [`UnitLowerTriangular`](@ref) |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref)                                |
+| [`UpperHessenberg`](@ref)     |     |     |     | MM  | [`inv`](@ref), [`det`](@ref)                                |
 | [`SymTridiagonal`](@ref)      | M   | M   | MS  | MV  | [`eigmax`](@ref), [`eigmin`](@ref)                          |
 | [`Tridiagonal`](@ref)         | M   | M   | MS  | MV  |                                                             |
 | [`Bidiagonal`](@ref)          | M   | M   | MS  | MV  |                                                             |
@@ -269,6 +271,12 @@ Stacktrace:
 [...]
 ```
 
+If you need to solve many systems of the form `(A+μI)x = b` for the same `A` and different `μ`, it might be beneficial
+to first compute the Hessenberg factorization `F` of `A` via the [`hessenberg`](@ref) function.
+Given `F`, Julia employs an efficient algorithm for `(F+μ*I) \ b` (equivalent to `(A+μ*I)x \ b`) and related
+operations like determinants.
+
+
 ## [Matrix factorizations](@id man-linalg-factorizations)
 
 [Matrix factorizations (a.k.a. matrix decompositions)](https://en.wikipedia.org/wiki/Matrix_decomposition)
@@ -319,6 +327,7 @@ LinearAlgebra.LowerTriangular
 LinearAlgebra.UpperTriangular
 LinearAlgebra.UnitLowerTriangular
 LinearAlgebra.UnitUpperTriangular
+LinearAlgebra.UpperHessenberg
 LinearAlgebra.UniformScaling
 LinearAlgebra.lu
 LinearAlgebra.lu!
