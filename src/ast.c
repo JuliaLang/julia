@@ -63,11 +63,10 @@ jl_sym_t *gc_preserve_begin_sym; jl_sym_t *gc_preserve_end_sym;
 jl_sym_t *escape_sym;
 jl_sym_t *aliasscope_sym; jl_sym_t *popaliasscope_sym;
 
-void jl_fl_init_frontend(void);
-
 void jl_init_frontend(void)
 {
-    jl_fl_init_frontend();
+    if (jl_frontend.init)
+        jl_frontend.init();
 
     empty_sym = jl_symbol("");
     call_sym = jl_symbol("call");
@@ -172,8 +171,80 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
     return expr;
 }
 
+// DLLEXPORT wrappers for the frontend
+// Parsing
+JL_DLLEXPORT jl_value_t *jl_parse_all(const char *str, size_t len, const char *filename, size_t filename_len)
+{
+    assert(jl_frontend.jl_parse_all);
+    return jl_frontend.jl_parse_all(str, len, filename, filename_len);
+}
 
+JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len, int pos0, int greedy)
+{
+    assert(jl_frontend.jl_parse_string);
+    return jl_frontend.jl_parse_string(str, len, pos0, greedy);
+}
 
+JL_DLLEXPORT jl_value_t *jl_parse_eval_all(const char *fname,
+                                           const char *content, size_t contentlen,
+                                           jl_module_t *inmodule)
+{
+    assert(jl_frontend.jl_parse_eval_all);
+    return jl_frontend.jl_parse_eval_all(fname, content, contentlen, inmodule);
+}
+
+// Macro expand
+JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule)
+{
+    assert(jl_frontend.jl_macroexpand);
+    return jl_frontend.jl_macroexpand(expr, inmodule);
+}
+
+JL_DLLEXPORT jl_value_t *jl_macroexpand1(jl_value_t *expr, jl_module_t *inmodule)
+{
+    assert(jl_frontend.jl_macroexpand1);
+    return jl_frontend.jl_macroexpand1(expr, inmodule);
+}
+
+// Lowering
+JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmodule,
+                                            const char *file, int line)
+{
+    assert(jl_frontend.jl_expand_with_loc);
+    return jl_frontend.jl_expand_with_loc(expr, inmodule, file, line);
+}
+
+JL_DLLEXPORT jl_value_t *jl_expand_stmt_with_loc(jl_value_t *expr, jl_module_t *inmodule,
+                                                 const char *file, int line)
+{
+    assert(jl_frontend.jl_expand_stmt_with_loc);
+    return jl_frontend.jl_expand_stmt_with_loc(expr, inmodule, file, line);
+}
+
+// Informational queries
+JL_DLLEXPORT int jl_is_operator(char *sym)
+{
+    assert(jl_frontend.jl_is_operator);
+    return jl_frontend.jl_is_operator(sym);
+}
+
+JL_DLLEXPORT int jl_is_unary_operator(char *sym)
+{
+    assert(jl_frontend.jl_is_unary_operator);
+    return jl_frontend.jl_is_unary_operator(sym);
+}
+
+JL_DLLEXPORT int jl_is_unary_and_binary_operator(char *sym)
+{
+    assert(jl_frontend.jl_is_unary_and_binary_operator);
+    return jl_frontend.jl_is_unary_and_binary_operator(sym);
+}
+
+JL_DLLEXPORT int jl_operator_precedence(char *sym)
+{
+    assert(jl_frontend.jl_operator_precedence);
+    return jl_frontend.jl_operator_precedence(sym);
+}
 
 // Convenience wrappers
 JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule)

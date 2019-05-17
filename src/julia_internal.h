@@ -1120,4 +1120,37 @@ jl_assume_aligned(T ptr, unsigned align)
 }
 #endif
 
+// -- typemap.c -- //
+
+typedef struct _jl_frontend_t {
+    // Init
+    void (*init)(void);
+
+    // Parsing
+    jl_value_t *(*jl_parse_all)(const char *str, size_t len, const char *filename, size_t filename_len);
+    jl_value_t *(*jl_parse_string)(const char *str, size_t len, int pos0, int greedy);
+    jl_value_t *(*jl_parse_eval_all)(const char *fname,
+                                     const char *content, size_t contentlen,
+                                     jl_module_t *inmodule);
+
+    // Macro expand
+    jl_value_t *(*jl_macroexpand)(jl_value_t *expr, jl_module_t *inmodule);
+    jl_value_t *(*jl_macroexpand1)(jl_value_t *expr, jl_module_t *inmodule);
+
+    // Lowering
+    jl_value_t *(*jl_expand_with_loc)(jl_value_t *expr, jl_module_t *inmodule,
+                                      const char *file, int line);
+    jl_value_t *(*jl_expand_stmt_with_loc)(jl_value_t *expr, jl_module_t *inmodule,
+                                           const char *file, int line);
+
+    // Informational queries
+    int (*jl_is_operator)(char *sym);
+    int (*jl_is_unary_operator)(char *sym);
+    int (*jl_is_unary_and_binary_operator)(char *sym);
+    int (*jl_operator_precedence)(char *sym);
+} jl_frontend_t;
+
+JL_DLLEXPORT extern jl_frontend_t jl_frontend;
+
+
 #endif

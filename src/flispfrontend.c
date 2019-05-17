@@ -636,7 +636,7 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
 }
 
 // parse an entire string like a file, reading multiple expressions
-JL_DLLEXPORT jl_value_t *jl_parse_all(const char *str, size_t len, const char *filename, size_t filename_len)
+static jl_value_t *jl_fl_parse_all(const char *str, size_t len, const char *filename, size_t filename_len)
 {
     JL_TIMING(PARSING);
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
@@ -651,8 +651,8 @@ JL_DLLEXPORT jl_value_t *jl_parse_all(const char *str, size_t len, const char *f
 
 // this is for parsing one expression out of a string, keeping track of
 // the current position.
-JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
-                                         int pos0, int greedy)
+static jl_value_t *jl_fl_parse_string(const char *str, size_t len,
+                                      int pos0, int greedy)
 {
     JL_TIMING(PARSING);
     if (pos0 < 0 || pos0 > len) {
@@ -683,9 +683,9 @@ JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
 }
 
 // parse and eval a whole file, possibly reading from a string (`content`)
-jl_value_t *jl_parse_eval_all(const char *fname,
-                              const char *content, size_t contentlen,
-                              jl_module_t *inmodule)
+static jl_value_t *jl_fl_parse_eval_all(const char *fname,
+                                        const char *content, size_t contentlen,
+                                        jl_module_t *inmodule)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (ptls->in_pure_callback)
@@ -812,7 +812,7 @@ jl_value_t *jl_call_scm_on_ast_and_loc(const char *funcname, jl_value_t *expr, j
 
 // syntax tree accessors
 
-JL_DLLEXPORT int jl_is_operator(char *sym)
+static int jl_fl_is_operator(char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
@@ -821,7 +821,7 @@ JL_DLLEXPORT int jl_is_operator(char *sym)
     return res;
 }
 
-JL_DLLEXPORT int jl_is_unary_operator(char *sym)
+static int jl_fl_is_unary_operator(char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
@@ -830,7 +830,7 @@ JL_DLLEXPORT int jl_is_unary_operator(char *sym)
     return res;
 }
 
-JL_DLLEXPORT int jl_is_unary_and_binary_operator(char *sym)
+static int jl_fl_is_unary_and_binary_operator(char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
@@ -839,7 +839,7 @@ JL_DLLEXPORT int jl_is_unary_and_binary_operator(char *sym)
     return res;
 }
 
-JL_DLLEXPORT int jl_operator_precedence(char *sym)
+static int jl_fl_operator_precedence(char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
@@ -992,7 +992,7 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
     return expr;
 }
 
-JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule)
+static jl_value_t *jl_fl_macroexpand(jl_value_t *expr, jl_module_t *inmodule)
 {
     JL_TIMING(LOWERING);
     JL_GC_PUSH1(&expr);
@@ -1003,7 +1003,7 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule)
     return expr;
 }
 
-JL_DLLEXPORT jl_value_t *jl_macroexpand1(jl_value_t *expr, jl_module_t *inmodule)
+static jl_value_t *jl_fl_macroexpand1(jl_value_t *expr, jl_module_t *inmodule)
 {
     JL_TIMING(LOWERING);
     JL_GC_PUSH1(&expr);
@@ -1014,8 +1014,8 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand1(jl_value_t *expr, jl_module_t *inmodule
     return expr;
 }
 
-JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmodule,
-                                            const char *file, int line)
+static jl_value_t *jl_fl_expand_with_loc(jl_value_t *expr, jl_module_t *inmodule,
+                                         const char *file, int line)
 {
     JL_TIMING(LOWERING);
     JL_GC_PUSH1(&expr);
@@ -1027,8 +1027,8 @@ JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmod
 }
 
 // expand in a context where the expression value is unused
-JL_DLLEXPORT jl_value_t *jl_expand_stmt_with_loc(jl_value_t *expr, jl_module_t *inmodule,
-                                                 const char *file, int line)
+static jl_value_t *jl_fl_expand_stmt_with_loc(jl_value_t *expr, jl_module_t *inmodule,
+                                              const char *file, int line)
 {
     JL_TIMING(LOWERING);
     JL_GC_PUSH1(&expr);
@@ -1038,6 +1038,23 @@ JL_DLLEXPORT jl_value_t *jl_expand_stmt_with_loc(jl_value_t *expr, jl_module_t *
     JL_GC_POP();
     return expr;
 }
+
+jl_frontend_t jl_frontend = {
+    .init = jl_fl_init_frontend,
+    .jl_parse_all = jl_fl_parse_all,
+    .jl_parse_string = jl_fl_parse_string,
+    .jl_parse_eval_all = jl_fl_parse_eval_all,
+
+    .jl_macroexpand = jl_fl_macroexpand,
+    .jl_macroexpand1 = jl_fl_macroexpand1,
+    .jl_expand_with_loc = jl_fl_expand_with_loc,
+    .jl_expand_stmt_with_loc = jl_fl_expand_stmt_with_loc,
+
+    .jl_is_operator = jl_fl_is_operator,
+    .jl_is_unary_operator = jl_fl_is_unary_operator,
+    .jl_is_unary_and_binary_operator = jl_fl_is_unary_and_binary_operator,
+    .jl_operator_precedence = jl_fl_operator_precedence,
+};
 
 #ifdef __cplusplus
 }
