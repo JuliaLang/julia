@@ -1048,15 +1048,17 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
     env.i = env.j = 0;
     env.vx = env.vy = 0;
     env.vvx = env.vvy = JL_VARARG_NONE;
-    if (env.lx > 0)
+    jl_varbinding_t *xbb = NULL;
+    if (env.lx > 0) {
         env.vvx = jl_vararg_kind(jl_tparam(env.xd, env.lx-1));
+        if (env.vvx == JL_VARARG_BOUND)
+            xbb = lookup(e, (jl_tvar_t *)jl_tparam1(jl_tparam(env.xd, env.lx - 1)));
+    }
     if (env.ly > 0)
         env.vvy = jl_vararg_kind(jl_tparam(env.yd, env.ly-1));
-    if (env.vvx != JL_VARARG_NONE && env.vvx != JL_VARARG_INT) {
-        jl_varbinding_t *bb = NULL;
-        if (env.vvx == JL_VARARG_BOUND)
-            bb = lookup(e, (jl_tvar_t*)jl_tparam1(jl_tparam(env.xd, env.lx-1)));
-        if (env.vvx == JL_VARARG_UNBOUND || (bb && !bb->right)) {
+    if (env.vvx != JL_VARARG_NONE && env.vvx != JL_VARARG_INT &&
+        (!xbb || !jl_is_long(xbb->lb))) {
+        if (env.vvx == JL_VARARG_UNBOUND || (xbb && !xbb->right)) {
             // Unbounded on the LHS, bounded on the RHS
             if (env.vvy == JL_VARARG_NONE || env.vvy == JL_VARARG_INT)
                 return 0;
@@ -1071,6 +1073,8 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
         size_t nx = env.lx;
         if (env.vvx == JL_VARARG_INT)
             nx += jl_vararg_length(jl_tparam(env.xd, env.lx-1)) - 1;
+        else if (xbb && jl_is_long(xbb->lb))
+            nx += jl_unbox_long(xbb->lb) - 1;
         else
             assert(env.vvx == JL_VARARG_NONE);
         size_t ny = env.ly;

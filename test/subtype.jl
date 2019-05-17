@@ -1584,3 +1584,7 @@ let T31805 = Tuple{Type{Tuple{}}, Tuple{Vararg{Int8, A}}} where A,
     S31805 = Tuple{Type{Tuple{Vararg{Int32, A}}}, Tuple{Vararg{Int16, A}}} where A
     @test !issub(T31805, S31805)
 end
+@testintersect(
+    Tuple{Array{Tuple{Vararg{Int64,N}},N},Tuple{Vararg{Array{Int64,1},N}}} where N,
+    Tuple{Array{Tuple{Int64},1}, Tuple},
+    Tuple{Array{Tuple{Int64},1},Tuple{Array{Int64,1}}})
