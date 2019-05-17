@@ -75,6 +75,7 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
                 sleep(3)
                 process_running(p) && kill(p, Base.SIGKILL)
             end
+            wait(p)
         end
 
         for (challenge, response) in challenges
