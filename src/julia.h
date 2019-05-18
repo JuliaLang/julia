@@ -1274,6 +1274,14 @@ STATIC_INLINE jl_value_t *jl_unwrap_vararg(jl_value_t *v) JL_NOTSAFEPOINT
     return jl_tparam0(jl_unwrap_unionall(v));
 }
 
+STATIC_INLINE size_t jl_vararg_length(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    assert(jl_is_vararg_type(v));
+    jl_value_t *len = jl_tparam1(jl_unwrap_unionall(v));
+    assert(jl_is_long(len));
+    return jl_unbox_long(len);
+}
+
 STATIC_INLINE jl_vararg_kind_t jl_vararg_kind(jl_value_t *v) JL_NOTSAFEPOINT
 {
     if (!jl_is_vararg_type(v))
