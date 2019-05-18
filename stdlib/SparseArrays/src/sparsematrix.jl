@@ -1321,8 +1321,8 @@ function _sparse_findnextnz(m::SparseMatrixCSC, ij::CartesianIndex{2})
     if lo <= n <= hi-1
         return CartesianIndex(m.rowval[n], col)
     end
-    nextcol = findnext(c->(c>hi), m.colptr, col+1)
-    nextcol === nothing && return nothing
+    nextcol = searchsortedfirst(m.colptr, hi + 1, col + 1, length(m.colptr), Base.Order.Forward)
+    nextcol > length(m.colptr) && return nothing
     nextlo = m.colptr[nextcol-1]
     return CartesianIndex(m.rowval[nextlo], nextcol - 1)
 end
@@ -1336,8 +1336,8 @@ function _sparse_findprevnz(m::SparseMatrixCSC, ij::CartesianIndex{2})
     if lo <= n <= hi-1
         return CartesianIndex(m.rowval[n], col)
     end
-    prevcol = findprev(c->(c<lo), m.colptr, col-1)
-    prevcol === nothing && return nothing
+    prevcol = searchsortedlast(m.colptr, lo - 1, 1, col - 1, Base.Order.Forward)
+    prevcol < 1 && return nothing
     prevhi = m.colptr[prevcol+1]
     return CartesianIndex(m.rowval[prevhi-1], prevcol)
 end
