@@ -1082,10 +1082,19 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
                 continue;
             if (jl_is_datatype(pi))
                 continue;
+            if (jl_is_vararg_type(pi)) {
+                pi = jl_unwrap_vararg(pi);
+                if (jl_has_free_typevars(pi))
+                    continue;
+            }
             // normalize types equal to wrappers (prepare for wrapper_id)
             jl_value_t *tw = extract_wrapper(pi);
             if (tw && tw != pi && (tn != jl_type_typename || jl_typeof(pi) == jl_typeof(tw)) &&
                     jl_types_equal(pi, tw)) {
+                if (jl_is_vararg_type(iparams[i])) {
+                    tw = jl_wrap_vararg(tw, jl_tparam1(jl_unwrap_unionall(iparams[i])));
+                    tw = jl_rewrap_unionall(tw, iparams[i]);
+                }
                 iparams[i] = tw;
                 if (p) jl_gc_wb(p, tw);
             }
@@ -1138,6 +1147,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         }
         int did_normalize = 0;
         jl_value_t *last2 = normalize_vararg(last);
+        assert(!jl_is_unionall(last2) || !jl_is_unionall(((jl_unionall_t*)last2)->body));
         if (last2 != last) {
             last = last2;
             did_normalize = 1;
