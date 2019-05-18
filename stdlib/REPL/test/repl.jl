@@ -729,24 +729,35 @@ ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
 
 let exename = Base.julia_cmd()
     # Test REPL in dumb mode
-    if !Sys.iswindows()
-        with_fake_pty() do pty_slave, pty_master
-            nENV = copy(ENV)
-            nENV["TERM"] = "dumb"
-            p = run(setenv(`$exename --startup-file=no -q`,nENV),pty_slave,pty_slave,pty_slave,wait=false)
-            output = readuntil(pty_master,"julia> ",keep=true)
-            if ccall(:jl_running_on_valgrind,Cint,()) == 0
-                # If --trace-children=yes is passed to valgrind, we will get a
-                # valgrind banner here, not just the prompt.
-                @test output == "julia> "
-            end
-            write(pty_master,"1\nexit()\n")
-
-            wait(p)
-            output = readuntil(pty_master,' ',keep=true)
-            @test output == "1\r\nexit()\r\n1\r\n\r\njulia> "
-            @test bytesavailable(pty_master) == 0
+    with_fake_pty() do pty_slave, pty_master
+        nENV = copy(ENV)
+        nENV["TERM"] = "dumb"
+        p = run(detach(setenv(`$exename --startup-file=no -q`, nENV)), pty_slave, pty_slave, pty_slave, wait=false)
+        Base.close_stdio(pty_slave)
+        output = readuntil(pty_master, "julia> ", keep=true)
+        if ccall(:jl_running_on_valgrind, Cint,()) == 0
+            # If --trace-children=yes is passed to valgrind, we will get a
+            # valgrind banner here, not just the prompt.
+            @test output == "julia> "
         end
+        write(pty_master, "1\nexit()\n")
+
+        output = readuntil(pty_master, ' ', keep=true)
+        if Sys.iswindows()
+	    # Our fake pty is actually a pipe, and thus lacks the input echo feature of posix
+            @test output == "1\n\njulia> "
+        else
+            @test output == "1\r\nexit()\r\n1\r\n\r\njulia> "
+        end
+        @test bytesavailable(pty_master) == 0
+        @test try # possibly consume child-exited notification
+                eof(pty_master)
+            catch ex
+                (ex isa Base.IOError && ex.code == Base.UV_EIO) || rethrow()
+                eof(pty_master)
+            end
+        @test read(pty_master, String) == ""
+        wait(p)
     end
 
     # Test stream mode

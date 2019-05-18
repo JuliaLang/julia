@@ -1,8 +1,7 @@
 # Base.Cartesian
 
 The (non-exported) Cartesian module provides macros that facilitate writing multidimensional algorithms.
-It is hoped that Cartesian will not, in the long term, be necessary; however, at present it is
-one of the few ways to write compact and performant multidimensional code.
+Most often you can write such algorithms with [straightforward techniques](https://julialang.org/blog/2016/02/iteration); however, there are a few cases where `Base.Cartesian` is still useful or necessary.
 
 ## Principles of usage
 
@@ -72,10 +71,7 @@ DocTestSetup = nothing
 
 The first argument to both of these macros is the number of expressions, which must be an integer.
 When you're writing a function that you intend to work in multiple dimensions, this may not be
-something you want to hard-code. If you're writing code that you need to work with older Julia
-versions, currently you should use the `@ngenerate` macro described in [an older version of this documentation](https://docs.julialang.org/en/release-0.3/devdocs/cartesian/#supplying-the-number-of-expressions).
-
-Starting in Julia 0.4-pre, the recommended approach is to use a `@generated function`.  Here's
+something you want to hard-code. The recommended approach is to use a `@generated function`.  Here's
 an example:
 
 ```julia

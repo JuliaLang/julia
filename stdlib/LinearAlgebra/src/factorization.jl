@@ -71,12 +71,17 @@ function Base.show(io::IO, ::MIME"text/plain", x::Transpose{<:Any,<:Factorizatio
 end
 
 # With a real lhs and complex rhs with the same precision, we can reinterpret
-# the complex rhs as a real rhs with twice the number of columns
+# the complex rhs as a real rhs with twice the number of columns or rows
 function (\)(F::Factorization{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
     require_one_based_indexing(B)
     c2r = reshape(copy(transpose(reinterpret(T, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
     x = ldiv!(F, c2r)
     return reshape(copy(reinterpret(Complex{T}, copy(transpose(reshape(x, div(length(x), 2), 2))))), _ret_size(F, B))
+end
+function (/)(B::VecOrMat{Complex{T}}, F::Factorization{T}) where T<:BlasReal
+    require_one_based_indexing(B)
+    x = rdiv!(copy(reinterpret(T, B)), F)
+    return copy(reinterpret(Complex{T}, x))
 end
 
 function \(F::Factorization, B::AbstractVecOrMat)
@@ -94,6 +99,24 @@ function \(adjF::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat)
     copyto!(BB, B)
     ldiv!(adjoint(F), BB)
 end
+
+function /(B::AbstractMatrix, F::Factorization)
+    require_one_based_indexing(B)
+    TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
+    BB = similar(B, TFB, size(B))
+    copyto!(BB, B)
+    rdiv!(BB, F)
+end
+function /(B::AbstractMatrix, adjF::Adjoint{<:Any,<:Factorization})
+    require_one_based_indexing(B)
+    F = adjF.parent
+    TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
+    BB = similar(B, TFB, size(B))
+    copyto!(BB, B)
+    rdiv!(BB, adjoint(F))
+end
+/(adjB::AdjointAbsVec, adjF::Adjoint{<:Any,<:Factorization}) = adjoint(adjF.parent \ adjB.parent)
+/(B::TransposeAbsVec, adjF::Adjoint{<:Any,<:Factorization}) = adjoint(adjF.parent \ adjoint(B))
 
 # support the same 3-arg idiom as in our other in-place A_*_B functions:
 function ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat)
@@ -120,3 +143,10 @@ end
 # fallback methods for transposed solves
 \(F::Transpose{<:Any,<:Factorization{<:Real}}, B::AbstractVecOrMat) = adjoint(F.parent) \ B
 \(F::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat) = conj.(adjoint(F.parent) \ conj.(B))
+
+/(B::AbstractMatrix, F::Transpose{<:Any,<:Factorization{<:Real}}) = B / adjoint(F.parent)
+/(B::AbstractMatrix, F::Transpose{<:Any,<:Factorization}) = conj.(conj.(B) / adjoint(F.parent))
+/(B::AdjointAbsVec, F::Transpose{<:Any,<:Factorization{<:Real}}) = B / adjoint(F.parent)
+/(B::TransposeAbsVec, F::Transpose{<:Any,<:Factorization{<:Real}}) = B / adjoint(F.parent)
+/(B::AdjointAbsVec, F::Transpose{<:Any,<:Factorization}) = conj.(conj.(B) / adjoint(F.parent))
+/(B::TransposeAbsVec, F::Transpose{<:Any,<:Factorization}) = conj.(conj.(B) / adjoint(F.parent))

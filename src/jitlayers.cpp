@@ -315,7 +315,7 @@ void JuliaOJIT::DebugObjectRegistrar::registerObject(RTDyldObjHandleT H, const O
                                                        std::move(NewBuffer));
     }
     else {
-        JIT.NotifyFinalizer(*(SavedObject.getBinary()), *LO);
+        JIT.NotifyFinalizer(H, *(SavedObject.getBinary()), *LO);
     }
 
     SavedObjects.push_back(std::move(SavedObject));
@@ -575,11 +575,17 @@ void JuliaOJIT::RegisterJITEventListener(JITEventListener *L)
     EventListeners.push_back(L);
 }
 
-void JuliaOJIT::NotifyFinalizer(const object::ObjectFile &Obj,
+void JuliaOJIT::NotifyFinalizer(RTDyldObjHandleT Key,
+                                const object::ObjectFile &Obj,
                                 const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo)
 {
     for (auto &Listener : EventListeners)
+#if JL_LLVM_VERSION >= 80000
+        Listener->notifyObjectLoaded(Key, Obj, LoadedObjectInfo);
+#else
         Listener->NotifyObjectEmitted(Obj, LoadedObjectInfo);
+    (void)Key;
+#endif
 }
 
 const DataLayout& JuliaOJIT::getDataLayout() const

@@ -52,6 +52,7 @@ export
     UpperTriangular,
     UnitLowerTriangular,
     UnitUpperTriangular,
+    UpperHessenberg,
     Diagonal,
     UniformScaling,
 
@@ -356,7 +357,6 @@ include("triangular.jl")
 
 include("factorization.jl")
 include("qr.jl")
-include("hessenberg.jl")
 include("lq.jl")
 include("eigen.jl")
 include("svd.jl")
@@ -367,6 +367,7 @@ include("bunchkaufman.jl")
 include("diagonal.jl")
 include("bidiag.jl")
 include("uniformscaling.jl")
+include("hessenberg.jl")
 include("givens.jl")
 include("special.jl")
 include("bitarray.jl")

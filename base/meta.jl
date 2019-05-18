@@ -12,15 +12,70 @@ export quot,
        show_sexpr,
        @dump
 
+"""
+    Meta.quot(ex)::Expr
+
+Quote expression `ex` to produce an expression with head `quote`. This can for instance be used to represent objects of type `Expr` in the AST.
+See also the manual section about [QuoteNode](@ref man-quote-node).
+
+# Examples
+```jldoctest
+julia> eval(quot(:x))
+:x
+
+julia> dump(Meta.quot(:x))
+Expr
+  head: Symbol quote
+  args: Array{Any}((1,))
+    1: Symbol x
+
+julia> eval(Meta.quot(:(1+2)))
+:(1 + 2)
+```
+"""
 quot(ex) = Expr(:quote, ex)
 
+"""
+    Meta.isexpr(ex, head[, n])::Bool
+
+Check if `ex` is an expression with head `head` and `n` arguments.
+
+# Examples
+```jldoctest
+julia> ex = :(f(x))
+:(f(x))
+
+julia> Meta.isexpr(ex, :block)
+false
+
+julia> Meta.isexpr(ex, :call)
+true
+
+julia> Meta.isexpr(ex, [:block, :call]) # multiple possible heads
+true
+
+julia> Meta.isexpr(ex, :call, 1)
+false
+
+julia> Meta.isexpr(ex, :call, 2)
+true
+```
+"""
 isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
 isexpr(@nospecialize(ex), heads::Union{Set,Vector,Tuple}) = isa(ex, Expr) && in(ex.head, heads)
 isexpr(@nospecialize(ex), heads, n::Int) = isexpr(ex, heads) && length(ex.args) == n
 
+"""
+    Meta.show_sexpr([io::IO,], ex)
 
-# ---- show_sexpr: print an AST as an S-expression ----
+Show expression `ex` as a lisp style S-expression.
 
+# Examples
+```jldoctest
+julia> Meta.show_sexpr(:(f(x, g(y,z))))
+(:call, :f, :x, (:call, :g, :y, :z))
+```
+"""
 show_sexpr(ex) = show_sexpr(stdout, ex)
 show_sexpr(io::IO, ex) = show_sexpr(io, ex, 0)
 show_sexpr(io::IO, ex, indent::Int) = show(io, ex)

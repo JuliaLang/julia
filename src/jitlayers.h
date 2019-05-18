@@ -127,13 +127,19 @@ class JuliaOJIT {
     };
 
 public:
+#if JL_LLVM_VERSION >= 80000
+    typedef orc::LegacyRTDyldObjectLinkingLayer ObjLayerT;
+    typedef orc::LegacyIRCompileLayer<ObjLayerT,CompilerT> CompileLayerT;
+    typedef orc::VModuleKey ModuleHandleT;
+#elif JL_LLVM_VERSION >= 70000
     typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
     typedef orc::IRCompileLayer<ObjLayerT,CompilerT> CompileLayerT;
-    #if JL_LLVM_VERSION >= 70000
     typedef orc::VModuleKey ModuleHandleT;
-    #else
+#else
+    typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
+    typedef orc::IRCompileLayer<ObjLayerT,CompilerT> CompileLayerT;
     typedef CompileLayerT::ModuleHandleT ModuleHandleT;
-    #endif
+#endif
     typedef StringMap<void*> SymbolTableT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
 
@@ -141,7 +147,9 @@ public:
 
     void RegisterJITEventListener(JITEventListener *L);
     std::vector<JITEventListener *> EventListeners;
-    void NotifyFinalizer(const object::ObjectFile &Obj, const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo);
+    void NotifyFinalizer(RTDyldObjHandleT Key,
+                         const object::ObjectFile &Obj,
+                         const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo);
     void addGlobalMapping(StringRef Name, uint64_t Addr);
     void addGlobalMapping(const GlobalValue *GV, void *Addr);
     void *getPointerToGlobalIfAvailable(StringRef S);

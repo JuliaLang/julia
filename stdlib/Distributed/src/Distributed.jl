@@ -14,6 +14,7 @@ using Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes, wait_connecte
             VERSION_STRING, binding_module, atexit, julia_exename,
             julia_cmd, AsyncGenerator, acquire, release, invokelatest,
             shell_escape_posixly, uv_error, something, notnothing, isbuffered
+using Base.Threads: Event
 
 using Serialization, Sockets
 import Serialization: serialize, deserialize

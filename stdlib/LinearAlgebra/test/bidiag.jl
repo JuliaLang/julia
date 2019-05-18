@@ -218,6 +218,9 @@ Random.seed!(1)
                 tx = Tfull \ b
                 @test_throws DimensionMismatch LinearAlgebra.naivesub!(T,Vector{elty}(undef,n+1))
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+                x = transpose(T) \ b
+                tx = transpose(Tfull) \ b
+                @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
                 @testset "Generic Mat-vec ops" begin
                     @test T*b ≈ Tfull*b
                     @test T'*b ≈ Tfull'*b
@@ -297,35 +300,14 @@ Random.seed!(1)
             # test pass-through of mul! for AbstractTriangular*Bidiagonal
             Tri = UpperTriangular(diagm(1 => T.ev))
             @test Array(Tri*T) ≈ Array(Tri)*Array(T)
-
-            # Issue #31870
-            # Bi/Tri/Sym times Diagonal
-            Diag = Diagonal(rand(elty, 10))
-            BidiagU = Bidiagonal(rand(elty, 10), rand(elty, 9), 'U')
-            BidiagL = Bidiagonal(rand(elty, 10), rand(elty, 9), 'L')
-            Tridiag = Tridiagonal(rand(elty, 9), rand(elty, 10), rand(elty, 9))
-            SymTri = SymTridiagonal(rand(elty, 10), rand(elty, 9))
-
-            @test BidiagU*Diag ≈ Matrix(BidiagU)*Matrix(Diag)
-            @test typeof(BidiagU*Diag) <: Bidiagonal
-            @test BidiagL*Diag ≈ Matrix(BidiagL)*Matrix(Diag)
-            @test typeof(BidiagL*Diag) <: Bidiagonal
-            @test Tridiag*Diag ≈ Matrix(Tridiag)*Matrix(Diag)
-            @test typeof(Tridiag*Diag) <: Tridiagonal
-            @test SymTri*Diag ≈ Matrix(SymTri)*Matrix(Diag)
-            @test typeof(SymTri*Diag) <: Tridiagonal
-
-            @test Diag*BidiagU ≈ Matrix(Diag)*Matrix(BidiagU)
-            @test typeof(BidiagU*Diag) <: Bidiagonal
-            @test Diag*BidiagL ≈ Matrix(Diag)*Matrix(BidiagL)
-            @test typeof(Diag*BidiagL) <: Bidiagonal
-            @test Diag*Tridiag ≈ Matrix(Diag)*Matrix(Tridiag)
-            @test typeof(Diag*Tridiag) <: Tridiagonal
-            @test Diag*SymTri ≈ Matrix(Diag)*Matrix(SymTri)
-            @test typeof(Diag*SymTri) <: Tridiagonal
+            # test mul! for Diagonal*Bidiagonal
+            C = Matrix{elty}(undef, n, n)
+            Dia = Diagonal(T.dv)
+            @test mul!(C, Dia, T) ≈ Array(Dia)*Array(T)
         end
 
         @test inv(T)*Tfull ≈ Matrix(I, n, n)
+        @test factorize(T) === T
     end
     BD = Bidiagonal(dv, ev, :U)
     @test Matrix{Complex{Float64}}(BD) == BD

@@ -764,11 +764,14 @@ end
         @test_logs (Warn,) foo(1)
         @test_logs (Warn,) match_mode=:any @info "foo"
         @test_logs (Debug,) @debug "foo"
+        @test_logs (Warn,) error()
     end
-    @test length(fails) == 3
+    @test length(fails) == 4
     @test fails[1] isa Test.LogTestFailure
     @test fails[2] isa Test.LogTestFailure
     @test fails[3] isa Test.LogTestFailure
+    @test fails[4] isa Test.Error
+    @test startswith(fails[4].value, "ErrorException")
 end
 
 function newfunc()

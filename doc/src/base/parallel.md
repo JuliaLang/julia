@@ -30,7 +30,7 @@ Base.Threads.Condition
 Base.notify
 Base.schedule
 
-Base.Event
+Base.Threads.Event
 
 Base.Semaphore
 Base.acquire

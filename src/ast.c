@@ -892,8 +892,8 @@ finally:
         if (jl_loaderror_type == NULL)
             jl_rethrow();
         else
-            jl_throw(jl_new_struct(jl_loaderror_type, form, result,
-                                   jl_current_exception()));
+            jl_rethrow_other(jl_new_struct(jl_loaderror_type, form, result,
+                                           jl_current_exception()));
     }
     JL_GC_POP();
     return result;
@@ -1030,13 +1030,14 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
     jl_value_t *result;
     JL_TRY {
         margs[0] = jl_toplevel_eval(*ctx, margs[0]);
-        jl_method_instance_t *mfunc = jl_method_lookup(jl_gf_mtable(margs[0]), margs, nargs, 1, world);
+        jl_method_instance_t *mfunc = jl_method_lookup(margs, nargs, 1, world);
+        JL_GC_PROMISE_ROOTED(mfunc);
         if (mfunc == NULL) {
-            jl_method_error((jl_function_t*)margs[0], margs, nargs, world);
+            jl_method_error(margs[0], &margs[1], nargs, world);
             // unreachable
         }
         *ctx = mfunc->def.method->module;
-        result = jl_invoke(mfunc, margs, nargs);
+        result = jl_invoke(margs[0], &margs[1], nargs - 1, mfunc);
     }
     JL_CATCH {
         if (jl_loaderror_type == NULL) {
@@ -1050,8 +1051,8 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
             else
                 margs[0] = jl_cstr_to_string("<macrocall>");
             margs[1] = jl_fieldref(lno, 0); // extract and allocate line number
-            jl_throw(jl_new_struct(jl_loaderror_type, margs[0], margs[1],
-                                   jl_current_exception()));
+            jl_rethrow_other(jl_new_struct(jl_loaderror_type, margs[0], margs[1],
+                                           jl_current_exception()));
         }
     }
     ptls->world_age = last_age;

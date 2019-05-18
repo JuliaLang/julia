@@ -80,7 +80,7 @@ function getindex(x::Number, i::Integer)
 end
 function getindex(x::Number, I::Integer...)
     @_inline_meta
-    @boundscheck all([i == 1 for i in I]) || throw(BoundsError())
+    @boundscheck all(isone, I) || throw(BoundsError())
     x
 end
 first(x::Number) = x

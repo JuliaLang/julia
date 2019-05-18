@@ -1799,14 +1799,20 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 ChangesMade = true;
                 ++it;
                 continue;
-            } else if (CC == JLCALL_CC ||
-                       CC == JLCALL_F_CC) {
+            } else if (CC == JLCALL_F_CC ||
+                       CC == JLCALL_F2_CC) {
                 assert(T_prjlvalue);
                 size_t nargs = CI->getNumArgOperands();
-                size_t nframeargs = nargs - (CC == JLCALL_F_CC);
-                SmallVector<Value *, 3> ReplacementArgs;
+                size_t nframeargs = nargs;
+                if (CC == JLCALL_F_CC)
+                    nframeargs -= 1;
+                else if (CC == JLCALL_F2_CC)
+                    nframeargs -= 2;
+                SmallVector<Value*, 4> ReplacementArgs;
                 auto it = CI->arg_begin();
-                if (CC == JLCALL_F_CC) {
+                assert(it != CI->arg_end());
+                ReplacementArgs.push_back(*(it++));
+                if (CC != JLCALL_F_CC) {
                     assert(it != CI->arg_end());
                     ReplacementArgs.push_back(*(it++));
                 }
@@ -1821,11 +1827,17 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                     (llvm::Value*)ConstantPointerNull::get(T_pprjlvalue) :
                     (llvm::Value*)Frame);
                 ReplacementArgs.push_back(ConstantInt::get(T_int32, nframeargs));
-                FunctionType *FTy = CC == JLCALL_F_CC ?
-                    FunctionType::get(T_prjlvalue, {T_prjlvalue,
-                        T_pprjlvalue, T_int32}, false) :
-                    FunctionType::get(T_prjlvalue,
-                        {T_pprjlvalue, T_int32}, false);
+                if (CC == JLCALL_F2_CC) {
+                    // move trailing arg to the end now
+                    Value *front = ReplacementArgs.front();
+                    ReplacementArgs.erase(ReplacementArgs.begin());
+                    ReplacementArgs.push_back(front);
+                }
+                FunctionType *FTy;
+                if  (CC == JLCALL_F_CC) // jl_fptr_args
+                    FTy = FunctionType::get(T_prjlvalue, {T_prjlvalue, T_pprjlvalue, T_int32}, false);
+                else // CC == JLCALL_F2_CC // jl_invoke
+                    FTy = FunctionType::get(T_prjlvalue, {T_prjlvalue, T_pprjlvalue, T_int32, T_prjlvalue}, false);
                 Value *newFptr = Builder.CreateBitCast(callee, FTy->getPointerTo());
                 CallInst *NewCall = CallInst::Create(newFptr, ReplacementArgs, "", CI);
                 NewCall->setTailCallKind(CI->getTailCallKind());

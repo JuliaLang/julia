@@ -203,7 +203,7 @@ struct _jl_code_instance_t;
 // otherwise the leaf entries are stored sorted, linearly
 typedef jl_value_t jl_typemap_t;
 
-typedef jl_value_t *(jl_call_t)(struct _jl_code_instance_t*, jl_value_t**, uint32_t);
+typedef jl_value_t *(jl_call_t)(jl_value_t*, jl_value_t**, uint32_t, struct _jl_code_instance_t*);
 typedef jl_call_t *jl_callptr_t;
 
 // "speccall" calling convention signatures.
@@ -214,7 +214,7 @@ typedef jl_value_t *(*jl_fptr_args_t)(jl_value_t*, jl_value_t**, uint32_t);
 JL_DLLEXPORT extern jl_call_t jl_fptr_const_return;
 
 JL_DLLEXPORT extern jl_call_t jl_fptr_sparam;
-typedef jl_value_t *(*jl_fptr_sparam_t)(jl_svec_t*, jl_value_t*, jl_value_t**, uint32_t);
+typedef jl_value_t *(*jl_fptr_sparam_t)(jl_value_t*, jl_value_t**, uint32_t, jl_svec_t*);
 
 JL_DLLEXPORT extern jl_call_t jl_fptr_interpret_call;
 
@@ -521,7 +521,7 @@ typedef struct _jl_typemap_level_t {
 // contains the TypeMap for one Type
 typedef struct _jl_methtable_t {
     JL_DATA_TYPE
-    jl_sym_t *name;
+    jl_sym_t *name; // sometimes a hack used by serialization to handle kwsorter
     jl_typemap_t *defs;
     jl_typemap_t *cache;
     intptr_t max_args;  // max # of non-vararg arguments in a signature
@@ -530,6 +530,7 @@ typedef struct _jl_methtable_t {
     jl_array_t *backedges;
     jl_mutex_t writelock;
     uint8_t offs;  // 0, or 1 to skip splitting typemap on first (function) argument
+    uint8_t frozen; // whether this accepts adding new methods
 } jl_methtable_t;
 
 typedef struct {
@@ -552,7 +553,6 @@ extern JL_DLLEXPORT jl_unionall_t *jl_type_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_unionall_t *jl_typetype_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_typename_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_typename_t *jl_type_typename JL_GLOBALLY_ROOTED;
-extern JL_DLLEXPORT jl_datatype_t *jl_sym_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_symbol_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_ssavalue_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_abstractslot_type JL_GLOBALLY_ROOTED;
@@ -567,7 +567,6 @@ extern JL_DLLEXPORT jl_datatype_t *jl_emptytuple_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_unionall_t *jl_anytuple_type_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_unionall_t *jl_vararg_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_typename_t *jl_vararg_typename JL_GLOBALLY_ROOTED;
-extern JL_DLLEXPORT jl_datatype_t *jl_task_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_function_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_builtin_type JL_GLOBALLY_ROOTED;
 
@@ -625,6 +624,7 @@ extern JL_DLLEXPORT jl_unionall_t *jl_ref_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_typename_t *jl_pointer_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_typename_t *jl_namedtuple_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_unionall_t *jl_namedtuple_type JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_datatype_t *jl_task_type JL_GLOBALLY_ROOTED;
 
 extern JL_DLLEXPORT jl_value_t *jl_array_uint8_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_value_t *jl_array_any_type JL_GLOBALLY_ROOTED;
@@ -896,6 +896,8 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x) JL_NOTSAFEPO
 #define jl_gf_name(f)   (jl_gf_mtable(f)->name)
 
 // struct type info
+JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st);
+#define jl_get_fieldtypes(st) ((st)->types ? (st)->types : jl_compute_fieldtypes((st)))
 STATIC_INLINE jl_svec_t *jl_field_names(jl_datatype_t *st) JL_NOTSAFEPOINT
 {
     jl_svec_t *names = st->names;
@@ -907,8 +909,10 @@ STATIC_INLINE jl_sym_t *jl_field_name(jl_datatype_t *st, size_t i) JL_NOTSAFEPOI
 {
     return (jl_sym_t*)jl_svecref(jl_field_names(st), i);
 }
-#define jl_field_type(st,i)    jl_svecref(((jl_datatype_t*)st)->types, (i))
-#define jl_field_count(st)     jl_svec_len(((jl_datatype_t*)st)->types)
+STATIC_INLINE jl_value_t *jl_field_type(jl_datatype_t *st, size_t i)
+{
+    return jl_svecref(jl_get_fieldtypes(st), i);
+}
 #define jl_datatype_size(t)    (((jl_datatype_t*)t)->size)
 #define jl_datatype_align(t)   (((jl_datatype_t*)t)->layout->alignment)
 #define jl_datatype_nbits(t)   ((((jl_datatype_t*)t)->size)*8)
@@ -993,7 +997,7 @@ static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEP
 #define jl_is_uint32(v)      jl_typeis(v,jl_uint32_type)
 #define jl_is_uint64(v)      jl_typeis(v,jl_uint64_type)
 #define jl_is_bool(v)        jl_typeis(v,jl_bool_type)
-#define jl_is_symbol(v)      jl_typeis(v,jl_sym_type)
+#define jl_is_symbol(v)      jl_typeis(v,jl_symbol_type)
 #define jl_is_ssavalue(v)    jl_typeis(v,jl_ssavalue_type)
 #define jl_is_slot(v)        (jl_typeis(v,jl_slotnumber_type) || jl_typeis(v,jl_typedslot_type))
 #define jl_is_expr(v)        jl_typeis(v,jl_expr_type)
@@ -1596,14 +1600,14 @@ STATIC_INLINE int jl_vinfo_usedundef(uint8_t vi)
 
 // calling into julia ---------------------------------------------------------
 
-JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs);
-JL_DLLEXPORT jl_value_t *jl_invoke(jl_method_instance_t *meth, jl_value_t **args, uint32_t nargs);
+JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs);
+JL_DLLEXPORT jl_value_t *jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *meth);
 JL_DLLEXPORT int32_t jl_invoke_api(jl_code_instance_t *linfo);
 
 STATIC_INLINE
 jl_value_t *jl_apply(jl_value_t **args, uint32_t nargs)
 {
-    return jl_apply_generic(args, nargs);
+    return jl_apply_generic(args[0], &args[1], nargs - 1);
 }
 
 JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs);
