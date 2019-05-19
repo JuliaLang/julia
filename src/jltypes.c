@@ -1600,7 +1600,6 @@ JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st)
     top.prev = NULL;
     st->types = inst_ftypes(wt->types, &env[n - 1], &top);
     jl_gc_wb(st, st->types);
-    JL_GC_POP();
     return st->types;
 }
 
