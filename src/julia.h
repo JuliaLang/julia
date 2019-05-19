@@ -100,11 +100,11 @@ JL_EXTENSION struct _jl_taggedvalue_t {
 
 #ifdef __clang_analyzer__
 JL_DLLEXPORT jl_taggedvalue_t *_jl_astaggedvalue(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-#define jl_astaggedvalue(v) _jl_astaggedvalue((jl_value_t*)v)
+#define jl_astaggedvalue(v) _jl_astaggedvalue((jl_value_t*)(v))
 jl_value_t *_jl_valueof(jl_taggedvalue_t *tv JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-#define jl_valueof(v) _jl_valueof((jl_taggedvalue_t*)v)
+#define jl_valueof(v) _jl_valueof((jl_taggedvalue_t*)(v))
 JL_DLLEXPORT jl_value_t *_jl_typeof(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-#define jl_typeof(v) _jl_typeof((jl_value_t*)v)
+#define jl_typeof(v) _jl_typeof((jl_value_t*)(v))
 #else
 #define jl_astaggedvalue(v)                                             \
     ((jl_taggedvalue_t*)((char*)(v) - sizeof(jl_taggedvalue_t)))

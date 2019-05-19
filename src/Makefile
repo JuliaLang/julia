@@ -39,13 +39,15 @@ ifeq ($(OS),FreeBSD)
 FLAGS += -I$(LOCALBASE)/include
 endif
 
-SRCS := \
+RUNTIME_C_SRCS := \
 	jltypes gf typemap ast builtins module interpreter symbol \
 	dlload sys init task array dump staticdata toplevel jl_uv datatype \
-	simplevector APInt-C runtime_intrinsics runtime_ccall precompile \
+	simplevector runtime_intrinsics precompile \
 	threading partr stackwalk gc gc-debug gc-pages gc-stacks method \
 	jlapi signal-handling safepoint jloptions timing subtype rtutils \
-	crc32c processor
+	crc32c
+RUNTIME_SRCS := APInt-C runtime_ccall processor $(RUNTIME_C_SRCS)
+SRCS := $(RUNTIME_SRCS)
 
 ifeq ($(USEMSVC), 1)
 SRCS += getopt
@@ -319,7 +321,10 @@ clean-flisp:
 clean-support:
 	-$(MAKE) -C $(SRCDIR)/support clean BUILDDIR='$(abspath $(BUILDDIR)/support)'
 
-
 cleanall: clean clean-flisp clean-support
+
+analyzegc:
+	$(MAKE) -C clangsa
+	$(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)  $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -Xclang -analyzer-checker=core,julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c $(RUNTIME_C_SRCS:%=$(SRCDIR)/%.c)
 
 .PHONY: default all debug release clean cleanall clean-* libccalltest libllvmcalltest julia_flisp.boot.inc.phony
