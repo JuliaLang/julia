@@ -828,6 +828,7 @@ _deleteat!(a::Vector, i::Integer, delta::Integer) =
     push!(collection, items...) -> collection
 
 Insert one or more `items` at the end of `collection`.
+See also the non-mutating variant [`push`](@ref).
 
 # Examples
 ```jldoctest
@@ -867,6 +868,9 @@ end
 Create a new collection containing all the elements from `coll` (in the same order
 for ordered collections) plus the provided new `items` (inserted at the end
 for ordered collections).
+The type of the returned collection may differ from that of `coll` if
+`coll` is immutable.
+See also the mutating variant [`push!`](@ref).
 
 # Examples
 ```jldoctest
@@ -884,10 +888,7 @@ julia> a
  2
 ```
 """
-function push end
-
-push(a::Union{Vector,Associative,AbstractSet}, item) = push!(copy(a), item)
-push(a::Union{Vector,Associative,AbstractSet}, items...) = push!(copy(a), items...)
+push(a, items...) = push!(copymutable(a), items...)
 
 
 """

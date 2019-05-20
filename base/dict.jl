@@ -636,7 +636,7 @@ end
 """
     delete!(collection, key)
 
-Delete the mapping for the given key in a collection, and return the collection.
+Delete the element with the given key in a collection, and return the collection.
 
 # Examples
 ```jldoctest
@@ -659,6 +659,33 @@ function delete!(h::Dict, key)
     end
     return h
 end
+
+"""
+    delete(coll, k)
+
+Create and return a new collection containing all the elements from `coll`
+with key different from `k`.
+The type of the returned collection may differ from that of `coll` if
+`coll` is immutable.
+
+# Examples
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2)
+Dict{String,Int64} with 2 entries:
+  "b" => 2
+  "a" => 1
+
+julia> delete(d, "b")
+Dict{String,Int64} with 1 entry:
+  "a" => 1
+
+julia> d
+Dict{String,Int64} with 2 entries:
+  "b" => 2
+  "a" => 1
+```
+"""
+delete(coll, k) = delete!(copymutable(coll), k)
 
 function skip_deleted(h::Dict, i)
     L = length(h.slots)

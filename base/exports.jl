@@ -482,6 +482,7 @@ export
     collect,
     count,
     delete!,
+    delete,
     deleteat!,
     eltype,
     empty!,
