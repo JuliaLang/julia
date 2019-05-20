@@ -1211,13 +1211,14 @@ static int check_disabled_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct
         return 1;
     jl_tupletype_t *sig = oldentry->sig;
     jl_value_t *isect = closure->match.ti;
+    jl_value_t *isect2 = NULL;
     if (closure->shadowed == NULL)
         closure->shadowed = (jl_value_t*)jl_alloc_vec_any(0);
-
+    JL_GC_PUSH1(&isect2);
     int i, l = jl_array_len(closure->shadowed);
     for (i = 0; i < l; i++) {
         jl_typemap_entry_t *mth = (jl_typemap_entry_t*)jl_array_ptr_ref(closure->shadowed, i);
-        jl_value_t *isect2 = jl_type_intersection((jl_value_t*)mth->sig, (jl_value_t*)sig);
+        isect2 = jl_type_intersection((jl_value_t*)mth->sig, (jl_value_t*)sig);
         // see if the intersection was covered by precisely the disabled method
         // that means we now need to record the ambiguity
         if (jl_types_equal(isect, isect2)) {
@@ -1235,7 +1236,7 @@ static int check_disabled_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct
             jl_array_ptr_1d_push((jl_array_t*)mambig->ambig, (jl_value_t*)oldentry);
         }
     }
-
+    JL_GC_POP();
     jl_array_ptr_1d_push((jl_array_t*)closure->shadowed, (jl_value_t*)oldentry);
     return 1;
 }

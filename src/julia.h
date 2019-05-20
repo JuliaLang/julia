@@ -1115,7 +1115,7 @@ STATIC_INLINE int jl_is_type_type(jl_value_t *v) JL_NOTSAFEPOINT
 }
 
 // object identity
-JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT;
 
 // type predicates and basic operations
