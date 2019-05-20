@@ -43,8 +43,8 @@ JL_DLLEXPORT void JL_NORETURN jl_error(const char *str)
 
 extern int vasprintf(char **str, const char *fmt, va_list ap);
 
-jl_value_t *jl_vexceptionf(jl_datatype_t *exception_type,
-                           const char *fmt, va_list args)
+static jl_value_t *jl_vexceptionf(jl_datatype_t *exception_type,
+                                  const char *fmt, va_list args)
 {
     if (exception_type == NULL) {
         jl_printf(JL_STDERR, "ERROR: ");
