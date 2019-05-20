@@ -882,18 +882,16 @@ INTERP_CALLBACK_ABI void *jl_parse_eval_all_callback(interpreter_state *istate, 
             jl_get_ptls_states()->world_age = jl_world_counter;
             if (jl_is_linenode(form)) {
                 jl_lineno = jl_linenode_line(form);
-                istate->ip = jl_lineno;
+                istate->src = form; // FIXME
             }
             else {
-                result = jl_toplevel_eval_flex(inmodule, form, 1, 1);
+                result = jl_toplevel_eval_flex(istate, inmodule, form, 1, 1);
             }
             JL_SIGATOMIC_BEGIN();
             ast = cdr_(ast);
         }
     }
     JL_CATCH {
-        form = jl_pchar_to_string(fname, len);
-        result = jl_box_long(jl_lineno);
         err = 1;
         goto finally; // skip jl_restore_excstack
     }

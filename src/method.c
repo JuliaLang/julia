@@ -406,6 +406,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
             func = (jl_code_info_t*)ex;
         }
         else {
+            // FIXME: if macroexpand or lowering fails here, backtrace will probably be missing the source location.
             func = (jl_code_info_t*)jl_expand((jl_value_t*)ex, def->module);
             if (!jl_is_code_info(func)) {
                 if (jl_is_expr(func) && ((jl_expr_t*)func)->head == error_sym) {

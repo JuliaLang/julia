@@ -448,7 +448,6 @@ int jl_is_submodule(jl_module_t *child, jl_module_t *parent);
 jl_array_t *jl_get_loaded_modules(void);
 
 void jl_resolve_global_expr(jl_module_t *m, jl_expr_t *ex);
-jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded);
 
 jl_value_t *jl_eval_global_var(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *e);
 jl_value_t *jl_parse_eval_all(const char *fname,
@@ -1035,6 +1034,9 @@ typedef struct {
 #endif
 
 extern void * INTERP_CALLBACK_ABI enter_interpreter_frame(void * INTERP_CALLBACK_ABI (*callback)(interpreter_state *, void *), void *arg);
+
+jl_value_t *jl_toplevel_eval_flex(interpreter_state* istate, jl_module_t *m,
+                                  jl_value_t *e, int fast, int expanded);
 
 extern jl_sym_t *call_sym;    extern jl_sym_t *invoke_sym;
 extern jl_sym_t *empty_sym;   extern jl_sym_t *top_sym;
