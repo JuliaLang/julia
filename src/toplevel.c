@@ -509,6 +509,27 @@ int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
     return 1;
 }
 
+// Create uninitialized mutable binding for `global x, ...` declarations
+void jl_resolve_global_expr(jl_module_t *m, jl_expr_t *ex) {
+    assert(ex->head == global_sym);
+    size_t i, l = jl_array_len(ex->args);
+    for (i = 0; i < l; i++) {
+        jl_value_t *arg = jl_exprarg(ex, i);
+        jl_module_t *gm;
+        jl_sym_t *gs;
+        if (jl_is_globalref(arg)) {
+            gm = jl_globalref_mod(arg);
+            gs = jl_globalref_name(arg);
+        }
+        else {
+            assert(jl_is_symbol(arg));
+            gm = m;
+            gs = (jl_sym_t*)arg;
+        }
+        jl_get_binding_wr(gm, gs, 0);
+    }
+}
+
 void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals,
                               int binding_effects);
 
@@ -719,23 +740,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         return jl_nothing;
     }
     else if (head == global_sym) {
-        // create uninitialized mutable binding for "global x" decl
-        size_t i, l = jl_array_len(ex->args);
-        for (i = 0; i < l; i++) {
-            jl_value_t *arg = jl_exprarg(ex, i);
-            jl_module_t *gm;
-            jl_sym_t *gs;
-            if (jl_is_globalref(arg)) {
-                gm = jl_globalref_mod(arg);
-                gs = jl_globalref_name(arg);
-            }
-            else {
-                assert(jl_is_symbol(arg));
-                gm = m;
-                gs = (jl_sym_t*)arg;
-            }
-            jl_get_binding_wr(gm, gs, 0);
-        }
+        jl_resolve_global_expr(m, ex);
         JL_GC_POP();
         return jl_nothing;
     }
