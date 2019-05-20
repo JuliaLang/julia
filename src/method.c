@@ -31,7 +31,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         if (e->head == global_sym && binding_effects) {
             // execute the side-effects of "global x" decl immediately:
             // creates uninitialized mutable binding in module for each global
-            jl_toplevel_eval_flex(module, expr, 0, 1);
+            jl_resolve_global_expr(module, e);
             expr = jl_nothing;
         }
         if (jl_is_toplevel_only_expr(expr) || e->head == const_sym || e->head == copyast_sym ||
