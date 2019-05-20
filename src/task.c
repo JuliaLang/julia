@@ -64,7 +64,7 @@ jl_sym_t *failed_sym;
 jl_sym_t *runnable_sym;
 
 extern size_t jl_page_size;
-static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner);
+static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner) JL_NOTSAFEPOINT;
 static void jl_set_fiber(jl_ucontext_t *t);
 static void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
 static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
@@ -144,7 +144,8 @@ static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *lastt)
 }
 #endif
 
-static jl_function_t *task_done_hook_func = NULL;
+/* Rooted by the base module */
+static jl_function_t *task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
 
 void JL_NORETURN jl_finish_task(jl_task_t *t, jl_value_t *resultval JL_MAYBE_UNROOTED)
 {
@@ -385,7 +386,7 @@ JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
         jl_sigint_safepoint(ptls);
 }
 
-JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e) JL_NOTSAFEPOINT
+JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e)
 {
     jl_printf(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
     jl_static_show(JL_STDERR, e);
@@ -602,7 +603,7 @@ skip_pop_exception:;
 #define swapcontext jl_swapcontext
 #define makecontext jl_makecontext
 #endif
-static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
+static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner) JL_NOTSAFEPOINT
 {
 #ifndef _OS_WINDOWS_
     int r = getcontext(t);
@@ -729,8 +730,10 @@ static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
     char *stkbuf = (char*)jl_malloc_stack(ssize, owner);
     if (stkbuf == NULL)
         return NULL;
+#ifndef __clang_analyzer__
     ((char**)t)[0] = stkbuf; // stash the stack pointer somewhere for start_fiber
     ((size_t*)t)[1] = *ssize; // stash the stack size somewhere for start_fiber
+#endif
     return stkbuf;
 }
 static void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)

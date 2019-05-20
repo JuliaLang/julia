@@ -390,7 +390,7 @@ JL_DLLEXPORT int jl_fs_chown(char *path, int uid, int gid)
 }
 
 JL_DLLEXPORT int jl_fs_write(uv_os_fd_t handle, const char *data, size_t len,
-                             int64_t offset)
+                             int64_t offset) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     // TODO: fix this cheating
@@ -590,7 +590,7 @@ JL_DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...)
     return c;
 }
 
-JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...)
+JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...) JL_NOTSAFEPOINT
 {
     static char buf[1000];
     buf[0] = '\0';

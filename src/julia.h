@@ -746,7 +746,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_alloc_1w(void);
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_2w(void);
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_3w(void);
 JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz);
-JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, struct _jl_task_t *owner);
+JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, struct _jl_task_t *owner) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_free_stack(void *stkbuf, size_t bufsz);
 JL_DLLEXPORT void jl_gc_use(jl_value_t *a);
 
@@ -896,7 +896,7 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x) JL_NOTSAFEPO
 #define jl_gf_name(f)   (jl_gf_mtable(f)->name)
 
 // struct type info
-JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st);
+JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT);
 #define jl_get_fieldtypes(st) ((st)->types ? (st)->types : jl_compute_fieldtypes((st)))
 STATIC_INLINE jl_svec_t *jl_field_names(jl_datatype_t *st) JL_NOTSAFEPOINT
 {
@@ -909,10 +909,16 @@ STATIC_INLINE jl_sym_t *jl_field_name(jl_datatype_t *st, size_t i) JL_NOTSAFEPOI
 {
     return (jl_sym_t*)jl_svecref(jl_field_names(st), i);
 }
-STATIC_INLINE jl_value_t *jl_field_type(jl_datatype_t *st, size_t i)
+STATIC_INLINE jl_value_t *jl_field_type(jl_datatype_t *st JL_PROPAGATES_ROOT, size_t i)
 {
     return jl_svecref(jl_get_fieldtypes(st), i);
 }
+STATIC_INLINE jl_value_t *jl_field_type_concrete(jl_datatype_t *st JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
+{
+    assert(st->types);
+    return jl_svecref(st->types, i);
+}
+
 #define jl_datatype_size(t)    (((jl_datatype_t*)t)->size)
 #define jl_datatype_align(t)   (((jl_datatype_t*)t)->layout->alignment)
 #define jl_datatype_nbits(t)   ((((jl_datatype_t*)t)->size)*8)
@@ -1115,7 +1121,7 @@ STATIC_INLINE int jl_is_type_type(jl_value_t *v) JL_NOTSAFEPOINT
 }
 
 // object identity
-JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b);
+JL_DLLEXPORT int jl_egal(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT;
 
 // type predicates and basic operations
@@ -1125,7 +1131,7 @@ JL_DLLEXPORT int jl_has_typevar_from_unionall(jl_value_t *t, jl_unionall_t *ua);
 JL_DLLEXPORT int jl_subtype_env_size(jl_value_t *t);
 JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, int envsz);
 JL_DLLEXPORT int jl_isa(jl_value_t *a, jl_value_t *t);
-JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT int jl_is_not_broken_subtype(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n);
 JL_DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b);
@@ -1582,11 +1588,11 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr JL_MAYBE_UNROOTED);
 
 JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code);
 JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data);
-JL_DLLEXPORT uint8_t jl_ast_flag_inferred(jl_array_t *data);
-JL_DLLEXPORT uint8_t jl_ast_flag_inlineable(jl_array_t *data);
-JL_DLLEXPORT uint8_t jl_ast_flag_pure(jl_array_t *data);
-JL_DLLEXPORT ssize_t jl_ast_nslots(jl_array_t *data);
-JL_DLLEXPORT uint8_t jl_ast_slotflag(jl_array_t *data, size_t i);
+JL_DLLEXPORT uint8_t jl_ast_flag_inferred(jl_array_t *data) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint8_t jl_ast_flag_inlineable(jl_array_t *data) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint8_t jl_ast_flag_pure(jl_array_t *data) JL_NOTSAFEPOINT;
+JL_DLLEXPORT ssize_t jl_ast_nslots(jl_array_t *data) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint8_t jl_ast_slotflag(jl_array_t *data, size_t i) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_compress_argnames(jl_array_t *syms);
 JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms);
 JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i);
@@ -1796,10 +1802,10 @@ typedef struct {
 #define _JL_FORMAT_ATTR(type, str, arg)
 #endif
 
-JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n);
+JL_DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...)
     _JL_FORMAT_ATTR(printf, 2, 3);
-JL_DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
     _JL_FORMAT_ATTR(printf, 2, 0);
 JL_DLLEXPORT void jl_safe_printf(const char *str, ...) JL_NOTSAFEPOINT
     _JL_FORMAT_ATTR(printf, 1, 2);
@@ -1818,9 +1824,9 @@ JL_DLLEXPORT jl_value_t *jl_stdout_obj(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jlbacktrace(void);
+JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT;
 // Mainly for debugging, use `void*` so that no type cast is needed in C++.
-JL_DLLEXPORT void jl_(void *jl_value);
+JL_DLLEXPORT void jl_(void *jl_value) JL_NOTSAFEPOINT;
 
 // julia options -----------------------------------------------------------
 // NOTE: This struct needs to be kept in sync with JLOptions type in base/options.jl

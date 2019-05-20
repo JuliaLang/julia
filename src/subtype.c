@@ -777,6 +777,7 @@ struct subtype_unionall_env {
 };
 
 static int subtype_unionall_callback(struct subtype_unionall_env *env, int8_t R, jl_stenv_t *s, int param) {
+    JL_GC_PROMISE_ROOTED(env->t); JL_GC_PROMISE_ROOTED(env->ubody);
     if (R) {
         return subtype(env->t, env->ubody, s, param);
     }
@@ -836,7 +837,7 @@ struct subtype_tuple_env {
     jl_value_t *vtx;
     jl_value_t *vty;
     jl_vararg_kind_t vvx, vvy;
-};
+} JL_ROOTED_VALUE_COLLECTION;
 
 static int subtype_tuple_varargs(struct subtype_tuple_env *env, jl_stenv_t *e, int param)
 {

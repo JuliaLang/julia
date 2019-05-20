@@ -501,14 +501,14 @@ JL_DLLEXPORT void jl_flush_cstdio(void) JL_NOTSAFEPOINT
 JL_DLLEXPORT jl_value_t *jl_stdout_obj(void) JL_NOTSAFEPOINT
 {
     if (jl_base_module == NULL) return NULL;
-    jl_value_t *stdout_obj = jl_get_global(jl_base_module, jl_symbol("stdout"));
+    jl_value_t *stdout_obj = jl_get_module_binding(jl_base_module, jl_symbol("stdout"))->value;
     return stdout_obj;
 }
 
 JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT
 {
     if (jl_base_module == NULL) return NULL;
-    jl_value_t *stderr_obj = jl_get_global(jl_base_module, jl_symbol("stderr"));
+    jl_value_t *stderr_obj = jl_get_module_binding(jl_base_module, jl_symbol("stderr"))->value;
     return stderr_obj;
 }
 
@@ -1001,7 +1001,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                     n += jl_static_show_x(out, *(jl_value_t**)fld_ptr, depth);
                 }
                 else {
-                    jl_datatype_t *ft = (jl_datatype_t*)jl_field_type(vt, i);
+                    jl_datatype_t *ft = (jl_datatype_t*)jl_field_type_concrete(vt, i);
                     if (jl_is_uniontype(ft)) {
                         uint8_t sel = ((uint8_t*)fld_ptr)[jl_field_size(vt, i) - 1];
                         ft = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)ft, sel);
@@ -1110,7 +1110,7 @@ JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_N
     return n;
 }
 
-JL_DLLEXPORT void jl_(void *jl_value)
+JL_DLLEXPORT void jl_(void *jl_value) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_jmp_buf *old_buf = ptls->safe_restore;

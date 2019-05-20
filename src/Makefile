@@ -44,9 +44,9 @@ RUNTIME_C_SRCS := \
 	dlload sys init task array dump staticdata toplevel jl_uv datatype \
 	simplevector runtime_intrinsics precompile \
 	threading partr stackwalk gc gc-debug gc-pages gc-stacks method \
-	jlapi signal-handling safepoint jloptions timing subtype rtutils \
+	jlapi signal-handling safepoint jloptions timing subtype \
 	crc32c
-RUNTIME_SRCS := APInt-C runtime_ccall processor $(RUNTIME_C_SRCS)
+RUNTIME_SRCS := APInt-C runtime_ccall processor rtutils $(RUNTIME_C_SRCS)
 SRCS := $(RUNTIME_SRCS)
 
 ifeq ($(USEMSVC), 1)
@@ -324,6 +324,11 @@ clean-support:
 cleanall: clean clean-flisp clean-support
 
 analyzegc:
+ifeq ($(USE_BINARYBUILDER_LLVM),0)
+ifneq ($(BUILD_LLVM_CLANG),1)
+	$(error Clang must be available to use the clang analyzer. Either build it (BUILD_LLVM_CLANG) or use BinaryBuilder)
+endif
+endif
 	$(MAKE) -C clangsa
 	$(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)  $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -Xclang -analyzer-checker=core,julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c $(RUNTIME_C_SRCS:%=$(SRCDIR)/%.c)
 

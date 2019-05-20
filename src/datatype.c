@@ -236,7 +236,7 @@ STATIC_INLINE void jl_allocate_singleton_instance(jl_datatype_t *st)
     }
 }
 
-static unsigned union_isbits(jl_value_t *ty, size_t *nbytes, size_t *align)
+static unsigned union_isbits(jl_value_t *ty, size_t *nbytes, size_t *align) JL_NOTSAFEPOINT
 {
     if (jl_is_uniontype(ty)) {
         unsigned na = union_isbits(((jl_uniontype_t*)ty)->a, nbytes, align);
@@ -259,7 +259,7 @@ static unsigned union_isbits(jl_value_t *ty, size_t *nbytes, size_t *align)
     return 0;
 }
 
-JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al)
+JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al) JL_NOTSAFEPOINT
 {
     unsigned countbits = union_isbits(eltype, fsz, al);
     return (countbits > 0 && countbits < 127) ? countbits : 0;
@@ -452,6 +452,8 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     jl_datatype_t *t = NULL;
     jl_typename_t *tn = NULL;
     JL_GC_PUSH2(&t, &tn);
+
+    assert(parameters);
 
     // init enough before possibly calling jl_new_typename_in
     t = jl_new_uninitialized_datatype();
@@ -966,7 +968,7 @@ JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs) JL_
         if (rhs != NULL) jl_gc_wb(v, rhs);
     }
     else {
-        jl_value_t *ty = jl_field_type(st, i);
+        jl_value_t *ty = jl_field_type_concrete(st, i);
         if (jl_is_uniontype(ty)) {
             uint8_t *psel = &((uint8_t*)v)[offs + jl_field_size(st, i) - 1];
             unsigned nth = 0;

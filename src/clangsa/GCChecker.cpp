@@ -45,8 +45,13 @@ namespace {
             enum State { Allocated, Rooted, PotentiallyFreed, Untracked } S;
             const MemRegion *Root;
             int RootDepth;
-            ValueState(State InS, const MemRegion *Root, int Depth) : S(InS), Root(Root), RootDepth(Depth) {}
-            ValueState() : S(Untracked), Root(nullptr), RootDepth(0) {}
+
+            // Optional Metadata (for error messages)
+            const FunctionDecl *FD;
+            const ParmVarDecl *PVD;
+
+            ValueState(State InS, const MemRegion *Root, int Depth) : S(InS), Root(Root), RootDepth(Depth), FD(nullptr), PVD(nullptr) {}
+            ValueState() : S(Untracked), Root(nullptr), RootDepth(0), FD(nullptr), PVD(nullptr) {}
 
             void dump() const {
                 llvm::dbgs() << ((S == Allocated) ? "Allocated" :
@@ -90,8 +95,11 @@ namespace {
                                              const ParmVarDecl *PVD) {
                bool isFunctionSafepoint = !isFDAnnotatedNotSafepoint(FD);
                bool maybeUnrooted = declHasAnnotation(PVD, "julia_maybe_unrooted");
-               if (!isFunctionSafepoint || maybeUnrooted)
-                  return getAllocated();
+               if (!isFunctionSafepoint || maybeUnrooted) {
+                  ValueState VS = getAllocated();
+                  VS.PVD = PVD; VS.FD = FD;
+                  return VS;
+               }
                return getRooted(nullptr, -1);
             }
         };
@@ -137,6 +145,14 @@ namespace {
           }
           return f(TD->getName());
         }
+        static bool isValueCollection(QualType QT) {
+            if (QT->isPointerType() || QT->isArrayType())
+                return isValueCollection(clang::QualType(QT->getPointeeOrArrayElementType(), 0));
+            const TagDecl *TD = QT->getUnqualifiedDesugaredType()->getAsTagDecl();
+            if (!TD)
+                return false;
+            return declHasAnnotation(TD, "julia_rooted_value_collection");
+        }
         template <typename callback>
         static SymbolRef walkToRoot(callback f, const ProgramStateRef &State, const MemRegion *Region);
 
@@ -153,6 +169,7 @@ namespace {
         bool rootRegionIfGlobal(const MemRegion *R, ProgramStateRef &, CheckerContext &C, ValueState *ValS = nullptr) const;
         static const ValueState *getValStateForRegion(ASTContext &AstC, const ProgramStateRef &State, const MemRegion *R, bool Debug = false);
         bool gcEnabledHere(CheckerContext &C) const;
+        bool safepointEnabledHere(CheckerContext &C) const;
         bool propagateArgumentRootedness(CheckerContext &C, ProgramStateRef &State) const;
         SymbolRef getSymbolForResult(const Expr *Result, const ValueState *OldValS, ProgramStateRef &State, CheckerContext &C) const;
 
@@ -227,6 +244,8 @@ namespace {
 
 REGISTER_TRAIT_WITH_PROGRAMSTATE(GCDepth, unsigned)
 REGISTER_TRAIT_WITH_PROGRAMSTATE(GCDisabledAt, unsigned)
+REGISTER_TRAIT_WITH_PROGRAMSTATE(SafepointDisabledAt, unsigned)
+REGISTER_TRAIT_WITH_PROGRAMSTATE(MayCallSafepoint, bool)
 REGISTER_MAP_WITH_PROGRAMSTATE(GCValueMap, SymbolRef, GCChecker::ValueState)
 REGISTER_MAP_WITH_PROGRAMSTATE(GCRootMap, const MemRegion *, GCChecker::RootState)
 
@@ -411,10 +430,22 @@ PDP GCChecker::GCValueBugVisitor::VisitNode(
         if (NewValueState->isRooted()) {
             return MakePDP(Pos, "Started tracking value here (root was inherited).");
         } else {
-            PDP Diag = ExplainNoPropagation(N, Pos, BRC, BR);
-            if (Diag)
-                return Diag;
-            return MakePDP(Pos, "Started tracking value here.");
+            if (NewValueState->FD) {
+                bool isFunctionSafepoint = !isFDAnnotatedNotSafepoint(NewValueState->FD);
+                bool maybeUnrooted = declHasAnnotation(NewValueState->PVD, "julia_maybe_unrooted");
+                assert(isFunctionSafepoint || maybeUnrooted);
+                Pos = PathDiagnosticLocation{NewValueState->PVD,
+                                             BRC.getSourceManager()};
+                if (!isFunctionSafepoint)
+                    return MakePDP(Pos, "Argument not rooted, because function was annotated as not a safepoint");
+                else
+                    return MakePDP(Pos, "Argument was annotated as MAYBE_UNROOTED.");
+            } else {
+                PDP Diag = ExplainNoPropagation(N, Pos, BRC, BR);
+                if (Diag)
+                    return Diag;
+                return MakePDP(Pos, "Started tracking value here.");
+            }
         }
     }
     if (!OldValueState->isUntracked() &&
@@ -486,6 +517,11 @@ bool GCChecker::gcEnabledHere(CheckerContext &C) const {
     return disabledAt == (unsigned)-1;
 }
 
+bool GCChecker::safepointEnabledHere(CheckerContext &C) const {
+    unsigned disabledAt = C.getState()->get<SafepointDisabledAt>();
+    return disabledAt == (unsigned)-1;
+}
+
 bool GCChecker::propagateArgumentRootedness(CheckerContext &C, ProgramStateRef &State) const {
     const auto *LCtx = C.getLocationContext();
 
@@ -551,6 +587,7 @@ void GCChecker::checkBeginFunction(CheckerContext &C) const {
     bool Change = false;
     if (C.inTopFrame()) {
         State = State->set<GCDisabledAt>((unsigned)-1);
+        State = State->set<SafepointDisabledAt>((unsigned)-1);
         Change = true;
     }
     if (State->get<GCDisabledAt>() == (unsigned)-1) {
@@ -559,8 +596,14 @@ void GCChecker::checkBeginFunction(CheckerContext &C) const {
             Change = true;
         }
     }
-    if (!C.inTopFrame()) {
-        if (propagateArgumentRootedness(C, State))
+    if (State->get<SafepointDisabledAt>() == (unsigned)-1 && isFDAnnotatedNotSafepoint(FD))
+    {
+        State = State->set<SafepointDisabledAt>(C.getStackFrame()->getIndex());
+        Change = true;
+    }
+    if (!C.inTopFrame())
+    {
+        if (propagateArgumentRootedness(C, State) || Change)
             C.addTransition(State);
         return;
     }
@@ -592,14 +635,23 @@ void GCChecker::checkEndFunction(const clang::ReturnStmt* RS, CheckerContext &C)
 #else
 void GCChecker::checkEndFunction(CheckerContext &C) const {
 #endif
+    ProgramStateRef State = C.getState();
+    bool Changed = false;
+    if (State->get<GCDisabledAt>() == C.getStackFrame()->getIndex())
+    {
+        State = State->set<GCDisabledAt>((unsigned)-1);
+        Changed = true;
+    }
+    if (State->get<SafepointDisabledAt>() == C.getStackFrame()->getIndex()) {
+        State = State->set<SafepointDisabledAt>((unsigned)-1);
+        Changed = true;
+    }
+    if (Changed)
+        C.addTransition(State);
     if (!C.inTopFrame())
         return;
-    if (C.getState()->get<GCDepth>() > 0) {
+    if (C.getState()->get<GCDepth>() > 0)
         report_error(C, "Non-popped GC frame present at end of function");
-    }
-    if (C.getState()->get<GCDisabledAt>() == C.getStackFrame()->getIndex()) {
-        C.addTransition(C.getState()->set<GCDisabledAt>((unsigned)-1));
-    }
 }
 
 bool GCChecker::declHasAnnotation(const clang::Decl *D, const char *which) {
@@ -623,46 +675,51 @@ bool GCChecker::isBundleOfGCValues(QualType QT) const {
 }
 
 bool GCChecker::isGCTrackedType(QualType QT) {
-    return isJuliaType([](StringRef Name) {
-      if (Name.endswith_lower("jl_value_t") ||
-          Name.endswith_lower("jl_svec_t") ||
-          Name.endswith_lower("jl_sym_t") ||
-          Name.endswith_lower("jl_expr_t") ||
-          Name.endswith_lower("jl_code_info_t") ||
-          Name.endswith_lower("jl_array_t") ||
-          Name.endswith_lower("jl_method_t") ||
-          Name.endswith_lower("jl_method_instance_t") ||
-          Name.endswith_lower("jl_tupletype_t") ||
-          Name.endswith_lower("jl_datatype_t") ||
-          Name.endswith_lower("jl_typemap_entry_t") ||
-          Name.endswith_lower("jl_typemap_level_t") ||
-          Name.endswith_lower("jl_typename_t") ||
-          Name.endswith_lower("jl_module_t") ||
-          Name.endswith_lower("jl_tupletype_t") ||
-          Name.endswith_lower("jl_gc_tracked_buffer_t") ||
-          Name.endswith_lower("jl_tls_states_t") ||
-          Name.endswith_lower("jl_binding_t") ||
-          Name.endswith_lower("jl_ordereddict_t") ||
-          Name.endswith_lower("jl_tvar_t") ||
-          Name.endswith_lower("jl_typemap_t") ||
-          Name.endswith_lower("jl_unionall_t") ||
-          Name.endswith_lower("jl_methtable_t") ||
-          Name.endswith_lower("jl_cgval_t") ||
-          Name.endswith_lower("jl_codectx_t") ||
-          Name.endswith_lower("jl_ast_context_t") ||
-          // Probably not technically true for these, but let's allow it
-          Name.endswith_lower("typemap_intersection_env") ||
-          Name.endswith_lower("interpreter_state") ||
-          Name.endswith_lower("jl_typeenv_t") ||
-          Name.endswith_lower("jl_stenv_t") ||
-          Name.endswith_lower("jl_varbinding_t") ||
-          Name.endswith_lower("set_world") ||
-          Name.endswith_lower("jl_codectx_t")
-          ) {
-          return true;
-      }
-      return false;
-    }, QT);
+    return isValueCollection(QT) || isJuliaType([](StringRef Name) {
+        if (Name.endswith_lower("jl_value_t") ||
+            Name.endswith_lower("jl_svec_t") ||
+            Name.endswith_lower("jl_sym_t") ||
+            Name.endswith_lower("jl_expr_t") ||
+            Name.endswith_lower("jl_code_info_t") ||
+            Name.endswith_lower("jl_array_t") ||
+            Name.endswith_lower("jl_method_t") ||
+            Name.endswith_lower("jl_method_instance_t") ||
+            Name.endswith_lower("jl_tupletype_t") ||
+            Name.endswith_lower("jl_datatype_t") ||
+            Name.endswith_lower("jl_typemap_entry_t") ||
+            Name.endswith_lower("jl_typemap_level_t") ||
+            Name.endswith_lower("jl_typename_t") ||
+            Name.endswith_lower("jl_module_t") ||
+            Name.endswith_lower("jl_tupletype_t") ||
+            Name.endswith_lower("jl_gc_tracked_buffer_t") ||
+            Name.endswith_lower("jl_tls_states_t") ||
+            Name.endswith_lower("jl_binding_t") ||
+            Name.endswith_lower("jl_ordereddict_t") ||
+            Name.endswith_lower("jl_tvar_t") ||
+            Name.endswith_lower("jl_typemap_t") ||
+            Name.endswith_lower("jl_unionall_t") ||
+            Name.endswith_lower("jl_methtable_t") ||
+            Name.endswith_lower("jl_cgval_t") ||
+            Name.endswith_lower("jl_codectx_t") ||
+            Name.endswith_lower("jl_ast_context_t") ||
+            Name.endswith_lower("jl_code_instance_t") ||
+            Name.endswith_lower("jl_excstack_t") ||
+            Name.endswith_lower("jl_task_t") ||
+            Name.endswith_lower("jl_uniontype_t") ||
+            // Probably not technically true for these, but let's allow it
+            Name.endswith_lower("typemap_intersection_env") ||
+            Name.endswith_lower("interpreter_state") ||
+            Name.endswith_lower("jl_typeenv_t") ||
+            Name.endswith_lower("jl_stenv_t") ||
+            Name.endswith_lower("jl_varbinding_t") ||
+            Name.endswith_lower("set_world") ||
+            Name.endswith_lower("jl_codectx_t"))
+        {
+            return true;
+        }
+        return false;
+    },
+                                        QT);
 }
 
 bool GCChecker::isGloballyRootedType(QualType QT) const {
@@ -678,9 +735,20 @@ bool GCChecker::isSafepoint(const CallEvent &Call) const
       Call.isGlobalCFunction("memcpy") ||
       Call.isGlobalCFunction("memset") ||
       Call.isGlobalCFunction("memcmp") ||
+      Call.isGlobalCFunction("mmap") ||
+      Call.isGlobalCFunction("munmap") ||
+      Call.isGlobalCFunction("mprotect") ||
+      Call.isGlobalCFunction("madvise") ||
+      Call.isGlobalCFunction("write") ||
+      Call.isGlobalCFunction("vasprintf") ||
       Call.isGlobalCFunction("strrchr") ||
-      Call.isGlobalCFunction("free")) {
-    isCalleeSafepoint = false;
+      Call.isGlobalCFunction("free") ||
+      Call.isGlobalCFunction("__assert_fail") ||
+      Call.isGlobalCFunction("fflush") ||
+      Call.isGlobalCFunction("__isnan") ||
+      Call.isGlobalCFunction("__isnanf"))
+  {
+      isCalleeSafepoint = false;
   } else {
     auto *Decl = Call.getDecl();
     const DeclContext *DC = Decl ? Decl->getDeclContext() : nullptr;
@@ -700,6 +768,11 @@ bool GCChecker::isSafepoint(const CallEvent &Call) const
     } else if (FD) {
       if (FD->getBuiltinID() != 0)
         isCalleeSafepoint = false;
+      else if ((FD->getName().startswith_lower("uv_") ||
+                FD->getName().startswith_lower("unw_") ||
+                FD->getName().startswith("_U")) &&
+               FD->getName() != "uv_run")
+          isCalleeSafepoint = false;
       else
         isCalleeSafepoint = !isFDAnnotatedNotSafepoint(FD);
     }
@@ -1068,14 +1141,24 @@ void GCChecker::dumpState(const ProgramStateRef &State) {
 }
 
 void GCChecker::checkPreCall(const CallEvent &Call, CheckerContext &C) const {
+    if (!gcEnabledHere(C))
+        return;
     unsigned NumArgs = Call.getNumArgs();
     ProgramStateRef State = C.getState();
     bool isCalleeSafepoint = isSafepoint(Call);
     auto *Decl = Call.getDecl();
     const FunctionDecl *FD = Decl ? Decl->getAsFunction() : nullptr;
+    if (!safepointEnabledHere(C) && isCalleeSafepoint) {
+        // Suppress this warning if the function is noreturn.
+        // We could separate out "not safepoint, except for noreturn functions",
+        // but that seems like a lot of effort with little benefit.
+        if (!FD || !FD->isNoReturn())
+        {
+            report_error(C, "Calling potential safepoint from function annotated JL_NOTSAFEPOINT");
+            return;
+        }
+    }
     SValExplainer Ex(C.getASTContext());
-    if (!gcEnabledHere(C))
-        return;
     if (FD && FD->getDeclName().isIdentifier() && FD->getName() == "JL_GC_PROMISE_ROOTED")
         return;
     for (unsigned idx = 0; idx < NumArgs; ++idx) {

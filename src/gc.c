@@ -934,7 +934,7 @@ static bigval_t **sweep_big_list(int sweep_full, bigval_t **pv) JL_NOTSAFEPOINT
     return pv;
 }
 
-static void sweep_big(jl_ptls_t ptls, int sweep_full)
+static void sweep_big(jl_ptls_t ptls, int sweep_full) JL_NOTSAFEPOINT
 {
     gc_time_big_start();
     for (int i = 0;i < jl_n_threads;i++)
@@ -1037,7 +1037,7 @@ static void sweep_malloced_arrays(void) JL_NOTSAFEPOINT
 }
 
 // pool allocation
-static inline jl_taggedvalue_t *reset_page(const jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_taggedvalue_t *fl)
+static inline jl_taggedvalue_t *reset_page(const jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_taggedvalue_t *fl) JL_NOTSAFEPOINT
 {
     assert(GC_PAGE_OFFSET >= sizeof(void*));
     pg->nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / p->osize;
@@ -1070,7 +1070,7 @@ static inline jl_taggedvalue_t *reset_page(const jl_gc_pool_t *p, jl_gc_pagemeta
 }
 
 // Add a new page to the pool. Discards any pages in `p->newpages` before.
-static NOINLINE jl_taggedvalue_t *add_page(jl_gc_pool_t *p)
+static NOINLINE jl_taggedvalue_t *add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
 {
     // Do not pass in `ptls` as argument. This slows down the fast path
     // in pool_alloc significantly
@@ -1530,7 +1530,7 @@ JL_NORETURN NOINLINE void gc_assert_datatype_fail(jl_ptls_t ptls, jl_datatype_t 
 void *gc_mark_label_addrs[_GC_MARK_L_MAX];
 
 // Double the mark stack (both pc and data) with the lock held.
-static void NOINLINE gc_mark_stack_resize(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
+static void NOINLINE gc_mark_stack_resize(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp) JL_NOTSAFEPOINT
 {
     jl_gc_mark_data_t *old_data = gc_cache->data_stack;
     void **pc_stack = sp->pc_start;
@@ -3189,7 +3189,7 @@ jl_mutex_t gc_perm_lock = {0, 0};
 static uintptr_t gc_perm_pool = 0;
 static uintptr_t gc_perm_end = 0;
 
-static void *gc_perm_alloc_large(size_t sz, int zero, unsigned align, unsigned offset)
+static void *gc_perm_alloc_large(size_t sz, int zero, unsigned align, unsigned offset) JL_NOTSAFEPOINT
 {
     // `align` must be power of two
     assert(offset == 0 || offset < align);
@@ -3202,7 +3202,7 @@ static void *gc_perm_alloc_large(size_t sz, int zero, unsigned align, unsigned o
     return (void*)(base + diff);
 }
 
-STATIC_INLINE void *gc_try_perm_alloc_pool(size_t sz, unsigned align, unsigned offset)
+STATIC_INLINE void *gc_try_perm_alloc_pool(size_t sz, unsigned align, unsigned offset) JL_NOTSAFEPOINT
 {
     uintptr_t pool = LLT_ALIGN(gc_perm_pool + offset, (uintptr_t)align) - offset;
     uintptr_t end = pool + sz;

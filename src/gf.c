@@ -1702,7 +1702,7 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int
     return ml_matches(mt->defs, 0, types, lim, include_ambiguous, world, min_valid, max_valid);
 }
 
-jl_method_instance_t *jl_get_unspecialized(jl_method_instance_t *method)
+jl_method_instance_t *jl_get_unspecialized(jl_method_instance_t *method JL_PROPAGATES_ROOT)
 {
     // one unspecialized version of a function can be shared among all cached specializations
     jl_method_t *def = method->def.method;
@@ -2257,7 +2257,9 @@ jl_value_t *jl_gf_invoke(jl_value_t *types0, jl_value_t *gf, jl_value_t **args, 
     // now we have found the matching definition.
     // next look for or create a specialization of this definition.
     JL_GC_POP();
-    return jl_gf_invoke_by_method(entry->func.method, gf, args, nargs);
+    jl_method_t *method = entry->func.method;
+    JL_GC_PROMISE_ROOTED(method);
+    return jl_gf_invoke_by_method(method, gf, args, nargs);
 }
 
 static jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value_t **args, size_t nargs)

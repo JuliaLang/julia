@@ -283,7 +283,7 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
     return jl_top_module;
 }
 
-static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs) JL_NOTSAFEPOINT
+static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
 {
     if (!jl_is_expr(v))
         return;
