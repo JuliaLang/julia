@@ -853,20 +853,18 @@ un_fintrinsic_withtype(fpext,fpext)
 
 // checked arithmetic
 /**
- * s_typemin =  ((typeof a)~0 << (runtime_nbits - 1))
- * s_typemax = ~((typeof a)1 << (runtime_nbits - 1))
+ * s_typemin = - s_typemax - 1
+ * s_typemax = ((typeof a)1 << (runtime_nbits - 1)) - 1
  * u_typemin = 0
  * u_typemax = ((typeof a)1 << runtime_nbits) - 1
  * where (a - a) == (typeof(a)0
  **/
-#define sTYPEMIN(a) \
-    (8 * sizeof(a) == runtime_nbits \
-     ? ((a - a + ~0) << (8 * sizeof(a) - 1)) \
-     : ((a - a + ~0) << (runtime_nbits - 1)))
-#define sTYPEMAX(a) \
-    (8 * sizeof(a) == runtime_nbits \
-     ? ~((a - a + ~0) << (8 * sizeof(a) - 1)) \
-     : ~((a - a + ~0) << (runtime_nbits - 1)))
+#define sTYPEMIN(a) -sTYPEMAX(a) - 1
+#define sTYPEMAX(a)                                                \
+    (8 * sizeof(a) == runtime_nbits                                \
+         ? (((((a - a + 1) << (8 * sizeof(a) - 2)) - 1) << 1) + 1) \
+         : (  ((a - a + 1) << (runtime_nbits - 1)) - 1))
+
 #define uTYPEMIN(a) (0)
 #define uTYPEMAX(a) \
     (8 * sizeof(~a) == runtime_nbits \
