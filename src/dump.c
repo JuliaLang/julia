@@ -2605,7 +2605,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_code_instance_
     jl_value_t *slotnames = jl_deserialize_value(&s, NULL);
     if (!jl_is_string(slotnames))
         slotnames = m->slot_syms;
-    code->slotnames = jl_uncompress_argnames(m->slot_syms);
+    code->slotnames = jl_uncompress_argnames(slotnames);
 
     size_t nstmt = jl_array_len(code->code);
     code->codelocs = (jl_value_t*)jl_alloc_array_1d(jl_array_int32_type, nstmt);
