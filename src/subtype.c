@@ -1869,14 +1869,16 @@ static int subtype_in_env_existential(jl_value_t *x, jl_value_t *y, jl_stenv_t *
     int8_t *rs = (int8_t*)malloc(len);
     int n = 0;
     v = e->vars;
-    while (v != NULL) {
+    while (n < len) {
+        assert(v != NULL);
         rs[n++] = v->right;
         v->right = 1;
         v = v->prev;
     }
     int issub = subtype_in_env(x, y, e);
     n = 0; v = e->vars;
-    while (v != NULL) {
+    while (n < len) {
+        assert(v != NULL);
         v->right = rs[n++];
         v = v->prev;
     }

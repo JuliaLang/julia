@@ -835,17 +835,13 @@ SECT_INTERP CALLBACK_ABI void *jl_interpret_call_callback(interpreter_state *s, 
     locals[1] = (jl_value_t*)stmts;
     s->locals = locals + 2;
     s->src = src;
-    size_t nargs;
-    int isva;
     if (jl_is_module(args->mi->def.value)) {
         s->module = args->mi->def.module;
-        nargs = 0;
-        isva = 0;
     }
     else {
         s->module = args->mi->def.method->module;
-        nargs = args->mi->def.method->nargs;
-        isva = args->mi->def.method->isva ? 1 : 0;
+        size_t nargs = args->mi->def.method->nargs;
+        int isva = args->mi->def.method->isva ? 1 : 0;
         size_t i;
         s->locals[0] = args->f;
         for (i = 1; i < nargs - isva; i++)

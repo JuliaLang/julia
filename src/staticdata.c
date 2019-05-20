@@ -985,7 +985,7 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         offset -= NBOX_C;
         if (offset < 256)
             return (uintptr_t)jl_box_uint8(offset);
-        offset -= 256;
+        // offset -= 256;
         assert(0 && "corrupt relocation item id");
     case BuiltinFunctionRef:
         assert(offset < sizeof(id_to_fptrs) / sizeof(*id_to_fptrs) && "unknown function pointer ID");
