@@ -13,7 +13,7 @@ using LinearAlgebra
 import Base: +, -, *, \, /, &, |, xor, ==
 import LinearAlgebra: mul!, ldiv!, rdiv!, cholesky, adjoint!, diag, eigen, dot,
     issymmetric, istril, istriu, lu, tr, transpose!, tril!, triu!,
-    cond, diagm, factorize, ishermitian, norm, opnorm, lmul!, rmul!, tril, triu
+    cond, diagm, factorize, ishermitian, norm, opnorm, lmul!, rmul!, tril, triu, matprod
 
 import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
     atan, atand, atanh, broadcast!, conj!, cos, cosc, cosd, cosh, cospi, cot,
