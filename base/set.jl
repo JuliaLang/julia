@@ -56,10 +56,12 @@ end
 
 delete!(s::Set, x) = (delete!(s.dict, x); s)
 
-copy(s::Set) = copymutable(s)
+copy(s::Set) = typeof(s)(s)
 
 # Set is the default mutable fall-back
-copymutable(s::AbstractSet{T}) where {T} = Set{T}(s)
+copymutable(s::AbstractSet{T}) where {T} = ismutable(s) ? copy(s) : Set{T}(s)
+
+ismutable(::Type{<:Set}) = true
 
 sizehint!(s::Set, newsz) = (sizehint!(s.dict, newsz); s)
 empty!(s::Set) = (empty!(s.dict); s)

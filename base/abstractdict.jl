@@ -643,6 +643,8 @@ length(d::IdDict) = d.count
 
 copy(d::IdDict) = typeof(d)(d)
 
+ismutable(::Type{<:IdDict}) = true
+
 get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V} = (d[key] = get(d, key, default))::V
 
 function get(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
@@ -679,7 +681,7 @@ end
 IdSet{T}(itr) where {T} = union!(IdSet{T}(), itr)
 IdSet() = IdSet{Any}()
 
-copymutable(s::IdSet) = typeof(s)(s)
+ismutable(::Type{<:IdSet}) = true
 copy(s::IdSet) = typeof(s)(s)
 
 isempty(s::IdSet) = isempty(s.dict)

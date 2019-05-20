@@ -118,6 +118,11 @@ Dict() = Dict{Any,Any}()
 Dict(kv::Tuple{}) = Dict()
 copy(d::Dict) = Dict(d)
 
+# Dict is the default mutable fall-back
+copymutable(d::AbstractDict{K,V}) where {K,V} = ismutable(d) ? copy(d) : Dict{K,V}(d)
+
+ismutable(::Type{<:Dict}) = true
+
 const AnyDict = Dict{Any,Any}
 
 Dict(ps::Pair{K,V}...) where {K,V} = Dict{K,V}(ps)
