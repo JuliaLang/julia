@@ -371,7 +371,7 @@ Return the size in bytes of each field-description entry in the layout array,
 located at `(dt.layout + sizeof(DataTypeLayout))`.
 Can be called on any `isconcretetype`.
 
-See also [`Base.fieldoffset`](@ref).
+See also [`fieldoffset`](@ref).
 """
 function datatype_fielddesc_type(dt::DataType)
     @_pure_meta
@@ -399,7 +399,7 @@ false
 isimmutable(@nospecialize(x)) = (@_pure_meta; !typeof(x).mutable)
 
 """
-    Base.isstructtype(T) -> Bool
+    isstructtype(T) -> Bool
 
 Determine whether type `T` was declared as a struct type
 (i.e. using the `struct` or `mutable struct` keyword).
@@ -414,7 +414,7 @@ function isstructtype(@nospecialize(t::Type))
 end
 
 """
-    Base.isprimitivetype(T) -> Bool
+    isprimitivetype(T) -> Bool
 
 Determine whether type `T` was declared as a primitive type
 (i.e. using the `primitive` keyword).
@@ -509,17 +509,17 @@ false
 isconcretetype(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && t.isconcretetype)
 
 """
-    Base.isabstracttype(T)
+    isabstracttype(T)
 
 Determine whether type `T` was declared as an abstract type
 (i.e. using the `abstract` keyword).
 
 # Examples
 ```jldoctest
-julia> Base.isabstracttype(AbstractArray)
+julia> isabstracttype(AbstractArray)
 true
 
-julia> Base.isabstracttype(Vector)
+julia> isabstracttype(Vector)
 false
 ```
 """
@@ -529,6 +529,14 @@ function isabstracttype(@nospecialize(t))
     # TODO: what to do for `Union`?
     return isa(t, DataType) && t.abstract
 end
+
+"""
+    Base.issingletontype(T)
+
+Determine whether type `T` has exactly one possible instance; for example, a
+struct type with no fields.
+"""
+issingletontype(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && isdefined(t, :instance))
 
 """
     Base.parameter_upper_bound(t::UnionAll, idx)
@@ -612,7 +620,7 @@ String
 fieldtype
 
 """
-    fieldindex(T, name::Symbol, err:Bool=true)
+    Base.fieldindex(T, name::Symbol, err:Bool=true)
 
 Get the index of a named field, throwing an error if the field does not exist (when err==true)
 or returning 0 (when err==false).
@@ -1232,7 +1240,7 @@ function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Sym
 end
 
 """
-    isambiguous(m1, m2; ambiguous_bottom=false) -> Bool
+    Base.isambiguous(m1, m2; ambiguous_bottom=false) -> Bool
 
 Determine whether two methods `m1` and `m2` (typically of the same
 function) are ambiguous.  This test is performed in the context of
