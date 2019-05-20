@@ -2302,7 +2302,8 @@ mark: {
             if (gc_cblist_task_scanner) {
                 export_gc_state(ptls, &sp);
                 gc_invoke_callbacks(jl_gc_cb_task_scanner_t,
-                    gc_cblist_task_scanner, (ta, ta == ptls2->root_task));
+                    gc_cblist_task_scanner,
+                    (ta, ptls2 != NULL && ta == ptls2->root_task));
                 import_gc_state(ptls, &sp);
             }
             if (stkbuf) {
