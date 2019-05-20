@@ -135,7 +135,7 @@ jl_value_t *jl_readonlymemory_exception;
 
 // --- type properties and predicates ---
 
-static int typeenv_has(jl_typeenv_t *env, jl_tvar_t *v)
+static int typeenv_has(jl_typeenv_t *env, jl_tvar_t *v) JL_NOTSAFEPOINT
 {
     while (env != NULL) {
         if (env->var == v)
@@ -145,7 +145,7 @@ static int typeenv_has(jl_typeenv_t *env, jl_tvar_t *v)
     return 0;
 }
 
-static int has_free_typevars(jl_value_t *v, jl_typeenv_t *env)
+static int has_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
 {
     if (jl_typeis(v, jl_tvar_type)) {
         return !typeenv_has(env, (jl_tvar_t*)v);
@@ -174,7 +174,7 @@ static int has_free_typevars(jl_value_t *v, jl_typeenv_t *env)
     return 0;
 }
 
-JL_DLLEXPORT int jl_has_free_typevars(jl_value_t *v)
+JL_DLLEXPORT int jl_has_free_typevars(jl_value_t *v) JL_NOTSAFEPOINT
 {
     return has_free_typevars(v, NULL);
 }
@@ -215,7 +215,7 @@ JL_DLLEXPORT jl_array_t *jl_find_free_typevars(jl_value_t *v)
 }
 
 // test whether a type has vars bound by the given environment
-static int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env)
+static int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
 {
     if (jl_typeis(v, jl_tvar_type))
         return typeenv_has(env, (jl_tvar_t*)v);
@@ -249,7 +249,7 @@ static int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env)
     return 0;
 }
 
-JL_DLLEXPORT int jl_has_typevar(jl_value_t *t, jl_tvar_t *v)
+JL_DLLEXPORT int jl_has_typevar(jl_value_t *t, jl_tvar_t *v) JL_NOTSAFEPOINT
 {
     jl_typeenv_t env = { v, NULL, NULL };
     return jl_has_bound_typevars(t, &env);
@@ -637,6 +637,8 @@ void jl_sort_types(jl_value_t **types, size_t length)
 static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
 {
     size_t j;
+    // TOOD: This shouldn't be necessary
+    JL_GC_PROMISE_ROOTED(tt);
     size_t tnp = jl_nparams(tt);
     if (n != tnp) return 0;
     if (tt->name == jl_type_typename) {
@@ -687,7 +689,8 @@ static ssize_t lookup_type_idx(jl_typename_t *tn, jl_value_t **key, size_t n, in
           need to allow sequences of typekey_compare-equal types in the ordered cache.
         */
         while (hi < cl && typekey_compare(data[hi], key, n) == 0) {
-            if (typekey_eq(data[hi], key, n))
+            jl_datatype_t *tt = data[hi];
+            if (typekey_eq(tt, key, n))
                 return hi;
             hi++;
         }
@@ -1581,7 +1584,7 @@ jl_value_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n)
     return vn;
 }
 
-JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st)
+JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT)
 {
     assert(st->name != jl_namedtuple_typename && st->name != jl_tuple_typename);
     jl_datatype_t *wt = (jl_datatype_t*)jl_unwrap_unionall(st->name->wrapper);

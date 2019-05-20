@@ -17,17 +17,17 @@ extern "C" {
 
 static jl_sym_t *symtab = NULL;
 
-static uintptr_t hash_symbol(const char *str, size_t len)
+static uintptr_t hash_symbol(const char *str, size_t len) JL_NOTSAFEPOINT
 {
     return memhash(str, len) ^ ~(uintptr_t)0/3*2;
 }
 
-static size_t symbol_nbytes(size_t len)
+static size_t symbol_nbytes(size_t len) JL_NOTSAFEPOINT
 {
     return (sizeof(jl_taggedvalue_t) + sizeof(jl_sym_t) + len + 1 + 7) & -8;
 }
 
-static jl_sym_t *mk_symbol(const char *str, size_t len)
+static jl_sym_t *mk_symbol(const char *str, size_t len) JL_NOTSAFEPOINT
 {
     jl_sym_t *sym;
     size_t nb = symbol_nbytes(len);
@@ -44,7 +44,7 @@ static jl_sym_t *mk_symbol(const char *str, size_t len)
     return sym;
 }
 
-static jl_sym_t *symtab_lookup(jl_sym_t **ptree, const char *str, size_t len, jl_sym_t ***slot)
+static jl_sym_t *symtab_lookup(jl_sym_t **ptree, const char *str, size_t len, jl_sym_t ***slot) JL_NOTSAFEPOINT
 {
     jl_sym_t *node = jl_atomic_load_acquire(ptree); // consume
     uintptr_t h = hash_symbol(str, len);
@@ -71,7 +71,7 @@ static jl_sym_t *symtab_lookup(jl_sym_t **ptree, const char *str, size_t len, jl
     return node;
 }
 
-static jl_sym_t *_jl_symbol(const char *str, size_t len)
+static jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT
 {
     jl_sym_t **slot;
     jl_sym_t *node = symtab_lookup(&symtab, str, len, &slot);

@@ -109,7 +109,7 @@ typedef struct _jl_ast_context_t {
 static jl_ast_context_t jl_ast_main_ctx;
 
 #ifdef __clang_analyzer__
-jl_ast_context_t *jl_ast_ctx(fl_context_t *fl) JL_GLOBALLY_ROOTED;
+jl_ast_context_t *jl_ast_ctx(fl_context_t *fl) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #else
 #define jl_ast_ctx(fl_ctx) container_of(fl_ctx, jl_ast_context_t, fl)
 #endif
@@ -203,7 +203,7 @@ static const builtinspec_t julia_flisp_ast_ext[] = {
     { NULL, NULL }
 };
 
-static void jl_init_ast_ctx(jl_ast_context_t *ast_ctx)
+static void jl_init_ast_ctx(jl_ast_context_t *ast_ctx) JL_NOTSAFEPOINT
 {
     fl_context_t *fl_ctx = &ast_ctx->fl;
     fl_init(fl_ctx, 4*1024*1024);

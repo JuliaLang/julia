@@ -94,7 +94,7 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *
             }
         }
         else {
-            jl_datatype_t *ft = (jl_datatype_t*)jl_field_type(dt, f);
+            jl_datatype_t *ft = (jl_datatype_t*)jl_field_type_concrete(dt, f);
             if (jl_is_uniontype(ft)) {
                 uint8_t asel = ((uint8_t*)ao)[jl_field_size(dt, f) - 1];
                 uint8_t bsel = ((uint8_t*)bo)[jl_field_size(dt, f) - 1];
@@ -321,7 +321,7 @@ JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPO
             u = (f == NULL) ? 0 : jl_object_id(f);
         }
         else {
-            jl_datatype_t *fieldtype = (jl_datatype_t*)jl_field_type(dt, f);
+            jl_datatype_t *fieldtype = (jl_datatype_t*)jl_field_type_concrete(dt, f);
             if (jl_is_uniontype(fieldtype)) {
                 uint8_t sel = ((uint8_t*)vo)[jl_field_size(dt, f) - 1];
                 fieldtype = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)fieldtype, sel);
@@ -472,7 +472,7 @@ void STATIC_INLINE _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t 
     *n_alloc = newalloc;
 }
 
-static jl_function_t *jl_iterate_func;
+static jl_function_t *jl_iterate_func JL_GLOBALLY_ROOTED;
 
 JL_CALLABLE(jl_f__apply)
 {
@@ -597,10 +597,9 @@ JL_CALLABLE(jl_f__apply)
         }
         else {
             assert(extra > 0);
-            jl_value_t *args[3];
-            args[0] = jl_iterate_func;
-            args[1] = ai;
-            jl_value_t *next = jl_apply(args, 2);
+            jl_value_t *args[2];
+            args[0] = ai;
+            jl_value_t *next = jl_apply_generic(jl_iterate_func, args, 1);
             while (next != jl_nothing) {
                 roots[stackalloc] = next;
                 jl_value_t *value = jl_fieldref(next, 0);
@@ -612,8 +611,8 @@ JL_CALLABLE(jl_f__apply)
                 if (arg_heap)
                     jl_gc_wb(arg_heap, value);
                 roots[stackalloc + 1] = NULL;
-                args[2] = state;
-                next = jl_apply(args, 3);
+                args[1] = state;
+                next = jl_apply_generic(jl_iterate_func, args, 2);
             }
             roots[stackalloc] = NULL;
             extra -= 1;

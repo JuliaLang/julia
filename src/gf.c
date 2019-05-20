@@ -1211,13 +1211,14 @@ static int check_disabled_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct
         return 1;
     jl_tupletype_t *sig = oldentry->sig;
     jl_value_t *isect = closure->match.ti;
+    jl_value_t *isect2 = NULL;
     if (closure->shadowed == NULL)
         closure->shadowed = (jl_value_t*)jl_alloc_vec_any(0);
-
+    JL_GC_PUSH1(&isect2);
     int i, l = jl_array_len(closure->shadowed);
     for (i = 0; i < l; i++) {
         jl_typemap_entry_t *mth = (jl_typemap_entry_t*)jl_array_ptr_ref(closure->shadowed, i);
-        jl_value_t *isect2 = jl_type_intersection((jl_value_t*)mth->sig, (jl_value_t*)sig);
+        isect2 = jl_type_intersection((jl_value_t*)mth->sig, (jl_value_t*)sig);
         // see if the intersection was covered by precisely the disabled method
         // that means we now need to record the ambiguity
         if (jl_types_equal(isect, isect2)) {
@@ -1235,7 +1236,7 @@ static int check_disabled_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct
             jl_array_ptr_1d_push((jl_array_t*)mambig->ambig, (jl_value_t*)oldentry);
         }
     }
-
+    JL_GC_POP();
     jl_array_ptr_1d_push((jl_array_t*)closure->shadowed, (jl_value_t*)oldentry);
     return 1;
 }
@@ -1701,7 +1702,7 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int
     return ml_matches(mt->defs, 0, types, lim, include_ambiguous, world, min_valid, max_valid);
 }
 
-jl_method_instance_t *jl_get_unspecialized(jl_method_instance_t *method)
+jl_method_instance_t *jl_get_unspecialized(jl_method_instance_t *method JL_PROPAGATES_ROOT)
 {
     // one unspecialized version of a function can be shared among all cached specializations
     jl_method_t *def = method->def.method;
@@ -2256,7 +2257,9 @@ jl_value_t *jl_gf_invoke(jl_value_t *types0, jl_value_t *gf, jl_value_t **args, 
     // now we have found the matching definition.
     // next look for or create a specialization of this definition.
     JL_GC_POP();
-    return jl_gf_invoke_by_method(entry->func.method, gf, args, nargs);
+    jl_method_t *method = entry->func.method;
+    JL_GC_PROMISE_ROOTED(method);
+    return jl_gf_invoke_by_method(method, gf, args, nargs);
 }
 
 static jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value_t **args, size_t nargs)
