@@ -20,7 +20,6 @@
 #include "uv.h"
 #include "julia_assert.h"
 #include "intrinsics.h"
-#include "builtin_proto.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -590,22 +589,6 @@ static jl_module_t *eval_import_from(jl_module_t *m JL_PROPAGATES_ROOT, jl_expr_
     return NULL;
 }
 
-// Format msg and eval `throw(ErrorException(msg)))` in module `m`.
-// Used in `jl_toplevel_eval_flex` instead of `jl_errorf` so that the error
-// location in julia code gets into the backtrace.
-static void jl_eval_errorf(jl_module_t *m, const char* fmt, ...)
-{
-    jl_value_t *throw_ex = (jl_value_t*)jl_exprn(call_sym, 2);
-    JL_GC_PUSH1(&throw_ex);
-    jl_exprargset(throw_ex, 0, jl_builtin_throw);
-    va_list args;
-    va_start(args, fmt);
-    jl_exprargset(throw_ex, 1, jl_vexceptionf(jl_errorexception_type, fmt, args));
-    va_end(args);
-    jl_toplevel_eval_flex(m, throw_ex, 0, 0);
-    JL_GC_POP();
-}
-
 jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int fast, int expanded)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -623,7 +606,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
             char *n = jl_symbol_name((jl_sym_t*)e), *n0 = n;
             while (*n == '_') ++n;
             if (*n == 0 && n > n0)
-                jl_eval_errorf(m, "all-underscore identifier used as rvalue");
+                jl_error("all-underscore identifier used as rvalue");
         }
         return jl_interpret_toplevel_expr_in(m, e, NULL, NULL);
     }
@@ -632,7 +615,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
 
     if (ex->head == dot_sym) {
         if (jl_expr_nargs(ex) != 2)
-            jl_eval_errorf(m, "syntax: malformed \".\" expression");
+            jl_error("syntax: malformed \".\" expression");
         jl_value_t *lhs = jl_exprarg(ex, 0);
         jl_value_t *rhs = jl_exprarg(ex, 1);
         // only handle `a.b` syntax here, so qualified names can be eval'd in pure contexts
@@ -642,7 +625,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
     }
 
     if (ptls->in_pure_callback) {
-        jl_eval_errorf(m, "eval cannot be used in a generated function");
+        jl_error("eval cannot be used in a generated function");
     }
 
     jl_method_instance_t *mfunc = NULL;
@@ -684,8 +667,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                 }
                 else {
                     if (!jl_is_module(u))
-                        jl_eval_errorf(m, "invalid using path: \"%s\" does not name a module",
-                                       jl_symbol_name(name));
+                        jl_errorf("invalid using path: \"%s\" does not name a module", jl_symbol_name(name));
                     // `using A.B` syntax
                     jl_module_using(m, u);
                     if (m == jl_main_module && name == NULL) {
@@ -696,7 +678,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                 }
             }
             else {
-                jl_eval_errorf(m, "syntax: malformed \"using\" statement");
+                jl_error("syntax: malformed \"using\" statement");
             }
         }
         JL_GC_POP();
@@ -723,7 +705,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                 }
             }
             else {
-                jl_eval_errorf(m, "syntax: malformed \"import\" statement");
+                jl_error("syntax: malformed \"import\" statement");
             }
         }
         JL_GC_POP();
@@ -733,7 +715,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         for (size_t i = 0; i < jl_array_len(ex->args); i++) {
             jl_sym_t *name = (jl_sym_t*)jl_array_ptr_ref(ex->args, i);
             if (!jl_is_symbol(name))
-                jl_eval_errorf(m, "syntax: malformed \"export\" statement");
+                jl_error("syntax: malformed \"export\" statement");
             jl_module_export(m, name);
         }
         JL_GC_POP();
@@ -773,9 +755,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
     }
     else if (head == error_sym || head == jl_incomplete_sym) {
         if (jl_expr_nargs(ex) == 0)
-            jl_eval_errorf(m, "malformed \"%s\" expression", jl_symbol_name(head));
+            jl_errorf("malformed \"%s\" expression", jl_symbol_name(head));
         if (jl_is_string(jl_exprarg(ex, 0)))
-            jl_eval_errorf(m, "syntax: %s", jl_string_data(jl_exprarg(ex, 0)));
+            jl_errorf("syntax: %s", jl_string_data(jl_exprarg(ex, 0)));
         jl_throw(jl_exprarg(ex, 0));
     }
     else if (jl_is_symbol(ex)) {
