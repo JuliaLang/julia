@@ -644,6 +644,15 @@ end
     @test Symmetric(B) == Symmetric(Matrix(B))
 end
 
+@testset "issue #32079: det for singular Symmetric matrix" begin
+    A = ones(Float64, 3, 3)
+    @test det(Symmetric(A))::Float64 == det(A) == 0.0
+    @test det(Hermitian(A))::Float64 == det(A) == 0.0
+    A = ones(ComplexF64, 3, 3)
+    @test det(Symmetric(A))::ComplexF64 == det(A) == 0.0
+    @test det(Hermitian(A))::Float64 == det(A) == 0.0
+end
+
 @testset "symmetric()/hermitian() for Numbers" begin
     @test LinearAlgebra.symmetric(1, :U) == 1
     @test LinearAlgebra.symmetric_type(Int) == Int
