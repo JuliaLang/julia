@@ -794,6 +794,11 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     // it does "using Base" if Base is available.
     if (jl_base_module != NULL) {
         jl_add_standard_imports(jl_main_module);
+        jl_value_t *maininclude = jl_get_global(jl_base_module, jl_symbol("MainInclude"));
+        if (maininclude && jl_is_module(maininclude)) {
+            jl_module_import(jl_main_module, (jl_module_t*)maininclude, jl_symbol("include"));
+            jl_module_import(jl_main_module, (jl_module_t*)maininclude, jl_symbol("eval"));
+        }
         // Do initialization needed before starting child threads
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("__preinit_threads__"));
         if (f) {
