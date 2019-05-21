@@ -397,6 +397,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
         {
             int nullfd;
             nullfd = open("/dev/null", O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH /* 0666 */);
+            assert(nullfd != -1);
             dup2(nullfd, fd);
             close(nullfd);
         }
