@@ -818,8 +818,8 @@ some ideas that might help to understand Julia's definition.
   the product of the size. The size of a zero-dimensional array is `()`, and
   therefore its length is `1`.
 * Zero-dimensional arrays don't natively have any dimensions into which you
-  index -- they’re just `A[]`. We can apply the same "trailing one" rule for them as for all other array dimensionalities, 
-  so you can indeed index them as `A[1]`, `A[1,1]`, etc; see 
+  index -- they’re just `A[]`. We can apply the same "trailing one" rule for them 
+  as for all other array dimensionalities, so you can indeed index them as `A[1]`, `A[1,1]`, etc; see 
   [Omitted and extra indices](https://docs.julialang.org/en/v1/manual/arrays/#Omitted-and-extra-indices-1).
 
 It is also important to understand the differences to ordinary scalars. Scalars
