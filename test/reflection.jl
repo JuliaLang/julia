@@ -882,3 +882,6 @@ _test_at_locals2(1,1)
                    #=dump_module=#true, #=syntax=#:att, #=optimize=#false, :none,
                    params)
 end
+
+@test nameof(Any) === :Any
+@test nameof(:) === :Colon

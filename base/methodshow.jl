@@ -164,18 +164,39 @@ function show(io::IO, m::Method; kwtype::Union{DataType, Nothing}=nothing)
     end
 end
 
+function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
+    mt = ms.mt
+    name = mt.name
+    hasname = isdefined(mt.module, name) &&
+              typeof(getfield(mt.module, name)) <: Function
+    n = length(ms)
+    if mt.module === Core && n == 0 && mt.defs === nothing && mt.cache !== nothing
+        # try to detect Builtin
+        print(io, "# built-in function; no methods")
+    else
+        m = n==1 ? "method" : "methods"
+        print(io, "# $n $m")
+        sname = string(name)
+        namedisplay = namefmt(sname)
+        if hasname
+            what = startswith(sname, '@') ? "macro" : "generic function"
+            print(io, " for ", what, " ", namedisplay)
+        elseif '#' in sname
+            print(io, " for anonymous function ", namedisplay)
+        elseif mt === _TYPE_NAME.mt
+            print(io, " for type constructor")
+        end
+        print(io, ":")
+    end
+end
+
 function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=true)
     mt = ms.mt
     name = mt.name
-    isself = isdefined(mt.module, name) &&
-             typeof(getfield(mt.module, name)) <: Function
-    n = length(ms)
+    hasname = isdefined(mt.module, name) &&
+              typeof(getfield(mt.module, name)) <: Function
     if header
-        m = n==1 ? "method" : "methods"
-        sname = string(name)
-        ns = (isself || '#' in sname) ? sname : string("(::", name, ")")
-        what = startswith(ns, '@') ? "macro" : "generic function"
-        print(io, "# $n $m for ", what, " \"", ns, "\":")
+        show_method_list_header(io, ms, str -> "\""*str*"\"")
     end
     kwtype = isdefined(mt, :kwsorter) ? typeof(mt.kwsorter) : nothing
     n = rest = 0
@@ -204,7 +225,10 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
         if rest == 1
             show(io, last; kwtype=kwtype)
         else
-            print(io,"... $rest methods not shown (use methods($name) to see them all)")
+            print(io, "... $rest methods not shown")
+            if hasname
+                print(io, " (use methods($name) to see them all)")
+            end
         end
     end
 end
@@ -317,13 +341,9 @@ end
 
 function show(io::IO, mime::MIME"text/html", ms::MethodList)
     mt = ms.mt
-    name = mt.name
-    n = length(ms)
-    meths = n==1 ? "method" : "methods"
-    ns = string(name)
-    what = startswith(ns, '@') ? "macro" : "generic function"
-    print(io, "$n $meths for ", what, " <b>$ns</b>:<ul>")
+    show_method_list_header(io, ms, str -> "<b>"*str*"</b>")
     kwtype = isdefined(mt, :kwsorter) ? typeof(mt.kwsorter) : nothing
+    print(io, "<ul>")
     for meth in ms
         print(io, "<li> ")
         show(io, mime, meth; kwtype=kwtype)
