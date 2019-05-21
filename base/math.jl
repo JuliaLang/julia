@@ -552,29 +552,33 @@ function hypot(x::T,y::T) where T<:AbstractFloat
         return convert(T,Inf)
     end
 
+    # Order the operands
     ax,ay = abs(x), abs(y)
     if ay > ax
         ax,ay = ay,ax
     end
 
-    if ay <= ax*sqrt(eps(T)/2)  #Note: This also gets ay == 0
+    # Widely varying operands
+    if ay <= ax*sqrt(eps(T)/2.0)  #Note: This also gets ay == 0
         return ax
     end
 
-    if (ax > sqrt(floatmax(T)/2)) || (ay < sqrt(floatmin(T)))
-        rescale = eps(sqrt(floatmin(T)))
-        if ax > sqrt(floatmax(T)/2)
-            ax = ax*rescale
-            ay = ay*rescale
-            return sqrt(muladd(ax,ax,ay*ay))/rescale
-        else
-            ax = ax/rescale
-            ay = ay/rescale
-            return sqrt(muladd(ax,ax,ay*ay))*rescale
-        end
-    else
-        return sqrt(muladd(ax,ax,ay*ay))
+    # Operands do not vary widely
+    rescale = eps(sqrt(floatmin(T)))  #Rescaling constant
+
+    if ax > sqrt(floatmax(T)/2.0)
+        ax = ax*rescale
+        ay = ay*rescale
+        return sqrt(muladd(ax,ax,ay*ay))/rescale
     end
+
+    if ay < sqrt(floatmin(T))
+        ax = ax/rescale
+        ay = ay/rescale
+        return sqrt(muladd(ax,ax,ay*ay))*rescale
+    end
+
+    sqrt(muladd(ax,ax,ay*ay))
 end
 function hypot(x::T, y::T) where T<:Number
     ax = abs(x)
