@@ -183,12 +183,28 @@ julia> cross(a,b)
 ```
 """
 function cross(a::AbstractVector, b::AbstractVector)
-    if !(length(a) == length(b) == 3)
-        throw(DimensionMismatch("cross product is only defined for vectors of length 3"))
+    len = length(a)
+
+    if len != length(b) || !(len == 3 || len == 7)
+        throw(DimensionMismatch("cross product is only defined for vectors of length 3 (and 7)"))
     end
-    a1, a2, a3 = a
-    b1, b2, b3 = b
-    [a2*b3-a3*b2, a3*b1-a1*b3, a1*b2-a2*b1]
+
+    if len == 3
+        a1, a2, a3 = a
+        b1, b2, b3 = b
+        [a2*b3-a3*b2, a3*b1-a1*b3, a1*b2-a2*b1]
+    else
+        a1,a2,a3,a4,a5,a6,a7 = a
+        b1,b2,b3,b4,b5,b6,b7 = b
+
+        [a2*b4 - a4*b2 + a3*b7 - a7*b3 + a5*b6 - a6*b5,
+         a3*b5 - a5*b3 + a4*b1 - a1*b4 + a6*b7 - a7*b6,
+         a4*b6 - a6*b4 + a5*b2 - a2*b5 + a7*b1 - a1*b7,
+         a5*b7 - a7*b5 + a6*b3 - a3*b6 + a1*b2 - a2*b1,
+         a6*b1 - a1*b6 + a7*b4 - a4*b7 + a2*b3 - a3*b2,
+         a7*b2 - a2*b7 + a1*b5 - a5*b1 + a3*b4 - a4*b3,
+         a1*b3 - a3*b1 + a2*b6 - a6*b2 + a4*b5 - a5*b4]
+     end
 end
 
 """
