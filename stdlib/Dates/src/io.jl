@@ -67,8 +67,13 @@ function Base.show(io::IO, t::Time)
             nanosecond(t)
         ]
         index = something(findlast(!iszero, values), 1)
-        params = map(repr, values[1:index])
-        print(io, Time, "(", join(params, ", "), ")")
+
+        print(io, Time, "(")
+        for i in 1:index
+            show(io, values[i])
+            i != index && print(io, ", ")
+        end
+        print(io, ")")
     end
 end
 
