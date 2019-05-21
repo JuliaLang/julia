@@ -51,7 +51,26 @@ function Base.string(t::Time)
     return "$hh:$mii:$ss$ns"
 end
 
-Base.show(io::IO, x::Time) = print(io, string(x))
+Base.show(io::IO, ::MIME"text/plain", t::Time) = print(io, t)
+Base.print(io::IO, t::Time) = print(io, string(t))
+
+function Base.show(io::IO, t::Time)
+    if get(io, :compact, false)
+        print(io, t)
+    else
+        values = [
+            hour(t)
+            minute(t)
+            second(t)
+            millisecond(t)
+            microsecond(t)
+            nanosecond(t)
+        ]
+        index = something(findlast(!iszero, values), 1)
+        params = map(repr, values[1:index])
+        print(io, Time, "(", join(params, ", "), ")")
+    end
+end
 
 @inline function format(io, d::AbstractDateToken, dt, locale)
     format(io, d, dt)
