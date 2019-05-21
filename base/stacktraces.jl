@@ -136,8 +136,9 @@ function lookup(ip::Base.InterpreterIP)
         return [StackFrame(top_level_scope_sym, ip.code, ip.stmt, nothing, false, false, 0)]
     elseif ip.code isa LineNumberNode
         node = ip.code
+        file = node.file === nothing ? :none : node.file
         # top-level expression during macro expansion pass
-        return [StackFrame(top_level_scope_sym, node.file, node.line, nothing, false, false, 0)]
+        return [StackFrame(top_level_scope_sym, file, node.line, nothing, false, false, 0)]
     else
         @assert ip.code isa Core.CodeInfo
         codeinfo = ip.code
