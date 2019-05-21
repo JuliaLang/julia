@@ -161,6 +161,7 @@ Base.isdispatchtuple
 Base.isimmutable
 Base.isabstracttype
 Base.isprimitivetype
+Base.issingletontype
 Base.isstructtype
 Base.nameof(::DataType)
 Base.fieldnames
