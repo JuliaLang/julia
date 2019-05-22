@@ -314,7 +314,11 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
                 }
                 uv_loop_t *loop = jl_global_event_loop();
                 loop->stop_flag = 0;
+#ifdef _OS_WINDOWS_
+                uv_run(loop, UV_RUN_NOWAIT);
+#else
                 uv_run(loop, UV_RUN_ONCE);
+#endif
                 JL_UV_UNLOCK();
             }
             else {
