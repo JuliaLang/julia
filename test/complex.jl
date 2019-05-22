@@ -991,7 +991,7 @@ end
 @testset "Complex Irrationals, issue #21204" begin
     for x in (pi, ℯ, Base.MathConstants.catalan) # No need to test all of them
         z = Complex(x, x)
-        @test typeof(z) == Complex{typeof(x)}
+        @test typeof(z) == Complex{Float64}
         @test exp(z) ≈ exp(x) * cis(x)
         @test log1p(z) ≈ log(1 + z)
         @test exp2(z) ≈ exp(z * log(2))

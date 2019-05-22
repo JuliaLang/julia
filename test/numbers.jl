@@ -2058,10 +2058,10 @@ for T = (UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64,UInt128,Int128)
 end
 
 @testset "Irrational/Bool multiplication" begin
-    @test false*pi === 0.0
-    @test pi*false === 0.0
-    @test true*pi === Float64(pi)
-    @test pi*true === Float64(pi)
+    @test false*pi === false
+    @test pi*false === false
+    @test true*pi === pi
+    @test pi*true === pi
 end
 # issue #5492
 @test -0.0 + false === -0.0
@@ -2653,5 +2653,72 @@ end
                 @test sprint(print, x) == sx
             end
         end
+    end
+end
+
+
+@testset "Irrational/Bool addition/subtraction" begin
+    @test false + pi === pi
+    @test pi + false === pi
+    @test true + pi === pi + 1.0
+    @test pi + true === pi + 1.0
+
+    @test false - pi === -pi
+    @test pi - false === pi
+    @test true - pi === 1.0 - pi
+    @test pi - true === pi - 1.0
+end
+
+@testset "One-argument functions of Irrational" begin
+    for f in (*, +, abs, adjoint, conj, prod, real, sum)
+        @test f(pi) === pi
+    end
+    for f in (isfinite, isreal, one)
+        @test f(pi) === true
+    end
+    for f in (imag, isinf, isinteger, ismissing, isnan, isnothing, isone,
+              iszero, signbit, zero)
+        @test f(pi) === false
+    end
+    for f in (sin, tan)
+        @test f(float(pi)) < eps() # otherwise f should not be on this list
+        # f(Float64(pi)) is supposed to be different from zero, but f(pi) is not.
+        @test f(pi) === 0.0
+    end
+    for f in (cot, csc)
+        @test f(pi) === Inf
+    end
+    @test cis(pi) === -1.0 + 0.0im
+    @test sincos(pi) === (sin(pi), cos(pi))
+    for f in (-, abs2, acosh, acot, acotd, acoth, acsc, acscd, acsch, angle,
+              asec, asecd, asinh, atan, atand, cbrt, ceil, cos, cosc, cosd,
+              cosh, cospi, cotd, coth, cscd, csch, deg2rad, exp, exp10, exp2,
+              expm1, floor, hypot, inv, log, log10, log1p, log2, rad2deg,
+              round, sec, secd, sech, sign, sinc, sind, sinh, sinpi, sqrt,
+              tand, tanh, trunc)
+        @test f(pi) isa Float64
+        @test isapprox(f(pi), Float64(f(big(pi))))
+    end
+    @test reim(pi) === (pi, false)
+    @test_throws ArgumentError oneunit(pi)
+end
+
+@testset "Two-argument functions of Irrationals" begin
+    for i in (ℯ, pi), j in (ℯ, π)
+        for  f in (Complex, ComplexF16, ComplexF32, ComplexF64,
+                   cld, cmp, complex, fld,
+                   isapprox, isequal, isless, issetequal, issubset)
+            @test f(i, j) === f(float(i), float(j))
+        end
+        for  f in (atan, atand, copysign, div, fld, flipsign,
+                    hypot, kron, log, max, min,
+                    mod, mod1, nextpow, prevpow, rem)
+            @test isapprox(f(i, j), Float64(f(big(i), big(j))))
+        end
+        for  f in (divrem, fldmod, minmax)
+            @test all(isapprox.(f(i, j), Float64.(f(big(i), big(j)))))
+        end
+        @test isapprox(widemul(i, j), big(i)*big(j))
+        @test typeof(widemul(i, j)) == typeof(widemul(float(i), float(j)))
     end
 end

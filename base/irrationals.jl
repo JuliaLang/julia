@@ -14,6 +14,12 @@ abstract type AbstractIrrational <: Real end
 
 Number type representing an exact irrational value denoted by the
 symbol `sym`.
+
+Note: `Irrational`s are converted to `Float64` before use by most
+built-in mathematical operators. Conversion to high-precision types
+such as  `BigFloat` should be done before the first operation,
+as in `2*big(π)` rather than `big(2π)`. The latter would only be
+accurate to about 16 decimal places.
 """
 struct Irrational{sym} <: AbstractIrrational end
 
@@ -36,6 +42,7 @@ promote_rule(::Type{S}, ::Type{T}) where {S<:AbstractIrrational,T<:Number} = pro
 AbstractFloat(x::AbstractIrrational) = Float64(x)
 Float16(x::AbstractIrrational) = Float16(Float32(x))
 Complex{T}(x::AbstractIrrational) where {T<:Real} = Complex{T}(T(x))
+Complex(x::AbstractIrrational, y::AbstractIrrational) = Complex(Float64(x), Float64(y))
 
 @pure function Rational{T}(x::AbstractIrrational) where T<:Integer
     o = precision(BigFloat)
@@ -136,13 +143,42 @@ hash(x::Irrational, h::UInt) = 3*objectid(x) - h
 
 widen(::Type{T}) where {T<:Irrational} = T
 
+zero(::AbstractIrrational) = false
+zero(::Type{<:AbstractIrrational}) = false
+
+one(::Type{<:AbstractIrrational}) = true
+
+oneunit(T::Type{<:AbstractIrrational}) = throw(ArgumentError("The number one cannot be of type $T"))
+oneunit(x::T) where {T <: AbstractIrrational} = oneunit(T)
+
 -(x::AbstractIrrational) = -Float64(x)
-for op in Symbol[:+, :-, :*, :/, :^]
+for op in Symbol[:+, :-, :*, :/, :^, :cld, :div, :divrem, :fld, :mod, :mod1, :rem, :UnitRange]
     @eval $op(x::AbstractIrrational, y::AbstractIrrational) = $op(Float64(x),Float64(y))
 end
-*(x::Bool, y::AbstractIrrational) = ifelse(x, Float64(y), 0.0)
+*(x::Bool, y::AbstractIrrational) = x ? y : zero(y)
+*(x::AbstractIrrational, y::Bool) = y * x
++(x::Bool, y::AbstractIrrational) = x ? 1.0 + y : y
++(x::AbstractIrrational, y::Bool) = y + x
+-(x::AbstractIrrational, y::Bool) = y ? x - 1.0 : x
 
 round(x::Irrational, r::RoundingMode) = round(float(x), r)
+
+Rational(x::AbstractIrrational) = rationalize(x)
+rationalize(x::Irrational{T}) where T = throw(ArgumentError("Type must be specified. Use rationalize(Int, $T) to obtain a Rational{Int} approximation to the irrational constant $T."))
+Math.mod2pi(x::AbstractIrrational) = Float64(mod2pi(big(x)))
+Math.rem2pi(x::AbstractIrrational, m) = Float64(rem2pi(big(x), m))
+
+# sin(float(pi)) is computed from the difference between accurate pi and float(pi),
+# but sin(pi) should return zero. (The same applies to tan(pi).)
+sin(::Irrational{:π}) = 0.0
+tan(::Irrational{:π}) = 0.0
+Math.sincos(::Irrational{:π}) = (0.0, -1.0)
+
+sign(x::AbstractIrrational) = sign(Float64(x))
+
+widemul(x::AbstractIrrational, y::AbstractIrrational) = big(x)*big(y)
+
+(::Colon)(x::AbstractIrrational, y::AbstractIrrational) = Float64(x):Float64(y)
 
 """
 	@irrational sym val def
@@ -188,6 +224,3 @@ function alignment(io::IO, x::AbstractIrrational)
     m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
     (length(m.captures[1]), length(m.captures[2]))
 end
-
-# inv
-inv(x::AbstractIrrational) = 1/x
