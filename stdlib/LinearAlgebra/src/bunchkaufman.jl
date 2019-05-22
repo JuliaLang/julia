@@ -125,7 +125,7 @@ size(B::BunchKaufman, d::Integer) = size(getfield(B, :LD), d)
 issymmetric(B::BunchKaufman) = B.symmetric
 ishermitian(B::BunchKaufman) = !B.symmetric
 
-function _ipiv2perm_bk(v::AbstractVector{T}, maxi::Integer, uplo::AbstractChar) where T
+function _ipiv2perm_bk(v::AbstractVector{T}, maxi::Integer, uplo::AbstractChar, rook::Bool) where T
     require_one_based_indexing(v)
     p = T[1:maxi;]
     uploL = uplo == 'L'
@@ -137,11 +137,16 @@ function _ipiv2perm_bk(v::AbstractVector{T}, maxi::Integer, uplo::AbstractChar) 
             p[i], p[vi] = p[vi], p[i]
             i += uploL ? 1 : -1
         else # the 2x2 blocks
+            if rook
+                p[i], p[-vi] = p[-vi], p[i]
+            end
             if uploL
-                p[i + 1], p[-vi] = p[-vi], p[i + 1]
+                vp = rook ? -v[i+1] : -vi
+                p[i + 1], p[vp] = p[vp], p[i + 1]
                 i += 2
             else # 'U'
-                p[i - 1], p[-vi] = p[-vi], p[i - 1]
+                vp = rook ? -v[i-1] : -vi
+                p[i - 1], p[vp] = p[vp], p[i - 1]
                 i -= 2
             end
         end
@@ -208,7 +213,7 @@ julia> F.U*F.D*F.U' - F.P*A*F.P'
 function getproperty(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
     n = size(B, 1)
     if d == :p
-        return _ipiv2perm_bk(getfield(B, :ipiv), n, getfield(B, :uplo))
+        return _ipiv2perm_bk(getfield(B, :ipiv), n, getfield(B, :uplo), B.rook)
     elseif d == :P
         return Matrix{T}(I, n, n)[:,invperm(B.p)]
     elseif d == :L || d == :U || d == :D
