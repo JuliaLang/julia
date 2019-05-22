@@ -46,10 +46,10 @@ typedef struct taskheap_tag {
 
 /* multiqueue parameters */
 static const int16_t heap_d = 8;
-static const int heap_c = 4;
+static const int heap_c = 16;
 
 /* size of each heap */
-static const int tasks_per_heap = 8192; // TODO: this should be smaller by default, but growable!
+static const int tasks_per_heap = 16384; // TODO: this should be smaller by default, but growable!
 
 /* the multiqueue's heaps */
 static taskheap_t *heaps;
@@ -117,7 +117,7 @@ static inline int multiq_insert(jl_task_t *task, int16_t priority)
 
     if (heaps[rn].ntasks >= tasks_per_heap) {
         jl_mutex_unlock_nogc(&heaps[rn].lock);
-        jl_error("multiq insertion failed, increase #tasks per heap");
+        // multiq insertion failed, increase #tasks per heap
         return -1;
     }
 
@@ -287,9 +287,11 @@ void jl_threadfun(void *arg)
 
 
 // enqueue the specified task for execution
-JL_DLLEXPORT void jl_enqueue_task(jl_task_t *task)
+JL_DLLEXPORT int jl_enqueue_task(jl_task_t *task)
 {
-    multiq_insert(task, task->prio);
+    if (multiq_insert(task, task->prio) == -1)
+        return 1;
+    return 0;
 }
 
 
@@ -372,17 +374,22 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
 }
 
 
+JL_DLLEXPORT void jl_set_task_tid(jl_task_t *task, int tid)
+{
+    // Try to acquire the lock on this task.
+    // If this fails, we'll check for that error later (in jl_switchto).
+    if (jl_atomic_load_acquire(&task->tid) != tid) {
+        jl_atomic_compare_exchange(&task->tid, -1, tid);
+    }
+}
+
 // get the next runnable task from the multiq
 static jl_task_t *get_next_task(jl_value_t *getsticky)
 {
     jl_task_t *task = (jl_task_t*)jl_apply(&getsticky, 1);
     if (jl_typeis(task, jl_task_type)) {
         int self = jl_get_ptls_states()->tid;
-        // try to acquire the lock on this task now
-        // we'll check this error later (in yieldto)
-        if (jl_atomic_load_acquire(&task->tid) != self) {
-            jl_atomic_compare_exchange(&task->tid, -1, self);
-        }
+        jl_set_task_tid(task, self);
         return task;
     }
 #ifdef JULIA_ENABLE_THREADING
