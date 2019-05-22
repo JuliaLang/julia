@@ -378,12 +378,12 @@ function is_exported_from_stdlib(name::Symbol, mod::Module)
     return isexported(mod, name) && isdefined(mod, name) && !isdeprecated(mod, name) && getfield(mod, name) === orig
 end
 
-function show(io::IO, f::Function)
+function show_function(io::IO, f::Function, compact::Bool)
     ft = typeof(f)
     mt = ft.name.mt
     if isdefined(mt, :module) && isdefined(mt.module, mt.name) &&
         getfield(mt.module, mt.name) === f
-        if is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main || get(io, :compact, false)
+        if compact || is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main
             print(io, mt.name)
         else
             print(io, mt.module, ".", mt.name)
@@ -393,7 +393,8 @@ function show(io::IO, f::Function)
     end
 end
 
-print(io::IO, f::Function) = print(io, nameof(f))
+show(io::IO, f::Function) = show_function(io, f, get(io, :compact, false))
+print(io::IO, f::Function) = show_function(io, f, true)
 
 function show(io::IO, x::Core.IntrinsicFunction)
     name = ccall(:jl_intrinsic_name, Cstring, (Core.IntrinsicFunction,), x)

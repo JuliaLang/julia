@@ -1122,12 +1122,23 @@ function which(m::Module, s::Symbol)
 end
 
 # function reflection
+
 """
     nameof(f::Function) -> Symbol
 
-Get the name of a generic `Function` as a symbol, or `:anonymous`.
+Get the name of a generic `Function` as a symbol. For anonymous functions,
+this is a compiler-generated name. For explicitly-declared subtypes of
+`Function`, it is the name of the function's type.
 """
-nameof(f::Function) = (typeof(f).name.mt::Core.MethodTable).name
+function nameof(f::Function)
+    t = typeof(f)
+    mt = t.name.mt::Core.MethodTable
+    if mt === Symbol.name.mt
+        # uses shared method table, so name is not unique to this function type
+        return nameof(t)
+    end
+    return mt.name
+end
 
 functionloc(m::Core.MethodInstance) = functionloc(m.def)
 
