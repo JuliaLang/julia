@@ -564,21 +564,18 @@ function hypot(x::T,y::T) where T<:AbstractFloat
     end
 
     # Operands do not vary widely
-    rescale = eps(sqrt(floatmin(T)))  #Rescaling constant
-
+    scale = eps(sqrt(floatmin(T)))  #Rescaling constant
     if ax > sqrt(floatmax(T)/2.0)
-        ax = ax*rescale
-        ay = ay*rescale
-        return sqrt(muladd(ax,ax,ay*ay))/rescale
+        ax = ax*scale
+        ay = ay*scale
+        scale = 1.0/scale
+    elseif ay < sqrt(floatmin(T))
+        ax = ax/scale
+        ay = ay/scale
+    else
+        scale = 1.0
     end
-
-    if ay < sqrt(floatmin(T))
-        ax = ax/rescale
-        ay = ay/rescale
-        return sqrt(muladd(ax,ax,ay*ay))*rescale
-    end
-
-    sqrt(muladd(ax,ax,ay*ay))
+    sqrt(muladd(ax,ax,ay*ay))*scale
 end
 function hypot(x::T, y::T) where T<:Number
     ax = abs(x)
