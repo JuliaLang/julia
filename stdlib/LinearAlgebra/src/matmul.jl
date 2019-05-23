@@ -41,9 +41,10 @@ function *(transx::Transpose{<:Any,<:StridedVector{T}}, y::StridedVector{T}) whe
 end
 
 # Matrix-vector multiplication
-function (*)(A::StridedMatrix{T}, x::StridedVector{S}) where {T<:BlasFloat,S}
+function (*)(A::StridedMatrix{T}, x::StridedVector{S}) where {T<:BlasFloat,S<:Real}
     TS = promote_op(matprod, T, S)
-    mul!(similar(x, TS, size(A,1)), A, convert(AbstractVector{TS}, x))
+    y = isconcretetype(TS) ? convert(AbstractVector{TS}, x) : x
+    mul!(similar(x, TS, size(A,1)), A, y)
 end
 function (*)(A::AbstractMatrix{T}, x::AbstractVector{S}) where {T,S}
     TS = promote_op(matprod, T, S)
