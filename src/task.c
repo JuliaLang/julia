@@ -269,6 +269,7 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
     if (killed) {
         *pt = lastt; // can't fail after here: clear the gc-root for the target task now
         lastt->gcstack = NULL;
+        lastt->interpstack = NULL;
         if (!lastt->copy_stack && lastt->stkbuf) {
             // early free of stkbuf back to the pool
             jl_release_task_stack(ptls, lastt);
@@ -292,13 +293,16 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
 #endif
         *pt = lastt; // can't fail after here: clear the gc-root for the target task now
         lastt->gcstack = ptls->pgcstack;
+        lastt->interpstack = ptls->interpstack;
     }
 
     // set up global state for new task
     lastt->world_age = ptls->world_age;
     ptls->pgcstack = t->gcstack;
+    ptls->interpstack = t->interpstack;
     ptls->world_age = t->world_age;
     t->gcstack = NULL;
+    t->interpstack = NULL;
     ptls->current_task = t;
     if (!lastt->sticky)
         // release lastt to run on any tid
@@ -503,6 +507,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->eh = NULL;
     t->sticky = 1;
     t->gcstack = NULL;
+    t->interpstack = NULL;
     t->excstack = NULL;
     t->stkbuf = NULL;
     t->started = 0;
@@ -966,6 +971,7 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     ptls->current_task->logstate = jl_nothing;
     ptls->current_task->eh = NULL;
     ptls->current_task->gcstack = NULL;
+    ptls->current_task->interpstack = NULL;
     ptls->current_task->excstack = NULL;
     ptls->current_task->tid = ptls->tid;
     ptls->current_task->sticky = 1;

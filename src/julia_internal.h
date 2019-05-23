@@ -449,6 +449,29 @@ jl_array_t *jl_get_loaded_modules(void);
 
 void jl_resolve_global_expr(jl_module_t *m, jl_expr_t *ex);
 
+typedef size_t (*capture_interp_state_cb)(void* state, uintptr_t *bt_data, size_t space_remaining);
+struct _jl_interpstack_t { // jl_interpstack_t typedef in julia_threads.h
+    struct _jl_interpstack_t *prev;
+    void* state;
+    capture_interp_state_cb capture_for_bt;
+    // const char* C_funcname; FIXME __func__
+};
+
+#define JL_ENTER_INTERPRETER(state, capture_cb) \
+  jl_interpstack_t __interp_stkf = {jl_get_ptls_states()->interpstack, (void*)state, capture_cb}; \
+  (jl_get_ptls_states()->interpstack = &__interp_stkf) \
+
+#define JL_EXIT_INTERPRETER() \
+  (jl_get_ptls_states()->interpstack = __interp_stkf.prev)
+
+typedef struct {
+    jl_value_t*   filename; // nominally Union{Symbol,Nothing}
+    size_t line;
+} ast_interpreter_state;
+size_t capture_ast_interpreter_frame(void* vstate, uintptr_t *bt_data, size_t space_remaining);
+
+jl_value_t *jl_toplevel_eval_flex(ast_interpreter_state* istate, jl_module_t *m,
+                                  jl_value_t *e, int fast, int expanded);
 jl_value_t *jl_eval_global_var(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *e);
 jl_value_t *jl_parse_eval_all(const char *fname,
                               const char *content, size_t contentlen,
@@ -650,9 +673,11 @@ typedef int bt_cursor_t;
 // Special marker in backtrace data for encoding interpreter frames
 #define JL_BT_INTERP_FRAME (((uintptr_t)0)-1)
 size_t rec_backtrace(uintptr_t *data, size_t maxsize) JL_NOTSAFEPOINT;
-size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize, bt_context_t *ctx) JL_NOTSAFEPOINT;
+size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize, bt_context_t *ctx,
+                         jl_interpstack_t *interpstack) JL_NOTSAFEPOINT;
 #ifdef LIBOSXUNWIND
-size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
+size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize, bt_context_t *ctx,
+                               jl_interpstack_t *interpstack);
 #endif
 JL_DLLEXPORT void jl_get_backtrace(jl_array_t **bt, jl_array_t **bt2);
 void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_t *bt_size);
@@ -672,9 +697,19 @@ STATIC_INLINE char *jl_copy_str(char **to, const char *from)
     memcpy(*to, from, len);
     return *to;
 }
+
+// Interpreter frame detection for backtraces
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || defined(_OS_WINDOWS_)
+#   define SECT_INTERP JL_SECTION("jl_interpreter_frame_val")
+#elif defined(_OS_DARWIN_)
+#   define SECT_INTERP JL_SECTION("__TEXT,__jif")
+#else
+#   define SECT_INTERP
+#   define NO_INTERP_BT
+#warning "Interpreter backtraces not implemented for this platform"
+#endif
+
 JL_DLLEXPORT int jl_is_interpreter_frame(uintptr_t ip);
-JL_DLLEXPORT int jl_is_enter_interpreter_frame(uintptr_t ip);
-JL_DLLEXPORT size_t jl_capture_interp_frame(uintptr_t *data, uintptr_t sp, uintptr_t fp, size_t space_remaining);
 
 // Exception stack: a stack of pairs of (exception,raw_backtrace).
 // The stack may be traversed and accessed with the functions below.
@@ -1015,28 +1050,6 @@ void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
             jl_value_t *msg);
 
 int isabspath(const char *in);
-
-typedef struct {
-    jl_code_info_t *src; // contains the names and number of slots
-    jl_method_instance_t *mi; // MethodInstance we're executing, or NULL if toplevel
-    jl_module_t *module; // context for globals
-    jl_value_t **locals; // slots for holding local slots and ssavalues
-    jl_svec_t *sparam_vals; // method static parameters, if eval-ing a method body
-    size_t ip; // Leak the currently-evaluating statement index to backtrace capture
-    int preevaluation; // use special rules for pre-evaluating expressions (deprecated--only for ccall handling)
-    int continue_at; // statement index to jump to after leaving exception handler (0 if none)
-} interpreter_state;
-
-#ifdef _OS_WINDOWS_
-#define INTERP_CALLBACK_ABI  __attribute__((fastcall))
-#else
-#define INTERP_CALLBACK_ABI
-#endif
-
-extern void * INTERP_CALLBACK_ABI enter_interpreter_frame(void * INTERP_CALLBACK_ABI (*callback)(interpreter_state *, void *), void *arg);
-
-jl_value_t *jl_toplevel_eval_flex(interpreter_state* istate, jl_module_t *m,
-                                  jl_value_t *e, int fast, int expanded);
 
 extern jl_sym_t *call_sym;    extern jl_sym_t *invoke_sym;
 extern jl_sym_t *empty_sym;   extern jl_sym_t *top_sym;

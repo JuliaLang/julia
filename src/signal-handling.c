@@ -230,8 +230,10 @@ void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_
     if (sig)
         jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
     jl_safe_printf("in expression starting at %s:%d\n", jl_filename, jl_lineno);
-    if (context)
-        *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context);
+    if (context) {
+        *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context,
+                                         jl_get_ptls_states()->interpstack);
+    }
     for (i = 0; i < n; i++)
         jl_gdblookup(bt_data[i] - 1);
     gc_debug_print_status();

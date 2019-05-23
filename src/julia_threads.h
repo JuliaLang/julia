@@ -135,11 +135,13 @@ typedef struct {
 } jl_gc_mark_cache_t;
 
 typedef struct _jl_excstack_t jl_excstack_t;
+typedef struct _jl_interpstack_t jl_interpstack_t;
 // This includes all the thread local states we care about for a thread.
 // Changes to TLS field types must be reflected in codegen.
 #define JL_MAX_BT_SIZE 80000
 struct _jl_tls_states_t {
     struct _jl_gcframe_t *pgcstack;
+    jl_interpstack_t *interpstack;
     size_t world_age;
     int16_t tid;
     uint64_t rngseed;

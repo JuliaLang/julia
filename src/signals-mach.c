@@ -459,10 +459,10 @@ void *mach_profile_listener(void *arg)
 
             if (forceDwarf == 0) {
                 // Save the backtrace
-                bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
+                bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL); // FIXME!
             }
             else if (forceDwarf == 1) {
-                bt_size_cur += rec_backtrace_ctx_dwarf((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
+                bt_size_cur += rec_backtrace_ctx_dwarf((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL); // FIXME!
             }
             else if (forceDwarf == -1) {
                 jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");

@@ -108,7 +108,7 @@ jl_array_t *jl_get_loaded_modules(void)
 }
 
 // TODO: add locks around global state mutation operations
-jl_value_t *jl_eval_module_expr(interpreter_state* istate, jl_module_t *parent_module, jl_expr_t *ex)
+jl_value_t *jl_eval_module_expr(ast_interpreter_state* istate, jl_module_t *parent_module, jl_expr_t *ex)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     assert(ex->head == module_sym);
@@ -244,7 +244,7 @@ jl_value_t *jl_eval_module_expr(interpreter_state* istate, jl_module_t *parent_m
     return (jl_value_t*)newm;
 }
 
-static jl_value_t *jl_eval_dot_expr(interpreter_state* istate, jl_module_t *m,
+static jl_value_t *jl_eval_dot_expr(ast_interpreter_state* istate, jl_module_t *m,
                                     jl_value_t *x, jl_value_t *f, int fast)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -590,7 +590,7 @@ static jl_module_t *eval_import_from(jl_module_t *m JL_PROPAGATES_ROOT, jl_expr_
     return NULL;
 }
 
-jl_value_t *jl_toplevel_eval_flex(interpreter_state *istate, jl_module_t *JL_NONNULL m,
+jl_value_t *jl_toplevel_eval_flex(ast_interpreter_state *istate, jl_module_t *JL_NONNULL m,
                                   jl_value_t *e, int fast, int expanded)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -808,26 +808,29 @@ jl_value_t *jl_toplevel_eval_flex(interpreter_state *istate, jl_module_t *JL_NON
     return result;
 }
 
-typedef struct {
-    jl_module_t *m;
-    jl_value_t *e;
-} jl_toplevel_eval_args;
-
-// FIXME SECT_INTERP ?
-INTERP_CALLBACK_ABI void *jl_toplevel_eval_callback(interpreter_state *istate, void *vargs) {
-    jl_toplevel_eval_args *args = (jl_toplevel_eval_args*)vargs;
-    // FIXME: Set s.src and s.ip to do away with jl_filename & jl_lineno
-    istate->src = jl_symbol("none");
-    istate->ip = 0;
-    return jl_toplevel_eval_flex(istate, args->m, args->e, 1, 0);
+size_t capture_ast_interpreter_frame(void* vstate, uintptr_t *bt_data, size_t space_remaining)
+{
+    int needed_space = 2;
+    if (space_remaining < needed_space)
+        return needed_space;
+    ast_interpreter_state *s = (ast_interpreter_state*)vstate;
+    bt_data[0] = (uintptr_t)s->filename;
+    bt_data[1] = (uintptr_t)s->line;
+    return needed_space;
 }
 
 // Evaluate the toplevel surface syntax `e` in module `m`.
 // See also `jl_toplevel_eval_in()` for a version with more error checking.
-JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *e)
+SECT_INTERP JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *e)
 {
-    jl_toplevel_eval_args args = {m, e};
-    return (jl_value_t *)enter_interpreter_frame(jl_toplevel_eval_callback, (void*)&args);
+    ast_interpreter_state istate = {
+        .filename = (jl_value_t*)jl_symbol("none"),
+        .line = 0
+    };
+    JL_ENTER_INTERPRETER(&istate, &capture_ast_interpreter_frame);
+    jl_value_t *r = jl_toplevel_eval_flex(&istate, m, e, 1, 0);
+    JL_EXIT_INTERPRETER();
+    return r;
 }
 
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)

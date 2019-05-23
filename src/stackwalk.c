@@ -27,7 +27,8 @@ extern "C" {
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context);
 static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintptr_t *fp);
 
-size_t jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, size_t maxsize, int add_interp_frames)
+size_t jl_unw_stepn(bt_cursor_t *cursor, jl_interpstack_t **icursor, uintptr_t *ip,
+                    uintptr_t *sp, size_t maxsize, int add_interp_frames)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     volatile size_t n = 0;
@@ -52,10 +53,37 @@ size_t jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, size_t ma
                break;
            if (sp)
                sp[n] = thesp;
-           if (add_interp_frames && jl_is_enter_interpreter_frame(ip[n])) {
-               n += jl_capture_interp_frame(&ip[n], thesp, thefp, maxsize-n-1) + 1;
-           } else {
-               n++;
+           n++;
+           if (add_interp_frames && jl_is_interpreter_frame(ip[n])) {
+               jl_interpstack_t *interpstack = *icursor;
+               if (!interpstack) {
+                   assert(0 && "TLS interpreter stack empty but native interpreter frame found");
+                   jl_safe_printf("TLS interpreter stack empty but native interpreter frame found\n");
+                   continue;
+               }
+               *icursor = interpstack->prev;
+               // Add extra interpreter frame info:
+               //    ip[n+1]       = JL_BT_INTERP_FRAME
+               //    ip[n+2:n+1+K] = interp_frame_info
+               if (n+1 >= maxsize) {
+                   jl_safe_printf("FIXME - broken for blockwise bt capture\n");
+                   // FIXME - broken for blockwise bt capture
+                   // (interpreter frame ignored)
+                   continue;
+               }
+               // Sentinel value to indicate an interpreter frame
+               size_t space_remaining = maxsize - n - 1;
+               capture_interp_state_cb cb = interpstack->capture_for_bt;
+               size_t K = cb(interpstack->state, &ip[n+2], space_remaining);
+               if (K <= space_remaining) {
+                   ip[n+1] = JL_BT_INTERP_FRAME;
+                   n += 1 + K;
+               }
+               else {
+                   // FIXME - broken for blockwise bt capture
+                   jl_safe_printf("FIXME - broken for blockwise bt capture\n");
+                   // (interpreter frame ignored)
+               }
            }
         }
         n++;
@@ -77,13 +105,13 @@ size_t jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, size_t ma
 }
 
 size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize,
-                         bt_context_t *context)
+                         bt_context_t *context, jl_interpstack_t *interpstack)
 {
     size_t n = 0;
     bt_cursor_t cursor;
     if (!jl_unw_init(&cursor, context))
         return 0;
-    n = jl_unw_stepn(&cursor, data, NULL, maxsize, 1);
+    n = jl_unw_stepn(&cursor, &interpstack, data, NULL, maxsize, 1);
     return n > maxsize ? maxsize : n;
 }
 
@@ -92,7 +120,8 @@ size_t rec_backtrace(uintptr_t *data, size_t maxsize)
     bt_context_t context;
     memset(&context, 0, sizeof(context));
     jl_unw_get(&context);
-    return rec_backtrace_ctx(data, maxsize, &context);
+    jl_interpstack_t *interpstack = jl_get_ptls_states()->interpstack;
+    return rec_backtrace_ctx(data, maxsize, &context, interpstack);
 }
 
 static jl_value_t *array_ptr_void_type JL_ALWAYS_LEAFTYPE = NULL;
@@ -113,12 +142,13 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp)
     bt_cursor_t cursor;
     memset(&context, 0, sizeof(context));
     jl_unw_get(&context);
+    jl_interpstack_t *interpstack = jl_get_ptls_states()->interpstack;
     if (jl_unw_init(&cursor, &context)) {
         size_t n = 0, offset = 0;
         do {
             jl_array_grow_end(ip, maxincr);
             if (returnsp) jl_array_grow_end(sp, maxincr);
-            n = jl_unw_stepn(&cursor, (uintptr_t*)jl_array_data(ip) + offset,
+            n = jl_unw_stepn(&cursor, &interpstack, (uintptr_t*)jl_array_data(ip) + offset,
                     returnsp ? (uintptr_t*)jl_array_data(sp) + offset : NULL, maxincr, 1);
             offset += maxincr;
         } while (n > maxincr);
@@ -427,13 +457,13 @@ int jl_unw_init_dwarf(bt_cursor_t *cursor, bt_context_t *uc)
     return unw_init_local_dwarf(cursor, uc) != 0;
 }
 size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize,
-                               bt_context_t *context)
+                               bt_context_t *context, jl_interpstack_t *interpstack)
 {
     size_t n;
     bt_cursor_t cursor;
     if (!jl_unw_init_dwarf(&cursor, context))
         return 0;
-    n = jl_unw_stepn(&cursor, data, NULL, maxsize, 1);
+    n = jl_unw_stepn(&cursor, &interpstack, data, NULL, maxsize, 1);
     return n > maxsize ? maxsize : n;
 }
 #endif

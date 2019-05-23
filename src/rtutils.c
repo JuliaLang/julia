@@ -215,6 +215,7 @@ JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
     // Must have no safepoint
     eh->prev = current_task->eh;
     eh->gcstack = ptls->pgcstack;
+    eh->interpstack = ptls->interpstack;
 #ifdef JULIA_ENABLE_THREADING
     eh->gc_state = ptls->gc_state;
     eh->locks_len = current_task->locks.len;
@@ -250,6 +251,7 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     int8_t old_gc_state = ptls->gc_state;
     current_task->eh = eh->prev;
     ptls->pgcstack = eh->gcstack;
+    ptls->interpstack = eh->interpstack;
 #ifdef JULIA_ENABLE_THREADING
     arraylist_t *locks = &current_task->locks;
     if (locks->len > eh->locks_len) {

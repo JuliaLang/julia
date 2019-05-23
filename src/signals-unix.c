@@ -175,7 +175,7 @@ static void jl_throw_in_ctx(jl_ptls_t ptls, jl_value_t *e, int sig, void *sigctx
 {
     if (!ptls->safe_restore)
         ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE,
-                                          jl_to_bt_context(sigctx));
+                                          jl_to_bt_context(sigctx), ptls->interpstack);
     ptls->sig_exception = e;
     jl_call_in_ctx(ptls, &jl_sig_throw, sig, sigctx);
 }
@@ -669,7 +669,7 @@ static void *signal_listener(void *arg)
             if (critical) {
                 bt_size += rec_backtrace_ctx(bt_data + bt_size,
                         JL_MAX_BT_SIZE / jl_n_threads - 1,
-                        signal_context);
+                        signal_context, jl_get_ptls_states()->interpstack); // XXX: Can we access ptls here?
                 bt_data[bt_size++] = 0;
             }
 
@@ -688,7 +688,7 @@ static void *signal_listener(void *arg)
                     } else {
                         // Get backtrace data
                         bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
-                                bt_size_max - bt_size_cur - 1, signal_context);
+                                bt_size_max - bt_size_cur - 1, signal_context, ptls->interpstack);
                     }
                     ptls->safe_restore = old_buf;
 

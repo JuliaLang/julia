@@ -258,6 +258,7 @@ void jl_init_threadtls(int16_t tid)
     ptls->world_age = 1; // OK to run Julia code on this thread
     ptls->tid = tid;
     ptls->pgcstack = NULL;
+    ptls->interpstack = NULL;
     ptls->gc_state = 0; // GC unsafe
     // Conditionally initialize the safepoint address. See comment in
     // `safepoint.c`

@@ -1631,6 +1631,7 @@ typedef struct _jl_timing_block_t jl_timing_block_t;
 typedef struct _jl_handler_t {
     jl_jmp_buf eh_ctx;
     jl_gcframe_t *gcstack;
+    jl_interpstack_t *interpstack;
     struct _jl_handler_t *prev;
     int8_t gc_state;
 #ifdef JULIA_ENABLE_THREADING
@@ -1667,6 +1668,8 @@ typedef struct _jl_task_t {
     jl_handler_t *eh;
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
+    // saved interpreter state stack
+    jl_interpstack_t *interpstack;
     // saved exception stack
     jl_excstack_t *excstack;
     // current world age
