@@ -817,4 +817,8 @@ end
 let a = rand(5), b = rand(5), c = copy(a)
     view(identity(a), 1:3) .+= view(b, 1:3)
     @test a == [(c+b)[1:3]; c[4:5]]
+
+    x = [1]
+    x[[1,1]] .+= 1
+    @test x == [2]
 end
