@@ -107,7 +107,7 @@ julia> l == S.L &&  q == S.Q
 true
 ```
 """
-lq(A::StridedMatrix{<:BlasFloat})  = lq!(copy(A))
+lq(A::AbstractMatrix)  = lq!(copy(A))
 lq(x::Number) = lq(fill(x,1,1))
 
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
