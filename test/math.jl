@@ -193,6 +193,7 @@ end
             @test isequal(hypot(T(3),T(4)), T(5))
             @test isequal(hypot(floatmax(T),T(1)),floatmax(T))
             @test isequal(hypot(floatmin(T)*sqrt(eps(T)),T(0)),floatmin(T)*sqrt(eps(T)))
+            @test isequal(floatmin(T)*hypot(1.368423059742933,1.3510496552495361),hypot(floatmin(T)*1.368423059742933,floatmin(T)*1.3510496552495361))
             @test isequal(log(T(1)), T(0))
             @test isequal(log(ℯ,T(1)), T(0))
             @test log(T(ℯ)) ≈ T(1) atol=eps(T)
