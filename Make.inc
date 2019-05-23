@@ -939,14 +939,13 @@ endif
 USE_BINARYBUILDER := 0
 endif
 
-# This is the set of projects that BinaryBuilder dependencies are hooked up for.
-BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM MBEDTLS LIBSSH2 CURL LIBGIT2 PCRE LIBUV UNWIND
-define SET_BB_DEFAULT
-
 # GMP and MPFR have serious performance regressions for now
 USE_BINARYBUILDER_GMP ?= 0
 USE_BINARYBUILDER_MPFR ?= 0
 
+# This is the set of projects that BinaryBuilder dependencies are hooked up for.
+BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM MBEDTLS LIBSSH2 CURL LIBGIT2 PCRE LIBUV UNWIND
+define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
 USE_BINARYBUILDER_$(1) ?= 0
