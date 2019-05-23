@@ -1444,10 +1444,8 @@
 (define (expand-update-operator- op op= lhs rhs declT)
   (let* ((e      (remove-argument-side-effects lhs))
          (newlhs (car e))
-         (temp   (and (eq? op= '|.=|) (pair? newlhs) (make-ssavalue)))
-         (newlhs (if (and temp (eq? (car newlhs) 'ref))
-                     (ref-to-view newlhs)
-                     newlhs))
+         (temp   (and (eq? op= '|.=|) (pair? newlhs) (not (eq? (car newlhs) 'ref))
+                      (make-ssavalue)))
          (e      (if temp
                      (cons temp (append (cdr e) (list `(= ,temp ,newlhs))))
                      e))
