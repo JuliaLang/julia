@@ -34,7 +34,7 @@ All subtypes of `AbstractDateToken` must define this method in order
 to be able to print a Date / DateTime object according to a `DateFormat`
 containing that token.
 """
-function format end
+format(io::IO, tok::AbstractDateToken, dt::TimeType, locale)
 
 # fallback to tryparsenext/format methods that don't care about locale
 @inline function tryparsenext(d::AbstractDateToken, str, i, len, locale)
