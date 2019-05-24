@@ -30,6 +30,8 @@ Sockets.send
 Sockets.recv
 Sockets.recvfrom
 Sockets.setopt
+Sockets.nagle
+Sockets.quickack
 ```
 
 ```@meta
