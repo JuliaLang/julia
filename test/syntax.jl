@@ -1741,6 +1741,10 @@ end
            end
        end)), :thunk)
 
+# issue #32121
+macro id32121(x) x end
+@test @id32121((a=1, b=2)) === (a=1, b=2)
+
 # issue #30030
 let x = 0
     @test (a=1, b=2, c=(x=3)) == (a=1, b=2, c=3)
