@@ -473,7 +473,7 @@ void jl_start_threads(void)
 
 #endif
 
-unsigned volatile _threadedregion; // HACK: prevent the root task from sleeping
+unsigned volatile _threadedregion; // HACK: keep track of whether it is safe to do IO
 
 // simple fork/join mode code
 JL_DLLEXPORT void jl_threading_run(jl_value_t *func)
@@ -507,16 +507,12 @@ JL_DLLEXPORT void jl_threading_run(jl_value_t *func)
         jl_apply(args2, 2);
         if (i == 1) {
             // let threads know work is coming (optimistic)
-            uv_mutex_lock(&sleep_lock);
-            uv_cond_broadcast(&sleep_alarm);
-            uv_mutex_unlock(&sleep_lock);
+            jl_wakeup_thread(-1);
         }
     }
     if (nthreads > 2) {
         // let threads know work is ready (guaranteed)
-        uv_mutex_lock(&sleep_lock);
-        uv_cond_broadcast(&sleep_alarm);
-        uv_mutex_unlock(&sleep_lock);
+        jl_wakeup_thread(-1);
     }
     // join with all tasks
     JL_TRY {
@@ -533,8 +529,8 @@ JL_DLLEXPORT void jl_threading_run(jl_value_t *func)
         JL_UV_UNLOCK();
         jl_rethrow();
     }
-    _threadedregion -= 1;
     // make sure no threads are sitting in the event loop
+    _threadedregion -= 1;
     jl_wake_libuv();
     // make sure no more callbacks will run while user code continues
     // outside thread region and might touch an I/O object.
