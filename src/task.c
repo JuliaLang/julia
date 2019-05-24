@@ -151,14 +151,14 @@ void JL_NORETURN jl_finish_task(jl_task_t *t, jl_value_t *resultval JL_MAYBE_UNR
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_SIGATOMIC_BEGIN();
-    if (t->exception != jl_nothing)
-        t->state = failed_sym;
-    else
-        t->state = done_sym;
-    if (t->copy_stack) // early free of stkbuf
-        t->stkbuf = NULL;
     t->result = resultval;
     jl_gc_wb(t, t->result);
+    if (t->exception != jl_nothing)
+        jl_atomic_store_release(&t->state, failed_sym);
+    else
+        jl_atomic_store_release(&t->state, done_sym);
+    if (t->copy_stack) // early free of stkbuf
+        t->stkbuf = NULL;
     // ensure that state is cleared
     ptls->in_finalizer = 0;
     ptls->in_pure_callback = 0;
