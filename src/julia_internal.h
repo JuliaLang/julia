@@ -424,13 +424,34 @@ int jl_is_submodule(jl_module_t *child, jl_module_t *parent);
 jl_array_t *jl_get_loaded_modules(void);
 
 void jl_resolve_global_expr(jl_module_t *m, jl_expr_t *ex);
-jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded);
 
+typedef struct {
+    jl_code_info_t *src; // contains the names and number of slots
+    jl_method_instance_t *mi; // MethodInstance we're executing, or NULL if toplevel
+    jl_value_t *filename;    // Current file name for AST contexts (macro expansion, jl_eval_toplevel_flex)
+    jl_module_t *module; // context for globals
+    jl_value_t **locals; // slots for holding local slots and ssavalues
+    jl_svec_t *sparam_vals; // method static parameters, if eval-ing a method body
+    size_t ip; // Leak the currently-evaluating statement index to backtrace capture
+    int preevaluation; // use special rules for pre-evaluating expressions (deprecated--only for ccall handling)
+    int continue_at; // statement index to jump to after leaving exception handler (0 if none)
+} interpreter_state;
+
+#ifdef _OS_WINDOWS_
+#define INTERP_CALLBACK_ABI  __attribute__((fastcall))
+#else
+#define INTERP_CALLBACK_ABI
+#endif
+
+extern void * INTERP_CALLBACK_ABI enter_interpreter_frame(void * INTERP_CALLBACK_ABI (*callback)(interpreter_state *, void *), void *arg);
+
+jl_value_t *jl_toplevel_eval_flex(interpreter_state* istate, jl_module_t *m,
+                                  jl_value_t *e, int fast, int expanded);
 jl_value_t *jl_eval_global_var(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *e);
 jl_value_t *jl_parse_eval_all(const char *fname,
                               const char *content, size_t contentlen,
                               jl_module_t *inmodule);
-jl_value_t *jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src);
+jl_value_t *jl_interpret_toplevel_thunk(interpreter_state *s, jl_module_t *m, jl_code_info_t *src);
 jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                           jl_code_info_t *src,
                                           jl_svec_t *sparam_vals);

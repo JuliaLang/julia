@@ -14,17 +14,6 @@
 extern "C" {
 #endif
 
-typedef struct {
-    jl_code_info_t *src; // contains the names and number of slots
-    jl_method_instance_t *mi; // MethodInstance we're executing, or NULL if toplevel
-    jl_module_t *module; // context for globals
-    jl_value_t **locals; // slots for holding local slots and ssavalues
-    jl_svec_t *sparam_vals; // method static parameters, if eval-ing a method body
-    size_t ip; // Leak the currently-evaluating statement index to backtrace capture
-    int preevaluation; // use special rules for pre-evaluating expressions (deprecated--only for ccall handling)
-    int continue_at; // statement index to jump to after leaving exception handler (0 if none)
-} interpreter_state;
-
 #include "interpreter-stacktrace.c"
 
 static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s);
@@ -820,7 +809,7 @@ struct jl_interpret_call_args {
     uint32_t nargs;
 };
 
-SECT_INTERP CALLBACK_ABI void *jl_interpret_call_callback(interpreter_state *s, void *vargs)
+SECT_INTERP INTERP_CALLBACK_ABI void *jl_interpret_call_callback(interpreter_state *s, void *vargs)
 {
     struct jl_interpret_call_args *args =
         (struct jl_interpret_call_args *)vargs;
@@ -866,21 +855,16 @@ SECT_INTERP jl_value_t *jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args,
     return (jl_value_t*)enter_interpreter_frame(jl_interpret_call_callback, (void *)&callback_args);
 }
 
-struct jl_interpret_toplevel_thunk_args {
-    jl_module_t *m;
-    jl_code_info_t *src;
-};
-SECT_INTERP CALLBACK_ABI void *jl_interpret_toplevel_thunk_callback(interpreter_state *s, void *vargs) {
-    struct jl_interpret_toplevel_thunk_args *args =
-        (struct jl_interpret_toplevel_thunk_args*)vargs;
-    JL_GC_PROMISE_ROOTED(args);
-    jl_array_t *stmts = args->src->code;
+SECT_INTERP jl_value_t *jl_interpret_toplevel_thunk(interpreter_state *s,
+                                                    jl_module_t *m, jl_code_info_t *src)
+{
+    jl_array_t *stmts = src->code;
     assert(jl_typeis(stmts, jl_array_any_type));
     jl_value_t **locals;
-    JL_GC_PUSHARGS(locals, jl_source_nslots(args->src) + jl_source_nssavalues(args->src));
-    s->src = args->src;
+    JL_GC_PUSHARGS(locals, jl_source_nslots(src) + jl_source_nssavalues(src));
+    s->src = src;
     s->locals = locals;
-    s->module = args->m;
+    s->module = m;
     s->sparam_vals = jl_emptysvec;
     s->continue_at = 0;
     s->mi = NULL;
@@ -888,13 +872,7 @@ SECT_INTERP CALLBACK_ABI void *jl_interpret_toplevel_thunk_callback(interpreter_
     jl_value_t *r = eval_body(stmts, s, 0, 1);
     jl_get_ptls_states()->world_age = last_age;
     JL_GC_POP();
-    return (void*)r;
-}
-
-SECT_INTERP jl_value_t *jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src)
-{
-    struct jl_interpret_toplevel_thunk_args args = { m, src };
-    return (jl_value_t *)enter_interpreter_frame(jl_interpret_toplevel_thunk_callback, (void*)&args);
+    return r;
 }
 
 // deprecated: do not use this method in new code
@@ -907,7 +885,7 @@ struct interpret_toplevel_expr_in_args {
     jl_svec_t *sparam_vals;
 };
 
-SECT_INTERP CALLBACK_ABI void *jl_interpret_toplevel_expr_in_callback(interpreter_state *s, void *vargs)
+SECT_INTERP INTERP_CALLBACK_ABI void *jl_interpret_toplevel_expr_in_callback(interpreter_state *s, void *vargs)
 {
     struct interpret_toplevel_expr_in_args *args =
         (struct interpret_toplevel_expr_in_args*)vargs;

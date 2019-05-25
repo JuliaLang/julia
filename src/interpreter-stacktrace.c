@@ -97,9 +97,10 @@ asm(
 #endif
     "\tmovq %" ARG1_REG ", %rax\n"
     "\tleaq " XSTR(STACK_PADDING) "(%rsp), %" ARG1_REG "\n"
-    // Zero out the src and mi fields
+    // Zero out src, mi, filename
     "\tmovq $0, 0(%" ARG1_REG ")\n"
     "\tmovq $0, 8(%" ARG1_REG ")\n"
+    "\tmovq $0, 16(%" ARG1_REG ")\n"
 #ifdef _OS_WINDOWS_
     // Make space for the register parameter area
     "\tsubq $32, %rsp\n"
@@ -120,8 +121,6 @@ asm(
     ".cfi_endproc\n"
     ASM_END
     );
-
-#define CALLBACK_ABI
 
 #elif defined(_CPU_X86_)
 
@@ -184,9 +183,10 @@ asm(
      ".cfi_def_cfa_offset " XSTR(MAX_INTERP_STATE_SIZE) " + " XSTR(ENTRY_OFFSET) "\n"
      "\tmovl %ecx, %eax\n"
      "\tmovl %esp, %ecx\n"
-     // Zero out the src and mi fields
+     // Zero out src, mi, filename
      "\tmovl $0, (%esp)\n"
      "\tmovl $0, 4(%esp)\n"
+     "\tmovl $0, 8(%esp)\n"
      // Restore 16 byte stack alignment
      // Technically not necessary on windows, because we don't assume this
      // alignment, but let's be nice if we ever start doing that.
@@ -206,7 +206,6 @@ asm(
      ASM_END
      );
 
-#define CALLBACK_ABI  __attribute__((fastcall))
 static_assert(sizeof(interpreter_state) <= MAX_INTERP_STATE_SIZE, "Update assembly code above");
 
 #elif defined(_CPU_AARCH64_)
@@ -239,7 +238,8 @@ asm(
     "\t.cfi_def_cfa_offset (" XSTR(MAX_INTERP_STATE_SIZE) " + " XSTR(STACK_PADDING) ")\n"
     "\t.cfi_offset 30, -(" XSTR(MAX_INTERP_STATE_SIZE) " + " XSTR(STACK_PADDING) ")\n"
     "\tmov x2, x0\n"
-    // Zero out the src and mi fields
+    // Zero out src, mi, filename
+    // (FIXME: filename not done!)
     "\tstp xzr, xzr, [sp, " XSTR(STACK_PADDING) "]\n"
     "\tadd x0, sp, " XSTR(STACK_PADDING) "\n"
     "Lenter_interpreter_frame_start_val:\n"
@@ -252,8 +252,6 @@ asm(
     ".cfi_endproc\n"
     ASM_END
     );
-
-#define CALLBACK_ABI
 
 #elif defined(_CPU_ARM_)
 
@@ -282,10 +280,11 @@ asm(
     // It isn't strictly necessary since we currently do not rely on it.
     "\tsub sp, sp, #" XSTR(MAX_INTERP_STATE_SIZE) "\n"
     "\tbic sp, sp, #15\n"
-    // Zero out the src and mi field
+    // Zero out src, mi, filename
     "\tmov ip, #0\n"
     "\tstr ip, [sp]\n"
     "\tstr ip, [sp, #4]\n"
+    "\tstr ip, [sp, #8]\n"
     "\tmov r0, sp\n"
     "Lenter_interpreter_frame_start_val:\n"
     "\tblx r2\n"
@@ -295,8 +294,6 @@ asm(
     "\t.fnend\n"
     ASM_END
     );
-
-#define CALLBACK_ABI
 
 #elif defined(_CPU_PPC64_)
 /**
@@ -345,10 +342,11 @@ asm(
     "\tmtctr 3\n" // move arg1 (func pointer) to ctr
     "\tmr 12, 3\n" // move func pointer to r12 if we jump to global entry point
     "\tcal 3, " XSTR(MIN_STACK) "(1)\n" // move pointer to INTERP_STATE to arg1
-    // zero out src and mi field
+    // Zero out src, mi, filename
     "\tli 6, 0\n"
     "\tstd 6, 0(3)\n"
     "\tstd 6, 8(3)\n"
+    "\tstd 6, 16(3)\n"
     // store TOC
     "\tstd 2, 24(1)\n"
     "Lenter_interpreter_frame_start_val:\n"
@@ -366,8 +364,6 @@ asm(
     ".cfi_endproc\n"
     ASM_END
     );
-
-#define CALLBACK_ABI
 
 #else
 #warning "Interpreter backtraces not implemented for this platform"
@@ -401,12 +397,14 @@ JL_DLLEXPORT size_t jl_capture_interp_frame(uintptr_t *data, uintptr_t sp, uintp
         return 0;
     // Sentinel value to indicate an interpreter frame
     data[0] = JL_BT_INTERP_FRAME;
-    data[1] = s->mi ? (uintptr_t)s->mi : s->src ? (uintptr_t)s->src : (uintptr_t)jl_nothing;
+    data[1] = s->mi  ? (uintptr_t)s->mi :
+              s->src ? (uintptr_t)s->src :
+              s->filename ? (uintptr_t)s->filename :
+              (uintptr_t)jl_nothing;
     data[2] = (uintptr_t)s->ip;
     return 2;
 }
 
-extern void * CALLBACK_ABI enter_interpreter_frame(void * CALLBACK_ABI (*callback)(interpreter_state *, void *), void *arg);
 #else
 JL_DLLEXPORT int jl_is_interpreter_frame(uintptr_t ip)
 {
@@ -422,7 +420,6 @@ JL_DLLEXPORT size_t jl_capture_interp_frame(uintptr_t *data, uintptr_t sp, uintp
 {
     return 0;
 }
-#define CALLBACK_ABI
 void *NOINLINE enter_interpreter_frame(void *(*callback)(interpreter_state *, void *), void *arg) {
     interpreter_state state = {};
     return callback(&state, arg);

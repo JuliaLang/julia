@@ -131,6 +131,15 @@ function lookup(ip::Base.InterpreterIP)
     elseif ip.code === nothing
         # interpreted top-level expression with no CodeInfo
         return [StackFrame(top_level_scope_sym, empty_sym, 0, nothing, false, false, 0)]
+    elseif ip.code isa Symbol
+        # FIXME ... top-level expression in jl_parse_eval_all
+        return [StackFrame(top_level_scope_sym, ip.code, ip.stmt, nothing, false, false, 0)]
+    elseif ip.code isa LineNumberNode
+        # FIXME Cannot happen anymore?
+        node = ip.code
+        file = node.file === nothing ? :none : node.file
+        # top-level expression during macro expansion pass
+        return [StackFrame(top_level_scope_sym, file, node.line, nothing, false, false, 0)]
     else
         @assert ip.code isa Core.CodeInfo
         codeinfo = ip.code
