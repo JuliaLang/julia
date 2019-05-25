@@ -158,6 +158,15 @@ end
 function deserialize_global_from_main(s::ClusterSerializer, sym)
     sym_isconst = deserialize(s)
     v = deserialize(s)
+    if isdefined(Main, sym) && (sym_isconst || isconst(Main, sym))
+        if isequal(getfield(Main, sym), v)
+            # same value; ok
+            return nothing
+        else
+            @warn "Cannot transfer global variable $sym; it already has a value."
+            return nothing
+        end
+    end
     if sym_isconst
         ccall(:jl_set_const, Cvoid, (Any, Any, Any), Main, sym, v)
     else
