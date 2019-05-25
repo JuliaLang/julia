@@ -1146,7 +1146,7 @@ end
 #  a) in the unlikely eventuality that they use a different logic for Bool conversion
 #  b) to skip the check if not necessary
 @inline try_bool_conversion(x::Real) =
-    x == 0 || x == 1 || throw(InexactError(:try_bool_conversion, Bool, x))
+    iszero(x) || x == 1 || throw(InexactError(:try_bool_conversion, Bool, x))
 @inline unchecked_bool_convert(x::Real) = x == 1
 
 function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArray{<:Real}, pos_s::Int, numbits::Int)
@@ -1160,7 +1160,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
     delta_kd = kd1 - kd0
 
     u = _msk64
-    if delta_kd == 0
+    if iszero(delta_kd)
         msk_d0 = msk_d1 = ~(u << ld0) | (u << (ld1+1))
         lt0 = ld1
     else

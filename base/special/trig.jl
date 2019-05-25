@@ -764,7 +764,7 @@ function sinpi(x::T) where T<:AbstractFloat
     rx = x-((x+t)-t) # zeros may be incorrectly signed
     arx = abs(rx)
 
-    if (arx == 0) | (arx == 1)
+    if iszero(arx) | (arx == 1)
         copysign(zero(T),x)
     elseif arx < 0.25
         sin_kernel(mulpi_ext(rx))
@@ -793,7 +793,7 @@ function sinpi(x::T) where T<:Union{Integer,Rational}
     end
     arx = abs(rx)
 
-    if (arx == 0) | (arx == 1)
+    if iszero(arx) | (arx == 1)
         copysign(zero(Tf),x)
     elseif arx < 0.25
         sin_kernel(mulpi_ext(rx))

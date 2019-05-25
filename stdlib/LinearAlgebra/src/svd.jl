@@ -106,7 +106,7 @@ function svd(A::StridedVecOrMat{T}; full::Bool = false) where T
     svd!(copy_oftype(A, eigtype(T)), full = full)
 end
 function svd(x::Number; full::Bool = false)
-    SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/abs(x), 1, 1), [abs(x)], fill(one(x), 1, 1))
+    SVD(iszero(x) ? fill(one(x), 1, 1) : fill(x/abs(x), 1, 1), [abs(x)], fill(one(x), 1, 1))
 end
 function svd(x::Integer; full::Bool = false)
     svd(float(x), full = full)

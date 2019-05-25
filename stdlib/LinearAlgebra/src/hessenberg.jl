@@ -68,7 +68,7 @@ getindex(H::UpperHessenberg{T}, i::Integer, j::Integer) where {T} =
 
 function setindex!(A::UpperHessenberg, x, i::Integer, j::Integer)
     if i > j+1
-        x == 0 || throw(ArgumentError("cannot set index in the lower triangular part " *
+        iszero(x) || throw(ArgumentError("cannot set index in the lower triangular part " *
             "($i, $j) of an UpperHessenberg matrix to a nonzero value ($x)"))
     else
         A.data[i,j] = x

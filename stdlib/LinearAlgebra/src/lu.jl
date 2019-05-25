@@ -254,7 +254,7 @@ end
 
 lu(S::LU) = S
 function lu(x::Number; check::Bool=true)
-    info = x == 0 ? one(BlasInt) : zero(BlasInt)
+    info = iszero(x) ? one(BlasInt) : zero(BlasInt)
     check && checknonsingular(info)
     return LU(fill(x, 1, 1), BlasInt[1], info)
 end

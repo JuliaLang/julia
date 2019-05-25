@@ -132,7 +132,7 @@ end
 function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}
     isnan(x) && return 0, 0, 0
     isinf(x) && return x.sign, 0, 0
-    x == 0 && return 0, 0, x.sign
+    iszero(x) && return 0, 0, x.sign
     s = BigInt()
     s.size = cld(x.prec, 8*sizeof(GMP.Limb)) # limbs
     b = s.size * sizeof(GMP.Limb)            # bytes

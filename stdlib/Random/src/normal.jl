@@ -48,7 +48,7 @@ end
 
 # this unlikely branch is put in a separate function for better efficiency
 @noinline function randn_unlikely(rng, idx, rabs, x)
-    @inbounds if idx == 0
+    @inbounds if iszero(idx)
         while true
             xx = -ziggurat_nor_inv_r*log(rand(rng))
             yy = -log(rand(rng))
@@ -106,7 +106,7 @@ function randexp(rng::AbstractRNG=GLOBAL_RNG)
 end
 
 @noinline function randexp_unlikely(rng, idx, x)
-    @inbounds if idx == 0
+    @inbounds if iszero(idx)
         return ziggurat_exp_r - log(rand(rng))
     elseif (fe[idx] - fe[idx+1])*rand(rng) + fe[idx+1] < exp(-x)
         return x # return from the triangular area

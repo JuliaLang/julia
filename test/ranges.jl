@@ -111,7 +111,7 @@ end
         # Make sure we test dynamic range too
         for i = 1:10^5
             x, y = rand(T), rand(T)
-            x == 0 || y == 0 && continue
+            iszero(x) || iszero(y) && continue
             x, y = log(x), log(y)
             highprec_pair(x, y)
         end

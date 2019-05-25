@@ -451,7 +451,7 @@ ndigits0znb(x::Bool, b::Integer) = x % Int
 # The suffix "pb" stands for "positive base"
 function ndigits0zpb(x::Integer, b::Integer)
     # precondition: b > 1
-    x == 0 && return 0
+    iszero(x) && return 0
     b = Int(b)
     x = abs(x)
     if x isa Base.BitInteger
