@@ -96,9 +96,10 @@ static bool check_fd_or_close(int fd)
 {
     if (fd == -1)
         return false;
-    fcntl(fd, F_SETFD, FD_CLOEXEC);
-    fchmod(fd, S_IRWXU);
-    if (ftruncate(fd, jl_page_size) != 0) {
+    int err = fcntl(fd, F_SETFD, FD_CLOEXEC);
+    assert(err == 0);
+    if (fchmod(fd, S_IRWXU) != 0 ||
+        ftruncate(fd, jl_page_size) != 0) {
         close(fd);
         return false;
     }

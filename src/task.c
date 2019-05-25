@@ -384,6 +384,8 @@ JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
     assert(blk == ct->timing_stack);
     if (blk)
         jl_timing_block_start(blk);
+#else
+    (void)ct;
 #endif
 
     jl_gc_unsafe_leave(ptls, gc_state);

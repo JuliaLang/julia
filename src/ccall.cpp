@@ -87,7 +87,7 @@ static bool runtime_sym_gvs(const char *f_lib, const char *f_name, MT &&M,
             symMap = &libgv.second;
             libsym = jl_get_library(f_lib);
             assert(libsym != NULL);
-            *(void**)jl_emit_and_add_to_shadow(libptrgv) = libsym;
+            *jl_emit_and_add_to_shadow(libptrgv) = libsym;
         }
         else {
             libptrgv = iter->second.first;
@@ -116,7 +116,7 @@ static bool runtime_sym_gvs(const char *f_lib, const char *f_name, MT &&M,
         (*symMap)[f_name] = std::make_pair(llvmgv, addr);
         if (symaddr)
             *symaddr = addr;
-        *(void**)jl_emit_and_add_to_shadow(llvmgv) = addr;
+        *jl_emit_and_add_to_shadow(llvmgv) = addr;
     }
     else {
         if (symaddr)
@@ -238,7 +238,7 @@ static GlobalVariable *emit_plt_thunk(
     GlobalVariable *got = new GlobalVariable(*M, T_pvoidfunc, false,
                                              GlobalVariable::ExternalLinkage,
                                              nullptr, gname);
-    *(void**)jl_emit_and_add_to_shadow(got) = symaddr;
+    *jl_emit_and_add_to_shadow(got) = symaddr;
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", plt);
     IRBuilder<> irbuilder(b0);
     Value *ptr = runtime_sym_lookup(irbuilder, funcptype, f_lib, f_name, plt, libptrgv,
@@ -1426,7 +1426,9 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     // method involving `jl_dlsym()` on Linux platforms instead.
 #ifdef _OS_LINUX_
         jl_ptls_t (*p)(void);
-        jl_dlsym(jl_dlopen(nullptr, 0), "jl_get_ptls_states", (void **)&p, 0);
+        void *handle = jl_dlopen(nullptr, 0);
+        jl_dlsym(handle, "jl_get_ptls_states", (void **)&p, 0);
+        jl_dlclose(handle);
         return p;
 #else
         return &jl_get_ptls_states;

@@ -1101,11 +1101,7 @@ jl_code_instance_t *jl_compile_linfo(jl_method_instance_t *mi, jl_code_info_t *s
                     if (codeinst->min_world <= world && world <= codeinst->max_world) {
                         jl_llvm_functions_t decls = codeinst->functionObjectsDecls;
                         bool already_compiled = params->cached && decls.functionObject != NULL;
-                        if (!src) {
-                            if (already_compiled || codeinst->invoke == jl_fptr_const_return)
-                                goto locked_out;
-                        }
-                        else if (already_compiled) {
+                        if (already_compiled) {
                             goto locked_out;
                         }
                     }
@@ -1634,6 +1630,7 @@ void *jl_get_llvmf_decl(jl_method_instance_t *mi, size_t world, bool getwrapper,
             return returninfo.decl;
         }
     }
+    assert(decls.functionObject);
     auto f = Function::Create(jl_func_sig, GlobalVariable::ExternalLinkage, decls.functionObject);
     add_return_attr(f, Attribute::NonNull);
     f->addFnAttr(Thunk);
