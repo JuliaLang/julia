@@ -70,7 +70,7 @@ for t1 in (Float32, Float64)
 end
 (::Type{T})(x::Float16) where {T<:Integer} = T(Float32(x))
 
-Bool(x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))
+Bool(x::Real) = iszero(x) ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))
 
 promote_rule(::Type{Float64}, ::Type{UInt128}) = Float64
 promote_rule(::Type{Float64}, ::Type{Int128}) = Float64
@@ -78,7 +78,7 @@ promote_rule(::Type{Float32}, ::Type{UInt128}) = Float32
 promote_rule(::Type{Float32}, ::Type{Int128}) = Float32
 
 function Float64(x::UInt128)
-    x == 0 && return 0.0
+    iszero(x) && return 0.0
     n = 128-leading_zeros(x) # ndigits0z(x,2)
     if n <= 53
         y = ((x % UInt64) << (53-n)) & 0x000f_ffff_ffff_ffff
@@ -92,7 +92,7 @@ function Float64(x::UInt128)
 end
 
 function Float64(x::Int128)
-    x == 0 && return 0.0
+    iszero(x) && return 0.0
     s = ((x >>> 64) % UInt64) & 0x8000_0000_0000_0000 # sign bit
     x = abs(x) % UInt128
     n = 128-leading_zeros(x) # ndigits0z(x,2)
@@ -108,7 +108,7 @@ function Float64(x::Int128)
 end
 
 function Float32(x::UInt128)
-    x == 0 && return 0f0
+    iszero(x) && return 0f0
     n = 128-leading_zeros(x) # ndigits0z(x,2)
     if n <= 24
         y = ((x % UInt32) << (24-n)) & 0x007f_ffff
@@ -122,7 +122,7 @@ function Float32(x::UInt128)
 end
 
 function Float32(x::Int128)
-    x == 0 && return 0f0
+    iszero(x) && return 0f0
     s = ((x >>> 96) % UInt32) & 0x8000_0000 # sign bit
     x = abs(x) % UInt128
     n = 128-leading_zeros(x) # ndigits0z(x,2)
@@ -261,7 +261,7 @@ AbstractFloat(x::UInt32)  = Float64(x)
 AbstractFloat(x::UInt64)  = Float64(x) # LOSSY
 AbstractFloat(x::UInt128) = Float64(x) # LOSSY
 
-Bool(x::Float16) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))
+Bool(x::Float16) = iszero(x) ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))
 
 """
     float(x)
@@ -544,7 +544,7 @@ julia> isfinite(NaN32)
 false
 ```
 """
-isfinite(x::AbstractFloat) = x - x == 0
+isfinite(x::AbstractFloat) = iszero(x - x)
 isfinite(x::Float16) = reinterpret(UInt16,x)&0x7c00 != 0x7c00
 isfinite(x::Real) = decompose(x)[3] != 0
 isfinite(x::Integer) = true

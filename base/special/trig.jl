@@ -937,11 +937,11 @@ end
 
 Compute ``\\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
 """
-sinc(x::Number) = x==0 ? one(x)  : oftype(x,sinpi(x)/(pi*x))
-sinc(x::Integer) = x==0 ? one(x) : zero(x)
-sinc(x::Complex{<:AbstractFloat}) = x==0 ? one(x) : oftype(x, sinpi(x)/(pi*x))
+sinc(x::Number) = iszero(x) ? one(x)  : oftype(x,sinpi(x)/(pi*x))
+sinc(x::Integer) = iszero(x) ? one(x) : zero(x)
+sinc(x::Complex{<:AbstractFloat}) = iszero(x) ? one(x) : oftype(x, sinpi(x)/(pi*x))
 sinc(x::Complex) = sinc(float(x))
-sinc(x::Real) = x==0 ? one(x) : isinf(x) ? zero(x) : sinpi(x)/(pi*x)
+sinc(x::Real) = iszero(x) ? one(x) : isinf(x) ? zero(x) : sinpi(x)/(pi*x)
 
 """
     cosc(x)
@@ -949,11 +949,11 @@ sinc(x::Real) = x==0 ? one(x) : isinf(x) ? zero(x) : sinpi(x)/(pi*x)
 Compute ``\\cos(\\pi x) / x - \\sin(\\pi x) / (\\pi x^2)`` if ``x \\neq 0``, and ``0`` if
 ``x = 0``. This is the derivative of `sinc(x)`.
 """
-cosc(x::Number) = x==0 ? zero(x) : oftype(x,(cospi(x)-sinpi(x)/(pi*x))/x)
+cosc(x::Number) = iszero(x) ? zero(x) : oftype(x,(cospi(x)-sinpi(x)/(pi*x))/x)
 cosc(x::Integer) = cosc(float(x))
-cosc(x::Complex{<:AbstractFloat}) = x==0 ? zero(x) : oftype(x,(cospi(x)-sinpi(x)/(pi*x))/x)
+cosc(x::Complex{<:AbstractFloat}) = iszero(x) ? zero(x) : oftype(x,(cospi(x)-sinpi(x)/(pi*x))/x)
 cosc(x::Complex) = cosc(float(x))
-cosc(x::Real) = x==0 || isinf(x) ? zero(x) : (cospi(x)-sinpi(x)/(pi*x))/x
+cosc(x::Real) = iszero(x) || isinf(x) ? zero(x) : (cospi(x)-sinpi(x)/(pi*x))/x
 
 for (finv, f, finvh, fh, finvd, fd, fn) in ((:sec, :cos, :sech, :cosh, :secd, :cosd, "secant"),
                                             (:csc, :sin, :csch, :sinh, :cscd, :sind, "cosecant"),

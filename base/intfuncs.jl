@@ -799,7 +799,7 @@ julia> isqrt(5)
 isqrt(x::Integer) = oftype(x, trunc(sqrt(x)))
 
 function isqrt(x::Union{Int64,UInt64,Int128,UInt128})
-    x==0 && return x
+    iszero(x) && return x
     s = oftype(x, trunc(sqrt(x)))
     # fix with a Newton iteration, since conversion to float discards
     # too many bits.

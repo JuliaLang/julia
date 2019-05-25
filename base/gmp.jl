@@ -302,7 +302,7 @@ BigInt(x::Float16) = BigInt(Float64(x))
 BigInt(x::Float32) = BigInt(Float64(x))
 
 function BigInt(x::Integer)
-    x == 0 && return BigInt(Culong(0))
+    iszero(x) && return BigInt(Culong(0))
     nd = ndigits(x, base=2)
     z = MPZ.realloc2(nd)
     s = sign(x)
@@ -375,7 +375,7 @@ function (::Type{T})(n::BigInt, ::RoundingMode{:Up}) where T<:CdoubleMax
 end
 
 function Float64(x::BigInt, ::RoundingMode{:Nearest})
-    x == 0 && return 0.0
+    iszero(x) && return 0.0
     xsize = abs(x.size)
     if xsize*BITS_PER_LIMB > 1024
         z = Inf64
@@ -404,7 +404,7 @@ function Float64(x::BigInt, ::RoundingMode{:Nearest})
 end
 
 function Float32(x::BigInt, ::RoundingMode{:Nearest})
-    x == 0 && return 0f0
+    iszero(x) && return 0f0
     xsize = abs(x.size)
     if xsize*BITS_PER_LIMB > 128
         z = Inf32
@@ -426,7 +426,7 @@ function Float32(x::BigInt, ::RoundingMode{:Nearest})
 end
 
 function Float16(x::BigInt, ::RoundingMode{:Nearest})
-    x == 0 && return Float16(0.0)
+    iszero(x) && return Float16(0.0)
     y1 = unsafe_load(x.d)
     n = BITS_PER_LIMB - leading_zeros(y1)
     if n > 16 || abs(x.size) > 1
@@ -565,7 +565,7 @@ function bigint_pow(x::BigInt, y::Integer)
     if x== 1; return x; end
     if x==-1; return isodd(y) ? x : -x; end
     if y>typemax(Culong)
-       x==0 && return x
+       iszero(x) && return x
 
        #At this point, x is not 1, 0 or -1 and it is not possible to use
        #gmpz_pow_ui to compute the answer. Note that the magnitude of the

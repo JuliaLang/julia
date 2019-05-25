@@ -958,7 +958,7 @@ function atanh(z::Complex{T}) where T<:AbstractFloat
     z *= β
     x, y = reim(z)
     if x == 1
-        if y == 0
+        if iszero(y)
             ξ = oftype(x, Inf)
             η = y
         else
@@ -968,7 +968,7 @@ function atanh(z::Complex{T}) where T<:AbstractFloat
         end
     else #Normal case
         ysq = (ay+ρ)^2
-        if x == 0
+        if iszero(x)
             ξ = x
         else
             ξ = log1p(4x/((1-x)^2 + ysq))/4

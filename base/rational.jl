@@ -83,7 +83,7 @@ Rational{T}(x::Integer) where {T<:Integer} = Rational{T}(convert(T,x), convert(T
 
 Rational(x::Rational) = x
 
-Bool(x::Rational) = x==0 ? false : x==1 ? true :
+Bool(x::Rational) = iszero(x) ? false : x==1 ? true :
     throw(InexactError(:Bool, Bool, x)) # to resolve ambiguity
 (::Type{T})(x::Rational) where {T<:Integer} = (isinteger(x) ? convert(T, x.num) :
     throw(InexactError(nameof(T), T, x)))
