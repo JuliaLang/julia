@@ -2605,7 +2605,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_code_instance_
     jl_value_t *slotnames = jl_deserialize_value(&s, NULL);
     if (!jl_is_string(slotnames))
         slotnames = m->slot_syms;
-    code->slotnames = jl_uncompress_argnames(m->slot_syms);
+    code->slotnames = jl_uncompress_argnames(slotnames);
 
     size_t nstmt = jl_array_len(code->code);
     code->codelocs = (jl_value_t*)jl_alloc_array_1d(jl_array_int32_type, nstmt);
@@ -3072,6 +3072,7 @@ static jl_method_t *jl_lookup_method_worldset(jl_methtable_t *mt, jl_datatype_t 
     while (1) {
         entry = jl_typemap_assoc_by_type(
             mt->defs, (jl_value_t*)sig, NULL, /*subtype*/0, /*offs*/0, world, /*max_world_mask*/(~(size_t)0) >> 1);
+        assert(entry);
         jl_method_t *_new = (jl_method_t*)entry->func.value;
         world = lowerbound_dependent_world_set(_new->primary_world, dependent_worlds);
         if (world == _new->primary_world) {
