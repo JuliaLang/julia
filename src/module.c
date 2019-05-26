@@ -503,6 +503,8 @@ JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *va
     if (!bp->constp) {
         bp->value = val;
         jl_gc_wb(m, val);
+    } else {
+        assert(0);
     }
 }
 
@@ -513,6 +515,8 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
         bp->value = val;
         bp->constp = 1;
         jl_gc_wb(m, val);
+    } else {
+        assert(0);
     }
 }
 
