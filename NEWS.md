@@ -51,6 +51,7 @@ Standard library changes
 * `empty` now accepts a `NamedTuple` ([#32534]).
 * `mod` now accepts a unit range as the second argument to easily perform offset modular arithmetic to ensure the result is inside the range ([#32628]).
 * `Sockets.recvfrom` now returns both host and port as an InetAddr ([#32729]).
+* `nothing` can now be `print`ed, and interplated into strings etc. as the string `"nothing"`. It is still not permitted to be interplated into Cmds (i.e. ``echo `$(nothing)` `` will still error without running anything.) ([#32148])
 
 #### Libdl
 
