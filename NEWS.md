@@ -43,6 +43,7 @@ Standard library changes
 
 #### Dates
 
+* Fixed `repr` such that it displays `Time` as it would be entered in Julia ([#32103]).
 
 #### Statistics
 
