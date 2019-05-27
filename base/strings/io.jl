@@ -169,14 +169,32 @@ string(xs...) = print_to_string(xs...)
 
 # note: print uses an encoding determined by `io` (defaults to UTF-8), whereas
 #       write uses an encoding determined by `s` (UTF-8 for `String`)
-print(io::IO, s::AbstractString) = for c in s; print(io, c); end
+function print(io::IO, s::AbstractString)
+    lock(io)
+    try
+        for c in s
+            print(io, c)
+        end
+    finally
+        unlock(io)
+    end
+    return nothing
+end
 write(io::IO, s::AbstractString) = (len = 0; for c in s; len += write(io, c); end; len)
 show(io::IO, s::AbstractString) = print_quoted(io, s)
 
 # optimized methods to avoid iterating over chars
 write(io::IO, s::Union{String,SubString{String}}) =
     GC.@preserve s unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
-print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
+function print(io::IO, s::Union{String,SubString{String}})
+    lock(io)
+    try
+        write(io, s)
+    finally
+        unlock(io)
+    end
+    return nothing
+end
 
 ## printing literal quoted string data ##
 
