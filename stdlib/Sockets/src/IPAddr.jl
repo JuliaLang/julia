@@ -10,6 +10,9 @@ abstract type IPAddr end
 Base.isless(a::T, b::T) where {T<:IPAddr} = isless(a.host, b.host)
 (dt::Type{<:Integer})(ip::IPAddr) = dt(ip.host)::dt
 
+# Allow IP addresses to broadcast as unwrapped scalars
+Base.Broadcast.broadcastable(ip::IPAddr) = Ref(ip)
+
 struct IPv4 <: IPAddr
     host::UInt32
     IPv4(host::UInt32) = new(host)
