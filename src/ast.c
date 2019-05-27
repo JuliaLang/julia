@@ -914,10 +914,10 @@ jl_value_t *jl_parse_eval_all(const char *fname,
                               const char *content, size_t contentlen,
                               jl_module_t *inmodule)
 {
-    jl_parse_eval_all_args vargs = {
+    jl_parse_eval_all_args args = {
         fname, content, contentlen, inmodule
     };
-    return (jl_value_t*)enter_interpreter_frame(jl_parse_eval_all_callback, (void*)&vargs);
+    return (jl_value_t*)enter_interpreter_frame(jl_parse_eval_all_callback, (void*)&args);
 }
 
 JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,

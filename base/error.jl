@@ -52,7 +52,7 @@ rethrow() = ccall(:jl_rethrow, Bottom, ())
 rethrow(e) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
 
 struct InterpreterIP
-    code::Union{CodeInfo,Core.MethodInstance,Symbol,LineNumberNode,Nothing}
+    code::Union{CodeInfo,Core.MethodInstance,Symbol,Nothing}
     stmt::Csize_t
 end
 
@@ -69,8 +69,8 @@ function _reformat_bt(bt, bt2)
             #                       bt[i+2] is the instruction index
             #   * CodeInfo       => The top-level thunk being interpreted
             #                       bt[i+2] is the instruction index
-            #   * LineNumberNode => Line being interpreted by toplevel handler
-            #
+            #   * Symbol,Nothing => The filename being interpreted at toplevel;
+            #                       bt[i+2] is the line number
             push!(ret, InterpreterIP(
                 bt2[j],
                 bt[i+2]))

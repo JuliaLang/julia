@@ -818,7 +818,6 @@ typedef struct {
     jl_value_t *e;
 } jl_toplevel_eval_args;
 
-// FIXME SECT_INTERP ?
 INTERP_CALLBACK_ABI void *jl_toplevel_eval_callback(interpreter_state *istate, void *vargs) {
     jl_toplevel_eval_args *args = (jl_toplevel_eval_args*)vargs;
     istate->filename = jl_nothing;

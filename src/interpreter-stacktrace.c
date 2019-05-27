@@ -239,8 +239,8 @@ asm(
     "\t.cfi_offset 30, -(" XSTR(MAX_INTERP_STATE_SIZE) " + " XSTR(STACK_PADDING) ")\n"
     "\tmov x2, x0\n"
     // Zero out src, mi, filename
-    // (FIXME: filename not done!)
     "\tstp xzr, xzr, [sp, " XSTR(STACK_PADDING) "]\n"
+    "\tstr xzr, [sp, (" XSTR(STACK_PADDING) " + 16)]\n"
     "\tadd x0, sp, " XSTR(STACK_PADDING) "\n"
     "Lenter_interpreter_frame_start_val:\n"
     "\tblr x2\n"
