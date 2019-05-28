@@ -20,7 +20,7 @@ See also the manual section about [QuoteNode](@ref man-quote-node).
 
 # Examples
 ```jldoctest
-julia> eval(quot(:x))
+julia> eval(Meta.quot(:x))
 :x
 
 julia> dump(Meta.quot(:x))
