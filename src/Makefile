@@ -323,12 +323,13 @@ clean-support:
 
 cleanall: clean clean-flisp clean-support
 
-analyzegc:
+analyzegc: $(BUILDDIR)/julia_version.h $(BUILDDIR)/julia_flisp.boot.inc
 ifeq ($(USE_BINARYBUILDER_LLVM),0)
 ifneq ($(BUILD_LLVM_CLANG),1)
 	$(error Clang must be available to use the clang analyzer. Either build it (BUILD_LLVM_CLANG) or use BinaryBuilder)
 endif
 endif
+	$(MAKE) -C $(JULIAHOME)/deps install-llvm install-libuv
 	$(MAKE) -C clangsa
 	$(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)  $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -Xclang -analyzer-checker=core,julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c $(RUNTIME_C_SRCS:%=$(SRCDIR)/%.c)
 

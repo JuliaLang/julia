@@ -46,6 +46,9 @@ release: $(BUILDDIR)/$(EXENAME)$(EXE)
 
 debug: $(BUILDDIR)/$(EXENAME)-debug$(EXE)
 
+flisp-deps:
+	$(MAKE) -C $(JULIAHOME)/deps install-utf8proc
+
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
 
@@ -59,9 +62,9 @@ $(BUILDDIR)/flisp.dbg.obj:  flisp.c cvalues.c types.c flisp.h print.c read.c equ
 $(BUILDDIR)/flmain.o:  flmain.c flisp.h
 $(BUILDDIR)/flmain.dbg.obj: flmain.c flisp.h
 
-$(LLT_release): $(LLTDIR)/*.h $(LLTDIR)/*.c
+$(LLT_release): $(LLTDIR)/*.h $(LLTDIR)/*.c flisp-deps
 	$(MAKE) -C $(LLTDIR) BUILDDIR='$(abspath $(BUILDDIR)/$(LLTDIR))'
-$(LLT_debug): $(LLTDIR)/*.h $(LLTDIR)/*.c
+$(LLT_debug): $(LLTDIR)/*.h $(LLTDIR)/*.c flisp-deps
 	$(MAKE) debug -C $(LLTDIR) BUILDDIR='$(abspath $(BUILDDIR)/$(LLTDIR))'
 
 $(BUILDDIR)/$(LIBTARGET)-debug.a: $(DOBJS) | $(BUILDDIR)
@@ -100,3 +103,5 @@ clean:
 	rm -f $(BUILDDIR)/*.a
 	rm -f $(BUILDDIR)/$(EXENAME)$(EXE)
 	rm -f $(BUILDDIR)/$(EXENAME)-debug$(EXE)
+
+.PHONY: flisp-deps
