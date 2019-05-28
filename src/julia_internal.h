@@ -437,6 +437,11 @@ typedef struct {
     int continue_at; // statement index to jump to after leaving exception handler (0 if none)
 } interpreter_state;
 
+JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmodule,
+                                            const char *file, int line);
+JL_DLLEXPORT jl_value_t *jl_expand_stmt_with_loc(jl_value_t *expr, jl_module_t *inmodule,
+                                                 const char *file, int line);
+
 #ifdef _OS_WINDOWS_
 #define INTERP_CALLBACK_ABI  __attribute__((fastcall))
 #else

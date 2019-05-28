@@ -1157,12 +1157,71 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, int
     return expr;
 }
 
+typedef struct _jl_expand_macros_args {
+    jl_value_t *expr;
+    jl_module_t *inmodule;
+    int onelevel;
+    const char* filename;
+    int line;
+} jl_expand_macros_args;
+
+INTERP_CALLBACK_ABI void *jl_expand_macros_with_loc_callback(interpreter_state *istate, void *vargs)
+{
+    jl_expand_macros_args *args = (jl_expand_macros_args*)vargs;
+    istate->filename = (jl_value_t*)jl_symbol(args->filename);
+    istate->ip = args->line;
+    return (void*)jl_expand_macros(args->expr, args->inmodule, istate, NULL, args->onelevel);
+}
+// Expand macros outside of an interpreter context.
+// Creates a new interpreter frame in any resulting backtrace - use
+// jl_expand_macros instead to reuse an existing interpreter_state.
+static jl_value_t *jl_expand_macros_with_loc(jl_value_t *expr, jl_module_t *inmodule,
+                                             int onelevel, const char *filename, int line)
+{
+    jl_expand_macros_args args = {expr, inmodule, onelevel, filename, line};
+    return (jl_value_t*)enter_interpreter_frame(jl_expand_macros_with_loc_callback, (void*)&args);
+}
+
+JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmodule,
+                                            interpreter_state* istate)
+{
+    JL_TIMING(LOWERING);
+    JL_GC_PUSH1(&expr);
+    expr = jl_copy_ast(expr);
+    expr = jl_expand_macros_with_loc(expr, inmodule, 0, file, line);
+    const char* filename = istate->filename && jl_is_symbol(istate->filename) ?
+                           jl_symbol_name(istate->filename) : "none";
+    int line = (int)istate->ip;
+    expr = jl_call_scm_on_ast_and_loc("jl-expand-to-thunk", expr, inmodule, file, line);
+    JL_GC_POP();
+    return expr;
+}
+
+// expand in a context where the expression value is unused
+JL_DLLEXPORT jl_value_t *jl_expand_stmt_with_loc(jl_value_t *expr, jl_module_t *inmodule,
+                                                 interpreter_state* istate)
+{
+    JL_TIMING(LOWERING);
+    JL_GC_PUSH1(&expr);
+    expr = jl_copy_ast(expr);
+    jl_value_t *filename = istate->filename;
+    const char* file = istate->filename && jl_is_symbol(istate->filename) ?
+                       jl_symbol_name(istate->filename) : "none";
+    size_t line = istate->ip;
+    expr = jl_expand_macros(expr, inmodule, istate, NULL, 0);
+    expr = jl_call_scm_on_ast_and_loc("jl-expand-to-thunk-stmt", expr, inmodule,
+                                      file, (int)line);
+    JL_GC_POP();
+    return expr;
+}
+
+// External entry points for macro expansion
 JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule)
 {
     JL_TIMING(LOWERING);
     JL_GC_PUSH1(&expr);
     expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, NULL, 0);
+    expr = jl_expand_macros_with_loc(expr, inmodule, 0, "none", 0);
     expr = jl_call_scm_on_ast("jl-expand-macroscope", expr, inmodule);
     JL_GC_POP();
     return expr;
@@ -1173,46 +1232,19 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand1(jl_value_t *expr, jl_module_t *inmodule
     JL_TIMING(LOWERING);
     JL_GC_PUSH1(&expr);
     expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, NULL, 1);
+    expr = jl_expand_macros_with_loc(expr, inmodule, 1, "none", 0);
     expr = jl_call_scm_on_ast("jl-expand-macroscope", expr, inmodule);
     JL_GC_POP();
     return expr;
 }
 
-JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmodule,
-                                            const char *file, int line)
-{
-    JL_TIMING(LOWERING);
-    JL_GC_PUSH1(&expr);
-    expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, NULL, 0);
-    expr = jl_call_scm_on_ast_and_loc("jl-expand-to-thunk", expr, inmodule, file, line);
-    JL_GC_POP();
-    return expr;
-}
-
+// External entry points for macro expansion
 JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule)
 {
+    // FIXME
     return jl_expand_with_loc(expr, inmodule, "none", 0);
 }
 
-// expand in a context where the expression value is unused
-JL_DLLEXPORT jl_value_t *jl_expand_stmt_with_loc(jl_value_t *expr, jl_module_t *inmodule,
-                                                 const char *file, int line)
-{
-    JL_TIMING(LOWERING);
-    JL_GC_PUSH1(&expr);
-    expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, NULL, 0);
-    expr = jl_call_scm_on_ast_and_loc("jl-expand-to-thunk-stmt", expr, inmodule, file, line);
-    JL_GC_POP();
-    return expr;
-}
-
-JL_DLLEXPORT jl_value_t *jl_expand_stmt(jl_value_t *expr, jl_module_t *inmodule)
-{
-    return jl_expand_stmt_with_loc(expr, inmodule, "none", 0);
-}
 
 #ifdef __cplusplus
 }

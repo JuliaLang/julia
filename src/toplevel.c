@@ -175,7 +175,7 @@ jl_value_t *jl_eval_module_expr(interpreter_state* istate, jl_module_t *parent_m
     for (int i = 0; i < jl_array_len(exprs); i++) {
         // process toplevel form
         ptls->world_age = jl_world_counter;
-        form = jl_expand_stmt_with_loc(jl_array_ptr_ref(exprs, i), newm, jl_filename, jl_lineno);
+        form = jl_expand_stmt_with_loc(jl_array_ptr_ref(exprs, i), newm, istate);
         ptls->world_age = jl_world_counter;
         (void)jl_toplevel_eval_flex(istate, newm, form, 1, 1);
     }
@@ -639,7 +639,7 @@ jl_value_t *jl_toplevel_eval_flex(interpreter_state *istate, jl_module_t *JL_NON
     size_t last_age = ptls->world_age;
     if (!expanded && jl_needs_lowering(e)) {
         ptls->world_age = jl_world_counter;
-        ex = (jl_expr_t*)jl_expand_with_loc(e, m, jl_filename, jl_lineno);
+        ex = (jl_expr_t*)jl_expand_with_loc(e, m, istate);
         ptls->world_age = last_age;
     }
     jl_sym_t *head = jl_is_expr(ex) ? ex->head : NULL;
