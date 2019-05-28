@@ -1356,6 +1356,11 @@ end
     @test summary(Base.OneTo(BigInt(10))) == "10-element Base.OneTo{BigInt}"
 end
 
+@testset "Tuple summary" begin
+    @test summary((1,2,3)) == "(1, 2, 3)"
+    @test summary((:a, "b", 'c')) == "(:a, \"b\", 'c')"
+end
+
 # Tests for code_typed linetable annotations
 function compute_annotations(f, types)
     src = code_typed(f, types, debuginfo=:source)[1][1]
