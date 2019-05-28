@@ -245,7 +245,7 @@ function lpad(
     n::Integer,
     p::Union{AbstractChar,AbstractString}=' ',
 ) :: String
-    m = n - length(s)
+    m = signed(n) - length(s)
     m ≤ 0 && return string(s)
     l = length(p)
     q, r = divrem(m, l)
@@ -272,7 +272,7 @@ function rpad(
     n::Integer,
     p::Union{AbstractChar,AbstractString}=' ',
 ) :: String
-    m = n - length(s)
+    m = signed(n) - length(s)
     m ≤ 0 && return string(s)
     l = length(p)
     q, r = divrem(m, l)
