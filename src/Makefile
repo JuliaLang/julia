@@ -323,14 +323,22 @@ clean-support:
 
 cleanall: clean clean-flisp clean-support
 
+define CLANG_ANALYZE
+clang-sa-$(1):
+	@$$(call PRINT_ANALYZE, $$(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $$(build_shlibdir)/libGCCheckerPlugin.$$(SHLIB_EXT) $$(CPPFLAGS) $$(CFLAGS) $$(DEBUGFLAGS) -Xclang -analyzer-checker=core$$(COMMA)julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c $$(SRCDIR)/$(1).c)
+endef
+
+# Build a Makefile target for each file we want to analyze
+$(foreach S,$(RUNTIME_C_SRCS),$(eval $(call CLANG_ANALYZE,$(S))))
+
 analyzegc: $(BUILDDIR)/julia_version.h $(BUILDDIR)/julia_flisp.boot.inc
 ifeq ($(USE_BINARYBUILDER_LLVM),0)
 ifneq ($(BUILD_LLVM_CLANG),1)
 	$(error Clang must be available to use the clang analyzer. Either build it (BUILD_LLVM_CLANG) or use BinaryBuilder)
 endif
 endif
-	$(MAKE) -C $(JULIAHOME)/deps install-llvm install-libuv
 	$(MAKE) -C clangsa
-	$(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)  $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -Xclang -analyzer-checker=core,julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c $(RUNTIME_C_SRCS:%=$(SRCDIR)/%.c)
+	$(MAKE) $(addprefix clang-sa-,$(RUNTIME_C_SRCS))
+	#$(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)  $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -Xclang -analyzer-checker=core,julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c $(RUNTIME_C_SRCS:%=$(SRCDIR)/%.c)
 
 .PHONY: default all debug release clean cleanall clean-* libccalltest libllvmcalltest julia_flisp.boot.inc.phony
