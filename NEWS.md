@@ -5,6 +5,7 @@ New language features
 ---------------------
 
 * Support for Unicode 12.1.0 ([#32002]).
+* Added `sincosd(x)` to simultaneously compute the sine and cosine of `x`, where `x` is in degrees.
 
 Language changes
 ----------------
