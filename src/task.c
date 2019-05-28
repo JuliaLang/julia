@@ -374,6 +374,8 @@ JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
     assert(t->tid == ptls->tid);
     if (!t->sticky && !t->copy_stack)
         t->tid = -1;
+#elif defined(NDEBUG)
+    (void)refetch_ptls();
 #else
     assert(ptls == refetch_ptls());
 #endif
