@@ -14,8 +14,6 @@
 extern "C" {
 #endif
 
-#define JULIA_ENABLE_PARTR
-
 #ifdef JULIA_ENABLE_THREADING
 
 // GC functions used
@@ -176,6 +174,13 @@ static inline jl_task_t *multiq_deletemin(void)
 }
 
 
+void jl_gc_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
+{
+    for (int16_t i = 0; i < heap_p; ++i)
+        for (int16_t j = 0; j < heaps[i].ntasks; ++j)
+            jl_gc_mark_queue_obj_explicit(gc_cache, sp, (jl_value_t *)heaps[i].tasks[j]);
+}
+
 
 // parallel task runtime
 // ---
@@ -217,8 +222,18 @@ void jl_threadfun(void *arg)
     jl_finish_task(jl_current_task, jl_nothing); // noreturn
 }
 
+// enqueue the specified task for execution
+JL_DLLEXPORT void jl_enqueue_task(jl_task_t *task)
+{
+    multiq_insert(task, task->prio);
+}
+
+#endif // JULIA_ENABLE_THREADING
+
+
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
 {
+#ifdef JULIA_ENABLE_THREADING
     jl_ptls_t ptls = jl_get_ptls_states();
     /* ensure thread tid is awake if necessary */
     if (ptls->tid != tid && !_threadedregion && tid != -1) {
@@ -230,13 +245,9 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
         jl_wake_libuv();
     else
         uv_stop(jl_global_event_loop());
-}
-
-
-// enqueue the specified task for execution
-JL_DLLEXPORT void jl_enqueue_task(jl_task_t *task)
-{
-    multiq_insert(task, task->prio);
+#else
+    uv_stop(jl_global_event_loop());
+#endif
 }
 
 
@@ -246,7 +257,11 @@ static jl_task_t *get_next_task(jl_value_t *getsticky)
     jl_task_t *task = (jl_task_t*)jl_apply(&getsticky, 1);
     if (jl_typeis(task, jl_task_type))
         return task;
+#ifdef JULIA_ENABLE_THREADING
     return multiq_deletemin();
+#else
+    return NULL;
+#endif
 }
 
 
@@ -277,6 +292,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
 #endif
                 }
             }
+#ifdef JULIA_ENABLE_THREADING
             else {
                 int sleepnow = 0;
                 uv_mutex_lock(&sleep_lock);
@@ -293,6 +309,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
                     jl_gc_safe_leave(ptls, gc_state);
                 }
             }
+#endif
         }
         else {
             if (++spin_count > 1000 && jl_atomic_load(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
@@ -316,16 +333,6 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
         }
     }
 }
-
-
-void jl_gc_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
-{
-    for (int16_t i = 0; i < heap_p; ++i)
-        for (int16_t j = 0; j < heaps[i].ntasks; ++j)
-            jl_gc_mark_queue_obj_explicit(gc_cache, sp, (jl_value_t *)heaps[i].tasks[j]);
-}
-
-#endif // JULIA_ENABLE_THREADING
 
 #ifdef __cplusplus
 }

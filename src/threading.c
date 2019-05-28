@@ -505,19 +505,23 @@ JL_DLLEXPORT void jl_threading_run(jl_value_t *func)
         args2[0] = schd_func;
         args2[1] = (jl_value_t*)t;
         jl_apply(args2, 2);
+#ifdef JULIA_ENABLE_THREADING
         if (i == 1) {
             // let threads know work is coming (optimistic)
             uv_mutex_lock(&sleep_lock);
             uv_cond_broadcast(&sleep_alarm);
             uv_mutex_unlock(&sleep_lock);
         }
+#endif
     }
+#ifdef JULIA_ENABLE_THREADING
     if (nthreads > 2) {
         // let threads know work is ready (guaranteed)
         uv_mutex_lock(&sleep_lock);
         uv_cond_broadcast(&sleep_alarm);
         uv_mutex_unlock(&sleep_lock);
     }
+#endif
     // join with all tasks
     JL_TRY {
         for (int i = 0; i < nthreads; i++) {
