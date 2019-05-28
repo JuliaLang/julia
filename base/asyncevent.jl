@@ -98,9 +98,8 @@ mutable struct Timer
         associate_julia_struct(this.handle, this)
         finalizer(uvfinalize, this)
 
-        ccall(:uv_update_time, Cvoid, (Ptr{Cvoid},), eventloop())
-        ccall(:uv_timer_start,  Cint,  (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
-              this, uv_jl_timercb::Ptr{Cvoid},
+        ccall(:jl_uv_update_timer_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
+              eventloop(), this, uv_jl_timercb::Ptr{Cvoid},
               UInt64(round(timeout * 1000)) + 1, UInt64(round(interval * 1000)))
         return this
     end

@@ -1085,6 +1085,18 @@ JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *work_args, void *work_
     return 0;
 }
 
+JL_DLLEXPORT int jl_uv_update_timer_start(uv_loop_t* loop, uv_timer_t* handle,
+                                          uv_timer_cb cb, uint64_t timeout,
+                                          uint64_t repeat)
+{
+    JL_UV_LOCK();
+    uv_update_time(loop);
+
+    int r = uv_timer_start(handle, cb, timeout, repeat);
+    JL_UV_UNLOCK();
+    return r;
+}
+
 JL_DLLEXPORT void jl_uv_stop(uv_loop_t* loop)
 {
     JL_UV_LOCK();
