@@ -329,6 +329,7 @@ $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/GCChecker.c
 define CLANG_ANALYZE
 clang-sa-$(1): $$(build_shlibdir)/libGCCheckerPlugin.$$(SHLIB_EXT)
 	@$$(call PRINT_ANALYZE, $$(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $$(build_shlibdir)/libGCCheckerPlugin.$$(SHLIB_EXT) $$(CPPFLAGS) $$(CFLAGS) $$(DEBUGFLAGS) -Xclang -analyzer-checker=core$$(COMMA)julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c $$(SRCDIR)/$(1).c)
+.PHONY: clang-sa-$(1)
 endef
 
 # Build a Makefile target for each file we want to analyze
