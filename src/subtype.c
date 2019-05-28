@@ -218,20 +218,46 @@ static int obviously_unequal(jl_value_t *a, jl_value_t *b)
 {
     if (a == b)
         return 0;
-    if (jl_is_concrete_type(a) || jl_is_concrete_type(b))
-        return 1;
-    if (jl_is_unionall(a)) a = jl_unwrap_unionall(a);
-    if (jl_is_unionall(b)) b = jl_unwrap_unionall(b);
+    if (jl_is_unionall(a))
+        a = jl_unwrap_unionall(a);
+    if (jl_is_unionall(b))
+        b = jl_unwrap_unionall(b);
     if (jl_is_datatype(a)) {
-        if (b == jl_bottom_type) return 1;
+        if (b == jl_bottom_type)
+            return 1;
         if (jl_is_datatype(b)) {
-            jl_datatype_t *ad = (jl_datatype_t*)a, *bd = (jl_datatype_t*)b;
+            jl_datatype_t *ad = (jl_datatype_t*)a;
+            jl_datatype_t *bd = (jl_datatype_t*)b;
             if (ad->name != bd->name)
                 return 1;
-            size_t i, np = jl_nparams(ad);
-            if (np != jl_nparams(bd)) return 1;
-            for(i=0; i < np; i++) {
-                if (obviously_unequal(jl_tparam(ad,i), jl_tparam(bd,i)))
+            int istuple = (ad->name == jl_tuple_typename);
+            if (jl_is_concrete_type(a) || jl_is_concrete_type(b)) {
+                if (!istuple && ad->name != jl_type_typename) // HACK: can't properly normalize Tuple{Float64} == Tuple{<:Float64} like types or Type{T} types
+                    return 1;
+            }
+            size_t i, np;
+            if (istuple) {
+                size_t na = jl_nparams(ad), nb = jl_nparams(bd);
+                if (jl_is_va_tuple(ad)) {
+                    na -= 1;
+                    if (jl_is_va_tuple(bd))
+                        nb -= 1;
+                }
+                else if (jl_is_va_tuple(bd)) {
+                    nb -= 1;
+                }
+                else if (na != nb) {
+                    return 1;
+                }
+                np = na < nb ? na : nb;
+            }
+            else {
+                np = jl_nparams(ad);
+                if (np != jl_nparams(bd))
+                    return 1;
+            }
+            for (i = 0; i < np; i++) {
+                if (obviously_unequal(jl_tparam(ad, i), jl_tparam(bd, i)))
                     return 1;
             }
         }
@@ -245,7 +271,9 @@ static int obviously_unequal(jl_value_t *a, jl_value_t *b)
         if (jl_is_long(b) && jl_unbox_long(a) != jl_unbox_long(b))
             return 1;
     }
-    else if (jl_is_long(b)) return 1;
+    else if (jl_is_long(b)) {
+        return 1;
+    }
     if ((jl_is_symbol(a) || jl_is_symbol(b)) && a != b)
         return 1;
     return 0;
