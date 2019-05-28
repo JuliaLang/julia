@@ -1,0 +1,74 @@
+jl_parse_eval_all
+=================
+
+Currently:
+    while !eof
+        push!(exprs, jl_parse())
+    for expr in exprs:
+        jl_expand_macros
+        jl-expand-to-thunk
+        jl_toplevel_eval_flex
+
+
+Should ideally be:
+    while !eof
+        jl_parse()
+        jl_expand_macros()
+        jl_lower()
+        jl_interpret_toplevel_thunk()
+
+
+
+Overview
+========
+
+Two classes of fxns:
+
+Internals which take interpreter state
+--------------------------------------
+
+Lowering
+* jl_expand_with_loc       <- jl_toplevel_eval_flex
+* jl_expand_stmt_with_loc  <- jl_eval_module_expr
+
+Eval
+* jl_toplevel_eval_flex
+
+
+Internals which generate frame
+------------------------------
+* jl_interpret_toplevel_thunk
+                          <- jl_toplevel_eval_flex
+* jl_interpret_toplevel_expr_in
+
+
+Fxns which create interpreter frame
+-----------------------------------
+   (put into interpreter.c ??)
+
+ Macro expansion
+   * jl_macroexpand
+   * jl_macroexpand1
+ 
+ Lowering
+   * jl_expand         (macros + lowering)
+
+ Combined
+   * jl_toplevel_eval  (macros + lowering + eval)
+
+
+
+ Call chains:
+
+   jl_expand_with_loc
+      <- jl_toplevel_eval_flex
+
+   jl_expand_stmt_with_loc
+      <- jl_eval_module_expr
+         <- jl_toplevel_eval_flex
+
+   * jl_invoke_julia_macro (to look up macro ??)
+   * compiled toplevel thunks
+   *
+      jl_toplevel_eval
+
