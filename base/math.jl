@@ -521,7 +521,7 @@ sqrt(x::Real) = sqrt(float(x))
 """
     hypot(x, y)
 
-Compute the hypotenuse ``\\sqrt{x^2+y^2}`` avoiding overflow and underflow.
+Compute the hypotenuse ``\\sqrt{|x|^2+|y|^2}`` avoiding overflow and underflow.
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -535,6 +535,9 @@ ERROR: DomainError with -2.914184810805068e18:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
 [...]
+
+julia> hypot(3, 4im)
+5.0
 ```
 """
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
@@ -566,7 +569,16 @@ end
 """
     hypot(x...)
 
-Compute the hypotenuse ``\\sqrt{\\sum x_i^2}`` avoiding overflow and underflow.
+Compute the hypotenuse ``\\sqrt{\\sum |x_i|^2}`` avoiding overflow and underflow.
+
+# Examples
+```jldoctest
+julia> hypot(-5.7)
+5.7
+
+julia> hypot(3, 4im, 12.0)
+13.0
+```
 """
 hypot(x::Number...) = sqrt(sum(abs2(y) for y in x))
 
