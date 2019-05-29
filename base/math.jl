@@ -568,7 +568,7 @@ function hypot(x::T,y::T) where T<:AbstractFloat
     if ax > sqrt(floatmax(T)/2)
         ax = ax*scale
         ay = ay*scale
-        scale = 1.0/scale
+        scale = inv(scale)
     elseif ay < sqrt(floatmin(T))
         ax = ax/scale
         ay = ay/scale
