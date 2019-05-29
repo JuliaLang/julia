@@ -1090,8 +1090,9 @@ JL_DLLEXPORT int jl_uv_update_timer_start(uv_loop_t* loop, uv_timer_t* handle,
                                           uint64_t repeat)
 {
     JL_UV_LOCK();
+    int err = uv_timer_init(loop, handle);
+    jl_uv_associate_julia_struct(handle, handle);
     uv_update_time(loop);
-
     int r = uv_timer_start(handle, cb, timeout, repeat);
     JL_UV_UNLOCK();
     return r;
