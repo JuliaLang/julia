@@ -1094,10 +1094,10 @@ JL_DLLEXPORT int jl_uv_update_timer_start(uv_loop_t* loop, uv_timer_t* handle,
     if (err) {
         // TODO: this codepath is currently not tested
         free(handle);
-        return NULL;
+        return err;
     }
 
-    jl_uv_associate_julia_struct(handle, handle);
+    jl_uv_associate_julia_struct((uv_handle_t *)handle, (jl_value_t *)handle);
     uv_update_time(loop);
     int r = uv_timer_start(handle, cb, timeout, repeat);
     JL_UV_UNLOCK();
