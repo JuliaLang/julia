@@ -575,3 +575,5 @@ end
 
 cholesky(A::Diagonal, ::Val{false} = Val(false); check::Bool = true) =
     cholesky!(cholcopy(A), Val(false); check = check)
+
+Base._sum(A::Diagonal, ::Colon) = sum(A.diag)

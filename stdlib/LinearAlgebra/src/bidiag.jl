@@ -724,3 +724,5 @@ function eigvecs(M::Bidiagonal{T}) where T
     Q #Actually Triangular
 end
 eigen(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))
+
+Base._sum(A::Bidiagonal, ::Colon) = sum(A.dv) + sum(A.ev)
