@@ -805,7 +805,12 @@ end
 end
 
 ## general `copy` methods
-@inline copy(bc::Broadcasted{<:AbstractArrayStyle{0}}) = bc[CartesianIndex()]
+@inline function copy(bc::Broadcasted{<:AbstractArrayStyle{0}})
+    r = bc[CartesianIndex()]
+    dest = similar(bc, typeof(r))
+    dest[] = r
+    return dest
+end
 copy(bc::Broadcasted{<:Union{Nothing,Unknown}}) =
     throw(ArgumentError("broadcasting requires an assigned BroadcastStyle"))
 
