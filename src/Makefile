@@ -353,4 +353,4 @@ $(foreach S,$(RUNTIME_C_SRCS),$(eval $(call CLANG_ANALYZE,$(S))))
 #   make -c deps install-libuv install-utf8proc install-unwind
 analyzegc: $(BUILDDIR)/julia_version.h $(BUILDDIR)/julia_flisp.boot.inc
 
-.PHONY: default all debug release clean cleanall clean-* libccalltest libllvmcalltest julia_flisp.boot.inc.phony
+.PHONY: default all debug release clean cleanall clean-* libccalltest libllvmcalltest julia_flisp.boot.inc.phony analyzegc
