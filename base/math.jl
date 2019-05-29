@@ -565,7 +565,7 @@ function hypot(x::T,y::T) where T<:AbstractFloat
 
     # Operands do not vary widely
     scale = eps(sqrt(floatmin(T)))  #Rescaling constant
-    if ax > sqrt(floatmax(T)/2.0)
+    if ax > sqrt(floatmax(T)/2)
         ax = ax*scale
         ay = ay*scale
         scale = 1.0/scale
