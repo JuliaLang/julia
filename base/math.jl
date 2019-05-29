@@ -559,7 +559,7 @@ function hypot(x::T,y::T) where T<:AbstractFloat
     end
 
     # Widely varying operands
-    if ay <= ax*sqrt(eps(T)/2.0)  #Note: This also gets ay == 0
+    if ay <= ax*sqrt(eps(T)/2)  #Note: This also gets ay == 0
         return ax
     end
 
