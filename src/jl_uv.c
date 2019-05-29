@@ -1091,6 +1091,12 @@ JL_DLLEXPORT int jl_uv_update_timer_start(uv_loop_t* loop, uv_timer_t* handle,
 {
     JL_UV_LOCK();
     int err = uv_timer_init(loop, handle);
+    if (err) {
+        // TODO: this codepath is currently not tested
+        free(handle);
+        return NULL;
+    }
+
     jl_uv_associate_julia_struct(handle, handle);
     uv_update_time(loop);
     int r = uv_timer_start(handle, cb, timeout, repeat);
