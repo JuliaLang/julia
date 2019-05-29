@@ -573,7 +573,7 @@ function hypot(x::T,y::T) where T<:AbstractFloat
         ax = ax/scale
         ay = ay/scale
     else
-        scale = 1.0
+        scale = one(scale)
     end
     sqrt(muladd(ax,ax,ay*ay))*scale
 end
