@@ -1,4 +1,5 @@
 #!/bin/sh
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Invoke this with no arguments to refresh all tarballs, or with a project name to refresh only that project.
 #
