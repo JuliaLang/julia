@@ -110,7 +110,7 @@ findfirst(pattern::AbstractString, string::AbstractString) =
 Find the first occurrence of character `ch` in `string`.
 
 !!! compat "Julia 1.3"
-    This function requires at least Julia 1.3.
+    This method requires at least Julia 1.3.
 
 # Examples
 ```jldoctest
@@ -280,7 +280,7 @@ findnext(t::AbstractString, s::AbstractString, i::Integer) = _search(s, t, i)
 Find the next occurrence of character `ch` in `string` starting at position `start`.
 
 !!! compat "Julia 1.3"
-    This function requires at least Julia 1.3.
+    This method requires at least Julia 1.3.
 
 # Examples
 ```jldoctest
@@ -318,7 +318,7 @@ findlast(pattern::AbstractString, string::AbstractString) =
 Find the last occurrence of character `ch` in `string`.
 
 !!! compat "Julia 1.3"
-    This function requires at least Julia 1.3.
+    This method requires at least Julia 1.3.
 
 # Examples
 ```jldoctest
