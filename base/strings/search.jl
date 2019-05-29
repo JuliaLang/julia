@@ -492,7 +492,7 @@ findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, i)
 Find the previous occurrence of character `ch` in `string` starting at position `start`.
 
 !!! compat "Julia 1.3"
-    This function requires at least Julia 1.3.
+    This method requires at least Julia 1.3.
 
 # Examples
 ```jldoctest
