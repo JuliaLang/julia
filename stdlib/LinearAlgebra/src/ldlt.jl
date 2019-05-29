@@ -18,7 +18,7 @@ julia> S = SymTridiagonal([3., 4., 5.], [1., 2.])
   ⋅   2.0  5.0
 
 julia> F = ldlt(S)
-LDLt{Float64,SymTridiagonal{Float64,Array{Float64,1}}}([3.0 0.333333 0.0; 0.333333 3.66667 0.545455; 0.0 0.545455 3.90909])
+LDLt{Float64,SymTridiagonal{Float64,Array{Float64,1}}}([3.0 0.3333333333333333 0.0; 0.3333333333333333 3.6666666666666665 0.5454545454545455; 0.0 0.5454545454545455 3.909090909090909])
 ```
 """
 struct LDLt{T,S<:AbstractMatrix{T}} <: Factorization{T}

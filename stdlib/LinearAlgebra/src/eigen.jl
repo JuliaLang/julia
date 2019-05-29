@@ -31,15 +31,15 @@ eigenvectors:
 
 julia> F.values
 3-element Array{Float64,1}:
-1.0
-3.0
-18.0
+  1.0
+  3.0
+ 18.0
 
 julia> F.vectors
 3×3 Array{Float64,2}:
-1.0  0.0  0.0
-0.0  1.0  0.0
-0.0  0.0  1.0
+ 1.0  0.0  0.0
+ 0.0  1.0  0.0
+ 0.0  0.0  1.0
 
 julia> vals, vecs = F; # destructuring via iteration
 
