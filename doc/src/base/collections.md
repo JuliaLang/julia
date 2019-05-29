@@ -205,6 +205,7 @@ Base.get!(::Any, ::Any, ::Any)
 Base.get!(::Function, ::Any, ::Any)
 Base.getkey
 Base.delete!
+Base.delete
 Base.pop!(::Any, ::Any, ::Any)
 Base.keys
 Base.values
@@ -266,8 +267,10 @@ Partially implemented by:
 
 ```@docs
 Base.push!
+Base.push
 Base.pop!
 Base.pushfirst!
+Base.pushfirst
 Base.popfirst!
 Base.insert!
 Base.deleteat!

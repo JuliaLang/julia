@@ -637,6 +637,7 @@ end
     delete!(collection, key)
 
 Delete the element with the given key in a collection, and return the collection.
+See also the non-mutating variant [`delete`](@ref).
 
 # Examples
 ```jldoctest
@@ -667,6 +668,7 @@ Create and return a new collection containing all the elements from `coll`
 with key different from `k`.
 The type of the returned collection may differ from that of `coll` if
 `coll` is immutable.
+See also the mutating variant [`delete!`](@ref).
 
 # Examples
 ```jldoctest

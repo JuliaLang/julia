@@ -1100,6 +1100,7 @@ end
     pushfirst!(collection, items...) -> collection
 
 Insert one or more `items` at the beginning of `collection`.
+See also the non-mutating variant [`pushfirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -1119,6 +1120,40 @@ function pushfirst!(a::Array{T,1}, item) where T
     a[1] = item
     return a
 end
+
+
+"""
+    pushfirst(coll, items...) -> collection
+
+Create a new collection containing all the elements from an ordered collection `coll`
+plus the provided new `items` (inserted at the end).
+The type of the returned collection may differ from that of `coll` if
+`coll` is immutable.
+See also the mutating variant [`pushfirst!`](@ref).
+
+Insert one or more `items` at the beginning of `collection`.
+See also the mutating variant [`pushfirst!`](@ref).
+
+# Examples
+```jldoctest
+julia> a = [1, 2, 3, 4]; pushfirst(a, 5, 6)
+6-element Array{Int64,1}:
+ 5
+ 6
+ 1
+ 2
+ 3
+ 4
+
+julia> a
+4-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+```
+"""
+pushfirst(a, items...) = push!(copymutable(a), items...)
 
 """
     popfirst!(collection) -> item
