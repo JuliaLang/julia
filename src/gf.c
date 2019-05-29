@@ -2379,7 +2379,16 @@ JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_value_t *ty)
     if (!mt->kwsorter) {
         JL_LOCK(&mt->writelock);
         if (!mt->kwsorter) {
-            mt->kwsorter = jl_new_generic_function_with_supertype(mt->name, mt->module, jl_function_type, 1);
+            jl_sym_t *name;
+            if (mt == jl_nonfunction_mt) {
+                name = mt->name;
+            }
+            else {
+                jl_datatype_t *dt = (jl_datatype_t*)jl_argument_datatype(ty);
+                assert(jl_is_datatype(dt));
+                name = dt->name->name;
+            }
+            mt->kwsorter = jl_new_generic_function_with_supertype(name, mt->module, jl_function_type, 1);
             jl_gc_wb(mt, mt->kwsorter);
         }
         JL_UNLOCK(&mt->writelock);

@@ -225,6 +225,11 @@ let
 end
 
 struct TypeWithIntParam{T <: Integer} end
+struct Bounded  # not an AbstractArray
+    bound::Int
+end
+Base.getindex(b::Bounded, i) = checkindex(Bool, 1:b.bound, i) || throw(BoundsError(b, i))
+Base.summary(io::IO, b::Bounded) = print(io, "$(b.bound)-size Bounded")
 let undefvar
     err_str = @except_strbt sqrt(-1) DomainError
     @test occursin("Try sqrt(Complex(x)).", err_str)
@@ -245,6 +250,9 @@ let undefvar
     @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [-2, 1]"
     err_str = @except_str [5, 4, 3][1:5] BoundsError
     @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [1:5]"
+
+    err_str = @except_str Bounded(2)[3] BoundsError
+    @test err_str == "BoundsError: attempt to access 2-size Bounded\n  at index [3]"
 
     err_str = @except_str 0::Bool TypeError
     @test err_str == "TypeError: non-boolean ($Int) used in boolean context"

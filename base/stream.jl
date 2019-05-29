@@ -81,7 +81,7 @@ const StatusOpen        = 3 # handle is usable
 const StatusActive      = 4 # handle is listening for read/write/connect events
 const StatusClosing     = 5 # handle is closing / being closed
 const StatusClosed      = 6 # handle is closed
-const StatusEOF         = 7 # handle is a TTY that has seen an EOF event
+const StatusEOF         = 7 # handle is a TTY that has seen an EOF event (pretends to be closed until reseteof is called)
 const StatusPaused      = 8 # handle is Active, but not consuming events, and will transition to Open if it receives an event
 function uv_status_string(x)
     s = x.status
@@ -315,7 +315,7 @@ function isopen(x::Union{LibuvStream, LibuvServer})
     if x.status == StatusUninit || x.status == StatusInit
         throw(ArgumentError("$x is not initialized"))
     end
-    x.status != StatusClosed && x.status != StatusEOF
+    return x.status != StatusClosed && x.status != StatusEOF
 end
 
 function check_open(x::Union{LibuvStream, LibuvServer})
@@ -407,7 +407,7 @@ function close(stream::Union{LibuvStream, LibuvServer})
     end
     lock(stream.closenotify)
     try
-        if isopen(stream)
+        if isopen(stream) || stream.status == StatusEOF
             should_wait = uv_handle_data(stream) != C_NULL
             if stream.status != StatusClosing
                 ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
@@ -1191,7 +1191,7 @@ end
 
 function eof(s::BufferStream)
     wait_readnb(s, 1)
-    return !isopen(s) && bytesavailable(s)<=0
+    return !isopen(s) && bytesavailable(s) <= 0
 end
 
 # If buffer_writes is called, it will delay notifying waiters till a flush is called.

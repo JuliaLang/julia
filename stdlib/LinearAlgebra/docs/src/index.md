@@ -287,20 +287,24 @@ The following table summarizes the types of matrix factorizations that have been
 Julia. Details of their associated methods can be found in the [Standard Functions](@ref) section
 of the Linear Algebra documentation.
 
-| Type              | Description                                                                                                    |
-|:----------------- |:-------------------------------------------------------------------------------------------------------------- |
-| `Cholesky`        | [Cholesky factorization](https://en.wikipedia.org/wiki/Cholesky_decomposition)                                 |
-| `CholeskyPivoted` | [Pivoted](https://en.wikipedia.org/wiki/Pivot_element) Cholesky factorization                                  |
-| `LU`              | [LU factorization](https://en.wikipedia.org/wiki/LU_decomposition)                                             |
-| `LUTridiagonal`   | LU factorization for [`Tridiagonal`](@ref) matrices                                                            |
-| `QR`              | [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition)                                             |
-| `QRCompactWY`     | Compact WY form of the QR factorization                                                                        |
-| `QRPivoted`       | Pivoted [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition)                                     |
-| `Hessenberg`      | [Hessenberg decomposition](http://mathworld.wolfram.com/HessenbergDecomposition.html)                          |
-| `Eigen`           | [Spectral decomposition](https://en.wikipedia.org/wiki/Eigendecomposition_(matrix))                            |
-| `SVD`             | [Singular value decomposition](https://en.wikipedia.org/wiki/Singular_value_decomposition)                     |
-| `GeneralizedSVD`  | [Generalized SVD](https://en.wikipedia.org/wiki/Generalized_singular_value_decomposition#Higher_order_version) |
-
+| Type               | Description                                                                                                    |
+|:------------------ |:-------------------------------------------------------------------------------------------------------------- |
+| `BunchKaufman`     | Bunch-Kaufman factorization                                                                                    |
+| `Cholesky`         | [Cholesky factorization](https://en.wikipedia.org/wiki/Cholesky_decomposition)                                 |
+| `CholeskyPivoted`  | [Pivoted](https://en.wikipedia.org/wiki/Pivot_element) Cholesky factorization                                  |
+| `LDLt`             | [LDL(T) factorization](https://en.wikipedia.org/wiki/Cholesky_decomposition#LDL_decomposition)                 |
+| `LU`               | [LU factorization](https://en.wikipedia.org/wiki/LU_decomposition)                                             |
+| `QR`               | [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition)                                             |
+| `QRCompactWY`      | Compact WY form of the QR factorization                                                                        |
+| `QRPivoted`        | Pivoted [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition)                                     |
+| `LQ`               | [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition) of `transpose(A)`                           |
+| `Hessenberg`       | [Hessenberg decomposition](http://mathworld.wolfram.com/HessenbergDecomposition.html)                          |
+| `Eigen`            | [Spectral decomposition](https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix)                         |
+| `GeneralizedEigen` | [Generalized spectral decomposition](https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix#Generalized_eigenvalue_problem)                            |
+| `SVD`              | [Singular value decomposition](https://en.wikipedia.org/wiki/Singular_value_decomposition)                     |
+| `GeneralizedSVD`   | [Generalized SVD](https://en.wikipedia.org/wiki/Generalized_singular_value_decomposition#Higher_order_version) |
+| `Schur`            | [Schur decomposition](https://en.wikipedia.org/wiki/Schur_decomposition)                                       |
+| `GeneralizedSchur` | [Generalized Schur decomposition](https://en.wikipedia.org/wiki/Schur_decomposition#Generalized_Schur_decomposition) |
 
 
 
@@ -329,25 +333,34 @@ LinearAlgebra.UnitLowerTriangular
 LinearAlgebra.UnitUpperTriangular
 LinearAlgebra.UpperHessenberg
 LinearAlgebra.UniformScaling
+LinearAlgebra.Factorization
+LinearAlgebra.LU
 LinearAlgebra.lu
 LinearAlgebra.lu!
+LinearAlgebra.Cholesky
+LinearAlgebra.CholeskyPivoted
 LinearAlgebra.cholesky
 LinearAlgebra.cholesky!
 LinearAlgebra.lowrankupdate
 LinearAlgebra.lowrankdowndate
 LinearAlgebra.lowrankupdate!
 LinearAlgebra.lowrankdowndate!
+LinearAlgebra.LDLt
 LinearAlgebra.ldlt
 LinearAlgebra.ldlt!
-LinearAlgebra.qr
-LinearAlgebra.qr!
 LinearAlgebra.QR
 LinearAlgebra.QRCompactWY
 LinearAlgebra.QRPivoted
-LinearAlgebra.lq!
+LinearAlgebra.qr
+LinearAlgebra.qr!
+LinearAlgebra.LQ
 LinearAlgebra.lq
+LinearAlgebra.lq!
+LinearAlgebra.BunchKaufman
 LinearAlgebra.bunchkaufman
 LinearAlgebra.bunchkaufman!
+LinearAlgebra.Eigen
+LinearAlgebra.GeneralizedEigen
 LinearAlgebra.eigvals
 LinearAlgebra.eigvals!
 LinearAlgebra.eigmax
@@ -355,12 +368,17 @@ LinearAlgebra.eigmin
 LinearAlgebra.eigvecs
 LinearAlgebra.eigen
 LinearAlgebra.eigen!
+LinearAlgebra.Hessenberg
 LinearAlgebra.hessenberg
 LinearAlgebra.hessenberg!
-LinearAlgebra.schur!
+LinearAlgebra.Schur
+LinearAlgebra.GeneralizedSchur
 LinearAlgebra.schur
+LinearAlgebra.schur!
 LinearAlgebra.ordschur
 LinearAlgebra.ordschur!
+LinearAlgebra.SVD
+LinearAlgebra.GeneralizedSVD
 LinearAlgebra.svd
 LinearAlgebra.svd!
 LinearAlgebra.svdvals

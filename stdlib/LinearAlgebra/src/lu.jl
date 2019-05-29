@@ -3,6 +3,50 @@
 ####################
 # LU Factorization #
 ####################
+"""
+    LU <: Factorization
+
+Matrix factorization type of the `LU` factorization of a square matrix `A`. This
+is the return type of [`lu`](@ref), the corresponding matrix factorization function.
+
+The individual components of the factorization `F::LU` can be accessed via `getproperty`:
+
+| Component | Description                              |
+|:----------|:-----------------------------------------|
+| `F.L`     | `L` (unit lower triangular) part of `LU` |
+| `F.U`     | `U` (upper triangular) part of `LU`      |
+| `F.p`     | (right) permutation `Vector`             |
+| `F.P`     | (right) permutation `Matrix`             |
+
+Iterating the factorization produces the components `F.L`, `F.U`, and `F.p`.
+
+# Examples
+```jldoctest
+julia> A = [4 3; 6 3]
+2×2 Array{Int64,2}:
+ 4  3
+ 6  3
+
+julia> F = lu(A)
+LU{Float64,Array{Float64,2}}
+L factor:
+2×2 Array{Float64,2}:
+ 1.0  0.0
+ 1.5  1.0
+U factor:
+2×2 Array{Float64,2}:
+ 4.0   3.0
+ 0.0  -1.5
+
+julia> F.L * F.U == A[F.p, :]
+true
+
+julia> l, u, p = lu(A); # destructuring via iteration
+
+julia> l == F.L && u == F.U && p == F.p
+true
+```
+"""
 struct LU{T,S<:AbstractMatrix{T}} <: Factorization{T}
     factors::S
     ipiv::Vector{BlasInt}

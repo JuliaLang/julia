@@ -412,14 +412,19 @@ end
 function enq_work(t::Task)
     (t.state == :runnable && t.queue === nothing) || error("schedule: Task not runnable")
     tid = Threads.threadid(t)
-    if t.sticky || tid != 0
+    if t.sticky || tid != 0 || Threads.nthreads() == 1
         if tid == 0
             tid = Threads.threadid()
         end
         push!(Workqueues[tid], t)
     else
         tid = 0
-        ccall(:jl_enqueue_task, Cvoid, (Any,), t)
+        if ccall(:jl_enqueue_task, Cint, (Any,), t) != 0
+            # if multiq is full, give to a random thread (TODO fix)
+            tid = mod(time_ns() % Int, Threads.nthreads()) + 1
+            ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
+            push!(Workqueues[tid], t)
+        end
     end
     ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
     return t
