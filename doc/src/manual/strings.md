@@ -202,14 +202,13 @@ Using an index less than 1 or greater than `end` raises an error:
 
 ```jldoctest helloworldstring
 julia> str[0]
-ERROR: BoundsError: attempt to access "Hello, world.\n"
+ERROR: BoundsError: attempt to access String
   at index [0]
 [...]
 
 julia> str[end+1]
-ERROR: BoundsError: attempt to access "Hello, world.\n"
+ERROR: BoundsError: attempt to access String
   at index [15]
-Stacktrace:
 [...]
 ```
 

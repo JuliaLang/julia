@@ -55,15 +55,15 @@ U factor:
 
 julia> C.U
 3×3 UpperTriangular{Float64,Array{Float64,2}}:
-2.0  6.0  -8.0
-⋅   1.0   5.0
-⋅    ⋅    3.0
+ 2.0  6.0  -8.0
+  ⋅   1.0   5.0
+  ⋅    ⋅    3.0
 
 julia> C.L
 3×3 LowerTriangular{Float64,Array{Float64,2}}:
-2.0   ⋅    ⋅
-6.0  1.0   ⋅
--8.0  5.0  3.0
+  2.0   ⋅    ⋅
+  6.0  1.0   ⋅
+ -8.0  5.0  3.0
 
 julia> C.L * C.U == A
 true
