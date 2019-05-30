@@ -88,7 +88,7 @@ mutable struct Timer
 
         this = new(Libc.malloc(_sizeof_uv_timer), ThreadSynchronizer(), true)
         err = ccall(:jl_uv_update_timer_start, Cint,
-              (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
+              (Ptr{Cvoid}, Any, Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
               eventloop(), this, this.handle, uv_jl_timercb::Ptr{Cvoid},
               UInt64(round(timeout * 1000)) + 1, UInt64(round(interval * 1000)))
         if err != 0
