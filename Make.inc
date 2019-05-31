@@ -1007,18 +1007,7 @@ endif
 endef
 $(foreach proj,$(BB_PROJECTS),$(eval $(call SET_BB_DEFAULT,$(proj))))
 
-# Some special restrictions on BB usage:
-ifeq ($(USE_SYSTEM_BLAS),1)
-# Since the names don't line up (`BLAS` vs. `OPENBLAS`), manually gate:
-USE_BINARYBUILDER_OPENBLAS ?= 0
-# Disable BB SuiteSparse if we're using system BLAS
-USE_BINARYBUILDER_SUITESPARSE ?= 0
-endif
 
-ifeq ($(USE_SYSTEM_LIBM),1)
-# If we're using system libm, disable BB OpenLibm
-USE_BINARYBUILDER_OPENLIBM ?= 0
-endif
 
 # Use the Assertions build
 BINARYBUILDER_LLVM_ASSERTS ?= 0
@@ -1251,6 +1240,19 @@ CXXFLAGS += -cxxlib-nostd -static-intel
 CLDFLAGS += -static-intel
 LDFLAGS += -cxxlib-nostd -static-intel
 endif
+endif
+
+# Some special restrictions on BB usage:
+ifeq ($(USE_SYSTEM_BLAS),1)
+# Since the names don't line up (`BLAS` vs. `OPENBLAS`), manually gate:
+USE_BINARYBUILDER_OPENBLAS := 0
+# Disable BB SuiteSparse if we're using system BLAS
+USE_BINARYBUILDER_SUITESPARSE := 0
+endif
+
+ifeq ($(USE_SYSTEM_LIBM),1)
+# If we're using system libm, disable BB OpenLibm
+USE_BINARYBUILDER_OPENLIBM := 0
 endif
 
 # Make tricks
