@@ -171,10 +171,18 @@ end
 # 1) "Fast", which is most efficient when the underlying RNG produces rand(Float64)
 #    "fast enough". The tradeoff is faster creation of the sampler, but more
 #    consumption of entropy bits
-# 2) "Default" which tries to use as few entropy bits as possible, at the cost of a
+# 2) "Original" which tries to use as few entropy bits as possible, at the cost of a
 #    a bigger upfront price associated with the creation of the sampler
-# 3) "Nearly Division Less", which is the fastest algorithm for types of size
-#    up to 64 bits. This will be the default in a future realease.
+# 3) "Nearly Division Less" (NDL) which is generally the fastest algorithm for types of size
+#    up to 64 bits. This is the default for these types since Julia 1.5.
+#    The "Fast" algorithm can be faster than NDL when the length of the range is
+#    less than and close to a power of 2.
+
+Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{T},
+        ::Repetition) where {T<:Base.BitInteger64} = SamplerRangeNDL(r)
+
+Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{T},
+        ::Repetition) where {T<:Union{Int128,UInt128}} = SamplerRangeFast(r)
 
 #### helper functions
 
@@ -226,7 +234,7 @@ function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt128,T}) where T
     x % T + a
 end
 
-#### Default
+#### Original
 
 # remainder function according to Knuth, where rem_knuth(a, 0) = a
 rem_knuth(a::UInt, b::UInt) = a % (b + (b == 0)) + a * (b == 0)
@@ -275,10 +283,6 @@ function SamplerRangeInt(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
 
     SamplerRangeInt{T,U}(a, bw, k, mult) # overflow ok
 end
-
-Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{T},
-        ::Repetition) where {T<:BitInteger} = SamplerRangeInt(r)
-
 
 rand(rng::AbstractRNG, sp::SamplerRangeInt{T,UInt32}) where {T<:BitInteger} =
     (unsigned(sp.a) + rem_knuth(rand(rng, LessThan(sp.u, UInt52Raw(UInt32))), sp.k)) % T
