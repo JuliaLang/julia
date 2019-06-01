@@ -200,7 +200,6 @@ Base.WeakKeyDict
 Base.ImmutableDict
 Base.haskey
 Base.get(::Any, ::Any, ::Any)
-Base.get
 Base.get!(::Any, ::Any, ::Any)
 Base.get!(::Function, ::Any, ::Any)
 Base.getkey
