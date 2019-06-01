@@ -1584,7 +1584,7 @@ function densemv(A::SparseMatrixCSC, x::AbstractSparseVector; trans::AbstractCha
         throw(ArgumentError("Invalid trans character $trans"))
     end
     xlen == length(x) || throw(DimensionMismatch())
-    T = promote_type(eltype(A), eltype(x))
+    T = promote_op(matprod, eltype(A), eltype(x))
     y = Vector{T}(undef, ylen)
     if trans == 'N' || trans == 'N'
         mul!(y, A, x)
@@ -1694,7 +1694,7 @@ function _At_or_Ac_mul_B(tfun::Function, A::SparseMatrixCSC{TvA,TiA}, x::Abstrac
     require_one_based_indexing(A, x)
     m, n = size(A)
     length(x) == m || throw(DimensionMismatch())
-    Tv = promote_type(TvA, TvX)
+    Tv = promote_op(matprod, TvA, TvX)
     Ti = promote_type(TiA, TiX)
 
     xnzind = nonzeroinds(x)

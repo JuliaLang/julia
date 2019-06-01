@@ -50,9 +50,9 @@ function mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat, α::Nu
     C
 end
 *(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx} =
-    (T = promote_type(TA, Tx); mul!(similar(x, T, A.m), A, x, one(T), zero(T)))
+    (T = promote_op(matprod, TA, Tx); mul!(similar(x, T, A.m), A, x, one(T), zero(T)))
 *(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
-    (T = promote_type(TA, Tx); mul!(similar(B, T, (A.m, size(B, 2))), A, B, one(T), zero(T)))
+    (T = promote_op(matprod, TA, Tx); mul!(similar(B, T, (A.m, size(B, 2))), A, B, one(T), zero(T)))
 
 function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat, α::Number, β::Number)
     A = adjA.parent
@@ -76,9 +76,9 @@ function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::Str
     C
 end
 *(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
-    (A = adjA.parent; T = promote_type(TA, Tx); mul!(similar(x, T, A.n), adjoint(A), x, one(T), zero(T)))
+    (A = adjA.parent; T = promote_op(matprod, TA, Tx); mul!(similar(x, T, A.n), adjoint(A), x, one(T), zero(T)))
 *(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TA,S}}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
-    (A = adjA.parent; T = promote_type(TA, Tx); mul!(similar(B, T, (A.n, size(B, 2))), adjoint(A), B, one(T), zero(T)))
+    (A = adjA.parent; T = promote_op(matprod, TA, Tx); mul!(similar(B, T, (A.n, size(B, 2))), adjoint(A), B, one(T), zero(T)))
 
 function mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat, α::Number, β::Number)
     A = transA.parent
@@ -102,9 +102,9 @@ function mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B:
     C
 end
 *(transA::Transpose{<:Any,<:SparseMatrixCSC{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
-    (A = transA.parent; T = promote_type(TA, Tx); mul!(similar(x, T, A.n), transpose(A), x, one(T), zero(T)))
+    (A = transA.parent; T = promote_op(matprod, TA, Tx); mul!(similar(x, T, A.n), transpose(A), x, one(T), zero(T)))
 *(transA::Transpose{<:Any,<:SparseMatrixCSC{TA,S}}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
-    (A = transA.parent; T = promote_type(TA, Tx); mul!(similar(B, T, (A.n, size(B, 2))), transpose(A), B, one(T), zero(T)))
+    (A = transA.parent; T = promote_op(matprod, TA, Tx); mul!(similar(B, T, (A.n, size(B, 2))), transpose(A), B, one(T), zero(T)))
 
 # For compatibility with dense multiplication API. Should be deleted when dense multiplication
 # API is updated to follow BLAS API.
