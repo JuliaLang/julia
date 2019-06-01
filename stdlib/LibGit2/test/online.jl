@@ -67,6 +67,7 @@ mktempdir() do dir
                 LibGit2.clone(repo_url*randstring(10), repo_path, credentials=c)
                 error("unexpected")
             catch ex
+                @show ex
                 @test isa(ex, LibGit2.Error.GitError)
                 @test ex.code == LibGit2.Error.EAUTH
             end
