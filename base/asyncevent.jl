@@ -87,16 +87,10 @@ mutable struct Timer
         interval ≥ 0 || throw(ArgumentError("timer cannot have negative repeat interval of $interval seconds"))
 
         this = new(Libc.malloc(_sizeof_uv_timer), ThreadSynchronizer(), true)
-        err = ccall(:jl_uv_update_timer_start, Cint,
+        ccall(:jl_uv_update_timer_start, Cvoid,
               (Ptr{Cvoid}, Any, Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
               eventloop(), this, this.handle, uv_jl_timercb::Ptr{Cvoid},
               UInt64(round(timeout * 1000)) + 1, UInt64(round(interval * 1000)))
-        if err != 0
-            #TODO: this codepath is currently not tested
-            Libc.free(this.handle)
-            this.handle = C_NULL
-            throw(_UVError("uv_timer_init", err))
-        end
         finalizer(uvfinalize, this)
         return this
     end
