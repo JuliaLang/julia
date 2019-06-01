@@ -32,6 +32,10 @@ Standard library changes
   otherwise ([#24353]).
 * `IPAddr` subtypes now behave like scalars when used in broadcasting ([#32133]).
 
+#### Libdl
+
+* `dlopen()` can now be invoked in `do`-block syntax, similar to `open()`.
+
 #### LinearAlgebra
 
 * The BLAS submodule no longer exports `dot`, which conflicts with that in LinearAlgebra ([#31838]).
