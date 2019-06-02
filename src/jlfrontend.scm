@@ -142,6 +142,12 @@
   (error-wrap (lambda ()
                 (julia-expand-macroscope expr))))
 
+;; Debug tool: call named frontend function, translating flisp errors to AST
+;; to avoid crashing
+(define (jl-apply-with-error-wrap f . args)
+  (error-wrap (lambda ()
+                (apply f args))))
+
 ;; construct default definitions of `eval` for non-bare modules
 ;; called by jl_eval_module_expr
 (define (module-default-defs e)

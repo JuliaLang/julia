@@ -2210,7 +2210,7 @@
        (if (any assignment? a)
            (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
        (if (has-parameters? a)
-           (error "unexpected semicolon in array expression")
+           (error "unexpected semicolon in array expression") ;; Obsolete?
            (expand-forms
             (if (any (lambda (x)
                        (and (pair? x) (eq? (car x) 'row)))

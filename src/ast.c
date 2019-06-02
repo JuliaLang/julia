@@ -919,20 +919,34 @@ jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module
     return result;
 }
 
-// Call given flisp function on an Expr, converting result back to an Expr.
-// Does not expand lambdas and thunks to code info objects.
-JL_DLLEXPORT jl_value_t *jl_call_scm_on_ast_formonly(const char *funcname, jl_value_t *expr, jl_module_t *inmodule)
+// Debug tool: Call given flisp function on an Expr, converting result back to
+// an Expr. Does not expand lambdas and thunks to code info objects.
+JL_DLLEXPORT jl_value_t *jl_call_scm_on_ast_formonly(const char *funcname, jl_value_t *expr,
+                                                     jl_module_t *inmodule)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
     JL_AST_PRESERVE_PUSH(ctx, old_roots, inmodule);
     value_t arg = julia_to_scm(fl_ctx, expr);
-    value_t e = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, funcname)), arg);
-    jl_value_t *result = scm_to_julia_(fl_ctx, e, inmodule, 1);
+    value_t e = fl_applyn(fl_ctx, 2,
+                          symbol_value(symbol(fl_ctx, "jl-apply-with-error-wrap")),
+                          symbol_value(symbol(fl_ctx, funcname)), arg);
+    jl_value_t *result = NULL;
     JL_GC_PUSH1(&result);
+    int err = 0;
+    JL_TRY {
+        result = scm_to_julia_(fl_ctx, e, inmodule, 1);
+    }
+    JL_CATCH {
+        err = 1;
+        goto finally; // skip pop_exception
+    }
+finally:
     JL_AST_PRESERVE_POP(ctx, old_roots);
     jl_ast_ctx_leave(ctx);
     JL_GC_POP();
+    if (err)
+        jl_rethrow();
     return result;
 }
 
