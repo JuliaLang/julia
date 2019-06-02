@@ -1910,7 +1910,7 @@
                   (rr (if (or (symbol-like? rhs) (atom? rhs)) rhs (make-ssavalue))))
               `(block
                 ,.(if (eq? aa a)   '() `((= ,aa ,(expand-forms a))))
-                ,.(if (eq? bb b)   '() `((= ,bb ,(expand-forms b))))
+                ,.(if (eq? bb b)   '() `((= ,bb ,(expand-forms b)))) ;; Obsolete ?
                 ,.(if (eq? rr rhs) '() `((= ,rr ,(expand-forms rhs))))
                 (call (top setproperty!) ,aa ,bb ,rr)
                 (unnecessary ,rr)))))

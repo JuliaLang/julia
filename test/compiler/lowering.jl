@@ -15,8 +15,9 @@ function lift_lowered_expr!(ex, nextids, valmap, lift_full)
         end
     end
     if ex isa Symbol
+        # Rename gensyms
         name = string(ex)
-        if startswith(name, "#s")
+        if startswith(name, "#")
             return get!(valmap, ex) do
                 newid = nextids[2]
                 nextids[2] = newid+1
@@ -324,8 +325,12 @@ end
     @test_desugar a ? x : y   if a; x else y end
 end
 
-@testset "Adjoint" begin
-    @test_desugar a'  Top.adjoint(a)
+@testset "Misc operators" begin
+    @test_desugar a'    Top.adjoint(a)
+    # <: and >: are special Expr heads which need to be turned into call when
+    # used as operators
+    @test_desugar a <: b  $(Expr(:call, :(<:), :a, :b))
+    @test_desugar a >: b  $(Expr(:call, :(>:), :a, :b))
 end
 
 @testset "Broadcast" begin
@@ -484,8 +489,50 @@ end
         end
     )
 
+    # Invalid assignments
     @test_desugar_error 1=a      "invalid assignment location \"1\""
     @test_desugar_error true=a   "invalid assignment location \"true\""
     @test_desugar_error "str"=a  "invalid assignment location \"\"str\"\""
+    @test_desugar_error [x y]=c  "invalid assignment location \"[x y]\""
+    @test_desugar_error a[x y]=c "invalid spacing in left side of indexed assignment"
+    @test_desugar_error a[x;y]=c "unexpected \";\" in left side of indexed assignment"
+    @test_desugar_error [x;y]=c  "use \"(a, b) = ...\" to assign multiple values"
+
+    # Old deprecation (6575e12ba46)
+    @test_desugar_error x.(y)=c  "invalid syntax \"x.(y) = ...\""
 end
 
+@testset "For loops" begin
+    #=
+    @test_desugar(
+        for i in a
+           body
+        end,
+        begin
+            @break_block :loop_exit begin
+                ssa1 = a
+                gsym1 = Top.iterate(ssa1)
+                if Top.not_int(Core.:(===)(gsym1, nothing))
+                    @_do_while begin
+                        @break_block :loop_cont begin
+                            @scope_block begin
+                                local i
+                                begin
+                                    ssa2 = gsym1
+                                    i    = Core.getfield(ssa2, 1)
+                                    ssa3 = Core.getfield(ssa2, 2)
+                                    ssa2
+                                end
+                                body
+                            end
+                        end
+                        gsym1 = Top.iterate(ssa1, ssa3)
+                    end begin
+                        Top.not_int(Core.:(===)(gsym1, nothing))
+                    end
+                end
+            end
+        end
+    )
+    =#
+end
