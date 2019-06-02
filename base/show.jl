@@ -1953,14 +1953,6 @@ function showarg(io::IO, r::ReinterpretArray{T}, toplevel) where {T}
     print(io, ')')
 end
 
-function showarg(io::IO, c::CartesianIndices, toplevel)
-    if toplevel
-        print(io, "CartesianIndices ", UnitRange.(c.indices))
-    else
-        print(io, "::", typeof(c))
-    end
-end
-
 # pretty printing for Iterators.Pairs
 function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, T}, toplevel) where T<:AbstractArray
     print(io, "pairs(IndexLinear(), ::", T, ")")

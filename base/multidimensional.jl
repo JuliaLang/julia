@@ -4,7 +4,7 @@
 module IteratorsMD
     import .Base: eltype, length, size, first, last, in, getindex,
                  setindex!, IndexStyle, min, max, zero, oneunit, isless, eachindex,
-                 ndims, IteratorSize, convert, show, iterate, promote_rule
+                 ndims, IteratorSize, convert, show, showarg, iterate, promote_rule
 
     import .Base: +, -, *, (:)
     import .Base: simd_outer_range, simd_inner_length, simd_index
@@ -365,6 +365,14 @@ module IteratorsMD
         end
         valid, I = __inc(tail(state), tail(start), tail(stop))
         return valid, (start[1], I...)
+    end
+
+    function showarg(io::IO, c::CartesianIndices, toplevel)
+        if toplevel
+            print(io, "CartesianIndices ", UnitRange.(c.indices))
+        else
+            print(io, "::", typeof(c))
+        end
     end
 
     # 0-d cartesian ranges are special-cased to iterate once and only once
