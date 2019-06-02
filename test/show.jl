@@ -1154,6 +1154,10 @@ end
     @test summary(r) == "4×2 reshape(view(::Array{Int16,3}, :, 3, 2:5), 4, 2) with eltype Int16"
     p = PermutedDimsArray(r, (2, 1))
     @test summary(p) == "2×4 PermutedDimsArray(reshape(view(::Array{Int16,3}, :, 3, 2:5), 4, 2), (2, 1)) with eltype Int16"
+    c1 = CartesianIndices((2:4, 1:2))
+    c2 = CartesianIndices(rand(3, 2))
+    @test summary(c1) == "3×2 CartesianIndices (2:4, 1:2)"
+    @test summary(c2) == "3×2 CartesianIndices (1:3, 1:2)"
 end
 
 @testset "Methods" begin
