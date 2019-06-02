@@ -1954,11 +1954,10 @@ function showarg(io::IO, r::ReinterpretArray{T}, toplevel) where {T}
 end
 
 function showarg(io::IO, c::CartesianIndices, toplevel)
-    toplevel || print(io, "::")
     if toplevel
         print(io, "CartesianIndices ", UnitRange.(c.indices))
     else
-        print(io, typeof(a))
+        print(io, "::", typeof(c))
     end
 end
 
