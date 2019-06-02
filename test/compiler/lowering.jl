@@ -76,15 +76,22 @@ function lower_ref_expr!(ex)
         map!(lower_ref_expr!, ex.args, ex.args)
         if ex.head == :block && length(ex.args) == 1
             # Remove trivial blocks
-            return ex.args[1]
+            return lower_ref_expr!(ex.args[1])
         end
+        # Translate a selection of special expressions into the exotic Expr
+        # heads used in lowered code.
         if ex.head == :(.) && length(ex.args) >= 1 && (ex.args[1] == :Top ||
                                                        ex.args[1] == :Core)
             (length(ex.args) == 2 && ex.args[2] isa QuoteNode) || throw("Unexpected top/core expression $(sprint(dump, ex))")
             return Expr(ex.args[1] == :Top ? :top : :core, ex.args[2].value)
-        end
-        if ex.head == :call && length(ex.args) >= 1 && ex.args[1] == :maybe_unused
+        elseif ex.head == :call && length(ex.args) >= 1 && ex.args[1] == :maybe_unused
             return Expr(:unnecessary, ex.args[2:end]...)
+        elseif ex.head == :$ && length(ex.args) == 1 && ex.args[1] isa Expr &&
+               ex.args[1].head == :call && ex.args[1].args[1] == :Expr
+            # Expand exprs of form $(Expr(head, ...))
+            return Expr(map(q->q.value, ex.args[1].args[2:end])...)
+        elseif ex.head == :macrocall
+            # TODO heads for blocks
         end
     end
     return ex
@@ -469,6 +476,13 @@ end
             end
         )
     end
+
+    @test_desugar(x::T = a,
+        begin
+            $(Expr(:decl, :x, :T))
+            x = a
+        end
+    )
 
     @test_desugar_error 1=a      "invalid assignment location \"1\""
     @test_desugar_error true=a   "invalid assignment location \"true\""
