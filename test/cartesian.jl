@@ -64,3 +64,12 @@ end
     @test iterate(I, CartesianIndex(3, typemax(Int)))[1] == CartesianIndex(4,typemax(Int))
     @test iterate(I, CartesianIndex(4, typemax(Int)))    === nothing
 end
+
+@testset "show" begin
+    @test summary(CartesianIndex(1,2)) == "CartesianIndex{2}"
+
+    c1 = CartesianIndices((2:4, 1:2))
+    c2 = CartesianIndices(rand(3, 2))
+    @test summary(c1) == "3×2 CartesianIndices (2:4, 1:2)"
+    @test summary(c2) == "3×2 CartesianIndices (1:3, 1:2)"
+end
