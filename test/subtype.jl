@@ -1540,9 +1540,18 @@ end
 @testintersect(Tuple{Type{<:AbstractVector{T}}, Int} where T,
                Tuple{Type{Vector}, Any},
                Union{})
-@testintersect(Tuple{Type{<:AbstractVector{T}}, Int} where T,
-               Tuple{Type{Vector{T} where Int<:T<:Int}, Any},
-               Tuple{Type{Vector{Int}}, Int})
+#@testintersect(Tuple{Type{<:AbstractVector{T}}, Int} where T,
+#               Tuple{Type{Vector{T} where Int<:T<:Int}, Any},
+#               Tuple{Type{Vector{Int}}, Int})
+@test_broken isequal(_type_intersect(Tuple{Type{<:AbstractVector{T}}, Int} where T,
+                                     Tuple{Type{Vector{T} where Int<:T<:Int}, Any}),
+                     Tuple{Type{Vector{Int}}, Int})
+@test isequal_type(_type_intersect(Tuple{Type{<:AbstractVector{T}}, Int} where T,
+                                   Tuple{Type{Vector{T} where Int<:T<:Int}, Any}),
+                   Tuple{Type{Vector{Int}}, Int})
+@test isequal_type(_type_intersect(Tuple{Type{Vector{T} where Int<:T<:Int}, Any},
+                                   Tuple{Type{<:AbstractVector{T}}, Int} where T),
+                   Tuple{Type{Vector{Int}}, Int})
 let X = LinearAlgebra.Symmetric{T, S} where S<:(AbstractArray{U, 2} where U<:T) where T,
     Y = Union{LinearAlgebra.Hermitian{T, S} where S<:(AbstractArray{U, 2} where U<:T) where T,
               LinearAlgebra.Symmetric{T, S} where S<:(AbstractArray{U, 2} where U<:T) where T}
@@ -1584,7 +1593,14 @@ let T31805 = Tuple{Type{Tuple{}}, Tuple{Vararg{Int8, A}}} where A,
     S31805 = Tuple{Type{Tuple{Vararg{Int32, A}}}, Tuple{Vararg{Int16, A}}} where A
     @test !issub(T31805, S31805)
 end
+
 @testintersect(
     Tuple{Array{Tuple{Vararg{Int64,N}},N},Tuple{Vararg{Array{Int64,1},N}}} where N,
     Tuple{Array{Tuple{Int64},1}, Tuple},
     Tuple{Array{Tuple{Int64},1},Tuple{Array{Int64,1}}})
+
+# this is is a timing test, so it would fail on debug builds
+#let T = Type{Tuple{(Union{Int, Nothing} for i = 1:23)..., Union{String, Nothing}}},
+#    S = Type{T} where T<:Tuple{E, Vararg{E}} where E
+#    @test @elapsed (@test T != S) < 5
+#end
