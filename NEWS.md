@@ -21,6 +21,8 @@ Build system changes
 New library functions
 ---------------------
 
+* `findfirst`, `findlast`, `findnext` and `findprev` now accept a character as first argument
+  to search for that character in a string passed as the second argument ([#31664]).
 * New `findall(pattern, string)` method where `pattern` is a string or regex ([#31834]).
 
 Standard library changes
