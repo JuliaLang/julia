@@ -386,12 +386,14 @@ JL_DLLEXPORT void jl_set_task_tid(jl_task_t *task, int tid)
 // get the next runnable task from the multiq
 static jl_task_t *get_next_task(jl_value_t *getsticky)
 {
+    jl_gc_safepoint();
     jl_task_t *task = (jl_task_t*)jl_apply(&getsticky, 1);
     if (jl_typeis(task, jl_task_type)) {
         int self = jl_get_ptls_states()->tid;
         jl_set_task_tid(task, self);
         return task;
     }
+    jl_gc_safepoint();
 #ifdef JULIA_ENABLE_THREADING
     return multiq_deletemin();
 #else
@@ -408,7 +410,6 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
     jl_task_t *task;
 
     while (1) {
-        jl_gc_safepoint();
         task = get_next_task(getsticky);
         if (task)
             return task;
@@ -456,8 +457,10 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
                         return task;
                     }
                     uv_loop_t *loop = jl_global_event_loop();
-                    loop->stop_flag = 0;
-                    active = uv_run(loop, UV_RUN_ONCE);
+                    if (jl_atomic_load(&sleep_check_state) == sleeping) {
+                        loop->stop_flag = 0;
+                        active = uv_run(loop, UV_RUN_ONCE);
+                    }
                     JL_UV_UNLOCK();
                     // optimization: check again first if we added work for ourself
                     task = get_next_task(getsticky);
@@ -481,16 +484,16 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
                 }
             }
             // the other threads will just wait for on signal to resume
-            int8_t gc_state = jl_gc_safe_enter(ptls);
             uv_mutex_lock(&ptls->sleep_lock);
             while (jl_atomic_load(&sleep_check_state) == sleeping) {
                 task = get_next_task(getsticky);
                 if (task)
                     break;
+                int8_t gc_state = jl_gc_safe_enter(ptls);
                 uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
+                jl_gc_safe_leave(ptls, gc_state);
             }
             uv_mutex_unlock(&ptls->sleep_lock);
-            jl_gc_safe_leave(ptls, gc_state);
             start_cycles = 0;
             if (task)
                 return task;
