@@ -75,7 +75,7 @@ for f in (:(!), :(~), :(+), :(-), :(zero), :(one), :(oneunit),
           :(isinteger), :(isreal), :(isnan),
           :(iszero), :(transpose), :(adjoint), :(float), :(conj),
           :(abs), :(abs2), :(iseven), :(ispow2),
-          :(real), :(imag), :(sign), :(inv))
+          :(real), :(imag), :(sign), :(inv), :(eps))
     @eval ($f)(::Missing) = missing
 end
 for f in (:(Base.zero), :(Base.one), :(Base.oneunit))
