@@ -87,12 +87,6 @@ function lower_ref_expr!(ex)
             return Expr(ex.args[1] == :Top ? :top : :core, ex.args[2].value)
         elseif ex.head == :call && length(ex.args) >= 1 && ex.args[1] == :maybe_unused
             return Expr(:unnecessary, ex.args[2:end]...)
-        elseif ex.head == :$ && length(ex.args) == 1 && ex.args[1] isa Expr &&
-               ex.args[1].head == :call && ex.args[1].args[1] == :Expr
-            # Expand exprs of form $(Expr(head, ...))
-            return Expr(map(q->q.value, ex.args[1].args[2:end])...)
-        elseif ex.head == :macrocall
-            # TODO heads for blocks
         end
     end
     return ex
@@ -134,7 +128,7 @@ function diffdump(ex1, ex2; maxdepth=20)
 end
 
 # For interactive convenience in constructing test cases with flisp based lowering
-desugar(ex) = lift_lowered_expr(fl_expand_forms(ex); lift_full=true)
+desugar(ex; lift_full=true) = lift_lowered_expr(fl_expand_forms(ex); lift_full=lift_full)
 
 macro desugar(ex)
     quote
@@ -148,8 +142,8 @@ reference expression `ref`.
 """
 macro test_desugar(input, ref)
     ex = quote
-        input = lift_lowered_expr(fl_expand_forms($(QuoteNode(input))))
-        ref   = lower_ref_expr($(QuoteNode(ref)))
+        input = lift_lowered_expr(fl_expand_forms($(Expr(:quote, input))))
+        ref   = lower_ref_expr($(Expr(:quote, ref)))
         @test input == ref
         if input != ref
             # Kinda crude. Would be better if Test supported custom/more
@@ -166,7 +160,7 @@ end
 
 macro test_desugar_error(input, msg)
     ex = quote
-        input = lift_lowered_expr(fl_expand_forms($(QuoteNode(input))))
+        input = lift_lowered_expr(fl_expand_forms($(Expr(:quote, input))))
         @test input == Expr(:error, $msg)
     end
     # Attribute the test to the correct line number
@@ -327,8 +321,8 @@ end
 
 @testset "Misc operators" begin
     @test_desugar a'    Top.adjoint(a)
-    # <: and >: are special Expr heads which need to be turned into call when
-    # used as operators
+    # <: and >: are special Expr heads which need to be turned into Expr(:call)
+    # when used as operators
     @test_desugar a <: b  $(Expr(:call, :(<:), :a, :b))
     @test_desugar a >: b  $(Expr(:call, :(>:), :a, :b))
 end
@@ -407,7 +401,7 @@ end
             Top.materialize!(ssa1, Top.broadcasted(+, ssa1, a))
         end
     )
-    # TODO @test_desugar (x+y) += 1  Error
+    @test_desugar_error (x+y) += 1  "invalid assignment location \"(x + y)\""
 end
 
 @testset "Assignment" begin
@@ -502,37 +496,117 @@ end
     @test_desugar_error x.(y)=c  "invalid syntax \"x.(y) = ...\""
 end
 
-@testset "For loops" begin
-    #=
-    @test_desugar(
-        for i in a
-           body
-        end,
+@testset "Loops" begin
+    @test_desugar(while cond
+                      body1
+                      continue
+                      body2
+                      break
+                      body3
+                  end,
+        $(Expr(Symbol("break-block"), Symbol("loop-exit"),
+               Expr(:_while, :cond,
+                    Expr(Symbol("break-block"), Symbol("loop-cont"),
+                         Expr(Symbol("scope-block"), quote
+                                  body1
+                                  $(Expr(:break, Symbol("loop-cont")))
+                                  body2
+                                  $(Expr(:break, Symbol("loop-exit")))
+                                  body3
+                              end
+                             )
+                        )
+                   )
+              ))
+    )
+
+    @test_desugar(for i = a
+                      body1
+                      continue
+                      body2
+                      break
+                  end,
+        $(Expr(Symbol("break-block"), Symbol("loop-exit"),
+               quote
+                   ssa1 = a
+                   gsym1 = Top.iterate(ssa1)
+                   if Top.not_int(Core.:(===)(gsym1, $nothing))
+                       $(Expr(:_do_while,
+                              quote
+                                  $(Expr(Symbol("break-block"), Symbol("loop-cont"),
+                                         Expr(Symbol("scope-block"),
+                                              quote
+                                                  local i
+                                                  begin
+                                                      ssa2 = gsym1
+                                                      i = Core.getfield(ssa2, 1)
+                                                      ssa3 = Core.getfield(ssa2, 2)
+                                                      ssa2
+                                                  end
+                                                  begin
+                                                      body1
+                                                      $(Expr(:break, Symbol("loop-cont")))
+                                                      body2
+                                                      $(Expr(:break, Symbol("loop-exit")))
+                                                  end
+                                              end)))
+                                  gsym1 = Top.iterate(ssa1, ssa3)
+                              end,
+                              :(Top.not_int(Core.:(===)(gsym1, $nothing)))))
+                   end
+               end))
+    )
+end
+
+@testset "Functions" begin
+    # Short form
+    @test_desugar(f(x) = x,
         begin
-            @break_block :loop_exit begin
-                ssa1 = a
-                gsym1 = Top.iterate(ssa1)
-                if Top.not_int(Core.:(===)(gsym1, nothing))
-                    @_do_while begin
-                        @break_block :loop_cont begin
-                            @scope_block begin
-                                local i
-                                begin
-                                    ssa2 = gsym1
-                                    i    = Core.getfield(ssa2, 1)
-                                    ssa3 = Core.getfield(ssa2, 2)
-                                    ssa2
-                                end
-                                body
-                            end
-                        end
-                        gsym1 = Top.iterate(ssa1, ssa3)
-                    end begin
-                        Top.not_int(Core.:(===)(gsym1, nothing))
-                    end
-                end
-            end
+            $(Expr(:method, :f))
+            $(Expr(:method,
+                   :f,
+                   :(Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec())),
+                   Expr(:lambda,
+                        Expr(Symbol("#self#"), :x),
+                        Any[],
+                        Expr(Symbol("scope-block"),
+                             :x))))
+            maybe_unused(f)
         end
     )
-    =#
+    # Long form with argument annotations
+    @test_desugar(function f(x,y)
+                      body
+                  end,
+        begin
+            $(Expr(:method, :f))
+            $(Expr(:method,
+                   :f,
+                   :(Core.svec(Core.svec(Core.Typeof(f), Core.Any, Core.Any), Core.svec())),
+                   Expr(:lambda,
+                        Expr(Symbol("#self#"), :x, :y),
+                        Any[],
+                        Expr(Symbol("scope-block"),
+                             :body))))
+            maybe_unused(f)
+        end
+    )
+    # Return type
+    @test_desugar(f(x)::T = x,
+        begin
+            $(Expr(:method, :f))
+            $(Expr(:method, :f,
+                   :(Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec())),
+                   Expr(:lambda,
+                        Expr(Symbol("#self#"), :x),
+                        Any[],
+                        Expr(Symbol("scope-block"),
+                             quote
+                                 ssa1 = T
+                                 $(Expr(:meta, Symbol("ret-type"), :ssa1))
+                                 x
+                             end))))
+            maybe_unused(f)
+        end
+    )
 end
