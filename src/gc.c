@@ -3133,7 +3133,7 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
         // In theory we want JL_CACHE_BYTE_ALIGNMENT. We cannot guarantee this for inlined
         // arrays. In order to avoid unnecessary memcopies, we stick with 16 byte here.
         // Revisit when this gets fixed.
-        b = jl_realloc_aligned(p, sz, oldsz, JL_SMALL_BYTE_ALIGNMENT);
+        b = jl_realloc_aligned(d, allocsz, oldsz, JL_SMALL_BYTE_ALIGNMENT);
     else
         b = realloc(d, allocsz);
     if (b == NULL)
