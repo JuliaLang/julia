@@ -374,7 +374,7 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
 }
 
 
-JL_DLLEXPORT void jl_set_task_tid(jl_task_t *task, int tid)
+JL_DLLEXPORT void jl_set_task_tid(jl_task_t *task, int tid) JL_NOTSAFEPOINT
 {
     // Try to acquire the lock on this task.
     // If this fails, we'll check for that error later (in jl_switchto).
