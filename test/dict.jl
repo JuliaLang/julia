@@ -172,8 +172,6 @@ end
     end
 end
 
-
-
 @test_throws KeyError Dict("a"=>2)[Base.secret_table_token]
 
 @testset "issue #1821" begin
