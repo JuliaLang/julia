@@ -2069,7 +2069,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_info_type =
         jl_new_datatype(jl_symbol("CodeInfo"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(17,
+                        jl_perm_symsvec(18,
                             "code",
                             "codelocs",
                             "ssavaluetypes",
@@ -2081,13 +2081,14 @@ void jl_init_types(void) JL_GC_DISABLED
                             "slottypes",
                             "rettype",
                             "parent",
+                            "edges",
                             "min_world",
                             "max_world",
                             "inferred",
                             "inlineable",
                             "propagate_inbounds",
                             "pure"),
-                        jl_svec(17,
+                        jl_svec(18,
                             jl_array_any_type,
                             jl_any_type,
                             jl_any_type,
@@ -2099,13 +2100,14 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             jl_any_type,
                             jl_any_type,
+                            jl_any_type,
                             jl_ulong_type,
                             jl_ulong_type,
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type),
-                        0, 1, 17);
+                        0, 1, 18);
 
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,

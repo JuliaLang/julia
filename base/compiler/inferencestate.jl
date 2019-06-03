@@ -87,8 +87,9 @@ mutable struct InferenceState
             inmodule = linfo.def::Module
         end
 
-        min_valid = UInt(1)
-        max_valid = get_world_counter()
+        min_valid = src.min_world
+        max_valid = src.max_world == typemax(UInt) ?
+            get_world_counter() : src.max_world
         frame = new(
             params, result, linfo,
             sp, slottypes, inmodule, 0,

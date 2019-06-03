@@ -191,6 +191,15 @@ function store_backedges(frame::InferenceState)
                 end
             end
         end
+        edges = frame.src.edges
+        if edges !== nothing
+            edges = edges::Vector{MethodInstance}
+            for edge in edges
+                @assert isa(edge, MethodInstance)
+                ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any), edge, caller)
+            end
+            frame.src.edges = nothing
+        end
     end
 end
 
