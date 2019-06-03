@@ -159,6 +159,11 @@ end
     @test d == Dict{Real,Real}(2.0=>3.0, 1=>2)
 end
 
+@testset "empty tuple ctor" begin
+    h = Dict(())
+    @test length(h) == 0
+end
+
 @testset "type of Dict constructed from varargs of Pairs" begin
     @test Dict(1=>1, 2=>2.0) isa Dict{Int,Real}
     @test Dict(1=>1, 2.0=>2) isa Dict{Real,Int}
