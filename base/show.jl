@@ -381,9 +381,14 @@ end
 function show_function(io::IO, f::Function, compact::Bool)
     ft = typeof(f)
     mt = ft.name.mt
-    if isdefined(mt, :module) && isdefined(mt.module, mt.name) &&
+    if mt === Symbol.name.mt
+        # uses shared method table
+        show_default(io, f)
+    elseif compact
+        print(io, mt.name)
+    elseif isdefined(mt, :module) && isdefined(mt.module, mt.name) &&
         getfield(mt.module, mt.name) === f
-        if compact || is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main
+        if is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main
             print(io, mt.name)
         else
             print(io, mt.module, ".", mt.name)

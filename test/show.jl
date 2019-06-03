@@ -1501,6 +1501,7 @@ replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color =>
 @test string(:) == "Colon()"
 @test string(Iterators.flatten) == "flatten"
 @test Symbol(Iterators.flatten) === :flatten
+@test startswith(string(x->x), "#")
 
 # printing of bools and bool arrays
 @testset "Bool" begin
