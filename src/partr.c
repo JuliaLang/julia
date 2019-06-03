@@ -457,11 +457,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
                     }
                     uv_loop_t *loop = jl_global_event_loop();
                     loop->stop_flag = 0;
-#ifdef _OS_WINDOWS_
-                    active = uv_run(loop, _threadedregion ? UV_RUN_NOWAIT : UV_RUN_ONCE);
-#else
                     active = uv_run(loop, UV_RUN_ONCE);
-#endif
                     JL_UV_UNLOCK();
                     // optimization: check again first if we added work for ourself
                     task = get_next_task(getsticky);
