@@ -491,7 +491,9 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
                     break;
                 int8_t gc_state = jl_gc_safe_enter(ptls);
                 uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
+                uv_mutex_unlock(&ptls->sleep_lock);
                 jl_gc_safe_leave(ptls, gc_state);
+                uv_mutex_lock(&ptls->sleep_lock);
             }
             uv_mutex_unlock(&ptls->sleep_lock);
             start_cycles = 0;
