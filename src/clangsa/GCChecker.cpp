@@ -12,7 +12,11 @@
 #include "clang/StaticAnalyzer/Core/BugReporter/CommonBugCategories.h"
 #include "clang/StaticAnalyzer/Frontend/AnalysisConsumer.h"
 #include "clang/StaticAnalyzer/Checkers/SValExplainer.h"
+#if LLVM_VERSION_MAJOR >= 9
+#include "clang/StaticAnalyzer/Frontend/CheckerRegistry.h"
+#else
 #include "clang/StaticAnalyzer/Core/CheckerRegistry.h"
+#endif
 #include <iostream>
 
 namespace {
@@ -207,14 +211,16 @@ namespace {
           }
 
           PDP VisitNode(const ExplodedNode *N,
+#if LLVM_VERSION_MAJOR <= 8
                         const ExplodedNode *PrevN,
+#endif
                         BugReporterContext &BRC,
                         BugReport &BR) override;
         };
 
         class GCValueBugVisitor
 #if LLVM_VERSION_MAJOR >= 7
-          : public BugReporterVisitor
+          : public BugReporterVisitor {
 #else
           : public BugReporterVisitorImpl<GCValueBugVisitor> {
 #endif
@@ -236,7 +242,9 @@ namespace {
               const ExplodedNode *N, PathDiagnosticLocation Pos, BugReporterContext &BRC, BugReport &BR);
 
           PDP VisitNode(const ExplodedNode *N,
+#if LLVM_VERSION_MAJOR <= 8
                                                          const ExplodedNode *PrevN,
+#endif
                                                          BugReporterContext &BRC,
                                                          BugReport &BR) override;
         };
@@ -317,8 +325,12 @@ namespace Helpers {
 }
 
 PDP GCChecker::GCBugVisitor::VisitNode(
-  const ExplodedNode *N, const ExplodedNode *PrevN,
+  const ExplodedNode *N,
+#if LLVM_VERSION_MAJOR <= 8
+  const ExplodedNode *,
+#endif
   BugReporterContext &BRC, BugReport &BR) {
+    const ExplodedNode *PrevN = N->getFirstPred();
     unsigned NewGCDepth = N->getState()->get<GCDepth>();
     unsigned OldGCDepth = PrevN->getState()->get<GCDepth>();
     if (NewGCDepth != OldGCDepth) {
@@ -412,8 +424,12 @@ PDP GCChecker::GCValueBugVisitor::ExplainNoPropagation(
 }
 
 PDP GCChecker::GCValueBugVisitor::VisitNode(
-  const ExplodedNode *N, const ExplodedNode *PrevN,
+  const ExplodedNode *N,
+#if LLVM_VERSION_MAJOR <= 8
+  const ExplodedNode *,
+#endif
   BugReporterContext &BRC, BugReport &BR) {
+    const ExplodedNode *PrevN = N->getFirstPred();
     const ValueState *NewValueState = N->getState()->get<GCValueMap>(Sym);
     const ValueState *OldValueState = PrevN->getState()->get<GCValueMap>(Sym);
     const Stmt *Stmt = PathDiagnosticLocation::getStmt(N);
@@ -1518,7 +1534,11 @@ extern "C" const char clang_analyzerAPIVersionString[] =
     CLANG_ANALYZER_API_VERSION_STRING;
 extern "C"
 void clang_registerCheckers (CheckerRegistry &registry) {
-  registry.addChecker<GCChecker>("julia.GCChecker",
-    "Validates julia gc invariants");
+    registry.addChecker<GCChecker>("julia.GCChecker",
+                                   "Validates julia gc invariants"
+#if LLVM_VERSION_MAJOR >= 8
+                                   ,"https://docs.julialang.org/en/v1/devdocs/gc-sa/"
+#endif
+                                   );
 }
 #endif
