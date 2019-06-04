@@ -596,9 +596,49 @@ end
                        end))
         end
     )
+
+end
+
+@testset "let blocks" begin
+    # flisp: (expand-let)
+    @test_desugar(let x,y
+                      body
+                  end,
+        begin
+            $(Expr(Symbol("scope-block"),
+                   quote
+                       local x
+                       $(Expr(Symbol("scope-block"),
+                              quote
+                                  local y
+                                  body
+                              end))
+                   end))
+        end
+    )
+    # Let with assignment
+    @test_desugar(let x=a,y=b
+                      body
+                  end,
+        begin
+            $(Expr(Symbol("scope-block"),
+                   quote
+                       $(Expr(Symbol("local-def"), :x))
+                       x = a
+                       $(Expr(Symbol("scope-block"),
+                              quote
+                                  $(Expr(Symbol("local-def"), :y))
+                                  y = b
+                                  body
+                              end))
+                   end))
+        end
+    )
+    # TODO: More coverage. Internals look complex.
 end
 
 @testset "Loops" begin
+    # flisp: (expand-for) (lambda in expand-forms)
     @test_desugar(while cond
                       body1
                       continue
