@@ -18,7 +18,6 @@ function lift_lowered_expr!(ex, nextids, valmap, lift_full)
         end
     end
     if ex isa Symbol
-        # Rename special names
         if ex == Symbol("#self#")
             return :_self_
         end
@@ -41,10 +40,6 @@ function lift_lowered_expr!(ex, nextids, valmap, lift_full)
         map!(ex.args, ex.args) do e
             lift_lowered_expr!(e, nextids, valmap, lift_full)
         end
-        # FIXME: This translation of _self_ is an error in converting lamba exprs.
-        if ex.head == Symbol("#self#")
-            ex = Expr(:_self_, ex.args...)
-        end
         if lift_full
             # Lift exotic Expr heads into standard julia syntax for ease in
             # writing test case expressions.
@@ -57,6 +52,10 @@ function lift_lowered_expr!(ex, nextids, valmap, lift_full)
                 # do not need to be evaluated if their value is unused.
                 return Expr(:call, :maybe_unused, ex.args...)
             end
+        end
+    elseif ex isa Vector # Occasional case of lambdas
+        map!(ex, ex) do e
+            lift_lowered_expr!(e, nextids, valmap, lift_full)
         end
     end
     return ex
@@ -664,17 +663,14 @@ end
 
 @testset "Functions" begin
     # Short form
-    @test_desugar(f(x) = x,
+    @test_desugar(f(x) = body(x),
         begin
             $(Expr(:method, :f))
-            $(Expr(:method,
-                   :f,
+            $(Expr(:method, :f,
                    :(Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec())),
-                   Expr(:lambda,
-                        Expr(:_self_, :x),
-                        Any[],
+                   Expr(:lambda, [:_self_, :x], [],
                         Expr(Symbol("scope-block"),
-                             :x))))
+                             :(body(x))))))
             maybe_unused(f)
         end
     )
@@ -685,12 +681,9 @@ end
                   end,
         begin
             $(Expr(:method, :f))
-            $(Expr(:method,
-                   :f,
+            $(Expr(:method, :f,
                    :(Core.svec(Core.svec(Core.Typeof(f), T, Core.Any), Core.svec())),
-                   Expr(:lambda,
-                        Expr(:_self_, :x, :y),
-                        Any[],
+                   Expr(:lambda, [:_self_, :x, :y], [],
                         Expr(Symbol("scope-block"),
                              :(body(x))))))
             maybe_unused(f)
@@ -699,16 +692,14 @@ end
 
     # Default arguments
     @test_desugar(function f(x=a, y=b)
-                      body(x)
+                      body(x,y)
                   end,
         begin
             begin
                 $(Expr(:method, :f))
                 $(Expr(:method, :f,
                        :(Core.svec(Core.svec(Core.Typeof(f)), Core.svec())),
-                       Expr(:lambda,
-                            Expr(:_self_),
-                            Any[],
+                       Expr(:lambda, [:_self_], [],
                             Expr(Symbol("scope-block"),
                                  :(_self_(a, b))))))
                 maybe_unused(f)
@@ -717,9 +708,7 @@ end
                 $(Expr(:method, :f))
                 $(Expr(:method, :f,
                        :(Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec())),
-                       Expr(:lambda,
-                            Expr(:_self_, :x),
-                            Any[],
+                       Expr(:lambda, [:_self_, :x], [],
                             Expr(Symbol("scope-block"),
                                  :(_self_(x, b))))))
                 maybe_unused(f)
@@ -728,11 +717,9 @@ end
                 $(Expr(:method, :f))
                 $(Expr(:method, :f,
                        :(Core.svec(Core.svec(Core.Typeof(f), Core.Any, Core.Any), Core.svec())),
-                       Expr(:lambda,
-                            Expr(:_self_, :x, :y),
-                            Any[],
+                       Expr(:lambda, [:_self_, :x, :y], [],
                             Expr(Symbol("scope-block"),
-                                 :(body(x))))))
+                                 :(body(x,y))))))
                 maybe_unused(f)
             end
         end
@@ -740,16 +727,15 @@ end
 
     # Varargs
     @test_desugar(function f(x, args...)
-                      body
+                      body(x, args)
                   end,
         begin
             $(Expr(:method, :f))
             $(Expr(:method, :f,
                    :(Core.svec(Core.svec(Core.Typeof(f), Core.Any, Core.apply_type(Vararg, Core.Any)), Core.svec())),
-                   Expr(:lambda,
-                        Expr(:_self_, :x, :args),
-                        Any[],
-                        Expr(Symbol("scope-block"), :body))))
+                   Expr(:lambda, [:_self_, :x, :args], [],
+                        Expr(Symbol("scope-block"),
+                             :(body(x, args))))))
             maybe_unused(f)
         end
     )
@@ -769,9 +755,7 @@ end
             $(Expr(:method, :f))
             $(Expr(:method, :f,
                    :(Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec())),
-                   Expr(:lambda,
-                        Expr(:_self_, :x),
-                        Any[],
+                   Expr(:lambda, [:_self_, :x], [],
                         Expr(Symbol("scope-block"),
                              quote
                                  ssa1 = T
@@ -790,9 +774,7 @@ end
                 $(Expr(:method, :gsym1))
                 $(Expr(:method, :gsym1,
                        :(Core.svec(Core.svec(Core.Typeof(gsym1), Core.Any, Core.Any), Core.svec())),
-                       Expr(:lambda,
-                            Expr(:_self_, :x, :y),
-                            Any[],
+                       Expr(:lambda, [:_self_, :x, :y], [],
                             Expr(Symbol("scope-block"),
                                  :(body(x, y))))))
                 maybe_unused(gsym1)

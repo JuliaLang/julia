@@ -572,8 +572,26 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             jl_array_ptr_set(((jl_expr_t*)ex)->args, i, scm_to_julia_(fl_ctx, car_(e), mod, formonly));
             e = cdr_(e);
         }
-        if (sym == lambda_sym && !formonly)
-            ex = (jl_value_t*)jl_new_code_info_from_ast((jl_expr_t*)ex);
+        if (sym == lambda_sym) {
+            if (formonly) {
+                if (jl_array_len(((jl_expr_t*)ex)->args) >= 1 &&
+                        jl_is_expr(jl_array_ptr_ref(((jl_expr_t*)ex)->args, 0))) {
+                    // Hack: fixup translation of lambda arg names (only used in testing)
+                    jl_expr_t *argexpr = (jl_expr_t*)jl_array_ptr_ref(((jl_expr_t*)ex)->args, 0);
+                    size_t nargs = jl_array_len(argexpr->args) + 1;
+                    jl_array_t *args = jl_alloc_vec_any(nargs);
+                    JL_GC_PUSH1(&args);
+                    jl_array_ptr_set(args, 0, argexpr->head);
+                    for (size_t i = 1; i < nargs; ++i)
+                        jl_array_ptr_set(args, i, jl_array_ptr_ref(argexpr->args, i-1));
+                    jl_array_ptr_set(((jl_expr_t*)ex)->args, 0, args);
+                    JL_GC_POP();
+                }
+            }
+            else {
+                ex = (jl_value_t*)jl_new_code_info_from_ast((jl_expr_t*)ex);
+            }
+        }
         JL_GC_POP();
         if (sym == list_sym)
             return (jl_value_t*)((jl_expr_t*)ex)->args;
