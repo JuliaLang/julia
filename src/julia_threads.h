@@ -66,6 +66,16 @@ typedef struct {
 } jl_gc_pool_t;
 
 typedef struct {
+    int64_t     allocd;
+    int64_t     freed;
+    uint64_t    malloc;
+    uint64_t    realloc;
+    uint64_t    poolalloc;
+    uint64_t    bigalloc;
+    uint64_t    freecall;
+} jl_thread_gc_num_t;
+
+typedef struct {
     // variable for tracking weak references
     arraylist_t weak_refs;
     // live tasks started on this thread
@@ -156,6 +166,7 @@ struct _jl_tls_states_t {
     volatile int8_t in_finalizer;
     int8_t disable_gc;
     jl_thread_heap_t heap;
+    jl_thread_gc_num_t gc_num;
     uv_mutex_t sleep_lock;
     uv_cond_t wake_signal;
     volatile sig_atomic_t defer_signal;

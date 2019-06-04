@@ -742,10 +742,11 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_error("cannot generate code-coverage or track allocation information while generating a .o or .bc output file");
     }
 
+    jl_gc_init();
+
     jl_init_threading();
     jl_init_intrinsic_properties();
 
-    jl_gc_init();
     jl_gc_enable(0);
 
     jl_resolve_sysimg_location(rel);
