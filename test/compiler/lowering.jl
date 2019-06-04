@@ -659,6 +659,38 @@ end
                    end
                end))
     )
+
+    # For loops with `outer`
+    @test_desugar(for outer i = a
+                      body
+                  end,
+        $(Expr(Symbol("break-block"), Symbol("loop-exit"),
+               quote
+                   ssa1 = a
+                   gsym1 = Top.iterate(ssa1)
+                   $(Expr(Symbol("require-existing-local"), :i))  # Cf above.
+                   if Top.not_int(Core.:(===)(gsym1, $nothing))
+                       $(Expr(:_do_while,
+                              quote
+                                  $(Expr(Symbol("break-block"), Symbol("loop-cont"),
+                                         Expr(Symbol("scope-block"),
+                                              quote
+                                                  begin
+                                                      ssa2 = gsym1
+                                                      i = Core.getfield(ssa2, 1)
+                                                      ssa3 = Core.getfield(ssa2, 2)
+                                                      ssa2
+                                                  end
+                                                  begin
+                                                      body
+                                                  end
+                                              end)))
+                                  gsym1 = Top.iterate(ssa1, ssa3)
+                              end,
+                              :(Top.not_int(Core.:(===)(gsym1, $nothing)))))
+                   end
+               end))
+    )
 end
 
 @testset "Functions" begin
