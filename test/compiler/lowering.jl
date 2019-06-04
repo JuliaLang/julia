@@ -772,12 +772,70 @@ end
         end
     )
 
-    # Keyword args
-    # TODO
-    #= @desugar(function f(x; k1=v1, k2=v2) =#
-    #=              body =#
-    #=          end, =#
-    #= ) =#
+    # Keyword arguments
+    @test_desugar(function f(x; k1=v1, k2=v2)
+                      body
+                  end,
+        begin
+            Core.ifelse(false, false,
+            begin
+              $(Expr(:method, :f))
+              begin
+                  $(Expr(:method, :gsym1))
+                  $(Expr(:method, :gsym1,
+                         :(Core.svec(Core.svec(Core.typeof(gsym1), Core.Any, Core.Any, Core.Typeof(f), Core.Any), Core.svec())),
+                         Expr(:lambda, Any[:gsym1, :k1, :k2, :_self_, :x], Any[],
+                              Expr(Symbol("scope-block"), :body))))
+                  maybe_unused(gsym1)
+              end
+              begin
+                  $(Expr(:method, :f))
+                  $(Expr(:method, :f,
+                         :(Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec())),
+                         Expr(:lambda, Any[:_self_, :x], Any[],
+                              Expr(Symbol("scope-block"),
+                                   :(return gsym1(v1, v2, _self_, x))))))
+                  maybe_unused(f)
+              end
+              begin
+                  $(Expr(:method, :f))
+                  $(Expr(:method, :f,
+                         :(Core.svec(Core.svec(Core.kwftype(Core.Typeof(f)), Core.Any, Core.Typeof(f), Core.Any), Core.svec())),
+                         Expr(:lambda, Any[:gsym2, :gsym3, :_self_, :x], Any[],
+                              Expr(Symbol("scope-block"),
+                                   Expr(Symbol("scope-block"),
+                                        quote
+                                            $(Expr(Symbol("local-def"), :k1))
+                                            k1 = if Top.haskey(gsym3, :k1)
+                                                Top.getindex(gsym3, :k1)
+                                            else
+                                                v1
+                                            end
+                                            $(Expr(Symbol("scope-block"),
+                                                   quote
+                                                       $(Expr(Symbol("local-def"), :k2))
+                                                       k2 = if Top.haskey(gsym3, :k2)
+                                                           Top.getindex(gsym3, :k2)
+                                                       else
+                                                           v2
+                                                       end
+                                                       begin
+                                                           ssa1 = Top.pairs(Top.structdiff(gsym3, Core.apply_type(Core.NamedTuple, Core.tuple(:k1, :k2))))
+                                                           if Top.isempty(ssa1)
+                                                               $nothing
+                                                           else
+                                                               Top.kwerr(gsym3, _self_, x)
+                                                           end
+                                                           return gsym1(k1, k2, _self_, x)
+                                                       end
+                                                   end))
+                                        end)))))
+                  maybe_unused(f)
+              end
+              f
+          end)
+        end
+    )
 
     # Return type declaration
     @test_desugar(function f(x)::T
