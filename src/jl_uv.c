@@ -1085,6 +1085,23 @@ JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *work_args, void *work_
     return 0;
 }
 
+JL_DLLEXPORT void jl_uv_update_timer_start(uv_loop_t* loop, jl_value_t* jltimer,
+                                          uv_timer_t* uvtimer, uv_timer_cb cb,
+                                          uint64_t timeout, uint64_t repeat)
+{
+    JL_UV_LOCK();
+    int err = uv_timer_init(loop, uvtimer);
+    if (err)
+        abort();
+
+    jl_uv_associate_julia_struct((uv_handle_t*)uvtimer, jltimer);
+    uv_update_time(loop);
+    err = uv_timer_start(uvtimer, cb, timeout, repeat);
+    if (err)
+        abort();
+    JL_UV_UNLOCK();
+}
+
 JL_DLLEXPORT void jl_uv_stop(uv_loop_t* loop)
 {
     JL_UV_LOCK();
