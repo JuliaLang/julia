@@ -1279,7 +1279,7 @@
          (assigned-name (cadr e)))
         (else e)))
 
-;; local x, y=2, z => local x;local y;local z;y = 2
+;; local x, (y=2), z => local x;local y;local z;y = 2
 (define (expand-decls what binds const?)
   (if (not (list? binds))
       (error (string "invalid \"" what "\" declaration")))
