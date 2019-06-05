@@ -77,7 +77,13 @@ unwrap(A::Any) = A
 unwrap(A::AbstractMatrix) = iswrsparse(A) ? convert(SparseMatrixCSC, A) : convert(Array, A)
 
 import Base.copy
-copy(A::SubArray{T,2}) where T = getindex(unwrap(parent(A)), A.indices...)
+function copy(A::SubArray{T,2,P}) where {T,P}
+    if iswrsparse(P)
+        getindex(unwrap(parent(A)), A.indices...)
+    else
+        Base.copymutable(A)
+    end
+end
 
 # For pure sparse matrices and vectors return A.
 # For wrapped sparse matrices or vectors convert to SparseMatrixCSC.
