@@ -867,7 +867,6 @@ for A in (rand(2), rand(2,3))
 
      @test keytype(A) == keytype(typeof(A)) == eltype(keys(A))
      @test valtype(A) == valtype(typeof(A)) == eltype(values(A))
-    @test valtype(typeof(A)) == eltype(values(A))
 end
 
 # nextind and prevind
