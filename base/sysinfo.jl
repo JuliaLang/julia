@@ -203,7 +203,8 @@ end
 function cpu_info()
     UVcpus = Ref{Ptr{UV_cpu_info_t}}()
     count = Ref{Int32}()
-    Base.uv_error("uv_cpu_info",ccall(:uv_cpu_info, Int32, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count))
+    err = ccall(:uv_cpu_info, Int32, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count)
+    Base.uv_error("uv_cpu_info", err)
     cpus = Vector{CPUinfo}(undef, count[])
     for i = 1:length(cpus)
         cpus[i] = CPUinfo(unsafe_load(UVcpus[], i))
@@ -219,7 +220,8 @@ Gets the current system uptime in seconds.
 """
 function uptime()
     uptime_ = Ref{Float64}()
-    Base.uv_error("uv_uptime",ccall(:uv_uptime, Int32, (Ptr{Float64},), uptime_))
+    err = ccall(:uv_uptime, Int32, (Ptr{Float64},), uptime_)
+    Base.uv_error("uv_uptime", err)
     return uptime_[]
 end
 

@@ -71,6 +71,17 @@ void JL_UV_LOCK(void)
     }
 }
 
+JL_DLLEXPORT void jl_iolock_begin(void)
+{
+    JL_UV_LOCK();
+}
+
+JL_DLLEXPORT void jl_iolock_end(void)
+{
+    JL_UV_UNLOCK();
+}
+
+
 void jl_uv_call_close_callback(jl_value_t *val)
 {
     jl_value_t *args[2];
@@ -94,11 +105,11 @@ static void jl_uv_closeHandle(uv_handle_t *handle)
         JL_STDERR = (JL_STREAM*)STDERR_FILENO;
     // also let the client app do its own cleanup
     if (handle->type != UV_FILE && handle->data) {
-        size_t last_age = jl_get_ptls_states()->world_age;
-        // TODO: data race on jl_world_counter across many files, to be fixed in a separate revision
-        jl_get_ptls_states()->world_age = jl_world_counter;
+        jl_ptls_t ptls = jl_get_ptls_states();
+        size_t last_age = ptls->world_age;
+        ptls->world_age = jl_world_counter;
         jl_uv_call_close_callback((jl_value_t*)handle->data);
-        jl_get_ptls_states()->world_age = last_age;
+        ptls->world_age = last_age;
     }
     if (handle == (uv_handle_t*)&signal_async)
         return;
@@ -268,7 +279,9 @@ JL_DLLEXPORT void jl_forceclose_uv(uv_handle_t *handle)
     // avoid double-closing the stream
     if (!uv_is_closing(handle)) {
         JL_UV_LOCK();
-        uv_close(handle, &jl_uv_closeHandle);
+        if (!uv_is_closing(handle)) {
+            uv_close(handle, &jl_uv_closeHandle);
+        }
         JL_UV_UNLOCK();
     }
 }
@@ -626,28 +639,33 @@ JL_DLLEXPORT int jl_getpid(void)
 #endif
 }
 
-//NOTE: These function expects port/host to be in network byte-order (Big Endian)
-JL_DLLEXPORT int jl_tcp_bind(uv_tcp_t *handle, uint16_t port, uint32_t host,
-                             unsigned int flags)
+typedef union {
+    struct sockaddr in;
+    struct sockaddr_in v4;
+    struct sockaddr_in6 v6;
+} uv_sockaddr_in;
+
+static void jl_sockaddr_fill(uv_sockaddr_in *addr, uint16_t port, void *host, int ipv6)
 {
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(struct sockaddr_in));
-    addr.sin_port = port;
-    addr.sin_addr.s_addr = host;
-    addr.sin_family = AF_INET;
-    // TODO: do we need a lock here?
-    return uv_tcp_bind(handle, (struct sockaddr*)&addr, flags);
+    memset(addr, 0, sizeof(*addr));
+    if (ipv6) {
+        addr->v6.sin6_family = AF_INET6;
+        memcpy(&addr->v6.sin6_addr, host, 16);
+        addr->v6.sin6_port = port;
+    }
+    else {
+        addr->v4.sin_family = AF_INET;
+        addr->v4.sin_addr.s_addr = *(uint32_t*)host;
+        addr->v4.sin_port = port;
+    }
 }
 
-JL_DLLEXPORT int jl_tcp_bind6(uv_tcp_t *handle, uint16_t port, void *host,
-                              unsigned int flags)
+//NOTE: These function expects port/host to be in network byte-order (Big Endian)
+JL_DLLEXPORT int jl_tcp_bind(uv_tcp_t *handle, uint16_t port, void *host,
+                             unsigned int flags, int ipv6)
 {
-    struct sockaddr_in6 addr;
-    memset(&addr, 0, sizeof(struct sockaddr_in6));
-    addr.sin6_port = port;
-    memcpy(&addr.sin6_addr, host, 16);
-    addr.sin6_family = AF_INET6;
-    // TODO: do we need a lock here
+    uv_sockaddr_in addr;
+    jl_sockaddr_fill(&addr, port, host, ipv6);
     return uv_tcp_bind(handle, (struct sockaddr*)&addr, flags);
 }
 
@@ -701,63 +719,23 @@ JL_DLLEXPORT int jl_tcp_getpeername(uv_tcp_t *handle, uint16_t *port,
     return res;
 }
 
-JL_DLLEXPORT int jl_udp_bind(uv_udp_t *handle, uint16_t port, uint32_t host,
-                             uint32_t flags)
+JL_DLLEXPORT int jl_udp_bind(uv_udp_t *handle, uint16_t port, void *host,
+                             uint32_t flags, int ipv6)
 {
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(struct sockaddr_in));
-    addr.sin_port = port;
-    addr.sin_addr.s_addr = host;
-    addr.sin_family = AF_INET;
+    uv_sockaddr_in addr;
+    jl_sockaddr_fill(&addr, port, host, ipv6);
     return uv_udp_bind(handle, (struct sockaddr*)&addr, flags);
 }
 
-JL_DLLEXPORT int jl_udp_bind6(uv_udp_t *handle, uint16_t port, void *host,
-                              uint32_t flags)
+JL_DLLEXPORT int jl_udp_send(uv_udp_send_t *req, uv_udp_t *handle, uint16_t port, void *host,
+                             char *data, uint32_t size, uv_udp_send_cb cb, int ipv6)
 {
-    struct sockaddr_in6 addr;
-    memset(&addr, 0, sizeof(struct sockaddr_in6));
-    addr.sin6_port = port;
-    memcpy(&addr.sin6_addr, host, 16);
-    addr.sin6_family = AF_INET6;
-    return uv_udp_bind(handle, (struct sockaddr*)&addr, flags);
-}
-
-JL_DLLEXPORT int jl_udp_send(uv_udp_t *handle, uint16_t port, uint32_t host,
-                             void *data, uint32_t size, uv_udp_send_cb cb)
-{
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(struct sockaddr_in));
-    addr.sin_port = port;
-    addr.sin_addr.s_addr = host;
-    addr.sin_family = AF_INET;
+    uv_sockaddr_in addr;
+    jl_sockaddr_fill(&addr, port, host, ipv6);
     uv_buf_t buf[1];
-    buf[0].base = (char *) data;
+    buf[0].base = data;
     buf[0].len = size;
-    uv_udp_send_t *req = (uv_udp_send_t*)malloc(sizeof(uv_udp_send_t));
-    req->data = handle->data;
-    JL_UV_LOCK();
     int r = uv_udp_send(req, handle, buf, 1, (struct sockaddr*)&addr, cb);
-    JL_UV_UNLOCK();
-    return r;
-}
-
-JL_DLLEXPORT int jl_udp_send6(uv_udp_t *handle, uint16_t port, void *host,
-                              void *data, uint32_t size, uv_udp_send_cb cb)
-{
-    struct sockaddr_in6 addr;
-    memset(&addr, 0, sizeof(struct sockaddr_in6));
-    addr.sin6_port = port;
-    memcpy(&addr.sin6_addr, host, 16);
-    addr.sin6_family = AF_INET6;
-    uv_buf_t buf[1];
-    buf[0].base = (char *) data;
-    buf[0].len = size;
-    uv_udp_send_t *req = (uv_udp_send_t *) malloc(sizeof(uv_udp_send_t));
-    req->data = handle->data;
-    JL_UV_LOCK();
-    int r = uv_udp_send(req, handle, buf, 1, (struct sockaddr*)&addr, cb);
-    JL_UV_UNLOCK();
     return r;
 }
 
@@ -769,7 +747,7 @@ JL_DLLEXPORT int jl_uv_sizeof_interface_address(void)
 JL_DLLEXPORT int jl_uv_interface_addresses(uv_interface_address_t **ifAddrStruct,
                                            int *count)
 {
-    return uv_interface_addresses(ifAddrStruct,count);
+    return uv_interface_addresses(ifAddrStruct, count);
 }
 
 JL_DLLEXPORT int jl_uv_interface_address_is_internal(uv_interface_address_t *addr)
@@ -796,124 +774,73 @@ JL_DLLEXPORT int jl_getaddrinfo(uv_loop_t *loop, uv_getaddrinfo_t *req,
 }
 
 JL_DLLEXPORT int jl_getnameinfo(uv_loop_t *loop, uv_getnameinfo_t *req,
-        uint32_t host, uint16_t port, int flags, uv_getnameinfo_cb uvcb)
+        void *host, uint16_t port, int flags, uv_getnameinfo_cb uvcb, int ipv6)
 {
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = host;
-    addr.sin_port = port;
-
-    req->data = NULL;
+    uv_sockaddr_in addr;
+    jl_sockaddr_fill(&addr, port, host, ipv6);
     return uv_getnameinfo(loop, req, uvcb, (struct sockaddr*)&addr, flags);
 }
-
-JL_DLLEXPORT int jl_getnameinfo6(uv_loop_t *loop, uv_getnameinfo_t *req,
-        void *host, uint16_t port, int flags, uv_getnameinfo_cb uvcb)
-{
-    struct sockaddr_in6 addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin6_family = AF_INET6;
-    memcpy(&addr.sin6_addr, host, 16);
-    addr.sin6_port = port;
-
-    req->data = NULL;
-    JL_UV_LOCK();
-    int r = uv_getnameinfo(loop, req, uvcb, (struct sockaddr*)&addr, flags);
-    JL_UV_UNLOCK();
-    return r;
-}
-
 
 JL_DLLEXPORT struct sockaddr *jl_sockaddr_from_addrinfo(struct addrinfo *addrinfo)
 {
     return addrinfo->ai_addr;
 }
+
 JL_DLLEXPORT struct addrinfo *jl_next_from_addrinfo(struct addrinfo *addrinfo)
 {
     return addrinfo->ai_next;
 }
 
-JL_DLLEXPORT int jl_sockaddr_in_is_ip4(struct sockaddr_in *addr)
+JL_DLLEXPORT int jl_sockaddr_is_ip4(struct sockaddr *addr)
 {
-    return (addr->sin_family==AF_INET);
+    return (addr->sa_family == AF_INET);
 }
 
-JL_DLLEXPORT int jl_sockaddr_in_is_ip6(struct sockaddr_in *addr)
+JL_DLLEXPORT int jl_sockaddr_is_ip6(struct sockaddr *addr)
 {
-    return (addr->sin_family==AF_INET6);
+    return (addr->sa_family == AF_INET6);
 }
 
-JL_DLLEXPORT int jl_sockaddr_is_ip4(struct sockaddr_storage *addr)
-{
-    return (addr->ss_family==AF_INET);
-}
-
-JL_DLLEXPORT int jl_sockaddr_is_ip6(struct sockaddr_storage *addr)
-{
-    return (addr->ss_family==AF_INET6);
-}
-
-JL_DLLEXPORT unsigned int jl_sockaddr_host4(struct sockaddr_in *addr)
+JL_DLLEXPORT uint32_t jl_sockaddr_host4(struct sockaddr_in *addr)
 {
     return addr->sin_addr.s_addr;
 }
 
-JL_DLLEXPORT unsigned int jl_sockaddr_host6(struct sockaddr_in6 *addr, char *host)
+JL_DLLEXPORT unsigned jl_sockaddr_host6(struct sockaddr_in6 *addr, char *host)
 {
     memcpy(host, &addr->sin6_addr, 16);
     return addr->sin6_scope_id;
 }
 
-JL_DLLEXPORT void jl_sockaddr_set_port(struct sockaddr_storage *addr,
-                                       uint16_t port)
+JL_DLLEXPORT uint16_t jl_sockaddr_port4(struct sockaddr_in *addr)
 {
-    if (addr->ss_family==AF_INET)
-        ((struct sockaddr_in*)addr)->sin_port = port;
+    return addr->sin_port;
+}
+
+JL_DLLEXPORT uint16_t jl_sockaddr_port6(struct sockaddr_in6 *addr)
+{
+    return addr->sin6_port;
+}
+
+
+JL_DLLEXPORT void jl_sockaddr_set_port(uv_sockaddr_in *addr, uint16_t port)
+{
+    if (addr->in.sa_family == AF_INET)
+        addr->v4.sin_port = port;
     else
-        ((struct sockaddr_in6*)addr)->sin6_port = port;
+        addr->v6.sin6_port = port;
 }
 
-JL_DLLEXPORT int jl_tcp4_connect(uv_tcp_t *handle,uint32_t host, uint16_t port,
-                                 uv_connect_cb cb)
+JL_DLLEXPORT int jl_tcp_connect(uv_tcp_t *handle, void *host, uint16_t port,
+                                uv_connect_cb cb, int ipv6)
 {
-    struct sockaddr_in addr;
+    uv_sockaddr_in addr;
+    jl_sockaddr_fill(&addr, port, host, ipv6);
     uv_connect_t *req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
-    req->data = 0;
-    memset(&addr, 0, sizeof(struct sockaddr_in));
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = host;
-    addr.sin_port = port;
-    JL_UV_LOCK();
-    int r = uv_tcp_connect(req,handle,(struct sockaddr*)&addr,cb);
-    JL_UV_UNLOCK();
-    return r;
-}
-
-JL_DLLEXPORT int jl_tcp6_connect(uv_tcp_t *handle, void *host, uint16_t port,
-                                 uv_connect_cb cb)
-{
-    struct sockaddr_in6 addr;
-    uv_connect_t *req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
-    req->data = 0;
-    memset(&addr, 0, sizeof(struct sockaddr_in6));
-    addr.sin6_family = AF_INET6;
-    memcpy(&addr.sin6_addr, host, 16);
-    addr.sin6_port = port;
-    JL_UV_LOCK();
-    int r = uv_tcp_connect(req,handle,(struct sockaddr*)&addr,cb);
-    JL_UV_UNLOCK();
-    return r;
-}
-
-JL_DLLEXPORT int jl_connect_raw(uv_tcp_t *handle,struct sockaddr_storage *addr,
-                                uv_connect_cb cb)
-{
-    uv_connect_t *req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
-    req->data = 0;
-    JL_UV_LOCK();
-    int r = uv_tcp_connect(req,handle,(struct sockaddr*)addr,cb);
-    JL_UV_UNLOCK();
+    req->data = NULL;
+    int r = uv_tcp_connect(req, handle, &addr.in, cb);
+    if (r)
+        free(req);
     return r;
 }
 
@@ -1084,94 +1011,6 @@ JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *work_args, void *work_
 
     return 0;
 }
-
-JL_DLLEXPORT void jl_uv_update_timer_start(uv_loop_t* loop, jl_value_t* jltimer,
-                                          uv_timer_t* uvtimer, uv_timer_cb cb,
-                                          uint64_t timeout, uint64_t repeat)
-{
-    JL_UV_LOCK();
-    int err = uv_timer_init(loop, uvtimer);
-    if (err)
-        abort();
-
-    jl_uv_associate_julia_struct((uv_handle_t*)uvtimer, jltimer);
-    uv_update_time(loop);
-    err = uv_timer_start(uvtimer, cb, timeout, repeat);
-    if (err)
-        abort();
-    JL_UV_UNLOCK();
-}
-
-JL_DLLEXPORT void jl_uv_stop(uv_loop_t* loop)
-{
-    JL_UV_LOCK();
-    uv_stop(loop);
-    // TODO: use memory/compiler fence here instead of the lock
-    JL_UV_UNLOCK();
-}
-
-JL_DLLEXPORT int jl_uv_fs_scandir(uv_loop_t* loop, uv_fs_t* req, const char* path, int flags,
-                                  uv_fs_cb cb)
-{
-    JL_UV_LOCK();
-    int r = uv_fs_scandir(loop, req, path, flags, cb);
-    JL_UV_UNLOCK();
-    return r;
-}
-
-JL_DLLEXPORT int jl_uv_fs_readlink(uv_loop_t* loop, uv_fs_t* req, const char* path,
-                                   uv_fs_cb cb)
-{
-    JL_UV_LOCK();
-    int r = uv_fs_readlink(loop, req, path, cb);
-    JL_UV_UNLOCK();
-    return r;
-}
-
-JL_DLLEXPORT int jl_uv_fs_open(uv_loop_t* loop, uv_fs_t* req, const char* path, int flags,
-                               int mode, uv_fs_cb cb)
-{
-    JL_UV_LOCK();
-    int r = uv_fs_open(loop, req, path, flags, mode, cb);
-    JL_UV_UNLOCK();
-    return r;
-}
-
-JL_DLLEXPORT int jl_uv_fs_ftruncate(uv_loop_t* loop, uv_fs_t* req, uv_os_fd_t handle,
-                                    int64_t offset, uv_fs_cb cb)
-{
-    JL_UV_LOCK();
-    int r = uv_fs_ftruncate(loop, req, handle, offset, cb);
-    JL_UV_UNLOCK();
-    return r;
-}
-
-JL_DLLEXPORT int jl_uv_fs_futime(uv_loop_t* loop, uv_fs_t* req, uv_os_fd_t handle, double atime,
-                                 double mtime, uv_fs_cb cb)
-{
-    JL_UV_LOCK();
-    int r = uv_fs_futime(loop, req, handle, atime, mtime, cb);
-    JL_UV_UNLOCK();
-    return r;
-}
-
-JL_DLLEXPORT int jl_uv_read_start(uv_stream_t* handle, uv_alloc_cb alloc_cb,
-                                  uv_read_cb read_cb)
-{
-    JL_UV_LOCK();
-    int r = uv_read_start(handle, alloc_cb, read_cb);
-    JL_UV_UNLOCK();
-    return r;
-}
-
-JL_DLLEXPORT int jl_uv_read_stop(uv_stream_t* handle)
-{
-    JL_UV_LOCK();
-    int r = uv_read_stop(handle);
-    JL_UV_UNLOCK();
-    return r;
-}
-
 
 #ifndef _OS_WINDOWS_
 #if defined(__APPLE__)

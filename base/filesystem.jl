@@ -73,10 +73,10 @@ function open(path::AbstractString, flags::Integer, mode::Integer=0)
     req = Libc.malloc(_sizeof_uv_fs)
     local handle
     try
-        ret = ccall(:jl_uv_fs_open, Int32,
+        ret = ccall(:uv_fs_open, Int32,
                     (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Int32, Int32, Ptr{Cvoid}),
-                    eventloop(), req, path, flags, mode, C_NULL)
-        handle = ccall(:jl_uv_fs_result, Cssize_t, (Ptr{Cvoid},), req)
+                    C_NULL, req, path, flags, mode, C_NULL)
+        handle = ccall(:uv_fs_get_result, Cssize_t, (Ptr{Cvoid},), req)
         ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
         uv_error("open", ret)
     finally # conversion to Cstring could cause an exception
@@ -132,9 +132,9 @@ write(f::File, c::UInt8) = write(f, Ref{UInt8}(c))
 function truncate(f::File, n::Integer)
     check_open(f)
     req = Libc.malloc(_sizeof_uv_fs)
-    err = ccall(:jl_uv_fs_ftruncate, Int32,
+    err = ccall(:uv_fs_ftruncate, Int32,
                 (Ptr{Cvoid}, Ptr{Cvoid}, OS_HANDLE, Int64, Ptr{Cvoid}),
-                eventloop(), req, f.handle, n, C_NULL)
+                C_NULL, req, f.handle, n, C_NULL)
     Libc.free(req)
     uv_error("ftruncate", err)
     return f
@@ -143,9 +143,9 @@ end
 function futime(f::File, atime::Float64, mtime::Float64)
     check_open(f)
     req = Libc.malloc(_sizeof_uv_fs)
-    err = ccall(:jl_uv_fs_futime, Int32,
+    err = ccall(:uv_fs_futime, Int32,
                 (Ptr{Cvoid}, Ptr{Cvoid}, OS_HANDLE, Float64, Float64, Ptr{Cvoid}),
-                eventloop(), req, f.handle, atime, mtime, C_NULL)
+                C_NULL, req, f.handle, atime, mtime, C_NULL)
     Libc.free(req)
     uv_error("futime", err)
     return f

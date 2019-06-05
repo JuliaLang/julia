@@ -1783,11 +1783,6 @@ JL_DLLEXPORT uv_loop_t *jl_global_event_loop(void);
 
 JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle);
 
-JL_DLLEXPORT int jl_tcp_bind(uv_tcp_t *handle, uint16_t port, uint32_t host,
-                             unsigned int flags);
-
-JL_DLLEXPORT int jl_sizeof_ios_t(void);
-
 JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s);
 
 typedef struct {

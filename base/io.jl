@@ -61,9 +61,7 @@ Close an I/O stream. Performs a [`flush`](@ref) first.
 """
 function close end
 function flush end
-function wait_connected end
 function wait_readnb end
-function wait_readbyte end
 function wait_close end
 function bytesavailable end
 
@@ -260,7 +258,6 @@ iswritable(io::AbstractPipe) = iswritable(pipe_writer(io))
 isopen(io::AbstractPipe) = isopen(pipe_writer(io)) || isopen(pipe_reader(io))
 close(io::AbstractPipe) = (close(pipe_writer(io)); close(pipe_reader(io)))
 wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(pipe_reader(io), nb)
-wait_readbyte(io::AbstractPipe, byte::UInt8) = wait_readbyte(pipe_reader(io), byte)
 wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)); wait_close(pipe_reader(io)))
 
 """
