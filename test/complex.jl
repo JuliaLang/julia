@@ -999,6 +999,46 @@ end
     end
 end
 
+@testset "division by Inf, issue#23134" begin
+    @testset "$T" for T in (Float32, Float64, BigFloat)
+        @test isequal(one(T) / complex(T(Inf)),         complex(zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(Inf), one(T)), complex(zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(Inf), T(NaN)), complex(zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(Inf), T(Inf)), complex(zero(T), -zero(T)))
+
+        @test isequal(one(T) / complex(T(-Inf)),         complex(-zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(-Inf), one(T)), complex(-zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(-Inf), T(NaN)), complex(-zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(-Inf), T(Inf)), complex(-zero(T), -zero(T)))
+
+        @test isequal(one(T) / complex(T(Inf),-zero(T)), complex(zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(Inf),-one(T)),  complex(zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(Inf),T(-NaN)),  complex(zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(Inf),T(-Inf)),  complex(zero(T), zero(T)))
+
+        @test isequal(one(T) / complex(T(-Inf),-zero(T)),complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(-Inf),-one(T)), complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(-Inf),T(-NaN)), complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(-Inf),T(-Inf)), complex(-zero(T), zero(T)))
+
+        @test isequal(one(T) / complex(zero(T), T(Inf)), complex(zero(T), -zero(T)))
+        @test isequal(one(T) / complex(one(T),  T(Inf)), complex(zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(NaN),  T(Inf)), complex(zero(T), -zero(T)))
+
+        @test isequal(one(T) / complex(zero(T), T(-Inf)), complex(zero(T), zero(T)))
+        @test isequal(one(T) / complex(one(T),  T(-Inf)), complex(zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(NaN),  T(-Inf)), complex(zero(T), zero(T)))
+
+        @test isequal(one(T) / complex(-zero(T), T(Inf)), complex(-zero(T), -zero(T)))
+        @test isequal(one(T) / complex(-one(T),  T(Inf)), complex(-zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(-NaN),  T(Inf)), complex(-zero(T), -zero(T)))
+
+        @test isequal(one(T) / complex(-zero(T), T(-Inf)), complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(-one(T),  T(-Inf)), complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(-NaN),  T(-Inf)), complex(-zero(T), zero(T)))
+    end
+end
+
 @testset "complex^real, issue #14342" begin
     for T in (Float32, Float64, BigFloat), p in (T(-21//10), -21//10)
         z = T(2)+0im
