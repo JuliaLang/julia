@@ -919,6 +919,67 @@ end
     @test_desugar_error false(x)=body    "invalid function name \"false\""
 end
 
+@testset "Generated functions" begin
+    ln = LineNumberNode(@__LINE__()+2, Symbol(@__FILE__))
+    @test_desugar(function f(x)
+                      body1(x)
+                      if $(Expr(:generated))
+                          gen_body1(x)
+                      else
+                          normal_body1(x)
+                      end
+                      body2
+                      if $(Expr(:generated))
+                          gen_body2
+                      else
+                          normal_body2
+                      end
+                  end,
+        begin
+            begin
+                global gsym1
+                begin
+                    $(Expr(:method, :gsym1))
+                    $(Expr(:method, :gsym1,
+                           :(Core.svec(Core.svec(Core.Typeof(gsym1), Core.Any, Core.Any), Core.svec())),
+                           Expr(:lambda, [:_self_, :gsym2, :x], [],
+                                :(let
+                                      $(Expr(:meta, :nospecialize, :gsym2, :x))
+                                      Core._expr(:block,
+                                                 $(QuoteNode(LineNumberNode(ln.line, ln.file))),
+                                                 $(Expr(:copyast, QuoteNode(:(body1(x))))),
+                                                 # FIXME: These line numbers seem buggy?
+                                                 $(QuoteNode(LineNumberNode(ln.line+1, ln.file))),
+                                                 gen_body1(x),
+                                                 $(QuoteNode(LineNumberNode(ln.line+6, ln.file))),
+                                                 :body2,
+                                                 $(QuoteNode(LineNumberNode(ln.line+7, ln.file))),
+                                                 gen_body2
+                                                )
+                                  end))))
+                    maybe_unused(gsym1)
+                end
+            end
+            $(Expr(:method, :f))
+            $(Expr(:method, :f,
+                   :(Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec())),
+                   Expr(:lambda, [:_self_, :x], [],
+                        :(let
+                              $(Expr(:meta, :generated,
+                                     Expr(:new, :(Core.GeneratedFunctionStub),
+                                          :gsym1, [:_self_, :x],
+                                          :nothing, ln.line,
+                                          QuoteNode(ln.file), false)))
+                              body1(x)
+                              normal_body1(x)
+                              body2
+                              normal_body2
+                          end))))
+            maybe_unused(f)
+        end
+    )
+end
+
 @testset "Forms without desugaring" begin
     # (expand-forms)
     # The following Expr heads are currently not touched by desugaring
