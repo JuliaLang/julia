@@ -385,7 +385,7 @@ end
     @test sort(findall(Dict(1=>false, 2=>true, 3=>true))) == [2, 3]
 
     @test findall(true) == [1]
-    @test findall(false) == Vector{Int}[]
+    @test findall(false) == Int[]
 
     @test findall(isodd, 1) == [1]
     @test findall(isodd, 2) == Vector{Int}[]
