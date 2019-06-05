@@ -822,7 +822,7 @@ end
                   $(Expr(:method, :gsym1))
                   $(Expr(:method, :gsym1,
                          :(Core.svec(Core.svec(Core.typeof(gsym1), Core.Any, Core.Any, Core.Typeof(f), Core.Any), Core.svec())),
-                         Expr(:lambda, Any[:gsym1, :k1, :k2, :_self_, :x], Any[],
+                         Expr(:lambda, [:gsym1, :k1, :k2, :_self_, :x], [],
                               :(let
                                     body
                                 end))))
@@ -832,7 +832,7 @@ end
                   $(Expr(:method, :f))
                   $(Expr(:method, :f,
                          :(Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec())),
-                         Expr(:lambda, Any[:_self_, :x], Any[],
+                         Expr(:lambda, [:_self_, :x], [],
                               :(let
                                    return gsym1(v1, v2, _self_, x)
                                end))))
@@ -842,7 +842,7 @@ end
                   $(Expr(:method, :f))
                   $(Expr(:method, :f,
                          :(Core.svec(Core.svec(Core.kwftype(Core.Typeof(f)), Core.Any, Core.Typeof(f), Core.Any), Core.svec())),
-                         Expr(:lambda, Any[:gsym2, :gsym3, :_self_, :x], Any[],
+                         Expr(:lambda, [:gsym2, :gsym3, :_self_, :x], [],
                               :(let
                                     let
                                         $(Expr(Symbol("local-def"), :k1))
