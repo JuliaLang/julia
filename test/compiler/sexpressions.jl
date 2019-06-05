@@ -9,12 +9,12 @@ end
 function skipws(io::IO)
     while !eof(io)
         c = read(io, Char)
-        if !isspace(c)
-            return c
-        end
+        isspace(c) || return c
     end
     error("S-Expression terminated early by EOF")
 end
+
+putback(io::IO) = skip(io, -1) # assumes seekable :-/
 
 function _parse(io::IO, c::Char)
     if c == '('
@@ -35,7 +35,7 @@ function _parse(io::IO, c::Char)
         while !eof(io)
             c = read(io, Char)
             if !isdigit(c)
-                skip(io, -1)
+                putback(io)
                 break
             end
             n = 10*n + (c-'0')
@@ -64,7 +64,7 @@ function _parse(io::IO, c::Char)
             c = read(io, Char)
             isspace(c) && break
             if c == ')' || c == ','
-                skip(io, -1) # Assumes seekable :-/
+                putback(io)
                 break
             end
             write(buf, c)
@@ -81,13 +81,33 @@ end
 
 parse(content::String) = parse(IOBuffer(content))
 
-map_unqoutes(sx) = sx
-map_unqoutes(sx::Unquote) = esc(sx.name)
-map_unqoutes(sx::Vector) = Expr(:vect, map(map_unqoutes, sx)...)
+deparse(io::IO, sx::String)  = print(io, '"', sx, '"')
+deparse(io::IO, sx::Bool)    = print(io, sx ? "#t" : "#f")
+deparse(io::IO, sx) = print(io, sx)
+deparse(io::IO, sx::Unquote) = print(io, ',', string(sx.name))
+function deparse(io::IO, sx::Vector)
+    write(io, '(')
+    for (i,e) in enumerate(sx)
+        deparse(io, e)
+        i != length(sx) && write(io, ' ')
+    end
+    write(io, ')')
+end
+
+function deparse(sx)
+    buf = IOBuffer()
+    deparse(buf, sx)
+    String(take!(buf))
+end
+
+fill_unquotes_expr(sx) = sx
+fill_unquotes_expr(sx::Symbol) = QuoteNode(sx)
+fill_unquotes_expr(sx::Unquote) = esc(sx.name)
+fill_unquotes_expr(sx::Vector) = Expr(:vect, map(fill_unquotes_expr, sx)...)
 
 macro sexpr_str(str)
     sx = parse(IOBuffer(str))
-    map_unqoutes(sx)
+    fill_unquotes_expr(sx)
 end
 
 end
@@ -96,9 +116,7 @@ end
 using Test
 
 @testset "S-Expressions" begin
-
     parse = SExprs.parse
-    Unquote = SExprs.Unquote
 
     # atoms
     @test parse("#t") == true
@@ -111,16 +129,16 @@ using Test
     @test parse("(aa bb cc)") == [:aa, :bb, :cc]
     @test parse("(+ b (* c d))") == [:+, :b, [:*, :c, :d]]
     # unquote
-    @test parse(",aa") == Unquote(:aa)
+    @test parse(",aa") == SExprs.Unquote(:aa)
     # whitespace
     @test parse("   ( a\nb\n\r(c   d))   ") == [:a, :b, [:c, :d]]
 
     # interpolation
     x = 10
     y = "str"
-    @test SExprs.sexpr"(,x ,y ,Int)" == [10, "str", Int]
+    @test SExprs.sexpr"(x ,y ,Int)" == [:x, "str", Int]
 
-    # errors
+    # parse errors
     @test_throws ErrorException parse(")")
     @test_throws ErrorException parse("(")
     @test_throws ErrorException parse("(,)")
@@ -129,4 +147,7 @@ using Test
     @test_throws ErrorException parse(",(a)")
     @test_throws ErrorException parse("\"asdf")
     @test_throws ErrorException parse("#")
+
+    # printing
+    @test SExprs.deparse([1,2, [:aa, :bb], SExprs.Unquote(:cc)]) == "(1 2 (aa bb) ,cc)"
 end
