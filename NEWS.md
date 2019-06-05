@@ -5,6 +5,7 @@ New language features
 ---------------------
 
 * Support for Unicode 12.1.0 ([#32002]).
+* Methods can now be added to an abstract type ([#31916]).
 
 Language changes
 ----------------
