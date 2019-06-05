@@ -1,3 +1,5 @@
+include("sexpressions.jl")
+
 using Core: SSAValue
 
 # Call into lowering stage 1; syntax desugaring
@@ -73,6 +75,52 @@ hand
 function lift_lowered_expr(ex; lift_full=false)
     valmap = Dict{Union{Symbol,SSAValue},Symbol}()
     lift_lowered_expr!(deepcopy(ex), ones(Int,2), valmap, lift_full)
+end
+
+function to_sexpr!(ex, nextids, valmap)
+    if ex isa SSAValue
+        # Rename SSAValues into renumbered symbols
+        return get!(valmap, ex) do
+            newid = nextids[1]
+            nextids[1] = newid+1
+            Symbol("ssa$newid")
+        end
+    elseif ex isa Symbol
+        if ex == Symbol("#self#")
+            return :_self_
+        end
+        # Rename gensyms
+        name = string(ex)
+        if startswith(name, "#")
+            return get!(valmap, ex) do
+                newid = nextids[2]
+                nextids[2] = newid+1
+                Symbol("gsym$newid")
+            end
+        end
+    elseif ex isa Expr
+        filter!(e->!(e isa LineNumberNode), ex.args)
+        if ex.head == :block && length(ex.args) == 1
+            # Remove trivial blocks
+            return to_sexpr!(ex.args[1], nextids, valmap)
+        end
+        map!(ex.args, ex.args) do e
+            to_sexpr!(e, nextids, valmap)
+        end
+        return [ex.head; ex.args]
+    elseif ex isa QuoteNode
+        return [:quote, ex.value]
+    elseif ex isa Vector # Occasional case of lambdas
+        map!(ex, ex) do e
+            to_sexpr!(e, nextids, valmap)
+        end
+    end
+    return ex
+end
+
+function to_sexpr(ex)
+    valmap = Dict{Union{Symbol,SSAValue},Symbol}()
+    to_sexpr!(deepcopy(ex), ones(Int,2), valmap)
 end
 
 """
@@ -157,6 +205,12 @@ macro desugar(ex, kws...)
     end
 end
 
+macro desugar_sx(ex)
+    quote
+        SExprs.deparse(to_sexpr($(Expr(:quote, ex))))
+    end
+end
+
 """
 Test that syntax desugaring of `input` produces an expression equivalent to the
 reference expression `ref`.
@@ -171,6 +225,25 @@ macro test_desugar(input, ref)
             # capable diffing for failed tests.
             println("Diff dump:")
             diffdump(input, ref)
+        end
+    end
+    # Attribute the test to the correct line number
+    @assert ex.args[6].args[1] == Symbol("@test")
+    ex.args[6].args[2] = __source__
+    ex
+end
+
+macro test_desugar_sexpr(input, ref)
+    ex = quote
+        input = to_sexpr(expand_forms($(Expr(:quote, input))))
+        ref   = SExprs.parse($(esc(ref)))
+        @test input == ref
+        if input != ref
+            # Kinda crude. Would be much neater if Test supported custom/more
+            # capable diffing for failed tests.
+            println("Diff dump:")
+            println(SExprs.deparse(input))
+            println(SExprs.deparse(ref))
         end
     end
     # Attribute the test to the correct line number
@@ -212,6 +285,28 @@ end
         end
     )
 end
+
+# Example S-Expression version of the above.
+@testset "Property notation" begin
+    # flisp: (expand-fuse-broadcast)
+    @test_desugar_sexpr a.b    "(call (top getproperty) a (quote b))"
+    @test_desugar_sexpr a.b.c  "(call (top getproperty)
+                                  (call (top getproperty) a (quote b))
+                                  (quote c))"
+
+    @test_desugar_sexpr(a.b = c,
+        "(block
+           (call (top setproperty!) a (quote b) c)
+           (unnecessary c))"
+    )
+    @test_desugar_sexpr(a.b.c = d,
+        "(block
+           (= ssa1 (call (top getproperty) a (quote b)))
+           (call (top setproperty!) ssa1 (quote c) d)
+           (unnecessary d))"
+    )
+end
+
 
 @testset "Index notation" begin
     # flisp: (process-indices) (partially-expand-ref)
@@ -655,6 +750,26 @@ end
                              $(Expr(:break, Symbol("loop-exit")))
                              body3
                          end)))))
+    )
+
+    # Alternative with S-Expressions
+    @test_desugar_sexpr(while cond
+                            body1
+                            continue
+                            body2
+                            break
+                            body3
+                        end,
+        "(break-block loop-exit
+           (_while cond
+             (break-block loop-cont
+               (scope-block
+                 (block
+                    body1
+                    (break loop-cont)
+                    body2
+                    (break loop-exit)
+                    body3)))))"
     )
 
     @test_desugar(for i = a
