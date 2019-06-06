@@ -46,6 +46,11 @@ Standard library changes
 
 * Fixed `repr` such that it displays `Time` as it would be entered in Julia ([#32103]).
 
+#### Sockets
+
+* `getipaddrs` returns IP addresses in the order provided by libuv ([#32260]).
+* `getipaddr` prefers to return the first `IPv4` interface address provided by libuv ([#32260]).
+
 #### Statistics
 
 * `mean` now accepts both a function argument and a `dims` keyword ([#31576]).
