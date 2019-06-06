@@ -706,7 +706,7 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one, i1=1, n=typemax
         y = iterate(itr)
         first = true
         i0 = i1-1
-        while i1 > 2 && y !== nothing
+        while i1 > 1 && y !== nothing
             y = iterate(itr, y[2])
             i1 -= 1
         end
