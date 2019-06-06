@@ -491,10 +491,10 @@ end
         M = randn(T, 5, 5)
         MM = [randn(T, 2, 2) for _ in 1:2, _ in 1:2]
         for transform in (identity, adjoint, transpose, Adjoint, Transpose)
-            @test lmul!(transform(D), copy(M)) == *(transform(Matrix(D)), M)
-            @test rmul!(copy(M), transform(D)) == *(M, transform(Matrix(D)))
-            @test lmul!(transform(DD), copy(MM)) == *(transform(fullDD), MM)
-            @test rmul!(copy(MM), transform(DD)) == *(MM, transform(fullDD))
+            @test lmul!(transform(D), copy(M)) ≈ *(transform(Matrix(D)), M)
+            @test rmul!(copy(M), transform(D)) ≈ *(M, transform(Matrix(D)))
+            @test lmul!(transform(DD), copy(MM)) ≈ *(transform(fullDD), MM)
+            @test rmul!(copy(MM), transform(DD)) ≈ *(MM, transform(fullDD))
         end
     end
 end
