@@ -23,8 +23,8 @@ jl_value_t *checked_eval_string(const char* code)
                  jl_stderr_obj(),
                  jl_exception_occurred());
         jl_printf(jl_stderr_stream(), "\n");
-        jl_atexit_hook(1);
-        exit(1);
+        int exitcode = jl_atexit_hook(1);
+        exit(exitcode);
     }
     assert(result && "Missing return value but no exception occurred!");
     return result;
@@ -176,6 +176,6 @@ int main()
     }
 
     int ret = 0;
-    jl_atexit_hook(ret);
+    ret = jl_atexit_hook(ret);
     return ret;
 }

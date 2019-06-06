@@ -54,7 +54,7 @@ function choosetests(choices = [])
         "checked", "bitset", "floatfuncs", "precompile",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
         "channels", "iostream", "secretbuffer", "specificity",
-        "reinterpretarray", "syntax", "logging", "missing", "asyncmap"
+        "reinterpretarray", "syntax", "logging", "missing", "asyncmap", "atexit"
     ]
 
     tests = []

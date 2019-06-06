@@ -626,7 +626,7 @@ JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...) JL_NOTSAFEPOINT
 JL_DLLEXPORT void jl_exit(int exitcode)
 {
     uv_tty_reset_mode();
-    jl_atexit_hook(exitcode);
+    exitcode = jl_atexit_hook(exitcode);
     exit(exitcode);
 }
 

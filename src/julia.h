@@ -1537,7 +1537,7 @@ JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
                                      const char *image_relative_path);
 JL_DLLEXPORT const char *jl_get_default_sysimg_path(void);
 JL_DLLEXPORT int jl_is_initialized(void);
-JL_DLLEXPORT void jl_atexit_hook(int status);
+JL_DLLEXPORT int jl_atexit_hook(int status);
 JL_DLLEXPORT void JL_NORETURN jl_exit(int status);
 JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle);
 

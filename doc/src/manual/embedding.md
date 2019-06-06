@@ -31,8 +31,8 @@ int main(int argc, char *argv[])
          Julia time to cleanup pending write requests
          and run all finalizers
     */
-    jl_atexit_hook(0);
-    return 0;
+    int exitcode = jl_atexit_hook(0);
+    return exitcode;
 }
 ```
 
@@ -94,8 +94,8 @@ int main(int argc, char *argv[])
 {
     jl_init();
     (void)jl_eval_string("println(sqrt(2.0))");
-    jl_atexit_hook(0);
-    return 0;
+    int exitcode = jl_atexit_hook(0);
+    return exitcode;
 }
 ```
 
@@ -167,8 +167,8 @@ int main(int argc, char *argv[])
          Julia time to cleanup pending write requests
          and run all finalizers
     */
-    jl_atexit_hook(0);
-    return 0;
+    int exitcode = jl_atexit_hook(0);
+    return exitcode;
 }
 ```
 

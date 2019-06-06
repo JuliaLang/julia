@@ -219,10 +219,10 @@ static void jl_close_item_atexit(uv_handle_t *handle)
     }
 }
 
-JL_DLLEXPORT void jl_atexit_hook(int exitcode)
+JL_DLLEXPORT int jl_atexit_hook(int exitcode)
 {
     if (jl_all_tls_states == NULL)
-        return;
+        return exitcode;
 
     jl_ptls_t ptls = jl_get_ptls_states();
 
@@ -239,7 +239,16 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
             JL_TRY {
                 size_t last_age = ptls->world_age;
                 ptls->world_age = jl_get_world_counter();
-                jl_apply(&f, 1);
+                jl_value_t *ret;
+                ret = jl_apply(&f, 1);
+                if (jl_typeis(ret, jl_int32_type)) {
+                    int ret_unboxed = jl_unbox_int32(ret);
+                    if (exitcode == 0) {
+                        exitcode = ret_unboxed;
+                    }
+                } else {
+                    jl_printf(JL_STDERR, "\nunexpected return type from _atexit()");
+                }
                 ptls->world_age = last_age;
             }
             JL_CATCH {
@@ -259,7 +268,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     uv_loop_t *loop = jl_global_event_loop();
 
     if (loop == NULL) {
-        return;
+        return exitcode;
     }
 
     struct uv_shutdown_queue queue = {NULL, NULL};
@@ -302,6 +311,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 #ifdef ENABLE_TIMINGS
     jl_print_timings();
 #endif
+    return exitcode;
 }
 
 static void post_boot_hooks(void);

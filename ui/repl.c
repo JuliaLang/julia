@@ -215,7 +215,7 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
         return 0;
     }
     int ret = true_main(argc, (char**)argv);
-    jl_atexit_hook(ret);
+    ret = jl_atexit_hook(ret);
     return ret;
 }
 

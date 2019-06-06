@@ -296,22 +296,39 @@ end
 const atexit_hooks = Callable[Filesystem.temp_cleanup_purge]
 
 """
-    atexit(f)
+    atexit(f; exitcode = 0)
 
 Register a zero-argument function `f()` to be called at process exit. `atexit()` hooks are
 called in last in first out (LIFO) order and run before object finalizers.
-"""
-atexit(f::Function) = (pushfirst!(atexit_hooks, f); nothing)
 
-function _atexit()
-    for f in atexit_hooks
+If all three of the following conditions are met:
+1. An exit hook f() throws an exception
+2. The corresponding value for `exitcode` was nonzero
+3. Julia was previously planning on exiting with exit code `0`
+Then Julia will instead exit with exit code `exitcode`.
+
+If multiple exit hooks (each with nonzero `change_exit_hook`) throw
+exceptions, then Julia will use the `change_exit_hook` of the first called
+exit hook to throw an exception. (Because exit hooks are called in LIFO order,
+"first called" is equivalent to "last registered.")
+"""
+atexit(f::Function; exitcode = 0) = (pushfirst!(atexit_hooks, (f, Cint(exitcode))); nothing)
+
+function _atexit()::Cint
+    ret::Cint = Cint(0)
+    for (f, exitcode::Cint) in atexit_hooks
         try
             f()
-        catch err
-            show(stderr, err)
+        catch ex
+            if ret == 0
+                ret = exitcode
+            end
+            showerror(stderr, ex)
+            Base.show_backtrace(stderr, catch_backtrace())
             println(stderr)
         end
     end
+    return Cint(ret)
 end
 
 ## hook for disabling threaded libraries ##
