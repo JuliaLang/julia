@@ -172,6 +172,8 @@ end
             @test tanh(x) ≈ tanh(big(x))
             @test sec(x) ≈ sec(big(x))
             @test csc(x) ≈ csc(big(x))
+            @test secd(x) ≈ secd(big(x))
+            @test cscd(x) ≈ cscd(big(x))
             @test sech(x) ≈ sech(big(x))
             @test csch(x) ≈ csch(big(x))
         end
@@ -214,6 +216,8 @@ end
             @test tan(T(pi)/4) ≈ T(1) atol=eps(T)
             @test isequal(sec(T(pi)), -one(T))
             @test isequal(csc(T(pi)/2), one(T))
+            @test isequal(secd(T(180)), -one(T))
+            @test isequal(cscd(T(90)), one(T))
             @test isequal(sech(log(one(T))), one(T))
             @test isequal(csch(zero(T)), T(Inf))
         end
@@ -254,6 +258,8 @@ end
             @test tanh(x) ≈ sinh(x)/cosh(x)
             @test sec(x) ≈ inv(cos(x))
             @test csc(x) ≈ inv(sin(x))
+            @test secd(x) ≈ inv(cosd(x))
+            @test cscd(x) ≈ inv(sind(x))
             @test sech(x) ≈ inv(cosh(x))
             @test csch(x) ≈ inv(sinh(x))
         end
