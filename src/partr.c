@@ -462,6 +462,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
                 else {
                     // otherwise, we may block until someone asks us for the lock
                     uv_loop_t *loop = jl_global_event_loop();
+                    jl_gc_safepoint();
                     if (may_sleep(ptls)) {
                         loop->stop_flag = 0;
                         active = uv_run(loop, UV_RUN_ONCE);
@@ -494,7 +495,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
                 int8_t gc_state = jl_gc_safe_enter(ptls);
                 uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
                 uv_mutex_unlock(&ptls->sleep_lock);
-                jl_gc_safe_leave(ptls, gc_state);
+                jl_gc_safe_leave(ptls, gc_state); // contains jl_gc_safepoint
                 uv_mutex_lock(&ptls->sleep_lock);
             }
             uv_mutex_unlock(&ptls->sleep_lock);
