@@ -490,15 +490,13 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
             }
 
             // the other threads will just wait for on signal to resume
+            int8_t gc_state = jl_gc_safe_enter(ptls);
             uv_mutex_lock(&ptls->sleep_lock);
             while (may_sleep(ptls)) {
-                int8_t gc_state = jl_gc_safe_enter(ptls);
                 uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
-                uv_mutex_unlock(&ptls->sleep_lock);
-                jl_gc_safe_leave(ptls, gc_state); // contains jl_gc_safepoint
-                uv_mutex_lock(&ptls->sleep_lock);
             }
             uv_mutex_unlock(&ptls->sleep_lock);
+            jl_gc_safe_leave(ptls, gc_state); // contains jl_gc_safepoint
             start_cycles = 0;
         }
         else {
