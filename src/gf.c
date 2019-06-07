@@ -2582,19 +2582,7 @@ int jl_has_concrete_subtype(jl_value_t *typ)
         typ = jl_unwrap_vararg(typ);
     if (!jl_is_datatype(typ))
         return 1;
-    if (((jl_datatype_t*)typ)->name == jl_namedtuple_typename)
-        return jl_has_concrete_subtype(jl_tparam1(typ));
-    jl_svec_t *fields = jl_get_fieldtypes((jl_datatype_t*)typ);
-    size_t i, l = jl_svec_len(fields);
-    if (l != ((jl_datatype_t*)typ)->ninitialized)
-        if (((jl_datatype_t*)typ)->name != jl_tuple_typename)
-            return 1;
-    for (i = 0; i < l; i++) {
-        jl_value_t *ft = jl_svecref(fields, i);
-        if (!jl_has_concrete_subtype(ft))
-            return 0;
-    }
-    return 1;
+    return ((jl_datatype_t*)typ)->has_concrete_subtype;
 }
 
 // TODO: separate the codegen and typeinf locks
