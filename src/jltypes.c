@@ -1965,8 +1965,8 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_type_type, // TupleType
                             jl_any_type, // TupleType
                             jl_any_type, // SimpleVector{TupleType}
-                            jl_long_type, // Int
-                            jl_long_type, // Int
+                            jl_ulong_type, // UInt
+                            jl_ulong_type, // UInt
                             jl_any_type, // Any
                             jl_bool_type,
                             jl_bool_type,
@@ -2099,8 +2099,8 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             jl_any_type,
                             jl_any_type,
-                            jl_long_type,
-                            jl_long_type,
+                            jl_ulong_type,
+                            jl_ulong_type,
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type,
@@ -2136,8 +2136,8 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_module_type,
                             jl_symbol_type,
                             jl_int32_type,
-                            jl_long_type,
-                            jl_long_type,
+                            jl_ulong_type,
+                            jl_ulong_type,
                             jl_type_type,
                             jl_any_type, // Union{Array, Nothing}
                             jl_any_type, // TypeMap
@@ -2193,8 +2193,8 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_svec(11,
                             jl_method_instance_type,
                             jl_any_type,
-                            jl_long_type,
-                            jl_long_type,
+                            jl_ulong_type,
+                            jl_ulong_type,
                             jl_any_type,
                             jl_any_type,
                             jl_any_type,

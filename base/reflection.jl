@@ -1329,10 +1329,10 @@ has_bottom_parameter(t::Union) = has_bottom_parameter(t.a) & has_bottom_paramete
 has_bottom_parameter(t::TypeVar) = t.ub == Bottom || has_bottom_parameter(t.ub)
 has_bottom_parameter(::Any) = false
 
-min_world(m::Core.CodeInstance) = reinterpret(UInt, m.min_world)
-max_world(m::Core.CodeInstance) = reinterpret(UInt, m.max_world)
-min_world(m::Core.CodeInfo) = reinterpret(UInt, m.min_world)
-max_world(m::Core.CodeInfo) = reinterpret(UInt, m.max_world)
+min_world(m::Core.CodeInstance) = m.min_world
+max_world(m::Core.CodeInstance) = m.max_world
+min_world(m::Core.CodeInfo) = m.min_world
+max_world(m::Core.CodeInfo) = m.max_world
 get_world_counter() = ccall(:jl_get_world_counter, UInt, ())
 
 
