@@ -144,6 +144,7 @@ struct _jl_tls_states_t {
     int16_t tid;
     uint64_t rngseed;
     volatile size_t *safepoint;
+    volatile int8_t sleep_check_state;
     // Whether it is safe to execute GC at the same time.
 #define JL_GC_STATE_WAITING 1
     // gc_state = 1 means the thread is doing GC or is waiting for the GC to

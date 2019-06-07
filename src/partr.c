@@ -315,9 +315,12 @@ static void wake_thread(int16_t self, int16_t tid)
 {
     if (self != tid) {
         jl_ptls_t other = jl_all_tls_states[tid];
-        uv_mutex_lock(&other->sleep_lock);
-        uv_cond_signal(&other->wake_signal);
-        uv_mutex_unlock(&other->sleep_lock);
+        int16_t state = jl_atomic_exchange(&other->sleep_check_state, not_sleeping);
+        if (state == sleeping) {
+            uv_mutex_lock(&other->sleep_lock);
+            uv_cond_signal(&other->wake_signal);
+            uv_mutex_unlock(&other->sleep_lock);
+        }
     }
 }
 
@@ -401,6 +404,11 @@ static jl_task_t *get_next_task(jl_value_t *getsticky)
 #endif
 }
 
+static int may_sleep(jl_ptls_t ptls)
+{
+    return jl_atomic_load(&sleep_check_state) == sleeping && jl_atomic_load(&ptls->sleep_check_state) == sleeping;
+}
+
 extern volatile unsigned _threadedregion;
 
 JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
@@ -415,6 +423,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
             return task;
 
 #ifdef JULIA_ENABLE_THREADING
+        // quick, race-y check to see if there seems to be any stuff in there
         jl_cpu_pause();
         if (!multiq_check_empty()) {
             start_cycles = 0;
@@ -426,6 +435,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
         if (sleep_check_after_threshold(&start_cycles) || (!_threadedregion && ptls->tid == 0)) {
             if (!sleep_check_now(ptls->tid))
                 continue;
+            jl_atomic_store(&ptls->sleep_check_state, sleeping); // acquire sleep-check lock
             task = get_next_task(getsticky);
             if (task)
                 return task;
@@ -450,31 +460,25 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
                     JL_UV_UNLOCK();
                 }
                 else {
-                    // otherwise, block until someone asks us for the lock
-                    task = get_next_task(getsticky);
-                    if (task) {
-                        JL_UV_UNLOCK();
-                        return task;
-                    }
+                    // otherwise, we may block until someone asks us for the lock
                     uv_loop_t *loop = jl_global_event_loop();
-                    if (jl_atomic_load(&sleep_check_state) == sleeping) {
+                    if (may_sleep(ptls)) {
                         loop->stop_flag = 0;
                         active = uv_run(loop, UV_RUN_ONCE);
                     }
                     JL_UV_UNLOCK();
-                    // optimization: check again first if we added work for ourself
-                    task = get_next_task(getsticky);
-                    if (task)
-                        return task;
-                    // or someone else might have
-                    if (jl_atomic_load(&sleep_check_state) != sleeping) {
+                    // optimization: check again first if we may have work to do
+                    if (!may_sleep(ptls)) {
                         start_cycles = 0;
                         continue;
                     }
                     // otherwise, we got a spurious wakeup since some other
-                    // thread just wanted to steal libuv from us,
+                    // thread that just wanted to steal libuv from us,
                     // just go right back to sleep on the other wake signal
                     // to let them take it from us without conflict
+                    // TODO: this relinquishes responsibility for all event
+                    //       to the last thread to do an explicit operation,
+                    //       which may starve other threads of critical work
                 }
                 if (!_threadedregion && active && ptls->tid == 0) {
                     // thread 0 is the only thread permitted to run the event loop
@@ -483,12 +487,10 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
                     continue;
                 }
             }
+
             // the other threads will just wait for on signal to resume
             uv_mutex_lock(&ptls->sleep_lock);
-            while (jl_atomic_load(&sleep_check_state) == sleeping) {
-                task = get_next_task(getsticky);
-                if (task)
-                    break;
+            while (may_sleep(ptls)) {
                 int8_t gc_state = jl_gc_safe_enter(ptls);
                 uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
                 uv_mutex_unlock(&ptls->sleep_lock);
@@ -497,8 +499,6 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
             }
             uv_mutex_unlock(&ptls->sleep_lock);
             start_cycles = 0;
-            if (task)
-                return task;
         }
         else {
             // maybe check the kernel for new messages too
