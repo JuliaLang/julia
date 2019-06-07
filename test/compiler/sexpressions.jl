@@ -1,6 +1,6 @@
 module SExprs
 
-export Unquote, @sexpr_str
+export @sx_str
 
 struct Unquote
     name::Symbol
@@ -105,7 +105,7 @@ fill_unquotes_expr(sx::Symbol) = QuoteNode(sx)
 fill_unquotes_expr(sx::Unquote) = esc(sx.name)
 fill_unquotes_expr(sx::Vector) = Expr(:vect, map(fill_unquotes_expr, sx)...)
 
-macro sexpr_str(str)
+macro sx_str(str)
     sx = parse(IOBuffer(str))
     fill_unquotes_expr(sx)
 end
@@ -136,7 +136,7 @@ using Test
     # interpolation
     x = 10
     y = "str"
-    @test SExprs.sexpr"(x ,y ,Int)" == [:x, "str", Int]
+    @test SExprs.sx"(x ,y ,Int)" == [:x, "str", Int]
 
     # parse errors
     @test_throws ErrorException parse(")")

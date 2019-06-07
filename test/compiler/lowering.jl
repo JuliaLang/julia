@@ -1,5 +1,7 @@
 include("sexpressions.jl")
 
+using .SExprs
+
 using Core: SSAValue
 
 # Call into lowering stage 1; syntax desugaring
@@ -216,34 +218,29 @@ Test that syntax desugaring of `input` produces an expression equivalent to the
 reference expression `ref`.
 """
 macro test_desugar(input, ref)
-    ex = quote
-        input = lift_lowered_expr(expand_forms($(Expr(:quote, input))))
-        ref   = lower_ref_expr($(Expr(:quote, ref)))
-        @test input == ref
-        if input != ref
-            # Kinda crude. Would be much neater if Test supported custom/more
-            # capable diffing for failed tests.
-            println("Diff dump:")
-            diffdump(input, ref)
+    ex = if ref.head == :macrocall && ref.args[1] == Symbol("@sx_str")
+        # Reference is an S-Expression - test against that directly.
+        quote
+            input = to_sexpr(expand_forms($(Expr(:quote, input))))
+            ref   = $(esc(ref))
+            @test input == ref
+            if input != ref
+                println("Diff dump:")
+                println(SExprs.deparse(input))
+                println(SExprs.deparse(ref))
+            end
         end
-    end
-    # Attribute the test to the correct line number
-    @assert ex.args[6].args[1] == Symbol("@test")
-    ex.args[6].args[2] = __source__
-    ex
-end
-
-macro test_desugar_sexpr(input, ref)
-    ex = quote
-        input = to_sexpr(expand_forms($(Expr(:quote, input))))
-        ref   = SExprs.parse($(esc(ref)))
-        @test input == ref
-        if input != ref
-            # Kinda crude. Would be much neater if Test supported custom/more
-            # capable diffing for failed tests.
-            println("Diff dump:")
-            println(SExprs.deparse(input))
-            println(SExprs.deparse(ref))
+    else
+        quote
+            input = lift_lowered_expr(expand_forms($(Expr(:quote, input))))
+            ref   = lower_ref_expr($(Expr(:quote, ref)))
+            @test input == ref
+            if input != ref
+                # Kinda crude. Would be much neater if Test supported custom/more
+                # capable diffing for failed tests.
+                println("Diff dump:")
+                diffdump(input, ref)
+            end
         end
     end
     # Attribute the test to the correct line number
@@ -289,21 +286,21 @@ end
 # Example S-Expression version of the above.
 @testset "Property notation" begin
     # flisp: (expand-fuse-broadcast)
-    @test_desugar_sexpr a.b    "(call (top getproperty) a (quote b))"
-    @test_desugar_sexpr a.b.c  "(call (top getproperty)
-                                  (call (top getproperty) a (quote b))
-                                  (quote c))"
+    @test_desugar a.b    sx"(call (top getproperty) a (quote b))"
+    @test_desugar a.b.c  sx"(call (top getproperty)
+                               (call (top getproperty) a (quote b))
+                               (quote c))"
 
-    @test_desugar_sexpr(a.b = c,
-        "(block
-           (call (top setproperty!) a (quote b) c)
-           (unnecessary c))"
+    @test_desugar(a.b = c,
+        sx"(block
+             (call (top setproperty!) a (quote b) c)
+             (unnecessary c))"
     )
-    @test_desugar_sexpr(a.b.c = d,
-        "(block
-           (= ssa1 (call (top getproperty) a (quote b)))
-           (call (top setproperty!) ssa1 (quote c) d)
-           (unnecessary d))"
+    @test_desugar(a.b.c = d,
+        sx"(block
+             (= ssa1 (call (top getproperty) a (quote b)))
+             (call (top setproperty!) ssa1 (quote c) d)
+             (unnecessary d))"
     )
 end
 
@@ -753,23 +750,23 @@ end
     )
 
     # Alternative with S-Expressions
-    @test_desugar_sexpr(while cond
+    @test_desugar(while cond
                             body1
                             continue
                             body2
                             break
                             body3
                         end,
-        "(break-block loop-exit
-           (_while cond
-             (break-block loop-cont
-               (scope-block
-                 (block
-                    body1
-                    (break loop-cont)
-                    body2
-                    (break loop-exit)
-                    body3)))))"
+        sx"(break-block loop-exit
+             (_while cond
+               (break-block loop-cont
+                 (scope-block
+                   (block
+                      body1
+                      (break loop-cont)
+                      body2
+                      (break loop-exit)
+                      body3)))))"
     )
 
     @test_desugar(for i = a
