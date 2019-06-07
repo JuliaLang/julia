@@ -16,6 +16,9 @@
 #include "llvm-pass-helpers.h"
 
 #define DEBUG_TYPE "final_gc_lowering"
+#if JL_LLVM_VERSION < 70000
+#define LLVM_DEBUG DEBUG
+#endif
 
 using namespace llvm;
 
@@ -281,7 +284,7 @@ static void replaceInstruction(
 
 bool FinalLowerGC::runOnFunction(Function &F)
 {
-    DEBUG(dbgs() << "FINAL GC LOWERING: Processing function " << F.getName() << "\n");
+    LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Processing function " << F.getName() << "\n");
     // Check availability of functions again since they might have been deleted.
     initFunctions(*F.getParent());
     if (!ptls_getter)
