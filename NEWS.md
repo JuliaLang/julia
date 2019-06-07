@@ -81,6 +81,11 @@ Standard library changes
   form `kron(u, v')`, `u * v'`, and `u .* v'` where `u` and `v` are sparse vectors or column
   views ([#24980]).
 
+#### Sockets
+
+* `getipaddrs` returns IP addresses in the order provided by libuv ([#32260]).
+* `getipaddr` prefers to return the first `IPv4` interface address provided by libuv ([#32260]).
+
 #### Statistics
 * `quantile` now accepts in all cases collections whose `eltype` is not a subtype of `Number` ([#30938]).
 
