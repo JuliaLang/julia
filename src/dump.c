@@ -369,7 +369,8 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
             | (dt->isdispatchtuple << 2)
             | (dt->isbitstype << 3)
             | (dt->zeroinit << 4)
-            | (dt->isinlinealloc << 5));
+            | (dt->isinlinealloc << 5)
+            | (dt->has_concrete_subtype << 6));
     if (!dt->abstract) {
         write_uint16(s->s, dt->ninitialized);
     }
@@ -1403,6 +1404,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     dt->isbitstype = (memflags >> 3) & 1;
     dt->zeroinit = (memflags >> 4) & 1;
     dt->isinlinealloc = (memflags >> 5) & 1;
+    dt->has_concrete_subtype = (memflags >> 6) & 1;
     dt->types = NULL;
     dt->parameters = NULL;
     dt->name = NULL;

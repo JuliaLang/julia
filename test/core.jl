@@ -6976,3 +6976,15 @@ let spvec = sparse_t31649(zeros(Float64,5), Vector{Int64}())
     @test convert(Any, nothing) === nothing
     @test_throws MethodError repr(spvec)
 end
+
+# Issue #31062 - Accidental recursion in jl_has_concrete_subtype
+struct Bar31062
+    x::NTuple{N, Bar31062} where N
+end
+struct Foo31062
+    x::Foo31062
+end
+# Use eval to make sure that this actually gets executed and not
+# just constant folded by (future) over-eager compiler optimizations
+@test isa(Core.eval(@__MODULE__, :(Bar31062(()))), Bar31062)
+@test precompile(identity, (Foo31062,))
