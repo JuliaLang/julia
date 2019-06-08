@@ -14,7 +14,7 @@ struct SymTridiagonal{T, V<:AbstractVector{T}} <: AbstractMatrix{T}
         if !all(issymmetric.(dv))
             throw("block matrices on diagonal are not symmetric")
         end
-        new{T,V}(symmetric.(dv, :U)::AbstractVector{symmetric_type(eltype(dv))}, ev)
+        new{T,V}(dv, ev)
     end
 end
 
@@ -27,9 +27,8 @@ and provides efficient specialized eigensolvers, but may be converted into a
 regular matrix with [`convert(Array, _)`](@ref) (or `Array(_)` for short).
 
 For `SymTridiagonal` block matrices, the elements of `dv` are assumed to be
-symmetric, and made [`Symmetric`](@ref)) at construction. The argument `ev` is
-interpreted as the superdiagonal. Blocks from the subdiagonal are (materialized)
-transpose of the corresponding superdiagonal blocks.
+symmetric. The argument `ev` is interpreted as the superdiagonal. Blocks from the
+subdiagonal are (materialized) transpose of the corresponding superdiagonal blocks.
 
 # Examples
 ```jldoctest
@@ -438,7 +437,7 @@ function getindex(A::SymTridiagonal{T}, i::Integer, j::Integer) where T
         throw(BoundsError(A, (i,j)))
     end
     if i == j
-        return A.dv[i]
+        return symmetric(A.dv[i], :U)::symmetric_type(eltype(A.dv))
     elseif i == j + 1
         return copy(transpose(A.ev[j])) # materialized for type stability
     elseif i + 1 == j
