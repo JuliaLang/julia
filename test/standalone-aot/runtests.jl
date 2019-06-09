@@ -4,10 +4,11 @@ using .IRGen
 using Test
 
 # Various tests
-using LLVM
-llvmmod(native_code) =
-    LLVM.Module(ccall(:jl_get_llvm_module, LLVM.API.LLVMModuleRef,
-                      (Ptr{Cvoid},), native_code.p))
+
+# using LLVM
+# llvmmod(native_code) =
+#     LLVM.Module(ccall(:jl_get_llvm_module, LLVM.API.LLVMModuleRef,
+#                       (Ptr{Cvoid},), native_code.p))
 
 pkgdir = @__DIR__
 bindir = string(Sys.BINDIR, "/../tools")
@@ -16,7 +17,6 @@ bindir = string(Sys.BINDIR, "/../tools")
 GC.enable(false)
 dump_native(irgen(rand, Tuple{}), "librand.o")
 run(`$bindir/clang -shared -fpic librand.o -o librand.so -L$bindir/../lib -ljulia-debug -ldSFMT`)
-run(`$bindir/clang -shared -fpic librand.o -o librand.wasm -L$bindir/../lib -ljulia-debug -ldSFMT`)
 ccall((:init_lib, "./librand.so"), Cvoid, ()) 
 @show ccall((:rand, "./librand.so"), Float64, ()) 
 @show ccall((:rand, "./librand.so"), Float64, ()) 
@@ -35,7 +35,8 @@ mutable struct AAA
 end
 @noinline ssum(x) = x.aaa + x.bbb
 fstruct(x) = ssum(AAA(x, 99))
-@test fstruct(10) == @jlrun fstruct(10)
+native = irgen(fstruct, Tuple{Int})
+# @test fstruct(10) == @jlrun fstruct(10)
 
 module ZZ
 mutable struct AAA
@@ -46,7 +47,7 @@ end
 fstruct(x) = ssum(AAA(x, 99))
 end # module
 ffstruct(x) = ZZ.fstruct(x)
-@test ffstruct(10) == @jlrun ffstruct(10)
+# @test ffstruct(10) == @jlrun ffstruct(10)
 
 twox(x) = 2x
 dump_native(irgen(twox, Tuple{Float64}), "libtwox.o")

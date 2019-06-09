@@ -346,7 +346,6 @@ static std::string jl_name_from_type(void *p) {
     CRNAME(jl_typetype_type);
     CRNAME(jl_typename_type);
     CRNAME(jl_type_typename);
-    CRNAME(jl_sym_type);
     CRNAME(jl_symbol_type);
     CRNAME(jl_ssavalue_type);
     CRNAME(jl_abstractslot_type);
