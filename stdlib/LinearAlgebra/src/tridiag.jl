@@ -11,10 +11,7 @@ struct SymTridiagonal{T, V<:AbstractVector{T}} <: AbstractMatrix{T}
         if !(length(dv) - 1 <= length(ev) <= length(dv))
             throw(DimensionMismatch("subdiagonal has wrong length. Has length $(length(ev)), but should be either $(length(dv) - 1) or $(length(dv))."))
         end
-        if !all(issymmetric.(dv))
-            throw("block matrices on diagonal are not symmetric")
-        end
-        new{T,V}(dv, ev)
+        new{T, V}(dv, ev)
     end
 end
 
@@ -26,8 +23,8 @@ sub/super-diagonal (`ev`), respectively. The result is of type `SymTridiagonal`
 and provides efficient specialized eigensolvers, but may be converted into a
 regular matrix with [`convert(Array, _)`](@ref) (or `Array(_)` for short).
 
-For `SymTridiagonal` block matrices, the elements of `dv` are assumed to be
-symmetric. The argument `ev` is interpreted as the superdiagonal. Blocks from the
+For `SymTridiagonal` block matrices, the elements of `dv` are symmetrized.
+The argument `ev` is interpreted as the superdiagonal. Blocks from the
 subdiagonal are (materialized) transpose of the corresponding superdiagonal blocks.
 
 # Examples
@@ -52,12 +49,12 @@ julia> SymTridiagonal(dv, ev)
  ⋅  8  3  9
  ⋅  ⋅  9  4
 
-julia> A = SymTridiagonal(fill([1 2; 2 3], 3), fill([1 2; 3 4], 2));
+julia> A = SymTridiagonal(fill([1 2; 3 4], 3), fill([1 2; 3 4], 2));
 
 julia> A[1,1]
 2×2 Symmetric{Int64,Array{Int64,2}}:
 1  2
-2  3
+2  4
 
 julia> A[1,2]
 2×2 Array{Int64,2}:
