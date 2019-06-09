@@ -104,7 +104,7 @@ julia> SymTridiagonal(B)
 """
 function SymTridiagonal(A::AbstractMatrix)
     if (diag(A, 1) == transpose.(diag(A, -1))) && all(issymmetric.(diag(A, 0)))
-        SymTridiagonal(symmetric.(diag(A, 0), :U), diag(A, 1))
+        SymTridiagonal(diag(A, 0), diag(A, 1))
     else
         throw(ArgumentError("matrix is not symmetric; cannot convert to SymTridiagonal"))
     end
