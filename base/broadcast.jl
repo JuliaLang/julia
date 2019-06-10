@@ -803,6 +803,8 @@ function broadcast_preserving_zero_d(f, As...)
     r = materialize(bc)
     return length(axes(bc)) == 0 ? fill!(similar(bc, typeof(r)), r) : r
 end
+broadcast_preserving_zero_d(f) = fill(f())
+broadcast_preserving_zero_d(f, as::Number...) = fill(f(as...))
 
 """
     Broadcast.materialize(bc)
