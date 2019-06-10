@@ -108,7 +108,7 @@ function choosetests(choices = [])
     end
 
     compilertests = ["compiler/inference", "compiler/validation", "compiler/ssair", "compiler/irpasses",
-                     "compiler/codegen", "compiler/inline"]
+                     "compiler/codegen", "compiler/inline", "compiler/contextual"]
 
     if "compiler" in skip_tests
         filter!(x -> (x != "compiler" && !(x in compilertests)), tests)

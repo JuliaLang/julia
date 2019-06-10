@@ -254,6 +254,7 @@ typedef struct _jl_code_info_t {
     jl_value_t *slottypes; // inferred types of slots
     jl_value_t *rettype;
     jl_method_instance_t *parent; // context (optionally, if available, otherwise nothing)
+    jl_value_t *edges; // forward edges to method instances that must be invalidated
     size_t min_world;
     size_t max_world;
     // various boolean properties:

@@ -1015,8 +1015,15 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
         ci.slottypes = deserialize(s)
         ci.rettype = deserialize(s)
         ci.parent = deserialize(s)
-        ci.min_world = reinterpret(UInt, deserialize(s))
-        ci.max_world = reinterpret(UInt, deserialize(s))
+        world_or_edges = deserialize(s)
+        pre_13 = isa(world_or_edges, Integer)
+        if pre_13
+            ci.min_world = world_or_edges
+        else
+            ci.edges = world_or_edges
+            ci.min_world = reinterpret(UInt, deserialize(s))
+            ci.max_world = reinterpret(UInt, deserialize(s))
+        end
     end
     ci.inferred = deserialize(s)
     ci.inlineable = deserialize(s)
