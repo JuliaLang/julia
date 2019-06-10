@@ -550,6 +550,43 @@ static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
 }
 #endif
 
+int jl_profile_record_trace(bt_context_t *ctx)
+{
+    if (running) {
+        ucontext_t current_ctx;
+        if (NULL == ctx) {
+            getcontext(&current_ctx);
+            ctx = jl_to_bt_context(&current_ctx);
+        }
+        if (bt_size_cur < bt_size_max - 1) {
+            // unwinding can fail, so keep track of the current state
+            // and restore from the SEGV handler if anything happens.
+            jl_ptls_t ptls = jl_get_ptls_states();
+            jl_jmp_buf *old_buf = ptls->safe_restore;
+            jl_jmp_buf buf;
+
+            ptls->safe_restore = &buf;
+            if (jl_setjmp(buf, 0)) {
+                jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
+            } else {
+                // Get backtrace data
+                bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
+                        bt_size_max - bt_size_cur - 1, ctx);
+            }
+            ptls->safe_restore = old_buf;
+
+            // Mark the end of this block with 0
+            bt_data_prof[bt_size_cur++] = 0;
+
+            return 0;
+        }
+        if (bt_size_cur >= bt_size_max - 1) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static void *signal_listener(void *arg)
 {
     static uintptr_t bt_data[JL_MAX_BT_SIZE + 1];
@@ -674,31 +711,9 @@ static void *signal_listener(void *arg)
             }
 
             // do backtrace for profiler
-            if (profile && running) {
-                if (bt_size_cur < bt_size_max - 1) {
-                    // unwinding can fail, so keep track of the current state
-                    // and restore from the SEGV handler if anything happens.
-                    jl_ptls_t ptls = jl_get_ptls_states();
-                    jl_jmp_buf *old_buf = ptls->safe_restore;
-                    jl_jmp_buf buf;
-
-                    ptls->safe_restore = &buf;
-                    if (jl_setjmp(buf, 0)) {
-                        jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
-                    } else {
-                        // Get backtrace data
-                        bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
-                                bt_size_max - bt_size_cur - 1, signal_context);
-                    }
-                    ptls->safe_restore = old_buf;
-
-                    // Mark the end of this block with 0
-                    bt_data_prof[bt_size_cur++] = 0;
-                }
-                if (bt_size_cur >= bt_size_max - 1) {
-                    // Buffer full: Delete the timer
-                    jl_profile_stop_timer();
-                }
+            if(profile && signal_context != NULL && jl_profile_record_trace(signal_context)) {
+                // Buffer full: Delete the timer
+                jl_profile_stop_timer();
             }
 
             // notify thread to resume
