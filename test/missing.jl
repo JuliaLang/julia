@@ -149,19 +149,34 @@ Base.zero(::Type{Unit}) = Unit(0)
 Base.one(::Type{Unit}) = 1
 
 @testset "elementary functions" begin
-    elementary_functions = [abs, abs2, sign, real, imag,
-                            acos, acosh, asin, asinh, atan, atanh, sin, sinh,
-                            conj, cos, cosh, tan, tanh,
-                            exp, exp2, expm1, log, log10, log1p, log2,
-                            exponent, sqrt,
-                            identity, zero, one, oneunit,
-                            iseven, isodd, ispow2,
-                            isfinite, isinf, isnan, iszero,
-                            isinteger, isreal, transpose, adjoint, float, inv]
+    unary_functions = [abs, abs2, sign, real, imag, angle, hypot,
+                       acos, acosh, asin, asinh, atan, atanh, sin, sinh,
+                       conj, cos, cosh, tan, tanh,
+                       exp, exp2, expm1, log, log10, log1p, log2,
+                       exponent, sqrt,
+                       identity, zero, one, oneunit,
+                       iseven, isodd, ispow2,
+                       isfinite, isinf, isnan, iszero,
+                       isinteger, isreal, transpose, adjoint, float, inv]
+    binary_functions = [atan, hypot]
+    variadic_functions = [hypot]
 
     # All elementary functions return missing when evaluating missing
-    for f in elementary_functions
+    for f in unary_functions
         @test ismissing(f(missing))
+    end
+    for f in binary_functions
+        @test ismissing(f(missing, missing))
+        @test ismissing(f(1.0, missing))
+        @test ismissing(f(missing, 1.0))
+    end
+    for f in variadic_functions
+        @test ismissing(f(missing, missing, missing))
+        @test ismissing(f(1.0, missing, missing))
+        @test ismissing(f(missing, 1.0, missing))
+        @test ismissing(f(missing, missing, 1.0))
+        @test ismissing(f((1:20)..., missing))
+        @test ismissing(f(missing, (1:20)...))
     end
 
     for T in (Int, Float64)

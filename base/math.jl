@@ -1078,10 +1078,12 @@ include("special/log.jl")
 
 # `missing` definitions for functions in this module
 for f in (:(acos), :(acosh), :(asin), :(asinh), :(atan), :(atanh),
-          :(sin), :(sinh), :(cos), :(cosh), :(tan), :(tanh),
+          :(sin), :(sinh), :(cos), :(cosh), :(tan), :(tanh), :(angle),
           :(exp), :(exp2), :(expm1), :(log), :(log10), :(log1p),
           :(log2), :(exponent), :(sqrt))
     @eval $(f)(::Missing) = missing
 end
+atan(::Union{Real,Missing}, ::Union{Real,Missing}) = missing
+hypot(::Union{Number,Missing}...) = missing
 
 end # module
