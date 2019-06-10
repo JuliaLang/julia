@@ -908,7 +908,6 @@ static jl_typemap_level_t *jl_method_convert_list_to_cache(jl_typemap_entry_t *m
         jl_typemap_level_insert_(cache, ml, offs, tparams);
         ml = next;
     }
-    JL_GC_POP();
     return cache;
 }
 
