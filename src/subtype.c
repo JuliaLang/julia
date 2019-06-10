@@ -1650,10 +1650,10 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
                     }
                 }
             }
-            if (i < npx) {
+            if (i < nparams_expanded_x) {
                 // there are elements left in x (possibly just a Vararg), check them against the Vararg tail of y too
                 assert(vy != JL_VARARG_NONE && istuple && iscov);
-                jl_value_t *a1 = (vx != JL_VARARG_NONE && i == npx - 1) ? vxt : jl_tparam(x, i);
+                jl_value_t *a1 = (vx != JL_VARARG_NONE && i >= npx - 1) ? vxt : jl_tparam(x, i);
                 jl_value_t *b = jl_unwrap_vararg(jl_tparam(y, i));
                 if (nparams_expanded_x > npy && jl_is_typevar(b) && concrete_min(a1) > 1) {
                     // diagonal rule for 2 or more elements: they must all be concrete on the LHS
@@ -1663,8 +1663,8 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
                 if (jl_is_type_type(a1) && jl_is_type(jl_tparam0(a1))) {
                     a1 = jl_typeof(jl_tparam0(a1));
                 }
-                for (; i < npx; i++) {
-                    jl_value_t *a = (vx != JL_VARARG_NONE && i == npx - 1) ? vxt : jl_tparam(x, i);
+                for (; i < nparams_expanded_x; i++) {
+                    jl_value_t *a = (vx != JL_VARARG_NONE && i >= npx - 1) ? vxt : jl_tparam(x, i);
                     if (i > npy && jl_is_typevar(b)) { // i == npy implies a == a1
                         // diagonal rule: all the later parameters are also constrained to be type-equal to the first
                         jl_value_t *a2 = a;
