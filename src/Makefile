@@ -330,7 +330,11 @@ $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/GCChecker.c
 	@$(call PRINT_CC, $(CXX) -g -shared -o $@ -DCLANG_PLUGIN -I$(build_includedir) $(shell $(LLVM_CONFIG_HOST) --cxxflags) $(CPPFLAGS) $(CFLAGS) $< $(shell $(LLVM_CONFIG_HOST) --ldflags) $(LDFLAGS) -L$(build_libdir) -lclangAnalysis -lclangStaticAnalyzerCore -lclangASTMatchers -lclangAST -lclangLex -lclangBasic)
 
 # Throw an error if a proper version of `clang` is not available.
-analyzegc-deps-check:
+# Note that for a default install, you will need to have run the following
+# before attempting this static analysis, so that all necessary headers
+# and dependencies are properly installed:
+#   make -c deps install-llvm install-libuv install-utf8proc install-unwind
+analyzegc-deps-check: $(BUILDDIR)/julia_version.h $(BUILDDIR)/julia_flisp.boot.inc
 ifeq ($(USE_BINARYBUILDER_LLVM),0)
 ifneq ($(BUILD_LLVM_CLANG),1)
 	$(error Clang must be available to use the clang analyzer. Either build it (BUILD_LLVM_CLANG) or use BinaryBuilder)
@@ -352,11 +356,5 @@ $(foreach S,$(RUNTIME_C_SRCS),$(eval $(call CLANG_ANALYZE,$(S))))
 
 clean-analyzegc:
 	rm -f $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
-
-# Note that for a default install, you will need to have run the following
-# before attempting this static analysis, so that all necessary headers
-# and dependencies are properly installed:
-#   make -c deps install-libuv install-utf8proc install-unwind
-analyzegc: $(BUILDDIR)/julia_version.h $(BUILDDIR)/julia_flisp.boot.inc
 
 .PHONY: default all debug release clean cleanall clean-* libccalltest libllvmcalltest julia_flisp.boot.inc.phony analyzegc
