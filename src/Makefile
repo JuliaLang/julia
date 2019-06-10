@@ -324,7 +324,7 @@ clean-flisp:
 clean-support:
 	-$(MAKE) -C $(SRCDIR)/support clean BUILDDIR='$(abspath $(BUILDDIR)/support)'
 
-cleanall: clean clean-flisp clean-support
+cleanall: clean clean-flisp clean-support clean-analyzegc
 
 $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/GCChecker.cpp
 	@$(call PRINT_CC, $(CXX) -g -shared -o $@ -DCLANG_PLUGIN -I$(build_includedir) $(shell $(LLVM_CONFIG_HOST) --cxxflags) $(CPPFLAGS) $(CFLAGS) $< $(shell $(LLVM_CONFIG_HOST) --ldflags) $(LDFLAGS) -L$(build_libdir) -lclangAnalysis -lclangStaticAnalyzerCore -lclangASTMatchers -lclangAST -lclangLex -lclangBasic)
@@ -349,6 +349,9 @@ endef
 
 # Build a Makefile target for each file we want to analyze
 $(foreach S,$(RUNTIME_C_SRCS),$(eval $(call CLANG_ANALYZE,$(S))))
+
+clean-analyzegc:
+	rm -f $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
 
 # Note that for a default install, you will need to have run the following
 # before attempting this static analysis, so that all necessary headers
