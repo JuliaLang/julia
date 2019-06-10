@@ -18,7 +18,7 @@ export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
 import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
              max, min, minmax, ^, exp2, muladd, rem,
-             exp10, expm1, log1p
+             exp10, expm1, log1p, angle
 
 using .Base: sign_mask, exponent_mask, exponent_one,
             exponent_half, uinttype, significand_mask
