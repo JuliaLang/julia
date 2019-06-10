@@ -32,6 +32,10 @@ Standard library changes
 * Cmd interpolation (`` `$(x::Cmd) a b c` `` where) now propagates `x`'s process flags
   (environment, flags, working directory, etc) if `x` is the first interpolant and errors
   otherwise ([#24353]).
+* Zero-dimensional arrays are now consistently preserved in the return values of mathematical
+  functions that operate on the array(s) as a whole (and are not explicitly broadcasted across their elements).
+  Previously, the functions  `+`, `-`, `*`, `/`, `conj`, `real` and `imag` returned the unwrapped element
+  when operating over zero-dimensional arrays ([#32122]).
 * `IPAddr` subtypes now behave like scalars when used in broadcasting ([#32133]).
 
 #### Libdl
