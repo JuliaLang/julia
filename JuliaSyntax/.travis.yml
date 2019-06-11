@@ -4,19 +4,15 @@ os:
   - linux
   - osx
 julia:
+  - 1.0
+  - 1.1
+  - 1.2
   - nightly
 matrix:
   allow_failures:
     - julia: nightly
 notifications:
   email: false
-script:
-  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
-  - julia -e 'Pkg.clone(pwd()); Pkg.build("Tokenize"); Pkg.test("Tokenize"; coverage=true)'
-  # - julia -e 'Pkg.clone("https://github.com/ZacLN/CSTParser.jl"); Pkg.test("CSTParser")'
-  # - julia -e 'Pkg.clone("https://github.com/KristofferC/OhMyREPL.jl"); Pkg.test("OhMyREPL")'
 after_success:
-  # push coverage results to Coveralls
-  - julia -e 'cd(Pkg.dir("Tokenize")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())'
   # push coverage results to Codecov
-  - julia -e 'cd(Pkg.dir("Tokenize")); Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'
+  - julia -e 'import Pkg; Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'
