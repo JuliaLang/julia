@@ -1568,7 +1568,7 @@ end
 
 # Issue # 22865
 # Must be run on a new cluster, i.e., all workers must be in the same state.
-@assert nprocs() == 1
+(nprocs() > 1) && rmprocs(workers())
 p1,p2 = addprocs_with_testenv(2)
 @everywhere f22865(p) = remotecall_fetch(x->x.*2, p, fill(1.,2))
 @test fill(2.,2) == remotecall_fetch(f22865, p1, p2)
@@ -1607,11 +1607,31 @@ function reuseport_tests()
     @test all(in(results), procs())
 end
 
+# Test failure during worker setup
+old_stderr = stderr
+stderr_out, stderr_in = redirect_stderr()
+try
+    (nprocs() > 1) && rmprocs(workers())
+    npids = addprocs(1; topology=:all_to_all, lazy=false)
+    @test length(npids) == 1
+    @test nprocs() == 2
+    lsock = listenany(ip"127.0.0.1", 20000)
+    Distributed.PGRP.workers[2].config.connect_at=("127.0.0.1", lsock[1])
+    close(lsock[2])
+    npids = addprocs_with_testenv(1; topology=:all_to_all, lazy=false)
+    @test length(npids) == 0
+    @test nprocs() == 2
+    (nprocs() > 1) && rmprocs(workers())
+finally
+    redirect_stderr(old_stderr)
+    close(stderr_in)
+end
+
 # Test that the client port is reused. SO_REUSEPORT may not be supported on
 # all UNIX platforms, Linux kernels prior to 3.9 and older versions of OSX
-@assert nprocs() == 1
-addprocs_with_testenv(4; lazy=false)
 if ccall(:jl_has_so_reuseport, Int32, ()) == 1
+    (nprocs() > 1) && rmprocs(workers())
+    addprocs_with_testenv(4; lazy=false)
     reuseport_tests()
 else
     @info "SO_REUSEPORT is unsupported, skipping reuseport tests"
@@ -1688,5 +1708,5 @@ include("splitrange.jl")
 
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.
-rmprocs(workers())
+(nprocs() > 1) && rmprocs(workers())
 include("topology.jl")

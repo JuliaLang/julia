@@ -534,6 +534,7 @@ default_addprocs_params() = Dict{Symbol,Any}(
 
 function setup_launched_worker(manager, wconfig, launched_q)
     pid = create_worker(manager, wconfig)
+    (pid == 0) && return
     push!(launched_q, pid)
 
     # When starting workers on remote multi-core hosts, `launch` can (optionally) start only one
@@ -571,8 +572,10 @@ function launch_n_additional_processes(manager, frompid, fromconfig, cnt, launch
             let wconfig=wconfig
                 @async begin
                     pid = create_worker(manager, wconfig)
-                    remote_do(redirect_output_from_additional_worker, frompid, pid, port)
-                    push!(launched_q, pid)
+                    if pid !== 0
+                        remote_do(redirect_output_from_additional_worker, frompid, pid, port)
+                        push!(launched_q, pid)
+                    end
                 end
             end
         end
@@ -613,7 +616,11 @@ function create_worker(manager, wconfig)
 
     # Start a new task to handle inbound messages from connected worker in master.
     # Also calls `wait_connected` on TCP streams.
-    process_messages(w.r_stream, w.w_stream, false)
+    procmsg_task = process_messages(w.r_stream, w.w_stream, false)
+    Timer(1, interval=1) do timer
+        istaskstarted(procmsg_task) && istaskdone(procmsg_task) && put!(rr_ntfy_join, nothing)
+        isready(rr_ntfy_join) && close(timer)
+    end
 
     # send address information of all workers to the new worker.
     # Cluster managers set the address of each worker in `WorkerConfig.connect_at`.
@@ -685,7 +692,7 @@ function create_worker(manager, wconfig)
         delete!(PGRP.refs, ntfy_oid)
     end
 
-    return w.id
+    return istaskdone(procmsg_task) ? 0 : w.id
 end
 
 
