@@ -29,7 +29,7 @@ Standard library changes
 ------------------------
 
 * `Regex` can now be multiplied (`*`) and exponentiated (`^`), like strings ([#23422]).
-* Cmd interpolation (`` `$(x::Cmd) a b c` `` where) now propagates `x`'s process flags
+* `Cmd` interpolation (`` `$(x::Cmd) a b c` `` where) now propagates `x`'s process flags
   (environment, flags, working directory, etc) if `x` is the first interpolant and errors
   otherwise ([#24353]).
 * `IPAddr` subtypes now behave like scalars when used in broadcasting ([#32133]).
@@ -43,7 +43,6 @@ Standard library changes
 
 * The BLAS submodule no longer exports `dot`, which conflicts with that in LinearAlgebra ([#31838]).
 * `diagm` and `spdiagm` now accept optional `m,n` initial arguments to specify a size ([#31654]).
-
 * `Hessenberg` factorizations `H` now support efficient shifted solves `(H+µI) \ b` and determinants, and use a specialized tridiagonal factorization for Hermitian matrices. There is also a new `UpperHessenberg` matrix type ([#31853]).
 
 #### SparseArrays
