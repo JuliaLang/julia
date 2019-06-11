@@ -44,9 +44,13 @@ import .Base:
     skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
     rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror
 
+import .Base.RefValue
+
 if Sys.iswindows()
     import .Base: cwstring
 end
+
+const MAX_PATH = Sys.iswindows() ? 260 : 1024 # max buffer size including null terminator
 
 include("path.jl")
 include("stat.jl")
