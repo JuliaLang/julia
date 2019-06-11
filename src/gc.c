@@ -494,7 +494,7 @@ static size_t max_collect_interval =  500000000UL;
 // determine how often the given thread should atomically update
 // the global allocation counter.
 // NOTE: currently the same for all threads.
-static int64_t per_thread_counter_interval(jl_ptls_t ptls)
+static int64_t per_thread_counter_interval(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     if (jl_n_threads == 1)
         return gc_num.interval;
@@ -991,7 +991,7 @@ void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT
     ptls->gc_num.allocd += sz;
 }
 
-static void combine_thread_gc_counts(jl_gc_num_t *dest)
+static void combine_thread_gc_counts(jl_gc_num_t *dest) JL_NOTSAFEPOINT
 {
     for (int i = 0; i < jl_n_threads; i++) {
         jl_ptls_t ptls = jl_all_tls_states[i];
@@ -1007,7 +1007,7 @@ static void combine_thread_gc_counts(jl_gc_num_t *dest)
     }
 }
 
-static void reset_thread_gc_counts(void)
+static void reset_thread_gc_counts(void) JL_NOTSAFEPOINT
 {
     for (int i = 0; i < jl_n_threads; i++) {
         jl_ptls_t ptls = jl_all_tls_states[i];
