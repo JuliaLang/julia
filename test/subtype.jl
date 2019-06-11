@@ -1599,6 +1599,8 @@ end
     Tuple{Array{Tuple{Int64},1}, Tuple},
     Tuple{Array{Tuple{Int64},1},Tuple{Array{Int64,1}}})
 
+@test !isequal_type(Tuple{Int, Vararg{T, 3}} where T<:Real, Tuple{Int, Real, Vararg{T, 2}} where T<:Integer)
+
 # this is is a timing test, so it would fail on debug builds
 #let T = Type{Tuple{(Union{Int, Nothing} for i = 1:23)..., Union{String, Nothing}}},
 #    S = Type{T} where T<:Tuple{E, Vararg{E}} where E
