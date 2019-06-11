@@ -630,7 +630,7 @@ function readdir(path::AbstractString)
 
     # iterate the listing into entries
     entries = String[]
-    ent = Ref{uv_dirent_t}()
+    ent = RefValue{uv_dirent_t}()
     while Base.UV_EOF != ccall(:uv_fs_scandir_next, Cint, (Ptr{Cvoid}, Ptr{uv_dirent_t}), uv_readdir_req, ent)
         push!(entries, unsafe_string(ent[].name))
     end
