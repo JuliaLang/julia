@@ -617,8 +617,14 @@ function create_worker(manager, wconfig)
     # Start a new task to handle inbound messages from connected worker in master.
     # Also calls `wait_connected` on TCP streams.
     procmsg_task = process_messages(w.r_stream, w.w_stream, false)
+    timeout = worker_timeout()
     Timer(1, interval=1) do timer
-        istaskstarted(procmsg_task) && istaskdone(procmsg_task) && put!(rr_ntfy_join, nothing)
+        timeout -= 1
+        if timeout <= 0.0
+            put!(rr_ntfy_join, :TIMEDOUT)
+        elseif istaskdone(procmsg_task)
+            put!(rr_ntfy_join, :ERROR)
+        end
         isready(rr_ntfy_join) && close(timer)
     end
 
@@ -692,7 +698,7 @@ function create_worker(manager, wconfig)
         delete!(PGRP.refs, ntfy_oid)
     end
 
-    return istaskdone(procmsg_task) ? 0 : w.id
+    return (fetch(rr_ntfy_join.c) === :OK) ? w.id : 0
 end
 
 
