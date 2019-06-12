@@ -576,8 +576,14 @@ function hypot(x::T,y::T) where T<:AbstractFloat
         scale = one(scale)
     end
     h = sqrt(muladd(ax,ax,ay*ay))
-    delta = h-ax
-    (h - muladd(ax,delta,(delta+ay)*(delta-ay)/2)/h)*scale
+    if h <= 2*ay
+        delta = h-ay
+        h -= muladd(delta,delta-2*(ax-ay),ax*(2*delta - ax))/(2*h)
+    else
+        delta = h-ax
+        h -= muladd(delta,delta,muladd(ay,(4*delta-ay),2*delta*(ax-2*ay)))/(2*h)
+    end
+    h*scale
 end
 function hypot(x::T, y::T) where T<:Number
     ax = abs(x)
