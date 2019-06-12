@@ -84,6 +84,7 @@ parse(content::String) = parse(IOBuffer(content))
 deparse(io::IO, sx::String)  = print(io, '"', sx, '"')
 deparse(io::IO, sx::Bool)    = print(io, sx ? "#t" : "#f")
 deparse(io::IO, sx) = print(io, sx)
+deparse(io::IO, sx::Nothing) = "nothing"
 deparse(io::IO, sx::Unquote) = print(io, ',', string(sx.name))
 function deparse(io::IO, sx::Vector)
     write(io, '(')

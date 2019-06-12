@@ -111,7 +111,9 @@ function to_sexpr!(ex, nextids, valmap)
         end
         return [ex.head; ex.args]
     elseif ex isa QuoteNode
-        return [:quote, ex.value]
+        return [:quote, to_sexpr!(ex.value, nextids, valmap)]
+    elseif ex isa LineNumberNode
+        return [:line, ex.line, ex.file]
     elseif ex isa Vector # Occasional case of lambdas
         map!(ex, ex) do e
             to_sexpr!(e, nextids, valmap)
@@ -209,7 +211,7 @@ end
 
 macro desugar_sx(ex)
     quote
-        SExprs.deparse(to_sexpr($(Expr(:quote, ex))))
+        SExprs.deparse(to_sexpr(expand_forms($(Expr(:quote, ex)))))
     end
 end
 
