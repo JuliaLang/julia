@@ -1245,8 +1245,7 @@ function typeinf_local(frame::InferenceState)
             pc´ > n && break # can't proceed with the fast-path fall-through
             frame.handler_at[pc´] = frame.cur_hand
             newstate = stupdate!(s[pc´], changes)
-            if (isa(stmt, GotoNode) || isa(stmt, DetachNode) || isa(stmt, ReattachNode) ) &&
-                frame.pc´´ < pc´
+            if isa(stmt, GotoNode) && frame.pc´´ < pc´
                 # if we are processing a goto node anyways,
                 # (such as a terminator for a loop, if-else, or try block),
                 # consider whether we should jump to an older backedge first,
