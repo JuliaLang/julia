@@ -478,7 +478,12 @@ Enables or disables Nagle's algorithm on a given TCP server or socket.
 """
 function nagle(sock::Union{TCPServer, TCPSocket}, enable::Bool)
     # disable or enable Nagle's algorithm on all OSes
-    ccall(:uv_tcp_nodelay, Cint, (Ptr{Cvoid}, Cint), sock.handle, Cint(!enable))
+    r = ccall(:uv_tcp_nodelay, Cint, (Ptr{Cvoid}, Cint), sock.handle, Cint(!enable))
+    if r < 0
+        enable_disable = ifelse(enable, "enable", "disable")
+        error_string = Libc.strerror(Libc.errno())
+        @warn "Cannot $(enable_disable) Nagle's algorithm" maxlog=1 exception=error_string
+    end
 end
 
 """
@@ -490,7 +495,12 @@ function quickack(sock::Union{TCPServer, TCPSocket}, enable::Bool)
     @static if Sys.islinux()
         # tcp_quickack is a linux only option
         if ccall(:jl_tcp_quickack, Cint, (Ptr{Cvoid}, Cint), sock.handle, Cint(enable)) < 0
-            @warn "Networking unoptimized ( Error enabling TCP_QUICKACK : $(Libc.strerror(Libc.errno())) )" maxlog=1
+            error_string = Libc.strerror(Libc.errno())
+            if enable
+                @warn "Networking unoptimized (error enabling TCP_QUICKACK)" maxlog=1 exception=error_string
+            else
+                @warn "Error disabling TCP_QUICKACK" maxlog=1 exception=error_string
+            end
         end
     end
 end
