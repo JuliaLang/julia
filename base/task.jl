@@ -135,6 +135,28 @@ false
 """
 istaskstarted(t::Task) = ccall(:jl_is_task_started, Cint, (Any,), t) != 0
 
+"""
+    istaskfailed(t::Task) -> Bool
+
+Determine whether a task has exited because an exception was thrown.
+
+# Examples
+```jldoctest
+julia> a4() = error("task failed");
+
+julia> b = Task(a4);
+
+julia> istaskfailed(b)
+false
+
+julia> schedule(b);
+
+julia> yield();
+
+julia> istaskfailed(b)
+true
+```
+"""
 istaskfailed(t::Task) = (t.state == :failed)
 
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
