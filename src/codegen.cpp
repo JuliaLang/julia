@@ -6277,6 +6277,10 @@ static std::unique_ptr<Module> emit_function(
                 branch_targets.insert(dest);
                 if (i + 2 <= stmtslen)
                     branch_targets.insert(i + 2);
+            } else if (jl_is_syncnode(stmt)) {
+                // sync node act as terminator, implicit fall-through
+                if (i + 2 <= stmtslen)
+                    branch_targets.insert(i + 2);
             } else if (jl_is_phinode(stmt)) {
                 jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(stmt, 0);
                 for (size_t j = 0; j < jl_array_len(edges); ++j) {
@@ -6452,7 +6456,6 @@ static std::unique_ptr<Module> emit_function(
             // The CFG should gurantuee that we will go to lreattach
             // through the reattach that this detach dominates
             // Add it to the worklist anyway in case detach BB has a ret, or exception
-            // TODO: add validation
             workstack.push_back(lreattach - 1);
             come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
             ctx.builder.CreateDetach(BB[lname], BB[lreattach], syncregion.V);
@@ -6475,7 +6478,6 @@ static std::unique_ptr<Module> emit_function(
             continue;
         }
         if (jl_is_syncnode(stmt)) {
-            // TODO: represent this BB in higher-level IR?
             jl_value_t* ex = jl_syncregion(stmt);
             jl_cgval_t syncregion;
             if (jl_is_ssavalue(ex)) {
@@ -6484,9 +6486,8 @@ static std::unique_ptr<Module> emit_function(
                 assert(0);
             }
             assert(syncregion.V->getType()->isTokenTy());
-            BasicBlock *continueBlock = BasicBlock::Create(jl_LLVMContext, "sync.continue", ctx.f);
-            ctx.builder.CreateSync(continueBlock, syncregion.V);
-            ctx.builder.SetInsertPoint(continueBlock);
+            come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
+            ctx.builder.CreateSync(BB[cursor+2], syncregion.V);
             find_next_stmt(cursor + 1);
             continue;
         }
@@ -6505,7 +6506,9 @@ static std::unique_ptr<Module> emit_function(
             find_next_stmt(lname - 1);
             continue;
         }
-        if jl_is_syncnode(stmt)) {
+        if (jl_is_syncnode(stmt)) {
+            come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
+            ctx.builder.CreateBr(BB[cursor+2]); // fallthrough
             find_next_stmt(cursor + 1);
             continue;
         }

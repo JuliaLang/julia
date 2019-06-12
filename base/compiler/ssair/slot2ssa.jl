@@ -207,7 +207,7 @@ function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, flags::Vector{UIn
     # happen for implicit return on dead branches.
     term = code[end]
     if !isa(term, GotoIfNot) && !isa(term, GotoNode) && !isa(term, ReturnNode) &&
-       !isa(term, DetachNode) && !isa(term, ReattachNode)
+       !isa(term, DetachNode) && !isa(term, ReattachNode) && !(isa, SyncNode)
         push!(code, ReturnNode())
         push!(ci.ssavaluetypes, Union{})
         push!(ci.codelocs, 0)
@@ -417,7 +417,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
                     node = pop!(stack)
                 end
             end
-            if node != old_node && !isa(terminator, Union{GotoNode, ReturnNode, DetachNode, ReattachNode})
+            if node != old_node && !isa(terminator, Union{GotoNode, ReturnNode, DetachNode, ReattachNode, SyncNode})
                 if isa(terminator, GotoIfNot)
                     # Need to break the critical edge
                     ncritbreaks += 1
