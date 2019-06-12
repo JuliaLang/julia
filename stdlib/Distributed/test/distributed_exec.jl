@@ -1609,7 +1609,9 @@ end
 
 # Test failure during worker setup
 old_stderr = stderr
+old_stdout = stdout
 stderr_out, stderr_in = redirect_stderr()
+stdout_out, stdout_in = redirect_stdout()
 try
     (nprocs() > 1) && rmprocs(workers())
     npids = addprocs(1; topology=:all_to_all, lazy=false)
@@ -1631,11 +1633,15 @@ try
     withenv("JULIA_WORKER_TIMEOUT"=>1) do
         npids = addprocs_with_testenv(1; topology=:all_to_all, lazy=false)
         @test length(npids) == 0
+        # kill the stuck worker to speed up `rmprocs`
+        kill(Distributed.PGRP.workers[3].config.process)
     end
 finally
     rmprocs(workers())
     redirect_stderr(old_stderr)
+    redirect_stdout(old_stdout)
     close(stderr_in)
+    close(stdout_in)
 end
 
 # Test that the client port is reused. SO_REUSEPORT may not be supported on
