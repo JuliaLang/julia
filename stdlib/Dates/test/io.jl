@@ -579,7 +579,7 @@ end
         @test uppercase(t12) == Dates.format(t, "II:MMp") ==
                                 Dates.format(d, "II:MMp")
     end
-    for bad in ("13:24pm", "2pm", "12:24p.m.", "12:24 pm", "12:24pµ")
+    for bad in ("00:24am", "00:24pm", "13:24pm", "2pm", "12:24p.m.", "12:24 pm", "12:24pµ")
         @eval @test_throws ArgumentError Time($bad, "II:MMp")
     end
     # if am/pm is missing, defaults to 24-hour clock
