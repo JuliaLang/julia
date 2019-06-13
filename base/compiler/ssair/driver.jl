@@ -49,35 +49,6 @@ function normalize(@nospecialize(stmt), meta::Vector{Any})
     return stmt
 end
 
-# TODO: Check that CFG edges don't leave or enter parallel regions
-#       Check no return statements in parallel regions
-function mark_parallel_regions(code::Vector{Any})
-    regionmap = fill(-1, length(code))
-    regions = IdDict{Any, Int}()
-    cur_region = -1
-
-    idx = 1
-    while idx <= length(code)
-        stmt = code[idx]
-        regionmap[idx] = cur_region
-        if isa(stmt, DetachNode)
-            cur_region += 1
-            regions[(stmt::DetachNode).syncregion] = cur_region
-            regionmap[idx] = cur_region
-        elseif isa(stmt, ReattachNode)
-            # reattach should be in the same parallel region
-            @assert regions[(stmt::ReattachNode).syncregion] == cur_region
-            cur_region -= 1
-        elseif isa(stmt, SyncNode)
-            # SyncNode needs to be outside parallel region
-            @assert regions[(stmt::SyncNode).syncregion] > cur_region
-        end
-        idx += 1
-    end
-    return regionmap
-end
-
-
 function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, sv::OptimizationState)
     # Go through and add an unreachable node after every
     # Union{} call. Then reindex labels.

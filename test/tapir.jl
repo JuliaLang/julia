@@ -153,7 +153,7 @@ function vecadd_err(out, A, B)
 end
 
 # This function is broken due to the PhiNode
-function fib2(N)
+@noinline function fib2(N)
     if N <= 1
         return N
     end

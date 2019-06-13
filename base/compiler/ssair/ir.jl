@@ -81,6 +81,8 @@ function basic_blocks_starts(stmts::Vector{Any})
             push!(jump_dests, stmt.reattach)
         elseif isa(stmt, ReattachNode)
             push!(jump_dests, stmt.label)
+        elseif isa(stmt, SyncNode)
+            push!(jump_dests, idx+1)
         elseif isa(stmt, Expr)
             if stmt.head === :leave
                 # :leave terminates a BB
