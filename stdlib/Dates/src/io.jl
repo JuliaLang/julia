@@ -321,7 +321,7 @@ const CONVERSION_DEFAULTS = IdDict{Type, Any}(
     Millisecond => Int64(0),
     Microsecond => Int64(0),
     Nanosecond => Int64(0),
-    AMPM => TWENTYFOUR,
+    AMPM => TWENTYFOURHOUR,
 )
 
 # Specifies the required fields in order to parse a TimeType
