@@ -354,7 +354,7 @@ string:
 | `s`        | .500      | Matches milliseconds                                         |
 | `e`        | Mon, Tues | Matches abbreviated days of the week                         |
 | `E`        | Monday    | Matches full name days of the week                           |
-| `p`        | AM        | Matches AM/PM according to the `locale` keyword              |
+| `p`        | AM        | Matches AM/PM (case-insensitive)                             |
 | `yyyymmdd` | 19960101  | Matches fixed-width year, month, and day                     |
 
 Characters not listed above are normally treated as delimiters between date and time slots.
