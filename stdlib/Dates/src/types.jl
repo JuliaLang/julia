@@ -172,15 +172,6 @@ argerror() = nothing
 
 # Julia uses 24-hour clocks internally, but user input can be AM/PM with 12pm == noon and 12am == midnight.
 @enum AMPM AM PM TWENTYFOURHOUR
-function validhour(h::Int64, mi::Int64, s::Int64, ms::Int64, ampm::AMPM)
-    if ampm == TWENTYFOURHOUR # 24-hour clock
-        -1 < h < 24 || (h == 24 && mi==s==ms==0) ||
-            return argerror("Hour: $h out of range (0:23)")
-    else
-        0 < h < 13 || return argerror("Hour: $h out of range (1:12)")
-    end
-    return argerror()
-end
 function adjusthour(h::Int64, ampm::AMPM)
     ampm == TWENTYFOURHOUR && return h
     ampm == PM && h < 12 && return h + 12
@@ -208,10 +199,16 @@ function validargs(::Type{DateTime}, y::Int64, m::Int64, d::Int64,
                    h::Int64, mi::Int64, s::Int64, ms::Int64, ampm::AMPM=TWENTYFOURHOUR)
     0 < m < 13 || return argerror("Month: $m out of range (1:12)")
     0 < d < daysinmonth(y, m) + 1 || return argerror("Day: $d out of range (1:$(daysinmonth(y, m)))")
+    if ampm == TWENTYFOURHOUR # 24-hour clock
+        -1 < h < 24 || (h == 24 && mi==s==ms==0) ||
+            return argerror("Hour: $h out of range (0:23)")
+    else
+        0 < h < 13 || return argerror("Hour: $h out of range (1:12)")
+    end
     -1 < mi < 60 || return argerror("Minute: $mi out of range (0:59)")
     -1 < s < 60 || return argerror("Second: $s out of range (0:59)")
     -1 < ms < 1000 || return argerror("Millisecond: $ms out of range (0:999)")
-    return validhour(h, mi, s, ms, ampm)
+    return argerror()
 end
 
 DateTime(dt::Base.Libc.TmStruct) = DateTime(1900 + dt.year, 1 + dt.month, dt.mday, dt.hour, dt.min, dt.sec)
@@ -248,12 +245,17 @@ function Time(h::Int64, mi::Int64=0, s::Int64=0, ms::Int64=0, us::Int64=0, ns::I
 end
 
 function validargs(::Type{Time}, h::Int64, mi::Int64, s::Int64, ms::Int64, us::Int64, ns::Int64, ampm::AMPM=TWENTYFOURHOUR)
+    if ampm == TWENTYFOURHOUR # 24-hour clock
+        -1 < h < 24 || return argerror("Hour: $h out of range (0:23)")
+    else
+        0 < h < 13 || return argerror("Hour: $h out of range (1:12)")
+    end
     -1 < mi < 60 || return argerror("Minute: $mi out of range (0:59)")
     -1 < s < 60 || return argerror("Second: $s out of range (0:59)")
     -1 < ms < 1000 || return argerror("Millisecond: $ms out of range (0:999)")
     -1 < us < 1000 || return argerror("Microsecond: $us out of range (0:999)")
     -1 < ns < 1000 || return argerror("Nanosecond: $ns out of range (0:999)")
-    return validhour(h, mi, s, ms, ampm)
+    return argerror()
 end
 
 Time(dt::Base.Libc.TmStruct) = Time(dt.hour, dt.min, dt.sec)
