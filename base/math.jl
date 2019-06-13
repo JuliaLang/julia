@@ -523,6 +523,12 @@ sqrt(x::Real) = sqrt(float(x))
 
 Compute the hypotenuse ``\\sqrt{|x|^2+|y|^2}`` avoiding overflow and underflow.
 
+This code is an implementation of the algorithm described in:
+An Improved Algorithm for `hypot(a,b)`
+by Carlos F. Borges
+The article is available online at ArXiv at the link
+  https://arxiv.org/abs/1904.09481
+
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> a = 10^10;
@@ -541,6 +547,47 @@ julia> hypot(3, 4im)
 ```
 """
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
+hypot(x::Complex, y::Complex) = hypot(promote(abs(x),abs(y))...)
+hypot(x::Integer, y::Integer) = hypot(promote(float(x), float(y))...)
+function hypot(x::T,y::T) where T<:AbstractFloat
+    #Return Inf if either or both imputs is Inf (Compliance with IEEE754)
+    if isinf(x) || isinf(y)
+        return convert(T,Inf)
+    end
+
+    # Order the operands
+    ax,ay = abs(x), abs(y)
+    if ay > ax
+        ax,ay = ay,ax
+    end
+
+    # Widely varying operands
+    if ay <= ax*sqrt(eps(T)/2)  #Note: This also gets ay == 0
+        return ax
+    end
+
+    # Operands do not vary widely
+    scale = eps(sqrt(floatmin(T)))  #Rescaling constant
+    if ax > sqrt(floatmax(T)/2)
+        ax = ax*scale
+        ay = ay*scale
+        scale = inv(scale)
+    elseif ay < sqrt(floatmin(T))
+        ax = ax/scale
+        ay = ay/scale
+    else
+        scale = one(scale)
+    end
+    h = sqrt(muladd(ax,ax,ay*ay))
+    if h <= 2*ay
+        delta = h-ay
+        h -= muladd(delta,delta-2*(ax-ay),ax*(2*delta - ax))/(2*h)
+    else
+        delta = h-ax
+        h -= muladd(delta,delta,muladd(ay,(4*delta-ay),2*delta*(ax-2*ay)))/(2*h)
+    end
+    h*scale
+end
 function hypot(x::T, y::T) where T<:Number
     ax = abs(x)
     ay = abs(y)
