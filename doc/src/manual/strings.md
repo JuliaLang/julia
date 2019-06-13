@@ -1044,7 +1044,7 @@ The Unicode escape `\u2200` is encoded in UTF-8 as the three bytes 226, 136, 128
 resulting byte array does not correspond to a valid UTF-8 string:
 
 ```jldoctest
-julia> isvalid("DATA\xff\u2200")
+julia> isvalid(b"DATA\xff\u2200")
 false
 ```
 
