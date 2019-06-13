@@ -55,16 +55,9 @@ function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, sv::Opt
     idx = 1
     oldidx = 1
     changemap = fill(0, length(code))
-    pregionmap = mark_parallel_regions(code)
     while idx <= length(code)
         if code[idx] isa Expr && ci.ssavaluetypes[idx] === Union{}
-            if pregionmap[oldidx] > -1
-                # We are in a parallel region and can't place a return statement.
-                # Potentially we could say that a task that throws an error
-                # could be removed entirely, but we would need to prove that
-                # nobody waits upon this task, e.g. that for the token there is
-                # no sync or the sync is dead.
-            elseif !(idx < length(code) && isexpr(code[idx+1], :unreachable))
+            if !(idx < length(code) && isexpr(code[idx+1], :unreachable))
                 insert!(code, idx + 1, ReturnNode())
                 insert!(ci.codelocs, idx + 1, ci.codelocs[idx])
                 insert!(ci.ssavaluetypes, idx + 1, Union{})
