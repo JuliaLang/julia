@@ -575,11 +575,11 @@ end
             @test DateTime("2018-01-01 $t12","yyyy-mm-dd $HH:MMp") == d
             @test Time("$t12","$HH:MMp") == t
         end
+        @test Time(Libc.strptime("%I:%M%p", t12)) == t
         @test uppercase(t12) == Dates.format(t, "II:MMp") ==
                                 Dates.format(d, "II:MMp")
     end
     for bad in ("13:24pm", "2pm", "12:24p.m.", "12:24 pm", "12:24pµ")
-        @show bad
         @eval @test_throws ArgumentError Time($bad, "II:MMp")
     end
     # if am/pm is missing, defaults to 24-hour clock
