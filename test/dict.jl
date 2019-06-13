@@ -301,6 +301,13 @@ end
     @test d == Dict(8=>19, 19=>2, 42=>4)
 end
 
+@testset "getkey" begin
+   h = Dict(1=>2, 3 => 6, 5=>10)
+   @test getkey(h, 1, 7) == 1
+   @test getkey(h, 4, 6) == 6
+   @test getkey(h, "1", 8) == 8
+end
+
 @testset "show" begin
     for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
               Dict(string(i) => i for i = 1:30),
