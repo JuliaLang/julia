@@ -336,26 +336,22 @@ end
 const BiTriSym = Union{Bidiagonal,Tridiagonal,SymTridiagonal}
 const BiTri = Union{Bidiagonal,Tridiagonal}
 mul!(C::AbstractMatrix,   A::SymTridiagonal,     B::BiTriSym) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix,   A::BiTri,              B::BiTriSym) = A_mul_B_td!(C, A, B)
 mul!(C::AbstractMatrix,   A::BiTriSym,           B::BiTriSym) = A_mul_B_td!(C, A, B)
 mul!(C::AbstractMatrix,   A::AbstractTriangular, B::BiTriSym) = A_mul_B_td!(C, A, B)
 mul!(C::AbstractMatrix,   A::AbstractMatrix,     B::BiTriSym) = A_mul_B_td!(C, A, B)
 mul!(C::AbstractMatrix,   A::Diagonal,           B::BiTriSym) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix,   A::Adjoint{<:Any,<:Diagonal}, B::BiTriSym) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix,   A::Transpose{<:Any,<:Diagonal}, B::BiTriSym) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix,   A::BiTriSym,           B::Diagonal) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix,   A::BiTriSym,           B::Adjoint{<:Any,<:Diagonal}) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix,   A::BiTriSym,           B::Transpose{<:Any,<:Diagonal}) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix,   A::Adjoint{<:Any,<:AbstractTriangular}, B::BiTriSym) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix,   A::Transpose{<:Any,<:AbstractTriangular}, B::BiTriSym) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix,   A::Adjoint{<:Any,<:AbstractVecOrMat}, B::BiTriSym) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix,   A::Transpose{<:Any,<:AbstractVecOrMat}, B::BiTriSym) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractVector,   A::BiTri,              B::AbstractVector) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix,   A::BiTri,              B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractVecOrMat, A::BiTri,              B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix,   A::BiTri, B::Transpose{<:Any,<:AbstractVecOrMat}) = A_mul_B_td!(C, A, B) # around bidiag line 330
-mul!(C::AbstractMatrix,   A::BiTri, B::Adjoint{<:Any,<:AbstractVecOrMat}) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractVector,   A::BiTri, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
+mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractVecOrMat}, B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractVecOrMat}, B::BiTriSym) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractVector,   A::BiTriSym,              B::AbstractVector) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix,   A::BiTriSym,              B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractVecOrMat, A::BiTriSym,              B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractMatrix, A::BiTriSym, B::Transpose{<:Any,<:AbstractVecOrMat}) = A_mul_B_td!(C, A, B) # around bidiag line 330
+mul!(C::AbstractMatrix, A::BiTriSym, B::Adjoint{<:Any,<:AbstractVecOrMat}) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractVector, A::BiTriSym, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
 
 function check_A_mul_B!_sizes(C, A, B)
     require_one_based_indexing(C)
@@ -631,6 +627,11 @@ end
 function *(A::SymTridiagonal, B::Diagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
     A_mul_B_td!(Tridiagonal(zeros(TS, size(A, 1)-1), zeros(TS, size(A, 1)), zeros(TS, size(A, 1)-1)), A, B)
+end
+
+function *(A::BiTri, B::Transpose{<:Any, <:Diagonal})
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    A_mul_B_td!(similar(A, TS), A, B)
 end
 
 #Generic multiplication

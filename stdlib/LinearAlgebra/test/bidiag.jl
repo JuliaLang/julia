@@ -304,6 +304,38 @@ Random.seed!(1)
             C = Matrix{elty}(undef, n, n)
             Dia = Diagonal(T.dv)
             @test mul!(C, Dia, T) ≈ Array(Dia)*Array(T)
+
+            # Issue #31870
+            # Bi/Tri/Sym times Diagonal
+            Diag = Diagonal(rand(elty, 10))
+            BidiagU = Bidiagonal(rand(elty, 10), rand(elty, 9), 'U')
+            BidiagL = Bidiagonal(rand(elty, 10), rand(elty, 9), 'L')
+            Tridiag = Tridiagonal(rand(elty, 9), rand(elty, 10), rand(elty, 9))
+            SymTri = SymTridiagonal(rand(elty, 10), rand(elty, 9))
+
+            mats = [Diag, BidiagU, BidiagL, Tridiag, SymTri]
+            for a in mats
+                for b in mats
+                    for lwrap in (transpose, adjoint)
+                        for rwrap in (transpose, adjoint)
+                            @test a*b ≈ Matrix(a)*Matrix(b)
+                            @test lwrap(a)*b ≈ Matrix(lwrap(a))*Matrix(b)
+                            @test a*rwrap(b) ≈ Matrix(a)*Matrix(rwrap(b))
+                            @test lwrap(a)*rwrap(b) ≈ Matrix(lwrap(a))*Matrix(rwrap(b))
+                        end
+                    end
+                end
+            end
+
+            @test typeof(BidiagU*Diag) <: Bidiagonal
+            @test typeof(BidiagL*Diag) <: Bidiagonal
+            @test typeof(Tridiag*Diag) <: Tridiagonal
+            @test typeof(SymTri*Diag) <: Tridiagonal
+
+            @test typeof(BidiagU*Diag) <: Bidiagonal
+            @test typeof(Diag*BidiagL) <: Bidiagonal
+            @test typeof(Diag*Tridiag) <: Tridiagonal
+            @test typeof(Diag*SymTri) <: Tridiagonal
         end
 
         @test inv(T)*Tfull ≈ Matrix(I, n, n)
