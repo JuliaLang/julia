@@ -99,7 +99,7 @@ lists a series of running tests; if they complete without error, you
 should be in good shape to start using Julia.
 
 You can read about [getting
-started](https://docs.julialang.org/en/stable/manual/getting-started/)
+started](https://docs.julialang.org/en/v1/manual/getting-started/)
 in the manual.
 
 In case this default build path did not work, detailed build instructions
