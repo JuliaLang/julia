@@ -2,6 +2,10 @@
 
 ## General
 
+### Is Julia named after someone or something?
+
+No.
+
 ### Why don't you compile Matlab/Python/R/… code to Julia?
 
 Since many people are familiar with the syntax of other dynamic languages, and lots of code has already been written in those languages, it is natural to wonder why we didn't just plug a Matlab or Python front-end into a Julia back-end (or “transpile” code to Julia) in order to get all the performance benefits of Julia without requiring programmers to learn a new language.  Simple, right?
