@@ -923,9 +923,12 @@ STATIC_INLINE void *jl_realloc_aligned(void *d, size_t sz, size_t oldsz,
     // Since there is no system realloc_aligned, we use the following strategy: Try realloc
     // and hope that it maintains alignment. If it doesn't, manually allocate again via the
     // (malloc, memcpy, and free) steps, below.
-    d = realloc(d, sz);
-    if (jl_is_aligned(d, align)) {
-        return d;
+    void *r = realloc(d, sz);
+    if (r != NULL && jl_is_aligned(r, align)) {
+        return r;
+    } else if (r != NULL) {
+        // (Don't overwrite d unless r is non-null; if realloc returns NULL, d is unchanged)
+        d = r;
     }
 
     void *b = jl_malloc_aligned(sz, align);
