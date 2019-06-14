@@ -903,4 +903,10 @@ end
     @test adjoint(factorize(adjoint(a))) == factorize(a)
 end
 
+@testset "Matrix log issue #32313" begin
+    for A in ([30 20; -50 -30], [10.0im 0; 0 -10.0im], randn(6,6))
+        @test exp(log(A)) ≈ A
+    end
+end
+
 end # module TestDense
