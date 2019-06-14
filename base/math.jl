@@ -523,6 +523,12 @@ sqrt(x::Real) = sqrt(float(x))
 
 Compute the hypotenuse ``\\sqrt{x^2+y^2}`` avoiding overflow and underflow.
 
+This code is an implementation of the algorithm described in:
+An Improved Algorithm for `hypot(a,b)`
+by Carlos F. Borges
+The article is available online at ArXiv at the link
+  https://arxiv.org/abs/1904.09481
+
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> a = 10^10;
@@ -537,53 +543,55 @@ Stacktrace:
 [...]
 ```
 """
-hypot(x::Number, y::Number) = hypot(promote(x, y)...)
-function hypot(x::T, y::T) where T<:Number
-    ax = abs(x)
-    ay = abs(y)
-    if ax < ay
-        ax, ay = ay, ax
-    end
-    if iszero(ax)
-        r = ay / oneunit(ax)
-    else
-        r = ay / ax
+hypot(x::Number, y::Number; kwargs...) = hypot(promote(x, y)...; kwargs...)
+hypot(x::Complex, y::Complex; kwargs...) = hypot(promote(abs(x),abs(y))...; kwargs...)
+hypot(x::Integer, y::Integer; kwargs...) = hypot(promote(float(x), float(y))...; kwargs...)
+function hypot(x::T,y::T; correctlyrounded::Bool=false) where T<:AbstractFloat
+    #Return Inf if either or both imputs is Inf (Compliance with IEEE754)
+    if isinf(x) || isinf(y)
+        return convert(T,Inf)
     end
 
-    rr = ax * sqrt(1 + r * r)
-
-    # Use type of rr to make sure that return type is the same for
-    # all branches
-    if isnan(r)
-        isinf(ax) && return oftype(rr, Inf)
-        isinf(ay) && return oftype(rr, Inf)
-        return oftype(rr, r)
-    else
-        return rr
+    # Order the operands
+    ax,ay = abs(x), abs(y)
+    if ay > ax
+        ax,ay = ay,ax
     end
+
+    # Widely varying operands
+    if ay <= ax*sqrt(eps(T)/2)  #Note: This also gets ay == 0
+        return ax
+    end
+
+    # Operands do not vary widely
+    scale = eps(sqrt(floatmin(T)))  #Rescaling constant
+    if ax > sqrt(floatmax(T)/2)
+        ax = ax*scale
+        ay = ay*scale
+        scale = inv(scale)
+    elseif ay < sqrt(floatmin(T))
+        ax = ax/scale
+        ay = ay/scale
+    else
+        scale = one(scale)
+    end
+    h = sqrt(muladd(ax,ax,ay*ay))
+    if Base.Math.FMA_NATIVE | correctlyrounded
+        h = sqrt(fma(ax,ax,ay*ay))
+        h_sq = h*h
+        ax_sq = ax*ax
+        h -= (fma(-ay,ay,h_sq-ax_sq) + fma(h,h,-h_sq) - fma(ax,ax,-ax_sq))/(2*h)
+    else
+        if h <= 2*ay
+            delta = h-ay
+            h -= muladd(delta,delta-2*(ax-ay),ax*(2*delta - ax))/(2*h)
+        else
+            delta = h-ax
+            h -= muladd(delta,delta,muladd(ay,(4*delta-ay),2*delta*(ax-2*ay)))/(2*h)
+        end
+    end
+    h*scale
 end
-
-"""
-    hypot(x...)
-
-Compute the hypotenuse ``\\sqrt{\\sum x_i^2}`` avoiding overflow and underflow.
-"""
-hypot(x::Number...) = sqrt(sum(abs2(y) for y in x))
-
-atan(y::Real, x::Real) = atan(promote(float(y),float(x))...)
-atan(y::T, x::T) where {T<:AbstractFloat} = Base.no_op_err("atan", T)
-
-max(x::T, y::T) where {T<:AbstractFloat} = ifelse((y > x) | (signbit(y) < signbit(x)),
-                                    ifelse(isnan(x), x, y), ifelse(isnan(y), y, x))
-
-
-min(x::T, y::T) where {T<:AbstractFloat} = ifelse((y < x) | (signbit(y) > signbit(x)),
-                                    ifelse(isnan(x), x, y), ifelse(isnan(y), y, x))
-
-minmax(x::T, y::T) where {T<:AbstractFloat} =
-    ifelse(isnan(x) | isnan(y), ifelse(isnan(x), (x,x), (y,y)),
-           ifelse((y > x) | (signbit(x) > signbit(y)), (x,y), (y,x)))
-
 
 """
     ldexp(x, n)
