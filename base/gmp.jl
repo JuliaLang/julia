@@ -52,9 +52,8 @@ mutable struct BigInt <: Signed
     size::Cint
     d::Ptr{Limb}
 
-    function BigInt()
-        b = new(zero(Cint), zero(Cint), C_NULL)
-        MPZ.init!(b)
+    function BigInt(; nbits::Integer=0)
+        b = MPZ.init2!(new(), nbits)
         finalizer(cglobal((:__gmpz_clear, :libgmp)), b)
         return b
     end
@@ -130,7 +129,7 @@ module MPZ
 # - a method modifying its input has a "!" appendend to its name, according to Julia's conventions
 # - some convenient methods are added (in addition to the pure MPZ ones), e.g. `add(a, b) = add!(BigInt(), a, b)`
 #   and `add!(x, a) = add!(x, x, a)`.
-using .Base.GMP: BigInt, Limb
+using .Base.GMP: BigInt, Limb, BITS_PER_LIMB
 
 const mpz_t = Ref{BigInt}
 const bitcnt_t = Culong
@@ -145,11 +144,14 @@ realloc2(a) = realloc2!(BigInt(), a)
 
 sizeinbase(a::BigInt, b) = Int(ccall((:__gmpz_sizeinbase, :libgmp), Csize_t, (mpz_t, Cint), a, b))
 
-for op in (:add, :sub, :mul, :fdiv_q, :tdiv_q, :fdiv_r, :tdiv_r, :gcd, :lcm, :and, :ior, :xor)
+for (op, nbits) in (:add => :(BITS_PER_LIMB*(1 + max(abs(a.size), abs(b.size)))),
+                    :sub => :(BITS_PER_LIMB*(1 + max(abs(a.size), abs(b.size)))),
+                    :mul => 0, :fdiv_q => 0, :tdiv_q => 0, :fdiv_r => 0, :tdiv_r => 0,
+                    :gcd => 0, :lcm => 0, :and => 0, :ior => 0, :xor => 0)
     op! = Symbol(op, :!)
     @eval begin
         $op!(x::BigInt, a::BigInt, b::BigInt) = (ccall($(gmpz(op)), Cvoid, (mpz_t, mpz_t, mpz_t), x, a, b); x)
-        $op(a::BigInt, b::BigInt) = $op!(BigInt(), a, b)
+        $op(a::BigInt, b::BigInt) = $op!(BigInt(nbits=$nbits), a, b)
         $op!(x::BigInt, b::BigInt) = $op!(x, x, b)
     end
 end

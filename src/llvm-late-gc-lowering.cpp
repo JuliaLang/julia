@@ -30,6 +30,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
+#include "llvm-pass-helpers.h"
 
 #define DEBUG_TYPE "late_lower_gcroot"
 #if JL_LLVM_VERSION < 70000
@@ -304,17 +305,11 @@ namespace llvm {
     void initializeLateLowerGCFramePass(PassRegistry &Registry);
 }
 
-extern std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr, bool isConstant=false);
-struct LateLowerGCFrame: public FunctionPass {
+struct LateLowerGCFrame: public FunctionPass, private JuliaPassContext {
     static char ID;
     LateLowerGCFrame() : FunctionPass(ID)
     {
         llvm::initializeDominatorTreeWrapperPassPass(*PassRegistry::getPassRegistry());
-        tbaa_gcframe = tbaa_make_child("jtbaa_gcframe").first;
-        MDNode *tbaa_data;
-        MDNode *tbaa_data_scalar;
-        std::tie(tbaa_data, tbaa_data_scalar) = tbaa_make_child("jtbaa_data");
-        tbaa_tag = tbaa_make_child("jtbaa_tag", tbaa_data_scalar).first;
     }
 
 protected:
@@ -326,28 +321,6 @@ protected:
     }
 
 private:
-    Type *T_prjlvalue;
-    Type *T_ppjlvalue;
-    Type *T_size;
-    Type *T_int8;
-    Type *T_int32;
-    Type *T_pint8;
-    Type *T_pjlvalue;
-    Type *T_pjlvalue_der;
-    Type *T_ppjlvalue_der;
-    MDNode *tbaa_gcframe;
-    MDNode *tbaa_tag;
-    Function *ptls_getter;
-    Function *gc_flush_func;
-    Function *gc_preserve_begin_func;
-    Function *gc_preserve_end_func;
-    Function *pointer_from_objref_func;
-    Function *alloc_obj_func;
-    Function *typeof_func;
-    Function *write_barrier_func;
-    Function *queueroot_func;
-    Function *pool_alloc_func;
-    Function *big_alloc_func;
     CallInst *ptlsStates;
 
     void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, SmallVector<int, 1> &&RefinedPtr = SmallVector<int, 1>());
@@ -369,17 +342,12 @@ private:
     State LocalScan(Function &F);
     void ComputeLiveness(State &S);
     void ComputeLiveSets(State &S);
-    void PushGCFrame(AllocaInst *gcframe, unsigned NRoots, Instruction *InsertAfter);
-    void PopGCFrame(AllocaInst *gcframe, Instruction *InsertBefore);
     std::vector<int> ColorRoots(const State &S);
     void PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame, Instruction *InsertionPoint);
     void PlaceGCFrameStores(State &S, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame);
     void PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>);
     bool doInitialization(Module &M) override;
-    void reinitFunctions(Module &M);
-    bool doFinalization(Module &) override;
     bool runOnFunction(Function &F) override;
-    Instruction *get_pgcstack(Instruction *ptlsStates);
     bool CleanupIR(Function &F, State *S=nullptr);
     void NoteUseChain(State &S, BBState &BBS, User *TheUser);
     SmallVector<int, 1> GetPHIRefinements(PHINode *phi, State &S);
@@ -1619,44 +1587,6 @@ std::vector<int> LateLowerGCFrame::ColorRoots(const State &S) {
     return Colors;
 }
 
-Instruction *LateLowerGCFrame::get_pgcstack(Instruction *ptlsStates)
-{
-    Constant *offset = ConstantInt::getSigned(T_int32, offsetof(jl_tls_states_t, pgcstack) / sizeof(void*));
-    return GetElementPtrInst::Create(nullptr,
-                                     ptlsStates,
-                                     ArrayRef<Value*>(offset),
-                                     "jl_pgcstack");
-}
-
-void LateLowerGCFrame::PushGCFrame(AllocaInst *gcframe, unsigned NRoots, Instruction *InsertAfter) {
-    IRBuilder<> builder(gcframe->getContext());
-    builder.SetInsertPoint(&*(++BasicBlock::iterator(InsertAfter)));
-    Instruction *inst =
-        builder.CreateStore(ConstantInt::get(T_size, NRoots << 1),
-                          builder.CreateBitCast(builder.CreateConstGEP1_32(gcframe, 0), T_size->getPointerTo()));
-    inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
-    Value *pgcstack = builder.Insert(get_pgcstack(ptlsStates));
-    inst = builder.CreateStore(builder.CreateLoad(pgcstack),
-                               builder.CreatePointerCast(builder.CreateConstGEP1_32(gcframe, 1), PointerType::get(T_ppjlvalue,0)));
-    inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
-    builder.CreateStore(gcframe, builder.CreateBitCast(pgcstack,
-        PointerType::get(PointerType::get(T_prjlvalue, 0), 0)));
-}
-
-void LateLowerGCFrame::PopGCFrame(AllocaInst *gcframe, Instruction *InsertBefore) {
-    IRBuilder<> builder(InsertBefore->getContext());
-    builder.SetInsertPoint(InsertBefore); // set insert *before* Ret
-    Instruction *gcpop =
-        (Instruction*)builder.CreateConstGEP1_32(gcframe, 1);
-    Instruction *inst = builder.CreateLoad(gcpop);
-    inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
-    inst = builder.CreateStore(inst,
-                               builder.CreateBitCast(
-                                 builder.Insert(get_pgcstack(ptlsStates)),
-                                 PointerType::get(T_prjlvalue, 0)));
-    inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
-}
-
 // Size of T is assumed to be `sizeof(void*)`
 Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Value *V)
 {
@@ -1755,30 +1685,36 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 UpdatePtrNumbering(CI, ASCI, S);
             } else if (alloc_obj_func && callee == alloc_obj_func) {
                 assert(CI->getNumArgOperands() == 3);
-                auto sz = (size_t)cast<ConstantInt>(CI->getArgOperand(1))->getZExtValue();
-                // This is strongly architecture and OS dependent
-                int osize;
-                int offset = jl_gc_classify_pools(sz, &osize);
+
+                // Initialize an IR builder.
                 IRBuilder<> builder(CI);
                 builder.SetCurrentDebugLocation(CI->getDebugLoc());
-                auto ptls = CI->getArgOperand(0);
-                CallInst *newI;
-                if (offset < 0) {
-                    newI = builder.CreateCall(big_alloc_func,
-                                              {ptls, ConstantInt::get(T_size,
-                                                                      sz + sizeof(void*))});
-                }
-                else {
-                    auto pool_offs = ConstantInt::get(T_int32, offset);
-                    auto pool_osize = ConstantInt::get(T_int32, osize);
-                    newI = builder.CreateCall(pool_alloc_func, {ptls, pool_offs, pool_osize});
-                }
-                newI->setAttributes(newI->getCalledFunction()->getAttributes());
+
+                // Create a call to the `julia.gc_alloc_bytes` intrinsic, which is like
+                // `julia.gc_alloc_obj` except it doesn't set the tag.
+                auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
+                auto newI = builder.CreateCall(
+                    allocBytesIntrinsic,
+                    {
+                        CI->getArgOperand(0),
+                        builder.CreateIntCast(
+                            CI->getArgOperand(1),
+                            allocBytesIntrinsic->getFunctionType()->getParamType(1),
+                            false)
+                    });
                 newI->takeName(CI);
-                auto store = builder.CreateStore(CI->getArgOperand(2),
-                                                 EmitTagPtr(builder, T_prjlvalue, newI));
+
+                // Set the tag.
+                auto store = builder.CreateStore(
+                    CI->getArgOperand(2),
+                    EmitTagPtr(builder, T_prjlvalue, newI));
                 store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
+
+                // Replace uses of the call to `julia.gc_alloc_obj` with the call to
+                // `julia.gc_alloc_bytes`.
                 CI->replaceAllUsesWith(newI);
+
+                // Update the pointer numbering.
                 UpdatePtrNumbering(CI, newI, S);
             } else if (typeof_func && callee == typeof_func) {
                 assert(CI->getNumArgOperands() == 1);
@@ -1887,7 +1823,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
         auto trigTerm = SplitBlockAndInsertIfThen(chldNotMarked, mayTrigTerm, false,
                                                   MDB.createBranchWeights(Weights));
         builder.SetInsertPoint(trigTerm);
-        builder.CreateCall(queueroot_func, parent);
+        builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);
         CI->eraseFromParent();
     }
     if (maxframeargs == 0 && Frame) {
@@ -1938,18 +1874,21 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
                                          const std::vector<int> &Colors, Value *GCFrame,
                                          Instruction *InsertionPoint) {
     Value *Val = GetPtrForNumber(S, R, InsertionPoint);
-    Value *args[1] = {
-        ConstantInt::get(T_int32, Colors[R]+MinColorRoot)
-    };
-    GetElementPtrInst *gep = GetElementPtrInst::Create(T_prjlvalue, GCFrame, makeArrayRef(args));
-    gep->insertBefore(InsertionPoint);
+
+    // Get the slot address.
+    auto slotAddress = CallInst::Create(
+        getOrDeclare(jl_intrinsics::getGCFrameSlot),
+        {GCFrame, ConstantInt::get(T_int32, Colors[R] + MinColorRoot)});
+
+    slotAddress->insertBefore(InsertionPoint);
+
     Val = MaybeExtractUnion(std::make_pair(Val, -1), InsertionPoint);
     // Pointee types don't have semantics, so the optimizer is
     // free to rewrite them if convenient. We need to change
     // it back here for the store.
     if (Val->getType() != T_prjlvalue)
         Val = new BitCastInst(Val, T_prjlvalue, "", InsertionPoint);
-    new StoreInst(Val, gep, InsertionPoint);
+    new StoreInst(Val, slotAddress, InsertionPoint);
 }
 
 void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
@@ -1986,43 +1925,28 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
     // Insert instructions for the actual gc frame
     if (MaxColor != -1 || S.Allocas.size() != 0) {
         unsigned NRoots = MaxColor + 1 + S.Allocas.size();
-        // Create GC Frame
-        AllocaInst *gcframe = new AllocaInst(T_prjlvalue, 0,
-            ConstantInt::get(T_int32, NRoots + 2), "gcframe");
+        // Create and push a GC frame.
+        auto gcframe = CallInst::Create(
+            getOrDeclare(jl_intrinsics::newGCFrame),
+            {ConstantInt::get(T_int32, NRoots)},
+            "gcframe");
         gcframe->insertBefore(&*F->getEntryBlock().begin());
-        // Zero out gcframe
-        BitCastInst *tempSlot_i8 = new BitCastInst(gcframe, Type::getInt8PtrTy(F->getContext()), "");
-        tempSlot_i8->insertAfter(gcframe);
-        Type *argsT[2] = {tempSlot_i8->getType(), T_int32};
-        Function *memset = Intrinsic::getDeclaration(F->getParent(), Intrinsic::memset, makeArrayRef(argsT));
-#if JL_LLVM_VERSION >= 70000
-        Value *args[4] = {
-            tempSlot_i8, // dest
-            ConstantInt::get(Type::getInt8Ty(F->getContext()), 0), // val
-            ConstantInt::get(T_int32, sizeof(jl_value_t*)*(NRoots+2)), // len
-            ConstantInt::get(Type::getInt1Ty(F->getContext()), 0)}; // volatile
-#else
-        Value *args[5] = {
-            tempSlot_i8, // dest
-            ConstantInt::get(Type::getInt8Ty(F->getContext()), 0), // val
-            ConstantInt::get(T_int32, sizeof(jl_value_t*)*(NRoots+2)), // len
-            ConstantInt::get(T_int32, 0), // align
-            ConstantInt::get(Type::getInt1Ty(F->getContext()), 0)}; // volatile
-#endif
-        CallInst *zeroing = CallInst::Create(memset, makeArrayRef(args));
-        zeroing->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
-        zeroing->insertAfter(tempSlot_i8);
-        // Push GC Frame
-        PushGCFrame(gcframe, NRoots, ptlsStates);
+
+        auto pushGcframe = CallInst::Create(
+            getOrDeclare(jl_intrinsics::pushGCFrame),
+            {gcframe, ConstantInt::get(T_int32, NRoots)});
+        pushGcframe->insertAfter(ptlsStates);
+
         // Replace Allocas
-        unsigned AllocaSlot = 2;
+        unsigned AllocaSlot = 0;
         for (AllocaInst *AI : S.Allocas) {
-            Value *args[1] = {
-                ConstantInt::get(T_int32, AllocaSlot++)
-            };
-            GetElementPtrInst *gep = GetElementPtrInst::Create(T_prjlvalue, gcframe, makeArrayRef(args));
-            gep->insertAfter(gcframe);
-            gep->takeName(AI);
+            // Pick a slot for the alloca.
+            auto slotAddress = CallInst::Create(
+                getOrDeclare(jl_intrinsics::getGCFrameSlot),
+                {gcframe, ConstantInt::get(T_int32, AllocaSlot++)});
+            slotAddress->insertAfter(gcframe);
+            slotAddress->takeName(AI);
+
             // Check for lifetime intrinsics on this alloca, we can't keep them
             // because we're changing the semantics
             std::vector<CallInst*> ToDelete;
@@ -2035,7 +1959,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
             }, AI);
             for (CallInst *II : ToDelete)
                 II->eraseFromParent();
-            AI->replaceAllUsesWith(gep);
+            AI->replaceAllUsesWith(slotAddress);
             AI->eraseFromParent();
         }
         unsigned MinColorRoot = AllocaSlot;
@@ -2044,154 +1968,32 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
         // Insert GCFrame pops
         for(Function::iterator I = F->begin(), E = F->end(); I != E; ++I) {
             if (isa<ReturnInst>(I->getTerminator())) {
-                PopGCFrame(gcframe, I->getTerminator());
+                auto popGcframe = CallInst::Create(
+                    getOrDeclare(jl_intrinsics::popGCFrame),
+                    {gcframe});
+                popGcframe->insertBefore(I->getTerminator());
             }
         }
     }
 }
 
-void LateLowerGCFrame::reinitFunctions(Module &M) {
-    ptls_getter = M.getFunction("julia.ptls_states");
-    gc_flush_func = M.getFunction("julia.gcroot_flush");
-    gc_preserve_begin_func = M.getFunction("llvm.julia.gc_preserve_begin");
-    gc_preserve_end_func = M.getFunction("llvm.julia.gc_preserve_end");
-    pointer_from_objref_func = M.getFunction("julia.pointer_from_objref");
-    typeof_func = M.getFunction("julia.typeof");
-    write_barrier_func = M.getFunction("julia.write_barrier");
-    alloc_obj_func = M.getFunction("julia.gc_alloc_obj");
-}
-
 bool LateLowerGCFrame::doInitialization(Module &M) {
-    ptls_getter = M.getFunction("julia.ptls_states");
-    auto &ctx = M.getContext();
-    T_size = M.getDataLayout().getIntPtrType(ctx);
-    T_int8 = Type::getInt8Ty(ctx);
-    T_pint8 = PointerType::get(T_int8, 0);
-    T_int32 = Type::getInt32Ty(ctx);
-    if ((write_barrier_func = M.getFunction("julia.write_barrier"))) {
-        T_prjlvalue = write_barrier_func->getFunctionType()->getParamType(0);
-        if (!(queueroot_func = M.getFunction("jl_gc_queue_root"))) {
-            queueroot_func = Function::Create(FunctionType::get(Type::getVoidTy(ctx),
-                                                                {T_prjlvalue}, false),
-                                              Function::ExternalLinkage, "jl_gc_queue_root", &M);
-            queueroot_func->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
-        }
-    }
-    else {
-        queueroot_func = nullptr;
-    }
-    pool_alloc_func = nullptr;
-    big_alloc_func = nullptr;
-    if ((alloc_obj_func = M.getFunction("julia.gc_alloc_obj"))) {
-        T_prjlvalue = alloc_obj_func->getReturnType();
-        if (!(pool_alloc_func = M.getFunction("jl_gc_pool_alloc"))) {
-            std::vector<Type*> args(0);
-            args.push_back(T_pint8);
-            args.push_back(T_int32);
-            args.push_back(T_int32);
-            pool_alloc_func = Function::Create(FunctionType::get(T_prjlvalue, args, false),
-                                               Function::ExternalLinkage, "jl_gc_pool_alloc", &M);
-            pool_alloc_func->setAttributes(AttributeList::get(M.getContext(),
-                alloc_obj_func->getAttributes().getFnAttributes(),
-                alloc_obj_func->getAttributes().getRetAttributes(),
-                None));
-        }
-        if (!(big_alloc_func = M.getFunction("jl_gc_big_alloc"))) {
-            std::vector<Type*> args(0);
-            args.push_back(T_pint8);
-            args.push_back(T_size);
-            big_alloc_func = Function::Create(FunctionType::get(T_prjlvalue, args, false),
-                                         Function::ExternalLinkage, "jl_gc_big_alloc", &M);
-            big_alloc_func->setAttributes(AttributeList::get(M.getContext(),
-                alloc_obj_func->getAttributes().getFnAttributes(),
-                alloc_obj_func->getAttributes().getRetAttributes(),
-                None));
-        }
-        auto T_jlvalue = cast<PointerType>(T_prjlvalue)->getElementType();
-        T_pjlvalue = PointerType::get(T_jlvalue, 0);
-        T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
-        T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
-        T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
-    }
-    else if (ptls_getter) {
-        auto functype = ptls_getter->getFunctionType();
-        T_ppjlvalue = cast<PointerType>(functype->getReturnType())->getElementType();
-        T_pjlvalue = cast<PointerType>(T_ppjlvalue)->getElementType();
-        auto T_jlvalue = cast<PointerType>(T_pjlvalue)->getElementType();
-        T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
-        T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
-        T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
-    }
-    else {
-        T_ppjlvalue = nullptr;
-        T_prjlvalue = nullptr;
-        T_pjlvalue = nullptr;
-        T_pjlvalue_der = nullptr;
-        T_ppjlvalue_der = nullptr;
-    }
-    GlobalValue *function_list[] = {queueroot_func, pool_alloc_func, big_alloc_func};
-    unsigned j = 0;
-    for (unsigned i = 0; i < sizeof(function_list) / sizeof(void*); i++) {
-        if (!function_list[i])
-            continue;
-        if (i != j)
-            function_list[j] = function_list[i];
-        j++;
-    }
-    if (j != 0)
-        appendToCompilerUsed(M, ArrayRef<GlobalValue*>(function_list, j));
-    return true;
-}
-
-bool LateLowerGCFrame::doFinalization(Module &M)
-{
-    auto used = M.getGlobalVariable("llvm.compiler.used");
-    if (!used)
-        return false;
-    GlobalValue *function_list[] = {queueroot_func, pool_alloc_func, big_alloc_func};
-    SmallPtrSet<Constant*, 16> InitAsSet(function_list,
-                                         function_list + sizeof(function_list) / sizeof(void*));
-    bool changed = false;
-    SmallVector<Constant*, 16> Init;
-    ConstantArray *CA = dyn_cast<ConstantArray>(used->getInitializer());
-    for (auto &Op : CA->operands()) {
-        Constant *C = cast_or_null<Constant>(Op);
-        if (InitAsSet.count(C->stripPointerCasts())) {
-            changed = true;
-            continue;
-        }
-        Init.push_back(C);
-    }
-    if (!changed)
-        return false;
-    used->eraseFromParent();
-    if (Init.empty())
-        return true;
-    ArrayType *ATy = ArrayType::get(T_pint8, Init.size());
-    used = new llvm::GlobalVariable(M, ATy, false, GlobalValue::AppendingLinkage,
-                                    ConstantArray::get(ATy, Init), "llvm.compiler.used");
-    used->setSection("llvm.metadata");
+    // Initialize platform-agnostic references.
+    initAll(M);
     return true;
 }
 
 bool LateLowerGCFrame::runOnFunction(Function &F) {
     LLVM_DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
     // Check availability of functions again since they might have been deleted.
-    reinitFunctions(*F.getParent());
+    initFunctions(*F.getParent());
     if (!ptls_getter)
         return CleanupIR(F);
-    ptlsStates = nullptr;
-    for (auto I = F.getEntryBlock().begin(), E = F.getEntryBlock().end();
-         ptls_getter && I != E; ++I) {
-        if (CallInst *callInst = dyn_cast<CallInst>(&*I)) {
-            if (callInst->getCalledValue() == ptls_getter) {
-                ptlsStates = callInst;
-                break;
-            }
-        }
-    }
+
+    ptlsStates = getPtls(F);
     if (!ptlsStates)
         return CleanupIR(F);
+
     State S = LocalScan(F);
     ComputeLiveness(S);
     std::vector<int> Colors = ColorRoots(S);

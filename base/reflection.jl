@@ -371,7 +371,7 @@ Return the size in bytes of each field-description entry in the layout array,
 located at `(dt.layout + sizeof(DataTypeLayout))`.
 Can be called on any `isconcretetype`.
 
-See also [`Base.fieldoffset`](@ref).
+See also [`fieldoffset`](@ref).
 """
 function datatype_fielddesc_type(dt::DataType)
     @_pure_meta
@@ -399,7 +399,7 @@ false
 isimmutable(@nospecialize(x)) = (@_pure_meta; !typeof(x).mutable)
 
 """
-    Base.isstructtype(T) -> Bool
+    isstructtype(T) -> Bool
 
 Determine whether type `T` was declared as a struct type
 (i.e. using the `struct` or `mutable struct` keyword).
@@ -414,7 +414,7 @@ function isstructtype(@nospecialize(t::Type))
 end
 
 """
-    Base.isprimitivetype(T) -> Bool
+    isprimitivetype(T) -> Bool
 
 Determine whether type `T` was declared as a primitive type
 (i.e. using the `primitive` keyword).
@@ -509,17 +509,17 @@ false
 isconcretetype(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && t.isconcretetype)
 
 """
-    Base.isabstracttype(T)
+    isabstracttype(T)
 
 Determine whether type `T` was declared as an abstract type
 (i.e. using the `abstract` keyword).
 
 # Examples
 ```jldoctest
-julia> Base.isabstracttype(AbstractArray)
+julia> isabstracttype(AbstractArray)
 true
 
-julia> Base.isabstracttype(Vector)
+julia> isabstracttype(Vector)
 false
 ```
 """
@@ -529,6 +529,14 @@ function isabstracttype(@nospecialize(t))
     # TODO: what to do for `Union`?
     return isa(t, DataType) && t.abstract
 end
+
+"""
+    Base.issingletontype(T)
+
+Determine whether type `T` has exactly one possible instance; for example, a
+struct type with no fields.
+"""
+issingletontype(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && isdefined(t, :instance))
 
 """
     Base.parameter_upper_bound(t::UnionAll, idx)
@@ -612,7 +620,7 @@ String
 fieldtype
 
 """
-    fieldindex(T, name::Symbol, err:Bool=true)
+    Base.fieldindex(T, name::Symbol, err:Bool=true)
 
 Get the index of a named field, throwing an error if the field does not exist (when err==true)
 or returning 0 (when err==false).
@@ -1114,12 +1122,23 @@ function which(m::Module, s::Symbol)
 end
 
 # function reflection
+
 """
     nameof(f::Function) -> Symbol
 
-Get the name of a generic `Function` as a symbol, or `:anonymous`.
+Get the name of a generic `Function` as a symbol. For anonymous functions,
+this is a compiler-generated name. For explicitly-declared subtypes of
+`Function`, it is the name of the function's type.
 """
-nameof(f::Function) = (typeof(f).name.mt::Core.MethodTable).name
+function nameof(f::Function)
+    t = typeof(f)
+    mt = t.name.mt::Core.MethodTable
+    if mt === Symbol.name.mt
+        # uses shared method table, so name is not unique to this function type
+        return nameof(t)
+    end
+    return mt.name
+end
 
 functionloc(m::Core.MethodInstance) = functionloc(m.def)
 
@@ -1232,7 +1251,7 @@ function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Sym
 end
 
 """
-    isambiguous(m1, m2; ambiguous_bottom=false) -> Bool
+    Base.isambiguous(m1, m2; ambiguous_bottom=false) -> Bool
 
 Determine whether two methods `m1` and `m2` (typically of the same
 function) are ambiguous.  This test is performed in the context of
@@ -1310,10 +1329,10 @@ has_bottom_parameter(t::Union) = has_bottom_parameter(t.a) & has_bottom_paramete
 has_bottom_parameter(t::TypeVar) = t.ub == Bottom || has_bottom_parameter(t.ub)
 has_bottom_parameter(::Any) = false
 
-min_world(m::Core.CodeInstance) = reinterpret(UInt, m.min_world)
-max_world(m::Core.CodeInstance) = reinterpret(UInt, m.max_world)
-min_world(m::Core.CodeInfo) = reinterpret(UInt, m.min_world)
-max_world(m::Core.CodeInfo) = reinterpret(UInt, m.max_world)
+min_world(m::Core.CodeInstance) = m.min_world
+max_world(m::Core.CodeInstance) = m.max_world
+min_world(m::Core.CodeInfo) = m.min_world
+max_world(m::Core.CodeInfo) = m.max_world
 get_world_counter() = ccall(:jl_get_world_counter, UInt, ())
 
 

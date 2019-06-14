@@ -2,7 +2,6 @@
 
 include("formatting.jl")
 
-const margin = 2
 cols(io) = displaysize(io)[2]
 
 function term(io::IO, content::Vector, cols)

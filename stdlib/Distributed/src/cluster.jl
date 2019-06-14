@@ -248,7 +248,8 @@ function start_worker(out::IO, cookie::AbstractString=readline(stdin); close_std
     print(out, '\n')
     flush(out)
 
-    disable_nagle(sock)
+    Sockets.nagle(sock, false)
+    Sockets.quickack(sock, true)
 
     if ccall(:jl_running_on_valgrind,Cint,()) != 0
         println(out, "PID = $(getpid())")
@@ -1176,18 +1177,6 @@ function interrupt(pids::AbstractVector=workers())
     @sync begin
         for pid in pids
             @async interrupt(pid)
-        end
-    end
-end
-
-
-function disable_nagle(sock)
-    # disable nagle on all OSes
-    ccall(:uv_tcp_nodelay, Cint, (Ptr{Cvoid}, Cint), sock.handle, 1)
-    @static if Sys.islinux()
-        # tcp_quickack is a linux only option
-        if ccall(:jl_tcp_quickack, Cint, (Ptr{Cvoid}, Cint), sock.handle, 1) < 0
-            @warn "Networking unoptimized ( Error enabling TCP_QUICKACK : $(Libc.strerror(Libc.errno())) )" maxlog=1
         end
     end
 end

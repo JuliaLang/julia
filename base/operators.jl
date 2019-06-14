@@ -160,11 +160,11 @@ isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x
 
 function ==(T::Type, S::Type)
     @_pure_meta
-    T<:S && S<:T
+    return ccall(:jl_types_equal, Cint, (Any, Any), T, S) != 0
 end
 function !=(T::Type, S::Type)
     @_pure_meta
-    !(T == S)
+    return !(T == S)
 end
 ==(T::TypeVar, S::Type) = false
 ==(T::Type, S::TypeVar) = false

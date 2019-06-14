@@ -369,7 +369,8 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
             | (dt->isdispatchtuple << 2)
             | (dt->isbitstype << 3)
             | (dt->zeroinit << 4)
-            | (dt->isinlinealloc << 5));
+            | (dt->isinlinealloc << 5)
+            | (dt->has_concrete_subtype << 6));
     if (!dt->abstract) {
         write_uint16(s->s, dt->ninitialized);
     }
@@ -1403,6 +1404,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     dt->isbitstype = (memflags >> 3) & 1;
     dt->zeroinit = (memflags >> 4) & 1;
     dt->isinlinealloc = (memflags >> 5) & 1;
+    dt->has_concrete_subtype = (memflags >> 6) & 1;
     dt->types = NULL;
     dt->parameters = NULL;
     dt->name = NULL;
@@ -2605,7 +2607,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_code_instance_
     jl_value_t *slotnames = jl_deserialize_value(&s, NULL);
     if (!jl_is_string(slotnames))
         slotnames = m->slot_syms;
-    code->slotnames = jl_uncompress_argnames(m->slot_syms);
+    code->slotnames = jl_uncompress_argnames(slotnames);
 
     size_t nstmt = jl_array_len(code->code);
     code->codelocs = (jl_value_t*)jl_alloc_array_1d(jl_array_int32_type, nstmt);
@@ -3072,6 +3074,7 @@ static jl_method_t *jl_lookup_method_worldset(jl_methtable_t *mt, jl_datatype_t 
     while (1) {
         entry = jl_typemap_assoc_by_type(
             mt->defs, (jl_value_t*)sig, NULL, /*subtype*/0, /*offs*/0, world, /*max_world_mask*/(~(size_t)0) >> 1);
+        assert(entry);
         jl_method_t *_new = (jl_method_t*)entry->func.value;
         world = lowerbound_dependent_world_set(_new->primary_world, dependent_worlds);
         if (world == _new->primary_world) {
@@ -3304,7 +3307,8 @@ void jl_init_serializer(void)
                      jl_voidpointer_type, jl_newvarnode_type, jl_abstractstring_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
                      jl_emptytuple_type, jl_array_uint8_type, jl_code_info_type,
-                     jl_typeofbottom_type, jl_namedtuple_type, jl_array_int32_type,
+                     jl_typeofbottom_type, jl_typeofbottom_type->super,
+                     jl_namedtuple_type, jl_array_int32_type,
                      jl_typedslot_type, jl_uint32_type, jl_uint64_type,
                      jl_type_type_mt, jl_nonfunction_mt,
 

@@ -1312,36 +1312,34 @@ function findnz(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     return (I, J, V)
 end
 
-function _sparse_findnextnz(m::SparseMatrixCSC, i::Integer)
-    if i > length(m)
-        return nothing
-    end
-    row, col = Tuple(CartesianIndices(m)[i])
+function _sparse_findnextnz(m::SparseMatrixCSC, ij::CartesianIndex{2})
+    row, col = Tuple(ij)
+    col > m.n && return nothing
+
     lo, hi = m.colptr[col], m.colptr[col+1]
     n = searchsortedfirst(m.rowval, row, lo, hi-1, Base.Order.Forward)
     if lo <= n <= hi-1
-        return LinearIndices(m)[m.rowval[n], col]
+        return CartesianIndex(m.rowval[n], col)
     end
-    nextcol = findnext(c->(c>hi), m.colptr, col+1)
-    nextcol === nothing && return nothing
+    nextcol = searchsortedfirst(m.colptr, hi + 1, col + 1, length(m.colptr), Base.Order.Forward)
+    nextcol > length(m.colptr) && return nothing
     nextlo = m.colptr[nextcol-1]
-    return LinearIndices(m)[m.rowval[nextlo], nextcol-1]
+    return CartesianIndex(m.rowval[nextlo], nextcol - 1)
 end
 
-function _sparse_findprevnz(m::SparseMatrixCSC, i::Integer)
-    if iszero(i)
-        return nothing
-    end
-    row, col = Tuple(CartesianIndices(m)[i])
+function _sparse_findprevnz(m::SparseMatrixCSC, ij::CartesianIndex{2})
+    row, col = Tuple(ij)
+    iszero(col) && return nothing
+
     lo, hi = m.colptr[col], m.colptr[col+1]
     n = searchsortedlast(m.rowval, row, lo, hi-1, Base.Order.Forward)
     if lo <= n <= hi-1
-        return LinearIndices(m)[m.rowval[n], col]
+        return CartesianIndex(m.rowval[n], col)
     end
-    prevcol = findprev(c->(c<lo), m.colptr, col-1)
-    prevcol === nothing && return nothing
+    prevcol = searchsortedlast(m.colptr, lo - 1, 1, col - 1, Base.Order.Forward)
+    prevcol < 1 && return nothing
     prevhi = m.colptr[prevcol+1]
-    return LinearIndices(m)[m.rowval[prevhi-1], prevcol]
+    return CartesianIndex(m.rowval[prevhi-1], prevcol)
 end
 
 
@@ -1359,77 +1357,6 @@ function sparse_sortedlinearindices!(I::Vector{Ti}, V::Vector, m::Int, n::Int) w
         colm += m
     end
     return SparseMatrixCSC(m, n, colptr, I, V)
-end
-
-# findfirst/next/prev/last
-function _idxfirstnz(A::SparseMatrixCSC, ij::CartesianIndex{2})
-    nzr = nzrange(A, ij[2])
-    searchk = searchsortedfirst(A.rowval, ij[1], first(nzr), last(nzr), Forward)
-    return _idxnextnz(A, searchk)
-end
-
-function _idxlastnz(A::SparseMatrixCSC, ij::CartesianIndex{2})
-    nzr = nzrange(A, ij[2])
-    searchk = searchsortedlast(A.rowval, ij[1], first(nzr), last(nzr), Forward)
-    return _idxprevnz(A, searchk)
-end
-
-function _idxnextnz(A::SparseMatrixCSC, idx::Integer)
-    nnza = nnz(A)
-    nzval = nonzeros(A)
-    z = zero(eltype(A))
-    while idx <= nnza
-        nzv = nzval[idx]
-        !isequal(nzv, z) && return idx, nzv
-        idx += 1
-    end
-    return zero(idx), z
-end
-
-function _idxprevnz(A::SparseMatrixCSC, idx::Integer)
-    nzval = nonzeros(A)
-    z = zero(eltype(A))
-    while idx > 0
-        nzv = nzval[idx]
-        !isequal(nzv, z) && return idx, nzv
-        idx -= 1
-    end
-    return zero(idx), z
-end
-
-function _idx_to_cartesian(A::SparseMatrixCSC, idx::Integer)
-    rowval = rowvals(A)
-    i = rowval[idx]
-    j = searchsortedlast(A.colptr, idx, 1, size(A, 2), Base.Order.Forward)
-    return CartesianIndex(i, j)
-end
-
-function Base.findnext(pred::Function, A::SparseMatrixCSC, ij::CartesianIndex{2})
-    if nnz(A) == length(A) || pred(zero(eltype(A)))
-        return invoke(findnext, Tuple{Function,Any,Any}, pred, A, ij)
-    end
-    idx, nzv = _idxfirstnz(A, ij)
-    while idx > 0
-        if pred(nzv)
-            return _idx_to_cartesian(A, idx)
-        end
-        idx, nzv = _idxnextnz(A, idx + 1)
-    end
-    return nothing
-end
-
-function Base.findprev(pred::Function, A::SparseMatrixCSC, ij::CartesianIndex{2})
-    if nnz(A) == length(A) || pred(zero(eltype(A)))
-        return invoke(findprev, Tuple{Function,Any,Any}, pred, A, ij)
-    end
-    idx, nzv = _idxlastnz(A, ij)
-    while idx > 0
-        if pred(nzv)
-            return _idx_to_cartesian(A, idx)
-        end
-        idx, nzv = _idxprevnz(A, idx - 1)
-    end
-    return nothing
 end
 
 """

@@ -9,6 +9,7 @@ SetCompress off
 CRCCheck off
 SetDataBlockOptimize on
 ShowInstDetails nevershow
+ShowUninstDetails nevershow
 RequestExecutionLevel user
 BrandingText " "
 
@@ -29,6 +30,9 @@ Caption "Julia Installer" # title bar
 !define MUI_ICON "${JULIAHOME}\contrib\windows\julia.ico"
 !define MUI_UNICON "${JULIAHOME}\contrib\windows\julia.ico"
 !define MUI_WELCOMEFINISHPAGE_BITMAP "${JULIAHOME}\contrib\windows\julia-banner.bmp"
+!define MUI_HEADERIMAGE
+!define MUI_HEADERIMAGE_BITMAP "${JULIAHOME}\contrib\windows\julia-header.bmp"
+!define MUI_HEADERIMAGE_RIGHT
 
 # Uninstall settings
 !define UninstLog "uninstall.log"
@@ -48,7 +52,7 @@ FunctionEnd
 Function createDesktopLink
   ${NSD_GetState} $Checkbox $0
   ${If} $0 <> 0
-    CreateShortCut "$DESKTOP\julia.lnk" "$INSTDIR\bin\julia.exe"
+    CreateShortCut "$DESKTOP\julia.lnk" "$INSTDIR\bin\julia.exe" "" "$INSTDIR\bin\julia.exe" 0
   ${EndIf}
 FunctionEnd
 
@@ -103,7 +107,7 @@ Section "Dummy Section" SecDummy
     SetOutPath $INSTDIR
     File /a /r "julia-${Commit}\*"
     WriteUninstaller "$INSTDIR\uninstall.exe"
-    CreateShortcut "$INSTDIR\julia.lnk" "$INSTDIR\bin\julia.exe"
+    CreateShortcut "$INSTDIR\julia.lnk" "$INSTDIR\bin\julia.exe" "" "$INSTDIR\bin\julia.exe" 0
 
     # ARP entries
     WriteRegStr HKCU "${ARP}" \

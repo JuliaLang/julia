@@ -435,7 +435,7 @@ function typeof_tfunc(@nospecialize(t))
     t = widenconst(t)
     if isType(t)
         tp = t.parameters[1]
-        if issingletontype(tp)
+        if hasuniquerep(tp)
             return Const(typeof(tp))
         end
     elseif isa(t, DataType)
@@ -914,7 +914,7 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
             exactft1 = exact || (!has_free_typevars(ft1) && u.name !== Tuple.name)
             ft1 = rewrap_unionall(ft1, s)
             if exactft1
-                if issingletontype(ft1)
+                if hasuniquerep(ft1)
                     ft1 = Const(ft1) # ft unique via type cache
                 else
                     ft1 = Type{ft1}
@@ -947,7 +947,7 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
     exactft = exact || (!has_free_typevars(ft) && u.name !== Tuple.name)
     ft = rewrap_unionall(ft, s)
     if exactft
-        if issingletontype(ft)
+        if hasuniquerep(ft)
             return Const(ft) # ft unique via type cache
         end
         return Type{ft}
@@ -1041,7 +1041,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
             ai = args[i]
             if isType(ai)
                 aty = ai.parameters[1]
-                allconst &= issingletontype(aty)
+                allconst &= hasuniquerep(aty)
             else
                 aty = (ai::Const).val
             end
@@ -1174,7 +1174,7 @@ function tuple_tfunc(atypes::Vector{Any})
             x = widenconst(x)
             if isType(x)
                 xparam = x.parameters[1]
-                if issingletontype(xparam) || xparam === Bottom
+                if hasuniquerep(xparam) || xparam === Bottom
                     params[i] = typeof(xparam)
                 else
                     params[i] = Type
@@ -1429,7 +1429,7 @@ function return_type_tfunc(argtypes::Vector{Any}, vtypes::VarTable, sv::Inferenc
                     if isa(rt, Const)
                         # output was computed to be constant
                         return Const(typeof(rt.val))
-                    elseif issingletontype(rt) || rt === Bottom
+                    elseif hasuniquerep(rt) || rt === Bottom
                         # output type was known for certain
                         return Const(rt)
                     elseif (isa(tt, Const) || isconstType(tt)) &&

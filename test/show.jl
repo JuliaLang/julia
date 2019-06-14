@@ -741,6 +741,23 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T,N}, indices::Vararg{$Int,N})")
 @test sprint(show, :(function f end)) == ":(function f end)"
 @test_repr "function g end"
 
+# Printing of macro definitions
+@test sprint(show, :(macro m end)) == ":(macro m end)"
+@test_repr "macro m end"
+@test sprint(show, Expr(:macro, Expr(:call, :m, :ex), Expr(:block, :m))) ==
+      ":(macro m(ex)\n      m\n  end)"
+@test_repr """macro identity(ex)
+    # line meta
+    esc(ex)
+end"""
+@test_repr """macro m(a,b)
+    # line meta
+    quote
+        # line meta
+        \$a + \$b
+    end
+end"""
+
 # Issue #15765 printing of continue and break
 @test sprint(show, :(continue)) == ":(continue)"
 @test sprint(show, :(break)) == ":(break)"
@@ -1278,11 +1295,30 @@ end
     end
 end
 
+function _methodsstr(f)
+    buf = IOBuffer()
+    show(buf, methods(f))
+    String(take!(buf))
+end
+
+@testset "show function methods" begin
+    @test occursin("methods for generic function \"sin\":", _methodsstr(sin))
+end
+@testset "show macro methods" begin
+    @test startswith(_methodsstr(getfield(Base,Symbol("@show"))), "# 1 method for macro \"@show\":")
+end
+@testset "show constructor methods" begin
+    @test occursin("methods for type constructor:\n", _methodsstr(Vector))
+end
+@testset "show builtin methods" begin
+    @test startswith(_methodsstr(typeof), "# built-in function; no methods")
+end
+@testset "show callable object methods" begin
+    @test occursin("methods:", _methodsstr(:))
+end
 @testset "#20111 show for function" begin
     K20111(x) = y -> x
-    buf = IOBuffer()
-    show(buf, methods(K20111(1)))
-    @test occursin(" 1 method for generic function", String(take!(buf)))
+    @test startswith(_methodsstr(K20111(1)), "# 1 method for anonymous function")
 end
 
 @generated f22798(x::Integer, y) = :x
@@ -1318,6 +1354,11 @@ end
     @test Base.inds2string(tuple(BigInt(10))) == "10"
     @test summary(BigInt(1):BigInt(10)) == "10-element UnitRange{BigInt}"
     @test summary(Base.OneTo(BigInt(10))) == "10-element Base.OneTo{BigInt}"
+end
+
+@testset "Tuple summary" begin
+    @test summary((1,2,3)) == "(1, 2, 3)"
+    @test summary((:a, "b", 'c')) == "(:a, \"b\", 'c')"
 end
 
 # Tests for code_typed linetable annotations
@@ -1457,8 +1498,10 @@ replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color =>
 @test repr(Symbol("a\$")) == "Symbol(\"a\\\$\")"
 
 @test string(sin) == "sin"
+@test string(:) == "Colon()"
 @test string(Iterators.flatten) == "flatten"
 @test Symbol(Iterators.flatten) === :flatten
+@test startswith(string(x->x), "#")
 
 # printing of bools and bool arrays
 @testset "Bool" begin
@@ -1477,3 +1520,13 @@ Z = Array{Float64}(undef,0,0)
 
 # issue #31065, do not print parentheses for nested dot expressions
 @test sprint(Base.show_unquoted, :(foo.x.x)) == "foo.x.x"
+
+@testset "show_delim_array" begin
+    sdastr(f, n) =  # sda: Show Delim Array
+        sprint((io, x) -> Base.show_delim_array(io, x, "[", ",", "]", false, f, n), Iterators.take(1:f+n, f+n))
+    @test sdastr(1, 0) == "[1]"
+    @test sdastr(1, 1) == "[1]"
+    @test sdastr(1, 2) == "[1, 2]"
+    @test sdastr(2, 2) == "[2, 3]"
+    @test sdastr(3, 3) == "[3, 4, 5]"
+end

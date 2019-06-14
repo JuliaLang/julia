@@ -33,11 +33,7 @@ function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
         print(io, ": attempt to access ")
-        if isa(ex.a, AbstractArray)
-            summary(io, ex.a)
-        else
-            show(io, MIME"text/plain"(), ex.a)
-        end
+        summary(io, ex.a)
         if isdefined(ex, :i)
             !isa(ex.a, AbstractArray) && print(io, "\n ")
             print(io, " at index [")

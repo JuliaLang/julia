@@ -160,11 +160,11 @@ static void jl_uv_exitcleanup_add(uv_handle_t *handle, struct uv_shutdown_queue 
     struct uv_shutdown_queue_item *item = (struct uv_shutdown_queue_item*)malloc(sizeof(struct uv_shutdown_queue_item));
     item->h = handle;
     item->next = NULL;
-    JL_UV_LOCK();
-    if (queue->last) queue->last->next = item;
-    if (!queue->first) queue->first = item;
+    if (queue->last)
+        queue->last->next = item;
+    if (!queue->first)
+        queue->first = item;
     queue->last = item;
-    JL_UV_UNLOCK();
 }
 
 static void jl_uv_exitcleanup_walk(uv_handle_t *handle, void *arg)
@@ -297,8 +297,8 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 
     // force libuv to spin until everything has finished closing
     loop->stop_flag = 0;
-    JL_UV_UNLOCK();
     while (uv_run(loop, UV_RUN_DEFAULT)) { }
+    JL_UV_UNLOCK();
 
     // TODO: Destroy threads
 
@@ -397,6 +397,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
         {
             int nullfd;
             nullfd = open("/dev/null", O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH /* 0666 */);
+            assert(nullfd != -1);
             dup2(nullfd, fd);
             close(nullfd);
         }
@@ -627,11 +628,6 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         jl_options.outputbc = abspath(jl_options.outputbc, 0);
     if (jl_options.machine_file)
         jl_options.machine_file = abspath(jl_options.machine_file, 0);
-    if (jl_options.project
-            && strcmp(jl_options.project, "@.") != 0
-            && strcmp(jl_options.project, "@") != 0
-            && strcmp(jl_options.project, "") != 0)
-        jl_options.project = abspath(jl_options.project, 0);
     if (jl_options.output_code_coverage)
         jl_options.output_code_coverage = absformat(jl_options.output_code_coverage);
 
@@ -746,10 +742,11 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_error("cannot generate code-coverage or track allocation information while generating a .o or .bc output file");
     }
 
+    jl_gc_init();
+
     jl_init_threading();
     jl_init_intrinsic_properties();
 
-    jl_gc_init();
     jl_gc_enable(0);
 
     jl_resolve_sysimg_location(rel);
@@ -794,6 +791,11 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     // it does "using Base" if Base is available.
     if (jl_base_module != NULL) {
         jl_add_standard_imports(jl_main_module);
+        jl_value_t *maininclude = jl_get_global(jl_base_module, jl_symbol("MainInclude"));
+        if (maininclude && jl_is_module(maininclude)) {
+            jl_module_import(jl_main_module, (jl_module_t*)maininclude, jl_symbol("include"));
+            jl_module_import(jl_main_module, (jl_module_t*)maininclude, jl_symbol("eval"));
+        }
         // Do initialization needed before starting child threads
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("__preinit_threads__"));
         if (f) {

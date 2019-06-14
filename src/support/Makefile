@@ -61,11 +61,11 @@ endif
 release: $(BUILDDIR)/libsupport.a
 debug: $(BUILDDIR)/libsupport-debug.a
 
-$(BUILDDIR)/libsupport.a: $(OBJS)
+$(BUILDDIR)/libsupport.a: $(OBJS) | $(BUILDIR)
 	rm -rf $@
 	@$(call PRINT_LINK, $(AR) -rcs $@ $^)
 
-$(BUILDDIR)/libsupport-debug.a: $(DOBJS)
+$(BUILDDIR)/libsupport-debug.a: $(DOBJS) | $(BUILDDIR)
 	rm -rf $@
 	@$(call PRINT_LINK, $(AR) -rcs $@ $^)
 

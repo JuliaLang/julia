@@ -178,7 +178,7 @@ Julia function. The arguments to [`@cfunction`](@ref) are:
 !!! note
     Currently, only the platform-default C calling convention is supported. This means that
     `@cfunction`-generated pointers cannot be used in calls where WINAPI expects `stdcall`
-    function on 32-bit windows, but can be used on WIN64 (where `stdcall` is unified with the
+    function on 32-bit Windows, but can be used on WIN64 (where `stdcall` is unified with the
     C calling convention).
 
 A classic example is the standard C library `qsort` function, declared as:

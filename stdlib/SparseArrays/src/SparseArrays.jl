@@ -13,7 +13,7 @@ using LinearAlgebra
 import Base: +, -, *, \, /, &, |, xor, ==
 import LinearAlgebra: mul!, ldiv!, rdiv!, cholesky, adjoint!, diag, eigen, dot,
     issymmetric, istril, istriu, lu, tr, transpose!, tril!, triu!,
-    cond, diagm, factorize, ishermitian, norm, opnorm, lmul!, rmul!, tril, triu
+    cond, diagm, factorize, ishermitian, norm, opnorm, lmul!, rmul!, tril, triu, matprod
 
 import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
     atan, atand, atanh, broadcast!, conj!, cos, cosc, cosd, cosh, cospi, cot,
@@ -52,7 +52,6 @@ similar(D::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzero
 similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
-matprod(x, y) = x*y + x*y
 const BiTriSym = Union{Bidiagonal,SymTridiagonal,Tridiagonal}
 function *(A::BiTriSym, B::BiTriSym)
     TS = promote_op(matprod, eltype(A), eltype(B))

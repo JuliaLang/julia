@@ -74,8 +74,8 @@ typedef struct {
 
 extern void (*ios_set_io_wait_func)(int);
 /* low-level interface functions */
-JL_DLLEXPORT size_t ios_read(ios_t *s, char *dest, size_t n);
-JL_DLLEXPORT size_t ios_readall(ios_t *s, char *dest, size_t n);
+JL_DLLEXPORT size_t ios_read(ios_t *s, char *dest, size_t n) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t ios_readall(ios_t *s, char *dest, size_t n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t ios_write(ios_t *s, const char *data, size_t n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int64_t ios_seek(ios_t *s, int64_t pos) JL_NOTSAFEPOINT; // absolute seek
 JL_DLLEXPORT int64_t ios_seek_end(ios_t *s);
@@ -123,7 +123,7 @@ JL_DLLEXPORT int ios_vprintf(ios_t *s, const char *format, va_list args);
 /* high-level stream functions - input */
 JL_DLLEXPORT int ios_getutf8(ios_t *s, uint32_t *pwc);
 JL_DLLEXPORT int ios_peekutf8(ios_t *s, uint32_t *pwc);
-JL_DLLEXPORT char *ios_readline(ios_t *s);
+JL_DLLEXPORT char *ios_readline(ios_t *s) JL_NOTSAFEPOINT;
 
 // discard data buffered for reading
 JL_DLLEXPORT void ios_purge(ios_t *s);

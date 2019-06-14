@@ -74,6 +74,12 @@ implemented for a custom type, so should be `symmetric_type`, and vice versa.
 function symmetric_type(::Type{T}) where {S, T<:AbstractMatrix{S}}
     return Symmetric{Union{S, promote_op(transpose, S), symmetric_type(S)}, T}
 end
+function symmetric_type(::Type{T}) where {S<:Number, T<:AbstractMatrix{S}}
+    return Symmetric{S, T}
+end
+function symmetric_type(::Type{T}) where {S<:AbstractMatrix, T<:AbstractMatrix{S}}
+    return Symmetric{AbstractMatrix, T}
+end
 symmetric_type(::Type{T}) where {T<:Number} = T
 
 struct Hermitian{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
@@ -147,8 +153,14 @@ The type of the object returned by `hermitian(::T, ::Symbol)`. For matrices, thi
 appropriately typed `Hermitian`, for `Number`s, it is the original type. If `hermitian` is
 implemented for a custom type, so should be `hermitian_type`, and vice versa.
 """
-function hermitian_type(::Type{T}) where {S,T<:AbstractMatrix{S}}
+function hermitian_type(::Type{T}) where {S, T<:AbstractMatrix{S}}
     return Hermitian{Union{S, promote_op(adjoint, S), hermitian_type(S)}, T}
+end
+function hermitian_type(::Type{T}) where {S<:Number, T<:AbstractMatrix{S}}
+    return Hermitian{S, T}
+end
+function hermitian_type(::Type{T}) where {S<:AbstractMatrix, T<:AbstractMatrix{S}}
+    return Hermitian{AbstractMatrix, T}
 end
 hermitian_type(::Type{T}) where {T<:Number} = T
 

@@ -896,14 +896,14 @@ function append!(a::Vector, items::AbstractVector)
     return a
 end
 
-append!(a::Vector, iter) = _append!(a, IteratorSize(iter), iter)
-push!(a::Vector, iter...) = append!(a, iter)
+append!(a::AbstractVector, iter) = _append!(a, IteratorSize(iter), iter)
+push!(a::AbstractVector, iter...) = append!(a, iter)
 
 function _append!(a, ::Union{HasLength,HasShape}, iter)
-    require_one_based_indexing(a)
     n = length(a)
+    i = lastindex(a)
     resize!(a, n+length(iter))
-    @inbounds for (i,item) in zip(n+1:length(a), iter)
+    @inbounds for (i, item) in zip(i+1:lastindex(a), iter)
         a[i] = item
     end
     a

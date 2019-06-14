@@ -187,12 +187,32 @@ function abstract_call_method_with_const_args(@nospecialize(rettype), @nospecial
         end
     end
     haveconst || improvable_via_constant_propagation(rettype) || return Any
-    sig = match[1]
-    sparams = match[2]::SimpleVector
+    if nargs > 1
+        if istopfunction(f, :getindex) || istopfunction(f, :setindex!)
+            arrty = argtypes[2]
+            # don't propagate constant index into indexing of non-constant array
+            if arrty isa Type && arrty <: AbstractArray && !issingletontype(arrty)
+                return Any
+            end
+        elseif istopfunction(f, :iterate)
+            itrty = argtypes[2]
+            if itrty isa Type && !issingletontype(itrty)
+                return Any
+            end
+        end
+    end
+    if !allconst && (istopfunction(f, :+) || istopfunction(f, :-) || istopfunction(f, :*) ||
+                     istopfunction(f, :(==)) || istopfunction(f, :!=) ||
+                     istopfunction(f, :<=) || istopfunction(f, :>=) || istopfunction(f, :<) || istopfunction(f, :>) ||
+                     istopfunction(f, :<<) || istopfunction(f, :>>))
+        return Any
+    end
     force_inference = allconst || sv.params.aggressive_constant_propagation
     if istopfunction(f, :getproperty) || istopfunction(f, :setproperty!)
         force_inference = true
     end
+    sig = match[1]
+    sparams = match[2]::SimpleVector
     mi = specialize_method(method, sig, sparams, !force_inference)
     mi === nothing && return Any
     mi = mi::MethodInstance

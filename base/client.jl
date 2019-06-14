@@ -427,6 +427,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
     nothing
 end
 
+# MainInclude exists to hide Main.include and eval from `names(Main)`.
 baremodule MainInclude
 include(fname::AbstractString) = Main.Base.include(Main, fname)
 eval(x) = Core.eval(Main, x)
@@ -459,7 +460,6 @@ MainInclude.include
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
-    @eval Main import Base.MainInclude: eval, include
     try
         exec_options(JLOptions())
     catch

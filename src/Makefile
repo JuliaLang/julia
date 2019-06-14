@@ -39,13 +39,15 @@ ifeq ($(OS),FreeBSD)
 FLAGS += -I$(LOCALBASE)/include
 endif
 
-SRCS := \
+RUNTIME_C_SRCS := \
 	jltypes gf typemap ast builtins module interpreter symbol \
 	dlload sys init task array dump staticdata toplevel jl_uv datatype \
-	simplevector APInt-C runtime_intrinsics runtime_ccall precompile \
+	simplevector runtime_intrinsics precompile \
 	threading partr stackwalk gc gc-debug gc-pages gc-stacks method \
-	jlapi signal-handling safepoint jloptions timing subtype rtutils \
-	crc32c processor
+	jlapi signal-handling safepoint jloptions timing subtype \
+	crc32c
+RUNTIME_SRCS := APInt-C runtime_ccall processor rtutils $(RUNTIME_C_SRCS)
+SRCS := $(RUNTIME_SRCS)
 
 ifeq ($(USEMSVC), 1)
 SRCS += getopt
@@ -55,9 +57,9 @@ LLVMLINK :=
 
 ifeq ($(JULIACODEGEN),LLVM)
 SRCS += codegen jitlayers disasm debuginfo llvm-simdloop llvm-ptls llvm-muladd \
-	llvm-late-gc-lowering llvm-lower-handlers llvm-gc-invariant-verifier \
-	llvm-propagate-addrspaces llvm-multiversioning llvm-alloc-opt cgmemmgr \
-	llvm-api
+	llvm-final-gc-lowering llvm-pass-helpers llvm-late-gc-lowering \
+	llvm-lower-handlers llvm-gc-invariant-verifier llvm-propagate-addrspaces \
+	llvm-multiversioning llvm-alloc-opt cgmemmgr llvm-api
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 LLVM_LIBS := all
 ifeq ($(USE_POLLY),1)
@@ -211,6 +213,9 @@ $(BUILDDIR)/disasm.o $(BUILDDIR)/disasm.dbg.obj: $(SRCDIR)/debuginfo.h $(SRCDIR)
 $(BUILDDIR)/jitlayers.o $(BUILDDIR)/jitlayers.dbg.obj: $(SRCDIR)/jitlayers.h
 $(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: $(SRCDIR)/table.c
 $(BUILDDIR)/staticdata.o $(BUILDDIR)/staticdata.dbg.obj: $(SRCDIR)/processor.h
+$(BUILDDIR)/llvm-final-gc-lowering.o $(BUILDDIR)/llvm-final-gc-lowering.dbg.obj: $(SRCDIR)/llvm-pass-helpers.h
+$(BUILDDIR)/llvm-late-gc-lowering.o $(BUILDDIR)/llvm-late-gc-lowering.dbg.obj: $(SRCDIR)/llvm-pass-helpers.h
+$(BUILDDIR)/llvm-pass-helpers.o $(BUILDDIR)/llvm-pass-helpers.dbg.obj: $(SRCDIR)/llvm-pass-helpers.h
 $(BUILDDIR)/gc.o $(BUILDDIR)/gc.dbg.obj: $(SRCDIR)/gc.h
 $(BUILDDIR)/gc-debug.o $(BUILDDIR)/gc-debug.dbg.obj: $(SRCDIR)/gc.h
 $(BUILDDIR)/gc-pages.o $(BUILDDIR)/gc-pages.dbg.obj: $(SRCDIR)/gc.h
@@ -319,7 +324,37 @@ clean-flisp:
 clean-support:
 	-$(MAKE) -C $(SRCDIR)/support clean BUILDDIR='$(abspath $(BUILDDIR)/support)'
 
+cleanall: clean clean-flisp clean-support clean-analyzegc
 
-cleanall: clean clean-flisp clean-support
+$(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/GCChecker.cpp
+	@$(call PRINT_CC, $(CXX) -g -shared -o $@ -DCLANG_PLUGIN -I$(build_includedir) $(shell $(LLVM_CONFIG_HOST) --cxxflags) $(CPPFLAGS) $(CFLAGS) $< $(shell $(LLVM_CONFIG_HOST) --ldflags) $(LDFLAGS) -L$(build_libdir) -lclangAnalysis -lclangStaticAnalyzerCore -lclangASTMatchers -lclangAST -lclangLex -lclangBasic)
 
-.PHONY: default all debug release clean cleanall clean-* libccalltest libllvmcalltest julia_flisp.boot.inc.phony
+# Throw an error if a proper version of `clang` is not available.
+# Note that for a default install, you will need to have run the following
+# before attempting this static analysis, so that all necessary headers
+# and dependencies are properly installed:
+#   make -c deps install-llvm install-libuv install-utf8proc install-unwind
+analyzegc-deps-check: $(BUILDDIR)/julia_version.h $(BUILDDIR)/julia_flisp.boot.inc
+ifeq ($(USE_BINARYBUILDER_LLVM),0)
+ifneq ($(BUILD_LLVM_CLANG),1)
+	$(error Clang must be available to use the clang analyzer. Either build it (BUILD_LLVM_CLANG) or use BinaryBuilder)
+endif
+endif
+
+
+define CLANG_ANALYZE
+clang-sa-$(1): $$(build_shlibdir)/libGCCheckerPlugin.$$(SHLIB_EXT) | analyzegc-deps-check
+	@$$(call PRINT_ANALYZE, $$(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $$(build_shlibdir)/libGCCheckerPlugin.$$(SHLIB_EXT) $$(CPPFLAGS) $$(CFLAGS) $$(DEBUGFLAGS) -Xclang -analyzer-checker=core$$(COMMA)julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c $$(SRCDIR)/$(1).c)
+.PHONY: clang-sa-$(1)
+
+# Add this as a target of `analyzegc`
+analyzegc: clang-sa-$(1)
+endef
+
+# Build a Makefile target for each file we want to analyze
+$(foreach S,$(RUNTIME_C_SRCS),$(eval $(call CLANG_ANALYZE,$(S))))
+
+clean-analyzegc:
+	rm -f $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
+
+.PHONY: default all debug release clean cleanall clean-* libccalltest libllvmcalltest julia_flisp.boot.inc.phony analyzegc

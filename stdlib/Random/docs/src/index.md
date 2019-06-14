@@ -248,6 +248,13 @@ Here, `sp.data` refers to the second parameter in the call to the `SamplerSimple
 (in this case equal to `Sampler(rng, 1:die.nsides, r)`), while the `Die` object can be accessed
 via `sp[]`.
 
+Like `SamplerDie`, any custom sampler must be a subtype of `Sampler{T}` where `T` is the type
+of the generated values. Note that `SamplerSimple(x, data) isa Sampler{eltype(x)}`,
+so this constrains what the first argument to `SamplerSimple` can be
+(it's recommended to use `SamplerSimple` like in the `Die` example, where
+`x` is simply forwarded while defining a `Sampler` method).
+Similarly, `SamplerTrivial(x) isa Sampler{eltype(x)}`.
+
 Another helper type is currently available for other cases, `Random.SamplerTag`, but is
 considered as internal API, and can break at any time without proper deprecations.
 

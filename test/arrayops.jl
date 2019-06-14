@@ -381,6 +381,14 @@ end
 
     @test findall(in([1, 2]), 2) == [1]
     @test findall(in([1, 2]), 3) == []
+
+    @test sort(findall(Dict(1=>false, 2=>true, 3=>true))) == [2, 3]
+
+    @test findall(true) == [1]
+    @test findall(false) == Int[]
+
+    @test findall(isodd, 1) == [1]
+    @test findall(isodd, 2) == Int[]
 end
 @testset "setindex! return type" begin
     rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, Vector{UInt8}, Vector{Int}, Int16, UnitRange{Int}})
@@ -526,6 +534,7 @@ end
     @test findfirst(!iszero, a) == 2
     @test findfirst(a.==0) == 1
     @test findfirst(a.==5) == nothing
+    @test findfirst(Dict(1=>false, 2=>true)) == 2
     @test findfirst(isequal(3), [1,2,4,1,2,3,4]) == 6
     @test findfirst(!isequal(1), [1,2,4,1,2,3,4]) == 2
     @test findfirst(isodd, [2,4,6,3,9,2,0]) == 4

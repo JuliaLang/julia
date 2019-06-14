@@ -227,8 +227,8 @@ let ft = Base.datatype_fieldtypes
     @test ft(elT2.body)[1].parameters[1] === elT2
     @test Base.isconcretetype(ft(elT2.body)[1])
 end
-struct S22624{A,B,C} <: Ref{S22624{Int64,A}}; end
-@test @isdefined S22624
+#struct S22624{A,B,C} <: Ref{S22624{Int64,A}}; end
+@test_broken @isdefined S22624
 
 # issue #3890
 mutable struct A3890{T1}
@@ -3487,6 +3487,11 @@ end
 # 11996
 @test_throws ErrorException NTuple{-1, Int}
 @test_throws TypeError Union{Int, 1}
+
+@test_throws ErrorException Vararg{Any,-2}
+@test_throws ErrorException Vararg{Int, N} where N<:T where T
+@test_throws ErrorException Vararg{Int, N} where N<:Integer
+@test_throws ErrorException Vararg{Int, N} where N>:Integer
 
 mutable struct FooNTuple{N}
     z::Tuple{Integer, Vararg{Int, N}}
@@ -6971,3 +6976,15 @@ let spvec = sparse_t31649(zeros(Float64,5), Vector{Int64}())
     @test convert(Any, nothing) === nothing
     @test_throws MethodError repr(spvec)
 end
+
+# Issue #31062 - Accidental recursion in jl_has_concrete_subtype
+struct Bar31062
+    x::NTuple{N, Bar31062} where N
+end
+struct Foo31062
+    x::Foo31062
+end
+# Use eval to make sure that this actually gets executed and not
+# just constant folded by (future) over-eager compiler optimizations
+@test isa(Core.eval(@__MODULE__, :(Bar31062(()))), Bar31062)
+@test precompile(identity, (Foo31062,))

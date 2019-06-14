@@ -272,6 +272,11 @@ julia> eigvecs(A, [1.])
 """
 eigvecs(A::SymTridiagonal{<:BlasFloat}, eigvals::Vector{<:Real}) = LAPACK.stein!(A.dv, A.ev, eigvals)
 
+function svdvals!(A::SymTridiagonal)
+    vals = eigvals!(A)
+    return sort!(map!(abs, vals, vals); rev=true)
+end
+
 #tril and triu
 
 istriu(M::SymTridiagonal) = iszero(M.ev)

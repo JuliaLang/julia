@@ -145,6 +145,12 @@ end
     @test F\v5 == F\v6[1:5]
 end
 
+@testset "issue #32080" begin
+    A = Symmetric([-5 -9 9; -9 4 1; 9 1 2])
+    B = bunchkaufman(A, true)
+    @test B.U * B.D * B.U' ≈ A[B.p, B.p]
+end
+
 @test_throws DomainError logdet(bunchkaufman([-1 -1; -1 1]))
 @test logabsdet(bunchkaufman([8 4; 4 2]; check = false))[1] == -Inf
 @test isa(bunchkaufman(Symmetric(ones(0,0))), BunchKaufman) # 0x0 matrix

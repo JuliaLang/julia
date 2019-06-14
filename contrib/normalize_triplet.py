@@ -117,7 +117,7 @@ if gcc_version == "blank_gcc":
             "7": "gcc7",
             "8": "gcc8",
             "9": "gcc8",
-        }[list(filter(lambda x: re.match("\d+\.\d+\.\d+", x), sys.argv[2].split()))[-1][0]]
+        }[list(filter(lambda x: re.match("\d+\.\d+(\.\d+)?", x), sys.argv[2].split()))[-1][0]]
 
 if cxx_abi == "blank_cxx_abi":
     if len(sys.argv) == 4:
