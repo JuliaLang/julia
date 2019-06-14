@@ -100,3 +100,13 @@ end
     @test round(Float16(0.6), sigdigits=2) === Float16(0.6)
     @test round(Float16(1.1), sigdigits=70) === Float16(1.1)
 end
+
+@testset "approximation" begin
+
+    @test isapprox(1, 2; atol=1)
+
+    @test !isapprox(1, 2; atol = 0.5)
+
+    @test ≈(Float64(1); atol=1).(1.0:3.0) == [true, true, false]
+
+end
