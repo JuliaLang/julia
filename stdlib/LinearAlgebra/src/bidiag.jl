@@ -123,9 +123,9 @@ function setindex!(A::Bidiagonal, x, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
     if i == j
         @inbounds A.dv[i] = x
-    elseif istriu(A) && (i == j - 1)
+    elseif A.uplo == 'U' && (i == j - 1)
         @inbounds A.ev[i] = x
-    elseif istril(A) && (i == j + 1)
+    elseif A.uplo == 'L' && (i == j + 1)
         @inbounds A.ev[j] = x
     elseif !iszero(x)
         throw(ArgumentError(string("cannot set entry ($i, $j) off the ",

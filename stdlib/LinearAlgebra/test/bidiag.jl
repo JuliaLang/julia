@@ -91,6 +91,12 @@ Random.seed!(1)
         @test similar(ubd, Int).uplo == ubd.uplo
         @test isa(similar(ubd, (3, 2)), SparseMatrixCSC)
         @test isa(similar(ubd, Int, (3, 2)), SparseMatrixCSC{Int})
+
+        # setindex! when off diagonal is zero bug
+        Bu = Bidiagonal(rand(elty, 10), zeros(elty, 9), 'U')
+        Bl = Bidiagonal(rand(elty, 10), zeros(elty, 9), 'L')
+        @test_throws ArgumentError Bu[5, 4] = 1
+        @test_throws ArgumentError Bl[4, 5] = 1
     end
 
     @testset "show" begin
