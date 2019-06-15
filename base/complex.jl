@@ -460,6 +460,8 @@ function inv(w::ComplexF64)
     return ComplexF64(p*s,q*s) # undo scaling
 end
 
+ldexp(z::Complex, n::Integer) = Complex(ldexp(real(z), n), ldexp(imag(z), n))
+
 function ssqs(x::T, y::T) where T<:AbstractFloat
     k::Int = 0
     ρ = x*x + y*y
