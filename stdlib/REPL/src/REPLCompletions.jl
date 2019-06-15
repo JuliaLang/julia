@@ -530,14 +530,11 @@ function dict_identifier_key(str,tag)
         sym = Symbol(name)
         isdefined(obj, sym) || return (nothing, nothing, nothing)
         obj = getfield(obj, sym)
-        # Avoid `isdefined(::Array, ::Symbol)`
-        isa(obj, Array) && return (nothing, nothing, nothing)
     end
-    begin_of_key = first(something(findnext(r"\S", str, nextind(str, end_of_identifier) + 1), 1)) # 1 for [
-    begin_of_key==0 && return (true, nothing, nothing)
-    partial_key = str[begin_of_key:end]
-    (isa(obj, AbstractDict) && length(obj) < 1e6) || return (true, nothing, nothing)
-    return (obj, partial_key, begin_of_key)
+    (isa(obj, AbstractDict) && length(obj) < 1_000_000) || return (nothing, nothing, nothing)
+    begin_of_key = something(findnext(!isspace, str, nextind(str, end_of_identifier) + 1), # +1 for [
+                             lastindex(str)+1)
+    return (obj, str[begin_of_key:end], begin_of_key)
 end
 
 # This needs to be a separate non-inlined function, see #19441
@@ -581,13 +578,9 @@ function completions(string, pos, context_module=Main)::Completions
     # if completing a key in a Dict
     identifier, partial_key, loc = dict_identifier_key(partial,inc_tag)
     if identifier !== nothing
-        if partial_key !== nothing
-            matches = find_dict_matches(identifier, partial_key)
-            length(matches)==1 && (length(string) <= pos || string[pos+1] != ']') && (matches[1]*="]")
-            length(matches)>0 && return [DictCompletion(identifier, match) for match in sort!(matches)], loc:pos, true
-        else
-            return Completion[], 0:-1, false
-        end
+        matches = find_dict_matches(identifier, partial_key)
+        length(matches)==1 && (lastindex(string) <= pos || string[nextind(string,pos)] != ']') && (matches[1]*=']')
+        length(matches)>0 && return [DictCompletion(identifier, match) for match in sort!(matches)], loc:pos, true
     end
 
     # otherwise...
@@ -605,7 +598,7 @@ function completions(string, pos, context_module=Main)::Completions
            length(paths) == 1 &&  # Only close if there's a single choice,
            !isdir(expanduser(replace(string[startpos:prevind(string, first(r))] * paths[1].path,
                                      r"\\ " => " "))) &&  # except if it's a directory
-           (length(string) <= pos ||
+           (lastindex(string) <= pos ||
             string[nextind(string,pos)] != '"')  # or there's already a " at the cursor.
             paths[1] = PathCompletion(paths[1].path * "\"")
         end
