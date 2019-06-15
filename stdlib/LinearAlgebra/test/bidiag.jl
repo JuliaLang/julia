@@ -316,8 +316,8 @@ Random.seed!(1)
             mats = [Diag, BidiagU, BidiagL, Tridiag, SymTri]
             for a in mats
                 for b in mats
-                    for lwrap in (transpose, adjoint)
-                        for rwrap in (transpose, adjoint)
+                    for lwrap in (Transpose, Adjoint)
+                        for rwrap in (Transpose, Adjoint)
                             @test a*b ≈ Matrix(a)*Matrix(b)
                             @test lwrap(a)*b ≈ Matrix(lwrap(a))*Matrix(b)
                             @test a*rwrap(b) ≈ Matrix(a)*Matrix(rwrap(b))
