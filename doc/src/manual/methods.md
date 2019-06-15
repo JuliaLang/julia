@@ -981,7 +981,7 @@ f(x, y) = f(promote(x, y)...)
 One risk with this design is the possibility that if there is no
 suitable promotion method converting `x` and `y` to the same type, the
 second method will recurse on itself infinitely and trigger a stack
-overflow. 
+overflow.
 
 ### Dispatch on one argument at a time
 
