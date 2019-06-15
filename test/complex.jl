@@ -2,6 +2,10 @@
 
 using LinearAlgebra
 
+function isnan_type(::Type{T}, x) where T
+    isa(x, T) && isnan(x)
+end
+
 @test reim(2 + 3im) == (2, 3)
 
 for T in (Int64, Float64)
@@ -169,6 +173,55 @@ end
             @test sech(x) ≈ inv(cosh(x))
             @test csch(x) ≈ inv(sinh(x))
         end
+    end
+end
+
+@testset "complex ldexp" begin
+    @testset "Complex{$T}" for F in (Float16,Float32,Float64)
+        T = Complex{F}
+        @test ldexp(T(0.0), 0) === T(0.0)
+        @test ldexp(T(-0.0), 0) === T(-0.0)
+        @test ldexp(T(Inf), 1) === T(Inf)
+        @test ldexp(T(Inf), 10000) === T(Inf)
+        @test ldexp(T(-Inf), 1) === T(-Inf)
+        @test isnan_type(T, ldexp(T(NaN), 10))
+        @test ldexp(T(1.0), 0) === T(1.0)
+        @test ldexp(T(0.8), 4) === T(12.8)
+        @test ldexp(T(-0.854375), 5) === T(-27.34)
+        @test ldexp(T(1.0), typemax(Int)) === T(Inf)
+        @test ldexp(T(1.0), typemin(Int)) === T(0.0)
+        @test ldexp(T(prevfloat(floatmin(F))), typemax(Int)) === T(Inf)
+        @test ldexp(T(prevfloat(floatmin(F))), typemin(Int)) === T(0.0)
+
+        @test ldexp(T(0.0), Int128(0)) === T(0.0)
+        @test ldexp(T(-0.0), Int128(0)) === T(-0.0)
+        @test ldexp(T(1.0), Int128(0)) === T(1.0)
+        @test ldexp(T(0.8), Int128(4)) === T(12.8)
+        @test ldexp(T(-0.854375), Int128(5)) === T(-27.34)
+        @test ldexp(T(1.0), typemax(Int128)) === T(Inf)
+        @test ldexp(T(1.0), typemin(Int128)) === T(0.0)
+        @test ldexp(T(prevfloat(floatmin(F))), typemax(Int128)) === T(Inf)
+        @test ldexp(T(prevfloat(floatmin(F))), typemin(Int128)) === T(0.0)
+
+        @test ldexp(T(0.0), BigInt(0)) === T(0.0)
+        @test ldexp(T(-0.0), BigInt(0)) === T(-0.0)
+        @test ldexp(T(1.0), BigInt(0)) === T(1.0)
+        @test ldexp(T(0.8), BigInt(4)) === T(12.8)
+        @test ldexp(T(-0.854375), BigInt(5)) === T(-27.34)
+        @test ldexp(T(1.0), BigInt(typemax(Int128))) === T(Inf)
+        @test ldexp(T(1.0), BigInt(typemin(Int128))) === T(0.0)
+        @test ldexp(T(prevfloat(floatmin(F))), BigInt(typemax(Int128))) === T(Inf)
+        @test ldexp(T(prevfloat(floatmin(F))), BigInt(typemin(Int128))) === T(0.0)
+
+        # Test also against BigFloat reference. Needs to be exactly rounded.
+        @test ldexp(T(floatmin(F)), -1) == T(ldexp(big(floatmin(F)), -1))
+        @test ldexp(T(floatmin(F)), -2) == T(ldexp(big(floatmin(F)), -2))
+        @test ldexp(T(floatmin(F)/2), 0) == T(ldexp(big(floatmin(F)/2), 0))
+        @test ldexp(T(floatmin(F)/3), 0) == T(ldexp(big(floatmin(F)/3), 0))
+        @test ldexp(T(floatmin(F)/3), -1) == T(ldexp(big(floatmin(F)/3), -1))
+        @test ldexp(T(floatmin(F)/3), 11) == T(ldexp(big(floatmin(F)/3), 11))
+        @test ldexp(T(floatmin(F)/11), -10) == T(ldexp(big(floatmin(F)/11), -10))
+        @test ldexp(T(-floatmin(F)/11), -10) == T(ldexp(big(-floatmin(F)/11), -10))
     end
 end
 
