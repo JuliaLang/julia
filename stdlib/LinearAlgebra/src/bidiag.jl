@@ -112,8 +112,10 @@ function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
     end
     if i == j
         return A.dv[i]
-    elseif (istriu(A) && (i == j - 1)) || (istril(A) && (i == j + 1))
-        return A.ev[min(i,j)]
+    elseif A.uplo == 'U' && (i == j - 1)
+        return A.ev[i]
+    elseif A.uplo == 'L' && (i == j + 1)
+        return A.ev[j]
     else
         return zero(T)
     end
