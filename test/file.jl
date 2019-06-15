@@ -6,6 +6,7 @@
 starttime = time()
 pwd_ = pwd()
 dir = mktempdir()
+dir_removed_on_exit = mktempdir(; remove_on_exit = true)
 file = joinpath(dir, "afile.txt")
 # like touch, but lets the operating system update the timestamp
 # for greater precision on some platforms (windows)
