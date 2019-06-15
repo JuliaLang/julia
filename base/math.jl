@@ -537,16 +537,16 @@ Stacktrace:
 [...]
 ```
 """
-#  Hypot(a,b)
+#  hypot(a,b)
 #  This code is an implementation of the algorithm described in:
 #  An Improved Algorithm for hypot(a,b)
 #  by Carlos F. Borges
 #  The article is available online at ArXiv at the link
 #  https://arxiv.org/abs/1904.09481#
-Hypot(x::Number, y::Number) = Hypot(promote(x, y)...)
-Hypot(x::Complex, y::Complex) = Hypot(promote(abs(x),abs(y))...)
-Hypot(x::Integer, y::Integer) = Hypot(promote(float(x), float(y))...)
-function Hypot(x::T,y::T) where T<:AbstractFloat
+hypot(x::Number, y::Number) = hypot(promote(x, y)...)
+hypot(x::Complex, y::Complex) = hypot(promote(abs(x),abs(y))...)
+hypot(x::Integer, y::Integer) = hypot(promote(float(x), float(y))...)
+function hypot(x::T,y::T) where T<:AbstractFloat
     #Return Inf if either or both imputs is Inf (Compliance with IEEE754)
     if isinf(x) || isinf(y)
         return convert(T,Inf)
