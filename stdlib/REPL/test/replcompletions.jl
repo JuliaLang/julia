@@ -871,7 +871,7 @@ function test_dict_completion(dict_name)
     @test c == Any[":α]"]
     s = "$dict_name["
     c, r = test_complete(s)
-    @test c == sort!(repr.(keys(CompletionFoo.test_dict)))
+    @test c == sort!(repr.(keys(Main.CompletionFoo.test_dict)))
 end
 test_dict_completion("CompletionFoo.test_dict")
 test_dict_completion("CompletionFoo.test_customdict")
