@@ -44,6 +44,16 @@ julia> collect(pairs(x))
  :a => 1
  :b => 2
 ```
+
+A named tuple can be created programatically by splatting an iterator yielding
+`name => value` pairs where each `name` is a `Symbol`:
+
+```jldoctest
+julia> keys = (:a, :b, :c); values = (1, 2, 3);
+
+julia> (; zip(keys, values)...,)
+(a = 1, b = 2, c = 3)
+```
 """
 Core.NamedTuple
 
