@@ -330,12 +330,12 @@ Random.seed!(1)
             @test typeof(BidiagU*Diag) <: Bidiagonal
             @test typeof(BidiagL*Diag) <: Bidiagonal
             @test typeof(Tridiag*Diag) <: Tridiagonal
-            @test typeof(SymTri*Diag) <: Tridiagonal
+            @test typeof(SymTri*Diag)  <: Tridiagonal
 
             @test typeof(BidiagU*Diag) <: Bidiagonal
             @test typeof(Diag*BidiagL) <: Bidiagonal
             @test typeof(Diag*Tridiag) <: Tridiagonal
-            @test typeof(Diag*SymTri) <: Tridiagonal
+            @test typeof(Diag*SymTri)  <: Tridiagonal
         end
 
         @test inv(T)*Tfull ≈ Matrix(I, n, n)
