@@ -1,7 +1,3 @@
-include("sexpressions.jl")
-
-using .SExprs
-
 using Core: SSAValue
 
 # Call into lowering stage 1; syntax desugaring
@@ -77,54 +73,6 @@ hand
 function lift_lowered_expr(ex; lift_full=false)
     valmap = Dict{Union{Symbol,SSAValue},Symbol}()
     lift_lowered_expr!(deepcopy(ex), ones(Int,2), valmap, lift_full)
-end
-
-function to_sexpr!(ex, nextids, valmap)
-    if ex isa SSAValue
-        # Rename SSAValues into renumbered symbols
-        return get!(valmap, ex) do
-            newid = nextids[1]
-            nextids[1] = newid+1
-            Symbol("ssa$newid")
-        end
-    elseif ex isa Symbol
-        if ex == Symbol("#self#")
-            return :_self_
-        end
-        # Rename gensyms
-        name = string(ex)
-        if startswith(name, "#")
-            return get!(valmap, ex) do
-                newid = nextids[2]
-                nextids[2] = newid+1
-                Symbol("gsym$newid")
-            end
-        end
-    elseif ex isa Expr
-        filter!(e->!(e isa LineNumberNode), ex.args)
-        if ex.head == :block && length(ex.args) == 1
-            # Remove trivial blocks
-            return to_sexpr!(ex.args[1], nextids, valmap)
-        end
-        map!(ex.args, ex.args) do e
-            to_sexpr!(e, nextids, valmap)
-        end
-        return [ex.head; ex.args]
-    elseif ex isa QuoteNode
-        return [:quote, to_sexpr!(ex.value, nextids, valmap)]
-    elseif ex isa LineNumberNode
-        return [:line, ex.line, ex.file]
-    elseif ex isa Vector # Occasional case of lambdas
-        map!(ex, ex) do e
-            to_sexpr!(e, nextids, valmap)
-        end
-    end
-    return ex
-end
-
-function to_sexpr(ex)
-    valmap = Dict{Union{Symbol,SSAValue},Symbol}()
-    to_sexpr!(deepcopy(ex), ones(Int,2), valmap)
 end
 
 """
@@ -209,45 +157,20 @@ macro desugar(ex, kws...)
     end
 end
 
-
-function desugar_sx(ex)
-    SExprs.prettyprint(to_sexpr(expand_forms(ex)))
-end
-
-macro desugar_sx(ex)
-    quote
-        println(desugar_sx($(Expr(:quote, ex))))
-    end
-end
-
 """
 Test that syntax desugaring of `input` produces an expression equivalent to the
 reference expression `ref`.
 """
 macro test_desugar(input, ref)
-    ex = if ref.head == :macrocall && ref.args[1] == Symbol("@sx_str")
-        # Reference is an S-Expression - test against that directly.
-        quote
-            input = to_sexpr(expand_forms($(Expr(:quote, input))))
-            ref   = $(esc(ref))
-            @test input == ref
-            if input != ref
-                println("Diff dump:")
-                println(SExprs.deparse(input))
-                println(SExprs.deparse(ref))
-            end
-        end
-    else
-        quote
-            input = lift_lowered_expr(expand_forms($(Expr(:quote, input))))
-            ref   = lower_ref_expr($(Expr(:quote, ref)))
-            @test input == ref
-            if input != ref
-                # Kinda crude. Would be much neater if Test supported custom/more
-                # capable diffing for failed tests.
-                println("Diff dump:")
-                diffdump(input, ref)
-            end
+    ex = quote
+        input = lift_lowered_expr(expand_forms($(Expr(:quote, input))))
+        ref   = lower_ref_expr($(Expr(:quote, ref)))
+        @test input == ref
+        if input != ref
+            # Kinda crude. Would be much neater if Test supported custom/more
+            # capable diffing for failed tests.
+            println("Diff dump:")
+            diffdump(input, ref)
         end
     end
     # Attribute the test to the correct line number
@@ -289,28 +212,6 @@ end
         end
     )
 end
-
-# Example S-Expression version of the above.
-@testset "Property notation" begin
-    # flisp: (expand-fuse-broadcast)
-    @test_desugar a.b    sx"(call (top getproperty) a (quote b))"
-    @test_desugar a.b.c  sx"(call (top getproperty)
-                               (call (top getproperty) a (quote b))
-                               (quote c))"
-
-    @test_desugar(a.b = c,
-        sx"(block
-             (call (top setproperty!) a (quote b) c)
-             (unnecessary c))"
-    )
-    @test_desugar(a.b.c = d,
-        sx"(block
-             (= ssa1 (call (top getproperty) a (quote b)))
-             (call (top setproperty!) ssa1 (quote c) d)
-             (unnecessary d))"
-    )
-end
-
 
 @testset "Index notation" begin
     # flisp: (process-indices) (partially-expand-ref)
@@ -754,26 +655,6 @@ end
                              $(Expr(:break, Symbol("loop-exit")))
                              body3
                          end)))))
-    )
-
-    # Alternative with S-Expressions
-    @test_desugar(while cond
-                            body1
-                            continue
-                            body2
-                            break
-                            body3
-                        end,
-        sx"(break-block loop-exit
-             (_while cond
-               (break-block loop-cont
-                 (scope-block
-                   (block
-                      body1
-                      (break loop-cont)
-                      body2
-                      (break loop-exit)
-                      body3)))))"
     )
 
     @test_desugar(for i = a
