@@ -579,7 +579,7 @@ function hypot(x::T,y::T) where T<:AbstractFloat
     if Base.Math.FMA_NATIVE
         hsquared = h*h
         axsquared = ax*ax
-        h -= (fma(-ay,ay,hsquared-ax_sq) + fma(h,h,-h_sq) - fma(ax,ax,-axsquared))/(2*h)
+        h -= (fma(-ay,ay,hsquared-axsquared) + fma(h,h,-h_sq) - fma(ax,ax,-axsquared))/(2*h)
     else
         if h <= 2*ay
             delta = h-ay
