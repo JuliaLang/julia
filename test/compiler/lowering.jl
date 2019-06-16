@@ -226,13 +226,24 @@ end
         @test_desugar a[[end]]  Top.getindex(a, Top.vect(Top.lastindex(a)))
         @test_desugar a[b[end] + end]  Top.getindex(a, Top.getindex(b, Top.lastindex(b)) + Top.lastindex(a))
         @test_desugar a[f(end) + 1]    Top.getindex(a, f(Top.lastindex(a)) + 1)
-        # Interaction of `end` with splatting
-        @test_desugar(a[I..., end],
-            Core._apply(Top.getindex, Core.tuple(a), I,
-                        Core.tuple(Top.lastindex(a, Top.:+(1, Top.length(I)))))
-        )
+        @test_desugar a[end][b[i]]     Top.getindex(Top.getindex(a, Top.lastindex(a)), Top.getindex(b,i))
 
-        @test_desugar_error a[i,j;k]  "unexpected semicolon in array expression"
+        # Interaction of `end` with splatting
+        @test_desugar(a[I..., end, J..., end],
+            Core._apply(Top.getindex, Core.tuple(a),
+                        I,
+                        Core.tuple(Top.lastindex(a, Top.:+(1, Top.length(I)))),
+                        J,
+                        Core.tuple(Top.lastindex(a, Top.:+(2, Top.length(J), Top.length(I)))))
+        )
+        @test_desugar(a[f(x)..., end],
+            begin
+                ssa1 = f(x)
+                Core._apply(Top.getindex, Core.tuple(a),
+                            ssa1,
+                            Core.tuple(Top.lastindex(a, Top.:+(1, Top.length(ssa1)))))
+            end
+        )
     end
 
     @testset "setindex!" begin
