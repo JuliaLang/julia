@@ -50,6 +50,7 @@ Standard library changes
 
 #### Dates
 
+* `DateTime` and `Time` formatting/parsing now supports 12-hour clocks with AM/PM via `I` and `p` codes, similar to `strftime` ([#32308]).
 * Fixed `repr` such that it displays `Time` as it would be entered in Julia ([#32103]).
 
 #### Sockets
