@@ -101,6 +101,15 @@ function deparse(sx)
     String(take!(buf))
 end
 
+function prettyprint(sx)
+    buf = IOBuffer()
+    # Cheat terribly using racket's pretty printer
+    run(pipeline(`racket -e "(require racket/pretty) (pretty-write (read (current-input-port)))"`,
+                 stdin=IOBuffer(deparse(sx)),
+                 stdout=buf))
+    String(take!(buf))
+end
+
 fill_unquotes_expr(sx) = sx
 fill_unquotes_expr(sx::Symbol) = QuoteNode(sx)
 fill_unquotes_expr(sx::Unquote) = esc(sx.name)

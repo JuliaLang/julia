@@ -209,9 +209,14 @@ macro desugar(ex, kws...)
     end
 end
 
+
+function desugar_sx(ex)
+    SExprs.prettyprint(to_sexpr(expand_forms(ex)))
+end
+
 macro desugar_sx(ex)
     quote
-        SExprs.deparse(to_sexpr(expand_forms($(Expr(:quote, ex)))))
+        println(desugar_sx($(Expr(:quote, ex))))
     end
 end
 
