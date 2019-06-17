@@ -6,7 +6,18 @@
 starttime = time()
 pwd_ = pwd()
 dir = mktempdir()
-dir_removed_on_exit = mktempdir(; remove_on_exit=true)
+code = """
+child_dir = mktempdir(; remove_on_exit=true)
+ispath(child_dir) || error("`child_dir` is not a path")
+isdir(child_dir) || error("`child_dir` is not a directory")
+println(child_dir)
+"""
+cmd = ```
+$(Base.julia_cmd()) --eval $code
+```
+child_dir = chomp(read(cmd, String))
+@test !isdir(child_dir)
+@test !ispath(child_dir)
 file = joinpath(dir, "afile.txt")
 # like touch, but lets the operating system update the timestamp
 # for greater precision on some platforms (windows)
