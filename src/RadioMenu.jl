@@ -24,10 +24,18 @@ mutable struct RadioMenu <: AbstractMenu
     selected::Int
 end
 
+function _get_cursor(m::RadioMenu)
+    if m.selected == -1
+        1
+    else
+        m.selected
+    end
+end
+
 
 """
 
-    RadioMenu(options::Array{String,1}; pagesize::Int=10)
+    RadioMenu(options::Array{String,1}; pagesize::Int=10, default = nothing)
 
 Create a RadioMenu object. Use `request(menu::RadioMenu)` to get user input.
 `request()` returns an `Int` which is the index of the option selected by the
@@ -37,8 +45,9 @@ user.
 
   - `options::Array{String, 1}`: Options to be displayed
   - `pagesize::Int=10`: The number of options to be displayed at one time, the menu will scroll if length(options) > pagesize
+  - `default::Union{Nothing, Int}`: The cursor will point at this item when the menu will be displayed. 
 """
-function RadioMenu(options::Array{String,1}; pagesize::Int=10)
+function RadioMenu(options::Array{String,1}; pagesize::Int=10, default = nothing)
     length(options) < 1 && error("RadioMenu must have at least one option")
 
     # if pagesize is -1, use automatic paging
@@ -50,6 +59,11 @@ function RadioMenu(options::Array{String,1}; pagesize::Int=10)
 
     pageoffset = 0
     selected = -1 # none
+
+    if !isnothing(default)
+        @assert checkbounds(Bool, options, default)
+        selected = default
+    end
 
     RadioMenu(options, pagesize, pageoffset, selected)
 end

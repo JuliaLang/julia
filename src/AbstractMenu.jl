@@ -90,7 +90,6 @@ keypress(m::AbstractMenu, i::UInt32) = false
 
 
 
-
 """
 
     request(m::AbstractMenu)
@@ -117,7 +116,7 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu)
         end
     end
 
-    cursor = 1
+    cursor = _get_cursor(m) # here we allow the cursor to point at a default item
 
     menu_header = header(m)
     if !CONFIG[:supress_output] && menu_header != ""

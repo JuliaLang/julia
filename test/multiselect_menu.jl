@@ -32,3 +32,10 @@ multi_menu = MultiSelectMenu(string.(1:10))
 @test simulateInput(Set([1,2]), multi_menu, :enter, :enter, 'd')
 multi_menu = MultiSelectMenu(["single option"])
 @test simulateInput(Set([1]), multi_menu, :up, :up, :down, :enter, 'd')
+
+# Test defaults
+multi_menu = MultiSelectMenu(string.(1:10), default = 1:5)
+@test multi_menu.selected == Set(1:5)
+radio_menu = RadioMenu(string.(1:10), default = 5)
+@test radio_menu.selected == 5
+

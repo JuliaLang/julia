@@ -32,10 +32,19 @@ mutable struct MultiSelectMenu <: AbstractMenu
     selected::Set{Int}
 end
 
+_get_cursor(m::MultiSelectMenu) = 1
+
+_addselected!(s, x::Int) = push!(s, x)
+
+function _addselected!(s, x::AbstractVector)
+    for i in x
+        push!(s, i)
+    end
+end
 
 """
 
-    MultiSelectMenu(options::Array{String,1}; pagesize::Int=10)
+    MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, default = nothing)
 
 Create a MultiSelectMenu object. Use `request(menu::MultiSelectMenu)` to get
 user input. `request()` returns a `Set` containing the indices of options that
@@ -45,8 +54,9 @@ were selected by the user.
 
   - `options::Array{String, 1}`: Options to be displayed
   - `pagesize::Int=10`: The number of options to be displayed at one time, the menu will scroll if length(options) > pagesize
+  - `default::Union{Nothing, Int, Vector{Int}}`: pre-selected default items.
 """
-function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10)
+function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, default = nothing)
     length(options) < 1 && error("MultiSelectMenu must have at least one option")
 
     # if pagesize is -1, use automatic paging
@@ -58,6 +68,11 @@ function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10)
 
     pageoffset = 0
     selected = Set{Int}() # none
+
+    if !isnothing(default)
+        @assert checkbounds(Bool, options, default)
+        _addselected!(selected, default)
+    end
 
     MultiSelectMenu(options, pagesize, pageoffset, selected)
 end
