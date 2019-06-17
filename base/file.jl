@@ -518,7 +518,7 @@ is an open file object for this path.
 mktemp(parent)
 
 """
-    mktempdir(parent=tempdir(); prefix=$(repr(temp_prefix)), remove_on_exit = false)
+    mktempdir(parent=tempdir(); prefix=$(repr(temp_prefix)), remove_on_exit=false)
 
 Create a temporary directory in the `parent` directory with a name
 constructed from the given prefix and a random suffix, and return its path.
