@@ -277,7 +277,7 @@ end
 """
     isapprox(x; kwargs...) / ≈(x; kwargs...)
 
-Create a function that compares its argument to x using ≈, i.e. a function equivalent to y -> y ≈ x.
+Create a function that compares its argument to `x` using `≈`, i.e. a function equivalent to `y -> y ≈ x`.
 
 The keyword arguments supported here are the same as those in [`isapprox`](@ref).
 """
