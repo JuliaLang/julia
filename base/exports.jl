@@ -117,13 +117,14 @@ export
     Cwstring,
 
 # Exceptions
-    DimensionMismatch,
     CapturedException,
     CompositeException,
+    DimensionMismatch,
     EOFError,
     InvalidStateException,
     KeyError,
     MissingException,
+    ProcessFailedException,
     SystemError,
     StringIndexError,
 
@@ -641,7 +642,6 @@ export
 
 # tasks and conditions
     Condition,
-    Event,
     current_task,
     islocked,
     istaskdone,
@@ -700,7 +700,9 @@ export
     fieldnames,
     fieldcount,
     fieldtypes,
+    hasfield,
     propertynames,
+    hasproperty,
     isabstracttype,
     isbitstype,
     isprimitivetype,

@@ -175,8 +175,9 @@ to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
            "\nConvert input to float.")))
 @noinline throw_domerr_powbysq(::Integer, p) = throw(DomainError(p,
    string("Cannot raise an integer x to a negative power ", p, '.',
-          "\nMake x a float by adding a zero decimal (e.g., 2.0^$p instead ",
-          "of 2^$p), or write 1/x^$(-p), float(x)^$p, or (x//1)^$p")))
+          "\nMake x or $p a float by adding a zero decimal ",
+          "(e.g., 2.0^$p or 2^$(float(p)) instead of 2^$p), ",
+          "or write 1/x^$(-p), float(x)^$p, x^float($p) or (x//1)^$p")))
 @noinline throw_domerr_powbysq(::AbstractMatrix, p) = throw(DomainError(p,
    string("Cannot raise an integer matrix x to a negative power ", p, '.',
           "\nMake x a float matrix by adding a zero decimal ",
@@ -409,12 +410,12 @@ const powers_of_ten = [
     0x000000e8d4a51000, 0x000009184e72a000, 0x00005af3107a4000, 0x00038d7ea4c68000,
     0x002386f26fc10000, 0x016345785d8a0000, 0x0de0b6b3a7640000, 0x8ac7230489e80000,
 ]
-function ndigits0z(x::Base.BitUnsigned64)
+function bit_ndigits0z(x::Base.BitUnsigned64)
     lz = (sizeof(x)<<3)-leading_zeros(x)
     nd = (1233*lz)>>12+1
     nd -= x < powers_of_ten[nd]
 end
-function ndigits0z(x::UInt128)
+function bit_ndigits0z(x::UInt128)
     n = 0
     while x > 0x8ac7230489e80000
         x = div(x,0x8ac7230489e80000)
@@ -423,16 +424,20 @@ function ndigits0z(x::UInt128)
     return n + ndigits0z(UInt64(x))
 end
 
-ndigits0z(x::BitSigned) = ndigits0z(unsigned(abs(x)))
-
+ndigits0z(x::BitSigned) = bit_ndigits0z(unsigned(abs(x)))
+ndigits0z(x::BitUnsigned) = bit_ndigits0z(x)
 ndigits0z(x::Integer) = ndigits0zpb(x, 10)
 
 ## ndigits with specified base ##
 
 # The suffix "nb" stands for "negative base"
 function ndigits0znb(x::Integer, b::Integer)
-    # precondition: b < -1 && !(typeof(x) <: Unsigned)
     d = 0
+    if x isa Unsigned
+        d += (x != 0)::Bool
+        x = -signed(fld(x, -b))
+    end
+    # precondition: b < -1 && !(typeof(x) <: Unsigned)
     while x != 0
         x = cld(x,b)
         d += 1
@@ -441,7 +446,6 @@ function ndigits0znb(x::Integer, b::Integer)
 end
 
 # do first division before conversion with signed here, which can otherwise overflow
-ndigits0znb(x::Unsigned, b::Integer) = ndigits0znb(-signed(fld(x, -b)), b) + (x != 0)
 ndigits0znb(x::Bool, b::Integer) = x % Int
 
 # The suffix "pb" stands for "positive base"
@@ -451,11 +455,15 @@ function ndigits0zpb(x::Integer, b::Integer)
     b = Int(b)
     x = abs(x)
     if x isa Base.BitInteger
-        x = unsigned(x)
+        x = unsigned(x)::Unsigned
         b == 2  && return sizeof(x)<<3 - leading_zeros(x)
         b == 8  && return (sizeof(x)<<3 - leading_zeros(x) + 2) ÷ 3
         b == 16 && return sizeof(x)<<1 - leading_zeros(x)>>2
-        b == 10 && return ndigits0z(x)
+        b == 10 && return bit_ndigits0z(x)
+        if ispow2(b)
+            dv, rm = divrem(sizeof(x)<<3 - leading_zeros(x), trailing_zeros(b))
+            return iszero(rm) ? dv : dv + 1
+        end
     end
 
     d = 0
@@ -537,11 +545,11 @@ julia> ndigits(123, pad=5)
 5
 ```
 """
-ndigits(x::Integer; base::Integer=10, pad::Int=1) = max(pad, ndigits0z(x, base))
+ndigits(x::Integer; base::Integer=10, pad::Integer=1) = max(pad, ndigits0z(x, base))
 
 ## integer to string functions ##
 
-function bin(x::Unsigned, pad::Int, neg::Bool)
+function bin(x::Unsigned, pad::Integer, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
     a = StringVector(i)
     while i > neg
@@ -553,7 +561,7 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
     String(a)
 end
 
-function oct(x::Unsigned, pad::Int, neg::Bool)
+function oct(x::Unsigned, pad::Integer, neg::Bool)
     i = neg + max(pad,div((sizeof(x)<<3)-leading_zeros(x)+2,3))
     a = StringVector(i)
     while i > neg
@@ -565,7 +573,7 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
     String(a)
 end
 
-function dec(x::Unsigned, pad::Int, neg::Bool)
+function dec(x::Unsigned, pad::Integer, neg::Bool)
     i = neg + ndigits(x, base=10, pad=pad)
     a = StringVector(i)
     while i > neg
@@ -577,7 +585,7 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
     String(a)
 end
 
-function hex(x::Unsigned, pad::Int, neg::Bool)
+function hex(x::Unsigned, pad::Integer, neg::Bool)
     i = neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
     a = StringVector(i)
     while i > neg
@@ -593,9 +601,9 @@ end
 const base36digits = ['0':'9';'a':'z']
 const base62digits = ['0':'9';'A':'Z';'a':'z']
 
-function _base(b::Int, x::Integer, pad::Int, neg::Bool)
+function _base(b::Integer, x::Integer, pad::Integer, neg::Bool)
     (x >= 0) | (b < 0) || throw(DomainError(x, "For negative `x`, `b` must be negative."))
-    2 <= abs(b) <= 62 || throw(ArgumentError("base must satisfy 2 ≤ abs(base) ≤ 62, got $b"))
+    2 <= abs(b) <= 62 || throw(DomainError(b, "base must satisfy 2 ≤ abs(base) ≤ 62"))
     digits = abs(b) <= 36 ? base36digits : base62digits
     i = neg + ndigits(x, base=b, pad=pad)
     a = StringVector(i)
@@ -644,7 +652,7 @@ function string(n::Integer; base::Integer = 10, pad::Integer = 1)
         (n_positive, neg) = split_sign(n)
         hex(n_positive, pad, neg)
     else
-        _base(Int(base), base > 0 ? unsigned(abs(n)) : convert(Signed, n), Int(pad), (base>0) & (n<0))
+        _base(base, base > 0 ? unsigned(abs(n)) : convert(Signed, n), pad, (base>0) & (n<0))
     end
 end
 
@@ -745,15 +753,24 @@ julia> digits!([2,2,2,2,2,2], 10, base = 2)
 ```
 """
 function digits!(a::AbstractVector{T}, n::Integer; base::Integer = 10) where T<:Integer
-    2 <= abs(base) || throw(ArgumentError("base must be ≥ 2 or ≤ -2, got $base"))
+    2 <= abs(base) || throw(DomainError(base, "base must be ≥ 2 or ≤ -2"))
     hastypemax(T) && abs(base) - 1 > typemax(T) &&
         throw(ArgumentError("type $T too small for base $base"))
     isempty(a) && return a
 
     if base > 0
-        for i in eachindex(a)
-            n, d = divrem(n, base)
-            a[i] = d
+        if ispow2(base) && n >= 0 && n isa Base.BitInteger && base <= typemax(Int)
+            base = Int(base)
+            k = trailing_zeros(base)
+            c = base - 1
+            for i in eachindex(a)
+                a[i] = (n >> (k * (i - firstindex(a)))) & c
+            end
+        else
+            for i in eachindex(a)
+                n, d = divrem(n, base)
+                a[i] = d
+            end
         end
     else
         # manually peel one loop iteration for type stability
@@ -803,7 +820,7 @@ julia> factorial(6)
 720
 
 julia> factorial(21)
-ERROR: OverflowError: 21 is too large to look up in the table
+ERROR: OverflowError: 21 is too large to look up in the table; consider using `factorial(big(21))` instead
 Stacktrace:
 [...]
 

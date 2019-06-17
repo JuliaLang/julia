@@ -1,9 +1,17 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    IPAddr
+
+Abstract supertype for IP addresses. [`IPv4`](@ref) and [`IPv6`](@ref) are subtypes of this.
+"""
 abstract type IPAddr end
 
 Base.isless(a::T, b::T) where {T<:IPAddr} = isless(a.host, b.host)
 (dt::Type{<:Integer})(ip::IPAddr) = dt(ip.host)::dt
+
+# Allow IP addresses to broadcast as unwrapped scalars
+Base.Broadcast.broadcastable(ip::IPAddr) = Ref(ip)
 
 struct IPv4 <: IPAddr
     host::UInt32
@@ -25,6 +33,7 @@ end
 
 Returns an IPv4 object from ip address `host` formatted as an [`Integer`](@ref).
 
+# Examples
 ```jldoctest
 julia> IPv4(3223256218)
 ip"192.30.252.154"
@@ -77,6 +86,7 @@ end
 
 Returns an IPv6 object from ip address `host` formatted as an [`Integer`](@ref).
 
+# Examples
 ```jldoctest
 julia> IPv6(3223256218)
 ip"::c01e:fc9a"
@@ -241,6 +251,20 @@ function parse(::Type{IPAddr}, str::AbstractString)
     end
 end
 
+"""
+    @ip_str str -> IPAddr
+
+Parse `str` as an IP address.
+
+# Examples
+```jldoctest
+julia> ip"127.0.0.1"
+ip"127.0.0.1"
+
+julia> @ip_str "2001:db8:0:0:0:0:2:1"
+ip"2001:db8::2:1"
+```
+"""
 macro ip_str(str)
     return parse(IPAddr, str)
 end

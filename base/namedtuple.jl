@@ -5,7 +5,7 @@
 
 `NamedTuple`s are, as their name suggests, named [`Tuple`](@ref)s. That is, they're a
 tuple-like collection of values, where each entry has a unique name, represented as a
-`Symbol`. Like `Tuple`s, `NamedTuple`s are immutable; neither the names nor the values
+[`Symbol`](@ref). Like `Tuple`s, `NamedTuple`s are immutable; neither the names nor the values
 can be modified in place after construction.
 
 Accessing the value associated with a name in a named tuple can be done using field
@@ -56,21 +56,10 @@ Construct a named tuple with the given `names` (a tuple of Symbols) and field ty
 (a `Tuple` type) from a tuple of values.
 """
 function NamedTuple{names,T}(args::Tuple) where {names, T <: Tuple}
-    if length(args) == length(names)
-        if @generated
-            N = length(names)
-            types = T.parameters
-            Expr(:new, :(NamedTuple{names,T}), Any[ :(convert($(types[i]), args[$i])) for i in 1:N ]...)
-        else
-            N = length(names)
-            NT = NamedTuple{names,T}
-            types = T.parameters
-            fields = Any[ convert(types[i], args[i]) for i = 1:N ]
-            ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), NT, fields, N)::NT
-        end
-    else
+    if length(args) != length(names)
         throw(ArgumentError("Wrong number of arguments to named tuple constructor."))
     end
+    NamedTuple{names,T}(T(args))
 end
 
 """
@@ -112,13 +101,7 @@ function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {name
 end
 
 if nameof(@__MODULE__) === :Base
-    function Tuple(nt::NamedTuple{names}) where {names}
-        if @generated
-            return Expr(:tuple, Any[:(getfield(nt, $(QuoteNode(n)))) for n in names]...)
-        else
-            return tuple(nt...)
-        end
-    end
+    Tuple(nt::NamedTuple) = (nt...,)
     (::Type{T})(nt::NamedTuple) where {T <: Tuple} = convert(T, Tuple(nt))
 end
 
@@ -173,20 +156,12 @@ isless(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = isless(Tuple(a), Tuple(b)
 same_names(::NamedTuple{names}...) where {names} = true
 same_names(::NamedTuple...) = false
 
+# NOTE: this method signature makes sure we don't define map(f)
 function map(f, nt::NamedTuple{names}, nts::NamedTuple...) where names
     if !same_names(nt, nts...)
         throw(ArgumentError("Named tuple names do not match."))
     end
-    # this method makes sure we don't define a map(f) method
-    NT = NamedTuple{names}
-    if @generated
-        N = length(names)
-        M = length(nts)
-        args = Expr[:(f($(Expr[:(getfield(nt, $j)), (:(getfield(nts[$i], $j)) for i = 1:M)...]...))) for j = 1:N]
-        :( NT(($(args...),)) )
-    else
-        NT(map(f, map(Tuple, (nt, nts...))...))
-    end
+    NamedTuple{names}(map(f, map(Tuple, (nt, nts...))...))
 end
 
 # a version of `in` for the older world these generated functions run in

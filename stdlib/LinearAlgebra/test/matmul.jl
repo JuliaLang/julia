@@ -301,6 +301,27 @@ end
 
 @test_throws ArgumentError LinearAlgebra.copytri!(Matrix{Float64}(undef,10,10),'Z')
 
+@testset "Issue 30055" begin
+    B = [1+im 2+im 3+im; 4+im 5+im 6+im; 7+im 9+im im]
+    A = UpperTriangular(B)
+    @test copy(transpose(A)) == transpose(A)
+    @test copy(A') == A'
+    A = LowerTriangular(B)
+    @test copy(transpose(A)) == transpose(A)
+    @test copy(A') == A'
+    B = Matrix{Matrix{Complex{Int}}}(undef, 2, 2)
+    B[1,1] = [1+im 2+im; 3+im 4+im]
+    B[2,1] = [1+2im 1+3im;1+3im 1+4im]
+    B[1,2] = [7+im 8+2im; 9+3im 4im]
+    B[2,2] = [9+im 8+im; 7+im 6+im]
+    A = UpperTriangular(B)
+    @test copy(transpose(A)) == transpose(A)
+    @test copy(A') == A'
+    A = LowerTriangular(B)
+    @test copy(transpose(A)) == transpose(A)
+    @test copy(A') == A'
+end
+
 @testset "gemv! and gemm_wrapper for $elty" for elty in [Float32,Float64,ComplexF64,ComplexF32]
     A10x10, x10, x11 = Array{elty}.(undef, ((10,10), 10, 11))
     @test_throws DimensionMismatch LinearAlgebra.gemv!(x10,'N',A10x10,x11)
@@ -485,6 +506,15 @@ end
     script = joinpath(@__DIR__, "ambiguous_exec.jl")
     cmd = `$(Base.julia_cmd()) --startup-file=no $script`
     @test success(pipeline(cmd; stdout=stdout, stderr=stderr))
+end
+
+struct A32092
+    x::Float64
+end
+Base.:+(x::Float64, a::A32092) = x + a.x
+Base.:*(x::Float64, a::A32092) = x * a.x
+@testset "Issue #32092" begin
+    @test ones(2, 2) * [A32092(1.0), A32092(2.0)] == fill(3.0, (2,))
 end
 
 end # module TestMatmul

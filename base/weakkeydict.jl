@@ -76,7 +76,7 @@ lock(f, wkh::WeakKeyDict) = lock(f, wkh.lock)
 trylock(f, wkh::WeakKeyDict) = trylock(f, wkh.lock)
 
 function setindex!(wkh::WeakKeyDict{K}, v, key) where K
-    !isa(key, K) && throw(ArgumentError("$key is not a valid key for type $K"))
+    !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
     finalizer(wkh.finalizer, key)
     lock(wkh) do
         wkh.ht[WeakRef(key)] = v
@@ -92,14 +92,15 @@ function getkey(wkh::WeakKeyDict{K}, kk, default) where K
     end
 end
 
+map!(f,iter::ValueIterator{<:WeakKeyDict})= map!(f, values(iter.dict.ht))
 get(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> get(wkh.ht, key, default), wkh)
 get(default::Callable, wkh::WeakKeyDict{K}, key) where {K} = lock(() -> get(default, wkh.ht, key), wkh)
 function get!(wkh::WeakKeyDict{K}, key, default) where {K}
-    !isa(key, K) && throw(ArgumentError("$key is not a valid key for type $K"))
+    !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
     lock(() -> get!(wkh.ht, WeakRef(key), default), wkh)
 end
 function get!(default::Callable, wkh::WeakKeyDict{K}, key) where {K}
-    !isa(key, K) && throw(ArgumentError("$key is not a valid key for type $K"))
+    !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
     lock(() -> get!(default, wkh.ht, WeakRef(key)), wkh)
 end
 pop!(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> pop!(wkh.ht, key), wkh)

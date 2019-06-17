@@ -93,6 +93,7 @@ end
 if opt_level > 0
     # Make sure `jl_string_ptr` is inlined
     @test !occursin(" call ", get_llvm(jl_string_ptr, Tuple{String}))
+    # Make sure `Core.sizeof` call is inlined
     s = "aaa"
     @test jl_string_ptr(s) == pointer_from_objref(s) + sizeof(Int)
     # String
@@ -105,6 +106,8 @@ if opt_level > 0
     test_loads_no_call(get_llvm(core_sizeof, Tuple{Array{Any}}), [Iptr])
     # Check that we load the elsize
     test_loads_no_call(get_llvm(core_sizeof, Tuple{Vector}), [Iptr, "i16"])
+    # Primitive Type size should be folded to a constant
+    test_loads_no_call(get_llvm(core_sizeof, Tuple{Ptr}), String[])
 
     test_jl_dump_compiles()
     test_jl_dump_compiles_toplevel_thunks()
@@ -334,3 +337,57 @@ mktemp() do f_22330, _
     write(f_22330, str_22330)
     @test success(`$(Base.julia_cmd()) --startup-file=no $f_22330`)
 end
+
+# Alias scope
+macro aliasscope(body)
+    sym = gensym()
+    esc(quote
+        $(Expr(:aliasscope))
+        $sym = $body
+        $(Expr(:popaliasscope))
+        $sym
+    end)
+end
+
+struct Const{T<:Array}
+    a::T
+end
+
+@eval Base.getindex(A::Const, i1::Int) = Core.const_arrayref($(Expr(:boundscheck)), A.a, i1)
+@eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =  (Base.@_inline_meta; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
+
+function foo31018!(a, b)
+    @aliasscope for i in eachindex(a, b)
+        a[i] = Const(b)[i]
+    end
+end
+io = IOBuffer()
+code_llvm(io, foo31018!, Tuple{Vector{Int}, Vector{Int}}, optimize=false, raw=true, dump_module=true)
+str = String(take!(io))
+@test occursin("alias.scope", str)
+@test occursin("aliasscope", str)
+@test occursin("noalias", str)
+
+# Issue #10208 - Unnecessary boxing for calling objectid
+struct FooDictHash{T}
+    x::T
+end
+
+function f_dict_hash_alloc()
+    d = Dict{FooDictHash{Int},Int}()
+    for i in 1:10000
+        d[FooDictHash(i)] = i+1
+    end
+    d
+end
+
+function g_dict_hash_alloc()
+    d = Dict{Int,Int}()
+    for i in 1:10000
+        d[i] = i+1
+    end
+    d
+end
+# Warm up
+f_dict_hash_alloc(); g_dict_hash_alloc();
+@test (@allocated f_dict_hash_alloc()) == (@allocated g_dict_hash_alloc())

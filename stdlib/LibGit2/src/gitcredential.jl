@@ -87,7 +87,7 @@ function Base.copy!(a::GitCredential, b::GitCredential)
     a.host = b.host
     a.path = b.path
     a.username = b.username
-    a.password = b.password == nothing ? nothing : copy(b.password)
+    a.password = b.password === nothing ? nothing : copy(b.password)
     return a
 end
 

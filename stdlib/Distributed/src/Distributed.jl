@@ -11,9 +11,10 @@ import Base: getindex, wait, put!, take!, fetch, isready, push!, length,
 
 # imports for use
 using Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes, wait_connected,
-            VERSION_STRING, binding_module, notify_error, atexit, julia_exename,
+            VERSION_STRING, binding_module, atexit, julia_exename,
             julia_cmd, AsyncGenerator, acquire, release, invokelatest,
             shell_escape_posixly, uv_error, something, notnothing, isbuffered
+using Base.Threads: Event
 
 using Serialization, Sockets
 import Serialization: serialize, deserialize

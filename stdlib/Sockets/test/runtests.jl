@@ -79,6 +79,11 @@ end
     @test_throws MethodError sort([ip"2.3.4.5", ip"1.2.3.4", ip"2001:1:2::1"])
 end
 
+@testset "broadcastable" begin
+    @test size(ip"127.0.0.1" .== ip"127.0.0.1") == ()
+    @test size(ip"::1" .== ip"::1") == ()
+end
+
 @testset "RFC 5952 Compliance" begin
     @test repr(ip"2001:db8:0:0:0:0:2:1") == "ip\"2001:db8::2:1\""
     @test repr(ip"2001:0db8::0001") == "ip\"2001:db8::1\""
@@ -433,9 +438,17 @@ end
 
 @testset "getipaddrs" begin
     @test getipaddr() in getipaddrs()
+    try
+        getipaddr(IPv6) in getipaddrs(IPv6)
+    catch
+        if !isempty(getipaddrs(IPv6))
+            @test "getipaddr(IPv6) errored when it shouldn't have!"
+        end
+    end
 
-    @testset "include lo" begin
-        @test issubset(getipaddrs(), getipaddrs(true))
+    @testset "including loopback addresses" begin
+        @test issubset(getipaddrs(), getipaddrs(loopback=true))
+        @test issubset(getipaddrs(IPv6), getipaddrs(IPv6, loopback=true))
     end
 end
 
@@ -446,7 +459,7 @@ end
             srv = listen(addr)
             s = connect(addr)
 
-            @test success(pipeline(`$(Base.julia_cmd()) -e "exit()" -i`, stdin=s))
+            @test success(pipeline(`$(Base.julia_cmd()) --startup-file=no -e "exit()" -i`, stdin=s))
 
             close(s)
             close(srv)

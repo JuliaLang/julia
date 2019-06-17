@@ -10,7 +10,7 @@ using .Base: copymutable, LinearIndices, length, (:),
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
-    length, resize!, fill, Missing, has_offset_axes
+    length, resize!, fill, Missing, require_one_based_indexing
 
 using .Base: >>>, !==
 
@@ -170,11 +170,12 @@ partialsort(v::AbstractVector, k::Union{Int,OrdinalRange}; kws...) =
 
 # index of the first value of vector a that is greater than or equal to x;
 # returns length(v)+1 if x is greater than all values in v.
-function searchsortedfirst(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
-    lo = lo-1
-    hi = hi+1
-    @inbounds while lo < hi-1
-        m = (lo+hi)>>>1
+function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering) where T<:Integer
+    u = T(1)
+    lo = lo - u
+    hi = hi + u
+    @inbounds while lo < hi - u
+        m = (lo + hi) >>> 1
         if lt(o, v[m], x)
             lo = m
         else
@@ -186,11 +187,12 @@ end
 
 # index of the last value of vector a that is less than or equal to x;
 # returns 0 if x is less than all values of v.
-function searchsortedlast(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
-    lo = lo-1
-    hi = hi+1
-    @inbounds while lo < hi-1
-        m = (lo+hi)>>>1
+function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering) where T<:Integer
+    u = T(1)
+    lo = lo - u
+    hi = hi + u
+    @inbounds while lo < hi - u
+        m = (lo + hi) >>> 1
         if lt(o, x, v[m])
             hi = m
         else
@@ -203,11 +205,12 @@ end
 # returns the range of indices of v equal to x
 # if v does not contain x, returns a 0-length range
 # indicating the insertion point of x
-function searchsorted(v::AbstractVector, x, ilo::Int, ihi::Int, o::Ordering)
-    lo = ilo-1
-    hi = ihi+1
-    @inbounds while lo < hi-1
-        m = (lo+hi)>>>1
+function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering) where T<:Integer
+    u = T(1)
+    lo = ilo - u
+    hi = ihi + u
+    @inbounds while lo < hi - u
+        m = (lo + hi) >>> 1
         if lt(o, v[m], x)
             lo = m
         elseif lt(o, x, v[m])
@@ -222,7 +225,7 @@ function searchsorted(v::AbstractVector, x, ilo::Int, ihi::Int, o::Ordering)
 end
 
 function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -232,7 +235,7 @@ function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
 end
 
 function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if step(a) == 0
         lt(o, first(a), x) ? length(a) + 1 : 1
     else
@@ -242,7 +245,7 @@ function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
 end
 
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -251,7 +254,7 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderin
 end
 
 function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if step(a) == 0
         lt(o, first(a), x) ? length(a)+1 : 1
     else
@@ -260,7 +263,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderi
 end
 
 function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if lt(o, first(a), x)
         if step(a) == 0
             length(a) + 1
@@ -273,7 +276,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOr
 end
 
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if lt(o, x, first(a))
         0
     elseif step(a) == 0
@@ -305,18 +308,20 @@ if `a` does not contain values equal to `x`.
 
 # Examples
 ```jldoctest
-julia> a = [4, 3, 2, 1]
-4-element Array{Int64,1}:
- 4
- 3
- 2
- 1
+julia> searchsorted([1, 2, 4, 5, 5, 7], 4) # single match
+3:3
 
-julia> searchsorted(a, 4)
-5:4
+julia> searchsorted([1, 2, 4, 5, 5, 7], 5) # multiple matches
+4:5
 
-julia> searchsorted(a, 4, rev=true)
-1:1
+julia> searchsorted([1, 2, 4, 5, 5, 7], 3) # no match, insert in the middle
+3:2
+
+julia> searchsorted([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
+7:6
+
+julia> searchsorted([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
+1:0
 ```
 """ searchsorted
 
@@ -329,14 +334,20 @@ specified order. Return `length(a) + 1` if `x` is greater than all values in `a`
 
 # Examples
 ```jldoctest
-julia> searchsortedfirst([1, 2, 4, 5, 14], 4)
+julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 4) # single match
 3
 
-julia> searchsortedfirst([1, 2, 4, 5, 14], 4, rev=true)
-1
+julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 5) # multiple matches
+4
 
-julia> searchsortedfirst([1, 2, 4, 5, 14], 15)
-6
+julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 3) # no match, insert in the middle
+3
+
+julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
+7
+
+julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
+1
 ```
 """ searchsortedfirst
 
@@ -349,13 +360,19 @@ be sorted.
 
 # Examples
 ```jldoctest
-julia> searchsortedlast([1, 2, 4, 5, 14], 4)
+julia> searchsortedlast([1, 2, 4, 5, 5, 7], 4) # single match
 3
 
-julia> searchsortedlast([1, 2, 4, 5, 14], 4, rev=true)
+julia> searchsortedlast([1, 2, 4, 5, 5, 7], 5) # multiple matches
 5
 
-julia> searchsortedlast([1, 2, 4, 5, 14], -1)
+julia> searchsortedlast([1, 2, 4, 5, 5, 7], 3) # no match, insert in the middle
+2
+
+julia> searchsortedlast([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
+6
+
+julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 0
 ```
 """ searchsortedlast
@@ -387,10 +404,6 @@ struct PartialQuickSort{T <: Union{Int,OrdinalRange}} <: Algorithm
     k::T
 end
 
-Base.first(a::PartialQuickSort{Int}) = 1
-Base.last(a::PartialQuickSort{Int}) = a.k
-Base.first(a::PartialQuickSort) = first(a.k)
-Base.last(a::PartialQuickSort) = last(a.k)
 
 """
     InsertionSort
@@ -573,42 +586,38 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering
     return v
 end
 
-## TODO: When PartialQuickSort is parameterized by an Int, this version of sort
-##       has one less comparison per loop than the version below, but enabling
-##       it causes return type inference to fail for sort/sort! (#12833)
-##
-# function sort!(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort{Int},
-#                o::Ordering)
-#     @inbounds while lo < hi
-#         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
-#         j = partition!(v, lo, hi, o)
-#         if j >= a.k
-#             # we don't need to sort anything bigger than j
-#             hi = j-1
-#         elseif j-lo < hi-j
-#             # recurse on the smaller chunk
-#             # this is necessary to preserve O(log(n))
-#             # stack space in the worst case (rather than O(n))
-#             lo < (j-1) && sort!(v, lo, j-1, a, o)
-#             lo = j+1
-#         else
-#             (j+1) < hi && sort!(v, j+1, hi, a, o)
-#             hi = j-1
-#         end
-#     end
-#     return v
-# end
-
-
-function sort!(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort,
+function sort!(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort{Int},
                o::Ordering)
     @inbounds while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
         j = partition!(v, lo, hi, o)
-
-        if j <= first(a)
+        if j >= a.k
+            # we don't need to sort anything bigger than j
+            hi = j-1
+        elseif j-lo < hi-j
+            # recurse on the smaller chunk
+            # this is necessary to preserve O(log(n))
+            # stack space in the worst case (rather than O(n))
+            lo < (j-1) && sort!(v, lo, j-1, a, o)
             lo = j+1
-        elseif j >= last(a)
+        else
+            (j+1) < hi && sort!(v, j+1, hi, a, o)
+            hi = j-1
+        end
+    end
+    return v
+end
+
+
+function sort!(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort{T},
+               o::Ordering) where T<:OrdinalRange
+    @inbounds while lo < hi
+        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+        j = partition!(v, lo, hi, o)
+
+        if j <= first(a.k)
+            lo = j+1
+        elseif j >= last(a.k)
             hi = j-1
         else
             if j-lo < hi-j
@@ -808,9 +817,9 @@ end
     sortperm(v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Return a permutation vector `I` that puts `v[I]` in sorted order. The order is specified
-using the same keywords as `sort!`. The permutation is guaranteed to be stable even if the
-sorting algorithm is unstable, meaning that indices of equal elements appear in ascending
-order.
+using the same keywords as [`sort!`](@ref). The permutation is guaranteed to be stable even
+if the sorting algorithm is unstable, meaning that indices of equal elements appear in
+ascending order.
 
 See also [`sortperm!`](@ref).
 

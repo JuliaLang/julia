@@ -231,7 +231,7 @@ end
     @testset for elty in (ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         Aw, Avl, Avr = LAPACK.geev!('N','V',copy(A))
-        fA = eigen(A)
+        fA = eigen(A, sortby=nothing)
         @test fA.values  ≈ Aw
         @test fA.vectors ≈ Avr
     end
@@ -561,18 +561,18 @@ end
 @testset "trrfs & trevc" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         T = triu(rand(elty,10,10))
-        S = copy(T)
+        v = eigvecs(T, sortby=nothing)[:,1]
         select = zeros(LinearAlgebra.BlasInt,10)
         select[1] = 1
         select,Vr = LAPACK.trevc!('R','S',select,copy(T))
-        @test Vr ≈ eigvecs(S)[:,1]
+        @test Vr ≈ v
         select = zeros(LinearAlgebra.BlasInt,10)
         select[1] = 1
         select,Vl = LAPACK.trevc!('L','S',select,copy(T))
         select = zeros(LinearAlgebra.BlasInt,10)
         select[1] = 1
         select,Vln,Vrn = LAPACK.trevc!('B','S',select,copy(T))
-        @test Vrn ≈ eigvecs(S)[:,1]
+        @test Vrn ≈ v
         @test Vln ≈ Vl
         @test_throws ArgumentError LAPACK.trevc!('V','S',select,copy(T))
         @test_throws DimensionMismatch LAPACK.trrfs!('U','N','N',T,rand(elty,10,10),rand(elty,10,11))

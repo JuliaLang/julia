@@ -102,12 +102,12 @@
                                       0))
 
 (define unary-ops (append! '(|<:| |>:|)
-                           (add-dots '(+ - ! ~ ¬ √ ∛ ∜))))
+                           (add-dots '(+ - ! ~ ¬ √ ∛ ∜ ⋆))))
 
 (define unary-op? (Set unary-ops))
 
 ; operators that are both unary and binary
-(define unary-and-binary-ops '(+ - $ & ~ |.+| |.-|))
+(define unary-and-binary-ops '(+ - $ & ~ ⋆ |.+| |.-| |.⋆|))
 
 (define unary-and-binary-op? (Set unary-and-binary-ops))
 
@@ -141,12 +141,19 @@
 
 ;; characters that can be in an operator
 (define opchar? (Set op-chars))
+(define operator? (SuffSet operators))
+
+(define dot-operators (filter (lambda (o)
+                                (and (not (eq? o '|.|))
+                                     (eqv? (string.char (string o) 0) #\.)
+                                     (not (eqv? (string.char (string o) 1) #\.))))
+                              operators))
+(define dotop? (SuffSet dot-operators))
 ;; characters that can follow . in an operator
 (define dot-opchar? (Set
                      (delete-duplicates
                       (map (lambda (op) (string.char (string op) 1))
-                           (cons `|..| (filter dotop? operators))))))
-(define operator? (SuffSet operators))
+                           (cons `|..| dot-operators)))))
 
 (define initial-reserved-words '(begin while if for try return break continue
                          function macro quote let local global const do
@@ -182,12 +189,6 @@
 (define where-enabled #t)
 
 (define current-filename 'none)
-
-(define-macro (with-normal-ops . body)
-  `(with-bindings ((range-colon-enabled #t)
-                   (space-sensitive #f)
-                   (where-enabled #t))
-                  ,@body))
 
 (define-macro (with-normal-context . body)
   `(with-bindings ((range-colon-enabled #t)

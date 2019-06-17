@@ -606,6 +606,8 @@ end
         @test repeat(s, 3) === S
         @test repeat(S, 3) === S*S*S
     end
+    # Issue #32160 (string allocation unsigned overflow)
+    @test_throws OutOfMemoryError repeat('x', typemax(Csize_t))
 end
 @testset "issue #12495: check that logical indexing attempt raises ArgumentError" begin
     @test_throws ArgumentError "abc"[[true, false, true]]

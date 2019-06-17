@@ -259,6 +259,37 @@ end
         @test length(Char(0):Char(0x001fffff)) == 2097152
         @test length(typemax(UInt64)//one(UInt64):1:typemax(UInt64)//one(UInt64)) == 1
     end
+    @testset "keys/values" begin
+        keytype_is_correct(r) = keytype(r) == eltype(keys(r))
+        valtype_is_correct(r) = valtype(r) == eltype(values(r))
+        @test keytype_is_correct(1:3)
+        @test keytype_is_correct(1:.3:4)
+        @test keytype_is_correct(.1:.1:.3)
+        @test keytype_is_correct(Int8(1):Int8(5))
+        @test keytype_is_correct(Int16(1):Int8(5))
+        @test keytype_is_correct(Int16(1):Int8(3):Int8(5))
+        @test keytype_is_correct(Int8(1):Int16(3):Int8(5))
+        @test keytype_is_correct(Int8(1):Int8(3):Int16(5))
+        @test keytype_is_correct(Int64(1):Int64(5))
+        @test keytype_is_correct(Int64(1):Int64(5))
+        @test keytype_is_correct(Int128(1):Int128(5))
+        @test keytype_is_correct(Base.OneTo(4))
+        @test keytype_is_correct(Base.OneTo(Int32(4)))
+
+        @test valtype_is_correct(1:3)
+        @test valtype_is_correct(1:.3:4)
+        @test valtype_is_correct(.1:.1:.3)
+        @test valtype_is_correct(Int8(1):Int8(5))
+        @test valtype_is_correct(Int16(1):Int8(5))
+        @test valtype_is_correct(Int16(1):Int8(3):Int8(5))
+        @test valtype_is_correct(Int8(1):Int16(3):Int8(5))
+        @test valtype_is_correct(Int8(1):Int8(3):Int16(5))
+        @test valtype_is_correct(Int64(1):Int64(5))
+        @test valtype_is_correct(Int64(1):Int64(5))
+        @test valtype_is_correct(Int128(1):Int128(5))
+        @test valtype_is_correct(Base.OneTo(4))
+        @test valtype_is_correct(Base.OneTo(Int32(4)))
+    end
     @testset "findall(::Base.Fix2{typeof(in)}, ::Array)" begin
         @test findall(in(3:20), [5.2, 3.3]) == findall(in(Vector(3:20)), [5.2, 3.3])
 
@@ -268,6 +299,12 @@ end
             r = 15:-2:-38
             @test findall(in(span), r) == 1:6
         end
+    end
+    @testset "findfirst" begin
+        @test findfirst(isequal(7), 1:2:10) == 4
+        @test findfirst(==(7), 1:2:10) == 4
+        @test findfirst(==(10), 1:2:10) == nothing
+        @test findfirst(==(11), 1:2:10) == nothing
     end
     @testset "reverse" begin
         @test reverse(reverse(1:10)) == 1:10
@@ -400,9 +437,18 @@ end
 @test length(1:4:typemax(Int)) == div(typemax(Int),4) + 1
 
 @testset "overflow in length" begin
-    @test_throws OverflowError length(0:typemax(Int))
-    @test_throws OverflowError length(typemin(Int):typemax(Int))
-    @test_throws OverflowError length(-1:typemax(Int)-1)
+    Tset = Int === Int64 ? (Int,UInt,Int128,UInt128) :
+                           (Int,UInt,Int64,UInt64,Int128, UInt128)
+    for T in Tset
+        @test_throws OverflowError length(zero(T):typemax(T))
+        @test_throws OverflowError length(typemin(T):typemax(T))
+        @test_throws OverflowError length(zero(T):one(T):typemax(T))
+        @test_throws OverflowError length(typemin(T):one(T):typemax(T))
+        if T <: Signed
+            @test_throws OverflowError length(-one(T):typemax(T)-one(T))
+            @test_throws OverflowError length(-one(T):one(T):typemax(T)-one(T))
+        end
+    end
 end
 @testset "loops involving typemin/typemax" begin
     n = 0

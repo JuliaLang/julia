@@ -4,6 +4,9 @@ print(xs...)   = print(stdout::IO, xs...)
 println(xs...) = println(stdout::IO, xs...)
 println(io::IO) = print(io, '\n')
 
+function show end
+function repr end
+
 struct DevNull <: IO end
 const devnull = DevNull()
 isreadable(::DevNull) = false

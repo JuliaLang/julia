@@ -130,7 +130,7 @@ function relockall(rl::ReentrantLock, n::Int)
     lock(rl)
     n1 = rl.reentrancy_cnt
     rl.reentrancy_cnt = n
-    n1 == 1 || error("concurrency violation detected")
+    n1 == 1 || concurrency_violation()
     return
 end
 
@@ -176,6 +176,8 @@ end
     """
     wait(c::Condition)
 end
+
+const ThreadSynchronizer = GenericCondition{Threads.SpinLock}
 
 """
     Semaphore(sem_size)
@@ -271,4 +273,9 @@ function notify(e::Event)
         unlock(e.notify)
     end
     nothing
+end
+
+@eval Threads begin
+    import .Base: Event
+    export Event
 end

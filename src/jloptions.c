@@ -133,7 +133,7 @@ static const char opts[]  =
     "                           Append coverage information to the LCOV tracefile (filename supports format tokens).\n"
 // TODO: These TOKENS are defined in `runtime_ccall.cpp`. A more verbose `--help` should include that list here.
     " --track-allocation={none|user|all}, --track-allocation\n"
-    "                           Count bytes allocated by each source line\n\n"
+    "                           Count bytes allocated by each source line (omitting setting is equivalent to \"user\")\n\n"
 ;
 
 static const char opts_hidden[]  =
@@ -296,13 +296,13 @@ restart_switch:
             break;
         case 'v': // version
             jl_printf(JL_STDOUT, "julia version %s\n", JULIA_VERSION_STRING);
-            jl_exit(0);
+            exit(0);
         case 'h': // help
             jl_printf(JL_STDOUT, "%s%s", usage, opts);
-            jl_exit(0);
+            exit(0);
         case opt_help_hidden:
             jl_printf(JL_STDOUT, "%s%s", usage, opts_hidden);
-            jl_exit(0);
+            exit(0);
         case 'g': // debug info
             if (optarg != NULL) {
                 if (!strcmp(optarg,"0"))
@@ -620,8 +620,9 @@ restart_switch:
     }
     jl_options.code_coverage = codecov;
     jl_options.malloc_log = malloclog;
-    *argvp += optind;
-    *argcp -= optind;
+    int proc_args = *argcp < optind ? *argcp : optind;
+    *argvp += proc_args;
+    *argcp -= proc_args;
 }
 
 JL_DLLEXPORT void jl_set_ARGS(int argc, char **argv)

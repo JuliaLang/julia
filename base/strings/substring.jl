@@ -94,8 +94,7 @@ nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
 function cmp(a::SubString{String}, b::SubString{String})
     na = sizeof(a)
     nb = sizeof(b)
-    c = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-              pointer(a), pointer(b), min(na, nb))
+    c = _memcmp(a, b, min(na, nb))
     return c < 0 ? -1 : c > 0 ? +1 : cmp(na, nb)
 end
 

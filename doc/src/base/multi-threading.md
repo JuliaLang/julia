@@ -1,4 +1,4 @@
-# Multi-Threading
+# [Multi-Threading](@id lib-multithreading)
 
 This experimental interface supports Julia's multi-threading capabilities. Types and functions
 described here might (and likely will) change in the future.

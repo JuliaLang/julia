@@ -12,10 +12,10 @@ Julia also supports communication between `Tasks` through operations like [`wait
 Communication and data synchronization is managed through [`Channel`](@ref)s, which are the conduits
 that provide inter-`Tasks` communication.
 
-Julia also supports experimental multi-threading, where execution is forked and an anonymous function is run across all
+Julia also supports [experimental multi-threading](@ref man-multithreading), where execution is forked and an anonymous function is run across all
 threads.
 Known as the fork-join approach, parallel threads execute independently, and must ultimately be joined in Julia's main thread to allow serial execution to continue.
-Multi-threading is supported using the `Base.Threads` module that is still considered experimental, as Julia is
+Multi-threading is supported using the [`Base.Threads`](@ref lib-multithreading) module that is still considered experimental, as Julia is
 not yet fully thread-safe. In particular segfaults seem to occur during I/O operations and task switching.
 As an up-to-date reference, keep an eye on [the issue tracker](https://github.com/JuliaLang/julia/issues?q=is%3Aopen+is%3Aissue+label%3Amultithreading).
 Multi-Threading should only be used if you take into consideration global variables, locks and
@@ -80,51 +80,51 @@ A channel can be visualized as a pipe, i.e., it has a write end and a read end :
         @async foo()
     end
     ```
-* Channels are created via the `Channel{T}(sz)` constructor. The channel will only hold objects
-  of type `T`. If the type is not specified, the channel can hold objects of any type. `sz` refers
-  to the maximum number of elements that can be held in the channel at any time. For example, `Channel(32)`
-  creates a channel that can hold a maximum of 32 objects of any type. A `Channel{MyType}(64)` can
-  hold up to 64 objects of `MyType` at any time.
-* If a [`Channel`](@ref) is empty, readers (on a [`take!`](@ref) call) will block until data is available.
-* If a [`Channel`](@ref) is full, writers (on a [`put!`](@ref) call) will block until space becomes available.
-* [`isready`](@ref) tests for the presence of any object in the channel, while [`wait`](@ref)
-  waits for an object to become available.
-* A [`Channel`](@ref) is in an open state initially. This means that it can be read from and written to
-  freely via [`take!`](@ref) and [`put!`](@ref) calls. [`close`](@ref) closes a [`Channel`](@ref).
-  On a closed [`Channel`](@ref), [`put!`](@ref) will fail. For example:
+  * Channels are created via the `Channel{T}(sz)` constructor. The channel will only hold objects
+    of type `T`. If the type is not specified, the channel can hold objects of any type. `sz` refers
+    to the maximum number of elements that can be held in the channel at any time. For example, `Channel(32)`
+    creates a channel that can hold a maximum of 32 objects of any type. A `Channel{MyType}(64)` can
+    hold up to 64 objects of `MyType` at any time.
+  * If a [`Channel`](@ref) is empty, readers (on a [`take!`](@ref) call) will block until data is available.
+  * If a [`Channel`](@ref) is full, writers (on a [`put!`](@ref) call) will block until space becomes available.
+  * [`isready`](@ref) tests for the presence of any object in the channel, while [`wait`](@ref)
+    waits for an object to become available.
+  * A [`Channel`](@ref) is in an open state initially. This means that it can be read from and written to
+    freely via [`take!`](@ref) and [`put!`](@ref) calls. [`close`](@ref) closes a [`Channel`](@ref).
+    On a closed [`Channel`](@ref), [`put!`](@ref) will fail. For example:
 
-```julia-repl
-julia> c = Channel(2);
+    ```julia-repl
+    julia> c = Channel(2);
 
-julia> put!(c, 1) # `put!` on an open channel succeeds
-1
+    julia> put!(c, 1) # `put!` on an open channel succeeds
+    1
 
-julia> close(c);
+    julia> close(c);
 
-julia> put!(c, 2) # `put!` on a closed channel throws an exception.
-ERROR: InvalidStateException("Channel is closed.",:closed)
-Stacktrace:
-[...]
-```
+    julia> put!(c, 2) # `put!` on a closed channel throws an exception.
+    ERROR: InvalidStateException("Channel is closed.",:closed)
+    Stacktrace:
+    [...]
+    ```
 
   * [`take!`](@ref) and [`fetch`](@ref) (which retrieves but does not remove the value) on a closed
     channel successfully return any existing values until it is emptied. Continuing the above example:
 
-```julia-repl
-julia> fetch(c) # Any number of `fetch` calls succeed.
-1
+    ```julia-repl
+    julia> fetch(c) # Any number of `fetch` calls succeed.
+    1
 
-julia> fetch(c)
-1
+    julia> fetch(c)
+    1
 
-julia> take!(c) # The first `take!` removes the value.
-1
+    julia> take!(c) # The first `take!` removes the value.
+    1
 
-julia> take!(c) # No more data available on a closed channel.
-ERROR: InvalidStateException("Channel is closed.",:closed)
-Stacktrace:
-[...]
-```
+    julia> take!(c) # No more data available on a closed channel.
+    ERROR: InvalidStateException("Channel is closed.",:closed)
+    Stacktrace:
+    [...]
+    ```
 
 A `Channel` can be used as an iterable object in a `for` loop, in which case the loop runs as
 long as the `Channel` has data or is open. The loop variable takes on all values added to the
@@ -216,7 +216,7 @@ executed sequentially on a single OS thread. Future versions of Julia may suppor
 tasks on multiple threads, in which case compute bound tasks will see benefits of parallel execution
 too.
 
-# Multi-Threading (Experimental)
+# [Multi-Threading (Experimental)](@id man-multithreading)
 
 In addition to tasks Julia forwards natively supports multi-threading.
 Note that this section is experimental and the interfaces may change in the future.
@@ -531,11 +531,11 @@ A remote reference is an object that can be used from any process to refer to an
 on a particular process. A remote call is a request by one process to call a certain function
 on certain arguments on another (possibly the same) process.
 
-Remote references come in two flavors: [`Future`](@ref) and [`RemoteChannel`](@ref).
+Remote references come in two flavors: [`Future`](@ref Distributed.Future) and [`RemoteChannel`](@ref).
 
-A remote call returns a [`Future`](@ref) to its result. Remote calls return immediately; the process
+A remote call returns a [`Future`](@ref Distributed.Future) to its result. Remote calls return immediately; the process
 that made the call proceeds to its next operation while the remote call happens somewhere else.
-You can wait for a remote call to finish by calling [`wait`](@ref) on the returned [`Future`](@ref),
+You can wait for a remote call to finish by calling [`wait`](@ref) on the returned [`Future`](@ref Distributed.Future),
 and you can obtain the full value of the result using [`fetch`](@ref).
 
 On the other hand, [`RemoteChannel`](@ref) s are rewritable. For example, multiple processes can
@@ -615,8 +615,8 @@ on the process that owns `r`, so the [`fetch`](@ref) will be a no-op (no work is
 (It is worth noting that [`@spawn`](@ref) is not built-in but defined in Julia as a [macro](@ref man-macros).
 It is possible to define your own such constructs.)
 
-An important thing to remember is that, once fetched, a [`Future`](@ref) will cache its value
-locally. Further [`fetch`](@ref) calls do not entail a network hop. Once all referencing [`Future`](@ref)s
+An important thing to remember is that, once fetched, a [`Future`](@ref Distributed.Future) will cache its value
+locally. Further [`fetch`](@ref) calls do not entail a network hop. Once all referencing [`Future`](@ref Distributed.Future)s
 have fetched, the remote stored value is deleted.
 
 [`@async`](@ref) is similar to [`@spawn`](@ref), but only runs tasks on the local process. We
@@ -638,7 +638,7 @@ the same time.
 
 
 
-## Code Availability and Loading Packages
+## [Code Availability and Loading Packages](@id code-availability)
 
 Your code must be available on any process that runs it. For example, type the following into
 the Julia prompt:
@@ -981,8 +981,8 @@ Here each iteration applies `f` to a randomly-chosen sample from a vector `a` sh
 
 As you could see, the reduction operator can be omitted if it is not needed. In that case, the
 loop executes asynchronously, i.e. it spawns independent tasks on all available workers and returns
-an array of [`Future`](@ref) immediately without waiting for completion. The caller can wait for
-the [`Future`](@ref) completions at a later point by calling [`fetch`](@ref) on them, or wait
+an array of [`Future`](@ref Distributed.Future) immediately without waiting for completion. The caller can wait for
+the [`Future`](@ref Distributed.Future) completions at a later point by calling [`fetch`](@ref) on them, or wait
 for completion at the end of the loop by prefixing it with [`@sync`](@ref), like `@sync @distributed for`.
 
 In some cases no reduction operator is needed, and we merely wish to apply a function to all integers
@@ -1008,7 +1008,7 @@ Remote references always refer to an implementation of an `AbstractChannel`.
 
 A concrete implementation of an `AbstractChannel` (like `Channel`), is required to implement
 [`put!`](@ref), [`take!`](@ref), [`fetch`](@ref), [`isready`](@ref) and [`wait`](@ref).
-The remote object referred to by a [`Future`](@ref) is stored in a `Channel{Any}(1)`, i.e., a
+The remote object referred to by a [`Future`](@ref Distributed.Future) is stored in a `Channel{Any}(1)`, i.e., a
 `Channel` of size 1 capable of holding objects of `Any` type.
 
 [`RemoteChannel`](@ref), which is rewritable, can point to any type and size of channels, or any
@@ -1088,7 +1088,7 @@ julia> for p in workers() # start tasks on the workers to process requests in pa
 julia> @elapsed while n > 0 # print out results
            job_id, exec_time, where = take!(results)
            println("$job_id finished in $(round(exec_time; digits=2)) seconds on worker $where")
-           n = n - 1
+           global n = n - 1
        end
 1 finished in 0.18 seconds on worker 4
 2 finished in 0.26 seconds on worker 5
@@ -1111,9 +1111,9 @@ Objects referred to by remote references can be freed only when *all* held refer
 in the cluster are deleted.
 
 The node where the value is stored keeps track of which of the workers have a reference to it.
-Every time a [`RemoteChannel`](@ref) or a (unfetched) [`Future`](@ref) is serialized to a worker,
+Every time a [`RemoteChannel`](@ref) or a (unfetched) [`Future`](@ref Distributed.Future) is serialized to a worker,
 the node pointed to by the reference is notified. And every time a [`RemoteChannel`](@ref) or
-a (unfetched) [`Future`](@ref) is garbage collected locally, the node owning the value is again
+a (unfetched) [`Future`](@ref Distributed.Future) is garbage collected locally, the node owning the value is again
 notified. This is implemented in an internal cluster aware serializer. Remote references are only
 valid in the context of a running cluster. Serializing and deserializing references to and from
 regular `IO` objects is not supported.
@@ -1122,12 +1122,12 @@ The notifications are done via sending of "tracking" messages--an "add reference
 a reference is serialized to a different process and a "delete reference" message when a reference
 is locally garbage collected.
 
-Since [`Future`](@ref)s are write-once and cached locally, the act of [`fetch`](@ref)ing a
-[`Future`](@ref) also updates reference tracking information on the node owning the value.
+Since [`Future`](@ref Distributed.Future)s are write-once and cached locally, the act of [`fetch`](@ref)ing a
+[`Future`](@ref Distributed.Future) also updates reference tracking information on the node owning the value.
 
 The node which owns the value frees it once all references to it are cleared.
 
-With [`Future`](@ref)s, serializing an already fetched [`Future`](@ref) to a different node also
+With [`Future`](@ref Distributed.Future)s, serializing an already fetched [`Future`](@ref Distributed.Future) to a different node also
 sends the value since the original remote store may have collected the value by this time.
 
 It is important to note that *when* an object is locally garbage collected depends on the size
@@ -1136,9 +1136,9 @@ of the object and the current memory pressure in the system.
 In case of remote references, the size of the local reference object is quite small, while the
 value stored on the remote node may be quite large. Since the local object may not be collected
 immediately, it is a good practice to explicitly call [`finalize`](@ref) on local instances
-of a [`RemoteChannel`](@ref), or on unfetched [`Future`](@ref)s. Since calling [`fetch`](@ref)
-on a [`Future`](@ref) also removes its reference from the remote store, this is not required on
-fetched [`Future`](@ref)s. Explicitly calling [`finalize`](@ref) results in an immediate message
+of a [`RemoteChannel`](@ref), or on unfetched [`Future`](@ref Distributed.Future)s. Since calling [`fetch`](@ref)
+on a [`Future`](@ref Distributed.Future) also removes its reference from the remote store, this is not required on
+fetched [`Future`](@ref Distributed.Future)s. Explicitly calling [`finalize`](@ref) results in an immediate message
 sent to the remote node to go ahead and remove its reference to the value.
 
 Once finalized, a reference becomes invalid and cannot be used in any further calls.
@@ -1147,7 +1147,7 @@ Once finalized, a reference becomes invalid and cannot be used in any further ca
 ## Local invocations(@id man-distributed-local-invocations)
 
 Data is necessarily copied over to the remote node for execution. This is the case for both
-remotecalls and when data is stored to a[`RemoteChannel`](@ref) / [`Future`](@ref) on
+remotecalls and when data is stored to a[`RemoteChannel`](@ref) / [`Future`](@ref Distributed.Future) on
 a different node. As expected, this results in a copy of the serialized objects
 on the remote node. However, when the destination node is the local node, i.e.
 the calling process id is the same as the remote node id, it is executed

@@ -222,7 +222,8 @@ _eachindex(t::Tuple) = CartesianIndices(t)
 Base.ndims(::Broadcasted{<:Any,<:NTuple{N,Any}}) where {N} = N
 Base.ndims(::Type{<:Broadcasted{<:Any,<:NTuple{N,Any}}}) where {N} = N
 
-Base.length(bc::Broadcasted) = prod(map(length, axes(bc)))
+Base.size(bc::Broadcasted) = map(length, axes(bc))
+Base.length(bc::Broadcasted) = prod(size(bc))
 
 function Base.iterate(bc::Broadcasted)
     iter = eachindex(bc)
@@ -384,13 +385,45 @@ end
 
 ## logic for deciding the BroadcastStyle
 
-# combine_styles operates on values (arbitrarily many)
+"""
+    combine_styles(cs...) -> BroadcastStyle
+
+Decides which `BroadcastStyle` to use for any number of value arguments.
+Uses [`BroadcastStyle`](@ref) to get the style for each argument, and uses
+[`result_style`](@ref) to combine styles.
+
+# Examples
+
+```jldoctest
+julia> Broadcast.combine_styles([1], [1 2; 3 4])
+Base.Broadcast.DefaultArrayStyle{2}()
+```
+"""
+function combine_styles end
+
 combine_styles() = DefaultArrayStyle{0}()
 combine_styles(c) = result_style(BroadcastStyle(typeof(c)))
 combine_styles(c1, c2) = result_style(combine_styles(c1), combine_styles(c2))
 @inline combine_styles(c1, c2, cs...) = result_style(combine_styles(c1), combine_styles(c2, cs...))
 
-# result_style works on types (singletons and pairs), and leverages `BroadcastStyle`
+"""
+    result_style(s1::BroadcastStyle[, s2::BroadcastStyle]) -> BroadcastStyle
+
+Takes one or two `BroadcastStyle`s and combines them using [`BroadcastStyle`](@ref) to
+determine a common `BroadcastStyle`.
+
+# Examples
+
+```jldoctest
+julia> Broadcast.result_style(Broadcast.DefaultArrayStyle{0}(), Broadcast.DefaultArrayStyle{3}())
+Base.Broadcast.DefaultArrayStyle{3}()
+
+julia> Broadcast.result_style(Broadcast.Unknown(), Broadcast.DefaultArrayStyle{1}())
+Base.Broadcast.DefaultArrayStyle{1}()
+```
+"""
+function result_style end
+
 result_style(s::BroadcastStyle) = s
 result_style(s1::S, s2::S) where S<:BroadcastStyle = S()
 # Test both orders so users typically only have to declare one order
@@ -418,6 +451,20 @@ One of these should be undefined (and thus return Broadcast.Unknown).""")
 end
 
 # Indices utilities
+
+"""
+    combine_axes(As...) -> Tuple
+
+Determine the result axes for broadcasting across all values in `As`.
+
+```jldoctest
+julia> Broadcast.combine_axes([1], [1 2; 3 4; 5 6])
+(Base.OneTo(3), Base.OneTo(2))
+
+julia> Broadcast.combine_axes(1, 1, 1)
+()
+```
+"""
 @inline combine_axes(A, B...) = broadcast_shape(axes(A), combine_axes(B...))
 combine_axes(A) = axes(A)
 
@@ -605,11 +652,9 @@ julia> Broadcast.broadcastable("hello") # Strings break convention of matching i
 Base.RefValue{String}("hello")
 ```
 """
-broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val}) = Ref(x)
-broadcastable(x::Ptr) = Ref(x)
+broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,Regex}) = Ref(x)
 broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
 broadcastable(x::Union{AbstractArray,Number,Ref,Tuple,Broadcasted}) = x
-broadcastable(r::Regex) = Ref(r)
 # Default to collecting iterables — which will error for non-iterables
 broadcastable(x) = collect(x)
 broadcastable(::Union{AbstractDict, NamedTuple}) = throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
@@ -919,6 +964,15 @@ end
 @noinline throwdm(axdest, axsrc) =
     throw(DimensionMismatch("destination axes $axdest are not compatible with source axes $axsrc"))
 
+function restart_copyto_nonleaf!(newdest, dest, bc, val, I, iter, state, count)
+    # Function barrier that makes the copying to newdest type stable
+    for II in Iterators.take(iter, count)
+        newdest[II] = dest[II]
+    end
+    newdest[I] = val
+    return copyto_nonleaf!(newdest, bc, iter, state, count+1)
+end
+
 function copyto_nonleaf!(dest, bc::Broadcasted, iter, state, count)
     T = eltype(dest)
     while true
@@ -932,11 +986,7 @@ function copyto_nonleaf!(dest, bc::Broadcasted, iter, state, count)
             # This element type doesn't fit in dest. Allocate a new dest with wider eltype,
             # copy over old values, and continue
             newdest = Base.similar(dest, promote_typejoin(T, typeof(val)))
-            for II in Iterators.take(iter, count)
-                newdest[II] = dest[II]
-            end
-            newdest[I] = val
-            return copyto_nonleaf!(newdest, bc, iter, state, count+1)
+            return restart_copyto_nonleaf!(newdest, dest, bc, val, I, iter, state, count)
         end
         count += 1
     end

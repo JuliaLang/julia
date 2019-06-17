@@ -37,17 +37,21 @@ check_body!(x::QuoteNode) = check_body!(x.value)
 check_body!(x) = true
 
 # @simd splits a for loop into two loops: an outer scalar loop and
-# an inner loop marked with :simdloop. The simd_... functions define
+# an inner loop marked with :loopinfo. The simd_... functions define
 # the splitting.
+# Custom iterators that do not support random access cannot support
+# vectorization. In order to be compatible with `@simd` annotated loops,
+#they should override `simd_inner_length(v::MyIter, j) = 1`,
+#`simd_outer_range(v::MyIter) = v`, and `simd_index(v::MyIter, j, i) = j`.
 
 # Get range for outer loop.
 simd_outer_range(r) = 0:0
 
 # Get trip count for inner loop.
-@inline simd_inner_length(r,j::Int) = Base.length(r)
+@inline simd_inner_length(r, j) = Base.length(r)
 
 # Construct user-level element from original range, outer loop index j, and inner loop index i.
-@inline simd_index(r,j::Int,i) = (@inbounds ret = r[i+firstindex(r)]; ret)
+@inline simd_index(r, j, i) = (@inbounds ret = r[i+firstindex(r)]; ret)
 
 # Compile Expr x in context of @simd.
 function compile(x, ivdep)
@@ -72,7 +76,7 @@ function compile(x, ivdep)
                                 local $var = Base.simd_index($r,$j,$i)
                                 $(x.args[2])        # Body of loop
                                 $i += 1
-                                $(Expr(:simdloop, ivdep))  # Mark loop as SIMD loop
+                                $(Expr(:loopinfo, Symbol("julia.simdloop"), ivdep))  # Mark loop as SIMD loop
                             end
                         end
                     end
@@ -121,12 +125,12 @@ either case, your inner loop should have the following properties to allow vecto
 * No iteration ever waits on a previous iteration to make forward progress.
 """
 macro simd(forloop)
-    esc(compile(forloop, false))
+    esc(compile(forloop, nothing))
 end
 
 macro simd(ivdep, forloop)
     if ivdep == :ivdep
-        esc(compile(forloop, true))
+        esc(compile(forloop, Symbol("julia.ivdep")))
     else
         throw(SimdError("Only ivdep is valid as the first argument to @simd"))
     end

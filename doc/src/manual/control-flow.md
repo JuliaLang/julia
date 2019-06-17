@@ -981,8 +981,6 @@ symbols:
 
 | Symbol      | Meaning                                            |
 |:----------- |:-------------------------------------------------- |
-| `:runnable` | Currently running, or available to be switched to  |
-| `:waiting`  | Blocked waiting for a specific event               |
-| `:queued`   | In the scheduler's run queue about to be restarted |
+| `:runnable` | Currently running, or able to run                  |
 | `:done`     | Successfully finished executing                    |
 | `:failed`   | Finished with an uncaught exception                |

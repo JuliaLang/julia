@@ -44,6 +44,9 @@ end
     @test occursin("1.25", string(spv_x1))
     @test occursin("-0.75", string(spv_x1))
     @test occursin("3.5", string(spv_x1))
+
+    # issue #30589
+    @test repr("text/plain", sparse([true])) == "1-element SparseArrays.SparseVector{Bool,$Int} with 1 stored entry:\n  [1]  =  1"
 end
 
 ### Comparison helper to ensure exact equality with internal structure
@@ -904,6 +907,14 @@ end
             @test SparseArrays.densemv(A, x2; trans='C') ≈ Af'x2f
             @test_throws ArgumentError SparseArrays.densemv(A, x; trans='D')
         end
+
+        let A = sparse(bitrand(9, 16)), x = sparse(bitrand(16))
+            Af = Array(A)
+            xf = Array(x)
+            y = SparseArrays.densemv(A, x)
+            @test isa(y, Vector{Int})
+            @test y == Af*xf
+        end
     end
     @testset "sparse A * sparse x -> sparse y" begin
         let A = sprandn(9, 16, 0.5), x = sprand(16, 0.7), x2 = sprand(9, 0.7)
@@ -940,6 +951,35 @@ end
             y = *(adjoint(A), x2)
             @test isa(y, SparseVector{ComplexF64,Int})
             @test Array(y) ≈ Af'x2f
+        end
+
+        let A = sparse(bitrand(9, 16)), x = sparse(bitrand(16)), x2 = sparse(bitrand(9))
+            Af = Array(A)
+            xf = Array(x)
+            x2f = Array(x2)
+
+            y = A*x
+            @test isa(y, SparseVector{Int, Int})
+            @test Array(y) == Af*xf
+
+            y = A'*x2
+            @test isa(y, SparseVector{Int, Int})
+            @test Array(y) == Af'x2f
+        end
+    end
+    @testset "sparse A * dense x -> dense y" begin
+        let A = sparse(bitrand(9, 16)), x = Vector(bitrand(16)), x2 = Vector(bitrand(9))
+            Af = Array(A)
+            xf = Array(x)
+            x2f = Array(x2)
+
+            y = A*x
+            @test isa(y, Vector{Int})
+            @test y == Af*xf
+
+            y = A'*x2
+            @test isa(y, Vector{Int})
+            @test y == Af'x2f
         end
     end
     @testset "ldiv ops with triangular matrices and sparse vecs (#14005)" begin

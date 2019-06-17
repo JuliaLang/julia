@@ -73,6 +73,11 @@ end
     @test mean([1,2,3]) == 2.
     @test mean([0 1 2; 4 5 6], dims=1) == [2.  3.  4.]
     @test mean([1 2 3; 4 5 6], dims=1) == [2.5 3.5 4.5]
+    @test mean(-, [1 2 3 ; 4 5 6], dims=1) == [-2.5 -3.5 -4.5]
+    @test mean(-, [1 2 3 ; 4 5 6], dims=2) == transpose([-2.0 -5.0])
+    @test mean(-, [1 2 3 ; 4 5 6], dims=(1, 2)) == -3.5 .* ones(1, 1)
+    @test mean(-, [1 2 3 ; 4 5 6], dims=(1, 1)) == [-2.5 -3.5 -4.5]
+    @test mean(-, [1 2 3 ; 4 5 6], dims=()) == Float64[-1 -2 -3 ; -4 -5 -6]
     @test mean(i->i+1, 0:2) === 2.
     @test mean(isodd, [3]) === 1.
     @test mean(x->3x, (1,1)) === 3.
@@ -370,6 +375,12 @@ Y = [6.0  2.0;
         @test C ≈ Cxy
         @inferred cov(X, Y, dims=vd, corrected=cr)
     end
+
+    @testset "floating point accuracy for `cov` of large numbers" begin
+        A = [4.0, 7.0, 13.0, 16.0]
+        C = A .+ 1.0e10
+        @test cov(A, A) ≈ cov(C, C)
+    end
 end
 
 function safe_cor(x, y, zm::Bool)
@@ -468,12 +479,49 @@ end
     @test quantile([0,1],1e-18) == 1e-18
     @test quantile([1, 2, 3, 4],[]) == []
     @test quantile([1, 2, 3, 4], (0.5,)) == (2.5,)
-    @test quantile([4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11], (0.1, 0.2, 0.4, 0.9)) == (2.0, 3.0, 5.0, 11.0)
+    @test quantile([4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   (0.1, 0.2, 0.4, 0.9)) == (2.0, 3.0, 5.0, 11.0)
+    @test quantile(Union{Int, Missing}[4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   [0.1, 0.2, 0.4, 0.9]) == [2.0, 3.0, 5.0, 11.0]
+    @test quantile(Any[4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   [0.1, 0.2, 0.4, 0.9]) == [2.0, 3.0, 5.0, 11.0]
+    @test quantile([4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   Any[0.1, 0.2, 0.4, 0.9]) == [2.0, 3.0, 5.0, 11.0]
+    @test quantile([4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   Any[0.1, 0.2, 0.4, 0.9]) isa Vector{Float64}
+    @test quantile(Any[4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   Any[0.1, 0.2, 0.4, 0.9]) == [2, 3, 5, 11]
+    @test quantile(Any[4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   Any[0.1, 0.2, 0.4, 0.9]) isa Vector{Float64}
     @test quantile([1, 2, 3, 4], ()) == ()
+    @test isempty(quantile([1, 2, 3, 4], Float64[]))
+    @test quantile([1, 2, 3, 4], Float64[]) isa Vector{Float64}
+    @test quantile([1, 2, 3, 4], []) isa Vector{Any}
+    @test quantile([1, 2, 3, 4], [0, 1]) isa Vector{Int}
+
+    @test quantile(Any[1, 2, 3], 0.5) isa Float64
+    @test quantile(Any[1, big(2), 3], 0.5) isa BigFloat
+    @test quantile(Any[1, 2, 3], Float16(0.5)) isa Float16
+    @test quantile(Any[1, Float16(2), 3], Float16(0.5)) isa Float16
+    @test quantile(Any[1, big(2), 3], Float16(0.5)) isa BigFloat
 
     @test_throws ArgumentError quantile([1, missing], 0.5)
     @test_throws ArgumentError quantile([1, NaN], 0.5)
     @test quantile(skipmissing([1, missing, 2]), 0.5) === 1.5
+
+    # make sure that type inference works correctly in normal cases
+    for T in [Int, BigInt, Float64, Float16, BigFloat, Rational{Int}, Rational{BigInt}]
+        for S in [Float64, Float16, BigFloat, Rational{Int}, Rational{BigInt}]
+            @inferred quantile(T[1, 2, 3], S(0.5))
+            @inferred quantile(T[1, 2, 3], S(0.6))
+            @inferred quantile(T[1, 2, 3], S[0.5, 0.6])
+            @inferred quantile(T[1, 2, 3], (S(0.5), S(0.6)))
+        end
+    end
+    x = [3; 2; 1]
+    y = zeros(3)
+    @test quantile!(y, x, [0.1, 0.5, 0.9]) === y
+    @test y == [1.2, 2.0, 2.8]
 end
 
 # StatsBase issue 164

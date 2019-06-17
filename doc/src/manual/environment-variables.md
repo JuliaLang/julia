@@ -20,7 +20,7 @@ those for which `JULIA` appears in the name.
     starts, therefore adding these to `~/.julia/config/startup.jl` is too late in the startup process.
     In Bash, environment variables can either be set manually by running, e.g.,
     `export JULIA_NUM_THREADS=4` before starting Julia, or by adding the same command to
-    `-/.bashrc` or `~/.bash_profile` to set the variable each time Bash is started.
+    `~/.bashrc` or `~/.bash_profile` to set the variable each time Bash is started.
 
 ## File locations
 
@@ -75,27 +75,67 @@ and a global configuration search path of
 
 ### `JULIA_PROJECT`
 
-A directory path that points to the current Julia project. Setting this
-environment variable has the same effect as specifying the `--project` start-up
-option, but `--project` has higher precedence.  If the variable is set to `@.` then
-Julia tries to find a project directory that contains `Project.toml` or
-`JuliaProject.toml` file from the current directory and its parents.  See also
+A directory path that indicates which project should be the initial active project.
+Setting this environment variable has the same effect as specifying the `--project`
+start-up option, but `--project` has higher precedence. If the variable is set to `@.`
+then Julia tries to find a project directory that contains `Project.toml` or
+`JuliaProject.toml` file from the current directory and its parents. See also
 the chapter on [Code Loading](@ref).
 
 !!! note
 
-    `JULIA_PROJECT` must be defined before starting julia; defining it in `startup.jl` is too late in the startup process.
+    `JULIA_PROJECT` must be defined before starting julia; defining it in `startup.jl`
+    is too late in the startup process.
 
 ### `JULIA_LOAD_PATH`
 
-A separated list of absolute paths that are to be appended to the variable
-[`LOAD_PATH`](@ref). (In Unix-like systems, `:` is the path separator; in
-Windows systems, `;` is the path separator.) The `LOAD_PATH` variable is where
-[`Base.require`](@ref) and `Base.load_in_path()` look for code; it defaults to
-the absolute path
-`$JULIA_HOME/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)` so that,
-e.g., version 0.7 of Julia on a Linux system with a Julia executable at
-`/bin/julia` will have a default `LOAD_PATH` of `/share/julia/stdlib/v0.7`.
+The `JULIA_LOAD_PATH` environment variable is used to populate the global Julia
+[`LOAD_PATH`](@ref) variable, which determines which packages can be loaded via
+`import` and `using` (see [Code Loading](@ref)).
+
+Unlike the shell `PATH` variable, empty entries in `JULIA_LOAD_PATH` are expanded to
+the default value of `LOAD_PATH`, `["@", "@v#.#", "@stdlib"]` when populating
+`LOAD_PATH`. This allows easy appending, prepending, etc. of the load path value in
+shell scripts regardless of whether `JULIA_LOAD_PATH` is already set or not. For
+example, to prepend the directory `/foo/bar` to `LOAD_PATH` just do
+```sh
+export JULIA_LOAD_PATH="/foo/bar:$JULIA_LOAD_PATH"
+```
+If the `JULIA_LOAD_PATH` environment variable is already set, its old value will be
+prepended with `/foo/bar`. On the other hand, if `JULIA_LOAD_PATH` is not set, then
+it will be set to `/foo/bar:` which will expand to a `LOAD_PATH` value of
+`["/foo/bar", "@", "@v#.#", "@stdlib"]`. If `JULIA_LOAD_PATH` is set to the empty
+string, it expands to an empty `LOAD_PATH` array. In other words, the empty string
+is interpreted as a zero-element array, not a one-element array of the empty string.
+This behavior was chosen so that it would be possible to set an empty load path via
+the environment variable. If you want the default load path, either unset the
+environment variable or if it must have a value, set it to the string `:`.
+
+### `JULIA_DEPOT_PATH`
+
+The `JULIA_DEPOT_PATH` environment variable is used to populate the global Julia
+[`DEPOT_PATH`](@ref) variable, which controls where the package manager, as well
+as Julia's code loading mechanisms, look for package registries, installed
+packages, named environments, repo clones, cached compiled package images,
+configuration files, and the default location of the REPL's history file.
+
+Unlike the shell `PATH` variable but similar to `JULIA_LOAD_PATH`, empty entries in
+`JULIA_DEPOT_PATH` are expanded to the default value of `DEPOT_PATH`. This allows
+easy appending, prepending, etc. of the depot path value in shell scripts regardless
+of whether `JULIA_DEPOT_PATH` is already set or not. For example, to prepend the
+directory `/foo/bar` to `DEPOT_PATH` just do
+```sh
+export JULIA_DEPOT_PATH="/foo/bar:$JULIA_DEPOT_PATH"
+```
+If the `JULIA_DEPOT_PATH` environment variable is already set, its old value will be
+prepended with `/foo/bar`. On the other hand, if `JULIA_DEPOT_PATH` is not set, then
+it will be set to `/foo/bar:` which will have the effect of prepending `/foo/bar` to
+the default depot path. If `JULIA_DEPOT_PATH` is set to the empty string, it expands
+to an empty `DEPOT_PATH` array. In other words, the empty string is interpreted as a
+zero-element array, not a one-element array of the empty string. This behavior was
+chosen so that it would be possible to set an empty depot path via the environment
+variable. If you want the default depot path, either unset the environment variable
+or if it must have a value, set it to the string `:`.
 
 ### `JULIA_HISTORY`
 
@@ -103,7 +143,7 @@ The absolute path `REPL.find_hist_file()` of the REPL's history file. If
 `$JULIA_HISTORY` is not set, then `REPL.find_hist_file()` defaults to
 
 ```
-$HOME/.julia/logs/repl_history.jl
+$(DEPOT_PATH[1])/logs/repl_history.jl
 ```
 
 ### `JULIA_PKGRESOLVE_ACCURACY`
@@ -115,9 +155,10 @@ by default `1`, and larger values correspond to larger amounts of time.
 
 Suppose the value of `$JULIA_PKGRESOLVE_ACCURACY` is `n`. Then
 
-*   the number of pre-decimation iterations is `20*n`,
-*   the number of iterations between decimation steps is `10*n`, and
-*   at decimation steps, at most one in every `20*n` packages is decimated.
+* the number of pre-decimation iterations is `20*n`,
+* the number of iterations between decimation steps is `10*n`, and
+* at decimation steps, at most one in every `20*n` packages is decimated.
+
 
 ## External applications
 

@@ -26,7 +26,7 @@ comprehensions, broadcast-fusing                 | local | global or local
 
 Notably missing from this table are
 [begin blocks](@ref man-compound-expressions) and [if blocks](@ref man-conditional-evaluation)
-which do *not* introduce new scope blocks.
+which do *not* introduce new scopes.
 Both types of scopes follow somewhat different rules which will be explained below.
 
 Julia uses [lexical scoping](https://en.wikipedia.org/wiki/Scope_%28computer_science%29#Lexical_scoping_vs._dynamic_scoping),
@@ -97,15 +97,12 @@ A new local scope is introduced by most code blocks (see above
 [table](@ref man-scope-table) for a complete list).
 A local scope inherits all the variables from a parent local scope,
 both for reading and writing.
-Additionally, the local scope inherits all global variables that are assigned
-in its parent global scope block (if it is surrounded by a global `if` or `begin` scope).
 Unlike global scopes, local scopes are not namespaces,
 thus variables in an inner scope cannot be retrieved from the parent scope through some sort of
 qualified access.
 
 The following rules and examples pertain to local scopes.
-A newly introduced variable in a local scope does not
-back-propagate to its parent scope.
+A newly introduced variable in a local scope cannot be referenced by a parent scope.
 For example, here the ``z`` is not introduced into the top-level scope:
 
 ```jldoctest
@@ -121,18 +118,30 @@ ERROR: UndefVarError: z not defined
     In this and all following examples it is assumed that their top-level is a global scope
     with a clean workspace, for instance a newly started REPL.
 
+Inner local scopes can, however, update variables in their parent scopes:
+
+```jldoctest
+julia> for i = 1:1
+           z = i
+           for j = 1:1
+               z = 0
+           end
+           println(z)
+       end
+0
+```
+
 Inside a local scope a variable can be forced to be a new local variable using the [`local`](@ref) keyword:
 
 ```jldoctest
-julia> x = 0;
-
-julia> for i = 1:10
-           local x # this is also the default
+julia> for i = 1:1
            x = i + 1
+           for j = 1:1
+               local x = 0
+           end
+           println(x)
        end
-
-julia> x
-0
+2
 ```
 
 Inside a local scope a global variable can be assigned to by using the keyword [`global`](@ref):
@@ -163,9 +172,6 @@ julia> z
 The `local` and `global` keywords can also be applied to destructuring assignments, e.g.
 `local x, y = 1, 2`. In this case the keyword affects all listed variables.
 
-Local scopes are introduced by most block keywords,
-with notable exceptions of `begin` and `if`.
-
 In a local scope, all variables are inherited from its parent
 global scope block unless:
 
@@ -194,8 +200,8 @@ An explicit `global` is needed to assign to a global variable:
 !!! sidebar "Avoiding globals"
     Avoiding changing the value of global variables is considered by many
     to be a programming best-practice.
-    One reason for this is that remotely changing the state of global variables in other
-    modules should be done with care as it makes the local behavior of the program hard to reason about.
+    Changing the value of a global variable can cause "action at a distance",
+    making the behavior of a program harder to reason about.
     This is why the scope blocks that introduce local scope require the `global`
     keyword to declare the intent to modify a global variable.
 
@@ -233,9 +239,9 @@ julia> x, y # verify that global x and y are unchanged
 (1, 2)
 ```
 
-The reason to allow *modifying local* variables of parent scopes in
+The reason to allow modifying local variables of parent scopes in
 nested functions is to allow constructing [`closures`](https://en.wikipedia.org/wiki/Closure_%28computer_programming%29)
-which have a private state, for instance the `state` variable in the
+which have private state, for instance the `state` variable in the
 following example:
 
 ```jldoctest

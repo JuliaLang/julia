@@ -266,7 +266,7 @@ function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
     end
 
     inner = ex
-    while inner.head == :macrocall
+    while inner.head === :macrocall
         inner = inner.args[end]::Expr
     end
 
@@ -284,7 +284,7 @@ popmeta!(body, sym) = _getmeta(body, sym, true)
 peekmeta(body, sym) = _getmeta(body, sym, false)
 
 function _getmeta(body::Expr, sym::Symbol, delete::Bool)
-    body.head == :block || return false, []
+    body.head === :block || return false, []
     _getmeta(body.args, sym, delete)
 end
 _getmeta(arg, sym, delete::Bool) = (false, [])
@@ -319,19 +319,19 @@ function findmetaarg(metaargs, sym)
 end
 
 function is_short_function_def(ex)
-    ex.head == :(=) || return false
+    ex.head === :(=) || return false
     while length(ex.args) >= 1 && isa(ex.args[1], Expr)
-        (ex.args[1].head == :call) && return true
-        (ex.args[1].head == :where || ex.args[1].head == :(::)) || return false
+        (ex.args[1].head === :call) && return true
+        (ex.args[1].head === :where || ex.args[1].head === :(::)) || return false
         ex = ex.args[1]
     end
     return false
 end
 
 function findmeta(ex::Expr)
-    if ex.head == :function || is_short_function_def(ex)
+    if ex.head === :function || is_short_function_def(ex)
         body::Expr = ex.args[2]
-        body.head == :block || error(body, " is not a block expression")
+        body.head === :block || error(body, " is not a block expression")
         return findmeta_block(ex.args)
     end
     error(ex, " is not a function expression")
@@ -343,9 +343,9 @@ function findmeta_block(exargs, argsmatch=args->true)
     for i = 1:length(exargs)
         a = exargs[i]
         if isa(a, Expr)
-            if (a::Expr).head == :meta && argsmatch((a::Expr).args)
+            if (a::Expr).head === :meta && argsmatch((a::Expr).args)
                 return i, exargs
-            elseif (a::Expr).head == :block
+            elseif (a::Expr).head === :block
                 idx, exa = findmeta_block(a.args, argsmatch)
                 if idx != 0
                     return idx, exa

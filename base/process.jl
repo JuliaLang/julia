@@ -30,6 +30,12 @@ struct Cmd <: AbstractCmd
     end
 end
 
+has_nondefault_cmd_flags(c::Cmd) =
+    c.ignorestatus ||
+    c.flags != 0x00 ||
+    c.env !== nothing ||
+    c.dir !== ""
+
 """
     Cmd(cmd::Cmd; ignorestatus, detach, windows_verbatim, windows_hide, env, dir)
 
@@ -113,6 +119,7 @@ function show(io::IO, cmd::Cmd)
     print_env && (print(io, ","); show(io, cmd.env))
     print_dir && (print(io, "; dir="); show(io, cmd.dir))
     (print_dir || print_env) && print(io, ")")
+    nothing
 end
 
 function show(io::IO, cmds::Union{OrCmds,ErrOrCmds})
@@ -267,7 +274,7 @@ run(pipeline(`update`, stdout="log.txt", append=true))
 """
 function pipeline(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, append::Bool=false)
     if append && stdout === nothing && stderr === nothing
-        error("append set to true, but no output redirections specified")
+        throw(ArgumentError("append set to true, but no output redirections specified"))
     end
     if stdin !== nothing
         cmd = redir_out(stdin, cmd)
@@ -621,32 +628,46 @@ function eachline(cmd::AbstractCmd; keep::Bool=false)
     return EachLine(out, keep=keep, ondone=ondone)::EachLine
 end
 
-function open(cmds::AbstractCmd, mode::AbstractString, other::Redirectable=devnull)
+"""
+    open(command, mode::AbstractString, stdio=devnull)
+
+Run `command` asynchronously. Like `open(command, stdio; read, write)` except specifying
+the read and write flags via a mode string instead of keyword arguments.
+Possible mode strings are:
+
+| Mode | Description | Keywords                         |
+|:-----|:------------|:---------------------------------|
+| `r`  | read        | none                             |
+| `w`  | write       | `write = true`                   |
+| `r+` | read, write | `read = true, write = true`      |
+| `w+` | read, write | `read = true, write = true`      |
+"""
+function open(cmds::AbstractCmd, mode::AbstractString, stdio::Redirectable=devnull)
     if mode == "r+" || mode == "w+"
-        return open(cmds, other, read = true, write = true)
+        return open(cmds, stdio, read = true, write = true)
     elseif mode == "r"
-        return open(cmds, other)
+        return open(cmds, stdio)
     elseif mode == "w"
-        return open(cmds, other, write = true)
+        return open(cmds, stdio, write = true)
     else
-        throw(ArgumentError("mode must be \"r\" or \"w\", not \"$mode\""))
+        throw(ArgumentError("mode must be \"r\", \"w\", \"r+\", or \"w+\", not $(repr(mode))"))
     end
 end
 
 # return a Process object to read-to/write-from the pipeline
 """
-    open(command, other=devnull; write::Bool = false, read::Bool = !write)
+    open(command, stdio=devnull; write::Bool = false, read::Bool = !write)
 
 Start running `command` asynchronously, and return a `process::IO` object.  If `read` is
-true, then reads from the process come from the process's standard output and `other` optionally
+true, then reads from the process come from the process's standard output and `stdio` optionally
 specifies the process's standard input stream.  If `write` is true, then writes go to
-the process's standard input and `other` optionally specifies the process's standard output
+the process's standard input and `stdio` optionally specifies the process's standard output
 stream.
 The process's standard error stream is connected to the current global `stderr`.
 """
-function open(cmds::AbstractCmd, other::Redirectable=devnull; write::Bool=false, read::Bool=!write)
+function open(cmds::AbstractCmd, stdio::Redirectable=devnull; write::Bool=false, read::Bool=!write)
     if read && write
-        other === devnull || throw(ArgumentError("no stream can be specified for `other` in read-write mode"))
+        stdio === devnull || throw(ArgumentError("no stream can be specified for `stdio` in read-write mode"))
         in = PipeEndpoint()
         out = PipeEndpoint()
         processes = _spawn(cmds, Any[in, out, stderr])
@@ -654,14 +675,14 @@ function open(cmds::AbstractCmd, other::Redirectable=devnull; write::Bool=false,
         processes.out = out
     elseif read
         out = PipeEndpoint()
-        processes = _spawn(cmds, Any[other, out, stderr])
+        processes = _spawn(cmds, Any[stdio, out, stderr])
         processes.out = out
     elseif write
         in = PipeEndpoint()
-        processes = _spawn(cmds, Any[in, other, stderr])
+        processes = _spawn(cmds, Any[in, stdio, stderr])
         processes.in = in
     else
-        other === devnull || throw(ArgumentError("no stream can be specified for `other` in no-access mode"))
+        stdio === devnull || throw(ArgumentError("no stream can be specified for `stdio` in no-access mode"))
         processes = _spawn(cmds, Any[devnull, devnull, stderr])
     end
     return processes
@@ -710,8 +731,9 @@ read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))
 """
     run(command, args...; wait::Bool = true)
 
-Run a command object, constructed with backticks. Throws an error if anything goes wrong,
-including the process exiting with a non-zero status (when `wait` is true).
+Run a command object, constructed with backticks (see the [Running External Programs](@ref)
+section in the manual). Throws an error if anything goes wrong, including the process
+exiting with a non-zero status (when `wait` is true).
 
 If `wait` is false, the process runs asynchronously. You can later wait for it and check
 its exit status by calling `success` on the returned process object.
@@ -775,14 +797,40 @@ success(procs::ProcessChain) = success(procs.processes)
 """
     success(command)
 
-Run a command object, constructed with backticks, and tell whether it was successful (exited
-with a code of 0). An exception is raised if the process cannot be started.
+Run a command object, constructed with backticks (see the [Running External Programs](@ref)
+section in the manual), and tell whether it was successful (exited with a code of 0).
+An exception is raised if the process cannot be started.
 """
 success(cmd::AbstractCmd) = success(_spawn(cmd))
 
+
+"""
+    ProcessFailedException
+
+Indicates problematic exit status of a process.
+When running commands or pipelines, this is thrown to indicate
+a nonzero exit code was returned (i.e. that the invoked process failed).
+"""
+struct ProcessFailedException <: Exception
+    procs::Vector{Process}
+end
+ProcessFailedException(proc::Process) = ProcessFailedException([proc])
+
+function showerror(io::IO, err::ProcessFailedException)
+    if length(err.procs) == 1
+        proc = err.procs[1]
+        println(io, "failed process: ", proc, " [", proc.exitcode, "]")
+    else
+        println(io, "failed processes:")
+        for proc in err.procs
+            println(io, "  ", proc, " [", proc.exitcode, "]")
+        end
+    end
+end
+
 function pipeline_error(proc::Process)
     if !proc.cmd.ignorestatus
-        error("failed process: ", proc, " [", proc.exitcode, "]")
+        throw(ProcessFailedException(proc))
     end
     nothing
 end
@@ -795,12 +843,7 @@ function pipeline_error(procs::ProcessChain)
         end
     end
     isempty(failed) && return nothing
-    length(failed) == 1 && pipeline_error(failed[1])
-    msg = "failed processes:"
-    for proc in failed
-        msg = string(msg, "\n  ", proc, " [", proc.exitcode, "]")
-    end
-    error(msg)
+    throw(ProcessFailedException(failed))
 end
 
 """
@@ -878,7 +921,12 @@ end
 
 arg_gen() = String[]
 arg_gen(x::AbstractString) = String[cstr(x)]
-arg_gen(cmd::Cmd) = cmd.exec
+function arg_gen(cmd::Cmd)
+    if has_nondefault_cmd_flags(cmd)
+        throw(ArgumentError("Non-default environment behavior is only permitted for the first interpolant."))
+    end
+    cmd.exec
+end
 
 function arg_gen(head)
     if isiterable(typeof(head))
@@ -904,10 +952,20 @@ end
 
 function cmd_gen(parsed)
     args = String[]
-    for arg in parsed
-        append!(args, arg_gen(arg...))
+    if length(parsed) >= 1 && isa(parsed[1], Tuple{Cmd})
+        cmd = parsed[1][1]
+        (ignorestatus, flags, env, dir) = (cmd.ignorestatus, cmd.flags, cmd.env, cmd.dir)
+        append!(args, cmd.exec)
+        for arg in tail(parsed)
+            append!(args, arg_gen(arg...))
+        end
+        return Cmd(Cmd(args), ignorestatus, flags, env, dir)
+    else
+        for arg in parsed
+            append!(args, arg_gen(arg...))
+        end
+        return Cmd(args)
     end
-    return Cmd(args)
 end
 
 """

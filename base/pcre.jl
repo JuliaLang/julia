@@ -37,6 +37,7 @@ const COMPILE_MASK      =
       CASELESS          |
       DOLLAR_ENDONLY    |
       DOTALL            |
+      ENDANCHORED       |
       EXTENDED          |
       FIRSTLINE         |
       MULTILINE         |
@@ -76,7 +77,7 @@ function info(regex::Ptr{Cvoid}, what::Integer, ::Type{T}) where T
     buf = RefValue{T}()
     ret = ccall((:pcre2_pattern_info_8, PCRE_LIB), Int32,
                 (Ptr{Cvoid}, Int32, Ptr{Cvoid}),
-                regex, what, buf)
+                regex, what, buf) % UInt32
     if ret != 0
         error(ret == ERROR_NULL      ? "NULL regex object" :
               ret == ERROR_BADMAGIC  ? "invalid regex object" :
@@ -106,8 +107,10 @@ end
 
 function jit_compile(regex::Ptr{Cvoid})
     errno = ccall((:pcre2_jit_compile_8, PCRE_LIB), Cint,
-                  (Ptr{Cvoid}, UInt32), regex, JIT_COMPLETE)
-    errno == 0 || error("PCRE JIT error: $(err_message(errno))")
+                  (Ptr{Cvoid}, UInt32), regex, JIT_COMPLETE) % UInt32
+    errno == 0 && return true
+    errno == ERROR_JIT_BADOPTION && return false
+    error("PCRE JIT error: $(err_message(errno))")
 end
 
 free_match_data(match_data) =

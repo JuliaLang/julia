@@ -6,6 +6,7 @@ end
 
 @testset "nonmissingtype" begin
     @test Base.nonmissingtype(Union{Int, Missing}) == Int
+    @test Base.nonmissingtype(Union{Rational, Missing}) == Rational
     @test Base.nonmissingtype(Any) == Any
     @test Base.nonmissingtype(Missing) == Union{}
 end
@@ -156,12 +157,14 @@ Base.one(::Type{Unit}) = 1
                             identity, zero, one, oneunit,
                             iseven, isodd, ispow2,
                             isfinite, isinf, isnan, iszero,
-                            isinteger, isreal, transpose, adjoint, float]
+                            isinteger, isreal, transpose, adjoint, float, inv]
 
     # All elementary functions return missing when evaluating missing
     for f in elementary_functions
         @test ismissing(f(missing))
     end
+
+    @test ismissing(clamp(missing, 1, 2))
 
     for T in (Int, Float64)
         @test zero(Union{T, Missing}) === T(0)
@@ -179,6 +182,10 @@ Base.one(::Type{Unit}) = 1
         @test oneunit(Union{T, Missing}) === T(1)
     end
 
+    @test zero(Missing) === missing
+    @test one(Missing) === missing
+    @test oneunit(Missing) === missing
+
     @test_throws MethodError zero(Any)
     @test_throws MethodError one(Any)
     @test_throws MethodError oneunit(Any)
@@ -188,16 +195,25 @@ Base.one(::Type{Unit}) = 1
 end
 
 @testset "rounding functions" begin
-    rounding_functions = [ceil, floor, round, trunc]
-
     # All rounding functions return missing when evaluating missing as first argument
+
+    # Check that the RoundingMode argument is passed on correctly
+    @test round(Union{Int, Missing}, 0.9) === round(Int, 0.9)
+    @test round(Union{Int, Missing}, 0.9, RoundToZero) === round(Int, 0.9, RoundToZero)
+
+    # Test elementwise on mixed arrays to ensure signature of Missing methods matches that of Float methods
+    test_array = [1.0, missing]
+
+    @test isequal(round.(test_array, RoundNearest), test_array)
+    @test isequal(round.(Union{Int, Missing}, test_array, RoundNearest), test_array)
+
+    rounding_functions = [ceil, floor, round, trunc]
     for f in rounding_functions
-        @test ismissing(f(missing))
-        @test ismissing(f(missing, 1))
-        @test ismissing(f(missing, 1, 1))
-        @test ismissing(f(Union{Int, Missing}, missing))
-        @test f(Union{Int, Missing}, 1.0) === 1
         @test_throws MissingException f(Int, missing)
+        @test isequal(f.(test_array), test_array)
+        @test isequal(f.(test_array, digits=0, base=10), test_array)
+        @test isequal(f.(test_array, sigdigits=1, base=10), test_array)
+        @test isequal(f.(Union{Int, Missing}, test_array), test_array)
     end
 end
 
@@ -366,6 +382,50 @@ end
     @test collect(x) == [1, 2, 4]
     @test collect(x) isa Vector{Int}
 
+    @testset "indexing" begin
+        x = skipmissing([1, missing, 2, missing, missing])
+        @test collect(eachindex(x)) == collect(keys(x)) == [1, 3]
+        @test x[1] === 1
+        @test x[3] === 2
+        @test_throws MissingException x[2]
+        @test_throws BoundsError x[6]
+        @test findfirst(==(2), x) == 3
+        @test findall(==(2), x) == [3]
+        @test argmin(x) == 1
+        @test findmin(x) == (1, 1)
+        @test argmax(x) == 3
+        @test findmax(x) == (2, 3)
+
+        x = skipmissing([missing 2; 1 missing])
+        @test collect(eachindex(x)) == [2, 3]
+        @test collect(keys(x)) == [CartesianIndex(2, 1), CartesianIndex(1, 2)]
+        @test x[2] === x[2, 1] === 1
+        @test x[3] === x[1, 2] === 2
+        @test_throws MissingException x[1]
+        @test_throws MissingException x[1, 1]
+        @test_throws BoundsError x[5]
+        @test_throws BoundsError x[3, 1]
+        @test findfirst(==(2), x) == CartesianIndex(1, 2)
+        @test findall(==(2), x) == [CartesianIndex(1, 2)]
+        @test argmin(x) == CartesianIndex(2, 1)
+        @test findmin(x) == (1, CartesianIndex(2, 1))
+        @test argmax(x) == CartesianIndex(1, 2)
+        @test findmax(x) == (2, CartesianIndex(1, 2))
+
+        for x in (skipmissing([]), skipmissing([missing, missing]))
+            @test isempty(collect(eachindex(x)))
+            @test isempty(collect(keys(x)))
+            @test_throws BoundsError x[3]
+            @test_throws BoundsError x[3, 1]
+            @test findfirst(==(2), x) === nothing
+            @test isempty(findall(==(2), x))
+            @test_throws ArgumentError argmin(x)
+            @test_throws ArgumentError findmin(x)
+            @test_throws ArgumentError argmax(x)
+            @test_throws ArgumentError findmax(x)
+        end
+    end
+
     @testset "mapreduce" begin
         # Vary size to test splitting blocks with several configurations of missing values
         for T in (Int, Float64),
@@ -415,6 +475,15 @@ end
             @test_throws ArgumentError reduce(x -> x/2, itr)
             @test_throws ArgumentError mapreduce(x -> x/2, +, itr)
         end
+    end
+
+    @testset "filter" begin
+        allmiss = Vector{Union{Int,Missing}}(missing, 10)
+        @test isempty(filter(isodd, skipmissing(allmiss))::Vector{Int})
+        twod1 = [1.0f0 missing; 3.0f0 missing]
+        @test filter(x->x > 0, skipmissing(twod1))::Vector{Float32} == [1, 3]
+        twod2 = [1.0f0 2.0f0; 3.0f0 4.0f0]
+        @test filter(x->x > 0, skipmissing(twod2)) == reshape(twod2, (4,))
     end
 end
 

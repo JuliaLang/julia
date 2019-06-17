@@ -3,6 +3,8 @@ LIBUV_GIT_URL:=git://github.com/JuliaLang/libuv.git
 LIBUV_TAR_URL=https://api.github.com/repos/JuliaLang/libuv/tarball/$1
 $(eval $(call git-external,libuv,LIBUV,configure,,$(SRCCACHE)))
 
+ifneq ($(USE_BINARYBUILDER_LIBUV),1)
+
 UV_CFLAGS := -O2
 ifeq ($(USEMSVC), 1)
 UV_CFLAGS += -DBUILDING_UV_SHARED
@@ -59,3 +61,10 @@ configure-libuv: $(BUILDDIR)/$(LIBUV_SRC_DIR)/build-configured
 compile-libuv: $(BUILDDIR)/$(LIBUV_SRC_DIR)/build-compiled
 fastcheck-libuv: #none
 check-libuv: $(BUILDDIR)/$(LIBUV_SRC_DIR)/build-checked
+
+else # USE_BINARYBUILDER_LIBUV
+LIBUV_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LibUV-v$(LIBUV_VER)-$(LIBUV_BB_REL)
+LIBUV_BB_NAME := LibUV.v$(LIBUV_VER)
+
+$(eval $(call bb-install,libuv,LIBUV,false))
+endif

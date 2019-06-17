@@ -187,7 +187,7 @@ typemax(::Type{Char}) = reinterpret(Char, typemax(UInt32))
 typemin(::Type{Char}) = reinterpret(Char, typemin(UInt32))
 
 size(c::AbstractChar) = ()
-size(c::AbstractChar,d) = convert(Int, d) < 1 ? throw(BoundsError()) : 1
+size(c::AbstractChar, d::Integer) = d < 1 ? throw(BoundsError()) : 1
 ndims(c::AbstractChar) = 0
 ndims(::Type{<:AbstractChar}) = 0
 length(c::AbstractChar) = 1

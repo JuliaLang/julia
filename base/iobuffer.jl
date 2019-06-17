@@ -16,7 +16,7 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
 
     function GenericIOBuffer{T}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
                                 maxsize::Integer) where T<:AbstractVector{UInt8}
-        @assert !has_offset_axes(data)
+        require_one_based_indexing(data)
         new(data,readable,writable,seekable,append,length(data),maxsize,1,-1)
     end
 end
@@ -155,8 +155,13 @@ show(io::IO, b::GenericIOBuffer) = print(io, "IOBuffer(data=UInt8[...], ",
                                       "ptr=",      b.ptr, ", ",
                                       "mark=",     b.mark, ")")
 
+@noinline function _throw_not_readable()
+    # See https://github.com/JuliaLang/julia/issues/29688.
+    throw(ArgumentError("read failed, IOBuffer is not readable"))
+end
+
 function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
-    from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
+    from.readable || _throw_not_readable()
     avail = bytesavailable(from)
     adv = min(avail, nb)
     GC.@preserve from unsafe_copyto!(p, pointer(from.data, from.ptr), adv)
@@ -168,7 +173,7 @@ function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
 end
 
 function read(from::GenericIOBuffer, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
-    from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
+    from.readable || _throw_not_readable()
     avail = bytesavailable(from)
     nb = sizeof(T)
     if nb > avail
@@ -183,8 +188,8 @@ function read(from::GenericIOBuffer, T::Union{Type{Int16},Type{UInt16},Type{Int3
 end
 
 function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
-    @assert !has_offset_axes(a)
-    from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
+    require_one_based_indexing(a)
+    from.readable || _throw_not_readable()
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
@@ -200,7 +205,7 @@ function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
 end
 
 @inline function read(from::GenericIOBuffer, ::Type{UInt8})
-    from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
+    from.readable || _throw_not_readable()
     ptr = from.ptr
     size = from.size
     if ptr > size
@@ -212,7 +217,7 @@ end
 end
 
 function peek(from::GenericIOBuffer)
-    from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
+    from.readable || _throw_not_readable()
     if from.ptr > from.size
         throw(EOFError())
     end
@@ -425,7 +430,7 @@ function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
 end
 
 function write_sub(to::GenericIOBuffer, a::AbstractArray{UInt8}, offs, nel)
-    @assert !has_offset_axes(a)
+    require_one_based_indexing(a)
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
@@ -505,8 +510,8 @@ end
 
 # copy-free crc32c of IOBuffer:
 function _crc32c(io::IOBuffer, nb::Integer, crc::UInt32=0x00000000)
-    nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0"))
-    io.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
+    nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0, got $nb"))
+    io.readable || _throw_not_readable()
     n = min(nb, bytesavailable(io))
     n == 0 && return crc
     crc = GC.@preserve io unsafe_crc32c(pointer(io.data, io.ptr), n, crc)

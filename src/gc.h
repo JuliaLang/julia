@@ -204,7 +204,7 @@ STATIC_INLINE void *gc_pop_markdata_(jl_gc_mark_sp_t *sp, size_t size)
 // Re-push a frame to the mark stack (both data and pc)
 // The data and pc are expected to be on the stack (or updated in place) already.
 // Mainly useful to pause the current scanning in order to scan an new object.
-STATIC_INLINE void *gc_repush_markdata_(jl_gc_mark_sp_t *sp, size_t size)
+STATIC_INLINE void *gc_repush_markdata_(jl_gc_mark_sp_t *sp, size_t size) JL_NOTSAFEPOINT
 {
     jl_gc_mark_data_t *data = sp->data;
     sp->pc++;
@@ -381,17 +381,17 @@ STATIC_INLINE bigval_t *bigval_header(jl_taggedvalue_t *o) JL_NOTSAFEPOINT
 }
 
 // round an address inside a gcpage's data to its beginning
-STATIC_INLINE char *gc_page_data(void *x)
+STATIC_INLINE char *gc_page_data(void *x) JL_NOTSAFEPOINT
 {
     return (char*)(((uintptr_t)x >> GC_PAGE_LG2) << GC_PAGE_LG2);
 }
 
-STATIC_INLINE jl_taggedvalue_t *page_pfl_beg(jl_gc_pagemeta_t *p)
+STATIC_INLINE jl_taggedvalue_t *page_pfl_beg(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT
 {
     return (jl_taggedvalue_t*)(p->data + p->fl_begin_offset);
 }
 
-STATIC_INLINE jl_taggedvalue_t *page_pfl_end(jl_gc_pagemeta_t *p)
+STATIC_INLINE jl_taggedvalue_t *page_pfl_end(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT
 {
     return (jl_taggedvalue_t*)(p->data + p->fl_end_offset);
 }
@@ -506,8 +506,8 @@ extern void *gc_mark_label_addrs[_GC_MARK_L_MAX];
 // GC pages
 
 void jl_gc_init_page(void);
-NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void);
-void jl_gc_free_page(void *p);
+NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT;
+void jl_gc_free_page(void *p) JL_NOTSAFEPOINT;
 
 // GC debug
 

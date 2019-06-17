@@ -106,7 +106,7 @@ end
 getalladdrinfo(host::AbstractString) = getalladdrinfo(String(host))
 
 """
-    getalladdrinfo(host::AbstractString, IPAddr=IPv4) -> IPAddr
+    getaddrinfo(host::AbstractString, IPAddr=IPv4) -> IPAddr
 
 Gets the first IP address of the `host` of the specified `IPAddr` type.
 Uses the operating system's underlying getaddrinfo implementation, which may do a DNS lookup.
@@ -215,47 +215,47 @@ const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32
 """
     getipaddr() -> IPAddr
 
-Get the IP address of the local machine.
+Get an IP address of the local machine, preferring IPv4 over IPv6. Throws if no
+addresses are available.
+
+    getipaddr(addr_type::Type{T}) where T<:IPAddr -> T
+
+Get an IP address of the local machine of the specified type. Throws if no
+addresses of the specified type are available.
 
 # Examples
 ```julia-repl
 julia> getipaddr()
 ip"192.168.1.28"
+
+julia> getipaddr(IPv6)
+ip"fe80::9731:35af:e1c5:6e49"
 ```
 """
-function getipaddr()
-    addr_ref = Ref{Ptr{UInt8}}(C_NULL)
-    count_ref = Ref{Int32}(1)
-    lo_present = false
-    err = ccall(:jl_uv_interface_addresses, Int32, (Ref{Ptr{UInt8}}, Ref{Int32}), addr_ref, count_ref)
-    uv_error("getlocalip", err)
-    addr, count = addr_ref[], count_ref[]
-    for i = 0:(count-1)
-        current_addr = addr + i*_sizeof_uv_interface_address
-        if 1 == ccall(:jl_uv_interface_address_is_internal, Int32, (Ptr{UInt8},), current_addr)
-            lo_present = true
-            continue
-        end
-        sockaddr = ccall(:jl_uv_interface_address_sockaddr, Ptr{Cvoid}, (Ptr{UInt8},), current_addr)
-        if ccall(:jl_sockaddr_in_is_ip4, Int32, (Ptr{Cvoid},), sockaddr) == 1
-            rv = IPv4(ntoh(ccall(:jl_sockaddr_host4, UInt32, (Ptr{Cvoid},), sockaddr)))
-            ccall(:uv_free_interface_addresses, Cvoid, (Ptr{UInt8}, Int32), addr, count)
-            return rv
-        # Uncomment to enbable IPv6
-        #elseif ccall(:jl_sockaddr_in_is_ip6, Int32, (Ptr{Cvoid},), sockaddr) == 1
-        #   host = Vector{UInt128}(undef, 1)
-        #   ccall(:jl_sockaddr_host6, UInt32, (Ptr{Cvoid}, Ptr{UInt128}), sockaddrr, host)
-        #   return IPv6(ntoh(host[1]))
-        end
+function getipaddr(addr_type::Type{T}) where T<:IPAddr
+    addrs = getipaddrs(addr_type)
+
+    if length(addrs) == 0
+        error("No networking interface available")
     end
-    ccall(:uv_free_interface_addresses, Cvoid, (Ptr{UInt8}, Int32), addr, count)
-    return lo_present ? localhost : error("No networking interface available")
+
+    # Prefer the first IPv4 address
+    i = something(findfirst(ip -> ip isa IPv4, addrs), 1)
+    return addrs[i]
 end
+getipaddr() = getipaddr(IPv4)
+
 
 """
-    getipaddrs(include_lo::Bool=false) -> Vector{IPv4}
+    getipaddrs(; loopback::Bool=false) -> Vector{IPAddr}
 
-Get the IP addresses of the local machine.
+Get the IPv4 addresses of the local machine.
+
+    getipaddrs(addr_type::Type{T}; loopback::Bool=false) where T<:IPAddr -> Vector{T}
+
+Get the IP addresses of the local machine of the specified type.
+
+The `loopback` keyword argument dictates whether loopback addresses are included.
 
 !!! compat "Julia 1.2"
     This function is available as of Julia 1.2.
@@ -266,10 +266,15 @@ julia> getipaddrs()
 2-element Array{IPv4,1}:
  ip"10.255.0.183"
  ip"172.17.0.1"
+
+julia> getipaddrs(IPv6)
+2-element Array{IPv6,1}:
+ ip"fe80::9731:35af:e1c5:6e49"
+ ip"fe80::445e:5fff:fe5d:5500"
 ```
 """
-function getipaddrs(include_lo::Bool=false)
-    addresses = IPv4[]
+function getipaddrs(addr_type::Type{T}=IPAddr; loopback::Bool=false) where T<:IPAddr
+    addresses = T[]
     addr_ref = Ref{Ptr{UInt8}}(C_NULL)
     count_ref = Ref{Int32}(1)
     lo_present = false
@@ -280,13 +285,17 @@ function getipaddrs(include_lo::Bool=false)
         current_addr = addr + i*_sizeof_uv_interface_address
         if 1 == ccall(:jl_uv_interface_address_is_internal, Int32, (Ptr{UInt8},), current_addr)
             lo_present = true
-            if !include_lo
+            if !loopback
                 continue
             end
         end
         sockaddr = ccall(:jl_uv_interface_address_sockaddr, Ptr{Cvoid}, (Ptr{UInt8},), current_addr)
-        if ccall(:jl_sockaddr_in_is_ip4, Int32, (Ptr{Cvoid},), sockaddr) == 1
+        if IPv4 <: T && ccall(:jl_sockaddr_in_is_ip4, Int32, (Ptr{Cvoid},), sockaddr) == 1
             push!(addresses, IPv4(ntoh(ccall(:jl_sockaddr_host4, UInt32, (Ptr{Cvoid},), sockaddr))))
+        elseif IPv6 <: T && ccall(:jl_sockaddr_in_is_ip6, Int32, (Ptr{Cvoid},), sockaddr) == 1
+            addr6 = Ref{UInt128}()
+            scope_id = ccall(:jl_sockaddr_host6, UInt32, (Ptr{Cvoid}, Ref{UInt128},), sockaddr, addr6)
+            push!(addresses, IPv6(ntoh(addr6[])))
         end
     end
     ccall(:uv_free_interface_addresses, Cvoid, (Ptr{UInt8}, Int32), addr, count)

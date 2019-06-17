@@ -120,6 +120,7 @@ JL_DLLEXPORT int32_t jl_nb_available(ios_t *s)
 JL_DLLEXPORT int jl_sizeof_uv_fs_t(void) { return sizeof(uv_fs_t); }
 JL_DLLEXPORT void jl_uv_fs_req_cleanup(uv_fs_t *req) { uv_fs_req_cleanup(req); }
 JL_DLLEXPORT char *jl_uv_fs_t_ptr(uv_fs_t *req) { return (char*)req->ptr; }
+JL_DLLEXPORT char *jl_uv_fs_t_path(uv_fs_t *req) { return (char*)req->path; }
 JL_DLLEXPORT ssize_t jl_uv_fs_result(uv_fs_t *f) { return f->result; }
 
 // --- stat ---
@@ -132,7 +133,7 @@ JL_DLLEXPORT int32_t jl_stat(const char *path, char *statbuf)
 
     // Ideally one would use the statbuf for the storage in req, but
     // it's not clear that this is possible using libuv
-    ret = uv_fs_stat(uv_default_loop(), &req, path, NULL);
+    ret = uv_fs_stat(unused_uv_loop_arg, &req, path, NULL);
     if (ret == 0)
         memcpy(statbuf, req.ptr, sizeof(uv_stat_t));
     uv_fs_req_cleanup(&req);
@@ -144,7 +145,7 @@ JL_DLLEXPORT int32_t jl_lstat(const char *path, char *statbuf)
     uv_fs_t req;
     int ret;
 
-    ret = uv_fs_lstat(uv_default_loop(), &req, path, NULL);
+    ret = uv_fs_lstat(unused_uv_loop_arg, &req, path, NULL);
     if (ret == 0)
         memcpy(statbuf, req.ptr, sizeof(uv_stat_t));
     uv_fs_req_cleanup(&req);
@@ -156,7 +157,7 @@ JL_DLLEXPORT int32_t jl_fstat(uv_os_fd_t fd, char *statbuf)
     uv_fs_t req;
     int ret;
 
-    ret = uv_fs_fstat(uv_default_loop(), &req, fd, NULL);
+    ret = uv_fs_fstat(unused_uv_loop_arg, &req, fd, NULL);
     if (ret == 0)
         memcpy(statbuf, req.ptr, sizeof(uv_stat_t));
     uv_fs_req_cleanup(&req);
@@ -492,7 +493,9 @@ JL_DLLEXPORT long jl_getpagesize(void)
 #else
 JL_DLLEXPORT long jl_getpagesize(void)
 {
-    return sysconf(_SC_PAGESIZE);
+    long page_size = sysconf(_SC_PAGESIZE);
+    assert(page_size != -1);
+    return page_size;
 }
 #endif
 

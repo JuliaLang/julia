@@ -4,6 +4,12 @@
 
 const sizeof_ios_t = Int(ccall(:jl_sizeof_ios_t, Cint, ()))
 
+"""
+    IOStream
+
+A buffered IO stream wrapping an OS file descriptor.
+Mostly used to represent files returned by [`open`](@ref).
+"""
 mutable struct IOStream <: IO
     handle::Ptr{Cvoid}
     ios::Array{UInt8,1}
@@ -199,7 +205,7 @@ eof(s::IOStream) = ccall(:ios_eof_blocking, Cint, (Ptr{Cvoid},), s.ios)!=0
 """
     fdio([name::AbstractString, ]fd::Integer[, own::Bool=false]) -> IOStream
 
-Create an `IOStream` object from an integer file descriptor. If `own` is `true`, closing
+Create an [`IOStream`](@ref) object from an integer file descriptor. If `own` is `true`, closing
 this object will close the underlying descriptor. By default, an `IOStream` is closed when
 it is garbage collected. `name` allows you to associate the descriptor with a named file.
 """
@@ -446,20 +452,21 @@ function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)
         eof(s) && break
     end
     if lb > olb && lb > nr
-        resize!(b, nr) # shrink to just contain input data if was resized
+        resize!(b, max(olb, nr)) # shrink to just contain input data if was resized
     end
     return nr
 end
 
 function readbytes_some!(s::IOStream, b::Array{UInt8}, nb)
-    olb = lb = length(b)
-    if nb > lb
+    olb = length(b)
+    if nb > olb
         resize!(b, nb)
     end
     nr = GC.@preserve b Int(ccall(:ios_read, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
                                   s.ios, pointer(b), nb))
+    lb = length(b)
     if lb > olb && lb > nr
-        resize!(b, nr)
+        resize!(b, max(olb, nr)) # shrink to just contain input data if was resized
     end
     return nr
 end
@@ -471,25 +478,32 @@ Read at most `nb` bytes from `stream` into `b`, returning the number of bytes re
 The size of `b` will be increased if needed (i.e. if `nb` is greater than `length(b)`
 and enough bytes could be read), but it will never be decreased.
 
-See [`read`](@ref) for a description of the `all` option.
+If `all` is `true` (the default), this function will block repeatedly trying to read all
+requested bytes, until an error or end-of-file occurs. If `all` is `false`, at most one
+`read` call is performed, and the amount of data returned is device-dependent. Note that not
+all stream types support the `all` option.
 """
 function readbytes!(s::IOStream, b::Array{UInt8}, nb=length(b); all::Bool=true)
     return all ? readbytes_all!(s, b, nb) : readbytes_some!(s, b, nb)
 end
 
 function read(s::IOStream)
-    sz = 0
-    try # filesize is just a hint, so ignore if it fails
-        sz = filesize(s)
+    sz = try # filesize is just a hint, so ignore if `fstat` fails
+            filesize(s)
+        catch ex
+            ex isa IOError || rethrow()
+            Int64(0)
+        end
+    if sz > 0
         pos = ccall(:ios_pos, Int64, (Ptr{Cvoid},), s.ios)
         if pos > 0
             sz -= pos
         end
-    catch
     end
-    b = StringVector(sz<=0 ? 1024 : sz)
+    b = StringVector(sz <= 0 ? 1024 : sz)
     nr = readbytes_all!(s, b, typemax(Int))
     resize!(b, nr)
+    return b
 end
 
 """
@@ -503,9 +517,12 @@ requested bytes, until an error or end-of-file occurs. If `all` is `false`, at m
 all stream types support the `all` option.
 """
 function read(s::IOStream, nb::Integer; all::Bool=true)
-    b = Vector{UInt8}(undef, nb)
+    # When all=false we have to allocate a buffer of the requested size upfront
+    # since a single call will be made
+    b = Vector{UInt8}(undef, all && nb == typemax(Int) ? 1024 : nb)
     nr = readbytes!(s, b, nb, all=all)
     resize!(b, nr)
+    return b
 end
 
 ## peek ##

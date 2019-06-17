@@ -88,7 +88,7 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
     jl_value_t *r;
     JL_TRY {
         const char filename[] = "none";
-        jl_value_t *ast = jl_parse_input_line(str, strlen(str),
+        jl_value_t *ast = jl_parse_all(str, strlen(str),
                 filename, strlen(filename));
         JL_GC_PUSH1(&ast);
         r = jl_toplevel_eval_in(jl_main_module, ast);
@@ -393,6 +393,12 @@ JL_DLLEXPORT jl_value_t *(jl_typeof)(jl_value_t *v)
 {
     return jl_typeof(v);
 }
+
+JL_DLLEXPORT jl_value_t *(jl_get_fieldtypes)(jl_value_t *v)
+{
+    return (jl_value_t*)jl_get_fieldtypes((jl_datatype_t*)v);
+}
+
 
 #ifndef __clang_analyzer__
 JL_DLLEXPORT int8_t (jl_gc_unsafe_enter)(void)

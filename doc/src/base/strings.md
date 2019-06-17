@@ -24,6 +24,7 @@ Base.@r_str
 Base.SubstitutionString
 Base.@s_str
 Base.@raw_str
+Base.@b_str
 Base.Docs.@html_str
 Base.Docs.@text_str
 Base.isvalid(::Any)
@@ -75,7 +76,6 @@ Base.ispunct
 Base.isspace
 Base.isuppercase
 Base.isxdigit
-Core.Symbol
 Base.escape_string
 Base.unescape_string
 ```

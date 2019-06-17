@@ -29,8 +29,9 @@ function sppromote(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) whe
 end
 
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
+const AdjOrTransStridedMatrix{T} = Union{StridedMatrix{T},Adjoint{<:Any,<:StridedMatrix{T}},Transpose{<:Any,<:StridedMatrix{T}}}
 
-function mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat, α::Number, β::Number)
+function mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::Union{StridedVector,AdjOrTransStridedMatrix}, α::Number, β::Number)
     A.n == size(B, 1) || throw(DimensionMismatch())
     A.m == size(C, 1) || throw(DimensionMismatch())
     size(B, 2) == size(C, 2) || throw(DimensionMismatch())
@@ -50,11 +51,11 @@ function mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat, α::Nu
     C
 end
 *(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx} =
-    (T = promote_type(TA, Tx); mul!(similar(x, T, A.m), A, x, one(T), zero(T)))
+    (T = promote_op(matprod, TA, Tx); mul!(similar(x, T, A.m), A, x, one(T), zero(T)))
 *(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
-    (T = promote_type(TA, Tx); mul!(similar(B, T, (A.m, size(B, 2))), A, B, one(T), zero(T)))
+    (T = promote_op(matprod, TA, Tx); mul!(similar(B, T, (A.m, size(B, 2))), A, B, one(T), zero(T)))
 
-function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat, α::Number, β::Number)
+function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}, α::Number, β::Number)
     A = adjA.parent
     A.n == size(C, 1) || throw(DimensionMismatch())
     A.m == size(B, 1) || throw(DimensionMismatch())
@@ -76,11 +77,11 @@ function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::Str
     C
 end
 *(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
-    (A = adjA.parent; T = promote_type(TA, Tx); mul!(similar(x, T, A.n), adjoint(A), x, one(T), zero(T)))
-*(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TA,S}}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
-    (A = adjA.parent; T = promote_type(TA, Tx); mul!(similar(B, T, (A.n, size(B, 2))), adjoint(A), B, one(T), zero(T)))
+    (T = promote_op(matprod, TA, Tx); mul!(similar(x, T, size(adjA, 1)), adjA, x, one(T), zero(T)))
+*(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TA,S}}, B::AdjOrTransStridedMatrix{Tx}) where {TA,S,Tx} =
+    (T = promote_op(matprod, TA, Tx); mul!(similar(B, T, (size(adjA, 1), size(B, 2))), adjA, B, one(T), zero(T)))
 
-function mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat, α::Number, β::Number)
+function mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}, α::Number, β::Number)
     A = transA.parent
     A.n == size(C, 1) || throw(DimensionMismatch())
     A.m == size(B, 1) || throw(DimensionMismatch())
@@ -102,30 +103,74 @@ function mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B:
     C
 end
 *(transA::Transpose{<:Any,<:SparseMatrixCSC{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
-    (A = transA.parent; T = promote_type(TA, Tx); mul!(similar(x, T, A.n), transpose(A), x, one(T), zero(T)))
-*(transA::Transpose{<:Any,<:SparseMatrixCSC{TA,S}}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
-    (A = transA.parent; T = promote_type(TA, Tx); mul!(similar(B, T, (A.n, size(B, 2))), transpose(A), B, one(T), zero(T)))
+    (T = promote_op(matprod, TA, Tx); mul!(similar(x, T, size(transA, 1)), transA, x, one(T), zero(T)))
+*(transA::Transpose{<:Any,<:SparseMatrixCSC{TA,S}}, B::AdjOrTransStridedMatrix{Tx}) where {TA,S,Tx} =
+    (T = promote_op(matprod, TA, Tx); mul!(similar(B, T, (size(transA, 1), size(B, 2))), transA, B, one(T), zero(T)))
 
 # For compatibility with dense multiplication API. Should be deleted when dense multiplication
 # API is updated to follow BLAS API.
-mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) =
+mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::Union{StridedVector,AdjOrTransStridedMatrix}) =
     mul!(C, A, B, one(eltype(B)), zero(eltype(C)))
-mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat) =
-    (A = adjA.parent; mul!(C, adjoint(A), B, one(eltype(B)), zero(eltype(C))))
-mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat) =
-    (A = transA.parent; mul!(C, transpose(A), B, one(eltype(B)), zero(eltype(C))))
+mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}) =
+    mul!(C, adjA, B, one(eltype(B)), zero(eltype(C)))
+mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}) =
+    mul!(C, transA, B, one(eltype(B)), zero(eltype(C)))
 
-function (*)(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA}) where {TX,TvA,TiA}
+function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, A::SparseMatrixCSC, α::Number, β::Number)
     mX, nX = size(X)
     nX == A.m || throw(DimensionMismatch())
-    Y = zeros(promote_type(TX,TvA), mX, A.n)
-    rowval = A.rowval
-    nzval = A.nzval
-    @inbounds for multivec_row=1:mX, col = 1:A.n, k=A.colptr[col]:(A.colptr[col+1]-1)
-        Y[multivec_row, col] += X[multivec_row, rowval[k]] * nzval[k]
+    mX == size(C, 1) || throw(DimensionMismatch())
+    A.n == size(C, 2) || throw(DimensionMismatch())
+    rv = A.rowval
+    nzv = A.nzval
+    if β != 1
+        β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
     end
-    Y
+    @inbounds for multivec_row=1:mX, col = 1:A.n, k=A.colptr[col]:(A.colptr[col+1]-1)
+        C[multivec_row, col] += α * X[multivec_row, rv[k]] * nzv[k] # perhaps suboptimal position of α?
+    end
+    C
 end
+*(X::AdjOrTransStridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA}) where {TX,TvA,TiA} =
+    (T = promote_op(matprod, TX, TvA); mul!(similar(X, T, (size(X, 1), A.n)), X, A, one(T), zero(T)))
+
+function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, α::Number, β::Number)
+    A = adjA.parent
+    mX, nX = size(X)
+    nX == A.n || throw(DimensionMismatch())
+    mX == size(C, 1) || throw(DimensionMismatch())
+    A.m == size(C, 2) || throw(DimensionMismatch())
+    rv = A.rowval
+    nzv = A.nzval
+    if β != 1
+        β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
+    end
+    @inbounds for col = 1:A.n, k=A.colptr[col]:(A.colptr[col+1]-1), multivec_col=1:mX
+        C[multivec_col, rv[k]] += α * X[multivec_col, col] * adjoint(nzv[k]) # perhaps suboptimal position of α?
+    end
+    C
+end
+*(X::AdjOrTransStridedMatrix{TX}, adjA::Adjoint{<:Any,<:SparseMatrixCSC{TvA,TiA}}) where {TX,TvA,TiA} =
+    (T = promote_op(matprod, TX, TvA); mul!(similar(X, T, (size(X, 1), size(adjA, 2))), X, adjA, one(T), zero(T)))
+
+function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, transA::Transpose{<:Any,<:SparseMatrixCSC}, α::Number, β::Number)
+    A = transA.parent
+    mX, nX = size(X)
+    nX == A.n || throw(DimensionMismatch())
+    mX == size(C, 1) || throw(DimensionMismatch())
+    A.m == size(C, 2) || throw(DimensionMismatch())
+    rv = A.rowval
+    nzv = A.nzval
+    if β != 1
+        β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
+    end
+    @inbounds for col = 1:A.n, k=A.colptr[col]:(A.colptr[col+1]-1), multivec_col=1:mX
+        C[multivec_col, rv[k]] += α * X[multivec_col, col] * transpose(nzv[k]) # perhaps suboptimal position of α?
+    end
+    C
+end
+*(X::AdjOrTransStridedMatrix{TX}, transA::Transpose{<:Any,<:SparseMatrixCSC{TvA,TiA}}) where {TX,TvA,TiA} =
+    (T = promote_op(matprod, TX, TvA); mul!(similar(X, T, (size(X, 1), size(transA, 2))), X, transA, one(T), zero(T)))
 
 function (*)(D::Diagonal, A::SparseMatrixCSC)
     T = Base.promote_op(*, eltype(D), eltype(A))
@@ -314,7 +359,7 @@ const TriangularSparse{T} = Union{
 
 ## triangular multipliers
 function lmul!(A::TriangularSparse{T}, B::StridedVecOrMat{T}) where T
-    @assert !has_offset_axes(A, B)
+    require_one_based_indexing(A, B)
     nrowB, ncolB  = size(B, 1), size(B, 2)
     ncol = LinearAlgebra.checksquare(A)
     if nrowB != ncol
@@ -487,7 +532,7 @@ end
 
 ## triangular solvers
 function ldiv!(A::TriangularSparse{T}, B::StridedVecOrMat{T}) where T
-    @assert !has_offset_axes(A, B)
+    require_one_based_indexing(A, B)
     nrowB, ncolB  = size(B, 1), size(B, 2)
     ncol = LinearAlgebra.checksquare(A)
     if nrowB != ncol
@@ -677,6 +722,63 @@ end
 
 ## end of triangular
 
+# y .= A * x
+mul!(y::StridedVecOrMat, A::SparseMatrixCSCSymmHerm, x::StridedVecOrMat) = mul!(y,A,x,1,0)
+
+# C .= α * A * B + β * C
+function mul!(C::StridedVecOrMat{T}, sA::SparseMatrixCSCSymmHerm, B::StridedVecOrMat,
+              α::Number, β::Number) where T
+
+    fuplo = sA.uplo == 'U' ? nzrangeup : nzrangelo
+    _mul!(fuplo, C, sA, B, T(α), T(β))
+end
+
+function _mul!(nzrang::Function, C::StridedVecOrMat{T}, sA, B, α, β) where T
+    A = sA.data
+    n = size(A, 2)
+    m = size(B, 2)
+    n == size(B, 1) == size(C, 1) && m == size(C, 2) || throw(DimensionMismatch())
+    rv = rowvals(A)
+    nzv = nonzeros(A)
+    let z = T(0), sumcol=z, αxj=z, aarc=z, α = α
+        if β != 1
+            β != 0 ? rmul!(C, β) : fill!(C, z)
+        end
+        @inbounds for k = 1:m
+            for col = 1:n
+                αxj = B[col,k] * α
+                sumcol = z
+                for j = nzrang(A, col)
+                    row = rv[j]
+                    aarc = nzv[j]
+                    if row == col
+                        sumcol += (sA isa Hermitian ? real : identity)(aarc) * B[row,k]
+                    else
+                        C[row,k] += aarc * αxj
+                        sumcol += (sA isa Hermitian ? adjoint : transpose)(aarc) * B[row,k]
+                    end
+                end
+                C[col,k] += α * sumcol
+            end
+        end
+    end
+    C
+end
+
+# row range up to and including diagonal
+function nzrangeup(A, i)
+    r = nzrange(A, i); r1 = r.start; r2 = r.stop
+    rv = rowvals(A)
+    @inbounds r2 < r1 || rv[r2] <= i ? r : r1:searchsortedlast(rv, i, r1, r2, Forward)
+end
+# row range from diagonal (included) to end
+function nzrangelo(A, i)
+    r = nzrange(A, i); r1 = r.start; r2 = r.stop
+    rv = rowvals(A)
+    @inbounds r2 < r1 || rv[r1] >= i ? r : searchsortedfirst(rv, i, r1, r2, Forward):r2
+end
+## end of symmetric/Hermitian
+
 \(A::Transpose{<:Real,<:Hermitian{<:Real,<:SparseMatrixCSC}}, B::Vector) = A.parent \ B
 \(A::Transpose{<:Complex,<:Hermitian{<:Complex,<:SparseMatrixCSC}}, B::Vector) = copy(A) \ B
 \(A::Transpose{<:Number,<:Symmetric{<:Number,<:SparseMatrixCSC}}, B::Vector) = A.parent \ B
@@ -705,7 +807,7 @@ rdiv!(A::SparseMatrixCSC{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
     (D = transD.parent; rdiv!(A, D))
 
 function ldiv!(D::Diagonal{T}, A::SparseMatrixCSC{T}) where {T}
-    # @assert !has_offset_axes(A)
+    # require_one_based_indexing(A)
     if A.m != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(A.m) rows"))
     end
@@ -1198,6 +1300,9 @@ kron(x::SparseVector, A::SparseMatrixCSC) = kron(SparseMatrixCSC(x), A)
 kron(A::Union{SparseVector,SparseMatrixCSC}, B::VecOrMat) = kron(A, sparse(B))
 kron(A::VecOrMat, B::Union{SparseVector,SparseMatrixCSC}) = kron(sparse(A), B)
 
+# sparse outer product
+kron(A::SparseVectorUnion, B::AdjOrTransSparseVectorUnion) = A .* B
+
 ## det, inv, cond
 
 inv(A::SparseMatrixCSC) = error("The inverse of a sparse matrix can often be dense and can cause the computer to run out of memory. If you are sure you have enough memory, please convert your matrix to a dense matrix.")
@@ -1296,7 +1401,7 @@ function lmul!(D::Diagonal, A::SparseMatrixCSC)
 end
 
 function \(A::SparseMatrixCSC, B::AbstractVecOrMat)
-    @assert !has_offset_axes(A, B)
+    require_one_based_indexing(A, B)
     m, n = size(A)
     if m == n
         if istril(A)
@@ -1320,7 +1425,7 @@ for (xformtype, xformop) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
     @eval begin
         function \(xformA::($xformtype){<:Any,<:SparseMatrixCSC}, B::AbstractVecOrMat)
             A = xformA.parent
-            @assert !has_offset_axes(A, B)
+            require_one_based_indexing(A, B)
             m, n = size(A)
             if m == n
                 if istril(A)

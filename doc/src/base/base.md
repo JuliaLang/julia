@@ -84,11 +84,18 @@ primitive type
 where
 ...
 ;
+=
 ```
 
-## Base Modules
+## Standard Modules
 ```@docs
-Base.Base
+Main
+Core
+Base
+```
+
+## Base Submodules
+```@docs
 Base.Broadcast
 Base.Docs
 Base.Iterators
@@ -121,6 +128,7 @@ Base.deepcopy
 Base.getproperty
 Base.setproperty!
 Base.propertynames
+Base.hasproperty
 Core.getfield
 Core.setfield!
 Core.isdefined
@@ -153,10 +161,12 @@ Base.isdispatchtuple
 Base.isimmutable
 Base.isabstracttype
 Base.isprimitivetype
+Base.issingletontype
 Base.isstructtype
 Base.nameof(::DataType)
 Base.fieldnames
 Base.fieldname
+Base.hasfield
 ```
 
 ### Memory layout
@@ -203,7 +213,12 @@ Core.Nothing
 Base.isnothing
 Base.Some
 Base.something
+Base.Enums.Enum
 Base.Enums.@enum
+Core.Expr
+Core.Symbol
+Core.Symbol(x...)
+Core.Module
 ```
 
 ## Generic Functions
@@ -229,6 +244,7 @@ Base.evalfile
 Base.esc
 Base.@inbounds
 Base.@boundscheck
+Base.@propagate_inbounds
 Base.@inline
 Base.@noinline
 Base.@nospecialize
@@ -241,6 +257,7 @@ Base.@simd
 Base.@polly
 Base.@generated
 Base.@pure
+Base.@deprecate
 ```
 
 ## Missing Values
@@ -291,6 +308,8 @@ Base.Sys.isnetbsd
 Base.Sys.isdragonfly
 Base.Sys.iswindows
 Base.Sys.windows_version
+Base.Sys.free_memory
+Base.Sys.total_memory
 Base.@static
 ```
 
@@ -329,6 +348,7 @@ Base.MissingException
 Core.OutOfMemoryError
 Core.ReadOnlyMemoryError
 Core.OverflowError
+Base.ProcessFailedException
 Core.StackOverflowError
 Base.SystemError
 Core.TypeError
@@ -378,10 +398,18 @@ Meta.@lower
 Meta.parse(::AbstractString, ::Int)
 Meta.parse(::AbstractString)
 Meta.ParseError
+Core.QuoteNode
 Base.macroexpand
 Base.@macroexpand
 Base.@macroexpand1
 Base.code_lowered
 Base.code_typed
 Base.precompile
+```
+
+## Meta
+```@docs
+Meta.quot
+Meta.isexpr
+Meta.show_sexpr
 ```

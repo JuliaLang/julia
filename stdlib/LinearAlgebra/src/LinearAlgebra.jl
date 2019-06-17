@@ -13,10 +13,10 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     cosh, cot, coth, csc, csch, eltype, exp, fill!, floor, getindex, hcat,
     getproperty, imag, inv, isapprox, isone, iszero, IndexStyle, kron, length, log, map, ndims,
     oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
-    setindex!, show, similar, sin, sincos, sinh, size, size_to_strides, sqrt, StridedReinterpretArray,
-    StridedReshapedArray, strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
+    setindex!, show, similar, sin, sincos, sinh, size, sqrt,
+    strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
 using Base: hvcat_fill, IndexLinear, promote_op, promote_typeof,
-    @propagate_inbounds, @pure, reduce, typed_vcat, has_offset_axes
+    @propagate_inbounds, @pure, reduce, typed_vcat, require_one_based_indexing
 using Base.Broadcast: Broadcasted
 
 export
@@ -52,6 +52,7 @@ export
     UpperTriangular,
     UnitLowerTriangular,
     UnitUpperTriangular,
+    UpperHessenberg,
     Diagonal,
     UniformScaling,
 
@@ -356,7 +357,6 @@ include("triangular.jl")
 
 include("factorization.jl")
 include("qr.jl")
-include("hessenberg.jl")
 include("lq.jl")
 include("eigen.jl")
 include("svd.jl")
@@ -367,6 +367,7 @@ include("bunchkaufman.jl")
 include("diagonal.jl")
 include("bidiag.jl")
 include("uniformscaling.jl")
+include("hessenberg.jl")
 include("givens.jl")
 include("special.jl")
 include("bitarray.jl")

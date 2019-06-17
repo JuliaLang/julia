@@ -287,7 +287,7 @@ end
 
 # LocalManager
 struct LocalManager <: ClusterManager
-    np::Integer
+    np::Int
     restrict::Bool  # Restrict binding to 127.0.0.1 only
 end
 
@@ -373,7 +373,7 @@ manage
 struct DefaultClusterManager <: ClusterManager
 end
 
-const tunnel_hosts_map = Dict{AbstractString, Semaphore}()
+const tunnel_hosts_map = Dict{String, Semaphore}()
 
 """
     connect(manager::ClusterManager, pid::Int, config::WorkerConfig) -> (instrm::IO, outstrm::IO)

@@ -41,9 +41,10 @@ function *(transx::Transpose{<:Any,<:StridedVector{T}}, y::StridedVector{T}) whe
 end
 
 # Matrix-vector multiplication
-function (*)(A::StridedMatrix{T}, x::StridedVector{S}) where {T<:BlasFloat,S}
+function (*)(A::StridedMatrix{T}, x::StridedVector{S}) where {T<:BlasFloat,S<:Real}
     TS = promote_op(matprod, T, S)
-    mul!(similar(x, TS, size(A,1)), A, convert(AbstractVector{TS}, x))
+    y = isconcretetype(TS) ? convert(AbstractVector{TS}, x) : x
+    mul!(similar(x, TS, size(A,1)), A, y)
 end
 function (*)(A::AbstractMatrix{T}, x::AbstractVector{S}) where {T,S}
     TS = promote_op(matprod, T, S)
@@ -178,6 +179,9 @@ mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat) = generic_matm
     rmul!(A, B)
 
 Calculate the matrix-matrix product ``AB``, overwriting `A`, and return the result.
+Here, `B` must be of special matrix type, like, e.g., [`Diagonal`](@ref),
+[`UpperTriangular`](@ref) or [`LowerTriangular`](@ref), or of some orthogonal type,
+see [`QR`](@ref).
 
 # Examples
 ```jldoctest
@@ -191,6 +195,15 @@ julia> A
 2×2 Array{Int64,2}:
  0  3
  1  2
+
+julia> A = [1.0 2.0; 3.0 4.0];
+
+julia> F = qr([0 1; -1 0]);
+
+julia> rmul!(A, F.Q)
+2×2 Array{Float64,2}:
+ 2.0  1.0
+ 4.0  3.0
 ```
 """
 rmul!(A, B)
@@ -199,6 +212,9 @@ rmul!(A, B)
     lmul!(A, B)
 
 Calculate the matrix-matrix product ``AB``, overwriting `B`, and return the result.
+Here, `A` must be of special matrix type, like, e.g., [`Diagonal`](@ref),
+[`UpperTriangular`](@ref) or [`LowerTriangular`](@ref), or of some orthogonal type,
+see [`QR`](@ref).
 
 # Examples
 ```jldoctest
@@ -212,6 +228,15 @@ julia> B
 2×2 Array{Int64,2}:
  2  1
  3  0
+
+julia> B = [1.0 2.0; 3.0 4.0];
+
+julia> F = qr([0 1; -1 0]);
+
+julia> lmul!(F.Q, B)
+2×2 Array{Float64,2}:
+ 3.0  4.0
+ 1.0  2.0
 ```
 """
 lmul!(A, B)
@@ -327,14 +352,16 @@ function mul!(C::AbstractMatrix, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, transB
 end
 # Supporting functions for matrix multiplication
 
-function copytri!(A::AbstractMatrix, uplo::AbstractChar, conjugate::Bool=false)
+# copy transposed(adjoint) of upper(lower) side-digonals. Optionally include diagonal.
+@inline function copytri!(A::AbstractMatrix, uplo::AbstractChar, conjugate::Bool=false, diag::Bool=false)
     n = checksquare(A)
+    off = diag ? 0 : 1
     if uplo == 'U'
-        for i = 1:(n-1), j = (i+1):n
+        for i = 1:n, j = (i+off):n
             A[j,i] = conjugate ? adjoint(A[i,j]) : transpose(A[i,j])
         end
     elseif uplo == 'L'
-        for i = 1:(n-1), j = (i+1):n
+        for i = 1:n, j = (i+off):n
             A[i,j] = conjugate ? adjoint(A[j,i]) : transpose(A[j,i])
         end
     else
@@ -495,7 +522,7 @@ end
 #       strides != 1 cases
 
 function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::AbstractVector) where R
-    @assert !has_offset_axes(C, A, B)
+    require_one_based_indexing(C, A, B)
     mB = length(B)
     mA, nA = lapack_size(tA, A)
     if mB != nA
@@ -584,7 +611,7 @@ end
 generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::AbstractVecOrMat, B::AbstractVecOrMat) = _generic_matmatmul!(C, tA, tB, A, B)
 
 function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S}) where {T,S,R}
-    @assert !has_offset_axes(C, A, B)
+    require_one_based_indexing(C, A, B)
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     if mB != nA
@@ -758,7 +785,7 @@ function matmul2x2(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,
 end
 
 function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
-    @assert !has_offset_axes(C, A, B)
+    require_one_based_indexing(C, A, B)
     if !(size(A) == size(B) == size(C) == (2,2))
         throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
     end
@@ -800,7 +827,7 @@ function matmul3x3(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,
 end
 
 function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
-    @assert !has_offset_axes(C, A, B)
+    require_one_based_indexing(C, A, B)
     if !(size(A) == size(B) == size(C) == (3,3))
         throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
     end

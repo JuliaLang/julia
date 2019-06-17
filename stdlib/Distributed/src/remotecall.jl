@@ -506,6 +506,13 @@ Wait for a value to become available on the specified [`RemoteChannel`](@ref).
 """
 wait(r::RemoteChannel, args...) = (call_on_owner(wait_ref, r, myid(), args...); r)
 
+"""
+    fetch(x::Future)
+
+Wait for and get the value of a [`Future`](@ref). The fetched value is cached locally.
+Further calls to `fetch` on the same reference return the cached value. If the remote value
+is an exception, throws a [`RemoteException`](@ref) which captures the remote exception and backtrace.
+"""
 function fetch(r::Future)
     r.v !== nothing && return something(r.v)
     v = call_on_owner(fetch_ref, r)
@@ -515,22 +522,14 @@ function fetch(r::Future)
 end
 
 fetch_ref(rid, args...) = fetch(lookup_ref(rid).c, args...)
+
+"""
+    fetch(c::RemoteChannel)
+
+Wait for and get a value from a [`RemoteChannel`](@ref). Exceptions raised are the
+same as for a `Future`. Does not remove the item fetched.
+"""
 fetch(r::RemoteChannel, args...) = call_on_owner(fetch_ref, r, args...)
-
-"""
-    fetch(x)
-
-Waits and fetches a value from `x` depending on the type of `x`:
-
-* [`Future`](@ref): Wait for and get the value of a `Future`. The fetched value is cached locally.
-  Further calls to `fetch` on the same reference return the cached value. If the remote value
-  is an exception, throws a [`RemoteException`](@ref) which captures the remote exception and backtrace.
-* [`RemoteChannel`](@ref): Wait for and get the value of a remote reference. Exceptions raised are
-  same as for a `Future` .
-
-Does not remove the item fetched.
-"""
-fetch(@nospecialize x) = x
 
 isready(rv::RemoteValue, args...) = isready(rv.c, args...)
 

@@ -77,7 +77,7 @@ length(B::BitArray) = B.len
 size(B::BitVector) = (B.len,)
 size(B::BitArray) = B.dims
 
-@inline function size(B::BitVector, d)
+@inline function size(B::BitVector, d::Integer)
     d < 1 && throw_boundserror(size(B), d)
     ifelse(d == 1, B.len, 1)
 end
@@ -369,8 +369,8 @@ Create a `BitArray` with all values set to `false`.
 ```jldoctest
 julia> falses(2,3)
 2×3 BitArray{2}:
- false  false  false
- false  false  false
+ 0  0  0
+ 0  0  0
 ```
 """
 falses(dims::DimOrInd...) = falses(dims)
@@ -387,8 +387,8 @@ Create a `BitArray` with all values set to `true`.
 ```jldoctest
 julia> trues(2,3)
 2×3 BitArray{2}:
- true  true  true
- true  true  true
+ 1  1  1
+ 1  1  1
 ```
 """
 trues(dims::DimOrInd...) = trues(dims)
@@ -524,22 +524,22 @@ The shape is inferred from the `itr` object.
 ```jldoctest
 julia> BitArray([1 0; 0 1])
 2×2 BitArray{2}:
-  true  false
- false   true
+ 1  0
+ 0  1
 
 julia> BitArray(x+y == 3 for x = 1:2, y = 1:3)
 2×3 BitArray{2}:
- false   true  false
-  true  false  false
+ 0  1  0
+ 1  0  0
 
 julia> BitArray(x+y == 3 for x = 1:2 for y = 1:3)
 6-element BitArray{1}:
- false
-  true
- false
-  true
- false
- false
+ 0
+ 1
+ 0
+ 1
+ 0
+ 0
 ```
 """
 BitArray(itr) = gen_bitarray(IteratorSize(itr), itr)
@@ -741,7 +741,7 @@ function append!(B::BitVector, items::BitVector)
     return B
 end
 
-append!(B::BitVector, items::AbstractVector{Bool}) = append!(B, BitArray(items))
+append!(B::BitVector, items) = append!(B, BitArray(items))
 append!(A::Vector{Bool}, items::BitVector) = append!(A, Array(items))
 
 function prepend!(B::BitVector, items::BitVector)
@@ -761,7 +761,7 @@ function prepend!(B::BitVector, items::BitVector)
     return B
 end
 
-prepend!(B::BitVector, items::AbstractVector{Bool}) = prepend!(B, BitArray(items))
+prepend!(B::BitVector, items) = prepend!(B, BitArray(items))
 prepend!(A::Vector{Bool}, items::BitVector) = prepend!(A, Array(items))
 
 function sizehint!(B::BitVector, sz::Integer)
@@ -1260,27 +1260,27 @@ values. If `n < 0`, elements are shifted backwards. Equivalent to
 ```jldoctest
 julia> B = BitVector([true, false, true, false, false])
 5-element BitArray{1}:
-  true
- false
-  true
- false
- false
+ 1
+ 0
+ 1
+ 0
+ 0
 
 julia> B >> 1
 5-element BitArray{1}:
- false
-  true
- false
-  true
- false
+ 0
+ 1
+ 0
+ 1
+ 0
 
 julia> B >> -1
 5-element BitArray{1}:
- false
-  true
- false
- false
- false
+ 0
+ 1
+ 0
+ 0
+ 0
 ```
 """
 (>>)(B::BitVector, i::Union{Int, UInt}) = B >>> i
@@ -1298,27 +1298,27 @@ values. If `n < 0`, elements are shifted forwards. Equivalent to
 ```jldoctest
 julia> B = BitVector([true, false, true, false, false])
 5-element BitArray{1}:
-  true
- false
-  true
- false
- false
+ 1
+ 0
+ 1
+ 0
+ 0
 
 julia> B << 1
 5-element BitArray{1}:
- false
-  true
- false
- false
- false
+ 0
+ 1
+ 0
+ 0
+ 0
 
 julia> B << -1
 5-element BitArray{1}:
- false
-  true
- false
-  true
- false
+ 0
+ 1
+ 0
+ 1
+ 0
 ```
 """
 (<<)(B::BitVector, i::Int) = (i >=0 ? B << unsigned(i) : B >> unsigned(-i))
