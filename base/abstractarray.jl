@@ -560,11 +560,6 @@ checkindex(::Type{Bool}, inds::AbstractUnitRange, i) =
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i::Real) = (first(inds) <= i) & (i <= last(inds))
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Colon) = true
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Slice) = true
-if i < 1
-    checkindex(::Type{Bool}, inds::AbstractUnitRange, i::Real) =
-        throw(ArgumentError("array indices can't be negative")
-end
-
 function checkindex(::Type{Bool}, inds::AbstractUnitRange, r::AbstractRange)
     @_propagate_inbounds_meta
     isempty(r) | (checkindex(Bool, inds, first(r)) & checkindex(Bool, inds, last(r)))
