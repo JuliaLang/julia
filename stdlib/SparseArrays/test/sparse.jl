@@ -2287,17 +2287,6 @@ end
         @test findnext(!iszero, z,i) == findnext(!iszero, z_sp,i)
         @test findprev(!iszero, z,i) == findprev(!iszero, z_sp,i)
     end
-
-    w = [ "a" ""; "" "b"]
-    w_sp = sparse(w)
-
-    for i in keys(w)
-        @test findnext(!isequal(""), w,i) == findnext(!isequal(""), w_sp,i)
-        @test findprev(!isequal(""), w,i) == findprev(!isequal(""), w_sp,i)
-        @test findnext(isequal(""), w,i) == findnext(isequal(""), w_sp,i)
-        @test findprev(isequal(""), w,i) == findprev(isequal(""), w_sp,i)
-    end
-
 end
 
 # #20711
