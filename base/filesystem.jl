@@ -50,7 +50,9 @@ if Sys.iswindows()
     import .Base: cwstring
 end
 
-const MAX_PATH = Sys.iswindows() ? 260 : 1024 # max buffer size including null terminator
+# Average buffer size including null terminator for several filesystem operations.
+# On Windows we use the MAX_PATH = 260 value on Win32.
+const AVG_PATH = Sys.iswindows() ? 260 : 512
 
 include("path.jl")
 include("stat.jl")

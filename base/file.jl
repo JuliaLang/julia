@@ -46,7 +46,7 @@ julia> pwd()
 ```
 """
 function pwd()
-    buf = Base.StringVector(MAX_PATH - 1) # space for null-terminator implied by StringVector
+    buf = Base.StringVector(AVG_PATH - 1) # space for null-terminator implied by StringVector
     sz = RefValue{Csize_t}(length(buf) + 1) # total buffer size including null
     while true
         rc = ccall(:uv_cwd, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
