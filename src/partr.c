@@ -243,9 +243,11 @@ JL_DLLEXPORT void jl_enqueue_task(jl_task_t *task)
 // get the next runnable task from the multiq
 static jl_task_t *get_next_task(jl_value_t *getsticky)
 {
+    jl_gc_safepoint();
     jl_task_t *task = (jl_task_t*)jl_apply(&getsticky, 1);
     if (jl_typeis(task, jl_task_type))
         return task;
+    jl_gc_safepoint();
     return multiq_deletemin();
 }
 
@@ -258,7 +260,6 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
     jl_task_t *task;
 
     while (1) {
-        jl_gc_safepoint();
         task = get_next_task(getsticky);
         if (task)
             return task;
