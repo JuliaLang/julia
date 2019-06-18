@@ -455,6 +455,15 @@ end
     @test det(D) == 4
 end
 
+@testset "linear solve for block diagonal matrices" begin
+    D = Diagonal([rand(2,2) for _ in 1:5])
+    b = [rand(2,2) for _ in 1:5]
+    B = [rand(2,2) for _ in 1:5, _ in 1:5]
+    @test ldiv!(D, copy(b)) ≈ Diagonal(inv.(D.diag)) * b
+    @test ldiv!(D, copy(B)) ≈ Diagonal(inv.(D.diag)) * B
+    @test rdiv!(copy(B), D) ≈ B * Diagonal(inv.(D.diag))
+end
+
 @testset "multiplication with Symmetric/Hermitian" begin
     for T in (Float64, ComplexF64)
         D = Diagonal(randn(T, n))
