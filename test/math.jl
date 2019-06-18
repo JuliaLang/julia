@@ -170,6 +170,12 @@ end
             @test sqrt(x) ≈ sqrt(big(x))
             @test tan(x) ≈ tan(big(x))
             @test tanh(x) ≈ tanh(big(x))
+            @test sec(x) ≈ sec(big(x))
+            @test csc(x) ≈ csc(big(x))
+            @test secd(x) ≈ secd(big(x))
+            @test cscd(x) ≈ cscd(big(x))
+            @test sech(x) ≈ sech(big(x))
+            @test csch(x) ≈ csch(big(x))
         end
         @testset "Special values" begin
             @test isequal(T(1//4)^T(1//2), T(1//2))
@@ -191,6 +197,9 @@ end
             @test isequal(expm1(T(0)), T(0))
             @test expm1(T(1)) ≈ T(ℯ)-1 atol=10*eps(T)
             @test isequal(hypot(T(3),T(4)), T(5))
+            @test isequal(hypot(floatmax(T),T(1)),floatmax(T))
+            @test isequal(hypot(floatmin(T)*sqrt(eps(T)),T(0)),floatmin(T)*sqrt(eps(T)))
+            @test isequal(floatmin(T)*hypot(1.368423059742933,1.3510496552495361),hypot(floatmin(T)*1.368423059742933,floatmin(T)*1.3510496552495361))
             @test isequal(log(T(1)), T(0))
             @test isequal(log(ℯ,T(1)), T(0))
             @test log(T(ℯ)) ≈ T(1) atol=eps(T)
@@ -208,6 +217,12 @@ end
             @test isequal(sqrt(T(100000000)), T(10000))
             @test isequal(tan(T(0)), T(0))
             @test tan(T(pi)/4) ≈ T(1) atol=eps(T)
+            @test isequal(sec(T(pi)), -one(T))
+            @test isequal(csc(T(pi)/2), one(T))
+            @test isequal(secd(T(180)), -one(T))
+            @test isequal(cscd(T(90)), one(T))
+            @test isequal(sech(log(one(T))), one(T))
+            @test isequal(csch(zero(T)), T(Inf))
         end
         @testset "Inverses" begin
             @test acos(cos(x)) ≈ x
@@ -244,6 +259,12 @@ end
             @test sinh(x) ≈ (exp(x)-exp(-x))/2
             @test tan(x) ≈ sin(x)/cos(x)
             @test tanh(x) ≈ sinh(x)/cosh(x)
+            @test sec(x) ≈ inv(cos(x))
+            @test csc(x) ≈ inv(sin(x))
+            @test secd(x) ≈ inv(cosd(x))
+            @test cscd(x) ≈ inv(sind(x))
+            @test sech(x) ≈ inv(cosh(x))
+            @test csch(x) ≈ inv(sinh(x))
         end
         @testset "Edge cases" begin
             @test isinf(log(zero(T)))

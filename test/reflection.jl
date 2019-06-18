@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Test
 
 # code_native / code_llvm (issue #8239)
@@ -882,3 +883,6 @@ _test_at_locals2(1,1)
                    #=dump_module=#true, #=syntax=#:att, #=optimize=#false, :none,
                    params)
 end
+
+@test nameof(Any) === :Any
+@test nameof(:) === :Colon

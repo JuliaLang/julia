@@ -54,7 +54,7 @@ function edit(path::AbstractString, line::Integer=0)
         cmd = line != 0 ? `$command $path -l $line` : `$command $path`
     elseif startswith(name, "subl") || startswith(name, "atom")
         cmd = line != 0 ? `$command $path:$line` : `$command $path`
-    elseif name == "code" || (Sys.iswindows() && uppercase(name) == "CODE.EXE")
+    elseif name == "code" || (Sys.iswindows() && (uppercase(name) == "CODE.EXE" || uppercase(name) == "CODE.CMD"))
         cmd = line != 0 ? `$command -g $path:$line` : `$command -g $path`
     elseif startswith(name, "notepad++")
         cmd = line != 0 ? `$command $path -n$line` : `$command $path`

@@ -34,7 +34,7 @@ end
 ####
 
 """
-    init(; n::Integer, delay::Float64)
+    init(; n::Integer, delay::Real))
 
 Configure the `delay` between backtraces (measured in seconds), and the number `n` of
 instruction pointers that may be stored. Each instruction pointer corresponds to a single
@@ -42,7 +42,7 @@ line of code; backtraces generally consist of a long list of instruction pointer
 settings can be obtained by calling this function with no arguments, and each can be set
 independently using keywords or in the order `(n, delay)`.
 """
-function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Float64} = nothing)
+function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n === nothing && delay === nothing
@@ -53,7 +53,7 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Float6
     init(nnew, delaynew)
 end
 
-function init(n::Integer, delay::Float64)
+function init(n::Integer, delay::Real)
     status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), n, round(UInt64,10^9*delay))
     if status == -1
         error("could not allocate space for ", n, " instruction pointers")
@@ -560,28 +560,33 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
     return root
 end
 
-# Print a "branch" starting at a particular level. This gets called recursively.
-function tree(io::IO, bt::StackFrameTree, level::Int, cols::Int, fmt::ProfileFormat, noisefloor::Int)
-    level > fmt.maxdepth && return
-    isempty(bt.down) && return
-    # Order the line information
-    nexts = collect(values(bt.down))
-    lilist = collect(frame.frame for frame in nexts)
-    counts = collect(frame.count for frame in nexts)
-    # Generate the string for each line
-    strs = tree_format(lilist, counts, level, cols)
-    # Recurse to the next level
-    for i in liperm(lilist)
-        down = nexts[i]
-        count = down.count
-        count < fmt.mincount && continue
-        count < noisefloor && continue
-        str = strs[i]
-        println(io, isempty(str) ? "$count unknown stackframe" : str)
-        noisefloor_down = fmt.noisefloor > 0 ? floor(Int, fmt.noisefloor * sqrt(count)) : 0
-        tree(io, down, level + 1, cols, fmt, noisefloor_down)
+# Print the stack frame tree starting at a particular root. Uses a worklist to
+# avoid stack overflows.
+function tree(io::IO, bt::StackFrameTree, cols::Int, fmt::ProfileFormat)
+    worklist = [(bt, 0, 0, "")]
+    while !isempty(worklist)
+        (bt, level, noisefloor, str) = popfirst!(worklist)
+        isempty(str) || println(io, str)
+        level > fmt.maxdepth && continue
+        isempty(bt.down) && continue
+        # Order the line information
+        nexts = collect(values(bt.down))
+        lilist = collect(frame.frame for frame in nexts)
+        counts = collect(frame.count for frame in nexts)
+        # Generate the string for each line
+        strs = tree_format(lilist, counts, level, cols)
+        # Recurse to the next level
+        for i in reverse(liperm(lilist))
+            down = nexts[i]
+            count = down.count
+            count < fmt.mincount && continue
+            count < noisefloor && continue
+            str = strs[i]
+            isempty(str) && (str = "$count unknown stackframe")
+            noisefloor_down = fmt.noisefloor > 0 ? floor(Int, fmt.noisefloor * sqrt(count)) : 0
+            pushfirst!(worklist, (down, level + 1, noisefloor_down, str))
+        end
     end
-    nothing
 end
 
 function tree(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoFlatDict, LineInfoDict}, cols::Int, fmt::ProfileFormat)
@@ -594,8 +599,7 @@ function tree(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoFlatDict, Line
         warning_empty()
         return
     end
-    level = 0
-    tree(io, root, level, cols, fmt, 0)
+    tree(io, root, cols, fmt)
     nothing
 end
 

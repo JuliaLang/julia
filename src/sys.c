@@ -493,7 +493,9 @@ JL_DLLEXPORT long jl_getpagesize(void)
 #else
 JL_DLLEXPORT long jl_getpagesize(void)
 {
-    return sysconf(_SC_PAGESIZE);
+    long page_size = sysconf(_SC_PAGESIZE);
+    assert(page_size != -1);
+    return page_size;
 }
 #endif
 

@@ -93,6 +93,16 @@ end
     @test isempty(rgx1.captures)
 end
 
+@testset "deepcopy for bits types" begin
+    struct Immutable; x::Int; end
+    mutable struct Mutable; x::Int; end
+
+    @test deepcopy(Immutable(2)) === Immutable(2)
+    @test deepcopy(Mutable(2))   !== Mutable(2)
+    @inferred deepcopy(Immutable(2))
+    @inferred deepcopy(Mutable(2))
+end
+
 # issue #30911
 @test deepcopy(Array{Int,N} where N) == Array{Int,N} where N
 
@@ -175,4 +185,11 @@ end
             @test haskey(d, k)
         end
     end
+end
+
+# issue #17149
+mutable struct Bar17149
+end
+let x = Bar17149()
+    @test deepcopy(x) !== x
 end

@@ -966,17 +966,17 @@ for (finv, f, finvh, fh, finvd, fd, fn) in ((:sec, :cos, :sech, :cosh, :secd, :c
             $($name)(x)
 
         Compute the $($fn) of `x`, where `x` is in radians.
-        """ ($finv)(z::T) where {T<:Number} = one(T) / (($f)(z))
+        """ ($finv)(z::Number) = inv(($f)(z))
         @doc """
             $($hname)(x)
 
         Compute the hyperbolic $($fn) of `x`.
-        """ ($finvh)(z::T) where {T<:Number} = one(T) / (($fh)(z))
+        """ ($finvh)(z::Number) = inv(($fh)(z))
         @doc """
             $($dname)(x)
 
         Compute the $($fn) of `x`, where `x` is in degrees.
-        """ ($finvd)(z::T) where {T<:Number} = one(T) / (($fd)(z))
+        """ ($finvd)(z::Number) = inv(($fd)(z))
     end
 end
 
@@ -988,10 +988,10 @@ for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
     @eval begin
         @doc """
             $($tname)(x)
-        Compute the inverse $($fn) of `x`, where the output is in radians. """ ($tfa)(y::T) where {T<:Number} = ($tfainv)(one(T) / y)
+        Compute the inverse $($fn) of `x`, where the output is in radians. """ ($tfa)(y::Number) = ($tfainv)(inv(y))
         @doc """
             $($hname)(x)
-        Compute the inverse hyperbolic $($fn) of `x`. """ ($hfa)(y::T) where {T<:Number} = ($hfainv)(one(T) / y)
+        Compute the inverse hyperbolic $($fn) of `x`. """ ($hfa)(y::Number) = ($hfainv)(inv(y))
     end
 end
 

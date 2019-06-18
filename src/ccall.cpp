@@ -87,7 +87,7 @@ static bool runtime_sym_gvs(const char *f_lib, const char *f_name, MT &&M,
             symMap = &libgv.second;
             libsym = jl_get_library(f_lib);
             assert(libsym != NULL);
-            *(void**)jl_emit_and_add_to_shadow(libptrgv) = libsym;
+            *jl_emit_and_add_to_shadow(libptrgv) = libsym;
         }
         else {
             libptrgv = iter->second.first;
@@ -116,7 +116,7 @@ static bool runtime_sym_gvs(const char *f_lib, const char *f_name, MT &&M,
         (*symMap)[f_name] = std::make_pair(llvmgv, addr);
         if (symaddr)
             *symaddr = addr;
-        *(void**)jl_emit_and_add_to_shadow(llvmgv) = addr;
+        *jl_emit_and_add_to_shadow(llvmgv) = addr;
     }
     else {
         if (symaddr)
@@ -238,7 +238,7 @@ static GlobalVariable *emit_plt_thunk(
     GlobalVariable *got = new GlobalVariable(*M, T_pvoidfunc, false,
                                              GlobalVariable::ExternalLinkage,
                                              nullptr, gname);
-    *(void**)jl_emit_and_add_to_shadow(got) = symaddr;
+    *jl_emit_and_add_to_shadow(got) = symaddr;
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", plt);
     IRBuilder<> irbuilder(b0);
     Value *ptr = runtime_sym_lookup(irbuilder, funcptype, f_lib, f_name, plt, libptrgv,
@@ -789,7 +789,12 @@ public:
         Function *F = dyn_cast<Function>(V);
         if (F) {
             if (isIntrinsicFunction(F)) {
-                return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
+                auto Fcopy = destModule->getOrInsertFunction(F->getName(), F->getFunctionType());
+#if JL_LLVM_VERSION >= 90000
+                return Fcopy.getCallee();
+#else
+                return Fcopy;
+#endif
             }
             if (F->isDeclaration() || F->getParent() != destModule) {
                 if (F->getName().empty())
@@ -1421,7 +1426,9 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     // method involving `jl_dlsym()` on Linux platforms instead.
 #ifdef _OS_LINUX_
         jl_ptls_t (*p)(void);
-        jl_dlsym(jl_dlopen(nullptr, 0), "jl_get_ptls_states", (void **)&p, 0);
+        void *handle = jl_dlopen(nullptr, 0);
+        jl_dlsym(handle, "jl_get_ptls_states", (void **)&p, 0);
+        jl_dlclose(handle);
         return p;
 #else
         return &jl_get_ptls_states;
@@ -1686,15 +1693,15 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         JL_GC_POP();
         return mark_or_box_ccall_result(ctx, strp, retboxed, rt, unionall, static_rt);
     }
-    else if (is_libjulia_func(memcpy)) {
+    else if (is_libjulia_func(memcpy) && (rt == (jl_value_t*)jl_void_type || jl_is_cpointer_type(rt))) {
         const jl_cgval_t &dst = argv[0];
         const jl_cgval_t &src = argv[1];
         const jl_cgval_t &n = argv[2];
+        Value *destp = emit_unbox(ctx, T_size, dst, (jl_value_t*)jl_voidpointer_type);
 
 #if JL_LLVM_VERSION >= 70000
         ctx.builder.CreateMemCpy(
-                ctx.builder.CreateIntToPtr(
-                    emit_unbox(ctx, T_size, dst, (jl_value_t*)jl_voidpointer_type), T_pint8),
+                ctx.builder.CreateIntToPtr(destp, T_pint8),
                 1,
                 ctx.builder.CreateIntToPtr(
                     emit_unbox(ctx, T_size, src, (jl_value_t*)jl_voidpointer_type), T_pint8),
@@ -1703,15 +1710,36 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 false);
 #else
         ctx.builder.CreateMemCpy(
-                ctx.builder.CreateIntToPtr(
-                    emit_unbox(ctx, T_size, dst, (jl_value_t*)jl_voidpointer_type), T_pint8),
+                ctx.builder.CreateIntToPtr(destp, T_pint8),
                 ctx.builder.CreateIntToPtr(
                     emit_unbox(ctx, T_size, src, (jl_value_t*)jl_voidpointer_type), T_pint8),
                 emit_unbox(ctx, T_size, n, (jl_value_t*)jl_ulong_type), 1,
                 false);
 #endif
         JL_GC_POP();
-        return ghostValue(jl_void_type);
+        return rt == (jl_value_t*)jl_void_type ? ghostValue(jl_void_type) :
+            mark_or_box_ccall_result(ctx, destp, retboxed, rt, unionall, static_rt);
+    }
+    else if (is_libjulia_func(jl_object_id) && nargt == 1 &&
+            rt == (jl_value_t*)jl_ulong_type) {
+        jl_cgval_t val = argv[0];
+        if (!val.isboxed) {
+            // If the value is not boxed, try to compute the object id without
+            // reboxing it.
+            auto T_pint8_derived = PointerType::get(T_int8, AddressSpace::Derived);
+            if (!val.isghost && !val.ispointer())
+                val = value_to_pointer(ctx, val);
+            Value *args[] = {
+                emit_typeof_boxed(ctx, val),
+                val.isghost ? ConstantPointerNull::get(T_pint8_derived) :
+                    ctx.builder.CreateBitCast(
+                        decay_derived(data_pointer(ctx, val)),
+                        T_pint8_derived)
+            };
+            Value *ret = ctx.builder.CreateCall(prepare_call(jl_object_id__func), makeArrayRef(args));
+            JL_GC_POP();
+            return mark_or_box_ccall_result(ctx, ret, retboxed, rt, unionall, static_rt);
+        }
     }
 
     jl_cgval_t retval = sig.emit_a_ccall(
@@ -1859,7 +1887,12 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             bool f_extern = (strncmp(f_name, "extern ", 7) == 0);
             if (f_extern)
                 f_name += 7;
-            llvmf = jl_Module->getOrInsertFunction(f_name, functype);
+            llvmf = jl_Module->getOrInsertFunction(f_name, functype)
+#if JL_LLVM_VERSION >= 90000
+                .getCallee();
+#else
+                ;
+#endif
             if (!f_extern &&
                 (!isa<Function>(llvmf) ||
                  cast<Function>(llvmf)->getIntrinsicID() == Intrinsic::not_intrinsic))

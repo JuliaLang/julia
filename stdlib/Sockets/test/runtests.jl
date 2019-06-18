@@ -79,6 +79,11 @@ end
     @test_throws MethodError sort([ip"2.3.4.5", ip"1.2.3.4", ip"2001:1:2::1"])
 end
 
+@testset "broadcastable" begin
+    @test size(ip"127.0.0.1" .== ip"127.0.0.1") == ()
+    @test size(ip"::1" .== ip"::1") == ()
+end
+
 @testset "RFC 5952 Compliance" begin
     @test repr(ip"2001:db8:0:0:0:0:2:1") == "ip\"2001:db8::2:1\""
     @test repr(ip"2001:0db8::0001") == "ip\"2001:db8::1\""

@@ -30,7 +30,7 @@ Serializer(io::IO) = Serializer{typeof(io)}(io)
 ## serializing values ##
 
 const n_int_literals = 33
-const n_reserved_slots = 25
+const n_reserved_slots = 24
 const n_reserved_tags = 12
 
 const TAGS = Any[
@@ -65,7 +65,7 @@ const TAGS = Any[
     :sub_int, :mul_int, :add_float, :sub_float, :new, :mul_float, :bitcast, :start, :done, :next,
     :indexed_iterate, :getfield, :meta, :eq_int, :slt_int, :sle_int, :ne_int, :push_loc, :pop_loc,
     :pop, :arrayset, :arrayref, :apply_type, :inbounds, :getindex, :setindex!, :Core, :!, :+,
-    :Base, :static_parameter, :convert, :colon, Symbol("#self#"), Symbol(""), :tuple,
+    :Base, :static_parameter, :convert, :colon, Symbol("#self#"), Symbol("#temp#"), :tuple, Symbol(""),
 
     fill(:_reserved_, n_reserved_slots)...,
 
@@ -75,7 +75,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 7 # do not make changes without bumping the version #!
+const ser_version = 8 # do not make changes without bumping the version #!
 
 const NTAGS = length(TAGS)
 
@@ -411,7 +411,9 @@ function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     isa(linfo.def, Module) || error("can only serialize toplevel MethodInstance objects")
     writetag(s.io, METHODINSTANCE_TAG)
     serialize(s, linfo.uninferred)
+    serialize(s, nothing)  # for backwards compat
     serialize(s, linfo.sparam_vals)
+    serialize(s, Any)  # for backwards compat
     serialize(s, linfo.specTypes)
     serialize(s, linfo.def)
     nothing
@@ -466,7 +468,7 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, primary.abstract)
     serialize(s, primary.mutable)
     serialize(s, primary.ninitialized)
-    if isdefined(t, :mt)
+    if isdefined(t, :mt) && t.mt !== Symbol.name.mt
         serialize(s, t.mt.name)
         serialize(s, collect(Base.MethodList(t.mt)))
         serialize(s, t.mt.max_args)
@@ -915,7 +917,13 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     file = deserialize(s)::Symbol
     line = deserialize(s)::Int32
     sig = deserialize(s)::Type
-    slot_syms = deserialize(s)::String
+    syms = deserialize(s)
+    if syms isa SimpleVector
+        # < v1.2
+        _ambig = deserialize(s)
+    else
+        slot_syms = syms::String
+    end
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
     template = deserialize(s)
@@ -926,14 +934,17 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.file = file
         meth.line = line
         meth.sig = sig
-        meth.slot_syms = slot_syms
         meth.nargs = nargs
         meth.isva = isva
         if template !== nothing
             # TODO: compress template
             meth.source = template::CodeInfo
             meth.pure = template.pure
+            if !@isdefined(slot_syms)
+                slot_syms = ccall(:jl_compress_argnames, Ref{String}, (Any,), meth.source.slotnames)
+            end
         end
+        meth.slot_syms = slot_syms
         if generator !== nothing
             linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ())
             linfo.specTypes = Tuple
@@ -941,9 +952,9 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
             linfo.def = meth
             meth.generator = linfo
         end
-        ftype = ccall(:jl_first_argument_datatype, Any, (Any,), sig)::DataType
-        if isdefined(ftype.name, :mt) && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), ftype.name.mt, sig, typemax(UInt))
-            ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), ftype.name.mt, meth, C_NULL)
+        mt = ccall(:jl_method_table_for, Any, (Any,), sig)
+        if mt !== nothing && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), mt, sig, typemax(UInt))
+            ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, meth, C_NULL)
         end
         remember_object(s, meth, lnumber)
     end
@@ -954,10 +965,77 @@ function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
     linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, (Ptr{Cvoid},), C_NULL)
     deserialize_cycle(s, linfo)
     linfo.uninferred = deserialize(s)::CodeInfo
+    tag = Int32(read(s.io, UInt8)::UInt8)
+    if tag != UNDEFREF_TAG
+        # for reading files prior to v1.2
+        handle_deserialize(s, tag)
+    end
     linfo.sparam_vals = deserialize(s)::SimpleVector
+    _rettype = deserialize(s)  # for backwards compat
     linfo.specTypes = deserialize(s)
     linfo.def = deserialize(s)::Module
     return linfo
+end
+
+function deserialize(s::AbstractSerializer, ::Type{Core.LineInfoNode})
+    _meth = deserialize(s)
+    if _meth isa Module
+        # pre v1.2, skip
+        _meth = deserialize(s)
+    end
+    return Core.LineInfoNode(_meth::Symbol, deserialize(s)::Symbol, deserialize(s)::Int, deserialize(s)::Int)
+end
+
+function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
+    ci = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
+    deserialize_cycle(s, ci)
+    ci.code = deserialize(s)::Vector{Any}
+    ci.codelocs = deserialize(s)::Vector{Int32}
+    _x = deserialize(s)
+    if _x isa Array || _x isa Int
+        pre_12 = false
+        ci.ssavaluetypes = _x
+    else
+        pre_12 = true
+        # < v1.2
+        ci.method_for_inference_limit_heuristics = _x
+        ci.ssavaluetypes = deserialize(s)
+        ci.linetable = deserialize(s)
+    end
+    ci.ssaflags = deserialize(s)
+    if pre_12
+        ci.slotflags = deserialize(s)
+    else
+        ci.method_for_inference_limit_heuristics = deserialize(s)
+        ci.linetable = deserialize(s)
+    end
+    ci.slotnames = deserialize(s)
+    if !pre_12
+        ci.slotflags = deserialize(s)
+        ci.slottypes = deserialize(s)
+        ci.rettype = deserialize(s)
+        ci.parent = deserialize(s)
+        world_or_edges = deserialize(s)
+        pre_13 = isa(world_or_edges, Integer)
+        if pre_13
+            ci.min_world = world_or_edges
+        else
+            ci.edges = world_or_edges
+            ci.min_world = reinterpret(UInt, deserialize(s))
+            ci.max_world = reinterpret(UInt, deserialize(s))
+        end
+    end
+    ci.inferred = deserialize(s)
+    ci.inlineable = deserialize(s)
+    ci.propagate_inbounds = deserialize(s)
+    ci.pure = deserialize(s)
+    return ci
+end
+
+if Int === Int64
+const OtherInt = Int32
+else
+const OtherInt = Int64
 end
 
 function deserialize_array(s::AbstractSerializer)
@@ -969,15 +1047,17 @@ function deserialize_array(s::AbstractSerializer)
     else
         elty = UInt8
     end
-    if isa(d1, Int)
+    if isa(d1, Int32) || isa(d1, Int64)
         if elty !== Bool && isbitstype(elty)
             a = Vector{elty}(undef, d1)
             s.table[slot] = a
             return read!(s.io, a)
         end
-        dims = (d1,)
-    else
+        dims = (Int(d1),)
+    elseif d1 isa Dims
         dims = d1::Dims
+    else
+        dims = convert(Dims, d1::Tuple{Vararg{OtherInt}})::Dims
     end
     if isbitstype(elty)
         n = prod(dims)::Int

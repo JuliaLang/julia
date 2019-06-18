@@ -42,6 +42,10 @@ using llvm_file_magic = file_magic;
 #include <cstdio>
 #include "julia_assert.h"
 
+#ifdef _OS_DARWIN_
+#include <CoreFoundation/CoreFoundation.h>
+#endif
+
 typedef object::SymbolRef SymRef;
 
 // Any function that acquires this lock must be either a unmanaged thread
@@ -488,7 +492,7 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
     DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath,
                                  DILineInfoSpecifier::FunctionNameKind::ShortName);
 
-    auto inlineInfo = context->getInliningInfoForAddress(pointer, infoSpec);
+    auto inlineInfo = context->getInliningInfoForAddress(makeAddress(pointer), infoSpec);
 
     int fromC = (*frames)[0].fromC;
     int n_frames = inlineInfo.getNumberOfFrames();
@@ -512,7 +516,7 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
             info = inlineInfo.getFrame(i);
         }
         else {
-            info = context->getLineInfoForAddress(pointer, infoSpec);
+            info = context->getLineInfoForAddress(makeAddress(pointer), infoSpec);
         }
 
         jl_frame_t *frame = &(*frames)[i];
@@ -823,6 +827,9 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname)
     std::string debuginfopath;
     uint8_t uuid[16], uuid2[16];
     if (isdarwin) {
+        // Hide Darwin symbols (e.g. CoreFoundation) from non-Darwin systems.
+#ifdef _OS_DARWIN_
+
         size_t msize = (size_t)(((uint64_t)-1) - fbase);
         std::unique_ptr<MemoryBuffer> membuf = MemoryBuffer::getMemBuffer(
                 StringRef((const char *)fbase, msize), "", false);
@@ -839,15 +846,71 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname)
         if (!getObjUUID(morigobj, uuid))
             return entry;
 
-        // On OS X debug symbols are not contained in the dynamic library.
-        // For now we only support .dSYM files in the same directory
-        // as the shared library. In the future we may use DBGCopyFullDSYMURLForUUID from CoreFoundation to make
-        // use of spotlight to find the .dSYM file.
-        size_t sep = fname.rfind('/');
-        debuginfopath = fname;
-        debuginfopath += ".dSYM/Contents/Resources/DWARF/";
-        debuginfopath += fname.substr(sep + 1);
-        objpath = debuginfopath;
+        // On macOS, debug symbols are not contained in the dynamic library.
+        // Use DBGCopyFullDSYMURLForUUID from the private DebugSymbols framework
+        // to make use of spotlight to find the dSYM file. If that fails, lookup
+        // the dSYM file in the same directory as the dynamic library.  TODO: If
+        // the DebugSymbols framework is moved or removed, an alternative would
+        // be to directly query Spotlight for the dSYM bundle.
+
+        typedef CFURLRef (*DBGCopyFullDSYMURLForUUIDfn)(CFUUIDRef, CFURLRef);
+        DBGCopyFullDSYMURLForUUIDfn DBGCopyFullDSYMURLForUUID = NULL;
+
+        // First, try to load the private DebugSymbols framework.
+        CFURLRef dsfmwkurl = CFURLCreateWithFileSystemPath(
+            kCFAllocatorDefault,
+            CFSTR("/System/Library/PrivateFrameworks/DebugSymbols.framework"),
+            kCFURLPOSIXPathStyle, true);
+        CFBundleRef dsfmwkbundle =
+            CFBundleCreate(kCFAllocatorDefault, dsfmwkurl);
+        CFRelease(dsfmwkurl);
+
+        if (dsfmwkbundle) {
+            DBGCopyFullDSYMURLForUUID =
+                (DBGCopyFullDSYMURLForUUIDfn)CFBundleGetFunctionPointerForName(
+                    dsfmwkbundle, CFSTR("DBGCopyFullDSYMURLForUUID"));
+        }
+
+        if (DBGCopyFullDSYMURLForUUID != NULL) {
+            // Prepare UUID and shared object path URL.
+            CFUUIDRef objuuid = CFUUIDCreateWithBytes(
+                kCFAllocatorDefault, uuid[0], uuid[1], uuid[2], uuid[3],
+                uuid[4], uuid[5], uuid[6], uuid[7], uuid[8], uuid[9], uuid[10],
+                uuid[11], uuid[12], uuid[13], uuid[14], uuid[15]);
+            CFURLRef objurl = CFURLCreateFromFileSystemRepresentation(
+                kCFAllocatorDefault, (UInt8 const *)fname.data(),
+                (CFIndex)strlen(fname.data()), FALSE);
+
+            // Call private DBGCopyFullDSYMURLForUUID() to find dSYM.
+            CFURLRef dsympathurl = DBGCopyFullDSYMURLForUUID(objuuid, objurl);
+            CFRelease(objuuid);
+            CFRelease(objurl);
+
+            char objpathcstr[PATH_MAX];
+            if (dsympathurl != NULL &&
+                CFURLGetFileSystemRepresentation(
+                    dsympathurl, true, (UInt8 *)objpathcstr,
+                    (CFIndex)sizeof(objpathcstr))) {
+                // The dSYM was found. Copy its path.
+                debuginfopath = objpathcstr;
+                objpath = debuginfopath;
+                CFRelease(dsympathurl);
+            }
+        }
+
+        if (dsfmwkbundle) {
+            CFRelease(dsfmwkbundle);
+        }
+
+        if (objpath.empty()) {
+            // Fall back to simple path relative to the dynamic library.
+            size_t sep = fname.rfind('/');
+            debuginfopath = fname;
+            debuginfopath += ".dSYM/Contents/Resources/DWARF/";
+            debuginfopath += fname.substr(sep + 1);
+            objpath = debuginfopath;
+        }
+#endif
     }
     else {
         // On Linux systems we need to mmap another copy because of the permissions on the mmap'ed shared library.
@@ -1161,7 +1224,7 @@ JL_DLLEXPORT uint64_t jl_get_section_start(uint64_t fptr)
 }
 
 // Set *name and *filename to either NULL or malloc'd string
-int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int noInline)
+int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT
 {
     // This function is not allowed to reference any TLS variables if noInline
     // since it can be called from an unmanaged thread on OSX.
@@ -1182,7 +1245,7 @@ int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int n
     return jl_getDylibFunctionInfo(frames_out, pointer, skipC, noInline);
 }
 
-extern "C" jl_method_instance_t *jl_gdblookuplinfo(void *p)
+extern "C" jl_method_instance_t *jl_gdblookuplinfo(void *p) JL_NOTSAFEPOINT
 {
     return jl_jit_events->lookupLinfo((size_t)p);
 }

@@ -653,7 +653,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
         elseif !defuse[x].any_newvar
             undef_token
         else
-            SSAValue(-1)
+            SSAValue(-2)
         end for x in 1:length(ci.slotflags)
     ]
     worklist = Tuple{Int, Int, Vector{Any}}[(1, 0, initial_incoming_vals)]

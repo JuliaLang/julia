@@ -73,7 +73,32 @@ function mean(f, itr)
     end
     return total/count
 end
-mean(f, A::AbstractArray) = sum(f, A) / length(A)
+
+"""
+    mean(f::Function, A::AbstractArray; dims)
+
+Apply the function `f` to each element of array `A` and take the mean over dimensions `dims`.
+
+!!! compat "Julia 1.3"
+    This method requires at least Julia 1.3.
+
+```jldoctest
+julia> mean(√, [1, 2, 3])
+1.3820881233139908
+
+julia> mean([√1, √2, √3])
+1.3820881233139908
+
+julia> mean(√, [1 2 3; 4 5 6], dims=2)
+2×1 Array{Float64,2}:
+ 1.3820881233139908
+ 2.2285192400943226
+```
+"""
+mean(f, A::AbstractArray; dims=:) = _mean(f, A, dims)
+
+_mean(f, A::AbstractArray, ::Colon) = sum(f, A) / length(A)
+_mean(f, A::AbstractArray, dims) = sum(f, A, dims=dims) / mapreduce(i -> size(A, i), *, unique(dims); init=1)
 
 """
     mean!(r, v)

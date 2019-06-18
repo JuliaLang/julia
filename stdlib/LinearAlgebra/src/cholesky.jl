@@ -27,7 +27,48 @@
 # the cost would be extra unnecessary/unused fields for the unpivoted Cholesky and runtime
 # checks of those fields before calls to LAPACK to check which version of the Cholesky
 # factorization the type represents.
+"""
+    Cholesky <: Factorization
 
+Matrix factorization type of the Cholesky factorization of a dense symmetric/Hermitian
+positive definite matrix `A`. This is the return type of [`cholesky`](@ref),
+the corresponding matrix factorization function.
+
+The triangular Cholesky factor can be obtained from the factorization `F::Cholesky`
+via `F.L` and `F.U`.
+
+# Examples
+```jldoctest
+julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
+3×3 Array{Float64,2}:
+   4.0   12.0  -16.0
+  12.0   37.0  -43.0
+ -16.0  -43.0   98.0
+
+julia> C = cholesky(A)
+Cholesky{Float64,Array{Float64,2}}
+U factor:
+3×3 UpperTriangular{Float64,Array{Float64,2}}:
+ 2.0  6.0  -8.0
+  ⋅   1.0   5.0
+  ⋅    ⋅    3.0
+
+julia> C.U
+3×3 UpperTriangular{Float64,Array{Float64,2}}:
+ 2.0  6.0  -8.0
+  ⋅   1.0   5.0
+  ⋅    ⋅    3.0
+
+julia> C.L
+3×3 LowerTriangular{Float64,Array{Float64,2}}:
+  2.0   ⋅    ⋅
+  6.0  1.0   ⋅
+ -8.0  5.0  3.0
+
+julia> C.L * C.U == A
+true
+```
+"""
 struct Cholesky{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     uplo::Char
@@ -43,6 +84,38 @@ Cholesky(A::AbstractMatrix{T}, uplo::Symbol, info::Integer) where {T} =
 Cholesky(A::AbstractMatrix{T}, uplo::AbstractChar, info::Integer) where {T} =
     Cholesky{T,typeof(A)}(A, uplo, info)
 
+"""
+    CholeskyPivoted
+
+Matrix factorization type of the pivoted Cholesky factorization of a dense symmetric/Hermitian
+positive semi-definite matrix `A`. This is the return type of [`cholesky(_, Val(true))`](@ref),
+the corresponding matrix factorization function.
+
+The triangular Cholesky factor can be obtained from the factorization `F::CholeskyPivoted`
+via `F.L` and `F.U`.
+
+# Examples
+```jldoctest
+julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
+3×3 Array{Float64,2}:
+   4.0   12.0  -16.0
+  12.0   37.0  -43.0
+ -16.0  -43.0   98.0
+
+julia> C = cholesky(A, Val(true))
+CholeskyPivoted{Float64,Array{Float64,2}}
+U factor with rank 3:
+3×3 UpperTriangular{Float64,Array{Float64,2}}:
+ 9.89949  -4.34366  -1.61624
+  ⋅        4.25825   1.1694
+  ⋅         ⋅        0.142334
+permutation:
+3-element Array{Int64,1}:
+ 3
+ 2
+ 1
+```
+"""
 struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     uplo::Char

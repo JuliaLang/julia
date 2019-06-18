@@ -300,7 +300,7 @@ function setindex!(x::SparseVector{Tv,Ti}, v::Tv, i::Ti) where {Tv,Ti<:Integer}
     if 1 <= k <= m && nzind[k] == i  # i found
         nzval[k] = v
     else  # i not found
-        if v != 0
+        if !iszero(v)
             insert!(nzind, k, i)
             insert!(nzval, k, v)
         end
@@ -392,7 +392,7 @@ function _dense2indval!(nzind::Vector{Ti}, nzval::Vector{Tv}, s::AbstractArray{T
     c = 0
     @inbounds for i = 1:n
         v = s[i]
-        if v != 0
+        if !iszero(v)
             if c >= cap
                 cap *= 2
                 resize!(nzind, cap)
@@ -1584,7 +1584,7 @@ function densemv(A::SparseMatrixCSC, x::AbstractSparseVector; trans::AbstractCha
         throw(ArgumentError("Invalid trans character $trans"))
     end
     xlen == length(x) || throw(DimensionMismatch())
-    T = promote_type(eltype(A), eltype(x))
+    T = promote_op(matprod, eltype(A), eltype(x))
     y = Vector{T}(undef, ylen)
     if trans == 'N' || trans == 'N'
         mul!(y, A, x)
@@ -1694,7 +1694,7 @@ function _At_or_Ac_mul_B(tfun::Function, A::SparseMatrixCSC{TvA,TiA}, x::Abstrac
     require_one_based_indexing(A, x)
     m, n = size(A)
     length(x) == m || throw(DimensionMismatch())
-    Tv = promote_type(TvA, TvX)
+    Tv = promote_op(matprod, TvA, TvX)
     Ti = promote_type(TiA, TiX)
 
     xnzind = nonzeroinds(x)
@@ -1914,7 +1914,7 @@ end
 """
     droptol!(x::SparseVector, tol; trim::Bool = true)
 
-Removes stored values from `x` whose absolute value is (strictly) larger than `tol`,
+Removes stored values from `x` whose absolute value is less than or equal to `tol`,
 optionally trimming resulting excess space from `A.rowval` and `A.nzval` when `trim`
 is `true`.
 """
@@ -1929,7 +1929,7 @@ Removes stored numerical zeros from `x`, optionally trimming resulting excess sp
 For an out-of-place version, see [`dropzeros`](@ref). For
 algorithmic information, see `fkeep!`.
 """
-dropzeros!(x::SparseVector; trim::Bool = true) = fkeep!(x, (i, x) -> x != 0, trim)
+dropzeros!(x::SparseVector; trim::Bool = true) = fkeep!(x, (i, x) -> !iszero(x), trim)
 
 """
     dropzeros(x::SparseVector; trim::Bool = true)

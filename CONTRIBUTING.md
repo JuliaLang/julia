@@ -2,7 +2,7 @@
 
 Hi! If you are new to the Julia community: welcome, and thanks for trying Julia. Please be sure to respect our [community standards](https://julialang.org/community/standards) in all interactions.
 
-If you are already familiar with Julia itself, this blog post by Katharine Hyatt on [Making your first Julia pull request](http://kshyatt.github.io/post/firstjuliapr/) is a great way to get started.
+If you are already familiar with Julia itself, this blog post by Katharine Hyatt on [Making your first Julia pull request](https://kshyatt.github.io/post/firstjuliapr/) is a great way to get started.
 
 ## Learning Julia
 
@@ -26,7 +26,7 @@ If you are already familiar with Julia itself, this blog post by Katharine Hyatt
 
 * Keep Julia current. Julia is a fast-moving target, and many details of the language are still settling out. Keep the repository up-to-date and rebase work-in-progress frequently to make merges simpler.
 
-* Learn to use [git](http://git-scm.com), the version control system used by GitHub and the Julia project. Try a tutorial such as the one [provided by GitHub](http://try.GitHub.io/levels/1/challenges/1).
+* Learn to use [git](https://git-scm.com), the version control system used by GitHub and the Julia project. Try a tutorial such as the one [provided by GitHub](https://try.GitHub.io/levels/1/challenges/1).
 
 * Review discussions on the [Julia Discourse forum](https://discourse.julialang.org).
 
@@ -58,7 +58,7 @@ A useful bug report filed as a GitHub issue provides information about how to re
 
 ### Contributing a Julia package
 
-Julia has a built-in [package manager](https://julialang.github.io/Pkg.jl/v1/) based on `git`. A number of [packages](http://pkg.julialang.org) across many domains are already available for Julia. Developers are encouraged to provide their libraries as a Julia package. The manual provides instructions on [creating Julia packages](https://julialang.github.io/Pkg.jl/v1/creating-packages/).
+Julia has a built-in [package manager](https://julialang.github.io/Pkg.jl/v1/) based on `git`. A number of [packages](https://pkg.julialang.org) across many domains are already available for Julia. Developers are encouraged to provide their libraries as a Julia package. The manual provides instructions on [creating Julia packages](https://julialang.github.io/Pkg.jl/v1/creating-packages/).
 
 For developers who need to wrap C libraries so that they can be called from Julia, the [Clang.jl](https://github.com/ihnorton/Clang.jl) package can help generate the wrappers automatically from the C header files.
 
@@ -229,7 +229,7 @@ or with the `runtests.jl` script, e.g. to run `test/bitarray.jl` and `test/math.
 
     ./usr/bin/julia test/runtests.jl bitarray math
 
-Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request with a [`Good to merge` message](http://blog.travis-ci.com/2012-09-04-pull-requests-just-got-even-more-awesome).
+Make sure that [Travis](https://www.travis-ci.org) greenlights the pull request with a [`Good to merge` message](https://blog.travis-ci.com/2012-09-04-pull-requests-just-got-even-more-awesome).
 
 #### Modifying base more efficiently with Revise.jl
 
@@ -320,7 +320,7 @@ Julia if you made code-changes that Revise cannot handle.
   - [All Julia Publications](https://julialang.org/research)
 
 * Using GitHub
-  - [Using Julia with GitHub (video)](http://www.youtube.com/watch?v=wnFYV3ZKtOg&feature=youtu.be)
+  - [Using Julia with GitHub (video)](https://www.youtube.com/watch?v=wnFYV3ZKtOg)
   - [Using Julia on GitHub (notes for video)](https://gist.github.com/2712118#file_Julia_git_pull_request.md)
-  - [General GitHub documentation](http://help.github.com)
+  - [General GitHub documentation](https://help.github.com)
   - [GitHub pull request documentation](https://help.github.com/articles/creating-a-pull-request/)

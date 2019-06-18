@@ -326,7 +326,10 @@ show(x) = show(stdout::IO, x)
 
 show(io::IO, @nospecialize(x)) = show_default(io, x)
 
-function show_default(io::IO, @nospecialize(x))
+# avoid inferring show_default on the type of `x`
+show_default(io::IO, @nospecialize(x)) = _show_default(io, inferencebarrier(x))
+
+function _show_default(io::IO, @nospecialize(x))
     t = typeof(x)::DataType
     show(io, t)
     print(io, '(')
@@ -375,12 +378,17 @@ function is_exported_from_stdlib(name::Symbol, mod::Module)
     return isexported(mod, name) && isdefined(mod, name) && !isdeprecated(mod, name) && getfield(mod, name) === orig
 end
 
-function show(io::IO, f::Function)
+function show_function(io::IO, f::Function, compact::Bool)
     ft = typeof(f)
     mt = ft.name.mt
-    if isdefined(mt, :module) && isdefined(mt.module, mt.name) &&
+    if mt === Symbol.name.mt
+        # uses shared method table
+        show_default(io, f)
+    elseif compact
+        print(io, mt.name)
+    elseif isdefined(mt, :module) && isdefined(mt.module, mt.name) &&
         getfield(mt.module, mt.name) === f
-        if is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main || get(io, :compact, false)
+        if is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main
             print(io, mt.name)
         else
             print(io, mt.module, ".", mt.name)
@@ -390,7 +398,8 @@ function show(io::IO, f::Function)
     end
 end
 
-print(io::IO, f::Function) = print(io, nameof(f))
+show(io::IO, f::Function) = show_function(io, f, get(io, :compact, false))
+print(io::IO, f::Function) = show_function(io, f, true)
 
 function show(io::IO, x::Core.IntrinsicFunction)
     name = ccall(:jl_intrinsic_name, Cstring, (Core.IntrinsicFunction,), x)
@@ -697,7 +706,7 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one, i1=1, n=typemax
         y = iterate(itr)
         first = true
         i0 = i1-1
-        while i1 > 2 && y !== nothing
+        while i1 > 1 && y !== nothing
             y = iterate(itr, y[2])
             i1 -= 1
         end
@@ -1270,8 +1279,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_block(io, head, Expr(:calldecl, args[1].args...), args[2], indent)
         print(io, "end")
 
-    elseif head === :function && nargs == 1
-        print(io, "function ", args[1], " end")
+    elseif (head === :function || head === :macro) && nargs == 1
+        print(io, head, ' ', args[1], " end")
 
     elseif head === :do && nargs == 2
         show_unquoted(io, args[1], indent, -1)
@@ -1285,7 +1294,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, "end")
 
     # block with argument
-    elseif head in (:for,:while,:function,:if,:elseif,:let) && nargs==2
+    elseif head in (:for,:while,:function,:macro,:if,:elseif,:let) && nargs==2
         show_block(io, head, args[1], args[2], indent)
         print(io, "end")
 
@@ -1726,7 +1735,7 @@ function dump(io::IOContext, x::DataType, n::Int, indent)
             end
         end
         fields = fieldnames(x)
-        fieldtypes = x.types
+        fieldtypes = datatype_fieldtypes(x)
         for idx in 1:length(fields)
             println(io)
             print(io, indent, "  ", fields[idx], "::")
@@ -1845,6 +1854,7 @@ function summary(x)
     summary(io, x)
     String(take!(io))
 end
+summary(io::IO, t::Tuple) = print(io, t)
 
 ## `summary` for AbstractArrays
 # sizes such as 0-dimensional, 4-dimensional, 2x3

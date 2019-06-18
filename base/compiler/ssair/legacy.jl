@@ -57,6 +57,12 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
     ci.linetable = ir.linetable
     ci.ssavaluetypes = ir.types
     ci.ssaflags = ir.flags
+    for metanode in ir.meta
+        push!(ci.code, metanode)
+        push!(ci.codelocs, 1)
+        push!(ci.ssavaluetypes, Any)
+        push!(ci.ssaflags, 0x00)
+    end
     # Translate BB Edges to statement edges
     # (and undo normalization for now)
     for i = 1:length(ci.code)

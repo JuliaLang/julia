@@ -272,7 +272,7 @@ jl_value_t *jl_get_cfunction_trampoline(
 
     // not found, allocate a new one
     size_t n = jl_svec_len(fill);
-    void **nval = (void**)malloc(sizeof(void**) * (n + 1));
+    void **nval = (void**)malloc(sizeof(void*) * (n + 1));
     nval[0] = (void*)fobj;
     jl_value_t *result;
     JL_TRY {

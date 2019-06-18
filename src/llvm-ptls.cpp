@@ -33,6 +33,10 @@
 
 using namespace llvm;
 
+#if JL_LLVM_VERSION >= 80000
+typedef Instruction TerminatorInst;
+#endif
+
 std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr,
                                            bool isConstant=false);
 
@@ -213,7 +217,7 @@ void LowerPTLS::fix_ptls_use(CallInst *ptlsStates)
             auto getter = new LoadInst(T_ptls_getter, ptls_slot, "", false, ptlsStates);
             getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
             getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(*ctx, None));
-            ptlsStates->setCalledFunction(getter);
+            ptlsStates->setCalledFunction(ptlsStates->getFunctionType(), getter);
             set_ptls_attrs(ptlsStates);
 
             phi->addIncoming(fastTLS, fastTLS->getParent());
@@ -228,7 +232,7 @@ void LowerPTLS::fix_ptls_use(CallInst *ptlsStates)
         auto getter = new LoadInst(T_ptls_getter, ptls_slot, "", false, ptlsStates);
         getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
         getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(*ctx, None));
-        ptlsStates->setCalledFunction(getter);
+        ptlsStates->setCalledFunction(ptlsStates->getFunctionType(), getter);
         set_ptls_attrs(ptlsStates);
     }
     else if (jl_tls_offset != -1) {
@@ -238,7 +242,7 @@ void LowerPTLS::fix_ptls_use(CallInst *ptlsStates)
     else {
         // use the address of the actual getter function directly
         auto val = ConstantInt::get(T_size, (uintptr_t)jl_get_ptls_states_getter());
-        ptlsStates->setCalledFunction(ConstantExpr::getIntToPtr(val, T_ptls_getter));
+        ptlsStates->setCalledFunction(ptlsStates->getFunctionType(), ConstantExpr::getIntToPtr(val, T_ptls_getter));
         set_ptls_attrs(ptlsStates);
     }
 #else

@@ -25,7 +25,10 @@ so far within the recursion. Within the definition, `deepcopy_internal` should b
 in place of `deepcopy`, and the `dict` variable should be
 updated as appropriate before returning.
 """
-deepcopy(x) = deepcopy_internal(x, IdDict())::typeof(x)
+function deepcopy(x)
+    isbitstype(typeof(x)) && return x
+    return deepcopy_internal(x, IdDict())::typeof(x)
+end
 
 deepcopy_internal(x::Union{Symbol,Core.MethodInstance,Method,GlobalRef,DataType,Union,UnionAll,Task,Regex},
                   stackdict::IdDict) = x
@@ -53,8 +56,7 @@ end
 
 function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
     T = typeof(x)::DataType
-    nf = nfields(x)
-    (isbitstype(T) || nf == 0) && return x
+    isbitstype(T) && return x
     if haskey(stackdict, x)
         return stackdict[x]
     end
@@ -62,7 +64,7 @@ function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
     if T.mutable
         stackdict[x] = y
     end
-    for i in 1:nf
+    for i in 1:nfields(x)
         if isdefined(x,i)
             ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), y, i-1,
                   deepcopy_internal(getfield(x,i), stackdict))

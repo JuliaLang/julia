@@ -170,11 +170,12 @@ partialsort(v::AbstractVector, k::Union{Int,OrdinalRange}; kws...) =
 
 # index of the first value of vector a that is greater than or equal to x;
 # returns length(v)+1 if x is greater than all values in v.
-function searchsortedfirst(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
-    lo = lo-1
-    hi = hi+1
-    @inbounds while lo < hi-1
-        m = (lo+hi)>>>1
+function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering) where T<:Integer
+    u = T(1)
+    lo = lo - u
+    hi = hi + u
+    @inbounds while lo < hi - u
+        m = (lo + hi) >>> 1
         if lt(o, v[m], x)
             lo = m
         else
@@ -186,11 +187,12 @@ end
 
 # index of the last value of vector a that is less than or equal to x;
 # returns 0 if x is less than all values of v.
-function searchsortedlast(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
-    lo = lo-1
-    hi = hi+1
-    @inbounds while lo < hi-1
-        m = (lo+hi)>>>1
+function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering) where T<:Integer
+    u = T(1)
+    lo = lo - u
+    hi = hi + u
+    @inbounds while lo < hi - u
+        m = (lo + hi) >>> 1
         if lt(o, x, v[m])
             hi = m
         else
@@ -203,11 +205,12 @@ end
 # returns the range of indices of v equal to x
 # if v does not contain x, returns a 0-length range
 # indicating the insertion point of x
-function searchsorted(v::AbstractVector, x, ilo::Int, ihi::Int, o::Ordering)
-    lo = ilo-1
-    hi = ihi+1
-    @inbounds while lo < hi-1
-        m = (lo+hi)>>>1
+function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering) where T<:Integer
+    u = T(1)
+    lo = ilo - u
+    hi = ihi + u
+    @inbounds while lo < hi - u
+        m = (lo + hi) >>> 1
         if lt(o, v[m], x)
             lo = m
         elseif lt(o, x, v[m])
@@ -401,10 +404,6 @@ struct PartialQuickSort{T <: Union{Int,OrdinalRange}} <: Algorithm
     k::T
 end
 
-Base.first(a::PartialQuickSort{Int}) = 1
-Base.last(a::PartialQuickSort{Int}) = a.k
-Base.first(a::PartialQuickSort) = first(a.k)
-Base.last(a::PartialQuickSort) = last(a.k)
 
 """
     InsertionSort
@@ -587,42 +586,38 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering
     return v
 end
 
-## TODO: When PartialQuickSort is parameterized by an Int, this version of sort
-##       has one less comparison per loop than the version below, but enabling
-##       it causes return type inference to fail for sort/sort! (#12833)
-##
-# function sort!(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort{Int},
-#                o::Ordering)
-#     @inbounds while lo < hi
-#         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
-#         j = partition!(v, lo, hi, o)
-#         if j >= a.k
-#             # we don't need to sort anything bigger than j
-#             hi = j-1
-#         elseif j-lo < hi-j
-#             # recurse on the smaller chunk
-#             # this is necessary to preserve O(log(n))
-#             # stack space in the worst case (rather than O(n))
-#             lo < (j-1) && sort!(v, lo, j-1, a, o)
-#             lo = j+1
-#         else
-#             (j+1) < hi && sort!(v, j+1, hi, a, o)
-#             hi = j-1
-#         end
-#     end
-#     return v
-# end
-
-
-function sort!(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort,
+function sort!(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort{Int},
                o::Ordering)
     @inbounds while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
         j = partition!(v, lo, hi, o)
-
-        if j <= first(a)
+        if j >= a.k
+            # we don't need to sort anything bigger than j
+            hi = j-1
+        elseif j-lo < hi-j
+            # recurse on the smaller chunk
+            # this is necessary to preserve O(log(n))
+            # stack space in the worst case (rather than O(n))
+            lo < (j-1) && sort!(v, lo, j-1, a, o)
             lo = j+1
-        elseif j >= last(a)
+        else
+            (j+1) < hi && sort!(v, j+1, hi, a, o)
+            hi = j-1
+        end
+    end
+    return v
+end
+
+
+function sort!(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort{T},
+               o::Ordering) where T<:OrdinalRange
+    @inbounds while lo < hi
+        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+        j = partition!(v, lo, hi, o)
+
+        if j <= first(a.k)
+            lo = j+1
+        elseif j >= last(a.k)
             hi = j-1
         else
             if j-lo < hi-j

@@ -5634,6 +5634,160 @@ for (ormhr, elty) in
     end
 end
 
+for (hetrd, elty) in
+    ((:dsytrd_,Float64),
+     (:ssytrd_,Float32),
+     (:zhetrd_,ComplexF64),
+     (:chetrd_,ComplexF32))
+    relty = real(elty)
+    @eval begin
+
+        #                 .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, LWORK, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION  A( LDA, * ), D( * ), E( * ), TAU( * ), WORK( * )
+        function hetrd!(uplo::AbstractChar, A::AbstractMatrix{$elty})
+            chkstride1(A)
+            n = checksquare(A)
+            chkuplo(uplo)
+            chkfinite(A) # balancing routines don't support NaNs and Infs
+            tau = similar(A, $elty, max(0,n - 1))
+            d = Vector{$relty}(undef, n)
+            e = Vector{$relty}(undef, max(0,n - 1))
+            work = Vector{$elty}(undef, 1)
+            lwork = BlasInt(-1)
+            info = Ref{BlasInt}()
+            for i = 1:2  # first call returns lwork as work[1]
+                ccall((@blasfunc($hetrd), liblapack), Cvoid,
+                    (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
+                    Ptr{$relty}, Ptr{$relty},
+                    Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
+                    uplo, n, A, max(1, stride(A, 2)), d, e, tau, work, lwork, info)
+                chklapackerror(info[])
+                if i == 1
+                    lwork = BlasInt(real(work[1]))
+                    resize!(work, lwork)
+                end
+            end
+            A, tau, d, e
+        end
+    end
+end
+
+"""
+    hetrd!(uplo, A) -> (A, tau, d, e)
+
+Converts a Hermitian matrix `A` to real-symmetric tridiagonal Hessenberg form.
+If `uplo = U`, the upper half of `A` is stored; if `uplo = L`, the lower half is stored.
+`tau` contains the elementary reflectors of the factorization, `d` contains the
+diagonal and `e` contains the upper/lower diagonal.
+"""
+hetrd!(uplo::AbstractChar, A::AbstractMatrix)
+
+for (orgtr, elty) in
+    ((:dorgtr_,:Float64),
+     (:sorgtr_,:Float32),
+     (:zungtr_,:ComplexF64),
+     (:cungtr_,:ComplexF32))
+    @eval begin
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, LWORK, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
+        function orgtr!(uplo::AbstractChar, A::AbstractMatrix{$elty}, tau::AbstractVector{$elty})
+            require_one_based_indexing(A, tau)
+            chkstride1(A, tau)
+            n = checksquare(A)
+            if n - length(tau) != 1
+                throw(DimensionMismatch("tau has length $(length(tau)), needs $(n - 1)"))
+            end
+            chkuplo(uplo)
+            work = Vector{$elty}(undef, 1)
+            lwork = BlasInt(-1)
+            info = Ref{BlasInt}()
+            for i = 1:2  # first call returns lwork as work[1]
+                ccall((@blasfunc($orgtr), liblapack), Cvoid,
+                    (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty},
+                     Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
+                     Ptr{BlasInt}),
+                    uplo, n, A,
+                    max(1, stride(A, 2)), tau, work, lwork,
+                    info)
+                chklapackerror(info[])
+                if i == 1
+                    lwork = BlasInt(real(work[1]))
+                    resize!(work, lwork)
+                end
+            end
+            A
+        end
+    end
+end
+
+"""
+    orgtr!(uplo, A, tau)
+
+Explicitly finds `Q`, the orthogonal/unitary matrix from `hetrd!`. `uplo`,
+`A`, and `tau` must correspond to the input/output to `hetrd!`.
+"""
+orgtr!(uplo::AbstractChar, A::AbstractMatrix, tau::AbstractVector)
+
+for (ormtr, elty) in
+    ((:dormtr_,:Float64),
+     (:sormtr_,:Float32),
+     (:zunmtr_,:ComplexF64),
+     (:cunmtr_,:ComplexF32))
+    @eval begin
+        # .. Scalar Arguments ..
+        # CHARACTER          side, trans, uplo
+        # INTEGER            info, lda, ldc, lwork, m, n
+        # ..
+        # .. Array Arguments ..
+        # DOUBLE PRECISION   a( lda, * ), c( ldc, * ), tau( * ), work( * )
+        function ormtr!(side::AbstractChar, uplo::AbstractChar, trans::AbstractChar, A::AbstractMatrix{$elty},
+                        tau::AbstractVector{$elty}, C::AbstractVecOrMat{$elty})
+
+            require_one_based_indexing(A, tau, C)
+            chkstride1(A, tau, C)
+            n = checksquare(A)
+            chkuplo(uplo)
+            mC, nC = size(C, 1), size(C, 2)
+
+            if n - length(tau) != 1
+                throw(DimensionMismatch("tau has length $(length(tau)), needs $(n - 1)"))
+            end
+            if (side == 'L' && mC != n) || (side == 'R' && nC != n)
+                throw(DimensionMismatch("A and C matrices are not conformable"))
+            end
+
+            work = Vector{$elty}(undef, 1)
+            lwork = BlasInt(-1)
+            info = Ref{BlasInt}()
+            for i = 1:2  # first call returns lwork as work[1]
+                ccall((@blasfunc($ormtr), liblapack), Cvoid,
+                    (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
+                     Ptr{$elty}, Ref{BlasInt},
+                     Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
+                     Ref{BlasInt}, Ptr{BlasInt}),
+                    side, uplo, trans, mC, nC,
+                    A, max(1, stride(A, 2)),
+                    tau, C, max(1, stride(C, 2)), work,
+                    lwork, info)
+                chklapackerror(info[])
+                if i == 1
+                    lwork = BlasInt(real(work[1]))
+                    resize!(work, lwork)
+                end
+            end
+            C
+        end
+    end
+end
+
 for (gees, gges, elty) in
     ((:dgees_,:dgges_,:Float64),
      (:sgees_,:sgges_,:Float32))

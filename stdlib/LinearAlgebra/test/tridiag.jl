@@ -437,4 +437,12 @@ end
     @test A90\b90 ≈ inv(A90)*b90
 end
 
+@testset "singular values of SymTridiag" begin
+    @test svdvals(SymTridiagonal([-4,2,3], [0,0])) ≈ [4,3,2]
+    @test svdvals(SymTridiagonal(collect(0.:10.), zeros(10))) ≈ reverse(0:10)
+    @test svdvals(SymTridiagonal([1,2,1], [1,1])) ≈ [3,1,0]
+    # test that dependent methods such as `cond` also work
+    @test cond(SymTridiagonal([1,2,3], [0,0])) ≈ 3
+end
+
 end # module TestTridiagonal

@@ -755,7 +755,7 @@ typedef union {
 } bits64;
 
 #define fpiseq_n(c_type, nbits) \
-static inline int fpiseq##nbits(c_type a, c_type b) { \
+static inline int fpiseq##nbits(c_type a, c_type b) JL_NOTSAFEPOINT { \
     bits##nbits ua, ub; \
     ua.f = a; \
     ub.f = b; \
@@ -766,21 +766,22 @@ fpiseq_n(double, 64)
 #define fpiseq(a,b) \
     sizeof(a) == sizeof(float) ? fpiseq32(a, b) : fpiseq64(a, b)
 
-#define fpislt_n(c_type, nbits) \
-static inline int fpislt##nbits(c_type a, c_type b) { \
-    bits##nbits ua, ub; \
-    ua.f = a; \
-    ub.f = b; \
-    if (!isnan(a) && isnan(b)) \
-        return 1; \
-    if (isnan(a) || isnan(b)) \
-        return 0; \
-    if (ua.d >= 0 && ua.d < ub.d) \
-        return 1; \
-    if (ua.d < 0 && ua.ud > ub.ud) \
-        return 1; \
-    return 0; \
-}
+#define fpislt_n(c_type, nbits)                                         \
+    static inline int fpislt##nbits(c_type a, c_type b) JL_NOTSAFEPOINT \
+    {                                                                   \
+        bits##nbits ua, ub;                                             \
+        ua.f = a;                                                       \
+        ub.f = b;                                                       \
+        if (!isnan(a) && isnan(b))                                      \
+            return 1;                                                   \
+        if (isnan(a) || isnan(b))                                       \
+            return 0;                                                   \
+        if (ua.d >= 0 && ua.d < ub.d)                                   \
+            return 1;                                                   \
+        if (ua.d < 0 && ua.ud > ub.ud)                                  \
+            return 1;                                                   \
+        return 0;                                                       \
+    }
 fpislt_n(float, 32)
 fpislt_n(double, 64)
 #define fpislt(a, b) \
@@ -853,20 +854,18 @@ un_fintrinsic_withtype(fpext,fpext)
 
 // checked arithmetic
 /**
- * s_typemin =  ((typeof a)~0 << (runtime_nbits - 1))
- * s_typemax = ~((typeof a)1 << (runtime_nbits - 1))
+ * s_typemin = - s_typemax - 1
+ * s_typemax = ((typeof a)1 << (runtime_nbits - 1)) - 1
  * u_typemin = 0
  * u_typemax = ((typeof a)1 << runtime_nbits) - 1
  * where (a - a) == (typeof(a)0
  **/
-#define sTYPEMIN(a) \
-    (8 * sizeof(a) == runtime_nbits \
-     ? ((a - a + ~0) << (8 * sizeof(a) - 1)) \
-     : ((a - a + ~0) << (runtime_nbits - 1)))
-#define sTYPEMAX(a) \
-    (8 * sizeof(a) == runtime_nbits \
-     ? ~((a - a + ~0) << (8 * sizeof(a) - 1)) \
-     : ~((a - a + ~0) << (runtime_nbits - 1)))
+#define sTYPEMIN(a) -sTYPEMAX(a) - 1
+#define sTYPEMAX(a)                                                \
+    (8 * sizeof(a) == runtime_nbits                                \
+         ? (((((a - a + 1) << (8 * sizeof(a) - 2)) - 1) << 1) + 1) \
+         : (  ((a - a + 1) << (runtime_nbits - 1)) - 1))
+
 #define uTYPEMIN(a) (0)
 #define uTYPEMAX(a) \
     (8 * sizeof(~a) == runtime_nbits \

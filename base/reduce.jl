@@ -36,7 +36,7 @@ mul_prod(x::Real, y::Real)::Real = x * y
 
 ## foldl && mapfoldl
 
-@noinline function mapfoldl_impl(f, op, nt::NamedTuple{(:init,)}, itr, i...)
+function mapfoldl_impl(f, op, nt::NamedTuple{(:init,)}, itr, i...)
     init = nt.init
     # Unroll the while loop once; if init is known, the call to op may
     # be evaluated at compile time
@@ -56,7 +56,7 @@ function mapfoldl_impl(f, op, nt::NamedTuple{()}, itr)
     if y === nothing
         return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
-    (x, i) = y
+    x, i = y
     init = mapreduce_first(f, op, x)
     return mapfoldl_impl(f, op, (init=init,), itr, i)
 end
@@ -91,28 +91,20 @@ foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
 
 ## foldr & mapfoldr
 
-function mapfoldr_impl(f, op, nt::NamedTuple{(:init,)}, itr, i::Integer)
-    init = nt.init
-    # Unroll the while loop once; if init is known, the call to op may
-    # be evaluated at compile time
-    if isempty(itr) || i == 0
-        return init
-    else
-        x = itr[i]
-        v  = op(f(x), init)
-        while i > 1
-            x = itr[i -= 1]
-            v = op(f(x), v)
-        end
-        return v
-    end
-end
+mapfoldr_impl(f, op, nt::NamedTuple{(:init,)}, itr) =
+    mapfoldl_impl(f, (x,y) -> op(y,x), nt, Iterators.reverse(itr))
 
-function mapfoldr_impl(f, op, ::NamedTuple{()}, itr, i::Integer)
-    if isempty(itr)
+# we can't just call mapfoldl_impl with (x,y) -> op(y,x), because
+# we need to use the type of op for mapreduce_empty_iter and mapreduce_first.
+function mapfoldr_impl(f, op, nt::NamedTuple{()}, itr)
+    ritr = Iterators.reverse(itr)
+    y = iterate(ritr)
+    if y === nothing
         return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
-    return mapfoldr_impl(f, op, (init=mapreduce_first(f, op, itr[i]),), itr, i-1)
+    x, i = y
+    init = mapreduce_first(f, op, x)
+    return mapfoldl_impl(f, (x,y) -> op(y,x), (init=init,), ritr, i)
 end
 
 """
@@ -122,7 +114,7 @@ Like [`mapreduce`](@ref), but with guaranteed right associativity, as in [`foldr
 provided, the keyword argument `init` will be used exactly once. In general, it will be
 necessary to provide `init` to work with empty collections.
 """
-mapfoldr(f, op, itr; kw...) = mapfoldr_impl(f, op, kw.data, itr, lastindex(itr))
+mapfoldr(f, op, itr; kw...) = mapfoldr_impl(f, op, kw.data, itr)
 
 
 """

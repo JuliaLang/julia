@@ -101,6 +101,29 @@ end
 kw"module"
 
 """
+    __init__
+
+`__init__()` function in your module would executes immediately *after* the module is loaded at
+runtime for the first time (i.e., it is only called once and only after all statements in the
+module have been executed). Because it is called *after* fully importing the module, `__init__`
+functions of submodules will be executed *first*. Two typical uses of __init__ are calling
+runtime initialization functions of external C libraries and initializing global constants
+that involve pointers returned by external libraries.
+See the [manual section about modules](@ref modules) for more details.
+
+# Examples
+```julia
+const foo_data_ptr = Ref{Ptr{Cvoid}}(0)
+function __init__()
+    ccall((:foo_init, :libfoo), Cvoid, ())
+    foo_data_ptr[] = ccall((:foo_data, :libfoo), Ptr{Cvoid}, ())
+    nothing
+end
+```
+"""
+kw"__init__"
+
+"""
     baremodule
 
 `baremodule` declares a module that does not contain `using Base`
@@ -2177,5 +2200,12 @@ Main.Main
 The base library of Julia. `Base` is a module that contains basic functionality (the contents of `base/`). All modules implicitly contain `using Base`, since this is needed in the vast majority of cases.
 """
 Base.Base
+
+"""
+    QuoteNode
+
+A quoted piece of code, that does not support interpolation. See the [manual section about QuoteNodes](@ref man-quote-node) for details.
+"""
+QuoteNode
 
 end

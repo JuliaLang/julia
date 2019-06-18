@@ -840,9 +840,9 @@
                      (error (string "field name \"" (deparse v) "\" is not a symbol"))))
                field-names)
      `(block
+       (global ,name) (const ,name)
        (scope-block
         (block
-         (global ,name) (const ,name)
          ,@(map (lambda (v) `(local ,v)) params)
          ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
          (struct_type ,name (call (core svec) ,@params)
@@ -1444,10 +1444,8 @@
 (define (expand-update-operator- op op= lhs rhs declT)
   (let* ((e      (remove-argument-side-effects lhs))
          (newlhs (car e))
-         (temp   (and (eq? op= '|.=|) (pair? newlhs) (make-ssavalue)))
-         (newlhs (if (and temp (eq? (car newlhs) 'ref))
-                     (ref-to-view newlhs)
-                     newlhs))
+         (temp   (and (eq? op= '|.=|) (pair? newlhs) (not (eq? (car newlhs) 'ref))
+                      (make-ssavalue)))
          (e      (if temp
                      (cons temp (append (cdr e) (list `(= ,temp ,newlhs))))
                      e))
@@ -3479,7 +3477,7 @@ f(x) = yt(x)
         (label-map (table))   ;; maps label names to generated addresses
         (label-nesting (table)) ;; exception handler and catch block nesting of each label
         (finally-handler #f)  ;; `(var label map level)` where `map` is a list of `(tag . action)`.
-                              ;; to exit the current finally block, set `var` to integer `tag`,
+                              ;; To exit the current finally block, set `var` to integer `tag`,
                               ;; jump to `label`, and put `(tag . action)` in the map, where `action`
                               ;; is `(return x)`, `(break x)`, or a call to rethrow.
         (handler-goto-fixups '())  ;; `goto`s that might need `leave` exprs added
@@ -3542,11 +3540,11 @@ f(x) = yt(x)
     (define (emit-break labl)
       (let ((lvl (caddr labl))
             (dest-tokens (cadddr labl)))
+        (let ((pexc (pop-exc-expr catch-token-stack dest-tokens)))
+          (if pexc (emit pexc)))
         (if (and finally-handler (> (cadddr finally-handler) lvl))
             (leave-finally-block `(break ,labl))
             (begin
-              (let ((pexc (pop-exc-expr catch-token-stack dest-tokens)))
-                (if pexc (emit pexc)))
               (if (> handler-level lvl)
                   (emit `(leave ,(- handler-level lvl))))
               (emit `(goto ,(cadr labl)))))))

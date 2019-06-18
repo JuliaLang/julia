@@ -18,10 +18,10 @@ uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 version = "0.7.0"
 
 [[Documenter]]
-deps = ["Base64", "DocStringExtensions", "InteractiveUtils", "JSON", "LibGit2", "Logging", "Markdown", "Pkg", "REPL", "Random", "Test", "Unicode"]
-git-tree-sha1 = "04d40966cddd2ea5d227e7130484b57ac4718596"
+deps = ["Base64", "DocStringExtensions", "InteractiveUtils", "JSON", "LibGit2", "Logging", "Markdown", "REPL", "Unicode"]
+git-tree-sha1 = "38509269fc99a9bc450fdb9e17e805021f3e5b1b"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-version = "0.22.1"
+version = "0.22.4"
 
 [[DocumenterLaTeX]]
 deps = ["Documenter", "Test"]

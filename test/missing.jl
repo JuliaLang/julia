@@ -164,6 +164,8 @@ Base.one(::Type{Unit}) = 1
         @test ismissing(f(missing))
     end
 
+    @test ismissing(clamp(missing, 1, 2))
+
     for T in (Int, Float64)
         @test zero(Union{T, Missing}) === T(0)
         @test one(Union{T, Missing}) === T(1)

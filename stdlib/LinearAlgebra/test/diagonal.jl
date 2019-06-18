@@ -26,6 +26,7 @@ Random.seed!(1)
             @test Diagonal(x).diag === x
             @test Diagonal{elty}(x)::Diagonal{elty,typeof(x)} == DM
             @test Diagonal{elty}(x).diag === x
+            @test Diagonal{elty}(D) === D
         end
         @test eltype(Diagonal{elty}([1,2,3,4])) == elty
         @test isa(Diagonal{elty,Vector{elty}}(GenericArray([1,2,3,4])), Diagonal{elty,Vector{elty}})
@@ -177,6 +178,19 @@ Random.seed!(1)
         A = rand(elty, n, n)
         qrA = qr(A)
         @test qrA \ D ≈ A \ D
+
+        # HermOrSym
+        A     = rand(elty, n, n)
+        Asym  = Symmetric(A + transpose(A), :U)
+        Aherm = Hermitian(A + adjoint(A), :U)
+        @test Array(D*Transpose(Asym)) ≈ Array(D) * Array(transpose(Asym))
+        @test Array(D*Adjoint(Asym)) ≈ Array(D) * Array(adjoint(Asym))
+        @test Array(D*Transpose(Aherm)) ≈ Array(D) * Array(transpose(Aherm))
+        @test Array(D*Adjoint(Aherm)) ≈ Array(D) * Array(adjoint(Aherm))
+        @test Array(Transpose(Asym)*Transpose(D)) ≈ Array(transpose(Asym)) * Array(transpose(D))
+        @test Array(Transpose(D)*Transpose(Asym)) ≈ Array(transpose(D)) * Array(transpose(Asym))
+        @test Array(Adjoint(Aherm)*Adjoint(D)) ≈ Array(adjoint(Aherm)) * Array(adjoint(D))
+        @test Array(Adjoint(D)*Adjoint(Aherm)) ≈ Array(adjoint(D)) * Array(adjoint(Aherm))
 
         # Performance specialisations for A*_mul_B!
         vvv = similar(vv)
@@ -441,6 +455,15 @@ end
     @test det(D) == 4
 end
 
+@testset "linear solve for block diagonal matrices" begin
+    D = Diagonal([rand(2,2) for _ in 1:5])
+    b = [rand(2,2) for _ in 1:5]
+    B = [rand(2,2) for _ in 1:5, _ in 1:5]
+    @test ldiv!(D, copy(b)) ≈ Diagonal(inv.(D.diag)) * b
+    @test ldiv!(D, copy(B)) ≈ Diagonal(inv.(D.diag)) * B
+    @test rdiv!(copy(B), D) ≈ B * Diagonal(inv.(D.diag))
+end
+
 @testset "multiplication with Symmetric/Hermitian" begin
     for T in (Float64, ComplexF64)
         D = Diagonal(randn(T, n))
@@ -477,10 +500,10 @@ end
         M = randn(T, 5, 5)
         MM = [randn(T, 2, 2) for _ in 1:2, _ in 1:2]
         for transform in (identity, adjoint, transpose, Adjoint, Transpose)
-            @test lmul!(transform(D), copy(M)) == *(transform(Matrix(D)), M)
-            @test rmul!(copy(M), transform(D)) == *(M, transform(Matrix(D)))
-            @test lmul!(transform(DD), copy(MM)) == *(transform(fullDD), MM)
-            @test rmul!(copy(MM), transform(DD)) == *(MM, transform(fullDD))
+            @test lmul!(transform(D), copy(M)) ≈ *(transform(Matrix(D)), M)
+            @test rmul!(copy(M), transform(D)) ≈ *(M, transform(Matrix(D)))
+            @test lmul!(transform(DD), copy(MM)) ≈ *(transform(fullDD), MM)
+            @test rmul!(copy(MM), transform(DD)) ≈ *(MM, transform(fullDD))
         end
     end
 end

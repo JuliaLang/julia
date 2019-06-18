@@ -33,11 +33,7 @@ function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
         print(io, ": attempt to access ")
-        if isa(ex.a, AbstractArray)
-            summary(io, ex.a)
-        else
-            show(io, MIME"text/plain"(), ex.a)
-        end
+        summary(io, ex.a)
         if isdefined(ex, :i)
             !isa(ex.a, AbstractArray) && print(io, "\n ")
             print(io, " at index [")
@@ -85,11 +81,18 @@ function showerror(io::IO, ex, bt; backtrace=true)
 end
 
 function showerror(io::IO, ex::LoadError, bt; backtrace=true)
-    print(io, "Error while loading expression starting at ", ex.file, ":", ex.line)
+    print(io, "LoadError: ")
+    showerror(io, ex.error, bt, backtrace=backtrace)
+    print(io, "\nin expression starting at $(ex.file):$(ex.line)")
 end
 showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
 
-showerror(io::IO, ex::InitError) = print(io, "InitError during initialization of module ", ex.mod)
+function showerror(io::IO, ex::InitError, bt; backtrace=true)
+    print(io, "InitError: ")
+    showerror(io, ex.error, bt, backtrace=backtrace)
+    print(io, "\nduring initialization of module ", ex.mod)
+end
+showerror(io::IO, ex::InitError) = showerror(io, ex, [])
 
 function showerror(io::IO, ex::DomainError)
     if isa(ex.val, AbstractArray)

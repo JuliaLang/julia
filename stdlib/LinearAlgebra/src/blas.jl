@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module BLAS
-@doc """
+"""
 Interface to BLAS subroutines.
-""" BLAS
+"""
+module BLAS
 
 import ..axpy!, ..axpby!
 import Base: copyto!
@@ -15,7 +15,6 @@ export
     axpy!,
     axpby!,
     blascopy!,
-    dot,
     dotc,
     dotu,
     scal!,
@@ -73,7 +72,7 @@ import Libdl
 let lib = C_NULL
 global function determine_vendor()
     if lib == C_NULL
-        lib = something(Libdl.dlopen(Base.libblas_name; throw_error=false), C_NULL)
+        lib = something(Libdl.dlopen(libblas; throw_error=false), C_NULL)
     end
     vend = :unknown
     if lib != C_NULL
@@ -102,7 +101,7 @@ else
     end
 end
 
-openblas_get_config() = strip(unsafe_string(ccall((@blasfunc(openblas_get_config), Base.libblas_name), Ptr{UInt8}, () )))
+openblas_get_config() = strip(unsafe_string(ccall((@blasfunc(openblas_get_config), libblas), Ptr{UInt8}, () )))
 
 """
     set_num_threads(n)
@@ -112,12 +111,12 @@ Set the number of threads the BLAS library should use.
 function set_num_threads(n::Integer)
     blas = vendor()
     if blas == :openblas
-        return ccall((:openblas_set_num_threads, Base.libblas_name), Cvoid, (Int32,), n)
+        return ccall((:openblas_set_num_threads, libblas), Cvoid, (Int32,), n)
     elseif blas == :openblas64
-        return ccall((:openblas_set_num_threads64_, Base.libblas_name), Cvoid, (Int32,), n)
+        return ccall((:openblas_set_num_threads64_, libblas), Cvoid, (Int32,), n)
     elseif blas == :mkl
         # MKL may let us set the number of threads in several ways
-        return ccall((:MKL_Set_Num_Threads, Base.libblas_name), Cvoid, (Cint,), n)
+        return ccall((:MKL_Set_Num_Threads, libblas), Cvoid, (Cint,), n)
     end
 
     # OSX BLAS looks at an environment variable
