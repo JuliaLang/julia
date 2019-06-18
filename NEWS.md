@@ -18,6 +18,7 @@ Multi-threading changes
   This does not include subtypes of `IO` that are entirely in-memory, such as `IOBuffer`,
   although it specifically does include `BufferStream`.
   ([#32309], [#32174], [#31981], [#32421]).
+* The global random number generator (`GLOBAL_RNG`) is now thread-safe (and thread-local) ([#32407]).
 
 Build system changes
 --------------------
