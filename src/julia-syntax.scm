@@ -840,9 +840,9 @@
                      (error (string "field name \"" (deparse v) "\" is not a symbol"))))
                field-names)
      `(block
+       (global ,name) (const ,name)
        (scope-block
         (block
-         (global ,name) (const ,name)
          ,@(map (lambda (v) `(local ,v)) params)
          ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
          (struct_type ,name (call (core svec) ,@params)
