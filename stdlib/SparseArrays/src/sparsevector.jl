@@ -300,7 +300,7 @@ function setindex!(x::SparseVector{Tv,Ti}, v::Tv, i::Ti) where {Tv,Ti<:Integer}
     if 1 <= k <= m && nzind[k] == i  # i found
         nzval[k] = v
     else  # i not found
-        if v != 0
+        if !iszero(v)
             insert!(nzind, k, i)
             insert!(nzval, k, v)
         end
@@ -392,7 +392,7 @@ function _dense2indval!(nzind::Vector{Ti}, nzval::Vector{Tv}, s::AbstractArray{T
     c = 0
     @inbounds for i = 1:n
         v = s[i]
-        if v != 0
+        if !iszero(v)
             if c >= cap
                 cap *= 2
                 resize!(nzind, cap)
@@ -1929,7 +1929,7 @@ Removes stored numerical zeros from `x`, optionally trimming resulting excess sp
 For an out-of-place version, see [`dropzeros`](@ref). For
 algorithmic information, see `fkeep!`.
 """
-dropzeros!(x::SparseVector; trim::Bool = true) = fkeep!(x, (i, x) -> x != 0, trim)
+dropzeros!(x::SparseVector; trim::Bool = true) = fkeep!(x, (i, x) -> !iszero(x), trim)
 
 """
     dropzeros(x::SparseVector; trim::Bool = true)

@@ -1263,8 +1263,8 @@ end
         @test isequal(findmax(A, dims=tup), (rval, rind))
     end
 
-    A = sparse(["a", "b"])
-    @test_throws MethodError findmin(A, dims=1)
+    # sparse arrays of types without zero(T) are forbidden
+    @test_throws MethodError sparse(["a", "b"])
 end
 
 # Support the case when user defined `zero` and `isless` for non-numerical type
@@ -1272,6 +1272,7 @@ struct CustomType
     x::String
 end
 Base.zero(::Type{CustomType}) = CustomType("")
+Base.zero(x::CustomType) = zero(CustomType)
 Base.isless(x::CustomType, y::CustomType) = isless(x.x, y.x)
 @testset "findmin/findmax for non-numerical type" begin
     A = sparse([CustomType("a"), CustomType("b")])
@@ -2286,17 +2287,6 @@ end
         @test findnext(!iszero, z,i) == findnext(!iszero, z_sp,i)
         @test findprev(!iszero, z,i) == findprev(!iszero, z_sp,i)
     end
-
-    w = [ "a" ""; "" "b"]
-    w_sp = sparse(w)
-
-    for i in keys(w)
-        @test findnext(!isequal(""), w,i) == findnext(!isequal(""), w_sp,i)
-        @test findprev(!isequal(""), w,i) == findprev(!isequal(""), w_sp,i)
-        @test findnext(isequal(""), w,i) == findnext(isequal(""), w_sp,i)
-        @test findprev(isequal(""), w,i) == findprev(isequal(""), w_sp,i)
-    end
-
 end
 
 # #20711
