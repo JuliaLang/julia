@@ -74,6 +74,12 @@ implemented for a custom type, so should be `symmetric_type`, and vice versa.
 function symmetric_type(::Type{T}) where {S, T<:AbstractMatrix{S}}
     return Symmetric{Union{S, promote_op(transpose, S), symmetric_type(S)}, T}
 end
+function symmetric_type(::Type{T}) where {S<:Number, T<:AbstractMatrix{S}}
+    return Symmetric{S, T}
+end
+function symmetric_type(::Type{T}) where {S<:AbstractMatrix, T<:AbstractMatrix{S}}
+    return Symmetric{AbstractMatrix, T}
+end
 symmetric_type(::Type{T}) where {T<:Number} = T
 
 struct Hermitian{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
@@ -147,8 +153,14 @@ The type of the object returned by `hermitian(::T, ::Symbol)`. For matrices, thi
 appropriately typed `Hermitian`, for `Number`s, it is the original type. If `hermitian` is
 implemented for a custom type, so should be `hermitian_type`, and vice versa.
 """
-function hermitian_type(::Type{T}) where {S,T<:AbstractMatrix{S}}
+function hermitian_type(::Type{T}) where {S, T<:AbstractMatrix{S}}
     return Hermitian{Union{S, promote_op(adjoint, S), hermitian_type(S)}, T}
+end
+function hermitian_type(::Type{T}) where {S<:Number, T<:AbstractMatrix{S}}
+    return Hermitian{S, T}
+end
+function hermitian_type(::Type{T}) where {S<:AbstractMatrix, T<:AbstractMatrix{S}}
+    return Hermitian{AbstractMatrix, T}
 end
 hermitian_type(::Type{T}) where {T<:Number} = T
 
@@ -676,6 +688,22 @@ eigvals!(A::Hermitian{T,S}, B::Hermitian{T,S}) where {T<:BlasComplex,S<:StridedM
     LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))[1]
 
 eigvecs(A::HermOrSym) = eigvecs(eigen(A))
+
+function svd(A::RealHermSymComplexHerm, full::Bool=false)
+    vals, vecs = eigen(A)
+    I = sortperm(vals; by=abs, rev=true)
+    permute!(vals, I)
+    Base.permutecols!!(vecs, I)         # left-singular vectors
+    V = copy(vecs)                      # right-singular vectors
+    # shifting -1 from singular values to right-singular vectors
+    @inbounds for i = 1:length(vals)
+        if vals[i] < 0
+            vals[i] = -vals[i]
+            for j = 1:size(V,1); V[j,i] = -V[j,i]; end
+        end
+    end
+    return SVD(vecs, vals, V')
+end
 
 function svdvals!(A::RealHermSymComplexHerm)
     vals = eigvals!(A)

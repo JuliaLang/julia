@@ -385,7 +385,7 @@ function SparseMatrixCSC{Tv,Ti}(M::AbstractMatrix) where {Tv,Ti}
 end
 
 function SparseMatrixCSC{Tv,Ti}(M::StridedMatrix) where {Tv,Ti}
-    nz = count(t -> t != 0, M)
+    nz = count(!iszero, M)
     colptr = zeros(Ti, size(M, 2) + 1)
     nzval = Vector{Tv}(undef, nz)
     rowval = Vector{Ti}(undef, nz)
@@ -394,7 +394,7 @@ function SparseMatrixCSC{Tv,Ti}(M::StridedMatrix) where {Tv,Ti}
     @inbounds for j in 1:size(M, 2)
         for i in 1:size(M, 1)
             v = M[i, j]
-            if v != 0
+            if !iszero(v)
                 rowval[cnt] = i
                 nzval[cnt] = v
                 cnt += 1
@@ -1241,7 +1241,7 @@ Removes stored numerical zeros from `A`, optionally trimming resulting excess sp
 For an out-of-place version, see [`dropzeros`](@ref). For
 algorithmic information, see `fkeep!`.
 """
-dropzeros!(A::SparseMatrixCSC; trim::Bool = true) = fkeep!(A, (i, j, x) -> x != 0, trim)
+dropzeros!(A::SparseMatrixCSC; trim::Bool = true) = fkeep!(A, (i, j, x) -> !iszero(x), trim)
 """
     dropzeros(A::SparseMatrixCSC; trim::Bool = true)
 
@@ -1312,36 +1312,34 @@ function findnz(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     return (I, J, V)
 end
 
-function _sparse_findnextnz(m::SparseMatrixCSC, i::Integer)
-    if i > length(m)
-        return nothing
-    end
-    row, col = Tuple(CartesianIndices(m)[i])
+function _sparse_findnextnz(m::SparseMatrixCSC, ij::CartesianIndex{2})
+    row, col = Tuple(ij)
+    col > m.n && return nothing
+
     lo, hi = m.colptr[col], m.colptr[col+1]
     n = searchsortedfirst(m.rowval, row, lo, hi-1, Base.Order.Forward)
     if lo <= n <= hi-1
-        return LinearIndices(m)[m.rowval[n], col]
+        return CartesianIndex(m.rowval[n], col)
     end
-    nextcol = findnext(c->(c>hi), m.colptr, col+1)
-    nextcol === nothing && return nothing
+    nextcol = searchsortedfirst(m.colptr, hi + 1, col + 1, length(m.colptr), Base.Order.Forward)
+    nextcol > length(m.colptr) && return nothing
     nextlo = m.colptr[nextcol-1]
-    return LinearIndices(m)[m.rowval[nextlo], nextcol-1]
+    return CartesianIndex(m.rowval[nextlo], nextcol - 1)
 end
 
-function _sparse_findprevnz(m::SparseMatrixCSC, i::Integer)
-    if iszero(i)
-        return nothing
-    end
-    row, col = Tuple(CartesianIndices(m)[i])
+function _sparse_findprevnz(m::SparseMatrixCSC, ij::CartesianIndex{2})
+    row, col = Tuple(ij)
+    iszero(col) && return nothing
+
     lo, hi = m.colptr[col], m.colptr[col+1]
     n = searchsortedlast(m.rowval, row, lo, hi-1, Base.Order.Forward)
     if lo <= n <= hi-1
-        return LinearIndices(m)[m.rowval[n], col]
+        return CartesianIndex(m.rowval[n], col)
     end
-    prevcol = findprev(c->(c<lo), m.colptr, col-1)
-    prevcol === nothing && return nothing
+    prevcol = searchsortedlast(m.colptr, lo - 1, 1, col - 1, Base.Order.Forward)
+    prevcol < 1 && return nothing
     prevhi = m.colptr[prevcol+1]
-    return LinearIndices(m)[m.rowval[prevhi-1], prevcol]
+    return CartesianIndex(m.rowval[prevhi-1], prevcol)
 end
 
 
@@ -1359,77 +1357,6 @@ function sparse_sortedlinearindices!(I::Vector{Ti}, V::Vector, m::Int, n::Int) w
         colm += m
     end
     return SparseMatrixCSC(m, n, colptr, I, V)
-end
-
-# findfirst/next/prev/last
-function _idxfirstnz(A::SparseMatrixCSC, ij::CartesianIndex{2})
-    nzr = nzrange(A, ij[2])
-    searchk = searchsortedfirst(A.rowval, ij[1], first(nzr), last(nzr), Forward)
-    return _idxnextnz(A, searchk)
-end
-
-function _idxlastnz(A::SparseMatrixCSC, ij::CartesianIndex{2})
-    nzr = nzrange(A, ij[2])
-    searchk = searchsortedlast(A.rowval, ij[1], first(nzr), last(nzr), Forward)
-    return _idxprevnz(A, searchk)
-end
-
-function _idxnextnz(A::SparseMatrixCSC, idx::Integer)
-    nnza = nnz(A)
-    nzval = nonzeros(A)
-    z = zero(eltype(A))
-    while idx <= nnza
-        nzv = nzval[idx]
-        !isequal(nzv, z) && return idx, nzv
-        idx += 1
-    end
-    return zero(idx), z
-end
-
-function _idxprevnz(A::SparseMatrixCSC, idx::Integer)
-    nzval = nonzeros(A)
-    z = zero(eltype(A))
-    while idx > 0
-        nzv = nzval[idx]
-        !isequal(nzv, z) && return idx, nzv
-        idx -= 1
-    end
-    return zero(idx), z
-end
-
-function _idx_to_cartesian(A::SparseMatrixCSC, idx::Integer)
-    rowval = rowvals(A)
-    i = rowval[idx]
-    j = searchsortedlast(A.colptr, idx, 1, size(A, 2), Base.Order.Forward)
-    return CartesianIndex(i, j)
-end
-
-function Base.findnext(pred::Function, A::SparseMatrixCSC, ij::CartesianIndex{2})
-    if nnz(A) == length(A) || pred(zero(eltype(A)))
-        return invoke(findnext, Tuple{Function,Any,Any}, pred, A, ij)
-    end
-    idx, nzv = _idxfirstnz(A, ij)
-    while idx > 0
-        if pred(nzv)
-            return _idx_to_cartesian(A, idx)
-        end
-        idx, nzv = _idxnextnz(A, idx + 1)
-    end
-    return nothing
-end
-
-function Base.findprev(pred::Function, A::SparseMatrixCSC, ij::CartesianIndex{2})
-    if nnz(A) == length(A) || pred(zero(eltype(A)))
-        return invoke(findprev, Tuple{Function,Any,Any}, pred, A, ij)
-    end
-    idx, nzv = _idxlastnz(A, ij)
-    while idx > 0
-        if pred(nzv)
-            return _idx_to_cartesian(A, idx)
-        end
-        idx, nzv = _idxprevnz(A, idx - 1)
-    end
-    return nothing
 end
 
 """
@@ -2403,7 +2330,7 @@ function _setindex_scalar!(A::SparseMatrixCSC{Tv,Ti}, _v, _i::Integer, _j::Integ
     end
     # Column j does not contain entry A[i,j]. If v is nonzero, insert entry A[i,j] = v
     # and return. If to the contrary v is zero, then simply return.
-    if v != 0
+    if !iszero(v)
         insert!(A.rowval, searchk, i)
         insert!(A.nzval, searchk, v)
         @simd for m in (j + 1):(A.n + 1)
@@ -3257,7 +3184,7 @@ function is_hermsym(A::SparseMatrixCSC, check::Function)
                 # We therefore "catch up" here while making sure that
                 # the elements are actually zero.
                 while row2 < col
-                    if nzval[offset] != 0
+                    if !iszero(nzval[offset])
                         return false
                     end
                     offset += 1
@@ -3295,7 +3222,7 @@ function istriu(A::SparseMatrixCSC)
             if rowval[l1-i] <= col
                 break
             end
-            if nzval[l1-i] != 0
+            if !iszero(nzval[l1-i])
                 return false
             end
         end
@@ -3314,7 +3241,7 @@ function istril(A::SparseMatrixCSC)
             if rowval[i] >= col
                 break
             end
-            if nzval[i] != 0
+            if !iszero(nzval[i])
                 return false
             end
         end

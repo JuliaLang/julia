@@ -41,6 +41,9 @@
     @test rpad("αβ", 8, "¹₂³") == "αβ¹₂³¹₂³"
     @test lpad("αβ", 9, "¹₂³") == "¹₂³¹₂³¹αβ"
     @test rpad("αβ", 9, "¹₂³") == "αβ¹₂³¹₂³¹"
+    # Issue #32160 (unsigned underflow in lpad/rpad)
+    @test lpad("xx", UInt(1), " ") == "xx"
+    @test rpad("xx", UInt(1), " ") == "xx"
 end
 
 # string manipulation

@@ -471,6 +471,31 @@ function connect(sock::LibuvStream, args...)
     return sock
 end
 
+"""
+    nagle(socket::Union{TCPServer, TCPSocket}, enable::Bool)
+
+Enables or disables Nagle's algorithm on a given TCP server or socket.
+"""
+function nagle(sock::Union{TCPServer, TCPSocket}, enable::Bool)
+    # disable or enable Nagle's algorithm on all OSes
+    ccall(:uv_tcp_nodelay, Cint, (Ptr{Cvoid}, Cint), sock.handle, Cint(!enable))
+end
+
+"""
+    quickack(socket::Union{TCPServer, TCPSocket}, enable::Bool)
+
+On Linux systems, the TCP_QUICKACK is disabled or enabled on `socket`.
+"""
+function quickack(sock::Union{TCPServer, TCPSocket}, enable::Bool)
+    @static if Sys.islinux()
+        # tcp_quickack is a linux only option
+        if ccall(:jl_tcp_quickack, Cint, (Ptr{Cvoid}, Cint), sock.handle, Cint(enable)) < 0
+            @warn "Networking unoptimized ( Error enabling TCP_QUICKACK : $(Libc.strerror(Libc.errno())) )" maxlog=1
+        end
+    end
+end
+
+
 ##
 
 const BACKLOG_DEFAULT = 511

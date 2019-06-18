@@ -640,3 +640,16 @@ let t = Timer(identity, 0.025, interval=0.025)
         close(t)
     end
 end
+
+# shared workqueue
+
+function pfib(n::Int)
+    if n <= 1
+        return n
+    end
+    t = @task pfib(n-2)
+    t.sticky = false
+    schedule(t)
+    return pfib(n-1) + fetch(t)::Int
+end
+@test pfib(20) == 6765

@@ -1,5 +1,15 @@
 # Static analyzer annotations for GC correctness in C code
 
+## Running the analysis
+
+The analyzer plugin that drives the anlysis ships with julia. Its
+source code can be found in `src/clangsa`. Running it requires
+the clang dependency to be build. Set the `BUILD_LLVM_CLANG` variable
+in your Make.user in order to build an appropriate version of clang.
+You may also want to use the prebuilt binaries using the
+`USE_BINARYBUILDER_LLVM` options. Afterwards, running the analysis
+over the source tree is as simple as running `make -C src analyzegc`.
+
 ## General Overview
 
 Since Julia's GC is precise, it needs to maintain correct rooting

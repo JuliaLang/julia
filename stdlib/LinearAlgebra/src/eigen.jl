@@ -1,6 +1,52 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Eigendecomposition
+"""
+    Eigen <: Factorization
+
+Matrix factorization type of the eigenvalue/spectral decomposition of a square
+matrix `A`. This is the return type of [`eigen`](@ref), the corresponding matrix
+factorization function.
+
+If `F::Eigen` is the factorization object, the eigenvalues can be obtained via
+`F.values` and the eigenvectors as the columns of the matrix `F.vectors`.
+(The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
+
+Iterating the decomposition produces the components `F.values` and `F.vectors`.
+
+# Examples
+```jldoctest
+julia> F = eigen([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
+Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}
+eigenvalues:
+3-element Array{Float64,1}:
+  1.0
+  3.0
+ 18.0
+eigenvectors:
+3×3 Array{Float64,2}:
+ 1.0  0.0  0.0
+ 0.0  1.0  0.0
+ 0.0  0.0  1.0
+
+julia> F.values
+3-element Array{Float64,1}:
+  1.0
+  3.0
+ 18.0
+
+julia> F.vectors
+3×3 Array{Float64,2}:
+ 1.0  0.0  0.0
+ 0.0  1.0  0.0
+ 0.0  0.0  1.0
+
+julia> vals, vecs = F; # destructuring via iteration
+
+julia> vals == F.values && vecs == F.vectors
+true
+```
+"""
 struct Eigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
     values::U
     vectors::S
@@ -11,6 +57,57 @@ Eigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V} =
     Eigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
 
 # Generalized eigenvalue problem.
+"""
+    GeneralizedEigen <: Factorization
+
+Matrix factorization type of the generalized eigenvalue/spectral decomposition of
+`A` and `B`. This is the return type of [`eigen`](@ref), the corresponding
+matrix factorization function, when called with two matrix arguments.
+
+If `F::GeneralizedEigen` is the factorization object, the eigenvalues can be obtained via
+`F.values` and the eigenvectors as the columns of the matrix `F.vectors`.
+(The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
+
+Iterating the decomposition produces the components `F.values` and `F.vectors`.
+
+# Examples
+```jldoctest
+julia> A = [1 0; 0 -1]
+2×2 Array{Int64,2}:
+ 1   0
+ 0  -1
+
+julia> B = [0 1; 1 0]
+2×2 Array{Int64,2}:
+ 0  1
+ 1  0
+
+julia> F = eigen(A, B)
+GeneralizedEigen{Complex{Float64},Complex{Float64},Array{Complex{Float64},2},Array{Complex{Float64},1}}
+eigenvalues:
+2-element Array{Complex{Float64},1}:
+ 0.0 + 1.0im
+ 0.0 - 1.0im
+eigenvectors:
+2×2 Array{Complex{Float64},2}:
+  0.0-1.0im   0.0+1.0im
+ -1.0-0.0im  -1.0+0.0im
+
+julia> F.values
+2-element Array{Complex{Float64},1}:
+0.0 - 1.0im
+0.0 + 1.0im
+
+julia> F.vectors
+2×2 Array{Complex{Float64},2}:
+0.0+1.0im   0.0-1.0im
+-1.0+0.0im  -1.0-0.0im
+
+julia> vals, vecs = F; # destructuring via iteration
+
+julia> vals == F.values && vecs == F.vectors
+true
+"""
 struct GeneralizedEigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
     values::U
     vectors::S

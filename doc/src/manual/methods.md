@@ -981,9 +981,7 @@ f(x, y) = f(promote(x, y)...)
 One risk with this design is the possibility that if there is no
 suitable promotion method converting `x` and `y` to the same type, the
 second method will recurse on itself infinitely and trigger a stack
-overflow. The non-exported function `Base.promote_noncircular` can be
-used as an alternative; when promotion fails it will still throw an
-error, but one that fails faster with a more specific error message.
+overflow.
 
 ### Dispatch on one argument at a time
 

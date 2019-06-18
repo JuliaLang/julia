@@ -130,6 +130,8 @@ let c = Ref(0),
     @test c[] == 100
 end
 
+@test_throws ErrorException("deadlock detected: cannot wait on current task") wait(current_task())
+
 # test that @sync is lexical (PR #27164)
 
 const x27164 = Ref(0)

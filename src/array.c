@@ -171,9 +171,10 @@ static inline int is_ntuple_long(jl_value_t *v)
 {
     if (!jl_is_tuple(v))
         return 0;
-    size_t nfields = jl_nfields(v);
-    for (size_t i = 0; i < nfields; i++) {
-        if (jl_field_type(jl_typeof(v), i) != (jl_value_t*)jl_long_type) {
+    jl_value_t *tt = jl_typeof(v);
+    size_t i, nfields = jl_nparams(tt);
+    for (i = 0; i < nfields; i++) {
+        if (jl_tparam(tt, i) != (jl_value_t*)jl_long_type) {
             return 0;
         }
     }
@@ -470,6 +471,8 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
 JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
 {
     size_t sz = sizeof(size_t) + len + 1; // add space for trailing \nul protector and size
+    if (sz < len) // overflow
+        jl_throw(jl_memory_exception);
     if (len == 0)
         return jl_an_empty_string;
     jl_value_t *s = jl_gc_alloc_(jl_get_ptls_states(), sz, jl_string_type); // force inlining
@@ -482,6 +485,8 @@ JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
 JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
 {
     size_t sz = sizeof(size_t) + len + 1; // add space for trailing \nul protector and size
+    if (sz < len) // overflow
+        jl_throw(jl_memory_exception);
     if (len == 0)
         return jl_an_empty_string;
     jl_value_t *s = jl_gc_alloc_(jl_get_ptls_states(), sz, jl_string_type); // force inlining

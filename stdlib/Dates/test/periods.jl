@@ -13,6 +13,7 @@ using Test
     @test Dates.Year(1) != 1
     @test Dates.Year(1) + Dates.Year(1) == Dates.Year(2)
     @test Dates.Year(1) - Dates.Year(1) == zero(Dates.Year)
+    @test 1 == one(Dates.Year)
     @test_throws MethodError Dates.Year(1) * Dates.Year(1) == Dates.Year(1)
     t = Dates.Year(1)
     t2 = Dates.Year(2)
@@ -341,6 +342,8 @@ end
     @test d - h == 23h
     @test !isequal(d - h, 23h)
     @test isequal(d - h, 2d - 2h - 1d + 1h)
+    @test sprint(show, y + m) == string(y + m)
+    @test convert(Dates.CompoundPeriod, y) + m == y + m
 end
 @testset "compound period simplification" begin
     # reduce compound periods into the most basic form
@@ -431,6 +434,7 @@ end
 @testset "#30832" begin
     @test Dates.toms(Dates.Second(1) + Dates.Nanosecond(1)) == 1e3
     @test Dates.tons(Dates.Second(1) + Dates.Nanosecond(1)) == 1e9 + 1
+    @test Dates.toms(Dates.Second(1) + Dates.Microsecond(1)) == 1e3
 end
 
 end

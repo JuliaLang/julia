@@ -19,7 +19,7 @@ call_result_unused(frame::InferenceState, pc::LineNum=frame.currpc) =
 function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState,
                                   max_methods = sv.params.MAX_METHODS)
     atype_params = unwrap_unionall(atype).parameters
-    ft = unwrap_unionall(atype_params[1]) # TODO: ccall jl_first_argument_datatype here
+    ft = unwrap_unionall(atype_params[1]) # TODO: ccall jl_method_table_for here
     isa(ft, DataType) || return Any # the function being called is unknown. can't properly handle this backedge right now
     ftname = ft.name
     isdefined(ftname, :mt) || return Any # not callable. should be Bottom, but can't track this backedge right now
@@ -187,12 +187,32 @@ function abstract_call_method_with_const_args(@nospecialize(rettype), @nospecial
         end
     end
     haveconst || improvable_via_constant_propagation(rettype) || return Any
-    sig = match[1]
-    sparams = match[2]::SimpleVector
+    if nargs > 1
+        if istopfunction(f, :getindex) || istopfunction(f, :setindex!)
+            arrty = argtypes[2]
+            # don't propagate constant index into indexing of non-constant array
+            if arrty isa Type && arrty <: AbstractArray && !issingletontype(arrty)
+                return Any
+            end
+        elseif istopfunction(f, :iterate)
+            itrty = argtypes[2]
+            if itrty isa Type && !issingletontype(itrty)
+                return Any
+            end
+        end
+    end
+    if !allconst && (istopfunction(f, :+) || istopfunction(f, :-) || istopfunction(f, :*) ||
+                     istopfunction(f, :(==)) || istopfunction(f, :!=) ||
+                     istopfunction(f, :<=) || istopfunction(f, :>=) || istopfunction(f, :<) || istopfunction(f, :>) ||
+                     istopfunction(f, :<<) || istopfunction(f, :>>))
+        return Any
+    end
     force_inference = allconst || sv.params.aggressive_constant_propagation
     if istopfunction(f, :getproperty) || istopfunction(f, :setproperty!)
         force_inference = true
     end
+    sig = match[1]
+    sparams = match[2]::SimpleVector
     mi = specialize_method(method, sig, sparams, !force_inference)
     mi === nothing && return Any
     mi = mi::MethodInstance
@@ -258,7 +278,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                     # we have a self-cycle in the call-graph, but not in the inference graph (typically):
                     # break this edge now (before we record it) by returning early
                     # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
-                    return Any, false, nothing
+                    return Any, true, nothing
                 end
                 topmost = nothing
                 edgecycle = true
@@ -339,7 +359,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                 # since it's very unlikely that we'll try to inline this,
                 # or want make an invoke edge to its calling convention return type.
                 # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
-                return Any, false, nothing
+                return Any, true, nothing
             end
             poison_callstack(sv, topmost::InferenceState, true)
             sig = newsig
@@ -547,7 +567,7 @@ function abstract_apply(@nospecialize(aft), aargtypes::Vector{Any}, vtypes::VarT
                     tail = tuple_tail_elem(unwrapva(ct[end]), cti)
                     push!(ctypes´, push!(ct[1:(end - 1)], tail))
                 else
-                    push!(ctypes´, append_any(ct, cti))
+                    push!(ctypes´, append!(ct[:], cti))
                 end
             end
         end

@@ -492,7 +492,7 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
     DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath,
                                  DILineInfoSpecifier::FunctionNameKind::ShortName);
 
-    auto inlineInfo = context->getInliningInfoForAddress(pointer, infoSpec);
+    auto inlineInfo = context->getInliningInfoForAddress(makeAddress(pointer), infoSpec);
 
     int fromC = (*frames)[0].fromC;
     int n_frames = inlineInfo.getNumberOfFrames();
@@ -516,7 +516,7 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
             info = inlineInfo.getFrame(i);
         }
         else {
-            info = context->getLineInfoForAddress(pointer, infoSpec);
+            info = context->getLineInfoForAddress(makeAddress(pointer), infoSpec);
         }
 
         jl_frame_t *frame = &(*frames)[i];
@@ -1224,7 +1224,7 @@ JL_DLLEXPORT uint64_t jl_get_section_start(uint64_t fptr)
 }
 
 // Set *name and *filename to either NULL or malloc'd string
-int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int noInline)
+int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT
 {
     // This function is not allowed to reference any TLS variables if noInline
     // since it can be called from an unmanaged thread on OSX.
@@ -1245,7 +1245,7 @@ int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int n
     return jl_getDylibFunctionInfo(frames_out, pointer, skipC, noInline);
 }
 
-extern "C" jl_method_instance_t *jl_gdblookuplinfo(void *p)
+extern "C" jl_method_instance_t *jl_gdblookuplinfo(void *p) JL_NOTSAFEPOINT
 {
     return jl_jit_events->lookupLinfo((size_t)p);
 }

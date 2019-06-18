@@ -628,32 +628,46 @@ function eachline(cmd::AbstractCmd; keep::Bool=false)
     return EachLine(out, keep=keep, ondone=ondone)::EachLine
 end
 
-function open(cmds::AbstractCmd, mode::AbstractString, other::Redirectable=devnull)
+"""
+    open(command, mode::AbstractString, stdio=devnull)
+
+Run `command` asynchronously. Like `open(command, stdio; read, write)` except specifying
+the read and write flags via a mode string instead of keyword arguments.
+Possible mode strings are:
+
+| Mode | Description | Keywords                         |
+|:-----|:------------|:---------------------------------|
+| `r`  | read        | none                             |
+| `w`  | write       | `write = true`                   |
+| `r+` | read, write | `read = true, write = true`      |
+| `w+` | read, write | `read = true, write = true`      |
+"""
+function open(cmds::AbstractCmd, mode::AbstractString, stdio::Redirectable=devnull)
     if mode == "r+" || mode == "w+"
-        return open(cmds, other, read = true, write = true)
+        return open(cmds, stdio, read = true, write = true)
     elseif mode == "r"
-        return open(cmds, other)
+        return open(cmds, stdio)
     elseif mode == "w"
-        return open(cmds, other, write = true)
+        return open(cmds, stdio, write = true)
     else
-        throw(ArgumentError("mode must be \"r\" or \"w\", not \"$mode\""))
+        throw(ArgumentError("mode must be \"r\", \"w\", \"r+\", or \"w+\", not $(repr(mode))"))
     end
 end
 
 # return a Process object to read-to/write-from the pipeline
 """
-    open(command, other=devnull; write::Bool = false, read::Bool = !write)
+    open(command, stdio=devnull; write::Bool = false, read::Bool = !write)
 
 Start running `command` asynchronously, and return a `process::IO` object.  If `read` is
-true, then reads from the process come from the process's standard output and `other` optionally
+true, then reads from the process come from the process's standard output and `stdio` optionally
 specifies the process's standard input stream.  If `write` is true, then writes go to
-the process's standard input and `other` optionally specifies the process's standard output
+the process's standard input and `stdio` optionally specifies the process's standard output
 stream.
 The process's standard error stream is connected to the current global `stderr`.
 """
-function open(cmds::AbstractCmd, other::Redirectable=devnull; write::Bool=false, read::Bool=!write)
+function open(cmds::AbstractCmd, stdio::Redirectable=devnull; write::Bool=false, read::Bool=!write)
     if read && write
-        other === devnull || throw(ArgumentError("no stream can be specified for `other` in read-write mode"))
+        stdio === devnull || throw(ArgumentError("no stream can be specified for `stdio` in read-write mode"))
         in = PipeEndpoint()
         out = PipeEndpoint()
         processes = _spawn(cmds, Any[in, out, stderr])
@@ -661,14 +675,14 @@ function open(cmds::AbstractCmd, other::Redirectable=devnull; write::Bool=false,
         processes.out = out
     elseif read
         out = PipeEndpoint()
-        processes = _spawn(cmds, Any[other, out, stderr])
+        processes = _spawn(cmds, Any[stdio, out, stderr])
         processes.out = out
     elseif write
         in = PipeEndpoint()
-        processes = _spawn(cmds, Any[in, other, stderr])
+        processes = _spawn(cmds, Any[in, stdio, stderr])
         processes.in = in
     else
-        other === devnull || throw(ArgumentError("no stream can be specified for `other` in no-access mode"))
+        stdio === devnull || throw(ArgumentError("no stream can be specified for `stdio` in no-access mode"))
         processes = _spawn(cmds, Any[devnull, devnull, stderr])
     end
     return processes

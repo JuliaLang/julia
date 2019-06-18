@@ -308,7 +308,7 @@ The intuition behind this behavior is that `x` is evaluated once for each `$`:
 one `$` works similarly to `eval(:x)`, giving `x`'s value, while two `$`s do the
 equivalent of `eval(eval(:x))`.
 
-### QuoteNode
+### [QuoteNode](@id man-quote-node)
 
 The usual representation of a `quote` form in an AST is an [`Expr`](@ref) with head `:quote`:
 
@@ -328,9 +328,15 @@ Expr
 As we have seen, such expressions support interpolation with `$`.
 However, in some situations it is necessary to quote code *without* performing interpolation.
 This kind of quoting does not yet have syntax, but is represented internally
-as an object of type `QuoteNode`.
-The parser yields `QuoteNode`s for simple quoted items like symbols:
+as an object of type `QuoteNode`:
+```jldoctest interp1
+julia> eval(Meta.quot(Expr(:$, :(1+2))))
+3
 
+julia> eval(QuoteNode(Expr(:$, :(1+2))))
+:($(Expr(:$, :(1 + 2))))
+```
+The parser yields `QuoteNode`s for simple quoted items like symbols:
 ```jldoctest interp1
 julia> dump(Meta.parse(":x"))
 QuoteNode
@@ -1084,16 +1090,17 @@ To make this efficient, the result is usually cached. And to make this inferable
 subset of the language is usable. Thus, generated functions provide a flexible way to move work from
 run time to compile time, at the expense of greater restrictions on allowed constructs.
 
-When defining generated functions, there are four main differences to ordinary functions:
+When defining generated functions, there are five main differences to ordinary functions:
 
 1. You annotate the function declaration with the `@generated` macro. This adds some information
    to the AST that lets the compiler know that this is a generated function.
 2. In the body of the generated function you only have access to the *types* of the arguments –
-   not their values – and any function that was defined *before* the definition of the generated
-   function.
+   not their values.
 3. Instead of calculating something or performing some action, you return a *quoted expression* which,
    when evaluated, does what you want.
-4. Generated functions must not *mutate* or *observe* any non-constant global state (including,
+4. Generated functions are only permitted to call functions that were defined *before* the definition of the generated
+   function. (Failure to follow this my result on getting `MethodErrors` referring to functions from a future world-age.)
+5. Generated functions must not *mutate* or *observe* any non-constant global state (including,
    for example, IO, locks, non-local dictionaries, or using [`hasmethod`](@ref)).
    This means they can only read global constants, and cannot have any side effects.
    In other words, they must be completely pure.

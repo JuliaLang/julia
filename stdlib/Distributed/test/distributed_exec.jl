@@ -1614,6 +1614,18 @@ for T in (UInt8, Int8, UInt16, Int16, UInt32, Int32, UInt64)
     @test n == 55
 end
 
+# issue #28966
+let code = """
+    import Distributed
+    Distributed.addprocs(1)
+    Distributed.@everywhere f() = myid()
+    for w in Distributed.workers()
+        @assert Distributed.remotecall_fetch(f, w) == w
+    end
+    """
+    @test success(`$(Base.julia_cmd()) --startup-file=no -e $code`)
+end
+
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.
 rmprocs(workers())

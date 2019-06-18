@@ -5,9 +5,7 @@ if !isempty(ARGS)
 end
 
 # Prevent this from being put into the Main namespace
-let
-M = Module()
-@eval M begin
+@eval Module() begin
 if !isdefined(Base, :uv_eventloop)
     Base.reinit_stdio()
 end
@@ -36,7 +34,8 @@ f(1,2)
 cd("complet_path\t\t$CTRL_C
 """
 
-julia_cmd() = (julia = joinpath(Sys.BINDIR, Base.julia_exename()); `$julia`)
+julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
+
 have_repl =  haskey(Base.loaded_modules,
                     Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
 Pkg = get(Base.loaded_modules,
@@ -47,14 +46,9 @@ if Pkg !== nothing
     precompile_script *= Pkg.precompile_script
 end
 
-push!(LOAD_PATH, Sys.STDLIB)
-using Sockets
-Sockets.__init__()
-using Libdl
-empty!(LOAD_PATH)
-
 function generate_precompile_statements()
     start_time = time()
+    debug_output = devnull # or stdout
 
     # Precompile a package
     mktempdir() do prec_path
@@ -73,76 +67,76 @@ function generate_precompile_statements()
     end
 
     print("Generating precompile statements...")
-    sysimg = Base.unsafe_string(Base.JLOptions().image_file)
-    mktemp() do precompile_file, _
+    mktemp() do precompile_file, precompile_file_h
         # Run a repl process and replay our script
-        repl_output_buffer = IOBuffer()
-        @static if Sys.iswindows()
-            # Fake being cygwin
-            pipename = """\\\\?\\pipe\\cygwin-$("0"^16)-pty10-abcdef"""
-            server = listen(pipename)
-            pty_slave = connect(pipename)
-            @assert ccall(:jl_ispty, Cint, (Ptr{Cvoid},), pty_slave.handle) == 1
-            pty_master = accept(server)
-        else
-            pty_slave, pty_master = open_fake_pty()
-        end
-        done = false
+        pty_slave, pty_master = open_fake_pty()
         blackhole = Sys.isunix() ? "/dev/null" : "nul"
-        withenv("JULIA_HISTORY" => blackhole, "JULIA_PROJECT" => nothing,
-                "TERM" => "", "JULIA_LOAD_PATH" => Sys.iswindows() ? "@;@stdlib" : "@:@stdlib") do
-            if have_repl
-                p = run(`$(julia_cmd()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
-                        --compile=all --startup-file=no --color=yes
-                        -e 'import REPL; REPL.Terminals.is_precompiling[] = true'
-                        -i`,
-                        pty_slave, pty_slave, pty_slave; wait=false)
-                readuntil(pty_master, "julia>", keep=true)
-                t = @async begin
-                    s = ""
-                    while true
-                        sleep(0.5)
-                        news = String(readavailable(pty_master))
-                        write(repl_output_buffer, news)
-                        s *= news
-                        if occursin("__PRECOMPILE_END__", s)
-                            break
-                        end
-                    end
-                end
-                if have_repl
-                    for l in split(precompile_script, '\n'; keepempty=false)
-                        write(pty_master, l, '\n')
-                    end
-                end
-                write(pty_master, "print(\"__PRECOMPILE\", \"_END__\")", '\n')
-                wait(t)
-
-                # TODO Figure out why exit() on Windows doesn't exit the process
-                if Sys.iswindows()
-                    print(pty_master, "ccall(:_exit, Cvoid, (Cint,), 0)\n")
-                else
-                    write(pty_master, "exit()\n")
-                    readuntil(pty_master, "exit()\r\e[13C\r\n")
-                    # @assert bytesavailable(master) == 0
-                end
-                wait(p)
-            else
-                # Is this even needed or is this already recorded just from starting this process?
-                p = run(`$(julia_cmd()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
-                        --compile=all --startup-file=no
-                        -e0`)
+        if have_repl
+            cmdargs = ```--color=yes
+                      -e 'import REPL; REPL.Terminals.is_precompiling[] = true'
+                      ```
+        else
+            cmdargs = `-e nothing`
+        end
+        p = withenv("JULIA_HISTORY" => blackhole,
+                    "JULIA_PROJECT" => nothing, # remove from environment
+                    "JULIA_LOAD_PATH" => Sys.iswindows() ? "@;@stdlib" : "@:@stdlib",
+                    "TERM" => "") do
+            sysimg = Base.unsafe_string(Base.JLOptions().image_file)
+            run(```$(julia_exepath()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
+                   --cpu-target=native --startup-file=no --color=yes
+                   -e 'import REPL; REPL.Terminals.is_precompiling[] = true'
+                   -i $cmdargs```,
+                pty_slave, pty_slave, pty_slave; wait=false)
+        end
+        Base.close_stdio(pty_slave)
+        # Prepare a background process to copy output from process until `pty_slave` is closed
+        output_copy = Base.BufferStream()
+        tee = @async try
+            while !eof(pty_master)
+                l = readavailable(pty_master)
+                write(debug_output, l)
+                Sys.iswindows() && (sleep(0.1); yield(); yield()) # workaround hang - probably a libuv issue?
+                write(output_copy, l)
+            end
+            close(output_copy)
+            close(pty_master)
+        catch ex
+            close(output_copy)
+            close(pty_master)
+            if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
+                rethrow() # ignore EIO on pty_master after pty_slave dies
             end
         end
+        # wait for the definitive prompt before start writing to the TTY
+        readuntil(output_copy, "julia>")
+        sleep(0.1)
+        readavailable(output_copy)
+        # Input our script
+        if have_repl
+            for l in split(precompile_script, '\n'; keepempty=false)
+                sleep(0.1)
+                # consume any other output
+                bytesavailable(output_copy) > 0 && readavailable(output_copy)
+                # push our input
+                write(debug_output, "\n#### inputting statement: ####\n$(repr(l))\n####\n")
+                write(pty_master, l, "\n")
+                readuntil(output_copy, "\n")
+                # wait for the next prompt-like to appear
+                # NOTE: this is rather innaccurate because the Pkg REPL mode is a special flower
+                readuntil(output_copy, "\n")
+                readuntil(output_copy, "> ")
+            end
+        end
+        write(pty_master, "exit()\n")
+        wait(tee)
+        success(p) || Base.pipeline_error(p)
         close(pty_master)
-
-        # Check what the REPL displayed
-        # repl_output = String(take!(repl_output_buffer))
-        # println(repl_output)
+        write(debug_output, "\n#### FINISHED ####\n")
 
         # Extract the precompile statements from stderr
         statements = Set{String}()
-        for statement in split(read(precompile_file, String), '\n')
+        for statement in eachline(precompile_file_h)
             occursin("Main.", statement) && continue
             push!(statements, statement)
         end
@@ -157,7 +151,7 @@ function generate_precompile_statements()
         PrecompileStagingArea = Module()
         for (_pkgid, _mod) in Base.loaded_modules
             if !(_pkgid.name in ("Main", "Core", "Base"))
-                eval(PrecompileStagingArea, :($(Symbol(_mod)) = $_mod))
+                eval(PrecompileStagingArea, :(const $(Symbol(_mod)) = $_mod))
             end
         end
 
@@ -186,4 +180,3 @@ end
 generate_precompile_statements()
 
 end # @eval
-end # let

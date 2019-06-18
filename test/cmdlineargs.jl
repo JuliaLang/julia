@@ -97,6 +97,13 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
         @test startswith(read(`$exename --help`, String), header)
     end
 
+    # ~ expansion in --project and JULIA_PROJECT
+    if !Sys.iswindows()
+        expanded = abspath(expanduser("~/foo"))
+        @test occursin(expanded, readchomp(`$exename --project='~/foo' -E 'Base.active_project()'`))
+        @test occursin(expanded, readchomp(setenv(`$exename -E 'Base.active_project()'`, "JULIA_PROJECT"=>"~/foo")))
+    end
+
     # --quiet, --banner
     let t(q,b) = "Base.JLOptions().quiet == $q && Base.JLOptions().banner == $b"
         @test success(`$exename                 -e $(t(0, -1))`)
@@ -212,7 +219,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
         helperdir = joinpath(@__DIR__, "testhelpers")
         inputfile = joinpath(helperdir, "coverage_file.jl")
         expected = replace(read(joinpath(helperdir, "coverage_file.info"), String),
-            "<FILENAME>" => inputfile)
+            "<FILENAME>" => realpath(inputfile))
         covfile = replace(joinpath(dir, "coverage.info"), "%" => "%%")
         @test !isfile(covfile)
         defaultcov = readchomp(`$exename -E "Bool(Base.JLOptions().code_coverage)" -L $inputfile`)

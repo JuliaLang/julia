@@ -93,6 +93,7 @@ end
 if opt_level > 0
     # Make sure `jl_string_ptr` is inlined
     @test !occursin(" call ", get_llvm(jl_string_ptr, Tuple{String}))
+    # Make sure `Core.sizeof` call is inlined
     s = "aaa"
     @test jl_string_ptr(s) == pointer_from_objref(s) + sizeof(Int)
     # String
@@ -105,6 +106,8 @@ if opt_level > 0
     test_loads_no_call(get_llvm(core_sizeof, Tuple{Array{Any}}), [Iptr])
     # Check that we load the elsize
     test_loads_no_call(get_llvm(core_sizeof, Tuple{Vector}), [Iptr, "i16"])
+    # Primitive Type size should be folded to a constant
+    test_loads_no_call(get_llvm(core_sizeof, Tuple{Ptr}), String[])
 
     test_jl_dump_compiles()
     test_jl_dump_compiles_toplevel_thunks()

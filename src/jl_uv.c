@@ -190,14 +190,16 @@ JL_DLLEXPORT void jl_uv_req_set_data(uv_req_t *req, void *data) { req->data = da
 JL_DLLEXPORT void *jl_uv_handle_data(uv_handle_t *handle) { return handle->data; }
 JL_DLLEXPORT void *jl_uv_write_handle(uv_write_t *req) { return req->handle; }
 
+extern volatile unsigned _threadedregion;
+
 JL_DLLEXPORT int jl_run_once(uv_loop_t *loop)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (loop) {
+    if (loop && (_threadedregion || ptls->tid == 0)) {
         jl_gc_safepoint_(ptls);
         JL_UV_LOCK();
         loop->stop_flag = 0;
-        int r = uv_run(loop,UV_RUN_ONCE);
+        int r = uv_run(loop, UV_RUN_ONCE);
         JL_UV_UNLOCK();
         return r;
     }
@@ -207,13 +209,14 @@ JL_DLLEXPORT int jl_run_once(uv_loop_t *loop)
 JL_DLLEXPORT int jl_process_events(uv_loop_t *loop)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (loop) {
+    if (loop && (_threadedregion || ptls->tid == 0)) {
         jl_gc_safepoint_(ptls);
-        JL_UV_LOCK();
-        loop->stop_flag = 0;
-        int r = uv_run(loop,UV_RUN_NOWAIT);
-        JL_UV_UNLOCK();
-        return r;
+        if (jl_mutex_trylock(&jl_uv_mutex)) {
+            loop->stop_flag = 0;
+            int r = uv_run(loop, UV_RUN_NOWAIT);
+            JL_UV_UNLOCK();
+            return r;
+        }
     }
     return 0;
 }
@@ -390,7 +393,7 @@ JL_DLLEXPORT int jl_fs_chown(char *path, int uid, int gid)
 }
 
 JL_DLLEXPORT int jl_fs_write(uv_os_fd_t handle, const char *data, size_t len,
-                             int64_t offset)
+                             int64_t offset) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     // TODO: fix this cheating
@@ -590,7 +593,7 @@ JL_DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...)
     return c;
 }
 
-JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...)
+JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...) JL_NOTSAFEPOINT
 {
     static char buf[1000];
     buf[0] = '\0';
@@ -1082,36 +1085,29 @@ JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *work_args, void *work_
     return 0;
 }
 
+JL_DLLEXPORT void jl_uv_update_timer_start(uv_loop_t* loop, jl_value_t* jltimer,
+                                          uv_timer_t* uvtimer, uv_timer_cb cb,
+                                          uint64_t timeout, uint64_t repeat)
+{
+    JL_UV_LOCK();
+    int err = uv_timer_init(loop, uvtimer);
+    if (err)
+        abort();
+
+    jl_uv_associate_julia_struct((uv_handle_t*)uvtimer, jltimer);
+    uv_update_time(loop);
+    err = uv_timer_start(uvtimer, cb, timeout, repeat);
+    if (err)
+        abort();
+    JL_UV_UNLOCK();
+}
+
 JL_DLLEXPORT void jl_uv_stop(uv_loop_t* loop)
 {
     JL_UV_LOCK();
     uv_stop(loop);
     // TODO: use memory/compiler fence here instead of the lock
     JL_UV_UNLOCK();
-}
-
-JL_DLLEXPORT void jl_uv_update_time(uv_loop_t* loop)
-{
-    JL_UV_LOCK();
-    uv_update_time(loop);
-    JL_UV_UNLOCK();
-}
-
-JL_DLLEXPORT int jl_uv_timer_start(uv_timer_t* handle, uv_timer_cb cb,
-                                   uint64_t timeout, uint64_t repeat)
-{
-    JL_UV_LOCK();
-    int r = uv_timer_start(handle, cb, timeout, repeat);
-    JL_UV_UNLOCK();
-    return r;
-}
-
-JL_DLLEXPORT int jl_uv_timer_stop(uv_timer_t* handle)
-{
-    JL_UV_LOCK();
-    int r = uv_timer_stop(handle);
-    JL_UV_UNLOCK();
-    return r;
 }
 
 JL_DLLEXPORT int jl_uv_fs_scandir(uv_loop_t* loop, uv_fs_t* req, const char* path, int flags,
