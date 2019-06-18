@@ -62,7 +62,7 @@ Return the current user's home directory.
     [`uv_os_homedir` documentation](http://docs.libuv.org/en/v1.x/misc.html#c.uv_os_homedir).
 """
 function homedir()
-    buf = Base.StringVector(MAX_PATH - 1)  # space for null-terminator implied by StringVector
+    buf = Base.StringVector(MAX_PATH - 1) # space for null-terminator implied by StringVector
     sz = RefValue{Csize_t}(length(buf) + 1) # total buffer size including null
     while true
         rc = ccall(:uv_os_homedir, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
