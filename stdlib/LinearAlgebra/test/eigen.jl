@@ -136,6 +136,8 @@ end
     A = randn(3,3)
     @test eigvals(A') == eigvals(copy(A'))
     @test eigen(A')   == eigen(copy(A'))
+    @test eigmin(A') == eigmin(copy(A'))
+    @test eigmax(A') == eigmax(copy(A'))
 end
 
 
