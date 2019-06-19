@@ -799,12 +799,6 @@ fUnionAll(::Type{T}) where {T} = Type{S} where S <: T
 @inferred fUnionAll(Real) == Type{T} where T <: Real
 @inferred fUnionAll(Rational{T} where T <: AbstractFloat) == Type{T} where T<:(Rational{S} where S <: AbstractFloat)
 
-fComplicatedUnionAll(::Type{T}) where {T} = Type{Tuple{S,rand() >= 0.5 ? Int : Float64}} where S <: T
-let pub = Base.parameter_upper_bound, x = fComplicatedUnionAll(Real)
-    @test pub(pub(x, 1), 1) == Real
-    @test pub(pub(x, 1), 2) == Int || pub(pub(x, 1), 2) == Float64
-end
-
 # issue #20733
 # run this test in a separate process to avoid interfering with `getindex`
 let def = "Base.getindex(t::NTuple{3,NTuple{2,Int}}, i::Int, j::Int, k::Int) = (t[1][i], t[2][j], t[3][k])"

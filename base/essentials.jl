@@ -257,7 +257,7 @@ end
 
 # replace TypeVars in all enclosing UnionAlls with fresh TypeVars
 function rename_unionall(@nospecialize(u))
-    if !isa(u,UnionAll)
+    if !isa(u, UnionAll)
         return u
     end
     body = rename_unionall(u.body)
@@ -701,7 +701,7 @@ julia> f(Val(true))
 struct Val{x}
 end
 
-Val(x) = (@_pure_meta; Val{x}())
+Val(x) = Val{x}()
 
 """
     invokelatest(f, args...; kwargs...)

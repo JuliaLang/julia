@@ -535,31 +535,6 @@ struct type with no fields.
 issingletontype(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && isdefined(t, :instance))
 
 """
-    Base.parameter_upper_bound(t::UnionAll, idx)
-
-Determine the upper bound of a type parameter in the underlying datatype.
-This method should generally not be relied upon:
-code instead should usually use static parameters in dispatch to extract these values.
-
-# Examples
-```jldoctest
-julia> struct Foo{T<:AbstractFloat, N}
-           x::Tuple{T, N}
-       end
-
-julia> Base.parameter_upper_bound(Foo, 1)
-AbstractFloat
-
-julia> Base.parameter_upper_bound(Foo, 2)
-Any
-```
-"""
-function parameter_upper_bound(t::UnionAll, idx)
-    @_pure_meta
-    return rewrap_unionall((unwrap_unionall(t)::DataType).parameters[idx], t)
-end
-
-"""
     typeintersect(T, S)
 
 Compute a type that contains the intersection of `T` and `S`. Usually this will be the
@@ -725,13 +700,12 @@ julia> instances(Color)
 function instances end
 
 function to_tuple_type(@nospecialize(t))
-    @_pure_meta
-    if isa(t,Tuple) || isa(t,AbstractArray) || isa(t,SimpleVector)
+    if isa(t, Tuple) || isa(t, AbstractArray) || isa(t, SimpleVector)
         t = Tuple{t...}
     end
-    if isa(t,Type) && t<:Tuple
+    if isa(t, Type) && t <: Tuple
         for p in unwrap_unionall(t).parameters
-            if !(isa(p,Type) || isa(p,TypeVar))
+            if !(isa(p, Type) || isa(p, TypeVar))
                 error("argument tuple type must contain only types")
             end
         end
