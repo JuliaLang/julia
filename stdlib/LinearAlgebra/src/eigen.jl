@@ -230,7 +230,7 @@ julia> vals == F.values && vecs == F.vectors
 true
 ```
 """
-function eigen(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where T
+function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where T
     AA = copy_oftype(A, eigtype(T))
     isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
     return eigen!(AA; permute=permute, scale=scale, sortby=sortby)
@@ -322,7 +322,7 @@ julia> eigvals(diag_matrix)
  4.0
 ```
 """
-eigvals(A::StridedMatrix{T}; kws...) where T =
+eigvals(A::AbstractMatrix{T}; kws...) where T =
     eigvals!(copy_oftype(A, eigtype(T)); kws...)
 
 """
@@ -369,7 +369,7 @@ Stacktrace:
 [...]
 ```
 """
-function eigmax(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
+function eigmax(A::Union{Number, AbstractMatrix}; permute::Bool=true, scale::Bool=true)
     v = eigvals(A, permute = permute, scale = scale)
     if eltype(v)<:Complex
         throw(DomainError(A, "`A` cannot have complex eigenvalues."))
