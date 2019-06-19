@@ -62,18 +62,17 @@ Return the current user's home directory.
     [`uv_os_homedir` documentation](http://docs.libuv.org/en/v1.x/misc.html#c.uv_os_homedir).
 """
 function homedir()
-    path_max = 1024
-    buf = Vector{UInt8}(undef, path_max)
-    sz = RefValue{Csize_t}(path_max + 1)
+    buf = Base.StringVector(AVG_PATH - 1) # space for null-terminator implied by StringVector
+    sz = RefValue{Csize_t}(length(buf) + 1) # total buffer size including null
     while true
         rc = ccall(:uv_os_homedir, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
         if rc == 0
             resize!(buf, sz[])
             return String(buf)
         elseif rc == Base.UV_ENOBUFS
-            resize!(buf, sz[] - 1)
+            resize!(buf, sz[] - 1) # space for null-terminator implied by StringVector
         else
-            error("unable to retrieve home directory")
+            uv_error(:homedir, rc)
         end
     end
 end

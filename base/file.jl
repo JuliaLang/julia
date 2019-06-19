@@ -27,8 +27,6 @@ export
     unlink,
     walkdir
 
-import .Base.RefValue
-
 # get and set current directory
 
 """
@@ -48,11 +46,21 @@ julia> pwd()
 ```
 """
 function pwd()
-    b = Vector{UInt8}(undef, 1024)
-    len = RefValue{Csize_t}(length(b))
-    uv_error(:getcwd, ccall(:uv_cwd, Cint, (Ptr{UInt8}, Ptr{Csize_t}), b, len))
-    String(b[1:len[]])
+    buf = Base.StringVector(AVG_PATH - 1) # space for null-terminator implied by StringVector
+    sz = RefValue{Csize_t}(length(buf) + 1) # total buffer size including null
+    while true
+        rc = ccall(:uv_cwd, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
+        if rc == 0
+            resize!(buf, sz[])
+            return String(buf)
+        elseif rc == Base.UV_ENOBUFS
+            resize!(buf, sz[] - 1) # space for null-terminator implied by StringVector
+        else
+            uv_error(:cwd, rc)
+        end
+    end
 end
+
 
 """
     cd(dir::AbstractString=homedir())

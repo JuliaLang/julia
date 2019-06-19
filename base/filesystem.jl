@@ -44,9 +44,15 @@ import .Base:
     skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
     rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror
 
+import .Base.RefValue
+
 if Sys.iswindows()
     import .Base: cwstring
 end
+
+# Average buffer size including null terminator for several filesystem operations.
+# On Windows we use the MAX_PATH = 260 value on Win32.
+const AVG_PATH = Sys.iswindows() ? 260 : 512
 
 include("path.jl")
 include("stat.jl")
