@@ -621,7 +621,8 @@ A (usually temporary) container for holding lowered source code.
     * 0 = inbounds
     * 1,2 = <reserved> inlinehint,always-inline,noinline
     * 3 = <reserved> strict-ieee (strictfp)
-    * 4-6 = <unused>
+    * 4 = <reserved> inferred-pure
+    * 5-6 = <unused>
     * 7 = <reserved> has out-of-band info
 
   * `linetable`
