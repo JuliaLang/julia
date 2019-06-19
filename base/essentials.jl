@@ -204,7 +204,7 @@ tail(::Tuple{}) = throw(ArgumentError("Cannot call tail on an empty tuple."))
 tuple_type_head(T::Type) = (@_pure_meta; fieldtype(T::Type{<:Tuple}, 1))
 
 function tuple_type_tail(T::Type)
-    @_pure_meta
+    @_pure_meta # TODO: this method is wrong (and not @pure)
     if isa(T, UnionAll)
         return UnionAll(T.var, tuple_type_tail(T.body))
     elseif isa(T, Union)
@@ -698,7 +698,7 @@ julia> f(Val(true))
 struct Val{x}
 end
 
-Val(x) = (@_pure_meta; Val{x}())
+Val(x) = Val{x}()
 
 """
     invokelatest(f, args...; kwargs...)

@@ -30,11 +30,7 @@ julia> .![true false true]
  0  1  0
 ```
 """
-function !(x::Bool)
-    ## We need a better heuristic to detect this automatically
-    @_pure_meta
-    return not_int(x)
-end
+!(x::Bool) = not_int(x)
 
 (~)(x::Bool) = !x
 (&)(x::Bool, y::Bool) = and_int(x, y)

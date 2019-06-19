@@ -767,12 +767,6 @@ fUnionAll(::Type{T}) where {T} = Type{S} where S <: T
 @inferred fUnionAll(Real) == Type{T} where T <: Real
 @inferred fUnionAll(Rational{T} where T <: AbstractFloat) == Type{T} where T<:(Rational{S} where S <: AbstractFloat)
 
-fComplicatedUnionAll(::Type{T}) where {T} = Type{Tuple{S,rand() >= 0.5 ? Int : Float64}} where S <: T
-let pub = Base.parameter_upper_bound, x = fComplicatedUnionAll(Real)
-    @test pub(pub(x, 1), 1) == Real
-    @test pub(pub(x, 1), 2) == Int || pub(pub(x, 1), 2) == Float64
-end
-
 # issue #20733
 # run this test in a separate process to avoid interfering with `getindex`
 let def = "Base.getindex(t::NTuple{3,NTuple{2,Int}}, i::Int, j::Int, k::Int) = (t[1][i], t[2][j], t[3][k])"
@@ -787,28 +781,6 @@ end
 # infinite type growth via lower bounds (formed by intersection)
 f20267(x::T20267{T}, y::T) where (T) = f20267(Any[1][1], x.inds)
 @test Base.return_types(f20267, (Any, Any)) == Any[Union{}]
-
-# issue #20704
-f20704(::Int) = 1
-Base.@pure b20704(@nospecialize(x)) = f20704(x)
-@test b20704(42) === 1
-@test_throws MethodError b20704(42.0)
-
-bb20704() = b20704(Any[1.0][1])
-@test_throws MethodError bb20704()
-
-v20704() = Val{b20704(Any[1.0][1])}
-@test_throws MethodError v20704()
-@test Base.return_types(v20704, ()) == Any[Type{Val{1}}]
-
-Base.@pure g20704(::Int) = 1
-h20704(@nospecialize(x)) = g20704(x)
-@test g20704(1) === 1
-@test_throws MethodError h20704(1.2)
-
-Base.@pure c20704() = (f20704(1.0); 1)
-d20704() = c20704()
-@test_throws MethodError d20704()
 
 Base.@pure function a20704(x)
     rand()
