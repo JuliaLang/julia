@@ -629,11 +629,6 @@ function *(A::SymTridiagonal, B::Diagonal)
     A_mul_B_td!(Tridiagonal(zeros(TS, size(A, 1)-1), zeros(TS, size(A, 1)), zeros(TS, size(A, 1)-1)), A, B)
 end
 
-function *(A::BiTri, B::Transpose{<:Any, <:Diagonal})
-    TS = promote_op(matprod, eltype(A), eltype(B))
-    A_mul_B_td!(similar(A, TS), A, B)
-end
-
 #Generic multiplication
 *(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = *(Array(A), B)
 *(adjA::Adjoint{<:Any,<:Bidiagonal{T}}, B::AbstractVector{T}) where {T} = *(adjoint(Array(adjA.parent)), B)
