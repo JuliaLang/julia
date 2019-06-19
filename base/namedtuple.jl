@@ -45,10 +45,14 @@ julia> collect(pairs(x))
  :b => 2
 ```
 
-A named tuple can be created programmatically by splatting an iterator yielding
-`name => value` pairs where each `name` is a `Symbol`:
+A named tuple can be created programmatically by giving a pair
+`name::Symbol => value` or splatting an iterator yielding such pairs
+after a semicolon inside a tuple literal:
 
 ```jldoctest
+julia> (; :a => 1)
+(a = 1,)
+
 julia> keys = (:a, :b, :c); values = (1, 2, 3);
 
 julia> (; zip(keys, values)...)
