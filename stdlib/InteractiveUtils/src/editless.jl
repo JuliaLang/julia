@@ -21,9 +21,14 @@ function editor()
         default_editor = "emacs"
     end
     # Note: the editor path can include spaces (if escaped) and flags.
-    args = shell_split(get(ENV,"JULIA_EDITOR", get(ENV,"VISUAL", get(ENV,"EDITOR", default_editor))))
-    isempty(args) && error("editor is empty")
-    return args
+    default_editor = get(ENV,"JULIA_EDITOR", get(ENV,"VISUAL", get(ENV,"EDITOR", default_editor)))
+    isempty(default_editor) && error("editor is empty")
+    if Sys.iswindows()
+        # Allow users to pass a string path for the editor
+        return ispath(default_editor) ? [default_editor] : shell_split(default_editor)
+    else
+        return shell_split(default_editor)
+    end
 end
 
 """
