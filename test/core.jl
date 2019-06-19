@@ -3485,10 +3485,10 @@ let
 end
 
 # 11996
-@test_throws ErrorException NTuple{-1, Int}
+@test_throws ArgumentError NTuple{-1, Int}
 @test_throws TypeError Union{Int, 1}
 
-@test_throws ErrorException Vararg{Any,-2}
+@test_throws ArgumentError Vararg{Any,-2}
 @test_throws ErrorException Vararg{Int, N} where N<:T where T
 @test_throws ErrorException Vararg{Int, N} where N<:Integer
 @test_throws ErrorException Vararg{Int, N} where N>:Integer
@@ -6841,9 +6841,9 @@ end
 @test repackage28445()
 
 # issue #28597
-@test_throws ErrorException Array{Int, 2}(undef, 0, -10)
-@test_throws ErrorException Array{Int, 2}(undef, -10, 0)
-@test_throws ErrorException Array{Int, 2}(undef, -1, -1)
+@test_throws ArgumentError Array{Int, 2}(undef, 0, -10)
+@test_throws ArgumentError Array{Int, 2}(undef, -10, 0)
+@test_throws ArgumentError Array{Int, 2}(undef, -1, -1)
 
 # issue #28812
 @test Tuple{Vararg{Array{T},3} where T} === Tuple{Array,Array,Array}
