@@ -66,8 +66,8 @@ function _threadsfor(iter,lbody)
         end
         end
         # Hack to make nested threaded loops kinda work
-        if threadid() != 1 || in_threaded_loop[]
-            # We are in a nested threaded loop
+        if nthreads() == 1 || threadid() != 1 || in_threaded_loop[]
+            # We are in a nested threaded loop, or running single-threaded
             Base.invokelatest(threadsfor_fun, true)
         else
             in_threaded_loop[] = true
