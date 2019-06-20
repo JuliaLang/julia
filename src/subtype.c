@@ -1501,6 +1501,8 @@ static int concrete_min(jl_value_t *t)
 {
     if (jl_is_unionall(t))
         t = jl_unwrap_unionall(t);
+    if (t == (jl_value_t*)jl_bottom_type)
+        return 1;
     if (jl_is_datatype(t)) {
         if (jl_is_type_type(t))
             return 0; // Type{T} may have the concrete supertype `typeof(T)`, so don't try to handle them here

@@ -659,7 +659,10 @@ let fieldtype_tfunc = Core.Compiler.fieldtype_tfunc,
     @test fieldtype_nothrow(Union{Type{Base.RefValue{<:Real}}, Type{Base.RefValue{Any}}}, Const(:x))
     @test fieldtype_nothrow(Const(Union{Base.RefValue{<:Real}, Base.RefValue{Any}}), Const(:x))
     @test fieldtype_nothrow(Type{Union{Base.RefValue{T}, Base.RefValue{Any}}} where {T<:Real}, Const(:x))
+    @test !fieldtype_nothrow(Type{Tuple{}}, Const(1))
+    @test fieldtype_nothrow(Type{Tuple{Int}}, Const(1))
     @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(1))
+    @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(2))
     @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(42))
     @test !fieldtype_nothrow(Type{<:Tuple{Vararg{Int}}}, Const(1))
 end
@@ -753,7 +756,7 @@ end
 g11015(::Type{S}, ::S) where {S} = 1
 f11015(a::AT11015) = g11015(Base.fieldtype(typeof(a), :f), true)
 g11015(::Type{Bool}, ::Bool) = 2.0
-@test Int <: Base.return_types(f11015, (AT11015,))[1]
+@test Base.return_types(f11015, (AT11015,)) == Any[Int]
 @test f11015(AT11015(true)) === 1
 
 # better inference of apply (#20343)
