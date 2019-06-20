@@ -414,8 +414,8 @@ function triu(A::Symmetric, k::Integer=0)
     end
 end
 
-(-)(A::Symmetric) = Symmetric(-A.data, A.uplo)
-(-)(A::Hermitian) = Hermitian(-A.data, A.uplo)
+(-)(A::Symmetric) = Symmetric(-A.data, sym_uplo(A.uplo))
+(-)(A::Hermitian) = Hermitian(-A.data, sym_uplo(A.uplo))
 
 ## Addition/subtraction
 for f in (:+, :-)
