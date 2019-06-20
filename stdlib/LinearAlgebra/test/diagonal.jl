@@ -359,6 +359,14 @@ end
             @test_throws ErrorException ispossemdef(D, n + 1)
         end
     end
+    D = Diagonal(-areal)
+    for testrank in 0:n
+        @test !ispossemdef(D, testrank)
+    end
+    D = Diagonal(areal + areal*im)
+    for testrank in 0:n
+        @test !ispossemdef(D, testrank)
+    end
 end
 
 @testset "getindex" begin
