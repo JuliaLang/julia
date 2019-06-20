@@ -117,6 +117,7 @@ ishermitian(D::Diagonal) = all(ishermitian, D.diag)
 issymmetric(D::Diagonal{<:Number}) = true
 issymmetric(D::Diagonal) = all(issymmetric, D.diag)
 isposdef(D::Diagonal) = all(isposdef, D.diag)
+ispossemdef(D::Diagonal, k::Int) = !(0 <= k <= length(D.diag)) ? error("rank must be in [0, n]") : isreal(D.diag) && sum(real.(D.diag) .> 0) == k
 
 factorize(D::Diagonal) = D
 

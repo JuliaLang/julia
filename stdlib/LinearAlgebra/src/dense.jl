@@ -92,6 +92,52 @@ isposdef(A::AbstractMatrix) =
     ishermitian(A) && isposdef(cholesky(Hermitian(A); check = false))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
+"""
+ispossemdef(A, k) -> Bool
+
+Test whether a matrix is positive semi-definite with specified rank `k` by
+checking that `k` of its eigenvalues are positive and the rest are zero.
+
+# Examples
+```jldoctest
+julia> A = [1 0; 0 0]
+2×2 Array{Int64,2}:
+ 1  0
+ 0  0
+
+julia> ispossemdef(A, 1)
+true
+
+julia> ispossemdef(A, 2)
+false
+"""
+function ispossemdef(X::AbstractMatrix, k::Int;
+                     atol::Real = 0.0,
+                     rtol::Real = (size(X, 1)*eps(real(float(one(eltype(X))))))*iszero(atol))
+    !ishermitian(X) && return false
+    !(0 <= k <= size(X, 1)) && error("rank must be in [0, n]")
+    eigs = eigvals(X)    #  eigenvalues of X in ascending order
+    tol = max(atol, rtol * eigs[end])
+    return _k_positive_eigenvalues(eigs, k, tol)
+end
+function ispossemdef(X::Number, k::Int)
+    !(0 <= k <= 1) && error("rank must be in [0, n]")
+    if k == 0
+        return !isposdef(X)
+    elseif k == 1
+        return isposdef(X)
+    end
+end
+
+function _k_positive_eigenvalues(eigs::Vector{<: Real}, k::Int, tol::Real)
+    #  assumes but does not check that eigs is sorted in ascending order
+    z = eigs[1:(end - k)]       #  the values that should be zero
+    p = eigs[(end - k + 1):end] #  the values that should be positive
+    n_minus_k_zero_eigenvalues = norm(z, Inf) <= tol
+    k_positive_eigenvalues     = all(p .> tol)
+    return n_minus_k_zero_eigenvalues & k_positive_eigenvalues
+end
+
 function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasFloat,TI<:Integer}
     if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError(x, rx))

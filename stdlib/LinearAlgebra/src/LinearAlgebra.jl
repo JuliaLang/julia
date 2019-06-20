@@ -90,6 +90,7 @@ export
     ishermitian,
     isposdef,
     isposdef!,
+    ispossemdef,
     issuccess,
     issymmetric,
     istril,
