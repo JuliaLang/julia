@@ -377,6 +377,12 @@ end
     @test tryparse(Float32, "32o") === nothing
 end
 
+@testset "tryparse invalid chars" begin
+    # #32314: tryparse shouldn't throw, even given strings with invalid Chars
+    @test tryparse(UInt8, "\xb5")    === nothing
+    @test tryparse(UInt8, "100\xb5") === nothing  # Code path for numeric overflow
+end
+
 import Unicode
 
 @testset "issue #10994: handle embedded NUL chars for string parsing" begin
