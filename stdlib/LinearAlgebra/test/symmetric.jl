@@ -88,6 +88,8 @@ end
             @testset "Unary minus for Symmetric/Hermitian matrices" begin
                 @test (-Symmetric(asym))::typeof(Symmetric(asym)) == -asym
                 @test (-Hermitian(aherm))::typeof(Hermitian(aherm)) == -aherm
+                @test (-Symmetric(Symmetric(ones(Bool, 1, 1)))) == Symmetric(-ones(Bool, 1, 1))
+                @test (-Hermitian(Symmetric(ones(Bool, 1, 1)))) == Hermitian(-ones(Bool, 1, 1))
             end
 
             @testset "Addition and subtraction for Symmetric/Hermitian matrices" begin
