@@ -78,6 +78,13 @@ using .Iterators: zip, enumerate
 using .Iterators: Flatten, Filter, product  # for generators
 include("namedtuple.jl")
 
+ntuple(f, ::Val{0}) = ()
+ntuple(f, ::Val{1}) = (@_inline_meta; (f(1),))
+ntuple(f, ::Val{2}) = (@_inline_meta; (f(1), f(2)))
+ntuple(f, ::Val{3}) = (@_inline_meta; (f(1), f(2), f(3)))
+ntuple(f, ::Val{n}) where {n} = ntuple(f, n::Int)
+ntuple(f, n) = (Any[f(i) for i = 1:n]...,)
+
 # core docsystem
 include("docs/core.jl")
 
