@@ -59,7 +59,7 @@ end
         update!(+, h, j, 1)
     end
     for i=0:600
-        @test (get(h, i, 0) == ((iseven(i) + rem(i, 3))==0))
+        @test (get(h, i, 0) == (!iseven(i) + (rem(i, 3)==0)))
     end
     empty!(h)
 
