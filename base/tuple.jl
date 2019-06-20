@@ -14,6 +14,11 @@ true
 """
 NTuple
 
+# convenience function for extracting N from a Tuple (if defined)
+# else return `nothing` for anything else given (such as Vararg or other non-sized Union)
+_counttuple(::Type{<:NTuple{N,Any}}) where {N} = N
+_counttuple(::Type) = nothing
+
 ## indexing ##
 
 length(@nospecialize t::Tuple) = nfields(t)
