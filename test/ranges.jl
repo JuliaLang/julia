@@ -422,10 +422,10 @@ end
     end
 end
 @testset "indexing range with empty range (#4309)" begin
-    @test (3:6)[5:4] == 7:6
+    @test (3:6)[5:4] === 7:6
     @test_throws BoundsError (3:6)[5:5]
     @test_throws BoundsError (3:6)[5]
-    @test (0:2:10)[7:6] == 12:2:10
+    @test (0:2:10)[7:6] === 12:2:10
     @test_throws BoundsError (0:2:10)[7:7]
 end
 # indexing with negative ranges (#8351)
@@ -1479,11 +1479,11 @@ end
         for stops in [-2, 0, 2, 100]
             for lengths in [2, 10, 100]
                 if stops >= starts
-                    @test range(starts, stops, length=lengths) == range(starts, stop=stops, length=lengths)
+                    @test range(starts, stops, length=lengths) === range(starts, stop=stops, length=lengths)
                 end
             end
             for steps in [0.01, 1, 2]
-                @test range(starts, stops, step=steps) == range(starts, stop=stops, step=steps)
+                @test range(starts, stops, step=steps) === range(starts, stop=stops, step=steps)
             end
         end
     end

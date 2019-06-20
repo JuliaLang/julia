@@ -35,6 +35,12 @@ let a=[1:10;]
 end
 @test sum(randperm(6)) == 21
 
+# Compare ranges by comparing their `first` and `last` elements and their `length`. This
+# returns `false` if empty ranges have different startpoints, which is relevant for
+# `searchsorted`
+==ᵣ(r::AbstractRange, s::AbstractRange) =
+    (first(r) == first(s)) & (length(r) == length(s)) & (last(r) == last(s))
+
 @testset "searchsorted" begin
     numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
                 UInt8, UInt16, UInt32, UInt64, UInt128,
@@ -46,16 +52,16 @@ end
     @test searchsorted(fill(1, 15), 1, 6, 10, Forward) == 6:10
 
     for R in numTypes, T in numTypes
-        @test searchsorted(R[1, 1, 2, 2, 3, 3], T(0)) == 1:0
+        @test searchsorted(R[1, 1, 2, 2, 3, 3], T(0)) === 1:0
         @test searchsorted(R[1, 1, 2, 2, 3, 3], T(1)) == 1:2
         @test searchsorted(R[1, 1, 2, 2, 3, 3], T(2)) == 3:4
-        @test searchsorted(R[1, 1, 2, 2, 3, 3], T(4)) == 7:6
-        @test searchsorted(R[1, 1, 2, 2, 3, 3], 2.5) == 5:4
+        @test searchsorted(R[1, 1, 2, 2, 3, 3], T(4)) === 7:6
+        @test searchsorted(R[1, 1, 2, 2, 3, 3], 2.5) === 5:4
 
-        @test searchsorted(1:3, T(0)) == 1:0
+        @test searchsorted(1:3, T(0)) ==ᵣ 1:0
         @test searchsorted(1:3, T(1)) == 1:1
         @test searchsorted(1:3, T(2)) == 2:2
-        @test searchsorted(1:3, T(4)) == 4:3
+        @test searchsorted(1:3, T(4)) ==ᵣ 4:3
 
         @test searchsorted(R[1:10;], T(1), by=(x -> x >= 5)) == 1:4
         @test searchsorted(R[1:10;], T(10), by=(x -> x >= 5)) == 5:10
@@ -67,31 +73,31 @@ end
         rg_r = reverse(rg)
         rgv, rgv_r = [rg;], [rg_r;]
         for i = I
-            @test searchsorted(rg,i) == searchsorted(rgv,i)
-            @test searchsorted(rg_r,i,rev=true) == searchsorted(rgv_r,i,rev=true)
+            @test searchsorted(rg,i) === searchsorted(rgv,i)
+            @test searchsorted(rg_r,i,rev=true) === searchsorted(rgv_r,i,rev=true)
         end
     end
 
     rg = 0.0:0.01:1.0
     for i = 2:101
         @test searchsorted(rg, rg[i]) == i:i
-        @test searchsorted(rg, prevfloat(rg[i])) == i:i-1
-        @test searchsorted(rg, nextfloat(rg[i])) == i+1:i
+        @test searchsorted(rg, prevfloat(rg[i])) === i:i-1
+        @test searchsorted(rg, nextfloat(rg[i])) === i+1:i
     end
 
     rg_r = reverse(rg)
     for i = 1:100
         @test searchsorted(rg_r, rg_r[i], rev=true) == i:i
-        @test searchsorted(rg_r, prevfloat(rg_r[i]), rev=true) == i+1:i
-        @test searchsorted(rg_r, nextfloat(rg_r[i]), rev=true) == i:i-1
+        @test searchsorted(rg_r, prevfloat(rg_r[i]), rev=true) === i+1:i
+        @test searchsorted(rg_r, nextfloat(rg_r[i]), rev=true) === i:i-1
     end
 
     @test searchsorted(1:10, 1, by=(x -> x >= 5)) == searchsorted([1:10;], 1, by=(x -> x >= 5))
     @test searchsorted(1:10, 10, by=(x -> x >= 5)) == searchsorted([1:10;], 10, by=(x -> x >= 5))
 
-    @test searchsorted([], 0) == 1:0
-    @test searchsorted([1,2,3], 0) == 1:0
-    @test searchsorted([1,2,3], 4) == 4:3
+    @test searchsorted([], 0) === 1:0
+    @test searchsorted([1,2,3], 0) === 1:0
+    @test searchsorted([1,2,3], 4) === 4:3
 
     @testset "issue 8866" begin
         @test searchsortedfirst(500:1.0:600, -1.0e20) == 1
