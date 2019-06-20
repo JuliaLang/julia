@@ -426,6 +426,9 @@ replace(str::String, pat_repl::Pair{<:Union{Tuple{Vararg{<:AbstractChar}},
         count::Integer=typemax(Int)) =
     replace(str, in(first(pat_repl)) => last(pat_repl), count=count)
 
+_pat_replacer(x) = x
+_free_pat_replacer(x) = nothing
+
 function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     pattern, repl = pat_repl
     count == 0 && return str
@@ -433,6 +436,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     n = 1
     e = lastindex(str)
     i = a = firstindex(str)
+    pattern = _pat_replacer(pattern)
     r = something(findnext(pattern,str,i), 0)
     j, k = first(r), last(r)
     out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
@@ -453,6 +457,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
         j, k = first(r), last(r)
         n += 1
     end
+    _free_pat_replacer(pattern)
     write(out, SubString(str,i))
     String(take!(out))
 end
