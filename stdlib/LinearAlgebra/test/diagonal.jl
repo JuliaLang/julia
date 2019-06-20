@@ -338,6 +338,29 @@ end
     @test !isposdef(Diagonal([[1 0; 0 1], [1 0; 1 1]]))
 end
 
+@testset "ispossemdef" begin
+    areal  = rand(n)/2
+    aimg   = zeros(n)
+    for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
+        ainit = eltya == Int ? rand(1:7, n) : convert(Vector{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
+
+        for truerank in 0:n
+            d = vcat(ainit[1:truerank], zeros(n - truerank))
+            D = Diagonal( shuffle( d ) )
+
+            for testrank in 0:n
+                if testrank == truerank
+                    @test ispossemdef(D, testrank)
+                else
+                    @test !ispossemdef(D, testrank)
+                end
+            end
+            @test_throws ErrorException ispossemdef(D, -1)
+            @test_throws ErrorException ispossemdef(D, n + 1)
+        end
+    end
+end
+
 @testset "getindex" begin
     d = randn(n)
     D = Diagonal(d)

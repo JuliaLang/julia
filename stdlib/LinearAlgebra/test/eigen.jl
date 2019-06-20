@@ -41,6 +41,9 @@ aimg  = randn(n,n)/2
             @test det(a) ≈ det(f)
             @test inv(a) ≈ inv(f)
             @test isposdef(a) == isposdef(f)
+            for testrank in 0:n
+                @test ispossemdef(a, testrank) == ispossemdef(f, testrank)
+            end
             @test eigvals(f) === f.values
             @test eigvecs(f) === f.vectors
             @test Array(f) ≈ a
