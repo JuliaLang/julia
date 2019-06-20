@@ -115,13 +115,13 @@ function ispossemdef(X::AbstractMatrix, k::Int;
                      atol::Real = 0.0,
                      rtol::Real = (size(X, 1)*eps(real(float(one(eltype(X))))))*iszero(atol))
     !ishermitian(X) && return false
-    !(0 <= k <= size(X, 1)) && error("rank must be in [0, n]")
+    !(0 <= k <= size(X, 1)) && error("rank must be between 0 and $(size(X, 1)) (inclusive)")
     eigs = eigvals(X)    #  eigenvalues of X in ascending order
     tol = max(atol, rtol * eigs[end])
     return _k_positive_eigenvalues(eigs, k, tol)
 end
 function ispossemdef(X::Number, k::Int)
-    !(0 <= k <= 1) && error("rank must be in [0, n]")
+    !(0 <= k <= 1) && error("rank must be 0 or 1")
     if k == 0
         return !isposdef(X)
     elseif k == 1

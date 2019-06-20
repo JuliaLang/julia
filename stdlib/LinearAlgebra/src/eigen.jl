@@ -127,7 +127,7 @@ isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(x -> x > 0,
 function ispossemdef(A::Union{Eigen,GeneralizedEigen}, k::Int;
                      atol::Real = 0.0,
                      rtol::Real = (length(A.values)*eps(real(float(one(eltype(A.values))))))*iszero(atol))
-    !(0 <= k <= length(A.values)) && error("rank must be in [0, n]")
+    !(0 <= k <= length(A.values)) && error("rank must be between 0 and $(length(A.values)) (inclusive)")
     return isreal(A.values) && _k_positive_eigenvalues(A.values, k, max(atol, rtol * A.values[end]))
 end
 
