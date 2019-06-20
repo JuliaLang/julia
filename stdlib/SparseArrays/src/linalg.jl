@@ -1028,9 +1028,16 @@ function opnorm(A::SparseMatrixCSC, p::Real=2)
     m, n = size(A)
     if m == 0 || n == 0 || isempty(A)
         return float(real(zero(eltype(A))))
-    elseif m == 1 || n == 1
-        # TODO: compute more efficiently using A.nzval directly
-        return opnorm(Array(A), p)
+    elseif m == 1
+        if p == 1
+            return norm(A.nzval, Inf)
+        elseif p == 2
+            return norm(A.nzval, 2)
+        elseif p == Inf
+            return norm(A.nzval, 1)
+        end
+    elseif n == 1
+        return norm(A.nzval, p)
     else
         Tnorm = typeof(float(real(zero(eltype(A)))))
         Tsum = promote_type(Float64,Tnorm)
