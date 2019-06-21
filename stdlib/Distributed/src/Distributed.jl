@@ -10,7 +10,7 @@ import Base: getindex, wait, put!, take!, fetch, isready, push!, length,
              hash, ==, kill, close, isopen, showerror
 
 # imports for use
-using Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes, wait_connected,
+using Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes,
             VERSION_STRING, binding_module, atexit, julia_exename,
             julia_cmd, AsyncGenerator, acquire, release, invokelatest,
             shell_escape_posixly, uv_error, something, notnothing, isbuffered
@@ -18,7 +18,7 @@ using Base.Threads: Event
 
 using Serialization, Sockets
 import Serialization: serialize, deserialize
-import Sockets: connect
+import Sockets: connect, wait_connected
 
 # NOTE: clusterserialize.jl imports additional symbols from Serialization for use
 

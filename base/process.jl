@@ -319,13 +319,12 @@ mutable struct Process <: AbstractPipe
     err::IO
     exitcode::Int64
     termsignal::Int32
-    exitnotify::Condition
-    closenotify::Condition
+    exitnotify::ThreadSynchronizer
     function Process(cmd::Cmd, handle::Ptr{Cvoid})
         this = new(cmd, handle, devnull, devnull, devnull,
                    typemin(fieldtype(Process, :exitcode)),
                    typemin(fieldtype(Process, :termsignal)),
-                   Condition(), Condition())
+                   ThreadSynchronizer())
         finalizer(uvfinalize, this)
         return this
     end
@@ -366,14 +365,18 @@ function uv_return_spawn(p::Ptr{Cvoid}, exit_status::Int64, termsignal::Int32)
     proc.termsignal = termsignal
     ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
     proc.handle = C_NULL
-    notify(proc.exitnotify)
+    lock(proc.exitnotify)
+    try
+        notify(proc.exitnotify)
+    finally
+        unlock(proc.exitnotify)
+    end
     nothing
 end
 
 # called when the libuv handle is destroyed
 function _uv_hook_close(proc::Process)
     proc.handle = C_NULL
-    notify(proc.closenotify)
     nothing
 end
 
@@ -855,6 +858,7 @@ error if killing the process failed for other reasons (e.g. insufficient
 permissions).
 """
 function kill(p::Process, signum::Integer)
+    iolock_begin()
     if process_running(p)
         @assert p.handle != C_NULL
         err = ccall(:uv_process_kill, Int32, (Ptr{Cvoid}, Int32), p.handle, signum)
@@ -862,6 +866,8 @@ function kill(p::Process, signum::Integer)
             throw(_UVError("kill", err))
         end
     end
+    iolock_end()
+    nothing
 end
 kill(ps::Vector{Process}) = foreach(kill, ps)
 kill(ps::ProcessChain) = foreach(kill, ps.processes)
@@ -876,16 +882,15 @@ Get the child process ID, if it still exists.
     This function requires at least Julia 1.1.
 """
 function Libc.getpid(p::Process)
+    # TODO: due to threading, this method is no longer synchronized with the user application
+    iolock_begin()
     ppid = Int32(0)
     if p.handle != C_NULL
         ppid = ccall(:jl_uv_process_pid, Int32, (Ptr{Cvoid},), p.handle)
     end
+    iolock_end()
     ppid <= 0 && throw(_UVError("getpid", UV_ESRCH))
     return ppid
-end
-
-function _contains_newline(bufptr::Ptr{Cvoid}, len::Int32)
-    return (ccall(:memchr, Ptr{Cvoid}, (Ptr{Cvoid},Int32,Csize_t), bufptr, '\n', len) != C_NULL)
 end
 
 ## process status ##
@@ -988,8 +993,26 @@ macro cmd(str)
     return :(cmd_gen($(esc(shell_parse(str, special=shell_special)[1]))))
 end
 
-wait(x::Process)      = if !process_exited(x); stream_wait(x, x.exitnotify); end
-wait(x::ProcessChain) = for p in x.processes; wait(p); end
+function wait(x::Process)
+    process_exited(x) && return
+    iolock_begin()
+    if !process_exited(x)
+        preserve_handle(x)
+        lock(x.exitnotify)
+        iolock_end()
+        try
+            wait(x.exitnotify)
+        finally
+            unlock(x.exitnotify)
+            unpreserve_handle(x)
+        end
+    else
+        iolock_end()
+    end
+    nothing
+end
+
+wait(x::ProcessChain) = foreach(wait, x.processes)
 
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
 

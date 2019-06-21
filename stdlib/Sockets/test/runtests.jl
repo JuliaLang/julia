@@ -142,15 +142,20 @@ defaultport = rand(2000:4000)
 
     mktempdir() do tmpdir
         socketname = Sys.iswindows() ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
-        s = listen(socketname)
-        tsk = @async begin
-            sock = accept(s)
-            write(sock, "Hello World\n")
-            close(s)
-            close(sock)
+        local nconn = 0
+        srv = listen(socketname)
+        t = accept(srv) do client
+            write(client, "Hello World $(nconn += 1)\n")
+            close(client)
+            nconn == 3 && Base.wait_close(srv)
         end
-        @test read(connect(socketname), String) == "Hello World\n"
-        wait(tsk)
+        @test read(connect(socketname), String) == "Hello World 1\n"
+        @test read(connect(socketname), String) == "Hello World 2\n"
+        @test read(connect(socketname), String) == "Hello World 3\n"
+        conn = connect(socketname)
+        close(srv)
+        wait(t)
+        @test read(conn, String) == ""
     end
 end
 
@@ -240,41 +245,68 @@ end
         bind(b, ip"127.0.0.1", randport + 1)
 
         @sync begin
-            # FIXME: check that we received all messages
-            for i = 1:3
-                @async send(b, ip"127.0.0.1", randport, "Hello World")
-                @async String(recv(a)) == "Hello World"
+            let i = 0
+                for _ = 1:30
+                    @async let msg = String(recv(a))
+                        @test msg == "Hello World $(i += 1)"
+                    end
+                end
+            end
+            yield()
+            for i = 1:30
+                send(b, ip"127.0.0.1", randport, "Hello World $i")
             end
         end
-
-        tsk = @async send(b, ip"127.0.0.1", randport, "Hello World")
-        (addr, data) = recvfrom(a)
-        @test addr == ip"127.0.0.1" && String(data) == "Hello World"
-        wait(tsk)
+        let msg = Vector{UInt8}("fedcba9876543210"^36) # The minimum reassembly buffer size for IPv4 is 576 bytes
+            tsk = @async @test recv(a) == msg
+            @test send(b, ip"127.0.0.1", randport, msg) === nothing
+            wait(tsk)
+        end
+        let msg = Vector{UInt8}("1234"^16377) # The maximum size of an IPv4 datagram is 65535 bytes, including the header
+            @test_throws(Base._UVError("send", Base.UV_EMSGSIZE),
+                         send(b, ip"127.0.0.1", randport, msg))
+            pop!(msg)
+            tsk = @async recv(a)
+            try
+                send(b, ip"127.0.0.1", randport, msg)
+            catch ex
+                if !(ex isa Base.IOError && ex.code == Base.UV_EMSGSIZE) || Sys.islinux() || Sys.iswindows()
+                    # this is allowed failure on some platforms which might further restrict
+                    # the maximum packet size being sent (even locally), such as BSD's `sysctl net.inet.udp.maxdgram`
+                    rethrow()
+                end
+                empty!(msg)
+                send(b, ip"127.0.0.1", randport, msg) # check that the socket is still alive
+            end
+            @test fetch(tsk) == msg
+        end
+        let tsk = @async send(b, ip"127.0.0.1", randport, "WORLD HELLO")
+            (addr, data) = recvfrom(a)
+            @test addr == ip"127.0.0.1" && String(data) == "WORLD HELLO"
+            wait(tsk)
+        end
         close(a)
         close(b)
     end
 
     @test_throws MethodError bind(UDPSocket(), randport)
 
-    if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     let
         a = UDPSocket()
         b = UDPSocket()
         bind(a, ip"::1", UInt16(randport))
         bind(b, ip"::1", UInt16(randport + 1))
 
-        tsk = @async begin
-            @test begin
-                (addr, data) = recvfrom(a)
-                addr == ip"::1" && String(data) == "Hello World"
+        for i = 1:3
+            tsk = @async begin
+                let (addr, data) = recvfrom(a)
+                    @test addr == ip"::1"
+                    @test String(data) == "Hello World"
+                end
             end
+            send(b, ip"::1", randport, "Hello World")
+            wait(tsk)
         end
-        send(b, ip"::1", randport, "Hello World")
-        wait(tsk)
-        send(b, ip"::1", randport, "Hello World")
-        wait(tsk)
-    end
     end
 end
 
