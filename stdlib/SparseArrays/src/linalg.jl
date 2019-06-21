@@ -1030,14 +1030,14 @@ function opnorm(A::SparseMatrixCSC, p::Real=2)
         return float(real(zero(eltype(A))))
     elseif m == 1
         if p == 1
-            return norm(A.nzval, Inf)
+            return norm(nzvalview(A), Inf)
         elseif p == 2
-            return norm(A.nzval, 2)
+            return norm(nzvalview(A), 2)
         elseif p == Inf
-            return norm(A.nzval, 1)
+            return norm(nzvalview(A), 1)
         end
     elseif n == 1 && p in (1, 2, Inf)
-        return norm(A.nzval, p)
+        return norm(nzvalview(A), p)
     else
         Tnorm = typeof(float(real(zero(eltype(A)))))
         Tsum = promote_type(Float64,Tnorm)
