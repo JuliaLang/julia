@@ -732,7 +732,8 @@ like a process providing an interactive prompt.
 
 Finally, if `DummyModule.jl` is not a standalone file but a package, then `using
 DummyModule` will _load_ `DummyModule.jl` on all processes, but only bring it into scope on
-the process where `using` was called.
+the process where `using` was called. Use the `JULIA_PROJECT` environment variable to load a
+package that is available only in a certain project.
 
 ## Starting and managing worker processes
 
