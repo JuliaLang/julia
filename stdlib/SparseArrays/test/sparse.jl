@@ -1809,12 +1809,14 @@ end
     @test opnorm(colM, 1) ≈ opnorm(Array(colM), 1)
     @test opnorm(colM) ≈ opnorm(Array(colM))
     @test opnorm(colM, Inf) ≈ opnorm(Array(colM), Inf)
+    @test_throws ArgumentError opnorm(colM, 3)
 
     # Test (1 x n) sparse matrix
     rowM = sprandn(1, 10, 0.6)
     @test opnorm(rowM, 1) ≈ opnorm(Array(rowM), 1)
     @test opnorm(rowM) ≈ opnorm(Array(rowM))
     @test opnorm(rowM, Inf) ≈ opnorm(Array(rowM), Inf)
+    @test_throws ArgumentError opnorm(rowM, 3)
 end
 
 @testset "sparse matrix cond" begin

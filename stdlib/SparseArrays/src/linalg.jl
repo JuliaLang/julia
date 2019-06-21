@@ -1036,7 +1036,7 @@ function opnorm(A::SparseMatrixCSC, p::Real=2)
         elseif p == Inf
             return norm(A.nzval, 1)
         end
-    elseif n == 1
+    elseif n == 1 && p in (1, 2, Inf)
         return norm(A.nzval, p)
     else
         Tnorm = typeof(float(real(zero(eltype(A)))))
