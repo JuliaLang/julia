@@ -343,10 +343,12 @@ static int sleep_check_after_threshold(uint64_t *start_cycles)
 /* ensure thread tid is awake if necessary */
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
 {
-    int16_t self = jl_get_ptls_states()->tid;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    int16_t self = ptls->tid;
     int16_t uvlock = jl_atomic_load_acquire(&jl_uv_mutex.owner);
     if (tid == self) {
         // we're already awake, but make sure we'll exit uv_run
+        jl_atomic_store(&ptls->sleep_check_state, not_sleeping);
         if (uvlock == self)
             uv_stop(jl_global_event_loop());
     }
