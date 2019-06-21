@@ -265,6 +265,7 @@ end
 end
 
 @testset "Array notation" begin
+    # flisp: (in expand-table)
     @testset "Literals" begin
         @test_desugar [a,b]     Top.vect(a,b)
         @test_desugar T[a,b]    Top.getindex(T, a,b)  # Only so much syntax to go round :-/
@@ -295,6 +296,8 @@ end
 
 @testset "Splatting" begin
     @test_desugar f(i,j,v...,k)  Core._apply(f, Core.tuple(i,j), v, Core.tuple(k))
+
+    @test_desugar_error x...  "\"...\" expression outside call"
 end
 
 @testset "Comparison chains" begin
@@ -350,7 +353,7 @@ end
     )
 end
 
-@testset "Short circuit , ternary" begin
+@testset "Short circuit; ternary" begin
     # flisp: (expand-or) (expand-and)
     @test_desugar a || b      if a; a else b end
     @test_desugar a && b      if a; b else false end
@@ -363,9 +366,12 @@ end
     # when used as operators
     @test_desugar a <: b  $(Expr(:call, :(<:), :a, :b))
     @test_desugar a >: b  $(Expr(:call, :(>:), :a, :b))
+
+    @test_desugar_error $(Expr(:$, :x)) "\"\$\" expression outside quote"
 end
 
 @testset "Broadcast" begin
+    # flisp: (expand-fuse-broadcast)
     # Basic
     @test_desugar x .+ y        Top.materialize(Top.broadcasted(+, x, y))
     @test_desugar f.(x)         Top.materialize(Top.broadcasted(f, x))
@@ -393,7 +399,7 @@ end
     @test_desugar x .+= a       Top.materialize!(x, Top.broadcasted(+, x, a))
 end
 
-@testset "Keyword arguments" begin
+@testset "Call with keyword arguments" begin
     @test_desugar(
         f(x,a=1),
         begin
@@ -1002,4 +1008,88 @@ end
     @test expand_forms(QuoteNode(Expr(:$, :x))) == QuoteNode(Expr(:$, :x)) # flisp: `(inert ,expr)
     @test expand_forms(LineNumberNode(1, :foo)) == LineNumberNode(1, :foo) # flisp: `(line ,line ,file)
 end
+
+
+# flisp entry points for desugaring various forms. Many of these are inlined
+# into expand-table.
+#
+# function             expand-function-def
+# ->                   expand-arrow
+# let                  expand-let
+# macro                expand-macro-def
+# struct               expand-struct-def
+# try                  expand-try
+# lambda               expand-table
+# block                expand-table
+# |.|                  expand-fuse-broadcast
+# .=                   expand-fuse-broadcast
+# |<:|                 expand-table
+# |>:|                 expand-table
+# where                expand-wheres
+# const                expand-const-decl
+# local                expand-local-or-global-decl
+# global               expand-local-or-global-decl
+# local-def            expand-local-or-global-decl
+# =                    expand-table
+# abstract             expand-table
+# primitive            expand-table
+# comparison           expand-compare-chain
+# ref                  partially-expand-ref
+# curly                expand-table
+# call                 expand-table
+# do                   expand-table
+# tuple                lower-named-tuple
+# braces               expand-table
+# bracescat            expand-table
+# string               expand-table
+# ::                   expand-table
+# while                expand-table
+# break                expand-table
+# continue             expand-table
+# for                  expand-for
+# &&                   expand-and
+# ||                   expand-or
+# +=                   lower-update-op
+# -=                   lower-update-op
+# *=                   lower-update-op
+# .*=                  lower-update-op
+# /=                   lower-update-op
+# ./=                  lower-update-op
+# //=                  lower-update-op
+# .//=                 lower-update-op
+# |\\=|                lower-update-op
+# |.\\=|               lower-update-op
+# |.+=|                lower-update-op
+# |.-=|                lower-update-op
+# ^=                   lower-update-op
+# .^=                  lower-update-op
+# ÷=                   lower-update-op
+# .÷=                  lower-update-op
+# %=                   lower-update-op
+# .%=                  lower-update-op
+# |\|=|                lower-update-op
+# |.\|=|               lower-update-op
+# &=                   lower-update-op
+# .&=                  lower-update-op
+# $=                   lower-update-op
+# ⊻=                   lower-update-op
+# .⊻=                  lower-update-op
+# <<=                  lower-update-op
+# .<<=                 lower-update-op
+# >>=                  lower-update-op
+# .>>=                 lower-update-op
+# >>>=                 lower-update-op
+# .>>>=                lower-update-op
+# |...|                expand-table
+# $                    expand-table
+# vect                 expand-table
+# hcat                 expand-table
+# vcat                 expand-table
+# typed_hcat           expand-table
+# typed_vcat           expand-table
+# |'|                  expand-table
+# generator            expand-generator
+# flatten              expand-generator
+# comprehension        expand-table
+# typed_comprehension  lower-comprehension
 
