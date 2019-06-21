@@ -665,7 +665,7 @@ end
     @test typeof(log(A13)) == Array{elty, 2}
 
     T = elty == Float64 ? Symmetric : Hermitian
-    @test typeof(log(T(A13))) == T{elty, Array{elty, 2}, Array{elty, 2}}
+    @test typeof(log(T(A13))) == T{elty, Array{elty, 2}}
 
     A1  = convert(Matrix{elty}, [4 2 0; 1 4 1; 1 1 4])
     logA1 = convert(Matrix{elty}, [1.329661349 0.5302876358 -0.06818951543;

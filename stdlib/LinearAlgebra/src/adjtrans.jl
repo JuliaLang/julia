@@ -32,13 +32,12 @@ julia> adjoint(A)
  9-2im  4-6im
 ```
 """
-struct Adjoint{T,S,B} <: AbstractWrappedArray{T,2,S,B}
+struct Adjoint{T,S} <: AbstractWrappedArray{T,2,S}
     parent::S
-    function Adjoint{T,S,B}(A::S) where {T,S,B}
+    function Adjoint{T,S}(A::S) where {T,S}
         checkeltype_adjoint(T, eltype(A))
         new(A)
     end
-    Adjoint{T,S}(A::S) where {T,S} = Adjoint{T,S,basetype(S)}(A)
 end
 """
     Transpose
@@ -64,13 +63,12 @@ julia> transpose(A)
  9+2im  4+6im
 ```
 """
-struct Transpose{T,S,B} <: AbstractWrappedArray{T,2,S,B}
+struct Transpose{T,S} <: AbstractWrappedArray{T,2,S}
     parent::S
-    function Transpose{T,S,B}(A::S) where {T,S,B}
+    function Transpose{T,S}(A::S) where {T,S}
         checkeltype_transpose(T, eltype(A))
         new(A)
     end
-    Transpose{T,S}(A::S) where {T,S} = Transpose{T,S,basetype(S)}(A)
 end
 
 function checkeltype_adjoint(::Type{ResultEltype}, ::Type{ParentEltype}) where {ResultEltype,ParentEltype}

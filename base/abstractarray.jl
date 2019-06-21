@@ -2228,7 +2228,8 @@ function hash(A::AbstractArray, h::UInt)
 end
 
 """
-    AbstractWrappedArray{T,N,P,B}
+    AbstractWrappedArray{T,N,P}
+    AbstractWrappedMatrix{T,P} = AbstractWrappedArray{T,2,P}
 
 Supertype for `N`-dimensional array-like types with elements of type `T` which are
 'wrapping' another [`AbstractArray`](@ref) of type `P`. The ultimate unwrapped base
@@ -2237,7 +2238,8 @@ type is `B`.
 of this. Main purpose of this type is to allow for dispatching on `B`, which is
 appropriate for sparse arrays. Typically `B == basetype(P)`.
 """
-abstract type AbstractWrappedArray{T,N,P,S} <: AbstractArray{T,N}; end
+abstract type AbstractWrappedArray{T,N,P} <: AbstractArray{T,N}; end
+const AbstractWrappedMatrix{T,P} = AbstractWrappedArray{T,2,P}
 
 """
     basetype(::Type)
@@ -2245,5 +2247,5 @@ abstract type AbstractWrappedArray{T,N,P,S} <: AbstractArray{T,N}; end
 Return the base type of an `AbstractWrappedArray`, the type itself otherwise.
 """
 
-basetype(::Type{<:AbstractWrappedArray{T,N,X,S}}) where {T,N,X,S} = S
+basetype(::Type{<:AbstractWrappedArray{T,N,P}}) where {T,N,P} = basetype(P)
 basetype(::Type{P}) where P = P

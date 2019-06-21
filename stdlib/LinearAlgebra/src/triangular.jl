@@ -3,22 +3,19 @@
 ## Triangular
 
 # could be renamed to Triangular when that name has been fully deprecated
-abstract type AbstractTriangular{T,S<:AbstractMatrix,B} <: AbstractWrappedArray{T,2,S,B} end
+abstract type AbstractTriangular{T,S<:AbstractMatrix} <: AbstractWrappedArray{T,2,S} end
 
 # First loop through all methods that don't need special care for upper/lower and unit diagonal
 for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
           :UnitUpperTriangular)
     @eval begin
-        struct $t{T,S<:AbstractMatrix{T},B} <: AbstractTriangular{T,S,B}
+        struct $t{T,S<:AbstractMatrix{T}} <: AbstractTriangular{T,S}
             data::S
 
-            function $t{T,S,B}(data) where {T,S<:AbstractMatrix{T},B}
+            function $t{T,S}(data) where {T,S<:AbstractMatrix{T}}
                 require_one_based_indexing(data)
                 checksquare(data)
                 new(data)
-            end
-            function $t{T,S}(data) where {T,S<:AbstractMatrix{T}}
-                ($t){T,S,basetype(S)}(data)
             end
         end
         $t(A::$t) = A

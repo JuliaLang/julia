@@ -31,7 +31,7 @@ using Test, LinearAlgebra, SparseArrays
     intvecvec = [[1, 2], [3, 4]]
     intmatmat = [[[1 2]] [[3 4]] [[5 6]]; [[7 8]] [[9 10]] [[11 12]]]
     @test (X = Adjoint{Adjoint{Int,Vector{Int}},Vector{Vector{Int}}}(intvecvec);
-            isa(X, Adjoint{Adjoint{Int,Vector{Int}}}) && X.parent === intvecvec)
+            isa(X, Adjoint{Adjoint{Int,Vector{Int}},Vector{Vector{Int}}}) && X.parent === intvecvec)
     @test (X = Adjoint{Adjoint{Int,Matrix{Int}},Matrix{Matrix{Int}}}(intmatmat);
             isa(X, Adjoint{Adjoint{Int,Matrix{Int}},Matrix{Matrix{Int}}}) && X.parent === intmatmat)
     @test (X = Transpose{Transpose{Int,Vector{Int}},Vector{Vector{Int}}}(intvecvec);
@@ -63,10 +63,10 @@ end
 
 @testset "Adjoint and Transpose add additional layers to already-wrapped objects" begin
     intvec, intmat = [1, 2], [1 2; 3 4]
-    @test (A = Adjoint(Adjoint(intvec))::Adjoint{Int,<:Adjoint{Int,Vector{Int}}}; A.parent.parent === intvec)
-    @test (A = Adjoint(Adjoint(intmat))::Adjoint{Int,<:Adjoint{Int,Matrix{Int}}}; A.parent.parent === intmat)
-    @test (A = Transpose(Transpose(intvec))::Transpose{Int,<:Transpose{Int,Vector{Int}}}; A.parent.parent === intvec)
-    @test (A = Transpose(Transpose(intmat))::Transpose{Int,<:Transpose{Int,Matrix{Int}}}; A.parent.parent === intmat)
+    @test (A = Adjoint(Adjoint(intvec))::Adjoint{Int,Adjoint{Int,Vector{Int}}}; A.parent.parent === intvec)
+    @test (A = Adjoint(Adjoint(intmat))::Adjoint{Int,Adjoint{Int,Matrix{Int}}}; A.parent.parent === intmat)
+    @test (A = Transpose(Transpose(intvec))::Transpose{Int,Transpose{Int,Vector{Int}}}; A.parent.parent === intvec)
+    @test (A = Transpose(Transpose(intmat))::Transpose{Int,Transpose{Int,Matrix{Int}}}; A.parent.parent === intmat)
 end
 
 @testset "Adjoint and Transpose basic AbstractArray functionality" begin
@@ -290,8 +290,8 @@ end
     @test hcat(Transpose(vec), Transpose(vec))::Transpose{Complex{Int},Vector{Complex{Int}}} == hcat(tvec, tvec)
     @test hcat(Transpose(vec), 1, Transpose(vec))::Transpose{Complex{Int},Vector{Complex{Int}}} == hcat(tvec, 1, tvec)
     # for arrays with concrete array eltype
-    @test hcat(Adjoint(vecvec), Adjoint(vecvec))::Adjoint{<:Adjoint{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == hcat(avecvec, avecvec)
-    @test hcat(Transpose(vecvec), Transpose(vecvec))::Transpose{<:Transpose{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == hcat(tvecvec, tvecvec)
+    @test hcat(Adjoint(vecvec), Adjoint(vecvec))::Adjoint{Adjoint{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == hcat(avecvec, avecvec)
+    @test hcat(Transpose(vecvec), Transpose(vecvec))::Transpose{Transpose{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == hcat(tvecvec, tvecvec)
 end
 
 @testset "map/broadcast over Adjoint/Transpose-wrapped vectors and Numbers" begin
@@ -305,26 +305,26 @@ end
     @test map(-, Adjoint(vec))::Adjoint{Complex{Int},Vector{Complex{Int}}} == -avec
     @test map(-, Transpose(vec))::Transpose{Complex{Int},Vector{Complex{Int}}} == -tvec
     # unary map over wrapped vectors with concrete array eltype
-    @test map(-, Adjoint(vecvec))::Adjoint{<:Adjoint{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == -avecvec
-    @test map(-, Transpose(vecvec))::Transpose{<:Transpose{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == -tvecvec
+    @test map(-, Adjoint(vecvec))::Adjoint{Adjoint{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == -avecvec
+    @test map(-, Transpose(vecvec))::Transpose{Transpose{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == -tvecvec
     # binary map over wrapped vectors with concrete scalar eltype
     @test map(+, Adjoint(vec), Adjoint(vec))::Adjoint{Complex{Int},Vector{Complex{Int}}} == avec + avec
     @test map(+, Transpose(vec), Transpose(vec))::Transpose{Complex{Int},Vector{Complex{Int}}} == tvec + tvec
     # binary map over wrapped vectors with concrete array eltype
-    @test map(+, Adjoint(vecvec), Adjoint(vecvec))::Adjoint{<:Adjoint{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == avecvec + avecvec
-    @test map(+, Transpose(vecvec), Transpose(vecvec))::Transpose{<:Transpose{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == tvecvec + tvecvec
+    @test map(+, Adjoint(vecvec), Adjoint(vecvec))::Adjoint{Adjoint{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == avecvec + avecvec
+    @test map(+, Transpose(vecvec), Transpose(vecvec))::Transpose{Transpose{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == tvecvec + tvecvec
     # unary broadcast over wrapped vectors with concrete scalar eltype
     @test broadcast(-, Adjoint(vec))::Adjoint{Complex{Int},Vector{Complex{Int}}} == -avec
     @test broadcast(-, Transpose(vec))::Transpose{Complex{Int},Vector{Complex{Int}}} == -tvec
     # unary broadcast over wrapped vectors with concrete array eltype
-    @test broadcast(-, Adjoint(vecvec))::Adjoint{<:Adjoint{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == -avecvec
-    @test broadcast(-, Transpose(vecvec))::Transpose{<:Transpose{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == -tvecvec
+    @test broadcast(-, Adjoint(vecvec))::Adjoint{Adjoint{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == -avecvec
+    @test broadcast(-, Transpose(vecvec))::Transpose{Transpose{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == -tvecvec
     # binary broadcast over wrapped vectors with concrete scalar eltype
     @test broadcast(+, Adjoint(vec), Adjoint(vec))::Adjoint{Complex{Int},Vector{Complex{Int}}} == avec + avec
     @test broadcast(+, Transpose(vec), Transpose(vec))::Transpose{Complex{Int},Vector{Complex{Int}}} == tvec + tvec
     # binary broadcast over wrapped vectors with concrete array eltype
-    @test broadcast(+, Adjoint(vecvec), Adjoint(vecvec))::Adjoint{<:Adjoint{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == avecvec + avecvec
-    @test broadcast(+, Transpose(vecvec), Transpose(vecvec))::Transpose{<:Transpose{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == tvecvec + tvecvec
+    @test broadcast(+, Adjoint(vecvec), Adjoint(vecvec))::Adjoint{Adjoint{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == avecvec + avecvec
+    @test broadcast(+, Transpose(vecvec), Transpose(vecvec))::Transpose{Transpose{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == tvecvec + tvecvec
     # trinary broadcast over wrapped vectors with concrete scalar eltype and numbers
     @test broadcast(+, Adjoint(vec), 1, Adjoint(vec))::Adjoint{Complex{Int},Vector{Complex{Int}}} == avec + avec .+ 1
     @test broadcast(+, Transpose(vec), 1, Transpose(vec))::Transpose{Complex{Int},Vector{Complex{Int}}} == tvec + tvec .+ 1

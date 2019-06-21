@@ -5,18 +5,15 @@ const ViewIndex = Union{Real, AbstractArray}
 const ScalarIndex = Real
 
 # L is true if the view itself supports fast linear indexing
-struct SubArray{T,N,P,I,L,B} <: AbstractWrappedArray{T,N,P,B}
+struct SubArray{T,N,P,I,L} <: AbstractWrappedArray{T,N,P}
     parent::P
     indices::I
     offset1::Int       # for linear indexing and pointer, only valid when L==true
     stride1::Int       # used only for linear indexing
-    function SubArray{T,N,P,I,L,B}(parent, indices, offset1, stride1) where {T,N,P,I,L,B}
+    function SubArray{T,N,P,I,L}(parent, indices, offset1, stride1) where {T,N,P,I,L}
         @_inline_meta
         check_parent_index_match(parent, indices)
-        new{T,N,P,I,L,B}(parent, indices, offset1, stride1)
-    end
-    function SubArray{T,N,P,I,L}(parent, indices, offset1, stride1) where {T,N,P,I,L}
-        SubArray{T,N,P,I,L,basetype(P)}(parent, indices, offset1, stride1)
+        new{T,N,P,I,L}(parent, indices, offset1, stride1)
     end
 end
 # Compute the linear indexability of the indices, and combine it with the linear indexing of the parent
