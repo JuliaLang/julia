@@ -58,10 +58,12 @@ function test_repr(x::String)
     # strings get converted to string Exprs by the first show().
     # This could produce a few false positives, but until string
     # interpolation works we don't really have a choice.
+    #
+    # Rectification: comparing x1 and x2 seems to be working
     x1 = Meta.parse(x)
     x2 = eval(Meta.parse(repr(x1)))
     x3 = eval(Meta.parse(repr(x2)))
-    if x3 != x1
+    if ! (x1 == x2 == x3)
         error(string(
             "repr test failed:",
             "\noriginal: ", x,
@@ -69,6 +71,7 @@ function test_repr(x::String)
             "\n\nreparsed: ", x3, "\n", sprint(dump, x3)
             ))
     end
+    @test x1 == x2 == x3
 end
 
 # primitive types
@@ -143,9 +146,29 @@ end
 @test_repr "import A: a, x, y.z"
 @test_repr "import A.B.C: a, x, y.z"
 @test_repr "import ..A: a, x, y.z"
+@test_repr "import A.B, C.D"
 
 @test repr(Expr(:using, :Foo)) == ":(\$(Expr(:using, :Foo)))"
 @test repr(Expr(:using, Expr(:(.), ))) == ":(\$(Expr(:using, :(\$(Expr(:.))))))"
+@test repr(Expr(:import, :Foo)) == ":(\$(Expr(:import, :Foo)))"
+@test repr(Expr(:import, Expr(:(.), ))) == ":(\$(Expr(:import, :(\$(Expr(:.))))))"
+
+@test repr(Expr(:using, Expr(:(.), :A))) == ":(using A)"
+@test repr(Expr(:using, Expr(:(.), :A),
+                        Expr(:(.), :B))) == ":(using A, B)"
+@test repr(Expr(:using, Expr(:(.), :A),
+                        Expr(:(.), :B, :C),
+                        Expr(:(.), :D))) == ":(using A, B.C, D)"
+@test repr(Expr(:using, Expr(:(.), :A, :B),
+                        Expr(:(.), :C, :D))) == ":(using A.B, C.D)"
+@test repr(Expr(:import, Expr(:(.), :A))) == ":(import A)"
+@test repr(Expr(:import, Expr(:(.), :A),
+                         Expr(:(.), :B))) == ":(import A, B)"
+@test repr(Expr(:import, Expr(:(.), :A),
+                         Expr(:(.), :B, :(C)),
+                         Expr(:(.), :D))) == ":(import A, B.C, D)"
+@test repr(Expr(:import, Expr(:(.), :A, :B),
+                         Expr(:(.), :C, :D))) == ":(import A.B, C.D)"
 
 # range syntax
 @test_repr "1:2"
@@ -769,6 +792,21 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T,N}, indices::Vararg{$Int,N})")
 @test_repr "{a b c}"
 @test_repr "{a b; c d}"
 
+# typed vcat and hcat
+@test_repr "T[a]"
+@test_repr "T[a,b]"
+@test_repr "T[a;b;c]"
+@test_repr "T[a b]"
+@test_repr "T[a b;]"
+@test_repr "T[a b c]"
+@test_repr "T[a b; c d]"
+@test_repr repr(Expr(:quote, Expr(:typed_vcat, Expr(:$, :a), 1)))
+@test_repr repr(Expr(:quote, Expr(:typed_hcat, Expr(:$, :a), 1)))
+@test_repr "Expr(:quote, Expr(:typed_vcat, Expr(:\$, :a), 1))"
+@test_repr "Expr(:quote, Expr(:typed_hcat, Expr(:\$, :a), 1))"
+@test repr(Expr(:quote, Expr(:typed_vcat, Expr(:$, :a), 1))) == ":(:(\$a[1;]))"
+@test repr(Expr(:quote, Expr(:typed_hcat, Expr(:$, :a), 1))) == ":(:(\$a[1]))"
+
 # Printing of :(function f end)
 @test sprint(show, :(function f end)) == ":(function f end)"
 @test_repr "function g end"
@@ -789,6 +827,220 @@ end"""
         \$a + \$b
     end
 end"""
+@test repr(Meta.parse(
+"""macro m(a, b)
+    quote
+        \$a + \$b
+    end
+end""")) ==
+"""
+:(macro m(a, b)
+      #= none:2 =#
+      quote
+          #= none:3 =#
+          \$a + \$b
+      end
+  end)"""
+@test repr(Base.remove_linenums!(Meta.parse(
+"""macro m(a, b)
+    quote
+        \$a + \$b
+    end
+end"""))) ==
+"""
+:(macro m(a, b)
+      :(\$a + \$b)
+  end)"""
+@test repr(Meta.parse(
+"""macro m(a, b)
+    :(\$a + \$b)
+end""")) ==
+":(macro m(a, b)\n      #= none:2 =#\n      :(\$a + \$b)\n  end)"
+@test repr(Expr(:macro, Expr(:call, :m, :x), Expr(:quote, Expr(:call, :+, Expr(:($), :x), 1)))) ==
+":(macro m(x)\n      :(\$x + 1)\n  end)"
+
+# nested quotes and interpolations
+@test repr(Meta.parse(
+"""quote
+    quote
+        \$\$x
+    end
+end""")) ==
+"""
+:(quote
+      #= none:2 =#
+      quote
+          #= none:3 =#
+          \$\$x
+      end
+  end)"""
+@test_repr """
+quote
+    #= none:2 =#
+    quote
+        #= none:3 =#
+        \$\$x
+    end
+end"""
+
+# fallback printing + nested quotes and unquotes
+@test_repr repr(Expr(:block, LineNumberNode(0, :none),
+                     Expr(:exotic_head, Expr(:$, :x))))
+@test_repr repr(Expr(:exotic_head, Expr(:call, :+, 1, Expr(:quote, Expr(:$, Expr(:$, :y))))))
+@test_repr repr(Expr(:quote, Expr(:$, Expr(:exotic_head, Expr(:call, :+, 1, Expr(:$, :y))))))
+@test_repr repr(Expr(:$, Expr(:exotic_head, Expr(:call, :+, 1, Expr(:$, :y)))))
+@test_repr "Expr(:block, LineNumberNode(0, :none), Expr(:exotic_head, Expr(:\$, :x)))"
+@test_repr "Expr(:exotic_head, Expr(:call, :+, 1, \$y))"
+@test_repr "Expr(:exotic_head, Expr(:call, :+, 1, \$\$y))"
+@test_repr ":(Expr(:exotic_head, Expr(:call, :+, 1, \$y)))"
+@test_repr ":(:(Expr(:exotic_head, Expr(:call, :+, 1, \$\$y))))"
+@test repr(Expr(:block, LineNumberNode(0, :none),
+                Expr(:exotic_head, Expr(:$, :x)))) ==
+"""
+quote
+    #= none:0 =#
+    \$(Expr(:exotic_head, :(\$x)))
+end"""
+@test repr(Expr(:exotic_head, Expr(:call, :+, 1, :(Expr(:$, :y))))) ==
+    ":(\$(Expr(:exotic_head, :(1 + Expr(:\$, :y)))))"
+@test repr(Expr(:exotic_head, Expr(:call, :+, 1, Expr(:quote, Expr(:$, :y))))) ==
+    ":(\$(Expr(:exotic_head, :(1 + :(\$y)))))"
+@test repr(Expr(:quote, Expr(:exotic_head, Expr(:call, :+, 1, Expr(:$, :y))))) ==
+    ":(:(\$(Expr(:exotic_head, :(1 + \$y)))))"
+@test repr(Expr(:block, Expr(:(=), :y, 2),
+                        Expr(:quote, Expr(:exotic_head,
+                                          Expr(:call, :+, 1, Expr(:$, :y)))))) ==
+"""
+quote
+    y = 2
+    :(\$(Expr(:exotic_head, :(1 + \$y))))
+end"""
+@test repr(eval(Expr(:block, Expr(:(=), :y, 2),
+                        Expr(:quote, Expr(:exotic_head,
+                                          Expr(:call, :+, 1, Expr(:$, :y))))))) ==
+    ":(\$(Expr(:exotic_head, :(1 + 2))))"
+
+# nested quotes and blocks
+@test_repr "Expr(:quote, Expr(:block, :a, :b))"
+# @test_repr repr(Expr(:quote, Expr(:block, :a, :b)))
+@test_repr repr(Expr(:quote, Expr(:block, LineNumberNode(0, :none), :a, LineNumberNode(0, :none), :b)))
+@test repr(Expr(:quote, Expr(:block, :a, :b))) ==
+":(quote
+      a
+      b
+  end)"
+@test_repr "Expr(:quote, Expr(:block, :a))"
+@test_repr repr(Expr(:quote, Expr(:block, :a)))
+@test repr(Expr(:quote, Expr(:block, :a))) == ":(:a)"
+@test_repr "Expr(:quote, Expr(:block, :(a + b)))"
+@test_repr repr(Expr(:quote, Expr(:block, :(a + b))))
+@test repr(Expr(:quote, Expr(:block, :(a + b)))) == ":(:(a + b))"
+
+# QuoteNode + quotes and unquotes
+@test_repr "QuoteNode(\$x)"
+@test_repr "QuoteNode(\$\$x)"
+@test_repr ":(QuoteNode(\$x))"
+@test_repr ":(:(QuoteNode(\$\$x))"
+@test repr(QuoteNode(Expr(:$, :x))) == ":(\$(QuoteNode(:(\$(Expr(:\$, :x))))))"
+@test repr(QuoteNode(Expr(:quote, Expr(:$, :x)))) == ":(\$(QuoteNode(:(:(\$x)))))"
+@test repr(Expr(:quote, QuoteNode(Expr(:$, :x)))) == ":(:(\$(QuoteNode(:(\$(Expr(:\$, :x)))))))"
+
+# unquoting
+@test_repr "\$y"
+@test_repr "\$\$y"
+@test_repr """
+begin
+    # line meta
+    \$y
+end"""
+@test_repr """
+begin
+    # line meta
+    \$\$y
+end"""
+@test_repr ":(\$\$y)"
+@test_repr repr(Expr(:$, :y))
+
+# with reference to https://github.com/JuliaLang/julia/commit/9ef17207d5f99c7a0019cbbe0e58f77e7c4c1d21
+y856739 = 2
+x856739 = :y856739
+z856739 = [:a, :b]
+@test_repr repr(:(:(f($$x856739))))
+@test repr(:(:(f($$x856739)))) == ":(:(f(\$y856739)))"
+@test repr(eval(:(:(f($$x856739))))) == ":(f(2))"
+@test_repr repr(:(:(f($x856739))))
+@test repr(:(:(f($x856739)))) == ":(:(f(\$x856739)))"
+@test repr(eval(:(:(f($x856739))))) == ":(f(y856739))"
+@test_repr repr(:(:(f($(($z856739)...)))))
+@test repr(:(:(f($(($z856739)...))))) == ":(:(f(\$([:a, :b]...))))"
+@test repr(eval(:(:(f($(($z856739)...)))))) == ":(f(a, b))"
+
+# string interpolation, if this is what the comment in test_rep function
+# definition talk about
+@test repr(Expr(:string, "foo", :x, "bar")) == ":(\"foo\$(x)bar\")"
+@test Meta.parse(string(Expr(:string, "foo", :x, "bar"))) == Expr(:string, "foo", :x, "bar")
+@test repr(Meta.parse("\"foo\$(x)bar\"")) == ":(\"foo\$(x)bar\")"
+@test_repr "\"foo\$(x)bar\""
+
+# Printing of macrocall expressions with qualified macroname argument
+@test sprint(show, Expr(:macrocall,
+                   GlobalRef(Base, Symbol("@m")),
+                   LineNumberNode(0, :none), :a, :b)) ==
+    ":(#= none:0 =# Base.@m a b)"
+@test sprint(show, Expr(:macrocall,
+                   Expr(:(.), :Base, Expr(:quote, Symbol("@m"))),
+                   LineNumberNode(0, :none), :a, :b)) ==
+    ":(#= none:0 =# Base.@m a b)"
+@test sprint(show, Expr(:macrocall,
+                   Expr(:(.), Base, Expr(:quote, Symbol("@m"))),
+                   LineNumberNode(0, :none), :a, :b)) ==
+    ":(#= none:0 =# (Base).@m a b)"
+@test sprint(show, Expr(:macrocall,
+                   Expr(:(.), :Base, QuoteNode(Symbol("@m"))),
+                   LineNumberNode(0, :none), :a, :b)) ==
+    ":(#= none:0 =# Base.@m a b)"
+@test sprint(show, Expr(:macrocall,
+                   Expr(:(.), Base, QuoteNode(Symbol("@m"))),
+                   LineNumberNode(0, :none), :a, :b)) ==
+    ":(#= none:0 =# (Base).@m a b)"
+
+# Printing of special macro syntaxes
+# `a b c`
+@test sprint(show, Expr(:macrocall,
+                   GlobalRef(Core, Symbol("@cmd")),
+                   LineNumberNode(0, :none), "a b c")) == ":(`a b c`)"
+@test sprint(show, Expr(:macrocall,
+                        Expr(:(.), :Core, Expr(:quote, Symbol("@cmd"))),
+                        LineNumberNode(0, :none), "a b c")) == ":(#= none:0 =# Core.@cmd \"a b c\")"
+@test sprint(show, Expr(:macrocall,
+                        Expr(:(.), Core, Expr(:quote, Symbol("@cmd"))),
+                        LineNumberNode(0, :none), "a b c")) == ":(#= none:0 =# (Core).@cmd \"a b c\")"
+@test sprint(show, Expr(:macrocall,
+                        Expr(:(.), :Core, QuoteNode(Symbol("@cmd"))),
+                        LineNumberNode(0, :none), "a b c")) == ":(#= none:0 =# Core.@cmd \"a b c\")"
+@test sprint(show, Expr(:macrocall,
+                        Expr(:(.), Core, QuoteNode(Symbol("@cmd"))),
+                        LineNumberNode(0, :none), "a b c")) == ":(#= none:0 =# (Core).@cmd \"a b c\")"
+@test_repr "`a b c`"
+@test sprint(show, Meta.parse("`a b c`")) == ":(`a b c`)"
+# a"b" and a"b"c
+@test_repr "a\"b\""
+@test_repr "a\"b\"c"
+@test_repr "aa\"b\""
+@test_repr "a\"b\"cc"
+@test sprint(show, Meta.parse("a\"b\"")) == ":(a\"b\")"
+@test sprint(show, Meta.parse("a\"b\"c")) == ":(a\"b\"c)"
+@test sprint(show, Meta.parse("aa\"b\"")) == ":(aa\"b\")"
+@test sprint(show, Meta.parse("a\"b\"cc")) == ":(a\"b\"cc)"
+# 11111111111111111111, 0xfffffffffffffffff, 1111...many digits...
+@test sprint(show, Meta.parse("11111111111111111111")) == ":(11111111111111111111)"
+# @test_repr "Base.@int128_str \"11111111111111111111\""
+@test sprint(show, Meta.parse("Base.@int128_str \"11111111111111111111\"")) ==
+    ":(#= none:1 =# Base.@int128_str \"11111111111111111111\")"
+@test sprint(show, Meta.parse("11111111111111111111")) == ":(11111111111111111111)"
+@test sprint(show, Meta.parse("0xfffffffffffffffff")) == ":(0xfffffffffffffffff)"
+@test sprint(show, Meta.parse("11111111111111111111111111111111111111111111111111111111111111")) ==
+":(11111111111111111111111111111111111111111111111111111111111111)"
 
 # Issue #15765 printing of continue and break
 @test sprint(show, :(continue)) == ":(continue)"
