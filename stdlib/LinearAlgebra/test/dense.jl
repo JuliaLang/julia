@@ -55,12 +55,8 @@ bimg  = randn(n,2)/2
 
     @testset "Positive semi-definiteness" begin
 
-        #  not hermitian should return false regardless what k is
         notsymmetric = ainit
         notsquare    = [ainit ainit]
-
-        @test !ispossemdef(notsymmetric, -1)
-        @test !ispossemdef(notsquare, -1)
 
         for truerank in 0:n
 
@@ -74,6 +70,10 @@ bimg  = randn(n,2)/2
                     @test !ispossemdef(A, testrank)
                 end
             end
+            #  not hermitian should return false regardless what k is
+            @test !ispossemdef(notsymmetric, truerank)
+            @test !ispossemdef(notsquare, truerank)
+
             @test_throws ErrorException ispossemdef(A, -1)
             @test_throws ErrorException ispossemdef(A, n + 1)
         end
@@ -902,6 +902,8 @@ end
     @test isposdef(one(elty))
     @test ispossemdef(one(elty), 1)
     @test !ispossemdef(one(elty), 0)
+    @test !ispossemdef(zero(elty), 1)
+    @test ispossemdef(zero(elty), 0)
     @test lyap(one(elty),a) == -a/2
 end
 
