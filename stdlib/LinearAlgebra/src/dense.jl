@@ -113,22 +113,30 @@ false
 """
 function ispossemdef(X::AbstractMatrix, k::Int;
                      atol::Real = 0.0,
-                     rtol::Real = (size(X, 1)*eps(real(float(one(eltype(X))))))*iszero(atol))
-    !ishermitian(X) && return false
-    !(0 <= k <= size(X, 1)) && error("rank must be between 0 and $(size(X, 1)) (inclusive)")
-    eigs = eigvals(X)    #  eigenvalues of X in ascending order
-    tol = max(atol, rtol * eigs[end])
-    return _k_positive_eigenvalues(eigs, k, tol)
+                     rtol::Real = (minimum(size(X))*eps(real(float(one(eltype(X))))))*iszero(atol))
+    _check_rank_range(k, minimum(size(X)))
+    return ishermitian(X) && _k_positive_eigenvalues(X, k, atol, rtol)
 end
 function ispossemdef(X::Number, k::Int)
-    !(0 <= k <= 1) && error("rank must be 0 or 1")
-    if k == 0
-        return !isposdef(X)
-    elseif k == 1
-        return isposdef(X)
-    end
+    _check_rank_range(k, 1)
+    k == 0 && return iszero(X)
+    k == 1 && return isposdef(X)
 end
 
+function _check_rank_range(k::Int, n::Int)
+    !(0 <= k <= n) && error("rank must be between 0 and $(n) (inclusive)")
+    nothing
+end
+
+function _k_positive_eigenvalues(X::AbstractMatrix, k::Int, atol::Real, rtol::Real)
+    eigs = eigvals(X)
+    _k_positive_eigenvalues(eigs, k, atol, rtol)
+end
+function _k_positive_eigenvalues(eigs::Vector{<: Real}, k::Int, atol::Real, rtol::Real)
+    #  assumes but does not check that eigs is sorted in ascending order
+    tol = max(atol, rtol * eigs[end])
+    _k_positive_eigenvalues(eigs, k, tol)
+end
 function _k_positive_eigenvalues(eigs::Vector{<: Real}, k::Int, tol::Real)
     #  assumes but does not check that eigs is sorted in ascending order
     z = eigs[1:(end - k)]       #  the values that should be zero
