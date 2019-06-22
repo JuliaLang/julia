@@ -21,7 +21,7 @@ Language changes
   * Using the same name for both a local variable and a static parameter is now an error instead
     of a warning ([#29429]).
   * Precompilation cache files are now created atomically ([#30174]).  Note that
-    invoking _n_ `julia` processes simultaneously may creates _n_ temporary
+    invoking _n_ `julia` processes simultaneously may create _n_ temporary
     copies of cache files.
 
 New library functions
