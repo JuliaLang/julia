@@ -92,7 +92,7 @@
         (let* ((ex (julia-expand0 ex0))
                (th (julia-expand1
                     `(lambda () ()
-                             (scope-block
+                             (scope_block
                               ,(blockify ex)))
                     file line)))
           (if (and (null? (cdadr (caddr th)))

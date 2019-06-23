@@ -526,7 +526,7 @@ function (g::GeneratedFunctionStub)(@nospecialize args...)
         return body
     end
     lam = Expr(:lambda, g.argnames,
-               Expr(Symbol("scope-block"),
+               Expr(:scope_block,
                     Expr(:block,
                          LineNumberNode(g.line, g.file),
                          Expr(:meta, :push_loc, g.file, Symbol("@generated body")),
@@ -535,7 +535,7 @@ function (g::GeneratedFunctionStub)(@nospecialize args...)
     if g.spnames === nothing
         return lam
     else
-        return Expr(Symbol("with-static-parameters"), lam, g.spnames...)
+        return Expr(:with_static_parameters, lam, g.spnames...)
     end
 end
 

@@ -154,7 +154,7 @@
                    argl))
         (body (blockify body)))
     `(lambda ,argl ()
-             (scope-block
+             (scope_block
               ,(if (equal? rett '(core Any))
                    body
                    (let ((meta (take-while (lambda (x) (and (pair? x)
@@ -163,7 +163,7 @@
                          (R (make-ssavalue)))
                      `(,(car body) ,@meta
                        (= ,R ,rett)
-                       (meta ret-type ,R)
+                       (meta ret_type ,R)
                        ,@(list-tail body (+ 1 (length meta))))))))))
 
 ;; convert x<:T<:y etc. exprs into (name lower-bound upper-bound)
@@ -250,7 +250,7 @@
 (define (replace-vars e renames)
   (cond ((symbol? e)      (lookup e renames e))
         ((or (not (pair? e)) (quoted? e))  e)
-        ((memq (car e) '(-> function scope-block)) e)
+        ((memq (car e) '(-> function scope_block)) e)
         (else
          (cons (car e)
                (map (lambda (x) (replace-vars x renames))
@@ -841,7 +841,7 @@
                field-names)
      `(block
        (global ,name) (const ,name)
-       (scope-block
+       (scope_block
         (block
          ,@(map (lambda (v) `(local ,v)) params)
          ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
@@ -849,7 +849,7 @@
                       (call (core svec) ,@(map quotify field-names))
                       ,super (call (core svec) ,@field-types) ,mut ,min-initialized)))
        ;; "inner" constructors
-       (scope-block
+       (scope_block
         (block
          (global ,name)
          ,@(map (lambda (c)
@@ -869,7 +869,7 @@
                           (and (expr-contains-eq (car p) (cons 'list root-types))
                                (loop (append (cdr p) root-types)
                                      (cdr sp)))))))
-             `((scope-block
+             `((scope_block
                 (block
                  (global ,name)
                  ,(default-outer-ctor name field-names field-types
@@ -882,7 +882,7 @@
    (params bounds) (sparam-name-bounds params)
    `(block
      (global ,name) (const ,name)
-     (scope-block
+     (scope_block
       (block
        ,@(map (lambda (v) `(local ,v)) params)
        ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
@@ -893,7 +893,7 @@
    (params bounds) (sparam-name-bounds params)
    `(block
      (global ,name) (const ,name)
-     (scope-block
+     (scope_block
       (block
        ,@(map (lambda (v) `(local ,v)) params)
        ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
@@ -1076,7 +1076,7 @@
     (expand-forms
      (if
       (null? binds)
-      `(scope-block (block ,ex))
+      `(scope_block (block ,ex))
       (let loop ((binds (reverse binds))
                  (blk   ex))
         (if (null? binds)
@@ -1085,7 +1085,7 @@
              ((or (symbol? (car binds)) (decl? (car binds)))
               ;; just symbol -> add local
               (loop (cdr binds)
-                    `(scope-block
+                    `(scope_block
                       (block
                        (local ,(car binds))
                        ,blk))))
@@ -1100,11 +1100,11 @@
                   (if (not (symbol? name))
                       (error "invalid let syntax"))
                   (loop (cdr binds)
-                        `(scope-block
+                        `(scope_block
                           (block
                            ,(if (expr-contains-eq name (caddar binds))
                                 `(local ,name) ;; might need a Box for recursive functions
-                                `(local-def ,name))
+                                `(local_def ,name))
                            ,asgn
                            ,blk)))))
                ((or (symbol? (cadar binds))
@@ -1113,16 +1113,16 @@
                   (loop (cdr binds)
                         (if (expr-contains-eq vname (caddar binds))
                             (let ((tmp (make-ssavalue)))
-                              `(scope-block
+                              `(scope_block
                                 (block (= ,tmp ,(caddar binds))
-                                       (scope-block
+                                       (scope_block
                                         (block
-                                         (local-def ,(cadar binds))
+                                         (local_def ,(cadar binds))
                                          (= ,vname ,tmp)
                                          ,blk)))))
-                            `(scope-block
+                            `(scope_block
                               (block
-                               (local-def ,(cadar binds))
+                               (local_def ,(cadar binds))
                                (= ,vname ,(caddar binds))
                                ,blk))))))
                ;; (a, b, c, ...) = rhs
@@ -1135,14 +1135,14 @@
                             (let ((temp (make-ssavalue)))
                               `(block
                                 (= ,temp ,(caddr (car binds)))
-                                (scope-block
+                                (scope_block
                                  (block
-                                  ,@(map (lambda (v) `(local-def ,v)) vars)
+                                  ,@(map (lambda (v) `(local_def ,v)) vars)
                                   (= ,(cadr (car binds)) ,temp)
                                   ,blk))))
-                            `(scope-block
+                            `(scope_block
                               (block
-                               ,@(map (lambda (v) `(local-def ,v)) vars)
+                               ,@(map (lambda (v) `(local_def ,v)) vars)
                                ,(car binds)
                                ,blk))))))
                (else (error "invalid let syntax"))))
@@ -1223,17 +1223,17 @@
               `(tryfinally
                 ,(if (not (eq? catchb 'false))
                      `(try ,tryb ,var ,catchb)
-                     `(scope-block ,tryb))
-                (scope-block ,finalb)))))
+                     `(scope_block ,tryb))
+                (scope_block ,finalb)))))
           ((length= e 4)
            (expand-forms
             (if (and (symbol-like? var) (not (eq? var 'false)))
-                `(trycatch (scope-block ,tryb)
-                           (scope-block
+                `(trycatch (scope_block ,tryb)
+                           (scope_block
                             (block (= ,var (the_exception))
                                    ,catchb)))
-                `(trycatch (scope-block ,tryb)
-                           (scope-block ,catchb)))))
+                `(trycatch (scope_block ,tryb)
+                           (scope_block ,catchb)))))
           (else
            (error "invalid \"try\" form")))))
 
@@ -1245,7 +1245,7 @@
         (if (null? params)
             (error (string "empty type parameter list in \"" (deparse `(= (curly ,name) ,type-ex)) "\"")))
         `(block
-          (const-if-global ,name)
+          (const_if_global ,name)
           ,(expand-forms
             `(= ,name (where ,type-ex ,@params)))))
       (expand-forms
@@ -1257,7 +1257,7 @@
     (if (atom? arg)
         e
         (case (car arg)
-          ((global local local-def)
+          ((global local local_def)
            (for-each (lambda (b) (if (not (assignment? b))
                                      (error "expected assignment after \"const\"")))
                      (cdr arg))
@@ -1543,8 +1543,8 @@
                   (apply append
                          (map lhs-vars
                               (filter (lambda (x) (not (outer? x))) (butlast lhss))))))))
-    `(break-block
-      loop-exit
+    `(break_block
+      loop_exit
       ,(let nest ((lhss lhss)
                   (itrs itrs))
          (if (null? lhss)
@@ -1563,16 +1563,16 @@
                        ,(nest (cdr lhss) (cdr itrs))))
                     (body
                      (if (null? (cdr lhss))
-                         `(break-block
-                           loop-cont
+                         `(break_block
+                           loop_cont
                            (let (block ,@(map (lambda (v) `(= ,v ,v)) copied-vars))
                              ,body))
-                         `(scope-block ,body))))
+                         `(scope_block ,body))))
                `(block (= ,coll ,(car itrs))
                        (= ,next (call (top iterate) ,coll))
                        ;; TODO avoid `local declared twice` error from this
                        ;;,@(if outer `((local ,lhs)) '())
-                       ,@(if outer `((require-existing-local ,lhs)) '())
+                       ,@(if outer `((require_existing_local ,lhs)) '())
                        (if (call (top not_int) (call (core ===) ,next (null)))
                            (_do_while
 			    (block ,body
@@ -1848,7 +1848,7 @@
    'const  expand-const-decl
    'local  expand-local-or-global-decl
    'global expand-local-or-global-decl
-   'local-def expand-local-or-global-decl
+   'local_def expand-local-or-global-decl
 
    '=
    (lambda (e)
@@ -2129,18 +2129,18 @@
 
    'while
    (lambda (e)
-     `(break-block loop-exit
+     `(break_block loop_exit
                    (_while ,(expand-forms (cadr e))
-                           (break-block loop-cont
-                                        (scope-block ,(blockify (expand-forms (caddr e))))))))
+                           (break_block loop_cont
+                                        (scope_block ,(blockify (expand-forms (caddr e))))))))
 
    'break
    (lambda (e)
      (if (pair? (cdr e))
          e
-         '(break loop-exit)))
+         '(break loop_exit)))
 
-   'continue (lambda (e) '(break loop-cont))
+   'continue (lambda (e) '(break loop_cont))
 
    'for
    (lambda (e)
@@ -2326,7 +2326,7 @@
                 ,(construct-loops (cdr itrs) (cdr iv)))))
 
     (let ((overall-itr (if (length= itrs 1) (car iv) prod)))
-      `(scope-block
+      `(scope_block
         (block
          (local ,result) (local ,idx)
          ,.(map (lambda (v r) `(= ,v ,(caddr r))) iv itrs)
@@ -2369,7 +2369,7 @@
   (if (or (not (pair? e)) (quoted? e))
       '()
       (case (car e)
-        ((lambda scope-block module toplevel)  '())
+        ((lambda scope_block module toplevel)  '())
         ((method)
          (let ((v (decl-var (method-expr-name e))))
            (append!
@@ -2389,7 +2389,7 @@
 (define (find-decls kind e)
   (if (or (not (pair? e)) (quoted? e))
       '()
-      (cond ((memq (car e) '(lambda scope-block module toplevel))
+      (cond ((memq (car e) '(lambda scope_block module toplevel))
              '())
             ((eq? (car e) kind)
              (if (underscore-symbol? (cadr e))
@@ -2400,7 +2400,7 @@
                                  e))))))
 
 (define (find-local-decls e) (find-decls 'local e))
-(define (find-local-def-decls e) (find-decls 'local-def e))
+(define (find-local-def-decls e) (find-decls 'local_def e))
 (define (find-global-decls e) (find-decls 'global e))
 
 (define (check-valid-name e)
@@ -2458,11 +2458,11 @@
         ((eq? (car e) 'global)
          (check-valid-name (cadr e))
          e)
-        ((memq (car e) '(local local-def))
+        ((memq (car e) '(local local_def))
          (check-valid-name (cadr e))
          ;; remove local decls
          '(null))
-        ((eq? (car e) 'require-existing-local)
+        ((eq? (car e) 'require_existing_local)
          (if (not (in-scope? (cadr e) scope))
              (error "no outer local variable declaration exists for \"for outer\""))
          '(null))
@@ -2486,8 +2486,8 @@
          (let* ((args (lam:vars e))
                 (body (resolve-scopes- (lam:body e) (make-scope e args '() '() sp '() scope))))
            `(lambda ,(cadr e) ,(caddr e) ,body)))
-        ((eq? (car e) 'scope-block)
-         (let* ((blok            (cadr e)) ;; body of scope-block expression
+        ((eq? (car e) 'scope_block)
+         (let* ((blok            (cadr e)) ;; body of scope_block expression
                 (lam             (scope:lam scope))
                 (argnames        (lam:vars lam))
                 (current-locals  (caddr lam)) ;; locals created so far in our lambda
@@ -2532,7 +2532,7 @@
            (if lam
                (set-car! (cddr lam)
                          (append (caddr lam) newnames newnames-def)))
-           (insert-after-meta ;; return the new, expanded scope-block
+           (insert-after-meta ;; return the new, expanded scope_block
             (blockify
              (resolve-scopes- blok
                               (make-scope lam
@@ -2545,15 +2545,15 @@
                                                   (map cons need-rename-def renamed-def))
                                           scope)))
             (append! (map (lambda (v) `(local ,v)) newnames)
-                     (map (lambda (v) `(local-def ,v)) newnames-def)))
+                     (map (lambda (v) `(local_def ,v)) newnames-def)))
            ))
         ((eq? (car e) 'module)
          (error "\"module\" expression not at top level"))
-        ((eq? (car e) 'break-block)
-         `(break-block ,(cadr e) ;; ignore type symbol of break-block expression
-                       ,(resolve-scopes- (caddr e) scope))) ;; body of break-block expression
-        ((eq? (car e) 'with-static-parameters)
-         `(with-static-parameters
+        ((eq? (car e) 'break_block)
+         `(break_block ,(cadr e) ;; ignore type symbol of break_block expression
+                       ,(resolve-scopes- (caddr e) scope))) ;; body of break_block expression
+        ((eq? (car e) 'with_static_parameters)
+         `(with_static_parameters
            ,(resolve-scopes- (cadr e) scope (cddr e))
            ,@(cddr e)))
         ((and (eq? (car e) 'method) (length> e 2))
@@ -2579,8 +2579,8 @@
   (cond ((or (eq? e 'true) (eq? e 'false) (eq? e UNUSED) (underscore-symbol? e)) tab)
         ((symbol? e) (put! tab e #t))
         ((and (pair? e) (eq? (car e) 'outerref)) tab)
-        ((and (pair? e) (eq? (car e) 'break-block)) (free-vars- (caddr e) tab))
-        ((and (pair? e) (eq? (car e) 'with-static-parameters)) (free-vars- (cadr e) tab))
+        ((and (pair? e) (eq? (car e) 'break_block)) (free-vars- (caddr e) tab))
+        ((and (pair? e) (eq? (car e) 'with_static_parameters)) (free-vars- (cadr e) tab))
         ((or (atom? e) (quoted? e)) tab)
         ((eq? (car e) 'lambda)
          (let ((bound (lambda-all-vars e)))
@@ -2654,7 +2654,7 @@
                   (vinfo:set-read! vi #t))))
         e)
       (case (car e)
-        ((local-def) ;; a local that we know has an assignment that dominates all usages
+        ((local_def) ;; a local that we know has an assignment that dominates all usages
          (let ((vi (var-info-for (cadr e) env)))
               (vinfo:set-never-undef! vi #t)))
         ((=)
@@ -2685,8 +2685,8 @@
                       (vinfo:set-type! vi (caddr e))))))
         ((lambda)
          (analyze-vars-lambda e env captvars sp '()))
-        ((with-static-parameters)
-         ;; (with-static-parameters func_expr sp_1 sp_2 ...)
+        ((with_static_parameters)
+         ;; (with_static_parameters func_expr sp_1 sp_2 ...)
          (assert (eq? (car (cadr e)) 'lambda))
          (analyze-vars-lambda (cadr e) env captvars sp
                               (cddr e)))
@@ -2889,7 +2889,7 @@ f(x) = yt(x)
     `(call (core svec) (call (core svec) ,@newtypes)
            (call (core svec) ,@(append (cddr (cadddr te)) type-sp)))))
 
-;; collect all toplevel-butfirst expressions inside `e`, and return
+;; collect all toplevel_butfirst expressions inside `e`, and return
 ;; (ex . stmts), where `ex` is the expression to evaluated and
 ;; `stmts` is a list of statements to move to the top level.
 (define (lift-toplevel e)
@@ -2898,7 +2898,7 @@ f(x) = yt(x)
       (if (or (atom? e) (quoted? e))
           e
           (let ((e (cons (car e) (map lift- (cdr e)))))
-            (if (eq? (car e) 'toplevel-butfirst)
+            (if (eq? (car e) 'toplevel_butfirst)
                 (begin (set! top (cons (cddr e) top))
                        (cadr e))
                 e))))
@@ -2956,10 +2956,10 @@ f(x) = yt(x)
                    (lambda (x) (and (pair? x) (not (eq? (car x) 'lambda)))))))
 
 (define lambda-opt-ignored-exprs
-  (Set '(quote top core line inert local local-def unnecessary copyast
+  (Set '(quote top core line inert local local_def unnecessary copyast
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
-         struct_type abstract_type primitive_type thunk with-static-parameters
-         global globalref outerref const-if-global
+         struct_type abstract_type primitive_type thunk with_static_parameters
+         global globalref outerref const_if_global
          const null ssavalue isdefined toplevel module lambda error
          gc_preserve_begin gc_preserve_end import using export)))
 
@@ -3018,11 +3018,11 @@ f(x) = yt(x)
              #f)
             ((lambda-opt-ignored-exprs (car e))
              #f)
-            ((eq? (car e) 'scope-block)
+            ((eq? (car e) 'scope_block)
              (visit (cadr e)))
             ((memq (car e) '(block call new splatnew _do_while))
              (eager-any visit (cdr e)))
-            ((eq? (car e) 'break-block)
+            ((eq? (car e) 'break_block)
              (visit (caddr e)))
             ((eq? (car e) 'return)
              (begin0 (visit (cadr e))
@@ -3152,7 +3152,7 @@ f(x) = yt(x)
            (let ((var (cadr e))
                  (rhs (cl-convert (caddr e) fname lam namemap defined toplevel interp)))
              (convert-assignment var rhs fname lam interp)))
-          ((local-def) ;; make new Box for local declaration of defined variable
+          ((local_def) ;; make new Box for local declaration of defined variable
            (let ((vi (assq (cadr e) (car (lam:vinfo lam)))))
              (if (and vi (vinfo:asgn vi) (vinfo:capt vi))
                  `(= ,(cadr e) (call (core Box)))
@@ -3165,7 +3165,7 @@ f(x) = yt(x)
                      '(null)
                      `(newvar ,(cadr e))))))
           ((const) e)
-          ((const-if-global)
+          ((const_if_global)
            (if (local-in? (cadr e) lam)
                '(null)
                `(const ,(cadr e))))
@@ -3220,8 +3220,8 @@ f(x) = yt(x)
                                   e
                                   (begin
                                     (put! defined (cadr e) #t)
-                                    `(toplevel-butfirst
-                                      ;; wrap in toplevel-butfirst so it gets moved higher along with
+                                    `(toplevel_butfirst
+                                      ;; wrap in toplevel_butfirst so it gets moved higher along with
                                       ;; closure type definitions
                                       ,e
                                       (thunk (lambda () (() () 0 ()) (block (return ,e))))))))
@@ -3244,7 +3244,7 @@ f(x) = yt(x)
                         (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t '())))
                                (top-stmts (cdr exprs))
                                (newlam    (compact-and-renumber (linearize (car exprs)) 'none 0)))
-                          `(toplevel-butfirst
+                          `(toplevel_butfirst
                             (block ,@sp-inits
                                    (method ,name ,(cl-convert sig fname lam namemap defined toplevel interp)
                                            ,(julia-bq-macro newlam)))
@@ -3378,16 +3378,16 @@ f(x) = yt(x)
                                            (not (memq (car vi) moved-vars)))
                                          (car (lam:vinfo lam)))))
                    (if (or exists (and short (pair? alldefs)))
-                       `(toplevel-butfirst
+                       `(toplevel_butfirst
                          (null)
                          ,@sp-inits
                          ,@mk-method)
                        (begin
                          (put! defined name #t)
-                         `(toplevel-butfirst
+                         `(toplevel_butfirst
                            ,(convert-assignment name mk-closure fname lam interp)
                            ,@typedef
-                           ,@(map (lambda (v) `(moved-local ,v)) moved-vars)
+                           ,@(map (lambda (v) `(moved_local ,v)) moved-vars)
                            ,@sp-inits
                            ,@mk-method))))))))
           ((lambda)  ;; happens inside (thunk ...) and generated function bodies
@@ -3416,8 +3416,8 @@ f(x) = yt(x)
                   (if (or (symbol? (cadr e)) (and (pair? (cadr e)) (eq? (caadr e) 'outerref)))
                       (error "type declarations on global variables are not yet supported"))
                   (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap defined toplevel interp))))
-          ;; `with-static-parameters` expressions can be removed now; used only by analyze-vars
-          ((with-static-parameters)
+          ;; `with_static_parameters` expressions can be removed now; used only by analyze-vars
+          ((with_static_parameters)
            (cl-convert (cadr e) fname lam namemap defined toplevel interp))
           (else
            (if (eq? (car e) 'struct_type)
@@ -3619,7 +3619,7 @@ f(x) = yt(x)
                 (emit `(= ,lhs ,rr)))))
       #f)
     ;; the interpreter loop. `break-labels` keeps track of the labels to jump to
-    ;; for all currently closing break-blocks.
+    ;; for all currently closing break_blocks.
     ;; `value` means we are in a context where a value is required; a meaningful
     ;; value must be returned.
     ;; `tail` means we are in tail position, where a value needs to be `return`ed
@@ -3776,7 +3776,7 @@ f(x) = yt(x)
                (emit `(goto ,topl))
                (mark-label endl))
              (if value (compile '(null) break-labels value tail)))
-            ((break-block)
+            ((break_block)
              (let ((endl (make-label)))
                (compile (caddr e)
                         (cons (list (cadr e) endl handler-level catch-token-stack)
@@ -3888,9 +3888,9 @@ f(x) = yt(x)
                (if (var-info-for vname vi) ;; issue #7264
                    (error (string "`global " vname "`: " vname " is a local variable in its enclosing scope"))
                    (emit e))))
-            ((local-def) #f)
+            ((local_def) #f)
             ((local) #f)
-            ((moved-local)
+            ((moved_local)
              (set-car! (lam:vinfo lam) (append (car (lam:vinfo lam)) `((,(cadr e) Any 2))))
              #f)
             ((const)
@@ -3985,7 +3985,7 @@ f(x) = yt(x)
                                  (emit e))
                           ;; strip filenames out of non-initial line nodes
                           (emit `(line ,(cadr e)))))
-                     ((and (eq? (car e) 'meta) (length> e 2) (eq? (cadr e) 'ret-type))
+                     ((and (eq? (car e) 'meta) (length> e 2) (eq? (cadr e) 'ret_type))
                       (assert (or (not value) tail))
                       (assert (not rett))
                       (set! rett (caddr e)))
