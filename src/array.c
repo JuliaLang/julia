@@ -592,10 +592,9 @@ JL_DLLEXPORT void jl_arrayset(jl_array_t *a JL_ROOTING_ARGUMENT, jl_value_t *rhs
 JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i)
 {
     if (i >= jl_array_len(a))
-        jl_bounds_error_int((jl_value_t*)a, i+1);
-    char *ptail = (char*)a->data + i*a->elsize;
+        jl_bounds_error_int((jl_value_t*)a, i + 1);
     if (a->flags.ptrarray)
-        memset(ptail, 0, a->elsize);
+        ((jl_value_t**)a->data)[i] = NULL;
 }
 
 // at this size and bigger, allocate resized array data with malloc
