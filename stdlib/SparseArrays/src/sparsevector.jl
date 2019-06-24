@@ -1494,7 +1494,7 @@ function (*)(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
     require_one_based_indexing(A, x)
     m, n = size(A)
     length(x) == n || throw(DimensionMismatch())
-    Ty = promote_type(Ta, Tx)
+    Ty = promote_op(matprod, Ta, Tx)
     y = Vector{Ty}(undef, m)
     mul!(y, A, x)
 end
@@ -1531,23 +1531,21 @@ end
 
 function *(transA::Transpose{<:Any,<:StridedMatrix{Ta}}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
     require_one_based_indexing(transA, x)
-    A = transA.parent
-    m, n = size(A)
-    length(x) == m || throw(DimensionMismatch())
-    Ty = promote_type(Ta, Tx)
-    y = Vector{Ty}(undef, n)
-    mul!(y, transpose(A), x)
+    m, n = size(transA)
+    length(x) == n || throw(DimensionMismatch())
+    Ty = promote_op(matprod, Ta, Tx)
+    y = Vector{Ty}(undef, m)
+    mul!(y, transA, x)
 end
 
 mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = transA.parent; mul!(y, transpose(A), x, one(Tx), zero(Ty)))
+    mul!(y, transA, x, one(Tx), zero(Ty))
 
 function mul!(y::AbstractVector, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector, α::Number, β::Number)
-    A = transA.parent
-    require_one_based_indexing(y, A, x)
-    m, n = size(A)
-    length(x) == m && length(y) == n || throw(DimensionMismatch())
-    n == 0 && return y
+    require_one_based_indexing(y, transA, x)
+    m, n = size(transA)
+    length(x) == n && length(y) == m || throw(DimensionMismatch())
+    m == 0 && return y
     if β != one(β)
         β == zero(β) ? fill!(y, zero(eltype(y))) : rmul!(y, β)
     end
@@ -1558,11 +1556,53 @@ function mul!(y::AbstractVector, transA::Transpose{<:Any,<:StridedMatrix}, x::Ab
     _nnz = length(xnzind)
     _nnz == 0 && return y
 
-    s0 = zero(eltype(A)) * zero(eltype(x))
-    @inbounds for j = 1:n
-        s = zero(s0)
+    A = transA.parent
+    Ty = promote_op(matprod, eltype(A), eltype(x))
+    @inbounds for j = 1:m
+        s = zero(Ty)
         for i = 1:_nnz
-            s += A[xnzind[i], j] * xnzval[i]
+            s += transpose(A[xnzind[i], j]) * xnzval[i]
+        end
+        y[j] += s * α
+    end
+    return y
+end
+
+# * and mul!(C, adjoint(A), B)
+
+function *(adjA::Adjoint{<:Any,<:StridedMatrix{Ta}}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
+    require_one_based_indexing(adjA, x)
+    m, n = size(adjA)
+    length(x) == n || throw(DimensionMismatch())
+    Ty = promote_op(matprod, Ta, Tx)
+    y = Vector{Ty}(undef, m)
+    mul!(y, adjA, x)
+end
+
+mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:StridedMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
+    mul!(y, adjA, x, one(Tx), zero(Ty))
+
+function mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:StridedMatrix}, x::AbstractSparseVector, α::Number, β::Number)
+    require_one_based_indexing(y, adjA, x)
+    m, n = size(adjA)
+    length(x) == n && length(y) == m || throw(DimensionMismatch())
+    m == 0 && return y
+    if β != one(β)
+        β == zero(β) ? fill!(y, zero(eltype(y))) : rmul!(y, β)
+    end
+    α == zero(α) && return y
+
+    xnzind = nonzeroinds(x)
+    xnzval = nonzeros(x)
+    _nnz = length(xnzind)
+    _nnz == 0 && return y
+
+    A = adjA.parent
+    Ty = promote_op(matprod, eltype(A), eltype(x))
+    @inbounds for j = 1:m
+        s = zero(Ty)
+        for i = 1:_nnz
+            s += adjoint(A[xnzind[i], j]) * xnzval[i]
         end
         y[j] += s * α
     end
