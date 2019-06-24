@@ -433,13 +433,7 @@ systems, `tempdir()` uses the first environment variable found in the ordered li
 `TMP`, `TEMP`, and `TEMPDIR`. If none of these are found, the path `"/tmp"` is used.
 """
 function tempdir()
-    # Warning: On Windows uv_os_tmpdir internally calls GetTempPathW.
-    # The max buffer size not including the null-terminator is PATH_MAX + 1, not the typical PATH_MAX = 260.
-    # We use the max buffer size here since AVG_PATH is 260 on Windows,
-    # thus avoiding an additional allocation in the exceptional case when the path is 261 characters.
-    # Note, however setting the buffer to an arbitrary length is completely valid.
-    buf_sz = Sys.iswindows() ? 262 : AVG_PATH # total buffer size including null-terminator
-    buf = Base.StringVector(buf_sz - 1) # space for null-terminator implied by StringVector
+    buf = Base.StringVector(AVG_PATH - 1) # space for null-terminator implied by StringVector
     sz = RefValue{Csize_t}(length(buf) + 1) # total buffer size including null
     while true
         rc = ccall(:uv_os_tmpdir, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)

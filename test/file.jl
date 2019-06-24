@@ -253,8 +253,8 @@ end
     var =  Sys.iswindows() ? "TMP" : "TMPDIR"
     PATH_PREFIX = Sys.iswindows() ? "C:\\" : "/tmp/"
     # Warning: On Windows uv_os_tmpdir internally calls GetTempPathW. The max string length for
-    # GetTempPathW is MAX_PATH + 1 (including the trailing backslash), not the typical
-    # PATH_MAX = 260. We thus use MAX_PATH (implied trailing slash then gives MAX_PATH + 1) and
+    # GetTempPathW is 261 (including the implied trailing backslash), not the typical length 259.
+    # We thus use 260 (with implied trailing slash backlash this then gives 261 chars) and
     # subtract 9 to account for i = 0:9.
     MAX_PATH = (Sys.iswindows() ? 260-9 : 1024) - length(PATH_PREFIX)
     for i = 0:8
