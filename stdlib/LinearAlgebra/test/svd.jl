@@ -34,6 +34,7 @@ using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted
     @test inv(svd(Matrix(I, 2, 2))) ≈ I
     @test inv(svd([1 2; 3 4])) ≈ [-2.0 1.0; 1.5 -0.5]
     @test inv(svd([1 0 1; 0 1 0])) ≈ [0.5 0.0; 0.0 1.0; 0.5 0.0]
+    @test_throws SingularException inv(svd([0 0; 0 0]))
 end
 
 n = 10
