@@ -106,8 +106,8 @@ function lower_ref_expr!(ex)
             return Expr(:unnecessary, ex.args[2:end]...)
         elseif ex.head == :macrocall && ex.args[1] == Symbol("@Expr")
             head = ex.args[3]
-            head = head isa QuoteNode ? head.value : Symbol(head)
-            return Expr(head, ex.args[4:end]...)
+            head isa QuoteNode || throw(ArgumentError("`head` argument to @Expr should be quoted"))
+            return Expr(head.value, ex.args[4:end]...)
         end
     end
     return ex
@@ -162,9 +162,9 @@ end
 #
 # Note that this is provided for convenience/reference but in practice we
 # expand it "manually" inside lower_ref_expr!
-macro Ex(head, args...)
-    head = head isa QuoteNode ? head.value : Symbol(head)
-    esc(Expr(head, args...))
+macro Expr(head, args...)
+    head isa QuoteNode || throw(ArgumentError("`head` argument to @Expr should be quoted"))
+    esc(Expr(head.value, args...))
 end
 
 """
