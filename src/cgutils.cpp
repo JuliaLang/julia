@@ -787,13 +787,18 @@ static unsigned get_box_tindex(jl_datatype_t *jt, jl_value_t *ut)
 
 static Value *emit_nthptr_addr(jl_codectx_t &ctx, Value *v, ssize_t n, bool gctracked = true)
 {
-    return ctx.builder.CreateInBoundsGEP(emit_bitcast(ctx, maybe_decay_tracked(v), T_pprjlvalue),
-                             ConstantInt::get(T_size, n));
+    return ctx.builder.CreateInBoundsGEP(
+            T_prjlvalue,
+            emit_bitcast(ctx, maybe_decay_tracked(v), T_pprjlvalue),
+            ConstantInt::get(T_size, n));
 }
 
 static Value *emit_nthptr_addr(jl_codectx_t &ctx, Value *v, Value *idx)
 {
-    return ctx.builder.CreateInBoundsGEP(emit_bitcast(ctx, maybe_decay_tracked(v), T_pprjlvalue), idx);
+    return ctx.builder.CreateInBoundsGEP(
+            T_prjlvalue,
+            emit_bitcast(ctx, maybe_decay_tracked(v), T_pprjlvalue),
+            idx);
 }
 
 static Value *emit_nthptr(jl_codectx_t &ctx, Value *v, ssize_t n, MDNode *tbaa)
@@ -1485,8 +1490,10 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
                 minimum_align = std::min(minimum_align,
                     (size_t)julia_alignment(ft));
             }
-            Value *fldptr = ctx.builder.CreateInBoundsGEP(maybe_decay_tracked(
-                emit_bitcast(ctx, data_pointer(ctx, strct), T_pprjlvalue)), idx);
+            Value *fldptr = ctx.builder.CreateInBoundsGEP(
+                    T_prjlvalue,
+                    maybe_decay_tracked(emit_bitcast(ctx, data_pointer(ctx, strct), T_pprjlvalue)),
+                    idx);
             Value *fld = tbaa_decorate(strct.tbaa,
                 maybe_mark_load_dereferenceable(
                     ctx.builder.CreateLoad(T_prjlvalue, fldptr),
@@ -1568,8 +1575,9 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             // can pessimize mem2reg
             if (byte_offset > 0) {
                 addr = ctx.builder.CreateInBoundsGEP(
-                    emit_bitcast(ctx, staddr, T_pint8),
-                    ConstantInt::get(T_size, byte_offset));
+                        T_int8,
+                        emit_bitcast(ctx, staddr, T_pint8),
+                        ConstantInt::get(T_size, byte_offset));
             }
             else {
                 addr = staddr;
@@ -1924,8 +1932,8 @@ static Value *emit_array_nd_index(
         ctx.builder.SetInsertPoint(failBB);
         // CreateAlloca is OK here since we are on an error branch
         Value *tmp = ctx.builder.CreateAlloca(T_size, ConstantInt::get(T_size, nidxs));
-        for(size_t k=0; k < nidxs; k++) {
-            ctx.builder.CreateStore(idxs[k], ctx.builder.CreateInBoundsGEP(tmp, ConstantInt::get(T_size, k)));
+        for (size_t k = 0; k < nidxs; k++) {
+            ctx.builder.CreateStore(idxs[k], ctx.builder.CreateInBoundsGEP(T_size, tmp, ConstantInt::get(T_size, k)));
         }
         ctx.builder.CreateCall(prepare_call(jlboundserrorv_func),
             { mark_callee_rooted(a), tmp, ConstantInt::get(T_size, nidxs) });
@@ -2438,8 +2446,9 @@ static void emit_setfield(jl_codectx_t &ctx,
         Value *addr = data_pointer(ctx, strct);
         if (byte_offset > 0) {
             addr = ctx.builder.CreateInBoundsGEP(
-                emit_bitcast(ctx, maybe_decay_tracked(addr), T_pint8),
-                ConstantInt::get(T_size, byte_offset)); // TODO: use emit_struct_gep
+                    T_int8,
+                    emit_bitcast(ctx, maybe_decay_tracked(addr), T_pint8),
+                    ConstantInt::get(T_size, byte_offset)); // TODO: use emit_struct_gep
         }
         jl_value_t *jfty = jl_svecref(sty->types, idx0);
         if (jl_field_isptr(sty, idx0)) {
@@ -2561,7 +2570,9 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 if (!jl_field_isptr(sty, i) && jl_is_uniontype(jl_field_type(sty, i))) {
                     tbaa_decorate(tbaa_unionselbyte, ctx.builder.CreateStore(
                             ConstantInt::get(T_int8, 0),
-                            ctx.builder.CreateInBoundsGEP(emit_bitcast(ctx, strct, T_pint8),
+                            ctx.builder.CreateInBoundsGEP(
+                                T_int8,
+                                emit_bitcast(ctx, strct, T_pint8),
                                 ConstantInt::get(T_size, jl_field_offset(sty, i) + jl_field_size(sty, i) - 1))));
                 }
             }
@@ -2581,7 +2592,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 tbaa_decorate(strctinfo.tbaa, ctx.builder.CreateStore(
                         ConstantPointerNull::get(cast<PointerType>(T_prjlvalue)),
                         ctx.builder.CreateInBoundsGEP(T_prjlvalue, emit_bitcast(ctx, strct, T_pprjlvalue),
-                            ConstantInt::get(T_size, jl_field_offset(sty, i) / sizeof(void*)))));
+                                ConstantInt::get(T_size, jl_field_offset(sty, i) / sizeof(void*)))));
             }
         }
         for (size_t i = nargs; i < nf; i++) {
@@ -2589,7 +2600,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 tbaa_decorate(tbaa_unionselbyte, ctx.builder.CreateStore(
                         ConstantInt::get(T_int8, 0),
                         ctx.builder.CreateInBoundsGEP(emit_bitcast(ctx, strct, T_pint8),
-                            ConstantInt::get(T_size, jl_field_offset(sty, i) + jl_field_size(sty, i) - 1))));
+                                ConstantInt::get(T_size, jl_field_offset(sty, i) + jl_field_size(sty, i) - 1))));
             }
         }
         bool need_wb = false;
