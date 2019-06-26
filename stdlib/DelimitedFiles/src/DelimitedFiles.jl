@@ -791,7 +791,7 @@ function writedlm(fname::AbstractString, a, dlm; opts...)
 end
 
 """
-    writedlm(f, A, delim='\\t'; opts)
+    writedlm(f, A, delim; opts)
 
 Write `A` (a vector, matrix, or an iterable collection of iterable rows) as text to `f`
 (either a filename string or an `IO` stream) using the given delimiter
