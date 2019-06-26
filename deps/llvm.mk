@@ -138,6 +138,10 @@ LLVM_CPPFLAGS += -flto
 LLVM_LDFLAGS += -flto
 endif # LLVM_LTO
 
+ifeq ($(fPIC),)
+LLVM_CMAKE += -DLLVM_ENABLE_PIC=OFF
+endif
+
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 LLVM_LDFLAGS += -Wl,-rpath,$(build_libdir)
 LLVM_CPPFLAGS += -I$(build_includedir)
