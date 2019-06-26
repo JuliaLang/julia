@@ -265,11 +265,16 @@ file. This is a more general version of the 2-argument `pipeline` function.
 `pipeline(from, to)` is equivalent to `pipeline(from, stdout=to)` when `from` is a command,
 and to `pipeline(to, stdin=from)` when `from` is another kind of data source.
 
+A [`Pipe`](@ref) can be passed to allow general I/O operations on the process streams.
+
 **Examples**:
 
 ```julia
 run(pipeline(`dothings`, stdout="out.txt", stderr="errs.txt"))
 run(pipeline(`update`, stdout="log.txt", append=true))
+
+in = Pipe(); out = Pipe(); err = Pipe()
+proc = pipeline(`cat`, stdin = in, stdout = out, stderr = err)
 ```
 """
 function pipeline(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, append::Bool=false)
@@ -689,6 +694,17 @@ function open(cmds::AbstractCmd, stdio::Redirectable=devnull; write::Bool=false,
         processes = _spawn(cmds, Any[devnull, devnull, stderr])
     end
     return processes
+end
+
+function open3(cmds::AbstractCmd)
+    in = PipeEndpoint()
+    out = PipeEndpoint()
+    err = PipeEndpoint()
+    processes = _spawn(cmds, Any[in, out, err])
+    processes.in = in
+    processes.out = out
+    processes.err = err
+    return (processes, err)
 end
 
 """
