@@ -424,17 +424,33 @@ function touch(path::AbstractString)
     path
 end
 
+"""
+    tempdir()
+
+Gets the path of the temporary directory. On Windows, `tempdir()` uses the first environment
+variable found in the ordered list `TMP`, `TEMP`, `USERPROFILE`. On all other operating
+systems, `tempdir()` uses the first environment variable found in the ordered list `TMPDIR`,
+`TMP`, `TEMP`, and `TEMPDIR`. If none of these are found, the path `"/tmp"` is used.
+"""
+function tempdir()
+    buf = Base.StringVector(AVG_PATH - 1) # space for null-terminator implied by StringVector
+    sz = RefValue{Csize_t}(length(buf) + 1) # total buffer size including null
+    while true
+        rc = ccall(:uv_os_tmpdir, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
+        if rc == 0
+            resize!(buf, sz[])
+            return String(buf)
+        elseif rc == Base.UV_ENOBUFS
+            resize!(buf, sz[] - 1)  # space for null-terminator implied by StringVector
+        else
+            uv_error(:tmpdir, rc)
+        end
+    end
+end
+
 const temp_prefix = "jl_"
 
 if Sys.iswindows()
-
-function tempdir()
-    temppath = Vector{UInt16}(undef, 32767)
-    lentemppath = ccall(:GetTempPathW, stdcall, UInt32, (UInt32, Ptr{UInt16}), length(temppath), temppath)
-    windowserror("GetTempPath", lentemppath >= length(temppath) || lentemppath == 0)
-    resize!(temppath, lentemppath)
-    return transcode(String, temppath)
-end
 
 function _win_tempname(temppath::AbstractString, uunique::UInt32)
     tempp = cwstring(temppath)
@@ -481,9 +497,6 @@ function tempname()
     return s
 end
 
-# Obtain a temporary directory's path.
-tempdir() = dirname(tempname())
-
 # Create and return the name of a temporary file along with an IOStream
 function mktemp(parent=tempdir())
     b = joinpath(parent, temp_prefix * "XXXXXX")
@@ -495,13 +508,6 @@ end
 
 end # os-test
 
-
-"""
-    tempdir()
-
-Obtain the path of a temporary directory (possibly shared with other processes).
-"""
-tempdir()
 
 """
     tempname()
