@@ -15,6 +15,13 @@ IHNpbmd1bGFyIHBhc3Npb24gZnJvbSBvdGhlciBhbmltYWxzLCB3aGljaCBpcyBhIGx1c3Qgb2Yg
 dGhlIG1pbmQsIHRoYXQgYnkgYSBwZXJzZXZlcmFuY2Ugb2YgZGVsaWdodCBpbiB0aGUgY29udGlu
 dWVkIGFuZCBpbmRlZmF0aWdhYmxlIGdlbmVyYXRpb24gb2Yga25vd2xlZGdlLCBleGNlZWRzIHRo
 ZSBzaG9ydCB2ZWhlbWVuY2Ugb2YgYW55IGNhcm5hbCBwbGVhc3VyZS4="""
+const skipSpaces = """
+TWFuIGlz IGRpc3Rpbmd1aXNoZWQsIG5vdCBvbmx5IGJ5IGhpcyByZWFzb24sIGJ1dCBieSB0aGlz
+IHNpbmd1b  GFyIHBhc3Npb24gZnJvbSBvdGhlciBhbmltYWxzLCB3aGljaCBpcyBhIGx1c3Qgb2Yg
+dGhlIG1pbmQs\nIHRoYXQgYnkgYSBwZXJzZXZlcmFuY2Ugb2YgZGVsaWdodCBpbiB0aGUgY29udGlu
+dWVkIGFuZCBpbmRlZmF0aWdhYmxlIGdlbmVyYXRpb24gb2Yga25vd2xlZGdlLCBleGNlZWRzIHRo
+ZSBzaG9ydCB2ZWh\n\nlbWVuY2Ugb2YgYW55IGNhcm5hbCBwbGVhc3VyZS4="""
+
 
 @testset "Examples" begin
     # Encode and decode
@@ -51,6 +58,10 @@ ZSBzaG9ydCB2ZWhlbWVuY2Ugb2YgYW55IGNhcm5hbCBwbGVhc3VyZS4="""
 
     # Decode with max line chars = 76 and padding
     ipipe = Base64DecodePipe(IOBuffer(encodedMaxLine76))
+    @test read(ipipe, String) == inputText
+
+    # Decode string containing invalid chars
+    ipipe = Base64DecodePipe(IOBuffer(skipSpaces))
     @test read(ipipe, String) == inputText
 
     # Decode with max line chars = 76 and no padding

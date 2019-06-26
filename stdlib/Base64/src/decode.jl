@@ -94,7 +94,6 @@ function read_until_end(pipe::Base64DecodePipe, ptr::Ptr{UInt8}, n::UInt)
         end
     end
     consumed!(buffer, i)
-
     return p
 end
 
@@ -210,6 +209,7 @@ julia> String(b)
 """
 function base64decode(s)
     b = IOBuffer(s)
+    s = replace(s, r"\s" => "")
     try
         return read(Base64DecodePipe(b))
     finally
