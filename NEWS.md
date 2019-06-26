@@ -14,6 +14,9 @@ Language changes
 Multi-threading changes
 -----------------------
 
+* All system-level I/O operations (e.g. files and sockets) are now thread-safe.
+  This does not include subtypes of `IO` that are entirely in-memory, e.g. `IOBuffer`.
+  ([#32309], [#32174], [#31981], [#32421]).
 
 Build system changes
 --------------------
