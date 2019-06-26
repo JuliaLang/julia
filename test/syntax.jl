@@ -1861,3 +1861,6 @@ let
     a32325(x) = a32325()
 end
 @test a32325(0) === a32325()
+
+@test Meta.lower(Main, :(struct A; A() = new{Int}(); end)) == Expr(:error, "too many type parameters specified in \"new{...}\"")
+@test Meta.lower(Main, :(struct A{T, S}; A() = new{Int}(); end)) == Expr(:error, "too few type parameters specified in \"new{...}\"")
