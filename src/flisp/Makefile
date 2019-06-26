@@ -33,7 +33,10 @@ FLAGS := -I$(LLTDIR) $(JCFLAGS) $(HFILEDIRS:%=-I%) \
         -I$(LIBUV_INC) -I$(UTF8PROC_INC) -I$(build_includedir) $(LIBDIRS:%=-L%) \
         -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
 ifneq ($(USEMSVC), 1)
-FLAGS += -Wall -Wno-strict-aliasing -DUSE_COMPUTED_GOTO -fvisibility=hidden -Wpointer-arith -Wundef
+ifneq ($(OS), emscripten)
+FLAGS += -DUSE_COMPUTED_GOTO
+endif
+FLAGS += -Wall -Wno-strict-aliasing -fvisibility=hidden -Wpointer-arith -Wundef
 FLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 endif
 
