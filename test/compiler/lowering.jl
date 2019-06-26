@@ -178,36 +178,84 @@ macro desugar(ex, kws...)
     end
 end
 
+# Convenience macro to print code for a test case
 macro maketest(ex)
     Base.remove_linenums!(ex)
     quote
-        print("@test_desugar(")
-        print($(QuoteNode(ex)), ",\n")
+        print($(QuoteNode(ex)), "\n")
         print(desugar($(Expr(:quote, ex))), "\n")
-        print(")")
     end
 end
 
 """
-Test that syntax desugaring of `input` produces an expression equivalent to the
-reference expression `ref`.
+    @testset_desugar(name, exprs)
+
+Test that a set of expressions lower correctly to desugared AST form. This
+creates a new `@testset` with the given `name`. The statements in the block
+`exprs` are interpreted as a flat list of any number of `input_expr`,
+`ref_expr` pairs, where `input_expr` should be transformed by lowering into
+`ref_expr` by the desugaring pass.  For example,
+
+```
+@testset_desugar "Property notation" begin
+    # flisp: (expand-fuse-broadcast)
+    a.b
+    Top.getproperty(a, :b)
+
+    a.b.c
+    Top.getproperty(Top.getproperty(a, :b), :c)
+end
+```
 """
-macro test_desugar(input, ref)
-    ex = quote
-        input = lift_lowered_expr(expand_forms($(Expr(:quote, input))))
-        ref   = lower_ref_expr($(Expr(:quote, ref)))
-        @test input == ref
-        if input != ref
-            # Kinda crude. Would be much neater if Test supported custom/more
-            # capable diffing for failed tests.
-            println("Diff dump:")
-            diffdump(input, ref)
+macro testset_desugar(name, block)
+    if !(block isa Expr && block.head == :block)
+        throw(ArgumentError("@testset_desugar requires a block as the second argument"))
+    end
+    loc = nothing
+    tests = []
+    i = 1
+    while i <= length(block.args)
+        if block.args[i] isa LineNumberNode
+            loc = block.args[i]
+            i += 1
+            continue
+        end
+        exs = []
+        while i <= length(block.args) && length(exs) < 2
+            if !(block.args[i] isa LineNumberNode)
+                push!(exs, block.args[i])
+            end
+            i += 1
+        end
+        if length(exs) == 0
+            break
+        end
+        if length(exs) == 1
+            throw(ArgumentError("List of expressions to @testset_desugar must consist of input,ref pairs"))
+        end
+        input = exs[1]
+        ref = exs[2]
+        ex = quote
+            input = lift_lowered_expr(expand_forms($(Expr(:quote, input))))
+            ref = lower_ref_expr($(Expr(:quote, ref)))
+            @test input == ref
+            if input != ref
+                # Kinda crude. Would be much neater if Test supported custom/more
+                # capable diffing for failed tests.
+                println("Diff dump:")
+                diffdump(input, ref)
+            end
+        end
+        # Attribute the test to the correct line number
+        @assert ex.args[6].args[1] == Symbol("@test")
+        ex.args[6].args[2] = loc
+        push!(tests, ex)
+    end
+    quote
+        @testset $name begin
+            $(tests...)
         end
     end
-    # Attribute the test to the correct line number
-    @assert ex.args[6].args[1] == Symbol("@test")
-    ex.args[6].args[2] = __source__
-    ex
 end
 
 macro test_desugar_error(input, msg)
@@ -224,668 +272,744 @@ end
 #-------------------------------------------------------------------------------
 # Tests
 
-@testset "Property notation" begin
+@testset_desugar "Property notation" begin
     # flisp: (expand-fuse-broadcast)
-    @test_desugar a.b    Top.getproperty(a, :b)
-    @test_desugar a.b.c  Top.getproperty(Top.getproperty(a, :b), :c)
+    a.b
+    Top.getproperty(a, :b)
 
-    @test_desugar(a.b = c,
-        begin
-            Top.setproperty!(a, :b, c)
-            maybe_unused(c)
-        end
-    )
-    @test_desugar(a.b.c = d,
-        begin
-            ssa1 = Top.getproperty(a, :b)
-            Top.setproperty!(ssa1, :c, d)
-            maybe_unused(d)
-        end
-    )
-end
+    a.b.c
+    Top.getproperty(Top.getproperty(a, :b), :c)
 
-@testset "Index notation" begin
-    # flisp: (process-indices) (partially-expand-ref)
-    @testset "getindex" begin
-        # Indexing
-        @test_desugar a[i]      Top.getindex(a, i)
-        @test_desugar a[i,j]    Top.getindex(a, i, j)
-        # Indexing with `end`
-        @test_desugar a[end]    Top.getindex(a, Top.lastindex(a))
-        @test_desugar a[i,end]  Top.getindex(a, i, Top.lastindex(a,2))
-        # Nesting of `end`
-        @test_desugar a[[end]]  Top.getindex(a, Top.vect(Top.lastindex(a)))
-        @test_desugar a[b[end] + end]  Top.getindex(a, Top.getindex(b, Top.lastindex(b)) + Top.lastindex(a))
-        @test_desugar a[f(end) + 1]    Top.getindex(a, f(Top.lastindex(a)) + 1)
-        @test_desugar a[end][b[i]]     Top.getindex(Top.getindex(a, Top.lastindex(a)), Top.getindex(b,i))
-
-        # Interaction of `end` with splatting
-        @test_desugar(a[I..., end, J..., end],
-            Core._apply(Top.getindex, Core.tuple(a),
-                        I,
-                        Core.tuple(Top.lastindex(a, Top.:+(1, Top.length(I)))),
-                        J,
-                        Core.tuple(Top.lastindex(a, Top.:+(2, Top.length(J), Top.length(I)))))
-        )
-        @test_desugar(a[f(x)..., end],
-            begin
-                ssa1 = f(x)
-                Core._apply(Top.getindex, Core.tuple(a),
-                            ssa1,
-                            Core.tuple(Top.lastindex(a, Top.:+(1, Top.length(ssa1)))))
-            end
-        )
+    a.b=c
+    begin
+        Top.setproperty!(a, :b, c)
+        maybe_unused(c)
     end
 
-    @testset "setindex!" begin
-        # flisp: (lambda in expand-table)
-        @test_desugar(a[i] = b,
-            begin
-                Top.setindex!(a, b, i)
-                maybe_unused(b)
-            end
-        )
-        @test_desugar(a[i,end] = b+c,
-            begin
-                ssa1 = b+c
-                Top.setindex!(a, ssa1, i, Top.lastindex(a,2))
-                maybe_unused(ssa1)
-            end
-        )
+    a.b.c=d
+    begin
+        ssa1 = Top.getproperty(a, :b)
+        Top.setproperty!(ssa1, :c, d)
+        maybe_unused(d)
     end
 end
 
-@testset "Array notation" begin
+@testset_desugar "Index notation; getindex" begin
+    # Indexing
+    a[i]
+    Top.getindex(a, i)
+
+    a[i,j]
+    Top.getindex(a, i, j)
+
+    # Indexing with `end`
+    a[end]
+    Top.getindex(a, Top.lastindex(a))
+
+    a[i,end]
+    Top.getindex(a, i, Top.lastindex(a,2))
+
+    # Nesting of `end`
+    a[[end]]
+    Top.getindex(a, Top.vect(Top.lastindex(a)))
+
+    a[b[end] + end]
+    Top.getindex(a, Top.getindex(b, Top.lastindex(b)) + Top.lastindex(a))
+
+    a[f(end) + 1]
+    Top.getindex(a, f(Top.lastindex(a)) + 1)
+
+    a[end][b[i]]
+    Top.getindex(Top.getindex(a, Top.lastindex(a)), Top.getindex(b,i))
+
+    # Interaction of `end` with splatting
+    a[I..., end, J..., end]
+    Core._apply(Top.getindex, Core.tuple(a),
+                I,
+                Core.tuple(Top.lastindex(a, Top.:+(1, Top.length(I)))),
+                J,
+                Core.tuple(Top.lastindex(a, Top.:+(2, Top.length(J), Top.length(I)))))
+
+    a[f(x)..., end]
+    begin
+        ssa1 = f(x)
+        Core._apply(Top.getindex, Core.tuple(a),
+                    ssa1,
+                    Core.tuple(Top.lastindex(a, Top.:+(1, Top.length(ssa1)))))
+    end
+end
+
+@testset_desugar "Index notation; setindex!" begin
+    # flisp: (lambda in expand-table)
+    a[i] = b
+    begin
+        Top.setindex!(a, b, i)
+        maybe_unused(b)
+    end
+
+    a[i,end] = b+c
+    begin
+        ssa1 = b+c
+        Top.setindex!(a, ssa1, i, Top.lastindex(a,2))
+        maybe_unused(ssa1)
+    end
+end
+
+@testset_desugar "Array Literals" begin
     # flisp: (in expand-table)
-    @testset "Literals" begin
-        @test_desugar [a,b]     Top.vect(a,b)
-        @test_desugar T[a,b]    Top.getindex(T, a,b)  # Only so much syntax to go round :-/
-        @test_desugar_error [a,b;c]  "unexpected semicolon in array expression"
-        @test_desugar_error [a=b,c]  "misplaced assignment statement in \"[a = b, c]\""
-    end
+    [a,b]
+    Top.vect(a,b)
 
-    @testset "Concatenation" begin
-        # flisp: (lambda in expand-table)
-        @test_desugar [a b]     Top.hcat(a,b)
-        @test_desugar [a; b]    Top.vcat(a,b)
-        @test_desugar T[a b]    Top.typed_hcat(T, a,b)
-        @test_desugar T[a; b]   Top.typed_vcat(T, a,b)
-        @test_desugar [a b; c]  Top.hvcat(Core.tuple(2,1), a, b, c)
-        @test_desugar T[a b; c] Top.typed_hvcat(T, Core.tuple(2,1), a, b, c)
+    T[a,b]
+    Top.getindex(T, a,b)  # Only so much syntax to go round :-/
 
-        @test_desugar_error [a b=c]   "misplaced assignment statement in \"[a b = c]\""
-        @test_desugar_error [a; b=c]  "misplaced assignment statement in \"[a; b = c]\""
-        @test_desugar_error T[a b=c]  "misplaced assignment statement in \"T[a b = c]\""
-        @test_desugar_error T[a; b=c] "misplaced assignment statement in \"T[a; b = c]\""
-    end
+    [a,b;c]
+    @Expr(:error, "unexpected semicolon in array expression")
+
+    [a=b,c]
+    @Expr(:error, "misplaced assignment statement in \"[a = b, c]\"")
 end
 
-@testset "Tuples" begin
-    @test_desugar (x,y)      Core.tuple(x,y)
-    @test_desugar (x=a,y=b)  Core.apply_type(Core.NamedTuple, Core.tuple(:x, :y))(Core.tuple(a, b))
+@testset_desugar "Array Concatenation" begin
+    # flisp: (lambda in expand-table)
+    [a b]
+    Top.hcat(a,b)
+
+    [a; b]
+    Top.vcat(a,b)
+
+    T[a b]
+    Top.typed_hcat(T, a,b)
+
+    T[a; b]
+    Top.typed_vcat(T, a,b)
+
+    [a b; c]
+    Top.hvcat(Core.tuple(2,1), a, b, c)
+
+    T[a b; c]
+    Top.typed_hvcat(T, Core.tuple(2,1), a, b, c)
+
+    [a b=c]
+    @Expr(:error, "misplaced assignment statement in \"[a b = c]\"")
+
+    [a; b=c]
+    @Expr(:error, "misplaced assignment statement in \"[a; b = c]\"")
+
+    T[a b=c]
+    @Expr(:error, "misplaced assignment statement in \"T[a b = c]\"")
+
+    T[a; b=c]
+    @Expr(:error, "misplaced assignment statement in \"T[a; b = c]\"")
 end
 
-@testset "Splatting" begin
-    @test_desugar f(i,j,v...,k)  Core._apply(f, Core.tuple(i,j), v, Core.tuple(k))
+@testset_desugar "Tuples" begin
+    (x,y)
+    Core.tuple(x,y)
 
-    @test_desugar_error x...  "\"...\" expression outside call"
+    (x=a,y=b)
+    Core.apply_type(Core.NamedTuple, Core.tuple(:x, :y))(Core.tuple(a, b))
 end
 
-@testset "Comparison chains" begin
+@testset_desugar "Splatting" begin
+    f(i,j,v...,k)
+    Core._apply(f, Core.tuple(i,j), v, Core.tuple(k))
+
+    x...
+    @Expr(:error, "\"...\" expression outside call")
+end
+
+@testset_desugar "Comparison chains" begin
     # flisp: (expand-compare-chain)
-    @test_desugar(a < b < c,
-        if a < b
-            b < c
-        else
-            false
-        end
-    )
+    a < b < c
+    if a < b
+        b < c
+    else
+        false
+    end
+
     # Nested
-    @test_desugar(a < b > d <= e,
-        if a < b
-            if b > d
-                d <= e
-            else
-                false
-            end
+    a < b > d <= e
+    if a < b
+        if b > d
+            d <= e
         else
             false
         end
-    )
+    else
+        false
+    end
+
     # Subexpressions
-    @test_desugar(a < b+c < d,
-        if (ssa1 = b+c; a < ssa1)
-            ssa1 < d
-        else
-            false
-        end
-    )
+    a < b+c < d
+    if (ssa1 = b+c; a < ssa1)
+        ssa1 < d
+    else
+        false
+    end
 
     # Interaction with broadcast syntax
-    @test_desugar(a < b .< c,
-        Top.materialize(Top.broadcasted(&, a < b, Top.broadcasted(<, b, c)))
-    )
-    @test_desugar(a .< b+c < d,
-        Top.materialize(Top.broadcasted(&,
-                                        begin
-                                            ssa1 = b+c
-                                            # Is this a bug?
-                                            Top.materialize(Top.broadcasted(<, a, ssa1))
-                                        end,
-                                        ssa1 < d))
-    )
-    @test_desugar(a < b+c .< d,
-        Top.materialize(Top.broadcasted(&,
-                                        begin
-                                            ssa1 = b+c
-                                            a < ssa1
-                                        end,
-                                        Top.broadcasted(<, ssa1, d)))
-    )
+    a < b .< c
+    Top.materialize(Top.broadcasted(&, a < b, Top.broadcasted(<, b, c)))
+
+    a .< b+c < d
+    Top.materialize(Top.broadcasted(&,
+                                    begin
+                                        ssa1 = b+c
+                                        # Is this a bug?
+                                        Top.materialize(Top.broadcasted(<, a, ssa1))
+                                    end,
+                                    ssa1 < d))
+
+    a < b+c .< d
+    Top.materialize(Top.broadcasted(&,
+                                    begin
+                                        ssa1 = b+c
+                                        a < ssa1
+                                    end,
+                                    Top.broadcasted(<, ssa1, d)))
 end
 
-@testset "Short circuit; ternary" begin
+@testset_desugar "Short circuit; ternary" begin
     # flisp: (expand-or) (expand-and)
-    @test_desugar a || b      if a; a else b end
-    @test_desugar a && b      if a; b else false end
-    @test_desugar a ? x : y   if a; x else y end
+    a || b
+    if a
+        a
+    else
+        b
+    end
+
+    a && b
+    if a
+        b
+    else
+        false
+    end
+
+    a ? x : y
+    if a
+        x
+    else
+        y
+    end
 end
 
-@testset "Misc operators" begin
-    @test_desugar a'    Top.adjoint(a)
+@testset_desugar "Misc operators" begin
+    a'
+    Top.adjoint(a)
+
     # <: and >: are special Expr heads which need to be turned into Expr(:call)
     # when used as operators
-    @test_desugar a <: b  $(Expr(:call, :(<:), :a, :b))
-    @test_desugar a >: b  $(Expr(:call, :(>:), :a, :b))
+    a <: b
+    $(Expr(:call, :(<:), :a, :b))
 
-    @test_desugar_error $(Expr(:$, :x)) "\"\$\" expression outside quote"
+    a >: b
+    $(Expr(:call, :(>:), :a, :b))
+
+    $(Expr(:$, :x))
+    @Expr(:error, "\"\$\" expression outside quote")
 end
 
-@testset "Broadcast" begin
+@testset_desugar "Broadcast" begin
     # flisp: (expand-fuse-broadcast)
     # Basic
-    @test_desugar x .+ y        Top.materialize(Top.broadcasted(+, x, y))
-    @test_desugar f.(x)         Top.materialize(Top.broadcasted(f, x))
+    x .+ y
+    Top.materialize(Top.broadcasted(+, x, y))
+
+    f.(x)
+    Top.materialize(Top.broadcasted(f, x))
+
     # Fusing
-    @test_desugar f.(x) .+ g.(y)  Top.materialize(Top.broadcasted(+, Top.broadcasted(f, x),
-                                                                  Top.broadcasted(g, y)))
+    f.(x) .+ g.(y)
+    Top.materialize(Top.broadcasted(+, Top.broadcasted(f, x), Top.broadcasted(g, y)))
+
     # Keywords don't participate
-    @test_desugar(f.(x, a=1),
-        Top.materialize(
-            begin
-                ssa1 = Top.broadcasted_kwsyntax
-                ssa2 = Core.apply_type(Core.NamedTuple, Core.tuple(:a))(Core.tuple(1))
-                Core.kwfunc(ssa1)(ssa2, ssa1, f, x)
-            end
-        )
+    f.(x, a=1)
+    Top.materialize(
+        begin
+            ssa1 = Top.broadcasted_kwsyntax
+            ssa2 = Core.apply_type(Core.NamedTuple, Core.tuple(:a))(Core.tuple(1))
+            Core.kwfunc(ssa1)(ssa2, ssa1, f, x)
+        end
     )
+
     # Nesting
-    @test_desugar f.(g(x))      Top.materialize(Top.broadcasted(f, g(x)))
-    @test_desugar f.(g(h.(x)))  Top.materialize(Top.broadcasted(f,
-                                    g(Top.materialize(Top.broadcasted(h, x)))))
+    f.(g(x))
+    Top.materialize(Top.broadcasted(f, g(x)))
+
+    f.(g(h.(x)))
+    Top.materialize(Top.broadcasted(f, g(Top.materialize(Top.broadcasted(h, x)))))
 
     # In place
-    @test_desugar x .= a        Top.materialize!(x, Top.broadcasted(Top.identity, a))
-    @test_desugar x .= f.(a)    Top.materialize!(x, Top.broadcasted(f, a))
-    @test_desugar x .+= a       Top.materialize!(x, Top.broadcasted(+, x, a))
+    x .= a
+    Top.materialize!(x, Top.broadcasted(Top.identity, a))
+
+    x .= f.(a)
+    Top.materialize!(x, Top.broadcasted(f, a))
+
+    x .+= a
+    Top.materialize!(x, Top.broadcasted(+, x, a))
 end
 
-@testset "Call with keyword arguments" begin
-    @test_desugar(
-        f(x,a=1),
-        begin
-            ssa1 = Core.apply_type(Core.NamedTuple, Core.tuple(:a))(Core.tuple(1))
-            Core.kwfunc(f)(ssa1, f, x)
-        end
-    )
+@testset_desugar "Call with keyword arguments" begin
+    f(x,a=1)
+    begin
+        ssa1 = Core.apply_type(Core.NamedTuple, Core.tuple(:a))(Core.tuple(1))
+        Core.kwfunc(f)(ssa1, f, x)
+    end
 end
 
-@testset "In place update operators" begin
+@testset_desugar "In place update operators" begin
     # flisp: (lower-update-op)
-    @test_desugar x += a       x = x+a
-    @test_desugar x::Int += a  x = x::Int + a
-    @test_desugar(x[end] += a,
+    x += a
+    x = x+a
+
+    x::Int += a
+    x = x::Int + a
+
+    x[end] += a
+    begin
+        ssa1 = Top.lastindex(x)
         begin
-            ssa1 = Top.lastindex(x)
-            begin
-                ssa2 = Top.getindex(x, ssa1) + a
-                Top.setindex!(x, ssa2, ssa1)
-                maybe_unused(ssa2)
-            end
+            ssa2 = Top.getindex(x, ssa1) + a
+            Top.setindex!(x, ssa2, ssa1)
+            maybe_unused(ssa2)
         end
-    )
-    @test_desugar(x[f(y)] += a,
+    end
+
+    x[f(y)] += a
+    begin
+        ssa1 = f(y)
         begin
-            ssa1 = f(y)
-            begin
-                ssa2 = Top.getindex(x, ssa1) + a
-                Top.setindex!(x, ssa2, ssa1)
-                maybe_unused(ssa2)
-            end
+            ssa2 = Top.getindex(x, ssa1) + a
+            Top.setindex!(x, ssa2, ssa1)
+            maybe_unused(ssa2)
         end
-    )
-    @test_desugar((x,y) .+= a,
-        begin
-            ssa1 = Core.tuple(x, y)
-            Top.materialize!(ssa1, Top.broadcasted(+, ssa1, a))
-        end
-    )
-    @test_desugar([x y] .+= a,
-        begin
-            ssa1 = Top.hcat(x, y)
-            Top.materialize!(ssa1, Top.broadcasted(+, ssa1, a))
-        end
-    )
-    @test_desugar_error (x+y) += 1  "invalid assignment location \"(x + y)\""
+    end
+
+    (x,y) .+= a
+    begin
+        ssa1 = Core.tuple(x, y)
+        Top.materialize!(ssa1, Top.broadcasted(+, ssa1, a))
+    end
+
+    [x y] .+= a
+    begin
+        ssa1 = Top.hcat(x, y)
+        Top.materialize!(ssa1, Top.broadcasted(+, ssa1, a))
+    end
+
+    (x+y) += 1
+    @Expr(:error, "invalid assignment location \"(x + y)\"")
 end
 
-@testset "Assignment" begin
+@testset_desugar "Assignment" begin
     # flisp: (lambda in expand-table)
 
     # Assignment chain; nontrivial rhs
-    @test_desugar(x = y = f(a),
-        begin
-            ssa1 = f(a)
-            y = ssa1
-            x = ssa1
-            maybe_unused(ssa1)
-        end
-    )
+    x = y = f(a)
+    begin
+        ssa1 = f(a)
+        y = ssa1
+        x = ssa1
+        maybe_unused(ssa1)
+    end
 
-    @testset "Multiple Assignemnt" begin
-        # Simple multiple assignment exact match
-        @test_desugar((x,y) = (a,b),
+    # Multiple Assignment
+
+    # Simple multiple assignment exact match
+    (x,y) = (a,b)
+    begin
+        x = a
+        y = b
+        maybe_unused(Core.tuple(a,b))
+    end
+
+    # Destructuring
+    (x,y) = a
+    begin
+        begin
+            ssa1 = Top.indexed_iterate(a, 1)
+            x = Core.getfield(ssa1, 1)
+            gsym1 = Core.getfield(ssa1, 2)
+            ssa1
+        end
+        begin
+            ssa2 = Top.indexed_iterate(a, 2, gsym1)
+            y = Core.getfield(ssa2, 1)
+            ssa2
+        end
+        maybe_unused(a)
+    end
+
+    # Nested destructuring
+    (x,(y,z)) = a
+    begin
+        begin
+            ssa1 = Top.indexed_iterate(a, 1)
+            x = Core.getfield(ssa1, 1)
+            gsym1 = Core.getfield(ssa1, 2)
+            ssa1
+        end
+        begin
+            ssa2 = Top.indexed_iterate(a, 2, gsym1)
             begin
-                x = a
-                y = b
-                maybe_unused(Core.tuple(a,b))
+                ssa3 = Core.getfield(ssa2, 1)
+                begin
+                    ssa4 = Top.indexed_iterate(ssa3, 1)
+                    y = Core.getfield(ssa4, 1)
+                    gsym2 = Core.getfield(ssa4, 2)
+                    ssa4
+                end
+                begin
+                    ssa5 = Top.indexed_iterate(ssa3, 2, gsym2)
+                    z = Core.getfield(ssa5, 1)
+                    ssa5
+                end
+                maybe_unused(ssa3)
             end
-        )
-        # Destructuring
-        @test_desugar((x,y) = a,
-            begin
-                begin
-                    ssa1 = Top.indexed_iterate(a, 1)
-                    x = Core.getfield(ssa1, 1)
-                    gsym1 = Core.getfield(ssa1, 2)
-                    ssa1
-                end
-                begin
-                    ssa2 = Top.indexed_iterate(a, 2, gsym1)
-                    y = Core.getfield(ssa2, 1)
-                    ssa2
-                end
-                maybe_unused(a)
-            end
-        )
-        # Nested destructuring
-        @test_desugar((x,(y,z)) = a,
-            begin
-                begin
-                    ssa1 = Top.indexed_iterate(a, 1)
-                    x = Core.getfield(ssa1, 1)
-                    gsym1 = Core.getfield(ssa1, 2)
-                    ssa1
-                end
-                begin
-                    ssa2 = Top.indexed_iterate(a, 2, gsym1)
-                    begin
-                        ssa3 = Core.getfield(ssa2, 1)
-                        begin
-                            ssa4 = Top.indexed_iterate(ssa3, 1)
-                            y = Core.getfield(ssa4, 1)
-                            gsym2 = Core.getfield(ssa4, 2)
-                            ssa4
-                        end
-                        begin
-                            ssa5 = Top.indexed_iterate(ssa3, 2, gsym2)
-                            z = Core.getfield(ssa5, 1)
-                            ssa5
-                        end
-                        maybe_unused(ssa3)
-                    end
-                    ssa2
-                end
-                maybe_unused(a)
-            end
-        )
+            ssa2
+        end
+        maybe_unused(a)
     end
 
     # Invalid assignments
-    @test_desugar_error 1=a      "invalid assignment location \"1\""
-    @test_desugar_error true=a   "invalid assignment location \"true\""
-    @test_desugar_error "str"=a  "invalid assignment location \"\"str\"\""
-    @test_desugar_error [x y]=c  "invalid assignment location \"[x y]\""
-    @test_desugar_error a[x y]=c "invalid spacing in left side of indexed assignment"
-    @test_desugar_error a[x;y]=c "unexpected \";\" in left side of indexed assignment"
-    @test_desugar_error [x;y]=c  "use \"(a, b) = ...\" to assign multiple values"
+    1 = a
+    @Expr(:error, "invalid assignment location \"1\"")
+
+    true = a
+    @Expr(:error, "invalid assignment location \"true\"")
+
+    "str" = a
+    @Expr(:error, "invalid assignment location \"\"str\"\"")
+
+    [x y] = c
+    @Expr(:error, "invalid assignment location \"[x y]\"")
+
+    a[x y] = c
+    @Expr(:error, "invalid spacing in left side of indexed assignment")
+
+    a[x;y] = c
+    @Expr(:error, "unexpected \";\" in left side of indexed assignment")
+
+    [x;y] = c
+    @Expr(:error, "use \"(a, b) = ...\" to assign multiple values")
 
     # Old deprecation (6575e12ba46)
-    @test_desugar_error x.(y)=c  "invalid syntax \"x.(y) = ...\""
+    x.(y)=c
+    @Expr(:error, "invalid syntax \"x.(y) = ...\"")
 end
 
-@testset "Declarations" begin
+@testset_desugar "Declarations" begin
     # flisp: (expand-decls) (expand-local-or-global-decl) (expand-const-decl)
 
     # const
-    @test_desugar((const x=a),
-        begin
-            @Expr :const x    # `const x` is invalid surface syntax
-            x = a
-        end
-    )
-    @test_desugar((const x,y = a,b),
-        begin
-            @Expr :const x
-            @Expr :const y
-            begin
-                x = a
-                y = b
-                maybe_unused(Core.tuple(a,b))
-            end
-        end
-    )
+    const x=a
+    begin
+        @Expr :const x    # `const x` is invalid surface syntax
+        x = a
+    end
 
-    # local
-    @test_desugar((local x, y),
+    const x,y = a,b
+    begin
+        @Expr :const x
+        @Expr :const y
         begin
-            local y
-            local x
-        end
-    )
-    # Locals with initialization. Note parentheses are needed for this to parse
-    # as individual assignments rather than multiple assignment.
-    @test_desugar((local (x=a), (y=b), z),
-        begin
-            local z
-            local y
-            local x
             x = a
             y = b
+            maybe_unused(Core.tuple(a,b))
         end
-    )
+    end
+
+    # local
+    local x, y
+    begin
+        local y
+        local x
+    end
+
+    # Locals with initialization. Note parentheses are needed for this to parse
+    # as individual assignments rather than multiple assignment.
+    local (x=a), (y=b), z
+    begin
+        local z
+        local y
+        local x
+        x = a
+        y = b
+    end
+
     # Multiple assignment form
-    @test_desugar(begin
-                      local x,y = a,b
-                  end,
+    begin
+        local x,y = a,b
+    end
+    begin
+        local x
+        local y
         begin
-            local x
-            local y
-            begin
-                x = a
-                y = b
-                maybe_unused(Core.tuple(a,b))
-            end
+            x = a
+            y = b
+            maybe_unused(Core.tuple(a,b))
         end
-    )
+    end
 
     # global
-    @test_desugar((global x, (y=a)),
-        begin
-            global y
-            global x
-            y = a
-        end
-    )
+    global x, (y=a)
+    begin
+        global y
+        global x
+        y = a
+    end
 
     # type decl
-    @test_desugar(x::T = a,
-        begin
-            @Expr :decl x T
-            x = a
-        end
-    )
+    x::T = a
+    begin
+        @Expr :decl x T
+        x = a
+    end
 
     # type aliases
-    @test_desugar(A{T} = B{T},
-        begin
-            @Expr :const_if_global A
-            A = @Expr(:scope_block,
-                      begin
-                          @Expr :local_def T
-                          T = Core.TypeVar(:T)
-                          Core.UnionAll(T, Core.apply_type(B, T))
-                      end)
-        end
-    )
-
+    A{T} = B{T}
+    begin
+        @Expr :const_if_global A
+        A = @Expr(:scope_block,
+                  begin
+                      @Expr :local_def T
+                      T = Core.TypeVar(:T)
+                      Core.UnionAll(T, Core.apply_type(B, T))
+                  end)
+    end
 end
 
-@testset "let blocks" begin
+@testset_desugar "let blocks" begin
     # flisp: (expand-let)
-    @test_desugar(let x::Int
-                      body
-                  end,
-        @Expr(:scope_block, begin
-                  begin
-                      local x
-                      @Expr(:decl, x, Int)
-                  end
-                  body
-              end)
-    )
-    @test_desugar(let x,y
-                      body
-                  end,
-        @Expr(:scope_block,
+    let x::Int
+        body
+    end
+    @Expr(:scope_block, begin
               begin
                   local x
-                  @Expr(:scope_block,
-                        begin
-                            local y
-                            body
-                        end)
-              end)
-    )
-    # Let with assignment
-    @test_desugar(let x=a,y=b
-                      body
-                  end,
-        @Expr(:scope_block,
-              begin
-                  @Expr :local_def x
-                  x = a
-                  @Expr(:scope_block,
-                        begin
-                            @Expr :local_def y
-                            y = b
-                            body
-                        end)
-              end)
-    )
+                  @Expr(:decl, x, Int)
+              end
+              body
+          end)
 
-    @test_desugar(let f(x) = 1
-                      body
-                  end,
-        @Expr(:scope_block,
+    # Let without assignment
+    let x,y
+        body
+    end
+    @Expr(:scope_block,
+          begin
+              local x
+              @Expr(:scope_block,
+                    begin
+                        local y
+                        body
+                    end)
+          end)
+
+    # Let with assignment
+    let x=a,y=b
+        body
+    end
+    @Expr(:scope_block,
+          begin
+              @Expr :local_def x
+              x = a
+              @Expr(:scope_block,
+                    begin
+                        @Expr :local_def y
+                        y = b
+                        body
+                    end)
+          end)
+
+    # Let with function declaration
+    let f(x) = 1
+        body
+    end
+    @Expr(:scope_block,
+          begin
+              @Expr(:local_def, f)
               begin
-                  @Expr(:local_def, f)
-                  begin
-                      @Expr(:method, f)
-                      @Expr(:method, f,
-                            Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec()),
-                            @Expr(:lambda, $([:_self_, :x]), $([]), @Expr(:scope_block, 1)))
-                  end
-                  body
-              end)
-    )
+                  @Expr(:method, f)
+                  @Expr(:method, f,
+                        Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec()),
+                        @Expr(:lambda, $([:_self_, :x]), $([]), @Expr(:scope_block, 1)))
+              end
+              body
+          end)
 
     # Other things in the variable list should produce an error
-    @test_desugar_error let f(x); body end  "invalid let syntax"
+    let f(x)
+        body
+    end
+    @Expr(:error, "invalid let syntax")
 end
 
-@testset "Loops" begin
+@testset_desugar "Loops" begin
     # flisp: (expand-for) (lambda in expand-forms)
-    @test_desugar(
-        while cond
-            body1
-            continue
-            body2
-            break
-            body3
-        end,
-        @Expr(:break_block, loop_exit,
-              @Expr(:_while, cond,
-                    @Expr(:break_block, loop_cont,
-                          @Expr(:scope_block, begin
-                                    body1
-                                    @Expr :break loop_cont
-                                    body2
-                                    @Expr :break loop_exit
-                                    body3
-                                end))))
-    )
+    while cond
+        body1
+        continue
+        body2
+        break
+        body3
+    end
+    @Expr(:break_block, loop_exit,
+          @Expr(:_while, cond,
+                @Expr(:break_block, loop_cont,
+                      @Expr(:scope_block, begin
+                                body1
+                                @Expr :break loop_cont
+                                body2
+                                @Expr :break loop_exit
+                                body3
+                            end))))
 
-    @test_desugar(
-        for i = a
-            body1
-            continue
-            body2
-            break
-        end,
-        @Expr(:break_block, loop_exit,
-              begin
-                  ssa1 = a
-                  gsym1 = Top.iterate(ssa1)
-                  if Top.not_int(Core.:(===)(gsym1, $nothing))
-                      @Expr(:_do_while,
-                            begin
-                                @Expr(:break_block, loop_cont,
-                                      @Expr(:scope_block,
+    for i = a
+        body1
+        continue
+        body2
+        break
+    end
+    @Expr(:break_block, loop_exit,
+          begin
+              ssa1 = a
+              gsym1 = Top.iterate(ssa1)
+              if Top.not_int(Core.:(===)(gsym1, $nothing))
+                  @Expr(:_do_while,
+                        begin
+                            @Expr(:break_block, loop_cont,
+                                  @Expr(:scope_block,
+                                        begin
+                                            local i
                                             begin
-                                                local i
-                                                begin
-                                                    ssa2 = gsym1
-                                                    i = Core.getfield(ssa2, 1)
-                                                    ssa3 = Core.getfield(ssa2, 2)
-                                                    ssa2
-                                                end
-                                                begin
-                                                    body1
-                                                    @Expr :break loop_cont
-                                                    body2
-                                                    @Expr :break loop_exit
-                                                end
-                                            end))
-                                gsym1 = Top.iterate(ssa1, ssa3)
-                            end,
-                            Top.not_int(Core.:(===)(gsym1, $nothing)))
-                  end
-              end)
-    )
+                                                ssa2 = gsym1
+                                                i = Core.getfield(ssa2, 1)
+                                                ssa3 = Core.getfield(ssa2, 2)
+                                                ssa2
+                                            end
+                                            begin
+                                                body1
+                                                @Expr :break loop_cont
+                                                body2
+                                                @Expr :break loop_exit
+                                            end
+                                        end))
+                            gsym1 = Top.iterate(ssa1, ssa3)
+                        end,
+                        Top.not_int(Core.:(===)(gsym1, $nothing)))
+              end
+          end)
 
     # For loops with `outer`
-    @test_desugar(for outer i = a
-                      body
-                  end,
-        @Expr(:break_block, loop_exit,
-              begin
-                  ssa1 = a
-                  gsym1 = Top.iterate(ssa1)
-                  @Expr(:require_existing_local, i)
-                  if Top.not_int(Core.:(===)(gsym1, $nothing))
-                      @Expr(:_do_while,
-                            begin
-                                @Expr(:break_block, loop_cont,
-                                      @Expr(:scope_block,
+    for outer i = a
+        body
+    end
+    @Expr(:break_block, loop_exit,
+          begin
+              ssa1 = a
+              gsym1 = Top.iterate(ssa1)
+              @Expr(:require_existing_local, i)
+              if Top.not_int(Core.:(===)(gsym1, $nothing))
+                  @Expr(:_do_while,
+                        begin
+                            @Expr(:break_block, loop_cont,
+                                  @Expr(:scope_block,
+                                        begin
                                             begin
-                                                begin
-                                                    ssa2 = gsym1
-                                                    i = Core.getfield(ssa2, 1)
-                                                    ssa3 = Core.getfield(ssa2, 2)
-                                                    ssa2
-                                                end
-                                                body
-                                            end))
-                                gsym1 = Top.iterate(ssa1, ssa3)
-                            end,
-                            Top.not_int(Core.:(===)(gsym1, $nothing)))
-                  end
-              end)
-    )
+                                                ssa2 = gsym1
+                                                i = Core.getfield(ssa2, 1)
+                                                ssa3 = Core.getfield(ssa2, 2)
+                                                ssa2
+                                            end
+                                            body
+                                        end))
+                            gsym1 = Top.iterate(ssa1, ssa3)
+                        end,
+                        Top.not_int(Core.:(===)(gsym1, $nothing)))
+              end
+          end)
 end
 
-@testset "Functions" begin
+@testset_desugar "Functions" begin
     # Short form
-    @test_desugar(f(x) = body(x),
+    f(x) = body(x)
+    begin
+        @Expr(:method, f)
+        @Expr(:method, f,
+              Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec()),
+              @Expr(:lambda, $([:_self_, :x]), $([]),
+                    @Expr(:scope_block,
+                          body(x))))
+        maybe_unused(f)
+    end
+
+    # Long form with argument annotations
+    function f(x::T, y)
+        body(x)
+    end
+    begin
+        @Expr(:method, f)
+        @Expr(:method, f,
+              Core.svec(Core.svec(Core.Typeof(f), T, Core.Any), Core.svec()),
+              @Expr(:lambda, $([:_self_, :x, :y]), $([]),
+                    @Expr(:scope_block,
+                          body(x))))
+        maybe_unused(f)
+    end
+
+    # Default arguments
+    function f(x=a, y=b)
+        body(x,y)
+    end
+    begin
+        begin
+            @Expr(:method, f)
+            @Expr(:method, f,
+                  Core.svec(Core.svec(Core.Typeof(f)), Core.svec()),
+                  @Expr(:lambda, $([:_self_]), $([]),
+                        @Expr(:scope_block, _self_(a, b))))
+            maybe_unused(f)
+        end
         begin
             @Expr(:method, f)
             @Expr(:method, f,
                   Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec()),
                   @Expr(:lambda, $([:_self_, :x]), $([]),
-                        @Expr(:scope_block,
-                              body(x))))
+                        @Expr(:scope_block, _self_(x, b))))
             maybe_unused(f)
         end
-    )
-
-    # Long form with argument annotations
-    @test_desugar(function f(x::T, y)
-                      body(x)
-                  end,
         begin
             @Expr(:method, f)
             @Expr(:method, f,
-                  Core.svec(Core.svec(Core.Typeof(f), T, Core.Any), Core.svec()),
+                  Core.svec(Core.svec(Core.Typeof(f), Core.Any, Core.Any), Core.svec()),
                   @Expr(:lambda, $([:_self_, :x, :y]), $([]),
-                        @Expr(:scope_block,
-                           body(x))))
+                        @Expr(:scope_block, body(x, y))))
             maybe_unused(f)
         end
-    )
-
-    # Default arguments
-    @test_desugar(function f(x=a, y=b)
-                      body(x,y)
-                  end,
-        begin
-            begin
-                @Expr(:method, f)
-                @Expr(:method, f,
-                      Core.svec(Core.svec(Core.Typeof(f)), Core.svec()),
-                      @Expr(:lambda, $([:_self_]), $([]),
-                            @Expr(:scope_block, _self_(a, b))))
-                maybe_unused(f)
-            end
-            begin
-                @Expr(:method, f)
-                @Expr(:method, f,
-                      Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec()),
-                      @Expr(:lambda, $([:_self_, :x]), $([]),
-                            @Expr(:scope_block, _self_(x, b))))
-                maybe_unused(f)
-            end
-            begin
-                @Expr(:method, f)
-                @Expr(:method, f,
-                      Core.svec(Core.svec(Core.Typeof(f), Core.Any, Core.Any), Core.svec()),
-                      @Expr(:lambda, $([:_self_, :x, :y]), $([]),
-                            @Expr(:scope_block, body(x, y))))
-                maybe_unused(f)
-            end
-        end
-    )
+    end
 
     # Varargs
-    @test_desugar(function f(x, args...)
-                      body(x, args)
-                  end,
-        begin
-            @Expr(:method, f)
-            @Expr(:method, f,
-                  Core.svec(Core.svec(Core.Typeof(f), Core.Any,
-                                      Core.apply_type(Vararg, Core.Any)), Core.svec()),
-                  @Expr(:lambda, $([:_self_, :x, :args]), $([]),
-                        @Expr(:scope_block, body(x, args))))
-            maybe_unused(f)
-        end
-    )
+    function f(x, args...)
+        body(x, args)
+    end
+    begin
+        @Expr(:method, f)
+        @Expr(:method, f,
+              Core.svec(Core.svec(Core.Typeof(f), Core.Any,
+                                  Core.apply_type(Vararg, Core.Any)), Core.svec()),
+              @Expr(:lambda, $([:_self_, :x, :args]), $([]),
+                    @Expr(:scope_block, body(x, args))))
+        maybe_unused(f)
+    end
 
     # Keyword arguments
-    @test_desugar(function f(x; k1=v1, k2=v2)
-                      body
-                  end,
-        Core.ifelse(false, false,
+    function f(x; k1=v1, k2=v2)
+        body
+    end
+    Core.ifelse(false, false,
         begin
             @Expr(:method, f)
             begin
@@ -940,112 +1064,115 @@ end
             end
             f
         end)
-    )
 
     # Return type declaration
-    @test_desugar(function f(x)::T
-                      body(x)
-                  end,
-        begin
-            @Expr(:method, f)
-            @Expr(:method, f,
-                  Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec()),
-                  @Expr(:lambda, $([:_self_, :x]), $([]),
-                        @Expr(:scope_block,
-                              begin
-                                  ssa1 = T
-                                  @Expr(:meta, ret_type, ssa1)
-                                  body(x)
-                              end)))
-            maybe_unused(f)
-        end
-    )
+    function f(x)::T
+        body(x)
+    end
+    begin
+        @Expr(:method, f)
+        @Expr(:method, f,
+              Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec()),
+              @Expr(:lambda, $([:_self_, :x]), $([]),
+                    @Expr(:scope_block,
+                          begin
+                              ssa1 = T
+                              @Expr(:meta, ret_type, ssa1)
+                              body(x)
+                          end)))
+        maybe_unused(f)
+    end
 
     # Anon functions
-    @test_desugar((x,y)->body(x,y),
+    (x,y)->body(x,y)
+    begin
+        local gsym1
         begin
-            local gsym1
+            @Expr(:method, gsym1)
+            @Expr(:method, gsym1,
+                  Core.svec(Core.svec(Core.Typeof(gsym1), Core.Any, Core.Any), Core.svec()),
+                  @Expr(:lambda, $([:_self_, :x, :y]), $([]),
+                        @Expr(:scope_block, body(x, y))))
+            maybe_unused(gsym1)
+        end
+    end
+
+    # Invalid names
+    ccall(x)=body
+    @Expr(:error, "invalid function name \"ccall\"")
+
+    cglobal(x)=body
+    @Expr(:error, "invalid function name \"cglobal\"")
+
+    true(x)=body
+    @Expr(:error, "invalid function name \"true\"")
+
+    false(x)=body
+    @Expr(:error, "invalid function name \"false\"")
+end
+
+ln = LineNumberNode(@__LINE__()+3, Symbol(@__FILE__))
+@testset_desugar "Generated function; optionally generated" begin
+    function f(x)
+        body1(x)
+        if $(Expr(:generated))
+            gen_body1(x)
+        else
+            normal_body1(x)
+        end
+        body2
+        if $(Expr(:generated))
+            gen_body2
+        else
+            normal_body2
+        end
+    end
+    begin
+        begin
+            global gsym1
             begin
                 @Expr(:method, gsym1)
                 @Expr(:method, gsym1,
                       Core.svec(Core.svec(Core.Typeof(gsym1), Core.Any, Core.Any), Core.svec()),
-                      @Expr(:lambda, $([:_self_, :x, :y]), $([]),
-                            @Expr(:scope_block, body(x, y))))
+                      @Expr(:lambda, $([:_self_, :gsym2, :x]), $([]),
+                            @Expr(:scope_block,
+                                  begin
+                                      @Expr(:meta, nospecialize, gsym2, x)
+                                      Core._expr(:block,
+                                                 $(QuoteNode(LineNumberNode(ln.line, ln.file))),
+                                                 @Expr(:copyast, $(QuoteNode(:(body1(x))))),
+                                                 # FIXME: These line numbers seem buggy?
+                                                 $(QuoteNode(LineNumberNode(ln.line+1, ln.file))),
+                                                 gen_body1(x),
+                                                 $(QuoteNode(LineNumberNode(ln.line+6, ln.file))),
+                                                 :body2,
+                                                 $(QuoteNode(LineNumberNode(ln.line+7, ln.file))),
+                                                 gen_body2)
+                                  end)))
                 maybe_unused(gsym1)
             end
         end
-    )
-
-    # Invalid names
-    @test_desugar_error ccall(x)=body    "invalid function name \"ccall\""
-    @test_desugar_error cglobal(x)=body  "invalid function name \"cglobal\""
-    @test_desugar_error true(x)=body     "invalid function name \"true\""
-    @test_desugar_error false(x)=body    "invalid function name \"false\""
-end
-
-@testset "Generated functions" begin
-    ln = LineNumberNode(@__LINE__()+2, Symbol(@__FILE__))
-    @test_desugar(function f(x)
-                      body1(x)
-                      if $(Expr(:generated))
-                          gen_body1(x)
-                      else
-                          normal_body1(x)
-                      end
-                      body2
-                      if $(Expr(:generated))
-                          gen_body2
-                      else
-                          normal_body2
-                      end
-                  end,
-        begin
-            begin
-                global gsym1
-                begin
-                    @Expr(:method, gsym1)
-                    @Expr(:method, gsym1,
-                          Core.svec(Core.svec(Core.Typeof(gsym1), Core.Any, Core.Any), Core.svec()),
-                          @Expr(:lambda, $([:_self_, :gsym2, :x]), $([]),
-                                @Expr(:scope_block,
-                                      begin
-                                          @Expr(:meta, nospecialize, gsym2, x)
-                                          Core._expr(:block,
-                                                     $(QuoteNode(LineNumberNode(ln.line, ln.file))),
-                                                     @Expr(:copyast, $(QuoteNode(:(body1(x))))),
-                                                     # FIXME: These line numbers seem buggy?
-                                                     $(QuoteNode(LineNumberNode(ln.line+1, ln.file))),
-                                                     gen_body1(x),
-                                                     $(QuoteNode(LineNumberNode(ln.line+6, ln.file))),
-                                                     :body2,
-                                                     $(QuoteNode(LineNumberNode(ln.line+7, ln.file))),
-                                                     gen_body2)
-                                      end)))
-                    maybe_unused(gsym1)
-                end
-            end
-            @Expr(:method, f)
-            @Expr(:method, f,
-                  Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec()),
-                  @Expr(:lambda, $([:_self_, :x]), $([]),
-                        @Expr(:scope_block,
-                              begin
-                                  @Expr(:meta, generated,
-                                        @Expr(:new,
-                                              Core.GeneratedFunctionStub,
-                                              gsym1, $([:_self_, :x]),
-                                              nothing,
-                                              $(ln.line),
-                                              $(QuoteNode(ln.file)),
-                                              false))
-                                  body1(x)
-                                  normal_body1(x)
-                                  body2
-                                  normal_body2
-                              end)))
-            maybe_unused(f)
-        end
-    )
+        @Expr(:method, f)
+        @Expr(:method, f,
+              Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec()),
+              @Expr(:lambda, $([:_self_, :x]), $([]),
+                    @Expr(:scope_block,
+                          begin
+                              @Expr(:meta, generated,
+                                    @Expr(:new,
+                                          Core.GeneratedFunctionStub,
+                                          gsym1, $([:_self_, :x]),
+                                          nothing,
+                                          $(ln.line),
+                                          $(QuoteNode(ln.file)),
+                                          false))
+                              body1(x)
+                              normal_body1(x)
+                              body2
+                              normal_body2
+                          end)))
+        maybe_unused(f)
+    end
 end
 
 @testset "Forms without desugaring" begin
