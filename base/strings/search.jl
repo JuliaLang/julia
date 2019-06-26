@@ -284,10 +284,10 @@ Find the next occurrence of character `ch` in `string` starting at position `sta
 
 # Examples
 ```jldoctest
-julia> findnext(`z`, "Hello to the world", 1) === nothing
+julia> findnext('z', "Hello to the world", 1) === nothing
 true
 
-julia> findnext(`o`, "Hello to the world", 6)
+julia> findnext('o', "Hello to the world", 6)
 8
 ```
 """
