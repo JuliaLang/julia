@@ -238,7 +238,7 @@ Dot product of two vectors consisting of `n` elements of array `X` with stride `
 
 # Examples
 ```jldoctest
-julia> dot(10, fill(1.0, 10), 1, fill(1.0, 20), 2)
+julia> BLAS.dot(10, fill(1.0, 10), 1, fill(1.0, 20), 2)
 10.0
 ```
 """
@@ -495,9 +495,9 @@ julia> y = [4., 5, 6];
 
 julia> BLAS.axpby!(2., x, 3., y)
 3-element Array{Float64,1}:
-14.0
-19.0
-24.0
+ 14.0
+ 19.0
+ 24.0
 ```
 """
 function axpby! end
