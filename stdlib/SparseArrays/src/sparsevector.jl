@@ -325,11 +325,11 @@ julia> x = sparsevec([1, 3], [1.0, 2.0])
   [1]  =  1.0
   [3]  =  2.0
 
-julia> Base.SparseArrays.dropstored!(x, 3)
+julia> SparseArrays.dropstored!(x, 3)
 3-element SparseVector{Float64,Int64} with 1 stored entry:
   [1]  =  1.0
 
-julia> Base.SparseArrays.dropstored!(x, 2)
+julia> SparseArrays.dropstored!(x, 2)
 3-element SparseVector{Float64,Int64} with 1 stored entry:
   [1]  =  1.0
 ```
