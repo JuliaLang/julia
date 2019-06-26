@@ -178,6 +178,16 @@ macro desugar(ex, kws...)
     end
 end
 
+macro maketest(ex)
+    Base.remove_linenums!(ex)
+    quote
+        print("@test_desugar(")
+        print($(QuoteNode(ex)), ",\n")
+        print(desugar($(Expr(:quote, ex))), "\n")
+        print(")")
+    end
+end
+
 """
 Test that syntax desugaring of `input` produces an expression equivalent to the
 reference expression `ref`.
@@ -643,6 +653,17 @@ end
 
 @testset "let blocks" begin
     # flisp: (expand-let)
+    @test_desugar(let x::Int
+                      body
+                  end,
+        @Expr(:scope_block, begin
+                  begin
+                      local x
+                      @Expr(:decl, x, Int)
+                  end
+                  body
+              end)
+    )
     @test_desugar(let x,y
                       body
                   end,
@@ -672,7 +693,25 @@ end
                         end)
               end)
     )
-    # TODO: More coverage. Internals look complex.
+
+    @test_desugar(let f(x) = 1
+                      body
+                  end,
+        @Expr(:scope_block,
+              begin
+                  @Expr(:local_def, f)
+                  begin
+                      @Expr(:method, f)
+                      @Expr(:method, f,
+                            Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec()),
+                            @Expr(:lambda, $([:_self_, :x]), $([]), @Expr(:scope_block, 1)))
+                  end
+                  body
+              end)
+    )
+
+    # Other things in the variable list should produce an error
+    @test_desugar_error let f(x); body end  "invalid let syntax"
 end
 
 @testset "Loops" begin
