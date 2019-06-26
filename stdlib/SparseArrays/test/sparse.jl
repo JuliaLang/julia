@@ -2597,6 +2597,7 @@ end
     A = SparseMatrixCSC(Complex{BigInt}[1+im 2+2im]')'[1:1, 2:2]
     # ...ensure it does! If necessary, the test needs to be updated to use
     # another mechanism to create a suitable A.
+    resize!(A.nzval, 2)
     @assert length(A.nzval) > nnz(A)
     @test -A == fill(-2-2im, 1, 1)
     @test conj(A) == fill(2-2im, 1, 1)
@@ -2615,6 +2616,61 @@ end
     @test sum(x1) == sum(x2) == 1100
     @test sum(x1, dims=1) == sum(x2, dims=1)
     @test sum(x1, dims=2) == sum(x2, dims=2)
+end
+
+@testset "Ti cannot store all potential values #31024" begin
+    # m * n >= typemax(Ti) but nnz < typemax(Ti)
+    A = SparseMatrixCSC(12, 12, fill(Int8(1),13), Int8[], Int[])
+    @test size(A) == (12,12) && nnz(A) == 0
+    I1 = [Int8(i) for i in 1:20 for _ in 1:20]
+    J1 = [Int8(i) for _ in 1:20 for i in 1:20]
+    # m * n >= typemax(Ti) and nnz >= typemax(Ti)
+    @test_throws ArgumentError sparse(I1, J1, ones(length(I1)))
+    I1 = Int8.(rand(1:10, 500))
+    J1 = Int8.(rand(1:10, 500))
+    V1 = ones(500)
+    # m * n < typemax(Ti) and length(I) >= typemax(Ti) - combining values
+    @test sparse(I1, J1, V1, 10, 10) !== nothing
+    # m * n >= typemax(Ti) and length(I) >= typemax(Ti)
+    @test sparse(I1, J1, V1, 12, 13) !== nothing
+    I1 = Int8.(rand(1:10, 126))
+    J1 = Int8.(rand(1:10, 126))
+    V1 = ones(126)
+    # m * n >= typemax(Ti) and length(I) < typemax(Ti)
+    @test sparse(I1, J1, V1, 100, 100) !== nothing
+end
+
+@testset "Typecheck too strict #31435" begin
+    A = SparseMatrixCSC{Int,Int8}(70, 2, fill(Int8(1), 3), Int8[], Int[])
+    A[5:67,1:2] .= ones(Int, 63, 2)
+    @test nnz(A) == 126
+    # nnz >= typemax
+    @test_throws ArgumentError A[2,1] = 42
+    # colptr short
+    @test_throws ArgumentError SparseMatrixCSC(1, 1, Int[], Int[], Float64[])
+    # colptr[1] must be 1
+    @test_throws ArgumentError SparseMatrixCSC(10, 3, [0,1,1,1], Int[], Float64[])
+    # colptr not ascending
+    @test_throws ArgumentError SparseMatrixCSC(10, 3, [1,2,1,2], Int[], Float64[])
+    # rowwal (and nzval) short
+    @test_throws ArgumentError SparseMatrixCSC(10, 3, [1,2,2,4], [1,2], Float64[])
+    # nzval short
+    @test SparseMatrixCSC(10, 3, [1,2,2,4], [1,2,3], Float64[]) !== nothing
+    # length(rowval) >= typemax
+    @test_throws ArgumentError SparseMatrixCSC(5, 1, Int8[1,2], fill(Int8(1),127), Int[1,2,3])
+    @test SparseMatrixCSC{Int,Int8}(5, 1, Int8[1,2], fill(Int8(1),127), Int[1,2,3]) != 0
+    # length(nzval) >= typemax
+    @test_throws ArgumentError SparseMatrixCSC(5, 1, Int8[1,2], Int8[1], fill(7, 127))
+    @test SparseMatrixCSC{Int,Int8}(5, 1, Int8[1,2], Int8[1], fill(7, 127)) != 0
+
+    # length(I) >= typemax
+    @test_throws ArgumentError sparse(UInt8.(1:255), fill(UInt8(1), 255), fill(1, 255))
+    # m > typemax
+    @test_throws ArgumentError sparse(UInt8.(1:254), fill(UInt8(1), 254), fill(1, 254), 256, 1)
+    # n > typemax
+    @test_throws ArgumentError sparse(UInt8.(1:254), fill(UInt8(1), 254), fill(1, 254), 255, 256)
+    # n, m maximal
+    @test sparse(UInt8.(1:254), fill(UInt8(1), 254), fill(1, 254), 255, 255) !== nothing
 end
 
 end # module

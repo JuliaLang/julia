@@ -48,6 +48,11 @@ Standard library changes
 
 #### SparseArrays
 
+* `SparseMatrixCSC(m,n,colptr,rowval,nzval)` perform consistency checks for arguments:
+  `colptr` must be properly populated and lengths of `colptr`, `rowval`, and `nzval`
+  must be compatible with `m`, `n`, and `eltype(colptr)`.
+* `sparse(I, J, V, m, n)` verifies lengths of `I`, `J`, `V` are equal and compatible with
+  `eltype(I)` and `m`, `n`.
 
 #### Dates
 
