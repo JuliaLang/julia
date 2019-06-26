@@ -258,17 +258,6 @@ macro testset_desugar(name, block)
     end
 end
 
-macro test_desugar_error(input, msg)
-    ex = quote
-        input = lift_lowered_expr(expand_forms($(Expr(:quote, input))))
-        @test input == Expr(:error, $msg)
-    end
-    # Attribute the test to the correct line number
-    @assert ex.args[4].args[1] == Symbol("@test")
-    ex.args[4].args[2] = __source__
-    ex
-end
-
 #-------------------------------------------------------------------------------
 # Tests
 
@@ -809,7 +798,7 @@ end
           end)
 
     # Let with assignment
-    let x=a,y=b
+    let x=a, y=b
         body
     end
     @Expr(:scope_block,
@@ -840,9 +829,85 @@ end
               body
           end)
 
-    # Other things in the variable list should produce an error
+    # Local recursive function
+    let f(x) = f(x)
+        body
+    end
+    @Expr(:scope_block, begin
+              local f
+              begin
+                  @Expr(:method, f)
+                  @Expr(:method, f,
+                        Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec()),
+                        @Expr(:lambda, $([:_self_, :x]), $([]), @Expr(:scope_block, f(x))))
+              end
+              body
+          end)
+
+    # Let with existing var on rhs
+    let x = x + a
+        body
+    end
+    @Expr(:scope_block, begin
+              ssa1 = x + a
+              @Expr(:scope_block, begin
+                        @Expr(:local_def, x)
+                        x = ssa1
+                        body
+                    end)
+          end)
+
+    # Destructuring
+    let (a, b) = (c, d)
+        body
+    end
+    @Expr(:scope_block,
+          begin
+              @Expr(:local_def, a)
+              @Expr(:local_def, b)
+              begin
+                  a = c
+                  b = d
+                  maybe_unused(Core.tuple(c, d))
+              end
+              body
+          end)
+
+    # Destructuring with existing vars on rhs
+    let (a, b) = (a, d)
+        body
+    end
+    begin
+        ssa1 = Core.tuple(a, d)
+        @Expr(:scope_block,
+              begin
+                  @Expr(:local_def, a)
+                  @Expr(:local_def, b)
+                  begin
+                      begin
+                          ssa2 = Top.indexed_iterate(ssa1, 1)
+                          a = Core.getfield(ssa2, 1)
+                          gsym1 = Core.getfield(ssa2, 2)
+                          ssa2
+                      end
+                      begin
+                          ssa3 = Top.indexed_iterate(ssa1, 2, gsym1)
+                          b = Core.getfield(ssa3, 1)
+                          ssa3
+                      end
+                      maybe_unused(ssa1)
+                  end
+                  body
+              end)
+    end
+
+    # Other expressions in the variable list should produce an error
     let f(x)
         body
+    end
+    @Expr(:error, "invalid let syntax")
+
+    let x[i] = a
     end
     @Expr(:error, "invalid let syntax")
 end
