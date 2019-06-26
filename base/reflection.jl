@@ -1274,7 +1274,7 @@ foo (generic function with 2 methods)
 julia> m1, m2 = collect(methods(foo));
 
 julia> typeintersect(m1.sig, m2.sig)
-Tuple{#foo,Complex{Union{}}}
+Tuple{typeof(foo),Complex{Union{}}}
 
 julia> Base.isambiguous(m1, m2, ambiguous_bottom=true)
 true
