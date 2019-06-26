@@ -295,9 +295,9 @@ julia> function f(x)
        end;
 
 julia> f(42)
-Dict{Symbol,Any}(:x=>42)
-Dict{Symbol,Any}(:i=>1,:x=>42)
-Dict{Symbol,Any}(:y=>2,:x=>42)
+Dict{Symbol,Any}(:x => 42)
+Dict{Symbol,Any}(:i => 1,:x => 42)
+Dict{Symbol,Any}(:y => 2,:x => 42)
 ```
 """
 macro locals()
