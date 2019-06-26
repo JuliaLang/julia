@@ -24,10 +24,6 @@ if Sys.iswindows()
 end
 
 function find_curl()
-    if Sys.iswindows()
-        @show Sys.which("curl")
-        Sys.which("curl") !== nothing && run(`$(Sys.which("curl")) -V`)
-    end
     if Sys.isapple() && Sys.isexecutable("/usr/bin/curl")
         "/usr/bin/curl"
     elseif Sys.iswindows() && Sys.isexecutable(joinpath(get(ENV, "SYSTEMROOT", "C:\\Windows"), "System32\\curl.exe"))
