@@ -1240,6 +1240,37 @@ ln = LineNumberNode(@__LINE__()+3, Symbol(@__FILE__))
     end
 end
 
+@testset_desugar "Macros" begin
+    macro foo
+    end
+    @Expr(:method, $(Symbol("@foo")))
+
+    macro foo(ex)
+        body(ex)
+    end
+    begin
+        @Expr(:method, $(Symbol("@foo")))
+        @Expr(:method, $(Symbol("@foo")),
+              Core.svec(Core.svec(Core.Typeof($(Symbol("@foo"))), Core.LineNumberNode, Core.Module, Core.Any), Core.svec()),
+              @Expr(:lambda, $([:_self_, :__source__, :__module__, :ex]), $([]),
+                    @Expr(:scope_block,
+                          begin
+                              @Expr(:meta, nospecialize, ex)
+                              body(ex)
+                          end)))
+        maybe_unused($(Symbol("@foo")))
+    end
+
+    macro foo(ex; x=a)
+        body(ex)
+    end
+    @Expr(:error, "macros cannot accept keyword arguments")
+
+    macro ()
+    end
+    @Expr(:error, "invalid macro definition")
+end
+
 @testset "Forms without desugaring" begin
     # (expand-forms)
     # The following Expr heads are currently not touched by desugaring
