@@ -68,6 +68,11 @@ Standard library changes
 
 * `mean` now accepts both a function argument and a `dims` keyword ([#31576]).
 
+#### Sockets
+
+* Added `InetAddr` constructor from `AbstractString`, representing IP address, and `Integer`,
+  representing port number ([#31459]).
+
 #### Miscellaneous
 
 * `foldr` and `mapfoldr` now work on any iterator that supports `Iterators.reverse`, not just arrays ([#31781]).
