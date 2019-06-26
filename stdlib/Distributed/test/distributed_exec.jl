@@ -1626,6 +1626,32 @@ let code = """
     @test success(`$(Base.julia_cmd()) --startup-file=no -e $code`)
 end
 
+# PR 32431: tests for internal Distributed.head_and_tail
+let (h, t) = Distributed.head_and_tail(1:10, 3)
+    @test h == 1:3
+    @test collect(t) == 4:10
+end
+let (h, t) = Distributed.head_and_tail(1:10, 0)
+    @test h == []
+    @test collect(t) == 1:10
+end
+let (h, t) = Distributed.head_and_tail(1:3, 5)
+    @test h == 1:3
+    @test collect(t) == []
+end
+let (h, t) = Distributed.head_and_tail(1:3, 3)
+    @test h == 1:3
+    @test collect(t) == []
+end
+let (h, t) = Distributed.head_and_tail(Int[], 3)
+    @test h == []
+    @test collect(t) == []
+end
+let (h, t) = Distributed.head_and_tail(Int[], 0)
+    @test h == []
+    @test collect(t) == []
+end
+
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.
 rmprocs(workers())
