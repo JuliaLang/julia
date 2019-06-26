@@ -175,6 +175,20 @@ false
 isbitsunion(u::Union) = (@_pure_meta; ccall(:jl_array_store_unboxed, Cint, (Any,), u) != Cint(0))
 isbitsunion(x) = false
 
+isptrelement(t::Type) = (@_pure_meta; ccall(:jl_array_store_unboxed, Cint, (Any,), t) == Cint(0))
+
+function _unsetindex!(A::Array{T}, i::Int) where {T}
+    @boundscheck checkbounds(A, i)
+    if isptrelement(T)
+        t = @_gc_preserve_begin A
+        p = Ptr{Ptr{Cvoid}}(pointer(A))
+        unsafe_store!(p, C_NULL, i)
+        @_gc_preserve_end t
+    end
+    return A
+end
+
+
 """
     Base.bitsunionsize(U::Union)
 
