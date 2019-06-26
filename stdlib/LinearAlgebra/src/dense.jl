@@ -623,59 +623,35 @@ end
 """
     log(A{T}::StridedMatrix{T})
 
-If `A` has no negative real eigenvalue, compute the principal matrix logarithm of `A`, i.e.
-the unique matrix ``X`` such that ``e^X = A`` and ``-\\pi < Im(\\lambda) < \\pi`` for all
-the eigenvalues ``\\lambda`` of ``X``. If `A` has nonpositive eigenvalues, a nonprincipal
-matrix function is returned whenever possible.
+Takes the square root of a matrix until the Taylor expansion of the log
+function is valid, then performs an eigendecomposition.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is
-used, if `A` is triangular an improved version of the inverse scaling and squaring method is
-employed (see [^AH12] and [^AHR13]). For general matrices, the complex Schur form
-([`schur`](@ref)) is computed and the triangular algorithm is used on the
-triangular factor.
-
-[^AH12]: Awad H. Al-Mohy and Nicholas J. Higham, "Improved inverse  scaling and squaring algorithms for the matrix logarithm", SIAM Journal on Scientific Computing, 34(4), 2012, C153-C169. [doi:10.1137/110852553](https://doi.org/10.1137/110852553)
-
-[^AHR13]: Awad H. Al-Mohy, Nicholas J. Higham and Samuel D. Relton, "Computing the Fréchet derivative of the matrix logarithm and estimating the condition number", SIAM Journal on Scientific Computing, 35(4), 2013, C394-C410. [doi:10.1137/120885991](https://doi.org/10.1137/120885991)
-
-# Examples
-```jldoctest
-julia> A = Matrix(2.7182818*I, 2, 2)
-2×2 Array{Float64,2}:
- 2.71828  0.0
- 0.0      2.71828
-
-julia> log(A)
-2×2 Array{Float64,2}:
- 1.0  0.0
- 0.0  1.0
-```
 """
-function log(A::StridedMatrix)
-    # If possible, use diagonalization
-    if ishermitian(A)
-        logHermA = log(Hermitian(A))
-        return isa(logHermA, Hermitian) ? copytri!(parent(logHermA), 'U', true) : parent(logHermA)
+function matrix_log_taylor(A, i=512)
+    B0 = A - I
+    R = copy(B0)
+    B = copy(B0)
+    for n=2:i
+        B *= B0
+        R += (-1)^(n+1)*B/n
     end
+    return R
+end
 
-    # Use Schur decomposition
-    n = checksquare(A)
-    if istriu(A)
-        return triu!(parent(log(UpperTriangular(complex(A)))))
+function log(A)
+    Λ, S = eigen(A)
+    if length(Set(Λ)) == length(Λ)
+        # no repeated eigenvalues
+        return S*(log.(complex(Λ)).*inv(S))
     else
-        if isreal(A)
-            SchurF = schur(real(A))
-        else
-            SchurF = schur(A)
+        # repeated eigenvalues
+        B = copy(A)
+        n = 0
+        while norm(B-I) > 1
+            B = sqrt(B)
+            n += 1
         end
-        if !istriu(SchurF.T)
-            SchurS = schur(complex(SchurF.T))
-            logT = SchurS.Z * log(UpperTriangular(SchurS.T)) * SchurS.Z'
-            return SchurF.Z * logT * SchurF.Z'
-        else
-            R = log(UpperTriangular(complex(SchurF.T)))
-            return SchurF.Z * R * SchurF.Z'
-        end
+        return 2^n*matrix_log_taylor(B)
     end
 end
 
