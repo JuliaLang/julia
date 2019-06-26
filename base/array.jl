@@ -1281,7 +1281,7 @@ If specified, replacement values from an ordered
 collection will be spliced in place of the removed item.
 
 # Examples
-```jldoctest splice!
+```jldoctest
 julia> A = [6, 5, 4, 3, 2, 1]; splice!(A, 5)
 2
 
@@ -1352,8 +1352,8 @@ To insert `replacement` before an index `n` without removing any items, use
 `splice!(collection, n:n-1, replacement)`.
 
 # Examples
-```jldoctest splice!
-julia> splice!(A, 4:3, 2)
+```jldoctest
+julia> A = [-1, -2, -3, 5, 4, 3, -1]; splice!(A, 4:3, 2)
 0-element Array{Int64,1}
 
 julia> A
