@@ -1162,7 +1162,44 @@ end
         end
     end
 
-    # Invalid names
+    # Where syntax
+    function f(x::T, y::S) where {T <: S, S <: U}
+        body(x, y)
+    end
+    begin
+        @Expr(:method, f)
+        @Expr(:method, f,
+              begin
+                  ssa1 = Core.TypeVar(:T, S)
+                  ssa2 = Core.TypeVar(:S, U)
+                  Core.svec(Core.svec(Core.Typeof(f), ssa1, ssa2), Core.svec(ssa1, ssa2))
+              end,
+              @Expr(:lambda, [_self_, x, y], [], @Expr(:scope_block, body(x, y))))
+        maybe_unused(f)
+    end
+
+    # Type constraints
+    #=
+    function f(x::T{<:S})
+        body(x, y)
+    end
+    begin
+        @Expr(:method, f)
+        @Expr(:method, f,
+              Core.svec(Core.svec(Core.Typeof(f),
+                                  @Expr(:scope_block,
+                                        begin
+                                            @Expr(:local_def, gsym1)
+                                            gsym1 = Core.TypeVar(Symbol("#s167"), S)
+                                            Core.UnionAll(gsym1, Core.apply_type(T, gsym1))
+                                        end)), Core.svec()),
+              @Expr(:lambda, [_self_, x], [], @Expr(:scope_block, body(x, y))))
+        maybe_unused(f)
+    end
+    FIXME
+    =#
+
+    # Invalid function names
     ccall(x)=body
     @Expr(:error, "invalid function name \"ccall\"")
 
