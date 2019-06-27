@@ -66,7 +66,7 @@ Convert a string to a contiguous byte array representation encoded as UTF-8 byte
 This representation is often appropriate for passing strings to C.
 """
 String(s::AbstractString) = print_to_string(s)
-String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
+@pure String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
 
 unsafe_wrap(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
 
@@ -81,8 +81,8 @@ String(s::CodeUnits{UInt8,String}) = s.s
 pointer(s::String) = unsafe_convert(Ptr{UInt8}, s)
 pointer(s::String, i::Integer) = pointer(s)+(i-1)
 
-ncodeunits(s::String) = Core.sizeof(s)
-sizeof(s::String) = Core.sizeof(s)
+@pure ncodeunits(s::String) = Core.sizeof(s)
+@pure sizeof(s::String) = Core.sizeof(s)
 codeunit(s::String) = UInt8
 
 @inline function codeunit(s::String, i::Integer)
