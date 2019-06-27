@@ -174,7 +174,7 @@
         s
         (error (string "invalid type parameter name \"" (deparse s) "\""))))
   (cond ((atom? e) (list (check-sym e) #f #f))
-        ((eq? (car e) 'var-bounds)  (cdr e))
+        ((eq? (car e) 'var_bounds)  (cdr e))
         ((and (eq? (car e) 'comparison) (length= e 6))
          (cons (check-sym (cadddr e))
                (cond ((and (eq? (caddr e) '|<:|) (eq? (caddr (cddr e)) '|<:|))
@@ -662,7 +662,7 @@
                                    `(curly ,name ,@params)
                                    name)
                               ,@field-names)
-                       (map (lambda (b) (cons 'var-bounds b)) bounds))
+                       (map (lambda (b) (cons 'var_bounds b)) bounds))
                      (block
                       ,@locs
                       (call new ,@field-names)))))
@@ -688,7 +688,7 @@
   (let ((field-names (safe-field-names field-names field-types)))
     `(function ,(with-wheres
                  `(call ,name ,@(map make-decl field-names field-types))
-                 (map (lambda (b) (cons 'var-bounds b)) bounds))
+                 (map (lambda (b) (cons 'var_bounds b)) bounds))
                (block
                 ,@locs
                 (call (curly ,name ,@params) ,@field-names)))))
