@@ -802,9 +802,9 @@ for (larf, elty) in
             incv  = BlasInt(1)
             ccall((@blasfunc($larf), liblapack), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                 Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}),
+                 Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Clong),
                 side, m, n, v, incv,
-                τ, C, ldc, work)
+                τ, C, ldc, work, 1)
             return C
         end
 
