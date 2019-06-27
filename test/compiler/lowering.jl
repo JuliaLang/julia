@@ -824,7 +824,7 @@ end
                   @Expr(:method, f)
                   @Expr(:method, f,
                         Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec()),
-                        @Expr(:lambda, $([:_self_, :x]), $([]), @Expr(:scope_block, 1)))
+                        @Expr(:lambda, [_self_, x], [], @Expr(:scope_block, 1)))
               end
               body
           end)
@@ -839,7 +839,7 @@ end
                   @Expr(:method, f)
                   @Expr(:method, f,
                         Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec()),
-                        @Expr(:lambda, $([:_self_, :x]), $([]), @Expr(:scope_block, f(x))))
+                        @Expr(:lambda, [_self_, x], [], @Expr(:scope_block, f(x))))
               end
               body
           end)
@@ -1005,7 +1005,7 @@ end
         @Expr(:method, f)
         @Expr(:method, f,
               Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec()),
-              @Expr(:lambda, $([:_self_, :x]), $([]),
+              @Expr(:lambda, [_self_, x], [],
                     @Expr(:scope_block,
                           body(x))))
         maybe_unused(f)
@@ -1019,7 +1019,7 @@ end
         @Expr(:method, f)
         @Expr(:method, f,
               Core.svec(Core.svec(Core.Typeof(f), T, Core.Any), Core.svec()),
-              @Expr(:lambda, $([:_self_, :x, :y]), $([]),
+              @Expr(:lambda, [_self_, x, y], [],
                     @Expr(:scope_block,
                           body(x))))
         maybe_unused(f)
@@ -1034,7 +1034,7 @@ end
             @Expr(:method, f)
             @Expr(:method, f,
                   Core.svec(Core.svec(Core.Typeof(f)), Core.svec()),
-                  @Expr(:lambda, $([:_self_]), $([]),
+                  @Expr(:lambda, [_self_], [],
                         @Expr(:scope_block, _self_(a, b))))
             maybe_unused(f)
         end
@@ -1042,7 +1042,7 @@ end
             @Expr(:method, f)
             @Expr(:method, f,
                   Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec()),
-                  @Expr(:lambda, $([:_self_, :x]), $([]),
+                  @Expr(:lambda, [_self_, x], [],
                         @Expr(:scope_block, _self_(x, b))))
             maybe_unused(f)
         end
@@ -1050,7 +1050,7 @@ end
             @Expr(:method, f)
             @Expr(:method, f,
                   Core.svec(Core.svec(Core.Typeof(f), Core.Any, Core.Any), Core.svec()),
-                  @Expr(:lambda, $([:_self_, :x, :y]), $([]),
+                  @Expr(:lambda, [_self_, x, y], [],
                         @Expr(:scope_block, body(x, y))))
             maybe_unused(f)
         end
@@ -1065,7 +1065,7 @@ end
         @Expr(:method, f,
               Core.svec(Core.svec(Core.Typeof(f), Core.Any,
                                   Core.apply_type(Vararg, Core.Any)), Core.svec()),
-              @Expr(:lambda, $([:_self_, :x, :args]), $([]),
+              @Expr(:lambda, [_self_, x, args], [],
                     @Expr(:scope_block, body(x, args))))
         maybe_unused(f)
     end
@@ -1081,7 +1081,7 @@ end
                 @Expr(:method, gsym1)
                 @Expr(:method, gsym1,
                       Core.svec(Core.svec(Core.typeof(gsym1), Core.Any, Core.Any, Core.Typeof(f), Core.Any), Core.svec()),
-                      @Expr(:lambda, $([:gsym1, :k1, :k2, :_self_, :x]), $([]),
+                      @Expr(:lambda, [gsym1, k1, k2, _self_, x], [],
                             @Expr(:scope_block, body)))
                 maybe_unused(gsym1)
             end
@@ -1089,7 +1089,7 @@ end
                 @Expr(:method, f)
                 @Expr(:method, f,
                       Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec()),
-                      @Expr(:lambda, $([:_self_, :x]), $([]),
+                      @Expr(:lambda, [_self_, x], [],
                             @Expr(:scope_block, return gsym1(v1, v2, _self_, x))))
                 maybe_unused(f)
             end
@@ -1097,7 +1097,7 @@ end
                 @Expr(:method, f)
                 @Expr(:method, f,
                       Core.svec(Core.svec(Core.kwftype(Core.Typeof(f)), Core.Any, Core.Typeof(f), Core.Any), Core.svec()),
-                      @Expr(:lambda, $([:gsym2, :gsym3, :_self_, :x]), $([]),
+                      @Expr(:lambda, [gsym2, gsym3, _self_, x], [],
                             @Expr(:scope_block,
                                   @Expr(:scope_block,
                                         begin
@@ -1138,7 +1138,7 @@ end
         @Expr(:method, f)
         @Expr(:method, f,
               Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec()),
-              @Expr(:lambda, $([:_self_, :x]), $([]),
+              @Expr(:lambda, [_self_, x], [],
                     @Expr(:scope_block,
                           begin
                               ssa1 = T
@@ -1156,7 +1156,7 @@ end
             @Expr(:method, gsym1)
             @Expr(:method, gsym1,
                   Core.svec(Core.svec(Core.Typeof(gsym1), Core.Any, Core.Any), Core.svec()),
-                  @Expr(:lambda, $([:_self_, :x, :y]), $([]),
+                  @Expr(:lambda, [_self_, x, y], [],
                         @Expr(:scope_block, body(x, y))))
             maybe_unused(gsym1)
         end
@@ -1199,7 +1199,7 @@ ln = LineNumberNode(@__LINE__()+3, Symbol(@__FILE__))
                 @Expr(:method, gsym1)
                 @Expr(:method, gsym1,
                       Core.svec(Core.svec(Core.Typeof(gsym1), Core.Any, Core.Any), Core.svec()),
-                      @Expr(:lambda, $([:_self_, :gsym2, :x]), $([]),
+                      @Expr(:lambda, [_self_, gsym2, x], [],
                             @Expr(:scope_block,
                                   begin
                                       @Expr(:meta, nospecialize, gsym2, x)
@@ -1220,7 +1220,7 @@ ln = LineNumberNode(@__LINE__()+3, Symbol(@__FILE__))
         @Expr(:method, f)
         @Expr(:method, f,
               Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec()),
-              @Expr(:lambda, $([:_self_, :x]), $([]),
+              @Expr(:lambda, [_self_, x], [],
                     @Expr(:scope_block,
                           begin
                               @Expr(:meta, generated,
@@ -1252,7 +1252,7 @@ end
         @Expr(:method, $(Symbol("@foo")))
         @Expr(:method, $(Symbol("@foo")),
               Core.svec(Core.svec(Core.Typeof($(Symbol("@foo"))), Core.LineNumberNode, Core.Module, Core.Any), Core.svec()),
-              @Expr(:lambda, $([:_self_, :__source__, :__module__, :ex]), $([]),
+              @Expr(:lambda, [_self_, __source__, __module__, ex], [],
                     @Expr(:scope_block,
                           begin
                               @Expr(:meta, nospecialize, ex)
