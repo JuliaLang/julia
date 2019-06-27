@@ -3,7 +3,7 @@ using Base: remove_linenums!
 
 # Call into lowering stage 1; syntax desugaring
 function fl_expand_forms(ex)
-    ccall(:jl_call_scm_on_ast_formonly, Any, (Cstring, Any, Any), "expand-forms", ex, Main)
+    ccall(:jl_call_scm_on_ast_formonly, Any, (Cstring, Any, Any), "jl-expand-forms", ex, Main)
 end
 
 # Make it easy to replace fl_expand_forms with a julia version in the future.
