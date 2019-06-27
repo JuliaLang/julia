@@ -560,6 +560,9 @@ end
 
 # issue #12960
 mutable struct T12960 end
+import Base.zero
+Base.zero(::Type{T12960}) = T12960()
+Base.zero(x::T12960) = T12960()
 let
     A = sparse(1.0I, 3, 3)
     B = similar(A, T12960)
@@ -1356,6 +1359,11 @@ end
     @test summary(Base.OneTo(BigInt(10))) == "10-element Base.OneTo{BigInt}"
 end
 
+@testset "Tuple summary" begin
+    @test summary((1,2,3)) == "(1, 2, 3)"
+    @test summary((:a, "b", 'c')) == "(:a, \"b\", 'c')"
+end
+
 # Tests for code_typed linetable annotations
 function compute_annotations(f, types)
     src = code_typed(f, types, debuginfo=:source)[1][1]
@@ -1496,6 +1504,7 @@ replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color =>
 @test string(:) == "Colon()"
 @test string(Iterators.flatten) == "flatten"
 @test Symbol(Iterators.flatten) === :flatten
+@test startswith(string(x->x), "#")
 
 # printing of bools and bool arrays
 @testset "Bool" begin
@@ -1514,3 +1523,13 @@ Z = Array{Float64}(undef,0,0)
 
 # issue #31065, do not print parentheses for nested dot expressions
 @test sprint(Base.show_unquoted, :(foo.x.x)) == "foo.x.x"
+
+@testset "show_delim_array" begin
+    sdastr(f, n) =  # sda: Show Delim Array
+        sprint((io, x) -> Base.show_delim_array(io, x, "[", ",", "]", false, f, n), Iterators.take(1:f+n, f+n))
+    @test sdastr(1, 0) == "[1]"
+    @test sdastr(1, 1) == "[1]"
+    @test sdastr(1, 2) == "[1, 2]"
+    @test sdastr(2, 2) == "[2, 3]"
+    @test sdastr(3, 3) == "[3, 4, 5]"
+end

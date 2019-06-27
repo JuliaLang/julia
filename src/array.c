@@ -471,6 +471,8 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
 JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
 {
     size_t sz = sizeof(size_t) + len + 1; // add space for trailing \nul protector and size
+    if (sz < len) // overflow
+        jl_throw(jl_memory_exception);
     if (len == 0)
         return jl_an_empty_string;
     jl_value_t *s = jl_gc_alloc_(jl_get_ptls_states(), sz, jl_string_type); // force inlining
@@ -483,6 +485,8 @@ JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
 JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
 {
     size_t sz = sizeof(size_t) + len + 1; // add space for trailing \nul protector and size
+    if (sz < len) // overflow
+        jl_throw(jl_memory_exception);
     if (len == 0)
         return jl_an_empty_string;
     jl_value_t *s = jl_gc_alloc_(jl_get_ptls_states(), sz, jl_string_type); // force inlining
@@ -588,10 +592,9 @@ JL_DLLEXPORT void jl_arrayset(jl_array_t *a JL_ROOTING_ARGUMENT, jl_value_t *rhs
 JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i)
 {
     if (i >= jl_array_len(a))
-        jl_bounds_error_int((jl_value_t*)a, i+1);
-    char *ptail = (char*)a->data + i*a->elsize;
+        jl_bounds_error_int((jl_value_t*)a, i + 1);
     if (a->flags.ptrarray)
-        memset(ptail, 0, a->elsize);
+        ((jl_value_t**)a->data)[i] = NULL;
 }
 
 // at this size and bigger, allocate resized array data with malloc

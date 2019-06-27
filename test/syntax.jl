@@ -1854,3 +1854,13 @@ macro id28992(x) x end
 # issue #31596
 f31596(x; kw...) = x
 @test f31596((a=1,), b = 1.0) === (a=1,)
+
+# issue #32325
+let
+    struct a32325 end
+    a32325(x) = a32325()
+end
+@test a32325(0) === a32325()
+
+@test Meta.lower(Main, :(struct A; A() = new{Int}(); end)) == Expr(:error, "too many type parameters specified in \"new{...}\"")
+@test Meta.lower(Main, :(struct A{T, S}; A() = new{Int}(); end)) == Expr(:error, "too few type parameters specified in \"new{...}\"")

@@ -1,5 +1,26 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    LDLt <: Factorization
+
+Matrix factorization type of the `LDLt` factorization of a real [`SymTridiagonal`](@ref)
+matrix `S` such that `S = L*Diagonal(d)*L'`, where `L` is a [`UnitLowerTriangular`](@ref)
+matrix and `d` is a vector. The main use of an `LDLt` factorization `F = ldlt(S)`
+is to solve the linear system of equations `Sx = b` with `F\\b`. This is the
+return type of [`ldlt`](@ref), the corresponding matrix factorization function.
+
+# Examples
+```jldoctest
+julia> S = SymTridiagonal([3., 4., 5.], [1., 2.])
+3×3 SymTridiagonal{Float64,Array{Float64,1}}:
+ 3.0  1.0   ⋅
+ 1.0  4.0  2.0
+  ⋅   2.0  5.0
+
+julia> F = ldlt(S)
+LDLt{Float64,SymTridiagonal{Float64,Array{Float64,1}}}([3.0 0.3333333333333333 0.0; 0.3333333333333333 3.6666666666666665 0.5454545454545455; 0.0 0.5454545454545455 3.909090909090909])
+```
+"""
 struct LDLt{T,S<:AbstractMatrix{T}} <: Factorization{T}
     data::S
 

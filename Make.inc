@@ -1007,18 +1007,7 @@ endif
 endef
 $(foreach proj,$(BB_PROJECTS),$(eval $(call SET_BB_DEFAULT,$(proj))))
 
-# Some special restrictions on BB usage:
-ifeq ($(USE_SYSTEM_BLAS),1)
-# Since the names don't line up (`BLAS` vs. `OPENBLAS`), manually gate:
-USE_BINARYBUILDER_OPENBLAS ?= 0
-# Disable BB SuiteSparse if we're using system BLAS
-USE_BINARYBUILDER_SUITESPARSE ?= 0
-endif
 
-ifeq ($(USE_SYSTEM_LIBM),1)
-# If we're using system libm, disable BB OpenLibm
-USE_BINARYBUILDER_OPENLIBM ?= 0
-endif
 
 # Use the Assertions build
 BINARYBUILDER_LLVM_ASSERTS ?= 0
@@ -1081,14 +1070,15 @@ IFUNC_DETECT_SRC := 'void (*f0(void))(void) { return (void(*)(void))0L; }; void 
 ifeq (supported, $(shell echo $(IFUNC_DETECT_SRC) | $(CC) -Werror -x c - -S -o /dev/null > /dev/null 2>&1 && echo supported))
 JCPPFLAGS += -DJULIA_HAS_IFUNC_SUPPORT=1
 endif
+JLDFLAGS := -Wl,-Bdynamic
 ifneq ($(SANITIZE),1)
 ifneq ($(SANITIZE_MEMORY),1)
 ifneq ($(LLVM_SANITIZE),1)
 OSLIBS += -Wl,--version-script=$(JULIAHOME)/src/julia.expmap
+JLDFLAGS += -Wl,-no-undefined
 endif
 endif
 endif
-JLDFLAGS := -Wl,-Bdynamic -Wl,-no-undefined
 ifeq (-Bsymbolic-functions, $(shell $(LD) --help | grep -o -e "-Bsymbolic-functions"))
 JLIBLDFLAGS := -Wl,-Bsymbolic-functions
 else
@@ -1253,6 +1243,19 @@ LDFLAGS += -cxxlib-nostd -static-intel
 endif
 endif
 
+# Some special restrictions on BB usage:
+ifeq ($(USE_SYSTEM_BLAS),1)
+# Since the names don't line up (`BLAS` vs. `OPENBLAS`), manually gate:
+USE_BINARYBUILDER_OPENBLAS := 0
+# Disable BB SuiteSparse if we're using system BLAS
+USE_BINARYBUILDER_SUITESPARSE := 0
+endif
+
+ifeq ($(USE_SYSTEM_LIBM),1)
+# If we're using system libm, disable BB OpenLibm
+USE_BINARYBUILDER_OPENLIBM := 0
+endif
+
 # Make tricks
 
 define dir_target
@@ -1345,6 +1348,7 @@ JULCOLOR:="\033[34;1m"
 GOAL=$(subst ','\'',$(subst $(abspath $(JULIAHOME))/,,$(abspath $@)))
 
 PRINT_CC = printf '    %b %b\n' $(CCCOLOR)CC$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR); $(1)
+PRINT_ANALYZE = printf '    %b %b\n' $(CCCOLOR)ANALYZE$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_LINK = printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_PERL = printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_FLISP = printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
@@ -1353,6 +1357,7 @@ PRINT_JULIA = printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GO
 else
 QUIET_MAKE =
 PRINT_CC = echo '$(subst ','\'',$(1))'; $(1)
+PRINT_ANALYZE = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_LINK = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_PERL = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_FLISP = echo '$(subst ','\'',$(1))'; $(1)

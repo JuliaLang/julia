@@ -445,4 +445,9 @@ end
     @test cond(SymTridiagonal([1,2,3], [0,0])) ≈ 3
 end
 
+@testset "sum" begin
+    @test sum(Tridiagonal([1,2], [1,2,3], [7,8])) == 24
+    @test sum(SymTridiagonal([1,2,3], [1,2])) == 12
+end
+
 end # module TestTridiagonal

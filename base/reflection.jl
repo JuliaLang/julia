@@ -295,9 +295,9 @@ julia> function f(x)
        end;
 
 julia> f(42)
-Dict{Symbol,Any}(:x=>42)
-Dict{Symbol,Any}(:i=>1,:x=>42)
-Dict{Symbol,Any}(:y=>2,:x=>42)
+Dict{Symbol,Any}(:x => 42)
+Dict{Symbol,Any}(:i => 1,:x => 42)
+Dict{Symbol,Any}(:y => 2,:x => 42)
 ```
 """
 macro locals()
@@ -1274,7 +1274,7 @@ foo (generic function with 2 methods)
 julia> m1, m2 = collect(methods(foo));
 
 julia> typeintersect(m1.sig, m2.sig)
-Tuple{#foo,Complex{Union{}}}
+Tuple{typeof(foo),Complex{Union{}}}
 
 julia> Base.isambiguous(m1, m2, ambiguous_bottom=true)
 true
@@ -1329,10 +1329,10 @@ has_bottom_parameter(t::Union) = has_bottom_parameter(t.a) & has_bottom_paramete
 has_bottom_parameter(t::TypeVar) = t.ub == Bottom || has_bottom_parameter(t.ub)
 has_bottom_parameter(::Any) = false
 
-min_world(m::Core.CodeInstance) = reinterpret(UInt, m.min_world)
-max_world(m::Core.CodeInstance) = reinterpret(UInt, m.max_world)
-min_world(m::Core.CodeInfo) = reinterpret(UInt, m.min_world)
-max_world(m::Core.CodeInfo) = reinterpret(UInt, m.max_world)
+min_world(m::Core.CodeInstance) = m.min_world
+max_world(m::Core.CodeInstance) = m.max_world
+min_world(m::Core.CodeInfo) = m.min_world
+max_world(m::Core.CodeInfo) = m.max_world
 get_world_counter() = ccall(:jl_get_world_counter, UInt, ())
 
 

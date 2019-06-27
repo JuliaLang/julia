@@ -628,11 +628,6 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         jl_options.outputbc = abspath(jl_options.outputbc, 0);
     if (jl_options.machine_file)
         jl_options.machine_file = abspath(jl_options.machine_file, 0);
-    if (jl_options.project
-            && strcmp(jl_options.project, "@.") != 0
-            && strcmp(jl_options.project, "@") != 0
-            && strcmp(jl_options.project, "") != 0)
-        jl_options.project = abspath(jl_options.project, 0);
     if (jl_options.output_code_coverage)
         jl_options.output_code_coverage = absformat(jl_options.output_code_coverage);
 
@@ -747,10 +742,11 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_error("cannot generate code-coverage or track allocation information while generating a .o or .bc output file");
     }
 
+    jl_gc_init();
+
     jl_init_threading();
     jl_init_intrinsic_properties();
 
-    jl_gc_init();
     jl_gc_enable(0);
 
     jl_resolve_sysimg_location(rel);

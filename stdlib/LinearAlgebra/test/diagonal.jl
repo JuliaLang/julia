@@ -455,6 +455,15 @@ end
     @test det(D) == 4
 end
 
+@testset "linear solve for block diagonal matrices" begin
+    D = Diagonal([rand(2,2) for _ in 1:5])
+    b = [rand(2,2) for _ in 1:5]
+    B = [rand(2,2) for _ in 1:5, _ in 1:5]
+    @test ldiv!(D, copy(b)) ≈ Diagonal(inv.(D.diag)) * b
+    @test ldiv!(D, copy(B)) ≈ Diagonal(inv.(D.diag)) * B
+    @test rdiv!(copy(B), D) ≈ B * Diagonal(inv.(D.diag))
+end
+
 @testset "multiplication with Symmetric/Hermitian" begin
     for T in (Float64, ComplexF64)
         D = Diagonal(randn(T, n))
@@ -491,10 +500,10 @@ end
         M = randn(T, 5, 5)
         MM = [randn(T, 2, 2) for _ in 1:2, _ in 1:2]
         for transform in (identity, adjoint, transpose, Adjoint, Transpose)
-            @test lmul!(transform(D), copy(M)) == *(transform(Matrix(D)), M)
-            @test rmul!(copy(M), transform(D)) == *(M, transform(Matrix(D)))
-            @test lmul!(transform(DD), copy(MM)) == *(transform(fullDD), MM)
-            @test rmul!(copy(MM), transform(DD)) == *(MM, transform(fullDD))
+            @test lmul!(transform(D), copy(M)) ≈ *(transform(Matrix(D)), M)
+            @test rmul!(copy(M), transform(D)) ≈ *(M, transform(Matrix(D)))
+            @test lmul!(transform(DD), copy(MM)) ≈ *(transform(fullDD), MM)
+            @test rmul!(copy(MM), transform(DD)) ≈ *(MM, transform(fullDD))
         end
     end
 end
@@ -537,6 +546,10 @@ end
     E = eigen(D, sortby=abs) # sortby keyword supported for eigen(::Diagonal)
     @test E.values == [0.2, 0.4, -1.3]
     @test E.vectors == [0 1 0; 1 0 0; 0 0 1]
+end
+
+@testset "sum" begin
+    @test sum(Diagonal([1,2,3])) == 6
 end
 
 end # module TestDiagonal

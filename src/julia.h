@@ -254,6 +254,7 @@ typedef struct _jl_code_info_t {
     jl_value_t *slottypes; // inferred types of slots
     jl_value_t *rettype;
     jl_method_instance_t *parent; // context (optionally, if available, otherwise nothing)
+    jl_value_t *edges; // forward edges to method instances that must be invalidated
     size_t min_world;
     size_t max_world;
     // various boolean properties:
@@ -442,6 +443,7 @@ typedef struct _jl_datatype_t {
     uint8_t isbitstype; // relevant query for C-api and type-parameters
     uint8_t zeroinit; // if one or more fields requires zero-initialization
     uint8_t isinlinealloc; // if this is allocated inline
+    uint8_t has_concrete_subtype; // If clear, no value will have this datatype
     void *struct_decl;  //llvm::Type*
     void *ditype; // llvm::MDNode* to be used as llvm::DIType(ditype)
 } jl_datatype_t;
@@ -1780,11 +1782,6 @@ JL_DLLEXPORT int jl_process_events(uv_loop_t *loop);
 JL_DLLEXPORT uv_loop_t *jl_global_event_loop(void);
 
 JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle);
-
-JL_DLLEXPORT int jl_tcp_bind(uv_tcp_t *handle, uint16_t port, uint32_t host,
-                             unsigned int flags);
-
-JL_DLLEXPORT int jl_sizeof_ios_t(void);
 
 JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s);
 

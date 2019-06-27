@@ -566,4 +566,26 @@ end
     @test_throws ArgumentError DateTime(2018, 1, 1, 24, 0, 0, 1)
 end
 
+@testset "AM/PM" begin
+    for (t12,t24) in (("12:00am","00:00"), ("12:07am","00:07"), ("01:24AM","01:24"),
+                      ("12:00pm","12:00"), ("12:15pm","12:15"), ("11:59PM","23:59"))
+        d = DateTime("2018-01-01T$t24:00")
+        t = Time("$t24:00")
+        for HH in ("HH","II")
+            @test DateTime("2018-01-01 $t12","yyyy-mm-dd $HH:MMp") == d
+            @test Time("$t12","$HH:MMp") == t
+        end
+        tmstruct = Libc.strptime("%I:%M%p", t12)
+        @test Time(tmstruct) == t
+        @test uppercase(t12) == Dates.format(t, "II:MMp") ==
+                                Dates.format(d, "II:MMp") ==
+              Libc.strftime("%I:%M%p", tmstruct)
+    end
+    for bad in ("00:24am", "00:24pm", "13:24pm", "2pm", "12:24p.m.", "12:24 pm", "12:24pµ")
+        @eval @test_throws ArgumentError Time($bad, "II:MMp")
+    end
+    # if am/pm is missing, defaults to 24-hour clock
+    @eval Time("13:24", "II:MMp") == Time("13:24", "HH:MM")
+end
+
 end

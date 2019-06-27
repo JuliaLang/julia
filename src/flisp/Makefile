@@ -100,3 +100,5 @@ clean:
 	rm -f $(BUILDDIR)/*.a
 	rm -f $(BUILDDIR)/$(EXENAME)$(EXE)
 	rm -f $(BUILDDIR)/$(EXENAME)-debug$(EXE)
+
+.PHONY: flisp-deps

@@ -238,14 +238,11 @@ Return `head`: the first `n` elements of `c`;
 and `tail`: an iterator over the remaining elements.
 
 ```jldoctest
-julia> a = 1:10
-1:10
-
-julia> b, c = Base.head_and_tail(a, 3)
-([1,2,3],Base.Iterators.Rest{UnitRange{Int64},Int64}(1:10,4))
+julia> b, c = Distributed.head_and_tail(1:10, 3)
+([1, 2, 3], Base.Iterators.Rest{UnitRange{Int64},Int64}(1:10, 3))
 
 julia> collect(c)
-7-element Array{Any,1}:
+7-element Array{Int64,1}:
   4
   5
   6
@@ -268,7 +265,7 @@ function head_and_tail(c, n)
         i += 1
         head[i] = y[1]
     end
-    return head, Iterators.rest(c, s)
+    return head, Iterators.rest(c, y[2])
 end
 
 """

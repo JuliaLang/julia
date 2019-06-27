@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 // RUN: %clang --analyze -Xanalyzer -analyzer-output=text -Xclang -load -Xclang %gc_plugin -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include -Xclang -analyzer-checker=core,julia.GCChecker --analyzer-no-default-checks -Xclang -verify -Xclang -verify-ignore-unexpected=note -x c %s
 
 #include "julia.h"

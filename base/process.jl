@@ -319,13 +319,12 @@ mutable struct Process <: AbstractPipe
     err::IO
     exitcode::Int64
     termsignal::Int32
-    exitnotify::Condition
-    closenotify::Condition
+    exitnotify::ThreadSynchronizer
     function Process(cmd::Cmd, handle::Ptr{Cvoid})
         this = new(cmd, handle, devnull, devnull, devnull,
                    typemin(fieldtype(Process, :exitcode)),
                    typemin(fieldtype(Process, :termsignal)),
-                   Condition(), Condition())
+                   ThreadSynchronizer())
         finalizer(uvfinalize, this)
         return this
     end
@@ -366,14 +365,18 @@ function uv_return_spawn(p::Ptr{Cvoid}, exit_status::Int64, termsignal::Int32)
     proc.termsignal = termsignal
     ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
     proc.handle = C_NULL
-    notify(proc.exitnotify)
+    lock(proc.exitnotify)
+    try
+        notify(proc.exitnotify)
+    finally
+        unlock(proc.exitnotify)
+    end
     nothing
 end
 
 # called when the libuv handle is destroyed
 function _uv_hook_close(proc::Process)
     proc.handle = C_NULL
-    notify(proc.closenotify)
     nothing
 end
 
@@ -628,32 +631,46 @@ function eachline(cmd::AbstractCmd; keep::Bool=false)
     return EachLine(out, keep=keep, ondone=ondone)::EachLine
 end
 
-function open(cmds::AbstractCmd, mode::AbstractString, other::Redirectable=devnull)
+"""
+    open(command, mode::AbstractString, stdio=devnull)
+
+Run `command` asynchronously. Like `open(command, stdio; read, write)` except specifying
+the read and write flags via a mode string instead of keyword arguments.
+Possible mode strings are:
+
+| Mode | Description | Keywords                         |
+|:-----|:------------|:---------------------------------|
+| `r`  | read        | none                             |
+| `w`  | write       | `write = true`                   |
+| `r+` | read, write | `read = true, write = true`      |
+| `w+` | read, write | `read = true, write = true`      |
+"""
+function open(cmds::AbstractCmd, mode::AbstractString, stdio::Redirectable=devnull)
     if mode == "r+" || mode == "w+"
-        return open(cmds, other, read = true, write = true)
+        return open(cmds, stdio, read = true, write = true)
     elseif mode == "r"
-        return open(cmds, other)
+        return open(cmds, stdio)
     elseif mode == "w"
-        return open(cmds, other, write = true)
+        return open(cmds, stdio, write = true)
     else
-        throw(ArgumentError("mode must be \"r\" or \"w\", not \"$mode\""))
+        throw(ArgumentError("mode must be \"r\", \"w\", \"r+\", or \"w+\", not $(repr(mode))"))
     end
 end
 
 # return a Process object to read-to/write-from the pipeline
 """
-    open(command, other=devnull; write::Bool = false, read::Bool = !write)
+    open(command, stdio=devnull; write::Bool = false, read::Bool = !write)
 
 Start running `command` asynchronously, and return a `process::IO` object.  If `read` is
-true, then reads from the process come from the process's standard output and `other` optionally
+true, then reads from the process come from the process's standard output and `stdio` optionally
 specifies the process's standard input stream.  If `write` is true, then writes go to
-the process's standard input and `other` optionally specifies the process's standard output
+the process's standard input and `stdio` optionally specifies the process's standard output
 stream.
 The process's standard error stream is connected to the current global `stderr`.
 """
-function open(cmds::AbstractCmd, other::Redirectable=devnull; write::Bool=false, read::Bool=!write)
+function open(cmds::AbstractCmd, stdio::Redirectable=devnull; write::Bool=false, read::Bool=!write)
     if read && write
-        other === devnull || throw(ArgumentError("no stream can be specified for `other` in read-write mode"))
+        stdio === devnull || throw(ArgumentError("no stream can be specified for `stdio` in read-write mode"))
         in = PipeEndpoint()
         out = PipeEndpoint()
         processes = _spawn(cmds, Any[in, out, stderr])
@@ -661,14 +678,14 @@ function open(cmds::AbstractCmd, other::Redirectable=devnull; write::Bool=false,
         processes.out = out
     elseif read
         out = PipeEndpoint()
-        processes = _spawn(cmds, Any[other, out, stderr])
+        processes = _spawn(cmds, Any[stdio, out, stderr])
         processes.out = out
     elseif write
         in = PipeEndpoint()
-        processes = _spawn(cmds, Any[in, other, stderr])
+        processes = _spawn(cmds, Any[in, stdio, stderr])
         processes.in = in
     else
-        other === devnull || throw(ArgumentError("no stream can be specified for `other` in no-access mode"))
+        stdio === devnull || throw(ArgumentError("no stream can be specified for `stdio` in no-access mode"))
         processes = _spawn(cmds, Any[devnull, devnull, stderr])
     end
     return processes
@@ -841,6 +858,7 @@ error if killing the process failed for other reasons (e.g. insufficient
 permissions).
 """
 function kill(p::Process, signum::Integer)
+    iolock_begin()
     if process_running(p)
         @assert p.handle != C_NULL
         err = ccall(:uv_process_kill, Int32, (Ptr{Cvoid}, Int32), p.handle, signum)
@@ -848,6 +866,8 @@ function kill(p::Process, signum::Integer)
             throw(_UVError("kill", err))
         end
     end
+    iolock_end()
+    nothing
 end
 kill(ps::Vector{Process}) = foreach(kill, ps)
 kill(ps::ProcessChain) = foreach(kill, ps.processes)
@@ -862,16 +882,15 @@ Get the child process ID, if it still exists.
     This function requires at least Julia 1.1.
 """
 function Libc.getpid(p::Process)
+    # TODO: due to threading, this method is no longer synchronized with the user application
+    iolock_begin()
     ppid = Int32(0)
     if p.handle != C_NULL
         ppid = ccall(:jl_uv_process_pid, Int32, (Ptr{Cvoid},), p.handle)
     end
+    iolock_end()
     ppid <= 0 && throw(_UVError("getpid", UV_ESRCH))
     return ppid
-end
-
-function _contains_newline(bufptr::Ptr{Cvoid}, len::Int32)
-    return (ccall(:memchr, Ptr{Cvoid}, (Ptr{Cvoid},Int32,Csize_t), bufptr, '\n', len) != C_NULL)
 end
 
 ## process status ##
@@ -974,8 +993,26 @@ macro cmd(str)
     return :(cmd_gen($(esc(shell_parse(str, special=shell_special)[1]))))
 end
 
-wait(x::Process)      = if !process_exited(x); stream_wait(x, x.exitnotify); end
-wait(x::ProcessChain) = for p in x.processes; wait(p); end
+function wait(x::Process)
+    process_exited(x) && return
+    iolock_begin()
+    if !process_exited(x)
+        preserve_handle(x)
+        lock(x.exitnotify)
+        iolock_end()
+        try
+            wait(x.exitnotify)
+        finally
+            unlock(x.exitnotify)
+            unpreserve_handle(x)
+        end
+    else
+        iolock_end()
+    end
+    nothing
+end
+
+wait(x::ProcessChain) = foreach(wait, x.processes)
 
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
 

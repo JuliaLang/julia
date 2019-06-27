@@ -301,6 +301,13 @@ end
     @test d == Dict(8=>19, 19=>2, 42=>4)
 end
 
+@testset "getkey" begin
+   h = Dict(1=>2, 3 => 6, 5=>10)
+   @test getkey(h, 1, 7) == 1
+   @test getkey(h, 4, 6) == 6
+   @test getkey(h, "1", 8) == 8
+end
+
 @testset "show" begin
     for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
               Dict(string(i) => i for i = 1:30),
@@ -819,6 +826,8 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test WeakKeyDict(a=>i+1 for (i,a) in enumerate([A,B,C]) ) == wkd
     @test WeakKeyDict([(A,2), (B,3), (C,4)]) == wkd
     @test WeakKeyDict(Pair(A,2), Pair(B,3), Pair(C,4)) == wkd
+    @test isa(WeakKeyDict(Pair(A,2), Pair(B,3.0), Pair(C,4)), WeakKeyDict{Array{Int,1},Any})
+    @test isa(WeakKeyDict(Pair(convert(Vector{Number}, A),2), Pair(B,3), Pair(C,4)), WeakKeyDict{Any,Int})
     @test copy(wkd) == wkd
 
     @test length(wkd) == 3

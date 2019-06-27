@@ -84,13 +84,13 @@ Referencing the created task:
 ```jldoctest
 julia> taskref = Ref{Task}();
 
-julia> chnl = Channel(c->(@show take!(c)); taskref=taskref);
+julia> chnl = Channel(c -> println(take!(c)); taskref=taskref);
 
 julia> istaskdone(taskref[])
 false
 
 julia> put!(chnl, "Hello");
-take!(c) = "Hello"
+Hello
 
 julia> istaskdone(taskref[])
 true

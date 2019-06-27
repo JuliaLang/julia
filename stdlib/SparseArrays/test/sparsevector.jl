@@ -841,30 +841,46 @@ end
 
 @testset "BLAS Level-2" begin
     @testset "dense A * sparse x -> dense y" begin
-        let A = randn(9, 16), x = sprand(16, 0.7)
-            xf = Array(x)
-            for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
-                y = rand(9)
-                rr = α*A*xf + β*y
-                @test mul!(y, A, x, α, β) === y
-                @test y ≈ rr
+        for TA in (Float64, ComplexF64), Tx in (Float64, ComplexF64)
+            T = Base.promote_op(LinearAlgebra.matprod, TA, Tx)
+            let A = randn(TA, 9, 16), x = sprand(Tx, 16, 0.7)
+                xf = Array(x)
+                for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
+                    y = rand(T, 9)
+                    rr = α*A*xf + β*y
+                    @test mul!(y, A, x, α, β) === y
+                    @test y ≈ rr
+                end
+                y = A*x
+                @test isa(y, Vector{T})
+                @test A*x ≈ A*xf
             end
-            y = A*x
-            @test isa(y, Vector{Float64})
-            @test A*x ≈ A*xf
-        end
 
-        let A = randn(16, 9), x = sprand(16, 0.7)
-            xf = Array(x)
-            for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
-                y = rand(9)
-                rr = α*A'xf + β*y
-                @test mul!(y, transpose(A), x, α, β) === y
-                @test y ≈ rr
+            let A = randn(TA, 16, 9), x = sprand(Tx, 16, 0.7)
+                xf = Array(x)
+                for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
+                    y = rand(T, 9)
+                    rr = α*transpose(A)*xf + β*y
+                    @test mul!(y, transpose(A), x, α, β) === y
+                    @test y ≈ rr
+                end
+                y = *(transpose(A), x)
+                @test isa(y, Vector{T})
+                @test y ≈ *(transpose(A), xf)
             end
-            y = *(transpose(A), x)
-            @test isa(y, Vector{Float64})
-            @test y ≈ *(transpose(A), xf)
+
+            let A = randn(TA, 16, 9), x = sprand(Tx, 16, 0.7)
+                xf = Array(x)
+                for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
+                    y = rand(T, 9)
+                    rr = α*A'xf + β*y
+                    @test mul!(y, adjoint(A), x, α, β) === y
+                    @test y ≈ rr
+                end
+                y = *(adjoint(A), x)
+                @test isa(y, Vector{T})
+                @test y ≈ *(adjoint(A), xf)
+            end
         end
     end
     @testset "sparse A * sparse x -> dense y" begin
@@ -907,6 +923,14 @@ end
             @test SparseArrays.densemv(A, x2; trans='C') ≈ Af'x2f
             @test_throws ArgumentError SparseArrays.densemv(A, x; trans='D')
         end
+
+        let A = sparse(bitrand(9, 16)), x = sparse(bitrand(16))
+            Af = Array(A)
+            xf = Array(x)
+            y = SparseArrays.densemv(A, x)
+            @test isa(y, Vector{Int})
+            @test y == Af*xf
+        end
     end
     @testset "sparse A * sparse x -> sparse y" begin
         let A = sprandn(9, 16, 0.5), x = sprand(16, 0.7), x2 = sprand(9, 0.7)
@@ -943,6 +967,35 @@ end
             y = *(adjoint(A), x2)
             @test isa(y, SparseVector{ComplexF64,Int})
             @test Array(y) ≈ Af'x2f
+        end
+
+        let A = sparse(bitrand(9, 16)), x = sparse(bitrand(16)), x2 = sparse(bitrand(9))
+            Af = Array(A)
+            xf = Array(x)
+            x2f = Array(x2)
+
+            y = A*x
+            @test isa(y, SparseVector{Int, Int})
+            @test Array(y) == Af*xf
+
+            y = A'*x2
+            @test isa(y, SparseVector{Int, Int})
+            @test Array(y) == Af'x2f
+        end
+    end
+    @testset "sparse A * dense x -> dense y" begin
+        let A = sparse(bitrand(9, 16)), x = Vector(bitrand(16)), x2 = Vector(bitrand(9))
+            Af = Array(A)
+            xf = Array(x)
+            x2f = Array(x2)
+
+            y = A*x
+            @test isa(y, Vector{Int})
+            @test y == Af*xf
+
+            y = A'*x2
+            @test isa(y, Vector{Int})
+            @test y == Af'x2f
         end
     end
     @testset "ldiv ops with triangular matrices and sparse vecs (#14005)" begin

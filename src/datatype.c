@@ -85,6 +85,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->isbitstype = 0;
     t->zeroinit = 0;
     t->isinlinealloc = 0;
+    t->has_concrete_subtype = 1;
     t->layout = NULL;
     t->names = NULL;
     return t;
@@ -309,6 +310,12 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                     st->isbitstype = jl_is_datatype(fld) && ((jl_datatype_t*)fld)->isbitstype;
                 if (!st->zeroinit)
                     st->zeroinit = (jl_is_datatype(fld) && ((jl_datatype_t*)fld)->isinlinealloc) ? ((jl_datatype_t*)fld)->zeroinit : 1;
+                if (i < st->ninitialized) {
+                    if (fld == jl_bottom_type)
+                        st->has_concrete_subtype = 0;
+                    else
+                        st->has_concrete_subtype &= !jl_is_datatype(fld) || ((jl_datatype_t *)fld)->has_concrete_subtype;
+                }
             }
             if (st->isbitstype) {
                 st->isinlinealloc = 1;

@@ -229,7 +229,7 @@ _maxnnzfrom(shape::NTuple{2}, A::SparseMatrixCSC) = nnz(A) * div(shape[1], A.m) 
     return SparseVector(shape..., storedinds, storedvals)
 end
 @inline function _allocres(shape::NTuple{2}, indextype, entrytype, maxnnz)
-    pointers = Vector{indextype}(undef, shape[2] + 1)
+    pointers = ones(indextype, shape[2] + 1)
     storedinds = Vector{indextype}(undef, maxnnz)
     storedvals = Vector{entrytype}(undef, maxnnz)
     return SparseMatrixCSC(shape..., pointers, storedinds, storedvals)

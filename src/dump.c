@@ -369,7 +369,8 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
             | (dt->isdispatchtuple << 2)
             | (dt->isbitstype << 3)
             | (dt->zeroinit << 4)
-            | (dt->isinlinealloc << 5));
+            | (dt->isinlinealloc << 5)
+            | (dt->has_concrete_subtype << 6));
     if (!dt->abstract) {
         write_uint16(s->s, dt->ninitialized);
     }
@@ -1403,6 +1404,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     dt->isbitstype = (memflags >> 3) & 1;
     dt->zeroinit = (memflags >> 4) & 1;
     dt->isinlinealloc = (memflags >> 5) & 1;
+    dt->has_concrete_subtype = (memflags >> 6) & 1;
     dt->types = NULL;
     dt->parameters = NULL;
     dt->name = NULL;
@@ -3305,7 +3307,8 @@ void jl_init_serializer(void)
                      jl_voidpointer_type, jl_newvarnode_type, jl_abstractstring_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
                      jl_emptytuple_type, jl_array_uint8_type, jl_code_info_type,
-                     jl_typeofbottom_type, jl_namedtuple_type, jl_array_int32_type,
+                     jl_typeofbottom_type, jl_typeofbottom_type->super,
+                     jl_namedtuple_type, jl_array_int32_type,
                      jl_typedslot_type, jl_uint32_type, jl_uint64_type,
                      jl_type_type_mt, jl_nonfunction_mt,
 

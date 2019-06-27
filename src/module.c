@@ -500,6 +500,10 @@ JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
 JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
 {
     jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
+    // In a release build, simply ignore conflicting assignments (for backwards compatibility).
+    // However, we want to start asserting that they do not occur, since that can cause `val`
+    // not to be rooted when the caller expected it to be.
+    assert(!bp->constp);
     if (!bp->constp) {
         bp->value = val;
         jl_gc_wb(m, val);
@@ -509,6 +513,7 @@ JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *va
 JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
 {
     jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
+    assert(!bp->constp);
     if (!bp->constp) {
         bp->value = val;
         bp->constp = 1;

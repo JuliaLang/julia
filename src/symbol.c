@@ -119,9 +119,9 @@ JL_DLLEXPORT jl_sym_t *jl_gensym(void)
 {
     char name[16];
     char *n;
-    n = uint2str(&name[2], sizeof(name)-2, gs_ctr, 10);
+    uint32_t ctr = jl_atomic_fetch_add(&gs_ctr, 1);
+    n = uint2str(&name[2], sizeof(name)-2, ctr, 10);
     *(--n) = '#'; *(--n) = '#';
-    gs_ctr++;
     return jl_symbol(n);
 }
 
@@ -135,9 +135,9 @@ JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len)
     char *n;
     name[0] = '#'; name[1] = '#'; name[2+len] = '#';
     memcpy(name+2, str, len);
-    n = uint2str(gs_name, sizeof(gs_name), gs_ctr, 10);
+    uint32_t ctr = jl_atomic_fetch_add(&gs_ctr, 1);
+    n = uint2str(gs_name, sizeof(gs_name), ctr, 10);
     memcpy(name+3+len, n, sizeof(gs_name)-(n-gs_name));
-    gs_ctr++;
     jl_sym_t *sym = _jl_symbol(name, len+3+sizeof(gs_name)-(n-gs_name)-1);
     if (len >= 256) free(name);
     return sym;
