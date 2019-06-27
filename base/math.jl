@@ -21,7 +21,8 @@ import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              exp10, expm1, log1p
 
 using .Base: sign_mask, exponent_mask, exponent_one,
-            exponent_half, uinttype, significand_mask
+            exponent_half, uinttype, significand_mask,
+            significand_bits, exponent_bits
 
 using Core.Intrinsics: sqrt_llvm
 
@@ -38,8 +39,6 @@ end
 end
 
 for T in (Float16, Float32, Float64)
-    @eval significand_bits(::Type{$T}) = $(trailing_ones(significand_mask(T)))
-    @eval exponent_bits(::Type{$T}) = $(sizeof(T)*8 - significand_bits(T) - 1)
     @eval exponent_bias(::Type{$T}) = $(Int(exponent_one(T) >> significand_bits(T)))
     # maximum float exponent
     @eval exponent_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T))
