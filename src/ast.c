@@ -613,7 +613,11 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
     if (iscvalue(e) && cv_class((cvalue_t*)ptr(e)) == jl_ast_ctx(fl_ctx)->jvtype) {
         return *(jl_value_t**)cv_data((cvalue_t*)ptr(e));
     }
-    jl_error("malformed tree");
+    if (e == fl_ctx->T || e == fl_ctx->F) {
+        return e == fl_ctx->T ? jl_true : jl_false;
+    }
+    value_t e_str = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "string")), e);
+    jl_errorf("malformed tree %.*s", cvalue_len(e_str), (char*)cvalue_data(e_str));
 }
 
 static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v);
