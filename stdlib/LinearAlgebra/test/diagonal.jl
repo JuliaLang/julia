@@ -548,4 +548,8 @@ end
     @test E.vectors == [0 1 0; 1 0 0; 0 0 1]
 end
 
+@testset "sum" begin
+    @test sum(Diagonal([1,2,3])) == 6
+end
+
 end # module TestDiagonal
