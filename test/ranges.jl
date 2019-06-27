@@ -968,6 +968,11 @@ end
     @test eltype(['a':'z', 1:2]) == (StepRange{T,Int} where T)
 end
 
+@testset "StepRange{<:Integer} with non-integer step (issue #32419)" begin
+    @test eltype(StepRange(1, 1//1, 2)) <: Integer
+    @test_throws ArgumentError StepRange(1, 1//2, 2)
+end
+
 @testset "LinRange ops" begin
     @test 2*LinRange(0,3,4) == LinRange(0,6,4)
     @test LinRange(0,3,4)*2 == LinRange(0,6,4)
@@ -1295,6 +1300,7 @@ Base.:+(x, y::NotReal) = x + y.val
 Base.zero(y::NotReal) = zero(y.val)
 Base.rem(x, y::NotReal) = rem(x, y.val)
 Base.isless(x, y::NotReal) = isless(x, y.val)
+Base.isinteger(y::NotReal) = isinteger(y.val)
 @test (:)(1, NotReal(1), 5) isa StepRange{Int,NotReal}
 
 isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")

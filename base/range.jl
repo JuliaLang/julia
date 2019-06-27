@@ -208,6 +208,9 @@ function steprange_last(start::T, step, stop) where T
     if isa(start,AbstractFloat) || isa(step,AbstractFloat)
         throw(ArgumentError("StepRange should not be used with floating point"))
     end
+    if isa(start,Integer) && !isinteger(step)
+        throw(ArgumentError("StepRange{<:Integer} cannot have non-integer step"))
+    end
     z = zero(step)
     step == z && throw(ArgumentError("step cannot be zero"))
 
