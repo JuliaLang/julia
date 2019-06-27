@@ -1606,3 +1606,8 @@ end
 #    S = Type{T} where T<:Tuple{E, Vararg{E}} where E
 #    @test @elapsed (@test T != S) < 5
 #end
+
+# issue #32386
+# TODO: intersect currently returns a bad answer here (it has free typevars)
+@test typeintersect(Type{S} where S<:(Array{Pair{_A,N} where N, 1} where _A),
+                    Type{Vector{T}} where T) != Union{}
