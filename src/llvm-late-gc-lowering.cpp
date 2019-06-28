@@ -1682,7 +1682,7 @@ MDNode *createMutableTBAAAccessTag(MDNode *Tag) {
 }
 #else
 MDNode *createMutableTBAAAccessTag(MDNode *Tag) {
-    return MDBuilder(Tag->getContext()).createMutableTBAAAccessTag(TBAA);
+    return MDBuilder(Tag->getContext()).createMutableTBAAAccessTag(Tag);
 }
 #endif
 
