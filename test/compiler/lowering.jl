@@ -289,6 +289,10 @@ end
     a[end][b[i]]
     Top.getindex(Top.getindex(a, Top.lastindex(a)), Top.getindex(b,i))
 
+    # `end` replacment for first agument of Expr(:ref)
+    a[f(end)[i]]
+    Top.getindex(a, Top.getindex(f(Top.lastindex(a)), i))
+
     # Interaction of `end` with splatting
     a[I..., end, J..., end]
     Core._apply(Top.getindex, Core.tuple(a),
