@@ -16,11 +16,13 @@ promote_rule(::Type{Some{T}}, ::Type{Some{S}}) where {T, S<:T} = Some{T}
 promote_rule(::Type{Some{T}}, ::Type{Nothing}) where {T} = Union{Some{T}, Nothing}
 
 convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))
+convert(::Type{Some{T}}, x::Some{T}) where {T} = x
 convert(::Type{Union{Some{T}, Nothing}}, x::Some) where {T} = convert(Some{T}, x)
 
+convert(::Type{Union{T, Nothing}}, x::Union{T, Nothing}) where {T} = x
 convert(::Type{Union{T, Nothing}}, x::Any) where {T} = convert(T, x)
-convert(::Type{Nothing}, x::Any) = throw(MethodError(convert, (Nothing, x)))
 convert(::Type{Nothing}, x::Nothing) = nothing
+convert(::Type{Nothing}, x::Any) = throw(MethodError(convert, (Nothing, x)))
 
 function show(io::IO, x::Some)
     if get(io, :typeinfo, Any) == typeof(x)
@@ -44,6 +46,9 @@ notnothing(::Nothing) = throw(ArgumentError("nothing passed to notnothing"))
     isnothing(x)
 
 Return `true` if `x === nothing`, and return `false` if not.
+
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1.
 """
 isnothing(::Any) = false
 isnothing(::Nothing) = true

@@ -21,7 +21,7 @@ export @testset
 # Legacy approximate testing functions, yet to be included
 export @inferred
 export detect_ambiguities, detect_unbound_args
-export GenericString, GenericSet, GenericDict, GenericArray
+export GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
 export TestSetException
 
 import Distributed: myid
@@ -29,6 +29,17 @@ import Distributed: myid
 using Random
 using Random: AbstractRNG, GLOBAL_RNG
 using InteractiveUtils: gen_call_with_extracted_types
+using Core.Compiler: typesubtract
+
+const DISPLAY_FAILED = (
+    :isequal,
+    :isapprox,
+    :≈,
+    :occursin,
+    :startswith,
+    :endswith,
+    :isempty,
+)
 
 #-----------------------------------------------------------------------
 
@@ -47,6 +58,10 @@ function scrub_backtrace(bt)
         bt = bt[1:name_ind]
     end
     return bt
+end
+
+function scrub_exc_stack(stack)
+    return Any[ (x[1], scrub_backtrace(x[2])) for x in stack ]
 end
 
 """
@@ -134,10 +149,10 @@ mutable struct Error <: Result
 
     function Error(test_type, orig_expr, value, bt, source)
         if test_type === :test_error
-            bt = scrub_backtrace(bt)
+            bt = scrub_exc_stack(bt)
         end
         if test_type === :test_error || test_type === :nontest_error
-            bt_str = sprint(showerror, value, bt)
+            bt_str = sprint(Base.show_exception_stack, bt)
         else
             bt_str = ""
         end
@@ -215,7 +230,7 @@ struct Threw <: ExecutionResult
     source::LineNumberNode
 end
 
-function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode)
+function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate::Bool=false)
     res = true
     i = 1
     evaled_args = evaluated.args
@@ -263,6 +278,12 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode)
     else
         throw(ArgumentError("Unhandled expression type: $(evaluated.head)"))
     end
+
+    if negate
+        res = !res
+        quoted = Expr(:call, :!, quoted)
+    end
+
     Returned(res,
              # stringify arguments in case of failure, for easy remote printing
              res ? quoted : sprint(io->print(IOContext(io, :limit => true), quoted)),
@@ -393,6 +414,13 @@ end
 # evaluate each term in the comparison individually so the results
 # can be displayed nicely.
 function get_test_result(ex, source)
+    negate = QuoteNode(false)
+    orig_ex = ex
+    # Evaluate `not` wrapped functions separately for pretty-printing failures
+    if isa(ex, Expr) && ex.head == :call && length(ex.args) == 2 && ex.args[1] === :!
+        negate = QuoteNode(true)
+        ex = ex.args[2]
+    end
     # Normalize non-dot comparison operator calls to :comparison expressions
     is_splat = x -> isa(x, Expr) && x.head == :...
     if isa(ex, Expr) && ex.head == :call && length(ex.args) == 3 &&
@@ -408,8 +436,9 @@ function get_test_result(ex, source)
             Expr(:comparison, $(escaped_terms...)),
             Expr(:comparison, $(quoted_terms...)),
             $(QuoteNode(source)),
+            $negate,
         ))
-    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in (:isequal, :isapprox, :≈)
+    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in DISPLAY_FAILED
         escaped_func = esc(ex.args[1])
         quoted_func = QuoteNode(ex.args[1])
 
@@ -451,16 +480,17 @@ function get_test_result(ex, source)
             Expr(:call, $escaped_func, Expr(:parameters, $(escaped_kwargs...)), $(escaped_args...)),
             Expr(:call, $quoted_func),
             $(QuoteNode(source)),
+            $negate,
         ))
     else
-        testret = :(Returned($(esc(ex)), nothing, $(QuoteNode(source))))
+        testret = :(Returned($(esc(orig_ex)), nothing, $(QuoteNode(source))))
     end
     result = quote
         try
             $testret
         catch _e
             _e isa InterruptException && rethrow()
-            Threw(_e, catch_backtrace(), $(QuoteNode(source)))
+            Threw(_e, Base.catch_stack(), $(QuoteNode(source)))
         end
     end
     Base.remove_linenums!(result)
@@ -558,7 +588,7 @@ function do_test_throws(result::ExecutionResult, @nospecialize(orig_expr), @nosp
             if isa(exc, typeof(extype))
                 success = true
                 for fld in 1:nfields(extype)
-                    if !(getfield(extype, fld) == getfield(exc, fld))
+                    if !isequal(getfield(extype, fld), getfield(exc, fld))
                         success = false
                         break
                     end
@@ -1085,7 +1115,7 @@ function testset_beginend(args, tests, source)
             err isa InterruptException && rethrow()
             # something in the test block threw an error. Count that as an
             # error in this test set
-            record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
+            record(ts, Error(:nontest_error, :(), err, Base.catch_stack(), $(QuoteNode(source))))
         finally
             copy!(GLOBAL_RNG, oldrng)
         end
@@ -1158,7 +1188,7 @@ function testset_forloop(args, testloop, source)
             err isa InterruptException && rethrow()
             # Something in the test block threw an error. Count that as an
             # error in this test set
-            record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
+            record(ts, Error(:nontest_error, :(), err, Base.catch_stack(), $(QuoteNode(source))))
         end
     end
     quote
@@ -1261,40 +1291,71 @@ end
 
 _args_and_call(args...; kwargs...) = (args[1:end-1], kwargs, args[end](args[1:end-1]...; kwargs...))
 _materialize_broadcasted(f, args...) = Broadcast.materialize(Broadcast.broadcasted(f, args...))
+
 """
-    @inferred f(x)
+    @inferred [AllowedType] f(x)
 
-Tests that the call expression `f(x)` returns a value of the same type
-inferred by the compiler. It is useful to check for type stability.
+Tests that the call expression `f(x)` returns a value of the same type inferred by the
+compiler. It is useful to check for type stability.
 
-`f(x)` can be any call expression.
-Returns the result of `f(x)` if the types match,
-and an `Error` `Result` if it finds different types.
+`f(x)` can be any call expression. Returns the result of `f(x)` if the types match, and an
+`Error` `Result` if it finds different types.
+
+Optionally, `AllowedType` relaxes the test, by making it pass when either the type of `f(x)`
+matches the inferred type modulo `AllowedType`, or when the return type is a subtype of
+`AllowedType`. This is useful when testing type stability of functions returning a small
+union such as `Union{Nothing, T}` or `Union{Missing, T}`.
 
 ```jldoctest; setup = :(using InteractiveUtils), filter = r"begin\\n(.|\\n)*end"
-julia> f(a, b, c) = b > 1 ? 1 : 1.0
+julia> f(a) = a > 1 ? 1 : 1.0
 f (generic function with 1 method)
 
-julia> typeof(f(1, 2, 3))
+julia> typeof(f(2))
 Int64
 
-julia> @code_warntype f(1, 2, 3)
-Body::UNION{FLOAT64, INT64}
-1 1 ─ %1 = (Base.slt_int)(1, b)::Bool
-  └──      goto #3 if not %1
-  2 ─      return 1
-  3 ─      return 1.0
+julia> @code_warntype f(2)
+Variables
+  #self#::Core.Compiler.Const(f, false)
+  a::Int64
 
-julia> @inferred f(1, 2, 3)
+Body::UNION{FLOAT64, INT64}
+1 ─ %1 = (a > 1)::Bool
+└──      goto #3 if not %1
+2 ─      return 1
+3 ─      return 1.0
+
+julia> @inferred f(2)
 ERROR: return type Int64 does not match inferred return type Union{Float64, Int64}
-Stacktrace:
 [...]
 
 julia> @inferred max(1, 2)
 2
+
+julia> g(a) = a < 10 ? missing : 1.0
+g (generic function with 1 method)
+
+julia> @inferred g(20)
+ERROR: return type Float64 does not match inferred return type Union{Missing, Float64}
+[...]
+
+julia> @inferred Missing g(20)
+1.0
+
+julia> h(a) = a < 10 ? missing : f(a)
+h (generic function with 1 method)
+
+julia> @inferred Missing h(20)
+ERROR: return type Int64 does not match inferred return type Union{Missing, Float64, Int64}
+[...]
 ```
 """
 macro inferred(ex)
+    _inferred(ex, __module__)
+end
+macro inferred(allow, ex)
+    _inferred(ex, __module__, allow)
+end
+function _inferred(ex, mod, allow = :(Union{}))
     if Meta.isexpr(ex, :ref)
         ex = Expr(:call, :getindex, ex.args...)
     end
@@ -1307,13 +1368,15 @@ macro inferred(ex)
     end
     Base.remove_linenums!(quote
         let
+            allow = $(esc(allow))
+            allow isa Type || throw(ArgumentError("@inferred requires a type as second argument"))
             $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
                 # Has keywords
                 args = gensym()
                 kwargs = gensym()
                 quote
                     $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
-                    inftypes = $(gen_call_with_extracted_types(__module__, Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
+                    inftypes = $(gen_call_with_extracted_types(mod, Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
                 end
             else
                 # No keywords
@@ -1324,8 +1387,8 @@ macro inferred(ex)
                 end
             end)
             @assert length(inftypes) == 1
-            rettype = isa(result, Type) ? Type{result} : typeof(result)
-            rettype == inftypes[1] || error("return type $rettype does not match inferred return type $(inftypes[1])")
+            rettype = result isa Type ? Type{result} : typeof(result)
+            rettype <: allow || rettype == typesubtract(inftypes[1], allow) || error("return type $rettype does not match inferred return type $(inftypes[1])")
             result
         end
     end)
@@ -1348,12 +1411,12 @@ function detect_ambiguities(mods...;
                             imported::Bool = false,
                             recursive::Bool = false,
                             ambiguous_bottom::Bool = false)
-    function sortdefs(m1, m2)
+    function sortdefs(m1::Method, m2::Method)
         ord12 = m1.file < m2.file
         if !ord12 && (m1.file == m2.file)
             ord12 = m1.line < m2.line
         end
-        ord12 ? (m1, m2) : (m2, m1)
+        return ord12 ? (m1, m2) : (m2, m1)
     end
     ambs = Set{Tuple{Method,Method}}()
     for mod in mods
@@ -1368,16 +1431,34 @@ function detect_ambiguities(mods...;
                 subambs = detect_ambiguities(f,
                     imported=imported, recursive=recursive, ambiguous_bottom=ambiguous_bottom)
                 union!(ambs, subambs)
-            elseif isa(f, DataType) && isdefined(f.name, :mt)
+            elseif isa(f, DataType) && isdefined(f.name, :mt) && f.name.mt !== Symbol.name.mt
                 mt = Base.MethodList(f.name.mt)
                 for m in mt
                     if m.ambig !== nothing
                         for m2 in m.ambig
-                            if Base.isambiguous(m, m2, ambiguous_bottom=ambiguous_bottom)
-                                push!(ambs, sortdefs(m, m2))
+                            if Base.isambiguous(m, m2.func, ambiguous_bottom=ambiguous_bottom)
+                                push!(ambs, sortdefs(m, m2.func))
                             end
                         end
                     end
+                end
+            end
+        end
+    end
+    function is_in_mods(m::Module)
+        while true
+            m in mods && return true
+            recursive || return false
+            p = parentmodule(m)
+            p === m && return false
+            m = parent
+        end
+    end
+    for m in Base.MethodList(Symbol.name.mt)
+        if m.ambig !== nothing && is_in_mods(m.module)
+            for m2 in m.ambig
+                if Base.isambiguous(m, m2.func, ambiguous_bottom=ambiguous_bottom)
+                    push!(ambs, sortdefs(m, m2.func))
                 end
             end
         end
@@ -1546,12 +1627,22 @@ end
 GenericArray{T}(args...) where {T} = GenericArray(Array{T}(args...))
 GenericArray{T,N}(args...) where {T,N} = GenericArray(Array{T,N}(args...))
 
+"""
+The `GenericOrder` can be used to test APIs for their support
+of generic ordered types.
+"""
+struct GenericOrder{T}
+    val::T
+end
+Base.isless(x::GenericOrder, y::GenericOrder) = isless(x.val,y.val)
+
 Base.keys(a::GenericArray) = keys(a.a)
 Base.axes(a::GenericArray) = axes(a.a)
 Base.length(a::GenericArray) = length(a.a)
 Base.size(a::GenericArray) = size(a.a)
-Base.getindex(a::GenericArray, i...) = a.a[i...]
-Base.setindex!(a::GenericArray, x, i...) = a.a[i...] = x
+Base.IndexStyle(::Type{<:GenericArray}) = IndexLinear()
+Base.getindex(a::GenericArray, i::Int) = a.a[i]
+Base.setindex!(a::GenericArray, x, i::Int) = a.a[i] = x
 
 Base.similar(A::GenericArray, s::Integer...) = GenericArray(similar(A.a, s...))
 

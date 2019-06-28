@@ -124,7 +124,7 @@ function launch(manager::SSHManager, params::Dict, launched::Array, launch_ntfy:
     # Wait for all launches to complete.
     launch_tasks = Vector{Any}(undef, length(manager.machines))
 
-    for (i,(machine, cnt)) in enumerate(manager.machines)
+    for (i, (machine, cnt)) in enumerate(manager.machines)
         let machine=machine, cnt=cnt
             launch_tasks[i] = @async try
                     launch_on_machine(manager, machine, cnt, params, launched, launch_ntfy)
@@ -135,7 +135,7 @@ function launch(manager::SSHManager, params::Dict, launched::Array, launch_ntfy:
     end
 
     for t in launch_tasks
-        wait(t)
+        wait(t::Task)
     end
 
     notify(launch_ntfy)
@@ -287,7 +287,7 @@ end
 
 # LocalManager
 struct LocalManager <: ClusterManager
-    np::Integer
+    np::Int
     restrict::Bool  # Restrict binding to 127.0.0.1 only
 end
 
@@ -373,7 +373,7 @@ manage
 struct DefaultClusterManager <: ClusterManager
 end
 
-const tunnel_hosts_map = Dict{AbstractString, Semaphore}()
+const tunnel_hosts_map = Dict{String, Semaphore}()
 
 """
     connect(manager::ClusterManager, pid::Int, config::WorkerConfig) -> (instrm::IO, outstrm::IO)
@@ -484,10 +484,15 @@ function socket_reuse_port()
     end
 end
 
-function bind_client_port(s)
-    err = ccall(:jl_tcp_bind, Int32, (Ptr{Cvoid}, UInt16, UInt32, Cuint),
-                            s.handle, hton(client_port[]), hton(UInt32(0)), 0)
-    uv_error("bind() failed", err)
+# TODO: this doesn't belong here, it belongs in Sockets
+function bind_client_port(s::TCPSocket)
+    Sockets.iolock_begin()
+    @assert s.status == Sockets.StatusInit
+    host_in = Ref(hton(UInt32(0))) # IPv4 0.0.0.0
+    err = ccall(:jl_tcp_bind, Int32, (Ptr{Cvoid}, UInt16, Ptr{Cvoid}, Cuint, Cint),
+                s, hton(client_port[]), host_in, 0, false)
+    Sockets.iolock_end()
+    uv_error("tcp_bind", err)
 
     _addr, port = getsockname(s)
     client_port[] = port

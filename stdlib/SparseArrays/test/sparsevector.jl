@@ -44,6 +44,9 @@ end
     @test occursin("1.25", string(spv_x1))
     @test occursin("-0.75", string(spv_x1))
     @test occursin("3.5", string(spv_x1))
+
+    # issue #30589
+    @test repr("text/plain", sparse([true])) == "1-element SparseArrays.SparseVector{Bool,$Int} with 1 stored entry:\n  [1]  =  1"
 end
 
 ### Comparison helper to ensure exact equality with internal structure
@@ -154,6 +157,11 @@ end
             end
         end
 
+        let xr = sprandn(ComplexF64, 1000, 0.9)
+            @test isa(xr, SparseVector{ComplexF64,Int})
+            @test length(xr) == 1000
+        end
+
         let xr = sprand(Bool, 1000, 0.9)
             @test isa(xr, SparseVector{Bool,Int})
             @test length(xr) == 1000
@@ -164,6 +172,22 @@ end
             @test sprand(r1, 100, .9) == sprand(r2, 100, .9)
             @test sprandn(r1, 100, .9) == sprandn(r2, 100, .9)
             @test sprand(r1, Bool, 100, .9) == sprand(r2,  Bool, 100, .9)
+        end
+
+        # test sprand with function inputs
+        let xr = sprand(1000, 0.9, rand)
+            @test isa(xr, SparseVector{Float64,Int})
+            @test length(xr) == 1000
+            if !isempty(nonzeros(xr))
+                @test all(nonzeros(xr) .> 0.0)
+            end
+        end
+        let xr = sprand(1000, 0.9, rand, Float32)
+            @test isa(xr, SparseVector{Float32,Int})
+            @test length(xr) == 1000
+            if !isempty(nonzeros(xr))
+                @test all(nonzeros(xr) .> 0.0)
+            end
         end
     end
 end
@@ -817,30 +841,46 @@ end
 
 @testset "BLAS Level-2" begin
     @testset "dense A * sparse x -> dense y" begin
-        let A = randn(9, 16), x = sprand(16, 0.7)
-            xf = Array(x)
-            for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
-                y = rand(9)
-                rr = α*A*xf + β*y
-                @test mul!(y, A, x, α, β) === y
-                @test y ≈ rr
+        for TA in (Float64, ComplexF64), Tx in (Float64, ComplexF64)
+            T = Base.promote_op(LinearAlgebra.matprod, TA, Tx)
+            let A = randn(TA, 9, 16), x = sprand(Tx, 16, 0.7)
+                xf = Array(x)
+                for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
+                    y = rand(T, 9)
+                    rr = α*A*xf + β*y
+                    @test mul!(y, A, x, α, β) === y
+                    @test y ≈ rr
+                end
+                y = A*x
+                @test isa(y, Vector{T})
+                @test A*x ≈ A*xf
             end
-            y = A*x
-            @test isa(y, Vector{Float64})
-            @test A*x ≈ A*xf
-        end
 
-        let A = randn(16, 9), x = sprand(16, 0.7)
-            xf = Array(x)
-            for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
-                y = rand(9)
-                rr = α*A'xf + β*y
-                @test mul!(y, transpose(A), x, α, β) === y
-                @test y ≈ rr
+            let A = randn(TA, 16, 9), x = sprand(Tx, 16, 0.7)
+                xf = Array(x)
+                for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
+                    y = rand(T, 9)
+                    rr = α*transpose(A)*xf + β*y
+                    @test mul!(y, transpose(A), x, α, β) === y
+                    @test y ≈ rr
+                end
+                y = *(transpose(A), x)
+                @test isa(y, Vector{T})
+                @test y ≈ *(transpose(A), xf)
             end
-            y = *(transpose(A), x)
-            @test isa(y, Vector{Float64})
-            @test y ≈ *(transpose(A), xf)
+
+            let A = randn(TA, 16, 9), x = sprand(Tx, 16, 0.7)
+                xf = Array(x)
+                for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
+                    y = rand(T, 9)
+                    rr = α*A'xf + β*y
+                    @test mul!(y, adjoint(A), x, α, β) === y
+                    @test y ≈ rr
+                end
+                y = *(adjoint(A), x)
+                @test isa(y, Vector{T})
+                @test y ≈ *(adjoint(A), xf)
+            end
         end
     end
     @testset "sparse A * sparse x -> dense y" begin
@@ -883,6 +923,14 @@ end
             @test SparseArrays.densemv(A, x2; trans='C') ≈ Af'x2f
             @test_throws ArgumentError SparseArrays.densemv(A, x; trans='D')
         end
+
+        let A = sparse(bitrand(9, 16)), x = sparse(bitrand(16))
+            Af = Array(A)
+            xf = Array(x)
+            y = SparseArrays.densemv(A, x)
+            @test isa(y, Vector{Int})
+            @test y == Af*xf
+        end
     end
     @testset "sparse A * sparse x -> sparse y" begin
         let A = sprandn(9, 16, 0.5), x = sprand(16, 0.7), x2 = sprand(9, 0.7)
@@ -919,6 +967,35 @@ end
             y = *(adjoint(A), x2)
             @test isa(y, SparseVector{ComplexF64,Int})
             @test Array(y) ≈ Af'x2f
+        end
+
+        let A = sparse(bitrand(9, 16)), x = sparse(bitrand(16)), x2 = sparse(bitrand(9))
+            Af = Array(A)
+            xf = Array(x)
+            x2f = Array(x2)
+
+            y = A*x
+            @test isa(y, SparseVector{Int, Int})
+            @test Array(y) == Af*xf
+
+            y = A'*x2
+            @test isa(y, SparseVector{Int, Int})
+            @test Array(y) == Af'x2f
+        end
+    end
+    @testset "sparse A * dense x -> dense y" begin
+        let A = sparse(bitrand(9, 16)), x = Vector(bitrand(16)), x2 = Vector(bitrand(9))
+            Af = Array(A)
+            xf = Array(x)
+            x2f = Array(x2)
+
+            y = A*x
+            @test isa(y, Vector{Int})
+            @test y == Af*xf
+
+            y = A'*x2
+            @test isa(y, Vector{Int})
+            @test y == Af'x2f
         end
     end
     @testset "ldiv ops with triangular matrices and sparse vecs (#14005)" begin
@@ -1257,6 +1334,28 @@ end
               LinearAlgebra.axpy!(1.0, Ajview, sparse(fill(1., n)))
         @test LinearAlgebra.lowrankupdate!(Matrix(1.0*I, n, n), fill(1.0, n), Aj) ==
               LinearAlgebra.lowrankupdate!(Matrix(1.0*I, n, n), fill(1.0, n), Ajview)
+    end
+end
+
+@testset "SparseVector circshift" begin
+    n = 100
+    v = sprand(n, 0.5)
+    for shift in (0,-1,1,5,-7,n+10)
+        x = circshift(Vector(v), shift)
+        w = circshift(v, shift)
+        @test nnz(v) == nnz(w)
+        @test w == x
+        # test circshift!
+        v1 = similar(v)
+        circshift!(v1, v, shift)
+        @test v1 == x
+        # test different in/out types
+        y1 = spzeros(Int64, n)
+        y2 = spzeros(Int64, n)
+        v2 = floor.(100v)
+        circshift!(y1, v2, shift)
+        circshift!(y2, Vector(v2), shift)
+        @test y1 == y2
     end
 end
 

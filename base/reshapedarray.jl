@@ -35,6 +35,22 @@ end
 length(R::ReshapedArrayIterator) = length(R.iter)
 eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedIndex{eltype(I)} : Any
 
+## reshape(::Array, ::Dims) returns an Array, except for isbitsunion eltypes (issue #28611)
+# reshaping to same # of dimensions
+function reshape(a::Array{T,M}, dims::NTuple{N,Int}) where {T,N,M}
+    throw_dmrsa(dims, len) =
+        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $len"))
+
+    if prod(dims) != length(a)
+        throw_dmrsa(dims, length(a))
+    end
+    isbitsunion(T) && return ReshapedArray(a, dims, ())
+    if N == M && dims == size(a)
+        return a
+    end
+    ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
+end
+
 """
     reshape(A, dims...) -> AbstractArray
     reshape(A, dims) -> AbstractArray
@@ -148,7 +164,7 @@ _reshape(parent::Array, dims::Dims) = reshape(parent, dims)
 
 # When reshaping Vector->Vector, don't wrap with a ReshapedArray
 function _reshape(v::AbstractVector, dims::Dims{1})
-    @assert !has_offset_axes(v)
+    require_one_based_indexing(v)
     len = dims[1]
     len == length(v) || _throw_dmrs(length(v), "length", len)
     v

@@ -225,6 +225,11 @@ let
 end
 
 struct TypeWithIntParam{T <: Integer} end
+struct Bounded  # not an AbstractArray
+    bound::Int
+end
+Base.getindex(b::Bounded, i) = checkindex(Bool, 1:b.bound, i) || throw(BoundsError(b, i))
+Base.summary(io::IO, b::Bounded) = print(io, "$(b.bound)-size Bounded")
 let undefvar
     err_str = @except_strbt sqrt(-1) DomainError
     @test occursin("Try sqrt(Complex(x)).", err_str)
@@ -246,6 +251,9 @@ let undefvar
     err_str = @except_str [5, 4, 3][1:5] BoundsError
     @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [1:5]"
 
+    err_str = @except_str Bounded(2)[3] BoundsError
+    @test err_str == "BoundsError: attempt to access 2-size Bounded\n  at index [3]"
+
     err_str = @except_str 0::Bool TypeError
     @test err_str == "TypeError: non-boolean ($Int) used in boolean context"
     err_str = @except_str 0::AbstractFloat TypeError
@@ -260,6 +268,8 @@ let undefvar
     @test err_str == "TypeError: in Type, in parameter, expected Type, got String"
     err_str = @except_str TypeWithIntParam{Any} TypeError
     @test err_str == "TypeError: in TypeWithIntParam, in T, expected T<:Integer, got Type{Any}"
+    err_str = @except_str Type{Vararg} TypeError
+    @test err_str == "TypeError: in Type, in parameter, expected Type, got Vararg"
 
     err_str = @except_str mod(1,0) DivideError
     @test err_str == "DivideError: integer division error"
@@ -533,6 +543,22 @@ end
     @test occursin("g28442", output[3])
     @test output[4][1:4] == " [2]"
     @test occursin("f28442", output[4])
-    @test occursin("the last 2 lines are repeated 5000 more times", output[5])
-    @test output[6][1:8] == " [10003]"
+    # Issue #30233
+    # Note that we can't use @test_broken on FreeBSD here, because the tests actually do
+    # pass with some compilation options, e.g. with assertions enabled
+    if !Sys.isfreebsd()
+        @test occursin("the last 2 lines are repeated 5000 more times", output[5])
+        @test output[6][1:8] == " [10003]"
+    end
+end
+
+# issue #30633
+@test_throws ArgumentError("invalid index: \"foo\" of type String") [1]["foo"]
+@test_throws ArgumentError("invalid index: nothing of type Nothing") [1][nothing]
+
+# test showing MethodError with type argument
+struct NoMethodsDefinedHere; end
+let buf = IOBuffer()
+    Base.show_method_candidates(buf, Base.MethodError(sin, Tuple{NoMethodsDefinedHere}))
+    @test length(take!(buf)) !== 0
 end

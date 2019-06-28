@@ -24,10 +24,10 @@ void jl_unw_get(void *context) {};
 extern "C" {
 #endif
 
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context);
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintptr_t *fp);
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context) JL_NOTSAFEPOINT;
+static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintptr_t *fp) JL_NOTSAFEPOINT;
 
-size_t jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, size_t maxsize, int add_interp_frames)
+size_t jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, size_t maxsize, int add_interp_frames) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     volatile size_t n = 0;
@@ -181,15 +181,21 @@ JL_DLLEXPORT void jl_get_backtrace(jl_array_t **btout, jl_array_t **bt2out)
 // with the top of the stack and returning up to `max_entries`. If requested by
 // setting the `include_bt` flag, backtrace data in bt,bt2 format is
 // interleaved.
-JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_value_t* task, int include_bt, int max_entries)
+JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int max_entries)
 {
-    JL_TYPECHK(catch_stack, task, task);
+    JL_TYPECHK(catch_stack, task, (jl_value_t*)task);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (task != ptls->current_task &&
+        task->state != failed_sym && task->state != done_sym) {
+        jl_error("Inspecting the exception stack of a task which might "
+                 "be running concurrently isn't allowed.");
+    }
     jl_array_t *stack = NULL;
     jl_array_t *bt = NULL;
     jl_array_t *bt2 = NULL;
     JL_GC_PUSH3(&stack, &bt, &bt2);
     stack = jl_alloc_array_1d(jl_array_any_type, 0);
-    jl_excstack_t *excstack = ((jl_task_t*)task)->excstack;
+    jl_excstack_t *excstack = task->excstack;
     size_t itr = excstack ? excstack->top : 0;
     int i = 0;
     while (itr > 0 && i < max_entries) {
@@ -511,7 +517,7 @@ JL_DLLEXPORT void jl_gdblookup(uintptr_t ip)
     free(frames);
 }
 
-JL_DLLEXPORT void jlbacktrace(void)
+JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT
 {
     jl_excstack_t *s = jl_get_ptls_states()->current_task->excstack;
     if (!s)

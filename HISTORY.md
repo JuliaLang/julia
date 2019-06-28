@@ -1,3 +1,365 @@
+Julia v1.2 Release Notes
+========================
+
+New language features
+---------------------
+
+* Argument splatting (`x...`) can now be used in calls to the `new` pseudo-function in
+  constructors ([#30577]).
+* Support for Unicode 12.0.0 ([#31561]).
+* Added `⋆` (`\star`) as unary operator ([#31604]).
+
+Language changes
+----------------
+
+* Empty entries in `JULIA_DEPOT_PATH` are now expanded to default depot entries ([#31009]).
+
+Multi-threading changes
+-----------------------
+
+* The `Condition` type now has a thread-safe replacement, accessed as `Threads.Condition`.
+  With that addition, task scheduling primitives such as `ReentrantLock` are now thread-safe ([#30061]).
+* It is possible to schedule and switch Tasks during `@threads` loops, and perform limited I/O ([#31438]).
+
+Build system changes
+--------------------
+
+* The build system now prefers downloading prebuilt binary tarballs for most dependencies on
+  supported systems, disable by setting `USE_BINARYBUILDER=0` at `make` time ([#31441]).
+
+New library functions
+---------------------
+
+* `getipaddrs()` function returns all the IP addresses of the local machine, with IPv4 addresses sorting before IPv6 addresses ([#30349, #30604]).
+* `getipaddr(addr_type)` and `getipaddrs(addr_type)` functions returns an IP address(es) of the desired type of the local machine ([#30604]).
+* Added `Base.hasproperty` and `Base.hasfield` ([#28850]).
+* One argument `!=(x)`, `>(x)`, `>=(x)`, `<(x)`, `<=(x)` have been added, returning partially-applied
+  versions of the functions, similar to the existing `==(x)` and `isequal(x)` methods ([#30915]).
+
+Standard library changes
+------------------------
+
+* `Enum` now behaves like a scalar when used in broadcasting ([#30670]).
+* If a `pipeline` is specified with `append=true` set, but no redirection, an `ArgumentError`
+  is thrown, rather than a `ErrorException` ([#27900]).
+* Functions that invoke commands (e.g. `run(::Cmd)`) now throw a `ProcessFailedException`
+  rather than an `ErrorException`, if those commands exit with non-zero exit code ([#27900]).
+* The `extrema` function now accepts a function argument in the same manner as `minimum` and
+  `maximum` ([#30323]).
+* `hasmethod` can now check for matching keyword argument names ([#30712]).
+* `startswith` and `endswith` now accept a `Regex` for the second argument ([#29790]).
+* `retry` supports arbitrary callable objects ([#30382]).
+* A no-argument constructor for `Ptr{T}` has been added which constructs a null pointer ([#30919]).
+* `strip` now accepts a function argument in the same manner as `lstrip` and `rstrip` ([#31211]).
+* `mktempdir` now accepts a `prefix` keyword argument to customize the file name ([#31230], [#22922]).
+* `keytype` and `valtype` now work on `AbstractArray`, and return the `eltype` of `keys(...)` and
+  `values(...)` respectively ([#27749]).
+* `nextfloat(::BigFloat)` and `prevfloat(::BigFloat)` now returns a value with the same precision
+  as their argument, which means that (in particular) `nextfloat(prevfloat(x)) == x` whereas
+  previously this could result in a completely different value with a different precision ([#31310]).
+* `mapreduce` now accepts multiple iterators, similar to `map` ([#31532]).
+* `filter` now supports `SkipMissing`-wrapped arrays ([#31235]).
+* Objects created by calling `skipmissing` on an array can now be indexed using indices
+  from the parent at non-missing positions. This allows functions such as
+  `findall`, `findfirst`, `argmin`/`argmax` and `findmin`/`findmax` to work with these
+  objects, returning the index of matching non-missing elements in the parent ([#31008]).
+* `inv(::Missing)` has now been added and returns `missing` ([#31451]).
+* `nextfloat(::BigFloat, n::Integer)` and `prevfloat(::BigFloat, n::Integer)` methods
+  have been added ([#31310]).
+
+#### LinearAlgebra
+* Added keyword arguments `rtol`, `atol` to `pinv` and `nullspace` ([#29998]).
+* `UniformScaling` instances are now callable such that e.g. `I(3)` will produce a `Diagonal` matrix ([#30298]).
+* Eigenvalues λ of general matrices are now sorted lexicographically by (Re λ, Im λ) ([#21598]).
+* `one` for structured matrices (`Diagonal`, `Bidiagonal`, `Tridiagonal`, `Symtridiagonal`) now preserves
+  structure and type ([#29777]).
+* `diagm(v)` is now a shorthand for `diagm(0 => v)` ([#31125]).
+
+#### SparseArrays
+* Performance improvements for sparse matrix-matrix multiplication ([#30372]).
+* Sparse vector outer products are more performant and maintain sparsity in products of the
+  form `kron(u, v')`, `u * v'`, and `u .* v'` where `u` and `v` are sparse vectors or column
+  views ([#24980]).
+
+#### Dates
+* Fixed `repr` such that it displays `DateTime` as it would be entered in Julia ([#30200]).
+
+#### Statistics
+* `quantile` now accepts in all cases collections whose `eltype` is not a subtype of `Number` ([#30938]).
+
+#### Miscellaneous
+* Since environment variables on Windows are case-insensitive, `ENV` now converts its keys
+  to uppercase for display, iteration, and copying ([#30593]).
+
+External dependencies
+---------------------
+
+* libgit2 has been updated to v0.27.7 ([#30584]).
+* OpenBLAS has been updated to v0.3.5 ([#30583]).
+* MbedTLS has been updated to v2.16.0 ([#30618]).
+* libunwind has been updated to v1.3.1 ([#30724]).
+
+<!--- generated by NEWS-update.jl: -->
+[#21598]: https://github.com/JuliaLang/julia/issues/21598
+[#22922]: https://github.com/JuliaLang/julia/issues/22922
+[#24980]: https://github.com/JuliaLang/julia/issues/24980
+[#27749]: https://github.com/JuliaLang/julia/issues/27749
+[#27900]: https://github.com/JuliaLang/julia/issues/27900
+[#28850]: https://github.com/JuliaLang/julia/issues/28850
+[#29777]: https://github.com/JuliaLang/julia/issues/29777
+[#29790]: https://github.com/JuliaLang/julia/issues/29790
+[#29998]: https://github.com/JuliaLang/julia/issues/29998
+[#30061]: https://github.com/JuliaLang/julia/issues/30061
+[#30200]: https://github.com/JuliaLang/julia/issues/30200
+[#30298]: https://github.com/JuliaLang/julia/issues/30298
+[#30323]: https://github.com/JuliaLang/julia/issues/30323
+[#30372]: https://github.com/JuliaLang/julia/issues/30372
+[#30382]: https://github.com/JuliaLang/julia/issues/30382
+[#30577]: https://github.com/JuliaLang/julia/issues/30577
+[#30583]: https://github.com/JuliaLang/julia/issues/30583
+[#30584]: https://github.com/JuliaLang/julia/issues/30584
+[#30593]: https://github.com/JuliaLang/julia/issues/30593
+[#30604]: https://github.com/JuliaLang/julia/issues/30604
+[#30618]: https://github.com/JuliaLang/julia/issues/30618
+[#30670]: https://github.com/JuliaLang/julia/issues/30670
+[#30712]: https://github.com/JuliaLang/julia/issues/30712
+[#30724]: https://github.com/JuliaLang/julia/issues/30724
+[#30915]: https://github.com/JuliaLang/julia/issues/30915
+[#30919]: https://github.com/JuliaLang/julia/issues/30919
+[#30938]: https://github.com/JuliaLang/julia/issues/30938
+[#31008]: https://github.com/JuliaLang/julia/issues/31008
+[#31009]: https://github.com/JuliaLang/julia/issues/31009
+[#31125]: https://github.com/JuliaLang/julia/issues/31125
+[#31211]: https://github.com/JuliaLang/julia/issues/31211
+[#31230]: https://github.com/JuliaLang/julia/issues/31230
+[#31235]: https://github.com/JuliaLang/julia/issues/31235
+[#31310]: https://github.com/JuliaLang/julia/issues/31310
+[#31438]: https://github.com/JuliaLang/julia/issues/31438
+[#31441]: https://github.com/JuliaLang/julia/issues/31441
+[#31451]: https://github.com/JuliaLang/julia/issues/31451
+[#31532]: https://github.com/JuliaLang/julia/issues/31532
+[#31561]: https://github.com/JuliaLang/julia/issues/31561
+[#31604]: https://github.com/JuliaLang/julia/issues/31604
+
+Julia v1.1 Release Notes
+========================
+
+New language features
+---------------------
+
+  * An *exception stack* is maintained on each task to make exception handling
+    more robust and enable root cause analysis. The stack may be accessed using
+    the experimental function `Base.catch_stack` ([#28878]).
+  * The experimental macro `Base.@locals` returns a dictionary of current local variable names
+    and values ([#29733]).
+  * Binary `~` can now be dotted, as in `x .~ y` ([#30341]).
+
+Language changes
+----------------
+
+  * Parser inputs ending with a comma are now consistently treated as incomplete.
+    Previously they were sometimes parsed as tuples, depending on whitespace ([#28506]).
+  * Spaces were accidentally allowed in broadcast call syntax, e.g. `f. (x)`. They are now
+    disallowed, consistent with normal function call syntax ([#29781]).
+  * Big integer literals and command syntax (backticks) are now parsed with the name of
+    the macro (`@int128_str`, `@uint128_str`, `@big_str`, `@cmd`) qualified to refer
+    to the `Core` module ([#29968]).
+  * Using the same name for both a local variable and a static parameter is now an error instead
+    of a warning ([#29429]).
+  * `findall(in(b), a)` now returns a `CartesianIndex` when `a` is a matrix or a higher-dimensional array,
+    for consistency with other `findall` methods. Use `LinearIndices(a)[findall(in(b), a)]` to get
+    the old behavior, or `CartesianIndices(a)[findall(in(b), a)]` to get the new behavior
+    on previous Julia versions ([#30226]).
+  * `findmin(::BitArray)` and `findmax(::BitArray)` now return a `CartesianIndex` when `a` is a matrix
+    or a higher-dimensional array, for consistency with other array types.
+    Use `LinearIndices(a)[findmin(a)[2]]` to get the old behavior, or `CartesianIndices(a)[findmin(a)[2]]`
+    to get the new behavior on previous Julia versions ([#30102]).
+  * Method signatures such as
+    `f(::Type{T}, ::T) where {T <: X}` and
+    `f(::Type{X}, ::Any)`
+    are now considered ambiguous. Previously a bug caused the first one to be considered more specific in
+    some cases ([#30160]).
+
+Command-line option changes
+---------------------------
+
+  * When a script run in interactive mode (`-i`) throws an error, the REPL now starts after
+    the error is displayed. Previously the REPL only started if the script completed without
+    error ([#21233]).
+
+New library functions
+---------------------
+
+  * `splitpath(p::String)` function, which is the opposite of `joinpath(parts...)`: it splits a filepath
+    into its components ([#28156]).
+  * `isnothing(::Any)` predicate, to check whether the argument is `nothing`. ([#29679]).
+  * `getpid(::Process)` method ([#24064]).
+  * `eachrow`, `eachcol` and `eachslice` functions provide efficient iterators over slices of arrays ([#29749]).
+  * `fieldtypes(T::Type)` which returns the declared types of the field in type T ([#29600]).
+  * `uuid5` has been added to the `UUIDs` standard library ([#28761]).
+  * Predicates `Sys.isfreebsd`, `Sys.isopenbsd`, `Sys.isnetbsd`, and `Sys.isdragonfly` for
+    detecting BSD systems have been added ([#30249]).
+  * Internal `Base.disable_library_threading` that sets libraries to use one thread.
+    It executes function hooks that have been registered with
+    `Base.at_disable_library_threading` ([#30004]).
+
+Standard library changes
+------------------------
+
+  * `CartesianIndices` can now be constructed from two `CartesianIndex`es `I` and `J` with `I:J` ([#29440]).
+  * `CartesianIndices` support broadcasting arithmetic (+ and -) with a `CartesianIndex` ([#29890]).
+  * `copy!` support for arrays, dicts, and sets has been moved to Base from the Future package ([#29173]).
+  * Channels now convert inserted values (like containers) instead of requiring types to match ([#29092]).
+  * `range` can accept the stop value as a positional argument, e.g. `range(1,10,step=2)` ([#28708]).
+  * `diff` now supports arrays of arbitrary dimensionality and can operate over any dimension ([#29827]).
+  * The constructor `BigFloat(::BigFloat)` now respects the global precision setting and always
+    returns a `BigFloat` with precision equal to `precision(BigFloat)` ([#29127]). The optional
+    `precision` argument to override the global setting is now a keyword instead of positional
+    argument ([#29157]).
+  * The use of scientific notation when printing `BigFloat` values is now consistent with other floating point
+    types ([#29211]).
+  * `Regex` now behaves like a scalar when used in broadcasting ([#29913]).
+  * `Char` now behaves like a read-only 0-dimensional array ([#29819]).
+  * `parse` now allows strings representing integer 0 and 1 for type `Bool` ([#29980]).
+  * `Base.tail` now works on named tuples ([#29595]).
+  * The process id is appended to malloc log files in order to track memory allocations of
+    multiple processes ([#29969]).
+  * `Base.julia_cmd` now propagates the `--inline=(yes|no)` flag ([#29858]).
+  * `Base.@kwdef` can now be used for parametric structs, and for structs with supertypes ([#29316]).
+  * `merge(::NamedTuple, ::NamedTuple...)` can now be used with more than 2 `NamedTuple`s ([#29259]).
+  * New `ncodeunits(c::Char)` method as a fast equivalent to `ncodeunits(string(c))` ([#29153]).
+  * New `sort!(::AbstractArray; dims)` method that can sort the array along the `dims` dimension ([#28902]).
+  * `range` now accepts `stop` as a positional argument ([#28708]).
+  * `get(A::AbstractArray, (), default)` now returns `A[]` instead of an empty array ([#30270]).
+  * `parse(Bool, str)` is now supported ([#29997]).
+  * `copyto!(::AbstractMatrix, ::UniformScaling)` now supports rectangular matrices ([#28790]).
+  * `current_project()` now searches the parent directories of a Git repository for a `Project.toml` file.
+    This also affects the behavior of the `--project` command line option when using the default
+    `--project=@.` ([#29108]).
+  * The `spawn` API is now more flexible and supports taking IOBuffer directly as an I/O stream,
+    converting to a system pipe as needed ([#30278]).
+
+#### Dates
+  * New `DateTime(::Date, ::Time)` constructor ([#29754]).
+  * `TimeZone` now behaves like a scalar when used in broadcasting ([#30159]).
+
+#### InteractiveUtils
+  * `edit` can now be called on a module to edit the file that defines it ([#29636]).
+  * All compiler-reflection tools (i.e. the `code_` class of functions and macros) now print accurate
+    line number and inlining information in a common style, and take an optional parameter (debuginfo=:default)
+    to control the verbosity of the metadata shown ([#29893]).
+
+#### LinearAlgebra
+  * `isdiag` and `isposdef` for `Diagonal` and `UniformScaling` ([#29638]).
+  * `mul!`, `rmul!` and `lmul!` methods for `UniformScaling` ([#29506]).
+  * `Symmetric` and `Hermitian` matrices now preserve the wrapper when scaled with a number ([#29469]).
+  * Exponentiation operator `^` now supports raising an `Irrational` to an `AbstractMatrix` power ([#29782]).
+  * Added keyword arguments `rtol`, `atol` to `rank` ([#29926]).
+
+#### Random
+  * `randperm` and `randcycle` now use the type of their argument to determine the element type of
+    the returned array ([#29670]).
+  * A new method `rand(::Tuple)` implements sampling from the values of a tuple ([#25278]).
+  * `serialize` and `deserialize` now accept a filename argument, like `write` and `read` ([#30151]).
+
+#### SparseArrays
+  * `sprandn` now supports specifying the output element type ([#30083]).
+
+#### Statistics
+  * `mean` and `var` now handle more kinds of empty inputs ([#29033]).
+
+External dependencies
+---------------------
+
+  * 7zip (bundled with Julia on Windows) has been upgraded from version 16.04 to 18.05 ([#30035]).
+  * Busybox is no longer bundled with Julia on Windows ([#30022]).
+  * OpenBLAS has been upgraded from 0.3.2 to 0.3.3 ([#29845]).
+  * The source code for Pkg is no longer included in JuliaLang/julia. Pkg is instead
+    downloaded during the build process ([#29615]).
+  * LLVM has been upgraded to 6.0.1 and support for LLVM < 6.0 has been dropped ([#28745], [#28696]).
+  * Pkg has been upgraded to version 1.1 ([#30342]).
+
+Deprecated or removed
+---------------------
+
+  * `one(i::CartesianIndex)` should be replaced with `oneunit(i::CartesianIndex)` ([#29442]).
+  * The internal array `Base.Grisu.DIGITS` is deprecated; new code should use `Base.Grisu.getbuf()`
+    to get an appropriate task-local buffer and pass it to `grisu()` instead ([#29907]).
+  * The internal function `Base._default_type(T)` has been removed. Calls to it should be
+    replaced with just the argument `T` ([#29739]).
+  * `peakflops` has been scheduled to move from `InteractiveUtils` to `LinearAlgebra`
+    but is already now available as `LinearAlgebra.peakflops` ([#29978]).
+
+<!--- generated by NEWS-update.jl: -->
+[#21233]: https://github.com/JuliaLang/julia/issues/21233
+[#24064]: https://github.com/JuliaLang/julia/issues/24064
+[#25278]: https://github.com/JuliaLang/julia/issues/25278
+[#28156]: https://github.com/JuliaLang/julia/issues/28156
+[#28506]: https://github.com/JuliaLang/julia/issues/28506
+[#28696]: https://github.com/JuliaLang/julia/issues/28696
+[#28708]: https://github.com/JuliaLang/julia/issues/28708
+[#28745]: https://github.com/JuliaLang/julia/issues/28745
+[#28761]: https://github.com/JuliaLang/julia/issues/28761
+[#28790]: https://github.com/JuliaLang/julia/issues/28790
+[#28878]: https://github.com/JuliaLang/julia/issues/28878
+[#28902]: https://github.com/JuliaLang/julia/issues/28902
+[#29033]: https://github.com/JuliaLang/julia/issues/29033
+[#29092]: https://github.com/JuliaLang/julia/issues/29092
+[#29108]: https://github.com/JuliaLang/julia/issues/29108
+[#29127]: https://github.com/JuliaLang/julia/issues/29127
+[#29153]: https://github.com/JuliaLang/julia/issues/29153
+[#29157]: https://github.com/JuliaLang/julia/issues/29157
+[#29173]: https://github.com/JuliaLang/julia/issues/29173
+[#29211]: https://github.com/JuliaLang/julia/issues/29211
+[#29259]: https://github.com/JuliaLang/julia/issues/29259
+[#29316]: https://github.com/JuliaLang/julia/issues/29316
+[#29429]: https://github.com/JuliaLang/julia/issues/29429
+[#29440]: https://github.com/JuliaLang/julia/issues/29440
+[#29442]: https://github.com/JuliaLang/julia/issues/29442
+[#29469]: https://github.com/JuliaLang/julia/issues/29469
+[#29506]: https://github.com/JuliaLang/julia/issues/29506
+[#29595]: https://github.com/JuliaLang/julia/issues/29595
+[#29600]: https://github.com/JuliaLang/julia/issues/29600
+[#29615]: https://github.com/JuliaLang/julia/issues/29615
+[#29636]: https://github.com/JuliaLang/julia/issues/29636
+[#29638]: https://github.com/JuliaLang/julia/issues/29638
+[#29670]: https://github.com/JuliaLang/julia/issues/29670
+[#29679]: https://github.com/JuliaLang/julia/issues/29679
+[#29733]: https://github.com/JuliaLang/julia/issues/29733
+[#29739]: https://github.com/JuliaLang/julia/issues/29739
+[#29749]: https://github.com/JuliaLang/julia/issues/29749
+[#29754]: https://github.com/JuliaLang/julia/issues/29754
+[#29781]: https://github.com/JuliaLang/julia/issues/29781
+[#29782]: https://github.com/JuliaLang/julia/issues/29782
+[#29819]: https://github.com/JuliaLang/julia/issues/29819
+[#29827]: https://github.com/JuliaLang/julia/issues/29827
+[#29845]: https://github.com/JuliaLang/julia/issues/29845
+[#29858]: https://github.com/JuliaLang/julia/issues/29858
+[#29890]: https://github.com/JuliaLang/julia/issues/29890
+[#29893]: https://github.com/JuliaLang/julia/issues/29893
+[#29907]: https://github.com/JuliaLang/julia/issues/29907
+[#29913]: https://github.com/JuliaLang/julia/issues/29913
+[#29926]: https://github.com/JuliaLang/julia/issues/29926
+[#29968]: https://github.com/JuliaLang/julia/issues/29968
+[#29969]: https://github.com/JuliaLang/julia/issues/29969
+[#29978]: https://github.com/JuliaLang/julia/issues/29978
+[#29980]: https://github.com/JuliaLang/julia/issues/29980
+[#29997]: https://github.com/JuliaLang/julia/issues/29997
+[#30004]: https://github.com/JuliaLang/julia/issues/30004
+[#30022]: https://github.com/JuliaLang/julia/issues/30022
+[#30035]: https://github.com/JuliaLang/julia/issues/30035
+[#30083]: https://github.com/JuliaLang/julia/issues/30083
+[#30102]: https://github.com/JuliaLang/julia/issues/30102
+[#30151]: https://github.com/JuliaLang/julia/issues/30151
+[#30159]: https://github.com/JuliaLang/julia/issues/30159
+[#30160]: https://github.com/JuliaLang/julia/issues/30160
+[#30226]: https://github.com/JuliaLang/julia/issues/30226
+[#30249]: https://github.com/JuliaLang/julia/issues/30249
+[#30270]: https://github.com/JuliaLang/julia/issues/30270
+[#30278]: https://github.com/JuliaLang/julia/issues/30278
+[#30341]: https://github.com/JuliaLang/julia/issues/30341
+[#30342]: https://github.com/JuliaLang/julia/issues/30342
+
 Julia v1.0.0 Release Notes
 ==========================
 
@@ -3232,7 +3594,7 @@ Library improvements
 
     * The `MathConst` type has been renamed `Irrational` ([#11922]).
 
-    * `isapprox` now has simpler and more sensible default tolerances ([#12393]), supports arrays, and has synonyms `≈` ([U+2248](http://www.fileformat.info/info/unicode/char/2248/index.htm), LaTeX `\approx`) and `≉` ([U+2249](http://www.fileformat.info/info/unicode/char/2249/index.htm), LaTeX `\napprox`) for `isapprox` and `!isapprox`, respectively ([#12472]).
+    * `isapprox` now has simpler and more sensible default tolerances ([#12393]), supports arrays, and has synonyms `≈` ([U+2248](https://www.fileformat.info/info/unicode/char/2248/index.htm), LaTeX `\approx`) and `≉` ([U+2249](https://www.fileformat.info/info/unicode/char/2249/index.htm), LaTeX `\napprox`) for `isapprox` and `!isapprox`, respectively ([#12472]).
 
   * Numbers
 

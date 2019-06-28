@@ -632,3 +632,6 @@ _test_27632(view(ones(Int64, (1, 1, 1)), 1, 1, 1))
     copyto!(a, d)
     @test a[:, 1] == d
 end
+
+# issue #29608 - views of single values can be considered contiguous
+@test Base.iscontiguous(view(ones(1), 1))

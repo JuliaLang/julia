@@ -338,4 +338,18 @@ end
     @test_logs (:warn, "a", Base) (@warn "a" _module=Base)
 end
 
+# Issue #28786
+@testset "ID generation" begin
+    logs,_ = collect_test_logs() do
+        for i in 1:2
+            @info "test"
+            @info "test"
+        end
+    end
+    @test length(logs) == 4
+    @test logs[1].id == logs[3].id
+    @test logs[2].id == logs[4].id
+    @test logs[1].id != logs[2].id
+end
+
 end

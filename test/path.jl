@@ -258,9 +258,9 @@ end
 end
 @testset "homedir" begin
     var = Sys.iswindows() ? "USERPROFILE" : "HOME"
-    MAX_PATH = Sys.iswindows() ? 240 : 1020
+    AVG_PATH = Base.Filesystem.AVG_PATH - 1 # null-termination character
     for i = 0:9
-        local home = " "^MAX_PATH * "123456789"[1:i]
+        local home = " "^AVG_PATH * "123456789"[1:i]
         @test withenv(var => home) do
             homedir()
         end == home

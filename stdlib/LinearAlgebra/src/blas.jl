@@ -1,13 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module BLAS
-@doc """
+"""
 Interface to BLAS subroutines.
-""" BLAS
+"""
+module BLAS
 
 import ..axpy!, ..axpby!
 import Base: copyto!
-using Base: has_offset_axes
+using Base: require_one_based_indexing
 
 export
 # Level 1
@@ -15,7 +15,6 @@ export
     axpy!,
     axpby!,
     blascopy!,
-    dot,
     dotc,
     dotu,
     scal!,
@@ -73,7 +72,7 @@ import Libdl
 let lib = C_NULL
 global function determine_vendor()
     if lib == C_NULL
-        lib = Libdl.dlopen(Base.libblas_name; throw_error=false)
+        lib = something(Libdl.dlopen(libblas; throw_error=false), C_NULL)
     end
     vend = :unknown
     if lib != C_NULL
@@ -102,7 +101,7 @@ else
     end
 end
 
-openblas_get_config() = strip(unsafe_string(ccall((@blasfunc(openblas_get_config), Base.libblas_name), Ptr{UInt8}, () )))
+openblas_get_config() = strip(unsafe_string(ccall((@blasfunc(openblas_get_config), libblas), Ptr{UInt8}, () )))
 
 """
     set_num_threads(n)
@@ -112,12 +111,12 @@ Set the number of threads the BLAS library should use.
 function set_num_threads(n::Integer)
     blas = vendor()
     if blas == :openblas
-        return ccall((:openblas_set_num_threads, Base.libblas_name), Cvoid, (Int32,), n)
+        return ccall((:openblas_set_num_threads, libblas), Cvoid, (Int32,), n)
     elseif blas == :openblas64
-        return ccall((:openblas_set_num_threads64_, Base.libblas_name), Cvoid, (Int32,), n)
+        return ccall((:openblas_set_num_threads64_, libblas), Cvoid, (Int32,), n)
     elseif blas == :mkl
         # MKL may let us set the number of threads in several ways
-        return ccall((:MKL_Set_Num_Threads, Base.libblas_name), Cvoid, (Cint,), n)
+        return ccall((:MKL_Set_Num_Threads, libblas), Cvoid, (Cint,), n)
     end
 
     # OSX BLAS looks at an environment variable
@@ -239,7 +238,7 @@ Dot product of two vectors consisting of `n` elements of array `X` with stride `
 
 # Examples
 ```jldoctest
-julia> dot(10, fill(1.0, 10), 1, fill(1.0, 20), 2)
+julia> BLAS.dot(10, fill(1.0, 10), 1, fill(1.0, 20), 2)
 10.0
 ```
 """
@@ -328,7 +327,7 @@ for (fname, elty) in ((:cblas_zdotu_sub,:ComplexF64),
 end
 
 function dot(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasReal
-    @assert !has_offset_axes(DX, DY)
+    require_one_based_indexing(DX, DY)
     n = length(DX)
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
@@ -336,7 +335,7 @@ function dot(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T}
     GC.@preserve DX DY dot(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
 end
 function dotc(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasComplex
-    @assert !has_offset_axes(DX, DY)
+    require_one_based_indexing(DX, DY)
     n = length(DX)
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
@@ -344,7 +343,7 @@ function dotc(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T
     GC.@preserve DX DY dotc(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
 end
 function dotu(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasComplex
-    @assert !has_offset_axes(DX, DY)
+    require_one_based_indexing(DX, DY)
     n = length(DX)
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
@@ -496,9 +495,9 @@ julia> y = [4., 5, 6];
 
 julia> BLAS.axpby!(2., x, 3., y)
 3-element Array{Float64,1}:
-14.0
-19.0
-24.0
+ 14.0
+ 19.0
+ 24.0
 ```
 """
 function axpby! end
@@ -525,7 +524,7 @@ for (fname, elty) in ((:daxpby_,:Float64), (:saxpby_,:Float32),
 end
 
 function axpby!(alpha::Number, x::Union{DenseArray{T},AbstractVector{T}}, beta::Number, y::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasFloat
-    @assert !has_offset_axes(x, y)
+    require_one_based_indexing(x, y)
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     end
@@ -548,6 +547,15 @@ for (fname, elty) in ((:idamax_,:Float64),
 end
 iamax(dx::Union{AbstractVector,DenseArray}) = GC.@preserve dx iamax(length(dx), pointer(dx), stride1(dx))
 
+"""
+    iamax(n, dx, incx)
+    iamax(dx)
+
+Find the index of the element of `dx` with the maximum absolute value. `n` is the length of `dx`, and `incx` is the
+stride. If `n` and `incx` are not provided, they assume default values of `n=length(dx)` and `incx=stride1(dx)`.
+"""
+iamax
+
 # Level 2
 ## mv
 ### gemv
@@ -564,7 +572,7 @@ for (fname, elty) in ((:dgemv_,:Float64),
              #*     .. Array Arguments ..
              #      DOUBLE PRECISION A(LDA,*),X(*),Y(*)
         function gemv!(trans::AbstractChar, alpha::($elty), A::AbstractVecOrMat{$elty}, X::AbstractVector{$elty}, beta::($elty), Y::AbstractVector{$elty})
-            @assert !has_offset_axes(A, X, Y)
+            require_one_based_indexing(A, X, Y)
             m,n = size(A,1),size(A,2)
             if trans == 'N' && (length(X) != n || length(Y) != m)
                 throw(DimensionMismatch("A has dimensions $(size(A)), X has length $(length(X)) and Y has length $(length(Y))"))
@@ -649,7 +657,7 @@ for (fname, elty) in ((:dgbmv_,:Float64),
              # *     .. Array Arguments ..
              #       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
         function gbmv!(trans::AbstractChar, m::Integer, kl::Integer, ku::Integer, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, beta::($elty), y::AbstractVector{$elty})
-            @assert !has_offset_axes(A, x, y)
+            require_one_based_indexing(A, x, y)
             chkstride1(A)
             ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
@@ -697,7 +705,7 @@ for (fname, elty, lib) in ((:dsymv_,:Float64,libblas),
              #     .. Array Arguments ..
              #      DOUBLE PRECISION A(LDA,*),X(*),Y(*)
         function symv!(uplo::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, beta::($elty), y::AbstractVector{$elty})
-            @assert !has_offset_axes(A, x, y)
+            require_one_based_indexing(A, x, y)
             m, n = size(A)
             if m != n
                 throw(DimensionMismatch("matrix A is $m by $n but must be square"))
@@ -749,7 +757,7 @@ for (fname, elty) in ((:zhemv_,:ComplexF64),
                       (:chemv_,:ComplexF32))
     @eval begin
         function hemv!(uplo::AbstractChar, α::$elty, A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, β::$elty, y::AbstractVector{$elty})
-            @assert !has_offset_axes(A, x, y)
+            require_one_based_indexing(A, x, y)
             m, n = size(A)
             if m != n
                 throw(DimensionMismatch("matrix A is $m by $n but must be square"))
@@ -794,7 +802,7 @@ for (fname, elty) in ((:dsbmv_,:Float64),
              # *     .. Array Arguments ..
              #       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
         function sbmv!(uplo::AbstractChar, k::Integer, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, beta::($elty), y::AbstractVector{$elty})
-            @assert !has_offset_axes(A, x, y)
+            require_one_based_indexing(A, x, y)
             chkstride1(A)
             ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{$elty},
@@ -858,7 +866,7 @@ for (fname, elty) in ((:zhbmv_,:ComplexF64),
              # *     .. Array Arguments ..
              #       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
         function hbmv!(uplo::AbstractChar, k::Integer, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, beta::($elty), y::AbstractVector{$elty})
-            @assert !has_offset_axes(A, x, y)
+            require_one_based_indexing(A, x, y)
             chkstride1(A)
             ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{$elty},
@@ -914,7 +922,7 @@ for (fname, elty) in ((:dtrmv_,:Float64),
                 # *     .. Array Arguments ..
                 #       DOUBLE PRECISION A(LDA,*),X(*)
         function trmv!(uplo::AbstractChar, trans::AbstractChar, diag::AbstractChar, A::AbstractMatrix{$elty}, x::AbstractVector{$elty})
-            @assert !has_offset_axes(A, x)
+            require_one_based_indexing(A, x)
             n = checksquare(A)
             if n != length(x)
                 throw(DimensionMismatch("A has size ($n,$n), x has length $(length(x))"))
@@ -968,7 +976,7 @@ for (fname, elty) in ((:dtrsv_,:Float64),
                 #       .. Array Arguments ..
                 #       DOUBLE PRECISION A(LDA,*),X(*)
         function trsv!(uplo::AbstractChar, trans::AbstractChar, diag::AbstractChar, A::AbstractMatrix{$elty}, x::AbstractVector{$elty})
-            @assert !has_offset_axes(A, x)
+            require_one_based_indexing(A, x)
             n = checksquare(A)
             if n != length(x)
                 throw(DimensionMismatch("size of A is $n != length(x) = $(length(x))"))
@@ -1002,7 +1010,7 @@ for (fname, elty) in ((:dger_,:Float64),
                       (:cgerc_,:ComplexF32))
     @eval begin
         function ger!(α::$elty, x::AbstractVector{$elty}, y::AbstractVector{$elty}, A::AbstractMatrix{$elty})
-            @assert !has_offset_axes(A, x, y)
+            require_one_based_indexing(A, x, y)
             m, n = size(A)
             if m != length(x) || n != length(y)
                 throw(DimensionMismatch("A has size ($m,$n), x has length $(length(x)), y has length $(length(y))"))
@@ -1035,7 +1043,7 @@ for (fname, elty, lib) in ((:dsyr_,:Float64,libblas),
                            (:csyr_,:ComplexF32,liblapack))
     @eval begin
         function syr!(uplo::AbstractChar, α::$elty, x::AbstractVector{$elty}, A::AbstractMatrix{$elty})
-            @assert !has_offset_axes(A, x)
+            require_one_based_indexing(A, x)
             n = checksquare(A)
             if length(x) != n
                 throw(DimensionMismatch("A has size ($n,$n), x has length $(length(x))"))
@@ -1065,7 +1073,7 @@ for (fname, elty, relty) in ((:zher_,:ComplexF64, :Float64),
                              (:cher_,:ComplexF32, :Float32))
     @eval begin
         function her!(uplo::AbstractChar, α::$relty, x::AbstractVector{$elty}, A::AbstractMatrix{$elty})
-            @assert !has_offset_axes(A, x)
+            require_one_based_indexing(A, x)
             n = checksquare(A)
             if length(x) != n
                 throw(DimensionMismatch("A has size ($n,$n), x has length $(length(x))"))
@@ -1108,7 +1116,7 @@ for (gemm, elty) in
 #           if any([stride(A,1), stride(B,1), stride(C,1)] .!= 1)
 #               error("gemm!: BLAS module requires contiguous matrix columns")
 #           end  # should this be checked on every call?
-            @assert !has_offset_axes(A, B, C)
+            require_one_based_indexing(A, B, C)
             m = size(A, transA == 'N' ? 1 : 2)
             ka = size(A, transA == 'N' ? 2 : 1)
             kb = size(B, transB == 'N' ? 1 : 2)
@@ -1168,7 +1176,7 @@ for (mfname, elty) in ((:dsymm_,:Float64),
              #     .. Array Arguments ..
              #     DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
         function symm!(side::AbstractChar, uplo::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty}, beta::($elty), C::AbstractMatrix{$elty})
-            @assert !has_offset_axes(A, B, C)
+            require_one_based_indexing(A, B, C)
             m, n = size(C)
             j = checksquare(A)
             if j != (side == 'L' ? m : n)
@@ -1237,7 +1245,7 @@ for (mfname, elty) in ((:zhemm_,:ComplexF64),
              #     .. Array Arguments ..
              #     DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
         function hemm!(side::AbstractChar, uplo::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty}, beta::($elty), C::AbstractMatrix{$elty})
-            @assert !has_offset_axes(A, B, C)
+            require_one_based_indexing(A, B, C)
             m, n = size(C)
             j = checksquare(A)
             if j != (side == 'L' ? m : n)
@@ -1303,7 +1311,7 @@ for (fname, elty) in ((:dsyrk_,:Float64),
        function syrk!(uplo::AbstractChar, trans::AbstractChar,
                       alpha::($elty), A::AbstractVecOrMat{$elty},
                       beta::($elty), C::AbstractMatrix{$elty})
-           @assert !has_offset_axes(A, C)
+           require_one_based_indexing(A, C)
            n = checksquare(C)
            nn = size(A, trans == 'N' ? 1 : 2)
            if nn != n throw(DimensionMismatch("C has size ($n,$n), corresponding dimension of A is $nn")) end
@@ -1360,7 +1368,7 @@ for (fname, elty, relty) in ((:zherk_, :ComplexF64, :Float64),
        #       COMPLEX A(LDA,*),C(LDC,*)
        function herk!(uplo::AbstractChar, trans::AbstractChar, α::$relty, A::AbstractVecOrMat{$elty},
                       β::$relty, C::AbstractMatrix{$elty})
-           @assert !has_offset_axes(A, C)
+           require_one_based_indexing(A, C)
            n = checksquare(C)
            nn = size(A, trans == 'N' ? 1 : 2)
            if nn != n
@@ -1404,7 +1412,7 @@ for (fname, elty) in ((:dsyr2k_,:Float64),
         function syr2k!(uplo::AbstractChar, trans::AbstractChar,
                         alpha::($elty), A::AbstractVecOrMat{$elty}, B::AbstractVecOrMat{$elty},
                         beta::($elty), C::AbstractMatrix{$elty})
-            @assert !has_offset_axes(A, B, C)
+            require_one_based_indexing(A, B, C)
             n = checksquare(C)
             nn = size(A, trans == 'N' ? 1 : 2)
             if nn != n throw(DimensionMismatch("C has size ($n,$n), corresponding dimension of A is $nn")) end
@@ -1445,7 +1453,7 @@ for (fname, elty1, elty2) in ((:zher2k_,:ComplexF64,:Float64), (:cher2k_,:Comple
        function her2k!(uplo::AbstractChar, trans::AbstractChar, alpha::($elty1),
                        A::AbstractVecOrMat{$elty1}, B::AbstractVecOrMat{$elty1},
                        beta::($elty2), C::AbstractMatrix{$elty1})
-           @assert !has_offset_axes(A, B, C)
+           require_one_based_indexing(A, B, C)
            n = checksquare(C)
            nn = size(A, trans == 'N' ? 1 : 2)
            if nn != n throw(DimensionMismatch("C has size ($n,$n), corresponding dimension of A is $nn")) end
@@ -1533,7 +1541,7 @@ for (mmname, smname, elty) in
         #       DOUBLE PRECISION A(LDA,*),B(LDB,*)
         function trmm!(side::AbstractChar, uplo::AbstractChar, transa::AbstractChar, diag::AbstractChar, alpha::Number,
                        A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
-            @assert !has_offset_axes(A, B)
+            require_one_based_indexing(A, B)
             m, n = size(B)
             nA = checksquare(A)
             if nA != (side == 'L' ? m : n)
@@ -1561,7 +1569,7 @@ for (mmname, smname, elty) in
         #       DOUBLE PRECISION A(LDA,*),B(LDB,*)
         function trsm!(side::AbstractChar, uplo::AbstractChar, transa::AbstractChar, diag::AbstractChar,
                        alpha::$elty, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
-            @assert !has_offset_axes(A, B)
+            require_one_based_indexing(A, B)
             m, n = size(B)
             k = checksquare(A)
             if k != (side == 'L' ? m : n)

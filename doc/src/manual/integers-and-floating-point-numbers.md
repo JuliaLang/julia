@@ -505,7 +505,7 @@ Floating-point arithmetic entails many subtleties which can be surprising to use
 with the low-level implementation details. However, these subtleties are described in detail in
 most books on scientific computation, and also in the following references:
 
-  * The definitive guide to floating point arithmetic is the [IEEE 754-2008 Standard](http://standards.ieee.org/findstds/standard/754-2008.html);
+  * The definitive guide to floating point arithmetic is the [IEEE 754-2008 Standard](https://standards.ieee.org/standard/754-2008.html);
     however, it is not available for free online.
   * For a brief but lucid presentation of how floating-point numbers are represented, see John D.
     Cook's [article](https://www.johndcook.com/blog/2009/04/06/anatomy-of-a-floating-point-number/)
@@ -523,7 +523,7 @@ most books on scientific computation, and also in the following references:
 ## Arbitrary Precision Arithmetic
 
 To allow computations with arbitrary-precision integers and floating point numbers, Julia wraps
-the [GNU Multiple Precision Arithmetic Library (GMP)](https://gmplib.org) and the [GNU MPFR Library](http://www.mpfr.org),
+the [GNU Multiple Precision Arithmetic Library (GMP)](https://gmplib.org) and the [GNU MPFR Library](https://www.mpfr.org),
 respectively. The [`BigInt`](@ref) and [`BigFloat`](@ref) types are available in Julia for arbitrary
 precision integer and floating point numbers respectively.
 

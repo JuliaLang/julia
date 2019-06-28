@@ -11,6 +11,8 @@ import LinearAlgebra: Factorization, det, lu, ldiv!
 using SparseArrays
 import SparseArrays: nnz
 
+import Serialization: AbstractSerializer, deserialize
+
 import ..increment, ..increment!, ..decrement, ..decrement!
 
 include("umfpack_h.jl")
@@ -190,6 +192,22 @@ end
 function show(io::IO, F::UmfpackLU)
     print(io, "UMFPACK LU Factorization of a $(size(F)) sparse matrix")
     F.numeric != C_NULL && print(io, '\n', F.numeric)
+end
+
+function deserialize(s::AbstractSerializer, t::Type{UmfpackLU{Tv,Ti}}) where {Tv,Ti}
+    symbolic = deserialize(s)
+    numeric  = deserialize(s)
+    m        = deserialize(s)
+    n        = deserialize(s)
+    colptr   = deserialize(s)
+    rowval   = deserialize(s)
+    nzval    = deserialize(s)
+    status   = deserialize(s)
+    obj      = UmfpackLU{Tv,Ti}(symbolic, numeric, m, n, colptr, rowval, nzval, status)
+
+    finalizer(umfpack_free_symbolic, obj)
+
+    return obj
 end
 
 ## Wrappers for UMFPACK functions

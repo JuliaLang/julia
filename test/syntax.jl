@@ -346,8 +346,8 @@ let b = IOBuffer("""
                  end
                  f()
                  """)
-    @test Base.parse_input_line(b) == Expr(:let, Expr(:(=), :x, :x), Expr(:block, LineNumberNode(2, :none), :x))
-    @test Base.parse_input_line(b) == Expr(:call, :f)
+    @test Base.parse_input_line(b).args[end] == Expr(:let, Expr(:(=), :x, :x), Expr(:block, LineNumberNode(2, :none), :x))
+    @test Base.parse_input_line(b).args[end] == Expr(:call, :f)
     @test Base.parse_input_line(b) === nothing
 end
 
@@ -736,8 +736,8 @@ end
     end
 end
 
-f1_ci = code_typed(f1, (Int,))[1][1]
-f2_ci = code_typed(f2, (Int,))[1][1]
+f1_ci = code_typed(f1, (Int,), debuginfo=:source)[1][1]
+f2_ci = code_typed(f2, (Int,), debuginfo=:source)[1][1]
 
 f1_exprs = get_expr_list(f1_ci)
 f2_exprs = get_expr_list(f2_ci)
@@ -759,7 +759,7 @@ end
 @test :(x`s\`"\x\$\\`) == :(@x_cmd "s`\"\\x\\\$\\")
 
 # Check multiline command literals
-@test :(@cmd "multiline\ncommand\n") == :```
+@test Expr(:macrocall, GlobalRef(Core, Symbol("@cmd")), LineNumberNode(@__LINE__, Symbol(@__FILE__)), "multiline\ncommand\n") == :```
 multiline
 command
 ```
@@ -1328,6 +1328,8 @@ end
 @test Meta.parse("+((1,2))")   == Expr(:call, :+, Expr(:tuple, 1, 2))
 
 @test_throws ParseError("space before \"(\" not allowed in \"+ (\"") Meta.parse("1 -+ (a=1, b=2)")
+# issue #29781
+@test_throws ParseError("space before \"(\" not allowed in \"sin. (\"") Meta.parse("sin. (1)")
 
 @test Meta.parse("1 -+(a=1, b=2)") == Expr(:call, :-, 1,
                                            Expr(:call, :+, Expr(:kw, :a, 1), Expr(:kw, :b, 2)))
@@ -1491,7 +1493,7 @@ end
 # issue #27129
 f27129(x = 1) = (@Base._inline_meta; x)
 for meth in methods(f27129)
-    @test ccall(:jl_uncompress_ast, Any, (Any, Any), meth, meth.source).inlineable
+    @test ccall(:jl_uncompress_ast, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source).inlineable
 end
 
 # issue #27710
@@ -1554,21 +1556,13 @@ end
 end
 @test A27807.@m()(1,1.0) === (1, 0.0)
 
-# issue #27896
-let oldstderr = stderr, newstderr, errtxt
-    try
-        newstderr = redirect_stderr()
-        @eval function foo(a::A, b::B) where {A,B}
-            B = eltype(A)
-            return convert(B, b)
-        end
-        errtxt = @async read(newstderr[1], String)
-    finally
-        redirect_stderr(oldstderr)
-        close(newstderr[2])
+# issue #27896 / #29429
+@test Meta.lower(@__MODULE__, quote
+    function foo(a::A, b::B) where {A,B}
+        B = eltype(A)
+        return convert(B, b)
     end
-    @test occursin("WARNING: local variable B conflicts with a static parameter", fetch(errtxt))
-end
+end) == Expr(:error, "local variable name \"B\" conflicts with a static parameter")
 
 # issue #28044
 code28044(x) = 10x
@@ -1736,6 +1730,21 @@ end
 # we don't parse chains of these since the associativity and meaning aren't clear
 @test_throws ParseError Meta.parse("1..2..3")
 
+# issue #30048
+@test Meta.isexpr(Meta.lower(@__MODULE__, :(for a in b
+           c = try
+               try
+                   d() do
+                       if  GC.@preserve c begin
+                           end
+                       end
+                   end
+               finally
+               end
+           finally
+           end
+       end)), :thunk)
+
 # issue #28506
 @test Meta.isexpr(Meta.parse("1,"), :incomplete)
 @test Meta.isexpr(Meta.parse("1, "), :incomplete)
@@ -1743,3 +1752,115 @@ end
 @test Meta.isexpr(Meta.parse("1, \n"), :incomplete)
 @test_throws LoadError include_string(@__MODULE__, "1,")
 @test_throws LoadError include_string(@__MODULE__, "1,\n")
+
+# issue #30062
+let er = Meta.lower(@__MODULE__, quote if false end, b+=2 end)
+    @test Meta.isexpr(er, :error)
+    @test startswith(er.args[1], "invalid multiple assignment location \"if")
+end
+
+# issue #30030
+let x = 0
+    @test (a=1, b=2, c=(x=3)) == (a=1, b=2, c=3)
+    @test x == 3
+end
+
+function captured_and_shadowed_sp(x::T) where T
+    function g()
+        (T,
+         let T = 0
+             T
+         end)
+    end
+    g()
+end
+@test captured_and_shadowed_sp(1) === (Int, 0)
+
+function capture_with_conditional_label()
+    @goto foo
+    x = 1
+    if false
+        @label foo
+    end
+    return y->x
+end
+let f = capture_with_conditional_label()  # should not throw
+    @test_throws UndefVarError(:x) f(0)
+end
+
+# `_` should not create a global (or local)
+f30656(T) = (t, _)::Pair -> t >= T
+f30656(10)(11=>1)
+@test !isdefined(@__MODULE__, :_)
+
+# issue #30772
+function f30772(a::T) where T
+    function ()
+        function (b::T)
+        end
+    end
+end
+let f = f30772(1.0), g = f()
+    @test g(1.0) === nothing
+    @test_throws MethodError g(1)
+end
+
+@test_throws ErrorException("syntax: malformed \"using\" statement")  eval(Expr(:using, :X))
+@test_throws ErrorException("syntax: malformed \"import\" statement") eval(Expr(:import, :X))
+
+# eval'ing :const exprs
+eval(Expr(:const, :_var_30877))
+@test !isdefined(@__MODULE__, :_var_30877)
+@test isconst(@__MODULE__, :_var_30877)
+
+# anonymous kw function in value position at top level
+f30926 = function (;k=0)
+    k
+end
+@test f30926(k=2) == 2
+
+if false
+elseif false
+    g30926(x) = 1
+end
+@test !isdefined(@__MODULE__, :g30926)
+
+@testset "closure conversion in testsets" begin
+    p = (2, 3, 4)
+    @test p == (2, 3, 4)
+    identity(p)
+    allocs = @allocated identity(p)
+    @test allocs == 0
+end
+
+@test_throws UndefVarError eval(Symbol(""))
+@test_throws UndefVarError eval(:(1+$(Symbol(""))))
+
+# issue #31404
+f31404(a, b; kws...) = (a, b, kws.data)
+@test f31404(+, (Type{T} where T,); optimize=false) === (+, (Type,), (optimize=false,))
+
+# issue #28992
+macro id28992(x) x end
+@test @id28992(1 .+ 2) == 3
+@test Meta.isexpr(Meta.lower(@__MODULE__, :(@id28992((.+)(a,b) = 0))), :error)
+@test @id28992([1] .< [2] .< [3]) == [true]
+@test @id28992(2 ^ -2) == 0.25
+@test @id28992(2 .^ -2) == 0.25
+
+# issue #32121
+@test @id28992((a=1, b=2)) === (a=1, b=2)
+
+# issue #31596
+f31596(x; kw...) = x
+@test f31596((a=1,), b = 1.0) === (a=1,)
+
+# issue #32325
+let
+    struct a32325 end
+    a32325(x) = a32325()
+end
+@test a32325(0) === a32325()
+
+@test Meta.lower(Main, :(struct A; A() = new{Int}(); end)) == Expr(:error, "too many type parameters specified in \"new{...}\"")
+@test Meta.lower(Main, :(struct A{T, S}; A() = new{Int}(); end)) == Expr(:error, "too few type parameters specified in \"new{...}\"")

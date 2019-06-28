@@ -6,7 +6,7 @@ struct Bidiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     ev::V      # sub/super diagonal
     uplo::Char # upper bidiagonal ('U') or lower ('L')
     function Bidiagonal{T,V}(dv, ev, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
-        @assert !has_offset_axes(dv, ev)
+        require_one_based_indexing(dv, ev)
         if length(ev) != length(dv)-1
             throw(DimensionMismatch("length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
         end
@@ -306,7 +306,8 @@ function +(A::Bidiagonal, B::Bidiagonal)
     if A.uplo == B.uplo
         Bidiagonal(A.dv+B.dv, A.ev+B.ev, A.uplo)
     else
-        Tridiagonal((A.uplo == 'U' ? (B.ev,A.dv+B.dv,A.ev) : (A.ev,A.dv+B.dv,B.ev))...)
+        newdv = A.dv+B.dv
+        Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(B.ev), newdv, typeof(newdv)(A.ev)) : (typeof(newdv)(A.ev), newdv, typeof(newdv)(B.ev)))...)
     end
 end
 
@@ -314,7 +315,8 @@ function -(A::Bidiagonal, B::Bidiagonal)
     if A.uplo == B.uplo
         Bidiagonal(A.dv-B.dv, A.ev-B.ev, A.uplo)
     else
-        Tridiagonal((A.uplo == 'U' ? (-B.ev,A.dv-B.dv,A.ev) : (A.ev,A.dv-B.dv,-B.ev))...)
+        newdv = A.dv-B.dv
+        Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(-B.ev), newdv, typeof(newdv)(A.ev)) : (typeof(newdv)(A.ev), newdv, typeof(newdv)(-B.ev)))...)
     end
 end
 
@@ -322,7 +324,14 @@ end
 *(A::Bidiagonal, B::Number) = Bidiagonal(A.dv*B, A.ev*B, A.uplo)
 *(B::Number, A::Bidiagonal) = A*B
 /(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.uplo)
-==(A::Bidiagonal, B::Bidiagonal) = (A.uplo==B.uplo) && (A.dv==B.dv) && (A.ev==B.ev)
+
+function ==(A::Bidiagonal, B::Bidiagonal)
+    if A.uplo == B.uplo
+        return A.dv == B.dv && A.ev == B.ev
+    else
+        return iszero(A.ev) && iszero(B.ev) && A.dv == B.dv
+    end
+end
 
 const BiTriSym = Union{Bidiagonal,Tridiagonal,SymTridiagonal}
 const BiTri = Union{Bidiagonal,Tridiagonal}
@@ -346,9 +355,9 @@ mul!(C::AbstractMatrix, A::BiTri, B::Adjoint{<:Any,<:AbstractVecOrMat}) = A_mul_
 mul!(C::AbstractVector, A::BiTri, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
 
 function check_A_mul_B!_sizes(C, A, B)
-    @assert !has_offset_axes(C)
-    @assert !has_offset_axes(A)
-    @assert !has_offset_axes(B)
+    require_one_based_indexing(C)
+    require_one_based_indexing(A)
+    require_one_based_indexing(B)
     nA, mA = size(A)
     nB, mB = size(B)
     nC, mC = size(C)
@@ -429,8 +438,8 @@ function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym)
 end
 
 function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat)
-    @assert !has_offset_axes(C)
-    @assert !has_offset_axes(B)
+    require_one_based_indexing(C)
+    require_one_based_indexing(B)
     nA = size(A,1)
     nB = size(B,2)
     if !(size(C,1) == size(B,1) == nA)
@@ -489,9 +498,72 @@ function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym)
 end
 
 const SpecialMatrix = Union{Bidiagonal,SymTridiagonal,Tridiagonal}
-# to avoid ambiguity warning, but shouldn't be necessary
-*(A::AbstractTriangular, B::SpecialMatrix) = Array(A) * Array(B)
-*(A::SpecialMatrix, B::SpecialMatrix) = Array(A) * Array(B)
+
+function *(A::AbstractTriangular, B::Union{SymTridiagonal, Tridiagonal})
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    A_mul_B_td!(zeros(TS, size(A)...), A, B)
+end
+
+function *(A::UpperTriangular, B::Bidiagonal)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    if B.uplo == 'U'
+        A_mul_B_td!(UpperTriangular(zeros(TS, size(A)...)), A, B)
+    else
+        A_mul_B_td!(zeros(TS, size(A)...), A, B)
+    end
+end
+
+function *(A::LowerTriangular, B::Bidiagonal)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    if B.uplo == 'L'
+        A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
+    else
+        A_mul_B_td!(zeros(TS, size(A)...), A, B)
+    end
+end
+
+function *(A::Union{SymTridiagonal, Tridiagonal}, B::AbstractTriangular)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    A_mul_B_td!(zeros(TS, size(A)...), A, B)
+end
+
+function *(A::Bidiagonal, B::UpperTriangular)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    if A.uplo == 'U'
+        A_mul_B_td!(UpperTriangular(zeros(TS, size(A)...)), A, B)
+    else
+        A_mul_B_td!(zeros(TS, size(A)...), A, B)
+    end
+end
+
+function *(A::Bidiagonal, B::LowerTriangular)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    if A.uplo == 'L'
+        A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
+    else
+        A_mul_B_td!(zeros(TS, size(A)...), A, B)
+    end
+end
+
+function *(A::Bidiagonal, B::Diagonal)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    A_mul_B_td!(similar(A, TS), A, B)
+end
+
+function *(A::Diagonal, B::BiTri)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    A_mul_B_td!(similar(B, TS), A, B)
+end
+
+function *(A::Diagonal, B::SymTridiagonal)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    A_mul_B_td!(Tridiagonal(zeros(TS, size(A, 1)-1), zeros(TS, size(A, 1)), zeros(TS, size(A, 1)-1)), A, B)
+end
+
+function *(A::SymTridiagonal, B::Diagonal)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    A_mul_B_td!(Tridiagonal(zeros(TS, size(A, 1)-1), zeros(TS, size(A, 1)), zeros(TS, size(A, 1)-1)), A, B)
+end
 
 #Generic multiplication
 *(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = *(Array(A), B)
@@ -505,7 +577,7 @@ ldiv!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A
 ldiv!(A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(copy(A), b)
 ldiv!(A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(copy(A), b)
 function ldiv!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
-    @assert !has_offset_axes(A, B)
+    require_one_based_indexing(A, B)
     nA,mA = size(A)
     tmp = similar(B,size(B,1))
     n = size(B, 1)
@@ -520,7 +592,7 @@ function ldiv!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
     B
 end
 function ldiv!(adjA::Adjoint{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::AbstractMatrix)
-    @assert !has_offset_axes(adjA, B)
+    require_one_based_indexing(adjA, B)
     A = adjA.parent
     nA,mA = size(A)
     tmp = similar(B,size(B,1))
@@ -536,7 +608,7 @@ function ldiv!(adjA::Adjoint{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::A
     B
 end
 function ldiv!(transA::Transpose{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::AbstractMatrix)
-    @assert !has_offset_axes(transA, B)
+    require_one_based_indexing(transA, B)
     A = transA.parent
     nA,mA = size(A)
     tmp = similar(B,size(B,1))
@@ -553,7 +625,7 @@ function ldiv!(transA::Transpose{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, 
 end
 #Generic solver using naive substitution
 function naivesub!(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b) where T
-    @assert !has_offset_axes(A, b, x)
+    require_one_based_indexing(A, b, x)
     N = size(A, 2)
     if N != length(b) || N != length(x)
         throw(DimensionMismatch("second dimension of A, $N, does not match one of the lengths of x, $(length(x)), or b, $(length(b))"))
@@ -652,3 +724,5 @@ function eigvecs(M::Bidiagonal{T}) where T
     Q #Actually Triangular
 end
 eigen(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))
+
+Base._sum(A::Bidiagonal, ::Colon) = sum(A.dv) + sum(A.ev)

@@ -19,8 +19,8 @@ end
 # needs to be factored out so depwarn only warns once
 # when removed, also need to update shell_escape for a Cmd to pass shell_special
 # and may want to use it in the test for #10120 (currently the implementation is essentially copied there)
-@noinline warn_shell_special(special) =
-    depwarn("special characters \"$special\" should now be quoted in commands", :warn_shell_special)
+@noinline warn_shell_special(str,special) =
+    depwarn("Parsing command \"$str\". Special characters \"$special\" should now be quoted in commands", :warn_shell_special)
 
 function shell_parse(str::AbstractString, interpolate::Bool=true;
                      special::AbstractString="")
@@ -97,7 +97,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                     _ = popfirst!(st)
                 end
             elseif !in_single_quotes && !in_double_quotes && c in special
-                warn_shell_special(special) # noinline depwarn
+                warn_shell_special(str,special) # noinline depwarn
             end
         end
     end
@@ -128,9 +128,6 @@ function shell_split(s::AbstractString)
 end
 
 function print_shell_word(io::IO, word::AbstractString, special::AbstractString = "")
-    if isempty(word)
-        print(io, "''")
-    end
     has_single = false
     has_special = false
     for c in word
@@ -141,7 +138,9 @@ function print_shell_word(io::IO, word::AbstractString, special::AbstractString 
             end
         end
     end
-    if !has_special
+    if isempty(word)
+        print(io, "''")
+    elseif !has_special
         print(io, word)
     elseif !has_single
         print(io, '\'', word, '\'')
@@ -155,6 +154,7 @@ function print_shell_word(io::IO, word::AbstractString, special::AbstractString 
         end
         print(io, '"')
     end
+    nothing
 end
 
 function print_shell_escaped(io::IO, cmd::AbstractString, args::AbstractString...;
@@ -186,7 +186,7 @@ julia> Base.shell_escape("echo", "this", "&&", "that")
 ```
 """
 shell_escape(args::AbstractString...; special::AbstractString="") =
-    sprint(io->print_shell_escaped(io, args..., special=special))
+    sprint((io, args...) -> print_shell_escaped(io, args..., special=special), args...)
 
 
 function print_shell_escaped_posixly(io::IO, args::AbstractString...)
@@ -215,7 +215,9 @@ function print_shell_escaped_posixly(io::IO, args::AbstractString...)
             end
             return true
         end
-        if all(isword, arg)
+        if isempty(arg)
+            print(io, "''")
+        elseif all(isword, arg)
             have_single && (arg = replace(arg, '\'' => "\\'"))
             have_double && (arg = replace(arg, '"' => "\\\""))
             print(io, arg)
@@ -243,4 +245,4 @@ julia> Base.shell_escape_posixly("echo", "this", "&&", "that")
 ```
 """
 shell_escape_posixly(args::AbstractString...) =
-    sprint(io->print_shell_escaped_posixly(io, args...))
+    sprint(print_shell_escaped_posixly, args...)

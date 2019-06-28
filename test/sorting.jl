@@ -1,7 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module SortingTests
+
 using Base.Order: Forward
 using Random
+using Test
 
 @test sort([2,3,1]) == [1,2,3]
 @test sort([2,3,1], rev=true) == [3,2,1]
@@ -371,3 +374,28 @@ end
 end
 # https://discourse.julialang.org/t/sorting-big-int-with-v-0-6/1241
 @test sort([big(3), big(2)]) == [big(2), big(3)]
+
+@testset "issue #30763" begin
+    for T in [:Int8, :Int16, :Int32, :Int64, :Int128, :UInt8, :UInt16, :UInt32, :UInt64, :UInt128]
+        @eval begin
+            struct T_30763{T}
+                n::T
+            end
+
+            Base.zero(::T_30763{$T}) = T_30763{$T}(0)
+            Base.convert(::Type{T_30763{$T}}, n::Integer) = T_30763{$T}($T(n))
+            Base.isless(a::T_30763{$T}, b::T_30763{$T}) = isless(a.n, b.n)
+            Base.:(-)(a::T_30763{$T}, b::T_30763{$T}) = T_30763{$T}(a.n - b.n)
+            Base.:(+)(a::T_30763{$T}, b::T_30763{$T}) = T_30763{$T}(a.n + b.n)
+            Base.:(*)(n::Integer, a::T_30763{$T}) = T_30763{$T}(n * a.n)
+            Base.rem(a::T_30763{$T}, b::T_30763{$T}) = T_30763{$T}(rem(a.n, b.n))
+
+            # The important part of this test is that the return type of length might be different from Int
+            Base.length(r::StepRange{T_30763{$T},T_30763{$T}}) = $T((last(r).n - first(r).n) ÷ step(r).n)
+
+            @test searchsorted(T_30763{$T}(1):T_30763{$T}(3), T_30763{$T}(2)) == 2:2
+        end
+    end
+end
+
+end

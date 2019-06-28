@@ -342,7 +342,7 @@
                                    ,(resolve-expansion-vars-with-new-env (caddr arg) env m parent-scope inarg))))
                              (else
                               `(global ,(resolve-expansion-vars-with-new-env arg env m parent-scope inarg))))))
-           ((using import export meta line inbounds boundscheck simdloop gc_preserve gc_preserve_end) (map unescape e))
+           ((using import export meta line inbounds boundscheck loopinfo gc_preserve gc_preserve_end) (map unescape e))
            ((macrocall) e) ; invalid syntax anyways, so just act like it's quoted.
            ((symboliclabel) e)
            ((symbolicgoto) e)
@@ -414,6 +414,14 @@
                    (body (cadr e))
                    (m (caddr e)))
               (resolve-expansion-vars-with-new-env body env m parent-scope inarg #t)))
+           ((tuple)
+            (cons (car e)
+                  (map (lambda (x)
+                         (if (assignment? x)
+                             `(= ,(unescape (cadr x))
+                                 ,(resolve-expansion-vars-with-new-env x env m parent-scope inarg))
+                             (resolve-expansion-vars-with-new-env x env m parent-scope inarg)))
+                       (cdr e))))
 
            ;; todo: trycatch
            (else

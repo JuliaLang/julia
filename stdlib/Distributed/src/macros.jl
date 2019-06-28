@@ -135,24 +135,17 @@ end
 extract_imports!(imports, x) = imports
 function extract_imports!(imports, ex::Expr)
     if Meta.isexpr(ex, (:import, :using))
-        m = ex.args[1]
-        if isa(m, Expr) && m.head === :(:)
-            push!(imports, m.args[1].args[1])
-        else
-            for a in ex.args
-                push!(imports, a.args[1])
-            end
-        end
+        push!(imports, ex)
     elseif Meta.isexpr(ex, :let)
         extract_imports!(imports, ex.args[2])
     elseif Meta.isexpr(ex, (:toplevel, :block))
-        for i in eachindex(ex.args)
-            extract_imports!(imports, ex.args[i])
+        for arg in ex.args
+            extract_imports!(imports, arg)
         end
     end
     return imports
 end
-extract_imports(x) = extract_imports!(Symbol[], x)
+extract_imports(x) = extract_imports!(Any[], x)
 
 """
     @everywhere [procs()] expr
@@ -179,11 +172,11 @@ Equivalent to calling `remotecall_eval(Main, procs, expr)`.
 """
 macro everywhere(ex)
     procs = GlobalRef(@__MODULE__, :procs)
-    return esc(:(@everywhere $procs() $ex))
+    return esc(:($(Distributed).@everywhere $procs() $ex))
 end
 
 macro everywhere(procs, ex)
-    imps = [Expr(:import, m) for m in extract_imports(ex)]
+    imps = extract_imports(ex)
     return quote
         $(isempty(imps) ? nothing : Expr(:toplevel, imps...)) # run imports locally first
         let ex = $(Expr(:quote, ex)), procs = $(esc(procs))

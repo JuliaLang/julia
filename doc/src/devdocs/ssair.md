@@ -151,7 +151,7 @@ catch blocks are considered to have an invisible control flow edge
 from outside the function. As a result, no SSA value dominates the
 catch blocks, and all incoming values have to come through a `φᶜ` node.
 
-# Main SSA data structure
+## Main SSA data structure
 
 The main `SSAIR` data structure is worthy of discussion. It draws inspiration from LLVM and Webkit's B3 IR.
 The core of the data structure is a flat vector of statements. Each statement is implicitly assigned

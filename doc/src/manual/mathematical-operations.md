@@ -432,12 +432,12 @@ julia> Int8(127.0)
 127
 
 julia> Int8(3.14)
-ERROR: InexactError: Int8(Int8, 3.14)
+ERROR: InexactError: Int8(3.14)
 Stacktrace:
 [...]
 
 julia> Int8(128.0)
-ERROR: InexactError: Int8(Int8, 128.0)
+ERROR: InexactError: Int8(128.0)
 Stacktrace:
 [...]
 

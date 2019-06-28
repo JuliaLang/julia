@@ -19,7 +19,7 @@ include("grisu/bignum.jl")
 const DIGITS = Vector{UInt8}(undef, 309+17)
 const BIGNUMS = [Bignums.Bignum(),Bignums.Bignum(),Bignums.Bignum(),Bignums.Bignum()]
 
-# thread-safe code should use a per-thread DIGITS buffer DIGITSs[Threads.threadid()]
+# NOTE: DIGITS[s] is deprecated; you should use getbuf() instead.
 const DIGITSs = [DIGITS]
 const BIGNUMSs = [BIGNUMS]
 function __init__()
@@ -27,9 +27,18 @@ function __init__()
     Threads.resize_nthreads!(BIGNUMSs)
 end
 
+function getbuf()
+    tls = task_local_storage()
+    d = get(tls, :DIGITS, nothing)
+    if d === nothing
+        d = Vector{UInt8}(undef, 309+17)
+        tls[:DIGITS] = d
+    end
+    return d::Vector{UInt8}
+end
+
 """
-    (len, point, neg) = Grisu.grisu(v::AbstractFloat, mode, requested_digits,
-                buffer=DIGITSs[Threads.threadid()], bignums=BIGNUMSs[Threads.threadid()])
+    (len, point, neg) = Grisu.grisu(v::AbstractFloat, mode, requested_digits, [buffer], [bignums])
 
 Convert the number `v` to decimal using the Grisu algorithm.
 
@@ -38,7 +47,7 @@ Convert the number `v` to decimal using the Grisu algorithm.
  - `Grisu.FIXED`: round to `requested_digits` digits.
  - `Grisu.PRECISION`: round to `requested_digits` significant digits.
 
-The characters are written as bytes to `buffer`, with a terminating NUL byte, and `bignums` are used internally as part of the correction step.
+The characters are written as bytes to `buffer`, with a terminating NUL byte, and `bignums` are used internally as part of the correction step. You can call `Grisu.getbuf()` to obtain a suitable task-local buffer.
 
 The returned tuple contains:
 
@@ -94,7 +103,8 @@ function _show(io::IO, x::AbstractFloat, mode, n::Int, typed, compact)
         return
     end
     typed && isa(x,Float16) && print(io, "Float16(")
-    (len,pt,neg),buffer = grisu(x,mode,n),DIGITSs[Threads.threadid()]
+    buffer = getbuf()
+    len, pt, neg = grisu(x,mode,n,buffer)
     pdigits = pointer(buffer)
     if mode == PRECISION
         while len > 1 && buffer[len] == 0x30
@@ -182,7 +192,8 @@ function _print_shortest(io::IO, x::AbstractFloat, dot::Bool, mode, n::Int)
     isnan(x) && return print(io, "NaN")
     x < 0 && print(io,'-')
     isinf(x) && return print(io, "Inf")
-    (len,pt,neg),buffer = grisu(x,mode,n),DIGITSs[Threads.threadid()]
+    buffer = getbuf()
+    len, pt, neg = grisu(x,mode,n,buffer)
     pdigits = pointer(buffer)
     e = pt-len
     k = -9<=e<=9 ? 1 : 2

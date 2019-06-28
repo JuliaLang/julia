@@ -144,9 +144,9 @@ function Float16(val::Float32)
         return reinterpret(Float16, t ⊻ ((f >> 0xd) % UInt16))
     end
     i = (f >> 23) & 0x1ff + 1
-    sh = shifttable[i]
+    @inbounds sh = shifttable[i]
     f &= 0x007fffff
-    h::UInt16 = basetable[i] + (f >> sh)
+    @inbounds h = (basetable[i] + (f >> sh)) % UInt16
     # round
     # NOTE: we maybe should ignore NaNs here, but the payload is
     # getting truncated anyway so "rounding" it might not matter
@@ -154,7 +154,7 @@ function Float16(val::Float32)
     if nextbit != 0
         # Round halfway to even or check lower bits
         if h&1 == 1 || (f & ((1<<(sh-1))-1)) != 0
-            h += 1
+            h += UInt16(1)
         end
     end
     reinterpret(Float16, h)
@@ -179,7 +179,7 @@ function Float32(val::Float16)
                 bit = bit >> 1
             end
             sign = sign << 31
-            exp = (-14 - n_bit + 127) << 23
+            exp = ((-14 - n_bit + 127) << 23) % UInt32
             sig = ((sig & (~bit)) << n_bit) << (23 - 10)
             ret = sign | exp | sig
         end
@@ -195,7 +195,7 @@ function Float32(val::Float16)
         end
     else
         sign = sign << 31
-        exp  = (exp - 15 + 127) << 23
+        exp  = ((exp - 15 + 127) << 23) % UInt32
         sig  = sig << (23 - 10)
         ret = sign | exp | sig
     end
@@ -206,37 +206,39 @@ end
 #   "Fast Half Float Conversion" by Jeroen van der Zijp
 #   ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
 
-const basetable = Vector{UInt16}(undef, 512)
-const shifttable = Vector{UInt8}(undef, 512)
-
-for i = 0:255
-    e = i - 127
-    if e < -24  # Very small numbers map to zero
-        basetable[i|0x000+1] = 0x0000
-        basetable[i|0x100+1] = 0x8000
-        shifttable[i|0x000+1] = 24
-        shifttable[i|0x100+1] = 24
-    elseif e < -14  # Small numbers map to denorms
-        basetable[i|0x000+1] = (0x0400>>(-e-14))
-        basetable[i|0x100+1] = (0x0400>>(-e-14)) | 0x8000
-        shifttable[i|0x000+1] = -e-1
-        shifttable[i|0x100+1] = -e-1
-    elseif e <= 15  # Normal numbers just lose precision
-        basetable[i|0x000+1] = ((e+15)<<10)
-        basetable[i|0x100+1] = ((e+15)<<10) | 0x8000
-        shifttable[i|0x000+1] = 13
-        shifttable[i|0x100+1] = 13
-    elseif e < 128  # Large numbers map to Infinity
-        basetable[i|0x000+1] = 0x7C00
-        basetable[i|0x100+1] = 0xFC00
-        shifttable[i|0x000+1] = 24
-        shifttable[i|0x100+1] = 24
-    else  # Infinity and NaN's stay Infinity and NaN's
-        basetable[i|0x000+1] = 0x7C00
-        basetable[i|0x100+1] = 0xFC00
-        shifttable[i|0x000+1] = 13
-        shifttable[i|0x100+1] = 13
+let _basetable = Vector{UInt16}(undef, 512),
+    _shifttable = Vector{UInt8}(undef, 512)
+    for i = 0:255
+        e = i - 127
+        if e < -24  # Very small numbers map to zero
+            _basetable[i|0x000+1] = 0x0000
+            _basetable[i|0x100+1] = 0x8000
+            _shifttable[i|0x000+1] = 24
+            _shifttable[i|0x100+1] = 24
+        elseif e < -14  # Small numbers map to denorms
+            _basetable[i|0x000+1] = (0x0400>>(-e-14))
+            _basetable[i|0x100+1] = (0x0400>>(-e-14)) | 0x8000
+            _shifttable[i|0x000+1] = -e-1
+            _shifttable[i|0x100+1] = -e-1
+        elseif e <= 15  # Normal numbers just lose precision
+            _basetable[i|0x000+1] = ((e+15)<<10)
+            _basetable[i|0x100+1] = ((e+15)<<10) | 0x8000
+            _shifttable[i|0x000+1] = 13
+            _shifttable[i|0x100+1] = 13
+        elseif e < 128  # Large numbers map to Infinity
+            _basetable[i|0x000+1] = 0x7C00
+            _basetable[i|0x100+1] = 0xFC00
+            _shifttable[i|0x000+1] = 24
+            _shifttable[i|0x100+1] = 24
+        else  # Infinity and NaN's stay Infinity and NaN's
+            _basetable[i|0x000+1] = 0x7C00
+            _basetable[i|0x100+1] = 0xFC00
+            _shifttable[i|0x000+1] = 13
+            _shifttable[i|0x100+1] = 13
+        end
     end
+    global const shifttable = (_shifttable...,)
+    global const basetable = (_basetable...,)
 end
 
 #convert(::Type{Float16}, x::Float32) = fptrunc(Float16, x)
@@ -501,15 +503,18 @@ for Ti in (Int64,UInt64,Int128,UInt128)
         end
     end
 end
+for op in (:(==), :<, :<=)
+    @eval begin
+        ($op)(x::Float16, y::Union{Int128,UInt128,Int64,UInt64}) = ($op)(Float64(x), Float64(y))
+        ($op)(x::Union{Int128,UInt128,Int64,UInt64}, y::Float16) = ($op)(Float64(x), Float64(y))
 
-==(x::Float32, y::Union{Int32,UInt32}) = Float64(x)==Float64(y)
-==(x::Union{Int32,UInt32}, y::Float32) = Float64(x)==Float64(y)
+        ($op)(x::Union{Float16,Float32}, y::Union{Int32,UInt32}) = ($op)(Float64(x), Float64(y))
+        ($op)(x::Union{Int32,UInt32}, y::Union{Float16,Float32}) = ($op)(Float64(x), Float64(y))
 
-<(x::Float32, y::Union{Int32,UInt32}) = Float64(x)<Float64(y)
-<(x::Union{Int32,UInt32}, y::Float32) = Float64(x)<Float64(y)
-
-<=(x::Float32, y::Union{Int32,UInt32}) = Float64(x)<=Float64(y)
-<=(x::Union{Int32,UInt32}, y::Float32) = Float64(x)<=Float64(y)
+        ($op)(x::Float16, y::Union{Int16,UInt16}) = ($op)(Float32(x), Float32(y))
+        ($op)(x::Union{Int16,UInt16}, y::Float16) = ($op)(Float32(x), Float32(y))
+    end
+end
 
 
 abs(x::Float16) = reinterpret(Float16, reinterpret(UInt16, x) & 0x7fff)
@@ -589,7 +594,7 @@ uabs(x::BitSigned) = unsigned(abs(x))
 
 
 """
-    nextfloat(x::IEEEFloat, n::Integer)
+    nextfloat(x::AbstractFloat, n::Integer)
 
 The result of `n` iterative applications of `nextfloat` to `x` if `n >= 0`, or `-n`
 applications of `prevfloat` if `n < 0`.
@@ -836,8 +841,7 @@ eps(::AbstractFloat)
 
 
 ## byte order swaps for arbitrary-endianness serialization/deserialization ##
-bswap(x::Float32) = bswap_int(x)
-bswap(x::Float64) = bswap_int(x)
+bswap(x::IEEEFloat) = bswap_int(x)
 
 # bit patterns
 reinterpret(::Type{Unsigned}, x::Float64) = reinterpret(UInt64, x)

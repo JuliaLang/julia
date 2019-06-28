@@ -218,6 +218,9 @@ Random.seed!(1)
                 tx = Tfull \ b
                 @test_throws DimensionMismatch LinearAlgebra.naivesub!(T,Vector{elty}(undef,n+1))
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+                x = transpose(T) \ b
+                tx = transpose(Tfull) \ b
+                @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
                 @testset "Generic Mat-vec ops" begin
                     @test T*b ≈ Tfull*b
                     @test T'*b ≈ Tfull'*b
@@ -252,7 +255,7 @@ Random.seed!(1)
         @testset "Eigensystems" begin
             if relty <: AbstractFloat
                 d1, v1 = eigen(T)
-                d2, v2 = eigen(map(elty<:Complex ? ComplexF64 : Float64,Tfull))
+                d2, v2 = eigen(map(elty<:Complex ? ComplexF64 : Float64,Tfull), sortby=nothing)
                 @test (uplo == :U ? d1 : reverse(d1)) ≈ d2
                 if elty <: Real
                     test_approx_eq_modphase(v1, uplo == :U ? v2 : v2[:,n:-1:1])
@@ -297,9 +300,14 @@ Random.seed!(1)
             # test pass-through of mul! for AbstractTriangular*Bidiagonal
             Tri = UpperTriangular(diagm(1 => T.ev))
             @test Array(Tri*T) ≈ Array(Tri)*Array(T)
+            # test mul! for Diagonal*Bidiagonal
+            C = Matrix{elty}(undef, n, n)
+            Dia = Diagonal(T.dv)
+            @test mul!(C, Dia, T) ≈ Array(Dia)*Array(T)
         end
 
         @test inv(T)*Tfull ≈ Matrix(I, n, n)
+        @test factorize(T) === T
     end
     BD = Bidiagonal(dv, ev, :U)
     @test Matrix{Complex{Float64}}(BD) == BD
@@ -399,6 +407,11 @@ end
     bb = Any[b[1:3], b[4:6], b[7:9]]
     @test vcat((Alb\bb)...) ≈ LowerTriangular(A)\b
     @test vcat((Aub\bb)...) ≈ UpperTriangular(A)\b
+end
+
+@testset "sum" begin
+    @test sum(Bidiagonal([1,2,3], [1,2], :U)) == 9
+    @test sum(Bidiagonal([1,2,3], [1,2], :L)) == 9
 end
 
 end # module TestBidiagonal

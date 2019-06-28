@@ -5,6 +5,7 @@
 #########################
 
 const MAX_TYPEUNION_COMPLEXITY = 3
+const MAX_TYPEUNION_LENGTH = 3
 const MAX_INLINE_CONST_SIZE = 256
 
 #########################
@@ -65,7 +66,10 @@ function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
             # it cannot have a reference cycle in the type graph
             cF = c.types
             for f in cF
-                is_derived_type(t, f, mindepth) && return true
+                # often a parameter is also a field type; avoid searching twice
+                if !contains_is(c.parameters, f)
+                    is_derived_type(t, f, mindepth) && return true
+                end
             end
         end
     end
@@ -88,10 +92,13 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
         return t # easy case
     elseif isa(t, DataType) && isempty(t.parameters)
         return t # fast path: unparameterized are always simple
-    elseif isa(unwrap_unionall(t), DataType) && isa(c, Type) && c !== Union{} && c <: t
-        return t # t is already wider than the comparison in the type lattice
-    elseif is_derived_type_from_any(unwrap_unionall(t), sources, depth)
-        return t # t isn't something new
+    else
+        ut = unwrap_unionall(t)
+        if isa(ut, DataType) && ut.name !== _va_typename && isa(c, Type) && c !== Union{} && c <: t
+            return t # t is already wider than the comparison in the type lattice
+        elseif is_derived_type_from_any(ut, sources, depth)
+            return t # t isn't something new
+        end
     end
     # peel off (and ignore) wrappers - they contribute no useful information, so we don't need to consider their size
     # first attempt to turn `c` into a type that contributes meaningful information
@@ -233,6 +240,7 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         if isa(c, DataType) && t.name === c.name
             cP = c.parameters
             length(cP) < length(tP) && return true
+            length(cP) > length(tP) && !isvarargtype(tP[end]) && depth == 1 && return false
             ntail = length(cP) - length(tP) # assume parameters were dropped from the tuple head
             # allow creating variation within a nested tuple, but only so deep
             if t.name === Tuple.name && tupledepth > 0
@@ -315,6 +323,27 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         end
         return Bool
     end
+    if (isa(typea, PartialStruct) || isa(typea, Const)) &&
+       (isa(typeb, PartialStruct) || isa(typeb, Const)) &&
+        widenconst(typea) === widenconst(typeb)
+
+       typea_nfields = nfields_tfunc(typea)
+       typeb_nfields = nfields_tfunc(typeb)
+       if !isa(typea_nfields, Const) || !isa(typea_nfields, Const) || typea_nfields.val !== typeb_nfields.val
+            return widenconst(typea)
+       end
+
+       type_nfields = typea_nfields.val::Int
+       fields = Vector{Any}(undef, type_nfields)
+       anyconst = false
+       for i = 1:type_nfields
+            fields[i] = tmerge(getfield_tfunc(typea, Const(i)),
+                               getfield_tfunc(typeb, Const(i)))
+            anyconst |= has_nontrivial_const_info(fields[i])
+       end
+       return anyconst ? PartialStruct(widenconst(typea), fields) :
+            widenconst(typea)
+    end
     # no special type-inference lattice, join the types
     typea, typeb = widenconst(typea), widenconst(typeb)
     typea === typeb && return typea
@@ -373,7 +402,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         end
     end
     u = Union{types...}
-    if unioncomplexity(u) <= MAX_TYPEUNION_COMPLEXITY
+    if unionlen(u) <= MAX_TYPEUNION_LENGTH && unioncomplexity(u) <= MAX_TYPEUNION_COMPLEXITY
         # don't let type unions get too big, if the above didn't reduce it enough
         return u
     end
@@ -400,7 +429,7 @@ function tuplemerge(a::DataType, b::DataType)
     p = Vector{Any}(undef, lt + vt)
     for i = 1:lt
         ui = Union{ap[i], bp[i]}
-        if unioncomplexity(ui) < MAX_TYPEUNION_COMPLEXITY
+        if unionlen(ui) <= MAX_TYPEUNION_LENGTH && unioncomplexity(ui) <= MAX_TYPEUNION_COMPLEXITY
             p[i] = ui
         else
             p[i] = Any

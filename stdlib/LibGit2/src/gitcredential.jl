@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+const GIT_CRED_ATTRIBUTES = ("protocol", "host", "path", "username", "password", "url")
+
 """
     GitCredential
 
@@ -85,7 +87,7 @@ function Base.copy!(a::GitCredential, b::GitCredential)
     a.host = b.host
     a.path = b.path
     a.username = b.username
-    a.password = b.password == nothing ? nothing : copy(b.password)
+    a.password = b.password === nothing ? nothing : copy(b.password)
     return a
 end
 
@@ -111,16 +113,19 @@ function Base.read!(io::IO, cred::GitCredential)
         else
             value = readuntil(io, '\n')
         end
+
         if key == "url"
             # Any components which are missing from the URL will be set to empty
             # https://git-scm.com/docs/git-credential#git-credential-codeurlcode
             Base.shred!(parse(GitCredential, value)) do urlcred
                 copy!(cred, urlcred)
             end
-        else
+        elseif key in GIT_CRED_ATTRIBUTES
             field = getproperty(cred, Symbol(key))
             field !== nothing && Symbol(key) == :password && Base.shred!(field)
             setproperty!(cred, Symbol(key), value)
+        elseif !all(isspace, key)
+            @warn "Unknown git credential attribute found: $(repr(key))"
         end
     end
 

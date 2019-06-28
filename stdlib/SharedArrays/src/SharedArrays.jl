@@ -275,13 +275,23 @@ function finalize_refs(S::SharedArray{T,N}) where T where N
     S
 end
 
+"""
+    SharedVector
 
+A one-dimensional [`SharedArray`](@ref).
+"""
 const SharedVector{T} = SharedArray{T,1}
+"""
+    SharedMatrix
+
+A two-dimensional [`SharedArray`](@ref).
+"""
 const SharedMatrix{T} = SharedArray{T,2}
 
-length(S::SharedArray) = prod(S.dims)
+SharedVector(A::Vector) = SharedArray(A)
+SharedMatrix(A::Matrix) = SharedArray(A)
+
 size(S::SharedArray) = S.dims
-ndims(S::SharedArray) = length(S.dims)
 IndexStyle(::Type{<:SharedArray}) = IndexLinear()
 
 function reshape(a::SharedArray{T}, dims::NTuple{N,Int}) where {T,N}

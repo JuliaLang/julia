@@ -118,9 +118,16 @@ JL_DLLEXPORT double jl_strtod_c(const char *nptr, char **endptr)
 
     decimal_point_pos = NULL;
 
+    p = nptr;
+
+    /* parse leading spaces */
+    while (isspace((unsigned char)*p)) {
+        p++;
+    }
+
     /* Parse infinities and nans */
-    val = parse_inf_or_nan(nptr, endptr);
-    if (*endptr != nptr)
+    val = parse_inf_or_nan(p, endptr);
+    if (*endptr != p)
         return val;
 
     /* Set errno to zero, so that we can distinguish zero results
@@ -130,12 +137,6 @@ JL_DLLEXPORT double jl_strtod_c(const char *nptr, char **endptr)
     /* We process the optional sign manually, then pass the remainder to
        the system strtod.  This ensures that the result of an underflow
        has the correct sign.  */
-    p = nptr;
-
-    /* parse leading spaces */
-    while (isspace((unsigned char)*p)) {
-        p++;
-    }
 
     /* Process leading sign, if present */
     if (*p == '-') {

@@ -68,16 +68,17 @@ function _threadsfor(iter,lbody)
         # Hack to make nested threaded loops kinda work
         if threadid() != 1 || in_threaded_loop[]
             # We are in a nested threaded loop
-            threadsfor_fun(true)
+            Base.invokelatest(threadsfor_fun, true)
         else
             in_threaded_loop[] = true
             # the ccall is not expected to throw
-            ccall(:jl_threading_run, Ref{Cvoid}, (Any,), threadsfor_fun)
+            ccall(:jl_threading_run, Cvoid, (Any,), threadsfor_fun)
             in_threaded_loop[] = false
         end
         nothing
     end
 end
+
 """
     Threads.@threads
 
@@ -96,7 +97,7 @@ macro threads(args...)
         throw(ArgumentError("need an expression argument to @threads"))
     end
     if ex.head === :for
-        return _threadsfor(ex.args[1],ex.args[2])
+        return _threadsfor(ex.args[1], ex.args[2])
     else
         throw(ArgumentError("unrecognized argument to @threads"))
     end

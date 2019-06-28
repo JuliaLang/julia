@@ -177,3 +177,46 @@ let bt, found = false
     end
     @test found
 end
+
+# issue 28618
+let bt, found = false
+    @info ""
+    bt = backtrace()
+    for frame in map(StackTraces.lookup, bt)
+        if frame[1].line == @__LINE__() - 2 && frame[1].file == Symbol(@__FILE__)
+            found = true; break
+        end
+    end
+    @test found
+end
+
+# Syntax error locations appear in backtraces
+let trace = try
+        include_string(@__MODULE__,
+            """
+
+            )
+
+            """, "a_filename")
+    catch
+        stacktrace(catch_backtrace())
+    end
+    @test trace[1].func == Symbol("top-level scope")
+    @test trace[1].file == :a_filename
+    @test trace[1].line == 2
+end
+let trace = try
+        include_string(@__MODULE__,
+            """
+
+            incomplete_syntax(
+
+            """, "a_filename")
+    catch
+        stacktrace(catch_backtrace())
+    end
+    @test trace[1].func == Symbol("top-level scope")
+    @test trace[1].file == :a_filename
+    @test trace[1].line == 2
+end
+

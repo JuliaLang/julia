@@ -6,6 +6,7 @@ using .Main.OffsetArrays
 using SparseArrays
 
 using Random, LinearAlgebra
+using Dates
 
 @testset "basics" begin
     @test length([1, 2, 3]) == 3
@@ -234,6 +235,29 @@ end
     end
 end
 
+@testset "reshape isbitsunion Arrays (issue #28611)" begin
+    v = Union{Float64,Missing}[]
+    for i in 1:10 push!(v, i) end
+    v[5] = missing
+    a = @inferred(reshape(v, 2, 5))
+    for (I, i) in zip(CartesianIndices((2, 5)), 1:10)
+        @test a[I] === v[i]
+    end
+    ac = copy(a)
+    @test ac isa Array{Union{Float64, Missing}, 2}
+    b = @inferred(reshape(ac, 5, 2))
+    for (I, J) in zip(CartesianIndices((2, 5)), CartesianIndices((5, 2)))
+        @test ac[I] === b[J]
+    end
+
+    for T in (Any, Union{Float64,String})
+        a = Array{T}(undef, 4)
+        @test @inferred(reshape(a, (2, 2))) isa Array{T,2}
+        a = Array{T}(undef, 4, 1)
+        @test @inferred(reshape(a, (2, 2))) isa Array{T,2}
+    end
+end
+
 @testset "conversion from ReshapedArray to Array (#18262)" begin
     a = Base.ReshapedArray(1:3, (3, 1), ())
     @test convert(Array, a) == a
@@ -319,20 +343,27 @@ end
     @test B == [0 23 1 24 0; 11 12 13 14 15; 0 21 3 22 0; 0 7 7 0 0]
 
     @test isequal(reshape(reshape(1:27, 3, 3, 3), Val(2))[1,:], [1,  4,  7,  10,  13,  16,  19,  22,  25])
-
+end
+@testset "find(in(b), a)" begin
+    # unsorted inputs
     a = [3, 5, -7, 6]
     b = [4, 6, 2, -7, 1]
-    ind = findall(in(b), a)
-    @test ind == [3,4]
+    @test findall(in(b), a) == [3,4]
     @test findall(in(Int[]), a) == Int[]
     @test findall(in(a), Int[]) == Int[]
+    @test findall(in(b), reshape(a, 2, 2)) == [CartesianIndex(1, 2), CartesianIndex(2, 2)]
 
-    a = [1,2,3,4,5]
+    # sorted inputs
+    a = [1,2,3,4,5,10]
     b = [2,3,4,6]
     @test findall(in(b), a) == [2,3,4]
     @test findall(in(a), b) == [1,2,3]
     @test findall(in(Int[]), a) == Int[]
     @test findall(in(a), Int[]) == Int[]
+    @test findall(in(b), reshape(a, 3, 2)) ==
+        [CartesianIndex(2, 1), CartesianIndex(3, 1), CartesianIndex(1, 2)]
+    @test findall(in(a), reshape(b, 2, 2)) ==
+        [CartesianIndex(1, 1), CartesianIndex(2, 1), CartesianIndex(1, 2)]
 
     a = Vector(1:3:15)
     b = Vector(2:4:10)
@@ -351,6 +382,15 @@ end
     @test findall(in([1, 2]), 2) == [1]
     @test findall(in([1, 2]), 3) == []
 
+    @test sort(findall(Dict(1=>false, 2=>true, 3=>true))) == [2, 3]
+
+    @test findall(true) == [1]
+    @test findall(false) == Int[]
+
+    @test findall(isodd, 1) == [1]
+    @test findall(isodd, 2) == Int[]
+end
+@testset "setindex! return type" begin
     rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, Vector{UInt8}, Vector{Int}, Int16, UnitRange{Int}})
     @test length(rt) == 1 && rt[1] === Array{Int32, 3}
 end
@@ -494,6 +534,7 @@ end
     @test findfirst(!iszero, a) == 2
     @test findfirst(a.==0) == 1
     @test findfirst(a.==5) == nothing
+    @test findfirst(Dict(1=>false, 2=>true)) == 2
     @test findfirst(isequal(3), [1,2,4,1,2,3,4]) == 6
     @test findfirst(!isequal(1), [1,2,4,1,2,3,4]) == 2
     @test findfirst(isodd, [2,4,6,3,9,2,0]) == 4
@@ -567,6 +608,11 @@ end
     @test isnan(findmax([NaN, NaN, 0.0/0.0])[1])
     @test findmax([NaN, NaN, 0.0/0.0])[2] == 1
 
+    # Check that cartesian indices are returned for matrices
+    @test argmax([10 12; 9 11]) === CartesianIndex(1, 2)
+    @test argmin([10 12; 9 11]) === CartesianIndex(2, 1)
+    @test findmax([10 12; 9 11]) === (12, CartesianIndex(1, 2))
+    @test findmin([10 12; 9 11]) === (9, CartesianIndex(2, 1))
 end
 
 @testset "permutedims" begin
@@ -698,6 +744,10 @@ end
     # issue 20564
     @test_throws MethodError repeat(1, 2, 3)
     @test repeat([1, 2], 1, 2, 3) == repeat([1, 2], outer = (1, 2, 3))
+
+    # issue 29020
+    @test repeat(collect(5), outer=(2, 2)) == [5 5;5 5]
+    @test repeat(ones(Int64), inner=(1,2), outer=(2,2)) == [1 1 1 1;1 1 1 1]
 
     # issue 29614
     @test repeat(ones(2, 2), 1, 1, 1) == ones(2, 2, 1)
@@ -1266,6 +1316,12 @@ end
     fill!(A, [1, 2])
     @test A[1] == [1, 2]
     @test A[1] === A[2]
+    # byte arrays
+    @test_throws InexactError fill!(UInt8[0], -1)
+    @test_throws InexactError fill!(UInt8[0], 300)
+    @test_throws InexactError fill!(Int8[0], 200)
+    @test fill!(UInt8[0,0], 200) == [200,200]
+    @test fill!(Int8[0,0], -2) == [-2,-2]
 end
 
 @testset "splice!" begin
@@ -1334,6 +1390,12 @@ end
     @test_throws BoundsError deleteat!(a, Bool[])
     @test_throws BoundsError deleteat!(a, [true])
     @test_throws BoundsError deleteat!(a, falses(11))
+
+    @test_throws BoundsError deleteat!([], 1)
+    @test_throws BoundsError deleteat!([], [1])
+    @test_throws BoundsError deleteat!([], [2])
+    @test deleteat!([], []) == []
+    @test deleteat!([], Bool[]) == []
 end
 
 @testset "comprehensions" begin
@@ -1734,8 +1796,12 @@ end
     b[CartesianIndex{2}(1,1)] = 7
     @test a[1,2] == 7
     @test 2*CartesianIndex{3}(1,2,3) == CartesianIndex{3}(2,4,6)
+    @test CartesianIndex{3}(1,2,3)*2 == CartesianIndex{3}(2,4,6)
+    @test_throws ErrorException iterate(CartesianIndex{3}(1,2,3))
+    @test CartesianIndices(CartesianIndex{3}(1,2,3)) == CartesianIndices((1, 2, 3))
+    @test Tuple{}(CartesianIndices{0,Tuple{}}(())) == ()
 
-    R = CartesianIndices(map(Base.Slice, (2:5, 3:5)))
+    R = CartesianIndices(map(Base.IdentityUnitRange, (2:5, 3:5)))
     @test eltype(R) <: CartesianIndex{2}
     @test eltype(typeof(R)) <: CartesianIndex{2}
     @test eltype(CartesianIndices{2}) <: CartesianIndex{2}
@@ -1936,6 +2002,22 @@ end
     @test IndexStyle(selectdim(A, 1, 1)) == IndexStyle(view(A, 1, :, :)) == IndexLinear()
     @test IndexStyle(selectdim(A, 2, 1)) == IndexStyle(view(A, :, 1, :)) == IndexCartesian()
     @test IndexStyle(selectdim(A, 3, 1)) == IndexStyle(view(A, :, :, 1)) == IndexLinear()
+end
+
+# row/column/slice iterator tests
+using Base: eachrow, eachcol
+@testset "row/column/slice iterators" begin
+    # Simple ones
+    M = [1 2 3; 4 5 6; 7 8 9]
+    @test collect(eachrow(M)) == collect(eachslice(M, dims = 1)) == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    @test collect(eachcol(M)) == collect(eachslice(M, dims = 2)) == [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
+    @test_throws DimensionMismatch eachslice(M, dims = 4)
+
+    # Higher-dimensional case
+    M = reshape([(1:16)...], 2, 2, 2, 2)
+    @test_throws MethodError collect(eachrow(M))
+    @test_throws MethodError collect(eachcol(M))
+    @test collect(eachslice(M, dims = 1))[1][:, :, 1] == [1 5; 3 7]
 end
 
 ###
@@ -2283,6 +2365,9 @@ end
 
 @testset "diff" begin
     # test diff, throw ArgumentError for invalid dimension argument
+    v = [7, 3, 5, 1, 9]
+    @test diff(v) == [-4, 2, -4, 8]
+    @test diff(v,dims=1) == [-4, 2, -4, 8]
     X = [3  9   5;
          7  4   2;
          2  1  10]
@@ -2292,6 +2377,9 @@ end
     @test diff(view(X, 1:2, 1:2),dims=2) == reshape([6; -3], (2,1))
     @test diff(view(X, 2:3, 2:3),dims=1) == [-3 8]
     @test diff(view(X, 2:3, 2:3),dims=2) == reshape([-2; 9], (2,1))
+    Y = cat([1 3; 4 3], [6 5; 1 4], dims=3)
+    @test diff(Y, dims=3) == reshape([5 2; -3 1], (2, 2, 1))
+    @test_throws UndefKeywordError diff(X)
     @test_throws ArgumentError diff(X,dims=3)
     @test_throws ArgumentError diff(X,dims=-1)
 end
@@ -2539,3 +2627,7 @@ Base.view(::T25958, args...) = args
     @test t[end,end,1]   == @view(t[end,end,1])   == @views t[end,end,1]
     @test t[end,end,end] == @view(t[end,end,end]) == @views t[end,end,end]
 end
+
+# Fix oneunit bug for unitful arrays
+@test oneunit([Second(1) Second(2); Second(3) Second(4)]) == [Second(1) Second(0); Second(0) Second(1)]
+

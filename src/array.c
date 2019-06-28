@@ -148,6 +148,8 @@ static inline jl_array_t *_new_array(jl_value_t *atype, uint32_t ndims, size_t *
 {
     jl_value_t *eltype = jl_tparam0(atype);
     size_t elsz = 0, al = 0;
+    if (!jl_is_kind(jl_typeof(eltype)))
+        jl_type_error_rt("Array", "element type", (jl_value_t*)jl_type_type, eltype);
     int isunboxed = jl_islayout_inline(eltype, &elsz, &al);
     int isunion = jl_is_uniontype(eltype);
     if (!isunboxed) {
@@ -169,9 +171,10 @@ static inline int is_ntuple_long(jl_value_t *v)
 {
     if (!jl_is_tuple(v))
         return 0;
-    size_t nfields = jl_nfields(v);
-    for (size_t i = 0; i < nfields; i++) {
-        if (jl_field_type(jl_typeof(v), i) != (jl_value_t*)jl_long_type) {
+    jl_value_t *tt = jl_typeof(v);
+    size_t i, nfields = jl_nparams(tt);
+    for (i = 0; i < nfields; i++) {
+        if (jl_tparam(tt, i) != (jl_value_t*)jl_long_type) {
             return 0;
         }
     }
@@ -468,6 +471,10 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
 JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
 {
     size_t sz = sizeof(size_t) + len + 1; // add space for trailing \nul protector and size
+    if (sz < len) // overflow
+        jl_throw(jl_memory_exception);
+    if (len == 0)
+        return jl_an_empty_string;
     jl_value_t *s = jl_gc_alloc_(jl_get_ptls_states(), sz, jl_string_type); // force inlining
     *(size_t*)s = len;
     memcpy((char*)s + sizeof(size_t), str, len);
@@ -478,6 +485,10 @@ JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
 JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
 {
     size_t sz = sizeof(size_t) + len + 1; // add space for trailing \nul protector and size
+    if (sz < len) // overflow
+        jl_throw(jl_memory_exception);
+    if (len == 0)
+        return jl_an_empty_string;
     jl_value_t *s = jl_gc_alloc_(jl_get_ptls_states(), sz, jl_string_type); // force inlining
     *(size_t*)s = len;
     ((char*)s + sizeof(size_t))[len] = 0;
@@ -581,10 +592,9 @@ JL_DLLEXPORT void jl_arrayset(jl_array_t *a JL_ROOTING_ARGUMENT, jl_value_t *rhs
 JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i)
 {
     if (i >= jl_array_len(a))
-        jl_bounds_error_int((jl_value_t*)a, i+1);
-    char *ptail = (char*)a->data + i*a->elsize;
+        jl_bounds_error_int((jl_value_t*)a, i + 1);
     if (a->flags.ptrarray)
-        memset(ptail, 0, a->elsize);
+        ((jl_value_t**)a->data)[i] = NULL;
 }
 
 // at this size and bigger, allocate resized array data with malloc

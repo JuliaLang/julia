@@ -15,7 +15,10 @@ using Random
     Future.copy!(dst, src) -> dst
 
 Copy `src` into `dst`.
-This function has now been moved into `Base`, consider using `copy!(dst, src)` instead.
+
+!!! compat "Julia 1.1"
+    This function has moved to `Base` with Julia 1.1, consider using `copy!(dst, src)` instead.
+    `Future.copy!` will be deprecated in the future.
 """
 copy!(dst::AbstractSet, src::AbstractSet) = Base.copy!(dst, src)
 copy!(dst::AbstractDict, src::AbstractDict) = Base.copy!(dst, src)

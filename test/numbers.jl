@@ -208,6 +208,11 @@ end
 
 @test isa(0170141183460469231731687303715884105728,BigInt)
 
+# GMP allocation overflow should not cause crash
+if Base.GMP.ALLOC_OVERFLOW_FUNCTION[] && sizeof(Int) > 4
+  @test_throws OutOfMemoryError BigInt(2)^(typemax(Culong))
+end
+
 # exponentiating with a negative base
 @test -3^2 == -9
 @test -9223372036854775808^2 == -(9223372036854775808^2)
@@ -592,6 +597,17 @@ end
     # test x = Inf
     @test isinf(copysign(1/0,1))
     @test isinf(copysign(1/0,-1))
+
+    # with Unsigned argument
+    @test copysign(Float16(-1), 0x01) === Float16(1)
+    @test copysign(Float16(1), 0x01) === Float16(1)
+    @test copysign(-1.0f0, 0x01) === 1.0f0
+    @test copysign(1.0f0, 0x01) === 1.0f0
+    @test copysign(-1.0, 0x01) === 1.0
+    @test copysign(-1, 0x02) === 1
+    @test copysign(big(-1), 0x02) == 1
+    @test copysign(big(-1.0), 0x02) == 1.0
+    @test copysign(-1//2, 0x01) == 1//2
 end
 
 @testset "isnan/isinf/isfinite" begin
@@ -973,6 +989,11 @@ end
     @test Float32(typemin(UInt128)) == 0.0f0
     @test Float64(typemax(UInt128)) == 2.0^128
     @test Float32(typemax(UInt128)) == 2.0f0^128
+    # leading zeros > 53
+    @test Float64(UInt128(Int64(2)^54)) == 1.8014398509481984e16
+    @test Float64(Int128(Int64(2)^54)) == 1.8014398509481984e16
+    @test Float32(UInt128(Int64(2)^54)) == 1.8014399f16
+    @test Float32(Int128(Int64(2)^54)) == 1.8014399f16
 
     # check for double rounding in conversion
     @test Float64(10633823966279328163822077199654060032) == 1.0633823966279327e37 #0x1p123
@@ -987,6 +1008,16 @@ end
     @test Int128(-2.0^127) == typemin(Int128)
     @test Float64(UInt128(3.7e19)) == 3.7e19
     @test Float64(UInt128(3.7e30)) == 3.7e30
+end
+@testset "Float16 vs Int comparisons" begin
+    @test Inf16 != typemax(Int16)
+    @test Inf16 != typemax(Int32)
+    @test Inf16 != typemax(Int64)
+    @test Inf16 != typemax(Int128)
+    @test Inf16 != typemax(UInt16)
+    @test Inf16 != typemax(UInt32)
+    @test Inf16 != typemax(UInt64)
+    @test Inf16 != typemax(UInt128)
 end
 @testset "NaN comparisons" begin
     @test !(NaN <= 1)
@@ -1010,6 +1041,10 @@ end
             @test isequal(i>j, Float64(i)>Float64(j))
         end
     end
+end
+
+@testset "Irrational Inverses, Issue #30882" begin
+    @test @inferred(inv(π)) ≈ 0.3183098861837907
 end
 
 @testset "Irrationals compared with Rationals and Floats" begin
@@ -1525,6 +1560,18 @@ end
     @test signed(cld(typemax(UInt),typemin(Int)+1))      == -2
     @test signed(cld(typemax(UInt),typemin(Int)>>1))     == -3
     @test signed(cld(typemax(UInt),(typemin(Int)>>1)+1)) == -4
+
+    @testset "UInt128 div/rem" begin
+        uints = [0xadc0db298a7401251f4fa96ba429cb24, 0xd11ef418102afb1f7959b6df48d08044]
+        for x in uints, y in uints, sx in 0:128, sy in 0:127
+            xs = x >> sx
+            ys = y >> sy
+            q, r = @inferred(divrem(xs, ys))::Tuple{UInt128,UInt128}
+            @test xs == q*ys + r && r < ys
+            @test q == @inferred(div(xs, ys))::UInt128
+            @test r == @inferred(rem(xs, ys))::UInt128
+        end
+    end
 
     @testset "exceptions and special cases" begin
         for T in (Int8,Int16,Int32,Int64,Int128, UInt8,UInt16,UInt32,UInt64,UInt128)
@@ -2142,8 +2189,10 @@ end
     @test bswap(0x01020304) === 0x04030201
     @test reinterpret(Float64,bswap(0x000000000000f03f)) === 1.0
     @test reinterpret(Float32,bswap(0x0000c03f)) === 1.5f0
+    @test reinterpret(Float16,bswap(0x003c)) === Float16(1.0)
     @test bswap(reinterpret(Float64,0x000000000000f03f)) === 1.0
     @test bswap(reinterpret(Float32,0x0000c03f)) === 1.5f0
+    @test bswap(reinterpret(Float16,0x003e)) === Float16(1.5)
     zbuf = IOBuffer([0xbf, 0xc0, 0x00, 0x00, 0x40, 0x20, 0x00, 0x00,
                      0x40, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                      0xc0, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])

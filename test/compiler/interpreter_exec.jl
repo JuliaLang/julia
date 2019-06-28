@@ -19,8 +19,9 @@ let m = Meta.@lower 1 + 1
         Expr(:return, Core.SSAValue(6)),
     ]
     nstmts = length(src.code)
-    src.ssavaluetypes = nstmts
+    src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
     src.codelocs = fill(Int32(1), nstmts)
+    src.inferred = true
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
     global test29262 = true
     @test :a === @eval $m
@@ -38,25 +39,29 @@ let m = Meta.@lower 1 + 1
         QuoteNode(:c),
         GlobalRef(@__MODULE__, :test29262),
         # block 2
-        Core.PhiNode(Any[4, 13], Any[false, true]), # false, true
-        Core.PhiNode(Any[4, 13], Any[Core.SSAValue(1), Core.SSAValue(2)]), # :a, :b
-        Core.PhiNode(Any[4, 13], Any[Core.SSAValue(3), Core.SSAValue(6)]), # :c, :a
-        Core.PhiNode(Any[13], Any[Core.SSAValue(7)]), # NULL, :c
+        Core.PhiNode(Any[4, 16], Any[false, true]), # false, true
+        Core.PhiNode(Any[4, 16], Any[Core.SSAValue(1), Core.SSAValue(2)]), # :a, :b
+        Core.PhiNode(Any[4, 16], Any[Core.SSAValue(3), Core.SSAValue(6)]), # :c, :a
+        Core.PhiNode(Any[16], Any[Core.SSAValue(7)]), # NULL, :c
         # block 3
         Core.PhiNode(Any[], Any[]), # NULL, NULL
-        Core.PhiNode(Any[14, 8], Any[true, Core.SSAValue(4)]), # test29262, test29262, [true]
-        Core.PhiNode(Any[14, 8], Any[Core.SSAValue(2), Core.SSAValue(8)]), # NULL, :c, [:b]
+        Core.PhiNode(Any[17, 8], Any[true, Core.SSAValue(4)]), # test29262, test29262, [true]
+        Core.PhiNode(Any[17], Vector{Any}(undef, 1)), # NULL, NULL
+        Core.PhiNode(Any[8], Vector{Any}(undef, 1)), # NULL, NULL
+        Core.PhiNode(Any[], Any[]), # NULL, NULL
+        Core.PhiNode(Any[17, 8], Any[Core.SSAValue(2), Core.SSAValue(8)]), # NULL, :c, [:b]
         Core.PhiNode(Any[], Any[]), # NULL, NULL
         Expr(:gotoifnot, Core.SSAValue(5), 5),
         # block 4
         Expr(:gotoifnot, Core.SSAValue(10), 9),
         # block 5
-        Expr(:call, GlobalRef(Core, :tuple), Core.SSAValue(6), Core.SSAValue(7), Core.SSAValue(8), Core.SSAValue(11)),
-        Expr(:return, Core.SSAValue(15)),
+        Expr(:call, GlobalRef(Core, :tuple), Core.SSAValue(6), Core.SSAValue(7), Core.SSAValue(8), Core.SSAValue(14)),
+        Expr(:return, Core.SSAValue(18)),
     ]
     nstmts = length(src.code)
-    src.ssavaluetypes = nstmts
+    src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
     src.codelocs = fill(Int32(1), nstmts)
+    src.inferred = true
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
     global test29262 = true
     @test (:b, :a, :c, :c) === @eval $m
@@ -91,8 +96,9 @@ let m = Meta.@lower 1 + 1
         Expr(:return, Core.SSAValue(11)),
     ]
     nstmts = length(src.code)
-    src.ssavaluetypes = nstmts
+    src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
     src.codelocs = fill(Int32(1), nstmts)
+    src.inferred = true
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
     global test29262 = true
     @test :a === @eval $m

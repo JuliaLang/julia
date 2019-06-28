@@ -36,7 +36,7 @@ Passing arguments to functions is better style. It leads to more reusable code a
 
 !!! note
     All code in the REPL is evaluated in global scope, so a variable defined and assigned
-    at toplevel will be a **global** variable. Variables defined in at top level scope inside
+    at top level will be a **global** variable. Variables defined at top level scope inside
     modules are also global.
 
 In the following REPL session:
@@ -164,9 +164,9 @@ julia> a = Real[]
 
 julia> push!(a, 1); push!(a, 2.0); push!(a, π)
 3-element Array{Real,1}:
-  1
-  2.0
- π = 3.1415926535897...
+ 1
+ 2.0
+ π
 ```
 
 Because `a` is a an array of abstract type [`Real`](@ref), it must be able to hold any
@@ -481,26 +481,6 @@ c = (b + 1.0f0)::Complex{T}
 does not hinder performance (but does not help either) since the compiler can determine the type of `c`
 at the time `k` is compiled.
 
-### Declare types of keyword arguments
-
-Keyword arguments can have declared types:
-
-```julia
-function with_keyword(x; name::Int = 1)
-    ...
-end
-```
-
-Functions are specialized on the types of keyword arguments, so these declarations will not affect
-performance of code inside the function. However, they will reduce the overhead of calls to the
-function that include keyword arguments.
-
-Functions with keyword arguments have near-zero overhead for call sites that pass only positional
-arguments.
-
-Passing dynamic lists of keyword arguments, as in `f(x; keywords...)`, can be slow and should
-be avoided in performance-sensitive code.
-
 ## Break functions into multiple definitions
 
 Writing a function as many small definitions allows the compiler to directly call the most applicable
@@ -727,7 +707,7 @@ type-domain.
 
 ## The dangers of abusing multiple dispatch (aka, more on types with values-as-parameters)
 
-Once one learns to appreciate multiple dispatch, there's an understandable tendency to go crazy
+Once one learns to appreciate multiple dispatch, there's an understandable tendency to go overboard
 and try to use it for everything. For example, you might imagine using it to store information,
 e.g.
 
@@ -850,7 +830,7 @@ julia> x = randn(10000);
 
 julia> fmt(f) = println(rpad(string(f)*": ", 14, ' '), @elapsed f(x))
 
-julia> map(fmt, Any[copy_cols, copy_rows, copy_col_row, copy_row_col]);
+julia> map(fmt, [copy_cols, copy_rows, copy_col_row, copy_row_col]);
 copy_cols:    0.331706323
 copy_rows:    1.799009911
 copy_col_row: 0.415630047
@@ -1149,7 +1129,7 @@ Sometimes you can enable better optimization by promising certain program proper
 
 The common idiom of using 1:n to index into an AbstractArray is not safe if the Array uses unconventional indexing,
 and may cause a segmentation fault if bounds checking is turned off. Use `LinearIndices(x)` or `eachindex(x)`
-instead (see also [offset-arrays](https://docs.julialang.org/en/latest/devdocs/offset-arrays)).
+instead (see also [offset-arrays](https://docs.julialang.org/en/latest/devdocs/offset-arrays/)).
 
 !!! note
     While `@simd` needs to be placed directly in front of an innermost `for` loop, both `@inbounds` and `@fastmath`
@@ -1382,29 +1362,21 @@ julia> @noinline pos(x) = x < 0 ? 0 : x;
 
 julia> function f(x)
            y = pos(x)
-           sin(y*x + 1)
+           return sin(y*x + 1)
        end;
 
 julia> @code_warntype f(3.2)
+Variables
+  #self#::Core.Compiler.Const(f, false)
+  x::Float64
+  y::Union{Float64, Int64}
+
 Body::Float64
-2 1 ─ %1  = invoke Main.pos(%%x::Float64)::UNION{FLOAT64, INT64}
-3 │   %2  = isa(%1, Float64)::Bool
-  └──       goto 3 if not %2
-  2 ─ %4  = π (%1, Float64)
-  │   %5  = Base.mul_float(%4, %%x)::Float64
-  └──       goto 6
-  3 ─ %7  = isa(%1, Int64)::Bool
-  └──       goto 5 if not %7
-  4 ─ %9  = π (%1, Int64)
-  │   %10 = Base.sitofp(Float64, %9)::Float64
-  │   %11 = Base.mul_float(%10, %%x)::Float64
-  └──       goto 6
-  5 ─       Base.error("fatal error in type inference (type bound)")
-  └──       unreachable
-  6 ┄ %15 = φ (2 => %5, 4 => %11)::Float64
-  │   %16 = Base.add_float(%15, 1.0)::Float64
-  │   %17 = invoke Main.sin(%16::Float64)::Float64
-  └──       return %17
+1 ─      (y = Main.pos(x))
+│   %2 = (y * x)::Float64
+│   %3 = (%2 + 1)::Float64
+│   %4 = Main.sin(%3)::Float64
+└──      return %4
 ```
 
 Interpreting the output of [`@code_warntype`](@ref), like that of its cousins [`@code_lowered`](@ref),

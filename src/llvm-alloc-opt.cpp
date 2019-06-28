@@ -4,11 +4,15 @@
 #undef DEBUG
 #include "llvm-version.h"
 
+#include <llvm-c/Core.h>
+#include <llvm-c/Types.h>
+
 #include <llvm/ADT/SmallSet.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/CFG.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -314,7 +318,7 @@ private:
     CheckInst::Stack check_stack;
     Lifetime::Stack lifetime_stack;
     ReplaceUses::Stack replace_stack;
-    std::map<BasicBlock*,Instruction*> first_safepoint;
+    std::map<BasicBlock*, llvm::WeakVH> first_safepoint;
 };
 
 void Optimizer::pushInstruction(Instruction *I)
@@ -408,8 +412,11 @@ bool Optimizer::isSafepoint(Instruction *inst)
 Instruction *Optimizer::getFirstSafepoint(BasicBlock *bb)
 {
     auto it = first_safepoint.find(bb);
-    if (it != first_safepoint.end())
-        return it->second;
+    if (it != first_safepoint.end()) {
+        Value *Val = it->second;
+        if (Val)
+            return cast<Instruction>(Val);
+    }
     Instruction *first = nullptr;
     for (auto &I: *bb) {
         if (isSafepoint(&I)) {
@@ -582,7 +589,11 @@ void Optimizer::checkInst(Instruction *I)
             if (auto II = dyn_cast<IntrinsicInst>(call)) {
                 if (auto id = II->getIntrinsicID()) {
                     if (id == Intrinsic::memset) {
+#if JL_LLVM_VERSION < 70000
                         assert(call->getNumArgOperands() == 5);
+#else
+                        assert(call->getNumArgOperands() == 4);
+#endif
                         use_info.hasmemset = true;
                         if (cur.offset == UINT32_MAX ||
                             !isa<ConstantInt>(call->getArgOperand(2)) ||
@@ -1486,4 +1497,9 @@ static RegisterPass<AllocOpt> X("AllocOpt", "Promote heap allocation to stack",
 Pass *createAllocOptPass()
 {
     return new AllocOpt();
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddAllocOptPass(LLVMPassManagerRef PM)
+{
+    unwrap(PM)->add(createAllocOptPass());
 }

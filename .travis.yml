@@ -40,7 +40,7 @@ matrix:
             - gfortran-5
     - os: osx
       env: ARCH="x86_64"
-      osx_image: xcode8
+      osx_image: xcode8.3
 cache: ccache
 branches:
   only:
@@ -61,7 +61,7 @@ before_install:
         ln -s /usr/bin/g++-5 $HOME/bin/x86_64-linux-gnu-g++;
         gcc --version;
         BAR="bar -i 30";
-        BUILDOPTS="-j5 VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1 USECCACHE=1";
+        BUILDOPTS="-j5 VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1 USECCACHE=1 USE_BINARYBUILDER_LIBUV=0 USE_BINARYBUILDER_LIBUNWIND=0 USE_BINARYBUILDER_LLVM=0";
         echo "override ARCH=$ARCH" >> Make.user;
         sudo sh -c "echo 0 > /proc/sys/net/ipv6/conf/lo/disable_ipv6";
         export JULIA_CPU_THREADS=4;
@@ -73,23 +73,18 @@ before_install:
         export PATH="$(brew --prefix ccache)/libexec:$PATH";
         BAR="pv -i 30";
         contrib/travis_fastfail.sh || exit 1;
-        brew tap staticfloat/julia > /dev/null;
-        brew rm --force $(brew deps --HEAD julia);
-        brew install -v gcc gmp mpfr pcre2 staticfloat/julia/openblas-julia staticfloat/julia/suite-sparse-julia staticfloat/juliadeps/libgfortran;
-        BUILDOPTS="-j3 USECLANG=1 USECCACHE=1 BINARYBUILDER_TRIPLET=x86_64-apple-darwin14 BINARYBUILDER_LLVM_ASSERTS=1";
-        BUILDOPTS="$BUILDOPTS USE_BINARYBUILDER_LLVM=1 LLVM_CONFIG=$TRAVIS_BUILD_DIR/usr/tools/llvm-config LLVM_SIZE=$TRAVIS_BUILD_DIR/usr/tools/llvm-size";
-        BUILDOPTS="$BUILDOPTS VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include FORCE_ASSERTIONS=1";
-        BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
-        for lib in SUITESPARSE BLAS LAPACK GMP MPFR LIBUNWIND; do
+        brew rm --force gcc gmp mpfr pcre2;
+        brew install -v gcc gmp mpfr pcre2;
+        BUILDOPTS="-j3 USECLANG=1 USECCACHE=1 VERBOSE=1 FORCE_ASSERTIONS=1";
+        for proj in LLVM LLVM_ASSERTS OPENBLAS SUITESPARSE OPENLIBM; do
+            BUILDOPTS="$BUILDOPTS USE_BINARYBUILDER_${proj}=1";
+        done;
+        for lib in GMP MPFR LIBUNWIND; do
             BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
         done;
-        export LDFLAGS="-L$(brew --prefix openblas-julia)/lib -L$(brew --prefix suite-sparse-julia)/lib";
         spawn_DYLD_FALLBACK_LIBRARY_PATH="/usr/local/lib:/lib:/usr/lib";
-        spawn_DYLD_FALLBACK_LIBRARY_PATH+=":$(brew --prefix openblas-julia)/lib";
-        spawn_DYLD_FALLBACK_LIBRARY_PATH+=":$(brew --prefix suite-sparse-julia)/lib";
         export JULIA_MACOS_SPAWN="DYLD_FALLBACK_LIBRARY_PATH=\"$spawn_DYLD_FALLBACK_LIBRARY_PATH\" \$1";
         export BUILDOPTS="$BUILDOPTS spawn=\$(JULIA_MACOS_SPAWN)";
-        make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
         export JULIA_CPU_THREADS=2;
         export JULIA_TEST_MAXRSS_MB=600;
         TESTSTORUN="all --skip linalg/triangular subarray"; fi # TODO: re enable these if possible without timing out
@@ -134,13 +129,13 @@ script:
     # skip tests if only files within the "doc" dir have changed
     - if [ $(echo "$FILES_CHANGED" | grep -cv '^doc/') -gt 0 ]; then
         /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
-        /tmp/julia/bin/julia --check-bounds=yes runtests.jl LibGit2/online Pkg/pkg download; fi
+        /tmp/julia/bin/julia --check-bounds=yes runtests.jl LibGit2/online download; fi
     - popd
     # test that the embedding code works on our installation
     - mkdir /tmp/embedding-test &&
-        make check -C /tmp/julia/share/julia/test/embedding \
-             JULIA="/tmp/julia/bin/julia" \
-             BIN=/tmp/embedding-test \
+        make check -C /tmp/julia/share/julia/test/embedding
+             JULIA="/tmp/julia/bin/julia"
+             BIN=/tmp/embedding-test
              "$(cd julia2 && make print-CC)"
     # restore initial state and prepare for travis caching
     - mv julia2 julia &&

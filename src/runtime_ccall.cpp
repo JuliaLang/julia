@@ -5,6 +5,8 @@
 #include <string>
 #include <cstdio>
 #include <llvm/Support/Host.h>
+#include <llvm/Support/raw_ostream.h>
+
 #include "julia.h"
 #include "julia_internal.h"
 #include "processor.h"
@@ -107,6 +109,85 @@ jl_value_t *jl_get_JIT(void)
     return jl_pchar_to_string(HostJITName.data(), HostJITName.size());
 }
 
+#ifndef MAXHOSTNAMELEN
+# define MAXHOSTNAMELEN 256
+#endif
+
+extern "C" int jl_getpid();
+
+// Form a file name from a pattern made by replacing tokens,
+// similar to many of those provided by ssh_config TOKENS:
+//
+//           %%    A literal `%'.
+//           %p    The process PID
+//           %d    Local user's home directory.
+//           %i    The local user ID.
+//           %L    The local hostname.
+//           %l    The local hostname, including the domain name.
+//           %u    The local username.
+std::string jl_format_filename(StringRef output_pattern)
+{
+    std::string buf;
+    llvm::raw_string_ostream outfile(buf);
+    bool special = false;
+    char hostname[MAXHOSTNAMELEN + 1];
+    uv_passwd_t pwd;
+    bool got_pwd = false;
+    for (auto c : output_pattern) {
+        if (special) {
+            if (!got_pwd && (c == 'i' || c == 'd' || c == 'u')) {
+                uv_os_get_passwd(&pwd);
+                got_pwd = true;
+            }
+            switch (c) {
+            case 'p':
+                outfile << jl_getpid();
+                break;
+            case 'd':
+                outfile << pwd.homedir;
+                break;
+            case 'i':
+                outfile << pwd.uid;
+                break;
+            case 'l':
+            case 'L':
+                if (gethostname(hostname, sizeof(hostname)) == 0) {
+                    hostname[sizeof(hostname) - 1] = '\0'; /* Null terminate, just to be safe. */
+                    outfile << hostname;
+                }
+#ifndef _OS_WINDOWS_
+                if (c == 'l' && getdomainname(hostname, sizeof(hostname)) == 0) {
+                    hostname[sizeof(hostname) - 1] = '\0'; /* Null terminate, just to be safe. */
+                    outfile << hostname;
+                }
+#endif
+                break;
+            case 'u':
+                outfile << pwd.username;
+                break;
+            default:
+                outfile << c;
+                break;
+            }
+            special = false;
+        }
+        else if (c == '%') {
+            special = true;
+        }
+        else {
+            outfile << c;
+        }
+    }
+    if (got_pwd)
+        uv_os_free_passwd(&pwd);
+    return outfile.str();
+}
+
+extern "C" JL_DLLEXPORT char *jl_format_filename(const char *output_pattern)
+{
+    return strdup(jl_format_filename(StringRef(output_pattern)).c_str());
+}
+
 
 static void *trampoline_freelist;
 
@@ -191,7 +272,7 @@ jl_value_t *jl_get_cfunction_trampoline(
 
     // not found, allocate a new one
     size_t n = jl_svec_len(fill);
-    void **nval = (void**)malloc(sizeof(void**) * (n + 1));
+    void **nval = (void**)malloc(sizeof(void*) * (n + 1));
     nval[0] = (void*)fobj;
     jl_value_t *result;
     JL_TRY {

@@ -8,6 +8,30 @@ import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, c
 # note that Adjoint and Transpose must be able to wrap not only vectors and matrices
 # but also factorizations, rotations, and other linear algebra objects, including
 # user-defined such objects. so do not restrict the wrapped type.
+"""
+    Adjoint
+
+Lazy wrapper type for an adjoint view of the underlying linear algebra object,
+usually an `AbstractVector`/`AbstractMatrix`, but also some `Factorization`, for instance.
+Usually, the `Adjoint` constructor should not be called directly, use [`adjoint`](@ref)
+instead. To materialize the view use [`copy`](@ref).
+
+This type is intended for linear algebra usage - for general data manipulation see
+[`permutedims`](@ref Base.permutedims).
+
+# Examples
+```jldoctest
+julia> A = [3+2im 9+2im; 8+7im  4+6im]
+2×2 Array{Complex{Int64},2}:
+ 3+2im  9+2im
+ 8+7im  4+6im
+
+julia> adjoint(A)
+2×2 Adjoint{Complex{Int64},Array{Complex{Int64},2}}:
+ 3-2im  8-7im
+ 9-2im  4-6im
+```
+"""
 struct Adjoint{T,S} <: AbstractMatrix{T}
     parent::S
     function Adjoint{T,S}(A::S) where {T,S}
@@ -15,6 +39,30 @@ struct Adjoint{T,S} <: AbstractMatrix{T}
         new(A)
     end
 end
+"""
+    Transpose
+
+Lazy wrapper type for a transpose view of the underlying linear algebra object,
+usually an `AbstractVector`/`AbstractMatrix`, but also some `Factorization`, for instance.
+Usually, the `Transpose` constructor should not be called directly, use [`transpose`](@ref)
+instead. To materialize the view use [`copy`](@ref).
+
+This type is intended for linear algebra usage - for general data manipulation see
+[`permutedims`](@ref Base.permutedims).
+
+# Examples
+```jldoctest
+julia> A = [3+2im 9+2im; 8+7im  4+6im]
+2×2 Array{Complex{Int64},2}:
+ 3+2im  9+2im
+ 8+7im  4+6im
+
+julia> transpose(A)
+2×2 Transpose{Complex{Int64},Array{Complex{Int64},2}}:
+ 3+2im  8+7im
+ 9+2im  4+6im
+```
+"""
 struct Transpose{T,S} <: AbstractMatrix{T}
     parent::S
     function Transpose{T,S}(A::S) where {T,S}
@@ -152,9 +200,6 @@ similar(A::AdjOrTrans, ::Type{T}, dims::Dims{N}) where {T,N} = similar(A.parent,
 parent(A::AdjOrTrans) = A.parent
 vec(v::TransposeAbsVec) = parent(v)
 
-cmp(A::AdjOrTransAbsVec, B::AdjOrTransAbsVec) = cmp(parent(A), parent(B))
-isless(A::AdjOrTransAbsVec, B::AdjOrTransAbsVec) = isless(parent(A), parent(B))
-
 ### concatenation
 # preserve Adjoint/Transpose wrapper around vectors
 # to retain the associated semantics post-concatenation
@@ -197,7 +242,7 @@ broadcast(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...
 *(u::AdjointAbsVec, v::AbstractVector) = dot(u.parent, v)
 *(u::TransposeAbsVec{T}, v::AbstractVector{T}) where {T<:Real} = dot(u.parent, v)
 function *(u::TransposeAbsVec, v::AbstractVector)
-    @assert !has_offset_axes(u, v)
+    require_one_based_indexing(u, v)
     @boundscheck length(u) == length(v) || throw(DimensionMismatch())
     return sum(@inbounds(u[k]*v[k]) for k in 1:length(u))
 end
@@ -228,7 +273,7 @@ pinv(v::TransposeAbsVec, tol::Real = 0) = pinv(conj(v.parent)).parent
 \(u::AdjOrTransAbsVec, v::AdjOrTransAbsVec) = pinv(u) * v
 
 
-## right-division \
+## right-division /
 /(u::AdjointAbsVec, A::AbstractMatrix) = adjoint(adjoint(A) \ u.parent)
 /(u::TransposeAbsVec, A::AbstractMatrix) = transpose(transpose(A) \ u.parent)
 /(u::AdjointAbsVec, A::Transpose{<:Any,<:AbstractMatrix}) = adjoint(conj(A.parent) \ u.parent) # technically should be adjoint(copy(adjoint(copy(A))) \ u.parent)

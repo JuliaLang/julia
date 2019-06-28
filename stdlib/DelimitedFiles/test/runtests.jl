@@ -206,8 +206,8 @@ end
             "Puerto Rico", "Olga Tanon", "Puerto Rico", "Olga Tañón",
             "Rep. of China", "Hsu Chi", "臺灣", "舒淇",
             "Rep. of China", "Ang Lee", "臺灣", "李安",
-            "Rep. of Korea", "AHN Sung-Gi", "한민국", "안성기",
-            "Rep. of Korea", "SHIM Eun-Ha", "한민국", "심은하",
+            "Rep. of Korea", "AHN Sung-Gi", "대한민국", "안성기",
+            "Rep. of Korea", "SHIM Eun-Ha", "대한민국", "심은하",
             "Russia", "Mikhail Gorbachev", "Россия", "Михаил Горбачёв",
             "Russia", "Boris Grebenshchikov", "Россия", "Борис Гребенщиков",
             "Slovenia", "\"Frane \"\"Jezek\"\" Milcinski", "Slovenija", "Frane Milčinski - Ježek",
@@ -286,6 +286,12 @@ end
 # issue #21207
 let data = "\"1\",\"灣\"\"灣灣灣灣\",\"3\""
     @test readdlm(IOBuffer(data), ',') == Any[1 "灣\"灣灣灣灣" 3]
+end
+
+# reading from a byte array (#16731)
+let data = Vector{UInt8}("1,2,3\n4,5,6"), origdata = copy(data)
+    @test readdlm(data, ',') == [1 2 3; 4 5 6]
+    @test data == origdata
 end
 
 # issue #11484: useful error message for invalid readdlm filepath arguments

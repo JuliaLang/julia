@@ -9,6 +9,7 @@
 @test_throws ErrorException NamedTuple{(:a,:a),Tuple{Int,Int}}
 @test_throws ErrorException NamedTuple{(:a,:a)}((1,2))
 @test_throws ErrorException NamedTuple{(:a, :b, :a), NTuple{3, Int}}((1, 2, 3))
+@test_throws ArgumentError NamedTuple{(:a, :b, :c), NTuple{3, Int}}((1, 2))
 
 @test fieldcount(NamedTuple{(:a,:b,:c)}) == 3
 @test fieldcount(NamedTuple{<:Any,Tuple{Int,Int}}) == 2
@@ -27,6 +28,16 @@
 @test length(NamedTuple()) == 0
 @test length((a=1,)) == 1
 @test length((a=1, b=0)) == 2
+
+@test firstindex((a=1, b=0)) == 1
+@test firstindex((a=1,)) == 1
+@test firstindex(NamedTuple()) == 1
+@test lastindex((a=1, b=0)) == 2
+@test lastindex((a=1,)) == 1
+@test lastindex(NamedTuple()) == 0
+
+@test isempty(NamedTuple())
+@test !isempty((a=1,))
 
 @test (a=1,b=2) === (a=1,b=2)
 @test (a=1,b=2) !== (b=1,a=2)
@@ -107,7 +118,7 @@ end
 @test get(()->0, (a=1,), :b) == 0
 @test Base.tail((a = 1, b = 2.0, c = 'x')) ≡ (b = 2.0, c = 'x')
 @test Base.tail((a = 1, )) ≡ NamedTuple()
-@test_throws MethodError Base.tail(NamedTuple())
+@test_throws ArgumentError Base.tail(NamedTuple())
 
 # syntax errors
 
@@ -243,3 +254,8 @@ y = map(v -> (a=v.a, b=v.a + v.b), [(a=1, b=missing), (a=1, b=2)])
 # Iterator constructor
 @test NamedTuple{(:a, :b), Tuple{Int, Float64}}(Any[1.0, 2]) === (a=1, b=2.0)
 @test NamedTuple{(:a, :b)}(Any[1.0, 2]) === (a=1.0, b=2)
+
+# Left-associative merge, issue #29215
+@test merge((a=1, b=2), (b=3, c=4), (c=5,)) === (a=1, b=3, c=5)
+@test merge((a=1, b=2), (b=3, c=(d=1,)), (c=(d=2,),)) === (a=1, b=3, c=(d=2,))
+@test merge((a=1, b=2)) === (a=1, b=2)

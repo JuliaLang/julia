@@ -88,6 +88,19 @@ end
             @testset "Unary minus for Symmetric/Hermitian matrices" begin
                 @test (-Symmetric(asym))::typeof(Symmetric(asym)) == -asym
                 @test (-Hermitian(aherm))::typeof(Hermitian(aherm)) == -aherm
+                @test (-Symmetric([true true; false false]))::Symmetric{Int,Matrix{Int}} == [-1 -1; -1 0]
+                @test (-Hermitian([true false; true false]))::Hermitian{Int,Matrix{Int}} == [-1 0; 0 0]
+            end
+
+            @testset "Addition and subtraction for Symmetric/Hermitian matrices" begin
+                for f in (+, -)
+                    @test (f(Symmetric(asym), Symmetric(aposs)))::typeof(Symmetric(asym)) == f(asym, aposs)
+                    @test (f(Hermitian(aherm), Hermitian(apos)))::typeof(Hermitian(aherm)) == f(aherm, apos)
+                    @test (f(Symmetric(real(asym)), Hermitian(aherm)))::typeof(Hermitian(aherm)) == f(real(asym), aherm)
+                    @test (f(Hermitian(aherm), Symmetric(real(asym))))::typeof(Hermitian(aherm)) == f(aherm, real(asym))
+                    @test (f(Symmetric(asym), Hermitian(aherm))) == f(asym, aherm)
+                    @test (f(Hermitian(aherm), Symmetric(asym))) == f(aherm, asym)
+                end
             end
 
             @testset "getindex and unsafe_getindex" begin
@@ -112,6 +125,8 @@ end
                         @test Hermitian(convert(Matrix{typ},aherm)) == convert(Hermitian{typ,Matrix{typ}},Hermitian(aherm))
                     end
                 end
+                @test Symmetric{eltya, Matrix{eltya}}(Symmetric(asym, :U)) === Symmetric(asym, :U)
+                @test Hermitian{eltya, Matrix{eltya}}(Hermitian(aherm, :U)) === Hermitian(aherm, :U)
             end
 
             @testset "issymmetric, ishermitian" begin
@@ -143,7 +158,7 @@ end
             @testset "transpose, adjoint" begin
                 S = Symmetric(asym)
                 H = Hermitian(aherm)
-                @test  transpose(S) === S == asym
+                @test transpose(S) === S == asym
                 @test adjoint(H) === H == aherm
                 if eltya <: Real
                     @test adjoint(S) === S == asym
@@ -152,7 +167,24 @@ end
                     @test adjoint(S) ==  Symmetric(conj(asym))
                     @test transpose(H) ==  Hermitian(copy(transpose(aherm)))
                 end
+                @test copy(adjoint(H)) == copy(aherm)
+                @test copy(transpose(S)) == copy(asym)
             end
+
+            @testset "real, imag" begin
+                S = Symmetric(asym)
+                H = Hermitian(aherm)
+                @test issymmetric(real(S))
+                @test ishermitian(real(H))
+                if eltya <: Real
+                    @test real(S) === S == asym
+                    @test real(H) === H == aherm
+                elseif eltya <: Complex
+                    @test issymmetric(imag(S))
+                    @test !ishermitian(imag(H))
+                end
+            end
+
         end
 
         @testset "linalg unary ops" begin
@@ -415,9 +447,6 @@ end
 
         @test T([true false; false true]) .+ true == T([2 1; 1 2])
     end
-
-    @test_throws ArgumentError Hermitian(X) + 2im*I
-    @test_throws ArgumentError Hermitian(X) - 2im*I
 end
 
 @testset "Issue #21981" begin
@@ -559,6 +588,21 @@ end
     @test (A / x)::Matrix == Matrix(A) / x
     A = Hermitian(C); x = 2.0im
     @test (A / x)::Matrix == Matrix(A) / x
+end
+
+@testset "issue #30814: Symmetric of Hermitian if diag is not real" begin
+    A = [1 2; 3 4] * (1 + im)
+    B = Hermitian(A)
+    @test_throws ArgumentError Symmetric(B) == Symmetric(Matrix(B))
+    A[1,1] = 1; A[2,2] = 4
+    @test Symmetric(B) == Symmetric(Matrix(B))
+end
+
+@testset "symmetric()/hermitian() for Numbers" begin
+    @test LinearAlgebra.symmetric(1, :U) == 1
+    @test LinearAlgebra.symmetric_type(Int) == Int
+    @test LinearAlgebra.hermitian(1, :U) == 1
+    @test LinearAlgebra.hermitian_type(Int) == Int
 end
 
 end # module TestSymmetric

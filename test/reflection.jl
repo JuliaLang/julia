@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Test
+
 # code_native / code_llvm (issue #8239)
 # It's hard to really test these, but just running them should be
 # sufficient to catch segfault bugs.
@@ -221,6 +223,10 @@ mutable struct TLayout
 end
 tlayout = TLayout(5,7,11)
 @test fieldnames(TLayout) == (:x, :y, :z) == Base.propertynames(tlayout)
+@test hasfield(TLayout, :y)
+@test !hasfield(TLayout, :a)
+@test hasproperty(tlayout, :x)
+@test !hasproperty(tlayout, :p)
 @test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:fieldcount(TLayout)] ==
     [(0, :x, Int8), (2, :y, Int16), (4, :z, Int32)]
 @test fieldnames(Complex) === (:re, :im)
@@ -234,6 +240,9 @@ tlayout = TLayout(5,7,11)
 @test fieldtype(Tuple{Vararg{Int8}}, 1) === Int8
 @test fieldtype(Tuple{Vararg{Int8}}, 10) === Int8
 @test_throws BoundsError fieldtype(Tuple{Vararg{Int8}}, 0)
+# issue #30505
+@test fieldtype(Union{Tuple{Char},Tuple{Char,Char}},2) === Char
+@test_throws BoundsError fieldtype(Union{Tuple{Char},Tuple{Char,Char}},3)
 
 @test fieldnames(NTuple{3, Int}) == ntuple(i -> fieldname(NTuple{3, Int}, i), 3) == (1, 2, 3)
 @test_throws ArgumentError fieldnames(Union{})
@@ -261,6 +270,10 @@ tlayout = TLayout(5,7,11)
 @test fieldtype(NamedTuple{(:a,:b)}, 2) === Any
 @test fieldtype((NamedTuple{(:a,:b),T} where T<:Tuple{Vararg{Integer}}), 2) === Integer
 @test_throws BoundsError fieldtype(NamedTuple{(:a,:b)}, 3)
+
+@test fieldtypes(NamedTuple{(:a,:b)}) == (Any, Any)
+@test fieldtypes((NamedTuple{T,Tuple{Int,String}} where T)) === (Int, String)
+@test fieldtypes(TLayout) === (Int8, Int16, Int32)
 
 import Base: datatype_alignment, return_types
 @test datatype_alignment(UInt16) == 2
@@ -297,7 +310,7 @@ for (f, t) in Any[(definitely_not_in_sysimg, Tuple{}),
     tt = Tuple{typeof(f), t.parameters...}
     (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), tt, meth.sig)::Core.SimpleVector
     @test ti === tt # intersection should be a subtype
-    world = typemax(UInt)
+    world = Core.Compiler.get_world_counter()
     linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, tt, env, world)
     params = Base.CodegenParams()
     llvmf1 = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, true, params)
@@ -321,13 +334,13 @@ function g15714(array_var15714)
         array_var15714[index_var15714] += 0
     end
     let index_var15714
-        for index_var15714 in eachindex(array_var15714)
+        for outer index_var15714 in eachindex(array_var15714)
             array_var15714[index_var15714] += 0
         end
         index_var15714
     end
     let index_var15714
-        for index_var15714 in eachindex(array_var15714)
+        for outer index_var15714 in eachindex(array_var15714)
             array_var15714[index_var15714] += 0
         end
         index_var15714
@@ -339,11 +352,11 @@ import InteractiveUtils.code_warntype
 used_dup_var_tested15714 = false
 used_unique_var_tested15714 = false
 function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types), must_used_vars)
-    src, rettype = code_typed(f, types)[1]
+    src, rettype = code_typed(f, types, optimize=false)[1]
     dupnames = Set()
     slotnames = Set()
     for name in src.slotnames
-        if name in slotnames
+        if name in slotnames || name === Symbol("")
             push!(dupnames, name)
         else
             push!(slotnames, name)
@@ -357,7 +370,7 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
     for sym in must_used_vars
         must_used_checked[sym] = false
     end
-    for str in (sprint(code_warntype, f, types),
+    for str in (sprint(io -> code_warntype(io, f, types, optimize=false)),
                 repr("text/plain", src))
         for var in must_used_vars
             @test occursin(string(var), str)
@@ -399,9 +412,9 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
     end
 end
 test_typed_ast_printing(f15714, Tuple{Vector{Float32}},
-                        [:array_var15714])
+                        [:array_var15714,  :index_var15714])
 test_typed_ast_printing(g15714, Tuple{Vector{Float32}},
-                        [:array_var15714])
+                        [:array_var15714,  :index_var15714])
 #This test doesn't work with the new optimizer because we drop slotnames
 #We may want to test it against debug info eventually
 #@test used_dup_var_tested15715
@@ -419,27 +432,13 @@ end
 
 
 # Linfo Tracing test
-tracefoo(x, y) = x+y
-didtrace = false
-tracer(x::Ptr{Cvoid}) = (@test isa(unsafe_pointer_to_objref(x), Core.MethodInstance); global didtrace = true; nothing)
-let ctracer = @cfunction(tracer, Cvoid, (Ptr{Cvoid},))
-    ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), ctracer)
-end
-meth = which(tracefoo,Tuple{Any,Any})
-ccall(:jl_trace_method, Cvoid, (Any,), meth)
-@test tracefoo(1, 2) == 3
-ccall(:jl_untrace_method, Cvoid, (Any,), meth)
-@test didtrace
-didtrace = false
-@test tracefoo(1.0, 2.0) == 3.0
-@test !didtrace
-ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), C_NULL)
-
+function tracefoo end
 # Method Tracing test
 methtracer(x::Ptr{Cvoid}) = (@test isa(unsafe_pointer_to_objref(x), Method); global didtrace = true; nothing)
 let cmethtracer = @cfunction(methtracer, Cvoid, (Ptr{Cvoid},))
     ccall(:jl_register_newmeth_tracer, Cvoid, (Ptr{Cvoid},), cmethtracer)
 end
+didtrace = false
 tracefoo2(x, y) = x*y
 @test didtrace
 didtrace = false
@@ -518,25 +517,26 @@ else
 end
 
 # PR #18888: code_typed shouldn't cache, return_types should
+f18888() = nothing
 let
-    world = typemax(UInt)
-    f18888() = return nothing
+    world = Core.Compiler.get_world_counter()
     m = first(methods(f18888, Tuple{}))
     @test m.specializations === nothing
     ft = typeof(f18888)
 
     code_typed(f18888, Tuple{}; optimize=false)
-    @test m.specializations !== nothing  # uncached, but creates the specializations entry
-    code = Core.Compiler.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
-    @test !isdefined(code, :inferred)
+    @test m.specializations isa Core.TypeMapEntry  # uncached, but creates the specializations entry
+    mi = Core.Compiler.specialize_method(m, Tuple{ft}, Core.svec())
+    @test Core.Compiler.inf_for_methodinstance(mi, world) === nothing
+    @test !isdefined(mi, :cache)
 
     code_typed(f18888, Tuple{}; optimize=true)
-    code = Core.Compiler.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
-    @test !isdefined(code, :inferred)
+    @test !isdefined(mi, :cache)
 
     Base.return_types(f18888, Tuple{})
-    code = Core.Compiler.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
-    @test isdefined(code, :inferred)
+    @test Core.Compiler.inf_for_methodinstance(mi, world) === mi.cache
+    @test mi.cache isa Core.CodeInstance
+    @test !isdefined(mi.cache, :next)
 end
 
 # New reflection methods in 0.6
@@ -597,7 +597,7 @@ end
 @test sizeof(TypeWithIrrelevantParameter{Int8}) == sizeof(Int32)
 @test sizeof(:abc) == 3
 @test sizeof(Symbol("")) == 0
-@test_throws(ErrorException("argument is an abstract type; size is indeterminate"),
+@test_throws(ErrorException("Abstract type Real does not have a definite size."),
              sizeof(Real))
 @test sizeof(Union{ComplexF32,ComplexF64}) == 16
 @test sizeof(Union{Int8,UInt8}) == 1
@@ -634,22 +634,24 @@ function test_similar_codeinfo(a, b)
 end
 
 @generated f22979(x...) = (y = 1; :(x[1] + x[2]))
-x22979 = (1, 2.0, 3.0 + im)
-T22979 = Tuple{typeof(f22979),typeof.(x22979)...}
-world = typemax(UInt)
-mtypes, msp, m = Base._methods_by_ftype(T22979, -1, world)[]
-instance = Core.Compiler.code_for_method(m, mtypes, msp, world, false)
-cinfo_generated = Core.Compiler.get_staged(instance)
-@test_throws ErrorException Base.uncompressed_ast(m)
+let
+    x22979 = (1, 2.0, 3.0 + im)
+    T22979 = Tuple{typeof(f22979), typeof.(x22979)...}
+    world = Core.Compiler.get_world_counter()
+    mtypes, msp, m = Base._methods_by_ftype(T22979, -1, world)[1]
+    instance = Core.Compiler.specialize_method(m, mtypes, msp)
+    cinfo_generated = Core.Compiler.get_staged(instance)
+    @test_throws ErrorException Base.uncompressed_ast(m)
 
-test_similar_codeinfo(code_lowered(f22979, typeof(x22979))[1], cinfo_generated)
+    test_similar_codeinfo(code_lowered(f22979, typeof(x22979))[1], cinfo_generated)
 
-cinfos = code_lowered(f22979, typeof.(x22979), generated = true)
-@test length(cinfos) == 1
-cinfo = cinfos[]
-test_similar_codeinfo(cinfo, cinfo_generated)
+    cinfos = code_lowered(f22979, typeof.(x22979), generated=true)
+    @test length(cinfos) == 1
+    cinfo = cinfos[1]
+    test_similar_codeinfo(cinfo, cinfo_generated)
+    @test_throws ErrorException code_lowered(f22979, typeof.(x22979), generated=false)
+end
 
-@test_throws ErrorException code_lowered(f22979, typeof.(x22979), generated = false)
 
 module MethodDeletion
 using Test, Random
@@ -789,6 +791,33 @@ Base.delete_method(m)
 
 end
 
+module HasmethodKwargs
+using Test
+f(x::Int; y=3) = x + y
+@test hasmethod(f, Tuple{Int})
+@test hasmethod(f, Tuple{Int}, ())
+@test hasmethod(f, Tuple{Int}, (:y,))
+@test !hasmethod(f, Tuple{Int}, (:jeff,))
+@test !hasmethod(f, Tuple{Int}, (:y,), world=typemin(UInt))
+g(; b, c, a) = a + b + c
+h(; kwargs...) = 4
+for gh = (g, h)
+    @test hasmethod(gh, Tuple{})
+    @test hasmethod(gh, Tuple{}, ())
+    @test hasmethod(gh, Tuple{}, (:a,))
+    @test hasmethod(gh, Tuple{}, (:a, :b))
+    @test hasmethod(gh, Tuple{}, (:a, :b, :c))
+end
+@test !hasmethod(g, Tuple{}, (:a, :b, :c, :d))
+@test hasmethod(h, Tuple{}, (:a, :b, :c, :d))
+end
+
+# issue #31353
+function f31353(f, x::Array{<:Dict})
+end
+@test  hasmethod(f31353, Tuple{Any, Array{D}} where D<:Dict)
+@test !hasmethod(f31353, Tuple{Any, Array{D}} where D<:AbstractDict)
+
 # issue #26267
 module M26267
 import Test
@@ -805,3 +834,55 @@ f20872(::Val, ::Val) = false
 @test which(f20872, Tuple{Val,Val}).sig == Tuple{typeof(f20872), Val, Val}
 @test which(f20872, Tuple{Val,Val{N}} where N).sig == Tuple{typeof(f20872), Val, Val}
 @test_throws ErrorException which(f20872, Tuple{Any,Val{N}} where N)
+
+module M29962 end
+# make sure checking if a binding is deprecated does not resolve it
+@test !Base.isdeprecated(M29962, :sin) && !Base.isbindingresolved(M29962, :sin)
+
+# @locals
+using Base: @locals
+let
+    local x, y
+    global z
+    @test isempty(keys(@locals))
+    x = 1
+    @test @locals() == Dict{Symbol,Any}(:x=>1)
+    y = ""
+    @test @locals() == Dict{Symbol,Any}(:x=>1,:y=>"")
+    for i = 8:8
+        @test @locals() == Dict{Symbol,Any}(:x=>1,:y=>"",:i=>8)
+    end
+    for i = 42:42
+        local x
+        @test @locals() == Dict{Symbol,Any}(:y=>"",:i=>42)
+    end
+    @test @locals() == Dict{Symbol,Any}(:x=>1,:y=>"")
+    x = (y,)
+    @test @locals() == Dict{Symbol,Any}(:x=>("",),:y=>"")
+end
+
+function _test_at_locals1(::Any, ::Any)
+    x = 1
+    @test @locals() == Dict{Symbol,Any}(:x=>1)
+end
+_test_at_locals1(1,1)
+function _test_at_locals2(a::Any, ::Any)
+    x = 2
+    @test @locals() == Dict{Symbol,Any}(:x=>2,:a=>a)
+end
+_test_at_locals2(1,1)
+
+@testset "issue #31687" begin
+    import InteractiveUtils._dump_function
+
+    @noinline f31687_child(i) = f31687_nonexistent(i)
+    f31687_parent() = f31687_child(0)
+    params = Base.CodegenParams(cached=false)
+    _dump_function(f31687_parent, Tuple{},
+                   #=native=#false, #=wrapper=#false, #=strip=#false,
+                   #=dump_module=#true, #=syntax=#:att, #=optimize=#false, :none,
+                   params)
+end
+
+@test nameof(Any) === :Any
+@test nameof(:) === :Colon

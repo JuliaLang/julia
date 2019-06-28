@@ -19,8 +19,10 @@ Print `args` using C `printf` style format specification string, with some cavea
 equally close to the numeric values of two possible output strings, the output
 string further away from zero is chosen.
 
-Optionally, an `IOStream`
+Optionally, an [`IOStream`](@ref)
 may be passed as the first argument to redirect output.
+
+See also: [`@sprintf`](@ref)
 
 # Examples
 ```jldoctest

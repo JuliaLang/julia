@@ -98,7 +98,8 @@ macro horner(x, p...)
     for i = length(p)-1:-1:1
         ex = :(muladd(t, $ex, $(esc(p[i]))))
     end
-    Expr(:block, :(t = $(esc(x))), ex)
+    ex = quote local r = $ex end # structure this to add exactly one line number node for the macro
+    return Expr(:block, :(local t = $(esc(x))), ex, :r)
 end
 
 # Evaluate p[1] + z*p[2] + z^2*p[3] + ... + z^(n-1)*p[n].  This uses
@@ -505,7 +506,7 @@ julia> sqrt(big(81))
 9.0
 
 julia> sqrt(big(-81))
-ERROR: DomainError with -8.1e+01:
+ERROR: DomainError with -81.0:
 NaN result for non-NaN input.
 Stacktrace:
  [1] sqrt(::BigFloat) at ./mpfr.jl:501
@@ -520,7 +521,13 @@ sqrt(x::Real) = sqrt(float(x))
 """
     hypot(x, y)
 
-Compute the hypotenuse ``\\sqrt{x^2+y^2}`` avoiding overflow and underflow.
+Compute the hypotenuse ``\\sqrt{|x|^2+|y|^2}`` avoiding overflow and underflow.
+
+This code is an implementation of the algorithm described in:
+An Improved Algorithm for `hypot(a,b)`
+by Carlos F. Borges
+The article is available online at ArXiv at the link
+  https://arxiv.org/abs/1904.09481
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -534,9 +541,53 @@ ERROR: DomainError with -2.914184810805068e18:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
 [...]
+
+julia> hypot(3, 4im)
+5.0
 ```
 """
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
+hypot(x::Complex, y::Complex) = hypot(promote(abs(x),abs(y))...)
+hypot(x::Integer, y::Integer) = hypot(promote(float(x), float(y))...)
+function hypot(x::T,y::T) where T<:AbstractFloat
+    #Return Inf if either or both imputs is Inf (Compliance with IEEE754)
+    if isinf(x) || isinf(y)
+        return convert(T,Inf)
+    end
+
+    # Order the operands
+    ax,ay = abs(x), abs(y)
+    if ay > ax
+        ax,ay = ay,ax
+    end
+
+    # Widely varying operands
+    if ay <= ax*sqrt(eps(T)/2)  #Note: This also gets ay == 0
+        return ax
+    end
+
+    # Operands do not vary widely
+    scale = eps(sqrt(floatmin(T)))  #Rescaling constant
+    if ax > sqrt(floatmax(T)/2)
+        ax = ax*scale
+        ay = ay*scale
+        scale = inv(scale)
+    elseif ay < sqrt(floatmin(T))
+        ax = ax/scale
+        ay = ay/scale
+    else
+        scale = one(scale)
+    end
+    h = sqrt(muladd(ax,ax,ay*ay))
+    if h <= 2*ay
+        delta = h-ay
+        h -= muladd(delta,delta-2*(ax-ay),ax*(2*delta - ax))/(2*h)
+    else
+        delta = h-ax
+        h -= muladd(delta,delta,muladd(ay,(4*delta-ay),2*delta*(ax-2*ay)))/(2*h)
+    end
+    h*scale
+end
 function hypot(x::T, y::T) where T<:Number
     ax = abs(x)
     ay = abs(y)
@@ -565,7 +616,16 @@ end
 """
     hypot(x...)
 
-Compute the hypotenuse ``\\sqrt{\\sum x_i^2}`` avoiding overflow and underflow.
+Compute the hypotenuse ``\\sqrt{\\sum |x_i|^2}`` avoiding overflow and underflow.
+
+# Examples
+```jldoctest
+julia> hypot(-5.7)
+5.7
+
+julia> hypot(3, 4im, 12.0)
+13.0
+```
 """
 hypot(x::Number...) = sqrt(sum(abs2(y) for y in x))
 
@@ -1057,6 +1117,7 @@ Return positive part of the high word of `x` as a `UInt32`.
 include("special/cbrt.jl")
 include("special/exp.jl")
 include("special/exp10.jl")
+include("special/ldexp_exp.jl")
 include("special/hyperbolic.jl")
 include("special/trig.jl")
 include("special/rem_pio2.jl")
@@ -1069,5 +1130,6 @@ for f in (:(acos), :(acosh), :(asin), :(asinh), :(atan), :(atanh),
           :(log2), :(exponent), :(sqrt))
     @eval $(f)(::Missing) = missing
 end
+clamp(::Missing, lo, hi) = missing
 
 end # module

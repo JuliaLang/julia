@@ -33,11 +33,7 @@ function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
         print(io, ": attempt to access ")
-        if isa(ex.a, AbstractArray)
-            summary(io, ex.a)
-        else
-            show(io, MIME"text/plain"(), ex.a)
-        end
+        summary(io, ex.a)
         if isdefined(ex, :i)
             !isa(ex.a, AbstractArray) && print(io, "\n ")
             print(io, " at index [")
@@ -56,13 +52,17 @@ function showerror(io::IO, ex::TypeError)
     if ex.expected === Bool
         print(io, "non-boolean (", typeof(ex.got), ") used in boolean context")
     else
-        if isa(ex.got, Type)
+        if isvarargtype(ex.got)
+            targs = (ex.got,)
+        elseif isa(ex.got, Type)
             targs = ("Type{", ex.got, "}")
         else
             targs = (typeof(ex.got),)
         end
-        if isempty(ex.context)
+        if ex.context == ""
             ctx = "in $(ex.func)"
+        elseif ex.func === Symbol("keyword argument")
+            ctx = "in keyword argument $(ex.context)"
         else
             ctx = "in $(ex.func), in $(ex.context)"
         end
@@ -94,7 +94,7 @@ function showerror(io::IO, ex::InitError, bt; backtrace=true)
 end
 showerror(io::IO, ex::InitError) = showerror(io, ex, [])
 
-function showerror(io::IO, ex::DomainError, bt; backtrace=true)
+function showerror(io::IO, ex::DomainError)
     if isa(ex.val, AbstractArray)
         compact = get(io, :compact, true)
         limit = get(io, :limit, true)
@@ -106,17 +106,24 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
     if isdefined(ex, :msg)
         print(io, ":\n", ex.msg)
     end
-    backtrace && show_backtrace(io, bt)
     nothing
 end
 
 function showerror(io::IO, ex::SystemError)
-    if ex.extrainfo === nothing
-        print(io, "SystemError: $(ex.prefix): $(Libc.strerror(ex.errnum))")
+    if @static(Sys.iswindows() ? ex.extrainfo isa WindowsErrorInfo : false)
+        errstring = Libc.FormatMessage(ex.extrainfo.errnum)
+        extrainfo = ex.extrainfo.extrainfo
     else
-        print(io, "SystemError (with $(ex.extrainfo)): $(ex.prefix): $(Libc.strerror(ex.errnum))")
+        errstring = Libc.strerror(ex.errnum)
+        extrainfo = ex.extrainfo
+    end
+    if extrainfo === nothing
+        print(io, "SystemError: $(ex.prefix): ", errstring)
+    else
+        print(io, "SystemError (with $extrainfo): $(ex.prefix): ", errstring)
     end
 end
+
 showerror(io::IO, ::DivideError) = print(io, "DivideError: integer division error")
 showerror(io::IO, ::StackOverflowError) = print(io, "StackOverflowError:")
 showerror(io::IO, ::UndefRefError) = print(io, "UndefRefError: access to undefined reference")
@@ -132,9 +139,9 @@ showerror(io::IO, ex::KeyError) = (print(io, "KeyError: key ");
                                    show(io, ex.key);
                                    print(io, " not found"))
 showerror(io::IO, ex::InterruptException) = print(io, "InterruptException:")
-showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: $(ex.msg)")
-showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: $(ex.msg)")
-showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: $(ex.msg)")
+showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: ", ex.msg)
+showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: ", ex.msg)
+showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: ", ex.msg)
 
 showerror(io::IO, ex::UndefKeywordError) =
     print(io, "UndefKeywordError: keyword argument $(ex.var) not assigned")
@@ -151,7 +158,9 @@ function showerror(io::IO, ex::UndefVarError)
 end
 
 function showerror(io::IO, ex::InexactError)
-    print(io, "InexactError: ", ex.func, '(', ex.T, ", ", ex.val, ')')
+    print(io, "InexactError: ", ex.func, '(')
+    nameof(ex.T) === ex.func || print(io, ex.T, ", ")
+    print(io, ex.val, ')')
 end
 
 typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
@@ -232,7 +241,7 @@ function showerror(io::IO, ex::MethodError)
     end
     if (ex.world != typemax(UInt) && hasmethod(ex.f, arg_types) &&
         !hasmethod(ex.f, arg_types, world = ex.world))
-        curworld = ccall(:jl_get_world_counter, UInt, ())
+        curworld = get_world_counter()
         println(io)
         print(io, "The applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
     end
@@ -384,7 +393,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 end
             end
 
-            if right_matches > 0 || length(ex.args) < 2
+            if right_matches > 0 || length(arg_types_param) < 2
                 if length(t_i) < length(sig)
                     # If the methods args is longer than input then the method
                     # arguments is printed as not a match
@@ -432,9 +441,9 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                         end
                     end
                 end
-                if ex.world < min_world(method)
+                if ex.world < reinterpret(UInt, method.primary_world)
                     print(iob, " (method too new to be called from this world context.)")
-                elseif ex.world > max_world(method)
+                elseif ex.world > reinterpret(UInt, method.deleted_world)
                     print(iob, " (method deleted before this world age.)")
                 end
                 # TODO: indicate if it's in the wrong world
@@ -626,9 +635,17 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     return ret
 end
 
-@noinline function throw_eachindex_mismatch(::IndexLinear, A...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(LinearIndices.(A), ", ", " and "))"))
-end
-@noinline function throw_eachindex_mismatch(::IndexCartesian, A...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same axes, got $(join(axes.(A), ", ", " and "))"))
+function show_exception_stack(io::IO, stack::Vector)
+    # Display exception stack with the top of the stack first.  This ordering
+    # means that the user doesn't have to scroll up in the REPL to discover the
+    # root cause.
+    nexc = length(stack)
+    for i = nexc:-1:1
+        if nexc != i
+            printstyled(io, "caused by [exception ", i, "]\n", color=:light_black)
+        end
+        exc, bt = stack[i]
+        showerror(io, exc, bt, backtrace = bt!==nothing)
+        println(io)
+    end
 end
