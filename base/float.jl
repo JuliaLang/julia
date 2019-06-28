@@ -141,62 +141,82 @@ end
 #   "Fast Half Float Conversion" by Jeroen van der Zijp
 #   ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
 #
-# With adjustments for round-to-nearest, ties to even.
+# With adjustments for round-to-nearest, ties to even
 #
-let _basetable = Vector{UInt16}(undef, 512),
-    _shifttable = Vector{UInt8}(undef, 512)
-    for i = 0:255
-        e = i - 127
-        if e < -25  # Very small numbers map to zero
-            _basetable[i|0x000+1] = 0x0000
-            _basetable[i|0x100+1] = 0x8000
-            _shifttable[i|0x000+1] = 25
-            _shifttable[i|0x100+1] = 25
-        elseif e < -14  # Small numbers map to denorms
-            _basetable[i|0x000+1] = 0x0000
-            _basetable[i|0x100+1] = 0x8000
-            _shifttable[i|0x000+1] = -e-1
-            _shifttable[i|0x100+1] = -e-1
-        elseif e <= 15  # Normal numbers just lose precision
-            _basetable[i|0x000+1] = ((e+15)<<10)
-            _basetable[i|0x100+1] = ((e+15)<<10) | 0x8000
-            _shifttable[i|0x000+1] = 13
-            _shifttable[i|0x100+1] = 13
-        elseif e < 128  # Large numbers map to Infinity
-            _basetable[i|0x000+1] = 0x7C00
-            _basetable[i|0x100+1] = 0xFC00
-            _shifttable[i|0x000+1] = 24
-            _shifttable[i|0x100+1] = 24
-        else  # Infinity and NaN's stay Infinity and NaN's
-            _basetable[i|0x000+1] = 0x7C00
-            _basetable[i|0x100+1] = 0xFC00
-            _shifttable[i|0x000+1] = 13
-            _shifttable[i|0x100+1] = 13
-        end
+# On modern x86 architectures, the memory-based tables are
+# slower than comparison tables in the instruction stream.
+# The reason for this discrepancy is most likely that under
+# SIMD, the table lookup requires a gather instruction, which
+# has a fairly high latency (~20 cycles or so) and also occupies
+# the memory units that would otherwise be fetching data from
+# memory. The same behavior has not been observed on other
+# architectures such as PowerPC, so we use the memory table
+# approach there.
+const IS_MEMORY_TABLE_FAST = !(Sys.ARCH in (:x86, :x86_64))
+
+@inline function compute_base_shift(e)
+    if e < -25  # Very small numbers map to zero
+        base = 0x0000
+        sh = 25
+    elseif e < -14  # Small numbers map to denorms
+        base = 0x0000
+        sh = -e-1
+    elseif e <= 15  # Normal numbers just lose precision
+        base = ((e+15)<<10)
+        sh = 13
+    elseif e < 128  # Large numbers map to Infinity
+        base = 0x7C00
+        sh = 24
+    else  # Infinity and NaN's stay Infinity and NaN's
+        base = 0x7C00
+        sh = 13
     end
-    global const shifttable = (_shifttable...,)
-    global const basetable = (_basetable...,)
+    (base, sh)
+end
+
+function lookup_base_sh end
+
+if IS_MEMORY_TABLE_FAST
+    let _basetable = Vector{UInt16}(undef, 512),
+        _shifttable = Vector{UInt8}(undef, 512)
+        for i = 0:255
+            e = i - 127
+            (base, sh) = compute_base_shift(e)
+            _basetable[i|0x000+1] = base
+            _basetable[i|0x100+1] = base | 0x8000
+            _shifttable[i|0x000+1] = sh
+            _shifttable[i|0x100+1] = sh
+        end
+        global const shifttable = (_shifttable...,)
+        global const basetable = (_basetable...,)
+        global l
+        @inline lookup_base_sh(es) =
+            (@inbounds basetable[es + 1],
+             @inbounds shifttable[es + 1])
+    end
+else
+    function lookup_base_sh(es)
+        (base, sh) = compute_base_shift(es & 0xff)
+        base |= (es & 0x100) << (significand_bits(Float32) - 16)
+        (base, sh)
+    end
 end
 
 function Float16(val::Float32)
     f = reinterpret(UInt32, val)
-    if isnan(val)
-        t = 0x8000 ⊻ (0x8000 & ((f >> 0x10) % UInt16))
-        return reinterpret(Float16, t ⊻ ((f >> 0xd) % UInt16))
-    end
-    i = ((f & ~significand_mask(Float32)) >> significand_bits(Float32)) + 1
-    @inbounds sh = shifttable[i]
+    es = ((f & ~significand_mask(Float32)) >> significand_bits(Float32))
+    (base, sh) = lookup_base_sh(es)
     f &= significand_mask(Float32)
     # If `val` is subnormal, the tables are set up to force the
     # result to 0, so the significand has an implicit `1` in the
     # cases we care about.
     f |= significand_mask(Float32) + 0x1
-    @inbounds h = (basetable[i] + (f >> sh) & significand_mask(Float16)) % UInt16
+    h = (base + (f >> sh) & significand_mask(Float16)) % UInt16
     # round
     # NOTE: we maybe should ignore NaNs here, but the payload is
     # getting truncated anyway so "rounding" it might not matter
     nextbit = (f >> (sh-1)) & 1
-    if nextbit != 0
+    if !isnan(val) & nextbit != 0
         # Round halfway to even or check lower bits
         if h&1 == 1 || (f & ((1<<(sh-1))-1)) != 0
             h += UInt16(1)
