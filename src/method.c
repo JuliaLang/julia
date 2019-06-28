@@ -573,6 +573,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->sig = NULL;
     m->slot_syms = NULL;
     m->ambig = jl_nothing;
+    m->resorted = jl_nothing;
     m->roots = NULL;
     m->module = module;
     m->source = NULL;

@@ -36,7 +36,7 @@ end
 
 @test length(methods(ambig, (Int, Int))) == 1
 @test length(methods(ambig, (UInt8, Int))) == 0
-@test length(Base.methods_including_ambiguous(ambig, (UInt8, Int))) == 2
+@test length(Base.methods_including_ambiguous(ambig, (UInt8, Int))) == 3
 
 @test ambig("hi", "there") == 1
 @test ambig(3.1, 3.2) == 5
@@ -58,11 +58,13 @@ let err = try
     Base.showerror(io, err)
     lines = split(String(take!(io)), '\n')
     ambig_checkline(str) = startswith(str, "  ambig(x, y::Integer) in $curmod_str at") ||
-                           startswith(str, "  ambig(x::Integer, y) in $curmod_str at")
+                           startswith(str, "  ambig(x::Integer, y) in $curmod_str at") ||
+                           startswith(str, "  ambig(x::Number, y) in $curmod_str at")
     @test ambig_checkline(lines[2])
     @test ambig_checkline(lines[3])
-    @test lines[4] == "Possible fix, define"
-    @test lines[5] == "  ambig(::Integer, ::Integer)"
+    @test ambig_checkline(lines[4])
+    @test lines[5] == "Possible fix, define"
+    @test lines[6] == "  ambig(::Integer, ::Integer)"
 end
 
 ## Other ways of accessing functions
@@ -226,20 +228,27 @@ end
 @test isempty(detect_ambiguities(Ambig17648))
 
 module Ambig8
-using Base: DimsInteger, Indices
-g18307(::Union{Indices,Dims}, I::AbstractVector{T}...) where {T<:Integer} = 1
-g18307(::DimsInteger) = 2
-g18307(::DimsInteger, I::Integer...) = 3
+# complex / unsorted(-able) ambiguities
+f(::Union{typeof(pi), Integer}) =  1
+f(::Union{AbstractIrrational, Int}) =  2
+f(::Irrational) = 3
+f(::Signed) = 4
+g(::Irrational) = 3
+g(::Signed) = 4
+g(::Union{typeof(pi), Integer}) =  1
+g(::Union{AbstractIrrational, Int}) =  2
+struct Irrational2 <: AbstractIrrational; end
 end
-try
-    # want this to be a test_throws MethodError, but currently it's not (see #18307)
-    Ambig8.g18307((1,))
-catch err
-    if isa(err, MethodError)
-        error("Test correctly returned a MethodError, please change to @test_throws MethodError")
-    else
-        rethrow()
-    end
+@test isempty(methods(Ambig8.f, (Int,)))
+@test isempty(methods(Ambig8.g, (Int,)))
+for f in (Ambig8.f, Ambig8.g)
+    @test length(methods(f, (Integer,))) == 2
+    @test f(0x00) == 1
+    @test f(Ambig8.Irrational2()) == 2
+    @test f(MathConstants.γ) == 3
+    @test f(Int8(0)) == 4
+    @test_throws MethodError f(0)
+    @test_throws MethodError f(pi)
 end
 
 module Ambig9
