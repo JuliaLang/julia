@@ -87,7 +87,7 @@ end
 
 function map_completion_text(completions)
     c, r, res = completions
-    return map(completion_text, c), r, res
+    return unique!(map(completion_text, c)), r, res
 end
 
 test_complete(s) = map_completion_text(completions(s,lastindex(s)))
