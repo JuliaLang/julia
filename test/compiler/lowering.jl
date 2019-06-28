@@ -7,7 +7,7 @@ function fl_expand_forms(ex)
 end
 
 # Make it easy to replace fl_expand_forms with a julia version in the future.
-expand_forms = ex->fl_expand_forms(ex)
+_expand_forms = fl_expand_forms
 
 function lift_lowered_expr!(ex, nextids, valmap, lift_full)
     if ex isa SSAValue
@@ -150,7 +150,7 @@ end
 
 # For interactive convenience in constructing test cases with flisp based lowering
 function desugar(ex; lift=:full)
-    expanded = expand_forms(ex)
+    expanded = _expand_forms(ex)
     if lift == :full || lift == :partial
         lift_lowered_expr(expanded; lift_full=(lift == :full))
     else
@@ -236,7 +236,7 @@ macro testset_desugar(name, block)
         input = exs[1]
         ref = exs[2]
         ex = quote
-            input = lift_lowered_expr(expand_forms($(Expr(:quote, input))))
+            input = lift_lowered_expr(_expand_forms($(Expr(:quote, input))))
             ref = lower_ref_expr($(Expr(:quote, ref)))
             @test input == ref
             if input != ref
@@ -260,28 +260,6 @@ end
 
 #-------------------------------------------------------------------------------
 # Tests
-
-@testset_desugar "Property notation" begin
-    # flisp: (expand-fuse-broadcast)
-    a.b
-    Top.getproperty(a, :b)
-
-    a.b.c
-    Top.getproperty(Top.getproperty(a, :b), :c)
-
-    a.b=c
-    begin
-        Top.setproperty!(a, :b, c)
-        maybe_unused(c)
-    end
-
-    a.b.c=d
-    begin
-        ssa1 = Top.getproperty(a, :b)
-        Top.setproperty!(ssa1, :c, d)
-        maybe_unused(d)
-    end
-end
 
 @testset_desugar "Index notation; getindex" begin
     # Indexing
@@ -325,22 +303,6 @@ end
         Core._apply(Top.getindex, Core.tuple(a),
                     ssa1,
                     Core.tuple(Top.lastindex(a, Top.:+(1, Top.length(ssa1)))))
-    end
-end
-
-@testset_desugar "Index notation; setindex!" begin
-    # flisp: (lambda in expand-table)
-    a[i] = b
-    begin
-        Top.setindex!(a, b, i)
-        maybe_unused(b)
-    end
-
-    a[i,end] = b+c
-    begin
-        ssa1 = b+c
-        Top.setindex!(a, ssa1, i, Top.lastindex(a,2))
-        maybe_unused(ssa1)
     end
 end
 
@@ -499,8 +461,17 @@ end
     @Expr(:error, "\"\$\" expression outside quote")
 end
 
-@testset_desugar "Broadcast" begin
+@testset_desugar "Dot syntax; broadcast/getproperty" begin
     # flisp: (expand-fuse-broadcast)
+
+    # Property access
+    a.b
+    Top.getproperty(a, :b)
+
+    a.b.c
+    Top.getproperty(Top.getproperty(a, :b), :c)
+
+    # Broadcast
     # Basic
     x .+ y
     Top.materialize(Top.broadcasted(+, x, y))
@@ -594,6 +565,34 @@ end
 
 @testset_desugar "Assignment" begin
     # flisp: (lambda in expand-table)
+
+    # property notation
+    a.b = c
+    begin
+        Top.setproperty!(a, :b, c)
+        maybe_unused(c)
+    end
+
+    a.b.c = d
+    begin
+        ssa1 = Top.getproperty(a, :b)
+        Top.setproperty!(ssa1, :c, d)
+        maybe_unused(d)
+    end
+
+    # setindex
+    a[i] = b
+    begin
+        Top.setindex!(a, b, i)
+        maybe_unused(b)
+    end
+
+    a[i,end] = b+c
+    begin
+        ssa1 = b+c
+        Top.setindex!(a, ssa1, i, Top.lastindex(a,2))
+        maybe_unused(ssa1)
+    end
 
     # Assignment chain; nontrivial rhs
     x = y = f(a)
@@ -1313,11 +1312,11 @@ end
     # The following Expr heads are currently not touched by desugaring
     for head in [:quote, :top, :core, :globalref, :outerref, :module, :toplevel, :null, :meta, :using, :import, :export]
         ex = Expr(head, Expr(:foobar, :junk, nothing, 42))
-        @test expand_forms(ex) == ex
+        @test _expand_forms(ex) == ex
     end
     # flisp: inert,line have special representations on the julia side
-    @test expand_forms(QuoteNode(Expr(:$, :x))) == QuoteNode(Expr(:$, :x)) # flisp: `(inert ,expr)
-    @test expand_forms(LineNumberNode(1, :foo)) == LineNumberNode(1, :foo) # flisp: `(line ,line ,file)
+    @test _expand_forms(QuoteNode(Expr(:$, :x))) == QuoteNode(Expr(:$, :x)) # flisp: `(inert ,expr)
+    @test _expand_forms(LineNumberNode(1, :foo)) == LineNumberNode(1, :foo) # flisp: `(line ,line ,file)
 end
 
 
