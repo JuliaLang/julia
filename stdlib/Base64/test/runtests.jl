@@ -16,12 +16,26 @@ dGhlIG1pbmQsIHRoYXQgYnkgYSBwZXJzZXZlcmFuY2Ugb2YgZGVsaWdodCBpbiB0aGUgY29udGlu
 dWVkIGFuZCBpbmRlZmF0aWdhYmxlIGdlbmVyYXRpb24gb2Yga25vd2xlZGdlLCBleGNlZWRzIHRo
 ZSBzaG9ydCB2ZWhlbWVuY2Ugb2YgYW55IGNhcm5hbCBwbGVhc3VyZS4="""
 
+
+const textJoyce = "What clashes here of wills gen wonts, oystrygods gaggin fishygods! Brekkek Kekkek Kekkek Kekkek! Koax Koax Koax! Ualu Ualu Ualu! Quaouauh! Where the Baddelaries partisans are still out to mathmaster Malachus Micgranes and the Verdons catapelting the camibalistics out of the Whoyteboyce of Hoodie Head. Assiegates and boomeringstroms. Sod's brood, be me fear! Sanglorians, save! Arms apeal with larms, appalling. Killykillkilly: a toll, a toll. What chance cuddleys, what cashels aired and ventilated! What bidimetoloves sinduced by what tegotetabsolvers!\n"
+const encodedMaxLine80 = """
+V2hhdCBjbGFzaGVzIGhlcmUgb2Ygd2lsbHMgZ2VuIHdvbnRzLCBveXN0cnlnb2RzIGdhZ2dpbiBmaXNo
+eWdvZHMhIEJyZWtrZWsgS2Vra2VrIEtla2tlayBLZWtrZWshIEtvYXggS29heCBLb2F4ISBVYWx1IFVh
+bHUgVWFsdSEgUXVhb3VhdWghIFdoZXJlIHRoZSBCYWRkZWxhcmllcyBwYXJ0aXNhbnMgYXJlIHN0aWxs
+IG91dCB0byBtYXRobWFzdGVyIE1hbGFjaHVzIE1pY2dyYW5lcyBhbmQgdGhlIFZlcmRvbnMgY2F0YXBl
+bHRpbmcgdGhlIGNhbWliYWxpc3RpY3Mgb3V0IG9mIHRoZSBXaG95dGVib3ljZSBvZiBIb29kaWUgSGVh
+ZC4gQXNzaWVnYXRlcyBhbmQgYm9vbWVyaW5nc3Ryb21zLiBTb2QncyBicm9vZCwgYmUgbWUgZmVhciEg
+U2FuZ2xvcmlhbnMsIHNhdmUhIEFybXMgYXBlYWwgd2l0aCBsYXJtcywgYXBwYWxsaW5nLiBLaWxseWtp
+bGxraWxseTogYSB0b2xsLCBhIHRvbGwuIFdoYXQgY2hhbmNlIGN1ZGRsZXlzLCB3aGF0IGNhc2hlbHMg
+YWlyZWQgYW5kIHZlbnRpbGF0ZWQhIFdoYXQgYmlkaW1ldG9sb3ZlcyBzaW5kdWNlZCBieSB3aGF0IHRl
+Z290ZXRhYnNvbHZlcnMhCg=="""
+
 @testset "Examples" begin
     # Encode and decode
     fname = tempname()
     open(fname, "w") do f
         opipe = Base64EncodePipe(f)
-        write(opipe,inputText)
+        write(opipe, inputText)
         @test close(opipe) === nothing
     end
 
@@ -58,15 +72,18 @@ ZSBzaG9ydCB2ZWhlbWVuY2Ugb2YgYW55IGNhcm5hbCBwbGVhc3VyZS4="""
     #@test read(ipipe, String) == inputText
 
     # Decode with two padding characters ("==")
-    ipipe = Base64DecodePipe(IOBuffer(string(encodedMaxLine76[1:end-2],"==")))
-    @test read(ipipe, String) == inputText[1:end-1]
+    ipipe = Base64DecodePipe(IOBuffer(string(encodedMaxLine76[1:end - 2], "==")))
+    @test read(ipipe, String) == inputText[1:end - 1]
 
     # Test incorrect format
-    ipipe = Base64DecodePipe(IOBuffer(encodedMaxLine76[1:end-3]))
+    ipipe = Base64DecodePipe(IOBuffer(encodedMaxLine76[1:end - 3]))
     @test_throws ArgumentError read(ipipe, String)
 
     # issue #21314
     @test base64decode(chomp("test")) == base64decode("test")
+
+    # issue #32397
+    @test String(base64decode(encodedMaxLine80)) == textJoyce;
 end
 
 @testset "Random data" begin
@@ -85,6 +102,7 @@ Base.show(io::IO, ::MIME"image/png", ::PNG) = print(io, "PNG")
     @test stringmime("text/html", "raw html data") == "raw html data"
     @test stringmime("text/plain", "string") == "\"string\""
     @test stringmime("image/png", UInt8[2,3,4,7]) == "AgMEBw=="
-    @test stringmime("text/plain", 3.141592653589793, context=:compact=>true) == "3.14159"
+    @test stringmime("text/plain", 3.141592653589793, context = :compact => true) == "3.14159"
     @test stringmime("image/png", PNG()) == stringmime(MIME("image/png"), PNG()) == "UE5H"
 end
+
