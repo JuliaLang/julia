@@ -1467,11 +1467,9 @@
 (define (partially-expand-ref e)
   (let ((a    (cadr e))
         (idxs (cddr e)))
-    (let* ((reuse (and (pair? a)
-                       (contains (lambda (x) (eq? x 'end))
-                                 idxs)))
-           (arr   (if reuse (make-ssavalue) a))
-           (stmts (if reuse `((= ,arr ,a)) '())))
+    (let* ((rename (not (effect-free? a)))
+           (arr   (if rename (make-ssavalue) a))
+           (stmts (if rename `((= ,arr ,a)) '())))
       (receive
        (new-idxs stuff) (process-indices arr idxs)
        `(block
