@@ -6,8 +6,13 @@ function fl_expand_forms(ex)
     ccall(:jl_call_scm_on_ast_formonly, Any, (Cstring, Any, Any), "jl-expand-forms", ex, Main)
 end
 
+include("../../base/compiler/lowering/desugar.jl")
+
 # Make it easy to replace fl_expand_forms with a julia version in the future.
-_expand_forms = fl_expand_forms
+if !isdefined(@__MODULE__, :use_flisp)
+    use_flisp = true
+end
+_expand_forms(ex) = use_flisp ? fl_expand_forms(ex) : expand_forms(ex)
 
 function lift_lowered_expr!(ex, nextids, valmap, lift_full)
     if ex isa SSAValue
@@ -118,7 +123,7 @@ lower_ref_expr(ex) = lower_ref_expr!(remove_linenums!(deepcopy(ex)))
 function diffdump(io::IOContext, ex1, ex2, n, prefix, indent)
     if ex1 == ex2
         isempty(prefix) || print(io, prefix)
-        dump(io, ex1, n, indent)
+        dump(io, ex1, 2, indent)
     else
         if ex1 isa Expr && ex2 isa Expr && ex1.head == ex2.head && length(ex1.args) == length(ex2.args)
             isempty(prefix) || print(io, prefix)
@@ -127,13 +132,13 @@ function diffdump(io::IOContext, ex1, ex2, n, prefix, indent)
             println(io, indent, "  args: Array{Any}(", size(ex1.args), ")")
             for i in 1:length(ex1.args)
                 prefix = string(indent, "    ", i, ": ")
-                diffdump(io, ex1.args[i], ex2.args[i], n - 1, prefix, string("    ", indent))
+                diffdump(io, ex1.args[i], ex2.args[i], 4, prefix, string("    ", indent))
                 i < length(ex1.args) && println(io)
             end
         else
-            printstyled(io, string(prefix, sprint(dump, ex1, n, indent; context=io)), color=:red)
+            printstyled(io, string(prefix, sprint(dump, ex1, 4, indent; context=io)), color=:green)
             println()
-            printstyled(io, string(prefix, sprint(dump, ex2, n, indent; context=io)), color=:green)
+            printstyled(io, string(prefix, sprint(dump, ex2, 4, indent; context=io)), color=:red)
         end
     end
 end
@@ -236,14 +241,14 @@ macro testset_desugar(name, block)
         input = exs[1]
         ref = exs[2]
         ex = quote
-            input = lift_lowered_expr(_expand_forms($(Expr(:quote, input))))
-            ref = lower_ref_expr($(Expr(:quote, ref)))
-            @test input == ref
-            if input != ref
+            expanded = lift_lowered_expr(_expand_forms($(Expr(:quote, input))))
+            reference = lower_ref_expr($(Expr(:quote, ref)))
+            @test expanded == reference
+            if expanded != reference
                 # Kinda crude. Would be much neater if Test supported custom/more
                 # capable diffing for failed tests.
                 println("Diff dump:")
-                diffdump(input, ref)
+                diffdump(expanded, reference)
             end
         end
         # Attribute the test to the correct line number
@@ -286,12 +291,25 @@ end
     a[f(end) + 1]
     Top.getindex(a, f(Top.lastindex(a)) + 1)
 
+    # array expr is only emitted once if it can have side effects
+    (f(x))[end]
+    begin
+        ssa1 = f(x)
+        Top.getindex(ssa1, Top.lastindex(ssa1))
+    end
+
     a[end][b[i]]
-    Top.getindex(Top.getindex(a, Top.lastindex(a)), Top.getindex(b,i))
+    begin
+        ssa1 = Top.getindex(a, Top.lastindex(a))
+        Top.getindex(ssa1, Top.getindex(b, i))
+    end
 
     # `end` replacment for first agument of Expr(:ref)
     a[f(end)[i]]
-    Top.getindex(a, Top.getindex(f(Top.lastindex(a)), i))
+    Top.getindex(a, begin
+                     ssa1 = f(Top.lastindex(a))
+                     Top.getindex(ssa1, i)
+                 end)
 
     # Interaction of `end` with splatting
     a[I..., end, J..., end]
@@ -364,6 +382,14 @@ end
 
     (x=a,y=b)
     Core.apply_type(Core.NamedTuple, Core.tuple(:x, :y))(Core.tuple(a, b))
+
+    # Why do we allow this form?
+    (;x=a,y=b)
+    Core.apply_type(Core.NamedTuple, Core.tuple(:x, :y))(Core.tuple(a, b))
+
+    # Mixed tuple + named tuple
+    (1; x=a, y=b)
+    @Expr(:error, "unexpected semicolon in tuple")
 end
 
 @testset_desugar "Splatting" begin
@@ -547,6 +573,17 @@ end
         begin
             ssa2 = Top.getindex(x, ssa1) + a
             Top.setindex!(x, ssa2, ssa1)
+            maybe_unused(ssa2)
+        end
+    end
+
+    # getproperty(x,y) only eval'd once.
+    x.y.z += a
+    begin
+        ssa1 = Top.getproperty(x, :y)
+        begin
+            ssa2 = Top.getproperty(ssa1, :z) + a
+            Top.setproperty!(ssa1, :z, ssa2)
             maybe_unused(ssa2)
         end
     end

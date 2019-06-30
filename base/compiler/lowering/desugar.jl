@@ -10,69 +10,242 @@
 
 using Core: SSAValue
 
+#-------------------------------------------------------------------------------
+# AST tools
+
 # :(f(arg; par)).arg s =>  [:f, Expr(:parameters, :par), :arg]
 has_parameters(args) = length(args) >= 2 && args[2] isa Expr && args[2].head === :parameters
-
+has_assignment(args) = any(isassignment, args)
 
 isquoted(ex) = ex isa QuoteNode || (ex isa Expr &&
                ex.head in (:quote, :top, :core, :globalref, :outerref, :break, :inert, :meta))
+issymbollike(ex) = ex isa Symbol || ex isa SSAValue
 
-# TODO: Shouldn't be global
-const _ssa_index = Ref(0)
-make_ssa() = SSAValue(_ssa_index += 1)
+isassignment(ex) = ex isa Expr && ex.head == :(=)
+
+# True if `ex` is trivially free of side effects (and hence safe to repeat)
+iseffectfree(ex) = !(ex isa Expr) || isquoted(ex)
+
+# FIXME: Counter Should be thread local or in expansion ctx
+let ssa_index = Ref(0)
+    global make_ssavalue() = SSAValue(ssa_index[] += 1)
+end
 
 top(ex) = Expr(:top, ex)
 core(ex) = Expr(:core, ex)
 mapargs(f, ex) = ex isa Expr ? Expr(ex.head, map(f, ex.args)...) : ex
 
-# replace `end` for the closest ref expression; don't go inside nested refs
-function replace_end(ex, a, n, tuples, last)
+# Symbol `s` occurs in ex
+occursin_ex(s::Symbol, ex::Symbol) = s === ex
+occursin_ex(s::Symbol, ex::Expr) = occursin_ex(s, ex.args)
+occursin_ex(s::Symbol, exs) = any(e->occursin_ex(s, e), exs)
+
+"""
+    make_ssa_if(need_ssa, ex, stmts)
+
+Return a name for the value of `ex` that can be used multiple times.
+An extra assignment is recorded into `stmts` if necessary.
+"""
+function make_ssa_if(need_ssa::Bool, ex, stmts)
+    if need_ssa
+        v = make_ssavalue()
+        push!(stmts, Expr(:(=), v, ex))
+        v
+    else
+        ex
+    end
+end
+
+make_ssa_if(need_ssa::Function, ex, stmts) = make_ssa_if(need_ssa(ex), ex, stmts)
+
+function check_no_assigments(ex)
+    for e in ex.args
+        !isassignment(e) || error("misplaced assigment statement in `$ex`")
+    end
+end
+error_unexpected_semicolon(ex) = error("unexpected semicolon in `$ex`")
+
+
+#-------------------------------------------------------------------------------
+
+"""
+Replace `end` for the closest ref expression; don't go inside nested refs
+`preceding_splats` are a list of the splatted arguments that precede index `n`.
+`end`s are replaced with a call to `lastindex(a)` if `n == nothing`, or
+`lastindex(a,n)`.
+"""
+function replace_end(ex, a, n, preceding_splats)
     if ex === :end
         # the appropriate computation for an `end` symbol for indexing
         # the array `a` in the `n`th index.
-        # `tuples` are a list of the splatted arguments that precede index `n`
-        # `last` = is this last index?
-        # returns a call to lastindex(a) or lastindex(a,n)
-        if isempty(tuples)
-            last && n == 1 ? Expr(:call, top(:lastindex), a) :
-                             Expr(:call, top(:lastindex), a, n)
-            #  @top(lastindex($a)) : @top(lastindex($a, $n)) ??
+        if isempty(preceding_splats)
+            n === nothing ? Expr(:call, top(:lastindex), a) :
+                            Expr(:call, top(:lastindex), a, n)
         else
-            dimno = Expr(:call, top(:+), n - length(tuples),
-                         map(t->:(Expr(:call, top(:length), t)), tuples)...)
+            dimno = Expr(:call, top(:+), n - length(preceding_splats),
+                         map(t->:(Expr(:call, top(:length), t)), preceding_splats)...)
             Expr(:call, top(:lastindex), a, dimno)
         end
     elseif !(ex isa Expr) || isquoted(ex)
         ex
     elseif ex.head == :ref
         # Only recurse into first argument of ref, not into index list.
-        Expr(:ref, replace_end(ex.args[1], a, n, tuples, last), ex.args[2:end]...)
+        Expr(:ref, replace_end(ex.args[1], a, n, preceding_splats), ex.args[2:end]...)
     else
-        mapargs(x->replace_end(x, a, n, tuples, last), ex)
+        mapargs(x->replace_end(x, a, n, preceding_splats), ex)
     end
 end
 
-# go through indices and replace the `end` symbol
-# a = array being indexed, i = list of indices
-# returns (values, index_list, stmts) where stmts are statements that need to
-# execute first.
-function process_indices(a, inds)
-    
-end
-
+# Expand Expr(:ref, indexable, indices...) by replacing `end` within `indices`
+# as necessary
 function partially_expand_ref(ex)
     a = ex.args[1]
-    idxs = ex.args[2]
+    stmts = []
+    arr = make_ssa_if(!iseffectfree, a, stmts)
+    preceding_splats = []
+    new_idxs = []
+    N = length(ex.args) - 1
+    # go through indices and replace any embedded `end` symbols
+    for i = 1:N
+        idx = ex.args[i+1]
+        n = N == 1 ? nothing : i
+        if idx isa Expr && idx.head == :...
+            idx = replace_end(idx.args[1], arr, n, preceding_splats)
+            tosplat = make_ssa_if(issymbollike, idx, stmts)
+            push!(preceding_splats, tosplat)
+            push!(new_idxs, Expr(:..., tosplat))
+        else
+            push!(new_idxs, replace_end(idx, arr, n, preceding_splats))
+        end
+    end
+    Expr(:block,
+         stmts...,
+         Expr(:call, top(:getindex), arr, new_idxs...))
+end
+
+
+#-------------------------------------------------------------------------------
+# Expansion entry point
+
+function expand_todo(ex)
+    Expr(ex.head, map(e->expand_forms(e), ex.args)...)
 end
 
 function expand_forms(ex)
-    if ex isa Symbol
-        ex
-    elseif ex isa Expr
-        head = ex.head
-        if head == :ref
-            !has_parameters(ex.args) || error("unexpected semicolon in array expression")
-            expand_forms(partially_expand_ref(ex))
-        end
+    if !(ex isa Expr)
+        return ex
+    end
+    head = ex.head
+    args = ex.args
+    # TODO: Use a hash table here like expand-table?
+    if head == :function
+        expand_todo(ex) # expand-function-def
+    elseif head == :->
+        expand_todo(ex) # expand-arrow
+    elseif head == :let
+        expand_todo(ex) # expand-let
+    elseif head == :macro
+        expand_todo(ex) # expand-macro-def
+    elseif head == :struct
+        expand_todo(ex) # expand-struct-def
+    elseif head == :try
+        expand_todo(ex) # expand-try
+    elseif head == :lambda
+        expand_todo(ex) # expand-table
+    elseif head == :block
+        expand_todo(ex) # expand-table
+    elseif head == :.
+        expand_todo(ex) # expand-fuse-broadcast
+    elseif head == :.=
+        expand_todo(ex) # expand-fuse-broadcast
+    elseif head == :<:
+        expand_todo(ex) # expand-table
+    elseif head == :>:
+        expand_todo(ex) # expand-table
+    elseif head == :where
+        expand_todo(ex) # expand-wheres
+    elseif head == :const
+        expand_todo(ex) # expand-const-decl
+    elseif head == :local
+        expand_todo(ex) # expand-local-or-global-decl
+    elseif head == :global
+        expand_todo(ex) # expand-local-or-global-decl
+    elseif head == :local_def
+        expand_todo(ex) # expand-local-or-global-decl
+    elseif head == :(=)
+        expand_todo(ex) # expand-table
+    elseif head == :abstract
+        expand_todo(ex) # expand-table
+    elseif head == :primitive
+        expand_todo(ex) # expand-table
+    elseif head == :comparison
+        expand_todo(ex) # expand-compare-chain
+    elseif head == :ref
+        !has_parameters(args) || error_unexpected_semicolon(ex)
+        expand_forms(partially_expand_ref(ex))
+    elseif head == :curly
+        expand_todo(ex) # expand-table
+    elseif head == :call
+        expand_todo(ex) # expand-table
+    elseif head == :do
+        expand_todo(ex) # expand-table
+    elseif head == :tuple
+        # TODO: NamedTuple lower-named-tuple
+        #if has_parameters(args)
+        #end
+        expand_forms(Expr(:call, core(:tuple), args...))
+    elseif head == :braces
+        expand_todo(ex) # expand-table
+    elseif head == :bracescat
+        expand_todo(ex) # expand-table
+    elseif head == :string
+        expand_todo(ex) # expand-table
+    elseif head == :(::)
+        expand_todo(ex) # expand-table
+    elseif head == :while
+        expand_todo(ex) # expand-table
+    elseif head == :break
+        expand_todo(ex) # expand-table
+    elseif head == :continue
+        expand_todo(ex) # expand-table
+    elseif head == :for
+        expand_todo(ex) # expand-for
+    elseif head == :&&
+        expand_todo(ex) # expand-and
+    elseif head == :||
+        expand_todo(ex) # expand-or
+    elseif head in (:(+=), :(-=), :(*=), :(.*=), :(/=), :(./=), :(//=), :(.//=),
+                    :(\=), :(.\=), :(.+=), :(.-=), :(^=), :(.^=), :(÷=), :(.÷=),
+                    :(%=), :(.%=), :(|=), :(.|=), :(&=), :(.&=), :($=), :(⊻=),
+                    :(.⊻=), :(<<=), :(.<<=), :(>>=), :(.>>=), :(>>>=), :(.>>>=))
+        expand_todo(ex) # lower-update-op
+    elseif head == :...
+        expand_todo(ex) # expand-table
+    elseif head == :$
+        expand_todo(ex) # expand-table
+    elseif head == :vect
+        !has_parameters(args) || error_unexpected_semicolon(ex)
+        check_no_assigments(ex)
+        expand_forms(Expr(:call, top(:vect), args...))
+    elseif head == :hcat
+        expand_todo(ex) # expand-table
+    elseif head == :vcat
+        expand_todo(ex) # expand-table
+    elseif head == :typed_hcat
+        expand_todo(ex) # expand-table
+    elseif head == :typed_vcat
+        expand_todo(ex) # expand-table
+    elseif head == Symbol("'")
+        expand_todo(ex) # expand-table
+    elseif head == :generator
+        expand_todo(ex) # expand-generator
+    elseif head == :flatten
+        expand_todo(ex) # expand-generator
+    elseif head == :comprehension
+        expand_todo(ex) # expand-table
+    elseif head == :typed_comprehension
+        expand_todo(ex) # lower-comprehension
+    else
+        Expr(head, map(e->expand_forms(e), args)...)
     end
 end
