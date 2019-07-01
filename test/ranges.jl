@@ -362,6 +362,20 @@ end
         @test intersect(1:3, 2) === intersect(2, 1:3) === 2:2
         @test intersect(1.0:3.0, 2) == intersect(2, 1.0:3.0) == [2.0]
     end
+    @testset "issubset" begin
+        @test issubset(1:3, 1:typemax(Int)) #32461
+        @test issubset(1:3, 1:3)
+        @test issubset(1:3, 1:4)
+        @test issubset(1:3, 0:3)
+        @test issubset(1:3, 0:4)
+        @test !issubset(1:5, 2:5)
+        @test !issubset(1:5, 1:4)
+        @test !issubset(1:5, 2:4)
+        @test issubset(Base.OneTo(5), Base.OneTo(10))
+        @test !issubset(Base.OneTo(10), Base.OneTo(5))
+        @test issubset(1:3:10, 1:10)
+        @test !issubset(1:10, 1:3:10)        
+    end
     @testset "sort/sort!/partialsort" begin
         @test sort(UnitRange(1,2)) == UnitRange(1,2)
         @test sort!(UnitRange(1,2)) == UnitRange(1,2)

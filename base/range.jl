@@ -847,6 +847,11 @@ function _findin(r::AbstractRange{<:Integer}, span::AbstractUnitRange{<:Integer}
     r isa AbstractUnitRange ? (ifirst:ilast) : (ifirst:1:ilast)
 end
 
+issubset(r::OneTo, s::OneTo) = r.stop <= s.stop
+
+issubset(r::AbstractUnitRange{<:Integer}, s::AbstractUnitRange{<:Integer}) = 
+    first(r) >= first(s) && last(r) <= last(s)
+
 ## linear operations on ranges ##
 
 -(r::OrdinalRange) = range(-first(r), step=-step(r), length=length(r))
