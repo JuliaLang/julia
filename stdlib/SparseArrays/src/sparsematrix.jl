@@ -405,16 +405,16 @@ end
 SparseMatrixCSC(M::Matrix) = sparse(M)
 function SparseMatrixCSC(T::SymTridiagonal)
     m = length(T.dv)
-    return sparse([1:m;2:m;1:m-1],[1:m;1:m-1;2:m],[T.dv;T.ev;T.ev], Int(m), Int(m))
+    return sparse([1:m;2:m;1:m-1], [1:m;1:m-1;2:m], [T.dv;T.ev;T.ev], Int(m), Int(m))
 end
 function SparseMatrixCSC(T::Tridiagonal)
     m = length(T.d)
-    return sparse([1:m;2:m;1:m-1],[1:m;1:m-1;2:m],[T.d;T.dl;T.du], Int(m), Int(m))
+    return sparse([1:m;2:m;1:m-1], [1:m;1:m-1;2:m], [T.d;T.dl;T.du], Int(m), Int(m))
 end
 function SparseMatrixCSC(B::Bidiagonal)
     m = length(B.dv)
     B.uplo == 'U' || return sparse([1:m;2:m],[1:m;1:m-1],[B.dv;B.ev], Int(m), Int(m)) # lower bidiagonal
-    return sparse([1:m;1:m-1],[1:m;2:m],[B.dv;B.ev], Int(m), Int(m)) # upper bidiagonal
+    return sparse([1:m;1:m-1], [1:m;2:m], [B.dv; B.ev], Int(m), Int(m)) # upper bidiagonal
 end
 function SparseMatrixCSC(D::Diagonal{T}) where T
     m = length(D.diag)
