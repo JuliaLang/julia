@@ -9,6 +9,7 @@ New language features
 Language changes
 ----------------
 
+* Empty ranges now compare equal, regardless of their startpoint and step ([#32348]).
 
 Multi-threading changes
 -----------------------
