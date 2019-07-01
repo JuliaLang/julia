@@ -15,6 +15,7 @@ end
 @testset "various constructors" begin
     c = Channel()
     @test eltype(c) == Any
+    @test c.sz_max == 0
 
     c = Channel(1)
     @test eltype(c) == Any
@@ -27,6 +28,10 @@ end
     c = Channel{Int}(1)
     @test eltype(c) == Int
     @test_throws MethodError put!(c, "Hello")
+
+    c = Channel{Int}()
+    @test eltype(c) == Int
+    @test c.sz_max == 0
 
     c = Channel{Int}(Inf)
     @test eltype(c) == Int

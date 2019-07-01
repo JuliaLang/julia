@@ -24,7 +24,7 @@ Other constructors:
 * `Channel(sz)`: equivalent to `Channel{Any}(sz)`
 
 !!! compat "Julia 1.3"
-  The default constructor `Channel()` was added in Julia 1.3.
+  The default constructor `Channel()` and default `sz=0` were added in Julia 1.3.
 """
 mutable struct Channel{T} <: AbstractChannel{T}
     cond_take::Threads.Condition                 # waiting for data to become available
@@ -36,7 +36,7 @@ mutable struct Channel{T} <: AbstractChannel{T}
     data::Vector{T}
     sz_max::Int                          # maximum size of channel
 
-    function Channel{T}(sz::Integer) where T
+    function Channel{T}(sz::Integer = 0) where T
         if sz < 0
             throw(ArgumentError("Channel size must be either 0, a positive integer or Inf"))
         end
