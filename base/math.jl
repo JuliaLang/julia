@@ -579,12 +579,20 @@ function hypot(x::T,y::T) where T<:AbstractFloat
         scale = one(scale)
     end
     h = sqrt(muladd(ax,ax,ay*ay))
-    if h <= 2*ay
-        delta = h-ay
-        h -= muladd(delta,delta-2*(ax-ay),ax*(2*delta - ax))/(2*h)
+    # This branch is correctly rounded but requires a native hardware fma.
+    if Base.Math.FMA_NATIVE
+        hsquared = h*h
+        axsquared = ax*ax
+        h -= (fma(-ay,ay,hsquared-axsquared) + fma(h,h,-hsquared) - fma(ax,ax,-axsquared))/(2*h)
+    # This branch is within one ulp of correctly rounded.
     else
-        delta = h-ax
-        h -= muladd(delta,delta,muladd(ay,(4*delta-ay),2*delta*(ax-2*ay)))/(2*h)
+        if h <= 2*ay
+            delta = h-ay
+            h -= muladd(delta,delta-2*(ax-ay),ax*(2*delta - ax))/(2*h)
+        else
+            delta = h-ax
+            h -= muladd(delta,delta,muladd(ay,(4*delta-ay),2*delta*(ax-2*ay)))/(2*h)
+        end
     end
     h*scale
 end
