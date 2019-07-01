@@ -82,7 +82,7 @@ $(BUILDDIR)/host/libsupport.a: $(BUILDDIR)/host/Makefile
 	$(MAKE) -C $(BUILDDIR)/host libsupport.a
 
 $(BUILDDIR)/host/libsupport-debug.a: $(BUILDDIR)/host/Makefile
-	$(MAKE) -C $(BUILDDIR)/host libsupport.a
+	$(MAKE) -C $(BUILDDIR)/host libsupport-debug.a
 
 clean:
 	rm -f $(BUILDDIR)/*.o
