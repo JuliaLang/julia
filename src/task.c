@@ -70,7 +70,7 @@ static void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
 static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
 
 #ifdef JL_HAVE_UNW_CONTEXT
-static JL_THREAD unw_cursor_t jl_basecursor;
+static JL_THREAD_LOCAL unw_cursor_t jl_basecursor;
 #endif
 
 #ifdef ALWAYS_COPY_STACKS
