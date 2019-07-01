@@ -466,13 +466,13 @@ ifneq ($(OS), WINNT)
 # Do not enable on windows to avoid warnings from libuv.
 JCXXFLAGS += -pedantic
 endif
-DEBUGFLAGS := -O0 -DJL_DEBUG_BUILD -fstack-protector-all
+DEBUGFLAGS := -DJL_DEBUG_BUILD
 SHIPFLAGS := -O3 -falign-functions
 ifeq ($(OS), emscripten)
-DEBUGFLAGS += -g4
+DEBUGFLAGS += -O3 -g4
 SHIPFLAGS += -g3
 else
-DEBUGFLAGS += -ggdb2
+DEBUGFLAGS += -O0 -ggdb2 -fstack-protector-all
 SHIPFLAGS += -ggdb2
 endif
 endif

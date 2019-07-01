@@ -3,6 +3,7 @@
 #include "julia_internal.h"
 #include "julia_gcext.h"
 #include "gc.h"
+#include <emscripten.h>
 
 extern void srand(unsigned int);
 extern char * getenv(const char *);
@@ -12238,6 +12239,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(ptrdiff_t) jl_unbox_long(eval_value(args[6], s))
 		);
 	return jl_nothing;
+} else if (strcmp(target, "emscripten_sleep") == 0) {
+    emscripten_sleep(jl_unbox_long(eval_value(args[5], s)));
+    return jl_nothing;
 } 
 
 return NULL;

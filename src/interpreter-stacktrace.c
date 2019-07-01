@@ -423,7 +423,7 @@ JL_DLLEXPORT size_t jl_capture_interp_frame(uintptr_t *data, uintptr_t sp, uintp
     return 0;
 }
 #define CALLBACK_ABI
-void *NOINLINE enter_interpreter_frame(void *(*callback)(interpreter_state *, void *), void *arg) {
+void *enter_interpreter_frame(void *(*callback)(interpreter_state *, void *), void *arg) {
     interpreter_state state = {};
     return callback(&state, arg);
 }
