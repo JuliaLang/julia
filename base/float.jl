@@ -137,6 +137,45 @@ function Float32(x::Int128)
     reinterpret(Float32, s | d + y)
 end
 
+# Float32 -> Float16 algorithm from:
+#   "Fast Half Float Conversion" by Jeroen van der Zijp
+#   ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
+
+let _basetable = Vector{UInt16}(undef, 512),
+    _shifttable = Vector{UInt8}(undef, 512)
+    for i = 0:255
+        e = i - 127
+        if e < -24  # Very small numbers map to zero
+            _basetable[i|0x000+1] = 0x0000
+            _basetable[i|0x100+1] = 0x8000
+            _shifttable[i|0x000+1] = 24
+            _shifttable[i|0x100+1] = 24
+        elseif e < -14  # Small numbers map to denorms
+            _basetable[i|0x000+1] = (0x0400>>(-e-14))
+            _basetable[i|0x100+1] = (0x0400>>(-e-14)) | 0x8000
+            _shifttable[i|0x000+1] = -e-1
+            _shifttable[i|0x100+1] = -e-1
+        elseif e <= 15  # Normal numbers just lose precision
+            _basetable[i|0x000+1] = ((e+15)<<10)
+            _basetable[i|0x100+1] = ((e+15)<<10) | 0x8000
+            _shifttable[i|0x000+1] = 13
+            _shifttable[i|0x100+1] = 13
+        elseif e < 128  # Large numbers map to Infinity
+            _basetable[i|0x000+1] = 0x7C00
+            _basetable[i|0x100+1] = 0xFC00
+            _shifttable[i|0x000+1] = 24
+            _shifttable[i|0x100+1] = 24
+        else  # Infinity and NaN's stay Infinity and NaN's
+            _basetable[i|0x000+1] = 0x7C00
+            _basetable[i|0x100+1] = 0xFC00
+            _shifttable[i|0x000+1] = 13
+            _shifttable[i|0x100+1] = 13
+        end
+    end
+    global const shifttable = (_shifttable...,)
+    global const basetable = (_basetable...,)
+end
+
 function Float16(val::Float32)
     f = reinterpret(UInt32, val)
     if isnan(val)
@@ -200,45 +239,6 @@ function Float32(val::Float16)
         ret = sign | exp | sig
     end
     return reinterpret(Float32, ret)
-end
-
-# Float32 -> Float16 algorithm from:
-#   "Fast Half Float Conversion" by Jeroen van der Zijp
-#   ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
-
-let _basetable = Vector{UInt16}(undef, 512),
-    _shifttable = Vector{UInt8}(undef, 512)
-    for i = 0:255
-        e = i - 127
-        if e < -24  # Very small numbers map to zero
-            _basetable[i|0x000+1] = 0x0000
-            _basetable[i|0x100+1] = 0x8000
-            _shifttable[i|0x000+1] = 24
-            _shifttable[i|0x100+1] = 24
-        elseif e < -14  # Small numbers map to denorms
-            _basetable[i|0x000+1] = (0x0400>>(-e-14))
-            _basetable[i|0x100+1] = (0x0400>>(-e-14)) | 0x8000
-            _shifttable[i|0x000+1] = -e-1
-            _shifttable[i|0x100+1] = -e-1
-        elseif e <= 15  # Normal numbers just lose precision
-            _basetable[i|0x000+1] = ((e+15)<<10)
-            _basetable[i|0x100+1] = ((e+15)<<10) | 0x8000
-            _shifttable[i|0x000+1] = 13
-            _shifttable[i|0x100+1] = 13
-        elseif e < 128  # Large numbers map to Infinity
-            _basetable[i|0x000+1] = 0x7C00
-            _basetable[i|0x100+1] = 0xFC00
-            _shifttable[i|0x000+1] = 24
-            _shifttable[i|0x100+1] = 24
-        else  # Infinity and NaN's stay Infinity and NaN's
-            _basetable[i|0x000+1] = 0x7C00
-            _basetable[i|0x100+1] = 0xFC00
-            _shifttable[i|0x000+1] = 13
-            _shifttable[i|0x100+1] = 13
-        end
-    end
-    global const shifttable = (_shifttable...,)
-    global const basetable = (_basetable...,)
 end
 
 #convert(::Type{Float16}, x::Float32) = fptrunc(Float16, x)
