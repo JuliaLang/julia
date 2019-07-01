@@ -440,6 +440,7 @@ $(eval $(call LLVM_PATCH,llvm-D57118-powerpc))
 $(eval $(call LLVM_PATCH,llvm-r355582-avxminmax)) # remove for 8.0
 $(eval $(call LLVM_PATCH,llvm-rL349068-llvm-config)) # remove for 8.0
 $(eval $(call LLVM_PATCH,llvm-6.0-D63688-wasm-isLocal))
+$(eval $(call LLVM_PATCH,llvm-6.0-D64032-cmake-cross))
 endif # LLVM_VER 6.0
 
 ifeq ($(LLVM_VER_SHORT),7.0)
