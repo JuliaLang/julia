@@ -96,6 +96,9 @@ julia> istaskdone(taskref[])
 true
 ```
 
+!!! compat "Julia 1.3"
+  The following constructors were added in Julia 1.3.
+
 Other constructors:
 * `Channel{T}(func::Function, sz=0)`
 * `Channel{T}(func::Function; csize=0, taskref=nothing)`
