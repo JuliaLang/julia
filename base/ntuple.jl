@@ -42,6 +42,20 @@ ntuple(f, ::Val{1}) = (@_inline_meta; (f(1),))
 ntuple(f, ::Val{2}) = (@_inline_meta; (f(1), f(2)))
 ntuple(f, ::Val{3}) = (@_inline_meta; (f(1), f(2), f(3)))
 
+"""
+ntuple(f::Function, ::Val{N})
+
+Create a tuple of length `N`, computing each element as `f(i)`,
+where `i` is the index of the element. By taking a Val{N} 
+argument, is able to generate more efficient code than the
+version taking the length as an integer.
+
+# Examples
+```jldoctest
+julia> ntuple(i -> 2*i, Val{4}())
+(2, 4, 6, 8)
+```
+"""
 @inline function ntuple(f::F, ::Val{N}) where {F,N}
     N::Int
     (N >= 0) || throw(ArgumentError(string("tuple length should be ≥ 0, got ", N)))
