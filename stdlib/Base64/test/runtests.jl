@@ -95,3 +95,21 @@ Base.show(io::IO, ::MIME"image/png", ::PNG) = print(io, "PNG")
     @test stringmime("image/png", PNG()) == stringmime(MIME("image/png"), PNG()) == "UE5H"
 end
 
+function splace(in::String, p = 0.3)
+    spaces = ["\n"," "]
+    len = length(in)
+    len == 0 && return in
+    rc::String = ""
+    i = 1
+    for (x, v) in enumerate(sort(randsubseq(collect(1:len), p)))
+        rc = rc * in[i:v] * rand(spaces)^rand(Int.(1:10))
+        i = v + 1
+    end
+    return rc * in[i:len] * rand(spaces)^rand(Int.(1:10))
+end
+
+@testset "lstrsplaced" begin
+    for _ in 1:1000
+        @test String(base64decode(splace(longEncodedText))) == longDecodedText
+    end
+end
