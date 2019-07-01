@@ -849,7 +849,7 @@ end
 
 issubset(r::OneTo, s::OneTo) = r.stop <= s.stop
 
-issubset(r::AbstractUnitRange{<:Integer}, s::AbstractUnitRange{<:Integer}) = 
+issubset(r::AbstractUnitRange{<:Integer}, s::AbstractUnitRange{<:Integer}) =
     first(r) >= first(s) && last(r) <= last(s)
 
 ## linear operations on ranges ##

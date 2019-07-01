@@ -374,7 +374,7 @@ end
         @test issubset(Base.OneTo(5), Base.OneTo(10))
         @test !issubset(Base.OneTo(10), Base.OneTo(5))
         @test issubset(1:3:10, 1:10)
-        @test !issubset(1:10, 1:3:10)        
+        @test !issubset(1:10, 1:3:10)
     end
     @testset "sort/sort!/partialsort" begin
         @test sort(UnitRange(1,2)) == UnitRange(1,2)
