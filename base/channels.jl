@@ -8,7 +8,7 @@ Representation of a channel passing objects of type `T`.
 abstract type AbstractChannel{T} end
 
 """
-    Channel{T}(sz::Int)
+    Channel{T}(sz::Int=0)
 
 Constructs a `Channel` with an internal buffer that can hold a maximum of `sz` objects
 of type `T`.
@@ -19,8 +19,12 @@ And vice-versa.
 
 Other constructors:
 
+* `Channel()`: default constructor, equivalent to `Channel{Any}(0)`
 * `Channel(Inf)`: equivalent to `Channel{Any}(typemax(Int))`
 * `Channel(sz)`: equivalent to `Channel{Any}(sz)`
+
+!!! compat "Julia 1.3"
+  The default constructor `Channel()` was added in Julia 1.3.
 """
 mutable struct Channel{T} <: AbstractChannel{T}
     cond_take::Threads.Condition                 # waiting for data to become available
@@ -48,6 +52,7 @@ function Channel{T}(sz::Float64) where T
     return Channel{T}(sz)
 end
 Channel(sz) = Channel{Any}(sz)
+Channel() = Channel{Any}(0)
 
 # special constructors
 """

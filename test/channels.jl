@@ -13,6 +13,9 @@ using Random
 end
 
 @testset "various constructors" begin
+    c = Channel()
+    @test eltype(c) == Any
+
     c = Channel(1)
     @test eltype(c) == Any
     @test put!(c, 1) == 1
@@ -31,7 +34,6 @@ end
     tvals = Int[take!(c) for i in 1:10^6]
     @test pvals == tvals
 
-    @test_throws MethodError Channel()
     @test_throws ArgumentError Channel(-1)
     @test_throws InexactError Channel(1.5)
 end
@@ -47,6 +49,10 @@ end
     @test eltype(c) == Int
     @test c.sz_max == 0
     @test collect(c) == 1:100
+
+    c = Channel() do c; put!(c, 1); put!(c, "hi") end
+    @test c.sz_max == 0
+    @test collect(c) == [1, "hi"]
 
     c = Channel{Int}(Inf) do c; put!(c,1); end
     @test eltype(c) == Int
