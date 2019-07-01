@@ -435,6 +435,10 @@ if istaskdone(t)   # Check if `addprocs` has completed to ensure `fetch` doesn't
     end
 end
 ```
+
+Only IDs of workers successfully launched and connected to are returned from a
+call to `addprocs`. Therefore it is always a good idea to check the return value
+and confirm if the requested number of processes were indeed added.
 """
 function addprocs(manager::ClusterManager; kwargs...)
     init_multi()
