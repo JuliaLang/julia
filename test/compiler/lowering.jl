@@ -829,6 +829,43 @@ end
 end
 
 @testset_desugar "where to UnionAll expansion" begin
+    A{T} where T
+    @Expr(:scope_block, begin
+              @Expr(:local_def, T)
+              T = Core.TypeVar(:T)
+              Core.UnionAll(T, Core.apply_type(A, T))
+          end)
+
+    A{T} where T <: S
+    @Expr(:scope_block, begin
+              @Expr(:local_def, T)
+              T = Core.TypeVar(:T, S)
+              Core.UnionAll(T, Core.apply_type(A, T))
+          end)
+
+    A{T} where T >: S
+    @Expr(:scope_block, begin
+              @Expr(:local_def, T)
+              T = Core.TypeVar(:T, S, Core.Any)
+              Core.UnionAll(T, Core.apply_type(A, T))
+          end)
+
+    A{T} where S' <: T <: V'
+    @Expr(:scope_block, begin
+              @Expr(:local_def, T)
+              T = Core.TypeVar(:T, Top.adjoint(S), Top.adjoint(V))
+              Core.UnionAll(T, Core.apply_type(A, T))
+          end)
+
+    A{T} where S <: T <: V <: W
+    @Expr(:error, "invalid variable expression in `where`")
+
+    A{T} where S <: T < V
+    @Expr(:error, "invalid bounds in `where`")
+
+    A{T} where S < T <: V
+    @Expr(:error, "invalid bounds in `where`")
+
     T where a <: T(x) <: b
     @Expr(:error, "invalid type parameter name `T(x)`")
 end

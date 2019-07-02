@@ -250,7 +250,7 @@ function expand_forms(ex)
                     :(.⊻=), :(<<=), :(.<<=), :(>>=), :(.>>=), :(>>>=), :(.>>>=))
         expand_todo(ex) # lower-update-op
     elseif head == :...
-        expand_todo(ex) # expand-table
+        throw(LoweringError("`...` expression outside call"))
     elseif head == :$
         throw(LoweringError("`\$` expression outside quote"))
     elseif head == :vect
