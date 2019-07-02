@@ -353,7 +353,7 @@ end
     @Expr(:error, "unexpected semicolon in array expression")
 
     [a=b,c]
-    @Expr(:error, "misplaced assignment statement in \"[a = b, c]\"")
+    @Expr(:error, "misplaced assignment statement in `[a = b, c]`")
 end
 
 @testset_desugar "Array Concatenation" begin
@@ -377,16 +377,16 @@ end
     Top.typed_hvcat(T, Core.tuple(2,1), a, b, c)
 
     [a b=c]
-    @Expr(:error, "misplaced assignment statement in \"[a b = c]\"")
+    @Expr(:error, "misplaced assignment statement in `[a b = c]`")
 
     [a; b=c]
-    @Expr(:error, "misplaced assignment statement in \"[a; b = c]\"")
+    @Expr(:error, "misplaced assignment statement in `[a; b = c]`")
 
     T[a b=c]
-    @Expr(:error, "misplaced assignment statement in \"T[a b = c]\"")
+    @Expr(:error, "misplaced assignment statement in `T[a b = c]`")
 
     T[a; b=c]
-    @Expr(:error, "misplaced assignment statement in \"T[a; b = c]\"")
+    @Expr(:error, "misplaced assignment statement in `T[a; b = c]`")
 end
 
 @testset_desugar "Tuples" begin
@@ -396,7 +396,7 @@ end
     (x=a,y=b)
     Core.apply_type(Core.NamedTuple, Core.tuple(:x, :y))(Core.tuple(a, b))
 
-    # Why do we allow this form?
+    # Expr(:parameters) version also works
     (;x=a,y=b)
     Core.apply_type(Core.NamedTuple, Core.tuple(:x, :y))(Core.tuple(a, b))
 
@@ -486,10 +486,10 @@ end
     $(Expr(:call, :(>:), :a, :b))
 
     $(Expr(:$, :x))
-    @Expr(:error, "\"\$\" expression outside quote")
+    @Expr(:error, "`\$` expression outside quote")
 
     x...
-    @Expr(:error, "\"...\" expression outside call")
+    @Expr(:error, "`...` expression outside call")
 end
 
 @testset_desugar "Dot syntax; broadcast/getproperty" begin
@@ -552,9 +552,6 @@ end
     # splatting
     f(i, j, v..., k)
     Core._apply(f, Core.tuple(i,j), v, Core.tuple(k))
-
-    x...
-    @Expr(:error, "\"...\" expression outside call")
 
     # keyword arguments
     f(x, a=1)
@@ -622,7 +619,7 @@ end
     end
 
     (x+y) += 1
-    @Expr(:error, "invalid assignment location \"(x + y)\"")
+    @Expr(:error, "invalid assignment location `(x + y)`")
 end
 
 @testset_desugar "Assignment" begin
@@ -725,29 +722,29 @@ end
 
     # Invalid assignments
     1 = a
-    @Expr(:error, "invalid assignment location \"1\"")
+    @Expr(:error, "invalid assignment location `1`")
 
     true = a
-    @Expr(:error, "invalid assignment location \"true\"")
+    @Expr(:error, "invalid assignment location `true`")
 
     "str" = a
-    @Expr(:error, "invalid assignment location \"\"str\"\"")
+    @Expr(:error, "invalid assignment location `\"str\"`")
 
     [x y] = c
-    @Expr(:error, "invalid assignment location \"[x y]\"")
+    @Expr(:error, "invalid assignment location `[x y]`")
 
     a[x y] = c
     @Expr(:error, "invalid spacing in left side of indexed assignment")
 
     a[x;y] = c
-    @Expr(:error, "unexpected \";\" in left side of indexed assignment")
+    @Expr(:error, "unexpected `;` in left side of indexed assignment")
 
     [x;y] = c
-    @Expr(:error, "use \"(a, b) = ...\" to assign multiple values")
+    @Expr(:error, "use `(a, b) = ...` to assign multiple values")
 
     # Old deprecation (6575e12ba46)
     x.(y)=c
-    @Expr(:error, "invalid syntax \"x.(y) = ...\"")
+    @Expr(:error, "invalid syntax `x.(y) = ...`")
 end
 
 @testset_desugar "Declarations" begin
@@ -829,6 +826,11 @@ end
                       Core.UnionAll(T, Core.apply_type(B, T))
                   end)
     end
+end
+
+@testset_desugar "where to UnionAll expansion" begin
+    T where a <: T(x) <: b
+    @Expr(:error, "invalid type parameter name `T(x)`")
 end
 
 @testset_desugar "let blocks" begin
@@ -1263,16 +1265,16 @@ end
 
     # Invalid function names
     ccall(x)=body
-    @Expr(:error, "invalid function name \"ccall\"")
+    @Expr(:error, "invalid function name `ccall`")
 
     cglobal(x)=body
-    @Expr(:error, "invalid function name \"cglobal\"")
+    @Expr(:error, "invalid function name `cglobal`")
 
     true(x)=body
-    @Expr(:error, "invalid function name \"true\"")
+    @Expr(:error, "invalid function name `true`")
 
     false(x)=body
-    @Expr(:error, "invalid function name \"false\"")
+    @Expr(:error, "invalid function name `false`")
 end
 
 ln = LineNumberNode(@__LINE__()+3, Symbol(@__FILE__))

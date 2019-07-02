@@ -10,7 +10,7 @@
       a))
 (define (fix-arglist l (unused #t))
   (if (any vararg? (butlast l))
-      (error "invalid ... on non-final argument"))
+      (error "invalid `...` on non-final argument"))
   (map (lambda (a)
          (cond ((and (pair? a) (eq? (car a) 'kw))
                 `(kw ,(fill-missing-argname (cadr a) unused) ,(caddr a)))
@@ -172,19 +172,19 @@
   (define (check-sym s)
     (if (symbol? s)
         s
-        (error (string "invalid type parameter name \"" (deparse s) "\""))))
+        (error (string "invalid type parameter name `" (deparse s) "`"))))
   (cond ((atom? e) (list (check-sym e) #f #f))
         ((eq? (car e) 'var_bounds)  (cdr e))
         ((and (eq? (car e) 'comparison) (length= e 6))
          (cons (check-sym (cadddr e))
                (cond ((and (eq? (caddr e) '|<:|) (eq? (caddr (cddr e)) '|<:|))
                       (list (cadr e) (last e)))
-                     (else (error "invalid bounds in \"where\"")))))
+                     (else (error "invalid bounds in `where`")))))
         ((eq? (car e) '|<:|)
          (list (check-sym (cadr e)) #f (caddr e)))
         ((eq? (car e) '|>:|)
          (list (check-sym (cadr e)) (caddr e) #f))
-        (else (error "invalid variable expression in \"where\""))))
+        (else (error "invalid variable expression in `where`"))))
 
 (define (sparam-name-bounds params)
   (let ((bounds (map analyze-typevar params)))
@@ -316,7 +316,7 @@
      (if (any (lambda (x) (and (not (eq? x UNUSED)) (memq x names))) anames)
          (error "function argument and static parameter names must be distinct"))
      (if (or (and name (not (sym-ref? name))) (not (valid-name? name)))
-         (error (string "invalid function name \"" (deparse name) "\"")))
+         (error (string "invalid function name `" (deparse name) "`")))
      (let* ((generator (if (expr-contains-p if-generated? body (lambda (x) (not (function-def? x))))
                            (let* ((gen    (generated-version body))
                                   (nongen (non-generated-version body))
@@ -603,8 +603,8 @@
     (if (pair? invalid)
         (if (and (pair? (car invalid)) (eq? 'parameters (caar invalid)))
             (error "more than one semicolon in argument list")
-            (error (string "invalid keyword argument syntax \""
-                           (deparse (car invalid)) "\""))))))
+            (error (string "invalid keyword argument syntax `"
+                           (deparse (car invalid)) "`"))))))
 
 ; replace unassigned kw args with assignment to throw() call (forcing the caller to assign the keyword)
 (define (throw-unassigned-kw-args argl)
@@ -695,9 +695,9 @@
 
 (define (new-call Tname type-params params args field-names field-types)
   (if (any kwarg? args)
-      (error "\"new\" does not accept keyword arguments"))
+      (error "`new` does not accept keyword arguments"))
   (if (length> params (length type-params))
-      (error "too few type parameters specified in \"new{...}\""))
+      (error "too few type parameters specified in `new{...}`"))
   (let ((Texpr (if (null? type-params)
                    `(outerref ,Tname)
                    `(curly (outerref ,Tname)
@@ -834,10 +834,10 @@
                      defs))
           (min-initialized (min (ctors-min-initialized defs) (length fields))))
      (let ((dups (has-dups field-names)))
-       (if dups (error (string "duplicate field name: \"" (car dups) "\" is not unique"))))
+       (if dups (error (string "duplicate field name: `" (car dups) "` is not unique"))))
      (for-each (lambda (v)
                  (if (not (symbol? v))
-                     (error (string "field name \"" (deparse v) "\" is not a symbol"))))
+                     (error (string "field name `" (deparse v) "` is not a symbol"))))
                field-names)
      `(block
        (global ,name) (const ,name)
@@ -964,7 +964,7 @@
   (define (check-lhs a)
     (if (expr-contains-p (lambda (e) (or (decl? e) (assignment? e) (kwarg? e)))
                          a)
-        (error (string "invalid argument destructuring syntax \"" (deparse a) "\""))
+        (error (string "invalid argument destructuring syntax `" (deparse a) "`"))
         a))
   (define (transform-arg a)
     (cond ((and (pair? a) (eq? (car a) 'tuple))
@@ -995,7 +995,7 @@
                     (let ((w (flatten-where-expr name)))
                       (begin0 (cddr w)
                               (if (not (and (pair? (cadr w)) (memq (caadr w) '(call |::|))))
-                                  (error (string "invalid assignment location \"" (deparse name) "\"")))
+                                  (error (string "invalid assignment location `" (deparse name) "`")))
                               (set! name (cadr w))))
                     #f))
          (dcl   (and (pair? name) (eq? (car name) '|::|)))
@@ -1003,7 +1003,7 @@
          (name  (if dcl (cadr name) name)))
     (cond ((and (length= e 2) (or (symbol? name) (globalref? name)))
            (if (not (valid-name? name))
-               (error (string "invalid function name \"" name "\"")))
+               (error (string "invalid function name `" name "`")))
            `(method ,name))
           ((not (pair? name))  e)
           ((eq? (car name) 'call)
@@ -1038,7 +1038,7 @@
              (expand-forms
               (method-def-expr name sparams argl body rett))))
           (else
-           (error (string "invalid assignment location \"" (deparse name) "\""))))))
+           (error (string "invalid assignment location `" (deparse name) "`"))))))
 
 ;; handle ( )->( ) function expressions. blocks `(a;b=1)` on the left need to be
 ;; converted to argument lists with kwargs.
@@ -1181,7 +1181,7 @@
             (cond ((or (symbol? x) (decl? x) (linenum? x))
                    (loop (cdr f)))
                   ((and (assignment? x) (or (symbol? (cadr x)) (decl? (cadr x))))
-                   (error (string "\"" (deparse x) "\" inside type definition is reserved")))
+                   (error (string "`" (deparse x) "` inside type definition is reserved")))
                   (else '())))))
     (expand-forms
      (receive (name params super) (analyze-type-sig sig)
@@ -1235,7 +1235,7 @@
                 `(trycatch (scope_block ,tryb)
                            (scope_block ,catchb)))))
           (else
-           (error "invalid \"try\" form")))))
+           (error "invalid `try` form")))))
 
 (define (expand-unionall-def name type-ex)
   (if (and (pair? name)
@@ -1243,7 +1243,7 @@
       (let ((name   (cadr name))
             (params (cddr name)))
         (if (null? params)
-            (error (string "empty type parameter list in \"" (deparse `(= (curly ,name) ,type-ex)) "\"")))
+            (error (string "empty type parameter list in `" (deparse `(= (curly ,name) ,type-ex)) "`")))
         `(block
           (const_if_global ,name)
           ,(expand-forms
@@ -1259,7 +1259,7 @@
         (case (car arg)
           ((global local local_def)
            (for-each (lambda (b) (if (not (assignment? b))
-                                     (error "expected assignment after \"const\"")))
+                                     (error "expected assignment after `const`")))
                      (cdr arg))
            (expand-forms (expand-decls (car arg) (cdr arg) #t)))
           ((= |::|)
@@ -1282,7 +1282,7 @@
 ;; local x, (y=2), z => local x;local y;local z;y = 2
 (define (expand-decls what binds const?)
   (if (not (list? binds))
-      (error (string "invalid \"" what "\" declaration")))
+      (error (string "invalid `" what "` declaration")))
   (let loop ((b       binds)
              (vars    '())
              (assigns '()))
@@ -1306,7 +1306,7 @@
                 ((symbol? x)
                  (loop (cdr b) (cons x vars) assigns))
                 (else
-                 (error (string "invalid syntax in \"" what "\" declaration"))))))))
+                 (error (string "invalid syntax in `" what "` declaration"))))))))
 
 ;; convert (lhss...) = (tuple ...) to assignments, eliminating the tuple
 (define (tuple-to-assignments lhss0 x)
@@ -1432,8 +1432,8 @@
     `(block
       ,@(if (eq? f fexpr) '() `((= ,f, fexpr)))
       (= ,kw-container ,(lower-named-tuple kw
-                                           (lambda (name) (string "keyword argument \"" name
-                                                                  "\" repeated in call to \"" (deparse fexpr) "\""))
+                                           (lambda (name) (string "keyword argument `" name
+                                                                  "` repeated in call to `" (deparse fexpr) "`"))
                                            "keyword argument"
                                            "keyword argument syntax"))
       ,(if (every vararg? kw)
@@ -1457,7 +1457,7 @@
               ;; if remove-argument-side-effects needed to replace an expression with
               ;; an ssavalue, then it can't be updated by assignment. issue #30062
               (begin (if (and (ssavalue? (car a)) (not (ssavalue? (car b))))
-                         (error (string "invalid multiple assignment location \"" (deparse (car b)) "\"")))
+                         (error (string "invalid multiple assignment location `" (deparse (car b)) "`")))
                      (loop (cdr a) (cdr b))))))
     `(block ,@(cdr e)
             ,(if (null? declT)
@@ -1494,7 +1494,7 @@
         (else
          (if (and (pair? lhs) (eq? op= '=)
                   (not (memq (car lhs) '(|.| tuple vcat typed_hcat typed_vcat))))
-             (error (string "invalid assignment location \"" (deparse lhs) "\"")))
+             (error (string "invalid assignment location `" (deparse lhs) "`")))
          (expand-update-operator- op op= lhs rhs declT))))
 
 (define (lower-update-op e)
@@ -1670,7 +1670,7 @@
                                 (list f (cadr x) (expand-forms `(call (call (core apply_type) (top Val) ,(caddr x))))))
                      (make-fuse f (cdr x))))
                 (else
-                 (error (string "invalid syntax \"" (deparse e) "\"")))))
+                 (error (string "invalid syntax `" (deparse e) "`")))))
         (if (and (pair? e) (eq? (car e) 'call) (dotop-named? (cadr e)))
             (let ((f (undotop (cadr e))) (x (cddr e)))
               (if (and (eq? (identifier-name f) '^) (length= x 2) (integer? (cadr x)))
@@ -1724,7 +1724,7 @@
          (call (core tuple) ,@values)))
 
 (define (lower-named-tuple lst
-                           (dup-error-fn (lambda (name) (string "field name \"" name "\" repeated in named tuple")))
+                           (dup-error-fn (lambda (name) (string "field name `" name "` repeated in named tuple")))
                            (name-str     "named tuple field")
                            (syntax-str   "named tuple element"))
   (let* ((names (apply append
@@ -1758,7 +1758,7 @@
         (let ((el (car L)))
           (cond ((or (assignment? el) (kwarg? el))
                  (if (not (symbol? (cadr el)))
-                     (error (string "invalid " name-str " name \"" (deparse (cadr el)) "\"")))
+                     (error (string "invalid " name-str " name `" (deparse (cadr el)) "`")))
                  (loop (cdr L)
                        (cons (cadr el) current-names)
                        (cons (caddr el) current-vals)
@@ -1790,7 +1790,7 @@
                              (merge current (cadr el))
                              `(call (top merge) (call (top NamedTuple)) ,(cadr el))))))
                 (else
-                 (error (string "invalid " syntax-str " \"" (deparse el) "\""))))))))
+                 (error (string "invalid " syntax-str " `" (deparse el) "`"))))))))
 
 (define (expand-forms e)
   (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref line module toplevel ssavalue null meta using import export)))
@@ -1883,7 +1883,7 @@
       ((and (symbol-like? lhs) (valid-name? lhs))
        `(= ,lhs ,(expand-forms (caddr e))))
       ((atom? lhs)
-       (error (string "invalid assignment location \"" (deparse lhs) "\"")))
+       (error (string "invalid assignment location `" (deparse lhs) "`")))
       (else
        (case (car lhs)
          ((globalref)
@@ -1900,8 +1900,8 @@
                  (b  (caddr lhs))
                  (rhs (caddr e)))
             (if (and (length= b 2) (eq? (car b) 'tuple))
-                (error (string "invalid syntax \""
-                               (string (deparse a) ".(" (deparse (cadr b)) ") = ...") "\"")))
+                (error (string "invalid syntax `"
+                               (string (deparse a) ".(" (deparse (cadr b)) ") = ...") "`")))
             (let ((aa (if (symbol-like? a) a (make-ssavalue)))
                   (bb (if (or (atom? b) (symbol-like? b) (and (pair? b) (quoted? b)))
                           b (make-ssavalue)))
@@ -1950,7 +1950,7 @@
          ((typed_hcat)
           (error "invalid spacing in left side of indexed assignment"))
          ((typed_vcat)
-          (error "unexpected \";\" in left side of indexed assignment"))
+          (error "unexpected `;` in left side of indexed assignment"))
          ((ref)
           ;; (= (ref a . idxs) rhs)
           (let ((a    (cadr lhs))
@@ -1985,9 +1985,9 @@
                        (= ,(car e) ,rhs))))))
          ((vcat)
           ;; (= (vcat . args) rhs)
-          (error "use \"(a, b) = ...\" to assign multiple values"))
+          (error "use `(a, b) = ...` to assign multiple values"))
          (else
-          (error (string "invalid assignment location \"" (deparse lhs) "\"")))))))
+          (error (string "invalid assignment location `" (deparse lhs) "`")))))))
 
    'abstract
    (lambda (e)
@@ -2017,9 +2017,9 @@
    'curly
    (lambda (e)
      (if (has-parameters? (cddr e))
-         (error (string "unexpected semicolon in \"" (deparse e) "\"")))
+         (error (string "unexpected semicolon in `" (deparse e) "`")))
      (if (any assignment? (cddr e))
-         (error (string "misplaced assignment statement in \"" (deparse e) "\"" )))
+         (error (string "misplaced assignment statement in `" (deparse e) "`" )))
      (let* ((p (extract-implicit-whereparams e))
             (curlyparams (car p))
             (whereparams (cdr p)))
@@ -2047,8 +2047,8 @@
                                         (eq? (car argtypes) 'tuple)))
                               (if (and (pair? RT)
                                        (eq? (car RT) 'tuple))
-                                  (error "ccall argument types must be a tuple; try \"(T,)\" and check if you specified a correct return type")
-                                  (error "ccall argument types must be a tuple; try \"(T,)\"")))
+                                  (error "ccall argument types must be a tuple; try `(T,)` and check if you specified a correct return type")
+                                  (error "ccall argument types must be a tuple; try `(T,)`")))
                           (expand-forms
                            (lower-ccall name RT (cdr argtypes) args
                                         (if have-cconv cconv 'ccall))))))
@@ -2119,7 +2119,7 @@
    '|::|
    (lambda (e)
      (if (not (length= e 3))
-         (error "invalid \"::\" syntax"))
+         (error "invalid `::` syntax"))
      (if (not (symbol-like? (cadr e)))
          `(call (core typeassert)
                 ,(expand-forms (cadr e)) ,(expand-forms (caddr e)))
@@ -2183,30 +2183,30 @@
    '.>>>=   lower-update-op
 
    '|...|
-   (lambda (e) (error "\"...\" expression outside call"))
+   (lambda (e) (error "`...` expression outside call"))
 
    '$
-   (lambda (e) (error "\"$\" expression outside quote"))
+   (lambda (e) (error "`$` expression outside quote"))
 
    'vect
    (lambda (e)
      (if (has-parameters? (cdr e))
          (error "unexpected semicolon in array expression"))
      (if (any assignment? (cdr e))
-         (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+         (error (string "misplaced assignment statement in `" (deparse e) "`")))
      (expand-forms `(call (top vect) ,@(cdr e))))
 
    'hcat
    (lambda (e)
      (if (any assignment? (cdr e))
-         (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+         (error (string "misplaced assignment statement in `" (deparse e) "`")))
      (expand-forms `(call (top hcat) ,@(cdr e))))
 
    'vcat
    (lambda (e)
      (let ((a (cdr e)))
        (if (any assignment? a)
-           (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+           (error (string "misplaced assignment statement in `" (deparse e) "`")))
        (if (has-parameters? a)
            (error "unexpected semicolon in array expression") ;; Obsolete?
            (expand-forms
@@ -2227,7 +2227,7 @@
    'typed_hcat
    (lambda (e)
      (if (any assignment? (cddr e))
-         (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+         (error (string "misplaced assignment statement in `" (deparse e) "`")))
      (expand-forms `(call (top typed_hcat) ,@(cdr e))))
 
    'typed_vcat
@@ -2235,7 +2235,7 @@
      (let ((t (cadr e))
            (a (cddr e)))
        (if (any assignment? (cddr e))
-           (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+           (error (string "misplaced assignment statement in `" (deparse e) "`")))
        (expand-forms
         (if (any (lambda (x)
                    (and (pair? x) (eq? (car x) 'row)))
@@ -2290,7 +2290,7 @@
 
 (define (check-no-return e)
   (if (has-return? e)
-      (error "\"return\" not allowed inside comprehension or generator")))
+      (error "`return` not allowed inside comprehension or generator")))
 
 (define (has-break-or-continue? e)
   (expr-contains-p (lambda (x) (and (pair? x) (memq (car x) '(break continue))))
@@ -2403,7 +2403,7 @@
 
 (define (check-valid-name e)
   (or (valid-name? e)
-      (error (string "invalid identifier name \"" e "\""))))
+      (error (string "invalid identifier name `" e "`"))))
 
 (define (make-scope (lam #f) (args '()) (locals '()) (globals '()) (sp '()) (renames '()) (prev #f))
   (vector lam args locals globals sp renames prev))
@@ -2462,7 +2462,7 @@
          '(null))
         ((eq? (car e) 'require_existing_local)
          (if (not (in-scope? (cadr e) scope))
-             (error "no outer local variable declaration exists for \"for outer\""))
+             (error "no outer local variable declaration exists for `for outer`"))
          '(null))
         ((eq? (car e) 'locals)
          (let* ((names (filter (lambda (v)
@@ -2515,17 +2515,17 @@
                 (newnames-def    (append (diff locals-def need-rename-def) renamed-def)))
            (for-each (lambda (v)
                        (if (or (memq v locals-def) (memq v local-decls))
-                           (error (string "variable \"" v "\" declared both local and global"))))
+                           (error (string "variable `" v "` declared both local and global"))))
                      globals)
            (if (and (pair? argnames) (eq? e (lam:body lam)))
                (for-each (lambda (v)
                            (if (memq v argnames)
-                               (error (string "local variable name \"" v "\" conflicts with an argument"))))
+                               (error (string "local variable name `" v "` conflicts with an argument"))))
                          local-decls))
            (if (eq? e (lam:body lam))
                (for-each (lambda (v)
                            (if (or (memq v locals-def) (memq v local-decls) (memq v implicit-locals))
-                               (error (string "local variable name \"" v "\" conflicts with a static parameter"))))
+                               (error (string "local variable name `" v "` conflicts with a static parameter"))))
                          (scope:sp scope)))
            (if lam
                (set-car! (cddr lam)
@@ -2546,7 +2546,7 @@
                      (map (lambda (v) `(local_def ,v)) newnames-def)))
            ))
         ((eq? (car e) 'module)
-         (error "\"module\" expression not at top level"))
+         (error "`module` expression not at top level"))
         ((eq? (car e) 'break_block)
          `(break_block ,(cadr e) ;; ignore type symbol of break_block expression
                        ,(resolve-scopes- (caddr e) scope))) ;; body of break_block expression
@@ -2675,11 +2675,11 @@
          (let ((vi (var-info-for (cadr e) env)))
            (if vi
                (begin (if (not (equal? (vinfo:type vi) '(core Any)))
-                          (error (string "multiple type declarations for \""
-                                         (cadr e) "\"")))
+                          (error (string "multiple type declarations for `"
+                                         (cadr e) "`")))
                       (if (assq (cadr e) captvars)
-                          (error (string "type of \"" (cadr e)
-                                         "\" declared in inner scope")))
+                          (error (string "type of `" (cadr e)
+                                         "` declared in inner scope")))
                       (vinfo:set-type! vi (caddr e))))))
         ((lambda)
          (analyze-vars-lambda e env captvars sp '()))
@@ -2864,7 +2864,7 @@ f(x) = yt(x)
      ((ssavalue? var)
       `(= ,var ,rhs0))
      (else
-       (error (string "invalid assignment location \"" (deparse var) "\"")))))
+       (error (string "invalid assignment location `" (deparse var) "`")))))
 
 (define (rename-sig-types ex namemap)
   (pattern-replace
@@ -3299,8 +3299,8 @@ f(x) = yt(x)
                                                                               (caddr e))))
                                                         (if (has? namemap s)
                                                             #f
-                                                            (error (string "local variable " s
-                                                                           " cannot be used in closure declaration")))
+                                                            (error (string "local variable `" s
+                                                                           "` cannot be used in closure declaration")))
                                                         #t)
                                                     #f)))
                                (caddr e)
@@ -3554,11 +3554,11 @@ f(x) = yt(x)
     (define (check-top-level e)
       (define (head-to-text h)
         (case h
-          ((abstract_type)  "\"abstract type\"")
-          ((primitive_type) "\"primitive type\"")
-          ((struct_type)    "\"struct\"")
+          ((abstract_type)  "`abstract type`")
+          ((primitive_type) "`primitive type`")
+          ((struct_type)    "`struct`")
           ((method)         "method definition")
-          (else             (string "\"" h "\""))))
+          (else             (string "`" h "`"))))
       (if (not (null? (cadr lam)))
           (error (string (head-to-text (car e)) " expression not at top level"))))
     ;; evaluate the arguments of a call, creating temporary locations as needed
@@ -3790,7 +3790,7 @@ f(x) = yt(x)
             ((label symboliclabel)
              (if (eq? (car e) 'symboliclabel)
                  (if (has? label-nesting (cadr e))
-                     (error (string "label \"" (cadr e) "\" defined multiple times"))
+                     (error (string "label `" (cadr e) "` defined multiple times"))
                      (put! label-nesting (cadr e) (list handler-level catch-token-stack))))
              (let ((m (get label-map (cadr e) #f)))
                (if m
@@ -3881,7 +3881,7 @@ f(x) = yt(x)
                  (emit e)
                  #f))
             ((global) ; keep global declarations as statements
-             (if value (error "misplaced \"global\" declaration"))
+             (if value (error "misplaced `global` declaration"))
              (let ((vname (cadr e)))
                (if (var-info-for vname vi) ;; issue #7264
                    (error (string "`global " vname "`: " vname " is a local variable in its enclosing scope"))
@@ -3905,7 +3905,7 @@ f(x) = yt(x)
             ((method)
              (if (not (null? (cadr lam)))
                  (error (string "Global method definition" (linenode-string current-loc)
-                                " needs to be placed at the top level, or use \"eval\".")))
+                                " needs to be placed at the top level, or use `eval`.")))
              (if (length> e 2)
                  (let* ((sig (let ((sig (compile (caddr e) break-labels #t #f)))
                                (if (valid-ir-argument? sig)
@@ -3995,7 +3995,7 @@ f(x) = yt(x)
             ((error)
              (error (cadr e)))
             (else
-             (error (string "invalid syntax " (deparse e)))))))
+             (error (string "invalid syntax `" (deparse e) "`"))))))
     ;; introduce new slots for assigned arguments
     (for-each (lambda (v)
                 (if (vinfo:asgn v)
@@ -4012,10 +4012,10 @@ f(x) = yt(x)
                       (lab   (cadddr x)))
                   (let ((target-nesting (get label-nesting lab #f)))
                     (if (not target-nesting)
-                        (error (string "label \"" lab "\" referenced but not defined")))
+                        (error (string "label `" lab "` referenced but not defined")))
                     (let ((target-level (car target-nesting)))
                       (cond ((> target-level hl)
-                            (error (string "cannot goto label \"" lab "\" inside try/catch block")))
+                            (error (string "cannot goto label `" lab "` inside try/catch block")))
                             ((= target-level hl)
                              (set-cdr! point (cddr point))) ;; remove empty slot
                             (else
