@@ -33,6 +33,7 @@ end
 
 top(ex) = Expr(:top, ex)
 core(ex) = Expr(:core, ex)
+blockify(ex) = ex isa Expr && ex.head !== :block ? ex : Expr(:block, ex) # TODO: null Expr?
 mapargs(f, ex) = ex isa Expr ? Expr(ex.head, map(f, ex.args)...) : ex
 
 # Symbol `s` occurs in ex
@@ -67,6 +68,9 @@ error_unexpected_semicolon(ex) = error("unexpected semicolon in `$ex`")
 
 
 #-------------------------------------------------------------------------------
+struct LoweringError <: Exception
+    msg::AbstractString
+end
 
 """
 Replace `end` for the closest ref expression; don't go inside nested refs
@@ -159,9 +163,9 @@ function expand_forms(ex)
     elseif head == :.=
         expand_todo(ex) # expand-fuse-broadcast
     elseif head == :<:
-        expand_todo(ex) # expand-table
+        expand_forms(Expr(:call, :<:, args...))
     elseif head == :>:
-        expand_todo(ex) # expand-table
+        expand_forms(Expr(:call, :>:, args...))
     elseif head == :where
         expand_todo(ex) # expand-wheres
     elseif head == :const
@@ -199,15 +203,19 @@ function expand_forms(ex)
     elseif head == :bracescat
         expand_todo(ex) # expand-table
     elseif head == :string
-        expand_todo(ex) # expand-table
+        expand_forms(Expr(:call, top(:string), args...))
     elseif head == :(::)
         expand_todo(ex) # expand-table
     elseif head == :while
-        expand_todo(ex) # expand-table
+        Expr(:break_block, :loop_exit,
+             Expr(:_while, expand_forms(args[1]),
+                  Expr(:break_block, :loop_cont,
+                       Expr(:scope_block,
+                            blockify(map(expand_forms, args[2:end])...)))))
     elseif head == :break
-        expand_todo(ex) # expand-table
+        isempty(args) ? Expr(:break, :loop_exit) : ex
     elseif head == :continue
-        expand_todo(ex) # expand-table
+        isempty(args) ? Expr(:break, :loop_cont) : ex
     elseif head == :for
         expand_todo(ex) # expand-for
     elseif head == :&&
@@ -222,7 +230,7 @@ function expand_forms(ex)
     elseif head == :...
         expand_todo(ex) # expand-table
     elseif head == :$
-        expand_todo(ex) # expand-table
+        throw(LoweringError("`\$` expression outside quote"))
     elseif head == :vect
         !has_parameters(args) || error_unexpected_semicolon(ex)
         check_no_assigments(ex)
@@ -236,7 +244,7 @@ function expand_forms(ex)
     elseif head == :typed_vcat
         expand_todo(ex) # expand-table
     elseif head == Symbol("'")
-        expand_todo(ex) # expand-table
+        expand_forms(Expr(:call, top(:adjoint), args...))
     elseif head == :generator
         expand_todo(ex) # expand-generator
     elseif head == :flatten

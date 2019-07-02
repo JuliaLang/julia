@@ -12,7 +12,18 @@ include("../../base/compiler/lowering/desugar.jl")
 if !isdefined(@__MODULE__, :use_flisp)
     use_flisp = true
 end
-_expand_forms(ex) = use_flisp ? fl_expand_forms(ex) : expand_forms(ex)
+function _expand_forms(ex)
+    if use_flisp
+        fl_expand_forms(ex)
+    else
+        try
+            expand_forms(ex)
+        catch exc
+            exc isa LoweringError || rethrow()
+            return Expr(:error, exc.msg)
+        end
+    end
+end
 
 function lift_lowered_expr!(ex, nextids, valmap, lift_full)
     if ex isa SSAValue
@@ -266,6 +277,8 @@ end
 #-------------------------------------------------------------------------------
 # Tests
 
+@testset "Lowering" begin
+
 @testset_desugar "Index notation; getindex" begin
     # Indexing
     a[i]
@@ -482,6 +495,9 @@ end
 
     $(Expr(:$, :x))
     @Expr(:error, "\"\$\" expression outside quote")
+
+    x...
+    @Expr(:error, "\"...\" expression outside call")
 end
 
 @testset_desugar "Dot syntax; broadcast/getproperty" begin
@@ -947,23 +963,24 @@ end
 
 @testset_desugar "Loops" begin
     # flisp: (expand-for) (lambda in expand-forms)
-    while cond
-        body1
+    while cond'
+        body1'
         continue
         body2
         break
         body3
     end
     @Expr(:break_block, loop_exit,
-          @Expr(:_while, cond,
+          @Expr(:_while, Top.adjoint(cond),
                 @Expr(:break_block, loop_cont,
                       @Expr(:scope_block, begin
-                                body1
+                                Top.adjoint(body1)
                                 @Expr :break loop_cont
                                 body2
                                 @Expr :break loop_exit
                                 body3
                             end))))
+
 
     for i = a
         body1
@@ -1353,6 +1370,7 @@ end
     @test _expand_forms(LineNumberNode(1, :foo)) == LineNumberNode(1, :foo) # flisp: `(line ,line ,file)
 end
 
+end
 
 #-------------------------------------------------------------------------------
 # Julia AST Notes
