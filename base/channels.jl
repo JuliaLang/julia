@@ -114,10 +114,10 @@ julia> chnl = Channel{Char}(1) do ch
                put!(ch, c)
            end
        end
->> Channel{Char}(sz_max:1,sz_curr:1)
+Channel{Char}(sz_max:1,sz_curr:1)
 
 julia> String(collect(chnl))
->> "hello world"
+"hello world"
 ```
 """
 function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
