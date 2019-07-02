@@ -1762,3 +1762,11 @@ end
 let f = capture_with_conditional_label()  # should not throw
     @test_throws UndefVarError(:x) f(0)
 end
+
+macro id28992(x) x end
+
+# issue #32121
+@test @id28992((a=1, b=2)) === (a=1, b=2)
+a32121 = 8
+b32121 = 9
+@test @id28992((a32121=a32121, b32121=b32121)) === (a32121=8, b32121=9)
