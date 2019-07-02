@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include <limits.h>
+#include <errno.h>
 
 #include "julia.h"
 

@@ -1731,6 +1731,11 @@ void (jl_longjmp)(jmp_buf _Buf, int _Value);
 #define jl_setjmp_name "jl_setjmp"
 #define jl_setjmp(a,b) jl_setjmp(a)
 #define jl_longjmp(a,b) jl_longjmp(a,b)
+#elif defined(_OS_EMSCRIPTEN_)
+#define jl_setjmp(a,b) setjmp(a)
+#define jl_longjmp(a,b) longjmp(a,b)
+#define jl_setjmp_f    setjmp
+#define jl_setjmp_name "setjmp"
 #else
 // determine actual entry point name
 #if defined(sigsetjmp)
