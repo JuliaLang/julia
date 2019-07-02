@@ -348,7 +348,7 @@ function repeat(c::Char, r::Integer)
     return s
 end
 
-function Base.filter(f, s::String)
+function filter(f, s::String)
     out = Base.StringVector(sizeof(s))
     offset = 1
     for c in s
