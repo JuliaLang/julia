@@ -335,6 +335,9 @@ OPENBLAS_DYNAMIC_ARCH := 1
 override CROSS_COMPILE:=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
 override OS := WINNT
+else ifneq (,$(findstring emscripten,$(XC_HOST)))
+override OS := emscripten
+override CROSS_COMPILE:=
 else
 ifeq (,$(OS))
 $(error "unknown XC_HOST variable set, please set OS")
@@ -1049,7 +1052,7 @@ else
 endif
 
 # shared library runtime paths
-ifeq ($(OS), WINNT)
+ifneq (,$(filter $(OS),WINNT emscripten))
   RPATH :=
   RPATH_ORIGIN :=
   RPATH_ESCAPED_ORIGIN :=
