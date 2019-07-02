@@ -113,7 +113,10 @@ end
     @test endswith(z, z)
 end
 
-@test filter(x -> x ∈ ['f', 'o'], "foobar") == "foo"
+@testset "filter specialization on String issue #32460" begin
+     @test filter(x -> x ∈ ['f', 'o'], "foobar") == "foo"
+     @test filter(x -> x ∈ ['f', 'o'], GenericString("foobar")) == "foo"
+end
 
 @testset "string iteration, and issue #1454" begin
     str = "é"
