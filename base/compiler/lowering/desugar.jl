@@ -32,6 +32,7 @@ let ssa_index = Ref(0)
 end
 
 top(ex) = Expr(:top, ex)
+topcall(head, args...) = Expr(:call, Expr(:top, head), args...)
 core(ex) = Expr(:core, ex)
 blockify(ex) = ex isa Expr && ex.head !== :block ? ex : Expr(:block, ex) # TODO: null Expr?
 mapargs(f, ex) = ex isa Expr ? Expr(ex.head, map(f, ex.args)...) : ex
@@ -61,10 +62,10 @@ make_ssa_if(need_ssa::Function, ex, stmts) = make_ssa_if(need_ssa(ex), ex, stmts
 
 function check_no_assigments(ex)
     for e in ex.args
-        !isassignment(e) || error("misplaced assigment statement in `$ex`")
+        !isassignment(e) || throw(LoweringError("misplaced assigment statement in `$ex`"))
     end
 end
-error_unexpected_semicolon(ex) = error("unexpected semicolon in `$ex`")
+error_unexpected_semicolon(ex) = throw(LoweringError("unexpected semicolon in `$ex`"))
 
 
 #-------------------------------------------------------------------------------
@@ -83,12 +84,12 @@ function replace_end(ex, a, n, preceding_splats)
         # the appropriate computation for an `end` symbol for indexing
         # the array `a` in the `n`th index.
         if isempty(preceding_splats)
-            n === nothing ? Expr(:call, top(:lastindex), a) :
-                            Expr(:call, top(:lastindex), a, n)
+            n === nothing ? topcall(:lastindex, a) :
+                            topcall(:lastindex, a, n)
         else
-            dimno = Expr(:call, top(:+), n - length(preceding_splats),
-                         map(t->:(Expr(:call, top(:length), t)), preceding_splats)...)
-            Expr(:call, top(:lastindex), a, dimno)
+            dimno = topcall(:+, n - length(preceding_splats),
+                            map(t->:(topcall(:length, t)), preceding_splats)...)
+            topcall(:lastindex, a, dimno)
         end
     elseif !(ex isa Expr) || isquoted(ex)
         ex
@@ -124,9 +125,30 @@ function partially_expand_ref(ex)
     end
     Expr(:block,
          stmts...,
-         Expr(:call, top(:getindex), arr, new_idxs...))
+         topcall(:getindex, arr, new_idxs...))
 end
 
+function expand_hvcat(ex)
+    # rows inside vcat -> hvcat
+    lengths = Int[]
+    vals = []
+    istyped = ex.head == :typed_vcat
+    for i in (istyped ? 2 : 1):length(ex.args)
+        e = ex.args[i]
+        if e isa Expr && e.head == :row
+            push!(lengths, length(e.args))
+            append!(vals, e.args)
+        else
+            push!(lengths, 1)
+            push!(vals, e)
+        end
+    end
+    if istyped
+        expand_forms(topcall(:typed_hvcat, ex.args[1], Expr(:tuple, lengths...), vals...))
+    else
+        expand_forms(topcall(:hvcat, Expr(:tuple, lengths...), vals...))
+    end
+end
 
 #-------------------------------------------------------------------------------
 # Expansion entry point
@@ -203,7 +225,7 @@ function expand_forms(ex)
     elseif head == :bracescat
         expand_todo(ex) # expand-table
     elseif head == :string
-        expand_forms(Expr(:call, top(:string), args...))
+        expand_forms(topcall(:string, args...))
     elseif head == :(::)
         expand_todo(ex) # expand-table
     elseif head == :while
@@ -234,17 +256,29 @@ function expand_forms(ex)
     elseif head == :vect
         !has_parameters(args) || error_unexpected_semicolon(ex)
         check_no_assigments(ex)
-        expand_forms(Expr(:call, top(:vect), args...))
+        expand_forms(topcall(:vect, args...))
     elseif head == :hcat
-        expand_todo(ex) # expand-table
+        check_no_assigments(ex)
+        expand_forms(topcall(:hcat, args...))
     elseif head == :vcat
-        expand_todo(ex) # expand-table
+        check_no_assigments(ex)
+        if any(e->e isa Expr && e.head == :row, args)
+            expand_hvcat(ex)
+        else
+            expand_forms(topcall(:vcat, args...))
+        end
     elseif head == :typed_hcat
-        expand_todo(ex) # expand-table
+        check_no_assigments(ex)
+        expand_forms(topcall(:typed_hcat, args...))
     elseif head == :typed_vcat
-        expand_todo(ex) # expand-table
+        check_no_assigments(ex)
+        if any(e->e isa Expr && e.head == :row, args)
+            expand_hvcat(ex)
+        else
+            expand_forms(topcall(:typed_vcat, args...))
+        end
     elseif head == Symbol("'")
-        expand_forms(Expr(:call, top(:adjoint), args...))
+        expand_forms(topcall(:adjoint, args...))
     elseif head == :generator
         expand_todo(ex) # expand-generator
     elseif head == :flatten

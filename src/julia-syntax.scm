@@ -1385,7 +1385,7 @@
        (car e)
        (map (lambda (x)
               (cond ((effect-free? x)  x)
-                    ((or (eq? (car x) '...) (eq? (car x) '&))
+                    ((eq? (car x) '...)
                      (if (effect-free? (cadr x))
                          x
                          (let ((g (make-ssavalue)))
