@@ -166,3 +166,8 @@ end
 
 # issue #17148
 @test rem(Float16(1.2), Float16(one(1.2))) == 0.20019531f0
+
+# issue #32441
+const f16eps2 = Float32(eps(Float16(0.0)))/2
+@test Float16(f16eps2) == Float16(0.0)
+@test Float16(nextfloat(f16eps2)) == nextfloat(Float16(0.0))
