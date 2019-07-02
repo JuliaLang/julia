@@ -64,7 +64,7 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
         size_t di = dims[i];
         wideint_t prod = (wideint_t)nel * (wideint_t)di;
         if (prod > (wideint_t) MAXINTVAL || di > MAXINTVAL)
-            jl_error("invalid Array dimensions");
+            jl_exceptionf(jl_argumenterror_type, "invalid Array dimensions");
         nel = prod;
     }
     assert(atype == NULL || isunion == jl_is_uniontype(jl_tparam0(atype)));
@@ -252,7 +252,7 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
             adims[i] = dims[i];
             prod = (wideint_t)l * (wideint_t)adims[i];
             if (prod > (wideint_t) MAXINTVAL)
-                jl_error("invalid Array dimensions");
+                jl_exceptionf(jl_argumenterror_type, "invalid Array dimensions");
             l = prod;
         }
 #ifdef STORE_ARRAY_LEN
@@ -356,7 +356,7 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
     for (size_t i = 0; i < ndims; i++) {
         prod = (wideint_t)nel * (wideint_t)dims[i];
         if (prod > (wideint_t) MAXINTVAL)
-            jl_error("invalid Array dimensions");
+            jl_exceptionf(jl_argumenterror_type, "invalid Array dimensions");
         nel = prod;
     }
     if (__unlikely(ndims == 1))

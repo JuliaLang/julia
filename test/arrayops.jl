@@ -2631,3 +2631,5 @@ end
 # Fix oneunit bug for unitful arrays
 @test oneunit([Second(1) Second(2); Second(3) Second(4)]) == [Second(1) Second(0); Second(0) Second(1)]
 
+# Throws ArgumentError for negative dimensions in Array
+@test_throws ArgumentError fill('a', -10)

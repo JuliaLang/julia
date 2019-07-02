@@ -485,7 +485,7 @@ let mta = MersenneTwister(42), mtb = MersenneTwister(42)
     @test sort!(randperm(10)) == sort!(shuffle(1:10)) == 1:10
     @test randperm(mta,big(10)) == randperm(mtb,big(10)) # cf. #16376
     @test randperm(0) == []
-    @test_throws ErrorException randperm(-1)
+    @test_throws ArgumentError randperm(-1)
 
     let p = randperm(UInt16(12))
         @test typeof(p) ≡ Vector{UInt16}
