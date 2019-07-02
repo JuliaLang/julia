@@ -431,6 +431,14 @@ function __preinit_threads__()
     nothing
 end
 
+function _run_on(t::Task, tid)
+    @assert !istaskstarted(t)
+    t.sticky = true
+    ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
+    schedule(t)
+    return t
+end
+
 function enq_work(t::Task)
     (t.state == :runnable && t.queue === nothing) || error("schedule: Task not runnable")
     tid = Threads.threadid(t)
