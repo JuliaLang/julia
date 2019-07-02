@@ -411,10 +411,8 @@ for period in (0.06, Dates.Millisecond(60))
             t = Timer(period)
             wait(t)
             ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
             wait(c)
             sleep(period)
-            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
             ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         end))
         wait(c)
@@ -700,8 +698,8 @@ function _atthreads_with_error(a, err)
     end
     a
 end
-@test_throws TaskFailedException _atthreads_with_error(zeros(nthreads()), true)
+@test_throws CompositeException _atthreads_with_error(zeros(nthreads()), true)
 let a = zeros(nthreads())
     _atthreads_with_error(a, false)
-    @test a == [1:nthreads();]
+    @test all(n->(1 <= n <= nthreads()), a)
 end

@@ -22,34 +22,28 @@ function _threadsfor(iter,lbody)
     lidx = iter.args[1]         # index
     range = iter.args[2]
     quote
-        local threadsfor_fun
         let range = $(esc(range))
-        function threadsfor_fun(onethread=false)
+        function threadsfor_fun(grain)
             r = range # Load into local variable
             lenr = length(r)
-            # divide loop iterations among threads
-            if onethread
-                tid = 1
-                len, rem = lenr, 0
-            else
-                tid = threadid()
-                len, rem = divrem(lenr, nthreads())
-            end
+            # divide loop iterations among tasks
+            ngrains = min(nthreads(), lenr)
+            len, rem = divrem(lenr, ngrains)
             # not enough iterations for all the threads?
             if len == 0
-                if tid > rem
+                if grain > rem
                     return
                 end
                 len, rem = 1, 0
             end
             # compute this thread's iterations
-            f = firstindex(r) + ((tid-1) * len)
+            f = firstindex(r) + ((grain-1) * len)
             l = f + len - 1
             # distribute remaining iterations evenly
             if rem > 0
-                if tid <= rem
-                    f = f + (tid-1)
-                    l = l + tid
+                if grain <= rem
+                    f = f + (grain-1)
+                    l = l + grain
                 else
                     f = f + rem
                     l = l + rem
@@ -61,15 +55,23 @@ function _threadsfor(iter,lbody)
                 $(esc(lbody))
             end
         end
-        end
-        if threadid() != 1
-            # only thread 1 can enter/exit _threadedregion
-            Base.invokelatest(threadsfor_fun, true)
-        else
-            ccall(:jl_threading_run, Cvoid, (Any,), threadsfor_fun)
+        threading_run(threadsfor_fun, length(range))
         end
         nothing
     end
+end
+
+function threading_run(func, len)
+    ngrains = min(nthreads(), len)
+    tasks = Vector{Task}(undef, ngrains)
+    for grain in 1:ngrains
+        t = Task(()->func(grain))
+        t.sticky = false
+        tasks[grain] = t
+        schedule(t)
+    end
+    Base.sync_end(tasks)
+    return nothing
 end
 
 """

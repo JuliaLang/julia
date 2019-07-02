@@ -201,13 +201,11 @@ JL_DLLEXPORT void jl_uv_req_set_data(uv_req_t *req, void *data) { req->data = da
 JL_DLLEXPORT void *jl_uv_handle_data(uv_handle_t *handle) { return handle->data; }
 JL_DLLEXPORT void *jl_uv_write_handle(uv_write_t *req) { return req->handle; }
 
-extern volatile unsigned _threadedregion;
-
 JL_DLLEXPORT int jl_process_events(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     uv_loop_t *loop = jl_io_loop;
-    if (loop && (_threadedregion || ptls->tid == 0)) {
+    if (loop) {
         jl_gc_safepoint_(ptls);
         if (jl_mutex_trylock(&jl_uv_mutex)) {
             loop->stop_flag = 0;
