@@ -451,7 +451,7 @@ end
                                     Top.broadcasted(<, ssa1, d)))
 end
 
-@testset_desugar "Short circuit; ternary" begin
+@testset_desugar "Short circuit boolean operators" begin
     # flisp: (expand-or) (expand-and)
     a || b
     if a
@@ -465,13 +465,6 @@ end
         b
     else
         false
-    end
-
-    a ? x : y
-    if a
-        x
-    else
-        y
     end
 end
 
