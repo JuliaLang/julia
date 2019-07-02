@@ -1856,7 +1856,7 @@ STATIC_INLINE int gc_mark_scan_obj32(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mar
     return 0;
 }
 
-#if defined(__GNUC__) && !defined(__OS_EMSCRIPTEN__)
+#if defined(__GNUC__) && !defined(_OS_EMSCRIPTEN_)
 #  define gc_mark_laddr(name) (&&name)
 #  define gc_mark_jmp(ptr) goto *(ptr)
 #else
