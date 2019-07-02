@@ -68,6 +68,9 @@ chmod(file, filemode(file) | 0o222)
 @test filemode(file) & 0o111 == 0
 @test filesize(file) == 0
 
+# issue #26685
+@test !isfile("http://google.com")
+
 if Sys.iswindows()
     permissions = 0o444
     @test filemode(dir) & 0o777 != permissions
@@ -244,8 +247,39 @@ close(s)
     end
 end
 
-my_tempdir = tempdir()
-@test isdir(my_tempdir) == true
+@testset "tempdir" begin
+    my_tempdir = tempdir()
+    @test isdir(my_tempdir)
+    @test my_tempdir[end] != '/'
+    @test my_tempdir[end] != '\\'
+
+    var =  Sys.iswindows() ? "TMP" : "TMPDIR"
+    PATH_PREFIX = Sys.iswindows() ? "C:\\" : "/tmp/"
+    # Warning: On Windows uv_os_tmpdir internally calls GetTempPathW. The max string length for
+    # GetTempPathW is 261 (including the implied trailing backslash), not the typical length 259.
+    # We thus use 260 (with implied trailing slash backlash this then gives 261 chars) and
+    # subtract 9 to account for i = 0:9.
+    MAX_PATH = (Sys.iswindows() ? 260-9 : 1024) - length(PATH_PREFIX)
+    for i = 0:8
+        local tmp = PATH_PREFIX * "x"^MAX_PATH * "123456789"[1:i]
+        @test withenv(var => tmp) do
+            tempdir()
+        end == (tmp)
+    end
+    for i = 9
+        local tmp = PATH_PREFIX * "x"^MAX_PATH * "123456789"[1:i]
+        if Sys.iswindows()
+            # libuv bug
+            @test_broken withenv(var => tmp) do
+                tempdir()
+            end == tmp
+        else
+            @test withenv(var => tmp) do
+                tempdir()
+            end == tmp
+        end
+    end
+end
 
 let path = tempname()
     # issue #9053

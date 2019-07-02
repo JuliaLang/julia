@@ -1183,10 +1183,10 @@ julia> a = [1 2; 2 -1]
  1   2
  2  -1
 
-julia> isbanded(a, 0, 0)
+julia> LinearAlgebra.isbanded(a, 0, 0)
 false
 
-julia> isbanded(a, -1, 1)
+julia> LinearAlgebra.isbanded(a, -1, 1)
 true
 
 julia> b = [1 0; -im -1] # lower bidiagonal
@@ -1194,10 +1194,10 @@ julia> b = [1 0; -im -1] # lower bidiagonal
  1+0im   0+0im
  0-1im  -1+0im
 
-julia> isbanded(b, 0, 0)
+julia> LinearAlgebra.isbanded(b, 0, 0)
 false
 
-julia> isbanded(b, -1, 0)
+julia> LinearAlgebra.isbanded(b, -1, 0)
 true
 ```
 """
@@ -1423,7 +1423,7 @@ julia> a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
  5.0
   Any[0+6im,[7.0,8.0]]
 
-julia> promote_leaf_eltypes(a)
+julia> LinearAlgebra.promote_leaf_eltypes(a)
 Complex{Float64}
 ```
 """

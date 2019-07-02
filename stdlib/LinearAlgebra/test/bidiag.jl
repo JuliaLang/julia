@@ -435,5 +435,9 @@ end
     @test opnorm(B, Inf) == opnorm(Matrix(B), Inf)
 end
 
+@testset "sum" begin
+    @test sum(Bidiagonal([1,2,3], [1,2], :U)) == 9
+    @test sum(Bidiagonal([1,2,3], [1,2], :L)) == 9
+end
 
 end # module TestBidiagonal

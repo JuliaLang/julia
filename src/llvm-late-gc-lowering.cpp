@@ -870,6 +870,22 @@ JL_USED_FUNC static void dumpLivenessState(Function &F, State &S) {
     }
 }
 
+static bool isTBAA(MDNode *TBAA, std::initializer_list<const char*> const strset)
+{
+    if (!TBAA)
+        return false;
+    while (TBAA->getNumOperands() > 1) {
+        TBAA = cast<MDNode>(TBAA->getOperand(1).get());
+        auto str = cast<MDString>(TBAA->getOperand(0))->getString();
+        for (auto str2 : strset) {
+            if (str == str2) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 // Check if this is a load from an immutable value. The easiest
 // way to do so is to look at the tbaa and see if it derives from
 // jtbaa_immut.
@@ -878,15 +894,8 @@ static bool isLoadFromImmut(LoadInst *LI)
     if (LI->getMetadata(LLVMContext::MD_invariant_load))
         return true;
     MDNode *TBAA = LI->getMetadata(LLVMContext::MD_tbaa);
-    if (!TBAA)
-        return false;
-    while (TBAA->getNumOperands() > 1) {
-        TBAA = cast<MDNode>(TBAA->getOperand(1).get());
-        auto str = cast<MDString>(TBAA->getOperand(0))->getString();
-        if (str == "jtbaa_immut" || str == "jtbaa_const") {
-            return true;
-        }
-    }
+    if (isTBAA(TBAA, {"jtbaa_immut", "jtbaa_const"}))
+        return true;
     return false;
 }
 
@@ -898,14 +907,8 @@ static bool isLoadFromConstGV(LoadInst *LI)
     if (!isa<GlobalVariable>(LI->getPointerOperand()->stripInBoundsOffsets()))
         return false;
     MDNode *TBAA = LI->getMetadata(LLVMContext::MD_tbaa);
-    if (!TBAA)
-        return false;
-    while (TBAA->getNumOperands() > 1) {
-        TBAA = cast<MDNode>(TBAA->getOperand(1).get());
-        if (cast<MDString>(TBAA->getOperand(0))->getString() == "jtbaa_const") {
-            return true;
-        }
-    }
+    if (isTBAA(TBAA, {"jtbaa_const"}))
+        return true;
     return false;
 }
 
@@ -1650,6 +1653,40 @@ static inline void UpdatePtrNumbering(Value *From, Value *To, State *S)
     }
 }
 
+#if JL_LLVM_VERSION < 80000
+MDNode *createMutableTBAAAccessTag(MDNode *Tag) {
+  MDNode *BaseType = cast<MDNode>(Tag->getOperand(0));
+  MDNode *AccessType = cast<MDNode>(Tag->getOperand(1));
+  Metadata *OffsetNode = Tag->getOperand(2);
+  uint64_t Offset = mdconst::extract<ConstantInt>(OffsetNode)->getZExtValue();
+
+  bool NewFormat = isa<MDNode>(AccessType->getOperand(0));
+
+  // See if the tag is already mutable.
+  unsigned ImmutabilityFlagOp = NewFormat ? 4 : 3;
+  if (Tag->getNumOperands() <= ImmutabilityFlagOp)
+    return Tag;
+
+  // If Tag is already mutable then return it.
+  Metadata *ImmutabilityFlagNode = Tag->getOperand(ImmutabilityFlagOp);
+  if (!mdconst::extract<ConstantInt>(ImmutabilityFlagNode)->getValue())
+    return Tag;
+
+  // Otherwise, create another node.
+  if (!NewFormat)
+    return MDBuilder(Tag->getContext()).createTBAAStructTagNode(BaseType, AccessType, Offset);
+
+  Metadata *SizeNode = Tag->getOperand(3);
+  uint64_t Size = mdconst::extract<ConstantInt>(SizeNode)->getZExtValue();
+  return MDBuilder(Tag->getContext()).createTBAAAccessTag(BaseType, AccessType, Offset, Size);
+}
+#else
+MDNode *createMutableTBAAAccessTag(MDNode *Tag) {
+    return MDBuilder(Tag->getContext()).createMutableTBAAAccessTag(Tag);
+}
+#endif
+
+
 bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
     bool ChangesMade = false;
     // We create one alloca for all the jlcall frames that haven't been processed
@@ -1667,6 +1704,24 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
     SmallVector<CallInst*, 16> write_barriers;
     for (BasicBlock &BB : F) {
         for (auto it = BB.begin(); it != BB.end();) {
+            Instruction *I = &*it;
+            if (isa<LoadInst>(I) || isa<StoreInst>(I)) {
+                // strip all constant alias information, as it might depend on the gc having
+                // preserved a gc root, which stops being true after this pass (#32215)
+                // we'd like to call RewriteStatepointsForGC::stripNonValidData here, but
+                // that function asserts that the GC strategy must be named either "statepoint-example" or "coreclr",
+                // while we don't give a name to our GC in the IR, and C++ scope rules prohibit us from using it,
+                // so instead we reimplement it here badly
+                if (I->getMetadata(LLVMContext::MD_invariant_load))
+                    I->setMetadata(LLVMContext::MD_invariant_load, NULL);
+                if (MDNode *TBAA = I->getMetadata(LLVMContext::MD_tbaa)) {
+                    if (TBAA->getNumOperands() == 4 && isTBAA(TBAA, {"jtbaa_const"})) {
+                        MDNode *MutableTBAA = createMutableTBAAAccessTag(TBAA);
+                        if (MutableTBAA != TBAA)
+                            I->setMetadata(LLVMContext::MD_tbaa, MutableTBAA);
+                    }
+                }
+            }
             auto *CI = dyn_cast<CallInst>(&*it);
             if (!CI) {
                 ++it;
@@ -1745,18 +1800,18 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 else if (CC == JLCALL_F2_CC)
                     nframeargs -= 2;
                 SmallVector<Value*, 4> ReplacementArgs;
-                auto it = CI->arg_begin();
-                assert(it != CI->arg_end());
-                ReplacementArgs.push_back(*(it++));
+                auto arg_it = CI->arg_begin();
+                assert(arg_it != CI->arg_end());
+                ReplacementArgs.push_back(*(arg_it++));
                 if (CC != JLCALL_F_CC) {
-                    assert(it != CI->arg_end());
-                    ReplacementArgs.push_back(*(it++));
+                    assert(arg_it != CI->arg_end());
+                    ReplacementArgs.push_back(*(arg_it++));
                 }
                 maxframeargs = std::max(maxframeargs, nframeargs);
                 int slot = 0;
                 IRBuilder<> Builder (CI);
-                for (; it != CI->arg_end(); ++it) {
-                    Builder.CreateStore(*it, Builder.CreateGEP(T_prjlvalue, Frame,
+                for (; arg_it != CI->arg_end(); ++arg_it) {
+                    Builder.CreateStore(*arg_it, Builder.CreateGEP(T_prjlvalue, Frame,
                         ConstantInt::get(T_int32, slot++)));
                 }
                 ReplacementArgs.push_back(nframeargs == 0 ?

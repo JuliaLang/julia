@@ -21,7 +21,8 @@ import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              exp10, expm1, log1p
 
 using .Base: sign_mask, exponent_mask, exponent_one,
-            exponent_half, uinttype, significand_mask
+            exponent_half, uinttype, significand_mask,
+            significand_bits, exponent_bits
 
 using Core.Intrinsics: sqrt_llvm
 
@@ -38,8 +39,6 @@ end
 end
 
 for T in (Float16, Float32, Float64)
-    @eval significand_bits(::Type{$T}) = $(trailing_ones(significand_mask(T)))
-    @eval exponent_bits(::Type{$T}) = $(sizeof(T)*8 - significand_bits(T) - 1)
     @eval exponent_bias(::Type{$T}) = $(Int(exponent_one(T) >> significand_bits(T)))
     # maximum float exponent
     @eval exponent_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T))
@@ -579,12 +578,20 @@ function hypot(x::T,y::T) where T<:AbstractFloat
         scale = one(scale)
     end
     h = sqrt(muladd(ax,ax,ay*ay))
-    if h <= 2*ay
-        delta = h-ay
-        h -= muladd(delta,delta-2*(ax-ay),ax*(2*delta - ax))/(2*h)
+    # This branch is correctly rounded but requires a native hardware fma.
+    if Base.Math.FMA_NATIVE
+        hsquared = h*h
+        axsquared = ax*ax
+        h -= (fma(-ay,ay,hsquared-axsquared) + fma(h,h,-hsquared) - fma(ax,ax,-axsquared))/(2*h)
+    # This branch is within one ulp of correctly rounded.
     else
-        delta = h-ax
-        h -= muladd(delta,delta,muladd(ay,(4*delta-ay),2*delta*(ax-2*ay)))/(2*h)
+        if h <= 2*ay
+            delta = h-ay
+            h -= muladd(delta,delta-2*(ax-ay),ax*(2*delta - ax))/(2*h)
+        else
+            delta = h-ax
+            h -= muladd(delta,delta,muladd(ay,(4*delta-ay),2*delta*(ax-2*ay)))/(2*h)
+        end
     end
     h*scale
 end

@@ -5,6 +5,7 @@ New language features
 ---------------------
 
 * Support for Unicode 12.1.0 ([#32002]).
+* Methods can now be added to an abstract type ([#31916]).
 
 Language changes
 ----------------
@@ -47,6 +48,11 @@ Standard library changes
 
 #### SparseArrays
 
+* `SparseMatrixCSC(m,n,colptr,rowval,nzval)` perform consistency checks for arguments:
+  `colptr` must be properly populated and lengths of `colptr`, `rowval`, and `nzval`
+  must be compatible with `m`, `n`, and `eltype(colptr)`.
+* `sparse(I, J, V, m, n)` verifies lengths of `I`, `J`, `V` are equal and compatible with
+  `eltype(I)` and `m`, `n`.
 
 #### Dates
 
@@ -61,6 +67,11 @@ Standard library changes
 #### Statistics
 
 * `mean` now accepts both a function argument and a `dims` keyword ([#31576]).
+
+#### Sockets
+
+* Added `InetAddr` constructor from `AbstractString`, representing IP address, and `Integer`,
+  representing port number ([#31459]).
 
 #### Miscellaneous
 

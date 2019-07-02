@@ -40,19 +40,18 @@ Each successful `trylock` must be matched by an [`unlock`](@ref).
 function trylock(rl::ReentrantLock)
     t = current_task()
     lock(rl.cond_wait)
-    try
-        if rl.reentrancy_cnt == 0
-            rl.locked_by = t
-            rl.reentrancy_cnt = 1
-            return true
-        elseif t == notnothing(rl.locked_by)
-            rl.reentrancy_cnt += 1
-            return true
-        end
-        return false
-    finally
-        unlock(rl.cond_wait)
+    if rl.reentrancy_cnt == 0
+        rl.locked_by = t
+        rl.reentrancy_cnt = 1
+        got = true
+    elseif t === notnothing(rl.locked_by)
+        rl.reentrancy_cnt += 1
+        got = true
+    else
+        got = false
     end
+    unlock(rl.cond_wait)
+    return got
 end
 
 """
@@ -67,21 +66,24 @@ Each `lock` must be matched by an [`unlock`](@ref).
 function lock(rl::ReentrantLock)
     t = current_task()
     lock(rl.cond_wait)
-    try
-        while true
-            if rl.reentrancy_cnt == 0
-                rl.locked_by = t
-                rl.reentrancy_cnt = 1
-                return
-            elseif t == notnothing(rl.locked_by)
-                rl.reentrancy_cnt += 1
-                return
-            end
-            wait(rl.cond_wait)
+    while true
+        if rl.reentrancy_cnt == 0
+            rl.locked_by = t
+            rl.reentrancy_cnt = 1
+            break
+        elseif t === notnothing(rl.locked_by)
+            rl.reentrancy_cnt += 1
+            break
         end
-    finally
-        unlock(rl.cond_wait)
+        try
+            wait(rl.cond_wait)
+        catch
+            unlock(rl.cond_wait)
+            rethrow()
+        end
     end
+    unlock(rl.cond_wait)
+    return
 end
 
 """
@@ -95,33 +97,41 @@ internal counter and return immediately.
 function unlock(rl::ReentrantLock)
     t = current_task()
     rl.reentrancy_cnt == 0 && error("unlock count must match lock count")
-    rl.locked_by == t || error("unlock from wrong thread")
+    rl.locked_by === t || error("unlock from wrong thread")
     lock(rl.cond_wait)
-    try
-        rl.reentrancy_cnt -= 1
-        if rl.reentrancy_cnt == 0
-            rl.locked_by = nothing
-            notify(rl.cond_wait)
+    rl.reentrancy_cnt -= 1
+    if rl.reentrancy_cnt == 0
+        rl.locked_by = nothing
+        if !isempty(rl.cond_wait.waitq)
+            try
+                notify(rl.cond_wait)
+            catch
+                unlock(rl.cond_wait)
+                rethrow()
+            end
         end
-    finally
-        unlock(rl.cond_wait)
     end
+    unlock(rl.cond_wait)
     return
 end
 
 function unlockall(rl::ReentrantLock)
     t = current_task()
     n = rl.reentrancy_cnt
-    rl.locked_by == t || error("unlock from wrong thread")
+    rl.locked_by === t || error("unlock from wrong thread")
     n == 0 && error("unlock count must match lock count")
     lock(rl.cond_wait)
-    try
-        rl.reentrancy_cnt = 0
-        rl.locked_by = nothing
-        notify(rl.cond_wait)
-    finally
-        unlock(rl.cond_wait)
+    rl.reentrancy_cnt = 0
+    rl.locked_by = nothing
+    if !isempty(rl.cond_wait.waitq)
+        try
+            notify(rl.cond_wait)
+        catch
+            unlock(rl.cond_wait)
+            rethrow()
+        end
     end
+    unlock(rl.cond_wait)
     return n
 end
 

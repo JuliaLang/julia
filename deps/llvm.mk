@@ -138,6 +138,10 @@ LLVM_CPPFLAGS += -flto
 LLVM_LDFLAGS += -flto
 endif # LLVM_LTO
 
+ifeq ($(fPIC),)
+LLVM_CMAKE += -DLLVM_ENABLE_PIC=OFF
+endif
+
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 LLVM_LDFLAGS += -Wl,-rpath,$(build_libdir)
 LLVM_CPPFLAGS += -I$(build_includedir)
@@ -431,6 +435,7 @@ endif
 $(eval $(call LLVM_PATCH,llvm-D51842-win64-byval-cc))
 $(eval $(call LLVM_PATCH,llvm-D57118-powerpc))
 $(eval $(call LLVM_PATCH,llvm-r355582-avxminmax)) # remove for 8.0
+$(eval $(call LLVM_PATCH,llvm-rL349068-llvm-config)) # remove for 8.0
 endif # LLVM_VER 6.0
 
 ifeq ($(LLVM_VER_SHORT),7.0)
@@ -445,6 +450,7 @@ $(eval $(call LLVM_PATCH,llvm-7.0-D50167-scev-umin))
 $(eval $(call LLVM_PATCH,llvm7-windows-race))
 $(eval $(call LLVM_PATCH,llvm7-D51842-win64-byval-cc)) # remove for 8.0
 $(eval $(call LLVM_PATCH,llvm-D57118-powerpc))
+$(eval $(call LLVM_PATCH,llvm-rL349068-llvm-config)) # remove for 8.0
 endif # LLVM_VER 7.0
 
 ifeq ($(LLVM_VER_SHORT),8.0)

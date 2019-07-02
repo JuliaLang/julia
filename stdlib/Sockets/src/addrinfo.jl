@@ -16,7 +16,7 @@ function uv_getaddrinfocb(req::Ptr{Cvoid}, status::Cint, addrinfo::Ptr{Cvoid})
         t = unsafe_pointer_to_objref(data)::Task
         uv_req_set_data(req, C_NULL)
         if status != 0 || addrinfo == C_NULL
-            schedule(t, _UVError("getaddrinfocb", status))
+            schedule(t, _UVError("getaddrinfo", status))
         else
             freeaddrinfo = addrinfo
             addrs = IPAddr[]
@@ -59,6 +59,7 @@ julia> getalladdrinfo("google.com")
 function getalladdrinfo(host::String)
     req = Libc.malloc(Base._sizeof_uv_getaddrinfo)
     uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
+    iolock_begin()
     status = ccall(:jl_getaddrinfo, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}, Ptr{Cvoid}),
                    eventloop(), req, host, #=service=#C_NULL, uv_jl_getaddrinfocb::Ptr{Cvoid})
     if status < 0
@@ -72,8 +73,9 @@ function getalladdrinfo(host::String)
     end
     ct = current_task()
     preserve_handle(ct)
+    uv_req_set_data(req, ct)
+    iolock_end()
     r = try
-        uv_req_set_data(req, ct)
         wait()
     finally
         if uv_req_data(req) != C_NULL
@@ -98,7 +100,7 @@ function getalladdrinfo(host::String)
         elseif code == UV_EAI_MEMORY
             throw(OutOfMemoryError())
         else
-            throw(_UVError("getaddrinfo", code))
+            throw(r)
         end
     end
     return r::Vector{IPAddr}
@@ -129,7 +131,7 @@ function uv_getnameinfocb(req::Ptr{Cvoid}, status::Cint, hostname::Cstring, serv
         t = unsafe_pointer_to_objref(data)::Task
         uv_req_set_data(req, C_NULL)
         if status != 0
-            schedule(t, _UVError("getnameinfocb", status))
+            schedule(t, _UVError("getnameinfo", status))
         else
             schedule(t, unsafe_string(hostname))
         end
@@ -155,18 +157,14 @@ julia> getnameinfo(Sockets.IPv4("8.8.8.8"))
 function getnameinfo(address::Union{IPv4, IPv6})
     req = Libc.malloc(Base._sizeof_uv_getnameinfo)
     uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
-    ev = eventloop()
     port = hton(UInt16(0))
     flags = 0
     uvcb = uv_jl_getnameinfocb::Ptr{Cvoid}
     status = UV_EINVAL
-    if address isa IPv4
-        status = ccall(:jl_getnameinfo, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, UInt32, UInt16, Cint, Ptr{Cvoid}),
-                       ev, req, hton(address.host), port, flags, uvcb)
-    elseif address isa IPv6
-        status = ccall(:jl_getnameinfo6, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Ref{UInt128}, UInt16, Cint, Ptr{Cvoid}),
-                       ev, req, hton(address.host), port, flags, uvcb)
-    end
+    host_in = Ref(hton(address.host))
+    iolock_begin()
+    status = ccall(:jl_getnameinfo, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, UInt16, Cint, Ptr{Cvoid}, Cint),
+                   eventloop(), req, host_in, port, flags, uvcb, address isa IPv6)
     if status < 0
         Libc.free(req)
         if status == UV_EINVAL
@@ -178,8 +176,9 @@ function getnameinfo(address::Union{IPv4, IPv6})
     end
     ct = current_task()
     preserve_handle(ct)
+    uv_req_set_data(req, ct)
+    iolock_end()
     r = try
-        uv_req_set_data(req, ct)
         wait()
     finally
         if uv_req_data(req) != C_NULL
@@ -204,7 +203,7 @@ function getnameinfo(address::Union{IPv4, IPv6})
         elseif code == UV_EAI_MEMORY
             throw(OutOfMemoryError())
         else
-            throw(_UVError("getnameinfo", code))
+            throw(r)
         end
     end
     return r::String
@@ -290,9 +289,9 @@ function getipaddrs(addr_type::Type{T}=IPAddr; loopback::Bool=false) where T<:IP
             end
         end
         sockaddr = ccall(:jl_uv_interface_address_sockaddr, Ptr{Cvoid}, (Ptr{UInt8},), current_addr)
-        if IPv4 <: T && ccall(:jl_sockaddr_in_is_ip4, Int32, (Ptr{Cvoid},), sockaddr) == 1
+        if IPv4 <: T && ccall(:jl_sockaddr_is_ip4, Int32, (Ptr{Cvoid},), sockaddr) == 1
             push!(addresses, IPv4(ntoh(ccall(:jl_sockaddr_host4, UInt32, (Ptr{Cvoid},), sockaddr))))
-        elseif IPv6 <: T && ccall(:jl_sockaddr_in_is_ip6, Int32, (Ptr{Cvoid},), sockaddr) == 1
+        elseif IPv6 <: T && ccall(:jl_sockaddr_is_ip6, Int32, (Ptr{Cvoid},), sockaddr) == 1
             addr6 = Ref{UInt128}()
             scope_id = ccall(:jl_sockaddr_host6, UInt32, (Ptr{Cvoid}, Ref{UInt128},), sockaddr, addr6)
             push!(addresses, IPv6(ntoh(addr6[])))

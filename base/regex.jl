@@ -22,9 +22,6 @@ mutable struct Regex
     compile_options::UInt32
     match_options::UInt32
     regex::Ptr{Cvoid}
-    extra::Ptr{Cvoid}
-    ovec::Vector{Csize_t}
-    match_data::Ptr{Cvoid}
 
     function Regex(pattern::AbstractString, compile_options::Integer,
                    match_options::Integer)
@@ -37,11 +34,9 @@ mutable struct Regex
         if (match_options & ~PCRE.EXECUTE_MASK) !=0
             throw(ArgumentError("invalid regex match options: $match_options"))
         end
-        re = compile(new(pattern, compile_options, match_options, C_NULL,
-                         C_NULL, Csize_t[], C_NULL))
+        re = compile(new(pattern, compile_options, match_options, C_NULL))
         finalizer(re) do re
             re.regex == C_NULL || PCRE.free_re(re.regex)
-            re.match_data == C_NULL || PCRE.free_match_data(re.match_data)
         end
         re
     end
@@ -68,8 +63,6 @@ function compile(regex::Regex)
     if regex.regex == C_NULL
         regex.regex = PCRE.compile(regex.pattern, regex.compile_options)
         PCRE.jit_compile(regex.regex)
-        regex.match_data = PCRE.create_match_data(regex.regex)
-        regex.ovec = PCRE.get_ovec(regex.match_data)
     end
     regex
 end
@@ -164,14 +157,12 @@ getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
 
 function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     compile(r)
-    return PCRE.exec(r.regex, String(s), offset, r.match_options,
-                     r.match_data)
+    return PCRE.exec_r(r.regex, String(s), offset, r.match_options)
 end
 
 function occursin(r::Regex, s::SubString; offset::Integer=0)
     compile(r)
-    return PCRE.exec(r.regex, s, offset, r.match_options,
-                     r.match_data)
+    return PCRE.exec_r(r.regex, s, offset, r.match_options)
 end
 
 """
@@ -198,14 +189,12 @@ true
 """
 function startswith(s::AbstractString, r::Regex)
     compile(r)
-    return PCRE.exec(r.regex, String(s), 0, r.match_options | PCRE.ANCHORED,
-                     r.match_data)
+    return PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ANCHORED)
 end
 
 function startswith(s::SubString, r::Regex)
     compile(r)
-    return PCRE.exec(r.regex, s, 0, r.match_options | PCRE.ANCHORED,
-                     r.match_data)
+    return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ANCHORED)
 end
 
 """
@@ -232,14 +221,12 @@ true
 """
 function endswith(s::AbstractString, r::Regex)
     compile(r)
-    return PCRE.exec(r.regex, String(s), 0, r.match_options | PCRE.ENDANCHORED,
-                     r.match_data)
+    return PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ENDANCHORED)
 end
 
 function endswith(s::SubString, r::Regex)
     compile(r)
-    return PCRE.exec(r.regex, s, 0, r.match_options | PCRE.ENDANCHORED,
-                     r.match_data)
+    return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ENDANCHORED)
 end
 
 """
@@ -274,17 +261,21 @@ function match end
 function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, add_opts::UInt32=UInt32(0))
     compile(re)
     opts = re.match_options | add_opts
-    if !PCRE.exec(re.regex, str, idx-1, opts, re.match_data)
+    matched, data = PCRE.exec_r_data(re.regex, str, idx-1, opts)
+    if !matched
+        PCRE.free_match_data(data)
         return nothing
     end
-    ovec = re.ovec
-    n = div(length(ovec),2) - 1
-    mat = SubString(str, ovec[1]+1, prevind(str, ovec[2]+1))
-    cap = Union{Nothing,SubString{String}}[ovec[2i+1] == PCRE.UNSET ? nothing :
-                                        SubString(str, ovec[2i+1]+1,
-                                                  prevind(str, ovec[2i+2]+1)) for i=1:n]
-    off = Int[ ovec[2i+1]+1 for i=1:n ]
-    RegexMatch(mat, cap, ovec[1]+1, off, re)
+    n = div(PCRE.ovec_length(data), 2) - 1
+    p = PCRE.ovec_ptr(data)
+    mat = SubString(str, unsafe_load(p, 1)+1, prevind(str, unsafe_load(p, 2)+1))
+    cap = Union{Nothing,SubString{String}}[unsafe_load(p,2i+1) == PCRE.UNSET ? nothing :
+                                        SubString(str, unsafe_load(p,2i+1)+1,
+                                                  prevind(str, unsafe_load(p,2i+2)+1)) for i=1:n]
+    off = Int[ unsafe_load(p,2i+1)+1 for i=1:n ]
+    result = RegexMatch(mat, cap, unsafe_load(p,1)+1, off, re)
+    PCRE.free_match_data(data)
+    return result
 end
 
 match(r::Regex, s::AbstractString) = match(r, s, firstindex(s))
@@ -292,18 +283,30 @@ match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
     "regex matching is only available for the String type; use String(s) to convert"
 ))
 
+findnext(re::Regex, str::Union{String,SubString}, idx::Integer) = _findnext_re(re, str, idx, C_NULL)
+
 # TODO: return only start index and update deprecation
-function findnext(re::Regex, str::Union{String,SubString}, idx::Integer)
+function _findnext_re(re::Regex, str::Union{String,SubString}, idx::Integer, match_data::Ptr{Cvoid})
     if idx > nextind(str,lastindex(str))
         throw(BoundsError())
     end
     opts = re.match_options
     compile(re)
-    if PCRE.exec(re.regex, str, idx-1, opts, re.match_data)
-        (Int(re.ovec[1])+1):prevind(str,Int(re.ovec[2])+1)
+    alloc = match_data == C_NULL
+    if alloc
+        matched, data = PCRE.exec_r_data(re.regex, str, idx-1, opts)
     else
-        nothing
+        matched = PCRE.exec(re.regex, str, idx-1, opts, match_data)
+        data = match_data
     end
+    if matched
+        p = PCRE.ovec_ptr(data)
+        ans = (Int(unsafe_load(p,1))+1):prevind(str,Int(unsafe_load(p,2))+1)
+    else
+        ans = nothing
+    end
+    alloc && PCRE.free_match_data(data)
+    return ans
 end
 findnext(r::Regex, s::AbstractString, idx::Integer) = throw(ArgumentError(
     "regex search is only available for the String type; use String(s) to convert"
@@ -384,9 +387,23 @@ julia> replace(msg, r"#(.+)# from (?<from>\\w+)" => s"FROM: \\g<from>; MESSAGE: 
 """
 macro s_str(string) SubstitutionString(string) end
 
+# replacement
+
+struct RegexAndMatchData
+    re::Regex
+    match_data::Ptr{Cvoid}
+    RegexAndMatchData(re::Regex) = (compile(re); new(re, PCRE.create_match_data(re.regex)))
+end
+
+findnext(pat::RegexAndMatchData, str, i) = _findnext_re(pat.re, str, i, pat.match_data)
+
+_pat_replacer(r::Regex) = RegexAndMatchData(r)
+
+_free_pat_replacer(r::RegexAndMatchData) = PCRE.free_match_data(r.match_data)
+
 replace_err(repl) = error("Bad replacement string: $repl")
 
-function _write_capture(io, re, group)
+function _write_capture(io, re::RegexAndMatchData, group)
     len = PCRE.substring_length_bynumber(re.match_data, group)
     ensureroom(io, len+1)
     PCRE.substring_copy_bynumber(re.match_data, group,
@@ -395,7 +412,7 @@ function _write_capture(io, re, group)
     io.size = max(io.size, io.ptr - 1)
 end
 
-function _replace(io, repl_s::SubstitutionString, str, r, re)
+function _replace(io, repl_s::SubstitutionString, str, r, re::RegexAndMatchData)
     SUB_CHAR = '\\'
     GROUP_CHAR = 'g'
     LBRACKET = '<'
@@ -439,8 +456,8 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
                 if all(isdigit, groupname)
                     _write_capture(io, re, parse(Int, groupname))
                 else
-                    group = PCRE.substring_number_from_name(re.regex, groupname)
-                    group < 0 && replace_err("Group $groupname not found in regex $re")
+                    group = PCRE.substring_number_from_name(re.re.regex, groupname)
+                    group < 0 && replace_err("Group $groupname not found in regex $(re.re)")
                     _write_capture(io, re, group)
                 end
                 i = nextind(repl, i)

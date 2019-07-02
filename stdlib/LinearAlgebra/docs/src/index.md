@@ -520,12 +520,14 @@ the input argument belongs on (`side`). The possibilities are:
 
 ```@docs
 LinearAlgebra.BLAS
+LinearAlgebra.BLAS.dot
 LinearAlgebra.BLAS.dotu
 LinearAlgebra.BLAS.dotc
 LinearAlgebra.BLAS.blascopy!
 LinearAlgebra.BLAS.nrm2
 LinearAlgebra.BLAS.asum
 LinearAlgebra.axpy!
+LinearAlgebra.axpby!
 LinearAlgebra.BLAS.scal!
 LinearAlgebra.BLAS.scal
 LinearAlgebra.BLAS.iamax

@@ -123,7 +123,8 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     _Z = UInt32('Z')
     _z = UInt32('z')
     while n <= m
-        _c = UInt32(c)
+        # Fast path from `UInt32(::Char)`; non-ascii will be >= 0x80
+        _c = reinterpret(UInt32, c) >> 24
         d::T = _0 <= _c <= _9 ? _c-_0             :
                _A <= _c <= _Z ? _c-_A+ UInt32(10) :
                _a <= _c <= _z ? _c-_a+a           : base
@@ -142,7 +143,8 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     end
     (T <: Signed) && (n *= sgn)
     while !isspace(c)
-        _c = UInt32(c)
+        # Fast path from `UInt32(::Char)`; non-ascii will be >= 0x80
+        _c = reinterpret(UInt32, c) >> 24
         d::T = _0 <= _c <= _9 ? _c-_0             :
                _A <= _c <= _Z ? _c-_A+ UInt32(10) :
                _a <= _c <= _z ? _c-_a+a           : base

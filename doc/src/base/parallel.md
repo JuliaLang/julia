@@ -44,6 +44,7 @@ Base.islocked
 Base.ReentrantLock
 
 Base.Channel
+Base.Channel(::Function)
 Base.put!(::Channel, ::Any)
 Base.take!(::Channel)
 Base.isready(::Channel)

@@ -681,3 +681,6 @@ function _opnorm1Inf(A::SymTridiagonal, p::Real)
                 ),
                 normfirst, normend)
 end
+
+Base._sum(A::Tridiagonal, ::Colon) = sum(A.d) + sum(A.dl) + sum(A.du)
+Base._sum(A::SymTridiagonal, ::Colon) = sum(A.dv) + 2sum(A.ev)
