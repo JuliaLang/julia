@@ -405,14 +405,6 @@ end
     @Expr(:error, "unexpected semicolon in tuple")
 end
 
-@testset_desugar "Splatting" begin
-    f(i,j,v...,k)
-    Core._apply(f, Core.tuple(i,j), v, Core.tuple(k))
-
-    x...
-    @Expr(:error, "\"...\" expression outside call")
-end
-
 @testset_desugar "Comparison chains" begin
     # flisp: (expand-compare-chain)
     a < b < c
@@ -550,11 +542,31 @@ end
     Top.materialize!(x, Top.broadcasted(+, x, a))
 end
 
-@testset_desugar "Call with keyword arguments" begin
-    f(x,a=1)
+@testset_desugar "Function call syntax" begin
+    # zero arg call
+    g[i]()
+    Top.getindex(g, i)()
+
+    # ccall
+
+    # splatting
+    f(i, j, v..., k)
+    Core._apply(f, Core.tuple(i,j), v, Core.tuple(k))
+
+    x...
+    @Expr(:error, "\"...\" expression outside call")
+
+    # keyword arguments
+    f(x, a=1)
     begin
         ssa1 = Core.apply_type(Core.NamedTuple, Core.tuple(:a))(Core.tuple(1))
         Core.kwfunc(f)(ssa1, f, x)
+    end
+
+    f(x; a=1)
+    begin
+        ssa1 = (Core.apply_type(Core.NamedTuple, Core.tuple(:a)))(Core.tuple(1))
+        (Core.kwfunc(f))(ssa1, f, x)
     end
 end
 
