@@ -1289,16 +1289,16 @@ end
 
 Determine whether `t` is a Type for which one or more of its parameters is `Union{}`.
 """
-function has_bottom_parameter(t::Type)
-    ret = false
+function has_bottom_parameter(t::DataType)
     for p in t.parameters
-        ret |= (p == Bottom) || has_bottom_parameter(p)
+        has_bottom_parameter(p) && return true
     end
-    ret
+    return false
 end
+has_bottom_parameter(t::typeof(Bottom)) = true
 has_bottom_parameter(t::UnionAll) = has_bottom_parameter(unwrap_unionall(t))
 has_bottom_parameter(t::Union) = has_bottom_parameter(t.a) & has_bottom_parameter(t.b)
-has_bottom_parameter(t::TypeVar) = t.ub == Bottom || has_bottom_parameter(t.ub)
+has_bottom_parameter(t::TypeVar) = has_bottom_parameter(t.ub)
 has_bottom_parameter(::Any) = false
 
 min_world(m::Core.CodeInstance) = m.min_world
