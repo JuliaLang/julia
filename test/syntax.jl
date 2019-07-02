@@ -1867,3 +1867,14 @@ end
 
 @test Meta.lower(Main, :(struct A; A() = new{Int}(); end)) == Expr(:error, "too many type parameters specified in \"new{...}\"")
 @test Meta.lower(Main, :(struct A{T, S}; A() = new{Int}(); end)) == Expr(:error, "too few type parameters specified in \"new{...}\"")
+
+# issue #32467
+let f = identity(identity() do
+                 x = 0
+                 @inbounds for i = 1:2
+                     x += i
+                 end
+                 x
+                 end)
+    @test f() == 3
+end
