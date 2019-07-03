@@ -216,10 +216,6 @@
   `(with-bindings ((whitespace-newline #t))
                   ,@body))
 
-(define-macro (without-whitespace-newline . body)
-  `(with-bindings ((whitespace-newline #f))
-                  ,@body))
-
 ;; --- lexer ---
 
 (define (newline? c) (eqv? c #\newline))
@@ -1546,7 +1542,7 @@
 (define (parse-do s)
   (with-bindings
    ((expect-end-current-line (input-port-line (ts:port s))))
-   (without-whitespace-newline
+   (with-normal-context
     (let ((doargs (if (memv (peek-token s) '(#\newline #\;))
                       '()
                       (parse-comma-separated s parse-range))))
