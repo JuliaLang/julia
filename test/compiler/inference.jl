@@ -1934,6 +1934,12 @@ Base.iterate(::Iterator27434, ::Any) = nothing
 @test @inferred((1, 2, 3) == (1, 2, 3))
 @test Core.Compiler.return_type(splat27434, Tuple{typeof(Iterators.repeated(1))}) == Union{}
 
+# issue #32465
+let rt = Base.return_types(splat27434, (NamedTuple{(:x,), Tuple{T}} where T,))
+    @test rt == Any[Tuple{Any}]
+    @test !Base.has_free_typevars(rt[1])
+end
+
 # issue #27078
 f27078(T::Type{S}) where {S} = isa(T, UnionAll) ? f27078(T.body) : T
 T27078 = Vector{Vector{T}} where T
