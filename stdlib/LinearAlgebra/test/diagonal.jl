@@ -199,9 +199,12 @@ Random.seed!(1)
         @test (r = transpose(Matrix(D)) * vv ; mul!(vvv, transpose(D), vv) ≈ r ≈ vvv)
 
         UUU = similar(UU)
-        @test (r = Matrix(D) * UU   ; mul!(UUU, D, UU) ≈ r ≈ UUU)
-        @test (r = Matrix(D)' * UU  ; mul!(UUU, adjoint(D), UU) ≈ r ≈ UUU)
-        @test (r = transpose(Matrix(D)) * UU ; mul!(UUU, transpose(D), UU) ≈ r ≈ UUU)
+        for transformA in (identity, adjoint, transpose)
+            for transformD in (identity, Adjoint, Transpose, adjoint, transpose)
+                @test mul!(UUU, transformA(UU), transformD(D)) ≈  transformA(UU) * Matrix(transformD(D))
+                @test mul!(UUU, transformD(D), transformA(UU)) ≈  Matrix(transformD(D)) * transformA(UU)
+            end
+        end
 
         # make sure that mul!(A, {Adj|Trans}(B)) works with B as a Diagonal
         VV = Array(D)

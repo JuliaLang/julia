@@ -285,6 +285,26 @@ mul!(out::AbstractMatrix, A::Diagonal, in::StridedMatrix) = out .= A.diag .* in
 mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::StridedMatrix) = out .= adjoint.(A.parent.diag) .* in
 mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::StridedMatrix) = out .= transpose.(A.parent.diag) .* in
 
+mul!(out::AbstractMatrix, A::Diagonal, in::Adjoint{<:Any,<:StridedMatrix}) = out .= A.diag .* in
+mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::Adjoint{<:Any,<:StridedMatrix}) = out .= adjoint.(A.parent.diag) .* in
+mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::Adjoint{<:Any,<:StridedMatrix}) = out .= transpose.(A.parent.diag) .* in
+
+mul!(out::AbstractMatrix, A::Diagonal, in::Transpose{<:Any,<:StridedMatrix}) = out .= A.diag .* in
+mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::Transpose{<:Any,<:StridedMatrix}) = out .= adjoint.(A.parent.diag) .* in
+mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::Transpose{<:Any,<:StridedMatrix}) = out .= transpose.(A.parent.diag) .* in
+
+mul!(out::AbstractMatrix, in::StridedMatrix, A::Diagonal) = out .= in .* permutedims(A.diag)
+mul!(out::AbstractMatrix, in::StridedMatrix, A::Adjoint{<:Any,<:Diagonal}) = out .= in .* adjoint(A.parent.diag)
+mul!(out::AbstractMatrix, in::StridedMatrix, A::Transpose{<:Any,<:Diagonal}) = out .= in .* transpose(A.parent.diag)
+
+mul!(out::AbstractMatrix, in::Adjoint{<:Any,<:StridedMatrix}, A::Diagonal) = out .= in .* permutedims(A.diag)
+mul!(out::AbstractMatrix, in::Adjoint{<:Any,<:StridedMatrix}, A::Adjoint{<:Any,<:Diagonal}) = out .= in .* adjoint(A.parent.diag)
+mul!(out::AbstractMatrix, in::Adjoint{<:Any,<:StridedMatrix}, A::Transpose{<:Any,<:Diagonal}) = out .= in .* transpose(A.parent.diag)
+
+mul!(out::AbstractMatrix, in::Transpose{<:Any,<:StridedMatrix}, A::Diagonal) = out .= in .* permutedims(A.diag)
+mul!(out::AbstractMatrix, in::Transpose{<:Any,<:StridedMatrix}, A::Adjoint{<:Any,<:Diagonal}) = out .= in .* adjoint(A.parent.diag)
+mul!(out::AbstractMatrix, in::Transpose{<:Any,<:StridedMatrix}, A::Transpose{<:Any,<:Diagonal}) = out .= in .* transpose(A.parent.diag)
+
 # ambiguities with Symmetric/Hermitian
 # RealHermSymComplex[Sym]/[Herm] only include Number; invariant to [c]transpose
 *(A::Diagonal, transB::Transpose{<:Any,<:RealHermSymComplexSym}) = A * transB.parent
