@@ -1875,3 +1875,14 @@ x32499 = begin
     S32499(x=2)
 end
 @test x32499 == 2
+
+# issue #32467
+let f = identity(identity() do
+                 x = 0
+                 @inbounds for i = 1:2
+                     x += i
+                 end
+                 x
+                 end)
+    @test f() == 3
+end
