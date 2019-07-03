@@ -686,6 +686,10 @@ function fieldcount(@nospecialize t)
     end
     return length(t.name.names)
 end
+# Add an overload for Tuples, where we can determine this much more cheaply than for other types.
+function fieldcount(@nospecialize t::Type{T}) where T<:Tuple{Vararg{Any,N}} where N
+    N
+end
 
 """
     fieldtypes(T::Type)
