@@ -326,11 +326,12 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
     for (func, arg_types_param) in funcs
         for method in methods(func)
             buf = IOBuffer()
-            iob = IOContext(buf, io)
+            iob0 = iob = IOContext(buf, io)
             tv = Any[]
             sig0 = method.sig
             while isa(sig0, UnionAll)
                 push!(tv, sig0.var)
+                iob = IOContext(iob, :unionall_env => sig0.var)
                 sig0 = sig0.body
             end
             s1 = sig0.parameters[1]
@@ -423,7 +424,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     length(kwords) > 0 && print(iob, "; ", join(kwords, ", "))
                 end
                 print(iob, ")")
-                show_method_params(iob, tv)
+                show_method_params(iob0, tv)
                 print(iob, " at ", method.file, ":", method.line)
                 if !isempty(kwargs)
                     unexpected = Symbol[]
