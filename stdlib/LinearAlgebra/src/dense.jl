@@ -114,7 +114,7 @@ false
 """
 function ispossemdef(X::AbstractMatrix, k::Int;
                      atol::Real=0.0,
-                     rtol::Real = (minimum(size(X))*eps(real(float(one(eltype(X))))))*iszero(atol))
+                     rtol::Real=(minimum(size(X))*eps(real(float(one(eltype(X))))))*iszero(atol))
     _check_rank_range(k, minimum(size(X)))
     return ishermitian(X) && _k_positive_eigenvalues(X, k, atol, rtol)
 end

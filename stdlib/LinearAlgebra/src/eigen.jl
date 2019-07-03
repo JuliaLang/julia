@@ -125,8 +125,8 @@ Base.iterate(S::Union{Eigen,GeneralizedEigen}, ::Val{:done}) = nothing
 isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(x -> x > 0, A.values)
 
 function ispossemdef(A::Union{Eigen,GeneralizedEigen}, k::Int;
-                     atol::Real = 0.0,
-                     rtol::Real = (length(A.values)*eps(real(float(one(eltype(A.values))))))*iszero(atol))
+                     atol::Real=0.0,
+                     rtol::Real=(length(A.values)*eps(real(float(one(eltype(A.values))))))*iszero(atol))
     _check_rank_range(k, length(A.values))
     return isreal(A.values) && _k_positive_eigenvalues(real.(A.values), k, atol, rtol)
 end
