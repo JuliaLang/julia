@@ -117,9 +117,7 @@ function retrieve_code_info(linfo::MethodInstance)
 end
 
 function inf_for_methodinstance(mi::MethodInstance, min_world::UInt, max_world::UInt=min_world)
-    inf = ccall(:jl_rettype_inferred, Ptr{Nothing}, (Any, UInt, UInt), mi, min_world, max_world)
-    inf == C_NULL && return nothing
-    return unsafe_pointer_to_objref(inf)::CodeInstance
+    return ccall(:jl_rettype_inferred, Any, (Any, UInt, UInt), mi, min_world, max_world)::Union{Nothing, CodeInstance}
 end
 
 
