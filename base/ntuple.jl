@@ -43,16 +43,16 @@ ntuple(f, ::Val{2}) = (@_inline_meta; (f(1), f(2)))
 ntuple(f, ::Val{3}) = (@_inline_meta; (f(1), f(2), f(3)))
 
 """
-ntuple(f::Function, ::Val{N})
+    ntuple(f::Function, ::Val{N})
 
 Create a tuple of length `N`, computing each element as `f(i)`,
-where `i` is the index of the element. By taking a Val{N} 
+where `i` is the index of the element. By taking a `Val{N}` 
 argument, is able to generate more efficient code than the
 version taking the length as an integer.
 
 # Examples
 ```jldoctest
-julia> ntuple(i -> 2*i, Val{4}())
+julia> ntuple(i -> 2*i, Val(4))
 (2, 4, 6, 8)
 ```
 """
