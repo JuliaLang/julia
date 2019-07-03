@@ -125,7 +125,7 @@ function ispossemdef(X::Number, k::Int)
 end
 
 function _check_rank_range(k::Int, n::Int)
-    !(0 <= k <= n) && error("rank must be between 0 and $(n) (inclusive)")
+    0 <= k <= n || throw(ArgumentError("rank must be between 0 and $(n) (inclusive)"))
     nothing
 end
 
