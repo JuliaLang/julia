@@ -237,18 +237,18 @@ JL_DLLEXPORT jl_value_t *jl_call_in_typeinf_world(jl_value_t **args, int nargs)
     return ret;
 }
 
-JL_DLLEXPORT jl_code_instance_t *jl_rettype_inferred(jl_method_instance_t *mi, size_t min_world, size_t max_world) JL_NOTSAFEPOINT
+JL_DLLEXPORT jl_value_t *jl_rettype_inferred(jl_method_instance_t *mi, size_t min_world, size_t max_world) JL_NOTSAFEPOINT
 {
     jl_code_instance_t *codeinst = mi->cache;
     while (codeinst) {
         if (codeinst->min_world <= min_world && max_world <= codeinst->max_world) {
             jl_value_t *code = codeinst->inferred;
             if (code && (code == jl_nothing || jl_ast_flag_inferred((jl_array_t*)code)))
-                return codeinst;
+                return (jl_value_t *)codeinst;
         }
         codeinst = codeinst->next;
     }
-    return NULL;
+    return (jl_value_t *)jl_nothing;
 }
 
 
@@ -313,7 +313,7 @@ static int get_spec_unspec_list(jl_typemap_entry_t *l, void *closure)
 {
     jl_method_instance_t *mi = l->func.linfo;
     assert(jl_is_method_instance(mi));
-    if (!jl_rettype_inferred(mi, jl_world_counter, jl_world_counter))
+    if (jl_rettype_inferred(mi, jl_world_counter, jl_world_counter) == jl_nothing)
         jl_array_ptr_1d_push((jl_array_t*)closure, l->func.value);
     return 1;
 }
@@ -408,7 +408,7 @@ JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
         size_t i, l;
         for (i = 0, l = jl_array_len(unspec); i < l; i++) {
             jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(unspec, i);
-            if (!jl_rettype_inferred(mi, jl_world_counter, jl_world_counter))
+            if (jl_rettype_inferred(mi, jl_world_counter, jl_world_counter) == jl_nothing)
                 jl_type_infer(mi, jl_world_counter, 1);
         }
         JL_GC_POP();
@@ -1769,7 +1769,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     if (codeinst == NULL) {
         // if we don't have any decls already, try to generate it now
         jl_code_info_t *src = NULL;
-        if (jl_is_method(mi->def.method) && !jl_rettype_inferred(mi, world, world) &&
+        if (jl_is_method(mi->def.method) && jl_rettype_inferred(mi, world, world) == jl_nothing &&
                  jl_symbol_name(mi->def.method->name)[0] != '@') {
             // don't bother with typeinf on macros or toplevel thunks
             // but try to infer everything else
@@ -1889,12 +1889,12 @@ static void _generate_from_hint(jl_method_instance_t *mi, size_t world)
     jl_code_info_t *src = NULL;
     // If we are saving ji files (e.g. package pre-compilation or intermediate sysimg build steps),
     // don't bother generating anything since it won't be saved.
-    if (!jl_rettype_inferred(mi, world, world))
+    if (jl_rettype_inferred(mi, world, world) == jl_nothing)
         src = jl_type_infer(mi, world, 1);
     if (generating_llvm) {
-        jl_code_instance_t *codeinst;
-        if ((codeinst = jl_rettype_inferred(mi, world, world)))
-            if (codeinst->invoke == jl_fptr_const_return)
+        jl_value_t *codeinst = jl_rettype_inferred(mi, world, world);
+        if (codeinst != jl_nothing)
+            if (((jl_code_instance_t*)codeinst)->invoke == jl_fptr_const_return)
                 return; // probably not a good idea to generate code
         // If we are saving LLVM or native code, generate the LLVM IR so that it'll
         // be included in the saved LLVM module.
@@ -1937,10 +1937,10 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
             types2 = jl_type_intersection_env((jl_value_t*)types, (jl_value_t*)mi->def.method->sig, &tpenv2);
             jl_method_instance_t *li2 = jl_specializations_get_linfo(mi->def.method, (jl_value_t*)types2, tpenv2);
             JL_GC_POP();
-            if (!jl_rettype_inferred(li2, world, world))
+            if (jl_rettype_inferred(li2, world, world) == jl_nothing)
                 (void)jl_type_infer(li2, world, 1);
             if (jl_typeinf_func && mi->def.method->primary_world <= tworld) {
-                if (!jl_rettype_inferred(li2, tworld, tworld))
+                if (jl_rettype_inferred(li2, tworld, tworld) == jl_nothing)
                     (void)jl_type_infer(li2, tworld, 1);
             }
         }
