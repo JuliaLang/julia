@@ -1460,22 +1460,32 @@ end
     end
 end
 
-@testset "issue #10837, sparse constructors from special matrices" begin
+@testset "issues #10837 & #32466, sparse constructors from special matrices" begin
     T = Tridiagonal(randn(4),randn(5),randn(4))
     S = sparse(T)
     @test norm(Array(T) - Array(S)) == 0.0
+    S2 = SparseMatrixCSC(T)
+    @test S == S2
     T = SymTridiagonal(randn(5),rand(4))
     S = sparse(T)
     @test norm(Array(T) - Array(S)) == 0.0
+    S2 = SparseMatrixCSC(T)
+    @test S == S2
     B = Bidiagonal(randn(5),randn(4),:U)
     S = sparse(B)
     @test norm(Array(B) - Array(S)) == 0.0
+    S2 = SparseMatrixCSC(B)
+    @test S == S2
     B = Bidiagonal(randn(5),randn(4),:L)
     S = sparse(B)
     @test norm(Array(B) - Array(S)) == 0.0
+    S2 = SparseMatrixCSC(B)
+    @test S == S2
     D = Diagonal(randn(5))
     S = sparse(D)
     @test norm(Array(D) - Array(S)) == 0.0
+    S2 = SparseMatrixCSC(D)
+    @test S == S2
 end
 
 @testset "error conditions for reshape, and dropdims" begin

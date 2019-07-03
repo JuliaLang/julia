@@ -403,6 +403,23 @@ function SparseMatrixCSC{Tv,Ti}(S::SparseMatrixCSC) where {Tv,Ti}
 end
 # converting from other matrix types to SparseMatrixCSC (also see sparse())
 SparseMatrixCSC(M::Matrix) = sparse(M)
+function SparseMatrixCSC(T::SymTridiagonal)
+    m = length(T.dv)
+    return sparse([1:m; 2:m; 1:m-1], [1:m; 1:m-1; 2:m], [T.dv; T.ev; T.ev], Int(m), Int(m))
+end
+function SparseMatrixCSC(T::Tridiagonal)
+    m = length(T.d)
+    return sparse([1:m; 2:m; 1:m-1], [1:m; 1:m-1; 2:m], [T.d; T.dl; T.du], Int(m), Int(m))
+end
+function SparseMatrixCSC(B::Bidiagonal)
+    m = length(B.dv)
+    B.uplo == 'U' || return sparse([1:m;2:m],[1:m;1:m-1],[B.dv;B.ev], Int(m), Int(m)) # lower bidiagonal
+    return sparse([1:m; 1:m-1], [1:m; 2:m], [B.dv; B.ev], Int(m), Int(m)) # upper bidiagonal
+end
+function SparseMatrixCSC(D::Diagonal{T}) where T
+    m = length(D.diag)
+    return SparseMatrixCSC(m, m, Vector(1:(m+1)), Vector(1:m), Vector{T}(D.diag))
+end
 SparseMatrixCSC(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
 SparseMatrixCSC{Tv}(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
 function SparseMatrixCSC{Tv,Ti}(M::AbstractMatrix) where {Tv,Ti}
@@ -496,6 +513,14 @@ julia> sparse(A)
 sparse(A::AbstractMatrix{Tv}) where {Tv} = convert(SparseMatrixCSC{Tv,Int}, A)
 
 sparse(S::SparseMatrixCSC) = copy(S)
+
+sparse(T::SymTridiagonal) = SparseMatrixCSC(T)
+
+sparse(T::Tridiagonal) = SparseMatrixCSC(T)
+
+sparse(B::Bidiagonal) = SparseMatrixCSC(B)
+
+sparse(D::Diagonal) = SparseMatrixCSC(D)
 
 """
     sparse(I, J, V,[ m, n, combine])
@@ -755,27 +780,6 @@ sparse(I,J,V::AbstractVector,m,n) = sparse(I, J, V, Int(m), Int(n), +)
 sparse(I,J,V::AbstractVector{Bool},m,n) = sparse(I, J, V, Int(m), Int(n), |)
 
 sparse(I,J,v::Number,m,n,combine::Function) = sparse(I, J, fill(v,length(I)), Int(m), Int(n), combine)
-
-function sparse(T::SymTridiagonal)
-    m = length(T.dv)
-    return sparse([1:m;2:m;1:m-1],[1:m;1:m-1;2:m],[T.dv;T.ev;T.ev], Int(m), Int(m))
-end
-
-function sparse(T::Tridiagonal)
-    m = length(T.d)
-    return sparse([1:m;2:m;1:m-1],[1:m;1:m-1;2:m],[T.d;T.dl;T.du], Int(m), Int(m))
-end
-
-function sparse(B::Bidiagonal)
-    m = length(B.dv)
-    B.uplo == 'U' || return sparse([1:m;2:m],[1:m;1:m-1],[B.dv;B.ev], Int(m), Int(m)) # lower bidiagonal
-    return sparse([1:m;1:m-1],[1:m;2:m],[B.dv;B.ev], Int(m), Int(m)) # upper bidiagonal
-end
-
-function sparse(D::Diagonal{T}) where T
-    m = length(D.diag)
-    return SparseMatrixCSC(m, m, Vector(1:(m+1)), Vector(1:m), Vector{T}(D.diag))
-end
 
 ## Transposition and permutation methods
 
