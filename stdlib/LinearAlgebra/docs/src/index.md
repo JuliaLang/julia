@@ -158,43 +158,42 @@ When computing matrix operations with different element types there are tradeoff
 The following example shows 3 different choices when multiplying two matrices `A` and `B` of `Float64` and `Float32` values.
 
 ```
-julia> n = 1000
+julia> n = 1000;
+
 julia> A = rand(Float64,n,n);
+
 julia> B = rand(Float32,n,n);
 
 julia> @time C = A*B;                                # 1)                
   1.048376 seconds (12 allocations: 7.630 MiB)
+
 julia> typeof(C)
 Array{Float64,2}
 
 julia> @time C = map(Float32,A)*B;                   # 2)
   0.028782 seconds (9 allocations: 7.630 MiB)
+
 julia> typeof(C)
 Array{Float32,2}
 
 julia> @time C = A* map(Float64,B);                  # 3)
   0.069675 seconds (9 allocations: 15.259 MiB)
+
 julia> typeof(C)
 Array{Float64,2}
 ```
 
-Notice that in in 
+Notice that
 
-1) Allocates `7.630 MiB` for a single matrix `C` of Float64 values
-2) Allocates `7.630 MiB` for two matrices: `map(Float32,A)` and `C` both of which contain Float32 values
-3) Allocates `15.259 MiB` for two matrices: `map(Float64,B)` and `C` both of which contain Float64 values
+- 1) allocates `7.630 MiB` for a single matrix `C` of `Float64` values
+- 2) allocates `7.630 MiB` for two matrices: `map(Float32,A)` and `C` both of which contain `Float32` values
+- 3) allocates `15.259 MiB` for two matrices: `map(Float64,B)` and `C` both of which contain `Float64` values
 
-Notice that 
+This means that
 
 - The best solution is 1) if you need a matrix of `Float64` values and you need to use the least amount of memory.
-
 - The best solution is 2) if a matrix of `Float32` values is enough and you need to miminize execution time.
-
-- The best solution is 3) when you need a matrix of `Float64` values but you don't need to minimize memory usage 
-
-
-
-
+- The best solution is 3) when you need a matrix of `Float64` values but you don't need to minimize memory usage.
 
 ## Special matrices
 
