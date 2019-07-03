@@ -74,8 +74,8 @@ bimg  = randn(n,2)/2
             @test !ispossemdef(notsymmetric, truerank)
             @test !ispossemdef(notsquare, truerank)
 
-            @test_throws ErrorException ispossemdef(A, -1)
-            @test_throws ErrorException ispossemdef(A, n + 1)
+            @test_throws ArgumentError ispossemdef(A, -1)
+            @test_throws ArgumentError ispossemdef(A, n + 1)
         end
     end
 

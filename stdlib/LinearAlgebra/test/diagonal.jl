@@ -355,8 +355,8 @@ end
                     @test !ispossemdef(D, testrank)
                 end
             end
-            @test_throws ErrorException ispossemdef(D, -1)
-            @test_throws ErrorException ispossemdef(D, n + 1)
+            @test_throws ArgumentError ispossemdef(D, -1)
+            @test_throws ArgumentError ispossemdef(D, n + 1)
         end
     end
     D = Diagonal(-areal)
