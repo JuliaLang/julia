@@ -403,18 +403,90 @@ function SparseMatrixCSC{Tv,Ti}(S::SparseMatrixCSC) where {Tv,Ti}
 end
 # converting from other matrix types to SparseMatrixCSC (also see sparse())
 SparseMatrixCSC(M::Matrix) = sparse(M)
-function SparseMatrixCSC(T::SymTridiagonal)
-    m = length(T.dv)
-    return sparse([1:m; 2:m; 1:m-1], [1:m; 1:m-1; 2:m], [T.dv; T.ev; T.ev], Int(m), Int(m))
-end
-function SparseMatrixCSC(T::Tridiagonal)
+function SparseMatrixCSC(T::Tridiagonal{Tv}) where Tv
     m = length(T.d)
-    return sparse([1:m; 2:m; 1:m-1], [1:m; 1:m-1; 2:m], [T.d; T.dl; T.du], Int(m), Int(m))
+
+    colptr = Vector{Int}(undef, m+1)
+    colptr[1] = 1
+    @inbounds for i=1:m-1
+        colptr[i+1] = 3i
+    end
+    colptr[end] = 3m-1
+
+    rowval = Vector{Int}(undef, 3m-2)
+    rowval[1] = 1
+    rowval[2] = 2
+    @inbounds for i=2:m-1, j=-1:1
+        rowval[3i+j-2] = i+j
+    end
+    rowval[end-1] = m - 1
+    rowval[end] = m
+
+    nzval = Vector{Tv}(undef, 3m-2)
+    @inbounds for i=1:(m-1)
+        nzval[3i-2] = T.d[i]
+        nzval[3i-1] = T.dl[i]
+        nzval[3i]   = T.du[i]
+    end
+    nzval[end] = T.d[end]
+
+    return SparseMatrixCSC(m, m, colptr, rowval, nzval)
 end
-function SparseMatrixCSC(B::Bidiagonal)
+function SparseMatrixCSC(T::SymTridiagonal{Tv}) where Tv
+    m = length(T.dv)
+
+    colptr = Vector{Int}(undef, m+1)
+    colptr[1] = 1
+    @inbounds for i=1:m-1
+        colptr[i+1] = 3i
+    end
+    colptr[end] = 3m-1
+
+    rowval = Vector{Int}(undef, 3m-2)
+    rowval[1] = 1
+    rowval[2] = 2
+    @inbounds for i=2:m-1, j=-1:1
+        rowval[3i+j-2] = i+j
+    end
+    rowval[end-1] = m - 1
+    rowval[end] = m
+
+    nzval = Vector{Tv}(undef, 3m-2)
+    @inbounds for i=1:(m-1)
+        nzval[3i-2] = T.dv[i]
+        nzval[3i-1] = T.ev[i]
+        nzval[3i]   = T.ev[i]
+    end
+    nzval[end] = T.dv[end]
+
+    return SparseMatrixCSC(m, m, colptr, rowval, nzval)
+end
+function SparseMatrixCSC(B::Bidiagonal{Tv}) where Tv
     m = length(B.dv)
-    B.uplo == 'U' || return sparse([1:m;2:m],[1:m;1:m-1],[B.dv;B.ev], Int(m), Int(m)) # lower bidiagonal
-    return sparse([1:m; 1:m-1], [1:m; 2:m], [B.dv; B.ev], Int(m), Int(m)) # upper bidiagonal
+
+    colptr = Vector{Int}(undef, m+1)
+    colptr[1] = 1
+    @inbounds for i=1:m-1
+        colptr[i+1] = B.uplo == 'U' ? 2i : 2i+1
+    end
+    colptr[end] = 2m
+
+    rowval = Vector{Int}(undef, 2m-1)
+    @inbounds for i=1:m-1
+        rowval[2i-1] = i
+        rowval[2i]   = B.uplo == 'U' ? i : i+1
+    end
+    rowval[end] = m
+
+    nzval = Vector{Tv}(undef, 2m-1)
+    nzval[1] = B.dv[1]
+    @inbounds for i=1:m-1
+        nzval[2i-1] = B.dv[i]
+        nzval[2i]   = B.ev[i]
+    end
+    nzval[end] = B.dv[end]
+
+    return SparseMatrixCSC(m, m, colptr, rowval, nzval)
 end
 function SparseMatrixCSC(D::Diagonal{T}) where T
     m = length(D.diag)
