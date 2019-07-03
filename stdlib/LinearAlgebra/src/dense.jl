@@ -93,7 +93,7 @@ isposdef(A::AbstractMatrix) =
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
 """
-ispossemdef(A, k) -> Bool
+    ispossemdef(A, k) -> Bool
 
 Test whether a matrix is positive semi-definite with specified rank `k` by
 checking that `k` of its eigenvalues are positive and the rest are zero.
@@ -113,7 +113,7 @@ false
 ```
 """
 function ispossemdef(X::AbstractMatrix, k::Int;
-                     atol::Real = 0.0,
+                     atol::Real=0.0,
                      rtol::Real = (minimum(size(X))*eps(real(float(one(eltype(X))))))*iszero(atol))
     _check_rank_range(k, minimum(size(X)))
     return ishermitian(X) && _k_positive_eigenvalues(X, k, atol, rtol)
