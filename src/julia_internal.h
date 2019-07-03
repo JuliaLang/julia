@@ -72,12 +72,17 @@
 // If this is detected in a backtrace of segfault, it means the functions
 // that use this value must be reworked into their async form with cb arg
 // provided and with JL_UV_LOCK used around the calls
+#ifndef JL_DISABLE_LIBUV
 static uv_loop_t *const unused_uv_loop_arg = (uv_loop_t *)0xBAD10;
 
 extern jl_mutex_t jl_uv_mutex;
 extern int jl_uv_n_waiters;
 void JL_UV_LOCK(void);
 #define JL_UV_UNLOCK() JL_UNLOCK(&jl_uv_mutex)
+#else
+#define JL_UV_LOCK()
+#define JL_UV_UNLOCK()
+#endif
 
 #ifdef __cplusplus
 extern "C" {

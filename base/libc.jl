@@ -394,3 +394,13 @@ Interface to the C `srand(seed)` function.
 srand(seed=floor(time())) = ccall(:srand, Cvoid, (Cuint,), seed)
 
 end # module
+
+import .Libc: RawFD, dup
+if Sys.iswindows()
+    import .Libc: WindowsRawSocket
+    const OS_HANDLE = WindowsRawSocket
+    const INVALID_OS_HANDLE = WindowsRawSocket(Ptr{Cvoid}(-1))
+else
+    const OS_HANDLE = RawFD
+    const INVALID_OS_HANDLE = RawFD(-1)
+end

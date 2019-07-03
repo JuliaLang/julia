@@ -19,7 +19,9 @@
 #include <ctype.h>
 #include <inttypes.h>
 
+#ifndef JL_DISABLE_LIBUV
 #include "uv.h"
+#endif
 #include "../src/julia.h"
 #include "../src/julia_assert.h"
 

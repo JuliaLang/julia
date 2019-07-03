@@ -231,7 +231,16 @@ include("version.jl")
 # system & environment
 include("sysinfo.jl")
 include("libc.jl")
-using .Libc: getpid, gethostname, time, RawFD
+
+using .Libc: getpid, gethostname, time, RawFD, dup
+if Sys.iswindows()
+    import .Libc: WindowsRawSocket
+    const OS_HANDLE = WindowsRawSocket
+    const INVALID_OS_HANDLE = WindowsRawSocket(Ptr{Cvoid}(-1))
+else
+    const OS_HANDLE = RawFD
+    const INVALID_OS_HANDLE = RawFD(-1)
+end
 
 const DL_LOAD_PATH = String[]
 if Sys.isapple()
@@ -397,7 +406,7 @@ function __init__()
     # for the few uses of Libc.rand in Base:
     Libc.srand()
     # Base library init
-    reinit_stdio()
+    DISABLE_LIBUV || reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
     # initialize loading
     init_depot_path()

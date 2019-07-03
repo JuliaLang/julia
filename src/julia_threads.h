@@ -173,8 +173,10 @@ struct _jl_tls_states_t {
     int8_t disable_gc;
     jl_thread_heap_t heap;
     jl_thread_gc_num_t gc_num;
+#ifdef JULIA_ENABLE_THREADING
     uv_mutex_t sleep_lock;
     uv_cond_t wake_signal;
+#endif
     volatile sig_atomic_t defer_signal;
     struct _jl_task_t *current_task;
 #ifdef MIGRATE_TASKS

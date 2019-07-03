@@ -2207,7 +2207,7 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint
 {
     size_t world = jl_get_ptls_states()->world_age;
     jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs,
-#ifdef _OS_EMSCRIPTEN_
+#ifndef _OS_EMSCRIPTEN_
                                                      jl_int32hash_fast(jl_return_address()),
 #else
                                                      0,

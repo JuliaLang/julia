@@ -1,16 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import .Libc: RawFD, dup
-if Sys.iswindows()
-    import .Libc: WindowsRawSocket
-    const OS_HANDLE = WindowsRawSocket
-    const INVALID_OS_HANDLE = WindowsRawSocket(Ptr{Cvoid}(-1))
-else
-    const OS_HANDLE = RawFD
-    const INVALID_OS_HANDLE = RawFD(-1)
-end
-
-
 ## types ##
 abstract type IOServer end
 abstract type LibuvServer <: IOServer end
