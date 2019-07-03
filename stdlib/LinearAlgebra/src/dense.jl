@@ -110,6 +110,7 @@ true
 
 julia> ispossemdef(A, 2)
 false
+```
 """
 function ispossemdef(X::AbstractMatrix, k::Int;
                      atol::Real = 0.0,
