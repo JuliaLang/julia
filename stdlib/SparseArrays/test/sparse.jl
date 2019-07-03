@@ -1460,7 +1460,7 @@ end
     end
 end
 
-@testset "issues #10837 6 #32466, sparse constructors from special matrices" begin
+@testset "issues #10837 & #32466, sparse constructors from special matrices" begin
     T = Tridiagonal(randn(4),randn(5),randn(4))
     S = sparse(T)
     @test norm(Array(T) - Array(S)) == 0.0
