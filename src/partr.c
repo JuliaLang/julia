@@ -324,22 +324,6 @@ static void wake_thread(int16_t tid)
     }
 }
 
-#else // JULIA_ENABLE_THREADING
-
-static int sleep_check_now(int16_t tid)
-{
-    (void)tid;
-    return 1;
-}
-
-static int sleep_check_after_threshold(uint64_t *start_cycles)
-{
-    (void)start_cycles;
-    return 1;
-}
-
-#endif
-
 /* ensure thread tid is awake if necessary */
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
 {
@@ -380,6 +364,30 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
     }
 #endif
 }
+
+#else // JULIA_ENABLE_THREADING
+
+JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
+{
+    assert(tid == 0);
+#ifndef JL_DISABLE_LIBUV
+    uv_stop(jl_global_event_loop());
+#endif
+}
+
+static int sleep_check_now(int16_t tid)
+{
+    (void)tid;
+    return 1;
+}
+
+static int sleep_check_after_threshold(uint64_t *start_cycles)
+{
+    (void)start_cycles;
+    return 1;
+}
+
+#endif
 
 
 JL_DLLEXPORT void jl_set_task_tid(jl_task_t *task, int tid) JL_NOTSAFEPOINT
@@ -509,12 +517,16 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
 #ifndef JL_HAVE_ASYNCIFY
             // maybe check the kernel for new messages too
             if (jl_atomic_load(&jl_uv_n_waiters) == 0)
+#endif
+#ifndef JL_DISABLE_LIBUV
                 jl_process_events();
 #else
             // Yield back to browser event loop
             return ptls->root_task;
 #endif
+#ifdef JULIA_ENABLE_THREADING
         }
+#endif
     }
 }
 

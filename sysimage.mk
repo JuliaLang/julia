@@ -59,7 +59,7 @@ RELBUILDROOT := $(shell $(JULIAHOME)/contrib/relative_path.sh "$(JULIAHOME)/base
 
 $(build_private_libdir)/corecompiler.ji: $(COMPILER_SRCS)
 	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) -C "$(JULIA_CPU_TARGET)" --output-ji $(call cygpath_w,$@).tmp \
+	$(call spawn,JULIA_BINDIR=$(build_bindir) $(JULIA_EXECUTABLE)) -C "$(JULIA_CPU_TARGET)" --output-ji $(call cygpath_w,$@).tmp \
 		--startup-file=no -g0 -O0 compiler/compiler.jl)
 	@mv $@.tmp $@
 

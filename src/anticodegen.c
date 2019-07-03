@@ -6,6 +6,7 @@
 #include "intrinsics.h"
 
 int globalUnique = 0;
+jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 0, NULL, NULL, NULL, NULL, NULL};
 
 #define UNAVAILABLE { jl_errorf("%s: not available in this build of Julia", __func__); }
 
@@ -26,7 +27,7 @@ JL_DLLEXPORT size_t jl_LLVMDisasmInstruction(void *DC, uint8_t *Bytes, uint64_t 
 int32_t jl_assign_functionID(const char *fname) UNAVAILABLE
 
 void jl_init_codegen(void) { }
-void jl_fptr_to_llvm(void *fptr, jl_method_instance_t *lam, int specsig) { }
+void jl_fptr_to_llvm(void *fptr, jl_code_instance_t *codeinst, int spec_abi) { }
 
 int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline)
 {
@@ -39,11 +40,12 @@ void jl_register_fptrs(uint64_t sysimage_base, const struct _jl_sysimg_fptrs_t *
     (void)sysimage_base; (void)fptrs; (void)linfos; (void)n;
 }
 
-jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t *src, size_t world, const jl_cgparams_t *params)
+jl_code_instance_t *jl_compile_linfo(
+        jl_method_instance_t *li JL_PROPAGATES_ROOT,
+        jl_code_info_t *src JL_MAYBE_UNROOTED,
+        size_t world,
+        const jl_cgparams_t *params)
 {
-    jl_method_instance_t *li = *pli;
-    jl_llvm_functions_t decls = {};
-
     if (jl_is_method(li->def.method)) {
         jl_printf(JL_STDERR, "code missing for ");
         jl_static_show(JL_STDERR, (jl_value_t*)li);
@@ -52,13 +54,12 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
     else {
         jl_printf(JL_STDERR, "top level expression cannot be compiled in this build of Julia");
     }
-    return decls;
+    return NULL;
 }
 
-jl_value_t *jl_fptr_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint32_t nargs);
-jl_callptr_t jl_generate_fptr(jl_method_instance_t **pli, jl_llvm_functions_t decls, size_t world)
+void jl_generate_fptr(jl_code_instance_t *codeinst)
 {
-    return (jl_callptr_t)&jl_fptr_interpret_call;
+    return;
 }
 
 JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION(void)

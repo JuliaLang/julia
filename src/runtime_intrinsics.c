@@ -10,6 +10,7 @@
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "threading.h"
 #include "APInt-C.h"
 
 const unsigned int host_char_bit = 8;
@@ -97,7 +98,7 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
         if (jl_is_tuple(sym))
             sym = jl_fieldref(sym, 0);
         const char *name = jl_symbol_name(sym);
-        
+
         # define WRAP(symname) \
         else if (strcmp(name, #symname) == 0) {                     \
             jl_ptls_t ptls = jl_get_ptls_states();                  \
@@ -105,7 +106,7 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
             *(void**)jl_data_ptr(v) = &symname;                     \
             return v;                                               \
         }
-        
+
         if (strcmp(name, "jl_options") == 0) {
             jl_ptls_t ptls = jl_get_ptls_states();
             jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
@@ -121,15 +122,17 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
             jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
             *(void**)jl_data_ptr(v) = &JL_STDERR;
             return v;
-        } 
+        }
 #ifdef _OS_EMSCRIPTEN_
         WRAP(__gmp_version)
         WRAP(__gmp_bits_per_limb)
         WRAP(__gmpz_clear)
 #endif
-        WRAP(jl_gc_counted_malloc)        
+        WRAP(jl_gc_counted_malloc)
         WRAP(jl_gc_counted_realloc_with_old_size)
         WRAP(jl_gc_counted_free_with_size)
+        WRAP(jl_n_threads)
+        WRAP(jl_throw_out_of_memory_error)
 #ifdef _OS_EMSCRIPTEN_
         else {
             jl_(v);

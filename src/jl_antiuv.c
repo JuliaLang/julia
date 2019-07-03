@@ -63,7 +63,7 @@ JL_DLLEXPORT void jl_uv_flush(JL_STREAM *stream) {
 JL_DLLEXPORT void jl_uv_puts(JL_STREAM *stream, const char *str, size_t n)
 {
     assert(stream);
-		
+
 		int fd = -1;
 		// Fallback for output during early initialisation...
     if (stream == (void*)STDOUT_FILENO) {
@@ -78,7 +78,7 @@ JL_DLLEXPORT void jl_uv_puts(JL_STREAM *stream, const char *str, size_t n)
         write(fd, str, n);
 				return;
     }
-		
+
     ios_write((ios_t*)stream, str, n);
 }
 
@@ -205,4 +205,9 @@ JL_DLLEXPORT int jl_is_file(char *fname)
 {
     struct stat stbuf;
     return !(jl_stat(fname, (char*)&stbuf) != 0 || (stbuf.st_mode & S_IFMT) != S_IFREG);
+}
+
+JL_DLLEXPORT void jl_wake_libuv(void)
+{
+    return;
 }
