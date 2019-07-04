@@ -100,9 +100,9 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     println(io, "  LIBM: ",Base.libm_name)
     println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
 
-    env_strs = [String[ "  $(k) = $(v)" for (k,v) in ENV if occursin(r"JULIA", k)];
+    env_strs = [String[ "  $(k) = $(repr(v))" for (k,v) in ENV if occursin(r"JULIA", k)];
                 (verbose ?
-                 String[ "  $(k) = $(v)" for (k,v) in ENV if occursin(r"PATH|FLAG|^TERM$|HOME", k)] :
+                 String[ "  $(k) = $(repr(v))" for (k,v) in ENV if occursin(r"PATH|FLAG|^TERM$|HOME", k)] :
                  [])]
     if !isempty(env_strs)
         println(io, "Environment:")

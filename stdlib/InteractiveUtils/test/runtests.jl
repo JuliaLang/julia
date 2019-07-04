@@ -185,8 +185,11 @@ end
     let exename = `$(Base.julia_cmd()) --startup-file=no`
         @test !occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
                                                     String[]), String))
-        @test  occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
-                                                    String["JULIA_CPU_THREADS=1"]), String))
+        str = read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
+                          String["JULIA_CPU_THREADS=1", "JULIA_EDITOR=atom -a"]), String)
+        @test occursin("Environment:", str)
+        @test occursin("JULIA_CPU_THREADS = \"1\"", str)
+        @test occursin("JULIA_EDITOR = \"atom -a\"", str)
     end
 end
 
