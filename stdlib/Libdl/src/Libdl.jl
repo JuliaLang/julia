@@ -207,7 +207,7 @@ find_library(libname::Union{Symbol,AbstractString}, extrapaths=String[]) =
     find_library([string(libname)], extrapaths)
 
 """
-    dlpath(handle::Ptr{Cvoid})
+    function dlpath(handle::Ptr{Cvoid})
 
 Given a library `handle` from `dlopen`, return the full path.
 """
