@@ -1481,7 +1481,9 @@ CovType{T} = Union{AbstractArray{T,2},
 # issue #31703
 @testintersect(Pair{<:Any, Ref{Tuple{Ref{Ref{Tuple{Int}}},Ref{Float64}}}},
                Pair{T, S} where S<:(Ref{A} where A<:(Tuple{C,Ref{T}} where C<:(Ref{D} where D<:(Ref{E} where E<:Tuple{FF}) where FF<:B)) where B) where T,
-               Pair{Float64, Ref{Tuple{Ref{Ref{Tuple{Int}}},Ref{Float64}}}})
+               Pair{T, Ref{Tuple{Ref{Ref{Tuple{Int}}},Ref{Float64}}}} where T)
+# TODO: should be able to get this result
+#              Pair{Float64, Ref{Tuple{Ref{Ref{Tuple{Int}}},Ref{Float64}}}}
 
 module I31703
 using Test, LinearAlgebra
@@ -1608,6 +1610,13 @@ end
 #end
 
 # issue #32386
-# TODO: intersect currently returns a bad answer here (it has free typevars)
-@test typeintersect(Type{S} where S<:(Array{Pair{_A,N} where N, 1} where _A),
-                    Type{Vector{T}} where T) != Union{}
+@test typeintersect(Type{S} where S<:(Vector{Pair{_A,N} where N} where _A),
+                    Type{Vector{T}} where T) == Type{Vector{Pair{_A,N} where N}} where _A
+
+# issue #32488
+struct S32488{S <: Tuple, T, N, L}
+    data::NTuple{L,T}
+end
+@testintersect(Tuple{Type{T} where T<:(S32488{Tuple{_A}, Int64, 1, _A} where _A), Tuple{Vararg{Int64, D}} where D},
+               Tuple{Type{S32488{S, T, N, L}}, Tuple{Vararg{T, L}}} where L where N where T where S,
+               Tuple{Type{S32488{Tuple{L},Int64,1,L}},Tuple{Vararg{Int64,L}}} where L)

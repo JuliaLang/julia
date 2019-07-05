@@ -2129,19 +2129,35 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     int d = bb->depth0;
     jl_value_t *root=NULL; jl_savedenv_t se;
     if (param == 2) {
-        if (!(subtype_in_env_existential(bb->lb, a, e, 0, d) && subtype_in_env_existential(a, bb->ub, e, 1, d)))
-            return jl_bottom_type;
-        jl_value_t *ub = a;
+        jl_value_t *ub = NULL;
+        JL_GC_PUSH2(&ub, &root);
+        if (!jl_has_free_typevars(a)) {
+            save_env(e, &root, &se);
+            int issub = subtype_in_env_existential(bb->lb, a, e, 0, d) && subtype_in_env_existential(a, bb->ub, e, 1, d);
+            restore_env(e, root, &se);
+            free(se.buf);
+            if (!issub) {
+                JL_GC_POP();
+                return jl_bottom_type;
+            }
+            ub = a;
+        }
+        else {
+            ub = R ? intersect_aside(a, bb->ub, e, 1, d) : intersect_aside(bb->ub, a, e, 0, d);
+            // TODO: we should probably check `bb->lb <: ub` here; find a test case for that
+        }
         if (ub != (jl_value_t*)b) {
             if (jl_has_free_typevars(ub)) {
                 // constraint X == Ref{X} is unsatisfiable. also check variables set equal to X.
                 if (var_occurs_inside(ub, b, 0, 0)) {
+                    JL_GC_POP();
                     return jl_bottom_type;
                 }
                 jl_varbinding_t *btemp = e->vars;
                 while (btemp != NULL) {
                     if (btemp->lb == (jl_value_t*)b && btemp->ub == (jl_value_t*)b &&
                         var_occurs_inside(ub, btemp->var, 0, 0)) {
+                        JL_GC_POP();
                         return jl_bottom_type;
                     }
                     btemp = btemp->prev;
@@ -2150,6 +2166,7 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
             bb->ub = ub;
             bb->lb = ub;
         }
+        JL_GC_POP();
         return ub;
     }
     else if (bb->constraintkind == 0) {
