@@ -10,6 +10,10 @@
 Register a function `f(x)` to be called when there are no program-accessible references to
 `x`, and return `x`. The type of `x` must be a `mutable struct`, otherwise the behavior of
 this function is unpredictable.
+
+`f` must not cause a task switch, which excludes most I/O operations such as `println`.
+`@schedule println("message")` or `ccall(:jl_, Void, (Any,), "message")` may be helpful for
+debugging purposes.
 """
 function finalizer(@nospecialize(f), @nospecialize(o))
     if isimmutable(o)
