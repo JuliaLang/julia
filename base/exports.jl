@@ -646,6 +646,7 @@ export
     islocked,
     istaskdone,
     istaskstarted,
+    istaskfailed,
     lock,
     notify,
     ReentrantLock,
