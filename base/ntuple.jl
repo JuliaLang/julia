@@ -49,7 +49,9 @@ Create a tuple of length `N`, computing each element as `f(i)`,
 where `i` is the index of the element. By taking a `Val(N)` 
 argument, it is possible that this version of ntuple may
 generate more efficient code than the version taking the 
-length as an integer.
+length as an integer. But `ntuple(fun, N)` is preferable
+to `ntuple(fun, Val(N))` in cases where `N` cannot be
+determined at compile time.
 
 # Examples
 ```jldoctest
