@@ -37,7 +37,7 @@ eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedI
 
 ## reshape(::Array, ::Dims) returns an Array, except for isbitsunion eltypes (issue #28611)
 # reshaping to same # of dimensions
-function reshape(a::Array{T,M}, dims::NTuple{N,Int}) where {T,N,M}
+function reshape(a::Array{T,M}, dims::NTuple{N,Integer}) where {T,N,M}
     throw_dmrsa(dims, len) =
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $len"))
 
@@ -112,9 +112,9 @@ reshape(parent::AbstractArray, shp::Tuple{Union{Integer,OneTo}, Vararg{Union{Int
 reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 
 # Allow missing dimensions with Colon():
-reshape(parent::AbstractArray, dims::Int...) = reshape(parent, dims)
-reshape(parent::AbstractArray, dims::Union{Int,Colon}...) = reshape(parent, dims)
-reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = _reshape(parent, _reshape_uncolon(parent, dims))
+reshape(parent::AbstractArray, dims::Integer...) = reshape(parent, dims)
+reshape(parent::AbstractArray, dims::Union{Integer,Colon}...) = reshape(parent, dims)
+reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Integer,Colon}}}) = _reshape(parent, _reshape_uncolon(parent, dims))
 @inline function _reshape_uncolon(A, dims)
     @noinline throw1(dims) = throw(DimensionMismatch(string("new dimensions $(dims) ",
         "may have at most one omitted dimension specified by `Colon()`")))
@@ -221,12 +221,12 @@ dataids(A::ReshapedArray) = dataids(A.parent)
     (_ind2sub_rs(front(ax), tail(strds), r)..., d + first(ax[end]))
 end
 
-@inline function getindex(A::ReshapedArrayLF, index::Int)
+@inline function getindex(A::ReshapedArrayLF, index::Integer)
     @boundscheck checkbounds(A, index)
     @inbounds ret = parent(A)[index]
     ret
 end
-@inline function getindex(A::ReshapedArray{T,N}, indices::Vararg{Int,N}) where {T,N}
+@inline function getindex(A::ReshapedArray{T,N}, indices::Vararg{Integer,N}) where {T,N}
     @boundscheck checkbounds(A, indices...)
     _unsafe_getindex(A, indices...)
 end
@@ -236,7 +236,7 @@ end
     ret
 end
 
-@inline function _unsafe_getindex(A::ReshapedArray{T,N}, indices::Vararg{Int,N}) where {T,N}
+@inline function _unsafe_getindex(A::ReshapedArray{T,N}, indices::Vararg{Integer,N}) where {T,N}
     i = Base._sub2ind(size(A), indices...)
     I = ind2sub_rs(axes(A.parent), A.mi, i)
     _unsafe_getindex_rs(parent(A), I)
@@ -249,7 +249,7 @@ end
     @inbounds parent(A)[index] = val
     val
 end
-@inline function setindex!(A::ReshapedArray{T,N}, val, indices::Vararg{Int,N}) where {T,N}
+@inline function setindex!(A::ReshapedArray{T,N}, val, indices::Vararg{Intger,N}) where {T,N}
     @boundscheck checkbounds(A, indices...)
     _unsafe_setindex!(A, val, indices...)
 end
@@ -259,14 +259,14 @@ end
     val
 end
 
-@inline function _unsafe_setindex!(A::ReshapedArray{T,N}, val, indices::Vararg{Int,N}) where {T,N}
+@inline function _unsafe_setindex!(A::ReshapedArray{T,N}, val, indices::Vararg{Integer,N}) where {T,N}
     @inbounds parent(A)[ind2sub_rs(axes(A.parent), A.mi, Base._sub2ind(size(A), indices...))...] = val
     val
 end
 
 # helpful error message for a common failure case
 const ReshapedRange{T,N,A<:AbstractRange} = ReshapedArray{T,N,A,Tuple{}}
-setindex!(A::ReshapedRange, val, index::Int) = _rs_setindex!_err()
+setindex!(A::ReshapedRange, val, index::Integer) = _rs_setindex!_err()
 setindex!(A::ReshapedRange{T,N}, val, indices::Vararg{Int,N}) where {T,N} = _rs_setindex!_err()
 setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()
 
