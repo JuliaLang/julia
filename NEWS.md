@@ -25,6 +25,7 @@ New library functions
 * `findfirst`, `findlast`, `findnext` and `findprev` now accept a character as first argument
   to search for that character in a string passed as the second argument ([#31664]).
 * New `findall(pattern, string)` method where `pattern` is a string or regex ([#31834]).
+* `istaskfailed` is now documented and exported, like its siblings `istaskdone` and `istaskstarted` ([#32300]).
 
 Standard library changes
 ------------------------
