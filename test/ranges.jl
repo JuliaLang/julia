@@ -1512,3 +1512,10 @@ end
                                             Base.TwicePrecision(-1.0, -0.0), 0)
     @test reverse(reverse(1.0:0.0)) === 1.0:0.0
 end
+
+@testset "Issue #30944 ranges with non-IEEEFloat types" begin
+    # We want to test the creation of a range with BigFloat start or step
+    @test range(big(1.0), length=10) == big(1.0):1:10
+    @test range(1, step = big(1.0), length=10) == big(1.0):1:10
+    @test range(1.0, step = big(1.0), length=10) == big(1.0):1:10
+end
