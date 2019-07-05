@@ -2339,7 +2339,34 @@ julia> filter(isodd, a)
  9
 ```
 """
-filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
+function filter(f, a::Array{T, N}) where {T, N}
+    j = 1
+    b = Vector{T}(undef, length(a))
+    for ai in a
+        @inbounds b[j] = ai
+        j = ifelse(f(ai), j+1, j)
+    end
+    resize!(b, j-1)
+    sizehint!(b, length(b))
+    b
+end
+
+function filter(f, a::AbstractArray)
+    (IndexStyle(a) != IndexLinear()) && return a[map(f, a)::AbstractArray{Bool}]
+
+    j = 1
+    idxs = Vector{Int}(undef, length(a))
+    for idx in eachindex(a)
+        @inbounds idxs[j] = idx
+        ai = @inbounds a[idx]
+        j = ifelse(f(ai), j+1, j)
+    end
+    resize!(idxs, j-1)
+    res = a[idxs]
+    empty!(idxs)
+    sizehint!(idxs, 0)
+    return res
+end
 
 """
     filter!(f, a::AbstractVector)
@@ -2359,26 +2386,20 @@ julia> filter!(isodd, Vector(1:10))
 ```
 """
 function filter!(f, a::AbstractVector)
-    idx = eachindex(a)
-    y = iterate(idx)
-    y === nothing && return a
-    i, state = y
-
-    for acurr in a
-        if f(acurr)
-            @inbounds a[i] = acurr
-            y = iterate(idx, state)
-            y === nothing && (i += 1; break)
-            i, state = y
-        end
+    j = firstindex(a)
+    for ai in a
+        @inbounds a[j] = ai
+        j = ifelse(f(ai), nextind(a, j), j)
     end
-
-    deleteat!(a, i:last(idx))
-
+    j > lastindex(a) && return a
+    if a isa Vector
+        resize!(a, j-1)
+        sizehint!(a, j-1)
+    else
+        deleteat!(a, j:lastindex(a))
+    end
     return a
 end
-
-filter(f, a::Vector) = mapfilter(f, push!, a, empty(a))
 
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.
