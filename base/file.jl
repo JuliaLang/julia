@@ -489,7 +489,7 @@ end
 else # !windows
 # Obtain a temporary filename.
 function tempname()
-    d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
+    d = tempdir() # tempnam ignores TMPDIR on darwin
     p = ccall(:tempnam, Cstring, (Cstring, Cstring), d, temp_prefix)
     systemerror(:tempnam, p == C_NULL)
     s = unsafe_string(p)
@@ -517,9 +517,9 @@ created. The path is likely to be unique, but this cannot be guaranteed.
 
 !!! warning
 
-    This can lead to race conditions if another process obtains the same
-    file name and creates the file before you are able to.
-    Using [`mktemp()`](@ref) is recommended instead.
+    This can lead to security holes if another process obtains the same
+    file name and creates the file before you are able to. Open the file with
+    `JL_O_EXCL` if this is a concern. Using [`mktemp()`](@ref) is also recommended instead.
 """
 tempname()
 
