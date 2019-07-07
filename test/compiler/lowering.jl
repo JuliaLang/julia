@@ -20,7 +20,7 @@ function _expand_forms(ex)
             expand_forms(ex)
         catch exc
             exc isa LoweringError || rethrow()
-            return Expr(:error, exc.msg)
+            return Expr(:error, sprint(show, exc))
         end
     end
 end

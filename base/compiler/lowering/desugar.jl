@@ -10,37 +10,106 @@
 
 using Core: SSAValue
 
-#-------------------------------------------------------------------------------
-# AST tools
-
-# :(f(arg; par)).arg s =>  [:f, Expr(:parameters, :par), :arg]
-has_parameters(args) = length(args) >= 2 && args[2] isa Expr && args[2].head === :parameters
-has_assignment(args) = any(isassignment, args)
+# AST predicates
+#---------------
 
 isquoted(ex) = ex isa QuoteNode || (ex isa Expr &&
-               ex.head in (:quote, :top, :core, :globalref, :outerref, :break, :inert, :meta))
+               ex.head in (:quote, :top, :core, :globalref,
+                           :outerref, :break, :inert, :meta))
+
 issymbollike(ex) = ex isa Symbol || ex isa SSAValue
 
 isassignment(ex) = ex isa Expr && ex.head == :(=)
 
+isdecl(ex)       = ex isa Expr && ex.head == :(::)
+
 # True if `ex` is trivially free of side effects (and hence safe to repeat)
 iseffectfree(ex) = !(ex isa Expr) || isquoted(ex)
+
+# True if `ex` is lhs of short-form function definition
+# f(args...)
+is_eventually_call(ex) = ex isa Expr &&
+                         (ex.head == :call || (ex.head in (:where, :(::)) &&
+                                               is_eventually_call(ex.args[1])))
+
+# Symbol `s` occurs in ex, excluding expression heads and quoted Exprs
+function occursin_ex(s::Symbol, ex)
+    s === ex || (ex isa Expr && !isquoted(ex) && any(e->occursin_ex(s, e), ex.args))
+end
+
+# As above, but test each expression with predicate `pred`. Optionally, filter
+# expressions with `filt`.
+function occursin_ex(pred::Function, ex; filt=e->true)
+    filt(ex) && (pred(ex) || (ex isa Expr && !isquoted(ex) &&
+                              any(e->occursin_ex(pred, e, filt=filt), ex.args)))
+end
+
+# Check for `f(args...; pars...)` syntax
+has_parameters(ex::Expr) = length(ex.args) >= 2 && ex.args[2] isa Expr &&
+                           ex.args[2].head === :parameters
+
+# has_assignment(args) = any(isassignment, args)
+
+# AST matching
+#-------------
+
+decl_var(ex) = isdecl(ex) ? ex.args[1] : ex
+
+# Given a complex assignment LHS, return the symbol that will ultimately be assigned to
+function assigned_name(ex)
+    if ex isa Expr && ex.head in (:call, :curly, :where) || (ex.head == :(::) &&
+                                                             is_eventually_call(ex))
+        assigned_name(ex.args[1])
+    else
+        ex
+    end
+end
+
+# Get list of variable names on lhs of expression
+lhs_vars(ex) = lhs_vars!(Symbol[], ex)
+function lhs_vars!(vars, ex)
+    if ex isa Symbol
+        push!(vars, ex)
+    elseif isdecl(ex)
+        push!(vars, decl_var(ex))
+    elseif ex isa Expr && ex.head == :tuple
+        foreach(e->lhs_vars!(vars, e), ex.args)
+    end
+    vars
+end
+
+# Error checking utilities
+#-------------------------
+struct LoweringError <: Exception
+    msg::String
+    ex
+end
+LoweringError(msg::AbstractString) = LoweringError(msg, nothing)
+
+function Base.show(io::IO, err::LoweringError)
+    print(io, err.msg, " in `", err.ex, "`")
+end
+
+function check_no_assignments(ex)
+    for e in ex.args
+        !isassignment(e) || throw(LoweringError("misplaced assignment statement", ex))
+    end
+end
+error_unexpected_semicolon(ex) = throw(LoweringError("unexpected semicolon", ex))
+
+
+# Utilities for constructing lowered ASTs
+#----------------------------------------
+
+topcall(head, args...) = Expr(:call, Expr(:top, head), args...)
+corecall(head, args...) = Expr(:call, Expr(:core, head), args...)
+blockify(ex) = ex isa Expr && ex.head !== :block ? ex : Expr(:block, ex) # TODO: null Expr?
+mapargs(f, ex) = ex isa Expr ? Expr(ex.head, map(f, ex.args)...) : ex
 
 # FIXME: Counter Should be thread local or in expansion ctx
 let ssa_index = Ref(0)
     global make_ssavalue() = SSAValue(ssa_index[] += 1)
 end
-
-top(ex) = Expr(:top, ex)
-topcall(head, args...) = Expr(:call, Expr(:top, head), args...)
-core(ex) = Expr(:core, ex)
-blockify(ex) = ex isa Expr && ex.head !== :block ? ex : Expr(:block, ex) # TODO: null Expr?
-mapargs(f, ex) = ex isa Expr ? Expr(ex.head, map(f, ex.args)...) : ex
-
-# Symbol `s` occurs in ex
-occursin_ex(s::Symbol, ex::Symbol) = s === ex
-occursin_ex(s::Symbol, ex::Expr) = occursin_ex(s, ex.args)
-occursin_ex(s::Symbol, exs) = any(e->occursin_ex(s, e), exs)
 
 """
     make_ssa_if(need_ssa, ex, stmts)
@@ -57,20 +126,78 @@ function make_ssa_if(need_ssa::Bool, ex, stmts)
         ex
     end
 end
-
 make_ssa_if(need_ssa::Function, ex, stmts) = make_ssa_if(need_ssa(ex), ex, stmts)
-
-function check_no_assigments(ex)
-    for e in ex.args
-        !isassignment(e) || throw(LoweringError("misplaced assigment statement in `$ex`"))
-    end
-end
-error_unexpected_semicolon(ex) = throw(LoweringError("unexpected semicolon in `$ex`"))
 
 
 #-------------------------------------------------------------------------------
-struct LoweringError <: Exception
-    msg::AbstractString
+
+function expand_let(ex)
+    bindings = !(ex.args[1] isa Expr) ? throw(LoweringError("Invalid let syntax", ex)) :
+               ex.args[1].head == :block ? ex.args[1].args : [ex.args[1]]
+    body = isempty(bindings) ?  Expr(:scope_block, blockify(ex.args[2])) : ex.args[2]
+    for binding in reverse(bindings)
+        body =
+        if binding isa Symbol || isdecl(binding)
+            # Just symbol -> add local
+            Expr(:scope_block,
+                 Expr(:block,
+                      Expr(:local, binding),
+                      body))
+        elseif binding isa Expr && binding.head == :(=) && length(binding.args) == 2
+            # Some kind of assignment
+            lhs = binding.args[1]
+            rhs = binding.args[2]
+            if is_eventually_call(lhs)
+                # f() = c
+                error("TODO") # Needs expand_function to be implemented
+            elseif lhs isa Symbol || isdecl(lhs)
+                # `x = c` or `x::T = c`
+                varname = decl_var(lhs)
+                if occursin_ex(varname, rhs)
+                    tmp = make_ssavalue()
+                    Expr(:scope_block,
+                         Expr(:block,
+                              Expr(:(=), tmp, rhs),
+                              Expr(:scope_block,
+                                   Expr(:block,
+                                        Expr(:local_def, lhs),
+                                        Expr(:(=), varname, tmp),
+                                        body))))
+                else
+                    Expr(:scope_block,
+                         Expr(:block,
+                              Expr(:local_def, lhs),
+                              Expr(:(=), varname, rhs),
+                              body))
+                end
+            elseif lhs isa Expr && lhs.head == :tuple
+                # (a, b, c, ...) = rhs
+                vars = lhs_vars(lhs)
+                if occursin_ex(e->e isa Symbol && e in vars, rhs)
+                    tmp = make_ssavalue()
+                    Expr(:scope_block,
+                         Expr(:block,
+                              Expr(:(=), tmp, rhs),
+                              Expr(:scope_block,
+                                   Expr(:block,
+                                        [Expr(:local_def, v) for v in vars]...,
+                                        Expr(:(=), lhs, tmp),
+                                        body))))
+                else
+                    Expr(:scope_block,
+                         Expr(:block,
+                              [Expr(:local_def, v) for v in vars]...,
+                              binding,
+                              body))
+                end
+            else
+                throw(LoweringError("invalid binding in let syntax", binding))
+            end
+        else
+            throw(LoweringError("invalid binding in let syntax", binding))
+        end
+    end
+    expand_forms(body)
 end
 
 """
@@ -169,7 +296,7 @@ function expand_forms(ex)
     elseif head == :->
         expand_todo(ex) # expand-arrow
     elseif head == :let
-        expand_todo(ex) # expand-let
+        expand_let(ex)
     elseif head == :macro
         expand_todo(ex) # expand-macro-def
     elseif head == :struct
@@ -191,7 +318,7 @@ function expand_forms(ex)
     elseif head == :where
         expand_todo(ex) # expand-wheres
     elseif head == :const
-        expand_todo(ex) # expand-const-decl
+        expand_todo(ex)
     elseif head == :local
         expand_todo(ex) # expand-local-or-global-decl
     elseif head == :global
@@ -207,23 +334,24 @@ function expand_forms(ex)
     elseif head == :comparison
         expand_todo(ex) # expand-compare-chain
     elseif head == :ref
-        !has_parameters(args) || error_unexpected_semicolon(ex)
+        !has_parameters(ex) || error_unexpected_semicolon(ex)
         expand_forms(partially_expand_ref(ex))
     elseif head == :curly
         expand_todo(ex) # expand-table
     elseif head == :call
         expand_todo(ex) # expand-table
     elseif head == :do
-        expand_todo(ex) # expand-table
+        callex = args[1]
+        anonfunc = args[2]
+        expand_forms(has_parameters(callex) ?
+            Expr(:call, callex.args[1], callex.args[2], anonfunc, callex.args[3:end]...) :
+            Expr(:call, callex.args[1], anonfunc, callex.args[2:end]...)
+        )
     elseif head == :tuple
         # TODO: NamedTuple lower-named-tuple
-        #if has_parameters(args)
+        #if has_parameters(ex)
         #end
-        expand_forms(Expr(:call, core(:tuple), args...))
-    elseif head == :braces
-        expand_todo(ex) # expand-table
-    elseif head == :bracescat
-        expand_todo(ex) # expand-table
+        expand_forms(corecall(:tuple, args...))
     elseif head == :string
         expand_forms(topcall(:string, args...))
     elseif head == :(::)
@@ -250,28 +378,28 @@ function expand_forms(ex)
                     :(.⊻=), :(<<=), :(.<<=), :(>>=), :(.>>=), :(>>>=), :(.>>>=))
         expand_todo(ex) # lower-update-op
     elseif head == :...
-        throw(LoweringError("`...` expression outside call"))
+        throw(LoweringError("`...` expression outside call", ex))
     elseif head == :$
-        throw(LoweringError("`\$` expression outside quote"))
+        throw(LoweringError("`\$` expression outside quote", ex))
     elseif head == :vect
-        !has_parameters(args) || error_unexpected_semicolon(ex)
-        check_no_assigments(ex)
+        !has_parameters(ex) || error_unexpected_semicolon(ex)
+        check_no_assignments(ex)
         expand_forms(topcall(:vect, args...))
     elseif head == :hcat
-        check_no_assigments(ex)
+        check_no_assignments(ex)
         expand_forms(topcall(:hcat, args...))
     elseif head == :vcat
-        check_no_assigments(ex)
+        check_no_assignments(ex)
         if any(e->e isa Expr && e.head == :row, args)
             expand_hvcat(ex)
         else
             expand_forms(topcall(:vcat, args...))
         end
     elseif head == :typed_hcat
-        check_no_assigments(ex)
+        check_no_assignments(ex)
         expand_forms(topcall(:typed_hcat, args...))
     elseif head == :typed_vcat
-        check_no_assigments(ex)
+        check_no_assignments(ex)
         if any(e->e isa Expr && e.head == :row, args)
             expand_hvcat(ex)
         else
