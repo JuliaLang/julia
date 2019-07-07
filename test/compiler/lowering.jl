@@ -567,6 +567,38 @@ end
     end
 end
 
+@testset_desugar "Do syntax" begin
+    f(x) do y
+        body(y)
+    end
+    f(begin
+          local gsym1
+          begin
+              @Expr(:method, gsym1)
+              @Expr(:method, gsym1, Core.svec(Core.svec(Core.Typeof(gsym1), Core.Any), Core.svec()), @Expr(:lambda, [_self_, y], [], @Expr(:scope_block, body(y))))
+              maybe_unused(gsym1)
+          end
+      end, x)
+
+    f(x; a=1) do y
+        body(y)
+    end
+    begin
+        ssa1 = begin
+            local gsym1
+            begin
+                @Expr(:method, gsym1)
+                @Expr(:method, gsym1, Core.svec(Core.svec(Core.Typeof(gsym1), Core.Any), Core.svec()), @Expr(:lambda, [_self_, y], [], @Expr(:scope_block, body(y))))
+                maybe_unused(gsym1)
+            end
+        end
+        begin
+            ssa2 = (Core.apply_type(Core.NamedTuple, Core.tuple(:a)))(Core.tuple(1))
+            (Core.kwfunc(f))(ssa2, f, ssa1, x)
+        end
+    end
+end
+
 @testset_desugar "In place update operators" begin
     # flisp: (lower-update-op)
     x += a
@@ -828,7 +860,7 @@ end
     end
 end
 
-@testset_desugar "where to UnionAll expansion" begin
+@testset_desugar "where -> UnionAll expansion" begin
     A{T} where T
     @Expr(:scope_block, begin
               @Expr(:local_def, T)
