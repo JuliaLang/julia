@@ -104,6 +104,7 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
             jl_ptls_t ptls = jl_get_ptls_states();                  \
             jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);   \
             *(void**)jl_data_ptr(v) = &symname;                     \
+            JL_GC_POP();                                            \
             return v;                                               \
         }
 
@@ -111,16 +112,19 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
             jl_ptls_t ptls = jl_get_ptls_states();
             jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
             *(void**)jl_data_ptr(v) = &jl_options;
+            JL_GC_POP();
             return v;
         } else if (strcmp(name, "jl_uv_stdout") == 0) {
             jl_ptls_t ptls = jl_get_ptls_states();
             jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
             *(void**)jl_data_ptr(v) = &JL_STDOUT;
+            JL_GC_POP();
             return v;
         } else if (strcmp(name, "jl_uv_stderr") == 0) {
             jl_ptls_t ptls = jl_get_ptls_states();
             jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
             *(void**)jl_data_ptr(v) = &JL_STDERR;
+            JL_GC_POP();
             return v;
         }
 #ifdef _OS_EMSCRIPTEN_
