@@ -356,7 +356,7 @@ extern void jl_install_sigint_handler(void);
 extern void jl_sigatomic_begin(void);
 extern void jl_sigatomic_end(void);
 extern jl_task_t * jl_new_task(jl_function_t *, jl_value_t *, size_t);
-extern void jl_switchto(jl_task_t **);
+extern void jl_switchto(jl_value_t *);
 extern void jl_throw(jl_value_t *);
 extern void jl_rethrow(void);
 extern void jl_sig_throw(void);
@@ -4055,7 +4055,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return result;
 } else if (strcmp(target, "jl_switchto") == 0) {
 	jl_switchto(
-			(jl_task_t **) jl_unbox_voidpointer(eval_value(args[5], s))
+			(jl_value_t *) eval_value(args[5], s)
 		);
 	return jl_nothing;
 } else if (strcmp(target, "jl_throw") == 0) {
