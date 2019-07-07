@@ -5644,10 +5644,9 @@ static std::unique_ptr<Module> emit_function(
             tableKind = DICompileUnit::DebugNameTableKind::None;
         }
 #endif
-        // TODO: Fix when moving to new LLVM version
         topfile = dbuilder.createFile(ctx.file, ".");
         DICompileUnit *CU =
-            dbuilder.createCompileUnit(0x01          // Language -- C89
+            dbuilder.createCompileUnit(llvm::dwarf::DW_LANG_Julia
                                        ,topfile      // File
                                        ,"julia"      // Producer
                                        ,true         // isOptimized
