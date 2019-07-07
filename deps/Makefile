@@ -1,12 +1,13 @@
 ## high-level setup ##
 default: install
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
-SRCCACHE := $(abspath $(SRCDIR)/srccache)
 JULIAHOME := $(abspath $(SRCDIR)/..)
 ifeq ($(abspath .),$(abspath $(SRCDIR)))
 BUILDDIR := scratch
+SRCCACHE := $(abspath $(SRCDIR)/srccache)
 else
 BUILDDIR := .
+SRCCACHE := $(abspath ./srccache)
 endif
 include $(SRCDIR)/Versions.make
 include $(JULIAHOME)/Make.inc
