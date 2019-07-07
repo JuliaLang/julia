@@ -145,7 +145,7 @@ static NOINLINE int true_main(int argc, char *argv[])
 
 void JL_DLLEXPORT jl_initialize() {
     char* argv2[]={"./julia", "-C", "\"native\"", "--compile=no", "--startup-file=no", "-J", "sys.ji", 0};
-    int argc = 9;
+    int argc = 7;
     char *argv = argv2;
     libsupport_init();
     jl_parse_opts(&argc, (char***)&argv);
@@ -176,7 +176,7 @@ void JL_DLLEXPORT jl_eval_and_print(const char *line)
 
 int main(int argc, char *argv[]) {
     char* argv2[]={"./julia", "-C", "\"native\"", "--compile=no", "--startup-file=no", "-J", "sys.ji", 0};
-    argc = 9;
+    argc = 7;
     argv = argv2;
     libsupport_init();
     int lisp_prompt = (argc >= 2 && strcmp((char*)argv[1],"--lisp") == 0);
