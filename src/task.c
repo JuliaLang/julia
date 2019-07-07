@@ -368,8 +368,9 @@ static jl_ptls_t NOINLINE refetch_ptls(void)
     return jl_get_ptls_states();
 }
 
-JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
+JL_DLLEXPORT void jl_switchto(jl_value_t *v)
 {
+    jl_task_t **pt = (jl_task_t**)v;
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_task_t *t = *pt;
     jl_task_t *ct = ptls->current_task;
