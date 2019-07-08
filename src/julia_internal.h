@@ -1016,6 +1016,10 @@ void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
 
 int isabspath(const char *in);
 
+// TODO(NHDALY): Find the right spot for this.
+JL_DLLEXPORT void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m,
+                              jl_svec_t *sparam_vals, int binding_effects);
+
 extern jl_sym_t *call_sym;    extern jl_sym_t *invoke_sym;
 extern jl_sym_t *empty_sym;   extern jl_sym_t *top_sym;
 extern jl_sym_t *module_sym;  extern jl_sym_t *slot_sym;
