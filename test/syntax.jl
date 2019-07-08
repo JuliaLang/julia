@@ -1864,3 +1864,14 @@ let
     a32325(x) = a32325()
 end
 @test a32325(0) === a32325()
+
+# issue #32499
+x32499 = begin
+    struct S32499
+        function S32499(; x=1)
+            x
+        end
+    end
+    S32499(x=2)
+end
+@test x32499 == 2
