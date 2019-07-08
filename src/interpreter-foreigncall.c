@@ -702,6 +702,8 @@ extern void jl_typeinf_end(void);
 extern jl_value_t * jl_get_current_task(void);
 extern int jl_is_task_started(jl_task_t *);
 extern int16_t jl_get_task_tid(jl_task_t *);
+extern void jl_set_task_tid(jl_task_t *, int);
+extern jl_task_t * jl_task_get_next(jl_value_t *);
 extern int pcre2_config_8(uint32_t, void *);
 struct pcre2_real_general_context_8;
 typedef struct pcre2_real_general_context_8 pcre2_general_context_8;
@@ -1918,6 +1920,116 @@ extern void fill_array_open_close(double *, ptrdiff_t);
 extern void fill_array_close_open(double *, ptrdiff_t);
 extern void fill_array_open_open(double *, ptrdiff_t);
 extern void fill_array_close1_open2(double *, ptrdiff_t);
+extern void emscripten_run_script(const char *);
+extern int emscripten_run_script_int(const char *);
+extern char * emscripten_run_script_string(const char *);
+extern void emscripten_async_run_script(const char *, int);
+typedef void *em_callback_func;
+typedef void *em_callback_func;
+extern void emscripten_async_load_script(const char *, em_callback_func, em_callback_func);
+typedef void *em_callback_func;
+extern void emscripten_set_main_loop(em_callback_func, int, int);
+extern int emscripten_set_main_loop_timing(int, int);
+extern void emscripten_get_main_loop_timing(int *, int *);
+typedef void *em_arg_callback_func;
+extern void emscripten_set_main_loop_arg(em_arg_callback_func, void *, int, int);
+extern void emscripten_pause_main_loop(void);
+extern void emscripten_resume_main_loop(void);
+extern void emscripten_cancel_main_loop(void);
+typedef void *em_socket_error_callback;
+extern void emscripten_set_socket_error_callback(void *, em_socket_error_callback);
+typedef void *em_socket_callback;
+extern void emscripten_set_socket_open_callback(void *, em_socket_callback);
+typedef void *em_socket_callback;
+extern void emscripten_set_socket_listen_callback(void *, em_socket_callback);
+typedef void *em_socket_callback;
+extern void emscripten_set_socket_connection_callback(void *, em_socket_callback);
+typedef void *em_socket_callback;
+extern void emscripten_set_socket_message_callback(void *, em_socket_callback);
+typedef void *em_socket_callback;
+extern void emscripten_set_socket_close_callback(void *, em_socket_callback);
+typedef void *em_arg_callback_func;
+extern void _emscripten_push_main_loop_blocker(em_arg_callback_func, void *, const char *);
+typedef void *em_arg_callback_func;
+extern void _emscripten_push_uncounted_main_loop_blocker(em_arg_callback_func, void *, const char *);
+extern void emscripten_set_main_loop_expected_blockers(int);
+typedef void *em_arg_callback_func;
+extern void emscripten_async_call(em_arg_callback_func, void *, int);
+extern void emscripten_exit_with_live_runtime(void);
+extern void emscripten_force_exit(int);
+extern double emscripten_get_device_pixel_ratio(void);
+extern void emscripten_hide_mouse(void);
+extern void emscripten_set_canvas_size(int, int);
+extern void emscripten_get_canvas_size(int *, int *, int *);
+extern double emscripten_get_now(void);
+extern float emscripten_random(void);
+typedef void *em_str_callback_func;
+typedef void *em_str_callback_func;
+extern void emscripten_async_wget(const char *, const char *, em_str_callback_func, em_str_callback_func);
+typedef void *em_async_wget_onload_func;
+typedef void *em_arg_callback_func;
+extern void emscripten_async_wget_data(const char *, void *, em_async_wget_onload_func, em_arg_callback_func);
+typedef void *em_async_wget2_onload_func;
+typedef void *em_async_wget2_onstatus_func;
+typedef void *em_async_wget2_onstatus_func;
+extern int emscripten_async_wget2(const char *, const char *, const char *, const char *, void *, em_async_wget2_onload_func, em_async_wget2_onstatus_func, em_async_wget2_onstatus_func);
+typedef void *em_async_wget2_data_onload_func;
+typedef void *em_async_wget2_data_onerror_func;
+typedef void *em_async_wget2_data_onprogress_func;
+extern int emscripten_async_wget2_data(const char *, const char *, const char *, void *, int, em_async_wget2_data_onload_func, em_async_wget2_data_onerror_func, em_async_wget2_data_onprogress_func);
+extern void emscripten_async_wget2_abort(int);
+extern void emscripten_wget(const char *, const char *);
+extern void emscripten_wget_data(const char *, void **, int *, int *);
+typedef void *em_async_wget_onload_func;
+typedef void *em_arg_callback_func;
+extern void emscripten_idb_async_load(const char *, const char *, void *, em_async_wget_onload_func, em_arg_callback_func);
+typedef void *em_arg_callback_func;
+typedef void *em_arg_callback_func;
+extern void emscripten_idb_async_store(const char *, const char *, void *, int, void *, em_arg_callback_func, em_arg_callback_func);
+typedef void *em_arg_callback_func;
+typedef void *em_arg_callback_func;
+extern void emscripten_idb_async_delete(const char *, const char *, void *, em_arg_callback_func, em_arg_callback_func);
+typedef void *em_idb_exists_func;
+typedef void *em_arg_callback_func;
+extern void emscripten_idb_async_exists(const char *, const char *, void *, em_idb_exists_func, em_arg_callback_func);
+extern void emscripten_idb_load(const char *, const char *, void **, int *, int *);
+extern void emscripten_idb_store(const char *, const char *, void *, int, int *);
+extern void emscripten_idb_delete(const char *, const char *, int *);
+extern void emscripten_idb_exists(const char *, const char *, int *, int *);
+extern void emscripten_idb_load_blob(const char *, const char *, int *, int *);
+extern void emscripten_idb_store_blob(const char *, const char *, void *, int, int *);
+extern void emscripten_idb_read_from_blob(int, int, int, void *);
+extern void emscripten_idb_free_blob(int);
+typedef void *em_str_callback_func;
+typedef void *em_str_callback_func;
+extern int emscripten_run_preload_plugins(const char *, em_str_callback_func, em_str_callback_func);
+typedef void *em_run_preload_plugins_data_onload_func;
+typedef void *em_arg_callback_func;
+extern void emscripten_run_preload_plugins_data(char *, int, const char *, void *, em_run_preload_plugins_data_onload_func, em_arg_callback_func);
+typedef int worker_handle;
+extern worker_handle emscripten_create_worker(const char *);
+extern void emscripten_destroy_worker(worker_handle);
+typedef void *em_worker_callback_func;
+extern void emscripten_call_worker(worker_handle, const char *, char *, int, em_worker_callback_func, void *);
+extern void emscripten_worker_respond(char *, int);
+extern void emscripten_worker_respond_provisionally(char *, int);
+extern int emscripten_get_worker_queue_size(worker_handle);
+extern int emscripten_get_compiler_setting(const char *);
+extern void emscripten_debugger(void);
+extern char * emscripten_get_preloaded_image_data(const char *, int *, int *);
+struct _IO_FILE;
+typedef struct _IO_FILE FILE;
+extern char * emscripten_get_preloaded_image_data_from_FILE(FILE *, int *, int *);
+extern void emscripten_log(int, ...);
+extern int emscripten_get_callstack(int, char *, int);
+extern int emscripten_print_double(double, char *, int);
+extern void emscripten_sleep(unsigned int);
+extern void emscripten_sleep_with_yield(unsigned int);
+typedef void * emscripten_coroutine;
+typedef void *em_arg_callback_func;
+extern emscripten_coroutine emscripten_coroutine_create(em_arg_callback_func, void *, int);
+extern int emscripten_coroutine_next(emscripten_coroutine);
+extern void emscripten_yield(void);
 
 
 struct interpreter_state;
@@ -6115,6 +6227,17 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_task_t *) eval_value(args[5], s)
 		);
 	return jl_box_int16(result);
+} else if (strcmp(target, "jl_set_task_tid") == 0) {
+	jl_set_task_tid(
+			(jl_task_t *) eval_value(args[5], s),
+			(int) jl_unbox_int32(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "jl_task_get_next") == 0) {
+	jl_task_t * result = jl_task_get_next(
+			(jl_value_t *) eval_value(args[5], s)
+		);
+	return result;
 } else if (strcmp(target, "pcre2_config_8") == 0) {
 	int result = pcre2_config_8(
 			(uint32_t) jl_unbox_uint32(eval_value(args[5], s)),
@@ -12460,6 +12583,469 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(double *) jl_unbox_voidpointer(eval_value(args[5], s)),
 			(ptrdiff_t) jl_unbox_long(eval_value(args[6], s))
 		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_run_script") == 0) {
+	emscripten_run_script(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_run_script_int") == 0) {
+	int result = emscripten_run_script_int(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s))
+		);
+	return jl_box_int32(result);
+} else if (strcmp(target, "emscripten_run_script_string") == 0) {
+	char * result = emscripten_run_script_string(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s))
+		);
+	jl_ptls_t ptls = jl_get_ptls_states();
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
+	*(void**)jl_data_ptr(v) = (void*)result;
+	return v;
+
+} else if (strcmp(target, "emscripten_async_run_script") == 0) {
+	emscripten_async_run_script(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(int) jl_unbox_int32(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_async_load_script") == 0) {
+	emscripten_async_load_script(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(em_callback_func) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(em_callback_func) jl_unbox_voidpointer(eval_value(args[7], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_set_main_loop") == 0) {
+	emscripten_set_main_loop(
+			(em_callback_func) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(int) jl_unbox_int32(eval_value(args[6], s)),
+			(int) jl_unbox_int32(eval_value(args[7], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_set_main_loop_timing") == 0) {
+	int result = emscripten_set_main_loop_timing(
+			(int) jl_unbox_int32(eval_value(args[5], s)),
+			(int) jl_unbox_int32(eval_value(args[6], s))
+		);
+	return jl_box_int32(result);
+} else if (strcmp(target, "emscripten_get_main_loop_timing") == 0) {
+	emscripten_get_main_loop_timing(
+			(int *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(int *) jl_unbox_voidpointer(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_set_main_loop_arg") == 0) {
+	emscripten_set_main_loop_arg(
+			(em_arg_callback_func) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(void *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(int) jl_unbox_int32(eval_value(args[7], s)),
+			(int) jl_unbox_int32(eval_value(args[8], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_pause_main_loop") == 0) {
+	emscripten_pause_main_loop();
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_resume_main_loop") == 0) {
+	emscripten_resume_main_loop();
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_cancel_main_loop") == 0) {
+	emscripten_cancel_main_loop();
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_set_socket_error_callback") == 0) {
+	emscripten_set_socket_error_callback(
+			(void *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(em_socket_error_callback) jl_unbox_voidpointer(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_set_socket_open_callback") == 0) {
+	emscripten_set_socket_open_callback(
+			(void *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(em_socket_callback) jl_unbox_voidpointer(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_set_socket_listen_callback") == 0) {
+	emscripten_set_socket_listen_callback(
+			(void *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(em_socket_callback) jl_unbox_voidpointer(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_set_socket_connection_callback") == 0) {
+	emscripten_set_socket_connection_callback(
+			(void *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(em_socket_callback) jl_unbox_voidpointer(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_set_socket_message_callback") == 0) {
+	emscripten_set_socket_message_callback(
+			(void *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(em_socket_callback) jl_unbox_voidpointer(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_set_socket_close_callback") == 0) {
+	emscripten_set_socket_close_callback(
+			(void *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(em_socket_callback) jl_unbox_voidpointer(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "_emscripten_push_main_loop_blocker") == 0) {
+	_emscripten_push_main_loop_blocker(
+			(em_arg_callback_func) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(void *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(const char *) jl_unbox_voidpointer(eval_value(args[7], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "_emscripten_push_uncounted_main_loop_blocker") == 0) {
+	_emscripten_push_uncounted_main_loop_blocker(
+			(em_arg_callback_func) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(void *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(const char *) jl_unbox_voidpointer(eval_value(args[7], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_set_main_loop_expected_blockers") == 0) {
+	emscripten_set_main_loop_expected_blockers(
+			(int) jl_unbox_int32(eval_value(args[5], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_async_call") == 0) {
+	emscripten_async_call(
+			(em_arg_callback_func) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(void *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(int) jl_unbox_int32(eval_value(args[7], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_exit_with_live_runtime") == 0) {
+	emscripten_exit_with_live_runtime();
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_force_exit") == 0) {
+	emscripten_force_exit(
+			(int) jl_unbox_int32(eval_value(args[5], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_get_device_pixel_ratio") == 0) {
+	double result = emscripten_get_device_pixel_ratio();
+	return jl_box_float64(result);
+} else if (strcmp(target, "emscripten_hide_mouse") == 0) {
+	emscripten_hide_mouse();
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_set_canvas_size") == 0) {
+	emscripten_set_canvas_size(
+			(int) jl_unbox_int32(eval_value(args[5], s)),
+			(int) jl_unbox_int32(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_get_canvas_size") == 0) {
+	emscripten_get_canvas_size(
+			(int *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(int *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(int *) jl_unbox_voidpointer(eval_value(args[7], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_get_now") == 0) {
+	double result = emscripten_get_now();
+	return jl_box_float64(result);
+} else if (strcmp(target, "emscripten_random") == 0) {
+	float result = emscripten_random();
+	return jl_box_float32(result);
+} else if (strcmp(target, "emscripten_async_wget") == 0) {
+	emscripten_async_wget(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(const char *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(em_str_callback_func) jl_unbox_voidpointer(eval_value(args[7], s)),
+			(em_str_callback_func) jl_unbox_voidpointer(eval_value(args[8], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_async_wget_data") == 0) {
+	emscripten_async_wget_data(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(void *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(em_async_wget_onload_func) jl_unbox_voidpointer(eval_value(args[7], s)),
+			(em_arg_callback_func) jl_unbox_voidpointer(eval_value(args[8], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_async_wget2") == 0) {
+	int result = emscripten_async_wget2(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(const char *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(const char *) jl_unbox_voidpointer(eval_value(args[7], s)),
+			(const char *) jl_unbox_voidpointer(eval_value(args[8], s)),
+			(void *) jl_unbox_voidpointer(eval_value(args[9], s)),
+			(em_async_wget2_onload_func) jl_unbox_voidpointer(eval_value(args[10], s)),
+			(em_async_wget2_onstatus_func) jl_unbox_voidpointer(eval_value(args[11], s)),
+			(em_async_wget2_onstatus_func) jl_unbox_voidpointer(eval_value(args[12], s))
+		);
+	return jl_box_int32(result);
+} else if (strcmp(target, "emscripten_async_wget2_data") == 0) {
+	int result = emscripten_async_wget2_data(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(const char *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(const char *) jl_unbox_voidpointer(eval_value(args[7], s)),
+			(void *) jl_unbox_voidpointer(eval_value(args[8], s)),
+			(int) jl_unbox_int32(eval_value(args[9], s)),
+			(em_async_wget2_data_onload_func) jl_unbox_voidpointer(eval_value(args[10], s)),
+			(em_async_wget2_data_onerror_func) jl_unbox_voidpointer(eval_value(args[11], s)),
+			(em_async_wget2_data_onprogress_func) jl_unbox_voidpointer(eval_value(args[12], s))
+		);
+	return jl_box_int32(result);
+} else if (strcmp(target, "emscripten_async_wget2_abort") == 0) {
+	emscripten_async_wget2_abort(
+			(int) jl_unbox_int32(eval_value(args[5], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_wget") == 0) {
+	emscripten_wget(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(const char *) jl_unbox_voidpointer(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_wget_data") == 0) {
+	emscripten_wget_data(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(void **) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(int *) jl_unbox_voidpointer(eval_value(args[7], s)),
+			(int *) jl_unbox_voidpointer(eval_value(args[8], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_idb_async_load") == 0) {
+	emscripten_idb_async_load(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(const char *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(void *) jl_unbox_voidpointer(eval_value(args[7], s)),
+			(em_async_wget_onload_func) jl_unbox_voidpointer(eval_value(args[8], s)),
+			(em_arg_callback_func) jl_unbox_voidpointer(eval_value(args[9], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_idb_async_store") == 0) {
+	emscripten_idb_async_store(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(const char *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(void *) jl_unbox_voidpointer(eval_value(args[7], s)),
+			(int) jl_unbox_int32(eval_value(args[8], s)),
+			(void *) jl_unbox_voidpointer(eval_value(args[9], s)),
+			(em_arg_callback_func) jl_unbox_voidpointer(eval_value(args[10], s)),
+			(em_arg_callback_func) jl_unbox_voidpointer(eval_value(args[11], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_idb_async_delete") == 0) {
+	emscripten_idb_async_delete(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(const char *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(void *) jl_unbox_voidpointer(eval_value(args[7], s)),
+			(em_arg_callback_func) jl_unbox_voidpointer(eval_value(args[8], s)),
+			(em_arg_callback_func) jl_unbox_voidpointer(eval_value(args[9], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_idb_async_exists") == 0) {
+	emscripten_idb_async_exists(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(const char *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(void *) jl_unbox_voidpointer(eval_value(args[7], s)),
+			(em_idb_exists_func) jl_unbox_voidpointer(eval_value(args[8], s)),
+			(em_arg_callback_func) jl_unbox_voidpointer(eval_value(args[9], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_idb_load") == 0) {
+	emscripten_idb_load(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(const char *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(void **) jl_unbox_voidpointer(eval_value(args[7], s)),
+			(int *) jl_unbox_voidpointer(eval_value(args[8], s)),
+			(int *) jl_unbox_voidpointer(eval_value(args[9], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_idb_store") == 0) {
+	emscripten_idb_store(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(const char *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(void *) jl_unbox_voidpointer(eval_value(args[7], s)),
+			(int) jl_unbox_int32(eval_value(args[8], s)),
+			(int *) jl_unbox_voidpointer(eval_value(args[9], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_idb_delete") == 0) {
+	emscripten_idb_delete(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(const char *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(int *) jl_unbox_voidpointer(eval_value(args[7], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_idb_exists") == 0) {
+	emscripten_idb_exists(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(const char *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(int *) jl_unbox_voidpointer(eval_value(args[7], s)),
+			(int *) jl_unbox_voidpointer(eval_value(args[8], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_idb_load_blob") == 0) {
+	emscripten_idb_load_blob(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(const char *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(int *) jl_unbox_voidpointer(eval_value(args[7], s)),
+			(int *) jl_unbox_voidpointer(eval_value(args[8], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_idb_store_blob") == 0) {
+	emscripten_idb_store_blob(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(const char *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(void *) jl_unbox_voidpointer(eval_value(args[7], s)),
+			(int) jl_unbox_int32(eval_value(args[8], s)),
+			(int *) jl_unbox_voidpointer(eval_value(args[9], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_idb_read_from_blob") == 0) {
+	emscripten_idb_read_from_blob(
+			(int) jl_unbox_int32(eval_value(args[5], s)),
+			(int) jl_unbox_int32(eval_value(args[6], s)),
+			(int) jl_unbox_int32(eval_value(args[7], s)),
+			(void *) jl_unbox_voidpointer(eval_value(args[8], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_idb_free_blob") == 0) {
+	emscripten_idb_free_blob(
+			(int) jl_unbox_int32(eval_value(args[5], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_run_preload_plugins") == 0) {
+	int result = emscripten_run_preload_plugins(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(em_str_callback_func) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(em_str_callback_func) jl_unbox_voidpointer(eval_value(args[7], s))
+		);
+	return jl_box_int32(result);
+} else if (strcmp(target, "emscripten_run_preload_plugins_data") == 0) {
+	emscripten_run_preload_plugins_data(
+			(char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(int) jl_unbox_int32(eval_value(args[6], s)),
+			(const char *) jl_unbox_voidpointer(eval_value(args[7], s)),
+			(void *) jl_unbox_voidpointer(eval_value(args[8], s)),
+			(em_run_preload_plugins_data_onload_func) jl_unbox_voidpointer(eval_value(args[9], s)),
+			(em_arg_callback_func) jl_unbox_voidpointer(eval_value(args[10], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_create_worker") == 0) {
+	worker_handle result = emscripten_create_worker(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s))
+		);
+	return jl_box_int32(result);
+} else if (strcmp(target, "emscripten_destroy_worker") == 0) {
+	emscripten_destroy_worker(
+			(worker_handle) jl_unbox_int32(eval_value(args[5], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_call_worker") == 0) {
+	emscripten_call_worker(
+			(worker_handle) jl_unbox_int32(eval_value(args[5], s)),
+			(const char *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(char *) jl_unbox_voidpointer(eval_value(args[7], s)),
+			(int) jl_unbox_int32(eval_value(args[8], s)),
+			(em_worker_callback_func) jl_unbox_voidpointer(eval_value(args[9], s)),
+			(void *) jl_unbox_voidpointer(eval_value(args[10], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_worker_respond") == 0) {
+	emscripten_worker_respond(
+			(char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(int) jl_unbox_int32(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_worker_respond_provisionally") == 0) {
+	emscripten_worker_respond_provisionally(
+			(char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(int) jl_unbox_int32(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_get_worker_queue_size") == 0) {
+	int result = emscripten_get_worker_queue_size(
+			(worker_handle) jl_unbox_int32(eval_value(args[5], s))
+		);
+	return jl_box_int32(result);
+} else if (strcmp(target, "emscripten_get_compiler_setting") == 0) {
+	int result = emscripten_get_compiler_setting(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s))
+		);
+	return jl_box_int32(result);
+} else if (strcmp(target, "emscripten_debugger") == 0) {
+	emscripten_debugger();
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_get_preloaded_image_data") == 0) {
+	char * result = emscripten_get_preloaded_image_data(
+			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(int *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(int *) jl_unbox_voidpointer(eval_value(args[7], s))
+		);
+	jl_ptls_t ptls = jl_get_ptls_states();
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
+	*(void**)jl_data_ptr(v) = (void*)result;
+	return v;
+
+} else if (strcmp(target, "emscripten_get_preloaded_image_data_from_FILE") == 0) {
+	char * result = emscripten_get_preloaded_image_data_from_FILE(
+			(FILE *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(int *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(int *) jl_unbox_voidpointer(eval_value(args[7], s))
+		);
+	jl_ptls_t ptls = jl_get_ptls_states();
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
+	*(void**)jl_data_ptr(v) = (void*)result;
+	return v;
+
+} else if (strcmp(target, "emscripten_log") == 0) {
+	emscripten_log(
+			(int) jl_unbox_int32(eval_value(args[5], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_get_callstack") == 0) {
+	int result = emscripten_get_callstack(
+			(int) jl_unbox_int32(eval_value(args[5], s)),
+			(char *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(int) jl_unbox_int32(eval_value(args[7], s))
+		);
+	return jl_box_int32(result);
+} else if (strcmp(target, "emscripten_print_double") == 0) {
+	int result = emscripten_print_double(
+			(double) jl_unbox_float64(eval_value(args[5], s)),
+			(char *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(int) jl_unbox_int32(eval_value(args[7], s))
+		);
+	return jl_box_int32(result);
+} else if (strcmp(target, "emscripten_sleep") == 0) {
+	emscripten_sleep(
+			(unsigned int) jl_unbox_uint32(eval_value(args[5], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_sleep_with_yield") == 0) {
+	emscripten_sleep_with_yield(
+			(unsigned int) jl_unbox_uint32(eval_value(args[5], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_coroutine_create") == 0) {
+	emscripten_coroutine result = emscripten_coroutine_create(
+			(em_arg_callback_func) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(void *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(int) jl_unbox_int32(eval_value(args[7], s))
+		);
+	jl_ptls_t ptls = jl_get_ptls_states();
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
+	*(void**)jl_data_ptr(v) = (void*)result;
+	return v;
+
+} else if (strcmp(target, "emscripten_coroutine_next") == 0) {
+	int result = emscripten_coroutine_next(
+			(emscripten_coroutine) jl_unbox_voidpointer(eval_value(args[5], s))
+		);
+	return jl_box_int32(result);
+} else if (strcmp(target, "emscripten_yield") == 0) {
+	emscripten_yield();
 	return jl_nothing;
 } 
 
