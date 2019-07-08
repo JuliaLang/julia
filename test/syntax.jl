@@ -1878,3 +1878,14 @@ let f = identity(identity() do
                  end)
     @test f() == 3
 end
+
+# issue #32499
+x32499 = begin
+    struct S32499
+        function S32499(; x=1)
+            x
+        end
+    end
+    S32499(x=2)
+end
+@test x32499 == 2
