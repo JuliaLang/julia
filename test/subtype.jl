@@ -1543,3 +1543,8 @@ let X = LinearAlgebra.Symmetric{T, S} where S<:(AbstractArray{U, 2} where U<:T) 
               LinearAlgebra.Symmetric{T, S} where S<:(AbstractArray{U, 2} where U<:T) where T}
     @test X <: Y
 end
+
+# issue #32386
+# TODO: intersect currently returns a bad answer here (it has free typevars)
+@test typeintersect(Type{S} where S<:(Array{Pair{_A,N} where N, 1} where _A),
+                    Type{Vector{T}} where T) != Union{}

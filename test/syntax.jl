@@ -1848,6 +1848,30 @@ macro id28992(x) x end
 @test @id28992(2 ^ -2) == 0.25
 @test @id28992(2 .^ -2) == 0.25
 
+# issue #32121
+@test @id28992((a=1, b=2)) === (a=1, b=2)
+a32121 = 8
+b32121 = 9
+@test @id28992((a32121=a32121, b32121=b32121)) === (a32121=8, b32121=9)
+
 # issue #31596
 f31596(x; kw...) = x
 @test f31596((a=1,), b = 1.0) === (a=1,)
+
+# issue #32325
+let
+    struct a32325 end
+    a32325(x) = a32325()
+end
+@test a32325(0) === a32325()
+
+# issue #32499
+x32499 = begin
+    struct S32499
+        function S32499(; x=1)
+            x
+        end
+    end
+    S32499(x=2)
+end
+@test x32499 == 2

@@ -840,9 +840,9 @@
                      (error (string "field name \"" (deparse v) "\" is not a symbol"))))
                field-names)
      `(block
+       (global ,name) (const ,name)
        (scope-block
         (block
-         (global ,name) (const ,name)
          ,@(map (lambda (v) `(local ,v)) params)
          ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
          (struct_type ,name (call (core svec) ,@params)
@@ -1794,6 +1794,14 @@
                 (else
                  (error (string "invalid " syntax-str " \"" (deparse el) "\""))))))))
 
+;; move an assignment into the last statement of a block to keep more statements at top level
+(define (sink-assignment lhs rhs)
+  (if (and (pair? rhs) (eq? (car rhs) 'block))
+      (let ((rr (reverse (cdr rhs))))
+        `(block ,@(reverse (cdr rr))
+                (= ,lhs ,(car rr))))
+      `(= ,lhs ,rhs)))
+
 (define (expand-forms e)
   (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref line module toplevel ssavalue null meta using import export)))
       e
@@ -1882,20 +1890,13 @@
                         ,@(map (lambda (l) `(= ,l ,rr))
                                lhss)
                         (unnecessary ,rr)))))))
-      ((and (symbol-like? lhs) (valid-name? lhs))
-       `(= ,lhs ,(expand-forms (caddr e))))
+      ((or (and (symbol-like? lhs) (valid-name? lhs))
+           (globalref? lhs))
+       (sink-assignment lhs (expand-forms (caddr e))))
       ((atom? lhs)
        (error (string "invalid assignment location \"" (deparse lhs) "\"")))
       (else
        (case (car lhs)
-         ((globalref)
-          ;; M.b =
-          (let* ((rhs (caddr e))
-                 (rr  (if (or (symbol-like? rhs) (atom? rhs)) rhs (make-ssavalue))))
-            `(block
-              ,.(if (eq? rr rhs) '() `((= ,rr ,(expand-forms rhs))))
-              (= ,lhs ,rr)
-              (unnecessary ,rr))))
          ((|.|)
           ;; a.b =
           (let* ((a   (cadr lhs))
@@ -1909,9 +1910,9 @@
                           b (make-ssavalue)))
                   (rr (if (or (symbol-like? rhs) (atom? rhs)) rhs (make-ssavalue))))
               `(block
-                ,.(if (eq? aa a)   '() `((= ,aa ,(expand-forms a))))
-                ,.(if (eq? bb b)   '() `((= ,bb ,(expand-forms b))))
-                ,.(if (eq? rr rhs) '() `((= ,rr ,(expand-forms rhs))))
+                ,.(if (eq? aa a)   '() (list (sink-assignment aa (expand-forms a))))
+                ,.(if (eq? bb b)   '() (list (sink-assignment bb (expand-forms b))))
+                ,.(if (eq? rr rhs) '() (list (sink-assignment rr (expand-forms rhs))))
                 (call (top setproperty!) ,aa ,bb ,rr)
                 (unnecessary ,rr)))))
          ((tuple)
@@ -1933,7 +1934,7 @@
                 (let* ((xx  (if (or (and (symbol? x) (not (memq x lhss)))
                                     (ssavalue? x))
                                 x (make-ssavalue)))
-                       (ini (if (eq? x xx) '() `((= ,xx ,(expand-forms x)))))
+                       (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x)))))
                        (n   (length lhss))
                        (st  (gensy)))
                   `(block
@@ -1965,7 +1966,7 @@
                    (stmts (if reuse `((= ,arr ,(expand-forms a))) '()))
                    (rrhs (and (pair? rhs) (not (ssavalue? rhs)) (not (quoted? rhs))))
                    (r    (if rrhs (make-ssavalue) rhs))
-                   (rini (if rrhs `((= ,r ,(expand-forms rhs))) '())))
+                   (rini (if rrhs (list (sink-assignment r (expand-forms rhs))) '())))
               (receive
                (new-idxs stuff) (process-indices arr idxs)
                `(block

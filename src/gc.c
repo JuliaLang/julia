@@ -3,6 +3,9 @@
 #include "gc.h"
 #include "julia_gcext.h"
 #include "julia_assert.h"
+#ifdef __GLIBC__
+#include <malloc.h> // for malloc_trim
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -555,6 +558,10 @@ static int prev_sweep_full = 1;
 // Full collection heuristics
 static int64_t live_bytes = 0;
 static int64_t promoted_bytes = 0;
+#ifdef __GLIBC__
+// maxrss at last malloc_trim
+static int64_t last_trim_maxrss = 0;
+#endif
 
 static int64_t last_full_live_ub = 0;
 static int64_t last_full_live_est = 0;
@@ -2500,7 +2507,9 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
     gc_mark_queue_obj(gc_cache, sp, jl_main_module);
 
     // tasks
+#ifdef JULIA_ENABLE_THREADING
     jl_gc_mark_enqueued_tasks(gc_cache, sp);
+#endif
 
     // invisible builtin values
     if (jl_an_empty_vec_any != NULL)
@@ -2683,6 +2692,8 @@ static void jl_gc_queue_bt_buf(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp
     }
 }
 
+size_t jl_maxrss(void);
+
 // Only one thread should be running in this function
 static int _jl_gc_collect(jl_ptls_t ptls, int full)
 {
@@ -2838,6 +2849,18 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
             ptls2->heap.rem_bindings.len = 0;
         }
     }
+
+#ifdef __GLIBC__
+    if (sweep_full) {
+        // issue #30653
+        // empirically, the malloc runaway seemed to occur within a growth gap
+        // of about 20-25%
+        if (jl_maxrss() > (last_trim_maxrss/4)*5) {
+            malloc_trim(0);
+            last_trim_maxrss = jl_maxrss();
+        }
+    }
+#endif
 
     uint64_t gc_end_t = jl_hrtime();
     uint64_t pause = gc_end_t - t0;

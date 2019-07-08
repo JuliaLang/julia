@@ -28,7 +28,7 @@ function find_curl()
         "/usr/bin/curl"
     elseif Sys.iswindows() && Sys.isexecutable(joinpath(get(ENV, "SYSTEMROOT", "C:\\Windows"), "System32\\curl.exe"))
         joinpath(get(ENV, "SYSTEMROOT", "C:\\Windows"), "System32\\curl.exe")
-    elseif Sys.which("curl") !== nothing
+    elseif !Sys.iswindows() && Sys.which("curl") !== nothing
         "curl"
     else
         nothing
