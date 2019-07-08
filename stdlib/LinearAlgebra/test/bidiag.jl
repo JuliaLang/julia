@@ -313,6 +313,7 @@ Random.seed!(1)
 
             # Issue #31870
             # Bi/Tri/Sym times Diagonal
+            Dense = rand(elty, 10, 10)
             Diag = Diagonal(rand(elty, 10))
             BidiagU = Bidiagonal(rand(elty, 10), rand(elty, 9), 'U')
             BidiagL = Bidiagonal(rand(elty, 10), rand(elty, 9), 'L')
@@ -321,20 +322,42 @@ Random.seed!(1)
 
             mats = [Diag, BidiagU, BidiagL, Tridiag, SymTri]
             for a in mats
+                @test typeof(Dense*a) <: Array
+                @test typeof(a*Dense) <: Array
                 for b in mats
                     @test a*b ≈ Matrix(a)*Matrix(b)
                 end
             end
 
-            @test typeof(BidiagU*Diag) <: Bidiagonal
+            @test typeof(Diag*Diag) <: Diagonal
+            @test typeof(Diag*BidiagL) <: Bidiagonal
+            @test typeof(Diag*BidiagU) <: Bidiagonal
+            @test typeof(Diag*Tridiag) <: Tridiagonal
+            @test typeof(Diag*SymTri) <: Tridiagonal
+
             @test typeof(BidiagL*Diag) <: Bidiagonal
-            @test typeof(Tridiag*Diag) <: Tridiagonal
-            @test typeof(SymTri*Diag)  <: Tridiagonal
+            @test typeof(BidiagL*BidiagL) <: SparseMatrixCSC
+            @test typeof(BidiagL*BidiagU) <: Tridiagonal
+            @test typeof(BidiagL*Tridiag) <: SparseMatrixCSC
+            @test typeof(BidiagL*SymTri) <: SparseMatrixCSC
 
             @test typeof(BidiagU*Diag) <: Bidiagonal
-            @test typeof(Diag*BidiagL) <: Bidiagonal
-            @test typeof(Diag*Tridiag) <: Tridiagonal
-            @test typeof(Diag*SymTri)  <: Tridiagonal
+            @test typeof(BidiagU*BidiagL) <: Tridiagonal
+            @test typeof(BidiagU*BidiagU) <: SparseMatrixCSC
+            @test typeof(BidiagU*Tridiag) <: SparseMatrixCSC
+            @test typeof(BidiagU*SymTri) <: SparseMatrixCSC
+
+            @test typeof(Tridiag*Diag) <: Tridiagonal
+            @test typeof(Tridiag*BidiagL) <: SparseMatrixCSC
+            @test typeof(Tridiag*BidiagU) <: SparseMatrixCSC
+            @test typeof(Tridiag*Tridiag) <: SparseMatrixCSC
+            @test typeof(Tridiag*SymTri) <: SparseMatrixCSC
+
+            @test typeof(SymTri*Diag) <: Tridiagonal
+            @test typeof(SymTri*BidiagL) <: SparseMatrixCSC
+            @test typeof(SymTri*BidiagU) <: SparseMatrixCSC
+            @test typeof(SymTri*Tridiag) <: SparseMatrixCSC
+            @test typeof(SymTri*SymTri) <: SparseMatrixCSC
         end
 
         @test inv(T)*Tfull ≈ Matrix(I, n, n)
