@@ -6,6 +6,11 @@
 #include <unistd.h>
 #include <errno.h>
 
+#ifdef _OS_EMSCRIPTEN_
+#include <emscripten.h>
+#endif
+
+
 JL_DLLEXPORT int jl_printf(JL_STREAM *s, const char *format, ...)
 {
     va_list args;
@@ -89,7 +94,11 @@ JL_DLLEXPORT void jl_uv_putb(JL_STREAM *stream, uint8_t b)
 
 JL_DLLEXPORT void JL_NORETURN jl_exit(int status)
 {
+#ifdef _OS_EMSCRIPTEN_
+    emscripten_force_exit(status);
+#else
     exit(status);
+#endif
 }
 
 JL_DLLEXPORT int jl_cwd(char *buf, size_t *sz)
