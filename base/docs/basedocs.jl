@@ -601,6 +601,7 @@ catch
 end
 ```
 or, when the file cannot be read into a variable:
+
 ```julia
 lines = try
     open("/danger", "r") do f
