@@ -229,9 +229,18 @@ end
 end
 
 @testset "min and max" begin
-    for a in [Dates.Date(2000), Dates.Time(10), Dates.DateTime(3000), Dates.Week(42)]
+    for (a, b) in [(Dates.Date(2000), Dates.Date(2001)),
+                    (Dates.Time(10), Dates.Time(11)),
+                    (Dates.DateTime(3000), Dates.DateTime(3001)),
+                    (Dates.Week(42), Dates.Week(1972))]
+        @test min(a, b) == a
+        @test min(b, a) == a
         @test min(a) == a
-        @test max(a) == a
+        @test max(a, b) == b
+        @test max(b, a) == b
+        @test max(b) == b
+        @test minmax(a, b) == (a, b)
+        @test minmax(b, a) == (a, b)
         @test minmax(a) == (a, a)
     end
 end
