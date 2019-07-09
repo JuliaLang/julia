@@ -40,6 +40,7 @@ Standard library changes
   when operating over zero-dimensional arrays ([#32122]).
 * `IPAddr` subtypes now behave like scalars when used in broadcasting ([#32133]).
 * `clamp` can now handle missing values ([#31066]).
+* `empty` now accepts a `NamedTuple` ([#32534])
 
 #### Libdl
 
