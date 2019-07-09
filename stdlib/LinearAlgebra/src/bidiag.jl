@@ -632,7 +632,6 @@ function *(A::SymTridiagonal, B::Diagonal)
 end
 
 #Generic multiplication
-*(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = *(Array(A), B)
 *(adjA::Adjoint{<:Any,<:Bidiagonal{T}}, B::AbstractVector{T}) where {T} = *(adjoint(Array(adjA.parent)), B)
 *(A::Bidiagonal{T}, adjB::Adjoint{<:Any,<:AbstractVector{T}}) where {T} = *(Array(A), adjoint(adjB.parent))
 /(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = /(Array(A), B)
