@@ -123,10 +123,10 @@ static inline int multiq_insert(jl_task_t *task, int16_t priority)
 
     heaps[rn].tasks[heaps[rn].ntasks++] = task;
     sift_up(&heaps[rn], heaps[rn].ntasks-1);
-    jl_mutex_unlock_nogc(&heaps[rn].lock);
     int16_t prio = jl_atomic_load(&heaps[rn].prio);
     if (task->prio < prio)
-        jl_atomic_compare_exchange(&heaps[rn].prio, prio, task->prio);
+        jl_atomic_store(&heaps[rn].prio, task->prio);
+    jl_mutex_unlock_nogc(&heaps[rn].lock);
 
     return 0;
 }
