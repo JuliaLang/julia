@@ -2282,7 +2282,17 @@
                (begin (check-identifier t)
                       (if (closing-token? t)
                           (error (string "unexpected \"" (take-token s) "\"")))))
-           (take-token s))
+           (take-token s)
+           (if (and (eq? t 'var) (eqv? (peek-token s) #\") (not (ts:space? s)))
+             (begin
+               ;; var"funky identifier" syntax
+               (take-token s)
+               (let ((str (parse-raw-literal s #\"))
+                     (nxt (peek-token s)))
+                 (if (and (symbol? nxt) (not (operator? nxt)) (not (ts:space? s)))
+                   (error (string "suffix not allowed after `var\"" str "\"`")))
+                 (symbol str)))
+             t))
 
           ;; parens or tuple
           ((eqv? t #\( )
