@@ -35,13 +35,6 @@ void jl_timing_block_stop(jl_timing_block_t *cur_block);
 #define JL_TIMING(owner)
 #else
 
-static inline uint64_t rdtscp(void)
-{
-    uint64_t rax,rdx;
-    asm volatile ( "rdtscp\n" : "=a" (rax), "=d" (rdx) : : "rcx" );
-    return (rdx << 32) + rax;
-}
-
 #define JL_TIMING_OWNERS          \
         X(ROOT),                  \
         X(GC),                    \

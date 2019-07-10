@@ -505,18 +505,12 @@ JL_DLLEXPORT void jl_threading_run(jl_value_t *func)
         args2[1] = (jl_value_t*)t;
         jl_apply(args2, 2);
 #ifdef JULIA_ENABLE_THREADING
-        if (i == 1) {
+        if (i == 2 && nthreads > 2) {
             // let threads know work is coming (optimistic)
             jl_wakeup_thread(-1);
         }
 #endif
     }
-#ifdef JULIA_ENABLE_THREADING
-    if (nthreads > 2) {
-        // let threads know work is ready (guaranteed)
-        jl_wakeup_thread(-1);
-    }
-#endif
     // join with all tasks
     JL_TRY {
         for (int i = 0; i < nthreads; i++) {

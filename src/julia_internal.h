@@ -123,6 +123,17 @@ void JL_UV_LOCK(void);
 extern "C" {
 #endif
 
+// timers
+// Returns time in nanosec
+JL_DLLEXPORT uint64_t jl_hrtime(void);
+
+STATIC_INLINE uint64_t rdtscp(void)
+{
+    uint64_t rax, rdx;
+    asm volatile ( "rdtscp\n" : "=a" (rax), "=d" (rdx) : : "rcx" );
+    return (rdx << 32) + rax;
+}
+
 #include "timing.h"
 
 #ifdef _COMPILER_MICROSOFT_
@@ -720,10 +731,6 @@ void jl_push_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_AR
                       jl_value_t *exception JL_ROOTED_ARGUMENT,
                       uintptr_t *bt_data, size_t bt_size);
 void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFEPOINT;
-
-// timers
-// Returns time in nanosec
-JL_DLLEXPORT uint64_t jl_hrtime(void);
 
 // congruential random number generator
 // for a small amount of thread-local randomness
