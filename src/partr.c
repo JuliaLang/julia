@@ -311,16 +311,14 @@ static int sleep_check_after_threshold(uint64_t *start_cycles)
 }
 
 
-static void wake_thread(int16_t self, int16_t tid)
+static void wake_thread(int16_t tid)
 {
-    if (self != tid) {
-        jl_ptls_t other = jl_all_tls_states[tid];
-        int16_t state = jl_atomic_exchange(&other->sleep_check_state, not_sleeping);
-        if (state == sleeping) {
-            uv_mutex_lock(&other->sleep_lock);
-            uv_cond_signal(&other->wake_signal);
-            uv_mutex_unlock(&other->sleep_lock);
-        }
+    jl_ptls_t other = jl_all_tls_states[tid];
+    int16_t state = jl_atomic_exchange(&other->sleep_check_state, not_sleeping);
+    if (state == sleeping) {
+        uv_mutex_lock(&other->sleep_lock);
+        uv_cond_signal(&other->wake_signal);
+        uv_mutex_unlock(&other->sleep_lock);
     }
 }
 
@@ -345,34 +343,37 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     int16_t self = ptls->tid;
+    unsigned long system_self = jl_all_tls_states[self]->system_id;
     int16_t uvlock = jl_atomic_load_acquire(&jl_uv_mutex.owner);
-    if (tid == self) {
+    if (tid == self || tid == -1) {
         // we're already awake, but make sure we'll exit uv_run
         jl_atomic_store(&ptls->sleep_check_state, not_sleeping);
-        if (uvlock == self)
+        if (uvlock == system_self)
             uv_stop(jl_global_event_loop());
     }
 #ifdef JULIA_ENABLE_THREADING
     else {
+        // something added to the sticky-queue: notify that thread
+        wake_thread(tid);
+        // check if we need to notify uv_run too
+        if (uvlock != system_self)
+            jl_wake_libuv();
+    }
+    if (tid == -1) {
         // check if the other threads might be sleeping
         if (jl_atomic_load_acquire(&sleep_check_state) != not_sleeping) {
-            if (tid == -1) {
-                // something added to the multi-queue: notify all threads
-                // in the future, we might want to instead wake some fraction of threads,
-                // and let each of those wake additional threads if they find work
-                int16_t state = jl_atomic_exchange(&sleep_check_state, not_sleeping);
-                if (state == sleeping) {
-                    for (tid = 0; tid < jl_n_threads; tid++)
-                        wake_thread(self, tid);
-                }
+            // something added to the multi-queue: notify all threads
+            // in the future, we might want to instead wake some fraction of threads,
+            // and let each of those wake additional threads if they find work
+            int16_t state = jl_atomic_exchange(&sleep_check_state, not_sleeping);
+            if (state == sleeping) {
+                for (tid = 0; tid < jl_n_threads; tid++)
+                    if (tid != self)
+                        wake_thread(tid);
+                // check if we need to notify uv_run too
+                if (uvlock != system_self)
+                    jl_wake_libuv();
             }
-            else {
-                // something added to the sticky-queue: notify that thread
-                wake_thread(self, tid);
-            }
-            // check if we need to notify uv_run too
-            if (uvlock != self)
-                jl_wake_libuv();
         }
     }
 #endif
