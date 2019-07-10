@@ -190,14 +190,12 @@ struct _jl_tls_states_t {
     // this is limited to the few places we do synchronous IO
     // we can make this more general (similar to defer_signal) if necessary
     volatile sig_atomic_t io_wait;
-#ifndef _OS_WINDOWS_
-    // These are only used on unix now
-    pthread_t system_id;
-    void *signal_stack;
-#endif
 #ifdef _OS_WINDOWS_
     int needs_resetstkoflw;
+#else
+    void *signal_stack;
 #endif
+    unsigned long system_id;
     // execution of certain certain impure
     // statements is prohibited from certain
     // callbacks (such as generated functions)
