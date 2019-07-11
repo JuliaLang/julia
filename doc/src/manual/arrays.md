@@ -397,7 +397,7 @@ julia> x[1, [2 3; 4 1]]
  13  1
 ```
 
-## Assignment
+## [Assignment](@id multi-dim-arrays-assignment)
 
 The general syntax for assigning values in an n-dimensional array `A` is:
 

@@ -324,6 +324,23 @@ end
 
 This has the exact same effect as the previous definition of `foo`.
 
+[Assignment](@ref multi-dim-arrays-assignment) into arrays works as expected with multiple
+return values:
+```jldoctest
+julia> A = [0, 0]
+2-element Array{Int64,1}:
+ 0
+ 0
+
+julia> A[1], c = foo(2, 3)
+(5, 6)
+
+julia> A
+2-element Array{Int64,1}:
+ 5
+ 0
+```
+
 ## Argument destructuring
 
 The destructuring feature can also be used within a function argument.
