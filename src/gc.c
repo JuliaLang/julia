@@ -571,41 +571,13 @@ static int prev_sweep_full = 1;
 // Full collection heuristics
 static int64_t live_bytes = 0;
 static int64_t promoted_bytes = 0;
+static int64_t last_full_live = 0;  // live_bytes after last full collection
+static int64_t last_live_bytes = 0; // live_bytes at last collection
+static int64_t grown_heap_age = 0;  // # of collects since live_bytes grew and remained
 #ifdef __GLIBC__
 // maxrss at last malloc_trim
 static int64_t last_trim_maxrss = 0;
 #endif
-
-static int64_t last_full_live_ub = 0;
-static int64_t last_full_live_est = 0;
-// upper bound and estimated live object sizes
-// This heuristic should be really unlikely to trigger.
-// However, this should be simple enough to trigger a full collection
-// when it's necessary if other heuristics are messed up.
-// It is also possible to take the total memory available into account
-// if necessary.
-STATIC_INLINE int gc_check_heap_size(int64_t sz_ub, int64_t sz_est)
-{
-    if (__unlikely(!last_full_live_ub || last_full_live_ub > sz_ub)) {
-        last_full_live_ub = sz_ub;
-    }
-    else if (__unlikely(last_full_live_ub * 3 / 2 < sz_ub)) {
-        return 1;
-    }
-    if (__unlikely(!last_full_live_est || last_full_live_est > sz_est)) {
-        last_full_live_est = sz_est;
-    }
-    else if (__unlikely(last_full_live_est * 2 < sz_est)) {
-        return 1;
-    }
-    return 0;
-}
-
-STATIC_INLINE void gc_update_heap_size(int64_t sz_ub, int64_t sz_est)
-{
-    last_full_live_ub = sz_ub;
-    last_full_live_est = sz_est;
-}
 
 static void gc_sync_cache_nolock(jl_ptls_t ptls, jl_gc_mark_cache_t *gc_cache) JL_NOTSAFEPOINT
 {
@@ -2834,20 +2806,25 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     int large_frontier = nptr*sizeof(void*) >= default_collect_interval; // many pointers in the intergen frontier => "quick" mark is not quick
     int sweep_full;
     int recollect = 0;
+    // trigger a full collection if the number of live bytes doubles since the last full
+    // collection and then remains at least that high for a while.
+    if (grown_heap_age == 0) {
+        if (live_bytes > 2 * last_full_live)
+            grown_heap_age = 1;
+    }
+    else if (live_bytes >= last_live_bytes) {
+        grown_heap_age++;
+    }
     if ((full || large_frontier ||
          ((not_freed_enough || promoted_bytes >= gc_num.interval) &&
           (promoted_bytes >= default_collect_interval || prev_sweep_full)) ||
-         gc_check_heap_size(live_sz_ub, live_sz_est)) &&
+         grown_heap_age > 1) &&
         gc_num.pause > 1) {
-        gc_update_heap_size(live_sz_ub, live_sz_est);
         recollect = full;
         if (large_frontier)
             gc_num.interval = last_long_collect_interval;
         if (not_freed_enough || large_frontier) {
-            if (gc_num.interval < default_collect_interval) {
-                gc_num.interval = default_collect_interval;
-            }
-            else if (gc_num.interval <= 2*(max_collect_interval/5)) {
+            if (gc_num.interval <= 2*(max_collect_interval/5)) {
                 gc_num.interval = 5 * (gc_num.interval / 2);
             }
         }
@@ -2856,7 +2833,12 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
         promoted_bytes = 0;
     }
     else {
-        gc_num.interval = default_collect_interval / 2;
+        // reset interval to default, or at least half of live_bytes
+        int64_t half = live_bytes/2;
+        if (default_collect_interval < half && half <= max_collect_interval)
+            gc_num.interval = half;
+        else
+            gc_num.interval = default_collect_interval;
         sweep_full = gc_sweep_always_full;
     }
     if (sweep_full)
@@ -2910,9 +2892,14 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,
                         estimate_freed, sweep_full);
     gc_num.full_sweep += sweep_full;
-    prev_sweep_full = sweep_full;
     gc_num.allocd = -(int64_t)gc_num.interval;
+    last_live_bytes = live_bytes;
     live_bytes += -gc_num.freed + gc_num.since_sweep;
+    if (prev_sweep_full) {
+        last_full_live = live_bytes;
+        grown_heap_age = 0;
+    }
+    prev_sweep_full = sweep_full;
     gc_num.pause += !recollect;
     gc_num.total_time += pause;
     gc_num.since_sweep = 0;
