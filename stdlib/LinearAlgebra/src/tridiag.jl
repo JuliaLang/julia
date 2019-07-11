@@ -649,3 +649,30 @@ end
 
 Base._sum(A::Tridiagonal, ::Colon) = sum(A.d) + sum(A.dl) + sum(A.du)
 Base._sum(A::SymTridiagonal, ::Colon) = sum(A.dv) + 2sum(A.ev)
+
+# tdma with Thomas algorithm
+function (\)(M::Tridiagonal{T}, rhs::AbstractVector{S}) where {T,S}
+    require_one_based_indexing(M, rhs)
+    N = length(rhs)
+    (size(M,1) == size(M,2) == N) || throw(DimensionMismatch("right-hand vector has leading dimension $N, but should be $(size(M,1))"))
+
+    TS = promote_op(/, T, S)
+    phi = similar(rhs, TS)
+    gamma = similar(rhs, TS)
+
+    @inbounds beta = M.d[1]
+    @inbounds phi[1] = rhs[1] / beta
+
+    @inbounds for j=2:N
+        gamma[j] = M.du[j-1] / beta
+        beta = M.d[j] - M.dl[j-1]*gamma[j]
+        phi[j] = (rhs[j] - M.dl[j-1]*phi[j-1]) / beta
+    end
+
+    @inbounds for j=1:N-1
+        k = N-j
+        phi[k] = phi[k] - gamma[k+1]*phi[k+1]
+    end
+
+    return phi
+end
