@@ -101,7 +101,9 @@
 // task options ---------------------------------------------------------------
 
 // select whether to allow the COPY_STACKS stack switching implementation
+#ifndef _CPU_WASM_
 #define COPY_STACKS
+#endif
 // select whether to use COPY_STACKS for new Tasks by default
 //#define ALWAYS_COPY_STACKS
 
