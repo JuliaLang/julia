@@ -376,7 +376,6 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
     jl_ptls_t ptls = jl_get_ptls_states();
     int16_t uvlock = jl_atomic_load(&jl_uv_mutex.owner);
     int16_t self = ptls->tid;
-    unsigned long system_tid = jl_all_tls_states[tid]->system_id;
     unsigned long system_self = jl_all_tls_states[self]->system_id;
     JULIA_DEBUG_SLEEPWAKE( wakeup_enter = rdtscp(); )
     if (tid == self || tid == -1) {
@@ -391,7 +390,7 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
         // something added to the sticky-queue: notify that thread
         wake_thread(tid);
         // check if we need to notify uv_run too
-        if (uvlock != system_self && jl_atomic_load(&jl_uv_mutex.owner) == system_tid)
+        if (uvlock != system_self && tid != -1 && jl_atomic_load(&jl_uv_mutex.owner) == jl_all_tls_states[tid]->system_id)
             wake_libuv();
     }
     // check if the other threads might be sleeping
