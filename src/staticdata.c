@@ -891,7 +891,7 @@ static void jl_write_gv_ints(jl_serializer_state *s)
 
 static inline uint32_t load_uint32(uintptr_t *base)
 {
-    uint32_t v = **(uint32_t**)base;
+    uint32_t v = jl_load_unaligned_i32((void*)*base);
     *base += 4;
     return v;
 }

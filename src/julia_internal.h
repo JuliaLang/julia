@@ -13,12 +13,6 @@
 #define sleep(x) Sleep(1000*x)
 #endif
 
-#ifdef __has_builtin
-#  define jl_has_builtin(x) __has_builtin(x)
-#else
-#  define jl_has_builtin(x) 0
-#endif
-
 #if defined(__has_feature)
 #if __has_feature(address_sanitizer)
 #define JL_ASAN_ENABLED     // Clang flavor
@@ -55,42 +49,6 @@
 #      define alignof(...) 1
 #    endif
 #  endif
-#endif
-
-#if jl_has_builtin(__builtin_assume)
-#define jl_assume(cond) (__extension__ ({               \
-                __typeof__(cond) cond_ = (cond);        \
-                __builtin_assume(!!(cond_));            \
-                cond_;                                  \
-            }))
-#elif defined(_COMPILER_MICROSOFT_) && defined(__cplusplus)
-template<typename T>
-static inline T
-jl_assume(T v)
-{
-    __assume(!!v);
-    return v;
-}
-#elif defined(_COMPILER_INTEL_)
-#define jl_assume(cond) (__extension__ ({               \
-                __typeof__(cond) cond_ = (cond);        \
-                __assume(!!(cond_));                    \
-                cond_;                                  \
-            }))
-#elif defined(__GNUC__)
-static inline void jl_assume_(int cond)
-{
-    if (!cond) {
-        __builtin_unreachable();
-    }
-}
-#define jl_assume(cond) (__extension__ ({               \
-                __typeof__(cond) cond_ = (cond);        \
-                jl_assume_(!!(cond_));                  \
-                cond_;                                  \
-            }))
-#else
-#define jl_assume(cond) (cond)
 #endif
 
 #if defined(__GLIBC__) && defined(JULIA_HAS_IFUNC_SUPPORT)
@@ -179,7 +137,7 @@ void gc_sweep_sysimg(void);
 static const int jl_gc_sizeclasses[] = {
 #ifdef _P64
     8,
-#elif defined(_CPU_ARM_) || defined(_CPU_PPC_)
+#elif MAX_ALIGN == 8
     // ARM and PowerPC have max alignment of 8,
     // make sure allocation of size 8 has that alignment.
     4, 8,
@@ -218,7 +176,7 @@ STATIC_INLINE int jl_gc_alignment(size_t sz)
 #ifdef _P64
     (void)sz;
     return 16;
-#elif defined(_CPU_ARM_) || defined(_CPU_PPC_)
+#elif MAX_ALIGN == 8
     return sz <= 4 ? 8 : 16;
 #else
     // szclass 8
@@ -246,7 +204,7 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass(unsigned sz)
     if (sz <= 8)
         return 0;
     const int N = 0;
-#elif defined(_CPU_ARM_) || defined(_CPU_PPC_)
+#elif MAX_ALIGN == 8
     if (sz <= 8)
         return (sz >= 4 ? 1 : 0);
     const int N = 1;
@@ -1060,32 +1018,6 @@ void jl_register_fptrs(uint64_t sysimage_base, const struct _jl_sysimg_fptrs_t *
                        jl_method_instance_t **linfos, size_t n);
 
 extern arraylist_t partial_inst;
-
-#if jl_has_builtin(__builtin_assume_aligned) || defined(_COMPILER_GCC_)
-#define jl_assume_aligned(ptr, align) __builtin_assume_aligned(ptr, align)
-#elif defined(_COMPILER_INTEL_)
-#define jl_assume_aligned(ptr, align) (__extension__ ({         \
-                __typeof__(ptr) ptr_ = (ptr);                   \
-                __assume_aligned(ptr_, align);                  \
-                ptr_;                                           \
-            }))
-#elif defined(__GNUC__)
-#define jl_assume_aligned(ptr, align) (__extension__ ({         \
-                __typeof__(ptr) ptr_ = (ptr);                   \
-                jl_assume(((uintptr_t)ptr) % (align) == 0);     \
-                ptr_;                                           \
-            }))
-#elif defined(__cplusplus)
-template<typename T>
-static inline T
-jl_assume_aligned(T ptr, unsigned align)
-{
-    (void)jl_assume(((uintptr_t)ptr) % align == 0);
-    return ptr;
-}
-#else
-#define jl_assume_aligned(ptr, align) (ptr)
-#endif
 
 #if jl_has_builtin(__builtin_unreachable) || defined(_COMPILER_GCC_) || defined(_COMPILER_INTEL_)
 #  define jl_unreachable() __builtin_unreachable()
