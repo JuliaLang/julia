@@ -462,7 +462,7 @@ typedef struct {
     jl_value_t *value;
     jl_value_t *globalref;  // cached GlobalRef for this binding
     struct _jl_module_t *owner;  // for individual imported bindings
-    uint8_t constp:1;
+    uint8_t constp;
     uint8_t exportp:1;
     uint8_t imported:1;
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
@@ -486,6 +486,7 @@ typedef struct _jl_module_t {
     uint32_t counter;
     int32_t nospecialize;  // global bit flags: initialization for new methods
     uint8_t istopmod;
+    jl_mutex_t lock;
 } jl_module_t;
 
 // one Type-to-Value entry
