@@ -1626,7 +1626,7 @@ function densemv(A::SparseMatrixCSC, x::AbstractSparseVector; trans::AbstractCha
     xlen == length(x) || throw(DimensionMismatch())
     T = promote_op(matprod, eltype(A), eltype(x))
     y = Vector{T}(undef, ylen)
-    if trans == 'N' || trans == 'N'
+    if trans == 'N' || trans == 'n'
         mul!(y, A, x)
     elseif trans == 'T' || trans == 't'
         mul!(y, transpose(A), x)
