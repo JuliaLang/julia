@@ -12,7 +12,9 @@ struct Rational{T<:Integer} <: Real
 
     function Rational{T}(num::Integer, den::Integer) where T<:Integer
         num == den == zero(T) && __throw_rational_argerror_zero(T)
-        den == typemin(T) &&  __throw_rational_argerror_typemin(T)
+        if T <: Signed && hasmethod(typemin, Tuple{Type{T}})
+            den == typemin(T) &&  __throw_rational_argerror_typemin(T)
+        end
         num2, den2 = signbit(den) ? divgcd(-num, -den) : divgcd(num, den)
         new(num2, den2)
     end
