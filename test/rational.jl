@@ -32,6 +32,8 @@ using Test
     @test_throws ArgumentError rationalize(Int, big(3.0), -1.)
     # issue 26823
     @test_throws InexactError rationalize(Int, NaN)
+    # issue 32569
+    @test_throws ArgumentError 1 // typemin(Int)
 
     for a = -5:5, b = -5:5
         if a == b == 0; continue; end
