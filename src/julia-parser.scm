@@ -700,7 +700,7 @@
 ;; symbol tokens that do not simply parse to themselves when appearing alone as
 ;; an element of an argument list
 (define non-standalone-symbol-token?
-  (Set (append operators reserved-words '(.... mutable primitive abstract))))
+  (Set (append operators reserved-words '(.... mutable primitive abstract incomplete))))
 
 ; parse-eq* is used where commas are special, for example in an argument list
 (define (parse-eq* s)
@@ -1061,7 +1061,7 @@
              (fix-syntactic-unary (list op arg)))))))
 
 (define block-form? (Set '(block quote if for while let function macro abstract primitive struct
-                                 try module)))
+                                 try module incomplete)))
 
 ;; handle ^ and .^
 ;; -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
@@ -1102,7 +1102,7 @@
   (parse-call-with-initial-ex s (parse-unary-prefix s)))
 
 (define (parse-call-with-initial-ex s ex)
-  (if (or (initial-reserved-word? ex) (eq? ex 'mutable) (eq? ex 'primitive) (eq? ex 'abstract))
+  (if (or (initial-reserved-word? ex) (eq? ex 'mutable) (eq? ex 'primitive) (eq? ex 'abstract) (eq? ex 'incomplete))
       (parse-resword s ex)
       (parse-call-chain s ex #f)))
 
@@ -1428,6 +1428,13 @@
                      (body (parse-block s)))
                 (expect-end s word)
                 (list word def body)))))
+       ((incomplete)
+        (if (not (eq? (peek-token s) 'type))
+            (parse-call-chain s word #f)
+            (begin (take-token s)
+                   (let ((spec (parse-subtype-spec s)))
+                     (begin0 (list 'type_incomplete spec)
+                             (expect-end (take-lineendings s) "incomplete type"))))))
 
        ((abstract)
         (if (not (eq? (peek-token s) 'type))
