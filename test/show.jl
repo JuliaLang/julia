@@ -351,6 +351,22 @@ end
 @test sprint(show, :+) == ":+"
 @test sprint(show, :end) == ":end"
 
+# issue #32408: Printing of names which are invalid identifiers
+# Invalid identifiers which need `var` quoting:
+@test sprint(show, Expr(:call, :foo, Symbol("##")))   == ":(foo(var\"##\"))"
+@test sprint(show, Expr(:call, :foo, Symbol("a-b")))  == ":(foo(var\"a-b\"))"
+@test sprint(show, :(export var"#"))    == ":(export var\"#\")"
+@test sprint(show, :(import A: var"#")) == ":(import A: var\"#\")"
+@test sprint(show, :(macro var"#" end)) == ":(macro var\"#\" end)"
+@test sprint(show, :"x$(var"#")y") == ":(\"x\$(var\"#\")y\")"
+# Macro-like names outside macro calls
+@test sprint(show, Expr(:call, :foo, Symbol("@bar"))) == ":(foo(var\"@bar\"))"
+@test sprint(show, :(export @foo)) == ":(export @foo)"
+@test sprint(show, :(import A.B: c.@d)) == ":(import A.B: c.@d)"
+@test sprint(show, :(using A.@foo)) == ":(using A.@foo)"
+# Hidden macro names
+@test sprint(show, Expr(:macrocall, Symbol("@#"), nothing, :a)) == ":(@var\"#\" a)"
+
 # issue #12477
 @test sprint(show,  Union{Int64, Int32, Int16, Int8, Float64}) == "Union{Float64, Int16, Int32, Int64, Int8}"
 
@@ -580,9 +596,9 @@ function f13127()
     show(buf, f)
     String(take!(buf))
 end
-@test startswith(f13127(), "getfield($(@__MODULE__), Symbol(\"")
+@test startswith(f13127(), "$(@__MODULE__).var\"#f")
 
-@test startswith(sprint(show, typeof(x->x), context = :module=>@__MODULE__), "getfield($(@__MODULE__), Symbol(\"")
+@test startswith(sprint(show, typeof(x->x), context = :module=>@__MODULE__), "var\"")
 
 #test methodshow.jl functions
 @test Base.inbase(Base)
@@ -1146,7 +1162,7 @@ end
     @test repr(typeof(UnexportedOperators.:(==))) == "typeof($(curmod_prefix)UnexportedOperators.:(==))"
     anonfn = x->2x
     modname = string(@__MODULE__)
-    anonfn_type_repr = "getfield($modname, Symbol(\"$(typeof(anonfn).name.name)\"))"
+    anonfn_type_repr = "$modname.var\"$(typeof(anonfn).name.name)\""
     @test repr(typeof(anonfn)) == anonfn_type_repr
     @test repr(anonfn) == anonfn_type_repr * "()"
     @test repr("text/plain", anonfn) == "$(typeof(anonfn).name.mt.name) (generic function with 1 method)"

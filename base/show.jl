@@ -490,48 +490,28 @@ function show_type_name(io::IO, tn::Core.TypeName)
         end
     end
     sym = (globfunc ? globname : tn.name)::Symbol
-    if get(io, :compact, false)
-        if globfunc
-            return print(io, "typeof(", sym, ")")
-        else
-            return print(io, sym)
-        end
-    end
-    sym_str = string(sym)
-    hidden = !globfunc && '#' ∈ sym_str
+    globfunc && print(io, "typeof(")
     quo = false
-    if hidden
-        print(io, "getfield(")
-    elseif globfunc
-        print(io, "typeof(")
-    end
-    # Print module prefix unless type is visible from module passed to IOContext
-    # If :module is not set, default to Main. nothing can be used to force printing prefix
-    from = get(io, :module, Main)
-    if isdefined(tn, :module) && (hidden || from === nothing || !isvisible(sym, tn.module, from))
-        show(io, tn.module)
-        if !hidden
+    if !get(io, :compact, false)
+        # Print module prefix unless type is visible from module passed to
+        # IOContext If :module is not set, default to Main. nothing can be used
+        # to force printing prefix
+        from = get(io, :module, Main)
+        if isdefined(tn, :module) && (from === nothing || !isvisible(sym, tn.module, from))
+            show(io, tn.module)
             print(io, ".")
-            if globfunc && !is_id_start_char(first(sym_str))
-                print(io, ":")
-                if sym == :(==)
-                    print(io, "(")
+            if globfunc && !is_id_start_char(first(string(sym)))
+                print(io, ':')
+                if sym in quoted_syms
+                    print(io, '(')
                     quo = true
                 end
             end
         end
     end
-    if hidden
-        print(io, ", Symbol(\"", sym_str, "\"))")
-    else
-        print(io, sym_str)
-        if globfunc
-            print(io, ")")
-            if quo
-                print(io, ")")
-            end
-        end
-    end
+    show_sym(io, sym)
+    quo      && print(io, ")")
+    globfunc && print(io, ")")
 end
 
 function show_datatype(io::IO, x::DataType)
@@ -815,7 +795,7 @@ julia> Base.isoperator(:+), Base.isoperator(:f)
 (true, false)
 ```
 """
-isoperator(s::Symbol) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
+isoperator(s::Union{Symbol,AbstractString}) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
 
 """
     isunaryoperator(s::Symbol)
@@ -982,7 +962,7 @@ end
 function show_call(io::IO, head, func, func_args, indent)
     op, cl = expr_calls[head]
     if (isa(func, Symbol) && func !== :(:) && !(head === :. && isoperator(func))) ||
-            (isa(func, Expr) && (func.head == :. || func.head == :curly)) ||
+            (isa(func, Expr) && (func.head == :. || func.head == :curly || func.head == :macroname)) ||
             isa(func, GlobalRef)
         show_unquoted(io, func, indent)
     else
@@ -1004,10 +984,24 @@ function show_call(io::IO, head, func, func_args, indent)
     end
 end
 
+# Print `sym` as it would appear as an identifier name in code
+# * Print valid identifiers & operators literally; also macros names if allow_macroname=true
+# * Escape invalid identifiers with var"" syntax
+function show_sym(io::IO, sym; allow_macroname=false)
+    if isidentifier(sym) || isoperator(sym)
+        print(io, sym)
+    elseif allow_macroname && (sym_str = string(sym); startswith(sym_str, '@'))
+        print(io, '@')
+        show_sym(io, sym_str[2:end])
+    else
+        print(io, "var", repr(string(sym)))
+    end
+end
+
 ## AST printing ##
 
 show_unquoted(io::IO, val::SSAValue, ::Int, ::Int)      = print(io, "%", val.id)
-show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = print(io, sym)
+show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = show_sym(io, sym)
 show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto %", ex.label)
 function show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)
@@ -1017,7 +1011,7 @@ function show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)
     parens = quoted && (!isoperator(ex.name) || (ex.name in quoted_syms))
     quoted && print(io, ':')
     parens && print(io, '(')
-    print(io, ex.name)
+    show_sym(io, ex.name, allow_macroname=true)
     parens && print(io, ')')
     nothing
 end
@@ -1095,7 +1089,7 @@ end
 
 function show_import_path(io::IO, ex)
     if !isa(ex, Expr)
-        print(io, ex)
+        show_unquoted(io, ex)
     elseif ex.head === :(:)
         show_import_path(io, ex.args[1])
         print(io, ": ")
@@ -1106,17 +1100,20 @@ function show_import_path(io::IO, ex)
             show_import_path(io, ex.args[i])
         end
     elseif ex.head === :(.)
-        print(io, ex.args[1])
-        for i = 2:length(ex.args)
-            if ex.args[i-1] != :(.)
+        for i = 1:length(ex.args)
+            if i > 1 && ex.args[i-1] != :(.)
                 print(io, '.')
             end
-            print(io, ex.args[i])
+            show_sym(io, ex.args[i], allow_macroname=(i==length(ex.args)))
         end
     else
         show_unquoted(io, ex)
     end
 end
+
+# Wrap symbols for macro names to allow them to be printed literally
+allow_macroname(ex) = ex isa Symbol && first(string(ex)) == '@' ?
+                      Expr(:macroname, ex) : ex
 
 # TODO: implement interpolated strings
 function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
@@ -1280,7 +1277,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, "end")
 
     elseif (head === :function || head === :macro) && nargs == 1
-        print(io, head, ' ', args[1], " end")
+        print(io, head, ' ')
+        show_unquoted(io, args[1])
+        print(io, " end")
 
     elseif head === :do && nargs == 2
         show_unquoted(io, args[1], indent, -1)
@@ -1345,9 +1344,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, head)
 
     elseif (nargs == 1 && head in (:return, :const)) ||
-                          head in (:local,  :global, :export)
+                          head in (:local,  :global)
         print(io, head, ' ')
         show_list(io, args, ", ", indent)
+
+    elseif head === :export
+        print(io, head, ' ')
+        show_list(io, allow_macroname.(args), ", ", indent)
 
     elseif head === :macrocall && nargs >= 2
         # first show the line number argument as a comment
@@ -1356,13 +1359,22 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         # Use the functional syntax unless specifically designated with prec=-1
         # and hide the line number argument from the argument list
+        mname = allow_macroname(args[1])
         if prec >= 0
-            show_call(io, :call, args[1], args[3:end], indent)
+            show_call(io, :call, mname, args[3:end], indent)
         else
             show_args = Vector{Any}(undef, nargs - 1)
-            show_args[1] = args[1]
+            show_args[1] = mname
             show_args[2:end] = args[3:end]
             show_list(io, show_args, ' ', indent)
+        end
+
+    elseif head === :macroname && nargs == 1
+        arg1 = args[1]
+        if arg1 isa Symbol
+            show_sym(io, arg1, allow_macroname=true)
+        else
+            show_unquoted(io, arg1)
         end
 
     elseif head === :line && 1 <= nargs <= 2
@@ -1407,11 +1419,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         for x in args
             if !isa(x,AbstractString)
                 print(io, "\$(")
-                if isa(x,Symbol) && !(x in quoted_syms)
-                    print(io, x)
-                else
-                    show_unquoted(io, x)
-                end
+                show_unquoted(io, x)
                 print(io, ")")
             else
                 escape_string(io, x, "\"\$")
