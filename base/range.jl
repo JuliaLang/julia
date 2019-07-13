@@ -1038,3 +1038,10 @@ function +(r1::StepRangeLen{T,S}, r2::StepRangeLen{T,S}) where {T,S}
 end
 
 -(r1::StepRangeLen, r2::StepRangeLen) = +(r1, -r2)
+
+# Modular arithmetic on ranges
+
+mod(i::Integer, r::OneTo) = mod1(i, last(r))
+mod(i::Integer, r::AbstractUnitRange) = mod(i-first(r), length(r)) + first(r)
+mod(i::Integer, r::StepRange) = abs(r.step)==1 ? mod(i-minimum(r), length(r)) + minimum(r) :
+    throw(ArgumentError("step must be +1 or -1"))
