@@ -38,6 +38,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
     JL_MUTEX_INIT(&m->lock);
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
+    arraylist_new(&m->deferred, 0);
     if (jl_core_module) {
         jl_module_using(m, jl_core_module);
     }
