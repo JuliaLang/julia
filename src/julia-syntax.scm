@@ -895,6 +895,17 @@
        ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
        (abstract_type ,name (call (core svec) ,@params) ,super))))))
 
+(define (incomplete-type-def-expr name params super)
+  (receive
+   (params bounds) (sparam-name-bounds params)
+   `(block
+     (global ,name) (const ,name)
+     (scope-block
+      (block
+       ,@(map (lambda (v) `(local ,v)) params)
+       ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
+       (incomplete_type ,name (call (core svec) ,@params) ,super))))))
+
 (define (primitive-type-def-expr n name params super)
   (receive
    (params bounds) (sparam-name-bounds params)
@@ -2006,6 +2017,14 @@
         (receive (name params super) (analyze-type-sig sig)
                  (abstract-type-def-expr name params super)))))
 
+   'type_incomplete
+   (lambda (e)
+     (let ((sig (cadr e)))
+       (expand-forms
+        (receive (name params super) (analyze-type-sig sig)
+                 (incomplete-type-def-expr name params super)))))
+
+
    'primitive
    (lambda (e)
      (let ((sig (cadr e))
@@ -2966,7 +2985,7 @@ f(x) = yt(x)
 (define lambda-opt-ignored-exprs
   (Set '(quote top core line inert local local-def unnecessary copyast
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
-         struct_type abstract_type primitive_type thunk with-static-parameters
+         struct_type abstract_type primitive_type incomplete_type thunk with-static-parameters
          global globalref outerref const-if-global
          const null ssavalue isdefined toplevel module lambda error
          gc_preserve_begin gc_preserve_end import using export)))
@@ -3564,11 +3583,12 @@ f(x) = yt(x)
     (define (check-top-level e)
       (define (head-to-text h)
         (case h
-          ((abstract_type)  "\"abstract type\"")
-          ((primitive_type) "\"primitive type\"")
-          ((struct_type)    "\"struct\"")
-          ((method)         "method definition")
-          (else             (string "\"" h "\""))))
+          ((abstract_type)   "\"abstract type\"")
+          ((incomplete_type) "\"incomplete type\"")
+          ((primitive_type)  "\"primitive type\"")
+          ((struct_type)     "\"struct\"")
+          ((method)          "method definition")
+          (else              (string "\"" h "\""))))
       (if (not (null? (cadr lam)))
           (error (string (head-to-text (car e)) " expression not at top level"))))
     ;; evaluate the arguments of a call, creating temporary locations as needed
@@ -3941,7 +3961,7 @@ f(x) = yt(x)
                      (else  (emit temp)))))
 
             ;; top level expressions returning values
-            ((abstract_type primitive_type struct_type thunk toplevel module)
+            ((abstract_type primitive_type struct_type incomplete_type thunk toplevel module)
              (check-top-level e)
              (with-bindings
               ((*very-linear-mode* #f))  ;; type defs use nonstandard evaluation order
@@ -3950,6 +3970,10 @@ f(x) = yt(x)
                  (let* ((para (compile (caddr e) break-labels #t #f))
                         (supe (compile (cadddr e) break-labels #t #f)))
                    (emit `(abstract_type ,(cadr e) ,para ,supe))))
+                ((incomplete_type)
+                 (let* ((para (compile (caddr e) break-labels #t #f))
+                        (supe (compile (cadddr e) break-labels #t #f)))
+                   (emit `(incomplete_type ,(cadr e) ,para ,supe))))
                 ((primitive_type)
                  (let* ((para (compile (caddr e) break-labels #t #f))
                         (supe (compile (list-ref e 4) break-labels #t #f)))
