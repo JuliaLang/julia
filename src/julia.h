@@ -439,6 +439,7 @@ typedef struct _jl_datatype_t {
     uint32_t uid;
     uint8_t abstract;
     uint8_t mutabl;
+    uint8_t incomplete; // If 1, this dt is not yet complete.
     // memoized properties
     uint8_t hasfreetypevars; // majority part of isconcrete computation
     uint8_t isconcretetype; // whether this type can have instances

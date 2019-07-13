@@ -1707,7 +1707,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_datatype_type->name->wrapper = (jl_value_t*)jl_datatype_type;
     jl_datatype_type->super = (jl_datatype_t*)jl_type_type;
     jl_datatype_type->parameters = jl_emptysvec;
-    jl_datatype_type->name->names = jl_perm_symsvec(21,
+    jl_datatype_type->name->names = jl_perm_symsvec(22,
                                                     "name",
                                                     "super",
                                                     "parameters",
@@ -1720,6 +1720,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                                     "uid",
                                                     "abstract",
                                                     "mutable",
+                                                    "incomplete",
                                                     "hasfreetypevars",
                                                     "isconcretetype",
                                                     "isdispatchtuple",
@@ -1729,12 +1730,13 @@ void jl_init_types(void) JL_GC_DISABLED
                                                     "has_concrete_subtype",
                                                     "llvm::StructType",
                                                     "llvm::DIType");
-    jl_datatype_type->types = jl_svec(21,
+    jl_datatype_type->types = jl_svec(22,
                                       jl_typename_type,
                                       jl_datatype_type,
                                       jl_simplevector_type,
                                       jl_simplevector_type, jl_simplevector_type,
                                       jl_any_type, // instance
+                                      jl_any_type,
                                       jl_any_type, jl_any_type, jl_any_type, jl_any_type,
                                       jl_any_type, jl_any_type, jl_any_type, jl_any_type,
                                       jl_any_type, jl_any_type, jl_any_type, jl_any_type,
@@ -2297,8 +2299,9 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_datatype_type->types, 16, jl_bool_type);
     jl_svecset(jl_datatype_type->types, 17, jl_bool_type);
     jl_svecset(jl_datatype_type->types, 18, jl_bool_type);
-    jl_svecset(jl_datatype_type->types, 19, jl_voidpointer_type);
+    jl_svecset(jl_datatype_type->types, 19, jl_bool_type);
     jl_svecset(jl_datatype_type->types, 20, jl_voidpointer_type);
+    jl_svecset(jl_datatype_type->types, 21, jl_voidpointer_type);
     jl_svecset(jl_typename_type->types, 1, jl_module_type);
     jl_svecset(jl_typename_type->types, 6, jl_long_type);
     jl_svecset(jl_typename_type->types, 3, jl_type_type);
