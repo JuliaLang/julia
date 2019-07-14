@@ -277,6 +277,38 @@ function expand_hvcat(ex)
     end
 end
 
+# Flatten nested Expr(head, args) with depth first traversal of args.
+function flatten_ex_args!(args, head, ex)
+    if ex isa Expr && ex.head == head
+        for a in ex.args
+            flatten_ex_args!(args, head, a)
+        end
+    else
+        push!(args, ex)
+    end
+    args
+end
+
+function expand_and(ex)
+    args = flatten_ex_args!([], :&&, ex)
+    @assert length(args) > 1
+    e = args[end]
+    for i = length(args)-1:-1:1
+        e = Expr(:if, args[i], e, false)
+    end
+    e
+end
+
+function expand_or(ex)
+    args = flatten_ex_args!([], :||, ex)
+    @assert length(args) > 1
+    e = args[end]
+    for i = length(args)-1:-1:1
+        e = Expr(:if, args[i], true, e)
+    end
+    e
+end
+
 #-------------------------------------------------------------------------------
 # Expansion entry point
 
@@ -369,9 +401,9 @@ function expand_forms(ex)
     elseif head == :for
         expand_todo(ex) # expand-for
     elseif head == :&&
-        expand_todo(ex) # expand-and
+        expand_forms(expand_and(ex))
     elseif head == :||
-        expand_todo(ex) # expand-or
+        expand_forms(expand_or(ex))
     elseif head in (:(+=), :(-=), :(*=), :(.*=), :(/=), :(./=), :(//=), :(.//=),
                     :(\=), :(.\=), :(.+=), :(.-=), :(^=), :(.^=), :(÷=), :(.÷=),
                     :(%=), :(.%=), :(|=), :(.|=), :(&=), :(.&=), :($=), :(⊻=),

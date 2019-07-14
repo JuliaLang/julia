@@ -457,17 +457,40 @@ end
 end
 
 @testset_desugar "Short circuit boolean operators" begin
-    # flisp: (expand-or) (expand-and)
+    # flisp: (expand-or)
     a || b
     if a
-        a
+        true
     else
         b
     end
 
+    f(a) || f(b) || f(c)
+    if f(a)
+        true
+    else
+        if f(b)
+            true
+        else
+            f(c)
+        end
+    end
+
+    # flisp: (expand-and)
     a && b
     if a
         b
+    else
+        false
+    end
+
+    f(a) && f(b) && f(c)
+    if f(a)
+        if f(b)
+            f(c)
+        else
+            false
+        end
     else
         false
     end
