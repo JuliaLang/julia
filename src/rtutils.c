@@ -849,7 +849,14 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             n += jl_printf(out, "Symbol(\"");
         else
             n += jl_printf(out, ":");
-        n += jl_printf(out, "%s", sn);
+        char buf[64];
+        size_t i = 0, ninc = 0, sz = strlen(sn);
+        while (i < sz) {
+            ninc = u8_escape(buf, sizeof(buf), sn, &i, sz, 1, 0) - 1;
+            n += ninc;
+            jl_uv_puts(out, buf, ninc);
+        }
+        n += sz;
         if (quoted)
             n += jl_printf(out, "\")");
     }
