@@ -790,7 +790,7 @@ Creates a symbolic link to `target` with the name `link`.
 
 !!! note
     This function raises an error under operating systems that do not support
-    soft symbolic links, such as Windows XP, or on newer when unless in Administrator mode.
+    soft symbolic links, such as Windows XP; and on later versions unless in Administrator mode.
 """
 function symlink(p::AbstractString, np::AbstractString)
     @static if Sys.iswindows()
