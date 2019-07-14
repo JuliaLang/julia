@@ -1664,7 +1664,7 @@ function mul!(y::AbstractVector, A::SparseMatrixCSC, x::AbstractSparseVector, α
         if v != zero(v)
             αv = v * α
             j = xnzind[i]
-            for r = A.colptr[j]:(Acolptr[j+1]-1)
+            for r = Acolptr[j]:(Acolptr[j+1]-1)
                 y[Arowval[r]] += Anzval[r] * αv
             end
         end
