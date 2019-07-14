@@ -808,7 +808,7 @@ function symlink(p::AbstractString, np::AbstractString)
     err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
     @static if Sys.iswindows()
         if err < 0 && !isdir(p)
-            @warn "On Windows, creating file symlinks requires Administrator privileges" maxlog=1 _group=:file
+            throw("On Windows, creating file symlinks requires Administrator privileges")
         end
     end
     uv_error("symlink",err)
