@@ -790,7 +790,7 @@ Creates a symbolic link to `target` with the name `link`.
 
 !!! note
     This function raises an error under operating systems that do not support
-    soft symbolic links, such as Windows XP.
+    soft symbolic links, such as Windows XP, or on newer when unless in Administrator mode.
 """
 function symlink(p::AbstractString, np::AbstractString)
     @static if Sys.iswindows()
@@ -808,7 +808,7 @@ function symlink(p::AbstractString, np::AbstractString)
     err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
     @static if Sys.iswindows()
         if err < 0 && !isdir(p)
-            throw("On Windows, creating file symlinks requires Administrator privileges")
+            @warn "On Windows, creating file symlinks requires Administrator privileges" maxlog=1 _group=:file
         end
     end
     uv_error("symlink",err)
