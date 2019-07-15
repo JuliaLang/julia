@@ -127,7 +127,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 i++;
             }
             if (e->head == method_sym || e->head == abstracttype_sym || e->head == structtype_sym ||
-                     e->head == primtype_sym || e->head == module_sym) {
+                    e->head == incompletetype_sym || e->head == primtype_sym || e->head == module_sym) {
                 i++;
             }
             for (; i < nargs; i++) {
@@ -739,6 +739,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
                       m->line);
     }
 
+    int any_argtypes_incomplete = 0;
     for (i = 0; i < na; i++) {
         jl_value_t *elt = jl_svecref(atypes, i);
         if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
@@ -758,6 +759,9 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
                               jl_symbol_name(m->file),
                               m->line);
         }
+        if (jl_is_datatype(elt)) {
+            any_argtypes_incomplete |= ((jl_datatype_t*)elt)->incomplete;
+        }
         if (jl_is_vararg_type(elt) && i < na-1)
             jl_exceptionf(jl_argumenterror_type,
                           "Vararg on non-final argument in method definition for %s at %s:%d",
@@ -776,7 +780,10 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
         jl_array_ptr_1d_push(jl_all_methods, (jl_value_t*)m);
     }
 
-    jl_method_table_insert(mt, m, NULL);
+    if (any_argtypes_incomplete) {
+        arraylist_push(&module->deferred, jl_svec(2, mt, m));
+    } else
+        jl_method_table_insert(mt, m, NULL);
     if (jl_newmeth_tracer)
         jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)m);
     JL_GC_POP();

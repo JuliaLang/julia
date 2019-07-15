@@ -503,6 +503,7 @@ typedef struct _jl_module_t {
     // hidden fields:
     htable_t bindings;
     arraylist_t usings;  // modules with all bindings potentially imported
+    // Any method definitions that are deferred to due to incomplete types
     uint64_t build_id;
     jl_uuid_t uuid;
     size_t primary_world;
