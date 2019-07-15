@@ -448,8 +448,30 @@ typedef struct _jl_datatype_t {
     uint8_t zeroinit; // if one or more fields requires zero-initialization
     uint8_t isinlinealloc; // if this is allocated inline
     uint8_t has_concrete_subtype; // If clear, no value will have this datatype
-    void *struct_decl;  //llvm::Type*
-    void *ditype; // llvm::MDNode* to be used as llvm::DIType(ditype)
+    union {
+        // If incomplete, we store the SCC condensation of the dependency graph
+        // of incomplete types. This is a DAG, in which one datatype is chosen
+        // as the representative of the SCC. Once the representative of the SCC
+        // is no longer incompletely specified and `depends` is empty, we may
+        // complete the entire cycle.
+        struct {
+            // Pointer to the SCC representative. Note that for efficiency,
+            // these may be chained, i.e. this pointer may have to be
+            // dereferenced multiple times to reach the SCC representative.
+            struct _jl_datatype_t *scc;
+            // Stores other SCCs that this SCC depends on (i.e. represents an
+            // edge in the SCC codensation)
+            jl_array_t *depends;
+            // The inverse array of the above, from SCCs to SCCs that depend on
+            // them.
+            jl_array_t *dependents;
+        };
+        struct {
+            void *struct_decl;  //llvm::Type*
+            void *ditype; // llvm::MDNode* to be used as llvm::DIType(ditype)
+            void *padding;
+        };
+    };
 } jl_datatype_t;
 
 typedef struct {
