@@ -665,3 +665,12 @@ let timeout = 300 # this test should take about 1-10 seconds
     end
     close(t) # stop the watchdog
 end
+
+# issue #32575
+let ch = Channel{Char}(0), t
+    t = Task(()->for v in "hello" put!(ch, v) end)
+    t.sticky = false
+    bind(ch, t)
+    schedule(t)
+    @test String(collect(ch)) == "hello"
+end
