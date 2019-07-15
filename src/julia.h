@@ -1984,6 +1984,10 @@ typedef struct {
     int static_alloc;       // is the compiler allowed to allocate statically?
     int prefer_specsig;     // are specialized function signatures preferred?
 
+    // controls the emission of debug-info. mirrors the clang options
+    int gnu_pubnames;       // can we emit the gnu pubnames debuginfo
+    int debug_info_kind; // Enum for line-table-only, line-directives-only,
+                            // limited, standalone
 
     // hooks
 
@@ -2013,6 +2017,7 @@ typedef struct {
     jl_value_t *emitted_function;
 } jl_cgparams_t;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
+extern JL_DLLEXPORT int jl_default_debug_info_kind;
 
 #if defined(JULIA_ENABLE_THREADING) && !defined(_OS_DARWIN_) && !defined(_OS_WINDOWS_)
 #define JULIA_DEFINE_FAST_TLS()                                                             \
