@@ -2805,7 +2805,8 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     for (i = 0; i < len; i++) {
         jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_array, i);
         assert(jl_is_module(m));
-        jl_collect_lambdas_from_mod(lambdas, m);
+        if (m->parent == m) // some toplevel modules (really just Base) aren't actually
+            jl_collect_lambdas_from_mod(lambdas, m);
     }
     jl_collect_methtable_from_mod(lambdas, jl_type_type_mt);
     jl_collect_missing_backedges_to_mod(jl_type_type_mt);
