@@ -526,6 +526,7 @@ end
 
 @testset "dot startpos" begin
     @test Tokenize.Tokens.startpos(tok("./")) == (1,1)
+    @test Tokenize.Tokens.startbyte(tok(".≤")) == 0
 end
 
 @testset "token errors" begin

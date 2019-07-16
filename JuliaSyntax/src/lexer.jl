@@ -298,8 +298,8 @@ end
 
 Returns the next `Token`.
 """
-function next_token(l::Lexer)
-    start_token!(l)
+function next_token(l::Lexer, start = true)
+    start && start_token!(l)
     c = readchar(l)
     if eof(c);
         return emit(l, Tokens.ENDMARKER)
@@ -854,7 +854,7 @@ function lex_dot(l::Lexer)
         pc, dpc = dpeekchar(l)
         if dotop1(pc)
             l.dotop = true
-            return next_token(l)
+            return next_token(l, false)
         elseif pc =='+'
             l.dotop = true
             readchar(l)
