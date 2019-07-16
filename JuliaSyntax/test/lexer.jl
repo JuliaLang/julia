@@ -358,6 +358,7 @@ end
     @test tok("1.+ ").kind == Tokens.INTEGER
     @test tok("1.⤋").kind  == Tokens.INTEGER
     @test tok("1..").kind  == Tokens.INTEGER
+    @test T.kind.(collect(tokenize("1f0./1"))) == [T.FLOAT, T.OP, T.INTEGER, T.ENDMARKER]
 end
 
 

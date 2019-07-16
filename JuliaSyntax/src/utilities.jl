@@ -278,6 +278,27 @@ takechar(io::IO) = (readchar(io); io)
     0x0000ffe9 <= c <= 0x0000ffec
 end
 
+function dotop2(pc, dpc)
+    dotop1(pc) ||
+    pc =='+' ||
+    pc =='-' ||
+    pc =='*' ||
+    pc =='/' ||
+    pc =='\\' ||
+    pc =='^' ||
+    pc =='<' ||
+    pc =='>' ||
+    pc =='&' && dpc === '=' ||
+    pc =='&' ||
+    pc =='%' ||
+    pc == '=' && dpc != '>' ||
+    pc == '|' && dpc != '|' ||
+    pc == '!' && dpc == '=' ||
+    pc == '⊻' ||
+    pc == '÷' ||
+    pc == '=' && dpc == '>'
+end
+
 # suffix operators
 # "₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎²³¹ʰʲʳʷʸˡˢˣᴬᴮᴰᴱᴳᴴᴵᴶᴷᴸᴹᴺᴼᴾᴿᵀᵁᵂᵃᵇᵈᵉᵍᵏᵐᵒᵖᵗᵘᵛᵝᵞᵟᵠᵡᵢᵣᵤᵥᵦᵧᵨᵩᵪᶜᶠᶥᶦᶫᶰᶸᶻᶿ ⁰ⁱ⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿₐₑₒₓₕₖₗₘₙₚₛₜⱼⱽ′″‴‵‶‷⁗"
 @inline function isopsuffix(c1::Char)
