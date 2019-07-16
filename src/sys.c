@@ -545,7 +545,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 
 #elif defined(_OS_WINDOWS_)
 
-    wchar_t *pth16 = (wchar_t*)malloc(32768); // max long path length
+    wchar_t *pth16 = (wchar_t*)malloc(32768 * sizeof(*pth16)); // max long path length
     DWORD n16 = GetModuleFileNameW((HMODULE)handle,pth16,32768);
     if (n16 <= 0) {
         free(pth16);
