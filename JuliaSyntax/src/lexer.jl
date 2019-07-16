@@ -638,7 +638,9 @@ function lex_digit(l::Lexer, kind)
             readchar(l)
             accept(l, "+-")
             if accept_batch(l, isdigit)
-                if accept(l, '.') # 1.2e2.3 -> [ERROR, 3]
+                pc,ppc = dpeekchar(l)
+                if pc === '.' && !dotop2(ppc, ' ')
+                    accept(l, '.')
                     return emit_error(l, Tokens.INVALID_NUMERIC_CONSTANT)
                 end
             else
@@ -654,7 +656,9 @@ function lex_digit(l::Lexer, kind)
         readchar(l)
         accept(l, "+-")
         if accept_batch(l, isdigit)
-            if accept(l, '.') # 1.2e2.3 -> [ERROR, 3]
+            pc,ppc = dpeekchar(l)
+            if pc === '.' && !dotop2(ppc, ' ')
+                accept(l, '.')
                 return emit_error(l, Tokens.INVALID_NUMERIC_CONSTANT)
             end
         else
