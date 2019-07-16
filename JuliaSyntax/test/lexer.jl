@@ -539,3 +539,7 @@ end
     @test tok("--",1).token_error === Tokens.INVALID_OPERATOR
     @test tok("1**2",2).token_error === Tokens.INVALID_OPERATOR
 end
+
+@testset "hat suffix" begin 
+    @test tok("ŝ", 1).kind==Tokens.IDENTIFIER
+end
