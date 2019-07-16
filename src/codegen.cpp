@@ -1392,7 +1392,7 @@ void jl_generate_fptr(jl_code_instance_t *output)
                 codeinst->rettype_const = ucache->rettype_const;
                 if (codeinst->rettype_const)
                     jl_gc_wb(codeinst, codeinst->rettype_const);
-                codeinst->invoke = ucache->invoke;
+                jl_atomic_store_release(&codeinst->invoke, ucache->invoke);
                 JL_UNLOCK(&codegen_lock);
                 return;
             }
@@ -1423,15 +1423,15 @@ void jl_generate_fptr(jl_code_instance_t *output)
     assert(specptr != NULL);
     // the fptr should be cached somewhere also
     if (codeinst->invoke == NULL) {
-        codeinst->specptr.fptr = specptr;
-        codeinst->invoke = fptr;
+        jl_atomic_store_release(&codeinst->specptr.fptr, specptr);
+        jl_atomic_store_release(&codeinst->invoke, fptr);
     }
     if (codeinst != output && output->invoke == NULL) {
         output->specptr = codeinst->specptr;
         output->rettype_const = codeinst->rettype_const;
         if (output->rettype_const)
             jl_gc_wb(output, output->rettype_const);
-        output->invoke = fptr;
+        jl_atomic_store_release(&output->invoke, fptr);
     }
     JL_UNLOCK(&codegen_lock); // Might GC
 }
