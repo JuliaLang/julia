@@ -2026,8 +2026,14 @@ static jl_value_t *intersect_union(jl_value_t *x, jl_uniontype_t *u, jl_stenv_t 
         jl_value_t *a=NULL, *b=NULL;
         JL_GC_PUSH2(&a, &b);
         jl_unionstate_t oldRunions = e->Runions;
-        a = R ? intersect_all(x, u->a, e) : intersect_all(u->a, x, e);
-        b = R ? intersect_all(x, u->b, e) : intersect_all(u->b, x, e);
+        if (param == 2) {
+            a = R ? intersect(x, u->a, e, param) : intersect(u->a, x, e, param);
+            b = R ? intersect(x, u->b, e, param) : intersect(u->b, x, e, param);
+        }
+        else {
+            a = R ? intersect_all(x, u->a, e) : intersect_all(u->a, x, e);
+            b = R ? intersect_all(x, u->b, e) : intersect_all(u->b, x, e);
+        }
         e->Runions = oldRunions;
         jl_value_t *i = simple_join(a,b);
         JL_GC_POP();
