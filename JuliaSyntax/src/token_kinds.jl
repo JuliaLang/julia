@@ -547,6 +547,12 @@
         begin_colon,
             COLON, # :
             DDOT, # ..
+            LDOTS, # …
+            TRICOLON, # ⁝
+            VDOTS, # ⋮ 
+            DDOTS, # ⋱
+            ADOTS, # ⋰
+            CDOTS, # ⋯
         end_colon,
 
         # Level 9
@@ -1317,7 +1323,13 @@ const UNICODE_OPS = Dict{Char, Kind}(
 '⥯' => DOWNWARDS_HARPOON_WITH_BARB_LEFT_BESIDE_UPWARDS_HARPOON_WITH_BARB_RIGHT,
 '￪' => HALFWIDTH_UPWARDS_ARROW,
 '￬' => HALFWIDTH_DOWNWARDS_ARROW,
-'⋅' => UNICODE_DOT)
+'⋅' => UNICODE_DOT,
+'…' => LDOTS,
+'⁝' => TRICOLON,
+'⋮' => VDOTS, 
+'⋱' => DDOTS,
+'⋰' => ADOTS,
+'⋯' => CDOTS)
 
 
 const UNICODE_OPS_REVERSE = Dict{Kind,Symbol}()
