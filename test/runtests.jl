@@ -52,6 +52,8 @@ move_to_node1("precompile")
 move_to_node1("SharedArrays")
 # Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
 move_to_node1("stress")
+# Run threads test on node 1 to avoid over-subscription
+move_to_node1("threads")
 
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
