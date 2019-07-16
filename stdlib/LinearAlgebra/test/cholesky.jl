@@ -168,6 +168,31 @@ end
                 end
             end
         end
+
+        for eltyb in (Float64, ComplexF64)
+            Breal = convert(Matrix{BigFloat}, randn(n,n)/2)
+            Bimg  = convert(Matrix{BigFloat}, randn(n,n)/2)
+            B = (eltya <: Complex || eltyb <: Complex) ? complex.(Breal, Bimg) : Breal
+            εb = eps(abs(float(one(eltyb))))
+            ε = max(εa,εb)
+
+            for B in (B, view(B, 1:n, 1:n)) # Array and SubArray
+
+                # Test error bound on linear solver: LAWNS 14, Theorem 2.1
+                # This is a surprisingly loose bound
+                BB = copy(B)
+                rdiv!(BB, capd)
+                @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                if eltya != BigFloat
+                    cpapd = cholesky(apdh, Val(true))
+                    BB = copy(B)
+                    rdiv!(BB, cpapd)
+                    @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                    @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                end
+            end
+        end
         if eltya <: BlasFloat
             @testset "generic cholesky!" begin
                 if eltya <: Complex
