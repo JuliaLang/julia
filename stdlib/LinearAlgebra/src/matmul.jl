@@ -153,7 +153,7 @@ function (*)(A::AbstractMatrix, B::AbstractMatrix)
     mul!(similar(B, TS, (size(A,1), size(B,2))), A, B)
 end
 function (*)(A::StridedMatrix{<:BlasFloat}, B::StridedMatrix{<:BlasFloat})
-    TS = promote_op(matprod, eltype(A), eltype(B))
+    TS = promote_type(eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
 end
 
