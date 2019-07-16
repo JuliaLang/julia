@@ -96,6 +96,7 @@
     ALIAS(llvmcall, llvmcall) \
     /* object access */ \
     ADD_I(arraylen, 1) \
+    ADD_I(bufferlen, 1) \
     /*  hidden intrinsics */ \
     ADD_HIDDEN(cglobal_auto, 1)
 

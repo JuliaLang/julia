@@ -169,7 +169,9 @@ static Type *T_prjlvalue;
 static Type *T_ppjlvalue;
 static Type *T_pprjlvalue;
 static Type *jl_array_llvmt;
+static Type *jl_buffer_llvmt;
 static Type *jl_parray_llvmt;
+static Type *jl_pbuffer_llvmt;
 static FunctionType *jl_func_sig;
 static FunctionType *jl_func_sig_sparams;
 static Type *T_pvoidfunc;
@@ -2922,6 +2924,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             *ret = mark_julia_type(ctx, len, false, jl_long_type);
             return true;
         }
+        //TODO: handle jl_buffer_typename
         else if (jl_is_datatype(sty) && sty->name == jl_array_typename) {
             auto len = emit_arraylen(ctx, obj);
             jl_value_t *ety = jl_tparam0(sty);
@@ -7073,6 +7076,9 @@ static void init_julia_llvm_env(Module *m)
     jl_array_llvmt =
         StructType::create(jl_LLVMContext, makeArrayRef(vaelts), "jl_array_t");
     jl_parray_llvmt = PointerType::get(jl_array_llvmt, 0);
+    jl_buffer_llvmt =
+        StructType::create(jl_LLVMContext, makeArrayRef(vaelts), "jl_buffer_t");
+    jl_pbuffer_llvmt = PointerType::get(jl_buffer_llvmt, 0);
 
     global_to_llvm("__stack_chk_guard", (void*)&__stack_chk_guard, m);
     Function *jl__stack_chk_fail =
@@ -7292,6 +7298,8 @@ static void init_julia_llvm_env(Module *m)
     builtin_func_map[jl_f_const_arrayref] = jlcall_func_to_llvm("jl_f_const_arrayref", &jl_f_arrayref, m);
     builtin_func_map[jl_f_arrayset] = jlcall_func_to_llvm("jl_f_arrayset", &jl_f_arrayset, m);
     builtin_func_map[jl_f_arraysize] = jlcall_func_to_llvm("jl_f_arraysize", &jl_f_arraysize, m);
+    builtin_func_map[jl_f_bufferref] = jlcall_func_to_llvm("jl_f_bufferref", &jl_f_bufferref, m);
+    builtin_func_map[jl_f_bufferset] = jlcall_func_to_llvm("jl_f_bufferset", &jl_f_bufferset, m);
     builtin_func_map[jl_f_apply_type] = jlcall_func_to_llvm("jl_f_apply_type", &jl_f_apply_type, m);
     jltuple_func = builtin_func_map[jl_f_tuple];
     jlgetfield_func = builtin_func_map[jl_f_getfield];

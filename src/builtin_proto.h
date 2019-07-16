@@ -30,6 +30,7 @@ DECLARE_BUILTIN(getfield);   DECLARE_BUILTIN(setfield);
 DECLARE_BUILTIN(fieldtype);  DECLARE_BUILTIN(arrayref);
 DECLARE_BUILTIN(const_arrayref);
 DECLARE_BUILTIN(arrayset);   DECLARE_BUILTIN(arraysize);
+DECLARE_BUILTIN(bufferref);  DECLARE_BUILTIN(bufferset);
 DECLARE_BUILTIN(apply_type); DECLARE_BUILTIN(applicable);
 DECLARE_BUILTIN(invoke);     DECLARE_BUILTIN(_expr);
 DECLARE_BUILTIN(typeassert); DECLARE_BUILTIN(ifelse);

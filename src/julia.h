@@ -166,6 +166,22 @@ typedef struct {
     uint16_t isaligned:1; // data allocated with memalign
 } jl_array_flags_t;
 
+typedef struct {
+    uint8_t how:2;
+    uint8_t pooled:1;
+    uint8_t isshared:1;
+    uint8_t isaligned:1;
+    uint8_t isinlinealloc:1;
+    uint8_t extra:2;
+} jl_buffer_flags_t;
+
+typedef struct {
+    JL_DATA_TYPE
+    void *data;
+    size_t length;
+    jl_buffer_flags_t flags;
+} jl_buffer_t;
+
 JL_EXTENSION typedef struct {
     JL_DATA_TYPE
     void *data;
@@ -585,7 +601,9 @@ extern JL_DLLEXPORT jl_datatype_t *jl_module_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_unionall_t *jl_abstractarray_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_unionall_t *jl_densearray_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_unionall_t *jl_array_type JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_unionall_t *jl_buffer_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_typename_t *jl_array_typename JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_typename_t *jl_buffer_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_weakref_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_abstractstring_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_string_type JL_GLOBALLY_ROOTED;
@@ -817,7 +835,10 @@ STATIC_INLINE jl_value_t *jl_svecset(
 JL_DLLEXPORT size_t jl_array_len_(jl_array_t *a);
 #define jl_array_len(a)   jl_array_len_((jl_array_t*)(a))
 #endif
-#define jl_array_data(a)  ((void*)((jl_array_t*)(a))->data)
+#define jl_buffer_len(a) (((jl_buffer_t *)(a))->length)
+#define jl_array_data(a) ((void*)((jl_array_t*)(a))->data)
+#define jl_buffer_data(a) ((void*)((jl_buffer_t*)(a))->data)
+#define jl_buffer_elsize(a) jl_datatype_size((jl_value_t *)jl_tparam0(jl_typeof((jl_buffer_t*)(a))))
 #define jl_array_dim(a,i) ((&((jl_array_t*)(a))->nrows)[i])
 #define jl_array_dim0(a)  (((jl_array_t*)(a))->nrows)
 #define jl_array_nrows(a) (((jl_array_t*)(a))->nrows)
@@ -1034,6 +1055,7 @@ static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEP
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_intrinsic(v)   jl_typeis(v,jl_intrinsic_type)
 #define jl_array_isbitsunion(a) (!(((jl_array_t*)(a))->flags.ptrarray) && jl_is_uniontype(jl_tparam0(jl_typeof(a))))
+#define jl_buffer_isbitsunion(a) ((((jl_buffer_t*)(a))->flags.isinlinealloc) && jl_is_uniontype(jl_tparam0(jl_typeof(a))))
 
 JL_DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b);
 
@@ -1084,10 +1106,22 @@ STATIC_INLINE int jl_is_array_type(void *t) JL_NOTSAFEPOINT
             ((jl_datatype_t*)(t))->name == jl_array_typename);
 }
 
+STATIC_INLINE int jl_is_buffer_type(void *t) JL_NOTSAFEPOINT
+{
+    return (jl_is_datatype(t) &&
+            ((jl_datatype_t*)(t))->name == jl_buffer_typename);
+}
+
 STATIC_INLINE int jl_is_array(void *v) JL_NOTSAFEPOINT
 {
     jl_value_t *t = jl_typeof(v);
     return jl_is_array_type(t);
+}
+
+STATIC_INLINE int jl_is_buffer(void *v) JL_NOTSAFEPOINT
+{
+    jl_value_t *t = jl_typeof(v);
+    return jl_is_buffer_type(t);
 }
 
 STATIC_INLINE int jl_is_cpointer_type(jl_value_t *t) JL_NOTSAFEPOINT
@@ -1349,6 +1383,14 @@ JL_DLLEXPORT int         jl_field_isdefined(jl_value_t *v, size_t i);
 JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld);
 JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a);
 JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al) JL_NOTSAFEPOINT;
+
+// buffers
+JL_DLLEXPORT jl_buffer_t *jl_new_buffer(jl_value_t *btype, size_t length);
+JL_DLLEXPORT jl_buffer_t *jl_ptr_to_buffer(jl_value_t *btype, void *data, size_t nel, int own_buffer);
+JL_DLLEXPORT jl_value_t *jl_bufferref(jl_buffer_t *b, size_t i); // 0-indexed
+JL_DLLEXPORT void jl_bufferset(jl_buffer_t *b JL_ROOTING_ARGUMENT, jl_value_t *v JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, size_t i); // 0-indexed
+JL_DLLEXPORT void jl_bufferunset(jl_buffer_t *b, size_t i);                                                                       // 0-indexed
+JL_DLLEXPORT int jl_buffer_isassigned(jl_buffer_t *b, size_t i);                                                                  // 0-indexed
 
 // arrays
 JL_DLLEXPORT jl_array_t *jl_new_array(jl_value_t *atype, jl_value_t *dims);

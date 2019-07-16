@@ -128,6 +128,7 @@ using .Checked
 # array structures
 include("indices.jl")
 include("array.jl")
+include("buffer.jl")
 include("abstractarray.jl")
 include("subarray.jl")
 include("views.jl")

@@ -1116,6 +1116,15 @@ void gc_stats_big_obj(void)
         ma = ma->next;
     }
 
+    mallocbuffer_t *ma = current_heap->mallocbuffers;
+    while (ma != NULL) {
+        if (gc_marked(jl_astaggedvalue(ma->a)->bits.gc)) {
+            nused++;
+            nbytes += buffer_nbytes(ma->a);
+        }
+        ma = ma->next;
+    }
+
     jl_printf(JL_STDOUT, "%d kB (%d%% old) in %d large objects (%d%% old)\n", (nbytes + nbytes_old)/1024, nbytes + nbytes_old ? (nbytes_old*100)/(nbytes + nbytes_old) : 0, nused + nused_old, nused+nused_old ? (nused_old*100)/(nused + nused_old) : 0);
 }
 #endif //MEMPROFILE
@@ -1228,6 +1237,7 @@ int gc_slot_to_arrayidx(void *obj, void *_slot)
         start = (char*)jl_svec_data(obj);
         len = jl_svec_len(obj);
     }
+    //TODO: handle jl_buffer_typename here?
     else if (vt->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)obj;
         if (!a->flags.ptrarray)

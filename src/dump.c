@@ -3369,6 +3369,7 @@ void jl_init_serializer(void)
 
     arraylist_new(&builtin_typenames, 0);
     arraylist_push(&builtin_typenames, jl_array_typename);
+    arraylist_push(&builtin_typenames, jl_buffer_typename);
     arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_ref_type->body)->name);
     arraylist_push(&builtin_typenames, jl_pointer_typename);
     arraylist_push(&builtin_typenames, jl_type_typename);

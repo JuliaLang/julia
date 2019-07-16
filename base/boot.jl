@@ -55,6 +55,9 @@
 #mutable struct Array{T,N} <: DenseArray{T,N}
 #end
 
+#struct Buffer{T} <: DenseArray{T, 1}
+#end
+
 #mutable struct Module
 #    name::Symbol
 #end
@@ -149,7 +152,7 @@ export
     AbstractArray, DenseArray, NamedTuple,
     # special objects
     Function, Method,
-    Module, Symbol, Task, Array, UndefInitializer, undef, WeakRef, VecElement,
+    Module, Symbol, Task, Array, Buffer, UndefInitializer, undef, WeakRef, VecElement,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
     AbstractFloat, Float16, Float32, Float64,
@@ -397,9 +400,11 @@ unsafe_convert(::Type{T}, x::T) where {T} = x
 const NTuple{N,T} = Tuple{Vararg{T,N}}
 
 
-## primitive Array constructors
+## primitive Buffer/Array constructors
 struct UndefInitializer end
 const undef = UndefInitializer()
+Buffer{T}(::UndefInitializer, len::Int) where {T} =
+    ccall(:jl_new_buffer, Buffer{T}, (Any, Int), Buffer{T}, len)
 # type and dimensionality specified, accepting dims as series of Ints
 Array{T,1}(::UndefInitializer, m::Int) where {T} =
     ccall(:jl_alloc_array_1d, Array{T,1}, (Any, Int), Array{T,1}, m)

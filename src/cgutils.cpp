@@ -1742,6 +1742,17 @@ static Value *emit_arraylen(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
     return emit_arraylen_prim(ctx, tinfo);
 }
 
+static Value *emit_bufferlen(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
+{
+    Value *t = boxed(ctx, tinfo);
+    jl_value_t *ty = tinfo.typ;
+    Value *addr = ctx.builder.CreateStructGEP(jl_buffer_llvmt,
+                                          emit_bitcast(ctx, decay_derived(t), jl_pbuffer_llvmt),
+                                          1); //index (not offset) of length field in jl_parray_llvmt
+
+    return tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(addr, false));
+}
+
 static Value *emit_arrayptr_internal(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *t, unsigned AS, bool isboxed)
 {
     Value *addr =

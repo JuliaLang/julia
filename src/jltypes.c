@@ -77,7 +77,9 @@ JL_DLLEXPORT jl_value_t *jl_false;
 jl_unionall_t *jl_typetype_type;
 
 jl_unionall_t *jl_array_type;
+jl_unionall_t *jl_buffer_type;
 jl_typename_t *jl_array_typename;
+jl_typename_t *jl_buffer_typename;
 jl_value_t *jl_array_uint8_type;
 jl_value_t *jl_array_any_type;
 jl_value_t *jl_array_symbol_type;
@@ -2004,6 +2006,16 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_array_symbol_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_symbol_type, jl_box_long(1));
     jl_array_uint8_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_uint8_type, jl_box_long(1));
     jl_array_int32_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_int32_type, jl_box_long(1));
+
+    tv = jl_svec1(tvar("T"));
+    jl_buffer_type = (jl_unionall_t*)
+        jl_new_datatype(jl_symbol("Buffer"), core,
+                        (jl_datatype_t*)
+                        jl_apply_type((jl_value_t*)jl_densearray_type, jl_svec_data(tv), 1),
+                        tv,
+                        jl_emptysvec, jl_emptysvec, 0, 1, 0)->name->wrapper;
+    jl_buffer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_buffer_type))->name;
+    jl_compute_field_offsets((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_buffer_type));
 
     jl_expr_type =
         jl_new_datatype(jl_symbol("Expr"), core,

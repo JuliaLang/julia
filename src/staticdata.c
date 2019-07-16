@@ -35,7 +35,7 @@ extern "C" {
 static void *const _tags[] = {
          // builtin types
          &jl_any_type, &jl_symbol_type, &jl_ssavalue_type, &jl_datatype_type, &jl_slotnumber_type,
-         &jl_simplevector_type, &jl_array_type, &jl_typedslot_type,
+         &jl_simplevector_type, &jl_array_type, &jl_buffer_type, &jl_typedslot_type,
          &jl_expr_type, &jl_globalref_type, &jl_string_type,
          &jl_module_type, &jl_tvar_type, &jl_method_instance_type, &jl_method_type, &jl_code_instance_type,
          &jl_linenumbernode_type, &jl_lineinfonode_type,
@@ -57,7 +57,7 @@ static void *const _tags[] = {
          &jl_float16_type, &jl_float32_type, &jl_float64_type, &jl_floatingpoint_type,
          &jl_number_type, &jl_signed_type,
          // special typenames
-         &jl_tuple_typename, &jl_pointer_typename, &jl_array_typename, &jl_type_typename,
+         &jl_tuple_typename, &jl_pointer_typename, &jl_array_typename, &jl_buffer_typename, &jl_type_typename,
          &jl_vararg_typename, &jl_namedtuple_typename,
          &jl_vecelement_typename,
          // special exceptions
@@ -79,6 +79,7 @@ static void *const _tags[] = {
          &jl_builtin_isdefined, &jl_builtin_nfields, &jl_builtin_tuple, &jl_builtin_svec,
          &jl_builtin_getfield, &jl_builtin_setfield, &jl_builtin_fieldtype, &jl_builtin_arrayref,
          &jl_builtin_const_arrayref, &jl_builtin_arrayset, &jl_builtin_arraysize,
+         &jl_builtin_bufferref, &jl_builtin_bufferset,
          &jl_builtin_apply_type, &jl_builtin_applicable, &jl_builtin_invoke,
          &jl_builtin__expr, &jl_builtin_ifelse,
          NULL };
@@ -112,7 +113,8 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_typeassert, &jl_f__apply, &jl_f__apply_pure, &jl_f__apply_latest, &jl_f_isdefined,
     &jl_f_tuple, &jl_f_svec, &jl_f_intrinsic_call, &jl_f_invoke_kwsorter,
     &jl_f_getfield, &jl_f_setfield, &jl_f_fieldtype, &jl_f_nfields,
-    &jl_f_arrayref, &jl_f_const_arrayref, &jl_f_arrayset, &jl_f_arraysize, &jl_f_apply_type,
+    &jl_f_arrayref, &jl_f_const_arrayref, &jl_f_arrayset, &jl_f_arraysize,
+    &jl_f_bufferref, &jl_f_bufferset, &jl_f_apply_type,
     &jl_f_applicable, &jl_f_invoke, &jl_f_sizeof, &jl_f__expr, &jl_f__typevar,
     &jl_f_ifelse,
     NULL };

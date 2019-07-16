@@ -1122,6 +1122,15 @@ JL_CALLABLE(jl_f_arrayref)
     return jl_arrayref(a, i);
 }
 
+JL_CALLABLE(jl_f_bufferref)
+{
+    JL_NARGS(bufferref, 3, 3);
+    JL_TYPECHK(bufferref, bool, args[0]);
+    JL_TYPECHK(bufferref, buffer, args[1]);
+    jl_buffer_t *a = (jl_buffer_t*)args[1];
+    return jl_bufferref(a, jl_unbox_long(args[2]) - 1);
+}
+
 JL_CALLABLE(jl_f_const_arrayref)
 {
     return jl_f_arrayref(F, args, nargs);
@@ -1135,6 +1144,16 @@ JL_CALLABLE(jl_f_arrayset)
     jl_array_t *a = (jl_array_t*)args[1];
     size_t i = array_nd_index(a, &args[3], nargs - 3, "arrayset");
     jl_arrayset(a, args[2], i);
+    return args[1];
+}
+
+JL_CALLABLE(jl_f_bufferset)
+{
+    JL_NARGS(bufferset, 4, 4);
+    JL_TYPECHK(bufferset, bool, args[0]);
+    JL_TYPECHK(bufferset, buffer, args[1]);
+    jl_buffer_t *a = (jl_buffer_t*)args[1];
+    jl_bufferset(a, args[2], jl_unbox_long(args[3]) - 1);
     return args[1];
 }
 
@@ -1281,6 +1300,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_const_arrayref = add_builtin_func("const_arrayref", jl_f_arrayref);
     jl_builtin_arrayset = add_builtin_func("arrayset", jl_f_arrayset);
     jl_builtin_arraysize = add_builtin_func("arraysize", jl_f_arraysize);
+    jl_builtin_bufferref = add_builtin_func("bufferref", jl_f_bufferref);
+    jl_builtin_bufferset = add_builtin_func("bufferset", jl_f_bufferset);
 
     // method table utils
     jl_builtin_applicable = add_builtin_func("applicable", jl_f_applicable);
@@ -1338,6 +1359,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("AbstractArray", (jl_value_t*)jl_abstractarray_type);
     add_builtin("DenseArray", (jl_value_t*)jl_densearray_type);
     add_builtin("Array", (jl_value_t*)jl_array_type);
+    add_builtin("Buffer", (jl_value_t*)jl_buffer_type);
 
     add_builtin("Expr", (jl_value_t*)jl_expr_type);
     add_builtin("LineNumberNode", (jl_value_t*)jl_linenumbernode_type);

@@ -780,6 +780,11 @@ void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT
         if (!a->flags.pooled)
             dtsz = GC_MAX_SZCLASS + 1;
     }
+    else if (dt->name == jl_buffer_typename) {
+        jl_buffer_t *b = (jl_buffer_t*)v;
+        if (!b->flags.pooled)
+            dtsz = GC_MAX_SZCLASS + 1;
+    }
     else if (dt == jl_module_type) {
         dtsz = sizeof(jl_module_t);
     }
@@ -964,6 +969,22 @@ void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a) JL_NOTSAFEPOINT
     ptls->heap.mallocarrays = ma;
 }
 
+void jl_gc_track_malloced_buffer(jl_ptls_t ptls, jl_buffer_t *b) JL_NOTSAFEPOINT
+{
+    // This is **NOT** a GC safe point.
+    mallocbuffer_t *ma;
+    if (ptls->heap.mbfreelist == NULL) {
+        ma = (mallocbuffer_t*)malloc(sizeof(mallocbuffer_t));
+    }
+    else {
+        ma = ptls->heap.mbfreelist;
+        ptls->heap.mbfreelist = ma->next;
+    }
+    ma->a = b;
+    ma->next = ptls->heap.mallocbuffers;
+    ptls->heap.mallocbuffers = ma;
+}
+
 void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -1020,6 +1041,16 @@ static size_t array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT
     return sz;
 }
 
+static size_t buffer_nbytes(jl_buffer_t *b) JL_NOTSAFEPOINT
+{
+    int isbitsunion = jl_buffer_isbitsunion(b);
+    size_t sz = jl_buffer_elsize(b) * b->length;
+    if (isbitsunion)
+        // account for isbits Union array selector bytes
+        sz += b->length;
+    return sz;
+}
+
 static void jl_gc_free_array(jl_array_t *a) JL_NOTSAFEPOINT
 {
     if (a->flags.how == 2) {
@@ -1029,6 +1060,18 @@ static void jl_gc_free_array(jl_array_t *a) JL_NOTSAFEPOINT
         else
             free(d);
         gc_num.freed += array_nbytes(a);
+    }
+}
+
+static void jl_gc_free_buffer(jl_buffer_t *b) JL_NOTSAFEPOINT
+{
+    if (b->flags.how == 2) {
+        char *d = (char*)b->data;
+        if (b->flags.isaligned)
+            jl_free_aligned(d);
+        else
+            free(d);
+        gc_num.freed += buffer_nbytes(b);
     }
 }
 
@@ -1051,6 +1094,33 @@ static void sweep_malloced_arrays(void) JL_NOTSAFEPOINT
                 jl_gc_free_array(ma->a);
                 ma->next = ptls2->heap.mafreelist;
                 ptls2->heap.mafreelist = ma;
+            }
+            gc_time_count_mallocd_array(bits);
+            ma = nxt;
+        }
+    }
+    gc_time_mallocd_array_end();
+}
+
+static void sweep_malloced_buffers(void) JL_NOTSAFEPOINT
+{
+    gc_time_mallocd_array_start();
+    for (int t_i = 0;t_i < jl_n_threads;t_i++) {
+        jl_ptls_t ptls2 = jl_all_tls_states[t_i];
+        mallocbuffer_t *ma = ptls2->heap.mallocbuffers;
+        mallocbuffer_t **pma = &ptls2->heap.mallocbuffers;
+        while (ma != NULL) {
+            mallocbuffer_t *nxt = ma->next;
+            int bits = jl_astaggedvalue(ma->a)->bits.gc;
+            if (gc_marked(bits)) {
+                pma = &ma->next;
+            }
+            else {
+                *pma = nxt;
+                assert(ma->a->flags.how == 2);
+                jl_gc_free_buffer(ma->a);
+                ma->next = ptls2->heap.mbfreelist;
+                ptls2->heap.mbfreelist = ma;
             }
             gc_time_count_mallocd_array(bits);
             ma = nxt;
@@ -1385,6 +1455,7 @@ static void sweep_pool_pagetable(jl_taggedvalue_t ***pfl, int sweep_full) JL_NOT
 static void gc_sweep_other(jl_ptls_t ptls, int sweep_full) JL_NOTSAFEPOINT
 {
     sweep_malloced_arrays();
+    sweep_malloced_buffers();
     sweep_big(ptls, sweep_full);
 }
 
@@ -2277,6 +2348,7 @@ mark: {
             objary = (gc_mark_objarray_t*)sp.data;
             goto objarray_loaded;
         }
+        //TODO: also handle jl_buffer_typename
         else if (vt->name == jl_array_typename) {
             jl_array_t *a = (jl_array_t*)new_obj;
             jl_array_flags_t flags = a->flags;
@@ -2995,7 +3067,9 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     arraylist_new(&heap->weak_refs, 0);
     arraylist_new(&heap->live_tasks, 0);
     heap->mallocarrays = NULL;
+    heap->mallocbuffers = NULL;
     heap->mafreelist = NULL;
+    heap->mbfreelist = NULL;
     heap->big_objects = NULL;
     arraylist_new(&heap->rem_bindings, 0);
     heap->remset = &heap->_remset[0];

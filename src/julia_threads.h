@@ -84,7 +84,9 @@ typedef struct {
 
     // variables for tracking malloc'd arrays
     struct _mallocarray_t *mallocarrays;
+    struct _mallocbuffer_t *mallocbuffers;
     struct _mallocarray_t *mafreelist;
+    struct _mallocbuffer_t *mbfreelist;
 
     // variables for tracking big objects
     struct _bigval_t *big_objects;

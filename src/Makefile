@@ -41,7 +41,7 @@ endif
 
 RUNTIME_C_SRCS := \
 	jltypes gf typemap ast builtins module interpreter symbol \
-	dlload sys init task array dump staticdata toplevel jl_uv datatype \
+	dlload sys init task array buffer dump staticdata toplevel jl_uv datatype \
 	simplevector runtime_intrinsics precompile \
 	threading partr stackwalk gc gc-debug gc-pages gc-stacks method \
 	jlapi signal-handling safepoint jloptions timing subtype \

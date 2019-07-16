@@ -920,3 +920,9 @@ JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a)
     JL_TYPECHK(arraylen, array, a);
     return jl_box_long(jl_array_len((jl_array_t*)a));
 }
+
+JL_DLLEXPORT jl_value_t *jl_bufferlen(jl_value_t *a)
+{
+    JL_TYPECHK(bufferlen, buffer, a);
+    return jl_box_long(((jl_buffer_t*)a)->length);
+}

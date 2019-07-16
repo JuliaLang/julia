@@ -246,6 +246,11 @@ typedef struct _mallocarray_t {
     struct _mallocarray_t *next;
 } mallocarray_t;
 
+typedef struct _mallocbuffer_t {
+    jl_buffer_t *a;
+    struct _mallocbuffer_t *next;
+} mallocbuffer_t;
+
 // pool page metadata
 typedef struct {
     // index of pool that owns this page
