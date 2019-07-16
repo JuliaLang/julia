@@ -152,6 +152,7 @@ function (*)(A::AbstractMatrix, B::AbstractMatrix)
     TS = promote_op(matprod, eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A,1), size(B,2))), A, B)
 end
+# optimization for dispatching to BLAS, e.g. *(::Matrix{Float32}, ::Matrix{Float64})
 function (*)(A::StridedMatrix{<:BlasFloat}, B::StridedMatrix{<:BlasFloat})
     TS = promote_type(eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
