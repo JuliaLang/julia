@@ -394,10 +394,14 @@ public:
            }
        }
        // now process these in order, so we ensure the closure values are updated before enabling the invoke pointer
+       // TODO: this sets these pointers a bit too early, allowing other threads to see
+       // the addresses before the code has been filled in.
+       /*
        for (auto &def : def_spec)
            def.first->specptr.fptr = (void*)def.second;
        for (auto &def : def_invoke)
            def.first->invoke = (jl_callptr_t)def.second;
+       */
         uv_rwlock_wrunlock(&threadsafe);
         jl_gc_safe_leave(ptls, gc_state);
     }
