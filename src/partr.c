@@ -516,6 +516,8 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
             return ptls->root_task;
 #endif
         }
+#else
+    return ptls->root_task;
 #endif
     }
 }

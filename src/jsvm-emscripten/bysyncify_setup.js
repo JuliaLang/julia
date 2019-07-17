@@ -1,40 +1,42 @@
 Module.preRun.push(function() {
-    Bysyncify.instrumentWasmExports = function (exports) { return exports; };
-    Bysyncify.handleSleep = function (startAsync) {
-        if (ABORT) return;
-        Module['noExitRuntime'] = true;
-        if (Bysyncify.state === Bysyncify.State.Normal) {
-            // Prepare to sleep. Call startAsync, and see what happens:
-            // if the code decided to call our callback synchronously,
-            // then no async operation was in fact begun, and we don't
-            // need to do anything.
-            var reachedCallback = false;
-            var reachedAfterCallback = false;
-            var task = get_current_task();
-            startAsync(function(returnValue) {
-            assert(!returnValue || typeof returnValue === 'number'); // old emterpretify API supported other stuff
+    if (typeof Bysyncify !== "undefined") {
+        Bysyncify.instrumentWasmExports = function (exports) { return exports; };
+        Bysyncify.handleSleep = function (startAsync) {
             if (ABORT) return;
-            Bysyncify.returnValue = returnValue || 0;
-            reachedCallback = true;
-            if (!reachedAfterCallback) {
-                // We are happening synchronously, so no need for async.
-                return;
+            Module['noExitRuntime'] = true;
+            if (Bysyncify.state === Bysyncify.State.Normal) {
+                // Prepare to sleep. Call startAsync, and see what happens:
+                // if the code decided to call our callback synchronously,
+                // then no async operation was in fact begun, and we don't
+                // need to do anything.
+                var reachedCallback = false;
+                var reachedAfterCallback = false;
+                var task = get_current_task();
+                startAsync(function(returnValue) {
+                assert(!returnValue || typeof returnValue === 'number'); // old emterpretify API supported other stuff
+                if (ABORT) return;
+                Bysyncify.returnValue = returnValue || 0;
+                reachedCallback = true;
+                if (!reachedAfterCallback) {
+                    // We are happening synchronously, so no need for async.
+                    return;
+                }
+                schedule_and_wait(task);
+                });
+                reachedAfterCallback = true;
+                if (!reachedCallback) {
+                    Module['_jl_task_wait']();
+                }
+            } else if (Bysyncify.state === Bysyncify.State.Rewinding) {
+                // Stop a resume.
+                finish_schedule_task();
+            } else {
+                abort('invalid state: ' + Bysyncify.state);
             }
-            schedule_and_wait(task);
-            });
-            reachedAfterCallback = true;
-            if (!reachedCallback) {
-                Module['_jl_task_wait']();
-            }
-        } else if (Bysyncify.state === Bysyncify.State.Rewinding) {
-            // Stop a resume.
-            finish_schedule_task();
-        } else {
-            abort('invalid state: ' + Bysyncify.state);
-        }
-        return Bysyncify.returnValue;
+            return Bysyncify.returnValue;
         };
-    });
+    }
+});
 
 function get_current_task() {
     return Module['_jl_get_current_task']();
