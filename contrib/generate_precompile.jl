@@ -159,7 +159,6 @@ function generate_precompile_statements()
         include_time = @elapsed for statement in sort(collect(statements))
             # println(statement)
             # Work around #28808
-            occursin("Char(0x", statement) && continue
             statement == "precompile(Tuple{typeof(Base.show), Base.IOContext{Base.TTY}, Type{Vararg{Any, N} where N}})" && continue
             try
                 Base.include_string(PrecompileStagingArea, statement)
