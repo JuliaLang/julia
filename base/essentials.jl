@@ -165,6 +165,14 @@ function convert end
 
 convert(::Type{Any}, @nospecialize(x)) = x
 convert(::Type{T}, x::T) where {T} = x
+
+unwrap(x) = x
+
+function convert(::Type{T}, x) where {T}
+    y = unwrap(x)
+    return y === x ? x : convert(T, y)
+end
+
 convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
                                    # in the absence of inlining-enabled
                                    # (due to fields typed as `Type`, which is generally a bad idea)
