@@ -980,7 +980,7 @@ function static_shown(x)
 end
 
 # Test for PR 17803
-@test static_shown(Int128(-1)) == "Int128(0xffffffffffffffffffffffffffffffff)"
+@test static_shown(Int128(-1)) == "reinterpret(Int128, 0xffffffffffffffffffffffffffffffff)"
 
 # PR #22160
 @test static_shown(:aa) == ":aa"
