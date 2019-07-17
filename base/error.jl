@@ -145,8 +145,14 @@ end
 Like [`systemerror`](@ref), but for Windows API functions that use [`GetLastError`](@ref) instead
 of setting [`errno`](@ref).
 """
-windowserror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), WindowsErrorInfo(Libc.GetLastError(), extrainfo))) : nothing
-
+function windowserror(p, b::Bool; extrainfo=nothing)
+    if b
+        err = Libc.GetLastError() #Only read once from volatile function
+        throw(Base.SystemError(string(p), err, WindowsErrorInfo(err, extrainfo)))
+    else
+        nothing
+    end
+end
 
 ## assertion macro ##
 
