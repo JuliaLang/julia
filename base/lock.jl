@@ -164,6 +164,28 @@ function trylock(f, l::AbstractLock)
     return false
 end
 
+macro lock(l, expr)
+    quote
+        temp = $(esc(l))
+        lock(temp)
+        try
+            $(esc(expr))
+        finally
+            unlock(temp)
+        end
+    end
+end
+
+macro lock_nofail(l, expr)
+    quote
+        temp = $(esc(l))
+        lock(temp)
+        val = $(esc(expr))
+        unlock(temp)
+        val
+    end
+end
+
 @eval Threads begin
     """
         Threads.Condition([lock])
