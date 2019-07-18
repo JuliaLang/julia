@@ -1524,13 +1524,9 @@
           'false
           (if (null? (cdr tail))
               (car tail)
-              (if (symbol-like? (car tail))
-                  `(if ,(car tail) ,(car tail)
-                       ,(loop (cdr tail)))
-                  (let ((g (make-ssavalue)))
-                    `(block (= ,g ,(car tail))
-                            (if ,g ,g
-                                ,(loop (cdr tail)))))))))))
+              `(if ,(car tail)
+                   true
+                   ,(loop (cdr tail))))))))
 
 (define (expand-for lhss itrs body)
   (define (outer? x) (and (pair? x) (eq? (car x) 'outer)))
