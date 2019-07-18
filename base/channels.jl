@@ -55,7 +55,7 @@ Channel(sz=0) = Channel{Any}(sz)
 
 # special constructors
 """
-    Channel{T=Any}(func::Function, size=0; taskref=nothing)
+    Channel{T=Any}(func::Function, size=0; taskref=nothing, spawn=false)
 
 Create a new task from `func`, bind it to a new channel of type
 `T` and size `size`, and schedule the task, all in a single call.
@@ -64,6 +64,9 @@ Create a new task from `func`, bind it to a new channel of type
 
 If you need a reference to the created task, pass a `Ref{Task}` object via
 the keyword argument `taskref`.
+
+If `spawn = true`, the Task created for `func` may be scheduled on another thread
+in parallel, equivalent to creating a task via `Threads.@spawn`.
 
 Return a `Channel`.
 
@@ -105,11 +108,12 @@ true
 ```
 
 !!! compat "Julia 1.3"
-  This constructor was added in Julia 1.3. Earlier versions of Julia used kwargs
-  to set `size` and `T`, but those constructors are deprecated.
+  The `spawn=` parameter was added in Julia 1.3. This constructor was added in Julia 1.3.
+  Earlier versions of Julia used kwargs to set `size` and `T`, but those constructors are
+  deprecated.
 
 ```jldoctest
-julia> chnl = Channel{Char}(1) do ch
+julia> chnl = Channel{Char}(1, spawn=true) do ch
            for c in "hello world"
                put!(ch, c)
            end
@@ -120,12 +124,16 @@ julia> String(collect(chnl))
 "hello world"
 ```
 """
-function Channel{T}(func::Function, size=0; taskref=nothing) where T
+function Channel{T}(func::Function, size=0; taskref=nothing, spawn=false) where T
     chnl = Channel{T}(size)
     task = Task(() -> func(chnl))
+    task.sticky = !spawn
     bind(chnl, task)
-    yield(task) # immediately start it
-
+    if spawn
+        schedule(task) # start it on (potentially) another thread
+    else
+        yield(task) # immediately start it, yielding the current thread
+    end
     isa(taskref, Ref{Task}) && (taskref[] = task)
     return chnl
 end
