@@ -236,7 +236,7 @@ to interpolate code from the caller.
 ## Lowered form
 
 Lowered form (IR) is more important to the compiler, since it is used for type inference,
-optimizations like inlining, and and code generation. It is also less obvious to the human,
+optimizations like inlining, and code generation. It is also less obvious to the human,
 since it results from a significant rearrangement of the input syntax.
 
 In addition to `Symbol`s and some number types, the following data
