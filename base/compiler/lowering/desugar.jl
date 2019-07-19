@@ -134,6 +134,55 @@ make_ssa_if(need_ssa::Function, ex, stmts) = make_ssa_if(need_ssa(ex), ex, stmts
 
 #-------------------------------------------------------------------------------
 
+function find_symbolic_labels!(labels, gotos, ex)
+    if ex isa Expr
+        if ex.head == :symboliclabel
+            push!(labels, ex.args[1])
+        elseif ex.head == :symbolicgoto
+            push!(gotos, ex.args[1])
+        elseif !isquoted(ex)
+            for arg in ex.args
+                find_symbolic_labels!(labels, gotos, arg)
+            end
+        end
+    end
+end
+
+function has_unmatched_symbolic_goto(ex)
+    labels = Set{Symbol}()
+    gotos = Set{Symbol}()
+    find_symbolic_labels!(labels, gotos, ex)
+    !all(target in labels for target in gotos)
+end
+
+function expand_try(ex)
+    if length(ex.args) < 3 || length(ex.args) > 4
+        throw(LoweringError("invalid `try` form", ex))
+    end
+    try_block   = ex.args[1]
+    exc_var     = ex.args[2]
+    catch_block = ex.args[3]
+    finally_block = length(ex.args) < 4 ? false : ex.args[4]
+    if has_unmatched_symbolic_goto(try_block)
+        throw(LoweringError("goto from a try/finally block is not permitted", ex))
+    end
+    if exc_var !== false
+        catch_block = Expr(:block,
+                           Expr(:(=), exc_var, Expr(:the_exception)),
+                           catch_block)
+    end
+    trycatch = catch_block !== false ?
+        Expr(:trycatch,
+             Expr(:scope_block, try_block),
+             Expr(:scope_block, catch_block)) :
+        Expr(:scope_block, try_block)
+    lowered = finally_block !== false ?
+        Expr(:tryfinally,
+             trycatch,
+             Expr(:scope_block, finally_block)) : trycatch
+    expand_forms(lowered)
+end
+
 function expand_let(ex)
     bindings = !(ex.args[1] isa Expr) ? throw(LoweringError("Invalid let syntax", ex)) :
                ex.args[1].head == :block ? ex.args[1].args : [ex.args[1]]
@@ -152,7 +201,7 @@ function expand_let(ex)
             rhs = binding.args[2]
             if is_eventually_call(lhs)
                 # f() = c
-                error("TODO") # Needs expand_function to be implemented
+                Expr(:scope_block, body) # FIXME Needs expand_function to be implemented
             elseif lhs isa Symbol || isdecl(lhs)
                 # `x = c` or `x::T = c`
                 varname = decl_var(lhs)
@@ -337,11 +386,17 @@ function expand_forms(ex)
     elseif head == :struct
         expand_todo(ex) # expand-struct-def
     elseif head == :try
-        expand_todo(ex) # expand-try
+        expand_try(ex)
     elseif head == :lambda
         expand_todo(ex) # expand-table
     elseif head == :block
-        expand_todo(ex) # expand-table
+        if length(args) == 0
+            nothing
+        elseif length(args) == 1 && !(args[1] isa LineNumberNode)
+            expand_forms(args[1])
+        else
+            Expr(:block, map(expand_forms, args)...)
+        end
     elseif head == :.
         expand_todo(ex) # expand-fuse-broadcast
     elseif head == :.=
