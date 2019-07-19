@@ -513,6 +513,12 @@ end
 
     x...
     @Expr(:error, "`...` expression outside call")
+
+    {a, b}
+    @Expr(:error, "{ } vector syntax is discontinued")
+
+    {a; b}
+    @Expr(:error, "{ } matrix syntax is discontinued")
 end
 
 @testset_desugar "Dot syntax; broadcast/getproperty" begin
@@ -1086,7 +1092,6 @@ end
                                 @Expr :break loop_exit
                                 body3
                             end))))
-
 
     for i = a
         body1

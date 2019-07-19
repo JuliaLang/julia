@@ -87,7 +87,10 @@ end
 LoweringError(msg::AbstractString) = LoweringError(msg, nothing)
 
 function Base.show(io::IO, err::LoweringError)
-    print(io, err.msg, " in `", err.ex, "`")
+    print(io, err.msg)
+    if err.ex !== nothing
+        print(io, " in `", err.ex, "`")
+    end
 end
 
 function check_no_assignments(ex)
@@ -384,6 +387,10 @@ function expand_forms(ex)
         #if has_parameters(ex)
         #end
         expand_forms(corecall(:tuple, args...))
+    elseif head == :braces
+        throw(LoweringError("{ } vector syntax is discontinued", ex))
+    elseif head == :bracescat
+        throw(LoweringError("{ } matrix syntax is discontinued", ex))
     elseif head == :string
         expand_forms(topcall(:string, args...))
     elseif head == :(::)
