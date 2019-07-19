@@ -672,7 +672,7 @@ end
 
 @testset "test guarded Random.seed!" begin
     seed = rand(UInt)
-    orig = copy(Random.GLOBAL_RNG)
+    orig = copy(Random.get_local_rng())
     @test guardseed(()->rand(), seed) == guardseed(()->rand(), seed)
     @test guardseed(()->rand(Int), seed) == guardseed(()->rand(Int), seed)
     r1, r2 = MersenneTwister(0), MersenneTwister(0)
@@ -686,7 +686,7 @@ end
     end::Tuple{Float64,Int}
     @test a == c == rand(r1) == rand(r2)
     @test b == d == rand(r1, Int) == rand(r2, Int)
-    @test orig == Random.GLOBAL_RNG
+    @test orig == Random.get_local_rng()
     @test rand(orig) == rand()
 end
 

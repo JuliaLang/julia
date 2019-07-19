@@ -73,8 +73,8 @@ let b = UInt8['0':'9';'A':'Z';'a':'z']
     global randstring
     randstring(r::AbstractRNG, chars=b, n::Integer=8) = String(rand(r, chars, n))
     randstring(r::AbstractRNG, n::Integer) = randstring(r, b, n)
-    randstring(chars=b, n::Integer=8) = randstring(GLOBAL_RNG, chars, n)
-    randstring(n::Integer) = randstring(GLOBAL_RNG, b, n)
+    randstring(chars=b, n::Integer=8) = randstring(get_local_rng(), chars, n)
+    randstring(n::Integer) = randstring(get_local_rng(), b, n)
 end
 
 
@@ -140,7 +140,7 @@ julia> S
  8
 ```
 """
-randsubseq!(S::AbstractArray, A::AbstractArray, p::Real) = randsubseq!(GLOBAL_RNG, S, A, p)
+randsubseq!(S::AbstractArray, A::AbstractArray, p::Real) = randsubseq!(get_local_rng(), S, A, p)
 
 randsubseq(r::AbstractRNG, A::AbstractArray{T}, p::Real) where {T} =
     randsubseq!(r, T[], A, p)
@@ -163,7 +163,7 @@ julia> randsubseq(rng, collect(1:8), 0.3)
  8
 ```
 """
-randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
+randsubseq(A::AbstractArray, p::Real) = randsubseq(get_local_rng(), A, p)
 
 
 ## rand Less Than Masked 52 bits (helper function)
@@ -217,7 +217,7 @@ function shuffle!(r::AbstractRNG, a::AbstractArray)
     return a
 end
 
-shuffle!(a::AbstractArray) = shuffle!(GLOBAL_RNG, a)
+shuffle!(a::AbstractArray) = shuffle!(get_local_rng(), a)
 
 """
     shuffle([rng=GLOBAL_RNG,] v::AbstractArray)
@@ -246,7 +246,7 @@ julia> shuffle(rng, Vector(1:10))
 ```
 """
 shuffle(r::AbstractRNG, a::AbstractArray) = shuffle!(r, copymutable(a))
-shuffle(a::AbstractArray) = shuffle(GLOBAL_RNG, a)
+shuffle(a::AbstractArray) = shuffle(get_local_rng(), a)
 
 
 ## randperm & randperm!
@@ -277,7 +277,7 @@ julia> randperm(MersenneTwister(1234), 4)
 ```
 """
 randperm(r::AbstractRNG, n::T) where {T <: Integer} = randperm!(r, Vector{T}(undef, n))
-randperm(n::Integer) = randperm(GLOBAL_RNG, n)
+randperm(n::Integer) = randperm(get_local_rng(), n)
 
 """
     randperm!([rng=GLOBAL_RNG,] A::Array{<:Integer})
@@ -314,7 +314,7 @@ function randperm!(r::AbstractRNG, a::Array{<:Integer})
     return a
 end
 
-randperm!(a::Array{<:Integer}) = randperm!(GLOBAL_RNG, a)
+randperm!(a::Array{<:Integer}) = randperm!(get_local_rng(), a)
 
 
 ## randcycle & randcycle!
@@ -343,7 +343,7 @@ julia> randcycle(MersenneTwister(1234), 6)
 ```
 """
 randcycle(r::AbstractRNG, n::T) where {T <: Integer} = randcycle!(r, Vector{T}(undef, n))
-randcycle(n::Integer) = randcycle(GLOBAL_RNG, n)
+randcycle(n::Integer) = randcycle(get_local_rng(), n)
 
 """
     randcycle!([rng=GLOBAL_RNG,] A::Array{<:Integer})
@@ -379,4 +379,4 @@ function randcycle!(r::AbstractRNG, a::Array{<:Integer})
     return a
 end
 
-randcycle!(a::Array{<:Integer}) = randcycle!(GLOBAL_RNG, a)
+randcycle!(a::Array{<:Integer}) = randcycle!(get_local_rng(), a)
