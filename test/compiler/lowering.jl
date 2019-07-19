@@ -20,7 +20,9 @@ function _expand_forms(ex)
             expand_forms(ex)
         catch exc
             exc isa LoweringError || rethrow()
-            return Expr(:error, sprint(show, exc))
+            # Hack: show only msg for more compatibility with flisp error forms
+            return Expr(:error, exc.msg)
+            #return Expr(:error, sprint(show, exc))
         end
     end
 end
@@ -1073,6 +1075,14 @@ end
     @Expr(:error, "invalid let syntax")
 end
 
+@testset_desugar "Blocks" begin
+    $(Expr(:block))
+    $nothing
+
+    $(Expr(:block, :a))
+    a
+end
+
 @testset_desugar "Loops" begin
     # flisp: (expand-for) (lambda in expand-forms)
     while cond'
@@ -1157,6 +1167,105 @@ end
                         Top.not_int(Core.:(===)(gsym1, $nothing)))
               end
           end)
+end
+
+@testset_desugar "Try blocks" begin
+    # flisp: expand-try
+    try
+        a
+    catch
+        b
+    end
+    @Expr(:trycatch,
+          @Expr(:scope_block, begin a end),
+          @Expr(:scope_block, begin b end))
+
+    try
+        a
+    catch exc
+        b
+    end
+    @Expr(:trycatch,
+          @Expr(:scope_block, begin a end),
+          @Expr(:scope_block,
+                begin
+                    exc = @Expr(:the_exception)
+                    b
+                end))
+
+    try
+    catch exc
+    end
+    @Expr(:trycatch,
+          @Expr(:scope_block, $nothing),
+          @Expr(:scope_block, begin
+                    exc = @Expr(:the_exception)
+                    begin
+                    end
+                end))
+
+    try
+        a
+    finally
+        b
+    end
+    @Expr(:tryfinally,
+          @Expr(:scope_block, begin a end),
+          @Expr(:scope_block, begin b end))
+
+    try
+        a
+    catch
+        b
+    finally
+        c
+    end
+    @Expr(:tryfinally,
+          @Expr(:trycatch,
+                @Expr(:scope_block, begin a end),
+                @Expr(:scope_block, begin b end)),
+          @Expr(:scope_block, begin c end))
+
+    # goto with label anywhere within try block is ok
+    try
+        begin
+            let
+                $(Expr(:symbolicgoto, :x))   # @goto x
+            end
+        end
+        begin
+            $(Expr(:symboliclabel, :x))  # @label x
+        end
+    finally
+    end
+    @Expr(:tryfinally,
+          @Expr(:scope_block,
+                begin
+                    begin
+                        @Expr(:scope_block,
+                              @Expr(:symbolicgoto, x))
+                    end
+                    begin
+                        @Expr(:symboliclabel, x)
+                    end
+                end),
+          @Expr(:scope_block,
+                begin
+                end))
+
+    # goto not allowed without associated label in try/finally
+    try
+        begin
+            let
+                $(Expr(:symbolicgoto, :x))   # @goto x
+            end
+        end
+    finally
+    end
+    @Expr(:error, "goto from a try/finally block is not permitted")
+
+    $(Expr(:try, :a, :b, :c, :d, :e))
+    @Expr(:error, "invalid `try` form")
 end
 
 @testset_desugar "Functions" begin
