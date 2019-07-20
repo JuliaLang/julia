@@ -800,7 +800,7 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
         overwritten = csccolptr[j]
         csccolptr[j] = countsum
         countsum += overwritten
-        countsum <= typemax(Ti) || throw(ArgumentError("more than typemax(Ti)-1 == $(typemax(Ti)-1) entries"))
+        Base.hastypemax(Ti) && (countsum <= typemax(Ti) || throw(ArgumentError("more than typemax(Ti)-1 == $(typemax(Ti)-1) entries")))
     end
 
     # Now knowing the CSC form's entry count, resize cscrowval and cscnzval if necessary
