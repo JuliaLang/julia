@@ -1889,3 +1889,7 @@ x32499 = begin
     S32499(x=2)
 end
 @test x32499 == 2
+
+# issue #32626
+@test Meta.parse("'a'..'b'") == Expr(:call, :(..), 'a', 'b')
+@test Meta.parse(":a..:b") == Expr(:call, :(..), QuoteNode(:a), QuoteNode(:b))
