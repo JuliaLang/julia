@@ -277,11 +277,11 @@ macro testset_desugar(name, block)
 end
 
 #-------------------------------------------------------------------------------
-# Tests
+# Tests, organized by the Expr head which needs to be lowered.
 
 @testset "Lowering" begin
 
-@testset_desugar "Index notation; getindex" begin
+@testset_desugar "ref end" begin
     # Indexing
     a[i]
     Top.getindex(a, i)
@@ -343,13 +343,10 @@ end
     end
 end
 
-@testset_desugar "Array Literals" begin
+@testset_desugar "vect" begin
     # flisp: (in expand-table)
     [a,b]
     Top.vect(a,b)
-
-    T[a,b]
-    Top.getindex(T, a,b)  # Only so much syntax to go round :-/
 
     [a,b;c]
     @Expr(:error, "unexpected semicolon in array expression")
@@ -358,7 +355,7 @@ end
     @Expr(:error, "misplaced assignment statement in `[a = b, c]`")
 end
 
-@testset_desugar "Array Concatenation" begin
+@testset_desugar "hcat vcat hvcat" begin
     # flisp: (lambda in expand-table)
     [a b]
     Top.hcat(a,b)
@@ -391,7 +388,7 @@ end
     @Expr(:error, "misplaced assignment statement in `T[a; b = c]`")
 end
 
-@testset_desugar "Tuples" begin
+@testset_desugar "tuple" begin
     (x,y)
     Core.tuple(x,y)
 
@@ -407,7 +404,7 @@ end
     @Expr(:error, "unexpected semicolon in tuple")
 end
 
-@testset_desugar "Comparison chains" begin
+@testset_desugar "comparison" begin
     # flisp: (expand-compare-chain)
     a < b < c
     if a < b
@@ -458,7 +455,7 @@ end
                                     Top.broadcasted(<, ssa1, d)))
 end
 
-@testset_desugar "Short circuit boolean operators" begin
+@testset_desugar "|| &&" begin
     # flisp: (expand-or)
     a || b
     if a
@@ -498,7 +495,7 @@ end
     end
 end
 
-@testset_desugar "Misc operators" begin
+@testset_desugar "' <: :>" begin
     a'
     Top.adjoint(a)
 
@@ -510,6 +507,9 @@ end
     a >: b
     $(Expr(:call, :(>:), :a, :b))
 
+end
+
+@testset_desugar "\$ ... {}" begin
     $(Expr(:$, :x))
     @Expr(:error, "`\$` expression outside quote")
 
@@ -523,7 +523,7 @@ end
     @Expr(:error, "{ } matrix syntax is discontinued")
 end
 
-@testset_desugar "Dot syntax; broadcast/getproperty" begin
+@testset_desugar ". .=" begin
     # flisp: (expand-fuse-broadcast)
 
     # Property access
@@ -573,12 +573,10 @@ end
     Top.materialize!(x, Top.broadcasted(+, x, a))
 end
 
-@testset_desugar "Function call syntax" begin
+@testset_desugar "call" begin
     # zero arg call
     g[i]()
     Top.getindex(g, i)()
-
-    # ccall
 
     # splatting
     f(i, j, v..., k)
@@ -598,7 +596,10 @@ end
     end
 end
 
-@testset_desugar "Do syntax" begin
+    # ccall
+
+
+@testset_desugar "do" begin
     f(x) do y
         body(y)
     end
@@ -630,7 +631,7 @@ end
     end
 end
 
-@testset_desugar "In place update operators" begin
+@testset_desugar "+= .+= etc" begin
     # flisp: (lower-update-op)
     x += a
     x = x+a
@@ -685,7 +686,7 @@ end
     @Expr(:error, "invalid assignment location `(x + y)`")
 end
 
-@testset_desugar "Assignment" begin
+@testset_desugar "=" begin
     # flisp: (lambda in expand-table)
 
     # property notation
@@ -783,6 +784,37 @@ end
         maybe_unused(a)
     end
 
+    # type decl
+    x::T = a
+    begin
+        @Expr :decl x T
+        x = a
+    end
+
+    # type aliases
+    A{T} = B{T}
+    begin
+        @Expr :const_if_global A
+        A = @Expr(:scope_block,
+                  begin
+                      @Expr :local_def T
+                      T = Core.TypeVar(:T)
+                      Core.UnionAll(T, Core.apply_type(B, T))
+                  end)
+    end
+
+    # Short form function definitions
+    f(x) = body(x)
+    begin
+        @Expr(:method, f)
+        @Expr(:method, f,
+              Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec()),
+              @Expr(:lambda, [_self_, x], [],
+                    @Expr(:scope_block,
+                          body(x))))
+        maybe_unused(f)
+    end
+
     # Invalid assignments
     1 = a
     @Expr(:error, "invalid assignment location `1`")
@@ -810,9 +842,8 @@ end
     @Expr(:error, "invalid syntax `x.(y) = ...`")
 end
 
-@testset_desugar "Declarations" begin
+@testset_desugar "const local global" begin
     # flisp: (expand-decls) (expand-local-or-global-decl) (expand-const-decl)
-
     # const
     const x=a
     begin
@@ -870,28 +901,9 @@ end
         global x
         y = a
     end
-
-    # type decl
-    x::T = a
-    begin
-        @Expr :decl x T
-        x = a
-    end
-
-    # type aliases
-    A{T} = B{T}
-    begin
-        @Expr :const_if_global A
-        A = @Expr(:scope_block,
-                  begin
-                      @Expr :local_def T
-                      T = Core.TypeVar(:T)
-                      Core.UnionAll(T, Core.apply_type(B, T))
-                  end)
-    end
 end
 
-@testset_desugar "where -> UnionAll expansion" begin
+@testset_desugar "where" begin
     A{T} where T
     @Expr(:scope_block, begin
               @Expr(:local_def, T)
@@ -933,7 +945,7 @@ end
     @Expr(:error, "invalid type parameter name `T(x)`")
 end
 
-@testset_desugar "let blocks" begin
+@testset_desugar "let" begin
     # flisp: (expand-let)
     let x::Int
         body
@@ -1075,7 +1087,7 @@ end
     @Expr(:error, "invalid let syntax")
 end
 
-@testset_desugar "Blocks" begin
+@testset_desugar "block" begin
     $(Expr(:block))
     $nothing
 
@@ -1083,7 +1095,7 @@ end
     a
 end
 
-@testset_desugar "Loops" begin
+@testset_desugar "while for" begin
     # flisp: (expand-for) (lambda in expand-forms)
     while cond'
         body1'
@@ -1169,7 +1181,7 @@ end
           end)
 end
 
-@testset_desugar "Try blocks" begin
+@testset_desugar "try catch finally" begin
     # flisp: expand-try
     try
         a
@@ -1268,19 +1280,7 @@ end
     @Expr(:error, "invalid `try` form")
 end
 
-@testset_desugar "Functions" begin
-    # Short form
-    f(x) = body(x)
-    begin
-        @Expr(:method, f)
-        @Expr(:method, f,
-              Core.svec(Core.svec(Core.Typeof(f), Core.Any), Core.svec()),
-              @Expr(:lambda, [_self_, x], [],
-                    @Expr(:scope_block,
-                          body(x))))
-        maybe_unused(f)
-    end
-
+@testset_desugar "function" begin
     # Long form with argument annotations
     function f(x::T, y)
         body(x)
@@ -1484,7 +1484,7 @@ end
 end
 
 ln = LineNumberNode(@__LINE__()+3, Symbol(@__FILE__))
-@testset_desugar "Generated function; optionally generated" begin
+@testset_desugar "@generated function" begin
     function f(x)
         body1(x)
         if $(Expr(:generated))
@@ -1547,7 +1547,7 @@ ln = LineNumberNode(@__LINE__()+3, Symbol(@__FILE__))
     end
 end
 
-@testset_desugar "Macros" begin
+@testset_desugar "macro" begin
     macro foo
     end
     @Expr(:method, $(Symbol("@foo")))
