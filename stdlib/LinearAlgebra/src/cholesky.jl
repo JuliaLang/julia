@@ -514,6 +514,32 @@ function ldiv!(C::CholeskyPivoted, B::StridedMatrix)
     end
 end
 
+function rdiv!(B::StridedMatrix, C::Cholesky{<:Any,<:AbstractMatrix})
+    if C.uplo == 'L'
+        return rdiv!(rdiv!(B, adjoint(LowerTriangular(C.factors))), LowerTriangular(C.factors))
+    else
+        return rdiv!(rdiv!(B, UpperTriangular(C.factors)), adjoint(UpperTriangular(C.factors)))
+    end
+end
+
+function LinearAlgebra.rdiv!(B::StridedMatrix, C::CholeskyPivoted)
+    n = size(C, 2)
+    for i in 1:size(B, 1)
+        permute!(view(B, i, 1:n), C.piv)
+    end
+    if C.uplo == 'L'
+        rdiv!(rdiv!(B, adjoint(LowerTriangular(C.factors))),
+            LowerTriangular(C.factors))
+    else
+        rdiv!(rdiv!(B, UpperTriangular(C.factors)),
+            adjoint(UpperTriangular(C.factors)))
+    end
+    for i in 1:size(B, 1)
+        invpermute!(view(B, i, 1:n), C.piv)
+    end
+    B
+end
+
 isposdef(C::Union{Cholesky,CholeskyPivoted}) = C.info == 0
 
 function det(C::Cholesky)
