@@ -487,6 +487,8 @@ typedef struct _jl_module_t {
     int32_t nospecialize;  // global bit flags: initialization for new methods
     uint8_t istopmod;
     jl_mutex_t lock;
+    // Any method definitions that are deferred to due to incomplete types
+    arraylist_t deferred;
 } jl_module_t;
 
 // one Type-to-Value entry

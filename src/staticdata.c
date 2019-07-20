@@ -504,6 +504,14 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
     newm->bindings.table = NULL;
     memset(&newm->bindings._space, 0, sizeof(newm->bindings._space));
 
+    // The deferred list should be empty
+    memset(&newm->deferred._space, 0, sizeof(newm->deferred._space));
+    newm->deferred.len = 1;
+    newm->deferred.max = AL_N_INLINE;
+    newm->deferred.items = (void**)offsetof(jl_module_t, usings._space);
+    arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, deferred.items)));
+    arraylist_push(&s->relocs_list, (void*)(((uintptr_t)DataRef << RELOC_TAG_OFFSET) + item));
+
     // write out the usings list
     memset(&newm->usings._space, 0, sizeof(newm->usings._space));
     if (m == jl_main_module) {
