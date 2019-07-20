@@ -2450,14 +2450,13 @@
            (if scope
                (cond ((memq e (scope:args scope)) e)
                      ((memq e (scope:globals scope)) `(outerref ,e))
-                     ((memq e (scope:sp scope)) e)
                      (else
                       (let ((r (assq e (scope:renames scope))))
-                        (if r
-                            (cdr r)
-                            (if (memq e (scope:locals scope))
-                                e
-                                (lookup (scope:prev scope)))))))
+                        (cond (r (cdr r))
+                              ((memq e (scope:locals scope)) e)
+                              ((memq e (scope:sp scope)) e)
+                              (else
+                               (lookup (scope:prev scope)))))))
                (if (underscore-symbol? e)
                    e
                    `(outerref ,e)))))
@@ -2532,11 +2531,12 @@
                            (if (memq v argnames)
                                (error (string "local variable name \"" v "\" conflicts with an argument"))))
                          local-decls))
-           (if (eq? e (lam:body lam))
-               (for-each (lambda (v)
-                           (if (or (memq v locals-def) (memq v local-decls) (memq v implicit-locals))
-                               (error (string "local variable name \"" v "\" conflicts with a static parameter"))))
-                         (scope:sp scope)))
+           (for-each (lambda (lst)
+                       (for-each (lambda (v)
+                                   (if (eq? (var-kind v scope) 'static-parameter)
+                                       (error (string "local variable name \"" v "\" conflicts with a static parameter"))))
+                                 lst))
+                     (list local-decls implicit-locals))
            (if lam
                (set-car! (cddr lam)
                          (append (caddr lam) newnames newnames-def)))
