@@ -277,6 +277,23 @@ jl_value_t *jl_permbox32(jl_datatype_t *t, int32_t x);
 jl_value_t *jl_permbox64(jl_datatype_t *t, int64_t x);
 jl_svec_t *jl_perm_symsvec(size_t n, ...);
 
+#ifdef __GNUC__
+#define jl_perm_symsvec(n, ...) \
+    (jl_perm_symsvec)(__extension__({                                         \
+            static_assert(                                                    \
+                n == sizeof((char *[]){ __VA_ARGS__ })/sizeof(char *),        \
+                "Number of passed arguments does not match expected number"); \
+            n;                                                                \
+        }), __VA_ARGS__)
+#define jl_svec(n, ...) \
+    (jl_svec)(__extension__({                                                 \
+            static_assert(                                                    \
+                n == sizeof((void *[]){ __VA_ARGS__ })/sizeof(void *),        \
+                "Number of passed arguments does not match expected number"); \
+            n;                                                                \
+        }), __VA_ARGS__)
+#endif
+
 // Returns a int32 where the high 16 bits are a lower bound of the number of non-pointer fields
 // at the beginning of the type and the low 16 bits are a lower bound on the number of non-pointer
 // fields at the end of the type. This field only exists for a layout that has at least one
