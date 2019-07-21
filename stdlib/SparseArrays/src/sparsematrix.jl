@@ -1509,11 +1509,11 @@ function sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat, 
 end
 
 sprand(m::Integer, n::Integer, density::AbstractFloat, rfn::Function, ::Type{T} = eltype(rfn(1))) where {T} =
-    sprand(get_local_rng(), m, n, density, (r, i) -> rfn(i))
+    sprand(default_rng(), m, n, density, (r, i) -> rfn(i))
 
 truebools(r::AbstractRNG, n::Integer) = fill(true, n)
 
-sprand(m::Integer, n::Integer, density::AbstractFloat) = sprand(get_local_rng(), m, n, density)
+sprand(m::Integer, n::Integer, density::AbstractFloat) = sprand(default_rng(), m, n, density)
 
 sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) =
     sprand(r, m, n, density, rand, Float64)
@@ -1522,7 +1522,7 @@ sprand(r::AbstractRNG, ::Type{T}, m::Integer, n::Integer, density::AbstractFloat
 sprand(r::AbstractRNG, ::Type{Bool}, m::Integer, n::Integer, density::AbstractFloat) =
     sprand(r, m, n, density, truebools, Bool)
 sprand(::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where {T} =
-    sprand(get_local_rng(), T, m, n, density)
+    sprand(default_rng(), T, m, n, density)
 
 """
     sprandn([rng][,Type],m[,n],p::AbstractFloat)
@@ -1546,11 +1546,11 @@ julia> sprandn(2, 2, 0.75)
 sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) =
     sprand(r, m, n, density, randn, Float64)
 sprandn(m::Integer, n::Integer, density::AbstractFloat) =
-    sprandn(get_local_rng(), m, n, density)
+    sprandn(default_rng(), m, n, density)
 sprandn(r::AbstractRNG, ::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where {T} =
     sprand(r, m, n, density, (r, i) -> randn(r, T, i), T)
 sprandn(::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where {T} =
-    sprandn(get_local_rng(), T, m, n, density)
+    sprandn(default_rng(), T, m, n, density)
 
 LinearAlgebra.fillstored!(S::SparseMatrixCSC, x) = (fill!(nzvalview(S), x); S)
 

@@ -27,7 +27,7 @@ export TestSetException
 import Distributed: myid
 
 using Random
-using Random: AbstractRNG, get_local_rng
+using Random: AbstractRNG, default_rng
 using InteractiveUtils: gen_call_with_extracted_types
 using Core.Compiler: typesubtract
 
@@ -1106,7 +1106,7 @@ function testset_beginend(args, tests, source)
         # we reproduce the logic of guardseed, but this function
         # cannot be used as it changes slightly the semantic of @testset,
         # by wrapping the body in a function
-        local RNG = get_local_rng()
+        local RNG = default_rng()
         oldrng = copy(RNG)
         try
             # RNG is re-seeded with its own seed to ease reproduce a failed test
@@ -1196,7 +1196,7 @@ function testset_forloop(args, testloop, source)
         arr = Vector{Any}()
         local first_iteration = true
         local ts
-        local RNG = get_local_rng()
+        local RNG = default_rng()
         local oldrng = copy(RNG)
         Random.seed!(RNG.seed)
         local tmprng = copy(RNG)
@@ -1650,7 +1650,7 @@ Base.similar(A::GenericArray, s::Integer...) = GenericArray(similar(A.a, s...))
 
 "`guardseed(f)` runs the function `f()` and then restores the
 state of the global RNG as it was before."
-function guardseed(f::Function, r::AbstractRNG=get_local_rng())
+function guardseed(f::Function, r::AbstractRNG=default_rng())
     old = copy(r)
     try
         f()

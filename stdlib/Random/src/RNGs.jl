@@ -285,16 +285,16 @@ function seed!(r::MersenneTwister, seed::Vector{UInt32})
     return r
 end
 
-seed!(r::MersenneTwister=get_local_rng()) = seed!(r, make_seed())
+seed!(r::MersenneTwister=default_rng()) = seed!(r, make_seed())
 seed!(r::MersenneTwister, n::Integer) = seed!(r, make_seed(n))
-seed!(seed::Union{Integer,Vector{UInt32}}) = seed!(get_local_rng(), seed)
+seed!(seed::Union{Integer,Vector{UInt32}}) = seed!(default_rng(), seed)
 
 
 ### Global RNG
 
 const THREAD_RNGs = MersenneTwister[]
-@inline get_local_rng() = get_local_rng(Threads.threadid())
-@noinline function get_local_rng(tid::Int)
+@inline default_rng() = default_rng(Threads.threadid())
+@noinline function default_rng(tid::Int)
     @assert 0 < tid <= length(THREAD_RNGs)
     if @inbounds isassigned(THREAD_RNGs, tid)
         @inbounds MT = THREAD_RNGs[tid]
@@ -313,16 +313,16 @@ struct _GLOBAL_RNG <: AbstractRNG
     global const GLOBAL_RNG = _GLOBAL_RNG.instance
 end
 
-copy!(dst::MersenneTwister, ::_GLOBAL_RNG) = copy!(dst, get_local_rng())
-copy!(::_GLOBAL_RNG, src::MersenneTwister) = copy!(get_local_rng(), src)
-copy(::_GLOBAL_RNG) = copy(get_local_rng())
+copy!(dst::MersenneTwister, ::_GLOBAL_RNG) = copy!(dst, default_rng())
+copy!(::_GLOBAL_RNG, src::MersenneTwister) = copy!(default_rng(), src)
+copy(::_GLOBAL_RNG) = copy(default_rng())
 
-seed!(::_GLOBAL_RNG, seed::Vector{UInt32}) = seed!(get_local_rng(), seed)
-seed!(::_GLOBAL_RNG, n::Integer) = seed!(get_local_rng(), n)
-seed!(::_GLOBAL_RNG, ::Nothing) = seed!(get_local_rng(), nothing)
+seed!(::_GLOBAL_RNG, seed::Vector{UInt32}) = seed!(default_rng(), seed)
+seed!(::_GLOBAL_RNG, n::Integer) = seed!(default_rng(), n)
+seed!(::_GLOBAL_RNG, ::Nothing) = seed!(default_rng(), nothing)
 
-rng_native_52(::_GLOBAL_RNG) = rng_native_52(get_local_rng())
-rand(::_GLOBAL_RNG, sp::SamplerBoolBitInteger) = rand(get_local_rng(), sp)
+rng_native_52(::_GLOBAL_RNG) = rng_native_52(default_rng())
+rand(::_GLOBAL_RNG, sp::SamplerBoolBitInteger) = rand(default_rng(), sp)
 for T in (:(SamplerTrivial{UInt52Raw{UInt64}}),
           :(SamplerTrivial{UInt2x52Raw{UInt128}}),
           :(SamplerTrivial{UInt104Raw{UInt128}}),
@@ -330,17 +330,17 @@ for T in (:(SamplerTrivial{UInt52Raw{UInt64}}),
           :(SamplerUnion(Int64, UInt64, Int128, UInt128)),
           :(SamplerUnion(Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32)),
          )
-    @eval rand(::_GLOBAL_RNG, x::$T) = rand(get_local_rng(), x)
+    @eval rand(::_GLOBAL_RNG, x::$T) = rand(default_rng(), x)
 end
 
-rand!(::_GLOBAL_RNG, A::AbstractArray{Float64}, I::SamplerTrivial{<:FloatInterval_64}) = rand!(get_local_rng(), A, I)
-rand!(::_GLOBAL_RNG, A::Array{Float64}, I::SamplerTrivial{<:FloatInterval_64}) = rand!(get_local_rng(), A, I)
+rand!(::_GLOBAL_RNG, A::AbstractArray{Float64}, I::SamplerTrivial{<:FloatInterval_64}) = rand!(default_rng(), A, I)
+rand!(::_GLOBAL_RNG, A::Array{Float64}, I::SamplerTrivial{<:FloatInterval_64}) = rand!(default_rng(), A, I)
 for T in (Float16, Float32)
-    @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerTrivial{CloseOpen12{$T}}) = rand!(get_local_rng(), A, I)
-    @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerTrivial{CloseOpen01{$T}}) = rand!(get_local_rng(), A, I)
+    @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerTrivial{CloseOpen12{$T}}) = rand!(default_rng(), A, I)
+    @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerTrivial{CloseOpen01{$T}}) = rand!(default_rng(), A, I)
 end
 for T in BitInteger_types
-    @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerType{$T}) = rand!(get_local_rng(), A, I)
+    @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerType{$T}) = rand!(default_rng(), A, I)
 end
 
 
