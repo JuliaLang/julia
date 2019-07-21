@@ -16,7 +16,18 @@ it can be written `Ref(a, i)` for creating a reference to the `i`-th element of 
 When passed as a `ccall` argument (either as a `Ptr` or `Ref` type), a `Ref` object will be
 converted to a native pointer to the data it references.
 
-There is no invalid (NULL) `Ref` in Julia, but a `C_NULL` instance of `Ptr` can be passed to a `ccall` Ref argument.
+There is no invalid (NULL) `Ref` in Julia, but a `C_NULL` instance of `Ptr` can be passed to
+a `ccall` Ref argument.
+
+# Use in broadcasting
+
+Broadcasting with `Ref(x)` treats `x` as a scalar (except when it is a `Ptr`):
+```jldoctest
+julia> round.(Ref(Int), [1.2, 3.7])
+2-element Array{Int64,1}:
+ 1
+ 4
+```
 """
 Ref
 
