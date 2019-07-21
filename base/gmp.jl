@@ -614,12 +614,12 @@ function gcdx(a::BigInt, b::BigInt)
 end
 
 sum(arr::AbstractArray{BigInt}) = foldl(MPZ.add!, arr; init=BigInt(0))
-# note: a similar implementation for `prod` won't be efficient:
+# Note: a similar implementation for `prod` won't be efficient:
 # 1) the time complexity of the allocations is negligible compared to the multiplications
 # 2) assuming arr contains similarly sized BigInts, the multiplications are much more
-# performant when doing e.g. ((a1*a2)*(a2*a3))*(...) rather than a1*(a2*(a3*(...))),
-# which is exactly what the default implementation of `prod` does, via mapreduce
-# (which maybe could be slightly optimized for BigInt)
+# performant when doing e.g. ((a1*a2)*(a3*a4))*(...) rather than a1*(a2*(a3*(...))),
+# which is exactly what the default implementation of `prod` does, via `mapreduce`
+# (which maybe could be slightly optimized for BigInt).
 
 factorial(x::BigInt) = isneg(x) ? BigInt(0) : MPZ.fac_ui(x)
 
