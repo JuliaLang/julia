@@ -57,7 +57,8 @@ julia> using Profile
 julia> @profile myfunc()
 ```
 
-To see the profiling results, there is a [graphical browser](https://github.com/timholy/ProfileView.jl)
+To see the profiling results, there are several graphical browsers
+including [ProfileView.jl](https://github.com/timholy/ProfileView.jl) and [https://github.com/tkluck/StatProfilerHTML.jl](StatProfilerHTML)
 available, but here we'll use the text-based display that comes with the standard library:
 
 ```julia-repl
