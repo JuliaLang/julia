@@ -39,6 +39,7 @@ jl_typename_t *jl_vecelement_typename;
 jl_unionall_t *jl_vararg_type;
 jl_typename_t *jl_vararg_typename;
 jl_datatype_t *jl_tvar_type;
+jl_datatype_t *jl_placeholder_type;
 jl_datatype_t *jl_uniontype_type;
 jl_datatype_t *jl_unionall_type;
 jl_datatype_t *jl_datatype_type;
@@ -1707,7 +1708,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_datatype_type->name->wrapper = (jl_value_t*)jl_datatype_type;
     jl_datatype_type->super = (jl_datatype_t*)jl_type_type;
     jl_datatype_type->parameters = jl_emptysvec;
-    jl_datatype_type->name->names = jl_perm_symsvec(21,
+    jl_datatype_type->name->names = jl_perm_symsvec(23,
                                                     "name",
                                                     "super",
                                                     "parameters",
@@ -1720,6 +1721,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                                     "uid",
                                                     "abstract",
                                                     "mutable",
+                                                    "incomplete",
                                                     "hasfreetypevars",
                                                     "isconcretetype",
                                                     "isdispatchtuple",
@@ -1728,8 +1730,10 @@ void jl_init_types(void) JL_GC_DISABLED
                                                     "isinlinealloc",
                                                     "has_concrete_subtype",
                                                     "llvm::StructType",
-                                                    "llvm::DIType");
-    jl_datatype_type->types = jl_svec(21,
+                                                    "llvm::DIType",
+                                                    "padding");
+
+    jl_datatype_type->types = jl_svec(23,
                                       jl_typename_type,
                                       jl_datatype_type,
                                       jl_simplevector_type,
@@ -1738,7 +1742,8 @@ void jl_init_types(void) JL_GC_DISABLED
                                       jl_any_type, jl_any_type, jl_any_type, jl_any_type,
                                       jl_any_type, jl_any_type, jl_any_type, jl_any_type,
                                       jl_any_type, jl_any_type, jl_any_type, jl_any_type,
-                                      jl_any_type, jl_any_type, jl_any_type);
+                                      jl_any_type, jl_any_type, jl_any_type, jl_any_type,
+                                      jl_any_type);
     jl_datatype_type->instance = NULL;
     jl_datatype_type->uid = jl_assign_type_uid();
     jl_datatype_type->struct_decl = NULL;
@@ -2004,6 +2009,11 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_array_symbol_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_symbol_type, jl_box_long(1));
     jl_array_uint8_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_uint8_type, jl_box_long(1));
     jl_array_int32_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_int32_type, jl_box_long(1));
+
+    jl_placeholder_type = jl_new_datatype(jl_symbol("Placeholder"), core, jl_any_type, jl_emptysvec,
+                                   jl_perm_symsvec(1, "dependents"),
+                                   jl_svec(1, jl_array_any_type),
+                                   0, 1, 1);
 
     jl_expr_type =
         jl_new_datatype(jl_symbol("Expr"), core,
@@ -2297,8 +2307,10 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_datatype_type->types, 16, jl_bool_type);
     jl_svecset(jl_datatype_type->types, 17, jl_bool_type);
     jl_svecset(jl_datatype_type->types, 18, jl_bool_type);
-    jl_svecset(jl_datatype_type->types, 19, jl_voidpointer_type);
+    jl_svecset(jl_datatype_type->types, 19, jl_bool_type);
     jl_svecset(jl_datatype_type->types, 20, jl_voidpointer_type);
+    jl_svecset(jl_datatype_type->types, 21, jl_voidpointer_type);
+    jl_svecset(jl_datatype_type->types, 22, jl_voidpointer_type);
     jl_svecset(jl_typename_type->types, 1, jl_module_type);
     jl_svecset(jl_typename_type->types, 6, jl_long_type);
     jl_svecset(jl_typename_type->types, 3, jl_type_type);

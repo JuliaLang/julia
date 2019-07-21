@@ -55,7 +55,7 @@ static void *const _tags[] = {
          &jl_uint32_type, &jl_uint64_type, &jl_char_type, &jl_weakref_type,
          &jl_int8_type, &jl_int16_type, &jl_uint16_type,
          &jl_float16_type, &jl_float32_type, &jl_float64_type, &jl_floatingpoint_type,
-         &jl_number_type, &jl_signed_type,
+         &jl_number_type, &jl_signed_type, &jl_placeholder_type,
          // special typenames
          &jl_tuple_typename, &jl_pointer_typename, &jl_array_typename, &jl_type_typename,
          &jl_vararg_typename, &jl_namedtuple_typename,

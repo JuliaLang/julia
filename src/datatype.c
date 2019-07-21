@@ -84,6 +84,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->isdispatchtuple = 0;
     t->isbitstype = 0;
     t->zeroinit = 0;
+    t->incomplete = 0;
     t->isinlinealloc = 0;
     t->has_concrete_subtype = 1;
     t->layout = NULL;

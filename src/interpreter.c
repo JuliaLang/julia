@@ -220,6 +220,159 @@ static void eval_primitivetype(jl_expr_t *ex, interpreter_state *s)
     JL_GC_POP();
 }
 
+/*
+ * We maintain a DAG of dependencies between incomplete datatypes. Each SCC in
+ * this graph is assigned a unique representative that represents the SCC to
+ * other SCCs. Obtain this representative for a given dt.
+ */
+static jl_datatype_t *get_scc_representative(jl_datatype_t *dt) {
+    if (dt->scc == dt)
+        return dt;
+    // For efficiency we only update the SCC representative when merging SCCs.
+    // This update here folds updating the members of the SCC into any
+    // subsequent access.
+    dt->scc = get_scc_representative(dt->scc);
+    return dt->scc;
+}
+
+ /*
+ * Check if adding a new dependency edge from scc_a to scc_b would add a cycle.
+ * If so, return the cycle.
+ *
+ * Note: We assume the SCC dag to be fairly small such that the search here is
+ * not too expensive. Should that not be the case in real world code, investigate
+ * using and incremental SCC maintenance algorithm (e.g.
+ * https://arxiv.org/pdf/1105.2397.pdf) instead.
+ */
+static jl_array_t *find_new_cycle(jl_datatype_t *scc_a, jl_datatype_t *scc_b) JL_NOTSAFEPOINT {
+    assert(get_scc_representative(scc_a) == scc_a);
+    assert(get_scc_representative(scc_b) == scc_b);
+    if (scc_a == scc_b) {
+        jl_array_t *cycle = jl_alloc_vec_any(0);
+        jl_array_ptr_1d_push(cycle, (jl_value_t*)scc_a);
+        return cycle;
+    }
+    for (int i = 0; i < jl_array_len(scc_a->depends); ++i) {
+        jl_array_t *cycle = find_new_cycle(
+            (jl_datatype_t*)jl_array_ptr_ref(scc_a->depends, i), scc_b);
+        if (cycle) {
+            jl_array_ptr_1d_push(cycle, (jl_value_t*)scc_a);
+            return cycle;
+        }
+    }
+    return NULL;
+}
+
+ static void filter_scc(jl_array_t *array, jl_datatype_t *scc_rep)
+{
+    size_t insert_point = 0;
+    for (int i = 0; i < jl_array_len(array); ++i) {
+        jl_datatype_t *connected_scc = (jl_datatype_t*)jl_array_ptr_ref(array, i);
+        if (get_scc_representative(connected_scc) == scc_rep) {
+            // If this SCC is now part of our new SCC, skip it in this list
+            continue;
+        }
+        if (insert_point != i) {
+            jl_array_ptr_set(array, insert_point,
+                jl_array_ptr_ref(array, i));
+        }
+        insert_point++;
+    }
+    jl_array_del_end(array, jl_array_len(array) - insert_point);
+}
+
+ static void filter_cycle_and_append(jl_array_t *newa, jl_array_t *olda, jl_datatype_t *scc_rep)
+{
+    for (int i = 0; i < jl_array_len(olda); ++i) {
+        jl_datatype_t *connected_scc = (jl_datatype_t*)jl_array_ptr_ref(olda, i);
+        if (get_scc_representative(connected_scc) != scc_rep)
+            jl_array_ptr_1d_push(newa, (jl_value_t*)connected_scc);
+    }
+}
+
+ static void incomplete_add_dep(jl_datatype_t *from, jl_datatype_t *to) {
+    assert(from->incomplete);
+    assert(to->incomplete);
+    // If these datatypes are part of the same SCC, there's nothing
+    // to do - they are contracted in the condensation.
+    if (get_scc_representative(from) == get_scc_representative(to)) {
+        // Nothing to do
+        return;
+    }
+    // See if adding this edge would result in a cycle.
+    jl_array_t *cycle = find_new_cycle(get_scc_representative(from),
+                                        get_scc_representative(to));
+    if (cycle) {
+        // If so, we need to contract the cycle by merging all SCCs that
+        // are part of the cycle. Arbitrarily pick the first SCC as the new
+        // SCC representative.
+        jl_datatype_t *new_scc_rep = (jl_datatype_t*)jl_array_ptr_ref(cycle, 0);
+        // First go through and set the elements to be members of the
+        // new cycle.
+        for (int i = 1; i < jl_array_len(cycle); ++i) {
+            jl_datatype_t *old_scc = (jl_datatype_t*)jl_array_ptr_ref(cycle, i);
+            old_scc->scc = new_scc_rep;
+        }
+        // Now go through and merge the various array lists
+        filter_scc(new_scc_rep->depends, new_scc_rep);
+        filter_scc(new_scc_rep->dependents, new_scc_rep);
+        for (int i = 1; i < jl_array_len(cycle); ++i) {
+            jl_datatype_t *old_scc = (jl_datatype_t*)jl_array_ptr_ref(cycle, 1);
+            filter_cycle_and_append(new_scc_rep->depends, old_scc->depends, new_scc_rep);
+            filter_cycle_and_append(new_scc_rep->dependents, old_scc->dependents, new_scc_rep);
+        }
+        return;
+    }
+    // Check if we need to merge cycle
+    jl_array_ptr_1d_push(get_scc_representative(to)->depends,
+        (jl_value_t*)get_scc_representative(from));
+    jl_array_ptr_1d_push(get_scc_representative(from)->dependents,
+        (jl_value_t*)get_scc_representative(to));
+}
+
+ static void finish_scc(jl_module_t *mod, jl_datatype_t *scc) {
+    assert(jl_array_len(scc->depends) == 0);
+    arraylist_t worklist;
+    arraylist_new(&worklist, 0);
+    arraylist_push(&worklist, scc);
+    while (worklist.len != 0) {
+        jl_datatype_t *dt = (jl_datatype_t*)arraylist_pop(&worklist);
+        if (!dt->incomplete)
+            continue;
+        dt->incomplete = 0;
+        // We don't store the members of the SCC. Instead, do a search through
+        // the various things that generate dependencies.
+        for (int i = 0; i < jl_svec_len(scc->types); ++i) {
+            jl_datatype_t *fdt = (jl_datatype_t*)jl_svecref(scc->types, i);
+            if (fdt->incomplete && get_scc_representative(fdt) == scc)
+                arraylist_push(&worklist, fdt);
+        }
+        jl_compute_field_offsets(dt);
+    }
+    scc->depends = NULL;
+    scc->dependents = NULL;
+    // See if there were any delayed method instantiations that we now need to
+    // add to the method table.
+    for (size_t i = 0; i < mod->deferred.len; ++i) {
+        jl_svec_t *item = (jl_svec_t*)mod->deferred.items[i];
+        jl_method_t *m = (jl_method_t*)jl_svecref(item, 1);
+        if (((jl_datatype_t*)jl_unwrap_unionall(m->sig))->scc == scc) {
+            jl_method_table_insert(
+                (jl_methtable_t*)jl_svecref(item, 0), m, NULL);
+        }
+    }
+}
+
+static void dt_mark_incomplete(jl_datatype_t *dt)
+{
+    if (dt->incomplete == 0) {
+        dt->scc = dt;
+        dt->depends = jl_alloc_vec_any(0);
+        dt->dependents = jl_alloc_vec_any(0);
+    }
+    dt->incomplete = 1;
+}
+
 static void eval_structtype(jl_expr_t *ex, interpreter_state *s)
 {
     jl_value_t **args = jl_array_ptr_data(ex->args);
@@ -261,7 +414,13 @@ static void eval_structtype(jl_expr_t *ex, interpreter_state *s)
         jl_gc_wb(dt, dt->types);
         for (size_t i = 0; i < jl_svec_len(dt->types); i++) {
             jl_value_t *elt = jl_svecref(dt->types, i);
-            if ((!jl_is_type(elt) && !jl_is_typevar(elt)) || jl_is_vararg_type(elt)) {
+            if (jl_typeis(elt, jl_placeholder_type)) {
+                jl_array_ptr_1d_push(
+                        ((jl_placeholder_t*)elt)->dependents,
+                        (jl_value_t*)dt);
+                dt_mark_incomplete(dt);
+                jl_array_ptr_1d_push(dt->depends, elt);
+            } else if ((!jl_is_type(elt) && !jl_is_typevar(elt)) || jl_is_vararg_type(elt)) {
                 jl_type_error_rt(jl_symbol_name(dt->name->name),
                                  "type definition",
                                  (jl_value_t*)jl_type_type, elt);
