@@ -108,7 +108,7 @@ abstract type Sampler{E} end
 gentype(::Type{<:Sampler{E}}) where {E} = E
 
 # temporarily for BaseBenchmarks
-RangeGenerator(x) = Sampler(get_local_rng(), x)
+RangeGenerator(x) = Sampler(default_rng(), x)
 
 # In some cases, when only 1 random value is to be generated,
 # the optimal sampler can be different than if multiple values
@@ -250,15 +250,15 @@ rand(rng::AbstractRNG, ::UniformT{T}) where {T} = rand(rng, T)
 rand(rng::AbstractRNG, X)                                           = rand(rng, Sampler(rng, X, Val(1)))
 # this is needed to disambiguate
 rand(rng::AbstractRNG, X::Dims)                                     = rand(rng, Sampler(rng, X, Val(1)))
-rand(rng::AbstractRNG=get_local_rng(), ::Type{X}=Float64) where {X} = rand(rng, Sampler(rng, X, Val(1)))
+rand(rng::AbstractRNG=default_rng(), ::Type{X}=Float64) where {X} = rand(rng, Sampler(rng, X, Val(1)))
 
-rand(X)                   = rand(get_local_rng(), X)
-rand(::Type{X}) where {X} = rand(get_local_rng(), X)
+rand(X)                   = rand(default_rng(), X)
+rand(::Type{X}) where {X} = rand(default_rng(), X)
 
 #### arrays
 
-rand!(A::AbstractArray{T}, X) where {T}             = rand!(get_local_rng(), A, X)
-rand!(A::AbstractArray{T}, ::Type{X}=T) where {T,X} = rand!(get_local_rng(), A, X)
+rand!(A::AbstractArray{T}, X) where {T}             = rand!(default_rng(), A, X)
+rand!(A::AbstractArray{T}, ::Type{X}=T) where {T,X} = rand!(default_rng(), A, X)
 
 rand!(rng::AbstractRNG, A::AbstractArray{T}, X) where {T}             = rand!(rng, A, Sampler(rng, X))
 rand!(rng::AbstractRNG, A::AbstractArray{T}, ::Type{X}=T) where {T,X} = rand!(rng, A, Sampler(rng, X))
@@ -274,7 +274,7 @@ rand(r::AbstractRNG, dims::Integer...) = rand(r, Float64, Dims(dims))
 rand(                dims::Integer...) = rand(Float64, Dims(dims))
 
 rand(r::AbstractRNG, X, dims::Dims)  = rand!(r, Array{gentype(X)}(undef, dims), X)
-rand(                X, dims::Dims)  = rand(get_local_rng(), X, dims)
+rand(                X, dims::Dims)  = rand(default_rng(), X, dims)
 
 rand(r::AbstractRNG, X, d::Integer, dims::Integer...) = rand(r, X, Dims((d, dims...)))
 rand(                X, d::Integer, dims::Integer...) = rand(X, Dims((d, dims...)))
@@ -283,7 +283,7 @@ rand(                X, d::Integer, dims::Integer...) = rand(X, Dims((d, dims...
 # moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
 
 rand(r::AbstractRNG, ::Type{X}, dims::Dims) where {X} = rand!(r, Array{X}(undef, dims), X)
-rand(                ::Type{X}, dims::Dims) where {X} = rand(get_local_rng(), X, dims)
+rand(                ::Type{X}, dims::Dims) where {X} = rand(default_rng(), X, dims)
 
 rand(r::AbstractRNG, ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(r, X, Dims((d, dims...)))
 rand(                ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(X, Dims((d, dims...)))
