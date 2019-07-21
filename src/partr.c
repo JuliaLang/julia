@@ -41,11 +41,12 @@ extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
 typedef struct taskheap_tag {
     jl_mutex_t lock;
     jl_task_t **tasks;
-    int16_t ntasks, prio;
+    int32_t ntasks;
+    int16_t prio;
 } taskheap_t;
 
 /* multiqueue parameters */
-static const int16_t heap_d = 8;
+static const int32_t heap_d = 8;
 static const int heap_c = 16;
 
 /* size of each heap */
@@ -53,7 +54,7 @@ static const int tasks_per_heap = 16384; // TODO: this should be smaller by defa
 
 /* the multiqueue's heaps */
 static taskheap_t *heaps;
-static int16_t heap_p;
+static int32_t heap_p;
 
 /* unbias state for the RNG */
 static uint64_t cong_unbias;
@@ -63,7 +64,7 @@ static inline void multiq_init(void)
 {
     heap_p = heap_c * jl_n_threads;
     heaps = (taskheap_t *)calloc(heap_p, sizeof(taskheap_t));
-    for (int16_t i = 0; i < heap_p; ++i) {
+    for (int32_t i = 0; i < heap_p; ++i) {
         jl_mutex_init(&heaps[i].lock);
         heaps[i].tasks = (jl_task_t **)calloc(tasks_per_heap, sizeof(jl_task_t*));
         heaps[i].ntasks = 0;
@@ -73,10 +74,10 @@ static inline void multiq_init(void)
 }
 
 
-static inline void sift_up(taskheap_t *heap, int16_t idx)
+static inline void sift_up(taskheap_t *heap, int32_t idx)
 {
     if (idx > 0) {
-        int16_t parent = (idx-1)/heap_d;
+        int32_t parent = (idx-1)/heap_d;
         if (heap->tasks[idx]->prio < heap->tasks[parent]->prio) {
             jl_task_t *t = heap->tasks[parent];
             heap->tasks[parent] = heap->tasks[idx];
@@ -87,10 +88,10 @@ static inline void sift_up(taskheap_t *heap, int16_t idx)
 }
 
 
-static inline void sift_down(taskheap_t *heap, int16_t idx)
+static inline void sift_down(taskheap_t *heap, int32_t idx)
 {
     if (idx < heap->ntasks) {
-        for (int16_t child = heap_d*idx + 1;
+        for (int32_t child = heap_d*idx + 1;
                 child < tasks_per_heap && child <= heap_d*idx + heap_d;
                 ++child) {
             if (heap->tasks[child]
@@ -136,7 +137,8 @@ static inline jl_task_t *multiq_deletemin(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     uint64_t rn1 = 0, rn2;
-    int16_t i, prio1, prio2;
+    int32_t i;
+    int16_t prio1, prio2;
     jl_task_t *task;
  retry:
     for (i = 0; i < heap_p; ++i) {
@@ -182,7 +184,7 @@ static inline jl_task_t *multiq_deletemin(void)
 
 void jl_gc_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
 {
-    int16_t i, j;
+    int32_t i, j;
     for (i = 0; i < heap_p; ++i)
         for (j = 0; j < heaps[i].ntasks; ++j)
             jl_gc_mark_queue_obj_explicit(gc_cache, sp, (jl_value_t *)heaps[i].tasks[j]);
@@ -191,7 +193,7 @@ void jl_gc_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp
 
 static int multiq_check_empty(void)
 {
-    int16_t i;
+    int32_t i;
     for (i = 0; i < heap_p; ++i) {
         if (heaps[i].ntasks != 0)
             return 0;
