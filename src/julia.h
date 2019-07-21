@@ -1198,6 +1198,16 @@ JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup);
 JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type);
 JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void);
 JL_DLLEXPORT jl_svec_t *jl_svec(size_t n, ...) JL_MAYBE_UNROOTED;
+#ifdef __GNUC__
+#define jl_svec(n, ...) \
+    (jl_svec)(                                                               \
+        __extension__({                                                      \
+            void *names[] = { __VA_ARGS__ };                                 \
+            _Static_assert(n == sizeof(names)/sizeof(names[0]),              \
+            "Number of passed arguments does not match expected number");    \
+            n;                                                               \
+        }), __VA_ARGS__)
+#endif
 JL_DLLEXPORT jl_svec_t *jl_svec1(void *a);
 JL_DLLEXPORT jl_svec_t *jl_svec2(void *a, void *b);
 JL_DLLEXPORT jl_svec_t *jl_alloc_svec(size_t n);
