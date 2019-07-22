@@ -1525,7 +1525,7 @@ end
         @test mod(n, 0:4) == mod(n, 5)
         @test mod(n, 1:5) == mod1(n, 5)
         @test mod(n, 2:6) == 2 + mod(n-2, 5)
-        @test mod(n, OneTo(5)) == mod1(n, 5)
+        @test mod(n, Base.OneTo(5)) == mod1(n, 5)
         @test mod(n, reverse(0:4)) == mod(n, 5)
         @test mod(n, reverse(2:6)) == 2 + mod(n-2, 5)
     end
