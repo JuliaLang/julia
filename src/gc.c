@@ -494,19 +494,6 @@ static size_t max_collect_interval = 1250000000UL;
 static size_t max_collect_interval =  500000000UL;
 #endif
 
-// determine how often the given thread should atomically update
-// the global allocation counter.
-// NOTE: currently the same for all threads.
-static int64_t per_thread_counter_interval(jl_ptls_t ptls) JL_NOTSAFEPOINT
-{
-    if (jl_n_threads == 1)
-        return gc_num.interval;
-    size_t intvl = gc_num.interval / jl_n_threads / 2;
-    if (intvl < 1048576)
-        return 1048576;
-    return intvl;
-}
-
 // global variables for GC stats
 
 // Resetting the object to a young object, this is used when marking the
@@ -796,14 +783,7 @@ void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT
 
 static inline void maybe_collect(jl_ptls_t ptls)
 {
-    int should_collect = 0;
-    if (ptls->gc_num.allocd >= 0) {
-        int64_t intvl = per_thread_counter_interval(ptls);
-        size_t localbytes = ptls->gc_num.allocd + intvl;
-        ptls->gc_num.allocd = -intvl;
-        should_collect = (jl_atomic_add_fetch(&gc_num.allocd, localbytes) >= 0);
-    }
-    if (should_collect || gc_debug_check_other()) {
+    if (ptls->gc_num.allocd >= 0 || gc_debug_check_other()) {
         jl_gc_collect(0);
     }
     else {
@@ -975,7 +955,7 @@ static void combine_thread_gc_counts(jl_gc_num_t *dest) JL_NOTSAFEPOINT
     for (int i = 0; i < jl_n_threads; i++) {
         jl_ptls_t ptls = jl_all_tls_states[i];
         if (ptls) {
-            dest->allocd += (jl_atomic_load_relaxed(&ptls->gc_num.allocd) + per_thread_counter_interval(ptls));
+            dest->allocd += (jl_atomic_load_relaxed(&ptls->gc_num.allocd) + gc_num.interval);
             dest->freed += jl_atomic_load_relaxed(&ptls->gc_num.freed);
             dest->malloc += jl_atomic_load_relaxed(&ptls->gc_num.malloc);
             dest->realloc += jl_atomic_load_relaxed(&ptls->gc_num.realloc);
@@ -992,7 +972,7 @@ static void reset_thread_gc_counts(void) JL_NOTSAFEPOINT
         jl_ptls_t ptls = jl_all_tls_states[i];
         if (ptls) {
             memset(&ptls->gc_num, 0, sizeof(jl_thread_gc_num_t));
-            ptls->gc_num.allocd = -per_thread_counter_interval(ptls);
+            ptls->gc_num.allocd = -(int64_t)gc_num.interval;
         }
     }
 }
@@ -1000,8 +980,8 @@ static void reset_thread_gc_counts(void) JL_NOTSAFEPOINT
 void jl_gc_reset_alloc_count(void) JL_NOTSAFEPOINT
 {
     combine_thread_gc_counts(&gc_num);
-    live_bytes += (gc_num.deferred_alloc + (gc_num.allocd + gc_num.interval));
-    gc_num.allocd = -(int64_t)gc_num.interval;
+    live_bytes += (gc_num.deferred_alloc + gc_num.allocd);
+    gc_num.allocd = 0;
     gc_num.deferred_alloc = 0;
     reset_thread_gc_counts();
 }
@@ -2622,8 +2602,7 @@ JL_DLLEXPORT int64_t jl_gc_total_bytes(void)
     jl_gc_num_t num = gc_num;
     combine_thread_gc_counts(&num);
     // Sync this logic with `base/util.jl:GC_Diff`
-    return (num.total_allocd + num.deferred_alloc +
-            num.allocd + num.interval);
+    return (num.total_allocd + num.deferred_alloc + num.allocd);
 }
 JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void)
 {
@@ -2742,7 +2721,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     }
     gc_mark_loop(ptls, sp);
     gc_mark_sp_init(gc_cache, &sp);
-    gc_num.since_sweep += gc_num.allocd + (int64_t)gc_num.interval;
+    gc_num.since_sweep += gc_num.allocd;
     gc_settime_premark_end();
     gc_time_mark_pause(t0, scanned_bytes, perm_scanned_bytes);
     int64_t actual_allocd = gc_num.since_sweep;
@@ -2892,7 +2871,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,
                         estimate_freed, sweep_full);
     gc_num.full_sweep += sweep_full;
-    gc_num.allocd = -(int64_t)gc_num.interval;
+    gc_num.allocd = 0;
     last_live_bytes = live_bytes;
     live_bytes += -gc_num.freed + gc_num.since_sweep;
     if (prev_sweep_full) {
@@ -2913,8 +2892,9 @@ JL_DLLEXPORT void jl_gc_collect(int full)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (jl_gc_disable_counter) {
-        gc_num.deferred_alloc += (gc_num.allocd + gc_num.interval);
-        gc_num.allocd = -(int64_t)gc_num.interval;
+        size_t localbytes = ptls->gc_num.allocd + gc_num.interval;
+        ptls->gc_num.allocd = -(int64_t)gc_num.interval;
+        jl_atomic_add_fetch(&gc_num.deferred_alloc, localbytes);
         return;
     }
     gc_debug_print();
@@ -3017,7 +2997,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
 
     memset(&ptls->gc_num, 0, sizeof(jl_thread_gc_num_t));
     assert(gc_num.interval == default_collect_interval);
-    ptls->gc_num.allocd = -per_thread_counter_interval(ptls);
+    ptls->gc_num.allocd = -(int64_t)gc_num.interval;
 }
 
 // System-wide initializations
@@ -3031,11 +3011,11 @@ void jl_gc_init(void)
 
     gc_num.interval = default_collect_interval;
     last_long_collect_interval = default_collect_interval;
-    gc_num.allocd = -default_collect_interval;
+    gc_num.allocd = 0;
 
 #ifdef _P64
-    // on a big memory machine, set max_collect_interval to totalmem * nthreads / ncores / 2
-    size_t maxmem = (uv_get_total_memory() * jl_n_threads) / jl_cpu_threads() / 2;
+    // on a big memory machine, set max_collect_interval to totalmem / ncores / 2
+    size_t maxmem = uv_get_total_memory() / jl_cpu_threads() / 2;
     if (maxmem > max_collect_interval)
         max_collect_interval = maxmem;
 #endif
