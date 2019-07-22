@@ -120,6 +120,6 @@ getindex(b::RefArray) = b.x[b.i]
 getindex(b::RefArray, ::CartesianIndex{0}) = getindex(b)
 
 setindex!(b::RefArray, x) = (b.x[b.i] = x; b)
-setindex!(b::RefArray, x, , ::CartesianIndex{0}) = setindex!(b, x)
+setindex!(b::RefArray, x, ::CartesianIndex{0}) = setindex!(b, x)
 
 ###

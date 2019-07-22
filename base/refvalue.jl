@@ -33,4 +33,4 @@ getindex(b::RefValue) = b.x
 getindex(b::RefValue, ::CartesianIndex{0}) = getindex(b)
 
 setindex!(b::RefValue, x) = (b.x = x; b)
-setindex!(b::RefValue, x, , ::CartesianIndex{0}) = setindex!(b, x)
+setindex!(b::RefValue, x, ::CartesianIndex{0}) = setindex!(b, x)
