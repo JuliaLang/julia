@@ -30,7 +30,4 @@ end
 unsafe_convert(::Type{Ptr{Cvoid}}, b::RefValue{T}) where {T} = convert(Ptr{Cvoid}, unsafe_convert(Ptr{T}, b))
 
 getindex(b::RefValue) = b.x
-getindex(b::RefValue, ::CartesianIndex{0}) = getindex(b)
-
 setindex!(b::RefValue, x) = (b.x = x; b)
-setindex!(b::RefValue, x, ::CartesianIndex{0}) = setindex!(b, x)
