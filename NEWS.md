@@ -88,6 +88,11 @@ Standard library changes
 
 * `foldr` and `mapfoldr` now work on any iterator that supports `Iterators.reverse`, not just arrays ([#31781]).
 
+Deprecated or removed
+---------------------
+
+* `@spawn expr` from the `Distributed` standard library should be replaced with `@spawnat :any expr` ([#32600]).
+
 External dependencies
 ---------------------
 

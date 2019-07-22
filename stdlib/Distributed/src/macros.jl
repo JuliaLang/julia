@@ -17,10 +17,11 @@ spawnat(p, thunk) = remotecall(thunk, p)
 spawn_somewhere(thunk) = spawnat(nextproc(),thunk)
 
 """
-    @spawn
+    @spawn expr
 
 Create a closure around an expression and run it on an automatically-chosen process,
 returning a [`Future`](@ref) to the result.
+This macro is deprecated; `@spawnat :any expr` should be used instead.
 
 # Examples
 ```julia-repl
@@ -38,6 +39,9 @@ Future(3, 1, 7, nothing)
 julia> fetch(f)
 3
 ```
+
+!!! compat "Julia 1.3"
+    As of Julia 1.3 this macro is deprecated. Use `@spawnat :any` instead.
 """
 macro spawn(expr)
     thunk = esc(:(()->($expr)))
@@ -52,28 +56,43 @@ macro spawn(expr)
 end
 
 """
-    @spawnat
+    @spawnat p expr
 
 Create a closure around an expression and run the closure
 asynchronously on process `p`. Return a [`Future`](@ref) to the result.
-Accepts two arguments, `p` and an expression.
+If `p` is the quoted literal symbol `:any`, then the system will pick a
+processor to use automatically.
 
 # Examples
 ```julia-repl
-julia> addprocs(1);
+julia> addprocs(3);
 
 julia> f = @spawnat 2 myid()
 Future(2, 1, 3, nothing)
 
 julia> fetch(f)
 2
+
+julia> f = @spawnat :any myid()
+Future(3, 1, 7, nothing)
+
+julia> fetch(f)
+3
 ```
+
+!!! compat "Julia 1.3"
+    The `:any` argument is available as of Julia 1.3.
 """
 macro spawnat(p, expr)
     thunk = esc(:(()->($expr)))
     var = esc(Base.sync_varname)
+    if p === QuoteNode(:any)
+        spawncall = :(spawn_somewhere($thunk))
+    else
+        spawncall = :(spawnat($(esc(p)), $thunk))
+    end
     quote
-        local ref = spawnat($(esc(p)), $thunk)
+        local ref = $spawncall
         if $(Expr(:isdefined, var))
             push!($var, ref)
         end
@@ -82,10 +101,10 @@ macro spawnat(p, expr)
 end
 
 """
-    @fetch
+    @fetch expr
 
-Equivalent to `fetch(@spawn expr)`.
-See [`fetch`](@ref) and [`@spawn`](@ref).
+Equivalent to `fetch(@spawnat :any expr)`.
+See [`fetch`](@ref) and [`@spawnat`](@ref).
 
 # Examples
 ```julia-repl
@@ -158,8 +177,7 @@ Errors on any of the processes are collected into a
 
 will define `Main.bar` on all processes.
 
-Unlike [`@spawn`](@ref) and [`@spawnat`](@ref),
-`@everywhere` does not capture any local variables.
+Unlike [`@spawnat`](@ref), `@everywhere` does not capture any local variables.
 Instead, local variables can be broadcast using interpolation:
 
     foo = 1
@@ -258,7 +276,7 @@ end
 
 function pfor(f, R)
     @async @sync for c in splitrange(length(R), nworkers())
-        @spawn f(R, first(c), last(c))
+        @spawnat :any f(R, first(c), last(c))
     end
 end
 
