@@ -1532,6 +1532,7 @@ end
     @test mod(Int32(3), 1:5) == 3
     @test mod(big(typemax(Int))+99, 0:4) == mod(big(typemax(Int))+99, 5)
     @test_throws MethodError mod(3.141, 1:5)
+    @test_throws MethodError mod(3, UnitRange(1.0,5.0))
     @test_throws ArgumentError mod(3, 1:2:7)
     @test_throws DivideError mod(3, 1:0)
 end
