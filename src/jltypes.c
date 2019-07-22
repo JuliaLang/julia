@@ -1323,6 +1323,24 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         jl_compute_field_offsets(ndt);
     }
 
+    for (int i = 0; ndt->types && i < jl_svec_len(ndt->types); ++i) {
+        jl_value_t *v = jl_svecref(ndt->types, i);
+        if (jl_typeis(v, jl_placeholder_type)) {
+            dt_mark_incomplete(ndt, v);
+        } else if (jl_is_datatype(v) && ((jl_datatype_t*)v)->incomplete) {
+            dt_mark_incomplete(ndt, v);
+        }
+    }
+
+    for (int i = 0; ndt->parameters && i < jl_svec_len(ndt->parameters); ++i) {
+        jl_value_t *p = jl_svecref(ndt->parameters, i);
+        if (jl_typeis(p, jl_placeholder_type)) {
+            dt_mark_incomplete(ndt, p);
+        } else if (jl_is_datatype(p) && ((jl_datatype_t*)p)->incomplete) {
+            dt_mark_incomplete(ndt, p);
+        }
+    }
+
     if (istuple)
         ndt->ninitialized = ntp - isvatuple;
     else if (isnamedtuple)

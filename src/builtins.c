@@ -907,7 +907,9 @@ static int valid_type_param(jl_value_t *v)
     if (jl_is_vararg_type(v))
         return 0;
     // TODO: maybe more things
-    return jl_is_type(v) || jl_is_typevar(v) || jl_is_symbol(v) || jl_isbits(jl_typeof(v));
+    return jl_is_type(v) || jl_is_typevar(v) ||
+        jl_is_symbol(v) || jl_isbits(jl_typeof(v)) ||
+        jl_typeis(v, jl_placeholder_type);
 }
 
 JL_CALLABLE(jl_f_apply_type)

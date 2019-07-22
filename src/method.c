@@ -739,9 +739,13 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
                       m->line);
     }
 
+    int any_argtypes_incomplete = 0;
     for (i = 0; i < na; i++) {
         jl_value_t *elt = jl_svecref(atypes, i);
-        if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
+        if (jl_typeis(elt, jl_placeholder_type) ||
+            (jl_is_datatype(elt) && ((jl_datatype_t*)elt)->incomplete)) {
+            any_argtypes_incomplete = 1;
+        } else if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
             jl_sym_t *argname = (jl_sym_t*)jl_array_ptr_ref(f->slotnames, i);
             if (argname == unused_sym)
                 jl_exceptionf(jl_argumenterror_type,
@@ -776,7 +780,14 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
         jl_array_ptr_1d_push(jl_all_methods, (jl_value_t*)m);
     }
 
-    jl_method_table_insert(mt, m, NULL);
+    if (any_argtypes_incomplete) {
+        if (jl_all_methods == NULL)
+            jl_all_methods = jl_alloc_vec_any(0);
+        jl_svec_t *d = jl_svec(2, mt, m);
+        arraylist_push(&module->deferred, d);
+        jl_array_ptr_1d_push(jl_all_methods, (jl_value_t*)d);
+    } else
+        jl_method_table_insert(mt, m, NULL);
     if (jl_newmeth_tracer)
         jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)m);
     JL_GC_POP();

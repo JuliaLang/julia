@@ -683,10 +683,74 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
     }
 }
 
+static int is_any_incomplete(jl_value_t *v)
+{
+    return jl_typeis(v, jl_placeholder_type) ||
+           (jl_is_datatype(v) && ((jl_datatype_t*)v)->incomplete);
+}
+
+static void complete_dt(jl_datatype_t *dt);
+static void fixup_dependent_dt(jl_datatype_t *dt, jl_value_t *to_replace, jl_value_t *replacement)
+{
+    assert(dt->incomplete);
+    int incomplete_remains = is_any_incomplete(replacement);
+    for (int j = 0; j < jl_svec_len(dt->types); ++j) {
+        jl_value_t *t = jl_svecref(dt->types, j);
+        if (t == (jl_value_t*)to_replace)
+            jl_svecset(dt->types, j, replacement);
+        else if (!incomplete_remains && is_any_incomplete(t))
+            incomplete_remains = 1;
+    }
+    for (int j = 0; j < jl_svec_len(dt->parameters); ++j) {
+        jl_value_t *t = jl_svecref(dt->parameters, j);
+        if (t == (jl_value_t*)to_replace)
+            jl_svecset(dt->parameters, j, replacement);
+        else if (!incomplete_remains && is_any_incomplete(t))
+            incomplete_remains = 1;
+    }
+    if (!incomplete_remains) {
+        complete_dt(dt);
+    }
+}
+
+static void complete_dt(jl_datatype_t *dt) {
+    dt->incomplete = 0;
+    jl_precompute_memoized_dt(dt);
+    jl_compute_field_offsets(dt);
+    for (int i = 0; i < jl_array_len(dt->dependents); ++i) {
+        jl_value_t *v = jl_array_ptr_ref(dt->dependents, i);
+        if (jl_is_datatype(v) && ((jl_datatype_t*)v)->incomplete) {
+            fixup_dependent_dt((jl_datatype_t*)v, (jl_value_t*)dt, (jl_value_t*)dt);
+        }
+    }
+    if (jl_is_tuple_type(dt)) {
+        jl_module_t *mod = jl_main_module;
+        for (size_t i = 0; i < mod->deferred.len; ++i) {
+            jl_svec_t *item = (jl_svec_t*)mod->deferred.items[i];
+            jl_method_t *m = (jl_method_t*)jl_svecref(item, 1);
+            if ((jl_datatype_t*)jl_unwrap_unionall(m->sig) == dt) {
+                jl_method_table_insert(
+                    (jl_methtable_t*)jl_svecref(item, 0), m, NULL);
+            }
+        }
+    }
+}
+
+static void resolve_placeholder(jl_placeholder_t *ph, jl_value_t *val)
+{
+    for (int i = 0; i < jl_array_len(ph->dependents); ++i) {
+        jl_value_t *v = jl_array_ptr_ref(ph->dependents, i);
+        if (jl_is_datatype(v) && ((jl_datatype_t*)v)->incomplete) {
+            fixup_dependent_dt((jl_datatype_t*)v, (jl_value_t*) ph, val);
+        }
+    }
+}
+
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
 {
     if (b->constp && b->value != NULL) {
-        if (!jl_egal(rhs, b->value)) {
+        if (!jl_typeis(b->value, jl_placeholder_type) &&
+            !jl_egal(rhs, b->value)) {
             if (jl_typeof(rhs) != jl_typeof(b->value) ||
                 jl_is_type(rhs) /*|| jl_is_function(rhs)*/ || jl_is_module(rhs)) {
                 jl_errorf("invalid redefinition of constant %s",
@@ -696,8 +760,12 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
                       jl_symbol_name(b->name));
         }
     }
+    jl_value_t *val = b->value;
     b->value = rhs;
     jl_gc_wb_binding(b, rhs);
+    if (val && jl_typeis(val, jl_placeholder_type)) {
+        resolve_placeholder((jl_placeholder_t*)val, rhs);
+    }
 }
 
 JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b)

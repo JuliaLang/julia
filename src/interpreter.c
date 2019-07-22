@@ -101,7 +101,8 @@ SECT_INTERP static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
 
 SECT_INTERP static void check_can_assign_type(jl_binding_t *b, jl_value_t *rhs)
 {
-    if (b->constp && b->value != NULL && jl_typeof(b->value) != jl_typeof(rhs))
+    if (b->constp && b->value != NULL && jl_typeof(b->value) != jl_typeof(rhs) &&
+        !jl_typeis(b->value, jl_placeholder_type))
         jl_errorf("invalid redefinition of constant %s",
                   jl_symbol_name(b->name));
 }
@@ -363,15 +364,34 @@ static jl_array_t *find_new_cycle(jl_datatype_t *scc_a, jl_datatype_t *scc_b) JL
     }
 }
 
-static void dt_mark_incomplete(jl_datatype_t *dt)
+extern jl_array_t *jl_all_methods;
+void dt_mark_incomplete(jl_datatype_t *dt, jl_value_t *v)
 {
+    // While we don't have GC hooked up, just push these into a global root;
+    if (jl_all_methods == NULL)
+        jl_all_methods = jl_alloc_vec_any(0);
     if (dt->incomplete == 0) {
         dt->scc = dt;
         dt->depends = jl_alloc_vec_any(0);
+        jl_array_ptr_1d_push(jl_all_methods, (jl_value_t*)dt->depends);
         dt->dependents = jl_alloc_vec_any(0);
+        jl_array_ptr_1d_push(jl_all_methods, (jl_value_t*)dt->dependents);
+    }
+    if (jl_typeis(v, jl_placeholder_type)) {
+        jl_array_ptr_1d_push(
+                ((jl_placeholder_t*)v)->dependents,
+                (jl_value_t*)dt);
+        jl_array_ptr_1d_push(dt->depends, v);
+    } else if (jl_is_datatype(v)) {
+        assert(((jl_datatype_t*)v)->incomplete);
+        jl_array_ptr_1d_push(
+                ((jl_datatype_t*)v)->dependents,
+                (jl_value_t*)dt);
+        jl_array_ptr_1d_push(dt->depends, v);
     }
     dt->incomplete = 1;
 }
+
 
 static void eval_structtype(jl_expr_t *ex, interpreter_state *s)
 {
@@ -415,11 +435,7 @@ static void eval_structtype(jl_expr_t *ex, interpreter_state *s)
         for (size_t i = 0; i < jl_svec_len(dt->types); i++) {
             jl_value_t *elt = jl_svecref(dt->types, i);
             if (jl_typeis(elt, jl_placeholder_type)) {
-                jl_array_ptr_1d_push(
-                        ((jl_placeholder_t*)elt)->dependents,
-                        (jl_value_t*)dt);
-                dt_mark_incomplete(dt);
-                jl_array_ptr_1d_push(dt->depends, elt);
+                dt_mark_incomplete(dt, elt);
             } else if ((!jl_is_type(elt) && !jl_is_typevar(elt)) || jl_is_vararg_type(elt)) {
                 jl_type_error_rt(jl_symbol_name(dt->name->name),
                                  "type definition",

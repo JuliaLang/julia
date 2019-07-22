@@ -504,6 +504,13 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     t->name->names = fnames;
     jl_gc_wb(t->name, t->name->names);
 
+    for (int i = 0; i < jl_svec_len(t->parameters); ++i) {
+        jl_value_t *p = jl_svecref(t->parameters, i);
+        if (jl_typeis(p, jl_placeholder_type)) {
+            dt_mark_incomplete(t, (jl_placeholder_t*)p);
+        }
+    }
+
     if (t->name->wrapper == NULL) {
         t->name->wrapper = (jl_value_t*)t;
         jl_gc_wb(t->name, t);
