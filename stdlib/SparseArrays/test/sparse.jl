@@ -1504,6 +1504,13 @@ end
     @test float(A) == float(Array(A))
 end
 
+@testset "complex" begin
+    A = sprand(Bool, 5, 5, 0.0)
+    @test eltype(complex(A)) == Complex{Bool}
+    A = sprand(Bool, 5, 5, 0.2)
+    @test complex(A) == complex(Array(A))
+end
+
 @testset "sparsevec" begin
     local A = sparse(fill(1, 5, 5))
     @test sparsevec(A) == fill(1, 25)
