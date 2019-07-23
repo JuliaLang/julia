@@ -1359,4 +1359,12 @@ end
     end
 end
 
+@testset "SparseColumnView properties" begin
+    n = 10
+    A = sprand(n, n, 0.5)
+    scv = view(A, :, 1)
+    @test SparseArrays.indtype(scv) == SparseArrays.indtype(A)
+    @test nnz(scv) == nnz(A[:, 1])
+end
+
 end # module
