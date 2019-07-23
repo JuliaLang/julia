@@ -324,3 +324,34 @@ using .Iterators: Stateful
     end
     return true
 end
+
+@pure function struct_subpadding(::Type{Out}, ::Type{In}) where {Out, In}
+    # TODO I believe the semantic is we cannot read the padding bits of the input,
+    # and therefore we should relax this to padding(In) being a subset of padding(Out).
+    padding(Out) == padding(In)
+end
+
+@inline function reinterpret(::Type{Out}, x) where {Out}
+    In = typeof(x)
+    if !isbitstype(Out)
+        error("reinterpret target type must be isbits")
+    end
+    if !isbitstype(In)
+        error("reinterpret source type must be isbits")
+    end
+
+    if isprimitivetype(Out) && isprimitivetype(In)
+        return bitcast(Out, x)
+    elseif struct_subpadding(Out, In)
+        in = Ref{In}(x)
+        ptr_in = unsafe_convert(Ptr{In}, in)
+        out = Ref{Out}()
+        ptr_out = unsafe_convert(Ptr{Out}, out)
+        GC.@preserve in out begin
+            _memcpy!(ptr_out, ptr_in, sizeof(Out))
+        end
+        return out[]
+    else
+        throw(PaddingError(Out, In))
+    end
+end
