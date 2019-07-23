@@ -1151,6 +1151,7 @@ function deserialize_typename(s::AbstractSerializer, number)
             # use setfield! directly to avoid `fieldtype` lowering expecting to see a Singleton object already on ty
             Core.setfield!(ty, :instance, ccall(:jl_new_struct, Any, (Any, Any...), ty))
         end
+        Core.setfield!(ndt, :incomplete, false)
     end
 
     tag = Int32(read(s.io, UInt8)::UInt8)

@@ -32,6 +32,7 @@ const DATATYPE_TYPES_FIELDINDEX = fieldindex(DataType, :types)
 const DATATYPE_SUPER_FIELDINDEX = fieldindex(DataType, :super)
 const DATATYPE_MUTABLE_FIELDINDEX = fieldindex(DataType, :mutable)
 const DATATYPE_INSTANCE_FIELDINDEX = fieldindex(DataType, :instance)
+const DATATYPE_INCOMPLETE_FIELDINDEX = fieldindex(DataType, :incomplete)
 
 const TYPENAME_NAME_FIELDINDEX = fieldindex(Core.TypeName, :name)
 const TYPENAME_MODULE_FIELDINDEX = fieldindex(Core.TypeName, :module)
@@ -547,18 +548,25 @@ function subtype_tfunc(@nospecialize(a), @nospecialize(b))
 end
 add_tfunc(<:, 2, 2, subtype_tfunc, 0)
 
+is_dt_complete_const_field(fld::Int) = (
+     fld == DATATYPE_TYPES_FIELDINDEX ||
+     fld == DATATYPE_MUTABLE_FIELDINDEX ||
+     fld == DATATYPE_INSTANCE_FIELDINDEX ||
+     fld == DATATYPE_INCOMPLETE_FIELDINDEX
+    )
+
 is_dt_const_field(fld::Int) = (
      fld == DATATYPE_NAME_FIELDINDEX ||
      fld == DATATYPE_PARAMETERS_FIELDINDEX ||
-     fld == DATATYPE_TYPES_FIELDINDEX ||
-     fld == DATATYPE_SUPER_FIELDINDEX ||
-     fld == DATATYPE_MUTABLE_FIELDINDEX ||
-     fld == DATATYPE_INSTANCE_FIELDINDEX
+     fld == DATATYPE_SUPER_FIELDINDEX
     )
+
 function const_datatype_getfield_tfunc(@nospecialize(sv), fld::Int)
     if fld == DATATYPE_INSTANCE_FIELDINDEX
         return isdefined(sv, fld) ? Const(getfield(sv, fld)) : Union{}
     elseif is_dt_const_field(fld)
+        return Const(getfield(sv, fld))
+    elseif !getfield(sv, :incomplete) && is_dt_complete_const_field(fld)
         return Const(getfield(sv, fld))
     end
     return nothing

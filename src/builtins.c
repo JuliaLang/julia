@@ -794,6 +794,8 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow)
     if (!jl_is_datatype(t))
         jl_type_error("fieldtype", (jl_value_t*)jl_datatype_type, t);
     jl_datatype_t *st = (jl_datatype_t*)t;
+    if (st->incomplete)
+        jl_error("Type is incomplete");
     int field_index;
     if (jl_is_long(f)) {
         field_index = jl_unbox_long(f) - 1;

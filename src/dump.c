@@ -363,7 +363,8 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
     write_int32(s->s, dt->size);
     int has_instance = (dt->instance != NULL);
     int has_layout = (dt->layout != NULL);
-    write_uint8(s->s, dt->abstract | (dt->mutabl << 1) | (has_layout << 2) | (has_instance << 3));
+    write_uint8(s->s, dt->abstract | (dt->mutabl << 1) | (has_layout << 2) |
+        (has_instance << 3) | (dt->incomplete << 4));
     write_uint8(s->s, dt->hasfreetypevars
             | (dt->isconcretetype << 1)
             | (dt->isdispatchtuple << 2)
@@ -1398,6 +1399,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     dt->mutabl = (flags >> 1) & 1;
     int has_layout = (flags >> 2) & 1;
     int has_instance = (flags >> 3) & 1;
+    dt->incomplete = (flags >> 4) & 1;
     dt->hasfreetypevars = memflags & 1;
     dt->isconcretetype = (memflags >> 1) & 1;
     dt->isdispatchtuple = (memflags >> 2) & 1;

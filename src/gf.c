@@ -2367,6 +2367,7 @@ jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_
     jl_set_const(module, tname, (jl_value_t*)ftype);
     jl_value_t *f = jl_new_struct(ftype);
     ftype->instance = f; jl_gc_wb(ftype, f);
+    ftype->incomplete = 0;
     JL_GC_POP();
     return (jl_function_t*)f;
 }

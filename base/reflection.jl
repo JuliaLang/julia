@@ -428,6 +428,11 @@ function isprimitivetype(@nospecialize(t::Type))
     return !hasfield && t.size != 0 && !t.abstract
 end
 
+struct IncompleteTypeException
+    dt::DataType
+end
+must_be_complete(t::DataType) = (t.incomplete && throw(IncompleteTypeException(t)); t)
+
 """
     isbitstype(T)
 
@@ -449,14 +454,14 @@ julia> isbitstype(Complex)
 false
 ```
 """
-isbitstype(@nospecialize(t::Type)) = (@_pure_meta; isa(t, DataType) && t.isbitstype)
+isbitstype(@nospecialize(t::Type)) = (@_pure_meta; isa(t, DataType) && must_be_complete(t).isbitstype)
 
 """
     isbits(x)
 
 Return `true` if `x` is an instance of an `isbitstype` type.
 """
-isbits(@nospecialize x) = (@_pure_meta; typeof(x).isbitstype)
+isbits(@nospecialize x) = typeof(x).isbitstype
 
 """
     isdispatchtuple(T)
@@ -465,7 +470,7 @@ Determine whether type `T` is a tuple "leaf type",
 meaning it could appear as a type signature in dispatch
 and has no subtypes (or supertypes) which could appear in a call.
 """
-isdispatchtuple(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && t.isdispatchtuple)
+isdispatchtuple(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && must_be_complete(t).isdispatchtuple)
 
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
 isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)

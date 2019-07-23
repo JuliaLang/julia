@@ -127,7 +127,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 i++;
             }
             if (e->head == method_sym || e->head == abstracttype_sym || e->head == structtype_sym ||
-                     e->head == primtype_sym || e->head == module_sym) {
+                     e->head == primtype_sym || e->head == module_sym || e->head == incompletetype_sym) {
                 i++;
             }
             for (; i < nargs; i++) {

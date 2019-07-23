@@ -7024,3 +7024,10 @@ let code = code_lowered(FieldConvert)[1].code
     @test code[10] == Expr(:new, Core.SSAValue(1), Core.SSAValue(3), Core.SSAValue(5), Core.SlotNumber(4), Core.SSAValue(7), Core.SSAValue(9))
     @test code[11] == Expr(:return, Core.SSAValue(10))
  end
+
+# Using a type before it's complete
+@test_throws Base.IncompleteTypeException Core.eval(Module(), quote
+    struct Bar
+        x::Val{isbitstype(Bar)}
+    end
+end)

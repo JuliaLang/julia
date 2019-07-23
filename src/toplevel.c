@@ -304,7 +304,7 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
         return;
     }
     else if (head == method_sym || head == abstracttype_sym || head == primtype_sym ||
-             head == structtype_sym || jl_is_toplevel_only_expr(v)) {
+             head == structtype_sym || head == incompletetype_sym || jl_is_toplevel_only_expr(v)) {
         *has_defs = 1;
     }
     else if (head == cfunction_sym) {

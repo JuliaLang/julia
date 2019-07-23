@@ -88,7 +88,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->has_concrete_subtype = 1;
     t->layout = NULL;
     t->names = NULL;
-    t->incomplete = 0;
+    t->incomplete = 1;
     return t;
 }
 
@@ -540,6 +540,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
     bt->size = nbytes;
     bt->layout = jl_get_layout(0, alignm, 0, NULL);
     bt->instance = NULL;
+    bt->incomplete = 0;
     return bt;
 }
 
@@ -568,6 +569,7 @@ JL_DLLEXPORT jl_datatype_t * jl_new_foreign_type(jl_sym_t *name,
     desc->sweepfunc = sweepfunc;
     bt->layout = layout;
     bt->instance = NULL;
+    bt->incomplete = 0;
     return bt;
 }
 
