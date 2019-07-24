@@ -1058,7 +1058,7 @@ julia> mod(3, 0:2)
 0
 
 !!! compat "Julia 1.3"
-     This function requires at least Julia 1.3.
+     This method requires at least Julia 1.3.
 ```
 """
 mod(i::Integer, r::OneTo) = mod1(i, last(r))
