@@ -41,7 +41,7 @@ Standard library changes
 * `IPAddr` subtypes now behave like scalars when used in broadcasting ([#32133]).
 * `clamp` can now handle missing values ([#31066]).
 * `empty` now accepts a `NamedTuple` ([#32534]).
-* `mod` now accepts a range as the second argument ([#32628]).
+* `mod` now accepts a unit range as the second argument to easily perform offset modular arithmetic to ensure the result is inside the range ([#32628]).
 
 #### Libdl
 
