@@ -714,15 +714,26 @@ norm(v::Union{TransposeAbsVec,AdjointAbsVec}, p::Real) = norm(v.parent, p)
     dot(x, y)
     x ⋅ y
 
-For any iterable containers `x` and `y` (including arrays of any dimension) of numbers (or
-any element type for which `dot` is defined), compute the dot product (or inner product
-or scalar product), i.e. the sum of `dot(x[i],y[i])`, as if they were vectors.
+Compute the dot product between two vectors. For complex vectors, the first
+vector is conjugated.
+
+`dot` also works on arbitrary iterable objects, including arrays of any dimension,
+as long as `dot` is defined on the elements.
+
+`dot` is semantically equivalent to `sum(dot(vx,vy) for (vx,vy) in zip(x, y))`,
+with the added restriction that the arguments must have equal lengths.
 
 `x ⋅ y` (where `⋅` can be typed by tab-completing `\\cdot` in the REPL) is a synonym for
 `dot(x, y)`.
 
 # Examples
 ```jldoctest
+julia> dot([1; 1], [2; 3])
+5
+
+julia> dot([im; im], [1; 1])
+0 - 2im
+
 julia> dot(1:5, 2:6)
 70
 
@@ -734,6 +745,8 @@ julia> dot(x, y)
 150.0
 ```
 """
+function dot end
+
 function dot(x, y) # arbitrary iterables
     ix = iterate(x)
     iy = iterate(y)
@@ -765,23 +778,6 @@ end
 
 dot(x::Number, y::Number) = conj(x) * y
 
-"""
-    dot(x, y)
-    x ⋅ y
-
-Compute the dot product between two vectors. For complex vectors, the first
-vector is conjugated. When the vectors have equal lengths, calling `dot` is
-semantically equivalent to `sum(dot(vx,vy) for (vx,vy) in zip(x, y))`.
-
-# Examples
-```jldoctest
-julia> dot([1; 1], [2; 3])
-5
-
-julia> dot([im; im], [1; 1])
-0 - 2im
-```
-"""
 function dot(x::AbstractArray, y::AbstractArray)
     lx = length(x)
     if lx != length(y)
