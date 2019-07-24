@@ -103,6 +103,8 @@ firstindex(t::NamedTuple) = 1
 lastindex(t::NamedTuple) = nfields(t)
 getindex(t::NamedTuple, i::Int) = getfield(t, i)
 getindex(t::NamedTuple, i::Symbol) = getfield(t, i)
+getindex(t::NamedTuple, v::AbstractVector{<:Integer}) = (; map(i->keys(t)[i] => t[i], v)...)
+getindex(t::NamedTuple, v::AbstractVector{Symbol}) = (; map(i->i => t[i], v)...)
 indexed_iterate(t::NamedTuple, i::Int, state=1) = (getfield(t, i), i+1)
 isempty(::NamedTuple{()}) = true
 isempty(::NamedTuple) = false

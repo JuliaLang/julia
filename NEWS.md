@@ -33,6 +33,7 @@ New library functions
 * New `findall(pattern, string)` method where `pattern` is a string or regex ([#31834]).
 * `istaskfailed` is now documented and exported, like its siblings `istaskdone` and `istaskstarted` ([#32300]).
 * `RefArray` and `RefValue` objects now accept index `CartesianIndex()` in  `getindex` and `setindex!` ([#32653])
+* `NamedTuple`s may now be subsetted with `getindex` ([#27021], [#32662])
 
 Standard library changes
 ------------------------
