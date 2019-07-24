@@ -1526,13 +1526,11 @@ end
         @test mod(n, 1:5) == mod1(n, 5)
         @test mod(n, 2:6) == 2 + mod(n-2, 5)
         @test mod(n, Base.OneTo(5)) == mod1(n, 5)
-        @test mod(n, reverse(0:4)) == mod(n, 5)
-        @test mod(n, reverse(2:6)) == 2 + mod(n-2, 5)
     end
     @test mod(Int32(3), 1:5) == 3
     @test mod(big(typemax(Int))+99, 0:4) == mod(big(typemax(Int))+99, 5)
     @test_throws MethodError mod(3.141, 1:5)
     @test_throws MethodError mod(3, UnitRange(1.0,5.0))
-    @test_throws ArgumentError mod(3, 1:2:7)
+    @test_throws MethodError mod(3, 1:2:7)
     @test_throws DivideError mod(3, 1:0)
 end

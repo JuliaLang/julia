@@ -1042,10 +1042,9 @@ end
 # Modular arithmetic on ranges
 
 """
-    mod(x::Integer, range)
+    mod(x::Integer, r::AbstractUnitRange)
 
-Find `y` in `range` such that `x` ≡ `y` (mod `n`), where `n = length(range)`.
-The range must contain only integers, and have step +1 or -1.
+Find `y` in `r` such that `x` ≡ `y` (mod `n`), where `n = length(r)`.
 
 See also: [`mod1`](@ref).
 
@@ -1060,5 +1059,3 @@ julia> mod(3, 0:2)
 """
 mod(i::Integer, r::OneTo) = mod1(i, last(r))
 mod(i::Integer, r::AbstractUnitRange{<:Integer}) = mod(i-first(r), length(r)) + first(r)
-mod(i::Integer, r::StepRange) = abs(r.step)==1 ? mod(i-minimum(r), length(r)) + minimum(r) :
-    throw(ArgumentError("step must be +1 or -1"))
