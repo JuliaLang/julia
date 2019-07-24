@@ -834,14 +834,7 @@ julia> factorial(big(21))
 # External links
 * [Factorial](https://en.wikipedia.org/wiki/Factorial) on Wikipedia.
 """
-function factorial(n::Integer)
-    n < 0 && throw(DomainError(n, "`n` must be nonnegative."))
-    f::typeof(n*n) = 1
-    for i::typeof(n*n) = 2:n
-        f *= i
-    end
-    return f
-end
+factorial(::Bool) = true
 
 """
     binomial(n::Integer, k::Integer)
