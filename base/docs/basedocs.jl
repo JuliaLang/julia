@@ -600,6 +600,7 @@ catch
     @warn "Could not write file."
 end
 ```
+
 or, when the file cannot be read into a variable:
 
 ```julia
