@@ -1,5 +1,7 @@
 ## objconv ##
 
+ifneq ($(USE_BINARYBUILDER_OBJCONV),1)
+
 $(SRCCACHE)/objconv.zip: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ http://www.agner.org/optimize/objconv.zip
 
@@ -31,3 +33,11 @@ configure-objconv: extract-objconv
 compile-objconv: $(BUILDDIR)/objconv/build-compiled
 fastcheck-objconv: check-objconv
 check-objconv: compile-objconv
+
+else
+
+OBJCONV_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/Objconv-v$(OBJCONV_VER)-$(OBJCONV_BB_REL)
+OBJCONV_BB_NAME := Objconv.v$(OBJCONV_VER)
+$(eval $(call bb-install,objconv,OBJCONV,false))
+
+endif

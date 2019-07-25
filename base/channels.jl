@@ -84,13 +84,13 @@ Referencing the created task:
 ```jldoctest
 julia> taskref = Ref{Task}();
 
-julia> chnl = Channel(c->(@show take!(c)); taskref=taskref);
+julia> chnl = Channel(c -> println(take!(c)); taskref=taskref);
 
 julia> istaskdone(taskref[])
 false
 
 julia> put!(chnl, "Hello");
-take!(c) = "Hello"
+Hello
 
 julia> istaskdone(taskref[])
 true
@@ -192,8 +192,10 @@ Stacktrace:
 ```
 """
 function bind(c::Channel, task::Task)
-    ref = WeakRef(c)
-    register_taskdone_hook(task, tsk->close_chnl_on_taskdone(tsk, ref))
+    # TODO: implement "schedulewait" and deprecate taskdone_hook
+    #T = Task(() -> close_chnl_on_taskdone(task, c))
+    #schedulewait(task, T)
+    register_taskdone_hook(task, tsk -> close_chnl_on_taskdone(tsk, c))
     return c
 end
 
@@ -223,33 +225,30 @@ function channeled_tasks(n::Int, funcs...; ctypes=fill(Any,n), csizes=fill(0,n))
     return (chnls, tasks)
 end
 
-function close_chnl_on_taskdone(t::Task, ref::WeakRef)
-    c = ref.value
-    if c isa Channel
-        isopen(c) || return
-        cleanup = () -> try
-                isopen(c) || return
-                if istaskfailed(t)
-                    excp = task_result(t)
-                    if excp isa Exception
-                        close(c, excp)
-                        return
-                    end
+function close_chnl_on_taskdone(t::Task, c::Channel)
+    isopen(c) || return
+    cleanup = () -> try
+            isopen(c) || return
+            if istaskfailed(t)
+                excp = task_result(t)
+                if excp isa Exception
+                    close(c, excp)
+                    return
                 end
-                close(c)
-                return
-            finally
-                unlock(c)
             end
-        if trylock(c)
-            # can't use `lock`, since attempts to task-switch to wait for it
-            # will just silently fail and leave us with broken state
-            cleanup()
-        else
-            # so schedule this to happen once we are finished destroying our task
-            # (on a new Task)
-            @async (lock(c); cleanup())
+            close(c)
+            return
+        finally
+            unlock(c)
         end
+    if trylock(c)
+        # can't use `lock`, since attempts to task-switch to wait for it
+        # will just silently fail and leave us with broken state
+        cleanup()
+    else
+        # so schedule this to happen once we are finished destroying our task
+        # (on a new Task)
+        @async (lock(c); cleanup())
     end
     nothing
 end
@@ -305,8 +304,8 @@ function put_unbuffered(c::Channel, v)
     finally
         unlock(c)
     end
-    # unfair version of: schedule(taker, v); yield()
-    yield(taker, v) # immediately give taker a chance to run, but don't block the current task
+    schedule(taker, v)
+    yield()  # immediately give taker a chance to run, but don't block the current task
     return v
 end
 

@@ -24,7 +24,7 @@ For help on a specific function or macro, type `?` followed
 by its name, e.g. `?cos`, or `?@time`, and press enter.
 Type `;` to enter shell mode, `]` to enter package mode.
 """
-kw"help", kw"?", kw"julia", kw""
+kw"help", kw"?", kw"Julia", kw"julia", kw""
 
 """
     using
@@ -75,7 +75,7 @@ kw"abstract type"
 """
     module
 
-`module` declares a `Module`, which is a separate global variable workspace. Within a
+`module` declares a [`Module`](@ref), which is a separate global variable workspace. Within a
 module, you can control which names from other modules are visible (via importing), and
 specify which of your names are intended to be public (via exporting).
 Modules allow you to create top-level definitions without worrying about name conflicts
@@ -101,10 +101,33 @@ end
 kw"module"
 
 """
+    __init__
+
+`__init__()` function in your module would executes immediately *after* the module is loaded at
+runtime for the first time (i.e., it is only called once and only after all statements in the
+module have been executed). Because it is called *after* fully importing the module, `__init__`
+functions of submodules will be executed *first*. Two typical uses of __init__ are calling
+runtime initialization functions of external C libraries and initializing global constants
+that involve pointers returned by external libraries.
+See the [manual section about modules](@ref modules) for more details.
+
+# Examples
+```julia
+const foo_data_ptr = Ref{Ptr{Cvoid}}(0)
+function __init__()
+    ccall((:foo_init, :libfoo), Cvoid, ())
+    foo_data_ptr[] = ccall((:foo_data, :libfoo), Ptr{Cvoid}, ())
+    nothing
+end
+```
+"""
+kw"__init__"
+
+"""
     baremodule
 
 `baremodule` declares a module that does not contain `using Base`
-or a definition of `eval`. It does still import `Core`.
+or a definition of [`eval`](@ref Base.eval). It does still import `Core`.
 """
 kw"baremodule"
 
@@ -133,7 +156,7 @@ kw"primitive type"
 A macro maps a sequence of argument expressions to a returned expression, and the
 resulting expression is substituted directly into the program at the point where
 the macro is invoked.
-Macros are a way to run generated code without calling `eval`, since the generated
+Macros are a way to run generated code without calling [`eval`](@ref Base.eval), since the generated
 code instead simply becomes part of the surrounding program.
 Macro arguments may include expressions, literal values, and symbols.
 
@@ -270,7 +293,7 @@ julia> push!(a, 2, 3)
  3
 
 ```
-Assigning `[]` does not eliminate elements from a collection; instead use `filter!`.
+Assigning `[]` does not eliminate elements from a collection; instead use [`filter!`](@ref).
 ```jldoctest
 julia> a = collect(1:3); a[a .<= 1] = []
 ERROR: DimensionMismatch("tried to assign 0 elements to 1 destinations")
@@ -329,7 +352,7 @@ kw"quote"
     Expr(head::Symbol, args...)
 
 A type representing compound expressions in parsed julia code (ASTs).
-Each expression consists of a `head` Symbol identifying which kind of
+Each expression consists of a `head` `Symbol` identifying which kind of
 expression it is (e.g. a call, for loop, conditional statement, etc.),
 and subexpressions (e.g. the arguments of a call).
 The subexpressions are stored in a `Vector{Any}` field called `args`.
@@ -870,7 +893,7 @@ The `where` keyword creates a type that is an iterated union of other types, ove
 values of some variable. For example `Vector{T} where T<:Real` includes all [`Vector`](@ref)s
 where the element type is some kind of `Real` number.
 
-The variable bound defaults to `Any` if it is omitted:
+The variable bound defaults to [`Any`](@ref) if it is omitted:
 
 ```julia
 Vector{T} where T    # short for `where T<:Any`
@@ -910,7 +933,7 @@ kw"ans"
     devnull
 
 Used in a stream redirect to discard all data written to it. Essentially equivalent to
-/dev/null on Unix or NUL on Windows. Usage:
+`/dev/null` on Unix or `NUL` on Windows. Usage:
 
 ```julia
 run(pipeline(`cat test.txt`, devnull))
@@ -947,6 +970,7 @@ Core.TypeofBottom
 
 Abstract type of all functions.
 
+# Examples
 ```jldoctest
 julia> isa(+, Function)
 true
@@ -972,7 +996,7 @@ ReadOnlyMemoryError
 
 Generic error type. The error message, in the `.msg` field, may provide more specific details.
 
-# Example
+# Examples
 ```jldoctest
 julia> ex = ErrorException("I've done a bad thing");
 
@@ -995,6 +1019,22 @@ Core.WrappedException
     UndefRefError()
 
 The item or field is not defined for the given object.
+
+# Examples
+```jldoctest
+julia> struct MyType
+           a::Vector{Int}
+           MyType() = new()
+       end
+
+julia> A = MyType()
+MyType(#undef)
+
+julia> A.a
+ERROR: UndefRefError: access to undefined reference
+Stacktrace:
+[...]
+```
 """
 UndefRefError
 
@@ -1185,6 +1225,20 @@ UndefVarError
     UndefKeywordError(var::Symbol)
 
 The required keyword argument `var` was not assigned in a function call.
+
+# Examples
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
+julia> function my_func(;my_arg)
+           return my_arg + 1
+       end
+my_func (generic function with 1 method)
+
+julia> my_func()
+ERROR: UndefKeywordError: keyword argument my_arg not assigned
+Stacktrace:
+ [1] my_func() at ./REPL[1]:2
+ [2] top-level scope at REPL[2]:1
+```
 """
 UndefKeywordError
 
@@ -1430,7 +1484,7 @@ Construct a tuple of the given objects.
 # Examples
 ```jldoctest
 julia> tuple(1, 'a', pi)
-(1, 'a', π = 3.1415926535897...)
+(1, 'a', π)
 ```
 """
 tuple
@@ -1513,6 +1567,8 @@ Tests whether a global variable or object field is defined. The arguments can be
 or a composite object and field name (as a symbol) or index.
 
 To test whether an array element is defined, use [`isassigned`](@ref) instead.
+
+See also [`@isdefined`](@ref).
 
 # Examples
 ```jldoctest
@@ -1749,6 +1805,13 @@ julia> Array{Float64,1}(undef, 3)
 undef
 
 """
+    Ptr{T}()
+
+Creates a null pointer to type `T`.
+"""
+Ptr{T}()
+
+"""
     +(x, y...)
 
 Addition operator. `x+y+z+...` calls this function with all arguments, i.e. `+(x, y, z, ...)`.
@@ -1872,7 +1935,7 @@ AssertionError
 """
     LoadError(file::AbstractString, line::Int, error)
 
-An error occurred while `include`ing, `require`ing, or [`using`](@ref) a file. The error specifics
+An error occurred while [`include`](@ref Base.include)ing, [`require`](@ref Base.require)ing, or [`using`](@ref) a file. The error specifics
 should be available in the `.error` field.
 """
 LoadError
@@ -2013,15 +2076,18 @@ See the manual section on [Tuple Types](@ref).
 Tuple
 
 """
-The base library of Julia.
-"""
-kw"Base"
-
-"""
     typeassert(x, type)
 
-Throw a TypeError unless `x isa type`.
+Throw a [`TypeError`](@ref) unless `x isa type`.
 The syntax `x::type` calls this function.
+
+# Examples
+```jldoctest
+julia> typeassert(2.5, Int)
+ERROR: TypeError: in typeassert, expected Int64, got Float64
+Stacktrace:
+[...]
+```
 """
 typeassert
 
@@ -2102,5 +2168,44 @@ StridedMatrix
 Union type of [`StridedVector`](@ref) and [`StridedMatrix`](@ref) with elements of type `T`.
 """
 StridedVecOrMat
+
+"""
+    Module
+
+A `Module` is a separate global variable workspace. See [`module`](@ref) and the [manual section about modules](@ref modules) for details.
+"""
+Module
+
+"""
+    Core
+
+`Core` is the module that contains all identifiers considered "built in" to the language, i.e. part of the core language and not libraries. Every module implicitly specifies `using Core`, since you can't do anything without those definitions.
+"""
+Core.Core
+
+"""
+    Main
+
+`Main` is the top-level module, and Julia starts with `Main` set as the current module.  Variables defined at the prompt go in `Main`, and `varinfo` lists variables in `Main`.
+```jldoctest
+julia> @__MODULE__
+Main
+```
+"""
+Main.Main
+
+"""
+    Base
+
+The base library of Julia. `Base` is a module that contains basic functionality (the contents of `base/`). All modules implicitly contain `using Base`, since this is needed in the vast majority of cases.
+"""
+Base.Base
+
+"""
+    QuoteNode
+
+A quoted piece of code, that does not support interpolation. See the [manual section about QuoteNodes](@ref man-quote-node) for details.
+"""
+QuoteNode
 
 end

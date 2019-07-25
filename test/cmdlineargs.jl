@@ -97,6 +97,13 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
         @test startswith(read(`$exename --help`, String), header)
     end
 
+    # ~ expansion in --project and JULIA_PROJECT
+    if !Sys.iswindows()
+        expanded = abspath(expanduser("~/foo"))
+        @test occursin(expanded, readchomp(`$exename --project='~/foo' -E 'Base.active_project()'`))
+        @test occursin(expanded, readchomp(setenv(`$exename -E 'Base.active_project()'`, "JULIA_PROJECT"=>"~/foo")))
+    end
+
     # --quiet, --banner
     let t(q,b) = "Base.JLOptions().quiet == $q && Base.JLOptions().banner == $b"
         @test success(`$exename                 -e $(t(0, -1))`)
@@ -172,7 +179,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     # --procs
     @test readchomp(`$exename -q -p 2 -e "println(nworkers())"`) == "2"
     @test !success(`$exename -p 0`)
-    @test !success(`$exename --procs=1.0`)
+    let p = run(`$exename --procs=1.0`, wait=false)
+        wait(p)
+        @test p.exitcode == 1 && p.termsignal == 0
+    end
 
     # --machine-file
     # this does not check that machine file works,
@@ -209,7 +219,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
         helperdir = joinpath(@__DIR__, "testhelpers")
         inputfile = joinpath(helperdir, "coverage_file.jl")
         expected = replace(read(joinpath(helperdir, "coverage_file.info"), String),
-            "<FILENAME>" => inputfile)
+            "<FILENAME>" => realpath(inputfile))
         covfile = replace(joinpath(dir, "coverage.info"), "%" => "%%")
         @test !isfile(covfile)
         defaultcov = readchomp(`$exename -E "Bool(Base.JLOptions().code_coverage)" -L $inputfile`)
@@ -480,7 +490,13 @@ end
 
 # Find the path of libjulia (or libjulia-debug, as the case may be)
 # to use as a dummy shlib to open
-libjulia = abspath(Libdl.dlpath((ccall(:jl_is_debugbuild, Cint, ()) != 0) ? "libjulia-debug" : "libjulia"))
+libjulia = if Base.DARWIN_FRAMEWORK
+    abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME *
+        (ccall(:jl_is_debugbuild, Cint, ()) != 0 ? "_debug" : "")))
+else
+    abspath(Libdl.dlpath((ccall(:jl_is_debugbuild, Cint, ()) != 0) ? "libjulia-debug" : "libjulia"))
+end
+
 
 # test error handling code paths of running --sysimage
 let exename = Base.julia_cmd()

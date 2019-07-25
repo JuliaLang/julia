@@ -74,8 +74,10 @@ end
 end
 
 @test copy(UniformScaling(one(Float64))) == UniformScaling(one(Float64))
-@test sprint(show,UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{Complex{Float64}}\n(1.0 + 0.0im)*I"
-@test sprint(show,UniformScaling(one(Float32))) == "LinearAlgebra.UniformScaling{Float32}\n1.0*I"
+@test sprint(show,MIME"text/plain"(),UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{Complex{Float64}}\n(1.0 + 0.0im)*I"
+@test sprint(show,MIME"text/plain"(),UniformScaling(one(Float32))) == "LinearAlgebra.UniformScaling{Float32}\n1.0*I"
+@test sprint(show,UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{Complex{Float64}}(1.0 + 0.0im)"
+@test sprint(show,UniformScaling(one(Float32))) == "LinearAlgebra.UniformScaling{Float32}(1.0f0)"
 
 let
     λ = complex(randn(),randn())
@@ -178,15 +180,17 @@ let
                 @test @inferred(J - T) == J - Array(T)
                 @test @inferred(T\I) == inv(T)
 
-                if isa(A, Array)
-                    T = Hermitian(randn(3,3))
-                else
-                    T = Hermitian(view(randn(3,3), 1:3, 1:3))
+                for elty in (Float64, ComplexF64)
+                    if isa(A, Array)
+                        T = Hermitian(randn(elty, 3,3))
+                    else
+                        T = Hermitian(view(randn(elty, 3,3), 1:3, 1:3))
+                    end
+                    @test @inferred(T + J) == Array(T) + J
+                    @test @inferred(J + T) == J + Array(T)
+                    @test @inferred(T - J) == Array(T) - J
+                    @test @inferred(J - T) == J - Array(T)
                 end
-                @test @inferred(T + J) == Array(T) + J
-                @test @inferred(J + T) == J + Array(T)
-                @test @inferred(T - J) == Array(T) - J
-                @test @inferred(J - T) == J - Array(T)
 
                 @test @inferred(I\A) == A
                 @test @inferred(A\I) == inv(A)
@@ -298,15 +302,18 @@ end
     @test_throws MethodError I .+ [1 1; 1 1]
 end
 
-@testset "in-place mul! methods" begin
+@testset "in-place mul! and div! methods" begin
     J = randn()*I
     A = randn(4, 3)
     C = similar(A)
-    target = J * A
-    @test mul!(C, J, A) == target
-    @test mul!(C, A, J) == target
-    @test lmul!(J, copyto!(C, A)) == target
-    @test rmul!(copyto!(C, A), J) == target
+    target_mul = J * A
+    target_div = A / J
+    @test mul!(C, J, A) == target_mul
+    @test mul!(C, A, J) == target_mul
+    @test lmul!(J, copyto!(C, A)) == target_mul
+    @test rmul!(copyto!(C, A), J) == target_mul
+    @test ldiv!(J, copyto!(C, A)) == target_div
+    @test rdiv!(copyto!(C, A), J) == target_div
 end
 
 @testset "Construct Diagonal from UniformScaling" begin

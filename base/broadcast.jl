@@ -11,7 +11,7 @@ using .Base.Cartesian
 using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin,
              _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias
 import .Base: copy, copyto!, axes
-export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__
+export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, broadcast_preserving_zero_d
 
 ## Computing the result's axes: deprecated name
 const broadcast_axes = axes
@@ -222,7 +222,8 @@ _eachindex(t::Tuple) = CartesianIndices(t)
 Base.ndims(::Broadcasted{<:Any,<:NTuple{N,Any}}) where {N} = N
 Base.ndims(::Type{<:Broadcasted{<:Any,<:NTuple{N,Any}}}) where {N} = N
 
-Base.length(bc::Broadcasted) = prod(map(length, axes(bc)))
+Base.size(bc::Broadcasted) = map(length, axes(bc))
+Base.length(bc::Broadcasted) = prod(size(bc))
 
 function Base.iterate(bc::Broadcasted)
     iter = eachindex(bc)
@@ -790,6 +791,22 @@ julia> A
 broadcast!(f::Tf, dest, As::Vararg{Any,N}) where {Tf,N} = (materialize!(dest, broadcasted(f, As...)); dest)
 
 """
+    broadcast_preserving_zero_d(f, As...)
+
+Like [`broadcast`](@ref), except in the case of a 0-dimensional result where it returns a 0-dimensional container
+
+Broadcast automatically unwraps zero-dimensional results to be just the element itself,
+but in some cases it is necessary to always return a container — even in the 0-dimensional case.
+"""
+function broadcast_preserving_zero_d(f, As...)
+    bc = broadcasted(f, As...)
+    r = materialize(bc)
+    return length(axes(bc)) == 0 ? fill!(similar(bc, typeof(r)), r) : r
+end
+broadcast_preserving_zero_d(f) = fill(f())
+broadcast_preserving_zero_d(f, as::Number...) = fill(f(as...))
+
+"""
     Broadcast.materialize(bc)
 
 Take a lazy `Broadcasted` object and compute the result
@@ -963,6 +980,15 @@ end
 @noinline throwdm(axdest, axsrc) =
     throw(DimensionMismatch("destination axes $axdest are not compatible with source axes $axsrc"))
 
+function restart_copyto_nonleaf!(newdest, dest, bc, val, I, iter, state, count)
+    # Function barrier that makes the copying to newdest type stable
+    for II in Iterators.take(iter, count)
+        newdest[II] = dest[II]
+    end
+    newdest[I] = val
+    return copyto_nonleaf!(newdest, bc, iter, state, count+1)
+end
+
 function copyto_nonleaf!(dest, bc::Broadcasted, iter, state, count)
     T = eltype(dest)
     while true
@@ -976,11 +1002,7 @@ function copyto_nonleaf!(dest, bc::Broadcasted, iter, state, count)
             # This element type doesn't fit in dest. Allocate a new dest with wider eltype,
             # copy over old values, and continue
             newdest = Base.similar(dest, promote_typejoin(T, typeof(val)))
-            for II in Iterators.take(iter, count)
-                newdest[II] = dest[II]
-            end
-            newdest[I] = val
-            return copyto_nonleaf!(newdest, bc, iter, state, count+1)
+            return restart_copyto_nonleaf!(newdest, dest, bc, val, I, iter, state, count)
         end
         count += 1
     end

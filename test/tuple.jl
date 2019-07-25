@@ -97,6 +97,7 @@ end
     @test length((1,2)) === 2
 
     @test_throws ArgumentError Base.front(())
+    @test_throws ArgumentError Base.tail(())
     @test_throws ArgumentError first(())
 
     @test lastindex(()) === 0
@@ -439,3 +440,14 @@ end
     @test findnext(isequal(1), (2, 3), 1) === nothing
     @test findprev(isequal(1), (2, 3), 2) === nothing
 end
+
+@testset "properties" begin
+    ttest = (:a, :b, :c)
+    @test propertynames(ttest) == (1, 2, 3)
+    @test getproperty(ttest, 2) == :b
+    @test map(p->getproperty(ttest, p), propertynames(ttest)) == ttest
+    @test_throws ErrorException setproperty!(ttest, 1, :d)
+end
+
+# tuple_type_tail on non-normalized vararg tuple
+@test Base.tuple_type_tail(Tuple{Vararg{T, 3}} where T<:Real) == Tuple{Vararg{T, 2}} where T<:Real

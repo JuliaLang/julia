@@ -34,6 +34,10 @@ The following is a leaf lock (level 2), and only acquires level 1 locks (safepoi
 
 >   * typecache
 
+The following is a level 2 lock:
+
+>   * Module->lock
+
 The following is a level 3 lock, which can only acquire level 1 or level 2 locks internally:
 
 >   * Method->writelock
@@ -57,6 +61,17 @@ trying to acquire it:
 >     > points
 >     >
 >     > currently the lock is merged with the codegen lock, since they call each other recursively
+
+The following lock synchronizes IO operation. Be aware that doing any I/O (for example,
+printing warning messages or debug information) while holding any other lock listed above
+may result in pernicious and hard-to-find deadlocks. BE VERY CAREFUL!
+
+>   * iolock
+>   * Individual ThreadSynchronizers locks
+>
+>     > this may continue to be held after releasing the iolock, or acquired without it,
+>     > but be very careful to never attempt to acquire the iolock while holding it
+
 
 The following is the root lock, meaning no other lock shall be held when trying to acquire it:
 
@@ -91,41 +106,38 @@ Type declarations : toplevel lock
 
 Type application : typecache lock
 
+Global variable tables : Module->lock
+
 Module serializer : toplevel lock
 
 JIT & type-inference : codegen lock
 
-MethodInstance updates : codegen lock
+MethodInstance/CodeInstance updates : Method->writelock, codegen lock
 
->   * These fields are generally lazy initialized, using the test-and-test-and-set pattern.
 >   * These are set at construction and immutable:
->
 >       * specTypes
 >       * sparam_vals
 >       * def
+
 >   * These are set by `jl_type_infer` (while holding codegen lock):
->
+>       * cache
 >       * rettype
 >       * inferred
->       * these can also be reset, see `jl_set_lambda_rettype` for that logic as it needs to keep `functionObjectsDecls`
->         in sync
+        * valid ages
+
 >   * `inInference` flag:
->
 >       * optimization to quickly avoid recurring into `jl_type_infer` while it is already running
 >       * actual state (of setting `inferred`, then `fptr`) is protected by codegen lock
->   * Function pointers (`jlcall_api` and `fptr`, `unspecialized_ducttape`):
->
+
+>   * Function pointers:
 >       * these transition once, from `NULL` to a value, while the codegen lock is held
->   * Code-generator cache (the contents of `functionObjectsDecls`):
 >
+>   * Code-generator cache (the contents of `functionObjectsDecls`):
 >       * these can transition multiple times, but only while the codegen lock is held
 >       * it is valid to use old version of this, or block for new versions of this, so races are benign,
 >         as long as the code is careful not to reference other data in the method instance (such as `rettype`)
 >         and assume it is coordinated, unless also holding the codegen lock
->   * `compile_traced` flag:
 >
->       * unknown
-
 LLVMContext : codegen lock
 
 Method : Method->writelock

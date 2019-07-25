@@ -22,6 +22,8 @@ string further away from zero is chosen.
 Optionally, an [`IOStream`](@ref)
 may be passed as the first argument to redirect output.
 
+See also: [`@sprintf`](@ref)
+
 # Examples
 ```jldoctest
 julia> @printf("%f %F %f %F\\n", Inf, Inf, NaN, NaN)

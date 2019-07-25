@@ -33,11 +33,7 @@ function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
         print(io, ": attempt to access ")
-        if isa(ex.a, AbstractArray)
-            summary(io, ex.a)
-        else
-            show(io, MIME"text/plain"(), ex.a)
-        end
+        summary(io, ex.a)
         if isdefined(ex, :i)
             !isa(ex.a, AbstractArray) && print(io, "\n ")
             print(io, " at index [")
@@ -98,7 +94,7 @@ function showerror(io::IO, ex::InitError, bt; backtrace=true)
 end
 showerror(io::IO, ex::InitError) = showerror(io, ex, [])
 
-function showerror(io::IO, ex::DomainError, bt; backtrace=true)
+function showerror(io::IO, ex::DomainError)
     if isa(ex.val, AbstractArray)
         compact = get(io, :compact, true)
         limit = get(io, :limit, true)
@@ -110,7 +106,6 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
     if isdefined(ex, :msg)
         print(io, ":\n", ex.msg)
     end
-    backtrace && show_backtrace(io, bt)
     nothing
 end
 
@@ -246,7 +241,7 @@ function showerror(io::IO, ex::MethodError)
     end
     if (ex.world != typemax(UInt) && hasmethod(ex.f, arg_types) &&
         !hasmethod(ex.f, arg_types, world = ex.world))
-        curworld = ccall(:jl_get_world_counter, UInt, ())
+        curworld = get_world_counter()
         println(io)
         print(io, "The applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
     end
@@ -331,11 +326,12 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
     for (func, arg_types_param) in funcs
         for method in methods(func)
             buf = IOBuffer()
-            iob = IOContext(buf, io)
+            iob0 = iob = IOContext(buf, io)
             tv = Any[]
             sig0 = method.sig
             while isa(sig0, UnionAll)
                 push!(tv, sig0.var)
+                iob = IOContext(iob, :unionall_env => sig0.var)
                 sig0 = sig0.body
             end
             s1 = sig0.parameters[1]
@@ -398,7 +394,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 end
             end
 
-            if right_matches > 0 || length(ex.args) < 2
+            if right_matches > 0 || length(arg_types_param) < 2
                 if length(t_i) < length(sig)
                     # If the methods args is longer than input then the method
                     # arguments is printed as not a match
@@ -428,7 +424,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     length(kwords) > 0 && print(iob, "; ", join(kwords, ", "))
                 end
                 print(iob, ")")
-                show_method_params(iob, tv)
+                show_method_params(iob0, tv)
                 print(iob, " at ", method.file, ":", method.line)
                 if !isempty(kwargs)
                     unexpected = Symbol[]
@@ -446,9 +442,9 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                         end
                     end
                 end
-                if ex.world < min_world(method)
+                if ex.world < reinterpret(UInt, method.primary_world)
                     print(iob, " (method too new to be called from this world context.)")
-                elseif ex.world > max_world(method)
+                elseif ex.world > reinterpret(UInt, method.deleted_world)
                     print(iob, " (method deleted before this world age.)")
                 end
                 # TODO: indicate if it's in the wrong world
@@ -640,9 +636,17 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     return ret
 end
 
-@noinline function throw_eachindex_mismatch(::IndexLinear, A...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(LinearIndices.(A), ", ", " and "))"))
-end
-@noinline function throw_eachindex_mismatch(::IndexCartesian, A...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same axes, got $(join(axes.(A), ", ", " and "))"))
+function show_exception_stack(io::IO, stack::Vector)
+    # Display exception stack with the top of the stack first.  This ordering
+    # means that the user doesn't have to scroll up in the REPL to discover the
+    # root cause.
+    nexc = length(stack)
+    for i = nexc:-1:1
+        if nexc != i
+            printstyled(io, "caused by [exception ", i, "]\n", color=:light_black)
+        end
+        exc, bt = stack[i]
+        showerror(io, exc, bt, backtrace = bt!==nothing)
+        println(io)
+    end
 end

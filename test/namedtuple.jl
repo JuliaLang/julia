@@ -38,6 +38,8 @@
 
 @test isempty(NamedTuple())
 @test !isempty((a=1,))
+@test empty((a=1,)) === NamedTuple()
+@test isempty(empty((a=1,)))
 
 @test (a=1,b=2) === (a=1,b=2)
 @test (a=1,b=2) !== (b=1,a=2)
@@ -118,7 +120,7 @@ end
 @test get(()->0, (a=1,), :b) == 0
 @test Base.tail((a = 1, b = 2.0, c = 'x')) ≡ (b = 2.0, c = 'x')
 @test Base.tail((a = 1, )) ≡ NamedTuple()
-@test_throws MethodError Base.tail(NamedTuple())
+@test_throws ArgumentError Base.tail(NamedTuple())
 
 # syntax errors
 

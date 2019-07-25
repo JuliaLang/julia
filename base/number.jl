@@ -80,7 +80,7 @@ function getindex(x::Number, i::Integer)
 end
 function getindex(x::Number, I::Integer...)
     @_inline_meta
-    @boundscheck all([i == 1 for i in I]) || throw(BoundsError())
+    @boundscheck all(isone, I) || throw(BoundsError())
     x
 end
 first(x::Number) = x
@@ -216,6 +216,9 @@ julia> inv(1 + 2im) * (1 + 2im)
 julia> inv(2//3)
 3//2
 ```
+
+!!! compat "Julia 1.2"
+    `inv(::Missing)` requires at least Julia 1.2.
 """
 inv(x::Number) = one(x)/x
 

@@ -39,7 +39,9 @@ Base.lpad
 Base.rpad
 Base.findfirst(::AbstractString, ::AbstractString)
 Base.findnext(::AbstractString, ::AbstractString, ::Integer)
+Base.findnext(::AbstractChar, ::AbstractString, ::Integer)
 Base.findlast(::AbstractString, ::AbstractString)
+Base.findlast(::AbstractChar, ::AbstractString)
 Base.findprev(::AbstractString, ::AbstractString, ::Integer)
 Base.occursin
 Base.reverse(::Union{String,SubString{String}})

@@ -71,6 +71,12 @@ else
 	@echo "const PRIVATE_LIBDIR = \"$(private_libdir_rel)\"" >> $@
 	@echo "const INCLUDEDIR = \"$(includedir_rel)\"" >> $@
 endif
+ifeq ($(DARWIN_FRAMEWORK), 1)
+	@echo "const DARWIN_FRAMEWORK = true" >> $@
+	@echo "const DARWIN_FRAMEWORK_NAME = \"$(FRAMEWORK_NAME)\"" >> $@
+else
+	@echo "const DARWIN_FRAMEWORK = false" >> $@
+endif
 
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
 	@# ensuring we rebuild the system image as infrequently as possible
@@ -104,7 +110,7 @@ else
 endif
 endif
 
-ifneq ($(OS), WINNT)
+ifeq (,$(filter $(OS), WINNT emscripten))
 # For any USE_SYSTEM_* libraries that will be dynamically loaded by libjulia,
 # put a symlink in the private libdir.
 # System package managers may want to install these links manually,

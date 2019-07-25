@@ -131,6 +131,12 @@ functions may give incorrect or invalid values when using rounding modes other t
 default [`RoundNearest`](@ref).
 
 Note that this is currently only supported for `T == BigFloat`.
+
+!!! warning
+
+    This function is not thread-safe. It will affect code running on all threads, but
+    its behavior is undefined if called concurrently with computations that use the
+    setting.
 """
 setrounding(T::Type, mode)
 
@@ -221,6 +227,10 @@ not required) to convert subnormal inputs or outputs to zero. Returns `true` unl
 
 `set_zero_subnormals(true)` can speed up some computations on some hardware. However, it can
 break identities such as `(x-y==0) == (x==y)`.
+
+!!! warning
+
+    This function only affects the current thread.
 """
 set_zero_subnormals(yes::Bool) = ccall(:jl_set_zero_subnormals,Int32,(Int8,),yes)==0
 
@@ -229,6 +239,10 @@ set_zero_subnormals(yes::Bool) = ccall(:jl_set_zero_subnormals,Int32,(Int8,),yes
 
 Return `false` if operations on subnormal floating-point values ("denormals") obey rules
 for IEEE arithmetic, and `true` if they might be converted to zeros.
+
+!!! warning
+
+    This function only affects the current thread.
 """
 get_zero_subnormals() = ccall(:jl_get_zero_subnormals,Int32,())!=0
 

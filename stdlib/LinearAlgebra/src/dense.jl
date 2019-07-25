@@ -92,22 +92,6 @@ isposdef(A::AbstractMatrix) =
     ishermitian(A) && isposdef(cholesky(Hermitian(A); check = false))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
-# the definition of strides for Array{T,N} is tuple() if N = 0, otherwise it is
-# a tuple containing 1 and a cumulative product of the first N-1 sizes
-# this definition is also used for StridedReshapedArray and StridedReinterpretedArray
-# which have the same memory storage as Array
-function stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, i::Int)
-    if i > ndims(a)
-        return length(a)
-    end
-    s = 1
-    for n = 1:(i-1)
-        s *= size(a, n)
-    end
-    return s
-end
-strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
-
 function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasFloat,TI<:Integer}
     if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError(x, rx))
@@ -263,9 +247,14 @@ diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
 
 """
     diagm(kv::Pair{<:Integer,<:AbstractVector}...)
+    diagm(m::Integer, n::Integer, kv::Pair{<:Integer,<:AbstractVector}...)
 
-Construct a square matrix from `Pair`s of diagonals and vectors.
+Construct a matrix from `Pair`s of diagonals and vectors.
 Vector `kv.second` will be placed on the `kv.first` diagonal.
+By default the matrix is square and its size is inferred
+from `kv`, but a non-square size `m`×`n` (padded with zeros as needed)
+can be specified by passing `m,n` as the first arguments.
+
 `diagm` constructs a full matrix; if you want storage-efficient
 versions with fast arithmetic, see [`Diagonal`](@ref), [`Bidiagonal`](@ref)
 [`Tridiagonal`](@ref) and [`SymTridiagonal`](@ref).
@@ -287,8 +276,10 @@ julia> diagm(1 => [1,2,3], -1 => [4,5])
  0  0  0  0
 ```
 """
-function diagm(kv::Pair{<:Integer,<:AbstractVector}...)
-    A = diagm_container(kv...)
+diagm(kv::Pair{<:Integer,<:AbstractVector}...) = _diagm(nothing, kv...)
+diagm(m::Integer, n::Integer, kv::Pair{<:Integer,<:AbstractVector}...) = _diagm((Int(m),Int(n)), kv...)
+function _diagm(size, kv::Pair{<:Integer,<:AbstractVector}...)
+    A = diagm_container(size, kv...)
     for p in kv
         inds = diagind(A, p.first)
         for (i, val) in enumerate(p.second)
@@ -297,16 +288,44 @@ function diagm(kv::Pair{<:Integer,<:AbstractVector}...)
     end
     return A
 end
-function diagm_container(kv::Pair{<:Integer,<:AbstractVector}...)
+function diagm_size(size::Nothing, kv::Pair{<:Integer,<:AbstractVector}...)
+    mnmax = mapreduce(x -> length(x.second) + abs(Int(x.first)), max, kv; init=0)
+    return mnmax, mnmax
+end
+function diagm_size(size::Tuple{Int,Int}, kv::Pair{<:Integer,<:AbstractVector}...)
+    mmax = mapreduce(x -> length(x.second) - min(0,Int(x.first)), max, kv; init=0)
+    nmax = mapreduce(x -> length(x.second) + max(0,Int(x.first)), max, kv; init=0)
+    m, n = size
+    (m ≥ mmax && n ≥ nmax) || throw(DimensionMismatch("invalid size=$size"))
+    return m, n
+end
+function diagm_container(size, kv::Pair{<:Integer,<:AbstractVector}...)
     T = promote_type(map(x -> eltype(x.second), kv)...)
-    n = mapreduce(x -> length(x.second) + abs(x.first), max, kv)
-    return zeros(T, n, n)
+    return zeros(T, diagm_size(size, kv...)...)
 end
-function diagm_container(kv::Pair{<:Integer,<:BitVector}...)
-    n = mapreduce(x -> length(x.second) + abs(x.first), max, kv)
-    return falses(n, n)
-end
+diagm_container(size, kv::Pair{<:Integer,<:BitVector}...) =
+    falses(diagm_size(size, kv...)...)
 
+"""
+    diagm(v::AbstractVector)
+    diagm(m::Integer, n::Integer, v::AbstractVector)
+
+Construct a matrix with elements of the vector as diagonal elements.
+By default (if `size=nothing`), the matrix is square and its size is given by
+`length(v)`, but a non-square size `m`×`n` can be specified
+by passing `m,n` as the first arguments.
+
+# Examples
+```jldoctest
+julia> diagm([1,2,3])
+3×3 Array{Int64,2}:
+ 1  0  0
+ 0  2  0
+ 0  0  3
+```
+"""
+diagm(v::AbstractVector) = diagm(0 => v)
+diagm(m::Integer, n::Integer, v::AbstractVector) = diagm(m, n, 0 => v)
 
 function tr(A::Matrix{T}) where T
     n = checksquare(A)
@@ -942,8 +961,8 @@ this function, see [^AH16_1].
 ```jldoctest
 julia> acos(cos([0.5 0.1; -0.2 0.3]))
 2×2 Array{Complex{Float64},2}:
-  0.5-5.55112e-17im  0.1-2.77556e-17im
- -0.2+2.498e-16im    0.3-3.46945e-16im
+  0.5-8.32667e-17im  0.1+0.0im
+ -0.2+2.63678e-16im  0.3-3.46945e-16im
 ```
 """
 function acos(A::AbstractMatrix)

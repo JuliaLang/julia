@@ -28,6 +28,7 @@ function kill_timer(delay)
         # **DON'T COPY ME.**
         # The correct way to handle timeouts is to close the handle:
         # e.g. `close(stdout_read); close(stdin_write)`
+        test_task.queue === nothing || Base.list_deletefirst!(test_task.queue, test_task)
         schedule(test_task, "hard kill repl test"; error=true)
         print(stderr, "WARNING: attempting hard kill of repl test after exceeding timeout\n")
     end
@@ -728,24 +729,44 @@ ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
 
 let exename = Base.julia_cmd()
     # Test REPL in dumb mode
-    if !Sys.iswindows()
-        with_fake_pty() do pty_slave, pty_master
-            nENV = copy(ENV)
-            nENV["TERM"] = "dumb"
-            p = run(setenv(`$exename --startup-file=no -q`,nENV),pty_slave,pty_slave,pty_slave,wait=false)
-            output = readuntil(pty_master,"julia> ",keep=true)
-            if ccall(:jl_running_on_valgrind,Cint,()) == 0
-                # If --trace-children=yes is passed to valgrind, we will get a
-                # valgrind banner here, not just the prompt.
-                @test output == "julia> "
-            end
-            write(pty_master,"1\nexit()\n")
-
-            wait(p)
-            output = readuntil(pty_master,' ',keep=true)
-            @test output == "1\r\nexit()\r\n1\r\n\r\njulia> "
-            @test bytesavailable(pty_master) == 0
+    with_fake_pty() do pty_slave, pty_master
+        nENV = copy(ENV)
+        nENV["TERM"] = "dumb"
+        p = run(detach(setenv(`$exename --startup-file=no -q`, nENV)), pty_slave, pty_slave, pty_slave, wait=false)
+        Base.close_stdio(pty_slave)
+        output = readuntil(pty_master, "julia> ", keep=true)
+        if ccall(:jl_running_on_valgrind, Cint,()) == 0
+            # If --trace-children=yes is passed to valgrind, we will get a
+            # valgrind banner here, not just the prompt.
+            @test output == "julia> "
         end
+        write(pty_master, "1\nexit()\n")
+
+        output = readuntil(pty_master, ' ', keep=true)
+        if Sys.iswindows()
+	    # Our fake pty is actually a pipe, and thus lacks the input echo feature of posix
+            @test output == "1\n\njulia> "
+        else
+            @test output == "1\r\nexit()\r\n1\r\n\r\njulia> "
+        end
+        @test bytesavailable(pty_master) == 0
+        @test if Sys.iswindows() || Sys.isbsd()
+                eof(pty_master)
+            else
+                # Some platforms (such as linux) report EIO instead of EOF
+                # possibly consume child-exited notification
+                # for example, see discussion in https://bugs.python.org/issue5380
+                try
+                    eof(pty_master) && !Sys.islinux()
+                catch ex
+                    (ex isa Base.IOError && ex.code == Base.UV_EIO) || rethrow()
+                    @test_throws ex eof(pty_master) # make sure the error is sticky
+                    pty_master.readerror = nothing
+                    eof(pty_master)
+                end
+            end
+        @test read(pty_master, String) == ""
+        wait(p)
     end
 
     # Test stream mode
@@ -759,7 +780,8 @@ mutable struct Error19864 <: Exception; end
 function test19864()
     @eval Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
     buf = IOBuffer()
-    REPL.print_response(buf, Error19864(), [], false, false, nothing)
+    fake_response = (Any[(Error19864(),[])],true)
+    REPL.print_response(buf, fake_response, false, false, nothing)
     return String(take!(buf))
 end
 @test occursin("correct19864", test19864())
@@ -985,11 +1007,28 @@ fake_repl() do stdin_write, stdout_read, repl
     end
     write(stdin_write, "Expr(:call, GlobalRef(Base.Math, :float), Core.SlotNumber(1))\n")
     readline(stdout_read)
-    @test readline(stdout_read) == "\e[0m:((Base.Math.float)(_1))"
+    @test readline(stdout_read) == "\e[0m:(Base.Math.float(_1))"
     write(stdin_write, "ans\n")
     readline(stdout_read)
     readline(stdout_read)
-    @test readline(stdout_read) == "\e[0m:((Base.Math.float)(_1))"
+    @test readline(stdout_read) == "\e[0m:(Base.Math.float(_1))"
     write(stdin_write, '\x04')
     Base.wait(repltask)
+end
+
+# issue #31352
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "struct Errs end\n")
+    readline(stdout_read)
+    readline(stdout_read)
+    write(stdin_write, "Base.show(io::IO, ::Errs) = throw(Errs())\n")
+    readline(stdout_read)
+    readline(stdout_read)
+    write(stdin_write, "Errs()\n")
+    write(stdin_write, '\x04')
+    wait(repltask)
+    @test istaskdone(repltask)
 end

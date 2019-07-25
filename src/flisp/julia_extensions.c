@@ -250,6 +250,7 @@ value_t fl_julia_underscore_symbolp(fl_context_t *fl_ctx, value_t *args, uint32_
     argcount(fl_ctx, "underscore-symbol?", nargs, 1);
     if (!issymbol(args[0])) return fl_ctx->F;
     char *op = symbol_name(fl_ctx, args[0]);
+    if (*op == '\0') return fl_ctx->F; // return false for empty symbol
     while (*op == '_') ++op;
     return *op ? fl_ctx->F : fl_ctx->T;
 }

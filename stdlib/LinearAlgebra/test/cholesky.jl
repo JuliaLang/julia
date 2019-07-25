@@ -168,6 +168,42 @@ end
                 end
             end
         end
+
+        @testset "solve with generic Cholesky" begin
+            Breal = convert(Matrix{BigFloat}, randn(n,n)/2)
+            Bimg  = convert(Matrix{BigFloat}, randn(n,n)/2)
+            B = eltya <: Complex ? complex.(Breal, Bimg) : Breal
+            εb = eps(abs(float(one(eltype(B)))))
+            ε = max(εa,εb)
+
+            for B in (B, view(B, 1:n, 1:n)) # Array and SubArray
+
+                # Test error bound on linear solver: LAWNS 14, Theorem 2.1
+                # This is a surprisingly loose bound
+                cpapd = cholesky(eltya <: Complex ? apdh : apds)
+                BB = copy(B)
+                rdiv!(BB, cpapd)
+                @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                cpapd = cholesky(eltya <: Complex ? apdhL : apdsL)
+                BB = copy(B)
+                rdiv!(BB, cpapd)
+                @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                if eltya != BigFloat
+                    cpapd = cholesky(eltya <: Complex ? apdh : apds, Val(true))
+                    BB = copy(B)
+                    rdiv!(BB, cpapd)
+                    @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                    @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                    cpapd = cholesky(eltya <: Complex ? apdhL : apdsL, Val(true))
+                    BB = copy(B)
+                    rdiv!(BB, cpapd)
+                    @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                    @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                end
+            end
+        end
         if eltya <: BlasFloat
             @testset "generic cholesky!" begin
                 if eltya <: Complex

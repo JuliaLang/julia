@@ -88,19 +88,20 @@ using Distributed
 @testset "channels bound to tasks" for N in [0, 10]
     # Normal exit of task
     c = Channel(N)
-    bind(c, @async (yield(); nothing))
+    bind(c, @async (GC.gc(); yield(); nothing))
     @test_throws InvalidStateException take!(c)
     @test !isopen(c)
 
     # Error exception in task
     c = Channel(N)
-    bind(c, @async (yield(); error("foo")))
+    bind(c, @async (GC.gc(); yield(); error("foo")))
     @test_throws ErrorException take!(c)
     @test !isopen(c)
 
     # Multiple channels closed by the same bound task
     cs = [Channel(N) for i in 1:5]
-    tf2 = () -> begin
+    tf2() = begin
+        GC.gc()
         if N > 0
             foreach(c -> (@assert take!(c) === 2), cs)
         end
@@ -129,8 +130,8 @@ using Distributed
     # Multiple tasks, first one to terminate closes the channel
     nth = rand(1:5)
     ref = Ref(0)
-    cond = Condition()
     tf3(i) = begin
+        GC.gc()
         if i == nth
             ref[] = i
         else
@@ -138,7 +139,7 @@ using Distributed
         end
     end
 
-    tasks = [Task(()->tf3(i)) for i in 1:5]
+    tasks = [Task(() -> tf3(i)) for i in 1:5]
     c = Channel(N)
     foreach(t -> bind(c, t), tasks)
     foreach(schedule, tasks)
@@ -237,26 +238,29 @@ end
     # interpreting the calling function.
     @noinline garbage_finalizer(f) = (finalizer(f, "gar" * "bage"); nothing)
     run = Ref(0)
-    GC.enable(false)
+    garbage_finalizer(x -> nothing) # warmup
+    @test GC.enable(false)
     # test for finalizers trying to yield leading to failed attempts to context switch
     garbage_finalizer((x) -> (run[] += 1; sleep(1)))
     garbage_finalizer((x) -> (run[] += 1; yield()))
     garbage_finalizer((x) -> (run[] += 1; yieldto(@task () -> ())))
     t = @task begin
-        GC.enable(true)
+        @test !GC.enable(true)
         GC.gc()
+        true
     end
     oldstderr = stderr
-    local newstderr, errstream
+    newstderr = redirect_stderr()
+    local errstream
     try
-        newstderr = redirect_stderr()
         errstream = @async read(newstderr[1], String)
         yield(t)
     finally
         redirect_stderr(oldstderr)
         close(newstderr[2])
     end
-    Base.wait(t)
+    @test istaskdone(t)
+    @test fetch(t)
     @test run[] == 3
     @test fetch(errstream) == """
         error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
@@ -266,26 +270,15 @@ end
     # test for invalid state in Workqueue during yield
     t = @async nothing
     t.state = :invalid
+    newstderr = redirect_stderr()
     try
-        newstderr = redirect_stderr()
         errstream = @async read(newstderr[1], String)
         yield()
     finally
         redirect_stderr(oldstderr)
         close(newstderr[2])
     end
-    @test fetch(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :queued\n"
-end
-
-@testset "schedule_and_wait" begin
-    t = @async(nothing)
-    ct = current_task()
-    testobject = "testobject"
-    # note: there is a low probability this test could fail, due to receiving network traffic simultaneously
-    @test length(Base.Workqueue) == 1
-    @test Base.schedule_and_wait(ct, 8) == 8
-    @test isempty(Base.Workqueue)
-    @test Base.schedule_and_wait(ct, testobject) === testobject
+    @test fetch(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :runnable\n"
 end
 
 @testset "throwto" begin
@@ -302,68 +295,78 @@ end
 end
 
 @testset "Timer / AsyncCondition triggering and race #12719" begin
-    tc = Ref(0)
-    t = Timer(0) do t
-        tc[] += 1
+    let tc = Ref(0)
+        t = Timer(0) do t
+            tc[] += 1
+        end
+        @test isopen(t)
+        Base.process_events()
+        @test !isopen(t)
+        @test tc[] == 0
+        yield()
+        @test tc[] == 1
     end
-    @test isopen(t)
-    Base.process_events(false)
-    @test !isopen(t)
-    @test tc[] == 0
-    yield()
-    @test tc[] == 1
 
-    tc = Ref(0)
-    t = Timer(0) do t
-        tc[] += 1
+    let tc = Ref(0)
+        t = Timer(0) do t
+            tc[] += 1
+        end
+        @test isopen(t)
+        close(t)
+        @test !isopen(t)
+        sleep(0.1)
+        @test tc[] == 0
     end
-    @test isopen(t)
-    close(t)
-    @test !isopen(t)
-    sleep(0.1)
-    @test tc[] == 0
 
-    tc = Ref(0)
-    async = Base.AsyncCondition() do async
-        tc[] += 1
+    let tc = Ref(0)
+        async = Base.AsyncCondition() do async
+            tc[] += 1
+        end
+        @test isopen(async)
+        ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+        ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+        Base.process_events() # schedule event
+        Sys.iswindows() && Base.process_events() # schedule event (windows?)
+        ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+        @test tc[] == 0
+        yield() # consume event
+        @test tc[] == 1
+        Sys.iswindows() && Base.process_events() # schedule event (windows?)
+        yield() # consume event
+        @test tc[] == 2
+        sleep(0.1) # no further events
+        @test tc[] == 2
+        ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+        ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+        Base.process_events() # schedule event
+        Sys.iswindows() && Base.process_events() # schedule event (windows?)
+        close(async) # and close
+        @test !isopen(async)
+        @test tc[] == 2
+        @test tc[] == 2
+        yield() # consume event & then close
+        @test tc[] == 3
+        sleep(0.1) # no further events
+        @test tc[] == 3
     end
-    @test isopen(async)
-    ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-    Base.process_events(false) # schedule event
-    ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-    Sys.iswindows() && Base.process_events(false) # schedule event (windows?)
-    @test tc[] == 0
-    yield() # consume event
-    @test tc[] == 1
-    sleep(0.1) # no further events
-    @test tc[] == 1
-    ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-    ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-    close(async)
-    @test !isopen(async)
-    @test tc[] == 1
-    Base.process_events(false) # schedule event & then close
-    Sys.iswindows() && Base.process_events(false) # schedule event (windows?)
-    yield() # consume event & then close
-    @test tc[] == 2
-    sleep(0.1) # no further events
-    @test tc[] == 2
 
-    tc = Ref(0)
-    async = Base.AsyncCondition() do async
-        tc[] += 1
+    let tc = Ref(0)
+        async = Base.AsyncCondition() do async
+            tc[] += 1
+        end
+        @test isopen(async)
+        ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+        Base.process_events() # schedule event
+        Sys.iswindows() && Base.process_events() # schedule event (windows)
+        close(async)
+        @test !isopen(async)
+        Base.process_events() # and close
+        @test tc[] == 0
+        yield() # consume event & then close
+        @test tc[] == 1
+        sleep(0.1)
+        @test tc[] == 1
     end
-    @test isopen(async)
-    ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-    close(async)
-    @test !isopen(async)
-    Base.process_events(false) # schedule event & then close
-    Sys.iswindows() && Base.process_events(false) # schedule event (windows)
-    @test tc[] == 0
-    yield() # consume event & then close
-    @test tc[] == 1
-    sleep(0.1)
-    @test tc[] == 1
 end
 
 @testset "check_channel_state" begin
@@ -398,4 +401,10 @@ let a = Ref(0)
     make_unrooted_timer(a)
     GC.gc()
     @test a[] == 1
+end
+
+# trying to `schedule` a finished task
+let t = @async nothing
+    wait(t)
+    @test_throws ErrorException("schedule: Task not runnable") schedule(t, nothing)
 end

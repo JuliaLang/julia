@@ -124,7 +124,7 @@ eltype(::Type) = Any
 eltype(::Type{Bottom}) = throw(ArgumentError("Union{} does not have elements"))
 eltype(x) = eltype(typeof(x))
 
-import Core: arraysize, arrayset, arrayref
+import Core: arraysize, arrayset, arrayref, const_arrayref
 
 vect() = Vector{Any}()
 vect(X::T...) where {T} = T[ X[i] for i = 1:length(X) ]
@@ -174,6 +174,20 @@ false
 """
 isbitsunion(u::Union) = (@_pure_meta; ccall(:jl_array_store_unboxed, Cint, (Any,), u) != Cint(0))
 isbitsunion(x) = false
+
+isptrelement(t::Type) = (@_pure_meta; ccall(:jl_array_store_unboxed, Cint, (Any,), t) == Cint(0))
+
+function _unsetindex!(A::Array{T}, i::Int) where {T}
+    @boundscheck checkbounds(A, i)
+    if isptrelement(T)
+        t = @_gc_preserve_begin A
+        p = Ptr{Ptr{Cvoid}}(pointer(A))
+        unsafe_store!(p, C_NULL, i)
+        @_gc_preserve_end t
+    end
+    return A
+end
+
 
 """
     Base.bitsunionsize(U::Union)
@@ -291,7 +305,7 @@ copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, leng
 function fill!(dest::Array{T}, x) where T
     @_noinline_meta
     xT = convert(T, x)
-    for i in 1:length(dest)
+    for i in eachindex(dest)
         @inbounds dest[i] = xT
     end
     return dest
@@ -363,16 +377,7 @@ end
 getindex(::Type{Any}) = Vector{Any}()
 
 function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
-    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), a, x, length(a))
-    return a
-end
-
-function fill!(a::Array{T}, x) where T<:Union{Integer,AbstractFloat}
-    @_noinline_meta
-    xT = convert(T, x)
-    for i in eachindex(a)
-        @inbounds a[i] = xT
-    end
+    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), a, convert(eltype(a), x), length(a))
     return a
 end
 
@@ -401,8 +406,8 @@ dims)` will return an array filled with the result of evaluating `Foo()` once.
 """
 fill(v, dims::DimOrInd...) = fill(v, dims)
 fill(v, dims::NTuple{N, Union{Integer, OneTo}}) where {N} = fill(v, map(to_dim, dims))
-fill(v, dims::NTuple{N, Integer}) where {N} = fill!(Array{typeof(v),N}(undef, dims), v)
-fill(v, dims::Tuple{}) = fill!(Array{typeof(v),0}(undef, dims), v)
+fill(v, dims::NTuple{N, Integer}) where {N} = (a=Array{typeof(v),N}(undef, dims); fill!(a, v); a)
+fill(v, dims::Tuple{}) = (a=Array{typeof(v),0}(undef, dims); fill!(a, v); a)
 
 """
     zeros([T=Float64,] dims...)
@@ -450,8 +455,16 @@ for (fname, felt) in ((:zeros, :zero), (:ones, :one))
         $fname(::Type{T}, dims::DimOrInd...) where {T} = $fname(T, dims)
         $fname(dims::Tuple{Vararg{DimOrInd}}) = $fname(Float64, dims)
         $fname(::Type{T}, dims::NTuple{N, Union{Integer, OneTo}}) where {T,N} = $fname(T, map(to_dim, dims))
-        $fname(::Type{T}, dims::NTuple{N, Integer}) where {T,N} = fill!(Array{T,N}(undef, map(to_dim, dims)), $felt(T))
-        $fname(::Type{T}, dims::Tuple{}) where {T} = fill!(Array{T}(undef), $felt(T))
+        function $fname(::Type{T}, dims::NTuple{N, Integer}) where {T,N}
+            a = Array{T,N}(undef, dims)
+            fill!(a, $felt(T))
+            return a
+        end
+        function $fname(::Type{T}, dims::Tuple{}) where {T}
+            a = Array{T}(undef)
+            fill!(a, $felt(T))
+            return a
+        end
     end
 end
 
@@ -889,7 +902,7 @@ Use [`push!`](@ref) to add individual items to `collection` which are not alread
 themselves in another collection. The result of the preceding example is equivalent to
 `push!([1, 2, 3], 4, 5, 6)`.
 """
-function append!(a::Array{<:Any,1}, items::AbstractVector)
+function append!(a::Vector, items::AbstractVector)
     itemindices = eachindex(items)
     n = length(itemindices)
     _growend!(a, n)
@@ -897,14 +910,14 @@ function append!(a::Array{<:Any,1}, items::AbstractVector)
     return a
 end
 
-append!(a::Vector, iter) = _append!(a, IteratorSize(iter), iter)
-push!(a::Vector, iter...) = append!(a, iter)
+append!(a::AbstractVector, iter) = _append!(a, IteratorSize(iter), iter)
+push!(a::AbstractVector, iter...) = append!(a, iter)
 
 function _append!(a, ::Union{HasLength,HasShape}, iter)
-    require_one_based_indexing(a)
     n = length(a)
+    i = lastindex(a)
     resize!(a, n+length(iter))
-    @inbounds for (i,item) in zip(n+1:length(a), iter)
+    @inbounds for (i, item) in zip(i+1:lastindex(a), iter)
         a[i] = item
     end
     a
@@ -933,7 +946,7 @@ julia> prepend!([3],[1,2])
 """
 function prepend! end
 
-function prepend!(a::Array{<:Any,1}, items::AbstractVector)
+function prepend!(a::Vector, items::AbstractVector)
     itemindices = eachindex(items)
     n = length(itemindices)
     _growbeg!(a, n)
@@ -1268,7 +1281,7 @@ If specified, replacement values from an ordered
 collection will be spliced in place of the removed item.
 
 # Examples
-```jldoctest splice!
+```jldoctest
 julia> A = [6, 5, 4, 3, 2, 1]; splice!(A, 5)
 2
 
@@ -1339,8 +1352,8 @@ To insert `replacement` before an index `n` without removing any items, use
 `splice!(collection, n:n-1, replacement)`.
 
 # Examples
-```jldoctest splice!
-julia> splice!(A, 4:3, 2)
+```jldoctest
+julia> A = [-1, -2, -3, 5, 4, 3, -1]; splice!(A, 4:3, 2)
 0-element Array{Int64,1}
 
 julia> A
@@ -1388,7 +1401,7 @@ function empty!(a::Vector)
     return a
 end
 
-_memcmp(a, b, len) = ccall(:memcmp, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), a, b, len) % Int
+_memcmp(a, b, len) = ccall(:memcmp, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), a, b, len % Csize_t) % Int
 
 # use memcmp for cmp on byte arrays
 function cmp(a::Array{UInt8,1}, b::Array{UInt8,1})
@@ -1605,10 +1618,11 @@ CartesianIndex(2, 1)
 function findnext(A, start)
     l = last(keys(A))
     i = start
-    while i <= l
-        if A[i]
-            return i
-        end
+    i > l && return nothing
+    while true
+        A[i] && return i
+        i == l && break
+        # nextind(A, l) can throw/overflow
         i = nextind(A, i)
     end
     return nothing
@@ -1686,10 +1700,11 @@ CartesianIndex(1, 1)
 function findnext(testf::Function, A, start)
     l = last(keys(A))
     i = start
-    while i <= l
-        if testf(A[i])
-            return i
-        end
+    i > l && return nothing
+    while true
+        testf(A[i]) && return i
+        i == l && break
+        # nextind(A, l) can throw/overflow
         i = nextind(A, i)
     end
     return nothing
@@ -1782,8 +1797,12 @@ CartesianIndex(2, 1)
 """
 function findprev(A, start)
     i = start
-    while i >= first(keys(A))
+    f = first(keys(A))
+    i < f && return nothing
+    while true
         A[i] && return i
+        i == f && break
+        # prevind(A, f) can throw/underflow
         i = prevind(A, i)
     end
     return nothing
@@ -1869,8 +1888,12 @@ CartesianIndex(2, 1)
 """
 function findprev(testf::Function, A, start)
     i = start
-    while i >= first(keys(A))
+    f = first(keys(A))
+    i < f && return nothing
+    while true
         testf(A[i]) && return i
+        i == f && break
+        # prevind(A, f) can throw/underflow
         i = prevind(A, i)
     end
     return nothing
@@ -2316,7 +2339,34 @@ julia> filter(isodd, a)
  9
 ```
 """
-filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
+function filter(f, a::Array{T, N}) where {T, N}
+    j = 1
+    b = Vector{T}(undef, length(a))
+    for ai in a
+        @inbounds b[j] = ai
+        j = ifelse(f(ai), j+1, j)
+    end
+    resize!(b, j-1)
+    sizehint!(b, length(b))
+    b
+end
+
+function filter(f, a::AbstractArray)
+    (IndexStyle(a) != IndexLinear()) && return a[map(f, a)::AbstractArray{Bool}]
+
+    j = 1
+    idxs = Vector{Int}(undef, length(a))
+    for idx in eachindex(a)
+        @inbounds idxs[j] = idx
+        ai = @inbounds a[idx]
+        j = ifelse(f(ai), j+1, j)
+    end
+    resize!(idxs, j-1)
+    res = a[idxs]
+    empty!(idxs)
+    sizehint!(idxs, 0)
+    return res
+end
 
 """
     filter!(f, a::AbstractVector)
@@ -2336,26 +2386,20 @@ julia> filter!(isodd, Vector(1:10))
 ```
 """
 function filter!(f, a::AbstractVector)
-    idx = eachindex(a)
-    y = iterate(idx)
-    y === nothing && return a
-    i, state = y
-
-    for acurr in a
-        if f(acurr)
-            @inbounds a[i] = acurr
-            y = iterate(idx, state)
-            y === nothing && (i += 1; break)
-            i, state = y
-        end
+    j = firstindex(a)
+    for ai in a
+        @inbounds a[j] = ai
+        j = ifelse(f(ai), nextind(a, j), j)
     end
-
-    deleteat!(a, i:last(idx))
-
+    j > lastindex(a) && return a
+    if a isa Vector
+        resize!(a, j-1)
+        sizehint!(a, j-1)
+    else
+        deleteat!(a, j:lastindex(a))
+    end
     return a
 end
-
-filter(f, a::Vector) = mapfilter(f, push!, a, empty(a))
 
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.

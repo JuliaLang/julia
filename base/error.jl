@@ -183,7 +183,11 @@ macro assert(ex, msgs...)
         msg = Main.Base.string(msg)
     else
         # string() might not be defined during bootstrap
-        msg = :(Main.Base.string($(Expr(:quote,msg))))
+        msg = quote
+            msg = $(Expr(:quote,msg))
+            isdefined(Main, :Base) ? Main.Base.string(msg) :
+                (Core.println(msg); "Error during bootstrap. See stdout.")
+        end
     end
     return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end
@@ -221,12 +225,15 @@ length(ebo::ExponentialBackOff) = ebo.n
 eltype(::Type{ExponentialBackOff}) = Float64
 
 """
-    retry(f::Function;  delays=ExponentialBackOff(), check=nothing) -> Function
+    retry(f;  delays=ExponentialBackOff(), check=nothing) -> Function
 
 Return an anonymous function that calls function `f`.  If an exception arises,
 `f` is repeatedly called again, each time `check` returns `true`, after waiting the
 number of seconds specified in `delays`.  `check` should input `delays`'s
 current state and the `Exception`.
+
+!!! compat "Julia 1.2"
+    Before Julia 1.2 this signature was restricted to `f::Function`.
 
 # Examples
 ```julia
@@ -237,7 +244,7 @@ retry(http_get, check=(s,e)->e.status == "503")(url)
 retry(read, check=(s,e)->isa(e, IOError))(io, 128; all=false)
 ```
 """
-function retry(f::Function;  delays=ExponentialBackOff(), check=nothing)
+function retry(f;  delays=ExponentialBackOff(), check=nothing)
     (args...; kwargs...) -> begin
         y = iterate(delays)
         while y !== nothing

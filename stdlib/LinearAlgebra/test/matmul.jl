@@ -508,4 +508,13 @@ end
     @test success(pipeline(cmd; stdout=stdout, stderr=stderr))
 end
 
+struct A32092
+    x::Float64
+end
+Base.:+(x::Float64, a::A32092) = x + a.x
+Base.:*(x::Float64, a::A32092) = x * a.x
+@testset "Issue #32092" begin
+    @test ones(2, 2) * [A32092(1.0), A32092(2.0)] == fill(3.0, (2,))
+end
+
 end # module TestMatmul

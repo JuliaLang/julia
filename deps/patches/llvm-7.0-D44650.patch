@@ -1,0 +1,13 @@
+diff --git a/tools/llvm-cfi-verify/CMakeLists.txt b/tools/llvm-cfi-verify/CMakeLists.txt
+index ae12bec5e80..9ffbe4e070d 100644
+--- a/tools/llvm-cfi-verify/CMakeLists.txt
++++ b/tools/llvm-cfi-verify/CMakeLists.txt
+@@ -11,7 +11,7 @@ set(LLVM_LINK_COMPONENTS
+   Symbolize
+   )
+ 
+-add_llvm_tool(llvm-cfi-verify
++add_llvm_tool(llvm-cfi-verify DISABLE_LLVM_LINK_LLVM_DYLIB
+   llvm-cfi-verify.cpp
+   )
+ 

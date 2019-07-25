@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include <limits.h>
+#include <errno.h>
 
 #include "julia.h"
 
@@ -296,13 +297,13 @@ restart_switch:
             break;
         case 'v': // version
             jl_printf(JL_STDOUT, "julia version %s\n", JULIA_VERSION_STRING);
-            jl_exit(0);
+            exit(0);
         case 'h': // help
             jl_printf(JL_STDOUT, "%s%s", usage, opts);
-            jl_exit(0);
+            exit(0);
         case opt_help_hidden:
             jl_printf(JL_STDOUT, "%s%s", usage, opts_hidden);
-            jl_exit(0);
+            exit(0);
         case 'g': // debug info
             if (optarg != NULL) {
                 if (!strcmp(optarg,"0"))
@@ -620,8 +621,9 @@ restart_switch:
     }
     jl_options.code_coverage = codecov;
     jl_options.malloc_log = malloclog;
-    *argvp += optind;
-    *argcp -= optind;
+    int proc_args = *argcp < optind ? *argcp : optind;
+    *argvp += proc_args;
+    *argcp -= proc_args;
 }
 
 JL_DLLEXPORT void jl_set_ARGS(int argc, char **argv)

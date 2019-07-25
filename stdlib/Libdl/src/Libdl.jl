@@ -114,10 +114,37 @@ function dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND; t
 end
 
 """
+    dlopen(f::Function, args...; kwargs...)
+
+Wrapper for usage with `do` blocks to automatically close the dynamic library once
+control flow leaves the `do` block scope.
+
+# Example
+```julia
+vendor = dlopen("libblas") do lib
+    if Libdl.dlsym(lib, :openblas_set_num_threads; throw_error=false) !== nothing
+        return :openblas
+    else
+        return :other
+    end
+end
+```
+"""
+function dlopen(f::Function, args...; kwargs...)
+    hdl = nothing
+    try
+        hdl = dlopen(args...; kwargs...)
+        f(hdl)
+    finally
+        dlclose(hdl)
+    end
+end
+
+"""
     dlopen_e(libfile::AbstractString [, flags::Integer])
 
 Similar to [`dlopen`](@ref), except returns `C_NULL` instead of raising errors.
-This method is now deprecated in favor of `dlsym(handle, sym; throw_error=false)`.
+This method is now deprecated in favor of `dlopen(libfile::AbstractString [, flags::Integer]; throw_error=false)`.
 """
 dlopen_e(args...) = something(dlopen(args...; throw_error=false), C_NULL)
 
@@ -209,7 +236,7 @@ File extension for dynamic libraries (e.g. dll, dylib, so) on the current platfo
 """
 dlext
 
-if Sys.islinux()
+if (Sys.islinux() || Sys.isbsd()) && !Sys.isapple()
     struct dl_phdr_info
         # Base address of object
         addr::Cuint
@@ -224,50 +251,17 @@ if Sys.islinux()
         phnum::Cshort
     end
 
-    # This callback function called by dl_iterate_phdr() on Linux
-    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dynamic_libraries::Array{AbstractString,1})
-        # Skip over objects without a path (as they represent this own object)
-        name = unsafe_string(di.name)
-        if !isempty(name)
-            push!(dynamic_libraries, name)
-        end
-        return convert(Cint, 0)::Cint
-    end
-end # linux-only
-
-if Sys.isbsd() && !Sys.isapple()
+    # This callback function called by dl_iterate_phdr() on Linux and BSD's
     # DL_ITERATE_PHDR(3) on freebsd
-    struct dl_phdr_info
-        # Base address of object
-        addr::Cuint
-
-        # Null-terminated name of object
-        name::Ptr{UInt8}
-
-        # Pointer to array of ELF program headers for this object
-        phdr::Ptr{Cvoid}
-
-        # Number of program headers for this object
-        phnum::Cshort
-    end
-
-    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dy_libs::Vector{AbstractString})
+    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dynamic_libraries::Array{String,1})
         name = unsafe_string(di.name)
-        if !isempty(name)
-            push!(dy_libs, name)
-        end
-        return convert(Cint, 0)::Cint
+        push!(dynamic_libraries, name)
+        return Cint(0)
     end
-end # bsd family
+end
 
 function dllist()
-    dynamic_libraries = Vector{AbstractString}()
-
-    @static if Sys.islinux()
-        callback = @cfunction(dl_phdr_info_callback, Cint,
-                              (Ref{dl_phdr_info}, Csize_t, Ref{Vector{AbstractString}}))
-        ccall(:dl_iterate_phdr, Cint, (Ptr{Cvoid}, Ref{Vector{AbstractString}}), callback, dynamic_libraries)
-    end
+    dynamic_libraries = Vector{String}()
 
     @static if Sys.isapple()
         numImages = ccall(:_dyld_image_count, Cint, ())
@@ -277,17 +271,16 @@ function dllist()
             name = unsafe_string(ccall(:_dyld_get_image_name, Cstring, (UInt32,), i))
             push!(dynamic_libraries, name)
         end
-    end
-
-    @static if Sys.iswindows()
-        ccall(:jl_dllist, Cint, (Any,), dynamic_libraries)
-    end
-
-    @static if Sys.isbsd() && !Sys.isapple()
+    elseif Sys.islinux() || Sys.isbsd()
         callback = @cfunction(dl_phdr_info_callback, Cint,
-                              (Ref{dl_phdr_info}, Csize_t, Ref{Vector{AbstractString}}))
-        ccall(:dl_iterate_phdr, Cint, (Ptr{Cvoid}, Ref{Vector{AbstractString}}), callback, dynamic_libraries)
+                              (Ref{dl_phdr_info}, Csize_t, Ref{Vector{String}}))
+        ccall(:dl_iterate_phdr, Cint, (Ptr{Cvoid}, Ref{Vector{String}}), callback, dynamic_libraries)
         popfirst!(dynamic_libraries)
+        filter!(!isempty, dynamic_libraries)
+    elseif Sys.iswindows()
+        ccall(:jl_dllist, Cint, (Any,), dynamic_libraries)
+    else
+        # unimplemented
     end
 
     return dynamic_libraries

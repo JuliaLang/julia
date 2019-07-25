@@ -46,7 +46,7 @@ min_enabled_level(logger::ConsoleLogger) = logger.min_level
 showvalue(io, msg) = show(io, "text/plain", msg)
 function showvalue(io, e::Tuple{Exception,Any})
     ex,bt = e
-    showerror(io, ex, bt; backtrace = bt!=nothing)
+    showerror(io, ex, bt; backtrace = bt!==nothing)
 end
 showvalue(io, ex::Exception) = showerror(io, ex)
 
@@ -97,7 +97,7 @@ end
 
 function handle_message(logger::ConsoleLogger, level, message, _module, group, id,
                         filepath, line; maxlog=nothing, kwargs...)
-    if maxlog != nothing && maxlog isa Integer
+    if maxlog !== nothing && maxlog isa Integer
         remaining = get!(logger.message_limits, id, maxlog)
         logger.message_limits[id] = remaining - 1
         remaining > 0 || return

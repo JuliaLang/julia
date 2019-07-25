@@ -1,73 +1,136 @@
-Julia v1.2 Release Notes
+Julia v1.3 Release Notes
 ========================
 
 New language features
 ---------------------
 
-* The `extrema` function now accepts a function argument in the same manner as `minimum` and
-  `maximum` ([#30323]).
+* Support for Unicode 12.1.0 ([#32002]).
+* Methods can now be added to an abstract type ([#31916]).
 * Added argument `keep` to `unescape_string` ([#27125]).
-* `hasmethod` can now check for matching keyword argument names ([#30712]).
-
-Multi-threading changes
------------------------
-
-  * The `Condition` type now has a thread-safe replacement, accessed as `Threads.Condition`.
-    With that addition, task scheduling primitives such as `ReentrantLock` are now thread-safe ([#30061]).
 
 Language changes
 ----------------
 
-* `Enum` now behaves like a scalar when used in broadcasting ([#30670]).
 
-Command-line option changes
----------------------------
+Multi-threading changes
+-----------------------
+
+* All system-level I/O operations (e.g. files and sockets) are now thread-safe.
+  This does not include subtypes of `IO` that are entirely in-memory, such as `IOBuffer`,
+  although it specifically does include `BufferStream`.
+  ([#32309], [#32174], [#31981], [#32421]).
+* The global random number generator (`GLOBAL_RNG`) is now thread-safe (and thread-local) ([#32407]).
+* New experimental `Threads.@spawn` macro that runs a task on any available thread ([#32600]).
+
+Build system changes
+--------------------
 
 
 New library functions
 ---------------------
 
-* `getipaddrs()` function returns all the IP addresses of the local machine ([#30349])
+* `findfirst`, `findlast`, `findnext` and `findprev` now accept a character as first argument
+  to search for that character in a string passed as the second argument ([#31664]).
+* New `findall(pattern, string)` method where `pattern` is a string or regex ([#31834]).
+* `istaskfailed` is now documented and exported, like its siblings `istaskdone` and `istaskstarted` ([#32300]).
+* `RefArray` and `RefValue` objects now accept index `CartesianIndex()` in  `getindex` and `setindex!` ([#32653])
 
 Standard library changes
 ------------------------
 
+* `Regex` can now be multiplied (`*`) and exponentiated (`^`), like strings ([#23422]).
+* `Cmd` interpolation (``` `$(x::Cmd) a b c` ``` where) now propagates `x`'s process flags
+  (environment, flags, working directory, etc) if `x` is the first interpolant and errors
+  otherwise ([#24353]).
+* Zero-dimensional arrays are now consistently preserved in the return values of mathematical
+  functions that operate on the array(s) as a whole (and are not explicitly broadcasted across their elements).
+  Previously, the functions  `+`, `-`, `*`, `/`, `conj`, `real` and `imag` returned the unwrapped element
+  when operating over zero-dimensional arrays ([#32122]).
+* `IPAddr` subtypes now behave like scalars when used in broadcasting ([#32133]).
+* `clamp` can now handle missing values ([#31066]).
+* `empty` now accepts a `NamedTuple` ([#32534]).
+* `mod` now accepts a unit range as the second argument to easily perform offset modular arithmetic to ensure the result is inside the range ([#32628]).
+
+#### Libdl
+
+* `dlopen()` can now be invoked in `do`-block syntax, similar to `open()`.
+
 #### LinearAlgebra
 
-* Added keyword arguments `rtol`, `atol` to `pinv` and `nullspace` ([#29998]).
-* `UniformScaling` instances are now callable such that e.g. `I(3)` will produce a `Diagonal` matrix ([#30298]).
+* The BLAS submodule no longer exports `dot`, which conflicts with that in LinearAlgebra ([#31838]).
+* `diagm` and `spdiagm` now accept optional `m,n` initial arguments to specify a size ([#31654]).
+* `Hessenberg` factorizations `H` now support efficient shifted solves `(H+µI) \ b` and determinants, and use a specialized tridiagonal factorization for Hermitian matrices. There is also a new `UpperHessenberg` matrix type ([#31853]).
 
 #### SparseArrays
 
-* performance improvements for sparse matrix-matrix multiplication ([#30372]).
-* Sparse vector outer products are more performant and maintain sparsity in products of the
-  form `kron(u, v')`, `u * v'`, and `u .* v'` where `u` and `v` are sparse vectors or column
-  views. ([#24980])
+* `SparseMatrixCSC(m,n,colptr,rowval,nzval)` perform consistency checks for arguments:
+  `colptr` must be properly populated and lengths of `colptr`, `rowval`, and `nzval`
+  must be compatible with `m`, `n`, and `eltype(colptr)`.
+* `sparse(I, J, V, m, n)` verifies lengths of `I`, `J`, `V` are equal and compatible with
+  `eltype(I)` and `m`, `n`.
 
 #### Dates
 
-* Fixed `repr` such that it displays `DateTime` as it would be entered in Julia ([#30200]).
+* `DateTime` and `Time` formatting/parsing now supports 12-hour clocks with AM/PM via `I` and `p` codes, similar to `strftime` ([#32308]).
+* Fixed `repr` such that it displays `Time` as it would be entered in Julia ([#32103]).
+
+#### Sockets
+
+* `getipaddrs` returns IP addresses in the order provided by libuv ([#32260]).
+* `getipaddr` prefers to return the first `IPv4` interface address provided by libuv ([#32260]).
+
+#### Statistics
+
+* `mean` now accepts both a function argument and a `dims` keyword ([#31576]).
+
+#### Sockets
+
+* Added `InetAddr` constructor from `AbstractString`, representing IP address, and `Integer`,
+  representing port number ([#31459]).
 
 #### Miscellaneous
 
-* Since environment variables on Windows are case-insensitive, `ENV` now converts its keys
-  to uppercase for display, iteration, and copying ([#30593]).
-
-External dependencies
----------------------
-
-* libgit2 has been updated to v0.27.7 ([#30584]).
-* OpenBLAS has been updated to v0.3.5 ([#30583]).
-* MbedTLS has been updated to v2.16.0 ([#30618]).
-* libunwind has been updated to v1.3.1 ([#30724]).
+* `foldr` and `mapfoldr` now work on any iterator that supports `Iterators.reverse`, not just arrays ([#31781]).
 
 Deprecated or removed
 ---------------------
 
+* `@spawn expr` from the `Distributed` standard library should be replaced with `@spawnat :any expr` ([#32600]).
+
+External dependencies
+---------------------
+
+Tooling Improvements
+---------------------
+
+* The `ClangSA.jl` static analysis package has been imported, which makes use of
+  the clang static analyzer to validate GC invariants in Julia's C code. The analysis
+  may be run using `make -C src analyzegc`.
 
 <!--- generated by NEWS-update.jl: -->
-[#29998]: https://github.com/JuliaLang/julia/issues/29998
-[#30061]: https://github.com/JuliaLang/julia/issues/30061
-[#30200]: https://github.com/JuliaLang/julia/issues/30200
-[#30323]: https://github.com/JuliaLang/julia/issues/30323
-[#30349]: https://github.com/JuliaLang/julia/issues/30349
+[#23422]: https://github.com/JuliaLang/julia/issues/23422
+[#24353]: https://github.com/JuliaLang/julia/issues/24353
+[#31066]: https://github.com/JuliaLang/julia/issues/31066
+[#31459]: https://github.com/JuliaLang/julia/issues/31459
+[#31576]: https://github.com/JuliaLang/julia/issues/31576
+[#31654]: https://github.com/JuliaLang/julia/issues/31654
+[#31664]: https://github.com/JuliaLang/julia/issues/31664
+[#31781]: https://github.com/JuliaLang/julia/issues/31781
+[#31834]: https://github.com/JuliaLang/julia/issues/31834
+[#31838]: https://github.com/JuliaLang/julia/issues/31838
+[#31853]: https://github.com/JuliaLang/julia/issues/31853
+[#31916]: https://github.com/JuliaLang/julia/issues/31916
+[#31981]: https://github.com/JuliaLang/julia/issues/31981
+[#32002]: https://github.com/JuliaLang/julia/issues/32002
+[#32103]: https://github.com/JuliaLang/julia/issues/32103
+[#32122]: https://github.com/JuliaLang/julia/issues/32122
+[#32133]: https://github.com/JuliaLang/julia/issues/32133
+[#32174]: https://github.com/JuliaLang/julia/issues/32174
+[#32260]: https://github.com/JuliaLang/julia/issues/32260
+[#32300]: https://github.com/JuliaLang/julia/issues/32300
+[#32308]: https://github.com/JuliaLang/julia/issues/32308
+[#32309]: https://github.com/JuliaLang/julia/issues/32309
+[#32407]: https://github.com/JuliaLang/julia/issues/32407
+[#32421]: https://github.com/JuliaLang/julia/issues/32421
+[#32534]: https://github.com/JuliaLang/julia/issues/32534
+[#32600]: https://github.com/JuliaLang/julia/issues/32600
