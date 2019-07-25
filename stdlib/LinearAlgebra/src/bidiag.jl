@@ -640,7 +640,7 @@ function *(A::Bidiagonal, B::Bidiagonal)
     end
 end
 
-function *(A::Matrix, B::BiTriSym)
+function *(A::StridedMatrix, B::BiTriSym)
     TS = promote_op(matprod, eltype(A), eltype(B))
     A_mul_B_td!(similar(A, TS), A, B)
 end
