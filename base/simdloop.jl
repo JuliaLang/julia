@@ -15,7 +15,8 @@ end
 #       symbol '=' range
 #       symbol 'in' range
 function parse_iteration_space(x)
-    (isa(x, Expr) && (x.head == :(=) || x.head == :in)) || throw(SimdError("= or in expected"))
+    (isa(x, Expr) && (x.head == :(=) || x.head == :in)) ||
+    throw(SimdError("= or in expected"))
     length(x.args) == 2 || throw(SimdError("simd range syntax is wrong"))
     isa(x.args[1], Symbol) || throw(SimdError("simd loop index must be a symbol"))
     x.args # symbol, range
@@ -59,7 +60,7 @@ function compile(x, ivdep)
     length(x.args) == 2 || throw(SimdError("1D for loop expected"))
     check_body!(x)
 
-    var,range = parse_iteration_space(x.args[1])
+    var, range = parse_iteration_space(x.args[1])
     r = gensym("r") # Range value
     j = gensym("i") # Iteration variable for outer loop
     n = gensym("n") # Trip count for inner loop
@@ -68,15 +69,15 @@ function compile(x, ivdep)
         # Evaluate range value once, to enhance type and data flow analysis by optimizers.
         let $r = $range
             for $j in Base.simd_outer_range($r)
-                let $n = Base.simd_inner_length($r,$j)
+                let $n = Base.simd_inner_length($r, $j)
                     if zero($n) < $n
                         # Lower loop in way that seems to work best for LLVM 3.3 vectorizer.
                         let $i = zero($n)
                             while $i < $n
-                                local $var = Base.simd_index($r,$j,$i)
-                                $(x.args[2])        # Body of loop
+                                local $var = Base.simd_index($r, $j, $i)
+                                $(x.args[2]) # Body of loop
                                 $i += 1
-                                $(Expr(:loopinfo, Symbol("julia.simdloop"), ivdep))  # Mark loop as SIMD loop
+                                $(Expr(:loopinfo, Symbol("julia.simdloop"), ivdep)) # Mark loop as SIMD loop
                             end
                         end
                     end
@@ -136,4 +137,4 @@ macro simd(ivdep, forloop)
     end
 end
 
-end # module SimdLoop
+end

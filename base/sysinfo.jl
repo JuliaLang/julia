@@ -2,8 +2,8 @@
 
 module Sys
 @doc """
-Provide methods for retrieving information about hardware and the operating system.
-""" Sys
+     Provide methods for retrieving information about hardware and the operating system.
+     """ Sys
 
 export BINDIR,
        STDLIB,
@@ -47,7 +47,7 @@ A string containing the full path to the directory containing the `julia` execut
     Sys.STDLIB
 
 A string containing the full path to the directory containing the `stdlib` packages.
-"""
+""" # for bootstrap
 STDLIB = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
 
 # helper to avoid triggering precompile warnings
@@ -61,7 +61,7 @@ CPU cores, for example, in the presence of
 [hyper-threading](https://en.wikipedia.org/wiki/Hyper-threading).
 
 See Hwloc.jl or CpuId.jl for extended information, including number of physical cores.
-"""
+""" # for bootstrap, changed on startup
 CPU_THREADS = 1 # for bootstrap, changed on startup
 
 """
@@ -102,7 +102,10 @@ function __init__()
         env_threads = tryparse(Int, env_threads)
         if !(env_threads isa Int && env_threads > 0)
             env_threads = Int(ccall(:jl_cpu_threads, Int32, ()))
-            Core.print(Core.stderr, "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $env_threads.\n")
+            Core.print(
+                Core.stderr,
+                "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $env_threads.\n"
+            )
         end
         env_threads
     else
@@ -134,28 +137,59 @@ mutable struct CPUinfo
     cpu_times!sys::UInt64
     cpu_times!idle::UInt64
     cpu_times!irq::UInt64
-    CPUinfo(model,speed,u,n,s,id,ir)=new(model,speed,u,n,s,id,ir)
+    CPUinfo(model, speed, u, n, s, id, ir) = new(model, speed, u, n, s, id, ir)
 end
-CPUinfo(info::UV_cpu_info_t) = CPUinfo(unsafe_string(info.model), info.speed,
-    info.cpu_times!user, info.cpu_times!nice, info.cpu_times!sys,
-    info.cpu_times!idle, info.cpu_times!irq)
+CPUinfo(info::UV_cpu_info_t) =
+    CPUinfo(
+        unsafe_string(info.model),
+        info.speed,
+        info.cpu_times!user,
+        info.cpu_times!nice,
+        info.cpu_times!sys,
+        info.cpu_times!idle,
+        info.cpu_times!irq
+    )
 
-function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::AbstractString="    ")
+function _show_cpuinfo(
+    io::IO,
+    info::Sys.CPUinfo,
+    header::Bool = true,
+    prefix::AbstractString = "    "
+)
     tck = SC_CLK_TCK
     if header
         println(io, info.model, ": ")
         print(io, " "^length(prefix))
-        println(io, "    ", lpad("speed", 5), "    ", lpad("user", 9), "    ", lpad("nice", 9), "    ",
-                lpad("sys", 9), "    ", lpad("idle", 9), "    ", lpad("irq", 9))
+        println(
+            io,
+            "    ",
+            lpad("speed", 5),
+            "    ",
+            lpad("user", 9),
+            "    ",
+            lpad("nice", 9),
+            "    ",
+            lpad("sys", 9),
+            "    ",
+            lpad("idle", 9),
+            "    ",
+            lpad("irq", 9)
+        )
     end
     print(io, prefix)
     unit = tck > 0 ? " s  " : "    "
     tc = max(tck, 1)
-    d(i, unit=unit) = lpad(string(round(Int64,i)), 9) * unit
-    print(io,
-          lpad(string(info.speed), 5), " MHz  ",
-          d(info.cpu_times!user / tc), d(info.cpu_times!nice / tc), d(info.cpu_times!sys / tc),
-          d(info.cpu_times!idle / tc), d(info.cpu_times!irq / tc, tck > 0 ? " s" : "  "))
+    d(i, unit = unit) = lpad(string(round(Int64, i)), 9) * unit
+    print(
+        io,
+        lpad(string(info.speed), 5),
+        " MHz  ",
+        d(info.cpu_times!user / tc),
+        d(info.cpu_times!nice / tc),
+        d(info.cpu_times!sys / tc),
+        d(info.cpu_times!idle / tc),
+        d(info.cpu_times!irq / tc, tck > 0 ? " s" : "  ")
+    )
     if tck <= 0
         print(io, "ticks")
     end
@@ -164,7 +198,7 @@ end
 show(io::IO, info::CPUinfo) = _show_cpuinfo(io, info, true, "    ")
 
 function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
-    if j-i < 9
+    if j - i < 9
         header = true
         for x = i:j
             header || println(io)
@@ -172,7 +206,7 @@ function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
             header = false
         end
     else
-        summary = CPUinfo(cpu[i].model,0,0,0,0,0,0)
+        summary = CPUinfo(cpu[i].model, 0, 0, 0, 0, 0, 0)
         count = j - i + 1
         for x = i:j
             summary.speed += cpu[i].speed
@@ -182,18 +216,18 @@ function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
             summary.cpu_times!idle += cpu[x].cpu_times!idle
             summary.cpu_times!irq += cpu[x].cpu_times!irq
         end
-        summary.speed = div(summary.speed,count)
+        summary.speed = div(summary.speed, count)
         _show_cpuinfo(io, summary, true, "#1-$(count) ")
     end
     println(io)
 end
 
-function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
+function cpu_summary(io::IO = stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
     model = cpu[1].model
     first = 1
     for i = 2:length(cpu)
         if model != cpu[i].model
-            _cpu_summary(io, cpu, first, i-1)
+            _cpu_summary(io, cpu, first, i - 1)
             first = i
         end
     end
@@ -323,7 +357,8 @@ See documentation in [Handling Operating System Variation](@ref).
     `true` on macOS systems. To exclude macOS from a predicate, use
     `Sys.isbsd() && !Sys.isapple()`.
 """
-isbsd(os::Symbol) = (isfreebsd(os) || isopenbsd(os) || isnetbsd(os) || isdragonfly(os) || isapple(os))
+isbsd(os::Symbol) =
+    (isfreebsd(os) || isopenbsd(os) || isnetbsd(os) || isdragonfly(os) || isapple(os))
 
 """
     Sys.isfreebsd([os])
@@ -408,7 +443,18 @@ including e.g. a WebAssembly JavaScript embedding in a web browser.
 """
 isjsvm(os::Symbol) = (os === :Emscripten)
 
-for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
+for f in (
+    :isunix,
+    :islinux,
+    :isbsd,
+    :isapple,
+    :iswindows,
+    :isfreebsd,
+    :isopenbsd,
+    :isnetbsd,
+    :isdragonfly,
+    :isjsvm
+)
     @eval $f() = $(getfield(@__MODULE__, f)(KERNEL))
 end
 
@@ -512,4 +558,4 @@ function which(program_name::String)
 end
 which(program_name::AbstractString) = which(String(program_name))
 
-end # module Sys
+end

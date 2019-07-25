@@ -4,7 +4,10 @@
 # stable in certain situations (e.g. sums).
 # it does double the number of operations compared to accumulate,
 # though for cheap operations like + this does not have much impact (20%)
-function _accumulate_pairwise!(op::Op, c::AbstractVector{T}, v::AbstractVector, s, i1, n)::T where {T,Op}
+function _accumulate_pairwise!(op::Op, c::AbstractVector{T}, v::AbstractVector, s, i1, n)::T where {
+    T,
+    Op
+}
     @inbounds if n < 128
         s_ = v[i1]
         c[i1] = op(s, s_)
@@ -15,7 +18,7 @@ function _accumulate_pairwise!(op::Op, c::AbstractVector{T}, v::AbstractVector, 
     else
         n2 = n >> 1
         s_ = _accumulate_pairwise!(op, c, v, s, i1, n2)
-        s_ = op(s_, _accumulate_pairwise!(op, c, v, op(s, s_), i1+n2, n-n2))
+        s_ = op(s_, _accumulate_pairwise!(op, c, v, op(s, s_), i1 + n2, n - n2))
     end
     return s_
 end
@@ -26,9 +29,9 @@ function accumulate_pairwise!(op::Op, result::AbstractVector, v::AbstractVector)
     n = length(li)
     n == 0 && return result
     i1 = first(li)
-    @inbounds result[i1] = v1 = reduce_first(op,v[i1])
+    @inbounds result[i1] = v1 = reduce_first(op, v[i1])
     n == 1 && return result
-    _accumulate_pairwise!(op, result, v, v1, i1+1, n-1)
+    _accumulate_pairwise!(op, result, v, v1, i1 + 1, n - 1)
     return result
 end
 
@@ -44,9 +47,9 @@ end
 Cumulative sum of `A` along the dimension `dims`, storing the result in `B`. See also [`cumsum`](@ref).
 """
 cumsum!(B::AbstractArray{T}, A; dims::Integer) where {T} =
-    accumulate!(add_sum, B, A, dims=dims)
+    accumulate!(add_sum, B, A, dims = dims)
 
-function cumsum!(out::AbstractArray, v::AbstractVector; dims::Integer=1)
+function cumsum!(out::AbstractArray, v::AbstractVector; dims::Integer = 1)
     # we dispatch on the possibility of numerical stability issues
     _cumsum!(out, v, dims, ArithmeticStyle(eltype(out)))
 end
@@ -88,7 +91,7 @@ julia> cumsum(a, dims=2)
 """
 function cumsum(A::AbstractArray{T}; dims::Integer) where T
     out = similar(A, promote_op(add_sum, T, T))
-    cumsum!(out, A, dims=dims)
+    cumsum!(out, A, dims = dims)
 end
 
 """
@@ -113,7 +116,7 @@ julia> cumsum([fill(1, 2) for i in 1:3])
  [3, 3]
 ```
 """
-cumsum(x::AbstractVector) = cumsum(x, dims=1)
+cumsum(x::AbstractVector) = cumsum(x, dims = 1)
 
 
 """
@@ -123,7 +126,7 @@ Cumulative product of `A` along the dimension `dims`, storing the result in `B`.
 See also [`cumprod`](@ref).
 """
 cumprod!(B::AbstractArray{T}, A; dims::Integer) where {T} =
-    accumulate!(mul_prod, B, A, dims=dims)
+    accumulate!(mul_prod, B, A, dims = dims)
 
 """
     cumprod!(y::AbstractVector, x::AbstractVector)
@@ -131,7 +134,7 @@ cumprod!(B::AbstractArray{T}, A; dims::Integer) where {T} =
 Cumulative product of a vector `x`, storing the result in `y`.
 See also [`cumprod`](@ref).
 """
-cumprod!(y::AbstractVector, x::AbstractVector) = cumprod!(y, x, dims=1)
+cumprod!(y::AbstractVector, x::AbstractVector) = cumprod!(y, x, dims = 1)
 
 """
     cumprod(A; dims::Integer)
@@ -159,7 +162,7 @@ julia> cumprod(a, dims=2)
 ```
 """
 function cumprod(A::AbstractArray; dims::Integer)
-    return accumulate(mul_prod, A, dims=dims)
+    return accumulate(mul_prod, A, dims = dims)
 end
 
 """
@@ -184,7 +187,7 @@ julia> cumprod([fill(1//3, 2, 2) for i in 1:3])
  [4//27 4//27; 4//27 4//27]
 ```
 """
-cumprod(x::AbstractVector) = cumprod(x, dims=1)
+cumprod(x::AbstractVector) = cumprod(x, dims = 1)
 
 
 """
@@ -235,7 +238,7 @@ julia> accumulate(+, fill(1, 3, 3), dims=2)
  1  2  3
 ```
 """
-function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
+function accumulate(op, A; dims::Union{Nothing,Integer} = nothing, kw...)
     nt = kw.data
     if nt isa NamedTuple{()}
         out = similar(A, promote_op(op, eltype(A), eltype(A)))
@@ -244,7 +247,7 @@ function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
     else
         throw(ArgumentError("acccumulate does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
     end
-    accumulate!(op, out, A; dims=dims, kw...)
+    accumulate!(op, out, A; dims = dims, kw...)
 end
 
 """
@@ -289,7 +292,7 @@ julia> B
  3  -1
 ```
 """
-function accumulate!(op, B, A; dims::Union{Integer, Nothing} = nothing, kw...)
+function accumulate!(op, B, A; dims::Union{Integer,Nothing} = nothing, kw...)
     nt = kw.data
     if nt isa NamedTuple{()}
         _accumulate!(op, B, A, dims, nothing)
@@ -300,7 +303,7 @@ function accumulate!(op, B, A; dims::Union{Integer, Nothing} = nothing, kw...)
     end
 end
 
-function _accumulate!(op, B, A, dims::Nothing, init::Union{Nothing, Some})
+function _accumulate!(op, B, A, dims::Nothing, init::Union{Nothing,Some})
     throw(ArgumentError("Keyword argument dims must be provided for multidimensional arrays"))
 end
 
@@ -316,7 +319,7 @@ function _accumulate!(op, B, A::AbstractVector, dims::Nothing, init::Some)
     _accumulate1!(op, B, v1, A, 1)
 end
 
-function _accumulate!(op, B, A, dims::Integer, init::Union{Nothing, Some})
+function _accumulate!(op, B, A, dims::Integer, init::Union{Nothing,Some})
     dims > 0 || throw(ArgumentError("dims must be a positive integer"))
     inds_t = axes(A)
     axes(B) == inds_t || throw(DimensionMismatch("shape of B must match A"))
@@ -339,7 +342,7 @@ function _accumulate!(op, B, A, dims::Integer, init::Union{Nothing, Some})
             end
         end
     else
-        R1 = CartesianIndices(axes(A)[1:dims-1])   # not type-stable
+        R1 = CartesianIndices(axes(A)[1:dims-1]) # not type-stable
         R2 = CartesianIndices(axes(A)[dims+1:end])
         _accumulaten!(op, B, A, R1, inds_t[dims], R2, init) # use function barrier
     end

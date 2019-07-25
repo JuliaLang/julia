@@ -3,8 +3,19 @@
 # Various Unicode functionality from the utf8proc library
 module Unicode
 
-import Base: show, ==, hash, string, Symbol, isless, length, eltype,
-             convert, isvalid, ismalformed, isoverlong, iterate
+import Base: show,
+             ==,
+             hash,
+             string,
+             Symbol,
+             isless,
+             length,
+             eltype,
+             convert,
+             isvalid,
+             ismalformed,
+             isoverlong,
+             iterate
 
 # whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
 
@@ -47,12 +58,13 @@ julia> isvalid(Char, 0xd799)
 true
 ```
 """
-isvalid(T,value)
+isvalid(T, value)
 
-isvalid(c::AbstractChar) = !ismalformed(c) & !isoverlong(c) & ((c ≤ '\ud7ff') | ('\ue000' ≤ c) & (c ≤ '\U10ffff'))
-isvalid(::Type{<:AbstractChar}, c::Unsigned) = ((c ≤  0xd7ff ) | ( 0xe000  ≤ c) & (c ≤  0x10ffff ))
-isvalid(::Type{T}, c::Integer) where {T<:AbstractChar}  = isvalid(T, Unsigned(c))
-isvalid(::Type{<:AbstractChar}, c::AbstractChar)     = isvalid(c)
+isvalid(c::AbstractChar) =
+    !ismalformed(c) & !isoverlong(c) & ((c ≤ '\ud7ff') | ('\ue000' ≤ c) & (c ≤ '\U10ffff'))
+isvalid(::Type{<:AbstractChar}, c::Unsigned) = ((c ≤ 0xd7ff) | (0xe000 ≤ c) & (c ≤ 0x10ffff))
+isvalid(::Type{T}, c::Integer) where {T<:AbstractChar} = isvalid(T, Unsigned(c))
+isvalid(::Type{<:AbstractChar}, c::AbstractChar) = isvalid(c)
 
 # utf8 category constants
 const UTF8PROC_CATEGORY_CN = 0
@@ -122,32 +134,49 @@ const category_strings = [
     "Malformed, bad data",
 ]
 
-const UTF8PROC_STABLE    = (1<<1)
-const UTF8PROC_COMPAT    = (1<<2)
-const UTF8PROC_COMPOSE   = (1<<3)
-const UTF8PROC_DECOMPOSE = (1<<4)
-const UTF8PROC_IGNORE    = (1<<5)
-const UTF8PROC_REJECTNA  = (1<<6)
-const UTF8PROC_NLF2LS    = (1<<7)
-const UTF8PROC_NLF2PS    = (1<<8)
-const UTF8PROC_NLF2LF    = (UTF8PROC_NLF2LS | UTF8PROC_NLF2PS)
-const UTF8PROC_STRIPCC   = (1<<9)
-const UTF8PROC_CASEFOLD  = (1<<10)
-const UTF8PROC_CHARBOUND = (1<<11)
-const UTF8PROC_LUMP      = (1<<12)
-const UTF8PROC_STRIPMARK = (1<<13)
+const UTF8PROC_STABLE = (1 << 1)
+const UTF8PROC_COMPAT = (1 << 2)
+const UTF8PROC_COMPOSE = (1 << 3)
+const UTF8PROC_DECOMPOSE = (1 << 4)
+const UTF8PROC_IGNORE = (1 << 5)
+const UTF8PROC_REJECTNA = (1 << 6)
+const UTF8PROC_NLF2LS = (1 << 7)
+const UTF8PROC_NLF2PS = (1 << 8)
+const UTF8PROC_NLF2LF = (UTF8PROC_NLF2LS | UTF8PROC_NLF2PS)
+const UTF8PROC_STRIPCC = (1 << 9)
+const UTF8PROC_CASEFOLD = (1 << 10)
+const UTF8PROC_CHARBOUND = (1 << 11)
+const UTF8PROC_LUMP = (1 << 12)
+const UTF8PROC_STRIPMARK = (1 << 13)
 
 ############################################################################
 
-utf8proc_error(result) = error(unsafe_string(ccall(:utf8proc_errmsg, Cstring, (Cssize_t,), result)))
+utf8proc_error(result) =
+    error(unsafe_string(ccall(:utf8proc_errmsg, Cstring, (Cssize_t,), result)))
 
 function utf8proc_map(str::String, options::Integer)
-    nwords = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
-                   str, sizeof(str), C_NULL, 0, options)
+    nwords = ccall(
+        :utf8proc_decompose,
+        Int,
+        (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
+        str,
+        sizeof(str),
+        C_NULL,
+        0,
+        options
+    )
     nwords < 0 && utf8proc_error(nwords)
-    buffer = Base.StringVector(nwords*4)
-    nwords = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
-                   str, sizeof(str), buffer, nwords, options)
+    buffer = Base.StringVector(nwords * 4)
+    nwords = ccall(
+        :utf8proc_decompose,
+        Int,
+        (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
+        str,
+        sizeof(str),
+        buffer,
+        nwords,
+        options
+    )
     nwords < 0 && utf8proc_error(nwords)
     nbytes = ccall(:utf8proc_reencode, Int, (Ptr{UInt8}, Int, Cint), buffer, nwords, options)
     nbytes < 0 && utf8proc_error(nbytes)
@@ -159,19 +188,19 @@ utf8proc_map(s::AbstractString, flags::Integer) = utf8proc_map(String(s), flags)
 # Documented in Unicode module
 function normalize(
     s::AbstractString;
-    stable::Bool=false,
-    compat::Bool=false,
-    compose::Bool=true,
-    decompose::Bool=false,
-    stripignore::Bool=false,
-    rejectna::Bool=false,
-    newline2ls::Bool=false,
-    newline2ps::Bool=false,
-    newline2lf::Bool=false,
-    stripcc::Bool=false,
-    casefold::Bool=false,
-    lump::Bool=false,
-    stripmark::Bool=false,
+    stable::Bool = false,
+    compat::Bool = false,
+    compose::Bool = true,
+    decompose::Bool = false,
+    stripignore::Bool = false,
+    rejectna::Bool = false,
+    newline2ls::Bool = false,
+    newline2ps::Bool = false,
+    newline2lf::Bool = false,
+    stripcc::Bool = false,
+    casefold::Bool = false,
+    lump::Bool = false,
+    stripmark::Bool = false,
 )
     flags = 0
     stable && (flags = flags | UTF8PROC_STABLE)
@@ -198,13 +227,14 @@ function normalize(
 end
 
 function normalize(s::AbstractString, nf::Symbol)
-    utf8proc_map(s, nf == :NFC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE) :
-                    nf == :NFD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE) :
-                    nf == :NFKC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE
-                                   | UTF8PROC_COMPAT) :
-                    nf == :NFKD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE
-                                   | UTF8PROC_COMPAT) :
-                    throw(ArgumentError(":$nf is not one of :NFC, :NFD, :NFKC, :NFKD")))
+    utf8proc_map(
+        s,
+        nf == :NFC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE) :
+        nf == :NFD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE) :
+        nf == :NFKC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE | UTF8PROC_COMPAT) :
+        nf == :NFKD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE | UTF8PROC_COMPAT) :
+        throw(ArgumentError(":$nf is not one of :NFC, :NFD, :NFKC, :NFKD"))
+    )
 end
 
 ############################################################################
@@ -240,13 +270,16 @@ julia> textwidth("March")
 5
 ```
 """
-textwidth(s::AbstractString) = mapreduce(textwidth, +, s; init=0)
+textwidth(s::AbstractString) = mapreduce(textwidth, +, s; init = 0)
 
-lowercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) :
+lowercase(c::T) where {T<:AbstractChar} =
+    isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) :
     T(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))
-uppercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
+uppercase(c::T) where {T<:AbstractChar} =
+    isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
     T(ccall(:utf8proc_toupper, UInt32, (UInt32,), c))
-titlecase(c::T) where {T<:AbstractChar} = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
+titlecase(c::T) where {T<:AbstractChar} =
+    isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
     T(ccall(:utf8proc_totitle, UInt32, (UInt32,), c))
 
 ############################################################################
@@ -328,8 +361,7 @@ Tests whether a character is cased, i.e. is lower-, upper- or title-cased.
 function iscased(c::AbstractChar)
     cat = category_code(c)
     return cat == UTF8PROC_CATEGORY_LU ||
-           cat == UTF8PROC_CATEGORY_LT ||
-           cat == UTF8PROC_CATEGORY_LL
+           cat == UTF8PROC_CATEGORY_LT || cat == UTF8PROC_CATEGORY_LL
 end
 
 
@@ -464,8 +496,9 @@ true
 ```
 """
 @inline isspace(c::AbstractChar) =
-    c == ' ' || '\t' <= c <= '\r' || c == '\u85' ||
-    '\ua0' <= c && category_code(c) == UTF8PROC_CATEGORY_ZS
+    c == ' ' ||
+    '\t' <= c <= '\r' ||
+    c == '\u85' || '\ua0' <= c && category_code(c) == UTF8PROC_CATEGORY_ZS
 
 """
     isprint(c::AbstractChar) -> Bool
@@ -500,7 +533,7 @@ julia> isxdigit('x')
 false
 ```
 """
-isxdigit(c::AbstractChar) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
+isxdigit(c::AbstractChar) = '0' <= c <= '9' || 'a' <= c <= 'f' || 'A' <= c <= 'F'
 
 ## uppercase, lowercase, and titlecase transformations ##
 
@@ -554,7 +587,7 @@ julia> titlecase("a-a b-b", wordsep = c->c==' ')
 "A-a B-b"
 ```
 """
-function titlecase(s::AbstractString; wordsep::Function = !iscased, strict::Bool=true)
+function titlecase(s::AbstractString; wordsep::Function = !iscased, strict::Bool = true)
     startword = true
     b = IOBuffer()
     for c in s
@@ -589,8 +622,7 @@ function uppercasefirst(s::AbstractString)
     isempty(s) && return ""
     c = s[1]
     c′ = titlecase(c)
-    c == c′ ? convert(String, s) :
-    string(c′, SubString(s, nextind(s, 1)))
+    c == c′ ? convert(String, s) : string(c′, SubString(s, nextind(s, 1)))
 end
 
 """
@@ -611,16 +643,15 @@ function lowercasefirst(s::AbstractString)
     isempty(s) && return ""
     c = s[1]
     c′ = lowercase(c)
-    c == c′ ? convert(String, s) :
-    string(c′, SubString(s, nextind(s, 1)))
+    c == c′ ? convert(String, s) : string(c′, SubString(s, nextind(s, 1)))
 end
 
 ############################################################################
 # iterators for grapheme segmentation
 
 isgraphemebreak(c1::AbstractChar, c2::AbstractChar) =
-    ismalformed(c1) || ismalformed(c2) ||
-    ccall(:utf8proc_grapheme_break, Bool, (UInt32, UInt32), c1, c2)
+    ismalformed(c1) ||
+    ismalformed(c2) || ccall(:utf8proc_grapheme_break, Bool, (UInt32, UInt32), c1, c2)
 
 # Stateful grapheme break required by Unicode-9 rules: the string
 # must be processed in sequence, with state initialized to Ref{Int32}(0).
@@ -630,8 +661,14 @@ function isgraphemebreak!(state::Ref{Int32}, c1::AbstractChar, c2::AbstractChar)
         state[] = 0
         return true
     end
-    ccall(:utf8proc_grapheme_break_stateful, Bool,
-          (UInt32, UInt32, Ref{Int32}), c1, c2, state)
+    ccall(
+        :utf8proc_grapheme_break_stateful,
+        Bool,
+        (UInt32, UInt32, Ref{Int32}),
+        c1,
+        c2,
+        state
+    )
 end
 
 struct GraphemeIterator{S<:AbstractString}
@@ -655,7 +692,7 @@ function length(g::GraphemeIterator{S}) where {S}
     return n
 end
 
-function iterate(g::GraphemeIterator, i_=(Int32(0),firstindex(g.s)))
+function iterate(g::GraphemeIterator, i_ = (Int32(0), firstindex(g.s)))
     s = g.s
     statei, i = i_
     state = Ref{Int32}(statei)
@@ -677,8 +714,9 @@ end
 hash(g::GraphemeIterator, h::UInt) = hash(g.s, h)
 isless(g1::GraphemeIterator, g2::GraphemeIterator) = isless(g1.s, g2.s)
 
-show(io::IO, g::GraphemeIterator{S}) where {S} = print(io, "length-$(length(g)) GraphemeIterator{$S} for \"$(g.s)\"")
+show(io::IO, g::GraphemeIterator{S}) where {S} =
+    print(io, "length-$(length(g)) GraphemeIterator{$S} for \"$(g.s)\"")
 
 ############################################################################
 
-end # module
+end

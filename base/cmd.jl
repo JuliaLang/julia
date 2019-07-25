@@ -13,28 +13,27 @@ struct Cmd <: AbstractCmd
     flags::UInt32 # libuv process flags
     env::Union{Array{String},Nothing}
     dir::String
-    Cmd(exec::Vector{String}) =
-        new(exec, false, 0x00, nothing, "")
+    Cmd(exec::Vector{String}) = new(exec, false, 0x00, nothing, "")
     Cmd(cmd::Cmd, ignorestatus, flags, env, dir) =
-        new(cmd.exec, ignorestatus, flags, env,
-            dir === cmd.dir ? dir : cstr(dir))
-    function Cmd(cmd::Cmd; ignorestatus::Bool=cmd.ignorestatus, env=cmd.env, dir::AbstractString=cmd.dir,
-                 detach::Bool = 0 != cmd.flags & UV_PROCESS_DETACHED,
-                 windows_verbatim::Bool = 0 != cmd.flags & UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS,
-                 windows_hide::Bool = 0 != cmd.flags & UV_PROCESS_WINDOWS_HIDE)
+        new(cmd.exec, ignorestatus, flags, env, dir === cmd.dir ? dir : cstr(dir))
+    function Cmd(
+        cmd::Cmd;
+        ignorestatus::Bool = cmd.ignorestatus,
+        env = cmd.env,
+        dir::AbstractString = cmd.dir,
+        detach::Bool = 0 != cmd.flags & UV_PROCESS_DETACHED,
+        windows_verbatim::Bool = 0 != cmd.flags & UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS,
+        windows_hide::Bool = 0 != cmd.flags & UV_PROCESS_WINDOWS_HIDE
+    )
         flags = detach * UV_PROCESS_DETACHED |
                 windows_verbatim * UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS |
                 windows_hide * UV_PROCESS_WINDOWS_HIDE
-        new(cmd.exec, ignorestatus, flags, byteenv(env),
-            dir === cmd.dir ? dir : cstr(dir))
+        new(cmd.exec, ignorestatus, flags, byteenv(env), dir === cmd.dir ? dir : cstr(dir))
     end
 end
 
 has_nondefault_cmd_flags(c::Cmd) =
-    c.ignorestatus ||
-    c.flags != 0x00 ||
-    c.env !== nothing ||
-    c.dir !== ""
+    c.ignorestatus || c.flags != 0x00 || c.env !== nothing || c.dir !== ""
 
 """
     Cmd(cmd::Cmd; ignorestatus, detach, windows_verbatim, windows_hide, env, dir)
@@ -73,9 +72,12 @@ to create a `Cmd` object in the first place, one uses backticks, e.g.
 """
 Cmd
 
-hash(x::Cmd, h::UInt) = hash(x.exec, hash(x.env, hash(x.ignorestatus, hash(x.dir, hash(x.flags, h)))))
-==(x::Cmd, y::Cmd) = x.exec == y.exec && x.env == y.env && x.ignorestatus == y.ignorestatus &&
-                     x.dir == y.dir && isequal(x.flags, y.flags)
+hash(x::Cmd, h::UInt) =
+    hash(x.exec, hash(x.env, hash(x.ignorestatus, hash(x.dir, hash(x.flags, h)))))
+==(x::Cmd, y::Cmd) =
+    x.exec == y.exec &&
+    x.env == y.env &&
+    x.ignorestatus == y.ignorestatus && x.dir == y.dir && isequal(x.flags, y.flags)
 
 struct OrCmds <: AbstractCmd
     a::AbstractCmd
@@ -98,23 +100,29 @@ end
 hash(x::AndCmds, h::UInt) = hash(x.a, hash(x.b, h))
 ==(x::AndCmds, y::AndCmds) = x.a == y.a && x.b == y.b
 
-shell_escape(cmd::Cmd; special::AbstractString="") =
-    shell_escape(cmd.exec..., special=special)
-shell_escape_posixly(cmd::Cmd) =
-    shell_escape_posixly(cmd.exec...)
+shell_escape(cmd::Cmd; special::AbstractString = "") =
+    shell_escape(cmd.exec..., special = special)
+shell_escape_posixly(cmd::Cmd) = shell_escape_posixly(cmd.exec...)
 
 function show(io::IO, cmd::Cmd)
     print_env = cmd.env !== nothing
     print_dir = !isempty(cmd.dir)
     (print_env || print_dir) && print(io, "setenv(")
     print(io, '`')
-    join(io, map(cmd.exec) do arg
-        replace(sprint(context=io) do io
-            with_output_color(:underline, io) do io
-                print_shell_word(io, arg, shell_special)
-            end
-        end, '`' => "\\`")
-    end, ' ')
+    join(
+        io,
+        map(cmd.exec) do arg
+            replace(
+                sprint(context = io) do io
+                    with_output_color(:underline, io) do io
+                        print_shell_word(io, arg, shell_special)
+                    end
+                end,
+                '`' => "\\`"
+            )
+        end,
+        ' '
+    )
     print(io, '`')
     print_env && (print(io, ","); show(io, cmd.env))
     print_dir && (print(io, "; dir="); show(io, cmd.dir))
@@ -137,17 +145,18 @@ function show(io::IO, cmds::AndCmds)
     show(io, cmds.b)
 end
 
-const STDIN_NO  = 0
+const STDIN_NO = 0
 const STDOUT_NO = 1
 const STDERR_NO = 2
 
 struct FileRedirect
     filename::String
     append::Bool
-    FileRedirect(filename::AbstractString, append::Bool) = FileRedirect(convert(String, filename), append)
+    FileRedirect(filename::AbstractString, append::Bool) =
+        FileRedirect(convert(String, filename), append)
     function FileRedirect(filename::String, append::Bool)
         if lowercase(filename) == (@static Sys.iswindows() ? "nul" : "/dev/null")
-            @warn "For portability use devnull instead of a file redirect" maxlog=1
+            @warn "For portability use devnull instead of a file redirect" maxlog = 1
         end
         return new(filename, append)
     end
@@ -161,8 +170,8 @@ if OS_HANDLE !== RawFD
     rawhandle(x::RawFD) = Libc._get_osfhandle(x)
 end
 
-const Redirectable = Union{IO, FileRedirect, RawFD, OS_HANDLE}
-const StdIOSet = NTuple{3, Redirectable}
+const Redirectable = Union{IO,FileRedirect,RawFD,OS_HANDLE}
+const StdIOSet = NTuple{3,Redirectable}
 
 struct CmdRedirect <: AbstractCmd
     cmd::AbstractCmd
@@ -170,7 +179,8 @@ struct CmdRedirect <: AbstractCmd
     stream_no::Int
     readable::Bool
 end
-CmdRedirect(cmd, handle, stream_no) = CmdRedirect(cmd, handle, stream_no, stream_no == STDIN_NO)
+CmdRedirect(cmd, handle, stream_no) =
+    CmdRedirect(cmd, handle, stream_no, stream_no == STDIN_NO)
 
 function show(io::IO, cr::CmdRedirect)
     print(io, "pipeline(")
@@ -195,7 +205,7 @@ end
 
 Mark a command object so that running it will not throw an error if the result code is non-zero.
 """
-ignorestatus(cmd::Cmd) = Cmd(cmd, ignorestatus=true)
+ignorestatus(cmd::Cmd) = Cmd(cmd, ignorestatus = true)
 ignorestatus(cmd::Union{OrCmds,AndCmds}) =
     typeof(cmd)(ignorestatus(cmd.a), ignorestatus(cmd.b))
 
@@ -204,7 +214,7 @@ ignorestatus(cmd::Union{OrCmds,AndCmds}) =
 
 Mark a command object so that it will be run in a new process group, allowing it to outlive the julia process, and not have Ctrl-C interrupts passed to it.
 """
-detach(cmd::Cmd) = Cmd(cmd; detach=true)
+detach(cmd::Cmd) = Cmd(cmd; detach = true)
 
 # like String(s), but throw an error if s contains NUL, since
 # libuv requires NUL-terminated strings
@@ -216,13 +226,13 @@ function cstr(s)
 end
 
 # convert various env representations into an array of "key=val" strings
-byteenv(env::AbstractArray{<:AbstractString}) =
-    String[cstr(x) for x in env]
-byteenv(env::AbstractDict) =
-    String[cstr(string(k)*"="*string(v)) for (k,v) in env]
+byteenv(env::AbstractArray{<:AbstractString}) = String[cstr(x) for x in env]
+byteenv(env::AbstractDict) = String[cstr(string(k) * "=" * string(v)) for (k, v) in env]
 byteenv(env::Nothing) = nothing
-byteenv(env::Union{AbstractVector{Pair{T}}, Tuple{Vararg{Pair{T}}}}) where {T<:AbstractString} =
-    String[cstr(k*"="*string(v)) for (k,v) in env]
+byteenv(env::Union{
+    AbstractVector{Pair{T}},
+    Tuple{Vararg{Pair{T}}}
+}) where {T<:AbstractString} = String[cstr(k * "=" * string(v)) for (k, v) in env]
 
 """
     setenv(command::Cmd, env; dir="")
@@ -235,10 +245,9 @@ use `withenv`.
 
 The `dir` keyword argument can be used to specify a working directory for the command.
 """
-setenv(cmd::Cmd, env; dir="") = Cmd(cmd; env=byteenv(env), dir=dir)
-setenv(cmd::Cmd, env::Pair{<:AbstractString}...; dir="") =
-    setenv(cmd, env; dir=dir)
-setenv(cmd::Cmd; dir="") = Cmd(cmd; dir=dir)
+setenv(cmd::Cmd, env; dir = "") = Cmd(cmd; env = byteenv(env), dir = dir)
+setenv(cmd::Cmd, env::Pair{<:AbstractString}...; dir = "") = setenv(cmd, env; dir = dir)
+setenv(cmd::Cmd; dir = "") = Cmd(cmd; dir = dir)
 
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)
 redir_out(src::AbstractCmd, dest::AbstractCmd) = OrCmds(src, dest)
@@ -250,11 +259,16 @@ redir_out(src::AbstractCmd, dest::Redirectable) = CmdRedirect(src, dest, STDOUT_
 redir_err(src::AbstractCmd, dest::Redirectable) = CmdRedirect(src, dest, STDERR_NO)
 
 # File redirects
-redir_out(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, false), STDOUT_NO)
-redir_out(src::AbstractString, dest::AbstractCmd) = CmdRedirect(dest, FileRedirect(src, false), STDIN_NO)
-redir_err(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, false), STDERR_NO)
-redir_out_append(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, true), STDOUT_NO)
-redir_err_append(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, true), STDERR_NO)
+redir_out(src::AbstractCmd, dest::AbstractString) =
+    CmdRedirect(src, FileRedirect(dest, false), STDOUT_NO)
+redir_out(src::AbstractString, dest::AbstractCmd) =
+    CmdRedirect(dest, FileRedirect(src, false), STDIN_NO)
+redir_err(src::AbstractCmd, dest::AbstractString) =
+    CmdRedirect(src, FileRedirect(dest, false), STDERR_NO)
+redir_out_append(src::AbstractCmd, dest::AbstractString) =
+    CmdRedirect(src, FileRedirect(dest, true), STDOUT_NO)
+redir_err_append(src::AbstractCmd, dest::AbstractString) =
+    CmdRedirect(src, FileRedirect(dest, true), STDERR_NO)
 
 """
     pipeline(command; stdin, stdout, stderr, append=false)
@@ -272,7 +286,10 @@ run(pipeline(`dothings`, stdout="out.txt", stderr="errs.txt"))
 run(pipeline(`update`, stdout="log.txt", append=true))
 ```
 """
-function pipeline(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, append::Bool=false)
+function pipeline(
+    cmd::AbstractCmd;
+    stdin = nothing, stdout = nothing, stderr = nothing, append::Bool = false
+)
     if append && stdout === nothing && stderr === nothing
         throw(ArgumentError("append set to true, but no output redirections specified"))
     end
@@ -288,8 +305,9 @@ function pipeline(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothin
     return cmd
 end
 
-pipeline(cmd::AbstractCmd, dest) = pipeline(cmd, stdout=dest)
-pipeline(src::Union{Redirectable,AbstractString}, cmd::AbstractCmd) = pipeline(cmd, stdin=src)
+pipeline(cmd::AbstractCmd, dest) = pipeline(cmd, stdout = dest)
+pipeline(src::Union{Redirectable,AbstractString}, cmd::AbstractCmd) =
+    pipeline(cmd, stdin = src)
 
 """
     pipeline(from, to, ...)
@@ -340,7 +358,7 @@ function arg_gen(head, tail...)
     tail = arg_gen(tail...)
     vals = String[]
     for h = head, t = tail
-        push!(vals, cstr(string(h,t)))
+        push!(vals, cstr(string(h, t)))
     end
     return vals
 end
@@ -380,5 +398,5 @@ Process(`echo 1`, ProcessExited(0))
 ```
 """
 macro cmd(str)
-    return :(cmd_gen($(esc(shell_parse(str, special=shell_special)[1]))))
+    return :(cmd_gen($(esc(shell_parse(str, special = shell_special)[1]))))
 end

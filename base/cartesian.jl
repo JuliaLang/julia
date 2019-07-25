@@ -41,7 +41,7 @@ end
 
 function _nloops(N::Int, itersym::Symbol, arraysym::Symbol, args::Expr...)
     @gensym d
-    _nloops(N, itersym, :($d->Base.axes($arraysym, $d)), args...)
+    _nloops(N, itersym, :($d -> Base.axes($arraysym, $d)), args...)
 end
 
 function _nloops(N::Int, itersym::Symbol, rangeexpr::Expr, args::Expr...)
@@ -82,7 +82,7 @@ julia> @macroexpand Base.Cartesian.@nref 3 A i
 ```
 """
 macro nref(N::Int, A::Symbol, ex)
-    vars = Any[ inlineanonymous(ex,i) for i = 1:N ]
+    vars = Any[inlineanonymous(ex, i) for i = 1:N]
     Expr(:escape, Expr(:ref, A, vars...))
 end
 
@@ -104,7 +104,7 @@ while `@ncall 2 func a b i->c[i]` yields
 macro ncall(N::Int, f, args...)
     pre = args[1:end-1]
     ex = args[end]
-    vars = Any[ inlineanonymous(ex,i) for i = 1:N ]
+    vars = Any[inlineanonymous(ex, i) for i = 1:N]
     Expr(:escape, Expr(:call, f, pre..., vars...))
 end
 
@@ -125,7 +125,7 @@ end
 ```
 """
 macro nexprs(N::Int, ex::Expr)
-    exs = Any[ inlineanonymous(ex,i) for i = 1:N ]
+    exs = Any[inlineanonymous(ex, i) for i = 1:N]
     Expr(:escape, Expr(:block, exs...))
 end
 
@@ -148,12 +148,12 @@ while `@nextract 3 x d->y[2d-1]` yields
 
 """
 macro nextract(N::Int, esym::Symbol, isym::Symbol)
-    aexprs = Any[ Expr(:escape, Expr(:(=), inlineanonymous(esym, i), :(($isym)[$i]))) for i = 1:N ]
+    aexprs = Any[Expr(:escape, Expr(:(=), inlineanonymous(esym, i), :(($isym)[$i]))) for i = 1:N]
     Expr(:block, aexprs...)
 end
 
 macro nextract(N::Int, esym::Symbol, ex::Expr)
-    aexprs = Any[ Expr(:escape, Expr(:(=), inlineanonymous(esym, i), inlineanonymous(ex,i))) for i = 1:N ]
+    aexprs = Any[Expr(:escape, Expr(:(=), inlineanonymous(esym, i), inlineanonymous(ex, i))) for i = 1:N]
     Expr(:block, aexprs...)
 end
 
@@ -170,7 +170,7 @@ macro nall(N::Int, criterion::Expr)
     if criterion.head != :->
         throw(ArgumentError("second argument must be an anonymous function expression yielding the criterion"))
     end
-    conds = Any[ Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N ]
+    conds = Any[Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N]
     Expr(:&&, conds...)
 end
 
@@ -186,7 +186,7 @@ macro nany(N::Int, criterion::Expr)
     if criterion.head != :->
         error("Second argument must be an anonymous function expression yielding the criterion")
     end
-    conds = Any[ Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N ]
+    conds = Any[Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N]
     Expr(:||, conds...)
 end
 
@@ -197,7 +197,7 @@ Generates an `N`-tuple. `@ntuple 2 i` would generate `(i_1, i_2)`, and `@ntuple 
 would generate `(2,3)`.
 """
 macro ntuple(N::Int, ex)
-    vars = Any[ inlineanonymous(ex,i) for i = 1:N ]
+    vars = Any[inlineanonymous(ex, i) for i = 1:N]
     Expr(:escape, Expr(:tuple, vars...))
 end
 
@@ -223,8 +223,13 @@ macro nif(N, condition, operation...)
     # Handle the final "else"
     ex = esc(inlineanonymous(length(operation) > 1 ? operation[2] : operation[1], N))
     # Make the nested if statements
-    for i = N-1:-1:1
-        ex = Expr(:if, esc(inlineanonymous(condition,i)), esc(inlineanonymous(operation[1],i)), ex)
+    for i = N - 1:-1:1
+        ex = Expr(
+            :if,
+            esc(inlineanonymous(condition, i)),
+            esc(inlineanonymous(operation[1], i)),
+            ex
+        )
     end
     ex
 end
@@ -247,7 +252,7 @@ function inlineanonymous(ex::Expr, val)
 end
 
 # Given :i and 3, this generates :i_3
-inlineanonymous(base::Symbol, ext) = Symbol(base,'_',ext)
+inlineanonymous(base::Symbol, ext) = Symbol(base, '_', ext)
 
 # Replace a symbol by a value or a "coded" symbol
 # E.g., for d = 3,
@@ -313,10 +318,11 @@ end
 
 function lreplace!(ex::Expr, r::LReplace)
     # Curly-brace notation, which acts like parentheses
-    if ex.head == :curly && length(ex.args) == 2 && isa(ex.args[1], Symbol) && endswith(string(ex.args[1]), "_")
+    if ex.head == :curly &&
+       length(ex.args) == 2 && isa(ex.args[1], Symbol) && endswith(string(ex.args[1]), "_")
         excurly = exprresolve(lreplace!(ex.args[2], r))
         if isa(excurly, Number)
-            return Symbol(ex.args[1],excurly)
+            return Symbol(ex.args[1], excurly)
         else
             ex.args[2] = excurly
             return ex
@@ -347,13 +353,26 @@ end
 
 ## Resolve expressions at parsing time ##
 
-const exprresolve_arith_dict = Dict{Symbol,Function}(:+ => +,
-    :- => -, :* => *, :/ => /, :^ => ^, :div => div)
-const exprresolve_cond_dict = Dict{Symbol,Function}(:(==) => ==,
-    :(<) => <, :(>) => >, :(<=) => <=, :(>=) => >=)
+const exprresolve_arith_dict = Dict{Symbol,Function}(
+    :+ => +,
+    :- => -,
+    :* => *,
+    :/ => /,
+    :^ => ^,
+    :div => div
+)
+const exprresolve_cond_dict = Dict{Symbol,Function}(
+    :(==) => ==,
+    :(<) => <,
+    :(>) => >,
+    :(<=) => <=,
+    :(>=) => >=
+)
 
 function exprresolve_arith(ex::Expr)
-    if ex.head == :call && haskey(exprresolve_arith_dict, ex.args[1]) && all([isa(ex.args[i], Number) for i = 2:length(ex.args)])
+    if ex.head == :call &&
+       haskey(exprresolve_arith_dict, ex.args[1]) &&
+       all([isa(ex.args[i], Number) for i = 2:length(ex.args)])
         return true, exprresolve_arith_dict[ex.args[1]](ex.args[2:end]...)
     end
     false, 0
@@ -362,7 +381,9 @@ exprresolve_arith(arg) = false, 0
 
 exprresolve_conditional(b::Bool) = true, b
 function exprresolve_conditional(ex::Expr)
-    if ex.head == :call && ex.args[1] ∈ keys(exprresolve_cond_dict) && isa(ex.args[2], Number) && isa(ex.args[3], Number)
+    if ex.head == :call &&
+       ex.args[1] ∈ keys(exprresolve_cond_dict) &&
+       isa(ex.args[2], Number) && isa(ex.args[3], Number)
         return true, exprresolve_cond_dict[ex.args[1]](ex.args[2], ex.args[3])
     end
     false, false
@@ -378,7 +399,8 @@ function exprresolve(ex::Expr)
     can_eval, result = exprresolve_arith(ex)
     if can_eval
         return result
-    elseif ex.head == :call && (ex.args[1] == :+ || ex.args[1] == :-) && length(ex.args) == 3 && ex.args[3] == 0
+    elseif ex.head == :call &&
+           (ex.args[1] == :+ || ex.args[1] == :-) && length(ex.args) == 3 && ex.args[3] == 0
         # simplify x+0 and x-0
         return ex.args[2]
     end

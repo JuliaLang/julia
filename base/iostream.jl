@@ -17,11 +17,12 @@ mutable struct IOStream <: IO
     mark::Int64
     lock::ReentrantLock
 
-    IOStream(name::AbstractString, buf::Array{UInt8,1}) = new(pointer(buf), buf, name, -1, ReentrantLock())
+    IOStream(name::AbstractString, buf::Array{UInt8,1}) =
+        new(pointer(buf), buf, name, -1, ReentrantLock())
 end
 
 function IOStream(name::AbstractString, finalize::Bool)
-    buf = zeros(UInt8,sizeof_ios_t)
+    buf = zeros(UInt8, sizeof_ios_t)
     x = IOStream(name, buf)
     if finalize
         finalizer(close, x)
@@ -50,8 +51,8 @@ function flush(s::IOStream)
     sigatomic_end()
     systemerror("flush", bad)
 end
-iswritable(s::IOStream) = ccall(:ios_get_writable, Cint, (Ptr{Cvoid},), s.ios)!=0
-isreadable(s::IOStream) = ccall(:ios_get_readable, Cint, (Ptr{Cvoid},), s.ios)!=0
+iswritable(s::IOStream) = ccall(:ios_get_writable, Cint, (Ptr{Cvoid},), s.ios) != 0
+isreadable(s::IOStream) = ccall(:ios_get_readable, Cint, (Ptr{Cvoid},), s.ios) != 0
 
 """
     truncate(file, n)
@@ -130,7 +131,7 @@ julia> read(io, Char)
 'J': ASCII/Unicode U+004a (category Lu: Letter, uppercase)
 ```
 """
-seekstart(s::IO) = seek(s,0)
+seekstart(s::IO) = seek(s, 0)
 
 """
     seekend(s)
@@ -212,13 +213,12 @@ Create an [`IOStream`](@ref) object from an integer file descriptor. If `own` is
 this object will close the underlying descriptor. By default, an `IOStream` is closed when
 it is garbage collected. `name` allows you to associate the descriptor with a named file.
 """
-function fdio(name::AbstractString, fd::Integer, own::Bool=false)
+function fdio(name::AbstractString, fd::Integer, own::Bool = false)
     s = IOStream(name)
-    ccall(:ios_fd, Ptr{Cvoid}, (Ptr{Cvoid}, Clong, Cint, Cint),
-          s.ios, fd, 0, own)
+    ccall(:ios_fd, Ptr{Cvoid}, (Ptr{Cvoid}, Clong, Cint, Cint), s.ios, fd, 0, own)
     return s
 end
-fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)
+fdio(fd::Integer, own::Bool = false) = fdio(string("<fd ", fd, ">"), fd, own)
 
 """
     open(filename::AbstractString; keywords...) -> IOStream
@@ -236,12 +236,13 @@ Open a file in a mode specified by five boolean keyword arguments:
 The default when no keywords are passed is to open files for reading only.
 Returns a stream for accessing the opened file.
 """
-function open(fname::AbstractString;
-    read     :: Union{Bool,Nothing} = nothing,
-    write    :: Union{Bool,Nothing} = nothing,
-    create   :: Union{Bool,Nothing} = nothing,
-    truncate :: Union{Bool,Nothing} = nothing,
-    append   :: Union{Bool,Nothing} = nothing,
+function open(
+    fname::AbstractString;
+    read::Union{Bool,Nothing} = nothing,
+    write::Union{Bool,Nothing} = nothing,
+    create::Union{Bool,Nothing} = nothing,
+    truncate::Union{Bool,Nothing} = nothing,
+    append::Union{Bool,Nothing} = nothing,
 )
     flags = open_flags(
         read = read,
@@ -250,13 +251,26 @@ function open(fname::AbstractString;
         truncate = truncate,
         append = append,
     )
-    s = IOStream(string("<file ",fname,">"))
-    systemerror("opening file $(repr(fname))",
-                ccall(:ios_file, Ptr{Cvoid},
-                      (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
-                      s.ios, fname, flags.read, flags.write, flags.create, flags.truncate) == C_NULL)
+    s = IOStream(string("<file ", fname, ">"))
+    systemerror(
+        "opening file $(repr(fname))",
+        ccall(
+            :ios_file,
+            Ptr{Cvoid},
+            (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
+            s.ios,
+            fname,
+            flags.read,
+            flags.write,
+            flags.create,
+            flags.truncate
+        ) == C_NULL
+    )
     if flags.append
-        systemerror("seeking to end of file $fname", ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0)
+        systemerror(
+            "seeking to end of file $fname",
+            ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0
+        )
     end
     return s
 end
@@ -307,12 +321,12 @@ julia> rm("myfile.txt")
 ```
 """
 function open(fname::AbstractString, mode::AbstractString)
-    mode == "r"  ? open(fname, read = true)                  :
-    mode == "r+" ? open(fname, read = true, write = true)    :
-    mode == "w"  ? open(fname, truncate = true)              :
+    mode == "r" ? open(fname, read = true) :
+    mode == "r+" ? open(fname, read = true, write = true) :
+    mode == "w" ? open(fname, truncate = true) :
     mode == "w+" ? open(fname, truncate = true, read = true) :
-    mode == "a"  ? open(fname, append = true)                :
-    mode == "a+" ? open(fname, append = true, read = true)   :
+    mode == "a" ? open(fname, append = true) :
+    mode == "a+" ? open(fname, append = true, read = true) :
     throw(ArgumentError("invalid open mode: $mode"))
 end
 
@@ -325,11 +339,19 @@ end
 
 function unsafe_write(s::IOStream, p::Ptr{UInt8}, nb::UInt)
     iswritable(s) || throw(ArgumentError("write failed, IOStream is not writeable"))
-    return Int(@lock_nofail s.lock ccall(:ios_write, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), s.ios, p, nb))
+    return Int(@lock_nofail s.lock ccall(
+        :ios_write,
+        Csize_t,
+        (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
+        s.ios,
+        p,
+        nb
+    ))
 end
 
 # num bytes available without blocking
-bytesavailable(s::IOStream) = @lock_nofail s.lock ccall(:jl_nb_available, Int32, (Ptr{Cvoid},), s.ios)
+bytesavailable(s::IOStream) =
+    @lock_nofail s.lock ccall(:jl_nb_available, Int32, (Ptr{Cvoid},), s.ios)
 
 function readavailable(s::IOStream)
     lock(s.lock)
@@ -353,25 +375,35 @@ function read(s::IOStream, ::Type{UInt8})
 end
 
 if ENDIAN_BOM == 0x04030201
-function read(s::IOStream, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64}})
-    n = sizeof(T)
-    lock(s.lock)
-    if ccall(:jl_ios_buffer_n, Cint, (Ptr{Cvoid}, Csize_t), s.ios, n) != 0
+    function read(
+        s::IOStream,
+        T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64}}
+    )
+        n = sizeof(T)
+        lock(s.lock)
+        if ccall(:jl_ios_buffer_n, Cint, (Ptr{Cvoid}, Csize_t), s.ios, n) != 0
+            unlock(s.lock)
+            throw(EOFError())
+        end
+        x = ccall(:jl_ios_get_nbyte_int, UInt64, (Ptr{Cvoid}, Csize_t), s.ios, n) % T
         unlock(s.lock)
-        throw(EOFError())
+        return x
     end
-    x = ccall(:jl_ios_get_nbyte_int, UInt64, (Ptr{Cvoid}, Csize_t), s.ios, n) % T
-    unlock(s.lock)
-    return x
-end
 
-read(s::IOStream, ::Type{Float16}) = reinterpret(Float16, read(s, Int16))
-read(s::IOStream, ::Type{Float32}) = reinterpret(Float32, read(s, Int32))
-read(s::IOStream, ::Type{Float64}) = reinterpret(Float64, read(s, Int64))
+    read(s::IOStream, ::Type{Float16}) = reinterpret(Float16, read(s, Int16))
+    read(s::IOStream, ::Type{Float32}) = reinterpret(Float32, read(s, Int32))
+    read(s::IOStream, ::Type{Float64}) = reinterpret(Float64, read(s, Int64))
 end
 
 function unsafe_read(s::IOStream, p::Ptr{UInt8}, nb::UInt)
-    nr = @lock_nofail s.lock ccall(:ios_readall, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), s, p, nb)
+    nr = @lock_nofail s.lock ccall(
+        :ios_readall,
+        Csize_t,
+        (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
+        s,
+        p,
+        nb
+    )
     if nr != nb
         throw(EOFError())
     end
@@ -383,32 +415,62 @@ end
 take!(s::IOStream) =
     @lock_nofail s.lock ccall(:jl_take_buffer, Vector{UInt8}, (Ptr{Cvoid},), s.ios)
 
-function readuntil(s::IOStream, delim::UInt8; keep::Bool=false)
-    @lock_nofail s.lock ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 0, !keep)
+function readuntil(s::IOStream, delim::UInt8; keep::Bool = false)
+    @lock_nofail s.lock ccall(
+        :jl_readuntil,
+        Array{UInt8,1},
+        (Ptr{Cvoid}, UInt8, UInt8, UInt8),
+        s.ios,
+        delim,
+        0,
+        !keep
+    )
 end
 
 # like readuntil, above, but returns a String without requiring a copy
 function readuntil_string(s::IOStream, delim::UInt8, keep::Bool)
-    @lock_nofail s.lock ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 1, !keep)
+    @lock_nofail s.lock ccall(
+        :jl_readuntil,
+        Ref{String},
+        (Ptr{Cvoid}, UInt8, UInt8, UInt8),
+        s.ios,
+        delim,
+        1,
+        !keep
+    )
 end
 
-function readline(s::IOStream; keep::Bool=false)
-    @lock_nofail s.lock ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)
+function readline(s::IOStream; keep::Bool = false)
+    @lock_nofail s.lock ccall(
+        :jl_readuntil,
+        Ref{String},
+        (Ptr{Cvoid}, UInt8, UInt8, UInt8),
+        s.ios,
+        '\n',
+        1,
+        keep ? 0 : 2
+    )
 end
 
 function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)
     olb = lb = length(b)
     nr = 0
     @lock_nofail s.lock begin
-    GC.@preserve b while nr < nb
-        if lb < nr+1
-            lb = max(65536, (nr+1) * 2)
-            resize!(b, lb)
+        GC.@preserve b while nr < nb
+            if lb < nr + 1
+                lb = max(65536, (nr + 1) * 2)
+                resize!(b, lb)
+            end
+            nr += Int(ccall(
+                :ios_readall,
+                Csize_t,
+                (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
+                s.ios,
+                pointer(b, nr + 1),
+                min(lb - nr, nb - nr)
+            ))
+            _eof_nolock(s) && break
         end
-        nr += Int(ccall(:ios_readall, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
-                        s.ios, pointer(b, nr+1), min(lb-nr, nb-nr)))
-        _eof_nolock(s) && break
-    end
     end
     if lb > olb && lb > nr
         resize!(b, max(olb, nr)) # shrink to just contain input data if was resized
@@ -423,8 +485,14 @@ function readbytes_some!(s::IOStream, b::Array{UInt8}, nb)
     end
     local nr
     @lock_nofail s.lock begin
-    nr = GC.@preserve b Int(ccall(:ios_read, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
-                                  s.ios, pointer(b), nb))
+        nr = GC.@preserve b Int(ccall(
+            :ios_read,
+            Csize_t,
+            (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
+            s.ios,
+            pointer(b),
+            nb
+        ))
     end
     lb = length(b)
     if lb > olb && lb > nr
@@ -445,17 +513,17 @@ requested bytes, until an error or end-of-file occurs. If `all` is `false`, at m
 `read` call is performed, and the amount of data returned is device-dependent. Note that not
 all stream types support the `all` option.
 """
-function readbytes!(s::IOStream, b::Array{UInt8}, nb=length(b); all::Bool=true)
+function readbytes!(s::IOStream, b::Array{UInt8}, nb = length(b); all::Bool = true)
     return all ? readbytes_all!(s, b, nb) : readbytes_some!(s, b, nb)
 end
 
 function read(s::IOStream)
     sz = try # filesize is just a hint, so ignore if `fstat` fails
-            filesize(s)
-        catch ex
-            ex isa IOError || rethrow()
-            Int64(0)
-        end
+        filesize(s)
+    catch ex
+        ex isa IOError || rethrow()
+        Int64(0)
+    end
     if sz > 0
         pos = position(s)
         if pos > 0
@@ -478,11 +546,11 @@ requested bytes, until an error or end-of-file occurs. If `all` is `false`, at m
 `read` call is performed, and the amount of data returned is device-dependent. Note that not
 all stream types support the `all` option.
 """
-function read(s::IOStream, nb::Integer; all::Bool=true)
+function read(s::IOStream, nb::Integer; all::Bool = true)
     # When all=false we have to allocate a buffer of the requested size upfront
     # since a single call will be made
     b = Vector{UInt8}(undef, all && nb == typemax(Int) ? 1024 : nb)
-    nr = readbytes!(s, b, nb, all=all)
+    nr = readbytes!(s, b, nb, all = all)
     resize!(b, nr)
     return b
 end

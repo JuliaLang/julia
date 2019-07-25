@@ -174,7 +174,8 @@ function current_project(dir::AbstractString)
 end
 
 function current_project()
-    dir = try pwd()
+    dir = try
+        pwd()
     catch err
         err isa IOError || rethrow()
         return nothing
@@ -208,22 +209,22 @@ function init_load_path()
     elseif haskey(ENV, "JULIA_LOAD_PATH")
         paths = parse_load_path(ENV["JULIA_LOAD_PATH"])
     else
-        paths = filter!(env -> env !== nothing,
-            [env == "@." ? current_project() : env for env in DEFAULT_LOAD_PATH])
+        paths = filter!(
+            env -> env !== nothing,
+            [env == "@." ? current_project() : env for env in DEFAULT_LOAD_PATH]
+        )
     end
-    project = (JLOptions().project != C_NULL ?
-        unsafe_string(Base.JLOptions().project) :
-        get(ENV, "JULIA_PROJECT", nothing))
-    HOME_PROJECT[] =
-        project === nothing ? nothing :
-        project == "" ? nothing :
-        project == "@." ? current_project() : abspath(expanduser(project))
+    project = (JLOptions().project != C_NULL ? unsafe_string(Base.JLOptions().project) :
+               get(ENV, "JULIA_PROJECT", nothing))
+    HOME_PROJECT[] = project === nothing ? nothing :
+                     project == "" ? nothing :
+                     project == "@." ? current_project() : abspath(expanduser(project))
     append!(empty!(LOAD_PATH), paths)
 end
 
 ## load path expansion: turn LOAD_PATH entries into concrete paths ##
 
-function load_path_expand(env::AbstractString)::Union{String, Nothing}
+function load_path_expand(env::AbstractString)::Union{String,Nothing}
     # named environment?
     if startswith(env, '@')
         # `@` in JULIA_LOAD_PATH is expanded early (at startup time)
@@ -231,9 +232,9 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         env == "@" && return active_project(false)
         env == "@." && return current_project()
         env == "@stdlib" && return Sys.STDLIB
-        env = replace(env, '#' => VERSION.major, count=1)
-        env = replace(env, '#' => VERSION.minor, count=1)
-        env = replace(env, '#' => VERSION.patch, count=1)
+        env = replace(env, '#' => VERSION.major, count = 1)
+        env = replace(env, '#' => VERSION.minor, count = 1)
+        env = replace(env, '#' => VERSION.patch, count = 1)
         name = env[2:end]
         # look for named env in each depot
         for depot in DEPOT_PATH
@@ -261,7 +262,7 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
 end
 load_path_expand(::Nothing) = nothing
 
-function active_project(search_load_path::Bool=true)
+function active_project(search_load_path::Bool = true)
     for project in (ACTIVE_PROJECT[], HOME_PROJECT[])
         project == "@" && continue
         project = load_path_expand(project)
@@ -334,8 +335,10 @@ function disable_library_threading()
         try
             f()
         catch err
-            @warn("a hook from a library to disable threading failed:",
-                  exception = (err, catch_backtrace()))
+            @warn(
+                "a hook from a library to disable threading failed:",
+                exception = (err, catch_backtrace())
+            )
         end
     end
     return

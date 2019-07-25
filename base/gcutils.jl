@@ -19,8 +19,7 @@ function finalizer(@nospecialize(f), @nospecialize(o))
     if isimmutable(o)
         error("objects of type ", typeof(o), " cannot be finalized")
     end
-    ccall(:jl_gc_add_finalizer_th, Cvoid, (Ptr{Cvoid}, Any, Any),
-          Core.getptls(), o, f)
+    ccall(:jl_gc_add_finalizer_th, Cvoid, (Ptr{Cvoid}, Any, Any), Core.getptls(), o, f)
     return o
 end
 
@@ -29,8 +28,14 @@ function finalizer(f::Ptr{Cvoid}, o::T) where T
     if isimmutable(T)
         error("objects of type ", T, " cannot be finalized")
     end
-    ccall(:jl_gc_add_ptr_finalizer, Cvoid, (Ptr{Cvoid}, Any, Ptr{Cvoid}),
-          Core.getptls(), o, f)
+    ccall(
+        :jl_gc_add_ptr_finalizer,
+        Cvoid,
+        (Ptr{Cvoid}, Any, Ptr{Cvoid}),
+        Core.getptls(),
+        o,
+        f
+    )
     return o
 end
 
@@ -39,8 +44,8 @@ end
 
 Immediately run finalizers registered for object `x`.
 """
-finalize(@nospecialize(o)) = ccall(:jl_finalize_th, Cvoid, (Ptr{Cvoid}, Any,),
-                                   Core.getptls(), o)
+finalize(@nospecialize(o)) =
+    ccall(:jl_finalize_th, Cvoid, (Ptr{Cvoid}, Any,), Core.getptls(), o)
 
 """
     Base.GC
@@ -57,7 +62,7 @@ Perform garbage collection.
 !!! warning
     Excessive use will likely lead to poor performance.
 """
-gc(full::Bool=true) = ccall(:jl_gc_collect, Cvoid, (Int32,), full)
+gc(full::Bool = true) = ccall(:jl_gc_collect, Cvoid, (Int32,), full)
 
 """
     GC.enable(on::Bool)
@@ -94,4 +99,4 @@ macro preserve(args...)
     end)
 end
 
-end # module GC
+end

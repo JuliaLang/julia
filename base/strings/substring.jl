@@ -24,24 +24,27 @@ struct SubString{T<:AbstractString} <: AbstractString
     offset::Int
     ncodeunits::Int
 
-    function SubString{T}(s::T, i::Int, j::Int) where T<:AbstractString
-        i ≤ j || return new(s, 0, 0)
+    function SubString{T}(s::T, i::Int, j::Int) where T <: AbstractString
+        i ≤ j || return new(s, 0, 0)
         @boundscheck begin
             checkbounds(s, i:j)
             @inbounds isvalid(s, i) || string_index_err(s, i)
             @inbounds isvalid(s, j) || string_index_err(s, j)
         end
-        return new(s, i-1, nextind(s,j)-i)
+        return new(s, i - 1, nextind(s, j) - i)
     end
 end
 
-@propagate_inbounds SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
-@propagate_inbounds SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s)) = SubString(s, Int(i), Int(j))
-@propagate_inbounds SubString(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, first(r), last(r))
+@propagate_inbounds SubString(s::T, i::Int, j::Int) where {T<:AbstractString} =
+    SubString{T}(s, i, j)
+@propagate_inbounds SubString(s::AbstractString, i::Integer, j::Integer = lastindex(s)) =
+    SubString(s, Int(i), Int(j))
+@propagate_inbounds SubString(s::AbstractString, r::UnitRange{<:Integer}) =
+    SubString(s, first(r), last(r))
 
 @propagate_inbounds function SubString(s::SubString, i::Int, j::Int)
     @boundscheck i ≤ j && checkbounds(s, i:j)
-    SubString(s.string, s.offset+i, s.offset+j)
+    SubString(s.string, s.offset + i, s.offset + j)
 end
 
 SubString(s::AbstractString) = SubString(s, 1, lastindex(s))
@@ -51,19 +54,19 @@ convert(::Type{SubString{S}}, s::AbstractString) where {S<:AbstractString} =
     SubString(convert(S, s))
 convert(::Type{T}, s::T) where {T<:SubString} = s
 
-String(s::SubString{String}) = unsafe_string(pointer(s.string, s.offset+1), s.ncodeunits)
+String(s::SubString{String}) = unsafe_string(pointer(s.string, s.offset + 1), s.ncodeunits)
 
 ncodeunits(s::SubString) = s.ncodeunits
 codeunit(s::SubString) = codeunit(s.string)
-length(s::SubString) = length(s.string, s.offset+1, s.offset+s.ncodeunits)
+length(s::SubString) = length(s.string, s.offset + 1, s.offset + s.ncodeunits)
 
 function codeunit(s::SubString, i::Integer)
     @boundscheck checkbounds(s, i)
     @inbounds return codeunit(s.string, s.offset + i)
 end
 
-function iterate(s::SubString, i::Integer=firstindex(s))
-    i == ncodeunits(s)+1 && return nothing
+function iterate(s::SubString, i::Integer = firstindex(s))
+    i == ncodeunits(s) + 1 && return nothing
     @boundscheck checkbounds(s, i)
     y = iterate(s.string, s.offset + i)
     y === nothing && return nothing
@@ -102,12 +105,12 @@ end
 cconvert(::Type{Ptr{UInt8}}, s::SubString{String}) = s
 cconvert(::Type{Ptr{Int8}}, s::SubString{String}) = s
 
-function unsafe_convert(::Type{Ptr{R}}, s::SubString{String}) where R<:Union{Int8, UInt8}
+function unsafe_convert(::Type{Ptr{R}}, s::SubString{String}) where R <: Union{Int8,UInt8}
     convert(Ptr{R}, pointer(s.string)) + s.offset
 end
 
 pointer(x::SubString{String}) = pointer(x.string) + x.offset
-pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i-1)
+pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i - 1)
 
 """
     reverse(s::AbstractString) -> AbstractString
@@ -148,7 +151,7 @@ function reverse(s::Union{String,SubString{String}})::String
     return out
 end
 
-string(a::String)            = String(a)
+string(a::String) = String(a)
 string(a::SubString{String}) = String(a)
 
 @inline function __unsafe_string!(out, c::Char, offs::Integer)
@@ -157,23 +160,23 @@ string(a::SubString{String}) = String(a)
     unsafe_store!(pointer(out, offs), x % UInt8)
     n == 1 && return n
     x >>= 8
-    unsafe_store!(pointer(out, offs+1), x % UInt8)
+    unsafe_store!(pointer(out, offs + 1), x % UInt8)
     n == 2 && return n
     x >>= 8
-    unsafe_store!(pointer(out, offs+2), x % UInt8)
+    unsafe_store!(pointer(out, offs + 2), x % UInt8)
     n == 3 && return n
     x >>= 8
-    unsafe_store!(pointer(out, offs+3), x % UInt8)
+    unsafe_store!(pointer(out, offs + 3), x % UInt8)
     return n
 end
 
-@inline function __unsafe_string!(out, s::Union{String, SubString{String}}, offs::Integer)
+@inline function __unsafe_string!(out, s::Union{String,SubString{String}}, offs::Integer)
     n = sizeof(s)
     unsafe_copyto!(pointer(out, offs), pointer(s), n)
     return n
 end
 
-function string(a::Union{Char, String, SubString{String}}...)
+function string(a::Union{Char,String,SubString{String}}...)
     n = 0
     for v in a
         if v isa Char
@@ -190,17 +193,17 @@ function string(a::Union{Char, String, SubString{String}}...)
     return out
 end
 
-function repeat(s::Union{String, SubString{String}}, r::Integer)
+function repeat(s::Union{String,SubString{String}}, r::Integer)
     r < 0 && throw(ArgumentError("can't repeat a string $r times"))
     r == 1 && return String(s)
     n = sizeof(s)
-    out = _string_n(n*r)
+    out = _string_n(n * r)
     if n == 1 # common case: repeating a single-byte string
         @inbounds b = codeunit(s, 1)
         ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Csize_t), out, b, r)
     else
         for i = 0:r-1
-            unsafe_copyto!(pointer(out, i*n+1), pointer(s), n)
+            unsafe_copyto!(pointer(out, i * n + 1), pointer(s), n)
         end
     end
     return out

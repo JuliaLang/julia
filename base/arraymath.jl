@@ -59,7 +59,8 @@ end
 ## data movement ##
 
 function reverse(A::Array{T}; dims::Integer) where T
-    nd = ndims(A); d = dims
+    nd = ndims(A)
+    d = dims
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     sd = size(A, d)
     if sd == 1 || isempty(A)
@@ -70,9 +71,9 @@ function reverse(A::Array{T}; dims::Integer) where T
 
     nnd = 0
     for i = 1:nd
-        nnd += Int(size(A,i)==1 || i==d)
+        nnd += Int(size(A, i) == 1 || i == d)
     end
-    if nnd==nd
+    if nnd == nd
         # reverse along the only non-singleton dimension
         for i = 1:sd
             B[i] = A[sd+1-i]
@@ -81,36 +82,36 @@ function reverse(A::Array{T}; dims::Integer) where T
     end
 
     d_in = size(A)
-    leading = d_in[1:(d-1)]
+    leading = d_in[1:(d - 1)]
     M = prod(leading)
     N = length(A)
     stride = M * sd
 
-    if M==1
-        for j = 0:stride:(N-stride)
+    if M == 1
+        for j = 0:stride:(N - stride)
             for i = 1:sd
-                ri = sd+1-i
-                B[j + ri] = A[j + i]
+                ri = sd + 1 - i
+                B[j+ri] = A[j+i]
             end
         end
     else
-        if isbitstype(T) && M>200
+        if isbitstype(T) && M > 200
             for i = 1:sd
-                ri = sd+1-i
-                for j=0:stride:(N-stride)
-                    offs = j + 1 + (i-1)*M
-                    boffs = j + 1 + (ri-1)*M
+                ri = sd + 1 - i
+                for j = 0:stride:(N - stride)
+                    offs = j + 1 + (i - 1) * M
+                    boffs = j + 1 + (ri - 1) * M
                     copyto!(B, boffs, A, offs, M)
                 end
             end
         else
             for i = 1:sd
-                ri = sd+1-i
-                for j=0:stride:(N-stride)
-                    offs = j + 1 + (i-1)*M
-                    boffs = j + 1 + (ri-1)*M
-                    for k=0:(M-1)
-                        B[boffs + k] = A[offs + k]
+                ri = sd + 1 - i
+                for j = 0:stride:(N - stride)
+                    offs = j + 1 + (i - 1) * M
+                    boffs = j + 1 + (ri - 1) * M
+                    for k = 0:(M - 1)
+                        B[boffs+k] = A[offs+k]
                     end
                 end
             end
@@ -139,10 +140,10 @@ julia> rotl90(a)
 """
 function rotl90(A::AbstractMatrix)
     ind1, ind2 = axes(A)
-    B = similar(A, (ind2,ind1))
-    n = first(ind2)+last(ind2)
-    for i=axes(A,1), j=ind2
-        B[n-j,i] = A[i,j]
+    B = similar(A, (ind2, ind1))
+    n = first(ind2) + last(ind2)
+    for i = axes(A, 1), j = ind2
+        B[n-j, i] = A[i, j]
     end
     return B
 end
@@ -167,10 +168,10 @@ julia> rotr90(a)
 """
 function rotr90(A::AbstractMatrix)
     ind1, ind2 = axes(A)
-    B = similar(A, (ind2,ind1))
-    m = first(ind1)+last(ind1)
-    for i=ind1, j=axes(A,2)
-        B[j,m-i] = A[i,j]
+    B = similar(A, (ind2, ind1))
+    m = first(ind1) + last(ind1)
+    for i = ind1, j = axes(A, 2)
+        B[j, m-i] = A[i, j]
     end
     return B
 end
@@ -194,10 +195,10 @@ julia> rot180(a)
 """
 function rot180(A::AbstractMatrix)
     B = similar(A)
-    ind1, ind2 = axes(A,1), axes(A,2)
-    m, n = first(ind1)+last(ind1), first(ind2)+last(ind2)
-    for j=ind2, i=ind1
-        B[m-i,n-j] = A[i,j]
+    ind1, ind2 = axes(A, 1), axes(A, 2)
+    m, n = first(ind1) + last(ind1), first(ind2) + last(ind2)
+    for j = ind2, i = ind1
+        B[m-i, n-j] = A[i, j]
     end
     return B
 end
@@ -237,9 +238,7 @@ julia> rotl90(a,4)
 """
 function rotl90(A::AbstractMatrix, k::Integer)
     k = mod(k, 4)
-    k == 1 ? rotl90(A) :
-    k == 2 ? rot180(A) :
-    k == 3 ? rotr90(A) : copy(A)
+    k == 1 ? rotl90(A) : k == 2 ? rot180(A) : k == 3 ? rotr90(A) : copy(A)
 end
 """
     rotr90(A, k)
@@ -275,7 +274,7 @@ julia> rotr90(a,4)
  3  4
 ```
 """
-rotr90(A::AbstractMatrix, k::Integer) = rotl90(A,-k)
+rotr90(A::AbstractMatrix, k::Integer) = rotl90(A, -k)
 """
     rot180(A, k)
 

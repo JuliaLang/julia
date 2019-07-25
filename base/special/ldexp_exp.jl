@@ -28,14 +28,15 @@
 # SUCH DAMAGE.
 
 modify_highword(x::Float32, hw) = reinterpret(Float32, hw)
-modify_highword(x::Float64, hw) = reinterpret(Float64, (UInt64(hw)<<32)|(reinterpret(UInt64, x)<<32)>>32)
+modify_highword(x::Float64, hw) =
+    reinterpret(Float64, (UInt64(hw) << 32) | (reinterpret(UInt64, x) << 32) >> 32)
 
 exponent_rshift(T::Type{Float32}, hw) = hw >> 23 # this comes from 32 (bits in UInt32) minus 9 bits for the sign and exponent
 exponent_rshift(T::Type{Float64}, hw) = hw >> 20 # this comes from 32 (bits in UInt32) minus 12 bits for the sign and exponent
 exponent_lshift(T::Type{Float32}, hw) = hw << 23 # this comes from 32 (bits in UInt32) minus 9 bits for the sign and exponent
 exponent_lshift(T::Type{Float64}, hw) = hw << 20 # this comes from 32 (bits in UInt32) minus 12 bits for the sign and exponent
 
-function modify_exponent(x::T, expnt_x) where T <: Union{Float32, Float64}
+function modify_exponent(x::T, expnt_x) where T <: Union{Float32,Float64}
     # mask away exponent; "100...0111..111" with 9 or 12 leading 0's
     high_mask = T == Float32 ? 0x807fffff : 0x800fffff # don't mask away the sign
     # use mask to replace with first 9 or 12 bits with expnt_x << appropriately
@@ -51,10 +52,10 @@ The present implementation is narrowly tailored for our hyperbolic and
 exponential functions.  We assume l2 is small (0 or -1), and the caller
 has filtered out very large x, for which overflow would be inevitable.
 """
-function _ldexp_exp(x::T, l2) where T <: Union{Float32, Float64}
+function _ldexp_exp(x::T, l2) where T <: Union{Float32,Float64}
     # This function is intended for use in our hyperbolic and exponential functions.
 
-    # Calculate exp(x) = (exp(x-kr*log(2))*2^ks*)2^k2 = exp_x*2^k2
+        # Calculate exp(x) = (exp(x-kr*log(2))*2^ks*)2^k2 = exp_x*2^k2
     exp_x, k2 = _frexp_exp(x)
 
     # Add the two exponents together to form (2^l2)*(2^k2) = 2^(l2+k2) = 2^L
@@ -76,7 +77,7 @@ to be outside the normal floating point range.
 
 This function is intended for use in our hyperbolic and exponential functions.
 """
-function _frexp_exp(x::T) where T<:Union{Float32, Float64}
+function _frexp_exp(x::T) where T <: Union{Float32,Float64}
     # and should only be used for values in the range (let T = typeof(x)):
     #
     #     log(prevfloat(typemax(x))) <= x < log(2 * prevfloat(typemax(x) / nextfloat(T(0)))
@@ -87,17 +88,18 @@ function _frexp_exp(x::T) where T<:Union{Float32, Float64}
     #     [2.0^1023, 2.0^1024)
     # respectively.
 
-    # We use exp(x) = exp(x - kln2) * 2**k, carefully chosen to
+        # We use exp(x) = exp(x - kln2) * 2**k, carefully chosen to
     # minimize |exp(kln2) - 2**k|.
     kr = T == Float32 ? UInt32(235) : UInt32(1799)
 
     # We also scale the exponent of exp_x to exponent_bias + the largest finite
     # exponent (exponent of T(Inf)-1, so that the result can be multiplied by
     # a tiny number without losing accuracy due to denormalization.
-    exp_x = exp(x - kr*log(T(2))) # exp_x*2^k = exp(x)
+    exp_x = exp(x - kr * log(T(2))) # exp_x*2^k = exp(x)
 
     # Calculate the ks in exp_x*2^ks
-    ks = exponent_rshift(T, highword(exp_x)) - (exponent_bias(T) + (exponent_max(T) - 1)) + kr
+    ks = exponent_rshift(T, highword(exp_x)) - (exponent_bias(T) + (exponent_max(T) - 1)) +
+         kr
 
     # Rescale exp_x to have exponent k2 = exponent_max(T) - 1
     exp_x = modify_exponent(exp_x, UInt32(exponent_bias(T) + (exponent_max(T) - 1)))

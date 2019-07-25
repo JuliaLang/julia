@@ -68,18 +68,20 @@ This representation is often appropriate for passing strings to C.
 String(s::AbstractString) = print_to_string(s)
 String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
 
-unsafe_wrap(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
+unsafe_wrap(::Type{Vector{UInt8}}, s::String) =
+    ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
 
-(::Type{Vector{UInt8}})(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(undef, length(s)), s)
+(::Type{Vector{UInt8}})(s::CodeUnits{UInt8,String}) =
+    copyto!(Vector{UInt8}(undef, length(s)), s)
 (::Type{Vector{UInt8}})(s::String) = Vector{UInt8}(codeunits(s))
-(::Type{Array{UInt8}})(s::String)  = Vector{UInt8}(codeunits(s))
+(::Type{Array{UInt8}})(s::String) = Vector{UInt8}(codeunits(s))
 
 String(s::CodeUnits{UInt8,String}) = s.s
 
 ## low-level functions ##
 
 pointer(s::String) = unsafe_convert(Ptr{UInt8}, s)
-pointer(s::String, i::Integer) = pointer(s)+(i-1)
+pointer(s::String, i::Integer) = pointer(s) + (i - 1)
 
 ncodeunits(s::String) = Core.sizeof(s)
 sizeof(s::String) = Core.sizeof(s)
@@ -97,8 +99,8 @@ _memcmp(a::Union{Ptr{UInt8},AbstractString}, b::Union{Ptr{UInt8},AbstractString}
 
 function cmp(a::String, b::String)
     al, bl = sizeof(a), sizeof(b)
-    c = _memcmp(a, b, min(al,bl))
-    return c < 0 ? -1 : c > 0 ? +1 : cmp(al,bl)
+    c = _memcmp(a, b, min(al, bl))
+    return c < 0 ? -1 : c > 0 ? +1 : cmp(al, bl)
 end
 
 function ==(a::String, b::String)
@@ -121,15 +123,15 @@ Base.@propagate_inbounds thisind(s::String, i::Int) = _thisind_str(s, i)
     i == n + 1 && return i
     @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
     @inbounds b = codeunit(s, i)
-    (b & 0xc0 == 0x80) & (i-1 > 0) || return i
-    @inbounds b = codeunit(s, i-1)
-    between(b, 0b11000000, 0b11110111) && return i-1
-    (b & 0xc0 == 0x80) & (i-2 > 0) || return i
-    @inbounds b = codeunit(s, i-2)
-    between(b, 0b11100000, 0b11110111) && return i-2
-    (b & 0xc0 == 0x80) & (i-3 > 0) || return i
-    @inbounds b = codeunit(s, i-3)
-    between(b, 0b11110000, 0b11110111) && return i-3
+    (b & 0xc0 == 0x80) & (i - 1 > 0) || return i
+    @inbounds b = codeunit(s, i - 1)
+    between(b, 0b11000000, 0b11110111) && return i - 1
+    (b & 0xc0 == 0x80) & (i - 2 > 0) || return i
+    @inbounds b = codeunit(s, i - 2)
+    between(b, 0b11100000, 0b11110111) && return i - 2
+    (b & 0xc0 == 0x80) & (i - 3 > 0) || return i
+    @inbounds b = codeunit(s, i - 3)
+    between(b, 0b11110000, 0b11110111) && return i - 3
     return i
 end
 
@@ -141,10 +143,10 @@ Base.@propagate_inbounds nextind(s::String, i::Int) = _nextind_str(s, i)
     n = ncodeunits(s)
     @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
     @inbounds l = codeunit(s, i)
-    (l < 0x80) | (0xf8 ≤ l) && return i+1
+    (l < 0x80) | (0xf8 ≤ l) && return i + 1
     if l < 0xc0
         i′ = thisind(s, i)
-        return i′ < i ? nextind(s, i′) : i+1
+        return i′ < i ? nextind(s, i′) : i + 1
     end
     # first continuation byte
     (i += 1) > n && return i
@@ -157,16 +159,16 @@ Base.@propagate_inbounds nextind(s::String, i::Int) = _nextind_str(s, i)
     ((i += 1) > n) | (l < 0xf0) && return i
     # third continuation byte
     @inbounds b = codeunit(s, i)
-    ifelse(b & 0xc0 ≠ 0x80, i, i+1)
+    ifelse(b & 0xc0 ≠ 0x80, i, i + 1)
 end
 
 ## checking UTF-8 & ACSII validity ##
 
 byte_string_classify(s::Union{String,Vector{UInt8}}) =
     ccall(:u8_isvalid, Int32, (Ptr{UInt8}, Int), s, sizeof(s))
-    # 0: neither valid ASCII nor UTF-8
-    # 1: valid ASCII
-    # 2: valid UTF-8
+# 0: neither valid ASCII nor UTF-8
+# 1: valid ASCII
+# 2: valid UTF-8
 
 isvalid(::Type{String}, s::Union{Vector{UInt8},String}) = byte_string_classify(s) ≠ 0
 isvalid(s::String) = isvalid(String, s)
@@ -175,11 +177,11 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
 
 ## required core functionality ##
 
-@propagate_inbounds function iterate(s::String, i::Int=firstindex(s))
+@propagate_inbounds function iterate(s::String, i::Int = firstindex(s))
     i > ncodeunits(s) && return nothing
     b = codeunit(s, i)
     u = UInt32(b) << 24
-    between(b, 0x80, 0xf7) || return reinterpret(Char, u), i+1
+    between(b, 0x80, 0xf7) || return reinterpret(Char, u), i + 1
     return iterate_continued(s, i, u)
 end
 
@@ -200,8 +202,9 @@ function iterate_continued(s::String, i::Int, u::UInt32)
     ((i += 1) > n) | (u < 0xf0000000) && @goto ret
     @inbounds b = codeunit(s, i)
     b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b); i += 1
-@label ret
+    u |= UInt32(b)
+    i += 1
+    @label ret
     return reinterpret(Char, u), i
 end
 
@@ -220,7 +223,7 @@ function getindex_continued(s::String, i::Int, u::UInt32)
     end
     n = ncodeunits(s)
 
-    (i += 1) > n && @goto ret
+    (i += 1) > n && @goto ret
     @inbounds b = codeunit(s, i) # cont byte 1
     b & 0xc0 == 0x80 || @goto ret
     u |= UInt32(b) << 16
@@ -234,7 +237,7 @@ function getindex_continued(s::String, i::Int, u::UInt32)
     @inbounds b = codeunit(s, i) # cont byte 3
     b & 0xc0 == 0x80 || @goto ret
     u |= UInt32(b)
-@label ret
+    @label ret
     return reinterpret(Char, u)
 end
 
@@ -259,8 +262,8 @@ length(s::String) = length_continued(s, 1, ncodeunits(s), ncodeunits(s))
 
 @inline function length(s::String, i::Int, j::Int)
     @boundscheck begin
-        0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
-        0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))
+        0 < i ≤ ncodeunits(s) + 1 || throw(BoundsError(s, i))
+        0 ≤ j < ncodeunits(s) + 1 || throw(BoundsError(s, j))
     end
     j < i && return 0
     @inbounds i, k = thisind(s, i), i
@@ -273,8 +276,8 @@ end
     @inbounds b = codeunit(s, i)
     @inbounds while true
         while true
-            (i += 1) ≤ n || return c
-            0xc0 ≤ b ≤ 0xf7 && break
+            (i += 1) ≤ n || return c
+            0xc0 ≤ b ≤ 0xf7 && break
             b = codeunit(s, i)
         end
         l = b
@@ -282,12 +285,12 @@ end
         c -= (x = b & 0xc0 == 0x80)
         x & (l ≥ 0xe0) || continue
 
-        (i += 1) ≤ n || return c
+        (i += 1) ≤ n || return c
         b = codeunit(s, i) # cont byte 2
         c -= (x = b & 0xc0 == 0x80)
         x & (l ≥ 0xf0) || continue
 
-        (i += 1) ≤ n || return c
+        (i += 1) ≤ n || return c
         b = codeunit(s, i) # cont byte 3
         c -= (b & 0xc0 == 0x80)
     end
@@ -314,16 +317,16 @@ Repeat a character `r` times. This can equivalently be accomplished by calling [
 julia> repeat('A', 3)
 "AAA"
 ```
-"""
+""" # fallback
 repeat(c::AbstractChar, r::Integer) = repeat(Char(c), r) # fallback
 function repeat(c::Char, r::Integer)
     r == 0 && return ""
     r < 0 && throw(ArgumentError("can't repeat a character $r times"))
     u = bswap(reinterpret(UInt32, c))
     n = 4 - (leading_zeros(u | 0xff) >> 3)
-    s = _string_n(n*r)
+    s = _string_n(n * r)
     p = pointer(s)
-    if n == 1
+    if n == 1
         ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Csize_t), p, u % UInt8, r)
     elseif n == 2
         p16 = reinterpret(Ptr{UInt16}, p)
@@ -335,9 +338,9 @@ function repeat(c::Char, r::Integer)
         b2 = (u >> 8) % UInt8
         b3 = (u >> 16) % UInt8
         for i = 0:r-1
-            unsafe_store!(p, b1, 3i + 1)
-            unsafe_store!(p, b2, 3i + 2)
-            unsafe_store!(p, b3, 3i + 3)
+            unsafe_store!(p, b1, 3 * i + 1)
+            unsafe_store!(p, b2, 3 * i + 2)
+            unsafe_store!(p, b3, 3 * i + 3)
         end
     elseif n == 4
         p32 = reinterpret(Ptr{UInt32}, pointer(s))
@@ -356,7 +359,7 @@ function filter(f, s::String)
             offset += Base.__unsafe_string!(out, c, offset)
         end
     end
-    resize!(out, offset-1)
-    sizehint!(out, offset-1)
+    resize!(out, offset - 1)
+    sizehint!(out, offset - 1)
     return String(out)
 end

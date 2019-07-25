@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
- ## Basic functions ##
+## Basic functions ##
 
-isreal(x::AbstractArray) = all(isreal,x)
-iszero(x::AbstractArray) = all(iszero,x)
+isreal(x::AbstractArray) = all(isreal, x)
+iszero(x::AbstractArray) = all(iszero, x)
 isreal(x::AbstractArray{<:Real}) = true
 
 ## Constructors ##
@@ -38,7 +38,7 @@ julia> vec(1:3)
 
 See also [`reshape`](@ref).
 """
-vec(a::AbstractArray) = reshape(a,length(a))
+vec(a::AbstractArray) = reshape(a, length(a))
 vec(a::AbstractVector) = a
 
 _sub(::Tuple{}, ::Tuple{}) = ()
@@ -119,11 +119,12 @@ julia> selectdim(A, 2, 3)
  7
 ```
 """
-@inline selectdim(A::AbstractArray, d::Integer, i) = _selectdim(A, d, i, setindex(map(Slice, axes(A)), i, d))
+@inline selectdim(A::AbstractArray, d::Integer, i) =
+    _selectdim(A, d, i, setindex(map(Slice, axes(A)), i, d))
 @noinline function _selectdim(A, d, i, idxs)
     d >= 1 || throw(ArgumentError("dimension must be ≥ 1, got $d"))
     nd = ndims(A)
-    d > nd && (i == 1 || throw(BoundsError(A, (ntuple(k->Colon(),d-1)..., i))))
+    d > nd && (i == 1 || throw(BoundsError(A, (ntuple(k -> Colon(), d - 1)..., i))))
     return view(A, idxs...)
 end
 
@@ -146,7 +147,8 @@ julia> reverse(b, dims=2)
 ```
 """
 function reverse(A::AbstractArray; dims::Integer)
-    nd = ndims(A); d = dims
+    nd = ndims(A)
+    d = dims
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     if isempty(A)
         return copy(A)
@@ -157,21 +159,21 @@ function reverse(A::AbstractArray; dims::Integer)
     B = similar(A)
     nnd = 0
     for i = 1:nd
-        nnd += Int(length(inds[i])==1 || i==d)
+        nnd += Int(length(inds[i]) == 1 || i == d)
     end
     indsd = inds[d]
-    sd = first(indsd)+last(indsd)
-    if nnd==nd
+    sd = first(indsd) + last(indsd)
+    if nnd == nd
         # reverse along the only non-singleton dimension
         for i in indsd
             B[i] = A[sd-i]
         end
         return B
     end
-    let B=B # workaround #15276
-        alli = [ axes(B,n) for n in 1:nd ]
+    let B = B # workaround #15276
+        alli = [axes(B, n) for n in 1:nd]
         for i in indsd
-            B[[ n==d ? sd-i : alli[n] for n in 1:nd ]...] = selectdim(A, d, i)
+            B[[n == d ? sd - i : alli[n] for n in 1:nd]...] = selectdim(A, d, i)
         end
     end
     return B
@@ -272,14 +274,14 @@ julia> repeat([1, 2, 3], 2, 3)
 """
 repeat(a::AbstractArray, counts::Integer...) = repeat(a, outer = counts)
 
-function repeat(a::AbstractVecOrMat, m::Integer, n::Integer=1)
-    o, p = size(a,1), size(a,2)
-    b = similar(a, o*m, p*n)
-    for j=1:n
-        d = (j-1)*p+1
+function repeat(a::AbstractVecOrMat, m::Integer, n::Integer = 1)
+    o, p = size(a, 1), size(a, 2)
+    b = similar(a, o * m, p * n)
+    for j = 1:n
+        d = (j - 1) * p + 1
         R = d:d+p-1
-        for i=1:m
-            c = (i-1)*o+1
+        for i = 1:m
+            c = (i - 1) * o + 1
             b[c:c+o-1, R] = a
         end
     end
@@ -288,9 +290,9 @@ end
 
 function repeat(a::AbstractVector, m::Integer)
     o = length(a)
-    b = similar(a, o*m)
-    for i=1:m
-        c = (i-1)*o+1
+    b = similar(a, o * m)
+    for i = 1:m
+        c = (i - 1) * o + 1
         b[c:c+o-1] = a
     end
     return b
@@ -334,13 +336,19 @@ function repeat(A::AbstractArray; inner = nothing, outer = nothing)
 end
 
 # we have optimized implementations of these cases above
-_repeat_inner_outer(A::AbstractVecOrMat, ::Nothing, r::Union{Tuple{Integer},Tuple{Integer,Integer}}) = repeat(A, r...)
+_repeat_inner_outer(
+    A::AbstractVecOrMat,
+    ::Nothing,
+    r::Union{Tuple{Integer},Tuple{Integer,Integer}}
+) = repeat(A, r...)
 _repeat_inner_outer(A::AbstractVecOrMat, ::Nothing, r::Integer) = repeat(A, r)
 
 _repeat_inner_outer(A, ::Nothing, ::Nothing) = A
-_repeat_inner_outer(A, ::Nothing, outer) = _repeat(A, ntuple(n->1, Val(ndims(A))), rep_kw2tup(outer))
-_repeat_inner_outer(A, inner, ::Nothing) = _repeat(A, rep_kw2tup(inner), ntuple(n->1, Val(ndims(A))))
-_repeat_inner_outer(A, inner, outer)     = _repeat(A, rep_kw2tup(inner), rep_kw2tup(outer))
+_repeat_inner_outer(A, ::Nothing, outer) =
+    _repeat(A, ntuple(n -> 1, Val(ndims(A))), rep_kw2tup(outer))
+_repeat_inner_outer(A, inner, ::Nothing) =
+    _repeat(A, rep_kw2tup(inner), ntuple(n -> 1, Val(ndims(A))))
+_repeat_inner_outer(A, inner, outer) = _repeat(A, rep_kw2tup(inner), rep_kw2tup(outer))
 
 rep_kw2tup(n::Integer) = (n,)
 rep_kw2tup(v::AbstractArray{<:Integer}) = (v...,)
@@ -351,11 +359,14 @@ rep_shapes(A, i, o) = _rshps((), (), size(A), i, o)
 _rshps(shp, shp_i, ::Tuple{}, ::Tuple{}, ::Tuple{}) = (shp, shp_i)
 @inline _rshps(shp, shp_i, ::Tuple{}, ::Tuple{}, o) =
     _rshps((shp..., o[1]), (shp_i..., 1), (), (), tail(o))
-@inline _rshps(shp, shp_i, ::Tuple{}, i, ::Tuple{}) = (n = i[1];
+@inline _rshps(shp, shp_i, ::Tuple{}, i, ::Tuple{}) =
+    (n = i[1];
     _rshps((shp..., n), (shp_i..., n), (), tail(i), ()))
-@inline _rshps(shp, shp_i, ::Tuple{}, i, o) = (n = i[1];
+@inline _rshps(shp, shp_i, ::Tuple{}, i, o) =
+    (n = i[1];
     _rshps((shp..., n * o[1]), (shp_i..., n), (), tail(i), tail(o)))
-@inline _rshps(shp, shp_i, sz, i, o) = (n = sz[1] * i[1];
+@inline _rshps(shp, shp_i, sz, i, o) =
+    (n = sz[1] * i[1];
     _rshps((shp..., n * o[1]), (shp_i..., n), tail(sz), tail(i), tail(o)))
 _rshps(shp, shp_i, sz, ::Tuple{}, ::Tuple{}) =
     (n = length(shp); N = n + length(sz); _reperr("inner", n, N))
@@ -363,8 +374,9 @@ _rshps(shp, shp_i, sz, ::Tuple{}, o) =
     (n = length(shp); N = n + length(sz); _reperr("inner", n, N))
 _rshps(shp, shp_i, sz, i, ::Tuple{}) =
     (n = length(shp); N = n + length(sz); _reperr("outer", n, N))
-_reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
-    "($n) cannot be less than number of dimensions of input ($N)"))
+_reperr(s, n, N) =
+    throw(ArgumentError("number of " * s * " repetitions " *
+                        "($n) cannot be less than number of dimensions of input ($N)"))
 
 @noinline function _repeat(A::AbstractArray, inner, outer)
     shape, inner_shape = rep_shapes(A, inner, outer)
@@ -376,7 +388,7 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
 
     # fill the first inner block
     if all(x -> x == 1, inner)
-        idxs = (axes(A)..., ntuple(n->OneTo(1), ndims(R)-ndims(A))...) # keep dimension consistent
+        idxs = (axes(A)..., ntuple(n -> OneTo(1), ndims(R) - ndims(A))...) # keep dimension consistent
         R[idxs...] = A
     else
         inner_indices = [1:n for n in inner]
@@ -393,7 +405,7 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
     if all(x -> x == 1, outer)
         return R
     end
-    src_indices  = [1:n for n in inner_shape]
+    src_indices = [1:n for n in inner_shape]
     dest_indices = copy(src_indices)
     for i in 1:length(outer)
         B = view(R, src_indices...)
@@ -452,6 +464,6 @@ See also [`eachrow`](@ref), [`eachcol`](@ref), and [`selectdim`](@ref).
     length(dims) == 1 || throw(ArgumentError("only single dimensions are supported"))
     dim = first(dims)
     dim <= ndims(A) || throw(DimensionMismatch("A doesn't have $dim dimensions"))
-    idx1, idx2 = ntuple(d->(:), dim-1), ntuple(d->(:), ndims(A)-dim)
+    idx1, idx2 = ntuple(d -> (:), dim - 1), ntuple(d -> (:), ndims(A) - dim)
     return (view(A, idx1..., i, idx2...) for i in axes(A, dim))
 end

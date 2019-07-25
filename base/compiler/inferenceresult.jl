@@ -14,9 +14,11 @@ mutable struct InferenceResult
     end
 end
 
-function is_argtype_match(@nospecialize(given_argtype),
-                          @nospecialize(cache_argtype),
-                          overridden_by_const::Bool)
+function is_argtype_match(
+    @nospecialize(given_argtype),
+    @nospecialize(cache_argtype),
+    overridden_by_const::Bool
+)
     if isa(given_argtype, Const) || isa(given_argtype, PartialStruct)
         return is_lattice_equal(given_argtype, cache_argtype)
     end
@@ -139,7 +141,11 @@ function matching_cache_argtypes(linfo::MethodInstance, ::Nothing)
     return cache_argtypes, falses(length(cache_argtypes))
 end
 
-function cache_lookup(linfo::MethodInstance, given_argtypes::Vector{Any}, cache::Vector{InferenceResult})
+function cache_lookup(
+    linfo::MethodInstance,
+    given_argtypes::Vector{Any},
+    cache::Vector{InferenceResult}
+)
     method = linfo.def::Method
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
@@ -150,17 +156,21 @@ function cache_lookup(linfo::MethodInstance, given_argtypes::Vector{Any}, cache:
         cache_argtypes = cached_result.argtypes
         cache_overridden_by_const = cached_result.overridden_by_const
         for i in 1:nargs
-            if !is_argtype_match(given_argtypes[i],
-                                 cache_argtypes[i],
-                                 cache_overridden_by_const[i])
+            if !is_argtype_match(
+                given_argtypes[i],
+                cache_argtypes[i],
+                cache_overridden_by_const[i]
+            )
                 cache_match = false
                 break
             end
         end
         if method.isva && cache_match
-            cache_match = is_argtype_match(tuple_tfunc(given_argtypes[(nargs + 1):end]),
-                                           cache_argtypes[end],
-                                           cache_overridden_by_const[end])
+            cache_match = is_argtype_match(
+                tuple_tfunc(given_argtypes[(nargs + 1):end]),
+                cache_argtypes[end],
+                cache_overridden_by_const[end]
+            )
         end
         cache_match || continue
         return cached_result

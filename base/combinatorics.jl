@@ -16,7 +16,12 @@ end
 
 function factorial_lookup(n::Integer, table, lim)
     n < 0 && throw(DomainError(n, "`n` must not be negative."))
-    n > lim && throw(OverflowError(string(n, " is too large to look up in the table; consider using `factorial(big(", n, "))` instead")))
+    n > lim && throw(OverflowError(string(
+        n,
+        " is too large to look up in the table; consider using `factorial(big(",
+        n,
+        "))` instead"
+    )))
     n == 0 && return one(n)
     @inbounds f = table[n]
     return oftype(n, f)
@@ -66,11 +71,11 @@ isperm(p::Tuple{Int,Int}) = ((p[1] == 1) & (p[2] == 2)) | ((p[1] == 2) & (p[2] =
 # swap columns i and j of a, in-place
 function swapcols!(a::AbstractMatrix, i, j)
     i == j && return
-    cols = axes(a,2)
-    @boundscheck i in cols || throw(BoundsError(a, (:,i)))
-    @boundscheck j in cols || throw(BoundsError(a, (:,j)))
-    for k in axes(a,1)
-        @inbounds a[k,i],a[k,j] = a[k,j],a[k,i]
+    cols = axes(a, 2)
+    @boundscheck i in cols || throw(BoundsError(a, (:, i)))
+    @boundscheck j in cols || throw(BoundsError(a, (:, j)))
+    for k in axes(a, 1)
+        @inbounds a[k, i], a[k, j] = a[k, j], a[k, i]
     end
 end
 # like permute!! applied to each row of a, in-place in a (overwriting p).
@@ -79,7 +84,7 @@ function permutecols!!(a::AbstractMatrix, p::AbstractVector{<:Integer})
     count = 0
     start = 0
     while count < length(p)
-        ptr = start = findnext(!iszero, p, start+1)::Int
+        ptr = start = findnext(!iszero, p, start + 1)::Int
         next = p[start]
         count += 1
         while next != start
@@ -99,7 +104,7 @@ function permute!!(a, p::AbstractVector{<:Integer})
     count = 0
     start = 0
     while count < length(a)
-        ptr = start = findnext(!iszero, p, start+1)::Int
+        ptr = start = findnext(!iszero, p, start + 1)::Int
         temp = a[start]
         next = p[start]
         count += 1
@@ -150,7 +155,7 @@ function invpermute!!(a, p::AbstractVector{<:Integer})
     count = 0
     start = 0
     while count < length(a)
-        start = findnext(!iszero, p, start+1)::Int
+        start = findnext(!iszero, p, start + 1)::Int
         temp = a[start]
         next = p[start]
         count += 1
@@ -231,8 +236,7 @@ function invperm(a::AbstractVector)
     b = zero(a) # similar vector of zeros
     n = length(a)
     @inbounds for (i, j) in enumerate(a)
-        ((1 <= j <= n) && b[j] == 0) ||
-            throw(ArgumentError("argument is not a permutation"))
+        ((1 <= j <= n) && b[j] == 0) || throw(ArgumentError("argument is not a permutation"))
         b[j] = i
     end
     b
@@ -240,7 +244,7 @@ end
 
 function invperm(p::Union{Tuple{},Tuple{Int},Tuple{Int,Int}})
     isperm(p) || throw(ArgumentError("argument is not a permutation"))
-    p  # in dimensions 0-2, every permutation is its own inverse
+    p # in dimensions 0-2, every permutation is its own inverse
 end
 invperm(a::Tuple) = (invperm([a...])...,)
 
@@ -265,16 +269,16 @@ function nextprod(a::Vector{Int}, x)
         throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
     end
     k = length(a)
-    v = fill(1, k)                    # current value of each counter
-    mx = [nextpow(ai,x) for ai in a]  # maximum value of each counter
-    v[1] = mx[1]                      # start at first case that is >= x
-    p::widen(Int) = mx[1]             # initial value of product in this case
+    v = fill(1, k) # current value of each counter
+    mx = [nextpow(ai, x) for ai in a] # maximum value of each counter
+    v[1] = mx[1] # start at first case that is >= x
+    p::widen(Int) = mx[1] # initial value of product in this case
     best = p
     icarry = 1
 
     while v[end] < mx[end]
         if p >= x
-            best = p < best ? p : best  # keep the best found yet
+            best = p < best ? p : best # keep the best found yet
             carrytest = true
             while carrytest
                 p = div(p, v[icarry])

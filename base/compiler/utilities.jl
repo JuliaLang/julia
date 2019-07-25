@@ -36,7 +36,7 @@ function contains_is(itr, @nospecialize(x))
     return false
 end
 
-anymap(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i in 1:length(a) ]
+anymap(f::Function, a::Array{Any,1}) = Any[f(a[i]) for i in 1:length(a)]
 
 ###########
 # scoping #
@@ -59,13 +59,15 @@ end
 
 # Meta expression head, these generally can't be deleted even when they are
 # in a dead branch but can be ignored when analyzing uses/liveness.
-is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :loopinfo)
+is_meta_expr_head(head::Symbol) =
+    (head === :inbounds || head === :boundscheck || head === :meta || head === :loopinfo)
 
 sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
 
 function is_self_quoting(@nospecialize(x))
-    return isa(x,Number) || isa(x,AbstractString) || isa(x,Tuple) || isa(x,Type) ||
-        isa(x,Char) || x === nothing || isa(x,Function)
+    return isa(x, Number) ||
+           isa(x, AbstractString) ||
+           isa(x, Tuple) || isa(x, Type) || isa(x, Char) || x === nothing || isa(x, Function)
 end
 
 function quoted(@nospecialize(x))
@@ -116,13 +118,25 @@ function retrieve_code_info(linfo::MethodInstance)
     end
 end
 
-function inf_for_methodinstance(mi::MethodInstance, min_world::UInt, max_world::UInt=min_world)
-    return ccall(:jl_rettype_inferred, Any, (Any, UInt, UInt), mi, min_world, max_world)::Union{Nothing, CodeInstance}
+function inf_for_methodinstance(
+    mi::MethodInstance,
+    min_world::UInt,
+    max_world::UInt = min_world
+)
+    return ccall(:jl_rettype_inferred, Any, (Any, UInt, UInt), mi, min_world, max_world)::Union{
+        Nothing,
+        CodeInstance
+    }
 end
 
 
 # get a handle to the unique specialization object representing a particular instantiation of a call
-function specialize_method(method::Method, @nospecialize(atypes), sparams::SimpleVector, preexisting::Bool=false)
+function specialize_method(
+    method::Method,
+    @nospecialize(atypes),
+    sparams::SimpleVector,
+    preexisting::Bool = false
+)
     if preexisting
         if method.specializations !== nothing
             # check cached specializations
@@ -131,12 +145,24 @@ function specialize_method(method::Method, @nospecialize(atypes), sparams::Simpl
         end
         return nothing
     end
-    return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, atypes, sparams)
+    return ccall(
+        :jl_specializations_get_linfo,
+        Ref{MethodInstance},
+        (Any, Any, Any),
+        method,
+        atypes,
+        sparams
+    )
 end
 
 # This function is used for computing alternate limit heuristics
-function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector)
-    if isdefined(method, :generator) && method.generator.expand_early && may_invoke_generator(method, sig, sparams)
+function method_for_inference_heuristics(
+    method::Method,
+    @nospecialize(sig),
+    sparams::SimpleVector
+)
+    if isdefined(method, :generator) &&
+       method.generator.expand_early && may_invoke_generator(method, sig, sparams)
         method_instance = specialize_method(method, sig, sparams, false)
         if isa(method_instance, MethodInstance)
             cinfo = get_staged(method_instance)
@@ -155,7 +181,12 @@ argextype(@nospecialize(x), state) = argextype(x, state.src, state.sptypes, stat
 
 const empty_slottypes = Any[]
 
-function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vector{Any} = empty_slottypes)
+function argextype(
+    @nospecialize(x),
+    src,
+    sptypes::Vector{Any},
+    slottypes::Vector{Any} = empty_slottypes
+)
     if isa(x, Expr)
         if x.head === :static_parameter
             return sptypes[x.args[1]]
@@ -191,7 +222,7 @@ end
 ###################
 
 function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
-    uses = BitSet[ BitSet() for i = 1:nvals ]
+    uses = BitSet[BitSet() for i = 1:nvals]
     for line in 1:length(body)
         e = body[line]
         if isa(e, SSAValue)

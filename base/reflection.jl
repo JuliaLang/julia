@@ -99,8 +99,10 @@ names(m::Module; all::Bool = false, imported::Bool = false) =
     sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported))
 
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
-isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
-isbindingresolved(m::Module, var::Symbol) = ccall(:jl_binding_resolved_p, Cint, (Any, Any), m, var) != 0
+isdeprecated(m::Module, s::Symbol) =
+    ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
+isbindingresolved(m::Module, var::Symbol) =
+    ccall(:jl_binding_resolved_p, Cint, (Any, Any), m, var) != 0
 
 function binding_module(m::Module, s::Symbol)
     p = ccall(:jl_get_module_of_binding, Ptr{Cvoid}, (Any, Any), m, s)
@@ -108,7 +110,7 @@ function binding_module(m::Module, s::Symbol)
     return unsafe_pointer_to_objref(p)::Module
 end
 
-function resolve(g::GlobalRef; force::Bool=false)
+function resolve(g::GlobalRef; force::Bool = false)
     if force || isbindingresolved(g.mod, g.name)
         return GlobalRef(binding_module(g.mod, g.name), g.name)
     end
@@ -168,9 +170,9 @@ Get a tuple with the names of the fields of a `DataType`.
 julia> fieldnames(Rational)
 (:num, :den)
 ```
-"""
+""" # error check to make sure type is specific enough
 fieldnames(t::DataType) = (fieldcount(t); # error check to make sure type is specific enough
-                           (_fieldnames(t)...,))
+    (_fieldnames(t)...,))
 fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
 fieldnames(::Core.TypeofBottom) =
     throw(ArgumentError("The empty type does not have field names since it does not have instances."))
@@ -237,8 +239,7 @@ parentmodule(t::UnionAll) = parentmodule(unwrap_unionall(t))
 
 Determine whether a global is declared `const` in a given `Module`.
 """
-isconst(m::Module, s::Symbol) =
-    ccall(:jl_is_const, Cint, (Any, Any), m, s) != 0
+isconst(m::Module, s::Symbol) = ccall(:jl_is_const, Cint, (Any, Any), m, s) != 0
 
 """
     @isdefined s -> Bool
@@ -318,10 +319,10 @@ datatype_fieldtypes(x::DataType) = ccall(:jl_get_fieldtypes, Any, (Any,), x)
 struct DataTypeLayout
     nfields::UInt32
     alignment::UInt32
-    # alignment : 28;
-    # haspadding : 1;
-    # pointerfree : 1;
-    # fielddesc_type : 2;
+# alignment : 28;
+# haspadding : 1;
+# pointerfree : 1;
+# fielddesc_type : 2;
 end
 
 """
@@ -467,7 +468,8 @@ and has no subtypes (or supertypes) which could appear in a call.
 """
 isdispatchtuple(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && t.isdispatchtuple)
 
-iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
+iskindtype(@nospecialize t) =
+    (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
 isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
 has_free_typevars(@nospecialize(t)) = ccall(:jl_has_free_typevars, Cint, (Any,), t) != 0
 
@@ -475,8 +477,10 @@ has_free_typevars(@nospecialize(t)) = ccall(:jl_has_free_typevars, Cint, (Any,),
 # and is thus perhaps most similar to the old (pre-1.0) `isleaftype` query
 const _TYPE_NAME = Type.body.name
 function isdispatchelem(@nospecialize v)
-    return (v === Bottom) || (v === typeof(Bottom)) || isconcretedispatch(v) ||
-        (isa(v, DataType) && v.name === _TYPE_NAME && !has_free_typevars(v)) # isType(v)
+    return (v === Bottom) ||
+           (v === typeof(Bottom)) ||
+           isconcretedispatch(v) ||
+           (isa(v, DataType) && v.name === _TYPE_NAME && !has_free_typevars(v)) # isType(v)
 end
 
 """
@@ -536,7 +540,8 @@ end
 Determine whether type `T` has exactly one possible instance; for example, a
 struct type with no fields.
 """
-issingletontype(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && isdefined(t, :instance))
+issingletontype(@nospecialize(t)) =
+    (@_pure_meta; isa(t, DataType) && isdefined(t, :instance))
 
 """
     Base.parameter_upper_bound(t::UnionAll, idx)
@@ -569,7 +574,8 @@ end
 Compute a type that contains the intersection of `T` and `S`. Usually this will be the
 smallest such type or one close to it.
 """
-typeintersect(@nospecialize(a),@nospecialize(b)) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any,Any), a, b))
+typeintersect(@nospecialize(a), @nospecialize(b)) =
+    (@_pure_meta; ccall(:jl_type_intersection, Any, (Any, Any), a, b))
 
 """
     fieldoffset(type, i)
@@ -596,7 +602,8 @@ julia> structinfo(Base.Filesystem.StatStruct)
  (0x0000000000000058, :ctime, Float64)
 ```
 """
-fieldoffset(x::DataType, idx::Integer) = (@_pure_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
+fieldoffset(x::DataType, idx::Integer) =
+    (@_pure_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
 
 """
     fieldtype(T, name::Symbol | index::Int)
@@ -641,8 +648,8 @@ julia> Base.fieldindex(Foo, :z, false)
 0
 ```
 """
-function fieldindex(T::DataType, name::Symbol, err::Bool=true)
-    return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
+function fieldindex(T::DataType, name::Symbol, err::Bool = true)
+    return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err) + 1)
 end
 
 argument_datatype(@nospecialize t) = ccall(:jl_argument_datatype, Any, (Any,), t)
@@ -728,12 +735,12 @@ function instances end
 
 function to_tuple_type(@nospecialize(t))
     @_pure_meta
-    if isa(t,Tuple) || isa(t,AbstractArray) || isa(t,SimpleVector)
+    if isa(t, Tuple) || isa(t, AbstractArray) || isa(t, SimpleVector)
         t = Tuple{t...}
     end
-    if isa(t,Type) && t<:Tuple
+    if isa(t, Type) && t <: Tuple
         for p in unwrap_unionall(t).parameters
-            if !(isa(p,Type) || isa(p,TypeVar))
+            if !(isa(p, Type) || isa(p, TypeVar))
                 error("argument tuple type must contain only types")
             end
         end
@@ -747,9 +754,9 @@ function signature_type(@nospecialize(f), @nospecialize(args))
     f_type = isa(f, Type) ? Type{f} : typeof(f)
     if isa(args, Type)
         u = unwrap_unionall(args)
-        return rewrap_unionall(Tuple{f_type, u.parameters...}, args)
+        return rewrap_unionall(Tuple{f_type,u.parameters...}, args)
     else
-        return Tuple{f_type, args...}
+        return Tuple{f_type,args...}
     end
 end
 
@@ -769,7 +776,11 @@ The keyword debuginfo controls the amount of code metadata present in the output
 Note that an error will be thrown if `types` are not leaf types when `generated` is
 `true` and any of the corresponding methods are an `@generated` method.
 """
-function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=true, debuginfo::Symbol=:default)
+function code_lowered(
+    @nospecialize(f),
+    @nospecialize(t = Tuple);
+    generated::Bool = true, debuginfo::Symbol = :default
+)
     if @isdefined(IRShow)
         debuginfo = IRShow.debuginfo(debuginfo)
     elseif debuginfo == :default
@@ -783,9 +794,15 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
             if may_invoke_generator(m)
                 return ccall(:jl_code_for_staged, Any, (Any,), m)::CodeInfo
             else
-                error("Could not expand generator for `@generated` method ", m, ". ",
-                      "This can happen if the provided argument types (", t, ") are ",
-                      "not leaf types, but the `generated` argument is `true`.")
+                error(
+                    "Could not expand generator for `@generated` method ",
+                    m,
+                    ". ",
+                    "This can happen if the provided argument types (",
+                    t,
+                    ") are ",
+                    "not leaf types, but the `generated` argument is `true`."
+                )
             end
         end
         code = uncompressed_ast(m.def::Method)
@@ -802,7 +819,7 @@ isgenerated(m::Core.MethodInstance) = isgenerated(m.def)
 unionlen(x::Union) = unionlen(x.a) + unionlen(x.b)
 unionlen(@nospecialize(x)) = 1
 
-_uniontypes(x::Union, ts) = (_uniontypes(x.a,ts); _uniontypes(x.b,ts); ts)
+_uniontypes(x::Union, ts) = (_uniontypes(x.a, ts); _uniontypes(x.b, ts); ts)
 _uniontypes(@nospecialize(x), ts) = (push!(ts, x); ts)
 uniontypes(@nospecialize(x)) = _uniontypes(x, Any[])
 
@@ -814,8 +831,24 @@ end
 function _methods_by_ftype(@nospecialize(t), lim::Int, world::UInt)
     return _methods_by_ftype(t, lim, world, UInt[typemin(UInt)], UInt[typemax(UInt)])
 end
-function _methods_by_ftype(@nospecialize(t), lim::Int, world::UInt, min::Array{UInt,1}, max::Array{UInt,1})
-    return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), t, lim, 0, world, min, max)
+function _methods_by_ftype(
+    @nospecialize(t),
+    lim::Int,
+    world::UInt,
+    min::Array{UInt,1},
+    max::Array{UInt,1}
+)
+    return ccall(
+        :jl_matching_methods,
+        Any,
+        (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}),
+        t,
+        lim,
+        0,
+        world,
+        min,
+        max
+    )
 end
 
 # high-level, more convenient method lookup functions
@@ -862,7 +895,17 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     world = typemax(UInt)
     min = UInt[typemin(UInt)]
     max = UInt[typemax(UInt)]
-    ms = ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), tt, -1, 1, world, min, max)::Array{Any,1}
+    ms = ccall(
+        :jl_matching_methods,
+        Any,
+        (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}),
+        tt,
+        -1,
+        1,
+        world,
+        min,
+        max
+    )::Array{Any,1}
     return MethodList(Method[m[3] for m in ms], typeof(f).name.mt)
 end
 function methods(@nospecialize(f))
@@ -908,19 +951,29 @@ function length(mt::Core.MethodTable)
 end
 isempty(mt::Core.MethodTable) = (mt.defs === nothing)
 
-uncompressed_ast(m::Method) = isdefined(m, :source) ? _uncompressed_ast(m, m.source) :
-                              isdefined(m, :generator) ? error("Method is @generated; try `code_lowered` instead.") :
-                              error("Code for this Method is not available.")
+uncompressed_ast(m::Method) =
+    isdefined(m, :source) ? _uncompressed_ast(m, m.source) :
+    isdefined(m, :generator) ? error("Method is @generated; try `code_lowered` instead.") :
+    error("Code for this Method is not available.")
 _uncompressed_ast(m::Method, s::CodeInfo) = copy(s)
-_uncompressed_ast(m::Method, s::Array{UInt8,1}) = ccall(:jl_uncompress_ast, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)::CodeInfo
-_uncompressed_ast(ci::Core.CodeInstance, s::Array{UInt8,1}) = ccall(:jl_uncompress_ast, Any, (Any, Any, Any), ci.def.def::Method, ci, s)::CodeInfo
+_uncompressed_ast(m::Method, s::Array{UInt8,1}) =
+    ccall(:jl_uncompress_ast, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)::CodeInfo
+_uncompressed_ast(ci::Core.CodeInstance, s::Array{UInt8,1}) =
+    ccall(:jl_uncompress_ast, Any, (Any, Any, Any), ci.def.def::Method, ci, s)::CodeInfo
 
 function method_instances(@nospecialize(f), @nospecialize(t), world::UInt = typemax(UInt))
     tt = signature_type(f, t)
     results = Core.MethodInstance[]
     for method_data in _methods_by_ftype(tt, -1, world)
         mtypes, msp, m = method_data
-        instance = ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), m, mtypes, msp)
+        instance = ccall(
+            :jl_specializations_get_linfo,
+            Ref{MethodInstance},
+            (Any, Any, Any),
+            m,
+            mtypes,
+            msp
+        )
         push!(results, instance)
     end
     return results
@@ -945,22 +998,40 @@ struct CodegenParams
     emit_function::Any
     emitted_function::Any
 
-    CodegenParams(;cached::Bool=true,
-                   track_allocations::Bool=true, code_coverage::Bool=true,
-                   static_alloc::Bool=true, prefer_specsig::Bool=false,
-                   gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
-                   module_setup=nothing, module_activation=nothing, raise_exception=nothing,
-                   emit_function=nothing, emitted_function=nothing) =
-        new(Cint(cached),
-            Cint(track_allocations), Cint(code_coverage),
-            Cint(static_alloc), Cint(prefer_specsig),
-            Cint(gnu_pubnames), debug_info_kind,
-            module_setup, module_activation, raise_exception,
-            emit_function, emitted_function)
+    CodegenParams(
+        ;
+        cached::Bool = true,
+        track_allocations::Bool = true,
+        code_coverage::Bool = true,
+        static_alloc::Bool = true,
+        prefer_specsig::Bool = false,
+        gnu_pubnames = true,
+        debug_info_kind::Cint = default_debug_info_kind(),
+        module_setup = nothing,
+        module_activation = nothing,
+        raise_exception = nothing,
+        emit_function = nothing,
+        emitted_function = nothing
+    ) =
+        new(
+            Cint(cached),
+            Cint(track_allocations),
+            Cint(code_coverage),
+            Cint(static_alloc),
+            Cint(prefer_specsig),
+            Cint(gnu_pubnames),
+            debug_info_kind,
+            module_setup,
+            module_activation,
+            raise_exception,
+            emit_function,
+            emitted_function
+        )
 end
 
 const SLOT_USED = 0x8
-ast_slotflag(@nospecialize(code), i) = ccall(:jl_ast_slotflag, UInt8, (Any, Csize_t), code, i - 1)
+ast_slotflag(@nospecialize(code), i) =
+    ccall(:jl_ast_slotflag, UInt8, (Any, Csize_t), code, i - 1)
 
 """
     may_invoke_generator(method, atypes, sparams)
@@ -988,7 +1059,7 @@ function may_invoke_generator(method::Method, @nospecialize(atypes), sparams::Si
     # syntactically doesn't make use of the information we don't have. Check
     # for that.
 
-    # For now, only handle the (common, generated by the frontend case) that the
+        # For now, only handle the (common, generated by the frontend case) that the
     # generator only has one method
     isa(method.generator, Core.GeneratedFunctionStub) || return false
     gen_mthds = methods(method.generator.gen)
@@ -1022,18 +1093,30 @@ end
 # give a decent error message if we try to instantiate a staged function on non-leaf types
 function func_for_method_checked(m::Method, @nospecialize(types), sparams::SimpleVector)
     if isdefined(m, :generator) && !may_invoke_generator(m, types, sparams)
-        error("cannot call @generated function `", m, "` ",
-              "with abstract argument types: ", types)
+        error(
+            "cannot call @generated function `",
+            m,
+            "` ",
+            "with abstract argument types: ",
+            types
+        )
     end
     return m
 end
 
 function func_for_method_checked(m::Method, @nospecialize(types))
-    depwarn("The two argument form of `func_for_method_checked` is deprecated. Pass sparams in addition.",
-            :func_for_method_checked)
+    depwarn(
+        "The two argument form of `func_for_method_checked` is deprecated. Pass sparams in addition.",
+        :func_for_method_checked
+    )
     if isdefined(m, :generator) && !isdispatchtuple(types)
-        error("cannot call @generated function `", m, "` ",
-              "with abstract argument types: ", types)
+        error(
+            "cannot call @generated function `",
+            m,
+            "` ",
+            "with abstract argument types: ",
+            types
+        )
     end
     return m
 end
@@ -1048,11 +1131,14 @@ additional optimizations, such as inlining, are also applied.
 The keyword `debuginfo` controls the amount of code metadata present in the output,
 possible options are `:source` or `:none`.
 """
-function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
-                    optimize=true,
-                    debuginfo::Symbol=:default,
-                    world = get_world_counter(),
-                    params = Core.Compiler.Params(world))
+function code_typed(
+    @nospecialize(f),
+    @nospecialize(types = Tuple);
+    optimize = true,
+    debuginfo::Symbol = :default,
+    world = get_world_counter(),
+    params = Core.Compiler.Params(world)
+)
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
@@ -1077,7 +1163,7 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
     return asts
 end
 
-function return_types(@nospecialize(f), @nospecialize(types=Tuple))
+function return_types(@nospecialize(f), @nospecialize(types = Tuple))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
@@ -1166,7 +1252,7 @@ end
 
 Returns a tuple `(filename,line)` giving the location of a generic `Function` definition.
 """
-functionloc(@nospecialize(f), @nospecialize(types)) = functionloc(which(f,types))
+functionloc(@nospecialize(f), @nospecialize(types)) = functionloc(which(f, types))
 
 function functionloc(@nospecialize(f))
     mt = methods(f)
@@ -1238,15 +1324,20 @@ julia> hasmethod(g, Tuple{}, (:a, :b, :c, :d))  # g accepts arbitrary kwargs
 true
 ```
 """
-function hasmethod(@nospecialize(f), @nospecialize(t); world=typemax(UInt))
+function hasmethod(@nospecialize(f), @nospecialize(t); world = typemax(UInt))
     t = to_tuple_type(t)
     t = signature_type(f, t)
     return ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), t, world) !== nothing
 end
 
-function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Symbol}}; world=typemax(UInt))
+function hasmethod(
+    @nospecialize(f),
+    @nospecialize(t),
+    kwnames::Tuple{Vararg{Symbol}};
+    world = typemax(UInt)
+)
     # TODO: this appears to be doing the wrong queries
-    hasmethod(f, t, world=world) || return false
+    hasmethod(f, t, world = world) || return false
     isempty(kwnames) && return true
     m = which(f, t)
     kws = kwarg_decl(m, Core.kwftype(typeof(f)))
@@ -1289,7 +1380,7 @@ julia> Base.isambiguous(m1, m2, ambiguous_bottom=false)
 false
 ```
 """
-function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
+function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool = false)
     ti = typeintersect(m1.sig, m2.sig)
     ti === Bottom && return false
     if !ambiguous_bottom

@@ -28,7 +28,7 @@ unlock(::IO) = nothing
 reseteof(x::IO) = nothing
 
 const SZ_UNBUFFERED_IO = 65536
-buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = x
+buffer_writes(x::IO, bufsize = SZ_UNBUFFERED_IO) = x
 
 """
     isopen(object) -> Bool
@@ -190,8 +190,8 @@ Base.RefValue{MyStruct}(MyStruct(42.0))
 """
 function write end
 
-read(s::IO, ::Type{UInt8}) = error(typeof(s)," does not support byte I/O")
-write(s::IO, x::UInt8) = error(typeof(s)," does not support byte I/O")
+read(s::IO, ::Type{UInt8}) = error(typeof(s), " does not support byte I/O")
+write(s::IO, x::UInt8) = error(typeof(s), " does not support byte I/O")
 
 """
     unsafe_write(io::IO, ref, nbytes::UInt)
@@ -228,7 +228,8 @@ end
 
 function peek(s::IO)
     mark(s)
-    try read(s, UInt8)
+    try
+        read(s, UInt8)
     finally
         reset(s)
     end
@@ -242,28 +243,29 @@ end
 Compute the `read`, `write`, `create`, `truncate`, `append` flag value for
 a given set of keyword arguments to [`open`](@ref) a [`NamedTuple`](@ref).
 """
-function open_flags(;
-    read     :: Union{Bool,Nothing} = nothing,
-    write    :: Union{Bool,Nothing} = nothing,
-    create   :: Union{Bool,Nothing} = nothing,
-    truncate :: Union{Bool,Nothing} = nothing,
-    append   :: Union{Bool,Nothing} = nothing,
+function open_flags(
+    ;
+    read::Union{Bool,Nothing} = nothing,
+    write::Union{Bool,Nothing} = nothing,
+    create::Union{Bool,Nothing} = nothing,
+    truncate::Union{Bool,Nothing} = nothing,
+    append::Union{Bool,Nothing} = nothing,
 )
     if write === true && read !== true && append !== true
-        create   === nothing && (create   = true)
+        create === nothing && (create = true)
         truncate === nothing && (truncate = true)
     end
 
     if truncate === true || append === true
-        write  === nothing && (write  = true)
+        write === nothing && (write = true)
         create === nothing && (create = true)
     end
 
-    write    === nothing && (write    = false)
-    read     === nothing && (read     = !write)
-    create   === nothing && (create   = false)
+    write === nothing && (write = false)
+    read === nothing && (read = !write)
+    create === nothing && (create = false)
     truncate === nothing && (truncate = false)
-    append   === nothing && (append   = false)
+    append === nothing && (append = false)
 
     return (
         read = read,
@@ -307,7 +309,8 @@ function pipe_reader end
 function pipe_writer end
 
 write(io::AbstractPipe, byte::UInt8) = write(pipe_writer(io), byte)
-unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_write(pipe_writer(io), p, nb)
+unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) =
+    unsafe_write(pipe_writer(io), p, nb)
 buffer_writes(io::AbstractPipe, args...) = buffer_writes(pipe_writer(io), args...)
 flush(io::AbstractPipe) = flush(pipe_writer(io))
 
@@ -315,16 +318,16 @@ read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io), byte)
 unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io), p, nb)
 read(io::AbstractPipe) = read(pipe_reader(io))
 readuntil(io::AbstractPipe, arg::UInt8; kw...) = readuntil(pipe_reader(io), arg; kw...)
-readuntil(io::AbstractPipe, arg::AbstractChar; kw...) = readuntil(pipe_reader(io), arg; kw...)
-readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io), arg; kw...)
-readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io), arg; kw...)
-readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io), target, keep, out)
+readuntil(io::AbstractPipe, arg::AbstractChar; kw...) =
+    readuntil(pipe_reader(io), arg; kw...)
+readuntil(io::AbstractPipe, arg::AbstractString; kw...) =
+    readuntil(pipe_reader(io), arg; kw...)
+readuntil(io::AbstractPipe, arg::AbstractVector; kw...) =
+    readuntil(pipe_reader(io), arg; kw...)
+readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) =
+    readuntil_vector!(pipe_reader(io), target, keep, out)
 
-for f in (
-        # peek/mark interface
-        :peek, :mark, :unmark, :reset, :ismarked,
-        # Simple reader functions
-        :readavailable, :isreadable)
+for f in (:peek, :mark, :unmark, :reset, :ismarked, :readavailable, :isreadable)
     @eval $(f)(io::AbstractPipe) = $(f)(pipe_reader(io))
 end
 
@@ -364,7 +367,8 @@ reseteof(io::AbstractPipe) = reseteof(pipe_reader(io))
 
 # Exception-safe wrappers (io = open(); try f(io) finally close(io))
 
-write(filename::AbstractString, a1, args...) = open(io->write(io, a1, args...), filename, "w")
+write(filename::AbstractString, a1, args...) =
+    open(io -> write(io, a1, args...), filename, "w")
 
 """
     read(filename::AbstractString, args...)
@@ -376,9 +380,9 @@ Open a file and read its contents. `args` is passed to `read`: this is equivalen
 
 Read the entire contents of a file as a string.
 """
-read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
+read(filename::AbstractString, args...) = open(io -> read(io, args...), filename)
 
-read(filename::AbstractString, ::Type{T}) where {T} = open(io->read(io, T), filename)
+read(filename::AbstractString, ::Type{T}) where {T} = open(io -> read(io, T), filename)
 
 """
     read!(stream::IO, array::Union{Array, BitArray})
@@ -388,7 +392,7 @@ Read binary data from an I/O stream or file, filling in `array`.
 """
 function read! end
 
-read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
+read!(filename::AbstractString, a) = open(io -> read!(io, a), filename)
 
 """
     readuntil(stream::IO, delim; keep::Bool = false)
@@ -415,7 +419,8 @@ julia> readuntil("my_file.txt", '.', keep = true)
 julia> rm("my_file.txt")
 ```
 """
-readuntil(filename::AbstractString, args...; kw...) = open(io->readuntil(io, args...; kw...), filename)
+readuntil(filename::AbstractString, args...; kw...) =
+    open(io -> readuntil(io, args...; kw...), filename)
 
 """
     readline(io::IO=stdin; keep::Bool=false)
@@ -444,21 +449,21 @@ julia> readline("my_file.txt", keep=true)
 julia> rm("my_file.txt")
 ```
 """
-function readline(filename::AbstractString; keep::Bool=false)
+function readline(filename::AbstractString; keep::Bool = false)
     open(filename) do f
-        readline(f, keep=keep)
+        readline(f, keep = keep)
     end
 end
 
-function readline(s::IO=stdin; keep::Bool=false)::String
-    line = readuntil(s, 0x0a, keep=true)
+function readline(s::IO = stdin; keep::Bool = false)::String
+    line = readuntil(s, 0x0a, keep = true)
     i = length(line)
     if keep || i == 0 || line[i] != 0x0a
         return String(line)
     elseif i < 2 || line[i-1] != 0x0d
-        return String(resize!(line,i-1))
+        return String(resize!(line, i - 1))
     else
-        return String(resize!(line,i-2))
+        return String(resize!(line, i - 2))
     end
 end
 
@@ -495,7 +500,7 @@ function readlines(filename::AbstractString; kw...)
         readlines(f; kw...)
     end
 end
-readlines(s=stdin; kw...) = collect(eachline(s; kw...))
+readlines(s = stdin; kw...) = collect(eachline(s; kw...))
 
 ## byte-order mark, ntoh & hton ##
 
@@ -590,10 +595,14 @@ end
 
 @noinline unsafe_write(s::IO, p::Ref{T}, n::Integer) where {T} =
     unsafe_write(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
-unsafe_write(s::IO, p::Ptr, n::Integer) = unsafe_write(s, convert(Ptr{UInt8}, p), convert(UInt, n))
+unsafe_write(s::IO, p::Ptr, n::Integer) =
+    unsafe_write(s, convert(Ptr{UInt8}, p), convert(UInt, n))
 write(s::IO, x::Ref{T}) where {T} = unsafe_write(s, x, Core.sizeof(T))
 write(s::IO, x::Int8) = write(s, reinterpret(UInt8, x))
-function write(s::IO, x::Union{Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128,Float16,Float32,Float64})
+function write(
+    s::IO,
+    x::Union{Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128,Float16,Float32,Float64}
+)
     return write(s, Ref(x))
 end
 
@@ -621,11 +630,11 @@ end
 
 function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
     if !isbitstype(T) || !isa(a, StridedArray)
-        return invoke(write, Tuple{IO, AbstractArray}, s, a)
+        return invoke(write, Tuple{IO,AbstractArray}, s, a)
     end
     elsz = sizeof(T)
-    colsz = size(a,1) * elsz
-    GC.@preserve a if stride(a,1) != 1
+    colsz = size(a, 1) * elsz
+    GC.@preserve a if stride(a, 1) != 1
         for idxs in CartesianIndices(size(a))
             unsafe_write(s, pointer(a, idxs.I), elsz)
         end
@@ -636,7 +645,7 @@ function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
         for idxs in CartesianIndices((1, size(a)[2:end]...))
             unsafe_write(s, pointer(a, idxs.I), colsz)
         end
-        return colsz * trailingsize(a,2)
+        return colsz * trailingsize(a, 2)
     end
 end
 
@@ -665,12 +674,29 @@ function write(to::IO, from::IO)
     return n
 end
 
-@noinline unsafe_read(s::IO, p::Ref{T}, n::Integer) where {T} = unsafe_read(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
-unsafe_read(s::IO, p::Ptr, n::Integer) = unsafe_read(s, convert(Ptr{UInt8}, p), convert(UInt, n))
+@noinline unsafe_read(s::IO, p::Ref{T}, n::Integer) where {T} =
+    unsafe_read(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
+unsafe_read(s::IO, p::Ptr, n::Integer) =
+    unsafe_read(s, convert(Ptr{UInt8}, p), convert(UInt, n))
 read!(s::IO, x::Ref{T}) where {T} = (unsafe_read(s, x, Core.sizeof(T)); x)
 
 read(s::IO, ::Type{Int8}) = reinterpret(Int8, read(s, UInt8))
-function read(s::IO, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
+function read(
+    s::IO,
+    T::Union{
+        Type{Int16},
+        Type{UInt16},
+        Type{Int32},
+        Type{UInt32},
+        Type{Int64},
+        Type{UInt64},
+        Type{Int128},
+        Type{UInt128},
+        Type{Float16},
+        Type{Float32},
+        Type{Float64}
+    }
+)
     return read!(s, Ref{T}(0))[]::T
 end
 
@@ -695,7 +721,7 @@ end
 
 function read(io::IO, ::Type{Char})
     b0 = read(io, UInt8)
-    l = 8(4-leading_ones(b0))
+    l = 8 * (4 - leading_ones(b0))
     c = UInt32(b0) << 24
     if l < 24
         s = 16
@@ -713,9 +739,9 @@ end
 
 # readuntil_string is useful below since it has
 # an optimized method for s::IOStream
-readuntil_string(s::IO, delim::UInt8, keep::Bool) = String(readuntil(s, delim, keep=keep))
+readuntil_string(s::IO, delim::UInt8, keep::Bool) = String(readuntil(s, delim, keep = keep))
 
-function readuntil(s::IO, delim::AbstractChar; keep::Bool=false)
+function readuntil(s::IO, delim::AbstractChar; keep::Bool = false)
     if delim ≤ '\x7f'
         return readuntil_string(s, delim % UInt8, keep)
     end
@@ -731,7 +757,7 @@ function readuntil(s::IO, delim::AbstractChar; keep::Bool=false)
     return String(take!(out))
 end
 
-function readuntil(s::IO, delim::T; keep::Bool=false) where T
+function readuntil(s::IO, delim::T; keep::Bool = false) where T
     out = (T === UInt8 ? StringVector(0) : Vector{T}())
     while !eof(s)
         c = read(s, T)
@@ -774,7 +800,7 @@ function readuntil_vector!(io::IO, target::AbstractVector{T}, keep::Bool, out) w
         c = read(io, T)
         # Backtrack until the next target character matches what was found
         while true
-            c1 = target[pos + first]
+            c1 = target[pos+first]
             if c == c1
                 pos += 1
                 break
@@ -791,12 +817,12 @@ function readuntil_vector!(io::IO, target::AbstractVector{T}, keep::Bool, out) w
                     cache = zeros(Int, len)
                 end
                 while max_pos < pos
-                    ci = target[max_pos + first]
+                    ci = target[max_pos+first]
                     b = max_pos
                     max_pos += 1
                     while b != 0
                         b = cache[b]
-                        cb = target[b + first]
+                        cb = target[b+first]
                         if ci == cb
                             cache[max_pos] = b + 1
                             break
@@ -809,7 +835,7 @@ function readuntil_vector!(io::IO, target::AbstractVector{T}, keep::Bool, out) w
                     # and add the removed prefix from the target to the output
                     # if not always keeping the match
                     for b in 1:(pos - pos1)
-                        output!(out, target[b - 1 + first])
+                        output!(out, target[b-1+first])
                     end
                 end
                 pos = pos1
@@ -825,13 +851,13 @@ function readuntil_vector!(io::IO, target::AbstractVector{T}, keep::Bool, out) w
         # add the partial match to the output
         # if not always keeping the match
         for b in 1:pos
-            output!(out, target[b - 1 + first])
+            output!(out, target[b-1+first])
         end
     end
     return false
 end
 
-function readuntil(io::IO, target::AbstractString; keep::Bool=false)
+function readuntil(io::IO, target::AbstractString; keep::Bool = false)
     # small-string target optimizations
     isempty(target) && return ""
     c, rest = Iterators.peel(target)
@@ -843,10 +869,10 @@ function readuntil(io::IO, target::AbstractString; keep::Bool=false)
         target = String(target)
     end
     target = codeunits(target)::AbstractVector
-    return String(readuntil(io, target, keep=keep))
+    return String(readuntil(io, target, keep = keep))
 end
 
-function readuntil(io::IO, target::AbstractVector{T}; keep::Bool=false) where T
+function readuntil(io::IO, target::AbstractVector{T}; keep::Bool = false) where T
     out = (T === UInt8 ? StringVector(0) : Vector{T}())
     readuntil_vector!(io, target, keep, out)
     return out
@@ -881,7 +907,7 @@ Read at most `nb` bytes from `stream` into `b`, returning the number of bytes re
 The size of `b` will be increased if needed (i.e. if `nb` is greater than `length(b)`
 and enough bytes could be read), but it will never be decreased.
 """
-function readbytes!(s::IO, b::AbstractArray{UInt8}, nb=length(b))
+function readbytes!(s::IO, b::AbstractArray{UInt8}, nb = length(b))
     require_one_based_indexing(b)
     olb = lb = length(b)
     nr = 0
@@ -918,11 +944,11 @@ read(s::IO, T::Type) = error("The IO stream does not support reading objects of 
 
 ## high-level iterator interfaces ##
 
-struct EachLine{IOT <: IO}
+struct EachLine{IOT<:IO}
     stream::IOT
     ondone::Function
     keep::Bool
-    EachLine(stream::IO=stdin; ondone::Function=()->nothing, keep::Bool=false) =
+    EachLine(stream::IO = stdin; ondone::Function = () -> nothing, keep::Bool = false) =
         new{typeof(stream)}(stream, ondone, keep)
 end
 
@@ -951,18 +977,18 @@ JuliaLang is a GitHub organization. It has many members.
 julia> rm("my_file.txt");
 ```
 """
-function eachline(stream::IO=stdin; keep::Bool=false)
-    EachLine(stream, keep=keep)::EachLine
+function eachline(stream::IO = stdin; keep::Bool = false)
+    EachLine(stream, keep = keep)::EachLine
 end
 
-function eachline(filename::AbstractString; keep::Bool=false)
+function eachline(filename::AbstractString; keep::Bool = false)
     s = open(filename)
-    EachLine(s, ondone=()->close(s), keep=keep)::EachLine
+    EachLine(s, ondone = () -> close(s), keep = keep)::EachLine
 end
 
-function iterate(itr::EachLine, state=nothing)
+function iterate(itr::EachLine, state = nothing)
     eof(itr.stream) && return (itr.ondone(); nothing)
-    (readline(itr.stream, keep=itr.keep), nothing)
+    (readline(itr.stream, keep = itr.keep), nothing)
 end
 
 eltype(::Type{<:EachLine}) = String
@@ -1006,7 +1032,7 @@ previously marked position. Throw an error if the stream is not marked.
 
 See also [`mark`](@ref), [`unmark`](@ref), [`ismarked`](@ref).
 """
-function reset(io::T) where T<:IO
+function reset(io::T) where T <: IO
     ismarked(io) || throw(ArgumentError("$T not marked"))
     m = io.mark
     seek(io, m)
@@ -1052,7 +1078,7 @@ julia> String(readavailable(buf))
 "text"
 ```
 """
-function skipchars(predicate, io::IO; linecomment=nothing)
+function skipchars(predicate, io::IO; linecomment = nothing)
     while !eof(io)
         c = read(io, Char)
         if c === linecomment
@@ -1089,14 +1115,14 @@ julia> countlines(io, eol = '.')
 0
 ```
 """
-function countlines(io::IO; eol::AbstractChar='\n')
+function countlines(io::IO; eol::AbstractChar = '\n')
     isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
     aeol = UInt8(eol)
     a = Vector{UInt8}(undef, 8192)
     nl = nb = 0
     while !eof(io)
         nb = readbytes!(io, a)
-        @simd for i=1:nb
+        @simd for i = 1:nb
             @inbounds nl += a[i] == aeol
         end
     end
@@ -1106,4 +1132,5 @@ function countlines(io::IO; eol::AbstractChar='\n')
     nl
 end
 
-countlines(f::AbstractString; eol::AbstractChar = '\n') = open(io->countlines(io, eol = eol), f)::Int
+countlines(f::AbstractString; eol::AbstractChar = '\n') =
+    open(io -> countlines(io, eol = eol), f)::Int

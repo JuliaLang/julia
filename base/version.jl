@@ -27,9 +27,13 @@ struct VersionNumber
     prerelease::Tuple{Vararg{Union{UInt64,String}}}
     build::Tuple{Vararg{Union{UInt64,String}}}
 
-    function VersionNumber(major::VInt, minor::VInt, patch::VInt,
-            pre::Tuple{Vararg{Union{UInt64,String}}},
-            bld::Tuple{Vararg{Union{UInt64,String}}})
+    function VersionNumber(
+        major::VInt,
+        minor::VInt,
+        patch::VInt,
+        pre::Tuple{Vararg{Union{UInt64,String}}},
+        bld::Tuple{Vararg{Union{UInt64,String}}}
+    )
         major >= 0 || throw(ArgumentError("invalid negative major version: $major"))
         minor >= 0 || throw(ArgumentError("invalid negative minor version: $minor"))
         patch >= 0 || throw(ArgumentError("invalid negative patch version: $patch"))
@@ -38,7 +42,7 @@ struct VersionNumber
                 ident >= 0 || throw(ArgumentError("invalid negative pre-release identifier: $ident"))
             else
                 if !occursin(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
-                    isempty(ident) && !(length(pre)==1 && isempty(bld))
+                   isempty(ident) && !(length(pre) == 1 && isempty(bld))
                     throw(ArgumentError("invalid pre-release identifier: $(repr(ident))"))
                 end
             end
@@ -48,7 +52,7 @@ struct VersionNumber
                 ident >= 0 || throw(ArgumentError("invalid negative build identifier: $ident"))
             else
                 if !occursin(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
-                    isempty(ident) && length(bld)!=1
+                   isempty(ident) && length(bld) != 1
                     throw(ArgumentError("invalid build identifier: $(repr(ident))"))
                 end
             end
@@ -56,12 +60,20 @@ struct VersionNumber
         new(major, minor, patch, pre, bld)
     end
 end
-VersionNumber(major::Integer, minor::Integer = 0, patch::Integer = 0,
-        pre::Tuple{Vararg{Union{Integer,AbstractString}}} = (),
-        bld::Tuple{Vararg{Union{Integer,AbstractString}}} = ()) =
-    VersionNumber(VInt(major), VInt(minor), VInt(patch),
-        map(x->x isa Integer ? UInt64(x) : String(x), pre),
-        map(x->x isa Integer ? UInt64(x) : String(x), bld))
+VersionNumber(
+    major::Integer,
+    minor::Integer = 0,
+    patch::Integer = 0,
+    pre::Tuple{Vararg{Union{Integer,AbstractString}}} = (),
+    bld::Tuple{Vararg{Union{Integer,AbstractString}}} = ()
+) =
+    VersionNumber(
+        VInt(major),
+        VInt(minor),
+        VInt(patch),
+        map(x -> x isa Integer ? UInt64(x) : String(x), pre),
+        map(x -> x isa Integer ? UInt64(x) : String(x), bld)
+    )
 
 VersionNumber(v::Tuple) = VersionNumber(v...)
 
@@ -74,11 +86,11 @@ function print(io::IO, v::VersionNumber)
     print(io, v.patch)
     if !isempty(v.prerelease)
         print(io, '-')
-        join(io, v.prerelease,'.')
+        join(io, v.prerelease, '.')
     end
     if !isempty(v.build)
         print(io, '+')
-        join(io, v.build,'.')
+        join(io, v.build, '.')
     end
 end
 show(io::IO, v::VersionNumber) = print(io, "v\"", v, "\"")
@@ -86,16 +98,16 @@ show(io::IO, v::VersionNumber) = print(io, "v\"", v, "\"")
 Broadcast.broadcastable(v::VersionNumber) = Ref(v)
 
 const VERSION_REGEX = r"^
-    v?                                      # prefix        (optional)
-    (\d+)                                   # major         (required)
-    (?:\.(\d+))?                            # minor         (optional)
-    (?:\.(\d+))?                            # patch         (optional)
-    (?:(-)|                                 # pre-release   (optional)
-    ([a-z][0-9a-z-]*(?:\.[0-9a-z-]+)*|-(?:[0-9a-z-]+\.)*[0-9a-z-]+)?
-    (?:(\+)|
-    (?:\+((?:[0-9a-z-]+\.)*[0-9a-z-]+))?    # build         (optional)
-    ))
-$"ix
+                           v?                                      # prefix        (optional)
+                           (\d+)                                   # major         (required)
+                           (?:\.(\d+))?                            # minor         (optional)
+                           (?:\.(\d+))?                            # patch         (optional)
+                           (?:(-)|                                 # pre-release   (optional)
+                           ([a-z][0-9a-z-]*(?:\.[0-9a-z-]+)*|-(?:[0-9a-z-]+\.)*[0-9a-z-]+)?
+                           (?:(\+)|
+                           (?:\+((?:[0-9a-z-]+\.)*[0-9a-z-]+))?    # build         (optional)
+                           ))
+                       $"ix
 
 function split_idents(s::AbstractString)
     idents = split(s, '.')
@@ -117,7 +129,7 @@ function VersionNumber(v::AbstractString)
         prerl = prerl[2:end] # strip leading '-'
     end
     prerl = prerl !== nothing ? split_idents(prerl) : minus !== nothing ? ("",) : ()
-    build = build !== nothing ? split_idents(build) : plus  !== nothing ? ("",) : ()
+    build = build !== nothing ? split_idents(build) : plus !== nothing ? ("",) : ()
     return VersionNumber(major, minor, patch, prerl, build)
 end
 
@@ -135,7 +147,9 @@ julia> v"2.0.1-rc1"
 v"2.0.1-rc1"
 ```
 """
-macro v_str(v); VersionNumber(v); end
+macro v_str(v)
+    VersionNumber(v)
+end
 
 typemin(::Type{VersionNumber}) = v"0-"
 
@@ -145,20 +159,19 @@ function typemax(::Type{VersionNumber})
 end
 
 ident_cmp(a::Integer, b::Integer) = cmp(a, b)
-ident_cmp(a::Integer, b::String ) = isempty(b) ? +1 : -1
-ident_cmp(a::String,  b::Integer) = isempty(a) ? -1 : +1
-ident_cmp(a::String,  b::String ) = cmp(a, b)
+ident_cmp(a::Integer, b::String) = isempty(b) ? +1 : -1
+ident_cmp(a::String, b::Integer) = isempty(a) ? -1 : +1
+ident_cmp(a::String, b::String) = cmp(a, b)
 
 function ident_cmp(
     A::Tuple{Vararg{Union{Integer,String}}},
     B::Tuple{Vararg{Union{Integer,String}}},
 )
     for (a, b) in zip(A, B)
-       c = ident_cmp(a,b)
-       (c != 0) && return c
+        c = ident_cmp(a, b)
+        (c != 0) && return c
     end
-    length(A) < length(B) ? -1 :
-    length(B) < length(A) ? +1 : 0
+    length(A) < length(B) ? -1 : length(B) < length(A) ? +1 : 0
 end
 
 function ==(a::VersionNumber, b::VersionNumber)
@@ -170,7 +183,7 @@ function ==(a::VersionNumber, b::VersionNumber)
     return true
 end
 
-issupbuild(v::VersionNumber) = length(v.build)==1 && isempty(v.build[1])
+issupbuild(v::VersionNumber) = length(v.build) == 1 && isempty(v.build[1])
 
 function isless(a::VersionNumber, b::VersionNumber)
     (a.major < b.major) && return true
@@ -181,12 +194,12 @@ function isless(a::VersionNumber, b::VersionNumber)
     (a.patch > b.patch) && return false
     (!isempty(a.prerelease) && isempty(b.prerelease)) && return true
     (isempty(a.prerelease) && !isempty(b.prerelease)) && return false
-    c = ident_cmp(a.prerelease,b.prerelease)
+    c = ident_cmp(a.prerelease, b.prerelease)
     (c < 0) && return true
     (c > 0) && return false
     (!issupbuild(a) && issupbuild(b)) && return true
     (issupbuild(a) && !issupbuild(b)) && return false
-    c = ident_cmp(a.build,b.build)
+    c = ident_cmp(a.build, b.build)
     (c < 0) && return true
     return false
 end
@@ -207,9 +220,12 @@ thispatch(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch)
 thisminor(v::VersionNumber) = VersionNumber(v.major, v.minor, 0)
 thismajor(v::VersionNumber) = VersionNumber(v.major, 0, 0)
 
-nextpatch(v::VersionNumber) = v < thispatch(v) ? thispatch(v) : VersionNumber(v.major, v.minor, v.patch+1)
-nextminor(v::VersionNumber) = v < thisminor(v) ? thisminor(v) : VersionNumber(v.major, v.minor+1, 0)
-nextmajor(v::VersionNumber) = v < thismajor(v) ? thismajor(v) : VersionNumber(v.major+1, 0, 0)
+nextpatch(v::VersionNumber) =
+    v < thispatch(v) ? thispatch(v) : VersionNumber(v.major, v.minor, v.patch + 1)
+nextminor(v::VersionNumber) =
+    v < thisminor(v) ? thisminor(v) : VersionNumber(v.major, v.minor + 1, 0)
+nextmajor(v::VersionNumber) =
+    v < thismajor(v) ? thismajor(v) : VersionNumber(v.major + 1, 0, 0)
 
 ## julia version info
 
@@ -223,10 +239,22 @@ const VERSION = try
     ver = VersionNumber(VERSION_STRING)
     if !isempty(ver.prerelease)
         if GIT_VERSION_INFO.build_number >= 0
-            ver = VersionNumber(ver.major, ver.minor, ver.patch, (ver.prerelease..., GIT_VERSION_INFO.build_number), ver.build)
+            ver = VersionNumber(
+                ver.major,
+                ver.minor,
+                ver.patch,
+                (ver.prerelease..., GIT_VERSION_INFO.build_number),
+                ver.build
+            )
         else
             println("WARNING: no build number found for pre-release version")
-            ver = VersionNumber(ver.major, ver.minor, ver.patch, (ver.prerelease..., "unknown"), ver.build)
+            ver = VersionNumber(
+                ver.major,
+                ver.minor,
+                ver.patch,
+                (ver.prerelease..., "unknown"),
+                ver.build
+            )
         end
     elseif GIT_VERSION_INFO.build_number > 0
         println("WARNING: ignoring non-zero build number for VERSION")
@@ -245,7 +273,8 @@ function banner(io::IO = stdout)
     elseif isempty(GIT_VERSION_INFO.commit)
         commit_string = ""
     else
-        days = Int(floor((ccall(:jl_clock_now, Float64, ()) - GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
+        days = Int(floor((ccall(:jl_clock_now, Float64, ()) -
+                          GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
         days = max(0, days)
         unit = days == 1 ? "day" : "days"
         distance = GIT_VERSION_INFO.fork_master_distance
@@ -259,38 +288,42 @@ function banner(io::IO = stdout)
         end
     end
 
-    commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
+    commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" :
+                  " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
 
     if get(io, :color, false)
         c = text_colors
         tx = c[:normal] # text
         jl = c[:normal] # julia
-        d1 = c[:bold] * c[:blue]    # first dot
-        d2 = c[:bold] * c[:red]     # second dot
-        d3 = c[:bold] * c[:green]   # third dot
+        d1 = c[:bold] * c[:blue] # first dot
+        d2 = c[:bold] * c[:red] # second dot
+        d3 = c[:bold] * c[:green] # third dot
         d4 = c[:bold] * c[:magenta] # fourth dot
 
-        print(io,"""               $(d3)_$(tx)
-           $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
-          $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
-           $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
-          $(jl)| | | | | | |/ _` |$(tx)  |
-          $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
-         $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
-        $(jl)|__/$(tx)                   |
+        print(
+            io,
+            """               $(d3)_$(tx)
+               $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
+              $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
+               $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
+              $(jl)| | | | | | |/ _` |$(tx)  |
+              $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
+             $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
+            $(jl)|__/$(tx)                   |
 
-        """)
+            """
+        )
     else
-        print(io,"""
-                       _
-           _       _ _(_)_     |  Documentation: https://docs.julialang.org
-          (_)     | (_) (_)    |
-           _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
-          | | | | | | |/ _` |  |
-          | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
-         _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
-        |__/                   |
+        print(io, """
+                                 _
+                     _       _ _(_)_     |  Documentation: https://docs.julialang.org
+                    (_)     | (_) (_)    |
+                     _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
+                    | | | | | | |/ _` |  |
+                    | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
+                   _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
+                  |__/                   |
 
-        """)
+                  """)
     end
 end

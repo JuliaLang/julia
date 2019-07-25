@@ -18,9 +18,11 @@ Compute the amount of memory, in bytes, used by all unique objects reachable fro
 - `chargeall`: specifies the types of objects to always charge the size of all of their
   fields, even if those fields would normally be excluded.
 """
-function summarysize(obj;
-                     exclude = Union{DataType, Core.TypeName, Core.MethodInstance},
-                     chargeall = Union{Core.TypeMapEntry, Method})
+function summarysize(
+    obj;
+    exclude = Union{DataType,Core.TypeName,Core.MethodInstance},
+    chargeall = Union{Core.TypeMapEntry,Method}
+)
     @nospecialize obj exclude chargeall
     ss = SummarySize(IdDict(), Any[], Int[], exclude, chargeall)
     size::Int = ss(obj)
@@ -53,7 +55,8 @@ function summarysize(obj;
             pop!(ss.frontier_x)
             pop!(ss.frontier_i)
         end
-        if val !== nothing && !isa(val, Module) && (!isa(val, ss.exclude) || isa(x, ss.chargeall))
+        if val !== nothing &&
+           !isa(val, Module) && (!isa(val, ss.exclude) || isa(x, ss.chargeall))
             size += ss(val)::Int
         end
     end
@@ -103,7 +106,7 @@ end
 
 function (ss::SummarySize)(obj::Array)
     haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
-    headersize = 4*sizeof(Int) + 8 + max(0, ndims(obj)-2)*sizeof(Int)
+    headersize = 4 * sizeof(Int) + 8 + max(0, ndims(obj) - 2) * sizeof(Int)
     size::Int = headersize
     datakey = unsafe_convert(Ptr{Cvoid}, obj)
     if !haskey(ss.seen, datakey)
@@ -139,7 +142,8 @@ function (ss::SummarySize)(obj::Module)
                 if isa(value, UnionAll)
                     value = unwrap_unionall(value)
                 end
-                if isa(value, DataType) && value.name.module === obj && value.name.name === binding
+                if isa(value, DataType) &&
+                   value.name.module === obj && value.name.name === binding
                     # charge a TypeName to its module (but not to the type)
                     size += ss(value.name)::Int
                 end

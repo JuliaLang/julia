@@ -20,30 +20,30 @@ hash(w::WeakRef, h::UInt) = hash(w.value, h)
 
 ## hashing general objects ##
 
-hash(@nospecialize(x), h::UInt) = hash_uint(3h - objectid(x))
+hash(@nospecialize(x), h::UInt) = hash_uint(3 * h - objectid(x))
 
 ## core data hashing functions ##
 
 function hash_64_64(n::UInt64)
     a::UInt64 = n
     a = ~a + a << 21
-    a =  a ⊻ a >> 24
-    a =  a + a << 3 + a << 8
-    a =  a ⊻ a >> 14
-    a =  a + a << 2 + a << 4
-    a =  a ⊻ a >> 28
-    a =  a + a << 31
+    a = a ⊻ a >> 24
+    a = a + a << 3 + a << 8
+    a = a ⊻ a >> 14
+    a = a + a << 2 + a << 4
+    a = a ⊻ a >> 28
+    a = a + a << 31
     return a
 end
 
 function hash_64_32(n::UInt64)
     a::UInt64 = n
     a = ~a + a << 18
-    a =  a ⊻ a >> 31
-    a =  a * 21
-    a =  a ⊻ a >> 11
-    a =  a + a << 6
-    a =  a ⊻ a >> 22
+    a = a ⊻ a >> 31
+    a = a * 21
+    a = a ⊻ a >> 11
+    a = a + a << 6
+    a = a ⊻ a >> 22
     return a % UInt32
 end
 
@@ -60,10 +60,10 @@ end
 
 if UInt === UInt64
     hash_uint64(x::UInt64) = hash_64_64(x)
-    hash_uint(x::UInt)     = hash_64_64(x)
+    hash_uint(x::UInt) = hash_64_64(x)
 else
     hash_uint64(x::UInt64) = hash_64_32(x)
-    hash_uint(x::UInt)     = hash_32_32(x)
+    hash_uint(x::UInt) = hash_32_32(x)
 end
 
 ## symbol & expression hashing ##

@@ -43,15 +43,21 @@ LN2L(::Type{Float32}) = 9.0580006145f-6
 
 # max and min arguments
 MAX_EXP(::Type{Float64}) = 7.09782712893383996732e2 # log 2^1023*(2-2^-52)
-MAX_EXP(::Type{Float32}) = 88.72283905206835f0      # log 2^127 *(2-2^-23)
+MAX_EXP(::Type{Float32}) = 88.72283905206835f0 # log 2^127 *(2-2^-23)
 
 # one less than the min exponent since we can sqeeze a bit more from the exp function
 MIN_EXP(::Type{Float64}) = -7.451332191019412076235e2 # log 2^-1075
-MIN_EXP(::Type{Float32}) = -103.97207708f0            # log 2^-150
+MIN_EXP(::Type{Float32}) = -103.97207708f0 # log 2^-150
 
-@inline exp_kernel(x::Float64) = @horner(x, 1.66666666666666019037e-1,
-    -2.77777777770155933842e-3, 6.61375632143793436117e-5,
-    -1.65339022054652515390e-6, 4.13813679705723846039e-8)
+@inline exp_kernel(x::Float64) =
+    @horner(
+        x,
+        1.66666666666666019037e-1,
+        -2.77777777770155933842e-3,
+        6.61375632143793436117e-5,
+        -1.65339022054652515390e-6,
+        4.13813679705723846039e-8
+    )
 
 @inline exp_kernel(x::Float32) = @horner(x, 1.6666625440f-1, -2.7667332906f-3)
 
@@ -71,7 +77,7 @@ julia> exp(1.0)
 ```
 """
 exp(x::Real) = exp(float(x))
-function exp(x::T) where T<:Union{Float32,Float64}
+function exp(x::T) where T <: Union{Float32,Float64}
     xa = reinterpret(Unsigned, x) & ~sign_mask(T)
     xsb = signbit(x)
 
@@ -92,9 +98,9 @@ function exp(x::T) where T<:Union{Float32,Float64}
         return 2.718281828459045235360
     end
     # compute approximation
-    if xa > reinterpret(Unsigned, T(0.5)*T(LN2)) # |x| > 0.5 log(2)
+    if xa > reinterpret(Unsigned, T(0.5) * T(LN2)) # |x| > 0.5 log(2)
         # argument reduction
-        if xa < reinterpret(Unsigned, T(1.5)*T(LN2)) # |x| < 1.5 log(2)
+        if xa < reinterpret(Unsigned, T(1.5) * T(LN2)) # |x| < 1.5 log(2)
             if xsb
                 k = -1
                 hi = x + LN2U(T)
@@ -105,25 +111,32 @@ function exp(x::T) where T<:Union{Float32,Float64}
                 lo = LN2L(T)
             end
         else
-            n = round(T(LOG2_E)*x)
-            k = unsafe_trunc(Int,n)
+            n = round(T(LOG2_E) * x)
+            k = unsafe_trunc(Int, n)
             hi = muladd(n, -LN2U(T), x)
-            lo = n*LN2L(T)
+            lo = n * LN2L(T)
         end
         # compute approximation on reduced argument
         r = hi - lo
-        z = r*r
-        p = r - z*exp_kernel(z)
-        y = T(1.0) - ((lo - (r*p)/(T(2.0) - p)) - hi)
+        z = r * r
+        p = r - z * exp_kernel(z)
+        y = T(1.0) - ((lo - (r * p) / (T(2.0) - p)) - hi)
         # scale back
         if k > -significand_bits(T)
             # multiply by 2.0 first to prevent overflow, which helps extends the range
             k == exponent_max(T) && return y * T(2.0) * T(2.0)^(exponent_max(T) - 1)
-            twopk = reinterpret(T, rem(exponent_bias(T) + k, uinttype(T)) << significand_bits(T))
-            return y*twopk
+            twopk = reinterpret(
+                T,
+                rem(exponent_bias(T) + k, uinttype(T)) << significand_bits(T)
+            )
+            return y * twopk
         else
             # add significand_bits(T) + 1 to lift the range outside the subnormals
-            twopk = reinterpret(T, rem(exponent_bias(T) + significand_bits(T) + 1 + k, uinttype(T)) << significand_bits(T))
+            twopk = reinterpret(
+                T,
+                rem(exponent_bias(T) + significand_bits(T) + 1 + k, uinttype(T)) <<
+                significand_bits(T)
+            )
             return y * twopk * T(2.0)^(-significand_bits(T) - 1)
         end
     elseif xa < reinterpret(Unsigned, exp_small_thres(T)) # |x| < exp_small_thres
@@ -131,8 +144,8 @@ function exp(x::T) where T<:Union{Float32,Float64}
         return T(1.0) + x
     else
         # primary range with k = 0, so compute approximation directly
-        z = x*x
-        p = x - z*exp_kernel(z)
-        return T(1.0) - ((x*p)/(p - T(2.0)) - x)
+        z = x * x
+        p = x - z * exp_kernel(z)
+        return T(1.0) - ((x * p) / (p - T(2.0)) - x)
     end
 end

@@ -1,13 +1,19 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using  Base.MultiplicativeInverses: SignedMultiplicativeInverse
+using Base.MultiplicativeInverses: SignedMultiplicativeInverse
 
-struct ReshapedArray{T,N,P<:AbstractArray,MI<:Tuple{Vararg{SignedMultiplicativeInverse{Int}}}} <: AbstractArray{T,N}
+struct ReshapedArray{
+    T,
+    N,
+    P<:AbstractArray,
+    MI<:Tuple{Vararg{SignedMultiplicativeInverse{Int}}}
+} <: AbstractArray{T,N}
     parent::P
     dims::NTuple{N,Int}
     mi::MI
 end
-ReshapedArray(parent::AbstractArray{T}, dims::NTuple{N,Int}, mi) where {T,N} = ReshapedArray{T,N,typeof(parent),typeof(mi)}(parent, dims, mi)
+ReshapedArray(parent::AbstractArray{T}, dims::NTuple{N,Int}, mi) where {T,N} =
+    ReshapedArray{T,N,typeof(parent),typeof(mi)}(parent, dims, mi)
 
 # IndexLinear ReshapedArray
 const ReshapedArrayLF{T,N,P<:AbstractArray} = ReshapedArray{T,N,P,Tuple{}}
@@ -33,7 +39,8 @@ end
     ReshapedIndex(item), inext
 end
 length(R::ReshapedArrayIterator) = length(R.iter)
-eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedIndex{eltype(I)} : Any
+eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} =
+    @isdefined(I) ? ReshapedIndex{eltype(I)} : Any
 
 ## reshape(::Array, ::Dims) returns an Array, except for isbitsunion eltypes (issue #28611)
 # reshaping to same # of dimensions
@@ -108,22 +115,32 @@ julia> reshape(1:6, 2, 3)
 reshape
 
 reshape(parent::AbstractArray, dims::IntOrInd...) = reshape(parent, dims)
-reshape(parent::AbstractArray, shp::Tuple{Union{Integer,OneTo}, Vararg{Union{Integer,OneTo}}}) = reshape(parent, to_shape(shp))
-reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
+reshape(
+    parent::AbstractArray,
+    shp::Tuple{Union{Integer,OneTo},Vararg{Union{Integer,OneTo}}}
+) = reshape(parent, to_shape(shp))
+reshape(parent::AbstractArray, dims::Dims) = _reshape(parent, dims)
 
 # Allow missing dimensions with Colon():
 reshape(parent::AbstractArray, dims::Int...) = reshape(parent, dims)
 reshape(parent::AbstractArray, dims::Union{Int,Colon}...) = reshape(parent, dims)
-reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = _reshape(parent, _reshape_uncolon(parent, dims))
+reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) =
+    _reshape(parent, _reshape_uncolon(parent, dims))
 @inline function _reshape_uncolon(A, dims)
-    @noinline throw1(dims) = throw(DimensionMismatch(string("new dimensions $(dims) ",
-        "may have at most one omitted dimension specified by `Colon()`")))
-    @noinline throw2(A, dims) = throw(DimensionMismatch(string("array size $(length(A)) ",
-        "must be divisible by the product of the new dimensions $dims")))
+    @noinline throw1(dims) =
+        throw(DimensionMismatch(string(
+            "new dimensions $(dims) ",
+            "may have at most one omitted dimension specified by `Colon()`"
+        )))
+    @noinline throw2(A, dims) =
+        throw(DimensionMismatch(string(
+            "array size $(length(A)) ",
+            "must be divisible by the product of the new dimensions $dims"
+        )))
     pre = _before_colon(dims...)
     post = _after_colon(dims...)
     _any_colon(post...) && throw1(dims)
-    sz, remainder = divrem(length(A), prod(pre)*prod(post))
+    sz, remainder = divrem(length(A), prod(pre) * prod(post))
     remainder == 0 || throw2(A, dims)
     (pre..., Int(sz), post...)
 end
@@ -132,7 +149,7 @@ end
 @inline _any_colon(dim::Any, tail...) = _any_colon(tail...)
 @inline _before_colon(dim::Any, tail...) = (dim, _before_colon(tail...)...)
 @inline _before_colon(dim::Colon, tail...) = ()
-@inline _after_colon(dim::Any, tail...) =  _after_colon(tail...)
+@inline _after_colon(dim::Any, tail...) = _after_colon(tail...)
 @inline _after_colon(dim::Colon, tail...) = tail
 
 reshape(parent::AbstractArray{T,N}, ndims::Val{N}) where {T,N} = parent
@@ -154,7 +171,8 @@ rdims(out::NTuple{N,Any}, inds::Tuple{}) where {N} = out # N > 1, M == 0
 rdims(out::Tuple{Any}, inds::Tuple{Any}) = inds # N == 1, M == 1
 rdims(out::Tuple{Any}, inds::NTuple{M,Any}) where {M} = (OneTo(rdims_trailing(inds...)),) # N == 1, M > 1
 rdims(out::NTuple{N,Any}, inds::NTuple{N,Any}) where {N} = inds # N > 1, M == N
-rdims(out::NTuple{N,Any}, inds::NTuple{M,Any}) where {N,M} = (first(inds), rdims(tail(out), tail(inds))...) # N > 1, M > 1, M != N
+rdims(out::NTuple{N,Any}, inds::NTuple{M,Any}) where {N,M} =
+    (first(inds), rdims(tail(out), tail(inds))...) # N > 1, M > 1, M != N
 
 
 # _reshape on Array returns an Array
@@ -187,7 +205,7 @@ _reshape(R::ReshapedArray, dims::Dims) = _reshape(R.parent, dims)
 function __reshape(p::Tuple{AbstractArray,IndexCartesian}, dims::Dims)
     parent = p[1]
     strds = front(size_to_strides(map(length, axes(parent))..., 1))
-    strds1 = map(s->max(1,Int(s)), strds)  # for resizing empty arrays
+    strds1 = map(s -> max(1, Int(s)), strds) # for resizing empty arrays
     mi = map(SignedMultiplicativeInverse, strds1)
     ReshapedArray(parent, dims, reverse(mi))
 end
@@ -207,7 +225,8 @@ similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype,
 IndexStyle(::Type{<:ReshapedArrayLF}) = IndexLinear()
 parent(A::ReshapedArray) = A.parent
 parentindices(A::ReshapedArray) = map(OneTo, size(parent(A)))
-reinterpret(::Type{T}, A::ReshapedArray, dims::Dims) where {T} = reinterpret(T, parent(A), dims)
+reinterpret(::Type{T}, A::ReshapedArray, dims::Dims) where {T} =
+    reinterpret(T, parent(A), dims)
 elsize(::Type{<:ReshapedArray{<:Any,<:Any,P}}) where {P} = elsize(P)
 
 unaliascopy(A::ReshapedArray) = typeof(A)(unaliascopy(A.parent), A.dims, A.mi)
@@ -259,7 +278,11 @@ end
     val
 end
 
-@inline function _unsafe_setindex!(A::ReshapedArray{T,N}, val, indices::Vararg{Int,N}) where {T,N}
+@inline function _unsafe_setindex!(
+    A::ReshapedArray{T,N},
+    val,
+    indices::Vararg{Int,N}
+) where {T,N}
     @inbounds parent(A)[ind2sub_rs(axes(A.parent), A.mi, Base._sub2ind(size(A), indices...))...] = val
     val
 end
@@ -267,9 +290,12 @@ end
 # helpful error message for a common failure case
 const ReshapedRange{T,N,A<:AbstractRange} = ReshapedArray{T,N,A,Tuple{}}
 setindex!(A::ReshapedRange, val, index::Int) = _rs_setindex!_err()
-setindex!(A::ReshapedRange{T,N}, val, indices::Vararg{Int,N}) where {T,N} = _rs_setindex!_err()
+setindex!(A::ReshapedRange{T,N}, val, indices::Vararg{Int,N}) where {T,N} =
+    _rs_setindex!_err()
 setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()
 
-@noinline _rs_setindex!_err() = error("indexed assignment fails for a reshaped range; consider calling collect")
+@noinline _rs_setindex!_err() =
+    error("indexed assignment fails for a reshaped range; consider calling collect")
 
-unsafe_convert(::Type{Ptr{T}}, a::ReshapedArray{T}) where {T} = unsafe_convert(Ptr{T}, parent(a))
+unsafe_convert(::Type{Ptr{T}}, a::ReshapedArray{T}) where {T} =
+    unsafe_convert(Ptr{T}, parent(a))

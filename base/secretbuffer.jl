@@ -33,7 +33,7 @@ mutable struct SecretBuffer <: IO
     size::Int
     ptr::Int
 
-    function SecretBuffer(; sizehint=128)
+    function SecretBuffer(; sizehint = 128)
         s = new(Vector{UInt8}(undef, sizehint), 0, 1)
         finalizer(final_shred!, s)
         return s
@@ -54,7 +54,7 @@ the `Base.SecretBuffer!(::Vector{UInt8})` constructor.
 SecretBuffer(str::AbstractString) = SecretBuffer(String(str))
 function SecretBuffer(str::String)
     buf = codeunits(str)
-    s = SecretBuffer(sizehint=length(buf))
+    s = SecretBuffer(sizehint = length(buf))
     for c in buf
         write(s, c)
     end
@@ -70,7 +70,7 @@ Initialize a new `SecretBuffer` from `data`, securely zeroing `data` afterwards.
 """
 function SecretBuffer!(d::Vector{UInt8})
     len = length(d)
-    s = SecretBuffer(sizehint=len)
+    s = SecretBuffer(sizehint = len)
     for i in 1:len
         write(s, d[i])
     end
@@ -79,9 +79,10 @@ function SecretBuffer!(d::Vector{UInt8})
     s
 end
 
-unsafe_SecretBuffer!(s::Cstring) = unsafe_SecretBuffer!(convert(Ptr{UInt8}, s), ccall(:strlen, Cint, (Cstring,), s))
-function unsafe_SecretBuffer!(p::Ptr{UInt8}, len=1)
-    s = SecretBuffer(sizehint=len)
+unsafe_SecretBuffer!(s::Cstring) =
+    unsafe_SecretBuffer!(convert(Ptr{UInt8}, s), ccall(:strlen, Cint, (Cstring,), s))
+function unsafe_SecretBuffer!(p::Ptr{UInt8}, len = 1)
+    s = SecretBuffer(sizehint = len)
     for i in 1:len
         write(s, unsafe_load(p, i))
     end
@@ -94,7 +95,9 @@ end
 show(io::IO, s::SecretBuffer) = print(io, "SecretBuffer(\"*******\")")
 
 # Unlike other IO objects, equality is computed by value for convenience
-==(s1::SecretBuffer, s2::SecretBuffer) = (s1.ptr == s2.ptr) && (s1.size == s2.size) && (UInt8(0) == _bufcmp(s1.data, s2.data, min(s1.size, s2.size)))
+==(s1::SecretBuffer, s2::SecretBuffer) =
+    (s1.ptr == s2.ptr) &&
+    (s1.size == s2.size) && (UInt8(0) == _bufcmp(s1.data, s2.data, min(s1.size, s2.size)))
 # Also attempt a constant time buffer comparison algorithm — the length of the secret might be
 # inferred by a timing attack, but not its values.
 @noinline function _bufcmp(data1::Vector{UInt8}, data2::Vector{UInt8}, sz::Int)
@@ -112,12 +115,12 @@ hash(s::SecretBuffer, h::UInt) = hash(_sb_hash, h)
 function write(io::SecretBuffer, b::UInt8)
     if io.ptr > length(io.data)
         # We need to resize! the array: do this manually to ensure no copies are left behind
-        newdata = Vector{UInt8}(undef, (io.size+16)*2)
+        newdata = Vector{UInt8}(undef, (io.size + 16) * 2)
         copyto!(newdata, io.data)
         securezero!(io.data)
         io.data = newdata
     end
-    io.size == io.ptr-1 && (io.size += 1)
+    io.size == io.ptr - 1 && (io.size += 1)
     io.data[io.ptr] = b
     io.ptr += 1
     return 1
@@ -146,12 +149,12 @@ function unsafe_convert(::Type{Cstring}, s::SecretBuffer)
     return Cstring(unsafe_convert(Ptr{Cchar}, s.data))
 end
 
-seek(io::SecretBuffer, n::Integer) = (io.ptr = max(min(n+1, io.size+1), 1); io)
-seekend(io::SecretBuffer) = seek(io, io.size+1)
+seek(io::SecretBuffer, n::Integer) = (io.ptr = max(min(n + 1, io.size + 1), 1); io)
+seekend(io::SecretBuffer) = seek(io, io.size + 1)
 skip(io::SecretBuffer, n::Integer) = seek(io, position(io) + n)
 
 bytesavailable(io::SecretBuffer) = io.size - io.ptr + 1
-position(io::SecretBuffer) = io.ptr-1
+position(io::SecretBuffer) = io.ptr - 1
 eof(io::SecretBuffer) = io.ptr > io.size
 isempty(io::SecretBuffer) = io.size == 0
 function peek(io::SecretBuffer)
@@ -166,7 +169,9 @@ function read(io::SecretBuffer, ::Type{UInt8})
 end
 
 function final_shred!(s::SecretBuffer)
-    !isshredded(s) && @warn("a SecretBuffer was `shred!`ed by the GC; use `shred!` manually after use to minimize exposure.")
+    !isshredded(s) && @warn(
+        "a SecretBuffer was `shred!`ed by the GC; use `shred!` manually after use to minimize exposure."
+    )
     shred!(s)
 end
 

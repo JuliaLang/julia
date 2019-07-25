@@ -2,69 +2,79 @@
 
 # filesystem operations
 
-export
-    ctime,
-    filemode,
-    filesize,
-    gperm,
-    isblockdev,
-    ischardev,
-    isdir,
-    isfifo,
-    isfile,
-    islink,
-    ismount,
-    ispath,
-    issetgid,
-    issetuid,
-    issocket,
-    issticky,
-    lstat,
-    mtime,
-    operm,
-    stat,
-    uperm
+export ctime,
+       filemode,
+       filesize,
+       gperm,
+       isblockdev,
+       ischardev,
+       isdir,
+       isfifo,
+       isfile,
+       islink,
+       ismount,
+       ispath,
+       issetgid,
+       issetuid,
+       issocket,
+       issticky,
+       lstat,
+       mtime,
+       operm,
+       stat,
+       uperm
 
 struct StatStruct
-    device  :: UInt
-    inode   :: UInt
-    mode    :: UInt
-    nlink   :: Int
-    uid     :: UInt
-    gid     :: UInt
-    rdev    :: UInt
-    size    :: Int64
-    blksize :: Int64
-    blocks  :: Int64
-    mtime   :: Float64
-    ctime   :: Float64
+    device::UInt
+    inode::UInt
+    mode::UInt
+    nlink::Int
+    uid::UInt
+    gid::UInt
+    rdev::UInt
+    size::Int64
+    blksize::Int64
+    blocks::Int64
+    mtime::Float64
+    ctime::Float64
 end
 
 StatStruct() = StatStruct(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 
-StatStruct(buf::Union{Vector{UInt8},Ptr{UInt8}}) = StatStruct(
-    ccall(:jl_stat_dev,     UInt32,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_ino,     UInt32,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_mode,    UInt32,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_nlink,   UInt32,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_uid,     UInt32,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_gid,     UInt32,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_rdev,    UInt32,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_size,    UInt64,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_blksize, UInt64,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_blocks,  UInt64,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_mtime,   Float64, (Ptr{UInt8},), buf),
-    ccall(:jl_stat_ctime,   Float64, (Ptr{UInt8},), buf),
-)
+StatStruct(buf::Union{Vector{UInt8},Ptr{UInt8}}) =
+    StatStruct(
+        ccall(:jl_stat_dev, UInt32, (Ptr{UInt8},), buf),
+        ccall(:jl_stat_ino, UInt32, (Ptr{UInt8},), buf),
+        ccall(:jl_stat_mode, UInt32, (Ptr{UInt8},), buf),
+        ccall(:jl_stat_nlink, UInt32, (Ptr{UInt8},), buf),
+        ccall(:jl_stat_uid, UInt32, (Ptr{UInt8},), buf),
+        ccall(:jl_stat_gid, UInt32, (Ptr{UInt8},), buf),
+        ccall(:jl_stat_rdev, UInt32, (Ptr{UInt8},), buf),
+        ccall(:jl_stat_size, UInt64, (Ptr{UInt8},), buf),
+        ccall(:jl_stat_blksize, UInt64, (Ptr{UInt8},), buf),
+        ccall(:jl_stat_blocks, UInt64, (Ptr{UInt8},), buf),
+        ccall(:jl_stat_mtime, Float64, (Ptr{UInt8},), buf),
+        ccall(:jl_stat_ctime, Float64, (Ptr{UInt8},), buf),
+    )
 
-show(io::IO, st::StatStruct) = print(io, "StatStruct(mode=0o$(string(filemode(st), base = 8, pad = 6)), size=$(filesize(st)))")
+show(io::IO, st::StatStruct) =
+    print(
+        io,
+        "StatStruct(mode=0o$(string(filemode(st), base = 8, pad = 6)), size=$(filesize(st)))"
+    )
 
 # stat & lstat functions
 
 macro stat_call(sym, arg1type, arg)
     return quote
         stat_buf = zeros(UInt8, ccall(:jl_sizeof_stat, Int32, ()))
-        r = ccall($(Expr(:quote, sym)), Int32, ($(esc(arg1type)), Ptr{UInt8}), $(esc(arg)), stat_buf)
+        r = ccall(
+            $(Expr(:quote, sym)),
+            Int32,
+            ($(esc(arg1type)), Ptr{UInt8}),
+            $(esc(arg)),
+            stat_buf
+        )
         if !(r in (0, Base.UV_ENOENT, Base.UV_ENOTDIR, Base.UV_EINVAL))
             throw(_UVError("stat", r))
         end
@@ -76,13 +86,13 @@ macro stat_call(sym, arg1type, arg)
     end
 end
 
-stat(fd::OS_HANDLE)         = @stat_call jl_fstat OS_HANDLE fd
-stat(path::AbstractString)  = @stat_call jl_stat  Cstring path
+stat(fd::OS_HANDLE) = @stat_call jl_fstat OS_HANDLE fd
+stat(path::AbstractString) = @stat_call jl_stat Cstring path
 lstat(path::AbstractString) = @stat_call jl_lstat Cstring path
 if RawFD !== OS_HANDLE
-    global stat(fd::RawFD)  = stat(Libc._get_osfhandle(fd))
+    global stat(fd::RawFD) = stat(Libc._get_osfhandle(fd))
 end
-stat(fd::Integer)           = stat(RawFD(fd))
+stat(fd::Integer) = stat(RawFD(fd))
 
 """
     stat(file)
@@ -285,36 +295,18 @@ gperm(st::StatStruct) = UInt8((filemode(st) >> 3) & 0x7)
 Like [`uperm`](@ref) but gets the permissions for people who neither own the file nor are a member of
 the group owning the file
 """
-operm(st::StatStruct) = UInt8((filemode(st)     ) & 0x7)
+operm(st::StatStruct) = UInt8((filemode(st)) & 0x7)
 
 # mode predicate methods for file names
 
-for f in Symbol[
-    :ispath,
-    :isfifo,
-    :ischardev,
-    :isdir,
-    :isblockdev,
-    :isfile,
-    :issocket,
-    :issetuid,
-    :issetgid,
-    :issticky,
-    :uperm,
-    :gperm,
-    :operm,
-    :filemode,
-    :filesize,
-    :mtime,
-    :ctime,
-]
-    @eval ($f)(path...)  = ($f)(stat(path...))
+for f in Symbol[:ispath, :isfifo, :ischardev, :isdir, :isblockdev, :isfile, :issocket, :issetuid, :issetgid, :issticky, :uperm, :gperm, :operm, :filemode, :filesize, :mtime, :ctime, ]
+    @eval ($f)(path...) = ($f)(stat(path...))
 end
 
 islink(path...) = islink(lstat(path...))
 
 # samefile can be used for files and directories: #11145#issuecomment-99511194
-samefile(a::StatStruct, b::StatStruct) = a.device==b.device && a.inode==b.inode
+samefile(a::StatStruct, b::StatStruct) = a.device == b.device && a.inode == b.inode
 function samefile(a::AbstractString, b::AbstractString)
     infoa = stat(a)
     infob = stat(b)

@@ -58,7 +58,7 @@ function mapfoldl_impl(f, op, nt::NamedTuple{()}, itr)
     end
     x, i = y
     init = mapreduce_first(f, op, x)
-    return mapfoldl_impl(f, op, (init=init,), itr, i)
+    return mapfoldl_impl(f, op, (init = init,), itr, i)
 end
 
 
@@ -92,7 +92,7 @@ foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
 ## foldr & mapfoldr
 
 mapfoldr_impl(f, op, nt::NamedTuple{(:init,)}, itr) =
-    mapfoldl_impl(f, (x,y) -> op(y,x), nt, Iterators.reverse(itr))
+    mapfoldl_impl(f, (x, y) -> op(y, x), nt, Iterators.reverse(itr))
 
 # we can't just call mapfoldl_impl with (x,y) -> op(y,x), because
 # we need to use the type of op for mapreduce_empty_iter and mapreduce_first.
@@ -104,7 +104,7 @@ function mapfoldr_impl(f, op, nt::NamedTuple{()}, itr)
     end
     x, i = y
     init = mapreduce_first(f, op, x)
-    return mapfoldl_impl(f, (x,y) -> op(y,x), (init=init,), ritr, i)
+    return mapfoldl_impl(f, (x, y) -> op(y, x), (init = init,), ritr, i)
 end
 
 """
@@ -144,7 +144,14 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
 
 # This is a generic implementation of `mapreduce_impl()`,
 # certain `op` (e.g. `min` and `max`) may have their own specialized versions.
-@noinline function mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer, blksize::Int)
+@noinline function mapreduce_impl(
+    f,
+    op,
+    A::AbstractArray,
+    ifirst::Integer,
+    ilast::Integer,
+    blksize::Int
+)
     if ifirst == ilast
         @inbounds a1 = A[ifirst]
         return mapreduce_first(f, op, a1)
@@ -153,7 +160,7 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
         @inbounds a1 = A[ifirst]
         @inbounds a2 = A[ifirst+1]
         v = op(f(a1), f(a2))
-        @simd for i = ifirst + 2 : ilast
+        @simd for i = ifirst+2:ilast
             @inbounds ai = A[i]
             v = op(v, f(ai))
         end
@@ -162,7 +169,7 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
         # pairwise portion
         imid = (ifirst + ilast) >> 1
         v1 = mapreduce_impl(f, op, A, ifirst, imid, blksize)
-        v2 = mapreduce_impl(f, op, A, imid+1, ilast, blksize)
+        v2 = mapreduce_impl(f, op, A, imid + 1, ilast, blksize)
         return op(v1, v2)
     end
 end
@@ -209,7 +216,8 @@ pairwise_blocksize(::typeof(abs2), ::typeof(+)) = 4096
 
 
 # handling empty arrays
-_empty_reduce_error() = throw(ArgumentError("reducing over an empty collection is not allowed"))
+_empty_reduce_error() =
+    throw(ArgumentError("reducing over an empty collection is not allowed"))
 
 """
     Base.reduce_empty(op, T)
@@ -228,10 +236,10 @@ reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
 
 reduce_empty(::typeof(add_sum), T) = reduce_empty(+, T)
-reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallSigned}  = zero(Int)
+reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallSigned} = zero(Int)
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallUnsigned} = zero(UInt)
 reduce_empty(::typeof(mul_prod), T) = reduce_empty(*, T)
-reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallSigned}  = one(Int)
+reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallSigned} = one(Int)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallUnsigned} = one(UInt)
 
 """
@@ -245,10 +253,10 @@ If not defined, this will throw an `ArgumentError`.
 """
 mapreduce_empty(f, op, T) = _empty_reduce_error()
 mapreduce_empty(::typeof(identity), op, T) = reduce_empty(op, T)
-mapreduce_empty(::typeof(abs), op, T)      = abs(reduce_empty(op, T))
-mapreduce_empty(::typeof(abs2), op, T)     = abs2(reduce_empty(op, T))
+mapreduce_empty(::typeof(abs), op, T) = abs(reduce_empty(op, T))
+mapreduce_empty(::typeof(abs2), op, T) = abs2(reduce_empty(op, T))
 
-mapreduce_empty(f::typeof(abs),  ::typeof(max), T) = abs(zero(T))
+mapreduce_empty(f::typeof(abs), ::typeof(max), T) = abs(zero(T))
 mapreduce_empty(f::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
 
 mapreduce_empty_iter(f, op, itr, ::HasEltype) = mapreduce_empty(f, op, eltype(itr))
@@ -274,10 +282,10 @@ reduce_first(::typeof(+), x::Bool) = Int(x)
 reduce_first(::typeof(*), x::AbstractChar) = string(x)
 
 reduce_first(::typeof(add_sum), x) = reduce_first(+, x)
-reduce_first(::typeof(add_sum), x::SmallSigned)   = Int(x)
+reduce_first(::typeof(add_sum), x::SmallSigned) = Int(x)
 reduce_first(::typeof(add_sum), x::SmallUnsigned) = UInt(x)
 reduce_first(::typeof(mul_prod), x) = reduce_first(*, x)
-reduce_first(::typeof(mul_prod), x::SmallSigned)   = Int(x)
+reduce_first(::typeof(mul_prod), x::SmallSigned) = Int(x)
 reduce_first(::typeof(mul_prod), x::SmallUnsigned) = UInt(x)
 
 """
@@ -356,7 +364,7 @@ julia> reduce(*, [2; 3; 4]; init=-1)
 """
 reduce(op, itr; kw...) = mapreduce(identity, op, itr; kw...)
 
-reduce(op, a::Number) = a  # Do we want this?
+reduce(op, a::Number) = a # Do we want this?
 
 ###### Specific reduction functions ######
 
@@ -448,18 +456,14 @@ julia> prod(1:20)
 prod(a) = mapreduce(identity, mul_prod, a)
 
 ## maximum & minimum
-_fast(::typeof(min),x,y) = min(x,y)
-_fast(::typeof(max),x,y) = max(x,y)
+_fast(::typeof(min), x, y) = min(x, y)
+_fast(::typeof(max), x, y) = max(x, y)
 function _fast(::typeof(max), x::AbstractFloat, y::AbstractFloat)
-    ifelse(isnan(x),
-        x,
-        ifelse(x > y, x, y))
+    ifelse(isnan(x), x, ifelse(x > y, x, y))
 end
 
-function _fast(::typeof(min),x::AbstractFloat, y::AbstractFloat)
-    ifelse(isnan(x),
-        x,
-        ifelse(x < y, x, y))
+function _fast(::typeof(min), x::AbstractFloat, y::AbstractFloat)
+    ifelse(isnan(x), x, ifelse(x < y, x, y))
 end
 
 isbadzero(::typeof(max), x::AbstractFloat) = (x == zero(x)) & signbit(x)
@@ -468,14 +472,19 @@ isbadzero(op, x) = false
 isgoodzero(::typeof(max), x) = isbadzero(min, x)
 isgoodzero(::typeof(min), x) = isbadzero(max, x)
 
-function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
-                        A::AbstractArray, first::Int, last::Int)
+function mapreduce_impl(
+    f,
+    op::Union{typeof(max),typeof(min)},
+    A::AbstractArray,
+    first::Int,
+    last::Int
+)
     a1 = @inbounds A[first]
     v1 = mapreduce_first(f, op, a1)
     v2 = v3 = v4 = v1
     chunk_len = 256
     start = first + 1
-    simdstop  = start + chunk_len - 4
+    simdstop = start + chunk_len - 4
     while simdstop <= last - 3
         # short circuit in case of NaN
         v1 == v1 || return v1
@@ -488,11 +497,11 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
             v3 = _fast(op, v3, f(A[i+2]))
             v4 = _fast(op, v4, f(A[i+3]))
         end
-        checkbounds(A, simdstop+3)
+        checkbounds(A, simdstop + 3)
         start += chunk_len
         simdstop += chunk_len
     end
-    v = op(op(v1,v2),op(v3,v4))
+    v = op(op(v1, v2), op(v3, v4))
     for i in start:last
         @inbounds ai = A[i]
         v = op(v, f(ai))
@@ -504,7 +513,7 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
     if isbadzero(op, v)
         for i in first:last
             x = @inbounds A[i]
-            isgoodzero(op,x) && return x
+            isgoodzero(op, x) && return x
         end
     end
     return v

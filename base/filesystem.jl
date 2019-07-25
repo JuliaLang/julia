@@ -19,7 +19,6 @@ const S_IRWXO = 0o007
 
 export File,
        StatStruct,
-       # open,
        futime,
        write,
        JL_O_WRONLY,
@@ -34,15 +33,47 @@ export File,
        JL_O_SEQUENTIAL,
        JL_O_RANDOM,
        JL_O_NOCTTY,
-       S_IRUSR, S_IWUSR, S_IXUSR, S_IRWXU,
-       S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXG,
-       S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
+       S_IRUSR,
+       S_IWUSR,
+       S_IXUSR,
+       S_IRWXU,
+       S_IRGRP,
+       S_IWGRP,
+       S_IXGRP,
+       S_IRWXG,
+       S_IROTH,
+       S_IWOTH,
+       S_IXOTH,
+       S_IRWXO
 
-import .Base:
-    IOError, _UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
-    bytesavailable, position, read, read!, readavailable, seek, seekend, show,
-    skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
-    rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror
+import .Base: IOError,
+              _UVError,
+              _sizeof_uv_fs,
+              check_open,
+              close,
+              eof,
+              eventloop,
+              fd,
+              isopen,
+              bytesavailable,
+              position,
+              read,
+              read!,
+              readavailable,
+              seek,
+              seekend,
+              show,
+              skip,
+              stat,
+              unsafe_read,
+              unsafe_write,
+              write,
+              transcode,
+              uv_error,
+              rawhandle,
+              OS_HANDLE,
+              INVALID_OS_HANDLE,
+              windowserror
 
 import .Base.RefValue
 
@@ -57,7 +88,7 @@ const AVG_PATH = Sys.iswindows() ? 260 : 512
 include("path.jl")
 include("stat.jl")
 include("file.jl")
-include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)
+include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "file_constants.jl")) # include($BUILDROOT/base/file_constants.jl)
 
 ## Operations with File (fd) objects ##
 
@@ -75,13 +106,21 @@ end
 rawhandle(file::File) = file.handle
 
 # Filesystem.open, not Base.open
-function open(path::AbstractString, flags::Integer, mode::Integer=0)
+function open(path::AbstractString, flags::Integer, mode::Integer = 0)
     req = Libc.malloc(_sizeof_uv_fs)
     local handle
     try
-        ret = ccall(:uv_fs_open, Int32,
-                    (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Int32, Int32, Ptr{Cvoid}),
-                    C_NULL, req, path, flags, mode, C_NULL)
+        ret = ccall(
+            :uv_fs_open,
+            Int32,
+            (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Int32, Int32, Ptr{Cvoid}),
+            C_NULL,
+            req,
+            path,
+            flags,
+            mode,
+            C_NULL
+        )
         handle = ccall(:uv_fs_get_result, Cssize_t, (Ptr{Cvoid},), req)
         ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
         uv_error("open", ret)
@@ -114,8 +153,15 @@ function sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
     check_open(dst)
     check_open(src)
     while true
-        result = ccall(:jl_fs_sendfile, Int32, (OS_HANDLE, OS_HANDLE, Int64, Csize_t),
-                       src.handle, dst.handle, src_offset, bytes)
+        result = ccall(
+            :jl_fs_sendfile,
+            Int32,
+            (OS_HANDLE, OS_HANDLE, Int64, Csize_t),
+            src.handle,
+            dst.handle,
+            src_offset,
+            bytes
+        )
         uv_error("sendfile", result)
         nsent = result
         bytes -= nsent
@@ -125,10 +171,17 @@ function sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
     nothing
 end
 
-function unsafe_write(f::File, buf::Ptr{UInt8}, len::UInt, offset::Int64=Int64(-1))
+function unsafe_write(f::File, buf::Ptr{UInt8}, len::UInt, offset::Int64 = Int64(-1))
     check_open(f)
-    err = ccall(:jl_fs_write, Int32, (OS_HANDLE, Ptr{UInt8}, Csize_t, Int64),
-                f.handle, buf, len, offset)
+    err = ccall(
+        :jl_fs_write,
+        Int32,
+        (OS_HANDLE, Ptr{UInt8}, Csize_t, Int64),
+        f.handle,
+        buf,
+        len,
+        offset
+    )
     uv_error("write", err)
     return len
 end
@@ -138,9 +191,16 @@ write(f::File, c::UInt8) = write(f, Ref{UInt8}(c))
 function truncate(f::File, n::Integer)
     check_open(f)
     req = Libc.malloc(_sizeof_uv_fs)
-    err = ccall(:uv_fs_ftruncate, Int32,
-                (Ptr{Cvoid}, Ptr{Cvoid}, OS_HANDLE, Int64, Ptr{Cvoid}),
-                C_NULL, req, f.handle, n, C_NULL)
+    err = ccall(
+        :uv_fs_ftruncate,
+        Int32,
+        (Ptr{Cvoid}, Ptr{Cvoid}, OS_HANDLE, Int64, Ptr{Cvoid}),
+        C_NULL,
+        req,
+        f.handle,
+        n,
+        C_NULL
+    )
     Libc.free(req)
     uv_error("ftruncate", err)
     return f
@@ -149,9 +209,17 @@ end
 function futime(f::File, atime::Float64, mtime::Float64)
     check_open(f)
     req = Libc.malloc(_sizeof_uv_fs)
-    err = ccall(:uv_fs_futime, Int32,
-                (Ptr{Cvoid}, Ptr{Cvoid}, OS_HANDLE, Float64, Float64, Ptr{Cvoid}),
-                C_NULL, req, f.handle, atime, mtime, C_NULL)
+    err = ccall(
+        :uv_fs_futime,
+        Int32,
+        (Ptr{Cvoid}, Ptr{Cvoid}, OS_HANDLE, Float64, Float64, Ptr{Cvoid}),
+        C_NULL,
+        req,
+        f.handle,
+        atime,
+        mtime,
+        C_NULL
+    )
     Libc.free(req)
     uv_error("futime", err)
     return f
@@ -188,8 +256,7 @@ read(f::File, ::Type{T}) where {T<:AbstractChar} = T(read(f, Char)) # fallback
 
 function unsafe_read(f::File, p::Ptr{UInt8}, nel::UInt)
     check_open(f)
-    ret = ccall(:jl_fs_read, Int32, (OS_HANDLE, Ptr{Cvoid}, Csize_t),
-                f.handle, p, nel)
+    ret = ccall(:jl_fs_read, Int32, (OS_HANDLE, Ptr{Cvoid}, Csize_t), f.handle, p, nel)
     uv_error("read", ret)
     ret == nel || throw(EOFError())
     nothing
@@ -199,13 +266,12 @@ bytesavailable(f::File) = max(0, filesize(f) - position(f)) # position can be > 
 
 eof(f::File) = bytesavailable(f) == 0
 
-function readbytes!(f::File, b::Array{UInt8}, nb=length(b))
+function readbytes!(f::File, b::Array{UInt8}, nb = length(b))
     nr = min(nb, bytesavailable(f))
     if length(b) < nr
         resize!(b, nr)
     end
-    ret = ccall(:jl_fs_read, Int32, (OS_HANDLE, Ptr{Cvoid}, Csize_t),
-                f.handle, b, nr)
+    ret = ccall(:jl_fs_read, Int32, (OS_HANDLE, Ptr{Cvoid}, Csize_t), f.handle, b, nr)
     uv_error("read", ret)
     return ret
 end

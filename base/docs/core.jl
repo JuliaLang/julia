@@ -28,6 +28,7 @@ function docm(source::LineNumberNode, mod::Module, str, x)
     return esc(out)
 end
 docm(source::LineNumberNode, mod::Module, x) =
-    isexpr(x, :->) ? docm(source, mod, x.args[1], x.args[2].args[2]) : error("invalid '@doc'.")
+    isexpr(x, :->) ? docm(source, mod, x.args[1], x.args[2].args[2]) :
+    error("invalid '@doc'.")
 
 end

@@ -2,19 +2,33 @@
 
 module Libc
 @doc """
-Interface to libc, the C standard library.
-""" Libc
+     Interface to libc, the C standard library.
+     """ Libc
 
 import Base: transcode, windowserror
 import Core.Intrinsics: bitcast
 
-export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
-    errno, strerror, flush_cstdio, systemsleep, time, transcode
+export FILE,
+       TmStruct,
+       strftime,
+       strptime,
+       getpid,
+       gethostname,
+       free,
+       malloc,
+       calloc,
+       realloc,
+       errno,
+       strerror,
+       flush_cstdio,
+       systemsleep,
+       time,
+       transcode
 if Sys.iswindows()
     export GetLastError, FormatMessage
 end
 
-include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "errno_h.jl"))  # include($BUILDROOT/base/errno_h.jl)
+include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "errno_h.jl")) # include($BUILDROOT/base/errno_h.jl)
 
 ## RawFD ##
 
@@ -34,9 +48,17 @@ RawFD(fd::RawFD) = fd
 Base.cconvert(::Type{Cint}, fd::RawFD) = bitcast(Cint, fd)
 
 dup(x::RawFD) = ccall((@static Sys.iswindows() ? :_dup : :dup), RawFD, (RawFD,), x)
-dup(src::RawFD, target::RawFD) = systemerror("dup", -1 ==
-    ccall((@static Sys.iswindows() ? :_dup2 : :dup2), Int32,
-                (RawFD, RawFD), src, target))
+dup(src::RawFD, target::RawFD) =
+    systemerror(
+        "dup",
+        -1 == ccall(
+            (@static Sys.iswindows() ? :_dup2 : :dup2),
+            Int32,
+            (RawFD, RawFD),
+            src,
+            target
+        )
+    )
 
 # Wrapper for an OS file descriptor (for Windows)
 if Sys.iswindows()
@@ -51,9 +73,27 @@ if Sys.iswindows()
         new_handle = Ref(WindowsRawSocket(Ptr{Cvoid}(-1)))
         my_process = ccall(:GetCurrentProcess, stdcall, Ptr{Cvoid}, ())
         DUPLICATE_SAME_ACCESS = 0x2
-        status = ccall(:DuplicateHandle, stdcall, Int32,
-            (Ptr{Cvoid}, WindowsRawSocket, Ptr{Cvoid}, Ptr{WindowsRawSocket}, UInt32, Int32, UInt32),
-            my_process, src, my_process, new_handle, 0, false, DUPLICATE_SAME_ACCESS)
+        status = ccall(
+            :DuplicateHandle,
+            stdcall,
+            Int32,
+            (
+             Ptr{Cvoid},
+             WindowsRawSocket,
+             Ptr{Cvoid},
+             Ptr{WindowsRawSocket},
+             UInt32,
+             Int32,
+             UInt32
+            ),
+            my_process,
+            src,
+            my_process,
+            new_handle,
+            0,
+            false,
+            DUPLICATE_SAME_ACCESS
+        )
         windowserror("dup failed", status == 0)
         return new_handle[]
     end
@@ -75,16 +115,23 @@ struct FILE
 end
 
 modestr(s::IO) = modestr(isreadable(s), iswritable(s))
-modestr(r::Bool, w::Bool) = r ? (w ? "r+" : "r") : (w ? "w" : throw(ArgumentError("neither readable nor writable")))
+modestr(r::Bool, w::Bool) =
+    r ? (w ? "r+" : "r") : (w ? "w" : throw(ArgumentError("neither readable nor writable")))
 
 function FILE(fd::RawFD, mode)
-    FILEp = ccall((@static Sys.iswindows() ? :_fdopen : :fdopen), Ptr{Cvoid}, (Cint, Cstring), fd, mode)
+    FILEp = ccall(
+        (@static Sys.iswindows() ? :_fdopen : :fdopen),
+        Ptr{Cvoid},
+        (Cint, Cstring),
+        fd,
+        mode
+    )
     systemerror("fdopen", FILEp == C_NULL)
     FILE(FILEp)
 end
 
 function FILE(s::IO)
-    f = FILE(dup(RawFD(fd(s))),modestr(s))
+    f = FILE(dup(RawFD(fd(s))), modestr(s))
     seek(f, position(s))
     f
 end
@@ -93,8 +140,10 @@ Base.unsafe_convert(T::Union{Type{Ptr{Cvoid}},Type{Ptr{FILE}}}, f::FILE) = conve
 Base.close(f::FILE) = systemerror("fclose", ccall(:fclose, Cint, (Ptr{Cvoid},), f.ptr) != 0)
 
 function Base.seek(h::FILE, offset::Integer)
-    systemerror("fseek", ccall(:fseek, Cint, (Ptr{Cvoid}, Clong, Cint),
-                               h.ptr, offset, 0) != 0)
+    systemerror(
+        "fseek",
+        ccall(:fseek, Cint, (Ptr{Cvoid}, Clong, Cint), h.ptr, offset, 0) != 0
+    )
     h
 end
 
@@ -113,7 +162,7 @@ flush_cstdio() = ccall(:jl_flush_cstdio, Cvoid, ())
 
 # TODO: check for usleep errors?
 if Sys.isunix()
-    systemsleep(s::Real) = ccall(:usleep, Int32, (UInt32,), round(UInt32, s*1e6))
+    systemsleep(s::Real) = ccall(:usleep, Int32, (UInt32,), round(UInt32, s * 1e6))
 elseif Sys.iswindows()
     function systemsleep(s::Real)
         ccall(:Sleep, stdcall, Cvoid, (UInt32,), round(UInt32, s * 1e3))
@@ -134,8 +183,8 @@ See also: [`sleep`](@ref)
 systemsleep
 
 struct TimeVal
-   sec::Int64
-   usec::Int64
+    sec::Int64
+    usec::Int64
 end
 
 function TimeVal()
@@ -169,8 +218,8 @@ mutable struct TmStruct
     _14::Int32
 
     TmStruct(sec, min, hour, mday, month, year, wday, yday, isdst) =
-        new(sec, min, hour, mday, month, year, wday, yday, isdst, 0,0,0,0,0)
-    TmStruct() = new(0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+        new(sec, min, hour, mday, month, year, wday, yday, isdst, 0, 0, 0, 0, 0)
+    TmStruct() = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
     function TmStruct(t::Real)
         t = floor(t)
         tm = TmStruct()
@@ -192,8 +241,15 @@ strftime(fmt::AbstractString, t::Real) = strftime(fmt, TmStruct(t))
 # Use wcsftime instead of strftime to support different locales
 function strftime(fmt::AbstractString, tm::TmStruct)
     wctimestr = Vector{Cwchar_t}(undef, 128)
-    n = ccall(:wcsftime, Csize_t, (Ptr{Cwchar_t}, Csize_t, Cwstring, Ref{TmStruct}),
-              wctimestr, length(wctimestr), fmt, tm)
+    n = ccall(
+        :wcsftime,
+        Csize_t,
+        (Ptr{Cwchar_t}, Csize_t, Cwstring, Ref{TmStruct}),
+        wctimestr,
+        length(wctimestr),
+        fmt,
+        tm
+    )
     n == 0 && return ""
     return transcode(String, resize!(wctimestr, n))
 end
@@ -313,16 +369,27 @@ function FormatMessage end
 if Sys.iswindows()
     GetLastError() = ccall(:GetLastError, stdcall, UInt32, ())
 
-    function FormatMessage(e=GetLastError())
+    function FormatMessage(e = GetLastError())
         FORMAT_MESSAGE_ALLOCATE_BUFFER = UInt32(0x100)
         FORMAT_MESSAGE_FROM_SYSTEM = UInt32(0x1000)
         FORMAT_MESSAGE_IGNORE_INSERTS = UInt32(0x200)
         FORMAT_MESSAGE_MAX_WIDTH_MASK = UInt32(0xFF)
         lpMsgBuf = Ref{Ptr{UInt16}}()
         lpMsgBuf[] = 0
-        len = ccall(:FormatMessageW, stdcall, UInt32, (Cint, Ptr{Cvoid}, Cint, Cint, Ptr{Ptr{UInt16}}, Cint, Ptr{Cvoid}),
-                    FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
-                    C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
+        len = ccall(
+            :FormatMessageW,
+            stdcall,
+            UInt32,
+            (Cint, Ptr{Cvoid}, Cint, Cint, Ptr{Ptr{UInt16}}, Cint, Ptr{Cvoid}),
+            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+            FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
+            C_NULL,
+            e,
+            0,
+            lpMsgBuf,
+            0,
+            C_NULL
+        )
         p = lpMsgBuf[]
         len == 0 && return ""
         buf = Vector{UInt16}(undef, len)
@@ -366,7 +433,8 @@ realloc(p::Ptr, size::Integer) = ccall(:realloc, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_
 
 Call `calloc` from the C standard library.
 """
-calloc(num::Integer, size::Integer) = ccall(:calloc, Ptr{Cvoid}, (Csize_t, Csize_t), num, size)
+calloc(num::Integer, size::Integer) =
+    ccall(:calloc, Ptr{Cvoid}, (Csize_t, Csize_t), num, size)
 
 free(p::Cstring) = free(convert(Ptr{UInt8}, p))
 free(p::Cwstring) = free(convert(Ptr{Cwchar_t}, p))
@@ -391,6 +459,6 @@ rand(::Type{Float64}) = rand(UInt32) / 2^32
 
 Interface to the C `srand(seed)` function.
 """
-srand(seed=floor(time())) = ccall(:srand, Cvoid, (Cuint,), seed)
+srand(seed = floor(time())) = ccall(:srand, Cvoid, (Cuint,), seed)
 
-end # module
+end

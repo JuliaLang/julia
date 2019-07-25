@@ -20,20 +20,21 @@ mutable struct WeakKeyDict{K,V} <: AbstractDict{K,V}
     # Constructors mirror Dict's
     function WeakKeyDict{K,V}() where V where K
         t = new(Dict{Any,V}(), ReentrantLock(), identity)
-        t.finalizer = function (k)
-            # when a weak key is finalized, remove from dictionary if it is still there
-            if islocked(t)
-                finalizer(t.finalizer, k)
-                return nothing
+        t.finalizer =
+            function (k)
+                # when a weak key is finalized, remove from dictionary if it is still there
+                if islocked(t)
+                    finalizer(t.finalizer, k)
+                    return nothing
+                end
+                delete!(t, k)
             end
-            delete!(t, k)
-        end
         return t
     end
 end
 function WeakKeyDict{K,V}(kv) where V where K
     h = WeakKeyDict{K,V}()
-    for (k,v) in kv
+    for (k, v) in kv
         h[k] = v
     end
     return h
@@ -52,16 +53,16 @@ WeakKeyDict() = WeakKeyDict{Any,Any}()
 WeakKeyDict(kv::Tuple{}) = WeakKeyDict()
 copy(d::WeakKeyDict) = WeakKeyDict(d)
 
-WeakKeyDict(ps::Pair{K,V}...)           where {K,V} = WeakKeyDict{K,V}(ps)
-WeakKeyDict(ps::Pair{K}...)             where {K}   = WeakKeyDict{K,Any}(ps)
-WeakKeyDict(ps::(Pair{K,V} where K)...) where {V}   = WeakKeyDict{Any,V}(ps)
-WeakKeyDict(ps::Pair...)                            = WeakKeyDict{Any,Any}(ps)
+WeakKeyDict(ps::Pair{K,V}...) where {K,V} = WeakKeyDict{K,V}(ps)
+WeakKeyDict(ps::Pair{K}...) where {K} = WeakKeyDict{K,Any}(ps)
+WeakKeyDict(ps::(Pair{K,V} where K)...) where {V} = WeakKeyDict{Any,V}(ps)
+WeakKeyDict(ps::Pair...) = WeakKeyDict{Any,Any}(ps)
 
 function WeakKeyDict(kv)
     try
-        Base.dict_with_eltype((K, V) -> WeakKeyDict{K, V}, kv, eltype(kv))
+        Base.dict_with_eltype((K, V) -> WeakKeyDict{K,V}, kv, eltype(kv))
     catch
-        if !isiterable(typeof(kv)) || !all(x->isa(x,Union{Tuple,Pair}),kv)
+        if !isiterable(typeof(kv)) || !all(x -> isa(x, Union{Tuple,Pair}), kv)
             throw(ArgumentError("WeakKeyDict(kv): kv needs to be an iterator of tuples or pairs"))
         else
             rethrow()
@@ -69,7 +70,7 @@ function WeakKeyDict(kv)
     end
 end
 
-empty(d::WeakKeyDict, ::Type{K}, ::Type{V}) where {K, V} = WeakKeyDict{K, V}()
+empty(d::WeakKeyDict, ::Type{K}, ::Type{V}) where {K,V} = WeakKeyDict{K,V}()
 
 islocked(wkh::WeakKeyDict) = islocked(wkh.lock)
 lock(f, wkh::WeakKeyDict) = lock(f, wkh.lock)
@@ -92,9 +93,10 @@ function getkey(wkh::WeakKeyDict{K}, kk, default) where K
     end
 end
 
-map!(f,iter::ValueIterator{<:WeakKeyDict})= map!(f, values(iter.dict.ht))
+map!(f, iter::ValueIterator{<:WeakKeyDict}) = map!(f, values(iter.dict.ht))
 get(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> get(wkh.ht, key, default), wkh)
-get(default::Callable, wkh::WeakKeyDict{K}, key) where {K} = lock(() -> get(default, wkh.ht, key), wkh)
+get(default::Callable, wkh::WeakKeyDict{K}, key) where {K} =
+    lock(() -> get(default, wkh.ht, key), wkh)
 function get!(wkh::WeakKeyDict{K}, key, default) where {K}
     !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
     lock(() -> get!(wkh.ht, WeakRef(key), default), wkh)
@@ -104,7 +106,8 @@ function get!(default::Callable, wkh::WeakKeyDict{K}, key) where {K}
     lock(() -> get!(default, wkh.ht, WeakRef(key)), wkh)
 end
 pop!(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> pop!(wkh.ht, key), wkh)
-pop!(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> pop!(wkh.ht, key, default), wkh)
+pop!(wkh::WeakKeyDict{K}, key, default) where {K} =
+    lock(() -> pop!(wkh.ht, key, default), wkh)
 delete!(wkh::WeakKeyDict, key) = lock(() -> delete!(wkh.ht, key), wkh)
 empty!(wkh::WeakKeyDict) = (lock(() -> empty!(wkh.ht), wkh); wkh)
 haskey(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> haskey(wkh.ht, key), wkh)

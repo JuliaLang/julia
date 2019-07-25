@@ -8,7 +8,7 @@ const shell_special = "#{}()[]<>|&*?~;"
 function rstrip_shell(s::AbstractString)
     c_old = nothing
     for (i, c) in Iterators.reverse(pairs(s))
-        ((c == '\\') && c_old == ' ') && return SubString(s, 1, i+1)
+        ((c == '\\') && c_old == ' ') && return SubString(s, 1, i + 1)
         isspace(c) || return SubString(s, 1, i)
         c_old = c
     end
@@ -19,17 +19,23 @@ end
 # needs to be factored out so depwarn only warns once
 # when removed, also need to update shell_escape for a Cmd to pass shell_special
 # and may want to use it in the test for #10120 (currently the implementation is essentially copied there)
-@noinline warn_shell_special(str,special) =
-    depwarn("Parsing command \"$str\". Special characters \"$special\" should now be quoted in commands", :warn_shell_special)
+@noinline warn_shell_special(str, special) =
+    depwarn(
+        "Parsing command \"$str\". Special characters \"$special\" should now be quoted in commands",
+        :warn_shell_special
+    )
 
-function shell_parse(str::AbstractString, interpolate::Bool=true;
-                     special::AbstractString="")
+function shell_parse(
+    str::AbstractString,
+    interpolate::Bool = true;
+    special::AbstractString = ""
+)
     s::SubString = SubString(str, firstindex(str))
     s = rstrip_shell(lstrip(s))
 
     # N.B.: This is used by REPLCompletions
     last_parse = 0:-1
-    isempty(s) && return interpolate ? (Expr(:tuple,:()),last_parse) : ([],last_parse)
+    isempty(s) && return interpolate ? (Expr(:tuple, :()), last_parse) : ([], last_parse)
 
     in_single_quotes = false
     in_double_quotes = false
@@ -40,16 +46,18 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     st = Iterators.Stateful(pairs(s))
 
     function update_arg(x)
-        if !isa(x,AbstractString) || !isempty(x)
+        if !isa(x, AbstractString) || !isempty(x)
             push!(arg, x)
         end
     end
     function consume_upto(j)
         update_arg(s[i:prevind(s, j)])
-        i = something(peek(st), (lastindex(s)+1,'\0'))[1]
+        i = something(peek(st), (lastindex(s) + 1, '\0'))[1]
     end
     function append_arg()
-        if isempty(arg); arg = Any["",]; end
+        if isempty(arg)
+            arg = Any["", ]
+        end
         push!(args, arg)
         arg = []
     end
@@ -70,9 +78,9 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
             isempty(st) && error("\$ right before end of command")
             stpos, c = popfirst!(st)
             isspace(c) && error("space not allowed right after \$")
-            ex, j = Meta.parse(s,stpos,greedy=false)
+            ex, j = Meta.parse(s, stpos, greedy = false)
             last_parse = (stpos:prevind(s, j)) .+ s.offset
-            update_arg(ex);
+            update_arg(ex)
             s = SubString(s, j)
             Iterators.reset!(st, pairs(s))
             i = firstindex(s)
@@ -97,13 +105,17 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                     _ = popfirst!(st)
                 end
             elseif !in_single_quotes && !in_double_quotes && c in special
-                warn_shell_special(str,special) # noinline depwarn
+                warn_shell_special(str, special) # noinline depwarn
             end
         end
     end
 
-    if in_single_quotes; error("unterminated single quote"); end
-    if in_double_quotes; error("unterminated double quote"); end
+    if in_single_quotes
+        error("unterminated single quote")
+    end
+    if in_double_quotes
+        error("unterminated double quote")
+    end
 
     update_arg(s[i:end])
     append_arg()
@@ -131,7 +143,7 @@ function print_shell_word(io::IO, word::AbstractString, special::AbstractString 
     has_single = false
     has_special = false
     for c in word
-        if isspace(c) || c=='\\' || c=='\'' || c=='"' || c=='$' || c in special
+        if isspace(c) || c == '\\' || c == '\'' || c == '"' || c == '$' || c in special
             has_special = true
             if c == '\''
                 has_single = true
@@ -157,15 +169,19 @@ function print_shell_word(io::IO, word::AbstractString, special::AbstractString 
     nothing
 end
 
-function print_shell_escaped(io::IO, cmd::AbstractString, args::AbstractString...;
-                             special::AbstractString="")
+function print_shell_escaped(
+    io::IO,
+    cmd::AbstractString,
+    args::AbstractString...;
+    special::AbstractString = ""
+)
     print_shell_word(io, cmd, special)
     for arg in args
         print(io, ' ')
         print_shell_word(io, arg, special)
     end
 end
-print_shell_escaped(io::IO; special::String="") = nothing
+print_shell_escaped(io::IO; special::String = "") = nothing
 
 """
     shell_escape(args::Union{Cmd,AbstractString...}; special::AbstractString="")
@@ -185,8 +201,8 @@ julia> Base.shell_escape("echo", "this", "&&", "that")
 "echo this && that"
 ```
 """
-shell_escape(args::AbstractString...; special::AbstractString="") =
-    sprint((io, args...) -> print_shell_escaped(io, args..., special=special), args...)
+shell_escape(args::AbstractString...; special::AbstractString = "") =
+    sprint((io, args...) -> print_shell_escaped(io, args..., special = special), args...)
 
 
 function print_shell_escaped_posixly(io::IO, args::AbstractString...)
@@ -199,16 +215,16 @@ function print_shell_escaped_posixly(io::IO, args::AbstractString...)
         have_double = false
         function isword(c::AbstractChar)
             if '0' <= c <= '9' || 'a' <= c <= 'z' || 'A' <= c <= 'Z'
-                # word characters
+            # word characters
             elseif c == '_' || c == '/' || c == '+' || c == '-'
-                # other common characters
+            # other common characters
             elseif c == '\''
                 have_single = true
             elseif c == '"'
                 have_double && return false # switch to single quoting
                 have_double = true
             elseif !first && c == '='
-                # equals is special if it is first (e.g. `env=val ./cmd`)
+            # equals is special if it is first (e.g. `env=val ./cmd`)
             else
                 # anything else
                 return false
@@ -244,5 +260,4 @@ julia> Base.shell_escape_posixly("echo", "this", "&&", "that")
 "echo this '&&' that"
 ```
 """
-shell_escape_posixly(args::AbstractString...) =
-    sprint(print_shell_escaped_posixly, args...)
+shell_escape_posixly(args::AbstractString...) = sprint(print_shell_escaped_posixly, args...)

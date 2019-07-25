@@ -68,7 +68,7 @@ function show(io::IO, opt::JLOptions)
 end
 
 function unsafe_load_commands(v::Ptr{Ptr{UInt8}})
-    cmds = Pair{Char, String}[]
+    cmds = Pair{Char,String}[]
     v == C_NULL && return cmds
     i = 1
     while true

@@ -2,7 +2,7 @@
 
 # Core definitions for interacting with the libuv library from Julia
 
-include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "uv_constants.jl"))  # include($BUILDROOT/base/uv_constants.jl)
+include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "uv_constants.jl")) # include($BUILDROOT/base/uv_constants.jl)
 
 # convert UV handle data to julia object, checking for null
 function uv_sizeof_handle(handle)
@@ -20,16 +20,17 @@ function uv_sizeof_req(req)
 end
 
 for h in uv_handle_types
-@eval const $(Symbol("_sizeof_", lowercase(string(h)))) = uv_sizeof_handle($h)
+    @eval const $(Symbol("_sizeof_", lowercase(string(h)))) = uv_sizeof_handle($h)
 end
 for r in uv_req_types
-@eval const $(Symbol("_sizeof_", lowercase(string(r)))) = uv_sizeof_req($r)
+    @eval const $(Symbol("_sizeof_", lowercase(string(r)))) = uv_sizeof_req($r)
 end
 
 uv_handle_data(handle) = ccall(:jl_uv_handle_data, Ptr{Cvoid}, (Ptr{Cvoid},), handle)
 uv_req_data(handle) = ccall(:jl_uv_req_data, Ptr{Cvoid}, (Ptr{Cvoid},), handle)
 uv_req_set_data(req, data) = ccall(:jl_uv_req_set_data, Cvoid, (Ptr{Cvoid}, Any), req, data)
-uv_req_set_data(req, data::Ptr{Cvoid}) = ccall(:jl_uv_req_set_data, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), req, data)
+uv_req_set_data(req, data::Ptr{Cvoid}) =
+    ccall(:jl_uv_req_set_data, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), req, data)
 
 macro handle_as(hand, typ)
     return quote
@@ -108,12 +109,20 @@ function uv_asynccb end
 function uv_timercb end
 
 function reinit_stdio()
-    global uv_jl_alloc_buf     = @cfunction(uv_alloc_buf, Cvoid, (Ptr{Cvoid}, Csize_t, Ptr{Cvoid}))
-    global uv_jl_readcb        = @cfunction(uv_readcb, Cvoid, (Ptr{Cvoid}, Cssize_t, Ptr{Cvoid}))
-    global uv_jl_writecb_task  = @cfunction(uv_writecb_task, Cvoid, (Ptr{Cvoid}, Cint))
-    global uv_jl_return_spawn  = @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32))
-    global uv_jl_asynccb       = @cfunction(uv_asynccb, Cvoid, (Ptr{Cvoid},))
-    global uv_jl_timercb       = @cfunction(uv_timercb, Cvoid, (Ptr{Cvoid},))
+    global uv_jl_alloc_buf = @cfunction(
+        uv_alloc_buf,
+        Cvoid,
+        (Ptr{Cvoid}, Csize_t, Ptr{Cvoid})
+    )
+    global uv_jl_readcb = @cfunction(uv_readcb, Cvoid, (Ptr{Cvoid}, Cssize_t, Ptr{Cvoid}))
+    global uv_jl_writecb_task = @cfunction(uv_writecb_task, Cvoid, (Ptr{Cvoid}, Cint))
+    global uv_jl_return_spawn = @cfunction(
+        uv_return_spawn,
+        Cvoid,
+        (Ptr{Cvoid}, Int64, Int32)
+    )
+    global uv_jl_asynccb = @cfunction(uv_asynccb, Cvoid, (Ptr{Cvoid},))
+    global uv_jl_timercb = @cfunction(uv_timercb, Cvoid, (Ptr{Cvoid},))
 
     global uv_eventloop = ccall(:jl_global_event_loop, Ptr{Cvoid}, ())
     global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))

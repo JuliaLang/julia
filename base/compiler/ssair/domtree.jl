@@ -28,12 +28,12 @@ end
 bb_unreachable(domtree::DomTree, bb::Int) = bb != 1 && domtree.nodes[bb].level == 1
 
 function update_level!(domtree::Vector{DomTreeNode}, node::Int, level::Int)
-    worklist = Tuple{Int, Int}[(node, level)]
+    worklist = Tuple{Int,Int}[(node, level)]
     while !isempty(worklist)
         (node, level) = pop!(worklist)
         domtree[node] = DomTreeNode(level, domtree[node].children)
         foreach(domtree[node].children) do child
-            push!(worklist, (child, level+1))
+            push!(worklist, (child, level + 1))
         end
     end
 end
@@ -49,7 +49,7 @@ function dominated(domtree::DomTree, root::Int)
     doms
 end
 
-function iterate(doms::DominatedBlocks, state::Nothing=nothing)
+function iterate(doms::DominatedBlocks, state::Nothing = nothing)
     isempty(doms.worklist) && return nothing
     bb = pop!(doms.worklist)
     for dominated in doms.domtree.nodes[bb].children
@@ -70,7 +70,7 @@ function naive_idoms(cfg::CFG)
             if isempty(cfg.blocks[n].preds)
                 continue
             end
-            firstp, rest = Iterators.peel(Iterators.filter(p->p != 0, cfg.blocks[n].preds))
+            firstp, rest = Iterators.peel(Iterators.filter(p -> p != 0, cfg.blocks[n].preds))
             new_doms = copy(dominators[firstp])
             for p in rest
                 intersect!(new_doms, dominators[p])
@@ -93,7 +93,8 @@ function naive_idoms(cfg::CFG)
             hasany = false
             for p in doms
                 if p !== i && p !== dom && dom in dominators[p]
-                    hasany = true; break
+                    hasany = true
+                    break
                 end
             end
             hasany && continue
@@ -141,7 +142,7 @@ begin
     const DFSNumber = UInt
 
     """
-    Keeps the per-BB state of the Semi NCA algorithm. In the original
+        Keeps the per-BB state of the Semi NCA algorithm. In the original
     formulation, there are three separate length `n` arrays, `label`, `semi` and
     `ancestor`. Instead, for efficiency, we use one array in a array-of-structs
     style setup.
@@ -162,13 +163,14 @@ begin
     end
     length(D::DFSTree) = length(D.numbering)
     preorder(D::DFSTree) = OneTo(length(D))
-    _drop(xs::AbstractUnitRange, n::Integer) = (first(xs)+n):last(xs)
+    _drop(xs::AbstractUnitRange, n::Integer) = (first(xs) + n):last(xs)
 
     function DFSTree(nblocks::Int)
         DFSTree(
             Vector{BBNumber}(undef, nblocks),
             zeros(DFSNumber, nblocks),
-            Vector{DFSNumber}(undef, nblocks))
+            Vector{DFSNumber}(undef, nblocks)
+        )
     end
 
     function DFS(cfg::CFG, current_node::BBNumber)::DFSTree
@@ -176,7 +178,7 @@ begin
         # TODO: We could reuse the storage in DFSTree for our worklist. We're
         # guaranteed for the worklist to be smaller than the remaining space in
         # DFSTree
-        worklist = Tuple{DFSNumber, BBNumber}[(0, current_node)]
+        worklist = Tuple{DFSNumber,BBNumber}[(0, current_node)]
         dfs_num = 1
         parent = 0
         while !isempty(worklist)
@@ -198,13 +200,17 @@ begin
     end
 
     """
-    Matches the snca_compress algorithm in Figure 2.8 of [LG05], with the
+        Matches the snca_compress algorithm in Figure 2.8 of [LG05], with the
     modification suggested in the paper to use `last_linked` to determine
     whether an ancestor has been processed rather than storing `0` in the
     ancestor array.
     """
-    function snca_compress!(state::Vector{Node}, ancestors::Vector{DFSNumber},
-                            v::DFSNumber, last_linked::DFSNumber)
+    function snca_compress!(
+        state::Vector{Node},
+        ancestors::Vector{DFSNumber},
+        v::DFSNumber,
+        last_linked::DFSNumber
+    )
         u = ancestors[v]
         @assert u < v
         if u >= last_linked
@@ -218,11 +224,14 @@ begin
     end
 
     function snca_compress_worklist!(
-            state::Vector{Node}, ancestors::Vector{DFSNumber},
-            v::DFSNumber, last_linked::DFSNumber)
+        state::Vector{Node},
+        ancestors::Vector{DFSNumber},
+        v::DFSNumber,
+        last_linked::DFSNumber
+    )
         # TODO: There is a smarter way to do this
         u = ancestors[v]
-        worklist = Tuple{Int, Int}[(u,v)]
+        worklist = Tuple{Int,Int}[(u, v)]
         @assert u < v
         while !isempty(worklist)
             u, v = last(worklist)
@@ -241,7 +250,7 @@ begin
     end
 
     """
-    The main Semi-NCA algrithm. Matches Figure 2.8 in [LG05].
+        The main Semi-NCA algrithm. Matches Figure 2.8 in [LG05].
     Note that the pseudocode in [LG05] is not entirely accurate.
     The best way to understand what's happening is to read [LT79], then the
     description of SLT in in [LG05] (warning: inconsistent notation), then
@@ -254,7 +263,7 @@ begin
         # 2.4 in [LG05] (i.e. Theorem 4 in ). Note however, that we don't
         # ever look at `semi` until it is fully initialized, so we could leave
         # it unitialized here if we wanted to.
-        state = Node[ Node(typemax(DFSNumber), w) for w in preorder(D) ]
+        state = Node[Node(typemax(DFSNumber), w) for w in preorder(D)]
         # Initialize idoms to parents. Note that while idoms are eventually
         # BB indexed, we keep it DFS indexed until a final post-processing
         # pass to avoid extra memory references during the O(N^2) phase below.
@@ -302,7 +311,8 @@ begin
             end
             idoms_dfs[v] = idom
         end
-        idoms_bb = Int[ (i == 1 || D.reverse[i] == 0) ? 0 : D.numbering[idoms_dfs[D.reverse[i]]] for i = 1:length(cfg.blocks) ]
+        idoms_bb = Int[(i == 1 || D.reverse[i] == 0) ? 0 :
+                       D.numbering[idoms_dfs[D.reverse[i]]] for i = 1:length(cfg.blocks)]
         idoms_bb
     end
 end

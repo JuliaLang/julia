@@ -6,7 +6,7 @@ mutable struct InferenceState
     params::Params # describes how to compute the result
     result::InferenceResult # remember where to put the result
     linfo::MethodInstance
-    sptypes::Vector{Any}    # types of static parameter
+    sptypes::Vector{Any} # types of static parameter
     slottypes::Vector{Any}
     mod::Module
     currpc::LineNum
@@ -31,9 +31,9 @@ mutable struct InferenceState
     # ssavalue sparsity and restart info
     ssavalue_uses::Vector{BitSet}
 
-    cycle_backedges::Vector{Tuple{InferenceState, LineNum}} # call-graph backedges connecting from callee to caller
+    cycle_backedges::Vector{Tuple{InferenceState,LineNum}} # call-graph backedges connecting from callee to caller
     callers_in_cycle::Vector{InferenceState}
-    parent::Union{Nothing, InferenceState}
+    parent::Union{Nothing,InferenceState}
 
     # TODO: move these to InferenceResult / Params?
     cached::Bool
@@ -42,8 +42,12 @@ mutable struct InferenceState
     dont_work_on_me::Bool
 
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
-    function InferenceState(result::InferenceResult, src::CodeInfo,
-                            cached::Bool, params::Params)
+    function InferenceState(
+        result::InferenceResult,
+        src::CodeInfo,
+        cached::Bool,
+        params::Params
+    )
         linfo = result.linfo
         code = src.code::Array{Any,1}
         toplevel = !isa(linfo.def, Method)
@@ -51,11 +55,11 @@ mutable struct InferenceState
         sp = sptypes_from_meth_instance(linfo::MethodInstance)
 
         nssavalues = src.ssavaluetypes::Int
-        src.ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
+        src.ssavaluetypes = Any[NOT_FOUND for i = 1:nssavalues]
 
         n = length(code)
-        s_edges = Any[ nothing for i = 1:n ]
-        s_types = Any[ nothing for i = 1:n ]
+        s_edges = Any[nothing for i = 1:n]
+        s_types = Any[nothing for i = 1:n]
 
         # initial types
         nslots = length(src.slotflags)
@@ -74,7 +78,7 @@ mutable struct InferenceState
 
         # exception handlers
         cur_hand = nothing
-        handler_at = Any[ nothing for i=1:n ]
+        handler_at = Any[nothing for i = 1:n]
         n_handlers = 0
 
         W = BitSet()
@@ -88,20 +92,37 @@ mutable struct InferenceState
         end
 
         min_valid = src.min_world
-        max_valid = src.max_world == typemax(UInt) ?
-            get_world_counter() : src.max_world
+        max_valid = src.max_world == typemax(UInt) ? get_world_counter() : src.max_world
         frame = new(
-            params, result, linfo,
-            sp, slottypes, inmodule, 0,
-            src, min_valid, max_valid,
-            nargs, s_types, s_edges,
-            Union{}, W, 1, n,
-            cur_hand, handler_at, n_handlers,
+            params,
+            result,
+            linfo,
+            sp,
+            slottypes,
+            inmodule,
+            0,
+            src,
+            min_valid,
+            max_valid,
+            nargs,
+            s_types,
+            s_edges,
+            Union{},
+            W,
+            1,
+            n,
+            cur_hand,
+            handler_at,
+            n_handlers,
             ssavalue_uses,
-            Vector{Tuple{InferenceState,LineNum}}(), # cycle_backedges
-            Vector{InferenceState}(), # callers_in_cycle
-            #=parent=#nothing,
-            cached, false, false, false)
+            Vector{Tuple{InferenceState,LineNum}}(),
+            Vector{InferenceState}(),
+            nothing,
+            cached,
+            false,
+            false,
+            false
+        )
         result.result = frame
         cached && push!(params.cache, result)
         return frame
@@ -190,12 +211,12 @@ _topmod(sv::InferenceState) = _topmod(sv.mod)
 function update_valid_age!(min_valid::UInt, max_valid::UInt, sv::InferenceState)
     sv.min_valid = max(sv.min_valid, min_valid)
     sv.max_valid = min(sv.max_valid, max_valid)
-    @assert(sv.min_valid <= sv.params.world <= sv.max_valid,
-            "invalid age range update")
+    @assert(sv.min_valid <= sv.params.world <= sv.max_valid, "invalid age range update")
     nothing
 end
 
-update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(edge.min_valid, edge.max_valid, sv)
+update_valid_age!(edge::InferenceState, sv::InferenceState) =
+    update_valid_age!(edge.min_valid, edge.max_valid, sv)
 
 function record_ssa_assign(ssa_id::Int, @nospecialize(new), frame::InferenceState)
     old = frame.src.ssavaluetypes[ssa_id]
@@ -244,7 +265,11 @@ function add_mt_backedge!(mt::Core.MethodTable, @nospecialize(typ), caller::Infe
     nothing
 end
 
-function poison_callstack(infstate::InferenceState, topmost::InferenceState, poison_topmost::Bool)
+function poison_callstack(
+    infstate::InferenceState,
+    topmost::InferenceState,
+    poison_topmost::Bool
+)
     poison_topmost && (topmost = topmost.parent)
     while !(infstate === topmost)
         if call_result_unused(infstate)

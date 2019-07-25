@@ -18,29 +18,29 @@ replace_ref_end!(ex) = replace_ref_end_!(ex, nothing)[1]
 # replace_ref_end_!(ex,withex) returns (new ex, whether withex was used)
 function replace_ref_end_!(ex, withex)
     used_withex = false
-    if isa(ex,Symbol) && ex == :end
+    if isa(ex, Symbol) && ex == :end
         withex === nothing && error("Invalid use of end")
         return withex, true
-    elseif isa(ex,Expr)
+    elseif isa(ex, Expr)
         if ex.head == :ref
-            ex.args[1], used_withex = replace_ref_end_!(ex.args[1],withex)
-            S = isa(ex.args[1],Symbol) ? ex.args[1]::Symbol : gensym(:S) # temp var to cache ex.args[1] if needed
+            ex.args[1], used_withex = replace_ref_end_!(ex.args[1], withex)
+            S = isa(ex.args[1], Symbol) ? ex.args[1]::Symbol : gensym(:S) # temp var to cache ex.args[1] if needed
             used_S = false # whether we actually need S
             # new :ref, so redefine withex
-            nargs = length(ex.args)-1
+            nargs = length(ex.args) - 1
             if nargs == 0
                 return ex, used_withex
             elseif nargs == 1
                 # replace with lastindex(S)
-                ex.args[2], used_S = replace_ref_end_!(ex.args[2],:($lastindex($S)))
+                ex.args[2], used_S = replace_ref_end_!(ex.args[2], :($lastindex($S)))
             else
                 n = 1
                 J = lastindex(ex.args)
                 for j = 2:J
-                    exj, used = replace_ref_end_!(ex.args[j],:($lastindex($S,$n)))
+                    exj, used = replace_ref_end_!(ex.args[j], :($lastindex($S, $n)))
                     used_S |= used
                     ex.args[j] = exj
-                    if isa(exj,Expr) && exj.head == :...
+                    if isa(exj, Expr) && exj.head == :...
                         # splatted object
                         exjs = exj.args[1]
                         n = :($n + length($exjs))
@@ -61,7 +61,7 @@ function replace_ref_end_!(ex, withex)
         else
             # recursive search
             for i = eachindex(ex.args)
-                ex.args[i], used = replace_ref_end_!(ex.args[i],withex)
+                ex.args[i], used = replace_ref_end_!(ex.args[i], withex)
                 used_withex |= used
             end
         end
@@ -138,9 +138,11 @@ function _views(ex::Expr)
         # don't use view for ref on the lhs of an assignment,
         # but still use views for the args of the ref:
         lhs = ex.args[1]
-        Expr(ex.head, Meta.isexpr(lhs, :ref) ?
-                      Expr(:ref, _views.(lhs.args)...) : _views(lhs),
-             _views(ex.args[2]))
+        Expr(
+            ex.head,
+            Meta.isexpr(lhs, :ref) ? Expr(:ref, _views.(lhs.args)...) : _views(lhs),
+            _views(ex.args[2])
+        )
     elseif ex.head == :ref
         Expr(:call, maybeview, _views.(ex.args)...)
     else
@@ -166,14 +168,24 @@ function _views(ex::Expr)
                 end
             end
 
-            Expr(:let,
-                 Expr(:block,
-                      :($a = $(_views(lhs.args[1]))),
-                      [:($(i[k]) = $(_views(lhs.args[k+1]))) for k=1:length(i)]...),
-                 Expr(first(h) == '.' ? :(.=) : :(=), :($a[$(I...)]),
-                      Expr(:call, Symbol(h[1:end-1]),
-                           :($maybeview($a, $(I...))),
-                           _views.(ex.args[2:end])...)))
+            Expr(
+                :let,
+                Expr(
+                    :block,
+                    :($a = $(_views(lhs.args[1]))),
+                    [:($(i[k]) = $(_views(lhs.args[k+1]))) for k = 1:length(i)]...
+                ),
+                Expr(
+                    first(h) == '.' ? :(.=) : :(=),
+                    :($a[$(I...)]),
+                    Expr(
+                        :call,
+                        Symbol(h[1:end-1]),
+                        :($maybeview($a, $(I...))),
+                        _views.(ex.args[2:end])...
+                    )
+                )
+            )
         else
             Expr(ex.head, _views.(ex.args)...)
         end

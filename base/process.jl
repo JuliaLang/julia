@@ -10,10 +10,16 @@ mutable struct Process <: AbstractPipe
     termsignal::Int32
     exitnotify::ThreadSynchronizer
     function Process(cmd::Cmd, handle::Ptr{Cvoid})
-        this = new(cmd, handle, devnull, devnull, devnull,
-                   typemin(fieldtype(Process, :exitcode)),
-                   typemin(fieldtype(Process, :termsignal)),
-                   ThreadSynchronizer())
+        this = new(
+            cmd,
+            handle,
+            devnull,
+            devnull,
+            devnull,
+            typemin(fieldtype(Process, :exitcode)),
+            typemin(fieldtype(Process, :termsignal)),
+            ThreadSynchronizer()
+        )
         finalizer(uvfinalize, this)
         return this
     end
@@ -74,26 +80,40 @@ const SpawnIOs = Vector{Any} # convenience name for readability
 # handle marshalling of `Cmd` arguments from Julia to C
 @noinline function _spawn_primitive(file, cmd::Cmd, stdio::SpawnIOs)
     loop = eventloop()
-    iohandles = Tuple{Cint, UInt}[ # assuming little-endian layout
-        let h = rawhandle(io)
-            h === C_NULL     ? (0x00, UInt(0)) :
-            h isa OS_HANDLE  ? (0x02, UInt(cconvert(@static(Sys.iswindows() ? Ptr{Cvoid} : Cint), h))) :
-            h isa Ptr{Cvoid} ? (0x04, UInt(h)) :
-            error("invalid spawn handle $h from $io")
-        end
-        for io in stdio]
+    iohandles = Tuple{Cint,UInt}[let h = rawhandle(io)
+        h === C_NULL ? (0x00, UInt(0)) :
+        h isa OS_HANDLE ?
+        (0x02, UInt(cconvert(@static(Sys.iswindows() ? Ptr{Cvoid} : Cint), h))) :
+        h isa Ptr{Cvoid} ? (0x04, UInt(h)) : error("invalid spawn handle $h from $io")
+    end for io in stdio]
     handle = Libc.malloc(_sizeof_uv_process)
     disassociate_julia_struct(handle) # ensure that data field is set to C_NULL
-    error = ccall(:jl_spawn, Int32,
-              (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid},
-               Ptr{Tuple{Cint, UInt}}, Int,
-               UInt32, Ptr{Cstring}, Cstring, Ptr{Cvoid}),
-        file, cmd.exec, loop, handle,
-        iohandles, length(iohandles),
+    error = ccall(
+        :jl_spawn,
+        Int32,
+        (
+         Cstring,
+         Ptr{Cstring},
+         Ptr{Cvoid},
+         Ptr{Cvoid},
+         Ptr{Tuple{Cint,UInt}},
+         Int,
+         UInt32,
+         Ptr{Cstring},
+         Cstring,
+         Ptr{Cvoid}
+        ),
+        file,
+        cmd.exec,
+        loop,
+        handle,
+        iohandles,
+        length(iohandles),
         cmd.flags,
         cmd.env === nothing ? C_NULL : cmd.env,
         isempty(cmd.dir) ? C_NULL : cmd.dir,
-        uv_jl_return_spawn::Ptr{Cvoid})
+        uv_jl_return_spawn::Ptr{Cvoid}
+    )
     if error != 0
         ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), handle) # will call free on handle eventually
         throw(_UVError("could not spawn " * repr(cmd), error))
@@ -254,7 +274,7 @@ end
 # incrementally move data between an IOBuffer and a system Pipe
 # TODO: probably more efficient (when valid) to use `stdio` directly as the
 #       PipeEndpoint buffer field in some cases
-function setup_stdio(stdio::Union{IOBuffer, BufferStream}, child_readable::Bool)
+function setup_stdio(stdio::Union{IOBuffer,BufferStream}, child_readable::Bool)
     parent = PipeEndpoint()
     rd, wr = link_pipe(!child_readable, child_readable)
     try
@@ -267,11 +287,11 @@ function setup_stdio(stdio::Union{IOBuffer, BufferStream}, child_readable::Bool)
     child = child_readable ? rd : wr
     try
         let in = (child_readable ? parent : stdio),
-            out = (child_readable ? stdio : parent)
+        out = (child_readable ? stdio : parent)
             @async try
                 write(in, out)
             catch ex
-                @warn "Process error" exception=(ex, catch_backtrace())
+                @warn "Process error" exception = (ex, catch_backtrace())
             finally
                 close(parent)
             end
@@ -304,20 +324,26 @@ close_stdio(stdio) = close(stdio)
 
 spawn_opts_swallow(stdios::StdIOSet) = Any[stdios...]
 spawn_opts_inherit(stdios::StdIOSet) = Any[stdios...]
-spawn_opts_swallow(in::Redirectable=devnull, out::Redirectable=devnull, err::Redirectable=devnull) =
-    Any[in, out, err]
+spawn_opts_swallow(
+    in::Redirectable = devnull,
+    out::Redirectable = devnull,
+    err::Redirectable = devnull
+) = Any[in, out, err]
 # pass original descriptors to child processes by default, because we might
 # have already exhausted and closed the libuv object for our standard streams.
 # ref issue #8529
-spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::Redirectable=RawFD(2)) =
-    Any[in, out, err]
+spawn_opts_inherit(
+    in::Redirectable = RawFD(0),
+    out::Redirectable = RawFD(1),
+    err::Redirectable = RawFD(2)
+) = Any[in, out, err]
 
-function eachline(cmd::AbstractCmd; keep::Bool=false)
+function eachline(cmd::AbstractCmd; keep::Bool = false)
     out = PipeEndpoint()
     processes = _spawn(cmd, Any[devnull, out, stderr])
     # if the user consumes all the data, also check process exit status for success
     ondone = () -> (success(processes) || pipeline_error(processes); nothing)
-    return EachLine(out, keep=keep, ondone=ondone)::EachLine
+    return EachLine(out, keep = keep, ondone = ondone)::EachLine
 end
 
 """
@@ -334,7 +360,7 @@ Possible mode strings are:
 | `r+` | read, write | `read = true, write = true`      |
 | `w+` | read, write | `read = true, write = true`      |
 """
-function open(cmds::AbstractCmd, mode::AbstractString, stdio::Redirectable=devnull)
+function open(cmds::AbstractCmd, mode::AbstractString, stdio::Redirectable = devnull)
     if mode == "r+" || mode == "w+"
         return open(cmds, stdio, read = true, write = true)
     elseif mode == "r"
@@ -357,7 +383,11 @@ the process's standard input and `stdio` optionally specifies the process's stan
 stream.
 The process's standard error stream is connected to the current global `stderr`.
 """
-function open(cmds::AbstractCmd, stdio::Redirectable=devnull; write::Bool=false, read::Bool=!write)
+function open(
+    cmds::AbstractCmd,
+    stdio::Redirectable = devnull;
+    write::Bool = false, read::Bool = !write
+)
     if read && write
         stdio === devnull || throw(ArgumentError("no stream can be specified for `stdio` in read-write mode"))
         in = PipeEndpoint()
@@ -463,8 +493,8 @@ end
 
 # some common signal numbers that are usually available on all platforms
 # and might be useful as arguments to `kill` or testing against `Process.termsignal`
-const SIGHUP  = 1
-const SIGINT  = 2
+const SIGHUP = 1
+const SIGINT = 2
 const SIGQUIT = 3 # !windows
 const SIGKILL = 9
 const SIGPIPE = 13 # !windows

@@ -31,7 +31,8 @@ struct CFunction <: Ref{Cvoid}
     f::Any
     _1::Ptr{Cvoid}
     _2::Ptr{Cvoid}
-    let constructor = false end
+    let constructor = false
+    end
 end
 unsafe_convert(::Type{Ptr{Cvoid}}, cf::CFunction) = cf.ptr
 
@@ -160,9 +161,9 @@ end
 
 # construction from pointers
 Cstring(p::Union{Ptr{Int8},Ptr{UInt8},Ptr{Cvoid}}) = bitcast(Cstring, p)
-Cwstring(p::Union{Ptr{Cwchar_t},Ptr{Cvoid}})       = bitcast(Cwstring, p)
+Cwstring(p::Union{Ptr{Cwchar_t},Ptr{Cvoid}}) = bitcast(Cwstring, p)
 (::Type{Ptr{T}})(p::Cstring) where {T<:Union{Int8,UInt8,Cvoid}} = bitcast(Ptr{T}, p)
-(::Type{Ptr{T}})(p::Cwstring) where {T<:Union{Cwchar_t,Cvoid}}  = bitcast(Ptr{Cwchar_t}, p)
+(::Type{Ptr{T}})(p::Cwstring) where {T<:Union{Cwchar_t,Cvoid}} = bitcast(Ptr{Cwchar_t}, p)
 
 convert(::Type{Cstring}, p::Union{Ptr{Int8},Ptr{UInt8},Ptr{Cvoid}}) = Cstring(p)
 convert(::Type{Cwstring}, p::Union{Ptr{Cwchar_t},Ptr{Cvoid}}) = Cwstring(p)
@@ -194,8 +195,7 @@ unsafe_string(s::Cstring) = unsafe_string(convert(Ptr{UInt8}, s))
 
 # convert strings to String etc. to pass as pointers
 cconvert(::Type{Cstring}, s::String) = s
-cconvert(::Type{Cstring}, s::AbstractString) =
-    cconvert(Cstring, String(s)::String)
+cconvert(::Type{Cstring}, s::AbstractString) = cconvert(Cstring, String(s)::String)
 
 function cconvert(::Type{Cwstring}, s::AbstractString)
     v = transcode(Cwchar_t, String(s))
@@ -213,18 +213,15 @@ containsnul(s::AbstractString) = '\0' in s
 
 function unsafe_convert(::Type{Cstring}, s::Union{String,AbstractVector{UInt8}})
     p = unsafe_convert(Ptr{Cchar}, s)
-    containsnul(p, sizeof(s)) &&
-        throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
+    containsnul(p, sizeof(s)) && throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
     return Cstring(p)
 end
 
 function unsafe_convert(::Type{Cwstring}, v::Vector{Cwchar_t})
     for i = 1:length(v)-1
-        v[i] == 0 &&
-            throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(v))"))
+        v[i] == 0 && throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(v))"))
     end
-    v[end] == 0 ||
-        throw(ArgumentError("C string data must be NUL terminated: $(repr(v))"))
+    v[end] == 0 || throw(ArgumentError("C string data must be NUL terminated: $(repr(v))"))
     p = unsafe_convert(Ptr{Cwchar_t}, v)
     return Cwstring(p)
 end
@@ -234,21 +231,21 @@ cconvert(::Type{Cstring}, s::Symbol) = s
 unsafe_convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
 
 @static if ccall(:jl_get_UNAME, Any, ()) === :NT
-"""
-    Base.cwstring(s)
+    """
+        Base.cwstring(s)
 
-Converts a string `s` to a NUL-terminated `Vector{Cwchar_t}`, suitable for passing to C
-functions expecting a `Ptr{Cwchar_t}`. The main advantage of using this over the implicit
-conversion provided by [`Cwstring`](@ref) is if the function is called multiple times with the
-same argument.
+    Converts a string `s` to a NUL-terminated `Vector{Cwchar_t}`, suitable for passing to C
+    functions expecting a `Ptr{Cwchar_t}`. The main advantage of using this over the implicit
+    conversion provided by [`Cwstring`](@ref) is if the function is called multiple times with the
+    same argument.
 
-This is only available on Windows.
-"""
-function cwstring(s::AbstractString)
-    bytes = codeunits(String(s))
-    0 in bytes && throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
-    return push!(transcode(UInt16, bytes), 0)
-end
+    This is only available on Windows.
+    """
+    function cwstring(s::AbstractString)
+        bytes = codeunits(String(s))
+        0 in bytes && throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
+        return push!(transcode(UInt16, bytes), 0)
+    end
 end
 
 # transcoding between data in UTF-8 and UTF-16 for Windows APIs,
@@ -273,7 +270,8 @@ Only conversion to/from UTF-8 is currently supported.
 """
 function transcode end
 
-transcode(::Type{T}, src::AbstractVector{T}) where {T<:Union{UInt8,UInt16,UInt32,Int32}} = src
+transcode(::Type{T}, src::AbstractVector{T}) where {T<:Union{UInt8,UInt16,UInt32,Int32}} =
+    src
 transcode(::Type{T}, src::String) where {T<:Union{Int32,UInt32}} = T[T(c) for c in src]
 transcode(::Type{T}, src::AbstractVector{UInt8}) where {T<:Union{Int32,UInt32}} =
     transcode(T, String(Vector(src)))
@@ -296,34 +294,40 @@ function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
     dst = UInt16[]
     i, n = 1, length(src)
     n > 0 || return dst
-    sizehint!(dst, 2n)
+    sizehint!(dst, 2 * n)
     a = src[1]
     while true
         if i < n && -64 <= a % Int8 <= -12 # multi-byte character
-            b = src[i += 1]
+            b = src[i+=1]
             if -64 <= (b % Int8) || a == 0xf4 && 0x8f < b
                 # invalid UTF-8 (non-continuation or too-high code point)
                 push!(dst, a)
-                a = b; continue
+                a = b
+                continue
             elseif a < 0xe0 # 2-byte UTF-8
                 push!(dst, xor(0x3080, UInt16(a) << 6, b))
             elseif i < n # 3/4-byte character
-                c = src[i += 1]
+                c = src[i+=1]
                 if -64 <= (c % Int8) # invalid UTF-8 (non-continuation)
                     push!(dst, a, b)
-                    a = c; continue
+                    a = c
+                    continue
                 elseif a < 0xf0 # 3-byte UTF-8
                     push!(dst, xor(0x2080, UInt16(a) << 12, UInt16(b) << 6, c))
                 elseif i < n
-                    d = src[i += 1]
+                    d = src[i+=1]
                     if -64 <= (d % Int8) # invalid UTF-8 (non-continuation)
                         push!(dst, a, b, c)
-                        a = d; continue
+                        a = d
+                        continue
                     elseif a == 0xf0 && b < 0x90 # overlong encoding
                         push!(dst, xor(0x2080, UInt16(b) << 12, UInt16(c) << 6, d))
                     else # 4-byte UTF-8
-                        push!(dst, 0xe5b8 + (UInt16(a) << 8) + (UInt16(b) << 2) + (c >> 4),
-                                   xor(0xdc80, UInt16(c & 0xf) << 6, d))
+                        push!(
+                            dst,
+                            0xe5b8 + (UInt16(a) << 8) + (UInt16(b) << 2) + (c >> 4),
+                            xor(0xdc80, UInt16(c & 0xf) << 6, d)
+                        )
                     end
                 else # too short
                     push!(dst, a, b, c)
@@ -337,7 +341,7 @@ function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
             push!(dst, a)
         end
         i < n || break
-        a = src[i += 1]
+        a = src[i+=1]
     end
     return dst
 end
@@ -361,12 +365,13 @@ function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
         elseif a < 0x800 # 2-byte UTF-8
             m += 2
         elseif a & 0xfc00 == 0xd800 && i < length(src)
-            b = src[i += 1]
+            b = src[i+=1]
             if (b & 0xfc00) == 0xdc00 # 2-unit UTF-16 sequence => 4-byte UTF-8
                 m += 4
             else
                 m += 3
-                a = b; continue
+                a = b
+                continue
             end
         else
             # 1-unit high UTF-16 or unpaired high surrogate
@@ -374,7 +379,7 @@ function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
             m += 3
         end
         i < n || break
-        a = src[i += 1]
+        a = src[i+=1]
     end
 
     dst = StringVector(m)
@@ -382,34 +387,35 @@ function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
     i, j = 1, 0
     while true
         if a < 0x80 # ASCII
-            dst[j += 1] = a % UInt8
+            dst[j+=1] = a % UInt8
         elseif a < 0x800 # 2-byte UTF-8
-            dst[j += 1] = 0xc0 | ((a >> 6) % UInt8)
-            dst[j += 1] = 0x80 | ((a % UInt8) & 0x3f)
+            dst[j+=1] = 0xc0 | ((a >> 6) % UInt8)
+            dst[j+=1] = 0x80 | ((a % UInt8) & 0x3f)
         elseif a & 0xfc00 == 0xd800 && i < n
-            b = src[i += 1]
+            b = src[i+=1]
             if (b & 0xfc00) == 0xdc00
                 # 2-unit UTF-16 sequence => 4-byte UTF-8
                 a += 0x2840
-                dst[j += 1] = 0xf0 | ((a >> 8) % UInt8)
-                dst[j += 1] = 0x80 | ((a % UInt8) >> 2)
-                dst[j += 1] = xor(0xf0, ((a % UInt8) << 4) & 0x3f, (b >> 6) % UInt8)
-                dst[j += 1] = 0x80 | ((b % UInt8) & 0x3f)
+                dst[j+=1] = 0xf0 | ((a >> 8) % UInt8)
+                dst[j+=1] = 0x80 | ((a % UInt8) >> 2)
+                dst[j+=1] = xor(0xf0, ((a % UInt8) << 4) & 0x3f, (b >> 6) % UInt8)
+                dst[j+=1] = 0x80 | ((b % UInt8) & 0x3f)
             else
-                dst[j += 1] = 0xe0 | ((a >> 12) % UInt8)
-                dst[j += 1] = 0x80 | (((a >> 6) % UInt8) & 0x3f)
-                dst[j += 1] = 0x80 | ((a % UInt8) & 0x3f)
-                a = b; continue
+                dst[j+=1] = 0xe0 | ((a >> 12) % UInt8)
+                dst[j+=1] = 0x80 | (((a >> 6) % UInt8) & 0x3f)
+                dst[j+=1] = 0x80 | ((a % UInt8) & 0x3f)
+                a = b
+                continue
             end
         else
             # 1-unit high UTF-16 or unpaired high surrogate
             # either way, encode as 3-byte UTF-8 code point
-            dst[j += 1] = 0xe0 | ((a >> 12) % UInt8)
-            dst[j += 1] = 0x80 | (((a >> 6) % UInt8) & 0x3f)
-            dst[j += 1] = 0x80 | ((a % UInt8) & 0x3f)
+            dst[j+=1] = 0xe0 | ((a >> 12) % UInt8)
+            dst[j+=1] = 0x80 | (((a >> 6) % UInt8) & 0x3f)
+            dst[j+=1] = 0x80 | ((a % UInt8) & 0x3f)
         end
         i < n || break
-        a = src[i += 1]
+        a = src[i+=1]
     end
     return dst
 end
@@ -463,12 +469,17 @@ function reenable_sigint(f::Function)
     res
 end
 
-function ccallable(f::Function, rt::Type, argt::Type, name::Union{AbstractString,Symbol}=string(f))
+function ccallable(
+    f::Function,
+    rt::Type,
+    argt::Type,
+    name::Union{AbstractString,Symbol} = string(f)
+)
     ccall(:jl_extern_c, Cvoid, (Any, Any, Any, Cstring), f, rt, argt, name)
 end
 
 function expand_ccallable(rt, def)
-    if isa(def,Expr) && (def.head === :(=) || def.head === :function)
+    if isa(def, Expr) && (def.head === :(=) || def.head === :function)
         sig = def.args[1]
         if sig.head === :(::)
             if rt === nothing
@@ -482,7 +493,7 @@ function expand_ccallable(rt, def)
         if sig.head === :call
             name = sig.args[1]
             at = map(sig.args[2:end]) do a
-                if isa(a,Expr) && a.head === :(::)
+                if isa(a, Expr) && a.head === :(::)
                     a.args[2]
                 else
                     :Any
@@ -490,7 +501,12 @@ function expand_ccallable(rt, def)
             end
             return quote
                 $(esc(def))
-                ccallable($(esc(name)), $(esc(rt)), $(Expr(:curly, :Tuple, map(esc, at)...)), $(string(name)))
+                ccallable(
+                    $(esc(name)),
+                    $(esc(rt)),
+                    $(Expr(:curly, :Tuple, map(esc, at)...)),
+                    $(string(name))
+                )
             end
         end
     end

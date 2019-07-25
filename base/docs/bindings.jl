@@ -21,11 +21,11 @@ resolve(b::Binding) = getfield(b.mod, b.var)
 
 function splitexpr(x::Expr)
     isexpr(x, :macrocall) ? splitexpr(x.args[1]) :
-    isexpr(x, :.)         ? (x.args[1], x.args[2]) :
-    error("Invalid @var syntax `$x`.")
+    isexpr(x, :.) ? (x.args[1], x.args[2]) : error("Invalid @var syntax `$x`.")
 end
-splitexpr(s::Symbol) = Expr(:macrocall, getfield(Base, Symbol("@__MODULE__")), nothing), quot(s)
-splitexpr(other)     = error("Invalid @var syntax `$other`.")
+splitexpr(s::Symbol) =
+    Expr(:macrocall, getfield(Base, Symbol("@__MODULE__")), nothing), quot(s)
+splitexpr(other) = error("Invalid @var syntax `$other`.")
 
 macro var(x)
     esc(bindingexpr(x))
@@ -39,8 +39,8 @@ function Base.show(io::IO, b::Binding)
     end
 end
 
-aliasof(b::Binding)     = defined(b) ? (a = aliasof(resolve(b), b); defined(a) ? a : b) : b
+aliasof(b::Binding) = defined(b) ? (a = aliasof(resolve(b), b); defined(a) ? a : b) : b
 aliasof(d::DataType, b) = Binding(d.name.module, d.name.name)
 aliasof(λ::Function, b) = (m = typeof(λ).name.mt; Binding(m.module, m.name))
-aliasof(m::Module,   b) = Binding(m, nameof(m))
-aliasof(other,       b) = b
+aliasof(m::Module, b) = Binding(m, nameof(m))
+aliasof(other, b) = b

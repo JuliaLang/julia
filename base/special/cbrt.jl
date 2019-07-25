@@ -32,7 +32,7 @@ julia> cbrt(big(-27))
 ```
 """
 cbrt(x::Real) = cbrt(float(x))
-cbrt(x::AbstractFloat) = x < 0 ? -(-x)^(1//3) : x^(1//3)
+cbrt(x::AbstractFloat) = x < 0 ? -(-x)^(1 // 3) : x^(1 // 3)
 
 """
     _approx_cbrt(x)
@@ -61,8 +61,8 @@ These implementations assume that NaNs, infinities and zeros have already been f
 """
 @inline function _approx_cbrt(x::T) where {T<:Union{Float32,Float64}}
     # floor(UInt32, adj * exp2(k)) should be evaluated to 2 constants.
-    adj = exponent_bias(T)*2/3 - 0.03306235651
-    k = significand_bits(T) - (8*sizeof(T) - 32)
+    adj = exponent_bias(T) * 2 / 3 - 0.03306235651
+    k = significand_bits(T) - (8 * sizeof(T) - 32)
 
     u = highword(x) & 0x7fff_ffff
     if u >= Base.Math.highword(floatmin(T))
@@ -70,7 +70,7 @@ These implementations assume that NaNs, infinities and zeros have already been f
     else
         # subnormal
         x *= maxintfloat(T)
-        adj -= exponent(maxintfloat(T))/3
+        adj -= exponent(maxintfloat(T)) / 3
         u = highword(x) & 0x7fff_ffff
         v = div(u, UInt32(3)) + floor(UInt32, adj * exp2(k))
     end
@@ -83,18 +83,18 @@ end
     # with update
     #   t <- t*(t^3 + 2*x)/(2*t^3 + x)
 
-    # Use double precision so that its terms can be arranged for efficiency
+        # Use double precision so that its terms can be arranged for efficiency
     # without causing overflow or underflow.
     xx = Float64(x)
     tt = Float64(t)
 
     # 1st step: 16 bits accuracy
     tt3 = tt^3
-    tt *= (2*xx + tt3)/(x + 2*tt3)
+    tt *= (2 * xx + tt3) / (x + 2 * tt3)
 
     # 2nd step: 47 bits accuracy
     tt3 = tt^3
-    tt *= (2*xx + tt3)/(x + 2*tt3)
+    tt *= (2 * xx + tt3) / (x + 2 * tt3)
 
     return Float32(tt)
 end
@@ -109,9 +109,13 @@ end
     # has produced t such than |t/cbrt(x) - 1| ~< 1/32, and cubing this
     # gives us bounds for r = t^3/x.
 
-    r = (t*t)*(t/x)
-    t *= (@horner(r, 1.87595182427177009643, -1.88497979543377169875, 1.621429720105354466140) +
-          r^3 * @horner(r, -0.758397934778766047437, 0.145996192886612446982))
+    r = (t * t) * (t / x)
+    t *= (@horner(
+        r,
+        1.87595182427177009643,
+        -1.88497979543377169875,
+        1.621429720105354466140
+    ) + r^3 * @horner(r, -0.758397934778766047437, 0.145996192886612446982))
 
     # Round t away from zero to 23 bits (sloppily except for ensuring that
     # the result is larger in magnitude than cbrt(x) but not much more than
@@ -131,11 +135,11 @@ end
     # with update
     #   t <- t + t * (x/t^2 - t) / (3*t)
 
-    # to 53 bits with error < 0.667 ulps
-    s = t*t             # t*t is exact
-    r = x/s             # error <= 0.5 ulps; |r| < |t|
-    w = t+t             # t+t is exact
-    r = (r - t)/(w + r) # r-t is exact; w+r ~= 3*t
+        # to 53 bits with error < 0.667 ulps
+    s = t * t # t*t is exact
+    r = x / s # error <= 0.5 ulps; |r| < |t|
+    w = t + t # t+t is exact
+    r = (r - t) / (w + r) # r-t is exact; w+r ~= 3*t
     t = muladd(t, r, t) # error <= 0.5 + 0.5/3 + epsilon
     return t
 end

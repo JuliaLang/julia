@@ -6,7 +6,7 @@
 # since we won't be able to specialize & infer them at runtime
 
 let fs = Any[typeinf_ext, typeinf, typeinf_edge, pure_eval_call, run_passes],
-    world = get_world_counter()
+world = get_world_counter()
     for x in T_FFUNC_VAL
         push!(fs, x[3])
     end
@@ -15,11 +15,15 @@ let fs = Any[typeinf_ext, typeinf, typeinf_edge, pure_eval_call, run_passes],
             x = T_IFUNC[i]
             push!(fs, x[3])
         else
-            println(stderr, "WARNING: tfunc missing for ", reinterpret(IntrinsicFunction, Int32(i)))
+            println(
+                stderr,
+                "WARNING: tfunc missing for ",
+                reinterpret(IntrinsicFunction, Int32(i))
+            )
         end
     end
     for f in fs
-        for m in _methods_by_ftype(Tuple{typeof(f), Vararg{Any}}, 10, typemax(UInt))
+        for m in _methods_by_ftype(Tuple{typeof(f),Vararg{Any}}, 10, typemax(UInt))
             # remove any TypeVars from the intersection
             typ = Any[m[1].parameters...]
             for i = 1:length(typ)

@@ -5,7 +5,7 @@ function inflate_ir(ci::CodeInfo, linfo::MethodInstance)
     if ci.inferred
         argtypes, _ = matching_cache_argtypes(linfo, nothing)
     else
-        argtypes = Any[ Any for i = 1:length(ci.slotflags) ]
+        argtypes = Any[Any for i = 1:length(ci.slotflags)]
     end
     return inflate_ir(ci, sptypes, argtypes)
 end
@@ -34,7 +34,10 @@ function inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
         elseif isa(stmt, GotoIfNot)
             code[i] = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
         elseif isa(stmt, PhiNode)
-            code[i] = PhiNode(Any[block_for_inst(cfg, edge) for edge in stmt.edges], stmt.values)
+            code[i] = PhiNode(
+                Any[block_for_inst(cfg, edge) for edge in stmt.edges],
+                stmt.values
+            )
         elseif isa(stmt, Expr) && stmt.head == :enter
             stmt.args[1] = block_for_inst(cfg, stmt.args[1])
             code[i] = stmt
@@ -42,16 +45,26 @@ function inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
             code[i] = stmt
         end
     end
-    ssavaluetypes = ci.ssavaluetypes isa Vector{Any} ? copy(ci.ssavaluetypes) : Any[ Any for i = 1:(ci.ssavaluetypes::Int) ]
-    ir = IRCode(code, ssavaluetypes, copy(ci.codelocs), copy(ci.ssaflags), cfg, collect(LineInfoNode, ci.linetable),
-                argtypes, Any[], sptypes)
+    ssavaluetypes = ci.ssavaluetypes isa Vector{Any} ? copy(ci.ssavaluetypes) :
+                    Any[Any for i = 1:(ci.ssavaluetypes::Int)]
+    ir = IRCode(
+        code,
+        ssavaluetypes,
+        copy(ci.codelocs),
+        copy(ci.ssaflags),
+        cfg,
+        collect(LineInfoNode, ci.linetable),
+        argtypes,
+        Any[],
+        sptypes
+    )
     return ir
 end
 
 function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
     @assert isempty(ir.new_nodes)
     # All but the first `nargs` slots will now be unused
-    resize!(ci.slotflags, nargs+1)
+    resize!(ci.slotflags, nargs + 1)
     ci.code = ir.stmts
     ci.codelocs = ir.lines
     ci.linetable = ir.linetable
@@ -80,7 +93,10 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
         elseif isa(stmt, GotoIfNot)
             ci.code[i] = Expr(:gotoifnot, stmt.cond, first(ir.cfg.blocks[stmt.dest].stmts))
         elseif isa(stmt, PhiNode)
-            ci.code[i] = PhiNode(Any[last(ir.cfg.blocks[edge].stmts) for edge in stmt.edges], stmt.values)
+            ci.code[i] = PhiNode(
+                Any[last(ir.cfg.blocks[edge].stmts) for edge in stmt.edges],
+                stmt.values
+            )
         elseif isa(stmt, ReturnNode)
             if isdefined(stmt, :val)
                 ci.code[i] = Expr(:return, stmt.val)
@@ -97,4 +113,4 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
 end
 
 # used by some tests
-inflate_ir(ci::CodeInfo) = inflate_ir(ci, Any[], Any[ Any for i = 1:length(ci.slotflags) ])
+inflate_ir(ci::CodeInfo) = inflate_ir(ci, Any[], Any[Any for i = 1:length(ci.slotflags)])

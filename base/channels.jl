@@ -23,14 +23,14 @@ Other constructors:
 * `Channel(sz)`: equivalent to `Channel{Any}(sz)`
 """
 mutable struct Channel{T} <: AbstractChannel{T}
-    cond_take::Threads.Condition                 # waiting for data to become available
-    cond_wait::Threads.Condition                 # waiting for data to become maybe available
-    cond_put::Threads.Condition                  # waiting for a writeable slot
+    cond_take::Threads.Condition # waiting for data to become available
+    cond_wait::Threads.Condition # waiting for data to become maybe available
+    cond_put::Threads.Condition # waiting for a writeable slot
     state::Symbol
-    excp::Union{Exception, Nothing}      # exception to be thrown when state != :open
+    excp::Union{Exception,Nothing} # exception to be thrown when state != :open
 
     data::Vector{T}
-    sz_max::Int                          # maximum size of channel
+    sz_max::Int # maximum size of channel
 
     function Channel{T}(sz::Integer) where T
         if sz < 0
@@ -96,7 +96,7 @@ julia> istaskdone(taskref[])
 true
 ```
 """
-function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
+function Channel(func::Function; ctype = Any, csize = 0, taskref = nothing)
     chnl = Channel{ctype}(csize)
     task = Task(() -> func(chnl))
     bind(chnl, task)
@@ -109,7 +109,7 @@ end
 
 closed_exception() = InvalidStateException("Channel is closed.", :closed)
 
-isbuffered(c::Channel) = c.sz_max==0 ? false : true
+isbuffered(c::Channel) = c.sz_max == 0 ? false : true
 
 function check_channel_state(c::Channel)
     if !isopen(c)
@@ -126,7 +126,7 @@ Close a channel. An exception (optionally given by `excp`), is thrown by:
 * [`put!`](@ref) on a closed channel.
 * [`take!`](@ref) and [`fetch`](@ref) on an empty, closed channel.
 """
-function close(c::Channel, excp::Exception=closed_exception())
+function close(c::Channel, excp::Exception = closed_exception())
     lock(c)
     try
         c.state = :closed
@@ -210,12 +210,12 @@ of type `Channel{Any}(0)`.
 
 Returns a tuple, `(Array{Channel}, Array{Task})`, of the created channels and tasks.
 """
-function channeled_tasks(n::Int, funcs...; ctypes=fill(Any,n), csizes=fill(0,n))
+function channeled_tasks(n::Int, funcs...; ctypes = fill(Any, n), csizes = fill(0, n))
     @assert length(csizes) == n
     @assert length(ctypes) == n
 
     chnls = map(i -> Channel{ctypes[i]}(csizes[i]), 1:n)
-    tasks = Task[ Task(() -> f(chnls...)) for f in funcs ]
+    tasks = Task[Task(() -> f(chnls...)) for f in funcs]
 
     # bind all tasks to all channels and schedule them
     foreach(t -> foreach(c -> bind(c, t), chnls), tasks)
@@ -228,19 +228,19 @@ end
 function close_chnl_on_taskdone(t::Task, c::Channel)
     isopen(c) || return
     cleanup = () -> try
-            isopen(c) || return
-            if istaskfailed(t)
-                excp = task_result(t)
-                if excp isa Exception
-                    close(c, excp)
-                    return
-                end
+        isopen(c) || return
+        if istaskfailed(t)
+            excp = task_result(t)
+            if excp isa Exception
+                close(c, excp)
+                return
             end
-            close(c)
-            return
-        finally
-            unlock(c)
         end
+        close(c)
+        return
+    finally
+        unlock(c)
+    end
     if trylock(c)
         # can't use `lock`, since attempts to task-switch to wait for it
         # will just silently fail and leave us with broken state
@@ -305,7 +305,7 @@ function put_unbuffered(c::Channel, v)
         unlock(c)
     end
     schedule(taker, v)
-    yield()  # immediately give taker a chance to run, but don't block the current task
+    yield() # immediately give taker a chance to run, but don't block the current task
     return v
 end
 
@@ -330,7 +330,8 @@ function fetch_buffered(c::Channel)
         unlock(c)
     end
 end
-fetch_unbuffered(c::Channel) = throw(ErrorException("`fetch` is not supported on an unbuffered Channel."))
+fetch_unbuffered(c::Channel) =
+    throw(ErrorException("`fetch` is not supported on an unbuffered Channel."))
 
 
 """
@@ -403,9 +404,10 @@ end
 
 eltype(::Type{Channel{T}}) where {T} = T
 
-show(io::IO, c::Channel) = print(io, "$(typeof(c))(sz_max:$(c.sz_max),sz_curr:$(n_avail(c)))")
+show(io::IO, c::Channel) =
+    print(io, "$(typeof(c))(sz_max:$(c.sz_max),sz_curr:$(n_avail(c)))")
 
-function iterate(c::Channel, state=nothing)
+function iterate(c::Channel, state = nothing)
     try
         return (take!(c), nothing)
     catch e

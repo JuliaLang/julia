@@ -32,39 +32,45 @@ LOG10_2L(::Type{Float32}) = 2.48745663981195213739f-4
 
 # max and min arguments
 MAX_EXP10(::Type{Float64}) = 3.08254715559916743851e2 # log 2^1023*(2-2^-52)
-MAX_EXP10(::Type{Float32}) = 38.531839419103626f0     # log 2^127 *(2-2^-23)
+MAX_EXP10(::Type{Float32}) = 38.531839419103626f0 # log 2^127 *(2-2^-23)
 
 # one less than the min exponent since we can sqeeze a bit more from the exp10 function
 MIN_EXP10(::Type{Float64}) = -3.23607245338779784854769e2 # log10 2^-1075
-MIN_EXP10(::Type{Float32}) = -45.15449934959718f0         # log10 2^-150
+MIN_EXP10(::Type{Float32}) = -45.15449934959718f0 # log10 2^-150
 
 @inline exp10_kernel(x::Float64) =
-    @horner(x, 1.0,
-    2.30258509299404590109361379290930926799774169921875,
-    2.6509490552391992146397114993305876851081848144531,
-    2.03467859229323178027470930828712880611419677734375,
-    1.17125514891212478829629617393948137760162353515625,
-    0.53938292928868392106522833273629657924175262451172,
-    0.20699584873167015119932443667494226247072219848633,
-    6.8089348259156870502017966373387025669217109680176e-2,
-    1.9597690535095281527677713029333972372114658355713e-2,
-    5.015553121397981796436571499953060992993414402008e-3,
-    1.15474960721768829356725927226534622604958713054657e-3,
-    1.55440426715227567738830671828509366605430841445923e-4,
-    3.8731032432074128681303432086835414338565897196531e-5,
-    2.3804466459036747669197886523306806338950991630554e-3,
-    9.3881392238209649520573607528461934634833596646786e-5,
-    -2.64330486232183387018679354696359951049089431762695e-2)
+    @horner(
+        x,
+        1.0,
+        2.30258509299404590109361379290930926799774169921875,
+        2.6509490552391992146397114993305876851081848144531,
+        2.03467859229323178027470930828712880611419677734375,
+        1.17125514891212478829629617393948137760162353515625,
+        0.53938292928868392106522833273629657924175262451172,
+        0.20699584873167015119932443667494226247072219848633,
+        6.8089348259156870502017966373387025669217109680176e-2,
+        1.9597690535095281527677713029333972372114658355713e-2,
+        5.015553121397981796436571499953060992993414402008e-3,
+        1.15474960721768829356725927226534622604958713054657e-3,
+        1.55440426715227567738830671828509366605430841445923e-4,
+        3.8731032432074128681303432086835414338565897196531e-5,
+        2.3804466459036747669197886523306806338950991630554e-3,
+        9.3881392238209649520573607528461934634833596646786e-5,
+        -2.64330486232183387018679354696359951049089431762695e-2
+    )
 
 @inline exp10_kernel(x::Float32) =
-    @horner(x, 1.0f0,
-    2.302585124969482421875f0,
-    2.650949001312255859375f0,
-    2.0346698760986328125f0,
-    1.17125606536865234375f0,
-    0.5400512218475341796875f0,
-    0.20749187469482421875f0,
-    5.2789829671382904052734375f-2)
+    @horner(
+        x,
+        1.0f0,
+        2.302585124969482421875f0,
+        2.650949001312255859375f0,
+        2.0346698760986328125f0,
+        1.17125606536865234375f0,
+        0.5400512218475341796875f0,
+        0.20749187469482421875f0,
+        5.2789829671382904052734375f-2
+    )
 
 @eval exp10_small_thres(::Type{Float64}) = $(2.0^-29)
 @eval exp10_small_thres(::Type{Float32}) = $(2.0f0^-14)
@@ -84,7 +90,7 @@ julia> exp10(0.2)
 ```
 """
 exp10(x::Real) = exp10(float(x))
-function exp10(x::T) where T<:Union{Float32,Float64}
+function exp10(x::T) where T <: Union{Float32,Float64}
     xa = reinterpret(Unsigned, x) & ~sign_mask(T)
     xsb = signbit(x)
 
@@ -98,9 +104,9 @@ function exp10(x::T) where T<:Union{Float32,Float64}
         x < MIN_EXP10(T) && return T(0.0)
     end
     # compute approximation
-    if xa > reinterpret(Unsigned, T(0.5)*T(LOG10_2)) # |x| > 0.5 log10(2).
+    if xa > reinterpret(Unsigned, T(0.5) * T(LOG10_2)) # |x| > 0.5 log10(2).
         # argument reduction
-        if xa < reinterpret(Unsigned, T(1.5)*T(LOG10_2)) # |x| <= 1.5 log10(2)
+        if xa < reinterpret(Unsigned, T(1.5) * T(LOG10_2)) # |x| <= 1.5 log10(2)
             if xsb
                 k = -1
                 r = LOG10_2U(T) + x
@@ -111,8 +117,8 @@ function exp10(x::T) where T<:Union{Float32,Float64}
                 r = r - LOG10_2L(T)
             end
         else
-            n = round(T(LOG2_10)*x)
-            k = unsafe_trunc(Int,n)
+            n = round(T(LOG2_10) * x)
+            k = unsafe_trunc(Int, n)
             r = muladd(n, -LOG10_2U(T), x)
             r = muladd(n, -LOG10_2L(T), r)
         end
@@ -122,14 +128,21 @@ function exp10(x::T) where T<:Union{Float32,Float64}
         if k > -significand_bits(T)
             # multiply by 2.0 first to prevent overflow, extending the range
             k == exponent_max(T) && return y * T(2.0) * T(2.0)^(exponent_max(T) - 1)
-            twopk = reinterpret(T, rem(exponent_bias(T) + k, uinttype(T)) << significand_bits(T))
-            return y*twopk
+            twopk = reinterpret(
+                T,
+                rem(exponent_bias(T) + k, uinttype(T)) << significand_bits(T)
+            )
+            return y * twopk
         else
             # add significand_bits(T) + 1 to lift the range outside the subnormals
-            twopk = reinterpret(T, rem(exponent_bias(T) + significand_bits(T) + 1 + k, uinttype(T)) << significand_bits(T))
+            twopk = reinterpret(
+                T,
+                rem(exponent_bias(T) + significand_bits(T) + 1 + k, uinttype(T)) <<
+                significand_bits(T)
+            )
             return y * twopk * T(2.0)^(-significand_bits(T) - 1)
         end
-    elseif xa < reinterpret(Unsigned, exp10_small_thres(T))  # |x| < exp10_small_thres
+    elseif xa < reinterpret(Unsigned, exp10_small_thres(T)) # |x| < exp10_small_thres
         # Taylor approximation for small values: exp10(x) ≈ 1.0 + log(10)*x
         return muladd(x, T(LN10), T(1.0))
     else

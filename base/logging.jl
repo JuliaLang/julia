@@ -4,20 +4,19 @@ module CoreLogging
 
 import Base: isless, +, -, convert, show
 
-export
-    AbstractLogger,
-    LogLevel,
-    NullLogger,
-    @debug,
-    @info,
-    @warn,
-    @error,
-    @logmsg,
-    with_logger,
-    current_logger,
-    global_logger,
-    disable_logging,
-    SimpleLogger
+export AbstractLogger,
+       LogLevel,
+       NullLogger,
+       @debug,
+       @info,
+       @warn,
+       @error,
+       @logmsg,
+       with_logger,
+       current_logger,
+       global_logger,
+       disable_logging,
+       SimpleLogger
 
 #-------------------------------------------------------------------------------
 # The AbstractLogger interface
@@ -26,7 +25,7 @@ A logger controls how log records are filtered and dispatched.  When a log
 record is generated, the logger is the first piece of user configurable code
 which gets to inspect the record and decide what to do with it.
 """
-abstract type AbstractLogger ; end
+abstract type AbstractLogger end
 
 """
     handle_message(logger, level, message, _module, group, id, file, line; key1=val1, ...)
@@ -77,7 +76,7 @@ catch_exceptions(logger) = true
 Logger which disables all messages and produces no output - the logger
 equivalent of /dev/null.
 """
-struct NullLogger <: AbstractLogger; end
+struct NullLogger <: AbstractLogger end
 
 min_enabled_level(::NullLogger) = AboveMaxLevel
 shouldlog(::NullLogger, args...) = false
@@ -103,25 +102,32 @@ end
 LogLevel(level::LogLevel) = level
 
 isless(a::LogLevel, b::LogLevel) = isless(a.level, b.level)
-+(level::LogLevel, inc::Integer) = LogLevel(level.level+inc)
--(level::LogLevel, inc::Integer) = LogLevel(level.level-inc)
++(level::LogLevel, inc::Integer) = LogLevel(level.level + inc)
+-(level::LogLevel, inc::Integer) = LogLevel(level.level - inc)
 convert(::Type{LogLevel}, level::Integer) = LogLevel(level)
 
 const BelowMinLevel = LogLevel(-1000001)
-const Debug         = LogLevel(   -1000)
-const Info          = LogLevel(       0)
-const Warn          = LogLevel(    1000)
-const Error         = LogLevel(    2000)
-const AboveMaxLevel = LogLevel( 1000001)
+const Debug = LogLevel(-1000)
+const Info = LogLevel(0)
+const Warn = LogLevel(1000)
+const Error = LogLevel(2000)
+const AboveMaxLevel = LogLevel(1000001)
 
 function show(io::IO, level::LogLevel)
-    if     level == BelowMinLevel  print(io, "BelowMinLevel")
-    elseif level == Debug          print(io, "Debug")
-    elseif level == Info           print(io, "Info")
-    elseif level == Warn           print(io, "Warn")
-    elseif level == Error          print(io, "Error")
-    elseif level == AboveMaxLevel  print(io, "AboveMaxLevel")
-    else                           print(io, "LogLevel($(level.level))")
+    if level == BelowMinLevel
+        print(io, "BelowMinLevel")
+    elseif level == Debug
+        print(io, "Debug")
+    elseif level == Info
+        print(io, "Info")
+    elseif level == Warn
+        print(io, "Warn")
+    elseif level == Error
+        print(io, "Error")
+    elseif level == AboveMaxLevel
+        print(io, "AboveMaxLevel")
+    else
+        print(io, "LogLevel($(level.level))")
     end
 end
 
@@ -130,89 +136,101 @@ end
 # Logging macros
 
 _logmsg_docs = """
-    @debug message  [key=value | value ...]
-    @info  message  [key=value | value ...]
-    @warn  message  [key=value | value ...]
-    @error message  [key=value | value ...]
+                   @debug message  [key=value | value ...]
+                   @info  message  [key=value | value ...]
+                   @warn  message  [key=value | value ...]
+                   @error message  [key=value | value ...]
 
-    @logmsg level message [key=value | value ...]
+                   @logmsg level message [key=value | value ...]
 
-Create a log record with an informational `message`.  For convenience, four
-logging macros `@debug`, `@info`, `@warn` and `@error` are defined which log at
-the standard severity levels `Debug`, `Info`, `Warn` and `Error`.  `@logmsg`
-allows `level` to be set programmatically to any `LogLevel` or custom log level
-types.
+               Create a log record with an informational `message`.  For convenience, four
+               logging macros `@debug`, `@info`, `@warn` and `@error` are defined which log at
+               the standard severity levels `Debug`, `Info`, `Warn` and `Error`.  `@logmsg`
+               allows `level` to be set programmatically to any `LogLevel` or custom log level
+               types.
 
-`message` should be an expression which evaluates to a string which is a human
-readable description of the log event.  By convention, this string will be
-formatted as markdown when presented.
+               `message` should be an expression which evaluates to a string which is a human
+               readable description of the log event.  By convention, this string will be
+               formatted as markdown when presented.
 
-The optional list of `key=value` pairs supports arbitrary user defined
-metadata which will be passed through to the logging backend as part of the
-log record.  If only a `value` expression is supplied, a key representing the
-expression will be generated using [`Symbol`](@ref). For example, `x` becomes `x=x`,
-and `foo(10)` becomes `Symbol("foo(10)")=foo(10)`.  For splatting a list of
-key value pairs, use the normal splatting syntax, `@info "blah" kws...`.
+               The optional list of `key=value` pairs supports arbitrary user defined
+               metadata which will be passed through to the logging backend as part of the
+               log record.  If only a `value` expression is supplied, a key representing the
+               expression will be generated using [`Symbol`](@ref). For example, `x` becomes `x=x`,
+               and `foo(10)` becomes `Symbol("foo(10)")=foo(10)`.  For splatting a list of
+               key value pairs, use the normal splatting syntax, `@info "blah" kws...`.
 
-There are some keys which allow automatically generated log data to be
-overridden:
+               There are some keys which allow automatically generated log data to be
+               overridden:
 
-  * `_module=mod` can be used to specify a different originating module from
-    the source location of the message.
-  * `_group=symbol` can be used to override the message group (this is
-    normally derived from the base name of the source file).
-  * `_id=symbol` can be used to override the automatically generated unique
-    message identifier.  This is useful if you need to very closely associate
-    messages generated on different source lines.
-  * `_file=string` and `_line=integer` can be used to override the apparent
-    source location of a log message.
+                 * `_module=mod` can be used to specify a different originating module from
+                   the source location of the message.
+                 * `_group=symbol` can be used to override the message group (this is
+                   normally derived from the base name of the source file).
+                 * `_id=symbol` can be used to override the automatically generated unique
+                   message identifier.  This is useful if you need to very closely associate
+                   messages generated on different source lines.
+                 * `_file=string` and `_line=integer` can be used to override the apparent
+                   source location of a log message.
 
-There's also some key value pairs which have conventional meaning:
+               There's also some key value pairs which have conventional meaning:
 
-  * `maxlog=integer` should be used as a hint to the backend that the message
-    should be displayed no more than `maxlog` times.
-  * `exception=ex` should be used to transport an exception with a log message,
-    often used with `@error`. An associated backtrace `bt` may be attached
-    using the tuple `exception=(ex,bt)`.
+                 * `maxlog=integer` should be used as a hint to the backend that the message
+                   should be displayed no more than `maxlog` times.
+                 * `exception=ex` should be used to transport an exception with a log message,
+                   often used with `@error`. An associated backtrace `bt` may be attached
+                   using the tuple `exception=(ex,bt)`.
 
-# Examples
+               # Examples
 
-```
-@debug "Verbose debugging information.  Invisible by default"
-@info  "An informational message"
-@warn  "Something was odd.  You should pay attention"
-@error "A non fatal error occurred"
+               ```
+               @debug "Verbose debugging information.  Invisible by default"
+               @info  "An informational message"
+               @warn  "Something was odd.  You should pay attention"
+               @error "A non fatal error occurred"
 
-x = 10
-@info "Some variables attached to the message" x a=42.0
+               x = 10
+               @info "Some variables attached to the message" x a=42.0
 
-@debug begin
-    sA = sum(A)
-    "sum(A) = \$sA is an expensive operation, evaluated only when `shouldlog` returns true"
-end
+               @debug begin
+                   sA = sum(A)
+                   "sum(A) = \$sA is an expensive operation, evaluated only when `shouldlog` returns true"
+               end
 
-for i=1:10000
-    @info "With the default backend, you will only see (i = \$i) ten times"  maxlog=10
-    @debug "Algorithm1" i progress=i/10000
-end
-```
-"""
+               for i=1:10000
+                   @info "With the default backend, you will only see (i = \$i) ten times"  maxlog=10
+                   @debug "Algorithm1" i progress=i/10000
+               end
+               ```
+               """
 
 # Get (module,filepath,line) for the location of the caller of a macro.
 # Designed to be used from within the body of a macro.
 macro _sourceinfo()
     esc(quote
-        (__module__,
+        (
+         __module__,
          __source__.file === nothing ? "?" : String(__source__.file),
-         __source__.line)
+         __source__.line
+        )
     end)
 end
 
-macro logmsg(level, exs...) logmsg_code((@_sourceinfo)..., esc(level), exs...) end
-macro debug(exs...) logmsg_code((@_sourceinfo)..., :Debug, exs...) end
-macro  info(exs...) logmsg_code((@_sourceinfo)..., :Info,  exs...) end
-macro  warn(exs...) logmsg_code((@_sourceinfo)..., :Warn,  exs...) end
-macro error(exs...) logmsg_code((@_sourceinfo)..., :Error, exs...) end
+macro logmsg(level, exs...)
+    logmsg_code((@_sourceinfo)..., esc(level), exs...)
+end
+macro debug(exs...)
+    logmsg_code((@_sourceinfo)..., :Debug, exs...)
+end
+macro info(exs...)
+    logmsg_code((@_sourceinfo)..., :Info, exs...)
+end
+macro warn(exs...)
+    logmsg_code((@_sourceinfo)..., :Warn, exs...)
+end
+macro error(exs...)
+    logmsg_code((@_sourceinfo)..., :Error, exs...)
+end
 
 # Logging macros share documentation
 @eval @doc $_logmsg_docs :(@logmsg)
@@ -229,7 +247,7 @@ _log_record_ids = Set{Symbol}()
 # across versions of the originating module, provided the log generating
 # statement itself doesn't change.
 function log_record_id(_module, level, message, log_kws)
-    modname = _module === nothing ?  "" : join(fullname(_module), "_")
+    modname = _module === nothing ? "" : join(fullname(_module), "_")
     # Use an arbitriraly chosen eight hex digits here. TODO: Figure out how to
     # make the id exactly the same on 32 and 64 bit systems.
     h = UInt32(hash(string(modname, level, message, log_kws)) & 0xFFFFFFFF)
@@ -254,7 +272,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
     kwargs = Any[]
     for ex in exs
         if ex isa Expr && ex.head === :(=) && ex.args[1] isa Symbol
-            k,v = ex.args
+            k, v = ex.args
             if !(k isa Symbol)
                 throw(ArgumentError("Expected symbol for key in key value pair `$ex`"))
             end
@@ -296,8 +314,8 @@ function logmsg_code(_module, file, line, level, message, exs...)
         else
             # memoized run-time execution
             ref = Ref{Symbol}()
-            :(isassigned($ref) ? $ref[]
-                               : $ref[] = Symbol(splitext(basename(something($file, "")))[1]))
+            :(isassigned($ref) ? $ref[] :
+              $ref[] = Symbol(splitext(basename(something($file, "")))[1]))
         end
     end
 
@@ -317,7 +335,17 @@ function logmsg_code(_module, file, line, level, message, exs...)
                     line = $line
                     try
                         msg = $(esc(message))
-                        handle_message(logger, level, msg, _module, group, id, file, line; $(kwargs...))
+                        handle_message(
+                            logger,
+                            level,
+                            msg,
+                            _module,
+                            group,
+                            id,
+                            file,
+                            line;
+                            $(kwargs...)
+                        )
                     catch err
                         logging_error(logger, level, _module, group, id, file, line, err)
                     end
@@ -329,14 +357,32 @@ function logmsg_code(_module, file, line, level, message, exs...)
 end
 
 # Report an error in log message creation (or in the logger itself).
-@noinline function logging_error(logger, level, _module, group, id,
-                                 filepath, line, @nospecialize(err))
+@noinline function logging_error(
+    logger,
+    level,
+    _module,
+    group,
+    id,
+    filepath,
+    line,
+    @nospecialize(err)
+)
     if !catch_exceptions(logger)
         rethrow(err)
     end
     try
         msg = "Exception while generating log record in module $_module at $filepath:$line"
-        handle_message(logger, Error, msg, _module, :logevent_error, id, filepath, line; exception=(err,catch_backtrace()))
+        handle_message(
+            logger,
+            Error,
+            msg,
+            _module,
+            :logevent_error,
+            id,
+            filepath,
+            line;
+            exception = (err, catch_backtrace())
+        )
     catch err2
         try
             # Give up and write to stderr, in three independent calls to
@@ -354,10 +400,17 @@ end
 # Log a message. Called from the julia C code; kwargs is in the format
 # Any[key1,val1, ...] for simplicity in construction on the C side.
 function logmsg_shim(level, message, _module, group, id, file, line, kwargs)
-    real_kws = Any[(kwargs[i],kwargs[i+1]) for i in 1:2:length(kwargs)]
-    @logmsg(convert(LogLevel, level), message,
-            _module=_module, _id=id, _group=group,
-            _file=String(file), _line=line, real_kws...)
+    real_kws = Any[(kwargs[i], kwargs[i+1]) for i in 1:2:length(kwargs)]
+    @logmsg(
+        convert(LogLevel, level),
+        message,
+        _module = _module,
+        _id = id,
+        _group = group,
+        _file = String(file),
+        _line = line,
+        real_kws...
+    )
 end
 
 # Global log limiting mechanism for super fast but inflexible global log
@@ -414,41 +467,41 @@ function disable_logging(level::LogLevel)
 end
 
 let _debug_groups = Symbol[],
-    _debug_str::String = ""
-global function env_override_minlevel(group, _module)
-    debug = get(ENV, "JULIA_DEBUG", "")
-    if !(debug === _debug_str)
-        _debug_str = debug
-        empty!(_debug_groups)
-        for g in split(debug, ',')
-            isempty(g) && continue
-            if g == "all"
-                empty!(_debug_groups)
-                push!(_debug_groups, :all)
-                break
+_debug_str::String = ""
+    global function env_override_minlevel(group, _module)
+        debug = get(ENV, "JULIA_DEBUG", "")
+        if !(debug === _debug_str)
+            _debug_str = debug
+            empty!(_debug_groups)
+            for g in split(debug, ',')
+                isempty(g) && continue
+                if g == "all"
+                    empty!(_debug_groups)
+                    push!(_debug_groups, :all)
+                    break
+                end
+                push!(_debug_groups, Symbol(g))
             end
-            push!(_debug_groups, Symbol(g))
         end
-    end
-    if isempty(_debug_groups)
+        if isempty(_debug_groups)
+            return false
+        end
+        if _debug_groups[1] == :all
+            return true
+        end
+        if isa(group, Symbol) && group in _debug_groups
+            return true
+        end
+        if isa(_module, Module)
+            if nameof(_module) in _debug_groups
+                return true
+            end
+            if nameof(Base.moduleroot(_module)) in _debug_groups
+                return true
+            end
+        end
         return false
     end
-    if _debug_groups[1] == :all
-        return true
-    end
-    if isa(group, Symbol) && group in _debug_groups
-        return true
-    end
-    if isa(_module, Module)
-        if nameof(_module) in _debug_groups
-            return true
-        end
-        if nameof(Base.moduleroot(_module)) in _debug_groups
-            return true
-        end
-    end
-    return false
-end
 end
 
 
@@ -512,7 +565,8 @@ struct SimpleLogger <: AbstractLogger
     min_level::LogLevel
     message_limits::Dict{Any,Int}
 end
-SimpleLogger(stream::IO=stderr, level=Info) = SimpleLogger(stream, level, Dict{Any,Int}())
+SimpleLogger(stream::IO = stderr, level = Info) =
+    SimpleLogger(stream, level, Dict{Any,Int}())
 
 shouldlog(logger::SimpleLogger, level, _module, group, id) =
     get(logger.message_limits, id, 1) > 0
@@ -521,8 +575,17 @@ min_enabled_level(logger::SimpleLogger) = logger.min_level
 
 catch_exceptions(logger::SimpleLogger) = false
 
-function handle_message(logger::SimpleLogger, level, message, _module, group, id,
-                        filepath, line; maxlog=nothing, kwargs...)
+function handle_message(
+    logger::SimpleLogger,
+    level,
+    message,
+    _module,
+    group,
+    id,
+    filepath,
+    line;
+    maxlog = nothing, kwargs...
+)
     if maxlog !== nothing && maxlog isa Integer
         remaining = get!(logger.message_limits, id, maxlog)
         logger.message_limits[id] = remaining - 1
@@ -539,12 +602,19 @@ function handle_message(logger::SimpleLogger, level, message, _module, group, id
     for (key, val) in kwargs
         println(iob, "│   ", key, " = ", val)
     end
-    println(iob, "└ @ ", something(_module, "nothing"), " ",
-            something(filepath, "nothing"), ":", something(line, "nothing"))
+    println(
+        iob,
+        "└ @ ",
+        something(_module, "nothing"),
+        " ",
+        something(filepath, "nothing"),
+        ":",
+        something(line, "nothing")
+    )
     write(logger.stream, take!(buf))
     nothing
 end
 
 _global_logstate = LogState(SimpleLogger(Core.stderr, CoreLogging.Info))
 
-end # CoreLogging
+end

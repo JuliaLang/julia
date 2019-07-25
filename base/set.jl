@@ -28,11 +28,11 @@ function _Set(itr, ::EltypeUnknown)
     return Set{T}(itr)
 end
 
-empty(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
+empty(s::AbstractSet{T}, ::Type{U} = T) where {T,U} = Set{U}()
 
 # return an empty set with eltype T, which is mutable (can be grown)
 # by default, a Set is returned
-emptymutable(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
+emptymutable(s::AbstractSet{T}, ::Type{U} = T) where {T,U} = Set{U}()
 
 _similar_for(c::AbstractSet, ::Type{T}, itr, isz) where {T} = empty(c, T)
 
@@ -43,7 +43,7 @@ function show(io::IO, s::Set)
 end
 
 isempty(s::Set) = isempty(s.dict)
-length(s::Set)  = length(s.dict)
+length(s::Set) = length(s.dict)
 in(x, s::Set) = haskey(s.dict, x)
 push!(s::Set, x) = (s.dict[x] = nothing; s)
 pop!(s::Set, x) = (pop!(s.dict, x); x)
@@ -65,7 +65,7 @@ sizehint!(s::Set, newsz) = (sizehint!(s.dict, newsz); s)
 empty!(s::Set) = (empty!(s.dict); s)
 rehash!(s::Set) = (rehash!(s.dict); s)
 
-iterate(s::Set, i...)       = iterate(KeySet(s.dict), i...)
+iterate(s::Set, i...) = iterate(KeySet(s.dict), i...)
 
 # In case the size(s) is smaller than size(t) its more efficient to iterate through
 # elements of s instead and only delete the ones also contained in t.
@@ -241,7 +241,7 @@ function unique!(f, A::AbstractVector)
     y = f(x)
     seen = Set{typeof(y)}()
     push!(seen, y)
-    return _unique!(f, A, seen, i, i+1)
+    return _unique!(f, A, seen, i, i + 1)
 end
 
 function _unique!(f, A::AbstractVector, seen::Set, current::Integer, i::Integer)
@@ -256,7 +256,7 @@ function _unique!(f, A::AbstractVector, seen::Set, current::Integer, i::Integer)
             else
                 seen2 = convert(Set{promote_typejoin(eltype(seen), typeof(y))}, seen)
                 push!(seen2, y)
-                return _unique!(f, A, seen2, current, i+1)
+                return _unique!(f, A, seen2, current, i + 1)
             end
         end
         i += 1
@@ -324,11 +324,14 @@ julia> unique!(B)
  42
 ```
 """
-function unique!(A::Union{AbstractVector{<:Real}, AbstractVector{<:AbstractString},
-                          AbstractVector{<:Symbol}})
+function unique!(A::Union{
+    AbstractVector{<:Real},
+    AbstractVector{<:AbstractString},
+    AbstractVector{<:Symbol}
+})
     if isempty(A)
         return A
-    elseif issorted(A) || issorted(A, rev=true)
+    elseif issorted(A) || issorted(A, rev = true)
         return _groupedunique!(A)
     else
         return _unique!(A)
@@ -414,7 +417,8 @@ _similar_or_copy(x::Any) = similar(x)
 _similar_or_copy(x::Any, ::Type{T}) where {T} = similar(x, T)
 # Make a copy on construction since it is faster than inserting elements separately
 _similar_or_copy(x::Union{AbstractDict,AbstractSet}) = copy(x)
-_similar_or_copy(x::Union{AbstractDict,AbstractSet}, ::Type{T}) where {T} = _copy_oftype(x, T)
+_similar_or_copy(x::Union{AbstractDict,AbstractSet}, ::Type{T}) where {T} =
+    _copy_oftype(x, T)
 
 # to make replace/replace! work for a new container type Cont, only
 # _replace!(new::Callable, res::Cont, A::Cont, count::Int)
@@ -442,7 +446,7 @@ julia> replace!(Set([1, 2, 3]), 1=>0)
 Set([0, 2, 3])
 ```
 """
-replace!(A, old_new::Pair...; count::Integer=typemax(Int)) =
+replace!(A, old_new::Pair...; count::Integer = typemax(Int)) =
     replace_pairs!(A, A, check_count(count), old_new)
 
 function replace_pairs!(res, A, count::Int, old_new::Tuple{Vararg{Pair}})
@@ -482,7 +486,7 @@ julia> replace!(x->2x, Set([3, 6]))
 Set([6, 12])
 ```
 """
-replace!(new::Callable, A; count::Integer=typemax(Int)) =
+replace!(new::Callable, A; count::Integer = typemax(Int)) =
     _replace!(new, A, A, check_count(count))
 
 """
@@ -517,7 +521,7 @@ julia> replace([1, missing], missing=>0)
  0
 ```
 """
-function replace(A, old_new::Pair...; count::Union{Integer,Nothing}=nothing)
+function replace(A, old_new::Pair...; count::Union{Integer,Nothing} = nothing)
     V = promote_valuetype(old_new...)
     if count isa Nothing
         T = promote_type(subtract_singletontype(eltype(A), old_new...), V)
@@ -528,19 +532,19 @@ function replace(A, old_new::Pair...; count::Union{Integer,Nothing}=nothing)
     end
 end
 
-promote_valuetype(x::Pair{K, V}) where {K, V} = V
-promote_valuetype(x::Pair{K, V}, y::Pair...) where {K, V} =
+promote_valuetype(x::Pair{K,V}) where {K,V} = V
+promote_valuetype(x::Pair{K,V}, y::Pair...) where {K,V} =
     promote_type(V, promote_valuetype(y...))
 
 # Subtract singleton types which are going to be replaced
-function subtract_singletontype(::Type{T}, x::Pair{K}) where {T, K}
+function subtract_singletontype(::Type{T}, x::Pair{K}) where {T,K}
     if issingletontype(K)
         Core.Compiler.typesubtract(T, K)
     else
         T
     end
 end
-subtract_singletontype(::Type{T}, x::Pair{K}, y::Pair...) where {T, K} =
+subtract_singletontype(::Type{T}, x::Pair{K}, y::Pair...) where {T,K} =
     subtract_singletontype(subtract_singletontype(T, y...), x)
 
 """
@@ -567,14 +571,16 @@ Dict{Int64,Int64} with 2 entries:
   1 => 3
 ```
 """
-replace(new::Callable, A; count::Integer=typemax(Int)) =
+replace(new::Callable, A; count::Integer = typemax(Int)) =
     _replace!(new, _similar_or_copy(A), A, check_count(count))
 
 # Handle ambiguities
-replace!(a::Callable, b::Pair; count::Integer=-1) = throw(MethodError(replace!, (a, b)))
-replace!(a::Callable, b::Pair, c::Pair; count::Integer=-1) = throw(MethodError(replace!, (a, b, c)))
-replace(a::Callable, b::Pair; count::Integer=-1) = throw(MethodError(replace, (a, b)))
-replace(a::Callable, b::Pair, c::Pair; count::Integer=-1) = throw(MethodError(replace, (a, b, c)))
+replace!(a::Callable, b::Pair; count::Integer = -1) = throw(MethodError(replace!, (a, b)))
+replace!(a::Callable, b::Pair, c::Pair; count::Integer = -1) =
+    throw(MethodError(replace!, (a, b, c)))
+replace(a::Callable, b::Pair; count::Integer = -1) = throw(MethodError(replace, (a, b)))
+replace(a::Callable, b::Pair, c::Pair; count::Integer = -1) =
+    throw(MethodError(replace, (a, b, c)))
 replace(a::AbstractString, b::Pair, c::Pair) = throw(MethodError(replace, (a, b, c)))
 
 ### replace! for AbstractDict/AbstractSet
@@ -582,8 +588,12 @@ replace(a::AbstractString, b::Pair, c::Pair) = throw(MethodError(replace, (a, b,
 askey(k, ::AbstractDict) = k.first
 askey(k, ::AbstractSet) = k
 
-function _replace!(new::Callable, res::T, A::T,
-                   count::Int) where T<:Union{AbstractDict,AbstractSet}
+function _replace!(
+    new::Callable,
+    res::T,
+    A::T,
+    count::Int
+) where T <: Union{AbstractDict,AbstractSet}
     c = 0
     if res === A # cannot replace elements while iterating over A
         repl = Pair{eltype(A),eltype(A)}[]

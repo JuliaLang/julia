@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 const max_ccall_threads = parse(Int, get(ENV, "UV_THREADPOOL_SIZE", "4"))
-const thread_notifiers = Union{Base.Condition, Nothing}[nothing for i in 1:max_ccall_threads]
+const thread_notifiers = Union{Base.Condition,Nothing}[nothing for i in 1:max_ccall_threads]
 const threadcall_restrictor = Semaphore(max_ccall_threads)
 
 """
@@ -18,10 +18,9 @@ Note that the called function should never call back into Julia.
 """
 macro threadcall(f, rettype, argtypes, argvals...)
     # check for usage errors
-    isa(argtypes,Expr) && argtypes.head == :tuple ||
-        error("threadcall: argument types must be a tuple")
-    length(argtypes.args) == length(argvals) ||
-        error("threadcall: wrong number of arguments to C function")
+    isa(argtypes, Expr) && argtypes.head == :tuple ||
+    error("threadcall: argument types must be a tuple")
+    length(argtypes.args) == length(argvals) || error("threadcall: wrong number of arguments to C function")
 
     # hygiene escape arguments
     f = esc(f)
@@ -32,7 +31,7 @@ macro threadcall(f, rettype, argtypes, argvals...)
     # construct non-allocating wrapper to call C function
     wrapper = :(function (args_ptr::Ptr{Cvoid}, retval_ptr::Ptr{Cvoid})
         p = args_ptr
-        # the rest of the body is created below
+    # the rest of the body is created below
     end)
     body = wrapper.args[2].args
     args = Symbol[]
@@ -60,7 +59,10 @@ function do_threadcall(fun_ptr::Ptr{Cvoid}, rettype::Type, argtypes::Vector, arg
             global thread_notifiers
             notify(thread_notifiers[idx])
             return
-        end, Cvoid, (Cint,))
+        end,
+        Cvoid,
+        (Cint,)
+    )
 
     # cconvert, root and unsafe_convert arguments
     roots = Any[]
@@ -85,9 +87,16 @@ function do_threadcall(fun_ptr::Ptr{Cvoid}, rettype::Type, argtypes::Vector, arg
 
     GC.@preserve args_arr ret_arr roots begin
         # queue up the work to be done
-        ccall(:jl_queue_work, Cvoid,
+        ccall(
+            :jl_queue_work,
+            Cvoid,
             (Ptr{Cvoid}, Ptr{UInt8}, Ptr{UInt8}, Ptr{Cvoid}, Cint),
-            fun_ptr, args_arr, ret_arr, c_notify_fun, idx)
+            fun_ptr,
+            args_arr,
+            ret_arr,
+            c_notify_fun,
+            idx
+        )
 
         # wait for a result & return it
         wait(thread_notifiers[idx])

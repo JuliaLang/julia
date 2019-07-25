@@ -16,11 +16,18 @@ let fenv_consts = Vector{Cint}(undef, 9)
     global const JL_FE_TOWARDZERO = fenv_consts[9]
 end
 
-export
-    RoundingMode, RoundNearest, RoundToZero, RoundUp, RoundDown, RoundFromZero,
-    RoundNearestTiesAway, RoundNearestTiesUp,
-    rounding, setrounding,
-    get_zero_subnormals, set_zero_subnormals
+export RoundingMode,
+       RoundNearest,
+       RoundToZero,
+       RoundUp,
+       RoundDown,
+       RoundFromZero,
+       RoundNearestTiesAway,
+       RoundNearestTiesUp,
+       rounding,
+       setrounding,
+       get_zero_subnormals,
+       set_zero_subnormals
 
 ## rounding modes ##
 """
@@ -83,7 +90,7 @@ This rounding mode may only be used with `T == BigFloat` inputs to [`round`](@re
 julia> BigFloat("1.0000000000000001", 5, RoundFromZero)
 1.06
 ```
-"""
+""" # mpfr only
 const RoundFromZero = RoundingMode{:FromZero}() # mpfr only
 
 """
@@ -151,7 +158,8 @@ See [`RoundingMode`](@ref) for available modes.
 """
 :rounding
 
-setrounding_raw(::Type{<:Union{Float32,Float64}}, i::Integer) = ccall(:fesetround, Int32, (Int32,), i)
+setrounding_raw(::Type{<:Union{Float32,Float64}}, i::Integer) =
+    ccall(:fesetround, Int32, (Int32,), i)
 rounding_raw(::Type{<:Union{Float32,Float64}}) = ccall(:fegetround, Int32, ())
 
 rounding(::Type{T}) where {T<:Union{Float32,Float64}} = from_fenv(rounding_raw(T))
@@ -171,20 +179,20 @@ See [`RoundingMode`](@ref) for available rounding modes.
 """
 function setrounding(f::Function, ::Type{T}, rounding::RoundingMode) where T
     old_rounding_raw = rounding_raw(T)
-    setrounding(T,rounding)
+    setrounding(T, rounding)
     try
         return f()
     finally
-        setrounding_raw(T,old_rounding_raw)
+        setrounding_raw(T, old_rounding_raw)
     end
 end
 function setrounding_raw(f::Function, ::Type{T}, rounding) where T
     old_rounding_raw = rounding_raw(T)
-    setrounding_raw(T,rounding)
+    setrounding_raw(T, rounding)
     try
         return f()
     finally
-        setrounding_raw(T,old_rounding_raw)
+        setrounding_raw(T, old_rounding_raw)
     end
 end
 
@@ -197,19 +205,28 @@ end
 # Assumes conversion is performed by rounding to nearest value.
 
 # To avoid ambiguous dispatch with methods in mpfr.jl:
-(::Type{T})(x::Real, r::RoundingMode) where {T<:AbstractFloat} = _convert_rounding(T,x,r)
+(::Type{T})(x::Real, r::RoundingMode) where {T<:AbstractFloat} = _convert_rounding(T, x, r)
 
-_convert_rounding(::Type{T}, x::Real, r::RoundingMode{:Nearest}) where {T<:AbstractFloat} = convert(T,x)
-function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:Down}) where T<:AbstractFloat
-    y = convert(T,x)
+_convert_rounding(::Type{T}, x::Real, r::RoundingMode{:Nearest}) where {T<:AbstractFloat} =
+    convert(T, x)
+function _convert_rounding(
+    ::Type{T},
+    x::Real,
+    r::RoundingMode{:Down}
+) where T <: AbstractFloat
+    y = convert(T, x)
     y > x ? prevfloat(y) : y
 end
-function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:Up}) where T<:AbstractFloat
-    y = convert(T,x)
+function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:Up}) where T <: AbstractFloat
+    y = convert(T, x)
     y < x ? nextfloat(y) : y
 end
-function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:ToZero}) where T<:AbstractFloat
-    y = convert(T,x)
+function _convert_rounding(
+    ::Type{T},
+    x::Real,
+    r::RoundingMode{:ToZero}
+) where T <: AbstractFloat
+    y = convert(T, x)
     if x > 0.0
         y > x ? prevfloat(y) : y
     else
@@ -232,7 +249,7 @@ break identities such as `(x-y==0) == (x==y)`.
 
     This function only affects the current thread.
 """
-set_zero_subnormals(yes::Bool) = ccall(:jl_set_zero_subnormals,Int32,(Int8,),yes)==0
+set_zero_subnormals(yes::Bool) = ccall(:jl_set_zero_subnormals, Int32, (Int8,), yes) == 0
 
 """
     get_zero_subnormals() -> Bool
@@ -244,6 +261,6 @@ for IEEE arithmetic, and `true` if they might be converted to zeros.
 
     This function only affects the current thread.
 """
-get_zero_subnormals() = ccall(:jl_get_zero_subnormals,Int32,())!=0
+get_zero_subnormals() = ccall(:jl_get_zero_subnormals, Int32, ()) != 0
 
-end #module
+end

@@ -77,33 +77,34 @@ julia> asyncmap(batch_func, 1:5; ntasks=2, batch_size=2)
     worker invocation, etc.
 
 """
-function asyncmap(f, c...; ntasks=0, batch_size=nothing)
-    return async_usemap(f, c...; ntasks=ntasks, batch_size=batch_size)
+function asyncmap(f, c...; ntasks = 0, batch_size = nothing)
+    return async_usemap(f, c...; ntasks = ntasks, batch_size = batch_size)
 end
 
-function async_usemap(f, c...; ntasks=0, batch_size=nothing)
+function async_usemap(f, c...; ntasks = 0, batch_size = nothing)
     ntasks = verify_ntasks(c[1], ntasks)
     batch_size = verify_batch_size(batch_size)
 
     if batch_size !== nothing
         exec_func = batch -> begin
             # extract the Refs from the input tuple
-            batch_refs = map(x->x[1], batch)
+            batch_refs = map(x -> x[1], batch)
 
             # and the args tuple....
-            batched_args = map(x->x[2], batch)
+            batched_args = map(x -> x[2], batch)
 
             results = f(batched_args)
             foreach(x -> (batch_refs[x[1]].x = x[2]), enumerate(results))
         end
     else
-        exec_func = (r,args) -> (r.x = f(args...))
+        exec_func = (r, args) -> (r.x = f(args...))
     end
     chnl, worker_tasks = setup_chnl_and_tasks(exec_func, ntasks, batch_size)
     return wrap_n_exec_twice(chnl, worker_tasks, ntasks, exec_func, c...)
 end
 
-batch_size_err_str(batch_size) = string("batch_size must be specified as a positive integer. batch_size=", batch_size)
+batch_size_err_str(batch_size) =
+    string("batch_size must be specified as a positive integer. batch_size=", batch_size)
 function verify_batch_size(batch_size)
     if batch_size === nothing
         return batch_size
@@ -119,14 +120,17 @@ end
 
 function verify_ntasks(iterable, ntasks)
     if !((isa(ntasks, Number) && (ntasks >= 0)) || isa(ntasks, Function))
-        err = string("ntasks must be specified as a positive integer or a 0-arg function. ntasks=", ntasks)
+        err = string(
+            "ntasks must be specified as a positive integer or a 0-arg function. ntasks=",
+            ntasks
+        )
         throw(ArgumentError(err))
     end
 
     if ntasks == 0
         chklen = IteratorSize(iterable)
         if (chklen isa HasLength) || (chklen isa HasShape)
-            ntasks = max(1,min(100, length(iterable)))
+            ntasks = max(1, min(100, length(iterable)))
         else
             ntasks = 100
         end
@@ -137,7 +141,7 @@ end
 function wrap_n_exec_twice(chnl, worker_tasks, ntasks, exec_func, c...)
     # The driver task, creates a Ref object and writes it and the args tuple to
     # the communication channel for processing by a free worker task.
-    push_arg_to_channel = (x...) -> (r=Ref{Any}(nothing); put!(chnl,(r,x));r)
+    push_arg_to_channel = (x...) -> (r = Ref{Any}(nothing); put!(chnl, (r, x)); r)
 
     if isa(ntasks, Function)
         map_f = (x...) -> begin
@@ -161,7 +165,7 @@ function maptwice(wrapped_f, chnl, worker_tasks, c...)
     try
         asyncrun = map(wrapped_f, c...)
     catch ex
-        if isa(ex,InvalidStateException)
+        if isa(ex, InvalidStateException)
             # channel could be closed due to exceptions in the async tasks,
             # we propagate those errors, if any, over the `put!` failing
             # in asyncrun due to a closed channel.
@@ -175,7 +179,7 @@ function maptwice(wrapped_f, chnl, worker_tasks, c...)
     close(chnl)
 
     # check and throw any exceptions from the worker tasks
-    foreach(x->(v=fetch(x); isa(v, Exception) && throw(v)), worker_tasks)
+    foreach(x -> (v = fetch(x); isa(v, Exception) && throw(v)), worker_tasks)
 
     # check if there was a genuine problem with asyncrun
     (asyncrun_excp !== nothing) && throw(asyncrun_excp)
@@ -185,11 +189,11 @@ function maptwice(wrapped_f, chnl, worker_tasks, c...)
         return asyncrun.x
     else
         # second run, extract values from the Refs and return
-        return map(ref->ref.x, asyncrun)
+        return map(ref -> ref.x, asyncrun)
     end
 end
 
-function setup_chnl_and_tasks(exec_func, ntasks, batch_size=nothing)
+function setup_chnl_and_tasks(exec_func, ntasks, batch_size = nothing)
     if isa(ntasks, Function)
         nt = ntasks()
         # start at least one worker task.
@@ -210,7 +214,7 @@ function setup_chnl_and_tasks(exec_func, ntasks, batch_size=nothing)
     return (chnl, worker_tasks)
 end
 
-function start_worker_task!(worker_tasks, exec_func, chnl, batch_size=nothing)
+function start_worker_task!(worker_tasks, exec_func, chnl, batch_size = nothing)
     t = @async begin
         retval = nothing
 
@@ -219,7 +223,7 @@ function start_worker_task!(worker_tasks, exec_func, chnl, batch_size=nothing)
                 while isopen(chnl)
                     # The mapping function expects an array of input args, as it processes
                     # elements in a batch.
-                    batch_collection=Any[]
+                    batch_collection = Any[]
                     n = 0
                     for exec_data in chnl
                         push!(batch_collection, exec_data)
@@ -266,9 +270,10 @@ mutable struct AsyncCollector
     enumerator::Enumerate
     ntasks
     batch_size
-    nt_check::Bool     # check number of tasks on every iteration
+    nt_check::Bool # check number of tasks on every iteration
 
-    AsyncCollector(f, r, en::Enumerate, ntasks, batch_size) = new(f, r, en, ntasks, batch_size, isa(ntasks, Function))
+    AsyncCollector(f, r, en::Enumerate, ntasks, batch_size) =
+        new(f, r, en, ntasks, batch_size, isa(ntasks, Function))
 end
 
 """
@@ -291,14 +296,14 @@ be a function which operates on an array of argument tuples.
     `for _ in AsyncCollector(f, results, c...; ntasks=1) end` is equivalent to
     `map!(f, results, c...)`.
 """
-function AsyncCollector(f, results, c...; ntasks=0, batch_size=nothing)
+function AsyncCollector(f, results, c...; ntasks = 0, batch_size = nothing)
     AsyncCollector(f, results, enumerate(zip(c...)), ntasks, batch_size)
 end
 
 mutable struct AsyncCollectorState
     chnl::Channel
     worker_tasks::Array{Task,1}
-    enum_state      # enumerator state
+    enum_state # enumerator state
     AsyncCollectorState(chnl::Channel, worker_tasks::Vector) =
         new(chnl, convert(Vector{Task}, worker_tasks))
 end
@@ -309,18 +314,22 @@ function iterate(itr::AsyncCollector)
     if itr.batch_size !== nothing
         exec_func = batch -> begin
             # extract indices from the input tuple
-            batch_idxs = map(x->x[1], batch)
+            batch_idxs = map(x -> x[1], batch)
 
             # and the args tuple....
-            batched_args = map(x->x[2], batch)
+            batched_args = map(x -> x[2], batch)
 
             results = f(batched_args)
             foreach(x -> (itr.results[batch_idxs[x[1]]] = x[2]), enumerate(results))
         end
     else
-        exec_func = (i,args) -> (itr.results[i]=itr.f(args...))
+        exec_func = (i, args) -> (itr.results[i] = itr.f(args...))
     end
-    chnl, worker_tasks = setup_chnl_and_tasks((i,args) -> (itr.results[i]=itr.f(args...)), itr.ntasks, itr.batch_size)
+    chnl, worker_tasks = setup_chnl_and_tasks(
+        (i, args) -> (itr.results[i] = itr.f(args...)),
+        itr.ntasks,
+        itr.batch_size
+    )
     return iterate(itr, AsyncCollectorState(chnl, worker_tasks))
 end
 
@@ -328,7 +337,7 @@ function wait_done(itr::AsyncCollector, state::AsyncCollectorState)
     close(state.chnl)
 
     # wait for all tasks to finish
-    foreach(x->(v=fetch(x); isa(v, Exception) && throw(v)), state.worker_tasks)
+    foreach(x -> (v = fetch(x); isa(v, Exception) && throw(v)), state.worker_tasks)
     empty!(state.worker_tasks)
 end
 
@@ -338,8 +347,7 @@ function iterate(itr::AsyncCollector, state::AsyncCollectorState)
     end
 
     # Get index and mapped function arguments from enumeration iterator.
-    y = isdefined(state, :enum_state) ?
-        iterate(itr.enumerator, state.enum_state) :
+    y = isdefined(state, :enum_state) ? iterate(itr.enumerator, state.enum_state) :
         iterate(itr.enumerator)
     if y === nothing
         wait_done(itr, state)
@@ -368,8 +376,8 @@ mutable struct AsyncGenerator
     collector::AsyncCollector
 end
 
-function AsyncGenerator(f, c...; ntasks=0)
-    AsyncGenerator(AsyncCollector(f, Dict{Int,Any}(), c...; ntasks=ntasks))
+function AsyncGenerator(f, c...; ntasks = 0)
+    AsyncGenerator(AsyncCollector(f, Dict{Int,Any}(), c...; ntasks = ntasks))
 end
 
 mutable struct AsyncGeneratorState
@@ -379,19 +387,18 @@ mutable struct AsyncGeneratorState
     AsyncGeneratorState(i::Int) = new(i, false)
 end
 
-function iterate(itr::AsyncGenerator, state::AsyncGeneratorState=AsyncGeneratorState(0))
+function iterate(itr::AsyncGenerator, state::AsyncGeneratorState = AsyncGeneratorState(0))
     state.i += 1
 
     results_dict = itr.collector.results
     while !state.collector_done && !haskey(results_dict, state.i)
         y = isdefined(state, :collector_state) ?
-            iterate(itr.collector, state.collector_state) :
-            iterate(itr.collector)
+            iterate(itr.collector, state.collector_state) : iterate(itr.collector)
         if y === nothing
             # `check_done` waits for async tasks to finish. if we do not have the index
             # we are looking for, it is an error.
             state.collector_done = true
-            break;
+            break
         end
         _, state.collector_state = y
     end
@@ -415,7 +422,10 @@ length(itr::AsyncGenerator) = length(itr.collector.enumerator)
 Like [`asyncmap`](@ref), but stores output in `results` rather than
 returning a collection.
 """
-function asyncmap!(f, r, c1, c...; ntasks=0, batch_size=nothing)
-    foreach(identity, AsyncCollector(f, r, c1, c...; ntasks=ntasks, batch_size=batch_size))
+function asyncmap!(f, r, c1, c...; ntasks = 0, batch_size = nothing)
+    foreach(
+        identity,
+        AsyncCollector(f, r, c1, c...; ntasks = ntasks, batch_size = batch_size)
+    )
     r
 end

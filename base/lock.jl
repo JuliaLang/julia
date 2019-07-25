@@ -9,7 +9,7 @@ The same task can acquire the lock as many times as required.
 Each [`lock`](@ref) must be matched with an [`unlock`](@ref).
 """
 mutable struct ReentrantLock <: AbstractLock
-    locked_by::Union{Task, Nothing}
+    locked_by::Union{Task,Nothing}
     cond_wait::GenericCondition{Threads.SpinLock}
     reentrancy_cnt::Int
 
@@ -188,7 +188,7 @@ end
 
 @eval Threads begin
     """
-        Threads.Condition([lock])
+            Threads.Condition([lock])
 
     A thread-safe version of [`Base.Condition`](@ref).
 
@@ -198,7 +198,7 @@ end
     const Condition = Base.GenericCondition{Base.ReentrantLock}
 
     """
-    Special note for [`Threads.Condition`](@ref):
+        Special note for [`Threads.Condition`](@ref):
 
     The caller must be holding the [`lock`](@ref) that owns `c` before calling this method.
     The calling task will be blocked until some other task wakes it,
@@ -222,7 +222,9 @@ mutable struct Semaphore
     sem_size::Int
     curr_cnt::Int
     cond_wait::Threads.Condition
-    Semaphore(sem_size) = sem_size > 0 ? new(sem_size, 0, Threads.Condition()) : throw(ArgumentError("Semaphore size must be > 0"))
+    Semaphore(sem_size) =
+        sem_size > 0 ? new(sem_size, 0, Threads.Condition()) :
+        throw(ArgumentError("Semaphore size must be > 0"))
 end
 
 """
@@ -256,7 +258,7 @@ function release(s::Semaphore)
     try
         s.curr_cnt > 0 || error("release count must match acquire count")
         s.curr_cnt -= 1
-        notify(s.cond_wait; all=false)
+        notify(s.cond_wait; all = false)
     finally
         unlock(s.cond_wait)
     end

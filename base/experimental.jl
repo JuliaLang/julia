@@ -28,7 +28,7 @@ Base.axes(C::Const) = axes(C.a)
 @eval Base.getindex(A::Const, i1::Int) =
     (Base.@_inline_meta; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1))
 @eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =
-  (Base.@_inline_meta; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
+    (Base.@_inline_meta; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
 
 """
     @aliasscope expr

@@ -34,20 +34,25 @@ end
 
 function has_nontrivial_const_info(@nospecialize t)
     isa(t, PartialStruct) && return true
-    return isa(t, Const) && !isdefined(typeof(t.val), :instance) && !(isa(t.val, Type) && hasuniquerep(t.val))
+    return isa(t, Const) &&
+           !isdefined(typeof(t.val), :instance) && !(isa(t.val, Type) && hasuniquerep(t.val))
 end
 
 # Subtyping currently intentionally answers certain queries incorrectly for kind types. For
 # some of these queries, this check can be used to somewhat protect against making incorrect
 # decisions based on incorrect subtyping. Note that this check, itself, is broken for
 # certain combinations of `a` and `b` where one/both isa/are `Union`/`UnionAll` type(s)s.
-isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || hasuniquerep(a.parameters[1]))
+isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) =
+    (!iskindtype(b) || !isType(a) || hasuniquerep(a.parameters[1]))
 
 argtypes_to_type(argtypes::Array{Any,1}) = Tuple{anymap(widenconst, argtypes)...}
 
 function isknownlength(t::DataType)
     isvatuple(t) || return true
-    return length(t.parameters) > 0 && isa(unwrap_unionall(t.parameters[end]).parameters[2], Int)
+    return length(t.parameters) > 0 && isa(
+        unwrap_unionall(t.parameters[end]).parameters[2],
+        Int
+    )
 end
 
 # test if non-Type, non-TypeVar `x` can be used to parameterize a type
@@ -68,8 +73,7 @@ function typesubtract(@nospecialize(a), @nospecialize(b))
         return Bottom
     end
     if isa(a, Union)
-        return Union{typesubtract(a.a, b),
-                     typesubtract(a.b, b)}
+        return Union{typesubtract(a.a, b),typesubtract(a.b, b)}
     end
     return a # TODO: improve this bound?
 end
@@ -96,7 +100,8 @@ _typename(a::DataType) = Const(a.name)
 
 function tuple_tail_elem(@nospecialize(init), ct::Vector{Any})
     # FIXME: this is broken: it violates subtyping relations and creates invalid types with free typevars
-    tmerge_maybe_vararg(@nospecialize(a), @nospecialize(b)) = tmerge(a, tvar_extent(unwrapva(b)))
+    tmerge_maybe_vararg(@nospecialize(a), @nospecialize(b)) =
+        tmerge(a, tvar_extent(unwrapva(b)))
     t = init
     for x in ct
         t = tmerge_maybe_vararg(t, x)

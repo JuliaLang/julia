@@ -54,14 +54,14 @@ function hash(x::Real, h::UInt)
 
     # handle values representable as Int64, UInt64, Float64
     if den == 1
-        left = ndigits0z(num,2) + pow
+        left = ndigits0z(num, 2) + pow
         right = trailing_zeros(num) + pow
         if -1074 <= right
             if 0 <= right && left <= 64
-                left <= 63                     && return hash(Int64(num) << Int(pow), h)
-                signbit(num) == signbit(den)   && return hash(UInt64(num) << Int(pow), h)
+                left <= 63 && return hash(Int64(num) << Int(pow), h)
+                signbit(num) == signbit(den) && return hash(UInt64(num) << Int(pow), h)
             end # typemin(Int64) handled by Float64 case
-            left <= 1024 && left - right <= 53 && return hash(ldexp(Float64(num),pow), h)
+            left <= 1024 && left - right <= 53 && return hash(ldexp(Float64(num), pow), h)
         end
     end
 
@@ -82,15 +82,24 @@ values `num, pow, den`, such that the value of `x` is mathematically equal to
     num*2^pow/den
 
 The decomposition need not be canonical in the sense that it just needs to be *some*
-way to express `x` in this form, not any particular way – with the restriction that
-`num` and `den` may not share any odd common factors. They may, however, have powers
-of two in common – the generic hashing code will normalize those as necessary.
+way to express `x` in this form, not any particular way – with the restriction th
+t
+`num` and `den` may not share any odd common factors. They may, however, have powe
+s
+of two in common – the generic hashing code will normalize those as necess
 
-Special values:
+y.
 
- - `x` is zero: `num` should be zero and `den` should have the same sign as `x`
- - `x` is infinite: `den` should be zero and `num` should have the same sign as `x`
- - `x` is not a number: `num` and `den` should both be zero
+Special val
+
+s:
+
+ - `x` is zero: `num` should be zero and `den` should have the same sign as
+`x`
+ - `x` is infinite: `den` should be zero and `num` should have the same sign as
+`x`
+ - `x` is not a number: `num` and `den` should both be 
+ero
 =#
 
 decompose(x::Integer) = x, 0, 1
@@ -118,7 +127,7 @@ function decompose(x::Float32)::NTuple{3,Int}
     s, e - 150 + (e == 0), d
 end
 
-function decompose(x::Float64)::Tuple{Int64, Int, Int}
+function decompose(x::Float64)::Tuple{Int64,Int,Int}
     isnan(x) && return 0, 0, 0
     isinf(x) && return ifelse(x < 0, -1, 1), 0, 0
     n = reinterpret(UInt64, x)
@@ -129,16 +138,16 @@ function decompose(x::Float64)::Tuple{Int64, Int, Int}
     s, e - 1075 + (e == 0), d
 end
 
-function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}
+function decompose(x::BigFloat)::Tuple{BigInt,Int,Int}
     isnan(x) && return 0, 0, 0
     isinf(x) && return x.sign, 0, 0
     x == 0 && return 0, 0, x.sign
     s = BigInt()
-    s.size = cld(x.prec, 8*sizeof(GMP.Limb)) # limbs
-    b = s.size * sizeof(GMP.Limb)            # bytes
-    ccall((:__gmpz_realloc2, :libgmp), Cvoid, (Ref{BigInt}, Culong), s, 8b) # bits
+    s.size = cld(x.prec, 8 * sizeof(GMP.Limb)) # limbs
+    b = s.size * sizeof(GMP.Limb) # bytes
+    ccall((:__gmpz_realloc2, :libgmp), Cvoid, (Ref{BigInt}, Culong), s, 8 * b) # bits
     ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), s.d, x.d, b) # bytes
-    s, x.exp - 8b, x.sign
+    s, x.exp - 8 * b, x.sign
 end
 
 ## streamlined hashing for smallish rational types ##
@@ -155,7 +164,7 @@ function hash(x::Rational{<:BitInteger64}, h::UInt)
         den >>= pow
         pow = -pow
         if den == 1 && abs(num) < 9007199254740992
-            return hash(ldexp(Float64(num),pow),h)
+            return hash(ldexp(Float64(num), pow), h)
         end
     end
     h = hash_integer(den, h)
@@ -176,6 +185,7 @@ const memhash_seed = UInt === UInt64 ? 0x71e729fd56419c81 : 0x56419c81
 function hash(s::Union{String,SubString{String}}, h::UInt)
     h += memhash_seed
     # note: use pointer(s) here (see #6058).
-    ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32), pointer(s), sizeof(s), h % UInt32) + h
+    ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32), pointer(s), sizeof(s), h % UInt32) +
+    h
 end
 hash(s::AbstractString, h::UInt) = hash(String(s), h)

@@ -27,7 +27,7 @@ H_OVERFLOW_X(::Type{Float64}) = 710.475860073944 # nextfloat(710.4758600739439)
 
 H_LARGE_X(::Type{Float32}) = 88.72283f0
 H_OVERFLOW_X(::Type{Float32}) = 89.415985f0
-function sinh(x::T) where T <: Union{Float32, Float64}
+function sinh(x::T) where T <: Union{Float32,Float64}
     # Method
     # mathematically sinh(x) is defined to be (exp(x)-exp(-x))/2
     #    1. Replace x by |x| (sinh(-x) = -sinh(x)).
@@ -62,17 +62,17 @@ function sinh(x::T) where T <: Union{Float32, Float64}
         end
         t = expm1(absx)
         if absx < T(1)
-            return h*(T(2)*t - t*t/(t + T(1)))
+            return h * (T(2) * t - t * t / (t + T(1)))
         end
-        return h*(t + t/(t + T(1)))
+        return h * (t + t / (t + T(1)))
     end
     # in c)
     if absx < H_LARGE_X(T)
-        return h*exp(absx)
+        return h * exp(absx)
     end
     # in d)
     if absx < H_OVERFLOW_X(T)
-        return h*T(2)*_ldexp_exp(absx, Int32(-1))
+        return h * T(2) * _ldexp_exp(absx, Int32(-1))
     end
     # in e)
     return copysign(T(Inf), x)
@@ -82,7 +82,7 @@ sinh(x::Real) = sinh(float(x))
 # cosh methods
 COSH_SMALL_X(::Type{Float32}) = 0.00024414062f0
 COSH_SMALL_X(::Type{Float64}) = 2.7755602085408512e-17
-function cosh(x::T) where T <: Union{Float32, Float64}
+function cosh(x::T) where T <: Union{Float32,Float64}
     # Method
     # mathematically cosh(x) is defined to be (exp(x)+exp(-x))/2
     #    1. Replace x by |x| (cosh(x) = cosh(-x)).
@@ -105,23 +105,23 @@ function cosh(x::T) where T <: Union{Float32, Float64}
     absx = abs(x)
     h = T(0.5)
     # in a) or b)
-    if absx < log(T(2))/2
+    if absx < log(T(2)) / 2
         # in a)
         if absx < COSH_SMALL_X(T)
             return T(1)
         end
         t = expm1(absx)
         w = T(1) + t
-        return T(1) + (t*t)/(w + w)
+        return T(1) + (t * t) / (w + w)
     end
     # in c)
     if absx < H_MEDIUM_X(T)
         t = exp(absx)
-        return h*t + h/t
+        return h * t + h / t
     end
     # in d)
     if absx < H_LARGE_X(T)
-        return h*exp(absx)
+        return h * exp(absx)
     end
     # in e)
     if absx < H_OVERFLOW_X(T)
@@ -135,7 +135,7 @@ cosh(x::Real) = cosh(float(x))
 # tanh methods
 TANH_LARGE_X(::Type{Float64}) = 22.0
 TANH_LARGE_X(::Type{Float32}) = 9.0f0
-function tanh(x::T) where T<:Union{Float32, Float64}
+function tanh(x::T) where T <: Union{Float32,Float64}
     # Method
     # mathematically tanh(x) is defined to be (exp(x)-exp(-x))/(exp(x)+exp(-x))
     #    1. reduce x to non-negative by tanh(-x) = -tanh(x).
@@ -162,12 +162,12 @@ function tanh(x::T) where T<:Union{Float32, Float64}
         end
         if absx >= T(1)
             # in c)
-            t = expm1(T(2)*absx)
-            z = T(1) - T(2)/(t + T(2))
+            t = expm1(T(2) * absx)
+            z = T(1) - T(2) / (t + T(2))
         else
             # in b)
-            t = expm1(-T(2)*absx)
-            z = -t/(t + T(2))
+            t = expm1(-T(2) * absx)
+            z = -t / (t + T(2))
         end
     else
         # in d)
@@ -181,7 +181,7 @@ tanh(x::Real) = tanh(float(x))
 AH_LN2(::Type{Float64}) = 6.93147180559945286227e-01
 AH_LN2(::Type{Float32}) = 6.9314718246f-01
 # asinh methods
-function asinh(x::T) where T <: Union{Float32, Float64}
+function asinh(x::T) where T <: Union{Float32,Float64}
     # Method
     # mathematically asinh(x) = sign(x)*log(|x| + sqrt(x*x + 1))
     # is the principle value of the inverse hyperbolic sine
@@ -204,12 +204,12 @@ function asinh(x::T) where T <: Union{Float32, Float64}
             return x
         end
         # in b)
-        t = x*x
-        w = log1p(absx + t/(T(1) + sqrt(T(1) + t)))
+        t = x * x
+        w = log1p(absx + t / (T(1) + sqrt(T(1) + t)))
     elseif absx < T(2)^28
         # in c)
         t = absx
-        w = log(T(2)*t + T(1)/(sqrt(x*x + T(1)) + t))
+        w = log(T(2) * t + T(1) / (sqrt(x * x + T(1)) + t))
     else
         # in d)
         w = log(absx) + AH_LN2(T)
@@ -219,8 +219,9 @@ end
 asinh(x::Real) = asinh(float(x))
 
 # acosh methods
-@noinline acosh_domain_error(x) = throw(DomainError(x, "acosh(x) is only defined for x ≥ 1."))
-function acosh(x::T) where T <: Union{Float32, Float64}
+@noinline acosh_domain_error(x) =
+    throw(DomainError(x, "acosh(x) is only defined for x ≥ 1."))
+function acosh(x::T) where T <: Union{Float32,Float64}
     # Method
     # mathematically acosh(x) if defined to be log(x + sqrt(x*x-1))
     # 1. Find the branch and the expression to calculate and return it
@@ -245,11 +246,11 @@ function acosh(x::T) where T <: Union{Float32, Float64}
     elseif x < T(2)
         # in b)
         t = x - T(1)
-        return log1p(t + sqrt(T(2)*t + t*t))
+        return log1p(t + sqrt(T(2) * t + t * t))
     elseif x < T(2)^28
         # in c)
-        t = x*x
-        return log(T(2)*x - T(1)/(x+sqrt(t - T(1))))
+        t = x * x
+        return log(T(2) * x - T(1) / (x + sqrt(t - T(1))))
     else
         # in d)
         return log(x) + AH_LN2(T)
@@ -258,8 +259,9 @@ end
 acosh(x::Real) = acosh(float(x))
 
 # atanh methods
-@noinline atanh_domain_error(x) = throw(DomainError(x, "atanh(x) is only defined for |x| ≤ 1."))
-function atanh(x::T) where T <: Union{Float32, Float64}
+@noinline atanh_domain_error(x) =
+    throw(DomainError(x, "atanh(x) is only defined for |x| ≤ 1."))
+function atanh(x::T) where T <: Union{Float32,Float64}
     # Method
     # 1.Reduced x to positive by atanh(-x) = -atanh(x)
     # 2. Find the branch and the expression to calculate and return it
@@ -286,11 +288,11 @@ function atanh(x::T) where T <: Union{Float32, Float64}
     end
     if absx < T(0.5)
         # in b)
-        t = absx+absx
-        t = T(0.5)*log1p(t+t*absx/(T(1)-absx))
+        t = absx + absx
+        t = T(0.5) * log1p(t + t * absx / (T(1) - absx))
     elseif absx < T(1)
         # in c)
-        t = T(0.5)*log1p((absx + absx)/(T(1)-absx))
+        t = T(0.5) * log1p((absx + absx) / (T(1) - absx))
     elseif absx == T(1)
         # in d)
         return copysign(T(Inf), x)

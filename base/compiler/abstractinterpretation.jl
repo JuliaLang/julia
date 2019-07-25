@@ -4,7 +4,7 @@
 # constants #
 #############
 
-const CoreNumType = Union{Int32, Int64, Float32, Float64}
+const CoreNumType = Union{Int32,Int64,Float32,Float64}
 
 const _REF_NAME = Ref.body.name
 
@@ -13,11 +13,16 @@ const _REF_NAME = Ref.body.name
 #########
 
 # see if the inference result might affect the final answer
-call_result_unused(frame::InferenceState, pc::LineNum=frame.currpc) =
+call_result_unused(frame::InferenceState, pc::LineNum = frame.currpc) =
     isexpr(frame.src.code[frame.currpc], :call) && isempty(frame.ssavalue_uses[pc])
 
-function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState,
-                                  max_methods = sv.params.MAX_METHODS)
+function abstract_call_gf_by_type(
+    @nospecialize(f),
+    argtypes::Vector{Any},
+    @nospecialize(atype),
+    sv::InferenceState,
+    max_methods = sv.params.MAX_METHODS
+)
     atype_params = unwrap_unionall(atype).parameters
     ft = unwrap_unionall(atype_params[1]) # TODO: ccall jl_method_table_for here
     isa(ft, DataType) || return Any # the function being called is unknown. can't properly handle this backedge right now
@@ -42,12 +47,24 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
         splitsigs = switchtupleunion(atype)
         applicable = Any[]
         for sig_n in splitsigs
-            xapplicable = _methods_by_ftype(sig_n, max_methods, sv.params.world, min_valid, max_valid)
+            xapplicable = _methods_by_ftype(
+                sig_n,
+                max_methods,
+                sv.params.world,
+                min_valid,
+                max_valid
+            )
             xapplicable === false && return Any
             append!(applicable, xapplicable)
         end
     else
-        applicable = _methods_by_ftype(atype, max_methods, sv.params.world, min_valid, max_valid)
+        applicable = _methods_by_ftype(
+            atype,
+            max_methods,
+            sv.params.world,
+            min_valid,
+            max_valid
+        )
         if applicable === false
             # this means too many methods matched
             # (assume this will always be true, so we don't compute / update valid age in this case)
@@ -60,8 +77,8 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
     rettype = Bottom
     edgecycle = false
     edges = Any[]
-    nonbot = 0  # the index of the only non-Bottom inference result if > 0
-    seen = 0    # number of signatures actually inferred
+    nonbot = 0 # the index of the only non-Bottom inference result if > 0
+    seen = 0 # number of signatures actually inferred
     istoplevel = sv.linfo.def isa Module
     multiple_matches = napplicable > 1
     for i in 1:napplicable
@@ -81,7 +98,13 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
         if splitunions
             splitsigs = switchtupleunion(sig)
             for sig_n in splitsigs
-                rt, edgecycle1, edge = abstract_call_method(method, sig_n, svec(), multiple_matches, sv)
+                rt, edgecycle1, edge = abstract_call_method(
+                    method,
+                    sig_n,
+                    svec(),
+                    multiple_matches,
+                    sv
+                )
                 if edge !== nothing
                     push!(edges, edge)
                 end
@@ -90,7 +113,13 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
                 this_rt === Any && break
             end
         else
-            this_rt, edgecycle1, edge = abstract_call_method(method, sig, match[2]::SimpleVector, multiple_matches, sv)
+            this_rt, edgecycle1, edge = abstract_call_method(
+                method,
+                sig,
+                match[2]::SimpleVector,
+                multiple_matches,
+                sv
+            )
             edgecycle |= edgecycle1::Bool
             if edge !== nothing
                 push!(edges, edge)
@@ -109,11 +138,19 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
     end
     # try constant propagation if only 1 method is inferred to non-Bottom
     # this is in preparation for inlining, or improving the return result
-    if nonbot > 0 && seen == napplicable && !edgecycle && isa(rettype, Type) && sv.params.ipo_constant_propagation
+    if nonbot > 0 &&
+       seen == napplicable &&
+       !edgecycle && isa(rettype, Type) && sv.params.ipo_constant_propagation
         # if there's a possibility we could constant-propagate a better result
         # (hopefully without doing too much work), try to do that now
         # TODO: it feels like this could be better integrated into abstract_call_method / typeinf_edge
-        const_rettype = abstract_call_method_with_const_args(rettype, f, argtypes, applicable[nonbot]::SimpleVector, sv)
+        const_rettype = abstract_call_method_with_const_args(
+            rettype,
+            f,
+            argtypes,
+            applicable[nonbot]::SimpleVector,
+            sv
+        )
         if const_rettype ⊑ rettype
             # use the better result, if it's a refinement of rettype
             rettype = const_rettype
@@ -159,14 +196,22 @@ function const_prop_profitable(@nospecialize(arg))
             isconstType(b) && return true
             const_prop_profitable(b) && return true
         end
-    elseif !isa(arg, Const) || (isa(arg.val, Symbol) || isa(arg.val, Type) || (!isa(arg.val, String) && isimmutable(arg.val)))
+    elseif !isa(arg, Const) ||
+           (isa(arg.val, Symbol) ||
+            isa(arg.val, Type) || (!isa(arg.val, String) && isimmutable(arg.val)))
         # don't consider mutable values or Strings useful constants
         return true
     end
     return false
 end
 
-function abstract_call_method_with_const_args(@nospecialize(rettype), @nospecialize(f), argtypes::Vector{Any}, match::SimpleVector, sv::InferenceState)
+function abstract_call_method_with_const_args(
+    @nospecialize(rettype),
+    @nospecialize(f),
+    argtypes::Vector{Any},
+    match::SimpleVector,
+    sv::InferenceState
+)
     method = match[3]::Method
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
@@ -201,10 +246,16 @@ function abstract_call_method_with_const_args(@nospecialize(rettype), @nospecial
             end
         end
     end
-    if !allconst && (istopfunction(f, :+) || istopfunction(f, :-) || istopfunction(f, :*) ||
-                     istopfunction(f, :(==)) || istopfunction(f, :!=) ||
-                     istopfunction(f, :<=) || istopfunction(f, :>=) || istopfunction(f, :<) || istopfunction(f, :>) ||
-                     istopfunction(f, :<<) || istopfunction(f, :>>))
+    if !allconst &&
+       (istopfunction(f, :+) ||
+        istopfunction(f, :-) ||
+        istopfunction(f, :*) ||
+        istopfunction(f, :(==)) ||
+        istopfunction(f, :!=) ||
+        istopfunction(f, :<=) ||
+        istopfunction(f, :>=) ||
+        istopfunction(f, :<) ||
+        istopfunction(f, :>) || istopfunction(f, :<<) || istopfunction(f, :>>))
         return Any
     end
     force_inference = allconst || sv.params.aggressive_constant_propagation
@@ -219,13 +270,19 @@ function abstract_call_method_with_const_args(@nospecialize(rettype), @nospecial
     # decide if it's likely to be worthwhile
     if !force_inference
         code = inf_for_methodinstance(mi, sv.params.world)
-        declared_inline = isdefined(method, :source) && ccall(:jl_ast_flag_inlineable, Bool, (Any,), method.source)
+        declared_inline = isdefined(method, :source) &&
+                          ccall(:jl_ast_flag_inlineable, Bool, (Any,), method.source)
         cache_inlineable = declared_inline
         if isdefined(code, :inferred) && !cache_inlineable
             cache_inf = code.inferred
             if !(cache_inf === nothing)
                 cache_src_inferred = ccall(:jl_ast_flag_inferred, Bool, (Any,), cache_inf)
-                cache_src_inlineable = ccall(:jl_ast_flag_inlineable, Bool, (Any,), cache_inf)
+                cache_src_inlineable = ccall(
+                    :jl_ast_flag_inlineable,
+                    Bool,
+                    (Any,),
+                    cache_inf
+                )
                 cache_inlineable = cache_src_inferred && cache_src_inlineable
             end
         end
@@ -236,7 +293,7 @@ function abstract_call_method_with_const_args(@nospecialize(rettype), @nospecial
     inf_result = cache_lookup(mi, argtypes, sv.params.cache)
     if inf_result === nothing
         inf_result = InferenceResult(mi, argtypes)
-        frame = InferenceState(inf_result, #=cache=#false, sv.params)
+        frame = InferenceState(inf_result, false, sv.params) #=cache=#
         frame.limited = true
         frame.parent = sv
         push!(sv.params.cache, inf_result)
@@ -248,7 +305,13 @@ function abstract_call_method_with_const_args(@nospecialize(rettype), @nospecial
     return result
 end
 
-function abstract_call_method(method::Method, @nospecialize(sig), sparams::SimpleVector, hardlimit::Bool, sv::InferenceState)
+function abstract_call_method(
+    method::Method,
+    @nospecialize(sig),
+    sparams::SimpleVector,
+    hardlimit::Bool,
+    sv::InferenceState
+)
     if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
         return Any, false, nothing
     end
@@ -313,7 +376,9 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                             parent = parent::InferenceState
                             parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
                             parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
-                            if (parent.cached || parent.limited) && parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
+                            if (parent.cached || parent.limited) &&
+                               parent.linfo.def === sv.linfo.def &&
+                               sv_method2 === parent_method2
                                 topmost = infstate
                                 edgecycle = true
                             end
@@ -348,7 +413,13 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
             comparison = method.sig
         end
         # see if the type is actually too big (relative to the caller), and limit it if required
-        newsig = limit_type_size(sig, comparison, hardlimit ? comparison : sv.linfo.specTypes, sv.params.TUPLE_COMPLEXITY_LIMIT_DEPTH, spec_len)
+        newsig = limit_type_size(
+            sig,
+            comparison,
+            hardlimit ? comparison : sv.linfo.specTypes,
+            sv.params.TUPLE_COMPLEXITY_LIMIT_DEPTH,
+            spec_len
+        )
 
         if newsig !== sig
             # continue inference, but note that we've limited parameter complexity
@@ -435,7 +506,7 @@ function precise_container_type(@nospecialize(typ), vtypes::VarTable, sv::Infere
     if isa(typ, Const)
         val = typ.val
         if isa(val, SimpleVector) || isa(val, Tuple)
-            return Any[ Const(val[i]) for i in 1:length(val) ] # avoid making a tuple Generator here!
+            return Any[Const(val[i]) for i in 1:length(val)] # avoid making a tuple Generator here!
         end
     end
 
@@ -470,7 +541,7 @@ function precise_container_type(@nospecialize(typ), vtypes::VarTable, sv::Infere
             if isvatuple(tti0) && length(tti0.parameters) == 1
                 return Any[Vararg{unwrapva(tti0.parameters[1])}]
             else
-                return Any[ p for p in tti0.parameters ]
+                return Any[p for p in tti0.parameters]
             end
         elseif !isa(tti, DataType)
             return Any[Vararg{Any}]
@@ -478,7 +549,7 @@ function precise_container_type(@nospecialize(typ), vtypes::VarTable, sv::Infere
             len = length(tti.parameters)
             last = tti.parameters[len]
             va = isvarargtype(last)
-            elts = Any[ fieldtype(tti0, i) for i = 1:len ]
+            elts = Any[fieldtype(tti0, i) for i = 1:len]
             if va
                 elts[len] = Vararg{elts[len]}
             end
@@ -495,11 +566,18 @@ end
 
 # simulate iteration protocol on container type up to fixpoint
 function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::InferenceState)
-    if !isdefined(Main, :Base) || !isdefined(Main.Base, :iterate) || !isconst(Main.Base, :iterate)
+    if !isdefined(Main, :Base) ||
+       !isdefined(Main.Base, :iterate) || !isconst(Main.Base, :iterate)
         return Any[Vararg{Any}]
     end
     iteratef = getfield(Main.Base, :iterate)
-    stateordonet = abstract_call(iteratef, nothing, Any[Const(iteratef), itertype], vtypes, sv)
+    stateordonet = abstract_call(
+        iteratef,
+        nothing,
+        Any[Const(iteratef), itertype],
+        vtypes,
+        sv
+    )
     # Return Bottom if this is not an iterator.
     # WARNING: Changes to the iteration protocol must be reflected here,
     # this is not just an optimization.
@@ -508,7 +586,9 @@ function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::Infer
     ret = Any[]
     stateordonet = widenconst(stateordonet)
     while !(Nothing <: stateordonet) && length(ret) < sv.params.MAX_TUPLE_SPLAT
-        if !isa(stateordonet, DataType) || !(stateordonet <: Tuple) || isvatuple(stateordonet) || length(stateordonet.parameters) != 2
+        if !isa(stateordonet, DataType) ||
+           !(stateordonet <: Tuple) ||
+           isvatuple(stateordonet) || length(stateordonet.parameters) != 2
             break
         end
         if stateordonet.parameters[2] <: statetype
@@ -518,7 +598,13 @@ function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::Infer
         valtype = stateordonet.parameters[1]
         statetype = stateordonet.parameters[2]
         push!(ret, valtype)
-        stateordonet = abstract_call(iteratef, nothing, Any[Const(iteratef), itertype, statetype], vtypes, sv)
+        stateordonet = abstract_call(
+            iteratef,
+            nothing,
+            Any[Const(iteratef), itertype, statetype],
+            vtypes,
+            sv
+        )
         stateordonet = widenconst(stateordonet)
     end
     if stateordonet === Nothing
@@ -526,7 +612,8 @@ function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::Infer
     end
     while valtype !== Any
         nounion = typesubtract(stateordonet, Nothing)
-        if !isa(nounion, DataType) || !(nounion <: Tuple) || isvatuple(nounion) || length(nounion.parameters) != 2
+        if !isa(nounion, DataType) ||
+           !(nounion <: Tuple) || isvatuple(nounion) || length(nounion.parameters) != 2
             valtype = Any
             break
         end
@@ -535,7 +622,13 @@ function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::Infer
         end
         valtype = tmerge(valtype, nounion.parameters[1])
         statetype = tmerge(statetype, nounion.parameters[2])
-        stateordonet = abstract_call(iteratef, nothing, Any[Const(iteratef), itertype, statetype], vtypes, sv)
+        stateordonet = abstract_call(
+            iteratef,
+            nothing,
+            Any[Const(iteratef), itertype, statetype],
+            vtypes,
+            sv
+        )
         stateordonet = widenconst(stateordonet)
     end
     push!(ret, Vararg{valtype})
@@ -543,8 +636,13 @@ function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::Infer
 end
 
 # do apply(af, fargs...), where af is a function value
-function abstract_apply(@nospecialize(aft), aargtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState,
-                        max_methods = sv.params.MAX_METHODS)
+function abstract_apply(
+    @nospecialize(aft),
+    aargtypes::Vector{Any},
+    vtypes::VarTable,
+    sv::InferenceState,
+    max_methods = sv.params.MAX_METHODS
+)
     aftw = widenconst(aft)
     if !isa(aft, Const) && (!isType(aftw) || has_free_typevars(aftw))
         if !isconcretetype(aftw) || (aftw <: Builtin)
@@ -593,7 +691,12 @@ function abstract_apply(@nospecialize(aft), aargtypes::Vector{Any}, vtypes::VarT
     return res
 end
 
-function pure_eval_call(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState)
+function pure_eval_call(
+    @nospecialize(f),
+    argtypes::Vector{Any},
+    @nospecialize(atype),
+    sv::InferenceState
+)
     for i = 2:length(argtypes)
         a = widenconditional(argtypes[i])
         if !(isa(a, Const) || isconstType(a))
@@ -622,7 +725,7 @@ function pure_eval_call(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(a
         return false
     end
 
-    args = Any[ (a = widenconditional(argtypes[i]); isa(a, Const) ? a.val : a.parameters[1]) for i in 2:length(argtypes) ]
+    args = Any[(a = widenconditional(argtypes[i]); isa(a, Const) ? a.val : a.parameters[1]) for i in 2:length(argtypes)]
     try
         value = Core._apply_pure(f, args)
         # TODO: add some sort of edge(s)
@@ -632,7 +735,14 @@ function pure_eval_call(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(a
     end
 end
 
-function abstract_call(@nospecialize(f), fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState, max_methods = sv.params.MAX_METHODS)
+function abstract_call(
+    @nospecialize(f),
+    fargs::Union{Nothing,Vector{Any}},
+    argtypes::Vector{Any},
+    vtypes::VarTable,
+    sv::InferenceState,
+    max_methods = sv.params.MAX_METHODS
+)
     if f === _apply
         return abstract_apply(argtypes[2], argtypes[3:end], vtypes, sv, max_methods)
     end
@@ -645,7 +755,8 @@ function abstract_call(@nospecialize(f), fargs::Union{Nothing,Vector{Any}}, argt
     end
 
     if isa(f, Builtin) || isa(f, IntrinsicFunction)
-        if f === ifelse && fargs isa Vector{Any} && length(argtypes) == 4 && argtypes[2] isa Conditional
+        if f === ifelse &&
+           fargs isa Vector{Any} && length(argtypes) == 4 && argtypes[2] isa Conditional
             # try to simulate this as a real conditional (`cnd ? x : y`), so that the penalty for using `ifelse` instead isn't too high
             cnd = argtypes[2]::Conditional
             tx = argtypes[3]
@@ -661,13 +772,17 @@ function abstract_call(@nospecialize(f), fargs::Union{Nothing,Vector{Any}}, argt
             return tmerge(tx, ty)
         end
         rt = builtin_tfunction(f, argtypes[2:end], sv)
-        if f === getfield && isa(fargs, Vector{Any}) && length(argtypes) == 3 && isa(argtypes[3], Const) && isa(argtypes[3].val, Int) && argtypes[2] ⊑ Tuple
+        if f === getfield &&
+           isa(fargs, Vector{Any}) &&
+           length(argtypes) == 3 &&
+           isa(argtypes[3], Const) && isa(argtypes[3].val, Int) && argtypes[2] ⊑ Tuple
             cti = precise_container_type(argtypes[2], vtypes, sv)
             idx = argtypes[3].val
             if 1 <= idx <= length(cti)
                 rt = unwrapva(cti[idx])
             end
-        elseif (rt === Bool || (isa(rt, Const) && isa(rt.val, Bool))) && isa(fargs, Vector{Any})
+        elseif (rt === Bool || (isa(rt, Const) && isa(rt.val, Bool))) &&
+               isa(fargs, Vector{Any})
             # perform very limited back-propagation of type information for `is` and `isa`
             if f === isa
                 a = ssa_def_slot(fargs[2], sv)
@@ -738,7 +853,8 @@ function abstract_call(@nospecialize(f), fargs::Union{Nothing,Vector{Any}}, argt
     elseif f === Core.kwfunc
         if length(argtypes) == 2
             ft = widenconst(argtypes[2])
-            if isa(ft, DataType) && isdefined(ft.name, :mt) && isdefined(ft.name.mt, :kwsorter)
+            if isa(ft, DataType) &&
+               isdefined(ft.name, :mt) && isdefined(ft.name.mt, :kwsorter)
                 return Const(ft.name.mt.kwsorter)
             end
         end
@@ -797,7 +913,7 @@ function abstract_call(@nospecialize(f), fargs::Union{Nothing,Vector{Any}}, argt
         # handle Conditional propagation through !Bool
         aty = argtypes[2]
         if isa(aty, Conditional)
-            abstract_call_gf_by_type(f, Any[Const(f), Bool], Tuple{typeof(f), Bool}, sv) # make sure we've inferred `!(::Bool)`
+            abstract_call_gf_by_type(f, Any[Const(f), Bool], Tuple{typeof(f),Bool}, sv) # make sure we've inferred `!(::Bool)`
             return Conditional(aty.var, aty.elsetype, aty.vtype)
         end
     elseif length(argtypes) == 3 && istopfunction(f, :!==)
@@ -820,11 +936,16 @@ function abstract_call(@nospecialize(f), fargs::Union{Nothing,Vector{Any}}, argt
         argtypes = Any[typeof(<:), argtypes[3], argtypes[2]]
         rty = abstract_call(<:, fargs, argtypes, vtypes, sv)
         return rty
-    elseif length(argtypes) == 2 && isa(argtypes[2], Const) && isa(argtypes[2].val, SimpleVector) && istopfunction(f, :length)
+    elseif length(argtypes) == 2 &&
+           isa(argtypes[2], Const) &&
+           isa(argtypes[2].val, SimpleVector) && istopfunction(f, :length)
         # mark length(::SimpleVector) as @pure
         return Const(length(argtypes[2].val))
-    elseif length(argtypes) == 3 && isa(argtypes[2], Const) && isa(argtypes[3], Const) &&
-            isa(argtypes[2].val, SimpleVector) && isa(argtypes[3].val, Int) && istopfunction(f, :getindex)
+    elseif length(argtypes) == 3 &&
+           isa(argtypes[2], Const) &&
+           isa(argtypes[3], Const) &&
+           isa(argtypes[2].val, SimpleVector) &&
+           isa(argtypes[3].val, Int) && istopfunction(f, :getindex)
         # mark getindex(::SimpleVector, i::Int) as @pure
         svecval = argtypes[2].val::SimpleVector
         idx = argtypes[3].val::Int
@@ -847,7 +968,12 @@ function abstract_call(@nospecialize(f), fargs::Union{Nothing,Vector{Any}}, argt
 end
 
 # wrapper around `abstract_call` for first computing if `f` is available
-function abstract_eval_call(fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
+function abstract_eval_call(
+    fargs::Union{Nothing,Vector{Any}},
+    argtypes::Vector{Any},
+    vtypes::VarTable,
+    sv::InferenceState
+)
     #print("call ", e.args[1], argtypes, "\n\n")
     for x in argtypes
         x === Bottom && return Bottom
@@ -895,7 +1021,14 @@ function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
         if isa(spsig, UnionAll)
             if !isempty(linfo.sparam_vals)
                 env = pointer_from_objref(linfo.sparam_vals) + sizeof(Ptr{Cvoid})
-                T = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), T, spsig, env)
+                T = ccall(
+                    :jl_instantiate_type_in_env,
+                    Any,
+                    (Any, Any, Ptr{Any}),
+                    T,
+                    spsig,
+                    env
+                )
                 isref && isreturn && T === Any && return Bottom # catch invalid return Ref{T} where T = Any
                 for v in linfo.sparam_vals
                     if isa(v, TypeVar)
@@ -916,7 +1049,7 @@ end
 function abstract_eval_cfunction(e::Expr, vtypes::VarTable, sv::InferenceState)
     f = abstract_eval(e.args[2], vtypes, sv)
     # rt = sp_type_rewrap(e.args[3], sv.linfo, true)
-    at = Any[ sp_type_rewrap(argt, sv.linfo, false) for argt in e.args[4]::SimpleVector ]
+    at = Any[sp_type_rewrap(argt, sv.linfo, false) for argt in e.args[4]::SimpleVector]
     pushfirst!(at, f)
     # this may be the wrong world for the call,
     # but some of the result is likely to be valid anyways
@@ -941,13 +1074,13 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
     end
     e = e::Expr
     if e.head === :call
-        argtypes = Any[ abstract_eval(a, vtypes, sv) for a in e.args ]
+        argtypes = Any[abstract_eval(a, vtypes, sv) for a in e.args]
         t = abstract_eval_call(e.args, argtypes, vtypes, sv)
     elseif e.head === :new
         t = instanceof_tfunc(abstract_eval(e.args[1], vtypes, sv))[1]
         if isconcretetype(t) && !t.mutable
-            args = Vector{Any}(undef, length(e.args)-1)
-            ats = Vector{Any}(undef, length(e.args)-1)
+            args = Vector{Any}(undef, length(e.args) - 1)
+            ats = Vector{Any}(undef, length(e.args) - 1)
             anyconst = false
             allconst = true
             for i = 2:length(e.args)
@@ -974,7 +1107,14 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
             # For now, don't allow partially initialized Const/PartialStruct
             if t !== Bottom && fieldcount(t) == length(ats)
                 if allconst
-                    t = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), t, args, length(args)))
+                    t = Const(ccall(
+                        :jl_new_structv,
+                        Any,
+                        (Any, Ptr{Cvoid}, UInt32),
+                        t,
+                        args,
+                        length(args)
+                    ))
                 elseif anyconst
                     t = PartialStruct(t, ats)
                 end
@@ -1054,8 +1194,8 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
 end
 
 function abstract_eval_global(M::Module, s::Symbol)
-    if isdefined(M,s) && isconst(M,s)
-        return AbstractEvalConstant(getfield(M,s))
+    if isdefined(M, s) && isconst(M, s)
+        return AbstractEvalConstant(getfield(M, s))
     end
     return Any
 end
@@ -1069,7 +1209,12 @@ function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
 end
 
 # determine whether `ex` abstractly evals to constant `c`
-function abstract_evals_to_constant(@nospecialize(ex), @nospecialize(c), vtypes::VarTable, sv::InferenceState)
+function abstract_evals_to_constant(
+    @nospecialize(ex),
+    @nospecialize(c),
+    vtypes::VarTable,
+    sv::InferenceState
+)
     av = abstract_eval(ex, vtypes, sv)
     return isa(av, Const) && av.val === c
 end
@@ -1123,11 +1268,20 @@ function typeinf_local(frame::InferenceState)
                     frame.handler_at[l] = frame.cur_hand
                     changes_else = changes
                     if isa(condt, Conditional)
-                        if condt.elsetype !== Any && condt.elsetype !== changes[slot_id(condt.var)]
-                            changes_else = StateUpdate(condt.var, VarState(condt.elsetype, false), changes_else)
+                        if condt.elsetype !== Any &&
+                           condt.elsetype !== changes[slot_id(condt.var)]
+                            changes_else = StateUpdate(
+                                condt.var,
+                                VarState(condt.elsetype, false),
+                                changes_else
+                            )
                         end
                         if condt.vtype !== Any && condt.vtype !== changes[slot_id(condt.var)]
-                            changes = StateUpdate(condt.var, VarState(condt.vtype, false), changes)
+                            changes = StateUpdate(
+                                condt.var,
+                                VarState(condt.vtype, false),
+                                changes
+                            )
                         end
                     end
                     newstate_else = stupdate!(s[l], changes_else)

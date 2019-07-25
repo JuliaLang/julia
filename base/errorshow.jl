@@ -70,7 +70,7 @@ function showerror(io::IO, ex::TypeError)
     end
 end
 
-function showerror(io::IO, ex, bt; backtrace=true)
+function showerror(io::IO, ex, bt; backtrace = true)
     try
         with_output_color(get(io, :color, false) ? error_color() : :nothing, io) do io
             showerror(io, ex)
@@ -80,16 +80,16 @@ function showerror(io::IO, ex, bt; backtrace=true)
     end
 end
 
-function showerror(io::IO, ex::LoadError, bt; backtrace=true)
+function showerror(io::IO, ex::LoadError, bt; backtrace = true)
     print(io, "LoadError: ")
-    showerror(io, ex.error, bt, backtrace=backtrace)
+    showerror(io, ex.error, bt, backtrace = backtrace)
     print(io, "\nin expression starting at $(ex.file):$(ex.line)")
 end
 showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
 
-function showerror(io::IO, ex::InitError, bt; backtrace=true)
+function showerror(io::IO, ex::InitError, bt; backtrace = true)
     print(io, "InitError: ")
-    showerror(io, ex.error, bt, backtrace=backtrace)
+    showerror(io, ex.error, bt, backtrace = backtrace)
     print(io, "\nduring initialization of module ", ex.mod)
 end
 showerror(io::IO, ex::InitError) = showerror(io, ex, [])
@@ -98,8 +98,11 @@ function showerror(io::IO, ex::DomainError)
     if isa(ex.val, AbstractArray)
         compact = get(io, :compact, true)
         limit = get(io, :limit, true)
-        print(IOContext(io, :compact => compact, :limit => limit),
-              "DomainError with ", ex.val)
+        print(
+            IOContext(io, :compact => compact, :limit => limit),
+            "DomainError with ",
+            ex.val
+        )
     else
         print(io, "DomainError with ", ex.val)
     end
@@ -126,7 +129,8 @@ end
 
 showerror(io::IO, ::DivideError) = print(io, "DivideError: integer division error")
 showerror(io::IO, ::StackOverflowError) = print(io, "StackOverflowError:")
-showerror(io::IO, ::UndefRefError) = print(io, "UndefRefError: access to undefined reference")
+showerror(io::IO, ::UndefRefError) =
+    print(io, "UndefRefError: access to undefined reference")
 showerror(io::IO, ::EOFError) = print(io, "EOFError: read end of file")
 function showerror(io::IO, ex::ErrorException)
     print(io, ex.msg)
@@ -135,9 +139,10 @@ function showerror(io::IO, ex::ErrorException)
         print(io, "Use `codeunits(str)` instead.")
     end
 end
-showerror(io::IO, ex::KeyError) = (print(io, "KeyError: key ");
-                                   show(io, ex.key);
-                                   print(io, " not found"))
+showerror(io::IO, ex::KeyError) =
+    (print(io, "KeyError: key ");
+    show(io, ex.key);
+    print(io, " not found"))
 showerror(io::IO, ex::InterruptException) = print(io, "InterruptException:")
 showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: ", ex.msg)
 showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: ", ex.msg)
@@ -148,11 +153,14 @@ showerror(io::IO, ex::UndefKeywordError) =
 
 function showerror(io::IO, ex::UndefVarError)
     if ex.var in [:UTF16String, :UTF32String, :WString, :utf16, :utf32, :wstring, :RepString]
-        return showerror(io, ErrorException("""
-        `$(ex.var)` has been moved to the package LegacyStrings.jl:
-        Run Pkg.add("LegacyStrings") to install LegacyStrings on Julia v0.5-;
-        Then do `using LegacyStrings` to get `$(ex.var)`.
-        """))
+        return showerror(
+            io,
+            ErrorException("""
+                           `$(ex.var)` has been moved to the package LegacyStrings.jl:
+                           Run Pkg.add("LegacyStrings") to install LegacyStrings on Julia v0.5-;
+                           Then do `using LegacyStrings` to get `$(ex.var)`.
+                           """)
+        )
     end
     print(io, "UndefVarError: $(ex.var) not defined")
 end
@@ -163,7 +171,7 @@ function showerror(io::IO, ex::InexactError)
     print(io, ex.val, ')')
 end
 
-typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
+typesof(args...) = Tuple{Any[Core.Typeof(a) for a in args]...}
 
 function showerror(io::IO, ex::MethodError)
     # ex.args is a tuple type if it was thrown from `invoke` and is
@@ -196,16 +204,22 @@ function showerror(io::IO, ex::MethodError)
         if T === nothing
             print(io, "First argument to `convert` must be a Type, got ", ex.args[1])
         else
-            print(io, "Cannot `convert` an object of type ", arg_types_param[2], " to an object of type ", T)
+            print(
+                io,
+                "Cannot `convert` an object of type ",
+                arg_types_param[2],
+                " to an object of type ",
+                T
+            )
         end
     elseif isempty(methods(f)) && isa(f, DataType) && f.abstract
         print(io, "no constructors have been defined for ", f)
     elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
         print(io, "objects of type ", ft, " are not callable")
     else
-        if ft <: Function && isempty(ft.parameters) &&
-                isdefined(ft.name.module, name) &&
-                ft == typeof(getfield(ft.name.module, name))
+        if ft <: Function &&
+           isempty(ft.parameters) &&
+           isdefined(ft.name.module, name) && ft == typeof(getfield(ft.name.module, name))
             f_is_function = true
             print(io, "no method matching ", name)
         elseif isa(f, Type)
@@ -239,31 +253,37 @@ function showerror(io::IO, ex::MethodError)
             print(io, "You may have intended to import Base.", name)
         end
     end
-    if (ex.world != typemax(UInt) && hasmethod(ex.f, arg_types) &&
-        !hasmethod(ex.f, arg_types, world = ex.world))
+    if (ex.world != typemax(UInt) &&
+        hasmethod(ex.f, arg_types) && !hasmethod(ex.f, arg_types, world = ex.world))
         curworld = get_world_counter()
         println(io)
-        print(io, "The applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
+        print(
+            io,
+            "The applicable method may be too new: running in world age $(ex.world), while current world is $(curworld)."
+        )
     end
     if !is_arg_types
         # Check for row vectors used where a column vector is intended.
         vec_args = []
         hasrows = false
         for arg in ex.args
-            isrow = isa(arg,Array) && ndims(arg)==2 && size(arg,1)==1
+            isrow = isa(arg, Array) && ndims(arg) == 2 && size(arg, 1) == 1
             hasrows |= isrow
             push!(vec_args, isrow ? vec(arg) : arg)
         end
         if hasrows && applicable(f, vec_args...)
-            print(io, "\n\nYou might have used a 2d row vector where a 1d column vector was required.",
-                      "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].",
-                      "\nYou can convert to a column vector with the vec() function.")
+            print(
+                io,
+                "\n\nYou might have used a 2d row vector where a 1d column vector was required.",
+                "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].",
+                "\nYou can convert to a column vector with the vec() function."
+            )
         end
     end
     try
         show_method_candidates(io, ex, kwargs)
     catch ex
-        @error "Error showing method candidates, aborted" exception=ex,catch_backtrace()
+        @error "Error showing method candidates, aborted" exception = ex, catch_backtrace()
     end
 end
 
@@ -273,7 +293,7 @@ striptype(::Any) = nothing
 function showerror_ambiguous(io::IO, meth, f, args)
     print(io, "MethodError: ", f, "(")
     p = args.parameters
-    for (i,a) in enumerate(p)
+    for (i, a) in enumerate(p)
         print(io, "::", a)
         i < length(p) && print(io, ", ")
     end
@@ -285,7 +305,7 @@ function showerror_ambiguous(io::IO, meth, f, args)
     end
     if isa(unwrap_unionall(sigfix), DataType) && sigfix <: Tuple
         print(io, "\nPossible fix, define\n  ")
-        Base.show_tuple_as_call(io, :function,  sigfix)
+        Base.show_tuple_as_call(io, :function, sigfix)
     end
     nothing
 end
@@ -294,13 +314,13 @@ end
 #Useful in Base submodule __init__ functions where stderr isn't defined yet.
 function showerror_nostdio(err, msg::AbstractString)
     stderr_stream = ccall(:jl_stderr_stream, Ptr{Cvoid}, ())
-    ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, msg)
-    ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, ":\n")
-    ccall(:jl_static_show, Csize_t, (Ptr{Cvoid},Any), stderr_stream, err)
-    ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, "\n")
+    ccall(:jl_printf, Cint, (Ptr{Cvoid}, Cstring), stderr_stream, msg)
+    ccall(:jl_printf, Cint, (Ptr{Cvoid}, Cstring), stderr_stream, ":\n")
+    ccall(:jl_static_show, Csize_t, (Ptr{Cvoid}, Any), stderr_stream, err)
+    ccall(:jl_printf, Cint, (Ptr{Cvoid}, Cstring), stderr_stream, "\n")
 end
 
-function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=())
+function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs = ())
     is_arg_types = isa(ex.args, DataType)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
     arg_types_param = Any[arg_types.parameters...]
@@ -318,7 +338,8 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
     # pool MethodErrors for these two functions.
     if f === convert && !isempty(arg_types_param)
         at1 = arg_types_param[1]
-        if isa(at1,DataType) && (at1::DataType).name === Type.body.name && !Core.Compiler.has_free_typevars(at1)
+        if isa(at1, DataType) &&
+           (at1::DataType).name === Type.body.name && !Core.Compiler.has_free_typevars(at1)
             push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
         end
     end
@@ -348,7 +369,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
             print(iob, "(")
             t_i = copy(arg_types_param)
             right_matches = 0
-            for i = 1 : min(length(t_i), length(sig))
+            for i = 1:min(length(t_i), length(sig))
                 i > 1 && print(iob, ", ")
                 # If isvarargtype then it checks whether the rest of the input arguments matches
                 # the varargtype
@@ -360,8 +381,10 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     j = i
                 end
                 # Checks if the type of arg 1:i of the input intersects with the current method
-                t_in = typeintersect(rewrap_unionall(Tuple{sig[1:i]...}, method.sig),
-                                     rewrap_unionall(Tuple{t_i[1:j]...}, method.sig))
+                t_in = typeintersect(
+                    rewrap_unionall(Tuple{sig[1:i]...}, method.sig),
+                    rewrap_unionall(Tuple{t_i[1:j]...}, method.sig)
+                )
                 # If the function is one of the special cased then it should break the loop if
                 # the type of the first argument is not matched.
                 t_in === Union{} && special && i == 1 && break
@@ -378,7 +401,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     # signature then there will be a type intersect
                     t_i[i] = sig[i]
                 else
-                    right_matches += j==i ? 1 : 0
+                    right_matches += j == i ? 1 : 0
                     print(iob, "::", sigstr...)
                 end
             end
@@ -388,7 +411,10 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 # It ensures that methods like f(a::AbstractString...) gets the correct
                 # number of right_matches
                 for t in arg_types_param[length(sig):end]
-                    if t <: rewrap_unionall(unwrap_unionall(sig[end]).parameters[1], method.sig)
+                    if t <: rewrap_unionall(
+                        unwrap_unionall(sig[end]).parameters[1],
+                        method.sig
+                    )
                         right_matches += 1
                     end
                 end
@@ -405,7 +431,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                         else
                             sigstr = (sigtype,)
                         end
-                        if !((min(length(t_i), length(sig)) == 0) && k==1)
+                        if !((min(length(t_i), length(sig)) == 0) && k == 1)
                             print(iob, ", ")
                         end
                         if get(io, :color, false)
@@ -428,7 +454,8 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 print(iob, " at ", method.file, ":", method.line)
                 if !isempty(kwargs)
                     unexpected = Symbol[]
-                    if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
+                    if isempty(kwords) ||
+                       !(any(endswith(string(kword), "...") for kword in kwords))
                         for (k, v) in kwargs
                             if !(k in kwords)
                                 push!(unexpected, k)
@@ -438,7 +465,12 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     if !isempty(unexpected)
                         Base.with_output_color(Base.error_color(), iob) do iob
                             plur = length(unexpected) > 1 ? "s" : ""
-                            print(iob, " got unsupported keyword argument$plur \"", join(unexpected, "\", \""), "\"")
+                            print(
+                                iob,
+                                " got unsupported keyword argument$plur \"",
+                                join(unexpected, "\", \""),
+                                "\""
+                            )
                         end
                     end
                 end
@@ -475,12 +507,12 @@ end
 # Contains file name and file number. Gets set when a backtrace
 # or methodlist is shown. Used by the REPL to make it possible to open
 # the location of a stackframe/method in the editor.
-global LAST_SHOWN_LINE_INFOS = Tuple{String, Int}[]
+global LAST_SHOWN_LINE_INFOS = Tuple{String,Int}[]
 
 function show_trace_entry(io, frame, n; prefix = "")
     push!(LAST_SHOWN_LINE_INFOS, (string(frame.file), frame.line))
     print(io, "\n", prefix)
-    show(io, frame, full_path=true)
+    show(io, frame, full_path = true)
     n > 1 && print(io, " (repeats ", n, " times)")
 end
 
@@ -498,10 +530,10 @@ const update_stackframes_callback = Ref{Function}(identity)
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
 
 function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
-    recorded_positions = IdDict{UInt, Vector{Int}}()
+    recorded_positions = IdDict{UInt,Vector{Int}}()
     #= For each frame of hash h, recorded_positions[h] is the list of indices i
-    such that hash(t[i-1]) == h, ie the list of positions in which the
-    frame appears just before. =#
+        such that hash(t[i-1]) == h, ie the list of positions in which the
+        frame appears just before. =#
 
     displayed_stackframes = []
     repeated_cycle = Tuple{Int,Int,Int}[]
@@ -518,31 +550,38 @@ function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
         recorded_positions[current_hash] = push!(positions, frame_counter)
 
         repetitions = 0
-        for index_p in length(positions)-1:-1:1 # More recent is more likely
+        for index_p in length(positions) - 1:-1:1 # More recent is more likely
             p = positions[index_p]
             cycle_length = frame_counter - p
             i = frame_counter
             j = p
             while i < length(t) && t[i] == t[j]
-                i+=1 ; j+=1
+                i += 1
+                j += 1
             end
-            if j >= frame_counter-1
+            if j >= frame_counter - 1
                 #= At least one cycle repeated =#
                 repetitions = div(i - frame_counter + 1, cycle_length)
-                push!(repeated_cycle, (length(displayed_stackframes), cycle_length, repetitions))
+                push!(
+                    repeated_cycle,
+                    (length(displayed_stackframes), cycle_length, repetitions)
+                )
                 frame_counter += cycle_length * repetitions - 1
                 break
             end
         end
 
-        if repetitions==0
+        if repetitions == 0
             push!(displayed_stackframes, (last_frame, n))
         end
     end
 
-    try invokelatest(update_stackframes_callback[], displayed_stackframes) catch end
+    try
+        invokelatest(update_stackframes_callback[], displayed_stackframes)
+    catch
+    end
 
-    push!(repeated_cycle, (0,0,0)) # repeated_cycle is never empty
+    push!(repeated_cycle, (0, 0, 0)) # repeated_cycle is never empty
     frame_counter = 1
     for i in 1:length(displayed_stackframes)
         (frame, n) = displayed_stackframes[i]
@@ -555,8 +594,15 @@ function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
             cycle_length = repeated_cycle[1][2]
             repetitions = repeated_cycle[1][3]
             popfirst!(repeated_cycle)
-            print(io, "\n ... (the last ", cycle_length, " lines are repeated ",
-                  repetitions, " more time", repetitions>1 ? "s)" : ")")
+            print(
+                io,
+                "\n ... (the last ",
+                cycle_length,
+                " lines are repeated ",
+                repetitions,
+                " more time",
+                repetitions > 1 ? "s)" : ")"
+            )
             frame_counter += cycle_length * repetitions
         end
         frame_counter += 1
@@ -579,11 +625,19 @@ function show_backtrace(io::IO, t::Vector)
     print(io, "\nStacktrace:")
     if length(filtered) < BIG_STACKTRACE_SIZE
         # Fast track: no duplicate stack frame detection.
-        try invokelatest(update_stackframes_callback[], filtered) catch end
+        try
+            invokelatest(update_stackframes_callback[], filtered)
+        catch
+        end
         frame_counter = 0
         for (last_frame, n) in filtered
             frame_counter += 1
-            show_trace_entry(IOContext(io, :backtrace => true), last_frame, n, prefix = string(" [", frame_counter, "] "))
+            show_trace_entry(
+                IOContext(io, :backtrace => true),
+                last_frame,
+                n,
+                prefix = string(" [", frame_counter, "] ")
+            )
         end
         return
     end
@@ -593,7 +647,10 @@ end
 
 function show_backtrace(io::IO, t::Vector{Any})
     if length(t) < BIG_STACKTRACE_SIZE
-        try invokelatest(update_stackframes_callback[], t) catch end
+        try
+            invokelatest(update_stackframes_callback[], t)
+        catch
+        end
         for entry in t
             show_trace_entry(io, entry...)
         end
@@ -602,7 +659,7 @@ function show_backtrace(io::IO, t::Vector{Any})
     end
 end
 
-function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
+function process_backtrace(t::Vector, limit::Int = typemax(Int); skipC = true)
     n = 0
     last_frame = StackTraces.UNKNOWN
     count = 0
@@ -614,14 +671,22 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
                 continue
             end
 
-            if lkup.from_c && skipC; continue; end
-            if i == 1 && lkup.func == :error; continue; end
+            if lkup.from_c && skipC
+                continue
+            end
+            if i == 1 && lkup.func == :error
+                continue
+            end
             count += 1
-            if count > limit; break; end
+            if count > limit
+                break
+            end
 
-            if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func || lkup.linfo !== lkup.linfo
+            if lkup.file != last_frame.file ||
+               lkup.line != last_frame.line ||
+               lkup.func != last_frame.func || lkup.linfo !== lkup.linfo
                 if n > 0
-                    push!(ret, (last_frame,n))
+                    push!(ret, (last_frame, n))
                 end
                 n = 1
                 last_frame = lkup
@@ -631,7 +696,7 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
         end
     end
     if n > 0
-        push!(ret, (last_frame,n))
+        push!(ret, (last_frame, n))
     end
     return ret
 end
@@ -643,10 +708,10 @@ function show_exception_stack(io::IO, stack::Vector)
     nexc = length(stack)
     for i = nexc:-1:1
         if nexc != i
-            printstyled(io, "caused by [exception ", i, "]\n", color=:light_black)
+            printstyled(io, "caused by [exception ", i, "]\n", color = :light_black)
         end
         exc, bt = stack[i]
-        showerror(io, exc, bt, backtrace = bt!==nothing)
+        showerror(io, exc, bt, backtrace = bt !== nothing)
         println(io)
     end
 end

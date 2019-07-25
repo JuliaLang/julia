@@ -74,7 +74,8 @@ IndexStyle(::Type{<:Array}) = IndexLinear()
 IndexStyle(::Type{<:AbstractRange}) = IndexLinear()
 
 IndexStyle(A::AbstractArray, B::AbstractArray) = IndexStyle(IndexStyle(A), IndexStyle(B))
-IndexStyle(A::AbstractArray, B::AbstractArray...) = IndexStyle(IndexStyle(A), IndexStyle(B...))
+IndexStyle(A::AbstractArray, B::AbstractArray...) =
+    IndexStyle(IndexStyle(A), IndexStyle(B...))
 IndexStyle(::IndexLinear, ::IndexLinear) = IndexLinear()
 IndexStyle(::IndexStyle, ::IndexStyle) = IndexCartesian()
 
@@ -98,7 +99,7 @@ end
 
 promote_shape(a::Tuple{Int,}, b::Tuple{Int,Int}) = promote_shape(b, a)
 
-function promote_shape(a::Tuple{Int, Int}, b::Tuple{Int, Int})
+function promote_shape(a::Tuple{Int,Int}, b::Tuple{Int,Int})
     if a[1] != b[1] || a[2] != b[2]
         throw(DimensionMismatch("dimensions must match"))
     end
@@ -128,12 +129,12 @@ function promote_shape(a::Dims, b::Dims)
     if length(a) < length(b)
         return promote_shape(b, a)
     end
-    for i=1:length(b)
+    for i = 1:length(b)
         if a[i] != b[i]
             throw(DimensionMismatch("dimensions must match"))
         end
     end
-    for i=length(b)+1:length(a)
+    for i = length(b)+1:length(a)
         if a[i] != 1
             throw(DimensionMismatch("dimensions must match"))
         end
@@ -149,12 +150,12 @@ function promote_shape(a::Indices, b::Indices)
     if length(a) < length(b)
         return promote_shape(b, a)
     end
-    for i=1:length(b)
+    for i = 1:length(b)
         if a[i] != b[i]
             throw(DimensionMismatch("dimensions must match"))
         end
     end
-    for i=length(b)+1:length(a)
+    for i = length(b)+1:length(a)
         if a[i] != 1:1
             throw(DimensionMismatch("dimensions must match"))
         end
@@ -180,12 +181,12 @@ function setindex_shape_check(X::AbstractArray, I::Integer...)
     lj = length(I)
     i = j = 1
     while true
-        ii = length(axes(X,i))
+        ii = length(axes(X, i))
         jj = I[j]
         if i == li || j == lj
             while i < li
                 i += 1
-                ii *= length(axes(X,i))
+                ii *= length(axes(X, i))
             end
             while j < lj
                 j += 1
@@ -209,25 +210,24 @@ function setindex_shape_check(X::AbstractArray, I::Integer...)
     end
 end
 
-setindex_shape_check(X::AbstractArray) =
-    (length(X)==1 || throw_setindex_mismatch(X,()))
+setindex_shape_check(X::AbstractArray) = (length(X) == 1 || throw_setindex_mismatch(X, ()))
 
 setindex_shape_check(X::AbstractArray, i::Integer) =
-    (length(X)==i || throw_setindex_mismatch(X, (i,)))
+    (length(X) == i || throw_setindex_mismatch(X, (i,)))
 
 setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer) =
-    (length(X)==i || throw_setindex_mismatch(X, (i,)))
+    (length(X) == i || throw_setindex_mismatch(X, (i,)))
 
 setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer, j::Integer) =
-    (length(X)==i*j || throw_setindex_mismatch(X, (i,j)))
+    (length(X) == i * j || throw_setindex_mismatch(X, (i, j)))
 
 function setindex_shape_check(X::AbstractArray{<:Any,2}, i::Integer, j::Integer)
-    if length(X) != i*j
-        throw_setindex_mismatch(X, (i,j))
+    if length(X) != i * j
+        throw_setindex_mismatch(X, (i, j))
     end
-    sx1 = length(axes(X,1))
+    sx1 = length(axes(X, 1))
     if !(i == 1 || i == sx1 || sx1 == 1)
-        throw_setindex_mismatch(X, (i,j))
+        throw_setindex_mismatch(X, (i, j))
     end
 end
 
@@ -262,12 +262,12 @@ Custom index types may specialize `to_index(::CustomIndex)` to provide special
 indexing behaviors. This must return either an `Int` or an `AbstractArray` of
 `Int`s.
 """
-to_index(i::Integer) = convert(Int,i)::Int
+to_index(i::Integer) = convert(Int, i)::Int
 to_index(i::Bool) = throw(ArgumentError("invalid index: $i of type Bool"))
 to_index(I::AbstractArray{Bool}) = LogicalIndex(I)
 to_index(I::AbstractArray) = I
 to_index(I::AbstractArray{Union{}}) = I
-to_index(I::AbstractArray{<:Union{AbstractArray, Colon}}) =
+to_index(I::AbstractArray{<:Union{AbstractArray,Colon}}) =
     throw(ArgumentError("invalid index: $(limitrepr(I)) of type $(typeof(I))"))
 to_index(::Colon) = throw(ArgumentError("colons must be converted by to_indices(...)"))
 to_index(i) = throw(ArgumentError("invalid index: $(limitrepr(i)) of type $(typeof(i))"))
@@ -295,9 +295,10 @@ given tuple of indices and the dimensional indices of `A` in tandem. As such,
 not all index types are guaranteed to propagate to `Base.to_index`.
 """
 to_indices(A, I::Tuple) = (@_inline_meta; to_indices(A, axes(A), I))
-to_indices(A, I::Tuple{Any}) = (@_inline_meta; to_indices(A, (eachindex(IndexLinear(), A),), I))
+to_indices(A, I::Tuple{Any}) =
+    (@_inline_meta; to_indices(A, (eachindex(IndexLinear(), A),), I))
 to_indices(A, inds, ::Tuple{}) = ()
-to_indices(A, inds, I::Tuple{Any, Vararg{Any}}) =
+to_indices(A, inds, I::Tuple{Any,Vararg{Any}}) =
     (@_inline_meta; (to_index(A, I[1]), to_indices(A, _maybetail(inds), tail(I))...))
 
 _maybetail(::Tuple{}) = ()
@@ -332,8 +333,10 @@ size(S::Slice) = (length(S.indices),)
 length(S::Slice) = length(S.indices)
 unsafe_length(S::Slice) = unsafe_length(S.indices)
 getindex(S::Slice, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
-getindex(S::Slice, i::AbstractUnitRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
-getindex(S::Slice, i::StepRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
+getindex(S::Slice, i::AbstractUnitRange{<:Integer}) =
+    (@_inline_meta; @boundscheck checkbounds(S, i); i)
+getindex(S::Slice, i::StepRange{<:Integer}) =
+    (@_inline_meta; @boundscheck checkbounds(S, i); i)
 show(io::IO, r::Slice) = print(io, "Base.Slice(", r.indices, ")")
 iterate(S::Slice, s...) = iterate(S.indices, s...)
 
@@ -364,8 +367,10 @@ size(S::IdentityUnitRange) = (length(S.indices),)
 length(S::IdentityUnitRange) = length(S.indices)
 unsafe_length(S::IdentityUnitRange) = unsafe_length(S.indices)
 getindex(S::IdentityUnitRange, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
-getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
-getindex(S::IdentityUnitRange, i::StepRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
+getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer}) =
+    (@_inline_meta; @boundscheck checkbounds(S, i); i)
+getindex(S::IdentityUnitRange, i::StepRange{<:Integer}) =
+    (@_inline_meta; @boundscheck checkbounds(S, i); i)
 show(io::IO, r::IdentityUnitRange) = print(io, "Base.IdentityUnitRange(", r.indices, ")")
 iterate(S::IdentityUnitRange, s...) = iterate(S.indices, s...)
 
@@ -422,16 +427,19 @@ end
 
 LinearIndices(::Tuple{}) = LinearIndices{0,typeof(())}(())
 LinearIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} =
-    LinearIndices(map(r->convert(AbstractUnitRange{Int}, r), inds))
+    LinearIndices(map(r -> convert(AbstractUnitRange{Int}, r), inds))
 LinearIndices(sz::NTuple{N,<:Integer}) where {N} = LinearIndices(map(Base.OneTo, sz))
 LinearIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} =
-    LinearIndices(map(i->first(i):last(i), inds))
+    LinearIndices(map(i -> first(i):last(i), inds))
 LinearIndices(A::Union{AbstractArray,SimpleVector}) = LinearIndices(axes(A))
 
 promote_rule(::Type{LinearIndices{N,R1}}, ::Type{LinearIndices{N,R2}}) where {N,R1,R2} =
-    LinearIndices{N,indices_promote_type(R1,R2)}
+    LinearIndices{N,indices_promote_type(R1, R2)}
 
-function indices_promote_type(::Type{Tuple{R1,Vararg{R1,N}}}, ::Type{Tuple{R2,Vararg{R2,N}}}) where {R1,R2,N}
+function indices_promote_type(
+    ::Type{Tuple{R1,Vararg{R1,N}}},
+    ::Type{Tuple{R2,Vararg{R2,N}}}
+) where {R1,R2,N}
     R = promote_type(R1, R2)
     Tuple{R,Vararg{R,N}}
 end
@@ -456,7 +464,7 @@ end
 # More efficient iteration — predominantly for non-vector LinearIndices
 # but one-dimensional LinearIndices must be special-cased to support OffsetArrays
 iterate(iter::LinearIndices{1}, s...) = iterate(axes1(iter.indices[1]), s...)
-iterate(iter::LinearIndices, i=1) = i > length(iter) ? nothing : (i, i+1)
+iterate(iter::LinearIndices, i = 1) = i > length(iter) ? nothing : (i, i + 1)
 
 # Needed since firstindex and lastindex are defined in terms of LinearIndices
 first(iter::LinearIndices) = 1

@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-struct Pair{A, B}
+struct Pair{A,B}
     first::A
     second::B
-    function Pair{A, B}(@nospecialize(a), @nospecialize(b)) where {A, B}
+    function Pair{A,B}(@nospecialize(a), @nospecialize(b)) where {A,B}
         @_inline_meta
         # if we didn't inline this, it's probably because the callsite was actually dynamic
         # to avoid potentially compiling many copies of this, we mark the arguments with `@nospecialize`
@@ -12,7 +12,7 @@ struct Pair{A, B}
         return new(a, b)
     end
 end
-Pair(a, b) = Pair{typeof(a), typeof(b)}(a, b)
+Pair(a, b) = Pair{typeof(a),typeof(b)}(a, b)
 const => = Pair
 
 """
@@ -45,19 +45,19 @@ foo
 """
 Pair, =>
 
-eltype(p::Type{Pair{A, B}}) where {A, B} = Union{A, B}
-iterate(p::Pair, i=1) = i > 2 ? nothing : (getfield(p, i), i + 1)
-indexed_iterate(p::Pair, i::Int, state=1) = (getfield(p, i), i + 1)
+eltype(p::Type{Pair{A,B}}) where {A,B} = Union{A,B}
+iterate(p::Pair, i = 1) = i > 2 ? nothing : (getfield(p, i), i + 1)
+indexed_iterate(p::Pair, i::Int, state = 1) = (getfield(p, i), i + 1)
 
 hash(p::Pair, h::UInt) = hash(p.second, hash(p.first, h))
 
-==(p::Pair, q::Pair) = (p.first==q.first) & (p.second==q.second)
-isequal(p::Pair, q::Pair) = isequal(p.first,q.first) & isequal(p.second,q.second)
+==(p::Pair, q::Pair) = (p.first == q.first) & (p.second == q.second)
+isequal(p::Pair, q::Pair) = isequal(p.first, q.first) & isequal(p.second, q.second)
 
-isless(p::Pair, q::Pair) = ifelse(!isequal(p.first,q.first), isless(p.first,q.first),
-                                                             isless(p.second,q.second))
-getindex(p::Pair,i::Int) = getfield(p,i)
-getindex(p::Pair,i::Real) = getfield(p, convert(Int, i))
+isless(p::Pair, q::Pair) =
+    ifelse(!isequal(p.first, q.first), isless(p.first, q.first), isless(p.second, q.second))
+getindex(p::Pair, i::Int) = getfield(p, i)
+getindex(p::Pair, i::Real) = getfield(p, convert(Int, i))
 reverse(p::Pair{A,B}) where {A,B} = Pair{B,A}(p.second, p.first)
 
 firstindex(p::Pair) = 1
@@ -72,4 +72,4 @@ function convert(::Type{Pair{A,B}}, x::Pair) where {A,B}
 end
 
 promote_rule(::Type{Pair{A1,B1}}, ::Type{Pair{A2,B2}}) where {A1,B1,A2,B2} =
-    Pair{promote_type(A1, A2), promote_type(B1, B2)}
+    Pair{promote_type(A1, A2),promote_type(B1, B2)}

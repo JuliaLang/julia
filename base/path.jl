@@ -1,41 +1,43 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-export
-    abspath,
-    basename,
-    dirname,
-    expanduser,
-    contractuser,
-    homedir,
-    isabspath,
-    isdirpath,
-    joinpath,
-    normpath,
-    realpath,
-    relpath,
-    splitdir,
-    splitdrive,
-    splitext,
-    splitpath
+export abspath,
+       basename,
+       dirname,
+       expanduser,
+       contractuser,
+       homedir,
+       isabspath,
+       isdirpath,
+       joinpath,
+       normpath,
+       realpath,
+       relpath,
+       splitdir,
+       splitdrive,
+       splitext,
+       splitpath
 
 if Sys.isunix()
-    const path_separator    = "/"
+    const path_separator = "/"
     const path_separator_re = r"/+"
     const path_directory_re = r"(?:^|/)\.{0,2}$"
     const path_dir_splitter = r"^(.*?)(/+)([^/]*)$"
     const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
 
-    splitdrive(path::String) = ("",path)
+    splitdrive(path::String) = ("", path)
 elseif Sys.iswindows()
-    const path_separator    = "\\"
+    const path_separator = "\\"
     const path_separator_re = r"[/\\]+"
-    const path_absolute_re  = r"^(?:[A-Za-z]+:)?[/\\]"
+    const path_absolute_re = r"^(?:[A-Za-z]+:)?[/\\]"
     const path_directory_re = r"(?:^|[/\\])\.{0,2}$"
     const path_dir_splitter = r"^(.*?)([/\\]+)([^/\\]*)$"
     const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"
 
     function splitdrive(path::String)
-        m = match(r"^([^\\]+:|\\\\[^\\]+\\[^\\]+|\\\\\?\\UNC\\[^\\]+\\[^\\]+|\\\\\?\\[^\\]+:|)(.*)$"s, path)
+        m = match(
+            r"^([^\\]+:|\\\\[^\\]+\\[^\\]+|\\\\\?\\UNC\\[^\\]+\\[^\\]+|\\\\\?\\[^\\]+:|)(.*)$"s,
+            path
+        )
         String(m.captures[1]), String(m.captures[2])
     end
 else
@@ -129,14 +131,14 @@ julia> splitdir("/home/myuser")
 """
 function splitdir(path::String)
     a, b = splitdrive(path)
-    _splitdir_nodrive(a,b)
+    _splitdir_nodrive(a, b)
 end
 
 # Common splitdir functionality without splitdrive, needed for splitpath.
 _splitdir_nodrive(path::String) = _splitdir_nodrive("", path)
 function _splitdir_nodrive(a::String, b::String)
-    m = match(path_dir_splitter,b)
-    m === nothing && return (a,b)
+    m = match(path_dir_splitter, b)
+    m === nothing && return (a, b)
     a = string(a, isempty(m.captures[1]) ? m.captures[2][1] : m.captures[1])
     a, String(m.captures[3])
 end
@@ -158,7 +160,7 @@ julia> dirname("/home/myuser/")
 
 See also: [`basename`](@ref)
 """
- dirname(path::AbstractString) = splitdir(path)[1]
+dirname(path::AbstractString) = splitdir(path)[1]
 
 """
     basename(path::AbstractString) -> AbstractString
@@ -194,8 +196,8 @@ julia> splitext("/home/myuser/example")
 function splitext(path::String)
     a, b = splitdrive(path)
     m = match(path_ext_splitter, b)
-    m === nothing && return (path,"")
-    a*m.captures[1], String(m.captures[2])
+    m === nothing && return (path, "")
+    a * m.captures[1], String(m.captures[2])
 end
 
 function pathsep(paths::AbstractString...)
@@ -229,17 +231,17 @@ julia> splitpath("/home/myuser/example.jl")
 function splitpath(p::String)
     drive, p = splitdrive(p)
     out = String[]
-    isempty(p) && (pushfirst!(out,p))  # "" means the current directory.
+    isempty(p) && (pushfirst!(out, p)) # "" means the current directory.
     while !isempty(p)
         dir, base = _splitdir_nodrive(p)
-        dir == p && (pushfirst!(out, dir); break)  # Reached root node.
-        if !isempty(base)  # Skip trailing '/' in basename
+        dir == p && (pushfirst!(out, dir); break) # Reached root node.
+        if !isempty(base) # Skip trailing '/' in basename
             pushfirst!(out, base)
         end
         p = dir
     end
-    if !isempty(drive)  # Tack the drive back on to the first element.
-        out[1] = drive*out[1]  # Note that length(out) is always >= 1.
+    if !isempty(drive) # Tack the drive back on to the first element.
+        out[1] = drive * out[1] # Note that length(out) is always >= 1.
     end
     return out
 end
@@ -259,17 +261,18 @@ julia> joinpath("/home/myuser", "example.jl")
 "/home/myuser/example.jl"
 ```
 """
-joinpath(a::AbstractString, b::AbstractString, c::AbstractString...) = joinpath(joinpath(a,b), c...)
+joinpath(a::AbstractString, b::AbstractString, c::AbstractString...) =
+    joinpath(joinpath(a, b), c...)
 
 function joinpath(a::String, b::String)
     isabspath(b) && return b
     A, a = splitdrive(a)
     B, b = splitdrive(b)
-    !isempty(B) && A != B && return string(B,b)
+    !isempty(B) && A != B && return string(B, b)
     C = isempty(B) ? A : B
-    isempty(a)                              ? string(C,b) :
-    occursin(path_separator_re, a[end:end]) ? string(C,a,b) :
-                                              string(C,a,pathsep(a,b),b)
+    isempty(a) ? string(C, b) :
+    occursin(path_separator_re, a[end:end]) ? string(C, a, b) :
+    string(C, a, pathsep(a, b), b)
 end
 joinpath(a::AbstractString, b::AbstractString) = joinpath(String(a), String(b))
 
@@ -289,7 +292,7 @@ function normpath(path::String)
     isdir = isdirpath(path)
     drive, path = splitdrive(path)
     parts = split(path, path_separator_re)
-    filter!(x->!isempty(x) && x!=".", parts)
+    filter!(x -> !isempty(x) && x != ".", parts)
     while true
         clean = true
         for j = 1:length(parts)-1
@@ -310,14 +313,14 @@ function normpath(path::String)
     end
     path = join(parts, path_separator)
     if isabs
-        path = path_separator*path
+        path = path_separator * path
     end
     if isdir && !isdirpath(path)
         path *= path_separator
     end
-    string(drive,path)
+    string(drive, path)
 end
-normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
+normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a, b...))
 
 """
     abspath(path::AbstractString) -> AbstractString
@@ -325,7 +328,7 @@ normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 Convert a path to an absolute path by adding the current directory if necessary.
 Also normalizes the path as in [`normpath`](@ref).
 """
-abspath(a::String) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
+abspath(a::String) = normpath(isabspath(a) ? a : joinpath(pwd(), a))
 
 """
     abspath(path::AbstractString, paths::AbstractString...) -> AbstractString
@@ -333,54 +336,79 @@ abspath(a::String) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
 Convert a set of paths to an absolute path by joining them together and adding the
 current directory if necessary. Equivalent to `abspath(joinpath(path, paths...))`.
 """
-abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
+abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a, b...))
 
 if Sys.iswindows()
 
-function realpath(path::AbstractString)
-    h = ccall(:CreateFileW, stdcall, Int, (Cwstring, UInt32, UInt32, Ptr{Cvoid}, UInt32, UInt32, Int),
-                path, 0, 0x03, C_NULL, 3, 0x02000000, 0)
-    windowserror(:realpath, h == -1)
-    try
-        buf = Vector{UInt16}(undef, 256)
-        oldlen = len = length(buf)
-        while len >= oldlen
-            len = ccall(:GetFinalPathNameByHandleW, stdcall, UInt32, (Int, Ptr{UInt16}, UInt32, UInt32),
-                            h, buf, (oldlen=len)-1, 0x0)
-            windowserror(:realpath, iszero(len))
-            resize!(buf, len) # strips NUL terminator on last call
+    function realpath(path::AbstractString)
+        h = ccall(
+            :CreateFileW,
+            stdcall,
+            Int,
+            (Cwstring, UInt32, UInt32, Ptr{Cvoid}, UInt32, UInt32, Int),
+            path,
+            0,
+            0x03,
+            C_NULL,
+            3,
+            0x02000000,
+            0
+        )
+        windowserror(:realpath, h == -1)
+        try
+            buf = Vector{UInt16}(undef, 256)
+            oldlen = len = length(buf)
+            while len >= oldlen
+                len = ccall(
+                    :GetFinalPathNameByHandleW,
+                    stdcall,
+                    UInt32,
+                    (Int, Ptr{UInt16}, UInt32, UInt32),
+                    h,
+                    buf,
+                    (oldlen = len) - 1,
+                    0x0
+                )
+                windowserror(:realpath, iszero(len))
+                resize!(buf, len) # strips NUL terminator on last call
+            end
+            if 4 < len < 264 && 0x005c == buf[1] == buf[2] == buf[4] && 0x003f == buf[3]
+                Base._deletebeg!(buf, 4) # omit \\?\ prefix for paths < MAXPATH in length
+            end
+            return transcode(String, buf)
+        finally
+            windowserror(:realpath, iszero(ccall(:CloseHandle, stdcall, Cint, (Int,), h)))
         end
-        if 4 < len < 264 && 0x005c == buf[1] == buf[2] == buf[4] && 0x003f == buf[3]
-            Base._deletebeg!(buf, 4) # omit \\?\ prefix for paths < MAXPATH in length
-        end
-        return transcode(String, buf)
-    finally
-        windowserror(:realpath, iszero(ccall(:CloseHandle, stdcall, Cint, (Int,), h)))
     end
-end
 
-function longpath(path::AbstractString)
-    p = cwstring(path)
-    buf = zeros(UInt16, length(p))
-    while true
-        n = ccall((:GetLongPathNameW, "kernel32"), stdcall,
-            UInt32, (Ptr{UInt16}, Ptr{UInt16}, UInt32),
-            p, buf, length(buf))
-        windowserror(:longpath, n == 0)
-        x = n < length(buf) # is the buffer big enough?
-        resize!(buf, n) # shrink if x, grow if !x
-        x && return transcode(String, buf)
+    function longpath(path::AbstractString)
+        p = cwstring(path)
+        buf = zeros(UInt16, length(p))
+        while true
+            n = ccall(
+                (:GetLongPathNameW, "kernel32"),
+                stdcall,
+                UInt32,
+                (Ptr{UInt16}, Ptr{UInt16}, UInt32),
+                p,
+                buf,
+                length(buf)
+            )
+            windowserror(:longpath, n == 0)
+            x = n < length(buf) # is the buffer big enough?
+            resize!(buf, n) # shrink if x, grow if !x
+            x && return transcode(String, buf)
+        end
     end
-end
 
 else # !windows
-function realpath(path::AbstractString)
-    p = ccall(:realpath, Ptr{UInt8}, (Cstring, Ptr{UInt8}), path, C_NULL)
-    systemerror(:realpath, p == C_NULL)
-    str = unsafe_string(p)
-    Libc.free(p)
-    return str
-end
+    function realpath(path::AbstractString)
+        p = ccall(:realpath, Ptr{UInt8}, (Cstring, Ptr{UInt8}), path, C_NULL)
+        systemerror(:realpath, p == C_NULL)
+        str = unsafe_string(p)
+        Libc.free(p)
+        return str
+    end
 end # os-test
 
 
@@ -397,30 +425,30 @@ realpath(path::AbstractString)
 
 
 if Sys.iswindows()
-# on windows, ~ means "temporary file"
-expanduser(path::AbstractString) = path
-contractuser(path::AbstractString) = path
+    # on windows, ~ means "temporary file"
+    expanduser(path::AbstractString) = path
+    contractuser(path::AbstractString) = path
 else
-function expanduser(path::AbstractString)
-    y = iterate(path)
-    y === nothing && return path
-    c, i = y
-    c != '~' && return path
-    y = iterate(path, i)
-    y === nothing && return homedir()
-    y[1] == '/' && return homedir() * path[i:end]
-    throw(ArgumentError("~user tilde expansion not yet implemented"))
-end
-function contractuser(path::AbstractString)
-    home = homedir()
-    if path == home
-        return "~"
-    elseif startswith(path, home)
-        return joinpath("~", relpath(path, home))
-    else
-        return path
+    function expanduser(path::AbstractString)
+        y = iterate(path)
+        y === nothing && return path
+        c, i = y
+        c != '~' && return path
+        y = iterate(path, i)
+        y === nothing && return homedir()
+        y[1] == '/' && return homedir() * path[i:end]
+        throw(ArgumentError("~user tilde expansion not yet implemented"))
     end
-end
+    function contractuser(path::AbstractString)
+        home = homedir()
+        if path == home
+            return "~"
+        elseif startswith(path, home)
+            return joinpath("~", relpath(path, home))
+        else
+            return path
+        end
+    end
 end
 
 
@@ -452,7 +480,7 @@ function relpath(path::String, startpath::String = ".")
     curdir = "."
     pardir = ".."
     path == startpath && return curdir
-    path_arr  = split(abspath(path),      path_separator_re)
+    path_arr = split(abspath(path), path_separator_re)
     start_arr = split(abspath(startpath), path_separator_re)
     i = 0
     while i < min(length(path_arr), length(start_arr))
@@ -462,17 +490,19 @@ function relpath(path::String, startpath::String = ".")
             break
         end
     end
-    pathpart = join(path_arr[i+1:something(findlast(x -> !isempty(x), path_arr), 0)], path_separator)
+    pathpart = join(
+        path_arr[i+1:something(findlast(x -> !isempty(x), path_arr), 0)],
+        path_separator
+    )
     prefix_num = something(findlast(x -> !isempty(x), start_arr), 0) - i - 1
     if prefix_num >= 0
         prefix = pardir * path_separator
-        relpath_ = isempty(pathpart)     ?
-            (prefix^prefix_num) * pardir :
-            (prefix^prefix_num) * pardir * path_separator * pathpart
+        relpath_ = isempty(pathpart) ? (prefix^prefix_num) * pardir :
+                   (prefix^prefix_num) * pardir * path_separator * pathpart
     else
         relpath_ = pathpart
     end
-    return isempty(relpath_) ? curdir :  relpath_
+    return isempty(relpath_) ? curdir : relpath_
 end
 relpath(path::AbstractString, startpath::AbstractString) =
     relpath(String(path), String(startpath))

@@ -63,7 +63,11 @@ function membershiptest(expr, values)
     if length(values) == hi - lo + 1
         :($lo <= $expr <= $hi)
     elseif length(values) < 20
-        foldl((x1,x2)->:($x1 || ($expr == $x2)), values[2:end]; init=:($expr == $(values[1])))
+        foldl(
+            (x1, x2) -> :($x1 || ($expr == $x2)),
+            values[2:end];
+            init = :($expr == $(values[1]))
+        )
     else
         :($expr in $(Set(values)))
     end
@@ -72,7 +76,8 @@ end
 # give Enum types scalar behavior in broadcasting
 Base.broadcastable(x::Enum) = Ref(x)
 
-@noinline enum_argument_error(typename, x) = throw(ArgumentError(string("invalid value for Enum $(typename): $x")))
+@noinline enum_argument_error(typename, x) =
+    throw(ArgumentError(string("invalid value for Enum $(typename): $x")))
 
 """
     @enum EnumName[::BaseType] value1[=x] value2[=y]
@@ -181,15 +186,20 @@ macro enum(T, syms...)
     end
     blk = quote
         # enum definition
-        Base.@__doc__(primitive type $(esc(typename)) <: Enum{$(basetype)} $(sizeof(basetype) * 8) end)
+        Base.@__doc__(
+            primitive type $(esc(typename)) <: Enum{$(basetype)} $(sizeof(basetype) * 8) end
+        )
         function $(esc(typename))(x::Integer)
-            $(membershiptest(:x, values)) || enum_argument_error($(Expr(:quote, typename)), x)
+            $(membershiptest(:x, values)) || enum_argument_error(
+                $(Expr(:quote, typename)),
+                x
+            )
             return bitcast($(esc(typename)), convert($(basetype), x))
         end
         Enums.namemap(::Type{$(esc(typename))}) = $(esc(namemap))
         Base.typemin(x::Type{$(esc(typename))}) = $(esc(typename))($lo)
         Base.typemax(x::Type{$(esc(typename))}) = $(esc(typename))($hi)
-        let insts = ntuple(i->$(esc(typename))($values[i]), $(length(values)))
+        let insts = ntuple(i -> $(esc(typename))($values[i]), $(length(values)))
             Base.instances(::Type{$(esc(typename))}) = insts
         end
     end
@@ -203,4 +213,4 @@ macro enum(T, syms...)
     return blk
 end
 
-end # module
+end

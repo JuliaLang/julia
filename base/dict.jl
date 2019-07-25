@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
+function _truncate_at_width_or_chars(str, width, chars = "", truncmark = "…")
     truncwidth = textwidth(truncmark)
     (width <= 0 || width < truncwidth) && return ""
 
@@ -22,8 +22,7 @@ function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
 end
 
 function show(io::IO, t::AbstractDict{K,V}) where V where K
-    recur_io = IOContext(io, :SHOWN_SET => t,
-                             :typeinfo => eltype(t))
+    recur_io = IOContext(io, :SHOWN_SET => t, :typeinfo => eltype(t))
 
     limit::Bool = get(io, :limit, false)
     # show in a Julia-syntax-like form: Dict(k=>v, ...)
@@ -36,7 +35,7 @@ function show(io::IO, t::AbstractDict{K,V}) where V where K
             first || print(io, ',')
             first = false
             show(recur_io, pair)
-            n+=1
+            n += 1
             limit && n >= 10 && (print(io, "…"); break)
         end
     end
@@ -47,7 +46,7 @@ end
 
 # These can be changed, to trade off better performance for space
 const global maxallowedprobe = 16
-const global maxprobeshift   = 6
+const global maxprobeshift = 6
 
 """
     Dict([itr])
@@ -82,24 +81,32 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
     ndel::Int
     count::Int
     age::UInt
-    idxfloor::Int  # an index <= the indices of all used slots
+    idxfloor::Int # an index <= the indices of all used slots
     maxprobe::Int
 
     function Dict{K,V}() where V where K
         n = 16
-        new(zeros(UInt8,n), Vector{K}(undef, n), Vector{V}(undef, n), 0, 0, 0, 1, 0)
+        new(zeros(UInt8, n), Vector{K}(undef, n), Vector{V}(undef, n), 0, 0, 0, 1, 0)
     end
     function Dict{K,V}(d::Dict{K,V}) where V where K
-        new(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age,
-            d.idxfloor, d.maxprobe)
+        new(
+            copy(d.slots),
+            copy(d.keys),
+            copy(d.vals),
+            d.ndel,
+            d.count,
+            d.age,
+            d.idxfloor,
+            d.maxprobe
+        )
     end
-    function Dict{K, V}(slots, keys, vals, ndel, count, age, idxfloor, maxprobe) where {K, V}
+    function Dict{K,V}(slots, keys, vals, ndel, count, age, idxfloor, maxprobe) where {K,V}
         new(slots, keys, vals, ndel, count, age, idxfloor, maxprobe)
     end
 end
 function Dict{K,V}(kv) where V where K
     h = Dict{K,V}()
-    for (k,v) in kv
+    for (k, v) in kv
         h[k] = v
     end
     return h
@@ -121,13 +128,13 @@ copy(d::Dict) = Dict(d)
 const AnyDict = Dict{Any,Any}
 
 Dict(ps::Pair{K,V}...) where {K,V} = Dict{K,V}(ps)
-Dict(ps::Pair...)                  = Dict(ps)
+Dict(ps::Pair...) = Dict(ps)
 
 function Dict(kv)
     try
-        dict_with_eltype((K, V) -> Dict{K, V}, kv, eltype(kv))
+        dict_with_eltype((K, V) -> Dict{K,V}, kv, eltype(kv))
     catch
-        if !isiterable(typeof(kv)) || !all(x->isa(x,Union{Tuple,Pair}),kv)
+        if !isiterable(typeof(kv)) || !all(x -> isa(x, Union{Tuple,Pair}), kv)
             throw(ArgumentError("Dict(kv): kv needs to be an iterator of tuples or pairs"))
         else
             rethrow()
@@ -135,10 +142,10 @@ function Dict(kv)
     end
 end
 
-function grow_to!(dest::AbstractDict{K, V}, itr) where V where K
+function grow_to!(dest::AbstractDict{K,V}, itr) where V where K
     y = iterate(itr)
     y === nothing && return dest
-    ((k,v), st) = y
+    ((k, v), st) = y
     dest2 = empty(dest, typeof(k), typeof(v))
     dest2[k] = v
     grow_to!(dest2, itr, st)
@@ -149,11 +156,11 @@ end
 function grow_to!(dest::AbstractDict{K,V}, itr, st) where V where K
     y = iterate(itr, st)
     while y !== nothing
-        (k,v), st = y
-        if isa(k,K) && isa(v,V)
+        (k, v), st = y
+        if isa(k, K) && isa(v, V)
             dest[k] = v
         else
-            new = empty(dest, promote_typejoin(K,typeof(k)), promote_typejoin(V,typeof(v)))
+            new = empty(dest, promote_typejoin(K, typeof(k)), promote_typejoin(V, typeof(v)))
             merge!(new, dest)
             new[k] = v
             return grow_to!(new, itr, st)
@@ -163,9 +170,9 @@ function grow_to!(dest::AbstractDict{K,V}, itr, st) where V where K
     return dest
 end
 
-empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
+empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K,V} = Dict{K,V}()
 
-hashindex(key, sz) = (((hash(key)%Int) & (sz-1)) + 1)::Int
+hashindex(key, sz) = (((hash(key) % Int) & (sz - 1)) + 1)::Int
 
 @propagate_inbounds isslotempty(h::Dict, i::Int) = h.slots[i] == 0x0
 @propagate_inbounds isslotfilled(h::Dict, i::Int) = h.slots[i] == 0x1
@@ -188,7 +195,7 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
         return h
     end
 
-    slots = zeros(UInt8,newsz)
+    slots = zeros(UInt8, newsz)
     keys = Vector{K}(undef, newsz)
     vals = Vector{V}(undef, newsz)
     age0 = h.age
@@ -201,9 +208,9 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
             v = oldv[i]
             index0 = index = hashindex(k, newsz)
             while slots[index] != 0
-                index = (index & (newsz-1)) + 1
+                index = (index & (newsz - 1)) + 1
             end
-            probe = (index - index0) & (newsz-1)
+            probe = (index - index0) & (newsz - 1)
             probe > maxprobe && (maxprobe = probe)
             slots[index] = 0x1
             keys[index] = k
@@ -237,8 +244,7 @@ function sizehint!(d::Dict{T}, newsz) where T
         return d
     end
     # grow at least 25%
-    newsz = min(max(newsz, (oldsz*5)>>2),
-                max_values(T))
+    newsz = min(max(newsz, (oldsz * 5) >> 2), max_values(T))
     rehash!(d, newsz)
 end
 
@@ -283,14 +289,14 @@ function ht_keyindex(h::Dict{K,V}, key) where V where K
     keys = h.keys
 
     @inbounds while true
-        if isslotempty(h,index)
+        if isslotempty(h, index)
             break
         end
-        if !isslotmissing(h,index) && (key === keys[index] || isequal(key,keys[index]))
+        if !isslotmissing(h, index) && (key === keys[index] || isequal(key, keys[index]))
             return index
         end
 
-        index = (index & (sz-1)) + 1
+        index = (index & (sz - 1)) + 1
         iter += 1
         iter > maxprobe && break
     end
@@ -310,14 +316,14 @@ function ht_keyindex2!(h::Dict{K,V}, key) where V where K
     keys = h.keys
 
     @inbounds while true
-        if isslotempty(h,index)
+        if isslotempty(h, index)
             if avail < 0
                 return avail
             end
             return -index
         end
 
-        if isslotmissing(h,index)
+        if isslotmissing(h, index)
             if avail == 0
                 # found an available slot, but need to keep scanning
                 # in case "key" already exists in a later collided slot.
@@ -327,25 +333,25 @@ function ht_keyindex2!(h::Dict{K,V}, key) where V where K
             return index
         end
 
-        index = (index & (sz-1)) + 1
+        index = (index & (sz - 1)) + 1
         iter += 1
         iter > maxprobe && break
     end
 
     avail < 0 && return avail
 
-    maxallowed = max(maxallowedprobe, sz>>maxprobeshift)
+    maxallowed = max(maxallowedprobe, sz >> maxprobeshift)
     # Check if key is not present, may need to keep searching to find slot
     @inbounds while iter < maxallowed
-        if !isslotfilled(h,index)
+        if !isslotfilled(h, index)
             h.maxprobe = iter
             return -index
         end
-        index = (index & (sz-1)) + 1
+        index = (index & (sz - 1)) + 1
         iter += 1
     end
 
-    rehash!(h, h.count > 64000 ? sz*2 : sz*4)
+    rehash!(h, h.count > 64000 ? sz * 2 : sz * 4)
 
     return ht_keyindex2!(h, key)
 end
@@ -362,9 +368,9 @@ end
 
     sz = length(h.keys)
     # Rehash now if necessary
-    if h.ndel >= ((3*sz)>>2) || h.count*3 > sz*2
+    if h.ndel >= ((3 * sz) >> 2) || h.count * 3 > sz * 2
         # > 3/4 deleted or > 2/3 full
-        rehash!(h, h.count > 64000 ? h.count*2 : h.count*4)
+        rehash!(h, h.count > 64000 ? h.count * 2 : h.count * 4)
     end
 end
 
@@ -417,7 +423,7 @@ Dict{String,Int64} with 4 entries:
 """
 get!(collection, key, default)
 
-get!(h::Dict{K,V}, key0, default) where {K,V} = get!(()->default, h, key0)
+get!(h::Dict{K,V}, key0, default) where {K,V} = get!(() -> default, h, key0)
 
 """
     get!(f::Function, collection, key)
@@ -467,7 +473,7 @@ end
 #       therefore not be exported as-is: it's for internal use only.
 macro get!(h, key0, default)
     return quote
-        get!(()->$(esc(default)), $(esc(h)), $(esc(key0)))
+        get!(() -> $(esc(default)), $(esc(h)), $(esc(key0)))
     end
 end
 
@@ -543,7 +549,7 @@ false
 ```
 """
 haskey(h::Dict, key) = (ht_keyindex(h, key) >= 0)
-in(key, v::KeySet{<:Any, <:Dict}) = (ht_keyindex(v.dict, key) >= 0)
+in(key, v::KeySet{<:Any,<:Dict}) = (ht_keyindex(v.dict, key) >= 0)
 
 """
     getkey(collection, key, default)
@@ -566,7 +572,7 @@ julia> getkey(D, 'd', 'a')
 """
 function getkey(h::Dict{K,V}, key, default) where V where K
     index = ht_keyindex(h, key)
-    @inbounds return (index<0) ? default : h.keys[index]::K
+    @inbounds return (index < 0) ? default : h.keys[index]::K
 end
 
 function _pop!(h::Dict, index)
@@ -658,8 +664,8 @@ end
 function skip_deleted(h::Dict, i)
     L = length(h.slots)
     for i = i:L
-        @inbounds if isslotfilled(h,i)
-            return  i
+        @inbounds if isslotfilled(h, i)
+            return i
         end
     end
     return 0
@@ -672,7 +678,8 @@ function skip_deleted_floor!(h::Dict)
     idx
 end
 
-@propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} = i == 0 ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i == typemax(Int) ? 0 : i+1)
+@propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} =
+    i == 0 ? nothing : (Pair{K,V}(t.keys[i], t.vals[i]), i == typemax(Int) ? 0 : i + 1)
 @propagate_inbounds function iterate(t::Dict)
     _iterate(t, skip_deleted_floor!(t))
 end
@@ -681,17 +688,20 @@ end
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
-@propagate_inbounds function Base.iterate(v::T, i::Int = v.dict.idxfloor) where T <: Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}}
+@propagate_inbounds function Base.iterate(
+    v::T,
+    i::Int = v.dict.idxfloor
+) where T <: Union{KeySet{<:Any,<:Dict},ValueIterator{<:Dict}}
     i == 0 && return nothing
     i = skip_deleted(v.dict, i)
     i == 0 && return nothing
     vals = T <: KeySet ? v.dict.keys : v.dict.vals
-    (@inbounds vals[i], i == typemax(Int) ? 0 : i+1)
+    (@inbounds vals[i], i == typemax(Int) ? 0 : i + 1)
 end
 
 function filter!(pred, h::Dict{K,V}) where {K,V}
     h.count == 0 && return h
-    @inbounds for i=1:length(h.slots)
+    @inbounds for i = 1:length(h.slots)
         if h.slots[i] == 0x01 && !pred(Pair{K,V}(h.keys[i], h.vals[i]))
             _delete!(h, i)
         end
@@ -702,7 +712,7 @@ end
 function reduce(::typeof(merge), items::Vector{<:Dict})
     K = mapreduce(keytype, promote_type, items)
     V = mapreduce(valtype, promote_type, items)
-    return reduce(merge!, items; init=Dict{K,V}())
+    return reduce(merge!, items; init = Dict{K,V}())
 end
 
 function map!(f, iter::ValueIterator{<:Dict})
@@ -723,7 +733,8 @@ struct ImmutableDict{K,V} <: AbstractDict{K,V}
     value::V
     ImmutableDict{K,V}() where {K,V} = new() # represents an empty dictionary
     ImmutableDict{K,V}(key, value) where {K,V} = (empty = new(); new(empty, key, value))
-    ImmutableDict{K,V}(parent::ImmutableDict, key, value) where {K,V} = new(parent, key, value)
+    ImmutableDict{K,V}(parent::ImmutableDict, key, value) where {K,V} =
+        new(parent, key, value)
 end
 
 """
@@ -744,9 +755,10 @@ Create a new entry in the Immutable Dictionary for the key => value pair
 """
 ImmutableDict
 ImmutableDict(KV::Pair{K,V}) where {K,V} = ImmutableDict{K,V}(KV[1], KV[2])
-ImmutableDict(t::ImmutableDict{K,V}, KV::Pair) where {K,V} = ImmutableDict{K,V}(t, KV[1], KV[2])
+ImmutableDict(t::ImmutableDict{K,V}, KV::Pair) where {K,V} =
+    ImmutableDict{K,V}(t, KV[1], KV[2])
 
-function in(key_value::Pair, dict::ImmutableDict, valcmp=(==))
+function in(key_value::Pair, dict::ImmutableDict, valcmp = (==))
     key, value = key_value
     while isdefined(dict, :parent)
         if dict.key == key
@@ -781,14 +793,14 @@ function get(dict::ImmutableDict, key, default)
 end
 
 # this actually defines reverse iteration (e.g. it should not be used for merge/copy/filter type operations)
-function iterate(d::ImmutableDict{K,V}, t=d) where {K, V}
+function iterate(d::ImmutableDict{K,V}, t = d) where {K,V}
     !isdefined(t, :parent) && return nothing
     (Pair{K,V}(t.key, t.value), t.parent)
 end
-length(t::ImmutableDict) = count(x->true, t)
+length(t::ImmutableDict) = count(x -> true, t)
 isempty(t::ImmutableDict) = !isdefined(t, :parent)
-empty(::ImmutableDict, ::Type{K}, ::Type{V}) where {K, V} = ImmutableDict{K,V}()
+empty(::ImmutableDict, ::Type{K}, ::Type{V}) where {K,V} = ImmutableDict{K,V}()
 
-_similar_for(c::Dict, ::Type{Pair{K,V}}, itr, isz) where {K, V} = empty(c, K, V)
+_similar_for(c::Dict, ::Type{Pair{K,V}}, itr, isz) where {K,V} = empty(c, K, V)
 _similar_for(c::AbstractDict, ::Type{T}, itr, isz) where {T} =
     throw(ArgumentError("for AbstractDicts, similar requires an element type of Pair;\n  if calling map, consider a comprehension instead"))

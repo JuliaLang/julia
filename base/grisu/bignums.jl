@@ -58,20 +58,20 @@ mutable struct Bignum
         @inbounds for i = 1:kBigitCapacity
             bigits[i] = 0
         end
-        new(bigits,0,0)
+        new(bigits, 0, 0)
     end
 end
 
-==(a::Bignum,b::Bignum) = compare(a,b) == 0
-<(a::Bignum,b::Bignum) = compare(a,b) < 0
+==(a::Bignum, b::Bignum) = compare(a, b) == 0
+<(a::Bignum, b::Bignum) = compare(a, b) < 0
 
-times10!(x::Bignum) = multiplybyuint32!(x,UInt32(10))
+times10!(x::Bignum) = multiplybyuint32!(x, UInt32(10))
 
-plusequal(a,b,c) = pluscompare(a,b,c) == 0
-pluslessequal(a,b,c) = pluscompare(a,b,c) <= 0
-plusless(a,b,c) = pluscompare(a,b,c) < 0
-lessequal(a::Bignum,b::Bignum) = compare(a,b) <= 0
-less(a::Bignum,b::Bignum) = compare(a,b) < 0
+plusequal(a, b, c) = pluscompare(a, b, c) == 0
+pluslessequal(a, b, c) = pluscompare(a, b, c) <= 0
+plusless(a, b, c) = pluscompare(a, b, c) < 0
+lessequal(a::Bignum, b::Bignum) = compare(a, b) <= 0
+less(a::Bignum, b::Bignum) = compare(a, b) < 0
 
 bigitlength(x::Bignum) = x.used_digits + x.exponent
 
@@ -96,11 +96,11 @@ end
 
 isclamped(x::Bignum) = x.used_digits == 0 || x.bigits[x.used_digits] != 0
 
-function align!(x::Bignum,other::Bignum)
+function align!(x::Bignum, other::Bignum)
     @inbounds if x.exponent > other.exponent
         zero_digits = x.exponent - other.exponent
         for i = x.used_digits:-1:1
-            x.bigits[i + zero_digits] = x.bigits[i]
+            x.bigits[i+zero_digits] = x.bigits[i]
         end
         for i = 1:zero_digits
             x.bigits[i] = 0
@@ -111,50 +111,50 @@ function align!(x::Bignum,other::Bignum)
     return
 end
 
-function bigitshiftleft!(x::Bignum,shift_amount)
+function bigitshiftleft!(x::Bignum, shift_amount)
     carry::UInt32 = 0
     @inbounds begin
-    for i = 1:x.used_digits
-        new_carry::Chunk = x.bigits[i] >> (kBigitSize - shift_amount)
-        x.bigits[i] = ((x.bigits[i] << shift_amount) + carry) & kBigitMask
-        carry = new_carry
-    end
-    if carry != 0
-        x.bigits[x.used_digits+1] = carry
-        x.used_digits += 1
-    end
+        for i = 1:x.used_digits
+            new_carry::Chunk = x.bigits[i] >> (kBigitSize - shift_amount)
+            x.bigits[i] = ((x.bigits[i] << shift_amount) + carry) & kBigitMask
+            carry = new_carry
+        end
+        if carry != 0
+            x.bigits[x.used_digits+1] = carry
+            x.used_digits += 1
+        end
     end
     return
 end
 
-function subtracttimes!(x::Bignum,other::Bignum,factor)
+function subtracttimes!(x::Bignum, other::Bignum, factor)
     if factor < 3
         for i = 1:factor
-            subtractbignum!(x,other)
+            subtractbignum!(x, other)
         end
         return
     end
     borrow::Chunk = 0
     exponent_diff = other.exponent - x.exponent
     @inbounds begin
-    for i = 1:other.used_digits
-        product::DoubleChunk = DoubleChunk(factor) * other.bigits[i]
-        remove::DoubleChunk = borrow + product
-        difference::Chunk = (x.bigits[i+exponent_diff] - (remove & kBigitMask)) % Chunk
-        x.bigits[i+exponent_diff] = difference & kBigitMask
-        borrow = ((difference >> (kChunkSize - 1)) + (remove >> kBigitSize)) % Chunk
-    end
-    for i = (other.used_digits + exponent_diff + 1):x.used_digits
-        borrow == 0 && return
-        difference::Chunk = x.bigits[i] - borrow
-        x.bigits[i] = difference & kBigitMask
-        borrow = difference >> (kChunkSize - 1)
-    end
+        for i = 1:other.used_digits
+            product::DoubleChunk = DoubleChunk(factor) * other.bigits[i]
+            remove::DoubleChunk = borrow + product
+            difference::Chunk = (x.bigits[i+exponent_diff] - (remove & kBigitMask)) % Chunk
+            x.bigits[i+exponent_diff] = difference & kBigitMask
+            borrow = ((difference >> (kChunkSize - 1)) + (remove >> kBigitSize)) % Chunk
+        end
+        for i = (other.used_digits + exponent_diff + 1):x.used_digits
+            borrow == 0 && return
+            difference::Chunk = x.bigits[i] - borrow
+            x.bigits[i] = difference & kBigitMask
+            borrow = difference >> (kChunkSize - 1)
+        end
     end
     clamp!(x)
 end
 
-function assignuint16!(x::Bignum,value::UInt16)
+function assignuint16!(x::Bignum, value::UInt16)
     zero!(x)
     value == 0 && return
     x.bigits[1] = value
@@ -163,10 +163,10 @@ function assignuint16!(x::Bignum,value::UInt16)
 end
 
 const kUInt64Size = 64
-function assignuint64!(x::Bignum,value::UInt64)
+function assignuint64!(x::Bignum, value::UInt64)
     zero!(x)
     value == 0 && return
-    needed_bigits = div(kUInt64Size,kBigitSize) + 1
+    needed_bigits = div(kUInt64Size, kBigitSize) + 1
     @inbounds for i = 1:needed_bigits
         x.bigits[i] = value & kBigitMask
         value >>= kBigitSize
@@ -175,29 +175,29 @@ function assignuint64!(x::Bignum,value::UInt64)
     clamp!(x)
 end
 
-function assignbignum!(x::Bignum,other::Bignum)
+function assignbignum!(x::Bignum, other::Bignum)
     x.exponent = other.exponent
     @inbounds begin
-    for i = 1:other.used_digits
-        x.bigits[i] = other.bigits[i]
-    end
-    for i = (other.used_digits+1):x.used_digits
-        x.bigits[i] = 0
-    end
+        for i = 1:other.used_digits
+            x.bigits[i] = other.bigits[i]
+        end
+        for i = (other.used_digits + 1):x.used_digits
+            x.bigits[i] = 0
+        end
     end
     x.used_digits = other.used_digits
     return
 end
 
-function adduint64!(x::Bignum,operand::UInt64)
+function adduint64!(x::Bignum, operand::UInt64)
     operand == 0 && return
     other = Bignum()
-    assignuint64!(other,operand)
-    addbignum!(x,other)
+    assignuint64!(other, operand)
+    addbignum!(x, other)
 end
 
-function addbignum!(x::Bignum,other::Bignum)
-    align!(x,other)
+function addbignum!(x::Bignum, other::Bignum)
+    align!(x, other)
     carry::Chunk = 0
     bigit_pos = other.exponent - x.exponent
     @inbounds for i = 1:other.used_digits
@@ -212,39 +212,39 @@ function addbignum!(x::Bignum,other::Bignum)
         carry = sum >> kBigitSize
         bigit_pos += 1
     end
-    x.used_digits = max(bigit_pos,x.used_digits)
+    x.used_digits = max(bigit_pos, x.used_digits)
     return
 end
 
-function subtractbignum!(x::Bignum,other::Bignum)
-    align!(x,other)
+function subtractbignum!(x::Bignum, other::Bignum)
+    align!(x, other)
     offset = other.exponent - x.exponent
     borrow = Chunk(0)
     @inbounds begin
-    for i = 1:other.used_digits
-        difference = x.bigits[i+offset] - other.bigits[i] - borrow
-        x.bigits[i+offset] = difference & kBigitMask
-        borrow = difference >> (kChunkSize - 1)
-    end
-    i = other.used_digits+1
-    while borrow != 0
-        difference = x.bigits[i+offset] - borrow
-        x.bigits[i+offset] = difference & kBigitMask
-        borrow = difference >> (kChunkSize - 1)
-        i += 1
-    end
+        for i = 1:other.used_digits
+            difference = x.bigits[i+offset] - other.bigits[i] - borrow
+            x.bigits[i+offset] = difference & kBigitMask
+            borrow = difference >> (kChunkSize - 1)
+        end
+        i = other.used_digits + 1
+        while borrow != 0
+            difference = x.bigits[i+offset] - borrow
+            x.bigits[i+offset] = difference & kBigitMask
+            borrow = difference >> (kChunkSize - 1)
+            i += 1
+        end
     end
     clamp!(x)
 end
 
-function shiftleft!(x::Bignum,shift_amount)
+function shiftleft!(x::Bignum, shift_amount)
     x.used_digits == 0 && return
-    x.exponent += div(shift_amount,kBigitSize)
+    x.exponent += div(shift_amount, kBigitSize)
     local_shift = shift_amount % kBigitSize
-    bigitshiftleft!(x,local_shift)
+    bigitshiftleft!(x, local_shift)
 end
 
-function multiplybyuint32!(x::Bignum,factor::UInt32)
+function multiplybyuint32!(x::Bignum, factor::UInt32)
     factor == 1 && return
     if factor == 0
         zero!(x)
@@ -253,21 +253,21 @@ function multiplybyuint32!(x::Bignum,factor::UInt32)
     x.used_digits == 0 && return
     carry::DoubleChunk = 0
     @inbounds begin
-    for i = 1:x.used_digits
-        product::DoubleChunk = (factor % DoubleChunk) * x.bigits[i] + carry
-        x.bigits[i] = (product & kBigitMask) % Chunk
-        carry = product >> kBigitSize
-    end
-    while carry != 0
-        x.bigits[x.used_digits+1] = carry & kBigitMask
-        x.used_digits += 1
-        carry >>= kBigitSize
-    end
+        for i = 1:x.used_digits
+            product::DoubleChunk = (factor % DoubleChunk) * x.bigits[i] + carry
+            x.bigits[i] = (product & kBigitMask) % Chunk
+            carry = product >> kBigitSize
+        end
+        while carry != 0
+            x.bigits[x.used_digits+1] = carry & kBigitMask
+            x.used_digits += 1
+            carry >>= kBigitSize
+        end
     end
     return
 end
 
-function multiplybyuint64!(x::Bignum,factor::UInt64)
+function multiplybyuint64!(x::Bignum, factor::UInt64)
     factor == 1 && return
     if factor == 0
         zero!(x)
@@ -277,19 +277,19 @@ function multiplybyuint64!(x::Bignum,factor::UInt64)
     low::UInt64 = factor & 0xFFFFFFFF
     high::UInt64 = factor >> 32
     @inbounds begin
-    for i = 1:x.used_digits
-        product_low::UInt64 = low * x.bigits[i]
-        product_high::UInt64 = high * x.bigits[i]
-        tmp::UInt64 = (carry & kBigitMask) + product_low
-        x.bigits[i] = tmp & kBigitMask
-        carry = (carry >> kBigitSize) + (tmp >> kBigitSize) +
-                (product_high << (32 - kBigitSize))
-    end
-    while carry != 0
-        x.bigits[x.used_digits+1] = carry & kBigitMask
-        x.used_digits += 1
-        carry >>= kBigitSize
-    end
+        for i = 1:x.used_digits
+            product_low::UInt64 = low * x.bigits[i]
+            product_high::UInt64 = high * x.bigits[i]
+            tmp::UInt64 = (carry & kBigitMask) + product_low
+            x.bigits[i] = tmp & kBigitMask
+            carry = (carry >> kBigitSize) + (tmp >> kBigitSize) +
+                    (product_high << (32 - kBigitSize))
+        end
+        while carry != 0
+            x.bigits[x.used_digits+1] = carry & kBigitMask
+            x.used_digits += 1
+            carry >>= kBigitSize
+        end
     end
     return
 end
@@ -308,23 +308,21 @@ const kFive10 = UInt32(kFive9 * 5)
 const kFive11 = UInt32(kFive10 * 5)
 const kFive12 = UInt32(kFive11 * 5)
 const kFive13 = UInt32(kFive12 * 5)
-const kFive1_to_12 = UInt32[kFive1, kFive2, kFive3, kFive4, kFive5, kFive6,
-        kFive7, kFive8, kFive9, kFive10, kFive11, kFive12]
-function multiplybypoweroften!(x::Bignum,exponent)
+const kFive1_to_12 = UInt32[kFive1, kFive2, kFive3, kFive4, kFive5, kFive6, kFive7, kFive8, kFive9, kFive10, kFive11, kFive12]
+function multiplybypoweroften!(x::Bignum, exponent)
     exponent == 0 && return
     x.used_digits == 0 && return
     remaining_exponent = exponent
     while remaining_exponent >= 27
-        multiplybyuint64!(x,kFive27)
+        multiplybyuint64!(x, kFive27)
         remaining_exponent -= 27
     end
     while remaining_exponent >= 13
-        multiplybyuint32!(x,kFive13)
+        multiplybyuint32!(x, kFive13)
         remaining_exponent -= 13
     end
-    remaining_exponent > 0 && multiplybyuint32!(x,
-                            kFive1_to_12[remaining_exponent])
-    shiftleft!(x,exponent)
+    remaining_exponent > 0 && multiplybyuint32!(x, kFive1_to_12[remaining_exponent])
+    shiftleft!(x, exponent)
 end
 
 function square!(x::Bignum)
@@ -333,44 +331,44 @@ function square!(x::Bignum)
     accumulator::DoubleChunk = 0
     copy_offset = x.used_digits
     @inbounds begin
-    for i = 1:x.used_digits
-        x.bigits[copy_offset + i] = x.bigits[i]
-    end
-    for i = 1:x.used_digits
-        bigit_index1 = i-1
-        bigit_index2 = 0
-        while bigit_index1 >= 0
-            chunk1::Chunk = x.bigits[copy_offset + bigit_index1 + 1]
-            chunk2::Chunk = x.bigits[copy_offset + bigit_index2 + 1]
-            accumulator += (chunk1 % DoubleChunk) * chunk2
-            bigit_index1 -= 1
-            bigit_index2 += 1
+        for i = 1:x.used_digits
+            x.bigits[copy_offset+i] = x.bigits[i]
         end
-        x.bigits[i] = (accumulator % Chunk) & kBigitMask
-        accumulator >>= kBigitSize
-    end
-    for i = x.used_digits+1:product_length
-        bigit_index1 = x.used_digits - 1
-        bigit_index2 = i - bigit_index1 - 1
-        while bigit_index2 < x.used_digits
-            chunk1::Chunk = x.bigits[copy_offset + bigit_index1 + 1]
-            chunk2::Chunk = x.bigits[copy_offset + bigit_index2 + 1]
-            accumulator += (chunk1 % DoubleChunk) * chunk2
-            bigit_index1 -= 1
-            bigit_index2 += 1
+        for i = 1:x.used_digits
+            bigit_index1 = i - 1
+            bigit_index2 = 0
+            while bigit_index1 >= 0
+                chunk1::Chunk = x.bigits[copy_offset + bigit_index1 + 1]
+                chunk2::Chunk = x.bigits[copy_offset + bigit_index2 + 1]
+                accumulator += (chunk1 % DoubleChunk) * chunk2
+                bigit_index1 -= 1
+                bigit_index2 += 1
+            end
+            x.bigits[i] = (accumulator % Chunk) & kBigitMask
+            accumulator >>= kBigitSize
         end
-        x.bigits[i] = (accumulator % Chunk) & kBigitMask
-        accumulator >>= kBigitSize
-    end
+        for i = x.used_digits+1:product_length
+            bigit_index1 = x.used_digits - 1
+            bigit_index2 = i - bigit_index1 - 1
+            while bigit_index2 < x.used_digits
+                chunk1::Chunk = x.bigits[copy_offset + bigit_index1 + 1]
+                chunk2::Chunk = x.bigits[copy_offset + bigit_index2 + 1]
+                accumulator += (chunk1 % DoubleChunk) * chunk2
+                bigit_index1 -= 1
+                bigit_index2 += 1
+            end
+            x.bigits[i] = (accumulator % Chunk) & kBigitMask
+            accumulator >>= kBigitSize
+        end
     end
     x.used_digits = product_length
     x.exponent *= 2
     clamp!(x)
 end
 
-function assignpoweruint16!(x::Bignum,base::UInt16,power_exponent::Int)
+function assignpoweruint16!(x::Bignum, base::UInt16, power_exponent::Int)
     if power_exponent == 0
-        assignuint16!(x,UInt16(1))
+        assignuint16!(x, UInt16(1))
         return
     end
     zero!(x)
@@ -380,7 +378,7 @@ function assignpoweruint16!(x::Bignum,base::UInt16,power_exponent::Int)
         shifts += 1
     end
     bit_size::Int = 0
-    tmp_base::Int= base
+    tmp_base::Int = base
     while tmp_base != 0
         tmp_base >>= 1
         bit_size += 1
@@ -407,57 +405,58 @@ function assignpoweruint16!(x::Bignum,base::UInt16,power_exponent::Int)
         end
         mask >>= 1
     end
-    assignuint64!(x,this_value)
-    delayed_multiplication && multiplybyuint32!(x,UInt32(base))
+    assignuint64!(x, this_value)
+    delayed_multiplication && multiplybyuint32!(x, UInt32(base))
     while mask != 0
         square!(x)
-        (power_exponent & mask) != 0 && multiplybyuint32!(x,UInt32(base))
+        (power_exponent & mask) != 0 && multiplybyuint32!(x, UInt32(base))
         mask >>= 1
     end
-    shiftleft!(x,shifts * power_exponent)
+    shiftleft!(x, shifts * power_exponent)
 end
 
-function dividemodulointbignum!(x::Bignum,other::Bignum)
+function dividemodulointbignum!(x::Bignum, other::Bignum)
     bigitlength(x) < bigitlength(other) && return UInt16(0)
-    align!(x,other)
+    align!(x, other)
     result::UInt16 = 0
     @inbounds begin
-    while bigitlength(x) > bigitlength(other)
-        result += x.bigits[x.used_digits] % UInt16
-        subtracttimes!(x,other,x.bigits[x.used_digits])
+        while bigitlength(x) > bigitlength(other)
+            result += x.bigits[x.used_digits] % UInt16
+            subtracttimes!(x, other, x.bigits[x.used_digits])
+        end
+        this_bigit::Chunk = x.bigits[x.used_digits]
+        other_bigit::Chunk = other.bigits[other.used_digits]
+        if other.used_digits == 1
+            quotient = reinterpret(Int32, div(this_bigit, other_bigit))
+            x.bigits[x.used_digits] = this_bigit -
+                                      other_bigit * reinterpret(UInt32, quotient)
+            result += quotient % UInt16
+            clamp!(x)
+            return result
+        end
     end
-    this_bigit::Chunk = x.bigits[x.used_digits]
-    other_bigit::Chunk = other.bigits[other.used_digits]
-    if other.used_digits == 1
-        quotient = reinterpret(Int32,div(this_bigit,other_bigit))
-        x.bigits[x.used_digits] = this_bigit - other_bigit * reinterpret(UInt32,quotient)
-        result += quotient % UInt16
-        clamp!(x)
-        return result
-    end
-    end
-    division_estimate = reinterpret(Int32,div(this_bigit,other_bigit+Chunk(1)))
+    division_estimate = reinterpret(Int32, div(this_bigit, other_bigit + Chunk(1)))
     result += division_estimate % UInt16
-    subtracttimes!(x,other,division_estimate)
-    other_bigit * (division_estimate+1) > this_bigit && return result
+    subtracttimes!(x, other, division_estimate)
+    other_bigit * (division_estimate + 1) > this_bigit && return result
     while lessequal(other, x)
-        subtractbignum!(x,other)
+        subtractbignum!(x, other)
         result += UInt16(1)
     end
     return result
 end
 
-function pluscompare(a::Bignum,b::Bignum,c::Bignum)
-    bigitlength(a) < bigitlength(b) && return pluscompare(b,a,c)
+function pluscompare(a::Bignum, b::Bignum, c::Bignum)
+    bigitlength(a) < bigitlength(b) && return pluscompare(b, a, c)
     bigitlength(a) + 1 < bigitlength(c) && return -1
     bigitlength(a) > bigitlength(c) && return 1
     a.exponent >= bigitlength(b) && bigitlength(a) < bigitlength(c) && return -1
     borrow::Chunk = 0
-    min_exponent = min(a.exponent,b.exponent,c.exponent)
-    for i = (bigitlength(c)-1):-1:min_exponent
-        chunk_a::Chunk = bigitat(a,i)
-        chunk_b::Chunk = bigitat(b,i)
-        chunk_c::Chunk = bigitat(c,i)
+    min_exponent = min(a.exponent, b.exponent, c.exponent)
+    for i = (bigitlength(c) - 1):-1:min_exponent
+        chunk_a::Chunk = bigitat(a, i)
+        chunk_b::Chunk = bigitat(b, i)
+        chunk_c::Chunk = bigitat(c, i)
         sum::Chunk = chunk_a + chunk_b
         if sum > chunk_c + borrow
             return 1
@@ -471,25 +470,25 @@ function pluscompare(a::Bignum,b::Bignum,c::Bignum)
     return -1
 end
 
-function compare(a::Bignum,b::Bignum)
+function compare(a::Bignum, b::Bignum)
     bigit_length_a = bigitlength(a)
     bigit_length_b = bigitlength(b)
     bigit_length_a < bigit_length_b && return -1
     bigit_length_a > bigit_length_b && return 1
-    for i = (bigit_length_a-1):-1:min(a.exponent,b.exponent)
-        bigit_a::Chunk = bigitat(a,i)
-        bigit_b::Chunk = bigitat(b,i)
+    for i = (bigit_length_a - 1):-1:min(a.exponent, b.exponent)
+        bigit_a::Chunk = bigitat(a, i)
+        bigit_b::Chunk = bigitat(b, i)
         bigit_a < bigit_b && return -1
         bigit_a > bigit_b && return 1
     end
     return 0
 end
 
-function bigitat(x::Bignum,index)
+function bigitat(x::Bignum, index)
     index >= bigitlength(x) && return Chunk(0)
     index < x.exponent && return Chunk(0)
-    @inbounds ret = x.bigits[index - x.exponent+1]::Chunk
+    @inbounds ret = x.bigits[index-x.exponent+1]::Chunk
     return ret
 end
 
-end # module
+end

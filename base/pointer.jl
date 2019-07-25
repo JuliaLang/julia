@@ -56,15 +56,20 @@ function unsafe_convert end
 
 unsafe_convert(::Type{Ptr{UInt8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), x)
 unsafe_convert(::Type{Ptr{Int8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Int8}, (Any,), x)
-unsafe_convert(::Type{Ptr{UInt8}}, s::String) = convert(Ptr{UInt8}, pointer_from_objref(s)+sizeof(Int))
-unsafe_convert(::Type{Ptr{Int8}}, s::String) = convert(Ptr{Int8}, pointer_from_objref(s)+sizeof(Int))
+unsafe_convert(::Type{Ptr{UInt8}}, s::String) =
+    convert(Ptr{UInt8}, pointer_from_objref(s) + sizeof(Int))
+unsafe_convert(::Type{Ptr{Int8}}, s::String) =
+    convert(Ptr{Int8}, pointer_from_objref(s) + sizeof(Int))
 # convert strings to String etc. to pass as pointers
 cconvert(::Type{Ptr{UInt8}}, s::AbstractString) = String(s)
 cconvert(::Type{Ptr{Int8}}, s::AbstractString) = String(s)
 
-unsafe_convert(::Type{Ptr{T}}, a::Array{T}) where {T} = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
-unsafe_convert(::Type{Ptr{S}}, a::AbstractArray{T}) where {S,T} = convert(Ptr{S}, unsafe_convert(Ptr{T}, a))
-unsafe_convert(::Type{Ptr{T}}, a::AbstractArray{T}) where {T} = error("conversion to pointer not defined for $(typeof(a))")
+unsafe_convert(::Type{Ptr{T}}, a::Array{T}) where {T} =
+    ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
+unsafe_convert(::Type{Ptr{S}}, a::AbstractArray{T}) where {S,T} =
+    convert(Ptr{S}, unsafe_convert(Ptr{T}, a))
+unsafe_convert(::Type{Ptr{T}}, a::AbstractArray{T}) where {T} =
+    error("conversion to pointer not defined for $(typeof(a))")
 
 # unsafe pointer to array conversions
 """
@@ -79,15 +84,37 @@ calling `free` on the pointer when the array is no longer referenced.
 This function is labeled "unsafe" because it will crash if `pointer` is not
 a valid memory address to data of the requested length.
 """
-function unsafe_wrap(::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
-                     p::Ptr{T}, dims::NTuple{N,Int}; own::Bool = false) where {T,N}
-    ccall(:jl_ptr_to_array, Array{T,N}, (Any, Ptr{Cvoid}, Any, Int32),
-          Array{T,N}, p, dims, own)
+function unsafe_wrap(
+    ::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
+    p::Ptr{T},
+    dims::NTuple{N,Int};
+    own::Bool = false
+) where {T,N}
+    ccall(
+        :jl_ptr_to_array,
+        Array{T,N},
+        (Any, Ptr{Cvoid}, Any, Int32),
+        Array{T,N},
+        p,
+        dims,
+        own
+    )
 end
-function unsafe_wrap(::Union{Type{Array},Type{Array{T}},Type{Array{T,1}}},
-                     p::Ptr{T}, d::Integer; own::Bool = false) where {T}
-    ccall(:jl_ptr_to_array_1d, Array{T,1},
-          (Any, Ptr{Cvoid}, Csize_t, Cint), Array{T,1}, p, d, own)
+function unsafe_wrap(
+    ::Union{Type{Array},Type{Array{T}},Type{Array{T,1}}},
+    p::Ptr{T},
+    d::Integer;
+    own::Bool = false
+) where {T}
+    ccall(
+        :jl_ptr_to_array_1d,
+        Array{T,1},
+        (Any, Ptr{Cvoid}, Csize_t, Cint),
+        Array{T,1},
+        p,
+        d,
+        own
+    )
 end
 unsafe_wrap(Atype::Type, p::Ptr, dims::NTuple{N,<:Integer}; own::Bool = false) where {N} =
     unsafe_wrap(Atype, p, convert(Tuple{Vararg{Int}}, dims), own = own)
@@ -102,7 +129,7 @@ The `unsafe` prefix on this function indicates that no validation is performed o
 pointer `p` to ensure that it is valid. Incorrect usage may segfault your program or return
 garbage answers, in the same manner as C.
 """
-unsafe_load(p::Ptr, i::Integer=1) = pointerref(p, Int(i), 1)
+unsafe_load(p::Ptr, i::Integer = 1) = pointerref(p, Int(i), 1)
 
 """
     unsafe_store!(p::Ptr{T}, x, i::Integer=1)
@@ -114,8 +141,9 @@ The `unsafe` prefix on this function indicates that no validation is performed o
 pointer `p` to ensure that it is valid. Incorrect usage may corrupt or segfault your
 program, in the same manner as C.
 """
-unsafe_store!(p::Ptr{Any}, @nospecialize(x), i::Integer=1) = pointerset(p, x, Int(i), 1)
-unsafe_store!(p::Ptr{T}, x, i::Integer=1) where {T} = pointerset(p, convert(T,x), Int(i), 1)
+unsafe_store!(p::Ptr{Any}, @nospecialize(x), i::Integer = 1) = pointerset(p, x, Int(i), 1)
+unsafe_store!(p::Ptr{T}, x, i::Integer = 1) where {T} =
+    pointerset(p, convert(T, x), Int(i), 1)
 
 # convert a raw Ptr to an object reference, and vice-versa
 """
@@ -153,8 +181,8 @@ isequal(x::Ptr, y::Ptr) = (x === y)
 isless(x::Ptr{T}, y::Ptr{T}) where {T} = x < y
 
 ==(x::Ptr, y::Ptr) = UInt(x) == UInt(y)
-<(x::Ptr,  y::Ptr) = UInt(x) < UInt(y)
--(x::Ptr,  y::Ptr) = UInt(x) - UInt(y)
+<(x::Ptr, y::Ptr) = UInt(x) < UInt(y)
+-(x::Ptr, y::Ptr) = UInt(x) - UInt(y)
 
 +(x::Ptr, y::Integer) = oftype(x, add_ptr(UInt(x), (y % UInt) % UInt))
 -(x::Ptr, y::Integer) = oftype(x, sub_ptr(UInt(x), (y % UInt) % UInt))

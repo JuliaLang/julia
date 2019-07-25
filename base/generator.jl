@@ -33,17 +33,17 @@ struct Generator{I,F}
     iter::I
 end
 
-Generator(f, I1, I2, Is...) = Generator(a->f(a...), zip(I1, I2, Is...))
+Generator(f, I1, I2, Is...) = Generator(a -> f(a...), zip(I1, I2, Is...))
 
 Generator(::Type{T}, iter::I) where {T,I} = Generator{I,Type{T}}(T, iter)
 
-Generator(::Type{T}, I1, I2, Is...) where {T} = Generator(a->T(a...), zip(I1, I2, Is...))
+Generator(::Type{T}, I1, I2, Is...) where {T} = Generator(a -> T(a...), zip(I1, I2, Is...))
 
 function iterate(g::Generator, s...)
     @_inline_meta
     y = iterate(g.iter, s...)
     y === nothing && return nothing
-    y = y::Tuple{Any, Any} # try to give inference some idea of what to expect about the behavior of the next line
+    y = y::Tuple{Any,Any} # try to give inference some idea of what to expect about the behavior of the next line
     return (g.f(y[1]), y[2])
 end
 
@@ -88,14 +88,14 @@ Base.HasLength()
 ```
 """
 IteratorSize(x) = IteratorSize(typeof(x))
-IteratorSize(::Type) = HasLength()  # HasLength is the default
+IteratorSize(::Type) = HasLength() # HasLength is the default
 
-IteratorSize(::Type{<:AbstractArray{<:Any,N}})  where {N} = HasShape{N}()
+IteratorSize(::Type{<:AbstractArray{<:Any,N}}) where {N} = HasShape{N}()
 IteratorSize(::Type{Generator{I,F}}) where {I,F} = IteratorSize(I)
 
 IteratorSize(::Type{Any}) = SizeUnknown()
 
-haslength(iter) = IteratorSize(iter) isa Union{HasShape, HasLength}
+haslength(iter) = IteratorSize(iter) isa Union{HasShape,HasLength}
 
 abstract type IteratorEltype end
 struct EltypeUnknown <: IteratorEltype end
@@ -121,7 +121,7 @@ Base.HasEltype()
 ```
 """
 IteratorEltype(x) = IteratorEltype(typeof(x))
-IteratorEltype(::Type) = HasEltype()  # HasEltype is the default
+IteratorEltype(::Type) = HasEltype() # HasEltype is the default
 
 IteratorEltype(::Type{Generator{I,T}}) where {I,T} = EltypeUnknown()
 

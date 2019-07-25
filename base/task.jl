@@ -2,7 +2,8 @@
 
 ## basic task functions and TLS
 
-Core.Task(@nospecialize(f), reserved_stack::Int=0) = Core._Task(f, reserved_stack, ThreadSynchronizer())
+Core.Task(@nospecialize(f), reserved_stack::Int = 0) =
+    Core._Task(f, reserved_stack, ThreadSynchronizer())
 
 # Container for a captured exception and its backtrace. Can be serialized.
 struct CapturedException <: Exception
@@ -13,7 +14,7 @@ struct CapturedException <: Exception
         # bt_raw MUST be a vector that can be processed by StackTraces.stacktrace
         # Typically the result of a catch_backtrace()
 
-        # Process bt_raw so that it can be safely serialized
+                # Process bt_raw so that it can be safely serialized
         bt_lines = process_backtrace(bt_raw, 100) # Limiting this to 100 lines.
         CapturedException(ex, bt_lines)
     end
@@ -22,7 +23,7 @@ struct CapturedException <: Exception
 end
 
 function showerror(io::IO, ce::CapturedException)
-    showerror(io, ce.ex, ce.processed_bt, backtrace=true)
+    showerror(io, ce.ex, ce.processed_bt, backtrace = true)
 end
 
 """
@@ -57,7 +58,10 @@ function showerror(io::IO, ex::CompositeException)
 end
 
 function show(io::IO, t::Task)
-    print(io, "Task ($(t.state)) @0x$(string(convert(UInt, pointer_from_objref(t)), base = 16, pad = Sys.WORD_SIZE>>2))")
+    print(
+        io,
+        "Task ($(t.state)) @0x$(string(convert(UInt, pointer_from_objref(t)), base = 16, pad = Sys.WORD_SIZE>>2))"
+    )
 end
 
 """
@@ -84,7 +88,7 @@ true
 ```
 """
 macro task(ex)
-    :(Task(()->$(esc(ex))))
+    :(Task(() -> $(esc(ex))))
 end
 
 """
@@ -159,7 +163,7 @@ true
 """
 istaskfailed(t::Task) = (t.state == :failed)
 
-Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
+Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t) + 1)
 
 task_result(t::Task) = t.result
 
@@ -289,7 +293,7 @@ end
 Wrap an expression in a [`Task`](@ref) and add it to the local machine's scheduler queue.
 """
 macro async(expr)
-    thunk = esc(:(()->($expr)))
+    thunk = esc(:(() -> ($expr)))
     var = esc(sync_varname)
     quote
         local task = Task($thunk)
@@ -339,9 +343,10 @@ function task_done_hook(t::Task)
     end
 
     if err && !handled && Threads.threadid() == 1
-        if isa(result, InterruptException) && isdefined(Base, :active_repl_backend) &&
-            active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
-            active_repl_backend.in_eval
+        if isa(result, InterruptException) &&
+           isdefined(Base, :active_repl_backend) &&
+           active_repl_backend.backend_task.state == :runnable &&
+           isempty(Workqueue) && active_repl_backend.in_eval
             throwto(active_repl_backend.backend_task, result) # this terminates the task
         end
     end
@@ -354,9 +359,10 @@ function task_done_hook(t::Task)
         # the exception to the REPL task since the current task is done.
         # issue #19467
         if Threads.threadid() == 1 &&
-            isa(e, InterruptException) && isdefined(Base, :active_repl_backend) &&
-            active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
-            active_repl_backend.in_eval
+           isa(e, InterruptException) &&
+           isdefined(Base, :active_repl_backend) &&
+           active_repl_backend.backend_task.state == :runnable &&
+           isempty(Workqueue) && active_repl_backend.in_eval
             throwto(active_repl_backend.backend_task, e)
         else
             rethrow()
@@ -370,7 +376,8 @@ end
 struct InvasiveLinkedListSynchronized{T}
     queue::InvasiveLinkedList{T}
     lock::Threads.SpinLock
-    InvasiveLinkedListSynchronized{T}() where {T} = new(InvasiveLinkedList{T}(), Threads.SpinLock())
+    InvasiveLinkedListSynchronized{T}() where {T} =
+        new(InvasiveLinkedList{T}(), Threads.SpinLock())
 end
 isempty(W::InvasiveLinkedListSynchronized) = isempty(W.queue)
 length(W::InvasiveLinkedListSynchronized) = length(W.queue)
@@ -442,7 +449,7 @@ function enq_work(t::Task)
     if t.sticky || tid != 0 || Threads.nthreads() == 1
         if tid == 0
             tid = Threads.threadid()
-            ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
+            ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid - 1)
         end
         push!(Workqueues[tid], t)
     else
@@ -450,7 +457,7 @@ function enq_work(t::Task)
         if ccall(:jl_enqueue_task, Cint, (Any,), t) != 0
             # if multiq is full, give to a random thread (TODO fix)
             tid = mod(time_ns() % Int, Threads.nthreads()) + 1
-            ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
+            ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid - 1)
             push!(Workqueues[tid], t)
         end
     end
@@ -490,7 +497,7 @@ julia> istaskdone(b)
 true
 ```
 """
-function schedule(t::Task, @nospecialize(arg); error=false)
+function schedule(t::Task, @nospecialize(arg); error = false)
     # schedule a task to be (re)started with the given value or exception
     t.state == :runnable || Base.error("schedule: Task not runnable")
     if error
@@ -519,7 +526,7 @@ yield() = (enq_work(current_task()); wait())
 A fast, unfair-scheduling version of `schedule(t, arg); yield()` which
 immediately yields to `t` before calling the scheduler.
 """
-function yield(t::Task, @nospecialize(x=nothing))
+function yield(t::Task, @nospecialize(x = nothing))
     t.result = x
     enq_work(current_task())
     return try_yieldto(ensure_rescheduled, Ref(t))
@@ -533,7 +540,7 @@ called with no arguments. On subsequent switches, `arg` is returned from the tas
 call to `yieldto`. This is a low-level call that only switches tasks, not considering states
 or scheduling in any way. Its use is discouraged.
 """
-function yieldto(t::Task, @nospecialize(x=nothing))
+function yieldto(t::Task, @nospecialize(x = nothing))
     t.result = x
     return try_yieldto(identity, Ref(t))
 end
@@ -587,8 +594,12 @@ function trypoptask(W::StickyWorkqueue)
         # probably broken now, but try discarding this switch and keep going
         # can't throw here, because it's probably not the fault of the caller to wait
         # and don't want to use print() here, because that may try to incur a task switch
-        ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
-            "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :runnable\n")
+        ccall(
+            :jl_safe_printf,
+            Cvoid,
+            (Ptr{UInt8}, Int32...),
+            "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :runnable\n"
+        )
         return
     end
     return t

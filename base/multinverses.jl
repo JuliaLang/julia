@@ -3,7 +3,7 @@
 module MultiplicativeInverses
 
 import Base: div, divrem, rem, unsigned
-using  Base: IndexLinear, IndexCartesian, tail
+using Base: IndexLinear, IndexCartesian, tail
 export multiplicativeinverse
 
 unsigned(::Type{Int8}) = UInt8
@@ -13,7 +13,7 @@ unsigned(::Type{Int64}) = UInt64
 unsigned(::Type{Int128}) = UInt128
 unsigned(::Type{T}) where {T<:Unsigned} = T
 
-abstract type  MultiplicativeInverse{T} end
+abstract type MultiplicativeInverse{T} end
 
 # Computes integer division by a constant using multiply, add, and bitshift.
 
@@ -49,7 +49,7 @@ struct SignedMultiplicativeInverse{T<:Signed} <: MultiplicativeInverse{T}
     addmul::Int8
     shift::UInt8
 
-    function SignedMultiplicativeInverse{T}(d::T) where T<:Signed
+    function SignedMultiplicativeInverse{T}(d::T) where T <: Signed
         d == 0 && throw(ArgumentError("cannot compute magic for d == $d"))
         signedmin = unsigned(typemin(T))
         UT = unsigned(T)
@@ -57,22 +57,22 @@ struct SignedMultiplicativeInverse{T<:Signed} <: MultiplicativeInverse{T}
         # Algorithm from Hacker's Delight, section 10-4
         ad = unsigned(abs(d))
         t = signedmin + signbit(d)
-        anc = t - one(UT) - rem(t, ad)   # absolute value of nc
-        p = sizeof(d)*8 - 1
+        anc = t - one(UT) - rem(t, ad) # absolute value of nc
+        p = sizeof(d) * 8 - 1
         q1, r1 = divrem(signedmin, anc)
         q2, r2 = divrem(signedmin, ad)
         while true
-            p += 1                       # loop until we find a satisfactory p
+            p += 1 # loop until we find a satisfactory p
             # update q1, r1 = divrem(2^p, abs(nc))
-            q1 = q1<<1
-            r1 = r1<<1
-            if r1 >= anc                 # must be unsigned comparison
+            q1 = q1 << 1
+            r1 = r1 << 1
+            if r1 >= anc # must be unsigned comparison
                 q1 += one(UT)
                 r1 -= anc
             end
             # update q2, r2 = divrem(2^p, abs(d))
-            q2 = q2<<1
-            r2 = r2<<1
+            q2 = q2 << 1
+            r2 = r2 << 1
             if r2 >= ad
                 q2 += one(UT)
                 r2 -= ad
@@ -81,8 +81,8 @@ struct SignedMultiplicativeInverse{T<:Signed} <: MultiplicativeInverse{T}
             (q1 < delta || (q1 == delta && r1 == 0)) || break
         end
 
-        m = flipsign((q2 + one(UT)) % T, d)  # resulting magic number
-        s = p - sizeof(d)*8                  # resulting shift
+        m = flipsign((q2 + one(UT)) % T, d) # resulting magic number
+        s = p - sizeof(d) * 8 # resulting shift
         new(d, m, d > 0 && m < 0 ? Int8(1) : d < 0 && m > 0 ? Int8(-1) : Int8(0), UInt8(s))
     end
 end
@@ -94,16 +94,16 @@ struct UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
     add::Bool
     shift::UInt8
 
-    function UnsignedMultiplicativeInverse{T}(d::T) where T<:Unsigned
+    function UnsignedMultiplicativeInverse{T}(d::T) where T <: Unsigned
         d == 0 && throw(ArgumentError("cannot compute magic for d == $d"))
         u2 = convert(T, 2)
         add = false
-        signedmin = one(d) << (sizeof(d)*8-1)
+        signedmin = one(d) << (sizeof(d) * 8 - 1)
         signedmax = signedmin - one(T)
         allones = (zero(d) - 1) % T
 
         nc = allones - rem(convert(T, allones - d), d)
-        p = 8*sizeof(d) - 1
+        p = 8 * sizeof(d) - 1
         q1, r1 = divrem(signedmin, nc)
         q2, r2 = divrem(signedmax, d)
         while true
@@ -125,32 +125,31 @@ struct UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
                 r2 = r2 + r2 + one(T)
             end
             delta = d - one(T) - r2
-            (p < sizeof(d)*16 && (q1 < delta || (q1 == delta && r1 == 0))) || break
+            (p < sizeof(d) * 16 && (q1 < delta || (q1 == delta && r1 == 0))) || break
         end
-        m = q2 + one(T)              # resulting magic number
-        s = p - sizeof(d)*8 - add    # resulting shift
+        m = q2 + one(T) # resulting magic number
+        s = p - sizeof(d) * 8 - add # resulting shift
         new(d, m, add, s % UInt8)
     end
 end
 UnsignedMultiplicativeInverse(x::Unsigned) = UnsignedMultiplicativeInverse{typeof(x)}(x)
 
 function div(a::T, b::SignedMultiplicativeInverse{T}) where T
-    x = ((widen(a)*b.multiplier) >>> (sizeof(a)*8)) % T
-    x += (a*b.addmul) % T
-    ifelse(abs(b.divisor) == 1, a*b.divisor, (signbit(x) + (x >> b.shift)) % T)
+    x = ((widen(a) * b.multiplier) >>> (sizeof(a) * 8)) % T
+    x += (a * b.addmul) % T
+    ifelse(abs(b.divisor) == 1, a * b.divisor, (signbit(x) + (x >> b.shift)) % T)
 end
 function div(a::T, b::UnsignedMultiplicativeInverse{T}) where T
-    x = ((widen(a)*b.multiplier) >>> (sizeof(a)*8)) % T
+    x = ((widen(a) * b.multiplier) >>> (sizeof(a) * 8)) % T
     x = ifelse(b.add, convert(T, convert(T, (convert(T, a - x) >>> 1)) + x), x)
     ifelse(b.divisor == 1, a, x >>> b.shift)
 end
 
-rem(a::T, b::MultiplicativeInverse{T}) where {T} =
-    a - div(a, b)*b.divisor
+rem(a::T, b::MultiplicativeInverse{T}) where {T} = a - div(a, b) * b.divisor
 
 function divrem(a::T, b::MultiplicativeInverse{T}) where T
     d = div(a, b)
-    (d, a - d*b.divisor)
+    (d, a - d * b.divisor)
 end
 
 multiplicativeinverse(x::Signed) = SignedMultiplicativeInverse(x)

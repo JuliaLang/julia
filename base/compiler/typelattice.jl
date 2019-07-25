@@ -7,7 +7,7 @@
 # The type of a value might be constant
 struct Const
     val
-    actual::Bool  # if true, we obtained `val` by actually calling a @pure function
+    actual::Bool # if true, we obtained `val` by actually calling a @pure function
     Const(@nospecialize(v)) = new(v, false)
     Const(@nospecialize(v), a::Bool) = new(v, a)
 end
@@ -30,10 +30,7 @@ struct Conditional
     var::Slot
     vtype
     elsetype
-    function Conditional(
-                var,
-                @nospecialize(vtype),
-                @nospecialize(nottype))
+    function Conditional(var, @nospecialize(vtype), @nospecialize(nottype))
         return new(var, vtype, nottype)
     end
 end
@@ -44,7 +41,8 @@ struct PartialTypeVar
     # into Const, if the bounds are pulled out of this TypeVar
     lb_certain::Bool
     ub_certain::Bool
-    PartialTypeVar(tv::TypeVar, lb_certain::Bool, ub_certain::Bool) = new(tv, lb_certain, ub_certain)
+    PartialTypeVar(tv::TypeVar, lb_certain::Bool, ub_certain::Bool) =
+        new(tv, lb_certain, ub_certain)
 end
 
 # Wraps a type and represents that the value may also be undef at this point.
@@ -168,8 +166,7 @@ function ⊑(@nospecialize(a), @nospecialize(b))
             return a.instance === b.val
         end
         return false
-    elseif !(isa(a, Type) || isa(a, TypeVar)) ||
-           !(isa(b, Type) || isa(b, TypeVar))
+    elseif !(isa(a, Type) || isa(a, TypeVar)) || !(isa(b, Type) || isa(b, TypeVar))
         return a === b
     else
         return a <: b
@@ -222,8 +219,10 @@ function smerge(sa::Union{NotFound,VarState}, sb::Union{NotFound,VarState})
     return VarState(tmerge(sa.typ, sb.typ), sa.undef | sb.undef)
 end
 
-@inline tchanged(@nospecialize(n), @nospecialize(o)) = o === NOT_FOUND || (n !== NOT_FOUND && !(n ⊑ o))
-@inline schanged(@nospecialize(n), @nospecialize(o)) = (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !issubstate(n, o)))
+@inline tchanged(@nospecialize(n), @nospecialize(o)) =
+    o === NOT_FOUND || (n !== NOT_FOUND && !(n ⊑ o))
+@inline schanged(@nospecialize(n), @nospecialize(o)) =
+    (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !issubstate(n, o)))
 
 widenconditional(@nospecialize typ) = typ
 function widenconditional(typ::Conditional)

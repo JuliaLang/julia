@@ -30,10 +30,12 @@ function deepcopy(x)
     return deepcopy_internal(x, IdDict())::typeof(x)
 end
 
-deepcopy_internal(x::Union{Symbol,Core.MethodInstance,Method,GlobalRef,DataType,Union,UnionAll,Task,Regex},
-                  stackdict::IdDict) = x
+deepcopy_internal(
+    x::Union{Symbol,Core.MethodInstance,Method,GlobalRef,DataType,Union,UnionAll,Task,Regex},
+    stackdict::IdDict
+) = x
 deepcopy_internal(x::Tuple, stackdict::IdDict) =
-    ntuple(i->deepcopy_internal(x[i], stackdict), length(x))
+    ntuple(i -> deepcopy_internal(x[i], stackdict), length(x))
 deepcopy_internal(x::Module, stackdict::IdDict) = error("deepcopy of Modules not supported")
 
 function deepcopy_internal(x::SimpleVector, stackdict::IdDict)
@@ -65,9 +67,15 @@ function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
         stackdict[x] = y
     end
     for i in 1:nfields(x)
-        if isdefined(x,i)
-            ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), y, i-1,
-                  deepcopy_internal(getfield(x,i), stackdict))
+        if isdefined(x, i)
+            ccall(
+                :jl_set_nth_field,
+                Cvoid,
+                (Any, Csize_t, Any),
+                y,
+                i - 1,
+                deepcopy_internal(getfield(x, i), stackdict)
+            )
         end
     end
     return y::T
@@ -82,17 +90,17 @@ end
 
 function _deepcopy_array_t(@nospecialize(x), T, stackdict::IdDict)
     if isbitstype(T)
-        return (stackdict[x]=copy(x))
+        return (stackdict[x] = copy(x))
     end
     dest = similar(x)
     stackdict[x] = dest
     for i = 1:(length(x)::Int)
-        if ccall(:jl_array_isassigned, Cint, (Any, Csize_t), x, i-1) != 0
-            xi = ccall(:jl_arrayref, Any, (Any, Csize_t), x, i-1)
+        if ccall(:jl_array_isassigned, Cint, (Any, Csize_t), x, i - 1) != 0
+            xi = ccall(:jl_arrayref, Any, (Any, Csize_t), x, i - 1)
             if !isbits(xi)
                 xi = deepcopy_internal(xi, stackdict)
             end
-            ccall(:jl_arrayset, Cvoid, (Any, Any, Csize_t), dest, xi, i-1)
+            ccall(:jl_arrayset, Cvoid, (Any, Any, Csize_t), dest, xi, i - 1)
         end
     end
     return dest

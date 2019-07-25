@@ -3,7 +3,8 @@
 if !isdefined(@__MODULE__, Symbol("@verify_error"))
     macro verify_error(arg)
         arg isa String && return esc(:(println(stderr, $arg)))
-        (arg isa Expr && arg.head === :string) || error("verify_error macro expected a string expression")
+        (arg isa Expr && arg.head === :string) ||
+        error("verify_error macro expected a string expression")
         pushfirst!(arg.args, GlobalRef(Core, :stderr))
         pushfirst!(arg.args, :println)
         arg.head = :call
@@ -14,13 +15,13 @@ end
 function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int)
     if isa(op, SSAValue)
         if op.id > length(ir.stmts)
-            def_bb = block_for_inst(ir.cfg, ir.new_nodes[op.id - length(ir.stmts)].pos)
+            def_bb = block_for_inst(ir.cfg, ir.new_nodes[op.id-length(ir.stmts)].pos)
         else
             def_bb = block_for_inst(ir.cfg, op.id)
         end
         if (def_bb == use_bb)
             if op.id > length(ir.stmts)
-                @assert ir.new_nodes[op.id - length(ir.stmts)].pos <= use_idx
+                @assert ir.new_nodes[op.id-length(ir.stmts)].pos <= use_idx
             else
                 if op.id >= use_idx
                     @verify_error "Def ($(op.id)) does not dominate use ($(use_idx)) in same BB"
@@ -28,17 +29,18 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
                 end
             end
         else
-            if !dominates(domtree, def_bb, use_bb) && !(bb_unreachable(domtree, def_bb) && bb_unreachable(domtree, use_bb))
+            if !dominates(domtree, def_bb, use_bb) &&
+               !(bb_unreachable(domtree, def_bb) && bb_unreachable(domtree, use_bb))
                 #@Base.show ir
                 @verify_error "Basic Block $def_bb does not dominate block $use_bb (tried to use value $(op.id))"
                 error()
             end
         end
-    elseif isa(op, Union{OldSSAValue, NewSSAValue})
+    elseif isa(op, Union{OldSSAValue,NewSSAValue})
         #@Base.show ir
         @verify_error "Left over SSA marker"
         error()
-    elseif isa(op, Union{SlotNumber, TypedSlot})
+    elseif isa(op, Union{SlotNumber,TypedSlot})
         @verify_error "Left over slot detected in converted IR"
         error()
     end
@@ -99,13 +101,17 @@ function verify_ir(ir::IRCode)
                 @verify_error "Block $idx terminator forms a double edge to block $(idx+1)"
                 error()
             end
-            if length(block.succs) != 2 || (block.succs != [terminator.dest, idx+1] && block.succs != [idx+1, terminator.dest])
+            if length(block.succs) != 2 ||
+               (block.succs != [terminator.dest, idx + 1] &&
+                block.succs != [idx + 1, terminator.dest])
                 @verify_error "Block $idx successors ($(block.succs)), does not match GotoIfNot terminator"
                 error()
             end
         elseif isexpr(terminator, :enter)
             @label enter_check
-            if length(block.succs) != 2 || (block.succs != [terminator.args[1], idx+1] && block.succs != [idx+1, terminator.args[1]])
+            if length(block.succs) != 2 ||
+               (block.succs != [terminator.args[1], idx + 1] &&
+                block.succs != [idx + 1, terminator.args[1]])
                 @verify_error "Block $idx successors ($(block.succs)), does not match :enter terminator"
                 error()
             end
@@ -156,18 +162,24 @@ function verify_ir(ir::IRCode)
                 phiT = ir.types[idx]
                 if isa(val, SSAValue)
                     if !(types(ir)[val] ⊑ phiT)
-                        #@verify_error """
-                        #    PhiNode $idx, has operand $(val.id), whose type is not a sub lattice element.
-                        #    PhiNode type was $phiT
-                        #    Value type was $(ir.types[val.id])
-                        #"""
-                        #error()
+                    #@verify_error """
+                    #    PhiNode $idx, has operand $(val.id), whose type is not a sub lattice element.
+                    #    PhiNode type was $phiT
+                    #    Value type was $(ir.types[val.id])
+                    #"""
+                    #error()
                     end
                 elseif isa(val, GlobalRef) || isa(val, Expr)
                     @verify_error "GlobalRefs and Exprs are not allowed as PhiNode values"
                     error()
                 end
-                check_op(ir, domtree, val, edge, last(ir.cfg.blocks[stmt.edges[i]].stmts)+1)
+                check_op(
+                    ir,
+                    domtree,
+                    val,
+                    edge,
+                    last(ir.cfg.blocks[stmt.edges[i]].stmts) + 1
+                )
             end
         elseif isa(stmt, PhiCNode)
             for i = 1:length(stmt.values)
@@ -185,7 +197,7 @@ function verify_ir(ir::IRCode)
             if isa(stmt, Expr) || isa(stmt, ReturnNode) # TODO: make sure everything has line info
                 if !(stmt isa ReturnNode && !isdefined(stmt, :val)) # not actually a return node, but an unreachable marker
                     if ir.lines[idx] <= 0
-                        #@verify_error "Missing line number information for statement $idx of $ir"
+                    #@verify_error "Missing line number information for statement $idx of $ir"
                     end
                 end
             end

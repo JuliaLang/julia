@@ -16,8 +16,8 @@ include("grisu/fastfixed.jl")
 include("grisu/bignums.jl")
 include("grisu/bignum.jl")
 
-const DIGITS = Vector{UInt8}(undef, 309+17)
-const BIGNUMS = [Bignums.Bignum(),Bignums.Bignum(),Bignums.Bignum(),Bignums.Bignum()]
+const DIGITS = Vector{UInt8}(undef, 309 + 17)
+const BIGNUMS = [Bignums.Bignum(), Bignums.Bignum(), Bignums.Bignum(), Bignums.Bignum()]
 
 # NOTE: DIGITS[s] is deprecated; you should use getbuf() instead.
 const DIGITSs = [DIGITS]
@@ -31,7 +31,7 @@ function getbuf()
     tls = task_local_storage()
     d = get(tls, :DIGITS, nothing)
     if d === nothing
-        d = Vector{UInt8}(undef, 309+17)
+        d = Vector{UInt8}(undef, 309 + 17)
         tls[:DIGITS] = d
     end
     return d::Vector{UInt8}
@@ -58,7 +58,13 @@ The returned tuple contains:
    (for very large values).
  - `neg`: the signbit of `v` (see [`signbit`](@ref)).
 """
-function grisu(v::AbstractFloat,mode,requested_digits,buffer=DIGITSs[Threads.threadid()],bignums=BIGNUMSs[Threads.threadid()])
+function grisu(
+    v::AbstractFloat,
+    mode,
+    requested_digits,
+    buffer = DIGITSs[Threads.threadid()],
+    bignums = BIGNUMSs[Threads.threadid()]
+)
     if signbit(v)
         neg = true
         v = -v
@@ -77,15 +83,15 @@ function grisu(v::AbstractFloat,mode,requested_digits,buffer=DIGITSs[Threads.thr
         return len, point, neg
     end
     if mode == SHORTEST
-        status,len,point = fastshortest(v,buffer)
+        status, len, point = fastshortest(v, buffer)
     elseif mode == FIXED
-        status,len,point = fastfixedtoa(v,0,requested_digits,buffer)
+        status, len, point = fastfixedtoa(v, 0, requested_digits, buffer)
     elseif mode == PRECISION
-        status,len,point = fastprecision(v,requested_digits,buffer)
+        status, len, point = fastprecision(v, requested_digits, buffer)
     end
-    status && return len-1, point, neg
-    status, len, point = bignumdtoa(v,mode,requested_digits,buffer,bignums)
-    return len-1, point, neg
+    status && return len - 1, point, neg
+    status, len, point = bignumdtoa(v, mode, requested_digits, buffer, bignums)
+    return len - 1, point, neg
 end
 
 nanstr(x::AbstractFloat) = "NaN"
@@ -98,20 +104,20 @@ infstr(x::Float16) = "Inf16"
 function _show(io::IO, x::AbstractFloat, mode, n::Int, typed, compact)
     isnan(x) && return print(io, typed ? nanstr(x) : "NaN")
     if isinf(x)
-        signbit(x) && print(io,'-')
+        signbit(x) && print(io, '-')
         print(io, typed ? infstr(x) : "Inf")
         return
     end
-    typed && isa(x,Float16) && print(io, "Float16(")
+    typed && isa(x, Float16) && print(io, "Float16(")
     buffer = getbuf()
-    len, pt, neg = grisu(x,mode,n,buffer)
+    len, pt, neg = grisu(x, mode, n, buffer)
     pdigits = pointer(buffer)
     if mode == PRECISION
         while len > 1 && buffer[len] == 0x30
             len -= 1
         end
     end
-    neg && print(io,'-')
+    neg && print(io, '-')
     exp_form = pt <= -4 || pt > 6
     exp_form = exp_form || (pt >= len && abs(mod(x + 0.05, 10^(pt - len)) - 0.05) > 0.05) # see issue #6608
     if exp_form # .00001 to 100000.
@@ -120,13 +126,13 @@ function _show(io::IO, x::AbstractFloat, mode, n::Int, typed, compact)
         unsafe_write(io, pdigits, 1)
         print(io, '.')
         if len > 1
-            unsafe_write(io, pdigits+1, len-1)
+            unsafe_write(io, pdigits + 1, len - 1)
         else
             print(io, '0')
         end
-        print(io, (typed && isa(x,Float32)) ? 'f' : 'e')
+        print(io, (typed && isa(x, Float32)) ? 'f' : 'e')
         print(io, string(pt - 1))
-        typed && isa(x,Float16) && print(io, ")")
+        typed && isa(x, Float16) && print(io, ")")
         return
     elseif pt <= 0
         # => 0.00########
@@ -147,10 +153,10 @@ function _show(io::IO, x::AbstractFloat, mode, n::Int, typed, compact)
     else # => ####.####
         unsafe_write(io, pdigits, pt)
         print(io, '.')
-        unsafe_write(io, pdigits+pt, len-pt)
+        unsafe_write(io, pdigits + pt, len - pt)
     end
-    typed && !compact && isa(x,Float32) && print(io, "f0")
-    typed && isa(x,Float16) && print(io, ")")
+    typed && !compact && isa(x, Float32) && print(io, "f0")
+    typed && isa(x, Float16) && print(io, ")")
     nothing
 end
 
@@ -190,16 +196,16 @@ Base.print(io::IO, x::Float16) = _show(io, x, SHORTEST, 0, false, false)
 
 function _print_shortest(io::IO, x::AbstractFloat, dot::Bool, mode, n::Int)
     isnan(x) && return print(io, "NaN")
-    x < 0 && print(io,'-')
+    x < 0 && print(io, '-')
     isinf(x) && return print(io, "Inf")
     buffer = getbuf()
-    len, pt, neg = grisu(x,mode,n,buffer)
+    len, pt, neg = grisu(x, mode, n, buffer)
     pdigits = pointer(buffer)
-    e = pt-len
-    k = -9<=e<=9 ? 1 : 2
-    if -pt > k+1 || e+dot > k+1
+    e = pt - len
+    k = -9 <= e <= 9 ? 1 : 2
+    if -pt > k + 1 || e + dot > k + 1
         # => ########e###
-        unsafe_write(io, pdigits+0, len)
+        unsafe_write(io, pdigits + 0, len)
         print(io, 'e')
         print(io, string(e))
         return
@@ -210,10 +216,10 @@ function _print_shortest(io::IO, x::AbstractFloat, dot::Bool, mode, n::Int)
             print(io, '0')
             pt += 1
         end
-        unsafe_write(io, pdigits+0, len)
+        unsafe_write(io, pdigits + 0, len)
     elseif e >= dot
         # => ########000.
-        unsafe_write(io, pdigits+0, len)
+        unsafe_write(io, pdigits + 0, len)
         while e > 0
             print(io, '0')
             e -= 1
@@ -222,9 +228,9 @@ function _print_shortest(io::IO, x::AbstractFloat, dot::Bool, mode, n::Int)
             print(io, '.')
         end
     else # => ####.####
-        unsafe_write(io, pdigits+0, pt)
+        unsafe_write(io, pdigits + 0, pt)
         print(io, '.')
-        unsafe_write(io, pdigits+pt, len-pt)
+        unsafe_write(io, pdigits + pt, len - pt)
     end
     nothing
 end
@@ -235,7 +241,8 @@ end
 Print the shortest possible representation, with the minimum number of consecutive non-zero
 digits, of number `x`, ensuring that it would parse to the exact same number.
 """
-print_shortest(io::IO, x::AbstractFloat, dot::Bool) = _print_shortest(io, x, dot, SHORTEST, 0)
+print_shortest(io::IO, x::AbstractFloat, dot::Bool) =
+    _print_shortest(io, x, dot, SHORTEST, 0)
 print_shortest(io::IO, x::Union{AbstractFloat,Integer}) = print_shortest(io, float(x), false)
 
-end # module
+end

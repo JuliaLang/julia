@@ -15,16 +15,16 @@ julia> ntuple(i -> 2*i, 4)
 ```
 """
 function ntuple(f::F, n::Integer) where F
-    t = n == 0  ? () :
-        n == 1  ? (f(1),) :
-        n == 2  ? (f(1), f(2)) :
-        n == 3  ? (f(1), f(2), f(3)) :
-        n == 4  ? (f(1), f(2), f(3), f(4)) :
-        n == 5  ? (f(1), f(2), f(3), f(4), f(5)) :
-        n == 6  ? (f(1), f(2), f(3), f(4), f(5), f(6)) :
-        n == 7  ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7)) :
-        n == 8  ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8)) :
-        n == 9  ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9)) :
+    t = n == 0 ? () :
+        n == 1 ? (f(1),) :
+        n == 2 ? (f(1), f(2)) :
+        n == 3 ? (f(1), f(2), f(3)) :
+        n == 4 ? (f(1), f(2), f(3), f(4)) :
+        n == 5 ? (f(1), f(2), f(3), f(4), f(5)) :
+        n == 6 ? (f(1), f(2), f(3), f(4), f(5), f(6)) :
+        n == 7 ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7)) :
+        n == 8 ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8)) :
+        n == 9 ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9)) :
         n == 10 ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9), f(10)) :
         _ntuple(f, n)
     return t
@@ -60,9 +60,9 @@ end
     M > N && throw(ArgumentError("input tuple of length $M, requested $N"))
     if @generated
         quote
-            (t..., $(fill(:val, N-length(t.parameters))...))
+            (t..., $(fill(:val, N - length(t.parameters))...))
         end
     else
-        (t..., fill(val, N-M)...)
+        (t..., fill(val, N - M)...)
     end
 end

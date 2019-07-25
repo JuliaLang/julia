@@ -3,7 +3,7 @@
 ## generic operations on numbers ##
 
 # Numbers are convertible
-convert(::Type{T}, x::T)      where {T<:Number} = x
+convert(::Type{T}, x::T) where {T<:Number} = x
 convert(::Type{T}, x::Number) where {T<:Number} = T(x)
 
 """
@@ -36,7 +36,7 @@ false
 julia> iszero([false, 0, 0])
 true
 ```
-"""
+""" # fallback method
 iszero(x) = x == zero(x) # fallback method
 
 """
@@ -56,7 +56,7 @@ false
 julia> isone([1 0; 0 true])
 true
 ```
-"""
+""" # fallback method
 isone(x) = x == one(x) # fallback method
 
 size(x::Number) = ()
@@ -102,14 +102,14 @@ julia> divrem(7,3)
 (2, 1)
 ```
 """
-divrem(x,y) = (div(x,y),rem(x,y))
+divrem(x, y) = (div(x, y), rem(x, y))
 
 """
     fldmod(x, y)
 
 The floored quotient and modulus after division. Equivalent to `(fld(x,y), mod(x,y))`.
 """
-fldmod(x,y) = (fld(x,y),mod(x,y))
+fldmod(x, y) = (fld(x, y), mod(x, y))
 
 """
     signbit(x)
@@ -138,9 +138,9 @@ signbit(x::Real) = x < 0
 
 Return zero if `x==0` and ``x/|x|`` otherwise (i.e., ±1 for real `x`).
 """
-sign(x::Number) = x == 0 ? x/abs(oneunit(x)) : x/abs(x)
-sign(x::Real) = ifelse(x < 0, oftype(one(x),-1), ifelse(x > 0, one(x), typeof(one(x))(x)))
-sign(x::Unsigned) = ifelse(x > 0, one(x), oftype(one(x),0))
+sign(x::Number) = x == 0 ? x / abs(oneunit(x)) : x / abs(x)
+sign(x::Real) = ifelse(x < 0, oftype(one(x), -1), ifelse(x > 0, one(x), typeof(one(x))(x)))
+sign(x::Unsigned) = ifelse(x > 0, one(x), oftype(one(x), 0))
 abs(x::Real) = ifelse(signbit(x), -x, x)
 
 """
@@ -154,7 +154,7 @@ julia> abs2(-3)
 9
 ```
 """
-abs2(x::Real) = x*x
+abs2(x::Real) = x * x
 
 """
     flipsign(x, y)
@@ -169,7 +169,7 @@ julia> flipsign(5, 3)
 julia> flipsign(5, -3)
 -5
 ```
-"""
+""" # the + is for type-stability on Bool
 flipsign(x::Real, y::Real) = ifelse(signbit(y), -x, +x) # the + is for type-stability on Bool
 
 """
@@ -186,7 +186,7 @@ julia> copysign(-1, 2)
 1
 ```
 """
-copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, +x)
+copysign(x::Real, y::Real) = ifelse(signbit(x) != signbit(y), -x, +x)
 
 conj(x::Real) = x
 transpose(x::Number) = x
@@ -220,7 +220,7 @@ julia> inv(2//3)
 !!! compat "Julia 1.2"
     `inv(::Missing)` requires at least Julia 1.2.
 """
-inv(x::Number) = one(x)/x
+inv(x::Number) = one(x) / x
 
 
 """
@@ -234,7 +234,7 @@ julia> widemul(Float32(3.), 4.)
 12.0
 ```
 """
-widemul(x::Number, y::Number) = widen(x)*widen(y)
+widemul(x::Number, y::Number) = widen(x) * widen(y)
 
 iterate(x::Number) = (x, nothing)
 iterate(x::Number, ::Any) = nothing
@@ -262,8 +262,8 @@ julia> zero(rand(2,2))
  0.0  0.0
 ```
 """
-zero(x::Number) = oftype(x,0)
-zero(::Type{T}) where {T<:Number} = convert(T,0)
+zero(x::Number) = oftype(x, 0)
+zero(::Type{T}) where {T<:Number} = convert(T, 0)
 
 """
     one(x)
@@ -297,7 +297,7 @@ julia> import Dates; one(Dates.Day(1))
 1
 ```
 """
-one(::Type{T}) where {T<:Number} = convert(T,1)
+one(::Type{T}) where {T<:Number} = convert(T, 1)
 one(x::T) where {T<:Number} = one(T)
 # note that convert(T, 1) should throw an error if T is dimensionful,
 # so this fallback definition should be okay.

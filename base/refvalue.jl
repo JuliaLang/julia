@@ -27,7 +27,8 @@ end
 function unsafe_convert(P::Type{Ptr{Any}}, b::RefValue{Any})
     return convert(P, pointer_from_objref(b))
 end
-unsafe_convert(::Type{Ptr{Cvoid}}, b::RefValue{T}) where {T} = convert(Ptr{Cvoid}, unsafe_convert(Ptr{T}, b))
+unsafe_convert(::Type{Ptr{Cvoid}}, b::RefValue{T}) where {T} =
+    convert(Ptr{Cvoid}, unsafe_convert(Ptr{T}, b))
 
 getindex(b::RefValue) = b.x
 setindex!(b::RefValue, x) = (b.x = x; b)

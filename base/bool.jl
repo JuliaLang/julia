@@ -85,12 +85,12 @@ abs2(x::Bool) = x
 iszero(x::Bool) = !x
 isone(x::Bool) = x
 
-<(x::Bool, y::Bool) = y&!x
-<=(x::Bool, y::Bool) = y|!x
+<(x::Bool, y::Bool) = y & !x
+<=(x::Bool, y::Bool) = y | !x
 
 ## do arithmetic as Int ##
 
-+(x::Bool) =  Int(x)
++(x::Bool) = Int(x)
 -(x::Bool) = -Int(x)
 
 +(x::Bool, y::Bool) = Int(x) + Int(y)
@@ -100,19 +100,19 @@ isone(x::Bool) = x
 ^(x::Integer, y::Bool) = ifelse(y, x, one(x))
 
 # preserve -0.0 in `false + -0.0`
-function +(x::Bool, y::T)::promote_type(Bool,T) where T<:AbstractFloat
+function +(x::Bool, y::T)::promote_type(Bool, T) where T <: AbstractFloat
     return ifelse(x, oneunit(y) + y, y)
 end
 +(y::AbstractFloat, x::Bool) = x + y
 
 # make `false` a "strong zero": false*NaN == 0.0
-function *(x::Bool, y::T)::promote_type(Bool,T) where T<:AbstractFloat
+function *(x::Bool, y::T)::promote_type(Bool, T) where T <: AbstractFloat
     return ifelse(x, y, copysign(zero(y), y))
 end
 *(y::AbstractFloat, x::Bool) = x * y
 
 div(x::Bool, y::Bool) = y ? x : throw(DivideError())
-fld(x::Bool, y::Bool) = div(x,y)
-cld(x::Bool, y::Bool) = div(x,y)
+fld(x::Bool, y::Bool) = div(x, y)
+cld(x::Bool, y::Bool) = div(x, y)
 rem(x::Bool, y::Bool) = y ? false : throw(DivideError())
-mod(x::Bool, y::Bool) = rem(x,y)
+mod(x::Bool, y::Bool) = rem(x, y)

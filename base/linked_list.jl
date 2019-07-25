@@ -2,8 +2,8 @@
 
 mutable struct InvasiveLinkedList{T}
     # Invasive list requires that T have a field `.next >: U{T, Nothing}` and `.queue >: U{ILL{T}, Nothing}`
-    head::Union{T, Nothing}
-    tail::Union{T, Nothing}
+    head::Union{T,Nothing}
+    tail::Union{T,Nothing}
     InvasiveLinkedList{T}() where {T} = new{T}(nothing, nothing)
 end
 
@@ -13,7 +13,8 @@ end
 eltype(::Type{<:InvasiveLinkedList{T}}) where {T} = @isdefined(T) ? T : Any
 
 iterate(q::InvasiveLinkedList) = (h = q.head; h === nothing ? nothing : (h, h))
-iterate(q::InvasiveLinkedList{T}, v::T) where {T} = (h = v.next; h === nothing ? nothing : (h, h))
+iterate(q::InvasiveLinkedList{T}, v::T) where {T} =
+    (h = v.next; h === nothing ? nothing : (h, h))
 
 isempty(q::InvasiveLinkedList) = (q.head === nothing)
 
@@ -123,8 +124,8 @@ end
 
 mutable struct LinkedListItem{T}
     # Adapter class to use any `T` in a LinkedList
-    next::Union{LinkedListItem{T}, Nothing}
-    queue::Union{InvasiveLinkedList{LinkedListItem{T}}, Nothing}
+    next::Union{LinkedListItem{T},Nothing}
+    queue::Union{InvasiveLinkedList{LinkedListItem{T}},Nothing}
     value::T
     LinkedListItem{T}(value::T) where {T} = new{T}(nothing, nothing, value)
 end
@@ -133,7 +134,8 @@ const LinkedList{T} = InvasiveLinkedList{LinkedListItem{T}}
 # delegate methods, as needed
 eltype(::Type{<:LinkedList{T}}) where {T} = @isdefined(T) ? T : Any
 iterate(q::LinkedList) = (h = q.head; h === nothing ? nothing : (h.value, h))
-iterate(q::InvasiveLinkedList{LLT}, v::LLT) where {LLT<:LinkedListItem} = (h = v.next; h === nothing ? nothing : (h.value, h))
+iterate(q::InvasiveLinkedList{LLT}, v::LLT) where {LLT<:LinkedListItem} =
+    (h = v.next; h === nothing ? nothing : (h.value, h))
 push!(q::LinkedList{T}, val::T) where {T} = push!(q, LinkedListItem{T}(val))
 pushfirst!(q::LinkedList{T}, val::T) where {T} = pushfirst!(q, LinkedListItem{T}(val))
 pop!(q::LinkedList) = invoke(pop!, Tuple{InvasiveLinkedList,}, q).value

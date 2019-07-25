@@ -125,9 +125,10 @@ isequal(x, y) = x == y
 signequal(x, y) = signbit(x)::Bool == signbit(y)::Bool
 signless(x, y) = signbit(x)::Bool & !signbit(y)::Bool
 
-isequal(x::AbstractFloat, y::AbstractFloat) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
-isequal(x::Real,          y::AbstractFloat) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
-isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
+isequal(x::AbstractFloat, y::AbstractFloat) =
+    (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
+isequal(x::Real, y::AbstractFloat) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
+isequal(x::AbstractFloat, y::Real) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
 
 """
     isless(x, y)
@@ -153,9 +154,10 @@ Types with a partial order should implement [`<`](@ref).
 """
 function isless end
 
-isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
-isless(x::Real,          y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
-isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
+isless(x::AbstractFloat, y::AbstractFloat) =
+    (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
+isless(x::Real, y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
+isless(x::AbstractFloat, y::Real) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 
 
 function ==(T::Type, S::Type)
@@ -343,7 +345,7 @@ const ≥ = >=
 
 # this definition allows Number types to implement < instead of isless,
 # which is more idiomatic:
-isless(x::Real, y::Real) = x<y
+isless(x::Real, y::Real) = x < y
 
 """
     ifelse(condition::Bool, x, y)
@@ -419,7 +421,7 @@ julia> min(2, 5, 1)
 1
 ```
 """
-min(x,y) = ifelse(isless(y, x), y, x)
+min(x, y) = ifelse(isless(y, x), y, x)
 
 """
     minmax(x, y)
@@ -432,7 +434,7 @@ julia> minmax('c','b')
 ('b', 'c')
 ```
 """
-minmax(x,y) = isless(y, x) ? (y, x) : (x, y)
+minmax(x, y) = isless(y, x) ? (y, x) : (x, y)
 
 """
     extrema(itr) -> Tuple
@@ -512,12 +514,29 @@ const ⊻ = xor
 # foldl for argument lists. expand recursively up to a point, then
 # switch to a loop. this allows small cases like `a+b+c+d` to be inlined
 # efficiently, without a major slowdown for `+(x...)` when `x` is big.
-afoldl(op,a) = a
-afoldl(op,a,b) = op(a,b)
-afoldl(op,a,b,c...) = afoldl(op, op(a,b), c...)
-function afoldl(op,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,qs...)
-    y = op(op(op(op(op(op(op(op(op(op(op(op(op(op(op(a,b),c),d),e),f),g),h),i),j),k),l),m),n),o),p)
-    for x in qs; y = op(y,x); end
+afoldl(op, a) = a
+afoldl(op, a, b) = op(a, b)
+afoldl(op, a, b, c...) = afoldl(op, op(a, b), c...)
+function afoldl(op, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, qs...)
+    y = op(
+        op(
+           op(
+              op(
+                 op(
+                    op(op(op(op(op(op(op(op(op(op(a, b), c), d), e), f), g), h), i), j), k),
+                    l
+                 ),
+                 m
+              ),
+              n
+           ),
+           o
+        ),
+        p
+    )
+    for x in qs
+        y = op(y, x)
+    end
     y
 end
 
@@ -526,10 +545,10 @@ for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
         # note: these definitions must not cause a dispatch loop when +(a,b) is
         # not defined, and must only try to call 2-argument definitions, so
         # that defining +(a,b) is sufficient for full functionality.
-        ($op)(a, b, c, xs...) = afoldl($op, ($op)(($op)(a,b),c), xs...)
-        # a further concern is that it's easy for a type like (Int,Int...)
-        # to match many definitions, so we need to keep the number of
-        # definitions down to avoid losing type information.
+        ($op)(a, b, c, xs...) = afoldl($op, ($op)(($op)(a, b), c), xs...)
+    # a further concern is that it's easy for a type like (Int,Int...)
+    # to match many definitions, so we need to keep the number of
+    # definitions down to avoid losing type information.
     end
 end
 
@@ -560,7 +579,7 @@ julia> inv(A) * x
  -7.0
 ```
 """
-\(x,y) = adjoint(adjoint(y)/adjoint(x))
+\(x, y) = adjoint(adjoint(y) / adjoint(x))
 
 # Core <<, >>, and >>> take either Int or UInt as second arg. Signed shift
 # counts can shift in either direction, and are translated here to unsigned
@@ -589,7 +608,7 @@ See also [`>>`](@ref), [`>>>`](@ref).
 function <<(x::Integer, c::Integer)
     @_inline_meta
     typemin(Int) <= c <= typemax(Int) && return x << (c % Int)
-    (x >= 0 || c >= 0) && return zero(x) << 0  # for type stability
+    (x >= 0 || c >= 0) && return zero(x) << 0 # for type stability
     oftype(x, -1)
 end
 function <<(x::Integer, c::Unsigned)
@@ -685,7 +704,7 @@ end
 # fallback div, fld, and cld implementations
 # NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
 # so it is used here as the basis of float div().
-div(x::T, y::T) where {T<:Real} = convert(T,round((x-rem(x,y))/y))
+div(x::T, y::T) where {T<:Real} = convert(T, round((x - rem(x, y)) / y))
 
 """
     fld(x, y)
@@ -698,7 +717,7 @@ julia> fld(7.3,5.5)
 1.0
 ```
 """
-fld(x::T, y::T) where {T<:Real} = convert(T,round((x-mod(x,y))/y))
+fld(x::T, y::T) where {T<:Real} = convert(T, round((x - mod(x, y)) / y))
 
 """
     cld(x, y)
@@ -711,10 +730,10 @@ julia> cld(5.5,2.2)
 3.0
 ```
 """
-cld(x::T, y::T) where {T<:Real} = convert(T,round((x-modCeil(x,y))/y))
+cld(x::T, y::T) where {T<:Real} = convert(T, round((x - modCeil(x, y)) / y))
 #rem(x::T, y::T) where {T<:Real} = convert(T,x-y*trunc(x/y))
 #mod(x::T, y::T) where {T<:Real} = convert(T,x-y*floor(x/y))
-modCeil(x::T, y::T) where {T<:Real} = convert(T,x-y*ceil(x/y))
+modCeil(x::T, y::T) where {T<:Real} = convert(T, x - y * ceil(x / y))
 
 # operator alias
 
@@ -799,7 +818,7 @@ true
 ```
 """
 fld1(x::T, y::T) where {T<:Real} = (m = mod1(x, y); fld(x + y - m, y))
-function fld1(x::T, y::T) where T<:Integer
+function fld1(x::T, y::T) where T <: Integer
     d = div(x, y)
     return d + (!signbit(x ⊻ y) & (d * y != x))
 end
@@ -870,7 +889,7 @@ julia> map(uppercase∘first, ["apple", "banana", "carrot"])
  'C'
 ```
 """
-∘(f, g) = (x...)->f(g(x...))
+∘(f, g) = (x...) -> f(g(x...))
 
 
 """
@@ -891,7 +910,7 @@ julia> filter(!isletter, str)
 "∀  > 0, ∃  > 0: |-| <  ⇒ |()-()| < "
 ```
 """
-!(f::Function) = (x...)->!f(x...)
+!(f::Function) = (x...) -> !f(x...)
 
 """
     Fix1(f, x)
@@ -1035,7 +1054,7 @@ julia> map(Base.splat(+), zip(1:3,4:6))
  9
 ```
 """
-splat(f) = args->f(args...)
+splat(f) = args -> f(args...)
 
 ## in & contains
 

@@ -2,46 +2,141 @@
 
 module Math
 
-export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
-       asinh, acosh, atanh, sec, csc, cot, asec, acsc, acot,
-       sech, csch, coth, asech, acsch, acoth,
-       sinpi, cospi, sinc, cosc,
-       cosd, cotd, cscd, secd, sind, tand,
-       acosd, acotd, acscd, asecd, asind, atand,
-       rad2deg, deg2rad,
-       log, log2, log10, log1p, exponent, exp, exp2, exp10, expm1,
-       cbrt, sqrt, significand,
-       hypot, max, min, minmax, ldexp, frexp,
-       clamp, clamp!, modf, ^, mod2pi, rem2pi,
+export sin,
+       cos,
+       sincos,
+       tan,
+       sinh,
+       cosh,
+       tanh,
+       asin,
+       acos,
+       atan,
+       asinh,
+       acosh,
+       atanh,
+       sec,
+       csc,
+       cot,
+       asec,
+       acsc,
+       acot,
+       sech,
+       csch,
+       coth,
+       asech,
+       acsch,
+       acoth,
+       sinpi,
+       cospi,
+       sinc,
+       cosc,
+       cosd,
+       cotd,
+       cscd,
+       secd,
+       sind,
+       tand,
+       acosd,
+       acotd,
+       acscd,
+       asecd,
+       asind,
+       atand,
+       rad2deg,
+       deg2rad,
+       log,
+       log2,
+       log10,
+       log1p,
+       exponent,
+       exp,
+       exp2,
+       exp10,
+       expm1,
+       cbrt,
+       sqrt,
+       significand,
+       hypot,
+       max,
+       min,
+       minmax,
+       ldexp,
+       frexp,
+       clamp,
+       clamp!,
+       modf,
+       ^,
+       mod2pi,
+       rem2pi,
        @evalpoly
 
-import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
-             acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
-             max, min, minmax, ^, exp2, muladd, rem,
-             exp10, expm1, log1p
+import .Base: log,
+              exp,
+              sin,
+              cos,
+              tan,
+              sinh,
+              cosh,
+              tanh,
+              asin,
+              acos,
+              atan,
+              asinh,
+              acosh,
+              atanh,
+              sqrt,
+              log2,
+              log10,
+              max,
+              min,
+              minmax,
+              ^,
+              exp2,
+              muladd,
+              rem,
+              exp10,
+              expm1,
+              log1p
 
-using .Base: sign_mask, exponent_mask, exponent_one,
-            exponent_half, uinttype, significand_mask,
-            significand_bits, exponent_bits
+using .Base: sign_mask,
+             exponent_mask,
+             exponent_one,
+             exponent_half,
+             uinttype,
+             significand_mask,
+             significand_bits,
+             exponent_bits
 
 using Core.Intrinsics: sqrt_llvm
 
 using .Base: IEEEFloat
 
 @noinline function throw_complex_domainerror(f::Symbol, x)
-    throw(DomainError(x, string("$f will only return a complex result if called with a ",
-                                "complex argument. Try $f(Complex(x)).")))
+    throw(DomainError(
+        x,
+        string(
+            "$f will only return a complex result if called with a ",
+            "complex argument. Try $f(Complex(x))."
+        )
+    ))
 end
 @noinline function throw_exp_domainerror(x)
-    throw(DomainError(x, string("Exponentiation yielding a complex result requires a ",
-                                "complex argument.\nReplace x^y with (x+0im)^y, ",
-                                "Complex(x)^y, or similar.")))
+    throw(DomainError(
+        x,
+        string(
+            "Exponentiation yielding a complex result requires a ",
+            "complex argument.\nReplace x^y with (x+0im)^y, ",
+            "Complex(x)^y, or similar."
+        )
+    ))
 end
 
 for T in (Float16, Float32, Float64)
     @eval exponent_bias(::Type{$T}) = $(Int(exponent_one(T) >> significand_bits(T)))
     # maximum float exponent
-    @eval exponent_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T))
+    @eval exponent_max(::Type{$T}) =
+        $(Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T))
     # maximum float exponent without bias
     @eval exponent_raw_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)))
 end
@@ -70,10 +165,15 @@ julia> clamp.([11,8,5],10,6) # an example where lo > hi
 ```
 """
 clamp(x::X, lo::L, hi::H) where {X,L,H} =
-    ifelse(x > hi, convert(promote_type(X,L,H), hi),
-           ifelse(x < lo,
-                  convert(promote_type(X,L,H), lo),
-                  convert(promote_type(X,L,H), x)))
+    ifelse(
+        x > hi,
+        convert(promote_type(X, L, H), hi),
+        ifelse(
+            x < lo,
+            convert(promote_type(X, L, H), lo),
+            convert(promote_type(X, L, H), x)
+        )
+    )
 
 """
     clamp!(array::AbstractArray, lo, hi)
@@ -94,10 +194,12 @@ end
 """
 macro horner(x, p...)
     ex = esc(p[end])
-    for i = length(p)-1:-1:1
+    for i = length(p) - 1:-1:1
         ex = :(muladd(t, $ex, $(esc(p[i]))))
     end
-    ex = quote local r = $ex end # structure this to add exactly one line number node for the macro
+    ex = quote # structure this to add exactly one line number node for the macro
+        local r = $ex # structure this to add exactly one line number node for the macro
+    end # structure this to add exactly one line number node for the macro
     return Expr(:block, :(local t = $(esc(x))), ex, :r)
 end
 
@@ -130,7 +232,7 @@ macro evalpoly(z, p...)
     a = :($(esc(p[end])))
     b = :($(esc(p[end-1])))
     as = []
-    for i = length(p)-2:-1:1
+    for i = length(p) - 2:-1:1
         ai = Symbol("a", i)
         push!(as, :($ai = $a))
         a = :(muladd(r, $ai, $b))
@@ -138,17 +240,19 @@ macro evalpoly(z, p...)
     end
     ai = :a0
     push!(as, :($ai = $a))
-    C = Expr(:block,
-             :(x = real(tt)),
-             :(y = imag(tt)),
-             :(r = x + x),
-             :(s = muladd(x, x, y*y)),
-             as...,
-             :(muladd($ai, tt, $b)))
+    C = Expr(
+        :block,
+        :(x = real(tt)),
+        :(y = imag(tt)),
+        :(r = x + x),
+        :(s = muladd(x, x, y * y)),
+        as...,
+        :(muladd($ai, tt, $b))
+    )
     R = Expr(:macrocall, Symbol("@horner"), (), :tt, map(esc, p)...)
     :(let tt = $(esc(z))
-          isa(tt, Complex) ? $C : $R
-      end)
+        isa(tt, Complex) ? $C : $R
+    end)
 end
 
 """
@@ -178,10 +282,10 @@ julia> deg2rad(90)
 deg2rad(z::AbstractFloat) = z * (oftype(z, pi) / 180)
 rad2deg(z::Real) = rad2deg(float(z))
 deg2rad(z::Real) = deg2rad(float(z))
-rad2deg(z::Number) = (z/pi)*180
-deg2rad(z::Number) = (z*pi)/180
+rad2deg(z::Number) = (z / pi) * 180
+deg2rad(z::Number) = (z * pi) / 180
 
-log(b::T, x::T) where {T<:Number} = log(x)/log(b)
+log(b::T, x::T) where {T<:Number} = log(x) / log(b)
 
 """
     log(b,x)
@@ -224,7 +328,7 @@ Stacktrace:
     3.0
     ```
 """
-log(b::Number, x::Number) = log(promote(b,x)...)
+log(b::Number, x::Number) = log(promote(b, x)...)
 
 # type specific math functions
 
@@ -282,8 +386,8 @@ Accurately compute ``e^x-1``.
 expm1(x)
 for f in (:exp2, :expm1)
     @eval begin
-        ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
-        ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
+        ($f)(x::Float64) = ccall(($(string(f)), libm), Float64, (Float64,), x)
+        ($f)(x::Float32) = ccall(($(string(f, "f")), libm), Float32, (Float32,), x)
         ($f)(x::Real) = ($f)(float(x))
     end
 end
@@ -329,14 +433,18 @@ end
     else
         # We will cast everything to Int64 to avoid errors in case of Int128
         # If x is a Int128, and is outside the range of Int64, then it is not -1023<x<=1023
-        reinterpret(Float64, (exponent_bias(Float64) + (x % Int64)) << (significand_bits(Float64) % UInt))
+        reinterpret(
+            Float64,
+            (exponent_bias(Float64) + (x % Int64)) << (significand_bits(Float64) % UInt)
+        )
     end
 end
 
 # utility for converting NaN return to DomainError
 # the branch in nan_dom_err prevents its callers from inlining, so be sure to force it
 # until the heuristics can be improved
-@inline nan_dom_err(out, x) = isnan(out) & !isnan(x) ? throw(DomainError(x, "NaN result for non-NaN input.")) : out
+@inline nan_dom_err(out, x) =
+    isnan(out) & !isnan(x) ? throw(DomainError(x, "NaN result for non-NaN input.")) : out
 
 # functions that return NaN on non-NaN argument for domain error
 """
@@ -482,8 +590,10 @@ Stacktrace:
 log1p(x)
 for f in (:log2, :log10)
     @eval begin
-        @inline ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)), libm), Float64, (Float64,), x), x)
-        @inline ($f)(x::Float32) = nan_dom_err(ccall(($(string(f, "f")), libm), Float32, (Float32,), x), x)
+        @inline ($f)(x::Float64) =
+            nan_dom_err(ccall(($(string(f)), libm), Float64, (Float64,), x), x)
+        @inline ($f)(x::Float32) =
+            nan_dom_err(ccall(($(string(f, "f")), libm), Float32, (Float32,), x), x)
         @inline ($f)(x::Real) = ($f)(float(x))
     end
 end
@@ -546,56 +656,61 @@ julia> hypot(3, 4im)
 ```
 """
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
-hypot(x::Complex, y::Complex) = hypot(promote(abs(x),abs(y))...)
+hypot(x::Complex, y::Complex) = hypot(promote(abs(x), abs(y))...)
 hypot(x::Integer, y::Integer) = hypot(promote(float(x), float(y))...)
-function hypot(x::T,y::T) where T<:AbstractFloat
+function hypot(x::T, y::T) where T <: AbstractFloat
     #Return Inf if either or both imputs is Inf (Compliance with IEEE754)
     if isinf(x) || isinf(y)
-        return convert(T,Inf)
+        return convert(T, Inf)
     end
 
     # Order the operands
-    ax,ay = abs(x), abs(y)
+    ax, ay = abs(x), abs(y)
     if ay > ax
-        ax,ay = ay,ax
+        ax, ay = ay, ax
     end
 
     # Widely varying operands
-    if ay <= ax*sqrt(eps(T)/2)  #Note: This also gets ay == 0
+    if ay <= ax * sqrt(eps(T) / 2) #Note: This also gets ay == 0
         return ax
     end
 
     # Operands do not vary widely
-    scale = eps(sqrt(floatmin(T)))  #Rescaling constant
-    if ax > sqrt(floatmax(T)/2)
-        ax = ax*scale
-        ay = ay*scale
+    scale = eps(sqrt(floatmin(T))) #Rescaling constant
+    if ax > sqrt(floatmax(T) / 2)
+        ax = ax * scale
+        ay = ay * scale
         scale = inv(scale)
     elseif ay < sqrt(floatmin(T))
-        ax = ax/scale
-        ay = ay/scale
+        ax = ax / scale
+        ay = ay / scale
     else
         scale = one(scale)
     end
-    h = sqrt(muladd(ax,ax,ay*ay))
+    h = sqrt(muladd(ax, ax, ay * ay))
     # This branch is correctly rounded but requires a native hardware fma.
     if Base.Math.FMA_NATIVE
-        hsquared = h*h
-        axsquared = ax*ax
-        h -= (fma(-ay,ay,hsquared-axsquared) + fma(h,h,-hsquared) - fma(ax,ax,-axsquared))/(2*h)
+        hsquared = h * h
+        axsquared = ax * ax
+        h -= (fma(-ay, ay, hsquared - axsquared) + fma(h, h, -hsquared) -
+              fma(ax, ax, -axsquared)) / (2 * h)
     # This branch is within one ulp of correctly rounded.
     else
-        if h <= 2*ay
-            delta = h-ay
-            h -= muladd(delta,delta-2*(ax-ay),ax*(2*delta - ax))/(2*h)
+        if h <= 2 * ay
+            delta = h - ay
+            h -= muladd(delta, delta - 2 * (ax - ay), ax * (2 * delta - ax)) / (2 * h)
         else
-            delta = h-ax
-            h -= muladd(delta,delta,muladd(ay,(4*delta-ay),2*delta*(ax-2*ay)))/(2*h)
+            delta = h - ax
+            h -= muladd(
+                delta,
+                delta,
+                muladd(ay, (4 * delta - ay), 2 * delta * (ax - 2 * ay))
+            ) / (2 * h)
         end
     end
-    h*scale
+    h * scale
 end
-function hypot(x::T, y::T) where T<:Number
+function hypot(x::T, y::T) where T <: Number
     ax = abs(x)
     ay = abs(y)
     if ax < ay
@@ -636,19 +751,30 @@ julia> hypot(3, 4im, 12.0)
 """
 hypot(x::Number...) = sqrt(sum(abs2(y) for y in x))
 
-atan(y::Real, x::Real) = atan(promote(float(y),float(x))...)
+atan(y::Real, x::Real) = atan(promote(float(y), float(x))...)
 atan(y::T, x::T) where {T<:AbstractFloat} = Base.no_op_err("atan", T)
 
-max(x::T, y::T) where {T<:AbstractFloat} = ifelse((y > x) | (signbit(y) < signbit(x)),
-                                    ifelse(isnan(x), x, y), ifelse(isnan(y), y, x))
+max(x::T, y::T) where {T<:AbstractFloat} =
+    ifelse(
+        (y > x) | (signbit(y) < signbit(x)),
+        ifelse(isnan(x), x, y),
+        ifelse(isnan(y), y, x)
+    )
 
 
-min(x::T, y::T) where {T<:AbstractFloat} = ifelse((y < x) | (signbit(y) > signbit(x)),
-                                    ifelse(isnan(x), x, y), ifelse(isnan(y), y, x))
+min(x::T, y::T) where {T<:AbstractFloat} =
+    ifelse(
+        (y < x) | (signbit(y) > signbit(x)),
+        ifelse(isnan(x), x, y),
+        ifelse(isnan(y), y, x)
+    )
 
 minmax(x::T, y::T) where {T<:AbstractFloat} =
-    ifelse(isnan(x) | isnan(y), ifelse(isnan(x), (x,x), (y,y)),
-           ifelse((y > x) | (signbit(x) > signbit(y)), (x,y), (y,x)))
+    ifelse(
+        isnan(x) | isnan(y),
+        ifelse(isnan(x), (x, x), (y, y)),
+        ifelse((y > x) | (signbit(x) > signbit(y)), (x, y), (y, x))
+    )
 
 
 """
@@ -662,7 +788,7 @@ julia> ldexp(5., 2)
 20.0
 ```
 """
-function ldexp(x::T, e::Integer) where T<:IEEEFloat
+function ldexp(x::T, e::Integer) where T <: IEEEFloat
     xu = reinterpret(Unsigned, x)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x # NaN or Inf
@@ -701,7 +827,7 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
         k += significand_bits(T)
         z = T(2.0)^-significand_bits(T)
         xu = (xu & ~exponent_mask(T)) | (rem(k, uinttype(T)) << significand_bits(T))
-        return z*reinterpret(T, xu)
+        return z * reinterpret(T, xu)
     end
 end
 ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
@@ -711,7 +837,7 @@ ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 
 Get the exponent of a normalized floating-point number.
 """
-function exponent(x::T) where T<:IEEEFloat
+function exponent(x::T) where T <: IEEEFloat
     @noinline throw1(x) = throw(DomainError(x, "Cannot be NaN or Inf."))
     @noinline throw2(x) = throw(DomainError(x, "Cannot be subnormal converted to 0."))
     xs = reinterpret(Unsigned, x) & ~sign_mask(T)
@@ -741,7 +867,7 @@ julia> significand(15.2)*8
 15.2
 ```
 """
-function significand(x::T) where T<:IEEEFloat
+function significand(x::T) where T <: IEEEFloat
     xu = reinterpret(Unsigned, x)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x # NaN or Inf
@@ -761,7 +887,7 @@ end
 Return `(x,exp)` such that `x` has a magnitude in the interval ``[1/2, 1)`` or 0,
 and `val` is equal to ``x \\times 2^{exp}``.
 """
-function frexp(x::T) where T<:IEEEFloat
+function frexp(x::T) where T <: IEEEFloat
     xu = reinterpret(Unsigned, x)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x, 0 # NaN or Inf
@@ -803,15 +929,16 @@ without any intermediate rounding.
   `abs(x) < abs(y)`. See also [`RoundUp`](@ref).
 
 """
-rem(x, y, ::RoundingMode{:ToZero}) = rem(x,y)
-rem(x, y, ::RoundingMode{:Down}) = mod(x,y)
-rem(x, y, ::RoundingMode{:Up}) = mod(x,-y)
+rem(x, y, ::RoundingMode{:ToZero}) = rem(x, y)
+rem(x, y, ::RoundingMode{:Down}) = mod(x, y)
+rem(x, y, ::RoundingMode{:Up}) = mod(x, -y)
 
 rem(x::Float64, y::Float64, ::RoundingMode{:Nearest}) =
-    ccall((:remainder, libm),Float64,(Float64,Float64),x,y)
+    ccall((:remainder, libm), Float64, (Float64, Float64), x, y)
 rem(x::Float32, y::Float32, ::RoundingMode{:Nearest}) =
-    ccall((:remainderf, libm),Float32,(Float32,Float32),x,y)
-rem(x::Float16, y::Float16, r::RoundingMode{:Nearest}) = Float16(rem(Float32(x), Float32(y), r))
+    ccall((:remainderf, libm), Float32, (Float32, Float32), x, y)
+rem(x::Float16, y::Float16, r::RoundingMode{:Nearest}) =
+    Float16(rem(Float32(x), Float32(y), r))
 
 
 """
@@ -829,7 +956,7 @@ julia> modf(-3.5)
 (-0.5, -3.0)
 ```
 """
-modf(x) = rem(x,one(x)), trunc(x)
+modf(x) = rem(x, one(x)), trunc(x)
 
 function modf(x::Float32)
     temp = Ref{Float32}()
@@ -845,22 +972,25 @@ end
 
 @inline function ^(x::Float64, y::Float64)
     z = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, y)
-    if isnan(z) & !isnan(x+y)
+    if isnan(z) & !isnan(x + y)
         throw_exp_domainerror(x)
     end
     z
 end
 @inline function ^(x::Float32, y::Float32)
     z = ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, y)
-    if isnan(z) & !isnan(x+y)
+    if isnan(z) & !isnan(x + y)
         throw_exp_domainerror(x)
     end
     z
 end
-@inline ^(x::Float64, y::Integer) = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, Float64(y))
-@inline ^(x::Float32, y::Integer) = ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, Float32(y))
-@inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
-@inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))
+@inline ^(x::Float64, y::Integer) =
+    ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, Float64(y))
+@inline ^(x::Float32, y::Integer) =
+    ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, Float32(y))
+@inline ^(x::Float16, y::Integer) = Float16(Float32(x)^y)
+@inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} =
+    Float16(literal_pow(^, Float32(x), Val(p)))
 
 ## rem2pi-related calculations ##
 
@@ -869,24 +999,24 @@ function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
     # double-double numbers and returns the high double. References:
     # [1] http://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
     # [2] https://doi.org/10.1007/BF01397083
-    r = xh+yh
-    s = (abs(xh) > abs(yh)) ? (xh-r+yh+yl+xl) : (yh-r+xh+xl+yl)
-    zh = r+s
+    r = xh + yh
+    s = (abs(xh) > abs(yh)) ? (xh - r + yh + yl + xl) : (yh - r + xh + xl + yl)
+    zh = r + s
     return zh
 end
 
 # multiples of pi/2, as double-double (ie with "tail")
-const pi1o2_h  = 1.5707963267948966     # convert(Float64, pi * BigFloat(1/2))
-const pi1o2_l  = 6.123233995736766e-17  # convert(Float64, pi * BigFloat(1/2) - pi1o2_h)
+const pi1o2_h = 1.5707963267948966 # convert(Float64, pi * BigFloat(1/2))
+const pi1o2_l = 6.123233995736766e-17 # convert(Float64, pi * BigFloat(1/2) - pi1o2_h)
 
-const pi2o2_h  = 3.141592653589793      # convert(Float64, pi * BigFloat(1))
-const pi2o2_l  = 1.2246467991473532e-16 # convert(Float64, pi * BigFloat(1) - pi2o2_h)
+const pi2o2_h = 3.141592653589793 # convert(Float64, pi * BigFloat(1))
+const pi2o2_l = 1.2246467991473532e-16 # convert(Float64, pi * BigFloat(1) - pi2o2_h)
 
-const pi3o2_h  = 4.71238898038469       # convert(Float64, pi * BigFloat(3/2))
-const pi3o2_l  = 1.8369701987210297e-16 # convert(Float64, pi * BigFloat(3/2) - pi3o2_h)
+const pi3o2_h = 4.71238898038469 # convert(Float64, pi * BigFloat(3/2))
+const pi3o2_l = 1.8369701987210297e-16 # convert(Float64, pi * BigFloat(3/2) - pi3o2_h)
 
-const pi4o2_h  = 6.283185307179586      # convert(Float64, pi * BigFloat(2))
-const pi4o2_l  = 2.4492935982947064e-16 # convert(Float64, pi * BigFloat(2) - pi4o2_h)
+const pi4o2_h = 6.283185307179586 # convert(Float64, pi * BigFloat(2))
+const pi4o2_l = 2.4492935982947064e-16 # convert(Float64, pi * BigFloat(2) - pi4o2_h)
 
 """
     rem2pi(x, r::RoundingMode)
@@ -923,77 +1053,77 @@ function rem2pi end
 function rem2pi(x::Float64, ::RoundingMode{:Nearest})
     abs(x) < pi && return x
 
-    n,y = rem_pio2_kernel(x)
+    n, y = rem_pio2_kernel(x)
 
     if iseven(n)
         if n & 2 == 2 # n % 4 == 2: add/subtract pi
             if y.hi <= 0
-                return add22condh(y.hi,y.lo,pi2o2_h,pi2o2_l)
+                return add22condh(y.hi, y.lo, pi2o2_h, pi2o2_l)
             else
-                return add22condh(y.hi,y.lo,-pi2o2_h,-pi2o2_l)
+                return add22condh(y.hi, y.lo, -pi2o2_h, -pi2o2_l)
             end
-        else          # n % 4 == 0: add 0
-            return y.hi+y.lo
+        else # n % 4 == 0: add 0
+            return y.hi + y.lo
         end
     else
         if n & 2 == 2 # n % 4 == 3: subtract pi/2
-            return add22condh(y.hi,y.lo,-pi1o2_h,-pi1o2_l)
-        else          # n % 4 == 1: add pi/2
-            return add22condh(y.hi,y.lo,pi1o2_h,pi1o2_l)
+            return add22condh(y.hi, y.lo, -pi1o2_h, -pi1o2_l)
+        else # n % 4 == 1: add pi/2
+            return add22condh(y.hi, y.lo, pi1o2_h, pi1o2_l)
         end
     end
 end
 function rem2pi(x::Float64, ::RoundingMode{:ToZero})
     ax = abs(x)
-    ax <= 2*Float64(pi,RoundDown) && return x
+    ax <= 2 * Float64(pi, RoundDown) && return x
 
-    n,y = rem_pio2_kernel(x)
+    n, y = rem_pio2_kernel(x)
 
     if iseven(n)
         if n & 2 == 2 # n % 4 == 2: add pi
-            z = add22condh(y.hi,y.lo,pi2o2_h,pi2o2_l)
-        else          # n % 4 == 0: add 0 or 2pi
+            z = add22condh(y.hi, y.lo, pi2o2_h, pi2o2_l)
+        else # n % 4 == 0: add 0 or 2pi
             if y.hi > 0
-                z = y.hi+y.lo
-            else      # negative: add 2pi
-                z = add22condh(y.hi,y.lo,pi4o2_h,pi4o2_l)
+                z = y.hi + y.lo
+            else # negative: add 2pi
+                z = add22condh(y.hi, y.lo, pi4o2_h, pi4o2_l)
             end
         end
     else
         if n & 2 == 2 # n % 4 == 3: add 3pi/2
-            z = add22condh(y.hi,y.lo,pi3o2_h,pi3o2_l)
-        else          # n % 4 == 1: add pi/2
-            z = add22condh(y.hi,y.lo,pi1o2_h,pi1o2_l)
+            z = add22condh(y.hi, y.lo, pi3o2_h, pi3o2_l)
+        else # n % 4 == 1: add pi/2
+            z = add22condh(y.hi, y.lo, pi1o2_h, pi1o2_l)
         end
     end
-    copysign(z,x)
+    copysign(z, x)
 end
 function rem2pi(x::Float64, ::RoundingMode{:Down})
     if x < pi4o2_h
         if x >= 0
             return x
         elseif x > -pi4o2_h
-            return add22condh(x,0.0,pi4o2_h,pi4o2_l)
+            return add22condh(x, 0.0, pi4o2_h, pi4o2_l)
         end
     end
 
-    n,y = rem_pio2_kernel(x)
+    n, y = rem_pio2_kernel(x)
 
     if iseven(n)
         if n & 2 == 2 # n % 4 == 2: add pi
-            return add22condh(y.hi,y.lo,pi2o2_h,pi2o2_l)
-        else          # n % 4 == 0: add 0 or 2pi
+            return add22condh(y.hi, y.lo, pi2o2_h, pi2o2_l)
+        else # n % 4 == 0: add 0 or 2pi
             if y.hi > 0
-                return y.hi+y.lo
-            else      # negative: add 2pi
-                return add22condh(y.hi,y.lo,pi4o2_h,pi4o2_l)
+                return y.hi + y.lo
+            else # negative: add 2pi
+                return add22condh(y.hi, y.lo, pi4o2_h, pi4o2_l)
             end
         end
     else
         if n & 2 == 2 # n % 4 == 3: add 3pi/2
-            return add22condh(y.hi,y.lo,pi3o2_h,pi3o2_l)
-        else          # n % 4 == 1: add pi/2
-            return add22condh(y.hi,y.lo,pi1o2_h,pi1o2_l)
+            return add22condh(y.hi, y.lo, pi3o2_h, pi3o2_l)
+        else # n % 4 == 1: add pi/2
+            return add22condh(y.hi, y.lo, pi1o2_h, pi1o2_l)
         end
     end
 end
@@ -1002,27 +1132,27 @@ function rem2pi(x::Float64, ::RoundingMode{:Up})
         if x <= 0
             return x
         elseif x < pi4o2_h
-            return add22condh(x,0.0,-pi4o2_h,-pi4o2_l)
+            return add22condh(x, 0.0, -pi4o2_h, -pi4o2_l)
         end
     end
 
-    n,y = rem_pio2_kernel(x)
+    n, y = rem_pio2_kernel(x)
 
     if iseven(n)
         if n & 2 == 2 # n % 4 == 2: sub pi
-            return add22condh(y.hi,y.lo,-pi2o2_h,-pi2o2_l)
-        else          # n % 4 == 0: sub 0 or 2pi
+            return add22condh(y.hi, y.lo, -pi2o2_h, -pi2o2_l)
+        else # n % 4 == 0: sub 0 or 2pi
             if y.hi < 0
-                return y.hi+y.lo
-            else      # positive: sub 2pi
-                return add22condh(y.hi,y.lo,-pi4o2_h,-pi4o2_l)
+                return y.hi + y.lo
+            else # positive: sub 2pi
+                return add22condh(y.hi, y.lo, -pi4o2_h, -pi4o2_l)
             end
         end
     else
         if n & 2 == 2 # n % 4 == 3: sub pi/2
-            return add22condh(y.hi,y.lo,-pi1o2_h,-pi1o2_l)
-        else          # n % 4 == 1: sub 3pi/2
-            return add22condh(y.hi,y.lo,-pi3o2_h,-pi3o2_l)
+            return add22condh(y.hi, y.lo, -pi1o2_h, -pi1o2_l)
+        else # n % 4 == 1: sub 3pi/2
+            return add22condh(y.hi, y.lo, -pi3o2_h, -pi3o2_l)
         end
     end
 end
@@ -1051,7 +1181,7 @@ julia> mod2pi(9*pi/4)
 0.7853981633974481
 ```
 """
-mod2pi(x) = rem2pi(x,RoundDown)
+mod2pi(x) = rem2pi(x, RoundDown)
 
 # generic fallback; for number types, promotion.jl does promotion
 
@@ -1075,21 +1205,42 @@ julia> 3 * 2 + 1
 7
 ```
 """
-muladd(x,y,z) = x*y+z
+muladd(x, y, z) = x * y + z
 
 # Float16 definitions
 
-for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
-             :atanh,:exp,:exp2,:exp10,:log,:log2,:log10,:sqrt,:lgamma,:log1p)
+for func in (
+    :sin,
+    :cos,
+    :tan,
+    :asin,
+    :acos,
+    :atan,
+    :sinh,
+    :cosh,
+    :tanh,
+    :asinh,
+    :acosh,
+    :atanh,
+    :exp,
+    :exp2,
+    :exp10,
+    :log,
+    :log2,
+    :log10,
+    :sqrt,
+    :lgamma,
+    :log1p
+)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
         $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
     end
 end
 
-for func in (:atan,:hypot)
+for func in (:atan, :hypot)
     @eval begin
-        $func(a::Float16,b::Float16) = Float16($func(Float32(a),Float32(b)))
+        $func(a::Float16, b::Float16) = Float16($func(Float32(a), Float32(b)))
     end
 end
 
@@ -1104,7 +1255,7 @@ sincos(a::Float16) = Float16.(sincos(Float32(a)))
 Return the high word of `x` as a `UInt32`.
 """
 @inline highword(x::Float64) = highword(reinterpret(UInt64, x))
-@inline highword(x::UInt64)  = (x >>> 32) % UInt32
+@inline highword(x::UInt64) = (x >>> 32) % UInt32
 @inline highword(x::Float32) = reinterpret(UInt32, x)
 
 @inline fromhighword(::Type{Float64}, u::UInt32) = reinterpret(Float64, UInt64(u) << 32)
@@ -1117,7 +1268,7 @@ Return the high word of `x` as a `UInt32`.
 Return positive part of the high word of `x` as a `UInt32`.
 """
 @inline poshighword(x::Float64) = poshighword(reinterpret(UInt64, x))
-@inline poshighword(x::UInt64)  = highword(x) & 0x7fffffff
+@inline poshighword(x::UInt64) = highword(x) & 0x7fffffff
 @inline poshighword(x::Float32) = highword(x) & 0x7fffffff
 
 # More special functions
@@ -1131,12 +1282,31 @@ include("special/rem_pio2.jl")
 include("special/log.jl")
 
 # `missing` definitions for functions in this module
-for f in (:(acos), :(acosh), :(asin), :(asinh), :(atan), :(atanh),
-          :(sin), :(sinh), :(cos), :(cosh), :(tan), :(tanh),
-          :(exp), :(exp2), :(expm1), :(log), :(log10), :(log1p),
-          :(log2), :(exponent), :(sqrt))
+for f in (
+    :(acos),
+    :(acosh),
+    :(asin),
+    :(asinh),
+    :(atan),
+    :(atanh),
+    :(sin),
+    :(sinh),
+    :(cos),
+    :(cosh),
+    :(tan),
+    :(tanh),
+    :(exp),
+    :(exp2),
+    :(expm1),
+    :(log),
+    :(log10),
+    :(log1p),
+    :(log2),
+    :(exponent),
+    :(sqrt)
+)
     @eval $(f)(::Missing) = missing
 end
 clamp(::Missing, lo, hi) = missing
 
-end # module
+end

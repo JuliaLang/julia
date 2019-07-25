@@ -24,10 +24,10 @@ Ref
 # instead of Ptr{Cchar} and Ptr{Cwchar_t}, respectively, to enforce
 # a check for embedded NUL chars in the string (to avoid silent truncation).
 if Int === Int64
-    primitive type Cstring  64 end
+    primitive type Cstring 64 end
     primitive type Cwstring 64 end
 else
-    primitive type Cstring  32 end
+    primitive type Cstring 32 end
     primitive type Cwstring 32 end
 end
 
@@ -55,10 +55,12 @@ struct RefArray{T,A<:AbstractArray{T},R} <: Ref{T}
     x::A
     i::Int
     roots::R # should be either ::Nothing or ::Any
-    RefArray{T,A,R}(x,i,roots=nothing) where {T,A<:AbstractArray{T},R} = new(x,i,roots)
+    RefArray{T,A,R}(x, i, roots = nothing) where {T,A<:AbstractArray{T},R} = new(x, i, roots)
 end
-RefArray(x::AbstractArray{T}, i::Int, roots::Any) where {T} = RefArray{T,typeof(x),Any}(x, i, roots)
-RefArray(x::AbstractArray{T}, i::Int=1, roots::Nothing=nothing) where {T} = RefArray{T,typeof(x),Nothing}(x, i, nothing)
+RefArray(x::AbstractArray{T}, i::Int, roots::Any) where {T} =
+    RefArray{T,typeof(x),Any}(x, i, roots)
+RefArray(x::AbstractArray{T}, i::Int = 1, roots::Nothing = nothing) where {T} =
+    RefArray{T,typeof(x),Nothing}(x, i, nothing)
 convert(::Type{Ref{T}}, x::AbstractArray{T}) where {T} = RefArray(x, 1)
 
 function unsafe_convert(P::Type{Ptr{T}}, b::RefArray{T}) where T
@@ -75,7 +77,8 @@ end
 function unsafe_convert(P::Type{Ptr{Any}}, b::RefArray{Any})
     return convert(P, pointer(b.x, b.i))
 end
-unsafe_convert(::Type{Ptr{Cvoid}}, b::RefArray{T}) where {T} = convert(Ptr{Cvoid}, unsafe_convert(Ptr{T}, b))
+unsafe_convert(::Type{Ptr{Cvoid}}, b::RefArray{T}) where {T} =
+    convert(Ptr{Cvoid}, unsafe_convert(Ptr{T}, b))
 
 ###
 if is_primary_base_module
@@ -87,15 +90,19 @@ if is_primary_base_module
     Ref(x::Ptr{T}, i::Integer) where {T} = x + (i - 1) * Core.sizeof(T)
 
     # convert Arrays to pointer arrays for ccall
-    function Ref{P}(a::Array{<:Union{Ptr,Cwstring,Cstring}}) where P<:Union{Ptr,Cwstring,Cstring}
+    function Ref{P}(a::Array{<:Union{
+        Ptr,
+        Cwstring,
+        Cstring
+    }}) where P <: Union{Ptr,Cwstring,Cstring}
         return RefArray(a) # effectively a no-op
     end
-    function Ref{P}(a::Array{T}) where P<:Union{Ptr,Cwstring,Cstring} where T
+    function Ref{P}(a::Array{T}) where P <: Union{Ptr,Cwstring,Cstring} where T
         if (!isbitstype(T) && T <: eltype(P))
             # this Array already has the right memory layout for the requested Ref
-            return RefArray(a,1,false) # root something, so that this function is type-stable
+            return RefArray(a, 1, false) # root something, so that this function is type-stable
         else
-            ptrs = Vector{P}(undef, length(a)+1)
+            ptrs = Vector{P}(undef, length(a) + 1)
             roots = Vector{Any}(undef, length(a))
             for i = 1:length(a)
                 root = cconvert(P, a[i])
@@ -103,7 +110,7 @@ if is_primary_base_module
                 roots[i] = root
             end
             ptrs[length(a)+1] = C_NULL
-            return RefArray(ptrs,1,roots)
+            return RefArray(ptrs, 1, roots)
         end
     end
     Ref(x::AbstractArray, i::Integer) = RefArray(x, i)

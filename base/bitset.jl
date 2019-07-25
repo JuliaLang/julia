@@ -40,8 +40,8 @@ end
 
 eltype(::Type{BitSet}) = Int
 
-empty(s::BitSet, ::Type{Int}=Int) = BitSet()
-emptymutable(s::BitSet, ::Type{Int}=Int) = BitSet()
+empty(s::BitSet, ::Type{Int} = Int) = BitSet()
+emptymutable(s::BitSet, ::Type{Int} = Int) = BitSet()
 
 copy(s1::BitSet) = copy!(BitSet(), s1)
 copymutable(s::BitSet) = copy(s)
@@ -53,7 +53,7 @@ function copy!(dest::BitSet, src::BitSet)
     dest
 end
 
-sizehint!(s::BitSet, n::Integer) = (sizehint!(s.bits, (n+63) >> 6); s)
+sizehint!(s::BitSet, n::Integer) = (sizehint!(s.bits, (n + 63) >> 6); s)
 
 function _bits_getindex(b::Bits, n::Int, offset::Int)
     ci = _div64(n) - offset + 1
@@ -66,7 +66,7 @@ function _bits_findnext(b::Bits, start::Int)
     # start is 0-based
     # @assert start >= 0
     _div64(start) + 1 > length(b) && return -1
-    ind = unsafe_bitfindnext(b, start+1)
+    ind = unsafe_bitfindnext(b, start + 1)
     ind === nothing ? -1 : ind - 1
 end
 
@@ -74,7 +74,7 @@ function _bits_findprev(b::Bits, start::Int)
     # start is 0-based
     # @assert start <= 64 * length(b) - 1
     start >= 0 || return -1
-    ind = unsafe_bitfindprev(b, start+1)
+    ind = unsafe_bitfindprev(b, start + 1)
     ind === nothing ? -1 : ind - 1
 end
 
@@ -101,7 +101,7 @@ end
         s.offset += diff
         diff = 0
     end
-    _unsafe_bitsetindex!(s.bits, b, diff+1, _mod64(idx))
+    _unsafe_bitsetindex!(s.bits, b, diff + 1, _mod64(idx))
     s
 end
 
@@ -142,14 +142,14 @@ function union!(s::BitSet, r::AbstractUnitRange{<:Integer})
         # fully overwritten (i.e. only or'ed with `|`)
         s.bits[end] = CHK0 # end == diffb + 1
         if diffa >= len
-            s.bits[diffa + 1] = CHK0
+            s.bits[diffa+1] = CHK0
         end
     end
     if diffa < 0
         _growbeg!(s.bits, -diffa)
         s.bits[1] = CHK0
         if diffb < 0
-            s.bits[diffb - diffa + 1] = CHK0
+            s.bits[diffb-diffa+1] = CHK0
         end
         s.offset = cidxa # s.offset += diffa
         diffb -= diffa
@@ -160,10 +160,10 @@ function union!(s::BitSet, r::AbstractUnitRange{<:Integer})
     i = _mod64(a)
     j = _mod64(b)
     @inbounds if diffa == diffb
-        s.bits[diffa + 1] |= (((~CHK0) >> i) << (i+63-j)) >> (63-j)
+        s.bits[diffa+1] |= (((~CHK0) >> i) << (i + 63 - j)) >> (63 - j)
     else
-        s.bits[diffa + 1] |= ((~CHK0) >> i) << i
-        s.bits[diffb + 1] |= (~CHK0  << (63-j)) >> (63-j)
+        s.bits[diffa+1] |= ((~CHK0) >> i) << i
+        s.bits[diffb+1] |= (~CHK0 << (63 - j)) >> (63 - j)
         for n = diffa+1:diffb-1
             s.bits[n+1] = ~CHK0
         end
@@ -183,29 +183,44 @@ function _matched_map!(f, s1::BitSet, s2::BitSet)
     elseif s2.offset == NO_OFFSET
         return right_false_is_false ? empty!(s1) : s1
     end
-    s1.offset = _matched_map!(f, s1.bits, s1.offset, s2.bits, s2.offset,
-                              left_false_is_false, right_false_is_false)
+    s1.offset =
+        _matched_map!(
+            f,
+            s1.bits,
+            s1.offset,
+            s2.bits,
+            s2.offset,
+            left_false_is_false,
+            right_false_is_false
+        )
     s1
 end
 
 # An internal function that takes a pure function `f` and maps across two BitArrays
 # allowing the lengths and offsets to be different and altering b1 with the result
 # WARNING: the assumptions written in the else clauses must hold
-function _matched_map!(f, a1::Bits, b1::Int, a2::Bits, b2::Int,
-                       left_false_is_false::Bool, right_false_is_false::Bool)
+function _matched_map!(
+    f,
+    a1::Bits,
+    b1::Int,
+    a2::Bits,
+    b2::Int,
+    left_false_is_false::Bool,
+    right_false_is_false::Bool
+)
     l1, l2 = length(a1), length(a2)
     bdiff = b2 - b1
-    e1, e2 = l1+b1, l2+b2
+    e1, e2 = l1 + b1, l2 + b2
     ediff = e2 - e1
 
     # map! over the common indices
-    @inbounds for i = max(1, 1+bdiff):min(l1, l2+bdiff)
+    @inbounds for i = max(1, 1 + bdiff):min(l1, l2 + bdiff)
         a1[i] = f(a1[i], a2[i-bdiff])
     end
 
     if ediff > 0
         if left_false_is_false
-            # We don't need to worry about the trailing bits — they're all false
+        # We don't need to worry about the trailing bits — they're all false
         else # @assert f(false, x) == x
             _growend!(a1, ediff)
             # if a1 and a2 are not overlapping, we infer implied "false" values from a2
@@ -215,24 +230,24 @@ function _matched_map!(f, a1::Bits, b1::Int, a2::Bits, b2::Int,
             # update ediff in case l1 was updated
             ediff = e2 - l1 - b1
             # copy actual chunks from a2
-            unsafe_copyto!(a1, l1+1, a2, l2+1-ediff, ediff)
+            unsafe_copyto!(a1, l1 + 1, a2, l2 + 1 - ediff, ediff)
             l1 = length(a1)
         end
     elseif ediff < 0
         if right_false_is_false
             # We don't need to worry about the trailing bits — they're all false
             _deleteend!(a1, min(l1, -ediff))
-            # no need to update l1, as if bdiff > 0 (case below), then bdiff will
-            # be smaller anyway than an updated l1
+        # no need to update l1, as if bdiff > 0 (case below), then bdiff will
+        # be smaller anyway than an updated l1
         else # @assert f(x, false) == x
-            # We don't need to worry about the trailing bits — they already have the
-            # correct value
+        # We don't need to worry about the trailing bits — they already have the
+        # correct value
         end
     end
 
     if bdiff < 0
         if left_false_is_false
-            # We don't need to worry about the leading bits — they're all false
+        # We don't need to worry about the leading bits — they're all false
         else # @assert f(false, x) == x
             _growbeg!(a1, -bdiff)
             # if a1 and a2 are not overlapping, we infer implied "false" values from a2
@@ -250,8 +265,8 @@ function _matched_map!(f, a1::Bits, b1::Int, a2::Bits, b2::Int,
             _deletebeg!(a1, min(l1, bdiff))
             b1 += bdiff
         else # @assert f(x, false) == x
-            # We don't need to worry about the trailing bits — they already have the
-            # correct value
+        # We don't need to worry about the trailing bits — they already have the
+        # correct value
         end
     end
     b1 # the new offset
@@ -272,7 +287,9 @@ end
 
 @inline push!(s::BitSet, n::Integer) = _setint!(s, _check_bitset_bounds(n), true)
 
-push!(s::BitSet, ns::Integer...) = (for n in ns; push!(s, n); end; s)
+push!(s::BitSet, ns::Integer...) = (for n in ns
+        push!(s, n)
+    end; s)
 
 @inline pop!(s::BitSet) = pop!(s, last(s))
 
@@ -340,10 +357,10 @@ filter!(f, s::BitSet) = unsafe_filter!(f, s)
 @inline in(n::Int, s::BitSet) = _bits_getindex(s.bits, n, s.offset)
 @inline in(n::Integer, s::BitSet) = _is_convertible_Int(n) ? in(Int(n), s) : false
 
-function iterate(s::BitSet, idx=0)
-   idx = _bits_findnext(s.bits, idx)
-   idx == -1 && return nothing
-   (idx + intoffset(s), idx+1)
+function iterate(s::BitSet, idx = 0)
+    idx = _bits_findnext(s.bits, idx)
+    idx == -1 && return nothing
+    (idx + intoffset(s), idx + 1)
 end
 
 @noinline _throw_bitset_notempty_error() =
@@ -388,28 +405,28 @@ function ==(s1::BitSet, s2::BitSet)
     a2 = s2.bits
     b1, b2 = s1.offset, s2.offset
     l1, l2 = length(a1), length(a2)
-    e1 = l1+b1
+    e1 = l1 + b1
     overlap0 = max(0, e1 - b2)
-    included = overlap0 >= l2  # whether a2's indices are included in a1's
-    overlap  = included ? l2 : overlap0
+    included = overlap0 >= l2 # whether a2's indices are included in a1's
+    overlap = included ? l2 : overlap0
 
     # Ensure non-overlap chunks are zero (unlikely)
-    _check0(a1, 1, l1-overlap0) || return false
+    _check0(a1, 1, l1 - overlap0) || return false
     if included
-        _check0(a1, b2-b1+l2+1, l1) || return false
+        _check0(a1, b2 - b1 + l2 + 1, l1) || return false
     else
-        _check0(a2, 1+overlap, l2) || return false
+        _check0(a2, 1 + overlap, l2) || return false
     end
 
     # compare overlap values
     if overlap > 0
-        _memcmp(pointer(a1, b2-b1+1), pointer(a2), overlap<<3) == 0 || return false
+        _memcmp(pointer(a1, b2 - b1 + 1), pointer(a2), overlap << 3) == 0 || return false
     end
 
     return true
 end
 
-issubset(a::BitSet, b::BitSet) = a == intersect(a,b)
+issubset(a::BitSet, b::BitSet) = a == intersect(a, b)
 ⊊(a::BitSet, b::BitSet) = a <= b && a != b
 
 

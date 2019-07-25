@@ -7,7 +7,7 @@ export threadid, nthreads, @threads
 
 Get the ID number of the current thread of execution. The master thread has ID `1`.
 """
-threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
+threadid() = Int(ccall(:jl_threadid, Int16, ()) + 1)
 
 # Inclusive upper bound on threadid()
 """
@@ -21,49 +21,49 @@ nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 # Only read/written by the main thread
 const in_threaded_loop = Ref(false)
 
-function _threadsfor(iter,lbody)
-    lidx = iter.args[1]         # index
+function _threadsfor(iter, lbody)
+    lidx = iter.args[1] # index
     range = iter.args[2]
     quote
         local threadsfor_fun
         let range = $(esc(range))
-        function threadsfor_fun(onethread=false)
-            r = range # Load into local variable
-            lenr = length(r)
-            # divide loop iterations among threads
-            if onethread
-                tid = 1
-                len, rem = lenr, 0
-            else
-                tid = threadid()
-                len, rem = divrem(lenr, nthreads())
-            end
-            # not enough iterations for all the threads?
-            if len == 0
-                if tid > rem
-                    return
-                end
-                len, rem = 1, 0
-            end
-            # compute this thread's iterations
-            f = 1 + ((tid-1) * len)
-            l = f + len - 1
-            # distribute remaining iterations evenly
-            if rem > 0
-                if tid <= rem
-                    f = f + (tid-1)
-                    l = l + tid
+            function threadsfor_fun(onethread = false)
+                r = range # Load into local variable
+                lenr = length(r)
+                # divide loop iterations among threads
+                if onethread
+                    tid = 1
+                    len, rem = lenr, 0
                 else
-                    f = f + rem
-                    l = l + rem
+                    tid = threadid()
+                    len, rem = divrem(lenr, nthreads())
+                end
+                # not enough iterations for all the threads?
+                if len == 0
+                    if tid > rem
+                        return
+                    end
+                    len, rem = 1, 0
+                end
+                # compute this thread's iterations
+                f = 1 + ((tid - 1) * len)
+                l = f + len - 1
+                # distribute remaining iterations evenly
+                if rem > 0
+                    if tid <= rem
+                        f = f + (tid - 1)
+                        l = l + tid
+                    else
+                        f = f + rem
+                        l = l + rem
+                    end
+                end
+                # run this thread's iterations
+                for i = f:l
+                    local $(esc(lidx)) = Base.unsafe_getindex(r, i)
+                    $(esc(lbody))
                 end
             end
-            # run this thread's iterations
-            for i = f:l
-                local $(esc(lidx)) = Base.unsafe_getindex(r,i)
-                $(esc(lbody))
-            end
-        end
         end
         # Hack to make nested threaded loops kinda work
         if threadid() != 1 || in_threaded_loop[]
@@ -117,7 +117,7 @@ to wait and then obtain its return value.
     This macro is available as of Julia 1.3.
 """
 macro spawn(expr)
-    thunk = esc(:(()->($expr)))
+    thunk = esc(:(() -> ($expr)))
     var = esc(Base.sync_varname)
     quote
         local task = Task($thunk)

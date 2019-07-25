@@ -13,7 +13,13 @@ gensym(s::String) = ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), s
 
 gensym(ss::String...) = map(gensym, ss)
 gensym(s::Symbol) =
-    ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), s, ccall(:strlen, Csize_t, (Ptr{UInt8},), s))
+    ccall(
+        :jl_tagged_gensym,
+        Ref{Symbol},
+        (Ptr{UInt8}, Int32),
+        s,
+        ccall(:strlen, Csize_t, (Ptr{UInt8},), s)
+    )
 
 """
     @gensym
@@ -65,7 +71,7 @@ function copy(c::CodeInfo)
     cnew.code = copy_exprargs(cnew.code)
     cnew.slotnames = copy(cnew.slotnames)
     cnew.slotflags = copy(cnew.slotflags)
-    cnew.codelocs  = copy(cnew.codelocs)
+    cnew.codelocs = copy(cnew.codelocs)
     cnew.linetable = copy(cnew.linetable)
     cnew.ssaflags = copy(cnew.ssaflags)
     ssavaluetypes = cnew.ssavaluetypes
@@ -102,7 +108,7 @@ julia> macroexpand(M, :(@m2()), recursive=false)
 :(#= REPL[16]:6 =# M.@m1)
 ```
 """
-function macroexpand(m::Module, @nospecialize(x); recursive=true)
+function macroexpand(m::Module, @nospecialize(x); recursive = true)
     if recursive
         ccall(:jl_macroexpand, Any, (Any, Any), x, m)
     else
@@ -149,7 +155,7 @@ With `@macroexpand` the expression expands where `@macroexpand` appears in the c
 With `macroexpand` the expression expands in the module given as the first argument.
 """
 macro macroexpand(code)
-    return :(macroexpand($__module__, $(QuoteNode(code)), recursive=true))
+    return :(macroexpand($__module__, $(QuoteNode(code)), recursive = true))
 end
 
 
@@ -159,7 +165,7 @@ end
 Non recursive version of [`@macroexpand`](@ref).
 """
 macro macroexpand1(code)
-    return :(macroexpand($__module__, $(QuoteNode(code)), recursive=false))
+    return :(macroexpand($__module__, $(QuoteNode(code)), recursive = false))
 end
 
 ## misc syntax ##
@@ -289,7 +295,7 @@ function _getmeta(body::Expr, sym::Symbol, delete::Bool)
 end
 _getmeta(arg, sym, delete::Bool) = (false, [])
 function _getmeta(body::Array{Any,1}, sym::Symbol, delete::Bool)
-    idx, blockargs = findmeta_block(body, args -> findmetaarg(args,sym)!=0)
+    idx, blockargs = findmeta_block(body, args -> findmetaarg(args, sym) != 0)
     if idx == 0
         return false, []
     end
@@ -310,8 +316,8 @@ end
 function findmetaarg(metaargs, sym)
     for i = 1:length(metaargs)
         arg = metaargs[i]
-        if (isa(arg, Symbol) && (arg::Symbol)    == sym) ||
-           (isa(arg, Expr)   && (arg::Expr).head == sym)
+        if (isa(arg, Symbol) && (arg::Symbol) == sym) ||
+           (isa(arg, Expr) && (arg::Expr).head == sym)
             return i
         end
     end
@@ -339,7 +345,7 @@ end
 
 findmeta(ex::Array{Any,1}) = findmeta_block(ex)
 
-function findmeta_block(exargs, argsmatch=args->true)
+function findmeta_block(exargs, argsmatch = args -> true)
     for i = 1:length(exargs)
         a = exargs[i]
         if isa(a, Expr)
@@ -414,15 +420,23 @@ macro generated(f)
     if isa(f, Expr) && (f.head === :function || is_short_function_def(f))
         body = f.args[2]
         lno = body.args[1]
-        return Expr(:escape,
-                    Expr(f.head, f.args[1],
-                         Expr(:block,
-                              lno,
-                              Expr(:if, Expr(:generated),
-                                   body,
-                                   Expr(:block,
-                                        Expr(:meta, :generated_only),
-                                        Expr(:return, nothing))))))
+        return Expr(
+            :escape,
+            Expr(
+                f.head,
+                f.args[1],
+                Expr(
+                    :block,
+                    lno,
+                    Expr(
+                        :if,
+                        Expr(:generated),
+                        body,
+                        Expr(:block, Expr(:meta, :generated_only), Expr(:return, nothing))
+                    )
+                )
+            )
+        )
     else
         error("invalid syntax; @generated must be used with a function definition")
     end

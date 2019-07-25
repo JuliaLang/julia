@@ -3,35 +3,35 @@
 
 # This type must be kept in sync with the C struct in src/gc.h
 struct GC_Num
-    allocd      ::Int64 # GC internal
+    allocd::Int64 # GC internal
     deferred_alloc::Int64 # GC internal
-    freed       ::Int64 # GC internal
-    malloc      ::UInt64
-    realloc     ::UInt64
-    poolalloc   ::UInt64
-    bigalloc    ::UInt64
-    freecall    ::UInt64
-    total_time  ::UInt64
+    freed::Int64 # GC internal
+    malloc::UInt64
+    realloc::UInt64
+    poolalloc::UInt64
+    bigalloc::UInt64
+    freecall::UInt64
+    total_time::UInt64
     total_allocd::UInt64 # GC internal
-    since_sweep ::UInt64 # GC internal
-    collect     ::Csize_t # GC internal
-    pause       ::Cint
-    full_sweep  ::Cint
+    since_sweep::UInt64 # GC internal
+    collect::Csize_t # GC internal
+    pause::Cint
+    full_sweep::Cint
 end
 
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
 
 # This type is to represent differences in the counters, so fields may be negative
 struct GC_Diff
-    allocd      ::Int64 # Bytes allocated
-    malloc      ::Int64 # Number of GC aware malloc()
-    realloc     ::Int64 # Number of GC aware realloc()
-    poolalloc   ::Int64 # Number of pool allocation
-    bigalloc    ::Int64 # Number of big (non-pool) allocation
-    freecall    ::Int64 # Number of GC aware free()
-    total_time  ::Int64 # Time spent in garbage collection
-    pause       ::Int64 # Number of GC pauses
-    full_sweep  ::Int64 # Number of GC full collection
+    allocd::Int64 # Bytes allocated
+    malloc::Int64 # Number of GC aware malloc()
+    realloc::Int64 # Number of GC aware realloc()
+    poolalloc::Int64 # Number of pool allocation
+    bigalloc::Int64 # Number of big (non-pool) allocation
+    freecall::Int64 # Number of GC aware free()
+    total_time::Int64 # Time spent in garbage collection
+    pause::Int64 # Number of GC pauses
+    full_sweep::Int64 # Number of GC full collection
 end
 
 gc_total_bytes(gc_num::GC_Num) =
@@ -41,15 +41,17 @@ function GC_Diff(new::GC_Num, old::GC_Num)
     # logic from `src/gc.c:jl_gc_total_bytes`
     old_allocd = gc_total_bytes(old)
     new_allocd = gc_total_bytes(new)
-    return GC_Diff(new_allocd - old_allocd,
-                   Int64(new.malloc       - old.malloc),
-                   Int64(new.realloc      - old.realloc),
-                   Int64(new.poolalloc    - old.poolalloc),
-                   Int64(new.bigalloc     - old.bigalloc),
-                   Int64(new.freecall     - old.freecall),
-                   Int64(new.total_time   - old.total_time),
-                   new.pause              - old.pause,
-                   new.full_sweep         - old.full_sweep)
+    return GC_Diff(
+        new_allocd - old_allocd,
+        Int64(new.malloc - old.malloc),
+        Int64(new.realloc - old.realloc),
+        Int64(new.poolalloc - old.poolalloc),
+        Int64(new.bigalloc - old.bigalloc),
+        Int64(new.freecall - old.freecall),
+        Int64(new.total_time - old.total_time),
+        new.pause - old.pause,
+        new.full_sweep - old.full_sweep
+    )
 end
 
 function gc_alloc_count(diff::GC_Diff)
@@ -72,11 +74,11 @@ function prettyprint_getunits(value, numunits, factor)
     end
     unit = ceil(Int, log(value) / log(factor))
     unit = min(numunits, unit)
-    number = value/factor^(unit-1)
+    number = value / factor^(unit - 1)
     return number, unit
 end
 
-function padded_nonzero_print(value,str)
+function padded_nonzero_print(value, str)
     if value != 0
         blanks = "                "[1:18-length(str)]
         println("$str:$blanks$value")
@@ -86,28 +88,33 @@ end
 function format_bytes(bytes)
     bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))
     if mb == 1
-        Printf.@sprintf("%d %s%s", bytes, _mem_units[mb], bytes==1 ? "" : "s")
+        Printf.@sprintf("%d %s%s", bytes, _mem_units[mb], bytes == 1 ? "" : "s")
     else
         Printf.@sprintf("%.3f %s", bytes, _mem_units[mb])
     end
 end
 
-function time_print(elapsedtime, bytes=0, gctime=0, allocs=0)
-    Printf.@printf("%10.6f seconds", elapsedtime/1e9)
+function time_print(elapsedtime, bytes = 0, gctime = 0, allocs = 0)
+    Printf.@printf("%10.6f seconds", elapsedtime / 1e9)
     if bytes != 0 || allocs != 0
         allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
         if ma == 1
-            Printf.@printf(" (%d%s allocation%s: ", allocs, _cnt_units[ma], allocs==1 ? "" : "s")
+            Printf.@printf(
+                " (%d%s allocation%s: ",
+                allocs,
+                _cnt_units[ma],
+                allocs == 1 ? "" : "s"
+            )
         else
             Printf.@printf(" (%.2f%s allocations: ", allocs, _cnt_units[ma])
         end
         print(format_bytes(bytes))
         if gctime > 0
-            Printf.@printf(", %.2f%% gc time", 100*gctime/elapsedtime)
+            Printf.@printf(", %.2f%% gc time", 100 * gctime / elapsedtime)
         end
         print(")")
     elseif gctime > 0
-        Printf.@printf(", %.2f%% gc time", 100*gctime/elapsedtime)
+        Printf.@printf(", %.2f%% gc time", 100 * gctime / elapsedtime)
     end
 end
 
@@ -115,15 +122,15 @@ function timev_print(elapsedtime, diff::GC_Diff)
     allocs = gc_alloc_count(diff)
     time_print(elapsedtime, diff.allocd, diff.total_time, allocs)
     print("\nelapsed time (ns): $elapsedtime\n")
-    padded_nonzero_print(diff.total_time,   "gc time (ns)")
-    padded_nonzero_print(diff.allocd,       "bytes allocated")
-    padded_nonzero_print(diff.poolalloc,    "pool allocs")
-    padded_nonzero_print(diff.bigalloc,     "non-pool GC allocs")
-    padded_nonzero_print(diff.malloc,       "malloc() calls")
-    padded_nonzero_print(diff.realloc,      "realloc() calls")
-    padded_nonzero_print(diff.freecall,     "free() calls")
-    padded_nonzero_print(diff.pause,        "GC pauses")
-    padded_nonzero_print(diff.full_sweep,   "full collections")
+    padded_nonzero_print(diff.total_time, "gc time (ns)")
+    padded_nonzero_print(diff.allocd, "bytes allocated")
+    padded_nonzero_print(diff.poolalloc, "pool allocs")
+    padded_nonzero_print(diff.bigalloc, "non-pool GC allocs")
+    padded_nonzero_print(diff.malloc, "malloc() calls")
+    padded_nonzero_print(diff.realloc, "realloc() calls")
+    padded_nonzero_print(diff.freecall, "free() calls")
+    padded_nonzero_print(diff.pause, "GC pauses")
+    padded_nonzero_print(diff.full_sweep, "full collections")
 end
 
 """
@@ -155,8 +162,7 @@ macro time(ex)
         local val = $(esc(ex))
         elapsedtime = time_ns() - elapsedtime
         local diff = GC_Diff(gc_num(), stats)
-        time_print(elapsedtime, diff.allocd, diff.total_time,
-                   gc_alloc_count(diff))
+        time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff))
         println()
         val
     end
@@ -210,7 +216,7 @@ macro elapsed(ex)
     quote
         local t0 = time_ns()
         local val = $(esc(ex))
-        (time_ns()-t0)/1e9
+        (time_ns() - t0) / 1e9
     end
 end
 
@@ -288,7 +294,7 @@ macro timed(ex)
         local val = $(esc(ex))
         elapsedtime = time_ns() - elapsedtime
         local diff = GC_Diff(gc_num(), stats)
-        val, elapsedtime/1e9, diff.allocd, diff.total_time/1e9, diff
+        val, elapsedtime / 1e9, diff.allocd, diff.total_time / 1e9, diff
     end
 end
 
@@ -296,29 +302,29 @@ end
 ## printing with color ##
 
 const text_colors = AnyDict(
-    :black         => "\033[30m",
-    :red           => "\033[31m",
-    :green         => "\033[32m",
-    :yellow        => "\033[33m",
-    :blue          => "\033[34m",
-    :magenta       => "\033[35m",
-    :cyan          => "\033[36m",
-    :white         => "\033[37m",
-    :light_black   => "\033[90m", # gray
-    :light_red     => "\033[91m",
-    :light_green   => "\033[92m",
-    :light_yellow  => "\033[93m",
-    :light_blue    => "\033[94m",
+    :black => "\033[30m",
+    :red => "\033[31m",
+    :green => "\033[32m",
+    :yellow => "\033[33m",
+    :blue => "\033[34m",
+    :magenta => "\033[35m",
+    :cyan => "\033[36m",
+    :white => "\033[37m",
+    :light_black => "\033[90m",
+    :light_red => "\033[91m",
+    :light_green => "\033[92m",
+    :light_yellow => "\033[93m",
+    :light_blue => "\033[94m",
     :light_magenta => "\033[95m",
-    :light_cyan    => "\033[96m",
-    :normal        => "\033[0m",
-    :default       => "\033[39m",
-    :bold          => "\033[1m",
-    :underline     => "\033[4m",
-    :blink         => "\033[5m",
-    :reverse       => "\033[7m",
-    :hidden        => "\033[8m",
-    :nothing       => "",
+    :light_cyan => "\033[96m",
+    :normal => "\033[0m",
+    :default => "\033[39m",
+    :bold => "\033[1m",
+    :underline => "\033[4m",
+    :blink => "\033[5m",
+    :reverse => "\033[7m",
+    :hidden => "\033[8m",
+    :nothing => "",
 )
 
 for i in 0:255
@@ -326,14 +332,14 @@ for i in 0:255
 end
 
 const disable_text_style = AnyDict(
-    :bold      => "\033[22m",
+    :bold => "\033[22m",
     :underline => "\033[24m",
-    :blink     => "\033[25m",
-    :reverse   => "\033[27m",
-    :hidden    => "\033[28m",
-    :normal    => "",
-    :default   => "",
-    :nothing   => "",
+    :blink => "\033[25m",
+    :reverse => "\033[27m",
+    :hidden => "\033[28m",
+    :normal => "",
+    :default => "",
+    :nothing => "",
 )
 
 # Create a docstring with an automatically generated list
@@ -341,15 +347,19 @@ const disable_text_style = AnyDict(
 available_text_colors = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors)))
 const possible_formatting_symbols = [:normal, :bold, :default]
 available_text_colors = cat(
-    sort!(intersect(available_text_colors, possible_formatting_symbols), rev=true),
-    sort!(setdiff(  available_text_colors, possible_formatting_symbols));
-    dims=1)
+    sort!(intersect(available_text_colors, possible_formatting_symbols), rev = true),
+    sort!(setdiff(available_text_colors, possible_formatting_symbols));
+    dims = 1
+)
 
-const available_text_colors_docstring =
-    string(join([string("`:", key,"`")
-                 for key in available_text_colors], ",\n", ", or \n"))
+const available_text_colors_docstring = string(join(
+    [string("`:", key, "`") for key in available_text_colors],
+    ",\n",
+    ", or \n"
+))
 
-"""Dictionary of color codes for the terminal.
+"""
+Dictionary of color codes for the terminal.
 
 Available colors are: $available_text_colors_docstring as well as the integers 0 to 255 inclusive.
 
@@ -359,20 +369,27 @@ Printing with the color `:nothing` will print the string without modifications.
 """
 text_colors
 
-function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
+function with_output_color(
+    f::Function,
+    color::Union{Int,Symbol},
+    io::IO,
+    args...;
+    bold::Bool = false
+)
     buf = IOBuffer()
     iscolor = get(io, :color, false)
-    try f(IOContext(buf, io), args...)
+    try
+        f(IOContext(buf, io), args...)
     finally
         str = String(take!(buf))
         if !iscolor
             print(io, str)
         else
             bold && color == :bold && (color = :nothing)
-            enable_ansi  = get(text_colors, color, text_colors[:default]) *
-                               (bold ? text_colors[:bold] : "")
+            enable_ansi = get(text_colors, color, text_colors[:default]) *
+                          (bold ? text_colors[:bold] : "")
             disable_ansi = (bold ? disable_text_style[:bold] : "") *
-                               get(disable_text_style, color, text_colors[:default])
+                           get(disable_text_style, color, text_colors[:default])
             first = true
             for line in split(str, '\n')
                 first || print(buf, '\n')
@@ -394,10 +411,10 @@ Print `xs` in a color specified as a symbol or integer, optionally in bold.
 or an integer between 0 and 255 inclusive. Note that not all terminals support 256 colors.
 If the keyword `bold` is given as `true`, the result will be printed in bold.
 """
-printstyled(io::IO, msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
-    with_output_color(print, color, io, msg...; bold=bold)
-printstyled(msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
-    printstyled(stdout, msg...; bold=bold, color=color)
+printstyled(io::IO, msg...; bold::Bool = false, color::Union{Int,Symbol} = :normal) =
+    with_output_color(print, color, io, msg...; bold = bold)
+printstyled(msg...; bold::Bool = false, color::Union{Int,Symbol} = :normal) =
+    printstyled(stdout, msg...; bold = bold, color = color)
 
 """
     Base.julia_cmd(juliapath=joinpath(Sys.BINDIR::String, julia_exename()))
@@ -413,38 +430,38 @@ Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notab
 !!! compat "Julia 1.1"
     Only the `--cpu-target`, `--sysimage`, `--depwarn`, `--compile` and `--check-bounds` flags were propagated before Julia 1.1.
 """
-function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
+function julia_cmd(julia = joinpath(Sys.BINDIR::String, julia_exename()))
     opts = JLOptions()
     cpu_target = unsafe_string(opts.cpu_target)
     image_file = unsafe_string(opts.image_file)
     addflags = String[]
     let compile = if opts.compile_enabled == 0
-                      "no"
-                  elseif opts.compile_enabled == 2
-                      "all"
-                  elseif opts.compile_enabled == 3
-                      "min"
-                  else
-                      "" # default = "yes"
-                  end
+        "no"
+    elseif opts.compile_enabled == 2
+        "all"
+    elseif opts.compile_enabled == 3
+        "min"
+    else
+        "" # default = "yes"
+    end
         isempty(compile) || push!(addflags, "--compile=$compile")
     end
     let depwarn = if opts.depwarn == 0
-                      "no"
-                  elseif opts.depwarn == 2
-                      "error"
-                  else
-                      "" # default = "yes"
-                  end
+        "no"
+    elseif opts.depwarn == 2
+        "error"
+    else
+        "" # default = "yes"
+    end
         isempty(depwarn) || push!(addflags, "--depwarn=$depwarn")
     end
     let check_bounds = if opts.check_bounds == 1
-                      "yes" # on
-                  elseif opts.check_bounds == 2
-                      "no" # off
-                  else
-                      "" # "default"
-                  end
+        "yes" # on
+    elseif opts.check_bounds == 2
+        "no" # off
+    else
+        "" # "default"
+    end
         isempty(check_bounds) || push!(addflags, "--check-bounds=$check_bounds")
     end
     opts.can_inline == 0 && push!(addflags, "--inline=no")
@@ -453,7 +470,8 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
     push!(addflags, "-g$(opts.debug_level)")
     if opts.code_coverage != 0
         # Forward the code-coverage flag only if applicable (if the filename is pid-dependent)
-        coverage_file = (opts.output_code_coverage != C_NULL) ?  unsafe_string(opts.output_code_coverage) : ""
+        coverage_file = (opts.output_code_coverage != C_NULL) ?
+                        unsafe_string(opts.output_code_coverage) : ""
         if isempty(coverage_file) || occursin("%p", coverage_file)
             if opts.code_coverage == 1
                 push!(addflags, "--code-coverage=user")
@@ -491,9 +509,10 @@ will always be called.
 """
 function securezero! end
 @noinline securezero!(a::AbstractArray{<:Number}) = fill!(a, 0)
-@noinline unsafe_securezero!(p::Ptr{T}, len::Integer=1) where {T} =
-    ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
-unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
+@noinline unsafe_securezero!(p::Ptr{T}, len::Integer = 1) where {T} =
+    ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len * sizeof(T))
+unsafe_securezero!(p::Ptr{Cvoid}, len::Integer = 1) =
+    Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
 """
     Base.getpass(message::AbstractString) -> Base.SecretBuffer
@@ -508,32 +527,33 @@ graphical interface.
 function getpass end
 
 if Sys.iswindows()
-function getpass(input::TTY, output::IO, prompt::AbstractString)
-    input === stdin || throw(ArgumentError("getpass only works for stdin"))
-    print(output, prompt, ": ")
-    flush(output)
-    s = SecretBuffer()
-    plen = 0
-    while true
-        c = UInt8(ccall(:_getch, Cint, ()))
-        if c == 0xff || c == UInt8('\n') || c == UInt8('\r')
-            break # EOF or return
-        elseif c == 0x00 || c == 0xe0
-            ccall(:_getch, Cint, ()) # ignore function/arrow keys
-        elseif c == UInt8('\b') && plen > 0
-            plen -= 1 # delete last character on backspace
-        elseif !iscntrl(Char(c)) && plen < 128
-            write(s, c)
+    function getpass(input::TTY, output::IO, prompt::AbstractString)
+        input === stdin || throw(ArgumentError("getpass only works for stdin"))
+        print(output, prompt, ": ")
+        flush(output)
+        s = SecretBuffer()
+        plen = 0
+        while true
+            c = UInt8(ccall(:_getch, Cint, ()))
+            if c == 0xff || c == UInt8('\n') || c == UInt8('\r')
+                break # EOF or return
+            elseif c == 0x00 || c == 0xe0
+                ccall(:_getch, Cint, ()) # ignore function/arrow keys
+            elseif c == UInt8('\b') && plen > 0
+                plen -= 1 # delete last character on backspace
+            elseif !iscntrl(Char(c)) && plen < 128
+                write(s, c)
+            end
         end
+        return seekstart(s)
     end
-    return seekstart(s)
-end
 else
-function getpass(input::TTY, output::IO, prompt::AbstractString)
-    (input === stdin && output === stdout) || throw(ArgumentError("getpass only works for stdin"))
-    msg = string(prompt, ": ")
-    unsafe_SecretBuffer!(ccall(:getpass, Cstring, (Cstring,), msg))
-end
+    function getpass(input::TTY, output::IO, prompt::AbstractString)
+        (input === stdin && output === stdout) ||
+        throw(ArgumentError("getpass only works for stdin"))
+        msg = string(prompt, ": ")
+        unsafe_SecretBuffer!(ccall(:getpass, Cstring, (Cstring,), msg))
+    end
 end
 
 # allow new getpass methods to be defined if stdin has been
@@ -549,18 +569,19 @@ then the user can enter just a newline character to select the `default`.
 
 See also `Base.getpass` and `Base.winprompt` for secure entry of passwords.
 """
-function prompt(input::IO, output::IO, message::AbstractString; default::AbstractString="")
+function prompt(input::IO, output::IO, message::AbstractString; default::AbstractString = "")
     msg = !isempty(default) ? "$message [$default]: " : "$message: "
     print(output, msg)
-    uinput = readline(input, keep=true)
-    isempty(uinput) && return nothing  # Encountered an EOF
+    uinput = readline(input, keep = true)
+    isempty(uinput) && return nothing # Encountered an EOF
     uinput = chomp(uinput)
     isempty(uinput) ? default : uinput
 end
 
 # allow new prompt methods to be defined if stdin has been
 # redirected to some custom stream, e.g. in IJulia.
-prompt(message::AbstractString; default::AbstractString="") = prompt(stdin, stdout, message, default=default)
+prompt(message::AbstractString; default::AbstractString = "") =
+    prompt(stdin, stdout, message, default = default)
 
 # Windows authentication prompt
 if Sys.iswindows()
@@ -572,23 +593,31 @@ if Sys.iswindows()
         banner::Ptr{Cvoid}
     end
 
-    const CREDUIWIN_GENERIC                 = 0x0001
-    const CREDUIWIN_IN_CRED_ONLY            = 0x0020
-    const CREDUIWIN_ENUMERATE_CURRENT_USER  = 0x0200
+    const CREDUIWIN_GENERIC = 0x0001
+    const CREDUIWIN_IN_CRED_ONLY = 0x0020
+    const CREDUIWIN_ENUMERATE_CURRENT_USER = 0x0200
 
-    const CRED_PACK_GENERIC_CREDENTIALS     = 0x0004
+    const CRED_PACK_GENERIC_CREDENTIALS = 0x0004
 
-    const ERROR_SUCCESS                     = 0x0000
-    const ERROR_CANCELLED                   = 0x04c7
+    const ERROR_SUCCESS = 0x0000
+    const ERROR_CANCELLED = 0x04c7
 
     function winprompt(message, caption, default_username; prompt_username = true)
         # Step 1: Create an encrypted username/password bundle that will be used to set
         #         the default username (in theory could also provide a default password)
         credbuf = Vector{UInt8}(undef, 1024)
         credbufsize = Ref{UInt32}(sizeof(credbuf))
-        succeeded = ccall((:CredPackAuthenticationBufferW, "credui.dll"), stdcall, Bool,
+        succeeded = ccall(
+            (:CredPackAuthenticationBufferW, "credui.dll"),
+            stdcall,
+            Bool,
             (UInt32, Cwstring, Cwstring, Ptr{UInt8}, Ptr{UInt32}),
-             CRED_PACK_GENERIC_CREDENTIALS, default_username, "", credbuf, credbufsize)
+            CRED_PACK_GENERIC_CREDENTIALS,
+            default_username,
+            "",
+            credbuf,
+            credbufsize
+        )
         @assert succeeded
 
         # Step 2: Create the actual dialog
@@ -596,7 +625,13 @@ if Sys.iswindows()
         messageArr = Base.cwstring(message)
         captionArr = Base.cwstring(caption)
         pfSave = Ref{Bool}(false)
-        cred = Ref{CREDUI_INFO}(CREDUI_INFO(sizeof(CREDUI_INFO), C_NULL, pointer(messageArr), pointer(captionArr), C_NULL))
+        cred = Ref{CREDUI_INFO}(CREDUI_INFO(
+            sizeof(CREDUI_INFO),
+            C_NULL,
+            pointer(messageArr),
+            pointer(captionArr),
+            C_NULL
+        ))
         dwflags = CREDUIWIN_GENERIC | CREDUIWIN_ENUMERATE_CURRENT_USER
         if !prompt_username
             # Disable setting anything other than default_username
@@ -607,9 +642,31 @@ if Sys.iswindows()
         outbuf_size = Ref{Culong}(0)
 
         #      2.2: Do the actual request
-        code = ccall((:CredUIPromptForWindowsCredentialsW, "credui.dll"), stdcall, UInt32, (Ptr{CREDUI_INFO}, UInt32, Ptr{Culong},
-            Ptr{Cvoid}, Culong, Ptr{Ptr{Cvoid}}, Ptr{Culong}, Ptr{Bool}, UInt32), cred, 0, authPackage, credbuf, credbufsize[],
-            outbuf_data, outbuf_size, pfSave, dwflags)
+        code = ccall(
+            (:CredUIPromptForWindowsCredentialsW, "credui.dll"),
+            stdcall,
+            UInt32,
+            (
+             Ptr{CREDUI_INFO},
+             UInt32,
+             Ptr{Culong},
+             Ptr{Cvoid},
+             Culong,
+             Ptr{Ptr{Cvoid}},
+             Ptr{Culong},
+             Ptr{Bool},
+             UInt32
+            ),
+            cred,
+            0,
+            authPackage,
+            credbuf,
+            credbufsize[],
+            outbuf_data,
+            outbuf_size,
+            pfSave,
+            dwflags
+        )
 
         #      2.3: If that failed for any reason other than the user canceling, error out.
         #           If the user canceled, just return nothing
@@ -623,9 +680,30 @@ if Sys.iswindows()
         usernamelen = Ref{UInt32}(length(usernamebuf))
         # Need valid buffers for domain, even though we don't care
         dummybuf = Vector{UInt16}(undef, 1024)
-        succeeded = ccall((:CredUnPackAuthenticationBufferW, "credui.dll"), Bool,
-            (UInt32, Ptr{Cvoid}, UInt32, Ptr{UInt16}, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}),
-            0, outbuf_data[], outbuf_size[], usernamebuf, usernamelen, dummybuf, Ref{UInt32}(1024), passbuf, passlen)
+        succeeded = ccall(
+            (:CredUnPackAuthenticationBufferW, "credui.dll"),
+            Bool,
+            (
+             UInt32,
+             Ptr{Cvoid},
+             UInt32,
+             Ptr{UInt16},
+             Ptr{UInt32},
+             Ptr{UInt16},
+             Ptr{UInt32},
+             Ptr{UInt16},
+             Ptr{UInt32}
+            ),
+            0,
+            outbuf_data[],
+            outbuf_size[],
+            usernamebuf,
+            usernamelen,
+            dummybuf,
+            Ref{UInt32}(1024),
+            passbuf,
+            passlen
+        )
         windowserror(:winprompt, !succeeded)
 
         # Step 4: Free the encrypted buffer
@@ -635,8 +713,10 @@ if Sys.iswindows()
 
         # Done.
         passbuf_ = passbuf[1:passlen[]-1]
-        result = (String(transcode(UInt8, usernamebuf[1:usernamelen[]-1])),
-                  SecretBuffer!(transcode(UInt8, passbuf_)))
+        result = (
+            String(transcode(UInt8, usernamebuf[1:usernamelen[]-1])),
+            SecretBuffer!(transcode(UInt8, passbuf_))
+        )
         securezero!(passbuf_)
         securezero!(passbuf)
 
@@ -645,14 +725,17 @@ if Sys.iswindows()
 
 end
 
-unsafe_crc32c(a, n, crc) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, n)
+unsafe_crc32c(a, n, crc) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, n)
 
-_crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) =
-    unsafe_crc32c(a, length(a) % Csize_t, crc)
+_crc32c(
+    a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N},
+    crc::UInt32 = 0x00000000
+) = unsafe_crc32c(a, length(a) % Csize_t, crc)
 
-_crc32c(s::String, crc::UInt32=0x00000000) = unsafe_crc32c(s, sizeof(s) % Csize_t, crc)
+_crc32c(s::String, crc::UInt32 = 0x00000000) = unsafe_crc32c(s, sizeof(s) % Csize_t, crc)
 
-function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
+function _crc32c(io::IO, nb::Integer, crc::UInt32 = 0x00000000)
     nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0, got $nb"))
     # use block size 24576=8192*3, since that is the threshold for
     # 3-way parallel SIMD code in the underlying jl_crc32c C function.
@@ -664,9 +747,10 @@ function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
     end
     return unsafe_crc32c(buf, readbytes!(io, buf, min(nb, length(buf))), crc)
 end
-_crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
-_crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
-_crc32c(uuid::UUID, crc::UInt32=0x00000000) =
+_crc32c(io::IO, crc::UInt32 = 0x00000000) = _crc32c(io, typemax(Int64), crc)
+_crc32c(io::IOStream, crc::UInt32 = 0x00000000) =
+    _crc32c(io, filesize(io) - position(io), crc)
+_crc32c(uuid::UUID, crc::UInt32 = 0x00000000) =
     ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, uuid.value, 16)
 
 """
@@ -729,7 +813,7 @@ macro kwdef(expr)
             Q = [U isa Expr && U.head == :<: ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
             kwdefs = quote
-                ($(esc(S)))($params_ex) =($(esc(S)))($(call_args...))
+                ($(esc(S)))($params_ex) = ($(esc(S)))($(call_args...))
                 ($(esc(SQ)))($params_ex) where {$(esc.(P)...)} =
                     ($(esc(SQ)))($(call_args...))
             end
@@ -768,7 +852,7 @@ function _kwdef!(blk, params_args, call_args)
                     #   F(...) = ...
                     continue
                 end
-                defexpr = ei.args[2]  # defexpr
+                defexpr = ei.args[2] # defexpr
                 push!(params_args, Expr(:kw, var, esc(defexpr)))
                 push!(call_args, var)
                 blk.args[i] = lhs
@@ -799,10 +883,13 @@ when `exit_on_error == true`.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
-function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
-                  exit_on_error=false,
-                  seed::Union{BitInteger,Nothing}=nothing)
-    if isa(tests,AbstractString)
+function runtests(
+    tests = ["all"];
+    ncores = ceil(Int, Sys.CPU_THREADS / 2),
+    exit_on_error = false,
+    seed::Union{BitInteger,Nothing} = nothing
+)
+    if isa(tests, AbstractString)
         tests = split(tests)
     end
     exit_on_error && push!(tests, "--exit-on-error")
@@ -811,7 +898,7 @@ function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
     try
         run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR::String,
-            Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
+                   Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
     catch
         buf = PipeBuffer()
         Base.require(Base, :InteractiveUtils).versioninfo(buf)

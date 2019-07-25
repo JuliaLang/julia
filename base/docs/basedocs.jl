@@ -1403,7 +1403,7 @@ Bool
 for bit in (16, 32, 64)
     @eval begin
         """
-            Float$($bit) <: AbstractFloat
+                    Float$($bit) <: AbstractFloat
 
         $($bit)-bit floating point number type.
         """
@@ -1414,14 +1414,14 @@ end
 for bit in (8, 16, 32, 64, 128)
     @eval begin
         """
-            Int$($bit) <: Signed
+                    Int$($bit) <: Signed
 
         $($bit)-bit signed integer type.
         """
         $(Symbol("Int", bit))
 
         """
-            UInt$($bit) <: Unsigned
+                    UInt$($bit) <: Unsigned
 
         $($bit)-bit unsigned integer type.
         """

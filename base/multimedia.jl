@@ -4,9 +4,17 @@ module Multimedia
 
 import .Base: show, print, convert, repr
 
-export AbstractDisplay, display, pushdisplay, popdisplay, displayable, redisplay,
-    MIME, @MIME_str, istextmime,
-    showable, TextDisplay
+export AbstractDisplay,
+       display,
+       pushdisplay,
+       popdisplay,
+       displayable,
+       redisplay,
+       MIME,
+       @MIME_str,
+       istextmime,
+       showable,
+       TextDisplay
 
 ###########################################################################
 # We define a singleton type MIME{mime symbol} for each MIME type, so
@@ -73,7 +81,8 @@ julia> showable("img/png", rand(5))
 false
 ```
 """
-showable(::MIME{mime}, @nospecialize x) where {mime} = hasmethod(show, Tuple{IO, MIME{mime}, typeof(x)})
+showable(::MIME{mime}, @nospecialize x) where {mime} =
+    hasmethod(show, Tuple{IO,MIME{mime},typeof(x)})
 showable(m::AbstractString, @nospecialize x) = showable(MIME(m), x)
 
 """
@@ -142,8 +151,9 @@ julia> repr("text/plain", A)
 "2×2 Array{Int64,2}:\\n 1  2\\n 3  4"
 ```
 """
-repr(m::MIME, x; context=nothing) = istextmime(m) ? _textrepr(m, x, context) : _binrepr(m, x, context)
-repr(m::AbstractString, x; context=nothing) = repr(MIME(m), x; context=context)
+repr(m::MIME, x; context = nothing) =
+    istextmime(m) ? _textrepr(m, x, context) : _binrepr(m, x, context)
+repr(m::AbstractString, x; context = nothing) = repr(MIME(m), x; context = context)
 
 # strings are shown escaped for text/plain
 _textrepr(m::MIME, x, context) = String(__binrepr(m, x, context))
@@ -181,13 +191,24 @@ false
 istextmime(m::MIME) = startswith(string(m), "text/")
 istextmime(m::AbstractString) = istextmime(MIME(m))
 
-for mime in ["application/atom+xml", "application/ecmascript",
-             "application/javascript", "application/julia",
-             "application/json", "application/postscript",
-             "application/rdf+xml", "application/rss+xml",
-             "application/x-latex", "application/xhtml+xml", "application/xml",
-             "application/xml-dtd", "image/svg+xml", "model/vrml",
-             "model/x3d+vrml", "model/x3d+xml"]
+for mime in [
+    "application/atom+xml",
+    "application/ecmascript",
+    "application/javascript",
+    "application/julia",
+    "application/json",
+    "application/postscript",
+    "application/rdf+xml",
+    "application/rss+xml",
+    "application/x-latex",
+    "application/xhtml+xml",
+    "application/xml",
+    "application/xml-dtd",
+    "image/svg+xml",
+    "model/vrml",
+    "model/x3d+vrml",
+    "model/x3d+xml"
+]
     global istextmime(::MIME{Symbol(mime)}) = true
 end
 
@@ -211,7 +232,8 @@ of this.
 abstract type AbstractDisplay end
 
 # it is convenient to accept strings instead of ::MIME
-display(d::AbstractDisplay, mime::AbstractString, @nospecialize x) = display(d, MIME(mime), x)
+display(d::AbstractDisplay, mime::AbstractString, @nospecialize x) =
+    display(d, MIME(mime), x)
 display(mime::AbstractString, @nospecialize x) = display(MIME(mime), x)
 
 """
@@ -322,8 +344,7 @@ function display(@nospecialize x)
             try
                 return display(displays[i], x)
             catch e
-                isa(e, MethodError) && e.f in (display, show) ||
-                    rethrow()
+                isa(e, MethodError) && e.f in (display, show) || rethrow()
             end
         end
     end
@@ -336,8 +357,7 @@ function display(m::MIME, @nospecialize x)
             try
                 return display(displays[i], m, x)
             catch e
-                isa(e, MethodError) && e.f == display ||
-                    rethrow()
+                isa(e, MethodError) && e.f == display || rethrow()
             end
         end
     end
@@ -381,8 +401,7 @@ function redisplay(@nospecialize x)
             try
                 return redisplay(displays[i], x)
             catch e
-                isa(e, MethodError) && e.f in (redisplay, display, show) ||
-                    rethrow()
+                isa(e, MethodError) && e.f in (redisplay, display, show) || rethrow()
             end
         end
     end
@@ -395,8 +414,7 @@ function redisplay(m::Union{MIME,AbstractString}, @nospecialize x)
             try
                 return redisplay(displays[i], m, x)
             catch e
-                isa(e, MethodError) && e.f in (redisplay, display) ||
-                    rethrow()
+                isa(e, MethodError) && e.f in (redisplay, display) || rethrow()
             end
         end
     end
@@ -405,8 +423,9 @@ end
 
 # default redisplay is simply to call display
 redisplay(d::AbstractDisplay, @nospecialize x) = display(d, x)
-redisplay(d::AbstractDisplay, m::Union{MIME,AbstractString}, @nospecialize x) = display(d, m, x)
+redisplay(d::AbstractDisplay, m::Union{MIME,AbstractString}, @nospecialize x) =
+    display(d, m, x)
 
 ###########################################################################
 
-end # module
+end

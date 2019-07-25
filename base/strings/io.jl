@@ -99,8 +99,8 @@ julia> sprint(showerror, BoundsError([1], 100))
 "BoundsError: attempt to access 1-element Array{Int64,1} at index [100]"
 ```
 """
-function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
-    s = IOBuffer(sizehint=sizehint)
+function sprint(f::Function, args...; context = nothing, sizehint::Integer = 0)
+    s = IOBuffer(sizehint = sizehint)
     if context !== nothing
         f(IOContext(s, context), args...)
     else
@@ -124,7 +124,7 @@ function print_to_string(xs...)
         siz += tostr_sizehint(x)
     end
     # specialized for performance reasons
-    s = IOBuffer(sizehint=siz)
+    s = IOBuffer(sizehint = siz)
     for x in xs
         print(s, x)
     end
@@ -140,7 +140,7 @@ function string_with_env(env, xs...)
         siz += tostr_sizehint(x)
     end
     # specialized for performance reasons
-    s = IOBuffer(sizehint=siz)
+    s = IOBuffer(sizehint = siz)
     env_io = IOContext(s, env)
     for x in xs
         print(env_io, x)
@@ -169,8 +169,12 @@ string(xs...) = print_to_string(xs...)
 
 # note: print uses an encoding determined by `io` (defaults to UTF-8), whereas
 #       write uses an encoding determined by `s` (UTF-8 for `String`)
-print(io::IO, s::AbstractString) = for c in s; print(io, c); end
-write(io::IO, s::AbstractString) = (len = 0; for c in s; len += write(io, c); end; len)
+print(io::IO, s::AbstractString) = for c in s
+        print(io, c)
+    end
+write(io::IO, s::AbstractString) = (len = 0; for c in s
+        len += write(io, c)
+    end; len)
 show(io::IO, s::AbstractString) = print_quoted(io, s)
 
 # optimized methods to avoid iterating over chars
@@ -184,7 +188,9 @@ print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 
 function print_quoted_literal(io, s::AbstractString)
     print(io, '"')
-    for c = s; c == '"' ? print(io, "\\\"") : print(io, c); end
+    for c = s
+        c == '"' ? print(io, "\\\"") : print(io, c)
+    end
     print(io, '"')
 end
 
@@ -218,9 +224,9 @@ julia> repr(big(1/3), context=:compact => true)
 
 ```
 """
-repr(x; context=nothing) = sprint(show, x; context=context)
+repr(x; context = nothing) = sprint(show, x; context = context)
 
-limitrepr(x) = repr(x, context = :limit=>true)
+limitrepr(x) = repr(x, context = :limit => true)
 
 # IOBuffer views of a (byte)string:
 
@@ -241,7 +247,8 @@ julia> String(take!(io))
 ```
 """
 IOBuffer(str::String) = IOBuffer(unsafe_wrap(Vector{UInt8}, str))
-IOBuffer(s::SubString{String}) = IOBuffer(view(unsafe_wrap(Vector{UInt8}, s.string), s.offset + 1 : s.offset + sizeof(s)))
+IOBuffer(s::SubString{String}) =
+    IOBuffer(view(unsafe_wrap(Vector{UInt8}, s.string), s.offset+1:s.offset+sizeof(s)))
 
 # join is implemented using IO
 
@@ -281,7 +288,7 @@ function join(io::IO, strings, delim, last)
     end
     nothing
 end
-function join(io::IO, strings, delim="")
+function join(io::IO, strings, delim = "")
     # Specialization of the above code when delim==last,
     # which lets us emit (compile) less code
     first = true
@@ -297,8 +304,8 @@ join(strings, delim, last) = sprint(join, strings, delim, last)
 
 ## string escaping & unescaping ##
 
-need_full_hex(c::Union{Nothing, AbstractChar}) = c !== nothing && isxdigit(c)
-escape_nul(c::Union{Nothing, AbstractChar}) =
+need_full_hex(c::Union{Nothing,AbstractChar}) = c !== nothing && isxdigit(c)
+escape_nul(c::Union{Nothing,AbstractChar}) =
     (c !== nothing && '0' <= c <= '7') ? "\\x00" : "\\0"
 
 """
@@ -333,23 +340,32 @@ julia> escape_string(string('\\u2135','\\0','0')) # \\0 would be ambiguous
 ## See also
 [`unescape_string`](@ref) for the reverse operation.
 """
-function escape_string(io::IO, s::AbstractString, esc="")
+function escape_string(io::IO, s::AbstractString, esc = "")
     a = Iterators.Stateful(s)
     for c in a
         if c in esc
             print(io, '\\', c)
         elseif isascii(c)
-            c == '\0'          ? print(io, escape_nul(peek(a))) :
-            c == '\e'          ? print(io, "\\e") :
-            c == '\\'          ? print(io, "\\\\") :
-            '\a' <= c <= '\r'  ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
-            isprint(c)         ? print(io, c) :
-                                 print(io, "\\x", string(UInt32(c), base = 16, pad = 2))
+            c == '\0' ? print(io, escape_nul(peek(a))) :
+            c == '\e' ? print(io, "\\e") :
+            c == '\\' ? print(io, "\\\\") :
+            '\a' <= c <= '\r' ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
+            isprint(c) ? print(io, c) :
+            print(io, "\\x", string(UInt32(c), base = 16, pad = 2))
         elseif !isoverlong(c) && !ismalformed(c)
-            isprint(c)         ? print(io, c) :
-            c <= '\x7f'        ? print(io, "\\x", string(UInt32(c), base = 16, pad = 2)) :
-            c <= '\uffff'      ? print(io, "\\u", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)) ? 4 : 2)) :
-                                 print(io, "\\U", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)) ? 8 : 4))
+            isprint(c) ? print(io, c) :
+            c <= '\x7f' ? print(io, "\\x", string(UInt32(c), base = 16, pad = 2)) :
+            c <= '\uffff' ?
+            print(
+                io,
+                "\\u",
+                string(UInt32(c), base = 16, pad = need_full_hex(peek(a)) ? 4 : 2)
+            ) :
+            print(
+                io,
+                "\\U",
+                string(UInt32(c), base = 16, pad = need_full_hex(peek(a)) ? 8 : 4)
+            )
         else # malformed or overlong
             u = bswap(reinterpret(UInt32, c))
             while true
@@ -360,11 +376,12 @@ function escape_string(io::IO, s::AbstractString, esc="")
     end
 end
 
-escape_string(s::AbstractString, esc=('\"',)) = sprint(escape_string, s, esc, sizehint=lastindex(s))
+escape_string(s::AbstractString, esc = ('\"',)) =
+    sprint(escape_string, s, esc, sizehint = lastindex(s))
 
 function print_quoted(io, s::AbstractString)
     print(io, '"')
-    escape_string(io, s, ('\"','$')) #"# work around syntax highlighting problem
+    escape_string(io, s, ('\"', '$')) #"# work around syntax highlighting problem
     print(io, '"')
 end
 
@@ -408,13 +425,12 @@ function unescape_string(io, s::AbstractString)
             c = popfirst!(a)
             if c == 'x' || c == 'u' || c == 'U'
                 n = k = 0
-                m = c == 'x' ? 2 :
-                    c == 'u' ? 4 : 8
+                m = c == 'x' ? 2 : c == 'u' ? 4 : 8
                 while (k += 1) <= m && !isempty(a)
                     nc = peek(a)
-                    n = '0' <= nc <= '9' ? n<<4 + (nc-'0') :
-                        'a' <= nc <= 'f' ? n<<4 + (nc-'a'+10) :
-                        'A' <= nc <= 'F' ? n<<4 + (nc-'A'+10) : break
+                    n = '0' <= nc <= '9' ? n << 4 + (nc - '0') :
+                        'a' <= nc <= 'f' ? n << 4 + (nc - 'a' + 10) :
+                        'A' <= nc <= 'F' ? n << 4 + (nc - 'A' + 10) : break
                     popfirst!(a)
                 end
                 if k == 1 || n > 0x10ffff
@@ -429,10 +445,10 @@ function unescape_string(io, s::AbstractString)
                 end
             elseif '0' <= c <= '7'
                 k = 1
-                n = c-'0'
+                n = c - '0'
                 while (k += 1) <= 3 && !isempty(a)
                     c = peek(a)
-                    n = ('0' <= c <= '7') ? n<<3 + c-'0' : break
+                    n = ('0' <= c <= '7') ? n << 3 + c - '0' : break
                     popfirst!(a)
                 end
                 if n > 255
@@ -440,23 +456,26 @@ function unescape_string(io, s::AbstractString)
                 end
                 write(io, UInt8(n))
             else
-                print(io, c == 'a' ? '\a' :
-                          c == 'b' ? '\b' :
-                          c == 't' ? '\t' :
-                          c == 'n' ? '\n' :
-                          c == 'v' ? '\v' :
-                          c == 'f' ? '\f' :
-                          c == 'r' ? '\r' :
-                          c == 'e' ? '\e' :
-                          (c == '\\' || c == '"') ? c :
-                          throw(ArgumentError("invalid escape sequence \\$c")))
+                print(
+                    io,
+                    c == 'a' ? '\a' :
+                    c == 'b' ? '\b' :
+                    c == 't' ? '\t' :
+                    c == 'n' ? '\n' :
+                    c == 'v' ? '\v' :
+                    c == 'f' ? '\f' :
+                    c == 'r' ? '\r' :
+                    c == 'e' ? '\e' :
+                    (c == '\\' || c == '"') ? c :
+                    throw(ArgumentError("invalid escape sequence \\$c"))
+                )
             end
         else
             print(io, c)
         end
     end
 end
-unescape_string(s::AbstractString) = sprint(unescape_string, s, sizehint=lastindex(s))
+unescape_string(s::AbstractString) = sprint(unescape_string, s, sizehint = lastindex(s))
 
 """
     @b_str
@@ -506,7 +525,9 @@ julia> println(raw"\\\\x \\\\\\"")
 \\\\x \\"
 ```
 """
-macro raw_str(s); s; end
+macro raw_str(s)
+    s
+end
 
 ## multiline strings ##
 
@@ -528,7 +549,7 @@ julia> Base.indentation("\\ta"; tabwidth=3)
 (3, false)
 ```
 """
-function indentation(str::AbstractString; tabwidth=8)
+function indentation(str::AbstractString; tabwidth = 8)
     count = 0
     for ch in str
         if ch == ' '
@@ -556,12 +577,12 @@ julia> Base.unindent("\\ta\\n\\tb", 2, tabwidth=8)
 "      a\\n      b"
 ```
 """
-function unindent(str::AbstractString, indent::Int; tabwidth=8)
+function unindent(str::AbstractString, indent::Int; tabwidth = 8)
     indent == 0 && return str
     # Note: this loses the type of the original string
-    buf = IOBuffer(sizehint=sizeof(str))
+    buf = IOBuffer(sizehint = sizeof(str))
     cutting = true
-    col = 0     # current column (0 based)
+    col = 0 # current column (0 based)
     for ch in str
         if cutting
             if ch == ' '
@@ -585,11 +606,11 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
                 col += 1
                 print(buf, ch)
             end
-        elseif ch == '\t'       # Handle internal tabs
+        elseif ch == '\t' # Handle internal tabs
             upd = div(col + tabwidth, tabwidth) * tabwidth
             # output the number of spaces that would have been seen
             # with original indentation
-            for i = 1:(upd-col)
+            for i = 1:(upd - col)
                 print(buf, ' ')
             end
             col = upd
@@ -626,7 +647,7 @@ function String(a::AbstractVector{Char})
 end
 
 function String(chars::AbstractVector{<:AbstractChar})
-    sprint(sizehint=length(chars)) do io
+    sprint(sizehint = length(chars)) do io
         for c in chars
             print(io, c)
         end

@@ -19,12 +19,15 @@ NTuple
 length(@nospecialize t::Tuple) = nfields(t)
 firstindex(@nospecialize t::Tuple) = 1
 lastindex(@nospecialize t::Tuple) = length(t)
-size(@nospecialize(t::Tuple), d::Integer) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
+size(@nospecialize(t::Tuple), d::Integer) =
+    (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
 axes(@nospecialize t::Tuple) = (OneTo(length(t)),)
 @eval getindex(@nospecialize(t::Tuple), i::Int) = getfield(t, i, $(Expr(:boundscheck)))
-@eval getindex(@nospecialize(t::Tuple), i::Real) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
+@eval getindex(@nospecialize(t::Tuple), i::Real) =
+    getfield(t, convert(Int, i), $(Expr(:boundscheck)))
 getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...,)
-getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, findall(b)) : throw(BoundsError(t, b))
+getindex(t::Tuple, b::AbstractArray{Bool,1}) =
+    length(b) == length(t) ? getindex(t, findall(b)) : throw(BoundsError(t, b))
 getindex(t::Tuple, c::Colon) = t
 
 # returns new tuple; N.B.: becomes no-op if i is out-of-bounds
@@ -38,15 +41,15 @@ _setindex(v, i::Integer) = ()
 
 ## iterating ##
 
-function iterate(@nospecialize(t::Tuple), i::Int=1)
+function iterate(@nospecialize(t::Tuple), i::Int = 1)
     @_inline_meta
     return (1 <= i <= length(t)) ? (@inbounds t[i], i + 1) : nothing
 end
 
 keys(@nospecialize t::Tuple) = OneTo(length(t))
 
-prevind(@nospecialize(t::Tuple), i::Integer) = Int(i)-1
-nextind(@nospecialize(t::Tuple), i::Integer) = Int(i)+1
+prevind(@nospecialize(t::Tuple), i::Integer) = Int(i) - 1
+nextind(@nospecialize(t::Tuple), i::Integer) = Int(i) + 1
 
 function keys(t::Tuple, t2::Tuple...)
     @_inline_meta
@@ -60,8 +63,8 @@ end
 
 # this allows partial evaluation of bounded sequences of next() calls on tuples,
 # while reducing to plain next() for arbitrary iterables.
-indexed_iterate(t::Tuple, i::Int, state=1) = (@_inline_meta; (getfield(t, i), i+1))
-indexed_iterate(a::Array, i::Int, state=1) = (@_inline_meta; (a[i], i+1))
+indexed_iterate(t::Tuple, i::Int, state = 1) = (@_inline_meta; (getfield(t, i), i + 1))
+indexed_iterate(a::Array, i::Int, state = 1) = (@_inline_meta; (a[i], i + 1))
 function indexed_iterate(I, i)
     x = iterate(I)
     x === nothing && throw(BoundsError(I, i))
@@ -135,31 +138,47 @@ end
 ## mapping ##
 
 # 1 argument function
-map(f, t::Tuple{})              = ()
-map(f, t::Tuple{Any,})          = (f(t[1]),)
-map(f, t::Tuple{Any, Any})      = (f(t[1]), f(t[2]))
-map(f, t::Tuple{Any, Any, Any}) = (f(t[1]), f(t[2]), f(t[3]))
-map(f, t::Tuple)                = (@_inline_meta; (f(t[1]), map(f,tail(t))...))
+map(f, t::Tuple{}) = ()
+map(f, t::Tuple{Any,}) = (f(t[1]),)
+map(f, t::Tuple{Any,Any}) = (f(t[1]), f(t[2]))
+map(f, t::Tuple{Any,Any,Any}) = (f(t[1]), f(t[2]), f(t[3]))
+map(f, t::Tuple) = (@_inline_meta; (f(t[1]), map(f, tail(t))...))
 # stop inlining after some number of arguments to avoid code blowup
-const Any16{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
-                       Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
-const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
-                         T,T,T,T,T,T,T,T,Vararg{T,N}}
+const Any16{N} = Tuple{
+    Any,
+    Any,
+    Any,
+    Any,
+    Any,
+    Any,
+    Any,
+    Any,
+    Any,
+    Any,
+    Any,
+    Any,
+    Any,
+    Any,
+    Any,
+    Any,
+    Vararg{Any,N}
+}
+const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,Vararg{T,N}}
 function map(f, t::Any16)
     n = length(t)
     A = Vector{Any}(undef, n)
-    for i=1:n
+    for i = 1:n
         A[i] = f(t[i])
     end
     (A...,)
 end
 # 2 argument function
-map(f, t::Tuple{},        s::Tuple{})        = ()
-map(f, t::Tuple{Any,},    s::Tuple{Any,})    = (f(t[1],s[1]),)
-map(f, t::Tuple{Any,Any}, s::Tuple{Any,Any}) = (f(t[1],s[1]), f(t[2],s[2]))
+map(f, t::Tuple{}, s::Tuple{}) = ()
+map(f, t::Tuple{Any,}, s::Tuple{Any,}) = (f(t[1], s[1]),)
+map(f, t::Tuple{Any,Any}, s::Tuple{Any,Any}) = (f(t[1], s[1]), f(t[2], s[2]))
 function map(f, t::Tuple, s::Tuple)
     @_inline_meta
-    (f(t[1],s[1]), map(f, tail(t), tail(s))...)
+    (f(t[1], s[1]), map(f, tail(t), tail(s))...)
 end
 function map(f, t::Any16, s::Any16)
     n = length(t)
@@ -187,17 +206,50 @@ function map(f, t1::Any16, t2::Any16, ts::Any16...)
 end
 
 # mapafoldl, based on afold in operators.jl
-mapafoldl(F,op,a) = a
-mapafoldl(F,op,a,b) = op(a,F(b))
-mapafoldl(F,op,a,b,c...) = mapafoldl(F, op, op(a,F(b)), c...)
-function mapafoldl(F,op,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,qs...)
-    y = op(op(op(op(op(op(op(op(op(op(op(op(op(op(op(a,F(b)),F(c)),F(d)),F(e)),F(f)),F(g)),F(h)),F(i)),F(j)),F(k)),F(l)),F(m)),F(n)),F(o)),F(p))
-    for x in qs; y = op(y,F(x)); end
+mapafoldl(F, op, a) = a
+mapafoldl(F, op, a, b) = op(a, F(b))
+mapafoldl(F, op, a, b, c...) = mapafoldl(F, op, op(a, F(b)), c...)
+function mapafoldl(F, op, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, qs...)
+    y = op(
+        op(
+           op(
+              op(
+                 op(
+                    op(
+                       op(
+                          op(
+                             op(
+                                op(
+                                   op(op(op(op(op(a, F(b)), F(c)), F(d)), F(e)), F(f)),
+                                   F(g)
+                                ),
+                                F(h)
+                             ),
+                             F(i)
+                          ),
+                          F(j)
+                       ),
+                       F(k)
+                    ),
+                    F(l)
+                 ),
+                 F(m)
+              ),
+              F(n)
+           ),
+           F(o)
+        ),
+        F(p)
+    )
+    for x in qs
+        y = op(y, F(x))
+    end
     y
 end
 mapfoldl_impl(f, op, nt::NamedTuple{(:init,)}, t::Tuple) = mapafoldl(f, op, nt.init, t...)
 mapfoldl_impl(f, op, nt::NamedTuple{()}, t::Tuple) = mapafoldl(f, op, f(t[1]), tail(t)...)
-mapfoldl_impl(f, op, nt::NamedTuple{()}, t::Tuple{}) = mapreduce_empty_iter(f, op, t, IteratorEltype(t))
+mapfoldl_impl(f, op, nt::NamedTuple{()}, t::Tuple{}) =
+    mapreduce_empty_iter(f, op, t, IteratorEltype(t))
 
 # type-stable padding
 fill_to_length(t::NTuple{N,Any}, val, ::Val{N}) where {N} = t
@@ -215,37 +267,38 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 # NOTE: this means this constructor must be avoided in Core.Compiler!
 if nameof(@__MODULE__) === :Base
 
-(::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x)  # still use `convert` for tuples
+    (::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x) # still use `convert` for tuples
 
-(::Type{T})(itr) where {T<:Tuple} = _totuple(T, itr)
+    (::Type{T})(itr) where {T<:Tuple} = _totuple(T, itr)
 
-_totuple(::Type{Tuple{}}, itr, s...) = ()
+    _totuple(::Type{Tuple{}}, itr, s...) = ()
 
-function _totuple_err(@nospecialize T)
-    @_noinline_meta
-    throw(ArgumentError("too few elements for tuple type $T"))
-end
-
-function _totuple(T, itr, s...)
-    @_inline_meta
-    y = iterate(itr, s...)
-    y === nothing && _totuple_err(T)
-    (convert(tuple_type_head(T), y[1]), _totuple(tuple_type_tail(T), itr, y[2])...)
-end
-
-# use iterative algorithm for long tuples
-function _totuple(T::Type{All16{E,N}}, itr) where {E,N}
-    len = N+16
-    elts = collect(E, Iterators.take(itr,len))
-    if length(elts) != len
-        _totuple_err(T)
+    function _totuple_err(@nospecialize T)
+        @_noinline_meta
+        throw(ArgumentError("too few elements for tuple type $T"))
     end
-    (elts...,)
-end
 
-_totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = (collect(E, Iterators.rest(itr,s...))...,)
+    function _totuple(T, itr, s...)
+        @_inline_meta
+        y = iterate(itr, s...)
+        y === nothing && _totuple_err(T)
+        (convert(tuple_type_head(T), y[1]), _totuple(tuple_type_tail(T), itr, y[2])...)
+    end
 
-_totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
+    # use iterative algorithm for long tuples
+    function _totuple(T::Type{All16{E,N}}, itr) where {E,N}
+        len = N + 16
+        elts = collect(E, Iterators.take(itr, len))
+        if length(elts) != len
+            _totuple_err(T)
+        end
+        (elts...,)
+    end
+
+    _totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} =
+        (collect(E, Iterators.rest(itr, s...))...,)
+
+    _totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr, s...))...,)
 
 end
 
@@ -292,8 +345,8 @@ function _eq(t1::Any16, t2::Any16)
         if ismissing(eq)
             anymissing = true
         elseif !eq
-           return false
-       end
+            return false
+        end
     end
     return anymissing ? missing : true
 end
@@ -330,7 +383,7 @@ function <(t1::Any16, t2::Any16)
         if ismissing(eq)
             return missing
         elseif !eq
-           return a < b
+            return a < b
         end
     end
     return n1 < n2
@@ -376,24 +429,24 @@ reverse(t::Tuple) = revargs(t...)
 # where x might be any tuple matches too many methods.
 # TODO: this is inconsistent with the regular sum in cases where the arguments
 # require size promotion to system size.
-sum(x::Tuple{Any, Vararg{Any}}) = +(x...)
+sum(x::Tuple{Any,Vararg{Any}}) = +(x...)
 
 # NOTE: should remove, but often used on array sizes
 # TODO: this is inconsistent with the regular prod in cases where the arguments
 # require size promotion to system size.
 prod(x::Tuple{}) = 1
-prod(x::Tuple{Any, Vararg{Any}}) = *(x...)
+prod(x::Tuple{Any,Vararg{Any}}) = *(x...)
 
 all(x::Tuple{}) = true
 all(x::Tuple{Bool}) = x[1]
-all(x::Tuple{Bool, Bool}) = x[1]&x[2]
-all(x::Tuple{Bool, Bool, Bool}) = x[1]&x[2]&x[3]
+all(x::Tuple{Bool,Bool}) = x[1] & x[2]
+all(x::Tuple{Bool,Bool,Bool}) = x[1] & x[2] & x[3]
 # use generic reductions for the rest
 
 any(x::Tuple{}) = false
 any(x::Tuple{Bool}) = x[1]
-any(x::Tuple{Bool, Bool}) = x[1]|x[2]
-any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
+any(x::Tuple{Bool,Bool}) = x[1] | x[2]
+any(x::Tuple{Bool,Bool,Bool}) = x[1] | x[2] | x[3]
 
 # equivalent to any(f, t), to be used only in bootstrap
 _tuple_any(f::Function, t::Tuple) = _tuple_any(f, false, t...)

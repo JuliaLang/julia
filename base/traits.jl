@@ -12,8 +12,8 @@ OrderStyle(::Type{<:Any}) = Unordered()
 
 # trait for objects that support arithmetic
 abstract type ArithmeticStyle end
-struct ArithmeticRounds <: ArithmeticStyle end     # least significant bits can be lost
-struct ArithmeticWraps <: ArithmeticStyle end      #  most significant bits can be lost
+struct ArithmeticRounds <: ArithmeticStyle end # least significant bits can be lost
+struct ArithmeticWraps <: ArithmeticStyle end #  most significant bits can be lost
 struct ArithmeticUnknown <: ArithmeticStyle end
 
 ArithmeticStyle(instance) = ArithmeticStyle(typeof(instance))
@@ -53,7 +53,7 @@ By default, all range types are assumed to be `RangeStepIrregular`, except
 ranges with an element type which is a subtype of `Integer`.
 """
 abstract type RangeStepStyle end
-struct RangeStepRegular   <: RangeStepStyle end # range with regular step
+struct RangeStepRegular <: RangeStepStyle end # range with regular step
 struct RangeStepIrregular <: RangeStepStyle end # range with rounding error
 
 RangeStepStyle(instance) = RangeStepStyle(typeof(instance))

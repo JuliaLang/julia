@@ -62,11 +62,25 @@ function validate_code_in_debug_mode(linfo::MethodInstance, src::CodeInfo, kind:
         if !isempty(errors)
             for e in errors
                 if linfo.def isa Method
-                    println(stderr, "WARNING: Encountered invalid ", kind, " code for method ",
-                            linfo.def, ": ", e)
+                    println(
+                        stderr,
+                        "WARNING: Encountered invalid ",
+                        kind,
+                        " code for method ",
+                        linfo.def,
+                        ": ",
+                        e
+                    )
                 else
-                    println(stderr, "WARNING: Encountered invalid ", kind, " code for top level expression in ",
-                            linfo.def, ": ", e)
+                    println(
+                        stderr,
+                        "WARNING: Encountered invalid ",
+                        kind,
+                        " code for top level expression in ",
+                        linfo.def,
+                        ": ",
+                        e
+                    )
                 end
             end
         end
@@ -78,13 +92,17 @@ end
 
 Validate `c`, logging any violation by pushing an `InvalidCodeError` into `errors`.
 """
-function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_level::Bool = false)
+function validate_code!(
+    errors::Vector{>:InvalidCodeError},
+    c::CodeInfo,
+    is_top_level::Bool = false
+)
     function validate_val!(@nospecialize(x))
         if isa(x, Expr)
             if x.head === :call || x.head === :invoke
                 f = x.args[1]
                 if f isa GlobalRef && (f.name === :cglobal) && x.head === :call
-                    # TODO: these are not yet linearized
+                # TODO: these are not yet linearized
                 else
                     for arg in x.args
                         if !is_valid_argument(arg)
@@ -139,16 +157,29 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
                     push!(errors, InvalidCodeError(INVALID_RETURN, x.args[1]))
                 end
                 validate_val!(x.args[1])
-            elseif head === :call || head === :invoke || head == :gc_preserve_end || head === :meta ||
-                head === :inbounds || head === :foreigncall || head === :cfunction ||
-                head === :const || head === :enter || head === :leave || head == :pop_exception ||
-                head === :method || head === :global || head === :static_parameter ||
-                head === :new || head === :splatnew || head === :thunk || head === :loopinfo ||
-                head === :throw_undef_if_not || head === :unreachable
+            elseif head === :call ||
+                   head === :invoke ||
+                   head == :gc_preserve_end ||
+                   head === :meta ||
+                   head === :inbounds ||
+                   head === :foreigncall ||
+                   head === :cfunction ||
+                   head === :const ||
+                   head === :enter ||
+                   head === :leave ||
+                   head == :pop_exception ||
+                   head === :method ||
+                   head === :global ||
+                   head === :static_parameter ||
+                   head === :new ||
+                   head === :splatnew ||
+                   head === :thunk ||
+                   head === :loopinfo ||
+                   head === :throw_undef_if_not || head === :unreachable
                 validate_val!(x)
             else
-                # TODO: nothing is actually in statement position anymore
-                #push!(errors, InvalidCodeError("invalid statement", x))
+            # TODO: nothing is actually in statement position anymore
+            #push!(errors, InvalidCodeError("invalid statement", x))
             end
         elseif isa(x, NewvarNode)
         elseif isa(x, GotoNode)
@@ -161,19 +192,28 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
         elseif isa(x, PhiNode)
         elseif isa(x, UpsilonNode)
         else
-            #push!(errors, InvalidCodeError("invalid statement", x))
+        #push!(errors, InvalidCodeError("invalid statement", x))
         end
     end
     nslotnames = length(c.slotnames)
     nslotflags = length(c.slotflags)
     nssavals = length(c.code)
     !is_top_level && nslotnames == 0 && push!(errors, InvalidCodeError(EMPTY_SLOTNAMES))
-    nslotnames < nslotflags && push!(errors, InvalidCodeError(SLOTFLAGS_MISMATCH, (nslotnames, nslotflags)))
+    nslotnames < nslotflags && push!(
+        errors,
+        InvalidCodeError(SLOTFLAGS_MISMATCH, (nslotnames, nslotflags))
+    )
     if c.inferred
         nssavaluetypes = length(c.ssavaluetypes)
-        nssavaluetypes < nssavals && push!(errors, InvalidCodeError(SSAVALUETYPES_MISMATCH, (nssavals, nssavaluetypes)))
+        nssavaluetypes < nssavals && push!(
+            errors,
+            InvalidCodeError(SSAVALUETYPES_MISMATCH, (nssavals, nssavaluetypes))
+        )
     else
-        c.ssavaluetypes != nssavals && push!(errors, InvalidCodeError(SSAVALUETYPES_MISMATCH_UNINFERRED, (nssavals, c.ssavaluetypes)))
+        c.ssavaluetypes != nssavals && push!(
+            errors,
+            InvalidCodeError(SSAVALUETYPES_MISMATCH_UNINFERRED, (nssavals, c.ssavaluetypes))
+        )
     end
     return errors
 end
@@ -187,8 +227,11 @@ Validate `mi`, logging any violation by pushing an `InvalidCodeError` into `erro
 If `isa(c, CodeInfo)`, also call `validate_code!(errors, c)`. It is assumed that `c` is
 the `CodeInfo` instance associated with `mi`.
 """
-function validate_code!(errors::Vector{>:InvalidCodeError}, mi::Core.MethodInstance,
-                        c::Union{Nothing,CodeInfo} = Core.Compiler.retrieve_code_info(mi))
+function validate_code!(
+    errors::Vector{>:InvalidCodeError},
+    mi::Core.MethodInstance,
+    c::Union{Nothing,CodeInfo} = Core.Compiler.retrieve_code_info(mi)
+)
     is_top_level = mi.def isa Module
     if is_top_level
         mnargs = 0
@@ -197,11 +240,17 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, mi::Core.MethodInsta
         mnargs = m.nargs
         n_sig_params = length(Core.Compiler.unwrap_unionall(m.sig).parameters)
         if (m.isva ? (n_sig_params < (mnargs - 1)) : (n_sig_params != mnargs))
-            push!(errors, InvalidCodeError(SIGNATURE_NARGS_MISMATCH, (m.isva, n_sig_params, mnargs)))
+            push!(
+                errors,
+                InvalidCodeError(SIGNATURE_NARGS_MISMATCH, (m.isva, n_sig_params, mnargs))
+            )
         end
     end
     if isa(c, CodeInfo)
-        mnargs > length(c.slotnames) && push!(errors, InvalidCodeError(SLOTNAMES_NARGS_MISMATCH))
+        mnargs > length(c.slotnames) && push!(
+            errors,
+            InvalidCodeError(SLOTNAMES_NARGS_MISMATCH)
+        )
         validate_code!(errors, c, is_top_level)
     end
     return errors
@@ -212,25 +261,44 @@ validate_code(args...) = validate_code!(Vector{InvalidCodeError}(), args...)
 is_valid_lvalue(@nospecialize(x)) = isa(x, Slot) || isa(x, GlobalRef)
 
 function is_valid_argument(@nospecialize(x))
-    if isa(x, Slot) || isa(x, SSAValue) || isa(x, GlobalRef) || isa(x, QuoteNode) ||
-        (isa(x,Expr) && (x.head in (:static_parameter, :boundscheck))) ||
-        isa(x, Number) || isa(x, AbstractString) || isa(x, AbstractChar) || isa(x, Tuple) ||
-        isa(x, Type) || isa(x, Core.Box) || isa(x, Module) || x === nothing
+    if isa(x, Slot) ||
+       isa(x, SSAValue) ||
+       isa(x, GlobalRef) ||
+       isa(x, QuoteNode) ||
+       (isa(x, Expr) && (x.head in (:static_parameter, :boundscheck))) ||
+       isa(x, Number) ||
+       isa(x, AbstractString) ||
+       isa(x, AbstractChar) ||
+       isa(x, Tuple) || isa(x, Type) || isa(x, Core.Box) || isa(x, Module) || x === nothing
         return true
     end
     # TODO: consider being stricter about what needs to be wrapped with QuoteNode
-    return !(isa(x,Expr) || isa(x,Symbol) || isa(x,GotoNode) ||
-             isa(x,LineNumberNode) || isa(x,NewvarNode))
+    return !(isa(x, Expr) ||
+             isa(x, Symbol) ||
+             isa(x, GotoNode) || isa(x, LineNumberNode) || isa(x, NewvarNode))
 end
 
 function is_valid_rvalue(@nospecialize(x))
     is_valid_argument(x) && return true
-    if isa(x, Expr) && x.head in (:new, :splatnew, :the_exception, :isdefined, :call, :invoke, :foreigncall, :cfunction, :gc_preserve_begin, :copyast)
+    if isa(x, Expr) &&
+       x.head in (
+        :new,
+        :splatnew,
+        :the_exception,
+        :isdefined,
+        :call,
+        :invoke,
+        :foreigncall,
+        :cfunction,
+        :gc_preserve_begin,
+        :copyast
+    )
         return true
     end
     return false
 end
 
-is_valid_return(@nospecialize(x)) = is_valid_argument(x) || (isa(x, Expr) && x.head === :lambda)
+is_valid_return(@nospecialize(x)) =
+    is_valid_argument(x) || (isa(x, Expr) && x.head === :lambda)
 
 is_flag_set(byte::UInt8, flag::UInt8) = (byte & flag) == flag

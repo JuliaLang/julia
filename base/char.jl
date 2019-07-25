@@ -60,7 +60,7 @@ to an output stream, or `ncodeunits(string(c))` but computed efficiently.
 !!! compat "Julia 1.1"
     This method requires at least Julia 1.1. In Julia 1.0 consider
     using `ncodeunits(string(c))`.
-"""
+""" # this is surprisingly efficient
 ncodeunits(c::Char) = write(devnull, c) # this is surprisingly efficient
 
 """
@@ -89,11 +89,11 @@ function ismalformed(c::Char)
     u = reinterpret(UInt32, c)
     l1 = leading_ones(u) << 3
     t0 = trailing_zeros(u) & 56
-    (l1 == 8) | (l1 + t0 > 32) |
-    (((u & 0x00c0c0c0) ⊻ 0x00808080) >> t0 != 0)
+    (l1 == 8) | (l1 + t0 > 32) | (((u & 0x00c0c0c0) ⊻ 0x00808080) >> t0 != 0)
 end
 
-@inline is_overlong_enc(u::UInt32) = (u >> 24 == 0xc0) | (u >> 24 == 0xc1) | (u >> 21 == 0x0704) | (u >> 20 == 0x0f08)
+@inline is_overlong_enc(u::UInt32) =
+    (u >> 24 == 0xc0) | (u >> 24 == 0xc1) | (u >> 21 == 0x0704) | (u >> 20 == 0x0f08)
 
 function isoverlong(c::Char)
     u = reinterpret(UInt32, c)
@@ -127,13 +127,12 @@ function UInt32(c::Char)
     u < 0x80000000 && return u >> 24
     l1 = leading_ones(u)
     t0 = trailing_zeros(u) & 56
-    (l1 == 1) | (8l1 + t0 > 32) |
-    ((((u & 0x00c0c0c0) ⊻ 0x00808080) >> t0 != 0) | is_overlong_enc(u)) &&
-        invalid_char(c)::Union{}
+    (l1 == 1) | (8 * l1 + t0 > 32) |
+    ((((u & 0x00c0c0c0) ⊻ 0x00808080) >> t0 != 0) | is_overlong_enc(u)) && invalid_char(c)::Union{}
     u &= 0xffffffff >> l1
     u >>= t0
-    ((u & 0x0000007f) >> 0) | ((u & 0x00007f00) >> 2) |
-    ((u & 0x007f0000) >> 4) | ((u & 0x7f000000) >> 6)
+    ((u & 0x0000007f) >> 0) | ((u & 0x00007f00) >> 2) | ((u & 0x007f0000) >> 4) |
+    ((u & 0x7f000000) >> 6)
 end
 
 """
@@ -151,18 +150,17 @@ function decode_overlong(c::Char)
     t0 = trailing_zeros(u) & 56
     u &= 0xffffffff >> l1
     u >>= t0
-    ((u & 0x0000007f) >> 0) | ((u & 0x00007f00) >> 2) |
-    ((u & 0x007f0000) >> 4) | ((u & 0x7f000000) >> 6)
+    ((u & 0x0000007f) >> 0) | ((u & 0x00007f00) >> 2) | ((u & 0x007f0000) >> 4) |
+    ((u & 0x7f000000) >> 6)
 end
 
 function Char(u::UInt32)
     u < 0x80 && return reinterpret(Char, u << 24)
     u < 0x00200000 || code_point_err(u)::Union{}
-    c = ((u << 0) & 0x0000003f) | ((u << 2) & 0x00003f00) |
-        ((u << 4) & 0x003f0000) | ((u << 6) & 0x3f000000)
+    c = ((u << 0) & 0x0000003f) | ((u << 2) & 0x00003f00) | ((u << 4) & 0x003f0000) |
+        ((u << 6) & 0x3f000000)
     c = u < 0x00000800 ? (c << 16) | 0xc0800000 :
-        u < 0x00010000 ? (c << 08) | 0xe0808000 :
-                         (c << 00) | 0xf0808080
+        u < 0x00010000 ? (c << 08) | 0xe0808000 : (c << 00) | 0xf0808080
     reinterpret(Char, c)
 end
 
@@ -201,7 +199,7 @@ first(c::AbstractChar) = c
 last(c::AbstractChar) = c
 eltype(::Type{T}) where {T<:AbstractChar} = T
 
-iterate(c::AbstractChar, done=false) = done ? nothing : (c, true)
+iterate(c::AbstractChar, done = false) = done ? nothing : (c, true)
 isempty(c::AbstractChar) = false
 in(x::AbstractChar, y::AbstractChar) = x == y
 
@@ -229,17 +227,14 @@ widen(::Type{T}) where {T<:AbstractChar} = T
 print(io::IO, c::Char) = (write(io, c); nothing)
 print(io::IO, c::AbstractChar) = print(io, Char(c)) # fallback: convert to output UTF-8
 
-const hex_chars = UInt8['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-                        'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',
-                        'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r',
-                        's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
+const hex_chars = UInt8['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
 
 function show_invalid(io::IO, c::Char)
     write(io, 0x27)
     u = reinterpret(UInt32, c)
     while true
-        a = hex_chars[((u >> 28) & 0xf) + 1]
-        b = hex_chars[((u >> 24) & 0xf) + 1]
+        a = hex_chars[((u >> 28) & 0xf)+1]
+        b = hex_chars[((u >> 24) & 0xf)+1]
         write(io, 0x5c, UInt8('x'), a, b)
         (u <<= 8) == 0 && break
     end
@@ -266,10 +261,7 @@ function show(io::IO, c::AbstractChar)
             c == '\n' ? 0x6e :
             c == '\v' ? 0x76 :
             c == '\f' ? 0x66 :
-            c == '\r' ? 0x72 :
-            c == '\e' ? 0x65 :
-            c == '\'' ? 0x27 :
-            c == '\\' ? 0x5c : 0xff
+            c == '\r' ? 0x72 : c == '\e' ? 0x65 : c == '\'' ? 0x27 : c == '\\' ? 0x5c : 0xff
         if b != 0xff
             write(io, 0x27, 0x5c, b, 0x27)
             return
@@ -286,7 +278,7 @@ function show(io::IO, c::AbstractChar)
         write(io, 0x27, 0x5c, u <= 0x7f ? 0x78 : u <= 0xffff ? 0x75 : 0x55)
         d = max(2, 8 - (leading_zeros(u) >> 2))
         while 0 < d
-            write(io, hex_chars[((u >> ((d -= 1) << 2)) & 0xf) + 1])
+            write(io, hex_chars[((u >> ((d -= 1) << 2)) & 0xf)+1])
         end
         write(io, 0x27)
     end

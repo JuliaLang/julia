@@ -62,11 +62,9 @@ function _reformat_bt(bt, bt2)
     i, j = 1, 1
     while i <= length(bt)
         ip = bt[i]::Ptr{Cvoid}
-        if ip == Ptr{Cvoid}(-1%UInt)
+        if ip == Ptr{Cvoid}(-1 % UInt)
             # The next one is really a CodeInfo
-            push!(ret, InterpreterIP(
-                bt2[j],
-                bt[i+2]))
+            push!(ret, InterpreterIP(bt2[j], bt[i+2]))
             j += 1
             i += 3
         else
@@ -108,13 +106,13 @@ uncaught exceptions.
     This function is experimental in Julia 1.1 and will likely be renamed in a
     future release (see https://github.com/JuliaLang/julia/pull/29901).
 """
-function catch_stack(task=current_task(); include_bt=true)
-    raw = ccall(:jl_get_excstack, Any, (Any,Cint,Cint), task, include_bt, typemax(Cint))
+function catch_stack(task = current_task(); include_bt = true)
+    raw = ccall(:jl_get_excstack, Any, (Any, Cint, Cint), task, include_bt, typemax(Cint))
     formatted = Any[]
     stride = include_bt ? 3 : 1
     for i = reverse(1:stride:length(raw))
         e = raw[i]
-        push!(formatted, include_bt ? (e,Base._reformat_bt(raw[i+1],raw[i+2])) : e)
+        push!(formatted, include_bt ? (e, Base._reformat_bt(raw[i+1], raw[i+2])) : e)
     end
     formatted
 end
@@ -122,7 +120,7 @@ end
 ## keyword arg lowering generates calls to this ##
 function kwerr(kw, args::Vararg{Any,N}) where {N}
     @_noinline_meta
-    throw(MethodError(typeof(args[1]).name.mt.kwsorter, (kw,args...)))
+    throw(MethodError(typeof(args[1]).name.mt.kwsorter, (kw, args...)))
 end
 
 ## system error handling ##
@@ -131,7 +129,8 @@ end
 
 Raises a `SystemError` for `errno` with the descriptive string `sysfunc` if `iftrue` is `true`
 """
-systemerror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), extrainfo)) : nothing
+systemerror(p, b::Bool; extrainfo = nothing) =
+    b ? throw(Main.Base.SystemError(string(p), Libc.errno(), extrainfo)) : nothing
 
 
 ## system errors from Windows API functions
@@ -145,7 +144,14 @@ end
 Like [`systemerror`](@ref), but for Windows API functions that use [`GetLastError`](@ref) instead
 of setting [`errno`](@ref).
 """
-windowserror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), WindowsErrorInfo(Libc.GetLastError(), extrainfo))) : nothing
+windowserror(p, b::Bool; extrainfo = nothing) =
+    b ?
+    throw(Main.Base.SystemError(
+        string(p),
+        Libc.errno(),
+        WindowsErrorInfo(Libc.GetLastError(), extrainfo)
+    )) :
+    nothing
 
 
 ## assertion macro ##
@@ -179,14 +185,15 @@ macro assert(ex, msgs...)
     elseif !isempty(msgs) && (isa(msg, Expr) || isa(msg, Symbol))
         # message is an expression needing evaluating
         msg = :(Main.Base.string($(esc(msg))))
-    elseif isdefined(Main, :Base) && isdefined(Main.Base, :string) && applicable(Main.Base.string, msg)
+    elseif isdefined(Main, :Base) &&
+           isdefined(Main.Base, :string) && applicable(Main.Base.string, msg)
         msg = Main.Base.string(msg)
     else
         # string() might not be defined during bootstrap
         msg = quote
-            msg = $(Expr(:quote,msg))
+            msg = $(Expr(:quote, msg))
             isdefined(Main, :Base) ? Main.Base.string(msg) :
-                (Core.println(msg); "Error during bootstrap. See stdout.")
+            (Core.println(msg); "Error during bootstrap. See stdout.")
         end
     end
     return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
@@ -200,7 +207,7 @@ struct ExponentialBackOff
     jitter::Float64
 
     function ExponentialBackOff(n, first_delay, max_delay, factor, jitter)
-        all(x->x>=0, (n, first_delay, max_delay, factor, jitter)) || error("all inputs must be non-negative")
+        all(x -> x >= 0, (n, first_delay, max_delay, factor, jitter)) || error("all inputs must be non-negative")
         new(n, first_delay, max_delay, factor, jitter)
     end
 end
@@ -212,13 +219,21 @@ A [`Float64`](@ref) iterator of length `n` whose elements exponentially increase
 rate in the interval `factor` * (1 ± `jitter`).  The first element is
 `first_delay` and all elements are clamped to `max_delay`.
 """
-ExponentialBackOff(; n=1, first_delay=0.05, max_delay=10.0, factor=5.0, jitter=0.1) =
-    ExponentialBackOff(n, first_delay, max_delay, factor, jitter)
-function iterate(ebo::ExponentialBackOff, state= (ebo.n, min(ebo.first_delay, ebo.max_delay)))
+ExponentialBackOff(
+    ;
+    n = 1, first_delay = 0.05, max_delay = 10.0, factor = 5.0, jitter = 0.1
+) = ExponentialBackOff(n, first_delay, max_delay, factor, jitter)
+function iterate(
+    ebo::ExponentialBackOff,
+    state = (ebo.n, min(ebo.first_delay, ebo.max_delay))
+)
     state[1] < 1 && return nothing
-    next_n = state[1]-1
+    next_n = state[1] - 1
     curr_delay = state[2]
-    next_delay = min(ebo.max_delay, state[2] * ebo.factor * (1.0 - ebo.jitter + (rand(Float64) * 2.0 * ebo.jitter)))
+    next_delay = min(
+        ebo.max_delay,
+        state[2] * ebo.factor * (1.0 - ebo.jitter + (rand(Float64) * 2.0 * ebo.jitter))
+    )
     (curr_delay, (next_n, next_delay))
 end
 length(ebo::ExponentialBackOff) = ebo.n
@@ -244,7 +259,7 @@ retry(http_get, check=(s,e)->e.status == "503")(url)
 retry(read, check=(s,e)->isa(e, IOError))(io, 128; all=false)
 ```
 """
-function retry(f;  delays=ExponentialBackOff(), check=nothing)
+function retry(f; delays = ExponentialBackOff(), check = nothing)
     (args...; kwargs...) -> begin
         y = iterate(delays)
         while y !== nothing

@@ -81,8 +81,8 @@ I.e. the value returned by `codeunit(s, i)` is of the type returned by
 
 See also: [`ncodeunits`](@ref), [`checkbounds`](@ref)
 """
-@propagate_inbounds codeunit(s::AbstractString, i::Integer) = typeof(i) === Int ?
-    throw(MethodError(codeunit, (s, i))) : codeunit(s, Int(i))
+@propagate_inbounds codeunit(s::AbstractString, i::Integer) =
+    typeof(i) === Int ? throw(MethodError(codeunit, (s, i))) : codeunit(s, Int(i))
 
 """
     isvalid(s::AbstractString, i::Integer) -> Bool
@@ -118,8 +118,8 @@ Stacktrace:
 [...]
 ```
 """
-@propagate_inbounds isvalid(s::AbstractString, i::Integer) = typeof(i) === Int ?
-    throw(MethodError(isvalid, (s, i))) : isvalid(s, Int(i))
+@propagate_inbounds isvalid(s::AbstractString, i::Integer) =
+    typeof(i) === Int ? throw(MethodError(isvalid, (s, i))) : isvalid(s, Int(i))
 
 """
     iterate(s::AbstractString, i::Integer) -> Union{Tuple{<:AbstractChar, Int}, Nothing}
@@ -132,8 +132,8 @@ protocol may assume that `i` is the start of a character in `s`.
 
 See also: [`getindex`](@ref), [`checkbounds`](@ref)
 """
-@propagate_inbounds iterate(s::AbstractString, i::Integer) = typeof(i) === Int ?
-    throw(MethodError(iterate, (s, i))) : iterate(s, Int(i))
+@propagate_inbounds iterate(s::AbstractString, i::Integer) =
+    typeof(i) === Int ? throw(MethodError(iterate, (s, i))) : iterate(s, Int(i))
 
 ## basic generic definitions ##
 
@@ -167,12 +167,14 @@ getindex(s::AbstractString, i::Colon) = s
 # TODO: handle other ranges with stride ±1 specially?
 # TODO: add more @propagate_inbounds annotations?
 getindex(s::AbstractString, v::AbstractVector{<:Integer}) =
-    sprint(io->(for i in v; write(io, s[i]) end), sizehint=length(v))
+    sprint(io -> (for i in v
+            write(io, s[i])
+        end), sizehint = length(v))
 getindex(s::AbstractString, v::AbstractVector{Bool}) =
     throw(ArgumentError("logical indexing not supported for strings"))
 
 function get(s::AbstractString, i::Integer, default)
-# TODO: use ternary once @inbounds is expression-like
+    # TODO: use ternary once @inbounds is expression-like
     if checkbounds(Bool, s, i)
         @inbounds return s[i]
     else
@@ -182,8 +184,7 @@ end
 
 ## bounds checking ##
 
-checkbounds(::Type{Bool}, s::AbstractString, i::Integer) =
-    1 ≤ i ≤ ncodeunits(s)
+checkbounds(::Type{Bool}, s::AbstractString, i::Integer) = 1 ≤ i ≤ ncodeunits(s)
 checkbounds(::Type{Bool}, s::AbstractString, r::AbstractRange{<:Integer}) =
     isempty(r) || (1 ≤ minimum(r) && maximum(r) ≤ ncodeunits(s))
 checkbounds(::Type{Bool}, s::AbstractString, I::AbstractArray{<:Real}) =
@@ -227,7 +228,8 @@ julia> 'j' * "ulia"
 "julia"
 ```
 """
-(*)(s1::Union{AbstractChar, AbstractString}, ss::Union{AbstractChar, AbstractString}...) = string(s1, ss...)
+(*)(s1::Union{AbstractChar,AbstractString}, ss::Union{AbstractChar,AbstractString}...) =
+    string(s1, ss...)
 
 one(::Union{T,Type{T}}) where {T<:AbstractString} = convert(T, "")
 
@@ -347,8 +349,8 @@ length(s::AbstractString) = @inbounds return length(s, 1, ncodeunits(s))
 
 function length(s::AbstractString, i::Int, j::Int)
     @boundscheck begin
-        0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
-        0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))
+        0 < i ≤ ncodeunits(s) + 1 || throw(BoundsError(s, i))
+        0 ≤ j < ncodeunits(s) + 1 || throw(BoundsError(s, j))
     end
     n = 0
     for k = i:j
@@ -399,8 +401,8 @@ thisind(s::AbstractString, i::Integer) = thisind(s, Int(i))
 function thisind(s::AbstractString, i::Int)
     z = ncodeunits(s) + 1
     i == z && return i
-    @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
-    @inbounds while 1 < i && !isvalid(s, i)
+    @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
+    @inbounds while 1 < i && !isvalid(s, i)
         i -= 1
     end
     return i
@@ -452,15 +454,15 @@ julia> prevind("α", 2, 3)
 ```
 """
 prevind(s::AbstractString, i::Integer, n::Integer) = prevind(s, Int(i), Int(n))
-prevind(s::AbstractString, i::Integer)             = prevind(s, Int(i))
-prevind(s::AbstractString, i::Int)                 = prevind(s, i, 1)
+prevind(s::AbstractString, i::Integer) = prevind(s, Int(i))
+prevind(s::AbstractString, i::Int) = prevind(s, i, 1)
 
 function prevind(s::AbstractString, i::Int, n::Int)
     n < 0 && throw(ArgumentError("n cannot be negative: $n"))
     z = ncodeunits(s) + 1
     @boundscheck 0 < i ≤ z || throw(BoundsError(s, i))
     n == 0 && return thisind(s, i) == i ? i : string_index_err(s, i)
-    while n > 0 && 1 < i
+    while n > 0 && 1 < i
         @inbounds n -= isvalid(s, i -= 1)
     end
     return i - n
@@ -512,15 +514,15 @@ julia> nextind("α", 1, 2)
 ```
 """
 nextind(s::AbstractString, i::Integer, n::Integer) = nextind(s, Int(i), Int(n))
-nextind(s::AbstractString, i::Integer)             = nextind(s, Int(i))
-nextind(s::AbstractString, i::Int)                 = nextind(s, i, 1)
+nextind(s::AbstractString, i::Integer) = nextind(s, Int(i))
+nextind(s::AbstractString, i::Int) = nextind(s, i, 1)
 
 function nextind(s::AbstractString, i::Int, n::Int)
     n < 0 && throw(ArgumentError("n cannot be negative: $n"))
     z = ncodeunits(s)
     @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
     n == 0 && return thisind(s, i) == i ? i : string_index_err(s, i)
-    while n > 0 && i < z
+    while n > 0 && i < z
         @inbounds n -= isvalid(s, i += 1)
     end
     return i + n
@@ -536,7 +538,8 @@ keys(s::AbstractString) = EachStringIndex(s)
 length(e::EachStringIndex) = length(e.s)
 first(::EachStringIndex) = 1
 last(e::EachStringIndex) = lastindex(e.s)
-iterate(e::EachStringIndex, state=firstindex(e.s)) = state > ncodeunits(e.s) ? nothing : (state, nextind(e.s, state))
+iterate(e::EachStringIndex, state = firstindex(e.s)) =
+    state > ncodeunits(e.s) ? nothing : (state, nextind(e.s, state))
 eltype(::Type{<:EachStringIndex}) = Int
 
 """
@@ -567,18 +570,17 @@ isascii(c::AbstractChar) = UInt32(c) < 0x80
 ## string map, filter, has ##
 
 function map(f, s::AbstractString)
-    out = IOBuffer(sizehint=sizeof(s))
+    out = IOBuffer(sizehint = sizeof(s))
     for c in s
         c′ = f(c)
-        isa(c′, AbstractChar) || throw(ArgumentError(
-            "map(f, s::AbstractString) requires f to return AbstractChar; try map(f, collect(s)) or a comprehension instead"))
+        isa(c′, AbstractChar) || throw(ArgumentError("map(f, s::AbstractString) requires f to return AbstractChar; try map(f, collect(s)) or a comprehension instead"))
         write(out, c′::AbstractChar)
     end
     String(take!(out))
 end
 
 function filter(f, s::AbstractString)
-    out = IOBuffer(sizehint=sizeof(s))
+    out = IOBuffer(sizehint = sizeof(s))
     for c in s
         f(c) && write(out, c)
     end
@@ -621,7 +623,8 @@ julia> last("∀ϵ≠0: ϵ²>0", 3)
 "²>0"
 ```
 """
-last(s::AbstractString, n::Integer) = @inbounds s[max(1, prevind(s, ncodeunits(s)+1, n)):end]
+last(s::AbstractString, n::Integer) =
+    @inbounds s[max(1, prevind(s, ncodeunits(s) + 1, n)):end]
 
 """
     reverseind(v, i)
@@ -641,7 +644,7 @@ julia> for i in 1:length(r)
 Julia
 ```
 """
-reverseind(s::AbstractString, i::Integer) = thisind(s, ncodeunits(s)-i+1)
+reverseind(s::AbstractString, i::Integer) = thisind(s, ncodeunits(s) - i + 1)
 
 """
     repeat(s::AbstractString, r::Integer)
@@ -674,8 +677,10 @@ julia> "Test "^3
 (^)(s::Union{AbstractString,AbstractChar}, r::Integer) = repeat(s, r)
 
 # reverse-order iteration for strings and indices thereof
-iterate(r::Iterators.Reverse{<:AbstractString}, i=lastindex(r.itr)) = i < firstindex(r.itr) ? nothing : (r.itr[i], prevind(r.itr, i))
-iterate(r::Iterators.Reverse{<:EachStringIndex}, i=lastindex(r.itr.s)) = i < firstindex(r.itr.s) ? nothing : (i, prevind(r.itr.s, i))
+iterate(r::Iterators.Reverse{<:AbstractString}, i = lastindex(r.itr)) =
+    i < firstindex(r.itr) ? nothing : (r.itr[i], prevind(r.itr, i))
+iterate(r::Iterators.Reverse{<:EachStringIndex}, i = lastindex(r.itr.s)) =
+    i < firstindex(r.itr.s) ? nothing : (i, prevind(r.itr.s, i))
 
 ## code unit access ##
 
@@ -696,11 +701,12 @@ size(s::CodeUnits) = (length(s),)
 elsize(s::CodeUnits{T}) where {T} = sizeof(T)
 @propagate_inbounds getindex(s::CodeUnits, i::Int) = codeunit(s.s, i)
 IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
-iterate(s::CodeUnits, i=1) = (@_propagate_inbounds_meta; i == length(s)+1 ? nothing : (s[i], i+1))
+iterate(s::CodeUnits, i = 1) =
+    (@_propagate_inbounds_meta; i == length(s) + 1 ? nothing : (s[i], i + 1))
 
 write(io::IO, s::CodeUnits) = write(io, s.s)
 
-unsafe_convert(::Type{Ptr{T}},    s::CodeUnits{T}) where {T} = unsafe_convert(Ptr{T}, s.s)
+unsafe_convert(::Type{Ptr{T}}, s::CodeUnits{T}) where {T} = unsafe_convert(Ptr{T}, s.s)
 unsafe_convert(::Type{Ptr{Int8}}, s::CodeUnits{UInt8}) = unsafe_convert(Ptr{Int8}, s.s)
 
 """

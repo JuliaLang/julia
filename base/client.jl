@@ -20,11 +20,11 @@ function repl_color(key, default)
 end
 
 error_color() = repl_color("JULIA_ERROR_COLOR", default_color_error)
-warn_color()  = repl_color("JULIA_WARN_COLOR" , default_color_warn)
-info_color()  = repl_color("JULIA_INFO_COLOR" , default_color_info)
-debug_color()  = repl_color("JULIA_DEBUG_COLOR" , default_color_debug)
+warn_color() = repl_color("JULIA_WARN_COLOR", default_color_warn)
+info_color() = repl_color("JULIA_INFO_COLOR", default_color_info)
+debug_color() = repl_color("JULIA_DEBUG_COLOR", default_color_debug)
 
-input_color()  = text_colors[repl_color("JULIA_INPUT_COLOR", default_color_input)]
+input_color() = text_colors[repl_color("JULIA_INPUT_COLOR", default_color_input)]
 answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answer)]
 
 stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bold)
@@ -56,7 +56,10 @@ function repl_cmd(cmd, out)
                     # If it's intended to simulate `cd`, it should instead be doing
                     # more nearly `cd $dir && printf %s \$PWD` (with appropriate quoting),
                     # since shell `cd` does more than just `echo` the result.
-                    dir = read(`$shell -c "printf '%s' $(shell_escape_posixly(dir))"`, String)
+                    dir = read(
+                        `$shell -c "printf '%s' $(shell_escape_posixly(dir))"`,
+                        String
+                    )
                 end
                 cd(dir)
             end
@@ -92,7 +95,7 @@ end
 function scrub_repl_backtrace(bt)
     if bt !== nothing
         # remove REPL-related frames from interactive printing
-        eval_ind = findlast(addr->ip_matches_func(addr, :eval), bt)
+        eval_ind = findlast(addr -> ip_matches_func(addr, :eval), bt)
         if eval_ind !== nothing
             return bt[1:eval_ind-1]
         end
@@ -101,13 +104,16 @@ function scrub_repl_backtrace(bt)
 end
 
 function display_error(io::IO, er, bt)
-    printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
+    printstyled(io, "ERROR: "; bold = true, color = Base.error_color())
     showerror(IOContext(io, :limit => true), er, scrub_repl_backtrace(bt))
     println(io)
 end
 function display_error(io::IO, stack::Vector)
-    printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    show_exception_stack(IOContext(io, :limit => true), Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ])
+    printstyled(io, "ERROR: "; bold = true, color = Base.error_color())
+    show_exception_stack(
+        IOContext(io, :limit => true),
+        Any[(x[1], scrub_repl_backtrace(x[2])) for x in stack]
+    )
 end
 display_error(stack::Vector) = display_error(stderr, stack)
 display_error(er, bt) = display_error(stderr, er, bt)
@@ -160,8 +166,15 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
 end
 
 function _parse_input_line_core(s::String, filename::String)
-    ex = ccall(:jl_parse_all, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
-               s, sizeof(s), filename, sizeof(filename))
+    ex = ccall(
+        :jl_parse_all,
+        Any,
+        (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
+        s,
+        sizeof(s),
+        filename,
+        sizeof(filename)
+    )
     if ex isa Expr && ex.head === :toplevel
         if isempty(ex.args)
             return nothing
@@ -176,7 +189,7 @@ function _parse_input_line_core(s::String, filename::String)
     return ex
 end
 
-function parse_input_line(s::String; filename::String="none", depwarn=true)
+function parse_input_line(s::String; filename::String = "none", depwarn = true)
     # For now, assume all parser warnings are depwarns
     ex = if depwarn
         _parse_input_line_core(s, filename)
@@ -192,9 +205,9 @@ parse_input_line(s::AbstractString) = parse_input_line(String(s))
 function parse_input_line(io::IO)
     s = ""
     while !eof(io)
-        s *= readline(io, keep=true)
+        s *= readline(io, keep = true)
         e = parse_input_line(s)
-        if !(isa(e,Expr) && e.head === :incomplete)
+        if !(isa(e, Expr) && e.head === :incomplete)
             return e
         end
     end
@@ -223,11 +236,11 @@ function exec_options(opts)
         idxs = findall(x -> x == "--", ARGS)
         length(idxs) > 0 && deleteat!(ARGS, idxs[1])
     end
-    quiet                 = (opts.quiet != 0)
-    startup               = (opts.startupfile != 2)
-    history_file          = (opts.historyfile != 0)
-    color_set             = (opts.color != 0) # --color!=auto
-    global have_color     = (opts.color == 1) # --color=on
+    quiet = (opts.quiet != 0)
+    startup = (opts.startupfile != 2)
+    history_file = (opts.historyfile != 0)
+    color_set = (opts.color != 0) # --color!=auto
+    global have_color = (opts.color == 1) # --color=on
     global is_interactive = (opts.isinteractive != 0)
 
     # pre-process command line argument list
@@ -242,7 +255,7 @@ function exec_options(opts)
             arg_is_program = false
             repl = false
         elseif cmd == 'L'
-            # nothing
+        # nothing
         else
             @warn "Unexpected command -$cmd'$arg'"
         end
@@ -252,9 +265,13 @@ function exec_options(opts)
     global PROGRAM_FILE = arg_is_program ? popfirst!(ARGS) : ""
 
     # Load Distributed module only if any of the Distributed options have been specified.
-    distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machine_file != C_NULL)
+    distributed_mode = (opts.worker == 1) ||
+                       (opts.nprocs > 0) || (opts.machine_file != C_NULL)
     if distributed_mode
-        let Distributed = require(PkgId(UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
+        let Distributed = require(PkgId(
+            UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)),
+            "Distributed"
+        ))
             Core.eval(Main, :(const Distributed = $Distributed))
             Core.eval(Main, :(using .Distributed))
         end
@@ -324,7 +341,10 @@ function load_julia_startup()
     else
         include_ifexists(Main, abspath(BINDIR, "..", "etc", "julia", "startup.jl"))
     end
-    !isempty(DEPOT_PATH) && include_ifexists(Main, abspath(DEPOT_PATH[1], "config", "startup.jl"))
+    !isempty(DEPOT_PATH) && include_ifexists(
+        Main,
+        abspath(DEPOT_PATH[1], "config", "startup.jl")
+    )
     return nothing
 end
 
@@ -356,17 +376,29 @@ _atreplinit(repl) = invokelatest(__atreplinit, repl)
 const REPL_MODULE_REF = Ref{Module}()
 
 # run the requested sort of evaluation loop on stdio
-function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool)
+function run_main_repl(
+    interactive::Bool,
+    quiet::Bool,
+    banner::Bool,
+    history_file::Bool,
+    color_set::Bool
+)
     global active_repl
     # load interactive-only libraries
     if !isdefined(Main, :InteractiveUtils)
         try
-            let InteractiveUtils = require(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
+            let InteractiveUtils = require(PkgId(
+                UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240),
+                "InteractiveUtils"
+            ))
                 Core.eval(Main, :(const InteractiveUtils = $InteractiveUtils))
                 Core.eval(Main, :(using .InteractiveUtils))
             end
         catch ex
-            @warn "Failed to import InteractiveUtils into module Main" exception=(ex, catch_backtrace())
+            @warn "Failed to import InteractiveUtils into module Main" exception = (
+                ex,
+                catch_backtrace()
+            )
         end
     end
 
@@ -387,7 +419,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
             # REPLDisplay
             pushdisplay(REPL.REPLDisplay(active_repl))
             _atreplinit(active_repl)
-            REPL.run_repl(active_repl, backend->(global active_repl_backend = backend))
+            REPL.run_repl(active_repl, backend -> (global active_repl_backend = backend))
         end
     else
         # otherwise provide a simple fallback

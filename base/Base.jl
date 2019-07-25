@@ -139,7 +139,7 @@ include("abstractdict.jl")
 
 include("iterators.jl")
 using .Iterators: zip, enumerate
-using .Iterators: Flatten, Filter, product  # for generators
+using .Iterators: Flatten, Filter, product # for generators
 
 include("namedtuple.jl")
 
@@ -190,8 +190,8 @@ include("strings/string.jl")
 include("strings/substring.jl")
 
 # For OS specific stuff
-include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
-include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
+include(string((length(Core.ARGS) >= 2 ? Core.ARGS[2] : ""), "build_h.jl")) # include($BUILDROOT/base/build_h.jl)
+include(string((length(Core.ARGS) >= 2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
 
 include("osutils.jl")
 include("c.jl")
@@ -276,13 +276,13 @@ include("secretbuffer.jl")
 include("floatfuncs.jl")
 include("math.jl")
 using .Math
-const (√)=sqrt
-const (∛)=cbrt
+const (√) = sqrt
+const (∛) = cbrt
 
 INCLUDE_STATE = 2 # include = _include (from lines above)
 
 # reduction along dims
-include("reducedim.jl")  # macros in this file relies on string.jl
+include("reducedim.jl") # macros in this file relies on string.jl
 include("accumulate.jl")
 
 # basic data structures
@@ -375,34 +375,34 @@ end
 end_base_include = time_ns()
 
 if is_primary_base_module
-function __init__()
-    # try to ensuremake sure OpenBLAS does not set CPU affinity (#1070, #9639)
-    if !haskey(ENV, "OPENBLAS_MAIN_FREE") && !haskey(ENV, "GOTOBLAS_MAIN_FREE")
-        ENV["OPENBLAS_MAIN_FREE"] = "1"
+    function __init__()
+        # try to ensuremake sure OpenBLAS does not set CPU affinity (#1070, #9639)
+        if !haskey(ENV, "OPENBLAS_MAIN_FREE") && !haskey(ENV, "GOTOBLAS_MAIN_FREE")
+            ENV["OPENBLAS_MAIN_FREE"] = "1"
+        end
+        # And try to prevent openblas from starting too many threads, unless/until specifically requested
+        if !haskey(ENV, "OPENBLAS_NUM_THREADS") && !haskey(ENV, "OMP_NUM_THREADS")
+            cpu_threads = Sys.CPU_THREADS::Int
+            if cpu_threads > 8 # always at most 8
+                ENV["OPENBLAS_NUM_THREADS"] = "8"
+            elseif haskey(ENV, "JULIA_CPU_THREADS") # or exactly as specified
+                ENV["OPENBLAS_NUM_THREADS"] = cpu_threads
+            end # otherwise, trust that openblas will pick CPU_THREADS anyways, without any intervention
+        end
+        # for the few uses of Libc.rand in Base:
+        Libc.srand()
+        # Base library init
+        reinit_stdio()
+        Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
+        # initialize loading
+        init_depot_path()
+        init_load_path()
+        nothing
     end
-    # And try to prevent openblas from starting too many threads, unless/until specifically requested
-    if !haskey(ENV, "OPENBLAS_NUM_THREADS") && !haskey(ENV, "OMP_NUM_THREADS")
-        cpu_threads = Sys.CPU_THREADS::Int
-        if cpu_threads > 8 # always at most 8
-            ENV["OPENBLAS_NUM_THREADS"] = "8"
-        elseif haskey(ENV, "JULIA_CPU_THREADS") # or exactly as specified
-            ENV["OPENBLAS_NUM_THREADS"] = cpu_threads
-        end # otherwise, trust that openblas will pick CPU_THREADS anyways, without any intervention
-    end
-    # for the few uses of Libc.rand in Base:
-    Libc.srand()
-    # Base library init
-    reinit_stdio()
-    Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
-    # initialize loading
-    init_depot_path()
-    init_load_path()
-    nothing
-end
 
-INCLUDE_STATE = 3 # include = include_relative
+    INCLUDE_STATE = 3 # include = include_relative
 end
 
 const tot_time_stdlib = RefValue(0.0)
 
-end # baremodule Base
+end

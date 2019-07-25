@@ -12,15 +12,15 @@ struct Some{T}
     value::T
 end
 
-promote_rule(::Type{Some{T}}, ::Type{Some{S}}) where {T, S<:T} = Some{T}
-promote_rule(::Type{Some{T}}, ::Type{Nothing}) where {T} = Union{Some{T}, Nothing}
+promote_rule(::Type{Some{T}}, ::Type{Some{S}}) where {T,S<:T} = Some{T}
+promote_rule(::Type{Some{T}}, ::Type{Nothing}) where {T} = Union{Some{T},Nothing}
 
 convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))
 convert(::Type{Some{T}}, x::Some{T}) where {T} = x
-convert(::Type{Union{Some{T}, Nothing}}, x::Some) where {T} = convert(Some{T}, x)
+convert(::Type{Union{Some{T},Nothing}}, x::Some) where {T} = convert(Some{T}, x)
 
-convert(::Type{Union{T, Nothing}}, x::Union{T, Nothing}) where {T} = x
-convert(::Type{Union{T, Nothing}}, x::Any) where {T} = convert(T, x)
+convert(::Type{Union{T,Nothing}}, x::Union{T,Nothing}) where {T} = x
+convert(::Type{Union{T,Nothing}}, x::Any) where {T} = convert(T, x)
 convert(::Type{Nothing}, x::Nothing) = nothing
 convert(::Type{Nothing}, x::Any) = throw(MethodError(convert, (Nothing, x)))
 

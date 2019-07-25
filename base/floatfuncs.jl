@@ -7,8 +7,13 @@ copysign(x::Float32, y::Float32) = copysign_float(x, y)
 copysign(x::Float32, y::Real) = copysign(x, Float32(y))
 copysign(x::Float64, y::Real) = copysign(x, Float64(y))
 
-flipsign(x::Float64, y::Float64) = bitcast(Float64, xor_int(bitcast(UInt64, x), and_int(bitcast(UInt64, y), 0x8000000000000000)))
-flipsign(x::Float32, y::Float32) = bitcast(Float32, xor_int(bitcast(UInt32, x), and_int(bitcast(UInt32, y), 0x80000000)))
+flipsign(x::Float64, y::Float64) =
+    bitcast(
+        Float64,
+        xor_int(bitcast(UInt64, x), and_int(bitcast(UInt64, y), 0x8000000000000000))
+    )
+flipsign(x::Float32, y::Float32) =
+    bitcast(Float32, xor_int(bitcast(UInt32, x), and_int(bitcast(UInt32, y), 0x80000000)))
 flipsign(x::Float32, y::Real) = flipsign(x, Float32(y))
 flipsign(x::Float64, y::Real) = flipsign(x, Float64(y))
 
@@ -39,7 +44,8 @@ The largest consecutive integer representable in the given floating-point type `
 also does not exceed the maximum integer representable by the integer type `S`.  Equivalently,
 it is the minimum of `maxintfloat(T)` and [`typemax(S)`](@ref).
 """
-maxintfloat(::Type{S}, ::Type{T}) where {S<:AbstractFloat, T<:Integer} = min(maxintfloat(S), S(typemax(T)))
+maxintfloat(::Type{S}, ::Type{T}) where {S<:AbstractFloat,T<:Integer} =
+    min(maxintfloat(S), S(typemax(T)))
 maxintfloat() = maxintfloat(Float64)
 
 isinteger(x::AbstractFloat) = (x - trunc(x) == 0)
@@ -121,20 +127,26 @@ To extend `round` to new numeric types, it is typically sufficient to define `Ba
 round(T::Type, x)
 
 round(::Type{T}, x::AbstractFloat, r::RoundingMode{:ToZero}) where {T<:Integer} = trunc(T, x)
-round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer} = trunc(T, round(x,r))
+round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer} =
+    trunc(T, round(x, r))
 
 # NOTE: this relies on the current keyword dispatch behaviour (#9498).
-function round(x::Real, r::RoundingMode=RoundNearest;
-               digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base::Union{Nothing,Integer}=nothing)
+function round(
+    x::Real,
+    r::RoundingMode = RoundNearest;
+    digits::Union{Nothing,Integer} = nothing,
+    sigdigits::Union{Nothing,Integer} = nothing,
+    base::Union{Nothing,Integer} = nothing
+)
     isfinite(x) || return x
     if digits === nothing
         if sigdigits === nothing
             if base === nothing
                 # avoid recursive calls
-                throw(MethodError(round, (x,r)))
+                throw(MethodError(round, (x, r)))
             else
-                round(x,r)
-                # or throw(ArgumentError("`round` cannot use `base` argument without `digits` or `sigdigits` arguments."))
+                round(x, r)
+            # or throw(ArgumentError("`round` cannot use `base` argument without `digits` or `sigdigits` arguments."))
             end
         else
             _round_sigdigits(x, r, sigdigits, base === nothing ? 10 : base)
@@ -150,7 +162,7 @@ end
 
 trunc(x::Real; kwargs...) = round(x, RoundToZero; kwargs...)
 floor(x::Real; kwargs...) = round(x, RoundDown; kwargs...)
-ceil(x::Real; kwargs...)  = round(x, RoundUp; kwargs...)
+ceil(x::Real; kwargs...) = round(x, RoundUp; kwargs...)
 
 round(x::Integer, r::RoundingMode) = x
 
@@ -205,16 +217,16 @@ hidigit(x::Real, base) = hidigit(float(x), base)
 
 function _round_sigdigits(x, r::RoundingMode, sigdigits::Integer, base)
     h = hidigit(x, base)
-    _round_digits(x, r, sigdigits-h, base)
+    _round_digits(x, r, sigdigits - h, base)
 end
 
 # C-style round
 function round(x::AbstractFloat, ::RoundingMode{:NearestTiesAway})
     y = trunc(x)
-    ifelse(x==y,y,trunc(2*x-y))
+    ifelse(x == y, y, trunc(2 * x - y))
 end
 # Java-style round
-function round(x::T, ::RoundingMode{:NearestTiesUp}) where {T <: AbstractFloat}
+function round(x::T, ::RoundingMode{:NearestTiesUp}) where {T<:AbstractFloat}
     copysign(floor((x + (T(0.25) - eps(T(0.5)))) + (T(0.25) + eps(T(0.5)))), x)
 end
 
@@ -270,8 +282,14 @@ julia> isapprox(1e-10, 0, atol=1e-8)
 true
 ```
 """
-function isapprox(x::Number, y::Number; atol::Real=0, rtol::Real=rtoldefault(x,y,atol), nans::Bool=false)
-    x == y || (isfinite(x) && isfinite(y) && abs(x-y) <= max(atol, rtol*max(abs(x), abs(y)))) || (nans && isnan(x) && isnan(y))
+function isapprox(
+    x::Number,
+    y::Number;
+    atol::Real = 0, rtol::Real = rtoldefault(x, y, atol), nans::Bool = false
+)
+    x == y ||
+    (isfinite(x) && isfinite(y) && abs(x - y) <= max(atol, rtol * max(abs(x), abs(y)))) ||
+    (nans && isnan(x) && isnan(y))
 end
 
 const ≈ = isapprox
@@ -285,8 +303,12 @@ This is equivalent to `!isapprox(x,y)` (see [`isapprox`](@ref)).
 # default tolerance arguments
 rtoldefault(::Type{T}) where {T<:AbstractFloat} = sqrt(eps(T))
 rtoldefault(::Type{<:Real}) = 0
-function rtoldefault(x::Union{T,Type{T}}, y::Union{S,Type{S}}, atol::Real) where {T<:Number,S<:Number}
-    rtol = max(rtoldefault(real(T)),rtoldefault(real(S)))
+function rtoldefault(
+    x::Union{T,Type{T}},
+    y::Union{S,Type{S}},
+    atol::Real
+) where {T<:Number,S<:Number}
+    rtol = max(rtoldefault(real(T)), rtoldefault(real(S)))
     return atol > 0 ? zero(rtol) : rtol
 end
 
@@ -302,9 +324,9 @@ algorithms. See [`muladd`](@ref).
 function fma end
 
 fma_libm(x::Float32, y::Float32, z::Float32) =
-    ccall(("fmaf", libm_name), Float32, (Float32,Float32,Float32), x, y, z)
+    ccall(("fmaf", libm_name), Float32, (Float32, Float32, Float32), x, y, z)
 fma_libm(x::Float64, y::Float64, z::Float64) =
-    ccall(("fma", libm_name), Float64, (Float64,Float64,Float64), x, y, z)
+    ccall(("fma", libm_name), Float64, (Float64, Float64, Float64), x, y, z)
 fma_llvm(x::Float32, y::Float32, z::Float32) = fma_float(x, y, z)
 fma_llvm(x::Float64, y::Float64, z::Float64) = fma_float(x, y, z)
 # Disable LLVM's fma if it is incorrect, e.g. because LLVM falls back
@@ -313,14 +335,15 @@ fma_llvm(x::Float64, y::Float64, z::Float64) = fma_float(x, y, z)
 # 1.0000000009313226 = 1 + 1/2^30
 # If fma_llvm() clobbers the rounding mode, the result of 0.1 + 0.2 will be 0.3
 # instead of the properly-rounded 0.30000000000000004; check after calling fma
-if (Sys.ARCH != :i686 && fma_llvm(1.0000305f0, 1.0000305f0, -1.0f0) == 6.103609f-5 &&
-    (fma_llvm(1.0000000009313226, 1.0000000009313226, -1.0) ==
-     1.8626451500983188e-9) && 0.1 + 0.2 == 0.30000000000000004)
-    fma(x::Float32, y::Float32, z::Float32) = fma_llvm(x,y,z)
-    fma(x::Float64, y::Float64, z::Float64) = fma_llvm(x,y,z)
+if (Sys.ARCH != :i686 &&
+    fma_llvm(1.0000305f0, 1.0000305f0, -1.0f0) == 6.103609f-5 &&
+    (fma_llvm(1.0000000009313226, 1.0000000009313226, -1.0) == 1.8626451500983188e-9) &&
+    0.1 + 0.2 == 0.30000000000000004)
+    fma(x::Float32, y::Float32, z::Float32) = fma_llvm(x, y, z)
+    fma(x::Float64, y::Float64, z::Float64) = fma_llvm(x, y, z)
 else
-    fma(x::Float32, y::Float32, z::Float32) = fma_libm(x,y,z)
-    fma(x::Float64, y::Float64, z::Float64) = fma_libm(x,y,z)
+    fma(x::Float32, y::Float32, z::Float32) = fma_libm(x, y, z)
+    fma(x::Float64, y::Float64, z::Float64) = fma_libm(x, y, z)
 end
 function fma(a::Float16, b::Float16, c::Float16)
     Float16(fma(Float32(a), Float32(b), Float32(c)))

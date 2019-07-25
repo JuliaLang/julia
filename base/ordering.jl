@@ -5,18 +5,32 @@ module Order
 
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
-import .Base:
-    AbstractVector, @propagate_inbounds, isless, identity, getindex,
-    +, -, !, &, <, |
+import .Base: AbstractVector,
+              @propagate_inbounds,
+              isless,
+              identity,
+              getindex,
+              +,
+              -,
+              !,
+              &,
+              <,
+              |
 
 ## notions of element ordering ##
 
-export # not exported by Base
-    Ordering, Forward, Reverse,
-    By, Lt, Perm,
-    ReverseOrdering, ForwardOrdering,
-    DirectOrdering,
-    lt, ord, ordtype
+export Ordering,
+       Forward,
+       Reverse,
+       By,
+       Lt,
+       Perm,
+       ReverseOrdering,
+       ForwardOrdering,
+       DirectOrdering,
+       lt,
+       ord,
+       ordtype
 
 abstract type Ordering end
 
@@ -46,10 +60,10 @@ struct Perm{O<:Ordering,V<:AbstractVector} <: Ordering
     data::V
 end
 
-lt(o::ForwardOrdering,       a, b) = isless(a,b)
-lt(o::ReverseOrdering,       a, b) = lt(o.fwd,b,a)
-lt(o::By,                    a, b) = isless(o.by(a),o.by(b))
-lt(o::Lt,                    a, b) = o.lt(a,b)
+lt(o::ForwardOrdering, a, b) = isless(a, b)
+lt(o::ReverseOrdering, a, b) = lt(o.fwd, b, a)
+lt(o::By, a, b) = isless(o.by(a), o.by(b))
+lt(o::Lt, a, b) = o.lt(a, b)
 
 @propagate_inbounds function lt(p::Perm, a::Integer, b::Integer)
     da = p.data[a]
@@ -58,19 +72,23 @@ lt(o::Lt,                    a, b) = o.lt(a,b)
 end
 
 ordtype(o::ReverseOrdering, vs::AbstractArray) = ordtype(o.fwd, vs)
-ordtype(o::Perm,            vs::AbstractArray) = ordtype(o.order, o.data)
+ordtype(o::Perm, vs::AbstractArray) = ordtype(o.order, o.data)
 # TODO: here, we really want the return type of o.by, without calling it
-ordtype(o::By,              vs::AbstractArray) = try typeof(o.by(vs[1])) catch; Any end
-ordtype(o::Ordering,        vs::AbstractArray) = eltype(vs)
+ordtype(o::By, vs::AbstractArray) = try
+        typeof(o.by(vs[1]))
+    catch
+        Any
+    end
+ordtype(o::Ordering, vs::AbstractArray) = eltype(vs)
 
 _ord(lt::typeof(isless), by::typeof(identity), order::Ordering) = order
-_ord(lt::typeof(isless), by,                   order::Ordering) = By(by)
-_ord(lt,                 by::typeof(identity), order::Ordering) = Lt(lt)
-_ord(lt,                 by,                   order::Ordering) = Lt((x,y)->lt(by(x),by(y)))
+_ord(lt::typeof(isless), by, order::Ordering) = By(by)
+_ord(lt, by::typeof(identity), order::Ordering) = Lt(lt)
+_ord(lt, by, order::Ordering) = Lt((x, y) -> lt(by(x), by(y)))
 
-ord(lt, by, rev::Nothing, order::Ordering=Forward) = _ord(lt, by, order)
+ord(lt, by, rev::Nothing, order::Ordering = Forward) = _ord(lt, by, order)
 
-function ord(lt, by, rev::Bool, order::Ordering=Forward)
+function ord(lt, by, rev::Bool, order::Ordering = Forward)
     o = _ord(lt, by, order)
     return rev ? ReverseOrdering(o) : o
 end

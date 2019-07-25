@@ -21,8 +21,14 @@ mutable struct AsyncCondition
         this = new(Libc.malloc(_sizeof_uv_async), ThreadSynchronizer(), true, false)
         iolock_begin()
         associate_julia_struct(this.handle, this)
-        err = ccall(:uv_async_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
-            eventloop(), this, uv_jl_asynccb::Ptr{Cvoid})
+        err = ccall(
+            :uv_async_init,
+            Cint,
+            (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+            eventloop(),
+            this,
+            uv_jl_asynccb::Ptr{Cvoid}
+        )
         if err != 0
             #TODO: this codepath is currently not tested
             Libc.free(this.handle)
@@ -44,9 +50,9 @@ the async condition object itself.
 function AsyncCondition(cb::Function)
     async = AsyncCondition()
     @async while _trywait(async)
-            cb(async)
-            isopen(async) || return
-        end
+        cb(async)
+        isopen(async) || return
+    end
     return async
 end
 
@@ -82,8 +88,15 @@ mutable struct Timer
         @assert err == 0
         finalizer(uvfinalize, this)
         ccall(:uv_update_time, Cvoid, (Ptr{Cvoid},), loop)
-        err = ccall(:uv_timer_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
-            this, uv_jl_timercb::Ptr{Cvoid}, timeout, interval)
+        err = ccall(
+            :uv_timer_start,
+            Cint,
+            (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
+            this,
+            uv_jl_timercb::Ptr{Cvoid},
+            timeout,
+            interval
+        )
         @assert err == 0
         iolock_end()
         return this
@@ -93,7 +106,7 @@ end
 unsafe_convert(::Type{Ptr{Cvoid}}, t::Timer) = t.handle
 unsafe_convert(::Type{Ptr{Cvoid}}, async::AsyncCondition) = async.handle
 
-function _trywait(t::Union{Timer, AsyncCondition})
+function _trywait(t::Union{Timer,AsyncCondition})
     set = t.set
     if !set
         t.handle == C_NULL && return false
@@ -124,15 +137,15 @@ function _trywait(t::Union{Timer, AsyncCondition})
     return set
 end
 
-function wait(t::Union{Timer, AsyncCondition})
+function wait(t::Union{Timer,AsyncCondition})
     _trywait(t) || throw(EOFError())
     nothing
 end
 
 
-isopen(t::Union{Timer, AsyncCondition}) = t.isopen
+isopen(t::Union{Timer,AsyncCondition}) = t.isopen
 
-function close(t::Union{Timer, AsyncCondition})
+function close(t::Union{Timer,AsyncCondition})
     iolock_begin()
     if t.handle != C_NULL && isopen(t)
         t.isopen = false
@@ -142,7 +155,7 @@ function close(t::Union{Timer, AsyncCondition})
     nothing
 end
 
-function uvfinalize(t::Union{Timer, AsyncCondition})
+function uvfinalize(t::Union{Timer,AsyncCondition})
     iolock_begin()
     lock(t.cond)
     try
@@ -162,7 +175,7 @@ function uvfinalize(t::Union{Timer, AsyncCondition})
     nothing
 end
 
-function _uv_hook_close(t::Union{Timer, AsyncCondition})
+function _uv_hook_close(t::Union{Timer,AsyncCondition})
     lock(t.cond)
     try
         t.isopen = false
@@ -245,12 +258,12 @@ julia> begin
 3
 ```
 """
-function Timer(cb::Function, timeout::Real; interval::Real=0.0)
-    timer = Timer(timeout, interval=interval)
+function Timer(cb::Function, timeout::Real; interval::Real = 0.0)
+    timer = Timer(timeout, interval = interval)
     @async while _trywait(timer)
-            cb(timer)
-            isopen(timer) || return
-        end
+        cb(timer)
+        isopen(timer) || return
+    end
     return timer
 end
 
@@ -262,7 +275,7 @@ Waits until `testcb` returns `true` or for `secs` seconds, whichever is earlier.
 
 Returns :ok, :timed_out, or :error
 """
-function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
+function timedwait(testcb::Function, secs::Float64; pollint::Float64 = 0.1)
     pollint > 0 || throw(ArgumentError("cannot set pollint to $pollint seconds"))
     start = time()
     done = Channel(1)

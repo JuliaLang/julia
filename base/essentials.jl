@@ -166,8 +166,8 @@ function convert end
 convert(::Type{Any}, @nospecialize(x)) = x
 convert(::Type{T}, x::T) where {T} = x
 convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
-                                   # in the absence of inlining-enabled
-                                   # (due to fields typed as `Type`, which is generally a bad idea)
+# in the absence of inlining-enabled
+# (due to fields typed as `Type`, which is generally a bad idea)
 
 """
     @eval [mod,] ex
@@ -176,10 +176,10 @@ Evaluate an expression with values interpolated into it using `eval`.
 If two arguments are provided, the first is the module to evaluate in.
 """
 macro eval(ex)
-    :(Core.eval($__module__, $(Expr(:quote,ex))))
+    :(Core.eval($__module__, $(Expr(:quote, ex))))
 end
 macro eval(mod, ex)
-    :(Core.eval($(esc(mod)), $(Expr(:quote,ex))))
+    :(Core.eval($(esc(mod)), $(Expr(:quote, ex))))
 end
 
 argtail(x, rest...) = rest
@@ -208,26 +208,26 @@ function tuple_type_tail(T::Type)
     if isa(T, UnionAll)
         return UnionAll(T.var, tuple_type_tail(T.body))
     elseif isa(T, Union)
-        return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
+        return Union{tuple_type_tail(T.a),tuple_type_tail(T.b)}
     else
         T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
         if isvatuple(T) && length(T.parameters) == 1
             va = T.parameters[1]
             (isa(va, DataType) && isa(va.parameters[2], Int)) || return T
-            return Tuple{Vararg{va.parameters[1], va.parameters[2]-1}}
+            return Tuple{Vararg{va.parameters[1],va.parameters[2] - 1}}
         end
         return Tuple{argtail(T.parameters...)...}
     end
 end
 
 tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
-function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
+function tuple_type_cons(::Type{S}, ::Type{T}) where T <: Tuple where S
     @_pure_meta
-    Tuple{S, T.parameters...}
+    Tuple{S,T.parameters...}
 end
 
 function unwrap_unionall(@nospecialize(a))
-    while isa(a,UnionAll)
+    while isa(a, UnionAll)
         a = a.body
     end
     return a
@@ -242,7 +242,7 @@ end
 
 # replace TypeVars in all enclosing UnionAlls with fresh TypeVars
 function rename_unionall(@nospecialize(u))
-    if !isa(u,UnionAll)
+    if !isa(u, UnionAll)
         return u
     end
     body = rename_unionall(u.body)
@@ -295,7 +295,7 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
-const AtLeast1 = Tuple{Any, Vararg{Any}}
+const AtLeast1 = Tuple{Any,Vararg{Any}}
 
 # converting to empty tuple type
 convert(::Type{Tuple{}}, ::Tuple{}) = ()
@@ -386,7 +386,7 @@ function cconvert end
 cconvert(T::Type, x) = convert(T, x) # do the conversion eagerly in most cases
 cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_convert
 unsafe_convert(::Type{T}, x::T) where {T} = x # unsafe_convert (like convert) defaults to assuming the convert occurred
-unsafe_convert(::Type{T}, x::T) where {T<:Ptr} = x  # to resolve ambiguity with the next method
+unsafe_convert(::Type{T}, x::T) where {T<:Ptr} = x # to resolve ambiguity with the next method
 unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
 
 """
@@ -410,8 +410,8 @@ julia> reinterpret(Float32, UInt32[1 2 3 4 5])
 ```
 """
 reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
-reinterpret(::Type{Unsigned}, x::Float16) = reinterpret(UInt16,x)
-reinterpret(::Type{Signed}, x::Float16) = reinterpret(Int16,x)
+reinterpret(::Type{Unsigned}, x::Float16) = reinterpret(UInt16, x)
+reinterpret(::Type{Signed}, x::Float16) = reinterpret(Int16, x)
 
 """
     sizeof(T::DataType)
@@ -447,7 +447,8 @@ Stacktrace:
 sizeof(x) = Core.sizeof(x)
 
 # simple Array{Any} operations needed for bootstrap
-@eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = arrayset($(Expr(:boundscheck)), A, x, i)
+@eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) =
+    arrayset($(Expr(:boundscheck)), A, x, i)
 
 """
     precompile(f, args::Tuple{Vararg{Any}})
@@ -455,7 +456,7 @@ sizeof(x) = Core.sizeof(x)
 Compile the given function `f` for the argument tuple (of types) `args`, but do not execute it.
 """
 function precompile(@nospecialize(f), args::Tuple)
-    ccall(:jl_compile_hint, Int32, (Any,), Tuple{Core.Typeof(f), args...}) != 0
+    ccall(:jl_compile_hint, Int32, (Any,), Tuple{Core.Typeof(f),args...}) != 0
 end
 
 function precompile(argt::Type)
@@ -545,11 +546,13 @@ end
     that all accesses are in bounds.
 """
 macro inbounds(blk)
-    return Expr(:block,
+    return Expr(
+        :block,
         Expr(:inbounds, true),
         Expr(:local, Expr(:(=), :val, esc(blk))),
         Expr(:inbounds, :pop),
-        :val)
+        :val
+    )
 end
 
 """
@@ -578,10 +581,10 @@ end
 
 function getindex(v::SimpleVector, i::Int)
     @boundscheck if !(1 <= i <= length(v))
-        throw(BoundsError(v,i))
+        throw(BoundsError(v, i))
     end
     t = @_gc_preserve_begin v
-    x = unsafe_load(convert(Ptr{Ptr{Cvoid}},pointer_from_objref(v)) + i*sizeof(Ptr))
+    x = unsafe_load(convert(Ptr{Ptr{Cvoid}}, pointer_from_objref(v)) + i * sizeof(Ptr))
     x == C_NULL && throw(UndefRefError())
     o = unsafe_pointer_to_objref(x)
     @_gc_preserve_end t
@@ -590,13 +593,13 @@ end
 
 function length(v::SimpleVector)
     t = @_gc_preserve_begin v
-    l = unsafe_load(convert(Ptr{Int},pointer_from_objref(v)))
+    l = unsafe_load(convert(Ptr{Int}, pointer_from_objref(v)))
     @_gc_preserve_end t
     return l
 end
 firstindex(v::SimpleVector) = 1
 lastindex(v::SimpleVector) = length(v)
-iterate(v::SimpleVector, i=1) = (length(v) < i ? nothing : (v[i], i + 1))
+iterate(v::SimpleVector, i = 1) = (length(v) < i ? nothing : (v[i], i + 1))
 eltype(::Type{SimpleVector}) = Any
 keys(v::SimpleVector) = OneTo(length(v))
 isempty(v::SimpleVector) = (length(v) == 0)
@@ -604,16 +607,16 @@ axes(v::SimpleVector) = (OneTo(length(v)),)
 axes(v::SimpleVector, d::Integer) = d <= 1 ? axes(v)[d] : OneTo(1)
 
 function ==(v1::SimpleVector, v2::SimpleVector)
-    length(v1)==length(v2) || return false
+    length(v1) == length(v2) || return false
     for i = 1:length(v1)
         v1[i] == v2[i] || return false
     end
     return true
 end
 
-map(f, v::SimpleVector) = Any[ f(v[i]) for i = 1:length(v) ]
+map(f, v::SimpleVector) = Any[f(v[i]) for i = 1:length(v)]
 
-getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[ v[i] for i in I ]...)
+getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[v[i] for i in I]...)
 
 """
     isassigned(array, i) -> Bool
@@ -646,7 +649,7 @@ function isassigned end
 function isassigned(v::SimpleVector, i::Int)
     @boundscheck 1 <= i <= length(v) || return false
     t = @_gc_preserve_begin v
-    x = unsafe_load(convert(Ptr{Ptr{Cvoid}},pointer_from_objref(v)) + i*sizeof(Ptr))
+    x = unsafe_load(convert(Ptr{Ptr{Cvoid}}, pointer_from_objref(v)) + i * sizeof(Ptr))
     @_gc_preserve_end t
     return x != C_NULL
 end
@@ -664,8 +667,7 @@ collection of indices they span before being used.
 The singleton instance of `Colon` is also a function used to construct ranges;
 see [`:`](@ref).
 """
-struct Colon <: Function
-end
+struct Colon <: Function end
 const (:) = Colon()
 
 """
@@ -688,8 +690,7 @@ julia> f(Val(true))
 "Good"
 ```
 """
-struct Val{x}
-end
+struct Val{x} end
 
 Val(x) = (@_pure_meta; Val{x}())
 
