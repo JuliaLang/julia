@@ -540,7 +540,7 @@ void jl_safepoint_defer_sigint(void);
 int jl_safepoint_consume_sigint(void);
 void jl_wake_libuv(void);
 
-#if defined(JULIA_ENABLE_THREADING) && !defined(__clang_analyzer__)
+#if !defined(__clang_analyzer__)
 jl_get_ptls_states_func jl_get_ptls_states_getter(void);
 static inline void jl_set_gc_and_wait(void)
 {
@@ -853,7 +853,7 @@ extern jl_mutex_t safepoint_lock;
 
 // -- gc.c -- //
 
-#if defined(__APPLE__) && defined(JULIA_ENABLE_THREADING)
+#if defined(__APPLE__)
 void jl_mach_gc_end(void);
 #endif
 
