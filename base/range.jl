@@ -1056,10 +1056,10 @@ julia> mod(0, Base.OneTo(3))
 
 julia> mod(3, 0:2)
 0
+```
 
 !!! compat "Julia 1.3"
      This method requires at least Julia 1.3.
-```
 """
 mod(i::Integer, r::OneTo) = mod1(i, last(r))
 mod(i::Integer, r::AbstractUnitRange{<:Integer}) = mod(i-first(r), length(r)) + first(r)
