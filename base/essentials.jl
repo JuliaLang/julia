@@ -166,11 +166,20 @@ function convert end
 convert(::Type{Any}, @nospecialize(x)) = x
 convert(::Type{T}, x::T) where {T} = x
 
+"""
+    Base.unwrap(x)
+
+Lower, or "unwrap" a value that has Base-defined representation. Currently
+only used in a generic `convert(::Type{T}, x)` definition, that allows
+custom "wrapper" types to avoid having to define their own
+`convert(::Type{Any}, x)` methods, which can cause large amounts of
+recompilation.
+"""
 unwrap(x) = x
 
 function convert(::Type{T}, x) where {T}
     y = unwrap(x)
-    return y === x ? x : convert(T, y)
+    return y === x ? throw(MethodError(convert, (T, x))) : convert(T, y)
 end
 
 convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization

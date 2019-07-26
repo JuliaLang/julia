@@ -7024,3 +7024,15 @@ let code = code_lowered(FieldConvert)[1].code
     @test code[10] == Expr(:new, Core.SSAValue(1), Core.SSAValue(3), Core.SSAValue(5), Core.SlotNumber(4), Core.SSAValue(7), Core.SSAValue(9))
     @test code[11] == Expr(:return, Core.SSAValue(10))
  end
+
+ # Base.unwrap + convert
+ @test Base.unwrap(1) === 1
+
+ struct WrapperStruct{T}
+    x::T
+ end
+
+ wrapperstruct = WrapperStruct("hey")
+ @test_throws MethodError convert(String, wrapperstruct)
+ Base.unwrap(x::WrapperStruct) = x.x
+ @test convert(String, wrapperstruct) == "hey"
