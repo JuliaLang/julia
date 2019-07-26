@@ -194,6 +194,10 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     HANDLE_MACH_ERROR("thread_get_state", ret);
     uint64_t fault_addr = exc_state.__faultvaddr;
     if (jl_addr_is_safepoint(fault_addr)) {
+        if (jl_mach_gc_wait(ptls2, thread, tid))
+            return KERN_SUCCESS;
+        if (ptls2->tid != 0)
+            return KERN_SUCCESS;
         if (ptls2->defer_signal) {
             jl_safepoint_defer_sigint();
         }
