@@ -353,6 +353,7 @@ include("loading.jl")
 include("util.jl")
 
 include("asyncmap.jl")
+include("sorttuple.jl")
 
 # experimental API's
 include("experimental.jl")
