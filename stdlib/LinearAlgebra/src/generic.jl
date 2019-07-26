@@ -541,8 +541,8 @@ julia> norm(-2, Inf)
 """
 @inline function norm(x::Number, p::Real=2)
     afx = abs(float(x))
-    if p == 0
-        if x == 0
+    if iszero(p)
+        if iszero(x)
             return zero(afx)
         elseif !isnan(x)
             return oneunit(afx)

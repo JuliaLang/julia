@@ -451,7 +451,7 @@ ndigits0znb(x::Bool, b::Integer) = x % Int
 # The suffix "pb" stands for "positive base"
 function ndigits0zpb(x::Integer, b::Integer)
     # precondition: b > 1
-    x == 0 && return 0
+    iszero(x) && return 0
     b = Int(b)
     x = abs(x)
     if x isa Base.BitInteger
@@ -799,7 +799,7 @@ julia> isqrt(5)
 isqrt(x::Integer) = oftype(x, trunc(sqrt(x)))
 
 function isqrt(x::Union{Int64,UInt64,Int128,UInt128})
-    x==0 && return x
+    iszero(x) && return x
     s = oftype(x, trunc(sqrt(x)))
     # fix with a Newton iteration, since conversion to float discards
     # too many bits.

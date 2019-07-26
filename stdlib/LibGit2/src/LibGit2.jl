@@ -963,7 +963,7 @@ function ensure_initialized()
     if x < 0
         negative_refcount_error(x)::Union{}
     end
-    if x == 0
+    if iszero(x)
         initialize()
     end
     return nothing

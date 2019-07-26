@@ -8,12 +8,12 @@ function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
     for (idx, c) in pairs(str)
         lastidx = idx
         wid += textwidth(c)
-        wid >= width - truncwidth && truncidx == 0 && (truncidx = lastidx)
+        wid >= width - truncwidth && iszero(truncidx) && (truncidx = lastidx)
         (wid >= width || c in chars) && break
     end
 
     lastidx != 0 && str[lastidx] in chars && (lastidx = prevind(str, lastidx))
-    truncidx == 0 && (truncidx = lastidx)
+    iszero(truncidx) && (truncidx = lastidx)
     if lastidx < lastindex(str)
         return String(SubString(str, 1, truncidx) * truncmark)
     else

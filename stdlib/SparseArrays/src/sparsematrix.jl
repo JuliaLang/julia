@@ -2496,7 +2496,7 @@ function Base.fill!(V::SubArray{Tv, <:Any, <:SparseMatrixCSC, Tuple{Vararg{Union
     if (I[1] < 1 || I[end] > A.m) || (J[1] < 1 || J[end] > A.n)
         throw(BoundsError(A, (I, J)))
     end
-    if x == 0
+    if iszero(x)
         _spsetz_setindex!(A, I, J)
     else
         _spsetnz_setindex!(A, convert(Tv, x), I, J)
@@ -2830,7 +2830,7 @@ function setindex!(A::SparseMatrixCSC, x::AbstractArray, I::AbstractMatrix{Bool}
                 if (mode > 1) && (nadd == 0)
                     # copy storage to take changes
                     colptrA = copy(colptrB)
-                    memreq = (x == 0) ? 0 : n
+                    memreq = iszero(x) ? 0 : n
                     # this x == 0 check and approach doesn't jive with use of v above
                     # and may not make sense generally, as scalar x == 0 probably
                     # means this section should never be called. also may not be generic.
@@ -2961,7 +2961,7 @@ function setindex!(A::SparseMatrixCSC, x::AbstractArray, Ix::AbstractVector{<:In
         if (mode > 1) && (nadd == 0)
             # copy storage to take changes
             colptrA = copy(colptrB)
-            memreq = (x == 0) ? 0 : n
+            memreq = iszero(x) ? 0 : n
             # see comment/TODO for same statement in preceding logical setindex! method
             rowvalA = copy(rowvalB)
             nzvalA = copy(nzvalB)

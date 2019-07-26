@@ -277,7 +277,7 @@ function log(x::Float64)
         jp = unsafe_trunc(Int,128.0*F)-127
 
         return log_proc1(y,mf,F,f,jp)
-    elseif x == 0.0
+    elseif iszero(x)
         -Inf
     elseif isnan(x)
         NaN
@@ -313,7 +313,7 @@ function log(x::Float32)
         jp = unsafe_trunc(Int,128.0f0*F)-127
 
         log_proc1(y,mf,F,f,jp)
-    elseif x == 0f0
+    elseif iszero(x)
         -Inf32
     elseif isnan(x)
         NaN32

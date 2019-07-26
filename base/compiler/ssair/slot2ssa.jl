@@ -75,7 +75,7 @@ function renumber_ssa!(@nospecialize(stmt), ssanums::Vector{Any}, new_ssa::Bool=
 end
 
 function make_ssa!(ci::CodeInfo, code::Vector{Any}, idx, slot, @nospecialize(typ))
-    (idx == 0) && return Argument(slot)
+    iszero(idx) && return Argument(slot)
     stmt = code[idx]
     @assert isexpr(stmt, :(=))
     code[idx] = stmt.args[2]

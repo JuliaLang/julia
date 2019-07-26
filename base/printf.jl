@@ -960,7 +960,7 @@ end
 #
 
 function decode_dec(x::SmallFloatingPoint, digits)
-    if x == 0.0
+    if iszero(x)
         digits[1] = '0'
         return (Int32(1), Int32(1), false)
     end
@@ -1040,7 +1040,7 @@ function ini_dec(d::Integer, n::Int, digits)
 end
 
 function ini_dec(x::SmallFloatingPoint, n::Int, digits)
-    if x == 0.0
+    if iszero(x)
         ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), digits, '0', n)
         return Int32(1), Int32(1), signbit(x)
     else
@@ -1077,7 +1077,7 @@ ini_hex(x::Real, symbols::AbstractArray{UInt8,1}, digits) = ini_hex(float(x), sy
 
 function ini_hex(x::SmallFloatingPoint, n::Int, symbols::AbstractArray{UInt8,1}, digits)
     x = Float64(x)
-    if x == 0.0
+    if iszero(x)
         ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), digits, '0', n)
         return Int32(1), Int32(0), signbit(x)
     else
@@ -1102,7 +1102,7 @@ end
 
 function ini_hex(x::SmallFloatingPoint, symbols::AbstractArray{UInt8,1}, digits)
     x = Float64(x)
-    if x == 0.0
+    if iszero(x)
         ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), digits, '0', 1)
         return Int32(1), Int32(0), signbit(x)
     else

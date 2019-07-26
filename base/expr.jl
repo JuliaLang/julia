@@ -290,12 +290,12 @@ end
 _getmeta(arg, sym, delete::Bool) = (false, [])
 function _getmeta(body::Array{Any,1}, sym::Symbol, delete::Bool)
     idx, blockargs = findmeta_block(body, args -> findmetaarg(args,sym)!=0)
-    if idx == 0
+    if iszero(idx)
         return false, []
     end
     metaargs = blockargs[idx].args
     i = findmetaarg(blockargs[idx].args, sym)
-    if i == 0
+    if iszero(i)
         return false, []
     end
     ret = isa(metaargs[i], Expr) ? (metaargs[i]::Expr).args : []
