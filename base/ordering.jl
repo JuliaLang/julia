@@ -16,7 +16,7 @@ export # not exported by Base
     By, Lt, Perm,
     ReverseOrdering, ForwardOrdering,
     DirectOrdering,
-    lt, ord, ordtype
+    lt, ltminmax, ord, ordtype
 
 abstract type Ordering end
 
@@ -55,6 +55,21 @@ lt(o::Lt,                    a, b) = o.lt(a,b)
     da = p.data[a]
     db = p.data[b]
     lt(p.order, da, db) | (!lt(p.order, db, da) & (a < b))
+end
+
+ltminmax(o::ForwardOrdering,       a, b) = min(a,b), max(a,b)
+ltminmax(o::ReverseOrdering,       a, b) = max(a,b), min(a,b)
+ltminmax(o::By,                    a, b) = ifelse(isless(o.by(a),o.by(b)), a, b), ifelse(isless(o.by(a),o.by(b)), b, a)
+ltminmax(o::Lt,                    a, b) = ifelse(o.lt(a,b), a, b), ifelse(o.lt(a,b), b, a)
+
+@propagate_inbounds function ltminmax(p::Perm, a::Integer, b::Integer)
+    da = p.data[a]
+    db = p.data[b]
+    if (lt(p.order, da, db) | (!lt(p.order, db, da) & (a < b)))
+        (a, b)
+    else
+        (b, a)
+    end
 end
 
 ordtype(o::ReverseOrdering, vs::AbstractArray) = ordtype(o.fwd, vs)

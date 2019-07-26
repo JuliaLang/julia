@@ -187,7 +187,7 @@ Base.step(r::ConstantRange) = 0
     end
 
     @testset "unstable algorithms" begin
-        for alg in [QuickSort, PartialQuickSort(length(a))]
+        for alg in [QuickSort, PartialQuickSort(length(a)), CombSort]
             b = sort(a, alg=alg)
             @test issorted(b)
             b = sort(a, alg=alg, rev=true)
@@ -265,7 +265,7 @@ end
             end
 
             # unstable algorithms
-            for alg in [QuickSort, PartialQuickSort(n)]
+            for alg in [QuickSort, PartialQuickSort(n), CombSort]
                 p = sortperm(v, alg=alg, rev=rev)
                 @test p == sortperm(float(v), alg=alg, rev=rev)
                 @test isperm(p)
@@ -279,7 +279,7 @@ end
         end
 
         v = randn_with_nans(n,0.1)
-        # TODO: alg = PartialQuickSort(n) fails here
+        # TODO: alg = PartialQuickSort(n) and CombSort fail here
         for alg in [InsertionSort, QuickSort, MergeSort],
             rev in [false,true]
             # test float sorting with NaNs

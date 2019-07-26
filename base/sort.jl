@@ -40,6 +40,7 @@ export # also exported by Base
     InsertionSort,
     QuickSort,
     MergeSort,
+    CombSort,
     PartialQuickSort
 
 export # not exported by Base
@@ -385,6 +386,7 @@ abstract type Algorithm end
 struct InsertionSortAlg <: Algorithm end
 struct QuickSortAlg     <: Algorithm end
 struct MergeSortAlg     <: Algorithm end
+struct CombSortAlg      <: Algorithm end
 
 """
     PartialQuickSort{T <: Union{Int,OrdinalRange}}
@@ -454,6 +456,24 @@ Characteristics:
   * *divide-and-conquer* sort strategy.
 """
 const MergeSort     = MergeSortAlg()
+"""
+    CombSort
+
+Indicate that a sorting function should use the comb sort
+algorithm. Comb sort traverses the collection multiple times
+ordering pairs of elements with a given interval between them.
+The interval decreases exponentially until it becomes 1, then
+it switches to insertion sort on the whole input.
+
+Characteristics:
+  * *not stable*: does not preserve the ordering of elements which
+    compare equal (e.g. "a" and "A" in a sort of letters which
+    ignores case).
+  * *in-place* in memory.
+  * *parallelizable* this algorithm is suitable for vectorization
+    because it performs many independent comparisons.
+"""
+const CombSort      = CombSortAlg()
 
 const DEFAULT_UNSTABLE = QuickSort
 const DEFAULT_STABLE   = MergeSort
@@ -608,7 +628,6 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort{Int},
     return v
 end
 
-
 function sort!(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort{T},
                o::Ordering) where T<:OrdinalRange
     @inbounds while lo < hi
@@ -630,6 +649,19 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort{T},
         end
     end
     return v
+end
+
+function sort!(v::AbstractVector, lo::Int, hi::Int, ::CombSortAlg, o::Ordering)
+    interval = (3 * (hi-lo+1)) >> 2
+
+    @inbounds while interval > 1
+        for j in lo:hi-interval
+            v[j], v[j+interval] = ltminmax(o, v[j], v[j+interval])
+        end
+        interval = (3 * interval) >> 2
+    end
+
+    return sort!(v, lo, hi, InsertionSort, o)
 end
 
 

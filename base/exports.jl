@@ -34,6 +34,7 @@ export
     Channel,
     Cmd,
     Colon,
+    CombSort,
     Complex,
     ComplexF64,
     ComplexF32,
