@@ -141,7 +141,8 @@ typedef struct {
     ios_t *s;
     DUMP_MODES mode;
     // method we're compressing for in MODE_IR
-    jl_method_t *method;
+    jl_module_t *module;
+    jl_array_t *roots;
     jl_ptls_t ptls;
     jl_array_t *loaded_modules_array;
 } jl_serializer_state;
@@ -484,7 +485,7 @@ static int is_ast_node(jl_value_t *v)
 
 static int literal_val_id(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABLED
 {
-    jl_array_t *rs = s->method->roots;
+    jl_array_t *rs = s->roots;
     int i, l = jl_array_len(rs);
     if (jl_is_symbol(v) || jl_is_concrete_type(v)) {
         for (i = 0; i < l; i++) {
@@ -535,7 +536,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
     }
 
     if (s->mode == MODE_IR) {
-        if (v == (jl_value_t*)s->method->module) {
+        if (v == (jl_value_t*)s->module) {
             write_uint8(s->s, TAG_NEARBYMODULE);
             return;
         }
@@ -640,7 +641,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         ios_write(s->s, jl_symbol_name((jl_sym_t*)v), l);
     }
     else if (jl_is_globalref(v)) {
-        if (s->mode == MODE_IR && jl_globalref_mod(v) == s->method->module) {
+        if (s->mode == MODE_IR && jl_globalref_mod(v) == s->module) {
             write_uint8(s->s, TAG_NEARBYGLOBAL);
             jl_serialize_value(s, jl_globalref_name(v));
         }
@@ -885,11 +886,13 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         jl_serialize_value(s, (jl_value_t*)codeinst->def);
         if (validate || codeinst->min_world == 0) {
             jl_serialize_value(s, codeinst->inferred);
+            jl_serialize_value(s, codeinst->localroots);
             jl_serialize_value(s, codeinst->rettype_const);
             jl_serialize_value(s, codeinst->rettype);
         }
         else {
             // skip storing useless data
+            jl_serialize_value(s, NULL);
             jl_serialize_value(s, NULL);
             jl_serialize_value(s, NULL);
             jl_serialize_value(s, jl_any_type);
@@ -1387,7 +1390,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
         assert(0 && "corrupt deserialization state");
         abort();
     }
-    assert(s->method == NULL && s->mode != MODE_IR && "no new data-types expected during MODE_IR");
+    assert(s->roots == NULL && s->mode != MODE_IR && "no new data-types expected during MODE_IR");
     assert(pos == backref_list.len - 1 && "nothing should have been deserialized since assigning pos");
     backref_list.items[pos] = dt;
     dt->size = size;
@@ -1762,7 +1765,11 @@ static jl_value_t *jl_deserialize_value_code_instance(jl_serializer_state *s, jl
     codeinst->def = (jl_method_instance_t*)jl_deserialize_value(s, (jl_value_t**)&codeinst->def);
     jl_gc_wb(codeinst, codeinst->def);
     codeinst->inferred = jl_deserialize_value(s, &codeinst->inferred);
-    jl_gc_wb(codeinst, codeinst->inferred);
+    if (codeinst->inferred)
+        jl_gc_wb(codeinst, codeinst->inferred);
+    codeinst->localroots = (jl_array_t*) jl_deserialize_value(s, (jl_value_t**) &(codeinst->localroots));
+    if (codeinst->localroots)
+        jl_gc_wb(codeinst, codeinst->localroots);
     codeinst->rettype_const = jl_deserialize_value(s, &codeinst->rettype_const);
     if (codeinst->rettype_const)
         jl_gc_wb(codeinst, codeinst->rettype_const);
@@ -2023,7 +2030,7 @@ static jl_value_t *jl_deserialize_value(jl_serializer_state *s, jl_value_t **loc
         tag = read_uint8(s->s);
         return deser_tag[tag];
     case TAG_BACKREF: JL_FALLTHROUGH; case TAG_SHORT_BACKREF:
-        assert(s->method == NULL && s->mode != MODE_IR);
+        assert(s->roots == NULL && s->mode != MODE_IR);
         uintptr_t offs = (tag == TAG_BACKREF) ? read_int32(s->s) : read_uint16(s->s);
         int isflagref = 0;
         isflagref = !!(offs & 1);
@@ -2042,9 +2049,9 @@ static jl_value_t *jl_deserialize_value(jl_serializer_state *s, jl_value_t **loc
         }
         return (jl_value_t*)bp;
     case TAG_METHODROOT:
-        return jl_array_ptr_ref(s->method->roots, read_uint8(s->s));
+        return jl_array_ptr_ref(s->roots, read_uint8(s->s));
     case TAG_LONG_METHODROOT:
-        return jl_array_ptr_ref(s->method->roots, read_uint16(s->s));
+        return jl_array_ptr_ref(s->roots, read_uint16(s->s));
     case TAG_SVEC: JL_FALLTHROUGH; case TAG_LONG_SVEC:
         return jl_deserialize_value_svec(s, tag);
     case TAG_COMMONSYM:
@@ -2152,12 +2159,12 @@ static jl_value_t *jl_deserialize_value(jl_serializer_state *s, jl_value_t **loc
     case TAG_UINT8:
         return jl_box_uint8(read_uint8(s->s));
     case TAG_NEARBYGLOBAL:
-        assert(s->method != NULL);
+        assert(s->module != NULL);
         v = jl_deserialize_value(s, NULL);
-        return jl_module_globalref(s->method->module, (jl_sym_t*)v);
+        return jl_module_globalref(s->module, (jl_sym_t*)v);
     case TAG_NEARBYMODULE:
-        assert(s->method != NULL);
-        return (jl_value_t*)s->method->module;
+        assert(s->module != NULL);
+        return (jl_value_t*)s->module;
     case TAG_GLOBALREF:
         return jl_deserialize_value_globalref(s);
     case TAG_SINGLETON:
@@ -2479,7 +2486,7 @@ JL_DLLEXPORT void jl_init_restored_modules(jl_array_t *init_order)
 
 // --- entry points ---
 
-JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
+JL_DLLEXPORT jl_svec_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
 {
     JL_TIMING(AST_COMPRESS);
     JL_LOCK(&m->writelock); // protect the roots array (Might GC)
@@ -2490,13 +2497,11 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
     int en = jl_gc_enable(0); // Might GC
     size_t i;
 
-    if (m->roots == NULL) {
-        m->roots = jl_alloc_vec_any(0);
-        jl_gc_wb(m, m->roots);
-    }
+    jl_array_t *localroots = jl_alloc_vec_any(0);
     jl_serializer_state s = {
         &dest, MODE_IR,
-        m,
+        m->module,
+        localroots,
         jl_get_ptls_states(),
         NULL
     };
@@ -2552,11 +2557,8 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
     }
 
     ios_flush(s.s);
-    jl_array_t *v = jl_take_buffer(&dest);
+    jl_svec_t *v = jl_svec2(jl_take_buffer(&dest), localroots);
     ios_close(s.s);
-    if (jl_array_len(m->roots) == 0) {
-        m->roots = NULL;
-    }
     JL_GC_PUSH1(&v);
     jl_gc_enable(en);
     JL_UNLOCK(&m->writelock); // Might GC
@@ -2564,7 +2566,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
     return v;
 }
 
-JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data)
+JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data, jl_array_t *localroots)
 {
     if (jl_is_code_info(data))
         return (jl_code_info_t*)data;
@@ -2572,6 +2574,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_code_instance_
     JL_LOCK(&m->writelock); // protect the roots array (Might GC)
     assert(jl_is_method(m));
     assert(jl_typeis(data, jl_array_uint8_type));
+    assert(localroots);
     size_t i;
     ios_t src;
     ios_mem(&src, 0);
@@ -2580,7 +2583,8 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_code_instance_
     int en = jl_gc_enable(0); // Might GC
     jl_serializer_state s = {
         &src, MODE_IR,
-        m,
+        m->module,
+        localroots,
         jl_get_ptls_states(),
         NULL
     };
@@ -2816,6 +2820,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
 
     jl_serializer_state s = {
         &f, MODE_MODULE,
+        NULL,
         NULL,
         jl_get_ptls_states(),
         mod_array
@@ -3197,6 +3202,7 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
 
     jl_serializer_state s = {
         f, MODE_MODULE,
+        NULL,
         NULL,
         ptls,
         mod_array

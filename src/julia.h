@@ -341,6 +341,7 @@ typedef struct _jl_code_instance_t {
     jl_value_t *rettype; // return type for fptr
     jl_value_t *rettype_const; // inferred constant return value, or null
     jl_value_t *inferred; // inferred jl_code_info_t, or jl_nothing, or null
+    jl_array_t *localroots;   // roots for this specific MethodInstance
     //TODO: jl_array_t *edges; // stored information about edges from this object
     //TODO: uint8_t absolute_max; // whether true max world is unknown
 
@@ -1592,8 +1593,8 @@ JL_DLLEXPORT void jl_register_newmeth_tracer(void (*callback)(jl_method_t *trace
 // AST access
 JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr JL_MAYBE_UNROOTED);
 
-JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code);
-JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data);
+JL_DLLEXPORT jl_svec_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code);
+JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data, jl_array_t *roots);
 JL_DLLEXPORT uint8_t jl_ast_flag_inferred(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ast_flag_inlineable(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ast_flag_pure(jl_array_t *data) JL_NOTSAFEPOINT;

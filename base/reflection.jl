@@ -912,8 +912,8 @@ uncompressed_ast(m::Method) = isdefined(m, :source) ? _uncompressed_ast(m, m.sou
                               isdefined(m, :generator) ? error("Method is @generated; try `code_lowered` instead.") :
                               error("Code for this Method is not available.")
 _uncompressed_ast(m::Method, s::CodeInfo) = copy(s)
-_uncompressed_ast(m::Method, s::Array{UInt8,1}) = ccall(:jl_uncompress_ast, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)::CodeInfo
-_uncompressed_ast(ci::Core.CodeInstance, s::Array{UInt8,1}) = ccall(:jl_uncompress_ast, Any, (Any, Any, Any), ci.def.def::Method, ci, s)::CodeInfo
+_uncompressed_ast(m::Method, s::Array{UInt8,1}) = ccall(:jl_uncompress_ast, Any, (Any, Ptr{Cvoid}, Any, Any), m, C_NULL, s, m.roots)::CodeInfo
+_uncompressed_ast(ci::Core.CodeInstance, s::Array{UInt8,1}) = ccall(:jl_uncompress_ast, Any, (Any, Any, Any, Any), ci.def.def::Method, ci, s, ci.localroots)::CodeInfo
 
 function method_instances(@nospecialize(f), @nospecialize(t), world::UInt = typemax(UInt))
     tt = signature_type(f, t)

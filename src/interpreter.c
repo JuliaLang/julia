@@ -790,22 +790,20 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi)
     if (jl_is_method(mi->def.value)) {
         if (!src || (jl_value_t*)src == jl_nothing) {
             if (mi->def.method->source) {
-                src = (jl_code_info_t*)mi->def.method->source;
+                src = jl_uncompress_ast(mi->def.method, NULL, mi->def.method->source,
+                                        mi->def.method->roots);
             }
             else {
                 assert(mi->def.method->generator);
                 src = jl_code_for_staged(mi);
             }
         }
-        if (src && (jl_value_t*)src != jl_nothing) {
-            JL_GC_PUSH1(&src);
-            src = jl_uncompress_ast(mi->def.method, NULL, (jl_array_t*)src);
-            mi->uninferred = (jl_value_t*)src;
-            jl_gc_wb(mi, src);
-            JL_GC_POP();
+        if (!src || !jl_is_code_info(src)) {
+            jl_error("source missing for method called in interpreter");
         }
-    }
-    if (!src || !jl_is_code_info(src)) {
+        mi->uninferred = (jl_value_t*)src;
+        jl_gc_wb(mi, src);
+    } else if (!src || !jl_is_code_info(src)) {
         jl_error("source missing for method called in interpreter");
     }
     return src;

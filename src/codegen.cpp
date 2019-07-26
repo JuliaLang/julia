@@ -1125,7 +1125,7 @@ jl_code_instance_t *jl_compile_linfo(jl_method_instance_t *mi, jl_code_info_t *s
             }
             // found inferred code, prep it for codegen
             if ((jl_value_t*)src != jl_nothing)
-                src = jl_uncompress_ast(mi->def.method, codeinst, (jl_array_t*)src);
+                src = jl_uncompress_ast(mi->def.method, codeinst, (jl_array_t*)src, (jl_array_t*)(codeinst->localroots));
             if (!jl_is_code_info(src)) {
                 src = jl_type_infer(mi, world, 0);
                 if (!src)
@@ -1157,7 +1157,7 @@ jl_code_instance_t *jl_compile_linfo(jl_method_instance_t *mi, jl_code_info_t *s
                 }
             }
             assert((jl_value_t*)src != jl_nothing);
-            src = jl_uncompress_ast(mi->def.method, NULL, (jl_array_t*)src);
+            src = jl_uncompress_ast(mi->def.method, NULL, (jl_array_t*)src, mi->def.method->roots);
         }
         assert(jl_is_code_info(src));
 
@@ -1175,6 +1175,7 @@ jl_code_instance_t *jl_compile_linfo(jl_method_instance_t *mi, jl_code_info_t *s
             uncached->functionObjectsDecls.functionObject = NULL;
             uncached->functionObjectsDecls.specFunctionObject = NULL;
             uncached->inferred = jl_nothing;
+            uncached->localroots = jl_alloc_vec_any(0);
             if (uncached->invoke != jl_fptr_const_return)
                 uncached->invoke = NULL;
             uncached->specptr.fptr = NULL;
@@ -1240,8 +1241,11 @@ jl_code_instance_t *jl_compile_linfo(jl_method_instance_t *mi, jl_code_info_t *s
                 jl_options.debug_level > 1) {
                 // update the stored code
                 if (codeinst->inferred != (jl_value_t*)src) {
-                    if (jl_is_method(mi->def.method))
-                        src = (jl_code_info_t*)jl_compress_ast(mi->def.method, src);
+                    if (jl_is_method(mi->def.method)) {
+                        jl_svec_t *srcroots = jl_compress_ast(mi->def.method, src);
+                        src = (jl_code_info_t*) jl_svecref(srcroots, 0);
+                        codeinst->localroots = (jl_array_t*) jl_svecref(srcroots, 1);
+                    }
                     codeinst->inferred = (jl_value_t*)src;
                     jl_gc_wb(codeinst, src);
                 }
@@ -1504,7 +1508,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, bool getwrapper,
         jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
         src = (jl_code_info_t*)codeinst->inferred;
         if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-            src = jl_uncompress_ast(mi->def.method, codeinst, (jl_array_t*)src);
+            src = jl_uncompress_ast(mi->def.method, codeinst, (jl_array_t*)src, (jl_array_t*)(codeinst->localroots));
         jlrettype = codeinst->rettype;
     }
     if (!src || (jl_value_t*)src == jl_nothing) {
@@ -1514,7 +1518,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, bool getwrapper,
         if (!src && jl_is_method(mi->def.method)) {
             src = mi->def.method->generator ? jl_code_for_staged(mi) : (jl_code_info_t*)mi->def.method->source;
             if (src && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-                src = jl_uncompress_ast(mi->def.method, NULL, (jl_array_t*)src);
+                src = jl_uncompress_ast(mi->def.method, NULL, (jl_array_t*)src, mi->def.method->roots);
         }
     }
     if (src == NULL || (jl_value_t*)src == jl_nothing || !jl_is_code_info(src))

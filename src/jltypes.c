@@ -2181,7 +2181,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_instance_type =
         jl_new_datatype(jl_symbol("CodeInstance"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(11,
+                        jl_perm_symsvec(12,
                             "def",
                             "next",
                             "min_world",
@@ -2189,15 +2189,17 @@ void jl_init_types(void) JL_GC_DISABLED
                             "rettype",
                             "rettype_const",
                             "inferred",
+                            "localroots",
                             //"edges",
                             //"absolute_max",
                             "invoke", "specptr",
                             "", ""), // function object decls
-                        jl_svec(11,
+                        jl_svec(12,
                             jl_method_instance_type,
                             jl_any_type,
                             jl_ulong_type,
                             jl_ulong_type,
+                            jl_any_type,
                             jl_any_type,
                             jl_any_type,
                             jl_any_type,
@@ -2316,10 +2318,10 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_methtable_type->types, 10, jl_uint8_type);
     jl_svecset(jl_method_type->types, 11, jl_method_instance_type);
     jl_svecset(jl_method_instance_type->types, 5, jl_code_instance_type);
-    jl_svecset(jl_code_instance_type->types, 7, jl_voidpointer_type);
     jl_svecset(jl_code_instance_type->types, 8, jl_voidpointer_type);
     jl_svecset(jl_code_instance_type->types, 9, jl_voidpointer_type);
     jl_svecset(jl_code_instance_type->types, 10, jl_voidpointer_type);
+    jl_svecset(jl_code_instance_type->types, 11, jl_voidpointer_type);
 
     jl_compute_field_offsets(jl_datatype_type);
     jl_compute_field_offsets(jl_typename_type);

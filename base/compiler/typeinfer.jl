@@ -83,7 +83,7 @@ end
 # update the MethodInstance and notify the edges
 function cache_result(result::InferenceResult, min_valid::UInt, max_valid::UInt)
     def = result.linfo.def
-    toplevel = !isa(result.linfo.def, Method)
+    toplevel = !isa(def, Method)
     if toplevel
         min_valid = UInt(0)
         max_valid = UInt(0)
@@ -129,12 +129,19 @@ function cache_result(result::InferenceResult, min_valid::UInt, max_valid::UInt)
                 end
             end
         end
-        if !isa(inferred_result, Union{CodeInfo, Vector{UInt8}})
-            inferred_result = nothing
+        if isa(inferred_result, CodeInfo)
+            ccall(:jl_set_method_inferred, Ref{CodeInstance}, (Any, Any, Any, Any, Any, Int32, UInt, UInt),
+                result.linfo, widenconst(result.result), rettype_const, inferred_result, C_NULL,
+                const_flags, min_valid, max_valid)
+        elseif isa(inferred_result, SimpleVector)
+            ccall(:jl_set_method_inferred, Ref{CodeInstance}, (Any, Any, Any, Any, Any, Int32, UInt, UInt),
+                result.linfo, widenconst(result.result), rettype_const, inferred_result[1], inferred_result[2],
+                const_flags, min_valid, max_valid)
+        else
+            ccall(:jl_set_method_inferred, Ref{CodeInstance}, (Any, Any, Any, Any, Any, Int32, UInt, UInt),
+                result.linfo, widenconst(result.result), rettype_const, nothing, C_NULL,
+                const_flags, min_valid, max_valid)
         end
-        ccall(:jl_set_method_inferred, Ref{CodeInstance}, (Any, Any, Any, Any, Int32, UInt, UInt),
-            result.linfo, widenconst(result.result), rettype_const, inferred_result,
-            const_flags, min_valid, max_valid)
     end
     result.linfo.inInference = false
     nothing

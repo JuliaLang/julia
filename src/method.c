@@ -556,10 +556,14 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     jl_gc_wb(src, copy);
     m->slot_syms = jl_compress_argnames(src->slotnames);
     jl_gc_wb(m, m->slot_syms);
-    if (gen_only)
+    if (gen_only) {
         m->source = NULL;
-    else
-        m->source = (jl_value_t*)jl_compress_ast(m, src);
+    }
+    else {
+        jl_svec_t *srcroots = jl_compress_ast(m, src);
+        m->source = jl_svecref(srcroots, 0);
+        m->roots = (jl_array_t*) jl_svecref(srcroots, 1);
+    }
     jl_gc_wb(m, m->source);
     JL_GC_POP();
 }

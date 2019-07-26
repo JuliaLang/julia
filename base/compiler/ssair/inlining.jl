@@ -702,7 +702,7 @@ function analyze_method!(idx::Int, sig::Signature, @nospecialize(metharg), meths
         return spec_lambda(atype_unlimited, sv, invoke_data)
     end
 
-    isconst, src = find_inferred(mi, atypes, sv, stmttyp)
+    isconst, src, roots = find_inferred(mi, atypes, sv, stmttyp)
     if isconst
         add_backedge!(mi, sv)
         return ConstantCase(src, method, Any[methsp...], metharg)
@@ -722,7 +722,7 @@ function analyze_method!(idx::Int, sig::Signature, @nospecialize(metharg), meths
     add_backedge!(mi, sv)
 
     if !isa(src, CodeInfo)
-        src = ccall(:jl_uncompress_ast, Any, (Any, Ptr{Cvoid}, Any), method, C_NULL, src::Vector{UInt8})::CodeInfo
+        src = ccall(:jl_uncompress_ast, Any, (Any, Ptr{Cvoid}, Any, Any), method, C_NULL, src::Vector{UInt8}, roots)::CodeInfo
     end
 
     @timeit "inline IR inflation" begin
@@ -1294,10 +1294,10 @@ function find_inferred(mi::MethodInstance, @nospecialize(atypes), sv::Optimizati
     if isa(inf_result, InferenceResult)
         let inferred_src = inf_result.src
             if isa(inferred_src, CodeInfo)
-                return svec(false, inferred_src)
+                return svec(false, inferred_src, nothing)
             end
             if isa(inferred_src, Const) && is_inlineable_constant(inferred_src.val)
-                return svec(true, quoted(inferred_src.val),)
+                return svec(true, quoted(inferred_src.val), nothing)
             end
         end
     end
@@ -1306,9 +1306,9 @@ function find_inferred(mi::MethodInstance, @nospecialize(atypes), sv::Optimizati
     if linfo isa CodeInstance
         if invoke_api(linfo) == 2
             # in this case function can be inlined to a constant
-            return svec(true, quoted(linfo.rettype_const))
+            return svec(true, quoted(linfo.rettype_const), linfo.localroots)
         end
-        return svec(false, linfo.inferred)
+        return svec(false, linfo.inferred, linfo.localroots)
     end
-    return svec(false, nothing)
+    return svec(false, nothing, nothing)
 end
