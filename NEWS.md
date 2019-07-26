@@ -67,6 +67,7 @@ Standard library changes
   must be compatible with `m`, `n`, and `eltype(colptr)`.
 * `sparse(I, J, V, m, n)` verifies lengths of `I`, `J`, `V` are equal and compatible with
   `eltype(I)` and `m`, `n`.
+* The `sprand` function is now 2 to 5 times faster ([#30494]). As a consequence of this change, the random stream of matrices produced with `sprand` and `sprandn` has changed.
 
 #### Dates
 
