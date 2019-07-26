@@ -424,21 +424,30 @@ end
 function ldiv!(C::CholeskyPivoted, B::StridedVector)
     if C.uplo == 'L'
         ldiv!(adjoint(LowerTriangular(C.factors)),
-            ldiv!(LowerTriangular(C.factors), B[C.piv]))[invperm(C.piv)]
+            ldiv!(LowerTriangular(C.factors), permute!(B, C.piv)))
     else
         ldiv!(UpperTriangular(C.factors),
-            ldiv!(adjoint(UpperTriangular(C.factors)), B[C.piv]))[invperm(C.piv)]
+            ldiv!(adjoint(UpperTriangular(C.factors)), permute!(B, C.piv)))
     end
+    invpermute!(B, C.piv)
 end
 
 function ldiv!(C::CholeskyPivoted, B::StridedMatrix)
+    n = size(C, 1)
+    for i in 1:size(B, 2)
+        permute!(view(B, 1:n, i), C.piv)
+    end
     if C.uplo == 'L'
         ldiv!(adjoint(LowerTriangular(C.factors)),
-            ldiv!(LowerTriangular(C.factors), B[C.piv,:]))[invperm(C.piv),:]
+            ldiv!(LowerTriangular(C.factors), B))
     else
         ldiv!(UpperTriangular(C.factors),
-            ldiv!(adjoint(UpperTriangular(C.factors)), B[C.piv,:]))[invperm(C.piv),:]
+            ldiv!(adjoint(UpperTriangular(C.factors)), B))
     end
+    for i in 1:size(B, 2)
+        invpermute!(view(B, 1:n, i), C.piv)
+    end
+    B
 end
 
 isposdef(C::Union{Cholesky,CholeskyPivoted}) = C.info == 0
