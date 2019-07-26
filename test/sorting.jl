@@ -440,16 +440,16 @@ end
         end
     end
 
-    s = ((1:3)...)
+    s = ((1:3)...,)
     @test typeof(sort(s)) == typeof(s)
-    s = ((1:64)...)
+    s = ((1:64)...,)
     @test typeof(sort(s)) == typeof(s)
-    s = reverse(Float.((1:64)...))
-    @test sort(s) == Float.((1:64)...)
+    s = reverse(Float64.(((1:64)...,)))
+    @test sort(s) == Float64.(((1:64)...,))
     @test typeof(sort(s)) == typeof(s)
-    s = reverse(Float.((1:3)...))
+    s = reverse(Float64.(((1:3)...,)))
     @test typeof(sort(s)) == typeof(s)
-    @test sort(s) == Float.((1:3)...
+    @test sort(s) == Float64.(((1:3)...,))
 end
 
 end
