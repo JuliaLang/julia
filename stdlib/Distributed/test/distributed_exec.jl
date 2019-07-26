@@ -256,7 +256,7 @@ let wid1 = workers()[1],
 end
 
 # Tests for issue #23109 - should not hang.
-f = @spawn rand(1, 1)
+f = @spawnat :any rand(1, 1)
 @sync begin
     for _ in 1:10
         @async fetch(f)
@@ -1339,7 +1339,7 @@ clust_ser = (Distributed.worker_from_id(id_other)).w_serializer
 # reported github issues - Mostly tests with globals and various distributed macros
 #2669, #5390
 v2669=10
-@test fetch(@spawn (1+v2669)) == 11
+@test fetch(@spawnat :any (1+v2669)) == 11
 
 #12367
 refs = []

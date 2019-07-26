@@ -241,6 +241,7 @@ JL_DLLEXPORT int16_t jl_threadid(void)
 void jl_init_threadtls(int16_t tid)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
+    ptls->system_id = jl_thread_self();
     seed_cong(&ptls->rngseed);
 #ifdef _OS_WINDOWS_
     if (tid == 0) {
@@ -251,8 +252,6 @@ void jl_init_threadtls(int16_t tid)
             hMainThread = INVALID_HANDLE_VALUE;
         }
     }
-#else
-    ptls->system_id = pthread_self();
 #endif
     assert(ptls->world_age == 0);
     ptls->world_age = 1; // OK to run Julia code on this thread

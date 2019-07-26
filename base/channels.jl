@@ -304,8 +304,8 @@ function put_unbuffered(c::Channel, v)
     finally
         unlock(c)
     end
-    # unfair version of: schedule(taker, v); yield()
-    yield(taker, v) # immediately give taker a chance to run, but don't block the current task
+    schedule(taker, v)
+    yield()  # immediately give taker a chance to run, but don't block the current task
     return v
 end
 

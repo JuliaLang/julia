@@ -49,7 +49,7 @@ function shouldlog end
 """
     min_enabled_level(logger)
 
-Return the maximum disabled level for `logger` for early filtering.  That is,
+Return the minimum enabled level for `logger` for early filtering.  That is,
 the log level below or equal to which all messages are filtered.
 """
 function min_enabled_level end

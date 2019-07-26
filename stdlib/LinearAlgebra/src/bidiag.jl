@@ -631,27 +631,6 @@ function *(A::SymTridiagonal, B::Diagonal)
     A_mul_B_td!(Tridiagonal(zeros(TS, size(A, 1)-1), zeros(TS, size(A, 1)), zeros(TS, size(A, 1)-1)), A, B)
 end
 
-function *(A::Bidiagonal, B::Bidiagonal)
-    TS = promote_op(matprod, eltype(A), eltype(B))
-    if A.uplo == B.uplo
-        A_mul_B_td!(similar(B, TS, size(B, 1), size(B, 2)), A, B)
-    else
-        A_mul_B_td!(Tridiagonal(zeros(TS, size(A, 1)-1), zeros(TS, size(A, 1)), zeros(TS, size(A, 1)-1)), A, B)
-    end
-end
-
-function *(A::StridedMatrix, B::BiTriSym)
-    TS = promote_op(matprod, eltype(A), eltype(B))
-    A_mul_B_td!(similar(A, TS), A, B)
-end
-
-#Generic multiplication
-*(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = *(Array(A), B)
-*(adjA::Adjoint{<:Any,<:Bidiagonal{T}}, B::AbstractVector{T}) where {T} = *(adjoint(Array(adjA.parent)), B)
-*(A::Bidiagonal{T}, adjB::Adjoint{<:Any,<:AbstractVector{T}}) where {T} = *(Array(A), adjoint(adjB.parent))
-/(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = /(Array(A), B)
-/(A::Bidiagonal{T}, adjB::Adjoint{<:Any,<:AbstractVector{T}}) where {T} = /(Array(A), adjoint(adjB.parent))
-
 #Linear solvers
 ldiv!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A, b)
 ldiv!(A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(copy(A), b)

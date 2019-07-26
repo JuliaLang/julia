@@ -178,7 +178,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
     found_def = false
     ## Track which PhiNodes, SSAValue intermediaries
     ## we forwarded through.
-    visited = IdSet{Any}()
+    visited = IdDict{Any, Any}()
     worklist_defs = Any[]
     worklist_constraints = Any[]
     leaves = Any[]
@@ -187,7 +187,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
     while !isempty(worklist_defs)
         defssa = pop!(worklist_defs)
         typeconstraint = pop!(worklist_constraints)
-        push!(visited, defssa)
+        visited[defssa] = typeconstraint
         def = compact[defssa]
         if isa(def, PhiNode)
             push!(visited_phinodes, defssa)
@@ -211,9 +211,15 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
                 if isa(val, AnySSAValue)
                     new_def, new_constraint = simple_walk_constraint(compact, val, typeconstraint)
                     if isa(new_def, AnySSAValue)
-                        if !(new_def in visited)
+                        if !haskey(visited, new_def)
                             push!(worklist_defs, new_def)
                             push!(worklist_constraints, new_constraint)
+                        elseif !(new_constraint <: visited[new_def])
+                            # We have reached the same definition via a different
+                            # path, with a different type constraint. We may have
+                            # to redo some work here with the wider typeconstraint
+                            push!(worklist_defs, new_def)
+                            push!(worklist_constraints, tmerge(new_constraint, visited[new_def]))
                         end
                         continue
                     end

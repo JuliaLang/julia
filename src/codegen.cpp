@@ -148,7 +148,7 @@ extern void _chkstk(void);
 #define DISABLE_FLOAT16
 
 // llvm state
-JL_DLLEXPORT LLVMContext jl_LLVMContext;
+JL_DLLEXPORT LLVMContext &jl_LLVMContext = *(new LLVMContext());
 TargetMachine *jl_TargetMachine;
 
 extern JITEventListener *CreateJuliaJITEventListener();
@@ -160,7 +160,7 @@ Module *shadow_output;
 #define jl_Module ctx.f->getParent()
 #define jl_builderModule(builder) (builder).GetInsertBlock()->getParent()->getParent()
 
-static DataLayout jl_data_layout("");
+static DataLayout &jl_data_layout = *(new DataLayout(""));
 
 // types
 static Type *T_jlvalue;
@@ -340,7 +340,8 @@ static std::map<jl_fptr_args_t, Function*> builtin_func_map;
 // --- code generation ---
 extern "C" {
     int globalUnique = 0;
-    jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 0, NULL, NULL, NULL, NULL, NULL};
+    int jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
+    jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 0, 1, jl_default_debug_info_kind, NULL, NULL, NULL, NULL, NULL};
 }
 
 template<typename T>
@@ -1391,7 +1392,7 @@ void jl_generate_fptr(jl_code_instance_t *output)
                 codeinst->rettype_const = ucache->rettype_const;
                 if (codeinst->rettype_const)
                     jl_gc_wb(codeinst, codeinst->rettype_const);
-                codeinst->invoke = ucache->invoke;
+                jl_atomic_store_release(&codeinst->invoke, ucache->invoke);
                 JL_UNLOCK(&codegen_lock);
                 return;
             }
@@ -1422,15 +1423,15 @@ void jl_generate_fptr(jl_code_instance_t *output)
     assert(specptr != NULL);
     // the fptr should be cached somewhere also
     if (codeinst->invoke == NULL) {
-        codeinst->specptr.fptr = specptr;
-        codeinst->invoke = fptr;
+        jl_atomic_store_release(&codeinst->specptr.fptr, specptr);
+        jl_atomic_store_release(&codeinst->invoke, fptr);
     }
     if (codeinst != output && output->invoke == NULL) {
         output->specptr = codeinst->specptr;
         output->rettype_const = codeinst->rettype_const;
         if (output->rettype_const)
             jl_gc_wb(output, output->rettype_const);
-        output->invoke = fptr;
+        jl_atomic_store_release(&output->invoke, fptr);
     }
     JL_UNLOCK(&codegen_lock); // Might GC
 }
@@ -5631,9 +5632,36 @@ static std::unique_ptr<Module> emit_function(
     DISubprogram *SP = NULL;
     DebugLoc noDbg, topdebugloc;
     if (ctx.debug_enabled) {
-        // TODO: Fix when moving to new LLVM version
+        DICompileUnit::DebugEmissionKind emissionKind = (DICompileUnit::DebugEmissionKind) ctx.params->debug_info_kind;
+
+#if JL_LLVM_VERSION >= 80000
+        DICompileUnit::DebugNameTableKind tableKind;
+
+        if (JL_FEAT_TEST(ctx, gnu_pubnames)) {
+            tableKind = DICompileUnit::DebugNameTableKind::GNU;
+        }
+        else {
+            tableKind = DICompileUnit::DebugNameTableKind::None;
+        }
+#endif
         topfile = dbuilder.createFile(ctx.file, ".");
-        DICompileUnit *CU = dbuilder.createCompileUnit(0x01, topfile, "julia", true, "", 0);
+        DICompileUnit *CU =
+            dbuilder.createCompileUnit(llvm::dwarf::DW_LANG_Julia
+                                       ,topfile      // File
+                                       ,"julia"      // Producer
+                                       ,true         // isOptimized
+                                       ,""           // Flags
+                                       ,0            // RuntimeVersion
+                                       ,""           // SplitName
+                                       ,emissionKind // Kind
+                                       ,0            // DWOId
+                                       ,true         // SplitDebugInlining
+                                       ,false        // DebugInfoForProfiling
+#if JL_LLVM_VERSION >= 80000
+                                       ,tableKind    // NameTableKind
+#endif
+                                       );
+
         DISubroutineType *subrty;
         if (jl_options.debug_level <= 1) {
             subrty = jl_di_func_null_sig;

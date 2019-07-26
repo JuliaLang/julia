@@ -96,3 +96,23 @@ let
         Meta.isexpr(ex, :meta)
     end
 end
+
+# Issue #32579 - Optimizer bug involving type constraints
+function f32579(x::Int, b::Bool)
+    if b
+        x = nothing
+    end
+    if isa(x, Int)
+        y = x
+    else
+        y = x
+    end
+    if isa(y, Nothing)
+        z = y
+    else
+        z = y
+    end
+    return z === nothing
+end
+@test f32579(0, true) === true
+@test f32579(0, false) === false

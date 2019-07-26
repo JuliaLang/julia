@@ -460,6 +460,8 @@ end
     @test cor(repeat(1:17, 1, 17))[2] <= 1.0
     @test cor(1:17, 1:17) <= 1.0
     @test cor(1:17, 18:34) <= 1.0
+    @test cor(Any[1, 2], Any[1, 2]) == 1.0
+    @test isnan(cor([0], Int8[81]))
     let tmp = range(1, stop=85, length=100)
         tmp2 = Vector(tmp)
         @test cor(tmp, tmp) <= 1.0

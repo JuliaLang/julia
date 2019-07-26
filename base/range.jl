@@ -1038,3 +1038,25 @@ function +(r1::StepRangeLen{T,S}, r2::StepRangeLen{T,S}) where {T,S}
 end
 
 -(r1::StepRangeLen, r2::StepRangeLen) = +(r1, -r2)
+
+# Modular arithmetic on ranges
+
+"""
+    mod(x::Integer, r::AbstractUnitRange)
+
+Find `y` in the range `r` such that ``x ≡ y (mod n)``, where `n = length(r)`,
+i.e. `y = mod(x - first(r), n) + first(r)`.
+
+See also: [`mod1`](@ref).
+
+# Examples
+```jldoctest
+julia> mod(0, Base.OneTo(3))
+3
+
+julia> mod(3, 0:2)
+0
+```
+"""
+mod(i::Integer, r::OneTo) = mod1(i, last(r))
+mod(i::Integer, r::AbstractUnitRange{<:Integer}) = mod(i-first(r), length(r)) + first(r)

@@ -567,6 +567,14 @@ void jl_init_tasks(void) JL_GC_DISABLED
 
 static void NOINLINE JL_NORETURN start_task(void)
 {
+#ifdef _OS_WINDOWS_
+#if defined(_CPU_X86_64_)
+    // install the unhandled exception hanlder at the top of our stack
+    // to call directly into our personality handler
+    asm volatile ("\t.seh_handler __julia_personality, @except\n\t.text");
+#endif
+#endif
+
     // this runs the first time we switch to a task
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_task_t *t = ptls->current_task;

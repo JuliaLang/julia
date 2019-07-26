@@ -647,9 +647,28 @@ function pfib(n::Int)
     if n <= 1
         return n
     end
-    t = @task pfib(n-2)
-    t.sticky = false
-    schedule(t)
+    t = Threads.@spawn pfib(n-2)
     return pfib(n-1) + fetch(t)::Int
 end
 @test pfib(20) == 6765
+
+
+# scheduling wake/sleep test (#32511)
+let timeout = 300 # this test should take about 1-10 seconds
+    t = Timer(timeout) do t
+        ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
+    end # set up a watchdog alarm
+    for _ = 1:10^5
+        @threads for idx in 1:1024; #=nothing=# end
+    end
+    close(t) # stop the watchdog
+end
+
+# issue #32575
+let ch = Channel{Char}(0), t
+    t = Task(()->for v in "hello" put!(ch, v) end)
+    t.sticky = false
+    bind(ch, t)
+    schedule(t)
+    @test String(collect(ch)) == "hello"
+end

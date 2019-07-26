@@ -926,6 +926,8 @@ function method_instances(@nospecialize(f), @nospecialize(t), world::UInt = type
     return results
 end
 
+default_debug_info_kind() = unsafe_load(cglobal(:jl_default_debug_info_kind, Cint))
+
 # this type mirrors jl_cgparams_t (documented in julia.h)
 struct CodegenParams
     cached::Cint
@@ -934,6 +936,8 @@ struct CodegenParams
     code_coverage::Cint
     static_alloc::Cint
     prefer_specsig::Cint
+    gnu_pubnames::Cint
+    debug_info_kind::Cint
 
     module_setup::Any
     module_activation::Any
@@ -944,11 +948,13 @@ struct CodegenParams
     CodegenParams(;cached::Bool=true,
                    track_allocations::Bool=true, code_coverage::Bool=true,
                    static_alloc::Bool=true, prefer_specsig::Bool=false,
+                   gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
                    module_setup=nothing, module_activation=nothing, raise_exception=nothing,
                    emit_function=nothing, emitted_function=nothing) =
         new(Cint(cached),
             Cint(track_allocations), Cint(code_coverage),
             Cint(static_alloc), Cint(prefer_specsig),
+            Cint(gnu_pubnames), debug_info_kind,
             module_setup, module_activation, raise_exception,
             emit_function, emitted_function)
 end

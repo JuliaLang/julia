@@ -1392,6 +1392,18 @@ end
 @testintersect((Tuple{Int, Array{T}} where T),
                (Tuple{Any, Vector{Union{Missing,Nothing,T}}} where T),
                (Tuple{Int, Vector{Union{Missing,Nothing,T}}} where T))
+# issue #32582
+let A = Tuple{Any, Type{Union{Nothing, Int64}}},
+    B = Tuple{T, Type{Union{Nothing, T}}} where T,
+    I = typeintersect(A, B),
+    J = typeintersect(B, A)
+    # TODO: improve precision
+    @test I >: Tuple{Int64,Type{Union{Nothing, Int64}}}
+    @test J >: Tuple{Int64,Type{Union{Nothing, Int64}}}
+end
+@testintersect(Union{Array{T,1},Array{T,2}} where T<:Union{Float32,Float64},
+               Union{AbstractMatrix{Float32},AbstractVector{Float32}},
+               Union{Array{Float32,2}, Array{Float32,1}})
 
 # issue #29955
 struct M29955{T, TV<:AbstractVector{T}}

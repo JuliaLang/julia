@@ -645,8 +645,8 @@ function corm(x::AbstractVector, mx, y::AbstractVector, my)
 
     @inbounds begin
         # Initialize the accumulators
-        xx = zero(sqrt(abs2(x[1])))
-        yy = zero(sqrt(abs2(y[1])))
+        xx = zero(sqrt(abs2(one(x[1]))))
+        yy = zero(sqrt(abs2(one(y[1]))))
         xy = zero(x[1] * y[1]')
 
         @simd for i in eachindex(x, y)
