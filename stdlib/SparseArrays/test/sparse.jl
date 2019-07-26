@@ -2692,4 +2692,15 @@ end
     @test sparse(UInt8.(1:254), fill(UInt8(1), 254), fill(1, 254), 255, 255) !== nothing
 end
 
+@testset "sppromote and sparse matmul" begin
+    A = SparseMatrixCSC{Float32, Int8}(2, 2, Int8[1, 2, 3], Int8[1, 2], Float32[1., 2.])
+    B = SparseMatrixCSC{ComplexF32, Int32}(2, 2, Int32[1, 2, 3], Int32[1, 2], ComplexF32[1. + im, 2. - im])
+    @test A*transpose(B)                  ≈ Array(A) * transpose(Array(B))
+    @test A*adjoint(B)                    ≈ Array(A) * adjoint(Array(B))
+    @test transpose(A)*B                  ≈ transpose(Array(A)) * Array(B)
+    @test transpose(A)*transpose(B)       ≈ transpose(Array(A)) * transpose(Array(B))
+    @test adjoint(B)*A                    ≈ adjoint(Array(B)) * Array(A)
+    @test adjoint(B)*adjoint(complex.(A)) ≈ adjoint(Array(B)) * adjoint(Array(complex.(A)))
+end
+
 end # module
