@@ -2283,17 +2283,7 @@
 
    'typed_comprehension
    (lambda (e)
-     (expand-forms
-      (or (and (eq? (caaddr e) 'generator)
-               (let ((ranges (cddr (caddr e))))
-                 (if (any (lambda (x) (eq? x ':)) ranges)
-                     (error "comprehension syntax with `:` ranges has been removed"))
-                 (and (every (lambda (x) (and (pair? x) (eq? (car x) '=)))
-                             ranges)
-                      ;; TODO: this is a hack to lower simple comprehensions to loops very
-                      ;; early, to greatly reduce the # of functions and load on the compiler
-                      (lower-comprehension (cadr e) (cadr (caddr e)) ranges))))
-          `(call (top collect) ,(cadr e) ,(caddr e)))))))
+     (expand-forms `(call (top collect) ,(cadr e) ,(caddr e))))))
 
 (define (has-return? e)
   (expr-contains-p return? e (lambda (x) (not (function-def? x)))))
