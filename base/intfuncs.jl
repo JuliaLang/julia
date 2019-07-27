@@ -722,9 +722,19 @@ end
     hastypemax(T::Type) -> Bool
 
 Return `true` if and only if `typemax(T)` is defined.
+See also [`hastypemin`](@ref Base.hastypemin).
 """
 hastypemax(::Base.BitIntegerType) = true
 hastypemax(::Type{T}) where {T} = applicable(typemax, T)
+
+"""
+    hastypemin(T::Type) -> Bool
+
+Return `true` if and only if `typemin(T)` is defined.
+See also [`hastypemax`](@ref Base.hastypemax).
+"""
+hastypemin(::Base.BitIntegerType) = true
+hastypemin(::Type{T}) where {T} = applicable(typemin, T)
 
 """
     digits!(array, n::Integer; base::Integer = 10)
