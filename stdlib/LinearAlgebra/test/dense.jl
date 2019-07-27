@@ -52,6 +52,31 @@ bimg  = randn(n,2)/2
             @test isposdef!(copy(apd))
         end
     end
+    @testset "Positive semi-definiteness" begin
+
+        notsymmetric = ainit
+        notsquare    = [ainit ainit]
+
+        for truerank in 0:n
+
+            X = ainit[:, 1:truerank]
+            A = truerank == 0 ? zeros(eltya, n, n) : X * X'
+
+            for testrank in 0:n
+                if testrank == truerank
+                    @test ispossemdef(A, testrank)
+                else
+                    @test !ispossemdef(A, testrank)
+                end
+            end
+            #  not hermitian should return false regardless what k is
+            @test !ispossemdef(notsymmetric, truerank)
+            @test !ispossemdef(notsquare, truerank)
+
+            @test_throws ArgumentError ispossemdef(A, -1)
+            @test_throws ArgumentError ispossemdef(A, n + 1)
+        end
+    end
     @testset "For b containing $eltyb" for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
         binit = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
         εb = eps(abs(float(one(eltyb))))
@@ -873,6 +898,10 @@ end
 @testset "test ops on Numbers for $elty" for elty in [Float32,Float64,ComplexF32,ComplexF64]
     a = rand(elty)
     @test isposdef(one(elty))
+    @test ispossemdef(one(elty), 1)
+    @test !ispossemdef(one(elty), 0)
+    @test !ispossemdef(zero(elty), 1)
+    @test ispossemdef(zero(elty), 0)
     @test lyap(one(elty),a) == -a/2
 end
 
