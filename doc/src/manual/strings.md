@@ -1167,3 +1167,20 @@ Notice that the first two backslashes appear verbatim in the output, since they 
 precede a quote character.
 However, the next backslash character escapes the backslash that follows it, and the
 last backslash escapes a quote, since these backslashes appear before a quote.
+
+## [Symbol Literals](@id man-symbol-literals)
+
+While symbols of valid identifiers can be writen in the form `:a`, sometimes we have
+`Symbol`s which are not valid identifiers or which we may want to create via interpolation.
+
+The `sym"..."` non-standard string literal constructs a `Symbol` from the given string
+using all the usual string parsing and interpolation rules. For example, we can create a
+`Symbol` by interpolating a variable's value into the symbol itself:
+
+```jldoctest
+julia> i = 10
+10
+
+julia> sym"a_$i"
+:a_10
+```

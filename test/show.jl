@@ -346,8 +346,8 @@ end
 
 # issue #7188
 @test sprint(show, :foo) == ":foo"
-@test sprint(show, Symbol("foo bar")) == "Symbol(\"foo bar\")"
-@test sprint(show, Symbol("foo \"bar")) == "Symbol(\"foo \\\"bar\")"
+@test sprint(show, Symbol("foo bar")) == "sym\"foo bar\""
+@test sprint(show, Symbol("foo \"bar")) == "sym\"foo \\\"bar\""
 @test sprint(show, :+) == ":+"
 @test sprint(show, :end) == ":end"
 
@@ -1498,7 +1498,7 @@ replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color =>
 @test occursin("\e[", replstrcolor(`curl abc`))
 
 # issue #30303
-@test repr(Symbol("a\$")) == "Symbol(\"a\\\$\")"
+@test repr(Symbol("a\$")) == "sym\"a\\\$\""
 
 @test string(sin) == "sin"
 @test string(:) == "Colon()"

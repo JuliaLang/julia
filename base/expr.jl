@@ -30,6 +30,37 @@ macro gensym(names...)
     return blk
 end
 
+"""
+    sym"..."
+
+Construct a `Symbol` out of the quoted string. Useful for creating/representing symbols
+which are not usually allowed in surface-level syntax.
+
+# Examples
+
+```jldoctest
+julia> sym"a"
+:a
+
+julia> sym"a#"
+sym"a#"
+
+julia> i = 10
+10
+
+julia> sym"a_\$i"
+:a_10
+```
+"""
+macro sym_str(in)
+    str = Meta.parse('"' * replace(in, '"' => "\\\"") * '"')
+    if str isa String
+        return QuoteNode(Symbol(str))
+    else
+        return Expr(:call, :Symbol, esc(str))
+    end
+end
+
 ## expressions ##
 
 function copy(e::Expr)

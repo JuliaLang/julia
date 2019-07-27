@@ -933,6 +933,7 @@ export
     @s_str,    # regex substitution string
     @v_str,    # version number
     @raw_str,  # raw string with no interpolation/unescaping
+    @sym_str,  # symbol
 
     # documentation
     @text_str,

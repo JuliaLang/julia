@@ -1054,7 +1054,7 @@ function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, pre
             print(io, ":")
             print(io, value)
         else
-            print(io, "Symbol(", repr(s), ")")
+            print(io, "sym", repr(s))
         end
     else
         if isa(value,Expr) && value.head === :block

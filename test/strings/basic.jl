@@ -171,7 +171,15 @@ end
     @test startswith(string(gensym()),"##")
     @test_throws ArgumentError Symbol("ab\0")
     @test_throws ArgumentError gensym("ab\0")
+
+    @test sym"a" === :a
+    @test sym"a#" === Symbol("a#")
+    i = 10
+    @test sym"a_$i" === :a_10
+    @test sym"\"" === Symbol("\"")
+    @test sym"\n" === Symbol("\n")
 end
+
 @testset "issue #6949" begin
     f = IOBuffer()
     x = split("1 2 3")
