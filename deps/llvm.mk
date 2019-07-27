@@ -171,7 +171,7 @@ ifeq ($(BUILD_LLDB),0)
 LLVM_CMAKE += -DLLVM_TOOL_LLDB_BUILD=OFF
 endif
 
-LLVM_SRC_URL := http://releases.llvm.org/$(LLVM_VER)
+LLVM_SRC_URL := https://github.com/llvm/llvm-project/releases/download/llvmorg-$(LLVM_VER)
 
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR): | $(SRCCACHE)
@@ -561,7 +561,7 @@ ifeq ($(USE_POLLY),1)
 endif
 endif
 else # USE_BINARYBUILDER_LLVM
-LLVM_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LLVM-v$(LLVM_VER)-$(LLVM_BB_REL)
+LLVM_BB_URL_BASE := https://github.com/staticfloat/LLVMBuilder/releases/download/v$(LLVM_VER)+$(LLVM_BB_REL)
 ifneq ($(BINARYBUILDER_LLVM_ASSERTS), 1)
 LLVM_BB_NAME := LLVM.v$(LLVM_VER)
 else
