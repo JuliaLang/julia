@@ -443,6 +443,7 @@ LinearAlgebra.issuccess
 LinearAlgebra.issymmetric
 LinearAlgebra.isposdef
 LinearAlgebra.isposdef!
+LinearAlgebra.ispossemdef
 LinearAlgebra.istril
 LinearAlgebra.istriu
 LinearAlgebra.isdiag
