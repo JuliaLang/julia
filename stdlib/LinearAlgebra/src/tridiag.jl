@@ -584,6 +584,7 @@ iszero(M::Tridiagonal) = iszero(M.dl) && iszero(M.d) && iszero(M.du)
 isone(M::Tridiagonal) = iszero(M.dl) && all(isone, M.d) && iszero(M.du)
 istriu(M::Tridiagonal) = iszero(M.dl)
 istril(M::Tridiagonal) = iszero(M.du)
+isdiag(M::Tridiagonal) = iszero(M.dl) && iszero(M.du)
 
 function tril!(M::Tridiagonal, k::Integer=0)
     n = length(M.d)

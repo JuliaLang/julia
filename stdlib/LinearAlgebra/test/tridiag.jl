@@ -137,9 +137,20 @@ end
         @test triu(Tridiagonal(dl,d,du),2)  == Tridiagonal(zerosdl,zerosd,zerosdu)
 
         @test !istril(SymTridiagonal(d,dl))
+        @test istril(SymTridiagonal(d,zerosdl))
         @test !istriu(SymTridiagonal(d,dl))
+        @test istriu(SymTridiagonal(d,zerosdl))
         @test istriu(Tridiagonal(zerosdl,d,du))
+        @test !istriu(Tridiagonal(dl,d,zerosdu))
         @test istril(Tridiagonal(dl,d,zerosdu))
+        @test !istril(Tridiagonal(zerosdl,d,du))
+
+        @test isdiag(SymTridiagonal(d,zerosdl))
+        @test !isdiag(SymTridiagonal(d,dl))
+        @test isdiag(Tridiagonal(zerosdl,d,zerosdu))
+        @test !isdiag(Tridiagonal(dl,d,zerosdu))
+        @test !isdiag(Tridiagonal(zerosdl,d,du))
+        @test !isdiag(Tridiagonal(dl,d,du))
     end
 
     @testset "iszero and isone" begin
