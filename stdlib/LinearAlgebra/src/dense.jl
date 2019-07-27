@@ -92,6 +92,61 @@ isposdef(A::AbstractMatrix) =
     ishermitian(A) && isposdef(cholesky(Hermitian(A); check = false))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
+"""
+    ispossemdef(A, k) -> Bool
+
+Test whether a matrix is positive semi-definite with specified rank `k` by
+checking that `k` of its eigenvalues are positive and the rest are zero.
+
+# Examples
+```jldoctest
+julia> A = [1 0; 0 0]
+2×2 Array{Int64,2}:
+ 1  0
+ 0  0
+
+julia> ispossemdef(A, 1)
+true
+
+julia> ispossemdef(A, 2)
+false
+```
+"""
+function ispossemdef(X::AbstractMatrix, k::Int;
+                     atol::Real=0.0,
+                     rtol::Real=(minimum(size(X))*eps(real(float(one(eltype(X))))))*iszero(atol))
+    _check_rank_range(k, minimum(size(X)))
+    return ishermitian(X) && _k_positive_eigenvalues(X, k, atol, rtol)
+end
+function ispossemdef(X::Number, k::Int)
+    _check_rank_range(k, 1)
+    k == 0 && return iszero(X)
+    k == 1 && return isposdef(X)
+end
+
+function _check_rank_range(k::Int, n::Int)
+    0 <= k <= n || throw(ArgumentError("rank must be between 0 and $(n) (inclusive)"))
+    nothing
+end
+
+function _k_positive_eigenvalues(X::AbstractMatrix, k::Int, atol::Real, rtol::Real)
+    eigs = eigvals(X)
+    _k_positive_eigenvalues(eigs, k, atol, rtol)
+end
+function _k_positive_eigenvalues(eigs::Vector{<: Real}, k::Int, atol::Real, rtol::Real)
+    #  assumes but does not check that eigs is sorted in ascending order
+    tol = max(atol, rtol * eigs[end])
+    _k_positive_eigenvalues(eigs, k, tol)
+end
+function _k_positive_eigenvalues(eigs::Vector{<: Real}, k::Int, tol::Real)
+    #  assumes but does not check that eigs is sorted in ascending order
+    z = eigs[1:(end - k)]       #  the values that should be zero
+    p = eigs[(end - k + 1):end] #  the values that should be positive
+    n_minus_k_zero_eigenvalues = norm(z, Inf) <= tol
+    k_positive_eigenvalues     = all(p .> tol)
+    return n_minus_k_zero_eigenvalues & k_positive_eigenvalues
+end
+
 function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasFloat,TI<:Integer}
     if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError(x, rx))

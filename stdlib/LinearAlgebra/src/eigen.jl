@@ -124,6 +124,13 @@ Base.iterate(S::Union{Eigen,GeneralizedEigen}, ::Val{:done}) = nothing
 
 isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(x -> x > 0, A.values)
 
+function ispossemdef(A::Union{Eigen,GeneralizedEigen}, k::Int;
+                     atol::Real=0.0,
+                     rtol::Real=(length(A.values)*eps(real(float(one(eltype(A.values))))))*iszero(atol))
+    _check_rank_range(k, length(A.values))
+    return isreal(A.values) && _k_positive_eigenvalues(real.(A.values), k, atol, rtol)
+end
+
 # pick a canonical ordering to avoid returning eigenvalues in "random" order
 # as is the LAPACK default (for complex λ — LAPACK sorts by λ for the Hermitian/Symmetric case)
 eigsortby(λ::Real) = λ
