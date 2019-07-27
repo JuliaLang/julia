@@ -324,7 +324,7 @@ function load_julia_startup()
     else
         include_ifexists(Main, abspath(BINDIR, "..", "etc", "julia", "startup.jl"))
     end
-    include_ifexists(Main, abspath(homedir(), ".julia", "config", "startup.jl"))
+    !isempty(DEPOT_PATH) && include_ifexists(Main, abspath(DEPOT_PATH[1], "config", "startup.jl"))
     return nothing
 end
 
@@ -427,6 +427,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
     nothing
 end
 
+# MainInclude exists to hide Main.include and eval from `names(Main)`.
 baremodule MainInclude
 include(fname::AbstractString) = Main.Base.include(Main, fname)
 eval(x) = Core.eval(Main, x)
@@ -459,7 +460,10 @@ MainInclude.include
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
-    @eval Main import Base.MainInclude: eval, include
+    if ccall(:jl_generating_output, Cint, ()) != 0 && JLOptions().incremental == 0
+        # clear old invalid pointers
+        PCRE.__init__()
+    end
     try
         exec_options(JLOptions())
     catch

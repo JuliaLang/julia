@@ -88,7 +88,7 @@ catch:
 ```
 
 However, this is problematic in a language like julia where at the start of the optimization
-pipeline, we do not now which calls throw. We would have to conservatively assume that every
+pipeline, we do not know which calls throw. We would have to conservatively assume that every
 call (which in julia is every statement) throws. This would have several negative effects.
 On the one hand, it would essentially recuce the scope of every basic block to a single call,
 defeating the purpose of having operations be performed at the basic block level. On the other

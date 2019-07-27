@@ -135,6 +135,28 @@ false
 """
 istaskstarted(t::Task) = ccall(:jl_is_task_started, Cint, (Any,), t) != 0
 
+"""
+    istaskfailed(t::Task) -> Bool
+
+Determine whether a task has exited because an exception was thrown.
+
+# Examples
+```jldoctest
+julia> a4() = error("task failed");
+
+julia> b = Task(a4);
+
+julia> istaskfailed(b)
+false
+
+julia> schedule(b);
+
+julia> yield();
+
+julia> istaskfailed(b)
+true
+```
+"""
 istaskfailed(t::Task) = (t.state == :failed)
 
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
@@ -184,6 +206,7 @@ end
 
 # NOTE: you can only wait for scheduled tasks
 function wait(t::Task)
+    t === current_task() && error("deadlock detected: cannot wait on current task")
     if !istaskdone(t)
         lock(t.donenotify)
         try
@@ -197,6 +220,7 @@ function wait(t::Task)
     if istaskfailed(t)
         throw(t.exception)
     end
+    nothing
 end
 
 fetch(@nospecialize x) = x
@@ -410,14 +434,25 @@ end
 function enq_work(t::Task)
     (t.state == :runnable && t.queue === nothing) || error("schedule: Task not runnable")
     tid = Threads.threadid(t)
-    if t.sticky || tid != 0
+    # Note there are three reasons a Task might be put into a sticky queue
+    # even if t.sticky == false:
+    # 1. The Task's stack is currently being used by the scheduler for a certain thread.
+    # 2. There is only 1 thread.
+    # 3. The multiq is full (can be fixed by making it growable).
+    if t.sticky || tid != 0 || Threads.nthreads() == 1
         if tid == 0
             tid = Threads.threadid()
+            ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
         end
         push!(Workqueues[tid], t)
     else
         tid = 0
-        ccall(:jl_enqueue_task, Cvoid, (Any,), t)
+        if ccall(:jl_enqueue_task, Cint, (Any,), t) != 0
+            # if multiq is full, give to a random thread (TODO fix)
+            tid = mod(time_ns() % Int, Threads.nthreads()) + 1
+            ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
+            push!(Workqueues[tid], t)
+        end
     end
     ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
     return t
@@ -560,29 +595,11 @@ function trypoptask(W::StickyWorkqueue)
 end
 
 @noinline function poptaskref(W::StickyWorkqueue)
-    gettask = () -> trypoptask(W)
-    task = ccall(:jl_task_get_next, Any, (Any,), gettask)
-    ## Below is a reference implementation for `jl_task_get_next`, which currently lives in C
-    #local task
-    #while true
-    #    task = trypoptask(W)
-    #    task === nothing || break
-    #    if !Threads.in_threaded_loop[] && Threads.threadid() == 1
-    #        if process_events(true) == 0
-    #            task = trypoptask(W)
-    #            task === nothing || break
-    #            # if there are no active handles and no runnable tasks, just
-    #            # wait for signals.
-    #            pause()
-    #        end
-    #    else
-    #        if Threads.threadid() == 1
-    #            process_events(false)
-    #        end
-    #        ccall(:jl_gc_safepoint, Cvoid, ())
-    #        ccall(:jl_cpu_pause, Cvoid, ())
-    #    end
-    #end
+    task = trypoptask(W)
+    if !(task isa Task)
+        gettask = () -> trypoptask(W)
+        task = ccall(:jl_task_get_next, Any, (Any,), gettask)::Task
+    end
     return Ref(task)
 end
 

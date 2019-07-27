@@ -347,3 +347,16 @@ function repeat(c::Char, r::Integer)
     end
     return s
 end
+
+function filter(f, s::String)
+    out = Base.StringVector(sizeof(s))
+    offset = 1
+    for c in s
+        if f(c)
+            offset += Base.__unsafe_string!(out, c, offset)
+        end
+    end
+    resize!(out, offset-1)
+    sizehint!(out, offset-1)
+    return String(out)
+end

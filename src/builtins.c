@@ -94,7 +94,7 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *
             }
         }
         else {
-            jl_datatype_t *ft = (jl_datatype_t*)jl_field_type(dt, f);
+            jl_datatype_t *ft = (jl_datatype_t*)jl_field_type_concrete(dt, f);
             if (jl_is_uniontype(ft)) {
                 uint8_t asel = ((uint8_t*)ao)[jl_field_size(dt, f) - 1];
                 uint8_t bsel = ((uint8_t*)bo)[jl_field_size(dt, f) - 1];
@@ -321,7 +321,7 @@ JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPO
             u = (f == NULL) ? 0 : jl_object_id(f);
         }
         else {
-            jl_datatype_t *fieldtype = (jl_datatype_t*)jl_field_type(dt, f);
+            jl_datatype_t *fieldtype = (jl_datatype_t*)jl_field_type_concrete(dt, f);
             if (jl_is_uniontype(fieldtype)) {
                 uint8_t sel = ((uint8_t*)vo)[jl_field_size(dt, f) - 1];
                 fieldtype = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)fieldtype, sel);
@@ -472,7 +472,7 @@ void STATIC_INLINE _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t 
     *n_alloc = newalloc;
 }
 
-static jl_function_t *jl_iterate_func;
+static jl_function_t *jl_iterate_func JL_GLOBALLY_ROOTED;
 
 JL_CALLABLE(jl_f__apply)
 {
@@ -597,10 +597,9 @@ JL_CALLABLE(jl_f__apply)
         }
         else {
             assert(extra > 0);
-            jl_value_t *args[3];
-            args[0] = jl_iterate_func;
-            args[1] = ai;
-            jl_value_t *next = jl_apply(args, 2);
+            jl_value_t *args[2];
+            args[0] = ai;
+            jl_value_t *next = jl_apply_generic(jl_iterate_func, args, 1);
             while (next != jl_nothing) {
                 roots[stackalloc] = next;
                 jl_value_t *value = jl_fieldref(next, 0);
@@ -612,8 +611,8 @@ JL_CALLABLE(jl_f__apply)
                 if (arg_heap)
                     jl_gc_wb(arg_heap, value);
                 roots[stackalloc + 1] = NULL;
-                args[2] = state;
-                next = jl_apply(args, 3);
+                args[1] = state;
+                next = jl_apply_generic(jl_iterate_func, args, 2);
             }
             roots[stackalloc] = NULL;
             extra -= 1;
@@ -671,18 +670,19 @@ JL_CALLABLE(jl_f__apply_latest)
 JL_CALLABLE(jl_f_tuple)
 {
     size_t i;
-    if (nargs == 0) return (jl_value_t*)jl_emptytuple;
+    if (nargs == 0)
+        return (jl_value_t*)jl_emptytuple;
     jl_datatype_t *tt;
-    if (nargs < jl_page_size/sizeof(jl_value_t*)) {
-        jl_value_t **types = (jl_value_t**)alloca(nargs*sizeof(jl_value_t*));
-        for(i=0; i < nargs; i++)
+    if (nargs < jl_page_size / sizeof(jl_value_t*)) {
+        jl_value_t **types = (jl_value_t**)alloca(nargs * sizeof(jl_value_t*));
+        for (i = 0; i < nargs; i++)
             types[i] = jl_typeof(args[i]);
         tt = jl_inst_concrete_tupletype_v(types, nargs);
     }
     else {
         jl_svec_t *types = jl_alloc_svec_uninit(nargs);
         JL_GC_PUSH1(&types);
-        for(i=0; i < nargs; i++)
+        for (i = 0; i < nargs; i++)
             jl_svecset(types, i, jl_typeof(args[i]));
         tt = jl_inst_concrete_tupletype(types);
         JL_GC_POP();
@@ -955,7 +955,7 @@ JL_CALLABLE(jl_f_applicable)
 {
     JL_NARGSV(applicable, 1);
     size_t world = jl_get_ptls_states()->world_age;
-    return jl_method_lookup(jl_gf_mtable(args[0]), args, nargs, 1, world) != NULL ?
+    return jl_method_lookup(args, nargs, 1, world) != NULL ?
         jl_true : jl_false;
 }
 
@@ -966,10 +966,9 @@ JL_CALLABLE(jl_f_invoke)
     JL_GC_PUSH1(&argtypes);
     if (!jl_is_tuple_type(jl_unwrap_unionall(args[1])))
         jl_type_error("invoke", (jl_value_t*)jl_anytuple_type_type, args[1]);
-    if (!jl_tuple_isa(&args[2], nargs-2, (jl_datatype_t*)argtypes))
+    if (!jl_tuple_isa(&args[2], nargs - 2, (jl_datatype_t*)argtypes))
         jl_error("invoke: argument type error");
-    args[1] = args[0];  // move function directly in front of arguments
-    jl_value_t *res = jl_gf_invoke(argtypes, &args[1], nargs-1);
+    jl_value_t *res = jl_gf_invoke(argtypes, args[0], &args[2], nargs - 1);
     JL_GC_POP();
     return res;
 }

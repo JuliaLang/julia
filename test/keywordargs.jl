@@ -342,3 +342,14 @@ end
     @test g() == (1,1)
     @test g(2) == (2,2)
 end
+
+# issue #32074
+function g32074(i::Float32; args...)
+    hook(i; args...) = args
+    hook(i; args...)
+end
+function g32074(i::Int32; args...)
+    hook(i; args...) = args
+    hook(i; args...)
+end
+@test isempty(g32074(Int32(1)))

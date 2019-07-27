@@ -642,11 +642,11 @@ export
 
 # tasks and conditions
     Condition,
-    Event,
     current_task,
     islocked,
     istaskdone,
     istaskstarted,
+    istaskfailed,
     lock,
     notify,
     ReentrantLock,

@@ -17,17 +17,17 @@ extern "C" {
 
 static jl_sym_t *symtab = NULL;
 
-static uintptr_t hash_symbol(const char *str, size_t len)
+static uintptr_t hash_symbol(const char *str, size_t len) JL_NOTSAFEPOINT
 {
     return memhash(str, len) ^ ~(uintptr_t)0/3*2;
 }
 
-static size_t symbol_nbytes(size_t len)
+static size_t symbol_nbytes(size_t len) JL_NOTSAFEPOINT
 {
     return (sizeof(jl_taggedvalue_t) + sizeof(jl_sym_t) + len + 1 + 7) & -8;
 }
 
-static jl_sym_t *mk_symbol(const char *str, size_t len)
+static jl_sym_t *mk_symbol(const char *str, size_t len) JL_NOTSAFEPOINT
 {
     jl_sym_t *sym;
     size_t nb = symbol_nbytes(len);
@@ -44,7 +44,7 @@ static jl_sym_t *mk_symbol(const char *str, size_t len)
     return sym;
 }
 
-static jl_sym_t *symtab_lookup(jl_sym_t **ptree, const char *str, size_t len, jl_sym_t ***slot)
+static jl_sym_t *symtab_lookup(jl_sym_t **ptree, const char *str, size_t len, jl_sym_t ***slot) JL_NOTSAFEPOINT
 {
     jl_sym_t *node = jl_atomic_load_acquire(ptree); // consume
     uintptr_t h = hash_symbol(str, len);
@@ -71,7 +71,7 @@ static jl_sym_t *symtab_lookup(jl_sym_t **ptree, const char *str, size_t len, jl
     return node;
 }
 
-static jl_sym_t *_jl_symbol(const char *str, size_t len)
+static jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT
 {
     jl_sym_t **slot;
     jl_sym_t *node = symtab_lookup(&symtab, str, len, &slot);
@@ -119,9 +119,9 @@ JL_DLLEXPORT jl_sym_t *jl_gensym(void)
 {
     char name[16];
     char *n;
-    n = uint2str(&name[2], sizeof(name)-2, gs_ctr, 10);
+    uint32_t ctr = jl_atomic_fetch_add(&gs_ctr, 1);
+    n = uint2str(&name[2], sizeof(name)-2, ctr, 10);
     *(--n) = '#'; *(--n) = '#';
-    gs_ctr++;
     return jl_symbol(n);
 }
 
@@ -135,9 +135,9 @@ JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len)
     char *n;
     name[0] = '#'; name[1] = '#'; name[2+len] = '#';
     memcpy(name+2, str, len);
-    n = uint2str(gs_name, sizeof(gs_name), gs_ctr, 10);
+    uint32_t ctr = jl_atomic_fetch_add(&gs_ctr, 1);
+    n = uint2str(gs_name, sizeof(gs_name), ctr, 10);
     memcpy(name+3+len, n, sizeof(gs_name)-(n-gs_name));
-    gs_ctr++;
     jl_sym_t *sym = _jl_symbol(name, len+3+sizeof(gs_name)-(n-gs_name)-1);
     if (len >= 256) free(name);
     return sym;

@@ -338,6 +338,34 @@ a = OffsetArray(a0, (-1,2,3,4,5))
 @test_throws ArgumentError dropdims(a, dims=4)
 @test_throws ArgumentError dropdims(a, dims=6)
 
+# push!
+v = OffsetArray(rand(4), (-3,))
+v2 = copy(v)
+@test push!(v2, 1) === v2
+@test v2[axes(v, 1)] == v
+@test v2[end] == 1
+v2 = copy(v)
+@test push!(v2, 2, 1) === v2
+@test v2[axes(v, 1)] == v
+@test v2[end-1] == 2
+@test v2[end] == 1
+
+# append! from array
+v2 = copy(v)
+@test append!(v2, [2, 1]) === v2
+@test v2[axes(v, 1)] == v
+@test v2[lastindex(v)+1:end] == [2, 1]
+# append! from HasLength iterator
+v2 = copy(v)
+@test append!(v2, (v for v in [2, 1])) === v2
+@test v2[axes(v, 1)] == v
+@test v2[lastindex(v)+1:end] == [2, 1]
+# append! from SizeUnknown iterator
+v2 = copy(v)
+@test append!(v2, (v for v in [2, 1] if true)) === v2
+@test v2[axes(v, 1)] == v
+@test v2[lastindex(v)+1:end] == [2, 1]
+
 # other functions
 v = OffsetArray(v0, (-3,))
 @test lastindex(v) == 1

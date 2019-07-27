@@ -256,7 +256,7 @@ let wid1 = workers()[1],
 end
 
 # Tests for issue #23109 - should not hang.
-f = @spawn rand(1, 1)
+f = @spawnat :any rand(1, 1)
 @sync begin
     for _ in 1:10
         @async fetch(f)
@@ -1339,7 +1339,7 @@ clust_ser = (Distributed.worker_from_id(id_other)).w_serializer
 # reported github issues - Mostly tests with globals and various distributed macros
 #2669, #5390
 v2669=10
-@test fetch(@spawn (1+v2669)) == 11
+@test fetch(@spawnat :any (1+v2669)) == 11
 
 #12367
 refs = []
@@ -1612,6 +1612,44 @@ for T in (UInt8, Int8, UInt16, Int16, UInt32, Int32, UInt64)
         i
     end
     @test n == 55
+end
+
+# issue #28966
+let code = """
+    import Distributed
+    Distributed.addprocs(1)
+    Distributed.@everywhere f() = myid()
+    for w in Distributed.workers()
+        @assert Distributed.remotecall_fetch(f, w) == w
+    end
+    """
+    @test success(`$(Base.julia_cmd()) --startup-file=no -e $code`)
+end
+
+# PR 32431: tests for internal Distributed.head_and_tail
+let (h, t) = Distributed.head_and_tail(1:10, 3)
+    @test h == 1:3
+    @test collect(t) == 4:10
+end
+let (h, t) = Distributed.head_and_tail(1:10, 0)
+    @test h == []
+    @test collect(t) == 1:10
+end
+let (h, t) = Distributed.head_and_tail(1:3, 5)
+    @test h == 1:3
+    @test collect(t) == []
+end
+let (h, t) = Distributed.head_and_tail(1:3, 3)
+    @test h == 1:3
+    @test collect(t) == []
+end
+let (h, t) = Distributed.head_and_tail(Int[], 3)
+    @test h == []
+    @test collect(t) == []
+end
+let (h, t) = Distributed.head_and_tail(Int[], 0)
+    @test h == []
+    @test collect(t) == []
 end
 
 # Run topology tests last after removing all workers, since a given

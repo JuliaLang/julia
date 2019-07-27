@@ -196,6 +196,18 @@ let dl = C_NULL
     end
 end
 
+# test do-block dlopen
+Libdl.dlopen(abspath(joinpath(private_libdir, "libccalltest"))) do dl
+    fptr = Libdl.dlsym(dl, :set_verbose)
+    @test fptr !== nothing
+    @test_throws ErrorException Libdl.dlsym(dl, :foo)
+
+    fptr = Libdl.dlsym_e(dl, :set_verbose)
+    @test fptr != C_NULL
+    fptr = Libdl.dlsym_e(dl, :foo)
+    @test fptr == C_NULL
+end
+
 # test dlclose
 # If dl is NULL, jl_dlclose should return -1 and dlclose should return false
 # dlclose should return true on success and false on failure

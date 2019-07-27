@@ -108,6 +108,8 @@ _range(a::Real,          st::AbstractFloat, ::Nothing, len::Integer) = _range(fl
 _range(a::AbstractFloat, st::Real,          ::Nothing, len::Integer) = _range(a, float(st),      nothing, len)
 _range(a,                ::Nothing,         ::Nothing, len::Integer) = _range(a, oftype(a-a, 1), nothing, len)
 
+_range(a::T, step::T, ::Nothing, len::Integer) where {T <: AbstractFloat} =
+    _rangestyle(OrderStyle(T), ArithmeticStyle(T), a, step, len)
 _range(a::T, step, ::Nothing, len::Integer) where {T} =
     _rangestyle(OrderStyle(T), ArithmeticStyle(T), a, step, len)
 _rangestyle(::Ordered, ::ArithmeticWraps, a::T, step::S, len::Integer) where {T,S} =
@@ -847,6 +849,11 @@ function _findin(r::AbstractRange{<:Integer}, span::AbstractUnitRange{<:Integer}
     r isa AbstractUnitRange ? (ifirst:ilast) : (ifirst:1:ilast)
 end
 
+issubset(r::OneTo, s::OneTo) = r.stop <= s.stop
+
+issubset(r::AbstractUnitRange{<:Integer}, s::AbstractUnitRange{<:Integer}) =
+    first(r) >= first(s) && last(r) <= last(s)
+
 ## linear operations on ranges ##
 
 -(r::OrdinalRange) = range(-first(r), step=-step(r), length=length(r))
@@ -1031,3 +1038,25 @@ function +(r1::StepRangeLen{T,S}, r2::StepRangeLen{T,S}) where {T,S}
 end
 
 -(r1::StepRangeLen, r2::StepRangeLen) = +(r1, -r2)
+
+# Modular arithmetic on ranges
+
+"""
+    mod(x::Integer, r::AbstractUnitRange)
+
+Find `y` in the range `r` such that ``x ≡ y (mod n)``, where `n = length(r)`,
+i.e. `y = mod(x - first(r), n) + first(r)`.
+
+See also: [`mod1`](@ref).
+
+# Examples
+```jldoctest
+julia> mod(0, Base.OneTo(3))
+3
+
+julia> mod(3, 0:2)
+0
+```
+"""
+mod(i::Integer, r::OneTo) = mod1(i, last(r))
+mod(i::Integer, r::AbstractUnitRange{<:Integer}) = mod(i-first(r), length(r)) + first(r)

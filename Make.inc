@@ -126,11 +126,19 @@ endif
 
 # we include twice to pickup user definitions better
 # include from JULIAHOME first so that BUILDROOT can override
-ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
-include $(JULIAHOME)/Make.user
+MAYBE_HOST :=
+ifneq ($(BUILDING_HOST_TOOLS),1)
+MAKE_USER_FNAME = Make.user
+else
+MAYBE_HOST := /host
+MAKE_USER_FNAME = Make.host.user
 endif
-ifeq (exists, $(shell [ -e $(BUILDROOT)/Make.user ] && echo exists ))
-include $(BUILDROOT)/Make.user
+
+ifeq (exists, $(shell [ -e $(JULIAHOME)/$(MAKE_USER_FNAME) ] && echo exists ))
+include $(JULIAHOME)/$(MAKE_USER_FNAME)
+endif
+ifeq (exists, $(shell [ -e $(BUILDROOT)/$(MAKE_USER_FNAME) ] && echo exists ))
+include $(BUILDROOT)/$(MAKE_USER_FNAME)
 endif
 
 # disable automatic Makefile rules
@@ -236,8 +244,12 @@ sysconfdir := $(prefix)/etc
 endif
 
 # Directories where things get built into
-build_prefix := $(BUILDROOT)/usr
+build_prefix := $(BUILDROOT)/usr$(MAYBE_HOST)
+ifeq ($(BUILDING_HOST_TOOLS), 1)
+build_staging := $(BUILDROOT)/usr-host-staging
+else
 build_staging := $(build_prefix)-staging
+endif
 build_bindir := $(build_prefix)/bin
 build_depsbindir := $(build_prefix)/tools
 build_libdir := $(build_prefix)/lib
@@ -323,6 +335,9 @@ OPENBLAS_DYNAMIC_ARCH := 1
 override CROSS_COMPILE:=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
 override OS := WINNT
+else ifneq (,$(findstring emscripten,$(XC_HOST)))
+override OS := emscripten
+override CROSS_COMPILE:=
 else
 ifeq (,$(OS))
 $(error "unknown XC_HOST variable set, please set OS")
@@ -571,11 +586,11 @@ else
 LOCALBASE ?= /usr
 endif
 
-ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
-include $(JULIAHOME)/Make.user
+ifeq (exists, $(shell [ -e $(JULIAHOME)/$(MAKE_USER_FNAME) ] && echo exists ))
+include $(JULIAHOME)/$(MAKE_USER_FNAME)
 endif
-ifeq (exists, $(shell [ -e $(BUILDROOT)/Make.user ] && echo exists ))
-include $(BUILDROOT)/Make.user
+ifeq (exists, $(shell [ -e $(BUILDROOT)/$(MAKE_USER_FNAME) ] && echo exists ))
+include $(BUILDROOT)/$(MAKE_USER_FNAME)
 endif
 
 # A bit of a kludge to work around libraries linking to FreeBSD's outdated system libgcc_s
@@ -980,22 +995,37 @@ else
 endif
 
 # BinaryBuilder options.  We default to "on" for all the projects listed in BB_PROJECTS,
-# but only if contrib/normalize_triplet.py works for our requested triplet
+# but only if contrib/normalize_triplet.py works for our requested triplet.
 ifeq ($(shell python $(JULIAHOME)/contrib/normalize_triplet.py $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) >/dev/null 2>/dev/null; echo $$?),0)
-USE_BINARYBUILDER := 1
+USE_BINARYBUILDER ?= 1
 else
 ifneq ($(shell python $(JULIAHOME)/contrib/normalize_triplet.py x86_64-linux-gnu),x86_64-linux-gnu)
 $(warning python normalize_triplet.py appears to be non-functional, so BinaryBuilder disabled)
 endif
-USE_BINARYBUILDER := 0
+USE_BINARYBUILDER ?= 0
 endif
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
-BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 MPFR CURL LIBGIT2 PCRE LIBUV UNWIND DSFMT OBJCONV
-$(foreach proj,$(BB_PROJECTS),$(if $(USE_BINARYBUILDER_$(proj)),,$(eval USE_BINARYBUILDER_$(proj) := $(USE_BINARYBUILDER))))
+BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV
+define SET_BB_DEFAULT
+# First, check to see if BB is disabled on a global setting
+ifeq ($$(USE_BINARYBUILDER),0)
+USE_BINARYBUILDER_$(1) ?= 0
+else
+# If it's not, check to see if it's disabled by a USE_SYSTEM_xxx flag
+ifeq ($$(USE_SYSTEM_$(1)),1)
+USE_BINARYBUILDER_$(1) ?= 0
+else
+USE_BINARYBUILDER_$(1) ?= 1
+endif
+endif
+endef
+$(foreach proj,$(BB_PROJECTS),$(eval $(call SET_BB_DEFAULT,$(proj))))
+
+
 
 # Use the Assertions build
-BINARYBUILDER_LLVM_ASSERTS := 0
+BINARYBUILDER_LLVM_ASSERTS ?= 0
 
 
 
@@ -1022,7 +1052,7 @@ else
 endif
 
 # shared library runtime paths
-ifeq ($(OS), WINNT)
+ifneq (,$(filter $(OS),WINNT emscripten))
   RPATH :=
   RPATH_ORIGIN :=
   RPATH_ESCAPED_ORIGIN :=
@@ -1049,20 +1079,21 @@ else ifneq ($(USEMSVC), 1)
 endif
 
 ifeq ($(OS), Linux)
-OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -Wl,--export-dynamic,--as-needed,--no-whole-archive $(LIBUNWIND)
+OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -Wl,--export-dynamic,--as-needed,--no-whole-archive
 # Detect if ifunc is supported
 IFUNC_DETECT_SRC := 'void (*f0(void))(void) { return (void(*)(void))0L; }; void f(void) __attribute__((ifunc("f0")));'
 ifeq (supported, $(shell echo $(IFUNC_DETECT_SRC) | $(CC) -Werror -x c - -S -o /dev/null > /dev/null 2>&1 && echo supported))
 JCPPFLAGS += -DJULIA_HAS_IFUNC_SUPPORT=1
 endif
+JLDFLAGS := -Wl,-Bdynamic
 ifneq ($(SANITIZE),1)
 ifneq ($(SANITIZE_MEMORY),1)
 ifneq ($(LLVM_SANITIZE),1)
 OSLIBS += -Wl,--version-script=$(JULIAHOME)/src/julia.expmap
+JLDFLAGS += -Wl,-no-undefined
 endif
 endif
 endif
-JLDFLAGS := -Wl,-Bdynamic -Wl,-no-undefined
 ifeq (-Bsymbolic-functions, $(shell $(LD) --help | grep -o -e "-Bsymbolic-functions"))
 JLIBLDFLAGS := -Wl,-Bsymbolic-functions
 else
@@ -1087,8 +1118,6 @@ OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expma
 endif
 
 ifeq ($(OS), Darwin)
-INSTALL_NAME_CMD := install_name_tool -id $(INSTALL_NAME_ID_DIR)
-INSTALL_NAME_CHANGE_CMD := install_name_tool -change
 SHLIB_EXT := dylib
 OSLIBS += -framework CoreFoundation $(LIBUNWIND)
 WHOLE_ARCHIVE := -Xlinker -all_load
@@ -1227,6 +1256,19 @@ LDFLAGS += -cxxlib-nostd -static-intel
 endif
 endif
 
+# Some special restrictions on BB usage:
+ifeq ($(USE_SYSTEM_BLAS),1)
+# Since the names don't line up (`BLAS` vs. `OPENBLAS`), manually gate:
+USE_BINARYBUILDER_OPENBLAS := 0
+# Disable BB SuiteSparse if we're using system BLAS
+USE_BINARYBUILDER_SUITESPARSE := 0
+endif
+
+ifeq ($(USE_SYSTEM_LIBM),1)
+# If we're using system libm, disable BB OpenLibm
+USE_BINARYBUILDER_OPENLIBM := 0
+endif
+
 # Make tricks
 
 define dir_target
@@ -1319,6 +1361,7 @@ JULCOLOR:="\033[34;1m"
 GOAL=$(subst ','\'',$(subst $(abspath $(JULIAHOME))/,,$(abspath $@)))
 
 PRINT_CC = printf '    %b %b\n' $(CCCOLOR)CC$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR); $(1)
+PRINT_ANALYZE = printf '    %b %b\n' $(CCCOLOR)ANALYZE$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_LINK = printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_PERL = printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_FLISP = printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
@@ -1327,6 +1370,7 @@ PRINT_JULIA = printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GO
 else
 QUIET_MAKE =
 PRINT_CC = echo '$(subst ','\'',$(1))'; $(1)
+PRINT_ANALYZE = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_LINK = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_PERL = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_FLISP = echo '$(subst ','\'',$(1))'; $(1)

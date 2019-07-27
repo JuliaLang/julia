@@ -217,7 +217,7 @@ function init_load_path()
     HOME_PROJECT[] =
         project === nothing ? nothing :
         project == "" ? nothing :
-        project == "@." ? current_project() : abspath(project)
+        project == "@." ? current_project() : abspath(expanduser(project))
     append!(empty!(LOAD_PATH), paths)
 end
 

@@ -216,10 +216,6 @@
   `(with-bindings ((whitespace-newline #t))
                   ,@body))
 
-(define-macro (without-whitespace-newline . body)
-  `(with-bindings ((whitespace-newline #f))
-                  ,@body))
-
 ;; --- lexer ---
 
 (define (newline? c) (eqv? c #\newline))
@@ -545,9 +541,10 @@
                         ((char-numeric? nextc)
                          (read-number port #t #f))
                         ((opchar? nextc)
-                         (let ((op (read-operator port c)))
-                           (if (and (eq? op '..) (opchar? (peek-char port)))
-                               (error (string "invalid operator \"" op (peek-char port) "\"" (scolno port))))
+                         (let* ((op (read-operator port c))
+                                (nx (peek-char port)))
+                           (if (and (eq? op '..) (opchar? nx) (not (memv nx '(#\' #\:))))
+                               (error (string "invalid operator \"" op nx "\"" (scolno port))))
                            op))
                         (else '|.|)))))
 
@@ -1546,7 +1543,7 @@
 (define (parse-do s)
   (with-bindings
    ((expect-end-current-line (input-port-line (ts:port s))))
-   (without-whitespace-newline
+   (with-normal-context
     (let ((doargs (if (memv (peek-token s) '(#\newline #\;))
                       '()
                       (parse-comma-separated s parse-range))))

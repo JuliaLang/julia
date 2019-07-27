@@ -865,8 +865,8 @@ for A in (rand(2), rand(2,3))
     end
     @test Array(values(A)) == A
 
-    @test keytype(A) == eltype(keys(A))
-    @test valtype(A) == eltype(values(A))
+     @test keytype(A) == keytype(typeof(A)) == eltype(keys(A))
+     @test valtype(A) == valtype(typeof(A)) == eltype(values(A))
 end
 
 # nextind and prevind
@@ -986,4 +986,12 @@ end
     @test promote_shape(Dims((2, 1)), Dims((2,))) == (2, 1)
     @test_throws DimensionMismatch promote_shape(Dims((2, 2)), Dims((2,)))
     @test_throws DimensionMismatch promote_shape(Dims((2, 3, 1)), Dims((2,2)))
+end
+
+@testset "getindex and setindex! for Ref" begin
+    for x in [Ref(1), Ref([1,2,3], 1)]
+        @test getindex(x) == getindex(x, CartesianIndex()) == 1
+        x[CartesianIndex()] = 10
+        @test getindex(x) == getindex(x, CartesianIndex()) == 10
+    end
 end

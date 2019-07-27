@@ -18,17 +18,17 @@ Distributed.pmap
 Distributed.RemoteException
 Distributed.Future
 Distributed.RemoteChannel
-Distributed.fetch(::Future)
+Distributed.fetch(::Distributed.Future)
 Distributed.fetch(::RemoteChannel)
 Distributed.remotecall(::Any, ::Integer, ::Any...)
 Distributed.remotecall_wait(::Any, ::Integer, ::Any...)
 Distributed.remotecall_fetch(::Any, ::Integer, ::Any...)
 Distributed.remote_do(::Any, ::Integer, ::Any...)
 Distributed.put!(::RemoteChannel, ::Any...)
-Distributed.put!(::Future, ::Any)
+Distributed.put!(::Distributed.Future, ::Any)
 Distributed.take!(::RemoteChannel, ::Any...)
 Distributed.isready(::RemoteChannel, ::Any...)
-Distributed.isready(::Future)
+Distributed.isready(::Distributed.Future)
 Distributed.AbstractWorkerPool
 Distributed.WorkerPool
 Distributed.CachingPool
@@ -39,7 +39,6 @@ Distributed.remotecall(::Any, ::AbstractWorkerPool, ::Any...)
 Distributed.remotecall_wait(::Any, ::AbstractWorkerPool, ::Any...)
 Distributed.remotecall_fetch(::Any, ::AbstractWorkerPool, ::Any...)
 Distributed.remote_do(::Any, ::AbstractWorkerPool, ::Any...)
-Distributed.@spawn
 Distributed.@spawnat
 Distributed.@fetch
 Distributed.@fetchfrom

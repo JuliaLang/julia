@@ -84,13 +84,13 @@ Referencing the created task:
 ```jldoctest
 julia> taskref = Ref{Task}();
 
-julia> chnl = Channel(c->(@show take!(c)); taskref=taskref);
+julia> chnl = Channel(c -> println(take!(c)); taskref=taskref);
 
 julia> istaskdone(taskref[])
 false
 
 julia> put!(chnl, "Hello");
-take!(c) = "Hello"
+Hello
 
 julia> istaskdone(taskref[])
 true
@@ -304,8 +304,8 @@ function put_unbuffered(c::Channel, v)
     finally
         unlock(c)
     end
-    # unfair version of: schedule(taker, v); yield()
-    yield(taker, v) # immediately give taker a chance to run, but don't block the current task
+    schedule(taker, v)
+    yield()  # immediately give taker a chance to run, but don't block the current task
     return v
 end
 

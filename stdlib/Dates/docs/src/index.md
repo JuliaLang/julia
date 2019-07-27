@@ -654,7 +654,7 @@ Dates.DateTime(::Dates.Period)
 Dates.DateTime(::Function, ::Any...)
 Dates.DateTime(::Dates.TimeType)
 Dates.DateTime(::AbstractString, ::AbstractString)
-Dates.format
+Dates.format(::Dates.TimeType, ::AbstractString)
 Dates.DateFormat
 Dates.@dateformat_str
 Dates.DateTime(::AbstractString, ::Dates.DateFormat)

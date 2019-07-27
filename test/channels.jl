@@ -238,26 +238,29 @@ end
     # interpreting the calling function.
     @noinline garbage_finalizer(f) = (finalizer(f, "gar" * "bage"); nothing)
     run = Ref(0)
-    GC.enable(false)
+    garbage_finalizer(x -> nothing) # warmup
+    @test GC.enable(false)
     # test for finalizers trying to yield leading to failed attempts to context switch
     garbage_finalizer((x) -> (run[] += 1; sleep(1)))
     garbage_finalizer((x) -> (run[] += 1; yield()))
     garbage_finalizer((x) -> (run[] += 1; yieldto(@task () -> ())))
     t = @task begin
-        GC.enable(true)
+        @test !GC.enable(true)
         GC.gc()
+        true
     end
     oldstderr = stderr
-    local newstderr, errstream
+    newstderr = redirect_stderr()
+    local errstream
     try
-        newstderr = redirect_stderr()
         errstream = @async read(newstderr[1], String)
         yield(t)
     finally
         redirect_stderr(oldstderr)
         close(newstderr[2])
     end
-    Base.wait(t)
+    @test istaskdone(t)
+    @test fetch(t)
     @test run[] == 3
     @test fetch(errstream) == """
         error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
@@ -267,8 +270,8 @@ end
     # test for invalid state in Workqueue during yield
     t = @async nothing
     t.state = :invalid
+    newstderr = redirect_stderr()
     try
-        newstderr = redirect_stderr()
         errstream = @async read(newstderr[1], String)
         yield()
     finally
@@ -292,68 +295,78 @@ end
 end
 
 @testset "Timer / AsyncCondition triggering and race #12719" begin
-    tc = Ref(0)
-    t = Timer(0) do t
-        tc[] += 1
+    let tc = Ref(0)
+        t = Timer(0) do t
+            tc[] += 1
+        end
+        @test isopen(t)
+        Base.process_events()
+        @test !isopen(t)
+        @test tc[] == 0
+        yield()
+        @test tc[] == 1
     end
-    @test isopen(t)
-    Base.process_events()
-    @test !isopen(t)
-    @test tc[] == 0
-    yield()
-    @test tc[] == 1
 
-    tc = Ref(0)
-    t = Timer(0) do t
-        tc[] += 1
+    let tc = Ref(0)
+        t = Timer(0) do t
+            tc[] += 1
+        end
+        @test isopen(t)
+        close(t)
+        @test !isopen(t)
+        sleep(0.1)
+        @test tc[] == 0
     end
-    @test isopen(t)
-    close(t)
-    @test !isopen(t)
-    sleep(0.1)
-    @test tc[] == 0
 
-    tc = Ref(0)
-    async = Base.AsyncCondition() do async
-        tc[] += 1
+    let tc = Ref(0)
+        async = Base.AsyncCondition() do async
+            tc[] += 1
+        end
+        @test isopen(async)
+        ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+        ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+        Base.process_events() # schedule event
+        Sys.iswindows() && Base.process_events() # schedule event (windows?)
+        ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+        @test tc[] == 0
+        yield() # consume event
+        @test tc[] == 1
+        Sys.iswindows() && Base.process_events() # schedule event (windows?)
+        yield() # consume event
+        @test tc[] == 2
+        sleep(0.1) # no further events
+        @test tc[] == 2
+        ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+        ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+        Base.process_events() # schedule event
+        Sys.iswindows() && Base.process_events() # schedule event (windows?)
+        close(async) # and close
+        @test !isopen(async)
+        @test tc[] == 2
+        @test tc[] == 2
+        yield() # consume event & then close
+        @test tc[] == 3
+        sleep(0.1) # no further events
+        @test tc[] == 3
     end
-    @test isopen(async)
-    ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-    Base.process_events() # schedule event
-    ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-    Sys.iswindows() && Base.process_events() # schedule event (windows?)
-    @test tc[] == 0
-    yield() # consume event
-    @test tc[] == 1
-    sleep(0.1) # no further events
-    @test tc[] == 1
-    ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-    ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-    close(async)
-    @test !isopen(async)
-    @test tc[] == 1
-    Base.process_events() # schedule event & then close
-    Sys.iswindows() && Base.process_events() # schedule event (windows?)
-    yield() # consume event & then close
-    @test tc[] == 2
-    sleep(0.1) # no further events
-    @test tc[] == 2
 
-    tc = Ref(0)
-    async = Base.AsyncCondition() do async
-        tc[] += 1
+    let tc = Ref(0)
+        async = Base.AsyncCondition() do async
+            tc[] += 1
+        end
+        @test isopen(async)
+        ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+        Base.process_events() # schedule event
+        Sys.iswindows() && Base.process_events() # schedule event (windows)
+        close(async)
+        @test !isopen(async)
+        Base.process_events() # and close
+        @test tc[] == 0
+        yield() # consume event & then close
+        @test tc[] == 1
+        sleep(0.1)
+        @test tc[] == 1
     end
-    @test isopen(async)
-    ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-    close(async)
-    @test !isopen(async)
-    Base.process_events() # schedule event & then close
-    Sys.iswindows() && Base.process_events() # schedule event (windows)
-    @test tc[] == 0
-    yield() # consume event & then close
-    @test tc[] == 1
-    sleep(0.1)
-    @test tc[] == 1
 end
 
 @testset "check_channel_state" begin

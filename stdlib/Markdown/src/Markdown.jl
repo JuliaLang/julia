@@ -8,6 +8,9 @@ module Markdown
 import Base: show, ==, with_output_color
 using Base64: stringmime
 
+# Margin for printing in terminal.
+const margin = 2
+
 include("parse/config.jl")
 include("parse/util.jl")
 include("parse/parse.jl")

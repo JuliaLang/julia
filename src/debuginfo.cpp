@@ -394,10 +394,14 @@ public:
            }
        }
        // now process these in order, so we ensure the closure values are updated before enabling the invoke pointer
+       // TODO: this sets these pointers a bit too early, allowing other threads to see
+       // the addresses before the code has been filled in.
+       /*
        for (auto &def : def_spec)
            def.first->specptr.fptr = (void*)def.second;
        for (auto &def : def_invoke)
            def.first->invoke = (jl_callptr_t)def.second;
+       */
         uv_rwlock_wrunlock(&threadsafe);
         jl_gc_safe_leave(ptls, gc_state);
     }
@@ -1224,7 +1228,7 @@ JL_DLLEXPORT uint64_t jl_get_section_start(uint64_t fptr)
 }
 
 // Set *name and *filename to either NULL or malloc'd string
-int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int noInline)
+int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT
 {
     // This function is not allowed to reference any TLS variables if noInline
     // since it can be called from an unmanaged thread on OSX.
@@ -1245,7 +1249,7 @@ int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int n
     return jl_getDylibFunctionInfo(frames_out, pointer, skipC, noInline);
 }
 
-extern "C" jl_method_instance_t *jl_gdblookuplinfo(void *p)
+extern "C" jl_method_instance_t *jl_gdblookuplinfo(void *p) JL_NOTSAFEPOINT
 {
     return jl_jit_events->lookupLinfo((size_t)p);
 }

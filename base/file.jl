@@ -27,8 +27,6 @@ export
     unlink,
     walkdir
 
-import .Base.RefValue
-
 # get and set current directory
 
 """
@@ -48,11 +46,21 @@ julia> pwd()
 ```
 """
 function pwd()
-    b = Vector{UInt8}(undef, 1024)
-    len = RefValue{Csize_t}(length(b))
-    uv_error(:getcwd, ccall(:uv_cwd, Cint, (Ptr{UInt8}, Ptr{Csize_t}), b, len))
-    String(b[1:len[]])
+    buf = Base.StringVector(AVG_PATH - 1) # space for null-terminator implied by StringVector
+    sz = RefValue{Csize_t}(length(buf) + 1) # total buffer size including null
+    while true
+        rc = ccall(:uv_cwd, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
+        if rc == 0
+            resize!(buf, sz[])
+            return String(buf)
+        elseif rc == Base.UV_ENOBUFS
+            resize!(buf, sz[] - 1) # space for null-terminator implied by StringVector
+        else
+            uv_error(:cwd, rc)
+        end
+    end
 end
+
 
 """
     cd(dir::AbstractString=homedir())
@@ -416,17 +424,33 @@ function touch(path::AbstractString)
     path
 end
 
+"""
+    tempdir()
+
+Gets the path of the temporary directory. On Windows, `tempdir()` uses the first environment
+variable found in the ordered list `TMP`, `TEMP`, `USERPROFILE`. On all other operating
+systems, `tempdir()` uses the first environment variable found in the ordered list `TMPDIR`,
+`TMP`, `TEMP`, and `TEMPDIR`. If none of these are found, the path `"/tmp"` is used.
+"""
+function tempdir()
+    buf = Base.StringVector(AVG_PATH - 1) # space for null-terminator implied by StringVector
+    sz = RefValue{Csize_t}(length(buf) + 1) # total buffer size including null
+    while true
+        rc = ccall(:uv_os_tmpdir, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
+        if rc == 0
+            resize!(buf, sz[])
+            return String(buf)
+        elseif rc == Base.UV_ENOBUFS
+            resize!(buf, sz[] - 1)  # space for null-terminator implied by StringVector
+        else
+            uv_error(:tmpdir, rc)
+        end
+    end
+end
+
 const temp_prefix = "jl_"
 
 if Sys.iswindows()
-
-function tempdir()
-    temppath = Vector{UInt16}(undef, 32767)
-    lentemppath = ccall(:GetTempPathW, stdcall, UInt32, (UInt32, Ptr{UInt16}), length(temppath), temppath)
-    windowserror("GetTempPath", lentemppath >= length(temppath) || lentemppath == 0)
-    resize!(temppath, lentemppath)
-    return transcode(String, temppath)
-end
 
 function _win_tempname(temppath::AbstractString, uunique::UInt32)
     tempp = cwstring(temppath)
@@ -465,16 +489,13 @@ end
 else # !windows
 # Obtain a temporary filename.
 function tempname()
-    d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
+    d = tempdir() # tempnam ignores TMPDIR on darwin
     p = ccall(:tempnam, Cstring, (Cstring, Cstring), d, temp_prefix)
     systemerror(:tempnam, p == C_NULL)
     s = unsafe_string(p)
     Libc.free(p)
     return s
 end
-
-# Obtain a temporary directory's path.
-tempdir() = dirname(tempname())
 
 # Create and return the name of a temporary file along with an IOStream
 function mktemp(parent=tempdir())
@@ -489,13 +510,6 @@ end # os-test
 
 
 """
-    tempdir()
-
-Obtain the path of a temporary directory (possibly shared with other processes).
-"""
-tempdir()
-
-"""
     tempname()
 
 Generate a temporary file path. This function only returns a path; no file is
@@ -503,9 +517,9 @@ created. The path is likely to be unique, but this cannot be guaranteed.
 
 !!! warning
 
-    This can lead to race conditions if another process obtains the same
-    file name and creates the file before you are able to.
-    Using [`mktemp()`](@ref) is recommended instead.
+    This can lead to security holes if another process obtains the same
+    file name and creates the file before you are able to. Open the file with
+    `JL_O_EXCL` if this is a concern. Using [`mktemp()`](@ref) is also recommended instead.
 """
 tempname()
 
@@ -537,7 +551,7 @@ function mktempdir(parent=tempdir(); prefix=temp_prefix)
     try
         ret = ccall(:uv_fs_mkdtemp, Int32,
                     (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
-                    eventloop(), req, tpath, C_NULL)
+                    C_NULL, req, tpath, C_NULL)
         if ret < 0
             ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
             uv_error("mktempdir", ret)
@@ -623,8 +637,8 @@ function readdir(path::AbstractString)
     uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
 
     # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
-    err = ccall(:jl_uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{UInt8}, Cstring, Cint, Ptr{Cvoid}),
-                eventloop(), uv_readdir_req, path, 0, C_NULL)
+    err = ccall(:uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{UInt8}, Cstring, Cint, Ptr{Cvoid}),
+                C_NULL, uv_readdir_req, path, 0, C_NULL)
     err < 0 && throw(SystemError("unable to read directory $path", -err))
     #uv_error("unable to read directory $path", err)
 
@@ -636,7 +650,7 @@ function readdir(path::AbstractString)
     end
 
     # Clean up the request string
-    ccall(:jl_uv_fs_req_cleanup, Cvoid, (Ptr{UInt8},), uv_readdir_req)
+    ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{UInt8},), uv_readdir_req)
 
     return entries
 end
@@ -808,9 +822,9 @@ Return the target location a symbolic link `path` points to.
 function readlink(path::AbstractString)
     req = Libc.malloc(_sizeof_uv_fs)
     try
-        ret = ccall(:jl_uv_fs_readlink, Int32,
+        ret = ccall(:uv_fs_readlink, Int32,
             (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
-            eventloop(), req, path, C_NULL)
+            C_NULL, req, path, C_NULL)
         if ret < 0
             ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
             uv_error("readlink", ret)

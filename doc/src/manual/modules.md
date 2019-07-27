@@ -46,8 +46,8 @@ The statement `using BigLib: thing1, thing2` brings just the identifiers `thing1
 into scope from module `BigLib`. If these names refer to functions, adding methods to them
 will not be allowed (you may only "use" them, not extend them).
 
-The [`import`](@ref) keyword supports the same syntax as [`using`](@ref), but only operates on a single name
-at a time. It does not add modules to be searched the way `using` does. `import` also differs
+The [`import`](@ref) keyword supports the same syntax as [`using`](@ref).
+It does not add modules to be searched the way `using` does. `import` also differs
 from `using` in that functions imported using `import` can be extended with new methods.
 
 In `MyModule` above we wanted to add a method to the standard [`show`](@ref) function, so we had to write

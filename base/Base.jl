@@ -198,7 +198,6 @@ include("c.jl")
 
 # Core I/O
 include("io.jl")
-include("iostream.jl")
 include("iobuffer.jl")
 
 # strings & printing
@@ -264,9 +263,11 @@ function randn end
 # I/O
 include("libuv.jl")
 include("asyncevent.jl")
+include("iostream.jl")
 include("stream.jl")
 include("filesystem.jl")
 using .Filesystem
+include("cmd.jl")
 include("process.jl")
 include("grisu/grisu.jl")
 include("secretbuffer.jl")

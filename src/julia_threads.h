@@ -66,6 +66,16 @@ typedef struct {
 } jl_gc_pool_t;
 
 typedef struct {
+    int64_t     allocd;
+    int64_t     freed;
+    uint64_t    malloc;
+    uint64_t    realloc;
+    uint64_t    poolalloc;
+    uint64_t    bigalloc;
+    uint64_t    freecall;
+} jl_thread_gc_num_t;
+
+typedef struct {
     // variable for tracking weak references
     arraylist_t weak_refs;
     // live tasks started on this thread
@@ -90,7 +100,7 @@ typedef struct {
     // variables for allocating objects from pools
 #ifdef _P64
 #  define JL_GC_N_POOLS 41
-#elif defined(_CPU_ARM_) || defined(_CPU_PPC_)
+#elif MAX_ALIGN == 8
 #  define JL_GC_N_POOLS 42
 #else
 #  define JL_GC_N_POOLS 43
@@ -144,6 +154,7 @@ struct _jl_tls_states_t {
     int16_t tid;
     uint64_t rngseed;
     volatile size_t *safepoint;
+    volatile int8_t sleep_check_state;
     // Whether it is safe to execute GC at the same time.
 #define JL_GC_STATE_WAITING 1
     // gc_state = 1 means the thread is doing GC or is waiting for the GC to
@@ -154,9 +165,15 @@ struct _jl_tls_states_t {
     volatile int8_t gc_state;
     volatile int8_t in_finalizer;
     int8_t disable_gc;
+    jl_thread_heap_t heap;
+    jl_thread_gc_num_t gc_num;
+    uv_mutex_t sleep_lock;
+    uv_cond_t wake_signal;
     volatile sig_atomic_t defer_signal;
     struct _jl_task_t *current_task;
+#ifdef MIGRATE_TASKS
     struct _jl_task_t *previous_task;
+#endif
     struct _jl_task_t *root_task;
     void *stackbase;
     size_t stacksize;
@@ -173,15 +190,12 @@ struct _jl_tls_states_t {
     // this is limited to the few places we do synchronous IO
     // we can make this more general (similar to defer_signal) if necessary
     volatile sig_atomic_t io_wait;
-    jl_thread_heap_t heap;
-#ifndef _OS_WINDOWS_
-    // These are only used on unix now
-    pthread_t system_id;
-    void *signal_stack;
-#endif
 #ifdef _OS_WINDOWS_
     int needs_resetstkoflw;
+#else
+    void *signal_stack;
 #endif
+    unsigned long system_id;
     // execution of certain certain impure
     // statements is prohibited from certain
     // callbacks (such as generated functions)
@@ -288,6 +302,8 @@ int8_t jl_gc_safe_leave(jl_ptls_t ptls, int8_t state); // Can be a safepoint
 JL_DLLEXPORT void (jl_gc_safepoint)(void);
 
 JL_DLLEXPORT void jl_gc_enable_finalizers(jl_ptls_t ptls, int on);
+
+JL_DLLEXPORT void jl_wakeup_thread(int16_t tid);
 
 #ifdef __cplusplus
 }

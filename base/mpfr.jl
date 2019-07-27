@@ -816,6 +816,12 @@ precision(::Type{BigFloat}) = Int(DEFAULT_PRECISION[]) # precision of the type B
     setprecision([T=BigFloat,] precision::Int)
 
 Set the precision (in bits) to be used for `T` arithmetic.
+
+!!! warning
+
+    This function is not thread-safe. It will affect code running on all threads, but
+    its behavior is undefined if called concurrently with computations that use the
+    setting.
 """
 function setprecision(::Type{BigFloat}, precision::Integer)
     if precision < 2

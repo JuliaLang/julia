@@ -241,6 +241,7 @@ JL_DLLEXPORT int16_t jl_threadid(void)
 void jl_init_threadtls(int16_t tid)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
+    ptls->system_id = jl_thread_self();
     seed_cong(&ptls->rngseed);
 #ifdef _OS_WINDOWS_
     if (tid == 0) {
@@ -251,8 +252,6 @@ void jl_init_threadtls(int16_t tid)
             hMainThread = INVALID_HANDLE_VALUE;
         }
     }
-#else
-    ptls->system_id = pthread_self();
 #endif
     assert(ptls->world_age == 0);
     ptls->world_age = 1; // OK to run Julia code on this thread
@@ -473,7 +472,7 @@ void jl_start_threads(void)
 
 #endif
 
-unsigned volatile _threadedregion; // HACK: prevent the root task from sleeping
+unsigned volatile _threadedregion; // HACK: keep track of whether it is safe to do IO
 
 // simple fork/join mode code
 JL_DLLEXPORT void jl_threading_run(jl_value_t *func)
@@ -505,19 +504,19 @@ JL_DLLEXPORT void jl_threading_run(jl_value_t *func)
         args2[0] = schd_func;
         args2[1] = (jl_value_t*)t;
         jl_apply(args2, 2);
+#ifdef JULIA_ENABLE_THREADING
         if (i == 1) {
             // let threads know work is coming (optimistic)
-            uv_mutex_lock(&sleep_lock);
-            uv_cond_broadcast(&sleep_alarm);
-            uv_mutex_unlock(&sleep_lock);
+            jl_wakeup_thread(-1);
         }
+#endif
     }
+#ifdef JULIA_ENABLE_THREADING
     if (nthreads > 2) {
         // let threads know work is ready (guaranteed)
-        uv_mutex_lock(&sleep_lock);
-        uv_cond_broadcast(&sleep_alarm);
-        uv_mutex_unlock(&sleep_lock);
+        jl_wakeup_thread(-1);
     }
+#endif
     // join with all tasks
     JL_TRY {
         for (int i = 0; i < nthreads; i++) {
@@ -533,8 +532,8 @@ JL_DLLEXPORT void jl_threading_run(jl_value_t *func)
         JL_UV_UNLOCK();
         jl_rethrow();
     }
-    _threadedregion -= 1;
     // make sure no threads are sitting in the event loop
+    _threadedregion -= 1;
     jl_wake_libuv();
     // make sure no more callbacks will run while user code continues
     // outside thread region and might touch an I/O object.

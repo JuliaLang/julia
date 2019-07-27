@@ -362,6 +362,20 @@ end
         @test intersect(1:3, 2) === intersect(2, 1:3) === 2:2
         @test intersect(1.0:3.0, 2) == intersect(2, 1.0:3.0) == [2.0]
     end
+    @testset "issubset" begin
+        @test issubset(1:3, 1:typemax(Int)) #32461
+        @test issubset(1:3, 1:3)
+        @test issubset(1:3, 1:4)
+        @test issubset(1:3, 0:3)
+        @test issubset(1:3, 0:4)
+        @test !issubset(1:5, 2:5)
+        @test !issubset(1:5, 1:4)
+        @test !issubset(1:5, 2:4)
+        @test issubset(Base.OneTo(5), Base.OneTo(10))
+        @test !issubset(Base.OneTo(10), Base.OneTo(5))
+        @test issubset(1:3:10, 1:10)
+        @test !issubset(1:10, 1:3:10)
+    end
     @testset "sort/sort!/partialsort" begin
         @test sort(UnitRange(1,2)) == UnitRange(1,2)
         @test sort!(UnitRange(1,2)) == UnitRange(1,2)
@@ -1497,4 +1511,26 @@ end
     @test reverse(1.0:0.0) === StepRangeLen(Base.TwicePrecision(1.0, 0.0),
                                             Base.TwicePrecision(-1.0, -0.0), 0)
     @test reverse(reverse(1.0:0.0)) === 1.0:0.0
+end
+
+@testset "Issue #30944 ranges with non-IEEEFloat types" begin
+    # We want to test the creation of a range with BigFloat start or step
+    @test range(big(1.0), length=10) == big(1.0):1:10
+    @test range(1, step = big(1.0), length=10) == big(1.0):1:10
+    @test range(1.0, step = big(1.0), length=10) == big(1.0):1:10
+end
+
+@testset "mod with ranges" begin
+    for n in -10:10
+        @test mod(n, 0:4) == mod(n, 5)
+        @test mod(n, 1:5) == mod1(n, 5)
+        @test mod(n, 2:6) == 2 + mod(n-2, 5)
+        @test mod(n, Base.OneTo(5)) == mod1(n, 5)
+    end
+    @test mod(Int32(3), 1:5) == 3
+    @test mod(big(typemax(Int))+99, 0:4) == mod(big(typemax(Int))+99, 5)
+    @test_throws MethodError mod(3.141, 1:5)
+    @test_throws MethodError mod(3, UnitRange(1.0,5.0))
+    @test_throws MethodError mod(3, 1:2:7)
+    @test_throws DivideError mod(3, 1:0)
 end
