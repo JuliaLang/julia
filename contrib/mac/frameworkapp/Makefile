@@ -17,14 +17,19 @@ XCEXPORT_METHOD ?= development
 # Identity for the product archive (the .pkg installer).
 DARWIN_CODESIGN_PRODUCT_ARCHIVE_KEYCHAIN_IDENTITY ?= -
 else
-DARWIN_CODESIGN_KEYCHAIN_IDENTITY ?= Developer ID Application
-APPLE_DEVELOPMENT_TEAM ?= unidentified
+DARWIN_CODESIGN_KEYCHAIN_IDENTITY ?= AFB379C0B4CBD9DB9A762797FC2AB5460A2B0DBE
+APPLE_DEVELOPMENT_TEAM ?= A427R7F42H
 XCEXPORT_METHOD ?= developer-id
 DARWIN_CODESIGN_PRODUCT_ARCHIVE_KEYCHAIN_IDENTITY ?= Developer ID Installer
 endif
 
 # X.Y.Z
 JULIA_VERSION_MAJOR_MINOR_PATCH := $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
+
+# X.Y.Z or X.Y.Z-hash
+JULIA_VERSION_OPT_COMMIT:=$(shell [ $$(git describe --tags --exact-match 2>/dev/null) ] && echo $(JULIA_VERSION) || echo $(JULIA_VERSION)-$(JULIA_COMMIT))
+DMGROOT := $(BUILDROOT)/dmg
+DMG_NAME:=$(BUILDROOT)/$(JULIA_BINARYDIST_FILENAME).dmg
 
 FRAMEWORK_DESTDIR := $(BUILDROOT)/julia-$(JULIA_COMMIT)-framework
 JULIA_FRAMEWORK_PATH := $(FRAMEWORK_DESTDIR)/$(framework_directory)
@@ -68,6 +73,21 @@ $(XCEXPORT)/Julia.app/Contents/MacOS/Julia: $(XCARCHIVE)/Info.plist $(BUILDROOT)
 	xcodebuild -exportArchive -archivePath $(XCARCHIVE) -exportPath $(XCEXPORT) -exportOptionsPlist $(BUILDROOT)/xcodebuild-export.plist
 
 appexport: $(XCEXPORT)/Julia.app/Contents/MacOS/Julia
+
+$(DMG_NAME): $(JULIA_FRAMEWORK_LIB) $(XCEXPORT)/Julia.app/Contents/MacOS/Julia
+	-rm -rf $(DMGROOT)
+	mkdir -p $(DMGROOT)
+	cp -a $(JULIA_FRAMEWORK_PATH) $(DMGROOT)
+	cp -a $(XCEXPORT)/Julia.app $(DMGROOT)
+	# Temporary hack to see how the framework does on the buildbots with CI
+	# NB: This invalidates the code signature of Julia.app.
+	ln -s ../../../$(framework_currver) $(DMGROOT)/Julia.app/Contents/Resources/julia
+	hdiutil create $@ -size 1t -fs HFS+ -ov -volname Julia -imagekey zlib-level=9 -srcfolder $(DMGROOT)
+ifeq ($(APPLE_DISTRIBUTE_DEVID),1)
+	codesign -s $(DARWIN_CODESIGN_KEYCHAIN_IDENTITY) $@
+endif
+
+dmg: $(DMG_NAME)
 
 $(BUILDROOT)/framework-component.plist: $(JULIAHOME)/contrib/mac/frameworkapp/framework-component.plist
 	sed -e 's/FRAMEWORK_VERSION/$(FRAMEWORK_VERSION)/g' -e 's/FRAMEWORK_NAME/$(FRAMEWORK_NAME)/g' $< > $@
@@ -120,5 +140,5 @@ clean:
 	-rm -rf $(FRAMEWORK_DESTDIR)
 	-rm -f $(PRODUCTARCHIVE)
 
-.PHONY: appexport clean productarchive signedproductarchive
+.PHONY: appexport clean productarchive signedproductarchive dmg
 .INTERMEDIATE: $(BUILDROOT)/xcodebuild-export.plist $(BUILDROOT)/framework-component.plist $(BUILDROOT)/$(FRAMEWORK_NAME)-framework.pkg $(BUILDROOT)/launcher.pkg $(BUILDROOT)/$(FRAMEWORK_NAME).dist

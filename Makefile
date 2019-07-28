@@ -488,8 +488,7 @@ exe:
 	chmod a+x "$(BUILDROOT)/$(JULIA_BINARYDIST_FILENAME).exe"
 
 app:
-	$(MAKE) -C contrib/mac/app
-	@mv contrib/mac/app/$(JULIA_BINARYDIST_FILENAME).dmg $(BUILDROOT)
+	$(MAKE) -C contrib/mac/frameworkapp APPLE_DISTRIBUTE_DEVID=1 dmg
 
 darwinframework:
 	$(MAKE) -C $(JULIAHOME)/contrib/mac/framework
