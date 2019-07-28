@@ -107,6 +107,7 @@ julia> vals, vecs = F; # destructuring via iteration
 
 julia> vals == F.values && vecs == F.vectors
 true
+```
 """
 struct GeneralizedEigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
     values::U
