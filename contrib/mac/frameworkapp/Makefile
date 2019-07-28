@@ -50,7 +50,7 @@ $(JULIA_FRAMEWORK_LIB):
 	$(MAKE) -C $(JULIAHOME) DARWIN_FRAMEWORK=1 prefix=$(FRAMEWORK_DESTDIR) darwinframework
 
 $(XCARCHIVE)/Info.plist: $(JULIA_FRAMEWORK_LIB)
-	xcodebuild \
+	env DEVELOPER_DIR=/Applications/Xcode.app xcrun xcodebuild \
 		-project JuliaLauncher.xcodeproj \
 		-scheme JuliaLauncher \
 		-configuration $(XCCONFIGURATION) \
