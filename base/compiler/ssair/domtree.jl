@@ -313,7 +313,7 @@ begin
             end
             idoms_dfs[v] = idom
         end
-        # The following produces for each BB in cfg, a map to its parent (as indexed in the cfg BB)
+        # Reexpress the idom relationship in  BB indexing
         idoms_bb = Int[ (i == 1 || D.reverse[i] == 0) ? 0 : D.numbering[idoms_dfs[D.reverse[i]]] for i = 1:length(cfg.blocks) ]
         idoms_bb
     end
