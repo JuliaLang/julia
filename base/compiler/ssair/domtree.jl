@@ -252,6 +252,10 @@ begin
     end
 
     """
+        SNCA(cfg::CFG)
+    Determines a map from basic blocks to the block which immidately dominate them.
+    Expressed as indexes into `cfg.blocks`.
+    
     The main Semi-NCA algrithm. Matches Figure 2.8 in [LG05].
     Note that the pseudocode in [LG05] is not entirely accurate.
     The best way to understand what's happening is to read [LT79], then the
