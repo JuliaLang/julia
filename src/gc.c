@@ -1149,13 +1149,16 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
 #ifdef MEMDEBUG
     return jl_gc_big_alloc(ptls, osize);
 #endif
+    // Crashing here or at *** below may indicate a mismatch between the gc
+    // pool offsets in the executable and the system image.
+    assert(osize <= p->osize);
     maybe_collect(ptls);
     ptls->gc_num.allocd += osize;
     ptls->gc_num.poolalloc++;
     // first try to use the freelist
     jl_taggedvalue_t *v = p->freelist;
     if (v) {
-        jl_taggedvalue_t *next = v->next;
+        jl_taggedvalue_t *next = v->next; // *** - see note above.
         p->freelist = next;
         if (__unlikely(gc_page_data(v) != gc_page_data(next))) {
             // we only update pg's fields when the freelist changes page
