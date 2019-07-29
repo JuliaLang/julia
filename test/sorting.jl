@@ -411,7 +411,7 @@ end
         end
         return perms
     end
-    
+
     for n = 0:8
         s = ((1:n)...,)
         for t in mypermutations(s)

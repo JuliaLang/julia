@@ -41,31 +41,18 @@ swaps = [
 
 function tuplesortthunk(swaps, N)
     vars = [Symbol(:t,n) for n = 1:N]
-    norev_thunk = Expr(:block)
+    thunk = Expr(:block)
     for (i, j) in swaps
         a = vars[i]
         b = vars[j]
-        append!(norev_thunk.args, (quote
-            c = lt(by($a), by($b))
+        append!(thunk.args, (quote
+            c = lt(by($a), by($b)) != rev
             ($a, $b) = (ifelse(c, $a, $b), ifelse(c, $b, $a))
-        end).args)
-    end
-    rev_thunk = Expr(:block)
-    for (i, j) in swaps
-        a = vars[i]
-        b = vars[j]
-        append!(rev_thunk.args, (quote
-            c = lt(by($a), by($b))
-            ($a, $b) = (ifelse(c, $b, $a), ifelse(c, $a, $b))
         end).args)
     end
     return quote
         ($(vars...),) = t
-        if rev
-            $rev_thunk
-        else
-            $norev_thunk
-        end
+        $thunk
         return ($(vars...),)
     end
 end
@@ -76,7 +63,7 @@ end
     else
         return quote
             s = sort!(Base.copymutable(t); lt=lt, by=by, rev=rev)
-            return ($([:(s[$n]) for n = 1:N]...),)
+            return @inbounds ($([:(s[$n]) for n = 1:N]...),)
         end
     end
 end
