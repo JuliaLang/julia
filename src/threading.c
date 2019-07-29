@@ -60,7 +60,7 @@ __attribute__((constructor)) void jl_mac_init_tls(void)
     pthread_key_create(&jl_tls_key, NULL);
 }
 
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void)
+JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED
 {
     void *ptls = pthread_getspecific(jl_tls_key);
     if (__unlikely(!ptls)) {
@@ -111,7 +111,7 @@ BOOLEAN WINAPI DllMain(IN HINSTANCE hDllHandle, IN DWORD nReason,
     return 1; // success
 }
 
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void)
+JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED
 {
     return (jl_ptls_t)TlsGetValue(jl_tls_key);
 }
@@ -167,9 +167,11 @@ static jl_ptls_t jl_get_ptls_states_init(void)
     return cb();
 }
 
-static JL_CONST_FUNC jl_ptls_t jl_get_ptls_states_wrapper(void)
+static JL_CONST_FUNC jl_ptls_t jl_get_ptls_states_wrapper(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT
 {
+#ifndef __clang_analyzer__
     return (*jl_tls_states_cb)();
+#endif
 }
 
 JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f)
@@ -201,10 +203,10 @@ static jl_get_ptls_states_func jl_get_ptls_states_resolve(void)
     return jl_tls_states_cb;
 }
 
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void)
+JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED
     __attribute__((ifunc ("jl_get_ptls_states_resolve")));
 #  else // JL_TLS_USE_IFUNC
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void)
+JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED
 {
     return jl_get_ptls_states_wrapper();
 }
@@ -219,7 +221,7 @@ jl_get_ptls_states_func jl_get_ptls_states_getter(void)
 #endif
 
 JL_DLLEXPORT int jl_n_threads;
-jl_ptls_t *jl_all_tls_states;
+jl_ptls_t *jl_all_tls_states JL_GLOBALLY_ROOTED;
 
 // return calling thread's ID
 // Also update the suspended_threads list in signals-mach when changing the
@@ -399,9 +401,9 @@ void jl_init_threading(void)
         jl_n_threads = max_threads;
     if (jl_n_threads <= 0)
         jl_n_threads = 1;
-
+#ifndef __clang_analyzer__
     jl_all_tls_states = (jl_ptls_t*)calloc(jl_n_threads, sizeof(void*));
-
+#endif
     // initialize this thread (set tid, create heap, etc.)
     jl_init_threadtls(0);
 
