@@ -1,21 +1,21 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Represents a Basic Block, in the DomTree
+"Represents a Basic Block, in the DomTree"
 struct DomTreeNode
     # How deep we are in the DomTree
     level::Int
-    # The BB indicies in the CFG for all Basic Blocks we immidately dominate
+    # The BB indices in the CFG for all Basic Blocks we immediately dominate
     children::Vector{Int}
 end
 DomTreeNode() = DomTreeNode(1, Vector{Int}())
 
-# Data structure that encodes which basic block dominates which.
+"Data structure that encodes which basic block dominates which.""
 struct DomTree
-    # Which basic block immidately dominates each basic block (ordered by BB indicies)
+    # Which basic block immediately dominates each basic block (ordered by BB indices)
     # Note: this is the inverse of the nodes, children field
     idoms::Vector{Int}
     
-    # The nodes in the tree (ordered by BB indicies)
+    # The nodes in the tree (ordered by BB indices)
     nodes::Vector{DomTreeNode}
 end
 
@@ -49,13 +49,13 @@ function update_level!(domtree::Vector{DomTreeNode}, node::Int, level::Int)
     end
 end
 
-# Iterable data structure that walks though all dominated blocks
+"Iterable data structure that walks though all dominated blocks"
 struct DominatedBlocks
     domtree::DomTree
     worklist::Vector{Int}
 end
 
-# Returns an interator that walks through all blocks dominated byroot
+"Returns an interator that walks through all blocks dominated by the basic block at index `root`"
 function dominated(domtree::DomTree, root::Int)
     doms = DominatedBlocks(domtree, Vector{Int}())
     push!(doms.worklist, root)
@@ -255,7 +255,7 @@ begin
 
     """
         SNCA(cfg::CFG)
-    Determines a map from basic blocks to the block which immidately dominate them.
+    Determines a map from basic blocks to the block which immediately dominate them.
     Expressed as indexes into `cfg.blocks`.
     
     The main Semi-NCA algrithm. Matches Figure 2.8 in [LG05].
