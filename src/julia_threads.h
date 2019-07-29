@@ -166,7 +166,6 @@ struct _jl_tls_states_t {
     struct _jl_gcframe_t *pgcstack;
     size_t world_age;
     int16_t tid;
-    uint64_t rngseed;
     volatile size_t *safepoint;
     volatile int8_t sleep_check_state;
     // Whether it is safe to execute GC at the same time.
@@ -228,6 +227,7 @@ struct _jl_tls_states_t {
     // Saved exception for previous external API call or NULL if cleared.
     // Access via jl_exception_occurred().
     struct _jl_value_t *previous_exception;
+    uint64_t rngseed;
 };
 
 // Update codegen version in `ccall.cpp` after changing either `pause` or `wake`
