@@ -55,7 +55,7 @@ struct DominatedBlocks
     worklist::Vector{Int}
 end
 
-"Returns an interator that walks through all blocks dominated by the basic block at index `root`"
+"Returns an iterator that walks through all blocks dominated by the basic block at index `root`"
 function dominated(domtree::DomTree, root::Int)
     doms = DominatedBlocks(domtree, Vector{Int}())
     push!(doms.worklist, root)
