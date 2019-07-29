@@ -9,7 +9,7 @@ struct DomTreeNode
 end
 DomTreeNode() = DomTreeNode(1, Vector{Int}())
 
-"Data structure that encodes which basic block dominates which.""
+"Data structure that encodes which basic block dominates which."
 struct DomTree
     # Which basic block immediately dominates each basic block (ordered by BB indices)
     # Note: this is the inverse of the nodes, children field
