@@ -172,6 +172,7 @@ static Type *jl_array_llvmt;
 static Type *jl_parray_llvmt;
 static FunctionType *jl_func_sig;
 static FunctionType *jl_func_sig_sparams;
+static FunctionType *jl_func_sig_ci;
 static Type *T_pvoidfunc;
 
 static IntegerType *T_int1;
@@ -5143,7 +5144,7 @@ static Function *jl_cfunction_object(jl_value_t *ff, jl_value_t *declrt, jl_tupl
 // generate a julia-callable function that calls f (AKA lam)
 static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlretty, const jl_returninfo_t &f, StringRef funcName, Module *M)
 {
-    Function *w = Function::Create(jl_func_sig, GlobalVariable::ExternalLinkage, funcName, M);
+    Function *w = Function::Create(jl_func_sig_ci, GlobalVariable::ExternalLinkage, funcName, M);
     add_return_attr(w, Attribute::NonNull);
     w->addFnAttr(Thunk);
     jl_init_function(w);
@@ -5154,7 +5155,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     Value *funcArg = &*AI++;
     Value *argArray = &*AI++;
     Value *argCount = &*AI++; (void)argCount; // unused
-    //Value *mfunc = &*AI++; (void)mfunc; // unused
+    Value *ci = &*AI++; (void)ci; // unused
     assert(AI == w->arg_end());
 
     jl_codectx_t ctx(jl_LLVMContext);
@@ -7030,7 +7031,9 @@ static void init_julia_llvm_env(Module *m)
     assert(jl_func_sig != NULL);
     ftargs.push_back(T_pprjlvalue); // linfo->sparam_vals
     jl_func_sig_sparams = FunctionType::get(T_prjlvalue, ftargs, false);
+    jl_func_sig_ci = FunctionType::get(T_prjlvalue, ftargs, false);
     assert(jl_func_sig_sparams != NULL);
+    assert(jl_func_sig_ci != NULL);
 
     Type *vaelts[] = {PointerType::get(T_int8, AddressSpace::Loaded)
 #ifdef STORE_ARRAY_LEN
