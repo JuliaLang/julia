@@ -734,11 +734,11 @@ function to_tuple_type(@nospecialize(t))
     if isa(t,Type) && t<:Tuple
         for p in unwrap_unionall(t).parameters
             if !(isa(p,Type) || isa(p,TypeVar))
-                error("argument tuple type must contain only types")
+                throw(ArgumentError("argument tuple type must contain only types"))
             end
         end
     else
-        error("expected tuple type")
+        throw(ArgumentError("expected tuple type"))
     end
     t
 end
@@ -1122,7 +1122,7 @@ Return the module in which the binding for the variable referenced by `symbol` i
 """
 function which(m::Module, s::Symbol)
     if !isdefined(m, s)
-        error("\"$s\" is not defined in module $m")
+        throw(ArgumentError("\"$s\" is not defined in module $m"))
     end
     return binding_module(m, s)
 end
@@ -1172,13 +1172,13 @@ function functionloc(@nospecialize(f))
     mt = methods(f)
     if isempty(mt)
         if isa(f, Function)
-            error("function has no definitions")
+            throw(ArgumentError("function has no definitions"))
         else
-            error("object is not callable")
+            throw(ArgumentError("object is not callable"))
         end
     end
     if length(mt) > 1
-        error("function has multiple methods; please specify a type signature")
+        throw(ArgumentError("function has multiple methods; please specify a type signature"))
     end
     return functionloc(first(mt))
 end
@@ -1199,7 +1199,7 @@ Determine the module containing a given definition of a generic function.
 function parentmodule(@nospecialize(f), @nospecialize(types))
     m = methods(f, types)
     if isempty(m)
-        error("no matching methods")
+        throw(ArgumentError("no matching methods"))
     end
     return first(m).module
 end
