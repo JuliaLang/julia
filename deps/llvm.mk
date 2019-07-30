@@ -387,7 +387,7 @@ endif # LLVM_VER
 LLVM_PATCH_PREV :=
 define LLVM_PATCH
 $$(LLVM_SRC_DIR)/$1.patch-applied: $$(LLVM_SRC_DIR)/source-extracted | $$(SRCDIR)/patches/$1.patch $$(LLVM_PATCH_PREV)
-	cd $$(LLVM_SRC_DIR) && patch -p1 < $$(SRCDIR)/patches/$1.patch
+	cd $$(LLVM_SRC_DIR) && patch -p$(if $2,$2,1) < $$(SRCDIR)/patches/$1.patch
 	echo 1 > $$@
 # declare that applying any patch must re-run the compile step
 $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(LLVM_SRC_DIR)/$1.patch-applied
@@ -472,6 +472,11 @@ $(eval $(call LLVM_PATCH,llvm-8.0-D50167-scev-umin))
 $(eval $(call LLVM_PATCH,llvm7-windows-race))
 $(eval $(call LLVM_PATCH,llvm-D57118-powerpc)) # remove for 9.0
 $(eval $(call LLVM_PATCH,llvm8-WASM-addrspaces)) # WebAssembly
+$(eval $(call LLVM_PATCH,llvm-nvptx-fix-relocation-info, 2)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm-nvptx-debuginfo, 2)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm-nvptx-dw_at_address_class, 2)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm-nvptx-debugloc, 2)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm-nvptx-ptxas-di, 2)) # remove for 9.0
 endif # LLVM_VER 8.0
 
 # Add a JL prefix to the version map. DO NOT REMOVE

@@ -1,0 +1,59 @@
+From 0f37ab35afdee0fa4a105ac587c2a7eeb70bdbab Mon Sep 17 00:00:00 2001
+From: Alexey Bataev <a.bataev@hotmail.com>
+Date: Fri, 8 Mar 2019 20:08:04 +0000
+Subject: [PATCH 4/5] [DEBUG_INFO][NVPTX]Emit empty .debug_loc section in
+ presence of the debug option.
+
+Summary:
+If the LLVM module shows that it has debug info, but the file is
+actually empty and the real debug info is not emitted, the ptxas tool
+emits error 'Debug information not found in presence of .target debug'.
+We need at leas one empty debug section to silence this message. Section
+`.debug_loc` is not emitted for PTX and we can emit empty `.debug_loc`
+section if `debug` option was emitted.
+
+Reviewers: tra
+
+Subscribers: jholewinski, aprantl, llvm-commits
+
+Differential Revision: https://reviews.llvm.org/D57250
+
+llvm-svn: 355719
+---
+ llvm/lib/Target/NVPTX/NVPTXAsmPrinter.cpp | 5 ++++-
+ llvm/test/DebugInfo/NVPTX/debug-empty.ll  | 1 +
+ 2 files changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/llvm/lib/Target/NVPTX/NVPTXAsmPrinter.cpp b/llvm/lib/Target/NVPTX/NVPTXAsmPrinter.cpp
+index db91369a524..83095e1adb8 100644
+--- a/llvm/lib/Target/NVPTX/NVPTXAsmPrinter.cpp
++++ b/llvm/lib/Target/NVPTX/NVPTXAsmPrinter.cpp
+@@ -955,9 +955,12 @@ bool NVPTXAsmPrinter::doFinalization(Module &M) {
+ 
+   delete[] gv_array;
+   // Close the last emitted section
+-  if (HasDebugInfo)
++  if (HasDebugInfo) {
+     static_cast<NVPTXTargetStreamer *>(OutStreamer->getTargetStreamer())
+         ->closeLastSection();
++    // Emit empty .debug_loc section for better support of the empty files.
++    OutStreamer->EmitRawText("\t.section\t.debug_loc\t{\t}");
++  }
+ 
+   // Output last DWARF .file directives, if any.
+   static_cast<NVPTXTargetStreamer *>(OutStreamer->getTargetStreamer())
+diff --git a/llvm/test/DebugInfo/NVPTX/debug-empty.ll b/llvm/test/DebugInfo/NVPTX/debug-empty.ll
+index f1ebf739d2f..cae258815e4 100644
+--- a/llvm/test/DebugInfo/NVPTX/debug-empty.ll
++++ b/llvm/test/DebugInfo/NVPTX/debug-empty.ll
+@@ -1,6 +1,7 @@
+ ; RUN: llc < %s -mtriple=nvptx64-nvidia-cuda | FileCheck %s
+ 
+ ; CHECK: .target sm_{{[0-9]+$}}
++; CHECK: .section .debug_loc { }
+ ; CHECK-NOT: }
+ 
+ !llvm.dbg.cu = !{!0}
+-- 
+2.22.0
+

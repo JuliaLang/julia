@@ -1,0 +1,224 @@
+From fa7c088eee6f4e7882e61ba11ce097e6748d377a Mon Sep 17 00:00:00 2001
+From: Alexey Bataev <a.bataev@hotmail.com>
+Date: Tue, 22 Jan 2019 17:24:16 +0000
+Subject: [PATCH 1/5] [DEBUG_INFO, NVPTX] Fix relocation info.
+
+Summary: Initial function labels must follow the debug location for the correct relocation info generation.
+
+Reviewers: tra, jlebar, echristo
+
+Subscribers: jholewinski, llvm-commits
+
+Differential Revision: https://reviews.llvm.org/D45784
+
+llvm-svn: 351843
+---
+ llvm/include/llvm/CodeGen/AsmPrinter.h        |  3 +
+ llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp    |  6 ++
+ llvm/lib/CodeGen/AsmPrinter/DwarfDebug.cpp    | 67 +++++++++++++------
+ llvm/lib/CodeGen/AsmPrinter/DwarfDebug.h      |  3 +
+ llvm/lib/Target/NVPTX/NVPTXAsmPrinter.cpp     |  3 +
+ llvm/test/DebugInfo/NVPTX/cu-range-hole.ll    |  2 +
+ llvm/test/DebugInfo/NVPTX/debug-loc-offset.ll |  6 +-
+ 7 files changed, 66 insertions(+), 24 deletions(-)
+
+diff --git a/llvm/include/llvm/CodeGen/AsmPrinter.h b/llvm/include/llvm/CodeGen/AsmPrinter.h
+index 413901d218f..df9c1d09941 100644
+--- a/llvm/include/llvm/CodeGen/AsmPrinter.h
++++ b/llvm/include/llvm/CodeGen/AsmPrinter.h
+@@ -227,6 +227,9 @@ public:
+ 
+   void EmitToStreamer(MCStreamer &S, const MCInst &Inst);
+ 
++  /// Emits inital debug location directive.
++  void emitInitialRawDwarfLocDirective(const MachineFunction &MF);
++
+   /// Return the current section we are emitting to.
+   const MCSection *getCurrentSection() const;
+ 
+diff --git a/llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp b/llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp
+index 7070451e333..25387217e82 100644
+--- a/llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp
++++ b/llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp
+@@ -232,6 +232,12 @@ void AsmPrinter::EmitToStreamer(MCStreamer &S, const MCInst &Inst) {
+   S.EmitInstruction(Inst, getSubtargetInfo());
+ }
+ 
++void AsmPrinter::emitInitialRawDwarfLocDirective(const MachineFunction &MF) {
++  assert(DD && "Dwarf debug file is not defined.");
++  assert(OutStreamer->hasRawTextSupport() && "Expected assembly output mode.");
++  (void)DD->emitInitialLocDirective(MF, /*CUID=*/0);
++}
++
+ /// getCurrentSection() - Return the current section we are emitting to.
+ const MCSection *AsmPrinter::getCurrentSection() const {
+   return OutStreamer->getCurrentSectionOnly();
+diff --git a/llvm/lib/CodeGen/AsmPrinter/DwarfDebug.cpp b/llvm/lib/CodeGen/AsmPrinter/DwarfDebug.cpp
+index 18c5fe27b1a..3b07a5a9c89 100644
+--- a/llvm/lib/CodeGen/AsmPrinter/DwarfDebug.cpp
++++ b/llvm/lib/CodeGen/AsmPrinter/DwarfDebug.cpp
+@@ -1521,6 +1521,46 @@ static DebugLoc findPrologueEndLoc(const MachineFunction *MF) {
+   return DebugLoc();
+ }
+ 
++/// Register a source line with debug info. Returns the  unique label that was
++/// emitted and which provides correspondence to the source line list.
++static void recordSourceLine(AsmPrinter &Asm, unsigned Line, unsigned Col,
++                             const MDNode *S, unsigned Flags, unsigned CUID,
++                             uint16_t DwarfVersion,
++                             ArrayRef<std::unique_ptr<DwarfCompileUnit>> DCUs) {
++  StringRef Fn;
++  unsigned FileNo = 1;
++  unsigned Discriminator = 0;
++  if (auto *Scope = cast_or_null<DIScope>(S)) {
++    Fn = Scope->getFilename();
++    if (Line != 0 && DwarfVersion >= 4)
++      if (auto *LBF = dyn_cast<DILexicalBlockFile>(Scope))
++        Discriminator = LBF->getDiscriminator();
++
++    FileNo = static_cast<DwarfCompileUnit &>(*DCUs[CUID])
++                 .getOrCreateSourceID(Scope->getFile());
++  }
++  Asm.OutStreamer->EmitDwarfLocDirective(FileNo, Line, Col, Flags, 0,
++                                         Discriminator, Fn);
++}
++
++DebugLoc DwarfDebug::emitInitialLocDirective(const MachineFunction &MF,
++                                             unsigned CUID) {
++  // Get beginning of function.
++  if (DebugLoc PrologEndLoc = findPrologueEndLoc(&MF)) {
++    // Ensure the compile unit is created if the function is called before
++    // beginFunction().
++    (void)getOrCreateDwarfCompileUnit(
++        MF.getFunction().getSubprogram()->getUnit());
++    // We'd like to list the prologue as "not statements" but GDB behaves
++    // poorly if we do that. Revisit this with caution/GDB (7.5+) testing.
++    const DISubprogram *SP = PrologEndLoc->getInlinedAtScope()->getSubprogram();
++    ::recordSourceLine(*Asm, SP->getScopeLine(), 0, SP, DWARF2_FLAG_IS_STMT,
++                       CUID, getDwarfVersion(), getUnits());
++    return PrologEndLoc;
++  }
++  return DebugLoc();
++}
++
+ // Gather pre-function debug information.  Assumes being called immediately
+ // after the function entry point has been emitted.
+ void DwarfDebug::beginFunctionImpl(const MachineFunction *MF) {
+@@ -1543,13 +1583,8 @@ void DwarfDebug::beginFunctionImpl(const MachineFunction *MF) {
+     Asm->OutStreamer->getContext().setDwarfCompileUnitID(CU.getUniqueID());
+ 
+   // Record beginning of function.
+-  PrologEndLoc = findPrologueEndLoc(MF);
+-  if (PrologEndLoc) {
+-    // We'd like to list the prologue as "not statements" but GDB behaves
+-    // poorly if we do that. Revisit this with caution/GDB (7.5+) testing.
+-    auto *SP = PrologEndLoc->getInlinedAtScope()->getSubprogram();
+-    recordSourceLine(SP->getScopeLine(), 0, SP, DWARF2_FLAG_IS_STMT);
+-  }
++  PrologEndLoc = emitInitialLocDirective(
++      *MF, Asm->OutStreamer->getContext().getDwarfCompileUnitID());
+ }
+ 
+ void DwarfDebug::skippedNonDebugFunction() {
+@@ -1647,21 +1682,9 @@ void DwarfDebug::endFunctionImpl(const MachineFunction *MF) {
+ // emitted and which provides correspondence to the source line list.
+ void DwarfDebug::recordSourceLine(unsigned Line, unsigned Col, const MDNode *S,
+                                   unsigned Flags) {
+-  StringRef Fn;
+-  unsigned FileNo = 1;
+-  unsigned Discriminator = 0;
+-  if (auto *Scope = cast_or_null<DIScope>(S)) {
+-    Fn = Scope->getFilename();
+-    if (Line != 0 && getDwarfVersion() >= 4)
+-      if (auto *LBF = dyn_cast<DILexicalBlockFile>(Scope))
+-        Discriminator = LBF->getDiscriminator();
+-
+-    unsigned CUID = Asm->OutStreamer->getContext().getDwarfCompileUnitID();
+-    FileNo = static_cast<DwarfCompileUnit &>(*InfoHolder.getUnits()[CUID])
+-              .getOrCreateSourceID(Scope->getFile());
+-  }
+-  Asm->OutStreamer->EmitDwarfLocDirective(FileNo, Line, Col, Flags, 0,
+-                                          Discriminator, Fn);
++  ::recordSourceLine(*Asm, Line, Col, S, Flags,
++                     Asm->OutStreamer->getContext().getDwarfCompileUnitID(),
++                     getDwarfVersion(), getUnits());
+ }
+ 
+ //===----------------------------------------------------------------------===//
+diff --git a/llvm/lib/CodeGen/AsmPrinter/DwarfDebug.h b/llvm/lib/CodeGen/AsmPrinter/DwarfDebug.h
+index 8a31e989b28..cece974b736 100644
+--- a/llvm/lib/CodeGen/AsmPrinter/DwarfDebug.h
++++ b/llvm/lib/CodeGen/AsmPrinter/DwarfDebug.h
+@@ -593,6 +593,9 @@ public:
+   /// Emit all Dwarf sections that should come after the content.
+   void endModule() override;
+ 
++  /// Emits inital debug location directive.
++  DebugLoc emitInitialLocDirective(const MachineFunction &MF, unsigned CUID);
++
+   /// Process beginning of an instruction.
+   void beginInstruction(const MachineInstr *MI) override;
+ 
+diff --git a/llvm/lib/Target/NVPTX/NVPTXAsmPrinter.cpp b/llvm/lib/Target/NVPTX/NVPTXAsmPrinter.cpp
+index 6284ad8b82e..45703ef8f20 100644
+--- a/llvm/lib/Target/NVPTX/NVPTXAsmPrinter.cpp
++++ b/llvm/lib/Target/NVPTX/NVPTXAsmPrinter.cpp
+@@ -473,6 +473,9 @@ void NVPTXAsmPrinter::EmitFunctionEntryLabel() {
+   // Emit open brace for function body.
+   OutStreamer->EmitRawText(StringRef("{\n"));
+   setAndEmitFunctionVirtualRegisters(*MF);
++  // Emit initial .loc debug directive for correct relocation symbol data.
++  if (MMI && MMI->hasDebugInfo())
++    emitInitialRawDwarfLocDirective(*MF);
+ }
+ 
+ bool NVPTXAsmPrinter::runOnMachineFunction(MachineFunction &F) {
+diff --git a/llvm/test/DebugInfo/NVPTX/cu-range-hole.ll b/llvm/test/DebugInfo/NVPTX/cu-range-hole.ll
+index e44b43d2b90..48570e090c8 100644
+--- a/llvm/test/DebugInfo/NVPTX/cu-range-hole.ll
++++ b/llvm/test/DebugInfo/NVPTX/cu-range-hole.ll
+@@ -6,6 +6,7 @@
+ ; CHECK: .param .b32 b_param_0
+ ; CHECK: )
+ ; CHECK: {
++; CHECK: .loc 1 1 0
+ ; CHECK: Lfunc_begin0:
+ ; CHECK: .loc 1 1 0
+ ; CHECK: .loc 1 1 0
+@@ -27,6 +28,7 @@
+ ; CHECK: .param .b32 d_param_0
+ ; CHECK: )
+ ; CHECK: {
++; CHECK: .loc 1 3 0
+ ; CHECK: Lfunc_begin2:
+ ; CHECK: .loc 1 3 0
+ ; CHECK: ret;
+diff --git a/llvm/test/DebugInfo/NVPTX/debug-loc-offset.ll b/llvm/test/DebugInfo/NVPTX/debug-loc-offset.ll
+index df7835f8a2d..72ed6c1cc2f 100644
+--- a/llvm/test/DebugInfo/NVPTX/debug-loc-offset.ll
++++ b/llvm/test/DebugInfo/NVPTX/debug-loc-offset.ll
+@@ -11,8 +11,9 @@
+ 
+ ; CHECK: .visible .func  (.param .b32 func_retval0) _Z3bari(
+ ; CHECK: {
+-; CHECK: Lfunc_begin0:
+ ; CHECK: .loc [[CU1:[0-9]+]] 1 0
++; CHECK: Lfunc_begin0:
++; CHECK: .loc [[CU1]] 1 0
+ 
+ ; CHECK: //DEBUG_VALUE: bar:b <- {{[0-9]+}}
+ ; CHECK: //DEBUG_VALUE: bar:b <- {{[0-9]+}}
+@@ -39,8 +40,9 @@ declare void @llvm.dbg.value(metadata, metadata, metadata) #1
+ 
+ ; CHECK: .visible .func _Z3baz1A(
+ ; CHECK: {
+-; CHECK: Lfunc_begin1:
+ ; CHECK: .loc [[CU2:[0-9]+]] 6 0
++; CHECK: Lfunc_begin1:
++; CHECK: .loc [[CU2]] 6 0
+ ; CHECK: //DEBUG_VALUE: baz:z <- {{[0-9]+}}
+ ; CHECK: //DEBUG_VALUE: baz:z <- {{[0-9]+}}
+ ; CHECK: .loc [[CU2]] 10 0
+-- 
+2.22.0
+
