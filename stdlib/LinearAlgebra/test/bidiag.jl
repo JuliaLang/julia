@@ -156,6 +156,10 @@ Random.seed!(1)
             @test triu!(bidiagcopy(dv,ev,:U))    == Bidiagonal(dv,ev,:U)
             @test_throws ArgumentError triu!(bidiagcopy(dv, ev, :U), -n)
             @test_throws ArgumentError triu!(bidiagcopy(dv, ev, :U), n + 2)
+            @test !isdiag(Bidiagonal(dv,ev,:U))
+            @test !isdiag(Bidiagonal(dv,ev,:L))
+            @test isdiag(Bidiagonal(dv,zerosev,:U))
+            @test isdiag(Bidiagonal(dv,zerosev,:L))
         end
 
         @testset "iszero and isone" begin
