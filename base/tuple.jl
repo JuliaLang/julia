@@ -33,6 +33,7 @@ getindex(t::Tuple, c::Colon) = t
     setindex(c::Tuple, v, i::Integer)
 
 Creates a new tuple similar to `x` with the value at index `i` set to `v`.
+An out-of-bound `i` makes it a no-op. 
 
 # Examples
 ```jldoctest
