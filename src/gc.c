@@ -1339,7 +1339,8 @@ static void sweep_pool_pagetable(jl_taggedvalue_t ***pfl, int sweep_full) JL_NOT
 {
     if (REGION2_PG_COUNT == 1) { // compile-time optimization
         pagetable1_t *pagetable1 = memory_map.meta1[0];
-        sweep_pool_pagetable1(pfl, pagetable1, sweep_full);
+        if (pagetable1)
+            sweep_pool_pagetable1(pfl, pagetable1, sweep_full);
         return;
     }
     unsigned ub = 0;
