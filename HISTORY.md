@@ -80,6 +80,12 @@ Standard library changes
 * Sparse vector outer products are more performant and maintain sparsity in products of the
   form `kron(u, v')`, `u * v'`, and `u .* v'` where `u` and `v` are sparse vectors or column
   views ([#24980]).
+* The `sprand` function is now 2 to 5 times faster ([#30494]). As a consequence of this change, the random stream of matrices produced with `sprand` and `sprandn` has changed.
+
+#### Sockets
+
+* `getipaddrs` returns IP addresses in the order provided by libuv ([#32260]).
+* `getipaddr` prefers to return the first `IPv4` interface address provided by libuv ([#32260]).
 
 #### Dates
 * Fixed `repr` such that it displays `DateTime` as it would be entered in Julia ([#30200]).
@@ -115,6 +121,7 @@ External dependencies
 [#30323]: https://github.com/JuliaLang/julia/issues/30323
 [#30372]: https://github.com/JuliaLang/julia/issues/30372
 [#30382]: https://github.com/JuliaLang/julia/issues/30382
+[#30494]: https://github.com/JuliaLang/julia/issues/30494
 [#30577]: https://github.com/JuliaLang/julia/issues/30577
 [#30583]: https://github.com/JuliaLang/julia/issues/30583
 [#30584]: https://github.com/JuliaLang/julia/issues/30584
@@ -140,6 +147,7 @@ External dependencies
 [#31532]: https://github.com/JuliaLang/julia/issues/31532
 [#31561]: https://github.com/JuliaLang/julia/issues/31561
 [#31604]: https://github.com/JuliaLang/julia/issues/31604
+[#32260]: https://github.com/JuliaLang/julia/issues/32260
 
 Julia v1.1 Release Notes
 ========================
