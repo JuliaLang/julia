@@ -712,6 +712,33 @@ function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
     Core._apply_latest(inner)
 end
 
+"""
+   invokefrozen(f, rt, args...; kwargs...)
+
+Calls `f(args...;kwargs...)` but allows the method of `f` at its current age to
+be directly executed without a world-age error. This is useful in specialized
+circumstances, such as code generation, where post-265 automatic function
+updating behavior may be non-sensical and impede usage. This has a very
+small overhead compared to calling `f` directly, and is much faster than
+`invokelatest`.
+"""
+@inline function invokefrozen(f, rt, args...; kwargs...)
+    if isempty(kwargs)
+        return _invokefrozen(f, rt, args)
+    end
+    # We use a closure (`inner`) to handle kwargs.
+    inner() = f(rt, args...; kwargs...)
+    _invokefrozen(inner)
+end
+
+@inline @generated function _invokefrozen(f, ::Type{rt}, args...) where rt
+  tupargs = Expr(:tuple,(a==Nothing ? Int : a for a in args)...)
+  quote
+    _f = $(Expr(:cfunction, Base.CFunction, :f, rt, :((Core.svec)($((a==Nothing ? Int : a for a in args)...))), :(:ccall)))
+    return ccall(_f.ptr,rt,$tupargs,$((:(getindex(args,$i) === nothing ? 0 : getindex(args,$i)) for i in 1:length(args))...))
+  end
+end
+
 # TODO: possibly make this an intrinsic
 inferencebarrier(@nospecialize(x)) = Ref{Any}(x)[]
 
