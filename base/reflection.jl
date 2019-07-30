@@ -1242,20 +1242,55 @@ function hasmethod(@nospecialize(f), @nospecialize(t); world=typemax(UInt))
     hasmethod(f, to_tuple_type(t); world=world)
 end
 
-@generated function hasmethod(@nospecialize(f), @nospecialize(t::Type{<:Tuple}); world=typemax(UInt))
-    fi = fi.instance  #TODO: make this work with constructors and functors.
-    typ = signature_type(fi, t)
-    method_exists_already = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), typ, world) !== nothing
-    method_exists_already && return true  # We are done, it exists, no need to recompile ever
-    # except if it is deleted. TODO: deal with Base.delete_method
-    
-    ci = CodeInfo(...[:(return false)]...)  #TODO write this, should be trivial enough
-    ci.edges == nothing && (ci.edges = [])
-    mt = f.name.mt
-    push!(ci.edges, mt)
-    push!(ci.edges, typ)
-    return ci
+# This is just declaring a simplified version of `@generated` earlier in bootstrappping
+# to be used by hasmethod. TODO: Replace this with just using @eval ?
+macro _early_generated(headsig, body)
+    return Expr(:escape,
+                Expr(:function, headsig,
+                     Expr(:block,
+                          Expr(:if, Expr(:generated),
+                               body,
+                               Expr(:block,
+                                    Expr(:meta, :generated_only),
+                                    Expr(:return, nothing))))))
 end
+
+# This is an earlier definition of `copy(::CodeInfo)` to use in hasmethod
+# TODO remove this
+# create copies of the CodeInfo definition, and any mutable fields
+function _early_copy(c::CodeInfo)
+    cnew = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), c)
+    cnew.code = copy_exprargs(cnew.code)
+    cnew.slotnames = copy(cnew.slotnames)
+    cnew.slotflags = copy(cnew.slotflags)
+    cnew.codelocs  = copy(cnew.codelocs)
+    cnew.linetable = copy(cnew.linetable)
+    cnew.ssaflags = copy(cnew.ssaflags)
+    ssavaluetypes = cnew.ssavaluetypes
+    ssavaluetypes isa Vector{Any} && (cnew.ssavaluetypes = copy(ssavaluetypes))
+    return cnew
+end
+
+# This is used to create the CodeInfo returned by hasmethod in the case of false.
+_hasmethod_false(@nospecialize(f), @nospecialize(t); world=typemax(UInt)) = false
+
+@_early_generated(
+    hasmethod(@nospecialize(f), @nospecialize(t::Type{<:Tuple}); world=typemax(UInt)),
+    begin
+        fi = fi.instance  #TODO: make this work with constructors and functors.
+        typ = signature_type(fi, t)
+        method_exists_already = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), typ, world) !== nothing
+        method_exists_already && return true  # We are done, it exists, no need to recompile ever
+        # except if it is deleted. TODO: deal with Base.delete_method
+
+        ci = _early_copy(uncompressed_ast(typeof(_hasmethod_false).name.mt.defs.func))
+
+        # Now we add the edges so if a method is defined this recompiles
+        mt = f.name.mt
+        ci.edges = [mt, typ]
+        return ci
+    end
+)
 
 function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Symbol}}; world=typemax(UInt))
     # TODO: this appears to be doing the wrong queries
