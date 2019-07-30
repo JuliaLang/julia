@@ -1239,9 +1239,22 @@ true
 ```
 """
 function hasmethod(@nospecialize(f), @nospecialize(t); world=typemax(UInt))
-    t = to_tuple_type(t)
-    t = signature_type(f, t)
-    return ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), t, world) !== nothing
+    hasmethod(f, to_tuple_type(t); world=world)
+end
+
+@generated function hasmethod(@nospecialize(f), @nospecialize(t::Type{<:Tuple}); world=typemax(UInt))
+    fi = fi.instance  #TODO: make this work with constructors and functors.
+    typ = signature_type(fi, t)
+    method_exists_already = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), typ, world) !== nothing
+    method_exists_already && return true  # We are done, it exists, no need to recompile ever
+    # except if it is deleted. TODO: deal with Base.delete_method
+    
+    ci = CodeInfo(...[:(return false)]...)  #TODO write this, should be trivial enough
+    ci.edges == nothing && (ci.edges = [])
+    mt = f.name.mt
+    push!(ci.edges, mt)
+    push!(ci.edges, typ)
+    return ci
 end
 
 function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Symbol}}; world=typemax(UInt))
