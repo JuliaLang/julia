@@ -647,6 +647,29 @@ function *(A::SymTridiagonal, B::Diagonal)
     A_mul_B_td!(Tridiagonal(zeros(TS, size(A, 1)-1), zeros(TS, size(A, 1)), zeros(TS, size(A, 1)-1)), A, B)
 end
 
+function dot(x::AbstractVector, B::Bidiagonal, y::AbstractVector)
+    nx, ny = length(x), length(y)
+    (nx == size(B, 1) == ny) || throw(DimensionMismatch())
+    if iszero(nx)
+        return dot(zero(eltype(x)), zero(eltype(B)), zero(eltype(y)))
+    end
+    if A.uplo == 'U'
+        r = adjoint(x[1]) * B.dv[1] * y[1]
+        @inbounds for j in 2:m-1
+            r += (adjoint(x[j-1])*B.ev[j] + adjoint(x[j])*B.dv[j]) * y[j]
+        end
+        r += (adjoint(x[nx-1]) * B.ev[nx-1] + adjoint(x[nx]) * B.dv[nx]) * y[nx]
+        return r
+    else # A.uplo = 'L'
+        r = (adjoint(x[1]) * B.dv[1] + adjoint(x[2]) * B.ev[1]) * y[1]
+        @inbounds for j in 2:m-1
+            r += (adjoint(x[j])*B.dv[j] + adjoint(x[j+1])*B.ev[j]) * y[j]
+        end
+        r += adjoint(x[nx]) * A.d[nx] * y[nx]
+        return r
+    end
+end
+
 #Linear solvers
 ldiv!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A, b)
 ldiv!(A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(copy(A), b)

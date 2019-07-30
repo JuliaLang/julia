@@ -321,6 +321,44 @@ function dot(A::AbstractSparseMatrixCSC{T1,S1},B::AbstractSparseMatrixCSC{T2,S2}
     return r
 end
 
+function dot(x::AbstractVector, A::SparseMatrixCSC, y::AbstractVector)
+    (length(x) == A.m && A.n == length(y)) || throw(DimensionMismatch())
+    if iszero(A.m) || iszero(A.n)
+        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    end
+    T = promote_type(eltype(x), eltype(A), eltype(y))
+    r = zero(T)
+    rvals = rowvals(A)
+    nzvals = nonzeros(A)
+    @inbounds for col in 1:A.n
+        ycol = y[col]
+        if !iszero(ycol)
+            temp = zero(T)
+            for k in nzrange(A, col)
+                temp += x[rvals[k]] * nzvals[k]
+            end
+            r += temp * ycol
+        end
+    end
+    return r
+end
+function dot(x::SparseVector, A::SparseMatrixCSC, y::SparseVector)
+    x.n == A.m && A.n == y.n || throw(DimensionMismatch())
+    if iszero(A.m) || iszero(A.n)
+        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    end
+    r = zero(promote_type(eltype(x), eltype(A), eltype(y)))
+    for (yi, yv) in zip(y.nzind, y.nzval)
+        A_ptr_lo = A.colptr[yi]
+        A_ptr_hi = A.colptr[yi+1] - 1
+        if A_ptr_lo <= A_ptr_hi
+            r += _spdot(dot, 1, length(x.nzind), x.nzind, x.nzval,
+                                            A_ptr_lo, A_ptr_hi, A.rowval, A.nzval) * yv
+        end
+    end
+    r
+end
+
 ## triangular sparse handling
 
 possible_adjoint(adj::Bool, a::Real ) = a

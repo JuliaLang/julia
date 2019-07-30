@@ -874,6 +874,57 @@ function dot(x::AbstractArray, y::AbstractArray)
     s
 end
 
+"""
+    dot(x, A, y)
+
+Compute the generalized dot product `x' * A * y` between two vectors `x` and `y`.
+For complex vectors, the first vector is conjugated.
+"""
+dot(x::Number, A::Number, y::Number) = conj(x) * A * y
+
+function dot(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
+    m, n = size(A)
+    (length(x) == m && n == length(y)) || throw(DimensionMismatch())
+    if iszero(m) || iszero(n)
+        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    end
+
+    if m == n
+        if istril(A)
+            if istriu(A)
+                return dot(x, Diagonal(A), y)
+            elseif isbanded(A, -1, 0)
+                return dot(x, Bidiagonal(A, 'L'), y)
+            else
+                return dot(x, LowerTriangular(A), y)
+            end
+        end
+        if istriu(A)
+            if isbanded(A, 0, 1)
+                return dot(x, Bidiagonal(A, 'U'), y)
+            else
+                return dot(x, UpperTriangular(A), y)
+            end
+        end
+        if isbanded(A, -1, 1)
+            return dot(x, Tridiagonal(A), y)
+        end
+    end
+
+    T = typeof(dot(first(x), first(A), first(y)))
+    s = zero(T)
+    @inbounds for j in 1:n
+        yj = y[j]
+        if !iszero(yj)
+            temp = zero(T)
+            @simd for i in 1:m
+                temp += adjoint(x[i]) * A[i,j]
+            end
+            s += temp * yj
+        end
+    end
+    return s
+end
 
 ###########################################################################################
 

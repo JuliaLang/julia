@@ -545,6 +545,86 @@ end
 rmul!(A::Union{UpperTriangular,LowerTriangular}, c::Number) = mul!(A, A, c)
 lmul!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = mul!(A, c, A)
 
+function dot(x::AbstractVector, A::UpperTriangular, y::AbstractVector)
+    m = size(A, 1)
+    (length(x) == m == length(y)) || throw(DimensionMismatch())
+    if iszero(m)
+        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    end
+    T = typeof(dot(first(x), first(A), first(y)))
+    r = zero(T)
+    @inbounds for j in 1:m
+        yj = y[j]
+        if !iszero(yj)
+            temp = zero(T)
+            @simd for i in 1:j
+                temp += adjoint(x[i]) * A[i,j]
+            end
+            r += temp * yj
+        end
+    end
+    return r
+end
+function dot(x::AbstractVector, A::UnitUpperTriangular, y::AbstractVector)
+    m = size(A, 1)
+    (length(x) == m == length(y)) || throw(DimensionMismatch())
+    if iszero(m)
+        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    end
+    T = typeof(dot(first(x), first(A), first(y)))
+    r = zero(T)
+    @inbounds for j in 1:m
+        yj = y[j]
+        if !iszero(yj)
+            temp = zero(T)
+            @simd for i in 1:j-1
+                temp += adjoint(x[i]) * A[i,j]
+            end
+            temp += A[j,j]
+            r += temp * yj
+        end
+    end
+    return r
+end
+function dot(x::AbstractVector, A::LowerTriangular, y::AbstractVector)
+    m = size(A, 1)
+    (length(x) == m == length(y)) || throw(DimensionMismatch())
+    if iszero(m)
+        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    end
+    T = typeof(dot(first(x), first(A), first(y)))
+    r = zero(T)
+    @inbounds for j in 1:n
+        yj = y[j]
+        if !iszero(yj)
+            temp = zero(T)
+            @simd for i in j:m
+                temp += adjoint(x[i]) * A[i,j]
+            end
+            r += temp * yj
+        end
+    end
+    return r
+end
+function dot(x::AbstractVector, A::UnitLowerTriangular, y::AbstractVector)
+    m = size(A, 1)
+    (length(x) == m == length(y)) || throw(DimensionMismatch())
+
+    T = typeof(dot(first(x), first(A), first(y)))
+    r = zero(T)
+    @inbounds for j in 1:n
+        yj = y[j]
+        if !iszero(yj)
+            temp = convert(T, A[j,j])
+            @simd for i in j+1:m
+                temp += adjoint(x[i]) * A[i,j]
+            end
+            r += temp * yj
+        end
+    end
+    return r
+end
+
 fillstored!(A::LowerTriangular, x)     = (fillband!(A.data, x, 1-size(A,1), 0); A)
 fillstored!(A::UnitLowerTriangular, x) = (fillband!(A.data, x, 1-size(A,1), -1); A)
 fillstored!(A::UpperTriangular, x)     = (fillband!(A.data, x, 0, size(A,2)-1); A)

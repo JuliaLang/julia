@@ -3,6 +3,7 @@
 # matmul.jl: Everything to do with dense matrix multiplication
 
 matprod(x, y) = x*y + x*y
+gendot(x, A, y) = adjoint(x)*A*y + adjoint(x)*A*y
 
 # dot products
 
@@ -39,6 +40,8 @@ function *(transx::Transpose{<:Any,<:StridedVector{T}}, y::StridedVector{T}) whe
     x = transx.parent
     return BLAS.dotu(x, y)
 end
+
+(*)(x::Adjoint{<:Any,<:AbstractVector}, A::AbstractMatrix, y::AbstractVector) = dot(parent(x), A, y)
 
 # Matrix-vector multiplication
 function (*)(A::StridedMatrix{T}, x::StridedVector{S}) where {T<:BlasFloat,S<:Real}
