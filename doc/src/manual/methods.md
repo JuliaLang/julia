@@ -537,7 +537,7 @@ eltype(::Type{<:AbstractArray{T}}) where {T} = T
 ```
 using so-called triangular dispatch.  Note that if `T` is a `UnionAll`
 type, as e.g. `eltype(Array{T} where T <: Integer)`, then `Any` is
-returned (as does the the version of `eltype` in `Base`).
+returned (as does the version of `eltype` in `Base`).
 
 Another way, which used to be the only correct way before the advent of
 triangular dispatch in Julia v0.6, is:
