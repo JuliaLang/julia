@@ -28,7 +28,20 @@ getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex
 getindex(t::Tuple, c::Colon) = t
 
 # returns new tuple; N.B.: becomes no-op if i is out-of-bounds
+
+"""
+    setindex(c::Tuple, v, i::Integer)
+
+Creates a new tuple similar to `x` with the value at index `i` set to `v`.
+
+# Examples
+```jldoctest
+julia> Base.setindex((1, 2, 6), 2, 3) == (1, 2, 2)
+true
+```
+"""
 setindex(x::Tuple, v, i::Integer) = (@_inline_meta; _setindex(v, i, x...))
+
 function _setindex(v, i::Integer, first, tail...)
     @_inline_meta
     return (ifelse(i == 1, v, first), _setindex(v, i - 1, tail...)...)
