@@ -26,8 +26,8 @@ endif
 # Julia.app is versioned independently of Julia because it's not Julia itself.
 #
 ifeq ($(JULIA_APP_SHORT_VERSION_STRING),)
-$(error JULIA_APP_SHORT_VERSION_STRING not defined)
-#https://developer.apple.com/documentation/bundleresources/information_property_list/cfbundleshortversionstring
+$(warning JULIA_APP_SHORT_VERSION_STRING not defined)
+# https://developer.apple.com/documentation/bundleresources/information_property_list/cfbundleshortversionstring
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html#//apple_ref/doc/uid/20001431-111349
 endif
 
