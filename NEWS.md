@@ -67,17 +67,11 @@ Standard library changes
   must be compatible with `m`, `n`, and `eltype(colptr)`.
 * `sparse(I, J, V, m, n)` verifies lengths of `I`, `J`, `V` are equal and compatible with
   `eltype(I)` and `m`, `n`.
-* The `sprand` function is now 2 to 5 times faster ([#30494]). As a consequence of this change, the random stream of matrices produced with `sprand` and `sprandn` has changed.
 
 #### Dates
 
 * `DateTime` and `Time` formatting/parsing now supports 12-hour clocks with AM/PM via `I` and `p` codes, similar to `strftime` ([#32308]).
 * Fixed `repr` such that it displays `Time` as it would be entered in Julia ([#32103]).
-
-#### Sockets
-
-* `getipaddrs` returns IP addresses in the order provided by libuv ([#32260]).
-* `getipaddr` prefers to return the first `IPv4` interface address provided by libuv ([#32260]).
 
 #### Statistics
 
@@ -126,7 +120,6 @@ Tooling Improvements
 [#32122]: https://github.com/JuliaLang/julia/issues/32122
 [#32133]: https://github.com/JuliaLang/julia/issues/32133
 [#32174]: https://github.com/JuliaLang/julia/issues/32174
-[#32260]: https://github.com/JuliaLang/julia/issues/32260
 [#32300]: https://github.com/JuliaLang/julia/issues/32300
 [#32308]: https://github.com/JuliaLang/julia/issues/32308
 [#32309]: https://github.com/JuliaLang/julia/issues/32309
