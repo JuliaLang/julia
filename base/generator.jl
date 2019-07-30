@@ -73,17 +73,19 @@ Given the type of an iterator, return one of the following values:
    for the iterator.
 * `IsInfinite()` if the iterator yields values forever.
 
-The default value (for iterators that do not define this function) is `HasLength()`.
+The default value (for iterator types that do not define this function) is `HasLength()`.
 This means that most iterators are assumed to implement [`length`](@ref).
+An example of changing this default:
+```Base.IteratorSize(::Type{MyIteratorType}) = SizeUnknown()```
 
 This trait is generally used to select between algorithms that pre-allocate space for their
 result, and algorithms that resize their result incrementally.
 
 ```jldoctest
-julia> Base.IteratorSize(1:5)
+julia> Base.IteratorSize(typeof(1:5))
 Base.HasShape{1}()
 
-julia> Base.IteratorSize((2,3))
+julia> Base.IteratorSize(typeof((2,3)))
 Base.HasLength()
 ```
 """

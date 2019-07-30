@@ -113,10 +113,10 @@ types.
 
 # Examples
 ```jldoctest
-julia> eltype(fill(1f0, (2,2)))
+julia> eltype(typeof(fill(1f0, (2,2))))
 Float32
 
-julia> eltype(fill(0x1, (2,2)))
+julia> eltype(typeof(fill(0x1, (2,2))))
 UInt8
 ```
 """
