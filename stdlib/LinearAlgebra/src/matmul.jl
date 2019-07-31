@@ -3,7 +3,6 @@
 # matmul.jl: Everything to do with dense matrix multiplication
 
 matprod(x, y) = x*y + x*y
-gendot(x, A, y) = adjoint(x)*A*y + adjoint(x)*A*y
 
 # dot products
 

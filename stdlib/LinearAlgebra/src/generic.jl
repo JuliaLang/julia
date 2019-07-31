@@ -883,19 +883,15 @@ For complex vectors, the first vector is conjugated.
 dot(x::Number, A::Number, y::Number) = conj(x) * A * y
 
 function dot(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
-    m, n = size(A)
-    (length(x) == m && n == length(y)) || throw(DimensionMismatch())
-    if iszero(m) || iszero(n)
-        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
-    end
-
+    (axes(x)..., axes(y)...) == axes(A) || throw(DimensionMismatch())
     T = typeof(dot(first(x), first(A), first(y)))
+    zeroxA = zero(adjoint(first(x))*first(A))
     s = zero(T)
-    @inbounds for j in 1:n
+    @inbounds for j in eachindex(y)
         yj = y[j]
         if !iszero(yj)
-            temp = zero(T)
-            @simd for i in 1:m
+            temp = zeroxA
+            @simd for i in eachindex(x)
                 temp += adjoint(x[i]) * A[i,j]
             end
             s += temp * yj
@@ -903,50 +899,8 @@ function dot(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
     end
     return s
 end
-function dot(x::AbstractVector, adjA::Adjoint, y::AbstractVector)
-    A = adjA.parent
-    m, n = size(A)
-    (length(x) == n && m == length(y)) || throw(DimensionMismatch())
-    if iszero(m) || iszero(n)
-        return dot(zero(eltype(y)), zero(eltype(A)), zero(eltype(x)))
-    end
-
-    T = typeof(dot(first(y), first(A), first(x)))
-    s = zero(T)
-    @inbounds for j in 1:n
-        xj = x[j]
-        if !iszero(xj)
-            temp = zero(T)
-            @simd for i in 1:m
-                temp += adjoint(y[i]) * A[i,j]
-            end
-            s += temp * xj
-        end
-    end
-    return adjoint(s)
-end
-function dot(x::AbstractVector, transA::Transpose, y::AbstractVector)
-    A = transA.parent
-    m, n = size(A)
-    (length(x) == n && m == length(y)) || throw(DimensionMismatch())
-    if iszero(m) || iszero(n)
-        return dot(zero(eltype(y)), zero(eltype(A)), zero(eltype(x)))
-    end
-
-    T = typeof(dot(first(y), first(A), first(x)))
-    s = zero(T)
-    @inbounds for j in 1:n
-        xj = x[j]
-        if !iszero(xj)
-            temp = zero(T)
-            @simd for i in 1:m
-                temp += transpose(y[i]) * A[i,j]
-            end
-            s += temp * conj(xj)
-        end
-    end
-    return s
-end
+dot(x::AbstractVector, adjA::Adjoint, y::AbstractVector) = adjoint(dot(y, adjA.parent, x))
+dot(x::AbstractVector, transA::Transpose{<:Real}, y::AbstractVector) = adjoint(dot(y, transA.parent, x))
 
 ###########################################################################################
 
