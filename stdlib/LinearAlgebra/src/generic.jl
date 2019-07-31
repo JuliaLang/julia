@@ -889,28 +889,6 @@ function dot(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
         return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
     end
 
-    if m == n
-        if istril(A)
-            if istriu(A)
-                return dot(x, Diagonal(A), y)
-            elseif isbanded(A, -1, 0)
-                return dot(x, Bidiagonal(A, 'L'), y)
-            else
-                return dot(x, LowerTriangular(A), y)
-            end
-        end
-        if istriu(A)
-            if isbanded(A, 0, 1)
-                return dot(x, Bidiagonal(A, 'U'), y)
-            else
-                return dot(x, UpperTriangular(A), y)
-            end
-        end
-        if isbanded(A, -1, 1)
-            return dot(x, Tridiagonal(A), y)
-        end
-    end
-
     T = typeof(dot(first(x), first(A), first(y)))
     s = zero(T)
     @inbounds for j in 1:n
@@ -921,6 +899,50 @@ function dot(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
                 temp += adjoint(x[i]) * A[i,j]
             end
             s += temp * yj
+        end
+    end
+    return s
+end
+function dot(x::AbstractVector, adjA::Adjoint, y::AbstractVector)
+    A = adjA.parent
+    m, n = size(A)
+    (length(x) == n && m == length(y)) || throw(DimensionMismatch())
+    if iszero(m) || iszero(n)
+        return dot(zero(eltype(y)), zero(eltype(A)), zero(eltype(x)))
+    end
+
+    T = typeof(dot(first(y), first(A), first(x)))
+    s = zero(T)
+    @inbounds for j in 1:n
+        xj = x[j]
+        if !iszero(xj)
+            temp = zero(T)
+            @simd for i in 1:m
+                temp += adjoint(y[i]) * A[i,j]
+            end
+            s += temp * xj
+        end
+    end
+    return adjoint(s)
+end
+function dot(x::AbstractVector, transA::Transpose, y::AbstractVector)
+    A = transA.parent
+    m, n = size(A)
+    (length(x) == n && m == length(y)) || throw(DimensionMismatch())
+    if iszero(m) || iszero(n)
+        return dot(zero(eltype(y)), zero(eltype(A)), zero(eltype(x)))
+    end
+
+    T = typeof(dot(first(y), first(A), first(x)))
+    s = zero(T)
+    @inbounds for j in 1:n
+        xj = x[j]
+        if !iszero(xj)
+            temp = zero(T)
+            @simd for i in 1:m
+                temp += transpose(y[i]) * A[i,j]
+            end
+            s += temp * conj(xj)
         end
     end
     return s
