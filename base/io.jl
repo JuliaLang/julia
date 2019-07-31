@@ -1033,3 +1033,30 @@ function countlines(io::IO; eol::AbstractChar='\n')
 end
 
 countlines(f::AbstractString; eol::AbstractChar = '\n') = open(io->countlines(io, eol = eol), f)::Int
+
+"""
+   displaysize([io::IO]) -> (lines, columns)
+
+Return the nominal size of the screen that may be used for rendering output to
+this `IO` object.
+If no input is provided, the environment variables `LINES` and `COLUMNS` are read.
+If those are not set, a default size of `(24, 80)` is returned.
+
+# Examples
+```jldoctest
+julia> withenv("LINES" => 30, "COLUMNS" => 100) do
+           displaysize()
+       end
+(30, 100)
+```
+
+To get your TTY size,
+
+```julia
+julia> displaysize(stdout)
+(34, 147)
+```
+"""
+displaysize(io::IO) = displaysize()
+displaysize() = (parse(Int, get(ENV, "LINES",   "24")),
+                 parse(Int, get(ENV, "COLUMNS", "80")))::Tuple{Int, Int}
