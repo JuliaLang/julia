@@ -234,10 +234,11 @@ function unwrap_unionall(@nospecialize(a))
 end
 
 function rewrap_unionall(@nospecialize(t), @nospecialize(u))
-    if !isa(u, UnionAll)
+    if isa(u, UnionAll)
+        return UnionAll(u.var, rewrap_unionall(t, u.body))
+    else
         return t
     end
-    return UnionAll(u.var, rewrap_unionall(t, u.body))
 end
 
 # replace TypeVars in all enclosing UnionAlls with fresh TypeVars

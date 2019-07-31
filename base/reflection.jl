@@ -1255,37 +1255,26 @@ macro _early_generated(headsig, body)
                                     Expr(:return, nothing))))))
 end
 
-# This is an earlier definition of `copy(::CodeInfo)` to use in hasmethod
-# TODO remove this
-# create copies of the CodeInfo definition, and any mutable fields
-function _early_copy(c::CodeInfo)
-    cnew = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), c)
-    cnew.code = copy_exprargs(cnew.code)
-    cnew.slotnames = copy(cnew.slotnames)
-    cnew.slotflags = copy(cnew.slotflags)
-    cnew.codelocs  = copy(cnew.codelocs)
-    cnew.linetable = copy(cnew.linetable)
-    cnew.ssaflags = copy(cnew.ssaflags)
-    ssavaluetypes = cnew.ssavaluetypes
-    ssavaluetypes isa Vector{Any} && (cnew.ssavaluetypes = copy(ssavaluetypes))
-    return cnew
-end
-
 # This is used to create the CodeInfo returned by hasmethod in the case of false.
-_hasmethod_false(@nospecialize(f), @nospecialize(t); world=typemax(UInt)) = false
+_hasmethod_false(@nospecialize(f), @nospecialize(t), @nospecialize(w)) = false
 
 @_early_generated(
-    static_hasmethod(@nospecialize(f), @nospecialize(t::Type{<:Tuple}); world=typemax(UInt)),
+    static_hasmethod(
+        @nospecialize(f),
+        @nospecialize(t::Type{T}),
+        @nospecialize(world::Val{W})
+    ) where {T<:Tuple, W},
     begin
         fi = f.instance  #TODO: make this work with constructors and functors.
-        typ = signature_type(fi, t)
-        method_doesnot_exist = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), typ, world) === nothing
+        typ = signature_type(fi, T)
+        method_doesnot_exist = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), typ, W) === nothing
         if method_doesnot_exist
-            ci = _early_copy(uncompressed_ast(typeof(_hasmethod_false).name.mt.defs.func))
+            ci_orig = uncompressed_ast(typeof(_hasmethod_false).name.mt.defs.func)
+            ci = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), ci_orig)
 
             # Now we add the edges so if a method is defined this recompiles
             mt = f.name.mt
-            ci.edges = [mt, typ]
+            ci.edges = Core.Compiler.vect(mt, typ)
             return ci
         else
             return true  # We are done, it exists, no need to recompile ever
@@ -1293,6 +1282,10 @@ _hasmethod_false(@nospecialize(f), @nospecialize(t); world=typemax(UInt)) = fals
         end
     end
 )
+
+function static_hasmethod(@nospecialize(f), @nospecialize(t); world=typemax(UInt))
+    return static_hasmethod(f, t, Val{world}())
+end
 
 # TODO: delete this and rename static_hasmethod above
 function hasmethod(@nospecialize(f), @nospecialize(t); world=typemax(UInt))
