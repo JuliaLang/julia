@@ -442,7 +442,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         jl_static_show(JL_STDERR, (jl_value_t*)ttdt);
         jl_printf(JL_STDERR, "\n");
         ssize_t numargs = jl_svec_len(ttdt->parameters);  // TODO: is there a better way to get the length of a Tuple?
-        jl_value_t* weird_types_tuple = jl_tupletype_fill(numargs, (jl_value_t*)jl_type_type);
+        jl_value_t* weird_types_tuple = jl_tupletype_fill(numargs, (jl_value_t*)jl_any_type);
         jl_printf(JL_STDERR, "\nWeird Tuple types: ");
         jl_static_show(JL_STDERR, (jl_value_t*)weird_types_tuple);
         jl_printf(JL_STDERR, "\n");
