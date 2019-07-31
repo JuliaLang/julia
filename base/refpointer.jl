@@ -21,7 +21,7 @@ a `ccall` Ref argument.
 
 # Use in broadcasting
 
-Broadcasting with `Ref(x)` treats `x` as a scalar (except when it is a `Ptr`):
+Broadcasting with `Ref(x)` treats `x` as a scalar:
 ```jldoctest
 julia> isa.(Ref([1,2,3]), [Array, Dict, Int])
 3-element BitArray{1}:
