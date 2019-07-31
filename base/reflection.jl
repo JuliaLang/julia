@@ -1275,22 +1275,31 @@ end
 _hasmethod_false(@nospecialize(f), @nospecialize(t); world=typemax(UInt)) = false
 
 @_early_generated(
-    hasmethod(@nospecialize(f), @nospecialize(t::Type{<:Tuple}); world=typemax(UInt)),
+    static_hasmethod(@nospecialize(f), @nospecialize(t::Type{<:Tuple}); world=typemax(UInt)),
     begin
-        fi = fi.instance  #TODO: make this work with constructors and functors.
+        fi = f.instance  #TODO: make this work with constructors and functors.
         typ = signature_type(fi, t)
-        method_exists_already = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), typ, world) !== nothing
-        method_exists_already && return true  # We are done, it exists, no need to recompile ever
-        # except if it is deleted. TODO: deal with Base.delete_method
+        method_doesnot_exist = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), typ, world) === nothing
+        if method_doesnot_exist
+            ci = _early_copy(uncompressed_ast(typeof(_hasmethod_false).name.mt.defs.func))
 
-        ci = _early_copy(uncompressed_ast(typeof(_hasmethod_false).name.mt.defs.func))
-
-        # Now we add the edges so if a method is defined this recompiles
-        mt = f.name.mt
-        ci.edges = [mt, typ]
-        return ci
+            # Now we add the edges so if a method is defined this recompiles
+            mt = f.name.mt
+            ci.edges = [mt, typ]
+            return ci
+        else
+            return true  # We are done, it exists, no need to recompile ever
+            # except if it is deleted. TODO: deal with Base.delete_method
+        end
     end
 )
+
+# TODO: delete this and rename static_hasmethod above
+function hasmethod(@nospecialize(f), @nospecialize(t); world=typemax(UInt))
+    t = to_tuple_type(t)
+    t = signature_type(f, t)
+    return ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), t, world) !== nothing
+end
 
 function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Symbol}}; world=typemax(UInt))
     # TODO: this appears to be doing the wrong queries
