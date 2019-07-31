@@ -424,13 +424,36 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         jl_value_t* gen_func = jl_get_field(generator, "gen");
         //jl_static_show(JL_STDERR, (jl_value_t*)gen_func);
 
-        // Get jl_method_t for generator
-        jl_value_t *types = NULL;
-        JL_GC_PUSH1(&types);
-        types = jl_argtype_with_function(gen_func, tt);
-        //jl_static_show(JL_STDERR, (jl_value_t*)types);
+        //// Main user-named staged function
+        //jl_value_t* staged_function = def->sig;
+        //jl_printf(JL_STDERR, "\nstaged_function: ");
+        //jl_static_show(JL_STDERR, (jl_value_t*)staged_function);
+        //jl_printf(JL_STDERR, "\n");
+
+        // Get jl_method_t for generator body
+        // The generator body takes two arguments: (typeof(func), T)
+        // So types should be e.g.: Tuple{getfield(Main, Symbol("##s4#3")), typeof(Main.foo), Float64}
+
+        // BUT --- THIS IS THE WEIRD PART:
+        // Apparently the backedge needs to be from `##s4#3(typeof(func), Type)` instead of
+        // the actual types of the aruments! Who knows why!! Weirdness.
+        // Manually construct that weird signature, here:
+        jl_printf(JL_STDERR, "\nttdt: ");
+        jl_static_show(JL_STDERR, (jl_value_t*)ttdt);
+        jl_printf(JL_STDERR, "\n");
+        ssize_t numargs = jl_svec_len(ttdt->parameters);  // TODO: is there a better way to get the length of a Tuple?
+        jl_value_t* weird_types_tuple = jl_tupletype_fill(numargs, (jl_value_t*)jl_type_type);
+        jl_printf(JL_STDERR, "\nWeird Tuple types: ");
+        jl_static_show(JL_STDERR, (jl_value_t*)weird_types_tuple);
+        jl_printf(JL_STDERR, "\n");
+        // One would expect to be able to just use `tt` here, but we have to use the weird
+        // thing instead.
+        //jl_value_t* types = jl_argtype_with_function(gen_func, tt);
+        jl_value_t* types = jl_argtype_with_function(gen_func, weird_types_tuple);
+        jl_static_show(JL_STDERR, (jl_value_t*)types);
 
         jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_gf_invoke_lookup(types, -1);
+        JL_GC_POP();
 
         //jl_static_show(JL_STDERR, (jl_value_t*)entry);
         //if ((jl_value_t*)entry == jl_nothing) {
@@ -440,11 +463,10 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 
         // now we have found the matching definition.
         // next look for or create a specialization of this definition.
-        JL_GC_POP();
         jl_method_t *method = entry->func.method;
-        //jl_static_show(JL_STDERR, (jl_value_t*)method);
+        jl_static_show(JL_STDERR, (jl_value_t*)method);
 
-        jl_method_instance_t *edge = jl_specializations_get_linfo(method, tt, linfo->sparam_vals);
+        jl_method_instance_t *edge = jl_specializations_get_linfo(method, types, linfo->sparam_vals);
         //jl_printf(JL_STDERR, "\nNATHAN: edge: %p\n", edge);
         //jl_static_show(JL_STDERR, (jl_value_t*)edge);
 
