@@ -1238,9 +1238,7 @@ julia> hasmethod(g, Tuple{}, (:a, :b, :c, :d))  # g accepts arbitrary kwargs
 true
 ```
 """
-function hasmethod(@nospecialize(f), @nospecialize(t); world=typemax(UInt))
-    hasmethod(f, to_tuple_type(t); world=world)
-end
+function hasmethod end
 
 # This is just declaring a simplified version of `@generated` earlier in bootstrappping
 # to be used by hasmethod. TODO: Replace this with just using @eval ?
