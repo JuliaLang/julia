@@ -23,10 +23,11 @@ a `ccall` Ref argument.
 
 Broadcasting with `Ref(x)` treats `x` as a scalar (except when it is a `Ptr`):
 ```jldoctest
-julia> round.(Ref(Int), [1.2, 3.7])
-2-element Array{Int64,1}:
+julia> isa.(Ref([1,2,3]), [Array, Dict, Int])
+3-element BitArray{1}:
  1
- 4
+ 0
+ 0
 ```
 """
 Ref
