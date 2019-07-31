@@ -991,6 +991,11 @@ void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
 
 int isabspath(const char *in);
 
+JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT, size_t world);
+JL_CALLABLE(jl_f__apply_pure);
+JL_CALLABLE(jl_f__apply_latest);
+
+
 extern jl_sym_t *call_sym;    extern jl_sym_t *invoke_sym;
 extern jl_sym_t *empty_sym;   extern jl_sym_t *top_sym;
 extern jl_sym_t *module_sym;  extern jl_sym_t *slot_sym;

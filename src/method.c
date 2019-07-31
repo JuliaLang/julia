@@ -420,6 +420,37 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
             jl_resolve_globals_in_ir(stmts, def->module, linfo->sparam_vals, 1);
         }
 
+        // Get generator function body
+        jl_value_t* gen_func = jl_get_field(generator, "gen");
+        //jl_static_show(JL_STDERR, (jl_value_t*)gen_func);
+
+        // Get jl_method_t for generator
+        jl_value_t *types = NULL;
+        JL_GC_PUSH1(&types);
+        types = jl_argtype_with_function(gen_func, tt);
+        //jl_static_show(JL_STDERR, (jl_value_t*)types);
+
+        jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_gf_invoke_lookup(types, -1);
+
+        //jl_static_show(JL_STDERR, (jl_value_t*)entry);
+        //if ((jl_value_t*)entry == jl_nothing) {
+            //jl_method_error_bare(gf, types0, world);
+            //// unreachable
+        //}
+
+        // now we have found the matching definition.
+        // next look for or create a specialization of this definition.
+        JL_GC_POP();
+        jl_method_t *method = entry->func.method;
+        //jl_static_show(JL_STDERR, (jl_value_t*)method);
+
+        jl_method_instance_t *edge = jl_specializations_get_linfo(method, tt, linfo->sparam_vals);
+        //jl_printf(JL_STDERR, "\nNATHAN: edge: %p\n", edge);
+        //jl_static_show(JL_STDERR, (jl_value_t*)edge);
+
+
+        jl_method_instance_add_backedge(edge, linfo);
+
         ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
         ptls->world_age = last_age;
