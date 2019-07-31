@@ -107,10 +107,9 @@ end
 
 Evaluate `p[1] + x * (p[2] + x * (...))`, i.e. a polynomial via Horner's rule.
 Should have performance parity with the `@horner` macro when constant propagation
-and inlining apply.
-
-For very high order polynomials, or polynomials whose length is not known at compile
-time, this function will fail to inline and the performance of this function will suffer.
+and inlining apply. For very high order polynomials, or polynomials whose length
+is not known at compile-time, this function will fail to inline and the performance 
+of this function will suffer.
 """
 horner(x) = zero(x)
 horner(x, p1) = p1
