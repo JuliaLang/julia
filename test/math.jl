@@ -1002,6 +1002,14 @@ end
     end
 end
 
+import Base.Math.@horner
+import Base.Math.horner
+@testset "horner" begin
+    for x in -1.0:2.0, p1 in -3.0:3.0, p2 in -3.0:3.0, p3 in -3.0:3.0
+        @test horner(x, p1, p2, p3) == @horner(x, p1, p2, p3)
+    end
+end
+
 isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
 using .Main.Furlongs
 @test hypot(Furlong(0), Furlong(0)) == Furlong(0.0)
