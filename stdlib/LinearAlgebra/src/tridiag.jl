@@ -208,11 +208,11 @@ function dot(x::AbstractVector, S::SymTridiagonal, y::AbstractVector)
     if iszero(nx)
         return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
     end
-    r = (adjoint(x[1]) * S.dv[1] + adjoint(x[2]) * adjoint(S.ev[1])) * y[1]
+    r = (adjoint(x[1]) * S.dv[1] + adjoint(x[2]) * transpose(S.ev[1])) * y[1]
     @inbounds for j in 2:nx-1
-        r += (adjoint(x[j-1])*S.ev[j-1] + adjoint(x[j])*S.dv[j] + adjoint(x[j+1])*adjoint(S.ev[j])) * yj
+        r += (adjoint(x[j-1])*S.ev[j-1] + adjoint(x[j])*S.dv[j] + adjoint(x[j+1])*transpose(S.ev[j])) * yj
     end
-    r += (adjoint(x[nx-1]) * S.ev[nx-1] + adjoint(x[nx]) * adjoint(S.dv[nx])) * y[nx]
+    r += (adjoint(x[nx-1]) * S.ev[nx-1] + adjoint(x[nx]) * transpose(S.dv[nx])) * y[nx]
     return r
 end
 
@@ -678,7 +678,7 @@ function dot(x::AbstractVector, A::Tridiagonal, y::AbstractVector)
     if iszero(nx)
         return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
     end
-    r = (adjoint(x[1]) * A.d[1] + adjoint(x[2]) * adjoint(A.dl[1])) * y[1]
+    r = (adjoint(x[1]) * A.d[1] + adjoint(x[2]) * A.dl[1]) * y[1]
     @inbounds for j in 2:nx-1
         r += (adjoint(x[j-1])*A.du[j-1] + adjoint(x[j])*A.d[j] + adjoint(x[j+1])*A.dl[j]) * yj
     end
