@@ -13050,4 +13050,3357 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } 
 
 return NULL;
-} 
+}
+
+# define WRAP(symname) \
+else if (strcmp(target, #symname) == 0) { \
+    return (void*)&symname; \
+}
+
+extern uint32_t __gmp_version;
+extern int32_t __gmp_bits_per_limb;
+#include <stdio.h>
+
+void *get_foreigncall_fptr(const char *target, const char *libname) {
+if (0) {
+} else if (strcmp(target, "srand") == 0) {
+return (void*)&srand; } 
+else if (strcmp(target, "getenv") == 0) {
+return (void*)&getenv; } 
+else if (strcmp(target, "setenv") == 0) {
+return (void*)&setenv; } 
+else if (strcmp(target, "memcpy") == 0) {
+return (void*)&memcpy; } 
+else if (strcmp(target, "memmove") == 0) {
+return (void*)&memmove; } 
+else if (strcmp(target, "memset") == 0) {
+return (void*)&memset; } 
+else if (strcmp(target, "memcmp") == 0) {
+return (void*)&memcmp; } 
+else if (strcmp(target, "memchr") == 0) {
+return (void*)&memchr; } 
+else if (strcmp(target, "strlen") == 0) {
+return (void*)&strlen; } 
+else if (strcmp(target, "uint2str") == 0) {
+return (void*)&uint2str; } 
+else if (strcmp(target, "u8_offset") == 0) {
+return (void*)&u8_offset; } 
+else if (strcmp(target, "u8_charnum") == 0) {
+return (void*)&u8_charnum; } 
+else if (strcmp(target, "u8_strwidth") == 0) {
+return (void*)&u8_strwidth; } 
+else if (strcmp(target, "u8_isvalid") == 0) {
+return (void*)&u8_isvalid; } 
+else if (strcmp(target, "ios_read") == 0) {
+return (void*)&ios_read; } 
+else if (strcmp(target, "ios_readall") == 0) {
+return (void*)&ios_readall; } 
+else if (strcmp(target, "ios_write") == 0) {
+return (void*)&ios_write; } 
+else if (strcmp(target, "ios_seek") == 0) {
+return (void*)&ios_seek; } 
+else if (strcmp(target, "ios_seek_end") == 0) {
+return (void*)&ios_seek_end; } 
+else if (strcmp(target, "ios_skip") == 0) {
+return (void*)&ios_skip; } 
+else if (strcmp(target, "ios_pos") == 0) {
+return (void*)&ios_pos; } 
+else if (strcmp(target, "ios_trunc") == 0) {
+return (void*)&ios_trunc; } 
+else if (strcmp(target, "ios_eof") == 0) {
+return (void*)&ios_eof; } 
+else if (strcmp(target, "ios_eof_blocking") == 0) {
+return (void*)&ios_eof_blocking; } 
+else if (strcmp(target, "ios_flush") == 0) {
+return (void*)&ios_flush; } 
+else if (strcmp(target, "ios_close") == 0) {
+return (void*)&ios_close; } 
+else if (strcmp(target, "ios_isopen") == 0) {
+return (void*)&ios_isopen; } 
+else if (strcmp(target, "ios_take_buffer") == 0) {
+return (void*)&ios_take_buffer; } 
+else if (strcmp(target, "ios_setbuf") == 0) {
+return (void*)&ios_setbuf; } 
+else if (strcmp(target, "ios_bufmode") == 0) {
+return (void*)&ios_bufmode; } 
+else if (strcmp(target, "ios_get_readable") == 0) {
+return (void*)&ios_get_readable; } 
+else if (strcmp(target, "ios_get_writable") == 0) {
+return (void*)&ios_get_writable; } 
+else if (strcmp(target, "ios_set_readonly") == 0) {
+return (void*)&ios_set_readonly; } 
+else if (strcmp(target, "ios_copy") == 0) {
+return (void*)&ios_copy; } 
+else if (strcmp(target, "ios_copyall") == 0) {
+return (void*)&ios_copyall; } 
+else if (strcmp(target, "ios_copyuntil") == 0) {
+return (void*)&ios_copyuntil; } 
+else if (strcmp(target, "ios_nchomp") == 0) {
+return (void*)&ios_nchomp; } 
+else if (strcmp(target, "ios_readprep") == 0) {
+return (void*)&ios_readprep; } 
+else if (strcmp(target, "ios_file") == 0) {
+return (void*)&ios_file; } 
+else if (strcmp(target, "ios_mkstemp") == 0) {
+return (void*)&ios_mkstemp; } 
+else if (strcmp(target, "ios_mem") == 0) {
+return (void*)&ios_mem; } 
+else if (strcmp(target, "ios_fd") == 0) {
+return (void*)&ios_fd; } 
+else if (strcmp(target, "ios_pututf8") == 0) {
+return (void*)&ios_pututf8; } 
+else if (strcmp(target, "ios_printf") == 0) {
+return (void*)&ios_printf; } 
+else if (strcmp(target, "ios_getutf8") == 0) {
+return (void*)&ios_getutf8; } 
+else if (strcmp(target, "ios_peekutf8") == 0) {
+return (void*)&ios_peekutf8; } 
+else if (strcmp(target, "ios_readline") == 0) {
+return (void*)&ios_readline; } 
+else if (strcmp(target, "ios_purge") == 0) {
+return (void*)&ios_purge; } 
+else if (strcmp(target, "ios_putc") == 0) {
+return (void*)&ios_putc; } 
+else if (strcmp(target, "ios_getc") == 0) {
+return (void*)&ios_getc; } 
+else if (strcmp(target, "ios_peekc") == 0) {
+return (void*)&ios_peekc; } 
+else if (strcmp(target, "jl_gettimeofday") == 0) {
+return (void*)&jl_gettimeofday; } 
+else if (strcmp(target, "jl_clock_now") == 0) {
+return (void*)&jl_clock_now; } 
+else if (strcmp(target, "int32hash") == 0) {
+return (void*)&int32hash; } 
+else if (strcmp(target, "int64hash") == 0) {
+return (void*)&int64hash; } 
+else if (strcmp(target, "int64to32hash") == 0) {
+return (void*)&int64to32hash; } 
+else if (strcmp(target, "memhash") == 0) {
+return (void*)&memhash; } 
+else if (strcmp(target, "memhash_seed") == 0) {
+return (void*)&memhash_seed; } 
+else if (strcmp(target, "memhash32") == 0) {
+return (void*)&memhash32; } 
+else if (strcmp(target, "memhash32_seed") == 0) {
+return (void*)&memhash32_seed; } 
+else if (strcmp(target, "bitvector_new") == 0) {
+return (void*)&bitvector_new; } 
+else if (strcmp(target, "bitvector_resize") == 0) {
+return (void*)&bitvector_resize; } 
+else if (strcmp(target, "bitvector_set") == 0) {
+return (void*)&bitvector_set; } 
+else if (strcmp(target, "bitvector_get") == 0) {
+return (void*)&bitvector_get; } 
+else if (strcmp(target, "jl_strtod_c") == 0) {
+return (void*)&jl_strtod_c; } 
+else if (strcmp(target, "jl_strtof_c") == 0) {
+return (void*)&jl_strtof_c; } 
+else if (strcmp(target, "libsupport_init") == 0) {
+return (void*)&libsupport_init; } 
+else if (strcmp(target, "jl_threadid") == 0) {
+return (void*)&jl_threadid; } 
+else if (strcmp(target, "jl_threading_profile") == 0) {
+return (void*)&jl_threading_profile; } 
+else if (strcmp(target, "jl_get_ptls_states") == 0) {
+return (void*)&jl_get_ptls_states; } 
+else if (strcmp(target, "jl_cpu_pause") == 0) {
+return (void*)&jl_cpu_pause; } 
+else if (strcmp(target, "jl_cpu_wake") == 0) {
+return (void*)&jl_cpu_wake; } 
+else if (strcmp(target, "jl_gc_safepoint") == 0) {
+return (void*)&jl_gc_safepoint; } 
+else if (strcmp(target, "jl_gc_enable_finalizers") == 0) {
+return (void*)&jl_gc_enable_finalizers; } 
+else if (strcmp(target, "jl_wakeup_thread") == 0) {
+return (void*)&jl_wakeup_thread; } 
+else if (strcmp(target, "jl_gc_enable") == 0) {
+return (void*)&jl_gc_enable; } 
+else if (strcmp(target, "jl_gc_is_enabled") == 0) {
+return (void*)&jl_gc_is_enabled; } 
+else if (strcmp(target, "jl_gc_total_bytes") == 0) {
+return (void*)&jl_gc_total_bytes; } 
+else if (strcmp(target, "jl_gc_total_hrtime") == 0) {
+return (void*)&jl_gc_total_hrtime; } 
+else if (strcmp(target, "jl_gc_diff_total_bytes") == 0) {
+return (void*)&jl_gc_diff_total_bytes; } 
+else if (strcmp(target, "jl_gc_collect") == 0) {
+return (void*)&jl_gc_collect; } 
+else if (strcmp(target, "jl_gc_add_finalizer") == 0) {
+return (void*)&jl_gc_add_finalizer; } 
+else if (strcmp(target, "jl_finalize") == 0) {
+return (void*)&jl_finalize; } 
+else if (strcmp(target, "jl_gc_new_weakref") == 0) {
+return (void*)&jl_gc_new_weakref; } 
+else if (strcmp(target, "jl_gc_alloc_0w") == 0) {
+return (void*)&jl_gc_alloc_0w; } 
+else if (strcmp(target, "jl_gc_alloc_1w") == 0) {
+return (void*)&jl_gc_alloc_1w; } 
+else if (strcmp(target, "jl_gc_alloc_2w") == 0) {
+return (void*)&jl_gc_alloc_2w; } 
+else if (strcmp(target, "jl_gc_alloc_3w") == 0) {
+return (void*)&jl_gc_alloc_3w; } 
+else if (strcmp(target, "jl_gc_allocobj") == 0) {
+return (void*)&jl_gc_allocobj; } 
+else if (strcmp(target, "jl_malloc_stack") == 0) {
+return (void*)&jl_malloc_stack; } 
+else if (strcmp(target, "jl_free_stack") == 0) {
+return (void*)&jl_free_stack; } 
+else if (strcmp(target, "jl_gc_use") == 0) {
+return (void*)&jl_gc_use; } 
+else if (strcmp(target, "jl_clear_malloc_data") == 0) {
+return (void*)&jl_clear_malloc_data; } 
+else if (strcmp(target, "jl_gc_queue_root") == 0) {
+return (void*)&jl_gc_queue_root; } 
+else if (strcmp(target, "jl_gc_managed_malloc") == 0) {
+return (void*)&jl_gc_managed_malloc; } 
+else if (strcmp(target, "jl_gc_managed_realloc") == 0) {
+return (void*)&jl_gc_managed_realloc; } 
+else if (strcmp(target, "jl_array_typetagdata") == 0) {
+return (void*)&jl_array_typetagdata; } 
+else if (strcmp(target, "jl_compute_fieldtypes") == 0) {
+return (void*)&jl_compute_fieldtypes; } 
+else if (strcmp(target, "jl_subtype") == 0) {
+return (void*)&jl_subtype; } 
+else if (strcmp(target, "jl_egal") == 0) {
+return (void*)&jl_egal; } 
+else if (strcmp(target, "jl_object_id") == 0) {
+return (void*)&jl_object_id; } 
+else if (strcmp(target, "jl_has_free_typevars") == 0) {
+return (void*)&jl_has_free_typevars; } 
+else if (strcmp(target, "jl_has_typevar") == 0) {
+return (void*)&jl_has_typevar; } 
+else if (strcmp(target, "jl_has_typevar_from_unionall") == 0) {
+return (void*)&jl_has_typevar_from_unionall; } 
+else if (strcmp(target, "jl_subtype_env_size") == 0) {
+return (void*)&jl_subtype_env_size; } 
+else if (strcmp(target, "jl_subtype_env") == 0) {
+return (void*)&jl_subtype_env; } 
+else if (strcmp(target, "jl_isa") == 0) {
+return (void*)&jl_isa; } 
+else if (strcmp(target, "jl_types_equal") == 0) {
+return (void*)&jl_types_equal; } 
+else if (strcmp(target, "jl_is_not_broken_subtype") == 0) {
+return (void*)&jl_is_not_broken_subtype; } 
+else if (strcmp(target, "jl_type_union") == 0) {
+return (void*)&jl_type_union; } 
+else if (strcmp(target, "jl_type_intersection") == 0) {
+return (void*)&jl_type_intersection; } 
+else if (strcmp(target, "jl_has_empty_intersection") == 0) {
+return (void*)&jl_has_empty_intersection; } 
+else if (strcmp(target, "jl_type_unionall") == 0) {
+return (void*)&jl_type_unionall; } 
+else if (strcmp(target, "jl_typename_str") == 0) {
+return (void*)&jl_typename_str; } 
+else if (strcmp(target, "jl_typeof_str") == 0) {
+return (void*)&jl_typeof_str; } 
+else if (strcmp(target, "jl_type_morespecific") == 0) {
+return (void*)&jl_type_morespecific; } 
+else if (strcmp(target, "jl_new_typename_in") == 0) {
+return (void*)&jl_new_typename_in; } 
+else if (strcmp(target, "jl_new_typevar") == 0) {
+return (void*)&jl_new_typevar; } 
+else if (strcmp(target, "jl_instantiate_unionall") == 0) {
+return (void*)&jl_instantiate_unionall; } 
+else if (strcmp(target, "jl_apply_type") == 0) {
+return (void*)&jl_apply_type; } 
+else if (strcmp(target, "jl_apply_type1") == 0) {
+return (void*)&jl_apply_type1; } 
+else if (strcmp(target, "jl_apply_type2") == 0) {
+return (void*)&jl_apply_type2; } 
+else if (strcmp(target, "jl_apply_tuple_type") == 0) {
+return (void*)&jl_apply_tuple_type; } 
+else if (strcmp(target, "jl_apply_tuple_type_v") == 0) {
+return (void*)&jl_apply_tuple_type_v; } 
+else if (strcmp(target, "jl_new_datatype") == 0) {
+return (void*)&jl_new_datatype; } 
+else if (strcmp(target, "jl_new_primitivetype") == 0) {
+return (void*)&jl_new_primitivetype; } 
+else if (strcmp(target, "jl_new_bits") == 0) {
+return (void*)&jl_new_bits; } 
+else if (strcmp(target, "jl_new_struct") == 0) {
+return (void*)&jl_new_struct; } 
+else if (strcmp(target, "jl_new_structv") == 0) {
+return (void*)&jl_new_structv; } 
+else if (strcmp(target, "jl_new_structt") == 0) {
+return (void*)&jl_new_structt; } 
+else if (strcmp(target, "jl_new_struct_uninit") == 0) {
+return (void*)&jl_new_struct_uninit; } 
+else if (strcmp(target, "jl_new_method_instance_uninit") == 0) {
+return (void*)&jl_new_method_instance_uninit; } 
+else if (strcmp(target, "jl_svec") == 0) {
+return (void*)&jl_svec; } 
+else if (strcmp(target, "jl_svec1") == 0) {
+return (void*)&jl_svec1; } 
+else if (strcmp(target, "jl_svec2") == 0) {
+return (void*)&jl_svec2; } 
+else if (strcmp(target, "jl_alloc_svec") == 0) {
+return (void*)&jl_alloc_svec; } 
+else if (strcmp(target, "jl_alloc_svec_uninit") == 0) {
+return (void*)&jl_alloc_svec_uninit; } 
+else if (strcmp(target, "jl_svec_copy") == 0) {
+return (void*)&jl_svec_copy; } 
+else if (strcmp(target, "jl_svec_fill") == 0) {
+return (void*)&jl_svec_fill; } 
+else if (strcmp(target, "jl_tupletype_fill") == 0) {
+return (void*)&jl_tupletype_fill; } 
+else if (strcmp(target, "jl_symbol") == 0) {
+return (void*)&jl_symbol; } 
+else if (strcmp(target, "jl_symbol_lookup") == 0) {
+return (void*)&jl_symbol_lookup; } 
+else if (strcmp(target, "jl_symbol_n") == 0) {
+return (void*)&jl_symbol_n; } 
+else if (strcmp(target, "jl_gensym") == 0) {
+return (void*)&jl_gensym; } 
+else if (strcmp(target, "jl_tagged_gensym") == 0) {
+return (void*)&jl_tagged_gensym; } 
+else if (strcmp(target, "jl_get_root_symbol") == 0) {
+return (void*)&jl_get_root_symbol; } 
+else if (strcmp(target, "jl_generic_function_def") == 0) {
+return (void*)&jl_generic_function_def; } 
+else if (strcmp(target, "jl_method_def") == 0) {
+return (void*)&jl_method_def; } 
+else if (strcmp(target, "jl_code_for_staged") == 0) {
+return (void*)&jl_code_for_staged; } 
+else if (strcmp(target, "jl_copy_code_info") == 0) {
+return (void*)&jl_copy_code_info; } 
+else if (strcmp(target, "jl_get_world_counter") == 0) {
+return (void*)&jl_get_world_counter; } 
+else if (strcmp(target, "jl_get_kwsorter") == 0) {
+return (void*)&jl_get_kwsorter; } 
+else if (strcmp(target, "jl_box_bool") == 0) {
+return (void*)&jl_box_bool; } 
+else if (strcmp(target, "jl_box_int8") == 0) {
+return (void*)&jl_box_int8; } 
+else if (strcmp(target, "jl_box_uint8") == 0) {
+return (void*)&jl_box_uint8; } 
+else if (strcmp(target, "jl_box_int16") == 0) {
+return (void*)&jl_box_int16; } 
+else if (strcmp(target, "jl_box_uint16") == 0) {
+return (void*)&jl_box_uint16; } 
+else if (strcmp(target, "jl_box_int32") == 0) {
+return (void*)&jl_box_int32; } 
+else if (strcmp(target, "jl_box_uint32") == 0) {
+return (void*)&jl_box_uint32; } 
+else if (strcmp(target, "jl_box_char") == 0) {
+return (void*)&jl_box_char; } 
+else if (strcmp(target, "jl_box_int64") == 0) {
+return (void*)&jl_box_int64; } 
+else if (strcmp(target, "jl_box_uint64") == 0) {
+return (void*)&jl_box_uint64; } 
+else if (strcmp(target, "jl_box_float32") == 0) {
+return (void*)&jl_box_float32; } 
+else if (strcmp(target, "jl_box_float64") == 0) {
+return (void*)&jl_box_float64; } 
+else if (strcmp(target, "jl_box_voidpointer") == 0) {
+return (void*)&jl_box_voidpointer; } 
+else if (strcmp(target, "jl_box_ssavalue") == 0) {
+return (void*)&jl_box_ssavalue; } 
+else if (strcmp(target, "jl_box_slotnumber") == 0) {
+return (void*)&jl_box_slotnumber; } 
+else if (strcmp(target, "jl_unbox_bool") == 0) {
+return (void*)&jl_unbox_bool; } 
+else if (strcmp(target, "jl_unbox_int8") == 0) {
+return (void*)&jl_unbox_int8; } 
+else if (strcmp(target, "jl_unbox_uint8") == 0) {
+return (void*)&jl_unbox_uint8; } 
+else if (strcmp(target, "jl_unbox_int16") == 0) {
+return (void*)&jl_unbox_int16; } 
+else if (strcmp(target, "jl_unbox_uint16") == 0) {
+return (void*)&jl_unbox_uint16; } 
+else if (strcmp(target, "jl_unbox_int32") == 0) {
+return (void*)&jl_unbox_int32; } 
+else if (strcmp(target, "jl_unbox_uint32") == 0) {
+return (void*)&jl_unbox_uint32; } 
+else if (strcmp(target, "jl_unbox_int64") == 0) {
+return (void*)&jl_unbox_int64; } 
+else if (strcmp(target, "jl_unbox_uint64") == 0) {
+return (void*)&jl_unbox_uint64; } 
+else if (strcmp(target, "jl_unbox_float32") == 0) {
+return (void*)&jl_unbox_float32; } 
+else if (strcmp(target, "jl_unbox_float64") == 0) {
+return (void*)&jl_unbox_float64; } 
+else if (strcmp(target, "jl_unbox_voidpointer") == 0) {
+return (void*)&jl_unbox_voidpointer; } 
+else if (strcmp(target, "jl_get_size") == 0) {
+return (void*)&jl_get_size; } 
+else if (strcmp(target, "jl_field_index") == 0) {
+return (void*)&jl_field_index; } 
+else if (strcmp(target, "jl_get_nth_field") == 0) {
+return (void*)&jl_get_nth_field; } 
+else if (strcmp(target, "jl_get_nth_field_noalloc") == 0) {
+return (void*)&jl_get_nth_field_noalloc; } 
+else if (strcmp(target, "jl_get_nth_field_checked") == 0) {
+return (void*)&jl_get_nth_field_checked; } 
+else if (strcmp(target, "jl_set_nth_field") == 0) {
+return (void*)&jl_set_nth_field; } 
+else if (strcmp(target, "jl_field_isdefined") == 0) {
+return (void*)&jl_field_isdefined; } 
+else if (strcmp(target, "jl_get_field") == 0) {
+return (void*)&jl_get_field; } 
+else if (strcmp(target, "jl_value_ptr") == 0) {
+return (void*)&jl_value_ptr; } 
+else if (strcmp(target, "jl_islayout_inline") == 0) {
+return (void*)&jl_islayout_inline; } 
+else if (strcmp(target, "jl_new_array") == 0) {
+return (void*)&jl_new_array; } 
+else if (strcmp(target, "jl_reshape_array") == 0) {
+return (void*)&jl_reshape_array; } 
+else if (strcmp(target, "jl_ptr_to_array_1d") == 0) {
+return (void*)&jl_ptr_to_array_1d; } 
+else if (strcmp(target, "jl_ptr_to_array") == 0) {
+return (void*)&jl_ptr_to_array; } 
+else if (strcmp(target, "jl_alloc_array_1d") == 0) {
+return (void*)&jl_alloc_array_1d; } 
+else if (strcmp(target, "jl_alloc_array_2d") == 0) {
+return (void*)&jl_alloc_array_2d; } 
+else if (strcmp(target, "jl_alloc_array_3d") == 0) {
+return (void*)&jl_alloc_array_3d; } 
+else if (strcmp(target, "jl_pchar_to_array") == 0) {
+return (void*)&jl_pchar_to_array; } 
+else if (strcmp(target, "jl_pchar_to_string") == 0) {
+return (void*)&jl_pchar_to_string; } 
+else if (strcmp(target, "jl_cstr_to_string") == 0) {
+return (void*)&jl_cstr_to_string; } 
+else if (strcmp(target, "jl_alloc_string") == 0) {
+return (void*)&jl_alloc_string; } 
+else if (strcmp(target, "jl_array_to_string") == 0) {
+return (void*)&jl_array_to_string; } 
+else if (strcmp(target, "jl_alloc_vec_any") == 0) {
+return (void*)&jl_alloc_vec_any; } 
+else if (strcmp(target, "jl_arrayref") == 0) {
+return (void*)&jl_arrayref; } 
+else if (strcmp(target, "jl_ptrarrayref") == 0) {
+return (void*)&jl_ptrarrayref; } 
+else if (strcmp(target, "jl_arrayset") == 0) {
+return (void*)&jl_arrayset; } 
+else if (strcmp(target, "jl_arrayunset") == 0) {
+return (void*)&jl_arrayunset; } 
+else if (strcmp(target, "jl_array_isassigned") == 0) {
+return (void*)&jl_array_isassigned; } 
+else if (strcmp(target, "jl_array_grow_end") == 0) {
+return (void*)&jl_array_grow_end; } 
+else if (strcmp(target, "jl_array_del_end") == 0) {
+return (void*)&jl_array_del_end; } 
+else if (strcmp(target, "jl_array_grow_beg") == 0) {
+return (void*)&jl_array_grow_beg; } 
+else if (strcmp(target, "jl_array_del_beg") == 0) {
+return (void*)&jl_array_del_beg; } 
+else if (strcmp(target, "jl_array_sizehint") == 0) {
+return (void*)&jl_array_sizehint; } 
+else if (strcmp(target, "jl_array_ptr_1d_push") == 0) {
+return (void*)&jl_array_ptr_1d_push; } 
+else if (strcmp(target, "jl_array_ptr_1d_append") == 0) {
+return (void*)&jl_array_ptr_1d_append; } 
+else if (strcmp(target, "jl_apply_array_type") == 0) {
+return (void*)&jl_apply_array_type; } 
+else if (strcmp(target, "jl_array_ptr") == 0) {
+return (void*)&jl_array_ptr; } 
+else if (strcmp(target, "jl_array_eltype") == 0) {
+return (void*)&jl_array_eltype; } 
+else if (strcmp(target, "jl_array_rank") == 0) {
+return (void*)&jl_array_rank; } 
+else if (strcmp(target, "jl_array_size") == 0) {
+return (void*)&jl_array_size; } 
+else if (strcmp(target, "jl_string_ptr") == 0) {
+return (void*)&jl_string_ptr; } 
+else if (strcmp(target, "jl_new_module") == 0) {
+return (void*)&jl_new_module; } 
+else if (strcmp(target, "jl_set_module_nospecialize") == 0) {
+return (void*)&jl_set_module_nospecialize; } 
+else if (strcmp(target, "jl_get_binding") == 0) {
+return (void*)&jl_get_binding; } 
+else if (strcmp(target, "jl_get_binding_or_error") == 0) {
+return (void*)&jl_get_binding_or_error; } 
+else if (strcmp(target, "jl_module_globalref") == 0) {
+return (void*)&jl_module_globalref; } 
+else if (strcmp(target, "jl_get_binding_wr") == 0) {
+return (void*)&jl_get_binding_wr; } 
+else if (strcmp(target, "jl_get_binding_for_method_def") == 0) {
+return (void*)&jl_get_binding_for_method_def; } 
+else if (strcmp(target, "jl_boundp") == 0) {
+return (void*)&jl_boundp; } 
+else if (strcmp(target, "jl_defines_or_exports_p") == 0) {
+return (void*)&jl_defines_or_exports_p; } 
+else if (strcmp(target, "jl_binding_resolved_p") == 0) {
+return (void*)&jl_binding_resolved_p; } 
+else if (strcmp(target, "jl_is_const") == 0) {
+return (void*)&jl_is_const; } 
+else if (strcmp(target, "jl_get_global") == 0) {
+return (void*)&jl_get_global; } 
+else if (strcmp(target, "jl_set_global") == 0) {
+return (void*)&jl_set_global; } 
+else if (strcmp(target, "jl_set_const") == 0) {
+return (void*)&jl_set_const; } 
+else if (strcmp(target, "jl_checked_assignment") == 0) {
+return (void*)&jl_checked_assignment; } 
+else if (strcmp(target, "jl_declare_constant") == 0) {
+return (void*)&jl_declare_constant; } 
+else if (strcmp(target, "jl_module_using") == 0) {
+return (void*)&jl_module_using; } 
+else if (strcmp(target, "jl_module_use") == 0) {
+return (void*)&jl_module_use; } 
+else if (strcmp(target, "jl_module_import") == 0) {
+return (void*)&jl_module_import; } 
+else if (strcmp(target, "jl_module_export") == 0) {
+return (void*)&jl_module_export; } 
+else if (strcmp(target, "jl_is_imported") == 0) {
+return (void*)&jl_is_imported; } 
+else if (strcmp(target, "jl_module_exports_p") == 0) {
+return (void*)&jl_module_exports_p; } 
+else if (strcmp(target, "jl_add_standard_imports") == 0) {
+return (void*)&jl_add_standard_imports; } 
+else if (strcmp(target, "jl_eqtable_put") == 0) {
+return (void*)&jl_eqtable_put; } 
+else if (strcmp(target, "jl_eqtable_get") == 0) {
+return (void*)&jl_eqtable_get; } 
+else if (strcmp(target, "jl_errno") == 0) {
+return (void*)&jl_errno; } 
+else if (strcmp(target, "jl_set_errno") == 0) {
+return (void*)&jl_set_errno; } 
+else if (strcmp(target, "jl_stat") == 0) {
+return (void*)&jl_stat; } 
+else if (strcmp(target, "jl_cpu_threads") == 0) {
+return (void*)&jl_cpu_threads; } 
+else if (strcmp(target, "jl_getpagesize") == 0) {
+return (void*)&jl_getpagesize; } 
+else if (strcmp(target, "jl_getallocationgranularity") == 0) {
+return (void*)&jl_getallocationgranularity; } 
+else if (strcmp(target, "jl_is_debugbuild") == 0) {
+return (void*)&jl_is_debugbuild; } 
+else if (strcmp(target, "jl_get_UNAME") == 0) {
+return (void*)&jl_get_UNAME; } 
+else if (strcmp(target, "jl_get_ARCH") == 0) {
+return (void*)&jl_get_ARCH; } 
+else if (strcmp(target, "jl_environ") == 0) {
+return (void*)&jl_environ; } 
+else if (strcmp(target, "jl_error") == 0) {
+return (void*)&jl_error; } 
+else if (strcmp(target, "jl_errorf") == 0) {
+return (void*)&jl_errorf; } 
+else if (strcmp(target, "jl_exceptionf") == 0) {
+return (void*)&jl_exceptionf; } 
+else if (strcmp(target, "jl_too_few_args") == 0) {
+return (void*)&jl_too_few_args; } 
+else if (strcmp(target, "jl_too_many_args") == 0) {
+return (void*)&jl_too_many_args; } 
+else if (strcmp(target, "jl_type_error") == 0) {
+return (void*)&jl_type_error; } 
+else if (strcmp(target, "jl_type_error_rt") == 0) {
+return (void*)&jl_type_error_rt; } 
+else if (strcmp(target, "jl_undefined_var_error") == 0) {
+return (void*)&jl_undefined_var_error; } 
+else if (strcmp(target, "jl_bounds_error") == 0) {
+return (void*)&jl_bounds_error; } 
+else if (strcmp(target, "jl_bounds_error_v") == 0) {
+return (void*)&jl_bounds_error_v; } 
+else if (strcmp(target, "jl_bounds_error_int") == 0) {
+return (void*)&jl_bounds_error_int; } 
+else if (strcmp(target, "jl_bounds_error_tuple_int") == 0) {
+return (void*)&jl_bounds_error_tuple_int; } 
+else if (strcmp(target, "jl_bounds_error_unboxed_int") == 0) {
+return (void*)&jl_bounds_error_unboxed_int; } 
+else if (strcmp(target, "jl_bounds_error_ints") == 0) {
+return (void*)&jl_bounds_error_ints; } 
+else if (strcmp(target, "jl_eof_error") == 0) {
+return (void*)&jl_eof_error; } 
+else if (strcmp(target, "jl_current_exception") == 0) {
+return (void*)&jl_current_exception; } 
+else if (strcmp(target, "jl_exception_occurred") == 0) {
+return (void*)&jl_exception_occurred; } 
+else if (strcmp(target, "jl_exception_clear") == 0) {
+return (void*)&jl_exception_clear; } 
+else if (strcmp(target, "julia_init") == 0) {
+return (void*)&julia_init; } 
+else if (strcmp(target, "jl_init") == 0) {
+return (void*)&jl_init; } 
+else if (strcmp(target, "jl_init_with_image") == 0) {
+return (void*)&jl_init_with_image; } 
+else if (strcmp(target, "jl_get_default_sysimg_path") == 0) {
+return (void*)&jl_get_default_sysimg_path; } 
+else if (strcmp(target, "jl_is_initialized") == 0) {
+return (void*)&jl_is_initialized; } 
+else if (strcmp(target, "jl_atexit_hook") == 0) {
+return (void*)&jl_atexit_hook; } 
+else if (strcmp(target, "jl_exit") == 0) {
+return (void*)&jl_exit; } 
+else if (strcmp(target, "jl_pathname_for_handle") == 0) {
+return (void*)&jl_pathname_for_handle; } 
+else if (strcmp(target, "jl_deserialize_verify_header") == 0) {
+return (void*)&jl_deserialize_verify_header; } 
+else if (strcmp(target, "jl_preload_sysimg_so") == 0) {
+return (void*)&jl_preload_sysimg_so; } 
+else if (strcmp(target, "jl_set_sysimg_so") == 0) {
+return (void*)&jl_set_sysimg_so; } 
+else if (strcmp(target, "jl_create_system_image") == 0) {
+return (void*)&jl_create_system_image; } 
+else if (strcmp(target, "jl_save_system_image") == 0) {
+return (void*)&jl_save_system_image; } 
+else if (strcmp(target, "jl_restore_system_image") == 0) {
+return (void*)&jl_restore_system_image; } 
+else if (strcmp(target, "jl_restore_system_image_data") == 0) {
+return (void*)&jl_restore_system_image_data; } 
+else if (strcmp(target, "jl_save_incremental") == 0) {
+return (void*)&jl_save_incremental; } 
+else if (strcmp(target, "jl_restore_incremental") == 0) {
+return (void*)&jl_restore_incremental; } 
+else if (strcmp(target, "jl_restore_incremental_from_buf") == 0) {
+return (void*)&jl_restore_incremental_from_buf; } 
+else if (strcmp(target, "jl_parse_all") == 0) {
+return (void*)&jl_parse_all; } 
+else if (strcmp(target, "jl_parse_input_line") == 0) {
+return (void*)&jl_parse_input_line; } 
+else if (strcmp(target, "jl_parse_string") == 0) {
+return (void*)&jl_parse_string; } 
+else if (strcmp(target, "jl_load_file_string") == 0) {
+return (void*)&jl_load_file_string; } 
+else if (strcmp(target, "jl_expand") == 0) {
+return (void*)&jl_expand; } 
+else if (strcmp(target, "jl_expand_with_loc") == 0) {
+return (void*)&jl_expand_with_loc; } 
+else if (strcmp(target, "jl_expand_stmt") == 0) {
+return (void*)&jl_expand_stmt; } 
+else if (strcmp(target, "jl_expand_stmt_with_loc") == 0) {
+return (void*)&jl_expand_stmt_with_loc; } 
+else if (strcmp(target, "jl_eval_string") == 0) {
+return (void*)&jl_eval_string; } 
+else if (strcmp(target, "jl_load_dynamic_library") == 0) {
+return (void*)&jl_load_dynamic_library; } 
+else if (strcmp(target, "jl_dlopen") == 0) {
+return (void*)&jl_dlopen; } 
+else if (strcmp(target, "jl_dlclose") == 0) {
+return (void*)&jl_dlclose; } 
+else if (strcmp(target, "jl_dlsym") == 0) {
+return (void*)&jl_dlsym; } 
+else if (strcmp(target, "jl_toplevel_eval") == 0) {
+return (void*)&jl_toplevel_eval; } 
+else if (strcmp(target, "jl_toplevel_eval_in") == 0) {
+return (void*)&jl_toplevel_eval_in; } 
+else if (strcmp(target, "jl_load") == 0) {
+return (void*)&jl_load; } 
+else if (strcmp(target, "jl_base_relative_to") == 0) {
+return (void*)&jl_base_relative_to; } 
+else if (strcmp(target, "jl_register_newmeth_tracer") == 0) {
+return (void*)&jl_register_newmeth_tracer; } 
+else if (strcmp(target, "jl_copy_ast") == 0) {
+return (void*)&jl_copy_ast; } 
+else if (strcmp(target, "jl_compress_ast") == 0) {
+return (void*)&jl_compress_ast; } 
+else if (strcmp(target, "jl_uncompress_ast") == 0) {
+return (void*)&jl_uncompress_ast; } 
+else if (strcmp(target, "jl_ast_flag_inferred") == 0) {
+return (void*)&jl_ast_flag_inferred; } 
+else if (strcmp(target, "jl_ast_flag_inlineable") == 0) {
+return (void*)&jl_ast_flag_inlineable; } 
+else if (strcmp(target, "jl_ast_flag_pure") == 0) {
+return (void*)&jl_ast_flag_pure; } 
+else if (strcmp(target, "jl_ast_nslots") == 0) {
+return (void*)&jl_ast_nslots; } 
+else if (strcmp(target, "jl_ast_slotflag") == 0) {
+return (void*)&jl_ast_slotflag; } 
+else if (strcmp(target, "jl_compress_argnames") == 0) {
+return (void*)&jl_compress_argnames; } 
+else if (strcmp(target, "jl_uncompress_argnames") == 0) {
+return (void*)&jl_uncompress_argnames; } 
+else if (strcmp(target, "jl_uncompress_argname_n") == 0) {
+return (void*)&jl_uncompress_argname_n; } 
+else if (strcmp(target, "jl_is_operator") == 0) {
+return (void*)&jl_is_operator; } 
+else if (strcmp(target, "jl_is_unary_operator") == 0) {
+return (void*)&jl_is_unary_operator; } 
+else if (strcmp(target, "jl_is_unary_and_binary_operator") == 0) {
+return (void*)&jl_is_unary_and_binary_operator; } 
+else if (strcmp(target, "jl_operator_precedence") == 0) {
+return (void*)&jl_operator_precedence; } 
+else if (strcmp(target, "jl_apply_generic") == 0) {
+return (void*)&jl_apply_generic; } 
+else if (strcmp(target, "jl_invoke") == 0) {
+return (void*)&jl_invoke; } 
+else if (strcmp(target, "jl_invoke_api") == 0) {
+return (void*)&jl_invoke_api; } 
+else if (strcmp(target, "jl_call") == 0) {
+return (void*)&jl_call; } 
+else if (strcmp(target, "jl_call0") == 0) {
+return (void*)&jl_call0; } 
+else if (strcmp(target, "jl_call1") == 0) {
+return (void*)&jl_call1; } 
+else if (strcmp(target, "jl_call2") == 0) {
+return (void*)&jl_call2; } 
+else if (strcmp(target, "jl_call3") == 0) {
+return (void*)&jl_call3; } 
+else if (strcmp(target, "jl_yield") == 0) {
+return (void*)&jl_yield; } 
+else if (strcmp(target, "jl_install_sigint_handler") == 0) {
+return (void*)&jl_install_sigint_handler; } 
+else if (strcmp(target, "jl_sigatomic_begin") == 0) {
+return (void*)&jl_sigatomic_begin; } 
+else if (strcmp(target, "jl_sigatomic_end") == 0) {
+return (void*)&jl_sigatomic_end; } 
+else if (strcmp(target, "jl_new_task") == 0) {
+return (void*)&jl_new_task; } 
+else if (strcmp(target, "jl_switchto") == 0) {
+return (void*)&jl_switchto; } 
+else if (strcmp(target, "jl_throw") == 0) {
+return (void*)&jl_throw; } 
+else if (strcmp(target, "jl_rethrow") == 0) {
+return (void*)&jl_rethrow; } 
+else if (strcmp(target, "jl_sig_throw") == 0) {
+return (void*)&jl_sig_throw; } 
+else if (strcmp(target, "jl_rethrow_other") == 0) {
+return (void*)&jl_rethrow_other; } 
+else if (strcmp(target, "jl_no_exc_handler") == 0) {
+return (void*)&jl_no_exc_handler; } 
+else if (strcmp(target, "jl_enter_handler") == 0) {
+return (void*)&jl_enter_handler; } 
+else if (strcmp(target, "jl_eh_restore_state") == 0) {
+return (void*)&jl_eh_restore_state; } 
+else if (strcmp(target, "jl_pop_handler") == 0) {
+return (void*)&jl_pop_handler; } 
+else if (strcmp(target, "jl_excstack_state") == 0) {
+return (void*)&jl_excstack_state; } 
+else if (strcmp(target, "jl_restore_excstack") == 0) {
+return (void*)&jl_restore_excstack; } 
+else if (strcmp(target, "jl_take_buffer") == 0) {
+return (void*)&jl_take_buffer; } 
+else if (strcmp(target, "jl_sizeof_ios_t") == 0) {
+return (void*)&jl_sizeof_ios_t; } 
+else if (strcmp(target, "jl_uv_puts") == 0) {
+return (void*)&jl_uv_puts; } 
+else if (strcmp(target, "jl_printf") == 0) {
+return (void*)&jl_printf; } 
+else if (strcmp(target, "jl_safe_printf") == 0) {
+return (void*)&jl_safe_printf; } 
+else if (strcmp(target, "jl_stdout_stream") == 0) {
+return (void*)&jl_stdout_stream; } 
+else if (strcmp(target, "jl_stdin_stream") == 0) {
+return (void*)&jl_stdin_stream; } 
+else if (strcmp(target, "jl_stderr_stream") == 0) {
+return (void*)&jl_stderr_stream; } 
+else if (strcmp(target, "jl_flush_cstdio") == 0) {
+return (void*)&jl_flush_cstdio; } 
+else if (strcmp(target, "jl_stdout_obj") == 0) {
+return (void*)&jl_stdout_obj; } 
+else if (strcmp(target, "jl_stderr_obj") == 0) {
+return (void*)&jl_stderr_obj; } 
+else if (strcmp(target, "jl_static_show") == 0) {
+return (void*)&jl_static_show; } 
+else if (strcmp(target, "jl_static_show_func_sig") == 0) {
+return (void*)&jl_static_show_func_sig; } 
+else if (strcmp(target, "jlbacktrace") == 0) {
+return (void*)&jlbacktrace; } 
+else if (strcmp(target, "jl_") == 0) {
+return (void*)&jl_; } 
+else if (strcmp(target, "jl_sizeof_jl_options") == 0) {
+return (void*)&jl_sizeof_jl_options; } 
+else if (strcmp(target, "jl_parse_opts") == 0) {
+return (void*)&jl_parse_opts; } 
+else if (strcmp(target, "jl_format_filename") == 0) {
+return (void*)&jl_format_filename; } 
+else if (strcmp(target, "jl_set_ARGS") == 0) {
+return (void*)&jl_set_ARGS; } 
+else if (strcmp(target, "jl_generating_output") == 0) {
+return (void*)&jl_generating_output; } 
+else if (strcmp(target, "jl_ver_major") == 0) {
+return (void*)&jl_ver_major; } 
+else if (strcmp(target, "jl_ver_minor") == 0) {
+return (void*)&jl_ver_minor; } 
+else if (strcmp(target, "jl_ver_patch") == 0) {
+return (void*)&jl_ver_patch; } 
+else if (strcmp(target, "jl_ver_is_release") == 0) {
+return (void*)&jl_ver_is_release; } 
+else if (strcmp(target, "jl_ver_string") == 0) {
+return (void*)&jl_ver_string; } 
+else if (strcmp(target, "jl_git_branch") == 0) {
+return (void*)&jl_git_branch; } 
+else if (strcmp(target, "jl_git_commit") == 0) {
+return (void*)&jl_git_commit; } 
+else if (strcmp(target, "jl_gc_pool_alloc") == 0) {
+return (void*)&jl_gc_pool_alloc; } 
+else if (strcmp(target, "jl_gc_big_alloc") == 0) {
+return (void*)&jl_gc_big_alloc; } 
+else if (strcmp(target, "jl_alignment") == 0) {
+return (void*)&jl_alignment; } 
+else if (strcmp(target, "jl_gc_counted_malloc") == 0) {
+return (void*)&jl_gc_counted_malloc; } 
+else if (strcmp(target, "jl_throw_out_of_memory_error") == 0) {
+return (void*)&jl_throw_out_of_memory_error; } 
+else if (strcmp(target, "jl_get_method_inferred") == 0) {
+return (void*)&jl_get_method_inferred; } 
+else if (strcmp(target, "jl_compile_hint") == 0) {
+return (void*)&jl_compile_hint; } 
+else if (strcmp(target, "jl_foreigncall_get_syms") == 0) {
+return (void*)&jl_foreigncall_get_syms; } 
+else if (strcmp(target, "jl_foreigncall_interpretable") == 0) {
+return (void*)&jl_foreigncall_interpretable; } 
+else if (strcmp(target, "jl_new_code_info_uninit") == 0) {
+return (void*)&jl_new_code_info_uninit; } 
+else if (strcmp(target, "jl_apply_2va") == 0) {
+return (void*)&jl_apply_2va; } 
+else if (strcmp(target, "jl_typeassert") == 0) {
+return (void*)&jl_typeassert; } 
+else if (strcmp(target, "jl_f_tuple") == 0) {
+return (void*)&jl_f_tuple; } 
+else if (strcmp(target, "jl_f_intrinsic_call") == 0) {
+return (void*)&jl_f_intrinsic_call; } 
+else if (strcmp(target, "jl_method_table_insert") == 0) {
+return (void*)&jl_method_table_insert; } 
+else if (strcmp(target, "jl_type_morespecific_no_subtype") == 0) {
+return (void*)&jl_type_morespecific_no_subtype; } 
+else if (strcmp(target, "jl_instantiate_type_in_env") == 0) {
+return (void*)&jl_instantiate_type_in_env; } 
+else if (strcmp(target, "jl_matching_methods") == 0) {
+return (void*)&jl_matching_methods; } 
+else if (strcmp(target, "jl_first_argument_datatype") == 0) {
+return (void*)&jl_first_argument_datatype; } 
+else if (strcmp(target, "jl_argument_datatype") == 0) {
+return (void*)&jl_argument_datatype; } 
+else if (strcmp(target, "jl_method_table_for") == 0) {
+return (void*)&jl_method_table_for; } 
+else if (strcmp(target, "jl_dump_fptr_asm") == 0) {
+return (void*)&jl_dump_fptr_asm; } 
+else if (strcmp(target, "jl_idtable_rehash") == 0) {
+return (void*)&jl_idtable_rehash; } 
+else if (strcmp(target, "jl_new_method_table") == 0) {
+return (void*)&jl_new_method_table; } 
+else if (strcmp(target, "jl_has_call_ambiguities") == 0) {
+return (void*)&jl_has_call_ambiguities; } 
+else if (strcmp(target, "jl_rettype_inferred") == 0) {
+return (void*)&jl_rettype_inferred; } 
+else if (strcmp(target, "jl_methtable_lookup") == 0) {
+return (void*)&jl_methtable_lookup; } 
+else if (strcmp(target, "jl_specializations_get_linfo") == 0) {
+return (void*)&jl_specializations_get_linfo; } 
+else if (strcmp(target, "jl_method_instance_add_backedge") == 0) {
+return (void*)&jl_method_instance_add_backedge; } 
+else if (strcmp(target, "jl_method_table_add_backedge") == 0) {
+return (void*)&jl_method_table_add_backedge; } 
+else if (strcmp(target, "jl_get_backtrace") == 0) {
+return (void*)&jl_get_backtrace; } 
+else if (strcmp(target, "jl_raise_debugger") == 0) {
+return (void*)&jl_raise_debugger; } 
+else if (strcmp(target, "jl_gdblookup") == 0) {
+return (void*)&jl_gdblookup; } 
+else if (strcmp(target, "jl_is_interpreter_frame") == 0) {
+return (void*)&jl_is_interpreter_frame; } 
+else if (strcmp(target, "jl_is_enter_interpreter_frame") == 0) {
+return (void*)&jl_is_enter_interpreter_frame; } 
+else if (strcmp(target, "jl_capture_interp_frame") == 0) {
+return (void*)&jl_capture_interp_frame; } 
+else if (strcmp(target, "jl_hrtime") == 0) {
+return (void*)&jl_hrtime; } 
+else if (strcmp(target, "jl_load_and_lookup") == 0) {
+return (void*)&jl_load_and_lookup; } 
+else if (strcmp(target, "jl_get_cfunction_trampoline") == 0) {
+return (void*)&jl_get_cfunction_trampoline; } 
+else if (strcmp(target, "jl_get_JIT") == 0) {
+return (void*)&jl_get_JIT; } 
+else if (strcmp(target, "jl_fs_rename") == 0) {
+return (void*)&jl_fs_rename; } 
+else if (strcmp(target, "jl_cwd") == 0) {
+return (void*)&jl_cwd; } 
+else if (strcmp(target, "jl_is_file") == 0) {
+return (void*)&jl_is_file; } 
+else if (strcmp(target, "jl_intrinsic_name") == 0) {
+return (void*)&jl_intrinsic_name; } 
+else if (strcmp(target, "jl_bitcast") == 0) {
+return (void*)&jl_bitcast; } 
+else if (strcmp(target, "jl_pointerref") == 0) {
+return (void*)&jl_pointerref; } 
+else if (strcmp(target, "jl_pointerset") == 0) {
+return (void*)&jl_pointerset; } 
+else if (strcmp(target, "jl_cglobal") == 0) {
+return (void*)&jl_cglobal; } 
+else if (strcmp(target, "jl_cglobal_auto") == 0) {
+return (void*)&jl_cglobal_auto; } 
+else if (strcmp(target, "jl_neg_int") == 0) {
+return (void*)&jl_neg_int; } 
+else if (strcmp(target, "jl_add_int") == 0) {
+return (void*)&jl_add_int; } 
+else if (strcmp(target, "jl_sub_int") == 0) {
+return (void*)&jl_sub_int; } 
+else if (strcmp(target, "jl_mul_int") == 0) {
+return (void*)&jl_mul_int; } 
+else if (strcmp(target, "jl_sdiv_int") == 0) {
+return (void*)&jl_sdiv_int; } 
+else if (strcmp(target, "jl_udiv_int") == 0) {
+return (void*)&jl_udiv_int; } 
+else if (strcmp(target, "jl_srem_int") == 0) {
+return (void*)&jl_srem_int; } 
+else if (strcmp(target, "jl_urem_int") == 0) {
+return (void*)&jl_urem_int; } 
+else if (strcmp(target, "jl_add_ptr") == 0) {
+return (void*)&jl_add_ptr; } 
+else if (strcmp(target, "jl_sub_ptr") == 0) {
+return (void*)&jl_sub_ptr; } 
+else if (strcmp(target, "jl_neg_float") == 0) {
+return (void*)&jl_neg_float; } 
+else if (strcmp(target, "jl_add_float") == 0) {
+return (void*)&jl_add_float; } 
+else if (strcmp(target, "jl_sub_float") == 0) {
+return (void*)&jl_sub_float; } 
+else if (strcmp(target, "jl_mul_float") == 0) {
+return (void*)&jl_mul_float; } 
+else if (strcmp(target, "jl_div_float") == 0) {
+return (void*)&jl_div_float; } 
+else if (strcmp(target, "jl_rem_float") == 0) {
+return (void*)&jl_rem_float; } 
+else if (strcmp(target, "jl_fma_float") == 0) {
+return (void*)&jl_fma_float; } 
+else if (strcmp(target, "jl_muladd_float") == 0) {
+return (void*)&jl_muladd_float; } 
+else if (strcmp(target, "jl_eq_int") == 0) {
+return (void*)&jl_eq_int; } 
+else if (strcmp(target, "jl_ne_int") == 0) {
+return (void*)&jl_ne_int; } 
+else if (strcmp(target, "jl_slt_int") == 0) {
+return (void*)&jl_slt_int; } 
+else if (strcmp(target, "jl_ult_int") == 0) {
+return (void*)&jl_ult_int; } 
+else if (strcmp(target, "jl_sle_int") == 0) {
+return (void*)&jl_sle_int; } 
+else if (strcmp(target, "jl_ule_int") == 0) {
+return (void*)&jl_ule_int; } 
+else if (strcmp(target, "jl_eq_float") == 0) {
+return (void*)&jl_eq_float; } 
+else if (strcmp(target, "jl_ne_float") == 0) {
+return (void*)&jl_ne_float; } 
+else if (strcmp(target, "jl_lt_float") == 0) {
+return (void*)&jl_lt_float; } 
+else if (strcmp(target, "jl_le_float") == 0) {
+return (void*)&jl_le_float; } 
+else if (strcmp(target, "jl_fpiseq") == 0) {
+return (void*)&jl_fpiseq; } 
+else if (strcmp(target, "jl_fpislt") == 0) {
+return (void*)&jl_fpislt; } 
+else if (strcmp(target, "jl_not_int") == 0) {
+return (void*)&jl_not_int; } 
+else if (strcmp(target, "jl_and_int") == 0) {
+return (void*)&jl_and_int; } 
+else if (strcmp(target, "jl_or_int") == 0) {
+return (void*)&jl_or_int; } 
+else if (strcmp(target, "jl_xor_int") == 0) {
+return (void*)&jl_xor_int; } 
+else if (strcmp(target, "jl_shl_int") == 0) {
+return (void*)&jl_shl_int; } 
+else if (strcmp(target, "jl_lshr_int") == 0) {
+return (void*)&jl_lshr_int; } 
+else if (strcmp(target, "jl_ashr_int") == 0) {
+return (void*)&jl_ashr_int; } 
+else if (strcmp(target, "jl_bswap_int") == 0) {
+return (void*)&jl_bswap_int; } 
+else if (strcmp(target, "jl_ctpop_int") == 0) {
+return (void*)&jl_ctpop_int; } 
+else if (strcmp(target, "jl_ctlz_int") == 0) {
+return (void*)&jl_ctlz_int; } 
+else if (strcmp(target, "jl_cttz_int") == 0) {
+return (void*)&jl_cttz_int; } 
+else if (strcmp(target, "jl_sext_int") == 0) {
+return (void*)&jl_sext_int; } 
+else if (strcmp(target, "jl_zext_int") == 0) {
+return (void*)&jl_zext_int; } 
+else if (strcmp(target, "jl_trunc_int") == 0) {
+return (void*)&jl_trunc_int; } 
+else if (strcmp(target, "jl_sitofp") == 0) {
+return (void*)&jl_sitofp; } 
+else if (strcmp(target, "jl_uitofp") == 0) {
+return (void*)&jl_uitofp; } 
+else if (strcmp(target, "jl_fptoui") == 0) {
+return (void*)&jl_fptoui; } 
+else if (strcmp(target, "jl_fptosi") == 0) {
+return (void*)&jl_fptosi; } 
+else if (strcmp(target, "jl_fptrunc") == 0) {
+return (void*)&jl_fptrunc; } 
+else if (strcmp(target, "jl_fpext") == 0) {
+return (void*)&jl_fpext; } 
+else if (strcmp(target, "jl_checked_sadd_int") == 0) {
+return (void*)&jl_checked_sadd_int; } 
+else if (strcmp(target, "jl_checked_uadd_int") == 0) {
+return (void*)&jl_checked_uadd_int; } 
+else if (strcmp(target, "jl_checked_ssub_int") == 0) {
+return (void*)&jl_checked_ssub_int; } 
+else if (strcmp(target, "jl_checked_usub_int") == 0) {
+return (void*)&jl_checked_usub_int; } 
+else if (strcmp(target, "jl_checked_smul_int") == 0) {
+return (void*)&jl_checked_smul_int; } 
+else if (strcmp(target, "jl_checked_umul_int") == 0) {
+return (void*)&jl_checked_umul_int; } 
+else if (strcmp(target, "jl_checked_sdiv_int") == 0) {
+return (void*)&jl_checked_sdiv_int; } 
+else if (strcmp(target, "jl_checked_udiv_int") == 0) {
+return (void*)&jl_checked_udiv_int; } 
+else if (strcmp(target, "jl_checked_srem_int") == 0) {
+return (void*)&jl_checked_srem_int; } 
+else if (strcmp(target, "jl_checked_urem_int") == 0) {
+return (void*)&jl_checked_urem_int; } 
+else if (strcmp(target, "jl_ceil_llvm") == 0) {
+return (void*)&jl_ceil_llvm; } 
+else if (strcmp(target, "jl_floor_llvm") == 0) {
+return (void*)&jl_floor_llvm; } 
+else if (strcmp(target, "jl_trunc_llvm") == 0) {
+return (void*)&jl_trunc_llvm; } 
+else if (strcmp(target, "jl_rint_llvm") == 0) {
+return (void*)&jl_rint_llvm; } 
+else if (strcmp(target, "jl_sqrt_llvm") == 0) {
+return (void*)&jl_sqrt_llvm; } 
+else if (strcmp(target, "jl_abs_float") == 0) {
+return (void*)&jl_abs_float; } 
+else if (strcmp(target, "jl_copysign_float") == 0) {
+return (void*)&jl_copysign_float; } 
+else if (strcmp(target, "jl_flipsign_int") == 0) {
+return (void*)&jl_flipsign_int; } 
+else if (strcmp(target, "jl_arraylen") == 0) {
+return (void*)&jl_arraylen; } 
+else if (strcmp(target, "jl_array_data_owner") == 0) {
+return (void*)&jl_array_data_owner; } 
+else if (strcmp(target, "jl_object_id_") == 0) {
+return (void*)&jl_object_id_; } 
+else if (strcmp(target, "jl_array_cconvert_cstring") == 0) {
+return (void*)&jl_array_cconvert_cstring; } 
+else if (strcmp(target, "jl_extern_c") == 0) {
+return (void*)&jl_extern_c; } 
+else if (strcmp(target, "jl_function_ptr") == 0) {
+return (void*)&jl_function_ptr; } 
+else if (strcmp(target, "jl_dump_function_asm") == 0) {
+return (void*)&jl_dump_function_asm; } 
+else if (strcmp(target, "jl_dump_function_ir") == 0) {
+return (void*)&jl_dump_function_ir; } 
+else if (strcmp(target, "jl_LLVMCreateDisasm") == 0) {
+return (void*)&jl_LLVMCreateDisasm; } 
+else if (strcmp(target, "jl_LLVMDisasmInstruction") == 0) {
+return (void*)&jl_LLVMDisasmInstruction; } 
+else if (strcmp(target, "jl_get_LLVM_VERSION") == 0) {
+return (void*)&jl_get_LLVM_VERSION; } 
+else if (strcmp(target, "jl_getutf8") == 0) {
+return (void*)&jl_getutf8; } 
+else if (strcmp(target, "jl_sizeof_off_t") == 0) {
+return (void*)&jl_sizeof_off_t; } 
+else if (strcmp(target, "jl_sizeof_mode_t") == 0) {
+return (void*)&jl_sizeof_mode_t; } 
+else if (strcmp(target, "jl_ftruncate") == 0) {
+return (void*)&jl_ftruncate; } 
+else if (strcmp(target, "jl_lseek") == 0) {
+return (void*)&jl_lseek; } 
+else if (strcmp(target, "jl_pwrite") == 0) {
+return (void*)&jl_pwrite; } 
+else if (strcmp(target, "jl_mmap") == 0) {
+return (void*)&jl_mmap; } 
+else if (strcmp(target, "jl_ios_fd") == 0) {
+return (void*)&jl_ios_fd; } 
+else if (strcmp(target, "jl_nb_available") == 0) {
+return (void*)&jl_nb_available; } 
+else if (strcmp(target, "jl_readuntil") == 0) {
+return (void*)&jl_readuntil; } 
+else if (strcmp(target, "jl_ios_get_nbyte_int") == 0) {
+return (void*)&jl_ios_get_nbyte_int; } 
+else if (strcmp(target, "jl_native_alignment") == 0) {
+return (void*)&jl_native_alignment; } 
+else if (strcmp(target, "jl_is_char_signed") == 0) {
+return (void*)&jl_is_char_signed; } 
+else if (strcmp(target, "jl_SC_CLK_TCK") == 0) {
+return (void*)&jl_SC_CLK_TCK; } 
+else if (strcmp(target, "jl_maxrss") == 0) {
+return (void*)&jl_maxrss; } 
+else if (strcmp(target, "jl_threading_enabled") == 0) {
+return (void*)&jl_threading_enabled; } 
+else if (strcmp(target, "jl_f_throw") == 0) {
+return (void*)&jl_f_throw; } 
+else if (strcmp(target, "jl_f_is") == 0) {
+return (void*)&jl_f_is; } 
+else if (strcmp(target, "jl_f_typeof") == 0) {
+return (void*)&jl_f_typeof; } 
+else if (strcmp(target, "jl_f_sizeof") == 0) {
+return (void*)&jl_f_sizeof; } 
+else if (strcmp(target, "jl_f_issubtype") == 0) {
+return (void*)&jl_f_issubtype; } 
+else if (strcmp(target, "jl_f_isa") == 0) {
+return (void*)&jl_f_isa; } 
+else if (strcmp(target, "jl_f__apply") == 0) {
+return (void*)&jl_f__apply; } 
+else if (strcmp(target, "jl_f__apply_pure") == 0) {
+return (void*)&jl_f__apply_pure; } 
+else if (strcmp(target, "jl_f__apply_latest") == 0) {
+return (void*)&jl_f__apply_latest; } 
+else if (strcmp(target, "jl_f_isdefined") == 0) {
+return (void*)&jl_f_isdefined; } 
+else if (strcmp(target, "jl_f_nfields") == 0) {
+return (void*)&jl_f_nfields; } 
+else if (strcmp(target, "jl_f_svec") == 0) {
+return (void*)&jl_f_svec; } 
+else if (strcmp(target, "jl_f_getfield") == 0) {
+return (void*)&jl_f_getfield; } 
+else if (strcmp(target, "jl_f_setfield") == 0) {
+return (void*)&jl_f_setfield; } 
+else if (strcmp(target, "jl_f_fieldtype") == 0) {
+return (void*)&jl_f_fieldtype; } 
+else if (strcmp(target, "jl_f_arrayref") == 0) {
+return (void*)&jl_f_arrayref; } 
+else if (strcmp(target, "jl_f_const_arrayref") == 0) {
+return (void*)&jl_f_const_arrayref; } 
+else if (strcmp(target, "jl_f_arrayset") == 0) {
+return (void*)&jl_f_arrayset; } 
+else if (strcmp(target, "jl_f_arraysize") == 0) {
+return (void*)&jl_f_arraysize; } 
+else if (strcmp(target, "jl_f_apply_type") == 0) {
+return (void*)&jl_f_apply_type; } 
+else if (strcmp(target, "jl_f_applicable") == 0) {
+return (void*)&jl_f_applicable; } 
+else if (strcmp(target, "jl_f_invoke") == 0) {
+return (void*)&jl_f_invoke; } 
+else if (strcmp(target, "jl_f__expr") == 0) {
+return (void*)&jl_f__expr; } 
+else if (strcmp(target, "jl_f_typeassert") == 0) {
+return (void*)&jl_f_typeassert; } 
+else if (strcmp(target, "jl_f_ifelse") == 0) {
+return (void*)&jl_f_ifelse; } 
+else if (strcmp(target, "jl_f__typevar") == 0) {
+return (void*)&jl_f__typevar; } 
+else if (strcmp(target, "jl_f_invoke_kwsorter") == 0) {
+return (void*)&jl_f_invoke_kwsorter; } 
+else if (strcmp(target, "jl_get_cpu_name") == 0) {
+return (void*)&jl_get_cpu_name; } 
+else if (strcmp(target, "jl_dump_host_cpu") == 0) {
+return (void*)&jl_dump_host_cpu; } 
+else if (strcmp(target, "jl_running_on_valgrind") == 0) {
+return (void*)&jl_running_on_valgrind; } 
+else if (strcmp(target, "ios_write_direct") == 0) {
+return (void*)&ios_write_direct; } 
+else if (strcmp(target, "jl_is_memdebug") == 0) {
+return (void*)&jl_is_memdebug; } 
+else if (strcmp(target, "jl_get_julia_bindir") == 0) {
+return (void*)&jl_get_julia_bindir; } 
+else if (strcmp(target, "jl_get_julia_bin") == 0) {
+return (void*)&jl_get_julia_bin; } 
+else if (strcmp(target, "jl_get_image_file") == 0) {
+return (void*)&jl_get_image_file; } 
+else if (strcmp(target, "jl_astaggedvalue") == 0) {
+return (void*)&jl_astaggedvalue; } 
+else if (strcmp(target, "jl_valueof") == 0) {
+return (void*)&jl_valueof; } 
+else if (strcmp(target, "jl_typeof") == 0) {
+return (void*)&jl_typeof; } 
+else if (strcmp(target, "jl_get_fieldtypes") == 0) {
+return (void*)&jl_get_fieldtypes; } 
+else if (strcmp(target, "jl_gc_unsafe_enter") == 0) {
+return (void*)&jl_gc_unsafe_enter; } 
+else if (strcmp(target, "jl_gc_unsafe_leave") == 0) {
+return (void*)&jl_gc_unsafe_leave; } 
+else if (strcmp(target, "jl_gc_safe_enter") == 0) {
+return (void*)&jl_gc_safe_enter; } 
+else if (strcmp(target, "jl_gc_safe_leave") == 0) {
+return (void*)&jl_gc_safe_leave; } 
+else if (strcmp(target, "jl_get_fenv_consts") == 0) {
+return (void*)&jl_get_fenv_consts; } 
+else if (strcmp(target, "jl_eqtable_pop") == 0) {
+return (void*)&jl_eqtable_pop; } 
+else if (strcmp(target, "jl_eqtable_nextind") == 0) {
+return (void*)&jl_eqtable_nextind; } 
+else if (strcmp(target, "jl_get_keyword_sorter") == 0) {
+return (void*)&jl_get_keyword_sorter; } 
+else if (strcmp(target, "jl_array_store_unboxed") == 0) {
+return (void*)&jl_array_store_unboxed; } 
+else if (strcmp(target, "jl_string_to_array") == 0) {
+return (void*)&jl_string_to_array; } 
+else if (strcmp(target, "jl_array_grow_at") == 0) {
+return (void*)&jl_array_grow_at; } 
+else if (strcmp(target, "jl_array_del_at") == 0) {
+return (void*)&jl_array_del_at; } 
+else if (strcmp(target, "jl_array_copy") == 0) {
+return (void*)&jl_array_copy; } 
+else if (strcmp(target, "jl_array_ptr_copy") == 0) {
+return (void*)&jl_array_ptr_copy; } 
+else if (strcmp(target, "jl_f_new_module") == 0) {
+return (void*)&jl_f_new_module; } 
+else if (strcmp(target, "jl_set_istopmod") == 0) {
+return (void*)&jl_set_istopmod; } 
+else if (strcmp(target, "jl_istopmod") == 0) {
+return (void*)&jl_istopmod; } 
+else if (strcmp(target, "jl_get_module_of_binding") == 0) {
+return (void*)&jl_get_module_of_binding; } 
+else if (strcmp(target, "jl_binding_owner") == 0) {
+return (void*)&jl_binding_owner; } 
+else if (strcmp(target, "jl_get_module_binding") == 0) {
+return (void*)&jl_get_module_binding; } 
+else if (strcmp(target, "jl_deprecate_binding") == 0) {
+return (void*)&jl_deprecate_binding; } 
+else if (strcmp(target, "jl_is_binding_deprecated") == 0) {
+return (void*)&jl_is_binding_deprecated; } 
+else if (strcmp(target, "jl_module_usings") == 0) {
+return (void*)&jl_module_usings; } 
+else if (strcmp(target, "jl_module_names") == 0) {
+return (void*)&jl_module_names; } 
+else if (strcmp(target, "jl_module_name") == 0) {
+return (void*)&jl_module_name; } 
+else if (strcmp(target, "jl_module_parent") == 0) {
+return (void*)&jl_module_parent; } 
+else if (strcmp(target, "jl_module_build_id") == 0) {
+return (void*)&jl_module_build_id; } 
+else if (strcmp(target, "jl_module_uuid") == 0) {
+return (void*)&jl_module_uuid; } 
+else if (strcmp(target, "jl_set_module_uuid") == 0) {
+return (void*)&jl_set_module_uuid; } 
+else if (strcmp(target, "jl_gc_set_cb_root_scanner") == 0) {
+return (void*)&jl_gc_set_cb_root_scanner; } 
+else if (strcmp(target, "jl_gc_set_cb_task_scanner") == 0) {
+return (void*)&jl_gc_set_cb_task_scanner; } 
+else if (strcmp(target, "jl_gc_set_cb_pre_gc") == 0) {
+return (void*)&jl_gc_set_cb_pre_gc; } 
+else if (strcmp(target, "jl_gc_set_cb_post_gc") == 0) {
+return (void*)&jl_gc_set_cb_post_gc; } 
+else if (strcmp(target, "jl_gc_set_cb_notify_external_alloc") == 0) {
+return (void*)&jl_gc_set_cb_notify_external_alloc; } 
+else if (strcmp(target, "jl_gc_set_cb_notify_external_free") == 0) {
+return (void*)&jl_gc_set_cb_notify_external_free; } 
+else if (strcmp(target, "jl_new_foreign_type") == 0) {
+return (void*)&jl_new_foreign_type; } 
+else if (strcmp(target, "jl_gc_max_internal_obj_size") == 0) {
+return (void*)&jl_gc_max_internal_obj_size; } 
+else if (strcmp(target, "jl_gc_external_obj_hdr_size") == 0) {
+return (void*)&jl_gc_external_obj_hdr_size; } 
+else if (strcmp(target, "jl_gc_alloc_typed") == 0) {
+return (void*)&jl_gc_alloc_typed; } 
+else if (strcmp(target, "jl_gc_mark_queue_obj") == 0) {
+return (void*)&jl_gc_mark_queue_obj; } 
+else if (strcmp(target, "jl_gc_mark_queue_objarray") == 0) {
+return (void*)&jl_gc_mark_queue_objarray; } 
+else if (strcmp(target, "jl_gc_schedule_foreign_sweepfunc") == 0) {
+return (void*)&jl_gc_schedule_foreign_sweepfunc; } 
+else if (strcmp(target, "jl_gc_enable_conservative_gc_support") == 0) {
+return (void*)&jl_gc_enable_conservative_gc_support; } 
+else if (strcmp(target, "jl_gc_conservative_gc_support_enabled") == 0) {
+return (void*)&jl_gc_conservative_gc_support_enabled; } 
+else if (strcmp(target, "jl_gc_internal_obj_base_ptr") == 0) {
+return (void*)&jl_gc_internal_obj_base_ptr; } 
+else if (strcmp(target, "jl_task_stack_buffer") == 0) {
+return (void*)&jl_task_stack_buffer; } 
+else if (strcmp(target, "jl_gc_add_ptr_finalizer") == 0) {
+return (void*)&jl_gc_add_ptr_finalizer; } 
+else if (strcmp(target, "jl_gc_add_finalizer_th") == 0) {
+return (void*)&jl_gc_add_finalizer_th; } 
+else if (strcmp(target, "jl_finalize_th") == 0) {
+return (void*)&jl_finalize_th; } 
+else if (strcmp(target, "jl_gc_new_weakref_th") == 0) {
+return (void*)&jl_gc_new_weakref_th; } 
+else if (strcmp(target, "jl_gc_num") == 0) {
+return (void*)&jl_gc_num; } 
+else if (strcmp(target, "jl_gc_counted_calloc") == 0) {
+return (void*)&jl_gc_counted_calloc; } 
+else if (strcmp(target, "jl_gc_counted_free_with_size") == 0) {
+return (void*)&jl_gc_counted_free_with_size; } 
+else if (strcmp(target, "jl_gc_counted_free") == 0) {
+return (void*)&jl_gc_counted_free; } 
+else if (strcmp(target, "jl_gc_counted_realloc_with_old_size") == 0) {
+return (void*)&jl_gc_counted_realloc_with_old_size; } 
+else if (strcmp(target, "jl_malloc") == 0) {
+return (void*)&jl_malloc; } 
+else if (strcmp(target, "jl_calloc") == 0) {
+return (void*)&jl_calloc; } 
+else if (strcmp(target, "jl_free") == 0) {
+return (void*)&jl_free; } 
+else if (strcmp(target, "jl_realloc") == 0) {
+return (void*)&jl_realloc; } 
+else if (strcmp(target, "jl_profile_stop_timer") == 0) {
+return (void*)&jl_profile_stop_timer; } 
+else if (strcmp(target, "jl_profile_start_timer") == 0) {
+return (void*)&jl_profile_start_timer; } 
+else if (strcmp(target, "jl_exit_on_sigint") == 0) {
+return (void*)&jl_exit_on_sigint; } 
+else if (strcmp(target, "jl_repl_raise_sigtstp") == 0) {
+return (void*)&jl_repl_raise_sigtstp; } 
+else if (strcmp(target, "jl_profile_init") == 0) {
+return (void*)&jl_profile_init; } 
+else if (strcmp(target, "jl_profile_get_data") == 0) {
+return (void*)&jl_profile_get_data; } 
+else if (strcmp(target, "jl_profile_len_data") == 0) {
+return (void*)&jl_profile_len_data; } 
+else if (strcmp(target, "jl_profile_maxlen_data") == 0) {
+return (void*)&jl_profile_maxlen_data; } 
+else if (strcmp(target, "jl_profile_delay_nsec") == 0) {
+return (void*)&jl_profile_delay_nsec; } 
+else if (strcmp(target, "jl_profile_clear_data") == 0) {
+return (void*)&jl_profile_clear_data; } 
+else if (strcmp(target, "jl_profile_is_running") == 0) {
+return (void*)&jl_profile_is_running; } 
+else if (strcmp(target, "jl_symbol_name") == 0) {
+return (void*)&jl_symbol_name; } 
+else if (strcmp(target, "jl_try_substrtod") == 0) {
+return (void*)&jl_try_substrtod; } 
+else if (strcmp(target, "jl_substrtod") == 0) {
+return (void*)&jl_substrtod; } 
+else if (strcmp(target, "jl_try_substrtof") == 0) {
+return (void*)&jl_try_substrtof; } 
+else if (strcmp(target, "jl_substrtof") == 0) {
+return (void*)&jl_substrtof; } 
+else if (strcmp(target, "jl_id_start_char") == 0) {
+return (void*)&jl_id_start_char; } 
+else if (strcmp(target, "jl_id_char") == 0) {
+return (void*)&jl_id_char; } 
+else if (strcmp(target, "jl_is_identifier") == 0) {
+return (void*)&jl_is_identifier; } 
+else if (strcmp(target, "jl_breakpoint") == 0) {
+return (void*)&jl_breakpoint; } 
+else if (strcmp(target, "jl_uv_flush") == 0) {
+return (void*)&jl_uv_flush; } 
+else if (strcmp(target, "jl_uv_putb") == 0) {
+return (void*)&jl_uv_putb; } 
+else if (strcmp(target, "jl_sizeof_stat") == 0) {
+return (void*)&jl_sizeof_stat; } 
+else if (strcmp(target, "jl_lstat") == 0) {
+return (void*)&jl_lstat; } 
+else if (strcmp(target, "jl_fstat") == 0) {
+return (void*)&jl_fstat; } 
+else if (strcmp(target, "jl_stat_dev") == 0) {
+return (void*)&jl_stat_dev; } 
+else if (strcmp(target, "jl_stat_ino") == 0) {
+return (void*)&jl_stat_ino; } 
+else if (strcmp(target, "jl_stat_mode") == 0) {
+return (void*)&jl_stat_mode; } 
+else if (strcmp(target, "jl_stat_nlink") == 0) {
+return (void*)&jl_stat_nlink; } 
+else if (strcmp(target, "jl_stat_uid") == 0) {
+return (void*)&jl_stat_uid; } 
+else if (strcmp(target, "jl_stat_gid") == 0) {
+return (void*)&jl_stat_gid; } 
+else if (strcmp(target, "jl_stat_rdev") == 0) {
+return (void*)&jl_stat_rdev; } 
+else if (strcmp(target, "jl_stat_size") == 0) {
+return (void*)&jl_stat_size; } 
+else if (strcmp(target, "jl_stat_blksize") == 0) {
+return (void*)&jl_stat_blksize; } 
+else if (strcmp(target, "jl_stat_blocks") == 0) {
+return (void*)&jl_stat_blocks; } 
+else if (strcmp(target, "jl_stat_mtime") == 0) {
+return (void*)&jl_stat_mtime; } 
+else if (strcmp(target, "jl_stat_ctime") == 0) {
+return (void*)&jl_stat_ctime; } 
+else if (strcmp(target, "jl_wake_libuv") == 0) {
+return (void*)&jl_wake_libuv; } 
+else if (strcmp(target, "jl_get_tls_world_age") == 0) {
+return (void*)&jl_get_tls_world_age; } 
+else if (strcmp(target, "jl_is_in_pure_context") == 0) {
+return (void*)&jl_is_in_pure_context; } 
+else if (strcmp(target, "jl_specializations_lookup") == 0) {
+return (void*)&jl_specializations_lookup; } 
+else if (strcmp(target, "jl_new_method_uninit") == 0) {
+return (void*)&jl_new_method_uninit; } 
+else if (strcmp(target, "jl_set_method_inferred") == 0) {
+return (void*)&jl_set_method_inferred; } 
+else if (strcmp(target, "jl_call_in_typeinf_world") == 0) {
+return (void*)&jl_call_in_typeinf_world; } 
+else if (strcmp(target, "jl_set_typeinf_func") == 0) {
+return (void*)&jl_set_typeinf_func; } 
+else if (strcmp(target, "jl_isa_compileable_sig") == 0) {
+return (void*)&jl_isa_compileable_sig; } 
+else if (strcmp(target, "jl_method_table_disable") == 0) {
+return (void*)&jl_method_table_disable; } 
+else if (strcmp(target, "jl_get_spec_lambda") == 0) {
+return (void*)&jl_get_spec_lambda; } 
+else if (strcmp(target, "jl_is_call_ambiguous") == 0) {
+return (void*)&jl_is_call_ambiguous; } 
+else if (strcmp(target, "jl_gf_invoke_lookup") == 0) {
+return (void*)&jl_gf_invoke_lookup; } 
+else if (strcmp(target, "jl_get_invoke_lambda") == 0) {
+return (void*)&jl_get_invoke_lambda; } 
+else if (strcmp(target, "jl_typeinf_begin") == 0) {
+return (void*)&jl_typeinf_begin; } 
+else if (strcmp(target, "jl_typeinf_end") == 0) {
+return (void*)&jl_typeinf_end; } 
+else if (strcmp(target, "jl_get_current_task") == 0) {
+return (void*)&jl_get_current_task; } 
+else if (strcmp(target, "jl_is_task_started") == 0) {
+return (void*)&jl_is_task_started; } 
+else if (strcmp(target, "jl_get_task_tid") == 0) {
+return (void*)&jl_get_task_tid; } 
+else if (strcmp(target, "jl_set_task_tid") == 0) {
+return (void*)&jl_set_task_tid; } 
+else if (strcmp(target, "jl_task_get_next") == 0) {
+return (void*)&jl_task_get_next; } 
+else if (strcmp(target, "pcre2_config_8") == 0) {
+return (void*)&pcre2_config_8; } 
+else if (strcmp(target, "pcre2_general_context_copy_8") == 0) {
+return (void*)&pcre2_general_context_copy_8; } 
+else if (strcmp(target, "pcre2_general_context_create_8") == 0) {
+return (void*)&pcre2_general_context_create_8; } 
+else if (strcmp(target, "pcre2_general_context_free_8") == 0) {
+return (void*)&pcre2_general_context_free_8; } 
+else if (strcmp(target, "pcre2_compile_context_copy_8") == 0) {
+return (void*)&pcre2_compile_context_copy_8; } 
+else if (strcmp(target, "pcre2_compile_context_create_8") == 0) {
+return (void*)&pcre2_compile_context_create_8; } 
+else if (strcmp(target, "pcre2_compile_context_free_8") == 0) {
+return (void*)&pcre2_compile_context_free_8; } 
+else if (strcmp(target, "pcre2_set_bsr_8") == 0) {
+return (void*)&pcre2_set_bsr_8; } 
+else if (strcmp(target, "pcre2_set_character_tables_8") == 0) {
+return (void*)&pcre2_set_character_tables_8; } 
+else if (strcmp(target, "pcre2_set_compile_extra_options_8") == 0) {
+return (void*)&pcre2_set_compile_extra_options_8; } 
+else if (strcmp(target, "pcre2_set_max_pattern_length_8") == 0) {
+return (void*)&pcre2_set_max_pattern_length_8; } 
+else if (strcmp(target, "pcre2_set_newline_8") == 0) {
+return (void*)&pcre2_set_newline_8; } 
+else if (strcmp(target, "pcre2_set_parens_nest_limit_8") == 0) {
+return (void*)&pcre2_set_parens_nest_limit_8; } 
+else if (strcmp(target, "pcre2_set_compile_recursion_guard_8") == 0) {
+return (void*)&pcre2_set_compile_recursion_guard_8; } 
+else if (strcmp(target, "pcre2_convert_context_copy_8") == 0) {
+return (void*)&pcre2_convert_context_copy_8; } 
+else if (strcmp(target, "pcre2_convert_context_create_8") == 0) {
+return (void*)&pcre2_convert_context_create_8; } 
+else if (strcmp(target, "pcre2_convert_context_free_8") == 0) {
+return (void*)&pcre2_convert_context_free_8; } 
+else if (strcmp(target, "pcre2_set_glob_escape_8") == 0) {
+return (void*)&pcre2_set_glob_escape_8; } 
+else if (strcmp(target, "pcre2_set_glob_separator_8") == 0) {
+return (void*)&pcre2_set_glob_separator_8; } 
+else if (strcmp(target, "pcre2_pattern_convert_8") == 0) {
+return (void*)&pcre2_pattern_convert_8; } 
+else if (strcmp(target, "pcre2_converted_pattern_free_8") == 0) {
+return (void*)&pcre2_converted_pattern_free_8; } 
+else if (strcmp(target, "pcre2_match_context_copy_8") == 0) {
+return (void*)&pcre2_match_context_copy_8; } 
+else if (strcmp(target, "pcre2_match_context_create_8") == 0) {
+return (void*)&pcre2_match_context_create_8; } 
+else if (strcmp(target, "pcre2_match_context_free_8") == 0) {
+return (void*)&pcre2_match_context_free_8; } 
+else if (strcmp(target, "pcre2_set_depth_limit_8") == 0) {
+return (void*)&pcre2_set_depth_limit_8; } 
+else if (strcmp(target, "pcre2_set_heap_limit_8") == 0) {
+return (void*)&pcre2_set_heap_limit_8; } 
+else if (strcmp(target, "pcre2_set_match_limit_8") == 0) {
+return (void*)&pcre2_set_match_limit_8; } 
+else if (strcmp(target, "pcre2_set_offset_limit_8") == 0) {
+return (void*)&pcre2_set_offset_limit_8; } 
+else if (strcmp(target, "pcre2_set_recursion_limit_8") == 0) {
+return (void*)&pcre2_set_recursion_limit_8; } 
+else if (strcmp(target, "pcre2_set_recursion_memory_management_8") == 0) {
+return (void*)&pcre2_set_recursion_memory_management_8; } 
+else if (strcmp(target, "pcre2_compile_8") == 0) {
+return (void*)&pcre2_compile_8; } 
+else if (strcmp(target, "pcre2_code_free_8") == 0) {
+return (void*)&pcre2_code_free_8; } 
+else if (strcmp(target, "pcre2_code_copy_8") == 0) {
+return (void*)&pcre2_code_copy_8; } 
+else if (strcmp(target, "pcre2_code_copy_with_tables_8") == 0) {
+return (void*)&pcre2_code_copy_with_tables_8; } 
+else if (strcmp(target, "pcre2_pattern_info_8") == 0) {
+return (void*)&pcre2_pattern_info_8; } 
+else if (strcmp(target, "pcre2_match_data_create_8") == 0) {
+return (void*)&pcre2_match_data_create_8; } 
+else if (strcmp(target, "pcre2_match_data_create_from_pattern_8") == 0) {
+return (void*)&pcre2_match_data_create_from_pattern_8; } 
+else if (strcmp(target, "pcre2_dfa_match_8") == 0) {
+return (void*)&pcre2_dfa_match_8; } 
+else if (strcmp(target, "pcre2_match_8") == 0) {
+return (void*)&pcre2_match_8; } 
+else if (strcmp(target, "pcre2_match_data_free_8") == 0) {
+return (void*)&pcre2_match_data_free_8; } 
+else if (strcmp(target, "pcre2_get_mark_8") == 0) {
+return (void*)&pcre2_get_mark_8; } 
+else if (strcmp(target, "pcre2_get_ovector_count_8") == 0) {
+return (void*)&pcre2_get_ovector_count_8; } 
+else if (strcmp(target, "pcre2_get_ovector_pointer_8") == 0) {
+return (void*)&pcre2_get_ovector_pointer_8; } 
+else if (strcmp(target, "pcre2_get_startchar_8") == 0) {
+return (void*)&pcre2_get_startchar_8; } 
+else if (strcmp(target, "pcre2_substring_copy_byname_8") == 0) {
+return (void*)&pcre2_substring_copy_byname_8; } 
+else if (strcmp(target, "pcre2_substring_copy_bynumber_8") == 0) {
+return (void*)&pcre2_substring_copy_bynumber_8; } 
+else if (strcmp(target, "pcre2_substring_free_8") == 0) {
+return (void*)&pcre2_substring_free_8; } 
+else if (strcmp(target, "pcre2_substring_get_byname_8") == 0) {
+return (void*)&pcre2_substring_get_byname_8; } 
+else if (strcmp(target, "pcre2_substring_get_bynumber_8") == 0) {
+return (void*)&pcre2_substring_get_bynumber_8; } 
+else if (strcmp(target, "pcre2_substring_length_byname_8") == 0) {
+return (void*)&pcre2_substring_length_byname_8; } 
+else if (strcmp(target, "pcre2_substring_length_bynumber_8") == 0) {
+return (void*)&pcre2_substring_length_bynumber_8; } 
+else if (strcmp(target, "pcre2_substring_nametable_scan_8") == 0) {
+return (void*)&pcre2_substring_nametable_scan_8; } 
+else if (strcmp(target, "pcre2_substring_number_from_name_8") == 0) {
+return (void*)&pcre2_substring_number_from_name_8; } 
+else if (strcmp(target, "pcre2_substring_list_free_8") == 0) {
+return (void*)&pcre2_substring_list_free_8; } 
+else if (strcmp(target, "pcre2_substring_list_get_8") == 0) {
+return (void*)&pcre2_substring_list_get_8; } 
+else if (strcmp(target, "pcre2_serialize_encode_8") == 0) {
+return (void*)&pcre2_serialize_encode_8; } 
+else if (strcmp(target, "pcre2_serialize_decode_8") == 0) {
+return (void*)&pcre2_serialize_decode_8; } 
+else if (strcmp(target, "pcre2_serialize_get_number_of_codes_8") == 0) {
+return (void*)&pcre2_serialize_get_number_of_codes_8; } 
+else if (strcmp(target, "pcre2_serialize_free_8") == 0) {
+return (void*)&pcre2_serialize_free_8; } 
+else if (strcmp(target, "pcre2_substitute_8") == 0) {
+return (void*)&pcre2_substitute_8; } 
+else if (strcmp(target, "pcre2_jit_compile_8") == 0) {
+return (void*)&pcre2_jit_compile_8; } 
+else if (strcmp(target, "pcre2_jit_match_8") == 0) {
+return (void*)&pcre2_jit_match_8; } 
+else if (strcmp(target, "pcre2_jit_free_unused_memory_8") == 0) {
+return (void*)&pcre2_jit_free_unused_memory_8; } 
+else if (strcmp(target, "pcre2_jit_stack_create_8") == 0) {
+return (void*)&pcre2_jit_stack_create_8; } 
+else if (strcmp(target, "pcre2_jit_stack_assign_8") == 0) {
+return (void*)&pcre2_jit_stack_assign_8; } 
+else if (strcmp(target, "pcre2_jit_stack_free_8") == 0) {
+return (void*)&pcre2_jit_stack_free_8; } 
+else if (strcmp(target, "pcre2_get_error_message_8") == 0) {
+return (void*)&pcre2_get_error_message_8; } 
+else if (strcmp(target, "pcre2_maketables_8") == 0) {
+return (void*)&pcre2_maketables_8; } 
+else if (strcmp(target, "pcre2_config_16") == 0) {
+return (void*)&pcre2_config_16; } 
+else if (strcmp(target, "pcre2_general_context_copy_16") == 0) {
+return (void*)&pcre2_general_context_copy_16; } 
+else if (strcmp(target, "pcre2_general_context_create_16") == 0) {
+return (void*)&pcre2_general_context_create_16; } 
+else if (strcmp(target, "pcre2_general_context_free_16") == 0) {
+return (void*)&pcre2_general_context_free_16; } 
+else if (strcmp(target, "pcre2_compile_context_copy_16") == 0) {
+return (void*)&pcre2_compile_context_copy_16; } 
+else if (strcmp(target, "pcre2_compile_context_create_16") == 0) {
+return (void*)&pcre2_compile_context_create_16; } 
+else if (strcmp(target, "pcre2_compile_context_free_16") == 0) {
+return (void*)&pcre2_compile_context_free_16; } 
+else if (strcmp(target, "pcre2_set_bsr_16") == 0) {
+return (void*)&pcre2_set_bsr_16; } 
+else if (strcmp(target, "pcre2_set_character_tables_16") == 0) {
+return (void*)&pcre2_set_character_tables_16; } 
+else if (strcmp(target, "pcre2_set_compile_extra_options_16") == 0) {
+return (void*)&pcre2_set_compile_extra_options_16; } 
+else if (strcmp(target, "pcre2_set_max_pattern_length_16") == 0) {
+return (void*)&pcre2_set_max_pattern_length_16; } 
+else if (strcmp(target, "pcre2_set_newline_16") == 0) {
+return (void*)&pcre2_set_newline_16; } 
+else if (strcmp(target, "pcre2_set_parens_nest_limit_16") == 0) {
+return (void*)&pcre2_set_parens_nest_limit_16; } 
+else if (strcmp(target, "pcre2_set_compile_recursion_guard_16") == 0) {
+return (void*)&pcre2_set_compile_recursion_guard_16; } 
+else if (strcmp(target, "pcre2_convert_context_copy_16") == 0) {
+return (void*)&pcre2_convert_context_copy_16; } 
+else if (strcmp(target, "pcre2_convert_context_create_16") == 0) {
+return (void*)&pcre2_convert_context_create_16; } 
+else if (strcmp(target, "pcre2_convert_context_free_16") == 0) {
+return (void*)&pcre2_convert_context_free_16; } 
+else if (strcmp(target, "pcre2_set_glob_escape_16") == 0) {
+return (void*)&pcre2_set_glob_escape_16; } 
+else if (strcmp(target, "pcre2_set_glob_separator_16") == 0) {
+return (void*)&pcre2_set_glob_separator_16; } 
+else if (strcmp(target, "pcre2_pattern_convert_16") == 0) {
+return (void*)&pcre2_pattern_convert_16; } 
+else if (strcmp(target, "pcre2_converted_pattern_free_16") == 0) {
+return (void*)&pcre2_converted_pattern_free_16; } 
+else if (strcmp(target, "pcre2_match_context_copy_16") == 0) {
+return (void*)&pcre2_match_context_copy_16; } 
+else if (strcmp(target, "pcre2_match_context_create_16") == 0) {
+return (void*)&pcre2_match_context_create_16; } 
+else if (strcmp(target, "pcre2_match_context_free_16") == 0) {
+return (void*)&pcre2_match_context_free_16; } 
+else if (strcmp(target, "pcre2_set_depth_limit_16") == 0) {
+return (void*)&pcre2_set_depth_limit_16; } 
+else if (strcmp(target, "pcre2_set_heap_limit_16") == 0) {
+return (void*)&pcre2_set_heap_limit_16; } 
+else if (strcmp(target, "pcre2_set_match_limit_16") == 0) {
+return (void*)&pcre2_set_match_limit_16; } 
+else if (strcmp(target, "pcre2_set_offset_limit_16") == 0) {
+return (void*)&pcre2_set_offset_limit_16; } 
+else if (strcmp(target, "pcre2_set_recursion_limit_16") == 0) {
+return (void*)&pcre2_set_recursion_limit_16; } 
+else if (strcmp(target, "pcre2_set_recursion_memory_management_16") == 0) {
+return (void*)&pcre2_set_recursion_memory_management_16; } 
+else if (strcmp(target, "pcre2_compile_16") == 0) {
+return (void*)&pcre2_compile_16; } 
+else if (strcmp(target, "pcre2_code_free_16") == 0) {
+return (void*)&pcre2_code_free_16; } 
+else if (strcmp(target, "pcre2_code_copy_16") == 0) {
+return (void*)&pcre2_code_copy_16; } 
+else if (strcmp(target, "pcre2_code_copy_with_tables_16") == 0) {
+return (void*)&pcre2_code_copy_with_tables_16; } 
+else if (strcmp(target, "pcre2_pattern_info_16") == 0) {
+return (void*)&pcre2_pattern_info_16; } 
+else if (strcmp(target, "pcre2_match_data_create_16") == 0) {
+return (void*)&pcre2_match_data_create_16; } 
+else if (strcmp(target, "pcre2_match_data_create_from_pattern_16") == 0) {
+return (void*)&pcre2_match_data_create_from_pattern_16; } 
+else if (strcmp(target, "pcre2_dfa_match_16") == 0) {
+return (void*)&pcre2_dfa_match_16; } 
+else if (strcmp(target, "pcre2_match_16") == 0) {
+return (void*)&pcre2_match_16; } 
+else if (strcmp(target, "pcre2_match_data_free_16") == 0) {
+return (void*)&pcre2_match_data_free_16; } 
+else if (strcmp(target, "pcre2_get_mark_16") == 0) {
+return (void*)&pcre2_get_mark_16; } 
+else if (strcmp(target, "pcre2_get_ovector_count_16") == 0) {
+return (void*)&pcre2_get_ovector_count_16; } 
+else if (strcmp(target, "pcre2_get_ovector_pointer_16") == 0) {
+return (void*)&pcre2_get_ovector_pointer_16; } 
+else if (strcmp(target, "pcre2_get_startchar_16") == 0) {
+return (void*)&pcre2_get_startchar_16; } 
+else if (strcmp(target, "pcre2_substring_copy_byname_16") == 0) {
+return (void*)&pcre2_substring_copy_byname_16; } 
+else if (strcmp(target, "pcre2_substring_copy_bynumber_16") == 0) {
+return (void*)&pcre2_substring_copy_bynumber_16; } 
+else if (strcmp(target, "pcre2_substring_free_16") == 0) {
+return (void*)&pcre2_substring_free_16; } 
+else if (strcmp(target, "pcre2_substring_get_byname_16") == 0) {
+return (void*)&pcre2_substring_get_byname_16; } 
+else if (strcmp(target, "pcre2_substring_get_bynumber_16") == 0) {
+return (void*)&pcre2_substring_get_bynumber_16; } 
+else if (strcmp(target, "pcre2_substring_length_byname_16") == 0) {
+return (void*)&pcre2_substring_length_byname_16; } 
+else if (strcmp(target, "pcre2_substring_length_bynumber_16") == 0) {
+return (void*)&pcre2_substring_length_bynumber_16; } 
+else if (strcmp(target, "pcre2_substring_nametable_scan_16") == 0) {
+return (void*)&pcre2_substring_nametable_scan_16; } 
+else if (strcmp(target, "pcre2_substring_number_from_name_16") == 0) {
+return (void*)&pcre2_substring_number_from_name_16; } 
+else if (strcmp(target, "pcre2_substring_list_free_16") == 0) {
+return (void*)&pcre2_substring_list_free_16; } 
+else if (strcmp(target, "pcre2_substring_list_get_16") == 0) {
+return (void*)&pcre2_substring_list_get_16; } 
+else if (strcmp(target, "pcre2_serialize_encode_16") == 0) {
+return (void*)&pcre2_serialize_encode_16; } 
+else if (strcmp(target, "pcre2_serialize_decode_16") == 0) {
+return (void*)&pcre2_serialize_decode_16; } 
+else if (strcmp(target, "pcre2_serialize_get_number_of_codes_16") == 0) {
+return (void*)&pcre2_serialize_get_number_of_codes_16; } 
+else if (strcmp(target, "pcre2_serialize_free_16") == 0) {
+return (void*)&pcre2_serialize_free_16; } 
+else if (strcmp(target, "pcre2_substitute_16") == 0) {
+return (void*)&pcre2_substitute_16; } 
+else if (strcmp(target, "pcre2_jit_compile_16") == 0) {
+return (void*)&pcre2_jit_compile_16; } 
+else if (strcmp(target, "pcre2_jit_match_16") == 0) {
+return (void*)&pcre2_jit_match_16; } 
+else if (strcmp(target, "pcre2_jit_free_unused_memory_16") == 0) {
+return (void*)&pcre2_jit_free_unused_memory_16; } 
+else if (strcmp(target, "pcre2_jit_stack_create_16") == 0) {
+return (void*)&pcre2_jit_stack_create_16; } 
+else if (strcmp(target, "pcre2_jit_stack_assign_16") == 0) {
+return (void*)&pcre2_jit_stack_assign_16; } 
+else if (strcmp(target, "pcre2_jit_stack_free_16") == 0) {
+return (void*)&pcre2_jit_stack_free_16; } 
+else if (strcmp(target, "pcre2_get_error_message_16") == 0) {
+return (void*)&pcre2_get_error_message_16; } 
+else if (strcmp(target, "pcre2_maketables_16") == 0) {
+return (void*)&pcre2_maketables_16; } 
+else if (strcmp(target, "pcre2_config_32") == 0) {
+return (void*)&pcre2_config_32; } 
+else if (strcmp(target, "pcre2_general_context_copy_32") == 0) {
+return (void*)&pcre2_general_context_copy_32; } 
+else if (strcmp(target, "pcre2_general_context_create_32") == 0) {
+return (void*)&pcre2_general_context_create_32; } 
+else if (strcmp(target, "pcre2_general_context_free_32") == 0) {
+return (void*)&pcre2_general_context_free_32; } 
+else if (strcmp(target, "pcre2_compile_context_copy_32") == 0) {
+return (void*)&pcre2_compile_context_copy_32; } 
+else if (strcmp(target, "pcre2_compile_context_create_32") == 0) {
+return (void*)&pcre2_compile_context_create_32; } 
+else if (strcmp(target, "pcre2_compile_context_free_32") == 0) {
+return (void*)&pcre2_compile_context_free_32; } 
+else if (strcmp(target, "pcre2_set_bsr_32") == 0) {
+return (void*)&pcre2_set_bsr_32; } 
+else if (strcmp(target, "pcre2_set_character_tables_32") == 0) {
+return (void*)&pcre2_set_character_tables_32; } 
+else if (strcmp(target, "pcre2_set_compile_extra_options_32") == 0) {
+return (void*)&pcre2_set_compile_extra_options_32; } 
+else if (strcmp(target, "pcre2_set_max_pattern_length_32") == 0) {
+return (void*)&pcre2_set_max_pattern_length_32; } 
+else if (strcmp(target, "pcre2_set_newline_32") == 0) {
+return (void*)&pcre2_set_newline_32; } 
+else if (strcmp(target, "pcre2_set_parens_nest_limit_32") == 0) {
+return (void*)&pcre2_set_parens_nest_limit_32; } 
+else if (strcmp(target, "pcre2_set_compile_recursion_guard_32") == 0) {
+return (void*)&pcre2_set_compile_recursion_guard_32; } 
+else if (strcmp(target, "pcre2_convert_context_copy_32") == 0) {
+return (void*)&pcre2_convert_context_copy_32; } 
+else if (strcmp(target, "pcre2_convert_context_create_32") == 0) {
+return (void*)&pcre2_convert_context_create_32; } 
+else if (strcmp(target, "pcre2_convert_context_free_32") == 0) {
+return (void*)&pcre2_convert_context_free_32; } 
+else if (strcmp(target, "pcre2_set_glob_escape_32") == 0) {
+return (void*)&pcre2_set_glob_escape_32; } 
+else if (strcmp(target, "pcre2_set_glob_separator_32") == 0) {
+return (void*)&pcre2_set_glob_separator_32; } 
+else if (strcmp(target, "pcre2_pattern_convert_32") == 0) {
+return (void*)&pcre2_pattern_convert_32; } 
+else if (strcmp(target, "pcre2_converted_pattern_free_32") == 0) {
+return (void*)&pcre2_converted_pattern_free_32; } 
+else if (strcmp(target, "pcre2_match_context_copy_32") == 0) {
+return (void*)&pcre2_match_context_copy_32; } 
+else if (strcmp(target, "pcre2_match_context_create_32") == 0) {
+return (void*)&pcre2_match_context_create_32; } 
+else if (strcmp(target, "pcre2_match_context_free_32") == 0) {
+return (void*)&pcre2_match_context_free_32; } 
+else if (strcmp(target, "pcre2_set_depth_limit_32") == 0) {
+return (void*)&pcre2_set_depth_limit_32; } 
+else if (strcmp(target, "pcre2_set_heap_limit_32") == 0) {
+return (void*)&pcre2_set_heap_limit_32; } 
+else if (strcmp(target, "pcre2_set_match_limit_32") == 0) {
+return (void*)&pcre2_set_match_limit_32; } 
+else if (strcmp(target, "pcre2_set_offset_limit_32") == 0) {
+return (void*)&pcre2_set_offset_limit_32; } 
+else if (strcmp(target, "pcre2_set_recursion_limit_32") == 0) {
+return (void*)&pcre2_set_recursion_limit_32; } 
+else if (strcmp(target, "pcre2_set_recursion_memory_management_32") == 0) {
+return (void*)&pcre2_set_recursion_memory_management_32; } 
+else if (strcmp(target, "pcre2_compile_32") == 0) {
+return (void*)&pcre2_compile_32; } 
+else if (strcmp(target, "pcre2_code_free_32") == 0) {
+return (void*)&pcre2_code_free_32; } 
+else if (strcmp(target, "pcre2_code_copy_32") == 0) {
+return (void*)&pcre2_code_copy_32; } 
+else if (strcmp(target, "pcre2_code_copy_with_tables_32") == 0) {
+return (void*)&pcre2_code_copy_with_tables_32; } 
+else if (strcmp(target, "pcre2_pattern_info_32") == 0) {
+return (void*)&pcre2_pattern_info_32; } 
+else if (strcmp(target, "pcre2_match_data_create_32") == 0) {
+return (void*)&pcre2_match_data_create_32; } 
+else if (strcmp(target, "pcre2_match_data_create_from_pattern_32") == 0) {
+return (void*)&pcre2_match_data_create_from_pattern_32; } 
+else if (strcmp(target, "pcre2_dfa_match_32") == 0) {
+return (void*)&pcre2_dfa_match_32; } 
+else if (strcmp(target, "pcre2_match_32") == 0) {
+return (void*)&pcre2_match_32; } 
+else if (strcmp(target, "pcre2_match_data_free_32") == 0) {
+return (void*)&pcre2_match_data_free_32; } 
+else if (strcmp(target, "pcre2_get_mark_32") == 0) {
+return (void*)&pcre2_get_mark_32; } 
+else if (strcmp(target, "pcre2_get_ovector_count_32") == 0) {
+return (void*)&pcre2_get_ovector_count_32; } 
+else if (strcmp(target, "pcre2_get_ovector_pointer_32") == 0) {
+return (void*)&pcre2_get_ovector_pointer_32; } 
+else if (strcmp(target, "pcre2_get_startchar_32") == 0) {
+return (void*)&pcre2_get_startchar_32; } 
+else if (strcmp(target, "pcre2_substring_copy_byname_32") == 0) {
+return (void*)&pcre2_substring_copy_byname_32; } 
+else if (strcmp(target, "pcre2_substring_copy_bynumber_32") == 0) {
+return (void*)&pcre2_substring_copy_bynumber_32; } 
+else if (strcmp(target, "pcre2_substring_free_32") == 0) {
+return (void*)&pcre2_substring_free_32; } 
+else if (strcmp(target, "pcre2_substring_get_byname_32") == 0) {
+return (void*)&pcre2_substring_get_byname_32; } 
+else if (strcmp(target, "pcre2_substring_get_bynumber_32") == 0) {
+return (void*)&pcre2_substring_get_bynumber_32; } 
+else if (strcmp(target, "pcre2_substring_length_byname_32") == 0) {
+return (void*)&pcre2_substring_length_byname_32; } 
+else if (strcmp(target, "pcre2_substring_length_bynumber_32") == 0) {
+return (void*)&pcre2_substring_length_bynumber_32; } 
+else if (strcmp(target, "pcre2_substring_nametable_scan_32") == 0) {
+return (void*)&pcre2_substring_nametable_scan_32; } 
+else if (strcmp(target, "pcre2_substring_number_from_name_32") == 0) {
+return (void*)&pcre2_substring_number_from_name_32; } 
+else if (strcmp(target, "pcre2_substring_list_free_32") == 0) {
+return (void*)&pcre2_substring_list_free_32; } 
+else if (strcmp(target, "pcre2_substring_list_get_32") == 0) {
+return (void*)&pcre2_substring_list_get_32; } 
+else if (strcmp(target, "pcre2_serialize_encode_32") == 0) {
+return (void*)&pcre2_serialize_encode_32; } 
+else if (strcmp(target, "pcre2_serialize_decode_32") == 0) {
+return (void*)&pcre2_serialize_decode_32; } 
+else if (strcmp(target, "pcre2_serialize_get_number_of_codes_32") == 0) {
+return (void*)&pcre2_serialize_get_number_of_codes_32; } 
+else if (strcmp(target, "pcre2_serialize_free_32") == 0) {
+return (void*)&pcre2_serialize_free_32; } 
+else if (strcmp(target, "pcre2_substitute_32") == 0) {
+return (void*)&pcre2_substitute_32; } 
+else if (strcmp(target, "pcre2_jit_compile_32") == 0) {
+return (void*)&pcre2_jit_compile_32; } 
+else if (strcmp(target, "pcre2_jit_match_32") == 0) {
+return (void*)&pcre2_jit_match_32; } 
+else if (strcmp(target, "pcre2_jit_free_unused_memory_32") == 0) {
+return (void*)&pcre2_jit_free_unused_memory_32; } 
+else if (strcmp(target, "pcre2_jit_stack_create_32") == 0) {
+return (void*)&pcre2_jit_stack_create_32; } 
+else if (strcmp(target, "pcre2_jit_stack_assign_32") == 0) {
+return (void*)&pcre2_jit_stack_assign_32; } 
+else if (strcmp(target, "pcre2_jit_stack_free_32") == 0) {
+return (void*)&pcre2_jit_stack_free_32; } 
+else if (strcmp(target, "pcre2_get_error_message_32") == 0) {
+return (void*)&pcre2_get_error_message_32; } 
+else if (strcmp(target, "pcre2_maketables_32") == 0) {
+return (void*)&pcre2_maketables_32; } 
+else if (strcmp(target, "utf8proc_version") == 0) {
+return (void*)&utf8proc_version; } 
+else if (strcmp(target, "utf8proc_unicode_version") == 0) {
+return (void*)&utf8proc_unicode_version; } 
+else if (strcmp(target, "utf8proc_errmsg") == 0) {
+return (void*)&utf8proc_errmsg; } 
+else if (strcmp(target, "utf8proc_iterate") == 0) {
+return (void*)&utf8proc_iterate; } 
+else if (strcmp(target, "utf8proc_codepoint_valid") == 0) {
+return (void*)&utf8proc_codepoint_valid; } 
+else if (strcmp(target, "utf8proc_encode_char") == 0) {
+return (void*)&utf8proc_encode_char; } 
+else if (strcmp(target, "utf8proc_get_property") == 0) {
+return (void*)&utf8proc_get_property; } 
+else if (strcmp(target, "utf8proc_decompose_char") == 0) {
+return (void*)&utf8proc_decompose_char; } 
+else if (strcmp(target, "utf8proc_decompose") == 0) {
+return (void*)&utf8proc_decompose; } 
+else if (strcmp(target, "utf8proc_decompose_custom") == 0) {
+return (void*)&utf8proc_decompose_custom; } 
+else if (strcmp(target, "utf8proc_normalize_utf32") == 0) {
+return (void*)&utf8proc_normalize_utf32; } 
+else if (strcmp(target, "utf8proc_reencode") == 0) {
+return (void*)&utf8proc_reencode; } 
+else if (strcmp(target, "utf8proc_grapheme_break_stateful") == 0) {
+return (void*)&utf8proc_grapheme_break_stateful; } 
+else if (strcmp(target, "utf8proc_grapheme_break") == 0) {
+return (void*)&utf8proc_grapheme_break; } 
+else if (strcmp(target, "utf8proc_tolower") == 0) {
+return (void*)&utf8proc_tolower; } 
+else if (strcmp(target, "utf8proc_toupper") == 0) {
+return (void*)&utf8proc_toupper; } 
+else if (strcmp(target, "utf8proc_totitle") == 0) {
+return (void*)&utf8proc_totitle; } 
+else if (strcmp(target, "utf8proc_charwidth") == 0) {
+return (void*)&utf8proc_charwidth; } 
+else if (strcmp(target, "utf8proc_category") == 0) {
+return (void*)&utf8proc_category; } 
+else if (strcmp(target, "utf8proc_category_string") == 0) {
+return (void*)&utf8proc_category_string; } 
+else if (strcmp(target, "utf8proc_map") == 0) {
+return (void*)&utf8proc_map; } 
+else if (strcmp(target, "utf8proc_map_custom") == 0) {
+return (void*)&utf8proc_map_custom; } 
+else if (strcmp(target, "utf8proc_NFD") == 0) {
+return (void*)&utf8proc_NFD; } 
+else if (strcmp(target, "utf8proc_NFC") == 0) {
+return (void*)&utf8proc_NFC; } 
+else if (strcmp(target, "utf8proc_NFKD") == 0) {
+return (void*)&utf8proc_NFKD; } 
+else if (strcmp(target, "utf8proc_NFKC") == 0) {
+return (void*)&utf8proc_NFKC; } 
+else if (strcmp(target, "utf8proc_NFKC_Casefold") == 0) {
+return (void*)&utf8proc_NFKC_Casefold; } 
+else if (strcmp(target, "__gmp_set_memory_functions") == 0) {
+return (void*)&__gmp_set_memory_functions; } 
+else if (strcmp(target, "__gmp_get_memory_functions") == 0) {
+return (void*)&__gmp_get_memory_functions; } 
+else if (strcmp(target, "__gmp_set_alloc_overflow_function") == 0) {
+return (void*)&__gmp_set_alloc_overflow_function; } 
+else if (strcmp(target, "__gmp_get_alloc_overflow_function") == 0) {
+return (void*)&__gmp_get_alloc_overflow_function; } 
+else if (strcmp(target, "__gmp_randinit") == 0) {
+return (void*)&__gmp_randinit; } 
+else if (strcmp(target, "__gmp_randinit_default") == 0) {
+return (void*)&__gmp_randinit_default; } 
+else if (strcmp(target, "__gmp_randinit_lc_2exp") == 0) {
+return (void*)&__gmp_randinit_lc_2exp; } 
+else if (strcmp(target, "__gmp_randinit_lc_2exp_size") == 0) {
+return (void*)&__gmp_randinit_lc_2exp_size; } 
+else if (strcmp(target, "__gmp_randinit_mt") == 0) {
+return (void*)&__gmp_randinit_mt; } 
+else if (strcmp(target, "__gmp_randinit_set") == 0) {
+return (void*)&__gmp_randinit_set; } 
+else if (strcmp(target, "__gmp_randseed") == 0) {
+return (void*)&__gmp_randseed; } 
+else if (strcmp(target, "__gmp_randseed_ui") == 0) {
+return (void*)&__gmp_randseed_ui; } 
+else if (strcmp(target, "__gmp_randclear") == 0) {
+return (void*)&__gmp_randclear; } 
+else if (strcmp(target, "__gmp_urandomb_ui") == 0) {
+return (void*)&__gmp_urandomb_ui; } 
+else if (strcmp(target, "__gmp_urandomm_ui") == 0) {
+return (void*)&__gmp_urandomm_ui; } 
+else if (strcmp(target, "__gmp_asprintf") == 0) {
+return (void*)&__gmp_asprintf; } 
+else if (strcmp(target, "__gmp_printf") == 0) {
+return (void*)&__gmp_printf; } 
+else if (strcmp(target, "__gmp_snprintf") == 0) {
+return (void*)&__gmp_snprintf; } 
+else if (strcmp(target, "__gmp_sprintf") == 0) {
+return (void*)&__gmp_sprintf; } 
+else if (strcmp(target, "__gmp_scanf") == 0) {
+return (void*)&__gmp_scanf; } 
+else if (strcmp(target, "__gmp_sscanf") == 0) {
+return (void*)&__gmp_sscanf; } 
+else if (strcmp(target, "__gmpz_realloc") == 0) {
+return (void*)&__gmpz_realloc; } 
+else if (strcmp(target, "__gmpz_abs") == 0) {
+return (void*)&__gmpz_abs; } 
+else if (strcmp(target, "__gmpz_add") == 0) {
+return (void*)&__gmpz_add; } 
+else if (strcmp(target, "__gmpz_add_ui") == 0) {
+return (void*)&__gmpz_add_ui; } 
+else if (strcmp(target, "__gmpz_addmul") == 0) {
+return (void*)&__gmpz_addmul; } 
+else if (strcmp(target, "__gmpz_addmul_ui") == 0) {
+return (void*)&__gmpz_addmul_ui; } 
+else if (strcmp(target, "__gmpz_and") == 0) {
+return (void*)&__gmpz_and; } 
+else if (strcmp(target, "__gmpz_array_init") == 0) {
+return (void*)&__gmpz_array_init; } 
+else if (strcmp(target, "__gmpz_bin_ui") == 0) {
+return (void*)&__gmpz_bin_ui; } 
+else if (strcmp(target, "__gmpz_bin_uiui") == 0) {
+return (void*)&__gmpz_bin_uiui; } 
+else if (strcmp(target, "__gmpz_cdiv_q") == 0) {
+return (void*)&__gmpz_cdiv_q; } 
+else if (strcmp(target, "__gmpz_cdiv_q_2exp") == 0) {
+return (void*)&__gmpz_cdiv_q_2exp; } 
+else if (strcmp(target, "__gmpz_cdiv_q_ui") == 0) {
+return (void*)&__gmpz_cdiv_q_ui; } 
+else if (strcmp(target, "__gmpz_cdiv_qr") == 0) {
+return (void*)&__gmpz_cdiv_qr; } 
+else if (strcmp(target, "__gmpz_cdiv_qr_ui") == 0) {
+return (void*)&__gmpz_cdiv_qr_ui; } 
+else if (strcmp(target, "__gmpz_cdiv_r") == 0) {
+return (void*)&__gmpz_cdiv_r; } 
+else if (strcmp(target, "__gmpz_cdiv_r_2exp") == 0) {
+return (void*)&__gmpz_cdiv_r_2exp; } 
+else if (strcmp(target, "__gmpz_cdiv_r_ui") == 0) {
+return (void*)&__gmpz_cdiv_r_ui; } 
+else if (strcmp(target, "__gmpz_cdiv_ui") == 0) {
+return (void*)&__gmpz_cdiv_ui; } 
+else if (strcmp(target, "__gmpz_clear") == 0) {
+return (void*)&__gmpz_clear; } 
+else if (strcmp(target, "__gmpz_clears") == 0) {
+return (void*)&__gmpz_clears; } 
+else if (strcmp(target, "__gmpz_clrbit") == 0) {
+return (void*)&__gmpz_clrbit; } 
+else if (strcmp(target, "__gmpz_cmp") == 0) {
+return (void*)&__gmpz_cmp; } 
+else if (strcmp(target, "__gmpz_cmp_d") == 0) {
+return (void*)&__gmpz_cmp_d; } 
+else if (strcmp(target, "__gmpz_cmp_si") == 0) {
+return (void*)&__gmpz_cmp_si; } 
+else if (strcmp(target, "__gmpz_cmp_ui") == 0) {
+return (void*)&__gmpz_cmp_ui; } 
+else if (strcmp(target, "__gmpz_cmpabs") == 0) {
+return (void*)&__gmpz_cmpabs; } 
+else if (strcmp(target, "__gmpz_cmpabs_d") == 0) {
+return (void*)&__gmpz_cmpabs_d; } 
+else if (strcmp(target, "__gmpz_cmpabs_ui") == 0) {
+return (void*)&__gmpz_cmpabs_ui; } 
+else if (strcmp(target, "__gmpz_com") == 0) {
+return (void*)&__gmpz_com; } 
+else if (strcmp(target, "__gmpz_combit") == 0) {
+return (void*)&__gmpz_combit; } 
+else if (strcmp(target, "__gmpz_congruent_p") == 0) {
+return (void*)&__gmpz_congruent_p; } 
+else if (strcmp(target, "__gmpz_congruent_2exp_p") == 0) {
+return (void*)&__gmpz_congruent_2exp_p; } 
+else if (strcmp(target, "__gmpz_congruent_ui_p") == 0) {
+return (void*)&__gmpz_congruent_ui_p; } 
+else if (strcmp(target, "__gmpz_divexact") == 0) {
+return (void*)&__gmpz_divexact; } 
+else if (strcmp(target, "__gmpz_divexact_ui") == 0) {
+return (void*)&__gmpz_divexact_ui; } 
+else if (strcmp(target, "__gmpz_divisible_p") == 0) {
+return (void*)&__gmpz_divisible_p; } 
+else if (strcmp(target, "__gmpz_divisible_ui_p") == 0) {
+return (void*)&__gmpz_divisible_ui_p; } 
+else if (strcmp(target, "__gmpz_divisible_2exp_p") == 0) {
+return (void*)&__gmpz_divisible_2exp_p; } 
+else if (strcmp(target, "__gmpz_dump") == 0) {
+return (void*)&__gmpz_dump; } 
+else if (strcmp(target, "__gmpz_export") == 0) {
+return (void*)&__gmpz_export; } 
+else if (strcmp(target, "__gmpz_fac_ui") == 0) {
+return (void*)&__gmpz_fac_ui; } 
+else if (strcmp(target, "__gmpz_2fac_ui") == 0) {
+return (void*)&__gmpz_2fac_ui; } 
+else if (strcmp(target, "__gmpz_mfac_uiui") == 0) {
+return (void*)&__gmpz_mfac_uiui; } 
+else if (strcmp(target, "__gmpz_primorial_ui") == 0) {
+return (void*)&__gmpz_primorial_ui; } 
+else if (strcmp(target, "__gmpz_fdiv_q") == 0) {
+return (void*)&__gmpz_fdiv_q; } 
+else if (strcmp(target, "__gmpz_fdiv_q_2exp") == 0) {
+return (void*)&__gmpz_fdiv_q_2exp; } 
+else if (strcmp(target, "__gmpz_fdiv_q_ui") == 0) {
+return (void*)&__gmpz_fdiv_q_ui; } 
+else if (strcmp(target, "__gmpz_fdiv_qr") == 0) {
+return (void*)&__gmpz_fdiv_qr; } 
+else if (strcmp(target, "__gmpz_fdiv_qr_ui") == 0) {
+return (void*)&__gmpz_fdiv_qr_ui; } 
+else if (strcmp(target, "__gmpz_fdiv_r") == 0) {
+return (void*)&__gmpz_fdiv_r; } 
+else if (strcmp(target, "__gmpz_fdiv_r_2exp") == 0) {
+return (void*)&__gmpz_fdiv_r_2exp; } 
+else if (strcmp(target, "__gmpz_fdiv_r_ui") == 0) {
+return (void*)&__gmpz_fdiv_r_ui; } 
+else if (strcmp(target, "__gmpz_fdiv_ui") == 0) {
+return (void*)&__gmpz_fdiv_ui; } 
+else if (strcmp(target, "__gmpz_fib_ui") == 0) {
+return (void*)&__gmpz_fib_ui; } 
+else if (strcmp(target, "__gmpz_fib2_ui") == 0) {
+return (void*)&__gmpz_fib2_ui; } 
+else if (strcmp(target, "__gmpz_fits_sint_p") == 0) {
+return (void*)&__gmpz_fits_sint_p; } 
+else if (strcmp(target, "__gmpz_fits_slong_p") == 0) {
+return (void*)&__gmpz_fits_slong_p; } 
+else if (strcmp(target, "__gmpz_fits_sshort_p") == 0) {
+return (void*)&__gmpz_fits_sshort_p; } 
+else if (strcmp(target, "__gmpz_fits_uint_p") == 0) {
+return (void*)&__gmpz_fits_uint_p; } 
+else if (strcmp(target, "__gmpz_fits_ulong_p") == 0) {
+return (void*)&__gmpz_fits_ulong_p; } 
+else if (strcmp(target, "__gmpz_fits_ushort_p") == 0) {
+return (void*)&__gmpz_fits_ushort_p; } 
+else if (strcmp(target, "__gmpz_gcd") == 0) {
+return (void*)&__gmpz_gcd; } 
+else if (strcmp(target, "__gmpz_gcd_ui") == 0) {
+return (void*)&__gmpz_gcd_ui; } 
+else if (strcmp(target, "__gmpz_gcdext") == 0) {
+return (void*)&__gmpz_gcdext; } 
+else if (strcmp(target, "__gmpz_get_d") == 0) {
+return (void*)&__gmpz_get_d; } 
+else if (strcmp(target, "__gmpz_get_d_2exp") == 0) {
+return (void*)&__gmpz_get_d_2exp; } 
+else if (strcmp(target, "__gmpz_get_si") == 0) {
+return (void*)&__gmpz_get_si; } 
+else if (strcmp(target, "__gmpz_get_str") == 0) {
+return (void*)&__gmpz_get_str; } 
+else if (strcmp(target, "__gmpz_get_ui") == 0) {
+return (void*)&__gmpz_get_ui; } 
+else if (strcmp(target, "__gmpz_getlimbn") == 0) {
+return (void*)&__gmpz_getlimbn; } 
+else if (strcmp(target, "__gmpz_hamdist") == 0) {
+return (void*)&__gmpz_hamdist; } 
+else if (strcmp(target, "__gmpz_import") == 0) {
+return (void*)&__gmpz_import; } 
+else if (strcmp(target, "__gmpz_init") == 0) {
+return (void*)&__gmpz_init; } 
+else if (strcmp(target, "__gmpz_init2") == 0) {
+return (void*)&__gmpz_init2; } 
+else if (strcmp(target, "__gmpz_inits") == 0) {
+return (void*)&__gmpz_inits; } 
+else if (strcmp(target, "__gmpz_init_set") == 0) {
+return (void*)&__gmpz_init_set; } 
+else if (strcmp(target, "__gmpz_init_set_d") == 0) {
+return (void*)&__gmpz_init_set_d; } 
+else if (strcmp(target, "__gmpz_init_set_si") == 0) {
+return (void*)&__gmpz_init_set_si; } 
+else if (strcmp(target, "__gmpz_init_set_str") == 0) {
+return (void*)&__gmpz_init_set_str; } 
+else if (strcmp(target, "__gmpz_init_set_ui") == 0) {
+return (void*)&__gmpz_init_set_ui; } 
+else if (strcmp(target, "__gmpz_invert") == 0) {
+return (void*)&__gmpz_invert; } 
+else if (strcmp(target, "__gmpz_ior") == 0) {
+return (void*)&__gmpz_ior; } 
+else if (strcmp(target, "__gmpz_jacobi") == 0) {
+return (void*)&__gmpz_jacobi; } 
+else if (strcmp(target, "__gmpz_kronecker_si") == 0) {
+return (void*)&__gmpz_kronecker_si; } 
+else if (strcmp(target, "__gmpz_kronecker_ui") == 0) {
+return (void*)&__gmpz_kronecker_ui; } 
+else if (strcmp(target, "__gmpz_si_kronecker") == 0) {
+return (void*)&__gmpz_si_kronecker; } 
+else if (strcmp(target, "__gmpz_ui_kronecker") == 0) {
+return (void*)&__gmpz_ui_kronecker; } 
+else if (strcmp(target, "__gmpz_lcm") == 0) {
+return (void*)&__gmpz_lcm; } 
+else if (strcmp(target, "__gmpz_lcm_ui") == 0) {
+return (void*)&__gmpz_lcm_ui; } 
+else if (strcmp(target, "__gmpz_lucnum_ui") == 0) {
+return (void*)&__gmpz_lucnum_ui; } 
+else if (strcmp(target, "__gmpz_lucnum2_ui") == 0) {
+return (void*)&__gmpz_lucnum2_ui; } 
+else if (strcmp(target, "__gmpz_millerrabin") == 0) {
+return (void*)&__gmpz_millerrabin; } 
+else if (strcmp(target, "__gmpz_mod") == 0) {
+return (void*)&__gmpz_mod; } 
+else if (strcmp(target, "__gmpz_mul") == 0) {
+return (void*)&__gmpz_mul; } 
+else if (strcmp(target, "__gmpz_mul_2exp") == 0) {
+return (void*)&__gmpz_mul_2exp; } 
+else if (strcmp(target, "__gmpz_mul_si") == 0) {
+return (void*)&__gmpz_mul_si; } 
+else if (strcmp(target, "__gmpz_mul_ui") == 0) {
+return (void*)&__gmpz_mul_ui; } 
+else if (strcmp(target, "__gmpz_neg") == 0) {
+return (void*)&__gmpz_neg; } 
+else if (strcmp(target, "__gmpz_nextprime") == 0) {
+return (void*)&__gmpz_nextprime; } 
+else if (strcmp(target, "__gmpz_perfect_power_p") == 0) {
+return (void*)&__gmpz_perfect_power_p; } 
+else if (strcmp(target, "__gmpz_perfect_square_p") == 0) {
+return (void*)&__gmpz_perfect_square_p; } 
+else if (strcmp(target, "__gmpz_popcount") == 0) {
+return (void*)&__gmpz_popcount; } 
+else if (strcmp(target, "__gmpz_pow_ui") == 0) {
+return (void*)&__gmpz_pow_ui; } 
+else if (strcmp(target, "__gmpz_powm") == 0) {
+return (void*)&__gmpz_powm; } 
+else if (strcmp(target, "__gmpz_powm_sec") == 0) {
+return (void*)&__gmpz_powm_sec; } 
+else if (strcmp(target, "__gmpz_powm_ui") == 0) {
+return (void*)&__gmpz_powm_ui; } 
+else if (strcmp(target, "__gmpz_probab_prime_p") == 0) {
+return (void*)&__gmpz_probab_prime_p; } 
+else if (strcmp(target, "__gmpz_random") == 0) {
+return (void*)&__gmpz_random; } 
+else if (strcmp(target, "__gmpz_random2") == 0) {
+return (void*)&__gmpz_random2; } 
+else if (strcmp(target, "__gmpz_realloc2") == 0) {
+return (void*)&__gmpz_realloc2; } 
+else if (strcmp(target, "__gmpz_remove") == 0) {
+return (void*)&__gmpz_remove; } 
+else if (strcmp(target, "__gmpz_root") == 0) {
+return (void*)&__gmpz_root; } 
+else if (strcmp(target, "__gmpz_rootrem") == 0) {
+return (void*)&__gmpz_rootrem; } 
+else if (strcmp(target, "__gmpz_rrandomb") == 0) {
+return (void*)&__gmpz_rrandomb; } 
+else if (strcmp(target, "__gmpz_scan0") == 0) {
+return (void*)&__gmpz_scan0; } 
+else if (strcmp(target, "__gmpz_scan1") == 0) {
+return (void*)&__gmpz_scan1; } 
+else if (strcmp(target, "__gmpz_set") == 0) {
+return (void*)&__gmpz_set; } 
+else if (strcmp(target, "__gmpz_set_d") == 0) {
+return (void*)&__gmpz_set_d; } 
+else if (strcmp(target, "__gmpz_set_f") == 0) {
+return (void*)&__gmpz_set_f; } 
+else if (strcmp(target, "__gmpz_set_q") == 0) {
+return (void*)&__gmpz_set_q; } 
+else if (strcmp(target, "__gmpz_set_si") == 0) {
+return (void*)&__gmpz_set_si; } 
+else if (strcmp(target, "__gmpz_set_str") == 0) {
+return (void*)&__gmpz_set_str; } 
+else if (strcmp(target, "__gmpz_set_ui") == 0) {
+return (void*)&__gmpz_set_ui; } 
+else if (strcmp(target, "__gmpz_setbit") == 0) {
+return (void*)&__gmpz_setbit; } 
+else if (strcmp(target, "__gmpz_size") == 0) {
+return (void*)&__gmpz_size; } 
+else if (strcmp(target, "__gmpz_sizeinbase") == 0) {
+return (void*)&__gmpz_sizeinbase; } 
+else if (strcmp(target, "__gmpz_sqrt") == 0) {
+return (void*)&__gmpz_sqrt; } 
+else if (strcmp(target, "__gmpz_sqrtrem") == 0) {
+return (void*)&__gmpz_sqrtrem; } 
+else if (strcmp(target, "__gmpz_sub") == 0) {
+return (void*)&__gmpz_sub; } 
+else if (strcmp(target, "__gmpz_sub_ui") == 0) {
+return (void*)&__gmpz_sub_ui; } 
+else if (strcmp(target, "__gmpz_ui_sub") == 0) {
+return (void*)&__gmpz_ui_sub; } 
+else if (strcmp(target, "__gmpz_submul") == 0) {
+return (void*)&__gmpz_submul; } 
+else if (strcmp(target, "__gmpz_submul_ui") == 0) {
+return (void*)&__gmpz_submul_ui; } 
+else if (strcmp(target, "__gmpz_swap") == 0) {
+return (void*)&__gmpz_swap; } 
+else if (strcmp(target, "__gmpz_tdiv_ui") == 0) {
+return (void*)&__gmpz_tdiv_ui; } 
+else if (strcmp(target, "__gmpz_tdiv_q") == 0) {
+return (void*)&__gmpz_tdiv_q; } 
+else if (strcmp(target, "__gmpz_tdiv_q_2exp") == 0) {
+return (void*)&__gmpz_tdiv_q_2exp; } 
+else if (strcmp(target, "__gmpz_tdiv_q_ui") == 0) {
+return (void*)&__gmpz_tdiv_q_ui; } 
+else if (strcmp(target, "__gmpz_tdiv_qr") == 0) {
+return (void*)&__gmpz_tdiv_qr; } 
+else if (strcmp(target, "__gmpz_tdiv_qr_ui") == 0) {
+return (void*)&__gmpz_tdiv_qr_ui; } 
+else if (strcmp(target, "__gmpz_tdiv_r") == 0) {
+return (void*)&__gmpz_tdiv_r; } 
+else if (strcmp(target, "__gmpz_tdiv_r_2exp") == 0) {
+return (void*)&__gmpz_tdiv_r_2exp; } 
+else if (strcmp(target, "__gmpz_tdiv_r_ui") == 0) {
+return (void*)&__gmpz_tdiv_r_ui; } 
+else if (strcmp(target, "__gmpz_tstbit") == 0) {
+return (void*)&__gmpz_tstbit; } 
+else if (strcmp(target, "__gmpz_ui_pow_ui") == 0) {
+return (void*)&__gmpz_ui_pow_ui; } 
+else if (strcmp(target, "__gmpz_urandomb") == 0) {
+return (void*)&__gmpz_urandomb; } 
+else if (strcmp(target, "__gmpz_urandomm") == 0) {
+return (void*)&__gmpz_urandomm; } 
+else if (strcmp(target, "__gmpz_xor") == 0) {
+return (void*)&__gmpz_xor; } 
+else if (strcmp(target, "__gmpz_limbs_read") == 0) {
+return (void*)&__gmpz_limbs_read; } 
+else if (strcmp(target, "__gmpz_limbs_write") == 0) {
+return (void*)&__gmpz_limbs_write; } 
+else if (strcmp(target, "__gmpz_limbs_modify") == 0) {
+return (void*)&__gmpz_limbs_modify; } 
+else if (strcmp(target, "__gmpz_limbs_finish") == 0) {
+return (void*)&__gmpz_limbs_finish; } 
+else if (strcmp(target, "__gmpz_roinit_n") == 0) {
+return (void*)&__gmpz_roinit_n; } 
+else if (strcmp(target, "__gmpq_abs") == 0) {
+return (void*)&__gmpq_abs; } 
+else if (strcmp(target, "__gmpq_add") == 0) {
+return (void*)&__gmpq_add; } 
+else if (strcmp(target, "__gmpq_canonicalize") == 0) {
+return (void*)&__gmpq_canonicalize; } 
+else if (strcmp(target, "__gmpq_clear") == 0) {
+return (void*)&__gmpq_clear; } 
+else if (strcmp(target, "__gmpq_clears") == 0) {
+return (void*)&__gmpq_clears; } 
+else if (strcmp(target, "__gmpq_cmp") == 0) {
+return (void*)&__gmpq_cmp; } 
+else if (strcmp(target, "__gmpq_cmp_si") == 0) {
+return (void*)&__gmpq_cmp_si; } 
+else if (strcmp(target, "__gmpq_cmp_ui") == 0) {
+return (void*)&__gmpq_cmp_ui; } 
+else if (strcmp(target, "__gmpq_cmp_z") == 0) {
+return (void*)&__gmpq_cmp_z; } 
+else if (strcmp(target, "__gmpq_div") == 0) {
+return (void*)&__gmpq_div; } 
+else if (strcmp(target, "__gmpq_div_2exp") == 0) {
+return (void*)&__gmpq_div_2exp; } 
+else if (strcmp(target, "__gmpq_equal") == 0) {
+return (void*)&__gmpq_equal; } 
+else if (strcmp(target, "__gmpq_get_num") == 0) {
+return (void*)&__gmpq_get_num; } 
+else if (strcmp(target, "__gmpq_get_den") == 0) {
+return (void*)&__gmpq_get_den; } 
+else if (strcmp(target, "__gmpq_get_d") == 0) {
+return (void*)&__gmpq_get_d; } 
+else if (strcmp(target, "__gmpq_get_str") == 0) {
+return (void*)&__gmpq_get_str; } 
+else if (strcmp(target, "__gmpq_init") == 0) {
+return (void*)&__gmpq_init; } 
+else if (strcmp(target, "__gmpq_inits") == 0) {
+return (void*)&__gmpq_inits; } 
+else if (strcmp(target, "__gmpq_inv") == 0) {
+return (void*)&__gmpq_inv; } 
+else if (strcmp(target, "__gmpq_mul") == 0) {
+return (void*)&__gmpq_mul; } 
+else if (strcmp(target, "__gmpq_mul_2exp") == 0) {
+return (void*)&__gmpq_mul_2exp; } 
+else if (strcmp(target, "__gmpq_neg") == 0) {
+return (void*)&__gmpq_neg; } 
+else if (strcmp(target, "__gmpq_set") == 0) {
+return (void*)&__gmpq_set; } 
+else if (strcmp(target, "__gmpq_set_d") == 0) {
+return (void*)&__gmpq_set_d; } 
+else if (strcmp(target, "__gmpq_set_den") == 0) {
+return (void*)&__gmpq_set_den; } 
+else if (strcmp(target, "__gmpq_set_f") == 0) {
+return (void*)&__gmpq_set_f; } 
+else if (strcmp(target, "__gmpq_set_num") == 0) {
+return (void*)&__gmpq_set_num; } 
+else if (strcmp(target, "__gmpq_set_si") == 0) {
+return (void*)&__gmpq_set_si; } 
+else if (strcmp(target, "__gmpq_set_str") == 0) {
+return (void*)&__gmpq_set_str; } 
+else if (strcmp(target, "__gmpq_set_ui") == 0) {
+return (void*)&__gmpq_set_ui; } 
+else if (strcmp(target, "__gmpq_set_z") == 0) {
+return (void*)&__gmpq_set_z; } 
+else if (strcmp(target, "__gmpq_sub") == 0) {
+return (void*)&__gmpq_sub; } 
+else if (strcmp(target, "__gmpq_swap") == 0) {
+return (void*)&__gmpq_swap; } 
+else if (strcmp(target, "__gmpf_abs") == 0) {
+return (void*)&__gmpf_abs; } 
+else if (strcmp(target, "__gmpf_add") == 0) {
+return (void*)&__gmpf_add; } 
+else if (strcmp(target, "__gmpf_add_ui") == 0) {
+return (void*)&__gmpf_add_ui; } 
+else if (strcmp(target, "__gmpf_ceil") == 0) {
+return (void*)&__gmpf_ceil; } 
+else if (strcmp(target, "__gmpf_clear") == 0) {
+return (void*)&__gmpf_clear; } 
+else if (strcmp(target, "__gmpf_clears") == 0) {
+return (void*)&__gmpf_clears; } 
+else if (strcmp(target, "__gmpf_cmp") == 0) {
+return (void*)&__gmpf_cmp; } 
+else if (strcmp(target, "__gmpf_cmp_z") == 0) {
+return (void*)&__gmpf_cmp_z; } 
+else if (strcmp(target, "__gmpf_cmp_d") == 0) {
+return (void*)&__gmpf_cmp_d; } 
+else if (strcmp(target, "__gmpf_cmp_si") == 0) {
+return (void*)&__gmpf_cmp_si; } 
+else if (strcmp(target, "__gmpf_cmp_ui") == 0) {
+return (void*)&__gmpf_cmp_ui; } 
+else if (strcmp(target, "__gmpf_div") == 0) {
+return (void*)&__gmpf_div; } 
+else if (strcmp(target, "__gmpf_div_2exp") == 0) {
+return (void*)&__gmpf_div_2exp; } 
+else if (strcmp(target, "__gmpf_div_ui") == 0) {
+return (void*)&__gmpf_div_ui; } 
+else if (strcmp(target, "__gmpf_dump") == 0) {
+return (void*)&__gmpf_dump; } 
+else if (strcmp(target, "__gmpf_eq") == 0) {
+return (void*)&__gmpf_eq; } 
+else if (strcmp(target, "__gmpf_fits_sint_p") == 0) {
+return (void*)&__gmpf_fits_sint_p; } 
+else if (strcmp(target, "__gmpf_fits_slong_p") == 0) {
+return (void*)&__gmpf_fits_slong_p; } 
+else if (strcmp(target, "__gmpf_fits_sshort_p") == 0) {
+return (void*)&__gmpf_fits_sshort_p; } 
+else if (strcmp(target, "__gmpf_fits_uint_p") == 0) {
+return (void*)&__gmpf_fits_uint_p; } 
+else if (strcmp(target, "__gmpf_fits_ulong_p") == 0) {
+return (void*)&__gmpf_fits_ulong_p; } 
+else if (strcmp(target, "__gmpf_fits_ushort_p") == 0) {
+return (void*)&__gmpf_fits_ushort_p; } 
+else if (strcmp(target, "__gmpf_floor") == 0) {
+return (void*)&__gmpf_floor; } 
+else if (strcmp(target, "__gmpf_get_d") == 0) {
+return (void*)&__gmpf_get_d; } 
+else if (strcmp(target, "__gmpf_get_d_2exp") == 0) {
+return (void*)&__gmpf_get_d_2exp; } 
+else if (strcmp(target, "__gmpf_get_default_prec") == 0) {
+return (void*)&__gmpf_get_default_prec; } 
+else if (strcmp(target, "__gmpf_get_prec") == 0) {
+return (void*)&__gmpf_get_prec; } 
+else if (strcmp(target, "__gmpf_get_si") == 0) {
+return (void*)&__gmpf_get_si; } 
+else if (strcmp(target, "__gmpf_get_str") == 0) {
+return (void*)&__gmpf_get_str; } 
+else if (strcmp(target, "__gmpf_get_ui") == 0) {
+return (void*)&__gmpf_get_ui; } 
+else if (strcmp(target, "__gmpf_init") == 0) {
+return (void*)&__gmpf_init; } 
+else if (strcmp(target, "__gmpf_init2") == 0) {
+return (void*)&__gmpf_init2; } 
+else if (strcmp(target, "__gmpf_inits") == 0) {
+return (void*)&__gmpf_inits; } 
+else if (strcmp(target, "__gmpf_init_set") == 0) {
+return (void*)&__gmpf_init_set; } 
+else if (strcmp(target, "__gmpf_init_set_d") == 0) {
+return (void*)&__gmpf_init_set_d; } 
+else if (strcmp(target, "__gmpf_init_set_si") == 0) {
+return (void*)&__gmpf_init_set_si; } 
+else if (strcmp(target, "__gmpf_init_set_str") == 0) {
+return (void*)&__gmpf_init_set_str; } 
+else if (strcmp(target, "__gmpf_init_set_ui") == 0) {
+return (void*)&__gmpf_init_set_ui; } 
+else if (strcmp(target, "__gmpf_integer_p") == 0) {
+return (void*)&__gmpf_integer_p; } 
+else if (strcmp(target, "__gmpf_mul") == 0) {
+return (void*)&__gmpf_mul; } 
+else if (strcmp(target, "__gmpf_mul_2exp") == 0) {
+return (void*)&__gmpf_mul_2exp; } 
+else if (strcmp(target, "__gmpf_mul_ui") == 0) {
+return (void*)&__gmpf_mul_ui; } 
+else if (strcmp(target, "__gmpf_neg") == 0) {
+return (void*)&__gmpf_neg; } 
+else if (strcmp(target, "__gmpf_pow_ui") == 0) {
+return (void*)&__gmpf_pow_ui; } 
+else if (strcmp(target, "__gmpf_random2") == 0) {
+return (void*)&__gmpf_random2; } 
+else if (strcmp(target, "__gmpf_reldiff") == 0) {
+return (void*)&__gmpf_reldiff; } 
+else if (strcmp(target, "__gmpf_set") == 0) {
+return (void*)&__gmpf_set; } 
+else if (strcmp(target, "__gmpf_set_d") == 0) {
+return (void*)&__gmpf_set_d; } 
+else if (strcmp(target, "__gmpf_set_default_prec") == 0) {
+return (void*)&__gmpf_set_default_prec; } 
+else if (strcmp(target, "__gmpf_set_prec") == 0) {
+return (void*)&__gmpf_set_prec; } 
+else if (strcmp(target, "__gmpf_set_prec_raw") == 0) {
+return (void*)&__gmpf_set_prec_raw; } 
+else if (strcmp(target, "__gmpf_set_q") == 0) {
+return (void*)&__gmpf_set_q; } 
+else if (strcmp(target, "__gmpf_set_si") == 0) {
+return (void*)&__gmpf_set_si; } 
+else if (strcmp(target, "__gmpf_set_str") == 0) {
+return (void*)&__gmpf_set_str; } 
+else if (strcmp(target, "__gmpf_set_ui") == 0) {
+return (void*)&__gmpf_set_ui; } 
+else if (strcmp(target, "__gmpf_set_z") == 0) {
+return (void*)&__gmpf_set_z; } 
+else if (strcmp(target, "__gmpf_size") == 0) {
+return (void*)&__gmpf_size; } 
+else if (strcmp(target, "__gmpf_sqrt") == 0) {
+return (void*)&__gmpf_sqrt; } 
+else if (strcmp(target, "__gmpf_sqrt_ui") == 0) {
+return (void*)&__gmpf_sqrt_ui; } 
+else if (strcmp(target, "__gmpf_sub") == 0) {
+return (void*)&__gmpf_sub; } 
+else if (strcmp(target, "__gmpf_sub_ui") == 0) {
+return (void*)&__gmpf_sub_ui; } 
+else if (strcmp(target, "__gmpf_swap") == 0) {
+return (void*)&__gmpf_swap; } 
+else if (strcmp(target, "__gmpf_trunc") == 0) {
+return (void*)&__gmpf_trunc; } 
+else if (strcmp(target, "__gmpf_ui_div") == 0) {
+return (void*)&__gmpf_ui_div; } 
+else if (strcmp(target, "__gmpf_ui_sub") == 0) {
+return (void*)&__gmpf_ui_sub; } 
+else if (strcmp(target, "__gmpf_urandomb") == 0) {
+return (void*)&__gmpf_urandomb; } 
+else if (strcmp(target, "__gmpn_add") == 0) {
+return (void*)&__gmpn_add; } 
+else if (strcmp(target, "__gmpn_add_1") == 0) {
+return (void*)&__gmpn_add_1; } 
+else if (strcmp(target, "__gmpn_add_n") == 0) {
+return (void*)&__gmpn_add_n; } 
+else if (strcmp(target, "__gmpn_addmul_1") == 0) {
+return (void*)&__gmpn_addmul_1; } 
+else if (strcmp(target, "__gmpn_cmp") == 0) {
+return (void*)&__gmpn_cmp; } 
+else if (strcmp(target, "__gmpn_zero_p") == 0) {
+return (void*)&__gmpn_zero_p; } 
+else if (strcmp(target, "__gmpn_divexact_1") == 0) {
+return (void*)&__gmpn_divexact_1; } 
+else if (strcmp(target, "__gmpn_divexact_by3c") == 0) {
+return (void*)&__gmpn_divexact_by3c; } 
+else if (strcmp(target, "__gmpn_divrem") == 0) {
+return (void*)&__gmpn_divrem; } 
+else if (strcmp(target, "__gmpn_divrem_1") == 0) {
+return (void*)&__gmpn_divrem_1; } 
+else if (strcmp(target, "__gmpn_divrem_2") == 0) {
+return (void*)&__gmpn_divrem_2; } 
+else if (strcmp(target, "__gmpn_div_qr_1") == 0) {
+return (void*)&__gmpn_div_qr_1; } 
+else if (strcmp(target, "__gmpn_div_qr_2") == 0) {
+return (void*)&__gmpn_div_qr_2; } 
+else if (strcmp(target, "__gmpn_gcd") == 0) {
+return (void*)&__gmpn_gcd; } 
+else if (strcmp(target, "__gmpn_gcd_1") == 0) {
+return (void*)&__gmpn_gcd_1; } 
+else if (strcmp(target, "__gmpn_gcdext_1") == 0) {
+return (void*)&__gmpn_gcdext_1; } 
+else if (strcmp(target, "__gmpn_gcdext") == 0) {
+return (void*)&__gmpn_gcdext; } 
+else if (strcmp(target, "__gmpn_get_str") == 0) {
+return (void*)&__gmpn_get_str; } 
+else if (strcmp(target, "__gmpn_hamdist") == 0) {
+return (void*)&__gmpn_hamdist; } 
+else if (strcmp(target, "__gmpn_lshift") == 0) {
+return (void*)&__gmpn_lshift; } 
+else if (strcmp(target, "__gmpn_mod_1") == 0) {
+return (void*)&__gmpn_mod_1; } 
+else if (strcmp(target, "__gmpn_mul") == 0) {
+return (void*)&__gmpn_mul; } 
+else if (strcmp(target, "__gmpn_mul_1") == 0) {
+return (void*)&__gmpn_mul_1; } 
+else if (strcmp(target, "__gmpn_mul_n") == 0) {
+return (void*)&__gmpn_mul_n; } 
+else if (strcmp(target, "__gmpn_sqr") == 0) {
+return (void*)&__gmpn_sqr; } 
+else if (strcmp(target, "__gmpn_neg") == 0) {
+return (void*)&__gmpn_neg; } 
+else if (strcmp(target, "__gmpn_com") == 0) {
+return (void*)&__gmpn_com; } 
+else if (strcmp(target, "__gmpn_perfect_square_p") == 0) {
+return (void*)&__gmpn_perfect_square_p; } 
+else if (strcmp(target, "__gmpn_perfect_power_p") == 0) {
+return (void*)&__gmpn_perfect_power_p; } 
+else if (strcmp(target, "__gmpn_popcount") == 0) {
+return (void*)&__gmpn_popcount; } 
+else if (strcmp(target, "__gmpn_pow_1") == 0) {
+return (void*)&__gmpn_pow_1; } 
+else if (strcmp(target, "__gmpn_preinv_mod_1") == 0) {
+return (void*)&__gmpn_preinv_mod_1; } 
+else if (strcmp(target, "__gmpn_random") == 0) {
+return (void*)&__gmpn_random; } 
+else if (strcmp(target, "__gmpn_random2") == 0) {
+return (void*)&__gmpn_random2; } 
+else if (strcmp(target, "__gmpn_rshift") == 0) {
+return (void*)&__gmpn_rshift; } 
+else if (strcmp(target, "__gmpn_scan0") == 0) {
+return (void*)&__gmpn_scan0; } 
+else if (strcmp(target, "__gmpn_scan1") == 0) {
+return (void*)&__gmpn_scan1; } 
+else if (strcmp(target, "__gmpn_set_str") == 0) {
+return (void*)&__gmpn_set_str; } 
+else if (strcmp(target, "__gmpn_sizeinbase") == 0) {
+return (void*)&__gmpn_sizeinbase; } 
+else if (strcmp(target, "__gmpn_sqrtrem") == 0) {
+return (void*)&__gmpn_sqrtrem; } 
+else if (strcmp(target, "__gmpn_sub") == 0) {
+return (void*)&__gmpn_sub; } 
+else if (strcmp(target, "__gmpn_sub_1") == 0) {
+return (void*)&__gmpn_sub_1; } 
+else if (strcmp(target, "__gmpn_sub_n") == 0) {
+return (void*)&__gmpn_sub_n; } 
+else if (strcmp(target, "__gmpn_submul_1") == 0) {
+return (void*)&__gmpn_submul_1; } 
+else if (strcmp(target, "__gmpn_tdiv_qr") == 0) {
+return (void*)&__gmpn_tdiv_qr; } 
+else if (strcmp(target, "__gmpn_and_n") == 0) {
+return (void*)&__gmpn_and_n; } 
+else if (strcmp(target, "__gmpn_andn_n") == 0) {
+return (void*)&__gmpn_andn_n; } 
+else if (strcmp(target, "__gmpn_nand_n") == 0) {
+return (void*)&__gmpn_nand_n; } 
+else if (strcmp(target, "__gmpn_ior_n") == 0) {
+return (void*)&__gmpn_ior_n; } 
+else if (strcmp(target, "__gmpn_iorn_n") == 0) {
+return (void*)&__gmpn_iorn_n; } 
+else if (strcmp(target, "__gmpn_nior_n") == 0) {
+return (void*)&__gmpn_nior_n; } 
+else if (strcmp(target, "__gmpn_xor_n") == 0) {
+return (void*)&__gmpn_xor_n; } 
+else if (strcmp(target, "__gmpn_xnor_n") == 0) {
+return (void*)&__gmpn_xnor_n; } 
+else if (strcmp(target, "__gmpn_copyi") == 0) {
+return (void*)&__gmpn_copyi; } 
+else if (strcmp(target, "__gmpn_copyd") == 0) {
+return (void*)&__gmpn_copyd; } 
+else if (strcmp(target, "__gmpn_zero") == 0) {
+return (void*)&__gmpn_zero; } 
+else if (strcmp(target, "__gmpn_cnd_add_n") == 0) {
+return (void*)&__gmpn_cnd_add_n; } 
+else if (strcmp(target, "__gmpn_cnd_sub_n") == 0) {
+return (void*)&__gmpn_cnd_sub_n; } 
+else if (strcmp(target, "__gmpn_sec_add_1") == 0) {
+return (void*)&__gmpn_sec_add_1; } 
+else if (strcmp(target, "__gmpn_sec_add_1_itch") == 0) {
+return (void*)&__gmpn_sec_add_1_itch; } 
+else if (strcmp(target, "__gmpn_sec_sub_1") == 0) {
+return (void*)&__gmpn_sec_sub_1; } 
+else if (strcmp(target, "__gmpn_sec_sub_1_itch") == 0) {
+return (void*)&__gmpn_sec_sub_1_itch; } 
+else if (strcmp(target, "__gmpn_cnd_swap") == 0) {
+return (void*)&__gmpn_cnd_swap; } 
+else if (strcmp(target, "__gmpn_sec_mul") == 0) {
+return (void*)&__gmpn_sec_mul; } 
+else if (strcmp(target, "__gmpn_sec_mul_itch") == 0) {
+return (void*)&__gmpn_sec_mul_itch; } 
+else if (strcmp(target, "__gmpn_sec_sqr") == 0) {
+return (void*)&__gmpn_sec_sqr; } 
+else if (strcmp(target, "__gmpn_sec_sqr_itch") == 0) {
+return (void*)&__gmpn_sec_sqr_itch; } 
+else if (strcmp(target, "__gmpn_sec_powm") == 0) {
+return (void*)&__gmpn_sec_powm; } 
+else if (strcmp(target, "__gmpn_sec_powm_itch") == 0) {
+return (void*)&__gmpn_sec_powm_itch; } 
+else if (strcmp(target, "__gmpn_sec_tabselect") == 0) {
+return (void*)&__gmpn_sec_tabselect; } 
+else if (strcmp(target, "__gmpn_sec_div_qr") == 0) {
+return (void*)&__gmpn_sec_div_qr; } 
+else if (strcmp(target, "__gmpn_sec_div_qr_itch") == 0) {
+return (void*)&__gmpn_sec_div_qr_itch; } 
+else if (strcmp(target, "__gmpn_sec_div_r") == 0) {
+return (void*)&__gmpn_sec_div_r; } 
+else if (strcmp(target, "__gmpn_sec_div_r_itch") == 0) {
+return (void*)&__gmpn_sec_div_r_itch; } 
+else if (strcmp(target, "__gmpn_sec_invert") == 0) {
+return (void*)&__gmpn_sec_invert; } 
+else if (strcmp(target, "__gmpn_sec_invert_itch") == 0) {
+return (void*)&__gmpn_sec_invert_itch; } 
+else if (strcmp(target, "mpfr_get_version") == 0) {
+return (void*)&mpfr_get_version; } 
+else if (strcmp(target, "mpfr_get_patches") == 0) {
+return (void*)&mpfr_get_patches; } 
+else if (strcmp(target, "mpfr_buildopt_tls_p") == 0) {
+return (void*)&mpfr_buildopt_tls_p; } 
+else if (strcmp(target, "mpfr_buildopt_float128_p") == 0) {
+return (void*)&mpfr_buildopt_float128_p; } 
+else if (strcmp(target, "mpfr_buildopt_decimal_p") == 0) {
+return (void*)&mpfr_buildopt_decimal_p; } 
+else if (strcmp(target, "mpfr_buildopt_gmpinternals_p") == 0) {
+return (void*)&mpfr_buildopt_gmpinternals_p; } 
+else if (strcmp(target, "mpfr_buildopt_sharedcache_p") == 0) {
+return (void*)&mpfr_buildopt_sharedcache_p; } 
+else if (strcmp(target, "mpfr_buildopt_tune_case") == 0) {
+return (void*)&mpfr_buildopt_tune_case; } 
+else if (strcmp(target, "mpfr_get_emin") == 0) {
+return (void*)&mpfr_get_emin; } 
+else if (strcmp(target, "mpfr_set_emin") == 0) {
+return (void*)&mpfr_set_emin; } 
+else if (strcmp(target, "mpfr_get_emin_min") == 0) {
+return (void*)&mpfr_get_emin_min; } 
+else if (strcmp(target, "mpfr_get_emin_max") == 0) {
+return (void*)&mpfr_get_emin_max; } 
+else if (strcmp(target, "mpfr_get_emax") == 0) {
+return (void*)&mpfr_get_emax; } 
+else if (strcmp(target, "mpfr_set_emax") == 0) {
+return (void*)&mpfr_set_emax; } 
+else if (strcmp(target, "mpfr_get_emax_min") == 0) {
+return (void*)&mpfr_get_emax_min; } 
+else if (strcmp(target, "mpfr_get_emax_max") == 0) {
+return (void*)&mpfr_get_emax_max; } 
+else if (strcmp(target, "mpfr_set_default_rounding_mode") == 0) {
+return (void*)&mpfr_set_default_rounding_mode; } 
+else if (strcmp(target, "mpfr_get_default_rounding_mode") == 0) {
+return (void*)&mpfr_get_default_rounding_mode; } 
+else if (strcmp(target, "mpfr_print_rnd_mode") == 0) {
+return (void*)&mpfr_print_rnd_mode; } 
+else if (strcmp(target, "mpfr_clear_flags") == 0) {
+return (void*)&mpfr_clear_flags; } 
+else if (strcmp(target, "mpfr_clear_underflow") == 0) {
+return (void*)&mpfr_clear_underflow; } 
+else if (strcmp(target, "mpfr_clear_overflow") == 0) {
+return (void*)&mpfr_clear_overflow; } 
+else if (strcmp(target, "mpfr_clear_divby0") == 0) {
+return (void*)&mpfr_clear_divby0; } 
+else if (strcmp(target, "mpfr_clear_nanflag") == 0) {
+return (void*)&mpfr_clear_nanflag; } 
+else if (strcmp(target, "mpfr_clear_inexflag") == 0) {
+return (void*)&mpfr_clear_inexflag; } 
+else if (strcmp(target, "mpfr_clear_erangeflag") == 0) {
+return (void*)&mpfr_clear_erangeflag; } 
+else if (strcmp(target, "mpfr_set_underflow") == 0) {
+return (void*)&mpfr_set_underflow; } 
+else if (strcmp(target, "mpfr_set_overflow") == 0) {
+return (void*)&mpfr_set_overflow; } 
+else if (strcmp(target, "mpfr_set_divby0") == 0) {
+return (void*)&mpfr_set_divby0; } 
+else if (strcmp(target, "mpfr_set_nanflag") == 0) {
+return (void*)&mpfr_set_nanflag; } 
+else if (strcmp(target, "mpfr_set_inexflag") == 0) {
+return (void*)&mpfr_set_inexflag; } 
+else if (strcmp(target, "mpfr_set_erangeflag") == 0) {
+return (void*)&mpfr_set_erangeflag; } 
+else if (strcmp(target, "mpfr_underflow_p") == 0) {
+return (void*)&mpfr_underflow_p; } 
+else if (strcmp(target, "mpfr_overflow_p") == 0) {
+return (void*)&mpfr_overflow_p; } 
+else if (strcmp(target, "mpfr_divby0_p") == 0) {
+return (void*)&mpfr_divby0_p; } 
+else if (strcmp(target, "mpfr_nanflag_p") == 0) {
+return (void*)&mpfr_nanflag_p; } 
+else if (strcmp(target, "mpfr_inexflag_p") == 0) {
+return (void*)&mpfr_inexflag_p; } 
+else if (strcmp(target, "mpfr_erangeflag_p") == 0) {
+return (void*)&mpfr_erangeflag_p; } 
+else if (strcmp(target, "mpfr_flags_clear") == 0) {
+return (void*)&mpfr_flags_clear; } 
+else if (strcmp(target, "mpfr_flags_set") == 0) {
+return (void*)&mpfr_flags_set; } 
+else if (strcmp(target, "mpfr_flags_test") == 0) {
+return (void*)&mpfr_flags_test; } 
+else if (strcmp(target, "mpfr_flags_save") == 0) {
+return (void*)&mpfr_flags_save; } 
+else if (strcmp(target, "mpfr_flags_restore") == 0) {
+return (void*)&mpfr_flags_restore; } 
+else if (strcmp(target, "mpfr_check_range") == 0) {
+return (void*)&mpfr_check_range; } 
+else if (strcmp(target, "mpfr_init2") == 0) {
+return (void*)&mpfr_init2; } 
+else if (strcmp(target, "mpfr_init") == 0) {
+return (void*)&mpfr_init; } 
+else if (strcmp(target, "mpfr_clear") == 0) {
+return (void*)&mpfr_clear; } 
+else if (strcmp(target, "mpfr_inits2") == 0) {
+return (void*)&mpfr_inits2; } 
+else if (strcmp(target, "mpfr_inits") == 0) {
+return (void*)&mpfr_inits; } 
+else if (strcmp(target, "mpfr_clears") == 0) {
+return (void*)&mpfr_clears; } 
+else if (strcmp(target, "mpfr_prec_round") == 0) {
+return (void*)&mpfr_prec_round; } 
+else if (strcmp(target, "mpfr_can_round") == 0) {
+return (void*)&mpfr_can_round; } 
+else if (strcmp(target, "mpfr_min_prec") == 0) {
+return (void*)&mpfr_min_prec; } 
+else if (strcmp(target, "mpfr_get_exp") == 0) {
+return (void*)&mpfr_get_exp; } 
+else if (strcmp(target, "mpfr_set_exp") == 0) {
+return (void*)&mpfr_set_exp; } 
+else if (strcmp(target, "mpfr_get_prec") == 0) {
+return (void*)&mpfr_get_prec; } 
+else if (strcmp(target, "mpfr_set_prec") == 0) {
+return (void*)&mpfr_set_prec; } 
+else if (strcmp(target, "mpfr_set_prec_raw") == 0) {
+return (void*)&mpfr_set_prec_raw; } 
+else if (strcmp(target, "mpfr_set_default_prec") == 0) {
+return (void*)&mpfr_set_default_prec; } 
+else if (strcmp(target, "mpfr_get_default_prec") == 0) {
+return (void*)&mpfr_get_default_prec; } 
+else if (strcmp(target, "mpfr_set_d") == 0) {
+return (void*)&mpfr_set_d; } 
+else if (strcmp(target, "mpfr_set_flt") == 0) {
+return (void*)&mpfr_set_flt; } 
+else if (strcmp(target, "mpfr_set_ld") == 0) {
+return (void*)&mpfr_set_ld; } 
+else if (strcmp(target, "mpfr_set_z") == 0) {
+return (void*)&mpfr_set_z; } 
+else if (strcmp(target, "mpfr_set_z_2exp") == 0) {
+return (void*)&mpfr_set_z_2exp; } 
+else if (strcmp(target, "mpfr_set_nan") == 0) {
+return (void*)&mpfr_set_nan; } 
+else if (strcmp(target, "mpfr_set_inf") == 0) {
+return (void*)&mpfr_set_inf; } 
+else if (strcmp(target, "mpfr_set_zero") == 0) {
+return (void*)&mpfr_set_zero; } 
+else if (strcmp(target, "mpfr_set_f") == 0) {
+return (void*)&mpfr_set_f; } 
+else if (strcmp(target, "mpfr_cmp_f") == 0) {
+return (void*)&mpfr_cmp_f; } 
+else if (strcmp(target, "mpfr_get_f") == 0) {
+return (void*)&mpfr_get_f; } 
+else if (strcmp(target, "mpfr_set_si") == 0) {
+return (void*)&mpfr_set_si; } 
+else if (strcmp(target, "mpfr_set_ui") == 0) {
+return (void*)&mpfr_set_ui; } 
+else if (strcmp(target, "mpfr_set_si_2exp") == 0) {
+return (void*)&mpfr_set_si_2exp; } 
+else if (strcmp(target, "mpfr_set_ui_2exp") == 0) {
+return (void*)&mpfr_set_ui_2exp; } 
+else if (strcmp(target, "mpfr_set_q") == 0) {
+return (void*)&mpfr_set_q; } 
+else if (strcmp(target, "mpfr_mul_q") == 0) {
+return (void*)&mpfr_mul_q; } 
+else if (strcmp(target, "mpfr_div_q") == 0) {
+return (void*)&mpfr_div_q; } 
+else if (strcmp(target, "mpfr_add_q") == 0) {
+return (void*)&mpfr_add_q; } 
+else if (strcmp(target, "mpfr_sub_q") == 0) {
+return (void*)&mpfr_sub_q; } 
+else if (strcmp(target, "mpfr_cmp_q") == 0) {
+return (void*)&mpfr_cmp_q; } 
+else if (strcmp(target, "mpfr_get_q") == 0) {
+return (void*)&mpfr_get_q; } 
+else if (strcmp(target, "mpfr_set_str") == 0) {
+return (void*)&mpfr_set_str; } 
+else if (strcmp(target, "mpfr_init_set_str") == 0) {
+return (void*)&mpfr_init_set_str; } 
+else if (strcmp(target, "mpfr_set4") == 0) {
+return (void*)&mpfr_set4; } 
+else if (strcmp(target, "mpfr_abs") == 0) {
+return (void*)&mpfr_abs; } 
+else if (strcmp(target, "mpfr_set") == 0) {
+return (void*)&mpfr_set; } 
+else if (strcmp(target, "mpfr_neg") == 0) {
+return (void*)&mpfr_neg; } 
+else if (strcmp(target, "mpfr_signbit") == 0) {
+return (void*)&mpfr_signbit; } 
+else if (strcmp(target, "mpfr_setsign") == 0) {
+return (void*)&mpfr_setsign; } 
+else if (strcmp(target, "mpfr_copysign") == 0) {
+return (void*)&mpfr_copysign; } 
+else if (strcmp(target, "mpfr_get_z_2exp") == 0) {
+return (void*)&mpfr_get_z_2exp; } 
+else if (strcmp(target, "mpfr_get_flt") == 0) {
+return (void*)&mpfr_get_flt; } 
+else if (strcmp(target, "mpfr_get_d") == 0) {
+return (void*)&mpfr_get_d; } 
+else if (strcmp(target, "mpfr_get_ld") == 0) {
+return (void*)&mpfr_get_ld; } 
+else if (strcmp(target, "mpfr_get_d1") == 0) {
+return (void*)&mpfr_get_d1; } 
+else if (strcmp(target, "mpfr_get_d_2exp") == 0) {
+return (void*)&mpfr_get_d_2exp; } 
+else if (strcmp(target, "mpfr_get_ld_2exp") == 0) {
+return (void*)&mpfr_get_ld_2exp; } 
+else if (strcmp(target, "mpfr_frexp") == 0) {
+return (void*)&mpfr_frexp; } 
+else if (strcmp(target, "mpfr_get_si") == 0) {
+return (void*)&mpfr_get_si; } 
+else if (strcmp(target, "mpfr_get_ui") == 0) {
+return (void*)&mpfr_get_ui; } 
+else if (strcmp(target, "mpfr_get_str") == 0) {
+return (void*)&mpfr_get_str; } 
+else if (strcmp(target, "mpfr_get_z") == 0) {
+return (void*)&mpfr_get_z; } 
+else if (strcmp(target, "mpfr_free_str") == 0) {
+return (void*)&mpfr_free_str; } 
+else if (strcmp(target, "mpfr_urandom") == 0) {
+return (void*)&mpfr_urandom; } 
+else if (strcmp(target, "mpfr_grandom") == 0) {
+return (void*)&mpfr_grandom; } 
+else if (strcmp(target, "mpfr_nrandom") == 0) {
+return (void*)&mpfr_nrandom; } 
+else if (strcmp(target, "mpfr_erandom") == 0) {
+return (void*)&mpfr_erandom; } 
+else if (strcmp(target, "mpfr_urandomb") == 0) {
+return (void*)&mpfr_urandomb; } 
+else if (strcmp(target, "mpfr_nextabove") == 0) {
+return (void*)&mpfr_nextabove; } 
+else if (strcmp(target, "mpfr_nextbelow") == 0) {
+return (void*)&mpfr_nextbelow; } 
+else if (strcmp(target, "mpfr_nexttoward") == 0) {
+return (void*)&mpfr_nexttoward; } 
+else if (strcmp(target, "mpfr_printf") == 0) {
+return (void*)&mpfr_printf; } 
+else if (strcmp(target, "mpfr_asprintf") == 0) {
+return (void*)&mpfr_asprintf; } 
+else if (strcmp(target, "mpfr_sprintf") == 0) {
+return (void*)&mpfr_sprintf; } 
+else if (strcmp(target, "mpfr_snprintf") == 0) {
+return (void*)&mpfr_snprintf; } 
+else if (strcmp(target, "mpfr_pow") == 0) {
+return (void*)&mpfr_pow; } 
+else if (strcmp(target, "mpfr_pow_si") == 0) {
+return (void*)&mpfr_pow_si; } 
+else if (strcmp(target, "mpfr_pow_ui") == 0) {
+return (void*)&mpfr_pow_ui; } 
+else if (strcmp(target, "mpfr_ui_pow_ui") == 0) {
+return (void*)&mpfr_ui_pow_ui; } 
+else if (strcmp(target, "mpfr_ui_pow") == 0) {
+return (void*)&mpfr_ui_pow; } 
+else if (strcmp(target, "mpfr_pow_z") == 0) {
+return (void*)&mpfr_pow_z; } 
+else if (strcmp(target, "mpfr_sqrt") == 0) {
+return (void*)&mpfr_sqrt; } 
+else if (strcmp(target, "mpfr_sqrt_ui") == 0) {
+return (void*)&mpfr_sqrt_ui; } 
+else if (strcmp(target, "mpfr_rec_sqrt") == 0) {
+return (void*)&mpfr_rec_sqrt; } 
+else if (strcmp(target, "mpfr_add") == 0) {
+return (void*)&mpfr_add; } 
+else if (strcmp(target, "mpfr_sub") == 0) {
+return (void*)&mpfr_sub; } 
+else if (strcmp(target, "mpfr_mul") == 0) {
+return (void*)&mpfr_mul; } 
+else if (strcmp(target, "mpfr_div") == 0) {
+return (void*)&mpfr_div; } 
+else if (strcmp(target, "mpfr_add_ui") == 0) {
+return (void*)&mpfr_add_ui; } 
+else if (strcmp(target, "mpfr_sub_ui") == 0) {
+return (void*)&mpfr_sub_ui; } 
+else if (strcmp(target, "mpfr_ui_sub") == 0) {
+return (void*)&mpfr_ui_sub; } 
+else if (strcmp(target, "mpfr_mul_ui") == 0) {
+return (void*)&mpfr_mul_ui; } 
+else if (strcmp(target, "mpfr_div_ui") == 0) {
+return (void*)&mpfr_div_ui; } 
+else if (strcmp(target, "mpfr_ui_div") == 0) {
+return (void*)&mpfr_ui_div; } 
+else if (strcmp(target, "mpfr_add_si") == 0) {
+return (void*)&mpfr_add_si; } 
+else if (strcmp(target, "mpfr_sub_si") == 0) {
+return (void*)&mpfr_sub_si; } 
+else if (strcmp(target, "mpfr_si_sub") == 0) {
+return (void*)&mpfr_si_sub; } 
+else if (strcmp(target, "mpfr_mul_si") == 0) {
+return (void*)&mpfr_mul_si; } 
+else if (strcmp(target, "mpfr_div_si") == 0) {
+return (void*)&mpfr_div_si; } 
+else if (strcmp(target, "mpfr_si_div") == 0) {
+return (void*)&mpfr_si_div; } 
+else if (strcmp(target, "mpfr_add_d") == 0) {
+return (void*)&mpfr_add_d; } 
+else if (strcmp(target, "mpfr_sub_d") == 0) {
+return (void*)&mpfr_sub_d; } 
+else if (strcmp(target, "mpfr_d_sub") == 0) {
+return (void*)&mpfr_d_sub; } 
+else if (strcmp(target, "mpfr_mul_d") == 0) {
+return (void*)&mpfr_mul_d; } 
+else if (strcmp(target, "mpfr_div_d") == 0) {
+return (void*)&mpfr_div_d; } 
+else if (strcmp(target, "mpfr_d_div") == 0) {
+return (void*)&mpfr_d_div; } 
+else if (strcmp(target, "mpfr_sqr") == 0) {
+return (void*)&mpfr_sqr; } 
+else if (strcmp(target, "mpfr_const_pi") == 0) {
+return (void*)&mpfr_const_pi; } 
+else if (strcmp(target, "mpfr_const_log2") == 0) {
+return (void*)&mpfr_const_log2; } 
+else if (strcmp(target, "mpfr_const_euler") == 0) {
+return (void*)&mpfr_const_euler; } 
+else if (strcmp(target, "mpfr_const_catalan") == 0) {
+return (void*)&mpfr_const_catalan; } 
+else if (strcmp(target, "mpfr_agm") == 0) {
+return (void*)&mpfr_agm; } 
+else if (strcmp(target, "mpfr_log") == 0) {
+return (void*)&mpfr_log; } 
+else if (strcmp(target, "mpfr_log2") == 0) {
+return (void*)&mpfr_log2; } 
+else if (strcmp(target, "mpfr_log10") == 0) {
+return (void*)&mpfr_log10; } 
+else if (strcmp(target, "mpfr_log1p") == 0) {
+return (void*)&mpfr_log1p; } 
+else if (strcmp(target, "mpfr_log_ui") == 0) {
+return (void*)&mpfr_log_ui; } 
+else if (strcmp(target, "mpfr_exp") == 0) {
+return (void*)&mpfr_exp; } 
+else if (strcmp(target, "mpfr_exp2") == 0) {
+return (void*)&mpfr_exp2; } 
+else if (strcmp(target, "mpfr_exp10") == 0) {
+return (void*)&mpfr_exp10; } 
+else if (strcmp(target, "mpfr_expm1") == 0) {
+return (void*)&mpfr_expm1; } 
+else if (strcmp(target, "mpfr_eint") == 0) {
+return (void*)&mpfr_eint; } 
+else if (strcmp(target, "mpfr_li2") == 0) {
+return (void*)&mpfr_li2; } 
+else if (strcmp(target, "mpfr_cmp") == 0) {
+return (void*)&mpfr_cmp; } 
+else if (strcmp(target, "mpfr_cmp3") == 0) {
+return (void*)&mpfr_cmp3; } 
+else if (strcmp(target, "mpfr_cmp_d") == 0) {
+return (void*)&mpfr_cmp_d; } 
+else if (strcmp(target, "mpfr_cmp_ld") == 0) {
+return (void*)&mpfr_cmp_ld; } 
+else if (strcmp(target, "mpfr_cmpabs") == 0) {
+return (void*)&mpfr_cmpabs; } 
+else if (strcmp(target, "mpfr_cmp_ui") == 0) {
+return (void*)&mpfr_cmp_ui; } 
+else if (strcmp(target, "mpfr_cmp_si") == 0) {
+return (void*)&mpfr_cmp_si; } 
+else if (strcmp(target, "mpfr_cmp_ui_2exp") == 0) {
+return (void*)&mpfr_cmp_ui_2exp; } 
+else if (strcmp(target, "mpfr_cmp_si_2exp") == 0) {
+return (void*)&mpfr_cmp_si_2exp; } 
+else if (strcmp(target, "mpfr_reldiff") == 0) {
+return (void*)&mpfr_reldiff; } 
+else if (strcmp(target, "mpfr_eq") == 0) {
+return (void*)&mpfr_eq; } 
+else if (strcmp(target, "mpfr_sgn") == 0) {
+return (void*)&mpfr_sgn; } 
+else if (strcmp(target, "mpfr_mul_2exp") == 0) {
+return (void*)&mpfr_mul_2exp; } 
+else if (strcmp(target, "mpfr_div_2exp") == 0) {
+return (void*)&mpfr_div_2exp; } 
+else if (strcmp(target, "mpfr_mul_2ui") == 0) {
+return (void*)&mpfr_mul_2ui; } 
+else if (strcmp(target, "mpfr_div_2ui") == 0) {
+return (void*)&mpfr_div_2ui; } 
+else if (strcmp(target, "mpfr_mul_2si") == 0) {
+return (void*)&mpfr_mul_2si; } 
+else if (strcmp(target, "mpfr_div_2si") == 0) {
+return (void*)&mpfr_div_2si; } 
+else if (strcmp(target, "mpfr_rint") == 0) {
+return (void*)&mpfr_rint; } 
+else if (strcmp(target, "mpfr_roundeven") == 0) {
+return (void*)&mpfr_roundeven; } 
+else if (strcmp(target, "mpfr_round") == 0) {
+return (void*)&mpfr_round; } 
+else if (strcmp(target, "mpfr_trunc") == 0) {
+return (void*)&mpfr_trunc; } 
+else if (strcmp(target, "mpfr_ceil") == 0) {
+return (void*)&mpfr_ceil; } 
+else if (strcmp(target, "mpfr_floor") == 0) {
+return (void*)&mpfr_floor; } 
+else if (strcmp(target, "mpfr_rint_roundeven") == 0) {
+return (void*)&mpfr_rint_roundeven; } 
+else if (strcmp(target, "mpfr_rint_round") == 0) {
+return (void*)&mpfr_rint_round; } 
+else if (strcmp(target, "mpfr_rint_trunc") == 0) {
+return (void*)&mpfr_rint_trunc; } 
+else if (strcmp(target, "mpfr_rint_ceil") == 0) {
+return (void*)&mpfr_rint_ceil; } 
+else if (strcmp(target, "mpfr_rint_floor") == 0) {
+return (void*)&mpfr_rint_floor; } 
+else if (strcmp(target, "mpfr_frac") == 0) {
+return (void*)&mpfr_frac; } 
+else if (strcmp(target, "mpfr_modf") == 0) {
+return (void*)&mpfr_modf; } 
+else if (strcmp(target, "mpfr_remquo") == 0) {
+return (void*)&mpfr_remquo; } 
+else if (strcmp(target, "mpfr_remainder") == 0) {
+return (void*)&mpfr_remainder; } 
+else if (strcmp(target, "mpfr_fmod") == 0) {
+return (void*)&mpfr_fmod; } 
+else if (strcmp(target, "mpfr_fmodquo") == 0) {
+return (void*)&mpfr_fmodquo; } 
+else if (strcmp(target, "mpfr_fits_ulong_p") == 0) {
+return (void*)&mpfr_fits_ulong_p; } 
+else if (strcmp(target, "mpfr_fits_slong_p") == 0) {
+return (void*)&mpfr_fits_slong_p; } 
+else if (strcmp(target, "mpfr_fits_uint_p") == 0) {
+return (void*)&mpfr_fits_uint_p; } 
+else if (strcmp(target, "mpfr_fits_sint_p") == 0) {
+return (void*)&mpfr_fits_sint_p; } 
+else if (strcmp(target, "mpfr_fits_ushort_p") == 0) {
+return (void*)&mpfr_fits_ushort_p; } 
+else if (strcmp(target, "mpfr_fits_sshort_p") == 0) {
+return (void*)&mpfr_fits_sshort_p; } 
+else if (strcmp(target, "mpfr_fits_uintmax_p") == 0) {
+return (void*)&mpfr_fits_uintmax_p; } 
+else if (strcmp(target, "mpfr_fits_intmax_p") == 0) {
+return (void*)&mpfr_fits_intmax_p; } 
+else if (strcmp(target, "mpfr_extract") == 0) {
+return (void*)&mpfr_extract; } 
+else if (strcmp(target, "mpfr_swap") == 0) {
+return (void*)&mpfr_swap; } 
+else if (strcmp(target, "mpfr_dump") == 0) {
+return (void*)&mpfr_dump; } 
+else if (strcmp(target, "mpfr_nan_p") == 0) {
+return (void*)&mpfr_nan_p; } 
+else if (strcmp(target, "mpfr_inf_p") == 0) {
+return (void*)&mpfr_inf_p; } 
+else if (strcmp(target, "mpfr_number_p") == 0) {
+return (void*)&mpfr_number_p; } 
+else if (strcmp(target, "mpfr_integer_p") == 0) {
+return (void*)&mpfr_integer_p; } 
+else if (strcmp(target, "mpfr_zero_p") == 0) {
+return (void*)&mpfr_zero_p; } 
+else if (strcmp(target, "mpfr_regular_p") == 0) {
+return (void*)&mpfr_regular_p; } 
+else if (strcmp(target, "mpfr_greater_p") == 0) {
+return (void*)&mpfr_greater_p; } 
+else if (strcmp(target, "mpfr_greaterequal_p") == 0) {
+return (void*)&mpfr_greaterequal_p; } 
+else if (strcmp(target, "mpfr_less_p") == 0) {
+return (void*)&mpfr_less_p; } 
+else if (strcmp(target, "mpfr_lessequal_p") == 0) {
+return (void*)&mpfr_lessequal_p; } 
+else if (strcmp(target, "mpfr_lessgreater_p") == 0) {
+return (void*)&mpfr_lessgreater_p; } 
+else if (strcmp(target, "mpfr_equal_p") == 0) {
+return (void*)&mpfr_equal_p; } 
+else if (strcmp(target, "mpfr_unordered_p") == 0) {
+return (void*)&mpfr_unordered_p; } 
+else if (strcmp(target, "mpfr_atanh") == 0) {
+return (void*)&mpfr_atanh; } 
+else if (strcmp(target, "mpfr_acosh") == 0) {
+return (void*)&mpfr_acosh; } 
+else if (strcmp(target, "mpfr_asinh") == 0) {
+return (void*)&mpfr_asinh; } 
+else if (strcmp(target, "mpfr_cosh") == 0) {
+return (void*)&mpfr_cosh; } 
+else if (strcmp(target, "mpfr_sinh") == 0) {
+return (void*)&mpfr_sinh; } 
+else if (strcmp(target, "mpfr_tanh") == 0) {
+return (void*)&mpfr_tanh; } 
+else if (strcmp(target, "mpfr_sinh_cosh") == 0) {
+return (void*)&mpfr_sinh_cosh; } 
+else if (strcmp(target, "mpfr_sech") == 0) {
+return (void*)&mpfr_sech; } 
+else if (strcmp(target, "mpfr_csch") == 0) {
+return (void*)&mpfr_csch; } 
+else if (strcmp(target, "mpfr_coth") == 0) {
+return (void*)&mpfr_coth; } 
+else if (strcmp(target, "mpfr_acos") == 0) {
+return (void*)&mpfr_acos; } 
+else if (strcmp(target, "mpfr_asin") == 0) {
+return (void*)&mpfr_asin; } 
+else if (strcmp(target, "mpfr_atan") == 0) {
+return (void*)&mpfr_atan; } 
+else if (strcmp(target, "mpfr_sin") == 0) {
+return (void*)&mpfr_sin; } 
+else if (strcmp(target, "mpfr_sin_cos") == 0) {
+return (void*)&mpfr_sin_cos; } 
+else if (strcmp(target, "mpfr_cos") == 0) {
+return (void*)&mpfr_cos; } 
+else if (strcmp(target, "mpfr_tan") == 0) {
+return (void*)&mpfr_tan; } 
+else if (strcmp(target, "mpfr_atan2") == 0) {
+return (void*)&mpfr_atan2; } 
+else if (strcmp(target, "mpfr_sec") == 0) {
+return (void*)&mpfr_sec; } 
+else if (strcmp(target, "mpfr_csc") == 0) {
+return (void*)&mpfr_csc; } 
+else if (strcmp(target, "mpfr_cot") == 0) {
+return (void*)&mpfr_cot; } 
+else if (strcmp(target, "mpfr_hypot") == 0) {
+return (void*)&mpfr_hypot; } 
+else if (strcmp(target, "mpfr_erf") == 0) {
+return (void*)&mpfr_erf; } 
+else if (strcmp(target, "mpfr_erfc") == 0) {
+return (void*)&mpfr_erfc; } 
+else if (strcmp(target, "mpfr_cbrt") == 0) {
+return (void*)&mpfr_cbrt; } 
+else if (strcmp(target, "mpfr_root") == 0) {
+return (void*)&mpfr_root; } 
+else if (strcmp(target, "mpfr_rootn_ui") == 0) {
+return (void*)&mpfr_rootn_ui; } 
+else if (strcmp(target, "mpfr_gamma") == 0) {
+return (void*)&mpfr_gamma; } 
+else if (strcmp(target, "mpfr_gamma_inc") == 0) {
+return (void*)&mpfr_gamma_inc; } 
+else if (strcmp(target, "mpfr_beta") == 0) {
+return (void*)&mpfr_beta; } 
+else if (strcmp(target, "mpfr_lngamma") == 0) {
+return (void*)&mpfr_lngamma; } 
+else if (strcmp(target, "mpfr_lgamma") == 0) {
+return (void*)&mpfr_lgamma; } 
+else if (strcmp(target, "mpfr_digamma") == 0) {
+return (void*)&mpfr_digamma; } 
+else if (strcmp(target, "mpfr_zeta") == 0) {
+return (void*)&mpfr_zeta; } 
+else if (strcmp(target, "mpfr_zeta_ui") == 0) {
+return (void*)&mpfr_zeta_ui; } 
+else if (strcmp(target, "mpfr_fac_ui") == 0) {
+return (void*)&mpfr_fac_ui; } 
+else if (strcmp(target, "mpfr_j0") == 0) {
+return (void*)&mpfr_j0; } 
+else if (strcmp(target, "mpfr_j1") == 0) {
+return (void*)&mpfr_j1; } 
+else if (strcmp(target, "mpfr_jn") == 0) {
+return (void*)&mpfr_jn; } 
+else if (strcmp(target, "mpfr_y0") == 0) {
+return (void*)&mpfr_y0; } 
+else if (strcmp(target, "mpfr_y1") == 0) {
+return (void*)&mpfr_y1; } 
+else if (strcmp(target, "mpfr_yn") == 0) {
+return (void*)&mpfr_yn; } 
+else if (strcmp(target, "mpfr_ai") == 0) {
+return (void*)&mpfr_ai; } 
+else if (strcmp(target, "mpfr_min") == 0) {
+return (void*)&mpfr_min; } 
+else if (strcmp(target, "mpfr_max") == 0) {
+return (void*)&mpfr_max; } 
+else if (strcmp(target, "mpfr_dim") == 0) {
+return (void*)&mpfr_dim; } 
+else if (strcmp(target, "mpfr_mul_z") == 0) {
+return (void*)&mpfr_mul_z; } 
+else if (strcmp(target, "mpfr_div_z") == 0) {
+return (void*)&mpfr_div_z; } 
+else if (strcmp(target, "mpfr_add_z") == 0) {
+return (void*)&mpfr_add_z; } 
+else if (strcmp(target, "mpfr_sub_z") == 0) {
+return (void*)&mpfr_sub_z; } 
+else if (strcmp(target, "mpfr_z_sub") == 0) {
+return (void*)&mpfr_z_sub; } 
+else if (strcmp(target, "mpfr_cmp_z") == 0) {
+return (void*)&mpfr_cmp_z; } 
+else if (strcmp(target, "mpfr_fma") == 0) {
+return (void*)&mpfr_fma; } 
+else if (strcmp(target, "mpfr_fms") == 0) {
+return (void*)&mpfr_fms; } 
+else if (strcmp(target, "mpfr_fmma") == 0) {
+return (void*)&mpfr_fmma; } 
+else if (strcmp(target, "mpfr_fmms") == 0) {
+return (void*)&mpfr_fmms; } 
+else if (strcmp(target, "mpfr_sum") == 0) {
+return (void*)&mpfr_sum; } 
+else if (strcmp(target, "mpfr_free_cache") == 0) {
+return (void*)&mpfr_free_cache; } 
+else if (strcmp(target, "mpfr_free_cache2") == 0) {
+return (void*)&mpfr_free_cache2; } 
+else if (strcmp(target, "mpfr_free_pool") == 0) {
+return (void*)&mpfr_free_pool; } 
+else if (strcmp(target, "mpfr_mp_memory_cleanup") == 0) {
+return (void*)&mpfr_mp_memory_cleanup; } 
+else if (strcmp(target, "mpfr_subnormalize") == 0) {
+return (void*)&mpfr_subnormalize; } 
+else if (strcmp(target, "mpfr_strtofr") == 0) {
+return (void*)&mpfr_strtofr; } 
+else if (strcmp(target, "mpfr_round_nearest_away_begin") == 0) {
+return (void*)&mpfr_round_nearest_away_begin; } 
+else if (strcmp(target, "mpfr_round_nearest_away_end") == 0) {
+return (void*)&mpfr_round_nearest_away_end; } 
+else if (strcmp(target, "mpfr_custom_get_size") == 0) {
+return (void*)&mpfr_custom_get_size; } 
+else if (strcmp(target, "mpfr_custom_init") == 0) {
+return (void*)&mpfr_custom_init; } 
+else if (strcmp(target, "mpfr_custom_get_significand") == 0) {
+return (void*)&mpfr_custom_get_significand; } 
+else if (strcmp(target, "mpfr_custom_get_exp") == 0) {
+return (void*)&mpfr_custom_get_exp; } 
+else if (strcmp(target, "mpfr_custom_move") == 0) {
+return (void*)&mpfr_custom_move; } 
+else if (strcmp(target, "mpfr_custom_init_set") == 0) {
+return (void*)&mpfr_custom_init_set; } 
+else if (strcmp(target, "mpfr_custom_get_kind") == 0) {
+return (void*)&mpfr_custom_get_kind; } 
+else if (strcmp(target, "dsfmt_gen_rand_all") == 0) {
+return (void*)&dsfmt_gen_rand_all; } 
+else if (strcmp(target, "dsfmt_fill_array_open_close") == 0) {
+return (void*)&dsfmt_fill_array_open_close; } 
+else if (strcmp(target, "dsfmt_fill_array_close_open") == 0) {
+return (void*)&dsfmt_fill_array_close_open; } 
+else if (strcmp(target, "dsfmt_fill_array_open_open") == 0) {
+return (void*)&dsfmt_fill_array_open_open; } 
+else if (strcmp(target, "dsfmt_fill_array_close1_open2") == 0) {
+return (void*)&dsfmt_fill_array_close1_open2; } 
+else if (strcmp(target, "dsfmt_chk_init_gen_rand") == 0) {
+return (void*)&dsfmt_chk_init_gen_rand; } 
+else if (strcmp(target, "dsfmt_chk_init_by_array") == 0) {
+return (void*)&dsfmt_chk_init_by_array; } 
+else if (strcmp(target, "dsfmt_get_idstring") == 0) {
+return (void*)&dsfmt_get_idstring; } 
+else if (strcmp(target, "dsfmt_get_min_array_size") == 0) {
+return (void*)&dsfmt_get_min_array_size; } 
+else if (strcmp(target, "dsfmt_genrand_uint32") == 0) {
+return (void*)&dsfmt_genrand_uint32; } 
+else if (strcmp(target, "dsfmt_genrand_close1_open2") == 0) {
+return (void*)&dsfmt_genrand_close1_open2; } 
+else if (strcmp(target, "dsfmt_genrand_close_open") == 0) {
+return (void*)&dsfmt_genrand_close_open; } 
+else if (strcmp(target, "dsfmt_genrand_open_close") == 0) {
+return (void*)&dsfmt_genrand_open_close; } 
+else if (strcmp(target, "dsfmt_genrand_open_open") == 0) {
+return (void*)&dsfmt_genrand_open_open; } 
+else if (strcmp(target, "dsfmt_gv_genrand_uint32") == 0) {
+return (void*)&dsfmt_gv_genrand_uint32; } 
+else if (strcmp(target, "dsfmt_gv_genrand_close1_open2") == 0) {
+return (void*)&dsfmt_gv_genrand_close1_open2; } 
+else if (strcmp(target, "dsfmt_gv_genrand_close_open") == 0) {
+return (void*)&dsfmt_gv_genrand_close_open; } 
+else if (strcmp(target, "dsfmt_gv_genrand_open_close") == 0) {
+return (void*)&dsfmt_gv_genrand_open_close; } 
+else if (strcmp(target, "dsfmt_gv_genrand_open_open") == 0) {
+return (void*)&dsfmt_gv_genrand_open_open; } 
+else if (strcmp(target, "dsfmt_gv_fill_array_open_close") == 0) {
+return (void*)&dsfmt_gv_fill_array_open_close; } 
+else if (strcmp(target, "dsfmt_gv_fill_array_close_open") == 0) {
+return (void*)&dsfmt_gv_fill_array_close_open; } 
+else if (strcmp(target, "dsfmt_gv_fill_array_open_open") == 0) {
+return (void*)&dsfmt_gv_fill_array_open_open; } 
+else if (strcmp(target, "dsfmt_gv_fill_array_close1_open2") == 0) {
+return (void*)&dsfmt_gv_fill_array_close1_open2; } 
+else if (strcmp(target, "dsfmt_gv_init_gen_rand") == 0) {
+return (void*)&dsfmt_gv_init_gen_rand; } 
+else if (strcmp(target, "dsfmt_gv_init_by_array") == 0) {
+return (void*)&dsfmt_gv_init_by_array; } 
+else if (strcmp(target, "dsfmt_init_gen_rand") == 0) {
+return (void*)&dsfmt_init_gen_rand; } 
+else if (strcmp(target, "dsfmt_init_by_array") == 0) {
+return (void*)&dsfmt_init_by_array; } 
+else if (strcmp(target, "get_idstring") == 0) {
+return (void*)&get_idstring; } 
+else if (strcmp(target, "get_min_array_size") == 0) {
+return (void*)&get_min_array_size; } 
+else if (strcmp(target, "init_gen_rand") == 0) {
+return (void*)&init_gen_rand; } 
+else if (strcmp(target, "init_by_array") == 0) {
+return (void*)&init_by_array; } 
+else if (strcmp(target, "genrand_close1_open2") == 0) {
+return (void*)&genrand_close1_open2; } 
+else if (strcmp(target, "genrand_close_open") == 0) {
+return (void*)&genrand_close_open; } 
+else if (strcmp(target, "genrand_open_close") == 0) {
+return (void*)&genrand_open_close; } 
+else if (strcmp(target, "genrand_open_open") == 0) {
+return (void*)&genrand_open_open; } 
+else if (strcmp(target, "fill_array_open_close") == 0) {
+return (void*)&fill_array_open_close; } 
+else if (strcmp(target, "fill_array_close_open") == 0) {
+return (void*)&fill_array_close_open; } 
+else if (strcmp(target, "fill_array_open_open") == 0) {
+return (void*)&fill_array_open_open; } 
+else if (strcmp(target, "fill_array_close1_open2") == 0) {
+return (void*)&fill_array_close1_open2; } 
+else if (strcmp(target, "emscripten_run_script") == 0) {
+return (void*)&emscripten_run_script; } 
+else if (strcmp(target, "emscripten_run_script_int") == 0) {
+return (void*)&emscripten_run_script_int; } 
+else if (strcmp(target, "emscripten_run_script_string") == 0) {
+return (void*)&emscripten_run_script_string; } 
+else if (strcmp(target, "emscripten_async_run_script") == 0) {
+return (void*)&emscripten_async_run_script; } 
+else if (strcmp(target, "emscripten_async_load_script") == 0) {
+return (void*)&emscripten_async_load_script; } 
+else if (strcmp(target, "emscripten_set_main_loop") == 0) {
+return (void*)&emscripten_set_main_loop; } 
+else if (strcmp(target, "emscripten_set_main_loop_timing") == 0) {
+return (void*)&emscripten_set_main_loop_timing; } 
+else if (strcmp(target, "emscripten_get_main_loop_timing") == 0) {
+return (void*)&emscripten_get_main_loop_timing; } 
+else if (strcmp(target, "emscripten_set_main_loop_arg") == 0) {
+return (void*)&emscripten_set_main_loop_arg; } 
+else if (strcmp(target, "emscripten_pause_main_loop") == 0) {
+return (void*)&emscripten_pause_main_loop; } 
+else if (strcmp(target, "emscripten_resume_main_loop") == 0) {
+return (void*)&emscripten_resume_main_loop; } 
+else if (strcmp(target, "emscripten_cancel_main_loop") == 0) {
+return (void*)&emscripten_cancel_main_loop; } 
+else if (strcmp(target, "emscripten_set_socket_error_callback") == 0) {
+return (void*)&emscripten_set_socket_error_callback; } 
+else if (strcmp(target, "emscripten_set_socket_open_callback") == 0) {
+return (void*)&emscripten_set_socket_open_callback; } 
+else if (strcmp(target, "emscripten_set_socket_listen_callback") == 0) {
+return (void*)&emscripten_set_socket_listen_callback; } 
+else if (strcmp(target, "emscripten_set_socket_connection_callback") == 0) {
+return (void*)&emscripten_set_socket_connection_callback; } 
+else if (strcmp(target, "emscripten_set_socket_message_callback") == 0) {
+return (void*)&emscripten_set_socket_message_callback; } 
+else if (strcmp(target, "emscripten_set_socket_close_callback") == 0) {
+return (void*)&emscripten_set_socket_close_callback; } 
+else if (strcmp(target, "_emscripten_push_main_loop_blocker") == 0) {
+return (void*)&_emscripten_push_main_loop_blocker; } 
+else if (strcmp(target, "_emscripten_push_uncounted_main_loop_blocker") == 0) {
+return (void*)&_emscripten_push_uncounted_main_loop_blocker; } 
+else if (strcmp(target, "emscripten_set_main_loop_expected_blockers") == 0) {
+return (void*)&emscripten_set_main_loop_expected_blockers; } 
+else if (strcmp(target, "emscripten_async_call") == 0) {
+return (void*)&emscripten_async_call; } 
+else if (strcmp(target, "emscripten_exit_with_live_runtime") == 0) {
+return (void*)&emscripten_exit_with_live_runtime; } 
+else if (strcmp(target, "emscripten_force_exit") == 0) {
+return (void*)&emscripten_force_exit; } 
+else if (strcmp(target, "emscripten_get_device_pixel_ratio") == 0) {
+return (void*)&emscripten_get_device_pixel_ratio; } 
+else if (strcmp(target, "emscripten_hide_mouse") == 0) {
+return (void*)&emscripten_hide_mouse; } 
+else if (strcmp(target, "emscripten_set_canvas_size") == 0) {
+return (void*)&emscripten_set_canvas_size; } 
+else if (strcmp(target, "emscripten_get_canvas_size") == 0) {
+return (void*)&emscripten_get_canvas_size; } 
+else if (strcmp(target, "emscripten_get_now") == 0) {
+return (void*)&emscripten_get_now; } 
+else if (strcmp(target, "emscripten_random") == 0) {
+return (void*)&emscripten_random; } 
+else if (strcmp(target, "emscripten_async_wget") == 0) {
+return (void*)&emscripten_async_wget; } 
+else if (strcmp(target, "emscripten_async_wget_data") == 0) {
+return (void*)&emscripten_async_wget_data; } 
+else if (strcmp(target, "emscripten_async_wget2") == 0) {
+return (void*)&emscripten_async_wget2; } 
+else if (strcmp(target, "emscripten_async_wget2_data") == 0) {
+return (void*)&emscripten_async_wget2_data; } 
+else if (strcmp(target, "emscripten_async_wget2_abort") == 0) {
+return (void*)&emscripten_async_wget2_abort; } 
+else if (strcmp(target, "emscripten_wget") == 0) {
+return (void*)&emscripten_wget; } 
+else if (strcmp(target, "emscripten_wget_data") == 0) {
+return (void*)&emscripten_wget_data; } 
+else if (strcmp(target, "emscripten_idb_async_load") == 0) {
+return (void*)&emscripten_idb_async_load; } 
+else if (strcmp(target, "emscripten_idb_async_store") == 0) {
+return (void*)&emscripten_idb_async_store; } 
+else if (strcmp(target, "emscripten_idb_async_delete") == 0) {
+return (void*)&emscripten_idb_async_delete; } 
+else if (strcmp(target, "emscripten_idb_async_exists") == 0) {
+return (void*)&emscripten_idb_async_exists; } 
+else if (strcmp(target, "emscripten_idb_load") == 0) {
+return (void*)&emscripten_idb_load; } 
+else if (strcmp(target, "emscripten_idb_store") == 0) {
+return (void*)&emscripten_idb_store; } 
+else if (strcmp(target, "emscripten_idb_delete") == 0) {
+return (void*)&emscripten_idb_delete; } 
+else if (strcmp(target, "emscripten_idb_exists") == 0) {
+return (void*)&emscripten_idb_exists; } 
+else if (strcmp(target, "emscripten_idb_load_blob") == 0) {
+return (void*)&emscripten_idb_load_blob; } 
+else if (strcmp(target, "emscripten_idb_store_blob") == 0) {
+return (void*)&emscripten_idb_store_blob; } 
+else if (strcmp(target, "emscripten_idb_read_from_blob") == 0) {
+return (void*)&emscripten_idb_read_from_blob; } 
+else if (strcmp(target, "emscripten_idb_free_blob") == 0) {
+return (void*)&emscripten_idb_free_blob; } 
+else if (strcmp(target, "emscripten_run_preload_plugins") == 0) {
+return (void*)&emscripten_run_preload_plugins; } 
+else if (strcmp(target, "emscripten_run_preload_plugins_data") == 0) {
+return (void*)&emscripten_run_preload_plugins_data; } 
+else if (strcmp(target, "emscripten_create_worker") == 0) {
+return (void*)&emscripten_create_worker; } 
+else if (strcmp(target, "emscripten_destroy_worker") == 0) {
+return (void*)&emscripten_destroy_worker; } 
+else if (strcmp(target, "emscripten_call_worker") == 0) {
+return (void*)&emscripten_call_worker; } 
+else if (strcmp(target, "emscripten_worker_respond") == 0) {
+return (void*)&emscripten_worker_respond; } 
+else if (strcmp(target, "emscripten_worker_respond_provisionally") == 0) {
+return (void*)&emscripten_worker_respond_provisionally; } 
+else if (strcmp(target, "emscripten_get_worker_queue_size") == 0) {
+return (void*)&emscripten_get_worker_queue_size; } 
+else if (strcmp(target, "emscripten_get_compiler_setting") == 0) {
+return (void*)&emscripten_get_compiler_setting; } 
+else if (strcmp(target, "emscripten_debugger") == 0) {
+return (void*)&emscripten_debugger; } 
+else if (strcmp(target, "emscripten_get_preloaded_image_data") == 0) {
+return (void*)&emscripten_get_preloaded_image_data; } 
+else if (strcmp(target, "emscripten_get_preloaded_image_data_from_FILE") == 0) {
+return (void*)&emscripten_get_preloaded_image_data_from_FILE; } 
+else if (strcmp(target, "emscripten_log") == 0) {
+return (void*)&emscripten_log; } 
+else if (strcmp(target, "emscripten_get_callstack") == 0) {
+return (void*)&emscripten_get_callstack; } 
+else if (strcmp(target, "emscripten_print_double") == 0) {
+return (void*)&emscripten_print_double; } 
+else if (strcmp(target, "emscripten_sleep") == 0) {
+return (void*)&emscripten_sleep; } 
+else if (strcmp(target, "emscripten_sleep_with_yield") == 0) {
+return (void*)&emscripten_sleep_with_yield; } 
+else if (strcmp(target, "emscripten_coroutine_create") == 0) {
+return (void*)&emscripten_coroutine_create; } 
+else if (strcmp(target, "emscripten_coroutine_next") == 0) {
+return (void*)&emscripten_coroutine_next; } 
+else if (strcmp(target, "emscripten_yield") == 0) {
+return (void*)&emscripten_yield; } 
+
+        WRAP(jl_options)
+#ifdef _OS_EMSCRIPTEN_
+        WRAP(__gmp_version)
+        WRAP(__gmp_bits_per_limb)
+        WRAP(__gmpz_clear)
+#endif
+        WRAP(jl_gc_counted_malloc)
+        WRAP(jl_gc_counted_realloc_with_old_size)
+        WRAP(jl_gc_counted_free_with_size)
+        WRAP(jl_n_threads)
+        WRAP(jl_throw_out_of_memory_error)
+        else if (strcmp(target, "jl_uv_stdout") == 0) {
+            return &JL_STDOUT;
+        } else if (strcmp(target, "jl_uv_stderr") == 0) {
+            return &JL_STDERR;
+        }
+
+ printf("%s", target);
+ jl_error("Encountered cglobal not mapped in runtime_intrinsics. For now, you may add it to the list. (Or write a proper solution)\n");
+
+return NULL;
+}
