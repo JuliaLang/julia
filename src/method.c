@@ -466,12 +466,21 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         jl_method_t *method = entry->func.method;
         //jl_static_show(JL_STDERR, (jl_value_t*)method);
 
+        //jl_printf(JL_STDERR, "\nedges: "); jl_static_show(JL_STDERR, (jl_value_t*)func->edges); jl_printf(JL_STDERR, "\n");
+        if (func->edges == jl_nothing) {
+          // TODO: How to construct this array type properly
+          jl_value_t* array_mi_type = jl_apply_type2((jl_value_t*)jl_array_type,
+                                                     (jl_value_t*)jl_method_instance_type, jl_box_long(1));
+
+          //jl_static_show(JL_STDERR, array_mi_type);
+          func->edges = (jl_value_t*)jl_alloc_array_1d(array_mi_type, 0);
+        }
+        //jl_static_show(JL_STDERR, (jl_value_t*)func->edges);
+
         jl_method_instance_t *edge = jl_specializations_get_linfo(method, types, linfo->sparam_vals);
-        //jl_printf(JL_STDERR, "\nNATHAN: edge: %p\n", edge);
-        //jl_static_show(JL_STDERR, (jl_value_t*)edge);
-
-
-        jl_method_instance_add_backedge(edge, linfo);
+        //jl_method_instance_add_backedge(edge, linfo);
+        jl_array_ptr_1d_push((jl_array_t*)func->edges, (jl_value_t*)edge);
+        //jl_static_show(JL_STDERR, (jl_value_t*)func->edges);
 
         ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
