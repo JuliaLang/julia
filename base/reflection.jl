@@ -1287,11 +1287,15 @@ function static_hasmethod(@nospecialize(f), @nospecialize(t); world=typemax(UInt
     return static_hasmethod(f, t, Val{world}())
 end
 
-# TODO: delete this and rename static_hasmethod above
-function hasmethod(@nospecialize(f), @nospecialize(t); world=typemax(UInt))
+
+function dynamic_hasmethod(@nospecialize(f), @nospecialize(t); world=typemax(UInt))
     t = to_tuple_type(t)
     t = signature_type(f, t)
     return ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), t, world) !== nothing
+end
+
+function hasmethod(@nospecialize(f), @nospecialize(t); world=typemax(UInt))
+    return static_hasmethod(f, t; world=world)
 end
 
 function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Symbol}}; world=typemax(UInt))
