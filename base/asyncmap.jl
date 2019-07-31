@@ -22,6 +22,33 @@ If `batch_size` is specified, the collection is processed in batch mode. `f` mus
 then be a function that must accept a `Vector` of argument tuples and must
 return a vector of results. The input vector will have a length of `batch_size` or less.
 
+# Exception handling
+
+Individual exceptions thrown by `f` will be wrapped in a `TaskFailedException`.
+As multiple tasks are used, more than one exception may be thrown. Exceptions
+are combined into a `CompositeException`. Even if only a single exception is
+thrown, it is still wrapped in a `CompositeException`.
+
+However, when an exception is thrown `asyncmap` will fail-fast. Any remaining
+iterations, which are not already in progress, will be cancelled. If you need
+`asyncmap` to be error resistant then wrap the body of 'f' in a `try... catch`
+statement. Below is one possible approach to error handling:
+
+```
+julia> result = asyncmap(1:2) do x
+           try
+               iseven(x) ? x : error("foo")
+           catch e
+               CapturedException(e, catch_backtrace())
+           end
+       end
+2-element Array{Any,1}:
+  CapturedException(ErrorException("foo"), Any[(error(::String) at error.jl:33, 1), ...])
+ 2
+```
+
+# Examples
+
 The following examples highlight execution in different tasks by returning
 the `objectid` of the tasks in which the mapping function is executed.
 
@@ -72,9 +99,9 @@ julia> asyncmap(batch_func, 1:5; ntasks=2, batch_size=2)
 ```
 
 !!! note
-    Currently, all tasks in Julia are executed in a single OS thread co-operatively. Consequently,
+    The tasks created by `asyncmap` are executed in a single OS thread co-operatively. Consequently,
     `asyncmap` is beneficial only when the mapping function involves any I/O - disk, network, remote
-    worker invocation, etc.
+    worker invocation, etc. See [`Threads`](@ref) and `Distributed` for alternatives.
 
 """
 function asyncmap(f, c...; ntasks=0, batch_size=nothing)
@@ -99,8 +126,8 @@ function async_usemap(f, c...; ntasks=0, batch_size=nothing)
     else
         exec_func = (r,args) -> (r.x = f(args...))
     end
-    chnl, worker_tasks = setup_chnl_and_tasks(exec_func, ntasks, batch_size)
-    return wrap_n_exec_twice(chnl, worker_tasks, ntasks, exec_func, c...)
+    chnl, err_chnl, worker_tasks = setup_chnl_and_tasks(exec_func, ntasks, batch_size)
+    return wrap_n_exec_twice(chnl, err_chnl, worker_tasks, ntasks, exec_func, c...)
 end
 
 batch_size_err_str(batch_size) = string("batch_size must be specified as a positive integer. batch_size=", batch_size)
@@ -134,7 +161,7 @@ function verify_ntasks(iterable, ntasks)
     return ntasks
 end
 
-function wrap_n_exec_twice(chnl, worker_tasks, ntasks, exec_func, c...)
+function wrap_n_exec_twice(chnl, err_chnl, worker_tasks, ntasks, exec_func, c...)
     # The driver task, creates a Ref object and writes it and the args tuple to
     # the communication channel for processing by a free worker task.
     push_arg_to_channel = (x...) -> (r=Ref{Any}(nothing); put!(chnl,(r,x));r)
@@ -144,41 +171,43 @@ function wrap_n_exec_twice(chnl, worker_tasks, ntasks, exec_func, c...)
             # check number of tasks every time, and start one if required.
             # number_tasks > optimal_number is fine, the other way around is inefficient.
             if length(worker_tasks) < ntasks()
-                start_worker_task!(worker_tasks, exec_func, chnl)
+                start_worker_task!(worker_tasks, exec_func, chnl, err_chnl)
             end
             push_arg_to_channel(x...)
         end
     else
         map_f = push_arg_to_channel
     end
-    maptwice(map_f, chnl, worker_tasks, c...)
+    maptwice(map_f, chnl, err_chnl, worker_tasks, c...)
 end
 
-function maptwice(wrapped_f, chnl, worker_tasks, c...)
+function maptwice(wrapped_f, chnl, err_chnl, worker_tasks, c...)
     # first run, returns a collection of Refs
-    asyncrun_excp = nothing
-    local asyncrun
-    try
-        asyncrun = map(wrapped_f, c...)
+    asyncrun = try
+        map(wrapped_f, c...)
     catch ex
-        if isa(ex,InvalidStateException)
-            # channel could be closed due to exceptions in the async tasks,
-            # we propagate those errors, if any, over the `put!` failing
-            # in asyncrun due to a closed channel.
-            asyncrun_excp = ex
-        else
-            rethrow()
-        end
+        # the work channel was closed early and we have the error
+        ex isa InvalidStateException && isready(err_chnl) || rethrow()
+    finally
+        close(chnl)
     end
 
-    # close channel and wait for all worker tasks to finish
-    close(chnl)
+    # wait for all worker tasks to finish. We try not to throw
+    # task errors here because they would be in task creation
+    # order.
+    try
+        @sync foreach(t -> @sync_add(t), worker_tasks)
+    catch
+        isready(err_chnl) || rethrow()
+    finally
+        close(err_chnl)
+    end
 
-    # check and throw any exceptions from the worker tasks
-    foreach(x->(v=fetch(x); isa(v, Exception) && throw(v)), worker_tasks)
-
-    # check if there was a genuine problem with asyncrun
-    (asyncrun_excp !== nothing) && throw(asyncrun_excp)
+    # throw task errors in chronological order
+    if isready(err_chnl)
+        exs = [TaskFailedException(task) for task in err_chnl]
+        throw(CompositeException(exs))
+    end
 
     if isa(asyncrun, Ref)
         # scalar case
@@ -204,42 +233,39 @@ function setup_chnl_and_tasks(exec_func, ntasks, batch_size=nothing)
     # of an error in any of the worker tasks, the channel is closed. This
     # results in the `put!` in the driver task failing immediately.
     chnl = Channel(0)
+    err_chnl = Channel(nt)
     worker_tasks = []
-    foreach(_ -> start_worker_task!(worker_tasks, exec_func, chnl, batch_size), 1:nt)
+    foreach(_ -> start_worker_task!(worker_tasks, exec_func, chnl, err_chnl, batch_size), 1:nt)
     yield()
-    return (chnl, worker_tasks)
+    return (chnl, err_chnl, worker_tasks)
 end
 
-function start_worker_task!(worker_tasks, exec_func, chnl, batch_size=nothing)
-    t = @async begin
-        retval = nothing
+start_worker_task(exec_func, chnl) = foreach(exec_data -> exec_func(exec_data...), chnl)
+start_worker_task(exec_func, chnl, ::Nothing) = start_worker_task(exec_func, chnl)
+start_worker_task(exec_func, chnl, batch_size) = while isopen(chnl)
+    # The mapping function expects an array of input args, as it processes
+    # elements in a batch.
+    batch_collection=Any[]
+    n = 0
+    for exec_data in chnl
+        push!(batch_collection, exec_data)
+        n += 1
+        (n == batch_size) && break
+    end
+    if n > 0
+        exec_func(batch_collection)
+    end
+end
 
+function start_worker_task!(worker_tasks, exec_func, chnl, err_chnl, batch_size=nothing)
+    t = @async begin
         try
-            if isa(batch_size, Number)
-                while isopen(chnl)
-                    # The mapping function expects an array of input args, as it processes
-                    # elements in a batch.
-                    batch_collection=Any[]
-                    n = 0
-                    for exec_data in chnl
-                        push!(batch_collection, exec_data)
-                        n += 1
-                        (n == batch_size) && break
-                    end
-                    if n > 0
-                        exec_func(batch_collection)
-                    end
-                end
-            else
-                for exec_data in chnl
-                    exec_func(exec_data...)
-                end
-            end
-        catch e
+            start_worker_task(exec_func, chnl, batch_size)
+        catch
+            put!(err_chnl, current_task())
             close(chnl)
-            retval = e
+            rethrow()
         end
-        retval
     end
     push!(worker_tasks, t)
 end
@@ -297,10 +323,11 @@ end
 
 mutable struct AsyncCollectorState
     chnl::Channel
+    err_chnl::Channel
     worker_tasks::Array{Task,1}
     enum_state      # enumerator state
-    AsyncCollectorState(chnl::Channel, worker_tasks::Vector) =
-        new(chnl, convert(Vector{Task}, worker_tasks))
+    AsyncCollectorState(chnl::Channel, err_chnl::Channel, worker_tasks::Vector) =
+        new(chnl, err_chnl, convert(Vector{Task}, worker_tasks))
 end
 
 function iterate(itr::AsyncCollector)
@@ -320,16 +347,23 @@ function iterate(itr::AsyncCollector)
     else
         exec_func = (i,args) -> (itr.results[i]=itr.f(args...))
     end
-    chnl, worker_tasks = setup_chnl_and_tasks((i,args) -> (itr.results[i]=itr.f(args...)), itr.ntasks, itr.batch_size)
-    return iterate(itr, AsyncCollectorState(chnl, worker_tasks))
+
+    chnl, err_chnl, worker_tasks = setup_chnl_and_tasks(itr.ntasks, itr.batch_size) do i, args
+        itr.results[i]=itr.f(args...)
+    end
+
+    return iterate(itr, AsyncCollectorState(chnl, err_chnl, worker_tasks))
 end
 
 function wait_done(itr::AsyncCollector, state::AsyncCollectorState)
     close(state.chnl)
 
     # wait for all tasks to finish
-    foreach(x->(v=fetch(x); isa(v, Exception) && throw(v)), state.worker_tasks)
+    @sync foreach(t -> @sync_add(t), state.worker_tasks)
     empty!(state.worker_tasks)
+
+    close(state.err_chnl)
+    isready(state.err_chnl) && throw(CompositeException(collect(state.err_chnl)))
 end
 
 function iterate(itr::AsyncCollector, state::AsyncCollectorState)
@@ -346,7 +380,14 @@ function iterate(itr::AsyncCollector, state::AsyncCollectorState)
         return nothing
     end
     (i, args), state.enum_state = y
-    put!(state.chnl, (i, args))
+
+    try
+        put!(state.chnl, (i, args))
+    catch ex
+        put!(state.err_chnl, ex)
+        wait_done(itr, state)
+        rethrow() # Should never reach here
+    end
 
     return (nothing, state)
 end

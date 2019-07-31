@@ -61,3 +61,28 @@ generic_map_tests(asyncmap, asyncmap!)
 run_map_equivalence_tests(asyncmap)
 using Base.Unicode: uppercase
 @test asyncmap(uppercase, "Hello World!") == map(uppercase, "Hello World!")
+
+# Inner exceptions
+@test_throws CompositeException asyncmap(_ -> error("foo"), 1:5)
+@test_throws CompositeException asyncmap(_ -> error("foo"), 1:5, ntasks=2)
+@test_throws CompositeException asyncmap(x -> x == 3 && error("foo"), 1:5, ntasks=2)
+@test_throws CompositeException asyncmap(1:4, batch_size=2) do v
+    map(u -> iseven(u) && error("foo"), v)
+end
+
+unpack(ex::CapturedException) = unpack(ex.ex)
+unpack(ex::TaskFailedException) = unpack(ex.task.exception)
+unpack(ex) = ex
+
+# Make sure exceptions are thrown in the order they happen
+chnl = Channel()
+try
+    asyncmap(1:2) do i
+        i == 1 && take!(chnl)
+        close(chnl)
+        error("first")
+    end
+catch ex
+    @test length(ex.exceptions) == 2
+    @test unpack(ex.exceptions[1]).msg == "first"
+end

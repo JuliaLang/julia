@@ -589,13 +589,18 @@ generic_map_tests(pmap_fallback)
 run_map_equivalence_tests(pmap)
 @test pmap(uppercase, "Hello World!") == map(uppercase, "Hello World!")
 
+unpack(ex::CompositeException) = unpack(ex.exceptions[1])
+unpack(ex::CapturedException) = unpack(ex.ex)
+unpack(ex::RemoteException) = unpack(ex.captured)
+unpack(ex::TaskFailedException) = unpack(ex.task.exception)
+unpack(ex) = ex
 
 # Simple test for pmap throws error
 let error_thrown = false
     try
         pmap(x -> x == 50 ? error("foobar") : x, 1:100)
     catch e
-        @test e.captured.ex.msg == "foobar"
+        @test unpack(e).msg == "foobar"
         error_thrown = true
     end
     @test error_thrown
