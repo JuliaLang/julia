@@ -380,7 +380,7 @@ Julia applies the following order and associativity of operations, from highest 
 For a complete list of *every* Julia operator's precedence, see the top of this file:
 [`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm)
 
-[Numeric literal cefficients](@ref man-numeric-literal-coefficients), e.g. `2x`, are treated as a multiplication with higher precedence than any other binary operation, and also have higher precedence than `^`.
+[Numeric literal coefficients](@ref man-numeric-literal-coefficients), e.g. `2x`, are treated as multiplications with higher precedence than any other binary operation, and also have higher precedence than `^`.
 
 You can also find the numerical precedence for any given operator via the built-in function `Base.operator_precedence`, where higher numbers take precedence:
 
