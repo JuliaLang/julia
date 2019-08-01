@@ -376,54 +376,12 @@ STATIC_INLINE jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator
     return code;
 }
 
-// return a newly allocated CodeInfo for the function signature
-// effectively described by the tuple (specTypes, env, Method) inside linfo
-JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
-{
-    JL_TIMING(STAGED_FUNCTION);
-    jl_value_t *tt = linfo->specTypes;
-    jl_method_t *def = linfo->def.method;
-    jl_value_t *generator = def->generator;
-    assert(generator != NULL);
-    assert(jl_is_method(def));
-    jl_code_info_t *func = NULL;
-    jl_value_t *ex = NULL;
-    JL_GC_PUSH2(&ex, &func);
-    jl_ptls_t ptls = jl_get_ptls_states();
-    int last_lineno = jl_lineno;
-    int last_in = ptls->in_pure_callback;
-    size_t last_age = jl_get_ptls_states()->world_age;
-
-    JL_TRY {
-        ptls->in_pure_callback = 1;
-        // and the right world
-        ptls->world_age = def->primary_world;
-
-        // invoke code generator
-        jl_tupletype_t *ttdt = (jl_tupletype_t*)jl_unwrap_unionall(tt);
-        ex = jl_call_staged(def, generator, linfo->sparam_vals, jl_svec_data(ttdt->parameters), jl_nparams(ttdt));
-
-        if (jl_is_code_info(ex)) {
-            func = (jl_code_info_t*)ex;
-        }
-        else {
-            func = (jl_code_info_t*)jl_expand((jl_value_t*)ex, def->module);
-            if (!jl_is_code_info(func)) {
-                if (jl_is_expr(func) && ((jl_expr_t*)func)->head == error_sym) {
-                    ptls->in_pure_callback = 0;
-                    jl_toplevel_eval(def->module, (jl_value_t*)func);
-                }
-                jl_error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure or comprehension.");
-            }
-
-            jl_array_t *stmts = (jl_array_t*)func->code;
-            jl_resolve_globals_in_ir(stmts, def->module, linfo->sparam_vals, 1);
-        }
-
-        // --------------------------------------------------------------------------------
-        // Set code_info.edges = [MethodInstance for gen_func(::Any, ::Any...)]
-        // --------------------------------------------------------------------------------
-
+// Sets func.edges = MethodInstance[MethodInstance for generator(::Any, ::Any...)]
+// This is so that @generated functions will be re-generated if any functions called from
+// the generator body are invalidated.
+static void set_codeinfo_forward_edge_to_generator(jl_code_info_t *func,
+                                                   jl_value_t *generator,
+                                                   jl_tupletype_t *ttdt) {
         // Get generator function body
         jl_value_t* gen_func = jl_get_field(generator, "gen");
 
@@ -468,6 +426,56 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
             //jl_method_instance_add_backedge(edge, linfo);
             jl_array_ptr_1d_push((jl_array_t*)func->edges, (jl_value_t*)edge);
         }
+}
+
+// return a newly allocated CodeInfo for the function signature
+// effectively described by the tuple (specTypes, env, Method) inside linfo
+JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
+{
+    JL_TIMING(STAGED_FUNCTION);
+    jl_value_t *tt = linfo->specTypes;
+    jl_method_t *def = linfo->def.method;
+    jl_value_t *generator = def->generator;
+    assert(generator != NULL);
+    assert(jl_is_method(def));
+    jl_code_info_t *func = NULL;
+    jl_value_t *ex = NULL;
+    JL_GC_PUSH2(&ex, &func);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    int last_lineno = jl_lineno;
+    int last_in = ptls->in_pure_callback;
+    size_t last_age = jl_get_ptls_states()->world_age;
+
+    JL_TRY {
+        ptls->in_pure_callback = 1;
+        // and the right world
+        ptls->world_age = def->primary_world;
+
+        // invoke code generator
+        jl_tupletype_t *ttdt = (jl_tupletype_t*)jl_unwrap_unionall(tt);
+        ex = jl_call_staged(def, generator, linfo->sparam_vals, jl_svec_data(ttdt->parameters), jl_nparams(ttdt));
+
+        if (jl_is_code_info(ex)) {
+            func = (jl_code_info_t*)ex;
+        }
+        else {
+            func = (jl_code_info_t*)jl_expand((jl_value_t*)ex, def->module);
+            if (!jl_is_code_info(func)) {
+                if (jl_is_expr(func) && ((jl_expr_t*)func)->head == error_sym) {
+                    ptls->in_pure_callback = 0;
+                    jl_toplevel_eval(def->module, (jl_value_t*)func);
+                }
+                jl_error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure or comprehension.");
+            }
+
+            jl_array_t *stmts = (jl_array_t*)func->code;
+            jl_resolve_globals_in_ir(stmts, def->module, linfo->sparam_vals, 1);
+        }
+
+        // Set forward edge from the staged func `func` to the generator, so that the
+        // generator will be rerun if any dependent functions called from the generator body
+        // are invalidated. This keeps generated functions up-to-date, like other functions.
+        set_codeinfo_forward_edge_to_generator(func, generator, ttdt);
 
         ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
