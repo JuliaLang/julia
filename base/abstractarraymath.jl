@@ -128,7 +128,7 @@ julia> selectdim(A, 2, 3)
 end
 
 """
-    selectslice(A, dim::Integer, inds...)
+    selectslice(A::AbstractArray, dim::Integer, inds...)
 
 Return a view in to the vector shaped slice of `A` along the dimension `dim` with all the other indicies set to `inds` in order.
 
