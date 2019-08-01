@@ -240,7 +240,11 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         for eltyb in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
             b1 = convert(Vector{eltyb}, (elty1 <: Complex ? real(A1) : A1)*fill(1., n))
             b2 = convert(Vector{eltyb}, (elty1 <: Complex ? real(A1) : A1)*randn(n))
-            @test dot(b1, A1, b2) ≈ b1' * A1 * b2 ≈ *(b1', A1, b2) ≈ (b1'A1)*b2
+            if elty1 in (BigFloat, Complex{BigFloat}) || eltyb in (BigFloat, Complex{BigFloat})
+                @test dot(b1, A1, b2) ≈ (b1'A1)*b2  atol=sqrt(max(eps(real(float(one(elty1)))),eps(real(float(one(eltyb))))))*n*n
+            else
+                @test dot(b1, A1, b2) ≈ (b1'A1)*b2
+            end
         end
 
         # Binary operations
