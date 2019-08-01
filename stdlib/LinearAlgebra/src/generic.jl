@@ -1415,9 +1415,9 @@ Currently supports only numeric leaf elements.
 ```jldoctest
 julia> a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
 3-element Array{Any,1}:
-  Any[1,2,[3,4]]
+  Any[1, 2, [3, 4]]
  5.0
-  Any[0+6im,[7.0,8.0]]
+  Any[0 + 6im, [7.0, 8.0]]
 
 julia> LinearAlgebra.promote_leaf_eltypes(a)
 Complex{Float64}
