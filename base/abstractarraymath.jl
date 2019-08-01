@@ -126,6 +126,7 @@ julia> selectdim(A, 2, 3)
     d > nd && (i == 1 || throw(BoundsError(A, (ntuple(k->Colon(),d-1)..., i))))
     return view(A, idxs...)
 end
+
 """
     selectslice(A, dim::Integer, inds...)
 
@@ -162,6 +163,7 @@ julia> selectslice(A, 2, 2)
     end
     view(A, _inds...)
 end
+
 """
     reverse(A; dims::Integer)
 
