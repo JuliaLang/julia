@@ -419,36 +419,26 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
             jl_array_t *stmts = (jl_array_t*)func->code;
             jl_resolve_globals_in_ir(stmts, def->module, linfo->sparam_vals, 1);
         }
-        //jl_printf(JL_STDERR, "\nHELLO\n");
-        //jl_printf(JL_STDERR, "def: "); jl_static_show(JL_STDERR, (jl_value_t*)def); jl_printf(JL_STDERR, "\n");
+
+        // --------------------------------------------------------------------------------
+        // Set code_info.edges = [MethodInstance for gen_func(::Any, ::Any...)]
+        // --------------------------------------------------------------------------------
 
         // Get generator function body
         jl_value_t* gen_func = jl_get_field(generator, "gen");
-        //jl_printf(JL_STDERR, "gen_func: "); jl_static_show(JL_STDERR, (jl_value_t*)gen_func); jl_printf(JL_STDERR, "\n");
-
-        //// Main user-named staged function
-        //jl_value_t* staged_function = def->sig;
-        //jl_printf(JL_STDERR, "\nstaged_function: ");
-        //jl_static_show(JL_STDERR, (jl_value_t*)staged_function);
-        //jl_printf(JL_STDERR, "\n");
 
         // Get jl_method_t for generator body
         // The generator body takes two arguments: (typeof(func), T)
-        // So types should be e.g.: Tuple{getfield(Main, Symbol("##s4#3")), typeof(Main.foo), Float64}
-
+        // So types should be, e.g.: Tuple{getfield(Main, Symbol("##s4#3")), typeof(Main.foo), Float64}
         // BUT --- THIS IS THE WEIRD PART:
-        // Apparently the backedge needs to be from `##s4#3(typeof(func), Type)` instead of
+        // Apparently the backedge needs to be from `##s4#3(::Any, ::Any)` instead of
         // the actual types of the aruments! Who knows why!! Weirdness.
+        // (EDIT: I _think_ this is because the generatorbody is marked nospecialize?)
         // Manually construct that weird signature, here:
-        //jl_printf(JL_STDERR, "\nttdt: "); jl_static_show(JL_STDERR, (jl_value_t*)ttdt); jl_printf(JL_STDERR, "\n");
-        ssize_t numargs = jl_svec_len(ttdt->parameters);  // TODO: is there a better way to get the length of a Tuple?
+        ssize_t numargs = jl_svec_len(ttdt->parameters);  // TODO: is there a better way to get the length of a Tuple type? (jl_nfields?)
+        // Construct Tuple{typeof(gen_func), ::Any, ::Any} for correct number of args.
         jl_value_t* weird_types_tuple = jl_tupletype_fill(numargs, (jl_value_t*)jl_any_type);
-        //jl_printf(JL_STDERR, "\nWeird Tuple types: "); jl_static_show(JL_STDERR, (jl_value_t*)weird_types_tuple); jl_printf(JL_STDERR, "\n");
-        // One would expect to be able to just use `tt` here, but we have to use the weird
-        // thing instead.
-        //jl_value_t* types = jl_argtype_with_function(gen_func, tt);
         jl_tupletype_t* types = (jl_tupletype_t*)jl_argtype_with_function(gen_func, weird_types_tuple);
-        //jl_printf(JL_STDERR, "\ntypes: "); jl_static_show(JL_STDERR, (jl_value_t*)types); jl_printf(JL_STDERR, "\n");
 
         // TODO: I still don't know what the right way to specialize the method is.
         // I've tried `jl_gf_invoke_lookup` (but that segfaults during bootstrap),
@@ -464,47 +454,19 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         jl_method_instance_t *edge = jl_get_specialization1((jl_tupletype_t*)types, -1,
                                                             &min_valid, &max_valid,
                                                             1 /* store new specialization */);
-        { // To offset the if-statement below
 
-//
-//        size_t min_valid = 0;
-//        size_t max_valid = ~(size_t)0;
-//        jl_value_t *matches = jl_matching_methods(types, /*limit*/ 1, /*ambiguous*/ 1,
-//                                                  /*world age*/ -1, &min_valid, &max_valid);
-//        //jl_printf(JL_STDERR, "matches: "); jl_static_show(JL_STDERR, (jl_value_t*)matches); jl_printf(JL_STDERR, "\n");
-//
-//        if (matches != jl_false) {
-//            jl_value_t *method_match = jl_arrayref((jl_array_t*)matches, 0);
-//            //jl_printf(JL_STDERR, "method_match: %p:", method_match); jl_static_show(JL_STDERR, (jl_value_t*)method_match); jl_printf(JL_STDERR, "\n");
-//            //jl_printf(JL_STDERR, "jl_typeof(method_match):"); jl_static_show(JL_STDERR, (jl_value_t*)jl_typeof(method_match)); jl_printf(JL_STDERR, "\n");
-//            //jl_printf(JL_STDERR, "svec_len(method_match): %d\n", jl_svec_len(method_match));
-//            //jl_value_t *tt = jl_svecref(method_match, 0);  // unused, already have `types`.
-//            jl_svec_t *spvals = (jl_svec_t*)jl_svecref(method_match, 1);
-//            //jl_printf(JL_STDERR, "spvals: "); jl_static_show(JL_STDERR, (jl_value_t*)spvals); jl_printf(JL_STDERR, "\n");
-//            jl_method_t *method = (jl_method_t*)jl_svecref(method_match, 2);
-//            //jl_printf(JL_STDERR, "method: "); jl_static_show(JL_STDERR, (jl_value_t*)method); jl_printf(JL_STDERR, "\n");
-//
-//            // now we have found the matching definition.
-//            // next look for or create a specialization of this definition.
-//            jl_method_instance_t *edge = jl_specializations_get_linfo(method, (jl_value_t*)types, spvals);
-//            //jl_printf(JL_STDERR, "edge: "); jl_static_show(JL_STDERR, (jl_value_t*)edge); jl_printf(JL_STDERR, "\n");
+        if (edge != NULL && (jl_value_t*)edge != jl_nothing) {
+            // Now create the edges array and set the edge!
+            if (func->edges == jl_nothing) {
+              // TODO: How to construct this array type properly
+              jl_value_t* array_mi_type = jl_apply_type2((jl_value_t*)jl_array_type,
+                                                         (jl_value_t*)jl_method_instance_type, jl_box_long(1));
 
-            if (edge != NULL && (jl_value_t*)edge != jl_nothing) {
-                // Now create the edges array and set the edge!
-                //jl_printf(JL_STDERR, "\nedges: "); jl_static_show(JL_STDERR, (jl_value_t*)func->edges); jl_printf(JL_STDERR, "\n");
-                if (func->edges == jl_nothing) {
-                  // TODO: How to construct this array type properly
-                  jl_value_t* array_mi_type = jl_apply_type2((jl_value_t*)jl_array_type,
-                                                             (jl_value_t*)jl_method_instance_type, jl_box_long(1));
-
-                  //jl_static_show(JL_STDERR, array_mi_type);
-                  func->edges = (jl_value_t*)jl_alloc_array_1d(array_mi_type, 0);
-                }
-
-                //jl_method_instance_add_backedge(edge, linfo);
-                jl_array_ptr_1d_push((jl_array_t*)func->edges, (jl_value_t*)edge);
-                //jl_printf(JL_STDERR, "\nedges: "); jl_static_show(JL_STDERR, (jl_value_t*)func->edges); jl_printf(JL_STDERR, "\n");
+              func->edges = (jl_value_t*)jl_alloc_array_1d(array_mi_type, 0);
             }
+
+            //jl_method_instance_add_backedge(edge, linfo);
+            jl_array_ptr_1d_push((jl_array_t*)func->edges, (jl_value_t*)edge);
         }
 
         ptls->in_pure_callback = last_in;
