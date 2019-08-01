@@ -147,7 +147,13 @@ const PAGES = [
 
 for stdlib in STDLIB_DOCS
     @eval using $(stdlib.stdlib)
+    # All standard library modules get `using $STDLIB` as their global
+    DocMeta.setdocmeta!(Base.root_module(Base, stdlib.stdlib), :DocTestSetup, :(using $(stdlib.stdlib)), recursive=true)
 end
+# A few standard libraries need more than just the module itself in the DocTestSetup.
+# This overwrites the existing ones from above though, hence the warn=false.
+DocMeta.setdocmeta!(SparseArrays, :DocTestSetup, :(using SparseArrays, LinearAlgebra), recursive=true, warn=false)
+DocMeta.setdocmeta!(UUIDs, :DocTestSetup, :(using UUIDs, Random), recursive=true, warn=false)
 
 const render_pdf = "pdf" in ARGS
 let r = r"buildroot=(.+)", i = findfirst(x -> occursin(r, x), ARGS)
@@ -171,7 +177,7 @@ makedocs(
     build     = joinpath(buildroot, "doc", "_build", (render_pdf ? "pdf" : "html"), "en"),
     modules   = [Base, Core, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
     clean     = true,
-    doctest   = ("doctest=fix" in ARGS) ? (:fix) : ("doctest=true" in ARGS) ? true : false,
+    doctest   = ("doctest=fix" in ARGS) ? (:fix) : ("doctest=only" in ARGS) ? (:only) : ("doctest=true" in ARGS) ? true : false,
     linkcheck = "linkcheck=true" in ARGS,
     linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
     strict    = true,
