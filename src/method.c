@@ -453,23 +453,33 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         jl_value_t* types = jl_argtype_with_function(gen_func, weird_types_tuple);
         jl_static_show(JL_STDERR, (jl_value_t*)types);
 
-        // TODO: The bootstrap segfault comes from jl_gf_invoke_lookup. We can't call
-        // this at this point! Try something else.
-        jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_gf_invoke_lookup(types, -1);
-        //return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), t, lim, 0, world, min, max)
-        //size_t min_valid = 0;
-        //size_t max_valid = ~(size_t)0;
-        //jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, -1, 1, 0, &min_valid, &max_valid);
-        //if (matches == jl_false)
-        //    valid = 0;
+//        // TODO: The bootstrap segfault comes from jl_gf_invoke_lookup. We can't call
+//        // this at this point! Try something else.
+//        jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_gf_invoke_lookup(types, -1);
+//        //return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), t, lim, 0, world, min, max)
+//        //size_t min_valid = 0;
+//        //size_t max_valid = ~(size_t)0;
+//        //jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, -1, 1, 0, &min_valid, &max_valid);
+//        //if (matches == jl_false)
+//        //    valid = 0;
+//
+//
+//        // now we have found the matching definition.
+//        // next look for or create a specialization of this definition.
+//        jl_method_t *method = entry->func.method;
+//        jl_static_show(JL_STDERR, (jl_value_t*)method);
+//        jl_method_instance_t *edge = jl_specializations_get_linfo(method, types, linfo->sparam_vals);
+
+        // next look for or create a specialization of this definition.
+        size_t min_valid = 0;
+        size_t max_valid = ~(size_t)0;
+        jl_method_instance_t *edge = jl_get_specialization1((jl_tupletype_t*)types, -1,
+                                                            &min_valid, &max_valid,
+                                                            1 /* store new specialization */);
+
+        jl_printf(JL_STDERR, "\nedge: "); jl_static_show(JL_STDERR, (jl_value_t*)edge); jl_printf(JL_STDERR, "\n");
 
         JL_GC_POP();
-
-        // now we have found the matching definition.
-        // next look for or create a specialization of this definition.
-        jl_method_t *method = entry->func.method;
-        jl_static_show(JL_STDERR, (jl_value_t*)method);
-        jl_method_instance_t *edge = jl_specializations_get_linfo(method, types, linfo->sparam_vals);
 
 
         // Now create the edges array and set the edge!
