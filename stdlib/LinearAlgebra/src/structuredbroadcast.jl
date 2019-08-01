@@ -91,14 +91,22 @@ isstructurepreserving(bc::Broadcasted) = isstructurepreserving(bc.f, bc.args...)
 isstructurepreserving(::Union{typeof(abs),typeof(big)}, ::StructuredMatrix) = true
 isstructurepreserving(::TypeFuncs, ::StructuredMatrix) = true
 isstructurepreserving(::TypeFuncs, ::Ref{<:Type}, ::StructuredMatrix) = true
+function isstructurepreserving(::typeof(Base.literal_pow), ::Ref{typeof(^)}, ::StructuredMatrix, ::Ref{Val{N}}) where N
+    return N isa Integer && N != 0
+end
 isstructurepreserving(f, args...) = false
 
 _iszero(n::Number) = iszero(n)
 _iszero(x) = x == 0
 fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && _iszero(v))
-# Very conservatively only allow Numbers and Types in this speculative zero-test pass
+# Like sparse matrices, we assume that the zero-preservation property of a broadcasted
+# expression is stable.  We can test the zero-preservability by applying the function
+# in cases where all other arguments are known scalars against a zero from the structured
+# matrix. If any non-structured matrix argument is not a known scalar, we give up.
 fzero(x::Number) = x
 fzero(::Type{T}) where T = T
+fzero(r::Ref) = r[]
+fzero(t::Tuple{Any}) = t[1]
 fzero(S::StructuredMatrix) = zero(eltype(S))
 fzero(x) = missing
 function fzero(bc::Broadcast.Broadcasted)
