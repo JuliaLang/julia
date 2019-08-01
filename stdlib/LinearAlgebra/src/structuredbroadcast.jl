@@ -92,7 +92,7 @@ isstructurepreserving(::Union{typeof(abs),typeof(big)}, ::StructuredMatrix) = tr
 isstructurepreserving(::TypeFuncs, ::StructuredMatrix) = true
 isstructurepreserving(::TypeFuncs, ::Ref{<:Type}, ::StructuredMatrix) = true
 function isstructurepreserving(::typeof(Base.literal_pow), ::Ref{typeof(^)}, ::StructuredMatrix, ::Ref{Val{N}}) where N
-    return N isa Integer && N != 0
+    return N isa Integer && N > 0
 end
 isstructurepreserving(f, args...) = false
 
