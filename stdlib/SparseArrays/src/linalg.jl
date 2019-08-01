@@ -336,7 +336,7 @@ function dot(x::AbstractVector, A::SparseMatrixCSC, y::AbstractVector)
         if !iszero(ycol)
             temp = zero(T)
             for k in nzrange(A, col)
-                temp += x[rvals[k]] * nzvals[k]
+                temp += adjoint(x[rvals[k]]) * nzvals[k]
             end
             r += temp * ycol
         end
