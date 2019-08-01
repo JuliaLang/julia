@@ -126,7 +126,42 @@ julia> selectdim(A, 2, 3)
     d > nd && (i == 1 || throw(BoundsError(A, (ntuple(k->Colon(),d-1)..., i))))
     return view(A, idxs...)
 end
+"""
+    selectslice(A, dim::Integer, inds...)
 
+Return a view in to the vector shaped slice of `A` along the dimension `dim` with all the other indicies set to `inds` in order.
+
+Equivalent to `view(A, inds[1], inds[2], ..., :, inds[dim], inds[dim+1], ...)`
+
+#Examples
+```jldoctest
+julia> A = [1 2 3 4; 5 6 7 8]
+2×4 Array{Int64,2}:
+ 1  2  3  4
+ 5  6  7  8
+
+julia> selectslice(A, 2, 2)
+4-element view(::Array{Int64,2}, 2, :) with eltype Int64:
+ 5
+ 6
+ 7
+ 8
+ ```
+"""
+@noinline function selectslice(A::AbstractArray{T,N}, dim, inds) where {T,N}
+    dim >= 1 || throw(ArgumentError("dimension must be ≥ 1, got $dim"))
+    dim > N && throw(ArgumentError("dimension must be ≤ ndims(A), got $dim"))
+    length(inds) == (N-1) || throw(ArgumentError("there must be ndims(A)-1 inds, got $(length(inds))"))
+    vecinds = [inds...]
+    if dim == 1
+        _inds = Tuple([: ; vecinds])
+    elseif dim == N
+        _inds = Tuple([vecinds ; :])
+    else
+        _inds = Tuple([vecinds[1:(dim-1)]; : ; vecinds[dim:end]])
+    end
+    view(A, _inds...)
+end
 """
     reverse(A; dims::Integer)
 
