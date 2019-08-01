@@ -582,7 +582,7 @@ function dot(x::AbstractVector, A::UnitUpperTriangular, y::AbstractVector)
             @simd for i in 1:j-1
                 temp += adjoint(x[i]) * A[i,j]
             end
-            temp += A[j,j]
+            temp += adjoint(x[j])
             r += temp * yj
         end
     end
@@ -597,7 +597,7 @@ function dot(x::AbstractVector, A::LowerTriangular, y::AbstractVector)
     end
     T = typeof(dot(first(x), first(A), first(y)))
     r = zero(T)
-    @inbounds for j in 1:n
+    @inbounds for j in 1:m
         yj = y[j]
         if !iszero(yj)
             temp = zero(T)
@@ -613,13 +613,15 @@ function dot(x::AbstractVector, A::UnitLowerTriangular, y::AbstractVector)
     require_one_based_indexing(x, y)
     m = size(A, 1)
     (length(x) == m == length(y)) || throw(DimensionMismatch())
-
+    if iszero(m)
+        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    end
     T = typeof(dot(first(x), first(A), first(y)))
     r = zero(T)
-    @inbounds for j in 1:n
+    @inbounds for j in 1:m
         yj = y[j]
         if !iszero(yj)
-            temp = convert(T, A[j,j])
+            temp = adjoint(x[j])
             @simd for i in j+1:m
                 temp += adjoint(x[i]) * A[i,j]
             end

@@ -219,7 +219,7 @@ function dot(x::AbstractVector, S::SymTridiagonal, y::AbstractVector)
         sup, sub = transpose(sub), transpose(ev[j])
         r += (x₋*sup + x₀*dv[j] + x₊*sub) * y[j]
     end
-    r += (x₀*transpose(sub) + x_₊*dv[nx]) * y[nx]
+    r += (x₀*transpose(sub) + x₊*dv[nx]) * y[nx]
     return r
 end
 
