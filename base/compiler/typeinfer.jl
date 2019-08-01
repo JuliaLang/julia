@@ -175,23 +175,28 @@ function store_backedges(frame::InferenceState)
     toplevel = !isa(frame.linfo.def, Method)
     if !toplevel && (frame.cached || frame.parent !== nothing)
         caller = frame.result.linfo
-        for edges in (frame.stmt_edges..., frame.src.edges)
-            edges === nothing && continue
-            i = 1
-            while i <= length(edges)
-                to = edges[i]
-                if isa(to, MethodInstance)
-                    ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any), to, caller)
-                    i += 1
-                else
-                    typeassert(to, Core.MethodTable)
-                    typ = edges[i + 1]
-                    ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
-                    i += 2
-                end
-            end
+        for edges in frame.stmt_edges
+            store_backedges(caller, edges)
         end
+        store_backedges(caller, frame.src, edges)
         frame.src.edges = nothing
+    end
+end
+
+store_backedges(caller, edges::Nothing) = nothing
+function store_backedges(caller, edges::Vector)
+    i = 1
+    while i <= length(edges)
+        to = edges[i]
+        if isa(to, MethodInstance)
+            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any), to, caller)
+            i += 1
+        else
+            typeassert(to, Core.MethodTable)
+            typ = edges[i + 1]
+            ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
+            i += 2
+        end
     end
 end
 
