@@ -419,10 +419,11 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
             jl_array_t *stmts = (jl_array_t*)func->code;
             jl_resolve_globals_in_ir(stmts, def->module, linfo->sparam_vals, 1);
         }
+        jl_printf(JL_STDERR, "\nHELLO\n");
 
         // Get generator function body
         jl_value_t* gen_func = jl_get_field(generator, "gen");
-        //jl_static_show(JL_STDERR, (jl_value_t*)gen_func);
+        jl_static_show(JL_STDERR, (jl_value_t*)gen_func);
 
         //// Main user-named staged function
         //jl_value_t* staged_function = def->sig;
@@ -438,35 +439,41 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         // Apparently the backedge needs to be from `##s4#3(typeof(func), Type)` instead of
         // the actual types of the aruments! Who knows why!! Weirdness.
         // Manually construct that weird signature, here:
-        //jl_printf(JL_STDERR, "\nttdt: ");
-        //jl_static_show(JL_STDERR, (jl_value_t*)ttdt);
-        //jl_printf(JL_STDERR, "\n");
+        jl_printf(JL_STDERR, "\nttdt: ");
+        jl_static_show(JL_STDERR, (jl_value_t*)ttdt);
+        jl_printf(JL_STDERR, "\n");
         ssize_t numargs = jl_svec_len(ttdt->parameters);  // TODO: is there a better way to get the length of a Tuple?
         jl_value_t* weird_types_tuple = jl_tupletype_fill(numargs, (jl_value_t*)jl_any_type);
-        //jl_printf(JL_STDERR, "\nWeird Tuple types: ");
-        //jl_static_show(JL_STDERR, (jl_value_t*)weird_types_tuple);
-        //jl_printf(JL_STDERR, "\n");
+        jl_printf(JL_STDERR, "\nWeird Tuple types: ");
+        jl_static_show(JL_STDERR, (jl_value_t*)weird_types_tuple);
+        jl_printf(JL_STDERR, "\n");
         // One would expect to be able to just use `tt` here, but we have to use the weird
         // thing instead.
         //jl_value_t* types = jl_argtype_with_function(gen_func, tt);
         jl_value_t* types = jl_argtype_with_function(gen_func, weird_types_tuple);
-        //jl_static_show(JL_STDERR, (jl_value_t*)types);
+        jl_static_show(JL_STDERR, (jl_value_t*)types);
 
+        // TODO: The bootstrap segfault comes from jl_gf_invoke_lookup. We can't call
+        // this at this point! Try something else.
         jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_gf_invoke_lookup(types, -1);
-        JL_GC_POP();
+        //return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), t, lim, 0, world, min, max)
+        //size_t min_valid = 0;
+        //size_t max_valid = ~(size_t)0;
+        //jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, -1, 1, 0, &min_valid, &max_valid);
+        //if (matches == jl_false)
+        //    valid = 0;
 
-        //jl_static_show(JL_STDERR, (jl_value_t*)entry);
-        //if ((jl_value_t*)entry == jl_nothing) {
-            //jl_method_error_bare(gf, types0, world);
-            //// unreachable
-        //}
+        JL_GC_POP();
 
         // now we have found the matching definition.
         // next look for or create a specialization of this definition.
         jl_method_t *method = entry->func.method;
-        //jl_static_show(JL_STDERR, (jl_value_t*)method);
+        jl_static_show(JL_STDERR, (jl_value_t*)method);
+        jl_method_instance_t *edge = jl_specializations_get_linfo(method, types, linfo->sparam_vals);
 
-        //jl_printf(JL_STDERR, "\nedges: "); jl_static_show(JL_STDERR, (jl_value_t*)func->edges); jl_printf(JL_STDERR, "\n");
+
+        // Now create the edges array and set the edge!
+        jl_printf(JL_STDERR, "\nedges: "); jl_static_show(JL_STDERR, (jl_value_t*)func->edges); jl_printf(JL_STDERR, "\n");
         if (func->edges == jl_nothing) {
           // TODO: How to construct this array type properly
           jl_value_t* array_mi_type = jl_apply_type2((jl_value_t*)jl_array_type,
@@ -477,7 +484,6 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         }
         //jl_static_show(JL_STDERR, (jl_value_t*)func->edges);
 
-        jl_method_instance_t *edge = jl_specializations_get_linfo(method, types, linfo->sparam_vals);
         //jl_method_instance_add_backedge(edge, linfo);
         jl_array_ptr_1d_push((jl_array_t*)func->edges, (jl_value_t*)edge);
         //jl_static_show(JL_STDERR, (jl_value_t*)func->edges);
