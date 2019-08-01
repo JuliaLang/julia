@@ -130,7 +130,7 @@ end
 """
     selectslice(A::AbstractArray, dim::Integer, inds...)
 
-Return a view in to the vector shaped slice of `A` along the dimension `dim` with all the other indicies set to `inds` in order.
+Return a view in to the vector shaped slice of `A` along the dimension `dim` with all the other indices set to `inds` in order.
 
 Equivalent to `view(A, inds[1], inds[2], ..., :, inds[dim], inds[dim+1], ...)`
 
