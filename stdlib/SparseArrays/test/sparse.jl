@@ -103,7 +103,10 @@ do33 = fill(1.,3)
 end
 
 @testset "Issue #30006" begin
-    SparseMatrixCSC{Float64,Int32}(spzeros(3,3))[:, 1] == [1, 2, 3]
+    A = SparseMatrixCSC{Float64,Int32}(spzeros(3,3))
+    A[:, 1] = [1, 2, 3]
+    @test nnz(A) == 3
+    @test nonzeros(A) == [1, 2, 3]
 end
 
 @testset "concatenation tests" begin
