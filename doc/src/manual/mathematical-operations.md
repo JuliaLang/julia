@@ -28,7 +28,7 @@ as well as the negation on [`Bool`](@ref) types:
 |:---------- |:-------- |:---------------------------------------- |
 | `!x`       | negation | changes `true` to `false` and vice versa |
 
-A numeric literal placed directly before a variable or parentheses, e.g. `2x` or `2(x+y)`, is treated as a multiplication, except with higher precedence than other binary operations.  See [Numeric Literal Coefficients](@ref man-numeric-literal-coefficients) for details.
+A numeric literal placed directly before an identifier or parentheses, e.g. `2x` or `2(x+y)`, is treated as a multiplication, except with higher precedence than other binary operations.  See [Numeric Literal Coefficients](@ref man-numeric-literal-coefficients) for details.
 
 Julia's promotion system makes arithmetic operations on mixtures of argument types "just work"
 naturally and automatically. See [Conversion and Promotion](@ref conversion-and-promotion) for details of the promotion
