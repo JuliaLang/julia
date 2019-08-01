@@ -479,8 +479,6 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 
         jl_printf(JL_STDERR, "\nedge: "); jl_static_show(JL_STDERR, (jl_value_t*)edge); jl_printf(JL_STDERR, "\n");
 
-        JL_GC_POP();
-
 
         // Now create the edges array and set the edge!
         jl_printf(JL_STDERR, "\nedges: "); jl_static_show(JL_STDERR, (jl_value_t*)func->edges); jl_printf(JL_STDERR, "\n");
