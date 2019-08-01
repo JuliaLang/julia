@@ -450,38 +450,44 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         jl_tupletype_t* types = (jl_tupletype_t*)jl_argtype_with_function(gen_func, weird_types_tuple);
         //jl_printf(JL_STDERR, "\ntypes: "); jl_static_show(JL_STDERR, (jl_value_t*)types); jl_printf(JL_STDERR, "\n");
 
-        // TODO: The bootstrap segfault comes from jl_gf_invoke_lookup. We can't call
-        // this at this point! Try something else.
+        // TODO: I still don't know what the right way to specialize the method is.
+        // I've tried `jl_gf_invoke_lookup` (but that segfaults during bootstrap),
+        // `jl_get_specialization1` and `jl_specializations_get_linfo.` The last two seem
+        // to behave identically, so I don't know which is better. Certainly
+        // jl_get_specialization1 is simpler.
+        // UPDATE: Actually jl_specializations_get_linfo seems to also cause an error during
+        // boostrap, complaining about `UndefRefError()`. So maybe jl_get_specialization1.
 
-//        // next look for or create a specialization of this definition.
-//        size_t min_valid = 0;
-//        size_t max_valid = ~(size_t)0;
-//        jl_method_instance_t *edge = jl_get_specialization1((jl_tupletype_t*)types, -1,
-//                                                            &min_valid, &max_valid,
-//                                                            1 /* store new specialization */);
-
-
+        // next look for or create a specialization of this definition.
         size_t min_valid = 0;
         size_t max_valid = ~(size_t)0;
-        jl_value_t *matches = jl_matching_methods(types, /*limit*/ 1, /*ambiguous*/ 1,
-                                                  /*world age*/ -1, &min_valid, &max_valid);
-        //jl_printf(JL_STDERR, "matches: "); jl_static_show(JL_STDERR, (jl_value_t*)matches); jl_printf(JL_STDERR, "\n");
+        jl_method_instance_t *edge = jl_get_specialization1((jl_tupletype_t*)types, -1,
+                                                            &min_valid, &max_valid,
+                                                            1 /* store new specialization */);
+        { // To offset the if-statement below
 
-        if (matches != jl_false) {
-            jl_value_t *method_match = jl_arrayref((jl_array_t*)matches, 0);
-            //jl_printf(JL_STDERR, "method_match: %p:", method_match); jl_static_show(JL_STDERR, (jl_value_t*)method_match); jl_printf(JL_STDERR, "\n");
-            //jl_printf(JL_STDERR, "jl_typeof(method_match):"); jl_static_show(JL_STDERR, (jl_value_t*)jl_typeof(method_match)); jl_printf(JL_STDERR, "\n");
-            //jl_printf(JL_STDERR, "svec_len(method_match): %d\n", jl_svec_len(method_match));
-            //jl_value_t *tt = jl_svecref(method_match, 0);  // unused, already have `types`.
-            jl_svec_t *spvals = (jl_svec_t*)jl_svecref(method_match, 1);
-            //jl_printf(JL_STDERR, "spvals: "); jl_static_show(JL_STDERR, (jl_value_t*)spvals); jl_printf(JL_STDERR, "\n");
-            jl_method_t *method = (jl_method_t*)jl_svecref(method_match, 2);
-            //jl_printf(JL_STDERR, "method: "); jl_static_show(JL_STDERR, (jl_value_t*)method); jl_printf(JL_STDERR, "\n");
-
-            // now we have found the matching definition.
-            // next look for or create a specialization of this definition.
-            jl_method_instance_t *edge = jl_specializations_get_linfo(method, (jl_value_t*)types, spvals);
-            //jl_printf(JL_STDERR, "edge: "); jl_static_show(JL_STDERR, (jl_value_t*)edge); jl_printf(JL_STDERR, "\n");
+//
+//        size_t min_valid = 0;
+//        size_t max_valid = ~(size_t)0;
+//        jl_value_t *matches = jl_matching_methods(types, /*limit*/ 1, /*ambiguous*/ 1,
+//                                                  /*world age*/ -1, &min_valid, &max_valid);
+//        //jl_printf(JL_STDERR, "matches: "); jl_static_show(JL_STDERR, (jl_value_t*)matches); jl_printf(JL_STDERR, "\n");
+//
+//        if (matches != jl_false) {
+//            jl_value_t *method_match = jl_arrayref((jl_array_t*)matches, 0);
+//            //jl_printf(JL_STDERR, "method_match: %p:", method_match); jl_static_show(JL_STDERR, (jl_value_t*)method_match); jl_printf(JL_STDERR, "\n");
+//            //jl_printf(JL_STDERR, "jl_typeof(method_match):"); jl_static_show(JL_STDERR, (jl_value_t*)jl_typeof(method_match)); jl_printf(JL_STDERR, "\n");
+//            //jl_printf(JL_STDERR, "svec_len(method_match): %d\n", jl_svec_len(method_match));
+//            //jl_value_t *tt = jl_svecref(method_match, 0);  // unused, already have `types`.
+//            jl_svec_t *spvals = (jl_svec_t*)jl_svecref(method_match, 1);
+//            //jl_printf(JL_STDERR, "spvals: "); jl_static_show(JL_STDERR, (jl_value_t*)spvals); jl_printf(JL_STDERR, "\n");
+//            jl_method_t *method = (jl_method_t*)jl_svecref(method_match, 2);
+//            //jl_printf(JL_STDERR, "method: "); jl_static_show(JL_STDERR, (jl_value_t*)method); jl_printf(JL_STDERR, "\n");
+//
+//            // now we have found the matching definition.
+//            // next look for or create a specialization of this definition.
+//            jl_method_instance_t *edge = jl_specializations_get_linfo(method, (jl_value_t*)types, spvals);
+//            //jl_printf(JL_STDERR, "edge: "); jl_static_show(JL_STDERR, (jl_value_t*)edge); jl_printf(JL_STDERR, "\n");
 
             if (edge != NULL && (jl_value_t*)edge != jl_nothing) {
                 // Now create the edges array and set the edge!
