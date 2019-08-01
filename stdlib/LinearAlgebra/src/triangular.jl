@@ -546,6 +546,7 @@ rmul!(A::Union{UpperTriangular,LowerTriangular}, c::Number) = mul!(A, A, c)
 lmul!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = mul!(A, c, A)
 
 function dot(x::AbstractVector, A::UpperTriangular, y::AbstractVector)
+    require_one_based_indexing(x, y)
     m = size(A, 1)
     (length(x) == m == length(y)) || throw(DimensionMismatch())
     if iszero(m)
@@ -566,6 +567,7 @@ function dot(x::AbstractVector, A::UpperTriangular, y::AbstractVector)
     return r
 end
 function dot(x::AbstractVector, A::UnitUpperTriangular, y::AbstractVector)
+    require_one_based_indexing(x, y)
     m = size(A, 1)
     (length(x) == m == length(y)) || throw(DimensionMismatch())
     if iszero(m)
@@ -587,6 +589,7 @@ function dot(x::AbstractVector, A::UnitUpperTriangular, y::AbstractVector)
     return r
 end
 function dot(x::AbstractVector, A::LowerTriangular, y::AbstractVector)
+    require_one_based_indexing(x, y)
     m = size(A, 1)
     (length(x) == m == length(y)) || throw(DimensionMismatch())
     if iszero(m)
@@ -607,6 +610,7 @@ function dot(x::AbstractVector, A::LowerTriangular, y::AbstractVector)
     return r
 end
 function dot(x::AbstractVector, A::UnitLowerTriangular, y::AbstractVector)
+    require_one_based_indexing(x, y)
     m = size(A, 1)
     (length(x) == m == length(y)) || throw(DimensionMismatch())
 

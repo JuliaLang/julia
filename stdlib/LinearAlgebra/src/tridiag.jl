@@ -203,16 +203,23 @@ end
 end
 
 function dot(x::AbstractVector, S::SymTridiagonal, y::AbstractVector)
+    require_one_based_indexing(x, y)
     nx, ny = length(x), length(y)
     (nx == size(S, 1) == ny) || throw(DimensionMismatch())
     if iszero(nx)
-        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+        return dot(zero(eltype(x)), zero(eltype(S)), zero(eltype(y)))
     end
-    r = (adjoint(x[1]) * S.dv[1] + adjoint(x[2]) * transpose(S.ev[1])) * y[1]
+    dv, ev = S.dv, S.ev
+    x₀ = adjoint(x[1])
+    x₊ = adjoint(x[2])
+    sub = transpose(ev[1])
+    r = (x₀*dv[1] + x₊*sub) * y[1]
     @inbounds for j in 2:nx-1
-        r += (adjoint(x[j-1])*S.ev[j-1] + adjoint(x[j])*S.dv[j] + adjoint(x[j+1])*transpose(S.ev[j])) * yj
+        x₋, x₀, x₊ = x₀, x₊, adjoint(x[j+1])
+        sup, sub = transpose(sub), transpose(ev[j])
+        r += (x₋*sup + x₀*dv[j] + x₊*sub) * y[j]
     end
-    r += (adjoint(x[nx-1]) * S.ev[nx-1] + adjoint(x[nx]) * transpose(S.dv[nx])) * y[nx]
+    r += (x₀*transpose(sub) + x_₊*dv[nx]) * y[nx]
     return r
 end
 
@@ -673,15 +680,20 @@ Base._sum(A::Tridiagonal, ::Colon) = sum(A.d) + sum(A.dl) + sum(A.du)
 Base._sum(A::SymTridiagonal, ::Colon) = sum(A.dv) + 2sum(A.ev)
 
 function dot(x::AbstractVector, A::Tridiagonal, y::AbstractVector)
+    require_one_based_indexing(x, y)
     nx, ny = length(x), length(y)
     (nx == size(A, 1) == ny) || throw(DimensionMismatch())
     if iszero(nx)
         return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
     end
-    r = (adjoint(x[1]) * A.d[1] + adjoint(x[2]) * A.dl[1]) * y[1]
+    x₀ = adjoint(x[1])
+    x₊ = adjoint(x[2])
+    dl, d, du = A.dl, A.d, A.du
+    r = (x₀*d[1] + x₊*dl[1]) * y[1]
     @inbounds for j in 2:nx-1
-        r += (adjoint(x[j-1])*A.du[j-1] + adjoint(x[j])*A.d[j] + adjoint(x[j+1])*A.dl[j]) * yj
+        x₋, x₀, x₊ = x₀, x₊, adjoint(x[j+1])
+        r += (x₋*du[j-1] + x₀*d[j] + x₊*dl[j]) * y[j]
     end
-    r += (adjoint(x[nx-1]) * A.du[nx-1] + adjoint(x[nx]) * A.d[nx]) * y[nx]
+    r += (x₀*du[nx-1] + x₊*d[nx]) * y[nx]
     return r
 end

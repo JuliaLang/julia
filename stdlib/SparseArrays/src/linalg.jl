@@ -322,6 +322,7 @@ function dot(A::AbstractSparseMatrixCSC{T1,S1},B::AbstractSparseMatrixCSC{T2,S2}
 end
 
 function dot(x::AbstractVector, A::SparseMatrixCSC, y::AbstractVector)
+    require_one_based_indexing(x, y)
     (length(x) == A.m && A.n == length(y)) || throw(DimensionMismatch())
     if iszero(A.m) || iszero(A.n)
         return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))

@@ -648,24 +648,31 @@ function *(A::SymTridiagonal, B::Diagonal)
 end
 
 function dot(x::AbstractVector, B::Bidiagonal, y::AbstractVector)
+    require_one_based_indexing(x, y)
     nx, ny = length(x), length(y)
     (nx == size(B, 1) == ny) || throw(DimensionMismatch())
     if iszero(nx)
         return dot(zero(eltype(x)), zero(eltype(B)), zero(eltype(y)))
     end
-    if A.uplo == 'U'
-        r = adjoint(x[1]) * B.dv[1] * y[1]
-        @inbounds for j in 2:m-1
-            r += (adjoint(x[j-1])*B.ev[j] + adjoint(x[j])*B.dv[j]) * y[j]
+    ev, dv = B.ev, B.dv
+    if B.uplo == 'U'
+        x₀ = adjoint(x[1])
+        r = x₀ * dv[1] * y[1]
+        @inbounds for j in 2:nx-1
+            x₋, x₀ = x₀, adjoint(x[j])
+            r += (x₋*ev[j-1] + x₀*dv[j]) * y[j]
         end
-        r += (adjoint(x[nx-1]) * B.ev[nx-1] + adjoint(x[nx]) * B.dv[nx]) * y[nx]
+        r += (x₀*ev[nx-1] + adjoint(x[nx])*dv[nx]) * y[nx]
         return r
-    else # A.uplo = 'L'
-        r = (adjoint(x[1]) * B.dv[1] + adjoint(x[2]) * B.ev[1]) * y[1]
-        @inbounds for j in 2:m-1
-            r += (adjoint(x[j])*B.dv[j] + adjoint(x[j+1])*B.ev[j]) * y[j]
+    else # B.uplo == 'L'
+        x₀ = adjoint(x[1])
+        x₊ = adjoint(x[2])
+        r = (x₀*dv[1] + x₊*ev[1]) * y[1]
+        @inbounds for j in 2:nx-1
+            x₀, x₊ = x₊, adjoint(x[j+1])
+            r += (x₀*dv[j] + x₊*ev[j]) * y[j]
         end
-        r += adjoint(x[nx]) * A.d[nx] * y[nx]
+        r += x₊ * dv[nx] * y[nx]
         return r
     end
 end
