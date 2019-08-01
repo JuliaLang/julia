@@ -236,6 +236,13 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             end
         end
 
+        # generalized dot
+        for eltyb in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
+            b1 = convert(Vector{eltyb}, (elty1 <: Complex ? real(A1) : A1)*fill(1., n))
+            b2 = convert(Vector{eltyb}, (elty1 <: Complex ? real(A1) : A1)*randn(n))
+            @test dot(b1, A1, b2) ≈ b1' * A1 * b2 ≈ *(b1', A1, b2) ≈ (b1'A1)*b2
+        end
+
         # Binary operations
         @test A1*0.5 == Matrix(A1)*0.5
         @test 0.5*A1 == 0.5*Matrix(A1)

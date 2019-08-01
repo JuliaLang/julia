@@ -330,4 +330,12 @@ end
     @test I(3) == [1 0 0; 0 1 0; 0 0 1]
 end
 
+@testset "generalized dot" begin
+    x = rand(-10:10, 3)
+    y = rand(-10:10, 3)
+    λ = rand(-10:10)
+    J = UniformScaling(λ)
+    @test dot(x, J, y) == λ*dot(x, y)
+end
+
 end # module TestUniformscaling
