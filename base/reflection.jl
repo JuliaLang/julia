@@ -1263,8 +1263,9 @@ _hasmethod_false(@nospecialize(f), @nospecialize(t), @nospecialize(w)) = false
         @nospecialize(world::Val{W})
     ) where {T<:Tuple, W},
     begin
-        fi = f.instance  #TODO: make this work with constructors and functors.
-        typ = signature_type(fi, T)
+        # The signature type:
+        typ = rewrap_unionall(Tuple{f, unwrap_unionall(T).parameters...}, T)
+
         method_doesnot_exist = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), typ, W) === nothing
         if method_doesnot_exist
             ci_orig = uncompressed_ast(typeof(_hasmethod_false).name.mt.defs.func)

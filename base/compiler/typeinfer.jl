@@ -178,7 +178,7 @@ function store_backedges(frame::InferenceState)
         for edges in frame.stmt_edges
             store_backedges(caller, edges)
         end
-        store_backedges(caller, frame.src, edges)
+        store_backedges(caller, frame.src.edges)
         frame.src.edges = nothing
     end
 end
