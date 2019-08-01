@@ -149,19 +149,11 @@ julia> selectslice(A, 2, 2)
  8
  ```
 """
-@noinline function selectslice(A::AbstractArray{T,N}, dim, inds) where {T,N}
+@noinline function selectslice(A::AbstractArray{T,N}, dim, inds...) where {T,N}
     dim >= 1 || throw(ArgumentError("dimension must be ≥ 1, got $dim"))
     dim > N && throw(ArgumentError("dimension must be ≤ ndims(A), got $dim"))
-    length(inds) == (N-1) || throw(ArgumentError("there must be ndims(A)-1 inds, got $(length(inds))"))
-    vecinds = [inds...]
-    if dim == 1
-        _inds = Tuple([: ; vecinds])
-    elseif dim == N
-        _inds = Tuple([vecinds ; :])
-    else
-        _inds = Tuple([vecinds[1:(dim-1)]; : ; vecinds[dim:end]])
-    end
-    view(A, _inds...)
+    length(inds) == (N-1) || throw(BoundsError(A, Tuple(inds[1:dim-1]..., Slice(1:size(A,dim)), inds[dim:end]...)))
+    view(A, inds[1:dim-1]..., Slice(1:size(A,dim)), inds[dim:end]...)
 end
 
 """
