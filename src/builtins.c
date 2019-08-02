@@ -607,10 +607,12 @@ JL_CALLABLE(jl_f__apply)
                 jl_value_t *state = jl_fieldref(next, 1);
                 roots[stackalloc] = state;
                 _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, n + precount + 1, extra);
+                JL_GC_ASSERT_LIVE(value);
                 newargs[n++] = value;
                 if (arg_heap)
                     jl_gc_wb(arg_heap, value);
                 roots[stackalloc + 1] = NULL;
+                JL_GC_ASSERT_LIVE(state);
                 args[1] = state;
                 next = jl_apply_generic(jl_iterate_func, args, 2);
             }
