@@ -7,7 +7,7 @@ starttime = time()
 pwd_ = pwd()
 dir = mktempdir()
 code = """
-child_dir = mktempdir(; remove_on_exit=true)
+child_dir = mktempdir(; remove_atexit=true)
 ispath(child_dir) || error("`child_dir` is not a path")
 isdir(child_dir) || error("`child_dir` is not a directory")
 println(child_dir)

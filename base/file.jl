@@ -518,15 +518,15 @@ is an open file object for this path.
 mktemp(parent)
 
 """
-    mktempdir(parent=tempdir(); prefix=$(repr(temp_prefix)), remove_on_exit=false)
+    mktempdir(parent=tempdir(); prefix=$(repr(temp_prefix)), remove_atexit=false)
 
 Create a temporary directory in the `parent` directory with a name
 constructed from the given prefix and a random suffix, and return its path.
 Additionally, any trailing `X` characters may be replaced with random characters.
-If `parent` does not exist, throw an error. If `remove_on_exit` is true, then
+If `parent` does not exist, throw an error. If `remove_atexit` is true, then
 the temporary directory will be removed when Julia exits.
 """
-function mktempdir(parent=tempdir(); prefix=temp_prefix, remove_on_exit=false)
+function mktempdir(parent=tempdir(); prefix=temp_prefix, remove_atexit=false)
     if isempty(parent) || occursin(path_separator_re, parent[end:end])
         # append a path_separator only if parent didn't already have one
         tpath = "$(parent)$(prefix)XXXXXX"
@@ -545,7 +545,7 @@ function mktempdir(parent=tempdir(); prefix=temp_prefix, remove_on_exit=false)
         end
         path = unsafe_string(ccall(:jl_uv_fs_t_path, Cstring, (Ptr{Cvoid},), req))
         ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
-        if remove_on_exit
+        if remove_atexit
             atexit(() -> rm(path; force=true, recursive=true))
         end
         return path
