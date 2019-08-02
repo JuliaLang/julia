@@ -49,7 +49,7 @@ bar(x) = 3
 @generated f_type(x) = t1(x)
 t1(::Type{Int}) = 2
 @test f_type(1) == 2
-t(::Type) = 3
+t(::Type{Int}) = 3
 @test_broken f_type(1) == 3
 
 
