@@ -603,7 +603,7 @@ JL_CALLABLE(jl_f__apply)
             while (next != jl_nothing) {
                 roots[stackalloc] = next;
                 jl_value_t *value = jl_fieldref(next, 0);
-                roots[stackalloc + 1] = next;
+                roots[stackalloc + 1] = value;
                 jl_value_t *state = jl_fieldref(next, 1);
                 roots[stackalloc] = state;
                 _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, n + precount + 1, extra);
