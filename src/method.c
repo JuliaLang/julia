@@ -444,12 +444,12 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
     jl_ptls_t ptls = jl_get_ptls_states();
     int last_lineno = jl_lineno;
     int last_in = ptls->in_pure_callback;
-    size_t last_age = jl_get_ptls_states()->world_age;
+    //size_t last_age = jl_get_ptls_states()->world_age;
 
     JL_TRY {
         ptls->in_pure_callback = 1;
         // and the right world
-        ptls->world_age = def->primary_world;
+        //ptls->world_age = def->primary_world;
 
         // invoke code generator
         jl_tupletype_t *ttdt = (jl_tupletype_t*)jl_unwrap_unionall(tt);
@@ -479,7 +479,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 
         ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
-        ptls->world_age = last_age;
+        //ptls->world_age = last_age;
         jl_linenumber_to_lineinfo(func, (jl_value_t*)def->name);
     }
     JL_CATCH {
