@@ -521,8 +521,8 @@ end
 
 # invoke and wrap the results of @generated
 function (g::GeneratedFunctionStub)(@nospecialize args...)
-    body = g.gen(args...)
-    #body = Core._apply_pure(g.gen, (args...,))
+    #body = g.gen(args...)
+    body = Core._apply_pure(g.gen, (args...,))
     if body isa CodeInfo
         return body
     end
