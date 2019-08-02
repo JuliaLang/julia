@@ -25,6 +25,7 @@
 @test (x=4, y=5, z=6)[1:2] == (x=4, y=5)
 @test (x=4, y=5, z=6)[[1,3]] == (x=4, z=6)
 @test (x=4, y=5, z=6)[[:x,:y]] == (x=4, y=5)
+@test (x=4, y=5, z=6)[[:x,2]] == (x=4, y=5)
 @test (x=4, y=5, z=6)[[true, true, false]] == (x=4, y=5)
 @test (x=4, y=5, z=6)[[true, true, true]] == (x=4, y=5, z=6)
 @test (x=4, y=5, z=6)[[false, false, false]] == NamedTuple()
