@@ -59,15 +59,22 @@ volatile int jl_in_stackwalk = 0;
 
 #define ROOT_TASK_STACK_ADJUSTMENT 3000000
 
+#ifdef JL_HAVE_ASYNCIFY
+// Switching logic is implemented in JavaScript
+#define STATIC_OR_JS JL_DLLEXPORT
+#else
+#define STATIC_OR_JS static
+#endif
+
 jl_sym_t *done_sym;
 jl_sym_t *failed_sym;
 jl_sym_t *runnable_sym;
 
 extern size_t jl_page_size;
 static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner) JL_NOTSAFEPOINT;
-static void jl_set_fiber(jl_ucontext_t *t);
-static void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
-static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
+STATIC_OR_JS void jl_set_fiber(jl_ucontext_t *t);
+STATIC_OR_JS void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
+STATIC_OR_JS void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
 
 #ifdef JL_HAVE_UNW_CONTEXT
 static JL_THREAD_LOCAL unw_cursor_t jl_basecursor;
@@ -319,9 +326,11 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
             jl_swap_fiber(lastt_ctx, &t->ctx);
     }
     else {
+#ifdef COPY_STACKS
         if (always_copy_stacks)
             jl_longjmp(ptls->base_ctx.uc_mcontext, 1);
         else
+#endif
             jl_start_fiber(lastt_ctx, &t->ctx);
     }
 }
@@ -557,6 +566,44 @@ JL_DLLEXPORT jl_value_t *jl_get_current_task(void)
     return (jl_value_t*)ptls->current_task;
 }
 
+#ifdef JL_HAVE_ASYNCIFY
+JL_DLLEXPORT jl_ucontext_t *task_ctx_ptr(jl_task_t *t)
+{
+    return &t->ctx;
+}
+
+JL_DLLEXPORT jl_value_t *jl_get_root_task(void)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    return (jl_value_t*)ptls->root_task;
+}
+
+void JL_DLLEXPORT jl_task_wait()
+{
+    static jl_function_t *wait_func = NULL;
+    if (!wait_func) {
+        wait_func = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("wait"));
+    }
+    size_t last_age = jl_get_ptls_states()->world_age;
+    jl_get_ptls_states()->world_age = jl_get_world_counter();
+    jl_apply(&wait_func, 1);
+    jl_get_ptls_states()->world_age = last_age;
+}
+
+void JL_DLLEXPORT jl_schedule_task(jl_task_t *task)
+{
+    static jl_function_t *sched_func = NULL;
+    if (!sched_func) {
+        sched_func = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("schedule"));
+    }
+    size_t last_age = jl_get_ptls_states()->world_age;
+    jl_get_ptls_states()->world_age = jl_get_world_counter();
+    jl_value_t *args[] = {(jl_value_t*)sched_func, (jl_value_t*)task};
+    jl_apply(args, 2);
+    jl_get_ptls_states()->world_age = last_age;
+}
+#endif
+
 // Do one-time initializations for task system
 void jl_init_tasks(void) JL_GC_DISABLED
 {
@@ -565,7 +612,7 @@ void jl_init_tasks(void) JL_GC_DISABLED
     runnable_sym = jl_symbol("runnable");
 }
 
-static void NOINLINE JL_NORETURN start_task(void)
+STATIC_OR_JS void NOINLINE JL_NORETURN start_task(void)
 {
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)
@@ -939,6 +986,22 @@ static void jl_init_basefiber(size_t ssize)
 }
 #endif
 
+#if defined(JL_HAVE_ASYNCIFY)
+static void jl_init_basefiber(size_t ssize)
+{
+}
+static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner) JL_NOTSAFEPOINT
+{
+    void *stk = jl_malloc_stack(ssize, owner);
+    if (stk == NULL)
+        return NULL;
+    t->stackbottom = stk;
+    t->stacktop = ((char*)stk) + *ssize;
+    return (char*)stk;
+}
+// jl_*_fiber implemented in js
+#endif
+
 // Initialize a root task using the given stack.
 void jl_init_root_task(void *stack_lo, void *stack_hi)
 {
@@ -986,15 +1049,17 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     arraylist_new(&ptls->current_task->locks, 0);
 #endif
 
+#ifdef COPY_STACKS
     if (always_copy_stacks) {
         ptls->stackbase = stack_hi;
         ptls->stacksize = ssize;
         if (jl_setjmp(ptls->base_ctx.uc_mcontext, 0))
             start_task();
+        return;
     }
-    else {
-        jl_init_basefiber(JL_STACK_SIZE);
-    }
+#endif
+
+    jl_init_basefiber(JL_STACK_SIZE);
 }
 
 JL_DLLEXPORT int jl_is_task_started(jl_task_t *t)
