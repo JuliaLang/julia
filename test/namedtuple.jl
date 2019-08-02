@@ -25,6 +25,14 @@
 @test (x=4, y=5, z=6)[1:2] == (x=4, y=5)
 @test (x=4, y=5, z=6)[[1,3]] == (x=4, z=6)
 @test (x=4, y=5, z=6)[[:x,:y]] == (x=4, y=5)
+@test (x=4, y=5, z=6)[[true, true, false]] == (x=4, y=5)
+@test (x=4, y=5, z=6)[[true, true, true]] == (x=4, y=5, z=6)
+@test (x=4, y=5, z=6)[[false, false, false]] == NamedTuple()
+@test (x=4, y=5, z=6)[Int[]] == NamedTuple()
+@test_throws BoundsError (x=4, y=5, z=6)[[true, true]]
+@test_throws ArgumentError (x=4, y=5, z=6)[true]
+@test (x=4, y=5, z=6)[0x01] == (x=4, y=5, z=6)[Int16(1)] == 4
+@test (x=4, y=5, z=6)[0x01:0x01] == (x=4, y=5, z=6)[[Int16(1)]] == (x=4,)
 @test_throws ErrorException (x=4, y=5, z=6).a
 @test_throws BoundsError (a=2,)[0]
 @test_throws BoundsError (a=2,)[2]
