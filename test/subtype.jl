@@ -1615,3 +1615,22 @@ end
     Tuple{Array{Tuple{Vararg{Int64,N}},N},Tuple{Vararg{Array{Int64,1},N}}} where N,
     Tuple{Array{Tuple{Int64},1}, Tuple},
     Tuple{Array{Tuple{Int64},1},Tuple{Array{Int64,1}}})
+
+# issue #32703
+struct Str{C} <: AbstractString
+end
+struct CSE{X}
+end
+const UTF16CSE = CSE{1}
+const UTF16Str = Str{UTF16CSE}
+const ASCIIStr = Str{CSE{2}}
+c32703(::Type{<:Str{UTF16CSE}}, str::AbstractString) = 42
+c32703(::Type{<:Str{C}}, str::Str{C}) where {C<:CSE} = str
+
+@testintersect(Tuple{Type{UTF16Str},ASCIIStr},
+               Tuple{Type{<:Str{C}}, Str{C}} where {C<:CSE},
+               Union{})
+@test c32703(UTF16Str, ASCIIStr()) == 42
+@test_broken typeintersect(Tuple{Vector{Vector{Float32}},Matrix,Matrix},
+                           Tuple{Vector{V},Matrix{Int},Matrix{S}} where {S, V<:AbstractVector{S}}) ==
+             Tuple{Array{Array{Float32,1},1},Array{Int,2},Array{Float32,2}}
