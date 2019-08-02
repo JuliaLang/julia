@@ -523,8 +523,11 @@ mktemp(parent)
 Create a temporary directory in the `parent` directory with a name
 constructed from the given prefix and a random suffix, and return its path.
 Additionally, any trailing `X` characters may be replaced with random characters.
-If `parent` does not exist, throw an error. If `remove_atexit` is true, then
-the temporary directory will be removed when Julia exits.
+If `parent` does not exist, throw an error.
+
+!!! compat "Julia 1.3"
+    The `remove_atexit` keyword argument requires at least Julia 1.3.
+    If `remove_atexit` is true, then the temporary directory will be removed when Julia exits.
 """
 function mktempdir(parent=tempdir(); prefix=temp_prefix, remove_atexit=false)
     if isempty(parent) || occursin(path_separator_re, parent[end:end])
