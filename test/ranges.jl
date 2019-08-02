@@ -361,6 +361,16 @@ end
 
         @test intersect(1:3, 2) === intersect(2, 1:3) === 2:2
         @test intersect(1.0:3.0, 2) == intersect(2, 1.0:3.0) == [2.0]
+
+        @testset "Support StepRange with a non-numeric step" begin
+            start = Date(1914, 7, 28)
+            stop = Date(1918, 11, 11)
+
+            @test intersect(start:Day(1):stop, start:Day(1):stop) == start:Day(1):stop
+            @test intersect(start:Day(1):stop, start:Day(5):stop) == start:Day(5):stop
+            @test intersect(start-Day(10):Day(1):stop-Day(10), start:Day(5):stop) ==
+                start:Day(5):stop-Day(10)-mod(stop-start, Day(5))
+        end
     end
     @testset "issubset" begin
         @test issubset(1:3, 1:typemax(Int)) #32461
