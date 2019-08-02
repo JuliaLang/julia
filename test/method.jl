@@ -44,13 +44,19 @@ bar(x) = 2
 @test foo(1) == 2
 bar(x) = 3
 @test foo(1) == 3
-# TODO: This doesn't work for some reason
-# The complex case -- bar(::Type):
-@generated f_type(x) = t1(x)
-t1(::Type{Int}) = 2
+# This also works, with t(::Type{Int})
+@generated f_type(x) = t(x)
+t(::Type{Int}) = 2
 @test f_type(1) == 2
 t(::Type{Int}) = 3
-@test_broken f_type(1) == 3
+@test f_type(1) == 3
+# Yet for some reason this does not work:
+# Somehow having t1(T) call typemax prevents forming a backedge from t1 to the generator.
+@generated f_type2(x) = t1(x)
+t1(T) = typemax(T)
+@test f_type2(1) == typemax(Int)
+t1(T) = 3
+@test_broken f_type2(1) == 3
 
 
 ## Functions with type params
