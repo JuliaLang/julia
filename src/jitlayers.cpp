@@ -3,6 +3,10 @@
 #include "llvm-version.h"
 #include "platform.h"
 #include "options.h"
+#if defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
+#  define JL_DISABLE_FPO
+#endif
+
 #include <iostream>
 #include <sstream>
 
@@ -822,6 +826,23 @@ bool jl_can_finalize_function(StringRef F)
 // let the JIT know this function is a WIP
 void jl_init_function(Function *F)
 {
+    // set any attributes that *must* be set on all functions
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
+    // tell Win32 to realign the stack to the next 16-byte boundary
+    // upon entry to any function. This achieves compatibility
+    // with both MinGW-GCC (which assumes an 16-byte-aligned stack) and
+    // i686 Windows (which uses a 4-byte-aligned stack)
+    AttrBuilder attr;
+    attr.addStackAlignmentAttr(16);
+    F->addAttributes(AttributeList::FunctionIndex, attr);
+#endif
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+    F->setHasUWTable(); // force NeedsWinEH
+#endif
+#ifdef JL_DISABLE_FPO
+    F->addFnAttr("no-frame-pointer-elim", "true");
+#endif
+    // record the WIP name
     incomplete_fname.insert(F->getName());
 }
 
