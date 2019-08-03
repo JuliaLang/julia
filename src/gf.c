@@ -1214,21 +1214,27 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
     }
     // TODO: also complete detection of a specificity cycle
 
-    // if this type-intersection is exact, then we can
     // see if the intersection is covered by another existing entry
     // that will resolve the ambiguity (by being more specific than either)
-    // (if type-morespecific made a mistake, this also might end up finding
+    // (in some cases, this also might end up finding
     // that isect == type or isect == sig and return the original match)
-    if (reorder && jl_subtype(isect, (jl_value_t*)sig) && jl_subtype(isect, (jl_value_t*)type)) {
+    if (reorder) {
         size_t world = closure->newentry->min_world;
         if (oldentry->min_world > world)
             world = oldentry->min_world;
+        int exact1 = jl_subtype(isect, (jl_value_t*)sig);
+        int exact2 = jl_subtype(isect, (jl_value_t*)type);
+        // TODO: we might like to use `subtype = exact1 && exact2` here, but check_disabled_ambiguous_visitor
+        // won't be able to handle that, so we might end up making some unnecessary mambig entries here
+        // but I don't have any examples of such
         jl_typemap_entry_t *l = jl_typemap_assoc_by_type(
                 closure->defs, isect, NULL, /*subtype*/0, /*offs*/0,
                 world, /*max_world_mask*/0);
-        if (l != NULL) { // ok, intersection is covered
-            // also need to check that `l` isn't the `after` entry
-            if (l != after) {
+        //assert((!subtype || l != after) && "bad typemap lookup result"); // should find `before` first
+        if (l != NULL && l != before && l != after) {
+            if ((exact1 || jl_type_morespecific_no_subtype((jl_value_t*)l->sig, (jl_value_t*)sig)) &&  // no subtype since `l->sig >: isect >: sig`
+                (exact2 || jl_type_morespecific_no_subtype((jl_value_t*)l->sig, (jl_value_t*)type))) { // no subtype since `l->sig >: isect >: type`
+                // ok, intersection is already covered by a more specific method
                 reorder = 0; // this lack of ordering doesn't matter (unless we delete this method--then it will)
                 shadowed = 0; // we wouldn't find anything that mattered
             }
