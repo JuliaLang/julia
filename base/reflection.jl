@@ -1253,8 +1253,9 @@ macro _early_generated(headsig, body)
                                     Expr(:return, nothing))))))
 end
 
-# This is used to create the CodeInfo returned by hasmethod in the case of false.
+# This is used to create the CodeInfo returned by hasmethod.
 _hasmethod_false(@nospecialize(f), @nospecialize(t), @nospecialize(w)) = false
+_hasmethod_true(@nospecialize(f), @nospecialize(t), @nospecialize(w)) = true
 
 @_early_generated(
     static_hasmethod(
@@ -1267,18 +1268,20 @@ _hasmethod_false(@nospecialize(f), @nospecialize(t), @nospecialize(w)) = false
         typ = rewrap_unionall(Tuple{f, unwrap_unionall(T).parameters...}, T)
 
         method_doesnot_exist = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), typ, W) === nothing
-        if method_doesnot_exist
-            ci_orig = uncompressed_ast(typeof(_hasmethod_false).name.mt.defs.func)
-            ci = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), ci_orig)
+        ret_func = method_doesnot_exist ? _hasmethod_false : _hasmethod_true
+        ci_orig = uncompressed_ast(typeof(ret_func).name.mt.defs.func)
+        ci = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), ci_orig)
 
-            # Now we add the edges so if a method is defined this recompiles
+        # Now we add the edges so if a method is defined this recompiles
+        if method_doesnot_exist
+            # No method so attach to method table
             mt = f.name.mt
             ci.edges = Core.Compiler.vect(mt, typ)
-            return ci
-        else
-            return true  # We are done, it exists, no need to recompile ever
-            # except if it is deleted. TODO: deal with Base.delete_method
+        else  # There is a method so need to attach to MethodInstance
+            # TODO: this case
+
         end
+        return ci
     end
 )
 
