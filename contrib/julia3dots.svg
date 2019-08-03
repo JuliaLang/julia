@@ -1,0 +1,14 @@
+<svg width="39" height="36" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg">
+ <defs>
+  <style>.cls-1{fill:#1a1a1a;}.cls-2{fill:#4d64ae;}.cls-3{fill:#ca3c32;}.cls-4{fill:#9259a3;}.cls-5{fill:#399746;}</style>
+ </defs>
+ <title>Asset 2</title>
+ <g>
+  <title>Layer 1</title>
+  <g id="g890">
+   <path id="path13" class="cls-3" d="m8.890002,36.33a8.9,8.9 0 1 1 8.91,-8.9a8.91,8.91 0 0 1 -8.91,8.9z"/>
+   <path id="path25" class="cls-4" d="m30.280002,36.33a8.9,8.9 0 1 1 8.91,-8.9a8.91,8.91 0 0 1 -8.91,8.9z"/>
+   <path id="path31" class="cls-5" d="m19.590002,17.8a8.9,8.9 0 1 1 8.9,-8.9a8.89,8.89 0 0 1 -8.9,8.9z"/>
+  </g>
+ </g>
+</svg>
