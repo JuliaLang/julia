@@ -255,6 +255,7 @@ begin
 
     """
         SNCA(cfg::CFG)
+
     Determines a map from basic blocks to the block which immediately dominate them.
     Expressed as indexes into `cfg.blocks`.
     
