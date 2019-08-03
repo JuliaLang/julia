@@ -14,7 +14,7 @@ struct DomTree
     # Which basic block immediately dominates each basic block (ordered by BB indices)
     # Note: this is the inverse of the nodes, children field
     idoms::Vector{Int}
-    
+
     # The nodes in the tree (ordered by BB indices)
     nodes::Vector{DomTreeNode}
 end
@@ -22,7 +22,7 @@ end
 """
     Checks if bb1 dominates bb2.
     bb1 and bb2 are indexes into the CFG blocks.
-    bb1 dominates bb2 if the only way to enter bb2 is via bb1. 
+    bb1 dominates bb2 if the only way to enter bb2 is via bb1.
     (Other blocks may be in between, e.g bb1->bbX->bb2).
 """
 function dominates(domtree::DomTree, bb1::Int, bb2::Int)
@@ -258,7 +258,7 @@ begin
 
     Determines a map from basic blocks to the block which immediately dominate them.
     Expressed as indexes into `cfg.blocks`.
-    
+
     The main Semi-NCA algrithm. Matches Figure 2.8 in [LG05].
     Note that the pseudocode in [LG05] is not entirely accurate.
     The best way to understand what's happening is to read [LT79], then the
