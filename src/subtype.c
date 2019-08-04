@@ -2454,26 +2454,16 @@ static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t 
         flip_vars(e);
         return jl_bottom_type;
     }
-    /*
-      TODO: This is a band-aid for issue #23685. A better solution would be to
-      first normalize types so that all `where` expressions in covariant position
-      are pulled out to the top level.
-    */
-    if ((jl_is_typevar(x) && !jl_is_typevar(y) && lookup(e, (jl_tvar_t*)x) == NULL) ||
-        (jl_is_typevar(y) && !jl_is_typevar(x) && lookup(e, (jl_tvar_t*)y) == NULL))
-        return ii;
     jl_value_t *root=NULL;
     jl_savedenv_t se;
     JL_GC_PUSH2(&ii, &root);
     save_env(e, &root, &se);
-    if (!subtype_in_env(x, y, e)) {
+    if (!subtype_in_env_existential(x, y, e, 0, e->invdepth)) {
         ii = NULL;
     }
     else {
-        flip_vars(e);
-        if (!subtype_in_env(y, x, e))
+        if (!subtype_in_env_existential(y, x, e, 0, e->invdepth))
             ii = NULL;
-        flip_vars(e);
     }
     restore_env(e, root, &se);
     free(se.buf);
