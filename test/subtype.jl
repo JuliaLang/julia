@@ -991,6 +991,17 @@ function test_intersection()
     @test_broken typeintersect(Tuple{Type{Z},Z} where Z,
                                Tuple{Type{Ref{T}} where T, Ref{Float64}}) ==
         Tuple{Type{Ref{Float64}},Ref{Float64}}
+
+    # issue #32607
+    @testintersect(Type{<:Tuple{Integer,Integer}},
+                   Type{Tuple{Int,T}} where T,
+                   Type{Tuple{Int,T}} where T<:Integer)
+    @testintersect(Type{<:Tuple{Any,Vararg{Any}}},
+                   Type{Tuple{Vararg{Int,N}}} where N,
+                   Type{Tuple{Int,Vararg{Int,N}}} where N)
+    @testintersect(Type{<:Array},
+                   Type{AbstractArray{T}} where T,
+                   Bottom)
 end
 
 function test_intersection_properties()
