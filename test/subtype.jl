@@ -1415,6 +1415,13 @@ end
 @testintersect(Union{Array{T,1},Array{T,2}} where T<:Union{Float32,Float64},
                Union{AbstractMatrix{Float32},AbstractVector{Float32}},
                Union{Array{Float32,2}, Array{Float32,1}})
+let A = Tuple{Type{Union{Missing,T}},Any} where T,
+    B = Tuple{Type{Union{Nothing,T}},Any} where T
+    I = typeintersect(A, B)
+    J = typeintersect(B, A)
+    @test I >: Tuple{Type{Union{Nothing,Missing,T}}, Any} where T
+    @test J >: Tuple{Type{Union{Nothing,Missing,T}}, Any} where T
+end
 
 # issue #29955
 struct M29955{T, TV<:AbstractVector{T}}
