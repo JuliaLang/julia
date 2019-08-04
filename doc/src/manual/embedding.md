@@ -257,8 +257,8 @@ out from under you, rendering pointers invalid.
 The GC can only run when Julia objects are allocated. Calls like `jl_box_float64` perform allocation,
 and allocation might also happen at any point in running Julia code. However, it is generally
 safe to use pointers in between `jl_...` calls. But in order to make sure that values can survive
-`jl_...` calls, we have to tell Julia that we hold a reference to a Julia value. This can be done
-using the `JL_GC_PUSH` macros:
+`jl_...` calls, we have to tell Julia that we hold a reference to a Julia value, a root, this procedure
+is called GC rooting. This can be done using the `JL_GC_PUSH` macros:
 
 ```c
 jl_value_t *ret = jl_eval_string("sqrt(2.0)");
