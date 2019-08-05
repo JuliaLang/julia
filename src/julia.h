@@ -89,7 +89,8 @@ extern "C" {
 typedef struct _jl_value_t jl_value_t;
 
 struct _jl_taggedvalue_bits {
-    uintptr_t gc:2;
+    uintptr_t gc:2;         // GC marking bits
+    uintptr_t gc_held:1;    // GC held bit
 };
 
 JL_EXTENSION struct _jl_taggedvalue_t {
@@ -1397,6 +1398,7 @@ extern JL_DLLEXPORT jl_module_t *jl_main_module JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_core_module JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_base_module JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_top_module JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT jl_module_t *jl_get_main_module();
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name);
 JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on);
 // get binding for reading

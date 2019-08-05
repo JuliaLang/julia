@@ -111,6 +111,7 @@ STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
 #define GC_MARKED 1 // reachable and young
 #define GC_OLD    2 // if it is reachable it will be marked as old
 #define GC_OLD_MARKED (GC_OLD | GC_MARKED) // reachable and old
+#define GC_HELD   3 // An external system is holding a reference - do not free
 
 // useful constants
 extern jl_methtable_t *jl_type_type_mt JL_GLOBALLY_ROOTED;

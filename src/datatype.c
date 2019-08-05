@@ -80,6 +80,9 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_datatype_t *t = (jl_datatype_t*)jl_gc_alloc(ptls, sizeof(jl_datatype_t), jl_datatype_type);
+    // We require 16 byte alignment for datatypes, since we are using the low
+    // bits of pointers to them for GC bits.
+    // assert( ((uintptr_t)t & ~(uintptr_t)15) == 0 );
     t->hasfreetypevars = 0;
     t->isdispatchtuple = 0;
     t->isbitstype = 0;
