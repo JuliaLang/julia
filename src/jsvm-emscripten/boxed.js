@@ -68,8 +68,12 @@ Module.initialize_jscall_runtime = function() {
     Module["_free"](name_buf);
 }
 
+function jl_typeof(arg_ptr) {
+    return HEAP32[(arg_ptr >> 2) - 1] & 0xfffffffb;
+}
+
 function jlboxed_to_js(arg_ptr) {
-    arg_type = HEAP32[(arg_ptr >> 2) - 1];
+    arg_type = jl_typeof(arg_ptr)
     if (arg_type == jl_float64_type) {
         return HEAPF64[arg_ptr >> 3];
     } else if (arg_type == jl_jsundefined_type) {
