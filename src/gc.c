@@ -919,7 +919,7 @@ static bigval_t **sweep_big_list(int sweep_full, bigval_t **pv) JL_NOTSAFEPOINT
         bigval_t *nxt = v->next;
         int bits = v->bits.gc;
         int old_bits = bits;
-        if (gc_marked(bits)) {
+        if (gc_alive(v->bits)) {
             pv = &v->next;
             int age = v->age;
             if (age >= PROMOTE_AGE || bits == GC_OLD_MARKED) {
@@ -1067,8 +1067,8 @@ static void sweep_malloced_arrays(void) JL_NOTSAFEPOINT
         mallocarray_t **pma = &ptls2->heap.mallocarrays;
         while (ma != NULL) {
             mallocarray_t *nxt = ma->next;
-            int bits = jl_astaggedvalue(ma->a)->bits.gc;
-            if (gc_marked(bits)) {
+            struct _jl_taggedvalue_bits bits = jl_astaggedvalue(ma->a)->bits;
+            if (gc_alive(bits)) {
                 pma = &ma->next;
             }
             else {
@@ -1078,7 +1078,7 @@ static void sweep_malloced_arrays(void) JL_NOTSAFEPOINT
                 ma->next = ptls2->heap.mafreelist;
                 ptls2->heap.mafreelist = ma;
             }
-            gc_time_count_mallocd_array(bits);
+            gc_time_count_mallocd_array(bits.gc);
             ma = nxt;
         }
     }
@@ -1264,7 +1264,7 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
         uint8_t msk = 1; // mask for the age bit in the current age byte
         while ((char*)v <= lim) {
             int bits = v->bits.gc;
-            if (!gc_marked(bits)) {
+            if (!gc_alive(v->bits)) {
                 *pfl = v;
                 pfl = &v->next;
                 pfl_begin = pfl_begin ? pfl_begin : pfl;

@@ -427,6 +427,10 @@ SECT_INTERP __attribute__((weak)) jl_value_t *eval_foreigncall(jl_sym_t *fname, 
     return NULL;
 }
 
+#ifdef _OS_EMSCRIPTEN_
+extern jl_value_t *jl_do_jscall(char *libname, char *fname, jl_value_t **args, size_t nargs);
+#endif
+
 SECT_INTERP jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
 {
     jl_code_info_t *src = s->src;
@@ -578,6 +582,29 @@ SECT_INTERP jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == foreigncall_sym) {
         jl_sym_t *fname = NULL, *libname = NULL;
         jl_foreigncall_get_syms(args[0], &fname, &libname);
+
+        jl_sym_t *cc_sym = *(jl_sym_t**)args[3];
+        assert(jl_is_symbol(cc_sym));
+        if (cc_sym == jl_symbol("jscall")) {
+#ifdef _OS_EMSCRIPTEN_
+            jl_value_t **ev_args;
+            JL_GC_PUSHARGS(ev_args, nargs-5);
+            for (int i = 5; i < nargs; ++i)
+                ev_args[i-5] = eval_value(args[i], s);
+            jl_value_t *result =
+                jl_do_jscall(libname ? jl_symbol_name(libname) : NULL,
+                            jl_symbol_name(fname),
+                            ev_args,
+                            nargs-5);
+            JL_GC_POP();
+            // For now
+            if (!result)
+                result = jl_nothing;
+            return result;
+#else
+            jl_error("jscall calling convention is only supported on jsvm targets");
+#endif
+        }
 
         jl_value_t *result = eval_foreigncall(fname, libname, s, args, nargs);
         if (!result) {

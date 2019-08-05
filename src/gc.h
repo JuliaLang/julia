@@ -233,9 +233,7 @@ JL_EXTENSION typedef struct _bigval_t {
     //struct jl_taggedvalue_t <>;
     union {
         uintptr_t header;
-        struct {
-            uintptr_t gc:2;
-        } bits;
+        struct _jl_taggedvalue_bits bits;
     };
     // must be 64-byte aligned here, in 32 & 64 bit modes
 } bigval_t;
@@ -400,6 +398,11 @@ STATIC_INLINE jl_taggedvalue_t *page_pfl_end(jl_gc_pagemeta_t *p) JL_NOTSAFEPOIN
 STATIC_INLINE int gc_marked(uintptr_t bits) JL_NOTSAFEPOINT
 {
     return (bits & GC_MARKED) != 0;
+}
+
+STATIC_INLINE int gc_alive(struct _jl_taggedvalue_bits bits) JL_NOTSAFEPOINT
+{
+    return gc_marked(bits.gc) || bits.gc_held;
 }
 
 STATIC_INLINE int gc_old(uintptr_t bits) JL_NOTSAFEPOINT

@@ -16,6 +16,11 @@ jl_module_t *jl_core_module = NULL;
 jl_module_t *jl_base_module = NULL;
 jl_module_t *jl_top_module = NULL;
 
+JL_DLLEXPORT jl_module_t *jl_get_main_module()
+{
+    return jl_main_module;
+}
+
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
