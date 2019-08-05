@@ -313,9 +313,9 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                 elseif i == 3
                     x.args[3] = Core.svec(Any[_instantiate_type_in_env(argt, type_signature, static_param_values) for argt in x.args[3]]...)
                 elseif i == 4
-                    @assert isa((x.args[4]::QuoteNode).value, Symbol)
+                    @assert isa(x.args[4], Int)
                 elseif i == 5
-                    @assert isa(x.args[5], Int)
+                    @assert isa((x.args[5]::QuoteNode).value, Symbol)
                 else
                     x.args[i] = _partially_inline!(x.args[i], slot_replacements,
                                                    type_signature, static_param_values,

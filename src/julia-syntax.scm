@@ -924,29 +924,34 @@
   (let loop ((F atypes)  ;; formals
              (A args)    ;; actuals
              (stmts '()) ;; initializers
-             (C '())     ;; converted
+             (T '())     ;; argument types (F converted)
+             (C '())     ;; argument values (A converted)
              (GC '()))   ;; GC roots
-    (if (and (null? F) (not (null? A))) (error "more arguments than types for ccall"))
-    (if (and (null? A) (not (or (null? F) (and (pair? F) (vararg? (car F)) (null? (cdr F)))))) (error "more types than arguments for ccall"))
-    (if (null? A)
-        `(block
-          ,.(reverse! stmts)
-          (foreigncall ,name ,RT (call (core svec) ,@(dots->vararg atypes))
-                       ',cconv
-                       ,(length C)
-                       ,.(reverse! C)
-                       ,@GC)) ; GC root ordering is arbitrary
-        (let* ((a     (car A))
-               (isseq (and (vararg? (car F))))
-               (ty    (if isseq (cadar F) (car F))))
-          (if (and isseq (not (null? (cdr F)))) (error "only the trailing ccall argument type should have \"...\""))
-          (if (eq? ty 'Any)
-              (loop (if isseq F (cdr F)) (cdr A) stmts (list* a C) GC)
-              (let* ((g (make-ssavalue))
-                     (stmts (cons `(= ,g (call (top cconvert) ,ty ,a)) stmts))
-                     (ca `(call (top unsafe_convert) ,ty ,g)))
-                (loop (if isseq F (cdr F)) (cdr A) stmts
-                      (list* ca C) (list* g GC))))))))
+    (if (and (null? F) (not (null? A)))
+        (error "more arguments than types for ccall"))
+    (if (and (null? A) (not (or (null? F) (and (pair? F) (vararg? (car F)) (null? (cdr F))))))
+        (error "more types than arguments for ccall"))
+    (let ((isseq (and (not (null? F)) (vararg? (car F)))))
+      (if (and isseq (null? T))
+          (error "C ABI prohibits vararg without one required argument"))
+      (if (null? A)
+          `(block
+            ,.(reverse! stmts)
+            (foreigncall ,name ,RT (call (core svec) ,@(reverse! T))
+                         ,(if isseq (- (length F) 1) 0) ; 0 or number of arguments before ... in definition
+                         ',cconv
+                         ,.(reverse! C)
+                         ,@GC)) ; GC root ordering is arbitrary
+          (let* ((a     (car A))
+                 (ty    (if isseq (cadar F) (car F))))
+            (if (and isseq (not (null? (cdr F)))) (error "only the trailing ccall argument type should have \"...\""))
+            (if (eq? ty 'Any)
+                (loop (if isseq F (cdr F)) (cdr A) stmts (list* '(core Any) T) (list* a C) GC)
+                (let* ((g (make-ssavalue))
+                       (stmts (cons `(= ,g (call (top cconvert) ,ty ,a)) stmts))
+                       (ca `(call (top unsafe_convert) ,ty ,g)))
+                  (loop (if isseq F (cdr F)) (cdr A) stmts
+                        (list* ty T) (list* ca C) (list* g GC)))))))))
 
 (define (expand-function-def e)   ;; handle function definitions
   (define (just-arglist? ex)
