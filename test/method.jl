@@ -59,16 +59,16 @@ t1(T) = 3
 @test_broken f_type2(1) == 3
 
 
-## Functions with type params
-#@generated f(x::T) where T<:Number = biggest(T)
-#biggest(::Type{T}) where T = typemax(T)
-#f(10)
-## It also works for newly defined types
-#struct MyNum <: Number x::Int end
-#Base.typemax(::Type{MyNum}) = MyNum(typemax(Int))
-#f(MyNum(10))
-## And still allows users to interactively change their mind about these definitions
-#Base.typemax(::Type{MyNum}) = MyNum(100)
-#biggest(::Type{MyNum}) = MyNum(100)
-#f(MyNum(10))
-#
+# Functions with type params
+@generated f(x::T) where T<:Number = width(T)
+width(::Type{Int}) where T = 5
+@test f(10) == 5
+width(::Type{Int}) where T = 100
+@test f(10) == 100
+
+# It also works for newly defined types
+struct MyNum <: Number x::Int end
+width(::Type{MyNum}) where T = MyNum(5)
+@test f(MyNum(10)) == MyNum(5)
+width(::Type{MyNum}) where T = MyNum(100)
+@test f(MyNum(10)) == MyNum(100)

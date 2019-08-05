@@ -381,21 +381,24 @@ STATIC_INLINE jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator
 // the generator body are invalidated.
 static void set_codeinfo_forward_edge_to_generator(jl_code_info_t *func,
                                                    jl_value_t *generator,
+                                                   jl_svec_t *sparam_vals,
                                                    jl_tupletype_t *ttdt) {
         // Get generator function body
         jl_value_t* gen_func = jl_get_field(generator, "gen");
 
         // Get jl_method_t for generator body
-        // The generator body takes two arguments: (typeof(func), T)
-        // So types should be, e.g.: Tuple{getfield(Main, Symbol("##s4#3")), typeof(Main.foo), Float64}
+        // The generator body takes three sets of arguments: (typeof(func), params..., T...)
+        // For example, for `foo(x::Array{T}) where T`:
+        //     Tuple{getfield(Main, Symbol("##s4#3")), typeof(Main.foo), Int64, Array{Int64}}
         // BUT --- THIS IS THE WEIRD PART:
         // Apparently the backedge needs to be from `##s4#3(::Any, ::Any)` instead of
         // the actual types of the aruments! Who knows why!! Weirdness.
         // (EDIT: I _think_ this is because the generatorbody is marked nospecialize?)
         // Manually construct that weird signature, here:
-        ssize_t numargs = jl_svec_len(ttdt->parameters);  // TODO: is there a better way to get the length of a Tuple type? (jl_nfields?)
+        size_t numargs = jl_svec_len(ttdt->parameters);  // TODO: is there a better way to get the length of a Tuple type? (jl_nfields?)
+        size_t n_sparams = jl_svec_len(sparam_vals);
         // Construct Tuple{typeof(gen_func), ::Any, ::Any} for correct number of args.
-        jl_value_t* weird_types_tuple = jl_tupletype_fill(numargs, (jl_value_t*)jl_any_type);
+        jl_value_t* weird_types_tuple = jl_tupletype_fill(numargs + n_sparams, (jl_value_t*)jl_any_type);
         jl_tupletype_t* types = (jl_tupletype_t*)jl_argtype_with_function(gen_func, weird_types_tuple);
 
         // TODO: I still don't know what the right way to specialize the method is.
@@ -425,6 +428,10 @@ static void set_codeinfo_forward_edge_to_generator(jl_code_info_t *func,
 
             //jl_method_instance_add_backedge(edge, linfo);
             jl_array_ptr_1d_push((jl_array_t*)func->edges, (jl_value_t*)edge);
+        }
+        else {
+            jl_printf(JL_STDERR, "WARNING: no edge for generated function body ");
+            jl_static_show(JL_STDERR, gen_func); jl_printf(JL_STDERR, "\n");
         }
 }
 
@@ -475,7 +482,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         // Set forward edge from the staged func `func` to the generator, so that the
         // generator will be rerun if any dependent functions called from the generator body
         // are invalidated. This keeps generated functions up-to-date, like other functions.
-        set_codeinfo_forward_edge_to_generator(func, generator, ttdt);
+        set_codeinfo_forward_edge_to_generator(func, generator, linfo->sparam_vals, ttdt);
 
         ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
