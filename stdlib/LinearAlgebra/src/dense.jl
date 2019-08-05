@@ -341,6 +341,12 @@ end
 
 Kronecker tensor product of two vectors or two matrices.
 
+For vectors v and w, the Kronecker product is related to the outer product by
+`kron(v,w) == vec(w*transpose(v))` or
+`w*transpose(v) == reshape(kron(v,w), (length(w), length(v)))`.
+Note how the ordering of `v` and `w` differs on the left and right
+of these expressions (due to column-major storage).
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -359,6 +365,20 @@ julia> kron(A, B)
  1+0im  0-1im  2+0im  0-2im
  0+3im  3+0im  0+4im  4+0im
  3+0im  0-3im  4+0im  0-4im
+
+julia> v = [1, 2]; w = [3, 4, 5];
+
+julia> w*transpose(v)
+3×2 Array{Int64,2}:
+ 3   6
+ 4   8
+ 5  10
+
+julia> reshape(kron(v,w), (length(w), length(v)))
+3×2 Array{Int64,2}:
+ 3   6
+ 4   8
+ 5  10
 ```
 """
 function kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
