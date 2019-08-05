@@ -369,6 +369,51 @@ SECT_INTERP static void eval_stmt_value(jl_value_t *stmt, interpreter_state *s)
     s->locals[jl_source_nslots(s->src) + s->ip] = res;
 }
 
+jl_sym_t *get_sym_or_global_if_const(jl_value_t *arg)
+{
+    if (jl_is_globalref(arg)) {
+        jl_module_t *mod = jl_globalref_mod(arg);
+        jl_sym_t *sym = jl_globalref_name(arg);
+        if (jl_is_const(mod, sym)) {
+            jl_value_t *val = jl_get_global(mod, sym);
+            if (jl_is_symbol(val)) {
+                return (jl_sym_t *)val;
+            }
+            return NULL;
+        }
+        return NULL;
+    } else if (jl_is_quotenode(arg)) {
+        if (!jl_is_symbol(jl_quotenode_value(arg)))
+            return NULL;
+        return (jl_sym_t*)jl_quotenode_value(arg);
+    }
+}
+
+void jl_foreigncall_get_syms(jl_value_t *target, jl_sym_t **fname, jl_sym_t **libname)
+{
+    if (jl_is_expr(target)) {
+        if (jl_expr_nargs(target) != 3)
+            return;
+        jl_value_t *arg0 = jl_exprarg(target, 1);
+        jl_value_t *arg1 = jl_exprarg(target, 2);
+        *fname = get_sym_or_global_if_const(arg0);
+        *libname = get_sym_or_global_if_const(arg1);
+        return;
+    } else if (jl_is_tuple(target)) {
+        jl_sym_t *arg0 = (jl_sym_t *)jl_fieldref_noalloc(target, 0);
+        jl_sym_t *arg1 = (jl_sym_t *)jl_fieldref_noalloc(target, 1);
+        assert(jl_is_symbol(arg0) && jl_is_symbol(arg1));
+        *fname = arg0;
+        *libname = arg1;
+    } else {
+        *fname = get_sym_or_global_if_const(target);
+    }
+}
+
+#ifdef _OS_EMSCRIPTEN_
+extern jl_value_t *jl_do_jscall(char *libname, char *fname, jl_value_t **args, size_t nargs);
+#endif
+
 SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
 {
     jl_code_info_t *src = s->src;
@@ -515,6 +560,36 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     }
     else if (head == method_sym && nargs == 1) {
         return eval_methoddef(ex, s);
+    }
+    else if (head == foreigncall_sym) {
+        jl_sym_t *fname = NULL, *libname = NULL;
+        jl_foreigncall_get_syms(args[0], &fname, &libname);
+
+        jl_sym_t *cc_sym = *(jl_sym_t**)args[3];
+        assert(jl_is_symbol(cc_sym));
+        if (cc_sym == jl_symbol("jscall")) {
+#ifdef _OS_EMSCRIPTEN_
+            jl_value_t **ev_args;
+            JL_GC_PUSHARGS(ev_args, nargs-5);
+            for (int i = 5; i < nargs; ++i)
+                ev_args[i-5] = eval_value(args[i], s);
+            jl_value_t *result =
+                jl_do_jscall(libname ? jl_symbol_name(libname) : NULL,
+                            jl_symbol_name(fname),
+                            ev_args,
+                            nargs-5);
+            JL_GC_POP();
+            // For now
+            if (!result)
+                result = jl_nothing;
+            return result;
+#else
+            jl_error("jscall calling convention is only supported on jsvm targets");
+#endif
+        }
+
+        jl_static_show(JL_STDERR, e);
+        jl_error("Encountered unsupported foreigncall in interpreter (this should not happen on supported platforms).");
     }
     jl_errorf("unsupported or misplaced expression %s", jl_symbol_name(head));
     abort();
