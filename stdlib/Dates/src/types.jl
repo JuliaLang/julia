@@ -403,6 +403,9 @@ function ==(a::Time, b::Time)
         microsecond(a) == microsecond(b) && nanosecond(a) == nanosecond(b)
 end
 (==)(x::TimeType, y::TimeType) = (===)(promote(x, y)...)
+Base.min(x::AbstractTime) = x
+Base.max(x::AbstractTime) = x
+Base.minmax(x::AbstractTime) = (x, x)
 Base.hash(x::Time, h::UInt) =
     hash(hour(x), hash(minute(x), hash(second(x),
         hash(millisecond(x), hash(microsecond(x), hash(nanosecond(x), h))))))

@@ -1743,3 +1743,6 @@ function _sortslices(A::AbstractArray, d::Val{dims}; kws...) where dims
         B
     end
 end
+
+getindex(b::Ref, ::CartesianIndex{0}) = getindex(b)
+setindex!(b::Ref, x, ::CartesianIndex{0}) = setindex!(b, x)

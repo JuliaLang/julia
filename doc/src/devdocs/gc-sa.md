@@ -48,7 +48,7 @@ code base to make things work.
 ## GC Invariants
 
 There is two simple invariants correctness:
-- All GC_PUSH calls need to be followed by an appropriate GC_POP (in practice we enforce this
+- All `GC_PUSH` calls need to be followed by an appropriate `GC_POP` (in practice we enforce this
   at the function level)
 - If a value was previously not rooted at any safepoint, it may no longer be referenced
   afterwards

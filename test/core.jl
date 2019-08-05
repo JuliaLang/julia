@@ -4942,7 +4942,7 @@ gVararg(a::fVararg(Int)) = length(a)
     false
 catch e
     (e::ErrorException).msg
-end == "generated function body is not pure. this likely means it contains a closure or comprehension."
+end == "The function body AST defined by this @generated function is not pure. This likely means it contains a closure or comprehension."
 
 let x = 1
     global g18444

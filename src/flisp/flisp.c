@@ -990,11 +990,12 @@ static uint32_t process_keys(fl_context_t *fl_ctx, value_t kwtable,
     ((int16_t)                                  \
     ((((int16_t)a[0])<<0)  |                    \
      (((int16_t)a[1])<<8)))
-#define PUT_INT32(a,i) (*(int32_t*)(a) = bswap_32((int32_t)(i)))
+#define PUT_INT32(a,i) jl_store_unaligned_i32((void*)a,
+    (uint32_t)bswap_32((int32_t)(i)))
 #else
-#define GET_INT32(a) (*(int32_t*)a)
-#define GET_INT16(a) (*(int16_t*)a)
-#define PUT_INT32(a,i) (*(int32_t*)(a) = (int32_t)(i))
+#define GET_INT32(a) (int32_t)jl_load_unaligned_i32((void*)a)
+#define GET_INT16(a) (int16_t)jl_load_unaligned_i16((void*)a)
+#define PUT_INT32(a,i) jl_store_unaligned_i32((void*)a, (uint32_t)(i))
 #endif
 #define SWAP_INT32(a) (*(int32_t*)(a) = bswap_32(*(int32_t*)(a)))
 #define SWAP_INT16(a) (*(int16_t*)(a) = bswap_16(*(int16_t*)(a)))

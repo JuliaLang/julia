@@ -494,30 +494,30 @@ copyto!(A::SparseMatrixCSC, B::SparseVector{TvB,TiB}) where {TvB,TiB} =
 
 
 ### Rand Construction
-sprand(n::Integer, p::AbstractFloat, rfn::Function, ::Type{T}) where {T} = sprand(GLOBAL_RNG, n, p, rfn, T)
+sprand(n::Integer, p::AbstractFloat, rfn::Function, ::Type{T}) where {T} = sprand(default_rng(), n, p, rfn, T)
 function sprand(r::AbstractRNG, n::Integer, p::AbstractFloat, rfn::Function, ::Type{T}) where T
     I = randsubseq(r, 1:convert(Int, n), p)
     V = rfn(r, T, length(I))
     SparseVector(n, I, V)
 end
 
-sprand(n::Integer, p::AbstractFloat, rfn::Function) = sprand(GLOBAL_RNG, n, p, rfn)
+sprand(n::Integer, p::AbstractFloat, rfn::Function) = sprand(default_rng(), n, p, rfn)
 function sprand(r::AbstractRNG, n::Integer, p::AbstractFloat, rfn::Function)
     I = randsubseq(r, 1:convert(Int, n), p)
     V = rfn(r, length(I))
     SparseVector(n, I, V)
 end
 
-sprand(n::Integer, p::AbstractFloat) = sprand(GLOBAL_RNG, n, p, rand)
+sprand(n::Integer, p::AbstractFloat) = sprand(default_rng(), n, p, rand)
 
 sprand(r::AbstractRNG, n::Integer, p::AbstractFloat) = sprand(r, n, p, rand)
 sprand(r::AbstractRNG, ::Type{T}, n::Integer, p::AbstractFloat) where {T} = sprand(r, n, p, (r, i) -> rand(r, T, i))
 sprand(r::AbstractRNG, ::Type{Bool}, n::Integer, p::AbstractFloat) = sprand(r, n, p, truebools)
-sprand(::Type{T}, n::Integer, p::AbstractFloat) where {T} = sprand(GLOBAL_RNG, T, n, p)
+sprand(::Type{T}, n::Integer, p::AbstractFloat) where {T} = sprand(default_rng(), T, n, p)
 
-sprandn(n::Integer, p::AbstractFloat) = sprand(GLOBAL_RNG, n, p, randn)
+sprandn(n::Integer, p::AbstractFloat) = sprand(default_rng(), n, p, randn)
 sprandn(r::AbstractRNG, n::Integer, p::AbstractFloat) = sprand(r, n, p, randn)
-sprandn(::Type{T}, n::Integer, p::AbstractFloat) where T = sprand(GLOBAL_RNG, n, p, (r, i) -> randn(r, T, i))
+sprandn(::Type{T}, n::Integer, p::AbstractFloat) where T = sprand(default_rng(), n, p, (r, i) -> randn(r, T, i))
 sprandn(r::AbstractRNG, ::Type{T}, n::Integer, p::AbstractFloat) where T = sprand(r, n, p, (r, i) -> randn(r, T, i))
 
 ## Indexing into Matrices can return SparseVectors
@@ -1626,7 +1626,7 @@ function densemv(A::SparseMatrixCSC, x::AbstractSparseVector; trans::AbstractCha
     xlen == length(x) || throw(DimensionMismatch())
     T = promote_op(matprod, eltype(A), eltype(x))
     y = Vector{T}(undef, ylen)
-    if trans == 'N' || trans == 'N'
+    if trans == 'N' || trans == 'n'
         mul!(y, A, x)
     elseif trans == 'T' || trans == 't'
         mul!(y, transpose(A), x)
@@ -1664,7 +1664,7 @@ function mul!(y::AbstractVector, A::SparseMatrixCSC, x::AbstractSparseVector, α
         if v != zero(v)
             αv = v * α
             j = xnzind[i]
-            for r = A.colptr[j]:(Acolptr[j+1]-1)
+            for r = Acolptr[j]:(Acolptr[j+1]-1)
                 y[Arowval[r]] += Anzval[r] * αv
             end
         end

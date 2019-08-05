@@ -20,13 +20,16 @@
 #include <setjmp.h>
 #ifndef _OS_WINDOWS_
 #  define jl_jmp_buf sigjmp_buf
-#  if defined(_CPU_ARM_) || defined(_CPU_PPC_)
+#  if defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_WASM_)
 #    define MAX_ALIGN 8
 #  elif defined(_CPU_AARCH64_)
 // int128 is 16 bytes aligned on aarch64
 #    define MAX_ALIGN 16
+#  elif defined(_P64)
+// Generically we assume MAX_ALIGN is sizeof(void*)
+#    define MAX_ALIGN 8
 #  else
-#    define MAX_ALIGN sizeof(void*)
+#    define MAX_ALIGN 4
 #  endif
 #else
 #  include "win32_ucontext.h"
@@ -459,7 +462,7 @@ typedef struct {
     jl_value_t *value;
     jl_value_t *globalref;  // cached GlobalRef for this binding
     struct _jl_module_t *owner;  // for individual imported bindings
-    uint8_t constp:1;
+    uint8_t constp;
     uint8_t exportp:1;
     uint8_t imported:1;
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
@@ -483,6 +486,7 @@ typedef struct _jl_module_t {
     uint32_t counter;
     int32_t nospecialize;  // global bit flags: initialization for new methods
     uint8_t istopmod;
+    jl_mutex_t lock;
 } jl_module_t;
 
 // one Type-to-Value entry
@@ -1980,6 +1984,10 @@ typedef struct {
     int static_alloc;       // is the compiler allowed to allocate statically?
     int prefer_specsig;     // are specialized function signatures preferred?
 
+    // controls the emission of debug-info. mirrors the clang options
+    int gnu_pubnames;       // can we emit the gnu pubnames debuginfo
+    int debug_info_kind; // Enum for line-table-only, line-directives-only,
+                            // limited, standalone
 
     // hooks
 
@@ -2009,6 +2017,7 @@ typedef struct {
     jl_value_t *emitted_function;
 } jl_cgparams_t;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
+extern JL_DLLEXPORT int jl_default_debug_info_kind;
 
 #if defined(JULIA_ENABLE_THREADING) && !defined(_OS_DARWIN_) && !defined(_OS_WINDOWS_)
 #define JULIA_DEFINE_FAST_TLS()                                                             \

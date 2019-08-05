@@ -38,6 +38,8 @@
 
 @test isempty(NamedTuple())
 @test !isempty((a=1,))
+@test empty((a=1,)) === NamedTuple()
+@test isempty(empty((a=1,)))
 
 @test (a=1,b=2) === (a=1,b=2)
 @test (a=1,b=2) !== (b=1,a=2)

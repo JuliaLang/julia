@@ -61,8 +61,21 @@ Regex(pattern::AbstractString) = Regex(pattern, DEFAULT_COMPILER_OPTS, DEFAULT_M
 
 function compile(regex::Regex)
     if regex.regex == C_NULL
-        regex.regex = PCRE.compile(regex.pattern, regex.compile_options)
-        PCRE.jit_compile(regex.regex)
+        if PCRE.PCRE_COMPILE_LOCK === nothing
+            regex.regex = PCRE.compile(regex.pattern, regex.compile_options)
+            PCRE.jit_compile(regex.regex)
+        else
+            l = PCRE.PCRE_COMPILE_LOCK::Threads.SpinLock
+            lock(l)
+            try
+                if regex.regex == C_NULL
+                    regex.regex = PCRE.compile(regex.pattern, regex.compile_options)
+                    PCRE.jit_compile(regex.regex)
+                end
+            finally
+                unlock(l)
+            end
+        end
     end
     regex
 end

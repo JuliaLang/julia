@@ -994,7 +994,7 @@ end
 end
 
 """
-    sort!(A; dims::Integer, alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+    sort!(A; dims::Integer, alg::Algorithm=defalg(A), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort the multidimensional array `A` along dimension `dims`.
 See [`sort!`](@ref) for a description of possible keyword arguments.
