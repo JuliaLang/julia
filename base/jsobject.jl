@@ -31,7 +31,7 @@ macro jscall(expr)
              isa(target_expr.args[2].value, Symbol))
             error("Unsupported call target `$(target_expr)`")
         end
-        target = (target_expr.args[1], target_expr.args[2].value)
+        target = (target_expr.args[2].value, target_expr.args[1])
     end
     b = Expr(:block)
     converted_args = Symbol[]
@@ -61,7 +61,7 @@ end
 # Yes, we're converting a pointer to Float64 here, but at least in
 # compiled code, we basically expect the compiler on both sides to
 # undo this conversion.
-jsconvert(x::Ptr) = convert(JSNumber, convert(Int32, x))
+jsconvert(x::Ptr) = convert(JSNumber, convert(UInt32, x))
 jsconvert(x::AbstractString) = convert(JSString, x)
 
 function convert(::Type{JSString}, x::String)

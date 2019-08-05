@@ -9,7 +9,7 @@ mergeInto(LibraryManager.library, {
     f = parent[UTF8ToString(fname)];
     js_args = new Array(nargs);
     for (var arg_idx = 0; arg_idx < nargs; arg_idx++) {
-      arg_ptr = HEAP32[args >> 2 + arg_idx];
+      arg_ptr = HEAP32[(args >> 2) + arg_idx];
       js_args[arg_idx] = jlboxed_to_js(arg_ptr);
     }
     return js_to_jlboxed(Reflect.apply(f, undefined, js_args));
