@@ -21,7 +21,7 @@ bar() = 3
     @generated foo() = bar()
     bar() = 2
 
-    # TODO: It seems like this doesn't work becuase of the @testset. Is that expected?
+    # TODO: It seems like this doesn't work because of the @testset. Is that expected?
     # Would this work for regular functions? I think it's broken...
     @test foo() == 2
     bar() = 3
@@ -72,3 +72,12 @@ width(::Type{MyNum}) where T = MyNum(5)
 @test f(MyNum(10)) == MyNum(5)
 width(::Type{MyNum}) where T = MyNum(100)
 @test f(MyNum(10)) == MyNum(100)
+
+
+# Functions with varargs
+@generated f(a::T, b, c...) where T<:Number = bar(T) + bar(a) + bar(b) + sum(bar(v) for v in c)
+bar(x) = 2
+@test f(2,3,4) == 8
+bar(x) = 3
+@test f(2,3,4) == 12
+@test f(2,3,4,5) == 15
