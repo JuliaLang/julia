@@ -799,42 +799,47 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow)
     int field_index;
     if (jl_is_long(f)) {
         field_index = jl_unbox_long(f) - 1;
-        if (st->name == jl_namedtuple_typename) {
-            jl_value_t *nm = jl_tparam0(st);
-            if (jl_is_tuple(nm)) {
-                int nf = jl_nfields(nm);
-                if (field_index < 0 || field_index >= nf) {
-                    if (dothrow)
-                        jl_bounds_error(t, f);
-                    else
-                        return jl_bottom_type;
-                }
-            }
-            jl_value_t *tt = jl_tparam1(st);
-            while (jl_is_typevar(tt))
-                tt = ((jl_tvar_t*)tt)->ub;
-            if (tt == (jl_value_t*)jl_any_type)
-                return (jl_value_t*)jl_any_type;
-            return get_fieldtype(tt, f, dothrow);
-        }
-        jl_svec_t *types = jl_get_fieldtypes(st);
-        int nf = jl_svec_len(types);
-        if (nf > 0 && field_index >= nf-1 && st->name == jl_tuple_typename) {
-            jl_value_t *ft = jl_field_type(st, nf-1);
-            if (jl_is_vararg_type(ft))
-                return jl_unwrap_vararg(ft);
-        }
-        if (field_index < 0 || field_index >= nf) {
-            if (dothrow)
-                jl_bounds_error(t, f);
-            else
-                return jl_bottom_type;
-        }
     }
     else {
         JL_TYPECHK(fieldtype, symbol, f);
         field_index = jl_field_index(st, (jl_sym_t*)f, dothrow);
         if (field_index == -1)
+            return jl_bottom_type;
+    }
+    if (st->name == jl_namedtuple_typename) {
+        jl_value_t *nm = jl_tparam0(st);
+        if (jl_is_tuple(nm)) {
+            int nf = jl_nfields(nm);
+            if (field_index < 0 || field_index >= nf) {
+                if (dothrow)
+                    jl_bounds_error(t, f);
+                else
+                    return jl_bottom_type;
+            }
+        }
+        jl_value_t *tt = jl_tparam1(st);
+        while (jl_is_typevar(tt))
+            tt = ((jl_tvar_t*)tt)->ub;
+        if (tt == (jl_value_t*)jl_any_type)
+            return (jl_value_t*)jl_any_type;
+        JL_GC_PUSH1(&f);
+        if (jl_is_symbol(f))
+            f = jl_box_long(field_index+1);
+        jl_value_t *ft = get_fieldtype(tt, f, dothrow);
+        JL_GC_POP();
+        return ft;
+    }
+    jl_svec_t *types = jl_get_fieldtypes(st);
+    int nf = jl_svec_len(types);
+    if (nf > 0 && field_index >= nf-1 && st->name == jl_tuple_typename) {
+        jl_value_t *ft = jl_field_type(st, nf-1);
+        if (jl_is_vararg_type(ft))
+            return jl_unwrap_vararg(ft);
+    }
+    if (field_index < 0 || field_index >= nf) {
+        if (dothrow)
+            jl_bounds_error(t, f);
+        else
             return jl_bottom_type;
     }
     return jl_field_type(st, field_index);

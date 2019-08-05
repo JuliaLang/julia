@@ -905,9 +905,25 @@ JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
 JL_DLLEXPORT int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err)
 {
     jl_svec_t *fn = jl_field_names(t);
-    for(size_t i=0; i < jl_svec_len(fn); i++) {
-        if (jl_svecref(fn,i) == (jl_value_t*)fld) {
-            return (int)i;
+    size_t n = jl_svec_len(fn);
+    if (n == 0) {
+        if (jl_is_namedtuple_type(t)) {
+            jl_value_t *ns = jl_tparam0(t);
+            if (jl_is_tuple(ns)) {
+                n = jl_nfields(ns);
+                for(size_t i=0; i < n; i++) {
+                    if (jl_get_nth_field(ns, i) == (jl_value_t*)fld) {
+                        return (int)i;
+                    }
+                }
+            }
+        }
+    }
+    else {
+        for(size_t i=0; i < n; i++) {
+            if (jl_svecref(fn,i) == (jl_value_t*)fld) {
+                return (int)i;
+            }
         }
     }
     if (err)
