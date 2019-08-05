@@ -244,6 +244,7 @@ end
 Returns a `Token` of kind `kind` with contents `str` and starts a new `Token`.
 """
 function emit(l::Lexer{IO_t,Token}, kind::Kind, err::TokenError = Tokens.NO_ERR) where IO_t
+    suffix = false
     if (kind == Tokens.IDENTIFIER || isliteral(kind) || kind == Tokens.COMMENT || kind == Tokens.WHITESPACE)
         str = String(take!(l.charstore))
     elseif kind == Tokens.ERROR
@@ -252,6 +253,7 @@ function emit(l::Lexer{IO_t,Token}, kind::Kind, err::TokenError = Tokens.NO_ERR)
         str = ""
         while isopsuffix(peekchar(l))
             str = string(str, readchar(l))
+            suffix = true
         end
     else
         str = ""
@@ -259,7 +261,7 @@ function emit(l::Lexer{IO_t,Token}, kind::Kind, err::TokenError = Tokens.NO_ERR)
     tok = Token(kind, (l.token_start_row, l.token_start_col),
             (l.current_row, l.current_col - 1),
             startpos(l), position(l) - 1,
-            str, err, l.dotop)
+            str, err, l.dotop, suffix)
     l.dotop = false
     l.last_token = kind
     readoff(l)
@@ -267,15 +269,17 @@ function emit(l::Lexer{IO_t,Token}, kind::Kind, err::TokenError = Tokens.NO_ERR)
 end
 
 function emit(l::Lexer{IO_t,RawToken}, kind::Kind, err::TokenError = Tokens.NO_ERR) where IO_t
+    suffix = false
     if optakessuffix(kind)
         while isopsuffix(peekchar(l))
             readchar(l)
+            suffix = true
         end
     end
 
     tok = RawToken(kind, (l.token_start_row, l.token_start_col),
                   (l.current_row, l.current_col - 1),
-                  startpos(l), position(l) - 1, err, l.dotop)
+                  startpos(l), position(l) - 1, err, l.dotop, suffix)
     
     l.dotop = false
     l.last_token = kind
