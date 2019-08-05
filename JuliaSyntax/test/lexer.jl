@@ -543,4 +543,12 @@ end
 
 @testset "hat suffix" begin 
     @test tok("ŝ", 1).kind==Tokens.IDENTIFIER
+    @test untokenize(collect(tokenize("ŝ", Tokens.RawToken))[1], "ŝ") == "ŝ"
 end
+
+@testset "suffixed op" begin 
+    s = "+¹"
+    @test Tokens.isoperator(tok(s, 1).kind)
+    @test untokenize(collect(tokenize(s, Tokens.RawToken))[1], s) == s
+end
+
