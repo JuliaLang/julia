@@ -365,6 +365,10 @@ end
                 @test Symmetric(asym)\b  ≈ asym\b
             end
         end
+        @testset "generalized dot product" begin
+            @test dot(x, aherm, y) ≈ x'aherm*y ≈ x'*aherm*y
+            @test dot(x, aherm, x) ≈ x'aherm*x ≈ x'*aherm*x
+        end
     end
 end
 

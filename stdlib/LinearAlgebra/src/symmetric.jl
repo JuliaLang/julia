@@ -457,6 +457,16 @@ end
 
 *(A::HermOrSym, B::HermOrSym) = A * copyto!(similar(parent(B)), B)
 
+function dot(x::AbstractVector, A::RealHermSymComplexHerm, y::AbstractVector)
+    Δ = A.uplo == 'U' ? UpperTriangular(A) : LowerTriangular(A)
+    D = Diagonal(A)
+    if x === y
+        return 2dot(x, Δ, x) - dot(x, D, x)
+    else
+        return dot(x, Δ, y) + dot(y, Δ, x) - dot(x, D, x)
+    end
+end
+
 # Fallbacks to avoid generic_matvecmul!/generic_matmatmul!
 ## Symmetric{<:Number} and Hermitian{<:Real} are invariant to transpose; peel off the t
 *(transA::Transpose{<:Any,<:RealHermSymComplexSym}, B::AbstractVector) = transA.parent * B
