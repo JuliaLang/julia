@@ -222,10 +222,8 @@ Stacktrace:
 ```
 """
 function bind(c::Channel, task::Task)
-    # TODO: implement "schedulewait" and deprecate taskdone_hook
-    #T = Task(() -> close_chnl_on_taskdone(task, c))
-    #schedulewait(task, T)
-    register_taskdone_hook(task, tsk -> close_chnl_on_taskdone(tsk, c))
+    T = Task(() -> close_chnl_on_taskdone(task, c))
+    _wait2(task, T)
     return c
 end
 

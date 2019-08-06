@@ -209,17 +209,32 @@ function wait(t::Task)
     t === current_task() && error("deadlock detected: cannot wait on current task")
     if !istaskdone(t)
         lock(t.donenotify)
-        try
-            while !istaskdone(t)
-                wait(t.donenotify)
-            end
-        finally
+        if !istaskdone(t)
+            push!(t.donenotify.waitq, current_task())
+            unlock(t.donenotify)
+            wait()
+        else
             unlock(t.donenotify)
         end
     end
     if istaskfailed(t)
-        throw(t.exception)
+        throw(CapturedException(t.exception, t.backtrace))
     end
+    nothing
+end
+
+function _wait2(t::Task, waiter::Task)
+    if !istaskdone(t)
+        lock(t.donenotify)
+        if !istaskdone(t)
+            push!(t.donenotify.waitq, waiter)
+            unlock(t.donenotify)
+            return nothing
+        else
+            unlock(t.donenotify)
+        end
+    end
+    schedule(waiter)
     nothing
 end
 
@@ -302,12 +317,6 @@ macro async(expr)
 end
 
 
-function register_taskdone_hook(t::Task, hook)
-    tls = get_task_tls(t)
-    push!(get!(tls, :TASKDONE_HOOKS, []), hook)
-    return t
-end
-
 # runtime system hook called when a task finishes
 function task_done_hook(t::Task)
     # `finish_task` sets `sigatomic` before entering this function
@@ -324,18 +333,11 @@ function task_done_hook(t::Task)
         try
             if !isempty(donenotify.waitq)
                 handled = true
-                notify(donenotify, result, true, err)
+                notify(donenotify)
             end
         finally
             unlock(donenotify)
         end
-    end
-
-    # Execute any other hooks registered in the TLS
-    if isa(t.storage, IdDict) && haskey(t.storage, :TASKDONE_HOOKS)
-        foreach(hook -> hook(t), t.storage[:TASKDONE_HOOKS])
-        delete!(t.storage, :TASKDONE_HOOKS)
-        handled = true
     end
 
     if err && !handled && Threads.threadid() == 1
@@ -522,7 +524,8 @@ immediately yields to `t` before calling the scheduler.
 function yield(t::Task, @nospecialize(x=nothing))
     t.result = x
     enq_work(current_task())
-    return try_yieldto(ensure_rescheduled, Ref(t))
+    current_task().nexttask = t
+    return try_yieldto(ensure_rescheduled)
 end
 
 """
@@ -535,14 +538,15 @@ or scheduling in any way. Its use is discouraged.
 """
 function yieldto(t::Task, @nospecialize(x=nothing))
     t.result = x
-    return try_yieldto(identity, Ref(t))
+    current_task().nexttask = t
+    return try_yieldto(identity)
 end
 
-function try_yieldto(undo, reftask::Ref{Task})
+function try_yieldto(undo)
     try
-        ccall(:jl_switchto, Cvoid, (Any,), reftask)
+        ccall(:jl_switchto, Cvoid, ())
     catch
-        undo(reftask[])
+        undo(current_task().nexttask)
         rethrow()
     end
     ct = current_task()
@@ -600,14 +604,16 @@ end
         gettask = () -> trypoptask(W)
         task = ccall(:jl_task_get_next, Any, (Any,), gettask)::Task
     end
-    return Ref(task)
+    current_task().nexttask = task
+    #return Ref(task)
+    nothing
 end
 
 function wait()
     W = Workqueues[Threads.threadid()]
-    reftask = poptaskref(W)
-    result = try_yieldto(ensure_rescheduled, reftask)
-    Sys.isjsvm() || process_events()
+    poptaskref(W)
+    result = try_yieldto(ensure_rescheduled)
+    process_events()
     # return when we come out of the queue
     return result
 end

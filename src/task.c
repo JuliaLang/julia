@@ -340,11 +340,11 @@ static jl_ptls_t NOINLINE refetch_ptls(void)
     return jl_get_ptls_states();
 }
 
-JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
+JL_DLLEXPORT void jl_switchto(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_task_t *t = *pt;
     jl_task_t *ct = ptls->current_task;
+    jl_task_t *t = ct->nexttask;
     if (t == ct) {
         return;
     }
@@ -375,7 +375,7 @@ JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
         jl_timing_block_stop(blk);
 #endif
 
-    ctx_switch(ptls, pt);
+    ctx_switch(ptls, &ct->nexttask);
 
 #ifdef MIGRATE_TASKS
     ptls = refetch_ptls();
@@ -531,6 +531,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->donenotify = completion_future;
     t->exception = jl_nothing;
     t->backtrace = jl_nothing;
+    t->nexttask = jl_nothing;
     // Inherit logger state from parent task
     t->logstate = ptls->current_task->logstate;
     // there is no active exception handler available on this stack yet
