@@ -298,8 +298,6 @@ Base.@elapsed
 Base.@allocated
 Base.EnvDict
 Base.ENV
-Base.Sys.cpu_summary
-Base.Sys.cpu_info
 Base.Sys.isunix
 Base.Sys.isapple
 Base.Sys.islinux
