@@ -65,6 +65,13 @@ See Hwloc.jl or CpuId.jl for extended information, including number of physical 
 CPU_THREADS = 1 # for bootstrap, changed on startup
 
 """
+    Sys.CPU_NAME
+
+The name of the host CPU as a string.
+"""
+CPU_NAME = "" # for bootstrap, changed on startup
+
+"""
     Sys.ARCH
 
 A symbol representing the architecture of the build configuration.
@@ -188,6 +195,15 @@ function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
     println(io)
 end
 
+"""
+    Sys.cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
+
+Print a summary of information about each processor in `cpu` gathered from [`cpu_info](@ref). This is generally:
+  - Its index in the `cpu` vector
+  - The CPU model
+  - The CPU speed
+  - The amount of time spent in `user`, `nice`, `sys`, `idle`, and `irq` modes
+"""
 function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
     model = cpu[1].model
     first = 1
@@ -200,6 +216,11 @@ function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
     _cpu_summary(io, cpu, first, length(cpu))
 end
 
+"""
+    Sys.cpu_info()
+
+Gather information about all CPUs in the system through a syscall using LibUV.
+"""
 function cpu_info()
     UVcpus = Ref{Ptr{UV_cpu_info_t}}()
     count = Ref{Int32}()
@@ -216,7 +237,7 @@ end
 """
     Sys.uptime()
 
-Gets the current system uptime in seconds.
+Get the current system uptime in seconds.
 """
 function uptime()
     uptime_ = Ref{Float64}()
