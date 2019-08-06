@@ -885,12 +885,11 @@ dot(x::Number, A::Number, y::Number) = conj(x) * A * y
 function dot(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
     (axes(x)..., axes(y)...) == axes(A) || throw(DimensionMismatch())
     T = typeof(dot(first(x), first(A), first(y)))
-    zeroxA = zero(adjoint(first(x))*first(A))
     s = zero(T)
     @inbounds for j in eachindex(y)
         yj = y[j]
         if !iszero(yj)
-            temp = zeroxA
+            temp = zero(adjoint(yj))
             @simd for i in eachindex(x)
                 temp += adjoint(x[i]) * A[i,j]
             end
