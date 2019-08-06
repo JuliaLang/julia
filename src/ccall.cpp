@@ -1607,6 +1607,17 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(ptid)),
             retboxed, rt, unionall, static_rt);
     }
+    else if (is_libjulia_func(jl_get_current_task)) {
+        assert(lrt == T_prjlvalue);
+        assert(!isVa && !llvmcall && nccallargs == 0);
+        JL_GC_POP();
+        Value *ptls_pv = emit_bitcast(ctx, ctx.ptlsStates, T_pprjlvalue);
+        const int ct_offset = offsetof(jl_tls_states_t, current_task);
+        Value *pct = ctx.builder.CreateGEP(ptls_pv, ConstantInt::get(T_size, ct_offset / sizeof(void*)));
+        return mark_or_box_ccall_result(ctx,
+            tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(pct)),
+            retboxed, rt, unionall, static_rt);
+    }
     else if (is_libjulia_func(jl_sigatomic_begin)) {
         assert(lrt == T_void);
         assert(!isVa && !llvmcall && nccallargs == 0);
