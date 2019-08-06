@@ -196,7 +196,7 @@ function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
 end
 
 """
-    Sys.cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = Sys.cpu_info())
+    Sys.cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo}=Sys.cpu_info())
 
 Print a summary of information about each processor in `cpu` gathered from [`Sys.cpu_info`](@ref).
 This is generally:
@@ -205,7 +205,7 @@ This is generally:
   - The CPU speed
   - The amount of time spent in `user`, `nice`, `sys`, `idle`, and `irq` modes
 """
-function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
+function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo}=cpu_info())
     model = cpu[1].model
     first = 1
     for i = 2:length(cpu)
