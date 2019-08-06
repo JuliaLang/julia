@@ -552,16 +552,16 @@ function dot(x::AbstractVector, A::UpperTriangular, y::AbstractVector)
     if iszero(m)
         return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
     end
-    T = typeof(dot(first(x), first(A), first(y)))
-    r = zero(T)
+    x₁ = first(x)
+    r = zero(typeof(dot(x₁, first(A), first(y))))
     @inbounds for j in 1:m
         yj = y[j]
         if !iszero(yj)
-            temp = zero(T)
-            @simd for i in 1:j
+            temp = adjoint(x₁) * A[1,j]
+            @simd for i in 2:j
                 temp += adjoint(x[i]) * A[i,j]
             end
-            r += temp * yj
+            r += dot(adjoint(temp), yj)
         end
     end
     return r
@@ -573,17 +573,17 @@ function dot(x::AbstractVector, A::UnitUpperTriangular, y::AbstractVector)
     if iszero(m)
         return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
     end
-    T = typeof(dot(first(x), first(A), first(y)))
-    r = zero(T)
-    @inbounds for j in 1:m
+    x₁ = first(x)
+    r = dot(x₁, y[1])
+    @inbounds for j in 2:m
         yj = y[j]
         if !iszero(yj)
-            temp = zero(T)
-            @simd for i in 1:j-1
+            temp = adjoint(x₁) * A[1,j]
+            @simd for i in 2:j-1
                 temp += adjoint(x[i]) * A[i,j]
             end
-            temp += adjoint(x[j])
-            r += temp * yj
+            r += dot(adjoint(temp), yj)
+            r += dot(x[j], yj)
         end
     end
     return r
@@ -595,16 +595,15 @@ function dot(x::AbstractVector, A::LowerTriangular, y::AbstractVector)
     if iszero(m)
         return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
     end
-    T = typeof(dot(first(x), first(A), first(y)))
-    r = zero(T)
+    r = zero(typeof(dot(first(x), first(A), first(y))))
     @inbounds for j in 1:m
         yj = y[j]
         if !iszero(yj)
-            temp = zero(T)
-            @simd for i in j:m
+            temp = adjoint(x[j]) * A[j,j]
+            @simd for i in j+1:m
                 temp += adjoint(x[i]) * A[i,j]
             end
-            r += temp * yj
+            r += dot(adjoint(temp), yj)
         end
     end
     return r
@@ -616,16 +615,15 @@ function dot(x::AbstractVector, A::UnitLowerTriangular, y::AbstractVector)
     if iszero(m)
         return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
     end
-    T = typeof(dot(first(x), first(A), first(y)))
-    r = zero(T)
-    @inbounds for j in 1:m
+    r = dot(x[1], y[1])
+    @inbounds for j in 2:m
         yj = y[j]
         if !iszero(yj)
-            temp = adjoint(x[j])
+            temp = dot(x[j], yj)
             @simd for i in j+1:m
                 temp += adjoint(x[i]) * A[i,j]
             end
-            r += temp * yj
+            r += dot(adjoint(temp), yj)
         end
     end
     return r

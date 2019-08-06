@@ -886,14 +886,16 @@ function dot(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
     (axes(x)..., axes(y)...) == axes(A) || throw(DimensionMismatch())
     T = typeof(dot(first(x), first(A), first(y)))
     s = zero(T)
+    i₁ = first(eachindex(x))
+    x₁ = first(x)
     @inbounds for j in eachindex(y)
         yj = y[j]
         if !iszero(yj)
-            temp = zero(adjoint(yj))
+            temp = zero(adjoint(x₁) * A[i₁,j])
             @simd for i in eachindex(x)
                 temp += adjoint(x[i]) * A[i,j]
             end
-            s += temp * yj
+            s += dot(adjoint(temp), yj)
         end
     end
     return s

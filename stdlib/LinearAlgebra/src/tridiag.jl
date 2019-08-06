@@ -213,13 +213,13 @@ function dot(x::AbstractVector, S::SymTridiagonal, y::AbstractVector)
     x₀ = adjoint(x[1])
     x₊ = adjoint(x[2])
     sub = transpose(ev[1])
-    r = (x₀*dv[1] + x₊*sub) * y[1]
+    r = dot(adjoint(x₀*dv[1] + x₊*sub), y[1])
     @inbounds for j in 2:nx-1
         x₋, x₀, x₊ = x₀, x₊, adjoint(x[j+1])
         sup, sub = transpose(sub), transpose(ev[j])
-        r += (x₋*sup + x₀*dv[j] + x₊*sub) * y[j]
+        r += dot(adjoint(x₋*sup + x₀*dv[j] + x₊*sub), y[j])
     end
-    r += (x₀*transpose(sub) + x₊*dv[nx]) * y[nx]
+    r += dot(adjoint(x₀*transpose(sub) + x₊*dv[nx]), y[nx])
     return r
 end
 
@@ -689,11 +689,11 @@ function dot(x::AbstractVector, A::Tridiagonal, y::AbstractVector)
     x₀ = adjoint(x[1])
     x₊ = adjoint(x[2])
     dl, d, du = A.dl, A.d, A.du
-    r = (x₀*d[1] + x₊*dl[1]) * y[1]
+    r = dot(adjoint(x₀*d[1] + x₊*dl[1]), y[1])
     @inbounds for j in 2:nx-1
         x₋, x₀, x₊ = x₀, x₊, adjoint(x[j+1])
-        r += (x₋*du[j-1] + x₀*d[j] + x₊*dl[j]) * y[j]
+        r += dot(adjoint(x₋*du[j-1] + x₀*d[j] + x₊*dl[j]), y[j])
     end
-    r += (x₀*du[nx-1] + x₊*d[nx]) * y[nx]
+    r += dot(adjoint(x₀*du[nx-1] + x₊*d[nx]), y[nx])
     return r
 end
