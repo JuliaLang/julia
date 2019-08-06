@@ -196,9 +196,10 @@ function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
 end
 
 """
-    Sys.cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
+    Sys.cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = Sys.cpu_info())
 
-Print a summary of information about each processor in `cpu` gathered from [`cpu_info](@ref). This is generally:
+Print a summary of information about each processor in `cpu` gathered from [`Sys.cpu_info`](@ref).
+This is generally:
   - Its index in the `cpu` vector
   - The CPU model
   - The CPU speed
