@@ -463,7 +463,7 @@ end
         y = randn(elty, 5)
         for uplo in (:U, :L)
             B = Bidiagonal(dv, ev, uplo)
-            @test dot(x, B, y) ≈ x' * B * y ≈ *(x', B, y) ≈ (x'B)*y
+            @test dot(x, B, y) ≈ dot(B'x, y) ≈ dot(x, Matrix(B), y)
         end
     end
 end

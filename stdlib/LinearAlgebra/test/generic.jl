@@ -425,15 +425,15 @@ end
             x = rand(elty, n)
             y = rand(elty, n)
         end
-        @test dot(x, A, y) ≈ x' * A * y ≈ *(x', A, y) ≈ (x'A)*y
-        @test dot(x, A', y) ≈ x' * A' * y ≈ *(x', A', y) ≈ (x'A')*y
-        elty <: Real && @test dot(x, transpose(A), y) ≈ x' * transpose(A) * y ≈ *(x', transpose(A), y) ≈ (x'*transpose(A))*y
+        @test dot(x, A, y) ≈ dot(A'x, y) ≈ *(x', A, y) ≈ (x'A)*y
+        @test dot(x, A', y) ≈ dot(A*x, y) ≈ *(x', A', y) ≈ (x'A')*y
+        elty <: Real && @test dot(x, transpose(A), y) ≈ dot(x, transpose(A)*y) ≈ *(x', transpose(A), y) ≈ (x'*transpose(A))*y
         B = reshape([A], 1, 1)
         x = [x]
         y = [y]
-        @test dot(x, B, y) ≈ x' * B * y ≈ *(x', B, y) ≈ (x'B)*y
-        @test dot(x, B', y) ≈ x' * B' * y ≈ *(x', B', y) ≈ (x'B')*y
-        elty <: Real && @test dot(x, transpose(B), y) ≈ x' * transpose(B) * y ≈ *(x', transpose(B), y) ≈ (x'*transpose(B))*y
+        @test dot(x, B, y) ≈ dot(B'x, y)
+        @test dot(x, B', y) ≈ dot(B*x, y)
+        elty <: Real && @test dot(x, transpose(B), y) ≈ dot(x, transpose(B)*y)
     end
 end
 

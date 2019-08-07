@@ -40,9 +40,6 @@ function *(transx::Transpose{<:Any,<:StridedVector{T}}, y::StridedVector{T}) whe
     return BLAS.dotu(x, y)
 end
 
-# I'm no longer sure we want ternary multiplication to be generally interpreted recursively
-# (*)(x::Adjoint{<:Any,<:AbstractVector}, A::AbstractMatrix, y::AbstractVector) = dot(parent(x), A, y)
-
 # Matrix-vector multiplication
 function (*)(A::StridedMatrix{T}, x::StridedVector{S}) where {T<:BlasFloat,S<:Real}
     TS = promote_op(matprod, T, S)

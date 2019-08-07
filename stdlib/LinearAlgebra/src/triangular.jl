@@ -557,11 +557,11 @@ function dot(x::AbstractVector, A::UpperTriangular, y::AbstractVector)
     @inbounds for j in 2:m
         yj = y[j]
         if !iszero(yj)
-            temp = adjoint(x₁) * A[1,j]
+            temp = adjoint(A[1,j]) * x₁
             @simd for i in 2:j
-                temp += adjoint(x[i]) * A[i,j]
+                temp += adjoint(A[i,j]) * x[i]
             end
-            r += dot(adjoint(temp), yj)
+            r += dot(temp, yj)
         end
     end
     return r
@@ -578,11 +578,11 @@ function dot(x::AbstractVector, A::UnitUpperTriangular, y::AbstractVector)
     @inbounds for j in 2:m
         yj = y[j]
         if !iszero(yj)
-            temp = adjoint(x₁) * A[1,j]
+            temp = adjoint(A[1,j]) * x₁
             @simd for i in 2:j-1
-                temp += adjoint(x[i]) * A[i,j]
+                temp += adjoint(A[i,j]) * x[i]
             end
-            r += dot(adjoint(temp), yj)
+            r += dot(temp, yj)
             r += dot(x[j], yj)
         end
     end
@@ -599,11 +599,11 @@ function dot(x::AbstractVector, A::LowerTriangular, y::AbstractVector)
     @inbounds for j in 1:m
         yj = y[j]
         if !iszero(yj)
-            temp = adjoint(x[j]) * A[j,j]
+            temp = adjoint(A[j,j]) * x[j]
             @simd for i in j+1:m
-                temp += adjoint(x[i]) * A[i,j]
+                temp += adjoint(A[i,j]) * x[i]
             end
-            r += dot(adjoint(temp), yj)
+            r += dot(temp, yj)
         end
     end
     return r
@@ -619,11 +619,11 @@ function dot(x::AbstractVector, A::UnitLowerTriangular, y::AbstractVector)
     @inbounds for j in 1:m
         yj = y[j]
         if !iszero(yj)
-            temp = adjoint(x[j])
+            temp = x[j]
             @simd for i in j+1:m
-                temp += adjoint(x[i]) * A[i,j]
+                temp += adjoint(A[i,j]) * x[i]
             end
-            r += dot(adjoint(temp), yj)
+            r += dot(temp, yj)
         end
     end
     return r

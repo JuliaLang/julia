@@ -393,7 +393,7 @@ end
         @testset "generalized dot" begin
             x = fill(convert(elty, 1), n)
             y = fill(convert(elty, 1), n)
-            @test dot(x, A, y) ≈ x' * A * y ≈ *(x', A, y) ≈ (x'A)*y
+            @test dot(x, A, y) ≈ dot(A'x, y)
         end
     end
 end

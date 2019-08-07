@@ -656,23 +656,23 @@ function dot(x::AbstractVector, B::Bidiagonal, y::AbstractVector)
     end
     ev, dv = B.ev, B.dv
     if B.uplo == 'U'
-        x₀ = adjoint(x[1])
+        x₀ = x[1]
         r = dot(x[1], dv[1], y[1])
         @inbounds for j in 2:nx-1
-            x₋, x₀ = x₀, adjoint(x[j])
-            r += dot(adjoint(x₋*ev[j-1] + x₀*dv[j]), y[j])
+            x₋, x₀ = x₀, x[j]
+            r += dot(adjoint(ev[j-1])*x₋ + adjoint(dv[j])*x₀, y[j])
         end
-        r += dot(adjoint(x₀*ev[nx-1] + adjoint(x[nx])*dv[nx]), y[nx])
+        r += dot(adjoint(ev[nx-1])*x₀ + adjoint(dv[nx])*x[nx], y[nx])
         return r
     else # B.uplo == 'L'
-        x₀ = adjoint(x[1])
-        x₊ = adjoint(x[2])
-        r = dot(adjoint(x₀*dv[1] + x₊*ev[1]), y[1])
+        x₀ = x[1]
+        x₊ = x[2]
+        r = dot(adjoint(dv[1])*x₀ + adjoint(ev[1])*x₊, y[1])
         @inbounds for j in 2:nx-1
-            x₀, x₊ = x₊, adjoint(x[j+1])
-            r += dot(adjoint(x₀*dv[j] + x₊*ev[j]), y[j])
+            x₀, x₊ = x₊, x[j+1]
+            r += dot(adjoint(dv[j])*x₀ + adjoint(ev[j])*x₊, y[j])
         end
-        r += dot(adjoint(x₊), dv[nx], y[nx])
+        r += dot(x₊, dv[nx], y[nx])
         return r
     end
 end

@@ -877,8 +877,10 @@ end
 """
     dot(x, A, y)
 
-Compute the generalized dot product `x' * A * y` between two vectors `x` and `y`.
-For complex vectors, the first vector is conjugated.
+Compute the generalized dot product `dot(A'x, y)` between two vectors `x` and `y`,
+without storing the intermediate result of `A'x`. As for the two-argument
+[`dot(_,_)`](@ref), this acts recursively. Moreover, for complex vectors, the
+first vector is conjugated.
 """
 dot(x::Number, A::Number, y::Number) = conj(x) * A * y
 
@@ -891,11 +893,11 @@ function dot(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
     @inbounds for j in eachindex(y)
         yj = y[j]
         if !iszero(yj)
-            temp = zero(adjoint(x₁) * A[i₁,j])
+            temp = zero(adjoint(A[i₁,j]) * x₁)
             @simd for i in eachindex(x)
-                temp += adjoint(x[i]) * A[i,j]
+                temp += adjoint(A[i,j]) * x[i]
             end
-            s += dot(adjoint(temp), yj)
+            s += dot(temp, yj)
         end
     end
     return s
