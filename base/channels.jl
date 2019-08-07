@@ -105,7 +105,7 @@ true
   The following constructors were added in Julia 1.3.
 
 Other constructors:
-* `Channel{T}(func::Function, sz=0)`
+* `Channel{T}(func::Function, size)`
 * `Channel{T}(func::Function; csize=0, taskref=nothing)`
 
 ```jldoctest
@@ -129,8 +129,8 @@ function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
     isa(taskref, Ref{Task}) && (taskref[] = task)
     return chnl
 end
-function Channel{T}(f::Function, sz=0) where T
-    return Channel(f, csize=sz, ctype=T)
+function Channel{T}(f::Function, size) where T
+    return Channel(f, csize=size, ctype=T)
 end
 function Channel{T}(f::Function; csize=0, taskref=nothing) where T
     return Channel(f, csize=csize, ctype=T, taskref=taskref)
