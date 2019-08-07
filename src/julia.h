@@ -1797,9 +1797,7 @@ extern int had_exception;
 #define JL_STDERR jl_uv_stderr
 #define JL_STDIN  jl_uv_stdin
 
-JL_DLLEXPORT void jl_run_event_loop(uv_loop_t *loop);
-JL_DLLEXPORT int jl_run_once(uv_loop_t *loop);
-JL_DLLEXPORT int jl_process_events(uv_loop_t *loop);
+JL_DLLEXPORT int jl_process_events(void);
 
 JL_DLLEXPORT uv_loop_t *jl_global_event_loop(void);
 
