@@ -1467,15 +1467,19 @@ let src = code_typed(gcd, (Int, Int), debuginfo=:source)[1][1]
     @test pop!(lines) == "   ! ──       unreachable::#UNDEF"
 end
 
-# issue #27352
-@test_throws ArgumentError print(nothing)
-@test_throws ArgumentError print(stdout, nothing)
-@test_throws ArgumentError string(nothing)
-@test_throws ArgumentError string(1, "", nothing)
-@test_throws ArgumentError let x = nothing; "x = $x" end
-@test let x = nothing; "x = $(repr(x))" end == "x = nothing"
-@test_throws ArgumentError `/bin/foo $nothing`
-@test_throws ArgumentError `$nothing`
+@testset "printing and interpolating nothing" begin
+    @test sprint(print, nothing) == "nothing"
+    @test string(nothing) == "nothing"
+    @test repr(nothing) == "nothing"
+    @test string(1, "", nothing) == "1nothing"
+    @test let x = nothing; "x = $x" end == "x = nothing"
+    @test let x = nothing; "x = $(repr(x))" end == "x = nothing"
+
+    # issue #27352 : No interpolating nothing into commands
+    @test_throws ArgumentError `/bin/foo $nothing`
+    @test_throws ArgumentError `$nothing`
+    @test_throws ArgumentError let x = nothing; `/bin/foo $x` end
+end
 
 struct X28004
     value::Any

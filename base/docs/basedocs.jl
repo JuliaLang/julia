@@ -601,6 +601,18 @@ catch
 end
 ```
 
+or, when the file cannot be read into a variable:
+
+```julia
+lines = try
+    open("/danger", "r") do f
+        readlines(f)
+    end
+catch
+    @warn "File not found."
+end
+```
+
 The syntax `catch e` (where `e` is any variable) assigns the thrown
 exception object to the given variable within the `catch` block.
 

@@ -25,6 +25,8 @@ end
 
 const THREAD_MATCH_CONTEXTS = Ptr{Cvoid}[C_NULL]
 
+PCRE_COMPILE_LOCK = nothing
+
 _tid() = Int(ccall(:jl_threadid, Int16, ())+1)
 _nth() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
@@ -40,6 +42,7 @@ end
 function __init__()
     resize!(THREAD_MATCH_CONTEXTS, _nth())
     fill!(THREAD_MATCH_CONTEXTS, C_NULL)
+    global PCRE_COMPILE_LOCK = Threads.SpinLock()
 end
 
 # supported options for different use cases

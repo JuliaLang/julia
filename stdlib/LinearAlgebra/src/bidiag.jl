@@ -250,6 +250,7 @@ iszero(M::Bidiagonal) = iszero(M.dv) && iszero(M.ev)
 isone(M::Bidiagonal) = all(isone, M.dv) && iszero(M.ev)
 istriu(M::Bidiagonal) = M.uplo == 'U' || iszero(M.ev)
 istril(M::Bidiagonal) = M.uplo == 'L' || iszero(M.ev)
+isdiag(M::Bidiagonal) = iszero(M.ev)
 
 function tril!(M::Bidiagonal, k::Integer=0)
     n = length(M.dv)
@@ -630,13 +631,6 @@ function *(A::SymTridiagonal, B::Diagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
     A_mul_B_td!(Tridiagonal(zeros(TS, size(A, 1)-1), zeros(TS, size(A, 1)), zeros(TS, size(A, 1)-1)), A, B)
 end
-
-#Generic multiplication
-*(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = *(Array(A), B)
-*(adjA::Adjoint{<:Any,<:Bidiagonal{T}}, B::AbstractVector{T}) where {T} = *(adjoint(Array(adjA.parent)), B)
-*(A::Bidiagonal{T}, adjB::Adjoint{<:Any,<:AbstractVector{T}}) where {T} = *(Array(A), adjoint(adjB.parent))
-/(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = /(Array(A), B)
-/(A::Bidiagonal{T}, adjB::Adjoint{<:Any,<:AbstractVector{T}}) where {T} = /(Array(A), adjoint(adjB.parent))
 
 #Linear solvers
 ldiv!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A, b)

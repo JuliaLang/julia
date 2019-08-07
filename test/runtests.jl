@@ -50,6 +50,7 @@ end
 # Base.compilecache only works from node 1, so precompile test is handled specially
 move_to_node1("precompile")
 move_to_node1("SharedArrays")
+move_to_node1("threads")
 # Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
 move_to_node1("stress")
 

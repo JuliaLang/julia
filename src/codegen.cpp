@@ -8,9 +8,6 @@
 // use ELF because RuntimeDyld COFF X86_64 doesn't seem to work (fails to generate function pointers)?
 #define FORCE_ELF
 #endif
-#if defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
-#  define JL_DISABLE_FPO
-#endif
 #if defined(_CPU_X86_)
 #define JL_NEED_FLOATTEMP_VAR 1
 #endif
@@ -148,7 +145,7 @@ extern void _chkstk(void);
 #define DISABLE_FLOAT16
 
 // llvm state
-JL_DLLEXPORT LLVMContext jl_LLVMContext;
+JL_DLLEXPORT LLVMContext &jl_LLVMContext = *(new LLVMContext());
 TargetMachine *jl_TargetMachine;
 
 extern JITEventListener *CreateJuliaJITEventListener();
@@ -160,7 +157,7 @@ Module *shadow_output;
 #define jl_Module ctx.f->getParent()
 #define jl_builderModule(builder) (builder).GetInsertBlock()->getParent()->getParent()
 
-static DataLayout jl_data_layout("");
+static DataLayout &jl_data_layout = *(new DataLayout(""));
 
 // types
 static Type *T_jlvalue;
@@ -340,7 +337,8 @@ static std::map<jl_fptr_args_t, Function*> builtin_func_map;
 // --- code generation ---
 extern "C" {
     int globalUnique = 0;
-    jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 0, NULL, NULL, NULL, NULL, NULL};
+    int jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
+    jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 0, 1, jl_default_debug_info_kind, NULL, NULL, NULL, NULL, NULL};
 }
 
 template<typename T>
@@ -1391,7 +1389,7 @@ void jl_generate_fptr(jl_code_instance_t *output)
                 codeinst->rettype_const = ucache->rettype_const;
                 if (codeinst->rettype_const)
                     jl_gc_wb(codeinst, codeinst->rettype_const);
-                codeinst->invoke = ucache->invoke;
+                jl_atomic_store_release(&codeinst->invoke, ucache->invoke);
                 JL_UNLOCK(&codegen_lock);
                 return;
             }
@@ -1422,15 +1420,15 @@ void jl_generate_fptr(jl_code_instance_t *output)
     assert(specptr != NULL);
     // the fptr should be cached somewhere also
     if (codeinst->invoke == NULL) {
-        codeinst->specptr.fptr = specptr;
-        codeinst->invoke = fptr;
+        jl_atomic_store_release(&codeinst->specptr.fptr, specptr);
+        jl_atomic_store_release(&codeinst->invoke, fptr);
     }
     if (codeinst != output && output->invoke == NULL) {
         output->specptr = codeinst->specptr;
         output->rettype_const = codeinst->rettype_const;
         if (output->rettype_const)
             jl_gc_wb(output, output->rettype_const);
-        output->invoke = fptr;
+        jl_atomic_store_release(&output->invoke, fptr);
     }
     JL_UNLOCK(&codegen_lock); // Might GC
 }
@@ -4443,11 +4441,8 @@ static Function* gen_cfun_wrapper(
     Function *cw = Function::Create(functype,
             GlobalVariable::ExternalLinkage,
             funcName.str(), M);
-    jl_init_function(cw);
     cw->setAttributes(attributes);
-#ifdef JL_DISABLE_FPO
-    cw->addFnAttr("no-frame-pointer-elim", "true");
-#endif
+    jl_init_function(cw);
     Function *cw_proto = into ? cw : function_proto(cw);
     // Save the Function object reference
     if (sf) {
@@ -4762,11 +4757,8 @@ static Function* gen_cfun_wrapper(
             funcName << "_gfthunk";
             Function *gf_thunk = Function::Create(returninfo.decl->getFunctionType(),
                     GlobalVariable::InternalLinkage, funcName.str(), M);
-            jl_init_function(gf_thunk);
             gf_thunk->setAttributes(returninfo.decl->getAttributes());
-#ifdef JL_DISABLE_FPO
-            gf_thunk->addFnAttr("no-frame-pointer-elim", "true");
-#endif
+            jl_init_function(gf_thunk);
             // build a  specsig -> jl_apply_generic converter thunk
             // this builds a method that calls jl_apply_generic (as a closure over a singleton function pointer),
             // but which has the signature of a specsig
@@ -4843,9 +4835,6 @@ static Function* gen_cfun_wrapper(
                 GlobalVariable::ExternalLinkage,
                 funcName.str(), M);
         jl_init_function(cw_make);
-#ifdef JL_DISABLE_FPO
-        cw_make->addFnAttr("no-frame-pointer-elim", "true");
-#endif
         BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", cw_make);
         IRBuilder<> cwbuilder(b0);
         Function::arg_iterator AI = cw_make->arg_begin();
@@ -5147,9 +5136,6 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     add_return_attr(w, Attribute::NonNull);
     w->addFnAttr(Thunk);
     jl_init_function(w);
-#ifdef JL_DISABLE_FPO
-    w->addFnAttr("no-frame-pointer-elim", "true");
-#endif
     Function::arg_iterator AI = w->arg_begin();
     Value *funcArg = &*AI++;
     Value *argArray = &*AI++;
@@ -5587,23 +5573,8 @@ static std::unique_ptr<Module> emit_function(
     }
     declarations->specFunctionObject = strdup(f->getName().str().c_str());
 
-#ifdef JL_DISABLE_FPO
-    f->addFnAttr("no-frame-pointer-elim", "true");
-#endif
     if (jlrettype == (jl_value_t*)jl_bottom_type)
         f->setDoesNotReturn();
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-    // tell Win32 to realign the stack to the next 16-byte boundary
-    // upon entry to any function. This achieves compatibility
-    // with both MinGW-GCC (which assumes an 16-byte-aligned stack) and
-    // i686 Windows (which uses a 4-byte-aligned stack)
-    AttrBuilder *attr = new AttrBuilder();
-    attr->addStackAlignmentAttr(16);
-    f->addAttributes(AttributeList::FunctionIndex, *attr);
-#endif
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-    f->setHasUWTable(); // force NeedsWinEH
-#endif
 
 #ifdef USE_POLLY
     if (!jl_has_meta(stmts, polly_sym) || jl_options.polly == JL_OPTIONS_POLLY_OFF) {
@@ -5631,9 +5602,36 @@ static std::unique_ptr<Module> emit_function(
     DISubprogram *SP = NULL;
     DebugLoc noDbg, topdebugloc;
     if (ctx.debug_enabled) {
-        // TODO: Fix when moving to new LLVM version
+        DICompileUnit::DebugEmissionKind emissionKind = (DICompileUnit::DebugEmissionKind) ctx.params->debug_info_kind;
+
+#if JL_LLVM_VERSION >= 80000
+        DICompileUnit::DebugNameTableKind tableKind;
+
+        if (JL_FEAT_TEST(ctx, gnu_pubnames)) {
+            tableKind = DICompileUnit::DebugNameTableKind::GNU;
+        }
+        else {
+            tableKind = DICompileUnit::DebugNameTableKind::None;
+        }
+#endif
         topfile = dbuilder.createFile(ctx.file, ".");
-        DICompileUnit *CU = dbuilder.createCompileUnit(0x01, topfile, "julia", true, "", 0);
+        DICompileUnit *CU =
+            dbuilder.createCompileUnit(llvm::dwarf::DW_LANG_Julia
+                                       ,topfile      // File
+                                       ,"julia"      // Producer
+                                       ,true         // isOptimized
+                                       ,""           // Flags
+                                       ,0            // RuntimeVersion
+                                       ,""           // SplitName
+                                       ,emissionKind // Kind
+                                       ,0            // DWOId
+                                       ,true         // SplitDebugInlining
+                                       ,false        // DebugInfoForProfiling
+#if JL_LLVM_VERSION >= 80000
+                                       ,tableKind    // NameTableKind
+#endif
+                                       );
+
         DISubroutineType *subrty;
         if (jl_options.debug_level <= 1) {
             subrty = jl_di_func_null_sig;

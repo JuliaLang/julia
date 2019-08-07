@@ -271,6 +271,10 @@ tlayout = TLayout(5,7,11)
 @test fieldtype((NamedTuple{(:a,:b),T} where T<:Tuple{Vararg{Integer}}), 2) === Integer
 @test_throws BoundsError fieldtype(NamedTuple{(:a,:b)}, 3)
 
+# issue #32697
+@test fieldtype(NamedTuple{(:x,:y), T} where T <: Tuple{Int, Union{Float64, Missing}}, :x) == Int
+@test fieldtype(NamedTuple{(:x,:y), T} where T <: Tuple{Int, Union{Float64, Missing}}, :y) == Union{Float64, Missing}
+
 @test fieldtypes(NamedTuple{(:a,:b)}) == (Any, Any)
 @test fieldtypes((NamedTuple{T,Tuple{Int,String}} where T)) === (Int, String)
 @test fieldtypes(TLayout) === (Int8, Int16, Int32)

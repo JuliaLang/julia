@@ -1460,6 +1460,21 @@ f_pure_add() = (1 + 1 == 2) ? true : "FAIL"
 @test Core.Compiler.getfield_tfunc(Const(Vector{Int}), Const(:mutable)) == Const(true)
 @test Core.Compiler.getfield_tfunc(DataType, Const(:mutable)) == Bool
 
+# getfield on abstract named tuples. issue #32698
+import Core.Compiler.getfield_tfunc
+@test getfield_tfunc(NamedTuple{(:id, :y), T} where {T <: Tuple{Int, Union{Float64, Missing}}},
+                     Const(:y)) == Union{Missing, Float64}
+@test getfield_tfunc(NamedTuple{(:id, :y), T} where {T <: Tuple{Int, Union{Float64, Missing}}},
+                     Const(2)) == Union{Missing, Float64}
+@test getfield_tfunc(NamedTuple{(:id, :y), T} where {T <: Tuple{Int, Union{Float64, Missing}}},
+                     Symbol) == Union{Missing, Float64, Int}
+@test getfield_tfunc(NamedTuple{<:Any, T} where {T <: Tuple{Int, Union{Float64, Missing}}},
+                     Symbol) == Union{Missing, Float64, Int}
+@test getfield_tfunc(NamedTuple{<:Any, T} where {T <: Tuple{Int, Union{Float64, Missing}}},
+                     Int) == Union{Missing, Float64, Int}
+@test getfield_tfunc(NamedTuple{<:Any, T} where {T <: Tuple{Int, Union{Float64, Missing}}},
+                     Const(:x)) == Union{Missing, Float64, Int}
+
 struct Foo_22708
     x::Ptr{Foo_22708}
 end

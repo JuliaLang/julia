@@ -295,7 +295,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_set_method_inferred(
     codeinst->invoke = NULL;
     if ((const_flags & 1) != 0) {
         assert(const_flags & 2);
-        codeinst->invoke = jl_fptr_const_return;
+        jl_atomic_store_release(&codeinst->invoke, jl_fptr_const_return);
     }
     codeinst->specptr.fptr = NULL;
     if (jl_is_method(mi->def.method))
@@ -1742,7 +1742,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                     0, 1, ~(size_t)0);
                 codeinst->specptr = unspec->specptr;
                 codeinst->rettype_const = unspec->rettype_const;
-                codeinst->invoke = unspec->invoke;
+                jl_atomic_store_release(&codeinst->invoke, unspec->invoke);
                 return codeinst;
             }
         }
@@ -1750,7 +1750,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         if (!jl_code_requires_compiler(src)) {
             jl_code_instance_t *codeinst = jl_set_method_inferred(mi, (jl_value_t*)jl_any_type, NULL, NULL,
                 0, 1, ~(size_t)0);
-            codeinst->invoke = jl_fptr_interpret_call;
+            jl_atomic_store_release(&codeinst->invoke, jl_fptr_interpret_call);
             return codeinst;
         }
         if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF) {
@@ -1790,7 +1790,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                 0, 1, ~(size_t)0);
             codeinst->specptr = ucache->specptr;
             codeinst->rettype_const = ucache->rettype_const;
-            codeinst->invoke = ucache->invoke;
+            jl_atomic_store_release(&codeinst->invoke, ucache->invoke);
             return codeinst;
         }
     }

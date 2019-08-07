@@ -499,24 +499,28 @@ mutable struct IncrementalCompact
             cur_bb = 1
             for i = 1:length(bb_rename)
                 if i != 1 && length(blocks[i].preds) == 0
-                    bb_rename[i] = 0
+                    bb_rename[i] = -1
                 else
                     bb_rename[i] = cur_bb
                     cur_bb += 1
                 end
             end
             for i = 1:length(bb_rename)
-                bb_rename[i] == 0 && continue
+                bb_rename[i] == -1 && continue
                 preds, succs = blocks[i].preds, blocks[i].succs
                 # Rename preds
-                for j = 1:length(preds); preds[j] = bb_rename[preds[j]]; end
+                for j = 1:length(preds)
+                    if preds[j] != 0
+                        preds[j] = bb_rename[preds[j]]
+                    end
+                end
                 # Dead blocks get removed from the predecessor list
-                filter!(x->x !== 0, preds)
+                filter!(x->x !== -1, preds)
                 # Rename succs
                 for j = 1:length(succs); succs[j] = bb_rename[succs[j]]; end
             end
             let blocks=blocks
-                result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != 0]
+                result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
             end
         else
             bb_rename = Vector{Int}()
