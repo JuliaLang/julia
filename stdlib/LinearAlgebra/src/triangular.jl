@@ -552,9 +552,9 @@ function dot(x::AbstractVector, A::UpperTriangular, y::AbstractVector)
     if iszero(m)
         return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
     end
-    x₁ = first(x)
-    r = zero(typeof(dot(x₁, first(A), first(y))))
-    @inbounds for j in 1:m
+    x₁ = x[1]
+    r = dot(x₁, A[1,1], y[1])
+    @inbounds for j in 2:m
         yj = y[j]
         if !iszero(yj)
             temp = adjoint(x₁) * A[1,j]
@@ -615,8 +615,8 @@ function dot(x::AbstractVector, A::UnitLowerTriangular, y::AbstractVector)
     if iszero(m)
         return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
     end
-    r = dot(x[1], y[1])
-    @inbounds for j in 2:m
+    r = zero(typeof(dot(first(x), first(y))))
+    @inbounds for j in 1:m
         yj = y[j]
         if !iszero(yj)
             temp = dot(x[j], yj)
