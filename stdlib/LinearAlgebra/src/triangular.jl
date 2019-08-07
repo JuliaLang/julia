@@ -619,7 +619,7 @@ function dot(x::AbstractVector, A::UnitLowerTriangular, y::AbstractVector)
     @inbounds for j in 1:m
         yj = y[j]
         if !iszero(yj)
-            temp = dot(x[j], yj)
+            temp = adjoint(x[j])
             @simd for i in j+1:m
                 temp += adjoint(x[i]) * A[i,j]
             end
