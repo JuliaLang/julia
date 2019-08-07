@@ -366,8 +366,16 @@ end
             end
         end
         @testset "generalized dot product" begin
-            @test dot(x, aherm, y) ≈ x'aherm*y ≈ x'*aherm*y
-            @test dot(x, aherm, x) ≈ x'aherm*x ≈ x'*aherm*x
+            for uplo in (:U, :L)
+                @test dot(x, Hermitian(aherm, uplo), y) ≈ x'aherm*y ≈ x'*Hermitian(aherm, uplo)*y
+                @test dot(x, Hermitian(aherm, uplo), x) ≈ x'aherm*x ≈ x'*Hermitian(aherm, uplo)*x
+            end
+            if eltya <: Real
+                for uplo in (:U, :L)
+                    @test dot(x, Symmetric(aherm, uplo), y) ≈ x'aherm*y ≈ x'*Symmetric(aherm, uplo)*y
+                    @test dot(x, Symmetric(aherm, uplo), x) ≈ x'aherm*x ≈ x'*Symmetric(aherm, uplo)*x
+                end
+            end
         end
     end
 end

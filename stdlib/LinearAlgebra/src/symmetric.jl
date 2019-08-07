@@ -463,7 +463,7 @@ function dot(x::AbstractVector, A::RealHermSymComplexHerm, y::AbstractVector)
     if x === y
         return 2dot(x, Δ, x) - dot(x, D, x)
     else
-        return dot(x, Δ, y) + dot(y, Δ, x) - dot(x, D, x)
+        return dot(x, Δ, y) + dot(y, Δ, x) - dot(x, D, y)
     end
 end
 
