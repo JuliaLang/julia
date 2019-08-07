@@ -458,12 +458,23 @@ end
 *(A::HermOrSym, B::HermOrSym) = A * copyto!(similar(parent(B)), B)
 
 function dot(x::AbstractVector, A::RealHermSymComplexHerm, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    (length(x) == length(y) == size(A, 1)) || throw(DimensionMismatch())
     Δ = A.uplo == 'U' ? UpperTriangular(A) : LowerTriangular(A)
     D = Diagonal(A)
     if x === y
-        return 2dot(x, Δ, x) - dot(x, D, x)
+        r = 2real(dot(x, Δ, x))
+        @inbounds @simd for i in eachindex(x)
+            r -= dot(x[i], A[i,i], x[i])
+        end
+        return r
     else
-        return dot(x, Δ, y) + dot(y, Δ, x) - dot(x, D, y)
+        r = dot(x, Δ, y)
+        r += conj(dot(y, Δ, x))
+        @inbounds @simd for i in eachindex(x)
+            r -= dot(x[i], A[i,i], y[i])
+        end
+        return r
     end
 end
 
