@@ -243,7 +243,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             if elty1 in (BigFloat, Complex{BigFloat}) || eltyb in (BigFloat, Complex{BigFloat})
                 @test dot(b1, A1, b2) ≈ dot(A1'b1, b2)  atol=sqrt(max(eps(real(float(one(elty1)))),eps(real(float(one(eltyb))))))*n*n
             else
-                @test dot(b1, A1, b2) ≈ dot(A1'b1, b2)
+                @test dot(b1, A1, b2) ≈ dot(A1'b1, b2)  atol=sqrt(max(eps(real(float(one(elty1)))),eps(real(float(one(eltyb))))))*n*n
             end
         end
 
