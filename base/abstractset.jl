@@ -336,8 +336,22 @@ julia> issetequal([1, 2], [2, 1])
 true
 ```
 """
-issetequal(l, r) = length(l) == length(r) && l ⊆ r
 issetequal(l::AbstractSet, r::AbstractSet) = l == r
+issetequal(l::AbstractSet, r) = issetequal(l, Set(r))
+
+function issetequal(l, r::AbstractSet)
+    if haslength(l)
+        # check r for too many unique elements
+        length(l) < length(r) && return false
+    end
+    return issetequal(Set(l), r)
+end
+
+function issetequal(l, r)
+    haslength(l) && return issetequal(l, Set(r))
+    haslength(r) && return issetequal(r, Set(l))
+    return issetequal(Set(l), Set(r))
+end
 
 ## partial ordering of sets by containment
 
