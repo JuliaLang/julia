@@ -470,7 +470,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
       * `:inline` and `:noinline`: Inlining hints.
 
 
-### Method
+### [Method](@id ast-lowered-method)
 
 A unique'd container describing the shared metadata for a single method.
 
