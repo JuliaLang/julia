@@ -56,6 +56,31 @@ function showerror(io::IO, ex::CompositeException)
     end
 end
 
+"""
+    TaskFailedException
+
+This exception is thrown by a `wait(t)` call when task `t` fails.
+`TaskFailedException` wraps the failed task `t`.
+"""
+struct TaskFailedException <: Exception
+    task::Task
+end
+
+function showerror(io::IO, ex::TaskFailedException)
+    stacks = []
+    while isa(ex.task.exception, TaskFailedException)
+        pushfirst!(stacks, ex.task.backtrace)
+        ex = ex.task.exception
+    end
+    println(io, "TaskFailedException:")
+    showerror(io, ex.task.exception, ex.task.backtrace)
+    if !isempty(stacks)
+        for bt in stacks
+            show_backtrace(io, bt)
+        end
+    end
+end
+
 function show(io::IO, t::Task)
     print(io, "Task ($(t.state)) @0x$(string(convert(UInt, pointer_from_objref(t)), base = 16, pad = Sys.WORD_SIZE>>2))")
 end
@@ -204,9 +229,8 @@ function task_local_storage(body::Function, key, val)
     end
 end
 
-# NOTE: you can only wait for scheduled tasks
-function wait(t::Task)
-    t === current_task() && error("deadlock detected: cannot wait on current task")
+# just wait for a task to be done, no error propagation
+function _wait(t::Task)
     if !istaskdone(t)
         lock(t.donenotify)
         try
@@ -217,8 +241,14 @@ function wait(t::Task)
             unlock(t.donenotify)
         end
     end
+    nothing
+end
+
+function wait(t::Task)
+    t === current_task() && error("deadlock detected: cannot wait on current task")
+    _wait(t)
     if istaskfailed(t)
-        throw(t.exception)
+        throw(TaskFailedException(t))
     end
     nothing
 end
@@ -228,8 +258,9 @@ fetch(@nospecialize x) = x
 """
     fetch(t::Task)
 
-Wait for a Task to finish, then return its result value. If the task fails with an
-exception, the exception is propagated (re-thrown in the task that called fetch).
+Wait for a Task to finish, then return its result value.
+If the task fails with an exception, a `TaskFailedException` (which wraps the failed task)
+is thrown.
 """
 function fetch(t::Task)
     wait(t)
@@ -240,22 +271,32 @@ end
 ## lexically-scoped waiting for multiple items
 
 function sync_end(refs)
-    c_ex = CompositeException()
+    local c_ex
+    defined = false
     for r in refs
-        try
-            wait(r)
-        catch
-            if !isa(r, Task) || (isa(r, Task) && !istaskfailed(r))
-                rethrow()
+        if isa(r, Task)
+            _wait(r)
+            if istaskfailed(r)
+                if !defined
+                    defined = true
+                    c_ex = CompositeException()
+                end
+                push!(c_ex, TaskFailedException(r))
             end
-        finally
-            if isa(r, Task) && istaskfailed(r)
-                push!(c_ex, CapturedException(task_result(r), r.backtrace))
+        else
+            try
+                wait(r)
+            catch e
+                if !defined
+                    defined = true
+                    c_ex = CompositeException()
+                end
+                push!(c_ex, e)
             end
         end
     end
 
-    if !isempty(c_ex)
+    if defined
         throw(c_ex)
     end
     nothing
@@ -301,6 +342,15 @@ macro async(expr)
     end
 end
 
+# add a wait-able object to the sync pool
+macro sync_add(expr)
+    var = esc(sync_varname)
+    quote
+        local ref = $(esc(expr))
+        push!($var, ref)
+        ref
+    end
+end
 
 function register_taskdone_hook(t::Task, hook)
     tls = get_task_tls(t)
@@ -324,7 +374,7 @@ function task_done_hook(t::Task)
         try
             if !isempty(donenotify.waitq)
                 handled = true
-                notify(donenotify, result, true, err)
+                notify(donenotify)
             end
         finally
             unlock(donenotify)
