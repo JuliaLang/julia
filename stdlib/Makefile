@@ -18,9 +18,12 @@ STDLIBS = Base64 CRC32c Dates DelimitedFiles Distributed FileWatching \
           Future InteractiveUtils Libdl LibGit2 LinearAlgebra Logging \
           Markdown Mmap Printf Profile Random REPL Serialization SHA \
           SharedArrays Sockets SparseArrays Statistics SuiteSparse Test Unicode UUIDs
-STDLIBS_EXT = Pkg
+STDLIBS_EXT = Pkg MbedTLS
 PKG_GIT_URL := git://github.com/JuliaLang/Pkg.jl.git
 PKG_TAR_URL = https://api.github.com/repos/JuliaLang/Pkg.jl/tarball/$1
+
+MBEDTLS_GIT_URL := git://github.com/JuliaWeb/MbedTLS.jl.git
+MBEDTLS_TAR_URL = https://api.github.com/repos/JuliaWeb/MbedTLS.jl/tarball/$1
 
 $(foreach module, $(STDLIBS_EXT), $(eval $(call stdlib-external,$(module),$(shell echo $(module) | tr a-z A-Z))))
 
