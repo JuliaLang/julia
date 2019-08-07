@@ -1665,6 +1665,8 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
                 assert(vy != JL_VARARG_NONE && istuple && iscov);
                 jl_value_t *a1 = (vx != JL_VARARG_NONE && i >= npx - 1) ? vxt : jl_tparam(x, i);
                 jl_value_t *b = jl_unwrap_vararg(jl_tparam(y, i));
+                if (jl_is_typevar(b) && var_occurs_inside(y, (jl_tvar_t*)b, 0, 1))
+                    return 0;
                 if (nparams_expanded_x > npy && jl_is_typevar(b) && concrete_min(a1) > 1) {
                     // diagonal rule for 2 or more elements: they must all be concrete on the LHS
                     *subtype = 0;
