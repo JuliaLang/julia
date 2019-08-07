@@ -253,11 +253,14 @@ issubset, ⊆, ⊇
 function issubset(l, r)
     if haslength(r)
         rlen = length(r)
-        #This threshold was empirically determined by repeatedly
-        #sampling using these two methods (see #26198)
-        lenthresh = 70
-
-        if rlen > lenthresh && !isa(r, AbstractSet)
+        if isa(l, AbstractSet)
+            # check l for too many unique elements
+            length(l) > rlen && return false
+        end
+        # if r is big enough, convert it to a Set
+        # threshold empirically determined by repeatedly
+        # sampling using these two methods (see #26198)
+        if rlen > 70 && !isa(r, AbstractSet)
             return issubset(l, Set(r))
         end
     end
