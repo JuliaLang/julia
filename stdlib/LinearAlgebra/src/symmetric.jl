@@ -414,6 +414,43 @@ function triu(A::Symmetric, k::Integer=0)
     end
 end
 
+function dot(A::Symmetric{T, Matrix{T}}, B::Symmetric{T, Matrix{T}}) where T
+    dotprod = zero(T)
+    m, n = size(A)
+    mB, nB = size(B)
+
+    if m != mB || n != nB
+        throw(DimensionMismatch("A has dimensions ($m,$n) but B has dimensions ($mB,$nB)"))
+    end
+
+    @inbounds if A.uplo == 'U' && B.uplo == 'U'
+        for j in 1:n
+            for i in 1:(j - 1)
+                dotprod += 2 * A.data[i, j] * conj(B.data[i, j])
+            end
+            dotprod += A.data[j, j] * conj(B.data[j, j])
+        end
+    elseif A.uplo == 'L' && B.uplo == 'L'
+        for j in 1:n
+            dotprod += A.data[j, j] * conj(B.data[j, j])
+            for i in (j + 1):m
+                dotprod += 2 * A.data[i, j] * conj(B.data[i, j])
+            end
+        end
+    else
+        if A.uplo == 'L' && B.uplo == 'U'
+            A, B = B, A
+        end
+        for j in 1:n
+            for i in 1:(j - 1)
+                dotprod += 2 * A.data[i, j] * conj(B.data[j, i])
+            end
+            dotprod += A.data[j, j] * conj(B.data[j, j])
+        end
+    end
+    return dotprod
+end
+
 (-)(A::Symmetric) = Symmetric(-A.data, sym_uplo(A.uplo))
 (-)(A::Hermitian) = Hermitian(-A.data, sym_uplo(A.uplo))
 
