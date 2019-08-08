@@ -6899,3 +6899,20 @@ TupleOf31406(cols::Union{Shape31406,Type}...) = TupleOf31406(collect(Shape31406,
         end
         true
     end
+
+# Issue #32820
+function f32820(refs)
+    local x
+    for r in refs
+        try
+            error()
+        catch e
+            if !@isdefined(x)
+                x = []
+            end
+            push!(x, 1)
+        end
+    end
+    x
+end
+@test f32820(Any[1,2]) == Any[1, 1]
