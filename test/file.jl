@@ -184,6 +184,16 @@ rm(c_tmpdir, recursive=true)
 @test_throws Base.IOError rm(c_tmpdir, recursive=true)
 @test rm(c_tmpdir, force=true, recursive=true) === nothing
 
+@testset "rmrf" begin
+    d = mktempdir()
+    write(joinpath(d, "hi.txt"), "hi")
+    @test isdir(d)
+    @test !isempty(readdir(d))
+    @test_throws SystemError rm(d)
+    @test rmrf(d) === nothing
+    @test !isdir(d)
+end
+
 if !Sys.iswindows()
     # chown will give an error if the user does not have permissions to change files
     if get(ENV, "USER", "") == "root" || get(ENV, "HOME", "") == "/root"

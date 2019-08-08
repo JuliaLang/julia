@@ -18,6 +18,7 @@ export
     readlink,
     readdir,
     rm,
+    rmrf,
     samefile,
     sendfile,
     symlink,
@@ -280,6 +281,18 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
     end
 end
 
+"""
+    rmrf(path)
+
+Forcibly and recursively remove the provided path.
+Shorthand for `rm(path, force=true, recursive=true)`.
+
+See also [`rm`](@ref).
+
+!!! compat "Julia 1.3"
+    This function requires Julia 1.3 or later.
+"""
+rmrf(path) = rm(path, force=true, recursive=true)
 
 # The following use Unix command line facilities
 function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::AbstractString;

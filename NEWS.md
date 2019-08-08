@@ -37,6 +37,7 @@ New library functions
 * `istaskfailed` is now documented and exported, like its siblings `istaskdone` and `istaskstarted` ([#32300]).
 * `RefArray` and `RefValue` objects now accept index `CartesianIndex()` in  `getindex` and `setindex!` ([#32653])
 * Added `sincosd(x)` to simultaneously compute the sine and cosine of `x`, where `x` is in degrees ([#30134]).
+* `rmrf` has been added as a shorthand for `rm(x, force=true, recursive=true)` ([#32831]).
 
 Standard library changes
 ------------------------

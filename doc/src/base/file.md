@@ -26,6 +26,7 @@ Base.Filesystem.cp
 Base.download
 Base.Filesystem.mv
 Base.Filesystem.rm
+Base.Filesystem.rmrf
 Base.Filesystem.touch
 Base.Filesystem.tempname
 Base.Filesystem.tempdir
