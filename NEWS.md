@@ -52,6 +52,8 @@ Standard library changes
 * `mod` now accepts a unit range as the second argument to easily perform offset modular arithmetic to ensure the result is inside the range ([#32628]).
 * `Sockets.recvfrom` now returns both host and port as an InetAddr ([#32729]).
 * `nothing` can now be `print`ed, and interplated into strings etc. as the string `"nothing"`. It is still not permitted to be interplated into Cmds (i.e. ``echo `$(nothing)` `` will still error without running anything.) ([#32148])
+* When `open` is called with a function, command, and keyword argument (e.g. ```open(`ls`, read=true) do f ...```)
+  it now correctly throws a `ProcessFailedException` like other similar calls ([#32193]).
 
 #### Libdl
 
