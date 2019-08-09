@@ -138,6 +138,10 @@ function generate_precompile_statements()
         statements = Set{String}()
         for statement in eachline(precompile_file_h)
             occursin("Main.", statement) && continue
+            # check for `#x##s66` style variable names not in quotes
+            occursin(r"#\w", statement) &&
+                count(r"(?:#+\w+)+", statement) !=
+                count(r"\"(?:#+\w+)+\"", statement) && continue
             push!(statements, statement)
         end
 
