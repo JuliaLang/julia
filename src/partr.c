@@ -47,10 +47,10 @@ typedef struct taskheap_tag {
 
 /* multiqueue parameters */
 static const int32_t heap_d = 8;
-static const int heap_c = 16;
+static const int heap_c = 2;
 
 /* size of each heap */
-static const int tasks_per_heap = 16384; // TODO: this should be smaller by default, but growable!
+static const int tasks_per_heap = 65536; // TODO: this should be smaller by default, but growable!
 
 /* the multiqueue's heaps */
 static taskheap_t *heaps;

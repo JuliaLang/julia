@@ -393,6 +393,9 @@ function test_5()
 
     @test isequal_type(Ref{Tuple{Union{Int,Int8},Int16,T}} where T,
                        Ref{Union{Tuple{Int,Int16,S},Tuple{Int8,Int16,S}}} where S)
+
+    # issue #32726
+    @test Tuple{Type{Any}, Int, Float64, String} <: Tuple{Type{T}, Vararg{T}} where T
 end
 
 # tricky type variable lower bounds

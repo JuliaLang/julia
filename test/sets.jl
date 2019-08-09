@@ -592,11 +592,16 @@ end
 end
 
 @testset "⊆, ⊊, ⊈, ⊇, ⊋, ⊉, <, <=, issetequal" begin
-    a = [1, 2]
-    b = [2, 1, 3]
-    for C = (Tuple, identity, Set, BitSet, Base.IdSet{Int})
-        A = C(a)
-        B = C(b)
+    a = [2, 1, 2]
+    b = [2, 3, 1, 3]
+    ua = unique(a)
+    ub = unique(b)
+    for TA in (Tuple, identity, Set, BitSet, Base.IdSet{Int}),
+        TB in (Tuple, identity, Set, BitSet, Base.IdSet{Int}),
+        uA = false:true,
+        uB = false:true
+        A = TA(uA ? ua : a)
+        B = TB(uB ? ub : b)
         @test A ⊆ B
         @test A ⊊ B
         @test !(A ⊈ B)
@@ -611,6 +616,10 @@ end
         @test !(B ⊉ A)
         @test !issetequal(A, B)
         @test !issetequal(B, A)
+        for T = (Tuple, identity, Set, BitSet, Base.IdSet{Int})
+            @test issetequal(A, T(A))
+            @test issetequal(B, T(B))
+        end
         if A isa AbstractSet && B isa AbstractSet
             @test A <= B
             @test A <  B
@@ -620,10 +629,6 @@ end
             @test !(B <  A)
             @test B >= A
             @test B >  A
-        end
-        for D = (Tuple, identity, Set, BitSet)
-            @test issetequal(A, D(A))
-            @test !issetequal(A, D(B))
         end
     end
 end
