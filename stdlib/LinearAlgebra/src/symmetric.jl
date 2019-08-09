@@ -416,11 +416,10 @@ end
 
 function dot(A::Symmetric, B::Symmetric)
     dotprod = zero(dot(first(A), first(B)))
-    m, n = size(A)
-    mB, nB = size(B)
 
-    if m != mB || n != nB
-        throw(DimensionMismatch("A has dimensions ($m,$n) but B has dimensions ($mB,$nB)"))
+    n = size(A, 2)
+    if n != size(B, 2)
+        throw(DimensionMismatch("A has dimensions $(size(A)) but B has dimensions $(size(B))"))
     end
 
     @inbounds if A.uplo == 'U' && B.uplo == 'U'
@@ -433,7 +432,7 @@ function dot(A::Symmetric, B::Symmetric)
     elseif A.uplo == 'L' && B.uplo == 'L'
         for j in 1:n
             dotprod += A.data[j, j] * conj(B.data[j, j])
-            for i in (j + 1):m
+            for i in (j + 1):n
                 dotprod += 2 * A.data[i, j] * conj(B.data[i, j])
             end
         end
