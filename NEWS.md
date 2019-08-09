@@ -32,6 +32,7 @@ New library functions
 * `findfirst`, `findlast`, `findnext` and `findprev` now accept a character as first argument
   to search for that character in a string passed as the second argument ([#31664]).
 * New `findall(pattern, string)` method where `pattern` is a string or regex ([#31834]).
+* `count(pattern, string)` gives the number of things `findall` would match ([#32849]).
 * `istaskfailed` is now documented and exported, like its siblings `istaskdone` and `istaskstarted` ([#32300]).
 * `RefArray` and `RefValue` objects now accept index `CartesianIndex()` in  `getindex` and `setindex!` ([#32653])
 
