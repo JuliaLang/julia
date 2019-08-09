@@ -18,10 +18,12 @@ uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 version = "0.8.0"
 
 [[Documenter]]
-deps = ["Base64", "DocStringExtensions", "InteractiveUtils", "JSON", "LibGit2", "Logging", "Markdown", "REPL", "Test", "Unicode"]
-git-tree-sha1 = "1dba3854d6b0e35b3ed77f84419efbaf81f28886"
+deps = ["Base64", "Dates", "DocStringExtensions", "InteractiveUtils", "JSON", "LibGit2", "Logging", "Markdown", "REPL", "Test", "Unicode"]
+git-tree-sha1 = "32dd6527c1cf0af1a9185f75396e0a87140ce933"
+repo-rev = "mp/julia-bulma-branch"
+repo-url = "https://github.com/JuliaDocs/Documenter.jl.git"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-version = "0.23.1"
+version = "0.23.2"
 
 [[DocumenterLaTeX]]
 deps = ["Documenter", "Test"]
