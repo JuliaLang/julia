@@ -45,6 +45,5 @@ extern "C" {
 #define JL_ROOTED_VALUE_COLLECTION
 #define JL_GC_PROMISE_ROOTED(x) (void)(x)
 #define jl_may_leak(x) (void)(x)
-#define JL_GC_ASSERT_LIVE(x)
 
 #endif

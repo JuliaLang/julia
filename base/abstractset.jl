@@ -5,6 +5,8 @@ sizehint!(s::AbstractSet, n) = nothing
 
 copy!(dst::AbstractSet, src::AbstractSet) = union!(empty!(dst), src)
 
+## set operations (union, intersection, symmetric difference)
+
 """
     union(s, itrs...)
     ∪(s, itrs...)
@@ -77,11 +79,11 @@ max_values(::Type{Nothing}) = 1
 
 function union!(s::AbstractSet{T}, itr) where T
     haslength(itr) && sizehint!(s, length(s) + length(itr))
-    for x=itr
+    for x in itr
         push!(s, x)
         length(s) == max_values(T) && break
     end
-    s
+    return s
 end
 
 """
@@ -220,41 +222,16 @@ function symdiff!(s::AbstractSet, itr)
     for x in itr
         x in s ? delete!(s, x) : push!(s, x)
     end
-    s
+    return s
 end
 
-==(l::AbstractSet, r::AbstractSet) = length(l) == length(r) && l ⊆ r
-# convenience functions for AbstractSet
-# (if needed, only their synonyms ⊊ and ⊆ must be specialized)
-<( l::AbstractSet, r::AbstractSet) = l ⊊ r
-<=(l::AbstractSet, r::AbstractSet) = l ⊆ r
+## non-strict subset comparison
 
-function issubset(l, r)
-    if haslength(r)
-        rlen = length(r)
-        #This threshold was empirically determined by repeatedly
-        #sampling using these two methods (see #26198)
-        lenthresh = 70
-
-        if rlen > lenthresh && !isa(r, AbstractSet)
-            return issubset(l, Set(r))
-        end
-    end
-
-    for elt in l
-        if !in(elt, r)
-            return false
-        end
-    end
-    return true
-end
-# use the implementation below when it becomes as efficient
-# issubset(l, r) = all(_in(r), l)
 const ⊆ = issubset
-⊇(l, r) = r ⊆ l
+function ⊇ end
 """
-    issubset(a, b)
-    ⊆(a,b)  -> Bool
+    issubset(a, b) -> Bool
+    ⊆(a, b) -> Bool
     ⊇(b, a) -> Bool
 
 Determine whether every element of `a` is also in `b`, using [`in`](@ref).
@@ -273,29 +250,35 @@ true
 """
 issubset, ⊆, ⊇
 
+function issubset(l, r)
+    if haslength(r)
+        rlen = length(r)
+        if isa(l, AbstractSet)
+            # check l for too many unique elements
+            length(l) > rlen && return false
+        end
+        # if r is big enough, convert it to a Set
+        # threshold empirically determined by repeatedly
+        # sampling using these two methods (see #26198)
+        if rlen > 70 && !isa(r, AbstractSet)
+            return issubset(l, Set(r))
+        end
+    end
+    for elt in l
+        elt in r || return false
+    end
+    return true
+end
+
+⊇(l, r) = r ⊆ l
+
+## strict subset comparison
+
+function ⊊ end
+function ⊋ end
 """
-    issetequal(a, b)
-
-Determine whether `a` and `b` have the same elements. Equivalent
-to `a ⊆ b && b ⊆ a`.
-
-# Examples
-```jldoctest
-julia> issetequal([1, 2], [1, 2, 3])
-false
-
-julia> issetequal([1, 2], [2, 1])
-true
-```
-"""
-issetequal(l, r) = length(l) == length(r) && l ⊆ r
-issetequal(l::AbstractSet, r::AbstractSet) = l == r
-
-⊊(l, r) = length(l) < length(r) && l ⊆ r
-⊋(l, r) = r ⊊ l
-"""
-    ⊊(a, b)
-    ⊋(b, a)
+    ⊊(a, b) -> Bool
+    ⊋(b, a) -> Bool
 
 Determines if `a` is a subset of, but not equal to, `b`.
 
@@ -310,11 +293,15 @@ false
 """
 ⊊, ⊋
 
-⊈(l, r) = !⊆(l, r)
-⊉(l, r) = r ⊈ l
+⊊(l::AbstractSet, r) = length(l) < length(r) && l ⊆ r
+⊊(l, r) = Set(l) ⊊ r
+⊋(l, r) = r ⊊ l
+
+function ⊈ end
+function ⊉ end
 """
-    ⊈(a, b)
-    ⊉(b, a)
+    ⊈(a, b) -> Bool
+    ⊉(b, a) -> Bool
 
 Negation of `⊆` and `⊇`, i.e. checks that `a` is not a subset of `b`.
 
@@ -328,6 +315,53 @@ false
 ```
 """
 ⊈, ⊉
+
+⊈(l, r) = !⊆(l, r)
+⊉(l, r) = r ⊈ l
+
+## set equality comparison
+
+"""
+    issetequal(a, b) -> Bool
+
+Determine whether `a` and `b` have the same elements. Equivalent
+to `a ⊆ b && b ⊆ a` but more efficient when possible.
+
+# Examples
+```jldoctest
+julia> issetequal([1, 2], [1, 2, 3])
+false
+
+julia> issetequal([1, 2], [2, 1])
+true
+```
+"""
+issetequal(l::AbstractSet, r::AbstractSet) = l == r
+issetequal(l::AbstractSet, r) = issetequal(l, Set(r))
+
+function issetequal(l, r::AbstractSet)
+    if haslength(l)
+        # check r for too many unique elements
+        length(l) < length(r) && return false
+    end
+    return issetequal(Set(l), r)
+end
+
+function issetequal(l, r)
+    haslength(l) && return issetequal(l, Set(r))
+    haslength(r) && return issetequal(r, Set(l))
+    return issetequal(Set(l), Set(r))
+end
+
+## partial ordering of sets by containment
+
+==(l::AbstractSet, r::AbstractSet) = length(l) == length(r) && l ⊆ r
+# convenience functions for AbstractSet
+# (if needed, only their synonyms ⊊ and ⊆ must be specialized)
+<( l::AbstractSet, r::AbstractSet) = l ⊊ r
+<=(l::AbstractSet, r::AbstractSet) = l ⊆ r
+
+## filtering sets
 
 filter(pred, s::AbstractSet) = mapfilter(pred, push!, s, emptymutable(s))
 
