@@ -415,13 +415,12 @@ function triu(A::Symmetric, k::Integer=0)
 end
 
 function dot(A::Symmetric, B::Symmetric)
-    dotprod = zero(dot(first(A), first(B)))
-
     n = size(A, 2)
     if n != size(B, 2)
         throw(DimensionMismatch("A has dimensions $(size(A)) but B has dimensions $(size(B))"))
     end
 
+    dotprod = zero(dot(first(A), first(B)))
     @inbounds if A.uplo == 'U' && B.uplo == 'U'
         for j in 1:n
             for i in 1:(j - 1)
