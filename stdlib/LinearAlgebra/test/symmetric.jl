@@ -383,7 +383,7 @@ end
             @test dot(Symmetric(asym, :L), Symmetric(asym, :L)) ≈ rhs
             @test dot(Symmetric(asym), Symmetric(asym, :L)) ≈ rhs
             @test dot(Symmetric(asym, :L), Symmetric(asym)) ≈ rhs
-            @test_throws DimensionMismatch dot(Symmetric(asym), Symmetric(Matrix{eltya}(undef, n-1, n-1)))
+            @test_throws DimensionMismatch dot(Symmetric(asym), Symmetric(zeros(eltya, n-1, n-1)))
         end
     end
 end
