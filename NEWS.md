@@ -59,6 +59,7 @@ Standard library changes
 * `nothing` can now be `print`ed, and interplated into strings etc. as the string `"nothing"`. It is still not permitted to be interplated into Cmds (i.e. ``echo `$(nothing)` `` will still error without running anything.) ([#32148])
 * When `open` is called with a function, command, and keyword argument (e.g. ```open(`ls`, read=true) do f ...```)
   it now correctly throws a `ProcessFailedException` like other similar calls ([#32193]).
+* `mktemp` and `mktempdir` now try, by default, to remove temporary paths they create before the process exits ([#32851]).
 
 #### Libdl
 
