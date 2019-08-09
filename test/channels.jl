@@ -231,7 +231,7 @@ using Distributed
 
     for T in [Any, Int]
         taskref = Ref{Task}()
-        chnl = Channel(tf6, ctype=T, csize=N, taskref=taskref)
+        chnl = Channel{T}(tf6, N, taskref=taskref)
         put!(chnl, 2)
         yield()
         @test_throws ErrorException wait(chnl)
