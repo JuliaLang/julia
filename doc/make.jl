@@ -171,6 +171,7 @@ else
         assets = ["assets/julia-manual.css", ],
         analytics = "UA-28835595-6",
         collapselevel = 1,
+        hide_sidebar_sitename = true,
     )
 end
 
