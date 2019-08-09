@@ -1672,3 +1672,7 @@ c32703(::Type{<:Str{C}}, str::Str{C}) where {C<:CSE} = str
 @test_broken typeintersect(Tuple{Vector{Vector{Float32}},Matrix,Matrix},
                            Tuple{Vector{V},Matrix{Int},Matrix{S}} where {S, V<:AbstractVector{S}}) ==
              Tuple{Array{Array{Float32,1},1},Array{Int,2},Array{Float32,2}}
+
+@testintersect(Tuple{Pair{Int, DataType}, Any},
+               Tuple{Pair{A, B} where B<:Type, Int} where A,
+               Tuple{Pair{Int, DataType}, Int})
