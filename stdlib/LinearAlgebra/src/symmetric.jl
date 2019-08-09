@@ -414,8 +414,8 @@ function triu(A::Symmetric, k::Integer=0)
     end
 end
 
-function dot(A::Symmetric{T, Matrix{T}}, B::Symmetric{T, Matrix{T}}) where T
-    dotprod = zero(T)
+function dot(A::Symmetric, B::Symmetric)
+    dotprod = zero(dot(first(A), first(B)))
     m, n = size(A)
     mB, nB = size(B)
 
