@@ -44,12 +44,6 @@ end
 end
 
 @testset "Task constructors" begin
-    c = Channel(ctype=Float32, csize=2) do c; map(i->put!(c,i), 1:100); end
-    @test eltype(c) == Float32
-    @test c.sz_max == 2
-    @test isopen(c)
-    @test collect(c) == 1:100
-
     c = Channel{Int}() do c; map(i->put!(c,i), 1:100); end
     @test eltype(c) == Int
     @test c.sz_max == 0
@@ -64,13 +58,20 @@ end
     @test c.sz_max == typemax(Int)
 
     taskref = Ref{Task}()
-    c = Channel{Int}(csize=0, taskref=taskref) do c; put!(c, 0); end
+    c = Channel{Int}(0, taskref=taskref) do c; put!(c, 0); end
     @test eltype(c) == Int
     @test c.sz_max == 0
     @test istaskstarted(taskref[])
     @test !istaskdone(taskref[])
     take!(c); wait(taskref[])
     @test istaskdone(taskref[])
+
+    # Legacy constructor
+    c = Channel(ctype=Float32, csize=2) do c; map(i->put!(c,i), 1:100); end
+    @test eltype(c) == Float32
+    @test c.sz_max == 2
+    @test isopen(c)
+    @test collect(c) == 1:100
 end
 
 @testset "multiple concurrent put!/take! on a channel for different sizes" begin
