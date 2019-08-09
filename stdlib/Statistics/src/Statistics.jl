@@ -4,6 +4,8 @@
     Statistics
 
 Standard library module for basic statistics functionality.
+
+To use any of the examples described below, run `using Statistics` and then the code from the example. 
 """
 module Statistics
 
