@@ -129,6 +129,8 @@ function Channel{T}(func::Function, size=0; taskref=nothing) where T
     isa(taskref, Ref{Task}) && (taskref[] = task)
     return chnl
 end
+Channel(func::Function, args...; kwargs...) = Channel{Any}(func, args...; kwargs...)
+
 # This constructor is deprecated as of Julia v1.3, and should not be used.
 function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
     return Channel{ctype}(func, csize; taskref=taskref)

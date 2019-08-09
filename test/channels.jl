@@ -53,6 +53,9 @@ end
     @test c.sz_max == 0
     @test collect(c) == [1, "hi"]
 
+    c = Channel(Inf) do c; put!(c,1); end
+    @test eltype(c) == Any
+    @test c.sz_max == typemax(Int)
     c = Channel{Int}(Inf) do c; put!(c,1); end
     @test eltype(c) == Int
     @test c.sz_max == typemax(Int)
