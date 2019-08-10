@@ -89,7 +89,7 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
         pthread_attr_getstack(&attr, &stackaddr, &stacksize);
         pthread_attr_destroy(&attr);
         *stack_lo = (void*)stackaddr;
-        *stack_hi = (void*)((char*)stackaddr + stacksize);
+        *stack_hi = (void*)&stacksize;
         return;
 #  elif defined(_OS_DARWIN_)
         extern void *pthread_get_stackaddr_np(pthread_t thread);
@@ -97,8 +97,8 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
         pthread_t thread = pthread_self();
         void *stackaddr = pthread_get_stackaddr_np(thread);
         size_t stacksize = pthread_get_stacksize_np(thread);
-        *stack_lo = (char*)stackaddr;
-        *stack_hi = (void*)((char*)stackaddr + stacksize);
+        *stack_lo = (void*)stackaddr;
+        *stack_hi = (void*)&stacksize;
         return;
 #  elif defined(_OS_FREEBSD_)
         pthread_attr_t attr;
@@ -108,8 +108,8 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
         size_t stacksize;
         pthread_attr_getstack(&attr, &stackaddr, &stacksize);
         pthread_attr_destroy(&attr);
-        *stack_lo = (char*)stackaddr;
-        *stack_hi = (void*)((char*)stackaddr + stacksize);
+        *stack_lo = (void*)stackaddr;
+        *stack_hi = (void*)&stacksize;
         return;
 #  else
 #      warning "Getting precise stack size for thread is not supported."
@@ -117,9 +117,9 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
     }
     struct rlimit rl;
     getrlimit(RLIMIT_STACK, &rl);
-    size_t stack_size = rl.rlim_cur;
-    *stack_hi = (void*)&stack_size;
-    *stack_lo = (void*)((char*)*stack_hi - stack_size);
+    size_t stacksize = rl.rlim_cur;
+    *stack_hi = (void*)&stacksize;
+    *stack_lo = (void*)((char*)*stack_hi - stacksize);
 #endif
 }
 
