@@ -918,3 +918,49 @@ end
 *(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Transpose{<:Any,<:AbstractTriangular}) = A.parent * B
 *(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Adjoint{<:Any,<:AbstractTriangular}) = A.parent * B
 *(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Transpose{<:Any,<:AbstractTriangular}) = A.parent * B
+
+"""
+    symmetrize!(X::AbstractMatrix; conjugate::Bool=true)
+
+Make the matrix `X` symmetric in-place using the formula `(X + X') / 2`.
+If `conjugate` is `true`, `X` is made Hermitian rather than symmetric.
+
+See also: [`symmetrize`](@ref)
+
+!!! compat "Julia 1.3"
+    This function requires Julia 1.3 or later.
+"""
+symmetrize!(X::AbstractMatrix; conjugate::Bool=true) =
+    conjugate ? _symmetrize!(conj, real, X) : _symmetrize!(identity, identity, X)
+
+function _symmetrize!(f::Function, g::Function, X::AbstractMatrix)
+    inds = axes(X, 1)
+    inds == axes(X, 2) || throw(DimensionMismatch("matrix is not square"))
+    r = first(inds)
+    s = step(inds)
+    @inbounds for j in inds
+        X[j,j] = g(X[j,j])
+        for i in r:s:j-s
+            X[i,j] = (X[i,j] + f(X[j,i])) / 2
+            X[j,i] = f(X[i,j])
+        end
+    end
+    X
+end
+
+"""
+    symmetrize(X::AbstractMatrix; conjugate::Bool=true)
+
+Construct a symmetric matrix based on `X` using the formula `(X + X') / 2`.
+If `conjugate` is `true`, the result is Hermitian rather than symmetric.
+
+See also: [`symmetrize!`](@ref)
+
+!!! compat "Julia 1.3"
+    This function requires Julia 1.3 or later.
+"""
+symmetrize(X::AbstractMatrix{T}; conjugate::Bool=true) where {T<:Number} =
+    symmetrize!(copyto!(similar(X, typeof(zero(T) / 2)), X), conjugate=conjugate)
+symmetrize(X::Symmetric{<:Real}; conjugate::Bool=true) = X
+symmetrize(X::Symmetric{<:Complex}; conjugate::Bool=true) = conjugate ? Hermitian(X) : X
+symmetrize(X::Hermitian; conjugate::Bool=true) = X
