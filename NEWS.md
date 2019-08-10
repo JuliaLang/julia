@@ -6,6 +6,7 @@ New language features
 
 * Support for Unicode 12.1.0 ([#32002]).
 * Methods can now be added to an abstract type ([#31916]).
+* Added `sincosd(x)` to simultaneously compute the sine and cosine of `x`, where `x` is in degrees ([#30134]).
 
 Language changes
 ----------------
@@ -46,9 +47,12 @@ Standard library changes
   Previously, the functions  `+`, `-`, `*`, `/`, `conj`, `real` and `imag` returned the unwrapped element
   when operating over zero-dimensional arrays ([#32122]).
 * `IPAddr` subtypes now behave like scalars when used in broadcasting ([#32133]).
+* `Pair` is now treated as a scalar for broadcasting ([#32209]).
 * `clamp` can now handle missing values ([#31066]).
 * `empty` now accepts a `NamedTuple` ([#32534]).
 * `mod` now accepts a unit range as the second argument to easily perform offset modular arithmetic to ensure the result is inside the range ([#32628]).
+* `Sockets.recvfrom` now returns both host and port as an InetAddr ([#32729]).
+* `nothing` can now be `print`ed, and interplated into strings etc. as the string `"nothing"`. It is still not permitted to be interplated into Cmds (i.e. ``echo `$(nothing)` `` will still error without running anything.) ([#32148])
 
 #### Libdl
 

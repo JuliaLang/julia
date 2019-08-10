@@ -47,10 +47,10 @@ typedef struct taskheap_tag {
 
 /* multiqueue parameters */
 static const int32_t heap_d = 8;
-static const int heap_c = 16;
+static const int heap_c = 2;
 
 /* size of each heap */
-static const int tasks_per_heap = 16384; // TODO: this should be smaller by default, but growable!
+static const int tasks_per_heap = 65536; // TODO: this should be smaller by default, but growable!
 
 /* the multiqueue's heaps */
 static taskheap_t *heaps;
@@ -505,9 +505,14 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
             start_cycles = 0;
         }
         else {
+#ifndef JL_HAVE_ASYNCIFY
             // maybe check the kernel for new messages too
             if (jl_atomic_load(&jl_uv_n_waiters) == 0)
                 jl_process_events(jl_global_event_loop());
+#else
+            // Yield back to browser event loop
+            return ptls->root_task;
+#endif
         }
     }
 }

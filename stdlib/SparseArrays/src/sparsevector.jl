@@ -1416,7 +1416,7 @@ function dot(x::AbstractVector{Tx}, y::SparseVectorUnion{Ty}) where {Tx<:Number,
     nzind = nonzeroinds(y)
     nzval = nonzeros(y)
     s = dot(zero(Tx), zero(Ty))
-    for i = 1:length(nzind)
+    @inbounds for i = 1:length(nzind)
         s += dot(x[nzind[i]], nzval[i])
     end
     return s

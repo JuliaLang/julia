@@ -8,9 +8,6 @@
 // use ELF because RuntimeDyld COFF X86_64 doesn't seem to work (fails to generate function pointers)?
 #define FORCE_ELF
 #endif
-#if defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
-#  define JL_DISABLE_FPO
-#endif
 #if defined(_CPU_X86_)
 #define JL_NEED_FLOATTEMP_VAR 1
 #endif
@@ -4444,11 +4441,8 @@ static Function* gen_cfun_wrapper(
     Function *cw = Function::Create(functype,
             GlobalVariable::ExternalLinkage,
             funcName.str(), M);
-    jl_init_function(cw);
     cw->setAttributes(attributes);
-#ifdef JL_DISABLE_FPO
-    cw->addFnAttr("no-frame-pointer-elim", "true");
-#endif
+    jl_init_function(cw);
     Function *cw_proto = into ? cw : function_proto(cw);
     // Save the Function object reference
     if (sf) {
@@ -4763,11 +4757,8 @@ static Function* gen_cfun_wrapper(
             funcName << "_gfthunk";
             Function *gf_thunk = Function::Create(returninfo.decl->getFunctionType(),
                     GlobalVariable::InternalLinkage, funcName.str(), M);
-            jl_init_function(gf_thunk);
             gf_thunk->setAttributes(returninfo.decl->getAttributes());
-#ifdef JL_DISABLE_FPO
-            gf_thunk->addFnAttr("no-frame-pointer-elim", "true");
-#endif
+            jl_init_function(gf_thunk);
             // build a  specsig -> jl_apply_generic converter thunk
             // this builds a method that calls jl_apply_generic (as a closure over a singleton function pointer),
             // but which has the signature of a specsig
@@ -4844,9 +4835,6 @@ static Function* gen_cfun_wrapper(
                 GlobalVariable::ExternalLinkage,
                 funcName.str(), M);
         jl_init_function(cw_make);
-#ifdef JL_DISABLE_FPO
-        cw_make->addFnAttr("no-frame-pointer-elim", "true");
-#endif
         BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", cw_make);
         IRBuilder<> cwbuilder(b0);
         Function::arg_iterator AI = cw_make->arg_begin();
@@ -5148,9 +5136,6 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     add_return_attr(w, Attribute::NonNull);
     w->addFnAttr(Thunk);
     jl_init_function(w);
-#ifdef JL_DISABLE_FPO
-    w->addFnAttr("no-frame-pointer-elim", "true");
-#endif
     Function::arg_iterator AI = w->arg_begin();
     Value *funcArg = &*AI++;
     Value *argArray = &*AI++;
@@ -5588,23 +5573,8 @@ static std::unique_ptr<Module> emit_function(
     }
     declarations->specFunctionObject = strdup(f->getName().str().c_str());
 
-#ifdef JL_DISABLE_FPO
-    f->addFnAttr("no-frame-pointer-elim", "true");
-#endif
     if (jlrettype == (jl_value_t*)jl_bottom_type)
         f->setDoesNotReturn();
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-    // tell Win32 to realign the stack to the next 16-byte boundary
-    // upon entry to any function. This achieves compatibility
-    // with both MinGW-GCC (which assumes an 16-byte-aligned stack) and
-    // i686 Windows (which uses a 4-byte-aligned stack)
-    AttrBuilder *attr = new AttrBuilder();
-    attr->addStackAlignmentAttr(16);
-    f->addAttributes(AttributeList::FunctionIndex, *attr);
-#endif
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-    f->setHasUWTable(); // force NeedsWinEH
-#endif
 
 #ifdef USE_POLLY
     if (!jl_has_meta(stmts, polly_sym) || jl_options.polly == JL_OPTIONS_POLLY_OFF) {

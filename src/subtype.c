@@ -1665,6 +1665,8 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
                 assert(vy != JL_VARARG_NONE && istuple && iscov);
                 jl_value_t *a1 = (vx != JL_VARARG_NONE && i >= npx - 1) ? vxt : jl_tparam(x, i);
                 jl_value_t *b = jl_unwrap_vararg(jl_tparam(y, i));
+                if (jl_is_typevar(b) && var_occurs_inside(y, (jl_tvar_t*)b, 0, 1))
+                    return 0;
                 if (nparams_expanded_x > npy && jl_is_typevar(b) && concrete_min(a1) > 1) {
                     // diagonal rule for 2 or more elements: they must all be concrete on the LHS
                     *subtype = 0;
@@ -2026,14 +2028,8 @@ static jl_value_t *intersect_union(jl_value_t *x, jl_uniontype_t *u, jl_stenv_t 
         jl_value_t *a=NULL, *b=NULL;
         JL_GC_PUSH2(&a, &b);
         jl_unionstate_t oldRunions = e->Runions;
-        if (param == 2) {
-            a = R ? intersect(x, u->a, e, param) : intersect(u->a, x, e, param);
-            b = R ? intersect(x, u->b, e, param) : intersect(u->b, x, e, param);
-        }
-        else {
-            a = R ? intersect_all(x, u->a, e) : intersect_all(u->a, x, e);
-            b = R ? intersect_all(x, u->b, e) : intersect_all(u->b, x, e);
-        }
+        a = R ? intersect_all(x, u->a, e) : intersect_all(u->a, x, e);
+        b = R ? intersect_all(x, u->b, e) : intersect_all(u->b, x, e);
         e->Runions = oldRunions;
         jl_value_t *i = simple_join(a,b);
         JL_GC_POP();
@@ -2683,26 +2679,16 @@ static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t 
         flip_vars(e);
         return jl_bottom_type;
     }
-    /*
-      TODO: This is a band-aid for issue #23685. A better solution would be to
-      first normalize types so that all `where` expressions in covariant position
-      are pulled out to the top level.
-    */
-    if ((jl_is_typevar(x) && !jl_is_typevar(y) && lookup(e, (jl_tvar_t*)x) == NULL) ||
-        (jl_is_typevar(y) && !jl_is_typevar(x) && lookup(e, (jl_tvar_t*)y) == NULL))
-        return ii;
     jl_value_t *root=NULL;
     jl_savedenv_t se;
     JL_GC_PUSH2(&ii, &root);
     save_env(e, &root, &se);
-    if (!subtype_in_env(x, y, e)) {
+    if (!subtype_in_env_existential(x, y, e, 0, e->invdepth)) {
         ii = NULL;
     }
     else {
-        flip_vars(e);
-        if (!subtype_in_env(y, x, e))
+        if (!subtype_in_env_existential(y, x, e, 0, e->invdepth))
             ii = NULL;
-        flip_vars(e);
     }
     restore_env(e, root, &se);
     free(se.buf);
@@ -3032,6 +3018,14 @@ static jl_value_t *intersect_types(jl_value_t *x, jl_value_t *y, int emptiness_o
     jl_stenv_t e;
     if (obviously_disjoint(x, y, 0))
         return jl_bottom_type;
+    if (jl_is_dispatch_tupletype(x) || jl_is_dispatch_tupletype(y)) {
+        if (jl_subtype(x, y))
+            return x;
+        else if (jl_subtype(y, x))
+            return y;
+        else
+            return jl_bottom_type;
+    }
     init_stenv(&e, NULL, 0);
     e.intersection = e.ignore_free = 1;
     e.emptiness_only = emptiness_only;

@@ -13,6 +13,10 @@ using Random
 end
 
 @testset "various constructors" begin
+    c = Channel()
+    @test eltype(c) == Any
+    @test c.sz_max == 0
+
     c = Channel(1)
     @test eltype(c) == Any
     @test put!(c, 1) == 1
@@ -25,15 +29,48 @@ end
     @test eltype(c) == Int
     @test_throws MethodError put!(c, "Hello")
 
+    c = Channel{Int}()
+    @test eltype(c) == Int
+    @test c.sz_max == 0
+
     c = Channel{Int}(Inf)
     @test eltype(c) == Int
     pvals = map(i->put!(c,i), 1:10^6)
     tvals = Int[take!(c) for i in 1:10^6]
     @test pvals == tvals
 
-    @test_throws MethodError Channel()
     @test_throws ArgumentError Channel(-1)
     @test_throws InexactError Channel(1.5)
+end
+
+@testset "Task constructors" begin
+    c = Channel(ctype=Float32, csize=2) do c; map(i->put!(c,i), 1:100); end
+    @test eltype(c) == Float32
+    @test c.sz_max == 2
+    @test isopen(c)
+    @test collect(c) == 1:100
+
+    c = Channel{Int}() do c; map(i->put!(c,i), 1:100); end
+    @test eltype(c) == Int
+    @test c.sz_max == 0
+    @test collect(c) == 1:100
+
+    c = Channel() do c; put!(c, 1); put!(c, "hi") end
+    @test c.sz_max == 0
+    @test collect(c) == [1, "hi"]
+
+    c = Channel{Int}(Inf) do c; put!(c,1); end
+    @test eltype(c) == Int
+    @test c.sz_max == typemax(Int)
+
+    taskref = Ref{Task}()
+    c = Channel{Int}(csize=0, taskref=taskref) do c; put!(c, 0); end
+    @test eltype(c) == Int
+    @test c.sz_max == 0
+    @test istaskstarted(taskref[])
+    @test !istaskdone(taskref[])
+    take!(c); wait(taskref[])
+    @test istaskdone(taskref[])
 end
 
 @testset "multiple concurrent put!/take! on a channel for different sizes" begin

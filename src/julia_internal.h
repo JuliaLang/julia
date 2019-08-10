@@ -1062,6 +1062,16 @@ extern arraylist_t partial_inst;
 #define JL_GCC_IGNORE_STOP
 #endif // _COMPILER_GCC_
 
+#ifdef __clang_analyzer__
+  // Not a safepoint (so it dosn't free other values), but an artificial use.
+  // Usually this is unnecessary because the analyzer can see all real uses,
+  // but sometimes real uses are harder for the analyzer to see, or it may
+  // give up before it sees it, so this can be helpful to be explicit.
+  void JL_GC_ASSERT_LIVE(jl_value_t *v) JL_NOTSAFEPOINT;
+#else
+  #define JL_GC_ASSERT_LIVE(x) (void)(x)
+#endif
+
 #ifdef __cplusplus
 }
 #endif

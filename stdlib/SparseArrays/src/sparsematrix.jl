@@ -176,10 +176,10 @@ column. In conjunction with [`nonzeros`](@ref) and
     rows = rowvals(A)
     vals = nonzeros(A)
     m, n = size(A)
-    for i = 1:n
-       for j in nzrange(A, i)
-          row = rows[j]
-          val = vals[j]
+    for j = 1:n
+       for i in nzrange(A, j)
+          row = rows[i]
+          val = vals[i]
           # perform sparse wizardry...
        end
     end
