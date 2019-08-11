@@ -984,7 +984,7 @@ end
 #
 
 # fallback for Real types without explicit fix_dec implementation
-fix_dec(x::Real, n::Int, digits) = fix_dec(float(x),n,digits)
+fix_dec(x::Real, n::Int, digits) = fix_dec(Float64(x),n,digits)
 
 fix_dec(x::Integer, n::Int, digits) = decode_dec(x, digits)
 
@@ -1005,7 +1005,7 @@ end
 #
 
 # fallback for Real types without explicit fix_dec implementation
-ini_dec(x::Real, n::Int, digits) = ini_dec(float(x),n,digits)
+ini_dec(x::Real, n::Int, digits) = ini_dec(Float64(x),n,digits)
 
 function ini_dec(d::Integer, n::Int, digits)
     neg, x = handlenegative(d)
