@@ -1515,12 +1515,11 @@ typedef enum {
     JL_IMAGE_JULIA_HOME = 1,
     //JL_IMAGE_LIBJULIA = 2,
 } JL_IMAGE_SEARCH;
-#ifdef JULIA_ENABLE_THREADING
 // this helps turn threading compilation mismatches into linker errors
 #define julia_init julia_init__threading
 #define jl_init jl_init__threading
 #define jl_init_with_image jl_init_with_image__threading
-#endif
+
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
 JL_DLLEXPORT void jl_init(void);
 JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
@@ -1656,9 +1655,7 @@ typedef struct _jl_handler_t {
     jl_gcframe_t *gcstack;
     struct _jl_handler_t *prev;
     int8_t gc_state;
-#ifdef JULIA_ENABLE_THREADING
     size_t locks_len;
-#endif
     sig_atomic_t defer_signal;
     int finalizers_inhibited;
     jl_timing_block_t *timing_stack;
@@ -1700,10 +1697,8 @@ typedef struct _jl_task_t {
     int16_t tid;
     /* for the multiqueue */
     int16_t prio;
-#ifdef JULIA_ENABLE_THREADING
     // This is statically initialized when the task is not holding any locks
     arraylist_t locks;
-#endif
     jl_timing_block_t *timing_stack;
 } jl_task_t;
 
@@ -2019,7 +2014,7 @@ typedef struct {
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 
-#if defined(JULIA_ENABLE_THREADING) && !defined(_OS_DARWIN_) && !defined(_OS_WINDOWS_)
+#if !defined(_OS_DARWIN_) && !defined(_OS_WINDOWS_)
 #define JULIA_DEFINE_FAST_TLS()                                                             \
 JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t jl_get_ptls_states_static(void)                        \
 {                                                                                           \

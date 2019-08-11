@@ -656,11 +656,7 @@ JL_DLLEXPORT size_t jl_maxrss(void)
 
 JL_DLLEXPORT int jl_threading_enabled(void)
 {
-#ifdef JULIA_ENABLE_THREADING
     return 1;
-#else
-    return 0;
-#endif
 }
 
 #ifdef __cplusplus

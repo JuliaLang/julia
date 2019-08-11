@@ -215,10 +215,8 @@ JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
     // Must have no safepoint
     eh->prev = current_task->eh;
     eh->gcstack = ptls->pgcstack;
-#ifdef JULIA_ENABLE_THREADING
     eh->gc_state = ptls->gc_state;
     eh->locks_len = current_task->locks.len;
-#endif
     eh->defer_signal = ptls->defer_signal;
     eh->finalizers_inhibited = ptls->finalizers_inhibited;
     eh->world_age = ptls->world_age;
@@ -250,14 +248,12 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     int8_t old_gc_state = ptls->gc_state;
     current_task->eh = eh->prev;
     ptls->pgcstack = eh->gcstack;
-#ifdef JULIA_ENABLE_THREADING
     arraylist_t *locks = &current_task->locks;
     if (locks->len > eh->locks_len) {
         for (size_t i = locks->len;i > eh->locks_len;i--)
             jl_mutex_unlock_nogc((jl_mutex_t*)locks->items[i - 1]);
         locks->len = eh->locks_len;
     }
-#endif
     ptls->world_age = eh->world_age;
     ptls->defer_signal = eh->defer_signal;
     ptls->gc_state = eh->gc_state;

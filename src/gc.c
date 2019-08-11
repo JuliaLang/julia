@@ -189,7 +189,6 @@ NOINLINE uintptr_t gc_get_stack_ptr(void)
 
 #define should_timeout() 0
 
-#ifdef JULIA_ENABLE_THREADING
 static void jl_gc_wait_for_the_world(void)
 {
     if (jl_n_threads > 1)
@@ -207,11 +206,6 @@ static void jl_gc_wait_for_the_world(void)
         }
     }
 }
-#else
-static inline void jl_gc_wait_for_the_world(void)
-{
-}
-#endif
 
 // malloc wrappers, aligned allocation
 
@@ -1095,9 +1089,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
     // to workaround a llvm bug.
     // Ref https://llvm.org/bugs/show_bug.cgi?id=27190
     jl_gc_pool_t *p = (jl_gc_pool_t*)((char*)ptls + pool_offset);
-#ifdef JULIA_ENABLE_THREADING
     assert(ptls->gc_state == 0);
-#endif
 #ifdef MEMDEBUG
     return jl_gc_big_alloc(ptls, osize);
 #endif
@@ -1452,12 +1444,6 @@ JL_DLLEXPORT void jl_gc_queue_root(jl_value_t *ptr)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_taggedvalue_t *o = jl_astaggedvalue(ptr);
-#ifndef JULIA_ENABLE_THREADING
-    // Disable this assert since it can happen with multithreading (same
-    // with the ones in gc_queue_binding) when two threads are writing
-    // to the same object.
-    assert(o->bits.gc == GC_OLD_MARKED);
-#endif
     // The modification of the `gc_bits` is not atomic but it
     // should be safe here since GC is not allowed to run here and we only
     // write GC_OLD to the GC bits outside GC. This could cause
@@ -1471,10 +1457,6 @@ void gc_queue_binding(jl_binding_t *bnd)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_taggedvalue_t *buf = jl_astaggedvalue(bnd);
-#ifndef JULIA_ENABLE_THREADING
-    // Will fail for multithreading. See `jl_gc_queue_root`
-    assert(buf->bits.gc == GC_OLD_MARKED);
-#endif
     buf->bits.gc = GC_MARKED;
     arraylist_push(&ptls->heap.rem_bindings, bnd);
 }
@@ -2496,9 +2478,7 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
     gc_mark_queue_obj(gc_cache, sp, jl_main_module);
 
     // tasks
-#ifdef JULIA_ENABLE_THREADING
     jl_gc_mark_enqueued_tasks(gc_cache, sp);
-#endif
 
     // invisible builtin values
     if (jl_an_empty_vec_any != NULL)
