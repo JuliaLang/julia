@@ -5261,12 +5261,17 @@ static bool uses_specsig(jl_value_t *sig, size_t nreq, jl_value_t *rettype, bool
         if (nbytes > 0)
             return true; // some elements of the union could be returned unboxed avoiding allocation
     }
+    bool allSingleton = true;
     for (size_t i = 0; i < jl_nparams(sig); i++) {
         jl_value_t *sigt = jl_tparam(sig, i);
-        if (jl_justbits(sigt) && !jl_is_datatype_singleton((jl_datatype_t*)sigt)) {
+        bool issing = jl_is_datatype_singleton((jl_datatype_t*)sigt);
+        allSingleton &= issing;
+        if (jl_justbits(sigt) && !issing) {
             return true;
         }
     }
+    if (allSingleton)
+        return true;
     return false; // jlcall sig won't require any box allocations
 }
 
