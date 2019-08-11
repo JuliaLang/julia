@@ -8,9 +8,9 @@ Representation of a channel passing objects of type `T`.
 abstract type AbstractChannel{T} end
 
 """
-    Channel{T}(sz::Int=0)
+    Channel{T=Any}(size::Int=0)
 
-Constructs a `Channel` with an internal buffer that can hold a maximum of `sz` objects
+Constructs a `Channel` with an internal buffer that can hold a maximum of `size` objects
 of type `T`.
 [`put!`](@ref) calls on a full channel block until an object is removed with [`take!`](@ref).
 
@@ -24,7 +24,7 @@ Other constructors:
 * `Channel(sz)`: equivalent to `Channel{Any}(sz)`
 
 !!! compat "Julia 1.3"
-  The default constructor `Channel()` and default `sz=0` were added in Julia 1.3.
+  The default constructor `Channel()` and default `size=0` were added in Julia 1.3.
 """
 mutable struct Channel{T} <: AbstractChannel{T}
     cond_take::Threads.Condition                 # waiting for data to become available
@@ -51,26 +51,27 @@ function Channel{T}(sz::Float64) where T
     sz = (sz == Inf ? typemax(Int) : convert(Int, sz))
     return Channel{T}(sz)
 end
-Channel(sz) = Channel{Any}(sz)
-Channel() = Channel{Any}(0)
+Channel(sz=0) = Channel{Any}(sz)
 
 # special constructors
 """
-    Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
+    Channel{T=Any}(func::Function, size=0; taskref=nothing)
 
 Create a new task from `func`, bind it to a new channel of type
-`ctype` and size `csize`, and schedule the task, all in a single call.
+`T` and size `size`, and schedule the task, all in a single call.
 
 `func` must accept the bound channel as its only argument.
 
 If you need a reference to the created task, pass a `Ref{Task}` object via
-keyword argument `taskref`.
+the keyword argument `taskref`.
 
 Return a `Channel`.
 
 # Examples
 ```jldoctest
-julia> chnl = Channel(c->foreach(i->put!(c,i), 1:4));
+julia> chnl = Channel() do ch
+           foreach(i -> put!(ch, i), 1:4)
+       end;
 
 julia> typeof(chnl)
 Channel{Any}
@@ -89,7 +90,9 @@ Referencing the created task:
 ```jldoctest
 julia> taskref = Ref{Task}();
 
-julia> chnl = Channel(c -> println(take!(c)); taskref=taskref);
+julia> chnl = Channel(taskref=taskref) do ch
+           println(take!(ch))
+       end;
 
 julia> istaskdone(taskref[])
 false
@@ -102,11 +105,8 @@ true
 ```
 
 !!! compat "Julia 1.3"
-  The following constructors were added in Julia 1.3.
-
-Other constructors:
-* `Channel{T}(func::Function, sz=0)`
-* `Channel{T}(func::Function; csize=0, taskref=nothing)`
+  This constructor was added in Julia 1.3. Earlier versions of Julia used kwargs
+  to set `size` and `T`, but those constructors are deprecated.
 
 ```jldoctest
 julia> chnl = Channel{Char}(1) do ch
@@ -120,8 +120,8 @@ julia> String(collect(chnl))
 "hello world"
 ```
 """
-function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
-    chnl = Channel{ctype}(csize)
+function Channel{T}(func::Function, size=0; taskref=nothing) where T
+    chnl = Channel{T}(size)
     task = Task(() -> func(chnl))
     bind(chnl, task)
     yield(task) # immediately start it
@@ -129,13 +129,12 @@ function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
     isa(taskref, Ref{Task}) && (taskref[] = task)
     return chnl
 end
-function Channel{T}(f::Function, sz=0) where T
-    return Channel(f, csize=sz, ctype=T)
-end
-function Channel{T}(f::Function; csize=0, taskref=nothing) where T
-    return Channel(f, csize=csize, ctype=T, taskref=taskref)
-end
+Channel(func::Function, args...; kwargs...) = Channel{Any}(func, args...; kwargs...)
 
+# This constructor is deprecated as of Julia v1.3, and should not be used.
+function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
+    return Channel{ctype}(func, csize; taskref=taskref)
+end
 
 closed_exception() = InvalidStateException("Channel is closed.", :closed)
 

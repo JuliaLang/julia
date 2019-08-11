@@ -20,6 +20,8 @@ Multi-threading changes
   ([#32309], [#32174], [#31981], [#32421]).
 * The global random number generator (`GLOBAL_RNG`) is now thread-safe (and thread-local) ([#32407]).
 * New experimental `Threads.@spawn` macro that runs a task on any available thread ([#32600]).
+* Simplified the `Channel` constructor, which is now easier to read and more idiomatic julia.
+  The old constructor (which used kwargs) is still available, but use is discouraged ([#30855], [#32818]).
 
 Build system changes
 --------------------
