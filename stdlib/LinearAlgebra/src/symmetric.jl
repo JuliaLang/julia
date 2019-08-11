@@ -424,15 +424,15 @@ function dot(A::Symmetric, B::Symmetric)
     @inbounds if A.uplo == 'U' && B.uplo == 'U'
         for j in 1:n
             for i in 1:(j - 1)
-                dotprod += 2 * dot(A.data[i, j], B.data[i, j])
+                dotprod += 2 * dot(A[i, j], B[i, j])
             end
-            dotprod += dot(A.data[j, j], B.data[j, j])
+            dotprod += dot(A[j, j], B[j, j])
         end
     elseif A.uplo == 'L' && B.uplo == 'L'
         for j in 1:n
-            dotprod += dot(A.data[j, j], B.data[j, j])
+            dotprod += dot(A[j, j], B[j, j])
             for i in (j + 1):n
-                dotprod += 2 * dot(A.data[i, j], B.data[i, j])
+                dotprod += 2 * dot(A[i, j], B[i, j])
             end
         end
     else
@@ -441,9 +441,9 @@ function dot(A::Symmetric, B::Symmetric)
         end
         for j in 1:n
             for i in 1:(j - 1)
-                dotprod += 2 * dot(A.data[i, j], B.data[j, i])
+                dotprod += 2 * dot(A[i, j], B[j, i])
             end
-            dotprod += dot(A.data[j, j], B.data[j, j])
+            dotprod += dot(A[j, j], B[j, j])
         end
     end
     return dotprod
