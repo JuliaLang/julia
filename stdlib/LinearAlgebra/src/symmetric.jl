@@ -436,9 +436,6 @@ function dot(A::Symmetric, B::Symmetric)
             end
         end
     else
-        if A.uplo == 'L' && B.uplo == 'U'
-            A, B = B, A
-        end
         for j in 1:n
             for i in 1:(j - 1)
                 dotprod += 2 * dot(A[i, j], B[j, i])
