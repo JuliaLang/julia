@@ -61,8 +61,12 @@ Base.iterate(S::SVD, ::Val{:S}) = (S.S, Val(:V))
 Base.iterate(S::SVD, ::Val{:V}) = (S.V, Val(:done))
 Base.iterate(S::SVD, ::Val{:done}) = nothing
 
+
+default_svd_alg(A) = DivideAndConquer()
+
+
 """
-    svd!(A; full::Bool = false, alg::Algorithm = DivideAndConquer()) -> SVD
+    svd!(A; full::Bool = false, alg::Algorithm = default_svd_alg(A)) -> SVD
 
 `svd!` is the same as [`svd`](@ref), but saves space by
 overwriting the input `A`, instead of creating a copy.
@@ -93,7 +97,7 @@ julia> A
   0.0       0.0  -2.0  0.0  0.0
 ```
 """
-function svd!(A::StridedMatrix{T}; full::Bool = false, alg::Algorithm = DivideAndConquer()) where T<:BlasFloat
+function svd!(A::StridedMatrix{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where T<:BlasFloat
     m,n = size(A)
     if m == 0 || n == 0
         u,s,vt = (Matrix{T}(I, m, full ? m : n), real(zeros(T,0)), Matrix{T}(I, n, n))
@@ -111,7 +115,7 @@ function svd!(A::StridedMatrix{T}; full::Bool = false, alg::Algorithm = DivideAn
 end
 
 """
-    svd(A; full::Bool = false, alg::Algorithm = DivideAndConquer()) -> SVD
+    svd(A; full::Bool = false, alg::Algorithm = default_svd_alg(A)) -> SVD
 
 Compute the singular value decomposition (SVD) of `A` and return an `SVD` object.
 
@@ -128,7 +132,7 @@ and `V` is `N \\times N`, while in the thin factorization `U` is `M
 \\times K` and `V` is `N \\times K`, where `K = \\min(M,N)` is the
 number of singular values.
 
-If `alg = DivideAndConquer()` (default) a divide-and-conquer algorithm is used to calculate the SVD.
+If `alg = DivideAndConquer()` a divide-and-conquer algorithm is used to calculate the SVD.
 Another (typically slower) option is `alg = GolubReinsch()`.
 
 # Examples
@@ -155,20 +159,20 @@ julia> u == F.U && s == F.S && v == F.V
 true
 ```
 """
-function svd(A::StridedVecOrMat{T}; full::Bool = false, alg::Algorithm = DivideAndConquer()) where T
+function svd(A::StridedVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where T
     svd!(copy_oftype(A, eigtype(T)), full = full, alg = alg)
 end
-function svd(x::Number; full::Bool = false, alg::Algorithm = DivideAndConquer())
+function svd(x::Number; full::Bool = false, alg::Algorithm = default_svd_alg(x))
     SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/abs(x), 1, 1), [abs(x)], fill(one(x), 1, 1))
 end
-function svd(x::Integer; full::Bool = false, alg::Algorithm = DivideAndConquer())
+function svd(x::Integer; full::Bool = false, alg::Algorithm = default_svd_alg(x))
     svd(float(x), full = full, alg = alg)
 end
-function svd(A::Adjoint; full::Bool = false, alg::Algorithm = DivideAndConquer())
+function svd(A::Adjoint; full::Bool = false, alg::Algorithm = default_svd_alg(A))
     s = svd(A.parent, full = full, alg = alg)
     return SVD(s.Vt', s.S, s.U')
 end
-function svd(A::Transpose; full::Bool = false, alg::Algorithm = DivideAndConquer())
+function svd(A::Transpose; full::Bool = false, alg::Algorithm = default_svd_alg(A))
     s = svd(A.parent, full = full, alg = alg)
     return SVD(transpose(s.Vt), s.S, transpose(s.U))
 end
