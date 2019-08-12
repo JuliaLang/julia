@@ -378,12 +378,24 @@ end
             end
 
         @testset "dot product of symmetric matrices" begin
-            rhs = dot(asym, asym)
-            @test dot(Symmetric(asym), Symmetric(asym)) ≈ rhs
-            @test dot(Symmetric(asym, :L), Symmetric(asym, :L)) ≈ rhs
-            @test dot(Symmetric(asym), Symmetric(asym, :L)) ≈ rhs
-            @test dot(Symmetric(asym, :L), Symmetric(asym)) ≈ rhs
-            @test_throws DimensionMismatch dot(Symmetric(asym), Symmetric(zeros(eltya, n-1, n-1)))
+            symau = Symmetric(a, :U)
+            symal = Symmetric(a, :L)
+            msymau = Matrix(symau)
+            msymal = Matrix(symal)
+            @test_throws DimensionMismatch dot(symau, Symmetric(zeros(eltya, n-1, n-1)))
+            for eltyc in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
+                creal = randn(n, n)/2
+                cimag = randn(n, n)/2
+                c = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(creal, cimag) : creal)
+                symcu = Symmetric(c, :U)
+                symcl = Symmetric(c, :L)
+                msymcu = Matrix(symcu)
+                msymcl = Matrix(symcl)
+                @test dot(symau, symcu) ≈ dot(msymau, msymcu)
+                @test dot(symau, symcl) ≈ dot(msymau, msymcl)
+                @test dot(symal, symcu) ≈ dot(msymal, msymcu)
+                @test dot(symal, symcl) ≈ dot(msymal, msymcl)
+            end
         end
     end
 end
