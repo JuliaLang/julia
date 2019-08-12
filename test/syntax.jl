@@ -1563,6 +1563,23 @@ end
         return convert(B, b)
     end
 end) == Expr(:error, "local variable name \"B\" conflicts with a static parameter")
+# issue #32620
+@test Meta.lower(@__MODULE__, quote
+    function foo(a::T) where {T}
+        for i = 1:1
+            T = 0
+        end
+    end
+end) == Expr(:error, "local variable name \"T\" conflicts with a static parameter")
+function f32620(x::T) where T
+    local y
+    let T = 3
+        T = 2
+        y = T
+    end
+    return (T, y)
+end
+@test f32620(0) === (Int, 2)
 
 # issue #28044
 code28044(x) = 10x
@@ -1875,3 +1892,14 @@ x32499 = begin
     S32499(x=2)
 end
 @test x32499 == 2
+
+# issue #32467
+let f = identity(identity() do
+                 x = 0
+                 @inbounds for i = 1:2
+                     x += i
+                 end
+                 x
+                 end)
+    @test f() == 3
+end

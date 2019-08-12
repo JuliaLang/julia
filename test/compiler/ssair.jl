@@ -96,3 +96,39 @@ let
         Meta.isexpr(ex, :meta)
     end
 end
+
+# PR #32145
+# Make sure IncrementalCompact can handle blocks with predecessors of index 0
+# while removing blocks with no predecessors.
+let cfg = CFG(BasicBlock[
+    make_bb([]        , [2, 4]),
+    make_bb([1]       , [4, 5]),
+    make_bb([]        , [4]   ), # should be removed
+    make_bb([0, 1, 2] , [5]   ), # 0 predecessor should be preserved
+    make_bb([2, 3]    , []    ),
+], Int[])
+    code = Compiler.IRCode(
+        [], [], Int32[], UInt8[], cfg, LineInfoNode[], [], [], [])
+    compact = Compiler.IncrementalCompact(code, true)
+    @test length(compact.result_bbs) == 4 && 0 in compact.result_bbs[3].preds
+end
+
+# Issue #32579 - Optimizer bug involving type constraints
+function f32579(x::Int, b::Bool)
+    if b
+        x = nothing
+    end
+    if isa(x, Int)
+        y = x
+    else
+        y = x
+    end
+    if isa(y, Nothing)
+        z = y
+    else
+        z = y
+    end
+    return z === nothing
+end
+@test f32579(0, true) === true
+@test f32579(0, false) === false

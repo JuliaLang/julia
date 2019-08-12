@@ -481,7 +481,7 @@ function ldiv!(D::Diagonal, B::StridedVecOrMat)
             if di == 0
                 throw(SingularException(i))
             end
-            B[i,j] /= di
+            B[i,j] = di \ B[i,j]
         end
     end
     return B
