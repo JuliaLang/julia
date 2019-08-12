@@ -376,22 +376,19 @@ reduce(op, a::Number) = a  # Do we want this?
 
 ## vcat
 
-function reduce(::typeof(vcat), xs, T::Type{<:AbstractVector}, isize)
+function reduce(::typeof(vcat), xs, T::Type{<:AbstractVector{V}}, isize) where V
     x_state = iterate(xs)
-    x_state === nothing && return T() # New empty instance
+    x_state === nothing && return reduce_empty(vcat, T)
     x1, state = x_state
 
-    ret = copy(x1)  # this is **Not** going to work for StaticArrays
+    ret = Vector(x1)
 
     hinted_size = 0
     if !(isize isa SizeUnknown)
         # Assume first element has representitive size, unless that would make this too large
         SIZEHINT_CAP = 10^5
-        expected_size = length(xs)*length(x1)
-        if expected_size < SIZEHINT_CAP
-            hinted_size = expected_size
-            sizehint!(ret, hinted_size)
-        end
+        hinted_size = min(SIZEHINT_CAP, length(xs)*length(x1))
+        sizehint!(ret, hinted_size)
     end
 
     x_state = iterate(xs, state)
@@ -401,7 +398,7 @@ function reduce(::typeof(vcat), xs, T::Type{<:AbstractVector}, isize)
         x_state = iterate(xs, state)
     end
 
-    if length(ret) < hinted_size/2  # it is only allowable to be at most 2x to much memory
+    if length(ret) < hinted_size/2  # it is only allowable to be at most 2x too much memory
         sizehint!(ret, length(ret))
     end
 
@@ -410,14 +407,14 @@ end
 
 ## hcat
 
-function reduce(::typeof(hcat), xs, T::Type{<:AbstractVector}, isize::SizeUnknown)
+function reduce(::typeof(hcat), xs, T::Type{<:AbstractVector{V}}, isize::SizeUnknown) where V
     x_state = iterate(xs)
-    x_state === nothing && return et() # New empty instance
+    x_state === nothing && return reduce_empty(hcat, T)
     x1, state = x_state
 
     dim1_size = length(x1)
     dim2_size = 1
-    ret_vec = copy(x1)  # this is **Not** going to work for StaticArrays
+    ret_vec = Vector(x1)
 
     x_state = iterate(xs, state)
 
@@ -432,10 +429,10 @@ function reduce(::typeof(hcat), xs, T::Type{<:AbstractVector}, isize::SizeUnknow
     return reshape(ret_vec, (dim1_size, dim2_size))
 end
 
-function reduce(::typeof(hcat), xs, T::Type{<:AbstractVector}, isize)
+function reduce(::typeof(hcat), xs, T::Type{<:AbstractVector{V}}, isize) where V
     # Size is known
     x_state = iterate(xs)
-    x_state === nothing && return T() # New empty instance
+    x_state === nothing && return reduce_empty(hcat, T)
     x1, state = x_state
 
     dim1_size = size(x1,1)
