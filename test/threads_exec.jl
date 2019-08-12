@@ -672,3 +672,16 @@ let ch = Channel{Char}(0), t
     schedule(t)
     @test String(collect(ch)) == "hello"
 end
+
+@testset "Issue #32873" begin
+    m = Mutex()
+    try
+        lock(m)
+        lock(m)
+    catch ex
+        @test ex isa ErrorException
+        @test occursin("concurrency violation detected", sprint(showerror, ex))
+    finally
+        unlock(m)
+    end
+end
