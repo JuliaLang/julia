@@ -9,9 +9,13 @@ A callable for operating short-circuiting version of `x * alpha + y * beta`.
 
 # Examples
 ```jldoctest
+julia> using LinearAlgebra: MulAddMul
+
 julia> _add = MulAddMul(1, 0);
+
 julia> _add(123, nothing)
 123
+
 julia> MulAddMul(12, 34)(56, 78) == 56 * 12 + 78 * 34
 true
 ```
@@ -43,6 +47,8 @@ when mutating an array of non-primitive numbers such as `BigFloat`.
 
 # Examples
 ```jldoctest
+julia> using LinearAlgebra: MulAddMul, _modify!
+
 julia> _add = MulAddMul(1, 0);
        C = Vector{BigFloat}(undef, 1);
 
@@ -50,7 +56,7 @@ julia> _modify!(_add, 123, C, 1)
 
 julia> C
 1-element Array{BigFloat,1}:
- 1.23e+02
+ 123.0
 ```
 """
 @inline @propagate_inbounds function _modify!(p::MulAddMul{ais1, bis0},
