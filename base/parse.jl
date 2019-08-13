@@ -14,6 +14,9 @@ of the form `"R±Iim"` as a `Complex(R,I)` of the requested type; `"i"` or `"j"`
 used instead of `"im"`, and `"R"` or `"Iim"` are also permitted.
 If the string does not contain a valid number, an error is raised.
 
+!!! compat "Julia 1.1"
+    `parse(Bool, str)` requires at least Julia 1.1.
+
 # Examples
 ```jldoctest
 julia> parse(Int, "1234")
@@ -120,7 +123,8 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     _Z = UInt32('Z')
     _z = UInt32('z')
     while n <= m
-        _c = UInt32(c)
+        # Fast path from `UInt32(::Char)`; non-ascii will be >= 0x80
+        _c = reinterpret(UInt32, c) >> 24
         d::T = _0 <= _c <= _9 ? _c-_0             :
                _A <= _c <= _Z ? _c-_A+ UInt32(10) :
                _a <= _c <= _z ? _c-_a+a           : base
@@ -139,7 +143,8 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     end
     (T <: Signed) && (n *= sgn)
     while !isspace(c)
-        _c = UInt32(c)
+        # Fast path from `UInt32(::Char)`; non-ascii will be >= 0x80
+        _c = reinterpret(UInt32, c) >> 24
         d::T = _0 <= _c <= _9 ? _c-_0             :
                _A <= _c <= _Z ? _c-_A+ UInt32(10) :
                _a <= _c <= _z ? _c-_a+a           : base
@@ -196,10 +201,8 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString{String}},
     len = endpos - startpos + 1
     p   = pointer(sbuff) + startpos - 1
     GC.@preserve sbuff begin
-        (len == 4) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-                                  p, "true", 4)) && (return true)
-        (len == 5) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-                                  p, "false", 5)) && (return false)
+        (len == 4) && (0 == _memcmp(p, "true", 4)) && (return true)
+        (len == 5) && (0 == _memcmp(p, "false", 5)) && (return false)
     end
 
     if raise
@@ -316,7 +319,7 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
     end
 
     if i₊ == 0 # purely real or imaginary value
-        if iᵢ > 0 # purely imaginary
+        if iᵢ > i && !(iᵢ == i+1 && s[i] in ('+','-')) # purely imaginary (not "±inf")
             x = tryparse_internal(T, s, i, iᵢ-1, raise)
             x === nothing && return nothing
             return Complex{T}(zero(x),x)

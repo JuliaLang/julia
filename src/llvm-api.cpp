@@ -86,6 +86,12 @@ extern "C" JL_DLLEXPORT LLVMBool LLVMExtraInitializeNativeDisassembler()
     return InitializeNativeTargetDisassembler();
 }
 
+// Exporting the Barrier LLVM pass
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddBarrierNoopPass(LLVMPassManagerRef PM)
+{
+    unwrap(PM)->add(createBarrierNoopPass());
+}
 
 // Infrastructure for writing LLVM passes in Julia
 
@@ -214,11 +220,20 @@ extern "C" JL_DLLEXPORT LLVMContextRef LLVMExtraGetValueContext(LLVMValueRef V)
     return wrap(&unwrap(V)->getContext());
 }
 
+
+#if JL_LLVM_VERSION < 80000
 extern ModulePass *createNVVMReflectPass();
-extern "C" JL_DLLEXPORT void LLVMExtraAddMVVMReflectPass(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddNVVMReflectPass(LLVMPassManagerRef PM)
 {
-    createNVVMReflectPass();
+    unwrap(PM)->add(createNVVMReflectPass());
 }
+#else
+FunctionPass *createNVVMReflectPass(unsigned int SmVersion);
+extern "C" JL_DLLEXPORT void LLVMExtraAddNVVMReflectFunctionPass(LLVMPassManagerRef PM, unsigned int SmVersion)
+{
+    unwrap(PM)->add(createNVVMReflectPass(SmVersion));
+}
+#endif
 
 extern "C" JL_DLLEXPORT void
 LLVMExtraAddTargetLibraryInfoByTiple(const char *T, LLVMPassManagerRef PM)

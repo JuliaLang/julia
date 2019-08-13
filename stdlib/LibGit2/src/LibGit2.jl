@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Interface to [libgit2](https://libgit2.github.com/).
+Interface to [libgit2](https://libgit2.org/).
 """
 module LibGit2
 
@@ -12,7 +12,7 @@ using Base.Printf: @printf
 export with, GitRepo, GitConfig
 
 const GITHUB_REGEX =
-    r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
+    r"^(?:(?:ssh://)?git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
 
 const REFCOUNT = Threads.Atomic{Int}(0)
 
@@ -1003,7 +1003,7 @@ function set_ssl_cert_locations(cert_loc)
     cert_dir  = isdir(cert_loc) ? cert_loc : Cstring(C_NULL)
     cert_file == C_NULL && cert_dir == C_NULL && return
     @check ccall((:git_libgit2_opts, :libgit2), Cint,
-          (Cint, Cstring, Cstring),
+          (Cint, Cstring...),
           Cint(Consts.SET_SSL_CERT_LOCATIONS), cert_file, cert_dir)
 end
 

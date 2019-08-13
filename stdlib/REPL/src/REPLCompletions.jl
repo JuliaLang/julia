@@ -353,7 +353,7 @@ get_value(sym, fn) = (sym, true)
 function get_value_getfield(ex::Expr, fn)
     # Example :((top(getfield))(Base,:max))
     val, found = get_value_getfield(ex.args[2],fn) #Look up Base in Main and returns the module
-    found || return (nothing, false)
+    (found && length(ex.args) >= 3) || return (nothing, false)
     return get_value_getfield(ex.args[3], val) #Look up max in Base and returns the function if found.
 end
 get_value_getfield(sym, fn) = get_value(sym, fn)
@@ -375,7 +375,7 @@ function get_type_call(expr::Expr)
         found ? push!(args, typ) : push!(args, Any)
     end
     # use _methods_by_ftype as the function is supplied as a type
-    world = ccall(:jl_get_world_counter, UInt, ())
+    world = Base.get_world_counter()
     mt = Base._methods_by_ftype(Tuple{ft, args...}, -1, world)
     length(mt) == 1 || return (Any, false)
     m = first(mt)
@@ -407,7 +407,7 @@ function try_get_type(sym::Expr, fn::Module)
     elseif sym.head === :ref
         # some simple cases of `expand`
         return try_get_type(Expr(:call, GlobalRef(Base, :getindex), sym.args...), fn)
-    elseif sym.head === :.
+    elseif sym.head === :.  && sym.args[2] isa QuoteNode # second check catches broadcasting
         return try_get_type(Expr(:call, GlobalRef(Core, :getfield), sym.args...), fn)
     end
     return (Any, false)
@@ -432,10 +432,21 @@ function complete_methods(ex_org::Expr, context_module=Main)::Vector{Completion}
     args_ex = Any[]
     func, found = get_value(ex_org.args[1], context_module)
     !found && return Completion[]
-    for ex in ex_org.args[2:end]
-        val, found = get_type(ex, context_module)
-        push!(args_ex, val)
+
+    funargs = ex_org.args[2:end]
+    # handle broadcasting, but only handle number of arguments instead of
+    # argument types
+    if ex_org.head === :. && ex_org.args[2] isa Expr
+        for _ in ex_org.args[2].args
+            push!(args_ex, Any)
+        end
+    else
+        for ex in funargs
+            val, found = get_type(ex, context_module)
+            push!(args_ex, val)
+        end
     end
+
     out = Completion[]
     t_in = Tuple{Core.Typeof(func), args_ex...} # Input types
     na = length(args_ex)+1
@@ -519,14 +530,11 @@ function dict_identifier_key(str,tag)
         sym = Symbol(name)
         isdefined(obj, sym) || return (nothing, nothing, nothing)
         obj = getfield(obj, sym)
-        # Avoid `isdefined(::Array, ::Symbol)`
-        isa(obj, Array) && return (nothing, nothing, nothing)
     end
-    begin_of_key = first(something(findnext(r"\S", str, nextind(str, end_of_identifier) + 1), 1)) # 1 for [
-    begin_of_key==0 && return (true, nothing, nothing)
-    partial_key = str[begin_of_key:end]
-    (isa(obj, AbstractDict) && length(obj) < 1e6) || return (true, nothing, nothing)
-    return (obj, partial_key, begin_of_key)
+    (isa(obj, AbstractDict) && length(obj) < 1_000_000) || return (nothing, nothing, nothing)
+    begin_of_key = something(findnext(!isspace, str, nextind(str, end_of_identifier) + 1), # +1 for [
+                             lastindex(str)+1)
+    return (obj, str[begin_of_key:end], begin_of_key)
 end
 
 # This needs to be a separate non-inlined function, see #19441
@@ -544,20 +552,18 @@ function project_deps_get_completion_candidates(pkgstarts::String, project_file:
     open(project_file) do io
         state = :top
         for line in eachline(io)
-            if state == :top
-                if occursin(Base.re_section, line)
-                    state = occursin(Base.re_section_deps, line) ? :deps : :other
-                elseif (m = match(Base.re_name_to_string, line)) != nothing
+            if occursin(Base.re_section, line)
+                state = occursin(Base.re_section_deps, line) ? :deps : :other
+            elseif state == :top
+                if (m = match(Base.re_name_to_string, line)) !== nothing
                     root_name = String(m.captures[1])
                     startswith(root_name, pkgstarts) && push!(loading_candidates, root_name)
                 end
             elseif state == :deps
-                if (m = match(Base.re_key_to_string, line)) != nothing
+                if (m = match(Base.re_key_to_string, line)) !== nothing
                     dep_name = m.captures[1]
                     startswith(dep_name, pkgstarts) && push!(loading_candidates, dep_name)
                 end
-            elseif occursin(Base.re_section, line)
-                state = occursin(Base.re_section_deps, line) ? :deps : :other
             end
         end
     end
@@ -572,13 +578,9 @@ function completions(string, pos, context_module=Main)::Completions
     # if completing a key in a Dict
     identifier, partial_key, loc = dict_identifier_key(partial,inc_tag)
     if identifier !== nothing
-        if partial_key !== nothing
-            matches = find_dict_matches(identifier, partial_key)
-            length(matches)==1 && (length(string) <= pos || string[pos+1] != ']') && (matches[1]*="]")
-            length(matches)>0 && return [DictCompletion(identifier, match) for match in sort!(matches)], loc:pos, true
-        else
-            return Completion[], 0:-1, false
-        end
+        matches = find_dict_matches(identifier, partial_key)
+        length(matches)==1 && (lastindex(string) <= pos || string[nextind(string,pos)] != ']') && (matches[1]*=']')
+        length(matches)>0 && return [DictCompletion(identifier, match) for match in sort!(matches)], loc:pos, true
     end
 
     # otherwise...
@@ -596,7 +598,7 @@ function completions(string, pos, context_module=Main)::Completions
            length(paths) == 1 &&  # Only close if there's a single choice,
            !isdir(expanduser(replace(string[startpos:prevind(string, first(r))] * paths[1].path,
                                      r"\\ " => " "))) &&  # except if it's a directory
-           (length(string) <= pos ||
+           (lastindex(string) <= pos ||
             string[nextind(string,pos)] != '"')  # or there's already a " at the cursor.
             paths[1] = PathCompletion(paths[1].path * "\"")
         end
@@ -610,12 +612,16 @@ function completions(string, pos, context_module=Main)::Completions
 
     # Make sure that only bslash_completions is working on strings
     inc_tag==:string && return String[], 0:-1, false
-
     if inc_tag == :other && should_method_complete(partial)
         frange, method_name_end = find_start_brace(partial)
         ex = Meta.parse(partial[frange] * ")", raise=false, depwarn=false)
-        if isa(ex, Expr) && ex.head==:call
-            return complete_methods(ex, context_module), first(frange):method_name_end, false
+
+        if isa(ex, Expr)
+            if ex.head==:call
+                return complete_methods(ex, context_module), first(frange):method_name_end, false
+            elseif ex.head==:. && ex.args[2] isa Expr && ex.args[2].head==:tuple
+                return complete_methods(ex, context_module), first(frange):(method_name_end - 1), false
+            end
         end
     elseif inc_tag == :comment
         return Completion[], 0:-1, false
@@ -665,7 +671,7 @@ function completions(string, pos, context_module=Main)::Completions
                 end
             end
         end
-        ffunc = (mod,x)->(isdefined(mod, x) && isa(getfield(mod, x), Module))
+        ffunc = (mod,x)->(Base.isbindingresolved(mod, x) && isdefined(mod, x) && isa(getfield(mod, x), Module))
         comp_keywords = false
     end
     startpos == 0 && (pos = -1)

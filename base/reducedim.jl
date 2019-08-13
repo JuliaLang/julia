@@ -4,7 +4,7 @@
 
 # for reductions that expand 0 dims to 1
 reduced_index(i::OneTo) = OneTo(1)
-reduced_index(i::Slice) = first(i):first(i)
+reduced_index(i::Union{Slice, IdentityUnitRange}) = first(i):first(i)
 reduced_index(i::AbstractUnitRange) =
     throw(ArgumentError(
 """
@@ -162,7 +162,7 @@ reducedim_init(f, op::typeof(|), A::AbstractArray, region) = reducedim_initarray
 # specialize to make initialization more efficient for common cases
 
 let
-    BitIntFloat = Union{BitInteger, Math.IEEEFloat}
+    BitIntFloat = Union{BitInteger, IEEEFloat}
     T = Union{
         [AbstractArray{t} for t in uniontypes(BitIntFloat)]...,
         [AbstractArray{Complex{t}} for t in uniontypes(BitIntFloat)]...}
@@ -218,17 +218,20 @@ Extract first entry of slices of array A into existing array R.
 """
 copyfirst!(R::AbstractArray, A::AbstractArray) = mapfirst!(identity, R, A)
 
-function mapfirst!(f, R::AbstractArray, A::AbstractArray)
+function mapfirst!(f, R::AbstractArray, A::AbstractArray{<:Any,N}) where {N}
     lsiz = check_reducedims(R, A)
-    iA = axes(A)
-    iR = axes(R)
-    t = []
-    for i in 1:length(iR)
-        iAi = iA[i]
-        push!(t, iAi == iR[i] ? iAi : first(iAi))
-    end
+    t = _firstreducedslice(axes(R), axes(A))
     map!(f, R, view(A, t...))
 end
+# We know that the axes of R and A are compatible, but R might have a different number of
+# dimensions than A, which is trickier than it seems due to offset arrays and type stability
+_firstreducedslice(::Tuple{}, a::Tuple{}) = ()
+_firstreducedslice(::Tuple, ::Tuple{}) = ()
+@inline _firstreducedslice(::Tuple{}, a::Tuple) = (_firstslice(a[1]), _firstreducedslice((), tail(a))...)
+@inline _firstreducedslice(r::Tuple, a::Tuple) = (length(r[1])==1 ? _firstslice(a[1]) : r[1], _firstreducedslice(tail(r), tail(a))...)
+_firstslice(i::OneTo) = OneTo(1)
+_firstslice(i::Slice) = Slice(_firstslice(i.indices))
+_firstslice(i) = i[firstindex(i):firstindex(i)]
 
 function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
     lsiz = check_reducedims(R,A)
@@ -275,10 +278,13 @@ reducedim!(op, R::AbstractArray{RT}, A::AbstractArray) where {RT} =
     mapreducedim!(identity, op, R, A)
 
 """
-    mapreduce(f, op, A::AbstractArray; dims=:, [init])
+    mapreduce(f, op, A::AbstractArray...; dims=:, [init])
 
 Evaluates to the same as `reduce(op, map(f, A); dims=dims, init=init)`, but is generally
 faster because the intermediate array is avoided.
+
+!!! compat "Julia 1.2"
+    `mapreduce` with multiple iterators requires Julia 1.2 or later.
 
 # Examples
 ```jldoctest
@@ -291,14 +297,15 @@ julia> a = reshape(Vector(1:16), (4,4))
 
 julia> mapreduce(isodd, *, a, dims=1)
 1×4 Array{Bool,2}:
- false  false  false  false
+ 0  0  0  0
 
 julia> mapreduce(isodd, |, a, dims=1)
 1×4 Array{Bool,2}:
- true  true  true  true
+ 1  1  1  1
 ```
 """
 mapreduce(f, op, A::AbstractArray; dims=:, kw...) = _mapreduce_dim(f, op, kw.data, A, dims)
+mapreduce(f, op, A::AbstractArray...; kw...) = reduce(op, map(f, A...); kw...)
 
 _mapreduce_dim(f, op, nt::NamedTuple{(:init,)}, A::AbstractArray, ::Colon) = mapfoldl(f, op, A; nt...)
 
@@ -550,17 +557,17 @@ Test whether all values along the given dimensions of an array are `true`.
 ```jldoctest
 julia> A = [true false; true true]
 2×2 Array{Bool,2}:
- true  false
- true   true
+ 1  0
+ 1  1
 
 julia> all(A, dims=1)
 1×2 Array{Bool,2}:
- true  false
+ 1  0
 
 julia> all(A, dims=2)
 2×1 Array{Bool,2}:
- false
-  true
+ 0
+ 1
 ```
 """
 all(A::AbstractArray; dims)
@@ -574,8 +581,8 @@ Test whether all values in `A` along the singleton dimensions of `r` are `true`,
 ```jldoctest
 julia> A = [true false; true false]
 2×2 Array{Bool,2}:
- true  false
- true  false
+ 1  0
+ 1  0
 
 julia> all!([1; 1], A)
 2-element Array{Int64,1}:
@@ -598,17 +605,17 @@ Test whether any values along the given dimensions of an array are `true`.
 ```jldoctest
 julia> A = [true false; true false]
 2×2 Array{Bool,2}:
- true  false
- true  false
+ 1  0
+ 1  0
 
 julia> any(A, dims=1)
 1×2 Array{Bool,2}:
- true  false
+ 1  0
 
 julia> any(A, dims=2)
 2×1 Array{Bool,2}:
- true
- true
+ 1
+ 1
 ```
 """
 any(::AbstractArray; dims)
@@ -623,8 +630,8 @@ results to `r`.
 ```jldoctest
 julia> A = [true false; true false]
 2×2 Array{Bool,2}:
- true  false
- true  false
+ 1  0
+ 1  0
 
 julia> any!([1; 1], A)
 2-element Array{Int64,1}:

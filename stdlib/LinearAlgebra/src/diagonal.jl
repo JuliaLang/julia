@@ -6,7 +6,7 @@ struct Diagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     diag::V
 
     function Diagonal{T,V}(diag) where {T,V<:AbstractVector{T}}
-        @assert !has_offset_axes(diag)
+        require_one_based_indexing(diag)
         new{T,V}(diag)
     end
 end
@@ -171,13 +171,13 @@ end
     lmul!(D, copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A))
 
 function rmul!(A::AbstractMatrix, D::Diagonal)
-    @assert !has_offset_axes(A)
-    A .= A .* transpose(D.diag)
+    require_one_based_indexing(A)
+    A .= A .* permutedims(D.diag)
     return A
 end
 
 function lmul!(D::Diagonal, B::AbstractMatrix)
-    @assert !has_offset_axes(B)
+    require_one_based_indexing(B)
     B .= D.diag .* B
     return B
 end
@@ -260,31 +260,23 @@ lmul!(A::Diagonal, B::Diagonal) = Diagonal(B.diag .= A.diag .* B.diag)
 
 function lmul!(adjA::Adjoint{<:Any,<:Diagonal}, B::AbstractMatrix)
     A = adjA.parent
-    return lmul!(conj(A.diag), B)
+    return lmul!(adjoint(A), B)
 end
 function lmul!(transA::Transpose{<:Any,<:Diagonal}, B::AbstractMatrix)
     A = transA.parent
-    return lmul!(A.diag, B)
+    return lmul!(transpose(A), B)
 end
 
 function rmul!(A::AbstractMatrix, adjB::Adjoint{<:Any,<:Diagonal})
     B = adjB.parent
-    return rmul!(A, conj(B.diag))
+    return rmul!(A, adjoint(B))
 end
 function rmul!(A::AbstractMatrix, transB::Transpose{<:Any,<:Diagonal})
     B = transB.parent
-    return rmul!(A, B.diag)
+    return rmul!(A, transpose(B))
 end
 
 # Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
-mul!(out::AbstractVector, A::Diagonal, in::AbstractVector) = out .= A.diag .* in
-mul!(out::AbstractVector, A::Adjoint{<:Any,<:Diagonal}, in::AbstractVector) = out .= adjoint.(A.parent.diag) .* in
-mul!(out::AbstractVector, A::Transpose{<:Any,<:Diagonal}, in::AbstractVector) = out .= transpose.(A.parent.diag) .* in
-
-mul!(out::AbstractMatrix, A::Diagonal, in::StridedMatrix) = out .= A.diag .* in
-mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::StridedMatrix) = out .= adjoint.(A.parent.diag) .* in
-mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::StridedMatrix) = out .= transpose.(A.parent.diag) .* in
-
 @inline addmul!(out::AbstractVector, A::Diagonal, in::AbstractVector,
                 alpha::Number, beta::Number) =
     out .= A.diag .* in .* alpha .+ out .* beta
@@ -304,6 +296,56 @@ mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::StridedMatrix) = o
 @inline addmul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::StridedMatrix,
                 alpha::Number, beta::Number) =
     out .= transpose.(A.parent.diag) .* in .* alpha .+ out .* beta
+
+@inline addmul!(out::AbstractMatrix, A::Diagonal, in::Adjoint{<:Any,<:StridedMatrix},
+                alpha::Number, beta::Number) =
+    out .= A.diag .* in .* alpha
+@inline addmul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::Adjoint{<:Any,<:StridedMatrix},
+                alpha::Number, beta::Number) =
+    out .= adjoint.(A.parent.diag) .* in .* alpha .+ out .* beta
+@inline addmul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::Adjoint{<:Any,<:StridedMatrix},
+                alpha::Number, beta::Number) =
+    out .= transpose.(A.parent.diag) .* in .* alpha .+ out .* beta
+
+@inline addmul!(out::AbstractMatrix, A::Diagonal, in::Transpose{<:Any,<:StridedMatrix},
+                alpha::Number, beta::Number) =
+    out .= A.diag .* in .* alpha .+ out .* beta
+@inline addmul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::Transpose{<:Any,<:StridedMatrix},
+                alpha::Number, beta::Number) =
+    out .= adjoint.(A.parent.diag) .* in .* alpha .+ out .* beta
+@inline addmul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::Transpose{<:Any,<:StridedMatrix},
+                alpha::Number, beta::Number) =
+    out .= transpose.(A.parent.diag) .* in .* alpha .+ out .* beta
+
+@inline addmul!(out::AbstractMatrix, in::StridedMatrix, A::Diagonal,
+                alpha::Number, beta::Number) =
+    out .= in .* permutedims(A.diag) .* alpha .+ out .* beta
+@inline addmul!(out::AbstractMatrix, in::StridedMatrix, A::Adjoint{<:Any,<:Diagonal},
+                alpha::Number, beta::Number) =
+    out .= in .* adjoint(A.parent.diag) .* alpha .+ out .* beta
+@inline addmul!(out::AbstractMatrix, in::StridedMatrix, A::Transpose{<:Any,<:Diagonal},
+                alpha::Number, beta::Number) =
+    out .= in .* transpose(A.parent.diag) .* alpha .+ out .* beta
+
+@inline addmul!(out::AbstractMatrix, in::Adjoint{<:Any,<:StridedMatrix}, A::Diagonal,
+                alpha::Number, beta::Number) =
+    out .= in .* permutedims(A.diag) .* alpha .+ out .* beta
+@inline addmul!(out::AbstractMatrix, in::Adjoint{<:Any,<:StridedMatrix}, A::Adjoint{<:Any,<:Diagonal},
+                alpha::Number, beta::Number) =
+    out .= in .* adjoint(A.parent.diag) .* alpha .+ out .* beta
+@inline addmul!(out::AbstractMatrix, in::Adjoint{<:Any,<:StridedMatrix}, A::Transpose{<:Any,<:Diagonal},
+                alpha::Number, beta::Number) =
+    out .= in .* transpose(A.parent.diag) .* alpha .+ out .* beta
+
+@inline addmul!(out::AbstractMatrix, in::Transpose{<:Any,<:StridedMatrix}, A::Diagonal,
+                alpha::Number, beta::Number) =
+    out .= in .* permutedims(A.diag) .* alpha .+ out .* beta
+@inline addmul!(out::AbstractMatrix, in::Transpose{<:Any,<:StridedMatrix}, A::Adjoint{<:Any,<:Diagonal},
+                alpha::Number, beta::Number) =
+    out .= in .* adjoint(A.parent.diag) .* alpha .+ out .* beta
+@inline addmul!(out::AbstractMatrix, in::Transpose{<:Any,<:StridedMatrix}, A::Transpose{<:Any,<:Diagonal},
+                alpha::Number, beta::Number) =
+    out .= in .* transpose(A.parent.diag) .* alpha .+ out .* beta
 
 # ambiguities with Symmetric/Hermitian
 # RealHermSymComplex[Sym]/[Herm] only include Number; invariant to [c]transpose
@@ -356,7 +398,7 @@ function ldiv!(D::Diagonal{T}, v::AbstractVector{T}) where {T}
     v
 end
 function ldiv!(D::Diagonal{T}, V::AbstractMatrix{T}) where {T}
-    @assert !has_offset_axes(V)
+    require_one_based_indexing(V)
     if size(V,1) != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(V,1)) rows"))
     end
@@ -384,7 +426,7 @@ function ldiv!(D::Diagonal, A::Union{LowerTriangular,UpperTriangular})
 end
 
 function rdiv!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
-    @assert !has_offset_axes(A)
+    require_one_based_indexing(A)
     dd = D.diag
     m, n = size(A)
     if (k = length(dd)) ≠ n
@@ -432,6 +474,44 @@ function kron(A::Diagonal{T1}, B::Diagonal{T2}) where {T1<:Number, T2<:Number}
     return Diagonal(valC)
 end
 
+function kron(A::Diagonal{T}, B::AbstractMatrix{S}) where {T<:Number, S<:Number}
+    Base.require_one_based_indexing(B)
+    (mA, nA) = size(A); (mB, nB) = size(B)
+    R = zeros(Base.promote_op(*, T, S), mA * mB, nA * nB)
+    m = 1
+    for j = 1:nA
+        A_jj = A[j,j]
+        for k = 1:nB
+            for l = 1:mB
+                R[m] = A_jj * B[l,k]
+                m += 1
+            end
+            m += (nA - 1) * mB
+        end
+        m += mB
+    end
+    return R
+end
+
+function kron(A::AbstractMatrix{T}, B::Diagonal{S}) where {T<:Number, S<:Number}
+    require_one_based_indexing(A)
+    (mA, nA) = size(A); (mB, nB) = size(B)
+    R = zeros(promote_op(*, T, S), mA * mB, nA * nB)
+    m = 1
+    for j = 1:nA
+        for l = 1:mB
+            Bll = B[l,l]
+            for k = 1:mA
+                R[m] = A[k,j] * Bll
+                m += nB
+            end
+            m += 1
+        end
+        m -= nB
+    end
+    return R
+end
+
 conj(D::Diagonal) = Diagonal(conj(D.diag))
 transpose(D::Diagonal{<:Number}) = D
 transpose(D::Diagonal) = Diagonal(transpose.(D.diag))
@@ -450,8 +530,8 @@ function diag(D::Diagonal, k::Integer=0)
             "and at most $(size(D, 2)) for an $(size(D, 1))-by-$(size(D, 2)) matrix")))
     end
 end
-tr(D::Diagonal) = sum(D.diag)
-det(D::Diagonal) = prod(D.diag)
+tr(D::Diagonal) = sum(tr, D.diag)
+det(D::Diagonal) = prod(det, D.diag)
 logdet(D::Diagonal{<:Real}) = sum(log, D.diag)
 function logdet(D::Diagonal{<:Complex}) # make sure branch cut is correct
     z = sum(log, D.diag)
@@ -480,7 +560,7 @@ function ldiv!(D::Diagonal, B::StridedVecOrMat)
             if di == 0
                 throw(SingularException(i))
             end
-            B[i,j] /= di
+            B[i,j] = di \ B[i,j]
         end
     end
     return B
@@ -527,11 +607,11 @@ eigvals(D::Diagonal{<:Number}; permute::Bool=true, scale::Bool=true) = D.diag
 eigvals(D::Diagonal; permute::Bool=true, scale::Bool=true) =
     [eigvals(x) for x in D.diag] #For block matrices, etc.
 eigvecs(D::Diagonal) = Matrix{eltype(D)}(I, size(D))
-function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true)
+function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=nothing)
     if any(!isfinite, D.diag)
         throw(ArgumentError("matrix contains Infs or NaNs"))
     end
-    Eigen(eigvals(D), eigvecs(D))
+    Eigen(sorteig!(eigvals(D), eigvecs(D), sortby)...)
 end
 
 #Singular system
@@ -551,10 +631,9 @@ end
 *(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal) = Adjoint(map((t,s) -> t'*s, D.diag, parent(x)))
 *(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) =
     mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
-*(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal) = Transpose(map(*, D.diag, parent(x)))
+*(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal) = Transpose(map((t,s) -> transpose(t)*s, D.diag, parent(x)))
 *(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) =
     mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
-# TODO: these methods will yield row matrices, rather than adjoint/transpose vectors
 
 function cholesky!(A::Diagonal, ::Val{false} = Val(false); check::Bool = true)
     info = 0
@@ -575,3 +654,5 @@ end
 
 cholesky(A::Diagonal, ::Val{false} = Val(false); check::Bool = true) =
     cholesky!(cholcopy(A), Val(false); check = check)
+
+Base._sum(A::Diagonal, ::Colon) = sum(A.diag)

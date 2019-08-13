@@ -10,10 +10,33 @@ mutable struct RemoteValue
 
     waitingfor::Int   # processor we need to hear from to fill this, or 0
 
-    RemoteValue(c) = new(c, BitSet(), 0)
+    synctake::Union{ReentrantLock, Nothing}  # A lock used to synchronize the
+                      # specific case of a local put! / remote take! on an
+                      # unbuffered store. github issue #29932
+
+    function RemoteValue(c)
+        c_is_buffered = false
+        try
+            c_is_buffered = isbuffered(c)
+        catch
+        end
+
+        if c_is_buffered
+            return new(c, BitSet(), 0, nothing)
+        else
+            return new(c, BitSet(), 0, ReentrantLock())
+        end
+    end
 end
 
 wait(rv::RemoteValue) = wait(rv.c)
+
+# A wrapper type to handle issue #29932 which requires locking / unlocking of
+# RemoteValue.synctake outside of lexical scope.
+struct SyncTake
+    v::Any
+    rv::RemoteValue
+end
 
 ## core messages: do, call, fetch, wait, ref, put! ##
 struct RemoteException <: Exception
@@ -108,10 +131,12 @@ function process_messages(r_stream::TCPSocket, w_stream::TCPSocket, incoming::Bo
 end
 
 function process_tcp_streams(r_stream::TCPSocket, w_stream::TCPSocket, incoming::Bool)
-    disable_nagle(r_stream)
+    Sockets.nagle(r_stream, false)
+    Sockets.quickack(r_stream, true)
     wait_connected(r_stream)
     if r_stream != w_stream
-        disable_nagle(w_stream)
+        Sockets.nagle(w_stream, false)
+        Sockets.quickack(w_stream, true)
         wait_connected(w_stream)
     end
     message_handler_loop(r_stream, w_stream, incoming)
@@ -267,7 +292,15 @@ end
 function handle_msg(msg::CallMsg{:call_fetch}, header, r_stream, w_stream, version)
     @async begin
         v = run_work_thunk(()->msg.f(msg.args...; msg.kwargs...), false)
-        deliver_result(w_stream, :call_fetch, header.notify_oid, v)
+        if isa(v, SyncTake)
+            try
+                deliver_result(w_stream, :call_fetch, header.notify_oid, v.v)
+            finally
+                unlock(v.rv.synctake)
+            end
+        else
+            deliver_result(w_stream, :call_fetch, header.notify_oid, v)
+        end
     end
 end
 
@@ -307,7 +340,7 @@ function handle_msg(msg::JoinPGRPMsg, header, r_stream, w_stream, version)
     topology(msg.topology)
 
     if !msg.enable_threaded_blas
-        disable_threaded_libs()
+        Base.disable_library_threading()
     end
 
     lazy = msg.lazy

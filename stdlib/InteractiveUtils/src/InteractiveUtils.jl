@@ -173,7 +173,7 @@ function methodswith(t::Type; supertypes::Bool=false)
 end
 
 # subtypes
-function _subtypes(m::Module, x::Type, sts=Set{Any}(), visited=Set{Module}())
+function _subtypes(m::Module, x::Type, sts=Base.IdSet{Any}(), visited=Base.IdSet{Module}())
     push!(visited, m)
     xt = unwrap_unionall(x)
     if !isa(xt, DataType)
@@ -212,8 +212,8 @@ function _subtypes_in(mods::Array, x::Type)
         # Fast path
         return Type[]
     end
-    sts = Set{Any}()
-    visited = Set{Module}()
+    sts = Base.IdSet{Any}()
+    visited = Base.IdSet{Module}()
     for m in mods
         _subtypes(m, x, sts, visited)
     end
@@ -316,9 +316,9 @@ export peakflops
 [`gemm!`](@ref LinearAlgebra.BLAS.gemm!). For more information see
 [`LinearAlgebra.peakflops`](@ref).
 
-!!! note
-    This function will move to the `LinearAlgebra` standard library in the
-    future, and is already available as `LinearAlgebra.peakflops`.
+!!! compat "Julia 1.1"
+    This function will be moved from `InteractiveUtils` to `LinearAlgebra` in the
+    future. In Julia 1.1 and later it is available as `LinearAlgebra.peakflops`.
 """
 function peakflops(n::Integer=2000; parallel::Bool=false)
     # Base.depwarn("`peakflop`s have moved to the LinearAlgebra module, " *

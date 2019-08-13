@@ -522,8 +522,8 @@ static inline unsigned long jl_getauxval(unsigned long type)
 {
     // First, try resolving getauxval in libc
     auto libc = jl_dlopen(nullptr, JL_RTLD_LOCAL);
-    static (unsigned long (*)(unsigned long) getauxval_p;
-    if (jl_dlsym(libc, "getauxval", &getauxval_p, 0) {
+    static unsigned long (*getauxval_p)(unsigned long) = NULL;
+    if (getauxval_p == NULL && jl_dlsym(libc, "getauxval", (void **)&getauxval_p, 0)) {
         return getauxval_p(type);
     }
 

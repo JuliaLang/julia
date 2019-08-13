@@ -26,11 +26,7 @@ JL_DLLEXPORT size_t jl_LLVMDisasmInstruction(void *DC, uint8_t *Bytes, uint64_t 
 int32_t jl_assign_functionID(const char *fname) UNAVAILABLE
 
 void jl_init_codegen(void) { }
-void jl_fptr_to_llvm(jl_fptr_t fptr, jl_method_instance_t *lam, int specsig)
-{
-    if (!specsig)
-        lam->fptr = fptr;
-}
+void jl_fptr_to_llvm(void *fptr, jl_method_instance_t *lam, int specsig) { }
 
 int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline)
 {
@@ -59,16 +55,15 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
     return decls;
 }
 
-jl_value_t *jl_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint32_t nargs);
-jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, const char *F, size_t world)
+jl_value_t *jl_fptr_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint32_t nargs);
+jl_callptr_t jl_generate_fptr(jl_method_instance_t **pli, jl_llvm_functions_t decls, size_t world)
 {
-    jl_generic_fptr_t fptr;
-    fptr.fptr = (jl_fptr_t)&jl_interpret_call;
-    fptr.jlcall_api = JL_API_INTERPRETED;
-    return fptr;
+    return (jl_callptr_t)&jl_fptr_interpret_call;
 }
 
 JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION(void)
 {
     return 0;
 }
+
+jl_array_t *jl_cfunction_list;

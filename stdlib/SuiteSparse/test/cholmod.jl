@@ -676,6 +676,11 @@ end
     @test_throws ArgumentError logdet(Fnew)
 end
 
+@testset "Issue #28985" begin
+    @test typeof(cholesky(sparse(I, 4, 4))'\rand(4)) == Array{Float64, 1}
+    @test typeof(cholesky(sparse(I, 4, 4))'\rand(4,1)) == Array{Float64, 2}
+end
+
 @testset "Issue with promotion during conversion to CHOLMOD.Dense" begin
     @test CHOLMOD.Dense(fill(1, 5)) == fill(1, 5, 1)
     @test CHOLMOD.Dense(fill(1f0, 5)) == fill(1, 5, 1)
@@ -759,10 +764,8 @@ end
 end
 
 @testset "Check inputs to Sparse. Related to #20024" for A_ in (
-    SparseMatrixCSC(2, 2, [1, 2], CHOLMOD.SuiteSparse_long[], Float64[]),
-    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[]),
-    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[], Float64[1.0]),
-    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[1.0]))
+    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1,2], Float64[]),
+    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1,2], Float64[1.0]))
     @test_throws ArgumentError CHOLMOD.Sparse(size(A_)..., A_.colptr .- 1, A_.rowval .- 1, A_.nzval)
     @test_throws ArgumentError CHOLMOD.Sparse(A_)
 end

@@ -3,7 +3,7 @@
 module SPQR
 
 import Base: \
-using Base: has_offset_axes
+using Base: require_one_based_indexing
 using LinearAlgebra
 
 # ordering options */
@@ -346,13 +346,14 @@ _ret_size(F::QRSparse, b::AbstractVector) = (size(F, 2),)
 _ret_size(F::QRSparse, B::AbstractMatrix) = (size(F, 2), size(B, 2))
 
 LinearAlgebra.rank(F::QRSparse) = reduce(max, view(F.R.rowval, 1:nnz(F.R)), init = eltype(F.R.rowval)(0))
+LinearAlgebra.rank(S::SparseMatrixCSC) = rank(qr(S))
 
 function (\)(F::QRSparse{T}, B::VecOrMat{Complex{T}}) where T<:LinearAlgebra.BlasReal
 # |z1|z3|  reinterpret  |x1|x2|x3|x4|  transpose  |x1|y1|  reshape  |x1|y1|x3|y3|
 # |z2|z4|      ->       |y1|y2|y3|y4|     ->      |x2|y2|     ->    |x2|y2|x4|y4|
 #                                                 |x3|y3|
 #                                                 |x4|y4|
-    @assert !has_offset_axes(F, B)
+    require_one_based_indexing(F, B)
     c2r = reshape(copy(transpose(reinterpret(T, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
     x = F\c2r
 
@@ -394,7 +395,7 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
     X[rnk + 1:end, :] .= 0
 
     # Solve R*X = B
-    LinearAlgebra.ldiv!(UpperTriangular(view(F.R, Base.OneTo(rnk), Base.OneTo(rnk))),
+    LinearAlgebra.ldiv!(UpperTriangular(F.R[Base.OneTo(rnk), Base.OneTo(rnk)]),
                         view(X0, Base.OneTo(rnk), :))
 
     # Apply right permutation and extract solution from X

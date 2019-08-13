@@ -398,6 +398,10 @@ end
     unique!(u)
     @test u == [5,"w","we","r"]
     u = [1,2,5,1,3,2]
+    @test unique!(x -> x ^ 2, [1, -1, 3, -3, 5, -5]) == [1, 3, 5]
+    @test unique!(n -> n % 3, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6]) == [5, 1, 9]
+    @test unique!(iseven, [2, 3, 5, 7, 9]) == [2, 3]
+    @test unique!(x -> x % 2 == 0 ? :even : :odd, [1, 2, 3, 4, 2, 2, 1]) == [1, 2]
 end
 
 @testset "allunique" begin
@@ -588,11 +592,16 @@ end
 end
 
 @testset "⊆, ⊊, ⊈, ⊇, ⊋, ⊉, <, <=, issetequal" begin
-    a = [1, 2]
-    b = [2, 1, 3]
-    for C = (Tuple, identity, Set, BitSet, Base.IdSet{Int})
-        A = C(a)
-        B = C(b)
+    a = [2, 1, 2]
+    b = [2, 3, 1, 3]
+    ua = unique(a)
+    ub = unique(b)
+    for TA in (Tuple, identity, Set, BitSet, Base.IdSet{Int}),
+        TB in (Tuple, identity, Set, BitSet, Base.IdSet{Int}),
+        uA = false:true,
+        uB = false:true
+        A = TA(uA ? ua : a)
+        B = TB(uB ? ub : b)
         @test A ⊆ B
         @test A ⊊ B
         @test !(A ⊈ B)
@@ -607,6 +616,10 @@ end
         @test !(B ⊉ A)
         @test !issetequal(A, B)
         @test !issetequal(B, A)
+        for T = (Tuple, identity, Set, BitSet, Base.IdSet{Int})
+            @test issetequal(A, T(A))
+            @test issetequal(B, T(B))
+        end
         if A isa AbstractSet && B isa AbstractSet
             @test A <= B
             @test A <  B
@@ -617,11 +630,28 @@ end
             @test B >= A
             @test B >  A
         end
-        for D = (Tuple, identity, Set, BitSet)
-            @test issetequal(A, D(A))
-            @test !issetequal(A, D(B))
-        end
     end
+end
+
+@testset "optimized union! with max_values" begin
+    # issue #30315
+    T = Union{Nothing, Bool}
+    @test Base.max_values(T) == 3
+    d = Set{T}()
+    union!(d, (nothing, true, false))
+    @test length(d) == 3
+    @test d == Set((nothing, true, false))
+    @test nothing in d
+    @test true    in d
+    @test false   in d
+
+    for X = (Int8, Int16, Int32, Int64)
+        @test Base.max_values(Union{Nothing, X}) == (sizeof(X) < sizeof(Int) ?
+                                                     2^(8*sizeof(X)) + 1 :
+                                                     typemax(Int))
+    end
+    # this does not account for non-empty intersections of the unioned types
+    @test Base.max_values(Union{Int8,Int16}) == 2^8 + 2^16
 end
 
 struct OpenInterval{T}

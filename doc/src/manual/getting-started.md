@@ -94,7 +94,7 @@ julia [switches] -- [programfile] [args...]
 |Switch                                 |Description|
 |:---                                   |:---|
 |`-v`, `--version`                      |Display version information|
-|`-h`, `--help`                         |Print this message|
+|`-h`, `--help`                         |Print command-line options (this message).|
 |`--project[={<dir>\|@.}]`              |Set <dir> as the home project/environment. The default @. option will search through parent directories until a Project.toml or JuliaProject.toml file is found.|
 |`-J`, `--sysimage <file>`              |Start up with the given system image file|
 |`-H`, `--home <dir>`                   |Set location of `julia` executable|
@@ -124,6 +124,11 @@ julia [switches] -- [programfile] [args...]
 |`--code-coverage`                      |equivalent to `--code-coverage=user`|
 |`--track-allocation={none\|user\|all}` |Count bytes allocated by each source line|
 |`--track-allocation`                   |equivalent to `--track-allocation=user`|
+
+!!! compat "Julia 1.1"
+    In Julia 1.0, the default `--project=@.` option did not search up from the root
+    directory of a Git repository for the `Project.toml` file. From Julia 1.1 forward, it
+    does.
 
 ## Resources
 

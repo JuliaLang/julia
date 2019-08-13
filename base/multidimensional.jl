@@ -89,10 +89,14 @@ module IteratorsMD
 
     # indexing
     getindex(index::CartesianIndex, i::Integer) = index.I[i]
+    Base.get(A::AbstractArray, I::CartesianIndex, default) = get(A, I.I, default)
     eltype(::Type{T}) where {T<:CartesianIndex} = eltype(fieldtype(T, :I))
 
     # access to index tuple
     Tuple(index::CartesianIndex) = index.I
+
+    # equality
+    Base.:(==)(a::CartesianIndex{N}, b::CartesianIndex{N}) where N = a.I == b.I
 
     # zeros and ones
     zero(::CartesianIndex{N}) where {N} = zero(CartesianIndex{N})
@@ -141,11 +145,15 @@ module IteratorsMD
     # nextind and prevind with CartesianIndex
     function Base.nextind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
         iter = CartesianIndices(axes(a))
-        return CartesianIndex(inc(i.I, first(iter).I, last(iter).I))
+        # might overflow
+        I = inc(i.I, first(iter).I, last(iter).I)
+        return I
     end
     function Base.prevind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
         iter = CartesianIndices(axes(a))
-        return CartesianIndex(dec(i.I, last(iter).I, first(iter).I))
+        # might underflow
+        I = dec(i.I, last(iter).I, first(iter).I)
+        return I
     end
 
     # Iteration over the elements of CartesianIndex cannot be supported until its length can be inferred,
@@ -211,6 +219,28 @@ module IteratorsMD
     CartesianIndex(1, 2)
     ```
 
+    ## Broadcasting
+
+    `CartesianIndices` support broadcasting arithmetic (+ and -) with a `CartesianIndex`.
+
+    !!! compat "Julia 1.1"
+        Broadcasting of CartesianIndices requires at least Julia 1.1.
+
+    ```jldoctest
+    julia> CIs = CartesianIndices((2:3, 5:6))
+    2×2 CartesianIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}}:
+     CartesianIndex(2, 5)  CartesianIndex(2, 6)
+     CartesianIndex(3, 5)  CartesianIndex(3, 6)
+
+    julia> CI = CartesianIndex(3, 4)
+    CartesianIndex(3, 4)
+
+    julia> CIs .+ CI
+    2×2 CartesianIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}}:
+     CartesianIndex(5, 9)  CartesianIndex(5, 10)
+     CartesianIndex(6, 9)  CartesianIndex(6, 10)
+    ```
+
     For cartesian to linear index conversion, see [`LinearIndices`](@ref).
     """
     struct CartesianIndices{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{CartesianIndex{N},N}
@@ -228,6 +258,26 @@ module IteratorsMD
 
     CartesianIndices(A::AbstractArray) = CartesianIndices(axes(A))
 
+    """
+        (:)(I::CartesianIndex, J::CartesianIndex)
+
+    Construct [`CartesianIndices`](@ref) from two `CartesianIndex`.
+
+    !!! compat "Julia 1.1"
+        This method requires at least Julia 1.1.
+
+    # Examples
+    ```jldoctest
+    julia> I = CartesianIndex(2,1);
+
+    julia> J = CartesianIndex(3,3);
+
+    julia> I:J
+    2×3 CartesianIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}}:
+     CartesianIndex(2, 1)  CartesianIndex(2, 2)  CartesianIndex(2, 3)
+     CartesianIndex(3, 1)  CartesianIndex(3, 2)  CartesianIndex(3, 3)
+    ```
+    """
     (:)(I::CartesianIndex{N}, J::CartesianIndex{N}) where N =
         CartesianIndices(map((i,j) -> i:j, Tuple(I), Tuple(J)))
 
@@ -291,20 +341,30 @@ module IteratorsMD
         iterfirst, iterfirst
     end
     @inline function iterate(iter::CartesianIndices, state)
-        nextstate = CartesianIndex(inc(state.I, first(iter).I, last(iter).I))
-        nextstate.I[end] > last(iter.indices[end]) && return nothing
-        nextstate, nextstate
+        valid, I = __inc(state.I, first(iter).I, last(iter).I)
+        valid || return nothing
+        return CartesianIndex(I...), CartesianIndex(I...)
     end
 
     # increment & carry
-    @inline inc(::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
-    @inline inc(state::Tuple{Int}, start::Tuple{Int}, stop::Tuple{Int}) = (state[1]+1,)
     @inline function inc(state, start, stop)
+        _, I = __inc(state, start, stop)
+        return CartesianIndex(I...)
+    end
+
+    # increment post check to avoid integer overflow
+    @inline __inc(::Tuple{}, ::Tuple{}, ::Tuple{}) = false, ()
+    @inline function __inc(state::Tuple{Int}, start::Tuple{Int}, stop::Tuple{Int})
+        valid = state[1] < stop[1]
+        return valid, (state[1]+1,)
+    end
+
+    @inline function __inc(state, start, stop)
         if state[1] < stop[1]
-            return (state[1]+1,tail(state)...)
+            return true, (state[1]+1, tail(state)...)
         end
-        newtail = inc(tail(state), tail(start), tail(stop))
-        (start[1], newtail...)
+        valid, I = __inc(tail(state), tail(start), tail(stop))
+        return valid, (start[1], I...)
     end
 
     # 0-d cartesian ranges are special-cased to iterate once and only once
@@ -371,21 +431,32 @@ module IteratorsMD
         iterfirst, iterfirst
     end
     @inline function iterate(r::Reverse{<:CartesianIndices}, state)
-        nextstate = CartesianIndex(dec(state.I, last(r.itr).I, first(r.itr).I))
-        nextstate.I[end] < first(r.itr.indices[end]) && return nothing
-        nextstate, nextstate
+        valid, I = __dec(state.I, last(r.itr).I, first(r.itr).I)
+        valid || return nothing
+        return CartesianIndex(I...), CartesianIndex(I...)
     end
 
     # decrement & carry
-    @inline dec(::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
-    @inline dec(state::Tuple{Int}, start::Tuple{Int}, stop::Tuple{Int}) = (state[1]-1,)
     @inline function dec(state, start, stop)
-        if state[1] > stop[1]
-            return (state[1]-1,tail(state)...)
-        end
-        newtail = dec(tail(state), tail(start), tail(stop))
-        (start[1], newtail...)
+        _, I = __dec(state, start, stop)
+        return CartesianIndex(I...)
     end
+
+    # decrement post check to avoid integer overflow
+    @inline __dec(::Tuple{}, ::Tuple{}, ::Tuple{}) = false, ()
+    @inline function __dec(state::Tuple{Int}, start::Tuple{Int}, stop::Tuple{Int})
+        valid = state[1] > stop[1]
+        return valid, (state[1]-1,)
+    end
+
+    @inline function __dec(state, start, stop)
+        if state[1] > stop[1]
+            return true, (state[1]-1, tail(state)...)
+        end
+        valid, I = __dec(tail(state), tail(start), tail(stop))
+        return valid, (start[1], I...)
+    end
+
     # 0-d cartesian ranges are special-cased to iterate once and only once
     iterate(iter::Reverse{<:CartesianIndices{0}}, state=false) = state ? nothing : (CartesianIndex(), true)
 
@@ -472,7 +543,6 @@ index_dimsum() = ()
 index_lengths() = ()
 @inline index_lengths(::Real, rest...) = (1, index_lengths(rest...)...)
 @inline index_lengths(A::AbstractArray, rest...) = (length(A), index_lengths(rest...)...)
-@inline index_lengths(A::Slice, rest...) = (length(axes1(A)), index_lengths(rest...)...)
 
 # shape of array to create for getindex() with indices I, dropping scalars
 # returns a Tuple{Vararg{AbstractUnitRange}} of indices
@@ -673,6 +743,9 @@ Finite difference operator on a vector or a multidimensional array `A`. In the
 latter case the dimension to operate on needs to be specified with the `dims`
 keyword argument.
 
+!!! compat "Julia 1.1"
+    `diff` for arrays with dimension higher than 2 requires at least Julia 1.1.
+
 # Examples
 ```jldoctest
 julia> a = [2 4; 6 16]
@@ -693,7 +766,7 @@ julia> diff(vec(a))
 ```
 """
 function diff(a::AbstractArray{T,N}; dims::Integer) where {T,N}
-    has_offset_axes(a) && throw(ArgumentError("offset axes unsupported"))
+    require_one_based_indexing(a)
     1 <= dims <= N || throw(ArgumentError("dimension $dims out of range (1:$N)"))
 
     r = axes(a)
@@ -1326,33 +1399,33 @@ Return unique regions of `A` along dimension `dims`.
 julia> A = map(isodd, reshape(Vector(1:8), (2,2,2)))
 2×2×2 Array{Bool,3}:
 [:, :, 1] =
-  true   true
- false  false
+ 1  1
+ 0  0
 
 [:, :, 2] =
-  true   true
- false  false
+ 1  1
+ 0  0
 
 julia> unique(A)
 2-element Array{Bool,1}:
-  true
- false
+ 1
+ 0
 
 julia> unique(A, dims=2)
 2×1×2 Array{Bool,3}:
 [:, :, 1] =
-  true
- false
+ 1
+ 0
 
 [:, :, 2] =
-  true
- false
+ 1
+ 0
 
 julia> unique(A, dims=3)
 2×2×1 Array{Bool,3}:
 [:, :, 1] =
-  true   true
- false  false
+ 1  1
+ 0  0
 ```
 """
 unique(A::AbstractArray; dims::Union{Colon,Integer} = :) = _unique_dims(A, dims)
@@ -1455,40 +1528,53 @@ julia> extrema(A, dims = (1,2))
  (9, 15)
 ```
 """
-extrema(A::AbstractArray; dims = :) = _extrema_dims(A, dims)
+extrema(A::AbstractArray; dims = :) = _extrema_dims(identity, A, dims)
 
-_extrema_dims(A::AbstractArray, ::Colon) = _extrema_itr(A)
+"""
+    extrema(f, A::AbstractArray; dims) -> Array{Tuple}
 
-function _extrema_dims(A::AbstractArray, dims)
+Compute the minimum and maximum of `f` applied to each element in the given dimensions
+of `A`.
+
+!!! compat "Julia 1.2"
+    This method requires Julia 1.2 or later.
+"""
+extrema(f, A::AbstractArray; dims=:) = _extrema_dims(f, A, dims)
+
+_extrema_dims(f, A::AbstractArray, ::Colon) = _extrema_itr(f, A)
+
+function _extrema_dims(f, A::AbstractArray, dims)
     sz = [size(A)...]
     for d in dims
         sz[d] = 1
     end
-    B = Array{Tuple{eltype(A),eltype(A)}}(undef, sz...)
-    return extrema!(B, A)
+    T = promote_op(f, eltype(A))
+    B = Array{Tuple{T,T}}(undef, sz...)
+    return extrema!(f, B, A)
 end
 
-@noinline function extrema!(B, A)
-    @assert !has_offset_axes(B, A)
+@noinline function extrema!(f, B, A)
+    require_one_based_indexing(B, A)
     sA = size(A)
     sB = size(B)
     for I in CartesianIndices(sB)
-        AI = A[I]
-        B[I] = (AI, AI)
+        fAI = f(A[I])
+        B[I] = (fAI, fAI)
     end
     Bmax = CartesianIndex(sB)
     @inbounds @simd for I in CartesianIndices(sA)
         J = min(Bmax,I)
         BJ = B[J]
-        AI = A[I]
-        if AI < BJ[1]
-            B[J] = (AI, BJ[2])
-        elseif AI > BJ[2]
-            B[J] = (BJ[1], AI)
+        fAI = f(A[I])
+        if fAI < BJ[1]
+            B[J] = (fAI, BJ[2])
+        elseif fAI > BJ[2]
+            B[J] = (BJ[1], fAI)
         end
     end
     return B
 end
+extrema!(B, A) = extrema!(identity, B, A)
 
 # Show for pairs() with Cartesian indices. Needs to be here rather than show.jl for bootstrap order
 function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, T}, toplevel) where T <: Union{AbstractVector, Tuple}
@@ -1657,3 +1743,6 @@ function _sortslices(A::AbstractArray, d::Val{dims}; kws...) where dims
         B
     end
 end
+
+getindex(b::Ref, ::CartesianIndex{0}) = getindex(b)
+setindex!(b::Ref, x, ::CartesianIndex{0}) = setindex!(b, x)

@@ -7,7 +7,7 @@ struct SymTridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     dv::V                        # diagonal
     ev::V                        # subdiagonal
     function SymTridiagonal{T,V}(dv, ev) where {T,V<:AbstractVector{T}}
-        @assert !has_offset_axes(dv, ev)
+        require_one_based_indexing(dv, ev)
         if !(length(dv) - 1 <= length(ev) <= length(dv))
             throw(DimensionMismatch("subdiagonal has wrong length. Has length $(length(ev)), but should be either $(length(dv) - 1) or $(length(dv))."))
         end
@@ -202,6 +202,10 @@ end
 
 (\)(T::SymTridiagonal, B::StridedVecOrMat) = ldlt(T)\B
 
+# division with optional shift for use in shifted-Hessenberg solvers (hessenberg.jl):
+ldiv!(A::SymTridiagonal, B::AbstractVecOrMat; shift::Number=false) = ldiv!(ldlt(A, shift=shift), B)
+rdiv!(B::AbstractVecOrMat, A::SymTridiagonal; shift::Number=false) = rdiv!(B, ldlt(A, shift=shift))
+
 eigen!(A::SymTridiagonal{<:BlasReal}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
 eigen(A::SymTridiagonal{T}) where T = eigen!(copy_oftype(A, eigtype(T)))
 
@@ -273,6 +277,11 @@ julia> eigvecs(A, [1.])
 """
 eigvecs(A::SymTridiagonal{<:BlasFloat}, eigvals::Vector{<:Real}) = LAPACK.stein!(A.dv, A.ev, eigvals)
 
+function svdvals!(A::SymTridiagonal)
+    vals = eigvals!(A)
+    return sort!(map!(abs, vals, vals); rev=true)
+end
+
 #tril and triu
 
 istriu(M::SymTridiagonal) = iszero(M.ev)
@@ -335,21 +344,23 @@ end
 #    R. Usmani, "Inversion of a tridiagonal Jacobi matrix",
 #    Linear Algebra and its Applications 212-213 (1994), pp.413-414
 #    doi:10.1016/0024-3795(94)90414-6
-function det_usmani(a::V, b::V, c::V) where {T,V<:AbstractVector{T}}
-    @assert !has_offset_axes(a, b, c)
+function det_usmani(a::V, b::V, c::V, shift::Number=0) where {T,V<:AbstractVector{T}}
+    require_one_based_indexing(a, b, c)
     n = length(b)
-    θa = one(T)
+    θa = oneunit(T)+zero(shift)
     if n == 0
         return θa
     end
-    θb = b[1]
+    θb = b[1]+shift
     for i in 2:n
-        θb, θa = b[i]*θb - a[i-1]*c[i-1]*θa, θb
+        θb, θa = (b[i]+shift)*θb - a[i-1]*c[i-1]*θa, θb
     end
     return θb
 end
 
-det(A::SymTridiagonal) = det_usmani(A.ev, A.dv, A.ev)
+# det with optional diagonal shift for use with shifted Hessenberg factorizations
+det(A::SymTridiagonal; shift::Number=false) = det_usmani(A.ev, A.dv, A.ev, shift)
+logabsdet(A::SymTridiagonal; shift::Number=false) = logabsdet(ldlt(A; shift=shift))
 
 function getindex(A::SymTridiagonal{T}, i::Integer, j::Integer) where T
     if !(1 <= i <= size(A,2) && 1 <= j <= size(A,2))
@@ -383,7 +394,7 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     du::V    # sup-diagonal
     du2::V   # supsup-diagonal for pivoting in LU
     function Tridiagonal{T,V}(dl, d, du) where {T,V<:AbstractVector{T}}
-        @assert !has_offset_axes(dl, d, du)
+        require_one_based_indexing(dl, d, du)
         n = length(d)
         if (length(dl) != n-1 || length(du) != n-1)
             throw(ArgumentError(string("cannot construct Tridiagonal from incompatible ",
@@ -394,7 +405,7 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     end
     # constructor used in lu!
     function Tridiagonal{T,V}(dl, d, du, du2) where {T,V<:AbstractVector{T}}
-        @assert !has_offset_axes(dl, d, du, du2)
+        require_one_based_indexing(dl, d, du, du2)
         # length checks?
         new{T,V}(dl, d, du, du2)
     end
@@ -578,6 +589,7 @@ iszero(M::Tridiagonal) = iszero(M.dl) && iszero(M.d) && iszero(M.du)
 isone(M::Tridiagonal) = iszero(M.dl) && all(isone, M.d) && iszero(M.du)
 istriu(M::Tridiagonal) = iszero(M.dl)
 istril(M::Tridiagonal) = iszero(M.du)
+isdiag(M::Tridiagonal) = iszero(M.dl) && iszero(M.du)
 
 function tril!(M::Tridiagonal, k::Integer=0)
     n = length(M.d)
@@ -640,3 +652,6 @@ function SymTridiagonal{T}(M::Tridiagonal) where T
         throw(ArgumentError("Tridiagonal is not symmetric, cannot convert to SymTridiagonal"))
     end
 end
+
+Base._sum(A::Tridiagonal, ::Colon) = sum(A.d) + sum(A.dl) + sum(A.du)
+Base._sum(A::SymTridiagonal, ::Colon) = sum(A.dv) + 2sum(A.ev)

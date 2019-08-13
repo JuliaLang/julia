@@ -52,9 +52,11 @@ function edit(path::AbstractString, line::Integer=0)
         cmd = line != 0 ? `$command +$line $path` : `$command $path`
     elseif name == "textmate" || name == "mate" || name == "kate"
         cmd = line != 0 ? `$command $path -l $line` : `$command $path`
+    elseif name == "rmate"
+        cmd = line != 0 ? `$command $path -l $line -f` : `$command $path -f`
     elseif startswith(name, "subl") || startswith(name, "atom")
         cmd = line != 0 ? `$command $path:$line` : `$command $path`
-    elseif name == "code" || (Sys.iswindows() && uppercase(name) == "CODE.EXE")
+    elseif name == "code" || (Sys.iswindows() && (uppercase(name) == "CODE.EXE" || uppercase(name) == "CODE.CMD"))
         cmd = line != 0 ? `$command -g $path:$line` : `$command -g $path`
     elseif startswith(name, "notepad++")
         cmd = line != 0 ? `$command $path -n$line` : `$command $path`
@@ -87,10 +89,11 @@ end
     edit(module)
 
 Edit the definition of a function, optionally specifying a tuple of types to indicate which
-method to edit.
+method to edit. For modules, open the main source file. The module needs to be loaded with
+`using` or `import` first.
 
-For modules, open the main source file. The module needs to be loaded with `using` or
-`import` first.
+!!! compat "Julia 1.1"
+    `edit` on modules requires at least Julia 1.1.
 
 The editor can be changed by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment
 variable.

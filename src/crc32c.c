@@ -43,6 +43,7 @@
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "processor.h"
 
 #ifdef _CPU_AARCH64_
 #  include <sys/auxv.h>
@@ -333,7 +334,7 @@ JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len)
 #  else
 static crc32c_func_t crc32c_dispatch(unsigned long hwcap)
 {
-    if (hwcap & HWCAP_CRC32)
+    if (hwcap & (1 << JL_AArch64_crc))
         return crc32c_armv8;
     return jl_crc32c_sw;
 }

@@ -5,7 +5,7 @@ getfield(getfield(Main, :Core), :eval)(getfield(Main, :Core), :(baremodule Compi
 using Core.Intrinsics, Core.IR
 
 import Core: print, println, show, write, unsafe_write, stdout, stderr,
-             _apply, svec, apply_type, Builtin, IntrinsicFunction, MethodInstance
+             _apply, svec, apply_type, Builtin, IntrinsicFunction, MethodInstance, CodeInstance
 
 const getproperty = getfield
 const setproperty! = setfield!
@@ -24,7 +24,6 @@ include(mod, x) = Core.include(mod, x)
 
 # essential files and libraries
 include("essentials.jl")
-include("some.jl")
 include("ctypes.jl")
 include("generator.jl")
 include("reflection.jl")

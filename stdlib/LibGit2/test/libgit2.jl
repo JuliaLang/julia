@@ -44,16 +44,17 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
         !debug && return ""
         str = read(seekstart(output), String)
         isempty(str) && return ""
-        "Process output found:\n\"\"\"\n$str\n\"\"\""
+        return "Process output found:\n\"\"\"\n$str\n\"\"\""
     end
     out = IOBuffer()
     with_fake_pty() do pty_slave, pty_master
         p = run(detach(cmd), pty_slave, pty_slave, pty_slave, wait=false)
+        Base.close_stdio(pty_slave)
 
         # Kill the process if it takes too long. Typically occurs when process is waiting
         # for input.
         timer = Channel{Symbol}(1)
-        @async begin
+        watcher = @async begin
             waited = 0
             while waited < timeout && process_running(p)
                 sleep(1)
@@ -74,8 +75,7 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
                 sleep(3)
                 process_running(p) && kill(p, Base.SIGKILL)
             end
-
-            close(pty_master)
+            wait(p)
         end
 
         for (challenge, response) in challenges
@@ -87,12 +87,17 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
             write(pty_master, response)
         end
 
-        # Capture output from process until `master` is closed
-        while !eof(pty_master)
-            write(out, readavailable(pty_master))
+        # Capture output from process until `pty_slave` is closed
+        try
+            write(out, pty_master)
+        catch ex
+            if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
+                rethrow() # ignore EIO from master after slave dies
+            end
         end
 
         status = fetch(timer)
+        close(pty_master)
         if status != :success
             if status == :timeout
                 error("Process timed out possibly waiting for a response. ",
@@ -101,6 +106,7 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
                 error("Failed process. ", format_output(out), "\n", p)
             end
         end
+        wait(watcher)
     end
     nothing
 end
@@ -569,6 +575,27 @@ end
         cred = LibGit2.GitCredential("https", "github.com", nothing, nothing)
         @test !LibGit2.ismatch("https://@github.com", cred)
         Base.shred!(cred)
+    end
+
+    @testset "GITHUB_REGEX" begin
+        github_regex_test = function(url, user, repo)
+            m = match(LibGit2.GITHUB_REGEX, url)
+            @test m !== nothing
+            @test m[1] == "$user/$repo"
+            @test m[2] == user
+            @test m[3] == repo
+        end
+        user = "User"
+        repo = "Repo"
+        github_regex_test("git@github.com/$user/$repo.git", user, repo)
+        github_regex_test("https://github.com/$user/$repo.git", user, repo)
+        github_regex_test("https://username@github.com/$user/$repo.git", user, repo)
+        github_regex_test("ssh://git@github.com/$user/$repo.git", user, repo)
+        github_regex_test("git@github.com/$user/$repo", user, repo)
+        github_regex_test("https://github.com/$user/$repo", user, repo)
+        github_regex_test("https://username@github.com/$user/$repo", user, repo)
+        github_regex_test("ssh://git@github.com/$user/$repo", user, repo)
+        @test !occursin(LibGit2.GITHUB_REGEX, "git@notgithub.com/$user/$repo.git")
     end
 end
 

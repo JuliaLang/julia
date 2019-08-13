@@ -127,11 +127,11 @@ end
 open_streams = []
 function cleanup()
     for s_ in open_streams
-        try close(s_); catch; end
+        close(s_)
     end
     empty!(open_streams)
     for tsk in tasks
-        Base.wait(tsk)
+        wait(tsk)
     end
     empty!(tasks)
 end
@@ -559,9 +559,12 @@ let p = Pipe()
     t = @async read(p)
     @sync begin
         @async write(p, zeros(UInt16, 660_000))
+        yield() # TODO: need to add an Event to the previous line
+        order::UInt16 = 0
         for i = 1:typemax(UInt16)
-            @async write(p, UInt16(i))
+            @async (order += 1; write(p, order); nothing)
         end
+        yield() # TODO: need to add an Event to the previous line
         @async close(p.in)
     end
     s = reinterpret(UInt16, fetch(t))

@@ -43,12 +43,9 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
 end
 
 function method_argnames(m::Method)
-    if !isdefined(m, :source) && isdefined(m, :generator)
-        return m.generator.argnames
-    end
-    argnames = Vector{Any}(undef, m.nargs)
-    ccall(:jl_fill_argnames, Cvoid, (Any, Any), m.source, argnames)
-    return argnames
+    argnames = ccall(:jl_uncompress_argnames, Vector{Any}, (Any,), m.slot_syms)
+    isempty(argnames) && return argnames
+    return argnames[1:m.nargs]
 end
 
 function arg_decl_parts(m::Method)
@@ -60,8 +57,8 @@ function arg_decl_parts(m::Method)
     end
     file = m.file
     line = m.line
-    if isdefined(m, :source) || isdefined(m, :generator)
-        argnames = method_argnames(m)
+    argnames = method_argnames(m)
+    if length(argnames) >= m.nargs
         show_env = ImmutableDict{Symbol, Any}()
         for t in tv
             show_env = ImmutableDict(show_env, :unionall_env => t)
@@ -74,26 +71,23 @@ function arg_decl_parts(m::Method)
     return tv, decls, file, line
 end
 
+const empty_sym = Symbol("")
+
 function kwarg_decl(m::Method, kwtype::DataType)
     sig = rewrap_unionall(Tuple{kwtype, Any, unwrap_unionall(m.sig).parameters...}, m.sig)
-    kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, max_world(m))
+    kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, get_world_counter())
     if kwli !== nothing
         kwli = kwli::Method
-        if isdefined(kwli, :source)
-            src = kwli.source
-            nslots = ccall(:jl_ast_nslots, Int, (Any,), src)
-            slotnames = Vector{Any}(undef, nslots)
-            ccall(:jl_fill_argnames, Cvoid, (Any, Any), src, slotnames)
-            kws = filter(x -> !('#' in string(x)), slotnames[(kwli.nargs + 1):end])
-            # ensure the kwarg... is always printed last. The order of the arguments are not
-            # necessarily the same as defined in the function
-            i = findfirst(x -> endswith(string(x), "..."), kws)
-            if i !== nothing
-                push!(kws, kws[i])
-                deleteat!(kws, i)
-            end
-            return kws
+        slotnames = ccall(:jl_uncompress_argnames, Vector{Any}, (Any,), kwli.slot_syms)
+        kws = filter(x -> !(x === empty_sym || '#' in string(x)), slotnames[(kwli.nargs + 1):end])
+        # ensure the kwarg... is always printed last. The order of the arguments are not
+        # necessarily the same as defined in the function
+        i = findfirst(x -> endswith(string(x), "..."), kws)
+        if i !== nothing
+            push!(kws, kws[i])
+            deleteat!(kws, i)
         end
+        return kws
     end
     return ()
 end
@@ -104,9 +98,61 @@ function show_method_params(io::IO, tv)
         if length(tv) == 1
             show(io, tv[1])
         else
-            show_delim_array(io, tv, '{', ',', '}', false)
+            print(io, "{")
+            for i = 1:length(tv)
+                if i > 1
+                    print(io, ", ")
+                end
+                x = tv[i]
+                show(io, x)
+                io = IOContext(io, :unionall_env => x)
+            end
+            print(io, "}")
         end
     end
+end
+
+# In case the line numbers in the source code have changed since the code was compiled,
+# allow packages to set a callback function that corrects them.
+# (Used by Revise and perhaps other packages.)
+default_methodloc(method::Method) = method.file, method.line
+const methodloc_callback = Ref{Function}(default_methodloc)
+
+functionloc(m::Core.MethodInstance) = functionloc(m.def)
+
+"""
+    functionloc(m::Method)
+
+Returns a tuple `(filename,line)` giving the location of a `Method` definition.
+"""
+function functionloc(m::Method)
+    file, ln = invokelatest(methodloc_callback[], m)
+    if ln <= 0
+        error("could not determine location of method definition")
+    end
+    return (find_source_file(string(file)), ln)
+end
+
+"""
+    functionloc(f::Function, types)
+
+Returns a tuple `(filename,line)` giving the location of a generic `Function` definition.
+"""
+functionloc(@nospecialize(f), @nospecialize(types)) = functionloc(which(f,types))
+
+function functionloc(@nospecialize(f))
+    mt = methods(f)
+    if isempty(mt)
+        if isa(f, Function)
+            error("function has no definitions")
+        else
+            error("object is not callable")
+        end
+    end
+    if length(mt) > 1
+        error("function has multiple methods; please specify a type signature")
+    end
+    return functionloc(first(mt))
 end
 
 function show(io::IO, m::Method; kwtype::Union{DataType, Nothing}=nothing)
@@ -147,22 +193,47 @@ function show(io::IO, m::Method; kwtype::Union{DataType, Nothing}=nothing)
     show_method_params(io, tv)
     print(io, " in ", m.module)
     if line > 0
+        try
+            file, line = invokelatest(methodloc_callback[], m)
+        catch
+        end
         print(io, " at ", file, ":", line)
+    end
+end
+
+function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
+    mt = ms.mt
+    name = mt.name
+    hasname = isdefined(mt.module, name) &&
+              typeof(getfield(mt.module, name)) <: Function
+    n = length(ms)
+    if mt.module === Core && n == 0 && mt.defs === nothing && mt.cache !== nothing
+        # try to detect Builtin
+        print(io, "# built-in function; no methods")
+    else
+        m = n==1 ? "method" : "methods"
+        print(io, "# $n $m")
+        sname = string(name)
+        namedisplay = namefmt(sname)
+        if hasname
+            what = startswith(sname, '@') ? "macro" : "generic function"
+            print(io, " for ", what, " ", namedisplay)
+        elseif '#' in sname
+            print(io, " for anonymous function ", namedisplay)
+        elseif mt === _TYPE_NAME.mt
+            print(io, " for type constructor")
+        end
+        print(io, ":")
     end
 end
 
 function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=true)
     mt = ms.mt
     name = mt.name
-    isself = isdefined(mt.module, name) &&
-             typeof(getfield(mt.module, name)) <: Function
-    n = length(ms)
+    hasname = isdefined(mt.module, name) &&
+              typeof(getfield(mt.module, name)) <: Function
     if header
-        m = n==1 ? "method" : "methods"
-        sname = string(name)
-        ns = (isself || '#' in sname) ? sname : string("(::", name, ")")
-        what = startswith(ns, '@') ? "macro" : "generic function"
-        print(io, "# $n $m for ", what, " \"", ns, "\":")
+        show_method_list_header(io, ms, str -> "\""*str*"\"")
     end
     kwtype = isdefined(mt, :kwsorter) ? typeof(mt.kwsorter) : nothing
     n = rest = 0
@@ -170,12 +241,17 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
 
     resize!(LAST_SHOWN_LINE_INFOS, 0)
     for meth in ms
-       if max==-1 || n<max
+        if max==-1 || n<max
             n += 1
             println(io)
             print(io, "[$(n)] ")
             show(io, meth; kwtype=kwtype)
-            push!(LAST_SHOWN_LINE_INFOS, (string(meth.file), meth.line))
+            file, line = meth.file, meth.line
+            try
+                file, line = invokelatest(methodloc_callback[], meth)
+            catch
+            end
+            push!(LAST_SHOWN_LINE_INFOS, (string(file), line))
         else
             rest += 1
             last = meth
@@ -186,7 +262,10 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
         if rest == 1
             show(io, last; kwtype=kwtype)
         else
-            print(io,"... $rest methods not shown (use methods($name) to see them all)")
+            print(io, "... $rest methods not shown")
+            if hasname
+                print(io, " (use methods($name) to see them all)")
+            end
         end
     end
 end
@@ -264,11 +343,6 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Union{DataType, Noth
     else
         print(io, "(", d1[1], "::<b>", d1[2], "</b>)")
     end
-    if !isempty(tv)
-        print(io,"<i>")
-        show_delim_array(io, tv, '{', ',', '}', false)
-        print(io,"</i>")
-    end
     print(io, "(")
     join(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
                       for d in decls[2:end]], ", ", ", ")
@@ -281,8 +355,17 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Union{DataType, Noth
         end
     end
     print(io, ")")
+    if !isempty(tv)
+        print(io,"<i>")
+        show_method_params(io, tv)
+        print(io,"</i>")
+    end
     print(io, " in ", m.module)
     if line > 0
+        try
+            file, line = invokelatest(methodloc_callback[], m)
+        catch
+        end
         u = url(m)
         if isempty(u)
             print(io, " at ", file, ":", line)
@@ -295,13 +378,9 @@ end
 
 function show(io::IO, mime::MIME"text/html", ms::MethodList)
     mt = ms.mt
-    name = mt.name
-    n = length(ms)
-    meths = n==1 ? "method" : "methods"
-    ns = string(name)
-    what = startswith(ns, '@') ? "macro" : "generic function"
-    print(io, "$n $meths for ", what, " <b>$ns</b>:<ul>")
+    show_method_list_header(io, ms, str -> "<b>"*str*"</b>")
     kwtype = isdefined(mt, :kwsorter) ? typeof(mt.kwsorter) : nothing
+    print(io, "<ul>")
     for meth in ms
         print(io, "<li> ")
         show(io, mime, meth; kwtype=kwtype)
@@ -321,7 +400,12 @@ function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
         first = false
         print(io, "[$(i)] ")
         show(io, m)
-        push!(LAST_SHOWN_LINE_INFOS, (string(m.file), m.line))
+        file, line = m.file, m.line
+        try
+            file, line = invokelatest(methodloc_callback[], m)
+        catch
+        end
+        push!(LAST_SHOWN_LINE_INFOS, (string(file), line))
     end
 end
 

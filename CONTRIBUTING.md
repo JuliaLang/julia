@@ -2,6 +2,8 @@
 
 Hi! If you are new to the Julia community: welcome, and thanks for trying Julia. Please be sure to respect our [community standards](https://julialang.org/community/standards) in all interactions.
 
+If you are already familiar with Julia itself, this blog post by Katharine Hyatt on [Making your first Julia pull request](https://kshyatt.github.io/post/firstjuliapr/) is a great way to get started.
+
 ## Learning Julia
 
 [The learning page](https://julialang.org/learning) has a great list of resources for new and experienced users alike. [This tutorial video](https://www.youtube.com/watch?v=vWkgEddb4-A) is one recommended starting point, as is the "[Invitation to Julia](https://www.youtube.com/watch?v=gQ1y5NUD_RI)" workshop video from JuliaCon 2015  ([slide materials here](https://github.com/dpsanders/invitation_to_julia)). The [Julia documentation](https://docs.julialang.org/en/latest) covers the language and core library features, and is searchable.
@@ -12,7 +14,7 @@ Hi! If you are new to the Julia community: welcome, and thanks for trying Julia.
 
 - Contributing code? Be sure to review the [contributor checklist](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md#contributor-checklist) for helpful tips on the tools we use to build Julia.
 
-- Library feature requests are generally not accepted on this issue tracker. New libraries should be developed as [packages](https://docs.julialang.org/en/latest/manual/packages#Package-Development-1). Discuss ideas for libraries at the [Julia Discourse forum](https://discourse.julialang.org). Doing so will often lead to pointers to existing projects and bring together collaborators with common interests.
+- Library feature requests are generally not accepted on this issue tracker. New libraries should be developed as [packages](https://julialang.github.io/Pkg.jl/v1/creating-packages/). Discuss ideas for libraries at the [Julia Discourse forum](https://discourse.julialang.org). Doing so will often lead to pointers to existing projects and bring together collaborators with common interests.
 
 ## Contributor Checklist
 
@@ -24,7 +26,7 @@ Hi! If you are new to the Julia community: welcome, and thanks for trying Julia.
 
 * Keep Julia current. Julia is a fast-moving target, and many details of the language are still settling out. Keep the repository up-to-date and rebase work-in-progress frequently to make merges simpler.
 
-* Learn to use [git](http://git-scm.com), the version control system used by GitHub and the Julia project. Try a tutorial such as the one [provided by GitHub](http://try.GitHub.io/levels/1/challenges/1).
+* Learn to use [git](https://git-scm.com), the version control system used by GitHub and the Julia project. Try a tutorial such as the one [provided by GitHub](https://try.GitHub.io/levels/1/challenges/1).
 
 * Review discussions on the [Julia Discourse forum](https://discourse.julialang.org).
 
@@ -56,7 +58,7 @@ A useful bug report filed as a GitHub issue provides information about how to re
 
 ### Contributing a Julia package
 
-Julia has a built-in [package manager](https://github.com/JuliaLang/METADATA.jl) based on `git`. A number of [packages](http://pkg.julialang.org) across many domains are already available for Julia. Developers are encouraged to provide their libraries as a Julia package. The Julia manual provides instructions on [creating Julia packages](https://docs.julialang.org/en/latest/manual/packages).
+Julia has a built-in [package manager](https://julialang.github.io/Pkg.jl/v1/) based on `git`. A number of [packages](https://pkg.julialang.org) across many domains are already available for Julia. Developers are encouraged to provide their libraries as a Julia package. The manual provides instructions on [creating Julia packages](https://julialang.github.io/Pkg.jl/v1/creating-packages/).
 
 For developers who need to wrap C libraries so that they can be called from Julia, the [Clang.jl](https://github.com/ihnorton/Clang.jl) package can help generate the wrappers automatically from the C header files.
 
@@ -182,7 +184,22 @@ A doctest needs to match an interactive REPL including the `julia>` prompt. To r
 
 #### News-worthy changes
 
-For new functionality and other substantial changes, add a brief summary to `NEWS.md`. The news item should cross reference the pull request (PR) parenthetically, in the form `([#pr])`; after adding this, run `./julia doc/NEWS-update.jl` from the `julia` directory to update the cross-reference links. To add the PR reference number, first create the PR, then push an additional commit updating `NEWS.md` with the PR reference number.
+For new functionality and other substantial changes, add a brief summary to `NEWS.md`. The news item should cross reference the pull request (PR) parenthetically, in the form `([#pr])`. To add the PR reference number, first create the PR, then push an additional commit updating `NEWS.md` with the PR reference number.  We periodically run `./julia doc/NEWS-update.jl` from the julia directory to update the cross-reference links, but this should not be done in a typical PR in order to avoid conflicting commits.
+
+#### Annotations for new features, deprecations and behavior changes
+
+API additions and deprecations, and minor behavior changes are allowed in minor version releases.
+For documented features that are part of the public API, a compatibility note should be added into
+the manual or the docstring. It should state the Julia minor version that changed the behavior
+and have a brief message describing the change.
+
+At the moment, this should always be done with the following `compat` admonition
+(so that it would be possible to programmatically find the annotations in the future):
+
+  ```
+  !!! compat "Julia 1.X"
+      This method was added in Julia 1.X.
+  ```
 
 ### Contributing to core functionality or base libraries
 
@@ -212,7 +229,7 @@ or with the `runtests.jl` script, e.g. to run `test/bitarray.jl` and `test/math.
 
     ./usr/bin/julia test/runtests.jl bitarray math
 
-Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request with a [`Good to merge` message](http://blog.travis-ci.com/2012-09-04-pull-requests-just-got-even-more-awesome).
+Make sure that [Travis](https://www.travis-ci.org) greenlights the pull request with a [`Good to merge` message](https://blog.travis-ci.com/2012-09-04-pull-requests-just-got-even-more-awesome).
 
 #### Modifying base more efficiently with Revise.jl
 
@@ -293,20 +310,17 @@ Julia if you made code-changes that Revise cannot handle.
 * Julia
   - **Homepage:** <https://julialang.org>
   - **Community:** <https://julialang.org/community/>
-  - **IRC:** <http://webchat.freenode.net/?channels=Julia>
   - **Source code:** <https://github.com/JuliaLang/julia>
-  - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
-  - **Documentation:** <https://julialang.org/manual/>
-  - **Status:** <http://status.julialang.org/>
+  - **Documentation:** <https://docs.julialang.org/>
   - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
 * Design of Julia
-  - [Julia: A Fresh Approach to Numerical Computing](http://arxiv.org/pdf/1411.1607v3.pdf)
-  - [Julia: A Fast Dynamic Language for Technical Computing](https://julialang.org/images/julia-dynamic-2012-tr.pdf)
-  - [All Julia Publications](https://julialang.org/publications)
+  - [Julia: A Fresh Approach to Numerical Computing](https://julialang.org/research/julia-fresh-approach-BEKS.pdf)
+  - [Julia: Dynamism and Performance Reconciled by Design](http://janvitek.org/pubs/oopsla18b.pdf)
+  - [All Julia Publications](https://julialang.org/research)
 
 * Using GitHub
-  - [Using Julia with GitHub (video)](http://www.youtube.com/watch?v=wnFYV3ZKtOg&feature=youtu.be)
+  - [Using Julia with GitHub (video)](https://www.youtube.com/watch?v=wnFYV3ZKtOg)
   - [Using Julia on GitHub (notes for video)](https://gist.github.com/2712118#file_Julia_git_pull_request.md)
-  - [General GitHub documentation](http://help.github.com)
-  - [GitHub pull request documentation](http://help.github.com/send-pull-requests)
+  - [General GitHub documentation](https://help.github.com)
+  - [GitHub pull request documentation](https://help.github.com/articles/creating-a-pull-request/)

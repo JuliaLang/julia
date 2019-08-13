@@ -15,6 +15,17 @@ end
 @test sprint(show, complex(1, 0), context=:compact => true) == "1+0im"
 @test sprint(show, complex(true, true)) == "Complex(true,true)"
 
+@testset "unary operator on complex boolean" begin
+    @test +Complex(true, true) === Complex(1, 1)
+    @test +Complex(true, false) === Complex(1, 0)
+    @test +Complex(false, true) === Complex(0, 1)
+    @test +Complex(false, false) === Complex(0, 0)
+    @test -Complex(true, true) === Complex(-1, -1)
+    @test -Complex(true, false) === Complex(-1, 0)
+    @test -Complex(false, true) === Complex(0, -1)
+    @test -Complex(false, false) === Complex(0, 0)
+end
+
 @testset "arithmetic" begin
     @testset for T in (Float16, Float32, Float64, BigFloat)
         t = true
@@ -113,6 +124,12 @@ end
             @test sqrt(x) ≈ sqrt(big(x))
             @test tan(x) ≈ tan(big(x))
             @test tanh(x) ≈ tanh(big(x))
+            @test sec(x) ≈ sec(big(x))
+            @test csc(x) ≈ csc(big(x))
+            @test secd(x) ≈ secd(big(x))
+            @test cscd(x) ≈ cscd(big(x))
+            @test sech(x) ≈ sech(big(x))
+            @test csch(x) ≈ csch(big(x))
         end
         @testset "Inverses" begin
             @test acos(cos(x)) ≈ x
@@ -145,6 +162,12 @@ end
             @test sinh(x) ≈ (exp(x)-exp(-x))/2
             @test tan(x) ≈ sin(x)/cos(x)
             @test tanh(x) ≈ sinh(x)/cosh(x)
+            @test sec(x) ≈ inv(cos(x))
+            @test csc(x) ≈ inv(sin(x))
+            @test secd(x) ≈ inv(cosd(x))
+            @test cscd(x) ≈ inv(sind(x))
+            @test sech(x) ≈ inv(cosh(x))
+            @test csch(x) ≈ inv(sinh(x))
         end
     end
 end
@@ -696,7 +719,9 @@ end
     @test isequal(atanh(complex(-0.0,-Inf)),complex(-0.0,-pi/2))
 
     @test isequal(atanh(complex( 1.0, 0.0)),complex( Inf, 0.0))
+    @test isequal(atanh(complex( 1.0,-0.0)),complex( Inf,-0.0))
     @test isequal(atanh(complex(-1.0, 0.0)),complex(-Inf, 0.0))
+    @test isequal(atanh(complex(-1.0,-0.0)),complex(-Inf,-0.0))
     @test isequal(atanh(complex( 5.0, Inf)),complex( 0.0, pi/2))
     @test isequal(atanh(complex( 5.0,-Inf)),complex( 0.0,-pi/2))
     @test isequal(atanh(complex( 5.0, NaN)),complex( NaN, NaN))
@@ -986,6 +1011,46 @@ end
     end
 end
 
+@testset "division by Inf, issue#23134" begin
+    @testset "$T" for T in (Float32, Float64, BigFloat)
+        @test isequal(one(T) / complex(T(Inf)),         complex(zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(Inf), one(T)), complex(zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(Inf), T(NaN)), complex(zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(Inf), T(Inf)), complex(zero(T), -zero(T)))
+
+        @test isequal(one(T) / complex(T(-Inf)),         complex(-zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(-Inf), one(T)), complex(-zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(-Inf), T(NaN)), complex(-zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(-Inf), T(Inf)), complex(-zero(T), -zero(T)))
+
+        @test isequal(one(T) / complex(T(Inf),-zero(T)), complex(zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(Inf),-one(T)),  complex(zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(Inf),T(-NaN)),  complex(zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(Inf),T(-Inf)),  complex(zero(T), zero(T)))
+
+        @test isequal(one(T) / complex(T(-Inf),-zero(T)),complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(-Inf),-one(T)), complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(-Inf),T(-NaN)), complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(-Inf),T(-Inf)), complex(-zero(T), zero(T)))
+
+        @test isequal(one(T) / complex(zero(T), T(Inf)), complex(zero(T), -zero(T)))
+        @test isequal(one(T) / complex(one(T),  T(Inf)), complex(zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(NaN),  T(Inf)), complex(zero(T), -zero(T)))
+
+        @test isequal(one(T) / complex(zero(T), T(-Inf)), complex(zero(T), zero(T)))
+        @test isequal(one(T) / complex(one(T),  T(-Inf)), complex(zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(NaN),  T(-Inf)), complex(zero(T), zero(T)))
+
+        @test isequal(one(T) / complex(-zero(T), T(Inf)), complex(-zero(T), -zero(T)))
+        @test isequal(one(T) / complex(-one(T),  T(Inf)), complex(-zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(-NaN),  T(Inf)), complex(-zero(T), -zero(T)))
+
+        @test isequal(one(T) / complex(-zero(T), T(-Inf)), complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(-one(T),  T(-Inf)), complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(-NaN),  T(-Inf)), complex(-zero(T), zero(T)))
+    end
+end
+
 @testset "complex^real, issue #14342" begin
     for T in (Float32, Float64, BigFloat), p in (T(-21//10), -21//10)
         z = T(2)+0im
@@ -1064,4 +1129,22 @@ end
           (3+1im)^(Inf + 1im) ≟ (1e200+1e-200im)^Inf ≟ (1e200+1e-200im)^(Inf+1im)
 
     @test @inferred(2.0^(3.0+0im)) === @inferred((2.0+0im)^(3.0+0im)) === @inferred((2.0+0im)^3.0) === 8.0+0.0im
+end
+
+@testset "issue #31054" begin
+    @test tanh(atanh(complex(1.0,1.0))) == complex(1.0,1.0)
+    @test tanh(atanh(complex(1.0,-1.0))) == complex(1.0,-1.0)
+    @test tanh(atanh(complex(-1.0,1.0))) == complex(-1.0,1.0)
+    @test tanh(atanh(complex(-1.0,-1.0))) == complex(-1.0,-1.0)
+end
+
+@testset "issue #29840" begin
+    @testset "$T" for T in (ComplexF32, ComplexF64, Complex{BigFloat})
+        @test isequal(ComplexF64(sec(T(-10, 1000))), ComplexF64(-0.0, 0.0))
+        @test isequal(ComplexF64(csc(T(-10, 1000))), ComplexF64(0.0, 0.0))
+        @test isequal(ComplexF64(sech(T(1000, 10))), ComplexF64(-0.0, 0.0))
+        @test isequal(ComplexF64(csch(T(1000, 10))), ComplexF64(-0.0, 0.0))
+        @test isequal(ComplexF64(secd(T(-1000, 100000))), ComplexF64(0.0, 0.0))
+        @test isequal(ComplexF64(cscd(T(-1000, 100000))), ComplexF64(0.0, -0.0))
+    end
 end

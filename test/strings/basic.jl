@@ -113,7 +113,15 @@ end
     @test endswith(z, z)
 end
 
-@test filter(x -> x ∈ ['f', 'o'], "foobar") == "foo"
+@testset "filter specialization on String issue #32460" begin
+     @test filter(x -> x ∉ ['작', 'Ï', 'z', 'ξ'],
+                  GenericString("J'étais n작작é pour plaiÏre à toute âξme un peu fière")) ==
+                  "J'étais né pour plaire à toute âme un peu fière"
+     @test filter(x -> x ∉ ['작', 'Ï', 'z', 'ξ'],
+                  "J'étais n작작é pour plaiÏre à toute âξme un peu fière") ==
+                  "J'étais né pour plaire à toute âme un peu fière"
+     @test filter(x -> x ∈ ['f', 'o'], GenericString("foobar")) == "foo"
+end
 
 @testset "string iteration, and issue #1454" begin
     str = "é"
@@ -377,6 +385,12 @@ end
     @test tryparse(Float32, "32o") === nothing
 end
 
+@testset "tryparse invalid chars" begin
+    # #32314: tryparse shouldn't throw, even given strings with invalid Chars
+    @test tryparse(UInt8, "\xb5")    === nothing
+    @test tryparse(UInt8, "100\xb5") === nothing  # Code path for numeric overflow
+end
+
 import Unicode
 
 @testset "issue #10994: handle embedded NUL chars for string parsing" begin
@@ -523,7 +537,8 @@ end
     end
     # Check seven-byte sequences, should be invalid
     @test isvalid(String, UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]) == false
-
+    @test isvalid(lstrip("blablabla")) == true
+    @test isvalid(SubString(String(UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]), 1,2)) == false
     # invalid Chars
     @test  isvalid('a')
     @test  isvalid('柒')
@@ -605,6 +620,8 @@ end
         @test repeat(s, 3) === S
         @test repeat(S, 3) === S*S*S
     end
+    # Issue #32160 (string allocation unsigned overflow)
+    @test_throws OutOfMemoryError repeat('x', typemax(Csize_t))
 end
 @testset "issue #12495: check that logical indexing attempt raises ArgumentError" begin
     @test_throws ArgumentError "abc"[[true, false, true]]
@@ -925,6 +942,10 @@ let v = unsafe_wrap(Vector{UInt8}, "abc")
     s = String(v)
     @test_throws BoundsError v[1]
     push!(v, UInt8('x'))
+    @test s == "abc"
+    s = "abc"
+    v = Vector{UInt8}(s)
+    v[1] = 0x40
     @test s == "abc"
 end
 

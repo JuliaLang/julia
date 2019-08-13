@@ -13,10 +13,10 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     cosh, cot, coth, csc, csch, eltype, exp, fill!, floor, getindex, hcat,
     getproperty, imag, inv, isapprox, isone, iszero, IndexStyle, kron, length, log, map, ndims,
     oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
-    setindex!, show, similar, sin, sincos, sinh, size, size_to_strides, sqrt, StridedReinterpretArray,
-    StridedReshapedArray, strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
+    setindex!, show, similar, sin, sincos, sinh, size, sqrt,
+    strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
 using Base: hvcat_fill, IndexLinear, promote_op, promote_typeof,
-    @propagate_inbounds, @pure, reduce, typed_vcat, has_offset_axes
+    @propagate_inbounds, @pure, reduce, typed_vcat, require_one_based_indexing
 using Base.Broadcast: Broadcasted
 
 export
@@ -52,6 +52,7 @@ export
     UpperTriangular,
     UnitLowerTriangular,
     UnitUpperTriangular,
+    UpperHessenberg,
     Diagonal,
     UniformScaling,
 
@@ -357,7 +358,6 @@ include("triangular.jl")
 
 include("factorization.jl")
 include("qr.jl")
-include("hessenberg.jl")
 include("lq.jl")
 include("eigen.jl")
 include("svd.jl")
@@ -368,6 +368,7 @@ include("bunchkaufman.jl")
 include("diagonal.jl")
 include("bidiag.jl")
 include("uniformscaling.jl")
+include("hessenberg.jl")
 include("givens.jl")
 include("special.jl")
 include("bitarray.jl")
@@ -393,6 +394,10 @@ If the keyword argument `parallel` is set to `true`, `peakflops` is run in paral
 the worker processors. The flop rate of the entire parallel computer is returned. When
 running in parallel, only 1 BLAS thread is used. The argument `n` still refers to the size
 of the problem that is solved on each processor.
+
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1. In Julia 1.0 it is available from
+    the standard library `InteractiveUtils`.
 """
 function peakflops(n::Integer=2000; parallel::Bool=false)
     a = fill(1.,100,100)
@@ -434,6 +439,8 @@ function __init__()
         Base.showerror_nostdio(ex,
             "WARNING: Error during initialization of module LinearAlgebra")
     end
+    # register a hook to disable BLAS threading
+    Base.at_disable_library_threading(() -> BLAS.set_num_threads(1))
 end
 
 end # module LinearAlgebra

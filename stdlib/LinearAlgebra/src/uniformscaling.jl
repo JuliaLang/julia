@@ -48,12 +48,37 @@ julia> [1 2im 3; 1im 2 3] * I
 """
 const I = UniformScaling(true)
 
+"""
+    (I::UniformScaling)(n::Integer)
+
+Construct a `Diagonal` matrix from a `UniformScaling`.
+
+!!! compat "Julia 1.2"
+     This method is available as of Julia 1.2.
+
+# Examples
+```jldoctest
+julia> I(3)
+3×3 Diagonal{Bool,Array{Bool,1}}:
+ 1  ⋅  ⋅
+ ⋅  1  ⋅
+ ⋅  ⋅  1
+
+julia> (0.7*I)(3)
+3×3 Diagonal{Float64,Array{Float64,1}}:
+ 0.7   ⋅    ⋅
+  ⋅   0.7   ⋅
+  ⋅    ⋅   0.7
+```
+"""
+(I::UniformScaling)(n::Integer) = Diagonal(fill(I.λ, n))
+
 eltype(::Type{UniformScaling{T}}) where {T} = T
 ndims(J::UniformScaling) = 2
 Base.has_offset_axes(::UniformScaling) = false
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
-function show(io::IO, J::UniformScaling)
+function show(io::IO, ::MIME"text/plain", J::UniformScaling)
     s = "$(J.λ)"
     if occursin(r"\w+\s*[\+\-]\s*\w+", s)
         s = "($s)"
@@ -110,6 +135,29 @@ for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
             return ($t2)(ULnew)
         end
     end
+end
+
+# Adding a complex UniformScaling to the diagonal of a Hermitian
+# matrix breaks the hermiticity, if the UniformScaling is non-real.
+# However, to preserve type stability, we do not special-case a
+# UniformScaling{<:Complex} that happens to be real.
+function (+)(A::Hermitian, J::UniformScaling{<:Complex})
+    TS = Base._return_type(+, Tuple{eltype(A), typeof(J)})
+    B = copytri!(copy_oftype(parent(A), TS), A.uplo, true)
+    for i in diagind(B)
+        B[i] = A[i] + J
+    end
+    return B
+end
+
+function (-)(J::UniformScaling{<:Complex}, A::Hermitian)
+    TS = Base._return_type(+, Tuple{eltype(A), typeof(J)})
+    B = copytri!(copy_oftype(parent(A), TS), A.uplo, true)
+    B .= .-B
+    for i in diagind(B)
+        B[i] = J - A[i]
+    end
+    return B
 end
 
 function (+)(A::AbstractMatrix, J::UniformScaling)
@@ -171,6 +219,8 @@ end
     addmul!(C, J.λ, B, alpha, beta)
 rmul!(A::AbstractMatrix, J::UniformScaling) = rmul!(A, J.λ)
 lmul!(J::UniformScaling, B::AbstractVecOrMat) = lmul!(J.λ, B)
+rdiv!(A::AbstractMatrix, J::UniformScaling) = rdiv!(A, J.λ)
+ldiv!(J::UniformScaling, B::AbstractVecOrMat) = ldiv!(J.λ, B)
 
 Broadcast.broadcasted(::typeof(*), x::Number,J::UniformScaling) = UniformScaling(x*J.λ)
 Broadcast.broadcasted(::typeof(*), J::UniformScaling,x::Number) = UniformScaling(J.λ*x)
@@ -182,7 +232,7 @@ Broadcast.broadcasted(::typeof(/), J::UniformScaling,x::Number) = UniformScaling
 ## equality comparison with UniformScaling
 ==(J::UniformScaling, A::AbstractMatrix) = A == J
 function ==(A::AbstractMatrix, J::UniformScaling)
-    @assert !has_offset_axes(A)
+    require_one_based_indexing(A)
     size(A, 1) == size(A, 2) || return false
     iszero(J.λ) && return iszero(A)
     isone(J.λ) && return isone(A)
@@ -214,8 +264,17 @@ function isapprox(J::UniformScaling, A::AbstractMatrix;
 end
 isapprox(A::AbstractMatrix, J::UniformScaling; kwargs...) = isapprox(J, A; kwargs...)
 
+"""
+    copyto!(dest::AbstractMatrix, src::UniformScaling)
+
+Copies a [`UniformScaling`](@ref) onto a matrix.
+
+!!! compat "Julia 1.1"
+    In Julia 1.0 this method only supported a square destination matrix. Julia 1.1. added
+    support for a rectangular matrix.
+"""
 function copyto!(A::AbstractMatrix, J::UniformScaling)
-    @assert !has_offset_axes(A)
+    require_one_based_indexing(A)
     fill!(A, 0)
     λ = J.λ
     for i = 1:min(size(A,1),size(A,2))
@@ -251,7 +310,7 @@ for (f,dim,name) in ((:hcat,1,"rows"), (:vcat,2,"cols"))
             n = -1
             for a in A
                 if !isa(a, UniformScaling)
-                    @assert !has_offset_axes(a)
+                    require_one_based_indexing(a)
                     na = size(a,$dim)
                     n >= 0 && n != na &&
                         throw(DimensionMismatch(string("number of ", $name,
@@ -267,7 +326,7 @@ end
 
 
 function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScaling}...)
-    @assert !has_offset_axes(A...)
+    require_one_based_indexing(A...)
     nr = length(rows)
     sum(rows) == length(A) || throw(ArgumentError("mismatch between row sizes and number of arguments"))
     n = fill(-1, length(A))

@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using SuiteSparse: increment!
+using Serialization
 using LinearAlgebra: Adjoint, Transpose, SingularException
 
 @testset "UMFPACK wrappers" begin
@@ -173,6 +174,18 @@ using LinearAlgebra: Adjoint, Transpose, SingularException
         for A in sparse.((Float64[1 2; 0 0], ComplexF64[1 2; 0 0]))
             @test_throws SingularException lu(A)
             @test !issuccess(lu(A; check = false))
+        end
+    end
+
+    @testset "deserialization" begin
+        A  = 10*I + sprandn(10, 10, 0.4)
+        F1 = lu(A)
+        b  = IOBuffer()
+        serialize(b, F1)
+        seekstart(b)
+        F2 = deserialize(b)
+        for nm in (:colptr, :m, :n, :nzval, :rowval, :status)
+            @test getfield(F1, nm) == getfield(F2, nm)
         end
     end
 

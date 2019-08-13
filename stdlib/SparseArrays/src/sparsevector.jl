@@ -2,7 +2,7 @@
 
 ### Common definitions
 
-import Base: sort, findall
+import Base: sort, findall, copy!
 import LinearAlgebra: promote_to_array_type, promote_to_arrays_
 
 ### The SparseVector
@@ -34,6 +34,7 @@ SparseVector(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv}) where {Tv,Ti} =
 # union of such a view and a SparseVector so we define an alias for such a union as well
 const SparseColumnView{T}  = SubArray{T,1,<:SparseMatrixCSC,Tuple{Base.Slice{Base.OneTo{Int}},Int},false}
 const SparseVectorUnion{T} = Union{SparseVector{T}, SparseColumnView{T}}
+const AdjOrTransSparseVectorUnion{T} = LinearAlgebra.AdjOrTrans{T, <:SparseVectorUnion{T}}
 
 ### Basic properties
 
@@ -58,6 +59,11 @@ function nonzeroinds(x::SparseColumnView)
     return y
 end
 
+indtype(x::SparseColumnView) = indtype(parent(x))
+function nnz(x::SparseColumnView)
+    rowidx, colidx = parentindices(x)
+    return length(nzrange(parent(x), colidx))
+end
 
 ## similar
 #
@@ -176,13 +182,13 @@ julia> sparsevec(II, V, 8, -)
 
 julia> sparsevec([1, 3, 1, 2, 2], [true, true, false, false, false])
 3-element SparseVector{Bool,Int64} with 3 stored entries:
-  [1]  =  true
-  [2]  =  false
-  [3]  =  true
+  [1]  =  1
+  [2]  =  0
+  [3]  =  1
 ```
 """
 function sparsevec(I::AbstractVector{<:Integer}, V::AbstractVector, combine::Function)
-    @assert !has_offset_axes(I, V)
+    require_one_based_indexing(I, V)
     length(I) == length(V) ||
         throw(ArgumentError("index and value vectors must be the same length"))
     len = 0
@@ -196,7 +202,7 @@ function sparsevec(I::AbstractVector{<:Integer}, V::AbstractVector, combine::Fun
 end
 
 function sparsevec(I::AbstractVector{<:Integer}, V::AbstractVector, len::Integer, combine::Function)
-    @assert !has_offset_axes(I, V)
+    require_one_based_indexing(I, V)
     length(I) == length(V) ||
         throw(ArgumentError("index and value vectors must be the same length"))
     for i in I
@@ -294,7 +300,7 @@ function setindex!(x::SparseVector{Tv,Ti}, v::Tv, i::Ti) where {Tv,Ti<:Integer}
     if 1 <= k <= m && nzind[k] == i  # i found
         nzval[k] = v
     else  # i not found
-        if v != 0
+        if !iszero(v)
             insert!(nzind, k, i)
             insert!(nzval, k, v)
         end
@@ -319,11 +325,11 @@ julia> x = sparsevec([1, 3], [1.0, 2.0])
   [1]  =  1.0
   [3]  =  2.0
 
-julia> Base.SparseArrays.dropstored!(x, 3)
+julia> SparseArrays.dropstored!(x, 3)
 3-element SparseVector{Float64,Int64} with 1 stored entry:
   [1]  =  1.0
 
-julia> Base.SparseArrays.dropstored!(x, 2)
+julia> SparseArrays.dropstored!(x, 2)
 3-element SparseVector{Float64,Int64} with 1 stored entry:
   [1]  =  1.0
 ```
@@ -378,17 +384,15 @@ sparsevec(a::AbstractSparseArray) = vec(a)
 sparsevec(a::AbstractSparseVector) = vec(a)
 sparse(a::AbstractVector) = sparsevec(a)
 
-function _dense2sparsevec(s::AbstractArray{Tv}, initcap::Ti) where {Tv,Ti}
-    @assert !has_offset_axes(s)
-    # pre-condition: initcap > 0; the initcap determines the index type
+function _dense2indval!(nzind::Vector{Ti}, nzval::Vector{Tv}, s::AbstractArray{Tv}) where {Tv,Ti}
+    require_one_based_indexing(s)
+    cap = length(nzind);
+    @assert cap == length(nzval)
     n = length(s)
-    cap = initcap
-    nzind = Vector{Ti}(undef, cap)
-    nzval = Vector{Tv}(undef, cap)
     c = 0
     @inbounds for i = 1:n
         v = s[i]
-        if v != 0
+        if !iszero(v)
             if c >= cap
                 cap *= 2
                 resize!(nzind, cap)
@@ -403,7 +407,12 @@ function _dense2sparsevec(s::AbstractArray{Tv}, initcap::Ti) where {Tv,Ti}
         resize!(nzind, c)
         resize!(nzval, c)
     end
-    SparseVector(n, nzind, nzval)
+    return (nzind, nzval)
+end
+
+function _dense2sparsevec(s::AbstractArray{Tv}, initcap::Ti) where {Tv,Ti}
+    nzind, nzval = _dense2indval!(Vector{Ti}(undef, initcap), Vector{Tv}(undef, initcap), s)
+    SparseVector(length(s), nzind, nzval)
 end
 
 SparseVector{Tv,Ti}(s::AbstractVector{Tv}) where {Tv,Ti} =
@@ -461,6 +470,8 @@ function copyto!(A::SparseVector, B::SparseVector)
     return A
 end
 
+copyto!(A::SparseVector, B::AbstractVector) = copyto!(A, sparsevec(B))
+
 function copyto!(A::SparseVector, B::SparseMatrixCSC)
     prep_sparsevec_copy_dest!(A, length(B), nnz(B))
 
@@ -483,30 +494,30 @@ copyto!(A::SparseMatrixCSC, B::SparseVector{TvB,TiB}) where {TvB,TiB} =
 
 
 ### Rand Construction
-sprand(n::Integer, p::AbstractFloat, rfn::Function, ::Type{T}) where {T} = sprand(GLOBAL_RNG, n, p, rfn, T)
+sprand(n::Integer, p::AbstractFloat, rfn::Function, ::Type{T}) where {T} = sprand(default_rng(), n, p, rfn, T)
 function sprand(r::AbstractRNG, n::Integer, p::AbstractFloat, rfn::Function, ::Type{T}) where T
     I = randsubseq(r, 1:convert(Int, n), p)
     V = rfn(r, T, length(I))
     SparseVector(n, I, V)
 end
 
-sprand(n::Integer, p::AbstractFloat, rfn::Function) = sprand(GLOBAL_RNG, n, p, rfn)
+sprand(n::Integer, p::AbstractFloat, rfn::Function) = sprand(default_rng(), n, p, rfn)
 function sprand(r::AbstractRNG, n::Integer, p::AbstractFloat, rfn::Function)
     I = randsubseq(r, 1:convert(Int, n), p)
     V = rfn(r, length(I))
     SparseVector(n, I, V)
 end
 
-sprand(n::Integer, p::AbstractFloat) = sprand(GLOBAL_RNG, n, p, rand)
+sprand(n::Integer, p::AbstractFloat) = sprand(default_rng(), n, p, rand)
 
 sprand(r::AbstractRNG, n::Integer, p::AbstractFloat) = sprand(r, n, p, rand)
 sprand(r::AbstractRNG, ::Type{T}, n::Integer, p::AbstractFloat) where {T} = sprand(r, n, p, (r, i) -> rand(r, T, i))
 sprand(r::AbstractRNG, ::Type{Bool}, n::Integer, p::AbstractFloat) = sprand(r, n, p, truebools)
-sprand(::Type{T}, n::Integer, p::AbstractFloat) where {T} = sprand(GLOBAL_RNG, T, n, p)
+sprand(::Type{T}, n::Integer, p::AbstractFloat) where {T} = sprand(default_rng(), T, n, p)
 
-sprandn(n::Integer, p::AbstractFloat) = sprand(GLOBAL_RNG, n, p, randn)
+sprandn(n::Integer, p::AbstractFloat) = sprand(default_rng(), n, p, randn)
 sprandn(r::AbstractRNG, n::Integer, p::AbstractFloat) = sprand(r, n, p, randn)
-sprandn(::Type{T}, n::Integer, p::AbstractFloat) where T = sprand(GLOBAL_RNG, n, p, (r, i) -> randn(r, T, i))
+sprandn(::Type{T}, n::Integer, p::AbstractFloat) where T = sprand(default_rng(), n, p, (r, i) -> randn(r, T, i))
 sprandn(r::AbstractRNG, ::Type{T}, n::Integer, p::AbstractFloat) where T = sprand(r, n, p, (r, i) -> randn(r, T, i))
 
 ## Indexing into Matrices can return SparseVectors
@@ -539,7 +550,7 @@ end
 # Row slices
 getindex(A::SparseMatrixCSC, i::Integer, ::Colon) = A[i, 1:end]
 function Base.getindex(A::SparseMatrixCSC{Tv,Ti}, i::Integer, J::AbstractVector) where {Tv,Ti}
-    @assert !has_offset_axes(A, J)
+    require_one_based_indexing(A, J)
     checkbounds(A, i, J)
     nJ = length(J)
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
@@ -573,7 +584,7 @@ end
 getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}) = _logical_index(A, I) # Ambiguities
 getindex(A::SparseMatrixCSC, I::AbstractArray{Bool}) = _logical_index(A, I)
 function _logical_index(A::SparseMatrixCSC{Tv}, I::AbstractArray{Bool}) where Tv
-    @assert !has_offset_axes(A, I)
+    require_one_based_indexing(A, I)
     checkbounds(A, I)
     n = sum(I)
     nnzB = min(n, nnz(A))
@@ -615,7 +626,7 @@ end
 getindex(A::SparseMatrixCSC, ::Colon) = A[1:end]
 
 function getindex(A::SparseMatrixCSC{Tv}, I::AbstractUnitRange) where Tv
-    @assert !has_offset_axes(A, I)
+    require_one_based_indexing(A, I)
     checkbounds(A, I)
     szA = size(A)
     nA = szA[1]*szA[2]
@@ -652,7 +663,7 @@ function getindex(A::SparseMatrixCSC{Tv}, I::AbstractUnitRange) where Tv
 end
 
 function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector) where {Tv,Ti}
-    @assert !has_offset_axes(A, I)
+    require_one_based_indexing(A, I)
     szA = size(A)
     nA = szA[1]*szA[2]
     colptrA = A.colptr
@@ -688,6 +699,8 @@ function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector) where {Tv,Ti}
     end
     SparseVector(n, rowvalB, nzvalB)
 end
+
+Base.copy(a::SubArray{<:Any,<:Any,<:Union{SparseVector, SparseMatrixCSC}}) = a.parent[a.indices...]
 
 function findall(x::SparseVector)
     return findall(identity, x)
@@ -825,7 +838,7 @@ function show(io::IO, ::MIME"text/plain", x::AbstractSparseVector)
            " stored ", xnnz == 1 ? "entry" : "entries")
     if xnnz != 0
         println(io, ":")
-        show(io, x)
+        show(IOContext(io, :typeinfo => eltype(x)), x)
     end
 end
 
@@ -835,8 +848,7 @@ function show(io::IOContext, x::AbstractSparseVector)
     n = length(x)
     nzind = nonzeroinds(x)
     nzval = nonzeros(x)
-    xnnz = length(nzind)
-    if length(nzind) == 0
+    if isempty(nzind)
         return show(io, MIME("text/plain"), x)
     end
     limit::Bool = get(io, :limit, false)
@@ -845,8 +857,8 @@ function show(io::IOContext, x::AbstractSparseVector)
     if !haskey(io, :compact)
         io = IOContext(io, :compact => true)
     end
-    for k = 1:length(nzind)
-        if k < half_screen_rows || k > xnnz - half_screen_rows
+    for k = eachindex(nzind)
+        if k < half_screen_rows || k > length(nzind) - half_screen_rows
             print(io, "  ", '[', rpad(nzind[k], pad), "]  =  ")
             if isassigned(nzval, Int(k))
                 show(io, nzval[k])
@@ -863,7 +875,7 @@ end
 ### Conversion to matrix
 
 function SparseMatrixCSC{Tv,Ti}(x::AbstractSparseVector) where {Tv,Ti}
-    @assert !has_offset_axes(x)
+    require_one_based_indexing(x)
     n = length(x)
     xnzind = nonzeroinds(x)
     xnzval = nonzeros(x)
@@ -881,7 +893,7 @@ SparseMatrixCSC{Tv}(x::AbstractSparseVector{<:Any,Ti}) where {Tv,Ti} = SparseMat
 SparseMatrixCSC(x::AbstractSparseVector{Tv,Ti}) where {Tv,Ti} = SparseMatrixCSC{Tv,Ti}(x)
 
 function Vector(x::AbstractSparseVector{Tv}) where Tv
-    @assert !has_offset_axes(x)
+    require_one_based_indexing(x)
     n = length(x)
     n == 0 && return Vector{Tv}()
     nzind = nonzeroinds(x)
@@ -1083,7 +1095,7 @@ hvcat(rows::Tuple{Vararg{Int}}, xs::_TypedDenseConcatGroup{T}...) where {T} = Ba
 macro unarymap_nz2z_z2z(op, TF)
     esc(quote
         function $(op)(x::AbstractSparseVector{Tv,Ti}) where Tv<:$(TF) where Ti<:Integer
-            @assert !has_offset_axes(x)
+            require_one_based_indexing(x)
             R = typeof($(op)(zero(Tv)))
             xnzind = nonzeroinds(x)
             xnzval = nonzeros(x)
@@ -1119,7 +1131,7 @@ imag(x::AbstractSparseVector{Tv,Ti}) where {Tv<:Real,Ti<:Integer} = SparseVector
 macro unarymap_z2nz(op, TF)
     esc(quote
         function $(op)(x::AbstractSparseVector{Tv,<:Integer}) where Tv<:$(TF)
-            @assert !has_offset_axes(x)
+            require_one_based_indexing(x)
             v0 = $(op)(zero(Tv))
             R = typeof(v0)
             xnzind = nonzeroinds(x)
@@ -1344,7 +1356,7 @@ adjoint(sv::SparseVector) = Adjoint(sv)
 # axpy
 
 function LinearAlgebra.axpy!(a::Number, x::SparseVectorUnion, y::AbstractVector)
-    @assert !has_offset_axes(x, y)
+    require_one_based_indexing(x, y)
     length(x) == length(y) || throw(DimensionMismatch())
     nzind = nonzeroinds(x)
     nzval = nonzeros(x)
@@ -1398,20 +1410,20 @@ end
 
 # dot
 function dot(x::AbstractVector{Tx}, y::SparseVectorUnion{Ty}) where {Tx<:Number,Ty<:Number}
-    @assert !has_offset_axes(x, y)
+    require_one_based_indexing(x, y)
     n = length(x)
     length(y) == n || throw(DimensionMismatch())
     nzind = nonzeroinds(y)
     nzval = nonzeros(y)
     s = dot(zero(Tx), zero(Ty))
-    for i = 1:length(nzind)
+    @inbounds for i = 1:length(nzind)
         s += dot(x[nzind[i]], nzval[i])
     end
     return s
 end
 
 function dot(x::SparseVectorUnion{Tx}, y::AbstractVector{Ty}) where {Tx<:Number,Ty<:Number}
-    @assert !has_offset_axes(x, y)
+    require_one_based_indexing(x, y)
     n = length(y)
     length(x) == n || throw(DimensionMismatch())
     nzind = nonzeroinds(x)
@@ -1464,7 +1476,7 @@ end
 
 # lowrankupdate (BLAS.ger! like)
 function LinearAlgebra.lowrankupdate!(A::StridedMatrix, x::AbstractVector, y::SparseVectorUnion, α::Number = 1)
-    @assert !has_offset_axes(A, x, y)
+    require_one_based_indexing(A, x, y)
     nzi = nonzeroinds(y)
     nzv = nonzeros(y)
     @inbounds for (j,v) in zip(nzi,nzv)
@@ -1479,10 +1491,10 @@ end
 # * and mul!
 
 function (*)(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
-    @assert !has_offset_axes(A, x)
+    require_one_based_indexing(A, x)
     m, n = size(A)
     length(x) == n || throw(DimensionMismatch())
-    Ty = promote_type(Ta, Tx)
+    Ty = promote_op(matprod, Ta, Tx)
     y = Vector{Ty}(undef, m)
     mul!(y, A, x)
 end
@@ -1491,7 +1503,7 @@ mul!(y::AbstractVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) where
     addmul!(y, A, x, one(Tx), zero(Ty))
 
 function addmul!(y::AbstractVector, A::StridedMatrix, x::AbstractSparseVector, α::Number, β::Number)
-    @assert !has_offset_axes(y, A, x)
+    require_one_based_indexing(y, A, x)
     m, n = size(A)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
     m == 0 && return y
@@ -1518,24 +1530,22 @@ end
 # * and mul!(C, transpose(A), B)
 
 function *(transA::Transpose{<:Any,<:StridedMatrix{Ta}}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
-    @assert !has_offset_axes(transA, x)
-    A = transA.parent
-    m, n = size(A)
-    length(x) == m || throw(DimensionMismatch())
-    Ty = promote_type(Ta, Tx)
-    y = Vector{Ty}(undef, n)
-    mul!(y, transpose(A), x)
+    require_one_based_indexing(transA, x)
+    m, n = size(transA)
+    length(x) == n || throw(DimensionMismatch())
+    Ty = promote_op(matprod, Ta, Tx)
+    y = Vector{Ty}(undef, m)
+    mul!(y, transA, x)
 end
 
 mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = transA.parent; addmul!(y, transpose(A), x, one(Tx), zero(Ty)))
+    addmul!(y, transA, x, one(Tx), zero(Ty))
 
 function addmul!(y::AbstractVector, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector, α::Number, β::Number)
-    A = transA.parent
-    @assert !has_offset_axes(y, A, x)
-    m, n = size(A)
-    length(x) == m && length(y) == n || throw(DimensionMismatch())
-    n == 0 && return y
+    require_one_based_indexing(y, transA, x)
+    m, n = size(transA)
+    length(x) == n && length(y) == m || throw(DimensionMismatch())
+    m == 0 && return y
     if β != one(β)
         β == zero(β) ? fill!(y, zero(eltype(y))) : rmul!(y, β)
     end
@@ -1546,11 +1556,53 @@ function addmul!(y::AbstractVector, transA::Transpose{<:Any,<:StridedMatrix}, x:
     _nnz = length(xnzind)
     _nnz == 0 && return y
 
-    s0 = zero(eltype(A)) * zero(eltype(x))
-    @inbounds for j = 1:n
-        s = zero(s0)
+    A = transA.parent
+    Ty = promote_op(matprod, eltype(A), eltype(x))
+    @inbounds for j = 1:m
+        s = zero(Ty)
         for i = 1:_nnz
-            s += A[xnzind[i], j] * xnzval[i]
+            s += transpose(A[xnzind[i], j]) * xnzval[i]
+        end
+        y[j] += s * α
+    end
+    return y
+end
+
+# * and mul!(C, adjoint(A), B)
+
+function *(adjA::Adjoint{<:Any,<:StridedMatrix{Ta}}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
+    require_one_based_indexing(adjA, x)
+    m, n = size(adjA)
+    length(x) == n || throw(DimensionMismatch())
+    Ty = promote_op(matprod, Ta, Tx)
+    y = Vector{Ty}(undef, m)
+    mul!(y, adjA, x)
+end
+
+mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:StridedMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
+    mul!(y, adjA, x, one(Tx), zero(Ty))
+
+function mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:StridedMatrix}, x::AbstractSparseVector, α::Number, β::Number)
+    require_one_based_indexing(y, adjA, x)
+    m, n = size(adjA)
+    length(x) == n && length(y) == m || throw(DimensionMismatch())
+    m == 0 && return y
+    if β != one(β)
+        β == zero(β) ? fill!(y, zero(eltype(y))) : rmul!(y, β)
+    end
+    α == zero(α) && return y
+
+    xnzind = nonzeroinds(x)
+    xnzval = nonzeros(x)
+    _nnz = length(xnzind)
+    _nnz == 0 && return y
+
+    A = adjA.parent
+    Ty = promote_op(matprod, eltype(A), eltype(x))
+    @inbounds for j = 1:m
+        s = zero(Ty)
+        for i = 1:_nnz
+            s += adjoint(A[xnzind[i], j]) * xnzval[i]
         end
         y[j] += s * α
     end
@@ -1562,7 +1614,7 @@ end
 
 function densemv(A::SparseMatrixCSC, x::AbstractSparseVector; trans::AbstractChar='N')
     local xlen::Int, ylen::Int
-    @assert !has_offset_axes(A, x)
+    require_one_based_indexing(A, x)
     m, n = size(A)
     if trans == 'N' || trans == 'n'
         xlen = n; ylen = m
@@ -1572,9 +1624,9 @@ function densemv(A::SparseMatrixCSC, x::AbstractSparseVector; trans::AbstractCha
         throw(ArgumentError("Invalid trans character $trans"))
     end
     xlen == length(x) || throw(DimensionMismatch())
-    T = promote_type(eltype(A), eltype(x))
+    T = promote_op(matprod, eltype(A), eltype(x))
     y = Vector{T}(undef, ylen)
-    if trans == 'N' || trans == 'N'
+    if trans == 'N' || trans == 'n'
         mul!(y, A, x)
     elseif trans == 'T' || trans == 't'
         mul!(y, transpose(A), x)
@@ -1592,7 +1644,7 @@ mul!(y::AbstractVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) whe
     addmul!(y, A, x, one(Tx), zero(Ty))
 
 function addmul!(y::AbstractVector, A::SparseMatrixCSC, x::AbstractSparseVector, α::Number, β::Number)
-    @assert !has_offset_axes(y, A, x)
+    require_one_based_indexing(y, A, x)
     m, n = size(A)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
     m == 0 && return y
@@ -1612,7 +1664,7 @@ function addmul!(y::AbstractVector, A::SparseMatrixCSC, x::AbstractSparseVector,
         if v != zero(v)
             αv = v * α
             j = xnzind[i]
-            for r = A.colptr[j]:(Acolptr[j+1]-1)
+            for r = Acolptr[j]:(Acolptr[j+1]-1)
                 y[Arowval[r]] += Anzval[r] * αv
             end
         end
@@ -1637,7 +1689,7 @@ mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSpars
 function _At_or_Ac_mul_B!(tfun::Function,
                           y::AbstractVector, A::SparseMatrixCSC, x::AbstractSparseVector,
                           α::Number, β::Number)
-    @assert !has_offset_axes(y, A, x)
+    require_one_based_indexing(y, A, x)
     m, n = size(A)
     length(x) == m && length(y) == n || throw(DimensionMismatch())
     n == 0 && return y
@@ -1666,7 +1718,7 @@ end
 ### BLAS-2 / sparse A * sparse x -> dense y
 
 function *(A::SparseMatrixCSC, x::AbstractSparseVector)
-    @assert !has_offset_axes(A, x)
+    require_one_based_indexing(A, x)
     y = densemv(A, x)
     initcap = min(nnz(A), size(A,1))
     _dense2sparsevec(y, initcap)
@@ -1679,10 +1731,10 @@ end
     (A = adjA.parent; _At_or_Ac_mul_B(dot, A, x))
 
 function _At_or_Ac_mul_B(tfun::Function, A::SparseMatrixCSC{TvA,TiA}, x::AbstractSparseVector{TvX,TiX}) where {TvA,TiA,TvX,TiX}
-    @assert !has_offset_axes(A, x)
+    require_one_based_indexing(A, x)
     m, n = size(A)
     length(x) == m || throw(DimensionMismatch())
-    Tv = promote_type(TvA, TvX)
+    Tv = promote_op(matprod, TvA, TvX)
     Ti = promote_type(TiA, TiX)
 
     xnzind = nonzeroinds(x)
@@ -1899,6 +1951,13 @@ function fkeep!(x::SparseVector, f, trim::Bool = true)
     x
 end
 
+"""
+    droptol!(x::SparseVector, tol; trim::Bool = true)
+
+Removes stored values from `x` whose absolute value is less than or equal to `tol`,
+optionally trimming resulting excess space from `A.rowval` and `A.nzval` when `trim`
+is `true`.
+"""
 droptol!(x::SparseVector, tol; trim::Bool = true) = fkeep!(x, (i, x) -> abs(x) > tol, trim)
 
 """
@@ -1910,7 +1969,7 @@ Removes stored numerical zeros from `x`, optionally trimming resulting excess sp
 For an out-of-place version, see [`dropzeros`](@ref). For
 algorithmic information, see `fkeep!`.
 """
-dropzeros!(x::SparseVector; trim::Bool = true) = fkeep!(x, (i, x) -> x != 0, trim)
+dropzeros!(x::SparseVector; trim::Bool = true) = fkeep!(x, (i, x) -> !iszero(x), trim)
 
 """
     dropzeros(x::SparseVector; trim::Bool = true)
@@ -1936,6 +1995,18 @@ julia> dropzeros(A)
 """
 dropzeros(x::SparseVector; trim::Bool = true) = dropzeros!(copy(x), trim = trim)
 
+function copy!(dst::SparseVector, src::SparseVector)
+    dst.n == src.n || throw(ArgumentError("Sparse vectors should have the same length for copy!"))
+    copy!(dst.nzval, src.nzval)
+    copy!(dst.nzind, src.nzind)
+    return dst
+end
+
+function copy!(dst::SparseVector, src::AbstractVector)
+    dst.n == length(src) || throw(ArgumentError("Sparse vector should have the same length as source for copy!"))
+    _dense2indval!(dst.nzind, dst.nzval, src)
+    return dst
+end
 
 function _fillnonzero!(arr::SparseMatrixCSC{Tv, Ti}, val) where {Tv,Ti}
     m, n = size(arr)
@@ -1976,3 +2047,42 @@ function fill!(A::Union{SparseVector, SparseMatrixCSC}, x)
     end
     return A
 end
+
+
+
+# in-place swaps (dense) blocks start:split and split+1:fin in col
+function _swap!(col::AbstractVector, start::Integer, fin::Integer, split::Integer)
+    split == fin && return
+    reverse!(col, start, split)
+    reverse!(col, split + 1, fin)
+    reverse!(col, start, fin)
+    return
+end
+
+
+# in-place shifts a sparse subvector by r. Used also by sparsematrix.jl
+function subvector_shifter!(R::AbstractVector, V::AbstractVector, start::Integer, fin::Integer, m::Integer, r::Integer)
+    split = fin
+    @inbounds for j = start:fin
+        # shift positions ...
+        R[j] += r
+        if R[j] <= m
+            split = j
+        else
+            R[j] -= m
+        end
+    end
+    # ...but rowval should be sorted within columns
+    _swap!(R, start, fin, split)
+    _swap!(V, start, fin, split)
+end
+
+
+function circshift!(O::SparseVector, X::SparseVector, (r,)::Base.DimsInteger{1})
+    copy!(O, X)
+    subvector_shifter!(O.nzind, O.nzval, 1, length(O.nzind), O.n, mod(r, X.n))
+    return O
+end
+
+
+circshift!(O::SparseVector, X::SparseVector, r::Real,) = circshift!(O, X, (Integer(r),))

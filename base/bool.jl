@@ -27,7 +27,7 @@ missing
 
 julia> .![true false true]
 1×3 BitArray{2}:
- false  true  false
+ 0  1  0
 ```
 """
 function !(x::Bool)
@@ -67,24 +67,16 @@ false
 
 julia> [true; true; false] .⊻ [true; false; false]
 3-element BitArray{1}:
- false
-  true
- false
+ 0
+ 1
+ 0
 ```
 """
 xor(x::Bool, y::Bool) = (x != y)
 
->>(x::Bool, c::Unsigned) = Int(x) >> c
-<<(x::Bool, c::Unsigned) = Int(x) << c
->>>(x::Bool, c::Unsigned) = Int(x) >>> c
-
->>(x::Bool, c::Int) = Int(x) >> c
-<<(x::Bool, c::Int) = Int(x) << c
->>>(x::Bool, c::Int) = Int(x) >>> c
-
->>(x::Bool, c::Integer) = Int(x) >> c
-<<(x::Bool, c::Integer) = Int(x) << c
->>>(x::Bool, c::Integer) = Int(x) >>> c
+>>(x::Bool, c::UInt) = Int(x) >> c
+<<(x::Bool, c::UInt) = Int(x) << c
+>>>(x::Bool, c::UInt) = Int(x) >>> c
 
 signbit(x::Bool) = false
 sign(x::Bool) = x

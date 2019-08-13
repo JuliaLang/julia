@@ -737,6 +737,7 @@ static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Si
 }
 } // namespace
 
+
 static void jl_dump_asm_internal(
         uintptr_t Fptr, size_t Fsize, int64_t slide,
         const object::ObjectFile *object,
@@ -747,24 +748,23 @@ static void jl_dump_asm_internal(
 {
     // GC safe
     // Get the host information
-    std::string TripleName = sys::getDefaultTargetTriple();
-    Triple TheTriple(Triple::normalize(TripleName));
+    Triple TheTriple(sys::getProcessTriple());
 
     const auto &target = jl_get_llvm_disasm_target();
     const auto &cpu = target.first;
     const auto &features = target.second;
 
     std::string err;
-    const Target *TheTarget = TargetRegistry::lookupTarget(TripleName, err);
+    const Target *TheTarget = TargetRegistry::lookupTarget(TheTriple.str(), err);
 
     // Set up required helpers and streamer
     std::unique_ptr<MCStreamer> Streamer;
     SourceMgr SrcMgr;
 
-    std::unique_ptr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TripleName),TripleName));
+    std::unique_ptr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TheTriple.str()), TheTriple.str()));
     assert(MAI && "Unable to create target asm info!");
 
-    std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TripleName));
+    std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TheTriple.str()));
     assert(MRI && "Unable to create target register info!");
 
     std::unique_ptr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
@@ -773,16 +773,15 @@ static void jl_dump_asm_internal(
 
     // Set up Subtarget and Disassembler
     std::unique_ptr<MCSubtargetInfo>
-        STI(TheTarget->createMCSubtargetInfo(TripleName, cpu, features));
+        STI(TheTarget->createMCSubtargetInfo(TheTriple.str(), cpu, features));
     std::unique_ptr<MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI, Ctx));
     if (!DisAsm) {
-        jl_printf(JL_STDERR, "ERROR: no disassembler for target %s\n",
-                  TripleName.c_str());
+        rstream << "ERROR: no disassembler for target " << TheTriple.str();
         return;
     }
     unsigned OutputAsmVariant = 0; // ATT or Intel-style assembly
 
-    if (strcmp(asm_variant, "intel")==0) {
+    if (strcmp(asm_variant, "intel") == 0) {
         OutputAsmVariant = 1;
     }
     bool ShowEncoding = false;
@@ -793,22 +792,38 @@ static void jl_dump_asm_internal(
     MCInstPrinter *IP =
         TheTarget->createMCInstPrinter(TheTriple, OutputAsmVariant, *MAI, *MCII, *MRI);
     //IP->setPrintImmHex(true); // prefer hex or decimal immediates
-    MCCodeEmitter *CE = 0;
-    MCAsmBackend *MAB = 0;
+#if JL_LLVM_VERSION >= 70000
+    std::unique_ptr<MCCodeEmitter> CE = 0;
+    std::unique_ptr<MCAsmBackend> MAB = 0;
+    if (ShowEncoding) {
+        CE = std::unique_ptr<MCCodeEmitter>(TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx));
+        MCTargetOptions Options;
+        MAB = std::unique_ptr<MCAsmBackend>(TheTarget->createMCAsmBackend(*STI, *MRI, Options));
+    }
+#else
+    MCCodeEmitter* CE = 0;
+    MCAsmBackend* MAB = 0;
     if (ShowEncoding) {
         CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx);
         MCTargetOptions Options;
         MAB = TheTarget->createMCAsmBackend(*STI, *MRI, Options);
     }
+#endif
 
     // createAsmStreamer expects a unique_ptr to a formatted stream, which means
     // it will destruct the stream when it is done. We cannot have this, so we
     // start out with a raw stream, and create formatted stream from it here.
     // LLVM will desctruct the formatted stream, and we keep the raw stream.
     auto ustream = llvm::make_unique<formatted_raw_ostream>(rstream);
+#if JL_LLVM_VERSION >= 70000
+    Streamer.reset(TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/true,
+                                                /*useDwarfDirectory*/ true,
+                                                IP, std::move(CE), std::move(MAB), /*ShowInst*/ false));
+#else
     Streamer.reset(TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/true,
                                                 /*useDwarfDirectory*/ true,
                                                 IP, CE, MAB, /*ShowInst*/ false));
+#endif
     Streamer->InitSections(true);
 
     // Make the MemoryObject wrapper
@@ -817,7 +832,7 @@ static void jl_dump_asm_internal(
 
     DILineInfoTable di_lineinfo;
     if (di_ctx)
-        di_lineinfo = di_ctx->getLineInfoForAddressRange(Fptr+slide, Fsize);
+        di_lineinfo = di_ctx->getLineInfoForAddressRange(makeAddress(Fptr + slide), Fsize);
     if (!di_lineinfo.empty()) {
         auto cur_addr = di_lineinfo[0].first;
         auto nlineinfo = di_lineinfo.size();
@@ -861,6 +876,7 @@ static void jl_dump_asm_internal(
         DILineInfoTable::iterator di_lineIter = di_lineinfo.begin();
         DILineInfoTable::iterator di_lineEnd = di_lineinfo.end();
         DILineInfoPrinter dbgctx{"; ", true};
+        dbgctx.SetVerbosity(debuginfo);
         if (pass != 0) {
             if (di_ctx && di_lineIter != di_lineEnd) {
                 // Set up the line info
@@ -886,7 +902,7 @@ static void jl_dump_asm_internal(
                     std::string buf;
                     DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::Default,
                                                  DILineInfoSpecifier::FunctionNameKind::ShortName);
-                    DIInliningInfo dbg = di_ctx->getInliningInfoForAddress(Index + Fptr + slide, infoSpec);
+                    DIInliningInfo dbg = di_ctx->getInliningInfoForAddress(makeAddress(Index + Fptr + slide), infoSpec);
                     if (dbg.getNumberOfFrames()) {
                         dbgctx.emit_lineinfo(buf, dbg);
                     }

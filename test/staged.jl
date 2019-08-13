@@ -284,3 +284,11 @@ end
 
 # issue #18747
 @test_throws ErrorException eval(:(f(x) = @generated g() = x))
+
+@generated function f30284(x)
+    quote
+        local x
+    end
+end
+
+@test_throws ErrorException("syntax: local variable name \"x\" conflicts with an argument") f30284(1)

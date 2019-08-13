@@ -8,7 +8,8 @@
 ;; be an operator.
 (define prec-assignment
   (append! (add-dots '(= += -= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻= ≔ ⩴ ≕))
-           '(:= ~ $=)))
+           (add-dots '(~))
+           '(:= $=)))
 ;; comma - higher than assignment outside parentheses, lower when inside
 (define prec-pair (add-dots '(=>)))
 (define prec-conditional '(?))
@@ -101,12 +102,12 @@
                                       0))
 
 (define unary-ops (append! '(|<:| |>:|)
-                           (add-dots '(+ - ! ~ ¬ √ ∛ ∜))))
+                           (add-dots '(+ - ! ~ ¬ √ ∛ ∜ ⋆))))
 
 (define unary-op? (Set unary-ops))
 
 ; operators that are both unary and binary
-(define unary-and-binary-ops '(+ - $ & ~ |.+| |.-|))
+(define unary-and-binary-ops '(+ - $ & ~ ⋆ |.+| |.-| |.⋆|))
 
 (define unary-and-binary-op? (Set unary-and-binary-ops))
 
@@ -140,12 +141,19 @@
 
 ;; characters that can be in an operator
 (define opchar? (Set op-chars))
+(define operator? (SuffSet operators))
+
+(define dot-operators (filter (lambda (o)
+                                (and (not (eq? o '|.|))
+                                     (eqv? (string.char (string o) 0) #\.)
+                                     (not (eqv? (string.char (string o) 1) #\.))))
+                              operators))
+(define dotop? (SuffSet dot-operators))
 ;; characters that can follow . in an operator
 (define dot-opchar? (Set
                      (delete-duplicates
                       (map (lambda (op) (string.char (string op) 1))
-                           (cons `|..| (filter dotop? operators))))))
-(define operator? (SuffSet operators))
+                           (cons `|..| dot-operators)))))
 
 (define initial-reserved-words '(begin while if for try return break continue
                          function macro quote let local global const do
@@ -182,12 +190,6 @@
 
 (define current-filename 'none)
 
-(define-macro (with-normal-ops . body)
-  `(with-bindings ((range-colon-enabled #t)
-                   (space-sensitive #f)
-                   (where-enabled #t))
-                  ,@body))
-
 (define-macro (with-normal-context . body)
   `(with-bindings ((range-colon-enabled #t)
                    (space-sensitive #f)
@@ -212,10 +214,6 @@
 
 (define-macro (with-whitespace-newline . body)
   `(with-bindings ((whitespace-newline #t))
-                  ,@body))
-
-(define-macro (without-whitespace-newline . body)
-  `(with-bindings ((whitespace-newline #f))
                   ,@body))
 
 ;; --- lexer ---
@@ -543,9 +541,10 @@
                         ((char-numeric? nextc)
                          (read-number port #t #f))
                         ((opchar? nextc)
-                         (let ((op (read-operator port c)))
-                           (if (and (eq? op '..) (opchar? (peek-char port)))
-                               (error (string "invalid operator \"" op (peek-char port) "\"" (scolno port))))
+                         (let* ((op (read-operator port c))
+                                (nx (peek-char port)))
+                           (if (and (eq? op '..) (opchar? nx) (not (memv nx '(#\' #\:))))
+                               (error (string "invalid operator \"" op nx "\"" (scolno port))))
                            op))
                         (else '|.|)))))
 
@@ -736,13 +735,13 @@
       ex))
 
 (define (parse-assignment s down)
-  (let loop ((ex (down s))
-             (t  (peek-token s)))
+  (let* ((ex (down s))
+         (t  (peek-token s)))
     (if (not (is-prec-assignment? t))
         ex
         (begin
           (take-token s)
-          (cond ((eq? t '~) ;; ~ is the only non-syntactic assignment-precedence operators
+          (cond ((or (eq? t '~) (eq? t '|.~|)) ;; ~ is the only non-syntactic assignment-precedence operators
                  (if (and space-sensitive (ts:space? s)
                           (not (space-before-next-token? s)))
                      (begin (ts:put-back! s t (ts:space? s))
@@ -1544,7 +1543,7 @@
 (define (parse-do s)
   (with-bindings
    ((expect-end-current-line (input-port-line (ts:port s))))
-   (without-whitespace-newline
+   (with-normal-context
     (let ((doargs (if (memv (peek-token s) '(#\newline #\;))
                       '()
                       (parse-comma-separated s parse-range))))

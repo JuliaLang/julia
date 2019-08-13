@@ -1,13 +1,47 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # LQ Factorizations
+"""
+    LQ <: Factorization
 
+Matrix factorization type of the `LQ` factorization of a matrix `A`. The `LQ`
+decomposition is the `QR` decomposition of `transpose(A)`. This is the return
+type of [`lq`](@ref), the corresponding matrix factorization function.
+
+If `S::LQ` is the factorization object, the lower triangular component can be
+obtained via `S.L`, and the orthogonal/unitary component via `S.Q`, such that
+`A ≈ S.L*S.Q`.
+
+Iterating the decomposition produces the components `S.L` and `S.Q`.
+
+# Examples
+```jldoctest
+julia> A = [5. 7.; -2. -4.]
+2×2 Array{Float64,2}:
+  5.0   7.0
+ -2.0  -4.0
+
+julia> S = lq(A)
+LQ{Float64,Array{Float64,2}} with factors L and Q:
+[-8.60233 0.0; 4.41741 -0.697486]
+[-0.581238 -0.813733; -0.813733 0.581238]
+
+julia> S.L * S.Q
+2×2 Array{Float64,2}:
+  5.0   7.0
+ -2.0  -4.0
+
+julia> l, q = S; # destructuring via iteration
+
+julia> l == S.L &&  q == S.Q
+true
+"""
 struct LQ{T,S<:AbstractMatrix{T}} <: Factorization{T}
     factors::S
     τ::Vector{T}
 
     function LQ{T,S}(factors, τ) where {T,S<:AbstractMatrix{T}}
-        @assert !has_offset_axes(factors)
+        require_one_based_indexing(factors)
         new{T,S}(factors, τ)
     end
 end
@@ -104,8 +138,9 @@ Base.propertynames(F::LQ, private::Bool=false) =
 getindex(A::LQPackedQ, i::Integer, j::Integer) =
     lmul!(A, setindex!(zeros(eltype(A), size(A, 2)), 1, j))[i]
 
-function show(io::IO, C::LQ)
+function show(io::IO, ::MIME"text/plain", C::LQ)
     println(io, typeof(C), " with factors L and Q:")
+    io = IOContext(io, :compact => true)
     show(io, C.L)
     println(io)
     show(io, C.Q)
@@ -286,7 +321,7 @@ end
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
 function (\)(F::LQ{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
-    @assert !has_offset_axes(B)
+    require_one_based_indexing(B)
     c2r = reshape(copy(transpose(reinterpret(T, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
     x = ldiv!(F, c2r)
     return reshape(copy(reinterpret(Complex{T}, copy(transpose(reshape(x, div(length(x), 2), 2))))),

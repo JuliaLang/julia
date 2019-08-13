@@ -584,11 +584,23 @@ function test_setindex!_internals(::Type{TestAbstractArray})
 end
 
 function test_get(::Type{TestAbstractArray})
-    A = T24Linear([1:24...])
-    B = TSlow([1:24...])
+    A = T24Linear(reshape([1:24...], 4, 3, 2))
+    B = TSlow(reshape([1:24...], 4, 3, 2))
 
-    @test get(A, (), 0) == Int[]
-    @test get(B, (), 0) == TSlow(Int, 0)
+    @test get(A, (), 0) == 0
+    @test get(B, (), 0) == 0
+    @test get(A, (1,), 0) == get(A, 1, 0) == A[1] == 1
+    @test get(B, (1,), 0) == get(B, 1, 0) == B[1] == 1
+    @test get(A, (25,), 0) == get(A, 25, 0) == 0
+    @test get(B, (25,), 0) == get(B, 25, 0) == 0
+    @test get(A, (1,1,1), 0) == A[1,1,1] == 1
+    @test get(B, (1,1,1), 0) == B[1,1,1] == 1
+    @test get(A, (1,1,3), 0) == 0
+    @test get(B, (1,1,3), 0) == 0
+
+    @test get(TSlow([]), (), 0) == 0
+    @test get(TSlow([1]), (), 0) == 1
+    @test get(TSlow(fill(1)), (), 0) == 1
 end
 
 function test_cat(::Type{TestAbstractArray})
@@ -852,6 +864,9 @@ for A in (rand(2), rand(2,3))
         @test A[i] == v
     end
     @test Array(values(A)) == A
+
+     @test keytype(A) == keytype(typeof(A)) == eltype(keys(A))
+     @test valtype(A) == valtype(typeof(A)) == eltype(values(A))
 end
 
 # nextind and prevind
@@ -946,4 +961,37 @@ end
 @testset "Issue 30145" begin
     X = [1,2,3]
     @test isempty(X[Union{}[]])
+end
+
+@testset "Issue 30259" begin
+    A = randn(1,2,3)
+    @test get(A, CartesianIndex(1,2,3), :some_default) === A[1,2,3]
+    @test get(A, CartesianIndex(2,2,3), :some_default) === :some_default
+    @test get(11:15, CartesianIndex(6), nothing) === nothing
+    @test get(11:15, CartesianIndex(5), nothing) === 15
+end
+
+@testset "IndexStyle for various types" begin
+    @test Base.IndexStyle(UpperTriangular) == IndexCartesian() # subtype of AbstractArray, not of Array
+    @test Base.IndexStyle(Vector) == IndexLinear()
+    @test Base.IndexStyle(UnitRange) == IndexLinear()
+    @test Base.IndexStyle(UpperTriangular(rand(3, 3)), [1; 2; 3]) == IndexCartesian()
+    @test Base.IndexStyle(UpperTriangular(rand(3, 3)), rand(3, 3), [1; 2; 3]) == IndexCartesian()
+    @test Base.IndexStyle(rand(3, 3), [1; 2; 3]) == IndexLinear()
+end
+
+@testset "promote_shape for Tuples and Dims" begin
+    @test promote_shape((2, 1), (2,)) == (2, 1)
+    @test_throws DimensionMismatch promote_shape((2, 3), (2,))
+    @test promote_shape(Dims((2, 1)), Dims((2,))) == (2, 1)
+    @test_throws DimensionMismatch promote_shape(Dims((2, 2)), Dims((2,)))
+    @test_throws DimensionMismatch promote_shape(Dims((2, 3, 1)), Dims((2,2)))
+end
+
+@testset "getindex and setindex! for Ref" begin
+    for x in [Ref(1), Ref([1,2,3], 1)]
+        @test getindex(x) == getindex(x, CartesianIndex()) == 1
+        x[CartesianIndex()] = 10
+        @test getindex(x) == getindex(x, CartesianIndex()) == 10
+    end
 end

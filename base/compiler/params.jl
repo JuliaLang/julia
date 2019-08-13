@@ -41,6 +41,8 @@ struct Params
                     inline_cost_threshold::Int = DEFAULT_PARAMS.inline_cost_threshold,
                     inline_nonleaf_penalty::Int = DEFAULT_PARAMS.inline_nonleaf_penalty,
                     inline_tupleret_bonus::Int = DEFAULT_PARAMS.inline_tupleret_bonus,
+                    ipo_constant_propagation::Bool = true,
+                    aggressive_constant_propagation::Bool = false,
                     max_methods::Int = DEFAULT_PARAMS.MAX_METHODS,
                     tupletype_depth::Int = DEFAULT_PARAMS.TUPLE_COMPLEXITY_LIMIT_DEPTH,
                     tuple_splat::Int = DEFAULT_PARAMS.MAX_TUPLE_SPLAT,
@@ -48,11 +50,14 @@ struct Params
                     apply_union_enum::Int = DEFAULT_PARAMS.MAX_APPLY_UNION_ENUM)
         return new(Vector{InferenceResult}(),
                    world, false,
-                   inlining, true, false, inline_cost_threshold, inline_nonleaf_penalty,
-                   inline_tupleret_bonus, max_methods, union_splitting, apply_union_enum,
-                   tupletype_depth, tuple_splat)
+                   inlining, ipo_constant_propagation, aggressive_constant_propagation,
+                   inline_cost_threshold, inline_nonleaf_penalty, inline_tupleret_bonus,
+                   max_methods, union_splitting, apply_union_enum, tupletype_depth,
+                   tuple_splat)
     end
     function Params(world::UInt)
+        world == typemax(UInt) && (world = get_world_counter()) # workaround for bad callers
+        @assert world <= get_world_counter()
         inlining = inlining_enabled()
         return new(Vector{InferenceResult}(),
                    world, true,

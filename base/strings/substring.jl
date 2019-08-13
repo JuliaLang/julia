@@ -82,14 +82,19 @@ function isvalid(s::SubString, i::Integer)
     @inbounds return ib && isvalid(s.string, s.offset + i)
 end
 
+byte_string_classify(s::SubString{String}) =
+    ccall(:u8_isvalid, Int32, (Ptr{UInt8}, Int), s, sizeof(s))
+
+isvalid(::Type{String}, s::SubString{String}) = byte_string_classify(s) ≠ 0
+isvalid(s::SubString{String}) = isvalid(String, s)
+
 thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
 nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
 
 function cmp(a::SubString{String}, b::SubString{String})
     na = sizeof(a)
     nb = sizeof(b)
-    c = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-              pointer(a), pointer(b), min(na, nb))
+    c = _memcmp(a, b, min(na, nb))
     return c < 0 ? -1 : c > 0 ? +1 : cmp(na, nb)
 end
 

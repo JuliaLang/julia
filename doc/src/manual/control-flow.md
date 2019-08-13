@@ -564,6 +564,7 @@ below all interrupt the normal flow of control.
 | [`ArgumentError`](@ref)       |
 | [`BoundsError`](@ref)         |
 | [`CompositeException`](@ref)  |
+| [`DimensionMismatch`](@ref)   |
 | [`DivideError`](@ref)         |
 | [`DomainError`](@ref)         |
 | [`EOFError`](@ref)            |
@@ -717,27 +718,24 @@ Stacktrace:
 
 ### The `try/catch` statement
 
-The `try/catch` statement allows for `Exception`s to be tested for. For example, a customized
-square root function can be written to automatically call either the real or complex square root
-method on demand using `Exception`s :
+The `try/catch` statement allows for `Exception`s to be tested for, and for the
+graceful handling of things that may ordinarily break your application. For example,
+in the below code the function for square root would normally throw an exception. By
+placing a `try/catch` block around it we can mitigate that here. You may choose how
+you wish to handle this exception, whether logging it, return a placeholder value or
+as in the case below where we just printed out a statement. One thing to think about
+when deciding how to handle unexpected situations is that using a `try/catch` block is
+much slower than using conditional branching to handle those situations.
+Below there are more examples of handling exceptions with a `try/catch` block:
 
 ```jldoctest
-julia> f(x) = try
-           sqrt(x)
-       catch
-           sqrt(complex(x, 0))
+julia> try
+           sqrt("ten")
+       catch e
+           println("You should have entered a numeric value")
        end
-f (generic function with 1 method)
-
-julia> f(1)
-1.0
-
-julia> f(-1)
-0.0 + 1.0im
+You should have entered a numeric value
 ```
-
-It is important to note that in real code computing this function, one would compare `x` to zero
-instead of catching an exception. The exception is much slower than simply comparing and branching.
 
 `try/catch` statements also allow the `Exception` to be saved in a variable. The following
 contrived example calculates the square root of the second element of `x` if `x`
@@ -794,7 +792,7 @@ The power of the `try/catch` construct lies in the ability to unwind a deeply ne
 immediately to a much higher level in the stack of calling functions. There are situations where
 no error has occurred, but the ability to unwind the stack and pass a value to a higher level
 is desirable. Julia provides the [`rethrow`](@ref), [`backtrace`](@ref), [`catch_backtrace`](@ref)
-and [`catch_stack`](@ref) functions for more advanced error handling.
+and [`Base.catch_stack`](@ref) functions for more advanced error handling.
 
 ### `finally` Clauses
 
@@ -984,8 +982,6 @@ symbols:
 
 | Symbol      | Meaning                                            |
 |:----------- |:-------------------------------------------------- |
-| `:runnable` | Currently running, or available to be switched to  |
-| `:waiting`  | Blocked waiting for a specific event               |
-| `:queued`   | In the scheduler's run queue about to be restarted |
+| `:runnable` | Currently running, or able to run                  |
 | `:done`     | Successfully finished executing                    |
 | `:failed`   | Finished with an uncaught exception                |

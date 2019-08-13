@@ -27,16 +27,28 @@ problematic for performance, so the results need to be used judiciously.
 In particular, unions containing either [`missing`](@ref) or [`nothing`](@ref) are displayed in yellow, since
 these are often intentional.
 
-Keyword argument `debuginfo` may be one of source or none (default), to specify the verbosity of code comments.
+Keyword argument `debuginfo` may be one of `:source` or `:none` (default), to specify the verbosity of code comments.
 
 See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
-function code_warntype(io::IO, @nospecialize(f), @nospecialize(t); debuginfo::Symbol=:default)
-    lineprinter = Base.IRShow.debuginfo[debuginfo]
-    for (src, rettype) in code_typed(f, t)
+function code_warntype(io::IO, @nospecialize(f), @nospecialize(t); debuginfo::Symbol=:default, optimize::Bool=false)
+    debuginfo = Base.IRShow.debuginfo(debuginfo)
+    lineprinter = Base.IRShow.__debuginfo[debuginfo]
+    for (src, rettype) in code_typed(f, t, optimize=optimize)
         lambda_io::IOContext = io
         if src.slotnames !== nothing
-            lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(src))
+            slotnames = Base.sourceinfo_slotnames(src)
+            lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => slotnames)
+            println(io, "Variables")
+            slottypes = src.slottypes
+            for i = 1:length(slotnames)
+                print(io, "  ", slotnames[i])
+                if isa(slottypes, Vector{Any})
+                    warntype_type_printer(io, slottypes[i], true)
+                end
+                println(io)
+            end
+            println(io)
         end
         print(io, "Body")
         warntype_type_printer(io, rettype, true)
@@ -54,7 +66,7 @@ import Base.CodegenParams
 # Printing code representations in IR and assembly
 function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrapper::Bool,
                         strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol,
-                        optimize::Bool, debuginfo::Symbol,
+                        optimize::Bool, debuginfo::Symbol=:default,
                         params::CodegenParams=CodegenParams())
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
@@ -66,7 +78,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
     t = to_tuple_type(t)
     tt = signature_type(f, t)
     (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), tt, meth.sig)::Core.SimpleVector
-    meth = Base.func_for_method_checked(meth, ti)
+    meth = Base.func_for_method_checked(meth, ti, env)
     linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, ti, env, world)
     # get the code for it
     return _dump_function_linfo(linfo, world, native, wrapper, strip_ir_metadata, dump_module, syntax, optimize, debuginfo, params)
@@ -74,7 +86,7 @@ end
 
 function _dump_function_linfo(linfo::Core.MethodInstance, world::UInt, native::Bool, wrapper::Bool,
                               strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol,
-                              optimize::Bool, debuginfo::Symbol,
+                              optimize::Bool, debuginfo::Symbol=:default,
                               params::CodegenParams=CodegenParams())
     if syntax != :att && syntax != :intel
         throw(ArgumentError("'syntax' must be either :intel or :att"))

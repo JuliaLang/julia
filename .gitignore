@@ -3,6 +3,7 @@
 /dist
 /dist-extras
 /julia
+/julia.bat
 /usr
 /oprofile_data
 /usr-staging

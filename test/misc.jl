@@ -88,6 +88,7 @@ end
 # lock / unlock
 let l = ReentrantLock()
     lock(l)
+    @test islocked(l)
     success = Ref(false)
     @test trylock(l) do
         @test lock(l) do
@@ -128,6 +129,8 @@ let c = Ref(0),
     yield(t2)
     @test c[] == 100
 end
+
+@test_throws ErrorException("deadlock detected: cannot wait on current task") wait(current_task())
 
 # test that @sync is lexical (PR #27164)
 
@@ -722,3 +725,13 @@ end
        end
    end
 end
+
+@testset "ordering UUIDs" begin
+    a = Base.UUID("dbd321ed-e87e-4f33-9511-65b7d01cdd55")
+    b = Base.UUID("2832b20a-2ad5-46e9-abb1-2d20c8c31dd3")
+    @test isless(b, a)
+    @test sort([a, b]) == [b, a]
+end
+
+# Pointer 0-arg constructor
+@test Ptr{Cvoid}() == C_NULL

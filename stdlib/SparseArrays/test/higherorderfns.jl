@@ -101,6 +101,8 @@ end
     fa, fA = Array(a), Array(A)
     @test broadcast(sin, a) == sparse(broadcast(sin, fa))
     @test broadcast(sin, A) == sparse(broadcast(sin, fA))
+    # also test the typed broadcast
+    @test broadcast(convert, Float32, A) == sparse(broadcast(convert, Float32, fA))
 end
 
 @testset "broadcast! implementation specialized for a single (input) sparse vector/matrix" begin
@@ -285,17 +287,14 @@ end
     A, fA = sparse(1.0I, N, N), Matrix(1.0I, N, N)
     B, fB = spzeros(1, N), zeros(1, N)
     intorfloat_zeropres(xs...) = all(iszero, xs) ? zero(Float64) : Int(1)
-    stringorfloat_zeropres(xs...) = all(iszero, xs) ? zero(Float64) : "hello"
     intorfloat_notzeropres(xs...) = all(iszero, xs) ? Int(1) : zero(Float64)
-    stringorfloat_notzeropres(xs...) = all(iszero, xs) ? "hello" : zero(Float64)
-    for fn in (intorfloat_zeropres, intorfloat_notzeropres,
-                stringorfloat_zeropres, stringorfloat_notzeropres)
+    for fn in (intorfloat_zeropres, intorfloat_notzeropres)
         @test map(fn, A) == sparse(map(fn, fA))
         @test broadcast(fn, A) == sparse(broadcast(fn, fA))
         @test broadcast(fn, A, B) == sparse(broadcast(fn, fA, fB))
         @test broadcast(fn, B, A) == sparse(broadcast(fn, fB, fA))
     end
-    for fn in (intorfloat_zeropres, stringorfloat_zeropres)
+    for fn in (intorfloat_zeropres,)
         @test broadcast(fn, A, B, A) == sparse(broadcast(fn, fA, fB, fA))
     end
 end
@@ -639,7 +638,7 @@ end
     @test_broken ((_, _, _, _, x) -> x).(Int, Int, Int, Int, spzeros(3)) == spzeros(3)
 end
 
-using SparseArrays.HigherOrderFns: SparseVecStyle
+using SparseArrays.HigherOrderFns: SparseVecStyle, SparseMatStyle
 
 @testset "Issue #30120: method ambiguity" begin
     # HigherOrderFns._copy(f) was ambiguous.  It may be impossible to
@@ -654,6 +653,42 @@ using SparseArrays.HigherOrderFns: SparseVecStyle
     @test err isa MethodError
     @test !occursin("is ambiguous", sprint(showerror, err))
     @test occursin("no method matching _copy(::typeof(rand))", sprint(showerror, err))
+end
+
+@testset "Sparse outer product, for type $T and vector $op" for
+         op in (transpose, adjoint),
+         T in (Float64, ComplexF64)
+    m, n, p = 100, 250, 0.1
+    A = sprand(T, m, n, p)
+    a, b = view(A, :, 1), sprand(T, m, p)
+    av, bv = Vector(a), Vector(b)
+    v = @inferred a .* op(b)
+    w = @inferred b .* op(a)
+    @test issparse(v)
+    @test issparse(w)
+    @test v == av .* op(bv)
+    @test w == bv .* op(av)
+end
+
+@testset "issue #31758: out of bounds write in _map_zeropres!" begin
+    y = sparsevec([2,7], [1., 2.], 10)
+    x1 = sparsevec(fill(1.0, 10))
+    x2 = sparsevec([2,7], [1., 2.], 10)
+    x3 = sparsevec(fill(1.0, 10))
+    f(x, y, z) = x == y == z == 0 ? 0.0 : NaN
+    y .= f.(x1, x2, x3)
+    @test all(isnan, y)
+end
+
+@testset "Vec/Mat Style" begin
+    @test SparseVecStyle(Val(0)) == SparseVecStyle()
+    @test SparseVecStyle(Val(1)) == SparseVecStyle()
+    @test SparseVecStyle(Val(2)) == SparseMatStyle()
+    @test SparseVecStyle(Val(3)) == Broadcast.DefaultArrayStyle{3}()
+    @test SparseMatStyle(Val(0)) == SparseMatStyle()
+    @test SparseMatStyle(Val(1)) == SparseMatStyle()
+    @test SparseMatStyle(Val(2)) == SparseMatStyle()
+    @test SparseMatStyle(Val(3)) == Broadcast.DefaultArrayStyle{3}()
 end
 
 end # module

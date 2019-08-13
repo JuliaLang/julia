@@ -106,7 +106,10 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_category_t cat)
 
             // Other_ID_Start
             wc == 0x2118 || wc == 0x212E || // ℘, ℮
-            (wc >= 0x309B && wc <= 0x309C)); // katakana-hiragana sound marks
+            (wc >= 0x309B && wc <= 0x309C) || // katakana-hiragana sound marks
+
+            // bold-digits and double-struck digits
+            (wc >= 0x1D7CE && wc <= 0x1D7E1)); // 𝟎 through 𝟗 (inclusive), 𝟘 through 𝟡 (inclusive)
 }
 
 JL_DLLEXPORT int jl_id_start_char(uint32_t wc)
@@ -171,7 +174,18 @@ static int never_id_char(uint32_t wc)
           (wc < 0xff &&
            cat >= UTF8PROC_CATEGORY_PD && cat <= UTF8PROC_CATEGORY_PO) ||
 
-          wc == '`');
+          wc == '`' ||
+
+          // mathematical brackets
+          (wc >= 0x27e6 && wc <= 0x27ef) ||
+          // angle, corner, and lenticular brackets
+          (wc >= 0x3008 && wc <= 0x3011) ||
+          // tortoise shell, square, and more lenticular brackets
+          (wc >= 0x3014 && wc <= 0x301b) ||
+          // fullwidth parens
+          (wc == 0xff08 || wc == 0xff09) ||
+          // fullwidth square brackets
+          (wc == 0xff3b || wc == 0xff3d));
 }
 
 value_t fl_julia_identifier_char(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
@@ -239,6 +253,7 @@ value_t fl_julia_underscore_symbolp(fl_context_t *fl_ctx, value_t *args, uint32_
     argcount(fl_ctx, "underscore-symbol?", nargs, 1);
     if (!issymbol(args[0])) return fl_ctx->F;
     char *op = symbol_name(fl_ctx, args[0]);
+    if (*op == '\0') return fl_ctx->F; // return false for empty symbol
     while (*op == '_') ++op;
     return *op ? fl_ctx->F : fl_ctx->T;
 }

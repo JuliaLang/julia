@@ -3,37 +3,10 @@
 module TestGeneric
 
 using Test, LinearAlgebra, Random
-import Base: +, -, *, /, \
 
-# A custom Quaternion type with minimal defined interface and methods.
-# Used to test mul and mul! methods to show non-commutativity.
-struct Quaternion{T<:Real} <: Number
-    s::T
-    v1::T
-    v2::T
-    v3::T
-end
-Quaternion(s::Real, v1::Real, v2::Real, v3::Real) = Quaternion(promote(s, v1, v2, v3)...)
-Base.convert(::Type{Quaternion{T}}, s::Real) where {T <: Real} =
-    Quaternion{T}(convert(T, s), zero(T), zero(T), zero(T))
-Base.abs2(q::Quaternion) = q.s*q.s + q.v1*q.v1 + q.v2*q.v2 + q.v3*q.v3
-Base.abs(q::Quaternion) = sqrt(abs2(q))
-Base.real(::Type{Quaternion{T}}) where {T} = T
-Base.conj(q::Quaternion) = Quaternion(q.s, -q.v1, -q.v2, -q.v3)
-Base.isfinite(q::Quaternion) = isfinite(q.s) & isfinite(q.v1) & isfinite(q.v2) & isfinite(q.v3)
-
-(+)(ql::Quaternion, qr::Quaternion) =
-    Quaternion(ql.s + qr.s, ql.v1 + qr.v1, ql.v2 + qr.v2, ql.v3 + qr.v3)
-(-)(ql::Quaternion, qr::Quaternion) =
-    Quaternion(ql.s - qr.s, ql.v1 - qr.v1, ql.v2 - qr.v2, ql.v3 - qr.v3)
-(*)(q::Quaternion, w::Quaternion) = Quaternion(q.s*w.s - q.v1*w.v1 - q.v2*w.v2 - q.v3*w.v3,
-                                               q.s*w.v1 + q.v1*w.s + q.v2*w.v3 - q.v3*w.v2,
-                                               q.s*w.v2 - q.v1*w.v3 + q.v2*w.s + q.v3*w.v1,
-                                               q.s*w.v3 + q.v1*w.v2 - q.v2*w.v1 + q.v3*w.s)
-(*)(q::Quaternion, r::Real) = Quaternion(q.s*r, q.v1*r, q.v2*r, q.v3*r)
-(*)(q::Quaternion, b::Bool) = b * q # remove method ambiguity
-(/)(q::Quaternion, w::Quaternion) = q * conj(w) * (1.0 / abs2(w))
-(\)(q::Quaternion, w::Quaternion) = conj(q) * w * (1.0 / abs2(q))
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
 
 Random.seed!(123)
 
@@ -143,6 +116,11 @@ end
             @test_throws DimensionMismatch rmul!(a, Diagonal(Vector{Float64}(undef,an+1)))
         end
 
+        @testset "Scaling with rdiv! and ldiv!" begin
+            @test rdiv!(copy(a), 5.) == a/5
+            @test ldiv!(5., copy(a)) == a/5
+        end
+
         @testset "Scaling with 3-argument mul!" begin
             @test mul!(similar(a), 5., a) == a*5
             @test mul!(similar(a), a, 5.) == a*5
@@ -203,15 +181,22 @@ end
         @test issymmetric(a)
         @test ishermitian(one(elty))
         @test det(a) == a
+        @test norm(a) == abs(a)
+        @test norm(a, 0) == 1
     end
 
     @test !issymmetric(NaN16)
     @test !issymmetric(NaN32)
     @test !issymmetric(NaN)
+    @test norm(NaN)    === NaN
+    @test norm(NaN, 0) === NaN
 end
 
 @test rank(fill(0, 0, 0)) == 0
 @test rank([1.0 0.0; 0.0 0.9],0.95) == 1
+@test rank([1.0 0.0; 0.0 0.9],rtol=0.95) == 1
+@test rank([1.0 0.0; 0.0 0.9],atol=0.95) == 1
+@test rank([1.0 0.0; 0.0 0.9],atol=0.95,rtol=0.95)==1
 @test qr(big.([0 1; 0 0])).R == [0 1; 0 0]
 
 @test norm([2.4e-322, 4.4e-323]) ≈ 2.47e-322
@@ -260,6 +245,11 @@ end
             @test isempty(normalize!(T[]))
         end
     end
+end
+
+@testset "Issue #30466" begin
+    @test norm([typemin(Int), typemin(Int)], Inf) == -float(typemin(Int))
+    @test norm([typemin(Int), typemin(Int)], 1) == -2float(typemin(Int))
 end
 
 @testset "potential overflow in normalize!" begin
@@ -336,6 +326,10 @@ LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
     @test A*(lu(A, Val(true))\b) == b
 end
 
+@testset "Issue 18742" begin
+    @test_throws DimensionMismatch ones(4,5)/zeros(3,6)
+    @test_throws DimensionMismatch ones(4,5)\zeros(3,6)
+end
 @testset "fallback throws properly for AbstractArrays with dimension > 2" begin
     @test_throws ErrorException adjoint(rand(2,2,2,2))
     @test_throws ErrorException transpose(rand(2,2,2,2))
@@ -401,6 +395,18 @@ end
 
 @testset "peakflops" begin
     @test LinearAlgebra.peakflops() > 0
+end
+
+@testset "NaN handling: Issue 28972" begin
+    @test all(isnan, rmul!([NaN], 0.0))
+    @test all(isnan, rmul!(Any[NaN], 0.0))
+    @test all(isnan, lmul!(0.0, [NaN]))
+    @test all(isnan, lmul!(0.0, Any[NaN]))
+
+    @test all(!isnan, rmul!([NaN], false))
+    @test all(!isnan, rmul!(Any[NaN], false))
+    @test all(!isnan, lmul!(false, [NaN]))
+    @test all(!isnan, lmul!(false, Any[NaN]))
 end
 
 end # module TestGeneric

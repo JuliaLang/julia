@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-world_counter() = ccall(:jl_get_world_counter, UInt, ())
+using Base: get_world_counter
 
 # DO NOT ALTER ORDER OR SPACING OF METHODS BELOW
 const lineoffset = @__LINE__
@@ -16,19 +16,17 @@ using LinearAlgebra, SparseArrays
 # For curmod_*
 include("testenv.jl")
 
-ambigs = Any[[], [3], [2,5], [], [3]]
-
-mt = methods(ambig)
-
+getline(m::Core.TypeMapEntry) = getline(m.func::Method)
 getline(m::Method) = m.line - lineoffset
 
-for m in mt
+ambigs = Any[[], [3], [2, 5], [], [3]]
+for m in methods(ambig)
     ln = getline(m)
     atarget = ambigs[ln]
     if isempty(atarget)
         @test m.ambig === nothing
     else
-        aln = Int[getline(a) for a in m.ambig]
+        aln = Int[getline(a::Core.TypeMapEntry) for a in m.ambig]
         @test sort(aln) == atarget
     end
 end
@@ -81,7 +79,7 @@ end
 let io = IOBuffer()
     @test precompile(ambig, (UInt8, Int)) == false
     cf = @eval @cfunction(ambig, Int, (UInt8, Int))  # test for a crash (doesn't throw an error)
-    @test_throws(MethodError(ambig, (UInt8(1), Int(2)), world_counter()),
+    @test_throws(MethodError(ambig, (UInt8(1), Int(2)), get_world_counter()),
                  ccall(cf, Int, (UInt8, Int), 1, 2))
     @test_throws(ErrorException("no unique matching method found for the specified argument types"),
                  which(ambig, (UInt8, Int)))
@@ -271,11 +269,8 @@ end
         @test_broken need_to_handle_undef_sparam == Set()
         pop!(need_to_handle_undef_sparam, which(Core.Compiler._cat, Tuple{Any, AbstractArray}))
         pop!(need_to_handle_undef_sparam, first(methods(Core.Compiler.same_names)))
-        pop!(need_to_handle_undef_sparam, which(Core.Compiler.convert, (Type{Union{Core.Compiler.Some{T}, Nothing}} where T, Core.Compiler.Some)))
-        pop!(need_to_handle_undef_sparam, which(Core.Compiler.convert, (Type{Union{T, Nothing}} where T, Core.Compiler.Some)))
         pop!(need_to_handle_undef_sparam, which(Core.Compiler.convert, Tuple{Type{Tuple{Vararg{Int}}}, Tuple{}}))
         pop!(need_to_handle_undef_sparam, which(Core.Compiler.convert, Tuple{Type{Tuple{Vararg{Int}}}, Tuple{Int8}}))
-        pop!(need_to_handle_undef_sparam, which(Core.Compiler.convert, Tuple{Type{Union{Nothing,T}},Union{Nothing,T}} where T))
         @test need_to_handle_undef_sparam == Set()
     end
     let need_to_handle_undef_sparam =
@@ -295,7 +290,6 @@ end
         pop!(need_to_handle_undef_sparam, which(Base.zero, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.one, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.oneunit, Tuple{Type{Union{Missing, T}} where T}))
-        pop!(need_to_handle_undef_sparam, which(Base.nonmissingtype, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.convert, (Type{Union{Some{T}, Nothing}} where T, Some)))
         pop!(need_to_handle_undef_sparam, which(Base.convert, (Type{Union{T, Nothing}} where T, Some)))
         pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Tuple{Vararg{Int}}}, Tuple{}}))
