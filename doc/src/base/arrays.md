@@ -159,6 +159,9 @@ Base.rot180
 Base.rotl90
 Base.rotr90
 Base.mapslices
+Base.eachrow
+Base.eachcol
+Base.eachslice
 ```
 
 ## Combinatorics
