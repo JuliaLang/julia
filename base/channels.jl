@@ -66,7 +66,7 @@ If you need a reference to the created task, pass a `Ref{Task}` object via
 the keyword argument `taskref`.
 
 If `spawn = true`, the Task created for `func` may be scheduled on another thread
-in parallel, equivalent to creating a task via `Threads.@spawn`.
+in parallel, equivalent to creating a task via [`Threads.@spawn`](@ref).
 
 Return a `Channel`.
 
@@ -108,7 +108,7 @@ true
 ```
 
 !!! compat "Julia 1.3"
-  The `spawn=` parameter was added in Julia 1.3. This constructor was added in Julia 1.3.
+  The `spawn` keyword argument was added in Julia 1.3. This constructor was added in Julia 1.3.
   Earlier versions of Julia used kwargs to set `size` and `T`, but those constructors are
   deprecated.
 
