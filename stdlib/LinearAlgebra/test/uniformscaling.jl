@@ -320,8 +320,8 @@ end
     alpha = randn()
     beta = randn()
     target = J * A * alpha + C * beta
-    @test addmul!(copy(C), J, A, alpha, beta) ≈ target
-    @test addmul!(copy(C), A, J, alpha, beta) ≈ target
+    @test mul!(copy(C), J, A, alpha, beta) ≈ target
+    @test mul!(copy(C), A, J, alpha, beta) ≈ target
 end
 
 @testset "Construct Diagonal from UniformScaling" begin

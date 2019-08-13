@@ -108,7 +108,6 @@ export
     lu!,
     lyap,
     mul!,
-    addmul!,
     lmul!,
     rmul!,
     norm,

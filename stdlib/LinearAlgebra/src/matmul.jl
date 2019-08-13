@@ -62,23 +62,23 @@ function *(a::AbstractVector, adjB::Adjoint{<:Any,<:AbstractMatrix})
 end
 (*)(a::AbstractVector, B::AbstractMatrix) = reshape(a,length(a),1)*B
 
-@inline addmul!(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T},
-                alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat} =
+@inline mul!(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T},
+             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat} =
     gemv!(y, 'N', A, x, alpha, beta)
 # Complex matrix times real vector. Reinterpret the matrix as a real matrix and do real matvec compuation.
 for elty in (Float32,Float64)
     @eval begin
-        @inline function addmul!(y::StridedVector{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, x::StridedVector{$elty},
-                         alpha::Union{$elty, Bool}, beta::Union{$elty, Bool})
+        @inline function mul!(y::StridedVector{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, x::StridedVector{$elty},
+                              alpha::Union{$elty, Bool}, beta::Union{$elty, Bool})
             Afl = reinterpret($elty,A)
             yfl = reinterpret($elty,y)
-            addmul!(yfl, Afl, x, alpha, beta)
+            mul!(yfl, Afl, x, alpha, beta)
             return y
         end
     end
 end
-@inline addmul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector,
-                alpha::Number, beta::Number) =
+@inline mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector,
+             alpha::Number, beta::Number) =
     generic_matvecmul!(y, 'N', A, x, MulAddMul(alpha, beta))
 
 function *(transA::Transpose{<:Any,<:StridedMatrix{T}}, x::StridedVector{S}) where {T<:BlasFloat,S}
@@ -91,13 +91,13 @@ function *(transA::Transpose{<:Any,<:AbstractMatrix{T}}, x::AbstractVector{S}) w
     TS = promote_op(matprod, T, S)
     mul!(similar(x,TS,size(A,2)), transpose(A), x)
 end
-@inline function addmul!(y::StridedVector{T}, transA::Transpose{<:Any,<:StridedVecOrMat{T}}, x::StridedVector{T},
-                 alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat}
+@inline function mul!(y::StridedVector{T}, transA::Transpose{<:Any,<:StridedVecOrMat{T}}, x::StridedVector{T},
+                      alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat}
     A = transA.parent
     return gemv!(y, 'T', A, x, alpha, beta)
 end
-@inline function addmul!(y::AbstractVector, transA::Transpose{<:Any,<:AbstractVecOrMat}, x::AbstractVector,
-                 alpha::Number, beta::Number)
+@inline function mul!(y::AbstractVector, transA::Transpose{<:Any,<:AbstractVecOrMat}, x::AbstractVector,
+                      alpha::Number, beta::Number)
     A = transA.parent
     return generic_matvecmul!(y, 'T', A, x, MulAddMul(alpha, beta))
 end
@@ -113,18 +113,18 @@ function *(adjA::Adjoint{<:Any,<:AbstractMatrix{T}}, x::AbstractVector{S}) where
     mul!(similar(x,TS,size(A,2)), adjoint(A), x)
 end
 
-@inline function addmul!(y::StridedVector{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, x::StridedVector{T},
-                 alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasReal}
+@inline function mul!(y::StridedVector{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, x::StridedVector{T},
+                      alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasReal}
     A = adjA.parent
-    return addmul!(y, transpose(A), x, alpha, beta)
+    return mul!(y, transpose(A), x, alpha, beta)
 end
-@inline function addmul!(y::StridedVector{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, x::StridedVector{T},
-                 alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasComplex}
+@inline function mul!(y::StridedVector{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, x::StridedVector{T},
+                      alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasComplex}
     A = adjA.parent
     return gemv!(y, 'C', A, x, alpha, beta)
 end
-@inline function addmul!(y::AbstractVector, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, x::AbstractVector,
-                 alpha::Number, beta::Number)
+@inline function mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, x::AbstractVector,
+                      alpha::Number, beta::Number)
     A = adjA.parent
     return generic_matvecmul!(y, 'C', A, x, MulAddMul(alpha, beta))
 end
@@ -152,18 +152,18 @@ function (*)(A::AbstractMatrix, B::AbstractMatrix)
     TS = promote_op(matprod, eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A,1), size(B,2))), A, B)
 end
-@inline addmul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
-                alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat} =
+@inline mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
+             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat} =
     gemm_wrapper!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
 # Complex Matrix times real matrix: We use that it is generally faster to reinterpret the
 # first matrix as a real matrix and carry out real matrix matrix multiply
 for elty in (Float32,Float64)
     @eval begin
-        @inline function addmul!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, B::StridedVecOrMat{$elty},
+        @inline function mul!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, B::StridedVecOrMat{$elty},
                          alpha::Union{$elty, Bool}, beta::Union{$elty, Bool})
             Afl = reinterpret($elty, A)
             Cfl = reinterpret($elty, C)
-            addmul!(Cfl, Afl, B, alpha, beta)
+            mul!(Cfl, Afl, B, alpha, beta)
             return C
         end
     end
@@ -187,15 +187,16 @@ julia> Y
 ```
 
 # Implementation
-For custom matrix and vector types, it is recommended to implement [`addmul!`](@ref)
-rather than implementing `mul!` directly if possible.
+For custom matrix and vector types, it is recommended to implement
+5-argument `mul!` rather than implementing 3-argument `mul!` directly
+if possible.
 """
 @inline function mul!(C, A, B)
-    return addmul!(C, A, B, true, false)
+    return mul!(C, A, B, true, false)
 end
 
 """
-    addmul!(C, A, B, α, β) -> C
+    mul!(C, A, B, α, β) -> C
 
 Combined inplace matrix-matrix or matrix-vector multiply-add ``A B α + C β``.
 The result is stored in `C` by overwriting it.  Note that `C` must not be
@@ -205,7 +206,7 @@ aliased with either `A` or `B`.
 ```jldoctest
 julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; C=[1.0 2.0; 3.0 4.0];
 
-julia> addmul!(C, A, B, 100.0, 10.0) === C
+julia> mul!(C, A, B, 100.0, 10.0) === C
 true
 
 julia> C
@@ -214,8 +215,8 @@ julia> C
  730.0  740.0
 ```
 """
-@inline addmul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat,
-                alpha::Number, beta::Number) =
+@inline mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat,
+             alpha::Number, beta::Number) =
     generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
 
 """
@@ -284,7 +285,7 @@ julia> lmul!(F.Q, B)
 """
 lmul!(A, B)
 
-@inline function addmul!(C::StridedMatrix{T}, transA::Transpose{<:Any,<:StridedVecOrMat{T}}, B::StridedVecOrMat{T},
+@inline function mul!(C::StridedMatrix{T}, transA::Transpose{<:Any,<:StridedVecOrMat{T}}, B::StridedVecOrMat{T},
                  alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat}
     A = transA.parent
     if A===B
@@ -293,13 +294,13 @@ lmul!(A, B)
         return gemm_wrapper!(C, 'T', 'N', A, B, MulAddMul(alpha, beta))
     end
 end
-@inline function addmul!(C::AbstractMatrix, transA::Transpose{<:Any,<:AbstractVecOrMat}, B::AbstractVecOrMat,
+@inline function mul!(C::AbstractMatrix, transA::Transpose{<:Any,<:AbstractVecOrMat}, B::AbstractVecOrMat,
                  alpha::Number, beta::Number)
     A = transA.parent
     return generic_matmatmul!(C, 'T', 'N', A, B, MulAddMul(alpha, beta))
 end
 
-@inline function addmul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, transB::Transpose{<:Any,<:StridedVecOrMat{T}},
+@inline function mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, transB::Transpose{<:Any,<:StridedVecOrMat{T}},
                  alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat}
     B = transB.parent
     if A===B
@@ -311,55 +312,55 @@ end
 # Complex matrix times transposed real matrix. Reinterpret the first matrix to real for efficiency.
 for elty in (Float32,Float64)
     @eval begin
-        @inline function addmul!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, transB::Transpose{<:Any,<:StridedVecOrMat{$elty}},
+        @inline function mul!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, transB::Transpose{<:Any,<:StridedVecOrMat{$elty}},
                          alpha::Union{$elty, Bool}, beta::Union{$elty, Bool})
             Afl = reinterpret($elty, A)
             Cfl = reinterpret($elty, C)
-            addmul!(Cfl, Afl, transB, alpha, beta)
+            mul!(Cfl, Afl, transB, alpha, beta)
             return C
         end
     end
 end
 # collapsing the following two defs with C::AbstractVecOrMat yields ambiguities
-@inline addmul!(C::AbstractVector, A::AbstractVecOrMat, transB::Transpose{<:Any,<:AbstractVecOrMat},
-                alpha::Number, beta::Number) =
+@inline mul!(C::AbstractVector, A::AbstractVecOrMat, transB::Transpose{<:Any,<:AbstractVecOrMat},
+             alpha::Number, beta::Number) =
     generic_matmatmul!(C, 'N', 'T', A, transB.parent, MulAddMul(alpha, beta))
-@inline addmul!(C::AbstractMatrix, A::AbstractVecOrMat, transB::Transpose{<:Any,<:AbstractVecOrMat},
-                alpha::Number, beta::Number) =
+@inline mul!(C::AbstractMatrix, A::AbstractVecOrMat, transB::Transpose{<:Any,<:AbstractVecOrMat},
+             alpha::Number, beta::Number) =
     generic_matmatmul!(C, 'N', 'T', A, transB.parent, MulAddMul(alpha, beta))
 
-@inline function addmul!(C::StridedMatrix{T}, transA::Transpose{<:Any,<:StridedVecOrMat{T}}, transB::Transpose{<:Any,<:StridedVecOrMat{T}},
+@inline function mul!(C::StridedMatrix{T}, transA::Transpose{<:Any,<:StridedVecOrMat{T}}, transB::Transpose{<:Any,<:StridedVecOrMat{T}},
                  alpha::Number, beta::Number) where {T<:BlasFloat}
     A = transA.parent
     B = transB.parent
     return gemm_wrapper!(C, 'T', 'T', A, B, MulAddMul(alpha, beta))
 end
-@inline function addmul!(C::AbstractMatrix, transA::Transpose{<:Any,<:AbstractVecOrMat}, transB::Transpose{<:Any,<:AbstractVecOrMat},
+@inline function mul!(C::AbstractMatrix, transA::Transpose{<:Any,<:AbstractVecOrMat}, transB::Transpose{<:Any,<:AbstractVecOrMat},
                  alpha::Number, beta::Number)
     A = transA.parent
     B = transB.parent
     return generic_matmatmul!(C, 'T', 'T', A, B, MulAddMul(alpha, beta))
 end
 
-@inline function addmul!(C::StridedMatrix{T}, transA::Transpose{<:Any,<:StridedVecOrMat{T}}, transB::Adjoint{<:Any,<:StridedVecOrMat{T}},
+@inline function mul!(C::StridedMatrix{T}, transA::Transpose{<:Any,<:StridedVecOrMat{T}}, transB::Adjoint{<:Any,<:StridedVecOrMat{T}},
                  alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat}
     A = transA.parent
     B = transB.parent
     return gemm_wrapper!(C, 'T', 'C', A, B, MulAddMul(alpha, beta))
 end
-@inline function addmul!(C::AbstractMatrix, transA::Transpose{<:Any,<:AbstractVecOrMat}, transB::Adjoint{<:Any,<:AbstractVecOrMat},
+@inline function mul!(C::AbstractMatrix, transA::Transpose{<:Any,<:AbstractVecOrMat}, transB::Adjoint{<:Any,<:AbstractVecOrMat},
                  alpha::Number, beta::Number)
     A = transA.parent
     B = transB.parent
     return generic_matmatmul!(C, 'T', 'C', A, B, MulAddMul(alpha, beta))
 end
 
-@inline function addmul!(C::StridedMatrix{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, B::StridedVecOrMat{T},
+@inline function mul!(C::StridedMatrix{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, B::StridedVecOrMat{T},
                  alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasReal}
     A = adjA.parent
-    return addmul!(C, transpose(A), B, alpha, beta)
+    return mul!(C, transpose(A), B, alpha, beta)
 end
-@inline function addmul!(C::StridedMatrix{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, B::StridedVecOrMat{T},
+@inline function mul!(C::StridedMatrix{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, B::StridedVecOrMat{T},
                  alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasComplex}
     A = adjA.parent
     if A===B
@@ -368,18 +369,18 @@ end
         return gemm_wrapper!(C, 'C', 'N', A, B, MulAddMul(alpha, beta))
     end
 end
-@inline function addmul!(C::AbstractMatrix, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, B::AbstractVecOrMat,
+@inline function mul!(C::AbstractMatrix, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, B::AbstractVecOrMat,
                  alpha::Number, beta::Number)
     A = adjA.parent
     return generic_matmatmul!(C, 'C', 'N', A, B, MulAddMul(alpha, beta))
 end
 
-@inline function addmul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:StridedVecOrMat{<:BlasReal}},
+@inline function mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:StridedVecOrMat{<:BlasReal}},
                  alpha::Number, beta::Number) where {T<:BlasFloat}
     B = adjB.parent
-    return addmul!(C, A, transpose(B), alpha, beta)
+    return mul!(C, A, transpose(B), alpha, beta)
 end
-@inline function addmul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:StridedVecOrMat{T}},
+@inline function mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:StridedVecOrMat{T}},
                  alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasComplex}
     B = adjB.parent
     if A === B
@@ -388,25 +389,25 @@ end
         return gemm_wrapper!(C, 'N', 'C', A, B, MulAddMul(alpha, beta))
     end
 end
-@inline function addmul!(C::AbstractMatrix, A::AbstractVecOrMat, adjB::Adjoint{<:Any,<:AbstractVecOrMat},
+@inline function mul!(C::AbstractMatrix, A::AbstractVecOrMat, adjB::Adjoint{<:Any,<:AbstractVecOrMat},
                  alpha::Number, beta::Number)
     B = adjB.parent
     return generic_matmatmul!(C, 'N', 'C', A, B, MulAddMul(alpha, beta))
 end
 
-@inline function addmul!(C::StridedMatrix{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, adjB::Adjoint{<:Any,<:StridedVecOrMat{T}},
+@inline function mul!(C::StridedMatrix{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, adjB::Adjoint{<:Any,<:StridedVecOrMat{T}},
                  alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat}
     A = adjA.parent
     B = adjB.parent
     return gemm_wrapper!(C, 'C', 'C', A, B, MulAddMul(alpha, beta))
 end
-@inline function addmul!(C::AbstractMatrix, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, adjB::Adjoint{<:Any,<:AbstractVecOrMat},
+@inline function mul!(C::AbstractMatrix, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, adjB::Adjoint{<:Any,<:AbstractVecOrMat},
                  alpha::Number, beta::Number)
     A = adjA.parent
     B = adjB.parent
     return generic_matmatmul!(C, 'C', 'C', A, B, MulAddMul(alpha, beta))
 end
-@inline function addmul!(C::AbstractMatrix, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, transB::Transpose{<:Any,<:AbstractVecOrMat},
+@inline function mul!(C::AbstractMatrix, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, transB::Transpose{<:Any,<:AbstractVecOrMat},
                  alpha::Number, beta::Number)
     A = adjA.parent
     B = transB.parent

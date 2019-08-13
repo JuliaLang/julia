@@ -426,33 +426,33 @@ for f in (:+, :-)
 end
 
 ## Matvec
-@inline addmul!(y::StridedVector{T}, A::Symmetric{T,<:StridedMatrix}, x::StridedVector{T},
-                alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat} =
+@inline mul!(y::StridedVector{T}, A::Symmetric{T,<:StridedMatrix}, x::StridedVector{T},
+             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat} =
     BLAS.symv!(A.uplo, alpha, A.data, x, beta, y)
-@inline addmul!(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T},
-                alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasReal} =
+@inline mul!(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T},
+             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasReal} =
     BLAS.symv!(A.uplo, alpha, A.data, x, beta, y)
-@inline addmul!(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T},
-                alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasComplex} =
+@inline mul!(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T},
+             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasComplex} =
     BLAS.hemv!(A.uplo, alpha, A.data, x, beta, y)
 ## Matmat
-@inline addmul!(C::StridedMatrix{T}, A::Symmetric{T,<:StridedMatrix}, B::StridedMatrix{T},
-                alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat} =
+@inline mul!(C::StridedMatrix{T}, A::Symmetric{T,<:StridedMatrix}, B::StridedMatrix{T},
+             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat} =
     BLAS.symm!('L', A.uplo, alpha, A.data, B, beta, C)
-@inline addmul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Symmetric{T,<:StridedMatrix},
-                alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat} =
+@inline mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Symmetric{T,<:StridedMatrix},
+             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat} =
     BLAS.symm!('R', B.uplo, alpha, B.data, A, beta, C)
-@inline addmul!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T},
-                alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasReal} =
+@inline mul!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T},
+             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasReal} =
     BLAS.symm!('L', A.uplo, alpha, A.data, B, beta, C)
-@inline addmul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix},
-                alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasReal} =
+@inline mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix},
+             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasReal} =
     BLAS.symm!('R', B.uplo, alpha, B.data, A, beta, C)
-@inline addmul!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T},
-                alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasComplex} =
+@inline mul!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T},
+             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasComplex} =
     BLAS.hemm!('L', A.uplo, alpha, A.data, B, beta, C)
-@inline addmul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix},
-                alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasComplex} =
+@inline mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix},
+             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasComplex} =
     BLAS.hemm!('R', B.uplo, alpha, B.data, A, beta, C)
 
 *(A::HermOrSym, B::HermOrSym) = A * copyto!(similar(parent(B)), B)

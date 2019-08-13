@@ -94,9 +94,9 @@ match the length of the second, $(length(X))."))
     C
 end
 
-@inline addmul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number) =
+@inline mul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number) =
     generic_mul!(C, s, X, MulAddMul(alpha, beta))
-@inline addmul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number) =
+@inline mul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number) =
     generic_mul!(C, X, s, MulAddMul(alpha, beta))
 
 # For better performance when input and output are the same array

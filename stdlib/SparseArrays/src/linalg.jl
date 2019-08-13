@@ -31,7 +31,7 @@ end
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
 const AdjOrTransStridedMatrix{T} = Union{StridedMatrix{T},Adjoint{<:Any,<:StridedMatrix{T}},Transpose{<:Any,<:StridedMatrix{T}}}
 
-function addmul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::Union{StridedVector,AdjOrTransStridedMatrix}, α::Number, β::Number)
+function mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::Union{StridedVector,AdjOrTransStridedMatrix}, α::Number, β::Number)
     A.n == size(B, 1) || throw(DimensionMismatch())
     A.m == size(C, 1) || throw(DimensionMismatch())
     size(B, 2) == size(C, 2) || throw(DimensionMismatch())
@@ -51,11 +51,11 @@ function addmul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::Union{StridedVector,
     C
 end
 *(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx} =
-    (T = promote_op(matprod, TA, Tx); addmul!(similar(x, T, A.m), A, x, one(T), zero(T)))
+    (T = promote_op(matprod, TA, Tx); mul!(similar(x, T, A.m), A, x, one(T), zero(T)))
 *(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
-    (T = promote_op(matprod, TA, Tx); addmul!(similar(B, T, (A.m, size(B, 2))), A, B, one(T), zero(T)))
+    (T = promote_op(matprod, TA, Tx); mul!(similar(B, T, (A.m, size(B, 2))), A, B, one(T), zero(T)))
 
-function addmul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}, α::Number, β::Number)
+function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}, α::Number, β::Number)
     A = adjA.parent
     A.n == size(C, 1) || throw(DimensionMismatch())
     A.m == size(B, 1) || throw(DimensionMismatch())
@@ -77,11 +77,11 @@ function addmul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::
     C
 end
 *(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
-    (T = promote_op(matprod, TA, Tx); addmul!(similar(x, T, size(adjA, 1)), adjA, x, one(T), zero(T)))
+    (T = promote_op(matprod, TA, Tx); mul!(similar(x, T, size(adjA, 1)), adjA, x, one(T), zero(T)))
 *(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TA,S}}, B::AdjOrTransStridedMatrix{Tx}) where {TA,S,Tx} =
-    (T = promote_op(matprod, TA, Tx); addmul!(similar(B, T, (size(adjA, 1), size(B, 2))), adjA, B, one(T), zero(T)))
+    (T = promote_op(matprod, TA, Tx); mul!(similar(B, T, (size(adjA, 1), size(B, 2))), adjA, B, one(T), zero(T)))
 
-function addmul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}, α::Number, β::Number)
+function mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}, α::Number, β::Number)
     A = transA.parent
     A.n == size(C, 1) || throw(DimensionMismatch())
     A.m == size(B, 1) || throw(DimensionMismatch())
@@ -103,18 +103,18 @@ function addmul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC},
     C
 end
 *(transA::Transpose{<:Any,<:SparseMatrixCSC{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
-    (T = promote_op(matprod, TA, Tx); addmul!(similar(x, T, size(transA, 1)), transA, x, one(T), zero(T)))
+    (T = promote_op(matprod, TA, Tx); mul!(similar(x, T, size(transA, 1)), transA, x, one(T), zero(T)))
 *(transA::Transpose{<:Any,<:SparseMatrixCSC{TA,S}}, B::AdjOrTransStridedMatrix{Tx}) where {TA,S,Tx} =
-    (T = promote_op(matprod, TA, Tx); addmul!(similar(B, T, (size(transA, 1), size(B, 2))), transA, B, one(T), zero(T)))
+    (T = promote_op(matprod, TA, Tx); mul!(similar(B, T, (size(transA, 1), size(B, 2))), transA, B, one(T), zero(T)))
 
 # For compatibility with dense multiplication API. Should be deleted when dense multiplication
 # API is updated to follow BLAS API.
 mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::Union{StridedVector,AdjOrTransStridedMatrix}) =
-    addmul!(C, A, B, one(eltype(B)), zero(eltype(C)))
+    mul!(C, A, B, one(eltype(B)), zero(eltype(C)))
 mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}) =
-    addmul!(C, adjA, B, one(eltype(B)), zero(eltype(C)))
+    mul!(C, adjA, B, one(eltype(B)), zero(eltype(C)))
 mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}) =
-    addmul!(C, transA, B, one(eltype(B)), zero(eltype(C)))
+    mul!(C, transA, B, one(eltype(B)), zero(eltype(C)))
 
 function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, A::SparseMatrixCSC, α::Number, β::Number)
     mX, nX = size(X)

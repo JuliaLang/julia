@@ -213,10 +213,10 @@ end
 
 \(x::Number, J::UniformScaling) = UniformScaling(x\J.λ)
 
-@inline addmul!(C::AbstractMatrix, A::AbstractMatrix, J::UniformScaling, alpha::Number, beta::Number) =
-    addmul!(C, A, J.λ, alpha, beta)
-@inline addmul!(C::AbstractVecOrMat, J::UniformScaling, B::AbstractVecOrMat, alpha::Number, beta::Number) =
-    addmul!(C, J.λ, B, alpha, beta)
+@inline mul!(C::AbstractMatrix, A::AbstractMatrix, J::UniformScaling, alpha::Number, beta::Number) =
+    mul!(C, A, J.λ, alpha, beta)
+@inline mul!(C::AbstractVecOrMat, J::UniformScaling, B::AbstractVecOrMat, alpha::Number, beta::Number) =
+    mul!(C, J.λ, B, alpha, beta)
 rmul!(A::AbstractMatrix, J::UniformScaling) = rmul!(A, J.λ)
 lmul!(J::UniformScaling, B::AbstractVecOrMat) = lmul!(J.λ, B)
 rdiv!(A::AbstractMatrix, J::UniformScaling) = rdiv!(A, J.λ)

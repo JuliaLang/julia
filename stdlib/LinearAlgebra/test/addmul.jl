@@ -125,7 +125,7 @@ for cmat in mattypes,
     push!(testdata, (cmat{celt}, amat{aelt}, bmat{belt}))
 end
 
-@testset "addmul!(::$TC, ::$TA, ::$TB, α, β)" for (TC, TA, TB) in testdata
+@testset "mul!(::$TC, ::$TA, ::$TB, α, β)" for (TC, TA, TB) in testdata
     if needsquare(TA)
         na1 = na2 = rand(sizecandidates)
     else
@@ -155,7 +155,7 @@ end
                    rtoldefault.(real.(typeof.((α, β))))...)
 
         Cc = copy(C)
-        returned_mat = addmul!(C, A, B, α, β)
+        returned_mat = mul!(C, A, B, α, β)
         @test returned_mat === C
         if (A isa Bidiagonal && B isa AbstractTriangular) ||
                 (A isa Diagonal && (eltype(A) <: AbstractFloat || !isinteger(α)) &&
@@ -181,7 +181,7 @@ end
         y = C[:, 1]
         x = B[:, 1]
         y0 = copy(y)
-        returned_vec = addmul!(y, A, x, α, β)
+        returned_vec = mul!(y, A, x, α, β)
         @test returned_vec === y
         if A isa AbstractTriangular && x isa SparseVector
             @test_broken returned_vec ≈ α * A * x + β * y0  rtol=rtol

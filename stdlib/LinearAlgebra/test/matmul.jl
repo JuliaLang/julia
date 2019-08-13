@@ -4,7 +4,7 @@ module TestMatmul
 
 using Base: rtoldefault
 using Test, LinearAlgebra, Random
-using LinearAlgebra: mul!, addmul!
+using LinearAlgebra: mul!
 
 ## Test Julia fallbacks to BLAS routines
 
@@ -113,11 +113,11 @@ end
         βC = β * C
         _C0 = copy(C)
         C0() = (C .= _C0; C)  # reset C but don't change the container type
-        @test addmul!(C0(), A, B, α, β) == α*A*B .+ βC
-        @test addmul!(C0(), transpose(A), B, α, β) == α*A'*B .+ βC
-        @test addmul!(C0(), A, transpose(B), α, β) == α*A*B' .+ βC
-        @test addmul!(C0(), transpose(A), transpose(B), α, β) == α*A'*B' .+ βC
-        @test addmul!(C0(), adjoint(A), transpose(B), α, β) == α*A'*transpose(B) .+ βC
+        @test mul!(C0(), A, B, α, β) == α*A*B .+ βC
+        @test mul!(C0(), transpose(A), B, α, β) == α*A'*B .+ βC
+        @test mul!(C0(), A, transpose(B), α, β) == α*A*B' .+ βC
+        @test mul!(C0(), transpose(A), transpose(B), α, β) == α*A'*B' .+ βC
+        @test mul!(C0(), adjoint(A), transpose(B), α, β) == α*A'*transpose(B) .+ βC
 
         #test DimensionMismatch for generic_matmatmul
         @test_throws DimensionMismatch LinearAlgebra.mul!(C, adjoint(A), transpose(fill(1,4,4)))
@@ -129,7 +129,7 @@ end
         @test @inferred(mul!(C, v, adjoint(v))) == [1 2; 2 4]
 
         C .= [1 0; 0 1]
-        @test @inferred(addmul!(C, v, adjoint(v), 2, 3)) == [5 4; 4 11]
+        @test @inferred(mul!(C, v, adjoint(v), 2, 3)) == [5 4; 4 11]
     end
 end
 
@@ -145,14 +145,14 @@ end
     for v in (copy(vv), view(vv, 1:3)), C in (copy(CC), view(CC, 1:3, 1:3))
         @test mul!(C, v, transpose(v)) == v*v'
         C .= C0 = rand(-10:10, size(C))
-        @test addmul!(C, v, transpose(v), 2, 3) == 2v*v' .+ 3C0
+        @test mul!(C, v, transpose(v), 2, 3) == 2v*v' .+ 3C0
     end
     vvf = map(Float64,vv)
     CC = Matrix{Float64}(undef, 3, 3)
     for vf in (copy(vvf), view(vvf, 1:3)), C in (copy(CC), view(CC, 1:3, 1:3))
         @test mul!(C, vf, transpose(vf)) == vf*vf'
         C .= C0 = rand(eltype(C), size(C))
-        @test addmul!(C, vf, transpose(vf), 2, 3) == 2vf*vf' .+ 3C0
+        @test mul!(C, vf, transpose(vf), 2, 3) == 2vf*vf' .+ 3C0
     end
 end
 
@@ -172,9 +172,9 @@ end
         βC = β * C
         _C0 = copy(C)
         C0() = (C .= _C0; C)  # reset C but don't change the container type
-        @test addmul!(C0(), transpose(A), transpose(B), α, β) ≈ α*transpose(A)*transpose(B) .+ βC
-        @test addmul!(C0(), A, adjoint(B), α, β) ≈ α*A*transpose(B) .+ βC
-        @test addmul!(C0(), adjoint(A), B, α, β) ≈ α*transpose(A)*B .+ βC
+        @test mul!(C0(), transpose(A), transpose(B), α, β) ≈ α*transpose(A)*transpose(B) .+ βC
+        @test mul!(C0(), A, adjoint(B), α, β) ≈ α*A*transpose(B) .+ βC
+        @test mul!(C0(), adjoint(A), B, α, β) ≈ α*transpose(A)*B .+ βC
     end
 end
 
@@ -404,7 +404,7 @@ Transpose(x::RootInt) = x
     mul!(C, a, transpose(a))
     @test C[1] == 9
     C = [1]
-    addmul!(C, a, transpose(a), 2, 3)
+    mul!(C, a, transpose(a), 2, 3)
     @test C[1] == 21
     a = [RootInt(2),RootInt(10)]
     @test a*adjoint(a) == [4 20; 20 100]
@@ -427,7 +427,7 @@ function test_mul(C, A, B)
     β = rand(T)
     βArrayC = β * Array(C)
     βC = β * C
-    addmul!(C, A, B, α, β)
+    mul!(C, A, B, α, β)
     @test α * Array(A) * Array(B) .+ βArrayC ≈ C  rtol=rtol
     @test α * A * B .+ βC ≈ C  rtol=rtol
 end

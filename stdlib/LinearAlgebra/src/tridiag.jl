@@ -162,11 +162,11 @@ end
 /(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv/B, A.ev/B)
 ==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (A.ev==B.ev)
 
-@inline addmul!(A::StridedVecOrMat, B::SymTridiagonal, C::StridedVecOrMat,
-                alpha::Number, beta::Number) =
-    _addmul!(A, B, C, MulAddMul(alpha, beta))
+@inline mul!(A::StridedVecOrMat, B::SymTridiagonal, C::StridedVecOrMat,
+             alpha::Number, beta::Number) =
+    _mul!(A, B, C, MulAddMul(alpha, beta))
 
-@inline function _addmul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat,
+@inline function _mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat,
                           _add::MulAddMul)
     m, n = size(B, 1), size(B, 2)
     if !(m == size(S, 1) == size(C, 1))

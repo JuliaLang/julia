@@ -283,74 +283,74 @@ end
 _scaledout(out, beta) = iszero(beta) ? false : broadcasted(*, out, beta)
 
 # Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
-@inline addmul!(out::AbstractVector, A::Diagonal, in::AbstractVector,
-                alpha::Number, beta::Number) =
+@inline mul!(out::AbstractVector, A::Diagonal, in::AbstractVector,
+             alpha::Number, beta::Number) =
     out .= A.diag .* in .* alpha .+ _scaledout(out, beta)
-@inline addmul!(out::AbstractVector, A::Adjoint{<:Any,<:Diagonal}, in::AbstractVector,
-                alpha::Number, beta::Number) =
+@inline mul!(out::AbstractVector, A::Adjoint{<:Any,<:Diagonal}, in::AbstractVector,
+             alpha::Number, beta::Number) =
     out .= adjoint.(A.parent.diag) .* in .* alpha .+ _scaledout(out, beta)
-@inline addmul!(out::AbstractVector, A::Transpose{<:Any,<:Diagonal}, in::AbstractVector,
-                alpha::Number, beta::Number) =
+@inline mul!(out::AbstractVector, A::Transpose{<:Any,<:Diagonal}, in::AbstractVector,
+             alpha::Number, beta::Number) =
     out .= transpose.(A.parent.diag) .* in .* alpha .+ _scaledout(out, beta)
 
-@inline addmul!(out::AbstractMatrix, A::Diagonal, in::StridedMatrix,
-                alpha::Number, beta::Number) =
+@inline mul!(out::AbstractMatrix, A::Diagonal, in::StridedMatrix,
+             alpha::Number, beta::Number) =
     out .= A.diag .* in .* alpha .+ _scaledout(out, beta)
-@inline addmul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::StridedMatrix,
-                alpha::Number, beta::Number) =
+@inline mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::StridedMatrix,
+             alpha::Number, beta::Number) =
     out .= adjoint.(A.parent.diag) .* in .* alpha .+ _scaledout(out, beta)
-@inline addmul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::StridedMatrix,
-                alpha::Number, beta::Number) =
+@inline mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::StridedMatrix,
+             alpha::Number, beta::Number) =
     out .= transpose.(A.parent.diag) .* in .* alpha .+ _scaledout(out, beta)
 
-@inline addmul!(out::AbstractMatrix, A::Diagonal, in::Adjoint{<:Any,<:StridedMatrix},
-                alpha::Number, beta::Number) =
+@inline mul!(out::AbstractMatrix, A::Diagonal, in::Adjoint{<:Any,<:StridedMatrix},
+             alpha::Number, beta::Number) =
     out .= A.diag .* in .* alpha
-@inline addmul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::Adjoint{<:Any,<:StridedMatrix},
-                alpha::Number, beta::Number) =
+@inline mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::Adjoint{<:Any,<:StridedMatrix},
+             alpha::Number, beta::Number) =
     out .= adjoint.(A.parent.diag) .* in .* alpha .+ _scaledout(out, beta)
-@inline addmul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::Adjoint{<:Any,<:StridedMatrix},
-                alpha::Number, beta::Number) =
+@inline mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::Adjoint{<:Any,<:StridedMatrix},
+             alpha::Number, beta::Number) =
     out .= transpose.(A.parent.diag) .* in .* alpha .+ _scaledout(out, beta)
 
-@inline addmul!(out::AbstractMatrix, A::Diagonal, in::Transpose{<:Any,<:StridedMatrix},
-                alpha::Number, beta::Number) =
+@inline mul!(out::AbstractMatrix, A::Diagonal, in::Transpose{<:Any,<:StridedMatrix},
+             alpha::Number, beta::Number) =
     out .= A.diag .* in .* alpha .+ _scaledout(out, beta)
-@inline addmul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::Transpose{<:Any,<:StridedMatrix},
-                alpha::Number, beta::Number) =
+@inline mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::Transpose{<:Any,<:StridedMatrix},
+             alpha::Number, beta::Number) =
     out .= adjoint.(A.parent.diag) .* in .* alpha .+ _scaledout(out, beta)
-@inline addmul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::Transpose{<:Any,<:StridedMatrix},
-                alpha::Number, beta::Number) =
+@inline mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::Transpose{<:Any,<:StridedMatrix},
+             alpha::Number, beta::Number) =
     out .= transpose.(A.parent.diag) .* in .* alpha .+ _scaledout(out, beta)
 
-@inline addmul!(out::AbstractMatrix, in::StridedMatrix, A::Diagonal,
-                alpha::Number, beta::Number) =
+@inline mul!(out::AbstractMatrix, in::StridedMatrix, A::Diagonal,
+             alpha::Number, beta::Number) =
     out .= in .* permutedims(A.diag) .* alpha .+ _scaledout(out, beta)
-@inline addmul!(out::AbstractMatrix, in::StridedMatrix, A::Adjoint{<:Any,<:Diagonal},
-                alpha::Number, beta::Number) =
+@inline mul!(out::AbstractMatrix, in::StridedMatrix, A::Adjoint{<:Any,<:Diagonal},
+             alpha::Number, beta::Number) =
     out .= in .* adjoint(A.parent.diag) .* alpha .+ _scaledout(out, beta)
-@inline addmul!(out::AbstractMatrix, in::StridedMatrix, A::Transpose{<:Any,<:Diagonal},
-                alpha::Number, beta::Number) =
+@inline mul!(out::AbstractMatrix, in::StridedMatrix, A::Transpose{<:Any,<:Diagonal},
+             alpha::Number, beta::Number) =
     out .= in .* transpose(A.parent.diag) .* alpha .+ _scaledout(out, beta)
 
-@inline addmul!(out::AbstractMatrix, in::Adjoint{<:Any,<:StridedMatrix}, A::Diagonal,
-                alpha::Number, beta::Number) =
+@inline mul!(out::AbstractMatrix, in::Adjoint{<:Any,<:StridedMatrix}, A::Diagonal,
+             alpha::Number, beta::Number) =
     out .= in .* permutedims(A.diag) .* alpha .+ _scaledout(out, beta)
-@inline addmul!(out::AbstractMatrix, in::Adjoint{<:Any,<:StridedMatrix}, A::Adjoint{<:Any,<:Diagonal},
-                alpha::Number, beta::Number) =
+@inline mul!(out::AbstractMatrix, in::Adjoint{<:Any,<:StridedMatrix}, A::Adjoint{<:Any,<:Diagonal},
+             alpha::Number, beta::Number) =
     out .= in .* adjoint(A.parent.diag) .* alpha .+ _scaledout(out, beta)
-@inline addmul!(out::AbstractMatrix, in::Adjoint{<:Any,<:StridedMatrix}, A::Transpose{<:Any,<:Diagonal},
-                alpha::Number, beta::Number) =
+@inline mul!(out::AbstractMatrix, in::Adjoint{<:Any,<:StridedMatrix}, A::Transpose{<:Any,<:Diagonal},
+             alpha::Number, beta::Number) =
     out .= in .* transpose(A.parent.diag) .* alpha .+ _scaledout(out, beta)
 
-@inline addmul!(out::AbstractMatrix, in::Transpose{<:Any,<:StridedMatrix}, A::Diagonal,
-                alpha::Number, beta::Number) =
+@inline mul!(out::AbstractMatrix, in::Transpose{<:Any,<:StridedMatrix}, A::Diagonal,
+             alpha::Number, beta::Number) =
     out .= in .* permutedims(A.diag) .* alpha .+ _scaledout(out, beta)
-@inline addmul!(out::AbstractMatrix, in::Transpose{<:Any,<:StridedMatrix}, A::Adjoint{<:Any,<:Diagonal},
-                alpha::Number, beta::Number) =
+@inline mul!(out::AbstractMatrix, in::Transpose{<:Any,<:StridedMatrix}, A::Adjoint{<:Any,<:Diagonal},
+             alpha::Number, beta::Number) =
     out .= in .* adjoint(A.parent.diag) .* alpha .+ _scaledout(out, beta)
-@inline addmul!(out::AbstractMatrix, in::Transpose{<:Any,<:StridedMatrix}, A::Transpose{<:Any,<:Diagonal},
-                alpha::Number, beta::Number) =
+@inline mul!(out::AbstractMatrix, in::Transpose{<:Any,<:StridedMatrix}, A::Transpose{<:Any,<:Diagonal},
+             alpha::Number, beta::Number) =
     out .= in .* transpose(A.parent.diag) .* alpha .+ _scaledout(out, beta)
 
 # ambiguities with Symmetric/Hermitian
@@ -366,26 +366,26 @@ _scaledout(out, beta) = iszero(beta) ? false : broadcasted(*, out, beta)
 mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexSym}) = C .= adjoint.(A.parent.diag) .* B
 mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexHerm}) = C .= transpose.(A.parent.diag) .* B
 
-@inline addmul!(C::AbstractMatrix,
-                A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSym},
-                alpha::Number, beta::Number) = addmul!(C, A, B.parent, alpha, beta)
-@inline addmul!(C::AbstractMatrix,
-                A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexHerm},
-                alpha::Number, beta::Number) = addmul!(C, A, B.parent, alpha, beta)
-@inline addmul!(C::AbstractMatrix,
-                A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSym},
-                alpha::Number, beta::Number) = addmul!(C, A, B.parent, alpha, beta)
-@inline addmul!(C::AbstractMatrix,
-                A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexSym},
-                alpha::Number, beta::Number) = addmul!(C, A, B.parent, alpha, beta)
+@inline mul!(C::AbstractMatrix,
+             A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSym},
+             alpha::Number, beta::Number) = mul!(C, A, B.parent, alpha, beta)
+@inline mul!(C::AbstractMatrix,
+             A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexHerm},
+             alpha::Number, beta::Number) = mul!(C, A, B.parent, alpha, beta)
+@inline mul!(C::AbstractMatrix,
+             A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSym},
+             alpha::Number, beta::Number) = mul!(C, A, B.parent, alpha, beta)
+@inline mul!(C::AbstractMatrix,
+             A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexSym},
+             alpha::Number, beta::Number) = mul!(C, A, B.parent, alpha, beta)
 
-@inline addmul!(C::AbstractMatrix,
-                A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexSym},
-                alpha::Number, beta::Number) =
+@inline mul!(C::AbstractMatrix,
+             A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexSym},
+             alpha::Number, beta::Number) =
     C .= adjoint.(A.parent.diag) .* B .* alpha .+ C .* beta
-@inline addmul!(C::AbstractMatrix,
-                A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexHerm},
-                alpha::Number, beta::Number) =
+@inline mul!(C::AbstractMatrix,
+             A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexHerm},
+             alpha::Number, beta::Number) =
     C .= transpose.(A.parent.diag) .* B .* alpha .+ C .* beta
 
 (/)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)

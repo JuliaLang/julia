@@ -468,7 +468,6 @@ below (e.g. `mul!`) according to the usual Julia convention.
 
 ```@docs
 LinearAlgebra.mul!
-LinearAlgebra.addmul!
 LinearAlgebra.lmul!
 LinearAlgebra.rmul!
 LinearAlgebra.ldiv!
