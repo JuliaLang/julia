@@ -58,12 +58,13 @@ struct Token <: AbstractToken
     val::String # The actual string of the token
     token_error::TokenError
     dotop::Bool
+    suffix::Bool
 end
 function Token(kind::Kind, startposition::Tuple{Int, Int}, endposition::Tuple{Int, Int},
     startbyte::Int, endbyte::Int, val::String)
-Token(kind, startposition, endposition, startbyte, endbyte, val, NO_ERR, false)
+Token(kind, startposition, endposition, startbyte, endbyte, val, NO_ERR, false, false)
 end
-Token() = Token(ERROR, (0,0), (0,0), 0, 0, "", UNKNOWN, false)
+Token() = Token(ERROR, (0,0), (0,0), 0, 0, "", UNKNOWN, false, false)
 
 struct RawToken <: AbstractToken
     kind::Kind
@@ -74,12 +75,13 @@ struct RawToken <: AbstractToken
     endbyte::Int # The byte where the token ended in the buffer
     token_error::TokenError
     dotop::Bool
+    suffix::Bool
 end
 function RawToken(kind::Kind, startposition::Tuple{Int, Int}, endposition::Tuple{Int, Int},
     startbyte::Int, endbyte::Int)
-RawToken(kind, startposition, endposition, startbyte, endbyte, NO_ERR, false)
+RawToken(kind, startposition, endposition, startbyte, endbyte, NO_ERR, false, false)
 end
-RawToken() = RawToken(ERROR, (0,0), (0,0), 0, 0, UNKNOWN, false)
+RawToken() = RawToken(ERROR, (0,0), (0,0), 0, 0, UNKNOWN, false, false)
 
 
 const _EMPTY_TOKEN = Token()
@@ -133,7 +135,7 @@ function untokenize(t::Token)
 end
 
 function untokenize(t::RawToken, str::String)
-    String(str[1 + (t.startbyte:t.endbyte)])
+    String(codeunits(str)[1 .+ (t.startbyte:t.endbyte)])
 end
 
 function untokenize(ts)
