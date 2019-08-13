@@ -42,6 +42,10 @@ New library functions
 Standard library changes
 ------------------------
 
+* When `wait` (or `@sync`, or `fetch`) is called on a failing `Task`, the exception is propagated as a
+  `TaskFailedException` wrapping the task.
+  This makes it possible to see the location of the original failure inside the task (as well as the
+  location of the `wait` call, as before) ([#32814]).
 * `Regex` can now be multiplied (`*`) and exponentiated (`^`), like strings ([#23422]).
 * `Cmd` interpolation (``` `$(x::Cmd) a b c` ``` where) now propagates `x`'s process flags
   (environment, flags, working directory, etc) if `x` is the first interpolant and errors
