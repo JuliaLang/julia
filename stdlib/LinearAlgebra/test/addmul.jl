@@ -173,9 +173,9 @@ end
 
             Ac = Matrix(A)
             Bc = Matrix(B)
-            @test returned_mat ≈ α * Ac * Bc + β * Cc  rtol=rtol
+            @test collect(returned_mat) ≈ collect(α * Ac * Bc + β * Cc)  rtol=rtol
         else
-            @test returned_mat ≈ α * A * B + β * Cc  rtol=rtol
+            @test collect(returned_mat) ≈ collect(α * A * B + β * Cc)  rtol=rtol
         end
 
         y = C[:, 1]
@@ -186,9 +186,9 @@ end
         if A isa AbstractTriangular && x isa SparseVector
             @test_broken returned_vec ≈ α * A * x + β * y0  rtol=rtol
             xc = Vector(x)
-            @test returned_vec ≈ α * A * xc + β * y0  rtol=rtol
+            @test collect(returned_vec) ≈ collect(α * A * xc + β * y0)  rtol=rtol
         else
-            @test returned_vec ≈ α * A * x + β * y0  rtol=rtol
+            @test collect(returned_vec) ≈ collect(α * A * x + β * y0)  rtol=rtol
         end
     end
 end
