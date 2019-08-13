@@ -238,6 +238,14 @@ function ldiv!(A::SVD{T}, B::StridedVecOrMat) where T
     view(A.Vt,1:k,:)' * (view(A.S,1:k) .\ (view(A.U,:,1:k)' * B))
 end
 
+function inv(F::SVD{T}) where T
+    @inbounds for i in eachindex(F.S)
+        iszero(F.S[i]) && throw(SingularException(i))
+    end
+    k = searchsortedlast(F.S, eps(T)*F.S[1], rev=true)
+    @views (F.S[1:k] .\ F.Vt[1:k, :])' * F.U[:,1:k]'
+end
+
 size(A::SVD, dim::Integer) = dim == 1 ? size(A.U, dim) : size(A.Vt, dim)
 size(A::SVD) = (size(A, 1), size(A, 2))
 

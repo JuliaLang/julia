@@ -31,6 +31,10 @@ using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted
     @test sf2.U*Diagonal(sf2.S)*sf2.Vt' ≊ m2
 
     @test ldiv!([0., 0.], svd(Matrix(I, 2, 2)), [1., 1.]) ≊ [1., 1.]
+    @test inv(svd(Matrix(I, 2, 2))) ≈ I
+    @test inv(svd([1 2; 3 4])) ≈ [-2.0 1.0; 1.5 -0.5]
+    @test inv(svd([1 0 1; 0 1 0])) ≈ [0.5 0.0; 0.0 1.0; 0.5 0.0]
+    @test_throws SingularException inv(svd([0 0; 0 0]))
 end
 
 n = 10
