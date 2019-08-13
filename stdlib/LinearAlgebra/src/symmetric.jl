@@ -414,7 +414,7 @@ function triu(A::Symmetric, k::Integer=0)
     end
 end
 
-function dot(A::Symmetric, B::Symmetric)
+function dot(A::Symmetric{Ta,<:AbstractArray}, B::Symmetric{Tb,<:AbstractArray}) where {Ta,Tb<:Number}
     n = size(A, 2)
     if n != size(B, 2)
         throw(DimensionMismatch("A has dimensions $(size(A)) but B has dimensions $(size(B))"))
