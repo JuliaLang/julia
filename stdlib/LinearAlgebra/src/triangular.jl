@@ -528,7 +528,7 @@ end
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
         for i = (j + 1):n
-            @inbounds _modify!(_add, alpha * c * B[i,j], A, (i,j))
+            @inbounds _modify!(_add, c * B[i,j], A, (i,j))
         end
     end
     return A
