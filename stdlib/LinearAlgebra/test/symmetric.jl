@@ -396,17 +396,6 @@ end
                 @test dot(symal, symcu) ≈ dot(msymal, msymcu)
                 @test dot(symal, symcl) ≈ dot(msymal, msymcl)
             end
-
-            # block matrices
-            blockm = [eltya == Int ? rand(1:7, 3, 3) : convert(Matrix{eltya}, eltya <: Complex ? complex.(randn(3, 3)/2, randn(3, 3)/2) : randn(3, 3)/2) for _ in 1:3, _ in 1:3]
-            symblockmu = Symmetric(blockm, :U)
-            symblockml = Symmetric(blockm, :L)
-            msymblockmu = Matrix(symblockmu)
-            msymblockml = Matrix(symblockml)
-            @test dot(symblockmu, symblockmu) ≈ dot(msymblockmu, msymblockmu)
-            @test dot(symblockmu, symblockml) ≈ dot(msymblockmu, msymblockml)
-            @test dot(symblockml, symblockmu) ≈ dot(msymblockml, msymblockmu)
-            @test dot(symblockml, symblockml) ≈ dot(msymblockml, msymblockml)
         end
     end
 end
