@@ -45,6 +45,16 @@ end
 id_me = myid()
 id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 
+# Test role
+@everywhere using Distributed
+@test Distributed.myrole() === :master
+for wid = workers()
+    wrole = remotecall_fetch(wid) do
+        Distributed.myrole()
+    end
+    @test wrole === :worker
+end
+
 # Test remote()
 let
     pool = default_worker_pool()

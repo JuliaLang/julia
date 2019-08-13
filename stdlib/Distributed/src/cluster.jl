@@ -361,6 +361,8 @@ process as a worker using TCP/IP sockets for transport.
 `cookie` is a [`cluster_cookie`](@ref).
 """
 function init_worker(cookie::AbstractString, manager::ClusterManager=DefaultClusterManager())
+    myrole!(:worker)
+
     # On workers, the default cluster manager connects via TCP sockets. Custom
     # transports will need to call this function with their own manager.
     global cluster_manager
@@ -783,11 +785,18 @@ end
 
 # globals
 const LPROC = LocalProcess()
+const LPROCROLE = Ref{Symbol}(:master)
 const HDR_VERSION_LEN=16
 const HDR_COOKIE_LEN=16
 const map_pid_wrkr = Dict{Int, Union{Worker, LocalProcess}}()
 const map_sock_wrkr = IdDict()
 const map_del_wrkr = Set{Int}()
+
+# whether process is a master or worker in a distributed setup
+myrole() = LPROCROLE[]
+function myrole!(proctype::Symbol)
+    LPROCROLE[] = proctype
+end
 
 # cluster management related API
 """
@@ -1108,7 +1117,7 @@ function deregister_worker(pg, pid)
             end
         end
 
-        if myid() == 1 && isdefined(w, :config)
+        if myid() == 1 && (myrole() === :master) && isdefined(w, :config)
             # Notify the cluster manager of this workers death
             manage(w.manager, w.id, w.config, :deregister)
             if PGRP.topology != :all_to_all || isclusterlazy()
