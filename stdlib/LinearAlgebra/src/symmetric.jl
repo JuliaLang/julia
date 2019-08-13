@@ -435,14 +435,14 @@ function dot(A::Symmetric{Ta,<:AbstractArray}, B::Symmetric{Tb,<:AbstractArray})
                 dotprod += 2 * dot(A.data[i, j], B.data[i, j])
             end
         end
-    elseif A.uplo == 'L' && B.uplo == 'U'
+    elseif A.uplo == 'U' && B.uplo == 'L'
         for j in 1:n
             for i in 1:(j - 1)
                 dotprod += 2 * dot(A.data[i, j], B.data[j, i])
             end
             dotprod += dot(A.data[j, j], B.data[j, j])
         end
-    elseif A.uplo == 'U' && B.uplo == 'L'
+    elseif A.uplo == 'L' && B.uplo == 'U'
         for j in 1:n
             dotprod += dot(A.data[j, j], B.data[j, j])
             for i in (j + 1):n
