@@ -446,7 +446,7 @@ function dot(A::Symmetric{Ta,<:AbstractArray}, B::Symmetric{Tb,<:AbstractArray})
         for j in 1:n
             dotprod += dot(A.data[j, j], B.data[j, j])
             for i in (j + 1):n
-                dotprod += 2 * dot(A.data[i,j], B.data[j, i])
+                dotprod += 2 * dot(A.data[i, j], B.data[j, i])
             end
         end
     end
