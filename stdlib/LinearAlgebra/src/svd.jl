@@ -133,7 +133,7 @@ and `V` is `N \\times N`, while in the thin factorization `U` is `M
 number of singular values.
 
 If `alg = DivideAndConquer()` a divide-and-conquer algorithm is used to calculate the SVD.
-Another (typically slower) option is `alg = GolubReinsch()`.
+Another (typically slower but more accurate) option is `alg = GolubReinsch()`.
 
 # Examples
 ```jldoctest
