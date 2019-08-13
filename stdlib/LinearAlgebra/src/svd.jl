@@ -102,17 +102,20 @@ function svd!(A::StridedMatrix{T}; full::Bool = false, alg::Algorithm = default_
     if m == 0 || n == 0
         u,s,vt = (Matrix{T}(I, m, full ? m : n), real(zeros(T,0)), Matrix{T}(I, n, n))
     else
-        if typeof(alg) == DivideAndConquer
-            u,s,vt = LAPACK.gesdd!(full ? 'A' : 'S', A)
-        elseif typeof(alg) == GolubReinsch
-            c = full ? 'A' : 'S'
-            u,s,vt = LAPACK.gesvd!(c, c, A)
-        else
-            throw(ArgumentError("Unsupported value for `alg` keyword."))
-        end
+        u,s,vt = _svd!(A,full,alg)
     end
     SVD(u,s,vt)
 end
+
+
+_svd!(A::StridedMatrix{T}, full::Bool, alg::Algorithm) where T<:BlasFloat = throw(ArgumentError("Unsupported value for `alg` keyword."))
+_svd!(A::StridedMatrix{T}, full::Bool, alg::DivideAndConquer) where T<:BlasFloat = LAPACK.gesdd!(full ? 'A' : 'S', A)
+function _svd!(A::StridedMatrix{T}, full::Bool, alg::QRIteration) where T<:BlasFloat
+    c = full ? 'A' : 'S'
+    u,s,vt = LAPACK.gesvd!(c, c, A)
+end
+
+
 
 """
     svd(A; full::Bool = false, alg::Algorithm = default_svd_alg(A)) -> SVD
@@ -133,7 +136,7 @@ and `V` is `N \\times N`, while in the thin factorization `U` is `M
 number of singular values.
 
 If `alg = DivideAndConquer()` a divide-and-conquer algorithm is used to calculate the SVD.
-Another (typically slower) option is `alg = GolubReinsch()`.
+Another (typically slower) option is `alg = QRIteration()`.
 
 # Examples
 ```jldoctest

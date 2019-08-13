@@ -159,7 +159,7 @@ end
 
 abstract type Algorithm end
 struct DivideAndConquer <: Algorithm end
-struct GolubReinsch <: Algorithm end
+struct QRIteration <: Algorithm end
 
 
 # Check that stride of matrix/vector is 1

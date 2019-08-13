@@ -146,7 +146,7 @@ end
 
     x = [0.1 0.2; 0.3 0.4]
 
-    for alg in [LinearAlgebra.GolubReinsch(), LinearAlgebra.DivideAndConquer()]
+    for alg in [LinearAlgebra.QRIteration(), LinearAlgebra.DivideAndConquer()]
         sx1 = svd(x, alg = alg)
         @test sx1.U * Diagonal(sx1.S) * sx1.Vt ≊ x
         @test sx1.V * sx1.Vt ≊ I
