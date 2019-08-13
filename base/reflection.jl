@@ -337,6 +337,9 @@ function datatype_alignment(dt::DataType)
     return Int(alignment & 0x1FF)
 end
 
+gc_alignment(sz::Integer) = Int(ccall(:jl_alignment, Cint, (Csize_t,), sz))
+gc_alignment(T::Type) = gc_alignment(Core.sizeof(T))
+
 """
     Base.datatype_haspadding(dt::DataType) -> Bool
 
