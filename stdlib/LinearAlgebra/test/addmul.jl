@@ -142,8 +142,8 @@ end
     bsize = (na2, nb2)
     csize = (na1, nb2)
 
-    for α in [true, eltype(TC)(1), _rand(eltype(TC))],
-        β in [false, eltype(TC)(0), _rand(eltype(TC))]
+    for α in Any[true, eltype(TC)(1), _rand(eltype(TC))],
+        β in Any[false, eltype(TC)(0), _rand(eltype(TC))]
 
         C = _rand(TC, csize)
         A = _rand(TA, asize)
