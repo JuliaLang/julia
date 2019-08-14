@@ -333,3 +333,7 @@ function ldiv!(A::LQ{T}, B::StridedVecOrMat{T}) where T
     lmul!(adjoint(A.Q), ldiv!(LowerTriangular(A.L),B))
     return B
 end
+
+# Compute `det` from the number of Householder reflections.  Handle
+# the case `Q.τ` contains zeros.
+det(Q::Union{QRPackedQ, LQPackedQ}) = isodd(count(!iszero, Q.τ)) ? -1 : 1

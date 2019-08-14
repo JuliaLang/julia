@@ -246,4 +246,11 @@ end
     @test c0 == c
 end
 
+@testset "det(Q::QRPackedQ)" begin
+    @testset for n in 1:3, m in 1:3
+        Q, = qr(randn(n, m), Val(true))
+        @test det(Q)::Int ≈ det(collect(Q))
+    end
+end
+
 end # module TestQR

@@ -191,4 +191,11 @@ end
     @test_throws DimensionMismatch adjoint(C) * adjoint(implicitQ)
 end
 
+@testset "det(Q::LQPackedQ)" begin
+    @testset for n in 1:3, m in 1:3
+        _, Q = lq(randn(n, m))
+        @test det(Q)::Int ≈ det(collect(Q))
+    end
+end
+
 end # module TestLQ
