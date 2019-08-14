@@ -92,6 +92,9 @@ Deprecated or removed
 ---------------------
 
 
+* A 1-d `Zip` iterator (where `Base.IteratorSize`
+is `Base.HasShape{1}()`) with defined length of `n` has now also size of `(n,)` (instead of throwing an error) ([#29927]).
+
 External dependencies
 ---------------------
 
