@@ -386,7 +386,7 @@ rand() = ccall(:rand, Cint, ())
     # Windows RAND_MAX is 2^15-1
     rand(::Type{UInt32}) = ((rand() % UInt32) << 17) ⊻ ((rand() % UInt32) << 8) ⊻ (rand() % UInt32)
 else
-    # RAND_MAX at least 2^15-1 in theory, but we assume 2^16-1
+    # RAND_MAX is at least 2^15-1 in theory, but we assume 2^16-1
     # on non-Windows systems (in practice, it's 2^31-1)
     rand(::Type{UInt32}) = ((rand() % UInt32) << 16) ⊻ (rand() % UInt32)
 end
