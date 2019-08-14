@@ -530,7 +530,7 @@ The article is available online at ArXiv at the link
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
-julia> a = 10^10;
+julia> a = Int64(10)^10;
 
 julia> hypot(a, a)
 1.4142135623730951e10
