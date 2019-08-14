@@ -1494,6 +1494,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 
     // some special functions
     bool isVa = nreqargs > 0;
+    (void)isVa; // prevent compiler warning
     if (is_libjulia_func(jl_array_ptr)) {
         assert(lrt == T_size);
         assert(!isVa && !llvmcall && nccallargs == 1);
