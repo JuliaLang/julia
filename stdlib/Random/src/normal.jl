@@ -86,7 +86,7 @@ The `Base` module currently provides an implementation for the types
 julia> rng = MersenneTwister(1234);
 
 julia> randexp(rng, Float32)
-2.4835055f0
+2.4835055
 
 julia> randexp(rng, 3, 3)
 3×3 Array{Float64,2}:
