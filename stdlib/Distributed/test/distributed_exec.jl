@@ -1627,15 +1627,19 @@ try
     @test length(npids) == 0
     @test nprocs() == 2
 
-    # test condition where connect times out
-    # using a non routable IP to test, ref: https://tools.ietf.org/html/rfc5737
-    Distributed.PGRP.workers[2].config.connect_at = ("203.0.113.0", w2_connect_at[2])
-    withenv("JULIA_WORKER_TIMEOUT"=>1) do
-        npids = addprocs_with_testenv(1; topology=:all_to_all, lazy=false)
-        @test length(npids) == 0
-        # kill the stuck worker to speed up `rmprocs`
-        kill(Distributed.PGRP.workers[3].config.process)
-    end
+    if DoFullTest
+        # Test condition where connect times out.
+        # Using a non routable IP to test, ref: https://tools.ietf.org/html/rfc5737.
+        # Since this doesn't seem to work under current CI environment (connect fails
+        # immediately instead of timing out), it is better to run it locally when needed.
+        Distributed.PGRP.workers[2].config.connect_at = ("203.0.113.0", w2_connect_at[2])
+        withenv("JULIA_WORKER_TIMEOUT"=>1) do
+            npids = addprocs_with_testenv(1; topology=:all_to_all, lazy=false)
+            @test length(npids) == 0
+            # kill the stuck worker to speed up `rmprocs`
+            kill(Distributed.PGRP.workers[3].config.process)
+        end
+    end # full-test
 finally
     rmprocs(workers())
     redirect_stderr(old_stderr)
