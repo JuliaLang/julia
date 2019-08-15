@@ -246,7 +246,7 @@ end
 ```
 
 The code above is equivalent to calling `get` with an anonymous function containing the code
-inclosed between do and end, like so:
+enclosed between `do` and `end`, like so:
 
 ```julia
 get( () -> time(), dict, key)
