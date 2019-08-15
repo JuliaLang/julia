@@ -168,6 +168,26 @@ end
         returned_vec = mul!(y, A, x, α, β)
         @test returned_vec === y
         @test collect(returned_vec) ≈ α * Ac * xc + β * yc  rtol=rtol
+
+        if TC <: Matrix
+            @testset "adjoint and transpose" begin
+                @testset for fa in [identity, adjoint, transpose],
+                             fb in [identity, adjoint, transpose]
+                    fa === fb === identity && continue
+
+                    Af = fa === identity ? A : fa(_rand(TA, reverse(asize)))
+                    Bf = fb === identity ? B : fb(_rand(TB, reverse(bsize)))
+
+                    Ac = collect(Af)
+                    Bc = collect(Bf)
+                    Cc = collect(C)
+
+                    returned_mat = mul!(C, Af, Bf, α, β)
+                    @test returned_mat === C
+                    @test collect(returned_mat) ≈ α * Ac * Bc + β * Cc  rtol=rtol
+                end
+            end
+        end
     end
 end
 
