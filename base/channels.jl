@@ -142,8 +142,19 @@ Channel(func::Function, args...; kwargs...) = Channel{Any}(func, args...; kwargs
 # This constructor is deprecated as of Julia v1.3, and should not be used.
 # (Note that this constructor also matches `Channel(::Function)` w/out any kwargs, which is
 # of course not deprecated.)
-function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
-    return Channel{ctype}(func, csize; taskref=taskref)
+# We use `nothing` default values to check which arguments were set in order to throw the
+# deprecation warning if users try to use `spawn=` with `ctype=` or `csize=`.
+function Channel(func::Function; ctype=nothing, csize=nothing, taskref=nothing, spawn=nothing)
+    # The spawn= keyword argument was added in Julia v1.3, and cannot be used with the
+    # deprecated keyword arguments `ctype=` or `csize=`.
+    if (ctype !== nothing || csize !== nothing) && spawn !== nothing
+        throw(ArgumentError("Cannot set `spawn=` in the deprecated constructor `Channel(f; ctype=Any, csize=0)`. Please use `Channel{T=Any}(f, size=0; taskref=nothing, spawn=false)` instead!"))
+    end
+    # Set the actual default values for the arguments.
+    ctype === nothing && (ctype = Any)
+    csize === nothing && (csize = 0)
+    spawn === nothing && (spawn = false)
+    return Channel{ctype}(func, csize; taskref=taskref, spawn=spawn)
 end
 
 closed_exception() = InvalidStateException("Channel is closed.", :closed)
