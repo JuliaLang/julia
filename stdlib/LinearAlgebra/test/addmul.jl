@@ -191,7 +191,7 @@ end
 
         if eltype(C) <: AbstractFloat
             @testset "β = 0 ignores C .= NaN" begin
-                C .= NaN
+                parent(C) .= NaN
                 Ac = Matrix(A)
                 Bc = Matrix(B)
                 returned_mat = mul!(C, A, B, α, zero(eltype(C)))
@@ -202,7 +202,7 @@ end
 
         if eltype(A) <: AbstractFloat
             @testset "α = 0 ignores A .= NaN" begin
-                A .= NaN
+                parent(A) .= NaN
                 Cc = copy(C)
                 returned_mat = mul!(C, A, B, zero(eltype(A)), β)
                 @test returned_mat === C
