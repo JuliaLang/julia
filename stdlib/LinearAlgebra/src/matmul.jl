@@ -202,6 +202,9 @@ Combined inplace matrix-matrix or matrix-vector multiply-add ``A B α + C β``.
 The result is stored in `C` by overwriting it.  Note that `C` must not be
 aliased with either `A` or `B`.
 
+!!! compat "Julia 1.3"
+    Five-argument `mul!` requires at least Julia 1.3.
+
 # Examples
 ```jldoctest
 julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; C=[1.0 2.0; 3.0 4.0];
