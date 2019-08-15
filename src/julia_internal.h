@@ -13,12 +13,6 @@
 #define sleep(x) Sleep(1000*x)
 #endif
 
-#ifdef __has_builtin
-#  define jl_has_builtin(x) __has_builtin(x)
-#else
-#  define jl_has_builtin(x) 0
-#endif
-
 #if defined(__has_feature)
 #if __has_feature(address_sanitizer)
 #define JL_ASAN_ENABLED     // Clang flavor
@@ -55,42 +49,6 @@
 #      define alignof(...) 1
 #    endif
 #  endif
-#endif
-
-#if jl_has_builtin(__builtin_assume)
-#define jl_assume(cond) (__extension__ ({               \
-                __typeof__(cond) cond_ = (cond);        \
-                __builtin_assume(!!(cond_));            \
-                cond_;                                  \
-            }))
-#elif defined(_COMPILER_MICROSOFT_) && defined(__cplusplus)
-template<typename T>
-static inline T
-jl_assume(T v)
-{
-    __assume(!!v);
-    return v;
-}
-#elif defined(_COMPILER_INTEL_)
-#define jl_assume(cond) (__extension__ ({               \
-                __typeof__(cond) cond_ = (cond);        \
-                __assume(!!(cond_));                    \
-                cond_;                                  \
-            }))
-#elif defined(__GNUC__)
-static inline void jl_assume_(int cond)
-{
-    if (!cond) {
-        __builtin_unreachable();
-    }
-}
-#define jl_assume(cond) (__extension__ ({               \
-                __typeof__(cond) cond_ = (cond);        \
-                jl_assume_(!!(cond_));                  \
-                cond_;                                  \
-            }))
-#else
-#define jl_assume(cond) (cond)
 #endif
 
 #if defined(__GLIBC__) && defined(JULIA_HAS_IFUNC_SUPPORT)
@@ -179,7 +137,7 @@ void gc_sweep_sysimg(void);
 static const int jl_gc_sizeclasses[] = {
 #ifdef _P64
     8,
-#elif defined(_CPU_ARM_) || defined(_CPU_PPC_)
+#elif MAX_ALIGN == 8
     // ARM and PowerPC have max alignment of 8,
     // make sure allocation of size 8 has that alignment.
     4, 8,
@@ -218,7 +176,7 @@ STATIC_INLINE int jl_gc_alignment(size_t sz)
 #ifdef _P64
     (void)sz;
     return 16;
-#elif defined(_CPU_ARM_) || defined(_CPU_PPC_)
+#elif MAX_ALIGN == 8
     return sz <= 4 ? 8 : 16;
 #else
     // szclass 8
@@ -246,7 +204,7 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass(unsigned sz)
     if (sz <= 8)
         return 0;
     const int N = 0;
-#elif defined(_CPU_ARM_) || defined(_CPU_PPC_)
+#elif MAX_ALIGN == 8
     if (sz <= 8)
         return (sz >= 4 ? 1 : 0);
     const int N = 1;
@@ -318,6 +276,23 @@ jl_value_t *jl_permbox16(jl_datatype_t *t, int16_t x);
 jl_value_t *jl_permbox32(jl_datatype_t *t, int32_t x);
 jl_value_t *jl_permbox64(jl_datatype_t *t, int64_t x);
 jl_svec_t *jl_perm_symsvec(size_t n, ...);
+
+#ifdef __GNUC__
+#define jl_perm_symsvec(n, ...) \
+    (jl_perm_symsvec)(__extension__({                                         \
+            static_assert(                                                    \
+                n == sizeof((char *[]){ __VA_ARGS__ })/sizeof(char *),        \
+                "Number of passed arguments does not match expected number"); \
+            n;                                                                \
+        }), __VA_ARGS__)
+#define jl_svec(n, ...) \
+    (jl_svec)(__extension__({                                                 \
+            static_assert(                                                    \
+                n == sizeof((void *[]){ __VA_ARGS__ })/sizeof(void *),        \
+                "Number of passed arguments does not match expected number"); \
+            n;                                                                \
+        }), __VA_ARGS__)
+#endif
 
 // Returns a int32 where the high 16 bits are a lower bound of the number of non-pointer fields
 // at the beginning of the type and the low 16 bits are a lower bound on the number of non-pointer
@@ -565,7 +540,7 @@ void jl_safepoint_defer_sigint(void);
 int jl_safepoint_consume_sigint(void);
 void jl_wake_libuv(void);
 
-#if defined(JULIA_ENABLE_THREADING) && !defined(__clang_analyzer__)
+#if !defined(__clang_analyzer__)
 jl_get_ptls_states_func jl_get_ptls_states_getter(void);
 static inline void jl_set_gc_and_wait(void)
 {
@@ -592,7 +567,7 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
 jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world, size_t *min_valid, size_t *max_valid, int mt_cache);
 JL_DLLEXPORT int jl_has_call_ambiguities(jl_value_t *types, jl_method_t *m);
 jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_svec_t *sp);
-JL_DLLEXPORT jl_code_instance_t *jl_rettype_inferred(jl_method_instance_t *li, size_t min_world, size_t max_world);
+JL_DLLEXPORT jl_value_t *jl_rettype_inferred(jl_method_instance_t *li, size_t min_world, size_t max_world);
 JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_value_t *type, size_t world);
 JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(
     jl_method_t *m JL_PROPAGATES_ROOT, jl_value_t *type, jl_svec_t *sparams);
@@ -878,7 +853,7 @@ extern jl_mutex_t safepoint_lock;
 
 // -- gc.c -- //
 
-#if defined(__APPLE__) && defined(JULIA_ENABLE_THREADING)
+#if defined(__APPLE__)
 void jl_mach_gc_end(void);
 #endif
 
@@ -1061,32 +1036,6 @@ void jl_register_fptrs(uint64_t sysimage_base, const struct _jl_sysimg_fptrs_t *
 
 extern arraylist_t partial_inst;
 
-#if jl_has_builtin(__builtin_assume_aligned) || defined(_COMPILER_GCC_)
-#define jl_assume_aligned(ptr, align) __builtin_assume_aligned(ptr, align)
-#elif defined(_COMPILER_INTEL_)
-#define jl_assume_aligned(ptr, align) (__extension__ ({         \
-                __typeof__(ptr) ptr_ = (ptr);                   \
-                __assume_aligned(ptr_, align);                  \
-                ptr_;                                           \
-            }))
-#elif defined(__GNUC__)
-#define jl_assume_aligned(ptr, align) (__extension__ ({         \
-                __typeof__(ptr) ptr_ = (ptr);                   \
-                jl_assume(((uintptr_t)ptr) % (align) == 0);     \
-                ptr_;                                           \
-            }))
-#elif defined(__cplusplus)
-template<typename T>
-static inline T
-jl_assume_aligned(T ptr, unsigned align)
-{
-    (void)jl_assume(((uintptr_t)ptr) % align == 0);
-    return ptr;
-}
-#else
-#define jl_assume_aligned(ptr, align) (ptr)
-#endif
-
 #if jl_has_builtin(__builtin_unreachable) || defined(_COMPILER_GCC_) || defined(_COMPILER_INTEL_)
 #  define jl_unreachable() __builtin_unreachable()
 #else
@@ -1112,6 +1061,16 @@ jl_assume_aligned(T ptr, unsigned align)
 #define JL_GCC_IGNORE_START(w)
 #define JL_GCC_IGNORE_STOP
 #endif // _COMPILER_GCC_
+
+#ifdef __clang_analyzer__
+  // Not a safepoint (so it dosn't free other values), but an artificial use.
+  // Usually this is unnecessary because the analyzer can see all real uses,
+  // but sometimes real uses are harder for the analyzer to see, or it may
+  // give up before it sees it, so this can be helpful to be explicit.
+  void JL_GC_ASSERT_LIVE(jl_value_t *v) JL_NOTSAFEPOINT;
+#else
+  #define JL_GC_ASSERT_LIVE(x) (void)(x)
+#endif
 
 #ifdef __cplusplus
 }

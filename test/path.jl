@@ -124,6 +124,7 @@
     @testset "splitting" begin
         @test joinpath(splitdir(S(homedir()))...) == homedir()
         @test string(splitdrive(S(homedir()))...) == homedir()
+        @test splitdrive("a\nb") == ("", "a\nb")
 
         if Sys.iswindows()
             @test splitdrive(S("\\\\servername\\hello.world\\filename.ext")) ==

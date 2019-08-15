@@ -22,7 +22,15 @@ typedef enum { bst_none, bst_rd, bst_wr } bufstate_t;
 #define IOS_INLSIZE 54
 #define IOS_BUFSIZE 131072
 
-typedef struct {
+#ifdef _P64
+#define ON_P64(x) x
+#else
+#define ON_P64(x)
+#endif
+
+// We allow ios_t as a cvalue in flisp, which only guarantees pointer
+// alignment. Make sure the compiler knows.
+JL_ATTRIBUTE_ALIGN_PTRSIZE(typedef struct {
     // the state only indicates where the underlying file position is relative
     // to the buffer. reading: at the end. writing: at the beginning.
     // in general, you can do any operation in any state.
@@ -30,9 +38,7 @@ typedef struct {
 
     int errcode;
 
-#ifdef _P64
-    int _pad_bm;      // put bm at same offset as type field of uv_stream_s
-#endif
+    ON_P64(int _pad_bm;)      // put bm at same offset as type field of uv_stream_s
     bufmode_t bm;     //
     bufstate_t state;
 
@@ -70,7 +76,9 @@ typedef struct {
 
     int64_t userdata;
     char local[IOS_INLSIZE];
-} ios_t;
+} ios_t);
+
+#undef ON_P64
 
 extern void (*ios_set_io_wait_func)(int);
 /* low-level interface functions */

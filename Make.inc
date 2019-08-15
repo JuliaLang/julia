@@ -126,11 +126,19 @@ endif
 
 # we include twice to pickup user definitions better
 # include from JULIAHOME first so that BUILDROOT can override
-ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
-include $(JULIAHOME)/Make.user
+MAYBE_HOST :=
+ifneq ($(BUILDING_HOST_TOOLS),1)
+MAKE_USER_FNAME = Make.user
+else
+MAYBE_HOST := /host
+MAKE_USER_FNAME = Make.host.user
 endif
-ifeq (exists, $(shell [ -e $(BUILDROOT)/Make.user ] && echo exists ))
-include $(BUILDROOT)/Make.user
+
+ifeq (exists, $(shell [ -e $(JULIAHOME)/$(MAKE_USER_FNAME) ] && echo exists ))
+include $(JULIAHOME)/$(MAKE_USER_FNAME)
+endif
+ifeq (exists, $(shell [ -e $(BUILDROOT)/$(MAKE_USER_FNAME) ] && echo exists ))
+include $(BUILDROOT)/$(MAKE_USER_FNAME)
 endif
 
 # disable automatic Makefile rules
@@ -236,8 +244,12 @@ sysconfdir := $(prefix)/etc
 endif
 
 # Directories where things get built into
-build_prefix := $(BUILDROOT)/usr
+build_prefix := $(BUILDROOT)/usr$(MAYBE_HOST)
+ifeq ($(BUILDING_HOST_TOOLS), 1)
+build_staging := $(BUILDROOT)/usr-host-staging
+else
 build_staging := $(build_prefix)-staging
+endif
 build_bindir := $(build_prefix)/bin
 build_depsbindir := $(build_prefix)/tools
 build_libdir := $(build_prefix)/lib
@@ -323,6 +335,9 @@ OPENBLAS_DYNAMIC_ARCH := 1
 override CROSS_COMPILE:=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
 override OS := WINNT
+else ifneq (,$(findstring emscripten,$(XC_HOST)))
+override OS := emscripten
+override CROSS_COMPILE:=
 else
 ifeq (,$(OS))
 $(error "unknown XC_HOST variable set, please set OS")
@@ -571,11 +586,11 @@ else
 LOCALBASE ?= /usr
 endif
 
-ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
-include $(JULIAHOME)/Make.user
+ifeq (exists, $(shell [ -e $(JULIAHOME)/$(MAKE_USER_FNAME) ] && echo exists ))
+include $(JULIAHOME)/$(MAKE_USER_FNAME)
 endif
-ifeq (exists, $(shell [ -e $(BUILDROOT)/Make.user ] && echo exists ))
-include $(BUILDROOT)/Make.user
+ifeq (exists, $(shell [ -e $(BUILDROOT)/$(MAKE_USER_FNAME) ] && echo exists ))
+include $(BUILDROOT)/$(MAKE_USER_FNAME)
 endif
 
 # A bit of a kludge to work around libraries linking to FreeBSD's outdated system libgcc_s
@@ -789,7 +804,6 @@ JCFLAGS += -fsigned-char
 USE_BLAS64:=0
 OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV7
-USE_SYSTEM_LIBM:=1
 endif
 
 # If we are running on aarch64 (e.g. ARMv8 or ARM64), set certain options automatically
@@ -1037,7 +1051,7 @@ else
 endif
 
 # shared library runtime paths
-ifeq ($(OS), WINNT)
+ifneq (,$(filter $(OS),WINNT emscripten))
   RPATH :=
   RPATH_ORIGIN :=
   RPATH_ESCAPED_ORIGIN :=
@@ -1064,7 +1078,7 @@ else ifneq ($(USEMSVC), 1)
 endif
 
 ifeq ($(OS), Linux)
-OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -Wl,--export-dynamic,--as-needed,--no-whole-archive $(LIBUNWIND)
+OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -Wl,--export-dynamic,--as-needed,--no-whole-archive
 # Detect if ifunc is supported
 IFUNC_DETECT_SRC := 'void (*f0(void))(void) { return (void(*)(void))0L; }; void f(void) __attribute__((ifunc("f0")));'
 ifeq (supported, $(shell echo $(IFUNC_DETECT_SRC) | $(CC) -Werror -x c - -S -o /dev/null > /dev/null 2>&1 && echo supported))
@@ -1103,8 +1117,6 @@ OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expma
 endif
 
 ifeq ($(OS), Darwin)
-INSTALL_NAME_CMD := install_name_tool -id $(INSTALL_NAME_ID_DIR)
-INSTALL_NAME_CHANGE_CMD := install_name_tool -change
 SHLIB_EXT := dylib
 OSLIBS += -framework CoreFoundation $(LIBUNWIND)
 WHOLE_ARCHIVE := -Xlinker -all_load
@@ -1133,7 +1145,7 @@ endif
 
 # Threads
 ifneq ($(JULIA_THREADS), 0)
-JCPPFLAGS += -DJULIA_ENABLE_THREADING -DJULIA_NUM_THREADS=$(JULIA_THREADS)
+JCPPFLAGS += -DJULIA_NUM_THREADS=$(JULIA_THREADS)
 endif
 
 # Intel VTune Amplifier

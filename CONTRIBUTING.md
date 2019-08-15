@@ -190,7 +190,7 @@ For new functionality and other substantial changes, add a brief summary to `NEW
 
 API additions and deprecations, and minor behavior changes are allowed in minor version releases.
 For documented features that are part of the public API, a compatibility note should be added into
-the manual or the docstring. It should state the Julia minor version that made changed the behavior
+the manual or the docstring. It should state the Julia minor version that changed the behavior
 and have a brief message describing the change.
 
 At the moment, this should always be done with the following `compat` admonition

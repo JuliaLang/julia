@@ -693,15 +693,27 @@
                 ,@locs
                 (call (curly ,name ,@params) ,@field-names)))))
 
-(define (new-call Tname type-params params args field-names field-types)
+(define (new-call Tname type-params sparams params args field-names field-types)
   (if (any kwarg? args)
       (error "\"new\" does not accept keyword arguments"))
   (if (length> params (length type-params))
       (error "too few type parameters specified in \"new{...}\""))
-  (let ((Texpr (if (null? type-params)
-                   `(outerref ,Tname)
-                   `(curly (outerref ,Tname)
-                           ,@type-params))))
+  (if (length> type-params (length params))
+      (error "too many type parameters specified in \"new{...}\""))
+  (let* ((Texpr (if (null? type-params)
+                    `(outerref ,Tname)
+                    `(curly (outerref ,Tname)
+                            ,@type-params)))
+         (tn (make-ssavalue))
+         (field-convert (lambda (fld fty val)
+                          (if (equal? fty '(core Any))
+                              val
+                              `(call (top convert)
+                                     ,(if (and (equal? type-params params) (memq fty params) (memq fty sparams))
+                                          fty ; the field type is a simple parameter, the usage here is of a
+                                              ; local variable (currently just handles sparam) for the bijection of params to type-params
+                                          `(call (core fieldtype) ,tn ,(+ fld 1)))
+                                     ,val)))))
     (cond ((length> (filter (lambda (a) (not (vararg? a))) args) (length field-names))
            `(call (core throw) (call (top ArgumentError)
                                      ,(string "new: too many arguments (expected " (length field-names) ")"))))
@@ -709,30 +721,24 @@
            (if (every (lambda (ty) (equal? ty '(core Any)))
                       field-types)
                `(splatnew ,Texpr (call (core tuple) ,@args))
-               (let ((tn (make-ssavalue)))
+               (let ((argt (make-ssavalue))
+                     (nf (make-ssavalue)))
                  `(block
                    (= ,tn ,Texpr)
-                   (splatnew ,tn (call (top convert_prefix)
-                                       (curly (core Tuple)
-                                              ,@(map (lambda (fld)
-                                                       `(call (core fieldtype) ,tn (quote ,fld)))
-                                                     field-names))
-                                       (call (core tuple) ,@args)))))))
+                   (= ,argt (call (core tuple) ,@args))
+                   (= ,nf (call (core nfields) ,argt))
+                   (if (call (top ult_int) ,nf ,(length field-names))
+                       (call (core throw) (call (top ArgumentError)
+                                                ,(string "new: too few arguments (expected " (length field-names) ")"))))
+                   (if (call (top ult_int) ,(length field-names) ,nf)
+                       (call (core throw) (call (top ArgumentError)
+                                                ,(string "new: too many arguments (expected " (length field-names) ")"))))
+                   (new ,tn ,@(map (lambda (fld fty) (field-convert fld fty `(call (core getfield) ,argt ,(+ fld 1) false)))
+                                   (iota (length field-names)) (list-head field-types (length field-names))))))))
           (else
-           (if (equal? type-params params)
-               `(new ,Texpr ,@(map (lambda (fty val)
-                                     (if (equal? fty '(core Any))
-                                         val
-                                         `(call (top convert) ,fty ,val)))
-                                   (list-head field-types (length args)) args))
-               (let ((tn (make-ssavalue)))
-                 `(block
-                   (= ,tn ,Texpr)
-                   (new ,tn ,@(map (lambda (fld val)
-                                     `(call (top convert)
-                                            (call (core fieldtype) ,tn (quote ,fld))
-                                            ,val))
-                                   (list-head field-names (length args)) args)))))))))
+            `(block
+              (= ,tn ,Texpr)
+              (new ,tn ,@(map field-convert (iota (length args)) (list-head field-types (length args)) args)))))))
 
 ;; insert item at start of arglist
 (define (arglist-unshift sig item)
@@ -745,10 +751,11 @@
         ((length= lno 3) (string " around " (caddr lno) ":" (cadr lno)))
         (else "")))
 
-(define (ctor-def name Tname params bounds sig ctor-body body wheres)
+(define (ctor-def name Tname ctor-body sig body wheres)
   (let* ((curly?     (and (pair? name) (eq? (car name) 'curly)))
          (curlyargs  (if curly? (cddr name) '()))
-         (name       (if curly? (cadr name) name)))
+         (name       (if curly? (cadr name) name))
+         (sparams (map car (map analyze-typevar wheres))))
     (cond ((not (eq? name Tname))
            `(function ,(with-wheres `(call ,(if curly?
                                                 `(curly ,name ,@curlyargs)
@@ -757,14 +764,14 @@
                                     wheres)
                       ;; pass '() in order to require user-specified parameters with
                       ;; new{...} inside a non-ctor inner definition.
-                      ,(ctor-body body '())))
+                      ,(ctor-body body '() sparams)))
           (else
            `(function ,(with-wheres `(call ,(if curly?
                                                 `(curly ,name ,@curlyargs)
                                                 name)
                                            ,@sig)
                                     wheres)
-                      ,(ctor-body body curlyargs))))))
+                      ,(ctor-body body curlyargs sparams))))))
 
 (define (function-body-lineno body)
   (let ((lnos (filter linenum? body)))
@@ -772,32 +779,32 @@
 
 ;; rewrite calls to `new( ... )` to `new` expressions on the appropriate
 ;; type, determined by the containing constructor definition.
-(define (rewrite-ctor ctor Tname params bounds field-names field-types)
-  (define (ctor-body body type-params)
+(define (rewrite-ctor ctor Tname params field-names field-types)
+  (define (ctor-body body type-params sparams)
     (pattern-replace (pattern-set
                       (pattern-lambda
                        (call (-/ new) . args)
-                       (new-call Tname type-params params
-                                 (map (lambda (a) (ctor-body a type-params)) args)
+                       (new-call Tname type-params sparams params
+                                 (map (lambda (a) (ctor-body a type-params sparams)) args)
                                  field-names field-types))
                       (pattern-lambda
                        (call (curly (-/ new) . p) . args)
-                       (new-call Tname p params
-                                 (map (lambda (a) (ctor-body a type-params)) args)
+                       (new-call Tname p sparams params
+                                 (map (lambda (a) (ctor-body a type-params sparams)) args)
                                  field-names field-types)))
                      body))
   (pattern-replace
    (pattern-set
     ;; definitions without `where`
     (pattern-lambda (function       (-$ (call name . sig) (|::| (call name . sig) _t)) body)
-                    (ctor-def name Tname params bounds sig ctor-body body #f))
+                    (ctor-def name Tname ctor-body sig body #f))
     (pattern-lambda (= (-$ (call name . sig) (|::| (call name . sig) _t)) body)
-                    (ctor-def name Tname params bounds sig ctor-body body #f))
+                    (ctor-def name Tname ctor-body sig body #f))
     ;; definitions with `where`
     (pattern-lambda (function       (where (-$ (call name . sig) (|::| (call name . sig) _t)) . wheres) body)
-                    (ctor-def name Tname params bounds sig ctor-body body wheres))
+                    (ctor-def name Tname ctor-body sig body wheres))
     (pattern-lambda (= (where (-$ (call name . sig) (|::| (call name . sig) _t)) . wheres) body)
-                    (ctor-def name Tname params bounds sig ctor-body body wheres)))
+                    (ctor-def name Tname ctor-body sig body wheres)))
 
    ;; flatten `where`s first
    (pattern-replace
@@ -853,7 +860,7 @@
         (block
          (global ,name)
          ,@(map (lambda (c)
-                  (rewrite-ctor c name params bounds field-names field-types))
+                  (rewrite-ctor c name params field-names field-types))
                 defs2)))
        ;; "outer" constructors
        ,@(if (and (null? defs)
@@ -917,29 +924,34 @@
   (let loop ((F atypes)  ;; formals
              (A args)    ;; actuals
              (stmts '()) ;; initializers
-             (C '())     ;; converted
+             (T '())     ;; argument types (F converted)
+             (C '())     ;; argument values (A converted)
              (GC '()))   ;; GC roots
-    (if (and (null? F) (not (null? A))) (error "more arguments than types for ccall"))
-    (if (and (null? A) (not (or (null? F) (and (pair? F) (vararg? (car F)) (null? (cdr F)))))) (error "more types than arguments for ccall"))
-    (if (null? A)
-        `(block
-          ,.(reverse! stmts)
-          (foreigncall ,name ,RT (call (core svec) ,@(dots->vararg atypes))
-                       ',cconv
-                       ,(length C)
-                       ,.(reverse! C)
-                       ,@GC)) ; GC root ordering is arbitrary
-        (let* ((a     (car A))
-               (isseq (and (vararg? (car F))))
-               (ty    (if isseq (cadar F) (car F))))
-          (if (and isseq (not (null? (cdr F)))) (error "only the trailing ccall argument type should have \"...\""))
-          (if (eq? ty 'Any)
-              (loop (if isseq F (cdr F)) (cdr A) stmts (list* a C) GC)
-              (let* ((g (make-ssavalue))
-                     (stmts (cons `(= ,g (call (top cconvert) ,ty ,a)) stmts))
-                     (ca `(call (top unsafe_convert) ,ty ,g)))
-                (loop (if isseq F (cdr F)) (cdr A) stmts
-                      (list* ca C) (list* g GC))))))))
+    (if (and (null? F) (not (null? A)))
+        (error "more arguments than types for ccall"))
+    (if (and (null? A) (not (or (null? F) (and (pair? F) (vararg? (car F)) (null? (cdr F))))))
+        (error "more types than arguments for ccall"))
+    (let ((isseq (and (not (null? F)) (vararg? (car F)))))
+      (if (and isseq (null? T))
+          (error "C ABI prohibits vararg without one required argument"))
+      (if (null? A)
+          `(block
+            ,.(reverse! stmts)
+            (foreigncall ,name ,RT (call (core svec) ,@(reverse! T))
+                         ,(if isseq (- (length F) 1) 0) ; 0 or number of arguments before ... in definition
+                         ',cconv
+                         ,.(reverse! C)
+                         ,@GC)) ; GC root ordering is arbitrary
+          (let* ((a     (car A))
+                 (ty    (if isseq (cadar F) (car F))))
+            (if (and isseq (not (null? (cdr F)))) (error "only the trailing ccall argument type should have \"...\""))
+            (if (eq? ty 'Any)
+                (loop (if isseq F (cdr F)) (cdr A) stmts (list* '(core Any) T) (list* a C) GC)
+                (let* ((g (make-ssavalue))
+                       (stmts (cons `(= ,g (call (top cconvert) ,ty ,a)) stmts))
+                       (ca `(call (top unsafe_convert) ,ty ,g)))
+                  (loop (if isseq F (cdr F)) (cdr A) stmts
+                        (list* ty T) (list* ca C) (list* g GC)))))))))
 
 (define (expand-function-def e)   ;; handle function definitions
   (define (just-arglist? ex)
@@ -1794,6 +1806,14 @@
                 (else
                  (error (string "invalid " syntax-str " \"" (deparse el) "\""))))))))
 
+;; move an assignment into the last statement of a block to keep more statements at top level
+(define (sink-assignment lhs rhs)
+  (if (and (pair? rhs) (eq? (car rhs) 'block))
+      (let ((rr (reverse (cdr rhs))))
+        `(block ,@(reverse (cdr rr))
+                (= ,lhs ,(car rr))))
+      `(= ,lhs ,rhs)))
+
 (define (expand-forms e)
   (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref line module toplevel ssavalue null meta using import export)))
       e
@@ -1882,20 +1902,13 @@
                         ,@(map (lambda (l) `(= ,l ,rr))
                                lhss)
                         (unnecessary ,rr)))))))
-      ((and (symbol-like? lhs) (valid-name? lhs))
-       `(= ,lhs ,(expand-forms (caddr e))))
+      ((or (and (symbol-like? lhs) (valid-name? lhs))
+           (globalref? lhs))
+       (sink-assignment lhs (expand-forms (caddr e))))
       ((atom? lhs)
        (error (string "invalid assignment location \"" (deparse lhs) "\"")))
       (else
        (case (car lhs)
-         ((globalref)
-          ;; M.b =
-          (let* ((rhs (caddr e))
-                 (rr  (if (or (symbol-like? rhs) (atom? rhs)) rhs (make-ssavalue))))
-            `(block
-              ,.(if (eq? rr rhs) '() `((= ,rr ,(expand-forms rhs))))
-              (= ,lhs ,rr)
-              (unnecessary ,rr))))
          ((|.|)
           ;; a.b =
           (let* ((a   (cadr lhs))
@@ -1909,9 +1922,9 @@
                           b (make-ssavalue)))
                   (rr (if (or (symbol-like? rhs) (atom? rhs)) rhs (make-ssavalue))))
               `(block
-                ,.(if (eq? aa a)   '() `((= ,aa ,(expand-forms a))))
-                ,.(if (eq? bb b)   '() `((= ,bb ,(expand-forms b))))
-                ,.(if (eq? rr rhs) '() `((= ,rr ,(expand-forms rhs))))
+                ,.(if (eq? aa a)   '() (list (sink-assignment aa (expand-forms a))))
+                ,.(if (eq? bb b)   '() (list (sink-assignment bb (expand-forms b))))
+                ,.(if (eq? rr rhs) '() (list (sink-assignment rr (expand-forms rhs))))
                 (call (top setproperty!) ,aa ,bb ,rr)
                 (unnecessary ,rr)))))
          ((tuple)
@@ -1933,7 +1946,7 @@
                 (let* ((xx  (if (or (and (symbol? x) (not (memq x lhss)))
                                     (ssavalue? x))
                                 x (make-ssavalue)))
-                       (ini (if (eq? x xx) '() `((= ,xx ,(expand-forms x)))))
+                       (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x)))))
                        (n   (length lhss))
                        (st  (gensy)))
                   `(block
@@ -1965,7 +1978,7 @@
                    (stmts (if reuse `((= ,arr ,(expand-forms a))) '()))
                    (rrhs (and (pair? rhs) (not (ssavalue? rhs)) (not (quoted? rhs))))
                    (r    (if rrhs (make-ssavalue) rhs))
-                   (rini (if rrhs `((= ,r ,(expand-forms rhs))) '())))
+                   (rini (if rrhs (list (sink-assignment r (expand-forms rhs))) '())))
               (receive
                (new-idxs stuff) (process-indices arr idxs)
                `(block
@@ -2442,14 +2455,13 @@
            (if scope
                (cond ((memq e (scope:args scope)) e)
                      ((memq e (scope:globals scope)) `(outerref ,e))
-                     ((memq e (scope:sp scope)) e)
                      (else
                       (let ((r (assq e (scope:renames scope))))
-                        (if r
-                            (cdr r)
-                            (if (memq e (scope:locals scope))
-                                e
-                                (lookup (scope:prev scope)))))))
+                        (cond (r (cdr r))
+                              ((memq e (scope:locals scope)) e)
+                              ((memq e (scope:sp scope)) e)
+                              (else
+                               (lookup (scope:prev scope)))))))
                (if (underscore-symbol? e)
                    e
                    `(outerref ,e)))))
@@ -2524,11 +2536,12 @@
                            (if (memq v argnames)
                                (error (string "local variable name \"" v "\" conflicts with an argument"))))
                          local-decls))
-           (if (eq? e (lam:body lam))
-               (for-each (lambda (v)
-                           (if (or (memq v locals-def) (memq v local-decls) (memq v implicit-locals))
-                               (error (string "local variable name \"" v "\" conflicts with a static parameter"))))
-                         (scope:sp scope)))
+           (for-each (lambda (lst)
+                       (for-each (lambda (v)
+                                   (if (eq? (var-kind v scope) 'static-parameter)
+                                       (error (string "local variable name \"" v "\" conflicts with a static parameter"))))
+                                 lst))
+                     (list local-decls implicit-locals))
            (if lam
                (set-car! (cddr lam)
                          (append (caddr lam) newnames newnames-def)))

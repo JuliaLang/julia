@@ -987,3 +987,11 @@ end
     @test_throws DimensionMismatch promote_shape(Dims((2, 2)), Dims((2,)))
     @test_throws DimensionMismatch promote_shape(Dims((2, 3, 1)), Dims((2,2)))
 end
+
+@testset "getindex and setindex! for Ref" begin
+    for x in [Ref(1), Ref([1,2,3], 1)]
+        @test getindex(x) == getindex(x, CartesianIndex()) == 1
+        x[CartesianIndex()] = 10
+        @test getindex(x) == getindex(x, CartesianIndex()) == 10
+    end
+end

@@ -20,13 +20,16 @@
 #include <setjmp.h>
 #ifndef _OS_WINDOWS_
 #  define jl_jmp_buf sigjmp_buf
-#  if defined(_CPU_ARM_) || defined(_CPU_PPC_)
+#  if defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_WASM_)
 #    define MAX_ALIGN 8
 #  elif defined(_CPU_AARCH64_)
 // int128 is 16 bytes aligned on aarch64
 #    define MAX_ALIGN 16
+#  elif defined(_P64)
+// Generically we assume MAX_ALIGN is sizeof(void*)
+#    define MAX_ALIGN 8
 #  else
-#    define MAX_ALIGN sizeof(void*)
+#    define MAX_ALIGN 4
 #  endif
 #else
 #  include "win32_ucontext.h"
@@ -459,7 +462,7 @@ typedef struct {
     jl_value_t *value;
     jl_value_t *globalref;  // cached GlobalRef for this binding
     struct _jl_module_t *owner;  // for individual imported bindings
-    uint8_t constp:1;
+    uint8_t constp;
     uint8_t exportp:1;
     uint8_t imported:1;
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
@@ -483,6 +486,7 @@ typedef struct _jl_module_t {
     uint32_t counter;
     int32_t nospecialize;  // global bit flags: initialization for new methods
     uint8_t istopmod;
+    jl_mutex_t lock;
 } jl_module_t;
 
 // one Type-to-Value entry
@@ -1511,12 +1515,11 @@ typedef enum {
     JL_IMAGE_JULIA_HOME = 1,
     //JL_IMAGE_LIBJULIA = 2,
 } JL_IMAGE_SEARCH;
-#ifdef JULIA_ENABLE_THREADING
 // this helps turn threading compilation mismatches into linker errors
 #define julia_init julia_init__threading
 #define jl_init jl_init__threading
 #define jl_init_with_image jl_init_with_image__threading
-#endif
+
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
 JL_DLLEXPORT void jl_init(void);
 JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
@@ -1652,9 +1655,7 @@ typedef struct _jl_handler_t {
     jl_gcframe_t *gcstack;
     struct _jl_handler_t *prev;
     int8_t gc_state;
-#ifdef JULIA_ENABLE_THREADING
     size_t locks_len;
-#endif
     sig_atomic_t defer_signal;
     int finalizers_inhibited;
     jl_timing_block_t *timing_stack;
@@ -1696,10 +1697,8 @@ typedef struct _jl_task_t {
     int16_t tid;
     /* for the multiqueue */
     int16_t prio;
-#ifdef JULIA_ENABLE_THREADING
     // This is statically initialized when the task is not holding any locks
     arraylist_t locks;
-#endif
     jl_timing_block_t *timing_stack;
 } jl_task_t;
 
@@ -1731,6 +1730,11 @@ void (jl_longjmp)(jmp_buf _Buf, int _Value);
 #define jl_setjmp_name "jl_setjmp"
 #define jl_setjmp(a,b) jl_setjmp(a)
 #define jl_longjmp(a,b) jl_longjmp(a,b)
+#elif defined(_OS_EMSCRIPTEN_)
+#define jl_setjmp(a,b) setjmp(a)
+#define jl_longjmp(a,b) longjmp(a,b)
+#define jl_setjmp_f    setjmp
+#define jl_setjmp_name "setjmp"
 #else
 // determine actual entry point name
 #if defined(sigsetjmp)
@@ -1975,6 +1979,10 @@ typedef struct {
     int static_alloc;       // is the compiler allowed to allocate statically?
     int prefer_specsig;     // are specialized function signatures preferred?
 
+    // controls the emission of debug-info. mirrors the clang options
+    int gnu_pubnames;       // can we emit the gnu pubnames debuginfo
+    int debug_info_kind; // Enum for line-table-only, line-directives-only,
+                            // limited, standalone
 
     // hooks
 
@@ -2004,8 +2012,9 @@ typedef struct {
     jl_value_t *emitted_function;
 } jl_cgparams_t;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
+extern JL_DLLEXPORT int jl_default_debug_info_kind;
 
-#if defined(JULIA_ENABLE_THREADING) && !defined(_OS_DARWIN_) && !defined(_OS_WINDOWS_)
+#if !defined(_OS_DARWIN_) && !defined(_OS_WINDOWS_)
 #define JULIA_DEFINE_FAST_TLS()                                                             \
 JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t jl_get_ptls_states_static(void)                        \
 {                                                                                           \

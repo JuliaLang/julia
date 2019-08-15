@@ -226,6 +226,80 @@ function unsafe_read(s::IO, p::Ptr{UInt8}, n::UInt)
     nothing
 end
 
+function peek(s::IO)
+    mark(s)
+    try read(s, UInt8)
+    finally
+        reset(s)
+    end
+end
+
+# Generic `open` methods
+
+"""
+    open_flags(; keywords...) -> NamedTuple
+
+Compute the `read`, `write`, `create`, `truncate`, `append` flag value for
+a given set of keyword arguments to [`open`](@ref) a [`NamedTuple`](@ref).
+"""
+function open_flags(;
+    read     :: Union{Bool,Nothing} = nothing,
+    write    :: Union{Bool,Nothing} = nothing,
+    create   :: Union{Bool,Nothing} = nothing,
+    truncate :: Union{Bool,Nothing} = nothing,
+    append   :: Union{Bool,Nothing} = nothing,
+)
+    if write === true && read !== true && append !== true
+        create   === nothing && (create   = true)
+        truncate === nothing && (truncate = true)
+    end
+
+    if truncate === true || append === true
+        write  === nothing && (write  = true)
+        create === nothing && (create = true)
+    end
+
+    write    === nothing && (write    = false)
+    read     === nothing && (read     = !write)
+    create   === nothing && (create   = false)
+    truncate === nothing && (truncate = false)
+    append   === nothing && (append   = false)
+
+    return (
+        read = read,
+        write = write,
+        create = create,
+        truncate = truncate,
+        append = append,
+    )
+end
+
+"""
+    open(f::Function, args...; kwargs....)
+
+Apply the function `f` to the result of `open(args...; kwargs...)` and close the resulting file
+descriptor upon completion.
+
+# Examples
+```jldoctest
+julia> open("myfile.txt", "w") do io
+           write(io, "Hello world!")
+       end;
+
+julia> open(f->read(f, String), "myfile.txt")
+"Hello world!"
+
+julia> rm("myfile.txt")
+```
+"""
+function open(f::Function, args...; kwargs...)
+    io = open(args...; kwargs...)
+    try
+        f(io)
+    finally
+        close(io)
+    end
+end
 
 # Generic wrappers around other IO objects
 abstract type AbstractPipe <: IO end

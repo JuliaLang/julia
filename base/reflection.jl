@@ -295,9 +295,9 @@ julia> function f(x)
        end;
 
 julia> f(42)
-Dict{Symbol,Any}(:x=>42)
-Dict{Symbol,Any}(:i=>1,:x=>42)
-Dict{Symbol,Any}(:y=>2,:x=>42)
+Dict{Symbol,Any}(:x => 42)
+Dict{Symbol,Any}(:i => 1,:x => 42)
+Dict{Symbol,Any}(:y => 2,:x => 42)
 ```
 """
 macro locals()
@@ -926,6 +926,8 @@ function method_instances(@nospecialize(f), @nospecialize(t), world::UInt = type
     return results
 end
 
+default_debug_info_kind() = unsafe_load(cglobal(:jl_default_debug_info_kind, Cint))
+
 # this type mirrors jl_cgparams_t (documented in julia.h)
 struct CodegenParams
     cached::Cint
@@ -934,6 +936,8 @@ struct CodegenParams
     code_coverage::Cint
     static_alloc::Cint
     prefer_specsig::Cint
+    gnu_pubnames::Cint
+    debug_info_kind::Cint
 
     module_setup::Any
     module_activation::Any
@@ -944,11 +948,13 @@ struct CodegenParams
     CodegenParams(;cached::Bool=true,
                    track_allocations::Bool=true, code_coverage::Bool=true,
                    static_alloc::Bool=true, prefer_specsig::Bool=false,
+                   gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
                    module_setup=nothing, module_activation=nothing, raise_exception=nothing,
                    emit_function=nothing, emitted_function=nothing) =
         new(Cint(cached),
             Cint(track_allocations), Cint(code_coverage),
             Cint(static_alloc), Cint(prefer_specsig),
+            Cint(gnu_pubnames), debug_info_kind,
             module_setup, module_activation, raise_exception,
             emit_function, emitted_function)
 end
@@ -1140,43 +1146,6 @@ function nameof(f::Function)
     return mt.name
 end
 
-functionloc(m::Core.MethodInstance) = functionloc(m.def)
-
-"""
-    functionloc(m::Method)
-
-Returns a tuple `(filename,line)` giving the location of a `Method` definition.
-"""
-function functionloc(m::Method)
-    ln = m.line
-    if ln <= 0
-        error("could not determine location of method definition")
-    end
-    return (find_source_file(string(m.file)), ln)
-end
-
-"""
-    functionloc(f::Function, types)
-
-Returns a tuple `(filename,line)` giving the location of a generic `Function` definition.
-"""
-functionloc(@nospecialize(f), @nospecialize(types)) = functionloc(which(f,types))
-
-function functionloc(@nospecialize(f))
-    mt = methods(f)
-    if isempty(mt)
-        if isa(f, Function)
-            error("function has no definitions")
-        else
-            error("object is not callable")
-        end
-    end
-    if length(mt) > 1
-        error("function has multiple methods; please specify a type signature")
-    end
-    return functionloc(first(mt))
-end
-
 """
     parentmodule(f::Function) -> Module
 
@@ -1274,7 +1243,7 @@ foo (generic function with 2 methods)
 julia> m1, m2 = collect(methods(foo));
 
 julia> typeintersect(m1.sig, m2.sig)
-Tuple{#foo,Complex{Union{}}}
+Tuple{typeof(foo),Complex{Union{}}}
 
 julia> Base.isambiguous(m1, m2, ambiguous_bottom=true)
 true

@@ -8,9 +8,9 @@ Representation of a channel passing objects of type `T`.
 abstract type AbstractChannel{T} end
 
 """
-    Channel{T}(sz::Int)
+    Channel{T=Any}(size::Int=0)
 
-Constructs a `Channel` with an internal buffer that can hold a maximum of `sz` objects
+Constructs a `Channel` with an internal buffer that can hold a maximum of `size` objects
 of type `T`.
 [`put!`](@ref) calls on a full channel block until an object is removed with [`take!`](@ref).
 
@@ -19,8 +19,12 @@ And vice-versa.
 
 Other constructors:
 
+* `Channel()`: default constructor, equivalent to `Channel{Any}(0)`
 * `Channel(Inf)`: equivalent to `Channel{Any}(typemax(Int))`
 * `Channel(sz)`: equivalent to `Channel{Any}(sz)`
+
+!!! compat "Julia 1.3"
+  The default constructor `Channel()` and default `size=0` were added in Julia 1.3.
 """
 mutable struct Channel{T} <: AbstractChannel{T}
     cond_take::Threads.Condition                 # waiting for data to become available
@@ -32,7 +36,7 @@ mutable struct Channel{T} <: AbstractChannel{T}
     data::Vector{T}
     sz_max::Int                          # maximum size of channel
 
-    function Channel{T}(sz::Integer) where T
+    function Channel{T}(sz::Integer = 0) where T
         if sz < 0
             throw(ArgumentError("Channel size must be either 0, a positive integer or Inf"))
         end
@@ -47,25 +51,27 @@ function Channel{T}(sz::Float64) where T
     sz = (sz == Inf ? typemax(Int) : convert(Int, sz))
     return Channel{T}(sz)
 end
-Channel(sz) = Channel{Any}(sz)
+Channel(sz=0) = Channel{Any}(sz)
 
 # special constructors
 """
-    Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
+    Channel{T=Any}(func::Function, size=0; taskref=nothing)
 
 Create a new task from `func`, bind it to a new channel of type
-`ctype` and size `csize`, and schedule the task, all in a single call.
+`T` and size `size`, and schedule the task, all in a single call.
 
 `func` must accept the bound channel as its only argument.
 
 If you need a reference to the created task, pass a `Ref{Task}` object via
-keyword argument `taskref`.
+the keyword argument `taskref`.
 
 Return a `Channel`.
 
 # Examples
 ```jldoctest
-julia> chnl = Channel(c->foreach(i->put!(c,i), 1:4));
+julia> chnl = Channel() do ch
+           foreach(i -> put!(ch, i), 1:4)
+       end;
 
 julia> typeof(chnl)
 Channel{Any}
@@ -84,20 +90,38 @@ Referencing the created task:
 ```jldoctest
 julia> taskref = Ref{Task}();
 
-julia> chnl = Channel(c->(@show take!(c)); taskref=taskref);
+julia> chnl = Channel(taskref=taskref) do ch
+           println(take!(ch))
+       end;
 
 julia> istaskdone(taskref[])
 false
 
 julia> put!(chnl, "Hello");
-take!(c) = "Hello"
+Hello
 
 julia> istaskdone(taskref[])
 true
 ```
+
+!!! compat "Julia 1.3"
+  This constructor was added in Julia 1.3. Earlier versions of Julia used kwargs
+  to set `size` and `T`, but those constructors are deprecated.
+
+```jldoctest
+julia> chnl = Channel{Char}(1) do ch
+           for c in "hello world"
+               put!(ch, c)
+           end
+       end
+Channel{Char}(sz_max:1,sz_curr:1)
+
+julia> String(collect(chnl))
+"hello world"
+```
 """
-function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
-    chnl = Channel{ctype}(csize)
+function Channel{T}(func::Function, size=0; taskref=nothing) where T
+    chnl = Channel{T}(size)
     task = Task(() -> func(chnl))
     bind(chnl, task)
     yield(task) # immediately start it
@@ -105,7 +129,12 @@ function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
     isa(taskref, Ref{Task}) && (taskref[] = task)
     return chnl
 end
+Channel(func::Function, args...; kwargs...) = Channel{Any}(func, args...; kwargs...)
 
+# This constructor is deprecated as of Julia v1.3, and should not be used.
+function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
+    return Channel{ctype}(func, csize; taskref=taskref)
+end
 
 closed_exception() = InvalidStateException("Channel is closed.", :closed)
 
@@ -304,8 +333,8 @@ function put_unbuffered(c::Channel, v)
     finally
         unlock(c)
     end
-    # unfair version of: schedule(taker, v); yield()
-    yield(taker, v) # immediately give taker a chance to run, but don't block the current task
+    schedule(taker, v)
+    yield()  # immediately give taker a chance to run, but don't block the current task
     return v
 end
 

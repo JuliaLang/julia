@@ -91,6 +91,12 @@ Random.seed!(1)
         @test similar(ubd, Int).uplo == ubd.uplo
         @test isa(similar(ubd, (3, 2)), SparseMatrixCSC)
         @test isa(similar(ubd, Int, (3, 2)), SparseMatrixCSC{Int})
+
+        # setindex! when off diagonal is zero bug
+        Bu = Bidiagonal(rand(elty, 10), zeros(elty, 9), 'U')
+        Bl = Bidiagonal(rand(elty, 10), zeros(elty, 9), 'L')
+        @test_throws ArgumentError Bu[5, 4] = 1
+        @test_throws ArgumentError Bl[4, 5] = 1
     end
 
     @testset "show" begin
@@ -150,6 +156,10 @@ Random.seed!(1)
             @test triu!(bidiagcopy(dv,ev,:U))    == Bidiagonal(dv,ev,:U)
             @test_throws ArgumentError triu!(bidiagcopy(dv, ev, :U), -n)
             @test_throws ArgumentError triu!(bidiagcopy(dv, ev, :U), n + 2)
+            @test !isdiag(Bidiagonal(dv,ev,:U))
+            @test !isdiag(Bidiagonal(dv,ev,:L))
+            @test isdiag(Bidiagonal(dv,zerosev,:U))
+            @test isdiag(Bidiagonal(dv,zerosev,:L))
         end
 
         @testset "iszero and isone" begin
@@ -304,6 +314,31 @@ Random.seed!(1)
             C = Matrix{elty}(undef, n, n)
             Dia = Diagonal(T.dv)
             @test mul!(C, Dia, T) ≈ Array(Dia)*Array(T)
+
+            # Issue #31870
+            # Bi/Tri/Sym times Diagonal
+            Diag = Diagonal(rand(elty, 10))
+            BidiagU = Bidiagonal(rand(elty, 10), rand(elty, 9), 'U')
+            BidiagL = Bidiagonal(rand(elty, 10), rand(elty, 9), 'L')
+            Tridiag = Tridiagonal(rand(elty, 9), rand(elty, 10), rand(elty, 9))
+            SymTri = SymTridiagonal(rand(elty, 10), rand(elty, 9))
+
+            mats = [Diag, BidiagU, BidiagL, Tridiag, SymTri]
+            for a in mats
+                for b in mats
+                    @test a*b ≈ Matrix(a)*Matrix(b)
+                end
+            end
+
+            @test typeof(BidiagU*Diag) <: Bidiagonal
+            @test typeof(BidiagL*Diag) <: Bidiagonal
+            @test typeof(Tridiag*Diag) <: Tridiagonal
+            @test typeof(SymTri*Diag)  <: Tridiagonal
+
+            @test typeof(BidiagU*Diag) <: Bidiagonal
+            @test typeof(Diag*BidiagL) <: Bidiagonal
+            @test typeof(Diag*Tridiag) <: Tridiagonal
+            @test typeof(Diag*SymTri)  <: Tridiagonal
         end
 
         @test inv(T)*Tfull ≈ Matrix(I, n, n)
@@ -407,6 +442,11 @@ end
     bb = Any[b[1:3], b[4:6], b[7:9]]
     @test vcat((Alb\bb)...) ≈ LowerTriangular(A)\b
     @test vcat((Aub\bb)...) ≈ UpperTriangular(A)\b
+end
+
+@testset "sum" begin
+    @test sum(Bidiagonal([1,2,3], [1,2], :U)) == 9
+    @test sum(Bidiagonal([1,2,3], [1,2], :L)) == 9
 end
 
 end # module TestBidiagonal

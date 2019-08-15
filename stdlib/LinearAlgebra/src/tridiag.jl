@@ -162,7 +162,12 @@ end
 /(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv/B, A.ev/B)
 ==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (A.ev==B.ev)
 
-function mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
+@inline mul!(A::StridedVecOrMat, B::SymTridiagonal, C::StridedVecOrMat,
+             alpha::Number, beta::Number) =
+    _mul!(A, B, C, MulAddMul(alpha, beta))
+
+@inline function _mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat,
+                          _add::MulAddMul)
     m, n = size(B, 1), size(B, 2)
     if !(m == size(S, 1) == size(C, 1))
         throw(DimensionMismatch("A has first dimension $(size(S,1)), B has $(size(B,1)), C has $(size(C,1)) but all must match"))
@@ -186,9 +191,9 @@ function mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
             for i = 1:m - 1
                 x₋, x₀, x₊ = x₀, x₊, B[i + 1, j]
                 β₋, β₀ = β₀, β[i]
-                C[i, j] = β₋*x₋ + α[i]*x₀ + β₀*x₊
+                _modify!(_add, β₋*x₋ + α[i]*x₀ + β₀*x₊, C, (i, j))
             end
-            C[m, j] = β₀*x₀ + α[m]*x₊
+            _modify!(_add, β₀*x₀ + α[m]*x₊, C, (m, j))
         end
     end
 
@@ -584,6 +589,7 @@ iszero(M::Tridiagonal) = iszero(M.dl) && iszero(M.d) && iszero(M.du)
 isone(M::Tridiagonal) = iszero(M.dl) && all(isone, M.d) && iszero(M.du)
 istriu(M::Tridiagonal) = iszero(M.dl)
 istril(M::Tridiagonal) = iszero(M.du)
+isdiag(M::Tridiagonal) = iszero(M.dl) && iszero(M.du)
 
 function tril!(M::Tridiagonal, k::Integer=0)
     n = length(M.d)
@@ -646,3 +652,6 @@ function SymTridiagonal{T}(M::Tridiagonal) where T
         throw(ArgumentError("Tridiagonal is not symmetric, cannot convert to SymTridiagonal"))
     end
 end
+
+Base._sum(A::Tridiagonal, ::Colon) = sum(A.d) + sum(A.dl) + sum(A.du)
+Base._sum(A::SymTridiagonal, ::Colon) = sum(A.dv) + 2sum(A.ev)

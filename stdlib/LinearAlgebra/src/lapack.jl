@@ -753,6 +753,71 @@ function geqp3!(A::AbstractMatrix{<:BlasFloat})
     geqp3!(A, zeros(BlasInt, n), similar(A, min(m, n)))
 end
 
+## Tools to compute and apply elementary reflectors
+for (larfg, elty) in
+    ((:dlarfg_, Float64),
+     (:slarfg_, Float32),
+     (:zlarfg_, ComplexF64),
+     (:clarfg_, ComplexF32))
+    @eval begin
+        #        .. Scalar Arguments ..
+        #        INTEGER            incx, n
+        #        DOUBLE PRECISION   alpha, tau
+        #        ..
+        #        .. Array Arguments ..
+        #        DOUBLE PRECISION   x( * )
+        function larfg!(x::AbstractVector{$elty})
+            N    = BlasInt(length(x))
+            α    = Ref{$elty}(x[1])
+            incx = BlasInt(1)
+            τ    = Ref{$elty}(0)
+            ccall((@blasfunc($larfg), liblapack), Cvoid,
+                (Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ref{$elty}),
+                N, α, pointer(x, 2), incx, τ)
+            @inbounds x[1] = one($elty)
+            return τ[]
+        end
+    end
+end
+
+for (larf, elty) in
+    ((:dlarf_, Float64),
+     (:slarf_, Float32),
+     (:zlarf_, ComplexF64),
+     (:clarf_, ComplexF32))
+    @eval begin
+        #        .. Scalar Arguments ..
+        #        CHARACTER          side
+        #        INTEGER            incv, ldc, m, n
+        #        DOUBLE PRECISION   tau
+        #        ..
+        #        .. Array Arguments ..
+        #        DOUBLE PRECISION   c( ldc, * ), v( * ), work( * )
+        function larf!(side::AbstractChar, v::AbstractVector{$elty},
+                       τ::$elty, C::AbstractMatrix{$elty}, work::AbstractVector{$elty})
+            m, n = size(C)
+            chkside(side)
+            ldc = max(1, stride(C, 2))
+            l = side == 'L' ? n : m
+            incv  = BlasInt(1)
+            ccall((@blasfunc($larf), liblapack), Cvoid,
+                (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
+                 Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Clong),
+                side, m, n, v, incv,
+                τ, C, ldc, work, 1)
+            return C
+        end
+
+        function larf!(side::AbstractChar, v::AbstractVector{$elty},
+                       τ::$elty, C::AbstractMatrix{$elty})
+            m, n = size(C)
+            chkside(side)
+            lwork = side == 'L' ? n : m
+            return larf!(side, v, τ, C, Vector{$elty}(undef,lwork))
+        end
+    end
+end
+
 ## Complete orthogonaliztion tools
 for (tzrzf, ormrz, elty) in
     ((:dtzrzf_,:dormrz_,:Float64),

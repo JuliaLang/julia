@@ -442,10 +442,13 @@ function precise_container_type(@nospecialize(typ), vtypes::VarTable, sv::Infere
     tti0 = widenconst(typ)
     tti = unwrap_unionall(tti0)
     if isa(tti, DataType) && tti.name === NamedTuple_typename
-        tti0 = tti.parameters[2]
-        while isa(tti0, TypeVar)
-            tti0 = tti0.ub
+        # A NamedTuple iteration is the the same as the iteration of its Tuple parameter:
+        # compute a new `tti == unwrap_unionall(tti0)` based on that Tuple type
+        tti = tti.parameters[2]
+        while isa(tti, TypeVar)
+            tti = tti.ub
         end
+        tti0 = rewrap_unionall(tti, tti0)
     end
     if isa(tti, Union)
         utis = uniontypes(tti)
@@ -605,9 +608,17 @@ function pure_eval_call(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(a
         return false
     end
     meth = meth[1]::SimpleVector
+    sig = meth[1]::DataType
+    sparams = meth[2]::SimpleVector
     method = meth[3]::Method
-    # TODO: check pure on the inferred thunk
-    if isdefined(method, :generator) || !method.pure
+
+    if isdefined(method, :generator)
+        method.generator.expand_early || return false
+        mi = specialize_method(method, sig, sparams, false)
+        isa(mi, MethodInstance) || return false
+        staged = get_staged(mi)
+        (staged isa CodeInfo && (staged::CodeInfo).pure) || return false
+    elseif !method.pure
         return false
     end
 
@@ -1136,6 +1147,8 @@ function typeinf_local(frame::InferenceState)
                     # only propagate information we know we can store
                     # and is valid inter-procedurally
                     rt = widenconst(rt)
+                elseif isa(rt, Const) && rt.actual
+                    rt = Const(rt.val)
                 end
                 if tchanged(rt, frame.bestguess)
                     # new (wider) return type for frame

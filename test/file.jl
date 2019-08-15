@@ -48,6 +48,193 @@ if !Sys.iswindows()
     cd(pwd_)
 end
 
+child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $code`)))
+
+@testset "mktemp/dir basic cleanup" begin
+    # mktemp without cleanup
+    t = child_eval("t = mktemp(cleanup=false)[1]; @assert isfile(t); t")
+    @test isfile(t)
+    rm(t, force=true)
+    @test !ispath(t)
+    # mktemp with cleanup
+    t = child_eval("t = mktemp()[1]; @assert isfile(t); t")
+    @test !ispath(t)
+    # mktempdir without cleanup
+    t = child_eval("t = mktempdir(cleanup=false); touch(joinpath(t, \"file.txt\")); t")
+    @test isfile("$t/file.txt")
+    rm(t, recursive=true, force=true)
+    @test !ispath(t)
+    # mktempdir with cleanup
+    t = child_eval("t = mktempdir(); touch(joinpath(t, \"file.txt\")); t")
+    @test !ispath(t)
+end
+
+import Base.Filesystem: TEMP_CLEANUP_MIN, TEMP_CLEANUP_MAX, TEMP_CLEANUP
+
+function with_temp_cleanup(f::Function, n::Int)
+    SAVE_TEMP_CLEANUP_MIN = TEMP_CLEANUP_MIN[]
+    SAVE_TEMP_CLEANUP_MAX = TEMP_CLEANUP_MAX[]
+    SAVE_TEMP_CLEANUP = copy(TEMP_CLEANUP)
+    empty!(TEMP_CLEANUP)
+    TEMP_CLEANUP_MIN[] = n
+    TEMP_CLEANUP_MAX[] = n
+    try f()
+    finally
+        Sys.iswindows() && GC.gc(true)
+        for t in keys(TEMP_CLEANUP)
+            rm(t, recursive=true, force=true)
+        end
+        copy!(TEMP_CLEANUP, SAVE_TEMP_CLEANUP)
+        TEMP_CLEANUP_MAX[] = SAVE_TEMP_CLEANUP_MAX
+        TEMP_CLEANUP_MIN[] = SAVE_TEMP_CLEANUP_MIN
+    end
+end
+
+function mktempfile(; cleanup=true)
+    (file, io) = mktemp(cleanup=cleanup)
+    Sys.iswindows() && close(io)
+    return file
+end
+
+@testset "mktemp/dir cleanup list purging" begin
+    n = 12 # cleanup min & max
+    @assert n % 2 == n % 3 == 0 # otherwise tests won't work
+    with_temp_cleanup(n) do
+        @test length(TEMP_CLEANUP) == 0
+        @test TEMP_CLEANUP_MAX[] == n
+        # for n mktemps, no purging is triggered
+        temps = String[]
+        for i = 1:n
+            t = i % 2 == 0 ? mktempfile() : mktempdir()
+            push!(temps, t)
+            @test ispath(t)
+            @test length(TEMP_CLEANUP) == i 
+            @test TEMP_CLEANUP_MAX[] == n
+            # delete 1/3 of the temp paths
+            i % 3 == 0 && rm(t, recursive=true, force=true)
+        end
+        # without cleanup no purge is triggered
+        t = mktempdir(cleanup=false)
+        @test isdir(t)
+        @test length(TEMP_CLEANUP) == n
+        @test TEMP_CLEANUP_MAX[] == n
+        rm(t, recursive=true, force=true)
+        # purge triggered by next mktemp with cleanup
+        t = mktempfile()
+        push!(temps, t)
+        n′ = 2n÷3 + 1
+        @test 2n′ > n
+        @test isfile(t)
+        @test length(TEMP_CLEANUP) == n′
+        @test TEMP_CLEANUP_MAX[] == 2n′
+        # remove all temp files
+        for t in temps
+            rm(t, recursive=true, force=true)
+        end
+        # for n′ mktemps, no purging is triggered
+        for i = 1:n′
+            t = i % 2 == 0 ? mktempfile() : mktempdir()
+            push!(temps, t)
+            @test ispath(t)
+            @test length(TEMP_CLEANUP) == n′ + i
+            @test TEMP_CLEANUP_MAX[] == 2n′
+            # delete 2/3 of the temp paths
+            i % 3 != 0 && rm(t, recursive=true, force=true)
+        end
+        # without cleanup no purge is triggered
+        t = mktempfile(cleanup=false)
+        @test isfile(t)
+        @test length(TEMP_CLEANUP) == 2n′
+        @test TEMP_CLEANUP_MAX[] == 2n′
+        rm(t, force=true)
+        # purge triggered by next mktemp
+        t = mktempdir()
+        push!(temps, t)
+        n′′ = n′÷3 + 1
+        @test 2n′′ < n
+        @test isdir(t)
+        @test length(TEMP_CLEANUP) == n′′
+        @test TEMP_CLEANUP_MAX[] == n
+    end
+end
+
+no_error_logging(f::Function) =
+    Base.CoreLogging.with_logger(f, Base.CoreLogging.NullLogger())
+
+@testset "hof mktemp/dir when cleanup is prevented" begin
+    d = mktempdir()
+    with_temp_cleanup(3) do
+        @test length(TEMP_CLEANUP) == 0
+        @test TEMP_CLEANUP_MAX[] == 3
+        local t, f
+        temps = String[]
+        # mktemp is normally cleaned up on completion
+        mktemp(d) do path, _
+            @test isfile(path)
+            t = path
+        end
+        @test !ispath(t)
+        @test length(TEMP_CLEANUP) == 0
+        @test TEMP_CLEANUP_MAX[] == 3
+        # mktemp when cleanup is prevented
+        no_error_logging() do
+            mktemp(d) do path, _
+                @test isfile(path)
+                f = open(path) # make undeletable on Windows
+                chmod(d, 0o400) # make undeletable on UNIX
+                t = path
+            end
+        end
+        chmod(d, 0o700)
+        close(f)
+        @test isfile(t)
+        @test length(TEMP_CLEANUP) == 1
+        @test TEMP_CLEANUP_MAX[] == 3
+        push!(temps, t)
+        # mktempdir is normally cleaned up on completion
+        mktempdir(d) do path
+            @test isdir(path)
+            t = path
+        end
+        @test !ispath(t)
+        @test length(TEMP_CLEANUP) == 1
+        @test TEMP_CLEANUP_MAX[] == 3
+        # mktempdir when cleanup is prevented
+        no_error_logging() do
+            mktempdir(d) do path
+                @test isdir(path)
+                # make undeletable on Windows:
+                f = open(joinpath(path, "file.txt"), "w+")
+                chmod(d, 0o400) # make undeletable on UNIX
+                t = path
+            end
+        end
+        chmod(d, 0o700)
+        close(f)
+        @test isdir(t)
+        @test length(TEMP_CLEANUP) == 2
+        @test TEMP_CLEANUP_MAX[] == 3
+        push!(temps, t)
+        # make one more temp file
+        t = mktemp()[1]
+        @test isfile(t)
+        @test length(TEMP_CLEANUP) == 3
+        @test TEMP_CLEANUP_MAX[] == 3
+        # nothing has been deleted yet
+        for t in temps
+            @test ispath(t)
+        end
+        # another temp file triggers purge
+        t = mktempdir()
+        @test isdir(t)
+        @test length(TEMP_CLEANUP) == 2
+        @test TEMP_CLEANUP_MAX[] == 4
+        # now all the temps are gone
+        for t in temps
+            @test !ispath(t)
+        end
+    end
+end
 
 #######################################################################
 # This section tests some of the features of the stat-based file info #
@@ -67,6 +254,9 @@ end
 chmod(file, filemode(file) | 0o222)
 @test filemode(file) & 0o111 == 0
 @test filesize(file) == 0
+
+# issue #26685
+@test !isfile("http://google.com")
 
 if Sys.iswindows()
     permissions = 0o444
@@ -244,8 +434,39 @@ close(s)
     end
 end
 
-my_tempdir = tempdir()
-@test isdir(my_tempdir) == true
+@testset "tempdir" begin
+    my_tempdir = tempdir()
+    @test isdir(my_tempdir)
+    @test my_tempdir[end] != '/'
+    @test my_tempdir[end] != '\\'
+
+    var =  Sys.iswindows() ? "TMP" : "TMPDIR"
+    PATH_PREFIX = Sys.iswindows() ? "C:\\" : "/tmp/"
+    # Warning: On Windows uv_os_tmpdir internally calls GetTempPathW. The max string length for
+    # GetTempPathW is 261 (including the implied trailing backslash), not the typical length 259.
+    # We thus use 260 (with implied trailing slash backlash this then gives 261 chars) and
+    # subtract 9 to account for i = 0:9.
+    MAX_PATH = (Sys.iswindows() ? 260-9 : 1024) - length(PATH_PREFIX)
+    for i = 0:8
+        local tmp = PATH_PREFIX * "x"^MAX_PATH * "123456789"[1:i]
+        @test withenv(var => tmp) do
+            tempdir()
+        end == (tmp)
+    end
+    for i = 9
+        local tmp = PATH_PREFIX * "x"^MAX_PATH * "123456789"[1:i]
+        if Sys.iswindows()
+            # libuv bug
+            @test_broken withenv(var => tmp) do
+                tempdir()
+            end == tmp
+        else
+            @test withenv(var => tmp) do
+                tempdir()
+            end == tmp
+        end
+    end
+end
 
 let path = tempname()
     # issue #9053

@@ -393,6 +393,9 @@ function test_5()
 
     @test isequal_type(Ref{Tuple{Union{Int,Int8},Int16,T}} where T,
                        Ref{Union{Tuple{Int,Int16,S},Tuple{Int8,Int16,S}}} where S)
+
+    # issue #32726
+    @test Tuple{Type{Any}, Int, Float64, String} <: Tuple{Type{T}, Vararg{T}} where T
 end
 
 # tricky type variable lower bounds
@@ -991,6 +994,17 @@ function test_intersection()
     @test_broken typeintersect(Tuple{Type{Z},Z} where Z,
                                Tuple{Type{Ref{T}} where T, Ref{Float64}}) ==
         Tuple{Type{Ref{Float64}},Ref{Float64}}
+
+    # issue #32607
+    @testintersect(Type{<:Tuple{Integer,Integer}},
+                   Type{Tuple{Int,T}} where T,
+                   Type{Tuple{Int,T}} where T<:Integer)
+    @testintersect(Type{<:Tuple{Any,Vararg{Any}}},
+                   Type{Tuple{Vararg{Int,N}}} where N,
+                   Type{Tuple{Int,Vararg{Int,N}}} where N)
+    @testintersect(Type{<:Array},
+                   Type{AbstractArray{T}} where T,
+                   Bottom)
 end
 
 function test_intersection_properties()
@@ -1392,6 +1406,25 @@ end
 @testintersect((Tuple{Int, Array{T}} where T),
                (Tuple{Any, Vector{Union{Missing,Nothing,T}}} where T),
                (Tuple{Int, Vector{Union{Missing,Nothing,T}}} where T))
+# issue #32582
+let A = Tuple{Any, Type{Union{Nothing, Int64}}},
+    B = Tuple{T, Type{Union{Nothing, T}}} where T,
+    I = typeintersect(A, B),
+    J = typeintersect(B, A)
+    # TODO: improve precision
+    @test I >: Tuple{Int64,Type{Union{Nothing, Int64}}}
+    @test J >: Tuple{Int64,Type{Union{Nothing, Int64}}}
+end
+@testintersect(Union{Array{T,1},Array{T,2}} where T<:Union{Float32,Float64},
+               Union{AbstractMatrix{Float32},AbstractVector{Float32}},
+               Union{Array{Float32,2}, Array{Float32,1}})
+let A = Tuple{Type{Union{Missing,T}},Any} where T,
+    B = Tuple{Type{Union{Nothing,T}},Any} where T
+    I = typeintersect(A, B)
+    J = typeintersect(B, A)
+    @test I >: Tuple{Type{Union{Nothing,Missing,T}}, Any} where T
+    @test J >: Tuple{Type{Union{Nothing,Missing,T}}, Any} where T
+end
 
 # issue #29955
 struct M29955{T, TV<:AbstractVector{T}}
@@ -1481,7 +1514,9 @@ CovType{T} = Union{AbstractArray{T,2},
 # issue #31703
 @testintersect(Pair{<:Any, Ref{Tuple{Ref{Ref{Tuple{Int}}},Ref{Float64}}}},
                Pair{T, S} where S<:(Ref{A} where A<:(Tuple{C,Ref{T}} where C<:(Ref{D} where D<:(Ref{E} where E<:Tuple{FF}) where FF<:B)) where B) where T,
-               Pair{Float64, Ref{Tuple{Ref{Ref{Tuple{Int}}},Ref{Float64}}}})
+               Pair{T, Ref{Tuple{Ref{Ref{Tuple{Int}}},Ref{Float64}}}} where T)
+# TODO: should be able to get this result
+#              Pair{Float64, Ref{Tuple{Ref{Ref{Tuple{Int}}},Ref{Float64}}}}
 
 module I31703
 using Test, LinearAlgebra
@@ -1606,3 +1641,38 @@ end
 #    S = Type{T} where T<:Tuple{E, Vararg{E}} where E
 #    @test @elapsed (@test T != S) < 5
 #end
+
+# issue #32386
+@test typeintersect(Type{S} where S<:(Vector{Pair{_A,N} where N} where _A),
+                    Type{Vector{T}} where T) == Type{Vector{Pair{_A,N} where N}} where _A
+
+# issue #32488
+struct S32488{S <: Tuple, T, N, L}
+    data::NTuple{L,T}
+end
+@testintersect(Tuple{Type{T} where T<:(S32488{Tuple{_A}, Int64, 1, _A} where _A), Tuple{Vararg{Int64, D}} where D},
+               Tuple{Type{S32488{S, T, N, L}}, Tuple{Vararg{T, L}}} where L where N where T where S,
+               Tuple{Type{S32488{Tuple{L},Int64,1,L}},Tuple{Vararg{Int64,L}}} where L)
+
+# issue #32703
+struct Str{C} <: AbstractString
+end
+struct CSE{X}
+end
+const UTF16CSE = CSE{1}
+const UTF16Str = Str{UTF16CSE}
+const ASCIIStr = Str{CSE{2}}
+c32703(::Type{<:Str{UTF16CSE}}, str::AbstractString) = 42
+c32703(::Type{<:Str{C}}, str::Str{C}) where {C<:CSE} = str
+
+@testintersect(Tuple{Type{UTF16Str},ASCIIStr},
+               Tuple{Type{<:Str{C}}, Str{C}} where {C<:CSE},
+               Union{})
+@test c32703(UTF16Str, ASCIIStr()) == 42
+@test_broken typeintersect(Tuple{Vector{Vector{Float32}},Matrix,Matrix},
+                           Tuple{Vector{V},Matrix{Int},Matrix{S}} where {S, V<:AbstractVector{S}}) ==
+             Tuple{Array{Array{Float32,1},1},Array{Int,2},Array{Float32,2}}
+
+@testintersect(Tuple{Pair{Int, DataType}, Any},
+               Tuple{Pair{A, B} where B<:Type, Int} where A,
+               Tuple{Pair{Int, DataType}, Int})

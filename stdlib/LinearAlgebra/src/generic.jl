@@ -2,29 +2,108 @@
 
 ## linalg.jl: Some generic Linear Algebra definitions
 
-function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number)
+"""
+    MulAddMul(alpha, beta)
+
+A callable for operating short-circuiting version of `x * alpha + y * beta`.
+
+# Examples
+```jldoctest
+julia> using LinearAlgebra: MulAddMul
+
+julia> _add = MulAddMul(1, 0);
+
+julia> _add(123, nothing)
+123
+
+julia> MulAddMul(12, 34)(56, 78) == 56 * 12 + 78 * 34
+true
+```
+"""
+struct MulAddMul{ais1, bis0, TA, TB}
+    alpha::TA
+    beta::TB
+end
+
+MulAddMul(alpha::TA, beta::TB) where {TA, TB} =
+    MulAddMul{isone(alpha), iszero(beta), TA, TB}(alpha, beta)
+
+MulAddMul() = MulAddMul(true, false)
+
+@inline (::MulAddMul{true})(x) = x
+@inline (p::MulAddMul{false})(x) = x * p.alpha
+@inline (::MulAddMul{true, true})(x, _) = x
+@inline (p::MulAddMul{false, true})(x, _) = x * p.alpha
+@inline (p::MulAddMul{true, false})(x, y) = x + y * p.beta
+@inline (p::MulAddMul{false, false})(x, y) = x * p.alpha + y * p.beta
+
+"""
+    _modify!(_add::MulAddMul, x, C, idx)
+
+Short-circuiting version of `C[idx] = _add(x, C[idx])`.
+
+Short-circuiting the indexing `C[idx]` is necessary for avoiding `UndefRefError`
+when mutating an array of non-primitive numbers such as `BigFloat`.
+
+# Examples
+```jldoctest
+julia> using LinearAlgebra: MulAddMul, _modify!
+
+julia> _add = MulAddMul(1, 0);
+       C = Vector{BigFloat}(undef, 1);
+
+julia> _modify!(_add, 123, C, 1)
+
+julia> C
+1-element Array{BigFloat,1}:
+ 123.0
+```
+"""
+@inline @propagate_inbounds function _modify!(p::MulAddMul{ais1, bis0},
+                                              x, C, idx) where {ais1, bis0}
+    if bis0
+        C[idx...] = p(x)
+    else
+        C[idx...] = p(x, C[idx...])
+    end
+    return
+end
+
+@inline function _rmul_or_fill!(C::AbstractArray, beta::Number)
+    if iszero(beta)
+        fill!(C, zero(eltype(C)))
+    else
+        rmul!(C, beta)
+    end
+    return C
+end
+
+
+function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number, _add::MulAddMul)
     if length(C) != length(X)
         throw(DimensionMismatch("first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
     end
     for (IC, IX) in zip(eachindex(C), eachindex(X))
-        @inbounds C[IC] = X[IX]*s
+        @inbounds _modify!(_add, X[IX] * s, C, IC)
     end
     C
 end
 
-function generic_mul!(C::AbstractArray, s::Number, X::AbstractArray)
+function generic_mul!(C::AbstractArray, s::Number, X::AbstractArray, _add::MulAddMul)
     if length(C) != length(X)
         throw(DimensionMismatch("first array has length $(length(C)) which does not
 match the length of the second, $(length(X))."))
     end
     for (IC, IX) in zip(eachindex(C), eachindex(X))
-        @inbounds C[IC] = s*X[IX]
+        @inbounds _modify!(_add, s * X[IX], C, IC)
     end
     C
 end
 
-mul!(C::AbstractArray, s::Number, X::AbstractArray) = generic_mul!(C, X, s)
-mul!(C::AbstractArray, X::AbstractArray, s::Number) = generic_mul!(C, s, X)
+@inline mul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number) =
+    generic_mul!(C, s, X, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number) =
+    generic_mul!(C, X, s, MulAddMul(alpha, beta))
 
 # For better performance when input and output are the same array
 # See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
@@ -714,15 +793,26 @@ norm(v::Union{TransposeAbsVec,AdjointAbsVec}, p::Real) = norm(v.parent, p)
     dot(x, y)
     x ⋅ y
 
-For any iterable containers `x` and `y` (including arrays of any dimension) of numbers (or
-any element type for which `dot` is defined), compute the dot product (or inner product
-or scalar product), i.e. the sum of `dot(x[i],y[i])`, as if they were vectors.
+Compute the dot product between two vectors. For complex vectors, the first
+vector is conjugated.
+
+`dot` also works on arbitrary iterable objects, including arrays of any dimension,
+as long as `dot` is defined on the elements.
+
+`dot` is semantically equivalent to `sum(dot(vx,vy) for (vx,vy) in zip(x, y))`,
+with the added restriction that the arguments must have equal lengths.
 
 `x ⋅ y` (where `⋅` can be typed by tab-completing `\\cdot` in the REPL) is a synonym for
 `dot(x, y)`.
 
 # Examples
 ```jldoctest
+julia> dot([1; 1], [2; 3])
+5
+
+julia> dot([im; im], [1; 1])
+0 - 2im
+
 julia> dot(1:5, 2:6)
 70
 
@@ -734,6 +824,8 @@ julia> dot(x, y)
 150.0
 ```
 """
+function dot end
+
 function dot(x, y) # arbitrary iterables
     ix = iterate(x)
     iy = iterate(y)
@@ -765,23 +857,6 @@ end
 
 dot(x::Number, y::Number) = conj(x) * y
 
-"""
-    dot(x, y)
-    x ⋅ y
-
-Compute the dot product between two vectors. For complex vectors, the first
-vector is conjugated. When the vectors have equal lengths, calling `dot` is
-semantically equivalent to `sum(dot(vx,vy) for (vx,vy) in zip(x, y))`.
-
-# Examples
-```jldoctest
-julia> dot([1; 1], [2; 3])
-5
-
-julia> dot([im; im], [1; 1])
-0 - 2im
-```
-"""
 function dot(x::AbstractArray, y::AbstractArray)
     lx = length(x)
     if lx != length(y)
@@ -1183,10 +1258,10 @@ julia> a = [1 2; 2 -1]
  1   2
  2  -1
 
-julia> isbanded(a, 0, 0)
+julia> LinearAlgebra.isbanded(a, 0, 0)
 false
 
-julia> isbanded(a, -1, 1)
+julia> LinearAlgebra.isbanded(a, -1, 1)
 true
 
 julia> b = [1 0; -im -1] # lower bidiagonal
@@ -1194,10 +1269,10 @@ julia> b = [1 0; -im -1] # lower bidiagonal
  1+0im   0+0im
  0-1im  -1+0im
 
-julia> isbanded(b, 0, 0)
+julia> LinearAlgebra.isbanded(b, 0, 0)
 false
 
-julia> isbanded(b, -1, 0)
+julia> LinearAlgebra.isbanded(b, -1, 0)
 true
 ```
 """
@@ -1419,11 +1494,11 @@ Currently supports only numeric leaf elements.
 ```jldoctest
 julia> a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
 3-element Array{Any,1}:
-  Any[1,2,[3,4]]
+  Any[1, 2, [3, 4]]
  5.0
-  Any[0+6im,[7.0,8.0]]
+  Any[0 + 6im, [7.0, 8.0]]
 
-julia> promote_leaf_eltypes(a)
+julia> LinearAlgebra.promote_leaf_eltypes(a)
 Complex{Float64}
 ```
 """

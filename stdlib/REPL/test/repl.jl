@@ -750,11 +750,20 @@ let exename = Base.julia_cmd()
             @test output == "1\r\nexit()\r\n1\r\n\r\njulia> "
         end
         @test bytesavailable(pty_master) == 0
-        @test try # possibly consume child-exited notification
+        @test if Sys.iswindows() || Sys.isbsd()
                 eof(pty_master)
-            catch ex
-                (ex isa Base.IOError && ex.code == Base.UV_EIO) || rethrow()
-                eof(pty_master)
+            else
+                # Some platforms (such as linux) report EIO instead of EOF
+                # possibly consume child-exited notification
+                # for example, see discussion in https://bugs.python.org/issue5380
+                try
+                    eof(pty_master) && !Sys.islinux()
+                catch ex
+                    (ex isa Base.IOError && ex.code == Base.UV_EIO) || rethrow()
+                    @test_throws ex eof(pty_master) # make sure the error is sticky
+                    pty_master.readerror = nothing
+                    eof(pty_master)
+                end
             end
         @test read(pty_master, String) == ""
         wait(p)

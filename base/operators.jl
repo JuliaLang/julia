@@ -1028,7 +1028,7 @@ passes a tuple as that single argument.
 
 # Example usage:
 ```jldoctest
-julia> map(splat(+), zip(1:3,4:6))
+julia> map(Base.splat(+), zip(1:3,4:6))
 3-element Array{Int64,1}:
  5
  7

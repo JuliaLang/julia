@@ -220,7 +220,7 @@ need wine (>=1.7.5), a system compiler, and some downloaders.
 
 **On Ubuntu** (on other linux systems, the dependency names are likely to be similar):
 ```sh
-apt-get install wine subversion cvs gcc wget p7zip-full winbind mingw-w64
+apt-get install wine-stable subversion cvs gcc wget p7zip-full winbind mingw-w64 gfortran-mingw-w64
 ```
 
 **On Mac**: Install XCode, XCode command line tools, X11 (now [XQuartz](

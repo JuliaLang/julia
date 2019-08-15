@@ -137,9 +137,20 @@ end
         @test triu(Tridiagonal(dl,d,du),2)  == Tridiagonal(zerosdl,zerosd,zerosdu)
 
         @test !istril(SymTridiagonal(d,dl))
+        @test istril(SymTridiagonal(d,zerosdl))
         @test !istriu(SymTridiagonal(d,dl))
+        @test istriu(SymTridiagonal(d,zerosdl))
         @test istriu(Tridiagonal(zerosdl,d,du))
+        @test !istriu(Tridiagonal(dl,d,zerosdu))
         @test istril(Tridiagonal(dl,d,zerosdu))
+        @test !istril(Tridiagonal(zerosdl,d,du))
+
+        @test isdiag(SymTridiagonal(d,zerosdl))
+        @test !isdiag(SymTridiagonal(d,dl))
+        @test isdiag(Tridiagonal(zerosdl,d,zerosdu))
+        @test !isdiag(Tridiagonal(dl,d,zerosdu))
+        @test !isdiag(Tridiagonal(zerosdl,d,du))
+        @test !isdiag(Tridiagonal(dl,d,du))
     end
 
     @testset "iszero and isone" begin
@@ -443,6 +454,11 @@ end
     @test svdvals(SymTridiagonal([1,2,1], [1,1])) ≈ [3,1,0]
     # test that dependent methods such as `cond` also work
     @test cond(SymTridiagonal([1,2,3], [0,0])) ≈ 3
+end
+
+@testset "sum" begin
+    @test sum(Tridiagonal([1,2], [1,2,3], [7,8])) == 24
+    @test sum(SymTridiagonal([1,2,3], [1,2])) == 12
 end
 
 end # module TestTridiagonal

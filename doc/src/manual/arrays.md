@@ -867,9 +867,11 @@ is equivalent to `broadcast(f, args...)`, providing a convenient syntax to broad
 ([dot syntax](@ref man-vectorized)). Nested "dot calls" `f.(...)` (including calls to `.+` etcetera)
 [automatically fuse](@ref man-dot-operators) into a single `broadcast` call.
 
-Additionally, [`broadcast`](@ref) is not limited to arrays (see the function documentation),
-it also handles tuples and treats any argument that is not an array, tuple or [`Ref`](@ref)
-(except for [`Ptr`](@ref)) as a "scalar".
+Additionally, [`broadcast`](@ref) is not limited to arrays (see the function documentation);
+it also handles scalars, tuples and other collections.  By default, only some argument types are
+considered scalars, including (but not limited to) `Number`s, `String`s, `Symbol`s, `Type`s, `Function`s
+and some common singletons like `missing` and `nothing`. All other arguments are
+iterated over or indexed into elementwise.
 
 ```jldoctest
 julia> convert.(Float32, [1, 2])

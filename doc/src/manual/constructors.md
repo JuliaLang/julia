@@ -294,7 +294,7 @@ Point{Float64}(1.0, 2.5)
 julia> Point(1,2.5) ## implicit T ##
 ERROR: MethodError: no method matching Point(::Int64, ::Float64)
 Closest candidates are:
-  Point(::T<:Real, ::T<:Real) where T<:Real at none:2
+  Point(::T, ::T) where T<:Real at none:2
 
 julia> Point{Int64}(1, 2) ## explicit T ##
 Point{Int64}(1, 2)
@@ -373,7 +373,7 @@ However, other similar calls still don't work:
 julia> Point(1.5,2)
 ERROR: MethodError: no method matching Point(::Float64, ::Int64)
 Closest candidates are:
-  Point(::T<:Real, !Matched::T<:Real) where T<:Real at none:1
+  Point(::T, !Matched::T) where T<:Real at none:1
 ```
 
 For a more general way to make all such calls work sensibly, see [Conversion and Promotion](@ref conversion-and-promotion).

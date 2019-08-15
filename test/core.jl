@@ -4942,7 +4942,7 @@ gVararg(a::fVararg(Int)) = length(a)
     false
 catch e
     (e::ErrorException).msg
-end == "generated function body is not pure. this likely means it contains a closure or comprehension."
+end == "The function body AST defined by this @generated function is not pure. This likely means it contains a closure or comprehension."
 
 let x = 1
     global g18444
@@ -6841,9 +6841,9 @@ end
 @test repackage28445()
 
 # issue #28597
-@test_throws ErrorException Array{Int, 2}(undef, 0, -10)
-@test_throws ErrorException Array{Int, 2}(undef, -10, 0)
-@test_throws ErrorException Array{Int, 2}(undef, -1, -1)
+@test_throws ArgumentError Array{Int, 2}(undef, 0, -10)
+@test_throws ArgumentError Array{Int, 2}(undef, -10, 0)
+@test_throws ArgumentError Array{Int, 2}(undef, -1, -1)
 
 # issue #28812
 @test Tuple{Vararg{Array{T},3} where T} === Tuple{Array,Array,Array}
@@ -6988,3 +6988,56 @@ end
 # just constant folded by (future) over-eager compiler optimizations
 @test isa(Core.eval(@__MODULE__, :(Bar31062(()))), Bar31062)
 @test precompile(identity, (Foo31062,))
+
+ftype_eval = Ref(0)
+FieldTypeA = String
+FieldTypeE = UInt32
+struct FieldConvert{FieldTypeA, S}
+    a::FieldTypeA
+    b::(ftype_eval[] += 1; Vector{FieldTypeA})
+    c
+    d::Any
+    e::FieldTypeE
+    FieldConvert(a::S, b, c, d, e) where {S} = new{FieldTypeA, S}(a, b, c, d, e)
+end
+@test ftype_eval[] == 1
+FieldTypeA = UInt64
+FieldTypeE = String
+let fc = FieldConvert(1.0, [2.0], 0x3, 0x4, 0x5)
+    @test fc.a === UInt64(1)
+    @test fc.b isa Vector{UInt64}
+    @test fc.c === 0x3
+    @test fc.d === 0x4
+    @test fc.e === UInt32(0x5)
+end
+@test ftype_eval[] == 1
+let code = code_lowered(FieldConvert)[1].code
+    @test code[1] == Expr(:call, GlobalRef(Core, :apply_type), GlobalRef(@__MODULE__, :FieldConvert), GlobalRef(@__MODULE__, :FieldTypeA), Expr(:static_parameter, 1))
+    @test code[2] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 1)
+    @test code[3] == Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(2), Core.SlotNumber(2))
+    @test code[4] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 2)
+    @test code[5] == Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(4), Core.SlotNumber(3))
+    @test code[6] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 4)
+    @test code[7] == Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(6), Core.SlotNumber(5))
+    @test code[8] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 5)
+    @test code[9] == Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(8), Core.SlotNumber(6))
+    @test code[10] == Expr(:new, Core.SSAValue(1), Core.SSAValue(3), Core.SSAValue(5), Core.SlotNumber(4), Core.SSAValue(7), Core.SSAValue(9))
+    @test code[11] == Expr(:return, Core.SSAValue(10))
+ end
+
+# Issue #32820
+function f32820(refs)
+    local x
+    for r in refs
+        try
+            error()
+        catch e
+            if !@isdefined(x)
+                x = []
+            end
+            push!(x, 1)
+        end
+    end
+    x
+end
+@test f32820(Any[1,2]) == Any[1, 1]

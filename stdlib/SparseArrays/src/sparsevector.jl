@@ -325,11 +325,11 @@ julia> x = sparsevec([1, 3], [1.0, 2.0])
   [1]  =  1.0
   [3]  =  2.0
 
-julia> Base.SparseArrays.dropstored!(x, 3)
+julia> SparseArrays.dropstored!(x, 3)
 3-element SparseVector{Float64,Int64} with 1 stored entry:
   [1]  =  1.0
 
-julia> Base.SparseArrays.dropstored!(x, 2)
+julia> SparseArrays.dropstored!(x, 2)
 3-element SparseVector{Float64,Int64} with 1 stored entry:
   [1]  =  1.0
 ```
@@ -494,30 +494,30 @@ copyto!(A::SparseMatrixCSC, B::SparseVector{TvB,TiB}) where {TvB,TiB} =
 
 
 ### Rand Construction
-sprand(n::Integer, p::AbstractFloat, rfn::Function, ::Type{T}) where {T} = sprand(GLOBAL_RNG, n, p, rfn, T)
+sprand(n::Integer, p::AbstractFloat, rfn::Function, ::Type{T}) where {T} = sprand(default_rng(), n, p, rfn, T)
 function sprand(r::AbstractRNG, n::Integer, p::AbstractFloat, rfn::Function, ::Type{T}) where T
     I = randsubseq(r, 1:convert(Int, n), p)
     V = rfn(r, T, length(I))
     SparseVector(n, I, V)
 end
 
-sprand(n::Integer, p::AbstractFloat, rfn::Function) = sprand(GLOBAL_RNG, n, p, rfn)
+sprand(n::Integer, p::AbstractFloat, rfn::Function) = sprand(default_rng(), n, p, rfn)
 function sprand(r::AbstractRNG, n::Integer, p::AbstractFloat, rfn::Function)
     I = randsubseq(r, 1:convert(Int, n), p)
     V = rfn(r, length(I))
     SparseVector(n, I, V)
 end
 
-sprand(n::Integer, p::AbstractFloat) = sprand(GLOBAL_RNG, n, p, rand)
+sprand(n::Integer, p::AbstractFloat) = sprand(default_rng(), n, p, rand)
 
 sprand(r::AbstractRNG, n::Integer, p::AbstractFloat) = sprand(r, n, p, rand)
 sprand(r::AbstractRNG, ::Type{T}, n::Integer, p::AbstractFloat) where {T} = sprand(r, n, p, (r, i) -> rand(r, T, i))
 sprand(r::AbstractRNG, ::Type{Bool}, n::Integer, p::AbstractFloat) = sprand(r, n, p, truebools)
-sprand(::Type{T}, n::Integer, p::AbstractFloat) where {T} = sprand(GLOBAL_RNG, T, n, p)
+sprand(::Type{T}, n::Integer, p::AbstractFloat) where {T} = sprand(default_rng(), T, n, p)
 
-sprandn(n::Integer, p::AbstractFloat) = sprand(GLOBAL_RNG, n, p, randn)
+sprandn(n::Integer, p::AbstractFloat) = sprand(default_rng(), n, p, randn)
 sprandn(r::AbstractRNG, n::Integer, p::AbstractFloat) = sprand(r, n, p, randn)
-sprandn(::Type{T}, n::Integer, p::AbstractFloat) where T = sprand(GLOBAL_RNG, n, p, (r, i) -> randn(r, T, i))
+sprandn(::Type{T}, n::Integer, p::AbstractFloat) where T = sprand(default_rng(), n, p, (r, i) -> randn(r, T, i))
 sprandn(r::AbstractRNG, ::Type{T}, n::Integer, p::AbstractFloat) where T = sprand(r, n, p, (r, i) -> randn(r, T, i))
 
 ## Indexing into Matrices can return SparseVectors
@@ -1416,7 +1416,7 @@ function dot(x::AbstractVector{Tx}, y::SparseVectorUnion{Ty}) where {Tx<:Number,
     nzind = nonzeroinds(y)
     nzval = nonzeros(y)
     s = dot(zero(Tx), zero(Ty))
-    for i = 1:length(nzind)
+    @inbounds for i = 1:length(nzind)
         s += dot(x[nzind[i]], nzval[i])
     end
     return s
@@ -1494,7 +1494,7 @@ function (*)(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
     require_one_based_indexing(A, x)
     m, n = size(A)
     length(x) == n || throw(DimensionMismatch())
-    Ty = promote_type(Ta, Tx)
+    Ty = promote_op(matprod, Ta, Tx)
     y = Vector{Ty}(undef, m)
     mul!(y, A, x)
 end
@@ -1531,23 +1531,21 @@ end
 
 function *(transA::Transpose{<:Any,<:StridedMatrix{Ta}}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
     require_one_based_indexing(transA, x)
-    A = transA.parent
-    m, n = size(A)
-    length(x) == m || throw(DimensionMismatch())
-    Ty = promote_type(Ta, Tx)
-    y = Vector{Ty}(undef, n)
-    mul!(y, transpose(A), x)
+    m, n = size(transA)
+    length(x) == n || throw(DimensionMismatch())
+    Ty = promote_op(matprod, Ta, Tx)
+    y = Vector{Ty}(undef, m)
+    mul!(y, transA, x)
 end
 
 mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = transA.parent; mul!(y, transpose(A), x, one(Tx), zero(Ty)))
+    mul!(y, transA, x, one(Tx), zero(Ty))
 
 function mul!(y::AbstractVector, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector, α::Number, β::Number)
-    A = transA.parent
-    require_one_based_indexing(y, A, x)
-    m, n = size(A)
-    length(x) == m && length(y) == n || throw(DimensionMismatch())
-    n == 0 && return y
+    require_one_based_indexing(y, transA, x)
+    m, n = size(transA)
+    length(x) == n && length(y) == m || throw(DimensionMismatch())
+    m == 0 && return y
     if β != one(β)
         β == zero(β) ? fill!(y, zero(eltype(y))) : rmul!(y, β)
     end
@@ -1558,11 +1556,53 @@ function mul!(y::AbstractVector, transA::Transpose{<:Any,<:StridedMatrix}, x::Ab
     _nnz = length(xnzind)
     _nnz == 0 && return y
 
-    s0 = zero(eltype(A)) * zero(eltype(x))
-    @inbounds for j = 1:n
-        s = zero(s0)
+    A = transA.parent
+    Ty = promote_op(matprod, eltype(A), eltype(x))
+    @inbounds for j = 1:m
+        s = zero(Ty)
         for i = 1:_nnz
-            s += A[xnzind[i], j] * xnzval[i]
+            s += transpose(A[xnzind[i], j]) * xnzval[i]
+        end
+        y[j] += s * α
+    end
+    return y
+end
+
+# * and mul!(C, adjoint(A), B)
+
+function *(adjA::Adjoint{<:Any,<:StridedMatrix{Ta}}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
+    require_one_based_indexing(adjA, x)
+    m, n = size(adjA)
+    length(x) == n || throw(DimensionMismatch())
+    Ty = promote_op(matprod, Ta, Tx)
+    y = Vector{Ty}(undef, m)
+    mul!(y, adjA, x)
+end
+
+mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:StridedMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
+    mul!(y, adjA, x, one(Tx), zero(Ty))
+
+function mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:StridedMatrix}, x::AbstractSparseVector, α::Number, β::Number)
+    require_one_based_indexing(y, adjA, x)
+    m, n = size(adjA)
+    length(x) == n && length(y) == m || throw(DimensionMismatch())
+    m == 0 && return y
+    if β != one(β)
+        β == zero(β) ? fill!(y, zero(eltype(y))) : rmul!(y, β)
+    end
+    α == zero(α) && return y
+
+    xnzind = nonzeroinds(x)
+    xnzval = nonzeros(x)
+    _nnz = length(xnzind)
+    _nnz == 0 && return y
+
+    A = adjA.parent
+    Ty = promote_op(matprod, eltype(A), eltype(x))
+    @inbounds for j = 1:m
+        s = zero(Ty)
+        for i = 1:_nnz
+            s += adjoint(A[xnzind[i], j]) * xnzval[i]
         end
         y[j] += s * α
     end
@@ -1586,7 +1626,7 @@ function densemv(A::SparseMatrixCSC, x::AbstractSparseVector; trans::AbstractCha
     xlen == length(x) || throw(DimensionMismatch())
     T = promote_op(matprod, eltype(A), eltype(x))
     y = Vector{T}(undef, ylen)
-    if trans == 'N' || trans == 'N'
+    if trans == 'N' || trans == 'n'
         mul!(y, A, x)
     elseif trans == 'T' || trans == 't'
         mul!(y, transpose(A), x)
@@ -1624,7 +1664,7 @@ function mul!(y::AbstractVector, A::SparseMatrixCSC, x::AbstractSparseVector, α
         if v != zero(v)
             αv = v * α
             j = xnzind[i]
-            for r = A.colptr[j]:(Acolptr[j+1]-1)
+            for r = Acolptr[j]:(Acolptr[j+1]-1)
                 y[Arowval[r]] += Anzval[r] * αv
             end
         end

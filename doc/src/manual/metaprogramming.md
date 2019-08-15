@@ -126,6 +126,9 @@ julia> Symbol(:var,'_',"sym")
 :var_sym
 ```
 
+Note that to use `:` syntax, the symbol's name must be a valid identifier.
+Otherwise the `Symbol(str)` constructor must be used.
+
 In the context of an expression, symbols are used to indicate access to variables; when an expression
 is evaluated, a symbol is replaced with the value bound to that symbol in the appropriate [scope](@ref scope-of-variables).
 
@@ -345,7 +348,7 @@ QuoteNode
 
 `QuoteNode` can also be used for certain advanced metaprogramming tasks.
 
-### [`eval`](@ref) and effects
+### Evaluating expressions
 
 Given an expression object, one can cause Julia to evaluate (execute) it at global scope using
 [`eval`](@ref):

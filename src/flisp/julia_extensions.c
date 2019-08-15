@@ -106,7 +106,10 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_category_t cat)
 
             // Other_ID_Start
             wc == 0x2118 || wc == 0x212E || // ℘, ℮
-            (wc >= 0x309B && wc <= 0x309C)); // katakana-hiragana sound marks
+            (wc >= 0x309B && wc <= 0x309C) || // katakana-hiragana sound marks
+
+            // bold-digits and double-struck digits
+            (wc >= 0x1D7CE && wc <= 0x1D7E1)); // 𝟎 through 𝟗 (inclusive), 𝟘 through 𝟡 (inclusive)
 }
 
 JL_DLLEXPORT int jl_id_start_char(uint32_t wc)

@@ -11,11 +11,9 @@
 // Nonetheless, we define JL_THREAD and use it to give advanced notice to
 // maintainers of what eventual threading support will change.
 
-// JULIA_ENABLE_THREADING is switched on in Make.inc if JULIA_THREADS is
-// set (in Make.user)
-
 //  Options for task switching algorithm (in order of preference):
 // JL_HAVE_ASM -- mostly setjmp
+// JL_HAVE_ASYNCIFY -- task switching based on the binaryen asyncify transform
 // JL_HAVE_UNW_CONTEXT -- hybrid of libunwind for start, setjmp for resume
 // JL_HAVE_UCONTEXT -- posix standard API, requires syscall for resume
 // JL_HAVE_SIGALTSTACK -- requires several syscall for start, setjmp for resume
@@ -27,7 +25,8 @@ typedef win32_ucontext_t jl_ucontext_t;
 #if !defined(JL_HAVE_UCONTEXT) && \
     !defined(JL_HAVE_ASM) && \
     !defined(JL_HAVE_UNW_CONTEXT) && \
-    !defined(JL_HAVE_SIGALTSTACK)
+    !defined(JL_HAVE_SIGALTSTACK) && \
+    !defined(JL_HAVE_ASYNCIFY)
 #if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_) ||  \
      defined(_CPU_ARM_) || defined(_CPU_PPC64_))
 #define JL_HAVE_ASM
@@ -35,6 +34,8 @@ typedef win32_ucontext_t jl_ucontext_t;
 #define JL_HAVE_UNW_CONTEXT
 #elif defined(_OS_LINUX_)
 #define JL_HAVE_UCONTEXT
+#elif defined(_OS_EMSCRIPTEN_)
+#define JL_HAVE_ASYNCIFY
 #else
 #define JL_HAVE_UNW_CONTEXT
 #endif
@@ -43,6 +44,16 @@ typedef win32_ucontext_t jl_ucontext_t;
 #if defined(JL_HAVE_ASM) || defined(JL_HAVE_SIGALTSTACK)
 typedef struct {
     jl_jmp_buf uc_mcontext;
+} jl_ucontext_t;
+#endif
+#if defined(JL_HAVE_ASYNCIFY)
+typedef struct {
+    // This is the extent of the asyncify stack, but because the top of the
+    // asyncify stack (stacktop) is also the bottom of the C stack, we can
+    // reuse stacktop for both. N.B.: This matches the layout of the
+    // __asyncify_data struct.
+    void *stackbottom;
+    void *stacktop;
 } jl_ucontext_t;
 #endif
 #if defined(JL_HAVE_UCONTEXT) || defined(JL_HAVE_UNW_CONTEXT)
@@ -100,7 +111,7 @@ typedef struct {
     // variables for allocating objects from pools
 #ifdef _P64
 #  define JL_GC_N_POOLS 41
-#elif defined(_CPU_ARM_) || defined(_CPU_PPC_)
+#elif MAX_ALIGN == 8
 #  define JL_GC_N_POOLS 42
 #else
 #  define JL_GC_N_POOLS 43
@@ -190,14 +201,12 @@ struct _jl_tls_states_t {
     // this is limited to the few places we do synchronous IO
     // we can make this more general (similar to defer_signal) if necessary
     volatile sig_atomic_t io_wait;
-#ifndef _OS_WINDOWS_
-    // These are only used on unix now
-    pthread_t system_id;
-    void *signal_stack;
-#endif
 #ifdef _OS_WINDOWS_
     int needs_resetstkoflw;
+#else
+    void *signal_stack;
 #endif
+    unsigned long system_id;
     // execution of certain certain impure
     // statements is prohibited from certain
     // callbacks (such as generated functions)
@@ -262,16 +271,6 @@ void jl_sigint_safepoint(jl_ptls_t tls) JL_NOTSAFEPOINT;
         (void)safepoint_load;                           \
     } while (0)
 #endif
-#ifndef JULIA_ENABLE_THREADING
-#define jl_gc_state(ptls) ((int8_t)0)
-STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
-                                     int8_t old_state)
-{
-    (void)ptls;
-    (void)state;
-    return old_state;
-}
-#else // ifndef JULIA_ENABLE_THREADING
 // Make sure jl_gc_state() is always a rvalue
 #define jl_gc_state(ptls) ((int8_t)ptls->gc_state)
 STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
@@ -284,7 +283,6 @@ STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
         jl_gc_safepoint_(ptls);
     return old_state;
 }
-#endif // ifndef JULIA_ENABLE_THREADING
 STATIC_INLINE int8_t jl_gc_state_save_and_set(jl_ptls_t ptls,
                                               int8_t state)
 {

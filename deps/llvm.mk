@@ -88,6 +88,9 @@ ifneq ($(BUILD_OS),WINNT)
 LLVM_CMAKE += -DCROSS_TOOLCHAIN_FLAGS_NATIVE=-DCMAKE_TOOLCHAIN_FILE=$(SRCDIR)/NATIVE.cmake
 endif # BUILD_OS != WINNT
 endif # OS == WINNT
+ifeq ($(OS), emscripten)
+LLVM_CMAKE += -DCMAKE_TOOLCHAIN_FILE=$(EMSCRIPTEN)/cmake/Modules/Platform/Emscripten.cmake -DCROSS_TOOLCHAIN_FLAGS_NATIVE=-DCMAKE_TOOLCHAIN_FILE=$(SRCDIR)/NATIVE.cmake -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_BUILD_TOOLS=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_ENABLE_THREADS=OFF -DLLVM_BUILD_UTILS=OFF
+endif # OS == emscripten
 ifeq ($(USE_LLVM_SHLIB),1)
 # NOTE: we could also --disable-static here (on the condition we link tools
 #       against libLLVM) but there doesn't seem to be a CMake counterpart option
@@ -137,6 +140,10 @@ ifeq ($(LLVM_LTO),1)
 LLVM_CPPFLAGS += -flto
 LLVM_LDFLAGS += -flto
 endif # LLVM_LTO
+
+ifeq ($(fPIC),)
+LLVM_CMAKE += -DLLVM_ENABLE_PIC=OFF
+endif
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 LLVM_LDFLAGS += -Wl,-rpath,$(build_libdir)
@@ -431,6 +438,11 @@ endif
 $(eval $(call LLVM_PATCH,llvm-D51842-win64-byval-cc))
 $(eval $(call LLVM_PATCH,llvm-D57118-powerpc))
 $(eval $(call LLVM_PATCH,llvm-r355582-avxminmax)) # remove for 8.0
+$(eval $(call LLVM_PATCH,llvm-rL349068-llvm-config)) # remove for 8.0
+$(eval $(call LLVM_PATCH,llvm-6.0-D63688-wasm-isLocal))
+$(eval $(call LLVM_PATCH,llvm-6.0-D64032-cmake-cross))
+$(eval $(call LLVM_PATCH,llvm-6.0-D64225-cmake-cross2))
+$(eval $(call LLVM_PATCH,llvm6-WASM-addrspaces)) # WebAssembly
 endif # LLVM_VER 6.0
 
 ifeq ($(LLVM_VER_SHORT),7.0)
@@ -445,6 +457,8 @@ $(eval $(call LLVM_PATCH,llvm-7.0-D50167-scev-umin))
 $(eval $(call LLVM_PATCH,llvm7-windows-race))
 $(eval $(call LLVM_PATCH,llvm7-D51842-win64-byval-cc)) # remove for 8.0
 $(eval $(call LLVM_PATCH,llvm-D57118-powerpc))
+$(eval $(call LLVM_PATCH,llvm-rL349068-llvm-config)) # remove for 8.0
+$(eval $(call LLVM_PATCH,llvm7-WASM-addrspaces)) # WebAssembly
 endif # LLVM_VER 7.0
 
 ifeq ($(LLVM_VER_SHORT),8.0)
@@ -457,6 +471,7 @@ $(eval $(call LLVM_PATCH,llvm7-D50010-VNCoercion-ni))
 $(eval $(call LLVM_PATCH,llvm-8.0-D50167-scev-umin))
 $(eval $(call LLVM_PATCH,llvm7-windows-race))
 $(eval $(call LLVM_PATCH,llvm-D57118-powerpc)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm8-WASM-addrspaces)) # WebAssembly
 endif # LLVM_VER 8.0
 
 # Add a JL prefix to the version map. DO NOT REMOVE

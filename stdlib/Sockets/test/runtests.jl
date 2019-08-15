@@ -66,6 +66,9 @@ end
     @test inet.port == 1024
     str = "Sockets.InetAddr{$(isdefined(Main, :IPv4) ? "" : "Sockets.")IPv4}(ip\"127.0.0.1\", 1024)"
     @test sprint(show, inet) == str
+    inet = Sockets.InetAddr("127.0.0.1", 1024)
+    @test inet.host == ip"127.0.0.1"
+    @test inet.port == 1024
 end
 @testset "InetAddr invalid port" begin
     @test_throws InexactError Sockets.InetAddr(IPv4(127,0,0,1), -1)
@@ -281,8 +284,8 @@ end
             @test fetch(tsk) == msg
         end
         let tsk = @async send(b, ip"127.0.0.1", randport, "WORLD HELLO")
-            (addr, data) = recvfrom(a)
-            @test addr == ip"127.0.0.1" && String(data) == "WORLD HELLO"
+            (inetaddr, data) = recvfrom(a)
+            @test inetaddr.host == ip"127.0.0.1" && String(data) == "WORLD HELLO"
             wait(tsk)
         end
         close(a)
@@ -299,8 +302,8 @@ end
 
         for i = 1:3
             tsk = @async begin
-                let (addr, data) = recvfrom(a)
-                    @test addr == ip"::1"
+                let (inetaddr, data) = recvfrom(a)
+                    @test inetaddr.host == ip"::1"
                     @test String(data) == "Hello World"
                 end
             end

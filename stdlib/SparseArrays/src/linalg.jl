@@ -42,7 +42,7 @@ function mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::Union{StridedVector,Adj
     end
     for k = 1:size(C, 2)
         @inbounds for col = 1:A.n
-            αxj = α*B[col,k]
+            αxj = B[col,k] * α
             for j = A.colptr[col]:(A.colptr[col + 1] - 1)
                 C[rv[j], k] += nzv[j]*αxj
             end
@@ -71,7 +71,7 @@ function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::Uni
             for j = A.colptr[col]:(A.colptr[col + 1] - 1)
                 tmp += adjoint(nzv[j])*B[rv[j],k]
             end
-            C[col,k] += α*tmp
+            C[col,k] += tmp * α
         end
     end
     C
@@ -97,7 +97,7 @@ function mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B:
             for j = A.colptr[col]:(A.colptr[col + 1] - 1)
                 tmp += transpose(nzv[j])*B[rv[j],k]
             end
-            C[col,k] += α*tmp
+            C[col,k] += tmp * α
         end
     end
     C
@@ -1028,9 +1028,16 @@ function opnorm(A::SparseMatrixCSC, p::Real=2)
     m, n = size(A)
     if m == 0 || n == 0 || isempty(A)
         return float(real(zero(eltype(A))))
-    elseif m == 1 || n == 1
-        # TODO: compute more efficiently using A.nzval directly
-        return opnorm(Array(A), p)
+    elseif m == 1
+        if p == 1
+            return norm(nzvalview(A), Inf)
+        elseif p == 2
+            return norm(nzvalview(A), 2)
+        elseif p == Inf
+            return norm(nzvalview(A), 1)
+        end
+    elseif n == 1 && p in (1, 2, Inf)
+        return norm(nzvalview(A), p)
     else
         Tnorm = typeof(float(real(zero(eltype(A)))))
         Tsum = promote_type(Float64,Tnorm)
@@ -1299,6 +1306,10 @@ kron(x::SparseVector, A::SparseMatrixCSC) = kron(SparseMatrixCSC(x), A)
 # sparse vec/mat ⊗ vec/mat and vice versa
 kron(A::Union{SparseVector,SparseMatrixCSC}, B::VecOrMat) = kron(A, sparse(B))
 kron(A::VecOrMat, B::Union{SparseVector,SparseMatrixCSC}) = kron(sparse(A), B)
+
+# sparse vec/mat ⊗ Diagonal and vice versa
+kron(A::Diagonal{T}, B::Union{SparseVector{S}, SparseMatrixCSC{S}}) where {T<:Number, S<:Number} = kron(sparse(A), B)
+kron(A::Union{SparseVector{T}, SparseMatrixCSC{T}}, B::Diagonal{S}) where {T<:Number, S<:Number} = kron(A, sparse(B))
 
 # sparse outer product
 kron(A::SparseVectorUnion, B::AdjOrTransSparseVectorUnion) = A .* B

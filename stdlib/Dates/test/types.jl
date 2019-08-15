@@ -228,6 +228,23 @@ end
     @test Dates.Date(Dates.DateTime(Dates.Date(2012, 7, 1))) == Dates.Date(2012, 7, 1)
 end
 
+@testset "min and max" begin
+    for (a, b) in [(Dates.Date(2000), Dates.Date(2001)),
+                    (Dates.Time(10), Dates.Time(11)),
+                    (Dates.DateTime(3000), Dates.DateTime(3001)),
+                    (Dates.Week(42), Dates.Week(1972))]
+        @test min(a, b) == a
+        @test min(b, a) == a
+        @test min(a) == a
+        @test max(a, b) == b
+        @test max(b, a) == b
+        @test max(b) == b
+        @test minmax(a, b) == (a, b)
+        @test minmax(b, a) == (a, b)
+        @test minmax(a) == (a, a)
+    end
+end
+
 @testset "issue #31524" begin
     dt1 = Libc.strptime("%Y-%M-%dT%H:%M:%SZ", "2018-11-16T10:26:14Z")
     dt2 = Base.Libc.TmStruct(14, 30, 5, 10, 1, 99, 3, 40, 0)

@@ -386,7 +386,7 @@ true
 julia> same_type_numeric("foo", 2.0)
 ERROR: MethodError: no method matching same_type_numeric(::String, ::Float64)
 Closest candidates are:
-  same_type_numeric(!Matched::T<:Number, ::T<:Number) where T<:Number at none:1
+  same_type_numeric(!Matched::T, ::T) where T<:Number at none:1
   same_type_numeric(!Matched::Number, ::Number) at none:1
 
 julia> same_type_numeric("foo", "bar")
@@ -537,7 +537,7 @@ eltype(::Type{<:AbstractArray{T}}) where {T} = T
 ```
 using so-called triangular dispatch.  Note that if `T` is a `UnionAll`
 type, as e.g. `eltype(Array{T} where T <: Integer)`, then `Any` is
-returned (as does the the version of `eltype` in `Base`).
+returned (as does the version of `eltype` in `Base`).
 
 Another way, which used to be the only correct way before the advent of
 triangular dispatch in Julia v0.6, is:

@@ -564,6 +564,7 @@ below all interrupt the normal flow of control.
 | [`ArgumentError`](@ref)       |
 | [`BoundsError`](@ref)         |
 | [`CompositeException`](@ref)  |
+| [`DimensionMismatch`](@ref)   |
 | [`DivideError`](@ref)         |
 | [`DomainError`](@ref)         |
 | [`EOFError`](@ref)            |

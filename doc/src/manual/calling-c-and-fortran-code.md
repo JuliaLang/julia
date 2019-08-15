@@ -463,7 +463,7 @@ checks and is only meant to improve readability of the call.
     ```julia
     str1 = "foo"
     str2 = "bar"
-    ccall(:test, Void, (Ptr{UInt8}, Ptr{UInt8}, Csize_t, Csize_t),
+    ccall(:test, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Csize_t, Csize_t),
                         str1, str2, sizeof(str1), sizeof(str2))
     ```
 

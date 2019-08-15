@@ -125,6 +125,7 @@ export
     KeyError,
     MissingException,
     ProcessFailedException,
+    TaskFailedException,
     SystemError,
     StringIndexError,
 
@@ -324,6 +325,7 @@ export
     sin,
     sinc,
     sincos,
+    sincosd,
     sind,
     sinh,
     sinpi,
@@ -646,6 +648,7 @@ export
     islocked,
     istaskdone,
     istaskstarted,
+    istaskfailed,
     lock,
     notify,
     ReentrantLock,

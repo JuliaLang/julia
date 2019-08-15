@@ -627,6 +627,13 @@ open(`$catcmd`, "r+") do f
     wait(t)
 end
 
+# issue #32193
+mktemp() do path, io
+    redirect_stderr(io) do
+        @test_throws ProcessFailedException open(identity, `$catcmd _doesnt_exist__111_`, read=true)
+    end
+end
+
 let text = "input-test-text"
     b = PipeBuffer()
     proc = open(Base.CmdRedirect(Base.CmdRedirect(```$exename --startup-file=no -E '

@@ -620,8 +620,8 @@ end
 
 function _delete!(h::Dict{K,V}, index) where {K,V}
     @inbounds h.slots[index] = 0x2
-    isbitstype(K) || isbitsunion(K) || ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.keys, index-1)
-    isbitstype(V) || isbitsunion(V) || ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.vals, index-1)
+    @inbounds _unsetindex!(h.keys, index)
+    @inbounds _unsetindex!(h.vals, index)
     h.ndel += 1
     h.count -= 1
     h.age += 1
@@ -689,7 +689,15 @@ length(t::Dict) = t.count
     (@inbounds vals[i], i == typemax(Int) ? 0 : i+1)
 end
 
-filter!(f, d::Dict) = filter_in_one_pass!(f, d)
+function filter!(pred, h::Dict{K,V}) where {K,V}
+    h.count == 0 && return h
+    @inbounds for i=1:length(h.slots)
+        if h.slots[i] == 0x01 && !pred(Pair{K,V}(h.keys[i], h.vals[i]))
+            _delete!(h, i)
+        end
+    end
+    return h
+end
 
 function reduce(::typeof(merge), items::Vector{<:Dict})
     K = mapreduce(keytype, promote_type, items)

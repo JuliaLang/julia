@@ -2628,6 +2628,25 @@ Base.view(::T25958, args...) = args
     @test t[end,end,end] == @view(t[end,end,end]) == @views t[end,end,end]
 end
 
+@testset "0-dimensional container operations" begin
+    for op in (-, conj, real, imag)
+        @test op(fill(2)) == fill(op(2))
+        @test op(fill(1+2im)) == fill(op(1+2im))
+    end
+    for op in (+, -)
+        @test op(fill(1), fill(2)) == fill(op(1, 2))
+        @test op(fill(1), fill(2)) isa AbstractArray{Int, 0}
+    end
+    @test fill(1) + fill(2) + fill(3) == fill(1+2+3)
+    @test fill(1) / 2 == fill(1/2)
+    @test 2 \ fill(1) == fill(1/2)
+    @test 2*fill(1) == fill(2)
+    @test fill(1)*2 == fill(2)
+end
+
+
 # Fix oneunit bug for unitful arrays
 @test oneunit([Second(1) Second(2); Second(3) Second(4)]) == [Second(1) Second(0); Second(0) Second(1)]
 
+# Throws ArgumentError for negative dimensions in Array
+@test_throws ArgumentError fill('a', -10)
