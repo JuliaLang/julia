@@ -108,9 +108,9 @@ true
 ```
 
 !!! compat "Julia 1.3"
-  The `spawn` keyword argument was added in Julia 1.3. This constructor was added in Julia 1.3.
-  Earlier versions of Julia used kwargs to set `size` and `T`, but those constructors are
-  deprecated.
+  The `spawn=` parameter was added in Julia 1.3. This constructor was added in Julia 1.3.
+  In earlier versions of Julia, Channel used keyword arguments to set `size` and `T`, but
+  those constructors are deprecated.
 
 ```jldoctest
 julia> chnl = Channel{Char}(1, spawn=true) do ch
@@ -140,6 +140,8 @@ end
 Channel(func::Function, args...; kwargs...) = Channel{Any}(func, args...; kwargs...)
 
 # This constructor is deprecated as of Julia v1.3, and should not be used.
+# (Note that this constructor also matches `Channel(::Function)` w/out any kwargs, which is
+# of course not deprecated.)
 function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
     return Channel{ctype}(func, csize; taskref=taskref)
 end
