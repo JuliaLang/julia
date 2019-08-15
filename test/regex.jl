@@ -52,11 +52,17 @@
     subst = s"FROM: \g<name>\n MESSAGE: \1"
     @test replace(msg, re => subst) == "FROM: Julia\n MESSAGE: Hello"
 
-    # findall:
+    # findall
     @test findall(r"\w+", "foo bar") == [1:3, 5:7]
     @test findall(r"\w+", "foo bar", overlap=true) == [1:3, 2:3, 3:3, 5:7, 6:7, 7:7]
     @test findall(r"\w*", "foo bar") == [1:3, 4:3, 5:7, 8:7]
     @test findall(r"\b", "foo bar") == [1:0, 4:3, 5:4, 8:7]
+
+    # count
+    @test count(r"\w+", "foo bar") == 2
+    @test count(r"\w+", "foo bar", overlap=true) == 6
+    @test count(r"\w*", "foo bar") == 4
+    @test count(r"\b", "foo bar") == 4
 
     # Named subpatterns
     let m = match(r"(?<a>.)(.)(?<b>.)", "xyz")

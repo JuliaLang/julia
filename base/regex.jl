@@ -328,26 +328,58 @@ findfirst(r::Regex, s::AbstractString) = findnext(r,s,firstindex(s))
 
 
 """
-    findall(pattern::Union{AbstractString,Regex}, string::AbstractString; overlap::Bool=false)
+    findall(
+        pattern::Union{AbstractString,Regex},
+        string::AbstractString;
+        overlap::Bool = false,
+    )
 
 Return a `Vector{UnitRange{Int}}` of all the matches for `pattern` in `string`.
 Each element of the returned vector is a range of indices where the
 matching sequence is found, like the return value of [`findnext`](@ref).
 
 If `overlap=true`, the matching sequences are allowed to overlap indices in the
-original string, otherwise they must be from distinct character ranges.
+original string, otherwise they must be from disjoint character ranges.
 """
 function findall(t::Union{AbstractString,Regex}, s::AbstractString; overlap::Bool=false)
     found = UnitRange{Int}[]
     i, e = firstindex(s), lastindex(s)
     while true
         r = findnext(t, s, i)
-        isnothing(r) && return found
+        isnothing(r) && break
         push!(found, r)
         j = overlap || isempty(r) ? first(r) : last(r)
-        j > e && return found
+        j > e && break
         @inbounds i = nextind(s, j)
     end
+    return found
+end
+
+"""
+    count(
+        pattern::Union{AbstractString,Regex},
+        string::AbstractString;
+        overlap::Bool = false,
+    )
+
+Return the number of matches for `pattern` in `string`. This is equivalent to
+calling `length(findall(pattern, string))` but more efficient.
+
+If `overlap=true`, the matching sequences are allowed to overlap indices in the
+original string, otherwise they must be from disjoint character ranges.
+"""
+function count(t::Union{AbstractString,Regex}, s::AbstractString; overlap::Bool=false)
+    n = 0
+    i, e = firstindex(s), lastindex(s)
+    while true
+        r = findnext(t, s, i)
+        isnothing(r) && break
+        n += 1
+        j = overlap || isempty(r) ? first(r) : last(r)
+        j > e && break
+        @inbounds i = nextind(s, j)
+    end
+    return n
 end
 
 """

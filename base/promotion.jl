@@ -231,10 +231,6 @@ it for new types as appropriate.
 function promote_rule end
 
 promote_rule(::Type{<:Any}, ::Type{<:Any}) = Bottom
-# To fix ambiguities
-promote_rule(::Type{Any}, ::Type{<:Any}) = Any
-promote_rule(::Type{<:Any}, ::Type{Any}) = Any
-promote_rule(::Type{Any}, ::Type{Any}) = Any
 
 promote_result(::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} = (@_inline_meta; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that

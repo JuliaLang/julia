@@ -7,6 +7,7 @@ New language features
 * Support for Unicode 12.1.0 ([#32002]).
 * Methods can now be added to an abstract type ([#31916]).
 * Added argument `keep` to `unescape_string` ([#27125]).
+* Support for unicode bold-digits and double-struck digits 0 through 9 as valid identifiers ([#32838]).
 
 Language changes
 ----------------
@@ -21,6 +22,11 @@ Multi-threading changes
   ([#32309], [#32174], [#31981], [#32421]).
 * The global random number generator (`GLOBAL_RNG`) is now thread-safe (and thread-local) ([#32407]).
 * New experimental `Threads.@spawn` macro that runs a task on any available thread ([#32600]).
+* New `Channel(f::Function)` constructor param (`spawn=true`) to schedule the created Task on
+  any available thread, matching the behavior of `Threads.@spawn` ([#32872]).
+* Simplified the `Channel` constructor, which is now easier to read and more idiomatic julia.
+  The old constructor (which used keyword arguments) is still available, but use is discouraged.
+  ([#30855], [#32818]).
 
 Build system changes
 --------------------
@@ -32,12 +38,19 @@ New library functions
 * `findfirst`, `findlast`, `findnext` and `findprev` now accept a character as first argument
   to search for that character in a string passed as the second argument ([#31664]).
 * New `findall(pattern, string)` method where `pattern` is a string or regex ([#31834]).
+* `count(pattern, string)` gives the number of things `findall` would match ([#32849]).
 * `istaskfailed` is now documented and exported, like its siblings `istaskdone` and `istaskstarted` ([#32300]).
 * `RefArray` and `RefValue` objects now accept index `CartesianIndex()` in  `getindex` and `setindex!` ([#32653])
+* Added `sincosd(x)` to simultaneously compute the sine and cosine of `x`, where `x` is in degrees ([#30134]).
+* The function `nonmissingtype`, which removes `Missing` from type unions, is now exported ([#31562]).
 
 Standard library changes
 ------------------------
 
+* When `wait` (or `@sync`, or `fetch`) is called on a failing `Task`, the exception is propagated as a
+  `TaskFailedException` wrapping the task.
+  This makes it possible to see the location of the original failure inside the task (as well as the
+  location of the `wait` call, as before) ([#32814]).
 * `Regex` can now be multiplied (`*`) and exponentiated (`^`), like strings ([#23422]).
 * `Cmd` interpolation (``` `$(x::Cmd) a b c` ``` where) now propagates `x`'s process flags
   (environment, flags, working directory, etc) if `x` is the first interpolant and errors
@@ -47,9 +60,15 @@ Standard library changes
   Previously, the functions  `+`, `-`, `*`, `/`, `conj`, `real` and `imag` returned the unwrapped element
   when operating over zero-dimensional arrays ([#32122]).
 * `IPAddr` subtypes now behave like scalars when used in broadcasting ([#32133]).
+* `Pair` is now treated as a scalar for broadcasting ([#32209]).
 * `clamp` can now handle missing values ([#31066]).
 * `empty` now accepts a `NamedTuple` ([#32534]).
 * `mod` now accepts a unit range as the second argument to easily perform offset modular arithmetic to ensure the result is inside the range ([#32628]).
+* `Sockets.recvfrom` now returns both host and port as an InetAddr ([#32729]).
+* `nothing` can now be `print`ed, and interpolated into strings etc. as the string `"nothing"`. It is still not permitted to be interpolated into Cmds (i.e. ``echo `$(nothing)` `` will still error without running anything.) ([#32148])
+* When `open` is called with a function, command, and keyword argument (e.g. ```open(`ls`, read=true) do f ...```)
+  it now correctly throws a `ProcessFailedException` like other similar calls ([#32193]).
+* `mktemp` and `mktempdir` now try, by default, to remove temporary paths they create before the process exits ([#32851]).
 
 #### Libdl
 
@@ -60,6 +79,8 @@ Standard library changes
 * The BLAS submodule no longer exports `dot`, which conflicts with that in LinearAlgebra ([#31838]).
 * `diagm` and `spdiagm` now accept optional `m,n` initial arguments to specify a size ([#31654]).
 * `Hessenberg` factorizations `H` now support efficient shifted solves `(H+µI) \ b` and determinants, and use a specialized tridiagonal factorization for Hermitian matrices. There is also a new `UpperHessenberg` matrix type ([#31853]).
+* Added keyword argument `alg` to `svd` and `svd!` that allows one to switch between different SVD algorithms ([#31057]).
+* Five-argument `mul!(C, A, B, α, β)` now implements inplace multiplication fused with addition _C = A B α + C β_ ([#23919]).
 
 #### SparseArrays
 
@@ -73,11 +94,6 @@ Standard library changes
 
 * `DateTime` and `Time` formatting/parsing now supports 12-hour clocks with AM/PM via `I` and `p` codes, similar to `strftime` ([#32308]).
 * Fixed `repr` such that it displays `Time` as it would be entered in Julia ([#32103]).
-
-#### Sockets
-
-* `getipaddrs` returns IP addresses in the order provided by libuv ([#32260]).
-* `getipaddr` prefers to return the first `IPv4` interface address provided by libuv ([#32260]).
 
 #### Statistics
 
@@ -96,6 +112,8 @@ Deprecated or removed
 ---------------------
 
 * `@spawn expr` from the `Distributed` standard library should be replaced with `@spawnat :any expr` ([#32600]).
+* `Threads.Mutex` and `Threads.RecursiveSpinLock` have been removed; use `ReentrantLock` (preferred) or
+  `Threads.SpinLock` instead ([#32875]).
 
 External dependencies
 ---------------------
@@ -126,7 +144,6 @@ Tooling Improvements
 [#32122]: https://github.com/JuliaLang/julia/issues/32122
 [#32133]: https://github.com/JuliaLang/julia/issues/32133
 [#32174]: https://github.com/JuliaLang/julia/issues/32174
-[#32260]: https://github.com/JuliaLang/julia/issues/32260
 [#32300]: https://github.com/JuliaLang/julia/issues/32300
 [#32308]: https://github.com/JuliaLang/julia/issues/32308
 [#32309]: https://github.com/JuliaLang/julia/issues/32309

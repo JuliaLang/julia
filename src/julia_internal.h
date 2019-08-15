@@ -540,7 +540,7 @@ void jl_safepoint_defer_sigint(void);
 int jl_safepoint_consume_sigint(void);
 void jl_wake_libuv(void);
 
-#if defined(JULIA_ENABLE_THREADING) && !defined(__clang_analyzer__)
+#if !defined(__clang_analyzer__)
 jl_get_ptls_states_func jl_get_ptls_states_getter(void);
 static inline void jl_set_gc_and_wait(void)
 {
@@ -853,7 +853,7 @@ extern jl_mutex_t safepoint_lock;
 
 // -- gc.c -- //
 
-#if defined(__APPLE__) && defined(JULIA_ENABLE_THREADING)
+#if defined(__APPLE__)
 void jl_mach_gc_end(void);
 #endif
 
@@ -1061,6 +1061,16 @@ extern arraylist_t partial_inst;
 #define JL_GCC_IGNORE_START(w)
 #define JL_GCC_IGNORE_STOP
 #endif // _COMPILER_GCC_
+
+#ifdef __clang_analyzer__
+  // Not a safepoint (so it dosn't free other values), but an artificial use.
+  // Usually this is unnecessary because the analyzer can see all real uses,
+  // but sometimes real uses are harder for the analyzer to see, or it may
+  // give up before it sees it, so this can be helpful to be explicit.
+  void JL_GC_ASSERT_LIVE(jl_value_t *v) JL_NOTSAFEPOINT;
+#else
+  #define JL_GC_ASSERT_LIVE(x) (void)(x)
+#endif
 
 #ifdef __cplusplus
 }

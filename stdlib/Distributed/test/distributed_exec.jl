@@ -45,6 +45,16 @@ end
 id_me = myid()
 id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 
+# Test role
+@everywhere using Distributed
+@test Distributed.myrole() === :master
+for wid = workers()
+    wrole = remotecall_fetch(wid) do
+        Distributed.myrole()
+    end
+    @test wrole === :worker
+end
+
 # Test remote()
 let
     pool = default_worker_pool()
@@ -420,11 +430,11 @@ try
 catch ex
     @test typeof(ex) == CompositeException
     @test length(ex) == 5
-    @test typeof(ex.exceptions[1]) == CapturedException
-    @test typeof(ex.exceptions[1].ex) == ErrorException
+    @test typeof(ex.exceptions[1]) == TaskFailedException
+    @test typeof(ex.exceptions[1].task.exception) == ErrorException
     # test start, next, and done
     for (i, i_ex) in enumerate(ex)
-        @test i == parse(Int, i_ex.ex.msg)
+        @test i == parse(Int, i_ex.task.exception.msg)
     end
     # test showerror
     err_str = sprint(showerror, ex)
@@ -738,7 +748,7 @@ end # full-test
 
 let t = @task 42
     schedule(t, ErrorException(""), error=true)
-    @test_throws ErrorException Base.wait(t)
+    @test_throws TaskFailedException(t) Base.wait(t)
 end
 
 # issue #8207
@@ -964,13 +974,15 @@ let (p, p2) = filter!(p -> p != myid(), procs())
             if procs isa Int
                 ex = Any[excpt]
             else
-                ex = Any[ (ex::CapturedException).ex for ex in (excpt::CompositeException).exceptions ]
+                ex = (excpt::CompositeException).exceptions
             end
             for (p, ex) in zip(procs, ex)
                 local p
                 if procs isa Int || p != myid()
                     @test (ex::RemoteException).pid == p
                     ex = ((ex::RemoteException).captured::CapturedException).ex
+                else
+                    ex = (ex::TaskFailedException).task.exception
                 end
                 @test (ex::ErrorException).msg == msg
             end
@@ -1165,7 +1177,7 @@ for (addp_testf, expected_errstr, env) in testruns
         close(stdout_in)
         @test isempty(fetch(stdout_txt))
         @test isa(ex, CompositeException)
-        @test ex.exceptions[1].ex.msg == expected_errstr
+        @test ex.exceptions[1].task.exception.msg == expected_errstr
     end
 end
 

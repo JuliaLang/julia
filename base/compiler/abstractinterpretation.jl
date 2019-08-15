@@ -1147,6 +1147,8 @@ function typeinf_local(frame::InferenceState)
                     # only propagate information we know we can store
                     # and is valid inter-procedurally
                     rt = widenconst(rt)
+                elseif isa(rt, Const) && rt.actual
+                    rt = Const(rt.val)
                 end
                 if tchanged(rt, frame.bestguess)
                     # new (wider) return type for frame

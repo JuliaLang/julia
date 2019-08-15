@@ -337,6 +337,9 @@ function datatype_alignment(dt::DataType)
     return Int(alignment & 0x1FF)
 end
 
+gc_alignment(sz::Integer) = Int(ccall(:jl_alignment, Cint, (Csize_t,), sz))
+gc_alignment(T::Type) = gc_alignment(Core.sizeof(T))
+
 """
     Base.datatype_haspadding(dt::DataType) -> Bool
 
@@ -1144,43 +1147,6 @@ function nameof(f::Function)
         return nameof(t)
     end
     return mt.name
-end
-
-functionloc(m::Core.MethodInstance) = functionloc(m.def)
-
-"""
-    functionloc(m::Method)
-
-Returns a tuple `(filename,line)` giving the location of a `Method` definition.
-"""
-function functionloc(m::Method)
-    ln = m.line
-    if ln <= 0
-        error("could not determine location of method definition")
-    end
-    return (find_source_file(string(m.file)), ln)
-end
-
-"""
-    functionloc(f::Function, types)
-
-Returns a tuple `(filename,line)` giving the location of a generic `Function` definition.
-"""
-functionloc(@nospecialize(f), @nospecialize(types)) = functionloc(which(f,types))
-
-function functionloc(@nospecialize(f))
-    mt = methods(f)
-    if isempty(mt)
-        if isa(f, Function)
-            error("function has no definitions")
-        else
-            error("object is not callable")
-        end
-    end
-    if length(mt) > 1
-        error("function has multiple methods; please specify a type signature")
-    end
-    return functionloc(first(mt))
 end
 
 """

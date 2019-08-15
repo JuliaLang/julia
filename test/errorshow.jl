@@ -562,3 +562,19 @@ let buf = IOBuffer()
     Base.show_method_candidates(buf, Base.MethodError(sin, Tuple{NoMethodsDefinedHere}))
     @test length(take!(buf)) !== 0
 end
+
+# pr #32814
+let t1 = @async(error(1)),
+    t2 = @async(wait(t1))
+    local e
+    try
+        wait(t2)
+    catch e_
+        e = e_
+    end
+    buf = IOBuffer()
+    showerror(buf, e)
+    s = String(take!(buf))
+    @test length(findall("Stacktrace:", s)) == 2
+    @test occursin("[1] error(::Int", s)
+end

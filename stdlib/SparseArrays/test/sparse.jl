@@ -103,7 +103,10 @@ do33 = fill(1.,3)
 end
 
 @testset "Issue #30006" begin
-    SparseMatrixCSC{Float64,Int32}(spzeros(3,3))[:, 1] == [1, 2, 3]
+    A = SparseMatrixCSC{Float64,Int32}(spzeros(3,3))
+    A[:, 1] = [1, 2, 3]
+    @test nnz(A) == 3
+    @test nonzeros(A) == [1, 2, 3]
 end
 
 @testset "concatenation tests" begin
@@ -371,10 +374,20 @@ end
         v = view(a, :, 1); v_d = Vector(v)
         x = sprand(m, 0.4); x_d = Vector(x)
         y = sprand(n, 0.3); y_d = Vector(y)
+        c_di = Diagonal(rand(m)); c = sparse(c_di); c_d = Array(c_di)
+        d_di = Diagonal(rand(n)); d = sparse(d_di); d_d = Array(d_di)
         # mat ⊗ mat
         @test Array(kron(a, b)) == kron(a_d, b_d)
         @test Array(kron(a_d, b)) == kron(a_d, b_d)
         @test Array(kron(a, b_d)) == kron(a_d, b_d)
+        @test issparse(kron(c, d_di))
+        @test Array(kron(c, d_di)) == kron(c_d, d_d)
+        @test issparse(kron(c_di, d))
+        @test Array(kron(c_di, d)) == kron(c_d, d_d)
+        @test issparse(kron(c_di, y))
+        @test Array(kron(c_di, y)) == kron(c_di, y_d)
+        @test issparse(kron(x, d_di))
+        @test Array(kron(x, d_di)) == kron(x_d, d_di)
         # vec ⊗ vec
         @test Vector(kron(x, y)) == kron(x_d, y_d)
         @test Vector(kron(x_d, y)) == kron(x_d, y_d)
@@ -2690,6 +2703,17 @@ end
     @test_throws ArgumentError sparse(UInt8.(1:254), fill(UInt8(1), 254), fill(1, 254), 255, 256)
     # n, m maximal
     @test sparse(UInt8.(1:254), fill(UInt8(1), 254), fill(1, 254), 255, 255) !== nothing
+end
+
+@testset "sppromote and sparse matmul" begin
+    A = SparseMatrixCSC{Float32, Int8}(2, 2, Int8[1, 2, 3], Int8[1, 2], Float32[1., 2.])
+    B = SparseMatrixCSC{ComplexF32, Int32}(2, 2, Int32[1, 2, 3], Int32[1, 2], ComplexF32[1. + im, 2. - im])
+    @test A*transpose(B)                  ≈ Array(A) * transpose(Array(B))
+    @test A*adjoint(B)                    ≈ Array(A) * adjoint(Array(B))
+    @test transpose(A)*B                  ≈ transpose(Array(A)) * Array(B)
+    @test transpose(A)*transpose(B)       ≈ transpose(Array(A)) * transpose(Array(B))
+    @test adjoint(B)*A                    ≈ adjoint(Array(B)) * Array(A)
+    @test adjoint(B)*adjoint(complex.(A)) ≈ adjoint(Array(B)) * adjoint(Array(complex.(A)))
 end
 
 end # module

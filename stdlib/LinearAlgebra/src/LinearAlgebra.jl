@@ -17,7 +17,7 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
 using Base: hvcat_fill, IndexLinear, promote_op, promote_typeof,
     @propagate_inbounds, @pure, reduce, typed_vcat, require_one_based_indexing
-using Base.Broadcast: Broadcasted
+using Base.Broadcast: Broadcasted, broadcasted
 
 export
 # Modules
@@ -155,6 +155,12 @@ if USE_BLAS64
 else
     const BlasInt = Int32
 end
+
+
+abstract type Algorithm end
+struct DivideAndConquer <: Algorithm end
+struct QRIteration <: Algorithm end
+
 
 # Check that stride of matrix/vector is 1
 # Writing like this to avoid splatting penalty when called with multiple arguments,
