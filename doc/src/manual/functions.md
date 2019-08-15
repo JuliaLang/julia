@@ -236,7 +236,7 @@ A zero-argument anonymous function is written as `()->3`. The idea of a function
 may seem strange, but is useful for "delaying" a computation. In this usage, a block of code is
 wrapped in a zero-argument function, which is later invoked by calling it as `f`.
 
-A use case example is [`get`](@ref). 
+As an example, consider this call to [`get`](@ref):
 
 ```julia
 get(dict, key) do
