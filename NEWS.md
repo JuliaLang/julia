@@ -20,10 +20,11 @@ Multi-threading changes
   ([#32309], [#32174], [#31981], [#32421]).
 * The global random number generator (`GLOBAL_RNG`) is now thread-safe (and thread-local) ([#32407]).
 * New experimental `Threads.@spawn` macro that runs a task on any available thread ([#32600]).
-* New `Channel(f::Function)` constructor param (`spawn=true`) to schedule created Task on
-  any available thread ([#32872]). Also simplified the `Channel` constructor, which is now
-  easier to read and more idiomatic julia. The old constructor (which used kwargs) is still
-  available, but use is discouraged ([#30855], [#32818]).
+* New `Channel(f::Function)` constructor param (`spawn=true`) to schedule the created Task on
+  any available thread, matching the behavior of `Threads.@spawn` ([#32872]).
+* Simplified the `Channel` constructor, which is now easier to read and more idiomatic julia.
+  The old constructor (which used keyword arguments) is still available, but use is discouraged.
+  ([#30855], [#32818]).
 
 Build system changes
 --------------------
