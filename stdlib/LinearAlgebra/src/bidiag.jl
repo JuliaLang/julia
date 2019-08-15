@@ -447,8 +447,8 @@ function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::Diagonal,
                      _add::MulAddMul = MulAddMul())
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
-    n <= 3 && return mul!(C, Array(A), Array(B))
-    fill!(C, zero(eltype(C)))
+    n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
+    _rmul_or_fill!(C, _add.beta)  # see the same use above
     Al = _diag(A, -1)
     Ad = _diag(A, 0)
     Au = _diag(A, 1)
@@ -542,8 +542,8 @@ end
 function A_mul_B_td!(C::AbstractMatrix, A::Diagonal, B::BiTriSym)
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
-    n <= 3 && return mul!(C, Array(A), Array(B))
-    fill!(C, zero(eltype(C)))
+    n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
+    _rmul_or_fill!(C, _add.beta)  # see the same use above
     Ad = A.diag
     Bl = _diag(B, -1)
     Bd = _diag(B, 0)
