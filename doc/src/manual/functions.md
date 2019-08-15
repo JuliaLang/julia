@@ -210,7 +210,7 @@ The primary use for anonymous functions is passing them to functions which take 
 as arguments. A classic example is [`map`](@ref), which applies a function to each value of
 an array and returns a new array containing the resulting values:
 
-```jldoctest
+```jldoctes
 julia> map(round, [1.2,3.5,1.7])
 3-element Array{Float64,1}:
  1.0
@@ -235,6 +235,25 @@ An anonymous function accepting multiple arguments can be written using the synt
 A zero-argument anonymous function is written as `()->3`. The idea of a function with no arguments
 may seem strange, but is useful for "delaying" a computation. In this usage, a block of code is
 wrapped in a zero-argument function, which is later invoked by calling it as `f`.
+
+A use case example is [`get`](@ref). 
+
+```julia
+get(dict, key) do
+    # default value calculated here
+    time()
+end
+```
+
+The code above is equivalent to calling get with an anonymous function containing the code
+inclosed between do and end, like so:
+
+```julia
+get( () -> time(), dict, key)
+```
+
+The call to [`time`](@ref) is delayed by wrapping it in an argumentless anonymous function
+that is called only when the requested key is absent from dict. 
 
 ## Tuples
 
