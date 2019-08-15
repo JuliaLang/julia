@@ -395,6 +395,7 @@ function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym,
     # `_modify!` in the following loop will not update the
     # off-diagonal elements for non-zero beta.
     _rmul_or_fill!(C, _add.beta)
+    iszero(_add.alpha) && return C
     Al = _diag(A, -1)
     Ad = _diag(A, 0)
     Au = _diag(A, 1)
@@ -449,6 +450,7 @@ function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::Diagonal,
     n = size(A,1)
     n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
     _rmul_or_fill!(C, _add.beta)  # see the same use above
+    iszero(_add.alpha) && return C
     Al = _diag(A, -1)
     Ad = _diag(A, 0)
     Au = _diag(A, 1)
@@ -489,6 +491,7 @@ function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat,
     if size(C,2) != nB
         throw(DimensionMismatch("A has second dimension $nA, B has $(size(B,2)), C has $(size(C,2)) but all must match"))
     end
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     nA <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
     l = _diag(A, -1)
     d = _diag(A, 0)
@@ -510,6 +513,7 @@ end
 function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym,
                      _add::MulAddMul = MulAddMul())
     check_A_mul_B!_sizes(C, A, B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     n = size(A,1)
     n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
     m = size(B,2)
@@ -545,6 +549,7 @@ function A_mul_B_td!(C::AbstractMatrix, A::Diagonal, B::BiTriSym,
     n = size(A,1)
     n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
     _rmul_or_fill!(C, _add.beta)  # see the same use above
+    iszero(_add.alpha) && return C
     Ad = A.diag
     Bl = _diag(B, -1)
     Bd = _diag(B, 0)

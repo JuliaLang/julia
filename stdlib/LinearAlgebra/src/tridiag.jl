@@ -178,6 +178,8 @@ end
 
     if m == 0
         return C
+    elseif iszero(_add.alpha)
+        return _rmul_or_fill!(C, _add.beta)
     end
 
     α = S.dv
