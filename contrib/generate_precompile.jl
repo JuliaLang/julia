@@ -137,11 +137,8 @@ function generate_precompile_statements()
         # Extract the precompile statements from stderr
         statements = Set{String}()
         for statement in eachline(precompile_file_h)
+            # Main should be completely clean
             occursin("Main.", statement) && continue
-            # check for `#x##s66` style variable names not in quotes
-            occursin(r"#\w", statement) &&
-                count(r"(?:#+\w+)+", statement) !=
-                count(r"\"(?:#+\w+)+\"", statement) && continue
             push!(statements, statement)
         end
 
@@ -162,9 +159,13 @@ function generate_precompile_statements()
         # Execute the collected precompile statements
         include_time = @elapsed for statement in sort(collect(statements))
             # println(statement)
-            # Work around #28808
+            # Workarounds for #28808
             occursin("\"YYYY-mm-dd\\THH:MM:SS\"", statement) && continue
             statement == "precompile(Tuple{typeof(Base.show), Base.IOContext{Base.TTY}, Type{Vararg{Any, N} where N}})" && continue
+            # check for `#x##s66` style variable names not in quotes
+            occursin(r"#\w", statement) &&
+                count(r"(?:#+\w+)+", statement) !=
+                count(r"\"(?:#+\w+)+\"", statement) && continue
             try
                 Base.include_string(PrecompileStagingArea, statement)
             catch
