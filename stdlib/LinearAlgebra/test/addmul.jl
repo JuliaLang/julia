@@ -155,41 +155,19 @@ end
                    rtoldefault.(real.(typeof.((α, β))))...)
 
         Cc = copy(C)
+        Ac = Matrix(A)
+        Bc = Matrix(B)
         returned_mat = mul!(C, A, B, α, β)
         @test returned_mat === C
-        if (A isa Bidiagonal && B isa AbstractTriangular) ||
-                (A isa Diagonal && (eltype(A) <: AbstractFloat || !isinteger(α)) &&
-                 B isa AbstractTriangular && eltype(B) <: Integer) ||
-                (A isa Diagonal && (eltype(A) <: Complex || !isreal(α)) &&
-                 B isa AbstractTriangular && eltype(B) <: Real)
-            # see https://github.com/JuliaLang/julia/issues/30094
-
-            # If `B` is an `AbstractTriangular{<:Integer}` and
-            # elements are all zero (which can happen with non-zero
-            # probability), this test can pass.  But let's keep this
-            # code here since it'd be useful for checking if the bugs
-            # are fixed.
-            # @test_broken returned_mat ≈ α * A * B + β * Cc  rtol=rtol
-
-            Ac = Matrix(A)
-            Bc = Matrix(B)
-            @test collect(returned_mat) ≈ collect(α * Ac * Bc + β * Cc)  rtol=rtol
-        else
-            @test collect(returned_mat) ≈ collect(α * A * B + β * Cc)  rtol=rtol
-        end
+        @test collect(returned_mat) ≈ α * Ac * Bc + β * Cc  rtol=rtol
 
         y = C[:, 1]
         x = B[:, 1]
-        y0 = copy(y)
+        yc = Vector(y)
+        xc = Vector(x)
         returned_vec = mul!(y, A, x, α, β)
         @test returned_vec === y
-        if A isa AbstractTriangular && x isa SparseVector
-            @test_broken returned_vec ≈ α * A * x + β * y0  rtol=rtol
-            xc = Vector(x)
-            @test collect(returned_vec) ≈ collect(α * A * xc + β * y0)  rtol=rtol
-        else
-            @test collect(returned_vec) ≈ collect(α * A * x + β * y0)  rtol=rtol
-        end
+        @test collect(returned_vec) ≈ α * Ac * xc + β * yc  rtol=rtol
     end
 end
 
