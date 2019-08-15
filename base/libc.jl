@@ -337,8 +337,8 @@ end
 """
     free(addr::Ptr)
 
-Call `free` from the C standard library. Only use this on memory obtained from `malloc`, not
-on pointers retrieved from other C libraries. `Ptr` objects obtained from C libraries should
+Call `free` from the C standard library. Only use this on memory obtained from [`malloc`](@ref), not
+on pointers retrieved from other C libraries. [`Ptr`](@ref) objects obtained from C libraries should
 be freed by the free functions defined in that library, to avoid assertion failures if
 multiple `libc` libraries exist on the system.
 """
@@ -356,8 +356,8 @@ malloc(size::Integer) = ccall(:malloc, Ptr{Cvoid}, (Csize_t,), size)
 
 Call `realloc` from the C standard library.
 
-See warning in the documentation for `free` regarding only using this on memory originally
-obtained from `malloc`.
+See warning in the documentation for [`free`](@ref) regarding only using this on memory originally
+obtained from [`malloc`](@ref).
 """
 realloc(p::Ptr, size::Integer) = ccall(:realloc, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t), p, size)
 
