@@ -539,7 +539,8 @@ function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym,
     C
 end
 
-function A_mul_B_td!(C::AbstractMatrix, A::Diagonal, B::BiTriSym)
+function A_mul_B_td!(C::AbstractMatrix, A::Diagonal, B::BiTriSym,
+                     _add::MulAddMul = MulAddMul())
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
     n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
