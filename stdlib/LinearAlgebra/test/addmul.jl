@@ -73,6 +73,10 @@ mattypes = [
     UpperTriangular,
 ]
 
+isnanfillable(::AbstractArray) = false
+isnanfillable(::Array{<:AbstractFloat}) = true
+isnanfillable(A::AbstractArray{<:AbstractFloat}) = parent(A) isa Array
+
 """
 Sample `n` elements from `S` on average but make sure at least one
 element is sampled.
@@ -189,7 +193,7 @@ end
             end
         end
 
-        if eltype(C) <: AbstractFloat
+        if isnanfillable(C)
             @testset "β = 0 ignores C .= NaN" begin
                 parent(C) .= NaN
                 Ac = Matrix(A)
@@ -200,7 +204,7 @@ end
             end
         end
 
-        if eltype(A) <: AbstractFloat
+        if isnanfillable(A)
             @testset "α = 0 ignores A .= NaN" begin
                 parent(A) .= NaN
                 Cc = copy(C)
