@@ -457,24 +457,24 @@ function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::Diagonal,
     Bd = B.diag
     @inbounds begin
         # first row of C
-        _modify!(_add, A[1,1]*B[1,1], C, (1,1))
-        _modify!(_add, A[1,2]*B[2,2], C, (1,2))
+        C[1,1] += _add(A[1,1]*B[1,1])
+        C[1,2] += _add(A[1,2]*B[2,2])
         # second row of C
-        _modify!(_add, A[2,1]*B[1,1], C, (2,1))
-        _modify!(_add, A[2,2]*B[2,2], C, (2,2))
-        _modify!(_add, A[2,3]*B[3,3], C, (2,3))
+        C[2,1] += _add(A[2,1]*B[1,1])
+        C[2,2] += _add(A[2,2]*B[2,2])
+        C[2,3] += _add(A[2,3]*B[3,3])
         for j in 3:n-2
-            _modify!(_add, Al[j-1]*Bd[j-1], C, (j, j-1))
-            _modify!(_add, Ad[j  ]*Bd[j  ], C, (j, j  ))
-            _modify!(_add, Au[j  ]*Bd[j+1], C, (j, j+1))
+            C[j, j-1] += _add(Al[j-1]*Bd[j-1])
+            C[j, j  ] += _add(Ad[j  ]*Bd[j  ])
+            C[j, j+1] += _add(Au[j  ]*Bd[j+1])
         end
         # row before last of C
-        _modify!(_add, A[n-1,n-2]*B[n-2,n-2], C, (n-1,n-2))
-        _modify!(_add, A[n-1,n-1]*B[n-1,n-1], C, (n-1,n-1))
-        _modify!(_add, A[n-1,  n]*B[n  ,n  ], C, (n-1,n  ))
+        C[n-1,n-2] += _add(A[n-1,n-2]*B[n-2,n-2])
+        C[n-1,n-1] += _add(A[n-1,n-1]*B[n-1,n-1])
+        C[n-1,n  ] += _add(A[n-1,  n]*B[n  ,n  ])
         # last row of C
-        _modify!(_add, A[n,n-1]*B[n-1,n-1], C, (n,n-1))
-        _modify!(_add, A[n,n  ]*B[n,  n  ], C, (n,n  ))
+        C[n,n-1] += _add(A[n,n-1]*B[n-1,n-1])
+        C[n,n  ] += _add(A[n,n  ]*B[n,  n  ])
     end # inbounds
     C
 end
