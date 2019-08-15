@@ -538,7 +538,7 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar
         throw(ArgumentError("output matrix must not be aliased with input matrix"))
     end
 
-    if mA == 0 || nA == 0 || nB == 0
+    if mA == 0 || nA == 0 || nB == 0 || iszero(_add.alpha)
         if size(C) != (mA, nB)
             throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
         end
