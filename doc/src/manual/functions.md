@@ -210,7 +210,7 @@ The primary use for anonymous functions is passing them to functions which take 
 as arguments. A classic example is [`map`](@ref), which applies a function to each value of
 an array and returns a new array containing the resulting values:
 
-```jldoctes
+```jldoctest
 julia> map(round, [1.2,3.5,1.7])
 3-element Array{Float64,1}:
  1.0
