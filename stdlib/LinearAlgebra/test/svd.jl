@@ -143,4 +143,28 @@ aimg  = randn(n,n)/2
     end
 end
 
+
+
+@testset "SVD Algorithms" begin
+    ≊(x,y) = isapprox(x,y,rtol=1e-15)
+
+    x = [0.1 0.2; 0.3 0.4]
+
+    for alg in [LinearAlgebra.QRIteration(), LinearAlgebra.DivideAndConquer()]
+        sx1 = svd(x, alg = alg)
+        @test sx1.U * Diagonal(sx1.S) * sx1.Vt ≊ x
+        @test sx1.V * sx1.Vt ≊ I
+        @test sx1.U * sx1.U' ≊ I
+        @test all(sx1.S .≥ 0)
+
+        sx2 = svd!(copy(x), alg = alg)
+        @test sx2.U * Diagonal(sx2.S) * sx2.Vt ≊ x
+        @test sx2.V * sx2.Vt ≊ I
+        @test sx2.U * sx2.U' ≊ I
+        @test all(sx2.S .≥ 0)
+    end
+end
+
+
+
 end # module TestSVD
