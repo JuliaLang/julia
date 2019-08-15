@@ -245,7 +245,7 @@ get(dict, key) do
 end
 ```
 
-The code above is equivalent to calling get with an anonymous function containing the code
+The code above is equivalent to calling `get` with an anonymous function containing the code
 inclosed between do and end, like so:
 
 ```julia
