@@ -249,7 +249,7 @@ The code above is equivalent to calling `get` with an anonymous function contain
 enclosed between `do` and `end`, like so:
 
 ```julia
-get( () -> time(), dict, key)
+get(()->time(), dict, key)
 ```
 
 The call to [`time`](@ref) is delayed by wrapping it in an argumentless anonymous function
