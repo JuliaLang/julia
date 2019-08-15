@@ -515,8 +515,10 @@ function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym,
     check_A_mul_B!_sizes(C, A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     n = size(A,1)
-    n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
     m = size(B,2)
+    if n <= 3 || m <= 1
+        return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
+    end
     Bl = _diag(B, -1)
     Bd = _diag(B, 0)
     Bu = _diag(B, 1)
