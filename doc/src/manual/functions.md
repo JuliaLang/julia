@@ -253,7 +253,7 @@ get(()->time(), dict, key)
 ```
 
 The call to [`time`](@ref) is delayed by wrapping it in a 0-argument anonymous function
-that is called only when the requested key is absent from dict. 
+that is called only when the requested key is absent from `dict`.
 
 ## Tuples
 
