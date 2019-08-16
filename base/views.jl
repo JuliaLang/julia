@@ -186,7 +186,7 @@ end
 Convert every array-slicing operation in the given expression
 (which may be a `begin`/`end` block, loop, function, etc.)
 to return a view. Scalar indices, non-array types, and
-explicit `getindex` calls (as opposed to `array[...]`) are
+explicit [`getindex`](@ref) calls (as opposed to `array[...]`) are
 unaffected.
 
 !!! note
