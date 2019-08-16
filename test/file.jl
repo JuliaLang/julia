@@ -310,7 +310,6 @@ else
     end
 end
 
-
 function test_stat_error(stat::Function, pth)
     if stat === lstat && !(pth isa AbstractString)
         return # no lstat for fd handles
@@ -355,7 +354,6 @@ end
         end
     end
 end
-
 
 # On windows the filesize of a folder is the accumulation of all the contained
 # files and is thus zero in this case.
