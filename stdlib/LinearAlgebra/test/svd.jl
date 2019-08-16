@@ -165,6 +165,14 @@ end
     end
 end
 
+@testset "REPL printing of SVD" begin
+    svdd = svd(randn(3, 3))
+    svdstring = sprint((t, s) -> show(t, "text/plain", s), svdd)
+    ustring = sprint((t, s) -> show(t, "text/plain", s), svdd.U)
+    sstring = sprint((t, s) -> show(t, "text/plain", s), svdd.S)
+    vtstring = sprint((t, s) -> show(t, "text/plain", s), svdd.Vt)
+    @test svdstring == "$(summary(svdd))\nU factor:\n$ustring\nsingular values:\n$sstring\nVt factor:\n$vtstring"
+end
 
 
 end # module TestSVD

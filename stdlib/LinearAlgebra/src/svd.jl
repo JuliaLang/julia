@@ -22,8 +22,26 @@ julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
  0.0  0.0  0.0  0.0  0.0
  0.0  2.0  0.0  0.0  0.0
 
-julia> F = svd(A)
-SVD{Float64,Float64,Array{Float64,2}}([0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0], [3.0, 2.23606797749979, 2.0, 0.0], [-0.0 0.0 … -0.0 0.0; 0.44721359549995787 0.0 … 0.0 0.8944271909999157; -0.0 1.0 … -0.0 0.0; 0.0 0.0 … 1.0 0.0])
+ julia> F = svd(A)
+ SVD{Float64,Float64,Array{Float64,2}}
+ U factor:
+ 4×4 Array{Float64,2}:
+  0.0  1.0  0.0   0.0
+  1.0  0.0  0.0   0.0
+  0.0  0.0  0.0  -1.0
+  0.0  0.0  1.0   0.0
+ singular values:
+ 4-element Array{Float64,1}:
+  3.0             
+  2.23606797749979
+  2.0             
+  0.0             
+ Vt factor:
+ 4×5 Array{Float64,2}:
+  -0.0       0.0  1.0  -0.0  0.0     
+   0.447214  0.0  0.0   0.0  0.894427
+  -0.0       1.0  0.0  -0.0  0.0     
+   0.0       0.0  0.0   1.0  0.0
 
 julia> F.U * Diagonal(F.S) * F.Vt
 4×5 Array{Float64,2}:
@@ -269,6 +287,16 @@ end
 
 size(A::SVD, dim::Integer) = dim == 1 ? size(A.U, dim) : size(A.Vt, dim)
 size(A::SVD) = (size(A, 1), size(A, 2))
+
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::SVD{<:Any,<:Any,<:AbstractArray})
+    summary(io, F); println(io)
+    println(io, "U factor:")
+    show(io, mime, F.U)
+    println(io, "\nsingular values:")
+    show(io, mime, F.S)
+    println(io, "\nVt factor:")
+    show(io, mime, F.Vt)
+end
 
 # Generalized svd
 """
