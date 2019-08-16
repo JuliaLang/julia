@@ -6,6 +6,7 @@ New language features
 
 * Support for Unicode 12.1.0 ([#32002]).
 * Methods can now be added to an abstract type ([#31916]).
+* Added argument `keep` to `unescape_string` ([#27125]).
 * Support for unicode bold-digits and double-struck digits 0 through 9 as valid identifiers ([#32838]).
 
 Language changes

@@ -457,12 +457,15 @@ function _write_capture(io, re::RegexAndMatchData, group)
     io.size = max(io.size, io.ptr - 1)
 end
 
+
+const SUB_CHAR = '\\'
+const GROUP_CHAR = 'g'
+const KEEP_ESC = [SUB_CHAR, GROUP_CHAR, '0':'9'...]
+
 function _replace(io, repl_s::SubstitutionString, str, r, re::RegexAndMatchData)
-    SUB_CHAR = '\\'
-    GROUP_CHAR = 'g'
     LBRACKET = '<'
     RBRACKET = '>'
-    repl = repl_s.string
+    repl = unescape_string(repl_s.string, KEEP_ESC)
     i = firstindex(repl)
     e = lastindex(repl)
     while i <= e
