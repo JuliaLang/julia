@@ -496,12 +496,12 @@ function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat,
     @inbounds begin
         for j = 1:nB
             b₀, b₊ = B[1, j], B[2, j]
-            _modify!(_add, d[1]*b₀ + u[1]*b₊, C, (1, j))
+            @sc _add C[1, j] += d[1]*b₀ + u[1]*b₊
             for i = 2:nA - 1
                 b₋, b₀, b₊ = b₀, b₊, B[i + 1, j]
-                _modify!(_add, l[i - 1]*b₋ + d[i]*b₀ + u[i]*b₊, C, (i, j))
+                @sc _add C[i, j] += l[i - 1]*b₋ + d[i]*b₀ + u[i]*b₊
             end
-            _modify!(_add, l[nA - 1]*b₀ + d[nA]*b₊, C, (nA, j))
+            @sc _add C[nA, j] += l[nA - 1]*b₀ + d[nA]*b₊
         end
     end
     C
@@ -523,8 +523,8 @@ function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym,
         Bmm = Bd[m]
         Bm₋1m = Bu[m-1]
         for i in 1:n
-            _modify!(_add, A[i,1] * B11 + A[i, 2] * B21, C, (i, 1))
-            _modify!(_add, A[i, m-1] * Bm₋1m + A[i, m] * Bmm, C, (i, m))
+            @sc _add C[i, 1] += A[i,1] * B11 + A[i, 2] * B21
+            @sc _add C[i, m] += A[i, m-1] * Bm₋1m + A[i, m] * Bmm
         end
         # middle columns of C
         for j = 2:m-1
@@ -532,7 +532,7 @@ function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym,
             Bjj = Bd[j]
             Bj₊1j = Bl[j]
             for i = 1:n
-                _modify!(_add, A[i, j-1] * Bj₋1j + A[i, j]*Bjj + A[i, j+1] * Bj₊1j, C, (i, j))
+                @sc _add C[i, j] += A[i, j-1] * Bj₋1j + A[i, j]*Bjj + A[i, j+1] * Bj₊1j
             end
         end
     end # inbounds

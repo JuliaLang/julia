@@ -618,7 +618,7 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
             for i = 1:nA
                 s += transpose(A[aoffs+i]) * B[i]
             end
-            _modify!(_add, s, C, k)
+            @sc _add C[k] += s
         end
     elseif tA == 'C'
         for k = 1:mA
@@ -631,7 +631,7 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
             for i = 1:nA
                 s += A[aoffs + i]'B[i]
             end
-            _modify!(_add, s, C, k)
+            @sc _add C[k] += s
         end
     else # tA == 'N'
         for i = 1:mA
@@ -726,7 +726,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         s += Atile[aoff+k] * Btile[boff+k]
                     end
-                    _modify!(_add, s, C, (i,j))
+                    @sc _add C[i,j] += s
                 end
             end
         else
@@ -774,7 +774,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += A[i, k]*B[k, j]
                     end
-                    _modify!(_add, Ctmp, C, (i,j))
+                    @sc _add C[i,j] += Ctmp
                 end
             elseif tB == 'T'
                 for i = 1:mA, j = 1:nB
@@ -783,7 +783,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += A[i, k] * transpose(B[j, k])
                     end
-                    _modify!(_add, Ctmp, C, (i,j))
+                    @sc _add C[i,j] += Ctmp
                 end
             else
                 for i = 1:mA, j = 1:nB
@@ -792,7 +792,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += A[i, k]*B[j, k]'
                     end
-                    _modify!(_add, Ctmp, C, (i,j))
+                    @sc _add C[i,j] += Ctmp
                 end
             end
         elseif tA == 'T'
@@ -803,7 +803,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += transpose(A[k, i]) * B[k, j]
                     end
-                    _modify!(_add, Ctmp, C, (i,j))
+                    @sc _add C[i,j] += Ctmp
                 end
             elseif tB == 'T'
                 for i = 1:mA, j = 1:nB
@@ -812,7 +812,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += transpose(A[k, i]) * transpose(B[j, k])
                     end
-                    _modify!(_add, Ctmp, C, (i,j))
+                    @sc _add C[i,j] += Ctmp
                 end
             else
                 for i = 1:mA, j = 1:nB
@@ -821,7 +821,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += transpose(A[k, i]) * adjoint(B[j, k])
                     end
-                    _modify!(_add, Ctmp, C, (i,j))
+                    @sc _add C[i,j] += Ctmp
                 end
             end
         else
@@ -832,7 +832,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += A[k, i]'B[k, j]
                     end
-                    _modify!(_add, Ctmp, C, (i,j))
+                    @sc _add C[i,j] += Ctmp
                 end
             elseif tB == 'T'
                 for i = 1:mA, j = 1:nB
@@ -841,7 +841,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += adjoint(A[k, i]) * transpose(B[j, k])
                     end
-                    _modify!(_add, Ctmp, C, (i,j))
+                    @sc _add C[i,j] += Ctmp
                 end
             else
                 for i = 1:mA, j = 1:nB
@@ -850,7 +850,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += A[k, i]'B[j, k]'
                     end
-                    _modify!(_add, Ctmp, C, (i,j))
+                    @sc _add C[i,j] += Ctmp
                 end
             end
         end
@@ -895,10 +895,10 @@ function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
         B11 = B[1,1]; B12 = B[1,2];
         B21 = B[2,1]; B22 = B[2,2]
     end
-    _modify!(_add, A11*B11 + A12*B21, C, (1,1))
-    _modify!(_add, A11*B12 + A12*B22, C, (1,2))
-    _modify!(_add, A21*B11 + A22*B21, C, (2,1))
-    _modify!(_add, A21*B12 + A22*B22, C, (2,2))
+    @sc _add C[1,1] += A11*B11 + A12*B21
+    @sc _add C[1,2] += A11*B12 + A12*B22
+    @sc _add C[2,1] += A21*B11 + A22*B21
+    @sc _add C[2,2] += A21*B12 + A22*B22
     end # inbounds
     C
 end
@@ -947,17 +947,17 @@ function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
         B31 = B[3,1]; B32 = B[3,2]; B33 = B[3,3]
     end
 
-    _modify!(_add, A11*B11 + A12*B21 + A13*B31, C, (1,1))
-    _modify!(_add, A11*B12 + A12*B22 + A13*B32, C, (1,2))
-    _modify!(_add, A11*B13 + A12*B23 + A13*B33, C, (1,3))
+    @sc _add C[1,1] += A11*B11 + A12*B21 + A13*B31
+    @sc _add C[1,2] += A11*B12 + A12*B22 + A13*B32
+    @sc _add C[1,3] += A11*B13 + A12*B23 + A13*B33
 
-    _modify!(_add, A21*B11 + A22*B21 + A23*B31, C, (2,1))
-    _modify!(_add, A21*B12 + A22*B22 + A23*B32, C, (2,2))
-    _modify!(_add, A21*B13 + A22*B23 + A23*B33, C, (2,3))
+    @sc _add C[2,1] += A21*B11 + A22*B21 + A23*B31
+    @sc _add C[2,2] += A21*B12 + A22*B22 + A23*B32
+    @sc _add C[2,3] += A21*B13 + A22*B23 + A23*B33
 
-    _modify!(_add, A31*B11 + A32*B21 + A33*B31, C, (3,1))
-    _modify!(_add, A31*B12 + A32*B22 + A33*B32, C, (3,2))
-    _modify!(_add, A31*B13 + A32*B23 + A33*B33, C, (3,3))
+    @sc _add C[3,1] += A31*B11 + A32*B21 + A33*B31
+    @sc _add C[3,2] += A31*B12 + A32*B22 + A33*B32
+    @sc _add C[3,3] += A31*B13 + A32*B23 + A33*B33
     end # inbounds
     C
 end

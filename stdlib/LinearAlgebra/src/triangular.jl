@@ -461,7 +461,7 @@ end
     n = checksquare(B)
     for j = 1:n
         for i = 1:j
-            @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
+            @inbounds @sc _add A[i,j] += B[i,j] * c
         end
     end
     return A
@@ -470,7 +470,7 @@ end
     n = checksquare(B)
     for j = 1:n
         for i = 1:j
-            @inbounds _modify!(_add, c * B[i,j], A, (i,j))
+            @inbounds @sc _add A[i,j] += c * B[i,j]
         end
     end
     return A
@@ -478,9 +478,9 @@ end
 @inline function _mul!(A::UpperTriangular, B::UnitUpperTriangular, c::Number, _add::MulAddMul)
     n = checksquare(B)
     for j = 1:n
-        @inbounds _modify!(_add, c, A, (j,j))
+        @inbounds @sc _add A[j,j] += c
         for i = 1:(j - 1)
-            @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
+            @inbounds @sc _add A[i,j] += B[i,j] * c
         end
     end
     return A
@@ -488,9 +488,9 @@ end
 @inline function _mul!(A::UpperTriangular, c::Number, B::UnitUpperTriangular, _add::MulAddMul)
     n = checksquare(B)
     for j = 1:n
-        @inbounds _modify!(_add, c, A, (j,j))
+        @inbounds @sc _add A[j,j] += c
         for i = 1:(j - 1)
-            @inbounds _modify!(_add, c * B[i,j], A, (i,j))
+            @inbounds @sc _add A[i,j] += c * B[i,j]
         end
     end
     return A
@@ -499,7 +499,7 @@ end
     n = checksquare(B)
     for j = 1:n
         for i = j:n
-            @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
+            @inbounds @sc _add A[i,j] += B[i,j] * c
         end
     end
     return A
@@ -508,7 +508,7 @@ end
     n = checksquare(B)
     for j = 1:n
         for i = j:n
-            @inbounds _modify!(_add, c * B[i,j], A, (i,j))
+            @inbounds @sc _add A[i,j] += c * B[i,j]
         end
     end
     return A
@@ -516,9 +516,9 @@ end
 @inline function _mul!(A::LowerTriangular, B::UnitLowerTriangular, c::Number, _add::MulAddMul)
     n = checksquare(B)
     for j = 1:n
-        @inbounds _modify!(_add, c, A, (j,j))
+        @inbounds @sc _add A[j,j] += c
         for i = (j + 1):n
-            @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
+            @inbounds @sc _add A[i,j] += B[i,j] * c
         end
     end
     return A
@@ -526,9 +526,9 @@ end
 @inline function _mul!(A::LowerTriangular, c::Number, B::UnitLowerTriangular, _add::MulAddMul)
     n = checksquare(B)
     for j = 1:n
-        @inbounds _modify!(_add, c, A, (j,j))
+        @inbounds @sc _add A[j,j] += c
         for i = (j + 1):n
-            @inbounds _modify!(_add, c * B[i,j], A, (i,j))
+            @inbounds @sc _add A[i,j] += c * B[i,j]
         end
     end
     return A

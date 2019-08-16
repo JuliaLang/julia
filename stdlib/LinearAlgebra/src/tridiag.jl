@@ -191,9 +191,9 @@ end
             for i = 1:m - 1
                 x₋, x₀, x₊ = x₀, x₊, B[i + 1, j]
                 β₋, β₀ = β₀, β[i]
-                _modify!(_add, β₋*x₋ + α[i]*x₀ + β₀*x₊, C, (i, j))
+                @sc _add C[i, j] += β₋*x₋ + α[i]*x₀ + β₀*x₊
             end
-            _modify!(_add, β₀*x₀ + α[m]*x₊, C, (m, j))
+            @sc _add C[m, j] += β₀*x₀ + α[m]*x₊
         end
     end
 

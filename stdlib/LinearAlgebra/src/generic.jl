@@ -69,6 +69,38 @@ julia> C
     return
 end
 
+"""
+    @sc _add C[idx] += rhs
+
+Short-Circuiting update for implementing `mul!`; i.e., it is roughly
+equivalent to
+
+```
+C[idx] = α * rhs + β * C[idx]
+```
+
+where `α = _add.alpha` and `β = _add.beta`.
+
+This macro expands to `_modify!(_add, rhs, C, idx)`.
+"""
+macro sc(_add, update)
+    if !(Meta.isexpr(update, :(+=)) && Meta.isexpr(update.args[1], :ref))
+        error("Only accept input of the form `@sc _add C[idx] += rhs`. Got:\n",
+              "@sc ", _add, " ", update)
+    end
+    _, rhs = esc.(update.args)
+    C = esc.(update.args[1].args[1])
+    idx_exprs = esc.(update.args[1].args[2:end])
+    if length(idx_exprs) > 1
+        idx = :(($(idx_exprs...),))
+    else
+        idx, = idx_exprs
+    end
+    quote
+        _modify!($(esc(_add)), $rhs, $C, $idx)
+    end
+end
+
 @inline function _rmul_or_fill!(C::AbstractArray, beta::Number)
     if iszero(beta)
         fill!(C, zero(eltype(C)))
@@ -84,7 +116,7 @@ function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number, _add::MulAd
         throw(DimensionMismatch("first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
     end
     for (IC, IX) in zip(eachindex(C), eachindex(X))
-        @inbounds _modify!(_add, X[IX] * s, C, IC)
+        @inbounds @sc _add C[IC] += X[IX] * s
     end
     C
 end
@@ -95,7 +127,7 @@ function generic_mul!(C::AbstractArray, s::Number, X::AbstractArray, _add::MulAd
 match the length of the second, $(length(X))."))
     end
     for (IC, IX) in zip(eachindex(C), eachindex(X))
-        @inbounds _modify!(_add, s * X[IX], C, IC)
+        @inbounds @sc _add C[IC] += s * X[IX]
     end
     C
 end
