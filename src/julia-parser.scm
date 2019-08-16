@@ -1068,10 +1068,11 @@
 ;; -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
 ;; and parse-unary from then on (to handle 2^-3)
 (define (parse-factor s)
-  (parse-factor-with-initial-ex s (parse-unary-prefix s)))
+  (let ((nxt (peek-token s)))
+    (parse-factor-with-initial-ex s (parse-unary-prefix s) nxt)))
 
-(define (parse-factor-with-initial-ex s ex0)
-  (let* ((ex (parse-decl-with-initial-ex s (parse-call-with-initial-ex s ex0)))
+(define (parse-factor-with-initial-ex s ex0 (tok #f))
+  (let* ((ex (parse-decl-with-initial-ex s (parse-call-with-initial-ex s ex0 tok)))
          (t  (peek-token s)))
     (if (is-prec-power? t)
         (begin (take-token s)
@@ -1100,10 +1101,11 @@
 ;; parse function call, indexing, dot, and transpose expressions
 ;; also handles looking for syntactic reserved words
 (define (parse-call s)
-  (parse-call-with-initial-ex s (parse-unary-prefix s)))
+  (let ((nxt (peek-token s)))
+    (parse-call-with-initial-ex s (parse-unary-prefix s) nxt)))
 
-(define (parse-call-with-initial-ex s ex)
-  (if (or (initial-reserved-word? ex) (eq? ex 'mutable) (eq? ex 'primitive) (eq? ex 'abstract))
+(define (parse-call-with-initial-ex s ex tok)
+  (if (or (initial-reserved-word? tok) (memq tok '(mutable primitive abstract)))
       (parse-resword s ex)
       (parse-call-chain s ex #f)))
 
