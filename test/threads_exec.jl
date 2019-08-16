@@ -2,7 +2,7 @@
 
 using Test
 using Base.Threads
-using Base.Threads: SpinLock, Mutex
+using Base.Threads: SpinLock
 
 # threading constructs
 
@@ -110,7 +110,6 @@ end
 
 @test threaded_add_locked(SpinLock, 0, 10000) == 10000
 @test threaded_add_locked(ReentrantLock, 0, 10000) == 10000
-@test threaded_add_locked(Mutex, 0, 10000) == 10000
 
 # Check if the recursive lock can be locked and unlocked correctly.
 let critical = ReentrantLock()
@@ -151,7 +150,6 @@ end
 
 threaded_gc_locked(SpinLock)
 threaded_gc_locked(Threads.ReentrantLock)
-threaded_gc_locked(Mutex)
 
 # Issue 14726
 # Make sure that eval'ing in a different module doesn't mess up other threads

@@ -42,7 +42,7 @@ function mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::Union{StridedVector,Adj
     end
     for k = 1:size(C, 2)
         @inbounds for col = 1:A.n
-            αxj = α*B[col,k]
+            αxj = B[col,k] * α
             for j = A.colptr[col]:(A.colptr[col + 1] - 1)
                 C[rv[j], k] += nzv[j]*αxj
             end
@@ -71,7 +71,7 @@ function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::Uni
             for j = A.colptr[col]:(A.colptr[col + 1] - 1)
                 tmp += adjoint(nzv[j])*B[rv[j],k]
             end
-            C[col,k] += α*tmp
+            C[col,k] += tmp * α
         end
     end
     C
@@ -97,7 +97,7 @@ function mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B:
             for j = A.colptr[col]:(A.colptr[col + 1] - 1)
                 tmp += transpose(nzv[j])*B[rv[j],k]
             end
-            C[col,k] += α*tmp
+            C[col,k] += tmp * α
         end
     end
     C

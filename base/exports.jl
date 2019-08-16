@@ -125,6 +125,7 @@ export
     KeyError,
     MissingException,
     ProcessFailedException,
+    TaskFailedException,
     SystemError,
     StringIndexError,
 
@@ -676,6 +677,7 @@ export
     skipmissing,
     something,
     isnothing,
+    nonmissingtype,
 
 # time
     sleep,

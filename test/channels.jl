@@ -76,6 +76,13 @@ end
     @test isopen(c)
     @test collect(c) == 1:100
 end
+@testset "Multithreaded task constructors" begin
+    taskref = Ref{Task}()
+    c = Channel(spawn=true, taskref=taskref) do c; put!(c, 0); end
+    # Test that the task is using the multithreaded scheduler
+    @test taskref[].sticky == false
+    @test collect(c) == [0]
+end
 
 @testset "multiple concurrent put!/take! on a channel for different sizes" begin
     function testcpt(sz)
@@ -327,12 +334,12 @@ end
     ct = current_task()
     testerr = ErrorException("expected")
     @async Base.throwto(t, testerr)
-    @test try
+    @test (try
         Base.wait(t)
         false
     catch ex
         ex
-    end === testerr
+    end).task.exception === testerr
 end
 
 @testset "Timer / AsyncCondition triggering and race #12719" begin

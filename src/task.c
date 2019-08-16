@@ -606,6 +606,14 @@ void jl_init_tasks(void) JL_GC_DISABLED
     done_sym = jl_symbol("done");
     failed_sym = jl_symbol("failed");
     runnable_sym = jl_symbol("runnable");
+
+    char *acs = getenv("JULIA_COPY_STACKS");
+    if (acs) {
+        if (!strcmp(acs, "1") || !strcmp(acs, "yes"))
+            always_copy_stacks = 1;
+        else if (!strcmp(acs, "0") || !strcmp(acs, "no"))
+            always_copy_stacks = 0;
+    }
 }
 
 STATIC_OR_JS void NOINLINE JL_NORETURN start_task(void)

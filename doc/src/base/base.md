@@ -267,6 +267,7 @@ Base.missing
 Base.coalesce
 Base.ismissing
 Base.skipmissing
+Base.nonmissingtype
 ```
 
 ## System

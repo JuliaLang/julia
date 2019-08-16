@@ -334,7 +334,7 @@ inttype(::Type{Float32}) = Int32
 inttype(::Type{Float64}) = Int64
 
 
-gc_alignment(::Type{T}) where {T} = ccall(:jl_alignment, Cint, (Csize_t,), sizeof(T))
+import ..Base.gc_alignment
 
 # All atomic operations have acquire and/or release semantics, depending on
 # whether the load or store values. Most of the time, this is what one wants

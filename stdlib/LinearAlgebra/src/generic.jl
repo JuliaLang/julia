@@ -2,29 +2,108 @@
 
 ## linalg.jl: Some generic Linear Algebra definitions
 
-function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number)
+"""
+    MulAddMul(alpha, beta)
+
+A callable for operating short-circuiting version of `x * alpha + y * beta`.
+
+# Examples
+```jldoctest
+julia> using LinearAlgebra: MulAddMul
+
+julia> _add = MulAddMul(1, 0);
+
+julia> _add(123, nothing)
+123
+
+julia> MulAddMul(12, 34)(56, 78) == 56 * 12 + 78 * 34
+true
+```
+"""
+struct MulAddMul{ais1, bis0, TA, TB}
+    alpha::TA
+    beta::TB
+end
+
+MulAddMul(alpha::TA, beta::TB) where {TA, TB} =
+    MulAddMul{isone(alpha), iszero(beta), TA, TB}(alpha, beta)
+
+MulAddMul() = MulAddMul(true, false)
+
+@inline (::MulAddMul{true})(x) = x
+@inline (p::MulAddMul{false})(x) = x * p.alpha
+@inline (::MulAddMul{true, true})(x, _) = x
+@inline (p::MulAddMul{false, true})(x, _) = x * p.alpha
+@inline (p::MulAddMul{true, false})(x, y) = x + y * p.beta
+@inline (p::MulAddMul{false, false})(x, y) = x * p.alpha + y * p.beta
+
+"""
+    _modify!(_add::MulAddMul, x, C, idx)
+
+Short-circuiting version of `C[idx] = _add(x, C[idx])`.
+
+Short-circuiting the indexing `C[idx]` is necessary for avoiding `UndefRefError`
+when mutating an array of non-primitive numbers such as `BigFloat`.
+
+# Examples
+```jldoctest
+julia> using LinearAlgebra: MulAddMul, _modify!
+
+julia> _add = MulAddMul(1, 0);
+       C = Vector{BigFloat}(undef, 1);
+
+julia> _modify!(_add, 123, C, 1)
+
+julia> C
+1-element Array{BigFloat,1}:
+ 123.0
+```
+"""
+@inline @propagate_inbounds function _modify!(p::MulAddMul{ais1, bis0},
+                                              x, C, idx) where {ais1, bis0}
+    if bis0
+        C[idx...] = p(x)
+    else
+        C[idx...] = p(x, C[idx...])
+    end
+    return
+end
+
+@inline function _rmul_or_fill!(C::AbstractArray, beta::Number)
+    if iszero(beta)
+        fill!(C, zero(eltype(C)))
+    else
+        rmul!(C, beta)
+    end
+    return C
+end
+
+
+function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number, _add::MulAddMul)
     if length(C) != length(X)
         throw(DimensionMismatch("first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
     end
     for (IC, IX) in zip(eachindex(C), eachindex(X))
-        @inbounds C[IC] = X[IX]*s
+        @inbounds _modify!(_add, X[IX] * s, C, IC)
     end
     C
 end
 
-function generic_mul!(C::AbstractArray, s::Number, X::AbstractArray)
+function generic_mul!(C::AbstractArray, s::Number, X::AbstractArray, _add::MulAddMul)
     if length(C) != length(X)
         throw(DimensionMismatch("first array has length $(length(C)) which does not
 match the length of the second, $(length(X))."))
     end
     for (IC, IX) in zip(eachindex(C), eachindex(X))
-        @inbounds C[IC] = s*X[IX]
+        @inbounds _modify!(_add, s * X[IX], C, IC)
     end
     C
 end
 
-mul!(C::AbstractArray, s::Number, X::AbstractArray) = generic_mul!(C, X, s)
-mul!(C::AbstractArray, X::AbstractArray, s::Number) = generic_mul!(C, s, X)
+@inline mul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number) =
+    generic_mul!(C, s, X, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number) =
+    generic_mul!(C, X, s, MulAddMul(alpha, beta))
 
 # For better performance when input and output are the same array
 # See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
