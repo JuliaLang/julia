@@ -5,10 +5,7 @@ module Printf
 # macros left in base/printf.jl, and uses the utility there
 
 export @printf, @sprintf
-using Base.Printf: _printf, is_str_expr, fix_dec, DIGITS, DIGITSs, print_fixed, print_fixed_width, decode_dec, decode_hex,
-                   ini_hex, ini_HEX, print_exp_a, decode_0ct, decode_HEX, ini_dec, print_exp_e,
-                   decode_oct, _limit, SmallNumber
-using Unicode: textwidth
+using Base.Printf
 
 """
     @printf([io::IOStream], "%Fmt", args...)
@@ -30,19 +27,10 @@ julia> @printf("%f %F %f %F\\n", Inf, Inf, NaN, NaN)
 Inf Inf NaN NaN\n
 
 julia> @printf "%.0f %.1f %f\\n" 0.5 0.025 -0.0078125
-1 0.0 -0.007813
+0 0.0 -0.007812
 ```
 """
-macro printf(args...)
-    isempty(args) && throw(ArgumentError("@printf: called with no arguments"))
-    if isa(args[1], AbstractString) || is_str_expr(args[1])
-        _printf("@printf", :stdout, args[1], args[2:end])
-    else
-        (length(args) >= 2 && (isa(args[2], AbstractString) || is_str_expr(args[2]))) ||
-            throw(ArgumentError("@printf: first or second argument must be a format string"))
-        _printf("@printf", esc(args[1]), args[2], args[3:end])
-    end
-end
+:(@printf)
 
 """
     @sprintf("%Fmt", args...)
@@ -57,13 +45,6 @@ julia> println(s)
 this is a test            34.6
 ```
 """
-macro sprintf(args...)
-    isempty(args) && throw(ArgumentError("@sprintf: called with zero arguments"))
-    isa(args[1], AbstractString) || is_str_expr(args[1]) ||
-        throw(ArgumentError("@sprintf: first argument must be a format string"))
-    letexpr = _printf("@sprintf", :(IOBuffer()), args[1], args[2:end])
-    push!(letexpr.args[2].args, :(String(take!(out))))
-    letexpr
-end
+:(@sprintf)
 
 end # module

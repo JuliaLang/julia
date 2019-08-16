@@ -137,7 +137,9 @@ function generate_precompile_statements()
         # Extract the precompile statements from stderr
         statements = Set{String}()
         for statement in eachline(precompile_file_h)
-            occursin("Main.", statement) && continue
+            (occursin("Main.", statement) ||
+                occursin("Printf.", statement) ||
+                occursin("Base.io_has_tvar_name", statement)) && continue
             # check for `#x##s66` style variable names not in quotes
             occursin(r"#\w", statement) &&
                 count(r"(?:#+\w+)+", statement) !=
