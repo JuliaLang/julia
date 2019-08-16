@@ -7,6 +7,7 @@ New language features
 * Support for Unicode 12.1.0 ([#32002]).
 * Methods can now be added to an abstract type ([#31916]).
 * Support for unicode bold-digits and double-struck digits 0 through 9 as valid identifiers ([#32838]).
+* Structs with all isbits and isbitsunion fields are now stored inline in arrays ([#32448]).
 
 Language changes
 ----------------
