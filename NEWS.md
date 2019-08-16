@@ -12,6 +12,7 @@ New language features
 Language changes
 ----------------
 
+* The syntax `var"#example#"` is used to print and parse non-standard variable names ([#32408]).
 
 Multi-threading changes
 -----------------------
