@@ -404,4 +404,8 @@ Diagonal(s::UniformScaling, m::Integer) = Diagonal{eltype(s)}(s, m)
 function dot(x::AbstractVector, J::UniformScaling, y::AbstractVector)
     return mapreduce(t -> dot(t[1], J.λ, t[2]), +, zip(x, y))
 end
+function dot(x::AbstractVector, a::Number, y::AbstractVector)
+    return mapreduce(t -> dot(t[1], a, t[2]), +, zip(x, y))
+end
 dot(x::AbstractVector, J::UniformScaling{<:Union{Real,Complex}}, y::AbstractVector) = J.λ*dot(x, y)
+dot(x::AbstractVector, a::Union{Real,Complex}, y::AbstractVector) = a*dot(x, y)
