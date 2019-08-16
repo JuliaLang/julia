@@ -472,6 +472,8 @@ $(eval $(call LLVM_PATCH,llvm-8.0-D50167-scev-umin))
 $(eval $(call LLVM_PATCH,llvm7-windows-race))
 $(eval $(call LLVM_PATCH,llvm-D57118-powerpc)) # remove for 9.0
 $(eval $(call LLVM_PATCH,llvm8-WASM-addrspaces)) # WebAssembly
+$(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
+$(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
 endif # LLVM_VER 8.0
 
 # Add a JL prefix to the version map. DO NOT REMOVE
