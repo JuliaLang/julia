@@ -401,4 +401,7 @@ Array(s::UniformScaling, dims::Dims{2}) = Matrix(s, dims)
 Diagonal{T}(s::UniformScaling, m::Integer) where {T} = Diagonal{T}(fill(T(s.λ), m))
 Diagonal(s::UniformScaling, m::Integer) = Diagonal{eltype(s)}(s, m)
 
-dot(x::AbstractVector, J::UniformScaling, y::AbstractVector) = J.λ * dot(x, y)
+function dot(x::AbstractVector, J::UniformScaling, y::AbstractVector)
+    return mapreduce(t -> dot(t[1], J.λ, t[2]), +, zip(x, y))
+end
+dot(x::AbstractVector, J::UniformScaling{<:Union{Real,Complex}}, y::AbstractVector) = J.λ*dot(x, y)
