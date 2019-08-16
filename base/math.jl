@@ -180,6 +180,8 @@ rad2deg(z::Real) = rad2deg(float(z))
 deg2rad(z::Real) = deg2rad(float(z))
 rad2deg(z::Number) = (z/pi)*180
 deg2rad(z::Number) = (z*pi)/180
+rad2deg(z::AbstractArray) = rad2deg.(z)
+deg2rad(z::AbstractArray) = deg2rad.(z)
 
 log(b::T, x::T) where {T<:Number} = log(x)/log(b)
 

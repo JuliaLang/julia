@@ -1100,7 +1100,7 @@ for (fd, f, fn) in ((:sind, :sin, "sine"), (:cosd, :cos, "cosine"), (:tand, :tan
     @eval begin
         @doc """
             $($name)(x)
-        Compute $($fn) of `x`, where `x` is in degrees. """ ($fd)(z) = ($f)(deg2rad.(z))
+        Compute $($fn) of `x`, where `x` is in degrees. """ ($fd)(z) = ($f)(deg2rad(z))
     end
 end
 
@@ -1111,7 +1111,7 @@ for (fd, f, fn) in ((:asind, :asin, "sine"), (:acosd, :acos, "cosine"),
         @doc """
             $($name)(x)
 
-        Compute the inverse $($fn) of `x`, where the output is in degrees. """ ($fd)(y) = rad2deg.(($f)(y))
+        Compute the inverse $($fn) of `x`, where the output is in degrees. """ ($fd)(y) = rad2deg(($f)(y))
     end
 end
 
