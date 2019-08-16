@@ -362,7 +362,18 @@ julia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]
  4.0  4.0  1.0
  4.0  3.0  2.0
 
-julia> F = hessenberg(A);
+julia> F = hessenberg(A)
+Hessenberg{Float64,UpperHessenberg{Float64,Array{Float64,2}},Array{Float64,2},Array{Float64,1},Bool}
+Q factor:
+3×3 LinearAlgebra.HessenbergQ{Float64,Array{Float64,2},Array{Float64,1},false}:
+ 1.0   0.0        0.0
+ 0.0  -0.707107  -0.707107
+ 0.0  -0.707107   0.707107
+H factor:
+3×3 UpperHessenberg{Float64,Array{Float64,2}}:
+  4.0      -11.3137       -1.41421
+ -5.65685    5.0           2.0
+   ⋅        -8.88178e-16   1.0
 
 julia> F.Q * F.H * F.Q'
 3×3 Array{Float64,2}:
