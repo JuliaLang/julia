@@ -336,4 +336,14 @@ end
 
 # Compute `det` from the number of Householder reflections.  Handle
 # the case `Q.τ` contains zeros.
-det(Q::Union{QRPackedQ, LQPackedQ}) = isodd(count(!iszero, Q.τ)) ? -1 : 1
+det(Q::Union{QRPackedQ{<:Real}, LQPackedQ{<:Real}}) =
+    isodd(count(!iszero, Q.τ)) ? -1 : 1
+
+# In complex case, we need to compute the non-unit eigenvalue `λ = 1 - c*τ`
+# (where `c = v'v`) of each Householder reflector.  As we know that the
+# reflector must have the determinant of 1, it must satisfy `abs2(λ) == 1`.
+# Combining this with the constraint `c > 0`, it turns out that the eigenvalue
+# (hence the determinant) can be computed as `λ = -sign(τ)^2`.
+# See: https://github.com/JuliaLang/julia/pull/32887#issuecomment-521935716
+det(Q::Union{QRPackedQ, LQPackedQ}) =
+    prod(τ -> -sign(τ)^2, Q.τ)

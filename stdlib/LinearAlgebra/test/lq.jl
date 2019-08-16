@@ -193,8 +193,16 @@ end
 
 @testset "det(Q::LQPackedQ)" begin
     @testset for n in 1:3, m in 1:3
-        _, Q = lq(randn(n, m))
-        @test det(Q)::Int ≈ det(collect(Q))
+        @testset "real" begin
+            _, Q = lq(randn(n, m))
+            @test det(Q)::Int ≈ det(collect(Q))
+            @test abs(det(Q)) ≈ 1
+        end
+        @testset "complex" begin
+            _, Q = lq(randn(ComplexF64, n, m))
+            @test det(Q) ≈ det(collect(Q))
+            @test abs(det(Q)) ≈ 1
+        end
     end
 end
 

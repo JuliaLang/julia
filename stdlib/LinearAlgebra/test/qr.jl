@@ -248,8 +248,16 @@ end
 
 @testset "det(Q::QRPackedQ)" begin
     @testset for n in 1:3, m in 1:3
-        Q, = qr(randn(n, m), Val(true))
-        @test det(Q)::Int ≈ det(collect(Q))
+        @testset "real" begin
+            Q, = qr(randn(n, m), Val(true))
+            @test det(Q)::Int ≈ det(collect(Q))
+            @test abs(det(Q)) ≈ 1
+        end
+        @testset "complex" begin
+            Q, = qr(randn(ComplexF64, n, m), Val(true))
+            @test det(Q) ≈ det(collect(Q))
+            @test abs(det(Q)) ≈ 1
+        end
     end
 end
 
