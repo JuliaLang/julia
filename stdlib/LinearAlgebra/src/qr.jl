@@ -906,14 +906,3 @@ end
 ## Lower priority: Add LQ, QL and RQ factorizations
 
 # FIXME! Should add balancing option through xgebal
-
-# Compute `det` from the number of Householder reflections.
-det(Q::QRPackedQ) = _det_qr(Q.factors, Q.τ)
-_det_qr(factors, τ) =
-    prod(axes(τ, 1)) do i
-        Base.@_inline_meta
-        # "v" in the math definition except for the diagonal (= 1):
-        v = @inbounds @view factors[i + 1:end, i]
-        𝟙 = one(eltype(factors))
-        𝟙 - (𝟙 + v'v) * @inbounds τ[i]
-    end
