@@ -5,6 +5,13 @@ const ViewIndex = Union{Real, AbstractArray}
 const ScalarIndex = Real
 
 # L is true if the view itself supports fast linear indexing
+"""
+    SubArray{T,N,P,I,L} <: AbstractArray{T,N}
+
+`N`-dimensional view into a parent array (of type `P`) with an element type `T`, restricted by a tuple of indices (of type `I`).
+
+Construct `SubArray`s using the [`view`](@ref) function.
+"""
 struct SubArray{T,N,P,I,L} <: AbstractArray{T,N}
     parent::P
     indices::I
