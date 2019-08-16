@@ -598,7 +598,7 @@ function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
             pos += 1
         end
     end
-    
+
     if leftalign && n2 < width
         # pad right
         for _ = 1:(width - n2)
