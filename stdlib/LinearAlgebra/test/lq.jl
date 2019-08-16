@@ -194,7 +194,7 @@ end
 @testset "det(Q::LQPackedQ)" begin
     @testset for n in 1:3, m in 1:3
         _, Q = lq(randn(n, m))
-        @test det(Q)::Int ≈ det(collect(Q))
+        @test det(Q) ≈ det(collect(Q))
     end
 end
 

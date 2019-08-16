@@ -334,6 +334,7 @@ function ldiv!(A::LQ{T}, B::StridedVecOrMat{T}) where T
     return B
 end
 
-# Compute `det` from the number of Householder reflections.  Handle
-# the case `Q.τ` contains zeros.
-det(Q::Union{QRPackedQ, LQPackedQ}) = isodd(count(!iszero, Q.τ)) ? -1 : 1
+# Compute `det` from the number of Householder reflections.
+det(Q::LQPackedQ) = _det_qr(permutedims(Q.factors), Q.τ)
+# Using `permutedims` as only the norm of `.factors` is relevant.
+# `permutedims` avoids extra `adjoint`-of-`view`-of-`adjoint`.
