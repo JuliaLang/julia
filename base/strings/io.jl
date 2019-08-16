@@ -372,7 +372,7 @@ end
 
 # TODO: handle unescaping invalid UTF-8 sequences
 """
-    unescape_string(str::AbstractString)::AbstractString
+    unescape_string(str::AbstractString, keep = ())::AbstractString
     unescape_string(io, s::AbstractString, keep = ())::Nothing
 
 General unescaping of traditional C and Unicode escape sequences. The first form returns
@@ -465,7 +465,6 @@ function unescape_string(io::IO, s::AbstractString, keep = ())
 end
 unescape_string(s::AbstractString, keep = ()) =
     sprint(unescape_string, s, keep; sizehint=lastindex(s))
-unescape_string(s::AbstractString) = sprint(unescape_string, s, sizehint=lastindex(s))
 
 """
     @b_str
