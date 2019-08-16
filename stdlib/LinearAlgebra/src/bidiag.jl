@@ -395,6 +395,7 @@ function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym,
     # `_modify!` in the following loop will not update the
     # off-diagonal elements for non-zero beta.
     _rmul_or_fill!(C, _add.beta)
+    iszero(_add.alpha) && return C
     Al = _diag(A, -1)
     Ad = _diag(A, 0)
     Au = _diag(A, 1)
@@ -447,32 +448,33 @@ function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::Diagonal,
                      _add::MulAddMul = MulAddMul())
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
-    n <= 3 && return mul!(C, Array(A), Array(B))
-    fill!(C, zero(eltype(C)))
+    n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
+    _rmul_or_fill!(C, _add.beta)  # see the same use above
+    iszero(_add.alpha) && return C
     Al = _diag(A, -1)
     Ad = _diag(A, 0)
     Au = _diag(A, 1)
     Bd = B.diag
     @inbounds begin
         # first row of C
-        _modify!(_add, A[1,1]*B[1,1], C, (1,1))
-        _modify!(_add, A[1,2]*B[2,2], C, (1,2))
+        C[1,1] += _add(A[1,1]*B[1,1])
+        C[1,2] += _add(A[1,2]*B[2,2])
         # second row of C
-        _modify!(_add, A[2,1]*B[1,1], C, (2,1))
-        _modify!(_add, A[2,2]*B[2,2], C, (2,2))
-        _modify!(_add, A[2,3]*B[3,3], C, (2,3))
+        C[2,1] += _add(A[2,1]*B[1,1])
+        C[2,2] += _add(A[2,2]*B[2,2])
+        C[2,3] += _add(A[2,3]*B[3,3])
         for j in 3:n-2
-            _modify!(_add, Al[j-1]*Bd[j-1], C, (j, j-1))
-            _modify!(_add, Ad[j  ]*Bd[j  ], C, (j, j  ))
-            _modify!(_add, Au[j  ]*Bd[j+1], C, (j, j+1))
+            C[j, j-1] += _add(Al[j-1]*Bd[j-1])
+            C[j, j  ] += _add(Ad[j  ]*Bd[j  ])
+            C[j, j+1] += _add(Au[j  ]*Bd[j+1])
         end
         # row before last of C
-        _modify!(_add, A[n-1,n-2]*B[n-2,n-2], C, (n-1,n-2))
-        _modify!(_add, A[n-1,n-1]*B[n-1,n-1], C, (n-1,n-1))
-        _modify!(_add, A[n-1,  n]*B[n  ,n  ], C, (n-1,n  ))
+        C[n-1,n-2] += _add(A[n-1,n-2]*B[n-2,n-2])
+        C[n-1,n-1] += _add(A[n-1,n-1]*B[n-1,n-1])
+        C[n-1,n  ] += _add(A[n-1,  n]*B[n  ,n  ])
         # last row of C
-        _modify!(_add, A[n,n-1]*B[n-1,n-1], C, (n,n-1))
-        _modify!(_add, A[n,n  ]*B[n,  n  ], C, (n,n  ))
+        C[n,n-1] += _add(A[n,n-1]*B[n-1,n-1])
+        C[n,n  ] += _add(A[n,n  ]*B[n,  n  ])
     end # inbounds
     C
 end
@@ -489,6 +491,7 @@ function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat,
     if size(C,2) != nB
         throw(DimensionMismatch("A has second dimension $nA, B has $(size(B,2)), C has $(size(C,2)) but all must match"))
     end
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     nA <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
     l = _diag(A, -1)
     d = _diag(A, 0)
@@ -510,9 +513,12 @@ end
 function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym,
                      _add::MulAddMul = MulAddMul())
     check_A_mul_B!_sizes(C, A, B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     n = size(A,1)
-    n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
     m = size(B,2)
+    if n <= 3 || m <= 1
+        return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
+    end
     Bl = _diag(B, -1)
     Bd = _diag(B, 0)
     Bu = _diag(B, 1)
@@ -539,36 +545,38 @@ function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym,
     C
 end
 
-function A_mul_B_td!(C::AbstractMatrix, A::Diagonal, B::BiTriSym)
+function A_mul_B_td!(C::AbstractMatrix, A::Diagonal, B::BiTriSym,
+                     _add::MulAddMul = MulAddMul())
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
-    n <= 3 && return mul!(C, Array(A), Array(B))
-    fill!(C, zero(eltype(C)))
+    n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
+    _rmul_or_fill!(C, _add.beta)  # see the same use above
+    iszero(_add.alpha) && return C
     Ad = A.diag
     Bl = _diag(B, -1)
     Bd = _diag(B, 0)
     Bu = _diag(B, 1)
     @inbounds begin
         # first row of C
-        C[1,1] = A[1,1]*B[1,1]
-        C[1,2] = A[1,1]*B[1,2]
+        C[1,1] += _add(A[1,1]*B[1,1])
+        C[1,2] += _add(A[1,1]*B[1,2])
         # second row of C
-        C[2,1] = A[2,2]*B[2,1]
-        C[2,2] = A[2,2]*B[2,2]
-        C[2,3] = A[2,2]*B[2,3]
+        C[2,1] += _add(A[2,2]*B[2,1])
+        C[2,2] += _add(A[2,2]*B[2,2])
+        C[2,3] += _add(A[2,2]*B[2,3])
         for j in 3:n-2
             Ajj       = Ad[j]
-            C[j, j-1] = Ajj*Bl[j-1]
-            C[j, j  ] = Ajj*Bd[j]
-            C[j, j+1] = Ajj*Bu[j]
+            C[j, j-1] += _add(Ajj*Bl[j-1])
+            C[j, j  ] += _add(Ajj*Bd[j])
+            C[j, j+1] += _add(Ajj*Bu[j])
         end
         # row before last of C
-        C[n-1,n-2] = A[n-1,n-1]*B[n-1,n-2]
-        C[n-1,n-1] = A[n-1,n-1]*B[n-1,n-1]
-        C[n-1,n  ] = A[n-1,n-1]*B[n-1,n  ]
+        C[n-1,n-2] += _add(A[n-1,n-1]*B[n-1,n-2])
+        C[n-1,n-1] += _add(A[n-1,n-1]*B[n-1,n-1])
+        C[n-1,n  ] += _add(A[n-1,n-1]*B[n-1,n  ])
         # last row of C
-        C[n,n-1] = A[n,n]*B[n,n-1]
-        C[n,n  ] = A[n,n]*B[n,n  ]
+        C[n,n-1] += _add(A[n,n]*B[n,n-1])
+        C[n,n  ] += _add(A[n,n]*B[n,n  ])
     end # inbounds
     C
 end
