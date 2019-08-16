@@ -310,6 +310,46 @@ else
     end
 end
 
+@testset "stat errors" begin # PR 32031
+    function test_stat_error(stat::Function, pth)
+        if stat === lstat && !(pth isa AbstractString)
+            return # no lstat for fd handles
+        end
+        ex = try; stat(pth); false; catch ex; ex; end::Base.IOError
+        @test ex.code == (pth isa AbstractString ? Base.UV_EACCES : Base.UV_EBADF)
+        @test startswith(ex.msg, "stat: ")
+        pth isa AbstractString || (pth = Base.INVALID_OS_HANDLE)
+        @test endswith(ex.msg, repr(pth))
+	nothing
+    end
+    if Sys.iswindows()
+        dir = raw"C:\\System Volume Information" # assume C: is NTFS-formatted
+        for pth in (dir,
+                    SubString(dir),
+                    Base.RawFD(-1),
+		    -1)
+            test_stat_error(stat, pth)
+            test_stat_error(lstat, pth)
+        end
+    else
+        dir = mktempdir()
+        cd(dir) do
+            touch("afile")
+            chmod(dir, 0o000) # cause EACCESS-denied errors
+            for pth in ("afile",
+                        joinpath("afile", "not_file"),
+                        SubString(joinpath(dir, "afile")),
+                        Base.RawFD(-1),
+			-1)
+                test_stat_error(stat, pth)
+                test_stat_error(lstat, pth)
+            end
+        end
+        chmod(dir, 0o777) # let us cleanup afile
+        rm(dir, recursive=true)
+    end
+end
+
 # On windows the filesize of a folder is the accumulation of all the contained
 # files and is thus zero in this case.
 if Sys.iswindows()
@@ -375,13 +415,13 @@ if !Sys.iswindows()
     # chown will give an error if the user does not have permissions to change files
     if get(ENV, "USER", "") == "root" || get(ENV, "HOME", "") == "/root"
         chown(file, -2, -1)  # Change the file owner to nobody
-        @test stat(file).uid !=0
+        @test stat(file).uid != 0
         chown(file, 0, -2)  # Change the file group to nogroup (and owner back to root)
-        @test stat(file).gid !=0
-        @test stat(file).uid ==0
+        @test stat(file).gid != 0
+        @test stat(file).uid == 0
         @test chown(file, -1, 0) == file
-        @test stat(file).gid ==0
-        @test stat(file).uid ==0
+        @test stat(file).gid == 0
+        @test stat(file).uid == 0
     else
         @test_throws Base.IOError chown(file, -2, -1)  # Non-root user cannot change ownership to another user
         @test_throws Base.IOError chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
@@ -574,38 +614,41 @@ end
 ## cp ----------------------------------------------------
 # issue #8698
 # Test copy file
-afile = joinpath(dir, "a.txt")
-touch(afile)
-af = open(afile, "r+")
-write(af, "This is indeed a test")
+let
+    afile = joinpath(dir, "a.txt")
+    touch(afile)
+    af = open(afile, "r+")
+    write(af, "This is indeed a test")
 
-bfile = joinpath(dir, "b.txt")
-cp(afile, bfile)
+    bfile = joinpath(dir, "b.txt")
+    cp(afile, bfile)
 
-cfile = joinpath(dir, "c.txt")
-write(cfile, "This is longer than the contents of afile")
-cp(afile, cfile; force=true)
+    cfile = joinpath(dir, "c.txt")
+    write(cfile, "This is longer than the contents of afile")
+    cp(afile, cfile; force=true)
 
-a_stat = stat(afile)
-b_stat = stat(bfile)
-c_stat = stat(cfile)
-@test a_stat.mode == b_stat.mode
-@test a_stat.size == b_stat.size
-@test a_stat.size == c_stat.size
+    a_stat = stat(afile)
+    b_stat = stat(bfile)
+    c_stat = stat(cfile)
+    @test a_stat.mode == b_stat.mode
+    @test a_stat.size == b_stat.size
+    @test a_stat.size == c_stat.size
 
-@test parse(Int,match(r"mode=(.*),",sprint(show,a_stat)).captures[1]) == a_stat.mode
+    @test parse(Int, match(r"mode=(.*),", sprint(show, a_stat)).captures[1]) == a_stat.mode
 
-close(af)
-rm(afile)
-rm(bfile)
-rm(cfile)
+    close(af)
+    rm(afile)
+    rm(bfile)
+    rm(cfile)
+end
+
 
 ## mv ----------------------------------------------------
 mktempdir() do tmpdir
     # rename file
     file = joinpath(tmpdir, "afile.txt")
     files_stat = stat(file)
-    close(open(file,"w")) # like touch, but lets the operating system update
+    close(open(file, "w")) # like touch, but lets the operating system update
     # the timestamp for greater precision on some platforms (windows)
 
     newfile = joinpath(tmpdir, "bfile.txt")
