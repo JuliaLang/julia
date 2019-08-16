@@ -245,7 +245,69 @@ end
 
 _totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = (collect(E, Iterators.rest(itr,s...))...,)
 
-_totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
+function _totuple(::Type{Tuple}, itr, s...)
+    y = iterate(itr, s...)
+    if y === nothing
+        return ()
+    end
+    v1, s = y
+    y = iterate(itr, s)
+    if y === nothing
+        return (v1,)
+    end
+    v2, s = y
+    y = iterate(itr, s)
+    if y === nothing
+        return (v1, v2)
+    end
+    v3, s = y
+    y = iterate(itr, s)
+    if y === nothing
+        return (v1, v2, v3)
+    end
+    v4, s = y
+    y = iterate(itr, s)
+    if y === nothing
+        return (v1, v2, v3, v4)
+    end
+    v5, s = y
+    y = iterate(itr, s)
+    if y === nothing
+        return (v1, v2, v3, v4, v5)
+    end
+    v6, s = y
+    y = iterate(itr, s)
+    if y === nothing
+        return (v1, v2, v3, v4, v5, v6)
+    end
+    v7, s = y
+    y = iterate(itr, s)
+    if y === nothing
+        return (v1, v2, v3, v4, v5, v6, v7)
+    end
+    v8, s = y
+    y = iterate(itr, s)
+    if y === nothing
+        return (v1, v2, v3, v4, v5, v6, v7, v8)
+    end
+    v9, s = y
+    y = iterate(itr, s)
+    if y === nothing
+        return (v1, v2, v3, v4, v5, v6, v7, v8, v9)
+    end
+    v10, s = y
+    y = iterate(itr, s)
+    if y === nothing
+        return (v1, v2, v3, v4, v5, v6, v7, v8, v9, v10)
+    end
+    v11, s = y
+    y = iterate(itr, s)
+    if y === nothing
+        return (v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11)
+    end
+    v12, s = y
+    return (v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, collect(Iterators.rest(itr,s))...)
+end
 
 end
 
