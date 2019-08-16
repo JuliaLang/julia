@@ -531,6 +531,7 @@ struct recur_list {
 };
 
 static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth) JL_NOTSAFEPOINT;
+static size_t jl_static_show_next_(JL_STREAM *out, jl_value_t *v, jl_value_t *prev, struct recur_list *depth) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT int jl_id_start_char(uint32_t wc) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_id_char(uint32_t wc) JL_NOTSAFEPOINT;
@@ -1011,7 +1012,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             }
             if (vt == jl_typemap_entry_type) {
                 n += jl_printf(out, ", next=↩︎\n  ");
-                n += jl_static_show_x(out, jl_fieldref_noalloc(v, 0), depth);
+                n += jl_static_show_next_(out, (jl_value_t*)((jl_typemap_entry_t*)v)->next, v, depth);
             }
         }
         n += jl_printf(out, ")");
@@ -1027,6 +1028,13 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
 static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth) JL_NOTSAFEPOINT
 {
     // show values without calling a julia method or allocating through the GC
+    return jl_static_show_next_(out, v, NULL, depth);
+}
+
+static size_t jl_static_show_next_(JL_STREAM *out, jl_value_t *v, jl_value_t *prev, struct recur_list *depth) JL_NOTSAFEPOINT
+{
+    // helper for showing a typemap list by following the next pointers
+    // while being careful about avoiding any recursion due to malformed (circular) references
     if (v == NULL) {
         return jl_printf(out, "#<null>");
     }
@@ -1034,14 +1042,48 @@ static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list 
         return jl_printf(out, "#<%d>", (int)(uintptr_t)v);
     }
     unsigned int dist = 1;
-    struct recur_list this_item = {depth, v}, *p = depth;
+    struct recur_list this_item = {depth, v},
+                      *newdepth = &this_item,
+                      *p = depth;
     while (p) {
+        if (jl_typeis(v, jl_typemap_entry_type) && newdepth == &this_item) {
+            jl_value_t *m = p->v;
+            unsigned nid = 1;
+            while (m && jl_typeis(m, jl_typemap_entry_type)) {
+                if (m == v) {
+                    return jl_printf(out, "<typemap reference #%u @-%u ", nid, dist) +
+                           jl_static_show_x(out, (jl_value_t*)((jl_typemap_entry_t*)m)->sig, depth) +
+                           jl_printf(out, ">");
+                }
+                if (m == prev) {
+                    newdepth = depth;
+                    break;
+                }
+                // verify that we aren't trying to follow a circular list
+                // by following the list again, and ensuring this is the only link to next
+                jl_value_t *mnext = (jl_value_t*)((jl_typemap_entry_t*)m)->next;
+                jl_value_t *m2 = p->v;
+                if (m2 == mnext)
+                    break;
+                while (m2 && jl_typeis(m2, jl_typemap_entry_type)) {
+                    jl_value_t *mnext2 = (jl_value_t*)((jl_typemap_entry_t*)m2)->next;
+                    if (mnext2 == mnext) {
+                        if (m2 != m)
+                            mnext = NULL;
+                        break;
+                    }
+                    m2 = mnext2;
+                }
+                m = mnext;
+                nid++;
+            }
+        }
         if (p->v == v)
             return jl_printf(out, "<circular reference @-%u>", dist);
         dist++;
         p = p->prev;
     }
-    return jl_static_show_x_(out, v, (jl_datatype_t*)jl_typeof(v), &this_item);
+    return jl_static_show_x_(out, v, (jl_datatype_t*)jl_typeof(v), newdepth);
 }
 
 JL_DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) JL_NOTSAFEPOINT

@@ -64,8 +64,10 @@ function promote_rule(T::Type{>:Missing}, S::Type)
     return Union{R, Missing}
 end
 
-convert(T::Type{>:Union{Missing, Nothing}}, x) = convert(nonmissingtype_checked(nonnothingtype_checked(T)), x)
-convert(T::Type{>:Missing}, x) = convert(nonmissingtype_checked(T), x)
+convert(::Type{T}, x::T) where {T>:Missing} = x
+convert(::Type{T}, x::T) where {T>:Union{Missing, Nothing}} = x
+convert(::Type{T}, x) where {T>:Missing} = convert(nonmissingtype_checked(T), x)
+convert(::Type{T}, x) where {T>:Union{Missing, Nothing}} = convert(nonmissingtype_checked(nonnothingtype_checked(T)), x)
 
 
 # Comparison operators
