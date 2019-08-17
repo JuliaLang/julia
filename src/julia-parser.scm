@@ -2134,11 +2134,11 @@
   (let* ((p (ts:port s))
          (c (peek-char p)))
     (cond ((identifier-start-char? c)
-           (let* ((atom (parse-atom s))
+           (let* ((t (require-token s))
                   (c (peek-char p)))
              (if (ends-interpolated-atom? c)
-                 atom
-                 (error (string "interpolated variable $" atom " ends with invalid character \"" c "\"; use \"$(" atom ")\" instead.")))))
+                 (take-token s)
+                 (error (string "interpolated variable $" t " ends with invalid character \"" c "\"; use \"$(" t ")\" instead.")))))
           ((eqv? c #\()
            (read-char p)
            (let ((ex (parse-eq* s))
@@ -2285,14 +2285,20 @@
                       (if (closing-token? t)
                           (error (string "unexpected \"" (take-token s) "\"")))))
            (take-token s)
-           (if (and (eq? t 'var) (eqv? (peek-token s) #\") (not (ts:space? s)))
+           (if (and (eq? t 'var)
+                    (if (or (ts:pbtok s) (ts:last-tok s))
+                        (and (eqv? (peek-token s) #\") (not (ts:space? s)))
+                        ;; Hack: avoid peek-token if possible to preserve
+                        ;; (io.pos (ts:port s)) for non-greedy Meta.parse
+                        (eqv? (peek-char (ts:port s)) #\")))
              (begin
                ;; var"funky identifier" syntax
-               (take-token s)
+               (peek-token s)
+               (take-token s) ;; leading "
                (let ((str (parse-raw-literal s #\"))
                      (nxt (peek-token s)))
                  (if (and (symbol? nxt) (not (operator? nxt)) (not (ts:space? s)))
-                   (error (string "suffix not allowed after `var\"" str "\"`")))
+                     (error (string "suffix not allowed after `var\"" str "\"`")))
                  (symbol str)))
              t))
 
