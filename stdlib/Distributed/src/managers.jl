@@ -665,12 +665,22 @@ It should cause the remote worker specified by `pid` to exit.
 on `pid`.
 """
 function kill(manager::ClusterManager, pid::Int, config::WorkerConfig)
-    remote_do(exit, pid)
+    try
+        remote_do(exit, pid) # For TCP based transports this will result in a close of the socket
+                           # at our end, which will result in a cleanup of the worker.
+    catch ex
+        @warn("Failed to kill remote worker $pid. Worker unreachable, unresponsive or already exited.")
+    end
     nothing
 end
 
 function kill(manager::SSHManager, pid::Int, config::WorkerConfig)
-    remote_do(exit, pid)
+    try
+        remote_do(exit, pid) # For TCP based transports this will result in a close of the socket
+                           # at our end, which will result in a cleanup of the worker.
+    catch ex
+        @warn("Failed to kill remote worker $pid. Worker unreachable, unresponsive or already exited.")
+    end
     cancel_ssh_tunnel(config)
     nothing
 end
