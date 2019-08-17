@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Distributed, Random, Serialization, Sockets
-import Distributed: launch, manage
+import Distributed: launch, manage, connect
 
 @test cluster_cookie() isa String
 
@@ -1141,7 +1141,7 @@ end
 testruns = Any[]
 
 if DoFullTest
-    append!(testruns, [(()->addprocs_with_testenv(["errorhost20372"]), "Unable to read host:port string from worker. Launch command exited with error?", ())])
+    append!(testruns, [(()->addprocs_with_testenv(["errorhost20372"]), "Timed out connecting to worker.", ())])
 end
 
 append!(testruns, [
@@ -1529,6 +1529,60 @@ rmprocs(npids)
 cluster_cookie("foobar") # custom cookie
 npids = addprocs_with_testenv(WorkerArgTester(`--worker=foobar`, false))
 @test remotecall_fetch(myid, npids[1]) == npids[1]
+
+# tests for connect timeout to worker
+struct ConnectTimeoutTester <: ClusterManager
+    block::Channel
+    function ConnectTimeoutTester()
+        new(Channel(1))
+    end
+end
+
+function launch(manager::ConnectTimeoutTester, params::Dict, launched::Array, c::Condition)
+    dir = params[:dir]
+    exename = params[:exename]
+    exeflags = params[:exeflags]
+
+    cmd = `$exename $exeflags --bind-to $(Distributed.LPROC.bind_addr) --worker=`
+    cmd = pipeline(detach(setenv(cmd, dir=dir)))
+    io = open(cmd, "r+")
+
+    wconfig = WorkerConfig()
+    wconfig.process = io
+    wconfig.io = io.out
+    push!(launched, wconfig)
+
+    notify(c)
+end
+manage(::ConnectTimeoutTester, ::Integer, ::WorkerConfig, ::Symbol) = nothing
+function connect(manager::ConnectTimeoutTester, pid::Int, config::WorkerConfig)
+    # block for 360 seconds
+    Timer(360) do timer
+        put!(manager.block, nothing)
+    end
+    (bind_addr, port) = Distributed.read_worker_host_port(config.io)
+    wait(manager.block)
+    (s, bind_addr) = Distributed.connect_to_worker(bind_addr, port)
+    config.bind_addr = bind_addr
+    config.connect_at = (bind_addr, port)
+    if config.io !== nothing
+        let pid = pid
+            redirect_worker_output(pid, Base.notnothing(config.io))
+        end
+    end
+    (s, s)
+end
+
+nprocs()>1 && rmprocs(workers())
+cluster_cookie("")
+npids, t, bytes, gctime, memallocs = @timed try
+    addprocs_with_testenv(ConnectTimeoutTester())
+catch ex
+    []
+end
+@test length(npids) == 0
+@test nprocs() == 1
+@test Distributed.worker_timeout() < t < 360.0
 
 # tests for start_worker options to retain stdio (issue #31035)
 struct RetainStdioTester <: ClusterManager
