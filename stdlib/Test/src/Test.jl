@@ -743,11 +743,41 @@ along with a summary of the test results.
 """
 mutable struct DefaultTestSet <: AbstractTestSet
     description::AbstractString
+    parent::WeakRef
     results::Vector
     n_passed::Int
     anynonpass::Bool
 end
-DefaultTestSet(desc) = DefaultTestSet(desc, [], 0, false)
+DefaultTestSet(desc, parent=nothing) =
+    DefaultTestSet(desc, WeakRef(parent), [], 0, false)
+
+function printdescription(io, ts::DefaultTestSet)
+    descs = AbstractString[ts.description]
+    parent = ts.parent.value
+    while parent isa DefaultTestSet
+        push!(descs, parent.description)
+        parent = parent.parent.value
+    end
+    printstyled(io, "Test Set:", bold=true, color=:white)
+    if length(descs) == 1
+        println(io, " ", descs[1])
+    else
+        println(io)
+        for (i, d) in enumerate(reverse!(descs))
+            println(io, " "^2(i - 1), d)
+        end
+    end
+end
+
+"""
+    subtestset(T::Type{<:AbstractTestSet}, description, parent; kwargs...) -> T
+
+Create a test set of type `T` with the `description :: String` under the
+`parent :: AbstractTestSet` test set.  Default implementation ignores `parent`;
+i.e., it returns `T(description; kwargs...)`.
+"""
+subtestset(T::Type{<:AbstractTestSet}, desc, ::Any; kwargs...) = T(desc; kwargs...)
+subtestset(::Type{DefaultTestSet}, desc, parent) = DefaultTestSet(desc, parent)
 
 # For a broken result, simply store the result
 record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
@@ -758,7 +788,7 @@ record(ts::DefaultTestSet, t::Pass) = (ts.n_passed += 1; t)
 # but do not terminate. Print a backtrace.
 function record(ts::DefaultTestSet, t::Union{Fail, Error})
     if myid() == 1
-        printstyled(ts.description, ": ", color=:white)
+        printdescription(stdout, ts)
         # don't print for interrupted tests
         if !(t isa Error) || t.test_type != :test_interrupted
             print(t)
@@ -1091,7 +1121,7 @@ function testset_beginend(args, tests, source)
     # action (such as reporting the results)
     ex = quote
         _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
-        ts = $(testsettype)($desc; $options...)
+        ts = subtestset($testsettype, $desc, get_testset(); $options...)
         # this empty loop is here to force the block to be compiled,
         # which is needed for backtrace scrubbing to work correctly.
         while false; end
@@ -1173,7 +1203,7 @@ function testset_forloop(args, testloop, source)
             copy!(RNG, tmprng)
 
         end
-        ts = $(testsettype)($desc; $options...)
+        ts = subtestset($testsettype, $desc, parent_ts; $options...)
         push_testset(ts)
         first_iteration = false
         try
@@ -1193,6 +1223,7 @@ function testset_forloop(args, testloop, source)
         local oldrng = copy(RNG)
         Random.seed!(RNG.seed)
         local tmprng = copy(RNG)
+        local parent_ts = get_testset()
         try
             $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
         finally

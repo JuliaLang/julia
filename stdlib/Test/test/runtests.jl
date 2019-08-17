@@ -918,3 +918,38 @@ end
     end
 end
 
+@testset "parent" begin
+    @testset "beginend" begin
+        rootts = Test.get_testset()
+        @testset "first level" begin
+            @testset "second level" begin
+                ts = Test.get_testset()
+                @test ts.parent.value.description === "first level"
+                @test ts.parent.value.parent.value === rootts
+            end
+        end
+    end
+    @testset "forloop" begin
+        rootts = Test.get_testset()
+        @testset "i = $i" for i in 1:3
+            @testset "j = $j" for j in 1:3
+                ts = Test.get_testset()
+                @test ts.parent.value.description[1:3] == "i ="
+                @test ts.parent.value.parent.value === rootts
+            end
+        end
+    end
+end
+
+@testset "printdescription" begin
+    ts = rootts = Test.DefaultTestSet("a")
+    ts = Test.subtestset(Test.DefaultTestSet, "b", ts)
+    ts = Test.subtestset(Test.DefaultTestSet, "c", ts)
+    @test sprint(Test.printdescription, ts) === """
+    Test Set:
+    a
+      b
+        c
+    """
+    @test sprint(Test.printdescription, rootts) === "Test Set: a\n"
+end
