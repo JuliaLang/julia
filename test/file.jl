@@ -107,6 +107,7 @@ end
         for i = 1:n
             t = i % 2 == 0 ? mktempfile() : mktempdir()
             push!(temps, t)
+            @test allunique(temps)
             @test ispath(t)
             @test length(TEMP_CLEANUP) == i 
             @test TEMP_CLEANUP_MAX[] == n
