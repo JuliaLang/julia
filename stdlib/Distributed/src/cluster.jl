@@ -594,8 +594,23 @@ function create_worker(manager, wconfig)
     # initiate a connect. Does not wait for connection completion in case of TCP.
     w = Worker()
     local r_s, w_s
+
+
     try
-        (r_s, w_s) = connect(manager, w.id, wconfig)
+        rw_future = Future()
+        @async try
+            put!(rw_future, connect(manager, w.id, wconfig))
+        catch connect_error
+            put!(rw_future, connect_error)
+        end
+        # allow timeout for both steps - reading host:port and actually connecting
+        Timer(worker_timeout() * 2) do timer
+            isready(rw_future) || put!(rw_future, nothing)
+        end
+        result = fetch(rw_future)
+        (r_s, w_s) = isa(result, Nothing)   ? throw(LaunchWorkerError("Timed out connecting to worker.")) :
+                     isa(result, Exception) ? throw(result) :
+                     result
     catch ex
         try
             deregister_worker(w.id)
