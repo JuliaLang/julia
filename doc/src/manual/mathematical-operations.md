@@ -359,9 +359,9 @@ Julia applies the following order and associativity of operations, from highest 
 | Syntax         | `.` followed by `::`                                                                              | Left                       |
 | Exponentiation | `^`                                                                                               | Right                      |
 | Unary          | `+ - √`                                                                                           | Right[^1]                  |
-| Bitshifts      | `<< >> >>>`                                                                                       | Left                       |
 | Fractions      | `//`                                                                                              | Left                       |
 | Multiplication | `* / % & \ ÷`                                                                                     | Left[^2]                   |
+| Bitshifts      | `<< >> >>>`                                                                                       | Left                       |
 | Addition       | `+ - \| ⊻`                                                                                        | Left[^2]                   |
 | Syntax         | `: ..`                                                                                            | Left                       |
 | Syntax         | `\|>`                                                                                             | Left                       |
