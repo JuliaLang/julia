@@ -46,6 +46,8 @@ New library functions
 Standard library changes
 ------------------------
 
+* `Pkg` can now download and install binary artifacts through the `Pkg.Artifacts`
+   submodule and supporting functions. ([#32918])
 * When `wait` (or `@sync`, or `fetch`) is called on a failing `Task`, the exception is propagated as a
   `TaskFailedException` wrapping the task.
   This makes it possible to see the location of the original failure inside the task (as well as the

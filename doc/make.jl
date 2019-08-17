@@ -154,6 +154,8 @@ end
 # This overwrites the existing ones from above though, hence the warn=false.
 DocMeta.setdocmeta!(SparseArrays, :DocTestSetup, :(using SparseArrays, LinearAlgebra), recursive=true, warn=false)
 DocMeta.setdocmeta!(UUIDs, :DocTestSetup, :(using UUIDs, Random), recursive=true, warn=false)
+DocMeta.setdocmeta!(Pkg, :DocTestSetup, :(using Pkg, Pkg.Artifacts), recursive=true, warn=false)
+DocMeta.setdocmeta!(Pkg.BinaryPlatforms, :DocTestSetup, :(using Pkg, Pkg.BinaryPlatforms), recursive=true, warn=false)
 
 const render_pdf = "pdf" in ARGS
 let r = r"buildroot=(.+)", i = findfirst(x -> occursin(r, x), ARGS)
