@@ -246,15 +246,15 @@ end
     @test c0 == c
 end
 
-@testset "det(Q::QRPackedQ)" begin
-    @testset for n in 1:3, m in 1:3
+@testset "det(Q::Union{QRCompactWYQ, QRPackedQ})" begin
+    @testset for n in 1:3, m in 1:3, pivot in [false, true]
         @testset "real" begin
-            Q, = qr(randn(n, m), Val(true))
+            Q, = qr(randn(n, m), Val(pivot))
             @test det(Q)::Int ≈ det(collect(Q))
             @test abs(det(Q)) ≈ 1
         end
         @testset "complex" begin
-            Q, = qr(randn(ComplexF64, n, m), Val(true))
+            Q, = qr(randn(ComplexF64, n, m), Val(pivot))
             @test det(Q) ≈ det(collect(Q))
             @test abs(det(Q)) ≈ 1
         end
