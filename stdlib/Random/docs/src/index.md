@@ -26,6 +26,11 @@ unbounded integers, the interval must be specified (e.g. `rand(big.(1:6))`).
 Additionally, normal and exponential distributions are implemented for some `AbstractFloat` and
 `Complex` types, see [`randn`](@ref) and [`randexp`](@ref) for details.
 
+!!! note
+    The `MersenneTwister` used by unqualified `rand` or `randstring` calls is not suitable for 
+    applications where cryptographically secure random numbers are required, as for example
+    session keys in web applications or nonces in network protocols. 
+
 ## Random numbers module
 ```@docs
 Random.Random
@@ -65,6 +70,18 @@ Random.AbstractRNG
 Random.MersenneTwister
 Random.RandomDevice
 ```
+
+## Cryptographically secure random numbers
+
+The Julia standard library does not provide a native cryptographically secure random number generator. For most applications,
+we recommend to use the operating system `RandomDevice()`. This should be initialized via a module-level
+`const SECURE_RANDOM = Random.RandomDevice()` and subsequently used via e.g. `gen_nonce() = rand(SECURE_RANDOM, UInt128)`.
+
+It is important to initialize the `RandomDevice()` on the module level, and not use e.g.
+`bad_gen_nonce() = rand(Random.RandomDevice(), UInt128)`, in order to not cause performance degradation and an eventual
+`ERROR: SystemError: opening file "/dev/urandom": Too many open files`.
+
+The `RandomDevice` reads and caches `/dev/urandom` on Unix-derived systems, and uses appropriate `Ntsecapi.h` calls on Windows.
 
 ## Hooking into the `Random` API
 
