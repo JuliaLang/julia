@@ -1955,7 +1955,7 @@ end
     droptol!(x::SparseVector, tol; trim::Bool = true)
 
 Removes stored values from `x` whose absolute value is less than or equal to `tol`,
-optionally trimming resulting excess space from `A.rowval` and `A.nzval` when `trim`
+optionally trimming resulting excess space from `x.nzind` and `x.nzval` when `trim`
 is `true`.
 """
 droptol!(x::SparseVector, tol; trim::Bool = true) = fkeep!(x, (i, x) -> abs(x) > tol, trim)
