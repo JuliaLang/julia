@@ -853,6 +853,11 @@ end
         Broadcast.broadcasted(iseven, Broadcast.broadcasted(-, xs, ys)))
     @test count(bc) == count(iseven, map(-, xs, ys))
 
+    xs = reshape(1:6, (2, 3))
+    ys = 1:2
+    bc = Broadcast.instantiate(Broadcast.broadcasted(*, xs, ys))
+    @test reduce(+, bc; dims=1, init=0) == [5 11 17]
+
     # Let's test that `Broadcasted` actually hits the efficient
     # `mapreduce` method as intended.  We are going to invoke `reduce`
     # with this *NON-ASSOCIATIVE* binary operator to see what
