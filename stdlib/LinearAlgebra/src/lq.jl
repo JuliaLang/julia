@@ -349,5 +349,9 @@ det(Q::Union{QRPackedQ{<:Real}, QRCompactWYQ{<:Real}, LQPackedQ{<:Real}}) =
 # Combining this with the constraint `c > 0`, it turns out that the eigenvalue
 # (hence the determinant) can be computed as `λ = -sign(τ)^2`.
 # See: https://github.com/JuliaLang/julia/pull/32887#issuecomment-521935716
-det(Q::Union{QRPackedQ, QRCompactWYQ, LQPackedQ}) =
+det(Q::Union{QRPackedQ, QRCompactWYQ}) =
     prod(τ -> iszero(τ) ? one(τ) : -sign(τ)^2, _tau(Q))
+# In LQ factorization, `Q` is expressed as the product of the adjoint of the
+# reflectors.  Thus, `τ` has to be conjugated before the computation.
+det(Q::LQPackedQ) =
+    prod(τ -> iszero(τ) ? one(τ) : -sign(conj(τ))^2, _tau(Q))
