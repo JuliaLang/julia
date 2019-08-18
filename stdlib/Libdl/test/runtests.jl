@@ -16,7 +16,11 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     end
 end
 @test length(filter(dlls) do dl
-        return occursin(Regex("^libjulia(?:.*)\\.$(Libdl.dlext)(?:\\..+)?\$"), basename(dl))
+      if Base.DARWIN_FRAMEWORK
+          return occursin(Regex("^$(Base.DARWIN_FRAMEWORK_NAME)(?:_debug)?\$"), basename(dl))
+      else
+          return occursin(Regex("^libjulia(?:.*)\\.$(Libdl.dlext)(?:\\..+)?\$"), basename(dl))
+      end
     end) == 1 # look for something libjulia-like (but only one)
 
 # library handle pointer must not be NULL
@@ -28,7 +32,13 @@ cd(@__DIR__) do
 # Find the library directory by finding the path of libjulia (or libjulia-debug, as the case may be)
 # and then adding on /julia to that directory path to get the private library directory, if we need
 # to (where "need to" is defined as private_libdir/julia/libccalltest.dlext exists
-private_libdir = if ccall(:jl_is_debugbuild, Cint, ()) != 0
+private_libdir = if Base.DARWIN_FRAMEWORK
+    if ccall(:jl_is_debugbuild, Cint, ()) != 0
+        dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug")))
+    else
+        joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME))),"Frameworks")
+    end
+elseif ccall(:jl_is_debugbuild, Cint, ()) != 0
     dirname(abspath(Libdl.dlpath("libjulia-debug")))
 else
     dirname(abspath(Libdl.dlpath("libjulia")))
@@ -184,6 +194,18 @@ let dl = C_NULL
     finally
         Libdl.dlclose(dl)
     end
+end
+
+# test do-block dlopen
+Libdl.dlopen(abspath(joinpath(private_libdir, "libccalltest"))) do dl
+    fptr = Libdl.dlsym(dl, :set_verbose)
+    @test fptr !== nothing
+    @test_throws ErrorException Libdl.dlsym(dl, :foo)
+
+    fptr = Libdl.dlsym_e(dl, :set_verbose)
+    @test fptr != C_NULL
+    fptr = Libdl.dlsym_e(dl, :foo)
+    @test fptr == C_NULL
 end
 
 # test dlclose

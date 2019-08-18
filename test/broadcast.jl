@@ -684,6 +684,15 @@ let n = 1
     @test ceil.(Int, 1 ./ (1,)) == (1,)
 end
 
+# Issue #29266
+@testset "deprecated scalar-fill .=" begin
+    a = fill(1, 10)
+    @test_throws ArgumentError a[1:5] = 0
+
+    x = randn(10)
+    @test_throws ArgumentError x[x .> 0.0] = 0.0
+end
+
 
 # lots of splatting!
 let x = [[1, 4], [2, 5], [3, 6]]
@@ -819,6 +828,10 @@ end
 let a = rand(5), b = rand(5), c = copy(a)
     view(identity(a), 1:3) .+= view(b, 1:3)
     @test a == [(c+b)[1:3]; c[4:5]]
+
+    x = [1]
+    x[[1,1]] .+= 1
+    @test x == [2]
 end
 
 @testset "broadcasted mapreduce" begin
@@ -869,3 +882,7 @@ end
     @test IndexStyle(bcraw) == IndexCartesian()
     @test reduce(paren, bcraw) == foldl(paren, xs)
 end
+
+# treat Pair as scalar:
+@test replace.(split("The quick brown fox jumps over the lazy dog"), r"[aeiou]"i => "_") ==
+      ["Th_", "q__ck", "br_wn", "f_x", "j_mps", "_v_r", "th_", "l_zy", "d_g"]

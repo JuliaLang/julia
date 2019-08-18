@@ -135,6 +135,8 @@ try
 
               const x28297 = Result(missing)
 
+              const d29936a = UnionAll(Dict.var, UnionAll(Dict.body.var, Dict.body.body))
+              const d29936b = UnionAll(Dict.body.var, UnionAll(Dict.var, Dict.body.body))
 
               # issue #28998
               const x28998 = [missing, 2, missing, 6, missing,
@@ -156,6 +158,11 @@ try
               const abigfloat_x = big"43.21"
               const abigint_f() = big"123"
               const abigint_x = big"124"
+
+              # issue #31488
+              _v31488 = Base.StringVector(2)
+              resize!(_v31488, 0)
+              const a31488 = fill(String(_v31488), 100)
           end
           """)
     @test_throws ErrorException Core.kwfunc(Base.nothing) # make sure `nothing` didn't have a kwfunc (which would invalidate the attempted test)
@@ -187,7 +194,12 @@ try
 
         @test Foo.x28297.result === missing
 
+        @test Foo.d29936a === Dict
+        @test Foo.d29936b === Dict{K,V} where {V,K}
+
         @test Foo.x28998[end] == 6
+
+        @test Foo.a31488 == fill("", 100)
     end
 
     cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")
@@ -281,13 +293,14 @@ try
                     some_method, Tuple{typeof(Base.include), String}, Core.svec(), typemax(UInt))
         @test Foo.some_linfo::Core.MethodInstance === some_linfo
 
-        PV = Foo.Value18343{Some}.body.types[1]
-        VR = PV.types[1].parameters[1]
-        @test PV.types[1] === Array{VR,1}
-        @test pointer_from_objref(PV.types[1]) ===
-              pointer_from_objref(PV.types[1].parameters[1].types[1].types[1])
-        @test PV === PV.types[1].parameters[1].types[1]
-        @test pointer_from_objref(PV) === pointer_from_objref(PV.types[1].parameters[1].types[1])
+        ft = Base.datatype_fieldtypes
+        PV = ft(Foo.Value18343{Some}.body)[1]
+        VR = ft(PV)[1].parameters[1]
+        @test ft(PV)[1] === Array{VR,1}
+        @test pointer_from_objref(ft(PV)[1]) ===
+              pointer_from_objref(ft(ft(ft(PV)[1].parameters[1])[1])[1])
+        @test PV === ft(ft(PV)[1].parameters[1])[1]
+        @test pointer_from_objref(PV) === pointer_from_objref(ft(ft(PV)[1].parameters[1])[1])
     end
 
     Baz_file = joinpath(dir, "Baz.jl")
@@ -359,7 +372,7 @@ try
           error("break me")
           end
           """)
-    @test_warn r"ERROR: Error while loading expression starting at.*FooBar2.*caused by.*break me"s try
+    @test_warn "ERROR: LoadError: break me\nStacktrace:\n [1] error" try
         Base.require(Main, :FooBar2)
         error("\"LoadError: break me\" test failed")
     catch exc

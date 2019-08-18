@@ -434,10 +434,11 @@ function show_vector(io::IO, v, opn='[', cls=']')
     io = IOContext(io, :typeinfo => eltype(v))
     limited = get(io, :limit, false)
     if limited && length(v) > 20
-        inds = axes1(v)
-        show_delim_array(io, v, opn, ",", "", false, inds[1], inds[1]+9)
+        axs1 = axes1(v)
+        f, l = first(axs1), last(axs1)
+        show_delim_array(io, v, opn, ",", "", false, f, f+9)
         print(io, "  …  ")
-        show_delim_array(io, v, "", ",", cls, false, inds[end-9], inds[end])
+        show_delim_array(io, v, "", ",", cls, false, l-9, l)
     else
         show_delim_array(io, v, opn, ",", cls, false)
     end

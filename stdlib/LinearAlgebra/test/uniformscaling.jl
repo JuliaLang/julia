@@ -180,15 +180,17 @@ let
                 @test @inferred(J - T) == J - Array(T)
                 @test @inferred(T\I) == inv(T)
 
-                if isa(A, Array)
-                    T = Hermitian(randn(3,3))
-                else
-                    T = Hermitian(view(randn(3,3), 1:3, 1:3))
+                for elty in (Float64, ComplexF64)
+                    if isa(A, Array)
+                        T = Hermitian(randn(elty, 3,3))
+                    else
+                        T = Hermitian(view(randn(elty, 3,3), 1:3, 1:3))
+                    end
+                    @test @inferred(T + J) == Array(T) + J
+                    @test @inferred(J + T) == J + Array(T)
+                    @test @inferred(T - J) == Array(T) - J
+                    @test @inferred(J - T) == J - Array(T)
                 end
-                @test @inferred(T + J) == Array(T) + J
-                @test @inferred(J + T) == J + Array(T)
-                @test @inferred(T - J) == Array(T) - J
-                @test @inferred(J - T) == J - Array(T)
 
                 @test @inferred(I\A) == A
                 @test @inferred(A\I) == inv(A)
@@ -312,6 +314,14 @@ end
     @test rmul!(copyto!(C, A), J) == target_mul
     @test ldiv!(J, copyto!(C, A)) == target_div
     @test rdiv!(copyto!(C, A), J) == target_div
+
+    A = randn(4, 3)
+    C = randn!(similar(A))
+    alpha = randn()
+    beta = randn()
+    target = J * A * alpha + C * beta
+    @test mul!(copy(C), J, A, alpha, beta) ≈ target
+    @test mul!(copy(C), A, J, alpha, beta) ≈ target
 end
 
 @testset "Construct Diagonal from UniformScaling" begin

@@ -93,6 +93,7 @@ end
 if opt_level > 0
     # Make sure `jl_string_ptr` is inlined
     @test !occursin(" call ", get_llvm(jl_string_ptr, Tuple{String}))
+    # Make sure `Core.sizeof` call is inlined
     s = "aaa"
     @test jl_string_ptr(s) == pointer_from_objref(s) + sizeof(Int)
     # String
@@ -105,6 +106,8 @@ if opt_level > 0
     test_loads_no_call(get_llvm(core_sizeof, Tuple{Array{Any}}), [Iptr])
     # Check that we load the elsize
     test_loads_no_call(get_llvm(core_sizeof, Tuple{Vector}), [Iptr, "i16"])
+    # Primitive Type size should be folded to a constant
+    test_loads_no_call(get_llvm(core_sizeof, Tuple{Ptr}), String[])
 
     test_jl_dump_compiles()
     test_jl_dump_compiles_toplevel_thunks()
@@ -364,3 +367,27 @@ str = String(take!(io))
 @test occursin("alias.scope", str)
 @test occursin("aliasscope", str)
 @test occursin("noalias", str)
+
+# Issue #10208 - Unnecessary boxing for calling objectid
+struct FooDictHash{T}
+    x::T
+end
+
+function f_dict_hash_alloc()
+    d = Dict{FooDictHash{Int},Int}()
+    for i in 1:10000
+        d[FooDictHash(i)] = i+1
+    end
+    d
+end
+
+function g_dict_hash_alloc()
+    d = Dict{Int,Int}()
+    for i in 1:10000
+        d[i] = i+1
+    end
+    d
+end
+# Warm up
+f_dict_hash_alloc(); g_dict_hash_alloc();
+@test (@allocated f_dict_hash_alloc()) == (@allocated g_dict_hash_alloc())

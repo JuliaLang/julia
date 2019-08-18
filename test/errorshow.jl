@@ -42,7 +42,7 @@ method_c2(x::Int32, y::Int32, z::Int32) = true
 method_c2(x::T, y::T, z::T) where {T<:Real} = true
 
 Base.show_method_candidates(buf, Base.MethodError(method_c2,(1., 1., 2)))
-@test String(take!(buf)) ==  "\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(!Matched::Int32, ::Any...)$cfile$(c2line+1)\n  method_c2(::T<:Real, ::T<:Real, !Matched::T<:Real) where T<:Real$cfile$(c2line+5)\n  ..."
+@test String(take!(buf)) ==  "\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(!Matched::Int32, ::Any...)$cfile$(c2line+1)\n  method_c2(::T, ::T, !Matched::T) where T<:Real$cfile$(c2line+5)\n  ..."
 
 c3line = @__LINE__() + 1
 method_c3(x::Float64, y::Float64) = true
@@ -156,16 +156,15 @@ end
 macro except_strbt(expr, err_type)
     errmsg = "expected failure, but no exception thrown for $expr"
     return quote
-        let err = nothing, bt = nothing
+        let err = nothing
             try
                 $(esc(expr))
             catch err
-                bt = catch_backtrace()
             end
             err === nothing && error($errmsg)
             @test typeof(err) === $(esc(err_type))
             buf = IOBuffer()
-            showerror(buf, err, bt)
+            showerror(buf, err, catch_backtrace())
             String(take!(buf))
         end
     end
@@ -226,6 +225,11 @@ let
 end
 
 struct TypeWithIntParam{T <: Integer} end
+struct Bounded  # not an AbstractArray
+    bound::Int
+end
+Base.getindex(b::Bounded, i) = checkindex(Bool, 1:b.bound, i) || throw(BoundsError(b, i))
+Base.summary(io::IO, b::Bounded) = print(io, "$(b.bound)-size Bounded")
 let undefvar
     err_str = @except_strbt sqrt(-1) DomainError
     @test occursin("Try sqrt(Complex(x)).", err_str)
@@ -246,6 +250,9 @@ let undefvar
     @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [-2, 1]"
     err_str = @except_str [5, 4, 3][1:5] BoundsError
     @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [1:5]"
+
+    err_str = @except_str Bounded(2)[3] BoundsError
+    @test err_str == "BoundsError: attempt to access 2-size Bounded\n  at index [3]"
 
     err_str = @except_str 0::Bool TypeError
     @test err_str == "TypeError: non-boolean ($Int) used in boolean context"
@@ -556,11 +563,18 @@ let buf = IOBuffer()
     @test length(take!(buf)) !== 0
 end
 
-@testset "Nested errors" begin
-    # LoadError and InitError used to print the nested exception.
-    # This is now dealt with via the exception stack so these print very simply:
-    @test sprint(Base.showerror, LoadError("somefile.jl", 10, ErrorException("retained for backward compat"))) ==
-          "Error while loading expression starting at somefile.jl:10"
-    @test sprint(Base.showerror, InitError(:some_module, ErrorException("retained for backward compat"))) ==
-          "InitError during initialization of module some_module"
+# pr #32814
+let t1 = @async(error(1)),
+    t2 = @async(wait(t1))
+    local e
+    try
+        wait(t2)
+    catch e_
+        e = e_
+    end
+    buf = IOBuffer()
+    showerror(buf, e)
+    s = String(take!(buf))
+    @test length(findall("Stacktrace:", s)) == 2
+    @test occursin("[1] error(::Int", s)
 end

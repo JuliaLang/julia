@@ -220,7 +220,7 @@ Give the number of columns needed to print a character.
 julia> textwidth('α')
 1
 
-julia> textwidth('❤')
+julia> textwidth('⛵')
 2
 ```
 """

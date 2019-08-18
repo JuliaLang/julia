@@ -553,8 +553,17 @@ timesofar("indexing")
         b2 = bitrand(m2)
         i1 = Array(b1)
         i2 = Array(b2)
+        # Append from array
         @test isequal(Array(append!(b1, b2)), append!(i1, i2))
         @test isequal(Array(append!(b1, i2)), append!(i1, b2))
+        @test bitcheck(b1)
+        # Append from HasLength iterator
+        @test isequal(Array(append!(b1, (v for v in b2))), append!(i1, i2))
+        @test isequal(Array(append!(b1, (v for v in i2))), append!(i1, b2))
+        @test bitcheck(b1)
+        # Append from SizeUnknown iterator
+        @test isequal(Array(append!(b1, (v for v in b2 if true))), append!(i1, i2))
+        @test isequal(Array(append!(b1, (v for v in i2 if true))), append!(i1, b2))
         @test bitcheck(b1)
     end
 

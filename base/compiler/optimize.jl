@@ -56,7 +56,7 @@ mutable struct OptimizationState
         return new(linfo,
                    s_edges::Vector{Any},
                    src, inmodule, nargs,
-                   min_world(linfo), max_world(linfo),
+                   UInt(1), get_world_counter(),
                    params, sptypes_from_meth_instance(linfo), slottypes, false)
         end
 end
@@ -104,19 +104,21 @@ _topmod(sv::OptimizationState) = _topmod(sv.mod)
 function update_valid_age!(min_valid::UInt, max_valid::UInt, sv::OptimizationState)
     sv.min_valid = max(sv.min_valid, min_valid)
     sv.max_valid = min(sv.max_valid, max_valid)
-    @assert(!isa(sv.linfo.def, Method) ||
-            (sv.min_valid == typemax(UInt) && sv.max_valid == typemin(UInt)) ||
-            sv.min_valid <= sv.params.world <= sv.max_valid,
+    @assert(sv.min_valid <= sv.params.world <= sv.max_valid,
             "invalid age range update")
     nothing
 end
 
-update_valid_age!(li::MethodInstance, sv::OptimizationState) = update_valid_age!(min_world(li), max_world(li), sv)
-
 function add_backedge!(li::MethodInstance, caller::OptimizationState)
+    #TODO: deprecate this?
     isa(caller.linfo.def, Method) || return # don't add backedges to toplevel exprs
     push!(caller.calledges, li)
-    update_valid_age!(li, caller)
+    nothing
+end
+
+function add_backedge!(li::CodeInstance, caller::OptimizationState)
+    update_valid_age!(min_world(li), max_world(li), caller)
+    add_backedge!(li.def, caller)
     nothing
 end
 

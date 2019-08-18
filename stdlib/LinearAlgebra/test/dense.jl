@@ -89,6 +89,22 @@ bimg  = randn(n,2)/2
     @test diagm(ones(50)) == diagm(0 => ones(50))
     v = randn(500)
     @test diagm(v) == diagm(0 => v)
+    @test diagm(500, 501, v) == diagm(500, 501, 0 => v)
+end
+
+@testset "Non-square diagm" begin
+    x = [7, 8]
+    for m=1:4, n=2:4
+        if m < 2 || n < 3
+            @test_throws DimensionMismatch diagm(m,n, 0 => x,  1 => x)
+            @test_throws DimensionMismatch diagm(n,m, 0 => x,  -1 => x)
+        else
+            M = zeros(m,n)
+            M[1:2,1:3] = [7 7 0; 0 8 8]
+            @test diagm(m,n, 0 => x,  1 => x) == M
+            @test diagm(n,m, 0 => x,  -1 => x) == M'
+        end
+    end
 end
 
 @testset "Test pinv (rtol, atol)" begin
@@ -877,6 +893,14 @@ end
 
     @test @inferred(inv(B'))*B'                     ≈ I
     @test @inferred(inv(transpose(B)))*transpose(B) ≈ I
+end
+
+@testset "Factorize fallback for Adjoint/Transpose" begin
+    a = rand(Complex{Int8}, n, n)
+    @test Array(transpose(factorize(Transpose(a)))) ≈ Array(factorize(a))
+    @test transpose(factorize(transpose(a))) == factorize(a)
+    @test Array(adjoint(factorize(Adjoint(a)))) ≈ Array(factorize(a))
+    @test adjoint(factorize(adjoint(a))) == factorize(a)
 end
 
 end # module TestDense

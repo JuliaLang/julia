@@ -244,6 +244,21 @@ let doc = Markdown.parse(
     @test !occursin("3. ", sprint(term, doc))
 end
 
+# Testing margin when printing Tables to the terminal.
+@test sprint(term, md"""
+| R |
+|---|
+| L |
+""") == "  R\n  –\n  L"
+
+@test sprint(term, md"""
+!!! note "Tables in admonitions"
+
+    | R |
+    |---|
+    | L |
+""") == "  │ Tables in admonitions\n  │\n  │  R\n  │  –\n  │  L"
+
 # HTML output
 @test md"foo *bar* baz" |> html == "<p>foo <em>bar</em> baz</p>\n"
 @test md"something ***" |> html == "<p>something ***</p>\n"
@@ -1085,7 +1100,7 @@ t = """
     a   |   b
     :-- | --:
     1   |   2"""
-@test sprint(Markdown.term, Markdown.parse(t), 0) == "a b\n– –\n1 2"
+@test sprint(Markdown.term, Markdown.parse(t), 0) == "  a b\n  – –\n  1 2"
 
 # test Base.copy
 let

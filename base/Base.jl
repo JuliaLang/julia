@@ -198,7 +198,6 @@ include("c.jl")
 
 # Core I/O
 include("io.jl")
-include("iostream.jl")
 include("iobuffer.jl")
 
 # strings & printing
@@ -235,7 +234,11 @@ using .Libc: getpid, gethostname, time
 
 const DL_LOAD_PATH = String[]
 if Sys.isapple()
-    push!(DL_LOAD_PATH, "@loader_path/julia")
+    if Base.DARWIN_FRAMEWORK
+        push!(DL_LOAD_PATH, "@loader_path/Frameworks")
+    else
+        push!(DL_LOAD_PATH, "@loader_path/julia")
+    end
     push!(DL_LOAD_PATH, "@loader_path")
 end
 
@@ -260,9 +263,11 @@ function randn end
 # I/O
 include("libuv.jl")
 include("asyncevent.jl")
+include("iostream.jl")
 include("stream.jl")
 include("filesystem.jl")
 using .Filesystem
+include("cmd.jl")
 include("process.jl")
 include("grisu/grisu.jl")
 include("secretbuffer.jl")
@@ -348,6 +353,9 @@ include("loading.jl")
 include("util.jl")
 
 include("asyncmap.jl")
+
+# experimental API's
+include("experimental.jl")
 
 # deprecated functions
 include("deprecated.jl")

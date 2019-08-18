@@ -620,8 +620,8 @@ end
 
 function _delete!(h::Dict{K,V}, index) where {K,V}
     @inbounds h.slots[index] = 0x2
-    isbitstype(K) || isbitsunion(K) || ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.keys, index-1)
-    isbitstype(V) || isbitsunion(V) || ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.vals, index-1)
+    @inbounds _unsetindex!(h.keys, index)
+    @inbounds _unsetindex!(h.vals, index)
     h.ndel += 1
     h.count -= 1
     h.age += 1
@@ -657,18 +657,22 @@ end
 
 function skip_deleted(h::Dict, i)
     L = length(h.slots)
-    @inbounds while i<=L && !isslotfilled(h,i)
-        i += 1
+    for i = i:L
+        @inbounds if isslotfilled(h,i)
+            return  i
+        end
     end
-    return i
+    return 0
 end
 function skip_deleted_floor!(h::Dict)
     idx = skip_deleted(h, h.idxfloor)
-    h.idxfloor = idx
+    if idx != 0
+        h.idxfloor = idx
+    end
     idx
 end
 
-@propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} = i > length(t.vals) ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i+1)
+@propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} = i == 0 ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i == typemax(Int) ? 0 : i+1)
 @propagate_inbounds function iterate(t::Dict)
     _iterate(t, skip_deleted_floor!(t))
 end
@@ -677,14 +681,29 @@ end
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
-@propagate_inbounds function iterate(v::Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}},
-                                     i=v.dict.idxfloor)
+@propagate_inbounds function Base.iterate(v::T, i::Int = v.dict.idxfloor) where T <: Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}}
+    i == 0 && return nothing
     i = skip_deleted(v.dict, i)
-    i > length(v.dict.vals) && return nothing
-    (v isa KeySet ? v.dict.keys[i] : v.dict.vals[i], i+1)
+    i == 0 && return nothing
+    vals = T <: KeySet ? v.dict.keys : v.dict.vals
+    (@inbounds vals[i], i == typemax(Int) ? 0 : i+1)
 end
 
-filter!(f, d::Dict) = filter_in_one_pass!(f, d)
+function filter!(pred, h::Dict{K,V}) where {K,V}
+    h.count == 0 && return h
+    @inbounds for i=1:length(h.slots)
+        if h.slots[i] == 0x01 && !pred(Pair{K,V}(h.keys[i], h.vals[i]))
+            _delete!(h, i)
+        end
+    end
+    return h
+end
+
+function reduce(::typeof(merge), items::Vector{<:Dict})
+    K = mapreduce(keytype, promote_type, items)
+    V = mapreduce(valtype, promote_type, items)
+    return reduce(merge!, items; init=Dict{K,V}())
+end
 
 function map!(f, iter::ValueIterator{<:Dict})
     dict = iter.dict

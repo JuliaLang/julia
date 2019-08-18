@@ -6,7 +6,7 @@
 # since we won't be able to specialize & infer them at runtime
 
 let fs = Any[typeinf_ext, typeinf, typeinf_edge, pure_eval_call, run_passes],
-    world = ccall(:jl_get_world_counter, UInt, ())
+    world = get_world_counter()
     for x in T_FFUNC_VAL
         push!(fs, x[3])
     end

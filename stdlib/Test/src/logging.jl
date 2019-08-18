@@ -169,7 +169,7 @@ macro test_logs(exs...)
                                              $(QuoteNode(exs[1:end-1])), logs)
                 end
             catch e
-                testres = Error(:test_error, $orig_expr, e, catch_backtrace(), $sourceloc)
+                testres = Error(:test_error, $orig_expr, e, Base.catch_stack(), $sourceloc)
             end
             Test.record(Test.get_testset(), testres)
             value

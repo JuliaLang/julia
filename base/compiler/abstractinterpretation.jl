@@ -19,7 +19,7 @@ call_result_unused(frame::InferenceState, pc::LineNum=frame.currpc) =
 function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState,
                                   max_methods = sv.params.MAX_METHODS)
     atype_params = unwrap_unionall(atype).parameters
-    ft = unwrap_unionall(atype_params[1]) # TODO: ccall jl_first_argument_datatype here
+    ft = unwrap_unionall(atype_params[1]) # TODO: ccall jl_method_table_for here
     isa(ft, DataType) || return Any # the function being called is unknown. can't properly handle this backedge right now
     ftname = ft.name
     isdefined(ftname, :mt) || return Any # not callable. should be Bottom, but can't track this backedge right now
@@ -63,6 +63,7 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
     nonbot = 0  # the index of the only non-Bottom inference result if > 0
     seen = 0    # number of signatures actually inferred
     istoplevel = sv.linfo.def isa Module
+    multiple_matches = napplicable > 1
     for i in 1:napplicable
         match = applicable[i]::SimpleVector
         method = match[3]::Method
@@ -80,7 +81,7 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
         if splitunions
             splitsigs = switchtupleunion(sig)
             for sig_n in splitsigs
-                rt, edgecycle1, edge = abstract_call_method(method, sig_n, svec(), sv)
+                rt, edgecycle1, edge = abstract_call_method(method, sig_n, svec(), multiple_matches, sv)
                 if edge !== nothing
                     push!(edges, edge)
                 end
@@ -89,7 +90,8 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
                 this_rt === Any && break
             end
         else
-            this_rt, edgecycle, edge = abstract_call_method(method, sig, match[2]::SimpleVector, sv)
+            this_rt, edgecycle1, edge = abstract_call_method(method, sig, match[2]::SimpleVector, multiple_matches, sv)
+            edgecycle |= edgecycle1::Bool
             if edge !== nothing
                 push!(edges, edge)
             end
@@ -170,45 +172,70 @@ function abstract_call_method_with_const_args(@nospecialize(rettype), @nospecial
     method.isva && (nargs -= 1)
     length(argtypes) >= nargs || return Any
     haveconst = false
+    allconst = true
+    # see if any or all of the arguments are constant and propagating constants may be worthwhile
     for a in argtypes
         a = widenconditional(a)
-        if has_nontrivial_const_info(a)
-            haveconst = const_prop_profitable(a)
-            haveconst && break
+        if allconst && !isa(a, Const) && !isconstType(a) && !isa(a, PartialStruct)
+            allconst = false
+        end
+        if !haveconst && has_nontrivial_const_info(a) && const_prop_profitable(a)
+            haveconst = true
+        end
+        if haveconst && !allconst
+            break
         end
     end
     haveconst || improvable_via_constant_propagation(rettype) || return Any
-    sig = match[1]
-    sparams = match[2]::SimpleVector
-    code = code_for_method(method, sig, sparams, sv.params.world)
-    code === nothing && return Any
-    code = code::MethodInstance
-    # decide if it's likely to be worthwhile
-    declared_inline = isdefined(method, :source) && ccall(:jl_ast_flag_inlineable, Bool, (Any,), method.source)
-    cache_inlineable = declared_inline
-    if isdefined(code, :inferred) && !cache_inlineable
-        cache_inf = code.inferred
-        if !(cache_inf === nothing)
-            cache_src_inferred = ccall(:jl_ast_flag_inferred, Bool, (Any,), cache_inf)
-            cache_src_inlineable = ccall(:jl_ast_flag_inlineable, Bool, (Any,), cache_inf)
-            cache_inlineable = cache_src_inferred && cache_src_inlineable
-        end
-    end
-    if !cache_inlineable && !sv.params.aggressive_constant_propagation
-        tm = _topmod(sv)
-        if !istopfunction(f, :getproperty) && !istopfunction(f, :setproperty!)
-            # in this case, see if all of the arguments are constants
-            for a in argtypes
-                a = widenconditional(a)
-                if !isa(a, Const) && !isconstType(a) && !isa(a, PartialStruct)
-                    return Any
-                end
+    if nargs > 1
+        if istopfunction(f, :getindex) || istopfunction(f, :setindex!)
+            arrty = argtypes[2]
+            # don't propagate constant index into indexing of non-constant array
+            if arrty isa Type && arrty <: AbstractArray && !issingletontype(arrty)
+                return Any
+            end
+        elseif istopfunction(f, :iterate)
+            itrty = argtypes[2]
+            if itrty isa Type && !issingletontype(itrty)
+                return Any
             end
         end
     end
-    inf_result = cache_lookup(code, argtypes, sv.params.cache)
+    if !allconst && (istopfunction(f, :+) || istopfunction(f, :-) || istopfunction(f, :*) ||
+                     istopfunction(f, :(==)) || istopfunction(f, :!=) ||
+                     istopfunction(f, :<=) || istopfunction(f, :>=) || istopfunction(f, :<) || istopfunction(f, :>) ||
+                     istopfunction(f, :<<) || istopfunction(f, :>>))
+        return Any
+    end
+    force_inference = allconst || sv.params.aggressive_constant_propagation
+    if istopfunction(f, :getproperty) || istopfunction(f, :setproperty!)
+        force_inference = true
+    end
+    sig = match[1]
+    sparams = match[2]::SimpleVector
+    mi = specialize_method(method, sig, sparams, !force_inference)
+    mi === nothing && return Any
+    mi = mi::MethodInstance
+    # decide if it's likely to be worthwhile
+    if !force_inference
+        code = inf_for_methodinstance(mi, sv.params.world)
+        declared_inline = isdefined(method, :source) && ccall(:jl_ast_flag_inlineable, Bool, (Any,), method.source)
+        cache_inlineable = declared_inline
+        if isdefined(code, :inferred) && !cache_inlineable
+            cache_inf = code.inferred
+            if !(cache_inf === nothing)
+                cache_src_inferred = ccall(:jl_ast_flag_inferred, Bool, (Any,), cache_inf)
+                cache_src_inlineable = ccall(:jl_ast_flag_inlineable, Bool, (Any,), cache_inf)
+                cache_inlineable = cache_src_inferred && cache_src_inlineable
+            end
+        end
+        if !cache_inlineable
+            return Any
+        end
+    end
+    inf_result = cache_lookup(mi, argtypes, sv.params.cache)
     if inf_result === nothing
-        inf_result = InferenceResult(code, argtypes)
+        inf_result = InferenceResult(mi, argtypes)
         frame = InferenceState(inf_result, #=cache=#false, sv.params)
         frame.limited = true
         frame.parent = sv
@@ -216,12 +243,12 @@ function abstract_call_method_with_const_args(@nospecialize(rettype), @nospecial
         typeinf(frame) || return Any
     end
     result = inf_result.result
-    isa(result, InferenceState) && return Any # TODO: is this recursive constant inference?
+    isa(result, InferenceState) && return Any # TODO: unexpected, is this recursive constant inference?
     add_backedge!(inf_result.linfo, sv)
     return result
 end
 
-function abstract_call_method(method::Method, @nospecialize(sig), sparams::SimpleVector, sv::InferenceState)
+function abstract_call_method(method::Method, @nospecialize(sig), sparams::SimpleVector, hardlimit::Bool, sv::InferenceState)
     if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
         return Any, false, nothing
     end
@@ -237,7 +264,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
     # necessary in order to retrieve this field from the generated `CodeInfo`, if it exists.
     # The other `CodeInfo`s we inspect will already have this field inflated, so we just
     # access it directly instead (to avoid regeneration).
-    method2 = method_for_inference_heuristics(method, sig, sparams, sv.params.world) # Union{Method, Nothing}
+    method2 = method_for_inference_heuristics(method, sig, sparams) # Union{Method, Nothing}
     sv_method2 = sv.src.method_for_inference_limit_heuristics # limit only if user token match
     sv_method2 isa Method || (sv_method2 = nothing) # Union{Method, Nothing}
     while !(infstate === nothing)
@@ -251,7 +278,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                     # we have a self-cycle in the call-graph, but not in the inference graph (typically):
                     # break this edge now (before we record it) by returning early
                     # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
-                    return Any, false, nothing
+                    return Any, true, nothing
                 end
                 topmost = nothing
                 edgecycle = true
@@ -260,30 +287,36 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
             inf_method2 = infstate.src.method_for_inference_limit_heuristics # limit only if user token match
             inf_method2 isa Method || (inf_method2 = nothing) # Union{Method, Nothing}
             if topmost === nothing && method2 === inf_method2
-                # inspect the parent of this edge,
-                # to see if they are the same Method as sv
-                # in which case we'll need to ensure it is convergent
-                # otherwise, we don't
-                for parent in infstate.callers_in_cycle
-                    # check in the cycle list first
-                    # all items in here are mutual parents of all others
-                    parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
-                    parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
-                    if parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
-                        topmost = infstate
-                        edgecycle = true
-                        break
-                    end
-                end
-                let parent = infstate.parent
-                    # then check the parent link
-                    if topmost === nothing && parent !== nothing
-                        parent = parent::InferenceState
+                if hardlimit
+                    topmost = infstate
+                    edgecycle = true
+                else
+                    # if this is a soft limit,
+                    # also inspect the parent of this edge,
+                    # to see if they are the same Method as sv
+                    # in which case we'll need to ensure it is convergent
+                    # otherwise, we don't
+                    for parent in infstate.callers_in_cycle
+                        # check in the cycle list first
+                        # all items in here are mutual parents of all others
                         parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
                         parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
-                        if (parent.cached || parent.limited) && parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
+                        if parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
                             topmost = infstate
                             edgecycle = true
+                            break
+                        end
+                    end
+                    let parent = infstate.parent
+                        # then check the parent link
+                        if topmost === nothing && parent !== nothing
+                            parent = parent::InferenceState
+                            parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
+                            parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
+                            if (parent.cached || parent.limited) && parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
+                                topmost = infstate
+                                edgecycle = true
+                            end
                         end
                     end
                 end
@@ -315,7 +348,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
             comparison = method.sig
         end
         # see if the type is actually too big (relative to the caller), and limit it if required
-        newsig = limit_type_size(sig, comparison, sv.linfo.specTypes, sv.params.TUPLE_COMPLEXITY_LIMIT_DEPTH, spec_len)
+        newsig = limit_type_size(sig, comparison, hardlimit ? comparison : sv.linfo.specTypes, sv.params.TUPLE_COMPLEXITY_LIMIT_DEPTH, spec_len)
 
         if newsig !== sig
             # continue inference, but note that we've limited parameter complexity
@@ -326,7 +359,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                 # since it's very unlikely that we'll try to inline this,
                 # or want make an invoke edge to its calling convention return type.
                 # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
-                return Any, false, nothing
+                return Any, true, nothing
             end
             poison_callstack(sv, topmost::InferenceState, true)
             sig = newsig
@@ -409,10 +442,13 @@ function precise_container_type(@nospecialize(typ), vtypes::VarTable, sv::Infere
     tti0 = widenconst(typ)
     tti = unwrap_unionall(tti0)
     if isa(tti, DataType) && tti.name === NamedTuple_typename
-        tti0 = tti.parameters[2]
-        while isa(tti0, TypeVar)
-            tti0 = tti0.ub
+        # A NamedTuple iteration is the the same as the iteration of its Tuple parameter:
+        # compute a new `tti == unwrap_unionall(tti0)` based on that Tuple type
+        tti = tti.parameters[2]
+        while isa(tti, TypeVar)
+            tti = tti.ub
         end
+        tti0 = rewrap_unionall(tti, tti0)
     end
     if isa(tti, Union)
         utis = uniontypes(tti)
@@ -534,7 +570,7 @@ function abstract_apply(@nospecialize(aft), aargtypes::Vector{Any}, vtypes::VarT
                     tail = tuple_tail_elem(unwrapva(ct[end]), cti)
                     push!(ctypes´, push!(ct[1:(end - 1)], tail))
                 else
-                    push!(ctypes´, append_any(ct, cti))
+                    push!(ctypes´, append!(ct[:], cti))
                 end
             end
         end
@@ -572,9 +608,17 @@ function pure_eval_call(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(a
         return false
     end
     meth = meth[1]::SimpleVector
+    sig = meth[1]::DataType
+    sparams = meth[2]::SimpleVector
     method = meth[3]::Method
-    # TODO: check pure on the inferred thunk
-    if isdefined(method, :generator) || !method.pure
+
+    if isdefined(method, :generator)
+        method.generator.expand_early || return false
+        mi = specialize_method(method, sig, sparams, false)
+        isa(mi, MethodInstance) || return false
+        staged = get_staged(mi)
+        (staged isa CodeInfo && (staged::CodeInfo).pure) || return false
+    elseif !method.pure
         return false
     end
 
@@ -938,7 +982,6 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
         end
     elseif e.head === :splatnew
         t = instanceof_tfunc(abstract_eval(e.args[1], vtypes, sv))[1]
-        # TODO: improve
     elseif e.head === :&
         abstract_eval(e.args[1], vtypes, sv)
         t = Any
@@ -1104,6 +1147,8 @@ function typeinf_local(frame::InferenceState)
                     # only propagate information we know we can store
                     # and is valid inter-procedurally
                     rt = widenconst(rt)
+                elseif isa(rt, Const) && rt.actual
+                    rt = Const(rt.val)
                 end
                 if tchanged(rt, frame.bestguess)
                     # new (wider) return type for frame

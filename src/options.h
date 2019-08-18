@@ -113,11 +113,14 @@
 #define JL_STACK_SIZE (2*1024*1024)
 #endif
 
+// allow a suspended Task to restart on a different thread
+//#define MIGRATE_TASKS
+
 // threading options ----------------------------------------------------------
 
 // controls for when threads sleep
 #define THREAD_SLEEP_THRESHOLD_NAME     "JULIA_THREAD_SLEEP_THRESHOLD"
-#define DEFAULT_THREAD_SLEEP_THRESHOLD  1e9    // cycles (1e9==1sec@1GHz)
+#define DEFAULT_THREAD_SLEEP_THRESHOLD  4*1000*1000 // nanoseconds (4ms)
 
 // defaults for # threads
 #define NUM_THREADS_NAME                "JULIA_NUM_THREADS"

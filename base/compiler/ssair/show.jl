@@ -280,7 +280,7 @@ function compute_ir_line_annotations(code::Union{IRCode, CodeInfo})
                 if min(depth, last_depth) > last_printed_depth
                     printing_depth = min(depth, last_printed_depth + 1)
                     last_printed_depth = printing_depth
-                elseif length(stack) > length(last_stack) || first_mismatch != nothing
+                elseif length(stack) > length(last_stack) || first_mismatch !== nothing
                     printing_depth = min(depth, last_depth + 1)
                     last_printed_depth = printing_depth
                 else
@@ -551,7 +551,7 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
         # Compute BB guard rail
         if bb_idx > length(cfg.blocks)
             # Even if invariants are violated, try our best to still print
-            bbrange = (last(cfg.blocks[end].stmts) + 1):typemax(Int)
+            bbrange = (length(cfg.blocks) == 0 ? 1 : last(cfg.blocks[end].stmts) + 1):typemax(Int)
             bb_idx_str = "!"
             bb_type = "─"
         else

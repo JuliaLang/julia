@@ -141,7 +141,7 @@ const t_log_Float32 = (0.0,0.007782140442054949,0.015504186535965254,0.023167059
 
 # determine if hardware FMA is available
 # should probably check with LLVM, see #9855.
-const FMA_NATIVE = muladd(nextfloat(1.0),nextfloat(1.0),-nextfloat(1.0,2)) == -4.930380657631324e-32
+const FMA_NATIVE = muladd(nextfloat(1.0),nextfloat(1.0),-nextfloat(1.0,2)) != 0
 
 # truncate lower order bits (up to 26)
 # ideally, this should be able to use ANDPD instructions, see #9868.

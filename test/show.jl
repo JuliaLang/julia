@@ -351,6 +351,22 @@ end
 @test sprint(show, :+) == ":+"
 @test sprint(show, :end) == ":end"
 
+# issue #32408: Printing of names which are invalid identifiers
+# Invalid identifiers which need `var` quoting:
+@test sprint(show, Expr(:call, :foo, Symbol("##")))   == ":(foo(var\"##\"))"
+@test sprint(show, Expr(:call, :foo, Symbol("a-b")))  == ":(foo(var\"a-b\"))"
+@test sprint(show, :(export var"#"))    == ":(export var\"#\")"
+@test sprint(show, :(import A: var"#")) == ":(import A: var\"#\")"
+@test sprint(show, :(macro var"#" end)) == ":(macro var\"#\" end)"
+@test sprint(show, :"x$(var"#")y") == ":(\"x\$(var\"#\")y\")"
+# Macro-like names outside macro calls
+@test sprint(show, Expr(:call, :foo, Symbol("@bar"))) == ":(foo(var\"@bar\"))"
+@test sprint(show, :(export @foo)) == ":(export @foo)"
+@test sprint(show, :(import A.B: c.@d)) == ":(import A.B: c.@d)"
+@test sprint(show, :(using A.@foo)) == ":(using A.@foo)"
+# Hidden macro names
+@test sprint(show, Expr(:macrocall, Symbol("@#"), nothing, :a)) == ":(@var\"#\" a)"
+
 # issue #12477
 @test sprint(show,  Union{Int64, Int32, Int16, Int8, Float64}) == "Union{Float64, Int16, Int32, Int64, Int8}"
 
@@ -560,6 +576,9 @@ end
 
 # issue #12960
 mutable struct T12960 end
+import Base.zero
+Base.zero(::Type{T12960}) = T12960()
+Base.zero(x::T12960) = T12960()
 let
     A = sparse(1.0I, 3, 3)
     B = similar(A, T12960)
@@ -577,9 +596,9 @@ function f13127()
     show(buf, f)
     String(take!(buf))
 end
-@test startswith(f13127(), "getfield($(@__MODULE__), Symbol(\"")
+@test startswith(f13127(), "$(@__MODULE__).var\"#f")
 
-@test startswith(sprint(show, typeof(x->x), context = :module=>@__MODULE__), "getfield($(@__MODULE__), Symbol(\"")
+@test startswith(sprint(show, typeof(x->x), context = :module=>@__MODULE__), "var\"")
 
 #test methodshow.jl functions
 @test Base.inbase(Base)
@@ -616,6 +635,18 @@ if isempty(Base.GIT_VERSION_INFO.commit)
 else
     @test occursin("https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/special/trig.jl#L", Base.url(which(sin, (Float64,))))
 end
+
+# Method location correction (Revise integration)
+methloc = Base.methodloc_callback[]
+dummyloc(m::Method) = :nofile, 123456789
+Base.methodloc_callback[] = dummyloc
+let repr = sprint(show, "text/plain", methods(Base.inbase))
+    @test occursin("nofile:123456789", repr)
+end
+let repr = sprint(show, "text/html", methods(Base.inbase))
+    @test occursin("nofile:123456789", repr)
+end
+Base.methodloc_callback[] = methloc
 
 # print_matrix should be able to handle small and large objects easily, test by
 # calling show. This also indirectly tests print_matrix_row, which
@@ -728,6 +759,23 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T,N}, indices::Vararg{$Int,N})")
 # Printing of :(function f end)
 @test sprint(show, :(function f end)) == ":(function f end)"
 @test_repr "function g end"
+
+# Printing of macro definitions
+@test sprint(show, :(macro m end)) == ":(macro m end)"
+@test_repr "macro m end"
+@test sprint(show, Expr(:macro, Expr(:call, :m, :ex), Expr(:block, :m))) ==
+      ":(macro m(ex)\n      m\n  end)"
+@test_repr """macro identity(ex)
+    # line meta
+    esc(ex)
+end"""
+@test_repr """macro m(a,b)
+    # line meta
+    quote
+        # line meta
+        \$a + \$b
+    end
+end"""
 
 # Issue #15765 printing of continue and break
 @test sprint(show, :(continue)) == ":(continue)"
@@ -1059,8 +1107,8 @@ end
 @testset "arrays printing follows the :compact property when specified" begin
     x = 3.141592653589793
     @test showstr(x) == "3.141592653589793"
-    @test showstr([x, x], :compact => true) == showstr([x, x], :compact => true) == "[3.14159, 3.14159]"
-    @test showstr([x, x], :compact => false) == "[3.141592653589793, 3.141592653589793]"
+    @test showstr([x, x], :compact => true) == "[3.14159, 3.14159]"
+    @test showstr([x, x]) == showstr([x, x], :compact => false) == "[3.141592653589793, 3.141592653589793]"
     @test showstr([x x; x x], :compact => true) ==
         "[3.14159 3.14159; 3.14159 3.14159]"
     @test showstr([x x; x x]) == showstr([x x; x x], :compact => false) ==
@@ -1114,7 +1162,7 @@ end
     @test repr(typeof(UnexportedOperators.:(==))) == "typeof($(curmod_prefix)UnexportedOperators.:(==))"
     anonfn = x->2x
     modname = string(@__MODULE__)
-    anonfn_type_repr = "getfield($modname, Symbol(\"$(typeof(anonfn).name.name)\"))"
+    anonfn_type_repr = "$modname.var\"$(typeof(anonfn).name.name)\""
     @test repr(typeof(anonfn)) == anonfn_type_repr
     @test repr(anonfn) == anonfn_type_repr * "()"
     @test repr("text/plain", anonfn) == "$(typeof(anonfn).name.mt.name) (generic function with 1 method)"
@@ -1266,11 +1314,30 @@ end
     end
 end
 
+function _methodsstr(f)
+    buf = IOBuffer()
+    show(buf, methods(f))
+    String(take!(buf))
+end
+
+@testset "show function methods" begin
+    @test occursin("methods for generic function \"sin\":", _methodsstr(sin))
+end
+@testset "show macro methods" begin
+    @test startswith(_methodsstr(getfield(Base,Symbol("@show"))), "# 1 method for macro \"@show\":")
+end
+@testset "show constructor methods" begin
+    @test occursin("methods for type constructor:\n", _methodsstr(Vector))
+end
+@testset "show builtin methods" begin
+    @test startswith(_methodsstr(typeof), "# built-in function; no methods")
+end
+@testset "show callable object methods" begin
+    @test occursin("methods:", _methodsstr(:))
+end
 @testset "#20111 show for function" begin
     K20111(x) = y -> x
-    buf = IOBuffer()
-    show(buf, methods(K20111(1)))
-    @test occursin(" 1 method for generic function", String(take!(buf)))
+    @test startswith(_methodsstr(K20111(1)), "# 1 method for anonymous function")
 end
 
 @generated f22798(x::Integer, y) = :x
@@ -1306,6 +1373,11 @@ end
     @test Base.inds2string(tuple(BigInt(10))) == "10"
     @test summary(BigInt(1):BigInt(10)) == "10-element UnitRange{BigInt}"
     @test summary(Base.OneTo(BigInt(10))) == "10-element Base.OneTo{BigInt}"
+end
+
+@testset "Tuple summary" begin
+    @test summary((1,2,3)) == "(1, 2, 3)"
+    @test summary((:a, "b", 'c')) == "(:a, \"b\", 'c')"
 end
 
 # Tests for code_typed linetable annotations
@@ -1411,15 +1483,19 @@ let src = code_typed(gcd, (Int, Int), debuginfo=:source)[1][1]
     @test pop!(lines) == "   ! ──       unreachable::#UNDEF"
 end
 
-# issue #27352
-@test_throws ArgumentError print(nothing)
-@test_throws ArgumentError print(stdout, nothing)
-@test_throws ArgumentError string(nothing)
-@test_throws ArgumentError string(1, "", nothing)
-@test_throws ArgumentError let x = nothing; "x = $x" end
-@test let x = nothing; "x = $(repr(x))" end == "x = nothing"
-@test_throws ArgumentError `/bin/foo $nothing`
-@test_throws ArgumentError `$nothing`
+@testset "printing and interpolating nothing" begin
+    @test sprint(print, nothing) == "nothing"
+    @test string(nothing) == "nothing"
+    @test repr(nothing) == "nothing"
+    @test string(1, "", nothing) == "1nothing"
+    @test let x = nothing; "x = $x" end == "x = nothing"
+    @test let x = nothing; "x = $(repr(x))" end == "x = nothing"
+
+    # issue #27352 : No interpolating nothing into commands
+    @test_throws ArgumentError `/bin/foo $nothing`
+    @test_throws ArgumentError `$nothing`
+    @test_throws ArgumentError let x = nothing; `/bin/foo $x` end
+end
 
 struct X28004
     value::Any
@@ -1445,8 +1521,10 @@ replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color =>
 @test repr(Symbol("a\$")) == "Symbol(\"a\\\$\")"
 
 @test string(sin) == "sin"
+@test string(:) == "Colon()"
 @test string(Iterators.flatten) == "flatten"
 @test Symbol(Iterators.flatten) === :flatten
+@test startswith(string(x->x), "#")
 
 # printing of bools and bool arrays
 @testset "Bool" begin
@@ -1465,3 +1543,13 @@ Z = Array{Float64}(undef,0,0)
 
 # issue #31065, do not print parentheses for nested dot expressions
 @test sprint(Base.show_unquoted, :(foo.x.x)) == "foo.x.x"
+
+@testset "show_delim_array" begin
+    sdastr(f, n) =  # sda: Show Delim Array
+        sprint((io, x) -> Base.show_delim_array(io, x, "[", ",", "]", false, f, n), Iterators.take(1:f+n, f+n))
+    @test sdastr(1, 0) == "[1]"
+    @test sdastr(1, 1) == "[1]"
+    @test sdastr(1, 2) == "[1, 2]"
+    @test sdastr(2, 2) == "[2, 3]"
+    @test sdastr(3, 3) == "[3, 4, 5]"
+end

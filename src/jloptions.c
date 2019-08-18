@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include <limits.h>
+#include <errno.h>
 
 #include "julia.h"
 
@@ -620,8 +621,9 @@ restart_switch:
     }
     jl_options.code_coverage = codecov;
     jl_options.malloc_log = malloclog;
-    *argvp += optind;
-    *argcp -= optind;
+    int proc_args = *argcp < optind ? *argcp : optind;
+    *argvp += proc_args;
+    *argcp -= proc_args;
 }
 
 JL_DLLEXPORT void jl_set_ARGS(int argc, char **argv)

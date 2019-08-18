@@ -830,7 +830,7 @@ julia> x = randn(10000);
 
 julia> fmt(f) = println(rpad(string(f)*": ", 14, ' '), @elapsed f(x))
 
-julia> map(fmt, Any[copy_cols, copy_rows, copy_col_row, copy_row_col]);
+julia> map(fmt, [copy_cols, copy_rows, copy_col_row, copy_row_col]);
 copy_cols:    0.331706323
 copy_rows:    1.799009911
 copy_col_row: 0.415630047
@@ -1513,3 +1513,11 @@ will not require this degree of programmer annotation to attain performance.
 In the mean time, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
 insertion of `let` statements as in `abmult3`.
+
+# Checking for equality with a singleton
+
+When checking if a value is equal to some singleton it can be
+better for performance to check for identicality (`===`) instead of
+equality (`==`). The same advice applies to using `!==` over `!=`.
+These type of checks frequently occur e.g. when implementing the iteration
+protocol and checking if `nothing` is returned from [`iterate`](@ref).

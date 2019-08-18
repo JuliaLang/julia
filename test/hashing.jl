@@ -72,7 +72,8 @@ vals = Any[
     # Overflow with Int8
     Any[Int8(127), Int8(-128), -383], 127:-255:-383,
     # Loss of precision with Float64
-    Any[-2^53-1, 0.0, 2^53+1], [-2^53-1, 0, 2^53+1], (-2^53-1):2^53+1:(2^53+1),
+    Any[-Int64(2)^53-1, 0.0, Int64(2)^53+1], [-Int64(2)^53-1, 0, Int64(2)^53+1],
+        (-Int64(2)^53-1):Int64(2)^53+1:(Int64(2)^53+1),
     # Some combinations of elements support -, others do not
     [1, 2, "a"], [1, "a", 2], [1, 2, "a", 2], [1, 'a', 2],
     Set([1,2,3,4]),
@@ -159,6 +160,7 @@ Base.hash(x::CustomHashReal, h::UInt) = hash(x.x, h)
 Base.:(==)(x::CustomHashReal, y::Number) = x.x == y
 Base.:(==)(x::Number, y::CustomHashReal) = x == y.x
 Base.zero(::Type{CustomHashReal}) = CustomHashReal(0.0)
+Base.zero(x::CustomHashReal) = zero(CustomHashReal)
 
 let a = sparse([CustomHashReal(0), CustomHashReal(3), CustomHashReal(3)])
     @test hash(a) == hash(Array(a))

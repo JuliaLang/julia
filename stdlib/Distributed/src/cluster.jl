@@ -248,7 +248,8 @@ function start_worker(out::IO, cookie::AbstractString=readline(stdin); close_std
     print(out, '\n')
     flush(out)
 
-    disable_nagle(sock)
+    Sockets.nagle(sock, false)
+    Sockets.quickack(sock, true)
 
     if ccall(:jl_running_on_valgrind,Cint,()) != 0
         println(out, "PID = $(getpid())")
@@ -360,6 +361,8 @@ process as a worker using TCP/IP sockets for transport.
 `cookie` is a [`cluster_cookie`](@ref).
 """
 function init_worker(cookie::AbstractString, manager::ClusterManager=DefaultClusterManager())
+    myrole!(:worker)
+
     # On workers, the default cluster manager connects via TCP sockets. Custom
     # transports will need to call this function with their own manager.
     global cluster_manager
@@ -782,11 +785,18 @@ end
 
 # globals
 const LPROC = LocalProcess()
+const LPROCROLE = Ref{Symbol}(:master)
 const HDR_VERSION_LEN=16
 const HDR_COOKIE_LEN=16
 const map_pid_wrkr = Dict{Int, Union{Worker, LocalProcess}}()
 const map_sock_wrkr = IdDict()
 const map_del_wrkr = Set{Int}()
+
+# whether process is a master or worker in a distributed setup
+myrole() = LPROCROLE[]
+function myrole!(proctype::Symbol)
+    LPROCROLE[] = proctype
+end
 
 # cluster management related API
 """
@@ -1030,20 +1040,23 @@ function _rmprocs(pids, waitfor)
 end
 
 
-struct ProcessExitedException <: Exception end
-
 """
-    ProcessExitedException()
+    ProcessExitedException(worker_id::Int)
 
 After a client Julia process has exited, further attempts to reference the dead child will
 throw this exception.
 """
-ProcessExitedException()
+struct ProcessExitedException <: Exception
+    worker_id::Int
+end
+
+# No-arg constructor added for compatibility with Julia 1.0 & 1.1, should be deprecated in the future
+ProcessExitedException() = ProcessExitedException(-1)
 
 worker_from_id(i) = worker_from_id(PGRP, i)
 function worker_from_id(pg::ProcessGroup, i)
     if !isempty(map_del_wrkr) && in(i, map_del_wrkr)
-        throw(ProcessExitedException())
+        throw(ProcessExitedException(i))
     end
     w = get(map_pid_wrkr, i, nothing)
     if w === nothing
@@ -1104,7 +1117,7 @@ function deregister_worker(pg, pid)
             end
         end
 
-        if myid() == 1 && isdefined(w, :config)
+        if myid() == 1 && (myrole() === :master) && isdefined(w, :config)
             # Notify the cluster manager of this workers death
             manage(w.manager, w.id, w.config, :deregister)
             if PGRP.topology != :all_to_all || isclusterlazy()
@@ -1137,7 +1150,7 @@ function deregister_worker(pg, pid)
 
         # throw exception to tasks waiting for this pid
         for (id, rv) in tonotify
-            close(rv.c, ProcessExitedException())
+            close(rv.c, ProcessExitedException(pid))
             delete!(pg.refs, id)
         end
     end
@@ -1173,18 +1186,6 @@ function interrupt(pids::AbstractVector=workers())
     @sync begin
         for pid in pids
             @async interrupt(pid)
-        end
-    end
-end
-
-
-function disable_nagle(sock)
-    # disable nagle on all OSes
-    ccall(:uv_tcp_nodelay, Cint, (Ptr{Cvoid}, Cint), sock.handle, 1)
-    @static if Sys.islinux()
-        # tcp_quickack is a linux only option
-        if ccall(:jl_tcp_quickack, Cint, (Ptr{Cvoid}, Cint), sock.handle, 1) < 0
-            @warn "Networking unoptimized ( Error enabling TCP_QUICKACK : $(Libc.strerror(Libc.errno())) )" maxlog=1
         end
     end
 end

@@ -231,6 +231,9 @@ function setindex_shape_check(X::AbstractArray{<:Any,2}, i::Integer, j::Integer)
     end
 end
 
+setindex_shape_check(::Any...) =
+    throw(ArgumentError("indexed assignment with a single value to many locations is not supported; perhaps use broadcasting `.=` instead?"))
+
 # convert to a supported index type (array or Int)
 """
     to_index(A, i)

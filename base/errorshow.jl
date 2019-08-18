@@ -33,11 +33,7 @@ function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
         print(io, ": attempt to access ")
-        if isa(ex.a, AbstractArray)
-            summary(io, ex.a)
-        else
-            show(io, MIME"text/plain"(), ex.a)
-        end
+        summary(io, ex.a)
         if isdefined(ex, :i)
             !isa(ex.a, AbstractArray) && print(io, "\n ")
             print(io, " at index [")
@@ -85,11 +81,18 @@ function showerror(io::IO, ex, bt; backtrace=true)
 end
 
 function showerror(io::IO, ex::LoadError, bt; backtrace=true)
-    print(io, "Error while loading expression starting at ", ex.file, ":", ex.line)
+    print(io, "LoadError: ")
+    showerror(io, ex.error, bt, backtrace=backtrace)
+    print(io, "\nin expression starting at $(ex.file):$(ex.line)")
 end
 showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
 
-showerror(io::IO, ex::InitError) = print(io, "InitError during initialization of module ", ex.mod)
+function showerror(io::IO, ex::InitError, bt; backtrace=true)
+    print(io, "InitError: ")
+    showerror(io, ex.error, bt, backtrace=backtrace)
+    print(io, "\nduring initialization of module ", ex.mod)
+end
+showerror(io::IO, ex::InitError) = showerror(io, ex, [])
 
 function showerror(io::IO, ex::DomainError)
     if isa(ex.val, AbstractArray)
@@ -238,7 +241,7 @@ function showerror(io::IO, ex::MethodError)
     end
     if (ex.world != typemax(UInt) && hasmethod(ex.f, arg_types) &&
         !hasmethod(ex.f, arg_types, world = ex.world))
-        curworld = ccall(:jl_get_world_counter, UInt, ())
+        curworld = get_world_counter()
         println(io)
         print(io, "The applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
     end
@@ -323,11 +326,12 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
     for (func, arg_types_param) in funcs
         for method in methods(func)
             buf = IOBuffer()
-            iob = IOContext(buf, io)
+            iob0 = iob = IOContext(buf, io)
             tv = Any[]
             sig0 = method.sig
             while isa(sig0, UnionAll)
                 push!(tv, sig0.var)
+                iob = IOContext(iob, :unionall_env => sig0.var)
                 sig0 = sig0.body
             end
             s1 = sig0.parameters[1]
@@ -420,7 +424,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     length(kwords) > 0 && print(iob, "; ", join(kwords, ", "))
                 end
                 print(iob, ")")
-                show_method_params(iob, tv)
+                show_method_params(iob0, tv)
                 print(iob, " at ", method.file, ":", method.line)
                 if !isempty(kwargs)
                     unexpected = Symbol[]
@@ -438,9 +442,9 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                         end
                     end
                 end
-                if ex.world < min_world(method)
+                if ex.world < reinterpret(UInt, method.primary_world)
                     print(iob, " (method too new to be called from this world context.)")
-                elseif ex.world > max_world(method)
+                elseif ex.world > reinterpret(UInt, method.deleted_world)
                     print(iob, " (method deleted before this world age.)")
                 end
                 # TODO: indicate if it's in the wrong world

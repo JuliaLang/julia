@@ -92,17 +92,19 @@ end
 
 ## comparison ##
 
+_memcmp(a::Union{Ptr{UInt8},AbstractString}, b::Union{Ptr{UInt8},AbstractString}, len) =
+    ccall(:memcmp, Cint, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), a, b, len % Csize_t) % Int
+
 function cmp(a::String, b::String)
     al, bl = sizeof(a), sizeof(b)
-    c = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-              a, b, min(al,bl))
+    c = _memcmp(a, b, min(al,bl))
     return c < 0 ? -1 : c > 0 ? +1 : cmp(al,bl)
 end
 
 function ==(a::String, b::String)
     pointer_from_objref(a) == pointer_from_objref(b) && return true
     al = sizeof(a)
-    return al == sizeof(b) && 0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, al)
+    return al == sizeof(b) && 0 == _memcmp(a, b, al)
 end
 
 typemin(::Type{String}) = ""
@@ -344,4 +346,17 @@ function repeat(c::Char, r::Integer)
         end
     end
     return s
+end
+
+function filter(f, s::String)
+    out = Base.StringVector(sizeof(s))
+    offset = 1
+    for c in s
+        if f(c)
+            offset += Base.__unsafe_string!(out, c, offset)
+        end
+    end
+    resize!(out, offset-1)
+    sizehint!(out, offset-1)
+    return String(out)
 end

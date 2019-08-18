@@ -1,8 +1,27 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    AbstractSparseArray{Tv,Ti,N}
+
+Supertype for `N`-dimensional sparse arrays (or array-like types) with elements
+of type `Tv` and index type `Ti`. [`SparseMatrixCSC`](@ref), [`SparseVector`](@ref)
+and `SuiteSparse.CHOLMOD.Sparse` are subtypes of this.
+"""
 abstract type AbstractSparseArray{Tv,Ti,N} <: AbstractArray{Tv,N} end
 
+"""
+    AbstractSparseVector{Tv,Ti}
+
+Supertype for one-dimensional sparse arrays (or array-like types) with elements
+of type `Tv` and index type `Ti`. Alias for `AbstractSparseArray{Tv,Ti,1}``.
+"""
 const AbstractSparseVector{Tv,Ti} = AbstractSparseArray{Tv,Ti,1}
+"""
+    AbstractSparseMatrix{Tv,Ti}
+
+Supertype for two-dimensional sparse arrays (or array-like types) with elements
+of type `Tv` and index type `Ti`. Alias for `AbstractSparseArray{Tv,Ti,2}`.
+"""
 const AbstractSparseMatrix{Tv,Ti} = AbstractSparseArray{Tv,Ti,2}
 
 """
@@ -45,21 +64,31 @@ end
 
 # The following two methods should be overloaded by concrete types to avoid
 # allocating the I = findall(...)
-_sparse_findnextnz(v::AbstractSparseArray, i::Integer) = (I = findall(!iszero, v); n = searchsortedfirst(I, i); n<=length(I) ? I[n] : nothing)
-_sparse_findprevnz(v::AbstractSparseArray, i::Integer) = (I = findall(!iszero, v); n = searchsortedlast(I, i);  !iszero(n)   ? I[n] : nothing)
+_sparse_findnextnz(v::AbstractSparseArray, i) = (I = findall(!iszero, v); n = searchsortedfirst(I, i); n<=length(I) ? I[n] : nothing)
+_sparse_findprevnz(v::AbstractSparseArray, i) = (I = findall(!iszero, v); n = searchsortedlast(I, i);  !iszero(n)   ? I[n] : nothing)
 
-function findnext(f::typeof(!iszero), v::AbstractSparseArray, i::Integer)
+function findnext(f::Function, v::AbstractSparseArray, i)
+    # short-circuit the case f == !iszero because that avoids
+    # allocating e.g. zero(BigInt) for the f(zero(...)) test.
+    if nnz(v) == length(v) || (f != (!iszero) && f(zero(eltype(v))))
+        return invoke(findnext, Tuple{Function,Any,Any}, f, v, i)
+    end
     j = _sparse_findnextnz(v, i)
     while j !== nothing && !f(v[j])
-        j = _sparse_findnextnz(v, j+1)
+        j = _sparse_findnextnz(v, nextind(v, j))
     end
     return j
 end
 
-function findprev(f::typeof(!iszero), v::AbstractSparseArray, i::Integer)
+function findprev(f::Function, v::AbstractSparseArray, i)
+    # short-circuit the case f == !iszero because that avoids
+    # allocating e.g. zero(BigInt) for the f(zero(...)) test.
+    if nnz(v) == length(v) || (f != (!iszero) && f(zero(eltype(v))))
+        return invoke(findprev, Tuple{Function,Any,Any}, f, v, i)
+    end
     j = _sparse_findprevnz(v, i)
     while j !== nothing && !f(v[j])
-        j = _sparse_findprevnz(v, j-1)
+        j = _sparse_findprevnz(v, prevind(v, j))
     end
     return j
 end

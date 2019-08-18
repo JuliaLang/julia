@@ -73,7 +73,32 @@ function mean(f, itr)
     end
     return total/count
 end
-mean(f, A::AbstractArray) = sum(f, A) / length(A)
+
+"""
+    mean(f::Function, A::AbstractArray; dims)
+
+Apply the function `f` to each element of array `A` and take the mean over dimensions `dims`.
+
+!!! compat "Julia 1.3"
+    This method requires at least Julia 1.3.
+
+```jldoctest
+julia> mean(√, [1, 2, 3])
+1.3820881233139908
+
+julia> mean([√1, √2, √3])
+1.3820881233139908
+
+julia> mean(√, [1 2 3; 4 5 6], dims=2)
+2×1 Array{Float64,2}:
+ 1.3820881233139908
+ 2.2285192400943226
+```
+"""
+mean(f, A::AbstractArray; dims=:) = _mean(f, A, dims)
+
+_mean(f, A::AbstractArray, ::Colon) = sum(f, A) / length(A)
+_mean(f, A::AbstractArray, dims) = sum(f, A, dims=dims) / mapreduce(i -> size(A, i), *, unique(dims); init=1)
 
 """
     mean!(r, v)
@@ -620,8 +645,8 @@ function corm(x::AbstractVector, mx, y::AbstractVector, my)
 
     @inbounds begin
         # Initialize the accumulators
-        xx = zero(sqrt(abs2(x[1])))
-        yy = zero(sqrt(abs2(y[1])))
+        xx = zero(sqrt(abs2(one(x[1]))))
+        yy = zero(sqrt(abs2(one(y[1]))))
         xy = zero(x[1] * y[1]')
 
         @simd for i in eachindex(x, y)
@@ -853,18 +878,17 @@ function quantile!(q::AbstractArray, v::AbstractVector, p::AbstractArray;
     return q
 end
 
-quantile!(v::AbstractVector, p::AbstractArray; sorted::Bool=false) =
-    quantile!(similar(p,float(eltype(v))), v, p; sorted=sorted)
+function quantile!(v::AbstractVector, p::Union{AbstractArray, Tuple{Vararg{Real}}};
+                   sorted::Bool=false)
+    if !isempty(p)
+        minp, maxp = extrema(p)
+        _quantilesort!(v, sorted, minp, maxp)
+    end
+    return map(x->_quantile(v, x), p)
+end
 
 quantile!(v::AbstractVector, p::Real; sorted::Bool=false) =
     _quantile(_quantilesort!(v, sorted, p, p), p)
-
-function quantile!(v::AbstractVector, p::Tuple{Vararg{Real}}; sorted::Bool=false)
-    isempty(p) && return ()
-    minp, maxp = extrema(p)
-    _quantilesort!(v, sorted, minp, maxp)
-    return map(x->_quantile(v, x), p)
-end
 
 # Function to perform partial sort of v for quantiles in given range
 function _quantilesort!(v::AbstractArray, sorted::Bool, minp::Real, maxp::Real)
@@ -895,18 +919,12 @@ end
     h  = f0 - t0
     i  = trunc(Int,t0) + 1
 
-    T  = promote_type(eltype(v), typeof(v[1]*h))
-
-    if h == 0
-        return convert(T, v[i])
+    a = v[i]
+    b = v[i + (h > 0)]
+    if isfinite(a) && isfinite(b)
+        return a + h*(b-a)
     else
-        a = v[i]
-        b = v[i+1]
-        if isfinite(a) && isfinite(b)
-            return convert(T, a + h*(b-a))
-        else
-            return convert(T, (1-h)*a + h*b)
-        end
+        return (1-h)*a + h*b
     end
 end
 

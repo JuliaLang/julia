@@ -52,9 +52,8 @@ mutable struct BigInt <: Signed
     size::Cint
     d::Ptr{Limb}
 
-    function BigInt()
-        b = new(zero(Cint), zero(Cint), C_NULL)
-        MPZ.init!(b)
+    function BigInt(; nbits::Integer=0)
+        b = MPZ.init2!(new(), nbits)
         finalizer(cglobal((:__gmpz_clear, :libgmp)), b)
         return b
     end
@@ -130,7 +129,7 @@ module MPZ
 # - a method modifying its input has a "!" appendend to its name, according to Julia's conventions
 # - some convenient methods are added (in addition to the pure MPZ ones), e.g. `add(a, b) = add!(BigInt(), a, b)`
 #   and `add!(x, a) = add!(x, x, a)`.
-using .Base.GMP: BigInt, Limb
+using .Base.GMP: BigInt, Limb, BITS_PER_LIMB
 
 const mpz_t = Ref{BigInt}
 const bitcnt_t = Culong
@@ -145,11 +144,14 @@ realloc2(a) = realloc2!(BigInt(), a)
 
 sizeinbase(a::BigInt, b) = Int(ccall((:__gmpz_sizeinbase, :libgmp), Csize_t, (mpz_t, Cint), a, b))
 
-for op in (:add, :sub, :mul, :fdiv_q, :tdiv_q, :fdiv_r, :tdiv_r, :gcd, :lcm, :and, :ior, :xor)
+for (op, nbits) in (:add => :(BITS_PER_LIMB*(1 + max(abs(a.size), abs(b.size)))),
+                    :sub => :(BITS_PER_LIMB*(1 + max(abs(a.size), abs(b.size)))),
+                    :mul => 0, :fdiv_q => 0, :tdiv_q => 0, :fdiv_r => 0, :tdiv_r => 0,
+                    :gcd => 0, :lcm => 0, :and => 0, :ior => 0, :xor => 0)
     op! = Symbol(op, :!)
     @eval begin
         $op!(x::BigInt, a::BigInt, b::BigInt) = (ccall($(gmpz(op)), Cvoid, (mpz_t, mpz_t, mpz_t), x, a, b); x)
-        $op(a::BigInt, b::BigInt) = $op!(BigInt(), a, b)
+        $op(a::BigInt, b::BigInt) = $op!(BigInt(nbits=$nbits), a, b)
         $op!(x::BigInt, b::BigInt) = $op!(x, x, b)
     end
 end
@@ -374,26 +376,72 @@ function (::Type{T})(n::BigInt, ::RoundingMode{:Up}) where T<:CdoubleMax
     x < n ? nextfloat(x) : x
 end
 
-function (::Type{T})(n::BigInt, ::RoundingMode{:Nearest}) where T<:CdoubleMax
-    x = T(n,RoundToZero)
-    if maxintfloat(T) <= abs(x) < T(Inf)
-        r = n-BigInt(x)
-        h = eps(x)/2
-        if iseven(reinterpret(Unsigned,x)) # check if last bit is odd/even
-            if r < -h
-                return prevfloat(x)
-            elseif r > h
-                return nextfloat(x)
-            end
+function Float64(x::BigInt, ::RoundingMode{:Nearest})
+    x == 0 && return 0.0
+    xsize = abs(x.size)
+    if xsize*BITS_PER_LIMB > 1024
+        z = Inf64
+    elseif xsize == 1
+        z = Float64(unsafe_load(x.d))
+    elseif Limb == UInt32 && xsize == 2
+        z = Float64((unsafe_load(x.d, 2) % UInt64) << BITS_PER_LIMB + unsafe_load(x.d))
+    else
+        y1 = unsafe_load(x.d, xsize) % UInt64
+        n = 64 - leading_zeros(y1)
+        # load first 54(1 + 52 bits of fraction + 1 for rounding)
+        y = y1 >> (n - (precision(Float64)+1))
+        if Limb == UInt64
+            y += n > precision(Float64) ? 0 : (unsafe_load(x.d, xsize-1) >> (10+n))
         else
-            if r <= -h
-                return prevfloat(x)
-            elseif r >= h
-                return nextfloat(x)
-            end
+            y += (unsafe_load(x.d, xsize-1) % UInt64) >> (n-22)
+            y += n > (precision(Float64) - 32) ? 0 : (unsafe_load(x.d, xsize-2) >> (10+n))
         end
+        y = (y + 1) >> 1 # round, ties up
+        y &= ~UInt64(trailing_zeros(x) == (n-54 + (xsize-1)*BITS_PER_LIMB)) # fix last bit to round to even
+        d = ((n+1021) % UInt64) << 52
+        z = reinterpret(Float64, d+y)
+        z = ldexp(z, (xsize-1)*BITS_PER_LIMB)
     end
-    x
+    return flipsign(z, x.size)
+end
+
+function Float32(x::BigInt, ::RoundingMode{:Nearest})
+    x == 0 && return 0f0
+    xsize = abs(x.size)
+    if xsize*BITS_PER_LIMB > 128
+        z = Inf32
+    elseif xsize == 1
+        z = Float32(unsafe_load(x.d))
+    else
+        y1 = unsafe_load(x.d, xsize)
+        n = BITS_PER_LIMB - leading_zeros(y1)
+        # load first 25(1 + 23 bits of fraction + 1 for rounding)
+        y = (y1 >> (n - (precision(Float32)+1))) % UInt32
+        y += (n > precision(Float32) ? 0 : unsafe_load(x.d, xsize-1) >> (BITS_PER_LIMB - (25-n))) % UInt32
+        y = (y + one(UInt32)) >> 1 # round, ties up
+        y &= ~UInt32(trailing_zeros(x) == (n-25 + (xsize-1)*BITS_PER_LIMB)) # fix last bit to round to even
+        d = ((n+125) % UInt32) << 23
+        z = reinterpret(Float32, d+y)
+        z = ldexp(z, (xsize-1)*BITS_PER_LIMB)
+    end
+    return flipsign(z, x.size)
+end
+
+function Float16(x::BigInt, ::RoundingMode{:Nearest})
+    x == 0 && return Float16(0.0)
+    y1 = unsafe_load(x.d)
+    n = BITS_PER_LIMB - leading_zeros(y1)
+    if n > 16 || abs(x.size) > 1
+        z = Inf16
+    else
+        # load first 12(1 + 10 bits for fraction + 1 for rounding)
+        y = (y1 >> (n - (precision(Float16)+1))) % UInt16
+        y = (y + one(UInt16)) >> 1 # round, ties up
+        y &= ~UInt16(trailing_zeros(x) == (n-12)) # fix last bit to round to even
+        d = ((n+13) % UInt16) << 10
+        z = reinterpret(Float16, d+y)
+    end
+    return flipsign(z, x.size)
 end
 
 Float64(n::BigInt) = Float64(n, RoundNearest)
@@ -566,12 +614,12 @@ function gcdx(a::BigInt, b::BigInt)
 end
 
 sum(arr::AbstractArray{BigInt}) = foldl(MPZ.add!, arr; init=BigInt(0))
-# note: a similar implementation for `prod` won't be efficient:
+# Note: a similar implementation for `prod` won't be efficient:
 # 1) the time complexity of the allocations is negligible compared to the multiplications
 # 2) assuming arr contains similarly sized BigInts, the multiplications are much more
-# performant when doing e.g. ((a1*a2)*(a2*a3))*(...) rather than a1*(a2*(a3*(...))),
-# which is exactly what the default implementation of `prod` does, via mapreduce
-# (which maybe could be slightly optimized for BigInt)
+# performant when doing e.g. ((a1*a2)*(a3*a4))*(...) rather than a1*(a2*(a3*(...))),
+# which is exactly what the default implementation of `prod` does, via `mapreduce`
+# (which maybe could be slightly optimized for BigInt).
 
 factorial(x::BigInt) = isneg(x) ? BigInt(0) : MPZ.fac_ui(x)
 

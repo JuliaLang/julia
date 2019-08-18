@@ -1,18 +1,29 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"Represents a Basic Block, in the DomTree"
 struct DomTreeNode
+    # How deep we are in the DomTree
     level::Int
+    # The BB indices in the CFG for all Basic Blocks we immediately dominate
     children::Vector{Int}
 end
 DomTreeNode() = DomTreeNode(1, Vector{Int}())
 
+"Data structure that encodes which basic block dominates which."
 struct DomTree
+    # Which basic block immediately dominates each basic block (ordered by BB indices)
+    # Note: this is the inverse of the nodes, children field
     idoms::Vector{Int}
+
+    # The nodes in the tree (ordered by BB indices)
     nodes::Vector{DomTreeNode}
 end
 
 """
-    Checks if bb1 dominates bb2
+    Checks if bb1 dominates bb2.
+    bb1 and bb2 are indexes into the CFG blocks.
+    bb1 dominates bb2 if the only way to enter bb2 is via bb1.
+    (Other blocks may be in between, e.g bb1->bbX->bb2).
 """
 function dominates(domtree::DomTree, bb1::Int, bb2::Int)
     bb1 == bb2 && return true
@@ -28,17 +39,23 @@ end
 bb_unreachable(domtree::DomTree, bb::Int) = bb != 1 && domtree.nodes[bb].level == 1
 
 function update_level!(domtree::Vector{DomTreeNode}, node::Int, level::Int)
-    domtree[node] = DomTreeNode(level, domtree[node].children)
-    foreach(domtree[node].children) do child
-        update_level!(domtree, child, level+1)
+    worklist = Tuple{Int, Int}[(node, level)]
+    while !isempty(worklist)
+        (node, level) = pop!(worklist)
+        domtree[node] = DomTreeNode(level, domtree[node].children)
+        foreach(domtree[node].children) do child
+            push!(worklist, (child, level+1))
+        end
     end
 end
 
+"Iterable data structure that walks though all dominated blocks"
 struct DominatedBlocks
     domtree::DomTree
     worklist::Vector{Int}
 end
 
+"Returns an iterator that walks through all blocks dominated by the basic block at index `root`"
 function dominated(domtree::DomTree, root::Int)
     doms = DominatedBlocks(domtree, Vector{Int}())
     push!(doms.worklist, root)
@@ -213,7 +230,35 @@ begin
         nothing
     end
 
+    function snca_compress_worklist!(
+            state::Vector{Node}, ancestors::Vector{DFSNumber},
+            v::DFSNumber, last_linked::DFSNumber)
+        # TODO: There is a smarter way to do this
+        u = ancestors[v]
+        worklist = Tuple{DFSNumber, DFSNumber}[(u,v)]
+        @assert u < v
+        while !isempty(worklist)
+            u, v = last(worklist)
+            if u >= last_linked
+                if ancestors[u] >= last_linked
+                    push!(worklist, (ancestors[u], u))
+                    continue
+                end
+                if state[u].label < state[v].label
+                    state[v] = Node(state[v].semi, state[u].label)
+                end
+                ancestors[v] = ancestors[u]
+            end
+            pop!(worklist)
+        end
+    end
+
     """
+        SNCA(cfg::CFG)
+
+    Determines a map from basic blocks to the block which immediately dominate them.
+    Expressed as indexes into `cfg.blocks`.
+
     The main Semi-NCA algrithm. Matches Figure 2.8 in [LG05].
     Note that the pseudocode in [LG05] is not entirely accurate.
     The best way to understand what's happening is to read [LT79], then the
@@ -226,7 +271,7 @@ begin
         # the paper doesn't make that clear). The rational for this is Lemma
         # 2.4 in [LG05] (i.e. Theorem 4 in ). Note however, that we don't
         # ever look at `semi` until it is fully initialized, so we could leave
-        # it unitialized here if we wanted to.
+        # it uninitialized here if we wanted to.
         state = Node[ Node(typemax(DFSNumber), w) for w in preorder(D) ]
         # Initialize idoms to parents. Note that while idoms are eventually
         # BB indexed, we keep it DFS indexed until a final post-processing
@@ -255,7 +300,13 @@ begin
                 # `ancestor[v] != 0` check in the `eval` implementation in
                 # figure 2.6
                 if vdfs >= last_linked
-                    snca_compress!(state, ancestors, vdfs, last_linked)
+                    # For performance, if the number of ancestors is small
+                    # avoid the extra allocation of the worklist.
+                    if length(ancestors) <= 32
+                        snca_compress!(state, ancestors, vdfs, last_linked)
+                    else
+                        snca_compress_worklist!(state, ancestors, vdfs, last_linked)
+                    end
                 end
                 semi_w = min(semi_w, state[vdfs].label)
             end
@@ -269,6 +320,7 @@ begin
             end
             idoms_dfs[v] = idom
         end
+        # Reexpress the idom relationship in BB indexing
         idoms_bb = Int[ (i == 1 || D.reverse[i] == 0) ? 0 : D.numbering[idoms_dfs[D.reverse[i]]] for i = 1:length(cfg.blocks) ]
         idoms_bb
     end

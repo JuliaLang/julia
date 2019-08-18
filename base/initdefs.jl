@@ -215,9 +215,9 @@ function init_load_path()
         unsafe_string(Base.JLOptions().project) :
         get(ENV, "JULIA_PROJECT", nothing))
     HOME_PROJECT[] =
-        project == nothing ? nothing :
+        project === nothing ? nothing :
         project == "" ? nothing :
-        project == "@." ? current_project() : abspath(project)
+        project == "@." ? current_project() : abspath(expanduser(project))
     append!(empty!(LOAD_PATH), paths)
 end
 
@@ -293,7 +293,7 @@ end
 
 ## atexit: register exit hooks ##
 
-const atexit_hooks = []
+const atexit_hooks = Callable[Filesystem.temp_cleanup_purge]
 
 """
     atexit(f)

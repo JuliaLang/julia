@@ -35,8 +35,7 @@ struct GC_Diff
 end
 
 gc_total_bytes(gc_num::GC_Num) =
-    (gc_num.allocd + gc_num.deferred_alloc +
-     Int64(gc_num.collect) + Int64(gc_num.total_allocd))
+    (gc_num.allocd + gc_num.deferred_alloc + Int64(gc_num.total_allocd))
 
 function GC_Diff(new::GC_Num, old::GC_Num)
     # logic from `src/gc.c:jl_gc_total_bytes`
@@ -807,7 +806,7 @@ function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
         tests = split(tests)
     end
     exit_on_error && push!(tests, "--exit-on-error")
-    seed != nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
+    seed !== nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
     try

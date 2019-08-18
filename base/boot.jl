@@ -65,6 +65,9 @@
 #mutable struct MethodInstance
 #end
 
+#mutable struct CodeInstance
+#end
+
 #mutable struct CodeInfo
 #end
 
@@ -442,11 +445,11 @@ Symbol(s::Symbol) = s
 
 # module providing the IR object model
 module IR
-export CodeInfo, MethodInstance, GotoNode,
+export CodeInfo, MethodInstance, CodeInstance, GotoNode,
     NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode
 
-import Core: CodeInfo, MethodInstance, GotoNode,
+import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode,
     NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode
 
@@ -554,7 +557,7 @@ eval(Core, :(NamedTuple{names,T}(args::T) where {names, T <: Tuple} =
 
 import .Intrinsics: eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext_int, zext_int, and_int
 
-throw_inexacterror(f::Symbol, @nospecialize(T), val) = (@_noinline_meta; throw(InexactError(f, T, val)))
+throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = (@_noinline_meta; throw(InexactError(f, T, val)))
 
 function is_top_bit_set(x)
     @_inline_meta
