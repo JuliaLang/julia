@@ -350,4 +350,4 @@ det(Q::Union{QRPackedQ{<:Real}, QRCompactWYQ{<:Real}, LQPackedQ{<:Real}}) =
 # (hence the determinant) can be computed as `λ = -sign(τ)^2`.
 # See: https://github.com/JuliaLang/julia/pull/32887#issuecomment-521935716
 det(Q::Union{QRPackedQ, QRCompactWYQ, LQPackedQ}) =
-    prod(τ -> -sign(τ)^2, _tau(Q))
+    prod(τ -> iszero(τ) ? one(τ) : -sign(τ)^2, _tau(Q))
