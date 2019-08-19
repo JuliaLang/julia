@@ -541,9 +541,10 @@
                         ((char-numeric? nextc)
                          (read-number port #t #f))
                         ((opchar? nextc)
-                         (let ((op (read-operator port c)))
-                           (if (and (eq? op '..) (opchar? (peek-char port)))
-                               (error (string "invalid operator \"" op (peek-char port) "\"" (scolno port))))
+                         (let* ((op (read-operator port c))
+                                (nx (peek-char port)))
+                           (if (and (eq? op '..) (opchar? nx) (not (memv nx '(#\' #\:))))
+                               (error (string "invalid operator \"" op nx "\"" (scolno port))))
                            op))
                         (else '|.|)))))
 
@@ -1067,10 +1068,11 @@
 ;; -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
 ;; and parse-unary from then on (to handle 2^-3)
 (define (parse-factor s)
-  (parse-factor-with-initial-ex s (parse-unary-prefix s)))
+  (let ((nxt (peek-token s)))
+    (parse-factor-with-initial-ex s (parse-unary-prefix s) nxt)))
 
-(define (parse-factor-with-initial-ex s ex0)
-  (let* ((ex (parse-decl-with-initial-ex s (parse-call-with-initial-ex s ex0)))
+(define (parse-factor-with-initial-ex s ex0 (tok #f))
+  (let* ((ex (parse-decl-with-initial-ex s (parse-call-with-initial-ex s ex0 tok)))
          (t  (peek-token s)))
     (if (is-prec-power? t)
         (begin (take-token s)
@@ -1099,10 +1101,11 @@
 ;; parse function call, indexing, dot, and transpose expressions
 ;; also handles looking for syntactic reserved words
 (define (parse-call s)
-  (parse-call-with-initial-ex s (parse-unary-prefix s)))
+  (let ((nxt (peek-token s)))
+    (parse-call-with-initial-ex s (parse-unary-prefix s) nxt)))
 
-(define (parse-call-with-initial-ex s ex)
-  (if (or (initial-reserved-word? ex) (eq? ex 'mutable) (eq? ex 'primitive) (eq? ex 'abstract))
+(define (parse-call-with-initial-ex s ex tok)
+  (if (or (initial-reserved-word? tok) (memq tok '(mutable primitive abstract)))
       (parse-resword s ex)
       (parse-call-chain s ex #f)))
 
@@ -2281,7 +2284,17 @@
                (begin (check-identifier t)
                       (if (closing-token? t)
                           (error (string "unexpected \"" (take-token s) "\"")))))
-           (take-token s))
+           (take-token s)
+           (if (and (eq? t 'var) (eqv? (peek-token s) #\") (not (ts:space? s)))
+             (begin
+               ;; var"funky identifier" syntax
+               (take-token s)
+               (let ((str (parse-raw-literal s #\"))
+                     (nxt (peek-token s)))
+                 (if (and (symbol? nxt) (not (operator? nxt)) (not (ts:space? s)))
+                   (error (string "suffix not allowed after `var\"" str "\"`")))
+                 (symbol str)))
+             t))
 
           ;; parens or tuple
           ((eqv? t #\( )

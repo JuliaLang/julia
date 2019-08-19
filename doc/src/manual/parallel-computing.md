@@ -590,15 +590,14 @@ julia> remotecall_fetch(getindex, 2, r, 1, 1)
 Remember that [`getindex(r,1,1)`](@ref) is [equivalent](@ref man-array-indexing) to `r[1,1]`, so this call fetches
 the first element of the future `r`.
 
-The syntax of [`remotecall`](@ref) is not especially convenient. The macro [`@spawn`](@ref)
-makes things easier. It operates on an expression rather than a function, and picks where to do
+To make things easier, the symbol `:any` can be passed to [`@spawnat`], which picks where to do
 the operation for you:
 
 ```julia-repl
-julia> r = @spawn rand(2,2)
+julia> r = @spawnat :any rand(2,2)
 Future(2, 1, 4, nothing)
 
-julia> s = @spawn 1 .+ fetch(r)
+julia> s = @spawnat :any 1 .+ fetch(r)
 Future(3, 1, 5, nothing)
 
 julia> fetch(s)
@@ -609,17 +608,17 @@ julia> fetch(s)
 
 Note that we used `1 .+ fetch(r)` instead of `1 .+ r`. This is because we do not know where the
 code will run, so in general a [`fetch`](@ref) might be required to move `r` to the process
-doing the addition. In this case, [`@spawn`](@ref) is smart enough to perform the computation
+doing the addition. In this case, [`@spawnat`](@ref) is smart enough to perform the computation
 on the process that owns `r`, so the [`fetch`](@ref) will be a no-op (no work is done).
 
-(It is worth noting that [`@spawn`](@ref) is not built-in but defined in Julia as a [macro](@ref man-macros).
+(It is worth noting that [`@spawnat`](@ref) is not built-in but defined in Julia as a [macro](@ref man-macros).
 It is possible to define your own such constructs.)
 
 An important thing to remember is that, once fetched, a [`Future`](@ref Distributed.Future) will cache its value
 locally. Further [`fetch`](@ref) calls do not entail a network hop. Once all referencing [`Future`](@ref Distributed.Future)s
 have fetched, the remote stored value is deleted.
 
-[`@async`](@ref) is similar to [`@spawn`](@ref), but only runs tasks on the local process. We
+[`@async`](@ref) is similar to [`@spawnat`](@ref), but only runs tasks on the local process. We
 use it to create a "feeder" task for each process. Each task picks the next index that needs to
 be computed, then waits for its process to finish, then repeats until we run out of indices. Note
 that the feeder tasks do not begin to execute until the main task reaches the end of the [`@sync`](@ref)
@@ -653,7 +652,7 @@ julia> rand2(2,2)
  0.153756  0.368514
  1.15119   0.918912
 
-julia> fetch(@spawn rand2(2,2))
+julia> fetch(@spawnat :any rand2(2,2))
 ERROR: RemoteException(2, CapturedException(UndefVarError(Symbol("#rand2"))
 Stacktrace:
 [...]
@@ -772,7 +771,7 @@ To this end, it is important to understand the data movement performed by Julia'
 programming constructs.
 
 [`fetch`](@ref) can be considered an explicit data movement operation, since it directly asks
-that an object be moved to the local machine. [`@spawn`](@ref) (and a few related constructs)
+that an object be moved to the local machine. [`@spawnat`](@ref) (and a few related constructs)
 also moves data, but this is not as obvious, hence it can be called an implicit data movement
 operation. Consider these two approaches to constructing and squaring a random matrix:
 
@@ -781,7 +780,7 @@ Method 1:
 ```julia-repl
 julia> A = rand(1000,1000);
 
-julia> Bref = @spawn A^2;
+julia> Bref = @spawnat :any A^2;
 
 [...]
 
@@ -791,14 +790,14 @@ julia> fetch(Bref);
 Method 2:
 
 ```julia-repl
-julia> Bref = @spawn rand(1000,1000)^2;
+julia> Bref = @spawnat :any rand(1000,1000)^2;
 
 [...]
 
 julia> fetch(Bref);
 ```
 
-The difference seems trivial, but in fact is quite significant due to the behavior of [`@spawn`](@ref).
+The difference seems trivial, but in fact is quite significant due to the behavior of [`@spawnat`](@ref).
 In the first method, a random matrix is constructed locally, then sent to another process where
 it is squared. In the second method, a random matrix is both constructed and squared on another
 process. Therefore the second method sends much less data than the first.
@@ -807,13 +806,13 @@ In this toy example, the two methods are easy to distinguish and choose from. Ho
 program designing data movement might require more thought and likely some measurement. For example,
 if the first process needs matrix `A` then the first method might be better. Or, if computing
 `A` is expensive and only the current process has it, then moving it to another process might
-be unavoidable. Or, if the current process has very little to do between the [`@spawn`](@ref)
+be unavoidable. Or, if the current process has very little to do between the [`@spawnat`](@ref)
 and `fetch(Bref)`, it might be better to eliminate the parallelism altogether. Or imagine `rand(1000,1000)`
-is replaced with a more expensive operation. Then it might make sense to add another [`@spawn`](@ref)
+is replaced with a more expensive operation. Then it might make sense to add another [`@spawnat`](@ref)
 statement just for this step.
 
 ## Global variables
-Expressions executed remotely via `@spawn`, or closures specified for remote execution using
+Expressions executed remotely via `@spawnat`, or closures specified for remote execution using
 `remotecall` may refer to global variables. Global bindings under module `Main` are treated
 a little differently compared to global bindings in other modules. Consider the following code
 snippet:
@@ -887,7 +886,7 @@ and hence a binding for `B` does not exist on worker 2.
 
 Fortunately, many useful parallel computations do not require data movement. A common example
 is a Monte Carlo simulation, where multiple processes can handle independent simulation trials
-simultaneously. We can use [`@spawn`](@ref) to flip coins on two processes. First, write the following
+simultaneously. We can use [`@spawnat`](@ref) to flip coins on two processes. First, write the following
 function in `count_heads.jl`:
 
 ```julia
@@ -906,10 +905,10 @@ trials on two machines, and add together the results:
 ```julia-repl
 julia> @everywhere include_string(Main, $(read("count_heads.jl", String)), "count_heads.jl")
 
-julia> a = @spawn count_heads(100000000)
+julia> a = @spawnat :any count_heads(100000000)
 Future(2, 1, 6, nothing)
 
-julia> b = @spawn count_heads(100000000)
+julia> b = @spawnat :any count_heads(100000000)
 Future(3, 1, 7, nothing)
 
 julia> fetch(a)+fetch(b)
@@ -926,7 +925,7 @@ for `f` to be associative, so that it does not matter what order the operations 
 in.
 
 Notice that our use of this pattern with `count_heads` can be generalized. We used two explicit
-[`@spawn`](@ref) statements, which limits the parallelism to two processes. To run on any number
+[`@spawnat`](@ref) statements, which limits the parallelism to two processes. To run on any number
 of processes, we can use a *parallel for loop*, running in distributed memory, which can be written
 in Julia using [`@distributed`](@ref) like this:
 

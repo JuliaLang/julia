@@ -745,8 +745,24 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         return Any
     end
     if s.name === _NAMEDTUPLE_NAME && !isconcretetype(s)
-        # TODO: better approximate inference
-        return Any
+        if isa(name, Const) && isa(name.val, Symbol)
+            if isa(s.parameters[1], Tuple)
+                name = Const(Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), s, name.val, false)+1))
+            else
+                name = Int
+            end
+        elseif Symbol ⊑ name
+            name = Int
+        end
+        _ts = s.parameters[2]
+        while isa(_ts, TypeVar)
+            _ts = _ts.ub
+        end
+        _ts = rewrap_unionall(_ts, s00)
+        if !(_ts <: Tuple)
+            return Any
+        end
+        return getfield_tfunc(_ts, name)
     end
     ftypes = datatype_fieldtypes(s)
     if isempty(ftypes)

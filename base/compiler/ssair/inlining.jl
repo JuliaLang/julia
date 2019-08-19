@@ -663,7 +663,7 @@ function analyze_method!(idx::Int, sig::Signature, @nospecialize(metharg), meths
     methsig = method.sig
 
     # Check whether this call just evaluates to a constant
-    if isa(f, widenconst(ft)) && !isdefined(method, :generator) && method.pure &&
+    if isa(f, widenconst(ft)) &&
             isa(stmttyp, Const) && stmttyp.actual && is_inlineable_constant(stmttyp.val)
         return ConstantCase(quoted(stmttyp.val), method, Any[methsp...], metharg)
     end
@@ -1130,7 +1130,7 @@ function compute_invoke_data(@nospecialize(atypes), params::Params)
     invoke_entry = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt),
                          invoke_types, params.world) # XXX: min_valid, max_valid
     invoke_entry === nothing && return nothing
-    invoke_data = InvokeData(invoke_entry, invoke_types, min_valid[1], max_valid[1])
+    invoke_data = InvokeData(invoke_entry::Core.TypeMapEntry, invoke_types, min_valid[1], max_valid[1])
     atype0 = atypes[2]
     atypes = atypes[4:end]
     pushfirst!(atypes, atype0)

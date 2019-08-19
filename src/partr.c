@@ -28,11 +28,9 @@ static const int16_t not_sleeping = 0;
 static const int16_t sleeping = 1;
 
 
-#ifdef JULIA_ENABLE_THREADING
-
 // GC functions used
 extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
-                                         jl_gc_mark_sp_t *sp, jl_value_t *obj);
+                                         jl_gc_mark_sp_t *sp, jl_value_t *obj) JL_NOTSAFEPOINT;
 
 // multiq
 // ---
@@ -41,19 +39,20 @@ extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
 typedef struct taskheap_tag {
     jl_mutex_t lock;
     jl_task_t **tasks;
-    int16_t ntasks, prio;
+    int32_t ntasks;
+    int16_t prio;
 } taskheap_t;
 
 /* multiqueue parameters */
-static const int16_t heap_d = 8;
-static const int heap_c = 16;
+static const int32_t heap_d = 8;
+static const int heap_c = 2;
 
 /* size of each heap */
-static const int tasks_per_heap = 16384; // TODO: this should be smaller by default, but growable!
+static const int tasks_per_heap = 65536; // TODO: this should be smaller by default, but growable!
 
 /* the multiqueue's heaps */
 static taskheap_t *heaps;
-static int16_t heap_p;
+static int32_t heap_p;
 
 /* unbias state for the RNG */
 static uint64_t cong_unbias;
@@ -63,7 +62,7 @@ static inline void multiq_init(void)
 {
     heap_p = heap_c * jl_n_threads;
     heaps = (taskheap_t *)calloc(heap_p, sizeof(taskheap_t));
-    for (int16_t i = 0; i < heap_p; ++i) {
+    for (int32_t i = 0; i < heap_p; ++i) {
         jl_mutex_init(&heaps[i].lock);
         heaps[i].tasks = (jl_task_t **)calloc(tasks_per_heap, sizeof(jl_task_t*));
         heaps[i].ntasks = 0;
@@ -73,10 +72,10 @@ static inline void multiq_init(void)
 }
 
 
-static inline void sift_up(taskheap_t *heap, int16_t idx)
+static inline void sift_up(taskheap_t *heap, int32_t idx)
 {
     if (idx > 0) {
-        int16_t parent = (idx-1)/heap_d;
+        int32_t parent = (idx-1)/heap_d;
         if (heap->tasks[idx]->prio < heap->tasks[parent]->prio) {
             jl_task_t *t = heap->tasks[parent];
             heap->tasks[parent] = heap->tasks[idx];
@@ -87,10 +86,10 @@ static inline void sift_up(taskheap_t *heap, int16_t idx)
 }
 
 
-static inline void sift_down(taskheap_t *heap, int16_t idx)
+static inline void sift_down(taskheap_t *heap, int32_t idx)
 {
     if (idx < heap->ntasks) {
-        for (int16_t child = heap_d*idx + 1;
+        for (int32_t child = heap_d*idx + 1;
                 child < tasks_per_heap && child <= heap_d*idx + heap_d;
                 ++child) {
             if (heap->tasks[child]
@@ -136,7 +135,8 @@ static inline jl_task_t *multiq_deletemin(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     uint64_t rn1 = 0, rn2;
-    int16_t i, prio1, prio2;
+    int32_t i;
+    int16_t prio1, prio2;
     jl_task_t *task;
  retry:
     for (i = 0; i < heap_p; ++i) {
@@ -182,7 +182,7 @@ static inline jl_task_t *multiq_deletemin(void)
 
 void jl_gc_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
 {
-    int16_t i, j;
+    int32_t i, j;
     for (i = 0; i < heap_p; ++i)
         for (j = 0; j < heaps[i].ntasks; ++j)
             jl_gc_mark_queue_obj_explicit(gc_cache, sp, (jl_value_t *)heaps[i].tasks[j]);
@@ -191,7 +191,7 @@ void jl_gc_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp
 
 static int multiq_check_empty(void)
 {
-    int16_t i;
+    int32_t i;
     for (i = 0; i < heap_p; ++i) {
         if (heaps[i].ntasks != 0)
             return 0;
@@ -322,21 +322,6 @@ static void wake_thread(int16_t tid)
     }
 }
 
-#else // JULIA_ENABLE_THREADING
-
-static int sleep_check_now(int16_t tid)
-{
-    (void)tid;
-    return 1;
-}
-
-static int sleep_check_after_threshold(uint64_t *start_cycles)
-{
-    (void)start_cycles;
-    return 1;
-}
-
-#endif
 
 /* ensure thread tid is awake if necessary */
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
@@ -351,7 +336,6 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
         if (uvlock == system_self)
             uv_stop(jl_global_event_loop());
     }
-#ifdef JULIA_ENABLE_THREADING
     else {
         // something added to the sticky-queue: notify that thread
         wake_thread(tid);
@@ -376,7 +360,6 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
             }
         }
     }
-#endif
 }
 
 
@@ -400,11 +383,7 @@ static jl_task_t *get_next_task(jl_value_t *getsticky)
         return task;
     }
     jl_gc_safepoint();
-#ifdef JULIA_ENABLE_THREADING
     return multiq_deletemin();
-#else
-    return NULL;
-#endif
 }
 
 static int may_sleep(jl_ptls_t ptls)
@@ -425,14 +404,12 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
         if (task)
             return task;
 
-#ifdef JULIA_ENABLE_THREADING
         // quick, race-y check to see if there seems to be any stuff in there
         jl_cpu_pause();
         if (!multiq_check_empty()) {
             start_cycles = 0;
             continue;
         }
-#endif
 
         jl_cpu_pause();
         if (sleep_check_after_threshold(&start_cycles) || (!_threadedregion && ptls->tid == 0)) {
@@ -503,9 +480,14 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
             start_cycles = 0;
         }
         else {
+#ifndef JL_HAVE_ASYNCIFY
             // maybe check the kernel for new messages too
             if (jl_atomic_load(&jl_uv_n_waiters) == 0)
                 jl_process_events(jl_global_event_loop());
+#else
+            // Yield back to browser event loop
+            return ptls->root_task;
+#endif
         }
     }
 }

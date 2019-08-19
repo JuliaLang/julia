@@ -293,7 +293,7 @@ end
 
 ## atexit: register exit hooks ##
 
-const atexit_hooks = []
+const atexit_hooks = Callable[Filesystem.temp_cleanup_purge]
 
 """
     atexit(f)

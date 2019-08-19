@@ -1,9 +1,5 @@
 # Sockets
 
-```@meta
-DocTestSetup = :(using Sockets)
-```
-
 ```@docs
 Sockets.Sockets
 Sockets.connect(::TCPSocket, ::Integer)
@@ -32,8 +28,4 @@ Sockets.recvfrom
 Sockets.setopt
 Sockets.nagle
 Sockets.quickack
-```
-
-```@meta
-DocTestSetup = nothing
 ```

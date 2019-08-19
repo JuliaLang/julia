@@ -810,10 +810,14 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         jl_serialize_value(s, (jl_value_t*)m->name);
         jl_serialize_value(s, (jl_value_t*)m->file);
         write_int32(s->s, m->line);
-        if (external_mt)
+        if (external_mt) {
             jl_serialize_value(s, jl_nothing);
-        else
+            jl_serialize_value(s, jl_nothing);
+        }
+        else {
             jl_serialize_value(s, (jl_value_t*)m->ambig);
+            jl_serialize_value(s, (jl_value_t*)m->resorted);
+        }
         write_int32(s->s, m->called);
         write_int32(s->s, m->nargs);
         write_int32(s->s, m->nospecialize);
@@ -1683,6 +1687,8 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     m->deleted_world = ~(size_t)0;
     m->ambig = jl_deserialize_value(s, (jl_value_t**)&m->ambig);
     jl_gc_wb(m, m->ambig);
+    m->resorted = jl_deserialize_value(s, (jl_value_t**)&m->resorted);
+    jl_gc_wb(m, m->resorted);
     m->called = read_int32(s->s);
     m->nargs = read_int32(s->s);
     m->nospecialize = read_int32(s->s);
@@ -2805,7 +2811,8 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     for (i = 0; i < len; i++) {
         jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_array, i);
         assert(jl_is_module(m));
-        jl_collect_lambdas_from_mod(lambdas, m);
+        if (m->parent == m) // some toplevel modules (really just Base) aren't actually
+            jl_collect_lambdas_from_mod(lambdas, m);
     }
     jl_collect_methtable_from_mod(lambdas, jl_type_type_mt);
     jl_collect_missing_backedges_to_mod(jl_type_type_mt);

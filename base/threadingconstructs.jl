@@ -102,3 +102,30 @@ macro threads(args...)
         throw(ArgumentError("unrecognized argument to @threads"))
     end
 end
+
+"""
+    Threads.@spawn expr
+
+Create and run a [`Task`](@ref) on any available thread. To wait for the task to
+finish, call [`wait`](@ref) on the result of this macro, or call [`fetch`](@ref)
+to wait and then obtain its return value.
+
+!!! note
+    This feature is currently considered experimental.
+
+!!! compat "Julia 1.3"
+    This macro is available as of Julia 1.3.
+"""
+macro spawn(expr)
+    thunk = esc(:(()->($expr)))
+    var = esc(Base.sync_varname)
+    quote
+        local task = Task($thunk)
+        task.sticky = false
+        if $(Expr(:isdefined, var))
+            push!($var, task)
+        end
+        schedule(task)
+        task
+    end
+end

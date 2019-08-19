@@ -48,6 +48,193 @@ if !Sys.iswindows()
     cd(pwd_)
 end
 
+child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $code`)))
+
+@testset "mktemp/dir basic cleanup" begin
+    # mktemp without cleanup
+    t = child_eval("t = mktemp(cleanup=false)[1]; @assert isfile(t); t")
+    @test isfile(t)
+    rm(t, force=true)
+    @test !ispath(t)
+    # mktemp with cleanup
+    t = child_eval("t = mktemp()[1]; @assert isfile(t); t")
+    @test !ispath(t)
+    # mktempdir without cleanup
+    t = child_eval("t = mktempdir(cleanup=false); touch(joinpath(t, \"file.txt\")); t")
+    @test isfile("$t/file.txt")
+    rm(t, recursive=true, force=true)
+    @test !ispath(t)
+    # mktempdir with cleanup
+    t = child_eval("t = mktempdir(); touch(joinpath(t, \"file.txt\")); t")
+    @test !ispath(t)
+end
+
+import Base.Filesystem: TEMP_CLEANUP_MIN, TEMP_CLEANUP_MAX, TEMP_CLEANUP
+
+function with_temp_cleanup(f::Function, n::Int)
+    SAVE_TEMP_CLEANUP_MIN = TEMP_CLEANUP_MIN[]
+    SAVE_TEMP_CLEANUP_MAX = TEMP_CLEANUP_MAX[]
+    SAVE_TEMP_CLEANUP = copy(TEMP_CLEANUP)
+    empty!(TEMP_CLEANUP)
+    TEMP_CLEANUP_MIN[] = n
+    TEMP_CLEANUP_MAX[] = n
+    try f()
+    finally
+        Sys.iswindows() && GC.gc(true)
+        for t in keys(TEMP_CLEANUP)
+            rm(t, recursive=true, force=true)
+        end
+        copy!(TEMP_CLEANUP, SAVE_TEMP_CLEANUP)
+        TEMP_CLEANUP_MAX[] = SAVE_TEMP_CLEANUP_MAX
+        TEMP_CLEANUP_MIN[] = SAVE_TEMP_CLEANUP_MIN
+    end
+end
+
+function mktempfile(; cleanup=true)
+    (file, io) = mktemp(cleanup=cleanup)
+    Sys.iswindows() && close(io)
+    return file
+end
+
+@testset "mktemp/dir cleanup list purging" begin
+    n = 12 # cleanup min & max
+    @assert n % 2 == n % 3 == 0 # otherwise tests won't work
+    with_temp_cleanup(n) do
+        @test length(TEMP_CLEANUP) == 0
+        @test TEMP_CLEANUP_MAX[] == n
+        # for n mktemps, no purging is triggered
+        temps = String[]
+        for i = 1:n
+            t = i % 2 == 0 ? mktempfile() : mktempdir()
+            push!(temps, t)
+            @test ispath(t)
+            @test length(TEMP_CLEANUP) == i 
+            @test TEMP_CLEANUP_MAX[] == n
+            # delete 1/3 of the temp paths
+            i % 3 == 0 && rm(t, recursive=true, force=true)
+        end
+        # without cleanup no purge is triggered
+        t = mktempdir(cleanup=false)
+        @test isdir(t)
+        @test length(TEMP_CLEANUP) == n
+        @test TEMP_CLEANUP_MAX[] == n
+        rm(t, recursive=true, force=true)
+        # purge triggered by next mktemp with cleanup
+        t = mktempfile()
+        push!(temps, t)
+        n′ = 2n÷3 + 1
+        @test 2n′ > n
+        @test isfile(t)
+        @test length(TEMP_CLEANUP) == n′
+        @test TEMP_CLEANUP_MAX[] == 2n′
+        # remove all temp files
+        for t in temps
+            rm(t, recursive=true, force=true)
+        end
+        # for n′ mktemps, no purging is triggered
+        for i = 1:n′
+            t = i % 2 == 0 ? mktempfile() : mktempdir()
+            push!(temps, t)
+            @test ispath(t)
+            @test length(TEMP_CLEANUP) == n′ + i
+            @test TEMP_CLEANUP_MAX[] == 2n′
+            # delete 2/3 of the temp paths
+            i % 3 != 0 && rm(t, recursive=true, force=true)
+        end
+        # without cleanup no purge is triggered
+        t = mktempfile(cleanup=false)
+        @test isfile(t)
+        @test length(TEMP_CLEANUP) == 2n′
+        @test TEMP_CLEANUP_MAX[] == 2n′
+        rm(t, force=true)
+        # purge triggered by next mktemp
+        t = mktempdir()
+        push!(temps, t)
+        n′′ = n′÷3 + 1
+        @test 2n′′ < n
+        @test isdir(t)
+        @test length(TEMP_CLEANUP) == n′′
+        @test TEMP_CLEANUP_MAX[] == n
+    end
+end
+
+no_error_logging(f::Function) =
+    Base.CoreLogging.with_logger(f, Base.CoreLogging.NullLogger())
+
+@testset "hof mktemp/dir when cleanup is prevented" begin
+    d = mktempdir()
+    with_temp_cleanup(3) do
+        @test length(TEMP_CLEANUP) == 0
+        @test TEMP_CLEANUP_MAX[] == 3
+        local t, f
+        temps = String[]
+        # mktemp is normally cleaned up on completion
+        mktemp(d) do path, _
+            @test isfile(path)
+            t = path
+        end
+        @test !ispath(t)
+        @test length(TEMP_CLEANUP) == 0
+        @test TEMP_CLEANUP_MAX[] == 3
+        # mktemp when cleanup is prevented
+        no_error_logging() do
+            mktemp(d) do path, _
+                @test isfile(path)
+                f = open(path) # make undeletable on Windows
+                chmod(d, 0o400) # make undeletable on UNIX
+                t = path
+            end
+        end
+        chmod(d, 0o700)
+        close(f)
+        @test isfile(t)
+        @test length(TEMP_CLEANUP) == 1
+        @test TEMP_CLEANUP_MAX[] == 3
+        push!(temps, t)
+        # mktempdir is normally cleaned up on completion
+        mktempdir(d) do path
+            @test isdir(path)
+            t = path
+        end
+        @test !ispath(t)
+        @test length(TEMP_CLEANUP) == 1
+        @test TEMP_CLEANUP_MAX[] == 3
+        # mktempdir when cleanup is prevented
+        no_error_logging() do
+            mktempdir(d) do path
+                @test isdir(path)
+                # make undeletable on Windows:
+                f = open(joinpath(path, "file.txt"), "w+")
+                chmod(d, 0o400) # make undeletable on UNIX
+                t = path
+            end
+        end
+        chmod(d, 0o700)
+        close(f)
+        @test isdir(t)
+        @test length(TEMP_CLEANUP) == 2
+        @test TEMP_CLEANUP_MAX[] == 3
+        push!(temps, t)
+        # make one more temp file
+        t = mktemp()[1]
+        @test isfile(t)
+        @test length(TEMP_CLEANUP) == 3
+        @test TEMP_CLEANUP_MAX[] == 3
+        # nothing has been deleted yet
+        for t in temps
+            @test ispath(t)
+        end
+        # another temp file triggers purge
+        t = mktempdir()
+        @test isdir(t)
+        @test length(TEMP_CLEANUP) == 2
+        @test TEMP_CLEANUP_MAX[] == 4
+        # now all the temps are gone
+        for t in temps
+            @test !ispath(t)
+        end
+    end
+end
 
 #######################################################################
 # This section tests some of the features of the stat-based file info #
@@ -123,6 +310,51 @@ else
     end
 end
 
+function test_stat_error(stat::Function, pth)
+    if stat === lstat && !(pth isa AbstractString)
+        return # no lstat for fd handles
+    end
+    ex = try; stat(pth); false; catch ex; ex; end::Base.IOError
+    @test ex.code == (pth isa AbstractString ? Base.UV_EACCES : Base.UV_EBADF)
+    @test startswith(ex.msg, "stat: ")
+    pth isa AbstractString || (pth = Base.INVALID_OS_HANDLE)
+    @test endswith(ex.msg, repr(pth))
+    nothing
+end
+@testset "stat errors" begin # PR 32031
+    mktempdir() do dir
+        cd(dir) do
+            touch("afile")
+            try
+                # remove permission to access this folder
+                # to cause cause EACCESS-denied errors
+                @static if Sys.iswindows()
+                    @test ccall((:ImpersonateAnonymousToken, "Advapi32.dll"), stdcall, Cint, (Libc.WindowsRawSocket,),
+                                ccall(:GetCurrentThread, Libc.WindowsRawSocket, ())) != 0
+                else
+                    chmod(dir, 0o000)
+                end
+                for pth in ("afile",
+                            joinpath("afile", "not_file"),
+                            SubString(joinpath(dir, "afile")),
+                            Base.RawFD(-1),
+                            -1)
+                    test_stat_error(stat, pth)
+                    test_stat_error(lstat, pth)
+                end
+            finally
+                # restore permissions
+                # to let us cleanup afile
+                @static if Sys.iswindows()
+                    ccall((:RevertToSelf, "advapi32.dll"), stdcall, Cint, ()) == 0 && exit(1)
+                else
+                    chmod(dir, 0o777)
+                end
+            end
+        end
+    end
+end
+
 # On windows the filesize of a folder is the accumulation of all the contained
 # files and is thus zero in this case.
 if Sys.iswindows()
@@ -188,13 +420,13 @@ if !Sys.iswindows()
     # chown will give an error if the user does not have permissions to change files
     if get(ENV, "USER", "") == "root" || get(ENV, "HOME", "") == "/root"
         chown(file, -2, -1)  # Change the file owner to nobody
-        @test stat(file).uid !=0
+        @test stat(file).uid != 0
         chown(file, 0, -2)  # Change the file group to nogroup (and owner back to root)
-        @test stat(file).gid !=0
-        @test stat(file).uid ==0
+        @test stat(file).gid != 0
+        @test stat(file).uid == 0
         @test chown(file, -1, 0) == file
-        @test stat(file).gid ==0
-        @test stat(file).uid ==0
+        @test stat(file).gid == 0
+        @test stat(file).uid == 0
     else
         @test_throws Base.IOError chown(file, -2, -1)  # Non-root user cannot change ownership to another user
         @test_throws Base.IOError chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
@@ -387,38 +619,41 @@ end
 ## cp ----------------------------------------------------
 # issue #8698
 # Test copy file
-afile = joinpath(dir, "a.txt")
-touch(afile)
-af = open(afile, "r+")
-write(af, "This is indeed a test")
+let
+    afile = joinpath(dir, "a.txt")
+    touch(afile)
+    af = open(afile, "r+")
+    write(af, "This is indeed a test")
 
-bfile = joinpath(dir, "b.txt")
-cp(afile, bfile)
+    bfile = joinpath(dir, "b.txt")
+    cp(afile, bfile)
 
-cfile = joinpath(dir, "c.txt")
-write(cfile, "This is longer than the contents of afile")
-cp(afile, cfile; force=true)
+    cfile = joinpath(dir, "c.txt")
+    write(cfile, "This is longer than the contents of afile")
+    cp(afile, cfile; force=true)
 
-a_stat = stat(afile)
-b_stat = stat(bfile)
-c_stat = stat(cfile)
-@test a_stat.mode == b_stat.mode
-@test a_stat.size == b_stat.size
-@test a_stat.size == c_stat.size
+    a_stat = stat(afile)
+    b_stat = stat(bfile)
+    c_stat = stat(cfile)
+    @test a_stat.mode == b_stat.mode
+    @test a_stat.size == b_stat.size
+    @test a_stat.size == c_stat.size
 
-@test parse(Int,match(r"mode=(.*),",sprint(show,a_stat)).captures[1]) == a_stat.mode
+    @test parse(Int, match(r"mode=(.*),", sprint(show, a_stat)).captures[1]) == a_stat.mode
 
-close(af)
-rm(afile)
-rm(bfile)
-rm(cfile)
+    close(af)
+    rm(afile)
+    rm(bfile)
+    rm(cfile)
+end
+
 
 ## mv ----------------------------------------------------
 mktempdir() do tmpdir
     # rename file
     file = joinpath(tmpdir, "afile.txt")
     files_stat = stat(file)
-    close(open(file,"w")) # like touch, but lets the operating system update
+    close(open(file, "w")) # like touch, but lets the operating system update
     # the timestamp for greater precision on some platforms (windows)
 
     newfile = joinpath(tmpdir, "bfile.txt")
