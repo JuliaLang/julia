@@ -39,7 +39,7 @@
 
 (define prec-names '(prec-assignment
                      prec-pair prec-conditional prec-lazy-or prec-lazy-and prec-arrow prec-comparison
-                     prec-pipe< prec-pipe> prec-colon prec-plus prec-bitshift prec-times prec-rational
+                     prec-pipe< prec-pipe> prec-colon prec-plus prec-times prec-rational prec-bitshift 
                      prec-power prec-decl prec-dot))
 
 (define trans-op (string->symbol ".'"))
