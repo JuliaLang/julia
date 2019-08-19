@@ -157,6 +157,16 @@ ambs = detect_ambiguities(Ambig5)
 # some ambiguities involving Union{} type parameters are expected, but not required
 @test !isempty(detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=true))
 
+module AmbigStdlib
+using Test
+
+# List standard libraries.  Exclude modules such as Main.
+modules = [mod for (pkg, mod) in Base.loaded_modules if pkg.uuid !== nothing]
+
+# not using isempty so this prints more information when it fails
+@test detect_ambiguities(modules...; imported=true, recursive=true) == []
+end  # module
+
 amb_1(::Int8, ::Int) = 1
 amb_1(::Integer, x) = 2
 amb_1(x, ::Int) = 3
