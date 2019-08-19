@@ -38,7 +38,7 @@
 (define prec-dot         '(|.|))
 
 (define prec-names '(prec-assignment
-                     prec-pair prec-conditional prec-lazy-or prec-lazy-and prec-arrow prec-comparison
+                     prec-pair prec-conditional prec-arrow prec-lazy-or prec-lazy-and prec-comparison
                      prec-pipe< prec-pipe> prec-colon prec-plus prec-times prec-rational prec-bitshift
                      prec-power prec-decl prec-dot))
 
