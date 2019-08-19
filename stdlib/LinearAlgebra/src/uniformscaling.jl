@@ -77,6 +77,7 @@ eltype(::Type{UniformScaling{T}}) where {T} = T
 ndims(J::UniformScaling) = 2
 Base.has_offset_axes(::UniformScaling) = false
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
+getindex(J::UniformScaling, I::CartesianIndex{2}) = J[I[1], I[2]]
 
 function show(io::IO, ::MIME"text/plain", J::UniformScaling)
     s = "$(J.λ)"

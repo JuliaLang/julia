@@ -11,6 +11,19 @@ StructuredMatrixStyle{T}(::Val{N}) where {T,N} = Broadcast.DefaultArrayStyle{N}(
 const StructuredMatrix = Union{Diagonal,Bidiagonal,SymTridiagonal,Tridiagonal,LowerTriangular,UnitLowerTriangular,UpperTriangular,UnitUpperTriangular}
 Broadcast.BroadcastStyle(::Type{T}) where {T<:StructuredMatrix} = StructuredMatrixStyle{T}()
 
+# Special support for UniformScaling — largely behave like a Diagonal, but hack into
+# Broadcast to avoid computing its size.
+Broadcast.BroadcastStyle(::Type{UniformScaling{T}}) where {T} = StructuredMatrixStyle{Diagonal{T}}()
+Broadcast.broadcastable(J::UniformScaling) = J
+@inline Broadcast.combine_axes(::UniformScaling, B...) = Broadcast.combine_axes(B...)
+@inline Broadcast.combine_axes(A, ::UniformScaling) = axes(A)
+Broadcast.newindex(::UniformScaling, I::CartesianIndex{2}) = I
+Broadcast.check_broadcast_axes(tup, ::UniformScaling) = nothing
+# And eagerly evaluate some 
+Broadcast.broadcasted(::StructuredMatrixStyle{<:Diagonal}, f, J::UniformScaling) = UniformScaling(f(J.λ))
+
+
+
 # Promotion of broadcasts between structured matrices. This is slightly unusual
 # as we define them symmetrically. This allows us to have a fallback to DefaultArrayStyle{2}().
 # Diagonal can cavort with all the other structured matrix types.
@@ -87,6 +100,7 @@ fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && _iszero(v))
 fzero(x::Number) = x
 fzero(::Type{T}) where T = T
 fzero(S::StructuredMatrix) = zero(eltype(S))
+fzero(J::UniformScaling) = zero(eltype(J))
 fzero(x) = missing
 function fzero(bc::Broadcast.Broadcasted)
     args = map(fzero, bc.args)
