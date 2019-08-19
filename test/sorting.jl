@@ -99,6 +99,19 @@ end
         @test searchsortedlast(500:1.0:600, -1.0e20) == 0
         @test searchsortedlast(500:1.0:600, 1.0e20) == 101
     end
+
+    @testset "issue 32568" begin
+        for R in numTypes, T in numTypes
+            for arr in [R[1:5;], R(1):R(5), R(1):2:R(5)]
+                @test eltype(searchsorted(arr, T(2))) == keytype(arr)
+                @test eltype(searchsorted(arr, T(2), big(1), big(4), Forward)) == keytype(arr)
+                @test searchsortedfirst(arr, T(2)) isa keytype(arr)
+                @test searchsortedfirst(arr, T(2), big(1), big(4), Forward) isa keytype(arr)
+                @test searchsortedlast(arr, T(2)) isa keytype(arr)
+                @test searchsortedlast(arr, T(2), big(1), big(4), Forward) isa keytype(arr)
+            end
+        end
+    end
 end
 # exercise the codepath in searchsorted* methods for ranges that check for zero step range
 struct ConstantRange{T} <: AbstractRange{T}
