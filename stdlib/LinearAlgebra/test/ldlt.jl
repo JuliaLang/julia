@@ -10,9 +10,9 @@ Random.seed!(123)
     S = SymTridiagonal(randn(5), randn(4))
     F = ldlt(S)
     ldltstring = sprint((t, s) -> show(t, "text/plain", s), F)
-    lstring = sprint((t, s) -> show(t, "text/plain", s), UnitLowerTriangular(F.data))
-    dstring = sprint((t, s) -> show(t, "text/plain", s), F.data.dv)
-    @test ldltstring == "$(summary(F))\nL factor:\n$lstring\ndiagonal values:\n$dstring"
+    lstring = sprint((t, s) -> show(t, "text/plain", s), F.L)
+    dstring = sprint((t, s) -> show(t, "text/plain", s), F.D)
+    @test ldltstring == "$(summary(F))\nL factor:\n$lstring\nD factor:\n$dstring"
 end
 
 end # module TestLDLT
