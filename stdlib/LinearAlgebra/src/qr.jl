@@ -73,7 +73,7 @@ triangular matrix ``T`` where
 Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T) = I - V T V^T
 ```
 
-such that ``v_i`` is the ``i``th column of ``V``, and ``\tau_i`` is the ``i``th diagonal
+such that ``v_i`` is the ``i``th column of ``V``, and ``\\tau_i`` is the ``i``th diagonal
 element of ``T``.
 
 Iterating the decomposition produces the components `Q` and `R`.

@@ -51,7 +51,6 @@ static inline void jl_mutex_lock_nogc(jl_mutex_t *lock) JL_NOTSAFEPOINT
 #endif
 }
 
-#ifdef JULIA_ENABLE_THREADING
 static inline void jl_lock_frame_push(jl_mutex_t *lock)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -75,15 +74,6 @@ static inline void jl_lock_frame_pop(void)
         ptls->current_task->locks.len--;
     }
 }
-#else
-static inline void jl_lock_frame_push(jl_mutex_t *lock)
-{
-    (void)lock;
-}
-static inline void jl_lock_frame_pop(void)
-{
-}
-#endif // ifndef JULIA_ENABLE_THREADING
 
 #define JL_SIGATOMIC_BEGIN() do {               \
         jl_get_ptls_states()->defer_signal++;   \
@@ -181,31 +171,11 @@ static inline void jl_mutex_init(jl_mutex_t *lock) JL_NOTSAFEPOINT
     lock->count = 0;
 }
 
-#ifdef JULIA_ENABLE_THREADING
 #define JL_MUTEX_INIT(m) jl_mutex_init(m)
 #define JL_LOCK(m) jl_mutex_lock(m)
 #define JL_UNLOCK(m) jl_mutex_unlock(m)
 #define JL_LOCK_NOGC(m) jl_mutex_lock_nogc(m)
 #define JL_UNLOCK_NOGC(m) jl_mutex_unlock_nogc(m)
-#else // JULIA_ENABLE_THREADING
-static inline void jl_mutex_check_type(jl_mutex_t *m) JL_NOTSAFEPOINT
-{
-    (void)m;
-}
-#define JL_MUTEX_INIT(m) jl_mutex_check_type(m)
-#define JL_LOCK(m) do {                                   \
-        JL_SIGATOMIC_BEGIN();                             \
-        jl_gc_enable_finalizers(jl_get_ptls_states(), 0); \
-        jl_mutex_check_type(m);                           \
-    } while (0)
-#define JL_UNLOCK(m) do {                                       \
-        jl_gc_enable_finalizers(jl_get_ptls_states(), 1);       \
-        jl_mutex_check_type(m);                                 \
-        JL_SIGATOMIC_END();                                     \
-    } while (0)
-#define JL_LOCK_NOGC(m) jl_mutex_check_type(m)
-#define JL_UNLOCK_NOGC(m) jl_mutex_check_type(m)
-#endif // JULIA_ENABLE_THREADING
 
 #ifdef __cplusplus
 }

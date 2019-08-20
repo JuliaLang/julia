@@ -274,12 +274,12 @@ end
     @test catch_stack(t, include_bt=false) == [ErrorException("A"), ErrorException("B")]
     # Exception stacks for tasks which never get the chance to start
     t = @task nothing
-    @test try
+    @test (try
         @async Base.throwto(t, ErrorException("expected"))
         wait(t)
     catch e
         e
-    end == ErrorException("expected")
+    end).task.exception == ErrorException("expected")
     @test length(catch_stack(t)) == 1
     @test length(catch_stack(t)[1][2]) > 0 # backtrace is nonempty
     # Exception stacks should not be accessed on concurrently running tasks

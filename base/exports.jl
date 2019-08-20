@@ -125,6 +125,7 @@ export
     KeyError,
     MissingException,
     ProcessFailedException,
+    TaskFailedException,
     SystemError,
     StringIndexError,
 
@@ -324,6 +325,7 @@ export
     sin,
     sinc,
     sincos,
+    sincosd,
     sind,
     sinh,
     sinpi,
@@ -675,6 +677,7 @@ export
     skipmissing,
     something,
     isnothing,
+    nonmissingtype,
 
 # time
     sleep,

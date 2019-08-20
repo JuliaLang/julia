@@ -174,6 +174,9 @@ v11801, t11801 = @timed sin(1)
 
 # interactive utilities
 
+struct ambigconvert; end # inject a problematic `convert` method to ensure it still works
+Base.convert(::Any, v::ambigconvert) = v
+
 import Base.summarysize
 @test summarysize(Core) > (summarysize(Core.Compiler) + Base.summarysize(Core.Intrinsics)) > Core.sizeof(Core)
 @test summarysize(Base) > 100_000 * sizeof(Ptr)
@@ -193,6 +196,15 @@ let A = zeros(1000), B = reshape(A, (1,1000))
     # check that object header is accounted for
     @test summarysize(A) > sizeof(A)
 end
+
+# issue #32881
+mutable struct S32881; end
+let s = "abc"
+    @test summarysize([s,s]) < summarysize(["abc","xyz"])
+end
+@test summarysize(Vector{Union{Nothing,Missing}}(undef, 16)) < summarysize(Vector{Union{Nothing,Missing}}(undef, 32))
+@test summarysize(Vector{Nothing}(undef, 16)) == summarysize(Vector{Nothing}(undef, 32))
+@test summarysize(S32881()) == sizeof(Int)
 
 # issue #13021
 let ex = try

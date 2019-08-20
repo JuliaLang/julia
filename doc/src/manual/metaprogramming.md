@@ -348,7 +348,7 @@ QuoteNode
 
 `QuoteNode` can also be used for certain advanced metaprogramming tasks.
 
-### [`eval`](@ref) and effects
+### Evaluating expressions
 
 Given an expression object, one can cause Julia to evaluate (execute) it at global scope using
 [`eval`](@ref):

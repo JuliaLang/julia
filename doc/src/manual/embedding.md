@@ -148,7 +148,6 @@ We start by opening Visual Studio and creating a new Console Application project
 header file, add the following lines at the end:
 
 ```c
-#define JULIA_ENABLE_THREADING
 #include <julia.h>
 ```
 

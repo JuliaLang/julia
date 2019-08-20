@@ -19,7 +19,6 @@
 
 static void attach_exception_port(thread_port_t thread, int segv_only);
 
-#ifdef JULIA_ENABLE_THREADING
 // low 16 bits are the thread id, the next 8 bits are the original gc_state
 static arraylist_t suspended_threads;
 void jl_mach_gc_end(void)
@@ -57,7 +56,6 @@ static int jl_mach_gc_wait(jl_ptls_t ptls2,
     jl_mutex_unlock_nogc(&safepoint_lock);
     return 1;
 }
-#endif
 
 static mach_port_t segv_port = 0;
 
@@ -80,9 +78,7 @@ void *mach_segv_listener(void *arg)
 
 static void allocate_segv_handler()
 {
-#ifdef JULIA_ENABLE_THREADING
     arraylist_new(&suspended_threads, jl_n_threads);
-#endif
     pthread_t thread;
     pthread_attr_t attr;
     kern_return_t ret;
@@ -174,7 +170,6 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     }
 #endif
     int16_t tid;
-#ifdef JULIA_ENABLE_THREADING
     jl_ptls_t ptls2 = NULL;
     for (tid = 0;tid < jl_n_threads;tid++) {
         jl_ptls_t _ptls2 = jl_all_tls_states[tid];
@@ -190,10 +185,6 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         jl_safe_printf("ERROR: Exception handler triggered on unmanaged thread.\n");
         return KERN_INVALID_ARGUMENT;
     }
-#else
-    jl_ptls_t ptls2 = &jl_tls_states;
-    tid = 0;
-#endif
     if (exception == EXC_ARITHMETIC) {
         jl_throw_in_thread(tid, thread, jl_diverror_exception);
         return KERN_SUCCESS;
@@ -203,12 +194,10 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     HANDLE_MACH_ERROR("thread_get_state", ret);
     uint64_t fault_addr = exc_state.__faultvaddr;
     if (jl_addr_is_safepoint(fault_addr)) {
-#ifdef JULIA_ENABLE_THREADING
         if (jl_mach_gc_wait(ptls2, thread, tid))
             return KERN_SUCCESS;
         if (ptls2->tid != 0)
             return KERN_SUCCESS;
-#endif
         if (ptls2->defer_signal) {
             jl_safepoint_defer_sigint();
         }

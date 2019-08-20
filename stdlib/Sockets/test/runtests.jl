@@ -284,8 +284,8 @@ end
             @test fetch(tsk) == msg
         end
         let tsk = @async send(b, ip"127.0.0.1", randport, "WORLD HELLO")
-            (addr, data) = recvfrom(a)
-            @test addr == ip"127.0.0.1" && String(data) == "WORLD HELLO"
+            (inetaddr, data) = recvfrom(a)
+            @test inetaddr.host == ip"127.0.0.1" && String(data) == "WORLD HELLO"
             wait(tsk)
         end
         close(a)
@@ -302,8 +302,8 @@ end
 
         for i = 1:3
             tsk = @async begin
-                let (addr, data) = recvfrom(a)
-                    @test addr == ip"::1"
+                let (inetaddr, data) = recvfrom(a)
+                    @test inetaddr.host == ip"::1"
                     @test String(data) == "Hello World"
                 end
             end

@@ -85,6 +85,10 @@ function _UVError(pfx::AbstractString, code::Integer)
     code = Int32(code)
     IOError(string(pfx, ": ", struverror(code), " (", uverrorname(code), ")"), code)
 end
+function _UVError(pfx::AbstractString, code::Integer, sfxs::AbstractString...)
+    code = Int32(code)
+    IOError(string(pfx, ": ", struverror(code), " (", uverrorname(code), ")", " ", sfxs...), code)
+end
 
 struverror(err::Int32) = unsafe_string(ccall(:uv_strerror, Cstring, (Int32,), err))
 uverrorname(err::Int32) = unsafe_string(ccall(:uv_err_name, Cstring, (Int32,), err))

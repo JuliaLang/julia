@@ -360,11 +360,11 @@ end
 
 function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, cols::Int, fmt::ProfileFormat)
     iplist, n = count_flat(data)
+    lilist, n = parse_flat(iplist, n, lidict, fmt.C)
     if isempty(n)
         warning_empty()
         return
     end
-    lilist, n = parse_flat(iplist, n, lidict, fmt.C)
     print_flat(io, lilist, n, cols, fmt)
     nothing
 end

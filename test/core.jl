@@ -4942,7 +4942,7 @@ gVararg(a::fVararg(Int)) = length(a)
     false
 catch e
     (e::ErrorException).msg
-end == "generated function body is not pure. this likely means it contains a closure or comprehension."
+end == "The function body AST defined by this @generated function is not pure. This likely means it contains a closure or comprehension."
 
 let x = 1
     global g18444
@@ -7024,3 +7024,20 @@ let code = code_lowered(FieldConvert)[1].code
     @test code[10] == Expr(:new, Core.SSAValue(1), Core.SSAValue(3), Core.SSAValue(5), Core.SlotNumber(4), Core.SSAValue(7), Core.SSAValue(9))
     @test code[11] == Expr(:return, Core.SSAValue(10))
  end
+
+# Issue #32820
+function f32820(refs)
+    local x
+    for r in refs
+        try
+            error()
+        catch e
+            if !@isdefined(x)
+                x = []
+            end
+            push!(x, 1)
+        end
+    end
+    x
+end
+@test f32820(Any[1,2]) == Any[1, 1]

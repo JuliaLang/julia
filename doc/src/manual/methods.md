@@ -243,8 +243,8 @@ julia> g(2, 3.0)
 
 julia> g(2.0, 3.0)
 ERROR: MethodError: g(::Float64, ::Float64) is ambiguous. Candidates:
-  g(x, y::Float64) in Main at none:1
   g(x::Float64, y) in Main at none:1
+  g(x, y::Float64) in Main at none:1
 Possible fix, define
   g(::Float64, ::Float64)
 ```
@@ -537,7 +537,7 @@ eltype(::Type{<:AbstractArray{T}}) where {T} = T
 ```
 using so-called triangular dispatch.  Note that if `T` is a `UnionAll`
 type, as e.g. `eltype(Array{T} where T <: Integer)`, then `Any` is
-returned (as does the the version of `eltype` in `Base`).
+returned (as does the version of `eltype` in `Base`).
 
 Another way, which used to be the only correct way before the advent of
 triangular dispatch in Julia v0.6, is:

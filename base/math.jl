@@ -6,7 +6,7 @@ export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
        asinh, acosh, atanh, sec, csc, cot, asec, acsc, acot,
        sech, csch, coth, asech, acsch, acoth,
        sinpi, cospi, sinc, cosc,
-       cosd, cotd, cscd, secd, sind, tand,
+       cosd, cotd, cscd, secd, sind, tand, sincosd,
        acosd, acotd, acscd, asecd, asind, atand,
        rad2deg, deg2rad,
        log, log2, log10, log1p, exponent, exp, exp2, exp10, expm1,
@@ -530,7 +530,7 @@ The article is available online at ArXiv at the link
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
-julia> a = 10^10;
+julia> a = Int64(10)^10;
 
 julia> hypot(a, a)
 1.4142135623730951e10

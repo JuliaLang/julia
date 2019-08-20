@@ -575,7 +575,7 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
             is_getfield = true
             is_unchecked = true
         elseif isexpr(stmt, :foreigncall)
-            nccallargs = stmt.args[5]
+            nccallargs = length(stmt.args[3]::SimpleVector)
             new_preserves = Any[]
             old_preserves = stmt.args[(6+nccallargs):end]
             for (pidx, preserved_arg) in enumerate(old_preserves)
@@ -817,7 +817,7 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
         # Insert the new preserves
         for (use, new_preserves) in preserve_uses
             useexpr = ir[SSAValue(use)]
-            nccallargs = useexpr.args[5]
+            nccallargs = length(useexpr.args[3]::SimpleVector)
             old_preserves = filter(ssa->!isa(ssa, SSAValue) || !(ssa.id in intermediaries), useexpr.args[(6+nccallargs):end])
             new_expr = Expr(:foreigncall, useexpr.args[1:(6+nccallargs-1)]...,
                 old_preserves..., new_preserves...)
