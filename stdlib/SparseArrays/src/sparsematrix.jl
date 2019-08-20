@@ -1274,7 +1274,7 @@ end
 ## fkeep! and children tril!, triu!, droptol!, dropzeros[!]
 
 """
-    fkeep!(A::AbstractSparseArray, f, trim::Bool = true)
+    fkeep!(A::AbstractSparseArray, f)
 
 Keep elements of `A` for which test `f` returns `true`. `f`'s signature should be
 
@@ -1283,8 +1283,7 @@ Keep elements of `A` for which test `f` returns `true`. `f`'s signature should b
 where `i` and `j` are an element's row and column indices and `x` is the element's
 value. This method makes a single sweep
 through `A`, requiring `O(size(A, 2), nnz(A))`-time for matrices and `O(nnz(A))`-time for vectors
-and no space beyond that passed in. If `trim` is `true`, this method trims `rowvals(A)` or `nonzeroinds(A)` and
-`nonzeros(A)` to length `nnz(A)` after dropping elements.
+and no space beyond that passed in.
 
 # Examples
 ```jldoctest
@@ -1328,50 +1327,40 @@ function fkeep!(A::AbstractSparseMatrixCSC, f, trim::Bool = true)
         Acolptr[Aj+1] = Awritepos
     end
 
-    # Trim A's storage if necessary and desired
-    if trim
-        Annz = Acolptr[end] - 1
-        if length(Arowval) != Annz
-            resize!(Arowval, Annz)
-        end
-        if length(Anzval) != Annz
-            resize!(Anzval, Annz)
-        end
-    end
+    # Trim A's storage if necessary
+    Annz = Acolptr[end] - 1
+    resize!(Arowval, Annz)
+    resize!(Anzval, Annz)
 
-    A
+    return A
 end
 
-tril!(A::AbstractSparseMatrixCSC, k::Integer = 0, trim::Bool = true) =
-    fkeep!(A, (i, j, x) -> i + k >= j, trim)
-triu!(A::AbstractSparseMatrixCSC, k::Integer = 0, trim::Bool = true) =
-    fkeep!(A, (i, j, x) -> j >= i + k, trim)
+tril!(A::AbstractSparseMatrixCSC, k::Integer = 0) =
+    fkeep!(A, (i, j, x) -> i + k >= j)
+triu!(A::AbstractSparseMatrixCSC, k::Integer = 0) =
+    fkeep!(A, (i, j, x) -> j >= i + k)
 
 """
-    droptol!(A::AbstractSparseMatrixCSC, tol; trim::Bool = true)
+    droptol!(A::AbstractSparseMatrixCSC, tol)
 
-Removes stored values from `A` whose absolute value is less than or equal to `tol`,
-optionally trimming resulting excess space from `rowvals(A)` and `nonzeros(A)` when `trim`
-is `true`.
+Removes stored values from `A` whose absolute value is less than or equal to `tol`.
 """
-droptol!(A::AbstractSparseMatrixCSC, tol; trim::Bool = true) =
-    fkeep!(A, (i, j, x) -> abs(x) > tol, trim)
+droptol!(A::AbstractSparseMatrixCSC, tol) =
+    fkeep!(A, (i, j, x) -> abs(x) > tol)
 
 """
-    dropzeros!(A::AbstractSparseMatrixCSC; trim::Bool = true)
+    dropzeros!(A::AbstractSparseMatrixCSC;)
 
-Removes stored numerical zeros from `A`, optionally trimming resulting excess space from
-`rowvals(A)` and `nonzeros(A)` when `trim` is `true`.
+Removes stored numerical zeros from `A`.
 
 For an out-of-place version, see [`dropzeros`](@ref). For
 algorithmic information, see `fkeep!`.
 """
-dropzeros!(A::AbstractSparseMatrixCSC; trim::Bool = true) = fkeep!(A, (i, j, x) -> !iszero(x), trim)
+dropzeros!(A::AbstractSparseMatrixCSC) = fkeep!(A, (i, j, x) -> !iszero(x))
 """
-    dropzeros(A::AbstractSparseMatrixCSC; trim::Bool = true)
+    dropzeros(A::AbstractSparseMatrixCSC;)
 
-Generates a copy of `A` and removes stored numerical zeros from that copy, optionally
-trimming excess space from the result's `rowval` and `nzval` arrays when `trim` is `true`.
+Generates a copy of `A` and removes stored numerical zeros from that copy.
 
 For an in-place version and algorithmic information, see [`dropzeros!`](@ref).
 
@@ -1389,7 +1378,7 @@ julia> dropzeros(A)
   [3, 3]  =  1.0
 ```
 """
-dropzeros(A::AbstractSparseMatrixCSC; trim::Bool = true) = dropzeros!(copy(A), trim = trim)
+dropzeros(A::AbstractSparseMatrixCSC) = dropzeros!(copy(A))
 
 ## Find methods
 
