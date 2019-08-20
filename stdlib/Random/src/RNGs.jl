@@ -320,6 +320,7 @@ copy(::_GLOBAL_RNG) = copy(default_rng())
 seed!(::_GLOBAL_RNG, seed::Vector{UInt32}) = seed!(default_rng(), seed)
 seed!(::_GLOBAL_RNG, n::Integer) = seed!(default_rng(), n)
 seed!(::_GLOBAL_RNG, ::Nothing) = seed!(default_rng(), nothing)
+seed!(::_GLOBAL_RNG) = seed!(default_rng(), nothing)
 
 rng_native_52(::_GLOBAL_RNG) = rng_native_52(default_rng())
 rand(::_GLOBAL_RNG, sp::SamplerBoolBitInteger) = rand(default_rng(), sp)
