@@ -1143,6 +1143,14 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
 end
 add_tfunc(apply_type, 1, INT_INF, apply_type_tfunc, 10)
 
+function _totuple_tfunc(@nospecialize(arg))
+    if arg ⊑ Tuple
+        return arg
+    end
+    return Any
+end
+add_tfunc(Core._totuple, 1, 1, _totuple_tfunc, 10)
+
 function invoke_tfunc(@nospecialize(ft), @nospecialize(types), @nospecialize(argtype), sv::InferenceState)
     argtype = typeintersect(types, argtype)
     argtype === Bottom && return Bottom
