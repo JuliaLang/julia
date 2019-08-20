@@ -382,3 +382,41 @@ s_18109 = "fooα🐨βcd3"
     @test findall("aa", "aaaaaa") == [1:2, 3:4, 5:6]
     @test findall("aa", "aaaaaa", overlap=true) == [1:2, 2:3, 3:4, 4:5, 5:6]
 end
+
+# issue 32568
+@test eltype(findnext(r"l", astr, big(4))) == Int
+@test eltype(findnext(r"l", astr, big(5))) == Int
+@test eltype(findnext(r"l", astr, UInt(4))) == Int
+@test eltype(findnext(r"l", astr, UInt(5))) == Int
+@test findnext(isequal('l'), astr, big(4)) isa Int
+@test findnext(isequal('l'), astr, big(5)) isa Int
+@test findnext(isequal('l'), astr, UInt(4)) isa Int
+@test findnext(isequal('l'), astr, UInt(5)) isa Int
+@test findprev(isequal('l'), astr, big(5)) isa Int
+@test findprev(isequal('l'), astr, big(4)) isa Int
+@test findprev(isequal('l'), astr, UInt(4)) isa Int
+@test findprev(isequal('l'), astr, UInt(5)) isa Int
+@test findnext('l', astr, big(4)) isa Int
+@test findnext('l', astr, big(5)) isa Int
+@test findnext('l', astr, UInt(4)) isa Int
+@test findnext('l', astr, UInt(5)) isa Int
+@test findprev('l', astr, big(4)) isa Int
+@test findprev('l', astr, big(5)) isa Int
+@test findprev('l', astr, UInt(4)) isa Int
+@test findprev('l', astr, UInt(5)) isa Int
+@test findnext(isletter, astr, big(7)) isa Int
+@test findnext(isletter, astr, big(8)) isa Int
+@test findnext(isletter, astr, UInt(7)) isa Int
+@test findnext(isletter, astr, UInt(8)) isa Int
+@test findprev(isletter, astr, big(7)) isa Int
+@test findprev(isletter, astr, big(8)) isa Int
+@test findprev(isletter, astr, UInt(7)) isa Int
+@test findprev(isletter, astr, UInt(8)) isa Int
+@test eltype(findnext(",b", "foo,bar,baz", big(7))) == Int
+@test eltype(findnext(",b", "foo,bar,baz", big(8))) == Int
+@test eltype(findnext(",b", "foo,bar,baz", UInt(7))) == Int
+@test eltype(findnext(",b", "foo,bar,baz", UInt(8))) == Int
+@test eltype(findprev(",b", "foo,bar,baz", big(5))) == Int
+@test eltype(findprev(",b", "foo,bar,baz", big(6))) == Int
+@test eltype(findprev(",b", "foo,bar,baz", UInt(5))) == Int
+@test eltype(findprev(",b", "foo,bar,baz", UInt(6))) == Int

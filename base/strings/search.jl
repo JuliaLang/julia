@@ -130,7 +130,7 @@ function findnext(testf::Function, s::AbstractString, i::Integer)
     @inbounds i == z || isvalid(s, i) || string_index_err(s, i)
     for (j, d) in pairs(SubString(s, i))
         if testf(d)
-            return i + j - 1
+            return Int(i + j - 1)
         end
     end
     return nothing
@@ -272,7 +272,7 @@ julia> findnext("Lang", "JuliaLang", 2)
 6:9
 ```
 """
-findnext(t::AbstractString, s::AbstractString, i::Integer) = _search(s, t, i)
+findnext(t::AbstractString, s::AbstractString, i::Integer) = _search(s, t, Int(i))
 
 """
     findnext(ch::AbstractChar, string::AbstractString, start::Integer)
@@ -484,7 +484,7 @@ julia> findprev("Julia", "JuliaLang", 6)
 1:5
 ```
 """
-findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, i)
+findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, Int(i))
 
 """
     findprev(ch::AbstractChar, string::AbstractString, start::Integer)
