@@ -443,6 +443,102 @@ JL_CALLABLE(jl_f_ifelse)
     return (args[0] == jl_false ? args[2] : args[1]);
 }
 
+JL_CALLABLE(jl_f__totuple)
+{
+    JL_NARGS(_totuple, 1, 1);
+    jl_value_t *arg = args[0];
+    if (jl_is_tuple(arg)) {
+        return arg;
+    }
+    // determine how many real arguments we will have
+    size_t al;
+    if (jl_is_svec(arg)) {
+        al = jl_svec_len(arg);
+    }
+    else if (jl_is_namedtuple(arg)) {
+        al = jl_nfields(arg);
+    }
+    else if (jl_is_array(arg)) {
+        al = jl_array_len(arg);
+    }
+    else {
+        jl_error("_totuple: unsupported argument type");
+    }
+    size_t newarglen = al + 1;
+    // allocate space for the argument array and gc roots for it
+    // based on our previous estimates
+    // use the stack if we have a good estimate that it is small
+    // otherwise, use the heap and grow it incrementally
+    // and if there are any extra elements, we'll also need a couple extra roots
+    int onstack = (newarglen < jl_page_size / sizeof(jl_value_t*));
+    size_t stackalloc = onstack ? newarglen : 1;
+    jl_value_t **roots;
+    JL_GC_PUSHARGS(roots, stackalloc);
+    jl_value_t **newargs = NULL;
+    jl_svec_t *arg_heap = NULL;
+    if (onstack) {
+        newargs = roots;
+    }
+    else {
+        // put arguments on the heap if there are too many
+        size_t j;
+        arg_heap = jl_alloc_svec_uninit(newarglen);
+        newargs = jl_svec_data(arg_heap);
+        for (j = 0; j < newarglen; j++)
+            newargs[j] = NULL;
+        *roots = (jl_value_t*)arg_heap;
+    }
+    newargs[0] = jl_builtin_tuple;
+    if (jl_is_svec(arg)) {
+        jl_svec_t *t = (jl_svec_t*)arg;
+        size_t j;
+        for (j = 0; j < al; j++) {
+            newargs[j+1] = jl_svecref(t, j);
+            // GC Note: here we assume that the return value of `jl_svecref`
+            //          will not be young if `arg_heap` becomes old
+            //          since they are allocated before `arg_heap`. Otherwise,
+            //          we need to add write barrier for !onstack
+        }
+    }
+    else if (jl_is_namedtuple(arg)) {
+        size_t j;
+        for (j = 0; j < al; j++) {
+            // jl_fieldref may allocate.
+            newargs[j+1] = jl_fieldref(arg, j);
+            if (arg_heap)
+                jl_gc_wb(arg_heap, newargs[j + 1]);
+        }
+    }
+    else if (jl_is_array(arg)) {
+        jl_array_t *aai = (jl_array_t*)arg;
+        size_t j;
+        if (aai->flags.ptrarray) {
+            for (j = 0; j < al; j++) {
+                jl_value_t *arg = jl_array_ptr_ref(aai, j);
+                // apply with array splatting may have embedded NULL value (#11772)
+                if (__unlikely(arg == NULL))
+                    jl_throw(jl_undefref_exception);
+                newargs[j+1] = arg;
+                if (arg_heap)
+                    jl_gc_wb(arg_heap, arg);
+            }
+        }
+        else {
+            for (j = 0; j < al; j++) {
+                newargs[j+1] = jl_arrayref(aai, j);
+                if (arg_heap)
+                    jl_gc_wb(arg_heap, newargs[j + 1]);
+            }
+        }
+    }
+    else {
+        jl_error("_totuple: unsupported argument type");
+    }
+    jl_value_t *result = jl_apply(newargs, newarglen);
+    JL_GC_POP();
+    return result;
+}
+
 // apply ----------------------------------------------------------------------
 
 static NOINLINE jl_svec_t *_copy_to(size_t newalloc, jl_value_t **oldargs, size_t oldalloc)
@@ -1300,6 +1396,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     // internal functions
     jl_builtin_apply_type = add_builtin_func("apply_type", jl_f_apply_type);
+    add_builtin_func("_totuple", jl_f__totuple);
     jl_builtin__apply = add_builtin_func("_apply", jl_f__apply);
     jl_builtin__expr = add_builtin_func("_expr", jl_f__expr);
     jl_builtin_svec = add_builtin_func("svec", jl_f_svec);
