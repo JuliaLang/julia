@@ -249,6 +249,21 @@ _totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
 
 end
 
+## filter ##
+
+filter(f, t::Tuple) = _filter(f, t, ())
+function _filter(f, t::Tuple, r::Tuple)
+    @_inline_meta
+    if f(first(t))
+        _filter(f, tail(t), (r..., first(t)))
+    else
+        _filter(f, tail(t), r)
+    end
+end
+_filter(f, t::Tuple{}, r::Tuple) = r
+# use Array for long tuples
+filter(f, t::Any16) = Tuple(filter(f, collect(t)))
+
 ## comparison ##
 
 isequal(t1::Tuple, t2::Tuple) = (length(t1) == length(t2)) && _isequal(t1, t2)
