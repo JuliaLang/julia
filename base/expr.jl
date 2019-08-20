@@ -196,7 +196,7 @@ end
 """
     @noinline
 
-Prevents the compiler from inlining a function.
+Prevent the compiler from inlining a function.
 
 Small functions are typically inlined automatically.
 By using `@noinline` on small functions, auto-inlining can be
@@ -227,6 +227,7 @@ generic functions. Calls to generic functions depend on method tables which are
 mutable global state.
 Use with caution, incorrect `@pure` annotation of a function may introduce
 hard to identify bugs. Double check for calls to generic functions.
+This macro is intended for internal compiler use and may be subject to changes.
 """
 macro pure(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
