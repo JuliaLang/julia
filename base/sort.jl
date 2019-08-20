@@ -205,7 +205,7 @@ end
 # returns the range of indices of v equal to x
 # if v does not contain x, returns a 0-length range
 # indicating the insertion point of x
-function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering) where T<:Integer
+function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRange{keytype(v)} where T<:Integer
     u = T(1)
     lo = ilo - u
     hi = ihi + u
@@ -221,7 +221,7 @@ function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering) where T
             return a : b
         end
     end
-    return convert(keytype(v), lo + 1) : convert(keytype(v), hi - 1)
+    return (lo + 1) : (hi - 1)
 end
 
 function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::keytype(a)
