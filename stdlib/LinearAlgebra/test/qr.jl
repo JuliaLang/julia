@@ -252,7 +252,7 @@ end
             @testset for k in 0:min(n, m)
                 A = cat(Array(I(k)), randn(n - k, m - k); dims=(1, 2))
                 Q, = qr(A, Val(pivot))
-                @test det(Q)::Int ≈ det(collect(Q))
+                @test det(Q) ≈ det(collect(Q))
                 @test abs(det(Q)) ≈ 1
             end
         end

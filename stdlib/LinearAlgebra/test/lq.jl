@@ -195,7 +195,7 @@ end
     @testset for n in 1:3, m in 1:3
         @testset "real" begin
             _, Q = lq(randn(n, m))
-            @test det(Q)::Int ≈ det(collect(Q))
+            @test det(Q) ≈ det(collect(Q))
             @test abs(det(Q)) ≈ 1
         end
         @testset "complex" begin

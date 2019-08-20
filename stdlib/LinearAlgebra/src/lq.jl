@@ -341,7 +341,7 @@ _tau(Q::QRCompactWYQ) = @view Q.T[diagind(Q.T)]
 # Compute `det` from the number of Householder reflections.  Handle
 # the case `Q.τ` contains zeros.
 det(Q::Union{QRPackedQ{<:Real}, QRCompactWYQ{<:Real}, LQPackedQ{<:Real}}) =
-    isodd(count(!iszero, _tau(Q))) ? -1 : 1
+    isodd(count(!iszero, _tau(Q))) ? -one(eltype(Q)) : one(eltype(Q))
 
 # In complex case, we need to compute the non-unit eigenvalue `λ = 1 - c*τ`
 # (where `c = v'v`) of each Householder reflector.  As we know that the
