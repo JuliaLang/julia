@@ -136,21 +136,21 @@
         @test r"this|that"^2 == r"(?:this|that){2}"
     end
 
-    @testset "convert from strings/chars" begin
-        r = convert(Regex, 'a')
+    @testset "escape_regex" begin
+        r = escape_regex('a')
         @test r == r"\Qa\E" # these tests can change if the implementation changes
         @test match(r, "a").match == "a"
-        r = convert(Regex, '\\')
+        r = escape_regex('\\')
         @test r == r"\Q\\E"
         @test match(r, "\\").match == "\\"
-        r = convert(Regex, '(')
+        r = escape_regex('(')
         @test r == r"\Q(\E"
         @test match(r, "(").match == "("
 
-        r = convert(Regex, "a\\b(c")
+        r = escape_regex("a\\b(c")
         @test r == r"\Qa\b(c\E"
         @test match(r, "a\\b(c").match == "a\\b(c"
-        r = convert(Regex, "a\\E\\Qz")
+        r = escape_regex("a\\E\\Qz")
         @test r == r"\Qa\\E\QE\Qz\E"
         @test match(r, "a\\E\\Qz") != nothing
     end

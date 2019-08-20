@@ -438,6 +438,7 @@ export
 # search, find, match and related functions
     eachmatch,
     endswith,
+    escape_regex,
     findall,
     findfirst,
     findlast,

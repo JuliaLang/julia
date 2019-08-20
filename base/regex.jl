@@ -714,8 +714,8 @@ RegexMatch("Test Test ")
 ## conversion from strings/chars ##
 
 """
-    convert(::Type{Regex}, x::AbstractChar)
-    convert(::Type{Regex}, x::AbstractString)
+    escape_regex(x::AbstractChar)
+    escape_regex(x::AbstractString)
 
 Create a `Regex` which matches `x` exactly. This means that special characters are
 not interpreted as having special meaning.
@@ -726,15 +726,15 @@ Multiplication can also be used in order to create a regex with specific flags.
 
 # Examples
 ```jldoctest
-julia> match(convert(Regex, '('), "(").match
+julia> match(escape_regex('('), "(").match
 "("
 
-julia> match(convert(Regex, ".*"), "abc") == nothing
+julia> match(escape_regex(".*"), "abc") == nothing
 true
 
-julia> match(convert(Regex, ".*"), ".*")
+julia> match(escape_regex(".*"), ".*")
 RegexMatch(".*")
 ```
 
 """
-convert(::Type{Regex}, s::Union{AbstractString,AbstractChar}) = Regex(wrap_string(s, zero(UInt32)))
+escape_regex(s::Union{AbstractString,AbstractChar}) = Regex(wrap_string(s, zero(UInt32)))
