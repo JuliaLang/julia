@@ -254,6 +254,7 @@ end
     @test filter(identity, (true,)) === (true,)
     longtuple = ntuple(identity, 20)
     @test filter(iseven, longtuple) == ntuple(i->2i, 10)
+    @test filter(x -> x<2, (longtuple..., 1.5)) === (1, 1.5)
 end
 
 @testset "comparison and hash" begin

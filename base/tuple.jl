@@ -255,9 +255,9 @@ filter(f, t::Tuple) = _filter(f, t, ())
 function _filter(f, t::Tuple, r::Tuple)
     @_inline_meta
     if f(first(t))
-        _filter(f, tail(t), (r..., first(t)))
+        return _filter(f, tail(t), (r..., first(t)))
     else
-        _filter(f, tail(t), r)
+        return _filter(f, tail(t), r)
     end
 end
 _filter(f, t::Tuple{}, r::Tuple) = r
