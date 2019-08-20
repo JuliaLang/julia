@@ -118,6 +118,11 @@ Dict() = Dict{Any,Any}()
 Dict(kv::Tuple{}) = Dict()
 copy(d::Dict) = Dict(d)
 
+# Dict is the default mutable fall-back
+copymutable(d::AbstractDict{K,V}) where {K,V} = ismutable(d) ? copy(d) : Dict{K,V}(d)
+
+ismutable(::Type{<:Dict}) = true
+
 const AnyDict = Dict{Any,Any}
 
 Dict(ps::Pair{K,V}...) where {K,V} = Dict{K,V}(ps)
@@ -631,7 +636,8 @@ end
 """
     delete!(collection, key)
 
-Delete the mapping for the given key in a collection, and return the collection.
+Delete the element with the given key in a collection, and return the collection.
+See also the non-mutating variant [`delete`](@ref).
 
 # Examples
 ```jldoctest
@@ -654,6 +660,34 @@ function delete!(h::Dict, key)
     end
     return h
 end
+
+"""
+    delete(coll, k)
+
+Create and return a new collection containing all the elements from `coll`
+with key different from `k`.
+The type of the returned collection may differ from that of `coll` if
+`coll` is immutable.
+See also the mutating variant [`delete!`](@ref).
+
+# Examples
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2)
+Dict{String,Int64} with 2 entries:
+  "b" => 2
+  "a" => 1
+
+julia> delete(d, "b")
+Dict{String,Int64} with 1 entry:
+  "a" => 1
+
+julia> d
+Dict{String,Int64} with 2 entries:
+  "b" => 2
+  "a" => 1
+```
+"""
+delete(coll, k) = delete!(copymutable(coll), k)
 
 function skip_deleted(h::Dict, i)
     L = length(h.slots)
@@ -779,6 +813,9 @@ function get(dict::ImmutableDict, key, default)
     end
     return default
 end
+
+push(dict::ImmutableDict, KV::Pair) = ImmutableDict(dict, KV)
+push(dict::ImmutableDict, KVs::Pair...) = foldl(push, KVs, init=dict)
 
 # this actually defines reverse iteration (e.g. it should not be used for merge/copy/filter type operations)
 function iterate(d::ImmutableDict{K,V}, t=d) where {K, V}

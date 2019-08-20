@@ -875,12 +875,17 @@ end
 
 
 """
+    copymutable(a::AbstractArray) -> AbstractArray
+    copymutable(a::AbstractSet)   -> AbstractSet
+    copymutable(a::AbstractDict)  -> AbstractDict
     copymutable(a)
 
-Make a mutable copy of an array or iterable `a`.  For `a::Array`,
-this is equivalent to `copy(a)`, but for other array types it may
-differ depending on the type of `similar(a)`.  For generic iterables
-this is equivalent to `collect(a)`.
+Make a mutable copy of a collection `a`. For mutable collections,
+this is in general equivalent to `copy(a)`, but not necessarily
+(it depends on the type of `similar(a)` for arrays).
+If `a::Union{AbstractArray,AbstractSet,AbstractDict}`, the copy is an instance
+of the same abstract collection type.
+For generic iterables this is equivalent to `collect(a)`.
 
 # Examples
 ```jldoctest
@@ -898,7 +903,21 @@ function copymutable(a::AbstractArray)
     @_propagate_inbounds_meta
     copyto!(similar(a), a)
 end
-copymutable(itr) = collect(itr)
+copymutable(itr) = ismutable(itr) ? copy(itr) : collect(itr)
+
+"""
+    ismutable(T)
+
+Predicate on the mutability of a collection of type `T`, which defaults to `false`.
+If `ismutable(T)` is `true`, `copy(::T)` must be defined.
+The definition `ismutable(x) = ismutable(typeof(x))` is provided for convenience so
+that instances can be passed instead of types. However the form that accepts a type
+argument should be defined for new types.
+"""
+ismutable(::Type) = false
+ismutable(a) = ismutable(typeof(a))
+
+ismutable(::Type{<:Array}) = true
 
 zero(x::AbstractArray{T}) where {T} = fill!(similar(x), zero(T))
 
