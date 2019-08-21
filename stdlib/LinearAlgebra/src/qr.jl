@@ -66,15 +66,22 @@ A = Q R
 
 where ``Q`` is an orthogonal/unitary matrix and ``R`` is upper triangular. It is similar
 to the [`QR`](@ref) format except that the orthogonal/unitary matrix ``Q`` is stored in
-*Compact WY* format [^Schreiber1989], as a lower trapezoidal matrix ``V`` and an upper
-triangular matrix ``T`` where
+*Compact WY* format [^Schreiber1989].  For the block size ``n_b``, it is stored as
+a `m`×`n` lower trapezoidal matrix ``V`` and a matrix ``T = (T_1 \\; T_2 \\; ... \\;
+T_{b-1} \\; T_b')`` composed of ``b = \\lceil \\min(m,n) / n_b \\rceil`` upper triangular
+matrices ``T_j`` of size ``n_b``×``n_b`` (``j = 1, ..., b-1``) and an upper trapezoidal
+``n_b``×``\\min(m,n) - (b-1) n_b`` matrix ``T_b'`` (``j=b``) whose upper square part
+denoted with ``T_b`` satisfying
 
 ```math
-Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T) = I - V T V^T
+Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T)
+= \\prod_{j=1}^{b} (I - V_j T_j V_j^T)
 ```
 
-such that ``v_i`` is the ``i``th column of ``V``, and ``\\tau_i`` is the ``i``th diagonal
-element of ``T``.
+such that ``v_i`` is the ``i``th column of ``V``, ``\\tau_i`` is the ``i``th element
+of `[diag(T_1); diag(T_2); …; diag(T_b)]`, and ``(V_1 \\; V_2 \\; ... \\; V_b)``
+is the left `m`×`min(m, n)` block of ``V``.  When constructed using [`qr`](@ref),
+the block size is given by ``n_b = \\min(m, n, 36)``.
 
 Iterating the decomposition produces the components `Q` and `R`.
 
@@ -88,8 +95,8 @@ The object has two fields:
   - The subdiagonal part contains the reflectors ``v_i`` stored in a packed format such
     that `V = I + tril(F.factors, -1)`.
 
-* `T` is a square matrix with `min(m,n)` columns, whose upper triangular part gives the
-  matrix ``T`` above (the subdiagonal elements are ignored).
+* `T` is a ``n_b``-by-``\\min(m,n)`` matrix as described above. The subdiagonal elements
+  for each triangular matrix ``T_j`` are ignored.
 
 !!! note
 
