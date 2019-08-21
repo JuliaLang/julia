@@ -835,3 +835,10 @@ end
 # treat Pair as scalar:
 @test replace.(split("The quick brown fox jumps over the lazy dog"), r"[aeiou]"i => "_") ==
       ["Th_", "q__ck", "br_wn", "f_x", "j_mps", "_v_r", "th_", "l_zy", "d_g"]
+
+# Test assigning into matrix doesn't allocate
+perf_op_bcast!(R, x, y) = R .= 3 .* x .- 4 .* y.^2 .+ x .* y .- x .^ 3
+let x = rand(10^3), y = rand(10^3), R = Matrix{Float64}(undef, length(x), length(y))
+    perf_op_bcast!(R, x, y)
+    @test @allocated(perf_op_bcast!(R, x, y)) == 0
+end
