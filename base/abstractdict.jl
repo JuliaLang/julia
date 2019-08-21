@@ -579,7 +579,7 @@ end
 
 function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
     !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
-    if !(val isa V) && V !== Any
+    if !(val isa V) # avoid a dynamic call
         val = convert(V, val)
     end
     if d.ndel >= ((3*length(d.ht))>>2)
