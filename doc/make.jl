@@ -194,7 +194,7 @@ env_mappings = [
 ]
 
 if Base.GIT_VERSION_INFO.tagged_commit
-    push!(env_mappings, "TRAVIS_TAG" => string(Base.VERSION))
+    push!(env_mappings, "TRAVIS_TAG" => "v$(Base.VERSION)")
 end
 
 withenv(env_mappings...) do
