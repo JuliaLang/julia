@@ -103,6 +103,11 @@ end
 
 openblas_get_config() = strip(unsafe_string(ccall((@blasfunc(openblas_get_config), libblas), Ptr{UInt8}, () )))
 
+function has_gemm3m()
+    lib = Libdl.dlopen(libblas; throw_error=false)
+    lib != nothing && Libdl.dlsym(lib, BLAS.@blasfunc("zgemm3m_"); throw_error=false) != nothing
+end
+
 """
     set_num_threads(n)
 
@@ -1106,11 +1111,14 @@ Update `C` as `alpha*A*B + beta*C` or the other three variants according to
 """
 function gemm! end
 
+zgemm_fun() = has_gemm3m() ? :zgemm3m_ : :zgemm_
+cgemm_fun() = has_gemm3m() ? :cgemm3m_ : :cgemm_
+
 for (gemm, elty) in
         ((:dgemm_,:Float64),
          (:sgemm_,:Float32),
-         (:zgemm_,:ComplexF64),
-         (:cgemm_,:ComplexF32))
+         (zgemm_fun(),:ComplexF64),
+         (cgemm_fun(),:ComplexF32))
     @eval begin
              # SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
              # *     .. Scalar Arguments ..
