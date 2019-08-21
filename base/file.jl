@@ -649,9 +649,10 @@ struct uv_dirent_t
 end
 
 """
-    readdir(dir::AbstractString=".") -> Vector{String}
+    readdir(dir::AbstractString="."; join=false, abspath=false) -> Vector{String}
 
 Return the files and directories in the directory `dir` (or the current working directory if not given).
+If `join=true`, prepend `dir` to the filenames and if `abspath=true`, use the absolute paths instead.
 
 # Examples
 ```julia-repl
@@ -660,16 +661,31 @@ julia> readdir("/home/JuliaUser/Projects/julia")
  ".circleci"
  ".freebsdci.sh"
  ".git"
- ".gitattributes"
- ".github"
  ⋮
- "test"
  "ui"
  "usr"
  "usr-staging"
+
+julia> readdir("doc", join=true)
+11-element Array{String,1}:
+ "doc/.gitignore"    
+ "doc/Makefile"      
+ "doc/Manifest.toml" 
+ ⋮
+ "doc/make.jl"       
+ "doc/man"           
+ "doc/src" 
+
+julia> readdir("doc/src", abspath=true)
+5-element Array{String,1}:
+ "/home/JuliaUser/Projects/julia/doc/src/assets"  
+ "/home/JuliaUser/Projects/julia/doc/src/base"    
+ "/home/JuliaUser/Projects/julia/doc/src/devdocs" 
+ "/home/JuliaUser/Projects/julia/doc/src/index.md"
+ "/home/JuliaUser/Projects/julia/doc/src/manual"  
 ```
 """
-function readdir(path::AbstractString)
+function readdir(path::AbstractString; join=false, abspath=false)
     # Allocate space for uv_fs_t struct
     uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
 
@@ -682,8 +698,13 @@ function readdir(path::AbstractString)
     # iterate the listing into entries
     entries = String[]
     ent = Ref{uv_dirent_t}()
+    _path = abspath ? Base.abspath(path) : path
     while Base.UV_EOF != ccall(:uv_fs_scandir_next, Cint, (Ptr{Cvoid}, Ptr{uv_dirent_t}), uv_readdir_req, ent)
-        push!(entries, unsafe_string(ent[].name))
+        filename = unsafe_string(ent[].name)
+        if join || abspath
+            filename = joinpath(_path, filename)
+        end
+        push!(entries, filename)
     end
 
     # Clean up the request string
