@@ -442,7 +442,7 @@ function dot(A::Symmetric, B::Symmetric)
             end
             dotprod += dot(A[j, j], B[j, j])
         end
-    elseif A.uplo == 'L' && B.uplo == 'U'
+    else
         for j in 1:n
             dotprod += dot(A[j, j], B[j, j])
             for i in (j + 1):n
@@ -481,7 +481,7 @@ function dot(A::Hermitian, B::Hermitian)
             end
             dotprod += dot(A[j, j], B[j, j])
         end
-    elseif A.uplo == 'L' && B.uplo == 'U'
+    else
         for j in 1:n
             dotprod += dot(A[j, j], B[j, j])
             for i in (j + 1):n
