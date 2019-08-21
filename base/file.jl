@@ -668,21 +668,21 @@ julia> readdir("/home/JuliaUser/Projects/julia")
 
 julia> readdir("doc", join=true)
 11-element Array{String,1}:
- "doc/.gitignore"    
- "doc/Makefile"      
- "doc/Manifest.toml" 
+ "doc/.gitignore"
+ "doc/Makefile"
+ "doc/Manifest.toml"
  ⋮
- "doc/make.jl"       
- "doc/man"           
- "doc/src" 
+ "doc/make.jl"
+ "doc/man"
+ "doc/src"
 
 julia> readdir("doc/src", abspath=true)
 5-element Array{String,1}:
- "/home/JuliaUser/Projects/julia/doc/src/assets"  
- "/home/JuliaUser/Projects/julia/doc/src/base"    
- "/home/JuliaUser/Projects/julia/doc/src/devdocs" 
+ "/home/JuliaUser/Projects/julia/doc/src/assets"
+ "/home/JuliaUser/Projects/julia/doc/src/base"
+ "/home/JuliaUser/Projects/julia/doc/src/devdocs"
  "/home/JuliaUser/Projects/julia/doc/src/index.md"
- "/home/JuliaUser/Projects/julia/doc/src/manual"  
+ "/home/JuliaUser/Projects/julia/doc/src/manual"
 ```
 """
 function readdir(path::AbstractString; join=false, abspath=false)
