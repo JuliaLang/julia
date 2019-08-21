@@ -1042,6 +1042,10 @@ const char *name_from_method_instance(jl_method_instance_t *mi)
 extern "C"
 jl_code_instance_t *jl_compile_linfo(jl_method_instance_t *mi, jl_code_info_t *src, size_t world, const jl_cgparams_t *params)
 {
+    // TODO: Merge with jl_dump_compiles?
+    static ios_t f_precompile;
+    static JL_STREAM* s_precompile = NULL;
+
     // N.B.: `src` may have not been rooted by the caller.
     JL_TIMING(CODEGEN);
     assert(jl_is_method_instance(mi));
@@ -1266,12 +1270,34 @@ jl_code_instance_t *jl_compile_linfo(jl_method_instance_t *mi, jl_code_info_t *s
     // ... unless mi->def isn't defined here meaning the function is a toplevel thunk and
     // would have its CodeInfo printed in the stream, which might contain double-quotes that
     // would not be properly escaped given the double-quotes added to the stream below.
-    if (dump_compiles_stream != NULL && jl_is_method(mi->def.method)) {
-        uint64_t this_time = jl_hrtime();
-        jl_printf(dump_compiles_stream, "%" PRIu64 "\t\"", this_time - last_time);
-        jl_static_show(dump_compiles_stream, mi->specTypes);
-        jl_printf(dump_compiles_stream, "\"\n");
-        last_time = this_time;
+    if (jl_is_method(mi->def.method)) {
+        if (jl_options.trace_compile != NULL) {
+            if (s_precompile == NULL) {
+                const char* t = jl_options.trace_compile;
+                if (!strncmp(t, "stderr", 6))
+                    s_precompile = JL_STDERR;
+                else {
+                    if (ios_file(&f_precompile, t, 1, 1, 1, 1) == NULL)
+                        jl_errorf("cannot open precompile statement file \"%s\" for writing", t);
+                    s_precompile = (JL_STREAM*) &f_precompile;
+                }
+            }
+            if (!jl_has_free_typevars(mi->specTypes)) {
+                jl_printf(s_precompile, "precompile(");
+                jl_static_show(s_precompile, mi->specTypes);
+                jl_printf(s_precompile, ")\n");
+
+                if (s_precompile != JL_STDERR)
+                    ios_flush(&f_precompile);
+            }
+        }
+        if (dump_compiles_stream != NULL) {
+            uint64_t this_time = jl_hrtime();
+            jl_printf(dump_compiles_stream, "%" PRIu64 "\t\"", this_time - last_time);
+            jl_static_show(dump_compiles_stream, mi->specTypes);
+            jl_printf(dump_compiles_stream, "\"\n");
+            last_time = this_time;
+        }
     }
     JL_GC_POP();
     return codeinst;
