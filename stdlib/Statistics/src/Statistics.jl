@@ -8,7 +8,6 @@ Standard library module for basic statistics functionality.
 module Statistics
 
 using LinearAlgebra, SparseArrays
-using SparseArrays: getcolptr
 
 using Base: has_offset_axes, require_one_based_indexing
 
@@ -1004,7 +1003,6 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::SparseMatrixCSC{Tv,Ti}, mea
     isempty(R) || fill!(R, zero(S))
     isempty(A) && return R
 
-    colptr = getcolptr(A)
     rowval = rowvals(A)
     nzval = nonzeros(A)
     m = size(A, 1)
@@ -1017,8 +1015,8 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::SparseMatrixCSC{Tv,Ti}, mea
         # Reduction along rows
         @inbounds for col = 1:n
             mu = means[col]
-            r = convert(S, (m-colptr[col+1]+colptr[col])*abs2(mu))
-            @simd for j = colptr[col]:colptr[col+1]-1
+            r = convert(S, (m - length(nzrange(A, col)))*abs2(mu))
+            @simd for j = nzrange(A, col)
                 r += abs2(nzval[j] - mu)
             end
             R[1, col] = r
@@ -1027,7 +1025,7 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::SparseMatrixCSC{Tv,Ti}, mea
         # Reduction along columns
         rownz = fill(convert(Ti, n), m)
         @inbounds for col = 1:n
-            @simd for j = colptr[col]:colptr[col+1]-1
+            @simd for j = nzrange(A, col)
                 row = rowval[j]
                 R[row, 1] += abs2(nzval[j] - means[row])
                 rownz[row] -= 1
@@ -1040,7 +1038,7 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::SparseMatrixCSC{Tv,Ti}, mea
         # Reduction along a dimension > 2
         @inbounds for col = 1:n
             lastrow = 0
-            @simd for j = colptr[col]:colptr[col+1]-1
+            @simd for j = nzrange(A, col)
                 row = rowval[j]
                 for i = lastrow+1:row-1
                     R[i, col] = abs2(means[i, col])
