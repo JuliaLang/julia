@@ -856,10 +856,10 @@ end
 Fields can have type restrictions, which may be parameterized:
 
 ```julia
-    struct Point{X}
-        x::X
-        y::Float64
-    end
+struct Point{X}
+    x::X
+    y::Float64
+end
 ```
 
 A struct can also declare an abstract super type via `<:` syntax:
