@@ -1922,3 +1922,9 @@ end
 @test Base.remove_linenums!(Meta.parse("try a catch var\"#\" b end")) ==
       Expr(:try, Expr(:block, :a), Symbol("#"), Expr(:block, :b))
 @test Meta.parse("(var\"function\" = 1,)") == Expr(:tuple, Expr(:(=), Symbol("function"), 1))
+# Non-standard identifiers require parens for string interpolation
+@test Meta.parse("\"\$var\\\"#\\\"\"") == Expr(:string, :var, "\"#\"")
+@test Meta.parse("\"\$(var\"#\")\"") == Expr(:string, Symbol("#"))
+# Stream positioning after parsing var
+@test Meta.parse("var'", 1, greedy=false) == (:var, 4)
+
