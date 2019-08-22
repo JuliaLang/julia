@@ -38,24 +38,23 @@ const AdjOrTransSparseVectorUnion{T} = LinearAlgebra.AdjOrTrans{T, <:SparseVecto
 
 ### Basic properties
 
-length(x::SparseVector)   = x.n
-size(x::SparseVector)     = (x.n,)
-nnz(x::SparseVector)      = length(x.nzval)
-count(f, x::SparseVector) = count(f, x.nzval) + f(zero(eltype(x)))*(length(x) - nnz(x))
+size(x::SparseVector)     = (getfield(x, :n),)
+nnz(x::SparseVector)      = length(nonzeros(x))
+count(f, x::SparseVector) = count(f, nonzeros(x)) + f(zero(eltype(x)))*(length(x) - nnz(x))
 
-nonzeros(x::SparseVector) = x.nzval
+nonzeros(x::SparseVector) = getfield(x, :nzval)
 function nonzeros(x::SparseColumnView)
     rowidx, colidx = parentindices(x)
     A = parent(x)
-    @inbounds y = view(A.nzval, nzrange(A, colidx))
+    @inbounds y = view(nonzeros(A), nzrange(A, colidx))
     return y
 end
 
-nonzeroinds(x::SparseVector) = x.nzind
+nonzeroinds(x::SparseVector) = getfield(x, :nzind)
 function nonzeroinds(x::SparseColumnView)
     rowidx, colidx = parentindices(x)
     A = parent(x)
-    @inbounds y = view(A.rowval, nzrange(A, colidx))
+    @inbounds y = view(rowvals(A), nzrange(A, colidx))
     return y
 end
 
@@ -69,13 +68,13 @@ end
 #
 # parent method for similar that preserves stored-entry structure (for when new and old dims match)
 _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}) where {TvNew,TiNew} =
-    SparseVector(S.n, copyto!(similar(S.nzind, TiNew), S.nzind), similar(S.nzval, TvNew))
+    SparseVector(length(S), copyto!(similar(nonzeroinds(S), TiNew), nonzeroinds(S)), similar(nonzeros(S), TvNew))
 # parent method for similar that preserves nothing (for when old and new dims differ, and new is 1d)
 _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{1}) where {TvNew,TiNew} =
-    SparseVector(dims..., similar(S.nzind, TiNew, 0), similar(S.nzval, TvNew, 0))
+    SparseVector(dims..., similar(nonzeroinds(S), TiNew, 0), similar(nonzeros(S), TvNew, 0))
 # parent method for similar that preserves storage space (for old and new dims differ, and new is 2d)
 _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew} =
-    SparseMatrixCSC(dims..., fill(one(TiNew), last(dims)+1), similar(S.nzind, TiNew), similar(S.nzval, TvNew))
+    SparseMatrixCSC(dims..., fill(one(TiNew), last(dims)+1), similar(nonzeroinds(S), TiNew), similar(nonzeros(S), TvNew))
 # The following methods hook into the AbstractArray similar hierarchy. The first method
 # covers similar(A[, Tv]) calls, which preserve stored-entry structure, and the latter
 # methods cover similar(A[, Tv], shape...) calls, which preserve nothing if the dims
@@ -100,8 +99,8 @@ similar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, m::Integer, n::Integer) w
 
 ## Alias detection and prevention
 using Base: dataids, unaliascopy
-Base.dataids(S::SparseVector) = (dataids(S.nzind)..., dataids(S.nzval)...)
-Base.unaliascopy(S::SparseVector) = typeof(S)(S.n, unaliascopy(S.nzind), unaliascopy(S.nzval))
+Base.dataids(S::SparseVector) = (dataids(nonzeroinds(S))..., dataids(nonzeros(S))...)
+Base.unaliascopy(S::SparseVector) = typeof(S)(length(S), unaliascopy(nonzeroinds(S)), unaliascopy(nonzeros(S)))
 
 ### Construct empty sparse vector
 
@@ -109,7 +108,7 @@ spzeros(len::Integer) = spzeros(Float64, len)
 spzeros(::Type{T}, len::Integer) where {T} = SparseVector(len, Int[], T[])
 spzeros(::Type{Tv}, ::Type{Ti}, len::Integer) where {Tv,Ti<:Integer} = SparseVector(len, Ti[], Tv[])
 
-LinearAlgebra.fillstored!(x::SparseVector, y) = (fill!(x.nzval, y); x)
+LinearAlgebra.fillstored!(x::SparseVector, y) = (fill!(nonzeros(x), y); x)
 
 ### Construction from lists of indices and values
 
@@ -335,14 +334,14 @@ julia> SparseArrays.dropstored!(x, 2)
 ```
 """
 function dropstored!(x::SparseVector, i::Integer)
-    if !(1 <= i <= x.n)
+    if !(1 <= i <= length(x::SparseVector))
         throw(BoundsError(x, i))
     end
-    searchk = searchsortedfirst(x.nzind, i)
-    if searchk <= length(x.nzind) && x.nzind[searchk] == i
+    searchk = searchsortedfirst(nonzeroinds(x), i)
+    if searchk <= length(nonzeroinds(x)) && nonzeroinds(x)[searchk] == i
         # Entry x[i] is stored. Drop and return.
-        deleteat!(x.nzind, searchk)
-        deleteat!(x.nzval, searchk)
+        deleteat!(nonzeroinds(x), searchk)
+        deleteat!(nonzeros(x), searchk)
     end
     return x
 end
@@ -355,7 +354,7 @@ end
 # convert SparseMatrixCSC to SparseVector
 function SparseVector{Tv,Ti}(s::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti<:Integer}
     size(s, 2) == 1 || throw(ArgumentError("The input argument must have a single-column."))
-    SparseVector(s.m, s.rowval, s.nzval)
+    SparseVector(size(s, 1), rowvals(s), nonzeros(s))
 end
 
 SparseVector{Tv}(s::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = SparseVector{Tv,Ti}(s)
@@ -427,10 +426,10 @@ SparseVector(s::AbstractVector{Tv}) where {Tv} = SparseVector{Tv,Int}(s)
 SparseVector{Tv}(s::SparseVector{Tv}) where {Tv} = s
 SparseVector{Tv,Ti}(s::SparseVector{Tv,Ti}) where {Tv,Ti} = s
 SparseVector{Tv,Ti}(s::SparseVector) where {Tv,Ti} =
-    SparseVector{Tv,Ti}(s.n, convert(Vector{Ti}, s.nzind), convert(Vector{Tv}, s.nzval))
+    SparseVector{Tv,Ti}(length(s::SparseVector), convert(Vector{Ti}, nonzeroinds(s)), convert(Vector{Tv}, nonzeros(s)))
 
 SparseVector{Tv}(s::SparseVector{<:Any,Ti}) where {Tv,Ti} =
-    SparseVector{Tv,Ti}(s.n, s.nzind, convert(Vector{Tv}, s.nzval))
+    SparseVector{Tv,Ti}(length(s::SparseVector), nonzeroinds(s), convert(Vector{Tv}, nonzeros(s)))
 
 convert(T::Type{<:SparseVector}, m::AbstractVector) = m isa T ? m : T(m)
 
@@ -443,30 +442,30 @@ function prep_sparsevec_copy_dest!(A::SparseVector, lB, nnzB)
     lA >= lB || throw(BoundsError())
     # If the two vectors have the same length then all the elements in A will be overwritten.
     if length(A) == lB
-        resize!(A.nzval, nnzB)
-        resize!(A.nzind, nnzB)
+        resize!(nonzeros(A), nnzB)
+        resize!(nonzeroinds(A), nnzB)
     else
         nnzA = nnz(A)
 
-        lastmodindA = searchsortedlast(A.nzind, lB)
+        lastmodindA = searchsortedlast(nonzeroinds(A), lB)
         if lastmodindA >= nnzB
             # A will have fewer non-zero elements; unmodified elements are kept at the end.
-            deleteat!(A.nzind, nnzB+1:lastmodindA)
-            deleteat!(A.nzval, nnzB+1:lastmodindA)
+            deleteat!(nonzeroinds(A), nnzB+1:lastmodindA)
+            deleteat!(nonzeros(A), nnzB+1:lastmodindA)
         else
             # A will have more non-zero elements; unmodified elements are kept at the end.
-            resize!(A.nzind, nnzB + nnzA - lastmodindA)
-            resize!(A.nzval, nnzB + nnzA - lastmodindA)
-            copyto!(A.nzind, nnzB+1, A.nzind, lastmodindA+1, nnzA-lastmodindA)
-            copyto!(A.nzval, nnzB+1, A.nzval, lastmodindA+1, nnzA-lastmodindA)
+            resize!(nonzeroinds(A), nnzB + nnzA - lastmodindA)
+            resize!(nonzeros(A), nnzB + nnzA - lastmodindA)
+            copyto!(nonzeroinds(A), nnzB+1, nonzeroinds(A), lastmodindA+1, nnzA-lastmodindA)
+            copyto!(nonzeros(A), nnzB+1, nonzeros(A), lastmodindA+1, nnzA-lastmodindA)
         end
     end
 end
 
 function copyto!(A::SparseVector, B::SparseVector)
     prep_sparsevec_copy_dest!(A, length(B), nnz(B))
-    copyto!(A.nzind, B.nzind)
-    copyto!(A.nzval, B.nzval)
+    copyto!(nonzeroinds(A), nonzeroinds(B))
+    copyto!(nonzeros(A), nonzeros(B))
     return A
 end
 
@@ -476,21 +475,21 @@ function copyto!(A::SparseVector, B::SparseMatrixCSC)
     prep_sparsevec_copy_dest!(A, length(B), nnz(B))
 
     ptr = 1
-    @assert length(A.nzind) >= length(B.rowval)
-    maximum(B.colptr)-1 <= length(B.rowval) || throw(BoundsError())
-    @inbounds for col=1:length(B.colptr)-1
-        offsetA = (col - 1) * B.m
-        while ptr <= B.colptr[col+1]-1
-            A.nzind[ptr] = B.rowval[ptr] + offsetA
+    @assert length(nonzeroinds(A)) >= length(rowvals(B))
+    maximum(getcolptr(B))-1 <= length(rowvals(B)) || throw(BoundsError())
+    @inbounds for col=1:length(getcolptr(B))-1
+        offsetA = (col - 1) * size(B, 1)
+        while ptr <= getcolptr(B)[col+1]-1
+            nonzeroinds(A)[ptr] = rowvals(B)[ptr] + offsetA
             ptr += 1
         end
     end
-    copyto!(A.nzval, B.nzval)
+    copyto!(nonzeros(A), nonzeros(B))
     return A
 end
 
 copyto!(A::SparseMatrixCSC, B::SparseVector{TvB,TiB}) where {TvB,TiB} =
-    copyto!(A, SparseMatrixCSC{TvB,TiB}(B.n, 1, TiB[1, length(B.nzind)+1], B.nzind, B.nzval))
+    copyto!(A, SparseMatrixCSC{TvB,TiB}(length(B), 1, TiB[1, length(nonzeroinds(B))+1], nonzeroinds(B), nonzeros(B)))
 
 
 ### Rand Construction
@@ -525,26 +524,26 @@ sprandn(r::AbstractRNG, ::Type{T}, n::Integer, p::AbstractFloat) where T = spran
 # Column slices
 function getindex(x::SparseMatrixCSC, ::Colon, j::Integer)
     checkbounds(x, :, j)
-    r1 = convert(Int, x.colptr[j])
-    r2 = convert(Int, x.colptr[j+1]) - 1
-    SparseVector(x.m, x.rowval[r1:r2], x.nzval[r1:r2])
+    r1 = convert(Int, getcolptr(x)[j])
+    r2 = convert(Int, getcolptr(x)[j+1]) - 1
+    SparseVector(size(x, 1), rowvals(x)[r1:r2], nonzeros(x)[r1:r2])
 end
 
 function getindex(x::SparseMatrixCSC, I::AbstractUnitRange, j::Integer)
     checkbounds(x, I, j)
     # Get the selected column
-    c1 = convert(Int, x.colptr[j])
-    c2 = convert(Int, x.colptr[j+1]) - 1
+    c1 = convert(Int, getcolptr(x)[j])
+    c2 = convert(Int, getcolptr(x)[j+1]) - 1
     # Restrict to the selected rows
-    r1 = searchsortedfirst(x.rowval, first(I), c1, c2, Forward)
-    r2 = searchsortedlast(x.rowval, last(I), c1, c2, Forward)
-    SparseVector(length(I), [x.rowval[i] - first(I) + 1 for i = r1:r2], x.nzval[r1:r2])
+    r1 = searchsortedfirst(rowvals(x), first(I), c1, c2, Forward)
+    r2 = searchsortedlast(rowvals(x), last(I), c1, c2, Forward)
+    SparseVector(length(I), [rowvals(x)[i] - first(I) + 1 for i = r1:r2], nonzeros(x)[r1:r2])
 end
 
 # In the general case, we piggy back upon SparseMatrixCSC's optimized solution
 @inline function getindex(A::SparseMatrixCSC, I::AbstractVector, J::Integer)
     M = A[I, [J]]
-    SparseVector(M.m, M.rowval, M.nzval)
+    SparseVector(size(M, 1), rowvals(M), nonzeros(M))
 end
 
 # Row slices
@@ -553,7 +552,7 @@ function Base.getindex(A::SparseMatrixCSC{Tv,Ti}, i::Integer, J::AbstractVector)
     require_one_based_indexing(A, J)
     checkbounds(A, i, J)
     nJ = length(J)
-    colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
+    colptrA = getcolptr(A); rowvalA = rowvals(A); nzvalA = nonzeros(A)
 
     nzinds = Vector{Ti}()
     nzvals = Vector{Tv}()
@@ -589,17 +588,17 @@ function _logical_index(A::SparseMatrixCSC{Tv}, I::AbstractArray{Bool}) where Tv
     n = sum(I)
     nnzB = min(n, nnz(A))
 
-    colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
+    colptrA = getcolptr(A); rowvalA = rowvals(A); nzvalA = nonzeros(A)
     rowvalB = Vector{Int}(undef, nnzB)
     nzvalB = Vector{Tv}(undef, nnzB)
     c = 1
     rowB = 1
 
-    @inbounds for col in 1:A.n
+    @inbounds for col in 1:size(A, 2)
         r1 = colptrA[col]
         r2 = colptrA[col+1]-1
 
-        for row in 1:A.m
+        for row in 1:size(A, 1)
             if I[row, col]
                 while (r1 <= r2) && (rowvalA[r1] < row)
                     r1 += 1
@@ -630,9 +629,9 @@ function getindex(A::SparseMatrixCSC{Tv}, I::AbstractUnitRange) where Tv
     checkbounds(A, I)
     szA = size(A)
     nA = szA[1]*szA[2]
-    colptrA = A.colptr
-    rowvalA = A.rowval
-    nzvalA = A.nzval
+    colptrA = getcolptr(A)
+    rowvalA = rowvals(A)
+    nzvalA = nonzeros(A)
 
     n = length(I)
     nnzB = min(n, nnz(A))
@@ -666,9 +665,9 @@ function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector) where {Tv,Ti}
     require_one_based_indexing(A, I)
     szA = size(A)
     nA = szA[1]*szA[2]
-    colptrA = A.colptr
-    rowvalA = A.rowval
-    nzvalA = A.nzval
+    colptrA = getcolptr(A)
+    rowvalA = rowvals(A)
+    nzvalA = nonzeros(A)
 
     n = length(I)
     nnzB = min(n, nnz(A))
@@ -713,8 +712,8 @@ function findall(p::Function, x::SparseVector{<:Any,Ti}) where Ti
     numnz = nnz(x)
     I = Vector{Ti}(undef, numnz)
 
-    nzind = x.nzind
-    nzval = x.nzval
+    nzind = nonzeroinds(x)
+    nzval = nonzeros(x)
 
     count = 1
     @inbounds for i = 1 : numnz
@@ -740,8 +739,8 @@ function findnz(x::SparseVector{Tv,Ti}) where {Tv,Ti}
     I = Vector{Ti}(undef, numnz)
     V = Vector{Tv}(undef, numnz)
 
-    nzind = x.nzind
-    nzval = x.nzval
+    nzind = nonzeroinds(x)
+    nzval = nonzeros(x)
 
     @inbounds for i = 1 : numnz
         I[i] = nzind[i]
@@ -752,20 +751,20 @@ function findnz(x::SparseVector{Tv,Ti}) where {Tv,Ti}
 end
 
 function _sparse_findnextnz(v::SparseVector, i::Integer)
-    n = searchsortedfirst(v.nzind, i)
-    if n > length(v.nzind)
+    n = searchsortedfirst(nonzeroinds(v), i)
+    if n > length(nonzeroinds(v))
         return nothing
     else
-        return v.nzind[n]
+        return nonzeroinds(v)[n]
     end
 end
 
 function _sparse_findprevnz(v::SparseVector, i::Integer)
-    n = searchsortedlast(v.nzind, i)
+    n = searchsortedlast(nonzeroinds(v), i)
     if iszero(n)
         return nothing
     else
-        return v.nzind[n]
+        return nonzeroinds(v)[n]
     end
 end
 
@@ -818,13 +817,13 @@ getindex(x::AbstractSparseVector, I::AbstractVector{Bool}) = x[findall(I)]
 getindex(x::AbstractSparseVector, I::AbstractArray{Bool}) = x[findall(I)]
 @inline function getindex(x::AbstractSparseVector{Tv,Ti}, I::AbstractVector) where {Tv,Ti}
     # SparseMatrixCSC has a nicely optimized routine for this; punt
-    S = SparseMatrixCSC(x.n, 1, Ti[1,length(x.nzind)+1], x.nzind, x.nzval)
+    S = SparseMatrixCSC(length(x::SparseVector), 1, Ti[1,length(nonzeroinds(x))+1], nonzeroinds(x), nonzeros(x))
     S[I, 1]
 end
 
 function getindex(x::AbstractSparseVector{Tv,Ti}, I::AbstractArray) where {Tv,Ti}
     # punt to SparseMatrixCSC
-    S = SparseMatrixCSC(x.n, 1, Ti[1,length(x.nzind)+1], x.nzind, x.nzval)
+    S = SparseMatrixCSC(length(x::SparseVector), 1, Ti[1,length(nonzeroinds(x))+1], nonzeroinds(x), nonzeros(x))
     S[I]
 end
 
@@ -1655,9 +1654,9 @@ function mul!(y::AbstractVector, A::SparseMatrixCSC, x::AbstractSparseVector, α
 
     xnzind = nonzeroinds(x)
     xnzval = nonzeros(x)
-    Acolptr = A.colptr
-    Arowval = A.rowval
-    Anzval = A.nzval
+    Acolptr = getcolptr(A)
+    Arowval = rowvals(A)
+    Anzval = nonzeros(A)
 
     @inbounds for i = 1:length(xnzind)
         v = xnzval[i]
@@ -1700,9 +1699,9 @@ function _At_or_Ac_mul_B!(tfun::Function,
 
     xnzind = nonzeroinds(x)
     xnzval = nonzeros(x)
-    Acolptr = A.colptr
-    Arowval = A.rowval
-    Anzval = A.nzval
+    Acolptr = getcolptr(A)
+    Arowval = rowvals(A)
+    Anzval = nonzeros(A)
     mx = length(xnzind)
 
     for j = 1:n
@@ -1739,9 +1738,9 @@ function _At_or_Ac_mul_B(tfun::Function, A::SparseMatrixCSC{TvA,TiA}, x::Abstrac
 
     xnzind = nonzeroinds(x)
     xnzval = nonzeros(x)
-    Acolptr = A.colptr
-    Arowval = A.rowval
-    Anzval = A.nzval
+    Acolptr = getcolptr(A)
+    Arowval = rowvals(A)
+    Anzval = nonzeros(A)
     mx = length(xnzind)
 
     ynzind = Vector{Ti}(undef, n)
@@ -1806,8 +1805,8 @@ for isunittri in (true, false), islowertri in (true, false)
             # operate on solely b[nzrange] for efficiency.
             if nnz(b) != 0
                 nzrange = $( (islowertri && !istrans) || (!islowertri && istrans) ?
-                    :(b.nzind[1]:b.n) :
-                    :(1:b.nzind[end]) )
+                    :(nonzeroinds(b)[1]:length(b::SparseVector)) :
+                    :(1:nonzeroinds(b)[end]) )
                 nzrangeviewr = view(r, nzrange)
                 nzrangeviewA = $tritype(view(A.data, nzrange, nzrange))
                 LinearAlgebra.ldiv!($xformop(convert(AbstractArray{TAb}, nzrangeviewA)), nzrangeviewr)
@@ -1849,9 +1848,9 @@ for isunittri in (true, false), islowertri in (true, false)
                 # furthermore we operate on that section as a dense vector
                 # such that dispatch has a chance to exploit, e.g., tuned BLAS
                 nzrange = $( (islowertri && !istrans) || (!islowertri && istrans) ?
-                    :(b.nzind[1]:b.n) :
-                    :(1:b.nzind[end]) )
-                nzrangeviewbnz = view(b.nzval, nzrange .- (b.nzind[1] - 1))
+                    :(nonzeroinds(b)[1]:length(b::SparseVector)) :
+                    :(1:nonzeroinds(b)[end]) )
+                nzrangeviewbnz = view(nonzeros(b), nzrange .- (nonzeroinds(b)[1] - 1))
                 nzrangeviewA = $tritype(view(A.data, nzrange, nzrange))
                 LinearAlgebra.ldiv!($xformop(nzrangeviewA), nzrangeviewbnz)
             end
@@ -1861,50 +1860,50 @@ for isunittri in (true, false), islowertri in (true, false)
 end
 
 # helper functions for in-place matrix division operations defined above
-"Densifies `x::SparseVector` from its first nonzero (`x[x.nzind[1]]`) through its end (`x[x.n]`)."
+"Densifies `x::SparseVector` from its first nonzero (`x[nonzeroinds(x)[1]]`) through its end (`x[length(x::SparseVector)]`)."
 function _densifyfirstnztoend!(x::SparseVector)
     # lengthen containers
     oldnnz = nnz(x)
-    newnnz = x.n - x.nzind[1] + 1
-    resize!(x.nzval, newnnz)
-    resize!(x.nzind, newnnz)
+    newnnz = length(x::SparseVector) - nonzeroinds(x)[1] + 1
+    resize!(nonzeros(x), newnnz)
+    resize!(nonzeroinds(x), newnnz)
     # redistribute nonzero values over lengthened container
     # initialize now-allocated zero values simultaneously
     nextpos = newnnz
     @inbounds for oldpos in oldnnz:-1:1
-        nzi = x.nzind[oldpos]
-        nzv = x.nzval[oldpos]
-        newpos = nzi - x.nzind[1] + 1
-        newpos < nextpos && (x.nzval[newpos+1:nextpos] .= 0)
+        nzi = nonzeroinds(x)[oldpos]
+        nzv = nonzeros(x)[oldpos]
+        newpos = nzi - nonzeroinds(x)[1] + 1
+        newpos < nextpos && (nonzeros(x)[newpos+1:nextpos] .= 0)
         newpos == oldpos && break
-        x.nzval[newpos] = nzv
+        nonzeros(x)[newpos] = nzv
         nextpos = newpos - 1
     end
     # finally update lengthened nzinds
-    x.nzind[2:end] = (x.nzind[1]+1):x.n
+    nonzeroinds(x)[2:end] = (nonzeroinds(x)[1]+1):length(x::SparseVector)
     x
 end
-"Densifies `x::SparseVector` from its beginning (`x[1]`) through its last nonzero (`x[x.nzind[end]]`)."
+"Densifies `x::SparseVector` from its beginning (`x[1]`) through its last nonzero (`x[nonzeroinds(x)[end]]`)."
 function _densifystarttolastnz!(x::SparseVector)
     # lengthen containers
     oldnnz = nnz(x)
-    newnnz = x.nzind[end]
-    resize!(x.nzval, newnnz)
-    resize!(x.nzind, newnnz)
+    newnnz = nonzeroinds(x)[end]
+    resize!(nonzeros(x), newnnz)
+    resize!(nonzeroinds(x), newnnz)
     # redistribute nonzero values over lengthened container
     # initialize now-allocated zero values simultaneously
     nextpos = newnnz
     @inbounds for oldpos in oldnnz:-1:1
-        nzi = x.nzind[oldpos]
-        nzv = x.nzval[oldpos]
-        nzi < nextpos && (x.nzval[nzi+1:nextpos] .= 0)
+        nzi = nonzeroinds(x)[oldpos]
+        nzv = nonzeros(x)[oldpos]
+        nzi < nextpos && (nonzeros(x)[nzi+1:nextpos] .= 0)
         nzi == oldpos && (nextpos = 0; break)
-        x.nzval[nzi] = nzv
+        nonzeros(x)[nzi] = nzv
         nextpos = nzi - 1
     end
-    nextpos > 0 && (x.nzval[1:nextpos] .= 0)
+    nextpos > 0 && (nonzeros(x)[1:nextpos] .= 0)
     # finally update lengthened nzinds
-    x.nzind[1:newnnz] = 1:newnnz
+    nonzeroinds(x)[1:newnnz] = 1:newnnz
     x
 end
 
@@ -1921,9 +1920,9 @@ function sort(x::SparseVector{Tv,Ti}; kws...) where {Tv,Ti}
 end
 
 function fkeep!(x::SparseVector, f, trim::Bool = true)
-    n = x.n
-    nzind = x.nzind
-    nzval = x.nzval
+    n = length(x::SparseVector)
+    nzind = nonzeroinds(x)
+    nzval = nonzeros(x)
 
     x_writepos = 1
     @inbounds for xk in 1:nnz(x)
@@ -1955,7 +1954,7 @@ end
     droptol!(x::SparseVector, tol; trim::Bool = true)
 
 Removes stored values from `x` whose absolute value is less than or equal to `tol`,
-optionally trimming resulting excess space from `x.nzind` and `x.nzval` when `trim`
+optionally trimming resulting excess space from `nonzeroinds(x)` and `nonzeros(x)` when `trim`
 is `true`.
 """
 droptol!(x::SparseVector, tol; trim::Bool = true) = fkeep!(x, (i, x) -> abs(x) > tol, trim)
@@ -1964,7 +1963,7 @@ droptol!(x::SparseVector, tol; trim::Bool = true) = fkeep!(x, (i, x) -> abs(x) >
     dropzeros!(x::SparseVector; trim::Bool = true)
 
 Removes stored numerical zeros from `x`, optionally trimming resulting excess space from
-`x.nzind` and `x.nzval` when `trim` is `true`.
+`nonzeroinds(x)` and `nonzeros(x)` when `trim` is `true`.
 
 For an out-of-place version, see [`dropzeros`](@ref). For
 algorithmic information, see `fkeep!`.
@@ -1996,29 +1995,29 @@ julia> dropzeros(A)
 dropzeros(x::SparseVector; trim::Bool = true) = dropzeros!(copy(x), trim = trim)
 
 function copy!(dst::SparseVector, src::SparseVector)
-    dst.n == src.n || throw(ArgumentError("Sparse vectors should have the same length for copy!"))
-    copy!(dst.nzval, src.nzval)
-    copy!(dst.nzind, src.nzind)
+    length(dst::SparseVector) == length(src::SparseVector) || throw(ArgumentError("Sparse vectors should have the same length for copy!"))
+    copy!(nonzeros(dst), nonzeros(src))
+    copy!(nonzeroinds(dst), nonzeroinds(src))
     return dst
 end
 
 function copy!(dst::SparseVector, src::AbstractVector)
-    dst.n == length(src) || throw(ArgumentError("Sparse vector should have the same length as source for copy!"))
-    _dense2indval!(dst.nzind, dst.nzval, src)
+    length(dst::SparseVector) == length(src) || throw(ArgumentError("Sparse vector should have the same length as source for copy!"))
+    _dense2indval!(nonzeroinds(dst), nonzeros(dst), src)
     return dst
 end
 
 function _fillnonzero!(arr::SparseMatrixCSC{Tv, Ti}, val) where {Tv,Ti}
     m, n = size(arr)
-    resize!(arr.colptr, n+1)
-    resize!(arr.rowval, m*n)
-    resize!(arr.nzval, m*n)
-    copyto!(arr.colptr, 1:m:n*m+1)
-    fill!(arr.nzval, val)
+    resize!(getcolptr(arr), n+1)
+    resize!(rowvals(arr), m*n)
+    resize!(nonzeros(arr), m*n)
+    copyto!(getcolptr(arr), 1:m:n*m+1)
+    fill!(nonzeros(arr), val)
     index = 1
     @inbounds for _ in 1:n
         for i in 1:m
-            arr.rowval[index] = Ti(i)
+            rowvals(arr)[index] = Ti(i)
             index += 1
         end
     end
@@ -2026,13 +2025,13 @@ function _fillnonzero!(arr::SparseMatrixCSC{Tv, Ti}, val) where {Tv,Ti}
 end
 
 function _fillnonzero!(arr::SparseVector{Tv,Ti}, val) where {Tv,Ti}
-    n = arr.n
-    resize!(arr.nzind, n)
-    resize!(arr.nzval, n)
+    n = length(arr::SparseVector)
+    resize!(nonzeroinds(arr), n)
+    resize!(nonzeros(arr), n)
     @inbounds for i in 1:n
-        arr.nzind[i] = Ti(i)
+        nonzeroinds(arr)[i] = Ti(i)
     end
-    fill!(arr.nzval, val)
+    fill!(nonzeros(arr), val)
     arr
 end
 
@@ -2041,7 +2040,7 @@ function fill!(A::Union{SparseVector, SparseMatrixCSC}, x)
     T = eltype(A)
     xT = convert(T, x)
     if xT == zero(T)
-        fill!(A.nzval, xT)
+        fill!(nonzeros(A), xT)
     else
         _fillnonzero!(A, xT)
     end
@@ -2080,7 +2079,7 @@ end
 
 function circshift!(O::SparseVector, X::SparseVector, (r,)::Base.DimsInteger{1})
     copy!(O, X)
-    subvector_shifter!(O.nzind, O.nzval, 1, length(O.nzind), O.n, mod(r, X.n))
+    subvector_shifter!(nonzeroinds(O), nonzeros(O), 1, length(nonzeroinds(O)), length(O), mod(r, length(X)))
     return O
 end
 

@@ -32,18 +32,18 @@ end
 const AdjOrTransStridedMatrix{T} = Union{StridedMatrix{T},Adjoint{<:Any,<:StridedMatrix{T}},Transpose{<:Any,<:StridedMatrix{T}}}
 
 function mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::Union{StridedVector,AdjOrTransStridedMatrix}, α::Number, β::Number)
-    A.n == size(B, 1) || throw(DimensionMismatch())
-    A.m == size(C, 1) || throw(DimensionMismatch())
+    size(A, 2) == size(B, 1) || throw(DimensionMismatch())
+    size(A, 1) == size(C, 1) || throw(DimensionMismatch())
     size(B, 2) == size(C, 2) || throw(DimensionMismatch())
-    nzv = A.nzval
-    rv = A.rowval
+    nzv = nonzeros(A)
+    rv = rowvals(A)
     if β != 1
         β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
     end
     for k = 1:size(C, 2)
-        @inbounds for col = 1:A.n
+        @inbounds for col = 1:size(A, 2)
             αxj = B[col,k] * α
-            for j = A.colptr[col]:(A.colptr[col + 1] - 1)
+            for j = getcolptr(A)[col]:(getcolptr(A)[col + 1] - 1)
                 C[rv[j], k] += nzv[j]*αxj
             end
         end
@@ -51,24 +51,24 @@ function mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::Union{StridedVector,Adj
     C
 end
 *(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx} =
-    (T = promote_op(matprod, TA, Tx); mul!(similar(x, T, A.m), A, x, one(T), zero(T)))
+    (T = promote_op(matprod, TA, Tx); mul!(similar(x, T, size(A, 1)), A, x, one(T), zero(T)))
 *(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
-    (T = promote_op(matprod, TA, Tx); mul!(similar(B, T, (A.m, size(B, 2))), A, B, one(T), zero(T)))
+    (T = promote_op(matprod, TA, Tx); mul!(similar(B, T, (size(A, 1), size(B, 2))), A, B, one(T), zero(T)))
 
 function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}, α::Number, β::Number)
     A = adjA.parent
-    A.n == size(C, 1) || throw(DimensionMismatch())
-    A.m == size(B, 1) || throw(DimensionMismatch())
+    size(A, 2) == size(C, 1) || throw(DimensionMismatch())
+    size(A, 1) == size(B, 1) || throw(DimensionMismatch())
     size(B, 2) == size(C, 2) || throw(DimensionMismatch())
-    nzv = A.nzval
-    rv = A.rowval
+    nzv = nonzeros(A)
+    rv = rowvals(A)
     if β != 1
         β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
     end
     for k = 1:size(C, 2)
-        @inbounds for col = 1:A.n
+        @inbounds for col = 1:size(A, 2)
             tmp = zero(eltype(C))
-            for j = A.colptr[col]:(A.colptr[col + 1] - 1)
+            for j = getcolptr(A)[col]:(getcolptr(A)[col + 1] - 1)
                 tmp += adjoint(nzv[j])*B[rv[j],k]
             end
             C[col,k] += tmp * α
@@ -83,18 +83,18 @@ end
 
 function mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}, α::Number, β::Number)
     A = transA.parent
-    A.n == size(C, 1) || throw(DimensionMismatch())
-    A.m == size(B, 1) || throw(DimensionMismatch())
+    size(A, 2) == size(C, 1) || throw(DimensionMismatch())
+    size(A, 1) == size(B, 1) || throw(DimensionMismatch())
     size(B, 2) == size(C, 2) || throw(DimensionMismatch())
-    nzv = A.nzval
-    rv = A.rowval
+    nzv = nonzeros(A)
+    rv = rowvals(A)
     if β != 1
         β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
     end
     for k = 1:size(C, 2)
-        @inbounds for col = 1:A.n
+        @inbounds for col = 1:size(A, 2)
             tmp = zero(eltype(C))
-            for j = A.colptr[col]:(A.colptr[col + 1] - 1)
+            for j = getcolptr(A)[col]:(getcolptr(A)[col + 1] - 1)
                 tmp += transpose(nzv[j])*B[rv[j],k]
             end
             C[col,k] += tmp * α
@@ -118,34 +118,34 @@ mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::Union{St
 
 function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, A::SparseMatrixCSC, α::Number, β::Number)
     mX, nX = size(X)
-    nX == A.m || throw(DimensionMismatch())
+    nX == size(A, 1) || throw(DimensionMismatch())
     mX == size(C, 1) || throw(DimensionMismatch())
-    A.n == size(C, 2) || throw(DimensionMismatch())
-    rv = A.rowval
-    nzv = A.nzval
+    size(A, 2) == size(C, 2) || throw(DimensionMismatch())
+    rv = rowvals(A)
+    nzv = nonzeros(A)
     if β != 1
         β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
     end
-    @inbounds for multivec_row=1:mX, col = 1:A.n, k=A.colptr[col]:(A.colptr[col+1]-1)
+    @inbounds for multivec_row=1:mX, col = 1:size(A, 2), k=getcolptr(A)[col]:(getcolptr(A)[col+1]-1)
         C[multivec_row, col] += α * X[multivec_row, rv[k]] * nzv[k] # perhaps suboptimal position of α?
     end
     C
 end
 *(X::AdjOrTransStridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA}) where {TX,TvA,TiA} =
-    (T = promote_op(matprod, TX, TvA); mul!(similar(X, T, (size(X, 1), A.n)), X, A, one(T), zero(T)))
+    (T = promote_op(matprod, TX, TvA); mul!(similar(X, T, (size(X, 1), size(A, 2))), X, A, one(T), zero(T)))
 
 function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, α::Number, β::Number)
     A = adjA.parent
     mX, nX = size(X)
-    nX == A.n || throw(DimensionMismatch())
+    nX == size(A, 2) || throw(DimensionMismatch())
     mX == size(C, 1) || throw(DimensionMismatch())
-    A.m == size(C, 2) || throw(DimensionMismatch())
-    rv = A.rowval
-    nzv = A.nzval
+    size(A, 1) == size(C, 2) || throw(DimensionMismatch())
+    rv = rowvals(A)
+    nzv = nonzeros(A)
     if β != 1
         β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
     end
-    @inbounds for col = 1:A.n, k=A.colptr[col]:(A.colptr[col+1]-1), multivec_col=1:mX
+    @inbounds for col = 1:size(A, 2), k=getcolptr(A)[col]:(getcolptr(A)[col+1]-1), multivec_col=1:mX
         C[multivec_col, rv[k]] += α * X[multivec_col, col] * adjoint(nzv[k]) # perhaps suboptimal position of α?
     end
     C
@@ -156,15 +156,15 @@ end
 function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, transA::Transpose{<:Any,<:SparseMatrixCSC}, α::Number, β::Number)
     A = transA.parent
     mX, nX = size(X)
-    nX == A.n || throw(DimensionMismatch())
+    nX == size(A, 2) || throw(DimensionMismatch())
     mX == size(C, 1) || throw(DimensionMismatch())
-    A.m == size(C, 2) || throw(DimensionMismatch())
-    rv = A.rowval
-    nzv = A.nzval
+    size(A, 1) == size(C, 2) || throw(DimensionMismatch())
+    rv = rowvals(A)
+    nzv = nonzeros(A)
     if β != 1
         β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
     end
-    @inbounds for col = 1:A.n, k=A.colptr[col]:(A.colptr[col+1]-1), multivec_col=1:mX
+    @inbounds for col = 1:size(A, 2), k=getcolptr(A)[col]:(getcolptr(A)[col+1]-1), multivec_col=1:mX
         C[multivec_col, rv[k]] += α * X[multivec_col, col] * transpose(nzv[k]) # perhaps suboptimal position of α?
     end
     C
@@ -296,24 +296,24 @@ function dot(A::SparseMatrixCSC{T1,S1},B::SparseMatrixCSC{T2,S2}) where {T1,T2,S
     size(B) == (m,n) || throw(DimensionMismatch("matrices must have the same dimensions"))
     r = dot(zero(T1), zero(T2))
     @inbounds for j = 1:n
-        ia = A.colptr[j]; ia_nxt = A.colptr[j+1]
-        ib = B.colptr[j]; ib_nxt = B.colptr[j+1]
+        ia = getcolptr(A)[j]; ia_nxt = getcolptr(A)[j+1]
+        ib = getcolptr(B)[j]; ib_nxt = getcolptr(B)[j+1]
         if ia < ia_nxt && ib < ib_nxt
-            ra = A.rowval[ia]; rb = B.rowval[ib]
+            ra = rowvals(A)[ia]; rb = rowvals(B)[ib]
             while true
                 if ra < rb
                     ia += oneunit(S1)
                     ia < ia_nxt || break
-                    ra = A.rowval[ia]
+                    ra = rowvals(A)[ia]
                 elseif ra > rb
                     ib += oneunit(S2)
                     ib < ib_nxt || break
-                    rb = B.rowval[ib]
+                    rb = rowvals(B)[ib]
                 else # ra == rb
-                    r += dot(A.nzval[ia], B.nzval[ib])
+                    r += dot(nonzeros(A)[ia], nonzeros(B)[ib])
                     ia += oneunit(S1); ib += oneunit(S2)
                     ia < ia_nxt && ib < ib_nxt || break
-                    ra = A.rowval[ia]; rb = B.rowval[ib]
+                    ra = rowvals(A)[ia]; rb = rowvals(B)[ib]
                 end
             end
         end
@@ -785,8 +785,8 @@ end
 
 function rdiv!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where T
     dd = D.diag
-    if (k = length(dd)) ≠ A.n
-        throw(DimensionMismatch("size(A, 2)=$(A.n) should be size(D, 1)=$k"))
+    if (k = length(dd)) ≠ size(A, 2)
+        throw(DimensionMismatch("size(A, 2)=$(size(A, 2)) should be size(D, 1)=$k"))
     end
     nonz = nonzeros(A)
     @inbounds for j in 1:k
@@ -808,16 +808,16 @@ rdiv!(A::SparseMatrixCSC{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
 
 function ldiv!(D::Diagonal{T}, A::SparseMatrixCSC{T}) where {T}
     # require_one_based_indexing(A)
-    if A.m != length(D.diag)
-        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(A.m) rows"))
+    if size(A, 1) != length(D.diag)
+        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(A, 1)) rows"))
     end
     nonz = nonzeros(A)
-    Arowval = A.rowval
+    Arowval = rowvals(A)
     b = D.diag
     for i=1:length(b)
         iszero(b[i]) && throw(SingularException(i))
     end
-    @inbounds for col = 1:A.n, p = A.colptr[col]:(A.colptr[col + 1] - 1)
+    @inbounds for col = 1:size(A, 2), p = getcolptr(A)[col]:(getcolptr(A)[col + 1] - 1)
         nonz[p] = b[Arowval[p]] \ nonz[p]
     end
     A
@@ -837,8 +837,8 @@ function triu(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
         colptr[col] = 1
     end
     for col = max(k+1,1) : n
-        for c1 = S.colptr[col] : S.colptr[col+1]-1
-            S.rowval[c1] > col - k && break
+        for c1 = getcolptr(S)[col] : getcolptr(S)[col+1]-1
+            rowvals(S)[c1] > col - k && break
             nnz += 1
         end
         colptr[col+1] = nnz+1
@@ -847,10 +847,10 @@ function triu(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     nzval = Vector{Tv}(undef, nnz)
     A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
     for col = max(k+1,1) : n
-        c1 = S.colptr[col]
-        for c2 = A.colptr[col] : A.colptr[col+1]-1
-            A.rowval[c2] = S.rowval[c1]
-            A.nzval[c2] = S.nzval[c1]
+        c1 = getcolptr(S)[col]
+        for c2 = getcolptr(A)[col] : getcolptr(A)[col+1]-1
+            rowvals(A)[c2] = rowvals(S)[c1]
+            nonzeros(A)[c2] = nonzeros(S)[c1]
             c1 += 1
         end
     end
@@ -863,9 +863,9 @@ function tril(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     nnz = 0
     colptr[1] = 1
     for col = 1 : min(n, m+k)
-        l1 = S.colptr[col+1]-1
-        for c1 = 0 : (l1 - S.colptr[col])
-            S.rowval[l1 - c1] < col - k && break
+        l1 = getcolptr(S)[col+1]-1
+        for c1 = 0 : (l1 - getcolptr(S)[col])
+            rowvals(S)[l1 - c1] < col - k && break
             nnz += 1
         end
         colptr[col+1] = nnz+1
@@ -877,11 +877,11 @@ function tril(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     nzval = Vector{Tv}(undef, nnz)
     A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
     for col = 1 : min(n, m+k)
-        c1 = S.colptr[col+1]-1
-        l2 = A.colptr[col+1]-1
-        for c2 = 0 : l2 - A.colptr[col]
-            A.rowval[l2 - c2] = S.rowval[c1]
-            A.nzval[l2 - c2] = S.nzval[c1]
+        c1 = getcolptr(S)[col+1]-1
+        l2 = getcolptr(A)[col+1]-1
+        for c2 = 0 : l2 - getcolptr(A)[col]
+            rowvals(A)[l2 - c2] = rowvals(S)[c1]
+            nonzeros(A)[l2 - c2] = nonzeros(S)[c1]
             c1 -= 1
         end
     end
@@ -902,9 +902,9 @@ function sparse_diff1(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     for col = 1 : n
         last_row = 0
         last_val = 0
-        for k = S.colptr[col] : S.colptr[col+1]-1
-            row = S.rowval[k]
-            val = S.nzval[k]
+        for k = getcolptr(S)[col] : getcolptr(S)[col+1]-1
+            row = rowvals(S)[k]
+            val = nonzeros(S)[k]
             if row > 1
                 if row == last_row + 1
                     nzval[numnz] += val
@@ -939,9 +939,9 @@ function sparse_diff2(a::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
 
     z = zero(Tv)
 
-    colptr_a = a.colptr
-    rowval_a = a.rowval
-    nzval_a = a.nzval
+    colptr_a = getcolptr(a)
+    rowval_a = rowvals(a)
+    nzval_a = nonzeros(a)
 
     ptrS = 1
     colptr[1] = 1
@@ -1022,7 +1022,7 @@ end
 diff(a::SparseMatrixCSC; dims::Integer) = dims==1 ? sparse_diff1(a) : sparse_diff2(a)
 
 ## norm and rank
-norm(A::SparseMatrixCSC, p::Real=2) = norm(view(A.nzval, 1:nnz(A)), p)
+norm(A::SparseMatrixCSC, p::Real=2) = norm(view(nonzeros(A), 1:nnz(A)), p)
 
 function opnorm(A::SparseMatrixCSC, p::Real=2)
     m, n = size(A)
@@ -1045,8 +1045,8 @@ function opnorm(A::SparseMatrixCSC, p::Real=2)
             nA::Tsum = 0
             for j=1:n
                 colSum::Tsum = 0
-                for i = A.colptr[j]:A.colptr[j+1]-1
-                    colSum += abs(A.nzval[i])
+                for i = getcolptr(A)[j]:getcolptr(A)[j+1]-1
+                    colSum += abs(nonzeros(A)[i])
                 end
                 nA = max(nA, colSum)
             end
@@ -1055,8 +1055,8 @@ function opnorm(A::SparseMatrixCSC, p::Real=2)
             throw(ArgumentError("2-norm not yet implemented for sparse matrices. Try opnorm(Array(A)) or opnorm(A, p) where p=1 or Inf."))
         elseif p==Inf
             rowSum = zeros(Tsum,m)
-            for i=1:length(A.nzval)
-                rowSum[A.rowval[i]] += abs(A.nzval[i])
+            for i=1:length(nonzeros(A))
+                rowSum[rowvals(A)[i]] += abs(nonzeros(A)[i])
             end
             return convert(Tnorm, maximum(rowSum))
         end
@@ -1261,12 +1261,12 @@ function kron(A::SparseMatrixCSC{T1,S1}, B::SparseMatrixCSC{T2,S2}) where {T1,S1
     colptrC[1] = 1
     col = 1
     @inbounds for j = 1:nA
-        startA = A.colptr[j]
-        stopA = A.colptr[j+1] - 1
+        startA = getcolptr(A)[j]
+        stopA = getcolptr(A)[j+1] - 1
         lA = stopA - startA + 1
         for i = 1:nB
-            startB = B.colptr[i]
-            stopB = B.colptr[i+1] - 1
+            startB = getcolptr(B)[i]
+            stopB = getcolptr(B)[i+1] - 1
             lB = stopB - startB + 1
             ptr_range = (1:lB) .+ (colptrC[col]-1)
             colptrC[col+1] = colptrC[col] + lA*lB
@@ -1274,8 +1274,8 @@ function kron(A::SparseMatrixCSC{T1,S1}, B::SparseMatrixCSC{T2,S2}) where {T1,S1
             for ptrA = startA : stopA
                 ptrB = startB
                 for ptr = ptr_range
-                    rowvalC[ptr] = (A.rowval[ptrA]-1)*mB + B.rowval[ptrB]
-                    nzvalC[ptr] = A.nzval[ptrA] * B.nzval[ptrB]
+                    rowvalC[ptr] = (rowvals(A)[ptrA]-1)*mB + rowvals(B)[ptrB]
+                    nzvalC[ptr] = nonzeros(A)[ptrA] * nonzeros(B)[ptrB]
                     ptrB += 1
                 end
                 ptr_range = ptr_range .+ lB
@@ -1293,10 +1293,10 @@ function kron(x::SparseVector{T1,S1}, y::SparseVector{T2,S2}) where {T1,S1,T2,S2
     nzval = Vector{typeof(one(T1)*one(T2))}(undef, nnzz) # the values of nonzeros
     @inbounds for i = 1:nnzx, j = 1:nnzy
         this_ind = (i-1)*nnzy+j
-        nzind[this_ind] = (x.nzind[i]-1)*y.n + y.nzind[j]
-        nzval[this_ind] = x.nzval[i] * y.nzval[j]
+        nzind[this_ind] = (nonzeroinds(x)[i]-1)*length(y::SparseVector) + nonzeroinds(y)[j]
+        nzval[this_ind] = nonzeros(x)[i] * nonzeros(y)[j]
     end
-    return SparseVector(x.n*y.n, nzind, nzval)
+    return SparseVector(length(x::SparseVector)*length(y::SparseVector), nzind, nzval)
 end
 
 # sparse matrix ⊗ sparse vector & vice versa
@@ -1324,13 +1324,13 @@ inv(A::SparseMatrixCSC) = error("The inverse of a sparse matrix can often be den
 
 # Copy colptr and rowval from one sparse matrix to another
 function copyinds!(C::SparseMatrixCSC, A::SparseMatrixCSC)
-    if C.colptr !== A.colptr
-        resize!(C.colptr, length(A.colptr))
-        copyto!(C.colptr, A.colptr)
+    if getcolptr(C) !== getcolptr(A)
+        resize!(getcolptr(C), length(getcolptr(A)))
+        copyto!(getcolptr(C), getcolptr(A))
     end
-    if C.rowval !== A.rowval
-        resize!(C.rowval, length(A.rowval))
-        copyto!(C.rowval, A.rowval)
+    if rowvals(C) !== rowvals(A)
+        resize!(rowvals(C), length(rowvals(A)))
+        copyto!(rowvals(C), rowvals(A))
     end
 end
 
@@ -1340,10 +1340,10 @@ function mul!(C::SparseMatrixCSC, A::SparseMatrixCSC, D::Diagonal{T, <:Vector}) 
     b    = D.diag
     (n==length(b) && size(A)==size(C)) || throw(DimensionMismatch())
     copyinds!(C, A)
-    Cnzval = C.nzval
-    Anzval = A.nzval
+    Cnzval = nonzeros(C)
+    Anzval = nonzeros(A)
     resize!(Cnzval, length(Anzval))
-    for col = 1:n, p = A.colptr[col]:(A.colptr[col+1]-1)
+    for col = 1:n, p = getcolptr(A)[col]:(getcolptr(A)[col+1]-1)
         @inbounds Cnzval[p] = Anzval[p] * b[col]
     end
     C
@@ -1354,11 +1354,11 @@ function mul!(C::SparseMatrixCSC, D::Diagonal{T, <:Vector}, A::SparseMatrixCSC) 
     b    = D.diag
     (m==length(b) && size(A)==size(C)) || throw(DimensionMismatch())
     copyinds!(C, A)
-    Cnzval = C.nzval
-    Anzval = A.nzval
-    Arowval = A.rowval
+    Cnzval = nonzeros(C)
+    Anzval = nonzeros(A)
+    Arowval = rowvals(A)
     resize!(Cnzval, length(Anzval))
-    for col = 1:n, p = A.colptr[col]:(A.colptr[col+1]-1)
+    for col = 1:n, p = getcolptr(A)[col]:(getcolptr(A)[col+1]-1)
         @inbounds Cnzval[p] = b[Arowval[p]] * Anzval[p]
     end
     C
@@ -1367,34 +1367,34 @@ end
 function mul!(C::SparseMatrixCSC, A::SparseMatrixCSC, b::Number)
     size(A)==size(C) || throw(DimensionMismatch())
     copyinds!(C, A)
-    resize!(C.nzval, length(A.nzval))
-    mul!(C.nzval, A.nzval, b)
+    resize!(nonzeros(C), length(nonzeros(A)))
+    mul!(nonzeros(C), nonzeros(A), b)
     C
 end
 
 function mul!(C::SparseMatrixCSC, b::Number, A::SparseMatrixCSC)
     size(A)==size(C) || throw(DimensionMismatch())
     copyinds!(C, A)
-    resize!(C.nzval, length(A.nzval))
-    mul!(C.nzval, b, A.nzval)
+    resize!(nonzeros(C), length(nonzeros(A)))
+    mul!(nonzeros(C), b, nonzeros(A))
     C
 end
 
 function rmul!(A::SparseMatrixCSC, b::Number)
-    rmul!(A.nzval, b)
+    rmul!(nonzeros(A), b)
     return A
 end
 
 function lmul!(b::Number, A::SparseMatrixCSC)
-    lmul!(b, A.nzval)
+    lmul!(b, nonzeros(A))
     return A
 end
 
 function rmul!(A::SparseMatrixCSC, D::Diagonal)
     m, n = size(A)
     (n == size(D, 1)) || throw(DimensionMismatch())
-    Anzval = A.nzval
-    @inbounds for col = 1:n, p = A.colptr[col]:(A.colptr[col + 1] - 1)
+    Anzval = nonzeros(A)
+    @inbounds for col = 1:n, p = getcolptr(A)[col]:(getcolptr(A)[col + 1] - 1)
          Anzval[p] = Anzval[p] * D.diag[col]
     end
     return A
@@ -1403,9 +1403,9 @@ end
 function lmul!(D::Diagonal, A::SparseMatrixCSC)
     m, n = size(A)
     (m == size(D, 2)) || throw(DimensionMismatch())
-    Anzval = A.nzval
-    Arowval = A.rowval
-    @inbounds for col = 1:n, p = A.colptr[col]:(A.colptr[col + 1] - 1)
+    Anzval = nonzeros(A)
+    Arowval = rowvals(A)
+    @inbounds for col = 1:n, p = getcolptr(A)[col]:(getcolptr(A)[col + 1] - 1)
         Anzval[p] = D.diag[Arowval[p]] * Anzval[p]
     end
     return A

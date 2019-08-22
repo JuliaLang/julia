@@ -100,13 +100,13 @@ _sparsem(A::AbstractSparseVector) = A
 function _sparsem(A::Union{Transpose{<:Any,<:AbstractSparseVector},Adjoint{<:Any,<:AbstractSparseVector}})
     B = parent(A)
     n = length(B)
-    Ti = eltype(B.nzind)
+    Ti = eltype(nonzeroinds(B))
     fadj = A isa Transpose ? transpose : adjoint
     colptr = fill!(Vector{Ti}(undef, n + 1), 0)
     colptr[1] = 1
-    colptr[B.nzind .+ 1] .= 1
+    colptr[nonzeroinds(B) .+ 1] .= 1
     cumsum!(colptr, colptr)
-    rowval = fill!(similar(B.nzind), 1)
+    rowval = fill!(similar(nonzeroinds(B)), 1)
     nzval = fadj.(nonzeros(B))
     SparseMatrixCSC(1, n, colptr, rowval, nzval)
 end
