@@ -109,7 +109,7 @@ julia> nnz(A)
 ```
 """
 nnz(S::AbstractSparseMatrixCSC) = Int(getcolptr(S)[size(S, 2) + 1] - 1)
-nnz(S::ReshapedArray{T,1,<:SparseMatrixCSC}) where T = nnz(parent(S))
+nnz(S::ReshapedArray{T,1,<:AbstractSparseMatrixCSC}) where T = nnz(parent(S))
 count(pred, S::AbstractSparseMatrixCSC) = count(pred, nzvalview(S)) + pred(zero(eltype(S)))*(prod(size(S)) - nnz(S))
 
 """
@@ -282,7 +282,7 @@ function sparse_compute_reshaped_colptr_and_rowval(colptrS::Vector{Ti}, rowvalS:
     end
 end
 
-function copy(ra::ReshapedArray{<:Any,2,<:SparseMatrixCSC})
+function copy(ra::ReshapedArray{<:Any,2,<:AbstractSparseMatrixCSC})
     mS,nS = size(ra)
     a = parent(ra)
     mA,nA = size(a)
@@ -530,8 +530,8 @@ function SparseMatrixCSC{Tv,Ti}(M::StridedMatrix) where {Tv,Ti}
     end
     return SparseMatrixCSC(size(M, 1), size(M, 2), colptr, rowval, nzval)
 end
-SparseMatrixCSC(M::Adjoint{<:Any,<:SparseMatrixCSC}) = copy(M)
-SparseMatrixCSC(M::Transpose{<:Any,<:SparseMatrixCSC}) = copy(M)
+SparseMatrixCSC(M::Adjoint{<:Any,<:AbstractSparseMatrixCSC}) = copy(M)
+SparseMatrixCSC(M::Transpose{<:Any,<:AbstractSparseMatrixCSC}) = copy(M)
 SparseMatrixCSC{Tv}(M::Adjoint{Tv,SparseMatrixCSC{Tv}}) where {Tv} = copy(M)
 SparseMatrixCSC{Tv}(M::Transpose{Tv,SparseMatrixCSC{Tv}}) where {Tv} = copy(M)
 SparseMatrixCSC{Tv,Ti}(M::Adjoint{Tv,SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = copy(M)
@@ -558,7 +558,7 @@ function Matrix(S::AbstractSparseMatrixCSC{Tv}) where Tv
 end
 Array(S::AbstractSparseMatrixCSC) = Matrix(S)
 
-convert(T::Type{<:SparseMatrixCSC}, m::AbstractMatrix) = m isa T ? m : T(m)
+convert(T::Type{<:AbstractSparseMatrixCSC}, m::AbstractMatrix) = m isa T ? m : T(m)
 
 float(S::SparseMatrixCSC) = SparseMatrixCSC(size(S, 1), size(S, 2), copy(getcolptr(S)), copy(rowvals(S)), float.(nonzeros(S)))
 complex(S::SparseMatrixCSC) = SparseMatrixCSC(size(S, 1), size(S, 2), copy(getcolptr(S)), copy(rowvals(S)), complex(copy(nonzeros(S))))
@@ -954,8 +954,8 @@ function ftranspose(A::AbstractSparseMatrixCSC{Tv,Ti}, f::Function) where {Tv,Ti
 end
 adjoint(A::AbstractSparseMatrixCSC) = Adjoint(A)
 transpose(A::AbstractSparseMatrixCSC) = Transpose(A)
-Base.copy(A::Adjoint{<:Any,<:SparseMatrixCSC}) = ftranspose(A.parent, x -> copy(adjoint(x)))
-Base.copy(A::Transpose{<:Any,<:SparseMatrixCSC}) = ftranspose(A.parent, x -> copy(transpose(x)))
+Base.copy(A::Adjoint{<:Any,<:AbstractSparseMatrixCSC}) = ftranspose(A.parent, x -> copy(adjoint(x)))
+Base.copy(A::Transpose{<:Any,<:AbstractSparseMatrixCSC}) = ftranspose(A.parent, x -> copy(transpose(x)))
 function Base.permutedims(A::AbstractSparseMatrixCSC, (a,b))
     (a, b) == (2, 1) && return ftranspose(A, identity)
     (a, b) == (1, 2) && return copy(A)
@@ -2487,7 +2487,7 @@ function _insert!(v::Vector, pos::Integer, item, nz::Integer)
     end
 end
 
-function Base.fill!(V::SubArray{Tv, <:Any, <:SparseMatrixCSC, Tuple{Vararg{Union{Integer, AbstractVector{<:Integer}},2}}}, x) where Tv
+function Base.fill!(V::SubArray{Tv, <:Any, <:AbstractSparseMatrixCSC, Tuple{Vararg{Union{Integer, AbstractVector{<:Integer}},2}}}, x) where Tv
     A = V.parent
     I, J = V.indices
     if isempty(I) || isempty(J); return A; end

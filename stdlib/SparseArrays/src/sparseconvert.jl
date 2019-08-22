@@ -111,7 +111,7 @@ function _sparsem(A::Union{Transpose{<:Any,<:AbstractSparseVector},Adjoint{<:Any
     SparseMatrixCSC(1, n, colptr, rowval, nzval)
 end
 
-function _sparsem(A::Union{Transpose{<:Any,<:SparseMatrixCSC},Adjoint{<:Any,<:SparseMatrixCSC}})
+function _sparsem(A::Union{Transpose{<:Any,<:AbstractSparseMatrixCSC},Adjoint{<:Any,<:AbstractSparseMatrixCSC}})
     ftranspose(parent(A), A isa Transpose ? transpose : adjoint)
 end
 
@@ -121,7 +121,7 @@ _sparsem(A::SparseMatrixCSCSymmHerm) = _sparsem(A.uplo == 'U' ? nzrangeup : nzra
 _sparsem(A::UpperTriangular{T,<:AbstractSparseMatrix}) where T = triu(A.data)
 _sparsem(A::LowerTriangular{T,<:AbstractSparseMatrix}) where T = tril(A.data)
 # view of sparse matrix
-_sparsem(S::SubArray{<:Any,2,<:SparseMatrixCSC}) = getindex(S.parent,S.indices...)
+_sparsem(S::SubArray{<:Any,2,<:AbstractSparseMatrixCSC}) = getindex(S.parent,S.indices...)
 
 # 4 cases: (Symmetric|Hermitian) variants (:U|:L)
 function _sparsem(fnzrange::Function, sA::SparseMatrixCSCSymmHerm{Tv}) where {Tv}

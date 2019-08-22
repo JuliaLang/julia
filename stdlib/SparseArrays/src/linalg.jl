@@ -7,17 +7,17 @@ using Random: rand!
 
 *(A::AbstractSparseMatrixCSC{TvA,TiA}, B::AbstractSparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} =
     *(sppromote(A, B)...)
-*(A::AbstractSparseMatrixCSC{TvA,TiA}, transB::Transpose{<:Any,<:SparseMatrixCSC{TvB,TiB}}) where {TvA,TiA,TvB,TiB} =
+*(A::AbstractSparseMatrixCSC{TvA,TiA}, transB::Transpose{<:Any,<:AbstractSparseMatrixCSC{TvB,TiB}}) where {TvA,TiA,TvB,TiB} =
     (B = transB.parent; (pA, pB) = sppromote(A, B); *(pA, transpose(pB)))
-*(A::AbstractSparseMatrixCSC{TvA,TiA}, adjB::Adjoint{<:Any,<:SparseMatrixCSC{TvB,TiB}}) where {TvA,TiA,TvB,TiB} =
+*(A::AbstractSparseMatrixCSC{TvA,TiA}, adjB::Adjoint{<:Any,<:AbstractSparseMatrixCSC{TvB,TiB}}) where {TvA,TiA,TvB,TiB} =
     (B = adjB.parent; (pA, pB) = sppromote(A, B); *(pA, adjoint(pB)))
-*(transA::Transpose{<:Any,<:SparseMatrixCSC{TvA,TiA}}, B::AbstractSparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} =
+*(transA::Transpose{<:Any,<:AbstractSparseMatrixCSC{TvA,TiA}}, B::AbstractSparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} =
     (A = transA.parent; (pA, pB) = sppromote(A, B); *(transpose(pA), pB))
-*(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TvA,TiA}}, B::AbstractSparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} =
+*(adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC{TvA,TiA}}, B::AbstractSparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB} =
     (A = adjA.parent; (pA, pB) = sppromote(A, B); *(adjoint(pA), pB))
-*(transA::Transpose{<:Any,<:SparseMatrixCSC{TvA,TiA}}, transB::Transpose{<:Any,<:SparseMatrixCSC{TvB,TiB}}) where {TvA,TiA,TvB,TiB} =
+*(transA::Transpose{<:Any,<:AbstractSparseMatrixCSC{TvA,TiA}}, transB::Transpose{<:Any,<:AbstractSparseMatrixCSC{TvB,TiB}}) where {TvA,TiA,TvB,TiB} =
     (A = transA.parent; B = transB.parent; (pA, pB) = sppromote(A, B); *(transpose(pA), transpose(pB)))
-*(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TvA,TiA}}, adjB::Adjoint{<:Any,<:SparseMatrixCSC{TvB,TiB}}) where {TvA,TiA,TvB,TiB} =
+*(adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC{TvA,TiA}}, adjB::Adjoint{<:Any,<:AbstractSparseMatrixCSC{TvB,TiB}}) where {TvA,TiA,TvB,TiB} =
     (A = adjA.parent; B = adjB.parent; (pA, pB) = sppromote(A, B); *(adjoint(pA), adjoint(pB)))
 
 function sppromote(A::AbstractSparseMatrixCSC{TvA,TiA}, B::AbstractSparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB}
@@ -55,7 +55,7 @@ end
 *(A::AbstractSparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
     (T = promote_op(matprod, TA, Tx); mul!(similar(B, T, (size(A, 1), size(B, 2))), A, B, one(T), zero(T)))
 
-function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}, α::Number, β::Number)
+function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}, α::Number, β::Number)
     A = adjA.parent
     size(A, 2) == size(C, 1) || throw(DimensionMismatch())
     size(A, 1) == size(B, 1) || throw(DimensionMismatch())
@@ -76,12 +76,12 @@ function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::Uni
     end
     C
 end
-*(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
+*(adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
     (T = promote_op(matprod, TA, Tx); mul!(similar(x, T, size(adjA, 1)), adjA, x, one(T), zero(T)))
-*(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TA,S}}, B::AdjOrTransStridedMatrix{Tx}) where {TA,S,Tx} =
+*(adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC{TA,S}}, B::AdjOrTransStridedMatrix{Tx}) where {TA,S,Tx} =
     (T = promote_op(matprod, TA, Tx); mul!(similar(B, T, (size(adjA, 1), size(B, 2))), adjA, B, one(T), zero(T)))
 
-function mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}, α::Number, β::Number)
+function mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}, α::Number, β::Number)
     A = transA.parent
     size(A, 2) == size(C, 1) || throw(DimensionMismatch())
     size(A, 1) == size(B, 1) || throw(DimensionMismatch())
@@ -102,18 +102,18 @@ function mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B:
     end
     C
 end
-*(transA::Transpose{<:Any,<:SparseMatrixCSC{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
+*(transA::Transpose{<:Any,<:AbstractSparseMatrixCSC{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
     (T = promote_op(matprod, TA, Tx); mul!(similar(x, T, size(transA, 1)), transA, x, one(T), zero(T)))
-*(transA::Transpose{<:Any,<:SparseMatrixCSC{TA,S}}, B::AdjOrTransStridedMatrix{Tx}) where {TA,S,Tx} =
+*(transA::Transpose{<:Any,<:AbstractSparseMatrixCSC{TA,S}}, B::AdjOrTransStridedMatrix{Tx}) where {TA,S,Tx} =
     (T = promote_op(matprod, TA, Tx); mul!(similar(B, T, (size(transA, 1), size(B, 2))), transA, B, one(T), zero(T)))
 
 # For compatibility with dense multiplication API. Should be deleted when dense multiplication
 # API is updated to follow BLAS API.
 mul!(C::StridedVecOrMat, A::AbstractSparseMatrixCSC, B::Union{StridedVector,AdjOrTransStridedMatrix}) =
     mul!(C, A, B, one(eltype(B)), zero(eltype(C)))
-mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}) =
+mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}) =
     mul!(C, adjA, B, one(eltype(B)), zero(eltype(C)))
-mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}) =
+mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}) =
     mul!(C, transA, B, one(eltype(B)), zero(eltype(C)))
 
 function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, A::AbstractSparseMatrixCSC, α::Number, β::Number)
@@ -134,7 +134,7 @@ end
 *(X::AdjOrTransStridedMatrix{TX}, A::AbstractSparseMatrixCSC{TvA,TiA}) where {TX,TvA,TiA} =
     (T = promote_op(matprod, TX, TvA); mul!(similar(X, T, (size(X, 1), size(A, 2))), X, A, one(T), zero(T)))
 
-function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, α::Number, β::Number)
+function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, α::Number, β::Number)
     A = adjA.parent
     mX, nX = size(X)
     nX == size(A, 2) || throw(DimensionMismatch())
@@ -150,10 +150,10 @@ function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, adjA::Adjoint{<:An
     end
     C
 end
-*(X::AdjOrTransStridedMatrix{TX}, adjA::Adjoint{<:Any,<:SparseMatrixCSC{TvA,TiA}}) where {TX,TvA,TiA} =
+*(X::AdjOrTransStridedMatrix{TX}, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC{TvA,TiA}}) where {TX,TvA,TiA} =
     (T = promote_op(matprod, TX, TvA); mul!(similar(X, T, (size(X, 1), size(adjA, 2))), X, adjA, one(T), zero(T)))
 
-function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, transA::Transpose{<:Any,<:SparseMatrixCSC}, α::Number, β::Number)
+function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, α::Number, β::Number)
     A = transA.parent
     mX, nX = size(X)
     nX == size(A, 2) || throw(DimensionMismatch())
@@ -169,7 +169,7 @@ function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, transA::Transpose{
     end
     C
 end
-*(X::AdjOrTransStridedMatrix{TX}, transA::Transpose{<:Any,<:SparseMatrixCSC{TvA,TiA}}) where {TX,TvA,TiA} =
+*(X::AdjOrTransStridedMatrix{TX}, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC{TvA,TiA}}) where {TX,TvA,TiA} =
     (T = promote_op(matprod, TX, TvA); mul!(similar(X, T, (size(X, 1), size(transA, 2))), X, transA, one(T), zero(T)))
 
 function (*)(D::Diagonal, A::AbstractSparseMatrixCSC)
@@ -185,12 +185,12 @@ end
 # http://dl.acm.org/citation.cfm?id=355796
 
 *(A::AbstractSparseMatrixCSC{Tv,Ti}, B::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = spmatmul(A,B)
-*(A::AbstractSparseMatrixCSC{Tv,Ti}, B::Adjoint{<:Any,<:SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = spmatmul(A, copy(B))
-*(A::AbstractSparseMatrixCSC{Tv,Ti}, B::Transpose{<:Any,<:SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = spmatmul(A, copy(B))
-*(A::Transpose{<:Any,<:SparseMatrixCSC{Tv,Ti}}, B::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = spmatmul(copy(A), B)
-*(A::Adjoint{<:Any,<:SparseMatrixCSC{Tv,Ti}}, B::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = spmatmul(copy(A), B)
-*(A::Adjoint{<:Any,<:SparseMatrixCSC{Tv,Ti}}, B::Adjoint{<:Any,<:SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = spmatmul(copy(A), copy(B))
-*(A::Transpose{<:Any,<:SparseMatrixCSC{Tv,Ti}}, B::Transpose{<:Any,<:SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = spmatmul(copy(A), copy(B))
+*(A::AbstractSparseMatrixCSC{Tv,Ti}, B::Adjoint{<:Any,<:AbstractSparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = spmatmul(A, copy(B))
+*(A::AbstractSparseMatrixCSC{Tv,Ti}, B::Transpose{<:Any,<:AbstractSparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = spmatmul(A, copy(B))
+*(A::Transpose{<:Any,<:AbstractSparseMatrixCSC{Tv,Ti}}, B::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = spmatmul(copy(A), B)
+*(A::Adjoint{<:Any,<:AbstractSparseMatrixCSC{Tv,Ti}}, B::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = spmatmul(copy(A), B)
+*(A::Adjoint{<:Any,<:AbstractSparseMatrixCSC{Tv,Ti}}, B::Adjoint{<:Any,<:AbstractSparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = spmatmul(copy(A), copy(B))
+*(A::Transpose{<:Any,<:AbstractSparseMatrixCSC{Tv,Ti}}, B::Transpose{<:Any,<:AbstractSparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = spmatmul(copy(A), copy(B))
 
 # Gustavsen's matrix multiplication algorithm revisited.
 # The result rowval vector is already sorted by construction.
@@ -779,9 +779,9 @@ function nzrangelo(A, i)
 end
 ## end of symmetric/Hermitian
 
-\(A::Transpose{<:Real,<:Hermitian{<:Real,<:SparseMatrixCSC}}, B::Vector) = A.parent \ B
-\(A::Transpose{<:Complex,<:Hermitian{<:Complex,<:SparseMatrixCSC}}, B::Vector) = copy(A) \ B
-\(A::Transpose{<:Number,<:Symmetric{<:Number,<:SparseMatrixCSC}}, B::Vector) = A.parent \ B
+\(A::Transpose{<:Real,<:Hermitian{<:Real,<:AbstractSparseMatrixCSC}}, B::Vector) = A.parent \ B
+\(A::Transpose{<:Complex,<:Hermitian{<:Complex,<:AbstractSparseMatrixCSC}}, B::Vector) = copy(A) \ B
+\(A::Transpose{<:Number,<:Symmetric{<:Number,<:AbstractSparseMatrixCSC}}, B::Vector) = A.parent \ B
 
 function rdiv!(A::AbstractSparseMatrixCSC{T}, D::Diagonal{T}) where T
     dd = D.diag
@@ -1434,7 +1434,7 @@ function \(A::AbstractSparseMatrixCSC, B::AbstractVecOrMat)
 end
 for (xformtype, xformop) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
     @eval begin
-        function \(xformA::($xformtype){<:Any,<:SparseMatrixCSC}, B::AbstractVecOrMat)
+        function \(xformA::($xformtype){<:Any,<:AbstractSparseMatrixCSC}, B::AbstractVecOrMat)
             A = xformA.parent
             require_one_based_indexing(A, B)
             m, n = size(A)
@@ -1489,7 +1489,7 @@ end
 #         return F
 #     end
 # end
-function factorize(A::LinearAlgebra.RealHermSymComplexHerm{Float64,<:SparseMatrixCSC})
+function factorize(A::LinearAlgebra.RealHermSymComplexHerm{Float64,<:AbstractSparseMatrixCSC})
     F = cholesky(A; check = false)
     if LinearAlgebra.issuccess(F)
         return F

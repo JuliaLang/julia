@@ -39,7 +39,7 @@ SparseVecOrMat = Union{SparseVector,SparseMatrixCSC}
 struct SparseVecStyle <: Broadcast.AbstractArrayStyle{1} end
 struct SparseMatStyle <: Broadcast.AbstractArrayStyle{2} end
 Broadcast.BroadcastStyle(::Type{<:SparseVector}) = SparseVecStyle()
-Broadcast.BroadcastStyle(::Type{<:SparseMatrixCSC}) = SparseMatStyle()
+Broadcast.BroadcastStyle(::Type{<:AbstractSparseMatrixCSC}) = SparseMatStyle()
 const SPVM = Union{SparseVecStyle,SparseMatStyle}
 
 # SparseVecStyle handles 0-1 dimensions, SparseMatStyle 0-2 dimensions.

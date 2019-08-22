@@ -32,7 +32,7 @@ SparseVector(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv}) where {Tv,Ti} =
 
 # Define an alias for a view of a whole column of a SparseMatrixCSC. Many methods can be written for the
 # union of such a view and a SparseVector so we define an alias for such a union as well
-const SparseColumnView{T}  = SubArray{T,1,<:SparseMatrixCSC,Tuple{Base.Slice{Base.OneTo{Int}},Int},false}
+const SparseColumnView{T}  = SubArray{T,1,<:AbstractSparseMatrixCSC,Tuple{Base.Slice{Base.OneTo{Int}},Int},false}
 const SparseVectorUnion{T} = Union{SparseVector{T}, SparseColumnView{T}}
 const AdjOrTransSparseVectorUnion{T} = LinearAlgebra.AdjOrTrans{T, <:SparseVectorUnion{T}}
 
@@ -434,7 +434,7 @@ SparseVector{Tv}(s::SparseVector{<:Any,Ti}) where {Tv,Ti} =
 convert(T::Type{<:SparseVector}, m::AbstractVector) = m isa T ? m : T(m)
 
 convert(T::Type{<:SparseVector}, m::AbstractSparseMatrixCSC) = T(m)
-convert(T::Type{<:SparseMatrixCSC}, v::SparseVector) = T(v)
+convert(T::Type{<:AbstractSparseMatrixCSC}, v::SparseVector) = T(v)
 
 ### copying
 function prep_sparsevec_copy_dest!(A::SparseVector, lB, nnzB)
@@ -1673,16 +1673,16 @@ end
 
 # * and *(Tranpose(A), B)
 
-mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
+mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     (A = transA.parent; mul!(y, transpose(A), x, one(Tx), zero(Ty)))
 
-mul!(y::AbstractVector, transA::Transpose{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
+mul!(y::AbstractVector, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
     (A = transA.parent; _At_or_Ac_mul_B!(*, y, A, x, α, β))
 
-mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
+mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     (A = adjA.parent; mul!(y, adjoint(A), x, one(Tx), zero(Ty)))
 
-mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
+mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
     (A = adjA.parent; _At_or_Ac_mul_B!(dot, y, A, x, α, β))
 
 function _At_or_Ac_mul_B!(tfun::Function,
@@ -1723,10 +1723,10 @@ function *(A::AbstractSparseMatrixCSC, x::AbstractSparseVector)
     _dense2sparsevec(y, initcap)
 end
 
-*(transA::Transpose{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector) =
+*(transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector) =
     (A = transA.parent; _At_or_Ac_mul_B(*, A, x))
 
-*(adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector) =
+*(adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector) =
     (A = adjA.parent; _At_or_Ac_mul_B(dot, A, x))
 
 function _At_or_Ac_mul_B(tfun::Function, A::AbstractSparseMatrixCSC{TvA,TiA}, x::AbstractSparseVector{TvX,TiX}) where {TvA,TiA,TvX,TiX}
