@@ -33,7 +33,7 @@ using LinearAlgebra
 
 # (0) BroadcastStyle rules and convenience types for dispatch
 
-SparseVecOrMat = Union{SparseVector,SparseMatrixCSC}
+SparseVecOrMat = Union{SparseVector,AbstractSparseMatrixCSC}
 
 # broadcast container type promotion for combinations of sparse arrays and other types
 struct SparseVecStyle <: Broadcast.AbstractArrayStyle{1} end

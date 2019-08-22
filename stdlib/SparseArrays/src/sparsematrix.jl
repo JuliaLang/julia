@@ -79,9 +79,9 @@ size(S::SparseMatrixCSC) = (getfield(S, :m), getfield(S, :n))
 # insight is that getcolptr on a SparseMatrixCSCView returns an offset view of the colptr of the
 # underlying SparseMatrixCSC
 const SparseMatrixCSCView{Tv,Ti} =
-    SubArray{Tv,2,SparseMatrixCSC{Tv,Ti},
+    SubArray{Tv,2,<:AbstractSparseMatrixCSC{Tv,Ti},
         Tuple{Base.Slice{Base.OneTo{Int}},I}} where {I<:AbstractUnitRange}
-const SparseMatrixCSCUnion{Tv,Ti} = Union{SparseMatrixCSC{Tv,Ti}, SparseMatrixCSCView{Tv,Ti}}
+const SparseMatrixCSCUnion{Tv,Ti} = Union{AbstractSparseMatrixCSC{Tv,Ti}, SparseMatrixCSCView{Tv,Ti}}
 
 getcolptr(S::SparseMatrixCSC)     = getfield(S, :colptr)
 getcolptr(S::SparseMatrixCSCView) = view(getcolptr(parent(S)), first(axes(S, 2)):(last(axes(S, 2)) + 1))
@@ -532,16 +532,16 @@ function SparseMatrixCSC{Tv,Ti}(M::StridedMatrix) where {Tv,Ti}
 end
 SparseMatrixCSC(M::Adjoint{<:Any,<:AbstractSparseMatrixCSC}) = copy(M)
 SparseMatrixCSC(M::Transpose{<:Any,<:AbstractSparseMatrixCSC}) = copy(M)
-SparseMatrixCSC{Tv}(M::Adjoint{Tv,SparseMatrixCSC{Tv}}) where {Tv} = copy(M)
-SparseMatrixCSC{Tv}(M::Transpose{Tv,SparseMatrixCSC{Tv}}) where {Tv} = copy(M)
-SparseMatrixCSC{Tv,Ti}(M::Adjoint{Tv,SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = copy(M)
-SparseMatrixCSC{Tv,Ti}(M::Transpose{Tv,SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = copy(M)
+SparseMatrixCSC{Tv}(M::Adjoint{Tv,<:AbstractSparseMatrixCSC{Tv}}) where {Tv} = copy(M)
+SparseMatrixCSC{Tv}(M::Transpose{Tv,<:AbstractSparseMatrixCSC{Tv}}) where {Tv} = copy(M)
+SparseMatrixCSC{Tv,Ti}(M::Adjoint{Tv,<:AbstractSparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = copy(M)
+SparseMatrixCSC{Tv,Ti}(M::Transpose{Tv,<:AbstractSparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = copy(M)
 
 # converting from adjoint or transpose sparse matrices to sparse matrices with different eltype
-SparseMatrixCSC{Tv}(M::Adjoint{<:Any,SparseMatrixCSC}) where {Tv} = SparseMatrixCSC{Tv}(copy(M))
-SparseMatrixCSC{Tv}(M::Transpose{<:Any,SparseMatrixCSC}) where {Tv} = SparseMatrixCSC{Tv}(copy(M))
-SparseMatrixCSC{Tv,Ti}(M::Adjoint{<:Any,SparseMatrixCSC}) where {Tv,Ti} = SparseMatrixCSC{Tv,Ti}(copy(M))
-SparseMatrixCSC{Tv,Ti}(M::Transpose{<:Any,SparseMatrixCSC}) where {Tv,Ti} = SparseMatrixCSC{Tv,Ti}(copy(M))
+SparseMatrixCSC{Tv}(M::Adjoint{<:Any,<:AbstractSparseMatrixCSC}) where {Tv} = SparseMatrixCSC{Tv}(copy(M))
+SparseMatrixCSC{Tv}(M::Transpose{<:Any,<:AbstractSparseMatrixCSC}) where {Tv} = SparseMatrixCSC{Tv}(copy(M))
+SparseMatrixCSC{Tv,Ti}(M::Adjoint{<:Any,<:AbstractSparseMatrixCSC}) where {Tv,Ti} = SparseMatrixCSC{Tv,Ti}(copy(M))
+SparseMatrixCSC{Tv,Ti}(M::Transpose{<:Any,<:AbstractSparseMatrixCSC}) where {Tv,Ti} = SparseMatrixCSC{Tv,Ti}(copy(M))
 
 # converting from SparseMatrixCSC to other matrix types
 function Matrix(S::AbstractSparseMatrixCSC{Tv}) where Tv

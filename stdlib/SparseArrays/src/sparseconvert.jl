@@ -174,7 +174,7 @@ function _sparsem(fnzrange::Function, sA::SparseMatrixCSCSymmHerm{Tv}) where {Tv
     _sparse_gen(m, n, newcolptr, newrowval, newnzval)
 end
 
-# 2 cases: Unit(Upper|Lower)Triangular{Tv,SparseMatrixCSC}
+# 2 cases: Unit(Upper|Lower)Triangular{Tv,AbstractSparseMatrixCSC}
 function _sparsem(A::AbstractTriangularSparse{Tv}) where Tv
     S = A.data
     rowval = rowvals(S)

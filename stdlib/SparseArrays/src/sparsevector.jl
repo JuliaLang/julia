@@ -699,7 +699,7 @@ function getindex(A::AbstractSparseMatrixCSC{Tv,Ti}, I::AbstractVector) where {T
     SparseVector(n, rowvalB, nzvalB)
 end
 
-Base.copy(a::SubArray{<:Any,<:Any,<:Union{SparseVector, SparseMatrixCSC}}) = a.parent[a.indices...]
+Base.copy(a::SubArray{<:Any,<:Any,<:Union{SparseVector, AbstractSparseMatrixCSC}}) = a.parent[a.indices...]
 
 function findall(x::SparseVector)
     return findall(identity, x)
@@ -1016,7 +1016,7 @@ vcat(X::Union{Vector,SparseVector}...) = vcat(map(sparse, X)...)
 
 # TODO: A definition similar to the third exists in base/linalg/bidiag.jl. These definitions
 # should be consolidated in a more appropriate location, e.g. base/linalg/special.jl.
-const _SparseArrays = Union{SparseVector, SparseMatrixCSC, Adjoint{<:Any,<:SparseVector}, Transpose{<:Any,<:SparseVector}}
+const _SparseArrays = Union{SparseVector, AbstractSparseMatrixCSC, Adjoint{<:Any,<:SparseVector}, Transpose{<:Any,<:SparseVector}}
 const _SpecialArrays = Union{Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal}
 const _SparseConcatArrays = Union{_SpecialArrays, _SparseArrays}
 
@@ -2036,7 +2036,7 @@ function _fillnonzero!(arr::SparseVector{Tv,Ti}, val) where {Tv,Ti}
 end
 
 import Base.fill!
-function fill!(A::Union{SparseVector, SparseMatrixCSC}, x)
+function fill!(A::Union{SparseVector, AbstractSparseMatrixCSC}, x)
     T = eltype(A)
     xT = convert(T, x)
     if xT == zero(T)

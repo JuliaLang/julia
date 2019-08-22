@@ -1304,12 +1304,12 @@ kron(A::AbstractSparseMatrixCSC, x::SparseVector) = kron(A, SparseMatrixCSC(x))
 kron(x::SparseVector, A::AbstractSparseMatrixCSC) = kron(SparseMatrixCSC(x), A)
 
 # sparse vec/mat ⊗ vec/mat and vice versa
-kron(A::Union{SparseVector,SparseMatrixCSC}, B::VecOrMat) = kron(A, sparse(B))
-kron(A::VecOrMat, B::Union{SparseVector,SparseMatrixCSC}) = kron(sparse(A), B)
+kron(A::Union{SparseVector,AbstractSparseMatrixCSC}, B::VecOrMat) = kron(A, sparse(B))
+kron(A::VecOrMat, B::Union{SparseVector,AbstractSparseMatrixCSC}) = kron(sparse(A), B)
 
 # sparse vec/mat ⊗ Diagonal and vice versa
-kron(A::Diagonal{T}, B::Union{SparseVector{S}, SparseMatrixCSC{S}}) where {T<:Number, S<:Number} = kron(sparse(A), B)
-kron(A::Union{SparseVector{T}, SparseMatrixCSC{T}}, B::Diagonal{S}) where {T<:Number, S<:Number} = kron(A, sparse(B))
+kron(A::Diagonal{T}, B::Union{SparseVector{S}, AbstractSparseMatrixCSC{S}}) where {T<:Number, S<:Number} = kron(sparse(A), B)
+kron(A::Union{SparseVector{T}, AbstractSparseMatrixCSC{T}}, B::Diagonal{S}) where {T<:Number, S<:Number} = kron(A, sparse(B))
 
 # sparse outer product
 kron(A::SparseVectorUnion, B::AdjOrTransSparseVectorUnion) = A .* B
@@ -1480,7 +1480,7 @@ function factorize(A::AbstractSparseMatrixCSC)
     end
 end
 
-# function factorize(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}) where Ti
+# function factorize(A::Symmetric{Float64,AbstractSparseMatrixCSC{Float64,Ti}}) where Ti
 #     F = cholesky(A)
 #     if LinearAlgebra.issuccess(F)
 #         return F
