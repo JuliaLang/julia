@@ -2370,6 +2370,29 @@ function filter(f, a::AbstractArray)
 end
 
 """
+    filter(f)
+
+Return a function filtering its inputs with `f`.
+
+# Examples
+```jldoctest
+julia> a = collect(1:8);
+
+julia> remove_odd = filter(iseven);
+
+julia> atleast5 = filter(>=(5));
+
+julia> remove_odd(atleast5(a))
+2-element Array{Int64,1}:
+ 6
+ 8
+```
+"""
+Base.filter(f) = function(iters...)
+    filter(f, iters...)
+end
+
+"""
     filter!(f, a::AbstractVector)
 
 Update `a`, removing elements for which `f` is `false`.

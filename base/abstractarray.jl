@@ -2151,7 +2151,35 @@ julia> a
 """
 map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F} = map_n!(f, dest, As)
 
-map(f) = f()
+"""
+    map(f)
+
+Return a function mapping `f` to its input.
+# Examples
+```jldoctest
+julia> a = ones(3);
+
+julia> doubler = map(x -> 2x);
+
+julia> tripler = map(x -> 3x);
+
+julia> doubler(tripler(a))
+3-element Array{Float64,1}:
+ 6.0
+ 6.0
+ 6.0
+
+julia> a |> doubler |> tripler
+3-element Array{Float64,1}:
+ 6.0
+ 6.0
+ 6.0
+```
+"""
+Base.map(f) = function(iters...)
+    map(f, iters...)
+end
+
 map(f, iters...) = collect(Generator(f, iters...))
 
 # multi-item push!, pushfirst! (built on top of type-specific 1-item version)
