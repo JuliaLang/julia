@@ -25,6 +25,13 @@ of type `Tv` and index type `Ti`. Alias for `AbstractSparseArray{Tv,Ti,2}`.
 const AbstractSparseMatrix{Tv,Ti} = AbstractSparseArray{Tv,Ti,2}
 
 """
+    AbstractSparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
+
+Supertype for matrix with compressed sparse column (CSC).
+"""
+abstract type AbstractSparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti} end
+
+"""
     issparse(S)
 
 Returns `true` if `S` is sparse, and `false` otherwise.

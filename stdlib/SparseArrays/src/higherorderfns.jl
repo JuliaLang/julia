@@ -7,7 +7,7 @@ module HigherOrderFns
 import Base: map, map!, broadcast, copy, copyto!
 
 using Base: front, tail, to_shape
-using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseVector,
+using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseVector, AbstractSparseMatrixCSC,
                       AbstractSparseMatrix, AbstractSparseArray, indtype, nnz, nzrange,
                       SparseVectorUnion, AdjOrTransSparseVectorUnion, nonzeroinds, nonzeros, rowvals, getcolptr
 using Base.Broadcast: BroadcastStyle, Broadcasted, flatten
