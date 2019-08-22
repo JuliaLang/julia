@@ -70,7 +70,14 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
             isempty(st) && error("\$ right before end of command")
             stpos, c = popfirst!(st)
             isspace(c) && error("space not allowed right after \$")
-            ex, j = Meta.parse(s,stpos,greedy=false)
+            if startswith(SubString(s, stpos), "var\"")
+                # Disallow var"#" syntax in cmd interpolations.
+                # TODO: Allow only identifiers after the $ for consistency with
+                # string interpolation syntax (see #3150)
+                ex, j = :var, stpos+3
+            else
+                ex, j = Meta.parse(s,stpos,greedy=false)
+            end
             last_parse = (stpos:prevind(s, j)) .+ s.offset
             update_arg(ex);
             s = SubString(s, j)
