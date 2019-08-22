@@ -223,11 +223,6 @@ lmul!(J::UniformScaling, B::AbstractVecOrMat) = lmul!(J.λ, B)
 rdiv!(A::AbstractMatrix, J::UniformScaling) = rdiv!(A, J.λ)
 ldiv!(J::UniformScaling, B::AbstractVecOrMat) = ldiv!(J.λ, B)
 
-Broadcast.broadcasted(::typeof(*), x::Number,J::UniformScaling) = UniformScaling(x*J.λ)
-Broadcast.broadcasted(::typeof(*), J::UniformScaling,x::Number) = UniformScaling(J.λ*x)
-
-Broadcast.broadcasted(::typeof(/), J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
-
 ==(J1::UniformScaling,J2::UniformScaling) = (J1.λ == J2.λ)
 
 ## equality comparison with UniformScaling

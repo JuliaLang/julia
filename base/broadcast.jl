@@ -253,7 +253,7 @@ of the `Broadcasted` object empty (populated with [`nothing`](@ref)).
 """
 @inline function instantiate(bc::Broadcasted{Style}) where {Style}
     if bc.axes isa Nothing # Not done via dispatch to make it easier to extend instantiate(::Broadcasted{Style})
-        axes = combine_axes(bc.args...)
+        axes = Base.axes(bc)
     else
         axes = bc.axes
         check_broadcast_axes(axes, bc.args...)
