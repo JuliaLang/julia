@@ -163,17 +163,39 @@ See also: [`basename`](@ref)
 """
     basename(path::AbstractString) -> AbstractString
 
-Get the file name part of a path.
+Get the file/dir name part of a path.
+
+Generally, trailing '/' will be ignored. There're some other exceptions:
+
+* ""  ===> "."
+* "~" ==> basename(ENV["HOME"])
+* "/" ==> "/"
+* "//" => "/"
 
 # Examples
 ```jldoctest
 julia> basename("/home/myuser/example.jl")
 "example.jl"
+julia> basename("/opt/")
+"opt"
 ```
 
 See also: [`dirname`](@ref)
+
+Reference: [POSIX basename](http://pubs.opengroup.org/onlinepubs/9699919799/functions/basename.html)
 """
-basename(path::AbstractString) = splitdir(path)[2]
+function basename(path::AbstractString)
+    if path == ""
+        return "."
+    elseif path == "/"
+        return "/"
+    elseif path == "~"
+        return basename(ENV["HOME"])
+    else
+        splited = splitdir(path)
+        return isempty(splited[2]) ? basename(splited[1]) : splited[2]
+    end
+end
 
 """
     splitext(path::AbstractString) -> (AbstractString, AbstractString)

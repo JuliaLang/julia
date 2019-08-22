@@ -1337,6 +1337,22 @@ let n = tempname()
     rm(n)
 end
 
+@testset "basename" begin
+    # reference http://pubs.opengroup.org/onlinepubs/9699919799/functions/basename.html
+    @test basename("") == "."
+    @test basename("/") == "/"
+    @test basename("//") == "/"
+    @test basename("///") == "/"
+    @test basename("usr") == "usr"
+    @test basename("usr/") == "usr"
+    @test basename("/usr/") == "usr"
+    @test basename("/usr/lib") == "lib"
+    @test basename("//usr//lib//") == "lib"
+    @test basename("/home//dwc//") == "dwc"
+
+    @test basename("~") == basename(ENV["HOME"])
+end
+
 @test_throws ArgumentError mkpath("fakepath", mode = -1)
 
 @testset "mktempdir 'prefix' argument" begin
