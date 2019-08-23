@@ -2078,7 +2078,7 @@
                  ((any vararg? (cddr e))
                   ;; call with splat
                   (let ((argl (cddr e)))
-                    ;; wrap sequences of non-... arguments in tuple()
+                    ;; wrap ... arguments in Tuple() and sequences of non-... arguments in tuple()
                     (define (tuple-wrap a run)
                       (if (null? a)
                           (if (null? run) '()
@@ -2087,10 +2087,10 @@
                             (if (and (length= x 2)
                                      (eq? (car x) '...))
                                 (if (null? run)
-                                    (list* (cadr x)
+                                    (list* `(call (core Tuple) ,(cadr x))
                                            (tuple-wrap (cdr a) '()))
                                     (list* `(call (core tuple) ,.(reverse run))
-                                           (cadr x)
+                                           `(call (core Tuple) ,(cadr x))
                                            (tuple-wrap (cdr a) '())))
                                 (tuple-wrap (cdr a) (cons x run))))))
                     (expand-forms
