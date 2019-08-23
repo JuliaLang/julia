@@ -687,34 +687,6 @@ end
 # so it is used here as the basis of float div().
 div(x::T, y::T) where {T<:Real} = convert(T,round((x-rem(x,y))/y))
 
-"""
-    fld(x, y)
-
-Largest integer less than or equal to `x/y`.
-
-# Examples
-```jldoctest
-julia> fld(7.3,5.5)
-1.0
-```
-"""
-fld(x::T, y::T) where {T<:Real} = convert(T,round((x-mod(x,y))/y))
-
-"""
-    cld(x, y)
-
-Smallest integer larger than or equal to `x/y`.
-
-# Examples
-```jldoctest
-julia> cld(5.5,2.2)
-3.0
-```
-"""
-cld(x::T, y::T) where {T<:Real} = convert(T,round((x-modCeil(x,y))/y))
-#rem(x::T, y::T) where {T<:Real} = convert(T,x-y*trunc(x/y))
-#mod(x::T, y::T) where {T<:Real} = convert(T,x-y*floor(x/y))
-modCeil(x::T, y::T) where {T<:Real} = convert(T,x-y*ceil(x/y))
 
 # operator alias
 

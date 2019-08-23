@@ -465,12 +465,18 @@ big(n::Integer) = convert(BigInt, n)
 
 # Binary ops
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
-                 (:fld, :fdiv_q), (:div, :tdiv_q), (:mod, :fdiv_r), (:rem, :tdiv_r),
+                 (:mod, :fdiv_r), (:rem, :tdiv_r),
                  (:gcd, :gcd), (:lcm, :lcm),
                  (:&, :and), (:|, :ior), (:xor, :xor))
     @eval begin
         ($fJ)(x::BigInt, y::BigInt) = MPZ.$fC(x, y)
     end
+end
+
+for (r, f) in ((RoundToZero, :tdiv_q),
+               (RoundDown, :fdiv_q),
+               (RoundUp, :cdiv_q))
+    @eval div(x::BigInt, y::BigInt, ::typeof($r)) = MPZ.$f(x, y)
 end
 
 /(x::BigInt, y::BigInt) = float(x)/float(y)

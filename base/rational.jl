@@ -350,22 +350,18 @@ end
 ==(z::Complex , x::Rational) = isreal(z) & (real(z) == x)
 ==(x::Rational, z::Complex ) = isreal(z) & (real(z) == x)
 
-for op in (:div, :fld, :cld)
-    @eval begin
-        function ($op)(x::Rational, y::Integer )
-            xn,yn = divgcd(x.num,y)
-            ($op)(xn, checked_mul(x.den,yn))
-        end
-        function ($op)(x::Integer,  y::Rational)
-            xn,yn = divgcd(x,y.num)
-            ($op)(checked_mul(xn,y.den), yn)
-        end
-        function ($op)(x::Rational, y::Rational)
-            xn,yn = divgcd(x.num,y.num)
-            xd,yd = divgcd(x.den,y.den)
-            ($op)(checked_mul(xn,yd), checked_mul(xd,yn))
-        end
-    end
+function div(x::Rational, y::Integer, r::RoundingMode)
+    xn,yn = divgcd(x.num,y)
+    div(xn, checked_mul(x.den,yn), r)
+end
+function div(x::Integer, y::Rational, r::RoundingMode)
+    xn,yn = divgcd(x,y.num)
+    div(checked_mul(xn,y.den), yn, r)
+end
+function div(x::Rational, y::Rational, r::RoundingMode)
+    xn,yn = divgcd(x.num,y.num)
+    xd,yd = divgcd(x.den,y.den)
+    div(checked_mul(xn,yd), checked_mul(xd,yn), r)
 end
 
 trunc(::Type{T}, x::Rational) where {T} = convert(T,div(x.num,x.den))
