@@ -54,6 +54,12 @@ function nonzeros(x::SparseColumnView)
     return y
 end
 
+"""
+    SparseArrays.nonzeroinds(x)
+
+Return indices of structural non-zeros of sparse vector `x`.  This function satisfies
+the invariance `x[nonzeroinds(x)] == nonzeros(x)`.
+"""
 nonzeroinds(x::SparseVector) = getfield(x, :nzind)
 function nonzeroinds(x::SparseColumnView)
     rowidx, colidx = parentindices(x)

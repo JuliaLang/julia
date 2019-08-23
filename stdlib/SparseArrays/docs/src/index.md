@@ -220,6 +220,7 @@ SparseArrays.sprandn
 SparseArrays.nonzeros
 SparseArrays.rowvals
 SparseArrays.nzrange
+SparseArrays.nonzeroinds
 SparseArrays.droptol!
 SparseArrays.dropzeros!
 SparseArrays.dropzeros
