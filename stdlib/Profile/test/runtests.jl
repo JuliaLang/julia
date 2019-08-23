@@ -52,8 +52,16 @@ let iobuf = IOBuffer()
     truncate(iobuf, 0)
     Profile.print(iobuf, format=:flat, sortedby=:count)
     @test !isempty(String(take!(iobuf)))
-    Profile.clear()
-    @test isempty(Profile.fetch())
+    Profile.print(iobuf, format=:tree, recur=:flat)
+    str = String(take!(iobuf))
+    @test !isempty(str)
+    truncate(iobuf, 0)
+end
+
+Profile.clear()
+@test isempty(Profile.fetch())
+
+let
     @test Profile.callers("\\") !== nothing
     @test Profile.callers(\) !== nothing
     # linerange with no filename provided should fail

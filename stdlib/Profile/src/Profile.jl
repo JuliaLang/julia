@@ -89,14 +89,16 @@ struct ProfileFormat
     sortedby::Symbol
     combine::Bool
     C::Bool
+    recur::Symbol
     function ProfileFormat(;
         C = false,
         combine = true,
         maxdepth::Int = typemax(Int),
         mincount::Int = 0,
         noisefloor = 0,
-        sortedby::Symbol = :filefuncline)
-        return new(maxdepth, mincount, noisefloor, sortedby, combine, C)
+        sortedby::Symbol = :filefuncline,
+        recur::Symbol = :off)
+        return new(maxdepth, mincount, noisefloor, sortedby, combine, C, recur)
     end
 end
 
@@ -126,30 +128,42 @@ The keyword arguments can be any combination of:
     where `n` is the number of samples on this line, and `N` is the number of samples for the callee.
 
  - `mincount` -- Limits the printout to only those lines with at least `mincount` occurrences.
+
+ - `recur` -- Controls the recursion handling in `:tree` format. `:off` (default) prints the tree as normal. `:flat` instead
+    compresses any recursion (by ip), showing the approximate effect of converting any self-recursion into an iterator.
+    `:flatc` does the same but also includes collapsing of C frames (may do odd things around `jl_apply`).
 """
-function print(io::IO, data::Vector{<:Unsigned} = fetch(), lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data);
+function print(io::IO,
+        data::Vector{<:Unsigned} = fetch(),
+        lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data)
+        ;
         format = :tree,
         C = false,
         combine = true,
         maxdepth::Int = typemax(Int),
         mincount::Int = 0,
         noisefloor = 0,
-        sortedby::Symbol = :filefuncline)
-    print(io, data, lidict, ProfileFormat(C = C,
+        sortedby::Symbol = :filefuncline,
+        recur::Symbol = :off)
+    print(io, data, lidict, ProfileFormat(
+            C = C,
             combine = combine,
             maxdepth = maxdepth,
             mincount = mincount,
             noisefloor = noisefloor,
-            sortedby = sortedby),
+            sortedby = sortedby,
+            recur = recur),
         format)
 end
 
 function print(io::IO, data::Vector{<:Unsigned}, lidict::Union{LineInfoDict, LineInfoFlatDict}, fmt::ProfileFormat, format::Symbol)
     cols::Int = Base.displaysize(io)[2]
     data = convert(Vector{UInt64}, data)
-    if format == :tree
+    fmt.recur ∈ (:off, :flat, :flatc) || throw(ArgumentError("recur value not recognized"))
+    if format === :tree
         tree(io, data, lidict, cols, fmt)
-    elseif format == :flat
+    elseif format === :flat
+        fmt.recur === :off || throw(ArgumentError("format flat only implements recur=:off"))
         flat(io, data, lidict, cols, fmt)
     else
         throw(ArgumentError("output format $(repr(format)) not recognized"))
@@ -518,26 +532,63 @@ mutable struct StackFrameTree{T} # where T <: Union{UInt64, StackFrame}
     frame::StackFrame
     count::Int
     down::Dict{T, StackFrameTree{T}}
-    # construction helpers:
+    # construction workers:
+    recur::Bool
     builder_key::Vector{UInt64}
     builder_value::Vector{StackFrameTree{T}}
     up::StackFrameTree{T}
-    StackFrameTree{T}() where {T} = new(UNKNOWN, 0, Dict{T, StackFrameTree{T}}(), UInt64[], StackFrameTree{T}[])
+    StackFrameTree{T}() where {T} = new(UNKNOWN, 0, Dict{T, StackFrameTree{T}}(), false, UInt64[], StackFrameTree{T}[])
 end
 
 # turn a list of backtraces into a tree (implicitly separated by NULL markers)
-function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineInfoFlatDict, LineInfoDict}, C::Bool) where {T}
+function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineInfoFlatDict, LineInfoDict}, C::Bool, recur::Symbol) where {T}
     parent = root
-    for i in length(all):-1:1
+    tops = Vector{StackFrameTree{T}}()
+    build = Vector{StackFrameTree{T}}()
+    startframe = length(all)
+    for i in startframe:-1:1
         ip = all[i]
         if ip == 0
             # sentinel value indicates the start of a new backtrace
+            empty!(build)
+            if recur !== :off
+                # We mark all visited nodes to so we'll only count those branches
+                # once for each backtrace. Reset that now for the next backtrace.
+                push!(tops, parent)
+                for top in tops
+                    while top.recur
+                        top.recur = false
+                        top = top.up
+                    end
+                end
+                empty!(tops)
+            end
             parent = root
             parent.count += 1
+            startframe = i
         else
+            pushfirst!(build, parent)
+            if recur === :flat || recur == :flatc
+                # Rewind the `parent` tree back, if this exact ip was already present *higher* in the current tree
+                found = false
+                for j in 1:(startframe - i)
+                    if ip == all[i + j]
+                        if recur === :flat # if not flattening C frames, check that now
+                            frames = lidict[ip]
+                            frame = (frames isa Vector ? frames[1] : frames)
+                            frame.from_c && break
+                        end
+                        push!(tops, parent)
+                        parent = build[j]
+                        found = true
+                        break
+                    end
+                end
+                found && continue
+            end
             builder_key = parent.builder_key
             builder_value = parent.builder_value
-            fastkey = searchsortedfirst(parent.builder_key, ip)
+            fastkey = searchsortedfirst(builder_key, ip)
             if fastkey < length(builder_key) && builder_key[fastkey] === ip
                 # jump forward to the end of the inlining chain
                 # avoiding an extra (slow) lookup of `ip` in `lidict`
@@ -545,9 +596,12 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
                 # note that we may even have this === parent (if we're ignoring this frame ip)
                 this = builder_value[fastkey]
                 let this = this
-                    while this !== parent
-                        this.count += 1
-                        this = this.up
+                    if recur === :off || !this.recur
+                        while this !== parent && !this.recur
+                            this.count += 1
+                            this.recur = true
+                            this = this.up
+                        end
                     end
                 end
                 parent = this
@@ -561,12 +615,13 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
                 frame = (frames isa Vector ? frames[i] : frames)
                 !C && frame.from_c && continue
                 key = (T === UInt64 ? ip : frame)
-                this = get!(parent.down, key) do
-                    return StackFrameTree{T}()
+                this = get!(StackFrameTree{T}, parent.down, key)
+                if recur === :off || !this.recur
+                    this.frame = frame
+                    this.up = parent
+                    this.count += 1
+                    this.recur = true
                 end
-                this.frame = frame
-                this.up = parent
-                this.count += 1
                 parent = this
             end
             # record where the end of this chain is for this ip
@@ -575,9 +630,10 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
         end
     end
     function cleanup!(node::StackFrameTree)
-        stack = StackFrameTree[node]
+        stack = [node]
         while !isempty(stack)
             node = pop!(stack)
+            node.recur = false
             empty!(node.builder_key)
             empty!(node.builder_value)
             append!(stack, values(node.down))
@@ -590,7 +646,7 @@ end
 
 # Print the stack frame tree starting at a particular root. Uses a worklist to
 # avoid stack overflows.
-function tree(io::IO, bt::StackFrameTree, cols::Int, fmt::ProfileFormat)
+function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat) where T
     worklist = [(bt, 0, 0, "")]
     while !isempty(worklist)
         (bt, level, noisefloor, str) = popfirst!(worklist)
@@ -619,15 +675,15 @@ end
 
 function tree(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoFlatDict, LineInfoDict}, cols::Int, fmt::ProfileFormat)
     if fmt.combine
-        root = tree!(StackFrameTree{StackFrame}(), data, lidict, fmt.C)
+        root = tree!(StackFrameTree{StackFrame}(), data, lidict, fmt.C, fmt.recur)
     else
-        root = tree!(StackFrameTree{UInt64}(), data, lidict, fmt.C)
+        root = tree!(StackFrameTree{UInt64}(), data, lidict, fmt.C, fmt.recur)
     end
     if isempty(root.down)
         warning_empty()
         return
     end
-    tree(io, root, cols, fmt)
+    print_tree(io, root, cols, fmt)
     nothing
 end
 
