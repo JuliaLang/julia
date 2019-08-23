@@ -121,6 +121,8 @@ for executing in module `m`.
 See also [`code_lowered`](@ref).
 """
 lower(m::Module, @nospecialize(x)) = ccall(:jl_expand, Any, (Any, Any), x, m)
+lower(m::Module, @nospecialize(x), types::AbstractArray) =
+    ccall(:jl_expand_and_resolve, Any, (Any, Any, Core.SimpleVector), x, m, Core.svec((Symbol(t) for t in types)...))
 
 """
     @lower [m] x

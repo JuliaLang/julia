@@ -18,6 +18,8 @@ extern "C" {
 extern jl_value_t *jl_builtin_getfield;
 extern jl_value_t *jl_builtin_tuple;
 
+// Resolve references to non-locally-defined variables to become references to global
+// variables in `module` (unless the rvalue is one of the type parameters in `sparam_vals`).
 static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals,
                                    int binding_effects, int eager_resolve)
 {
@@ -191,8 +193,8 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
     return expr;
 }
 
-JL_DLLEXPORT void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m,
-                              jl_svec_t *sparam_vals, int binding_effects)
+void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals,
+                              int binding_effects)
 {
     size_t i, l = jl_array_len(stmts);
     for (i = 0; i < l; i++) {
@@ -376,7 +378,19 @@ STATIC_INLINE jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator
     return code;
 }
 
-// return a newly allocated CodeInfo for the function signature
+// Lower `ex` into Julia IR, and (if it expands into a CodeInfo) resolve global-variable
+// references in light of the provided type parameters.
+JL_DLLEXPORT jl_code_info_t *jl_expand_and_resolve(jl_value_t *ex, jl_module_t *module,
+                                                   jl_svec_t *sparam_vals) {
+    jl_code_info_t *func = (jl_code_info_t*)jl_expand((jl_value_t*)ex, module);
+    if (jl_is_code_info(func)) {
+        jl_array_t *stmts = (jl_array_t*)func->code;
+        jl_resolve_globals_in_ir(stmts, module, sparam_vals, 1);
+    }
+    return func;
+}
+
+// Return a newly allocated CodeInfo for the function signature
 // effectively described by the tuple (specTypes, env, Method) inside linfo
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 {
@@ -407,17 +421,14 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
             func = (jl_code_info_t*)ex;
         }
         else {
-            func = (jl_code_info_t*)jl_expand((jl_value_t*)ex, def->module);
-            if (!jl_is_code_info(func)) {
-                if (jl_is_expr(func) && ((jl_expr_t*)func)->head == error_sym) {
-                    ptls->in_pure_callback = 0;
-                    jl_toplevel_eval(def->module, (jl_value_t*)func);
-                }
+            // Lower the user's expression and resolve references to the type parameters
+            func = jl_expand_and_resolve(ex, def->module, linfo->sparam_vals);
+
+            if (jl_is_expr(func) && ((jl_expr_t*)func)->head == error_sym) {
+                ptls->in_pure_callback = 0;
+                jl_toplevel_eval(def->module, (jl_value_t*)func);
                 jl_error("generated function body is not pure. this likely means it contains a closure or comprehension.");
             }
-
-            jl_array_t *stmts = (jl_array_t*)func->code;
-            jl_resolve_globals_in_ir(stmts, def->module, linfo->sparam_vals, 1);
         }
 
         ptls->in_pure_callback = last_in;
