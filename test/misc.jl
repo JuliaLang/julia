@@ -747,3 +747,7 @@ end
 
 # Pointer 0-arg constructor
 @test Ptr{Cvoid}() == C_NULL
+
+# Finalizer with immutable should throw
+@test_throws ErrorException finalizer(x->nothing, 1)
+@test_throws ErrorException finalizer(C_NULL, 1)
