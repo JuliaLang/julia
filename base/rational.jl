@@ -364,6 +364,18 @@ function div(x::Rational, y::Rational, r::RoundingMode)
     div(checked_mul(xn,yd), checked_mul(xd,yn), r)
 end
 
+# For compatibility - to be removed in 2.0 when the generic fallbacks
+# are removed from div.jl
+div(x::T, y::T, r::RoundingMode) where {T<:Rational} =
+    invoke(div, Tuple{Rational, Rational, RoundingMode}, x, y, r)
+for (S, T) in ((Rational, Integer), (Integer, Rational), (Rational, Rational))
+    @eval begin
+        div(x::$S, y::$T) = div(x, y, RoundToZero)
+        fld(x::$S, y::$T) = div(x, y, RoundDown)
+        cld(x::$S, y::$T) = div(x, y, RoundUp)
+    end
+end
+
 trunc(::Type{T}, x::Rational) where {T} = convert(T,div(x.num,x.den))
 floor(::Type{T}, x::Rational) where {T} = convert(T,fld(x.num,x.den))
 ceil(::Type{T}, x::Rational) where {T} = convert(T,cld(x.num,x.den))

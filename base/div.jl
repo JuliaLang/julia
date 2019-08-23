@@ -1,10 +1,77 @@
 # Div is truncating by default
+
+"""
+    div(x, y, r::RoundingMode=RoundToZero)
+
+Compute the remainder of `x` after integer division by `y`, with the quotient rounded
+according to the rounding mode `r`. In other words, the quantity
+
+    y*round(x/y,r)
+
+without any intermediate rounding.
+
+See also: [`fld`](@ref), [`cld`](@ref) which are special cases of this function
+
+# Examples:
+```jldoctest
+julia> div(4, 3, RoundDown) # Matches fld(4, 3)
+1
+julia> div(4, 3, RoundUp) # Matches cld(4, 3)
+2
+julia> div(5, 2, RoundNearest)
+2
+julia> div(5, 2, RoundNearestTiesAway)
+3
+julia> div(-5, 2, RoundNearest)
+-2
+julia> div(-5, 2, RoundNearestTiesAway)
+-3
+julia> div(-5, 2, RoundNearestTiesUp)
+-2
+```
+"""
+div(x, y, r::RoundingMode)
+
 div(a, b) = div(a, b, RoundToZero)
+
+"""
+    rem(x, y, r::RoundingMode)
+
+Compute the remainder of `x` after integer division by `y`, with the quotient rounded
+according to the rounding mode `r`. In other words, the quantity
+
+    x - y*round(x/y,r)
+
+without any intermediate rounding.
+
+- if `r == RoundNearest`, then the result is exact, and in the interval
+  ``[-|y|/2, |y|/2]``. See also [`RoundNearest`](@ref).
+
+- if `r == RoundToZero` (default), then the result is exact, and in the interval
+  ``[0, |y|)`` if `x` is positive, or ``(-|y|, 0]`` otherwise. See also [`RoundToZero`](@ref).
+
+- if `r == RoundDown`, then the result is in the interval ``[0, y)`` if `y` is positive, or
+  ``(y, 0]`` otherwise. The result may not be exact if `x` and `y` have different signs, and
+  `abs(x) < abs(y)`. See also[`RoundDown`](@ref).
+
+- if `r == RoundUp`, then the result is in the interval `(-y,0]` if `y` is positive, or
+  `[0,-y)` otherwise. The result may not be exact if `x` and `y` have the same sign, and
+  `abs(x) < abs(y)`. See also [`RoundUp`](@ref).
+
+"""
+rem(x, y, r::RoundingMode)
+
+# TODO: Make these primitive and have the two-argument version call these
+rem(x, y, ::RoundingMode{:ToZero}) = rem(x,y)
+rem(x, y, ::RoundingMode{:Down}) = mod(x,y)
+rem(x, y, ::RoundingMode{:Up}) = mod(x,-y)
 
 """
     fld(x, y)
 
-Largest integer less than or equal to `x/y`.
+Largest integer less than or equal to `x/y`. Equivalent to `div(x, y, RoundDown)`.
+
+See also: [`div`](@ref)
 
 # Examples
 ```jldoctest
@@ -17,7 +84,9 @@ fld(a, b) = div(a, b, RoundDown)
 """
     cld(x, y)
 
-Smallest integer larger than or equal to `x/y`.
+Smallest integer larger than or equal to `x/y`. Equivalent to `div(x, y, RoundUp)`.
+
+See also: [`div`](@ref)
 
 # Examples
 ```jldoctest
@@ -27,22 +96,101 @@ julia> cld(5.5,2.2)
 """
 cld(a, b) = div(a, b, RoundUp)
 
+# divrem
+"""
+    divrem(x, y)
+
+The quotient and remainder from Euclidean division. Equivalent to `(div(x,y), rem(x,y))` or
+`(x÷y, x%y)`.
+
+# Examples
+```jldoctest
+julia> divrem(3,7)
+(0, 3)
+
+julia> divrem(7,3)
+(2, 1)
+```
+"""
+divrem(x, y) = divrem(x, y, RoundToZero)
+divrem(a, b, r::RoundingMode) = (div(a, b, r), rem(a, b, r))
+
+"""
+    fldmod(x, y)
+
+The floored quotient and modulus after division. A convenience wrapper for
+`divrem(x, y, RoundDown)`. Equivalent to `(fld(x,y), mod(x,y))`.
+"""
+fldmod(x,y) = divrem(x, y, RoundDown)
+
 # We definite generic rounding methods for other rounding modes in terms of
 # RoundToZero.
-div(x::Signed, y::Unsigned, ::typeof(RoundDown)) = div(x, y, RoundToZero) - (signbit(x) & (rem(x, y) != 0))
-div(x::Unsigned, y::Signed, ::typeof(RoundDown)) = div(x, y, RoundToZero) - (signbit(y) & (rem(x, y) != 0))
+function div(x::Signed, y::Unsigned, ::typeof(RoundDown))
+    (q, r) = divrem(x, y)
+    q - (signbit(x) & (r != 0))
+end
+function div(x::Unsigned, y::Signed, ::typeof(RoundDown))
+    (q, r) = divrem(x, y)
+    q - (signbit(y) & (r != 0))
+end
 
-div(x::Signed, y::Unsigned, ::typeof(RoundUp)) = div(x, y, RoundToZero) + (!signbit(x) & (rem(x, y) != 0))
-div(x::Unsigned, y::Signed, ::typeof(RoundUp)) = div(x, y, RoundToZero) + (!signbit(y) & (rem(x, y) != 0))
+function div(x::Signed, y::Unsigned, ::typeof(RoundUp))
+    (q, r) = divrem(x, y)
+    q + (!signbit(x) & (r != 0))
+end
+function div(x::Unsigned, y::Signed, ::typeof(RoundUp))
+    (q, r) = divrem(x, y)
+    q + (!signbit(y) & (r != 0))
+end
+
+function div(x::Integer, y::Integer, rnd::Union{typeof(RoundNearest),
+                                              typeof(RoundNearestTiesAway),
+                                              typeof(RoundNearestTiesUp)})
+    (q, r) = divrem(x, y)
+    # No remainder, we're done
+    iszero(r) && return q
+    if isodd(y)
+        # The divisior is odd - no ties are possible, just
+        # round to nearest. N.B. 2r == y is impossible because
+        # y is odd.
+        return abs(2r) > abs(y) ? q + copysign(one(q), q) : q
+    end
+    # y is even, divide y by two and check whether we have a tie.
+    # If not, as above we just round to the nearest value.
+    halfy = copysign(y >> 1, r)
+    c = cmp(r, halfy)
+    c == -1 && return q
+    c == 1 && return q + copysign(one(q), q)
+    # We have a tie (r == y/2). Select tie behavior according to
+    # rounding mode.
+    if rnd == RoundNearest
+        return iseven(q) ? q : q + copysign(one(q), q)
+    elseif rnd == RoundNearestTiesAway
+        return q + copysign(one(q), q)
+    else
+        @assert rnd == RoundNearestTiesUp
+        return sign(q) == -1 ? q : q + one(q)
+    end
+end
 
 # For bootstrapping purposes, we define div for integers directly. Provide the
 # generic signature also
 div(a::T, b::T, ::typeof(RoundToZero)) where {T<:Union{BitSigned, BitUnsigned64}} = div(a, b)
 div(a::Bool, b::Bool, r::RoundingMode) = div(a, b)
+fld(a::T, b::T) where {T<:Union{Integer,AbstractFloat}} = div(a, b, RoundDown)
+cld(a::T, b::T) where {T<:Union{Integer,AbstractFloat}} = div(a, b, RoundUp)
 
-# For compatibility
-fld(a::T, b::T) where {T<:Integer} = div(a, b, RoundDown)
-cld(a::T, b::T) where {T<:Integer} = div(a, b, RoundDown)
+# These are kept for compatibility with external packages overriding fld/cld.
+# In 2.0, packages should extend div(a,b,r) instead, in which case, these can
+# be removed.
+fld(x::Real, y::Real) = div(promote(x,y)..., RoundDown)
+cld(x::Real, y::Real) = div(promote(x,y)..., RoundUp)
+fld(x::Signed, y::Unsigned) = div(x, y, RoundDown)
+fld(x::Unsigned, y::Signed) = div(x, y, RoundDown)
+cld(x::Signed, y::Unsigned) = div(x, y, RoundUp)
+cld(x::Unsigned, y::Signed) = div(x, y, RoundUp)
+fld(x::T, y::T) where {T<:Real} = throw(MethodError(div, (x, y, RoundDown)))
+cld(x::T, y::T) where {T<:Real} = throw(MethodError(div, (x, y, RoundUp)))
 
 # Promotion
 div(x::Real, y::Real, r::RoundingMode) = div(promote(x, y)..., r)
@@ -66,9 +214,5 @@ function div(x::T, y::T, ::typeof(RoundUp)) where T<:Integer
 end
 
 # Real
-div(x::T, y::T, ::typeof(RoundDown)) where {T<:Real} = convert(T,round((x-mod(x,y))/y))
-
-div(x::T, y::T, ::typeof(RoundUp)) where {T<:Real} = convert(T,round((x-modCeil(x,y))/y))
-#rem(x::T, y::T) where {T<:Real} = convert(T,x-y*trunc(x/y))
-#mod(x::T, y::T) where {T<:Real} = convert(T,x-y*floor(x/y))
-modCeil(x::T, y::T) where {T<:Real} = convert(T,x-y*ceil(x/y))
+div(x::T, y::T, r::RoundingMode) where {T<:Real} = convert(T,round((x-rem(x,y,r))/y))
+rem(x::T, y::T, ::typeof(RoundUp)) where {T<:Real} = convert(T,x-y*ceil(x/y))

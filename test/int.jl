@@ -305,3 +305,26 @@ let i = MyInt26779(1)
     @test_throws MethodError i << 1
     @test_throws MethodError i >>> 1
 end
+
+@testset "rounding division" begin
+    for (a, b, nearest, away, up) in (
+            (3, 2, 2, 2, 2),
+            (5, 3, 2, 2, 2),
+            (-3, 2, -2, -2, -1),
+            (5, 2, 2, 3, 3),
+            (-5, 2, -2, -3, -2),
+            (-5, 3, -2, -2, -2),
+            (5, -3, -2, -2, -2))
+        for sign in (+1, -1)
+            (a, b) = (a*sign, b*sign)
+            @test div(a, b, RoundNearest) == nearest
+            @test div(a, b, RoundNearestTiesAway) == away
+            @test div(a, b, RoundNearestTiesUp) == up
+        end
+    end
+
+    @test div(typemax(Int64), typemax(Int64)-1, RoundNearest) == 1
+    @test div(-typemax(Int64), typemax(Int64)-1, RoundNearest) == -2
+    @test div(typemax(Int64), 2, RoundNearest) == 4611686018427387904
+    @test div(-typemax(Int64), 2, RoundNearestTiesUp) == -4611686018427387903
+end
