@@ -15,6 +15,12 @@ Matrix type for storing sparse matrices in the
 [Compressed Sparse Column](@ref man-csc) format. The standard way
 of constructing SparseMatrixCSC is through the [`sparse`](@ref) function.
 See also [`spzeros`](@ref), [`spdiagm`](@ref) and [`sprand`](@ref).
+
+To write algorithm operating on `SparseMatrixCSC`, use accessor methods such as `size`,
+[`nzrange`](@ref), [`rowvals`](@ref) and [`nonzeros`](@ref).  Direct fields access
+(e.g., `A.m`) must be avoided since these names are implementation details.  Using
+accessor methods also helps your algorithms to be usable for other types implementing
+those interface functions.
 """
 struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     m::Int                  # Number of rows

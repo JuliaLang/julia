@@ -35,6 +35,11 @@ Standard library changes
 
 #### SparseArrays
 
+* `SparseMatrixCSC` and `SparseVector` are refactored to use accessor functions.  It is now
+  highly recommended to use accessor methods like `size`, `nzrange`, `rowvals`, `nonzeros`,
+  and `nonzeroinds` instead of directly using field (e.g., `A.m`) whose names are
+  implementation details ([#32953]).
+
 
 #### Dates
 

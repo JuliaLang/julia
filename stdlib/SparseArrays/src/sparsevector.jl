@@ -13,6 +13,10 @@ import LinearAlgebra: promote_to_array_type, promote_to_arrays_
     SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
 
 Vector type for storing sparse vectors.
+
+To write algorithm operating on `SparseVector`, use accessor methods such as `length`,
+[`nonzeroinds`](@ref) and [`nonzeros`](@ref).  Direct fields access (e.g., `x.n`) must be
+avoided since these names are implementation details.
 """
 struct SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
     n::Int              # Length of the sparse vector
