@@ -24,7 +24,7 @@ const ORDERING_BESTAMD = Int32(9) # try COLAMD and AMD; pick best#
 # the best of AMD and METIS. METIS is not tried if it isn't installed.
 
 using SparseArrays
-using SparseArrays: getcolptr
+using SparseArrays: colptrs
 using ..SuiteSparse.CHOLMOD
 using ..SuiteSparse.CHOLMOD: change_stype!, free!
 
@@ -160,7 +160,7 @@ function LinearAlgebra.qr(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where {
                     vec(Array(CHOLMOD.Dense(HTau[]))),
                     SparseMatrixCSC(min(size(A)...),
                                     size(R_, 2),
-                                    getcolptr(R_),
+                                    colptrs(R_),
                                     rowvals(R_),
                                     nonzeros(R_)),
                     p, hpinv)

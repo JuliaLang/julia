@@ -4,7 +4,7 @@ module SparseVectorTests
 
 using Test
 using SparseArrays
-using SparseArrays: nonzeroinds, getcolptr
+using SparseArrays: nonzeroinds, colptrs
 using LinearAlgebra
 using Random
 include("forbidproperties.jl")
@@ -1008,8 +1008,8 @@ end
 
         sprmat = sprand(m, m, 0.2)
         sparsefloatmat = I + sprmat/(2m)
-        sparsecomplexmat = I + SparseMatrixCSC(m, m, getcolptr(sprmat), rowvals(sprmat), complex.(nonzeros(sprmat), nonzeros(sprmat))/(4m))
-        sparseintmat = 10m*I + SparseMatrixCSC(m, m, getcolptr(sprmat), rowvals(sprmat), round.(Int, nonzeros(sprmat)*10))
+        sparsecomplexmat = I + SparseMatrixCSC(m, m, colptrs(sprmat), rowvals(sprmat), complex.(nonzeros(sprmat), nonzeros(sprmat))/(4m))
+        sparseintmat = 10m*I + SparseMatrixCSC(m, m, colptrs(sprmat), rowvals(sprmat), round.(Int, nonzeros(sprmat)*10))
 
         denseintmat = I*10m + rand(1:m, m, m)
         densefloatmat = I + randn(m, m)/(2m)
@@ -1302,21 +1302,21 @@ end
     simA = similar(A, (6,6))
     @test typeof(simA) == SparseMatrixCSC{eltype(nonzeros(A)),eltype(nonzeroinds(A))}
     @test size(simA) == (6,6)
-    @test getcolptr(simA) == fill(1, 6+1)
+    @test colptrs(simA) == fill(1, 6+1)
     @test length(rowvals(simA)) == length(nonzeroinds(A))
     @test length(nonzeros(simA)) == length(nonzeros(A))
     # test similar with entry type and Dims{2} specification (preserves storage space only)
     simA = similar(A, Float32, (6,6))
     @test typeof(simA) == SparseMatrixCSC{Float32,eltype(nonzeroinds(A))}
     @test size(simA) == (6,6)
-    @test getcolptr(simA) == fill(1, 6+1)
+    @test colptrs(simA) == fill(1, 6+1)
     @test length(rowvals(simA)) == length(nonzeroinds(A))
     @test length(nonzeros(simA)) == length(nonzeros(A))
     # test similar with entry type, index type, and Dims{2} specification (preserves storage space only)
     simA = similar(A, Float32, Int8, (6,6))
     @test typeof(simA) == SparseMatrixCSC{Float32, Int8}
     @test size(simA) == (6,6)
-    @test getcolptr(simA) == fill(1, 6+1)
+    @test colptrs(simA) == fill(1, 6+1)
     @test length(rowvals(simA)) == length(nonzeroinds(A))
     @test length(nonzeros(simA)) == length(nonzeros(A))
 end

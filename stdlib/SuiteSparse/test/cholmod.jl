@@ -7,7 +7,7 @@ using Random
 using Serialization
 using LinearAlgebra: issuccess, PosDefException
 using SparseArrays
-using SparseArrays: getcolptr
+using SparseArrays: colptrs
 
 # CHOLMOD tests
 Random.seed!(123)
@@ -334,7 +334,7 @@ end
     A1pdSparse = CHOLMOD.Sparse(
         size(A1pd, 1),
         size(A1pd, 2),
-        SuiteSparse.decrement(getcolptr(A1pd)),
+        SuiteSparse.decrement(colptrs(A1pd)),
         SuiteSparse.decrement(rowvals(A1pd)),
         nonzeros(A1pd))
 
@@ -768,7 +768,7 @@ end
 @testset "Check inputs to Sparse. Related to #20024" for A_ in (
     SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1,2], Float64[]),
     SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1,2], Float64[1.0]))
-    args = (size(A_)..., getcolptr(A_) .- 1, rowvals(A_) .- 1, nonzeros(A_))
+    args = (size(A_)..., colptrs(A_) .- 1, rowvals(A_) .- 1, nonzeros(A_))
     @test_throws ArgumentError CHOLMOD.Sparse(args...)
     @test_throws ArgumentError CHOLMOD.Sparse(A_)
 end

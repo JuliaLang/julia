@@ -43,7 +43,7 @@ function mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::Union{StridedVector,Adj
     for k = 1:size(C, 2)
         @inbounds for col = 1:size(A, 2)
             αxj = B[col,k] * α
-            for j = getcolptr(A)[col]:(getcolptr(A)[col + 1] - 1)
+            for j = colptrs(A)[col]:(colptrs(A)[col + 1] - 1)
                 C[rv[j], k] += nzv[j]*αxj
             end
         end
@@ -68,7 +68,7 @@ function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::Uni
     for k = 1:size(C, 2)
         @inbounds for col = 1:size(A, 2)
             tmp = zero(eltype(C))
-            for j = getcolptr(A)[col]:(getcolptr(A)[col + 1] - 1)
+            for j = colptrs(A)[col]:(colptrs(A)[col + 1] - 1)
                 tmp += adjoint(nzv[j])*B[rv[j],k]
             end
             C[col,k] += tmp * α
@@ -94,7 +94,7 @@ function mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B:
     for k = 1:size(C, 2)
         @inbounds for col = 1:size(A, 2)
             tmp = zero(eltype(C))
-            for j = getcolptr(A)[col]:(getcolptr(A)[col + 1] - 1)
+            for j = colptrs(A)[col]:(colptrs(A)[col + 1] - 1)
                 tmp += transpose(nzv[j])*B[rv[j],k]
             end
             C[col,k] += tmp * α
@@ -126,7 +126,7 @@ function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, A::SparseMatrixCSC
     if β != 1
         β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
     end
-    @inbounds for multivec_row=1:mX, col = 1:size(A, 2), k=getcolptr(A)[col]:(getcolptr(A)[col+1]-1)
+    @inbounds for multivec_row=1:mX, col = 1:size(A, 2), k=colptrs(A)[col]:(colptrs(A)[col+1]-1)
         C[multivec_row, col] += α * X[multivec_row, rv[k]] * nzv[k] # perhaps suboptimal position of α?
     end
     C
@@ -145,7 +145,7 @@ function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, adjA::Adjoint{<:An
     if β != 1
         β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
     end
-    @inbounds for col = 1:size(A, 2), k=getcolptr(A)[col]:(getcolptr(A)[col+1]-1), multivec_col=1:mX
+    @inbounds for col = 1:size(A, 2), k=colptrs(A)[col]:(colptrs(A)[col+1]-1), multivec_col=1:mX
         C[multivec_col, rv[k]] += α * X[multivec_col, col] * adjoint(nzv[k]) # perhaps suboptimal position of α?
     end
     C
@@ -164,7 +164,7 @@ function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, transA::Transpose{
     if β != 1
         β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
     end
-    @inbounds for col = 1:size(A, 2), k=getcolptr(A)[col]:(getcolptr(A)[col+1]-1), multivec_col=1:mX
+    @inbounds for col = 1:size(A, 2), k=colptrs(A)[col]:(colptrs(A)[col+1]-1), multivec_col=1:mX
         C[multivec_col, rv[k]] += α * X[multivec_col, col] * transpose(nzv[k]) # perhaps suboptimal position of α?
     end
     C
@@ -296,8 +296,8 @@ function dot(A::SparseMatrixCSC{T1,S1},B::SparseMatrixCSC{T2,S2}) where {T1,T2,S
     size(B) == (m,n) || throw(DimensionMismatch("matrices must have the same dimensions"))
     r = dot(zero(T1), zero(T2))
     @inbounds for j = 1:n
-        ia = getcolptr(A)[j]; ia_nxt = getcolptr(A)[j+1]
-        ib = getcolptr(B)[j]; ib_nxt = getcolptr(B)[j+1]
+        ia = colptrs(A)[j]; ia_nxt = colptrs(A)[j+1]
+        ib = colptrs(B)[j]; ib_nxt = colptrs(B)[j+1]
         if ia < ia_nxt && ib < ib_nxt
             ra = rowvals(A)[ia]; rb = rowvals(B)[ib]
             while true
@@ -376,7 +376,7 @@ function _lmul!(U::UpperTriangularPlain, B::StridedVecOrMat)
     nrowB, ncolB  = size(B, 1), size(B, 2)
     aa = getnzval(A)
     ja = getrowval(A)
-    ia = getcolptr(A)
+    ia = colptrs(A)
 
     joff = 0
     for k = 1:ncolB
@@ -417,7 +417,7 @@ function _lmul!(L::LowerTriangularPlain, B::StridedVecOrMat)
     nrowB, ncolB = size(B, 1), size(B, 2)
     aa = getnzval(A)
     ja = getrowval(A)
-    ia = getcolptr(A)
+    ia = colptrs(A)
 
     joff = 0
     for k = 1:ncolB
@@ -459,7 +459,7 @@ function _lmul!(U::UpperTriangularWrapped, B::StridedVecOrMat)
     nrowB, ncolB  = size(B, 1), size(B, 2)
     aa = getnzval(A)
     ja = getrowval(A)
-    ia = getcolptr(A)
+    ia = colptrs(A)
     Z = zero(eltype(A))
 
     joff = 0
@@ -499,7 +499,7 @@ function _lmul!(L::LowerTriangularWrapped, B::StridedVecOrMat)
     nrowB, ncolB  = size(B, 1), size(B, 2)
     aa = getnzval(A)
     ja = getrowval(A)
-    ia = getcolptr(A)
+    ia = colptrs(A)
     Z = zero(eltype(A))
 
     joff = 0
@@ -549,7 +549,7 @@ function _ldiv!(L::LowerTriangularPlain, B::StridedVecOrMat)
     nrowB, ncolB  = size(B, 1), size(B, 2)
     aa = getnzval(A)
     ja = getrowval(A)
-    ia = getcolptr(A)
+    ia = colptrs(A)
 
     joff = 0
     for k = 1:ncolB
@@ -591,7 +591,7 @@ function _ldiv!(U::UpperTriangularPlain, B::StridedVecOrMat)
     nrowB, ncolB = size(B, 1), size(B, 2)
     aa = getnzval(A)
     ja = getrowval(A)
-    ia = getcolptr(A)
+    ia = colptrs(A)
 
     joff = 0
     for k = 1:ncolB
@@ -634,7 +634,7 @@ function _ldiv!(L::LowerTriangularWrapped, B::StridedVecOrMat)
     nrowB, ncolB  = size(B, 1), size(B, 2)
     aa = getnzval(A)
     ja = getrowval(A)
-    ia = getcolptr(A)
+    ia = colptrs(A)
 
     joff = 0
     for k = 1:ncolB
@@ -680,7 +680,7 @@ function _ldiv!(U::UpperTriangularWrapped, B::StridedVecOrMat)
     nrowB, ncolB = size(B, 1), size(B, 2)
     aa = getnzval(A)
     ja = getrowval(A)
-    ia = getcolptr(A)
+    ia = colptrs(A)
 
     joff = 0
     for k = 1:ncolB
@@ -817,7 +817,7 @@ function ldiv!(D::Diagonal{T}, A::SparseMatrixCSC{T}) where {T}
     for i=1:length(b)
         iszero(b[i]) && throw(SingularException(i))
     end
-    @inbounds for col = 1:size(A, 2), p = getcolptr(A)[col]:(getcolptr(A)[col + 1] - 1)
+    @inbounds for col = 1:size(A, 2), p = colptrs(A)[col]:(colptrs(A)[col + 1] - 1)
         nonz[p] = b[Arowval[p]] \ nonz[p]
     end
     A
@@ -837,7 +837,7 @@ function triu(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
         colptr[col] = 1
     end
     for col = max(k+1,1) : n
-        for c1 = getcolptr(S)[col] : getcolptr(S)[col+1]-1
+        for c1 = colptrs(S)[col] : colptrs(S)[col+1]-1
             rowvals(S)[c1] > col - k && break
             nnz += 1
         end
@@ -847,8 +847,8 @@ function triu(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     nzval = Vector{Tv}(undef, nnz)
     A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
     for col = max(k+1,1) : n
-        c1 = getcolptr(S)[col]
-        for c2 = getcolptr(A)[col] : getcolptr(A)[col+1]-1
+        c1 = colptrs(S)[col]
+        for c2 = colptrs(A)[col] : colptrs(A)[col+1]-1
             rowvals(A)[c2] = rowvals(S)[c1]
             nonzeros(A)[c2] = nonzeros(S)[c1]
             c1 += 1
@@ -863,8 +863,8 @@ function tril(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     nnz = 0
     colptr[1] = 1
     for col = 1 : min(n, m+k)
-        l1 = getcolptr(S)[col+1]-1
-        for c1 = 0 : (l1 - getcolptr(S)[col])
+        l1 = colptrs(S)[col+1]-1
+        for c1 = 0 : (l1 - colptrs(S)[col])
             rowvals(S)[l1 - c1] < col - k && break
             nnz += 1
         end
@@ -877,9 +877,9 @@ function tril(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     nzval = Vector{Tv}(undef, nnz)
     A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
     for col = 1 : min(n, m+k)
-        c1 = getcolptr(S)[col+1]-1
-        l2 = getcolptr(A)[col+1]-1
-        for c2 = 0 : l2 - getcolptr(A)[col]
+        c1 = colptrs(S)[col+1]-1
+        l2 = colptrs(A)[col+1]-1
+        for c2 = 0 : l2 - colptrs(A)[col]
             rowvals(A)[l2 - c2] = rowvals(S)[c1]
             nonzeros(A)[l2 - c2] = nonzeros(S)[c1]
             c1 -= 1
@@ -902,7 +902,7 @@ function sparse_diff1(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     for col = 1 : n
         last_row = 0
         last_val = 0
-        for k = getcolptr(S)[col] : getcolptr(S)[col+1]-1
+        for k = colptrs(S)[col] : colptrs(S)[col+1]-1
             row = rowvals(S)[k]
             val = nonzeros(S)[k]
             if row > 1
@@ -939,7 +939,7 @@ function sparse_diff2(a::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
 
     z = zero(Tv)
 
-    colptr_a = getcolptr(a)
+    colptr_a = colptrs(a)
     rowval_a = rowvals(a)
     nzval_a = nonzeros(a)
 
@@ -1045,7 +1045,7 @@ function opnorm(A::SparseMatrixCSC, p::Real=2)
             nA::Tsum = 0
             for j=1:n
                 colSum::Tsum = 0
-                for i = getcolptr(A)[j]:getcolptr(A)[j+1]-1
+                for i = colptrs(A)[j]:colptrs(A)[j+1]-1
                     colSum += abs(nonzeros(A)[i])
                 end
                 nA = max(nA, colSum)
@@ -1261,12 +1261,12 @@ function kron(A::SparseMatrixCSC{T1,S1}, B::SparseMatrixCSC{T2,S2}) where {T1,S1
     colptrC[1] = 1
     col = 1
     @inbounds for j = 1:nA
-        startA = getcolptr(A)[j]
-        stopA = getcolptr(A)[j+1] - 1
+        startA = colptrs(A)[j]
+        stopA = colptrs(A)[j+1] - 1
         lA = stopA - startA + 1
         for i = 1:nB
-            startB = getcolptr(B)[i]
-            stopB = getcolptr(B)[i+1] - 1
+            startB = colptrs(B)[i]
+            stopB = colptrs(B)[i+1] - 1
             lB = stopB - startB + 1
             ptr_range = (1:lB) .+ (colptrC[col]-1)
             colptrC[col+1] = colptrC[col] + lA*lB
@@ -1324,9 +1324,9 @@ inv(A::SparseMatrixCSC) = error("The inverse of a sparse matrix can often be den
 
 # Copy colptr and rowval from one sparse matrix to another
 function copyinds!(C::SparseMatrixCSC, A::SparseMatrixCSC)
-    if getcolptr(C) !== getcolptr(A)
-        resize!(getcolptr(C), length(getcolptr(A)))
-        copyto!(getcolptr(C), getcolptr(A))
+    if colptrs(C) !== colptrs(A)
+        resize!(colptrs(C), length(colptrs(A)))
+        copyto!(colptrs(C), colptrs(A))
     end
     if rowvals(C) !== rowvals(A)
         resize!(rowvals(C), length(rowvals(A)))
@@ -1343,7 +1343,7 @@ function mul!(C::SparseMatrixCSC, A::SparseMatrixCSC, D::Diagonal{T, <:Vector}) 
     Cnzval = nonzeros(C)
     Anzval = nonzeros(A)
     resize!(Cnzval, length(Anzval))
-    for col = 1:n, p = getcolptr(A)[col]:(getcolptr(A)[col+1]-1)
+    for col = 1:n, p = colptrs(A)[col]:(colptrs(A)[col+1]-1)
         @inbounds Cnzval[p] = Anzval[p] * b[col]
     end
     C
@@ -1358,7 +1358,7 @@ function mul!(C::SparseMatrixCSC, D::Diagonal{T, <:Vector}, A::SparseMatrixCSC) 
     Anzval = nonzeros(A)
     Arowval = rowvals(A)
     resize!(Cnzval, length(Anzval))
-    for col = 1:n, p = getcolptr(A)[col]:(getcolptr(A)[col+1]-1)
+    for col = 1:n, p = colptrs(A)[col]:(colptrs(A)[col+1]-1)
         @inbounds Cnzval[p] = b[Arowval[p]] * Anzval[p]
     end
     C
@@ -1394,7 +1394,7 @@ function rmul!(A::SparseMatrixCSC, D::Diagonal)
     m, n = size(A)
     (n == size(D, 1)) || throw(DimensionMismatch())
     Anzval = nonzeros(A)
-    @inbounds for col = 1:n, p = getcolptr(A)[col]:(getcolptr(A)[col + 1] - 1)
+    @inbounds for col = 1:n, p = colptrs(A)[col]:(colptrs(A)[col + 1] - 1)
          Anzval[p] = Anzval[p] * D.diag[col]
     end
     return A
@@ -1405,7 +1405,7 @@ function lmul!(D::Diagonal, A::SparseMatrixCSC)
     (m == size(D, 2)) || throw(DimensionMismatch())
     Anzval = nonzeros(A)
     Arowval = rowvals(A)
-    @inbounds for col = 1:n, p = getcolptr(A)[col]:(getcolptr(A)[col + 1] - 1)
+    @inbounds for col = 1:n, p = colptrs(A)[col]:(colptrs(A)[col + 1] - 1)
         Anzval[p] = D.diag[Arowval[p]] * Anzval[p]
     end
     return A

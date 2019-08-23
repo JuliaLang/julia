@@ -20,7 +20,7 @@ import LinearAlgebra: (\),
                  issuccess, issymmetric, ldlt, ldlt!, logdet
 
 using SparseArrays
-using SparseArrays: getcolptr
+using SparseArrays: colptrs
 import Libdl
 
 export
@@ -864,8 +864,8 @@ end
 
 function Sparse{Tv}(A::SparseMatrixCSC, stype::Integer) where Tv<:VTypes
     ## Check length of input. This should never fail but see #20024
-    if length(getcolptr(A)) <= size(A, 2)
-        throw(ArgumentError("length of colptr must be at least size(A,2) + 1 = $(size(A, 2) + 1) but was $(length(getcolptr(A)))"))
+    if length(colptrs(A)) <= size(A, 2)
+        throw(ArgumentError("length of colptr must be at least size(A,2) + 1 = $(size(A, 2) + 1) but was $(length(colptrs(A)))"))
     end
     if nnz(A) > length(rowvals(A))
         throw(ArgumentError("length of rowval is $(length(rowvals(A))) but value of colptr requires length to be at least $(nnz(A))"))
@@ -877,7 +877,7 @@ function Sparse{Tv}(A::SparseMatrixCSC, stype::Integer) where Tv<:VTypes
     o = allocate_sparse(size(A, 1), size(A, 2), nnz(A), true, true, stype, Tv)
     s = unsafe_load(pointer(o))
     for i = 1:(size(A, 2) + 1)
-        unsafe_store!(s.p, getcolptr(A)[i] - 1, i)
+        unsafe_store!(s.p, colptrs(A)[i] - 1, i)
     end
     for i = 1:nnz(A)
         unsafe_store!(s.i, rowvals(A)[i] - 1, i)
@@ -887,7 +887,7 @@ function Sparse{Tv}(A::SparseMatrixCSC, stype::Integer) where Tv<:VTypes
         # BLAS/LAPACK these are not ignored by CHOLMOD. If even tiny imaginary parts are
         # present CHOLMOD will fail with a non-positive definite/zero pivot error.
         for j = 1:size(A, 2)
-            for ip = getcolptr(A)[j]:getcolptr(A)[j + 1] - 1
+            for ip = colptrs(A)[j]:colptrs(A)[j + 1] - 1
                 v = nonzeros(A)[ip]
                 unsafe_store!(s.x, rowvals(A)[ip] == j ? Complex(real(v)) : v, ip)
             end
@@ -1196,7 +1196,7 @@ function getLd!(S::SparseMatrixCSC)
     fill!(d, 0)
     col = 1
     for k = 1:nnz(S)
-        while k >= getcolptr(S)[col+1]
+        while k >= colptrs(S)[col+1]
             col += 1
         end
         if rowvals(S)[k] == col

@@ -9,7 +9,7 @@ import Base: map, map!, broadcast, copy, copyto!
 using Base: front, tail, to_shape
 using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseVector,
                       AbstractSparseMatrix, AbstractSparseArray, indtype, nnz, nzrange,
-                      SparseVectorUnion, AdjOrTransSparseVectorUnion, nonzeroinds, nonzeros, rowvals, getcolptr
+                      SparseVectorUnion, AdjOrTransSparseVectorUnion, nonzeroinds, nonzeros, rowvals, colptrs
 using Base.Broadcast: BroadcastStyle, Broadcasted, flatten
 using LinearAlgebra
 
@@ -119,13 +119,13 @@ const SpBroadcasted2{Style<:SPVM,Axes,F,Args<:Tuple{SparseVecOrMat,SparseVecOrMa
 @inline colrange(A::SparseMatrixCSC, j) = nzrange(A, j)
 @inline colstartind(A::SparseVector, j) = one(indtype(A))
 @inline colboundind(A::SparseVector, j) = convert(indtype(A), length(nonzeroinds(A)) + 1)
-@inline colstartind(A::SparseMatrixCSC, j) = getcolptr(A)[j]
-@inline colboundind(A::SparseMatrixCSC, j) = getcolptr(A)[j + 1]
+@inline colstartind(A::SparseMatrixCSC, j) = colptrs(A)[j]
+@inline colboundind(A::SparseMatrixCSC, j) = colptrs(A)[j + 1]
 @inline storedinds(A::SparseVector) = nonzeroinds(A)
 @inline storedinds(A::SparseMatrixCSC) = rowvals(A)
 @inline storedvals(A::SparseVecOrMat) = nonzeros(A)
 @inline setcolptr!(A::SparseVector, j, val) = val
-@inline setcolptr!(A::SparseMatrixCSC, j, val) = getcolptr(A)[j] = val
+@inline setcolptr!(A::SparseMatrixCSC, j, val) = colptrs(A)[j] = val
 function trimstorage!(A::SparseVecOrMat, maxstored)
     resize!(storedinds(A), maxstored)
     resize!(storedvals(A), maxstored)
@@ -286,7 +286,7 @@ end
 function _densestructure!(A::SparseMatrixCSC)
     nnzA = size(A, 1) * size(A, 2)
     expandstorage!(A, nnzA)
-    copyto!(getcolptr(A), 1:size(A, 1):(nnzA + 1))
+    copyto!(colptrs(A), 1:size(A, 1):(nnzA + 1))
     for k in _densecoloffsets(A)
         copyto!(rowvals(A), k + 1, 1:size(A, 1))
     end
@@ -812,7 +812,7 @@ function _broadcast_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, A::SparseV
     return C
 end
 _finishempty!(C::SparseVector) = C
-_finishempty!(C::SparseMatrixCSC) = (fill!(getcolptr(C), 1); C)
+_finishempty!(C::SparseMatrixCSC) = (fill!(colptrs(C), 1); C)
 
 # special case - vector outer product
 _copy(f::typeof(*), x::SparseVectorUnion, y::AdjOrTransSparseVectorUnion) = _outer(x, y)

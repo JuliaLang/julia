@@ -4,7 +4,7 @@ module SparseTests
 
 using Test
 using SparseArrays
-using SparseArrays: getcolptr, nonzeroinds
+using SparseArrays: colptrs, nonzeroinds
 using LinearAlgebra
 using Base.Printf: @printf
 using Random
@@ -495,7 +495,7 @@ end
     @test A == B
     @test pointer(nonzeros(A)) != pointer(nonzeros(B))
     @test pointer(rowvals(A)) != pointer(rowvals(B))
-    @test pointer(getcolptr(A)) != pointer(getcolptr(B))
+    @test pointer(colptrs(A)) != pointer(colptrs(B))
     # Test size(A) != size(B), but length(A) == length(B)
     B = sprand(25, 1, 0.2)
     copyto!(A, B)
@@ -566,7 +566,7 @@ end
         @test_throws ArgumentError permute!(X, A, p, q, (D = copy(C); resize!(nonzeros(D), nnz(A) - 1); D))
     end
     @testset "common error checking of permute[!] methods / source-workcolptr compat" begin
-        @test_throws DimensionMismatch permute!(A, p, q, C, Vector{eltype(rowvals(A))}(undef, length(getcolptr(A)) - 1))
+        @test_throws DimensionMismatch permute!(A, p, q, C, Vector{eltype(rowvals(A))}(undef, length(colptrs(A)) - 1))
     end
     @testset "common error checking of permute[!] methods / permutation validity" begin
         @test_throws ArgumentError permute!(A, (r = copy(p); r[2] = r[1]; r), q)
@@ -596,7 +596,7 @@ end
             @test permute!(similar(A), A, p, q, similar(At)) == fullPAQ
             @test permute!(copy(A), p, q) == fullPAQ
             @test permute!(copy(A), p, q, similar(At)) == fullPAQ
-            @test permute!(copy(A), p, q, similar(At), similar(getcolptr(A))) == fullPAQ
+            @test permute!(copy(A), p, q, similar(At), similar(colptrs(A))) == fullPAQ
         end
     end
 end
@@ -1556,7 +1556,7 @@ end
     local A = guardseed(1234321) do
         triu(sprand(10, 10, 0.2))
     end
-    @test getcolptr(SparseArrays.droptol!(A, 0.01)) == [1, 2, 2, 3, 4, 5, 5, 6, 8, 10, 13]
+    @test colptrs(SparseArrays.droptol!(A, 0.01)) == [1, 2, 2, 3, 4, 5, 5, 6, 8, 10, 13]
     @test isequal(SparseArrays.droptol!(sparse([1], [1], [1]), 1), SparseMatrixCSC(1, 1, Int[1, 1], Int[], Int[]))
 end
 
@@ -1597,7 +1597,7 @@ end
     # original lone dropzeros test
     local A = sparse([1 2 3; 4 5 6; 7 8 9])
     nonzeros(A)[2] = nonzeros(A)[6] = nonzeros(A)[7] = 0
-    @test getcolptr(dropzeros!(A)) == [1, 3, 5, 7]
+    @test colptrs(dropzeros!(A)) == [1, 3, 5, 7]
     # test for issue #5169, modified for new behavior following #15242/#14798
     @test nnz(sparse([1, 1], [1, 2], [0.0, -0.0])) == 2
     @test nnz(dropzeros!(sparse([1, 1], [1, 2], [0.0, -0.0]))) == 0
@@ -1661,9 +1661,9 @@ end
 
 @testset "expandptr" begin
     local A = sparse(1.0I, 5, 5)
-    @test SparseArrays.expandptr(getcolptr(A)) == 1:5
+    @test SparseArrays.expandptr(colptrs(A)) == 1:5
     A[1,2] = 1
-    @test SparseArrays.expandptr(getcolptr(A)) == [1; 2; 2; 3; 4; 5]
+    @test SparseArrays.expandptr(colptrs(A)) == [1; 2; 2; 3; 4; 5]
     @test_throws ArgumentError SparseArrays.expandptr([2; 3])
 end
 
@@ -2105,15 +2105,15 @@ end
     x = sparse(rand(3,3))
     SparseArrays.dropstored!(x, 1, 1)
     @test x[1, 1] == 0.0
-    @test getcolptr(x) == [1, 3, 6, 9]
+    @test colptrs(x) == [1, 3, 6, 9]
     SparseArrays.dropstored!(x, 2, 1)
-    @test getcolptr(x) == [1, 2, 5, 8]
+    @test colptrs(x) == [1, 2, 5, 8]
     @test x[2, 1] == 0.0
     SparseArrays.dropstored!(x, 2, 2)
-    @test getcolptr(x) == [1, 2, 4, 7]
+    @test colptrs(x) == [1, 2, 4, 7]
     @test x[2, 2] == 0.0
     SparseArrays.dropstored!(x, 2, 3)
-    @test getcolptr(x) == [1, 2, 4, 6]
+    @test colptrs(x) == [1, 2, 4, 6]
     @test x[2, 3] == 0.0
 end
 
@@ -2233,53 +2233,53 @@ end
     simA = similar(A)
     @test typeof(simA) == typeof(A)
     @test size(simA) == size(A)
-    @test getcolptr(simA) == getcolptr(A)
+    @test colptrs(simA) == colptrs(A)
     @test rowvals(simA) == rowvals(A)
     @test length(nonzeros(simA)) == length(nonzeros(A))
     # test similar with entry type specification (preserves stored-entry structure)
     simA = similar(A, Float32)
-    @test typeof(simA) == SparseMatrixCSC{Float32,eltype(getcolptr(A))}
+    @test typeof(simA) == SparseMatrixCSC{Float32,eltype(colptrs(A))}
     @test size(simA) == size(A)
-    @test getcolptr(simA) == getcolptr(A)
+    @test colptrs(simA) == colptrs(A)
     @test rowvals(simA) == rowvals(A)
     @test length(nonzeros(simA)) == length(nonzeros(A))
     # test similar with entry and index type specification (preserves stored-entry structure)
     simA = similar(A, Float32, Int8)
     @test typeof(simA) == SparseMatrixCSC{Float32,Int8}
     @test size(simA) == size(A)
-    @test getcolptr(simA) == getcolptr(A)
+    @test colptrs(simA) == colptrs(A)
     @test rowvals(simA) == rowvals(A)
     @test length(nonzeros(simA)) == length(nonzeros(A))
     # test similar with Dims{2} specification (preserves storage space only, not stored-entry structure)
     simA = similar(A, (6,6))
     @test typeof(simA) == typeof(A)
     @test size(simA) == (6,6)
-    @test getcolptr(simA) == fill(1, 6+1)
+    @test colptrs(simA) == fill(1, 6+1)
     @test length(rowvals(simA)) == length(rowvals(A))
     @test length(nonzeros(simA)) == length(nonzeros(A))
     # test similar with entry type and Dims{2} specification (preserves storage space only)
     simA = similar(A, Float32, (6,6))
-    @test typeof(simA) == SparseMatrixCSC{Float32,eltype(getcolptr(A))}
+    @test typeof(simA) == SparseMatrixCSC{Float32,eltype(colptrs(A))}
     @test size(simA) == (6,6)
-    @test getcolptr(simA) == fill(1, 6+1)
+    @test colptrs(simA) == fill(1, 6+1)
     @test length(rowvals(simA)) == length(rowvals(A))
     @test length(nonzeros(simA)) == length(nonzeros(A))
     # test similar with entry type, index type, and Dims{2} specification (preserves storage space only)
     simA = similar(A, Float32, Int8, (6,6))
     @test typeof(simA) == SparseMatrixCSC{Float32, Int8}
     @test size(simA) == (6,6)
-    @test getcolptr(simA) == fill(1, 6+1)
+    @test colptrs(simA) == fill(1, 6+1)
     @test length(rowvals(simA)) == length(rowvals(A))
     @test length(nonzeros(simA)) == length(nonzeros(A))
     # test similar with Dims{1} specification (preserves nothing)
     simA = similar(A, (6,))
-    @test typeof(simA) == SparseVector{eltype(nonzeros(A)),eltype(getcolptr(A))}
+    @test typeof(simA) == SparseVector{eltype(nonzeros(A)),eltype(colptrs(A))}
     @test size(simA) == (6,)
     @test length(nonzeroinds(simA)) == 0
     @test length(nonzeros(simA)) == 0
     # test similar with entry type and Dims{1} specification (preserves nothing)
     simA = similar(A, Float32, (6,))
-    @test typeof(simA) == SparseVector{Float32,eltype(getcolptr(A))}
+    @test typeof(simA) == SparseVector{Float32,eltype(colptrs(A))}
     @test size(simA) == (6,)
     @test length(nonzeroinds(simA)) == 0
     @test length(nonzeros(simA)) == 0

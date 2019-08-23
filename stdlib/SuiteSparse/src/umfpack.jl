@@ -9,7 +9,7 @@ using LinearAlgebra
 import LinearAlgebra: Factorization, det, lu, ldiv!
 
 using SparseArrays
-using SparseArrays: getcolptr
+using SparseArrays: colptrs
 import SparseArrays: nnz
 
 import Serialization: AbstractSerializer, deserialize
@@ -152,9 +152,9 @@ The relation between `F` and `A` is
     `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}` as appropriate.
 """
 function lu(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes}; check::Bool = true)
-    zerobased = getcolptr(S)[1] == 0
+    zerobased = colptrs(S)[1] == 0
     res = UmfpackLU(C_NULL, C_NULL, size(S, 1), size(S, 2),
-                    zerobased ? copy(getcolptr(S)) : decrement(getcolptr(S)),
+                    zerobased ? copy(colptrs(S)) : decrement(colptrs(S)),
                     zerobased ? copy(rowvals(S)) : decrement(rowvals(S)),
                     copy(nonzeros(S)), 0)
     finalizer(umfpack_free_symbolic, res)
