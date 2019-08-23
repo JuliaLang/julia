@@ -454,6 +454,15 @@ end
 ## A tree representation
 tree_format_linewidth(x::StackFrame) = ndigits(x.line) + 6
 
+const indent_s = "  ╎  "^10
+const indent_z = collect(eachindex(indent_s))
+function indent(depth::Int)
+    depth < 1 && return ""
+    depth <= length(indent_z) && return indent_s[1:indent_z[depth]]
+    div, rem = divrem(depth, length(indent_z))
+    return (indent_s^div) * SubString(indent_s, 1, indent_z[rem])
+end
+
 function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int, cols::Int)
     nindent = min(cols>>1, level)
     ndigcounts = ndigits(maximum(counts))
@@ -471,7 +480,7 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
     for i = 1:length(lilist)
         li = lilist[i]
         if li != UNKNOWN
-            base = " "^nindent
+            base = nindent == 0 ? "" : indent(nindent - 1) * " "
             if showextra
                 base = string(base, "+", nextra, " ")
             end
