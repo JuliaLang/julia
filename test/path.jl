@@ -9,7 +9,24 @@
         @test isabspath(S(homedir()))
         @test !isabspath(S("foo"))
     end
-    @test basename(S("foo$(sep)bar")) == "bar"
+    @testset "basename" begin
+        # reference http://pubs.opengroup.org/onlinepubs/9699919799/functions/basename.html
+        @test basename("") == "."
+        if Sys.iswindows()
+            @test basename("C:\\System32") == "System32"
+            @test basename("C:\\System32\\") == "System32"
+        else
+            @test basename("/") == "/"
+            @test basename("//") == "/"
+            @test basename("///") == "/"
+            @test basename("usr") == "usr"
+            @test basename("usr/") == "usr"
+            @test basename("/usr/") == "usr"
+            @test basename("/usr/lib") == "lib"
+            @test basename("//usr//lib//") == "lib"
+            @test basename("/home//dwc//") == "dwc"
+        end
+    end
     @test dirname(S("foo$(sep)bar")) == "foo"
 
     @testset "expanduser" begin

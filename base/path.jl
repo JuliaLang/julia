@@ -165,10 +165,10 @@ See also: [`basename`](@ref)
 
 Get the file/dir name part of a path.
 
-Generally, trailing '/' will be ignored. There're some other exceptions:
+Generally, trailing '/' (and '\\' in Windows) will be ignored.
+There're some other exceptions:
 
 * ""  ===> "."
-* "~" ==> basename(ENV["HOME"])
 * "/" ==> "/"
 * "//" => "/"
 
@@ -187,13 +187,11 @@ Reference: [POSIX basename](http://pubs.opengroup.org/onlinepubs/9699919799/func
 function basename(path::AbstractString)
     if path == ""
         return "."
-    elseif path == "/"
-        return "/"
-    elseif path == "~"
-        return basename(ENV["HOME"])
+    elseif path == Base.Filesystem.path_separator
+        return Base.Filesystem.path_separator
     else
-        splited = splitdir(path)
-        return isempty(splited[2]) ? basename(splited[1]) : splited[2]
+        dir, base = splitdir(path)
+        return isempty(base) ? basename(dir) : base
     end
 end
 
