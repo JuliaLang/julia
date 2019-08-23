@@ -301,10 +301,19 @@ include("trickyarithmetic.jl")
 @testset "lu with type whose sum is another type" begin
     A = TrickyArithmetic.A[1 2; 3 4]
     ElT = TrickyArithmetic.D{TrickyArithmetic.C,TrickyArithmetic.C}
-    B = lu(A)
+    B = lu(A, Val(false))
     @test B isa LinearAlgebra.LU{ElT,Matrix{ElT}}
-    C = lu(A, Val(false))
-    @test C isa LinearAlgebra.LU{ElT,Matrix{ElT}}
+end
+
+@testset "Issue #30917. Determinant of integer matrix" begin
+    @test det([1 1 0 0 1 0 0 0
+               1 0 1 0 0 1 0 0
+               1 0 0 1 0 0 1 0
+               0 1 1 1 0 0 0 0
+               0 1 0 0 0 0 1 1
+               0 0 1 0 1 0 0 1
+               0 0 0 1 1 1 0 0
+               0 0 0 0 1 1 0 1]) ≈ 6
 end
 
 end # module TestLU
