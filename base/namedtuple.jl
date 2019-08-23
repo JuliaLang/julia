@@ -116,7 +116,6 @@ function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {name
 end
 
 if nameof(@__MODULE__) === :Base
-    Tuple(nt::NamedTuple) = (nt...,)
     (::Type{T})(nt::NamedTuple) where {T <: Tuple} = convert(T, Tuple(nt))
 end
 

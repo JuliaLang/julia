@@ -216,6 +216,11 @@ ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       (f::typeof(Typeof))(x) = ($(_expr(:meta,:nospecialize,:x)); isa(x,Type) ? Type{x} : typeof(x))
       end)
 
+Tuple(x::Tuple) = x
+Tuple(x::Array) = Core._apply(tuple, x)
+Tuple(x::NamedTuple) = Core._apply(tuple, x)
+Tuple(x::SimpleVector) = Core._apply(tuple, x)
+
 macro nospecialize(x)
     _expr(:meta, :nospecialize, x)
 end
