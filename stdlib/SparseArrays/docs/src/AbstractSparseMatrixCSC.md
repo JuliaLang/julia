@@ -2,6 +2,9 @@
 
 Supertype for matrix with compressed sparse column (CSC).
 
+!!! compat "Julia 1.4"
+    `AbstractSparseMatrixCSC` requires at least Julia 1.4.
+
 ## `AbstractSparseMatrixCSC` interface
 
 In addition to the [Abstract array interface](@ref man-interface-array), every
