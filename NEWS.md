@@ -42,6 +42,8 @@ Standard library changes
 ------------------------
 
 * The methods of `mktemp` and `mktempdir` which take a function body to pass temporary paths to no longer throw errors if the path is already deleted when the function body returns ([#33091]).
+* `asyncmap` now preserves the backtrace of inner exceptions by wrapping them
+  in `TaskFailedException` and `CompositeException` ([#32749])
 
 * `div` now accepts a rounding mode as the third argument, consistent with the corresponding argument to `rem`. Support for rounding division, by passing one of the RoundNearest modes to this function, was added. For future compatibility, library authors should now extend this function, rather than extending the two-argument `fld`/`cld`/`div` directly. ([#33040])
 
