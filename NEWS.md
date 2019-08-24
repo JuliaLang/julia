@@ -32,6 +32,8 @@ Standard library changes
 
 #### LinearAlgebra
 
+* `qr` and `qr!` functions support `blocksize` keyword argument ([#33053]).
+
 
 #### SparseArrays
 

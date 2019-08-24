@@ -246,19 +246,22 @@ function qrfactPivotedUnblocked!(A::StridedMatrix)
 end
 
 # LAPACK version
-qr!(A::StridedMatrix{<:BlasFloat}, ::Val{false}) = QRCompactWY(LAPACK.geqrt!(A, min(min(size(A)...), 36))...)
+qr!(A::StridedMatrix{<:BlasFloat}, ::Val{false} = Val(false); blocksize=36) =
+    QRCompactWY(LAPACK.geqrt!(A, min(min(size(A)...), blocksize))...)
 qr!(A::StridedMatrix{<:BlasFloat}, ::Val{true}) = QRPivoted(LAPACK.geqp3!(A)...)
-qr!(A::StridedMatrix{<:BlasFloat}) = qr!(A, Val(false))
 
 # Generic fallbacks
 
 """
-    qr!(A, pivot=Val(false))
+    qr!(A, pivot=Val(false); blocksize)
 
 `qr!` is the same as [`qr`](@ref) when `A` is a subtype of
 `StridedMatrix`, but saves space by overwriting the input `A`, instead of creating a copy.
 An [`InexactError`](@ref) exception is thrown if the factorization produces a number not
 representable by the element type of `A`, e.g. for integer types.
+
+!!! compat "Julia 1.4"
+    The `blocksize` keyword argument requires Julia 1.4 or later.
 
 # Examples
 ```jldoctest
@@ -296,7 +299,7 @@ qr!(A::StridedMatrix) = qr!(A, Val(false))
 _qreltype(::Type{T}) where T = typeof(zero(T)/sqrt(abs2(one(T))))
 
 """
-    qr(A, pivot=Val(false)) -> F
+    qr(A, pivot=Val(false); blocksize) -> F
 
 Compute the QR factorization of the matrix `A`: an orthogonal (or unitary if `A` is
 complex-valued) matrix `Q`, and an upper triangular matrix `R` such that
@@ -336,6 +339,13 @@ and `F.Q*A` are supported. A `Q` matrix can be converted into a regular matrix w
 `m`×`m` orthogonal matrix, use `F.Q*Matrix(I,m,m)`.  If `m<=n`, then `Matrix(F.Q)` yields an `m`×`m`
 orthogonal matrix.
 
+The block size for QR decomposition can be specified by keyword argument
+`blocksize :: Integer` when `pivot == Val(false)` and `A isa StridedMatrix{<:BlasFloat}`.
+It is ignored when `blocksize > minimum(size(A))`.  See [`QRCompactWY`](@ref).
+
+!!! compat "Julia 1.4"
+    The `blocksize` keyword argument requires Julia 1.4 or later.
+
 # Examples
 ```jldoctest
 julia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]
@@ -366,17 +376,11 @@ true
     elementary reflectors, so that the `Q` and `R` matrices can be stored
     compactly rather as two separate dense matrices.
 """
-function qr(A::AbstractMatrix{T}, arg) where T
+function qr(A::AbstractMatrix{T}, arg...; kwargs...) where T
     require_one_based_indexing(A)
     AA = similar(A, _qreltype(T), size(A))
     copyto!(AA, A)
-    return qr!(AA, arg)
-end
-function qr(A::AbstractMatrix{T}) where T
-    require_one_based_indexing(A)
-    AA = similar(A, _qreltype(T), size(A))
-    copyto!(AA, A)
-    return qr!(AA)
+    return qr!(AA, arg...; kwargs...)
 end
 qr(x::Number) = qr(fill(x,1,1))
 function qr(v::AbstractVector)
