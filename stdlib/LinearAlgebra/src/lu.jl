@@ -31,12 +31,12 @@ julia> F = lu(A)
 LU{Float64,Array{Float64,2}}
 L factor:
 2×2 Array{Float64,2}:
- 1.0  0.0
- 1.5  1.0
+ 1.0       0.0
+ 0.666667  1.0
 U factor:
 2×2 Array{Float64,2}:
- 4.0   3.0
- 0.0  -1.5
+ 6.0  3.0
+ 0.0  1.0
 
 julia> F.L * F.U == A[F.p, :]
 true
@@ -251,12 +251,12 @@ julia> F = lu(A)
 LU{Float64,Array{Float64,2}}
 L factor:
 2×2 Array{Float64,2}:
- 1.0  0.0
- 1.5  1.0
+ 1.0       0.0
+ 0.666667  1.0
 U factor:
 2×2 Array{Float64,2}:
- 4.0   3.0
- 0.0  -1.5
+ 6.0  3.0
+ 0.0  1.0
 
 julia> F.L * F.U == A[F.p, :]
 true
