@@ -11,7 +11,7 @@ In addition to the [Abstract array interface](@ref man-interface-array), every
 `AbstractSparseMatrixCSC` subtype `TS` must provide the following methods:
 
 * [`size(::TS)`](@ref size)
-* [`getcolptr(::TS) :: AbstractVector{<:Ti}`](@ref getcolptr)
+* [`coloffsets(::TS) :: AbstractVector{<:Ti}`](@ref coloffsets)
 * [`rowvals(::TS) :: AbstractVector{<:Ti}`](@ref rowvals)
 * [`nonzeros(::TS) :: AbstractVector{<:Tv}`](@ref nonzeros)
 
@@ -27,7 +27,7 @@ must satisfy the following constraints.
 
 ```julia
 @assert !has_offset_axes(A)
-@assert !has_offset_axes(getcolptr(A))
+@assert !has_offset_axes(coloffsets(A))
 @assert !has_offset_axes(rowvals(A))
 @assert !has_offset_axes(nonzeros(A))
 ```
@@ -40,11 +40,11 @@ for col in axes(A, 2)
 end
 ```
 
-### Column pointers in `getcolptr(A)` are increasing, started at 1
+### Column pointers in `coloffsets(A)` are increasing, started at 1
 
 ```julia
-@assert getcolptr(A)[1] === 1
-@assert all(diff(getcolptr(A)) .>= 0)
+@assert coloffsets(A)[1] === 1
+@assert all(diff(coloffsets(A)) .>= 0)
 ```
 
 ### Row index vector `rowvals(A)` and non-zero value vector `nonzeros(A)` are long enough
