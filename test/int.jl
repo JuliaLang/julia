@@ -332,7 +332,8 @@ end
     end
 
     @test div(typemax(Int64), typemax(Int64)-1, RoundNearest) == 1
-    @test div(-typemax(Int64), typemax(Int64)-1, RoundNearest) == -2
+    @test div(-typemax(Int64), typemax(Int64)-1, RoundNearest) == -1
     @test div(typemax(Int64), 2, RoundNearest) == 4611686018427387904
     @test div(-typemax(Int64), 2, RoundNearestTiesUp) == -4611686018427387903
+    @test div(typemax(Int)-2, typemax(Int), RoundNearest) == 1
 end
