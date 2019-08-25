@@ -113,6 +113,56 @@ julia> divrem(7,3)
 ```
 """
 divrem(x, y) = divrem(x, y, RoundToZero)
+function divrem(x::Integer, y::Integer, rnd::typeof(RoundNearest))
+    (q, r) = divrem(x, y)
+    if x >= 0
+        if y >= 0
+            r >= (y÷2) + (isodd(y) | iseven(q)) ? (q+true, r-y) : (q, r)
+        else
+            r >= -(y÷2) + (isodd(y) | iseven(q)) ? (q-true, r+y) : (q, r)
+        end
+    else
+        if y >= 0
+            r <= -signed(y÷2) - (isodd(y)| iseven(q)) ? (q-true, r+y) : (q, r)
+        else
+            r <= (y÷2) - (isodd(y) | iseven(q)) ? (q+true, r-y) : (q, r)
+        end
+    end
+end
+function divrem(x::Integer, y::Integer, rnd:: typeof(RoundNearestTiesAway))
+    (q, r) = divrem(x, y)
+    if x >= 0
+        if y >= 0
+            r >= (y÷2) + isodd(y) ? (q+true, r-y) : (q, r)
+        else
+            r >= -(y÷2) + isodd(y) ? (q-true, r+y) : (q, r)
+        end
+    else
+        if y >= 0
+            r <= -signed(y÷2) - isodd(y) ? (q-true, r+y) : (q, r)
+        else
+            r <= (y÷2) - isodd(y) ? (q+true, r-y) : (q, r)
+        end
+    end
+end
+function divrem(x::Integer, y::Integer, rnd::typeof(RoundNearestTiesUp))
+    (q, r) = divrem(x, y)
+    if x >= 0
+        if y >= 0
+            r >= (y÷2) + isodd(y) ? (q+true, r-y) : (q, r)
+        else
+            r >= -(y÷2) + true ? (q-true, r+y) : (q, r)
+        end
+    else
+        if y >= 0
+            r <= -signed(y÷2) - true ? (q-true, r+y) : (q, r)
+        else
+            r <= (y÷2) - isodd(y) ? (q+true, r-y) : (q, r)
+        end
+    end
+end
+
+
 divrem(a, b, r::RoundingMode) = (div(a, b, r), rem(a, b, r))
 
 """
@@ -146,31 +196,7 @@ end
 function div(x::Integer, y::Integer, rnd::Union{typeof(RoundNearest),
                                               typeof(RoundNearestTiesAway),
                                               typeof(RoundNearestTiesUp)})
-    (q, r) = divrem(x, y)
-    # No remainder, we're done
-    iszero(r) && return q
-    if isodd(y)
-        # The divisior is odd - no ties are possible, just
-        # round to nearest. N.B. 2r == y is impossible because
-        # y is odd.
-        return abs(2r) > abs(y) ? q + copysign(one(q), q) : q
-    end
-    # y is even, divide y by two and check whether we have a tie.
-    # If not, as above we just round to the nearest value.
-    halfy = copysign(y >> 1, r)
-    c = cmp(r, halfy)
-    c == -1 && return q
-    c == 1 && return q + copysign(one(q), q)
-    # We have a tie (r == y/2). Select tie behavior according to
-    # rounding mode.
-    if rnd == RoundNearest
-        return iseven(q) ? q : q + copysign(one(q), q)
-    elseif rnd == RoundNearestTiesAway
-        return q + copysign(one(q), q)
-    else
-        @assert rnd == RoundNearestTiesUp
-        return sign(q) == -1 ? q : q + one(q)
-    end
+    divrem(x,y,rnd)[1]
 end
 
 # For bootstrapping purposes, we define div for integers directly. Provide the

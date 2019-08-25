@@ -307,6 +307,14 @@ let i = MyInt26779(1)
 end
 
 @testset "rounding division" begin
+    for x = -100:100
+        for y = 1:100
+            for rnd in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp)
+                @test div(x,y,rnd) == round(x/y,rnd)
+                @test div(x,-y,rnd) == round(x/-y,rnd)
+            end
+        end
+    end
     for (a, b, nearest, away, up) in (
             (3, 2, 2, 2, 2),
             (5, 3, 2, 2, 2),
