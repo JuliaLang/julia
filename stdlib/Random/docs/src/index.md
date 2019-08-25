@@ -286,8 +286,7 @@ The API is not clearly defined yet, but as a rule of thumb:
 2) other documented `rand` methods accepting an `AbstractRNG` should work out of the box,
    (provided the methods from 1) what are relied on are implemented),
    but can of course be specialized for this RNG if there is room for optimization;
-3) make sure that `copy` is possible for the new generator, otherwise, (i.e. hardware-based RNG),
-   an error should be thrown.
+3) `copy` for RNGs should be implemented when possible.
 
 Concerning 1), a `rand` method may happen to work automatically, but it's not officially
 supported and may break without warnings in a subsequent release.
