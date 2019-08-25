@@ -35,7 +35,7 @@ div(x, y, r::RoundingMode)
 div(a, b) = div(a, b, RoundToZero)
 
 """
-    rem(x, y, r::RoundingMode)
+    rem(x, y, r::RoundingMode=RoundToZero)
 
 Compute the remainder of `x` after integer division by `y`, with the quotient rounded
 according to the rounding mode `r`. In other words, the quantity
@@ -98,10 +98,11 @@ cld(a, b) = div(a, b, RoundUp)
 
 # divrem
 """
-    divrem(x, y)
+    divrem(x, y, r::RoundingMode=RoundToZero)
 
-The quotient and remainder from Euclidean division. Equivalent to `(div(x,y), rem(x,y))` or
-`(x÷y, x%y)`.
+The quotient and remainder from Euclidean division.
+Equivalent to `(div(x,y,r), rem(x,y,r))`. Equivalently, with the the default
+value of `r`, this call is equivalent to `(x÷y, x%y)`.
 
 # Examples
 ```jldoctest
@@ -113,6 +114,7 @@ julia> divrem(7,3)
 ```
 """
 divrem(x, y) = divrem(x, y, RoundToZero)
+divrem(a, b, r::RoundingMode) = (div(a, b, r), rem(a, b, r))
 function divrem(x::Integer, y::Integer, rnd::typeof(RoundNearest))
     (q, r) = divrem(x, y)
     if x >= 0
@@ -161,9 +163,6 @@ function divrem(x::Integer, y::Integer, rnd::typeof(RoundNearestTiesUp))
         end
     end
 end
-
-
-divrem(a, b, r::RoundingMode) = (div(a, b, r), rem(a, b, r))
 
 """
     fldmod(x, y)
