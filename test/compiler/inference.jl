@@ -2442,3 +2442,17 @@ f31974(n::Int) = f31974(1:n)
 # This query hangs if type inference improperly attempts to const prop
 # call cycles.
 @test code_typed(f31974, Tuple{Int}) !== nothing
+
+# avoid widening type when calling identity and identity-like functions
+function f_TODO_PRNUM()
+    n = rand(1:3)
+    i = ntuple(i->n==i ? "" : 0, 3)::Union{Tuple{String,Int,Int},Tuple{Int,String,Int},Tuple{Int,Int,String}}
+    return identity(i)
+end
+@test Base.return_types(f_TODO_PRNUM) == [Union{Tuple{String,Int,Int},Tuple{Int,String,Int},Tuple{Int,Int,String}}]
+function g_TODO_PRNUM()
+    n = rand(1:3)
+    i = ntuple(i->n==i ? "" : 0, 3)::Union{Tuple{String,Int,Int},Tuple{Int,String,Int},Tuple{Int,Int,String}}
+    return convert(Any, i)
+end
+@test Base.return_types(g_TODO_PRNUM) == [Union{Tuple{String,Int,Int},Tuple{Int,String,Int},Tuple{Int,Int,String}}]

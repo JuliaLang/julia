@@ -58,6 +58,7 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
     applicable = applicable::Array{Any,1}
     napplicable = length(applicable)
     rettype = Bottom
+    rettype_union = Bottom
     edgecycle = false
     edges = Any[]
     nonbot = 0  # the index of the only non-Bottom inference result if > 0
@@ -70,7 +71,7 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
         sig = match[1]
         if istoplevel && !isdispatchtuple(sig)
             # only infer concrete call sites in top-level expressions
-            rettype = Any
+            rettype_union = rettype = Any
             break
         end
         sigtuple = unwrap_unionall(sig)::DataType
@@ -105,7 +106,18 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
         end
         seen += 1
         rettype = tmerge(rettype, this_rt)
-        rettype === Any && break
+        if is_derived_type(this_rt, sig, 1)
+            # type is passed through this method, be more liberal in forming a Union
+            rettype_union = Union{rettype_union, widenconst(this_rt)}
+        else
+            # force using rettype
+            rettype_union = Any
+        end
+        rettype == Any && rettype_union === Any && break
+    end
+    if unionlen(rettype_union) < sv.params.MAX_UNION_SPLITTING &&
+        is_derived_type(rettype_union, atype, 1) && rettype_union ⊑ rettype
+        rettype = rettype_union
     end
     # try constant propagation if only 1 method is inferred to non-Bottom
     # this is in preparation for inlining, or improving the return result
