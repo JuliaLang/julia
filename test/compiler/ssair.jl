@@ -81,23 +81,6 @@ let
     # XXX: missing @test
 end
 
-let
-    ex = quote
-        function fouter(x)
-            finner(::Float16) = 2x
-            return finner(Float16(1))
-        end
-    end
-    thunk1 = Meta.lower(Main, ex)
-    thunk2 = thunk1.args[1].code[2]
-    code = thunk2.args[1]
-    used = BitSet()
-    for stmt in code.code
-        Compiler.scan_ssa_use!(push!, used, stmt)
-    end
-    @test !isempty(used)
-end
-
 for compile in ("min", "yes")
     cmd = `$(Base.julia_cmd()) --compile=$compile interpreter_exec.jl`
     if !success(pipeline(Cmd(cmd, dir=@__DIR__); stdout=stdout, stderr=stderr))
