@@ -664,3 +664,8 @@ cholesky(A::Diagonal, ::Val{false} = Val(false); check::Bool = true) =
     cholesky!(cholcopy(A), Val(false); check = check)
 
 Base._sum(A::Diagonal, ::Colon) = sum(A.diag)
+
+function logabsdet(A::Diagonal)
+     mapreduce(x -> (log(abs(x)), sign(x)), ((d1, s1), (d2, s2)) -> (d1 + d2, s1 * s2),
+               A.diag)
+end

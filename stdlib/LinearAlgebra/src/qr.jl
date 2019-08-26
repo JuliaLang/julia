@@ -66,15 +66,22 @@ A = Q R
 
 where ``Q`` is an orthogonal/unitary matrix and ``R`` is upper triangular. It is similar
 to the [`QR`](@ref) format except that the orthogonal/unitary matrix ``Q`` is stored in
-*Compact WY* format [^Schreiber1989], as a lower trapezoidal matrix ``V`` and an upper
-triangular matrix ``T`` where
+*Compact WY* format [^Schreiber1989].  For the block size ``n_b``, it is stored as
+a `m`×`n` lower trapezoidal matrix ``V`` and a matrix ``T = (T_1 \\; T_2 \\; ... \\;
+T_{b-1} \\; T_b')`` composed of ``b = \\lceil \\min(m,n) / n_b \\rceil`` upper triangular
+matrices ``T_j`` of size ``n_b``×``n_b`` (``j = 1, ..., b-1``) and an upper trapezoidal
+``n_b``×``\\min(m,n) - (b-1) n_b`` matrix ``T_b'`` (``j=b``) whose upper square part
+denoted with ``T_b`` satisfying
 
 ```math
-Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T) = I - V T V^T
+Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T)
+= \\prod_{j=1}^{b} (I - V_j T_j V_j^T)
 ```
 
-such that ``v_i`` is the ``i``th column of ``V``, and ``\\tau_i`` is the ``i``th diagonal
-element of ``T``.
+such that ``v_i`` is the ``i``th column of ``V``, ``\\tau_i`` is the ``i``th element
+of `[diag(T_1); diag(T_2); …; diag(T_b)]`, and ``(V_1 \\; V_2 \\; ... \\; V_b)``
+is the left `m`×`min(m, n)` block of ``V``.  When constructed using [`qr`](@ref),
+the block size is given by ``n_b = \\min(m, n, 36)``.
 
 Iterating the decomposition produces the components `Q` and `R`.
 
@@ -88,8 +95,8 @@ The object has two fields:
   - The subdiagonal part contains the reflectors ``v_i`` stored in a packed format such
     that `V = I + tril(F.factors, -1)`.
 
-* `T` is a square matrix with `min(m,n)` columns, whose upper triangular part gives the
-  matrix ``T`` above (the subdiagonal elements are ignored).
+* `T` is a ``n_b``-by-``\\min(m,n)`` matrix as described above. The subdiagonal elements
+  for each triangular matrix ``T_j`` are ignored.
 
 !!! note
 
@@ -239,19 +246,22 @@ function qrfactPivotedUnblocked!(A::StridedMatrix)
 end
 
 # LAPACK version
-qr!(A::StridedMatrix{<:BlasFloat}, ::Val{false}) = QRCompactWY(LAPACK.geqrt!(A, min(min(size(A)...), 36))...)
+qr!(A::StridedMatrix{<:BlasFloat}, ::Val{false} = Val(false); blocksize=36) =
+    QRCompactWY(LAPACK.geqrt!(A, min(min(size(A)...), blocksize))...)
 qr!(A::StridedMatrix{<:BlasFloat}, ::Val{true}) = QRPivoted(LAPACK.geqp3!(A)...)
-qr!(A::StridedMatrix{<:BlasFloat}) = qr!(A, Val(false))
 
 # Generic fallbacks
 
 """
-    qr!(A, pivot=Val(false))
+    qr!(A, pivot=Val(false); blocksize)
 
 `qr!` is the same as [`qr`](@ref) when `A` is a subtype of
 `StridedMatrix`, but saves space by overwriting the input `A`, instead of creating a copy.
 An [`InexactError`](@ref) exception is thrown if the factorization produces a number not
 representable by the element type of `A`, e.g. for integer types.
+
+!!! compat "Julia 1.4"
+    The `blocksize` keyword argument requires Julia 1.4 or later.
 
 # Examples
 ```jldoctest
@@ -289,7 +299,7 @@ qr!(A::StridedMatrix) = qr!(A, Val(false))
 _qreltype(::Type{T}) where T = typeof(zero(T)/sqrt(abs2(one(T))))
 
 """
-    qr(A, pivot=Val(false)) -> F
+    qr(A, pivot=Val(false); blocksize) -> F
 
 Compute the QR factorization of the matrix `A`: an orthogonal (or unitary if `A` is
 complex-valued) matrix `Q`, and an upper triangular matrix `R` such that
@@ -329,6 +339,13 @@ and `F.Q*A` are supported. A `Q` matrix can be converted into a regular matrix w
 `m`×`m` orthogonal matrix, use `F.Q*Matrix(I,m,m)`.  If `m<=n`, then `Matrix(F.Q)` yields an `m`×`m`
 orthogonal matrix.
 
+The block size for QR decomposition can be specified by keyword argument
+`blocksize :: Integer` when `pivot == Val(false)` and `A isa StridedMatrix{<:BlasFloat}`.
+It is ignored when `blocksize > minimum(size(A))`.  See [`QRCompactWY`](@ref).
+
+!!! compat "Julia 1.4"
+    The `blocksize` keyword argument requires Julia 1.4 or later.
+
 # Examples
 ```jldoctest
 julia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]
@@ -359,17 +376,11 @@ true
     elementary reflectors, so that the `Q` and `R` matrices can be stored
     compactly rather as two separate dense matrices.
 """
-function qr(A::AbstractMatrix{T}, arg) where T
+function qr(A::AbstractMatrix{T}, arg...; kwargs...) where T
     require_one_based_indexing(A)
     AA = similar(A, _qreltype(T), size(A))
     copyto!(AA, A)
-    return qr!(AA, arg)
-end
-function qr(A::AbstractMatrix{T}) where T
-    require_one_based_indexing(A)
-    AA = similar(A, _qreltype(T), size(A))
-    copyto!(AA, A)
-    return qr!(AA)
+    return qr!(AA, arg...; kwargs...)
 end
 qr(x::Number) = qr(fill(x,1,1))
 function qr(v::AbstractVector)
@@ -502,7 +513,7 @@ AbstractMatrix{T}(Q::QRPackedQ) where {T} = QRPackedQ{T}(Q)
 QRCompactWYQ{S}(Q::QRCompactWYQ) where {S} = QRCompactWYQ(convert(AbstractMatrix{S}, Q.factors), convert(AbstractMatrix{S}, Q.T))
 AbstractMatrix{S}(Q::QRCompactWYQ{S}) where {S} = Q
 AbstractMatrix{S}(Q::QRCompactWYQ) where {S} = QRCompactWYQ{S}(Q)
-Matrix{T}(Q::AbstractQ) where {T} = lmul!(Q, Matrix{T}(I, size(Q, 1), min(size(Q.factors)...)))
+Matrix{T}(Q::AbstractQ{S}) where {T,S} = Matrix{T}(lmul!(Q, Matrix{S}(I, size(Q, 1), min(size(Q.factors)...))))
 Matrix(Q::AbstractQ{T}) where {T} = Matrix{T}(Q)
 Array{T}(Q::AbstractQ) where {T} = Matrix{T}(Q)
 Array(Q::AbstractQ) = Matrix(Q)

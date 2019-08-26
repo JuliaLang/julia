@@ -90,7 +90,8 @@ end
 
 """
     @horner(x, p...)
-    Evaluate p[1] + x * (p[2] + x * (....)), i.e. a polynomial via Horner's rule
+
+Evaluate `p[1] + x * (p[2] + x * (....))`, i.e. a polynomial via Horner's rule.
 """
 macro horner(x, p...)
     ex = esc(p[end])

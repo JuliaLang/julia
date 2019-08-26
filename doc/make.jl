@@ -202,7 +202,7 @@ env_mappings = [
 ]
 
 if Base.GIT_VERSION_INFO.tagged_commit
-    push!(env_mappings, "TRAVIS_TAG" => string(Base.VERSION))
+    push!(env_mappings, "TRAVIS_TAG" => "v$(Base.VERSION)")
 end
 
 withenv(env_mappings...) do
@@ -210,8 +210,8 @@ withenv(env_mappings...) do
         repo = "github.com/JuliaLang/docs.julialang.org.git",
         target = joinpath(buildroot, "doc", "_build", "html", "en"),
         dirname = "en",
-        devurl = "v1.3-dev",
-        versions = ["v#.#", "v1.3-dev" => "v1.3-dev"]
+        devurl = "v1.4-dev",
+        versions = ["v#.#", "v1.4-dev" => "v1.4-dev"]
     )
 end
 end

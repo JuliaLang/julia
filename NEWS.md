@@ -20,6 +20,8 @@ Build system changes
 New library functions
 ---------------------
 
+* The `splitpath` function now accepts any `AbstractString` whereas previously it only accepted paths of type `String` ([#33012]).
+
 
 Standard library changes
 ------------------------
@@ -29,6 +31,8 @@ Standard library changes
 
 
 #### LinearAlgebra
+
+* `qr` and `qr!` functions support `blocksize` keyword argument ([#33053]).
 
 
 #### SparseArrays
