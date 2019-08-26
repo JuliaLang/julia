@@ -73,11 +73,16 @@ function getalladdrinfo(host::String)
     end
     ct = current_task()
     preserve_handle(ct)
+    Base.sigatomic_begin()
     uv_req_set_data(req, ct)
     iolock_end()
     r = try
+        Base.sigatomic_end()
         wait()
     finally
+        Base.sigatomic_end()
+        iolock_begin()
+        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we don't get spurious notifications later
@@ -87,6 +92,7 @@ function getalladdrinfo(host::String)
             # done with req
             Libc.free(req)
         end
+        iolock_end()
         unpreserve_handle(ct)
     end
     if isa(r, IOError)
@@ -176,11 +182,16 @@ function getnameinfo(address::Union{IPv4, IPv6})
     end
     ct = current_task()
     preserve_handle(ct)
+    Base.sigatomic_begin()
     uv_req_set_data(req, ct)
     iolock_end()
     r = try
+        Base.sigatomic_end()
         wait()
     finally
+        Base.sigatomic_end()
+        iolock_begin()
+        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we don't get spurious notifications later
@@ -190,6 +201,7 @@ function getnameinfo(address::Union{IPv4, IPv6})
             # done with req
             Libc.free(req)
         end
+        iolock_end()
         unpreserve_handle(ct)
     end
     if isa(r, IOError)
