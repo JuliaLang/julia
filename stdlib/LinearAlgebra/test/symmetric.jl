@@ -434,7 +434,6 @@ end
 
         W[1,1] = 4
         @test W == T([4 -1; -1 1])
-        @test_throws ArgumentError (W[1,2] = 2)
 
         @test Y + I == T([2 -1; -1 2])
         @test Y - I == T([0 -1; -1 0])
@@ -603,6 +602,76 @@ end
     @test LinearAlgebra.symmetric_type(Int) == Int
     @test LinearAlgebra.hermitian(1, :U) == 1
     @test LinearAlgebra.hermitian_type(Int) == Int
+end
+
+@testset "setindex!" begin
+    # set non-real number on diagonal of Hermitian matrix
+    A = Hermitian([rand(1:7) + rand(1:7)*im for _ in 1:3, _ in 1:3])
+    @test_throws ArgumentError A[2, 2] = 1 + im
+
+    for T in (Symmetric, Hermitian)
+        for uplo in (:L, :U)
+            # set value on lower part of matrix
+            A = T(ones(Int, 3, 3), uplo)
+            A[2, 1] = 2
+            @test A == [1 2 1; 2 1 1; 1 1 1]
+
+            # set value on upper part of matrix
+            A = T(ones(Int, 3, 3), uplo)
+            A[1, 3] = 2
+            @test A == [1 1 2; 1 1 1; 2 1 1]
+
+            # set value on diagonal of matrix
+            A = T(ones(Int, 3, 3), uplo)
+            A[2, 2] = 2
+            @test A == [1 1 1; 1 2 1; 1 1 1]
+
+            # set value on upper part of block matrix
+            A = T([zeros(Complex, 2, 2) for _ in 1:4, _ in 1:4], uplo)
+            B = [1+1im 2+2im; 3+3im 4+4im]
+            A[1, 2] = B
+            expected = T == Symmetric ? [1+1im 3+3im; 2+2im 4+4im] : [1-1im 3-3im; 2-2im 4-4im]
+            @test A[1, 2] == B
+            @test A[2, 1] == expected
+            for cart in CartesianIndices(A)
+                i, j = cart[1], cart[2]
+                if (i, j) == (1, 2) || (i, j) == (2, 1)
+                    continue
+                end
+                @test A[cart] == zeros(Complex, 2, 2)
+            end
+
+            # set value on lower part of block matrix
+            A = T([zeros(Complex, 2, 2) for _ in 1:4, _ in 1:4], uplo)
+            A[2, 1] = B
+            @test A[2, 1] == B
+            @test A[1, 2] == expected
+            for cart in CartesianIndices(A)
+                i, j = cart[1], cart[2]
+                if (i, j) == (1, 2) || (i, j) == (2, 1)
+                    continue
+                end
+                @test A[cart] == zeros(Complex, 2, 2)
+            end
+
+            # set value on diagonal of block matrix
+            A = T([zeros(Complex, 2, 2) for _ in 1:4, _ in 1:4], uplo)
+            B = [1+1im 2+2im; 3+3im 4+4im]
+            if T == Hermitian
+                @test_throws ArgumentError A[3, 3] = B
+                B = [1+0im 2+2im; 3+3im 4+0im]
+            end
+            A[3, 3] = B
+            @test A[3, 3] == T(B, uplo)
+            for cart in CartesianIndices(A)
+                i, j = cart[1], cart[2]
+                if (i, j) == (3, 3)
+                    continue
+                end
+                @test A[cart] == zeros(Complex, 2, 2)
+            end
+        end
+    end
 end
 
 end # module TestSymmetric

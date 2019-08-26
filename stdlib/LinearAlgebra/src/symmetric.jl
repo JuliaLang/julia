@@ -222,17 +222,28 @@ end
 end
 
 function setindex!(A::Symmetric, v, i::Integer, j::Integer)
-    i == j || throw(ArgumentError("Cannot set a non-diagonal index in a symmetric matrix"))
-    setindex!(A.data, v, i, j)
+    @boundscheck checkbounds(A, i, j)
+    @inbounds if i == j
+        setindex!(A.data, v, i, i)
+    elseif (A.uplo == 'U') == (i < j)
+        setindex!(A.data, v, i, j)
+    else
+        setindex!(A.data, transpose(v), j, i)
+    end
 end
 
 function setindex!(A::Hermitian, v, i::Integer, j::Integer)
-    if i != j
-        throw(ArgumentError("Cannot set a non-diagonal index in a Hermitian matrix"))
-    elseif !isreal(v)
-        throw(ArgumentError("Cannot set a diagonal entry in a Hermitian matrix to a nonreal value"))
-    else
+    @boundscheck checkbounds(A, i, j)
+
+    dvals(x::Number) = x
+    dvals(A::AbstractMatrix) = diag(A)
+    @inbounds if i == j
+        isreal(dvals(v)) || throw(ArgumentError("Cannot set a diagonal entry in a Hermitian matrix to a nonreal value"))
+        setindex!(A.data, v, i, i)
+    elseif (A.uplo == 'U') == (i < j)
         setindex!(A.data, v, i, j)
+    else
+        setindex!(A.data, adjoint(v), j, i)
     end
 end
 
