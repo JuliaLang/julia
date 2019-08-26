@@ -631,9 +631,8 @@ function sparse(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{
               "length(I) (=$(length(I))) == length(J) (= $(length(J))) == length(V) (= ",
               "$(length(V)))")))
     end
-    Tj = Ti
-    while isbitstype(Tj) && coolen >= typemax(Tj)
-        Tj = widen(Tj)
+    if Base.hastypemax(Ti) && coolen >= typemax(Ti)
+        throw(ArgumentError("the index type $Ti cannot hold $coolen elements; use a larger index type"))
     end
     if m == 0 || n == 0 || coolen == 0
         if coolen != 0
@@ -646,13 +645,13 @@ function sparse(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{
         SparseMatrixCSC(m, n, fill(one(Ti), n+1), Vector{Ti}(), Vector{Tv}())
     else
         # Allocate storage for CSR form
-        csrrowptr = Vector{Tj}(undef, m+1)
+        csrrowptr = Vector{Ti}(undef, m+1)
         csrcolval = Vector{Ti}(undef, coolen)
         csrnzval = Vector{Tv}(undef, coolen)
 
         # Allocate storage for the CSC form's column pointers and a necessary workspace
         csccolptr = Vector{Ti}(undef, n+1)
-        klasttouch = Vector{Tj}(undef, n)
+        klasttouch = Vector{Ti}(undef, n)
 
         # Allocate empty arrays for the CSC form's row and nonzero value arrays
         # The parent method called below automagically resizes these arrays

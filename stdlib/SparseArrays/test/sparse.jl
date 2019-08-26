@@ -2664,14 +2664,14 @@ end
     J1 = Int8.(rand(1:10, 500))
     V1 = ones(500)
     # m * n < typemax(Ti) and length(I) >= typemax(Ti) - combining values
-    @test sparse(I1, J1, V1, 10, 10) !== nothing
+    @test_throws ArgumentError sparse(I1, J1, V1, 10, 10)
     # m * n >= typemax(Ti) and length(I) >= typemax(Ti)
-    @test sparse(I1, J1, V1, 12, 13) !== nothing
+    @test_throws ArgumentError sparse(I1, J1, V1, 12, 13)
     I1 = Int8.(rand(1:10, 126))
     J1 = Int8.(rand(1:10, 126))
     V1 = ones(126)
     # m * n >= typemax(Ti) and length(I) < typemax(Ti)
-    @test sparse(I1, J1, V1, 100, 100) !== nothing
+    @test size(sparse(I1, J1, V1, 100, 100)) == (100,100)
 end
 
 @testset "Typecheck too strict #31435" begin
