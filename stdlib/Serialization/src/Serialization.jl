@@ -1350,6 +1350,4 @@ function deserialize(s::AbstractSerializer, ::Type{Base.StackTraces.StackFrame})
     return Base.StackTraces.StackFrame(func, file, line, nothing, from_c, inlined, pointer)
 end
 
-include("precompile.jl")
-
 end
