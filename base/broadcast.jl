@@ -826,6 +826,7 @@ end
 end
 
 ## general `copy` methods
+@inline copy(bc::Broadcasted{<:AbstractArrayStyle{0}}) = bc[CartesianIndex()]
 copy(bc::Broadcasted{<:Union{Nothing,Unknown}}) =
     throw(ArgumentError("broadcasting requires an assigned BroadcastStyle"))
 
