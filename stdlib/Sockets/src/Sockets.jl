@@ -434,12 +434,16 @@ function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg)
     uvw = _send_async(sock, ipaddr, UInt16(port), msg)
     ct = current_task()
     preserve_handle(ct)
+    Base.sigatomic_begin()
     uv_req_set_data(uvw, ct)
     iolock_end()
     status = try
+        Base.sigatomic_end()
         wait()::Cint
     finally
+        Base.sigatomic_end()
         iolock_begin()
+        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
         if uv_req_data(uvw) != C_NULL
             # uvw is still alive,
             # so make sure we won't get spurious notifications later

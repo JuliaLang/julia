@@ -106,7 +106,7 @@ function wait(c::GenericCondition)
     try
         return wait()
     catch
-        list_deletefirst!(c.waitq, ct)
+        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
         rethrow()
     finally
         relockall(c.lock, token)
