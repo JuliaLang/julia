@@ -2020,11 +2020,6 @@ function *(A::AbstractMatrix, transB::Transpose{<:Any,<:AbstractTriangular})
     copyto!(AA, A)
     rmul!(AA, transpose(convert(AbstractArray{TAB}, B)))
 end
-# ambiguity resolution with definitions in linalg/rowvector.jl
-*(v::AdjointAbsVec, A::AbstractTriangular) = adjoint(adjoint(A) * v.parent)
-*(v::TransposeAbsVec, A::AbstractTriangular) = transpose(transpose(A) * v.parent)
-*(v::AdjointAbsVec, A::Adjoint{<:Any,<:AbstractTriangular}) = adjoint(A.parent * v.parent)
-*(v::TransposeAbsVec, A::Transpose{<:Any,<:AbstractTriangular}) = transpose(A.parent * v.parent)
 
 
 # If these are not defined, they will fallback to the versions in matmul.jl
