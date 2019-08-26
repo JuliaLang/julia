@@ -2065,7 +2065,6 @@ end
 
         W[1,1] = 4
         @test W == T(sparse([4 -1; -1 1]))
-        @test_throws ArgumentError (W[1,2] = 2)
 
         @test Y + I == T(sparse([2 -1; -1 2]))
         @test Y - I == T(sparse([0 -1; -1 0]))
