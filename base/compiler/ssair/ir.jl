@@ -394,26 +394,11 @@ iterate(it::UseRefIterator) = (it.use[1].op = 0; iterate(it, nothing))
     end
 end
 
-function scan_ssa_use_recursive!(push!, used, @nospecialize(a))
-    if isa(a, SSAValue)
-        push!(used, a.id)
-    elseif isa(a, Expr)
-        for aa in a.args
-            scan_ssa_use_recursive!(push!, used, aa)
-        end
-    end
-    return used
-end
-
 # This function is used from the show code, which may have a different
 # `push!`/`used` type since it's in Base.
 function scan_ssa_use!(push!, used, @nospecialize(stmt))
     if isa(stmt, SSAValue)
         push!(used, stmt.id)
-    elseif isexpr(stmt, :struct_type)
-        for a in stmt.args
-            scan_ssa_use_recursive!(push!, used, a)
-        end
     end
     for useref in userefs(stmt)
         val = useref[]
