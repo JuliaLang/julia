@@ -1079,10 +1079,6 @@ static jl_typemap_entry_t *jl_typemap_morespecific_by_type(jl_typemap_entry_t *f
 
 static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *tt, int mt_cache, size_t world)
 {
-    // TODO: Merge with jl_dump_compiles?
-    static ios_t f_precompile;
-    static JL_STREAM* s_precompile = NULL;
-
     // caller must hold the mt->writelock
     jl_typemap_entry_t *entry = NULL;
     entry = jl_typemap_assoc_by_type(mt->cache, (jl_value_t*)tt, NULL, /*subtype*/1, jl_cachearg_offset(mt), world, /*max_world_mask*/0);
@@ -1099,26 +1095,6 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype
         entry = jl_typemap_morespecific_by_type(entry, (jl_value_t*)tt, &env, world);
         if (entry != NULL) {
             jl_method_t *m = entry->func.method;
-            if (jl_options.trace_compile != NULL) {
-                if (s_precompile == NULL) {
-                    const char* t = jl_options.trace_compile;
-                    if (!strncmp(t, "stderr", 6))
-                        s_precompile = JL_STDERR;
-                    else {
-                        if (ios_file(&f_precompile, t, 1, 1, 1, 1) == NULL)
-                            jl_errorf("cannot open precompile statement file \"%s\" for writing", t);
-                        s_precompile = (JL_STREAM*) &f_precompile;
-                    }
-                }
-                if (!jl_has_free_typevars((jl_value_t*)tt)) {
-                    jl_printf(s_precompile, "precompile(");
-                    jl_static_show(s_precompile, (jl_value_t*)tt);
-                    jl_printf(s_precompile, ")\n");
-
-                    if (s_precompile != JL_STDERR)
-                        ios_flush(&f_precompile);
-                }
-            }
             if (!mt_cache) {
                 intptr_t nspec = (mt == jl_type_type_mt ? m->nargs + 1 : mt->max_args + 2);
                 jl_compilation_sig(tt, env, m, nspec, &newparams);
