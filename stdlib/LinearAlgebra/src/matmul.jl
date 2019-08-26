@@ -129,10 +129,6 @@ end
     return generic_matvecmul!(y, 'C', A, x, MulAddMul(alpha, beta))
 end
 
-# Vector-Matrix multiplication
-(*)(x::AdjointAbsVec,   A::AbstractMatrix) = (A'*x')'
-(*)(x::TransposeAbsVec, A::AbstractMatrix) = transpose(transpose(A)*transpose(x))
-
 # Matrix-matrix multiplication
 
 """
@@ -149,6 +145,11 @@ julia> [1 1; 0 1] * [1 0; 1 1]
 ```
 """
 function (*)(A::AbstractMatrix, B::AbstractMatrix)
+    if A isa AdjointAbsVec
+        return (A'*x')'
+    elseif A isa TransposeAbsVec
+        return transpose(transpose(A)*transpose(x))
+    end
     TS = promote_op(matprod, eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A,1), size(B,2))), A, B)
 end
