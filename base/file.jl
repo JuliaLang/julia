@@ -500,7 +500,7 @@ function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
     return (filename, Base.open(filename, "r+"))
 end
 
-function tempname(parent::AbstractString=tempdir())
+function tempname(parent::AbstractString=tempdir(); cleanup::Bool=false)
     isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
     seed::UInt32 = rand(UInt32)
     while true
@@ -509,6 +509,7 @@ function tempname(parent::AbstractString=tempdir())
         end
         filename = _win_tempname(parent, seed)
         if !ispath(filename)
+            cleanup && temp_cleanup_later(filename)
             return filename
         end
         seed += 1
@@ -518,12 +519,13 @@ end
 else # !windows
 
 # Obtain a temporary filename.
-function tempname(parent::AbstractString=tempdir())
+function tempname(parent::AbstractString=tempdir(); cleanup::Bool=false)
     isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
     p = ccall(:tempnam, Cstring, (Cstring, Cstring), parent, temp_prefix)
     systemerror(:tempnam, p == C_NULL)
     s = unsafe_string(p)
     Libc.free(p)
+    cleanup && temp_cleanup_later(s)
     return s
 end
 
@@ -541,7 +543,7 @@ end # os-test
 
 
 """
-    tempname(parent=tempdir()) -> String
+    tempname(parent=tempdir(); cleanup=false) -> String
 
 Generate a temporary file path. This function only returns a path; no file is
 created. The path is likely to be unique, but this cannot be guaranteed due to
@@ -554,8 +556,15 @@ temporary name in the system temporary directory as given by `tempdir()`. If a
 `parent` directory argument is given, the temporary path will be in that
 directory instead.
 
+The `cleanup` option controls whether the process attempts to delete the
+returned path automatically when the process exits. Note that the `tempname`
+function does not create any file or directory at the returned location, so
+there is nothing to cleanup unless you create a file or directory there. If
+you do and `clean` is `true` it will be deleted upon process termination.
+
 !!! compat "Julia 1.4"
-    The `parent` argument was added in 1.4.
+    The `parent` and `cleanup` arguments were added in 1.4. Prior to Julia 1.4
+    the path `tempname` would never be cleaned up at process termination.
 
 !!! warning
 
