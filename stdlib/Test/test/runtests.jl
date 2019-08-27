@@ -601,7 +601,12 @@ uninferrable_kwtest(x; y=1) = 2x+y
     f(e::Expr) = e
     # NOTE: e1 and e3 must be on the same line to get the same LineNumberNodes 😅
     e1 = f(quote 2+2 end); e2 = @inferred f(quote 2+2 end)
-    @test_broken e1 == e2
+    @test e1 == e2
+
+    # Test kwargs path
+    f_kw(e::Expr; x=1) = (e,x)
+    e1 = f_kw(quote 2+2 end, x=1); e2 = @inferred f_kw(quote 2+2 end, x=1)
+    @test e1 == e2
 end
 
 
