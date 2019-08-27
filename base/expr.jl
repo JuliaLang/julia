@@ -367,7 +367,9 @@ function remove_linenums!(ex::Expr)
         end
     end
     for subex in ex.args
-        subex isa Expr && remove_linenums!(subex)
+        if subex isa Expr && subex.head != :escape  # Don't recurse into esc() expr (#31334)
+            remove_linenums!(subex)
+        end
     end
     return ex
 end
