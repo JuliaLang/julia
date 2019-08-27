@@ -260,8 +260,13 @@ of the `Broadcasted` object empty (populated with [`nothing`](@ref)).
     end
     return Broadcasted{Style}(bc.f, bc.args, axes)
 end
-instantiate(bc::Broadcasted{<:Union{AbstractArrayStyle{0}, Style{Tuple}}}) = bc
-
+instantiate(bc::Broadcasted{<:AbstractArrayStyle{0}}) = bc
+# Tuples don't need axes, but when they have axes (for .= assignment), we need to check them (#33020)
+instantiate(bc::Broadcasted{Style{Tuple}, Nothing}) = bc
+function instantiate(bc::Broadcasted{Style{Tuple}})
+    check_broadcast_axes(bc.axes, bc.args...)
+    return bc
+end
 ## Flattening
 
 """
