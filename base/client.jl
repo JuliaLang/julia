@@ -442,7 +442,7 @@ function include(fname::AbstractString)
     tls[:SOURCE_PATH] = path
     local result
     try
-        result = ccall(:jl_load_, Any, (Any, Any), mod, fname)
+        result = ccall(:jl_load_, Any, (Any, Any), mod, path)
     finally
         if prev === nothing
             Main.Base.delete!(tls, :SOURCE_PATH)
