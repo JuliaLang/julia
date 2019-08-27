@@ -25,7 +25,7 @@ New library functions
 
 Standard library changes
 ------------------------
-
+ * `download` now accepts a path to a directory to download into as its second argument ([#33088]).
 
 #### Libdl
 
