@@ -22,7 +22,7 @@ New library functions
 
 * The `splitpath` function now accepts any `AbstractString` whereas previously it only accepted paths of type `String` ([#33012]).
 * The `tempname` function now takes an optional `parent::AbstractString` argument to give it a directory in which to attempt to produce a temporary path name ([#33090]).
-* The `tempname` function now takes a `cleanup::Bool` keyword argument defaulting to `false`; when set to `true` the process will try to ensure that any file or directory at the path returned by `tempname` is deleted upon process exit ([#33090]).
+* The `tempname` function now takes a `cleanup::Bool` keyword argument defaulting to `true`, which causes the process to try to ensure that any file or directory at the path returned by `tempname` is deleted upon process exit ([#33090]).
 
 
 Standard library changes

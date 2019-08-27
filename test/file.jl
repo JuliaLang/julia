@@ -80,12 +80,12 @@ child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $co
     t = child_eval("t = mktempdir(); touch(joinpath(t, \"file.txt\")); t")
     @test !ispath(t)
     # tempname without cleanup
-    t = child_eval("t = tempname(); touch(t); t")
+    t = child_eval("t = tempname(cleanup=false); touch(t); t")
     @test isfile(t)
     rm(t, force=true)
     @test !ispath(t)
     # tempname with cleanup
-    t = child_eval("t = tempname(cleanup=true); touch(t); t")
+    t = child_eval("t = tempname(); touch(t); t")
     @test !ispath(t)
 end
 

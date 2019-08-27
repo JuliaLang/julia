@@ -500,7 +500,7 @@ function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
     return (filename, Base.open(filename, "r+"))
 end
 
-function tempname(parent::AbstractString=tempdir(); cleanup::Bool=false)
+function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
     isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
     seed::UInt32 = rand(UInt32)
     while true
@@ -519,7 +519,7 @@ end
 else # !windows
 
 # Obtain a temporary filename.
-function tempname(parent::AbstractString=tempdir(); cleanup::Bool=false)
+function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
     isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
     p = ccall(:tempnam, Cstring, (Cstring, Cstring), parent, temp_prefix)
     systemerror(:tempnam, p == C_NULL)
@@ -543,7 +543,7 @@ end # os-test
 
 
 """
-    tempname(parent=tempdir(); cleanup=false) -> String
+    tempname(parent=tempdir(); cleanup=true) -> String
 
 Generate a temporary file path. This function only returns a path; no file is
 created. The path is likely to be unique, but this cannot be guaranteed due to
