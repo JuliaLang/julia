@@ -376,19 +376,6 @@ function remove_linenums!(src::CodeInfo)
     length(src.linetable) > 1 && resize!(src.linetable, 1)
     return src
 end
-replace_subtree!(x, (pat,r)) = x == pat ? r : x
-function replace_subtree!(ex::Expr, (pat,r)::Pair)
-    if ex == pat
-        r
-    else
-        for i in 1:length(ex.args)
-            ex.head = replace_subtree!(ex.head, pat=>r)
-            ex.args[i] = replace_subtree!(ex.args[i], pat=>r)
-        end
-        ex
-    end
-end
-
 
 macro generated()
     return Expr(:generated)

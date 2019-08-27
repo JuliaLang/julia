@@ -1361,12 +1361,10 @@ function _inferred(ex, mod, allow = :(Union{}))
         ex = Expr(:call, GlobalRef(Test, :_materialize_broadcasted),
             farg, ex.args[2:end]...)
     end
-    args_subtree_tag = gensym(:REPLACE_ME_WITH_ARGS)
-    val = Base.remove_linenums!(quote
+    Base.remove_linenums!(quote
         let
             allow = $(esc(allow))
             allow isa Type || throw(ArgumentError("@inferred requires a type as second argument"))
-
             $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
                 # Has keywords
                 args = gensym()
@@ -1378,7 +1376,7 @@ function _inferred(ex, mod, allow = :(Union{}))
             else
                 # No keywords
                 quote
-                    args = $args_subtree_tag
+                    args = ($([esc(ex.args[i]) for i = 2:length(ex.args)]...),)
                     result = $(esc(ex.args[1]))(args...)
                     inftypes = Base.return_types($(esc(ex.args[1])), Base.typesof(args...))
                 end
@@ -1389,7 +1387,6 @@ function _inferred(ex, mod, allow = :(Union{}))
             result
         end
     end)
-    Base.replace_subtree!(val, args_subtree_tag => :(($([esc(ex.args[i]) for i = 2:length(ex.args)]...),)))
 end
 
 """
