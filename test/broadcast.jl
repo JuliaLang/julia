@@ -663,6 +663,25 @@ end
     @test_throws DimensionMismatch (1, 2) .+ (1, 2, 3)
 end
 
+@testset "broadcasted assignment from tuples and tuple styles (#33020)" begin
+    a = zeros(3)
+    @test_throws DimensionMismatch a .= (1,2)
+    @test_throws DimensionMismatch a .= sqrt.((1,2))
+    a .= (1,)
+    @test all(==(1), a)
+    a .= sqrt.((2,))
+    @test all(==(√2), a)
+    a = zeros(3, 2)
+    @test_throws DimensionMismatch a .= (1,2)
+    @test_throws DimensionMismatch a .= sqrt.((1,2))
+    a .= (1,)
+    @test all(==(1), a)
+    a .= sqrt.((2,))
+    @test all(==(√2), a)
+    a .= (1,2,3)
+    @test a == [1 1; 2 2; 3 3]
+end
+
 @testset "scalar .=" begin
     A = [[1,2,3],4:5,6]
     A[1] .= 0
