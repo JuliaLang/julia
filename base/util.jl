@@ -60,6 +60,19 @@ end
 # total time spend in garbage collection, in nanoseconds
 gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
 
+"""
+    Base.gc_live_bytes()
+
+Return the total size (in bytes) of objects currently in memory.
+This is computed as the total size of live objects after
+the last garbage collection, plus the number of bytes allocated
+since then.
+"""
+function gc_live_bytes()
+    num = gc_num()
+    Int(ccall(:jl_gc_live_bytes, Int64, ())) + num.allocd + num.deferred_alloc
+end
+
 # print elapsed time, return expression value
 const _mem_units = ["byte", "KiB", "MiB", "GiB", "TiB", "PiB"]
 const _cnt_units = ["", " k", " M", " G", " T", " P"]
