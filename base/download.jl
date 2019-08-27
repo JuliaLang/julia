@@ -55,7 +55,8 @@ function download_url(url::String)
     return url
 end
 
-function download(url::AbstractString, filename::AbstractString)
+function download(url::AbstractString, localpath::AbstractString)
+    filename = isdir(localpath) ? tempname(localpath) : localpath
     url = download_url(url)
     curl_exe = find_curl()
     if curl_exe !== nothing
@@ -83,10 +84,12 @@ function download(url::AbstractString)
 end
 
 """
-    download(url::AbstractString, [localfile::AbstractString])
+    download(url::AbstractString, [localpath::AbstractString])
 
-Download a file from the given url, optionally renaming it to the given local file name. If
-no filename is given this will download into a randomly-named file in your temp directory.
+Download a file from the given url, to a local path. If no local path is given, then this
+will download into a randomly-named file in your temp directory. If a path to a directory
+is given, then this will download to a randomly-named file in that directory.
+Otherwise, `localpath` is the file path to download to.
 Note that this function relies on the availability of external tools such as `curl`, `wget`
 or `fetch` to download the file and is provided for convenience. For production use or
 situations in which more options are needed, please use a package that provides the desired
@@ -94,4 +97,4 @@ functionality instead.
 
 Returns the filename of the downloaded file.
 """
-download(url, filename)
+download(url, localpath)

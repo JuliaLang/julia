@@ -22,6 +22,13 @@ mktempdir() do temp_dir
     @test !isempty(read(file))
     ip = read(file, String)
 
+    # Download a file to a directory
+    subdir = mkdir(joinpath(temp_dir, "sub"))
+    subdirfile = download("http://httpbin.org/ip", subdir)
+    @test dirname(subdirfile) == subdir
+    @test isfile(subdirfile)
+    @test ip == read(subdirfile, String)
+
     # Test download rewrite hook
     push!(Base.DOWNLOAD_HOOKS, url->replace(url, r"/status/404$" => "/ip"))
     @test download("http://httpbin.org/status/404", file) == file
