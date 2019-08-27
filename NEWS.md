@@ -26,6 +26,7 @@ New library functions
 Standard library changes
 ------------------------
 
+* The methods of `mktemp` and `mktempdir` which take a function body to pass temporary paths to no longer throw errors if the path is already deleted when the function body returns ([#33091]).
 
 #### Libdl
 

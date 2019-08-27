@@ -612,7 +612,7 @@ function mktemp(fn::Function, parent::AbstractString=tempdir())
     finally
         try
             close(tmp_io)
-            rm(tmp_path)
+            ispath(tmp_path) && rm(tmp_path)
         catch ex
             @error "mktemp cleanup" _group=:file exception=(ex, catch_backtrace())
             # might be possible to remove later
@@ -634,7 +634,7 @@ function mktempdir(fn::Function, parent::AbstractString=tempdir();
         fn(tmpdir)
     finally
         try
-            rm(tmpdir, recursive=true)
+            ispath(tmpdir) && rm(tmpdir, recursive=true)
         catch ex
             @error "mktempdir cleanup" _group=:file exception=(ex, catch_backtrace())
             # might be possible to remove later
