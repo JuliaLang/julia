@@ -592,16 +592,17 @@ uninferrable_kwtest(x; y=1) = 2x+y
 @test (@inferred uninferrable_kwtest(1; y=2)) == 4
 
 # Issue #31334
-# Test @test doesn't modify input Exprs
-# NOTE: these definitions be on the same line to get the same LineNumberNodes 😅
-e = quote 2 + 2 end; @test_broken quote 2+2 end == e
+@testset "Testing doesn't modify input argument Exprs" begin
+    # Test @test doesn't modify input Exprs
+    # NOTE: these definitions be on the same line to get the same LineNumberNodes 😅
+    e = quote 2 + 2 end; @test_broken quote 2+2 end == e
 
-# Issue #31334
-# Test @inferred doesn't modify input Exprs
-f(e::Expr) = e
-# NOTE: e1 and e3 must be on the same line to get the same LineNumberNodes 😅
-e1 = f(quote 2+2 end); e2 = @inferred f(quote 2+2 end)
-@test e1 == e2
+    # Test @inferred doesn't modify input Exprs
+    f(e::Expr) = e
+    # NOTE: e1 and e3 must be on the same line to get the same LineNumberNodes 😅
+    e1 = f(quote 2+2 end); e2 = @inferred f(quote 2+2 end)
+    @test_broken e1 == e2
+end
 
 
 @test_throws ErrorException @testset "$(error())" for i in 1:10
