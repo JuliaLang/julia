@@ -459,6 +459,7 @@ end
 
 @inline function _mul!(A::UpperTriangular, B::UpperTriangular, c::Number, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = 1:j
             @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
@@ -468,6 +469,7 @@ end
 end
 @inline function _mul!(A::UpperTriangular, c::Number, B::UpperTriangular, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = 1:j
             @inbounds _modify!(_add, c * B[i,j], A, (i,j))
@@ -477,6 +479,7 @@ end
 end
 @inline function _mul!(A::UpperTriangular, B::UnitUpperTriangular, c::Number, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
         for i = 1:(j - 1)
@@ -487,6 +490,7 @@ end
 end
 @inline function _mul!(A::UpperTriangular, c::Number, B::UnitUpperTriangular, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
         for i = 1:(j - 1)
@@ -497,6 +501,7 @@ end
 end
 @inline function _mul!(A::LowerTriangular, B::LowerTriangular, c::Number, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = j:n
             @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
@@ -506,6 +511,7 @@ end
 end
 @inline function _mul!(A::LowerTriangular, c::Number, B::LowerTriangular, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = j:n
             @inbounds _modify!(_add, c * B[i,j], A, (i,j))
@@ -515,6 +521,7 @@ end
 end
 @inline function _mul!(A::LowerTriangular, B::UnitLowerTriangular, c::Number, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
         for i = (j + 1):n
@@ -525,6 +532,7 @@ end
 end
 @inline function _mul!(A::LowerTriangular, c::Number, B::UnitLowerTriangular, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
         for i = (j + 1):n
@@ -2532,7 +2540,7 @@ eigen(A::AbstractTriangular) = Eigen(eigvals(A), eigvecs(A))
 # Generic singular systems
 for func in (:svd, :svd!, :svdvals)
     @eval begin
-        ($func)(A::AbstractTriangular) = ($func)(copyto!(similar(parent(A)), A))
+        ($func)(A::AbstractTriangular; kwargs...) = ($func)(copyto!(similar(parent(A)), A); kwargs...)
     end
 end
 

@@ -503,7 +503,7 @@ function check_broadcast_shape(shp, Ashp::Tuple)
     _bcsm(shp[1], Ashp[1]) || throw(DimensionMismatch("array could not be broadcast to match destination"))
     check_broadcast_shape(tail(shp), tail(Ashp))
 end
-check_broadcast_axes(shp, A) = check_broadcast_shape(shp, axes(A))
+@inline check_broadcast_axes(shp, A) = check_broadcast_shape(shp, axes(A))
 # comparing many inputs
 @inline function check_broadcast_axes(shp, A, As...)
     check_broadcast_axes(shp, A)
@@ -798,13 +798,13 @@ Like [`broadcast`](@ref), except in the case of a 0-dimensional result where it 
 Broadcast automatically unwraps zero-dimensional results to be just the element itself,
 but in some cases it is necessary to always return a container — even in the 0-dimensional case.
 """
-function broadcast_preserving_zero_d(f, As...)
+@inline function broadcast_preserving_zero_d(f, As...)
     bc = broadcasted(f, As...)
     r = materialize(bc)
     return length(axes(bc)) == 0 ? fill!(similar(bc, typeof(r)), r) : r
 end
-broadcast_preserving_zero_d(f) = fill(f())
-broadcast_preserving_zero_d(f, as::Number...) = fill(f(as...))
+@inline broadcast_preserving_zero_d(f) = fill(f())
+@inline broadcast_preserving_zero_d(f, as::Number...) = fill(f(as...))
 
 """
     Broadcast.materialize(bc)

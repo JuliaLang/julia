@@ -30,7 +30,8 @@ function nonnothingtype_checked(T::Type)
     return R
 end
 
-convert(T::Type{>:Nothing}, x) = convert(nonnothingtype_checked(T), x)
+convert(::Type{T}, x::T) where {T>:Nothing} = x
+convert(::Type{T}, x) where {T>:Nothing} = convert(nonnothingtype_checked(T), x)
 convert(::Type{Some{T}}, x::Some{T}) where {T} = x
 convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))
 

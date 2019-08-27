@@ -197,7 +197,6 @@ end
     @test fy(x) == x / y
 end
 
-
 @testset "curried comparisons" begin
     eql5 = (==)(5)
     neq5 = (!=)(5)

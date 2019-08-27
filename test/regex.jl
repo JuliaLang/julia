@@ -46,6 +46,12 @@
     @test_throws ArgumentError match(r"test", GenericString("this is a test"))
     @test_throws ArgumentError findfirst(r"test", GenericString("this is a test"))
 
+    # Issue 27125
+    msg = "#Hello# from Julia"
+    re = r"#(.+)# from (?<name>\w+)"
+    subst = s"FROM: \g<name>\n MESSAGE: \1"
+    @test replace(msg, re => subst) == "FROM: Julia\n MESSAGE: Hello"
+
     # findall
     @test findall(r"\w+", "foo bar") == [1:3, 5:7]
     @test findall(r"\w+", "foo bar", overlap=true) == [1:3, 2:3, 3:3, 5:7, 6:7, 7:7]

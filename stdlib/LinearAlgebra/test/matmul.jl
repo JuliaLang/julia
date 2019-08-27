@@ -566,4 +566,13 @@ Base.:*(x::Float64, a::A32092) = x * a.x
     @test ones(2, 2) * [A32092(1.0), A32092(2.0)] == fill(3.0, (2,))
 end
 
+@testset "strong zero" begin
+    @testset for α in Any[false, 0.0, 0], n in 1:4
+        C = ones(n, n)
+        A = fill!(zeros(n, n), NaN)
+        B = ones(n, n)
+        @test mul!(copy(C), A, B, α, 1.0) == C
+    end
+end
+
 end # module TestMatmul

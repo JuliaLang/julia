@@ -18,7 +18,26 @@ end
 showerror(io::IO, ex::MissingException) =
     print(io, "MissingException: ", ex.msg)
 
+"""
+    nonmissingtype(T::Type)
+
+If `T` is a union of types containing `Missing`, return a new type with
+`Missing` removed.
+
+# Examples
+```jldoctest
+julia> nonmissingtype(Union{Int64,Missing})
+Int64
+
+julia> nonmissingtype(Any)
+Any
+```
+
+!!! compat "Julia 1.3"
+  This function is exported as of Julia 1.3.
+"""
 nonmissingtype(::Type{T}) where {T} = Core.Compiler.typesubtract(T, Missing)
+
 function nonmissingtype_checked(T::Type)
     R = nonmissingtype(T)
     R >: T && error("could not compute non-missing type")
@@ -45,8 +64,10 @@ function promote_rule(T::Type{>:Missing}, S::Type)
     return Union{R, Missing}
 end
 
-convert(T::Type{>:Union{Missing, Nothing}}, x) = convert(nonmissingtype_checked(nonnothingtype_checked(T)), x)
-convert(T::Type{>:Missing}, x) = convert(nonmissingtype_checked(T), x)
+convert(::Type{T}, x::T) where {T>:Missing} = x
+convert(::Type{T}, x::T) where {T>:Union{Missing, Nothing}} = x
+convert(::Type{T}, x) where {T>:Missing} = convert(nonmissingtype_checked(T), x)
+convert(::Type{T}, x) where {T>:Union{Missing, Nothing}} = convert(nonmissingtype_checked(nonnothingtype_checked(T)), x)
 
 
 # Comparison operators

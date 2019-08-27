@@ -470,7 +470,7 @@ function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat
     if nC != mA
         throw(DimensionMismatch("output matrix has size: $(nC), but should have size $(mA)"))
     end
-    if mA == 0 || nA == 0
+    if mA == 0 || nA == 0 || iszero(_add.alpha)
         return _rmul_or_fill!(C, _add.beta)
     end
     if mA == 2 && nA == 2
@@ -541,7 +541,7 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar
         throw(ArgumentError("output matrix must not be aliased with input matrix"))
     end
 
-    if mA == 0 || nA == 0 || nB == 0
+    if mA == 0 || nA == 0 || nB == 0 || iszero(_add.alpha)
         if size(C) != (mA, nB)
             throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
         end
@@ -674,6 +674,9 @@ function generic_matmatmul!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::Abs
     mB, nB = lapack_size(tB, B)
     mC, nC = size(C)
 
+    if iszero(_add.alpha)
+        return _rmul_or_fill!(C, _add.beta)
+    end
     if mA == nA == mB == nB == mC == nC == 2
         return matmul2x2!(C, tA, tB, A, B, _add)
     end
@@ -697,7 +700,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
     if size(C,1) != mA || size(C,2) != nB
         throw(DimensionMismatch("result C has dimensions $(size(C)), needs ($mA,$nB)"))
     end
-    if isempty(A) || isempty(B)
+    if isempty(A) || isempty(B) || iszero(_add.alpha)
         return _rmul_or_fill!(C, _add.beta)
     end
 

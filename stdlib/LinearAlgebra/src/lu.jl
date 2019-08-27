@@ -31,12 +31,12 @@ julia> F = lu(A)
 LU{Float64,Array{Float64,2}}
 L factor:
 2×2 Array{Float64,2}:
- 1.0  0.0
- 1.5  1.0
+ 1.0       0.0
+ 0.666667  1.0
 U factor:
 2×2 Array{Float64,2}:
- 4.0   3.0
- 0.0  -1.5
+ 6.0  3.0
+ 0.0  1.0
 
 julia> F.L * F.U == A[F.p, :]
 true
@@ -179,13 +179,6 @@ function generic_lufact!(A::StridedMatrix{T}, ::Val{Pivot} = Val(true);
     return LU{T,typeof(A)}(A, ipiv, convert(BlasInt, info))
 end
 
-# floating point types doesn't have to be promoted for LU, but should default to pivoting
-function lu(A::Union{AbstractMatrix{T}, AbstractMatrix{Complex{T}}},
-            pivot::Union{Val{false}, Val{true}} = Val(true);
-            check::Bool = true) where {T<:AbstractFloat}
-    lu!(copy(A), pivot; check = check)
-end
-
 function lutype(T::Type)
     # In generic_lufact!, the elements of the lower part of the matrix are
     # obtained using the division of two matrix elements. Hence their type can
@@ -258,12 +251,12 @@ julia> F = lu(A)
 LU{Float64,Array{Float64,2}}
 L factor:
 2×2 Array{Float64,2}:
- 1.0  0.0
- 1.5  1.0
+ 1.0       0.0
+ 0.666667  1.0
 U factor:
 2×2 Array{Float64,2}:
- 4.0   3.0
- 0.0  -1.5
+ 6.0  3.0
+ 0.0  1.0
 
 julia> F.L * F.U == A[F.p, :]
 true
@@ -274,26 +267,10 @@ julia> l == F.L && u == F.U && p == F.p
 true
 ```
 """
-function lu(A::AbstractMatrix{T}, pivot::Union{Val{false}, Val{true}};
+function lu(A::AbstractMatrix{T}, pivot::Union{Val{false}, Val{true}}=Val(true);
             check::Bool = true) where T
     S = lutype(T)
-    AA = similar(A, S)
-    copyto!(AA, A)
-    lu!(AA, pivot; check = check)
-end
-# We can't assume an ordered field so we first try without pivoting
-function lu(A::AbstractMatrix{T}; check::Bool = true) where T
-    S = lutype(T)
-    AA = similar(A, S)
-    copyto!(AA, A)
-    F = lu!(AA, Val(false); check = false)
-    if issuccess(F)
-        return F
-    else
-        AA = similar(A, S)
-        copyto!(AA, A)
-        return lu!(AA, Val(true); check = check)
-    end
+    lu!(copy_oftype(A, S), pivot; check = check)
 end
 
 lu(S::LU) = S

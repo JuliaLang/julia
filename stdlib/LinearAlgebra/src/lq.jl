@@ -35,6 +35,7 @@ julia> l, q = S; # destructuring via iteration
 
 julia> l == S.L &&  q == S.Q
 true
+```
 """
 struct LQ{T,S<:AbstractMatrix{T}} <: Factorization{T}
     factors::S

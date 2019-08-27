@@ -156,6 +156,12 @@ else
     const BlasInt = Int32
 end
 
+
+abstract type Algorithm end
+struct DivideAndConquer <: Algorithm end
+struct QRIteration <: Algorithm end
+
+
 # Check that stride of matrix/vector is 1
 # Writing like this to avoid splatting penalty when called with multiple arguments,
 # see PR 16416
