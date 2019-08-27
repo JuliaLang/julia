@@ -601,7 +601,7 @@ e = quote 2 + 2 end; @test_broken quote 2+2 end == e
 f(e::Expr) = e
 # NOTE: e1 and e3 must be on the same line to get the same LineNumberNodes 😅
 e1 = f(quote 2+2 end); e2 = @inferred f(quote 2+2 end)
-@test_broken e1 == e2
+@test e1 == e2
 
 
 @test_throws ErrorException @testset "$(error())" for i in 1:10
