@@ -561,15 +561,12 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
         "Bool(Base.JLOptions().use_sysimage_native_code)"`) == "false"
 end
 
-# backtrace contains type and line number info (esp. on windows #17179)
+# backtrace contains line number info (esp. on windows #17179)
 for precomp in ("yes", "no")
-    succ, out, bt = readchomperrors(`$(Base.julia_cmd()) --startup-file=no --sysimage-native-code=$precomp -E 'include("____nonexistent_file")'`)
+    succ, out, bt = readchomperrors(`$(Base.julia_cmd()) --startup-file=no --sysimage-native-code=$precomp -E 'sqrt(-2)'`)
     @test !succ
     @test out == ""
-    @test occursin("include_relative(::Module, ::String) at $(joinpath(".", "loading.jl"))", bt)
-    lno = match(r"at \.[\/\\]loading\.jl:(\d+)", bt)
-    @test length(lno.captures) == 1
-    @test parse(Int, lno.captures[1]) > 0
+    @test occursin(r"\.jl:(\d+)", bt)
 end
 
 # PR #23002
