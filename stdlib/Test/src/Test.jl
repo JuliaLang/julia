@@ -1361,35 +1361,35 @@ function _inferred(ex, mod, allow = :(Union{}))
         ex = Expr(:call, GlobalRef(Test, :_materialize_broadcasted),
             farg, ex.args[2:end]...)
     end
-    :(  # Note :() used instead of quote ... end to avoid adding linenums
+    args_subtree_tag = gensym(:REPLACE_ME_WITH_ARGS)
+    val = Base.remove_linenums!(quote
         let
+            allow = $(esc(allow))
+            allow isa Type || throw(ArgumentError("@inferred requires a type as second argument"))
+
             $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
                 # Has keywords
                 args = gensym()
                 kwargs = gensym()
-                :(
-                    $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])));
-                    inftypes = $(gen_call_with_extracted_types(mod, Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))));
-                )
+                quote
+                    $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
+                    inftypes = $(gen_call_with_extracted_types(mod, Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
+                end
             else
                 # No keywords
-                :(
-                    args = ($([esc(ex.args[i]) for i = 2:length(ex.args)]...),);
-                    result = $(esc(ex.args[1]))(args...);
-                    inftypes = Base.return_types($(esc(ex.args[1])), Base.typesof(args...));
-                )
-            end);
-            $(Base.remove_linenums!(quote
-                allow = $(esc(allow))
-                allow isa Type || throw(ArgumentError("@inferred requires a type as second argument"))
-
-                @assert length(inftypes) == 1
-                rettype = result isa Type ? Type{result} : typeof(result)
-                rettype <: allow || rettype == typesubtract(inftypes[1], allow) || error("return type $rettype does not match inferred return type $(inftypes[1])")
-                result
-            end))
+                quote
+                    args = $args_subtree_tag
+                    result = $(esc(ex.args[1]))(args...)
+                    inftypes = Base.return_types($(esc(ex.args[1])), Base.typesof(args...))
+                end
+            end)
+            @assert length(inftypes) == 1
+            rettype = result isa Type ? Type{result} : typeof(result)
+            rettype <: allow || rettype == typesubtract(inftypes[1], allow) || error("return type $rettype does not match inferred return type $(inftypes[1])")
+            result
         end
-    )
+    end)
+    Base.replace_subtree!(val, args_subtree_tag => :(($([esc(ex.args[i]) for i = 2:length(ex.args)]...),)))
 end
 
 """
