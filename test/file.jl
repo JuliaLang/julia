@@ -48,6 +48,18 @@ if !Sys.iswindows()
     cd(pwd_)
 end
 
+using Random
+
+@testset "tempname with parent" begin
+    t = tempname()
+    @test dirname(t) == tempdir()
+    mktempdir() do d
+        t = tempname(d)
+        @test dirname(t) == d
+    end
+    @test_throws ArgumentError tempname(randstring())
+end
+
 child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $code`)))
 
 @testset "mktemp/dir basic cleanup" begin

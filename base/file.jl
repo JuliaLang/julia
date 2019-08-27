@@ -500,8 +500,8 @@ function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
     return (filename, Base.open(filename, "r+"))
 end
 
-function tempname()
-    parent = tempdir()
+function tempname(parent::AbstractString=tempdir())
+    isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
     seed::UInt32 = rand(UInt32)
     while true
         if (seed & typemax(UInt16)) == 0
@@ -516,10 +516,11 @@ function tempname()
 end
 
 else # !windows
+
 # Obtain a temporary filename.
-function tempname()
-    d = tempdir() # tempnam ignores TMPDIR on darwin
-    p = ccall(:tempnam, Cstring, (Cstring, Cstring), d, temp_prefix)
+function tempname(parent::AbstractString=tempdir())
+    isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
+    p = ccall(:tempnam, Cstring, (Cstring, Cstring), parent, temp_prefix)
     systemerror(:tempnam, p == C_NULL)
     s = unsafe_string(p)
     Libc.free(p)
@@ -540,16 +541,28 @@ end # os-test
 
 
 """
-    tempname()
+    tempname(parent=tempdir()) -> String
 
 Generate a temporary file path. This function only returns a path; no file is
-created. The path is likely to be unique, but this cannot be guaranteed.
+created. The path is likely to be unique, but this cannot be guaranteed due to
+the very remote posibility of two simultaneous calls to `tempname` generating
+the same file name. The name is guaranteed to differ from all files already
+existing at the time of the call to `tempname`.
+
+When called with no arguments, the temporary name will be an absolute path to a
+temporary name in the system temporary directory as given by `tempdir()`. If a
+`parent` directory argument is given, the temporary path will be in that
+directory instead.
+
+!!! compat "Julia 1.4"
+    The `parent` argument was added in 1.4.
 
 !!! warning
 
     This can lead to security holes if another process obtains the same
     file name and creates the file before you are able to. Open the file with
-    `JL_O_EXCL` if this is a concern. Using [`mktemp()`](@ref) is also recommended instead.
+    `JL_O_EXCL` if this is a concern. Using [`mktemp()`](@ref) is also
+    recommended instead.
 """
 tempname()
 
