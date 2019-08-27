@@ -1092,6 +1092,8 @@ function source_dir()
     return p === nothing ? pwd() : dirname(p)
 end
 
+# These functions are duplicated in client.jl/include(::String) for
+# nicer stacktraces. Modifications here have to be backported there
 include_relative(mod::Module, path::AbstractString) = include_relative(mod, String(path))
 function include_relative(mod::Module, _path::String)
     path, prev = _include_dependency(mod, _path)
