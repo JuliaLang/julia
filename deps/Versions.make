@@ -15,4 +15,4 @@ CURL_VER = 7.56.0
 # Specify the version of the Mozilla CA Certificate Store to obtain.
 # The versions of cacert.pem are identified by the date (YYYY-MM-DD) of their changes.
 # See https://curl.haxx.se/docs/caextract.html for more details.
-MOZILLA_CACERT_VERSION := 2019-05-15
+MOZILLA_CACERT_VERSION := 2019-08-28
