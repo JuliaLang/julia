@@ -158,6 +158,8 @@ size(a::Array{<:Any,N}) where {N} = (@_inline_meta; ntuple(M -> size(a, M), Val(
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
+allocatedinline(::Type{T}) where {T} = (@_pure_meta; ccall(:jl_array_store_unboxed, Cint, (Any,), T) != Cint(0))
+
 """
     Base.isbitsunion(::Type{T})
 
@@ -172,14 +174,12 @@ julia> Base.isbitsunion(Union{Float64, String})
 false
 ```
 """
-isbitsunion(u::Union) = (@_pure_meta; ccall(:jl_array_store_unboxed, Cint, (Any,), u) != Cint(0))
+isbitsunion(u::Union) = allocatedinline(u)
 isbitsunion(x) = false
-
-isptrelement(t::Type) = (@_pure_meta; ccall(:jl_array_store_unboxed, Cint, (Any,), t) == Cint(0))
 
 function _unsetindex!(A::Array{T}, i::Int) where {T}
     @boundscheck checkbounds(A, i)
-    if isptrelement(T)
+    if !allocatedinline(T)
         t = @_gc_preserve_begin A
         p = Ptr{Ptr{Cvoid}}(pointer(A))
         unsafe_store!(p, C_NULL, i)
@@ -212,7 +212,7 @@ function bitsunionsize(u::Union)
 end
 
 length(a::Array) = arraylen(a)
-elsize(::Type{<:Array{T}}) where {T} = isbitstype(T) ? sizeof(T) : (isbitsunion(T) ? bitsunionsize(T) : sizeof(Ptr))
+elsize(::Type{<:Array{T}}) where {T} = isbitsunion(T) ? bitsunionsize(T) : (allocatedinline(T) ? sizeof(T) : sizeof(Ptr))
 sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
@@ -255,9 +255,7 @@ the same manner as C.
 function unsafe_copyto!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     t1 = @_gc_preserve_begin dest
     t2 = @_gc_preserve_begin src
-    if isbitstype(T)
-        unsafe_copyto!(pointer(dest, doffs), pointer(src, soffs), n)
-    elseif isbitsunion(T)
+    if isbitsunion(T)
         ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
               pointer(dest, doffs), pointer(src, soffs), n * Base.bitsunionsize(T))
         # copy selector bytes
@@ -265,6 +263,8 @@ function unsafe_copyto!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
               ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), dest) + doffs - 1,
               ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), src) + soffs - 1,
               n)
+    elseif allocatedinline(T)
+        unsafe_copyto!(pointer(dest, doffs), pointer(src, soffs), n)
     else
         ccall(:jl_array_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
               dest, pointer(dest, doffs), src, pointer(src, soffs), n)
@@ -1548,11 +1548,11 @@ function vcat(arrays::Vector{T}...) where T
     end
     arr = Vector{T}(undef, n)
     ptr = pointer(arr)
-    if isbitstype(T)
-        elsz = Core.sizeof(T)
-    elseif isbitsunion(T)
+    if isbitsunion(T)
         elsz = bitsunionsize(T)
         selptr = ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), arr)
+    elseif allocatedinline(T)
+        elsz = Core.sizeof(T)
     else
         elsz = Core.sizeof(Ptr{Cvoid})
     end
@@ -1560,16 +1560,16 @@ function vcat(arrays::Vector{T}...) where T
     for a in arrays
         na = length(a)
         nba = na * elsz
-        if isbitstype(T)
-            ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
-                  ptr, a, nba)
-        elseif isbitsunion(T)
+        if isbitsunion(T)
             ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
                   ptr, a, nba)
             # copy selector bytes
             ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
                   selptr, ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), a), na)
             selptr += na
+        elseif allocatedinline(T)
+            ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
+                  ptr, a, nba)
         else
             ccall(:jl_array_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
                   arr, ptr, a, pointer(a), na)

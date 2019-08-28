@@ -4,6 +4,7 @@ Julia v1.4 Release Notes
 New language features
 ---------------------
 
+* Structs with all isbits and isbitsunion fields are now stored inline in arrays ([#32448]).
 
 Language changes
 ----------------
