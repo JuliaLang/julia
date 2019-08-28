@@ -537,7 +537,8 @@ g_vararg(x::Vararg{Int, N}) where {N} = tuple(x...)
 Note that [`@code_typed`](@ref) and friends will always show you specialized code, even if Julia
 would not normally specialize that method call. You need to check the
 [method internals](@ref ast-lowered-method) if you want to see whether specializations are generated
-when argument types are changed.
+when argument types are changed, i.e., if `(@which f(...)).specializations` contains specializations
+for the argument in question.
 
 ## Break functions into multiple definitions
 
