@@ -48,6 +48,18 @@ if !Sys.iswindows()
     cd(pwd_)
 end
 
+using Random
+
+@testset "tempname with parent" begin
+    t = tempname()
+    @test dirname(t) == tempdir()
+    mktempdir() do d
+        t = tempname(d)
+        @test dirname(t) == d
+    end
+    @test_throws ArgumentError tempname(randstring())
+end
+
 child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $code`)))
 
 @testset "mktemp/dir basic cleanup" begin
@@ -66,6 +78,14 @@ child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $co
     @test !ispath(t)
     # mktempdir with cleanup
     t = child_eval("t = mktempdir(); touch(joinpath(t, \"file.txt\")); t")
+    @test !ispath(t)
+    # tempname without cleanup
+    t = child_eval("t = tempname(cleanup=false); touch(t); t")
+    @test isfile(t)
+    rm(t, force=true)
+    @test !ispath(t)
+    # tempname with cleanup
+    t = child_eval("t = tempname(); touch(t); t")
     @test !ispath(t)
 end
 
