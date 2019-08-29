@@ -168,3 +168,26 @@ end
 @test bt[2].line == 42
 @test bt[2].file === :foo
 end
+
+@noinline f33065(x; b=1.0, a="") = error()
+@noinline f33065(x, y; b=1.0, a="", c...) = error()
+let bt
+    try
+        f33065(0.0f0)
+    catch
+        bt = stacktrace(catch_backtrace())
+    end
+    @test any(s->startswith(string(s), "f33065(::Float32; b::Float64, a::String)"), bt)
+    try
+        f33065(0.0f0, b=:x)
+    catch
+        bt = stacktrace(catch_backtrace())
+    end
+    @test any(s->startswith(string(s), "f33065(::Float32; b::Symbol, a::String)"), bt)
+    try
+        f33065(0.0f0, 0.0f0, z=0)
+    catch
+        bt = stacktrace(catch_backtrace())
+    end
+    @test any(s->startswith(string(s), "f33065(::Float32, ::Float32; b::Float64, a::String, c::"), bt)
+end

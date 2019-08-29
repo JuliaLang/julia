@@ -73,23 +73,27 @@ end
 
 const empty_sym = Symbol("")
 
-function kwarg_decl(m::Method, kwtype::DataType)
-    sig = rewrap_unionall(Tuple{kwtype, Any, unwrap_unionall(m.sig).parameters...}, m.sig)
-    kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, get_world_counter())
-    if kwli !== nothing
-        kwli = kwli::Method
-        slotnames = ccall(:jl_uncompress_argnames, Vector{Any}, (Any,), kwli.slot_syms)
-        kws = filter(x -> !(x === empty_sym || '#' in string(x)), slotnames[(kwli.nargs + 1):end])
-        # ensure the kwarg... is always printed last. The order of the arguments are not
-        # necessarily the same as defined in the function
-        i = findfirst(x -> endswith(string(x), "..."), kws)
-        if i !== nothing
-            push!(kws, kws[i])
-            deleteat!(kws, i)
+function kwarg_decl(m::Method)
+    mt = get_methodtable(m)
+    if isdefined(mt, :kwsorter)
+        kwtype = typeof(mt.kwsorter)
+        sig = rewrap_unionall(Tuple{kwtype, Any, unwrap_unionall(m.sig).parameters...}, m.sig)
+        kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, get_world_counter())
+        if kwli !== nothing
+            kwli = kwli::Method
+            slotnames = ccall(:jl_uncompress_argnames, Vector{Any}, (Any,), kwli.slot_syms)
+            kws = filter(x -> !(x === empty_sym || '#' in string(x)), slotnames[(kwli.nargs + 1):end])
+            # ensure the kwarg... is always printed last. The order of the arguments are not
+            # necessarily the same as defined in the function
+            i = findfirst(x -> endswith(string(x), "..."), kws)
+            if i !== nothing
+                push!(kws, kws[i])
+                deleteat!(kws, i)
+            end
+            return kws
         end
-        return kws
     end
-    return ()
+    return Any[]
 end
 
 function show_method_params(io::IO, tv)
@@ -155,7 +159,7 @@ function functionloc(@nospecialize(f))
     return functionloc(first(mt))
 end
 
-function show(io::IO, m::Method; kwtype::Union{DataType, Nothing}=nothing)
+function show(io::IO, m::Method)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
     ft0 = sig.parameters[1]
@@ -182,12 +186,10 @@ function show(io::IO, m::Method; kwtype::Union{DataType, Nothing}=nothing)
     print(io, "(")
     join(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
                  ", ", ", ")
-    if kwtype !== nothing
-        kwargs = kwarg_decl(m, kwtype)
-        if !isempty(kwargs)
-            print(io, "; ")
-            join(io, kwargs, ", ", ", ")
-        end
+    kwargs = kwarg_decl(m)
+    if !isempty(kwargs)
+        print(io, "; ")
+        join(io, kwargs, ", ", ", ")
     end
     print(io, ")")
     show_method_params(io, tv)
@@ -235,7 +237,6 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     if header
         show_method_list_header(io, ms, str -> "\""*str*"\"")
     end
-    kwtype = isdefined(mt, :kwsorter) ? typeof(mt.kwsorter) : nothing
     n = rest = 0
     local last
 
@@ -245,7 +246,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
             n += 1
             println(io)
             print(io, "[$(n)] ")
-            show(io, meth; kwtype=kwtype)
+            show(io, meth)
             file, line = meth.file, meth.line
             try
                 file, line = invokelatest(methodloc_callback[], meth)
@@ -260,7 +261,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     if rest > 0
         println(io)
         if rest == 1
-            show(io, last; kwtype=kwtype)
+            show(io, last)
         else
             print(io, "... $rest methods not shown")
             if hasname
@@ -323,7 +324,7 @@ function url(m::Method)
     end
 end
 
-function show(io::IO, ::MIME"text/html", m::Method; kwtype::Union{DataType, Nothing}=nothing)
+function show(io::IO, ::MIME"text/html", m::Method)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
     ft0 = sig.parameters[1]
@@ -346,13 +347,11 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Union{DataType, Noth
     print(io, "(")
     join(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
                       for d in decls[2:end]], ", ", ", ")
-    if kwtype !== nothing
-        kwargs = kwarg_decl(m, kwtype)
-        if !isempty(kwargs)
-            print(io, "; <i>")
-            join(io, kwargs, ", ", ", ")
-            print(io, "</i>")
-        end
+    kwargs = kwarg_decl(m)
+    if !isempty(kwargs)
+        print(io, "; <i>")
+        join(io, kwargs, ", ", ", ")
+        print(io, "</i>")
     end
     print(io, ")")
     if !isempty(tv)
@@ -379,11 +378,10 @@ end
 function show(io::IO, mime::MIME"text/html", ms::MethodList)
     mt = ms.mt
     show_method_list_header(io, ms, str -> "<b>"*str*"</b>")
-    kwtype = isdefined(mt, :kwsorter) ? typeof(mt.kwsorter) : nothing
     print(io, "<ul>")
     for meth in ms
         print(io, "<li> ")
-        show(io, mime, meth; kwtype=kwtype)
+        show(io, mime, meth)
         print(io, "</li> ")
     end
     print(io, "</ul>")

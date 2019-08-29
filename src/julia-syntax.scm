@@ -432,8 +432,8 @@
                   sparams)))
     (let ((kw      (gensy))
           (rkw     (if (null? restkw) (make-ssavalue) (symbol (string (car restkw) "..."))))
-          (mangled (symbol (string "#" (if name (undot-name name) 'call) "#"
-                                   (string (current-julia-module-counter))))))
+          (mangled (symbol (string (if name (undot-name name) '_) "#"
+                                   (current-julia-module-counter)))))
       ;; this is a hack: nest these statements inside a call so they get closure
       ;; converted together, allowing all needed types to be defined before any methods.
       `(call (core ifelse) false false (block
@@ -449,7 +449,8 @@
             ,@not-optional ,@vararg)
           (insert-after-meta `(block
                                ,@stmts)
-                             annotations)
+                             (cons `(meta nkw ,(+ (length vars) (length restkw)))
+                                   annotations))
           rett)
 
         ;; call with no keyword args
