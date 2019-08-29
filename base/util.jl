@@ -137,9 +137,9 @@ See also [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
 
 !!! note
-    For more serious benchmarking, consider the `@btime` macro from the
-    [BenchmarkTools.jl](https://github.com/JuliaCI/BenchmarkTools.jl) package which
-    among other things evaluates the function multiple times in order to reduce noise.
+    For more serious benchmarking, consider the `@btime` macro from the BenchmarkTools.jl
+    package which among other things evaluates the function multiple times in order to
+    reduce noise.
 
 ```julia-repl
 julia> @time rand(10^6);
