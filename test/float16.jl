@@ -177,3 +177,6 @@ const minsubf16_32 = Float32(minsubf16)
 # Ties to even, in this case up
 @test Float16(minsubf16_32 + f16eps2) == nextfloat(minsubf16)
 @test Float16(prevfloat(minsubf16_32 + f16eps2)) == minsubf16
+
+# issues #33076
+@test Float16(1f5) == Inf16
