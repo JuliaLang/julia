@@ -287,7 +287,7 @@ The API is not clearly defined yet, but as a rule of thumb:
    (provided the methods from 1) what are relied on are implemented),
    but can of course be specialized for this RNG if there is room for optimization;
 3) `copy` for pseudo-RNGs should return an independent copy that generates the exact same random sequence as the
-   original from that point when called in the same way. When this is not feasible (eg hardware-based RNGs),
+   original from that point when called in the same way. When this is not feasible (e.g. hardware-based RNGs),
    `copy` must not be implemented.
 
 Concerning 1), a `rand` method may happen to work automatically, but it's not officially
