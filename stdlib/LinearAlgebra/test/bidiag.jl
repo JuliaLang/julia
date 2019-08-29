@@ -449,4 +449,10 @@ end
     @test sum(Bidiagonal([1,2,3], [1,2], :L)) == 9
 end
 
+@testset "empty sub-diagonal" begin
+    # `mul!` must use non-specialized method when sub-diagonal is empty
+    A = [1 2 3 4]'
+    @test A * Tridiagonal(ones(1, 1)) == A
+end
+
 end # module TestBidiagonal

@@ -393,6 +393,9 @@ function test_5()
 
     @test isequal_type(Ref{Tuple{Union{Int,Int8},Int16,T}} where T,
                        Ref{Union{Tuple{Int,Int16,S},Tuple{Int8,Int16,S}}} where S)
+
+    # issue #32726
+    @test Tuple{Type{Any}, Int, Float64, String} <: Tuple{Type{T}, Vararg{T}} where T
 end
 
 # tricky type variable lower bounds
@@ -991,6 +994,17 @@ function test_intersection()
     @test_broken typeintersect(Tuple{Type{Z},Z} where Z,
                                Tuple{Type{Ref{T}} where T, Ref{Float64}}) ==
         Tuple{Type{Ref{Float64}},Ref{Float64}}
+
+    # issue #32607
+    @testintersect(Type{<:Tuple{Integer,Integer}},
+                   Type{Tuple{Int,T}} where T,
+                   Type{Tuple{Int,T}} where T<:Integer)
+    @testintersect(Type{<:Tuple{Any,Vararg{Any}}},
+                   Type{Tuple{Vararg{Int,N}}} where N,
+                   Type{Tuple{Int,Vararg{Int,N}}} where N)
+    @testintersect(Type{<:Array},
+                   Type{AbstractArray{T}} where T,
+                   Bottom)
 end
 
 function test_intersection_properties()
@@ -1404,6 +1418,13 @@ end
 @testintersect(Union{Array{T,1},Array{T,2}} where T<:Union{Float32,Float64},
                Union{AbstractMatrix{Float32},AbstractVector{Float32}},
                Union{Array{Float32,2}, Array{Float32,1}})
+let A = Tuple{Type{Union{Missing,T}},Any} where T,
+    B = Tuple{Type{Union{Nothing,T}},Any} where T
+    I = typeintersect(A, B)
+    J = typeintersect(B, A)
+    @test I >: Tuple{Type{Union{Nothing,Missing,T}}, Any} where T
+    @test J >: Tuple{Type{Union{Nothing,Missing,T}}, Any} where T
+end
 
 # issue #29955
 struct M29955{T, TV<:AbstractVector{T}}
@@ -1651,3 +1672,7 @@ c32703(::Type{<:Str{C}}, str::Str{C}) where {C<:CSE} = str
 @test_broken typeintersect(Tuple{Vector{Vector{Float32}},Matrix,Matrix},
                            Tuple{Vector{V},Matrix{Int},Matrix{S}} where {S, V<:AbstractVector{S}}) ==
              Tuple{Array{Array{Float32,1},1},Array{Int,2},Array{Float32,2}}
+
+@testintersect(Tuple{Pair{Int, DataType}, Any},
+               Tuple{Pair{A, B} where B<:Type, Int} where A,
+               Tuple{Pair{Int, DataType}, Int})

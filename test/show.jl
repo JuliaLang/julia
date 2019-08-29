@@ -351,6 +351,22 @@ end
 @test sprint(show, :+) == ":+"
 @test sprint(show, :end) == ":end"
 
+# issue #32408: Printing of names which are invalid identifiers
+# Invalid identifiers which need `var` quoting:
+@test sprint(show, Expr(:call, :foo, Symbol("##")))   == ":(foo(var\"##\"))"
+@test sprint(show, Expr(:call, :foo, Symbol("a-b")))  == ":(foo(var\"a-b\"))"
+@test sprint(show, :(export var"#"))    == ":(export var\"#\")"
+@test sprint(show, :(import A: var"#")) == ":(import A: var\"#\")"
+@test sprint(show, :(macro var"#" end)) == ":(macro var\"#\" end)"
+@test sprint(show, :"x$(var"#")y") == ":(\"x\$(var\"#\")y\")"
+# Macro-like names outside macro calls
+@test sprint(show, Expr(:call, :foo, Symbol("@bar"))) == ":(foo(var\"@bar\"))"
+@test sprint(show, :(export @foo)) == ":(export @foo)"
+@test sprint(show, :(import A.B: c.@d)) == ":(import A.B: c.@d)"
+@test sprint(show, :(using A.@foo)) == ":(using A.@foo)"
+# Hidden macro names
+@test sprint(show, Expr(:macrocall, Symbol("@#"), nothing, :a)) == ":(@var\"#\" a)"
+
 # issue #12477
 @test sprint(show,  Union{Int64, Int32, Int16, Int8, Float64}) == "Union{Float64, Int16, Int32, Int64, Int8}"
 
@@ -580,9 +596,9 @@ function f13127()
     show(buf, f)
     String(take!(buf))
 end
-@test startswith(f13127(), "getfield($(@__MODULE__), Symbol(\"")
+@test startswith(f13127(), "$(@__MODULE__).var\"#f")
 
-@test startswith(sprint(show, typeof(x->x), context = :module=>@__MODULE__), "getfield($(@__MODULE__), Symbol(\"")
+@test startswith(sprint(show, typeof(x->x), context = :module=>@__MODULE__), "var\"")
 
 #test methodshow.jl functions
 @test Base.inbase(Base)
@@ -1146,7 +1162,7 @@ end
     @test repr(typeof(UnexportedOperators.:(==))) == "typeof($(curmod_prefix)UnexportedOperators.:(==))"
     anonfn = x->2x
     modname = string(@__MODULE__)
-    anonfn_type_repr = "getfield($modname, Symbol(\"$(typeof(anonfn).name.name)\"))"
+    anonfn_type_repr = "$modname.var\"$(typeof(anonfn).name.name)\""
     @test repr(typeof(anonfn)) == anonfn_type_repr
     @test repr(anonfn) == anonfn_type_repr * "()"
     @test repr("text/plain", anonfn) == "$(typeof(anonfn).name.mt.name) (generic function with 1 method)"
@@ -1230,7 +1246,7 @@ end
     @test showstr(Set([[Int16(1)]])) == "Set(Array{Int16,1}[[1]])"
     @test showstr([Float16(1)]) == "Float16[1.0]"
     @test showstr([[Float16(1)]]) == "Array{Float16,1}[[1.0]]"
-    @test replstr(Real[Float16(1)]) == "1-element Array{Real,1}:\n Float16(1.0)"
+    @test replstr(Real[Float16(1)]) == "1-element Array{Real,1}:\n 1.0"
     @test replstr(Array{Real}[Real[1]]) == "1-element Array{Array{Real,N} where N,1}:\n [1]"
     # printing tuples (Issue #25042)
     @test replstr(fill((Int64(1), zeros(Float16, 3)), 1)) ==
@@ -1467,15 +1483,19 @@ let src = code_typed(gcd, (Int, Int), debuginfo=:source)[1][1]
     @test pop!(lines) == "   ! ──       unreachable::#UNDEF"
 end
 
-# issue #27352
-@test_throws ArgumentError print(nothing)
-@test_throws ArgumentError print(stdout, nothing)
-@test_throws ArgumentError string(nothing)
-@test_throws ArgumentError string(1, "", nothing)
-@test_throws ArgumentError let x = nothing; "x = $x" end
-@test let x = nothing; "x = $(repr(x))" end == "x = nothing"
-@test_throws ArgumentError `/bin/foo $nothing`
-@test_throws ArgumentError `$nothing`
+@testset "printing and interpolating nothing" begin
+    @test sprint(print, nothing) == "nothing"
+    @test string(nothing) == "nothing"
+    @test repr(nothing) == "nothing"
+    @test string(1, "", nothing) == "1nothing"
+    @test let x = nothing; "x = $x" end == "x = nothing"
+    @test let x = nothing; "x = $(repr(x))" end == "x = nothing"
+
+    # issue #27352 : No interpolating nothing into commands
+    @test_throws ArgumentError `/bin/foo $nothing`
+    @test_throws ArgumentError `$nothing`
+    @test_throws ArgumentError let x = nothing; `/bin/foo $x` end
+end
 
 struct X28004
     value::Any

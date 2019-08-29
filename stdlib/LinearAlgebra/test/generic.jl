@@ -132,6 +132,15 @@ end
             @test mul!(similar(a), a, Diagonal(1.:an)) == a.*Vector(1:an)'
             @test mul!(similar(a), a, Diagonal(1:an))  == a.*Vector(1:an)'
         end
+
+        @testset "Scaling with 5-argument mul!" begin
+            @test mul!(copy(a), 5., a, 10, 100) == a*150
+            @test mul!(copy(a), a, 5., 10, 100) == a*150
+            @test mul!(copy(a), Diagonal([1.; 2.]), a, 10, 100) == 10a.*[1; 2] .+ 100a
+            @test mul!(copy(a), Diagonal([1; 2]), a, 10, 100)   == 10a.*[1; 2] .+ 100a
+            @test mul!(copy(a), a, Diagonal(1.:an), 10, 100) == 10a.*Vector(1:an)' .+ 100a
+            @test mul!(copy(a), a, Diagonal(1:an), 10, 100)  == 10a.*Vector(1:an)' .+ 100a
+        end
     end
 end
 
@@ -155,6 +164,10 @@ end
     @test conj(q*qmat) ≈ conj(qmat)*conj(q)
     @test q * (q \ qmat) ≈ qmat ≈ (qmat / q) * q
     @test q\qmat ≉ qmat/q
+    alpha = Quaternion(rand(4)...)
+    beta = Quaternion(0, 0, 0, 0)
+    @test mul!(copy(qmat), qmat, q, alpha, beta) ≈ qmat * q * alpha
+    @test mul!(copy(qmat), q, qmat, alpha, beta) ≈ q * qmat * alpha
 end
 @testset "ops on Numbers" begin
     @testset for elty in [Float32,Float64,ComplexF32,ComplexF64]

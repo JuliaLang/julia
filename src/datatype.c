@@ -248,7 +248,7 @@ static unsigned union_isbits(jl_value_t *ty, size_t *nbytes, size_t *align) JL_N
             return 0;
         return na + nb;
     }
-    if (jl_isbits(ty)) {
+    if (jl_is_datatype(ty) && jl_datatype_isinlinealloc(ty)) {
         size_t sz = jl_datatype_size(ty);
         size_t al = jl_datatype_align(ty);
         if (*nbytes < sz)
@@ -292,6 +292,7 @@ static int references_name(jl_value_t *p, jl_typename_t *name) JL_NOTSAFEPOINT
 void jl_compute_field_offsets(jl_datatype_t *st)
 {
     size_t sz = 0, alignm = 1;
+    size_t fldsz = 0, fldal = 0;
     int homogeneous = 1;
     jl_value_t *lastty = NULL;
     uint64_t max_offset = (((uint64_t)1) << 32) - 1;
@@ -302,12 +303,14 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         // compute whether this type can be inlined
         // based on whether its definition is self-referential
         if (w->types != NULL) {
-            st->isbitstype = st->isconcretetype && !st->mutabl;
+            st->isbitstype = st->isinlinealloc = st->isconcretetype && !st->mutabl;
             size_t i, nf = jl_svec_len(st->types);
             for (i = 0; i < nf; i++) {
                 jl_value_t *fld = jl_svecref(st->types, i);
                 if (st->isbitstype)
                     st->isbitstype = jl_is_datatype(fld) && ((jl_datatype_t*)fld)->isbitstype;
+                if (st->isinlinealloc)
+                    st->isinlinealloc = (jl_is_datatype(fld) && ((jl_datatype_t*)fld)->isbitstype) || jl_islayout_inline(fld, &fldsz, &fldal);
                 if (!st->zeroinit)
                     st->zeroinit = (jl_is_datatype(fld) && ((jl_datatype_t*)fld)->isinlinealloc) ? ((jl_datatype_t*)fld)->zeroinit : 1;
                 if (i < st->ninitialized) {
@@ -317,8 +320,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                         st->has_concrete_subtype &= !jl_is_datatype(fld) || ((jl_datatype_t *)fld)->has_concrete_subtype;
                 }
             }
-            if (st->isbitstype) {
-                st->isinlinealloc = 1;
+            if (st->isinlinealloc) {
                 size_t i, nf = jl_svec_len(w->types);
                 for (i = 0; i < nf; i++) {
                     jl_value_t *fld = jl_svecref(w->types, i);
@@ -905,9 +907,25 @@ JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
 JL_DLLEXPORT int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err)
 {
     jl_svec_t *fn = jl_field_names(t);
-    for(size_t i=0; i < jl_svec_len(fn); i++) {
-        if (jl_svecref(fn,i) == (jl_value_t*)fld) {
-            return (int)i;
+    size_t n = jl_svec_len(fn);
+    if (n == 0) {
+        if (jl_is_namedtuple_type(t)) {
+            jl_value_t *ns = jl_tparam0(t);
+            if (jl_is_tuple(ns)) {
+                n = jl_nfields(ns);
+                for(size_t i=0; i < n; i++) {
+                    if (jl_get_nth_field(ns, i) == (jl_value_t*)fld) {
+                        return (int)i;
+                    }
+                }
+            }
+        }
+    }
+    else {
+        for(size_t i=0; i < n; i++) {
+            if (jl_svecref(fn,i) == (jl_value_t*)fld) {
+                return (int)i;
+            }
         }
     }
     if (err)

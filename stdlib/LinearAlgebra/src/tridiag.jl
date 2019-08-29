@@ -162,7 +162,12 @@ end
 /(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv/B, A.ev/B)
 ==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (A.ev==B.ev)
 
-function mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
+@inline mul!(A::StridedVecOrMat, B::SymTridiagonal, C::StridedVecOrMat,
+             alpha::Number, beta::Number) =
+    _mul!(A, B, C, MulAddMul(alpha, beta))
+
+@inline function _mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat,
+                          _add::MulAddMul)
     m, n = size(B, 1), size(B, 2)
     if !(m == size(S, 1) == size(C, 1))
         throw(DimensionMismatch("A has first dimension $(size(S,1)), B has $(size(B,1)), C has $(size(C,1)) but all must match"))
@@ -173,6 +178,8 @@ function mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
 
     if m == 0
         return C
+    elseif iszero(_add.alpha)
+        return _rmul_or_fill!(C, _add.beta)
     end
 
     α = S.dv
@@ -186,9 +193,9 @@ function mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
             for i = 1:m - 1
                 x₋, x₀, x₊ = x₀, x₊, B[i + 1, j]
                 β₋, β₀ = β₀, β[i]
-                C[i, j] = β₋*x₋ + α[i]*x₀ + β₀*x₊
+                _modify!(_add, β₋*x₋ + α[i]*x₀ + β₀*x₊, C, (i, j))
             end
-            C[m, j] = β₀*x₀ + α[m]*x₊
+            _modify!(_add, β₀*x₀ + α[m]*x₊, C, (m, j))
         end
     end
 

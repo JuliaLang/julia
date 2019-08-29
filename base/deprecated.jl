@@ -188,3 +188,12 @@ MPFR.BigFloat(x::Real, prec::Int) = BigFloat(x; precision=prec)
 MPFR.BigFloat(x::Real, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding; precision=prec)
 
 # END 1.0 deprecations
+
+# BEGIN 1.3 deprecations
+
+@eval Threads begin
+    Base.@deprecate_binding RecursiveSpinLock ReentrantLock
+    Base.@deprecate_binding Mutex ReentrantLock
+end
+
+# END 1.3 deprecations

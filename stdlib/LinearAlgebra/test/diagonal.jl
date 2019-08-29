@@ -3,7 +3,7 @@
 module TestDiagonal
 
 using Test, LinearAlgebra, SparseArrays, Random
-using LinearAlgebra: mul!, rmul!, lmul!, ldiv!, rdiv!, BlasFloat, BlasComplex, SingularException
+using LinearAlgebra: mul!, mul!, rmul!, lmul!, ldiv!, rdiv!, BlasFloat, BlasComplex, SingularException
 
 n=12 #Size of matrix problem to test
 Random.seed!(1)
@@ -206,6 +206,46 @@ Random.seed!(1)
             end
         end
 
+        alpha = elty(randn())  # randn(elty) does not work with BigFloat
+        beta = elty(randn())
+        @test begin
+            vvv = similar(vv)
+            vvv .= randn(size(vvv))  # randn!(vvv) does not work with BigFloat
+            r = alpha * Matrix(D) * vv + beta * vvv
+            mul!(vvv, D, vv, alpha, beta)  ≈ r ≈ vvv
+        end
+        @test begin
+            vvv = similar(vv)
+            vvv .= randn(size(vvv))  # randn!(vvv) does not work with BigFloat
+            r = alpha * Matrix(D)' * vv + beta * vvv
+            mul!(vvv, adjoint(D), vv, alpha, beta) ≈ r ≈ vvv
+        end
+        @test begin
+            vvv = similar(vv)
+            vvv .= randn(size(vvv))  # randn!(vvv) does not work with BigFloat
+            r = alpha * transpose(Matrix(D)) * vv + beta * vvv
+            mul!(vvv, transpose(D), vv, alpha, beta) ≈ r ≈ vvv
+        end
+
+        @test begin
+            UUU = similar(UU)
+            UUU .= randn(size(UUU))  # randn!(UUU) does not work with BigFloat
+            r = alpha * Matrix(D) * UU + beta * UUU
+            mul!(UUU, D, UU, alpha, beta) ≈ r ≈ UUU
+        end
+        @test begin
+            UUU = similar(UU)
+            UUU .= randn(size(UUU))  # randn!(UUU) does not work with BigFloat
+            r = alpha * Matrix(D)' * UU + beta * UUU
+            mul!(UUU, adjoint(D), UU, alpha, beta) ≈ r ≈ UUU
+        end
+        @test begin
+            UUU = similar(UU)
+            UUU .= randn(size(UUU))  # randn!(UUU) does not work with BigFloat
+            r = alpha * transpose(Matrix(D)) * UU + beta * UUU
+            mul!(UUU, transpose(D), UU, alpha, beta) ≈ r ≈ UUU
+        end
+
         # make sure that mul!(A, {Adj|Trans}(B)) works with B as a Diagonal
         VV = Array(D)
         DD = copy(D)
@@ -282,10 +322,15 @@ Random.seed!(1)
         @test(transpose(D) * vv == D * vv)
     end
 
-    #logdet
+    # logdet and logabsdet
     if relty <: Real
-        ld=convert(Vector{relty},rand(n))
-        @test logdet(Diagonal(ld)) ≈ logdet(Matrix(Diagonal(ld)))
+        lD = Diagonal(convert(Vector{relty}, rand(n)))
+        lM = Matrix(lD)
+        @test logdet(lD) ≈ logdet(lM)
+        d1, s1 = @inferred logabsdet(lD)
+        d2, s2 = logabsdet(lM)
+        @test d1 ≈ d2
+        @test s1 == s2
     end
 
     @testset "similar" begin
@@ -553,6 +598,14 @@ end
 
 @testset "sum" begin
     @test sum(Diagonal([1,2,3])) == 6
+end
+
+@testset "logabsdet for generic eltype" begin
+    d = Any[1, -2.0, -3.0]
+    D = Diagonal(d)
+    d1, s1 = logabsdet(D)
+    @test d1 ≈ sum(log ∘ abs, d)
+    @test s1 == prod(sign, d)
 end
 
 end # module TestDiagonal

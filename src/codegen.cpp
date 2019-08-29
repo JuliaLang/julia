@@ -8,9 +8,6 @@
 // use ELF because RuntimeDyld COFF X86_64 doesn't seem to work (fails to generate function pointers)?
 #define FORCE_ELF
 #endif
-#if defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
-#  define JL_DISABLE_FPO
-#endif
 #if defined(_CPU_X86_)
 #define JL_NEED_FLOATTEMP_VAR 1
 #endif
@@ -1045,6 +1042,10 @@ const char *name_from_method_instance(jl_method_instance_t *mi)
 extern "C"
 jl_code_instance_t *jl_compile_linfo(jl_method_instance_t *mi, jl_code_info_t *src, size_t world, const jl_cgparams_t *params)
 {
+    // TODO: Merge with jl_dump_compiles?
+    static ios_t f_precompile;
+    static JL_STREAM* s_precompile = NULL;
+
     // N.B.: `src` may have not been rooted by the caller.
     JL_TIMING(CODEGEN);
     assert(jl_is_method_instance(mi));
@@ -1269,12 +1270,34 @@ jl_code_instance_t *jl_compile_linfo(jl_method_instance_t *mi, jl_code_info_t *s
     // ... unless mi->def isn't defined here meaning the function is a toplevel thunk and
     // would have its CodeInfo printed in the stream, which might contain double-quotes that
     // would not be properly escaped given the double-quotes added to the stream below.
-    if (dump_compiles_stream != NULL && jl_is_method(mi->def.method)) {
-        uint64_t this_time = jl_hrtime();
-        jl_printf(dump_compiles_stream, "%" PRIu64 "\t\"", this_time - last_time);
-        jl_static_show(dump_compiles_stream, mi->specTypes);
-        jl_printf(dump_compiles_stream, "\"\n");
-        last_time = this_time;
+    if (jl_is_method(mi->def.method)) {
+        if (jl_options.trace_compile != NULL) {
+            if (s_precompile == NULL) {
+                const char* t = jl_options.trace_compile;
+                if (!strncmp(t, "stderr", 6))
+                    s_precompile = JL_STDERR;
+                else {
+                    if (ios_file(&f_precompile, t, 1, 1, 1, 1) == NULL)
+                        jl_errorf("cannot open precompile statement file \"%s\" for writing", t);
+                    s_precompile = (JL_STREAM*) &f_precompile;
+                }
+            }
+            if (!jl_has_free_typevars(mi->specTypes)) {
+                jl_printf(s_precompile, "precompile(");
+                jl_static_show(s_precompile, mi->specTypes);
+                jl_printf(s_precompile, ")\n");
+
+                if (s_precompile != JL_STDERR)
+                    ios_flush(&f_precompile);
+            }
+        }
+        if (dump_compiles_stream != NULL) {
+            uint64_t this_time = jl_hrtime();
+            jl_printf(dump_compiles_stream, "%" PRIu64 "\t\"", this_time - last_time);
+            jl_static_show(dump_compiles_stream, mi->specTypes);
+            jl_printf(dump_compiles_stream, "\"\n");
+            last_time = this_time;
+        }
     }
     JL_GC_POP();
     return codeinst;
@@ -4380,7 +4403,7 @@ static Function* gen_cfun_wrapper(
     jl_unionall_t *unionall_env, jl_svec_t *sparam_vals, jl_array_t **closure_types)
 {
     // Generate a c-callable wrapper
-    size_t nargs = sig.nargs;
+    size_t nargs = sig.nccallargs;
     const char *name = "cfunction";
     size_t world = jl_world_counter;
     size_t min_valid = 0;
@@ -4435,7 +4458,7 @@ static Function* gen_cfun_wrapper(
         assert(closure_types);
         std::vector<Type*> fargt_sig(sig.fargt_sig);
         fargt_sig.insert(fargt_sig.begin() + sig.sret, T_pprjlvalue);
-        functype = FunctionType::get(sig.sret ? T_void : sig.prt, fargt_sig, sig.isVa);
+        functype = FunctionType::get(sig.sret ? T_void : sig.prt, fargt_sig, /*isVa*/false);
         attributes = attributes.addAttribute(jl_LLVMContext, 1 + sig.sret, Attribute::Nest);
     }
     else {
@@ -4444,11 +4467,8 @@ static Function* gen_cfun_wrapper(
     Function *cw = Function::Create(functype,
             GlobalVariable::ExternalLinkage,
             funcName.str(), M);
-    jl_init_function(cw);
     cw->setAttributes(attributes);
-#ifdef JL_DISABLE_FPO
-    cw->addFnAttr("no-frame-pointer-elim", "true");
-#endif
+    jl_init_function(cw);
     Function *cw_proto = into ? cw : function_proto(cw);
     // Save the Function object reference
     if (sf) {
@@ -4763,11 +4783,8 @@ static Function* gen_cfun_wrapper(
             funcName << "_gfthunk";
             Function *gf_thunk = Function::Create(returninfo.decl->getFunctionType(),
                     GlobalVariable::InternalLinkage, funcName.str(), M);
-            jl_init_function(gf_thunk);
             gf_thunk->setAttributes(returninfo.decl->getAttributes());
-#ifdef JL_DISABLE_FPO
-            gf_thunk->addFnAttr("no-frame-pointer-elim", "true");
-#endif
+            jl_init_function(gf_thunk);
             // build a  specsig -> jl_apply_generic converter thunk
             // this builds a method that calls jl_apply_generic (as a closure over a singleton function pointer),
             // but which has the signature of a specsig
@@ -4844,9 +4861,6 @@ static Function* gen_cfun_wrapper(
                 GlobalVariable::ExternalLinkage,
                 funcName.str(), M);
         jl_init_function(cw_make);
-#ifdef JL_DISABLE_FPO
-        cw_make->addFnAttr("no-frame-pointer-elim", "true");
-#endif
         BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", cw_make);
         IRBuilder<> cwbuilder(b0);
         Function::arg_iterator AI = cw_make->arg_begin();
@@ -4893,21 +4907,25 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
     }
 
     // some sanity checking and check whether there's a vararg
+    size_t nargt = jl_svec_len(argt);
+    bool isVa = (nargt > 0 && jl_is_vararg_type(jl_svecref(argt, nargt - 1)));
+    if (isVa) {
+        emit_error(ctx, "cfunction: Vararg syntax not allowed for argument list");
+        return jl_cgval_t();
+    }
+
     jl_array_t *closure_types = NULL;
     jl_value_t *sigt = NULL; // dispatch-sig = type signature with Ref{} annotations removed and applied to the env
     JL_GC_PUSH4(&declrt, &sigt, &rt, &closure_types);
-    bool isVa;
-    size_t nargt;
     Type *lrt;
     bool retboxed;
     bool static_rt;
     const std::string err = verify_ccall_sig(
             /* inputs:  */
-            0, rt, (jl_value_t*)argt, unionall_env,
+            rt, (jl_value_t*)argt, unionall_env,
             sparam_vals,
-            "cfunction",
             /* outputs: */
-            nargt, isVa, lrt, retboxed, static_rt);
+            lrt, retboxed, static_rt);
     if (!err.empty()) {
         emit_error(ctx, "cfunction " + err);
         JL_GC_POP();
@@ -4916,9 +4934,8 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
     if (rt != declrt && rt != (jl_value_t*)jl_any_type)
         jl_add_method_root(ctx, rt);
 
-    function_sig_t sig("cfunction", lrt, rt, retboxed, argt, unionall_env, nargt, isVa, CallingConv::C, false);
-    if (sig.err_msg.empty() && (sig.isVa || sig.fargt.size() + sig.sret != sig.fargt_sig.size()))
-        sig.err_msg = "cfunction: Vararg syntax not allowed for argument list";
+    function_sig_t sig("cfunction", lrt, rt, retboxed, argt, unionall_env, false, CallingConv::C, false);
+    assert(sig.fargt.size() + sig.sret == sig.fargt_sig.size());
     if (!sig.err_msg.empty()) {
         emit_error(ctx, sig.err_msg);
         JL_GC_POP();
@@ -5078,7 +5095,7 @@ static Function *jl_cfunction_object(jl_value_t *ff, jl_value_t *declrt, jl_tupl
         if (!insert)
             insert = jl_nothing;
         cache_l3 = jl_typemap_insert(&insert, (jl_value_t*)insert, (jl_tupletype_t*)argt,
-            NULL, jl_emptysvec, (jl_value_t*)jl_emptysvec, /*offs*/0, &cfunction_cache, 1, ~(size_t)0, NULL);
+            NULL, jl_emptysvec, (jl_value_t*)jl_emptysvec, /*offs*/0, &cfunction_cache, 1, ~(size_t)0);
         if (insert != cache_l2)
             jl_cfunction_list = jl_eqtable_put(jl_cfunction_list, ft, insert, NULL);
     }
@@ -5123,22 +5140,15 @@ static Function *jl_cfunction_object(jl_value_t *ff, jl_value_t *declrt, jl_tupl
     jl_value_t *err;
     { // scope block for sig
         function_sig_t sig("cfunction", lcrt, crt, toboxed,
-                           argt->parameters, NULL, nargs, false, CallingConv::C, false);
-        if (!sig.err_msg.empty()) {
-            err = jl_get_exceptionf(jl_errorexception_type, "%s", sig.err_msg.c_str());
-        }
-        else if (sig.isVa || sig.fargt.size() + sig.sret != sig.fargt_sig.size()) {
-            err = NULL;
-        }
-        else {
+                           argt->parameters, NULL, false, CallingConv::C, false);
+        if (sig.err_msg.empty()) {
             Function *F = gen_cfun_wrapper(NULL, sig, ff, cache_l3, declrt, (jl_tupletype_t*)sigt, NULL, NULL, NULL);
             JL_GC_POP();
             return F;
         }
+        err = jl_get_exceptionf(jl_errorexception_type, "%s", sig.err_msg.c_str());
     }
-    if (err)
-        jl_throw(err);
-    jl_error("cfunction: Vararg syntax not allowed for cfunction argument list");
+    jl_throw(err);
 }
 
 // generate a julia-callable function that calls f (AKA lam)
@@ -5148,9 +5158,6 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     add_return_attr(w, Attribute::NonNull);
     w->addFnAttr(Thunk);
     jl_init_function(w);
-#ifdef JL_DISABLE_FPO
-    w->addFnAttr("no-frame-pointer-elim", "true");
-#endif
     Function::arg_iterator AI = w->arg_begin();
     Value *funcArg = &*AI++;
     Value *argArray = &*AI++;
@@ -5276,12 +5283,17 @@ static bool uses_specsig(jl_value_t *sig, size_t nreq, jl_value_t *rettype, bool
         if (nbytes > 0)
             return true; // some elements of the union could be returned unboxed avoiding allocation
     }
+    bool allSingleton = true;
     for (size_t i = 0; i < jl_nparams(sig); i++) {
         jl_value_t *sigt = jl_tparam(sig, i);
-        if (jl_justbits(sigt) && !jl_is_datatype_singleton((jl_datatype_t*)sigt)) {
+        bool issing = jl_is_datatype_singleton((jl_datatype_t*)sigt);
+        allSingleton &= issing;
+        if (jl_justbits(sigt) && !issing) {
             return true;
         }
     }
+    if (allSingleton)
+        return true;
     return false; // jlcall sig won't require any box allocations
 }
 
@@ -5588,23 +5600,8 @@ static std::unique_ptr<Module> emit_function(
     }
     declarations->specFunctionObject = strdup(f->getName().str().c_str());
 
-#ifdef JL_DISABLE_FPO
-    f->addFnAttr("no-frame-pointer-elim", "true");
-#endif
     if (jlrettype == (jl_value_t*)jl_bottom_type)
         f->setDoesNotReturn();
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-    // tell Win32 to realign the stack to the next 16-byte boundary
-    // upon entry to any function. This achieves compatibility
-    // with both MinGW-GCC (which assumes an 16-byte-aligned stack) and
-    // i686 Windows (which uses a 4-byte-aligned stack)
-    AttrBuilder *attr = new AttrBuilder();
-    attr->addStackAlignmentAttr(16);
-    f->addAttributes(AttributeList::FunctionIndex, *attr);
-#endif
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-    f->setHasUWTable(); // force NeedsWinEH
-#endif
 
 #ifdef USE_POLLY
     if (!jl_has_meta(stmts, polly_sym) || jl_options.polly == JL_OPTIONS_POLLY_OFF) {

@@ -236,6 +236,7 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
     evaled_args = evaluated.args
     quoted_args = quoted.args
     n = length(evaled_args)
+    kw_suffix = ""
     if evaluated.head == :comparison
         args = evaled_args
         while i < n
@@ -260,17 +261,9 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
         func_sym = quoted_args[1]
         if isempty(kwargs)
             quoted = Expr(:call, func_sym, args...)
-        elseif func_sym === :≈
-            # in case of `≈(x, y, atol = z)`
-            # make the display like `Evaluated: x ≈ y (atol=z)`
-            kws = [Symbol(Expr(:kw, k, v), ",") for (k, v) in kwargs]
-            kws[end] = Symbol(Expr(:kw, kwargs[end]...))
-            kws[1] = Symbol("(", kws[1])
-            kws[end] = Symbol(kws[end], ")")
-            quoted = Expr(:comparison, args[1], func_sym, args[2], kws...)
-            if length(quoted.args) & 1 == 0  # hack to fit `show_unquoted`
-                push!(quoted.args, Symbol())
-            end
+        elseif func_sym === :≈ && !res
+            quoted = Expr(:call, func_sym, args...)
+            kw_suffix = " ($(join(["$k=$v" for (k, v) in kwargs], ", ")))"
         else
             kwargs_expr = Expr(:parameters, [Expr(:kw, k, v) for (k, v) in kwargs]...)
             quoted = Expr(:call, func_sym, kwargs_expr, args...)
@@ -286,7 +279,7 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
 
     Returned(res,
              # stringify arguments in case of failure, for easy remote printing
-             res ? quoted : sprint(io->print(IOContext(io, :limit => true), quoted)),
+             res ? quoted : sprint(io->print(IOContext(io, :limit => true), quoted))*kw_suffix,
              source)
 end
 

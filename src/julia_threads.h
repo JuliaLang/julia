@@ -11,9 +11,6 @@
 // Nonetheless, we define JL_THREAD and use it to give advanced notice to
 // maintainers of what eventual threading support will change.
 
-// JULIA_ENABLE_THREADING is switched on in Make.inc if JULIA_THREADS is
-// set (in Make.user)
-
 //  Options for task switching algorithm (in order of preference):
 // JL_HAVE_ASM -- mostly setjmp
 // JL_HAVE_ASYNCIFY -- task switching based on the binaryen asyncify transform
@@ -274,16 +271,6 @@ void jl_sigint_safepoint(jl_ptls_t tls) JL_NOTSAFEPOINT;
         (void)safepoint_load;                           \
     } while (0)
 #endif
-#ifndef JULIA_ENABLE_THREADING
-#define jl_gc_state(ptls) ((int8_t)0)
-STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
-                                     int8_t old_state)
-{
-    (void)ptls;
-    (void)state;
-    return old_state;
-}
-#else // ifndef JULIA_ENABLE_THREADING
 // Make sure jl_gc_state() is always a rvalue
 #define jl_gc_state(ptls) ((int8_t)ptls->gc_state)
 STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
@@ -296,7 +283,6 @@ STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
         jl_gc_safepoint_(ptls);
     return old_state;
 }
-#endif // ifndef JULIA_ENABLE_THREADING
 STATIC_INLINE int8_t jl_gc_state_save_and_set(jl_ptls_t ptls,
                                               int8_t state)
 {
