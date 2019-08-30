@@ -882,7 +882,7 @@ without storing the intermediate result of `A*y`. As for the two-argument
 [`dot(_,_)`](@ref), this acts recursively. Moreover, for complex vectors, the
 first vector is conjugated.
 """
-dot(x, A, y) = dot(A'x, y) # generic fallback for cases that are not covered by specialized methods
+dot(x, A, y) = dot(x, A*y) # generic fallback for cases that are not covered by specialized methods
 
 dot(x::Number, A::Number, y::Number) = conj(x) * A * y
 
