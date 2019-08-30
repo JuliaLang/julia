@@ -321,17 +321,18 @@ function dot(A::AbstractSparseMatrixCSC{T1,S1},B::AbstractSparseMatrixCSC{T2,S2}
     return r
 end
 
-function dot(x::AbstractVector, A::SparseMatrixCSC, y::AbstractVector)
+function dot(x::AbstractVector, A::AbstractSparseMatrixCSC, y::AbstractVector)
     require_one_based_indexing(x, y)
-    (length(x) == A.m && A.n == length(y)) || throw(DimensionMismatch())
-    if iszero(A.m) || iszero(A.n)
+    m, n = size(A)
+    (length(x) == m && n == length(y)) || throw(DimensionMismatch())
+    if iszero(m) || iszero(n)
         return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
     end
     T = promote_type(eltype(x), eltype(A), eltype(y))
     r = zero(T)
-    rvals = rowvals(A)
-    nzvals = nonzeros(A)
-    @inbounds for col in 1:A.n
+    rvals = getrowval(A)
+    nzvals = getnzval(A)
+    @inbounds for col in 1:n
         ycol = y[col]
         if !iszero(ycol)
             temp = zero(T)
@@ -343,18 +344,26 @@ function dot(x::AbstractVector, A::SparseMatrixCSC, y::AbstractVector)
     end
     return r
 end
-function dot(x::SparseVector, A::SparseMatrixCSC, y::SparseVector)
-    x.n == A.m && A.n == y.n || throw(DimensionMismatch())
-    if iszero(A.m) || iszero(A.n)
+function dot(x::SparseVector, A::AbstractSparseMatrixCSC, y::SparseVector)
+    m, n = size(A)
+    length(x) == m && n == length(y) || throw(DimensionMismatch())
+    if iszero(m) || iszero(n)
         return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
     end
     r = zero(promote_type(eltype(x), eltype(A), eltype(y)))
-    for (yi, yv) in zip(y.nzind, y.nzval)
-        A_ptr_lo = A.colptr[yi]
-        A_ptr_hi = A.colptr[yi+1] - 1
+    xnzind = nonzeroinds(x)
+    xnzval = nonzeros(x)
+    ynzind = nonzeroinds(y)
+    ynzval = nonzeros(y)
+    Acolptr = getcolptr(A)
+    Arowval = getrowval(A)
+    Anzval = getnzval(A)
+    for (yi, yv) in zip(ynzind, ynzval)
+        A_ptr_lo = Acolptr[yi]
+        A_ptr_hi = Acolptr[yi+1] - 1
         if A_ptr_lo <= A_ptr_hi
-            r += _spdot(dot, 1, length(x.nzind), x.nzind, x.nzval,
-                                            A_ptr_lo, A_ptr_hi, A.rowval, A.nzval) * yv
+            r += _spdot(dot, 1, length(xnzind), xnzind, xnzval,
+                                            A_ptr_lo, A_ptr_hi, Arowval, Anzval) * yv
         end
     end
     r

@@ -427,9 +427,11 @@ end
 @testset "generalized dot product" begin
     for i = 1:5
         A = sprand(ComplexF64, 10, 15, 0.4)
+        Av = view(A, :, :)
         x = sprand(ComplexF64, 10, 0.5)
         y = sprand(ComplexF64, 15, 0.5)
         @test dot(x, A, y) ≈ dot(Vector(x), A, Vector(y)) ≈ (Vector(x)' * Matrix(A)) * Vector(y)
+        @test dot(x, A, y) ≈ dot(x, Av, y)
     end
 end
 
