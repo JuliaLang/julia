@@ -1340,7 +1340,7 @@ mktempdir() do dir
             @test basename(realpath(uppercase(path))) == path
         end
         rm(path)
-        @test_throws SystemError realpath(path)
+        @test_throws Base.IOError realpath(path)
     end
 end
 
