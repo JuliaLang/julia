@@ -899,8 +899,6 @@ true
 """
 dot(x, A, y) = dot(x, A*y) # generic fallback for cases that are not covered by specialized methods
 
-dot(x::Number, A::Number, y::Number) = conj(x) * A * y
-
 function dot(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
     (axes(x)..., axes(y)...) == axes(A) || throw(DimensionMismatch())
     T = typeof(dot(first(x), first(A), first(y)))
