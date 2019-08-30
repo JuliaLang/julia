@@ -229,7 +229,8 @@ repl_search(s) = repl_search(stdout, s)
 
 function repl_corrections(io::IO, s)
     print(io, "Couldn't find ")
-    printstyled(io, s, '\n', color=:cyan)
+    pre = context_module == Main ? [] : [context_module, '.']
+    printstyled(io, pre..., s, '\n', color=:cyan)
     print_correction(io, s)
 end
 repl_corrections(s) = repl_corrections(stdout, s)
@@ -279,7 +280,7 @@ function repl(io::IO, s::Symbol)
     quote
         repl_latex($io, $str)
         repl_search($io, $str)
-        $(if !isdefined(Main, s) && !haskey(keywords, s)
+        $(if !isdefined(context_module, s) && !haskey(keywords, s)
                :(repl_corrections($io, $str))
           end)
         $(_repl(s))
@@ -345,8 +346,9 @@ function _repl(x)
             x.args = Any[x.args[1], Expr(:parameters, kwargs...), pargs...]
         end
     end
-    #docs = lookup_doc(x) # TODO
-    docs = esc(:(@doc $x))
+    # docs = lookup_doc(x) # TODO
+    expr = :(@doc $x)
+    docs = esc(:(Core.eval($context_module, $expr)))
     if isfield(x)
         quote
             if isa($(esc(x.args[1])), DataType)
@@ -507,7 +509,7 @@ end
 print_joined_cols(args...; cols = displaysize(stdout)[2]) = print_joined_cols(stdout, args...; cols=cols)
 
 function print_correction(io, word)
-    cors = levsort(word, accessible(Main))
+    cors = levsort(word, accessible(context_module))
     pre = "Perhaps you meant "
     print(io, pre)
     print_joined_cols(io, cors, ", ", " or "; cols = displaysize(io)[2] - length(pre))
@@ -535,7 +537,7 @@ accessible(mod::Module) =
      map(names, moduleusings(mod))...;
      builtins] |> unique |> filtervalid
 
-doc_completions(name) = fuzzysort(name, accessible(Main))
+doc_completions(name) = fuzzysort(name, accessible(context_module))
 doc_completions(name::Symbol) = doc_completions(string(name))
 
 
