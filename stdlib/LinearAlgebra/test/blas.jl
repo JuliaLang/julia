@@ -258,33 +258,42 @@ Random.seed!(100)
         @test all(BLAS.gemv('N', U4, o4) .== v41)
     end
     @testset "gemm" begin
-        @test all(BLAS.gemm('N', 'N', I4, I4) .== I4)
-        @test all(BLAS.gemm('N', 'T', I4, I4) .== I4)
-        @test all(BLAS.gemm('T', 'N', I4, I4) .== I4)
-        @test all(BLAS.gemm('T', 'T', I4, I4) .== I4)
-        @test all(BLAS.gemm('N', 'N', el2, I4, I4) .== el2 * I4)
-        @test all(BLAS.gemm('N', 'T', el2, I4, I4) .== el2 * I4)
-        @test all(BLAS.gemm('T', 'N', el2, I4, I4) .== el2 * I4)
-        @test all(LinearAlgebra.BLAS.gemm('T', 'T', el2, I4, I4) .== el2 * I4)
-        I4cp = copy(I4)
-        @test all(BLAS.gemm!('N', 'N', one(elty), I4, I4, elm1, I4cp) .== Z4)
-        @test all(I4cp .== Z4)
-        I4cp[:] = I4
-        @test all(BLAS.gemm!('N', 'T', one(elty), I4, I4, elm1, I4cp) .== Z4)
-        @test all(I4cp .== Z4)
-        I4cp[:] = I4
-        @test all(BLAS.gemm!('T', 'N', one(elty), I4, I4, elm1, I4cp) .== Z4)
-        @test all(I4cp .== Z4)
-        I4cp[:] = I4
-        @test all(BLAS.gemm!('T', 'T', one(elty), I4, I4, elm1, I4cp) .== Z4)
-        @test all(I4cp .== Z4)
-        @test all(BLAS.gemm('N', 'N', I4, U4) .== U4)
-        @test all(BLAS.gemm('N', 'T', I4, U4) .== L4)
-        @test_throws DimensionMismatch BLAS.gemm!('N','N', one(elty), I4, I4, elm1, Matrix{elty}(I, 5, 5))
-        @test_throws DimensionMismatch BLAS.gemm!('N','N', one(elty), I43, I4, elm1, I4)
-        @test_throws DimensionMismatch BLAS.gemm!('T','N', one(elty), I43, I4, elm1, I43)
-        @test_throws DimensionMismatch BLAS.gemm!('N','T', one(elty), I43, I43, elm1, I43)
-        @test_throws DimensionMismatch BLAS.gemm!('T','T', one(elty), I43, I43, elm1, Matrix{elty}(I, 3, 4))
+        if eltype(elm1) <: Complex
+            gemms = (BLAS.gemm, BLAS.gemm_4M)
+            gemms! = (BLAS.gemm!, BLAS.gemm_4M!)
+        else
+            gemms = (BLAS.gemm,)
+            gemms! = (BLAS.gemm!,)
+        end
+        for (gemm, gemm!) in zip(gemms, gemms!)
+            @test all(BLAS.gemm('N', 'N', I4, I4) .== I4)
+            @test all(BLAS.gemm('N', 'T', I4, I4) .== I4)
+            @test all(BLAS.gemm('T', 'N', I4, I4) .== I4)
+            @test all(BLAS.gemm('T', 'T', I4, I4) .== I4)
+            @test all(BLAS.gemm('N', 'N', el2, I4, I4) .== el2 * I4)
+            @test all(BLAS.gemm('N', 'T', el2, I4, I4) .== el2 * I4)
+            @test all(BLAS.gemm('T', 'N', el2, I4, I4) .== el2 * I4)
+            @test all(LinearAlgebra.BLAS.gemm('T', 'T', el2, I4, I4) .== el2 * I4)
+            I4cp = copy(I4)
+            @test all(BLAS.gemm!('N', 'N', one(elty), I4, I4, elm1, I4cp) .== Z4)
+            @test all(I4cp .== Z4)
+            I4cp[:] = I4
+            @test all(BLAS.gemm!('N', 'T', one(elty), I4, I4, elm1, I4cp) .== Z4)
+            @test all(I4cp .== Z4)
+            I4cp[:] = I4
+            @test all(BLAS.gemm!('T', 'N', one(elty), I4, I4, elm1, I4cp) .== Z4)
+            @test all(I4cp .== Z4)
+            I4cp[:] = I4
+            @test all(BLAS.gemm!('T', 'T', one(elty), I4, I4, elm1, I4cp) .== Z4)
+            @test all(I4cp .== Z4)
+            @test all(BLAS.gemm('N', 'N', I4, U4) .== U4)
+            @test all(BLAS.gemm('N', 'T', I4, U4) .== L4)
+            @test_throws DimensionMismatch BLAS.gemm!('N','N', one(elty), I4, I4, elm1, Matrix{elty}(I, 5, 5))
+            @test_throws DimensionMismatch BLAS.gemm!('N','N', one(elty), I43, I4, elm1, I4)
+            @test_throws DimensionMismatch BLAS.gemm!('T','N', one(elty), I43, I4, elm1, I43)
+            @test_throws DimensionMismatch BLAS.gemm!('N','T', one(elty), I43, I43, elm1, I43)
+            @test_throws DimensionMismatch BLAS.gemm!('T','T', one(elty), I43, I43, elm1, Matrix{elty}(I, 3, 4))
+        end
     end
     @testset "gemm compared to (sy)(he)rk" begin
         if eltype(elm1) <: Complex

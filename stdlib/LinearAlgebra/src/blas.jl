@@ -1110,15 +1110,45 @@ Update `C` as `alpha*A*B + beta*C` or the other three variants according to
 [`tA`](@ref stdlib-blas-trans) and `tB`. Return the updated `C`.
 """
 function gemm! end
+"""
+    gemm_4M!(tA, tB, alpha, A, B, beta, C)
+
+Update `C` as `alpha*A*B + beta*C` or the other three variants according to
+[`tA`](@ref stdlib-blas-trans) and `tB`. Return the updated `C`.
+
+Only defined for complex matrices, where it performs the
+multiplication with the slower 4M method, as opposed to the 3M method
+called by `gemm!`.
+
+The difference can be significant in the case when only the real or
+imaginary part is of interest, where the 3M method loses accuracy. See
+https://epubs.siam.org/doi/abs/10.1137/0613043 for more details.
+
+# Examples (results are BLAS-dependent)
+```
+julia> A = fill(1.0+1e-14*im, 1, 1); C = fill(0.0im, 1, 1);
+
+julia> BLAS.gemm!('N', 'N', 1.0+0im, A, A, 0.0im, C)
+1×1 Array{Complex{Float64},2}:
+ 1.0 + 1.9984014443252717e-14im
+
+julia> BLAS.gemm_4M!('N', 'N', 1.0+0im, A, A, 0.0im, C)
+1×1 Array{Complex{Float64},2}:
+ 1.0 + 2.0e-14im
+```
+"""
+function gemm_4M! end
 
 zgemm_fun() = has_gemm3m() ? :zgemm3m_ : :zgemm_
 cgemm_fun() = has_gemm3m() ? :cgemm3m_ : :cgemm_
 
-for (gemm, elty) in
-        ((:dgemm_,:Float64),
-         (:sgemm_,:Float32),
-         (zgemm_fun(),:ComplexF64),
-         (cgemm_fun(),:ComplexF32))
+for (gemmfun, gemm, gemm!, elty) in
+        ((:dgemm_, :gemm, :gemm!, :Float64),
+         (:sgemm_, :gemm, :gemm!, :Float32),
+         (zgemm_fun(), :gemm, :gemm!, :ComplexF64),
+         (cgemm_fun(), :gemm, :gemm!, :ComplexF32),
+         (:zgemm_, :gemm_4M, :gemm_4M!, :ComplexF64),
+         (:cgemm_, :gemm_4M, :gemm_4M!, :ComplexF32))
     @eval begin
              # SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
              # *     .. Scalar Arguments ..
@@ -1127,11 +1157,11 @@ for (gemm, elty) in
              #       CHARACTER TRANSA,TRANSB
              # *     .. Array Arguments ..
              #       DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
-        function gemm!(transA::AbstractChar, transB::AbstractChar,
-                       alpha::Union{($elty), Bool},
-                       A::AbstractVecOrMat{$elty}, B::AbstractVecOrMat{$elty},
-                       beta::Union{($elty), Bool},
-                       C::AbstractVecOrMat{$elty})
+        function ($gemm!)(transA::AbstractChar, transB::AbstractChar,
+                          alpha::Union{($elty), Bool},
+                          A::AbstractVecOrMat{$elty}, B::AbstractVecOrMat{$elty},
+                          beta::Union{($elty), Bool},
+                          C::AbstractVecOrMat{$elty})
 #           if any([stride(A,1), stride(B,1), stride(C,1)] .!= 1)
 #               error("gemm!: BLAS module requires contiguous matrix columns")
 #           end  # should this be checked on every call?
@@ -1146,7 +1176,7 @@ for (gemm, elty) in
             chkstride1(A)
             chkstride1(B)
             chkstride1(C)
-            ccall((@blasfunc($gemm), libblas), Cvoid,
+            ccall((@blasfunc($gemmfun), libblas), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                  Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt},
                  Ptr{$elty}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
@@ -1157,11 +1187,11 @@ for (gemm, elty) in
                  max(1,stride(C,2)))
             C
         end
-        function gemm(transA::AbstractChar, transB::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
-            gemm!(transA, transB, alpha, A, B, zero($elty), similar(B, $elty, (size(A, transA == 'N' ? 1 : 2), size(B, transB == 'N' ? 2 : 1))))
+        function ($gemm)(transA::AbstractChar, transB::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+            ($gemm!)(transA, transB, alpha, A, B, zero($elty), similar(B, $elty, (size(A, transA == 'N' ? 1 : 2), size(B, transB == 'N' ? 2 : 1))))
         end
-        function gemm(transA::AbstractChar, transB::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
-            gemm(transA, transB, one($elty), A, B)
+        function ($gemm)(transA::AbstractChar, transB::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+            ($gemm)(transA, transB, one($elty), A, B)
         end
     end
 end
@@ -1172,6 +1202,15 @@ end
 Return `alpha*A*B` or the other three variants according to [`tA`](@ref stdlib-blas-trans) and `tB`.
 """
 gemm(tA, tB, alpha, A, B)
+"""
+    gemm_4M(tA, tB, alpha, A, B)
+
+Return `alpha*A*B` or the other three variants according to
+[`tA`](@ref stdlib-blas-trans) and `tB`. Only defined for complex
+matrices, where it performs the multiplication with the slower 4M
+method, as opposed to the 3M method called by `gemm`.
+"""
+gemm_4M(tA, tB, alpha, A, B)
 
 """
     gemm(tA, tB, A, B)
@@ -1179,6 +1218,16 @@ gemm(tA, tB, alpha, A, B)
 Return `A*B` or the other three variants according to [`tA`](@ref stdlib-blas-trans) and `tB`.
 """
 gemm(tA, tB, A, B)
+
+"""
+    gemm_4M(tA, tB, A, B)
+
+Return `A*B` or the other three variants according to [`tA`](@ref
+stdlib-blas-trans) and `tB`. Only defined for complex matrices, where
+it performs the multiplication with the slower 4M method, as opposed
+to the 3M method called by `gemm`.
+"""
+gemm_4M(tA, tB, A, B)
 
 
 ## (SY) symmetric matrix-matrix and matrix-vector multiplication
