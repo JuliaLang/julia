@@ -126,3 +126,41 @@ macro spawn(expr)
         task
     end
 end
+
+"""
+    @spawncall f(args...)
+
+Like [`Threads.@spawn`](@ref), creates a [`Task`](@ref) that will run the given function
+call on any available thread. The arguments to the provided function, `args`, will be
+evaluated immediately in the current task, like a normal function call.
+
+This is different from [`@spawn`](@ref), where `@spawn` runs an arbitrary provided
+expression, wrapped in an empty closure, so that the entire expression is evaluated in the
+new task. Instead, the argument to `@spawncall` must be a function call, and that function,
+`f` is invoked with the values of the arguments evaluated in the current task. (This
+prevents variables from being "boxed" to capture them in the closure.)
+
+# Examples:
+- `@spawncall println(i)`
+- `@spawncall peakflops()`
+
+!!! note
+    This feature is currently considered experimental.
+
+!!! compat "Julia 1.3"
+    This macro is available as of Julia 1.3.
+"""
+macro spawncall(expr)
+    @assert expr.head == :call "The argument to @spawncall must be a function call, e.g. " *
+                               "`@spawncall f(x)``. Provided expr `$expr` is not a function call."
+    escf = esc(expr.args[1])
+    args = expr.args[2:end]
+
+    newargs = [gensym(string(a)) for a in args]
+    letargs = [:($a=$(esc(b))) for (a,b) in zip(newargs,args)]
+    quote
+        let $(letargs...)
+            @spawn $escf($(newargs...))
+        end
+    end
+end
