@@ -939,7 +939,7 @@
           `(block
             ,.(reverse! stmts)
             (foreigncall ,name ,RT (call (core svec) ,@(reverse! T))
-                         ,(if isseq (- (length F) 1) 0) ; 0 or number of arguments before ... in definition
+                         ,(if isseq (- (length atypes) 1) 0) ; 0 or number of arguments before ... in definition
                          ',cconv
                          ,.(reverse! C)
                          ,@GC)) ; GC root ordering is arbitrary
