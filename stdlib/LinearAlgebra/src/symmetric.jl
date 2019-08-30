@@ -460,22 +460,26 @@ end
 function dot(x::AbstractVector, A::RealHermSymComplexHerm, y::AbstractVector)
     require_one_based_indexing(x, y)
     (length(x) == length(y) == size(A, 1)) || throw(DimensionMismatch())
-    Δ = A.uplo == 'U' ? UpperTriangular(A) : LowerTriangular(A)
-    D = Diagonal(A)
-    if x === y
-        r = 2real(dot(x, Δ, x))
-        @inbounds @simd for i in eachindex(x)
-            r -= dot(x[i], A[i,i], x[i])
+    data = A.data
+    r = zero(eltype(x)) * zero(eltype(A)) * zero(eltype(y))
+    if A.uplo == 'U'
+        @inbounds for j = 1:length(y)
+            r += dot(x[j], real(data[j,j]), y[j])
+            @simd for i = 1:j-1
+                Aij = data[i,j]
+                r += dot(x[i], Aij, y[j]) + dot(x[j], adjoint(Aij), y[i])
+            end
         end
-        return r
-    else
-        r = dot(x, Δ, y)
-        r += conj(dot(y, Δ, x))
-        @inbounds @simd for i in eachindex(x)
-            r -= dot(x[i], A[i,i], y[i])
+    else # A.uplo == 'L'
+        @inbounds for j = 1:length(y)
+            r += dot(x[j], real(data[j,j]), y[j])
+            @simd for i = j+1:length(y)
+                Aij = data[i,j]
+                r += dot(x[i], Aij, y[j]) + dot(x[j], adjoint(Aij), y[i])
+            end
         end
-        return r
     end
+    return r
 end
 
 # Fallbacks to avoid generic_matvecmul!/generic_matmatmul!
