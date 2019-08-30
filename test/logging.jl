@@ -28,16 +28,24 @@ end
         A = fill(1.0, 4, 4)
         "sum(A) = $(sum(A))"
     end
+    @test_logs (Info, "sum(A) = 16.0") @logwith current_logger() Info begin
+        A = fill(1.0, 4, 4)
+        "sum(A) = $(sum(A))"
+    end
     x = 10.50
     @test_logs (Info, "10.5") @info "$x"
     @test_logs (Info, "10.500") @info @sprintf("%.3f", x)
+    @test_logs (Info, "10.5") @logwith current_logger() Info "$x"
+    @test_logs (Info, "10.500") @logwith current_logger() Info @sprintf("%.3f", x)
 end
 
 @testset "Programmatically defined levels" begin
     level = Info
     @test_logs (Info, "X") @logmsg level "X"
+    @test_logs (Info, "X") @logwith current_logger() level "X"
     level = Warn
     @test_logs (Warn, "X") @logmsg level "X"
+    @test_logs (Warn, "X") @logwith current_logger() level "X"
 end
 
 @testset "Structured logging with key value pairs" begin
@@ -96,33 +104,55 @@ end
 end
 
 @testset "Special keywords" begin
+    "Test whether the given `logger` correctly handles special keywords."
+    function testspecial(logger)
+        @test length(logger.logs) == 1
+        record = logger.logs[1]
+        @test record._module == Base.Core
+        @test record.group == :somegroup
+        @test record.id == :asdf
+        @test record.file == "/a/file"
+        @test record.line == -10
+        # Test consistency with shouldlog() function arguments
+        @test record.level   == logger.shouldlog_args[1]
+        @test record._module == logger.shouldlog_args[2]
+        @test record.group   == logger.shouldlog_args[3]
+        @test record.id      == logger.shouldlog_args[4]
+    end
+
+    """"
+    Test whether the given `logger` correctly handles special keywords with
+    value `nothing`.
+    """
+    function testnothing(logger)
+        @test length(logger.logs) == 1
+        record = logger.logs[1]
+        @test record._module == nothing
+        @test record.file == nothing
+        @test record.line == nothing
+    end
+
     logger = TestLogger()
     with_logger(logger) do
         @info "foo" _module=Base.Core _id=:asdf _group=:somegroup _file="/a/file" _line=-10
     end
-    @test length(logger.logs) == 1
-    record = logger.logs[1]
-    @test record._module == Base.Core
-    @test record.group == :somegroup
-    @test record.id == :asdf
-    @test record.file == "/a/file"
-    @test record.line == -10
-    # Test consistency with shouldlog() function arguments
-    @test record.level   == logger.shouldlog_args[1]
-    @test record._module == logger.shouldlog_args[2]
-    @test record.group   == logger.shouldlog_args[3]
-    @test record.id      == logger.shouldlog_args[4]
+    testspecial(logger)
+
+    logger = TestLogger()
+    @logwith(logger, Info, "foo", _module=Base.Core, _id=:asdf,
+             _group=:somegroup, _file="/a/file", _line=-10)
+    testspecial(logger)
 
     # handling of nothing
     logger = TestLogger()
     with_logger(logger) do
         @info "foo" _module = nothing _file = nothing _line = nothing
     end
-    @test length(logger.logs) == 1
-    record = logger.logs[1]
-    @test record._module == nothing
-    @test record.file == nothing
-    @test record.line == nothing
+    testnothing(logger)
+
+    logger = TestLogger()
+    @logwith logger Info "foo" _module = nothing _file = nothing _line = nothing
+    testnothing(logger)
 end
 
 # PR #28209
@@ -132,6 +162,8 @@ end
     @test_throws MethodError @macrocall(@info)
     @test_throws MethodError @macrocall(@warn)
     @test_throws MethodError @macrocall(@error)
+
+    @test_throws MethodError @macrocall(@logwith current_logger() :Notice)
 end
 
 
@@ -262,6 +294,13 @@ end
     @test_logs (LogLevelTest.critical, "blah") @logmsg LogLevelTest.critical "blah"
     logs,_ = collect_test_logs(min_level=Debug) do
         @logmsg LogLevelTest.debug_verbose "blah"
+    end
+    @test length(logs) == 0
+
+    @test_logs (LogLevelTest.critical, "blah") @logwith(current_logger(),
+                                                        LogLevelTest.critical, "blah")
+    logs,_ = collect_test_logs(min_level=Debug) do
+        @logwith current_logger() LogLevelTest.debug_verbose "blah"
     end
     @test length(logs) == 0
 end

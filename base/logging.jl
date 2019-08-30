@@ -13,6 +13,7 @@ export
     @warn,
     @error,
     @logmsg,
+    @logwith,
     with_logger,
     current_logger,
     global_logger,
@@ -475,6 +476,8 @@ end
 
 Execute `function`, directing all log messages to `logger`.
 
+See also: `@logwith`
+
 # Example
 
 ```julia
@@ -489,6 +492,36 @@ end
 ```
 """
 with_logger(f::Function, logger::AbstractLogger) = with_logstate(f, LogState(logger))
+
+"""
+    @logwith logger level message  [key=value | value ...]
+
+Create a log record of `LogLevel` `level` with an informational `message`
+directed to `logger`.
+See `@logmsg` for further details.
+
+# Examples
+
+```julia
+using Logging
+a = collect(1:10)
+logger = SimpleLogger()
+
+# These are equivalent
+with_logger(logger) do
+    @info logger "Important values" a s = sum(a)
+end
+@logwith logger Logging.Info "Important values" a s = sum(a)
+```
+"""
+macro logwith(logger, level, exs...)
+    logfunction = logmsg_code((@_sourceinfo)..., esc(level), exs...)
+    quote
+        with_logger($(esc(logger))) do
+            $logfunction
+        end
+    end
+end
 
 """
     current_logger()

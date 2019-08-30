@@ -124,8 +124,8 @@ simple global variable. In such a system it's awkward to control logging while
 composing functionality from multiple modules.)
 
 The global logger may be set with [`global_logger`](@ref), and task-local
-loggers controlled using [`with_logger`](@ref).  Newly spawned tasks inherit
-the logger of the parent task.
+loggers controlled using [`with_logger`](@ref) or [`@logwith`](@ref). Newly
+spawned tasks inherit the logger of the parent task.
 
 There are three logger types provided by the library.  [`ConsoleLogger`](@ref)
 is the default logger you see when starting the REPL.  It displays events in a
@@ -276,6 +276,7 @@ Logger installation and inspection:
 Logging.global_logger
 Logging.with_logger
 Logging.current_logger
+Logging.@logwith
 ```
 
 Loggers that are supplied with the system:
