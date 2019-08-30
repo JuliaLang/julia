@@ -4,6 +4,10 @@ module TestUniformscaling
 
 using Test, LinearAlgebra, Random, SparseArrays
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
+
 Random.seed!(123)
 
 @testset "basic functions" begin
@@ -336,6 +340,9 @@ end
     λ = rand(-10:10)
     J = UniformScaling(λ)
     @test dot(x, J, y) == λ*dot(x, y)
+    λ = Quaternion(0.44567, 0.755871, 0.882548, 0.423612)
+    x, y = Quaternion(rand(4)...), Quaternion(rand(4)...)
+    @test dot([x], λ*I, [y]) ≈ dot(x, λ, y) ≈ dot(x, λ*I, y) ≈ dot(x, λ*y)
 end
 
 end # module TestUniformscaling
