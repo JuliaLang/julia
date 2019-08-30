@@ -13,6 +13,10 @@ export
     @warn,
     @error,
     @logmsg,
+    @debugwith,
+    @infowith,
+    @warnwith,
+    @errorwith,
     @logwith,
     with_logger,
     current_logger,
@@ -493,7 +497,12 @@ end
 """
 with_logger(f::Function, logger::AbstractLogger) = with_logstate(f, LogState(logger))
 
-"""
+_logwith_docs = """
+    @debugwith logger message  [key=value | value ...]
+    @infowith  logger message  [key=value | value ...]
+    @warnwith  logger message  [key=value | value ...]
+    @errorwith logger message  [key=value | value ...]
+
     @logwith logger level message  [key=value | value ...]
 
 Create a log record of `LogLevel` `level` with an informational `message`
@@ -507,13 +516,15 @@ using Logging
 a = collect(1:10)
 logger = SimpleLogger()
 
-# These are equivalent
+# These are all equivalent
 with_logger(logger) do
     @info logger "Important values" a s = sum(a)
 end
 @logwith logger Logging.Info "Important values" a s = sum(a)
+@infowith logger "Important values" a s = sum(a)
 ```
 """
+
 macro logwith(logger, level, exs...)
     logfunction = logmsg_code((@_sourceinfo)..., esc(level), exs...)
     quote
@@ -522,6 +533,49 @@ macro logwith(logger, level, exs...)
         end
     end
 end
+
+macro debugwith(logger, exs...)
+    logfunction = logmsg_code((@_sourceinfo)..., :Debug, exs...)
+    quote
+        with_logger($(esc(logger))) do
+            $logfunction
+        end
+    end
+end
+
+macro infowith(logger, exs...)
+    logfunction = logmsg_code((@_sourceinfo)..., :Info, exs...)
+    quote
+        with_logger($(esc(logger))) do
+            $logfunction
+        end
+    end
+end
+
+macro warnwith(logger, exs...)
+    logfunction = logmsg_code((@_sourceinfo)..., :Warn, exs...)
+    quote
+        with_logger($(esc(logger))) do
+            $logfunction
+        end
+    end
+end
+
+macro errorwith(logger, exs...)
+    logfunction = logmsg_code((@_sourceinfo)..., :Error, exs...)
+    quote
+        with_logger($(esc(logger))) do
+            $logfunction
+        end
+    end
+end
+
+# Logging macros share documentation
+@eval @doc $_logwith_docs :(@logwith)
+@eval @doc $_logwith_docs :(@debugwith)
+@eval @doc $_logwith_docs :(@infowith)
+@eval @doc $_logwith_docs :(@warnwith)
+@eval @doc $_logwith_docs :(@errorwith)
 
 """
     current_logger()

@@ -28,15 +28,15 @@ end
         A = fill(1.0, 4, 4)
         "sum(A) = $(sum(A))"
     end
-    @test_logs (Info, "sum(A) = 16.0") @logwith current_logger() Info begin
+    @test_logs (Info, "sum(A) = 16.0") @infowith current_logger() begin
         A = fill(1.0, 4, 4)
         "sum(A) = $(sum(A))"
     end
     x = 10.50
     @test_logs (Info, "10.5") @info "$x"
     @test_logs (Info, "10.500") @info @sprintf("%.3f", x)
-    @test_logs (Info, "10.5") @logwith current_logger() Info "$x"
-    @test_logs (Info, "10.500") @logwith current_logger() Info @sprintf("%.3f", x)
+    @test_logs (Info, "10.5") @infowith current_logger() "$x"
+    @test_logs (Info, "10.500") @infowith current_logger() @sprintf("%.3f", x)
 end
 
 @testset "Programmatically defined levels" begin
@@ -163,7 +163,11 @@ end
     @test_throws MethodError @macrocall(@warn)
     @test_throws MethodError @macrocall(@error)
 
-    @test_throws MethodError @macrocall(@logwith current_logger() :Notice)
+    @test_throws MethodError @macrocall(@logwith   current_logger() :Notice)
+    @test_throws MethodError @macrocall(@debugwith current_logger())
+    @test_throws MethodError @macrocall(@infowith  current_logger())
+    @test_throws MethodError @macrocall(@warnwith  current_logger())
+    @test_throws MethodError @macrocall(@errorwith current_logger())
 end
 
 
