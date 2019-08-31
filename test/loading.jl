@@ -282,6 +282,12 @@ module NotPkgModule; end
         @test pathof(NotPkgModule) === nothing
     end
 
+    @testset "rootof" begin
+        @test rootof(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test rootof(Foo.SubFoo) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test rootof(NotPkgModule) === nothing
+    end
+
 end
 
 ## systematic generation of test environments ##
