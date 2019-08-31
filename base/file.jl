@@ -671,7 +671,7 @@ struct uv_dirent_t
 end
 
 """
-    readdir(dir::AbstractString=pwd(); join::Bool=true) -> Vector{String}
+    readdir(dir::AbstractString=pwd(); join::Bool=false) -> Vector{String}
 
 Return the names in the directory `dir` or the current working directory if not
 given. When `join` is false, `readdir` returns just the names in the directory
