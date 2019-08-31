@@ -88,11 +88,31 @@ end
 _dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
 
 """
-    squeeze(f, A, dims)
+    dropdims(f, args...; dims, kwargs...)
 
-Compute reduction `f` over dimensions `dims` in array `A` and drop those dimensions from the result.
+Compute reduction `f` over dimensions `dims` and drop those dimensions from the result.
+
+# Examples
+```jldoctest
+julia> a = [3.0  2.0  6.0  8.0
+            6.0  1.0  4.0  2.0
+            3.0  0.0  7.0  6.0];
+
+julia> dropdims(sum, a, dims=1)
+4-element Array{Float64,1}:
+ 12.0
+  3.0
+ 17.0
+ 16.0
+
+julia> dropdims(sum, abs2, a, dims=2)
+3-element Array{Float64,1}:
+ 113.0
+  57.0
+  94.0
+```
 """
-squeeze(f, A::AbstractArray, dims::Union{Dims, Integer}) = squeeze(f(A, dims), dims)
+dropdims(f, args...; dims, kwargs...) = _dropdims(f(args...; kwargs..., dims=dims), dims)
 
 ## Unary operators ##
 

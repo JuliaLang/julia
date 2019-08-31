@@ -26,14 +26,12 @@ New library functions
 * The `tempname` function now takes a `cleanup::Bool` keyword argument defaulting to `true`, which causes the process to try to ensure that any file or directory at the path returned by `tempname` is deleted upon process exit ([#33090]).
 * The `readdir` function now takes a `join::Bool` keyword argument defaulting to `false`, which when set causes `readdir` to join its directory argument with each listed name ([#33113]).
 
-
 Standard library changes
 ------------------------
 
 * The methods of `mktemp` and `mktempdir` which take a function body to pass temporary paths to no longer throw errors if the path is already deleted when the function body returns ([#33091]).
 
-* A new `squeeze(f, A, dims)` method computes the reduction `f` over the region in
-`A` described by `dims` and then drops those dimensions from the result ([#23500]).
+* A new `dropdims(f, args...; dims, kwargs...)` method computes the reduction `f` over the region described by `dims` and then drops those dimensions from the result ([#23500]).
 
 #### Libdl
 
