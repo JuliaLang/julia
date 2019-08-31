@@ -147,7 +147,15 @@ const PAGES = [
 
 for stdlib in STDLIB_DOCS
     @eval using $(stdlib.stdlib)
+    # All standard library modules get `using $STDLIB` as their global
+    DocMeta.setdocmeta!(Base.root_module(Base, stdlib.stdlib), :DocTestSetup, :(using $(stdlib.stdlib)), recursive=true)
 end
+# A few standard libraries need more than just the module itself in the DocTestSetup.
+# This overwrites the existing ones from above though, hence the warn=false.
+DocMeta.setdocmeta!(SparseArrays, :DocTestSetup, :(using SparseArrays, LinearAlgebra), recursive=true, warn=false)
+DocMeta.setdocmeta!(UUIDs, :DocTestSetup, :(using UUIDs, Random), recursive=true, warn=false)
+DocMeta.setdocmeta!(Pkg, :DocTestSetup, :(using Pkg, Pkg.Artifacts), recursive=true, warn=false)
+DocMeta.setdocmeta!(Pkg.BinaryPlatforms, :DocTestSetup, :(using Pkg, Pkg.BinaryPlatforms), recursive=true, warn=false)
 
 const render_pdf = "pdf" in ARGS
 let r = r"buildroot=(.+)", i = findfirst(x -> occursin(r, x), ARGS)
@@ -171,7 +179,7 @@ makedocs(
     build     = joinpath(buildroot, "doc", "_build", (render_pdf ? "pdf" : "html"), "en"),
     modules   = [Base, Core, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
     clean     = true,
-    doctest   = ("doctest=fix" in ARGS) ? (:fix) : ("doctest=true" in ARGS) ? true : false,
+    doctest   = ("doctest=fix" in ARGS) ? (:fix) : ("doctest=only" in ARGS) ? (:only) : ("doctest=true" in ARGS) ? true : false,
     linkcheck = "linkcheck=true" in ARGS,
     linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
     strict    = true,
@@ -185,14 +193,25 @@ makedocs(
 # Only deploy docs from 64bit Linux to avoid committing multiple versions of the same
 # docs from different workers.
 if "deploy" in ARGS && Sys.ARCH === :x86_64 && Sys.KERNEL === :Linux
-# Override TRAVIS_REPO_SLUG since we deploy to a different repo
-withenv("TRAVIS_REPO_SLUG" => "JuliaLang/docs.julialang.org") do
+
+# Override a few environment variables to deploy to the appropriate repository,
+# encode things like branch, whether it's built on a tag, etc....
+env_mappings = [
+    "TRAVIS_REPO_SLUG" => "JuliaLang/docs.julialang.org",
+    "TRAVIS_BRANCH" => Base.GIT_VERSION_INFO.branch,
+]
+
+if Base.GIT_VERSION_INFO.tagged_commit
+    push!(env_mappings, "TRAVIS_TAG" => "v$(Base.VERSION)")
+end
+
+withenv(env_mappings...) do
     deploydocs(
         repo = "github.com/JuliaLang/docs.julialang.org.git",
         target = joinpath(buildroot, "doc", "_build", "html", "en"),
         dirname = "en",
-        devurl = "v1.3-dev",
-        versions = ["v#.#", "v1.3-dev" => "v1.3-dev"]
+        devurl = "v1.4-dev",
+        versions = ["v#.#", "v1.4-dev" => "v1.4-dev"]
     )
 end
 end

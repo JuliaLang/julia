@@ -442,6 +442,7 @@ $(eval $(call LLVM_PATCH,llvm-rL349068-llvm-config)) # remove for 8.0
 $(eval $(call LLVM_PATCH,llvm-6.0-D63688-wasm-isLocal))
 $(eval $(call LLVM_PATCH,llvm-6.0-D64032-cmake-cross))
 $(eval $(call LLVM_PATCH,llvm-6.0-D64225-cmake-cross2))
+$(eval $(call LLVM_PATCH,llvm6-WASM-addrspaces)) # WebAssembly
 endif # LLVM_VER 6.0
 
 ifeq ($(LLVM_VER_SHORT),7.0)
@@ -457,6 +458,7 @@ $(eval $(call LLVM_PATCH,llvm7-windows-race))
 $(eval $(call LLVM_PATCH,llvm7-D51842-win64-byval-cc)) # remove for 8.0
 $(eval $(call LLVM_PATCH,llvm-D57118-powerpc))
 $(eval $(call LLVM_PATCH,llvm-rL349068-llvm-config)) # remove for 8.0
+$(eval $(call LLVM_PATCH,llvm7-WASM-addrspaces)) # WebAssembly
 endif # LLVM_VER 7.0
 
 ifeq ($(LLVM_VER_SHORT),8.0)
@@ -469,6 +471,7 @@ $(eval $(call LLVM_PATCH,llvm7-D50010-VNCoercion-ni))
 $(eval $(call LLVM_PATCH,llvm-8.0-D50167-scev-umin))
 $(eval $(call LLVM_PATCH,llvm7-windows-race))
 $(eval $(call LLVM_PATCH,llvm-D57118-powerpc)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm8-WASM-addrspaces)) # WebAssembly
 endif # LLVM_VER 8.0
 
 # Add a JL prefix to the version map. DO NOT REMOVE

@@ -722,6 +722,7 @@ end
     @test Random.seed!(GLOBAL_RNG, nothing) === LOCAL_RNG
     @test Random.seed!(GLOBAL_RNG, UInt32[0]) === LOCAL_RNG
     @test Random.seed!(GLOBAL_RNG, 0) === LOCAL_RNG
+    @test Random.seed!(GLOBAL_RNG) === LOCAL_RNG
 
     mt = MersenneTwister(1)
     @test copy!(mt, GLOBAL_RNG) === mt

@@ -448,6 +448,34 @@ function tempdir()
     end
 end
 
+const TEMP_CLEANUP_MIN = Ref(1024)
+const TEMP_CLEANUP_MAX = Ref(1024)
+const TEMP_CLEANUP = Dict{String,Bool}()
+const TEMP_CLEANUP_LOCK = ReentrantLock()
+
+function temp_cleanup_later(path::AbstractString; asap::Bool=false)
+    lock(TEMP_CLEANUP_LOCK)
+    TEMP_CLEANUP[path] = asap
+    if length(TEMP_CLEANUP) > TEMP_CLEANUP_MAX[]
+        temp_cleanup_purge(false)
+        TEMP_CLEANUP_MAX[] = max(TEMP_CLEANUP_MIN[], 2*length(TEMP_CLEANUP))
+    end
+    unlock(TEMP_CLEANUP_LOCK)
+    return nothing
+end
+
+function temp_cleanup_purge(all::Bool=true)
+    need_gc = Sys.iswindows()
+    for (path, asap) in TEMP_CLEANUP
+        if (all || asap) && ispath(path)
+            need_gc && GC.gc(true)
+            need_gc = false
+            rm(path, recursive=true, force=true)
+        end
+        !ispath(path) && delete!(TEMP_CLEANUP, path)
+    end
+end
+
 const temp_prefix = "jl_"
 
 if Sys.iswindows()
@@ -466,13 +494,14 @@ function _win_tempname(temppath::AbstractString, uunique::UInt32)
     return transcode(String, tname)
 end
 
-function mktemp(parent=tempdir())
+function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
     filename = _win_tempname(parent, UInt32(0))
+    cleanup && temp_cleanup_later(filename)
     return (filename, Base.open(filename, "r+"))
 end
 
-function tempname()
-    parent = tempdir()
+function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
+    isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
     seed::UInt32 = rand(UInt32)
     while true
         if (seed & typemax(UInt16)) == 0
@@ -480,6 +509,7 @@ function tempname()
         end
         filename = _win_tempname(parent, seed)
         if !ispath(filename)
+            cleanup && temp_cleanup_later(filename)
             return filename
         end
         seed += 1
@@ -487,21 +517,24 @@ function tempname()
 end
 
 else # !windows
+
 # Obtain a temporary filename.
-function tempname()
-    d = tempdir() # tempnam ignores TMPDIR on darwin
-    p = ccall(:tempnam, Cstring, (Cstring, Cstring), d, temp_prefix)
+function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
+    isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
+    p = ccall(:tempnam, Cstring, (Cstring, Cstring), parent, temp_prefix)
     systemerror(:tempnam, p == C_NULL)
     s = unsafe_string(p)
     Libc.free(p)
+    cleanup && temp_cleanup_later(s)
     return s
 end
 
 # Create and return the name of a temporary file along with an IOStream
-function mktemp(parent=tempdir())
+function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
     b = joinpath(parent, temp_prefix * "XXXXXX")
     p = ccall(:mkstemp, Int32, (Cstring,), b) # modifies b
     systemerror(:mktemp, p == -1)
+    cleanup && temp_cleanup_later(b)
     return (b, fdio(p, true))
 end
 
@@ -510,36 +543,58 @@ end # os-test
 
 
 """
-    tempname()
+    tempname(parent=tempdir(); cleanup=true) -> String
 
 Generate a temporary file path. This function only returns a path; no file is
-created. The path is likely to be unique, but this cannot be guaranteed.
+created. The path is likely to be unique, but this cannot be guaranteed due to
+the very remote posibility of two simultaneous calls to `tempname` generating
+the same file name. The name is guaranteed to differ from all files already
+existing at the time of the call to `tempname`.
+
+When called with no arguments, the temporary name will be an absolute path to a
+temporary name in the system temporary directory as given by `tempdir()`. If a
+`parent` directory argument is given, the temporary path will be in that
+directory instead.
+
+The `cleanup` option controls whether the process attempts to delete the
+returned path automatically when the process exits. Note that the `tempname`
+function does not create any file or directory at the returned location, so
+there is nothing to cleanup unless you create a file or directory there. If
+you do and `clean` is `true` it will be deleted upon process termination.
+
+!!! compat "Julia 1.4"
+    The `parent` and `cleanup` arguments were added in 1.4. Prior to Julia 1.4
+    the path `tempname` would never be cleaned up at process termination.
 
 !!! warning
 
     This can lead to security holes if another process obtains the same
     file name and creates the file before you are able to. Open the file with
-    `JL_O_EXCL` if this is a concern. Using [`mktemp()`](@ref) is also recommended instead.
+    `JL_O_EXCL` if this is a concern. Using [`mktemp()`](@ref) is also
+    recommended instead.
 """
 tempname()
 
 """
-    mktemp(parent=tempdir())
+    mktemp(parent=tempdir(); cleanup=true) -> (path, io)
 
-Return `(path, io)`, where `path` is the path of a new temporary file in `parent` and `io`
-is an open file object for this path.
+Return `(path, io)`, where `path` is the path of a new temporary file in `parent`
+and `io` is an open file object for this path. The `cleanup` option controls whether
+the temporary file is automatically deleted when the process exits.
 """
 mktemp(parent)
 
 """
-    mktempdir(parent=tempdir(); prefix=$(repr(temp_prefix)))
+    mktempdir(parent=tempdir(); prefix=$(repr(temp_prefix)), cleanup=true) -> path
 
 Create a temporary directory in the `parent` directory with a name
 constructed from the given prefix and a random suffix, and return its path.
 Additionally, any trailing `X` characters may be replaced with random characters.
-If `parent` does not exist, throw an error.
+If `parent` does not exist, throw an error. The `cleanup` option controls whether
+the temporary directory is automatically deleted when the process exits.
 """
-function mktempdir(parent=tempdir(); prefix=temp_prefix)
+function mktempdir(parent::AbstractString=tempdir();
+    prefix::AbstractString=temp_prefix, cleanup::Bool=true)
     if isempty(parent) || occursin(path_separator_re, parent[end:end])
         # append a path_separator only if parent didn't already have one
         tpath = "$(parent)$(prefix)XXXXXX"
@@ -558,6 +613,7 @@ function mktempdir(parent=tempdir(); prefix=temp_prefix)
         end
         path = unsafe_string(ccall(:jl_uv_fs_t_path, Cstring, (Ptr{Cvoid},), req))
         ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+        cleanup && temp_cleanup_later(path)
         return path
     finally
         Libc.free(req)
@@ -571,17 +627,18 @@ end
 Apply the function `f` to the result of [`mktemp(parent)`](@ref) and remove the
 temporary file upon completion.
 """
-function mktemp(fn::Function, parent=tempdir())
-    (tmp_path, tmp_io) = mktemp(parent)
+function mktemp(fn::Function, parent::AbstractString=tempdir())
+    (tmp_path, tmp_io) = mktemp(parent, cleanup=false)
     try
         fn(tmp_path, tmp_io)
     finally
-        # TODO: should we call GC.gc() first on error, to make it much more likely that `rm` succeeds?
         try
             close(tmp_io)
-            rm(tmp_path)
+            ispath(tmp_path) && rm(tmp_path)
         catch ex
             @error "mktemp cleanup" _group=:file exception=(ex, catch_backtrace())
+            # might be possible to remove later
+            temp_cleanup_later(tmp_path, asap=true)
         end
     end
 end
@@ -592,16 +649,18 @@ end
 Apply the function `f` to the result of [`mktempdir(parent; prefix)`](@ref) and remove the
 temporary directory all of its contents upon completion.
 """
-function mktempdir(fn::Function, parent=tempdir(); prefix=temp_prefix)
-    tmpdir = mktempdir(parent; prefix=prefix)
+function mktempdir(fn::Function, parent::AbstractString=tempdir();
+    prefix::AbstractString=temp_prefix)
+    tmpdir = mktempdir(parent; prefix=prefix, cleanup=false)
     try
         fn(tmpdir)
     finally
-        # TODO: should we call GC.gc() first on error, to make it much more likely that `rm` succeeds?
         try
-            rm(tmpdir, recursive=true)
+            ispath(tmpdir) && rm(tmpdir, recursive=true)
         catch ex
             @error "mktempdir cleanup" _group=:file exception=(ex, catch_backtrace())
+            # might be possible to remove later
+            temp_cleanup_later(tmpdir, asap=true)
         end
     end
 end

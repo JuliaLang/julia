@@ -856,10 +856,10 @@ end
 Fields can have type restrictions, which may be parameterized:
 
 ```julia
-    struct Point{X}
-        x::X
-        y::Float64
-    end
+struct Point{X}
+    x::X
+    y::Float64
+end
 ```
 
 A struct can also declare an abstract super type via `<:` syntax:
@@ -933,6 +933,29 @@ order in which variables are substituted when a type is "applied" to parameter v
 using the syntax `T{p1, p2, ...}`.
 """
 kw"where"
+
+"""
+    var
+
+The syntax `var"#example#"` refers to a variable named `Symbol("#example#")`,
+even though `#example#` is not a valid Julia identifier name.
+
+This can be useful for interoperability with programming languages which have
+different rules for the construction of valid identifiers. For example, to
+refer to the `R` variable `draw.segments`, you can use `var"draw.segments"` in
+your Julia code.
+
+It is also used to `show` julia source code which has gone through macro
+hygiene or otherwise contains variable names which can't be parsed normally.
+
+Note that this syntax requires parser support so it is expanded directly by the
+parser rather than being implemented as a normal string macro `@var_str`.
+
+!!! compat "Julia 1.3"
+    This syntax requires at least Julia 1.3.
+
+"""
+kw"var\"name\"", kw"@var_str"
 
 """
     ans
@@ -1059,10 +1082,10 @@ Create a `Float32` from `x`. If `x` is not exactly representable then `mode` det
 # Examples
 ```jldoctest
 julia> Float32(1/3, RoundDown)
-0.3333333f0
+0.3333333
 
 julia> Float32(1/3, RoundUp)
-0.33333334f0
+0.33333334
 ```
 
 See [`RoundingMode`](@ref) for available rounding modes.

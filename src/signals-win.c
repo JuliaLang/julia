@@ -225,12 +225,10 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
                 return EXCEPTION_CONTINUE_EXECUTION;
             case EXCEPTION_ACCESS_VIOLATION:
                 if (jl_addr_is_safepoint(ExceptionInfo->ExceptionRecord->ExceptionInformation[1])) {
-#ifdef JULIA_ENABLE_THREADING
                     jl_set_gc_and_wait();
                     // Do not raise sigint on worker thread
                     if (ptls->tid != 0)
                         return EXCEPTION_CONTINUE_EXECUTION;
-#endif
                     if (ptls->defer_signal) {
                         jl_safepoint_defer_sigint();
                     }

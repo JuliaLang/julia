@@ -924,15 +924,20 @@ function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     uvw = uv_write_async(s, p, n)
     ct = current_task()
     preserve_handle(ct)
+    sigatomic_begin()
     uv_req_set_data(uvw, ct)
     iolock_end()
     status = try
+        sigatomic_end()
         # wait for the last chunk to complete (or error)
         # assume that any errors would be sticky,
         # (so we don't need to monitor the error status of the intermediate writes)
         wait()::Cint
     finally
+        # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
+        sigatomic_end()
         iolock_begin()
+        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
         if uv_req_data(uvw) != C_NULL
             # uvw is still alive,
             # so make sure we won't get spurious notifications later

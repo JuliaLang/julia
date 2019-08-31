@@ -156,6 +156,10 @@ Random.seed!(1)
             @test triu!(bidiagcopy(dv,ev,:U))    == Bidiagonal(dv,ev,:U)
             @test_throws ArgumentError triu!(bidiagcopy(dv, ev, :U), -n)
             @test_throws ArgumentError triu!(bidiagcopy(dv, ev, :U), n + 2)
+            @test !isdiag(Bidiagonal(dv,ev,:U))
+            @test !isdiag(Bidiagonal(dv,ev,:L))
+            @test isdiag(Bidiagonal(dv,zerosev,:U))
+            @test isdiag(Bidiagonal(dv,zerosev,:L))
         end
 
         @testset "iszero and isone" begin
@@ -443,6 +447,12 @@ end
 @testset "sum" begin
     @test sum(Bidiagonal([1,2,3], [1,2], :U)) == 9
     @test sum(Bidiagonal([1,2,3], [1,2], :L)) == 9
+end
+
+@testset "empty sub-diagonal" begin
+    # `mul!` must use non-specialized method when sub-diagonal is empty
+    A = [1 2 3 4]'
+    @test A * Tridiagonal(ones(1, 1)) == A
 end
 
 end # module TestBidiagonal

@@ -898,7 +898,7 @@ julia> y
 """
 copyto!(dest, src)
 
-function copyto!(dest::AbstractArray{T,N}, src::AbstractArray{T,N}) where {T,N}
+function copyto!(dest::AbstractArray{T1,N}, src::AbstractArray{T2,N}) where {T1,T2,N}
     checkbounds(dest, axes(src)...)
     src′ = unalias(dest, src)
     for I in eachindex(IndexStyle(src′,dest), src′)

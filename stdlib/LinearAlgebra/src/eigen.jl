@@ -86,27 +86,28 @@ julia> F = eigen(A, B)
 GeneralizedEigen{Complex{Float64},Complex{Float64},Array{Complex{Float64},2},Array{Complex{Float64},1}}
 eigenvalues:
 2-element Array{Complex{Float64},1}:
- 0.0 + 1.0im
  0.0 - 1.0im
+ 0.0 + 1.0im
 eigenvectors:
 2×2 Array{Complex{Float64},2}:
-  0.0-1.0im   0.0+1.0im
- -1.0-0.0im  -1.0+0.0im
+  0.0+1.0im   0.0-1.0im
+ -1.0+0.0im  -1.0-0.0im
 
 julia> F.values
 2-element Array{Complex{Float64},1}:
-0.0 - 1.0im
-0.0 + 1.0im
+ 0.0 - 1.0im
+ 0.0 + 1.0im
 
 julia> F.vectors
 2×2 Array{Complex{Float64},2}:
-0.0+1.0im   0.0-1.0im
--1.0+0.0im  -1.0-0.0im
+  0.0+1.0im   0.0-1.0im
+ -1.0+0.0im  -1.0-0.0im
 
 julia> vals, vecs = F; # destructuring via iteration
 
 julia> vals == F.values && vecs == F.vectors
 true
+```
 """
 struct GeneralizedEigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
     values::U

@@ -226,6 +226,8 @@ julia> splitpath("/home/myuser/example.jl")
  "example.jl"
 ```
 """
+splitpath(p::AbstractString) = splitpath(String(p))
+
 function splitpath(p::String)
     drive, p = splitdrive(p)
     out = String[]
@@ -244,8 +246,6 @@ function splitpath(p::String)
     return out
 end
 
-joinpath(a::AbstractString) = a
-
 """
     joinpath(parts...) -> AbstractString
 
@@ -260,6 +260,7 @@ julia> joinpath("/home/myuser", "example.jl")
 ```
 """
 joinpath(a::AbstractString, b::AbstractString, c::AbstractString...) = joinpath(joinpath(a,b), c...)
+joinpath(a::AbstractString) = a
 
 function joinpath(a::String, b::String)
     isabspath(b) && return b

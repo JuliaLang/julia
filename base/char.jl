@@ -218,10 +218,10 @@ isless(x::AbstractChar, y::AbstractChar) = isless(Char(x), Char(y))
 hash(x::AbstractChar, h::UInt) = hash(Char(x), h)
 widen(::Type{T}) where {T<:AbstractChar} = T
 
--(x::AbstractChar, y::AbstractChar) = Int(x) - Int(y)
--(x::T, y::Integer) where {T<:AbstractChar} = T(Int32(x) - Int32(y))
-+(x::T, y::Integer) where {T<:AbstractChar} = T(Int32(x) + Int32(y))
-+(x::Integer, y::AbstractChar) = y + x
+@inline -(x::AbstractChar, y::AbstractChar) = Int(x) - Int(y)
+@inline -(x::T, y::Integer) where {T<:AbstractChar} = T(Int32(x) - Int32(y))
+@inline +(x::T, y::Integer) where {T<:AbstractChar} = T(Int32(x) + Int32(y))
+@inline +(x::Integer, y::AbstractChar) = y + x
 
 # `print` should output UTF-8 by default for all AbstractChar types.
 # (Packages may implement other IO subtypes to specify different encodings.)
