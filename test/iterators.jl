@@ -666,4 +666,10 @@ end
     @test @inferred(only((;a=1))) === 1
     @test_throws ArgumentError only(NamedTuple())
     @test_throws ArgumentError only((a=3, b=2.0))
+
+    @test only(1 for ii in 1:1) === 1
+    @test only(1 for ii in 1:10 if ii < 2) === 1
+    @test_throws ArgumentError only(1 for ii in 1:10)
+    @test_throws ArgumentError only(1 for ii in 1:10 if ii > 2)
+    @test_throws ArgumentError only(1 for ii in 1:10 if ii > 200)
 end
