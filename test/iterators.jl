@@ -667,6 +667,10 @@ end
     @test_throws ArgumentError only(NamedTuple())
     @test_throws ArgumentError only((a=3, b=2.0))
 
+    @test @inferred(only(1)) === 1
+    @test @inferred(only('a')) === 'a'
+    @test @inferred(only(Ref([1, 2]))) == [1, 2]
+
     @test only(1 for ii in 1:1) === 1
     @test only(1 for ii in 1:10 if ii < 2) === 1
     @test_throws ArgumentError only(1 for ii in 1:10)
