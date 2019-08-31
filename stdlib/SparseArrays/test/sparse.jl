@@ -93,7 +93,10 @@ do33 = fill(1.,3)
 end
 
 @testset "Issue #30006" begin
-    SparseMatrixCSC{Float64,Int32}(spzeros(3,3))[:, 1] == [1, 2, 3]
+    A = SparseMatrixCSC{Float64,Int32}(spzeros(3,3))
+    A[:, 1] = [1, 2, 3]
+    @test nnz(A) == 3
+    @test nonzeros(A) == [1, 2, 3]
 end
 
 @testset "concatenation tests" begin
@@ -1997,6 +2000,12 @@ end
     @test nnz(A) == 1
     A[I, J] .= 1
     @test nnz(A) == 1
+end
+
+@testset "setindex with vector eltype (#29034)" begin
+    A = sparse([1], [1], [Vector{Float64}(undef, 3)], 3, 3)
+    A[1,1] = [1.0, 2.0, 3.0]
+    @test A[1,1] == [1.0, 2.0, 3.0]
 end
 
 @testset "show" begin

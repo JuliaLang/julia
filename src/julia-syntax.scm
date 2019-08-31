@@ -2905,19 +2905,6 @@ f(x) = yt(x)
   (or (assq s (car  (lam:vinfo lam)))
       (assq s (cadr (lam:vinfo lam)))))
 
-(define (table.merge! l r)
-  (table.foreach (lambda (k v) (put! l k v))
-                 r))
-
-(define (table.delete-if! p t)
-  (let ((to-del '()))
-    (table.foreach (lambda (v _)
-                     (if (p v)
-                         (set! to-del (cons v to-del))))
-                   t)
-    (for-each (lambda (v) (del! t v))
-              to-del)))
-
 ;; Try to identify never-undef variables, and then clear the `captured` flag for single-assigned,
 ;; never-undef variables to avoid allocating unnecessary `Box`es.
 (define (lambda-optimize-vars! lam)
@@ -2931,81 +2918,90 @@ f(x) = yt(x)
           (let ((am (all-methods-for ex stmts)))
             (put! allmethods-table mn am)
             am))))
-  (define (expr-uses-var ex v body)
-    (cond ((atom? ex) (expr-contains-eq v ex))
-          ((assignment? ex) (expr-contains-eq v (caddr ex)))
-          ((eq? (car ex) 'method)
-           (and (length> ex 2)
-                ;; a method expression captures a variable if any methods for the
-                ;; same function do.
-                (let* ((mn          (method-expr-name ex))
-                       (all-methods (if (local-in? mn lam)
-                                        (get-methods ex body)
-                                        (list ex))))
-                  (any (lambda (ex)
-                         (assq v (cadr (lam:vinfo (cadddr ex)))))
-                       all-methods))))
-          (else (expr-contains-eq v ex))))
   ;; This does a basic-block-local dominance analysis to find variables that
   ;; are never used undef.
   (let ((vi     (car (lam:vinfo lam)))
         (unused (table))  ;; variables not (yet) used (read from) in the current block
         (live   (table))  ;; variables that have been set in the current block
-        (seen   (table))  ;; all variables we've seen assignments to
-        (b1vars '())      ;; vars set in first basic block
-        (first  #t))      ;; are we in the first basic block?
+        (seen   (table))) ;; all variables we've seen assignments to
     ;; Collect candidate variables: those that are captured (and hence we want to optimize)
     ;; and only assigned once. This populates the initial `unused` table.
     (for-each (lambda (v)
                 (if (and (vinfo:capt v) (vinfo:sa v))
                     (put! unused (car v) #t)))
               vi)
+    (define (restore old)
+      (table.foreach (lambda (k v)
+                       (if (not (has? old k))
+                           (put! unused k v)))
+                     live)
+      (set! live old))
     (define (kill)
       ;; when we see control flow, empty live set back into unused set
-      (if first
-          (begin (set! first #f)
-                 (set! b1vars (table.keys live))))
-      (table.merge! unused live)
-      (set! live (table)))
-    (define (mark-used e)
-      ;; remove variables used by `e` from the unused table
-      (table.delete-if! (lambda (v) (expr-uses-var e v (lam:body lam)))
-                        unused))
+      (restore (table)))
+    (define (mark-used var)
+      ;; remove variable from the unused table
+      (if (has? unused var)
+          (del! unused var)))
+    (define (assign! var)
+      (if (has? unused var)
+          ;; When a variable is assigned, move it to the live set to protect
+          ;; it from being removed from `unused`.
+          (begin (put! live var #t)
+                 (put! seen var #t)
+                 (del! unused var))))
     (define (visit e)
-      (cond ((atom? e) (if (symbol? e) (mark-used e)))
+      ;; returns whether e contained a symboliclabel
+      (cond ((atom? e) (if (symbol? e) (mark-used e))
+             #f)
             ((lambda-opt-ignored-exprs (car e))
-             #t)
+             #f)
             ((eq? (car e) 'scope-block)
              (visit (cadr e)))
-            ((eq? (car e) 'block)
-             (for-each visit (cdr e)))
+            ((memq (car e) '(block call new _do_while))
+             (eager-any visit (cdr e)))
             ((eq? (car e) 'break-block)
              (visit (caddr e)))
             ((eq? (car e) 'return)
-             (visit (cadr e))
-             (kill))
-            ((memq (car e) '(break label symboliclabel symbolicgoto))
-             (kill))
-            ((memq (car e) '(if elseif _while _do_while trycatch tryfinally))
-             (for-each (lambda (e)
-                         (visit e)
-                         (kill))
-                       (cdr e)))
+             (begin0 (visit (cadr e))
+                     (kill)))
+            ((memq (car e) '(break label symbolicgoto))
+             (kill)
+             #f)
+            ((eq? (car e) 'symboliclabel)
+             (kill)
+             #t)
+            ((memq (car e) '(if elseif _while trycatch tryfinally))
+             (let ((prev (table.clone live)))
+               (if (eager-any (lambda (e) (begin0 (visit e)
+                                                  (kill)))
+                              (cdr e))
+                   ;; if there is a label inside, we could have skipped a prior
+                   ;; variable initialization
+                   (begin (kill) #t)
+                   (begin (restore prev) #f))))
+            ((eq? (car e) '=)
+             (begin0 (visit (caddr e))
+                     (assign! (cadr e))))
+            ((eq? (car e) 'method)
+             (if (length> e 2)
+                 (let* ((mn          (method-expr-name e))
+                        ;; a method expression captures a variable if any methods for
+                        ;; the same function do.
+                        (all-methods (if (local-in? mn lam)
+                                         (get-methods e (lam:body lam))
+                                         (list e))))
+                   (for-each (lambda (ex)
+                               (for-each mark-used
+                                         (map car (cadr (lam:vinfo (cadddr ex))))))
+                             all-methods)
+                   (assign! (cadr e))))
+             #f)
             (else
-             (if (eq? (car e) '=)
-                 (visit (caddr e))
-                 (mark-used e))
-             (if (and (or (eq? (car e) '=)
-                          (and (eq? (car e) 'method) (length> e 2)))
-                      (has? unused (cadr e)))
-                 ;; When a variable is assigned, move it to the live set to protect
-                 ;; it from being removed from `unused`.
-                 (begin (put! live (cadr e) #t)
-                        (put! seen (cadr e) #t)
-                        (del! unused (cadr e)))
-                 ;; in all other cases there's nothing to do except assert that
-                 ;; all expression heads have been handled.
-                 #;(assert (memq (car e) '(= method new call foreigncall cfunction |::|)))))))
+             (eager-any visit (cdr e))
+             ;; in all other cases there's nothing to do except assert that
+             ;; all expression heads have been handled.
+             #;(assert (memq (car e) '(foreigncall cfunction |::|))))))
     (visit (lam:body lam))
     ;; Finally, variables can be marked never-undef if they were set in the first block,
     ;; or are currently live, or are back in the unused set (because we've left the only
@@ -3014,7 +3010,7 @@ f(x) = yt(x)
                 (if (has? seen v)
                     (let ((vv (assq v vi)))
                       (vinfo:set-never-undef! vv #t))))
-              (append b1vars (table.keys live) (table.keys unused)))
+              (append (table.keys live) (table.keys unused)))
     (for-each (lambda (v)
                 (if (and (vinfo:sa v) (vinfo:never-undef v))
                     (set-car! (cddr v) (logand (caddr v) (lognot 5)))))

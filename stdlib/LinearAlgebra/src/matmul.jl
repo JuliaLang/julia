@@ -41,9 +41,10 @@ function *(transx::Transpose{<:Any,<:StridedVector{T}}, y::StridedVector{T}) whe
 end
 
 # Matrix-vector multiplication
-function (*)(A::StridedMatrix{T}, x::StridedVector{S}) where {T<:BlasFloat,S}
+function (*)(A::StridedMatrix{T}, x::StridedVector{S}) where {T<:BlasFloat,S<:Real}
     TS = promote_op(matprod, T, S)
-    mul!(similar(x, TS, size(A,1)), A, convert(AbstractVector{TS}, x))
+    y = isconcretetype(TS) ? convert(AbstractVector{TS}, x) : x
+    mul!(similar(x, TS, size(A,1)), A, y)
 end
 function (*)(A::AbstractMatrix{T}, x::AbstractVector{S}) where {T,S}
     TS = promote_op(matprod, T, S)
@@ -327,14 +328,16 @@ function mul!(C::AbstractMatrix, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, transB
 end
 # Supporting functions for matrix multiplication
 
-function copytri!(A::AbstractMatrix, uplo::AbstractChar, conjugate::Bool=false)
+# copy transposed(adjoint) of upper(lower) side-digonals. Optionally include diagonal.
+@inline function copytri!(A::AbstractMatrix, uplo::AbstractChar, conjugate::Bool=false, diag::Bool=false)
     n = checksquare(A)
+    off = diag ? 0 : 1
     if uplo == 'U'
-        for i = 1:(n-1), j = (i+1):n
+        for i = 1:n, j = (i+off):n
             A[j,i] = conjugate ? adjoint(A[i,j]) : transpose(A[i,j])
         end
     elseif uplo == 'L'
-        for i = 1:(n-1), j = (i+1):n
+        for i = 1:n, j = (i+off):n
             A[i,j] = conjugate ? adjoint(A[j,i]) : transpose(A[j,i])
         end
     else

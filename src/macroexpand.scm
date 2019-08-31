@@ -414,6 +414,14 @@
                    (body (cadr e))
                    (m (caddr e)))
               (resolve-expansion-vars-with-new-env body env m parent-scope inarg #t)))
+           ((tuple)
+            (cons (car e)
+                  (map (lambda (x)
+                         (if (assignment? x)
+                             `(= ,(unescape (cadr x))
+                                 ,(resolve-expansion-vars-with-new-env (caddr x) env m parent-scope inarg))
+                             (resolve-expansion-vars-with-new-env x env m parent-scope inarg)))
+                       (cdr e))))
 
            ;; todo: trycatch
            (else
@@ -488,10 +496,17 @@
         ((and (eq? (car e) '=) (not (function-def? e)))
          (append! (filter symbol? (decl-vars* (cadr e)))
                   (find-assigned-vars-in-expansion (caddr e) #f)))
+        ((eq? (car e) 'tuple)
+         (apply append! (map (lambda (x)
+                               (find-assigned-vars-in-expansion (if (assignment? x)
+                                                                    (caddr x)
+                                                                    x)
+                                                                #f))
+                             (cdr e))))
         (else
          (apply append! (map (lambda (x)
                                (find-assigned-vars-in-expansion x #f))
-                             e)))))
+                             (cdr e))))))
 
 (define (keywords-introduced-by e)
   (let ((v (pattern-expand1 keywords-introduced-by-patterns e)))
