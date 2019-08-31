@@ -780,7 +780,7 @@ mutable struct Error19864 <: Exception; end
 function test19864()
     @eval Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
     buf = IOBuffer()
-    fake_response = (Any[(Error19864(),[])],true)
+    fake_response = (Any[(Error19864(),[])], true, Main)
     REPL.print_response(buf, fake_response, false, false, nothing)
     return String(take!(buf))
 end
@@ -1028,6 +1028,53 @@ fake_repl() do stdin_write, stdout_read, repl
     readline(stdout_read)
     readline(stdout_read)
     write(stdin_write, "Errs()\n")
+    write(stdin_write, '\x04')
+    wait(repltask)
+    @test istaskdone(repltask)
+end
+
+# context_module changing #33102
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    global c = Condition()
+    sendrepl(code) = write(stdin_write, "$code\n notify($(curmod_prefix)c)\n")
+    existhelp(val) = begin
+        regex = Regex("is of type `$(Int)`")
+        str = sprint(show, REPL.context_module.eval(REPL._helpmode(IOBuffer(), val))::Union{Markdown.MD, Nothing})
+        occursin(regex, str)
+    end
+
+    # default context module
+    @test REPL.context_module == Main
+    sendrepl("inmodulemain = 1")
+    wait(c)
+    @test isdefined(Main, :inmodulemain)
+    write(stdin_write, "inmodule\t")
+    readuntil(stdout_read, "inmodulemain")
+    write(stdin_write, '\x03')
+    @test existhelp("inmodulemain")
+
+    # change context module
+    REPL.set_context_module(REPL)
+    @test REPL.context_module == REPL
+    sendrepl("inmodulerepl = 1")
+    wait(c)
+    # evaluation
+    @test isdefined(REPL, :inmodulerepl)
+    # completion
+    write(stdin_write, "inmodule\t")
+    readuntil(stdout_read, "inmodulerepl")
+    write(stdin_write, '\x03')
+    write(stdin_write, "Main.inmodule\t")
+    readuntil(stdout_read, "Main.inmodulemain")
+    write(stdin_write, '\x03')
+    # helpmode
+    @test existhelp("inmodulerepl")
+    @test !existhelp("inmodulemain")
+    @test existhelp("Main.inmodulemain")
+
     write(stdin_write, '\x04')
     wait(repltask)
     @test istaskdone(repltask)
