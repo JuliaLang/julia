@@ -1101,12 +1101,12 @@ Returns the one and only element of collection `x`, and throws an error if the c
 has zero or multiple elements.
 """
 Base.@propagate_inbounds function only(x)
-    i = start(x)
-    @boundscheck if done(x, i)
+    i = iterate(x)
+    @boundscheck if i === nothing
         error("Collection is empty, must contain exactly 1 element")
     end
-    (ret, i) = next(x, i)
-    @boundscheck if !done(x, i)
+    (ret, state) = i
+    @boundscheck if iterate(x, state) !== nothing
         error("Collection has multiple elements, must contain exactly 1 element")
     end
     return ret
