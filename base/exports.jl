@@ -743,6 +743,7 @@ export
     nameof,
     parentmodule,
     pathof,
+    rootof,
     names,
     which,
     @isdefined,
