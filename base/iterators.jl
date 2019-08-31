@@ -1097,29 +1097,31 @@ length(s::Stateful) = length(s.itr) - s.taken
 """
     only(x)
 
-Returns the one and only element of collection `x`, and throws an error if the collection
-has zero or multiple elements.
+Returns the one and only element of collection `x`, and throws an `ArgumentError` if the
+collection has zero or multiple elements.
 """
 Base.@propagate_inbounds function only(x)
     i = iterate(x)
     @boundscheck if i === nothing
-        error("Collection is empty, must contain exactly 1 element")
+        throw(ArgumentError("Collection is empty, must contain exactly 1 element"))
     end
     (ret, state) = i
     @boundscheck if iterate(x, state) !== nothing
-        error("Collection has multiple elements, must contain exactly 1 element")
+        throw(ArgumentError("Collection has multiple elements, must contain exactly 1 element"))
     end
     return ret
 end
 
 # Collections of known size
-only(x::Tuple{}) = error("Tuple is empty, must contain exactly 1 element")
+only(x::Tuple{}) = throw(ArgumentError("Tuple is empty, must contain exactly 1 element"))
 only(x::Tuple{Any}) = x[1]
-only(x::Tuple) = error("Tuple contains $(length(x)) elements, must contain exactly 1 element")
-
+only(x::Tuple) = throw(
+    ArgumentError("Tuple contains $(length(x)) elements, must contain exactly 1 element")
+)
 only(a::AbstractArray{<:Any, 0}) = @inbounds return a[]
-
 only(x::NamedTuple{<:Any, <:Tuple{Any}}) = first(x)
-only(x::NamedTuple) = error("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
+only(x::NamedTuple) = throw(
+    ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
+)
 
 end
