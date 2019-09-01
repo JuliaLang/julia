@@ -183,14 +183,14 @@ to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
           "\nMake x a float matrix by adding a zero decimal ",
           "(e.g., [2.0 1.0;1.0 0.0]^$p instead ",
           "of [2 1;1 0]^$p), or write float(x)^$p or Rational.(x)^$p")))
-function power_by_squaring(x_, p::Integer)
+function power_by_squaring(x_, p::Integer; square=x->x*x)
     x = to_power_type(x_)
     if p == 1
         return copy(x)
     elseif p == 0
         return one(x)
     elseif p == 2
-        return x*x
+        return square(x)
     elseif p < 0
         isone(x) && return copy(x)
         isone(-x) && return iseven(p) ? one(x) : copy(x)
@@ -199,14 +199,14 @@ function power_by_squaring(x_, p::Integer)
     t = trailing_zeros(p) + 1
     p >>= t
     while (t -= 1) > 0
-        x *= x
+        x = square(x)
     end
     y = x
     while p > 0
         t = trailing_zeros(p) + 1
         p >>= t
         while (t -= 1) >= 0
-            x *= x
+            x = square(x)
         end
         y *= x
     end
