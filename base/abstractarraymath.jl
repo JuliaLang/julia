@@ -92,6 +92,9 @@ _dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
 
 Compute reduction `f` over dimensions `dims` and drop those dimensions from the result.
 
+!!! compat "Julia 1.4"
+    This method requires at least Julia 1.4.
+
 # Examples
 ```jldoctest
 julia> a = [3.0  2.0  6.0  8.0

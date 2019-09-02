@@ -31,7 +31,7 @@ Standard library changes
 
 * The methods of `mktemp` and `mktempdir` which take a function body to pass temporary paths to no longer throw errors if the path is already deleted when the function body returns ([#33091]).
 
-* A new `dropdims(f, args...; dims, kwargs...)` method computes the reduction `f` over the region described by `dims` and then drops those dimensions from the result ([#23500]).
+* A new `dropdims(f, args...; dims, kwargs...)` method computes the reduction `f` over the region described by `dims` and then drops those dimensions from the result ([#33130]).
 
 #### Libdl
 
