@@ -459,6 +459,9 @@ for executable permissions only (with `.exe` and `.com` extensions added on
 Windows platforms); no searching of `PATH` is performed.
 """
 function which(program_name::String)
+    if isempty(program_name)
+       return nothing
+    end
     # Build a list of program names that we're going to try
     program_names = String[]
     base_pname = basename(program_name)
