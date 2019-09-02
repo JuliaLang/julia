@@ -1119,7 +1119,6 @@ end
 only(x::Ref) = x[]
 only(x::Number) = x
 only(x::Char) = x
-only(x::Tuple{}) = throw(ArgumentError("Tuple is empty, must contain exactly 1 element"))
 only(x::Tuple{Any}) = x[1]
 only(x::Tuple) = throw(
     ArgumentError("Tuple contains $(length(x)) elements, must contain exactly 1 element")
