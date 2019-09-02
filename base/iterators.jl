@@ -1100,6 +1100,8 @@ length(s::Stateful) = length(s.itr) - s.taken
 Returns the one and only element of collection `x`, and throws an `ArgumentError` if the
 collection has zero or multiple elements.
 
+See also: [`first`](@ref), [`last`](@ref).
+
 !!! compat "Julia 1.4"
     This method requires at least Julia 1.4.
 """
