@@ -17,7 +17,7 @@ function warntype_type_printer(io::IO, @nospecialize(ty), used::Bool)
 end
 
 """
-    code_warntype([io::IO], f, types; debuginfo=:default)
+    code_warntype([io::IO], f, types; debuginfo=:default, optimize=false, warn_about_lying=true)
 
 Prints lowered and type-inferred ASTs for the methods matching the given generic function
 and type signature to `io` which defaults to `stdout`. The ASTs are annotated in such a way
@@ -31,10 +31,10 @@ Keyword argument `debuginfo` may be one of `:source` or `:none` (default), to sp
 
 See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
-function code_warntype(io::IO, @nospecialize(f), @nospecialize(t); debuginfo::Symbol=:default, optimize::Bool=false)
+function code_warntype(io::IO, @nospecialize(f), @nospecialize(t); debuginfo::Symbol=:default, optimize::Bool=false, warn_about_lying::Bool=true)
     debuginfo = Base.IRShow.debuginfo(debuginfo)
     lineprinter = Base.IRShow.__debuginfo[debuginfo]
-    for (src, rettype) in code_typed(f, t, optimize=optimize)
+    for (src, rettype) in code_typed(f, t; debuginfo=debuginfo, optimize=optimize, warn_about_lying=warn_about_lying)
         lambda_io::IOContext = io
         if src.slotnames !== nothing
             slotnames = Base.sourceinfo_slotnames(src)

@@ -458,7 +458,7 @@ static jl_value_t *ml_matches(jl_typemap_t *ml, int offs,
                               size_t world, size_t *min_valid, size_t *max_valid);
 
 // get the compilation signature specialization for this method
-static void jl_compilation_sig(
+JL_DLLEXPORT void jl_compilation_sig(
     jl_tupletype_t *const tt, // the original tupletype of the call : this is expected to be a relative simple type (no Varags, Union, UnionAll, etc.)
     jl_svec_t *sparams,
     jl_method_t *definition,

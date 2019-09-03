@@ -774,7 +774,7 @@ function signature_type(@nospecialize(f), @nospecialize(args))
 end
 
 """
-    code_lowered(f, types; generated=true, debuginfo=:default)
+    code_lowered(f, types; generated=true, debuginfo=:default, warn_about_lying=true)
 
 Return an array of the lowered forms (IR) for the methods matching the given generic function
 and type signature.
@@ -789,7 +789,7 @@ The keyword debuginfo controls the amount of code metadata present in the output
 Note that an error will be thrown if `types` are not leaf types when `generated` is
 `true` and any of the corresponding methods are an `@generated` method.
 """
-function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=true, debuginfo::Symbol=:default)
+function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=true, debuginfo::Symbol=:default, warn_about_lying::Bool=true)
     if @isdefined(IRShow)
         debuginfo = IRShow.debuginfo(debuginfo)
     elseif debuginfo == :default
@@ -799,6 +799,12 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     return map(method_instances(f, t)) do m
+        if warn_about_lying
+            isa_compileable_sig = ccall(:jl_isa_compileable_sig, Cint, (Any, Any), m.specTypes, m.def) != 0
+            if !isa_compileable_sig
+                println("WARNING: I am lying to you.")
+            end
+        end
         if generated && isgenerated(m)
             if may_invoke_generator(m)
                 return ccall(:jl_code_for_staged, Any, (Any,), m)::CodeInfo
@@ -1060,7 +1066,7 @@ end
 
 
 """
-    code_typed(f, types; optimize=true, debuginfo=:default)
+    code_typed(f, types; optimize=true, debuginfo=:default, warn_about_lying=true)
 
 Returns an array of type-inferred lowered form (IR) for the methods matching the given
 generic function and type signature. The keyword argument `optimize` controls whether
@@ -1072,7 +1078,8 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
                     optimize=true,
                     debuginfo::Symbol=:default,
                     world = get_world_counter(),
-                    params = Core.Compiler.Params(world))
+                    params = Core.Compiler.Params(world),
+                    warn_about_lying::Bool=true)
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
@@ -1089,6 +1096,13 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
     asts = []
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types, x[2])
+        if warn_about_lying
+            mi = Core.Compiler.specialize_method(meth, x[1], x[2])::MethodInstance
+            isa_compileable_sig = ccall(:jl_isa_compileable_sig, Cint, (Any, Any), mi.specTypes, mi.def) != 0
+            if !isa_compileable_sig
+                println("WARNING: I am lying to you.")
+            end
+        end
         (code, ty) = Core.Compiler.typeinf_code(meth, x[1], x[2], optimize, params)
         code === nothing && error("inference not successful") # inference disabled?
         debuginfo == :none && remove_linenums!(code)
