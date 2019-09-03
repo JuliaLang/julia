@@ -1663,6 +1663,10 @@ function dump(io::IOContext, x::SimpleVector, n::Int, indent)
 end
 
 function dump(io::IOContext, @nospecialize(x), n::Int, indent)
+    if x === Union{}
+        show(io, x)
+        return
+    end
     T = typeof(x)
     if isa(x, Function)
         print(io, x, " (function of type ", T, ")")
