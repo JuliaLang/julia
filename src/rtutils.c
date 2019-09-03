@@ -194,10 +194,7 @@ JL_DLLEXPORT void JL_NORETURN jl_eof_error(void)
 // get kwsorter field, with appropriate error check and message
 JL_DLLEXPORT jl_value_t *jl_get_keyword_sorter(jl_value_t *f)
 {
-    jl_methtable_t *mt = jl_gf_mtable(f);
-    if (mt->kwsorter == NULL)
-        jl_errorf("function %s does not accept keyword arguments", jl_symbol_name(mt->name));
-    return mt->kwsorter;
+    return jl_get_kwsorter(jl_typeof(f));
 }
 
 JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t)
