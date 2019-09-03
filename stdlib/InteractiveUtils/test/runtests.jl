@@ -389,3 +389,45 @@ if Sys.iswindows() || Sys.isapple()
         @test clipboard() == str
     end
 end
+
+# tests for @will_specialize
+let
+    f1(x) = typemax(x)
+    @test !(@will_specialize f1(Int))
+    @test !(@will_specialize f1(Float32))
+    @test !(@will_specialize f1(Float64))
+    f2(t::Type) = t
+    @test !(@will_specialize f2(Int))
+    @test !(@will_specialize f2(Float32))
+    @test !(@will_specialize f2(Float64))
+    @test !(@will_specialize f2(String))
+    function f3(t::Type)
+        x = ones(t, 10)
+        return sum(map(sin, x))
+    end
+    @test !(@will_specialize f3(Int))
+    @test !(@will_specialize f3(Float32))
+    @test !(@will_specialize f3(Float64))
+    g0() = 0
+    @test @will_specialize g0()
+    g1(x) = x
+    @test @will_specialize g1(1)
+    @test @will_specialize g1(1.1)
+    @test @will_specialize g1("foo")
+    g2(x, y) = x * y
+    @test @will_specialize g2(1, 2)
+    @test @will_specialize g2(1, 2.2)
+    @test @will_specialize g2(1.1, 2)
+    @test @will_specialize g2(1.1, 2.2)
+    @test @will_specialize g2("foo", "bar")
+    g3(x, y, z) = x * y * z
+    @test @will_specialize g3(1, 2, 3)
+    @test @will_specialize g3(1, 2, 3.3)
+    @test @will_specialize g3(1, 2.2, 3)
+    @test @will_specialize g3(1, 2.2, 3.3)
+    @test @will_specialize g3(1.1, 2, 3)
+    @test @will_specialize g3(1.1, 2, 3.3)
+    @test @will_specialize g3(1.1, 2.2, 3)
+    @test @will_specialize g3(1.1, 2.2, 3)
+    @test @will_specialize g3("foo", "bar", "baz")
+end

@@ -150,3 +150,16 @@ code_native(io::IO, @nospecialize(f), @nospecialize(types=Tuple); syntax::Symbol
 code_native(@nospecialize(f), @nospecialize(types=Tuple); syntax::Symbol=:att, debuginfo::Symbol=:default) =
     code_native(stdout, f, types; syntax=syntax, debuginfo=debuginfo)
 code_native(::IO, ::Any, ::Symbol) = error("illegal code_native call") # resolve ambiguous call
+
+"""
+    will_specialize(f, types)
+
+Returns `true` if the specialization on this method signature will be compiled
+into the cache for this method.
+"""
+function will_specialize(@nospecialize(f), @nospecialize(t))
+    isa_compileable_sig = map(Base.method_instances(f, t)) do mi
+        ccall(:jl_isa_compileable_sig, Cint, (Any, Any), mi.specTypes, mi.def) != 0
+    end
+    return !isempty(isa_compileable_sig) && all(isa_compileable_sig)
+end

@@ -153,6 +153,13 @@ macro code_lowered(ex0...)
     end
 end
 
+macro will_specialize(ex0...)
+    thecall = gen_call_with_extracted_types_and_kwargs(__module__, :will_specialize, ex0)
+    quote
+        $thecall
+    end
+end
+
 """
     @functionloc
 
@@ -247,3 +254,11 @@ Set the optional keyword argument `debuginfo` by putting it before the function 
 `debuginfo` may be one of `:source` (default) or `:none`, to specify the verbosity of code comments.
 """
 :@code_native
+
+"""
+    @will_specialize
+
+Evaluates the arguments to the function or macro call, determines their types, and calls
+[`will_specialize`](@ref) on the resulting expression.
+"""
+:@will_specialize
