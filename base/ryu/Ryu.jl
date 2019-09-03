@@ -94,4 +94,6 @@ function Base.show(io::IO, x::T) where {T <: Base.IEEEFloat}
     return
 end
 
+Base.print(io::IO, x::Union{Float16, Float32}) = show(IOContext(io, :compact => true), x)
+
 end # module
