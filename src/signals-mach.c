@@ -427,52 +427,50 @@ void *mach_profile_listener(void *arg)
 
             unw_context_t *uc;
             jl_thread_suspend_and_get_state(i, &uc);
-
+            if (running) {
 #ifdef LIBOSXUNWIND
-            /*
-             *  Unfortunately compact unwind info is incorrectly generated for quite a number of
-             *  libraries by quite a large number of compilers. We can fall back to DWARF unwind info
-             *  in some cases, but in quite a number of cases (especially libraries not compiled in debug
-             *  mode, only the compact unwind info may be available). Even more unfortunately, there is no
-             *  way to detect such bogus compact unwind info (other than noticing the resulting segfault).
-             *  What we do here is ugly, but necessary until the compact unwind info situation improves.
-             *  We try to use the compact unwind info and if that results in a segfault, we retry with DWARF info.
-             *  Note that in a small number of cases this may result in bogus stack traces, but at least the topmost
-             *  entry will always be correct, and the number of cases in which this is an issue is rather small.
-             *  Other than that, this implementation is not incorrect as the other thread is paused while we are profiling
-             *  and during stack unwinding we only ever read memory, but never write it.
-             */
+                /*
+                 *  Unfortunately compact unwind info is incorrectly generated for quite a number of
+                 *  libraries by quite a large number of compilers. We can fall back to DWARF unwind info
+                 *  in some cases, but in quite a number of cases (especially libraries not compiled in debug
+                 *  mode, only the compact unwind info may be available). Even more unfortunately, there is no
+                 *  way to detect such bogus compact unwind info (other than noticing the resulting segfault).
+                 *  What we do here is ugly, but necessary until the compact unwind info situation improves.
+                 *  We try to use the compact unwind info and if that results in a segfault, we retry with DWARF info.
+                 *  Note that in a small number of cases this may result in bogus stack traces, but at least the topmost
+                 *  entry will always be correct, and the number of cases in which this is an issue is rather small.
+                 *  Other than that, this implementation is not incorrect as the other thread is paused while we are profiling
+                 *  and during stack unwinding we only ever read memory, but never write it.
+                 */
 
-            forceDwarf = 0;
-            unw_getcontext(&profiler_uc); // will resume from this point if the next lines segfault at any point
+                forceDwarf = 0;
+                unw_getcontext(&profiler_uc); // will resume from this point if the next lines segfault at any point
 
-            if (forceDwarf == 0) {
-                // Save the backtrace
-                bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
-            }
-            else if (forceDwarf == 1) {
-                bt_size_cur += rec_backtrace_ctx_dwarf((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
-            }
-            else if (forceDwarf == -1) {
-                jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
-            }
+                if (forceDwarf == 0) {
+                    // Save the backtrace
+                    bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
+                }
+                else if (forceDwarf == 1) {
+                    bt_size_cur += rec_backtrace_ctx_dwarf((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
+                }
+                else if (forceDwarf == -1) {
+                    jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
+                }
 
-            forceDwarf = -2;
+                forceDwarf = -2;
 #else
-            bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
+                bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
 #endif
 
-            // Mark the end of this block with 0
-            bt_data_prof[bt_size_cur++] = 0;
+                // Mark the end of this block with 0
+                bt_data_prof[bt_size_cur++] = 0;
 
-            // We're done! Resume the thread.
-            jl_thread_resume(i, 0);
-
-            if (running) {
                 // Reset the alarm
                 kern_return_t ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);
                 HANDLE_MACH_ERROR("clock_alarm", ret)
             }
+            // We're done! Resume the thread.
+            jl_thread_resume(i, 0);
         }
     }
 }

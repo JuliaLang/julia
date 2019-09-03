@@ -321,35 +321,37 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
     // Note: illegal to use jl_* functions from this thread
 
     TIMECAPS tc;
-    if (MMSYSERR_NOERROR!=timeGetDevCaps(&tc, sizeof(tc))) {
-        fputs("failed to get timer resolution",stderr);
+    if (MMSYSERR_NOERROR != timeGetDevCaps(&tc, sizeof(tc))) {
+        fputs("failed to get timer resolution", stderr);
         hBtThread = 0;
         return 0;
     }
     while (1) {
-        if (running && bt_size_cur < bt_size_max) {
+        if (bt_size_cur < bt_size_max) {
             DWORD timeout = nsecprof/GIGA;
-            timeout = min(max(timeout,tc.wPeriodMin*2),tc.wPeriodMax/2);
+            timeout = min(max(timeout, tc.wPeriodMin*2), tc.wPeriodMax/2);
             Sleep(timeout);
             if ((DWORD)-1 == SuspendThread(hMainThread)) {
-                fputs("failed to suspend main thread. aborting profiling.",stderr);
+                fputs("failed to suspend main thread. aborting profiling.", stderr);
                 break;
             }
-            CONTEXT ctxThread;
-            memset(&ctxThread, 0, sizeof(CONTEXT));
-            ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-            if (!GetThreadContext(hMainThread, &ctxThread)) {
-                fputs("failed to get context from main thread. aborting profiling.",stderr);
-                break;
+            if (running) {
+                CONTEXT ctxThread;
+                memset(&ctxThread, 0, sizeof(CONTEXT));
+                ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+                if (!GetThreadContext(hMainThread, &ctxThread)) {
+                    fputs("failed to get context from main thread. aborting profiling.", stderr);
+                    break;
+                }
+                // Get backtrace data
+                bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
+                    bt_size_max - bt_size_cur - 1, &ctxThread);
+                // Mark the end of this block with 0
+                bt_data_prof[bt_size_cur] = 0;
+                bt_size_cur++;
             }
-            // Get backtrace data
-            bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
-                bt_size_max - bt_size_cur - 1, &ctxThread);
-            // Mark the end of this block with 0
-            bt_data_prof[bt_size_cur] = 0;
-            bt_size_cur++;
             if ((DWORD)-1 == ResumeThread(hMainThread)) {
-                fputs("failed to resume main thread! aborting.",stderr);
+                fputs("failed to resume main thread! aborting.", stderr);
                 gc_debug_critical_error();
                 abort();
             }
@@ -369,11 +371,11 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
         hBtThread = CreateThread(
             NULL,                   // default security attributes
             0,                      // use default stack size
-            profile_bt,            // thread function name
+            profile_bt,             // thread function name
             0,                      // argument to thread function
             0,                      // use default creation flags
             0);                     // returns the thread identifier
-        (void)SetThreadPriority(hBtThread,THREAD_PRIORITY_ABOVE_NORMAL);
+        (void)SetThreadPriority(hBtThread, THREAD_PRIORITY_ABOVE_NORMAL);
     }
     else {
         if ((DWORD)-1 == ResumeThread(hBtThread)) {
