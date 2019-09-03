@@ -2554,7 +2554,7 @@
                                           (append locals-nondef locals-def)
                                           ;; global declarations at the top level are not inherited
                                           (if toplevel? '() globals)
-                                          (scope:sp scope)
+                                          '()
                                           (append (map cons need-rename renamed)
                                                   (map cons need-rename-def renamed-def))
                                           scope)))
