@@ -116,6 +116,11 @@ end
             @test_throws DimensionMismatch rmul!(a, Diagonal(Vector{Float64}(undef,an+1)))
         end
 
+        @testset "Scaling with rdiv! and ldiv!" begin
+            @test rdiv!(copy(a), 5.) == a/5
+            @test ldiv!(5., copy(a)) == a/5
+        end
+
         @testset "Scaling with 3-argument mul!" begin
             @test mul!(similar(a), 5., a) == a*5
             @test mul!(similar(a), a, 5.) == a*5

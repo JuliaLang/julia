@@ -4,11 +4,30 @@
 
 if Sys.isapple()
     function clipboard(x)
-        open(pipeline(`pbcopy`, stderr=stderr), "w") do io
+        pbcopy_cmd = `pbcopy`
+
+        # OSX shells, especially when run within `tmux` or `screen`, can be
+        # disconnected from the global shell namespace, which causes problems
+        # with clipboards.  Luckily, the `reattach-to-user-namespace` utility
+        # dodges these issues quite nicely, so we automatically utilize it if
+        # it is installed.
+        if Sys.which("reattach-to-user-namespace") != nothing
+            pbcopy_cmd = `reattach-to-user-namespace pbcopy`
+        end
+
+        open(pipeline(pbcopy_cmd, stderr=stderr), "w") do io
             print(io, x)
         end
     end
-    clipboard() = read(`pbpaste`, String)
+    function clipboard()
+        pbpaste_cmd = `pbpaste`
+
+        # See above comment in `clipboard(x)`
+        if Sys.which("reattach-to-user-namespace") != nothing
+            pbcopy_cmd = `reattach-to-user-namespace pbpaste`
+        end
+        read(pbpaste_cmd, String)
+    end
 
 elseif Sys.islinux() || Sys.KERNEL === :FreeBSD
     _clipboardcmd = nothing

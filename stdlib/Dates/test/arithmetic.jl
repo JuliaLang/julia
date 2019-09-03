@@ -305,6 +305,7 @@ end
         @test dt + Dates.Time(1, 0, 0) == Dates.DateTime(1999, 12, 27, 1, 0, 0)
         @test dt + Dates.Time(0, 1, 0) == Dates.DateTime(1999, 12, 27, 0, 1, 0)
         @test dt + Dates.Time(0, 0, 1) == Dates.DateTime(1999, 12, 27, 0, 0, 1)
+        @test Dates.Time(0, 0, 1) + dt == Dates.DateTime(1999, 12, 27, 0, 0, 1)
 
         t = Dates.Time(0, 0, 0) + Dates.Hour(24)
         @test dt + t == Dates.DateTime(1999, 12, 27, 0, 0, 0)

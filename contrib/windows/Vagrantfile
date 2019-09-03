@@ -1,7 +1,7 @@
 # Vagrantfile for building Windows Julia via MSYS2 or Cygwin
 
 $script_cygwin = <<SCRIPT
-# change the following to 32 for 32 bit Julia
+# change the following to 32 for 32-bit Julia
 $bits = "64"
 $arch = "x86_$bits".Replace("x86_32", "i686")
 $setup = "setup-$arch.exe".Replace("i686", "x86")
@@ -9,11 +9,11 @@ $cyginstall = "C:\\cygwin$bits"
 
 mkdir -Force $cyginstall | Out-Null
 (new-object net.webclient).DownloadFile(
-  "http://cygwin.com/$setup", "$cyginstall\\$setup")
+  "https://cygwin.com/$setup", "$cyginstall\\$setup")
 foreach ($pkg in @("git,make,curl,patch,python,gcc-g++,m4,cmake,p7zip",
     "mingw64-$arch-gcc-g++,mingw64-$arch-gcc-fortran")) {
   & "$cyginstall\\$setup" -q -n -R $cyginstall -l $cyginstall\\packages `
-    -s http://mirrors.kernel.org/sourceware/cygwin -g -P $pkg | Where-Object `
+    -s https://mirrors.kernel.org/sourceware/cygwin -g -P $pkg | Where-Object `
     -FilterScript {$_ -notlike "Installing file *"} | Write-Output
 }
 & "$cyginstall\\bin\\sh" -lc "if ! [ -e julia$bits ]; then git clone \\
@@ -23,7 +23,7 @@ foreach ($pkg in @("git,make,curl,patch,python,gcc-g++,m4,cmake,p7zip",
 SCRIPT
 
 $script_msys2 = <<SCRIPT
-# change the following to 32 for 32 bit Julia
+# change the following to 32 for 32-bit Julia
 $bits = "64"
 $arch = "x86_$bits".Replace("x86_32", "i686")
 # change the date in the following for future msys2 releases
@@ -46,7 +46,7 @@ mkdir -Force $msys2install | Out-Null
   "https://chocolatey.org/7za.exe",
   "$msys2install\\7za.exe")
 (new-object net.webclient).DownloadFile(
-  "http://sourceforge.net/projects/msys2/files/Base/$arch/$msys2tarball.xz",
+  "https://sourceforge.net/projects/msys2/files/Base/$arch/$msys2tarball.xz",
   "$msys2install\\$msys2tarball.xz")
 cd C:\\
 & "msys$bits\\7za.exe" x -y msys$bits\\$msys2tarball.xz

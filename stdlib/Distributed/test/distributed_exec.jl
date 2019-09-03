@@ -256,7 +256,7 @@ let wid1 = workers()[1],
 end
 
 # Tests for issue #23109 - should not hang.
-f = @spawn rand(1, 1)
+f = @spawnat :any rand(1, 1)
 @sync begin
     for _ in 1:10
         @async fetch(f)
@@ -481,7 +481,7 @@ let ex
     @test length(bt) > 1
     frame, repeated = bt[1]::Tuple{Base.StackTraces.StackFrame, Int}
     @test frame.func == :foo
-    @test frame.linfo == nothing
+    @test frame.linfo === nothing
     @test repeated == 1
 end
 
@@ -752,16 +752,20 @@ end
 # issue #13168
 function f13168(n)
     val = 0
-    for i=1:n val+=sum(rand(n,n)^2) end
-    val
+    for i = 1:n
+        val += sum(rand(n, n)^2)
+    end
+    return val
 end
 let t = schedule(@task f13168(100))
-    @test t.state == :queued
+    @test t.state == :runnable
+    @test t.queue !== nothing
     @test_throws ErrorException schedule(t)
     yield()
     @test t.state == :done
+    @test t.queue === nothing
     @test_throws ErrorException schedule(t)
-    @test isa(fetch(t),Float64)
+    @test isa(fetch(t), Float64)
 end
 
 # issue #13122
@@ -1210,6 +1214,29 @@ v6 = FooModEverywhere
 @test remotecall_fetch(()->v5, id_other) === FooStructEverywhere
 @test remotecall_fetch(()->v6, id_other) === FooModEverywhere
 
+# hash value same but different object instance
+v7 = ones(10)
+oid1 = objectid(v7)
+hval1 = hash(v7)
+@test v7 == @fetchfrom id_other v7
+remote_oid1 = @fetchfrom id_other objectid(v7)
+
+v7 = ones(10)
+@test oid1 != objectid(v7)
+@test hval1 == hash(v7)
+@test remote_oid1 != @fetchfrom id_other objectid(v7)
+
+
+# Github issue #31252
+v31252 = :a
+@test :a == @fetchfrom id_other v31252
+
+v31252 = :b
+@test :b == @fetchfrom id_other v31252
+
+v31252 = :a
+@test :a == @fetchfrom id_other v31252
+
 
 # Test that a global is not being repeatedly serialized when
 # a) referenced multiple times in the closure
@@ -1307,16 +1334,12 @@ global ids_func = ()->ids_cleanup
 clust_ser = (Distributed.worker_from_id(id_other)).w_serializer
 @test remotecall_fetch(ids_func, id_other) == ids_cleanup
 
-@test haskey(clust_ser.glbs_sent, objectid(ids_cleanup))
-finalize(ids_cleanup)
-@test !haskey(clust_ser.glbs_sent, objectid(ids_cleanup))
-
 # TODO Add test for cleanup from `clust_ser.glbs_in_tnobj`
 
 # reported github issues - Mostly tests with globals and various distributed macros
 #2669, #5390
 v2669=10
-@test fetch(@spawn (1+v2669)) == 11
+@test fetch(@spawnat :any (1+v2669)) == 11
 
 #12367
 refs = []
@@ -1493,6 +1516,42 @@ cluster_cookie("foobar") # custom cookie
 npids = addprocs_with_testenv(WorkerArgTester(`--worker=foobar`, false))
 @test remotecall_fetch(myid, npids[1]) == npids[1]
 
+# tests for start_worker options to retain stdio (issue #31035)
+struct RetainStdioTester <: ClusterManager
+    close_stdin::Bool
+    stderr_to_stdout::Bool
+end
+
+function launch(manager::RetainStdioTester, params::Dict, launched::Array, c::Condition)
+    dir = params[:dir]
+    exename = params[:exename]
+    exeflags = params[:exeflags]
+
+    jlcmd = "using Distributed; start_worker(\"\"; close_stdin=$(manager.close_stdin), stderr_to_stdout=$(manager.stderr_to_stdout));"
+    cmd = detach(setenv(`$exename $exeflags --bind-to $(Distributed.LPROC.bind_addr) -e $jlcmd`, dir=dir))
+    proc = open(cmd, "r+")
+
+    wconfig = WorkerConfig()
+    wconfig.process = proc
+    wconfig.io = proc.out
+    push!(launched, wconfig)
+
+    notify(c)
+end
+manage(::RetainStdioTester, ::Integer, ::WorkerConfig, ::Symbol) = nothing
+
+
+nprocs()>1 && rmprocs(workers())
+cluster_cookie("")
+
+for close_stdin in (true, false), stderr_to_stdout in (true, false)
+    npids = addprocs_with_testenv(RetainStdioTester(close_stdin,stderr_to_stdout))
+    @test remotecall_fetch(myid, npids[1]) == npids[1]
+    @test close_stdin != remotecall_fetch(()->isopen(stdin), npids[1])
+    @test stderr_to_stdout == remotecall_fetch(()->(stderr === stdout), npids[1])
+    rmprocs(npids)
+end
+
 # Issue # 22865
 # Must be run on a new cluster, i.e., all workers must be in the same state.
 rmprocs(workers())
@@ -1553,6 +1612,44 @@ for T in (UInt8, Int8, UInt16, Int16, UInt32, Int32, UInt64)
         i
     end
     @test n == 55
+end
+
+# issue #28966
+let code = """
+    import Distributed
+    Distributed.addprocs(1)
+    Distributed.@everywhere f() = myid()
+    for w in Distributed.workers()
+        @assert Distributed.remotecall_fetch(f, w) == w
+    end
+    """
+    @test success(`$(Base.julia_cmd()) --startup-file=no -e $code`)
+end
+
+# PR 32431: tests for internal Distributed.head_and_tail
+let (h, t) = Distributed.head_and_tail(1:10, 3)
+    @test h == 1:3
+    @test collect(t) == 4:10
+end
+let (h, t) = Distributed.head_and_tail(1:10, 0)
+    @test h == []
+    @test collect(t) == 1:10
+end
+let (h, t) = Distributed.head_and_tail(1:3, 5)
+    @test h == 1:3
+    @test collect(t) == []
+end
+let (h, t) = Distributed.head_and_tail(1:3, 3)
+    @test h == 1:3
+    @test collect(t) == []
+end
+let (h, t) = Distributed.head_and_tail(Int[], 3)
+    @test h == []
+    @test collect(t) == []
+end
+let (h, t) = Distributed.head_and_tail(Int[], 0)
+    @test h == []
+    @test collect(t) == []
 end
 
 # Run topology tests last after removing all workers, since a given

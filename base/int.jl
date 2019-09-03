@@ -184,11 +184,7 @@ fld(x::Unsigned, y::Signed) = div(x, y) - (signbit(y) & (rem(x, y) != 0))
     rem(x, y, RoundDown)
 
 The reduction of `x` modulo `y`, or equivalently, the remainder of `x` after floored
-division by `y`, i.e.
-```julia
-x - y*fld(x,y)
-```
-if computed without intermediate rounding.
+division by `y`, i.e. `x - y*fld(x,y)` if computed without intermediate rounding.
 
 The result will have the same sign as `y`, and magnitude less than `abs(y)` (with some
 exceptions, see note below).

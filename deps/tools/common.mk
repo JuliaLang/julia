@@ -214,10 +214,10 @@ endef
 
 ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
 #gnu tar
-UNTAR = $(TAR) -xzf
+UNTAR = $(TAR) -xmzf
 else
 #bsd tar
-UNTAR = $(TAR) -xUzf
+UNTAR = $(TAR) -xmUzf
 endif
 
 

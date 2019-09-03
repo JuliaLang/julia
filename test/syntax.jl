@@ -736,8 +736,8 @@ end
     end
 end
 
-f1_ci = code_typed(f1, (Int,))[1][1]
-f2_ci = code_typed(f2, (Int,))[1][1]
+f1_ci = code_typed(f1, (Int,), debuginfo=:source)[1][1]
+f2_ci = code_typed(f2, (Int,), debuginfo=:source)[1][1]
 
 f1_exprs = get_expr_list(f1_ci)
 f2_exprs = get_expr_list(f2_ci)
@@ -1493,7 +1493,7 @@ end
 # issue #27129
 f27129(x = 1) = (@Base._inline_meta; x)
 for meth in methods(f27129)
-    @test ccall(:jl_uncompress_ast, Any, (Any, Any), meth, meth.source).inlineable
+    @test ccall(:jl_uncompress_ast, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source).inlineable
 end
 
 # issue #27710
@@ -1563,6 +1563,23 @@ end
         return convert(B, b)
     end
 end) == Expr(:error, "local variable name \"B\" conflicts with a static parameter")
+# issue #32620
+@test Meta.lower(@__MODULE__, quote
+    function foo(a::T) where {T}
+        for i = 1:1
+            T = 0
+        end
+    end
+end) == Expr(:error, "local variable name \"T\" conflicts with a static parameter")
+function f32620(x::T) where T
+    local y
+    let T = 3
+        T = 2
+        y = T
+    end
+    return (T, y)
+end
+@test f32620(0) === (Int, 2)
 
 # issue #28044
 code28044(x) = 10x
@@ -1776,6 +1793,18 @@ function captured_and_shadowed_sp(x::T) where T
 end
 @test captured_and_shadowed_sp(1) === (Int, 0)
 
+function capture_with_conditional_label()
+    @goto foo
+    x = 1
+    if false
+        @label foo
+    end
+    return y->x
+end
+let f = capture_with_conditional_label()  # should not throw
+    @test_throws UndefVarError(:x) f(0)
+end
+
 # `_` should not create a global (or local)
 f30656(T) = (t, _)::Pair -> t >= T
 f30656(10)(11=>1)
@@ -1795,3 +1824,89 @@ end
 
 @test_throws ErrorException("syntax: malformed \"using\" statement")  eval(Expr(:using, :X))
 @test_throws ErrorException("syntax: malformed \"import\" statement") eval(Expr(:import, :X))
+
+# eval'ing :const exprs
+eval(Expr(:const, :_var_30877))
+@test !isdefined(@__MODULE__, :_var_30877)
+@test isconst(@__MODULE__, :_var_30877)
+
+# anonymous kw function in value position at top level
+f30926 = function (;k=0)
+    k
+end
+@test f30926(k=2) == 2
+
+if false
+elseif false
+    g30926(x) = 1
+end
+@test !isdefined(@__MODULE__, :g30926)
+
+@testset "closure conversion in testsets" begin
+    p = (2, 3, 4)
+    @test p == (2, 3, 4)
+    identity(p)
+    allocs = @allocated identity(p)
+    @test allocs == 0
+end
+
+@test_throws UndefVarError eval(Symbol(""))
+@test_throws UndefVarError eval(:(1+$(Symbol(""))))
+
+# issue #31404
+f31404(a, b; kws...) = (a, b, kws.data)
+@test f31404(+, (Type{T} where T,); optimize=false) === (+, (Type,), (optimize=false,))
+
+# issue #28992
+macro id28992(x) x end
+@test @id28992(1 .+ 2) == 3
+@test Meta.isexpr(Meta.lower(@__MODULE__, :(@id28992((.+)(a,b) = 0))), :error)
+@test @id28992([1] .< [2] .< [3]) == [true]
+@test @id28992(2 ^ -2) == 0.25
+@test @id28992(2 .^ -2) == 0.25
+
+# issue #32121
+@test @id28992((a=1, b=2)) === (a=1, b=2)
+a32121 = 8
+b32121 = 9
+@test @id28992((a32121=a32121, b32121=b32121)) === (a32121=8, b32121=9)
+
+# issue #31596
+f31596(x; kw...) = x
+@test f31596((a=1,), b = 1.0) === (a=1,)
+
+# issue #32325
+let
+    struct a32325 end
+    a32325(x) = a32325()
+end
+@test a32325(0) === a32325()
+
+@test Meta.lower(Main, :(struct A; A() = new{Int}(); end)) == Expr(:error, "too many type parameters specified in \"new{...}\"")
+@test Meta.lower(Main, :(struct A{T, S}; A() = new{Int}(); end)) == Expr(:error, "too few type parameters specified in \"new{...}\"")
+
+# issue #32467
+let f = identity(identity() do
+                 x = 0
+                 @inbounds for i = 1:2
+                     x += i
+                 end
+                 x
+                 end)
+    @test f() == 3
+end
+
+# issue #32499
+x32499 = begin
+    struct S32499
+        function S32499(; x=1)
+            x
+        end
+    end
+    S32499(x=2)
+end
+@test x32499 == 2
+
+# issue #32626
+@test Meta.parse("'a'..'b'") == Expr(:call, :(..), 'a', 'b')
+@test Meta.parse(":a..:b") == Expr(:call, :(..), QuoteNode(:a), QuoteNode(:b))

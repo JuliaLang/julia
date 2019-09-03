@@ -1,13 +1,14 @@
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 JULIAHOME := $(abspath $(SRCDIR)/..)
 BUILDDIR := .
-STDLIBDIR := $(abspath $(JULIAHOME)/stdlib)
 include $(JULIAHOME)/Make.inc
+VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
+STDLIBDIR := $(build_datarootdir)/julia/stdlib/$(VERSDIR)
 # TODO: this Makefile ignores BUILDDIR, except for computing JULIA_EXECUTABLE
 
 TESTGROUPS = unicode strings compiler
 TESTS = all stdlib $(TESTGROUPS) \
-        $(patsubst $(STDLIBDIR)/%/,%,$(dir $(wildcard $(STDLIBDIR)/*/.))) \
+		$(patsubst $(STDLIBDIR)/%/,%,$(dir $(wildcard $(STDLIBDIR)/*/.))) \
 		$(filter-out runtests testdefs, \
 			$(patsubst $(SRCDIR)/%.jl,%,$(wildcard $(SRCDIR)/*.jl))) \
 		$(foreach group,$(TESTGROUPS), \

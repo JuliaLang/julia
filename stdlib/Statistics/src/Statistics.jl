@@ -73,7 +73,32 @@ function mean(f, itr)
     end
     return total/count
 end
-mean(f, A::AbstractArray) = sum(f, A) / length(A)
+
+"""
+    mean(f::Function, A::AbstractArray; dims)
+
+Apply the function `f` to each element of array `A` and take the mean over dimensions `dims`.
+
+!!! compat "Julia 1.3"
+    This method requires at least Julia 1.3.
+
+```jldoctest
+julia> mean(√, [1, 2, 3])
+1.3820881233139908
+
+julia> mean([√1, √2, √3])
+1.3820881233139908
+
+julia> mean(√, [1 2 3; 4 5 6], dims=2)
+2×1 Array{Float64,2}:
+ 1.3820881233139908
+ 2.2285192400943226
+```
+"""
+mean(f, A::AbstractArray; dims=:) = _mean(f, A, dims)
+
+_mean(f, A::AbstractArray, ::Colon) = sum(f, A) / length(A)
+_mean(f, A::AbstractArray, dims) = sum(f, A, dims=dims) / mapreduce(i -> size(A, i), *, unique(dims); init=1)
 
 """
     mean!(r, v)
@@ -248,12 +273,20 @@ function varm!(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; correcte
 end
 
 """
-    varm(v, m; dims, corrected::Bool=true)
+    varm(itr, m; dims, corrected::Bool=true)
 
-Compute the sample variance of a collection `v` with known mean(s) `m`,
-optionally over the given dimensions. `m` may contain means for each dimension of
-`v`. If `corrected` is `true`, then the sum is scaled with `n-1`,
-whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(v)`.
+Compute the sample variance of collection `itr`, with known mean(s) `m`.
+
+The algorithm returns an estimator of the generative distribution's variance
+under the assumption that each entry of `itr` is an IID drawn from that generative
+distribution. For arrays, this computation is equivalent to calculating
+`sum((itr .- mean(itr)).^2) / (length(itr) - 1)`.
+If `corrected` is `true`, then the sum is scaled with `n-1`,
+whereas the sum is scaled with `n` if `corrected` is
+`false` with `n` the number of elements in `itr`.
+
+If `itr` is an `AbstractArray`, `dims` can be provided to compute the variance
+over dimensions, and `m` may contain means for each dimension of `itr`.
 
 !!! note
     If array contains `NaN` or [`missing`](@ref) values, the result is also
@@ -276,15 +309,22 @@ end
 
 
 """
-    var(v; dims, corrected::Bool=true, mean=nothing)
+    var(itr; dims, corrected::Bool=true, mean=nothing)
 
-Compute the sample variance of a vector or array `v`, optionally along the given dimensions.
-The algorithm will return an estimator of the generative distribution's variance
-under the assumption that each entry of `v` is an IID drawn from that generative
-distribution. This computation is equivalent to calculating `sum(abs2, v - mean(v)) /
-(length(v) - 1)`. If `corrected` is `true`, then the sum is scaled with `n-1`,
-whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(v)`.
-The mean `mean` over the region may be provided.
+Compute the sample variance of collection `itr`.
+
+The algorithm returns an estimator of the generative distribution's variance
+under the assumption that each entry of `itr` is an IID drawn from that generative
+distribution. For arrays, this computation is equivalent to calculating
+`sum((itr .- mean(itr)).^2) / (length(itr) - 1)).
+If `corrected` is `true`, then the sum is scaled with `n-1`,
+whereas the sum is scaled with `n` if `corrected` is
+`false` with `n` the number of elements in `itr`.
+
+A pre-computed `mean` may be provided.
+
+If `itr` is an `AbstractArray`, `dims` can be provided to compute the variance
+over dimensions, and `mean` may contain means for each dimension of `itr`.
 
 !!! note
     If array contains `NaN` or [`missing`](@ref) values, the result is also
@@ -342,15 +382,22 @@ stdm(A::AbstractArray, m; corrected::Bool=true) =
     sqrt.(varm(A, m; corrected=corrected))
 
 """
-    std(v; corrected::Bool=true, mean=nothing, dims)
+    std(itr; corrected::Bool=true, mean=nothing[, dims])
 
-Compute the sample standard deviation of a vector or array `v`, optionally along the given
-dimensions. The algorithm returns an estimator of the generative distribution's standard
-deviation under the assumption that each entry of `v` is an IID drawn from that generative
-distribution. This computation is equivalent to calculating `sqrt(sum((v - mean(v)).^2) /
-(length(v) - 1))`. A pre-computed `mean` may be provided. If `corrected` is `true`,
-then the sum is scaled with `n-1`, whereas the sum is scaled with `n` if `corrected` is
-`false` where `n = length(v)`.
+Compute the sample standard deviation of collection `itr`.
+
+The algorithm returns an estimator of the generative distribution's standard
+deviation under the assumption that each entry of `itr` is an IID drawn from that generative
+distribution. For arrays, this computation is equivalent to calculating
+`sqrt(sum((itr .- mean(itr)).^2) / (length(itr) - 1))`.
+If `corrected` is `true`, then the sum is scaled with `n-1`,
+whereas the sum is scaled with `n` if `corrected` is
+`false` with `n` the number of elements in `itr`.
+
+A pre-computed `mean` may be provided.
+
+If `itr` is an `AbstractArray`, `dims` can be provided to compute the standard deviation
+over dimensions, and `means` may contain means for each dimension of `itr`.
 
 !!! note
     If array contains `NaN` or [`missing`](@ref) values, the result is also
@@ -376,12 +423,22 @@ std(iterable; corrected::Bool=true, mean=nothing) =
     sqrt(var(iterable, corrected=corrected, mean=mean))
 
 """
-    stdm(v, m; corrected::Bool=true)
+    stdm(itr, m; corrected::Bool=true)
 
-Compute the sample standard deviation of a vector `v`
-with known mean `m`. If `corrected` is `true`,
-then the sum is scaled with `n-1`, whereas the sum is
-scaled with `n` if `corrected` is `false` where `n = length(v)`.
+Compute the sample standard deviation of collection `itr`, with known mean(s) `m`.
+
+The algorithm returns an estimator of the generative distribution's standard
+deviation under the assumption that each entry of `itr` is an IID drawn from that generative
+distribution. For arrays, this computation is equivalent to calculating
+`sqrt(sum((itr .- mean(itr)).^2) / (length(itr) - 1))`.
+If `corrected` is `true`, then the sum is scaled with `n-1`,
+whereas the sum is scaled with `n` if `corrected` is
+`false` with `n` the number of elements in `itr`.
+
+A pre-computed `mean` may be provided.
+
+If `itr` is an `AbstractArray`, `dims` can be provided to compute the standard deviation
+over dimensions, and `m` may contain means for each dimension of `itr`.
 
 !!! note
     If array contains `NaN` or [`missing`](@ref) values, the result is also
@@ -588,8 +645,8 @@ function corm(x::AbstractVector, mx, y::AbstractVector, my)
 
     @inbounds begin
         # Initialize the accumulators
-        xx = zero(sqrt(abs2(x[1])))
-        yy = zero(sqrt(abs2(y[1])))
+        xx = zero(sqrt(abs2(one(x[1]))))
+        yy = zero(sqrt(abs2(one(y[1]))))
         xy = zero(x[1] * y[1]')
 
         @simd for i in eachindex(x, y)
@@ -821,18 +878,17 @@ function quantile!(q::AbstractArray, v::AbstractVector, p::AbstractArray;
     return q
 end
 
-quantile!(v::AbstractVector, p::AbstractArray; sorted::Bool=false) =
-    quantile!(similar(p,float(eltype(v))), v, p; sorted=sorted)
+function quantile!(v::AbstractVector, p::Union{AbstractArray, Tuple{Vararg{Real}}};
+                   sorted::Bool=false)
+    if !isempty(p)
+        minp, maxp = extrema(p)
+        _quantilesort!(v, sorted, minp, maxp)
+    end
+    return map(x->_quantile(v, x), p)
+end
 
 quantile!(v::AbstractVector, p::Real; sorted::Bool=false) =
     _quantile(_quantilesort!(v, sorted, p, p), p)
-
-function quantile!(v::AbstractVector, p::Tuple{Vararg{Real}}; sorted::Bool=false)
-    isempty(p) && return ()
-    minp, maxp = extrema(p)
-    _quantilesort!(v, sorted, minp, maxp)
-    return map(x->_quantile(v, x), p)
-end
 
 # Function to perform partial sort of v for quantiles in given range
 function _quantilesort!(v::AbstractArray, sorted::Bool, minp::Real, maxp::Real)
@@ -863,18 +919,12 @@ end
     h  = f0 - t0
     i  = trunc(Int,t0) + 1
 
-    T  = promote_type(eltype(v), typeof(v[1]*h))
-
-    if h == 0
-        return convert(T, v[i])
+    a = v[i]
+    b = v[i + (h > 0)]
+    if isfinite(a) && isfinite(b)
+        return a + h*(b-a)
     else
-        a = v[i]
-        b = v[i+1]
-        if isfinite(a) && isfinite(b)
-            return convert(T, a + h*(b-a))
-        else
-            return convert(T, (1-h)*a + h*b)
-        end
+        return (1-h)*a + h*b
     end
 end
 

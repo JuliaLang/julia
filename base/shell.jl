@@ -19,8 +19,8 @@ end
 # needs to be factored out so depwarn only warns once
 # when removed, also need to update shell_escape for a Cmd to pass shell_special
 # and may want to use it in the test for #10120 (currently the implementation is essentially copied there)
-@noinline warn_shell_special(special) =
-    depwarn("special characters \"$special\" should now be quoted in commands", :warn_shell_special)
+@noinline warn_shell_special(str,special) =
+    depwarn("Parsing command \"$str\". Special characters \"$special\" should now be quoted in commands", :warn_shell_special)
 
 function shell_parse(str::AbstractString, interpolate::Bool=true;
                      special::AbstractString="")
@@ -97,7 +97,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                     _ = popfirst!(st)
                 end
             elseif !in_single_quotes && !in_double_quotes && c in special
-                warn_shell_special(special) # noinline depwarn
+                warn_shell_special(str,special) # noinline depwarn
             end
         end
     end

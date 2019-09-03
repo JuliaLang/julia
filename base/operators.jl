@@ -132,16 +132,24 @@ isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(
 """
     isless(x, y)
 
-Test whether `x` is less than `y`, according to a canonical total order. Values that are
-normally unordered, such as `NaN`, are ordered in an arbitrary but consistent fashion.
+Test whether `x` is less than `y`, according to a fixed total order.
+`isless` is not defined on all pairs of values `(x, y)`. However, if it
+is defined, it is expected to satisfy the following:
+- If `isless(x, y)` is defined, then so is `isless(y, x)` and `isequal(x, y)`,
+  and exactly one of those three yields `true`.
+- The relation defined by `isless` is transitive, i.e.,
+  `isless(x, y) && isless(y, z)` implies `isless(x, z)`.
+
+Values that are normally unordered, such as `NaN`,
+are ordered in an arbitrary but consistent fashion.
 [`missing`](@ref) values are ordered last.
 
 This is the default comparison used by [`sort`](@ref).
 
 # Implementation
-Non-numeric types with a canonical total order should implement this function.
+Non-numeric types with a total order should implement this function.
 Numeric types only need to implement it if they have special values such as `NaN`.
-Types with a canonical partial order should implement [`<`](@ref).
+Types with a partial order should implement [`<`](@ref).
 """
 function isless end
 
@@ -152,11 +160,11 @@ isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x
 
 function ==(T::Type, S::Type)
     @_pure_meta
-    T<:S && S<:T
+    return ccall(:jl_types_equal, Cint, (Any, Any), T, S) != 0
 end
 function !=(T::Type, S::Type)
     @_pure_meta
-    !(T == S)
+    return !(T == S)
 end
 ==(T::TypeVar, S::Type) = false
 ==(T::Type, S::TypeVar) = false
@@ -581,10 +589,16 @@ See also [`>>`](@ref), [`>>>`](@ref).
 function <<(x::Integer, c::Integer)
     @_inline_meta
     typemin(Int) <= c <= typemax(Int) && return x << (c % Int)
-    (x >= 0 || c >= 0) && return zero(x)
+    (x >= 0 || c >= 0) && return zero(x) << 0  # for type stability
     oftype(x, -1)
 end
-<<(x::Integer, c::Unsigned) = c <= typemax(UInt) ? x << (c % UInt) : zero(x)
+function <<(x::Integer, c::Unsigned)
+    @_inline_meta
+    if c isa UInt
+        throw(MethodError(<<, (x, c)))
+    end
+    c <= typemax(UInt) ? x << (c % UInt) : zero(x) << UInt(0)
+end
 <<(x::Integer, c::Int) = c >= 0 ? x << unsigned(c) : x >> unsigned(-c)
 
 """
@@ -619,11 +633,13 @@ See also [`>>>`](@ref), [`<<`](@ref).
 """
 function >>(x::Integer, c::Integer)
     @_inline_meta
+    if c isa UInt
+        throw(MethodError(>>, (x, c)))
+    end
     typemin(Int) <= c <= typemax(Int) && return x >> (c % Int)
-    (x >= 0 || c < 0) && return zero(x)
+    (x >= 0 || c < 0) && return zero(x) >> 0
     oftype(x, -1)
 end
->>(x::Integer, c::Unsigned) = c <= typemax(UInt) ? x >> (c % UInt) : zero(x)
 >>(x::Integer, c::Int) = c >= 0 ? x >> unsigned(c) : x << unsigned(-c)
 
 """
@@ -655,9 +671,15 @@ See also [`>>`](@ref), [`<<`](@ref).
 """
 function >>>(x::Integer, c::Integer)
     @_inline_meta
-    typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x)
+    typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x) >>> 0
 end
->>>(x::Integer, c::Unsigned) = c <= typemax(UInt) ? x >>> (c % UInt) : zero(x)
+function >>>(x::Integer, c::Unsigned)
+    @_inline_meta
+    if c isa UInt
+        throw(MethodError(>>>, (x, c)))
+    end
+    c <= typemax(UInt) ? x >>> (c % UInt) : zero(x) >>> 0
+end
 >>>(x::Integer, c::Int) = c >= 0 ? x >>> unsigned(c) : x << unsigned(-c)
 
 # fallback div, fld, and cld implementations
@@ -928,6 +950,71 @@ used to implement specialized methods.
 ==(x) = Fix2(==, x)
 
 """
+    !=(x)
+
+Create a function that compares its argument to `x` using [`!=`](@ref), i.e.
+a function equivalent to `y -> y != x`.
+The returned function is of type `Base.Fix2{typeof(!=)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.2"
+    This functionality requires at least Julia 1.2.
+"""
+!=(x) = Fix2(!=, x)
+
+"""
+    >=(x)
+
+Create a function that compares its argument to `x` using [`>=`](@ref), i.e.
+a function equivalent to `y -> y >= x`.
+The returned function is of type `Base.Fix2{typeof(>=)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.2"
+    This functionality requires at least Julia 1.2.
+"""
+>=(x) = Fix2(>=, x)
+
+"""
+    <=(x)
+
+Create a function that compares its argument to `x` using [`<=`](@ref), i.e.
+a function equivalent to `y -> y <= x`.
+The returned function is of type `Base.Fix2{typeof(<=)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.2"
+    This functionality requires at least Julia 1.2.
+"""
+<=(x) = Fix2(<=, x)
+
+"""
+    >(x)
+
+Create a function that compares its argument to `x` using [`>`](@ref), i.e.
+a function equivalent to `y -> y > x`.
+The returned function is of type `Base.Fix2{typeof(>)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.2"
+    This functionality requires at least Julia 1.2.
+"""
+>(x) = Fix2(>, x)
+
+"""
+    <(x)
+
+Create a function that compares its argument to `x` using [`<`](@ref), i.e.
+a function equivalent to `y -> y < x`.
+The returned function is of type `Base.Fix2{typeof(<)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.2"
+    This functionality requires at least Julia 1.2.
+"""
+<(x) = Fix2(<, x)
+
+"""
     splat(f)
 
 Defined as
@@ -941,7 +1028,7 @@ passes a tuple as that single argument.
 
 # Example usage:
 ```jldoctest
-julia> map(splat(+), zip(1:3,4:6))
+julia> map(Base.splat(+), zip(1:3,4:6))
 3-element Array{Int64,1}:
  5
  7

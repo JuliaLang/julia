@@ -11,7 +11,7 @@ end
 """
     Base.summarysize(obj; exclude=Union{...}, chargeall=Union{...}) -> Int
 
-Compute the amount of memory used by all unique objects reachable from the argument.
+Compute the amount of memory, in bytes, used by all unique objects reachable from the argument.
 
 # Keyword Arguments
 - `exclude`: specifies the types of objects to exclude from the traversal.
@@ -89,7 +89,9 @@ function (ss::SummarySize)(obj::DataType)
     size::Int = 7 * Core.sizeof(Int) + 6 * Core.sizeof(Int32)
     size += 4 * nfields(obj) + ifelse(Sys.WORD_SIZE == 64, 4, 0)
     size += ss(obj.parameters)::Int
-    size += ss(obj.types)::Int
+    if isdefined(obj, :types)
+        size += ss(obj.types)::Int
+    end
     return size
 end
 

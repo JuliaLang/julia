@@ -27,9 +27,19 @@ export TestSetException
 import Distributed: myid
 
 using Random
-using Random: AbstractRNG, GLOBAL_RNG
+using Random: AbstractRNG, default_rng
 using InteractiveUtils: gen_call_with_extracted_types
 using Core.Compiler: typesubtract
+
+const DISPLAY_FAILED = (
+    :isequal,
+    :isapprox,
+    :≈,
+    :occursin,
+    :startswith,
+    :endswith,
+    :isempty,
+)
 
 #-----------------------------------------------------------------------
 
@@ -48,6 +58,10 @@ function scrub_backtrace(bt)
         bt = bt[1:name_ind]
     end
     return bt
+end
+
+function scrub_exc_stack(stack)
+    return Any[ (x[1], scrub_backtrace(x[2])) for x in stack ]
 end
 
 """
@@ -135,10 +149,10 @@ mutable struct Error <: Result
 
     function Error(test_type, orig_expr, value, bt, source)
         if test_type === :test_error
-            bt = scrub_backtrace(bt)
+            bt = scrub_exc_stack(bt)
         end
         if test_type === :test_error || test_type === :nontest_error
-            bt_str = sprint(showerror, value, bt)
+            bt_str = sprint(Base.show_exception_stack, bt)
         else
             bt_str = ""
         end
@@ -424,7 +438,7 @@ function get_test_result(ex, source)
             $(QuoteNode(source)),
             $negate,
         ))
-    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in (:isequal, :isapprox, :≈)
+    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in DISPLAY_FAILED
         escaped_func = esc(ex.args[1])
         quoted_func = QuoteNode(ex.args[1])
 
@@ -476,7 +490,7 @@ function get_test_result(ex, source)
             $testret
         catch _e
             _e isa InterruptException && rethrow()
-            Threw(_e, catch_backtrace(), $(QuoteNode(source)))
+            Threw(_e, Base.catch_stack(), $(QuoteNode(source)))
         end
     end
     Base.remove_linenums!(result)
@@ -574,7 +588,7 @@ function do_test_throws(result::ExecutionResult, @nospecialize(orig_expr), @nosp
             if isa(exc, typeof(extype))
                 success = true
                 for fld in 1:nfields(extype)
-                    if !(getfield(extype, fld) == getfield(exc, fld))
+                    if !isequal(getfield(extype, fld), getfield(exc, fld))
                         success = false
                         break
                     end
@@ -1092,18 +1106,19 @@ function testset_beginend(args, tests, source)
         # we reproduce the logic of guardseed, but this function
         # cannot be used as it changes slightly the semantic of @testset,
         # by wrapping the body in a function
-        oldrng = copy(GLOBAL_RNG)
+        local RNG = default_rng()
+        oldrng = copy(RNG)
         try
-            # GLOBAL_RNG is re-seeded with its own seed to ease reproduce a failed test
-            Random.seed!(GLOBAL_RNG.seed)
+            # RNG is re-seeded with its own seed to ease reproduce a failed test
+            Random.seed!(RNG.seed)
             $(esc(tests))
         catch err
             err isa InterruptException && rethrow()
             # something in the test block threw an error. Count that as an
             # error in this test set
-            record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
+            record(ts, Error(:nontest_error, :(), err, Base.catch_stack(), $(QuoteNode(source))))
         finally
-            copy!(GLOBAL_RNG, oldrng)
+            copy!(RNG, oldrng)
         end
         pop_testset()
         finish(ts)
@@ -1162,7 +1177,7 @@ function testset_forloop(args, testloop, source)
             pop_testset()
             push!(arr, finish(ts))
             # it's 1000 times faster to copy from tmprng rather than calling Random.seed!
-            copy!(GLOBAL_RNG, tmprng)
+            copy!(RNG, tmprng)
 
         end
         ts = $(testsettype)($desc; $options...)
@@ -1174,16 +1189,17 @@ function testset_forloop(args, testloop, source)
             err isa InterruptException && rethrow()
             # Something in the test block threw an error. Count that as an
             # error in this test set
-            record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
+            record(ts, Error(:nontest_error, :(), err, Base.catch_stack(), $(QuoteNode(source))))
         end
     end
     quote
         arr = Vector{Any}()
         local first_iteration = true
         local ts
-        local oldrng = copy(GLOBAL_RNG)
-        Random.seed!(GLOBAL_RNG.seed)
-        local tmprng = copy(GLOBAL_RNG)
+        local RNG = default_rng()
+        local oldrng = copy(RNG)
+        Random.seed!(RNG.seed)
+        local tmprng = copy(RNG)
         try
             $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
         finally
@@ -1192,7 +1208,7 @@ function testset_forloop(args, testloop, source)
                 pop_testset()
                 push!(arr, finish(ts))
             end
-            copy!(GLOBAL_RNG, oldrng)
+            copy!(RNG, oldrng)
         end
         arr
     end
@@ -1277,6 +1293,7 @@ end
 
 _args_and_call(args...; kwargs...) = (args[1:end-1], kwargs, args[end](args[1:end-1]...; kwargs...))
 _materialize_broadcasted(f, args...) = Broadcast.materialize(Broadcast.broadcasted(f, args...))
+
 """
     @inferred [AllowedType] f(x)
 
@@ -1299,8 +1316,12 @@ julia> typeof(f(2))
 Int64
 
 julia> @code_warntype f(2)
+Variables
+  #self#::Core.Compiler.Const(f, false)
+  a::Int64
+
 Body::UNION{FLOAT64, INT64}
-1 ─ %1 = (Base.slt_int)(1, a)::Bool
+1 ─ %1 = (a > 1)::Bool
 └──      goto #3 if not %1
 2 ─      return 1
 3 ─      return 1.0
@@ -1473,12 +1494,12 @@ function detect_ambiguities(mods...;
                             imported::Bool = false,
                             recursive::Bool = false,
                             ambiguous_bottom::Bool = false)
-    function sortdefs(m1, m2)
+    function sortdefs(m1::Method, m2::Method)
         ord12 = m1.file < m2.file
         if !ord12 && (m1.file == m2.file)
             ord12 = m1.line < m2.line
         end
-        ord12 ? (m1, m2) : (m2, m1)
+        return ord12 ? (m1, m2) : (m2, m1)
     end
     ambs = Set{Tuple{Method,Method}}()
     for mod in mods
@@ -1493,16 +1514,34 @@ function detect_ambiguities(mods...;
                 subambs = detect_ambiguities(f,
                     imported=imported, recursive=recursive, ambiguous_bottom=ambiguous_bottom)
                 union!(ambs, subambs)
-            elseif isa(f, DataType) && isdefined(f.name, :mt)
+            elseif isa(f, DataType) && isdefined(f.name, :mt) && f.name.mt !== Symbol.name.mt
                 mt = Base.MethodList(f.name.mt)
                 for m in mt
                     if m.ambig !== nothing
                         for m2 in m.ambig
-                            if Base.isambiguous(m, m2, ambiguous_bottom=ambiguous_bottom)
-                                push!(ambs, sortdefs(m, m2))
+                            if Base.isambiguous(m, m2.func, ambiguous_bottom=ambiguous_bottom)
+                                push!(ambs, sortdefs(m, m2.func))
                             end
                         end
                     end
+                end
+            end
+        end
+    end
+    function is_in_mods(m::Module)
+        while true
+            m in mods && return true
+            recursive || return false
+            p = parentmodule(m)
+            p === m && return false
+            m = parent
+        end
+    end
+    for m in Base.MethodList(Symbol.name.mt)
+        if m.ambig !== nothing && is_in_mods(m.module)
+            for m2 in m.ambig
+                if Base.isambiguous(m, m2.func, ambiguous_bottom=ambiguous_bottom)
+                    push!(ambs, sortdefs(m, m2.func))
                 end
             end
         end
@@ -1692,7 +1731,7 @@ Base.similar(A::GenericArray, s::Integer...) = GenericArray(similar(A.a, s...))
 
 "`guardseed(f)` runs the function `f()` and then restores the
 state of the global RNG as it was before."
-function guardseed(f::Function, r::AbstractRNG=GLOBAL_RNG)
+function guardseed(f::Function, r::AbstractRNG=default_rng())
     old = copy(r)
     try
         f()

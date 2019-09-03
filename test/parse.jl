@@ -278,8 +278,8 @@ end
 
 # parsing complex numbers (#22250)
 @testset "complex parsing" begin
-    for r in (1,0,-1), i in (1,0,-1), sign in ('-','+'), Im in ("i","j","im")
-        for s1 in (""," "), s2 in (""," "), s3 in (""," "), s4 in (""," ")
+    for sign in ('-','+'), Im in ("i","j","im"), s1 in (""," "), s2 in (""," "), s3 in (""," "), s4 in (""," ")
+        for r in (1,0,-1), i in (1,0,-1),
             n = Complex(r, sign == '+' ? i : -i)
             s = string(s1, r, s2, sign, s3, i, Im, s4)
             @test n === parse(Complex{Int}, s)
@@ -292,6 +292,13 @@ end
                 @test n == parse(Complex{T}, string(s1, r, ".0", s2, sign, s3, i, ".0", Im, s4))
                 @test n*parse(T,"1e-3") == parse(Complex{T}, string(s1, r, "e-3", s2, sign, s3, i, "e-3", Im, s4))
             end
+        end
+        for r in (-1.0,-1e-9,Inf,-Inf,NaN), i in (-1.0,-1e-9,Inf,NaN)
+            n = Complex(r, sign == '+' ? i : -i)
+            s = lowercase(string(s1, r, s2, sign, s3, i, Im, s4))
+            @test n === parse(ComplexF64, s)
+            @test Complex(r) === parse(ComplexF64, string(s1, r, s2))
+            @test Complex(0,i) === parse(ComplexF64, string(s3, i, Im, s4))
         end
     end
     @test parse(Complex{Float16}, "3.3+4i") === Complex{Float16}(3.3+4im)
@@ -337,4 +344,11 @@ end
     @test Meta.parse("x .~ y") == Expr(:call, :.~, :x, :y)
     # Ensure dotting binary doesn't break dotting unary
     @test Meta.parse(".~[1,2]") == Expr(:call, :.~, Expr(:vect, 1, 2))
+end
+
+@testset "inf and nan parsing" begin
+    for (v,vs) in ((NaN,"nan"), (Inf,"inf"), (Inf,"infinity")), sbefore in ("", "  "), safter in ("", "  "), sign in (+, -), case in (lowercase, uppercase)
+        s = case(string(sbefore, sign, vs, safter))
+        @test isequal(parse(Float64, s), sign(v))
+    end
 end

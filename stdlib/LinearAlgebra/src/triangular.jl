@@ -97,6 +97,52 @@ julia> UpperTriangular(A)
 ```
 """
 UpperTriangular
+"""
+    UnitLowerTriangular(A::AbstractMatrix)
+
+Construct a `UnitLowerTriangular` view of the matrix `A`.
+Such a view has the [`oneunit`](@ref) of the [`eltype`](@ref)
+of `A` on its diagonal.
+
+# Examples
+```jldoctest
+julia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
+3×3 Array{Float64,2}:
+ 1.0  2.0  3.0
+ 4.0  5.0  6.0
+ 7.0  8.0  9.0
+
+julia> UnitLowerTriangular(A)
+3×3 UnitLowerTriangular{Float64,Array{Float64,2}}:
+ 1.0   ⋅    ⋅
+ 4.0  1.0   ⋅
+ 7.0  8.0  1.0
+```
+"""
+UnitLowerTriangular
+"""
+    UnitUpperTriangular(A::AbstractMatrix)
+
+Construct an `UnitUpperTriangular` view of the matrix `A`.
+Such a view has the [`oneunit`](@ref) of the [`eltype`](@ref)
+of `A` on its diagonal.
+
+# Examples
+```jldoctest
+julia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
+3×3 Array{Float64,2}:
+ 1.0  2.0  3.0
+ 4.0  5.0  6.0
+ 7.0  8.0  9.0
+
+julia> UnitUpperTriangular(A)
+3×3 UnitUpperTriangular{Float64,Array{Float64,2}}:
+ 1.0  2.0  3.0
+  ⋅   1.0  6.0
+  ⋅    ⋅   1.0
+```
+"""
+UnitUpperTriangular
 
 imag(A::UpperTriangular) = UpperTriangular(imag(A.data))
 imag(A::LowerTriangular) = LowerTriangular(imag(A.data))

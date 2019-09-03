@@ -260,9 +260,7 @@ with the `catdoc` function, which can of course be overridden for custom types.
 ## Advanced Usage
 
 The `@doc` macro associates its first argument with its second in a per-module dictionary called
-`META`. By default, documentation is expected to be written in Markdown, and the `doc""` string
-macro simply creates an object representing the Markdown content. In the future it is likely to
-do more advanced things such as allowing for relative image or link paths.
+`META`.
 
 To make it easier to write documentation, the parser treats the macro name `@doc` specially:
 if a call to `@doc` has one argument, but another expression appears after a single line
@@ -276,7 +274,7 @@ Therefore the following syntax is parsed as a 2-argument call to `@doc`:
 f(x) = x
 ```
 
-This makes it easy to use an arbitrary object (here a `raw` string) as a docstring.
+This makes it possible to use expressions other than normal string literals (such as the `raw""` string macro) as a docstring.
 
 When used for retrieving documentation, the `@doc` macro (or equally, the `doc` function) will
 search all `META` dictionaries for metadata relevant to the given object and return it. The returned
@@ -337,11 +335,23 @@ y = MyType("y")
 ## Syntax Guide
 
 A comprehensive overview of all documentable Julia syntax.
-
 In the following examples `"..."` is used to illustrate an arbitrary docstring.
 
-`doc""` should only be used when the docstring contains `$` or `\` characters that should not
-be parsed by Julia such as LaTeX syntax or Julia source code examples containing interpolation.
+### `$` and `\` characters
+
+The `$` and `\` characters are still parsed as string interpolation or start of an escape sequence
+in docstrings too. The `raw""` string macro together with the `@doc` macro can be used to avoid
+having to escape them. This is handy when the docstrings include LaTeX or Julia source code examples
+containing interpolation:
+
+````julia
+@doc raw"""
+```math
+\LaTeX
+```
+"""
+function f end
+````
 
 ### Functions and Methods
 

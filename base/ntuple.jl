@@ -32,7 +32,7 @@ end
 
 function _ntuple(f, n)
     @_noinline_meta
-    (n >= 0) || throw(ArgumentError(string("tuple length should be ≥0, got ", n)))
+    (n >= 0) || throw(ArgumentError(string("tuple length should be ≥ 0, got ", n)))
     ([f(i) for i = 1:n]...,)
 end
 
@@ -44,7 +44,7 @@ ntuple(f, ::Val{3}) = (@_inline_meta; (f(1), f(2), f(3)))
 
 @inline function ntuple(f::F, ::Val{N}) where {F,N}
     N::Int
-    (N >= 0) || throw(ArgumentError(string("tuple length should be ≥0, got ", N)))
+    (N >= 0) || throw(ArgumentError(string("tuple length should be ≥ 0, got ", N)))
     if @generated
         quote
             @nexprs $N i -> t_i = f(i)

@@ -8,7 +8,7 @@ Representation of a channel passing objects of type `T`.
 abstract type AbstractChannel{T} end
 
 """
-    Channel{T}(sz::Int)
+    Channel{T}(sz::Int=0)
 
 Constructs a `Channel` with an internal buffer that can hold a maximum of `sz` objects
 of type `T`.
@@ -19,8 +19,12 @@ And vice-versa.
 
 Other constructors:
 
+* `Channel()`: default constructor, equivalent to `Channel{Any}(0)`
 * `Channel(Inf)`: equivalent to `Channel{Any}(typemax(Int))`
 * `Channel(sz)`: equivalent to `Channel{Any}(sz)`
+
+!!! compat "Julia 1.3"
+  The default constructor `Channel()` and default `sz=0` were added in Julia 1.3.
 """
 mutable struct Channel{T} <: AbstractChannel{T}
     cond_take::Threads.Condition                 # waiting for data to become available
@@ -32,7 +36,7 @@ mutable struct Channel{T} <: AbstractChannel{T}
     data::Vector{T}
     sz_max::Int                          # maximum size of channel
 
-    function Channel{T}(sz::Integer) where T
+    function Channel{T}(sz::Integer = 0) where T
         if sz < 0
             throw(ArgumentError("Channel size must be either 0, a positive integer or Inf"))
         end
@@ -48,6 +52,7 @@ function Channel{T}(sz::Float64) where T
     return Channel{T}(sz)
 end
 Channel(sz) = Channel{Any}(sz)
+Channel() = Channel{Any}(0)
 
 # special constructors
 """
@@ -84,16 +89,35 @@ Referencing the created task:
 ```jldoctest
 julia> taskref = Ref{Task}();
 
-julia> chnl = Channel(c->(@show take!(c)); taskref=taskref);
+julia> chnl = Channel(c -> println(take!(c)); taskref=taskref);
 
 julia> istaskdone(taskref[])
 false
 
 julia> put!(chnl, "Hello");
-take!(c) = "Hello"
+Hello
 
 julia> istaskdone(taskref[])
 true
+```
+
+!!! compat "Julia 1.3"
+  The following constructors were added in Julia 1.3.
+
+Other constructors:
+* `Channel{T}(func::Function, sz=0)`
+* `Channel{T}(func::Function; csize=0, taskref=nothing)`
+
+```jldoctest
+julia> chnl = Channel{Char}(1) do ch
+           for c in "hello world"
+               put!(ch, c)
+           end
+       end
+Channel{Char}(sz_max:1,sz_curr:1)
+
+julia> String(collect(chnl))
+"hello world"
 ```
 """
 function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
@@ -104,6 +128,12 @@ function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
 
     isa(taskref, Ref{Task}) && (taskref[] = task)
     return chnl
+end
+function Channel{T}(f::Function, sz=0) where T
+    return Channel(f, csize=sz, ctype=T)
+end
+function Channel{T}(f::Function; csize=0, taskref=nothing) where T
+    return Channel(f, csize=csize, ctype=T, taskref=taskref)
 end
 
 
@@ -192,8 +222,10 @@ Stacktrace:
 ```
 """
 function bind(c::Channel, task::Task)
-    ref = WeakRef(c)
-    register_taskdone_hook(task, tsk->close_chnl_on_taskdone(tsk, ref))
+    # TODO: implement "schedulewait" and deprecate taskdone_hook
+    #T = Task(() -> close_chnl_on_taskdone(task, c))
+    #schedulewait(task, T)
+    register_taskdone_hook(task, tsk -> close_chnl_on_taskdone(tsk, c))
     return c
 end
 
@@ -223,33 +255,30 @@ function channeled_tasks(n::Int, funcs...; ctypes=fill(Any,n), csizes=fill(0,n))
     return (chnls, tasks)
 end
 
-function close_chnl_on_taskdone(t::Task, ref::WeakRef)
-    c = ref.value
-    if c isa Channel
-        isopen(c) || return
-        cleanup = () -> try
-                isopen(c) || return
-                if istaskfailed(t)
-                    excp = task_result(t)
-                    if excp isa Exception
-                        close(c, excp)
-                        return
-                    end
+function close_chnl_on_taskdone(t::Task, c::Channel)
+    isopen(c) || return
+    cleanup = () -> try
+            isopen(c) || return
+            if istaskfailed(t)
+                excp = task_result(t)
+                if excp isa Exception
+                    close(c, excp)
+                    return
                 end
-                close(c)
-                return
-            finally
-                unlock(c)
             end
-        if trylock(c)
-            # can't use `lock`, since attempts to task-switch to wait for it
-            # will just silently fail and leave us with broken state
-            cleanup()
-        else
-            # so schedule this to happen once we are finished destroying our task
-            # (on a new Task)
-            @async (lock(c); cleanup())
+            close(c)
+            return
+        finally
+            unlock(c)
         end
+    if trylock(c)
+        # can't use `lock`, since attempts to task-switch to wait for it
+        # will just silently fail and leave us with broken state
+        cleanup()
+    else
+        # so schedule this to happen once we are finished destroying our task
+        # (on a new Task)
+        @async (lock(c); cleanup())
     end
     nothing
 end
@@ -305,8 +334,8 @@ function put_unbuffered(c::Channel, v)
     finally
         unlock(c)
     end
-    # unfair version of: schedule(taker, v); yield()
-    yield(taker, v) # immediately give taker a chance to run, but don't block the current task
+    schedule(taker, v)
+    yield()  # immediately give taker a chance to run, but don't block the current task
     return v
 end
 

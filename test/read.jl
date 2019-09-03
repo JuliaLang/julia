@@ -127,11 +127,11 @@ end
 open_streams = []
 function cleanup()
     for s_ in open_streams
-        try close(s_); catch; end
+        close(s_)
     end
     empty!(open_streams)
     for tsk in tasks
-        Base.wait(tsk)
+        wait(tsk)
     end
     empty!(tasks)
 end

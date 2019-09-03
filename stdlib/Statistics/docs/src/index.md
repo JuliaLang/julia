@@ -1,9 +1,5 @@
 # Statistics
 
-```@meta
-DocTestSetup = :(using Statistics)
-```
-
 The Statistics module contains basic statistics functionality.
 
 ```@docs
@@ -20,8 +16,4 @@ Statistics.median
 Statistics.middle
 Statistics.quantile!
 Statistics.quantile
-```
-
-```@meta
-DocTestSetup = nothing
 ```

@@ -14,6 +14,8 @@ include $(SRCDIR)/tools/common.mk
 include $(SRCDIR)/tools/git-external.mk
 include $(SRCDIR)/tools/bb-install.mk
 
+BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
+
 # Special comments:
 #
 # all targets in here should follow the same structure,

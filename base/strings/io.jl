@@ -6,12 +6,18 @@
     print([io::IO], xs...)
 
 Write to `io` (or to the default output stream [`stdout`](@ref)
-if `io` is not given) a canonical (un-decorated) text representation
-of values `xs` if there is one, otherwise call [`show`](@ref).
+if `io` is not given) a canonical (un-decorated) text representation.
 The representation used by `print` includes minimal formatting and tries to
 avoid Julia-specific details.
 
 Printing `nothing` is not allowed and throws an error.
+
+`print` falls back to calling `show`, so most types should just define
+`show`. Define `print` if your type has a separate "plain" representation.
+For example, `show` displays strings with quotes, and `print` displays strings
+without quotes.
+
+[`string`](@ref) returns the output of `print` as a string.
 
 # Examples
 ```jldoctest
@@ -113,7 +119,7 @@ function print_to_string(xs...)
     if isempty(xs)
         return ""
     end
-    siz = 0
+    siz::Int = 0
     for x in xs
         siz += tostr_sizehint(x)
     end
@@ -129,7 +135,7 @@ function string_with_env(env, xs...)
     if isempty(xs)
         return ""
     end
-    siz = 0
+    siz::Int = 0
     for x in xs
         siz += tostr_sizehint(x)
     end
@@ -146,6 +152,12 @@ end
     string(xs...)
 
 Create a string from any values, except `nothing`, using the [`print`](@ref) function.
+
+`string` should usually not be defined directly. Instead, define a method
+`print(io::IO, x::MyType)`. If `string(x)` for a certain type needs to be
+highly efficient, then it may make sense to add a method to `string` and
+define `print(io::IO, x::MyType) = print(io, string(x))` to ensure the
+functions are consistent.
 
 # Examples
 ```jldoctest
@@ -180,6 +192,7 @@ end
     repr(x; context=nothing)
 
 Create a string from any value using the [`show`](@ref) function.
+You should not add methods to `repr`; define a `show` method instead.
 
 The optional keyword argument `context` can be set to an `IO` or [`IOContext`](@ref)
 object whose attributes are used for the I/O stream passed to `show`.
@@ -233,21 +246,24 @@ IOBuffer(s::SubString{String}) = IOBuffer(view(unsafe_wrap(Vector{UInt8}, s.stri
 # join is implemented using IO
 
 """
-    join([io::IO,] strings, delim, [last])
+    join([io::IO,] strings [, delim [, last]])
 
-Join an array of `strings` into a single string, inserting the given delimiter between
+Join an array of `strings` into a single string, inserting the given delimiter (if any) between
 adjacent strings. If `last` is given, it will be used instead of `delim` between the last
 two strings. If `io` is given, the result is written to `io` rather than returned as
 as a `String`.
+
+`strings` can be any iterable over elements `x` which are convertible to strings
+via `print(io::IOBuffer, x)`. `strings` will be printed to `io`.
 
 # Examples
 ```jldoctest
 julia> join(["apples", "bananas", "pineapples"], ", ", " and ")
 "apples, bananas and pineapples"
-```
 
-`strings` can be any iterable over elements `x` which are convertible to strings
-via `print(io::IOBuffer, x)`. `strings` will be printed to `io`.
+julia> join([1,2,3,4,5])
+"12345"
+```
 """
 function join(io::IO, strings, delim, last)
     first = true

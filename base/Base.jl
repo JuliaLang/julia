@@ -14,6 +14,8 @@ getproperty(x::Module, f::Symbol) = getfield(x, f)
 setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v)
 getproperty(x::Type, f::Symbol) = getfield(x, f)
 setproperty!(x::Type, f::Symbol, v) = setfield!(x, f, v)
+getproperty(x::Tuple, f::Int) = getfield(x, f)
+setproperty!(x::Tuple, f::Int, v) = setfield!(x, f, v) # to get a decent error
 
 getproperty(Core.@nospecialize(x), f::Symbol) = getfield(x, f)
 setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
@@ -196,7 +198,6 @@ include("c.jl")
 
 # Core I/O
 include("io.jl")
-include("iostream.jl")
 include("iobuffer.jl")
 
 # strings & printing
@@ -207,6 +208,7 @@ include("shell.jl")
 include("regex.jl")
 include("show.jl")
 include("arrayshow.jl")
+include("methodshow.jl")
 
 # multidimensional arrays
 include("cartesian.jl")
@@ -232,18 +234,22 @@ using .Libc: getpid, gethostname, time
 
 const DL_LOAD_PATH = String[]
 if Sys.isapple()
-    push!(DL_LOAD_PATH, "@loader_path/julia")
+    if Base.DARWIN_FRAMEWORK
+        push!(DL_LOAD_PATH, "@loader_path/Frameworks")
+    else
+        push!(DL_LOAD_PATH, "@loader_path/julia")
+    end
     push!(DL_LOAD_PATH, "@loader_path")
 end
 
 include("env.jl")
 
 # Scheduling
-include("libuv.jl")
-include("event.jl")
-include("task.jl")
+include("linked_list.jl")
+include("condition.jl")
 include("threads.jl")
 include("lock.jl")
+include("task.jl")
 include("weakkeydict.jl")
 
 # Logging
@@ -255,12 +261,15 @@ function rand end
 function randn end
 
 # I/O
+include("libuv.jl")
+include("asyncevent.jl")
+include("iostream.jl")
 include("stream.jl")
 include("filesystem.jl")
 using .Filesystem
+include("cmd.jl")
 include("process.jl")
 include("grisu/grisu.jl")
-include("methodshow.jl")
 include("secretbuffer.jl")
 
 # core math functions
@@ -344,6 +353,9 @@ include("loading.jl")
 include("util.jl")
 
 include("asyncmap.jl")
+
+# experimental API's
+include("experimental.jl")
 
 # deprecated functions
 include("deprecated.jl")

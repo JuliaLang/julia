@@ -2,9 +2,9 @@
 
 ## RandomDevice
 
-# SamplerUnion(Union{X,Y,...}) == Union{SamplerType{X},SamplerType{Y},...}
-SamplerUnion(U::Union) = Union{map(T->SamplerType{T}, Base.uniontypes(U))...}
-const SamplerBoolBitInteger = SamplerUnion(Union{Bool, BitInteger})
+# SamplerUnion(X, Y, ...}) == Union{SamplerType{X}, SamplerType{Y}, ...}
+SamplerUnion(U...) = Union{Any[SamplerType{T} for T in U]...}
+const SamplerBoolBitInteger = SamplerUnion(Bool, BitInteger_types...)
 
 if Sys.iswindows()
     struct RandomDevice <: AbstractRNG
@@ -285,14 +285,63 @@ function seed!(r::MersenneTwister, seed::Vector{UInt32})
     return r
 end
 
-seed!(r::MersenneTwister=GLOBAL_RNG) = seed!(r, make_seed())
+seed!(r::MersenneTwister=default_rng()) = seed!(r, make_seed())
 seed!(r::MersenneTwister, n::Integer) = seed!(r, make_seed(n))
-seed!(seed::Union{Integer,Vector{UInt32}}) = seed!(GLOBAL_RNG, seed)
+seed!(seed::Union{Integer,Vector{UInt32}}) = seed!(default_rng(), seed)
 
 
-### Global RNG (must be defined after seed!)
+### Global RNG
 
-const GLOBAL_RNG = MersenneTwister(0)
+const THREAD_RNGs = MersenneTwister[]
+@inline default_rng() = default_rng(Threads.threadid())
+@noinline function default_rng(tid::Int)
+    @assert 0 < tid <= length(THREAD_RNGs)
+    if @inbounds isassigned(THREAD_RNGs, tid)
+        @inbounds MT = THREAD_RNGs[tid]
+    else
+        MT = MersenneTwister()
+        @inbounds THREAD_RNGs[tid] = MT
+    end
+    return MT
+end
+function __init__()
+    resize!(empty!(THREAD_RNGs), Threads.nthreads()) # ensures that we didn't save a bad object
+end
+
+
+struct _GLOBAL_RNG <: AbstractRNG
+    global const GLOBAL_RNG = _GLOBAL_RNG.instance
+end
+
+copy!(dst::MersenneTwister, ::_GLOBAL_RNG) = copy!(dst, default_rng())
+copy!(::_GLOBAL_RNG, src::MersenneTwister) = copy!(default_rng(), src)
+copy(::_GLOBAL_RNG) = copy(default_rng())
+
+seed!(::_GLOBAL_RNG, seed::Vector{UInt32}) = seed!(default_rng(), seed)
+seed!(::_GLOBAL_RNG, n::Integer) = seed!(default_rng(), n)
+seed!(::_GLOBAL_RNG, ::Nothing) = seed!(default_rng(), nothing)
+
+rng_native_52(::_GLOBAL_RNG) = rng_native_52(default_rng())
+rand(::_GLOBAL_RNG, sp::SamplerBoolBitInteger) = rand(default_rng(), sp)
+for T in (:(SamplerTrivial{UInt52Raw{UInt64}}),
+          :(SamplerTrivial{UInt2x52Raw{UInt128}}),
+          :(SamplerTrivial{UInt104Raw{UInt128}}),
+          :(SamplerTrivial{CloseOpen12_64}),
+          :(SamplerUnion(Int64, UInt64, Int128, UInt128)),
+          :(SamplerUnion(Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32)),
+         )
+    @eval rand(::_GLOBAL_RNG, x::$T) = rand(default_rng(), x)
+end
+
+rand!(::_GLOBAL_RNG, A::AbstractArray{Float64}, I::SamplerTrivial{<:FloatInterval_64}) = rand!(default_rng(), A, I)
+rand!(::_GLOBAL_RNG, A::Array{Float64}, I::SamplerTrivial{<:FloatInterval_64}) = rand!(default_rng(), A, I)
+for T in (Float16, Float32)
+    @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerTrivial{CloseOpen12{$T}}) = rand!(default_rng(), A, I)
+    @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerTrivial{CloseOpen01{$T}}) = rand!(default_rng(), A, I)
+end
+for T in BitInteger_types
+    @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerType{$T}) = rand!(default_rng(), A, I)
+end
 
 
 ### generation
@@ -332,10 +381,10 @@ rand(r::MersenneTwister, sp::SamplerTrivial{CloseOpen12_64}) =
 
 #### integers
 
-rand(r::MersenneTwister, T::SamplerUnion(Union{Int64,UInt64,Int128,UInt128})) =
+rand(r::MersenneTwister, T::SamplerUnion(Int64, UInt64, Int128, UInt128)) =
     mt_pop!(r, T[])
 
-rand(r::MersenneTwister, T::SamplerUnion(Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32})) =
+rand(r::MersenneTwister, T::SamplerUnion(Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32)) =
     rand(r, UInt52Raw()) % T[]
 
 #### arrays of floats

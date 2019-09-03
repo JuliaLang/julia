@@ -35,7 +35,7 @@ elseif Sys.iswindows()
     const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"
 
     function splitdrive(path::String)
-        m = match(r"^([^\\]+:|\\\\[^\\]+\\[^\\]+|\\\\\?\\UNC\\[^\\]+\\[^\\]+|\\\\\?\\[^\\]+:|)(.*)$", path)
+        m = match(r"^([^\\]+:|\\\\[^\\]+\\[^\\]+|\\\\\?\\UNC\\[^\\]+\\[^\\]+|\\\\\?\\[^\\]+:|)(.*)$"s, path)
         String(m.captures[1]), String(m.captures[2])
     end
 else
@@ -62,18 +62,17 @@ Return the current user's home directory.
     [`uv_os_homedir` documentation](http://docs.libuv.org/en/v1.x/misc.html#c.uv_os_homedir).
 """
 function homedir()
-    path_max = 1024
-    buf = Vector{UInt8}(undef, path_max)
-    sz = RefValue{Csize_t}(path_max + 1)
+    buf = Base.StringVector(AVG_PATH - 1) # space for null-terminator implied by StringVector
+    sz = RefValue{Csize_t}(length(buf) + 1) # total buffer size including null
     while true
         rc = ccall(:uv_os_homedir, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
         if rc == 0
             resize!(buf, sz[])
             return String(buf)
         elseif rc == Base.UV_ENOBUFS
-            resize!(buf, sz[] - 1)
+            resize!(buf, sz[] - 1) # space for null-terminator implied by StringVector
         else
-            error("unable to retrieve home directory")
+            uv_error(:homedir, rc)
         end
     end
 end
@@ -145,12 +144,16 @@ end
 """
     dirname(path::AbstractString) -> AbstractString
 
-Get the directory part of a path.
+Get the directory part of a path. Trailing characters ('/' or '\\') in the path are
+counted as part of the path.
 
 # Examples
 ```jldoctest
 julia> dirname("/home/myuser")
 "/home"
+
+julia> dirname("/home/myuser/")
+"/home/myuser"
 ```
 
 See also: [`basename`](@ref)
@@ -339,7 +342,7 @@ function realpath(path::AbstractString)
                 path, 0, 0x03, C_NULL, 3, 0x02000000, 0)
     windowserror(:realpath, h == -1)
     try
-        buf = Array{UInt16}(undef, 256)
+        buf = Vector{UInt16}(undef, 256)
         oldlen = len = length(buf)
         while len >= oldlen
             len = ccall(:GetFinalPathNameByHandleW, stdcall, UInt32, (Int, Ptr{UInt16}, UInt32, UInt32),

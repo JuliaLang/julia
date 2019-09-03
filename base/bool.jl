@@ -74,17 +74,9 @@ julia> [true; true; false] .⊻ [true; false; false]
 """
 xor(x::Bool, y::Bool) = (x != y)
 
->>(x::Bool, c::Unsigned) = Int(x) >> c
-<<(x::Bool, c::Unsigned) = Int(x) << c
->>>(x::Bool, c::Unsigned) = Int(x) >>> c
-
->>(x::Bool, c::Int) = Int(x) >> c
-<<(x::Bool, c::Int) = Int(x) << c
->>>(x::Bool, c::Int) = Int(x) >>> c
-
->>(x::Bool, c::Integer) = Int(x) >> c
-<<(x::Bool, c::Integer) = Int(x) << c
->>>(x::Bool, c::Integer) = Int(x) >>> c
+>>(x::Bool, c::UInt) = Int(x) >> c
+<<(x::Bool, c::UInt) = Int(x) << c
+>>>(x::Bool, c::UInt) = Int(x) >>> c
 
 signbit(x::Bool) = false
 sign(x::Bool) = x
