@@ -462,7 +462,7 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
     JL_GC_PUSH1(&rs);
     for (int i = 0; i < n; i++) {
         jl_frame_t frame = frames[i];
-        jl_value_t *r = (jl_value_t*)jl_alloc_svec(7);
+        jl_value_t *r = (jl_value_t*)jl_alloc_svec(6);
         jl_svecset(rs, i, r);
         if (frame.func_name)
             jl_svecset(r, 0, jl_symbol(frame.func_name));
@@ -478,7 +478,6 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
         jl_svecset(r, 3, frame.linfo != NULL ? (jl_value_t*)frame.linfo : jl_nothing);
         jl_svecset(r, 4, jl_box_bool(frame.fromC));
         jl_svecset(r, 5, jl_box_bool(frame.inlined));
-        jl_svecset(r, 6, jl_box_voidpointer(ip));
     }
     free(frames);
     JL_GC_POP();

@@ -374,12 +374,12 @@ try
           end
           """)
     @test_warn "ERROR: LoadError: break me\nStacktrace:\n [1] error" try
-        Base.require(Main, :FooBar2)
-        error("\"LoadError: break me\" test failed")
-    catch exc
-        isa(exc, ErrorException) || rethrow()
-        occursin("ERROR: LoadError: break me", exc.msg) && rethrow()
-    end
+            Base.require(Main, :FooBar2)
+            error("the \"break me\" test failed")
+        catch exc
+            isa(exc, ErrorException) || rethrow()
+            occursin("ERROR: LoadError: break me", exc.msg) && rethrow()
+        end
 
     # Test transitive dependency for #21266
     FooBarT_file = joinpath(dir, "FooBarT.jl")

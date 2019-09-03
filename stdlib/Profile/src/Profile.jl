@@ -5,7 +5,11 @@ Profiling support, main entry point is the [`@profile`](@ref) macro.
 """
 module Profile
 
-import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo, StackFrame
+import Base.StackTraces: lookupat, UNKNOWN, show_spec_linfo, StackFrame
+
+# deprecated functions: use `getdict` instead
+lookup(ip::UInt) = lookupat(convert(Ptr{Cvoid}, ip) - 1)
+lookup(ip::Ptr{Cvoid}) = lookupat(ip - 1)
 
 export @profile
 
@@ -174,12 +178,15 @@ allows you to save profiling results for future analysis.
 """
 function retrieve()
     data = fetch()
-    return (copy(data), getdict(data))
+    return (data, getdict(data))
 end
 
 function getdict(data::Vector{UInt})
-    uip = unique(data)
-    return LineInfoDict(UInt64(ip)=>lookup(ip) for ip in uip)
+    dict = LineInfoDict()
+    for ip in data
+        get!(() -> lookupat(convert(Ptr{Cvoid}, ip)), dict, UInt64(ip))
+    end
+    return dict
 end
 
 """
@@ -299,21 +306,33 @@ error_codes = Dict(
 """
     fetch() -> data
 
-Returns a reference to the internal buffer of backtraces. Note that subsequent operations,
-like [`clear`](@ref), can affect `data` unless you first make a copy. Note that the
+Returns a copy of the buffer of profile backtraces. Note that the
 values in `data` have meaning only on this machine in the current session, because it
 depends on the exact memory addresses used in JIT-compiling. This function is primarily for
 internal use; [`retrieve`](@ref) may be a better choice for most users.
 """
 function fetch()
-    len = len_data()
     maxlen = maxlen_data()
+    len = len_data()
     if (len == maxlen)
         @warn """The profile data buffer is full; profiling probably terminated
                  before your program finished. To profile for longer runs, call
                  `Profile.init()` with a larger buffer and/or larger delay."""
     end
-    return unsafe_wrap(Array, get_data_pointer(), (len,))
+    data = Vector{UInt}(undef, len)
+    GC.@preserve data unsafe_copyto!(pointer(data), get_data_pointer(), len)
+    # post-process the data to convert from a return-stack to a call-stack
+    first = true
+    for i = 1:length(data)
+        if data[i] == 0
+            first = true
+        elseif first
+            first = false
+        else
+            data[i] -= 1
+        end
+    end
+    return data
 end
 
 

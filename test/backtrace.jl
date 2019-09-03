@@ -1,14 +1,19 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+lookup(ip) = StackTraces.lookupat(ip - 1)
+lookup(ip::Base.InterpreterIP) = StackTraces.lookupat(ip) # TODO: Base.InterpreterIP should not need a special-case
+
 # Test location information for inlined code (ref issues #1334 #12544)
 module test_inline_bt
 using Test
+import ..lookup
 
 function get_bt_frames(functionname, bt)
     for i = 1:length(bt)
-        lkup = Base.StackTraces.lookup(bt[i])
-        lkup[end].func == functionname && (return lkup)
+        lkup = lookup(bt[i])
+        lkup[end].func == functionname && return lkup
     end
+    return StackTraces.StackFrame[]
 end
 
 # same-file inline
@@ -91,14 +96,14 @@ let
 end
 
 module BackTraceTesting
-
 using Test
+import ..lookup
 
 @inline bt2() = backtrace()
 @inline bt1() = bt2()
 bt() = bt1()
 
-lkup = map(StackTraces.lookup, bt())
+lkup = map(lookup, bt())
 hasbt = hasbt2 = false
 for sfs in lkup
     for sf in sfs
@@ -117,7 +122,7 @@ function btmacro()
     ret = @timed backtrace()
     ret[1]
 end
-lkup = map(StackTraces.lookup, btmacro())
+lkup = map(lookup, btmacro())
 hasme = hasbtmacro = false
 for sfs in lkup
     for sf in sfs
@@ -142,7 +147,7 @@ bt = eval(quote
         catch_backtrace()
     end
 end)
-lkup = map(StackTraces.lookup, bt)
+lkup = map(lookup, bt)
 hastoplevel = false
 for sfs in lkup
     for sf in sfs
@@ -170,7 +175,7 @@ let bt, found = false
     @testset begin
         bt = backtrace()
     end
-    for frame in map(StackTraces.lookup, bt)
+    for frame in map(lookup, bt)
         if frame[1].line == @__LINE__() - 3 && frame[1].file == Symbol(@__FILE__)
             found = true; break
         end
@@ -182,7 +187,7 @@ end
 let bt, found = false
     @info ""
     bt = backtrace()
-    for frame in map(StackTraces.lookup, bt)
+    for frame in map(lookup, bt)
         if frame[1].line == @__LINE__() - 2 && frame[1].file == Symbol(@__FILE__)
             found = true; break
         end
