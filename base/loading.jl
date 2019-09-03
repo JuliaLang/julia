@@ -1485,9 +1485,10 @@ end
     @__FILE__ -> AbstractString
 
 Expand to a string with the path to the file containing the
-macrocall, or an empty string if evaluated by `julia -e <expr>`.
-Return `nothing` if the macro was missing parser source information.
-Alternatively see [`PROGRAM_FILE`](@ref).
+macrocall, or an empty string if evaluated by `julia -e <expr>`. If 
+you run `julia f` where `f` is a symlink to a file containing the macrocall, 
+the string will contain the path to `f`.  Return `nothing` if the macro was 
+missing parser source information. Alternatively see [`PROGRAM_FILE`](@ref). 
 """
 macro __FILE__()
     __source__.file === nothing && return nothing
