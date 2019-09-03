@@ -7,6 +7,8 @@
 #define JL_TIMING(owner)
 #else
 
+#include "julia_assert.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -53,6 +55,7 @@ static inline uint64_t rdtscp(void)
         X(LLVM_MODULE_FINISH),    \
         X(LLVM_EMIT),             \
         X(METHOD_LOOKUP_COMPILE), \
+        X(METHOD_MATCH),          \
         X(TYPE_CACHE_LOOKUP),     \
         X(TYPE_CACHE_INSERT),     \
         X(STAGED_FUNCTION),       \
@@ -61,7 +64,11 @@ static inline uint64_t rdtscp(void)
         X(AST_UNCOMPRESS),        \
         X(SYSIMG_LOAD),           \
         X(SYSIMG_DUMP),           \
-        X(NATIVE_DUMP),
+        X(NATIVE_DUMP),           \
+        X(ADD_METHOD),            \
+        X(LOAD_MODULE),           \
+        X(SAVE_MODULE),           \
+        X(INIT_MODULE),
 
 enum jl_timing_owners {
 #define X(name) JL_TIMING_ ## name

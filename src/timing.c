@@ -3,6 +3,7 @@
 #include <inttypes.h>
 #include "julia.h"
 #include "options.h"
+#include "stdio.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,7 +29,7 @@ void jl_print_timings(void)
     }
     for (int i = 0; i < JL_TIMING_LAST; i++) {
         if (jl_timing_data[i] != 0)
-            printf("%-25s : %.2f %%   %" PRIu64 "\n", jl_timing_names[i],
+            fprintf(stderr,"%-25s : %.2f %%   %" PRIu64 "\n", jl_timing_names[i],
                     100 * (((double)jl_timing_data[i]) / total_time), jl_timing_data[i]);
     }
 }

@@ -5,17 +5,15 @@ accessing arrays. In tight inner loops or other performance critical situations,
 to skip these bounds checks to improve runtime performance. For instance, in order to emit vectorized
 (SIMD) instructions, your loop body cannot contain branches, and thus cannot contain bounds checks.
 Consequently, Julia includes an `@inbounds(...)` macro to tell the compiler to skip such bounds
-checks within the given block. For the built-in `Array` type, the magic happens inside the `arrayref`
-and `arrayset` intrinsics. User-defined array types instead use the `@boundscheck(...)` macro
+checks within the given block. User-defined array types can use the `@boundscheck(...)` macro
 to achieve context-sensitive code selection.
 
 ## Eliding bounds checks
 
-The `@boundscheck(...)` macro marks blocks of code that perform bounds checking. When such blocks
-appear inside of an `@inbounds(...)` block, the compiler removes these blocks. When the `@boundscheck(...)`
-is nested inside of a calling function containing an `@inbounds(...)`, the compiler will remove
-the `@boundscheck` block *only if it is inlined* into the calling function. For example, you might
-write the method `sum` as:
+The `@boundscheck(...)` macro marks blocks of code that perform bounds checking.
+When such blocks are inlined into an `@inbounds(...)` block, the compiler may remove these blocks.
+The compiler removes the `@boundscheck` block *only if it is inlined* into the calling function.
+For example, you might write the method `sum` as:
 
 ```julia
 function sum(A::AbstractArray)
@@ -45,8 +43,9 @@ between the `@inbounds` and `@boundscheck` declarations. For instance, the defau
 methods have the chain `getindex(A::AbstractArray, i::Real)` calls `getindex(IndexStyle(A), A, i)`
 calls `_getindex(::IndexLinear, A, i)`.
 
-To override the "one layer of inlining" rule, a function may be marked with `@propagate_inbounds`
-to propagate an inbounds context (or out of bounds context) through one additional layer of inlining.
+To override the "one layer of inlining" rule, a function may be marked with
+[`Base.@propagate_inbounds`](@ref) to propagate an inbounds context (or out of bounds
+context) through one additional layer of inlining.
 
 ## The bounds checking call hierarchy
 
@@ -56,16 +55,16 @@ The overall hierarchy is:
 
       * `checkbounds(Bool, A, I...)` which calls
 
-          * `checkbounds_indices(Bool, indices(A), I)` which recursively calls
+          * `checkbounds_indices(Bool, axes(A), I)` which recursively calls
 
               * `checkindex` for each dimension
 
-Here `A` is the array, and `I` contains the "requested" indices. `indices(A)` returns a tuple
+Here `A` is the array, and `I` contains the "requested" indices. `axes(A)` returns a tuple
 of "permitted" indices of `A`.
 
 `checkbounds(A, I...)` throws an error if the indices are invalid, whereas `checkbounds(Bool, A, I...)`
 returns `false` in that circumstance.  `checkbounds_indices` discards any information about the
-array other than its `indices` tuple, and performs a pure indices-vs-indices comparison: this
+array other than its `axes` tuple, and performs a pure indices-vs-indices comparison: this
 allows relatively few compiled methods to serve a huge variety of array types. Indices are specified
 as tuples, and are usually compared in a 1-1 fashion with individual dimensions handled by calling
 another important function, `checkindex`: typically,
@@ -80,7 +79,7 @@ so `checkindex` checks a single dimension.  All of these functions, including th
 
 If you have to customize bounds checking for a specific array type, you should specialize `checkbounds(Bool, A, I...)`.
 However, in most cases you should be able to rely on `checkbounds_indices` as long as you supply
-useful `indices` for your array type.
+useful `axes` for your array type.
 
 If you have novel index types, first consider specializing `checkindex`, which handles a single
 index for a particular dimension of an array.  If you have a custom multidimensional index type

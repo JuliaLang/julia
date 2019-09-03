@@ -10,19 +10,18 @@
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
 #include "llvm/ExecutionEngine/Orc/LambdaResolver.h"
 #include "llvm/ExecutionEngine/Orc/LazyEmittingLayer.h"
-#if JL_LLVM_VERSION >= 50000
-#  include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
-#else
-#  include "llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h"
-#endif
-#include "llvm/ExecutionEngine/ObjectMemoryBuffer.h"
+#include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
+
+#if JL_LLVM_VERSION < 70000
+#include "llvm/ExecutionEngine/ObjectMemoryBuffer.h"
+#endif
 
 #include "llvm/IR/LegacyPassManager.h"
 extern legacy::PassManager *jl_globalPM;
 
 #include <llvm/Target/TargetMachine.h>
-#include "fix_llvm_assert.h"
+#include "julia_assert.h"
 
 extern "C" {
     extern int globalUnique;
@@ -35,17 +34,11 @@ extern Function *juliapersonality_func;
 #endif
 
 
-#ifdef JULIA_ENABLE_THREADING
-extern size_t jltls_states_func_idx;
-extern size_t jltls_offset_idx;
-#endif
-
 typedef struct {Value *gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
 
-void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level);
-void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit = NULL);
-GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *name,
-                                    uintptr_t init, size_t &idx);
+void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
+void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false);
+void** jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit = NULL);
 void* jl_get_globalvar(GlobalVariable *gv);
 GlobalVariable *jl_get_global_for(const char *cname, void *addr, Module *M);
 void jl_add_to_shadow(Module *m);
@@ -91,34 +84,34 @@ static inline void add_named_global(GlobalObject *gv, T *addr, bool dllimport = 
 }
 
 void jl_init_jit(Type *T_pjlvalue_);
-#if JL_LLVM_VERSION >= 40000
 typedef JITSymbol JL_JITSymbol;
 // The type that is similar to SymbolInfo on LLVM 4.0 is actually
 // `JITEvaluatedSymbol`. However, we only use this type when a JITSymbol
 // is expected.
 typedef JITSymbol JL_SymbolInfo;
+
+#if JL_LLVM_VERSION >= 70000
+using RTDyldObjHandleT = orc::VModuleKey;
 #else
-typedef orc::JITSymbol JL_JITSymbol;
-typedef RuntimeDyld::SymbolInfo JL_SymbolInfo;
-#endif
-#if JL_LLVM_VERSION >= 50000
 using RTDyldObjHandleT = orc::RTDyldObjectLinkingLayerBase::ObjHandleT;
+#endif
+
+#if JL_LLVM_VERSION >= 70000
+using CompilerResultT = std::unique_ptr<llvm::MemoryBuffer>;
 #else
-using RTDyldObjHandleT = orc::ObjectLinkingLayerBase::ObjSetHandleT;
+using CompilerResultT = object::OwningBinary<object::ObjectFile>;
 #endif
 
 class JuliaOJIT {
     // Custom object emission notification handler for the JuliaOJIT
-    // TODO: hook up RegisterJITEventListener, instead of hard-coding the GDB and JuliaListener targets
     class DebugObjectRegistrar {
     public:
         DebugObjectRegistrar(JuliaOJIT &JIT);
         template <typename ObjSetT, typename LoadResult>
-        void operator()(RTDyldObjHandleT H, const ObjSetT &Objects, const LoadResult &LOS);
+        void operator()(RTDyldObjHandleT H, const ObjSetT &Object, const LoadResult &LOS);
     private:
         template <typename ObjT, typename LoadResult>
-        void registerObject(RTDyldObjHandleT H, const ObjT &Object, const LoadResult &LO);
-        void NotifyGDB(object::OwningBinary<object::ObjectFile> &DebugObj);
+        void registerObject(RTDyldObjHandleT H, const ObjT &Obj, const LoadResult &LO);
         std::vector<object::OwningBinary<object::ObjectFile>> SavedObjects;
         std::unique_ptr<JITEventListener> JuliaListener;
         JuliaOJIT &JIT;
@@ -128,26 +121,35 @@ class JuliaOJIT {
         CompilerT(JuliaOJIT *pjit)
             : jit(*pjit)
         {}
-        object::OwningBinary<object::ObjectFile> operator()(Module &M);
+        CompilerResultT operator()(Module &M);
     private:
         JuliaOJIT &jit;
     };
 
 public:
-#if JL_LLVM_VERSION >= 50000
+#if JL_LLVM_VERSION >= 80000
+    typedef orc::LegacyRTDyldObjectLinkingLayer ObjLayerT;
+    typedef orc::LegacyIRCompileLayer<ObjLayerT,CompilerT> CompileLayerT;
+    typedef orc::VModuleKey ModuleHandleT;
+#elif JL_LLVM_VERSION >= 70000
+    typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
+    typedef orc::IRCompileLayer<ObjLayerT,CompilerT> CompileLayerT;
+    typedef orc::VModuleKey ModuleHandleT;
+#else
     typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
     typedef orc::IRCompileLayer<ObjLayerT,CompilerT> CompileLayerT;
     typedef CompileLayerT::ModuleHandleT ModuleHandleT;
-#else
-    typedef orc::ObjectLinkingLayer<std::reference_wrapper<DebugObjectRegistrar>> ObjLayerT;
-    typedef orc::IRCompileLayer<ObjLayerT> CompileLayerT;
-    typedef CompileLayerT::ModuleSetHandleT ModuleHandleT;
 #endif
     typedef StringMap<void*> SymbolTableT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
 
     JuliaOJIT(TargetMachine &TM);
 
+    void RegisterJITEventListener(JITEventListener *L);
+    std::vector<JITEventListener *> EventListeners;
+    void NotifyFinalizer(RTDyldObjHandleT Key,
+                         const object::ObjectFile &Obj,
+                         const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo);
     void addGlobalMapping(StringRef Name, uint64_t Addr);
     void addGlobalMapping(const GlobalValue *GV, void *Addr);
     void *getPointerToGlobalIfAvailable(StringRef S);
@@ -156,10 +158,10 @@ public:
     void removeModule(ModuleHandleT H);
     JL_JITSymbol findSymbol(const std::string &Name, bool ExportedSymbolsOnly);
     JL_JITSymbol findUnmangledSymbol(const std::string Name);
+    JL_JITSymbol resolveSymbol(const std::string& Name);
     uint64_t getGlobalValueAddress(const std::string &Name);
     uint64_t getFunctionAddress(const std::string &Name);
     Function *FindFunctionNamed(const std::string &Name);
-    void RegisterJITEventListener(JITEventListener *L);
     const DataLayout& getDataLayout() const;
     const Triple& getTargetTriple() const;
 private:
@@ -176,20 +178,29 @@ private:
     MCContext *Ctx;
     std::shared_ptr<RTDyldMemoryManager> MemMgr;
     DebugObjectRegistrar registrar;
+
+#if JL_LLVM_VERSION >= 70000
+    llvm::orc::ExecutionSession ES;
+    std::shared_ptr<llvm::orc::SymbolResolver> SymbolResolver;
+#endif
+
     ObjLayerT ObjectLayer;
     CompileLayerT CompileLayer;
+
     SymbolTableT GlobalSymbolTable;
     SymbolTableT LocalSymbolTable;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
-JL_DLLEXPORT extern LLVMContext jl_LLVMContext;
+JL_DLLEXPORT extern LLVMContext &jl_LLVMContext;
 
 Pass *createLowerPTLSPass(bool imaging_mode);
 Pass *createCombineMulAddPass();
+Pass *createFinalLowerGCPass();
 Pass *createLateLowerGCFramePass();
 Pass *createLowerExcHandlersPass();
 Pass *createGCInvariantVerifierPass(bool Strong);
 Pass *createPropagateJuliaAddrspaces();
+Pass *createMultiVersioningPass();
 Pass *createAllocOptPass();
 // Whether the Function is an llvm or julia intrinsic.
 static inline bool isIntrinsicFunction(Function *F)

@@ -1,12 +1,17 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
+
 // This LLVM pass verifies invariants required for correct GC root placement.
 // See the devdocs for a description of these invariants.
+
+#include <llvm-c/Core.h>
+#include <llvm-c/Types.h>
 
 #include <llvm/ADT/BitVector.h>
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/Analysis/CFG.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Constants.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -64,6 +69,8 @@ void GCInvariantVerifier::visitAddrSpaceCastInst(AddrSpaceCastInst &I) {
     unsigned ToAS = cast<PointerType>(I.getDestTy())->getAddressSpace();
     if (FromAS == 0)
         return;
+    Check(ToAS != AddressSpace::Loaded && FromAS != AddressSpace::Loaded,
+          "Illegal address space cast involving loaded ptr", &I);
     Check(FromAS != AddressSpace::Tracked ||
           ToAS   == AddressSpace::CalleeRooted ||
           ToAS   == AddressSpace::Derived,
@@ -78,12 +85,10 @@ void GCInvariantVerifier::visitStoreInst(StoreInst &SI) {
     if (VTy->isPointerTy()) {
         /* We currently don't obey this for arguments. That's ok - they're
            externally rooted. */
-        if (!isa<Argument>(SI.getValueOperand())) {
-            unsigned AS = cast<PointerType>(VTy)->getAddressSpace();
-            Check(AS != AddressSpace::CalleeRooted &&
-                  AS != AddressSpace::Derived,
-                  "Illegal store of decayed value", &SI);
-        }
+        unsigned AS = cast<PointerType>(VTy)->getAddressSpace();
+        Check(AS != AddressSpace::CalleeRooted &&
+              AS != AddressSpace::Derived,
+              "Illegal store of decayed value", &SI);
     }
     VTy = SI.getPointerOperand()->getType();
     if (VTy->isPointerTy()) {
@@ -148,7 +153,7 @@ void GCInvariantVerifier::visitGetElementPtrInst(GetElementPtrInst &GEP) {
 
 void GCInvariantVerifier::visitCallInst(CallInst &CI) {
     CallingConv::ID CC = CI.getCallingConv();
-    if (CC == JLCALL_CC || CC == JLCALL_F_CC) {
+    if (CC == JLCALL_F_CC || CC == JLCALL_F2_CC) {
         for (Value *Arg : CI.arg_operands()) {
             Type *Ty = Arg->getType();
             Check(Ty->isPointerTy() && cast<PointerType>(Ty)->getAddressSpace() == AddressSpace::Tracked,
@@ -182,4 +187,9 @@ static RegisterPass<GCInvariantVerifier> X("GCInvariantVerifier", "GC Invariant 
 
 Pass *createGCInvariantVerifierPass(bool Strong) {
     return new GCInvariantVerifier(Strong);
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddGCInvariantVerifierPass(LLVMPassManagerRef PM, LLVMBool Strong)
+{
+    unwrap(PM)->add(createGCInvariantVerifierPass(Strong));
 }

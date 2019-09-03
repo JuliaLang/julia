@@ -13,7 +13,7 @@ import Core.Intrinsics:
        checked_srem_int,
        checked_uadd_int, checked_usub_int, checked_umul_int, checked_udiv_int,
        checked_urem_int
-import Base: no_op_err, @_inline_meta, @_noinline_meta
+import ..no_op_err, ..@_inline_meta, ..@_noinline_meta
 
 # define promotion behavior for checked operations
 checked_add(x::Integer, y::Integer) = checked_add(promote(x,y)...)
@@ -60,13 +60,9 @@ brokenSignedInt = Union{}
 brokenUnsignedInt = Union{}
 brokenSignedIntMul = Int128
 brokenUnsignedIntMul = UInt128
-if Core.sizeof(Ptr{Void}) == 4
+if Core.sizeof(Ptr{Cvoid}) == 4
     brokenSignedIntMul = Union{brokenSignedIntMul, Int64}
     brokenUnsignedIntMul = Union{brokenUnsignedIntMul, UInt64}
-end
-if llvm_version < 30500
-    brokenSignedIntMul = Union{brokenSignedIntMul, Int8}
-    brokenUnsignedIntMul = Union{brokenUnsignedIntMul, UInt8}
 end
 const BrokenSignedInt = brokenSignedInt
 const BrokenUnsignedInt = brokenUnsignedInt
@@ -91,7 +87,7 @@ function checked_neg(x::T) where T<:Integer
     checked_sub(T(0), x)
 end
 throw_overflowerr_negation(x) = (@_noinline_meta;
-    throw(OverflowError("checked arithmetic: cannot compute -x for x = $x::$(typeof(x))")))
+    throw(OverflowError(Base.invokelatest(string, "checked arithmetic: cannot compute -x for x = ", x, "::", typeof(x)))))
 if BrokenSignedInt != Union{}
 function checked_neg(x::BrokenSignedInt)
     r = -x
@@ -155,7 +151,7 @@ end
 
 
 throw_overflowerr_binaryop(op, x, y) = (@_noinline_meta;
-    throw(OverflowError("$x $op $y overflowed for type $(typeof(x))")))
+    throw(OverflowError(Base.invokelatest(string, x, " ", op, " ", y, " overflowed for type ", typeof(x)))))
 
 """
     Base.checked_add(x, y)

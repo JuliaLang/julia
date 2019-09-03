@@ -570,6 +570,8 @@ chkutf8:
             return 0;
         // Check for surrogate chars
         if (byt == 0xed && *pnt > 0x9f) return 0;
+	// Check for overlong encoding
+	if (byt == 0xe0 && *pnt < 0xa0) return 0;
         pnt += 2;
     } else {                        // 4-byte sequence
         // Must have 3 valid continuation characters

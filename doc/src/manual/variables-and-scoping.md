@@ -2,7 +2,7 @@
 
 The *scope* of a variable is the region of code within which a variable is visible. Variable scoping
 helps avoid variable naming conflicts. The concept is intuitive: two functions can both have arguments
-called `x` without the two `x`'s referring to the same thing. Similarly there are many other cases
+called `x` without the two `x`'s referring to the same thing. Similarly, there are many other cases
 where different blocks of code can use the same name without referring to the same thing. The
 rules for when the same variable name does or doesn't refer to the same thing are called scope
 rules; this section spells them out in detail.
@@ -10,18 +10,24 @@ rules; this section spells them out in detail.
 Certain constructs in the language introduce *scope blocks*, which are regions of code that are
 eligible to be the scope of some set of variables. The scope of a variable cannot be an arbitrary
 set of source lines; instead, it will always line up with one of these blocks. There are two
-main types of scopes in Julia, *global scope* and *local scope*, the latter can be nested. The
+main types of scopes in Julia, *global scope* and *local scope*. The latter can be nested. The
 constructs introducing scope blocks are:
 
-| Scope name           | block/construct introducing this kind of scope                                                           |
-|:-------------------- |:-------------------------------------------------------------------------------------------------------- |
-| [Global Scope](@ref) | `module`, `baremodule`, at interactive prompt (REPL)                                                     |
-| [Local Scope](@ref)  | [Soft Local Scope](@ref): `for`, `while`, comprehensions, try-catch-finally, `let`                       |
-| [Local Scope](@ref)  | [Hard Local Scope](@ref): functions (either syntax, anonymous & do-blocks), `struct`, `macro`            |
+### [Scope constructs](@id man-scope-table)
 
-Notably missing from this table are [begin blocks](@ref man-compound-expressions) and [if blocks](@ref man-conditional-evaluation), which do *not*
-introduce new scope blocks. All three types of scopes follow somewhat different rules which will
-be explained below as well as some extra rules for certain blocks.
+Construct | Scope type | Scope blocks it may be nested in
+------------ | -------------  |---------------------------
+[`module`](@ref), [`baremodule`](@ref)            | global | global
+interactive prompt (REPL)                         | global | global
+(mutable) [`struct`](@ref), [`macro`](@ref)       | local  | global
+[`for`](@ref), [`while`](@ref), [`try-catch-finally`](@ref try), [`let`](@ref) |local | global or local
+functions (either syntax, anonymous & do-blocks) | local | global or local
+comprehensions, broadcast-fusing                 | local | global or local
+
+Notably missing from this table are
+[begin blocks](@ref man-compound-expressions) and [if blocks](@ref man-conditional-evaluation)
+which do *not* introduce new scopes.
+Both types of scopes follow somewhat different rules which will be explained below.
 
 Julia uses [lexical scoping](https://en.wikipedia.org/wiki/Scope_%28computer_science%29#Lexical_scoping_vs._dynamic_scoping),
 meaning that a function's scope does not inherit from its caller's scope, but from the scope in
@@ -50,7 +56,7 @@ Thus *lexical scope* means that the scope of variables can be inferred from the 
 
 ## Global Scope
 
-*Each module introduces a new global scope*, separate from the global scope of all other modules;
+Each module introduces a new global scope, separate from the global scope of all other modules;
 there is no all-encompassing global scope. Modules can introduce variables of other modules into
 their scope through the [using or import](@ref modules) statements or through qualified access using the
 dot-notation, i.e. each module is a so-called *namespace*. Note that variable bindings can only
@@ -87,16 +93,17 @@ Note that the interactive prompt (aka REPL) is in the global scope of the module
 
 ## Local Scope
 
-A new local scope is introduced by most code-blocks, see above table for a complete list.
- A local scope *usually* inherits all the variables from its parent scope, both for reading and
-writing. There are two subtypes of local scopes, hard and soft, with slightly different rules
-concerning what variables are inherited. Unlike global scopes, local scopes are not namespaces,
+A new local scope is introduced by most code blocks (see above
+[table](@ref man-scope-table) for a complete list).
+A local scope inherits all the variables from a parent local scope,
+both for reading and writing.
+Unlike global scopes, local scopes are not namespaces,
 thus variables in an inner scope cannot be retrieved from the parent scope through some sort of
 qualified access.
 
-The following rules and examples pertain to both hard and soft local scopes. A newly introduced
-variable in a local scope does not back-propagate to its parent scope. For example, here the
-`z` is not introduced into the top-level scope:
+The following rules and examples pertain to local scopes.
+A newly introduced variable in a local scope cannot be referenced by a parent scope.
+For example, here the ``z`` is not introduced into the top-level scope:
 
 ```jldoctest
 julia> for i = 1:10
@@ -107,24 +114,37 @@ julia> z
 ERROR: UndefVarError: z not defined
 ```
 
-(Note, in this and all following examples it is assumed that their top-level is a global scope
-with a clean workspace, for instance a newly started REPL.)
+!!! note
+    In this and all following examples it is assumed that their top-level is a global scope
+    with a clean workspace, for instance a newly started REPL.
 
-Inside a local scope a variable can be forced to be a local variable using the `local` keyword:
+Inner local scopes can, however, update variables in their parent scopes:
 
 ```jldoctest
-julia> x = 0;
-
-julia> for i = 1:10
-           local x
-           x = i + 1
+julia> for i = 1:1
+           z = i
+           for j = 1:1
+               z = 0
+           end
+           println(z)
        end
-
-julia> x
 0
 ```
 
-Inside a local scope a new global variable can be defined using the keyword `global`:
+Inside a local scope a variable can be forced to be a new local variable using the [`local`](@ref) keyword:
+
+```jldoctest
+julia> for i = 1:1
+           x = i + 1
+           for j = 1:1
+               local x = 0
+           end
+           println(x)
+       end
+2
+```
+
+Inside a local scope a global variable can be assigned to by using the keyword [`global`](@ref):
 
 ```jldoctest
 julia> for i = 1:10
@@ -152,39 +172,13 @@ julia> z
 The `local` and `global` keywords can also be applied to destructuring assignments, e.g.
 `local x, y = 1, 2`. In this case the keyword affects all listed variables.
 
-### Soft Local Scope
+In a local scope, all variables are inherited from its parent
+global scope block unless:
 
-> In a soft local scope, all variables are inherited from its parent scope unless a variable is
-> specifically marked with the keyword `local`.
+  * an assignment would result in a modified *global* variable, or
+  * a variable is specifically marked with the keyword `local`.
 
-Soft local scopes are introduced by for-loops, while-loops, comprehensions, try-catch-finally-blocks,
-and let-blocks. There are some extra rules for [Let Blocks](@ref) and for [For Loops and Comprehensions](@ref).
-
-In the following example the `x` and `y` refer always to the same variables as the soft local
-scope inherits both read and write variables:
-
-```jldoctest
-julia> x, y = 0, 1;
-
-julia> for i = 1:10
-           x = i + y + 1
-       end
-
-julia> x
-12
-```
-
-### Hard Local Scope
-
-Hard local scopes are introduced by function definitions (in all their forms), struct type definition blocks,
-and macro-definitions.
-
-> In a hard local scope, all variables are inherited from its parent scope unless:
->
->   * an assignment would result in a modified *global* variable, or
->   * a variable is specifically marked with the keyword `local`.
-
-Thus global variables are only inherited for reading but not for writing:
+Thus global variables are only inherited for reading, not for writing:
 
 ```jldoctest
 julia> x, y = 1, 2;
@@ -203,6 +197,14 @@ julia> x
 
 An explicit `global` is needed to assign to a global variable:
 
+!!! sidebar "Avoiding globals"
+    Avoiding changing the value of global variables is considered by many
+    to be a programming best-practice.
+    Changing the value of a global variable can cause "action at a distance",
+    making the behavior of a program harder to reason about.
+    This is why the scope blocks that introduce local scope require the `global`
+    keyword to declare the intent to modify a global variable.
+
 ```jldoctest
 julia> x = 1;
 
@@ -216,8 +218,7 @@ julia> x
 2
 ```
 
-Note that *nested functions* can behave differently to functions defined in the global scope as
-they can modify their parent scope's *local* variables:
+Note that *nested functions* can modify their parent scope's *local* variables:
 
 ```jldoctest
 julia> x, y = 1, 2;
@@ -234,19 +235,43 @@ julia> function baz()
 julia> baz()
 22
 
-julia> x, y
+julia> x, y # verify that global x and y are unchanged
 (1, 2)
 ```
 
-The distinction between inheriting global and local variables for assignment can lead to some
-slight differences between functions defined in local vs. global scopes. Consider the modification
-of the last example by moving `bar` to the global scope:
+The reason to allow modifying local variables of parent scopes in
+nested functions is to allow constructing [`closures`](https://en.wikipedia.org/wiki/Closure_%28computer_programming%29)
+which have private state, for instance the `state` variable in the
+following example:
+
+```jldoctest
+julia> let state = 0
+           global counter() = (state += 1)
+       end;
+
+julia> counter()
+1
+
+julia> counter()
+2
+```
+
+See also the closures in the examples in the next two sections. A variable,
+such as `x` in the first example and `state` in the second, that is inherited
+from the enclosing scope by the inner function is sometimes called a
+*captured* variable. Captured variables can present performance challenges
+discussed in [performance tips](@ref man-performance-tips).
+
+The distinction between inheriting global scope and nesting local scope
+can lead to some slight differences between functions
+defined in local versus global scopes for variable assignments.
+Consider the modification of the last example by moving `bar` to the global scope:
 
 ```jldoctest
 julia> x, y = 1, 2;
 
 julia> function bar()
-           x = 10 # local
+           x = 10 # local, no longer a closure variable
            return x + y
        end;
 
@@ -258,11 +283,11 @@ julia> function quz()
 julia> quz()
 14
 
-julia> x, y
+julia> x, y # verify that global x and y are unchanged
 (1, 2)
 ```
 
-Note that above subtlety does not pertain to type and macro definitions as they can only appear
+Note that the above nesting rules do not pertain to type and macro definitions as they can only appear
 at the global scope. There are special scoping rules concerning the evaluation of default and
 keyword function arguments which are described in the [Function section](@ref man-functions).
 
@@ -270,13 +295,12 @@ An assignment introducing a variable used inside a function, type or macro defin
 come before its inner usage:
 
 ```jldoctest
-julia> f = y -> y + a
-(::#1) (generic function with 1 method)
+julia> f = y -> y + a;
 
 julia> f(3)
 ERROR: UndefVarError: a not defined
 Stacktrace:
- [1] (::##1#2)(::Int64) at ./none:1
+[...]
 
 julia> a = 1
 1
@@ -293,9 +317,9 @@ they are actually called. As an example, here is an inefficient, mutually recurs
 if positive integers are even or odd:
 
 ```jldoctest
-julia> even(n) = n == 0 ? true : odd(n-1);
+julia> even(n) = (n == 0) ? true : odd(n - 1);
 
-julia> odd(n) = n == 0 ? false : even(n-1);
+julia> odd(n) = (n == 0) ? false : even(n - 1);
 
 julia> even(3)
 false
@@ -304,38 +328,9 @@ julia> odd(3)
 true
 ```
 
-Julia provides built-in, efficient functions to test for oddness and evenness called [`iseven()`](@ref)
-and [`isodd()`](@ref) so the above definitions should only be taken as examples.
-
-### Hard vs. Soft Local Scope
-
-Blocks which introduce a soft local scope, such as loops, are generally used to manipulate the
-variables in their parent scope. Thus their default is to fully access all variables in their
-parent scope.
-
-Conversely, the code inside blocks which introduce a hard local scope (function, type, and macro
-definitions) can be executed at any place in a program. Remotely changing the state of global
-variables in other modules should be done with care and thus this is an opt-in feature requiring
-the `global` keyword.
-
-The reason to allow *modifying local* variables of parent scopes in nested functions is to allow
-constructing [closures](https://en.wikipedia.org/wiki/Closure_%28computer_programming%29) which
-have a private state, for instance the `state` variable in the following example:
-
-```jldoctest
-julia> let state = 0
-           global counter
-           counter() = state += 1
-       end;
-
-julia> counter()
-1
-
-julia> counter()
-2
-```
-
-See also the closures in the examples in the next two sections.
+Julia provides built-in, efficient functions to test for oddness and evenness called [`iseven`](@ref)
+and [`isodd`](@ref) so the above definitions should only be considered to be examples of scope,
+not efficient design.
 
 ### Let Blocks
 
@@ -362,11 +357,11 @@ something like `let x = x` since the two `x` variables are distinct and have sep
 Here is an example where the behavior of `let` is needed:
 
 ```jldoctest
-julia> Fs = Array{Any}(2); i = 1;
+julia> Fs = Vector{Any}(undef, 2); i = 1;
 
 julia> while i <= 2
            Fs[i] = ()->i
-           i += 1
+           global i += 1
        end
 
 julia> Fs[1]()
@@ -381,13 +376,13 @@ variable `i`, so the two closures behave identically. We can use `let` to create
 for `i`:
 
 ```jldoctest
-julia> Fs = Array{Any}(2); i = 1;
+julia> Fs = Vector{Any}(undef, 2); i = 1;
 
 julia> while i <= 2
            let i = i
                Fs[i] = ()->i
            end
-           i += 1
+           global i += 1
        end
 
 julia> Fs[1]()
@@ -416,13 +411,12 @@ outer local `x`.
 
 ### For Loops and Comprehensions
 
-`for` loops and [Comprehensions](@ref) have the following behavior: any new variables introduced
-in their body scopes are freshly allocated for each loop iteration. This is in contrast to `while`
-loops which reuse the variables for all iterations. Therefore these constructs are similar to
-`while` loops with `let` blocks inside:
+`for` loops, `while` loops, and [Comprehensions](@ref) have the following behavior: any new variables
+introduced in their body scopes are freshly allocated for each loop iteration, as if the loop body
+were surrounded by a `let` block:
 
 ```jldoctest
-julia> Fs = Array{Any}(2);
+julia> Fs = Vector{Any}(undef, 2);
 
 julia> for j = 1:2
            Fs[j] = ()->j
@@ -437,38 +431,48 @@ julia> Fs[2]()
 
 A `for` loop or comprehension iteration variable is always a new variable:
 
-```jldoctest
-julia> i = 0;
+```julia-repl enable_doctest_when_deprecation_warning_is_removed
+julia> function f()
+           i = 0
+           for i = 1:3
+           end
+           return i
+       end;
 
-julia> for i = 1:3
-       end
-
-julia> i
+julia> f()
 0
 ```
 
-However, it is occasionally useful to reuse an existing variable as the iteration variable.
+However, it is occasionally useful to reuse an existing local variable as the iteration variable.
 This can be done conveniently by adding the keyword `outer`:
 
 ```jldoctest
-julia> i = 0;
+julia> function f()
+           i = 0
+           for outer i = 1:3
+           end
+           return i
+       end;
 
-julia> for outer i = 1:3
-       end
-
-julia> i
+julia> f()
 3
 ```
 
 ## Constants
 
 A common use of variables is giving names to specific, unchanging values. Such variables are only
-assigned once. This intent can be conveyed to the compiler using the `const` keyword:
+assigned once. This intent can be conveyed to the compiler using the [`const`](@ref) keyword:
 
 ```jldoctest
 julia> const e  = 2.71828182845904523536;
 
 julia> const pi = 3.14159265358979323846;
+```
+
+Multiple variables can be declared in a single `const` statement:
+```jldoctest
+julia> const a, b = 1, 2
+(1, 2)
 ```
 
 The `const` declaration should only be used in global scope on globals.
@@ -483,5 +487,88 @@ not supported.
 Special top-level assignments, such as those performed by the `function` and `struct` keywords,
 are constant by default.
 
-Note that `const` only affects the variable binding; the variable may be bound to a mutable object
-(such as an array), and that object may still be modified.
+Note that `const` only affects the variable binding; the variable may be bound to a mutable
+object (such as an array), and that object may still be modified. Additionally when one tries
+to assign a value to a variable that is declared constant the following scenarios are possible:
+
+* if a new value has a different type than the type of the constant then an error is thrown:
+```jldoctest
+julia> const x = 1.0
+1.0
+
+julia> x = 1
+ERROR: invalid redefinition of constant x
+```
+* if a new value has the same type as the constant then a warning is printed:
+```jldoctest
+julia> const y = 1.0
+1.0
+
+julia> y = 2.0
+WARNING: redefining constant y
+2.0
+```
+* if an assignment would not result in the change of variable value no message is given:
+```jldoctest
+julia> const z = 100
+100
+
+julia> z = 100
+100
+```
+The last rule applies for immutable objects even if the variable binding would change, e.g.:
+```julia-repl
+julia> const s1 = "1"
+"1"
+
+julia> s2 = "1"
+"1"
+
+julia> pointer.([s1, s2], 1)
+2-element Array{Ptr{UInt8},1}:
+ Ptr{UInt8} @0x00000000132c9638
+ Ptr{UInt8} @0x0000000013dd3d18
+
+julia> s1 = s2
+"1"
+
+julia> pointer.([s1, s2], 1)
+2-element Array{Ptr{UInt8},1}:
+ Ptr{UInt8} @0x0000000013dd3d18
+ Ptr{UInt8} @0x0000000013dd3d18
+```
+However, for mutable objects the warning is printed as expected:
+```jldoctest
+julia> const a = [1]
+1-element Array{Int64,1}:
+ 1
+
+julia> a = [1]
+WARNING: redefining constant a
+1-element Array{Int64,1}:
+ 1
+```
+
+Note that although sometimes possible, changing the value of a `const` variable
+is strongly discouraged, and is intended only for convenience during
+interactive use.
+Changing constants can cause various problems or unexpected behaviors.
+For instance, if a method references a constant and is already
+compiled before the constant is changed then it might keep using the old value:
+```jldoctest
+julia> const x = 1
+1
+
+julia> f() = x
+f (generic function with 1 method)
+
+julia> f()
+1
+
+julia> x = 2
+WARNING: redefining constant x
+2
+
+julia> f()
+1
+```

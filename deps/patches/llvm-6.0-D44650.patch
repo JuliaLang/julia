@@ -1,0 +1,13 @@
+Index: tools/llvm-cfi-verify/CMakeLists.txt
+===================================================================
+--- a/tools/llvm-cfi-verify/CMakeLists.txt
++++ b/tools/llvm-cfi-verify/CMakeLists.txt
+@@ -11,7 +11,7 @@
+   Symbolize
+   )
+ 
+-add_llvm_tool(llvm-cfi-verify
++add_llvm_tool(llvm-cfi-verify DISABLE_LLVM_LINK_LLVM_DYLIB
+   llvm-cfi-verify.cpp)
+ 
+ add_subdirectory(lib)

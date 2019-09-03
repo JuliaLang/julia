@@ -1,0 +1,8 @@
+name = "Test"
+uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[deps]
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"

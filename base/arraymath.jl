@@ -27,7 +27,7 @@ julia> A
 conj!(A::AbstractArray{<:Number}) = (@inbounds broadcast!(conj, A, A); A)
 
 for f in (:-, :conj, :real, :imag)
-    @eval ($f)(A::AbstractArray) = broadcast($f, A)
+    @eval ($f)(A::AbstractArray) = broadcast_preserving_zero_d($f, A)
 end
 
 
@@ -36,23 +36,30 @@ end
 for f in (:+, :-)
     @eval function ($f)(A::AbstractArray, B::AbstractArray)
         promote_shape(A, B) # check size compatibility
-        broadcast($f, A, B)
+        broadcast_preserving_zero_d($f, A, B)
     end
 end
 
-for f in (:/, :\, :*, :+, :-)
+function +(A::Array, Bs::Array...)
+    for B in Bs
+        promote_shape(A, B) # check size compatibility
+    end
+    broadcast_preserving_zero_d(+, A, Bs...)
+end
+
+for f in (:/, :\, :*)
     if f != :/
-        @eval ($f)(A::Number, B::AbstractArray) = broadcast($f, A, B)
+        @eval ($f)(A::Number, B::AbstractArray) = broadcast_preserving_zero_d($f, A, B)
     end
     if f != :\
-        @eval ($f)(A::AbstractArray, B::Number) = broadcast($f, A, B)
+        @eval ($f)(A::AbstractArray, B::Number) = broadcast_preserving_zero_d($f, A, B)
     end
 end
 
 ## data movement ##
 
-function flipdim(A::Array{T}, d::Integer) where T
-    nd = ndims(A)
+function reverse(A::Array{T}; dims::Integer) where T
+    nd = ndims(A); d = dims
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     sd = size(A, d)
     if sd == 1 || isempty(A)
@@ -66,7 +73,7 @@ function flipdim(A::Array{T}, d::Integer) where T
         nnd += Int(size(A,i)==1 || i==d)
     end
     if nnd==nd
-        # flip along the only non-singleton dimension
+        # reverse along the only non-singleton dimension
         for i = 1:sd
             B[i] = A[sd+1-i]
         end
@@ -87,13 +94,13 @@ function flipdim(A::Array{T}, d::Integer) where T
             end
         end
     else
-        if isbits(T) && M>200
+        if isbitstype(T) && M>200
             for i = 1:sd
                 ri = sd+1-i
                 for j=0:stride:(N-stride)
                     offs = j + 1 + (i-1)*M
                     boffs = j + 1 + (ri-1)*M
-                    copy!(B, boffs, A, offs, M)
+                    copyto!(B, boffs, A, offs, M)
                 end
             end
         else
@@ -131,10 +138,10 @@ julia> rotl90(a)
 ```
 """
 function rotl90(A::AbstractMatrix)
-    ind1, ind2 = indices(A)
+    ind1, ind2 = axes(A)
     B = similar(A, (ind2,ind1))
     n = first(ind2)+last(ind2)
-    for i=indices(A,1), j=ind2
+    for i=axes(A,1), j=ind2
         B[n-j,i] = A[i,j]
     end
     return B
@@ -159,10 +166,10 @@ julia> rotr90(a)
 ```
 """
 function rotr90(A::AbstractMatrix)
-    ind1, ind2 = indices(A)
+    ind1, ind2 = axes(A)
     B = similar(A, (ind2,ind1))
     m = first(ind1)+last(ind1)
-    for i=ind1, j=indices(A,2)
+    for i=ind1, j=axes(A,2)
         B[j,m-i] = A[i,j]
     end
     return B
@@ -187,7 +194,7 @@ julia> rot180(a)
 """
 function rot180(A::AbstractMatrix)
     B = similar(A)
-    ind1, ind2 = indices(A,1), indices(A,2)
+    ind1, ind2 = axes(A,1), axes(A,2)
     m, n = first(ind1)+last(ind1), first(ind2)+last(ind2)
     for j=ind2, i=ind1
         B[m-i,n-j] = A[i,j]
@@ -197,8 +204,8 @@ end
 """
     rotl90(A, k)
 
-Rotate matrix `A` left 90 degrees an integer `k` number of times.
-If `k` is zero or a multiple of four, this is equivalent to a `copy`.
+Left-rotate matrix `A` 90 degrees counterclockwise an integer `k` number of times.
+If `k` is a multiple of four (including zero), this is equivalent to a `copy`.
 
 # Examples
 ```jldoctest
@@ -237,8 +244,8 @@ end
 """
     rotr90(A, k)
 
-Rotate matrix `A` right 90 degrees an integer `k` number of times. If `k` is zero or a
-multiple of four, this is equivalent to a `copy`.
+Right-rotate matrix `A` 90 degrees clockwise an integer `k` number of times.
+If `k` is a multiple of four (including zero), this is equivalent to a `copy`.
 
 # Examples
 ```jldoctest

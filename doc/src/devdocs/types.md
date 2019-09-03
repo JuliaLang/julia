@@ -7,28 +7,28 @@ try to get under the hood, focusing particularly on [Parametric Types](@ref).
 
 It's perhaps easiest to conceive of Julia's type system in terms of sets. While programs manipulate
 individual values, a type refers to a set of values. This is not the same thing as a collection;
-for example a `Set` of values is itself a single `Set` value.
+for example a [`Set`](@ref) of values is itself a single `Set` value.
 Rather, a type describes a set of *possible* values, expressing uncertainty about which value we
 have.
 
-A *concrete* type `T` describes the set of values whose direct tag, as returned by the `typeof`
+A *concrete* type `T` describes the set of values whose direct tag, as returned by the [`typeof`](@ref)
 function, is `T`. An *abstract* type describes some possibly-larger set of values.
 
-`Any` describes the entire universe of possible values. [`Integer`](@ref) is a subset of
+[`Any`](@ref) describes the entire universe of possible values. [`Integer`](@ref) is a subset of
 `Any` that includes `Int`, [`Int8`](@ref), and other concrete types.
 Internally, Julia also makes heavy use of another type known as `Bottom`, which can also be written
 as `Union{}`. This corresponds to the empty set.
 
 Julia's types support the standard operations of set theory: you can ask whether `T1` is a "subset"
-(subtype) of `T2` with `T1 <: T2`. Likewise, you intersect two types using `typeintersect`, take
-their union with `Union`, and compute a type that contains their union with `typejoin`:
+(subtype) of `T2` with `T1 <: T2`. Likewise, you intersect two types using [`typeintersect`](@ref), take
+their union with [`Union`](@ref), and compute a type that contains their union with [`typejoin`](@ref):
 
 ```jldoctest
 julia> typeintersect(Int, Float64)
 Union{}
 
 julia> Union{Int, Float64}
-Union{Int64, Float64}
+Union{Float64, Int64}
 
 julia> typejoin(Int, Float64)
 Real
@@ -37,7 +37,7 @@ julia> typeintersect(Signed, Union{UInt8, Int8})
 Int8
 
 julia> Union{Signed, Union{UInt8, Int8}}
-Union{Signed, UInt8}
+Union{UInt8, Signed}
 
 julia> typejoin(Signed, Union{UInt8, Int8})
 Integer
@@ -66,7 +66,7 @@ Julia's type system can also express an *iterated union* of types: a union of ty
 of some variable. This is needed to describe parametric types where the values of some parameters
 are not known.
 
-For example, :obj:`Array` has two parameters as in `Array{Int,2}`. If we did not know the element
+For example, [`Array`](@ref) has two parameters as in `Array{Int,2}`. If we did not know the element
 type, we could write `Array{T,2} where T`, which is the union of `Array{T,2}` for all values of
 `T`: `Union{Array{Int8,2}, Array{Int16,2}, ...}`.
 
@@ -82,7 +82,7 @@ f3(A::Array{T}) where {T<:Any} = 3
 f4(A::Array{Any}) = 4
 ```
 
-The signature of `f3` is a `UnionAll` type wrapping a tuple type.
+The signature - as decribed in [Function calls](@ref) - of `f3` is a `UnionAll` type wrapping a tuple type: `Tuple{typeof(f3), Array{T}} where T`.
 All but `f4` can be called with `a = [1,2]`; all but `f2` can be called with `b = Any[1,2]`.
 
 Let's look at these types a little more closely:
@@ -195,8 +195,8 @@ TypeName
   hash: Int64 -7900426068641098781
   mt: MethodTable
     name: Symbol Array
-    defs: Void nothing
-    cache: Void nothing
+    defs: Nothing nothing
+    cache: Nothing nothing
     max_args: Int64 0
     kwsorter: #undef
     module: Module Core
@@ -209,16 +209,16 @@ to make new `Array` types.
 
 ```julia-repl
 julia> pointer_from_objref(Array)
-Ptr{Void} @0x00007fcc7de64850
+Ptr{Cvoid} @0x00007fcc7de64850
 
 julia> pointer_from_objref(Array.body.body.name.wrapper)
-Ptr{Void} @0x00007fcc7de64850
+Ptr{Cvoid} @0x00007fcc7de64850
 
 julia> pointer_from_objref(Array{TV,NV})
-Ptr{Void} @0x00007fcc80c4d930
+Ptr{Cvoid} @0x00007fcc80c4d930
 
 julia> pointer_from_objref(Array{TV,NV}.name.wrapper)
-Ptr{Void} @0x00007fcc7de64850
+Ptr{Cvoid} @0x00007fcc7de64850
 ```
 
 The `wrapper` field of [`Array`](@ref) points to itself, but for `Array{TV,NV}` it points back
@@ -301,16 +301,16 @@ What is the "primary" tuple-type?
 
 ```julia-repl
 julia> pointer_from_objref(Tuple)
-Ptr{Void} @0x00007f5998a04370
+Ptr{Cvoid} @0x00007f5998a04370
 
 julia> pointer_from_objref(Tuple{})
-Ptr{Void} @0x00007f5998a570d0
+Ptr{Cvoid} @0x00007f5998a570d0
 
 julia> pointer_from_objref(Tuple.name.wrapper)
-Ptr{Void} @0x00007f5998a04370
+Ptr{Cvoid} @0x00007f5998a04370
 
 julia> pointer_from_objref(Tuple{}.name.wrapper)
-Ptr{Void} @0x00007f5998a04370
+Ptr{Cvoid} @0x00007f5998a04370
 ```
 
 so `Tuple == Tuple{Vararg{Any}}` is indeed the primary type.
@@ -365,7 +365,7 @@ f(a::Array{T}, x::T, y::T) where {T} = ...
 
 In this case, `T` occurs in invariant position inside `Array{T}`.
 That means whatever type of array is passed unambiguously determines
-the value of `T` --- we say `T` has an *equality constraint* on it.
+the value of `T` -- we say `T` has an *equality constraint* on it.
 Therefore in this case the diagonal rule is not really necessary, since
 the array determines `T` and we can then allow `x` and `y` to be of
 any subtypes of `T`.
@@ -384,11 +384,11 @@ the type of `y` if `x` and `y` can have different types.
 The next complication is the interaction of unions and diagonal variables, e.g.
 
 ```julia
-f(x::Union{Void,T}, y::T) where {T} = ...
+f(x::Union{Nothing,T}, y::T) where {T} = ...
 ```
 
 Consider what this declaration means.
-`y` has type `T`. `x` then can have either the same type `T`, or else be of type `Void`.
+`y` has type `T`. `x` then can have either the same type `T`, or else be of type [`Nothing`](@ref).
 So all of the following calls should match:
 
 ```julia
@@ -400,18 +400,18 @@ f(nothing, "")
 f(nothing, 2.0)
 ```
 
-These examples are telling us something: when `x` is `nothing::Void`, there are no
+These examples are telling us something: when `x` is `nothing::Nothing`, there are no
 extra constraints on `y`.
 It is as if the method signature had `y::Any`.
 This means that whether a variable is diagonal is not a static property based on
 where it appears in a type.
 Rather, it depends on where a variable appears when the subtyping algorithm *uses* it.
-When `x` has type `Void`, we don't need to use the `T` in `Union{Void,T}`, so `T`
+When `x` has type `Nothing`, we don't need to use the `T` in `Union{Nothing,T}`, so `T`
 does not "occur".
 Indeed, we have the following type equivalence:
 
 ```julia
-(Tuple{Union{Void,T},T} where T) == Union{Tuple{Void,Any}, Tuple{T,T} where T}
+(Tuple{Union{Nothing,T},T} where T) == Union{Tuple{Nothing,Any}, Tuple{T,T} where T}
 ```
 
 ## Subtyping diagonal variables
@@ -463,7 +463,7 @@ code get triggered often--it will be easiest if you make the following definitio
 
 ```julia-repl
 julia> function mysubtype(a,b)
-           ccall(:jl_breakpoint, Void, (Any,), nothing)
+           ccall(:jl_breakpoint, Cvoid, (Any,), nothing)
            a <: b
        end
 ```

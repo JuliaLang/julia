@@ -16,8 +16,8 @@ const print_result = true  # prints files which where not processed.
 const rootdirs = [
     "../base",
     "../contrib",
-    "../examples",
     "../src",
+    "../stdlib",
     "../test",
 ]
 
@@ -35,7 +35,6 @@ const skipfiles = [
     "../base/special/trig.jl",
     "../base/special/exp.jl",
     "../base/special/rem_pio2.jl",
-    "../base/linalg/givens.jl",
     #
     "../src/abi_llvm.cpp",
     "../src/abi_ppc64le.cpp",
@@ -57,17 +56,15 @@ const skipfiles = [
     "../src/support/strtod.c",
     "../src/support/tzfile.h",
     "../src/support/utf8.c",
-    "../test/perf/micro/randmtzig.c",
     "../src/crc32c.c",
-    "../examples/quine.jl", # has license text in code
 ]
 
 const ext_prefix = Dict([
-(".jl", "# "),
-(".sh", "# "),
-(".h", "\/\/ "),
-(".c", "\/\/ "),
-(".cpp", "\/\/ "),
+    (".jl", "# "),
+    (".sh", "# "),
+    (".h", "// "),
+    (".c", "// "),
+    (".cpp", "// "),
 ])
 
 const new_license = "This file is a part of Julia. License is MIT: https://julialang.org/license"
@@ -84,7 +81,7 @@ function check_lines!(
     remove = []
     for i in 1:length(lines)
         line = lines[i]
-        if contains(line, checktxt)
+        if occursin(checktxt, line)
             if strip(line) == strip(prefix * checktxt) || strip(line) == strip(checktxt)
                 push!(remove, i)
             else
@@ -136,11 +133,12 @@ function add_license_line!(unprocessed::Vector, src::AbstractString, new_license
             if ext in keys(ext_prefix)
                 prefix = ext_prefix[ext]
                 f = open(path, "r")
-                lines = readlines(f, chomp=false)
+                lines = readlines(f, keep=true)
                 close(f)
                 isempty(lines) && (push!(unprocessed, path); continue)
                 isempty(old_license) || check_lines!(path, lines, old_license, prefix, true)
                 check_lines!(path, lines, new_license, prefix, false)
+                isempty(lines) && continue  # file consisting of just license header
                 # check shebang file
                 linenum = license_linenum(lines[1])
                 if !isempty(strip(lines[linenum]))
@@ -165,7 +163,7 @@ end
 function abspaths(A::Vector)
     abs_A = []
     for p in A
-        abs_p = isabspath(p) ? normpath(p) : normpath(joinpath(dirname(@__FILE__), p))
+        abs_p = isabspath(p) ? normpath(p) : normpath(joinpath(@__DIR__, p))
         ispath(abs_p) || error(string("`abs_p` seems not to be an existing path. ",
                                       "Adjust your configuration: <", p, "> : ", abs_p, "\n"))
         push!(abs_A, abs_p)

@@ -9,12 +9,12 @@ posts
 ([1](https://juliacomputing.com/blog/2016/04/04/inference-convergence.html),
 [2](https://juliacomputing.com/blog/2017/05/15/inference-converage2.html)).
 
-## Debugging inference.jl
+## Debugging compiler.jl
 
-You can start a Julia session, edit `inference.jl` (for example to
-insert `print` statements), and then replace `Core.Inference` in your
-running session by navigating to `base/` and executing
-`include("coreimg.jl")`. This trick typically leads to much faster
+You can start a Julia session, edit `compiler/*.jl` (for example to
+insert `print` statements), and then replace `Core.Compiler` in your
+running session by navigating to `base/compiler` and executing
+`include("compiler.jl")`. This trick typically leads to much faster
 development than if you rebuild Julia for each change.
 
 A convenient entry point into inference is `typeinf_code`. Here's a
@@ -27,16 +27,16 @@ mths = methods(convert, atypes)  # worth checking that there is only one
 m = first(mths)
 
 # Create variables needed to call `typeinf_code`
-params = Core.Inference.InferenceParams(typemax(UInt))  # parameter is the world age,
+params = Core.Compiler.Params(typemax(UInt))  # parameter is the world age,
                                                         #   typemax(UInt) -> most recent
 sparams = Core.svec()      # this particular method doesn't have type-parameters
 optimize = true            # run all inference optimizations
 cached = false             # force inference to happen (do not use cached results)
-Core.Inference.typeinf_code(m, atypes, sparams, optimize, cached, params)
+Core.Compiler.typeinf_code(m, atypes, sparams, optimize, cached, params)
 ```
 
 If your debugging adventures require a `MethodInstance`, you can look it up by
-calling `Core.Inference.code_for_method` using many of the variables above.
+calling `Core.Compiler.specialize_method` using many of the variables above.
 A `CodeInfo` object may be obtained with
 ```julia
 # Returns the CodeInfo object for `convert(Int, ::UInt)`:
@@ -75,7 +75,7 @@ in CPU cycles) to each of Julia's intrinsic functions. These costs are
 based on
 [standard ranges for common architectures](http://ithare.com/wp-content/uploads/part101_infographics_v08.png)
 (see
-[Agner Fog's analysis](http://www.agner.org/optimize/instruction_tables.pdf)
+[Agner Fog's analysis](https://www.agner.org/optimize/instruction_tables.pdf)
 for more detail).
 
 We supplement this low-level lookup table with a number of special
@@ -84,21 +84,37 @@ input and output types were inferred in advance) is assigned a fixed
 cost (currently 20 cycles). In contrast, a `:call` expression, for
 functions other than intrinsics/builtins, indicates that the call will
 require dynamic dispatch, in which case we assign a cost set by
-`InferenceParams.inline_nonleaf_penalty` (currently set at 1000). Note
+`Params.inline_nonleaf_penalty` (currently set at 1000). Note
 that this is not a "first-principles" estimate of the raw cost of
 dynamic dispatch, but a mere heuristic indicating that dynamic
 dispatch is extremely expensive.
 
 Each statement gets analyzed for its total cost in a function called
-`statement_cost`. You can run this yourself by following this example:
+`statement_cost`. You can run this yourself by following the sketch below,
+where `f` is your function and `tt` is the Tuple-type of the arguments:
 
-```julia
-params = Core.Inference.InferenceParams(typemax(UInt))
-# Get the CodeInfo object
-ci = (@code_typed fill(3, (5, 5)))[1]  # we'll try this on the code for `fill(3, (5, 5))`
+```jldoctest
+# A demo on `fill(3.5, (2, 3))
+f = fill
+tt = Tuple{Float64, Tuple{Int,Int}}
+# Create the objects we need to interact with the compiler
+params = Core.Compiler.Params(typemax(UInt))
+mi = Base.method_instances(f, tt)[1]
+ci = code_typed(f, tt)[1][1]
+opt = Core.Compiler.OptimizationState(mi, params)
 # Calculate cost of each statement
-cost(stmt) = Core.Inference.statement_cost(stmt, ci, Base, params)
+cost(stmt::Expr) = Core.Compiler.statement_cost(stmt, -1, ci, opt.sptypes, opt.slottypes, opt.params)
+cost(stmt) = 0
 cst = map(cost, ci.code)
+
+# output
+
+5-element Array{Int64,1}:
+  0
+  0
+ 20
+ 20
+  0
 ```
 
 The output is a `Vector{Int}` holding the estimated cost of each

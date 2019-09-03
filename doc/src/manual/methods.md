@@ -163,7 +163,7 @@ f (generic function with 2 methods)
 ```
 
 This output tells us that `f` is a function object with two methods. To find out what the signatures
-of those methods are, use the [`methods()`](@ref) function:
+of those methods are, use the [`methods`](@ref) function:
 
 ```julia-repl
 julia> methods(f)
@@ -242,8 +242,11 @@ julia> g(2, 3.0)
 8.0
 
 julia> g(2.0, 3.0)
-ERROR: MethodError: g(::Float64, ::Float64) is ambiguous.
-[...]
+ERROR: MethodError: g(::Float64, ::Float64) is ambiguous. Candidates:
+  g(x, y::Float64) in Main at none:1
+  g(x::Float64, y) in Main at none:1
+Possible fix, define
+  g(::Float64, ::Float64)
 ```
 
 Here the call `g(2.0, 3.0)` could be handled by either the `g(Float64, Any)` or the `g(Any, Float64)`
@@ -383,7 +386,7 @@ true
 julia> same_type_numeric("foo", 2.0)
 ERROR: MethodError: no method matching same_type_numeric(::String, ::Float64)
 Closest candidates are:
-  same_type_numeric(!Matched::T<:Number, ::T<:Number) where T<:Number at none:1
+  same_type_numeric(!Matched::T, ::T) where T<:Number at none:1
   same_type_numeric(!Matched::Number, ::Number) at none:1
 
 julia> same_type_numeric("foo", "bar")
@@ -453,7 +456,7 @@ This monotonically increasing value tracks each method definition operation.
 This allows describing "the set of method definitions visible to a given runtime environment"
 as a single number, or "world age".
 It also allows comparing the methods available in two worlds just by comparing their ordinal value.
-In the example above, we see that the "current world" (in which the method `newfun()` exists),
+In the example above, we see that the "current world" (in which the method `newfun` exists),
 is one greater than the task-local "runtime world" that was fixed when the execution of `tryeval` started.
 
 Sometimes it is necessary to get around this (for example, if you are implementing the above REPL).
@@ -506,13 +509,257 @@ julia> f(1)
 julia> g(1)
 "definition for Int"
 
-julia> wait(schedule(t, 1))
+julia> fetch(schedule(t, 1))
 "original definition"
 
 julia> t = @async f(wait()); yield();
 
-julia> wait(schedule(t, 1))
+julia> fetch(schedule(t, 1))
 "definition for Int"
+```
+
+## Design Patterns with Parametric Methods
+
+
+While complex dispatch logic is not required for performance or usability,
+sometimes it can be the best way to express some algorithm.
+Here are a few common design patterns that come up sometimes when using dispatch in this way.
+
+### Extracting the type parameter from a super-type
+
+
+Here is the correct code template for returning the element-type `T`
+of any arbitrary subtype of `AbstractArray`:
+
+```julia
+abstract type AbstractArray{T, N} end
+eltype(::Type{<:AbstractArray{T}}) where {T} = T
+```
+using so-called triangular dispatch.  Note that if `T` is a `UnionAll`
+type, as e.g. `eltype(Array{T} where T <: Integer)`, then `Any` is
+returned (as does the version of `eltype` in `Base`).
+
+Another way, which used to be the only correct way before the advent of
+triangular dispatch in Julia v0.6, is:
+
+```julia
+abstract type AbstractArray{T, N} end
+eltype(::Type{AbstractArray}) = Any
+eltype(::Type{AbstractArray{T}}) where {T} = T
+eltype(::Type{AbstractArray{T, N}}) where {T, N} = T
+eltype(::Type{A}) where {A<:AbstractArray} = eltype(supertype(A))
+```
+
+Another possibility is the following, which could useful to adapt
+to cases where the parameter `T` would need to be matched more
+narrowly:
+```julia
+eltype(::Type{AbstractArray{T, N} where {T<:S, N<:M}}) where {M, S} = Any
+eltype(::Type{AbstractArray{T, N} where {T<:S}}) where {N, S} = Any
+eltype(::Type{AbstractArray{T, N} where {N<:M}}) where {M, T} = T
+eltype(::Type{AbstractArray{T, N}}) where {T, N} = T
+eltype(::Type{A}) where {A <: AbstractArray} = eltype(supertype(A))
+```
+
+
+One common mistake is to try and get the element-type by using introspection:
+
+```julia
+eltype_wrong(::Type{A}) where {A<:AbstractArray} = A.parameters[1]
+```
+
+However, it is not hard to construct cases where this will fail:
+
+```julia
+struct BitVector <: AbstractArray{Bool, 1}; end
+```
+
+Here we have created a type `BitVector` which has no parameters,
+but where the element-type is still fully specified, with `T` equal to `Bool`!
+
+
+### Building a similar type with a different type parameter
+
+When building generic code, there is often a need for constructing a similar
+object with some change made to the layout of the type, also
+necessitating a change of the type parameters.
+For instance, you might have some sort of abstract array with an arbitrary element type
+and want to write your computation on it with a specific element type.
+We must implement a method for each `AbstractArray{T}` subtype that describes how to compute this type transform.
+There is no general transform of one subtype into another subtype with a different parameter.
+(Quick review: do you see why this is?)
+
+The subtypes of `AbstractArray` typically implement two methods to
+achieve this:
+A method to convert the input array to a subtype of a specific `AbstractArray{T, N}` abstract type;
+and a method to make a new uninitialized array with a specific element type.
+Sample implementations of these can be found in Julia Base.
+Here is a basic example usage of them, guaranteeing that `input` and
+`output` are of the same type:
+
+```julia
+input = convert(AbstractArray{Eltype}, input)
+output = similar(input, Eltype)
+```
+
+As an extension of this, in cases where the algorithm needs a copy of
+the input array,
+[`convert`](@ref) is insufficient as the return value may alias the original input.
+Combining [`similar`](@ref) (to make the output array) and [`copyto!`](@ref) (to fill it with the input data)
+is a generic way to express the requirement for a mutable copy of the input argument:
+
+```julia
+copy_with_eltype(input, Eltype) = copyto!(similar(input, Eltype), input)
+```
+
+### Iterated dispatch
+
+In order to dispatch a multi-level parametric argument list,
+often it is best to separate each level of dispatch into distinct functions.
+This may sound similar in approach to single-dispatch, but as we shall see below, it is still more flexible.
+
+For example, trying to dispatch on the element-type of an array will often run into ambiguous situations.
+Instead, commonly code will dispatch first on the container type,
+then recurse down to a more specific method based on eltype.
+In most cases, the algorithms lend themselves conveniently to this hierarchical approach,
+while in other cases, this rigor must be resolved manually.
+This dispatching branching can be observed, for example, in the logic to sum two matrices:
+
+```julia
+# First dispatch selects the map algorithm for element-wise summation.
++(a::Matrix, b::Matrix) = map(+, a, b)
+# Then dispatch handles each element and selects the appropriate
+# common element type for the computation.
++(a, b) = +(promote(a, b)...)
+# Once the elements have the same type, they can be added.
+# For example, via primitive operations exposed by the processor.
++(a::Float64, b::Float64) = Core.add(a, b)
+```
+
+### Trait-based dispatch
+
+A natural extension to the iterated dispatch above is to add a layer to
+method selection that allows to dispatch on sets of types which are
+independent from the sets defined by the type hierarchy.
+We could construct such a set by writing out a `Union` of the types in question,
+but then this set would not be extensible as `Union`-types cannot be
+altered after creation.
+However, such an extensible set can be programmed with a design pattern
+often referred to as a
+["Holy-trait"](https://github.com/JuliaLang/julia/issues/2345#issuecomment-54537633).
+
+This pattern is implemented by defining a generic function which
+computes a different singleton value (or type) for each trait-set to which the
+function arguments may belong to.  If this function is pure there is
+no impact on performance compared to normal dispatch.
+
+The example in the previous section glossed over the implementation details of
+[`map`](@ref) and [`promote`](@ref), which both operate in terms of these traits.
+When iterating over a matrix, such as in the implementation of `map`,
+one important question is what order to use to traverse the data.
+When `AbstractArray` subtypes implement the [`Base.IndexStyle`](@ref) trait,
+other functions such as `map` can dispatch on this information to pick
+the best algorithm (see [Abstract Array Interface](@ref man-interface-array)).
+This means that each subtype does not need to implement a custom version of `map`,
+since the generic definitions + trait classes will enable the system to select the fastest version.
+Here a toy implementation of `map` illustrating the trait-based dispatch:
+
+```julia
+map(f, a::AbstractArray, b::AbstractArray) = map(Base.IndexStyle(a, b), f, a, b)
+# generic implementation:
+map(::Base.IndexCartesian, f, a::AbstractArray, b::AbstractArray) = ...
+# linear-indexing implementation (faster)
+map(::Base.IndexLinear, f, a::AbstractArray, b::AbstractArray) = ...
+```
+
+This trait-based approach is also present in the [`promote`](@ref)
+mechanism employed by the scalar `+`.
+It uses [`promote_type`](@ref), which returns the optimal common type to
+compute the operation given the two types of the operands.
+This makes it possible to reduce the problem of implementing every function for every pair of possible type arguments,
+to the much smaller problem of implementing a conversion operation from each type to a common type,
+plus a table of preferred pair-wise promotion rules.
+
+
+### Output-type computation
+
+The discussion of trait-based promotion provides a transition into our next design pattern:
+computing the output element type for a matrix operation.
+
+For implementing primitive operations, such as addition,
+we use the [`promote_type`](@ref) function to compute the desired output type.
+(As before, we saw this at work in the `promote` call in the call to `+`).
+
+For more complex functions on matrices, it may be necessary to compute the expected return
+type for a more complex sequence of operations.
+This is often performed by the following steps:
+
+1. Write a small function `op` that expresses the set of operations performed by the kernel of the algorithm.
+2. Compute the element type `R` of the result matrix as `promote_op(op, argument_types...)`,
+   where `argument_types` is computed from `eltype` applied to each input array.
+3. Build the output matrix as `similar(R, dims)`, where `dims` are the desired dimensions of the output array.
+
+For a more specific example, a generic square-matrix multiply pseudo-code might look like:
+
+```julia
+function matmul(a::AbstractMatrix, b::AbstractMatrix)
+    op = (ai, bi) -> ai * bi + ai * bi
+
+    ## this is insufficient because it assumes `one(eltype(a))` is constructable:
+    # R = typeof(op(one(eltype(a)), one(eltype(b))))
+
+    ## this fails because it assumes `a[1]` exists and is representative of all elements of the array
+    # R = typeof(op(a[1], b[1]))
+
+    ## this is incorrect because it assumes that `+` calls `promote_type`
+    ## but this is not true for some types, such as Bool:
+    # R = promote_type(ai, bi)
+
+    # this is wrong, since depending on the return value
+    # of type-inference is very brittle (as well as not being optimizable):
+    # R = Base.return_types(op, (eltype(a), eltype(b)))
+
+    ## but, finally, this works:
+    R = promote_op(op, eltype(a), eltype(b))
+    ## although sometimes it may give a larger type than desired
+    ## it will always give a correct type
+
+    output = similar(b, R, (size(a, 1), size(b, 2)))
+    if size(a, 2) > 0
+        for j in 1:size(b, 2)
+            for i in 1:size(a, 1)
+                ## here we don't use `ab = zero(R)`,
+                ## since `R` might be `Any` and `zero(Any)` is not defined
+                ## we also must declare `ab::R` to make the type of `ab` constant in the loop,
+                ## since it is possible that typeof(a * b) != typeof(a * b + a * b) == R
+                ab::R = a[i, 1] * b[1, j]
+                for k in 2:size(a, 2)
+                    ab += a[i, k] * b[k, j]
+                end
+                output[i, j] = ab
+            end
+        end
+    end
+    return output
+end
+```
+
+### Separate convert and kernel logic
+
+One way to significantly cut down on compile-times and testing complexity is to isolate
+the logic for converting to the desired type and the computation.
+This lets the compiler specialize and inline the conversion logic independent
+from the rest of the body of the larger kernel.
+
+This is a common pattern seen when converting from a larger class of types
+to the one specific argument type that is actually supported by the algorithm:
+
+```julia
+complexfunction(arg::Int) = ...
+complexfunction(arg::Any) = complexfunction(convert(Int, arg))
+
+matmul(a::T, b::T) = ...
+matmul(a, b) = matmul(promote(a, b)...)
 ```
 
 ## Parametrically-constrained Varargs methods
@@ -542,10 +789,10 @@ Closest candidates are:
 More usefully, it is possible to constrain varargs methods by a parameter. For example:
 
 ```julia
-function getindex(A::AbstractArray{T,N}, indexes::Vararg{Number,N}) where {T,N}
+function getindex(A::AbstractArray{T,N}, indices::Vararg{Number,N}) where {T,N}
 ```
 
-would be called only when the number of `indexes` matches the dimensionality of the array.
+would be called only when the number of `indices` matches the dimensionality of the array.
 
 When only the type of supplied arguments needs to be constrained `Vararg{T}` can be equivalently
 written as `T...`. For instance `f(x::Int...) = x` is a shorthand for `f(x::Vararg{Int}) = x`.
@@ -604,10 +851,13 @@ julia> function (p::Polynomial)(x)
            end
            return v
        end
+
+julia> (p::Polynomial)() = p(5)
 ```
 
-Notice that the function is specified by type instead of by name. In the function body, `p` will
-refer to the object that was called. A `Polynomial` can be used as follows:
+Notice that the function is specified by type instead of by name. As with normal functions
+there is a terse syntax form. In the function body, `p` will refer to the object that was
+called. A `Polynomial` can be used as follows:
 
 ```jldoctest polynomial
 julia> p = Polynomial([1,10,100])
@@ -615,10 +865,13 @@ Polynomial{Int64}([1, 10, 100])
 
 julia> p(3)
 931
+
+julia> p()
+2551
 ```
 
 This mechanism is also the key to how type constructors and closures (inner functions that refer
-to their surrounding environment) work in Julia, discussed [later in the manual](@ref constructors-and-conversion).
+to their surrounding environment) work in Julia.
 
 ## Empty generic functions
 
@@ -728,9 +981,7 @@ f(x, y) = f(promote(x, y)...)
 One risk with this design is the possibility that if there is no
 suitable promotion method converting `x` and `y` to the same type, the
 second method will recurse on itself infinitely and trigger a stack
-overflow. The non-exported function `Base.promote_noncircular` can be
-used as an alternative; when promotion fails it will still throw an
-error, but one that fails faster with a more specific error message.
+overflow.
 
 ### Dispatch on one argument at a time
 

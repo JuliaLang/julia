@@ -26,15 +26,7 @@ The callback below is an example of how to do that:
 ```julia
 # Get the fully-qualified name of a module.
 function module_fqn(name::Symbol)
-    fqn = Symbol[name]
-    mod = getfield(Main, name)
-    parent = Base.module_parent(mod)
-    while parent !== Main
-        push!(fqn, Base.module_name(parent))
-        parent = Base.module_parent(parent)
-    end
-    fqn = reverse!(fqn)
+    fqn = fullname(Base.root_module(name))
     return join(fqn, '.')
 end
 ```
-

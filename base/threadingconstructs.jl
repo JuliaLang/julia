@@ -25,7 +25,8 @@ function _threadsfor(iter,lbody)
     lidx = iter.args[1]         # index
     range = iter.args[2]
     quote
-        range = $(esc(range))
+        local threadsfor_fun
+        let range = $(esc(range))
         function threadsfor_fun(onethread=false)
             r = range # Load into local variable
             lenr = length(r)
@@ -63,19 +64,21 @@ function _threadsfor(iter,lbody)
                 $(esc(lbody))
             end
         end
+        end
         # Hack to make nested threaded loops kinda work
         if threadid() != 1 || in_threaded_loop[]
             # We are in a nested threaded loop
-            threadsfor_fun(true)
+            Base.invokelatest(threadsfor_fun, true)
         else
             in_threaded_loop[] = true
             # the ccall is not expected to throw
-            ccall(:jl_threading_run, Ref{Void}, (Any,), threadsfor_fun)
+            ccall(:jl_threading_run, Cvoid, (Any,), threadsfor_fun)
             in_threaded_loop[] = false
         end
         nothing
     end
 end
+
 """
     Threads.@threads
 
@@ -94,8 +97,35 @@ macro threads(args...)
         throw(ArgumentError("need an expression argument to @threads"))
     end
     if ex.head === :for
-        return _threadsfor(ex.args[1],ex.args[2])
+        return _threadsfor(ex.args[1], ex.args[2])
     else
         throw(ArgumentError("unrecognized argument to @threads"))
+    end
+end
+
+"""
+    Threads.@spawn expr
+
+Create and run a [`Task`](@ref) on any available thread. To wait for the task to
+finish, call [`wait`](@ref) on the result of this macro, or call [`fetch`](@ref)
+to wait and then obtain its return value.
+
+!!! note
+    This feature is currently considered experimental.
+
+!!! compat "Julia 1.3"
+    This macro is available as of Julia 1.3.
+"""
+macro spawn(expr)
+    thunk = esc(:(()->($expr)))
+    var = esc(Base.sync_varname)
+    quote
+        local task = Task($thunk)
+        task.sticky = false
+        if $(Expr(:isdefined, var))
+            push!($var, task)
+        end
+        schedule(task)
+        task
     end
 end

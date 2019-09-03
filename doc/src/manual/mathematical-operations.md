@@ -17,6 +17,7 @@ are supported on all primitive numeric types:
 | `x - y`    | binary minus   | performs subtraction                   |
 | `x * y`    | times          | performs multiplication                |
 | `x / y`    | divide         | performs division                      |
+| `x ÷ y`    | integer divide | x / y, truncated to an integer         |
 | `x \ y`    | inverse divide | equivalent to `y / x`                  |
 | `x ^ y`    | power          | raises `x` to the `y`th power          |
 | `x % y`    | remainder      | equivalent to `rem(x,y)`               |
@@ -26,6 +27,8 @@ as well as the negation on [`Bool`](@ref) types:
 | Expression | Name     | Description                              |
 |:---------- |:-------- |:---------------------------------------- |
 | `!x`       | negation | changes `true` to `false` and vice versa |
+
+A numeric literal placed directly before an identifier or parentheses, e.g. `2x` or `2(x+y)`, is treated as a multiplication, except with higher precedence than other binary operations.  See [Numeric Literal Coefficients](@ref man-numeric-literal-coefficients) for details.
 
 Julia's promotion system makes arithmetic operations on mixtures of argument types "just work"
 naturally and automatically. See [Conversion and Promotion](@ref conversion-and-promotion) for details of the promotion
@@ -133,8 +136,8 @@ For *every* binary operation like `^`, there is a corresponding
 "dot" operation `.^` that is *automatically* defined
 to perform `^` element-by-element on arrays. For example,
 `[1,2,3] ^ 3` is not defined, since there is no standard
-mathematical meaning to "cubing" an array, but `[1,2,3] .^ 3`
-is defined as computing the elementwise
+mathematical meaning to "cubing" a (non-square) array, but
+`[1,2,3] .^ 3` is defined as computing the elementwise
 (or "vectorized") result `[1^3, 2^3, 3^3]`.  Similarly for unary
 operators like `!` or `√`, there is a corresponding `.√` that
 applies the operator elementwise.
@@ -249,7 +252,7 @@ julia> NaN > NaN
 false
 ```
 
-and can cause especial headaches with [Arrays](@ref):
+and can cause especial headaches with [arrays](@ref man-multi-dim-arrays):
 
 ```jldoctest
 julia> [1 NaN] == [1 NaN]
@@ -266,7 +269,7 @@ situations like hash key comparisons:
 | [`isinf(x)`](@ref)      | `x` is infinite           |
 | [`isnan(x)`](@ref)      | `x` is not a number       |
 
-[`isequal()`](@ref) considers `NaN`s equal to each other:
+[`isequal`](@ref) considers `NaN`s equal to each other:
 
 ```jldoctest
 julia> isequal(NaN, NaN)
@@ -279,7 +282,7 @@ julia> isequal(NaN, NaN32)
 true
 ```
 
-`isequal()` can also be used to distinguish signed zeros:
+`isequal` can also be used to distinguish signed zeros:
 
 ```jldoctest
 julia> -0.0 == 0.0
@@ -292,9 +295,9 @@ false
 Mixed-type comparisons between signed integers, unsigned integers, and floats can be tricky. A
 great deal of care has been taken to ensure that Julia does them correctly.
 
-For other types, `isequal()` defaults to calling [`==()`](@ref), so if you want to define
-equality for your own types then you only need to add a [`==()`](@ref) method.  If you define
-your own equality function, you should probably define a corresponding [`hash()`](@ref) method
+For other types, `isequal` defaults to calling [`==`](@ref), so if you want to define
+equality for your own types then you only need to add a [`==`](@ref) method.  If you define
+your own equality function, you should probably define a corresponding [`hash`](@ref) method
 to ensure that `isequal(x,y)` implies `hash(x) == hash(y)`.
 
 ### Chaining comparisons
@@ -347,35 +350,60 @@ Moreover, these functions (like any Julia function) can be applied in "vectorize
 arrays and other collections with the [dot syntax](@ref man-vectorized) `f.(A)`,
 e.g. `sin.(A)` will compute the sine of each element of an array `A`.
 
-## Operator Precedence
+## Operator Precedence and Associativity
 
-Julia applies the following order of operations, from highest precedence to lowest:
+Julia applies the following order and associativity of operations, from highest precedence to lowest:
 
-| Category       | Operators                                                                                         |
-|:-------------- |:------------------------------------------------------------------------------------------------- |
-| Syntax         | `.` followed by `::`                                                                              |
-| Exponentiation | `^`                                                                                               |
-| Fractions      | `//`                                                                                              |
-| Multiplication | `* / % & \`                                                                                       |
-| Bitshifts      | `<< >> >>>`                                                                                       |
-| Addition       | `+ - \| ⊻`                                                                                        |
-| Syntax         | `: ..` followed by `\|>`                                                                          |
-| Comparisons    | `> < >= <= == === != !== <:`                                                                      |
-| Control flow   | `&&` followed by `\|\|` followed by `?`                                                           |
-| Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            |
+| Category       | Operators                                                                                         | Associativity              |
+|:-------------- |:------------------------------------------------------------------------------------------------- |:-------------------------- |
+| Syntax         | `.` followed by `::`                                                                              | Left                       |
+| Exponentiation | `^`                                                                                               | Right                      |
+| Unary          | `+ - √`                                                                                           | Right[^1]                  |
+| Bitshifts      | `<< >> >>>`                                                                                       | Left                       |
+| Fractions      | `//`                                                                                              | Left                       |
+| Multiplication | `* / % & \ ÷`                                                                                     | Left[^2]                   |
+| Addition       | `+ - \| ⊻`                                                                                        | Left[^2]                   |
+| Syntax         | `: ..`                                                                                            | Left                       |
+| Syntax         | `\|>`                                                                                             | Left                       |
+| Syntax         | `<\|`                                                                                             | Right                      |
+| Comparisons    | `> < >= <= == === != !== <:`                                                                      | Non-associative            |
+| Control flow   | `&&` followed by `\|\|` followed by `?`                                                           | Right                      |
+| Pair           | `=>`                                                                                              | Right                      |
+| Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            | Right                      |
+
+[^1]:
+    The unary operators `+` and `-` require explicit parentheses around their argument to disambiguate them from the operator `++`, etc. Other compositions of unary operators are parsed with right-associativity, e. g., `√√-a` as `√(√(-a))`.
+[^2]:
+    The operators `+`, `++` and `*` are non-associative. `a + b + c` is parsed as `+(a, b, c)` not `+(+(a, b),
+    c)`. However, the fallback methods for `+(a, b, c, d...)` and `*(a, b, c, d...)` both default to left-associative evaluation.
 
 For a complete list of *every* Julia operator's precedence, see the top of this file:
 [`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm)
+
+[Numeric literal coefficients](@ref man-numeric-literal-coefficients), e.g. `2x`, are treated as multiplications with higher precedence than any other binary operation, and also have higher precedence than `^`.
 
 You can also find the numerical precedence for any given operator via the built-in function `Base.operator_precedence`, where higher numbers take precedence:
 
 ```jldoctest
 julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
-(9, 11, 15)
+(11, 13, 17)
 
-julia> Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
-(1, 1)
+julia> Base.operator_precedence(:sin), Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
+(0, 1, 1)
 ```
+
+A symbol representing the operator associativity can also be found by calling the built-in function `Base.operator_associativity`:
+
+```jldoctest
+julia> Base.operator_associativity(:-), Base.operator_associativity(:+), Base.operator_associativity(:^)
+(:left, :none, :right)
+
+julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Base.operator_associativity(:→)
+(:left, :none, :right)
+```
+
+Note that symbols such as `:sin` return precedence `0`. This value represents invalid operators and not
+operators of lowest precedence. Similarly, such operators are assigned associativity `:none`.
 
 ## Numerical Conversions
 
@@ -402,25 +430,20 @@ julia> Int8(127)
 julia> Int8(128)
 ERROR: InexactError: trunc(Int8, 128)
 Stacktrace:
- [1] throw_inexacterror(::Symbol, ::Type{Int8}, ::Int64) at ./int.jl:34
- [2] checked_trunc_sint at ./int.jl:419 [inlined]
- [3] convert at ./int.jl:439 [inlined]
- [4] Int8(::Int64) at ./sysimg.jl:102
+[...]
 
 julia> Int8(127.0)
 127
 
 julia> Int8(3.14)
-ERROR: InexactError: convert(Int8, 3.14)
+ERROR: InexactError: Int8(3.14)
 Stacktrace:
- [1] convert at ./float.jl:660 [inlined]
- [2] Int8(::Float64) at ./sysimg.jl:102
+[...]
 
 julia> Int8(128.0)
-ERROR: InexactError: convert(Int8, 128.0)
+ERROR: InexactError: Int8(128.0)
 Stacktrace:
- [1] convert at ./float.jl:660 [inlined]
- [2] Int8(::Float64) at ./sysimg.jl:102
+[...]
 
 julia> 127 % Int8
 127
@@ -434,8 +457,7 @@ julia> round(Int8,127.4)
 julia> round(Int8,127.6)
 ERROR: InexactError: trunc(Int8, 128.0)
 Stacktrace:
- [1] trunc at ./float.jl:653 [inlined]
- [2] round(::Type{Int8}, ::Float64) at ./float.jl:338
+[...]
 ```
 
 See [Conversion and Promotion](@ref conversion-and-promotion) for how to define your own conversions and promotions.
@@ -455,19 +477,19 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 
 ### Division functions
 
-| Function              | Description                                                                                               |
-|:--------------------- |:--------------------------------------------------------------------------------------------------------- |
-| [`div(x,y)`](@ref)    | truncated division; quotient rounded towards zero                                                         |
-| [`fld(x,y)`](@ref)    | floored division; quotient rounded towards `-Inf`                                                         |
-| [`cld(x,y)`](@ref)    | ceiling division; quotient rounded towards `+Inf`                                                         |
-| [`rem(x,y)`](@ref)    | remainder; satisfies `x == div(x,y)*y + rem(x,y)`; sign matches `x`                                       |
-| [`mod(x,y)`](@ref)    | modulus; satisfies `x == fld(x,y)*y + mod(x,y)`; sign matches `y`                                         |
-| [`mod1(x,y)`](@ref)   | `mod()` with offset 1; returns `r∈(0,y]` for `y>0` or `r∈[y,0)` for `y<0`, where `mod(r, y) == mod(x, y)` |
-| [`mod2pi(x)`](@ref)   | modulus with respect to 2pi;  `0 <= mod2pi(x)    < 2pi`                                                   |
-| [`divrem(x,y)`](@ref) | returns `(div(x,y),rem(x,y))`                                                                             |
-| [`fldmod(x,y)`](@ref) | returns `(fld(x,y),mod(x,y))`                                                                             |
-| [`gcd(x,y...)`](@ref) | greatest positive common divisor of `x`, `y`,...                                                          |
-| [`lcm(x,y...)`](@ref) | least positive common multiple of `x`, `y`,...                                                            |
+| Function                  | Description                                                                                               |
+|:------------------------- |:--------------------------------------------------------------------------------------------------------- |
+| [`div(x,y)`](@ref), `x÷y` | truncated division; quotient rounded towards zero                                                         |
+| [`fld(x,y)`](@ref)        | floored division; quotient rounded towards `-Inf`                                                         |
+| [`cld(x,y)`](@ref)        | ceiling division; quotient rounded towards `+Inf`                                                         |
+| [`rem(x,y)`](@ref)        | remainder; satisfies `x == div(x,y)*y + rem(x,y)`; sign matches `x`                                       |
+| [`mod(x,y)`](@ref)        | modulus; satisfies `x == fld(x,y)*y + mod(x,y)`; sign matches `y`                                         |
+| [`mod1(x,y)`](@ref)       | `mod` with offset 1; returns `r∈(0,y]` for `y>0` or `r∈[y,0)` for `y<0`, where `mod(r, y) == mod(x, y)`   |
+| [`mod2pi(x)`](@ref)       | modulus with respect to 2pi;  `0 <= mod2pi(x)    < 2pi`                                                   |
+| [`divrem(x,y)`](@ref)     | returns `(div(x,y),rem(x,y))`                                                                             |
+| [`fldmod(x,y)`](@ref)     | returns `(fld(x,y),mod(x,y))`                                                                             |
+| [`gcd(x,y...)`](@ref)     | greatest positive common divisor of `x`, `y`,...                                                          |
+| [`lcm(x,y...)`](@ref)     | least positive common multiple of `x`, `y`,...                                                            |
 
 ### Sign and absolute value functions
 
@@ -498,7 +520,7 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 | [`exponent(x)`](@ref)    | binary exponent of `x`                                                     |
 | [`significand(x)`](@ref) | binary significand (a.k.a. mantissa) of a floating-point number `x`        |
 
-For an overview of why functions like [`hypot()`](@ref), [`expm1()`](@ref), and [`log1p()`](@ref)
+For an overview of why functions like [`hypot`](@ref), [`expm1`](@ref), and [`log1p`](@ref)
 are necessary and useful, see John D. Cook's excellent pair of blog posts on the subject: [expm1, log1p, erfc](https://www.johndcook.com/blog/2010/06/07/math-library-functions-that-seem-unnecessary/),
 and [hypot](https://www.johndcook.com/blog/2010/06/02/whats-so-hard-about-finding-a-hypotenuse/).
 
@@ -511,12 +533,11 @@ sin    cos    tan    cot    sec    csc
 sinh   cosh   tanh   coth   sech   csch
 asin   acos   atan   acot   asec   acsc
 asinh  acosh  atanh  acoth  asech  acsch
-sinc   cosc   atan2
+sinc   cosc
 ```
 
-These are all single-argument functions, with the exception of [atan2](https://en.wikipedia.org/wiki/Atan2),
-which gives the angle in [radians](https://en.wikipedia.org/wiki/Radian) between the *x*-axis
-and the point specified by its arguments, interpreted as *x* and *y* coordinates.
+These are all single-argument functions, with [`atan`](@ref) also accepting two arguments
+corresponding to a traditional [`atan2`](https://en.wikipedia.org/wiki/Atan2) function.
 
 Additionally, [`sinpi(x)`](@ref) and [`cospi(x)`](@ref) are provided for more accurate computations
 of [`sin(pi*x)`](@ref) and [`cos(pi*x)`](@ref) respectively.
@@ -532,10 +553,5 @@ asind  acosd  atand  acotd  asecd  acscd
 
 ### Special functions
 
-| Function                                                      | Description                                                                                                                                                     |
-|:------------------------------------------------------------- |:--------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`gamma(x)`](@ref)                                            | [gamma function](https://en.wikipedia.org/wiki/Gamma_function) at `x`                                                                                           |
-| [`lgamma(x)`](@ref)                                           | accurate `log(gamma(x))` for large `x`                                                                                                                          |
-| [`lfact(x)`](@ref)                                            | accurate `log(factorial(x))` for large `x`; same as `lgamma(x+1)` for `x > 1`, zero otherwise                                                                   |
-| [`beta(x,y)`](@ref)                                           | [beta function](https://en.wikipedia.org/wiki/Beta_function) at `x,y`                                                                                           |
-| [`lbeta(x,y)`](@ref)                                          | accurate `log(beta(x,y))` for large `x` or `y`                                                                                                                  |
+Many other special mathematical functions are provided by the package
+[SpecialFunctions.jl](https://github.com/JuliaMath/SpecialFunctions.jl).

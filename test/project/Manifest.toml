@@ -1,0 +1,28 @@
+[[Foo]]
+deps = ["Bar", "Baz", "Qux"]
+uuid = "767738be-2f1f-45a9-b806-0234f3164144"
+git-tree-sha1 = "7c626031568a5e432112a74009c3763f9b851e3e"
+path = "deps/Foo1"
+
+[[Foo]]
+deps = ["Qux"]
+uuid = "6f418443-bd2e-4783-b551-cdbac608adf2"
+path = "deps/Foo2.jl"
+
+[[Bar]]
+uuid = "2a550a13-6bab-4a91-a4ee-dff34d6b99d0"
+path = "deps/Bar"
+    [Bar.deps]
+    Baz = "6801f525-dc68-44e8-a4e8-cabd286279e7"
+    Foo = "6f418443-bd2e-4783-b551-cdbac608adf2"
+
+[[Baz]]
+uuid = "6801f525-dc68-44e8-a4e8-cabd286279e7"
+git-tree-sha1 = "efc7e24c53d6a328011975294a2c75fed2f9800a"
+    [Baz.deps]
+    Foo = "6f418443-bd2e-4783-b551-cdbac608adf2"
+    Qux = "b5ec9b9c-e354-47fd-b367-a348bdc8f909"
+
+[[Qux]]
+uuid = "b5ec9b9c-e354-47fd-b367-a348bdc8f909"
+path = "deps/Qux.jl"

@@ -1,9 +1,0 @@
-3D Lattice Boltzmann (BGK) model of a fluid (http://exolete.com/lbm/)
-
-The Matlab/Octave version is from the website. The Julia version is
-rewritten in devectorized form with threading directives applied to
-the parallelizable code.
-
-The circshift! implementation needs work to support arbitrary
-dimensioned grids.
-

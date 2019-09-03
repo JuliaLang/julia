@@ -1,0 +1,18 @@
+From f23277bb91a4925ba8763337137a3123a7600557 Mon Sep 17 00:00:00 2001
+From: Valentin Churavy <v.churavy@gmail.com>
+Date: Tue, 16 Jan 2018 17:29:05 -0500
+Subject: [PATCH] add JL prefix to all LLVM version suffixes
+
+---
+ tools/llvm-shlib/simple_version_script.map.in | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tools/llvm-shlib/simple_version_script.map.in b/tools/llvm-shlib/simple_version_script.map.in
+index e9515fe7862..af082581627 100644
+--- a/tools/llvm-shlib/simple_version_script.map.in
++++ b/tools/llvm-shlib/simple_version_script.map.in
+@@ -1 +1 @@
+-LLVM_@LLVM_VERSION_MAJOR@.@LLVM_VERSION_MINOR@ { global: *; };
++JL_LLVM_@LLVM_VERSION_MAJOR@.@LLVM_VERSION_MINOR@ { global: *; };
+--
+2.15.1

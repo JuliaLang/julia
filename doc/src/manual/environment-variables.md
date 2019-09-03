@@ -1,59 +1,67 @@
 # Environment Variables
 
-Julia may be configured with a number of environment variables, either in the
-usual way of the operating system, or in a portable way from within Julia.
-Suppose you want to set the environment variable `JULIA_EDITOR` to
-`vim`, then either type `ENV["JULIA_EDITOR"] = "vim"` for instance in the REPL
-to make this change on a case by case basis, or add the same to the user
-configuration file `.juliarc.jl` in the user's home directory to have
-a permanent effect. The current value of the same environment variable is
+Julia can be configured with a number of environment variables, set either in
+the usual way for each operating system, or in a portable way from within Julia.
+Supposing that you want to set the environment variable `JULIA_EDITOR` to `vim`,
+you can type `ENV["JULIA_EDITOR"] = "vim"` (for instance, in the REPL) to make
+this change on a case by case basis, or add the same to the user configuration
+file `~/.julia/config/startup.jl` in the user's home directory to have a
+permanent effect. The current value of the same environment variable can be
 determined by evaluating `ENV["JULIA_EDITOR"]`.
 
 The environment variables that Julia uses generally start with `JULIA`. If
-[`Base.versioninfo`](@ref) is called with `verbose` equal to `true`, then the
+[`InteractiveUtils.versioninfo`](@ref) is called with the keyword `verbose=true`, then the
 output will list defined environment variables relevant for Julia, including
 those for which `JULIA` appears in the name.
 
+!!! note
+
+    Some variables, such as `JULIA_NUM_THREADS` and `JULIA_PROJECT`, need to be set before Julia
+    starts, therefore adding these to `~/.julia/config/startup.jl` is too late in the startup process.
+    In Bash, environment variables can either be set manually by running, e.g.,
+    `export JULIA_NUM_THREADS=4` before starting Julia, or by adding the same command to
+    `~/.bashrc` or `~/.bash_profile` to set the variable each time Bash is started.
+
 ## File locations
 
-### `JULIA_HOME`
+### `JULIA_BINDIR`
 
 The absolute path of the directory containing the Julia executable, which sets
-the global variable [`Base.JULIA_HOME`](@ref). If `$JULIA_HOME` is not set, then
-Julia determines the value `Base.JULIA_HOME` at run-time.
+the global variable [`Sys.BINDIR`](@ref). If `$JULIA_BINDIR` is not set, then
+Julia determines the value `Sys.BINDIR` at run-time.
 
 The executable itself is one of
 
 ```
-$JULIA_HOME/julia
-$JULIA_HOME/julia-debug
+$JULIA_BINDIR/julia
+$JULIA_BINDIR/julia-debug
 ```
 
 by default.
 
 The global variable `Base.DATAROOTDIR` determines a relative path from
-`Base.JULIA_HOME` to the data directory associated with Julia. Then the path
+`Sys.BINDIR` to the data directory associated with Julia. Then the path
 
 ```
-$JULIA_HOME/$DATAROOTDIR/julia/base
+$JULIA_BINDIR/$DATAROOTDIR/julia/base
 ```
 
 determines the directory in which Julia initially searches for source files (via
 `Base.find_source_file()`).
 
 Likewise, the global variable `Base.SYSCONFDIR` determines a relative path to the
-configuration file directory. Then Julia searches for a `juliarc.jl` file at
+configuration file directory. Then Julia searches for a `startup.jl` file at
 
 ```
-$JULIA_HOME/$SYSCONFDIR/julia/juliarc.jl
-$JULIA_HOME/../etc/julia/juliarc.jl
+$JULIA_BINDIR/$SYSCONFDIR/julia/startup.jl
+$JULIA_BINDIR/../etc/julia/startup.jl
 ```
 
-by default (via `Base.load_juliarc()`).
+by default (via `Base.load_julia_startup()`).
 
 For example, a Linux installation with a Julia executable located at
 `/bin/julia`, a `DATAROOTDIR` of `../share`, and a `SYSCONFDIR` of `../etc` will
-have `JULIA_HOME` set to `/bin`, a source-file search path of
+have `JULIA_BINDIR` set to `/bin`, a source-file search path of
 
 ```
 /share/julia/base
@@ -62,81 +70,95 @@ have `JULIA_HOME` set to `/bin`, a source-file search path of
 and a global configuration search path of
 
 ```
-/etc/julia/juliarc.jl
+/etc/julia/startup.jl
 ```
+
+### `JULIA_PROJECT`
+
+A directory path that indicates which project should be the initial active project.
+Setting this environment variable has the same effect as specifying the `--project`
+start-up option, but `--project` has higher precedence. If the variable is set to `@.`
+then Julia tries to find a project directory that contains `Project.toml` or
+`JuliaProject.toml` file from the current directory and its parents. See also
+the chapter on [Code Loading](@ref).
+
+!!! note
+
+    `JULIA_PROJECT` must be defined before starting julia; defining it in `startup.jl`
+    is too late in the startup process.
 
 ### `JULIA_LOAD_PATH`
 
-A separated list of absolute paths that are to be appended to the variable
-[`LOAD_PATH`](@ref). (In Unix-like systems, the path separator is `:`; in Windows
-systems, the path separator is `;`.) The `LOAD_PATH` variable is where
-[`Base.require`](@ref) and `Base.load_in_path()` look for code; it defaults to the absolute
-paths
+The `JULIA_LOAD_PATH` environment variable is used to populate the global Julia
+[`LOAD_PATH`](@ref) variable, which determines which packages can be loaded via
+`import` and `using` (see [Code Loading](@ref)).
 
+Unlike the shell `PATH` variable, empty entries in `JULIA_LOAD_PATH` are expanded to
+the default value of `LOAD_PATH`, `["@", "@v#.#", "@stdlib"]` when populating
+`LOAD_PATH`. This allows easy appending, prepending, etc. of the load path value in
+shell scripts regardless of whether `JULIA_LOAD_PATH` is already set or not. For
+example, to prepend the directory `/foo/bar` to `LOAD_PATH` just do
+```sh
+export JULIA_LOAD_PATH="/foo/bar:$JULIA_LOAD_PATH"
 ```
-$JULIA_HOME/../local/share/julia/site/v$(VERSION.major).$(VERSION.minor)
-$JULIA_HOME/../share/julia/site/v$(VERSION.major).$(VERSION.minor)
-```
+If the `JULIA_LOAD_PATH` environment variable is already set, its old value will be
+prepended with `/foo/bar`. On the other hand, if `JULIA_LOAD_PATH` is not set, then
+it will be set to `/foo/bar:` which will expand to a `LOAD_PATH` value of
+`["/foo/bar", "@", "@v#.#", "@stdlib"]`. If `JULIA_LOAD_PATH` is set to the empty
+string, it expands to an empty `LOAD_PATH` array. In other words, the empty string
+is interpreted as a zero-element array, not a one-element array of the empty string.
+This behavior was chosen so that it would be possible to set an empty load path via
+the environment variable. If you want the default load path, either unset the
+environment variable or if it must have a value, set it to the string `:`.
 
-so that, e.g., version 0.6 of Julia on a Linux system with a Julia executable at
-`/bin/julia` will have a default `LOAD_PATH` of
+### `JULIA_DEPOT_PATH`
 
-```
-/local/share/julia/site/v0.6
-/share/julia/site/v0.6
-```
+The `JULIA_DEPOT_PATH` environment variable is used to populate the global Julia
+[`DEPOT_PATH`](@ref) variable, which controls where the package manager, as well
+as Julia's code loading mechanisms, look for package registries, installed
+packages, named environments, repo clones, cached compiled package images,
+configuration files, and the default location of the REPL's history file.
 
-### `JULIA_PKGDIR`
-
-The path of the parent directory `Pkg.Dir._pkgroot()` for the version-specific
-Julia package repositories. If the path is relative, then it is taken with
-respect to the working directory. If `$JULIA_PKGDIR` is not set, then
-`Pkg.Dir._pkgroot()` defaults to
-
+Unlike the shell `PATH` variable but similar to `JULIA_LOAD_PATH`, empty entries in
+`JULIA_DEPOT_PATH` are expanded to the default value of `DEPOT_PATH`. This allows
+easy appending, prepending, etc. of the depot path value in shell scripts regardless
+of whether `JULIA_DEPOT_PATH` is already set or not. For example, to prepend the
+directory `/foo/bar` to `DEPOT_PATH` just do
+```sh
+export JULIA_DEPOT_PATH="/foo/bar:$JULIA_DEPOT_PATH"
 ```
-$HOME/.julia
-```
-
-Then the repository location [`Pkg.dir`](@ref) for a given Julia version is
-
-```
-$JULIA_PKGDIR/v$(VERSION.major).$(VERSION.minor)
-```
-
-For example, for a Linux user whose home directory is `/home/alice`, the directory
-containing the package repositories would by default be
-
-```
-/home/alice/.julia
-```
-
-and the package repository for version 0.6 of Julia would be
-
-```
-/home/alice/.julia/v0.6
-```
+If the `JULIA_DEPOT_PATH` environment variable is already set, its old value will be
+prepended with `/foo/bar`. On the other hand, if `JULIA_DEPOT_PATH` is not set, then
+it will be set to `/foo/bar:` which will have the effect of prepending `/foo/bar` to
+the default depot path. If `JULIA_DEPOT_PATH` is set to the empty string, it expands
+to an empty `DEPOT_PATH` array. In other words, the empty string is interpreted as a
+zero-element array, not a one-element array of the empty string. This behavior was
+chosen so that it would be possible to set an empty depot path via the environment
+variable. If you want the default depot path, either unset the environment variable
+or if it must have a value, set it to the string `:`.
 
 ### `JULIA_HISTORY`
 
-The absolute path `Base.REPL.find_hist_file()` of the REPL's history file. If
-`$JULIA_HISTORY` is not set, then `Base.REPL.find_hist_file()` defaults to
+The absolute path `REPL.find_hist_file()` of the REPL's history file. If
+`$JULIA_HISTORY` is not set, then `REPL.find_hist_file()` defaults to
 
 ```
-$HOME/.julia_history
+$(DEPOT_PATH[1])/logs/repl_history.jl
 ```
 
 ### `JULIA_PKGRESOLVE_ACCURACY`
 
 A positive `Int` that determines how much time the max-sum subroutine
-`MaxSum.maxsum()` of the package dependency resolver [`Base.Pkg.resolve`](@ref)
+`MaxSum.maxsum()` of the package dependency resolver
 will devote to attempting satisfying constraints before giving up: this value is
 by default `1`, and larger values correspond to larger amounts of time.
 
 Suppose the value of `$JULIA_PKGRESOLVE_ACCURACY` is `n`. Then
 
-*   the number of pre-decimation iterations is `20*n`,
-*   the number of iterations between decimation steps is `10*n`, and
-*   at decimation steps, at most one in every `20*n` packages is decimated.
+* the number of pre-decimation iterations is `20*n`,
+* the number of iterations between decimation steps is `10*n`, and
+* at decimation steps, at most one in every `20*n` packages is decimated.
+
 
 ## External applications
 
@@ -153,7 +175,7 @@ falls back to `/bin/sh` if `$SHELL` is unset.
 
 ### `JULIA_EDITOR`
 
-The editor returned by `Base.editor()` and used in, e.g., [`Base.edit`](@ref),
+The editor returned by `InteractiveUtils.editor()` and used in, e.g., [`InteractiveUtils.edit`](@ref),
 referring to the command of the preferred editor, for instance `vim`.
 
 `$JULIA_EDITOR` takes precedence over `$VISUAL`, which in turn takes precedence
@@ -161,21 +183,16 @@ over `$EDITOR`. If none of these environment variables is set, then the editor
 is taken to be `open` on Windows and OS X, or `/etc/alternatives/editor` if it
 exists, or `emacs` otherwise.
 
-!!! note
-
-    `$JULIA_EDITOR` is *not* used in the determination of the editor for
-    [`Base.Pkg.edit`](@ref): this function checks `$VISUAL` and `$EDITOR` alone.
-
 ## Parallelization
 
-### `JULIA_CPU_CORES`
+### `JULIA_CPU_THREADS`
 
-Overrides the global variable [`Base.Sys.CPU_CORES`](@ref), the number of
+Overrides the global variable [`Base.Sys.CPU_THREADS`](@ref), the number of
 logical CPU cores available.
 
 ### `JULIA_WORKER_TIMEOUT`
 
-A [`Float64`](@ref) that sets the value of `Base.worker_timeout()` (default: `60.0`).
+A [`Float64`](@ref) that sets the value of `Distributed.worker_timeout()` (default: `60.0`).
 This function gives the number of seconds a worker process will wait for
 a master process to establish a connection before dying.
 
@@ -187,6 +204,10 @@ physical CPU cores, then the number of threads is set to the number of cores. If
 `$JULIA_NUM_THREADS` is not positive or is not set, or if the number of CPU
 cores cannot be determined through system calls, then the number of threads is
 set to `1`.
+
+!!! note
+
+    `JULIA_NUM_THREADS` must be defined before starting julia; defining it in `startup.jl` is too late in the startup process.
 
 ### `JULIA_THREAD_SLEEP_THRESHOLD`
 
@@ -206,8 +227,8 @@ affinitized. Otherwise, Julia lets the operating system handle thread policy.
 Environment variables that determine how REPL output should be formatted at the
 terminal. Generally, these variables should be set to [ANSI terminal escape
 sequences](http://ascii-table.com/ansi-escape-sequences.php). Julia provides
-a high-level interface with much of the same functionality: see the section on
-[Interacting With Julia](@ref).
+a high-level interface with much of the same functionality; see the section on
+[The Julia REPL](@ref).
 
 ### `JULIA_ERROR_COLOR`
 
@@ -304,21 +325,14 @@ event listener for just-in-time (JIT) profiling.
 
     This environment variable only has an effect if Julia was compiled with JIT
     profiling support, using either
-
-*   Intel's [VTune™ Amplifier](https://software.intel.com/en-us/intel-vtune-amplifier-xe)
-    (`USE_INTEL_JITEVENTS` set to `1` in the build configuration), or
-*   [OProfile](http://oprofile.sourceforge.net/news/) (`USE_OPROFILE_JITEVENTS` set to `1`
-    in the build configuration).
+    * Intel's [VTune™ Amplifier](https://software.intel.com/en-us/vtune)
+      (`USE_INTEL_JITEVENTS` set to `1` in the build configuration), or
+    * [OProfile](http://oprofile.sourceforge.net/news/) (`USE_OPROFILE_JITEVENTS` set to `1`
+      in the build configuration).
 
 ### `JULIA_LLVM_ARGS`
 
 Arguments to be passed to the LLVM backend.
-
-!!! note
-
-    This environment variable has an effect only if Julia was compiled with
-    `JL_DEBUG_BUILD` set — in particular, the `julia-debug` executable is always
-    compiled with this build variable.
 
 ### `JULIA_DEBUG_LOADING`
 

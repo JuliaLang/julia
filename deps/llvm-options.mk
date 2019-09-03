@@ -1,5 +1,9 @@
-ifeq ($(LLVM_DEBUG),1)
+ifneq ($(LLVM_DEBUG),0)
+ifeq  ($(LLVM_DEBUG),1)
 LLVM_BUILDTYPE := Debug
+else
+LLVM_BUILDTYPE := RelWithDebInfo
+endif
 else
 LLVM_BUILDTYPE := Release
 endif

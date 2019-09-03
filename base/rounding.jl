@@ -2,8 +2,8 @@
 
 module Rounding
 
-let fenv_consts = Vector{Cint}(9)
-    ccall(:jl_get_fenv_consts, Void, (Ptr{Cint},), fenv_consts)
+let fenv_consts = Vector{Cint}(undef, 9)
+    ccall(:jl_get_fenv_consts, Cvoid, (Ptr{Cint},), fenv_consts)
     global const JL_FE_INEXACT = fenv_consts[1]
     global const JL_FE_UNDERFLOW = fenv_consts[2]
     global const JL_FE_OVERFLOW = fenv_consts[3]
@@ -37,7 +37,7 @@ Currently supported rounding modes are:
 - [`RoundNearestTiesAway`](@ref)
 - [`RoundNearestTiesUp`](@ref)
 - [`RoundToZero`](@ref)
-- `RoundFromZero` ([`BigFloat`](@ref) only)
+- [`RoundFromZero`](@ref) ([`BigFloat`](@ref) only)
 - [`RoundUp`](@ref)
 - [`RoundDown`](@ref)
 """
@@ -72,6 +72,18 @@ const RoundUp = RoundingMode{:Up}()
 """
 const RoundDown = RoundingMode{:Down}()
 
+"""
+    RoundFromZero
+
+Rounds away from zero.
+This rounding mode may only be used with `T == BigFloat` inputs to [`round`](@ref).
+
+# Examples
+```jldoctest
+julia> BigFloat("1.0000000000000001", 5, RoundFromZero)
+1.06
+```
+"""
 const RoundFromZero = RoundingMode{:FromZero}() # mpfr only
 
 """
@@ -116,15 +128,15 @@ Set the rounding mode of floating point type `T`, controlling the rounding of ba
 arithmetic functions ([`+`](@ref), [`-`](@ref), [`*`](@ref),
 [`/`](@ref) and [`sqrt`](@ref)) and type conversion. Other numerical
 functions may give incorrect or invalid values when using rounding modes other than the
-default `RoundNearest`.
+default [`RoundNearest`](@ref).
 
-Note that this may affect other types, for instance changing the rounding mode of
-[`Float64`](@ref) will change the rounding mode of [`Float32`](@ref).
-See [`RoundingMode`](@ref) for available modes.
+Note that this is currently only supported for `T == BigFloat`.
 
 !!! warning
 
-    This feature is still experimental, and may give unexpected or incorrect values.
+    This function is not thread-safe. It will affect code running on all threads, but
+    its behavior is undefined if called concurrently with computations that use the
+    setting.
 """
 setrounding(T::Type, mode)
 
@@ -142,7 +154,6 @@ See [`RoundingMode`](@ref) for available modes.
 setrounding_raw(::Type{<:Union{Float32,Float64}}, i::Integer) = ccall(:fesetround, Int32, (Int32,), i)
 rounding_raw(::Type{<:Union{Float32,Float64}}) = ccall(:fegetround, Int32, ())
 
-setrounding(::Type{T}, r::RoundingMode) where {T<:Union{Float32,Float64}} = setrounding_raw(T,to_fenv(r))
 rounding(::Type{T}) where {T<:Union{Float32,Float64}} = from_fenv(rounding_raw(T))
 
 """
@@ -157,32 +168,19 @@ equivalent to:
     setrounding(T, old)
 
 See [`RoundingMode`](@ref) for available rounding modes.
-
-!!! warning
-
-    This feature is still experimental, and may give unexpected or incorrect values. A
-    known problem is the interaction with compiler optimisations, e.g.
-
-        julia> setrounding(Float64,RoundDown) do
-                   1.1 + 0.1
-               end
-        1.2000000000000002
-
-    Here the compiler is *constant folding*, that is evaluating a known constant
-    expression at compile time, however the rounding mode is only changed at runtime, so
-    this is not reflected in the function result. This can be avoided by moving constants
-    outside the expression, e.g.
-
-        julia> x = 1.1; y = 0.1;
-
-        julia> setrounding(Float64,RoundDown) do
-                   x + y
-               end
-        1.2
 """
 function setrounding(f::Function, ::Type{T}, rounding::RoundingMode) where T
     old_rounding_raw = rounding_raw(T)
     setrounding(T,rounding)
+    try
+        return f()
+    finally
+        setrounding_raw(T,old_rounding_raw)
+    end
+end
+function setrounding_raw(f::Function, ::Type{T}, rounding) where T
+    old_rounding_raw = rounding_raw(T)
+    setrounding_raw(T,rounding)
     try
         return f()
     finally
@@ -229,14 +227,22 @@ not required) to convert subnormal inputs or outputs to zero. Returns `true` unl
 
 `set_zero_subnormals(true)` can speed up some computations on some hardware. However, it can
 break identities such as `(x-y==0) == (x==y)`.
+
+!!! warning
+
+    This function only affects the current thread.
 """
 set_zero_subnormals(yes::Bool) = ccall(:jl_set_zero_subnormals,Int32,(Int8,),yes)==0
 
 """
     get_zero_subnormals() -> Bool
 
-Returns `false` if operations on subnormal floating-point values ("denormals") obey rules
+Return `false` if operations on subnormal floating-point values ("denormals") obey rules
 for IEEE arithmetic, and `true` if they might be converted to zeros.
+
+!!! warning
+
+    This function only affects the current thread.
 """
 get_zero_subnormals() = ccall(:jl_get_zero_subnormals,Int32,())!=0
 

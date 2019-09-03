@@ -8,6 +8,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "threading.h"
+#include "julia_assert.h"
 
 // define `jl_unw_get` as a macro, since (like setjmp)
 // returning from the callee function will invalidate the context
@@ -23,14 +24,15 @@ void jl_unw_get(void *context) {};
 extern "C" {
 #endif
 
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context);
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp);
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context) JL_NOTSAFEPOINT;
+static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintptr_t *fp) JL_NOTSAFEPOINT;
 
-size_t jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, size_t maxsize)
+size_t jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, size_t maxsize, int add_interp_frames) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     volatile size_t n = 0;
-    uintptr_t nullsp;
+    uintptr_t thesp;
+    uintptr_t thefp;
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
     assert(!jl_in_stackwalk);
     jl_in_stackwalk = 1;
@@ -46,9 +48,15 @@ size_t jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, size_t ma
                n = maxsize; // return maxsize + 1 if ran out of space
                break;
            }
-           if (!jl_unw_step(cursor, &ip[n], sp ? &sp[n] : &nullsp))
+           if (!jl_unw_step(cursor, &ip[n], &thesp, &thefp))
                break;
-           n++;
+           if (sp)
+               sp[n] = thesp;
+           if (add_interp_frames && jl_is_enter_interpreter_frame(ip[n])) {
+               n += jl_capture_interp_frame(&ip[n], thesp, thefp, maxsize-n-1) + 1;
+           } else {
+               n++;
+           }
         }
         n++;
 #if !defined(_OS_WINDOWS_)
@@ -75,7 +83,7 @@ size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize,
     bt_cursor_t cursor;
     if (!jl_unw_init(&cursor, context))
         return 0;
-    n = jl_unw_stepn(&cursor, data, NULL, maxsize);
+    n = jl_unw_stepn(&cursor, data, NULL, maxsize, 1);
     return n > maxsize ? maxsize : n;
 }
 
@@ -87,17 +95,19 @@ size_t rec_backtrace(uintptr_t *data, size_t maxsize)
     return rec_backtrace_ctx(data, maxsize, &context);
 }
 
-static jl_value_t *array_ptr_void_type = NULL;
+static jl_value_t *array_ptr_void_type JL_ALWAYS_LEAFTYPE = NULL;
 JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp)
 {
     jl_array_t *ip = NULL;
     jl_array_t *sp = NULL;
-    JL_GC_PUSH2(&ip, &sp);
+    jl_array_t *bt2 = NULL;
+    JL_GC_PUSH3(&ip, &sp, &bt2);
     if (array_ptr_void_type == NULL) {
         array_ptr_void_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_voidpointer_type, jl_box_long(1));
     }
     ip = jl_alloc_array_1d(array_ptr_void_type, 0);
     sp = returnsp ? jl_alloc_array_1d(array_ptr_void_type, 0) : NULL;
+    bt2 = jl_alloc_array_1d(jl_array_any_type, 0);
     const size_t maxincr = 1000;
     bt_context_t context;
     bt_cursor_t cursor;
@@ -109,31 +119,100 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp)
             jl_array_grow_end(ip, maxincr);
             if (returnsp) jl_array_grow_end(sp, maxincr);
             n = jl_unw_stepn(&cursor, (uintptr_t*)jl_array_data(ip) + offset,
-                    returnsp ? (uintptr_t*)jl_array_data(sp) + offset : NULL, maxincr);
+                    returnsp ? (uintptr_t*)jl_array_data(sp) + offset : NULL, maxincr, 1);
             offset += maxincr;
         } while (n > maxincr);
         jl_array_del_end(ip, maxincr - n);
         if (returnsp) jl_array_del_end(sp, maxincr - n);
+
+        n = 0;
+        while (n < jl_array_len(ip)) {
+            if ((uintptr_t)jl_array_ptr_ref(ip, n) == JL_BT_INTERP_FRAME) {
+                jl_array_ptr_1d_push(bt2, jl_array_ptr_ref(ip, n+1));
+                n += 2;
+            }
+            n++;
+        }
     }
-    jl_value_t *bt = returnsp ? (jl_value_t*)jl_svec2(ip, sp) : (jl_value_t*)ip;
+    jl_value_t *bt = returnsp ? (jl_value_t*)jl_svec(3, ip, bt2, sp) : (jl_value_t*)jl_svec(2, ip, bt2);
     JL_GC_POP();
     return bt;
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
+void decode_backtrace(uintptr_t *bt_data, size_t bt_size,
+                      jl_array_t **btout, jl_array_t **bt2out)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     jl_array_t *bt = NULL;
-    JL_GC_PUSH1(&bt);
+    jl_array_t *bt2 = NULL;
+    JL_GC_PUSH2(&bt, &bt2);
     if (array_ptr_void_type == NULL) {
         array_ptr_void_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_voidpointer_type, jl_box_long(1));
     }
-    bt = jl_alloc_array_1d(array_ptr_void_type, ptls->bt_size);
-    memcpy(bt->data, ptls->bt_data, ptls->bt_size * sizeof(void*));
+    bt = jl_alloc_array_1d(array_ptr_void_type, bt_size);
+    memcpy(bt->data, bt_data, bt_size * sizeof(void*));
+    bt2 = jl_alloc_array_1d(jl_array_any_type, 0);
+    // Scan the stack for any interpreter frames
+    size_t n = 0;
+    while (n < bt_size) {
+        if (bt_data[n] == JL_BT_INTERP_FRAME) {
+            jl_array_ptr_1d_push(bt2, (jl_value_t*)bt_data[n+1]);
+            n += 2;
+        }
+        n++;
+    }
+    *btout = bt;
+    *bt2out = bt2;
     JL_GC_POP();
-    return (jl_value_t*)bt;
 }
 
+JL_DLLEXPORT void jl_get_backtrace(jl_array_t **btout, jl_array_t **bt2out)
+{
+    jl_excstack_t *s = jl_get_ptls_states()->current_task->excstack;
+    uintptr_t *bt_data = NULL;
+    size_t bt_size = 0;
+    if (s && s->top) {
+        bt_data = jl_excstack_bt_data(s, s->top);
+        bt_size = jl_excstack_bt_size(s, s->top);
+    }
+    decode_backtrace(bt_data, bt_size, btout, bt2out);
+}
+
+// Return data from the exception stack for `task` as an array of Any, starting
+// with the top of the stack and returning up to `max_entries`. If requested by
+// setting the `include_bt` flag, backtrace data in bt,bt2 format is
+// interleaved.
+JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int max_entries)
+{
+    JL_TYPECHK(catch_stack, task, (jl_value_t*)task);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (task != ptls->current_task &&
+        task->state != failed_sym && task->state != done_sym) {
+        jl_error("Inspecting the exception stack of a task which might "
+                 "be running concurrently isn't allowed.");
+    }
+    jl_array_t *stack = NULL;
+    jl_array_t *bt = NULL;
+    jl_array_t *bt2 = NULL;
+    JL_GC_PUSH3(&stack, &bt, &bt2);
+    stack = jl_alloc_array_1d(jl_array_any_type, 0);
+    jl_excstack_t *excstack = task->excstack;
+    size_t itr = excstack ? excstack->top : 0;
+    int i = 0;
+    while (itr > 0 && i < max_entries) {
+        jl_array_ptr_1d_push(stack, jl_excstack_exception(excstack, itr));
+        if (include_bt) {
+            decode_backtrace(jl_excstack_bt_data(excstack, itr),
+                             jl_excstack_bt_size(excstack, itr),
+                             &bt, &bt2);
+            jl_array_ptr_1d_push(stack, (jl_value_t*)bt);
+            jl_array_ptr_1d_push(stack, (jl_value_t*)bt2);
+        }
+        itr = jl_excstack_next(excstack, itr);
+        i++;
+    }
+    JL_GC_POP();
+    return (jl_value_t*)stack;
+}
 
 #if defined(_OS_WINDOWS_)
 #ifdef _CPU_X86_64_
@@ -244,13 +323,17 @@ static int readable_pointer(LPCVOID pointer)
     return 1;
 }
 
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
+static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintptr_t *fp)
 {
     // Might be called from unmanaged thread.
 #ifndef _CPU_X86_64_
     *ip = (uintptr_t)cursor->stackframe.AddrPC.Offset;
     *sp = (uintptr_t)cursor->stackframe.AddrStack.Offset;
-    if (*ip == 0 || *ip == ((uintptr_t)0)-1) {
+    if (fp)
+        *fp = (uintptr_t)cursor->stackframe.AddrFrame.Offset;
+    if (*ip == 0 || *ip == JL_BT_INTERP_FRAME) {
+        // don't leave special marker in the bt data as it can corrupt the GC.
+        *ip = 0;
         if (!readable_pointer((LPCVOID)*sp))
             return 0;
         cursor->stackframe.AddrPC.Offset = *(DWORD32*)*sp;      // POP EIP (aka RET)
@@ -264,7 +347,11 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
 #else
     *ip = (uintptr_t)cursor->Rip;
     *sp = (uintptr_t)cursor->Rsp;
-    if (*ip == 0 || *ip == ((uintptr_t)0)-1) {
+    if (fp)
+        *fp = (uintptr_t)cursor->Rbp;
+    if (*ip == 0 || *ip == JL_BT_INTERP_FRAME) {
+        // don't leave special marker in the bt data as it can corrupt the GC.
+        *ip = 0;
         if (!readable_pointer((LPCVOID)*sp))
             return 0;
         cursor->Rip = *(DWORD64*)*sp;      // POP RIP (aka RET)
@@ -312,15 +399,25 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
     return unw_init_local(cursor, context) == 0;
 }
 
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
+static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintptr_t *fp)
 {
     unw_word_t reg;
     if (unw_get_reg(cursor, UNW_REG_IP, &reg) < 0)
         return 0;
-    *ip = reg;
+    // don't leave special marker in the bt data as it can corrupt the GC.
+    *ip = reg == JL_BT_INTERP_FRAME ? 0 : reg;
     if (unw_get_reg(cursor, UNW_REG_SP, &reg) < 0)
         return 0;
     *sp = reg;
+#ifdef UNW_REG_FP
+    if (unw_get_reg(cursor, UNW_REG_FP, &reg) < 0)
+        return 0;
+    if (fp)
+        *fp = reg;
+#else
+    if (fp)
+        *fp = 0;
+#endif
     return unw_step(cursor) > 0;
 }
 
@@ -336,7 +433,7 @@ size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize,
     bt_cursor_t cursor;
     if (!jl_unw_init_dwarf(&cursor, context))
         return 0;
-    n = jl_unw_stepn(&cursor, data, NULL, maxsize);
+    n = jl_unw_stepn(&cursor, data, NULL, maxsize, 1);
     return n > maxsize ? maxsize : n;
 }
 #endif
@@ -348,7 +445,7 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
     return 0;
 }
 
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
+static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintptr_t *fp)
 {
     return 0;
 }
@@ -420,12 +517,23 @@ JL_DLLEXPORT void jl_gdblookup(uintptr_t ip)
     free(frames);
 }
 
-JL_DLLEXPORT void jlbacktrace(void)
+JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    size_t i, n = ptls->bt_size; // ptls->bt_size > 400 ? 400 : ptls->bt_size;
-    for (i = 0; i < n; i++)
-        jl_gdblookup(ptls->bt_data[i] - 1);
+    jl_excstack_t *s = jl_get_ptls_states()->current_task->excstack;
+    if (!s)
+        return;
+    size_t bt_size = jl_excstack_bt_size(s, s->top);
+    uintptr_t *bt_data = jl_excstack_bt_data(s, s->top);
+    for (size_t i = 0; i < bt_size; ) {
+        if (bt_data[i] == JL_BT_INTERP_FRAME) {
+            jl_safe_printf("Interpreter frame (ip: %d)\n", (int)bt_data[i+2]);
+            jl_static_show(JL_STDERR, (jl_value_t*)bt_data[i+1]);
+            i += 3;
+        } else {
+            jl_gdblookup(bt_data[i] - 1);
+            i += 1;
+        }
+    }
 }
 
 #ifdef __cplusplus
