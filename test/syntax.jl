@@ -1928,3 +1928,10 @@ end
 # Stream positioning after parsing var
 @test Meta.parse("var'", 1, greedy=false) == (:var, 4)
 
+# issue #33135
+function f33135(x::T) where {C1, T}
+    let C1 = 1, C2 = 2
+        C1
+    end
+end
+@test f33135(0) == 1
