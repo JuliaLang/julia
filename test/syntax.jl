@@ -1931,3 +1931,12 @@ end
 # quoted names in import (#33158)
 @test Meta.parse("import Base.:+") == :(import Base.+)
 @test Meta.parse("import Base.Foo.:(==).bar") == :(import Base.Foo.==.bar)
+
+# issue #33135
+function f33135(x::T) where {C1, T}
+    let C1 = 1, C2 = 2
+        C1
+    end
+end
+@test f33135(0) == 1
+

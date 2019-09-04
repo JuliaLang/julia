@@ -917,3 +917,25 @@ end
 ## Lower priority: Add LQ, QL and RQ factorizations
 
 # FIXME! Should add balancing option through xgebal
+
+
+det(Q::QRPackedQ) = _det_tau(Q.τ)
+
+det(Q::QRCompactWYQ) =
+    prod(i -> _det_tau(_diagview(Q.T[:, i:min(i + size(Q.T, 1), size(Q.T, 2))])),
+         1:size(Q.T, 1):size(Q.T, 2))
+
+_diagview(A) = @view A[diagind(A)]
+
+# Compute `det` from the number of Householder reflections.  Handle
+# the case `Q.τ` contains zeros.
+_det_tau(τs::AbstractVector{<:Real}) =
+    isodd(count(!iszero, τs)) ? -one(eltype(τs)) : one(eltype(τs))
+
+# In complex case, we need to compute the non-unit eigenvalue `λ = 1 - c*τ`
+# (where `c = v'v`) of each Householder reflector.  As we know that the
+# reflector must have the determinant of 1, it must satisfy `abs2(λ) == 1`.
+# Combining this with the constraint `c > 0`, it turns out that the eigenvalue
+# (hence the determinant) can be computed as `λ = -sign(τ)^2`.
+# See: https://github.com/JuliaLang/julia/pull/32887#issuecomment-521935716
+_det_tau(τs) = prod(τ -> iszero(τ) ? one(τ) : -sign(τ)^2, τs)
