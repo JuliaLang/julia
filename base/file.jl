@@ -582,7 +582,7 @@ function mktempdir(parent::AbstractString=tempdir();
 
     req = Libc.malloc(_sizeof_uv_fs)
     try
-        ret = ccall(:uv_fs_mkdtemp, Int32,
+        ret = ccall(:uv_fs_mkdtemp, Cint,
                     (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
                     C_NULL, req, tpath, C_NULL)
         if ret < 0
