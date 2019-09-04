@@ -159,7 +159,7 @@ end
 end
 
 # issue #5948
-@test string(reinterpret(Float16, 0x7bff)) == "Float16(65500.0)"
+@test string(reinterpret(Float16, 0x7bff)) == "65500.0"
 
 #  #9939 (and #9897)
 @test rationalize(Float16(0.1)) == 1//10
