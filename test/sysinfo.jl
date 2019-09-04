@@ -6,9 +6,3 @@
 sprint(Base.Sys.cpu_summary)
 @test Base.Sys.uptime() > 0
 Base.Sys.loadavg()
-
-# Check that which behaves correctly when passed an empty string
-@test isnothing(Base.Sys.which(""))
-
-# Check that which behaves correctly when passed a blank string
-@test isnothing(Base.Sys.which(" "))
