@@ -1930,3 +1930,4 @@ end
 
 # quoted names in import (#33152)
 @test Meta.parse("import Base.:+") == :(import Base.+)
+@test Meta.parse("import Base.Foo.:(==).bar") == :(import Base.Foo.==.bar)
