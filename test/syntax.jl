@@ -1928,3 +1928,5 @@ end
 # Stream positioning after parsing var
 @test Meta.parse("var'", 1, greedy=false) == (:var, 4)
 
+# quoted names in import (#33152)
+@test Meta.parse("import Base.:+") == :(import Base.+)
