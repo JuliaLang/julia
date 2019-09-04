@@ -361,8 +361,10 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
     lilist_idx = Dict{T, Int}()
     recursive = Set{T}()
     first = true
+    totalshots = 0
     for ip in data
         if ip == 0
+            totalshots += 1
             empty!(recursive)
             first = true
             continue
@@ -390,11 +392,11 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
         end
     end
     @assert length(lilist) == length(n) == length(m) == length(lilist_idx)
-    return (lilist, n, m)
+    return (lilist, n, m, totalshots)
 end
 
 function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, cols::Int, fmt::ProfileFormat)
-    lilist, n, m = parse_flat(fmt.combine ? StackFrame : UInt64, data, lidict, fmt.C)
+    lilist, n, m, totalshots = parse_flat(fmt.combine ? StackFrame : UInt64, data, lidict, fmt.C)
     if isempty(lilist)
         warning_empty()
         return
@@ -406,6 +408,7 @@ function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfo
         m = m[keep]
     end
     print_flat(io, lilist, n, m, cols, fmt)
+    Base.println(io, "Total snapshots: ", totalshots)
     nothing
 end
 
@@ -691,6 +694,7 @@ function tree(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoFlatDict, Line
         return
     end
     print_tree(io, root, cols, fmt)
+    Base.println(io, "Total snapshots: ", root.count)
     nothing
 end
 
