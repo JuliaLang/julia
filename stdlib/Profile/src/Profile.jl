@@ -418,14 +418,14 @@ function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int},
         maxfunc = max(maxfunc, length(string(li.func)))
     end
     wline = max(5, ndigits(maxline))
-    ntext = cols - wcounts - wline - 3
-    maxfunc += 25
+    ntext = max(20, cols - wcounts - wself - wline - 3)
+    maxfunc += 25 # for type signatures
     if maxfile + maxfunc <= ntext
         wfile = maxfile
         wfunc = maxfunc
     else
-        wfile = floor(Integer, 2*ntext/5)
-        wfunc = floor(Integer, 3*ntext/5)
+        wfile = 2*ntext÷5
+        wfunc = 3*ntext÷5
     end
     println(io, lpad("Count", wcounts, " "), " ", rpad("File", wfile, " "), " ",
         lpad("Line", wline, " "), " ", rpad("Function", wfunc, " "))
@@ -472,9 +472,9 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
     nindent = min(cols>>1, level)
     ndigcounts = ndigits(maximum(counts))
     ndigline = maximum([tree_format_linewidth(x) for x in lilist])
-    ntext = cols - nindent - ndigcounts - ndigline - 5
-    widthfile = floor(Integer, 0.4ntext)
-    widthfunc = floor(Integer, 0.6ntext)
+    ntext = max(20, cols - nindent - ndigcounts - ndigline - 5)
+    widthfile = 2*ntext÷5
+    widthfunc = 3*ntext÷5
     strs = Vector{String}(undef, length(lilist))
     showextra = false
     if level > nindent
