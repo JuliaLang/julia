@@ -142,13 +142,13 @@ static void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exceptio
     if (!ptls2->safe_restore) {
         assert(exception);
         ptls2->bt_size = rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE,
-                                           (bt_context_t*)&state);
+                                           (bt_context_t*)&state, 1);
         ptls2->sig_exception = exception;
     }
     jl_call_in_state(ptls2, &state, &jl_sig_throw);
     ret = thread_set_state(thread, x86_THREAD_STATE64,
                            (thread_state_t)&state, count);
-    HANDLE_MACH_ERROR("thread_set_state",ret);
+    HANDLE_MACH_ERROR("thread_set_state", ret);
 }
 
 //exc_server uses dlsym to find symbol
@@ -343,7 +343,7 @@ static void jl_exit_thread0(int exitstate)
     jl_call_in_state(ptls2, &state, (void (*)(void))exit_func);
     ret = thread_set_state(thread, x86_THREAD_STATE64,
                            (thread_state_t)&state, count);
-    HANDLE_MACH_ERROR("thread_set_state",ret);
+    HANDLE_MACH_ERROR("thread_set_state", ret);
 
     ret = thread_resume(thread);
     HANDLE_MACH_ERROR("thread_resume", ret);
@@ -448,10 +448,10 @@ void *mach_profile_listener(void *arg)
 
                 if (forceDwarf == 0) {
                     // Save the backtrace
-                    bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
+                    bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, 0);
                 }
                 else if (forceDwarf == 1) {
-                    bt_size_cur += rec_backtrace_ctx_dwarf((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
+                    bt_size_cur += rec_backtrace_ctx_dwarf((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, 0);
                 }
                 else if (forceDwarf == -1) {
                     jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
@@ -459,7 +459,7 @@ void *mach_profile_listener(void *arg)
 
                 forceDwarf = -2;
 #else
-                bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
+                bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, 0);
 #endif
 
                 // Mark the end of this block with 0

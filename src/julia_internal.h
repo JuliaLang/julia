@@ -626,9 +626,9 @@ typedef int bt_cursor_t;
 // Special marker in backtrace data for encoding interpreter frames
 #define JL_BT_INTERP_FRAME (((uintptr_t)0)-1)
 size_t rec_backtrace(uintptr_t *data, size_t maxsize) JL_NOTSAFEPOINT;
-size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize, bt_context_t *ctx) JL_NOTSAFEPOINT;
+size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize, bt_context_t *ctx, int add_interp_frames) JL_NOTSAFEPOINT;
 #ifdef LIBOSXUNWIND
-size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
+size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize, bt_context_t *ctx, int add_interp_frames) JL_NOTSAFEPOINT;
 #endif
 JL_DLLEXPORT void jl_get_backtrace(jl_array_t **bt, jl_array_t **bt2);
 void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_t *bt_size);
