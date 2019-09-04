@@ -535,6 +535,10 @@ withenv("PATH" => "$(Sys.BINDIR)$(psep)$(ENV["PATH"])") do
     @test Sys.which(julia_exe) == realpath(julia_exe)
 end
 
+# Check that which behaves correctly when passed an empty string
+@test Base.Sys.which("") === nothing
+
+
 mktempdir() do dir
     withenv("PATH" => "$(dir)$(psep)$(ENV["PATH"])") do
         # Test that files lacking executable permissions fail Sys.which
@@ -551,8 +555,15 @@ mktempdir() do dir
             @test Sys.which(foo_path) === nothing
         end
 
+    end
+
+    # Ensure these tests are done only with a PATH of known contents
+    withenv("PATH" => "$(dir)") do
         # Test that completely missing files also return nothing
         @test Sys.which("this_is_not_a_command") === nothing
+
+        # Check that which behaves correctly when passed a blank string
+        @test Base.Sys.which(" ") === nothing
     end
 end
 

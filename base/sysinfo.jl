@@ -368,6 +368,9 @@ for executable permissions only (with `.exe` and `.com` extensions added on
 Windows platforms); no searching of `PATH` is performed.
 """
 function which(program_name::String)
+    if isempty(program_name)
+       return nothing
+    end
     # Build a list of program names that we're going to try
     program_names = String[]
     base_pname = basename(program_name)
@@ -410,7 +413,7 @@ function which(program_name::String)
         for pname in program_names
             program_path = joinpath(path_dir, pname)
             # If we find something that matches our name and we can execute
-            if isexecutable(program_path)
+            if isfile(program_path) && isexecutable(program_path)
                 return realpath(program_path)
             end
         end
