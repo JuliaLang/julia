@@ -7,8 +7,6 @@ module StackTraces
 
 
 import Base: hash, ==, show
-using Base.Printf: @printf
-using Base: something
 
 export StackTrace, StackFrame, stacktrace
 
@@ -243,7 +241,7 @@ is_top_level_frame(f::StackFrame) = f.linfo isa Core.CodeInfo || (f.linfo === no
 function show_spec_linfo(io::IO, frame::StackFrame)
     if frame.linfo === nothing
         if frame.func === empty_sym
-            @printf(io, "ip:%#x", frame.pointer)
+            print(io, "ip:0x", string(frame.pointer, base=16))
         elseif frame.func === top_level_scope_sym
             print(io, "top-level scope")
         else
