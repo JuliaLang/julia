@@ -352,82 +352,62 @@ end
 
 ## Print as a flat list
 # Counts the number of times each line appears, at any nesting level
-function count_flat(data::Vector{UInt64})
-    linecount = Dict{UInt64, Int}()
-    for ip in data
-        if ip != 0
-            linecount[ip] = get(linecount, ip, 0) + 1
-        end
-    end
-    iplist = Vector{UInt64}()
-    n = Vector{Int}()
-    for (k, v) in linecount
-        push!(iplist, k)
-        push!(n, v)
-    end
-    return (iplist, n)
-end
-
-function parse_flat(iplist::Vector{UInt64}, n::Vector{Int}, lidict::Union{LineInfoDict, LineInfoFlatDict}, C::Bool)
-    # Convert instruction pointers to names & line numbers
+# Merging multiple equivalent entries and recursive calls
+function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, C::Bool) where {T}
     lilist = StackFrame[]
-    nlist = Int[]
-    for (ip, count) in zip(iplist, n)
+    n = Int[]
+    lilist_idx = Dict{T, Int}()
+    recursive = Set{T}()
+    for ip in data
+        if ip == 0
+            empty!(recursive)
+            continue
+        end
         frames = lidict[ip]
         nframes = (frames isa Vector ? length(frames) : 1)
-        # add all the inlining frames
         for i = nframes:-1:1
             frame = (frames isa Vector ? frames[i] : frames)
-            # Keep only the interpretable ones
-            # The ones with no line number might appear multiple times in a single
-            # backtrace, giving the wrong impression about the total number of backtraces.
-            # Delete them too.
-            if frame != UNKNOWN && frame.line != 0 && (C || !frame.from_c)
+            !C && frame.from_c && continue
+            key = (T === UInt64 ? ip : frame)
+            idx = get!(lilist_idx, key, length(lilist) + 1)
+            if idx > length(lilist)
+                push!(recursive, key)
                 push!(lilist, frame)
-                push!(nlist, count)
+                push!(n, 1)
+            elseif !(key in recursive)
+                push!(recursive, key)
+                n[idx] += 1
             end
         end
     end
-    return (lilist, nlist)
+    @assert length(lilist) == length(n) == length(lilist_idx)
+    return (lilist, n)
 end
 
 function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, cols::Int, fmt::ProfileFormat)
-    iplist, n = count_flat(data)
-    lilist, n = parse_flat(iplist, n, lidict, fmt.C)
-    if isempty(n)
+    lilist, n = parse_flat(fmt.combine ? StackFrame : UInt64, data, lidict, fmt.C)
+    if isempty(lilist)
         warning_empty()
         return
     end
-    print_flat(io, lilist, n, cols, fmt)
+    if false # optional: drop the "non-interpretable" ones
+        keep = map(frame -> frame != UNKNOWN && frame.line != 0, lilist)
+        lilist = lilist[keep]
+        n = n[keep]
+    end
+    print_flat(io, lilist, n, m, cols, fmt)
     nothing
 end
 
 function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int},
         cols::Int, fmt::ProfileFormat)
-    p = liperm(lilist)
-    lilist = lilist[p]
-    n = n[p]
-    if fmt.combine
-        # now that lilist is sorted by li,
-        # combine adjacent entries that are equivlent
-        j = 1
-        for i = 2:length(lilist)
-            if lilist[i] == lilist[j]
-                n[j] += n[i]
-                n[i] = 0
-            else
-                j = i
-            end
-        end
-        keep = n .> 0
-        n = n[keep]
-        lilist = lilist[keep]
-    end
     if fmt.sortedby == :count
         p = sortperm(n)
-        n = n[p]
-        lilist = lilist[p]
+    else
+        p = liperm(lilist)
     end
+    lilist = lilist[p]
+    n = n[p]
     wcounts = max(6, ndigits(maximum(n)))
     maxline = 0
     maxfile = 6
@@ -453,13 +433,24 @@ function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int},
         n[i] < fmt.mincount && continue
         li = lilist[i]
         Base.print(io, lpad(string(n[i]), wcounts, " "), " ")
-        Base.print(io, rpad(rtruncto(string(li.file), wfile), wfile, " "), " ")
-        Base.print(io, lpad(string(li.line), wline, " "), " ")
-        fname = string(li.func)
-        if !li.from_c && li.linfo !== nothing
-            fname = sprint(show_spec_linfo, li)
+        if li == UNKNOWN
+            if !fmt.combine && li.pointer != 0
+                Base.print(io, "@0x", string(li.pointer, base=16))
+            else
+                Base.print(io, "[any unknown stackframes]")
+            end
+        else
+            file = string(li.file)
+            isempty(file) && (file = "[unknown file]")
+            Base.print(io, rpad(rtruncto(file, wfile), wfile, " "), " ")
+            Base.print(io, lpad(li.line > 0 ? string(li.line) : "?", wline, " "), " ")
+            fname = string(li.func)
+            if !li.from_c && li.linfo !== nothing
+                fname = sprint(show_spec_linfo, li)
+            end
+            isempty(fname) && (fname = "[unknown function]")
+            Base.print(io, rpad(ltruncto(fname, wfunc), wfunc, " "))
         end
-        Base.print(io, rpad(ltruncto(fname, wfunc), wfunc, " "))
         println(io)
     end
     nothing
