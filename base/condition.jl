@@ -22,7 +22,6 @@ function trylock end
 function islocked end
 unlockall(l::AbstractLock) = unlock(l) # internal function for implementing `wait`
 relockall(l::AbstractLock, token::Nothing) = lock(l) # internal function for implementing `wait`
-assert_havelock(l::AbstractLock) = assert_havelock(l, Threads.threadid())
 assert_havelock(l::AbstractLock, tid::Integer) =
     (islocked(l) && tid == Threads.threadid()) ? nothing : concurrency_violation()
 assert_havelock(l::AbstractLock, tid::Task) =
