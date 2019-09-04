@@ -1150,4 +1150,4 @@ end
 end
 
 # real(C) with C a Complex Unionall
-@test real(Complex{<:AbstractFloat}) = AbstractFloat
+@test real(Complex{<:AbstractFloat}) == AbstractFloat
