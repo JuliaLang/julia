@@ -6,7 +6,7 @@ New language features
 
 * Structs with all isbits and isbitsunion fields are now stored inline in arrays ([#32448]).
 
-* `import` now allows quoted symbols, e.g. `import Base.:+` ([#33152]).
+* `import` now allows quoted symbols, e.g. `import Base.:+` ([#33158]).
 
 Language changes
 ----------------
