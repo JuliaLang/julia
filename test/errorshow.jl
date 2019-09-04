@@ -206,7 +206,7 @@ import ..@except_str
 global +
 +() = nothing
 err_str = @except_str 1 + 2 MethodError
-@test occursin("import Base.+", err_str)
+@test occursin("import Base.:+", err_str)
 
 err_str = @except_str Float64[](1) MethodError
 @test !occursin("import Base.Array", err_str)
