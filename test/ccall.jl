@@ -11,6 +11,17 @@ const libccalltest = "libccalltest"
 const verbose = false
 ccall((:set_verbose, libccalltest), Cvoid, (Int32,), verbose)
 
+@eval function cvarargs()
+    strp = Ref{Ptr{Cchar}}(0)
+    fmt = "%3.1f"
+    len = ccall(:asprintf, Cint, (Ptr{Ptr{Cchar}}, Cstring, Cfloat...), strp, fmt, 0.1)
+    str = unsafe_string(strp[], len)
+    Libc.free(strp[])
+    return str
+end
+@test cvarargs() == "0.1"
+
+
 # test multiple-type vararg handling (there's no syntax for this currently)
 @eval function foreign_varargs()
     strp = Ref{Ptr{Cchar}}(0)
@@ -29,6 +40,7 @@ ccall((:set_verbose, libccalltest), Cvoid, (Int32,), verbose)
     return str
 end
 @test foreign_varargs() == "hi+1-2-3-4-5-6-7-8-9-10-11-12-13-14-15-1.1-2.2-3.3-4.4-5.5-6.6-7.7-8.8-9.9\n"
+
 
 # Test for proper argument register truncation
 ccall_test_func(x) = ccall((:testUcharX, libccalltest), Int32, (UInt8,), x % UInt8)
