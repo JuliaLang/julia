@@ -121,7 +121,8 @@ The keyword arguments can be any combination of:
  - `maxdepth` -- Limits the depth higher than `maxdepth` in the `:tree` format.
 
  - `sortedby` -- Controls the order in `:flat` format. `:filefuncline` (default) sorts by the source
-    line, whereas `:count` sorts in order of number of collected samples.
+    line, `:count` sorts in order of number of collected samples, and `:overhead` sorts by the number of samples
+    incurred by each function by itself.
 
  - `noisefloor` -- Limits frames that exceed the heuristic noise floor of the sample (only applies to format `:tree`).
     A suggested value to try for this is 2.0 (the default is 0). This parameter hides samples for which `n <= noisefloor * √N`,
@@ -351,21 +352,24 @@ end
 
 
 ## Print as a flat list
-# Counts the number of times each line appears, at any nesting level
+# Counts the number of times each line appears, at any nesting level and at the topmost level
 # Merging multiple equivalent entries and recursive calls
 function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, C::Bool) where {T}
     lilist = StackFrame[]
     n = Int[]
+    m = Int[]
     lilist_idx = Dict{T, Int}()
     recursive = Set{T}()
+    first = true
     for ip in data
         if ip == 0
             empty!(recursive)
+            first = true
             continue
         end
         frames = lidict[ip]
         nframes = (frames isa Vector ? length(frames) : 1)
-        for i = nframes:-1:1
+        for i = 1:nframes
             frame = (frames isa Vector ? frames[i] : frames)
             !C && frame.from_c && continue
             key = (T === UInt64 ? ip : frame)
@@ -374,18 +378,23 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
                 push!(recursive, key)
                 push!(lilist, frame)
                 push!(n, 1)
+                push!(m, 0)
             elseif !(key in recursive)
                 push!(recursive, key)
                 n[idx] += 1
             end
+            if first
+                m[idx] += 1
+                first = false
+            end
         end
     end
-    @assert length(lilist) == length(n) == length(lilist_idx)
-    return (lilist, n)
+    @assert length(lilist) == length(n) == length(m) == length(lilist_idx)
+    return (lilist, n, m)
 end
 
 function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, cols::Int, fmt::ProfileFormat)
-    lilist, n = parse_flat(fmt.combine ? StackFrame : UInt64, data, lidict, fmt.C)
+    lilist, n, m = parse_flat(fmt.combine ? StackFrame : UInt64, data, lidict, fmt.C)
     if isempty(lilist)
         warning_empty()
         return
@@ -394,22 +403,28 @@ function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfo
         keep = map(frame -> frame != UNKNOWN && frame.line != 0, lilist)
         lilist = lilist[keep]
         n = n[keep]
+        m = m[keep]
     end
     print_flat(io, lilist, n, m, cols, fmt)
     nothing
 end
 
-function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int},
+function print_flat(io::IO, lilist::Vector{StackFrame},
+        n::Vector{Int}, m::Vector{Int},
         cols::Int, fmt::ProfileFormat)
     if fmt.sortedby == :count
         p = sortperm(n)
+    elseif fmt.sortedby == :overhead
+        p = sortperm(m)
     else
         p = liperm(lilist)
     end
     lilist = lilist[p]
     n = n[p]
+    m = m[p]
     wcounts = max(6, ndigits(maximum(n)))
-    maxline = 0
+    wself = max(9, ndigits(maximum(m)))
+    maxline = 1
     maxfile = 6
     maxfunc = 10
     for li in lilist
@@ -427,12 +442,13 @@ function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int},
         wfile = 2*ntext÷5
         wfunc = 3*ntext÷5
     end
-    println(io, lpad("Count", wcounts, " "), " ", rpad("File", wfile, " "), " ",
-        lpad("Line", wline, " "), " ", rpad("Function", wfunc, " "))
+    println(io, lpad("Count", wcounts, " "), " ", lpad("Overhead", wself, " "), " ",
+            rpad("File", wfile, " "), " ", lpad("Line", wline, " "), " ", rpad("Function", wfunc, " "))
     for i = 1:length(n)
         n[i] < fmt.mincount && continue
         li = lilist[i]
         Base.print(io, lpad(string(n[i]), wcounts, " "), " ")
+        Base.print(io, lpad(string(m[i]), wself, " "), " ")
         if li == UNKNOWN
             if !fmt.combine && li.pointer != 0
                 Base.print(io, "@0x", string(li.pointer, base=16))
