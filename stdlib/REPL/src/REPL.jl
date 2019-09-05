@@ -839,7 +839,7 @@ function setup_interface(
         # Transform "foo bar baz" into `foo bar baz` (shell quoting)
         # and pass into Base.repl_cmd for processing (handles `ls` and `cd`
         # special)
-        on_done = respond(repl, julia_prompt) do line
+        on_done = respond(shellmode, repl, julia_prompt, pass_empty=true) do line
             Expr(:call, :(Base.repl_cmd),
                 :(Base.cmd_gen($(Base.shell_parse(line)[1]))),
                 outstream(repl))
