@@ -165,8 +165,8 @@ try
 catch
     bt = stacktrace(catch_backtrace())
 end
-@test bt[2].line == 42
-@test bt[2].file === :foo
+@test bt[1].line == 42
+@test bt[1].file === :foo
 end
 
 @noinline f33065(x; b=1.0, a="") = error()
@@ -190,4 +190,20 @@ let bt
         bt = stacktrace(catch_backtrace())
     end
     @test any(s->startswith(string(s), "f33065(::Float32, ::Float32; b::Float64, a::String, c::"), bt)
+end
+
+# Test hidden frames
+function bt_not_hidden_frame()
+    backtrace()
+end
+Base.@hide_in_stacktrace function bt_hidden_frame()
+    bt_not_hidden_frame()
+end
+
+let bt = bt_hidden_frame()
+    st = stacktrace(bt, true)
+    hidden_frame = st[findfirst(s->s.func == :bt_hidden_frame, st)]
+    @test StackTraces.is_hidden(hidden_frame)
+    not_hidden_frame = st[findfirst(s->s.func == :bt_not_hidden_frame, st)]
+    @test !StackTraces.is_hidden(not_hidden_frame)
 end

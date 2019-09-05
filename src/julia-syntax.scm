@@ -499,6 +499,7 @@
           name positional-sparams pargl-all
           `(block
             ,@(without-generated prologue)
+            (meta hide_in_stacktrace)
             ,(let (;; call mangled(vals..., [rest_kw,] pargs..., [vararg]...)
                    (ret `(return (call ,mangled
                                        ,@(if ordered-defaults keynames vals)
@@ -519,6 +520,7 @@
              (call (core kwftype) ,ftype)) ,kw ,@pargl ,@vararg)
           `(block
             ,@(filter linenum? prologue)
+            (meta hide_in_stacktrace)
             ,(scopenest
               keynames
               (map (lambda (v dflt)

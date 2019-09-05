@@ -1054,6 +1054,7 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
             ci.max_world = reinterpret(UInt, deserialize(s))
         end
     end
+    ci.hide_in_stacktrace = deserialize(s)
     ci.inferred = deserialize(s)
     ci.inlineable = deserialize(s)
     ci.propagate_inbounds = deserialize(s)

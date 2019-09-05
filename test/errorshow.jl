@@ -674,7 +674,8 @@ let buf = IOBuffer()
 end
 
 # pr #32814
-let t1 = @async(error(1)),
+let error32814() = error(1),
+    t1 = @async(error32814()),
     t2 = @async(wait(t1))
     local e
     try
@@ -686,7 +687,7 @@ let t1 = @async(error(1)),
     showerror(buf, e)
     s = String(take!(buf))
     @test length(findall("Stacktrace:", s)) == 2
-    @test occursin("[1] error(::Int", s)
+    @test occursin(r"\[1\].*error32814", s)
 end
 
 module TestMethodShadow
