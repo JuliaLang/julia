@@ -424,6 +424,17 @@ end
     @test_throws DimensionMismatch dot(sprand(5,5,0.2),sprand(5,6,0.2))
 end
 
+@testset "generalized dot product" begin
+    for i = 1:5
+        A = sprand(ComplexF64, 10, 15, 0.4)
+        Av = view(A, :, :)
+        x = sprand(ComplexF64, 10, 0.5)
+        y = sprand(ComplexF64, 15, 0.5)
+        @test dot(x, A, y) ≈ dot(Vector(x), A, Vector(y)) ≈ (Vector(x)' * Matrix(A)) * Vector(y)
+        @test dot(x, A, y) ≈ dot(x, Av, y)
+    end
+end
+
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
 using .Main.Quaternions

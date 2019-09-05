@@ -284,6 +284,37 @@ function logabsdet(F::UpperHessenberg; shift::Number=false)
     return (logdeterminant, P)
 end
 
+function dot(x::AbstractVector, H::UpperHessenberg, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    m = size(H, 1)
+    (length(x) == m == length(y)) || throw(DimensionMismatch())
+    if iszero(m)
+        return dot(zero(eltype(x)), zero(eltype(H)), zero(eltype(y)))
+    end
+    x₁ = x[1]
+    r = dot(x₁, H[1,1], y[1])
+    r += dot(x[2], H[2,1], y[1])
+    @inbounds for j in 2:m-1
+        yj = y[j]
+        if !iszero(yj)
+            temp = adjoint(H[1,j]) * x₁
+            @simd for i in 2:j+1
+                temp += adjoint(H[i,j]) * x[i]
+            end
+            r += dot(temp, yj)
+        end
+    end
+    ym = y[m]
+    if !iszero(ym)
+        temp = adjoint(H[1,m]) * x₁
+        @simd for i in 2:m
+            temp += adjoint(H[i,m]) * x[i]
+        end
+        r += dot(temp, ym)
+    end
+    return r
+end
+
 ######################################################################################
 # Hessenberg factorizations Q(H+μI)Q' of A+μI:
 

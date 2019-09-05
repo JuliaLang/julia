@@ -457,6 +457,31 @@ end
 
 *(A::HermOrSym, B::HermOrSym) = A * copyto!(similar(parent(B)), B)
 
+function dot(x::AbstractVector, A::RealHermSymComplexHerm, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    (length(x) == length(y) == size(A, 1)) || throw(DimensionMismatch())
+    data = A.data
+    r = zero(eltype(x)) * zero(eltype(A)) * zero(eltype(y))
+    if A.uplo == 'U'
+        @inbounds for j = 1:length(y)
+            r += dot(x[j], real(data[j,j]), y[j])
+            @simd for i = 1:j-1
+                Aij = data[i,j]
+                r += dot(x[i], Aij, y[j]) + dot(x[j], adjoint(Aij), y[i])
+            end
+        end
+    else # A.uplo == 'L'
+        @inbounds for j = 1:length(y)
+            r += dot(x[j], real(data[j,j]), y[j])
+            @simd for i = j+1:length(y)
+                Aij = data[i,j]
+                r += dot(x[i], Aij, y[j]) + dot(x[j], adjoint(Aij), y[i])
+            end
+        end
+    end
+    return r
+end
+
 # Fallbacks to avoid generic_matvecmul!/generic_matmatmul!
 ## Symmetric{<:Number} and Hermitian{<:Real} are invariant to transpose; peel off the t
 *(transA::Transpose{<:Any,<:RealHermSymComplexSym}, B::AbstractVector) = transA.parent * B

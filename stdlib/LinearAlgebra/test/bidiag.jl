@@ -455,4 +455,17 @@ end
     @test A * Tridiagonal(ones(1, 1)) == A
 end
 
+@testset "generalized dot" begin
+    for elty in (Float64, ComplexF64)
+        dv = randn(elty, 5)
+        ev = randn(elty, 4)
+        x = randn(elty, 5)
+        y = randn(elty, 5)
+        for uplo in (:U, :L)
+            B = Bidiagonal(dv, ev, uplo)
+            @test dot(x, B, y) ≈ dot(B'x, y) ≈ dot(x, Matrix(B), y)
+        end
+    end
+end
+
 end # module TestBidiagonal
