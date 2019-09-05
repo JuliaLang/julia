@@ -113,6 +113,9 @@ end
 macro _propagate_inbounds_meta()
     return Expr(:meta, :inline, :propagate_inbounds)
 end
+macro _hide_in_stacktrace_meta()
+    return Expr(:meta, :hide_in_stacktrace)
+end
 
 function iterate end
 

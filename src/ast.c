@@ -62,6 +62,7 @@ jl_sym_t *throw_undef_if_not_sym; jl_sym_t *getfield_undefref_sym;
 jl_sym_t *gc_preserve_begin_sym; jl_sym_t *gc_preserve_end_sym;
 jl_sym_t *coverageeffect_sym; jl_sym_t *escape_sym;
 jl_sym_t *aliasscope_sym; jl_sym_t *popaliasscope_sym;
+jl_sym_t *hide_in_stacktrace_sym;
 
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -368,6 +369,7 @@ void jl_init_frontend(void)
     copyast_sym = jl_symbol("copyast");
     loopinfo_sym = jl_symbol("loopinfo");
     pure_sym = jl_symbol("pure");
+    hide_in_stacktrace_sym = jl_symbol("hide_in_stacktrace");
     meta_sym = jl_symbol("meta");
     list_sym = jl_symbol("list");
     unused_sym = jl_symbol("#unused#");

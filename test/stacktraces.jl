@@ -191,3 +191,19 @@ let bt
     end
     @test any(s->startswith(string(s), "f33065(::Float32, ::Float32; b::Float64, a::String, c::"), bt)
 end
+
+# Test hidden frames
+function bt_not_hidden_frame()
+    backtrace()
+end
+Base.@hide_in_stacktrace function bt_hidden_frame()
+    bt_not_hidden_frame()
+end
+
+let bt = bt_hidden_frame()
+    st = stacktrace(bt, true)
+    hidden_frame = st[findfirst(s->s.func == :bt_hidden_frame, st)]
+    @test StackTraces.is_hidden_frame(hidden_frame)
+    not_hidden_frame = st[findfirst(s->s.func == :bt_not_hidden_frame, st)]
+    @test !StackTraces.is_hidden_frame(not_hidden_frame)
+end

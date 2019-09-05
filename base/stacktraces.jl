@@ -161,8 +161,7 @@ function stacktrace(trace::Vector{<:Union{Base.InterpreterIP,Ptr{Cvoid}}}, c_fun
     stack = StackTrace()
     for ip in trace
         for frame in lookup(ip)
-            # Skip frames that come from C calls.
-            if c_funcs || !frame.from_c
+            if c_funcs || (!frame.from_c && !is_hidden_frame(frame))
                 push!(stack, frame)
             end
         end

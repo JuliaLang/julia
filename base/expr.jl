@@ -237,6 +237,10 @@ macro pure(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
 end
 
+macro hide_in_stacktrace(ex)
+    esc(ex isa Expr ? Base.pushmeta!(ex, :hide_in_stacktrace) : ex)
+end
+
 """
     @propagate_inbounds
 

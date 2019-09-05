@@ -30,7 +30,10 @@ throw
 
 Raise an `ErrorException` with the given message.
 """
-error(s::AbstractString) = throw(ErrorException(s))
+function error(s::AbstractString)
+    @_hide_in_stacktrace_meta
+    throw(ErrorException(s))
+end
 
 """
     error(msg...)
@@ -39,6 +42,7 @@ Raise an `ErrorException` with the given message.
 """
 function error(s::Vararg{Any,N}) where {N}
     @_noinline_meta
+    @_hide_in_stacktrace_meta
     throw(ErrorException(Main.Base.string(s...)))
 end
 
@@ -56,8 +60,14 @@ exception will continue propagation as if it had not been caught.
     `throw(e)` will preserve the root cause exception on the stack, as
     described in [`catch_stack`](@ref).
 """
-rethrow() = ccall(:jl_rethrow, Bottom, ())
-rethrow(e) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
+function rethrow()
+    @_hide_in_stacktrace_meta
+    ccall(:jl_rethrow, Bottom, ())
+end
+function rethrow(e)  # deprecated
+    @_hide_in_stacktrace_meta
+    ccall(:jl_rethrow_other, Bottom, (Any,), e)
+end
 
 struct InterpreterIP
     code::Union{CodeInfo,Core.MethodInstance,Nothing}
@@ -106,8 +116,10 @@ Get a backtrace object for the current program point.
 """
 function backtrace()
     @_noinline_meta
-    # skip frame for backtrace(). Note that for this to work properly,
-    # backtrace() itself must not be interpreted nor inlined.
+    @_hide_in_stacktrace_meta
+    # skip frame for backtrace(). Note that with `skip > 0` backtrace() must
+    # not be inlined to avoid loosing parent frames.
+    # We also tag it as hidden in case it gets interpreted.
     skip = 1
     bt1, bt2 = ccall(:jl_backtrace_from_here, Ref{SimpleVector}, (Cint, Cint), false, skip)
     return _reformat_bt(bt1::Vector{Ptr{Cvoid}}, bt2::Vector{Any})

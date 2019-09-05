@@ -238,6 +238,8 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                     li->inlineable = 1;
                 else if (ma == (jl_value_t*)propagate_inbounds_sym)
                     li->propagate_inbounds = 1;
+                else if (ma == (jl_value_t*)hide_in_stacktrace_sym)
+                    li->hide_in_stacktrace = 1;
                 else
                     jl_array_ptr_set(meta, ins++, ma);
             }
@@ -319,6 +321,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->rettype = (jl_value_t*)jl_any_type;
     src->min_world = 1;
     src->max_world = ~(size_t)0;
+    src->hide_in_stacktrace = 0;
     src->inferred = 0;
     src->inlineable = 0;
     src->propagate_inbounds = 0;
@@ -605,6 +608,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->nkw = 0;
     m->invokes = NULL;
     m->isva = 0;
+    m->pure = 0;
     m->nargs = 0;
     m->primary_world = 1;
     m->deleted_world = ~(size_t)0;
