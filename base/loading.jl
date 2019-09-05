@@ -287,7 +287,7 @@ function rootof(m::Module)
     rootmodule = Base.moduleroot(m)
     path = pathof(rootmodule)
     path === nothing && return nothing
-    return joinpath(splitpath(path)[1:end-2]...)
+    return dirname(dirname(path))
 end
 
 ## generic project & manifest API ##
