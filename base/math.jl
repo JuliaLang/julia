@@ -40,7 +40,7 @@ end
 """
     exponent_max(T)
 
-Maximum exponent a real floating point number of type `T` can have,
+Maximum value of [`exponent`](@ref) for a real floating point number of type `T`.
 for example 1023 for `Float64`. `exponent_max(T) + 1` is a possible value of
 the exponent field with bias, but it is used as sentinel value for `Inf` and `NaN`.
 """
