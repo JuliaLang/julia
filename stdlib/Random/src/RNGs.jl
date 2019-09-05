@@ -600,6 +600,8 @@ end
 for T in BitInteger_types, R=(1, Inf) # eval because of ambiguity otherwise
     @eval Sampler(::Type{MersenneTwister}, r::UnitRange{$T}, ::Val{$R}) =
         SamplerRangeFast(r)
+    @eval Sampler(::Type{_GLOBAL_RNG}, r::UnitRange{$T}, ::Val{$R}) =
+        SamplerRangeFast(r)
 end
 
 

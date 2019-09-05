@@ -771,3 +771,5 @@ end
         @test rand!(GLOBAL_RNG, A, x) === A == rand!(mt, B, x) === B
     end
 end
+
+@test Random.Sampler(Random.GLOBAL_RNG, 1:4, Val(1)) isa Random.SamplerRangeFast
