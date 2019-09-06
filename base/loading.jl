@@ -1222,6 +1222,18 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     return io
 end
 
+function compilecache_path(pkg::PkgId)::String
+    entrypath, entryfile = cache_file_entry(pkg)
+    cachepath = joinpath(DEPOT_PATH[1], entrypath)
+    isdir(cachepath) || mkpath(cachepath)
+    if pkg.uuid === nothing
+        abspath(cachepath, entryfile) * ".ji"
+    else
+        project_precompile_slug = slug(_crc32c(something(Base.active_project(), "")), 5)
+        abspath(cachepath, string(entryfile, "_", project_precompile_slug, ".ji"))
+    end
+end
+
 """
     Base.compilecache(module::PkgId)
 
@@ -1240,19 +1252,16 @@ const MAX_NUM_PRECOMPILE_FILES = 10
 
 function compilecache(pkg::PkgId, path::String)
     # decide where to put the resulting cache file
-    entrypath, entryfile = cache_file_entry(pkg)
-    cachepath = joinpath(DEPOT_PATH[1], entrypath)
-    isdir(cachepath) || mkpath(cachepath)
-    if pkg.uuid === nothing
-        cachefile = abspath(cachepath, entryfile) * ".ji"
-    else
-        candidates = filter!(x -> startswith(x, entryfile * "_"), readdir(cachepath))
-        if length(candidates) >= MAX_NUM_PRECOMPILE_FILES
-            idx = findmin(mtime.(joinpath.(cachepath, candidates)))[2]
-            rm(joinpath(cachepath, candidates[idx]))
+    cachefile = compilecache_path(pkg)
+    # prune the directory with cache files
+    if pkg.uuid !== nothing
+        cachepath = dirname(cachefile)
+        entrypath, entryfile = cache_file_entry(pkg)
+        cachefiles = filter!(x -> startswith(x, entryfile * "_"), readdir(cachepath))
+        if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES
+            idx = findmin(mtime.(joinpath.(cachepath, cachefiles)))[2]
+            rm(joinpath(cachepath, cachefiles[idx]))
         end
-        project_precompile_slug = slug(_crc32c(something(Base.active_project(), "")), 5)
-        cachefile = abspath(cachepath, string(entryfile, "_", project_precompile_slug, ".ji"))
     end
     # build up the list of modules that we want the precompile process to preserve
     concrete_deps = copy(_concrete_dependencies)
