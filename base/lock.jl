@@ -16,6 +16,7 @@ mutable struct ReentrantLock <: AbstractLock
     ReentrantLock() = new(nothing, GenericCondition{Threads.SpinLock}(), 0)
 end
 
+assert_havelock(l::ReentrantLock) = assert_havelock(l, l.locked_by)
 
 """
     islocked(lock) -> Status (Boolean)

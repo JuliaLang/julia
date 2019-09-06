@@ -151,6 +151,21 @@ end
 threaded_gc_locked(SpinLock)
 threaded_gc_locked(Threads.ReentrantLock)
 
+# Issue 33159
+# Make sure that a Threads.Condition can't be used without being locked, on any thread.
+@testset "Threads.Conditions must be locked" begin
+    c = Threads.Condition()
+    @test_throws Exception notify(c)
+    @test_throws Exception wait(c)
+
+    # If it's locked, but on the wrong thread, it should still throw an exception
+    lock(c)
+    @test_throws Exception fetch(@async notify(c))
+    @test_throws Exception fetch(@async notify(c, all=false))
+    @test_throws Exception fetch(@async wait(c))
+    unlock(c)
+end
+
 # Issue 14726
 # Make sure that eval'ing in a different module doesn't mess up other threads
 orig_curmodule14726 = @__MODULE__
