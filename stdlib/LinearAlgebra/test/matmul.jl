@@ -2,6 +2,7 @@
 
 module TestMatmul
 
+using Base: rtoldefault
 using Test, LinearAlgebra, Random
 using LinearAlgebra: mul!
 
@@ -105,6 +106,19 @@ end
         @test mul!(C, transpose(A), transpose(B)) == A'*B'
         @test LinearAlgebra.mul!(C, adjoint(A), transpose(B)) == A'*transpose(B)
 
+        # Inplace multiply-add
+        α = rand(-10:10)
+        β = rand(-10:10)
+        rand!(C, -10:10)
+        βC = β * C
+        _C0 = copy(C)
+        C0() = (C .= _C0; C)  # reset C but don't change the container type
+        @test mul!(C0(), A, B, α, β) == α*A*B .+ βC
+        @test mul!(C0(), transpose(A), B, α, β) == α*A'*B .+ βC
+        @test mul!(C0(), A, transpose(B), α, β) == α*A*B' .+ βC
+        @test mul!(C0(), transpose(A), transpose(B), α, β) == α*A'*B' .+ βC
+        @test mul!(C0(), adjoint(A), transpose(B), α, β) == α*A'*transpose(B) .+ βC
+
         #test DimensionMismatch for generic_matmatmul
         @test_throws DimensionMismatch LinearAlgebra.mul!(C, adjoint(A), transpose(fill(1,4,4)))
         @test_throws DimensionMismatch LinearAlgebra.mul!(C, adjoint(fill(1,4,4)), transpose(B))
@@ -113,6 +127,9 @@ end
     CC = Matrix{Int}(undef, 2, 2)
     for v in (copy(vv), view(vv, 1:2)), C in (copy(CC), view(CC, 1:2, 1:2))
         @test @inferred(mul!(C, v, adjoint(v))) == [1 2; 2 4]
+
+        C .= [1 0; 0 1]
+        @test @inferred(mul!(C, v, adjoint(v), 2, 3)) == [5 4; 4 11]
     end
 end
 
@@ -127,11 +144,15 @@ end
     CC = Matrix{Int}(undef, 3, 3)
     for v in (copy(vv), view(vv, 1:3)), C in (copy(CC), view(CC, 1:3, 1:3))
         @test mul!(C, v, transpose(v)) == v*v'
+        C .= C0 = rand(-10:10, size(C))
+        @test mul!(C, v, transpose(v), 2, 3) == 2v*v' .+ 3C0
     end
     vvf = map(Float64,vv)
     CC = Matrix{Float64}(undef, 3, 3)
     for vf in (copy(vvf), view(vvf, 1:3)), C in (copy(CC), view(CC, 1:3, 1:3))
         @test mul!(C, vf, transpose(vf)) == vf*vf'
+        C .= C0 = rand(eltype(C), size(C))
+        @test mul!(C, vf, transpose(vf), 2, 3) == 2vf*vf' .+ 3C0
     end
 end
 
@@ -143,6 +164,17 @@ end
         @test LinearAlgebra.mul!(C, transpose(A), transpose(B)) == transpose(A)*transpose(B)
         @test LinearAlgebra.mul!(C, A, adjoint(B)) == A*transpose(B)
         @test LinearAlgebra.mul!(C, adjoint(A), B) == transpose(A)*B
+
+        # Inplace multiply-add
+        α = rand(Float64)
+        β = rand(Float64)
+        rand!(C)
+        βC = β * C
+        _C0 = copy(C)
+        C0() = (C .= _C0; C)  # reset C but don't change the container type
+        @test mul!(C0(), transpose(A), transpose(B), α, β) ≈ α*transpose(A)*transpose(B) .+ βC
+        @test mul!(C0(), A, adjoint(B), α, β) ≈ α*A*transpose(B) .+ βC
+        @test mul!(C0(), adjoint(A), B, α, β) ≈ α*transpose(A)*B .+ βC
     end
 end
 
@@ -371,6 +403,9 @@ Transpose(x::RootInt) = x
     C = [0]
     mul!(C, a, transpose(a))
     @test C[1] == 9
+    C = [1]
+    mul!(C, a, transpose(a), 2, 3)
+    @test C[1] == 21
     a = [RootInt(2),RootInt(10)]
     @test a*adjoint(a) == [4 20; 20 100]
     A = [RootInt(3) RootInt(5)]
@@ -381,6 +416,20 @@ function test_mul(C, A, B)
     mul!(C, A, B)
     @test Array(A) * Array(B) ≈ C
     @test A*B ≈ C
+
+    # This is similar to how `isapprox` choose `rtol` (when `atol=0`)
+    # but consider all number types involved:
+    rtol = max(rtoldefault.(real.(eltype.((C, A, B))))...)
+
+    rand!(C)
+    T = promote_type(eltype.((A, B))...)
+    α = rand(T)
+    β = rand(T)
+    βArrayC = β * Array(C)
+    βC = β * C
+    mul!(C, A, B, α, β)
+    @test α * Array(A) * Array(B) .+ βArrayC ≈ C  rtol=rtol
+    @test α * A * B .+ βC ≈ C  rtol=rtol
 end
 
 @testset "mul! vs * for special types" begin
@@ -515,6 +564,15 @@ Base.:+(x::Float64, a::A32092) = x + a.x
 Base.:*(x::Float64, a::A32092) = x * a.x
 @testset "Issue #32092" begin
     @test ones(2, 2) * [A32092(1.0), A32092(2.0)] == fill(3.0, (2,))
+end
+
+@testset "strong zero" begin
+    @testset for α in Any[false, 0.0, 0], n in 1:4
+        C = ones(n, n)
+        A = fill!(zeros(n, n), NaN)
+        B = ones(n, n)
+        @test mul!(copy(C), A, B, α, 1.0) == C
+    end
 end
 
 end # module TestMatmul

@@ -18,7 +18,7 @@ Optionally generate an array of normally-distributed random numbers.
 The `Base` module currently provides an implementation for the types
 [`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default), and their
 [`Complex`](@ref) counterparts. When the type argument is complex, the values are drawn
-from the circularly symmetric complex normal distribution.
+from the circularly symmetric complex normal distribution of variance 1 (corresponding to real and imaginary part having independent normal distribution with mean zero and variance `1/2`).
 
 # Examples
 ```jldoctest
@@ -86,7 +86,7 @@ The `Base` module currently provides an implementation for the types
 julia> rng = MersenneTwister(1234);
 
 julia> randexp(rng, Float32)
-2.4835055f0
+2.4835055
 
 julia> randexp(rng, 3, 3)
 3×3 Array{Float64,2}:

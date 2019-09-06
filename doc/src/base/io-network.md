@@ -33,7 +33,6 @@ Base.isreadonly
 Base.iswritable
 Base.isreadable
 Base.isopen
-Base.Grisu.print_shortest
 Base.fd
 Base.redirect_stdout
 Base.redirect_stdout(::Function, ::Any)

@@ -34,13 +34,13 @@ end
 function term(io::IO, md::Admonition, columns)
     col = :default
     # If the types below are modified, the page manual/documentation.md must be updated accordingly.
-    if lowercase(md.title) == "danger"
+    if md.category == "danger"
         col = Base.error_color()
-    elseif lowercase(md.title) == "warning"
+    elseif md.category == "warning"
         col = Base.warn_color()
-    elseif lowercase(md.title) in ("info", "note")
+    elseif md.category in ("info", "note")
         col = Base.info_color()
-    elseif lowercase(md.title) == "tip"
+    elseif md.category == "tip"
         col = :green
     end
     printstyled(io, ' '^margin, "│ "; color=col, bold=true)

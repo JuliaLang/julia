@@ -449,4 +449,23 @@ end
     @test sum(Bidiagonal([1,2,3], [1,2], :L)) == 9
 end
 
+@testset "empty sub-diagonal" begin
+    # `mul!` must use non-specialized method when sub-diagonal is empty
+    A = [1 2 3 4]'
+    @test A * Tridiagonal(ones(1, 1)) == A
+end
+
+@testset "generalized dot" begin
+    for elty in (Float64, ComplexF64)
+        dv = randn(elty, 5)
+        ev = randn(elty, 4)
+        x = randn(elty, 5)
+        y = randn(elty, 5)
+        for uplo in (:U, :L)
+            B = Bidiagonal(dv, ev, uplo)
+            @test dot(x, B, y) ≈ dot(B'x, y) ≈ dot(x, Matrix(B), y)
+        end
+    end
+end
+
 end # module TestBidiagonal

@@ -120,9 +120,9 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                     jl_error("ccall: missing return type");
                 JL_TYPECHK(ccall method definition, type, rt);
                 JL_TYPECHK(ccall method definition, simplevector, at);
-                JL_TYPECHK(ccall method definition, quotenode, jl_exprarg(e, 3));
-                JL_TYPECHK(ccall method definition, symbol, *(jl_value_t**)jl_exprarg(e, 3));
-                JL_TYPECHK(ccall method definition, long, jl_exprarg(e, 4));
+                JL_TYPECHK(ccall method definition, long, jl_exprarg(e, 3));
+                JL_TYPECHK(ccall method definition, quotenode, jl_exprarg(e, 4));
+                JL_TYPECHK(ccall method definition, symbol, *(jl_value_t**)jl_exprarg(e, 4));
                 jl_exprargset(e, 0, resolve_globals(jl_exprarg(e, 0), module, sparam_vals, binding_effects, 1));
                 i++;
             }
@@ -573,6 +573,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->sig = NULL;
     m->slot_syms = NULL;
     m->ambig = jl_nothing;
+    m->resorted = jl_nothing;
     m->roots = NULL;
     m->module = module;
     m->source = NULL;

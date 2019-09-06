@@ -426,27 +426,61 @@ for f in (:+, :-)
 end
 
 ## Matvec
-mul!(y::StridedVector{T}, A::Symmetric{T,<:StridedMatrix}, x::StridedVector{T}) where {T<:BlasFloat} =
-    BLAS.symv!(A.uplo, one(T), A.data, x, zero(T), y)
-mul!(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T}) where {T<:BlasReal} =
-    BLAS.symv!(A.uplo, one(T), A.data, x, zero(T), y)
-mul!(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T}) where {T<:BlasComplex} =
-    BLAS.hemv!(A.uplo, one(T), A.data, x, zero(T), y)
+@inline mul!(y::StridedVector{T}, A::Symmetric{T,<:StridedMatrix}, x::StridedVector{T},
+             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat} =
+    BLAS.symv!(A.uplo, alpha, A.data, x, beta, y)
+@inline mul!(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T},
+             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasReal} =
+    BLAS.symv!(A.uplo, alpha, A.data, x, beta, y)
+@inline mul!(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T},
+             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasComplex} =
+    BLAS.hemv!(A.uplo, alpha, A.data, x, beta, y)
 ## Matmat
-mul!(C::StridedMatrix{T}, A::Symmetric{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat} =
-    BLAS.symm!('L', A.uplo, one(T), A.data, B, zero(T), C)
-mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Symmetric{T,<:StridedMatrix}) where {T<:BlasFloat} =
-    BLAS.symm!('R', B.uplo, one(T), B.data, A, zero(T), C)
-mul!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasReal} =
-    BLAS.symm!('L', A.uplo, one(T), A.data, B, zero(T), C)
-mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix}) where {T<:BlasReal} =
-    BLAS.symm!('R', B.uplo, one(T), B.data, A, zero(T), C)
-mul!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasComplex} =
-    BLAS.hemm!('L', A.uplo, one(T), A.data, B, zero(T), C)
-mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix}) where {T<:BlasComplex} =
-    BLAS.hemm!('R', B.uplo, one(T), B.data, A, zero(T), C)
+@inline mul!(C::StridedMatrix{T}, A::Symmetric{T,<:StridedMatrix}, B::StridedMatrix{T},
+             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat} =
+    BLAS.symm!('L', A.uplo, alpha, A.data, B, beta, C)
+@inline mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Symmetric{T,<:StridedMatrix},
+             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat} =
+    BLAS.symm!('R', B.uplo, alpha, B.data, A, beta, C)
+@inline mul!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T},
+             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasReal} =
+    BLAS.symm!('L', A.uplo, alpha, A.data, B, beta, C)
+@inline mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix},
+             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasReal} =
+    BLAS.symm!('R', B.uplo, alpha, B.data, A, beta, C)
+@inline mul!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T},
+             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasComplex} =
+    BLAS.hemm!('L', A.uplo, alpha, A.data, B, beta, C)
+@inline mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix},
+             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasComplex} =
+    BLAS.hemm!('R', B.uplo, alpha, B.data, A, beta, C)
 
 *(A::HermOrSym, B::HermOrSym) = A * copyto!(similar(parent(B)), B)
+
+function dot(x::AbstractVector, A::RealHermSymComplexHerm, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    (length(x) == length(y) == size(A, 1)) || throw(DimensionMismatch())
+    data = A.data
+    r = zero(eltype(x)) * zero(eltype(A)) * zero(eltype(y))
+    if A.uplo == 'U'
+        @inbounds for j = 1:length(y)
+            r += dot(x[j], real(data[j,j]), y[j])
+            @simd for i = 1:j-1
+                Aij = data[i,j]
+                r += dot(x[i], Aij, y[j]) + dot(x[j], adjoint(Aij), y[i])
+            end
+        end
+    else # A.uplo == 'L'
+        @inbounds for j = 1:length(y)
+            r += dot(x[j], real(data[j,j]), y[j])
+            @simd for i = j+1:length(y)
+                Aij = data[i,j]
+                r += dot(x[i], Aij, y[j]) + dot(x[j], adjoint(Aij), y[i])
+            end
+        end
+    end
+    return r
+end
 
 # Fallbacks to avoid generic_matvecmul!/generic_matmatmul!
 ## Symmetric{<:Number} and Hermitian{<:Real} are invariant to transpose; peel off the t

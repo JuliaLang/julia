@@ -1,12 +1,10 @@
-Julia v1.3 Release Notes
+Julia v1.4 Release Notes
 ========================
 
 New language features
 ---------------------
 
-* Support for Unicode 12.1.0 ([#32002]).
-* Methods can now be added to an abstract type ([#31916]).
-* Added `sincosd(x)` to simultaneously compute the sine and cosine of `x`, where `x` is in degrees ([#30134]).
+* Structs with all isbits and isbitsunion fields are now stored inline in arrays ([#32448]).
 
 Language changes
 ----------------
@@ -15,12 +13,6 @@ Language changes
 Multi-threading changes
 -----------------------
 
-* All system-level I/O operations (e.g. files and sockets) are now thread-safe.
-  This does not include subtypes of `IO` that are entirely in-memory, such as `IOBuffer`,
-  although it specifically does include `BufferStream`.
-  ([#32309], [#32174], [#31981], [#32421]).
-* The global random number generator (`GLOBAL_RNG`) is now thread-safe (and thread-local) ([#32407]).
-* New experimental `Threads.@spawn` macro that runs a task on any available thread ([#32600]).
 
 Build system changes
 --------------------
@@ -29,71 +21,41 @@ Build system changes
 New library functions
 ---------------------
 
-* `findfirst`, `findlast`, `findnext` and `findprev` now accept a character as first argument
-  to search for that character in a string passed as the second argument ([#31664]).
-* New `findall(pattern, string)` method where `pattern` is a string or regex ([#31834]).
-* `istaskfailed` is now documented and exported, like its siblings `istaskdone` and `istaskstarted` ([#32300]).
-* `RefArray` and `RefValue` objects now accept index `CartesianIndex()` in  `getindex` and `setindex!` ([#32653])
+* The `splitpath` function now accepts any `AbstractString` whereas previously it only accepted paths of type `String` ([#33012]).
+* The `tempname` function now takes an optional `parent::AbstractString` argument to give it a directory in which to attempt to produce a temporary path name ([#33090]).
+* The `tempname` function now takes a `cleanup::Bool` keyword argument defaulting to `true`, which causes the process to try to ensure that any file or directory at the path returned by `tempname` is deleted upon process exit ([#33090]).
+* The `readdir` function now takes a `join::Bool` keyword argument defaulting to `false`, which when set causes `readdir` to join its directory argument with each listed name ([#33113]).
+
 
 Standard library changes
 ------------------------
 
-* `Regex` can now be multiplied (`*`) and exponentiated (`^`), like strings ([#23422]).
-* `Cmd` interpolation (``` `$(x::Cmd) a b c` ``` where) now propagates `x`'s process flags
-  (environment, flags, working directory, etc) if `x` is the first interpolant and errors
-  otherwise ([#24353]).
-* Zero-dimensional arrays are now consistently preserved in the return values of mathematical
-  functions that operate on the array(s) as a whole (and are not explicitly broadcasted across their elements).
-  Previously, the functions  `+`, `-`, `*`, `/`, `conj`, `real` and `imag` returned the unwrapped element
-  when operating over zero-dimensional arrays ([#32122]).
-* `IPAddr` subtypes now behave like scalars when used in broadcasting ([#32133]).
-* `Pair` is now treated as a scalar for broadcasting ([#32209]).
-* `clamp` can now handle missing values ([#31066]).
-* `empty` now accepts a `NamedTuple` ([#32534]).
-* `mod` now accepts a unit range as the second argument to easily perform offset modular arithmetic to ensure the result is inside the range ([#32628]).
-* `Sockets.recvfrom` now returns both host and port as an InetAddr ([#32729]).
-* `nothing` can now be `print`ed, and interplated into strings etc. as the string `"nothing"`. It is still not permitted to be interplated into Cmds (i.e. ``echo `$(nothing)` `` will still error without running anything.) ([#32148])
+* The methods of `mktemp` and `mktempdir` which take a function body to pass temporary paths to no longer throw errors if the path is already deleted when the function body returns ([#33091]).
 
 #### Libdl
 
-* `dlopen()` can now be invoked in `do`-block syntax, similar to `open()`.
 
 #### LinearAlgebra
 
-* The BLAS submodule no longer exports `dot`, which conflicts with that in LinearAlgebra ([#31838]).
-* `diagm` and `spdiagm` now accept optional `m,n` initial arguments to specify a size ([#31654]).
-* `Hessenberg` factorizations `H` now support efficient shifted solves `(H+µI) \ b` and determinants, and use a specialized tridiagonal factorization for Hermitian matrices. There is also a new `UpperHessenberg` matrix type ([#31853]).
+* `qr` and `qr!` functions support `blocksize` keyword argument ([#33053]).
+
+* `dot` now admits a 3-argument method `dot(x, A, y)` to compute generalized dot products `dot(x, A*y)`, but without computing and storing the intermediate result `A*y` ([#32739]).
 
 #### SparseArrays
 
-* `SparseMatrixCSC(m,n,colptr,rowval,nzval)` perform consistency checks for arguments:
-  `colptr` must be properly populated and lengths of `colptr`, `rowval`, and `nzval`
-  must be compatible with `m`, `n`, and `eltype(colptr)`.
-* `sparse(I, J, V, m, n)` verifies lengths of `I`, `J`, `V` are equal and compatible with
-  `eltype(I)` and `m`, `n`.
 
 #### Dates
 
-* `DateTime` and `Time` formatting/parsing now supports 12-hour clocks with AM/PM via `I` and `p` codes, similar to `strftime` ([#32308]).
-* Fixed `repr` such that it displays `Time` as it would be entered in Julia ([#32103]).
 
 #### Statistics
 
-* `mean` now accepts both a function argument and a `dims` keyword ([#31576]).
 
 #### Sockets
 
-* Added `InetAddr` constructor from `AbstractString`, representing IP address, and `Integer`,
-  representing port number ([#31459]).
-
-#### Miscellaneous
-
-* `foldr` and `mapfoldr` now work on any iterator that supports `Iterators.reverse`, not just arrays ([#31781]).
 
 Deprecated or removed
 ---------------------
 
-* `@spawn expr` from the `Distributed` standard library should be replaced with `@spawnat :any expr` ([#32600]).
 
 External dependencies
 ---------------------
@@ -101,33 +63,5 @@ External dependencies
 Tooling Improvements
 ---------------------
 
-* The `ClangSA.jl` static analysis package has been imported, which makes use of
-  the clang static analyzer to validate GC invariants in Julia's C code. The analysis
-  may be run using `make -C src analyzegc`.
 
 <!--- generated by NEWS-update.jl: -->
-[#23422]: https://github.com/JuliaLang/julia/issues/23422
-[#24353]: https://github.com/JuliaLang/julia/issues/24353
-[#31066]: https://github.com/JuliaLang/julia/issues/31066
-[#31459]: https://github.com/JuliaLang/julia/issues/31459
-[#31576]: https://github.com/JuliaLang/julia/issues/31576
-[#31654]: https://github.com/JuliaLang/julia/issues/31654
-[#31664]: https://github.com/JuliaLang/julia/issues/31664
-[#31781]: https://github.com/JuliaLang/julia/issues/31781
-[#31834]: https://github.com/JuliaLang/julia/issues/31834
-[#31838]: https://github.com/JuliaLang/julia/issues/31838
-[#31853]: https://github.com/JuliaLang/julia/issues/31853
-[#31916]: https://github.com/JuliaLang/julia/issues/31916
-[#31981]: https://github.com/JuliaLang/julia/issues/31981
-[#32002]: https://github.com/JuliaLang/julia/issues/32002
-[#32103]: https://github.com/JuliaLang/julia/issues/32103
-[#32122]: https://github.com/JuliaLang/julia/issues/32122
-[#32133]: https://github.com/JuliaLang/julia/issues/32133
-[#32174]: https://github.com/JuliaLang/julia/issues/32174
-[#32300]: https://github.com/JuliaLang/julia/issues/32300
-[#32308]: https://github.com/JuliaLang/julia/issues/32308
-[#32309]: https://github.com/JuliaLang/julia/issues/32309
-[#32407]: https://github.com/JuliaLang/julia/issues/32407
-[#32421]: https://github.com/JuliaLang/julia/issues/32421
-[#32534]: https://github.com/JuliaLang/julia/issues/32534
-[#32600]: https://github.com/JuliaLang/julia/issues/32600

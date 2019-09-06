@@ -75,7 +75,6 @@ JL_DLLEXPORT uint32_t jl_getutf8(ios_t *s)
     return wc;
 }
 
-JL_DLLEXPORT int jl_sizeof_uv_mutex(void) { return sizeof(uv_mutex_t); }
 JL_DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
 #ifndef _OS_WINDOWS_
 JL_DLLEXPORT int jl_sizeof_mode_t(void) { return sizeof(mode_t); }
@@ -656,11 +655,7 @@ JL_DLLEXPORT size_t jl_maxrss(void)
 
 JL_DLLEXPORT int jl_threading_enabled(void)
 {
-#ifdef JULIA_ENABLE_THREADING
     return 1;
-#else
-    return 0;
-#endif
 }
 
 #ifdef __cplusplus

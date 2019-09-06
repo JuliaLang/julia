@@ -162,7 +162,12 @@ end
 /(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv/B, A.ev/B)
 ==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (A.ev==B.ev)
 
-function mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
+@inline mul!(A::StridedVecOrMat, B::SymTridiagonal, C::StridedVecOrMat,
+             alpha::Number, beta::Number) =
+    _mul!(A, B, C, MulAddMul(alpha, beta))
+
+@inline function _mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat,
+                          _add::MulAddMul)
     m, n = size(B, 1), size(B, 2)
     if !(m == size(S, 1) == size(C, 1))
         throw(DimensionMismatch("A has first dimension $(size(S,1)), B has $(size(B,1)), C has $(size(C,1)) but all must match"))
@@ -173,6 +178,8 @@ function mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
 
     if m == 0
         return C
+    elseif iszero(_add.alpha)
+        return _rmul_or_fill!(C, _add.beta)
     end
 
     α = S.dv
@@ -186,13 +193,34 @@ function mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
             for i = 1:m - 1
                 x₋, x₀, x₊ = x₀, x₊, B[i + 1, j]
                 β₋, β₀ = β₀, β[i]
-                C[i, j] = β₋*x₋ + α[i]*x₀ + β₀*x₊
+                _modify!(_add, β₋*x₋ + α[i]*x₀ + β₀*x₊, C, (i, j))
             end
-            C[m, j] = β₀*x₀ + α[m]*x₊
+            _modify!(_add, β₀*x₀ + α[m]*x₊, C, (m, j))
         end
     end
 
     return C
+end
+
+function dot(x::AbstractVector, S::SymTridiagonal, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    nx, ny = length(x), length(y)
+    (nx == size(S, 1) == ny) || throw(DimensionMismatch())
+    if iszero(nx)
+        return dot(zero(eltype(x)), zero(eltype(S)), zero(eltype(y)))
+    end
+    dv, ev = S.dv, S.ev
+    x₀ = x[1]
+    x₊ = x[2]
+    sub = transpose(ev[1])
+    r = dot(adjoint(dv[1])*x₀ + adjoint(sub)*x₊, y[1])
+    @inbounds for j in 2:nx-1
+        x₋, x₀, x₊ = x₀, x₊, x[j+1]
+        sup, sub = transpose(sub), transpose(ev[j])
+        r += dot(adjoint(sup)*x₋ + adjoint(dv[j])*x₀ + adjoint(sub)*x₊, y[j])
+    end
+    r += dot(adjoint(transpose(sub))*x₀ + adjoint(dv[nx])*x₊, y[nx])
+    return r
 end
 
 (\)(T::SymTridiagonal, B::StridedVecOrMat) = ldlt(T)\B
@@ -650,3 +678,22 @@ end
 
 Base._sum(A::Tridiagonal, ::Colon) = sum(A.d) + sum(A.dl) + sum(A.du)
 Base._sum(A::SymTridiagonal, ::Colon) = sum(A.dv) + 2sum(A.ev)
+
+function dot(x::AbstractVector, A::Tridiagonal, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    nx, ny = length(x), length(y)
+    (nx == size(A, 1) == ny) || throw(DimensionMismatch())
+    if iszero(nx)
+        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    end
+    x₀ = x[1]
+    x₊ = x[2]
+    dl, d, du = A.dl, A.d, A.du
+    r = dot(adjoint(d[1])*x₀ + adjoint(dl[1])*x₊, y[1])
+    @inbounds for j in 2:nx-1
+        x₋, x₀, x₊ = x₀, x₊, x[j+1]
+        r += dot(adjoint(du[j-1])*x₋ + adjoint(d[j])*x₀ + adjoint(dl[j])*x₊, y[j])
+    end
+    r += dot(adjoint(du[nx-1])*x₀ + adjoint(d[nx])*x₊, y[nx])
+    return r
+end

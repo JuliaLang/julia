@@ -571,7 +571,9 @@ for (fname, elty) in ((:dgemv_,:Float64),
              #      CHARACTER TRANS
              #*     .. Array Arguments ..
              #      DOUBLE PRECISION A(LDA,*),X(*),Y(*)
-        function gemv!(trans::AbstractChar, alpha::($elty), A::AbstractVecOrMat{$elty}, X::AbstractVector{$elty}, beta::($elty), Y::AbstractVector{$elty})
+        function gemv!(trans::AbstractChar, alpha::Union{($elty), Bool},
+                       A::AbstractVecOrMat{$elty}, X::AbstractVector{$elty},
+                       beta::Union{($elty), Bool}, Y::AbstractVector{$elty})
             require_one_based_indexing(A, X, Y)
             m,n = size(A,1),size(A,2)
             if trans == 'N' && (length(X) != n || length(Y) != m)
@@ -656,7 +658,10 @@ for (fname, elty) in ((:dgbmv_,:Float64),
              #       CHARACTER TRANS
              # *     .. Array Arguments ..
              #       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
-        function gbmv!(trans::AbstractChar, m::Integer, kl::Integer, ku::Integer, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, beta::($elty), y::AbstractVector{$elty})
+        function gbmv!(trans::AbstractChar, m::Integer, kl::Integer, ku::Integer,
+                       alpha::Union{($elty), Bool}, A::AbstractMatrix{$elty},
+                       x::AbstractVector{$elty}, beta::Union{($elty), Bool},
+                       y::AbstractVector{$elty})
             require_one_based_indexing(A, x, y)
             chkstride1(A)
             ccall((@blasfunc($fname), libblas), Cvoid,
@@ -704,7 +709,9 @@ for (fname, elty, lib) in ((:dsymv_,:Float64,libblas),
              #      CHARACTER UPLO
              #     .. Array Arguments ..
              #      DOUBLE PRECISION A(LDA,*),X(*),Y(*)
-        function symv!(uplo::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, beta::($elty), y::AbstractVector{$elty})
+        function symv!(uplo::AbstractChar, alpha::Union{($elty), Bool},
+                       A::AbstractMatrix{$elty}, x::AbstractVector{$elty},
+                       beta::Union{($elty), Bool}, y::AbstractVector{$elty})
             require_one_based_indexing(A, x, y)
             m, n = size(A)
             if m != n
@@ -756,7 +763,7 @@ symv(ul, A, x)
 for (fname, elty) in ((:zhemv_,:ComplexF64),
                       (:chemv_,:ComplexF32))
     @eval begin
-        function hemv!(uplo::AbstractChar, α::$elty, A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, β::$elty, y::AbstractVector{$elty})
+        function hemv!(uplo::AbstractChar, α::Union{$elty, Bool}, A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, β::Union{$elty, Bool}, y::AbstractVector{$elty})
             require_one_based_indexing(A, x, y)
             m, n = size(A)
             if m != n
@@ -1112,7 +1119,11 @@ for (gemm, elty) in
              #       CHARACTER TRANSA,TRANSB
              # *     .. Array Arguments ..
              #       DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
-        function gemm!(transA::AbstractChar, transB::AbstractChar, alpha::($elty), A::AbstractVecOrMat{$elty}, B::AbstractVecOrMat{$elty}, beta::($elty), C::AbstractVecOrMat{$elty})
+        function gemm!(transA::AbstractChar, transB::AbstractChar,
+                       alpha::Union{($elty), Bool},
+                       A::AbstractVecOrMat{$elty}, B::AbstractVecOrMat{$elty},
+                       beta::Union{($elty), Bool},
+                       C::AbstractVecOrMat{$elty})
 #           if any([stride(A,1), stride(B,1), stride(C,1)] .!= 1)
 #               error("gemm!: BLAS module requires contiguous matrix columns")
 #           end  # should this be checked on every call?
@@ -1175,7 +1186,9 @@ for (mfname, elty) in ((:dsymm_,:Float64),
              #     CHARACTER SIDE,UPLO
              #     .. Array Arguments ..
              #     DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
-        function symm!(side::AbstractChar, uplo::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty}, beta::($elty), C::AbstractMatrix{$elty})
+        function symm!(side::AbstractChar, uplo::AbstractChar, alpha::Union{($elty), Bool},
+                       A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty},
+                       beta::Union{($elty), Bool}, C::AbstractMatrix{$elty})
             require_one_based_indexing(A, B, C)
             m, n = size(C)
             j = checksquare(A)
@@ -1244,7 +1257,9 @@ for (mfname, elty) in ((:zhemm_,:ComplexF64),
              #     CHARACTER SIDE,UPLO
              #     .. Array Arguments ..
              #     DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
-        function hemm!(side::AbstractChar, uplo::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty}, beta::($elty), C::AbstractMatrix{$elty})
+        function hemm!(side::AbstractChar, uplo::AbstractChar, alpha::Union{($elty), Bool},
+                       A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty},
+                       beta::Union{($elty), Bool}, C::AbstractMatrix{$elty})
             require_one_based_indexing(A, B, C)
             m, n = size(C)
             j = checksquare(A)
@@ -1309,8 +1324,8 @@ for (fname, elty) in ((:dsyrk_,:Float64),
        # *     .. Array Arguments ..
        #       REAL A(LDA,*),C(LDC,*)
        function syrk!(uplo::AbstractChar, trans::AbstractChar,
-                      alpha::($elty), A::AbstractVecOrMat{$elty},
-                      beta::($elty), C::AbstractMatrix{$elty})
+                      alpha::Union{($elty), Bool}, A::AbstractVecOrMat{$elty},
+                      beta::Union{($elty), Bool}, C::AbstractMatrix{$elty})
            require_one_based_indexing(A, C)
            n = checksquare(C)
            nn = size(A, trans == 'N' ? 1 : 2)
@@ -1366,8 +1381,9 @@ for (fname, elty, relty) in ((:zherk_, :ComplexF64, :Float64),
        # *     ..
        # *     .. Array Arguments ..
        #       COMPLEX A(LDA,*),C(LDC,*)
-       function herk!(uplo::AbstractChar, trans::AbstractChar, α::$relty, A::AbstractVecOrMat{$elty},
-                      β::$relty, C::AbstractMatrix{$elty})
+       function herk!(uplo::AbstractChar, trans::AbstractChar,
+                      α::Union{$relty, Bool}, A::AbstractVecOrMat{$elty},
+                      β::Union{$relty, Bool}, C::AbstractMatrix{$elty})
            require_one_based_indexing(A, C)
            n = checksquare(C)
            nn = size(A, trans == 'N' ? 1 : 2)

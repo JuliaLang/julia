@@ -231,10 +231,6 @@ it for new types as appropriate.
 function promote_rule end
 
 promote_rule(::Type{<:Any}, ::Type{<:Any}) = Bottom
-# To fix ambiguities
-promote_rule(::Type{Any}, ::Type{<:Any}) = Any
-promote_rule(::Type{<:Any}, ::Type{Any}) = Any
-promote_rule(::Type{Any}, ::Type{Any}) = Any
 
 promote_result(::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} = (@_inline_meta; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that
@@ -250,7 +246,7 @@ If no arguments can be converted, an error is raised.
 # Examples
 ```jldoctest
 julia> promote(Int8(1), Float16(4.5), Float32(4.1))
-(1.0f0, 4.5f0, 4.1f0)
+(1.0, 4.5, 4.1)
 ```
 """
 function promote end

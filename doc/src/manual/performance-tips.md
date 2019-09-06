@@ -142,7 +142,7 @@ the performance of your code:
   * [Profiling](@ref) allows you to measure the performance of your running code and identify lines
     that serve as bottlenecks. For complex projects, the [ProfileView](https://github.com/timholy/ProfileView.jl)
     package can help you visualize your profiling results.
-  * The [Traceur](https://github.com/MikeInnes/Traceur.jl) package can help you find common performance problems in your code.
+  * The [Traceur](https://github.com/JunoLab/Traceur.jl) package can help you find common performance problems in your code.
   * Unexpectedly-large memory allocations--as reported by [`@time`](@ref), [`@allocated`](@ref), or
     the profiler (through calls to the garbage-collection routines)--hint that there might be issues
     with your code. If you don't see another reason for the allocations, suspect a type problem.
@@ -275,7 +275,7 @@ julia> typeof(t.a)
 Float64
 
 julia> t.a = 4.5f0
-4.5f0
+4.5
 
 julia> typeof(t.a)
 Float32
@@ -285,7 +285,7 @@ In contrast, once `m` is constructed, the type of `m.a` cannot change:
 
 ```jldoctest myambig2
 julia> m.a = 4.5f0
-4.5f0
+4.5
 
 julia> typeof(m.a)
 Float64
@@ -306,7 +306,7 @@ julia> typeof(m.a)
 Float64
 
 julia> m.a = 4.5f0
-4.5f0
+4.5
 
 julia> typeof(m.a)
 Float32
@@ -1339,10 +1339,10 @@ such as `x-y == 0` implies `x == y`:
 julia> x = 3f-38; y = 2f-38;
 
 julia> set_zero_subnormals(true); (x - y, x == y)
-(0.0f0, false)
+(0.0, false)
 
 julia> set_zero_subnormals(false); (x - y, x == y)
-(1.0000001f-38, false)
+(1.0000001e-38, false)
 ```
 
 In some applications, an alternative to zeroing subnormal numbers is to inject a tiny bit of noise.
@@ -1513,3 +1513,11 @@ will not require this degree of programmer annotation to attain performance.
 In the mean time, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
 insertion of `let` statements as in `abmult3`.
+
+# Checking for equality with a singleton
+
+When checking if a value is equal to some singleton it can be
+better for performance to check for identicality (`===`) instead of
+equality (`==`). The same advice applies to using `!==` over `!=`.
+These type of checks frequently occur e.g. when implementing the iteration
+protocol and checking if `nothing` is returned from [`iterate`](@ref).

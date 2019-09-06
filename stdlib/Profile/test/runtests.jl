@@ -2,16 +2,26 @@
 
 using Test, Profile, Serialization
 
-function busywait(t, n_tries)
+Profile.clear()
+Profile.init()
+
+let iobuf = IOBuffer()
+    for fmt in (:tree, :flat)
+        Test.@test_logs (:warn, r"^There were no samples collected\.") Profile.print(iobuf, format=fmt, C=true)
+        Test.@test_logs (:warn, r"^There were no samples collected\.") Profile.print(iobuf, [0x0000000000000001], Dict(0x0000000000000001 => [Base.StackTraces.UNKNOWN]), format=fmt, C=false)
+    end
+end
+
+@noinline function busywait(t, n_tries)
     iter = 0
-    while iter < n_tries && Profile.len_data() == 0
+    init_data = Profile.len_data()
+    while iter < n_tries && Profile.len_data() == init_data
         iter += 1
         tend = time() + t
         while time() < tend end
     end
 end
 
-Profile.clear()
 @profile busywait(1, 20)
 
 let r = Profile.retrieve()
