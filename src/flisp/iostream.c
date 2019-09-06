@@ -281,6 +281,33 @@ value_t fl_ioread(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     return cv;
 }
 
+value_t fl_peek_number_of_where_tokens(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    argcount(fl_ctx, "io.peek-number-of-where-tokens", nargs, 1);
+    ios_t *s = toiostream(fl_ctx, args[0], "io.peek-number-of-where-tokens");
+    size_t res = ios_peek_number_of_where_tokens(s);
+    return size_wrap(fl_ctx, res);
+}
+
+value_t fl_peek_char_after_where_tokens(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    argcount(fl_ctx, "io.peek-char-after-where-tokens", nargs, 1);
+    ios_t *s = toiostream(fl_ctx, args[0], "io.peek-char-after-where-tokens");
+    uint32_t wc;
+    if (ios_peek_utf8_after_where_tokens(s, &wc) == IOS_EOF)
+        return fl_ctx->FL_EOF;
+    return mk_wchar(fl_ctx, wc);
+}
+
+value_t fl_peek_space_after_where_tokens(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    argcount(fl_ctx, "io.peek-space-after-where-tokens?", nargs, 1);
+    ios_t *s = toiostream(fl_ctx, args[0], "io.peek-space-after-where-tokens?");
+    if (ios_peek_space_after_where_tokens(s))
+        return fl_ctx->T;
+    return fl_ctx->F;
+}
+
 // args must contain data[, offset[, count]]
 static void get_start_count_args(fl_context_t *fl_ctx, value_t *args, uint32_t nargs, size_t sz,
                                  size_t *offs, size_t *nb, char *fname)
@@ -426,6 +453,9 @@ static const builtinspec_t iostreamfunc_info[] = {
     { "io.peekc" , fl_iopeekc },
     { "io.discardbuffer", fl_iopurge },
     { "io.read", fl_ioread },
+    { "io.peek-number-of-where-tokens", fl_peek_number_of_where_tokens },
+    { "io.peek-char-after-where-tokens", fl_peek_char_after_where_tokens },
+    { "io.peek-space-after-where-tokens?", fl_peek_space_after_where_tokens },
     { "io.write", fl_iowrite },
     { "io.copy", fl_iocopy },
     { "io.readuntil", fl_ioreaduntil },

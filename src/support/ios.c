@@ -1175,6 +1175,138 @@ char *ios_readline(ios_t *s)
     return ios_take_buffer(&dest, &n);
 }
 
+int ios_peek_number_of_where_tokens(ios_t *s)
+{
+    int result = 0;
+    int where_length = 5; // length("where")
+    int lookahead = 0;
+
+    while(1) {
+        // skip spaces
+        while(1) {
+            size_t m = ios_readprep(s, lookahead + 1);
+            if (m < lookahead + 1) return result;
+            if (s->buf[s->bpos + lookahead] != ' ') break;
+            lookahead++;
+        }
+
+        // try to read a 'where'
+        size_t n = ios_readprep(s, lookahead + where_length);
+        if (n < lookahead + where_length) {
+            return result;
+        }
+        if(0 != strncmp(&s->buf[s->bpos + lookahead], "where", where_length)) {
+            return result;
+        }
+
+        // look beyond the 'where' we found
+        lookahead += where_length;
+        size_t m = ios_readprep(s, lookahead + 1);
+        if (m < lookahead + 1) {
+            return result + 1;
+        }
+        char nxt = s->buf[s->bpos + lookahead];
+        if (nxt == '\n' || nxt == '#') {
+            result += 1;
+            return result;
+        } else if (nxt == ' ') {
+            result += 1;
+            lookahead += 1;
+        } else {
+            return result;
+        }
+    }
+}
+
+int ios_peek_utf8_after_where_tokens(ios_t *s, uint32_t *pwc)
+{
+    int where_length = 5; // length("where")
+    int lookahead = 0;
+
+    while(1) {
+        // skip spaces
+        while(1) {
+            size_t m = ios_readprep(s, lookahead + 1);
+            if (m < lookahead + 1) return IOS_EOF;
+            if (s->buf[s->bpos + lookahead] != ' ') break;
+            lookahead++;
+        }
+
+        // try to read a 'where'
+        size_t n = ios_readprep(s, lookahead + where_length);
+        if (n < lookahead + where_length) {
+            return IOS_EOF;
+        }
+        if(0 != strncmp(&s->buf[s->bpos + lookahead], "where", where_length)) {
+            size_t i = s->bpos + lookahead;
+             *pwc = u8_nextchar(s->buf, &i);
+            return 1;
+        }
+
+        // look beyond the 'where' we found
+        lookahead += where_length;
+        size_t m = ios_readprep(s, lookahead + 1);
+        if (m < lookahead + 1) {
+            return IOS_EOF;
+        }
+        char nxt = s->buf[s->bpos + lookahead];
+        if (nxt == '\n') {
+            size_t i = s->bpos + lookahead;
+             *pwc = u8_nextchar(s->buf, &i);
+            return 1;
+        } else if (nxt == ' ') {
+            lookahead += 1;
+            // continue the loop
+        } else {
+            size_t i = s->bpos + lookahead;
+             *pwc = u8_nextchar(s->buf, &i);
+            return 1;
+        }
+    }
+}
+
+int ios_peek_space_after_where_tokens(ios_t *s)
+{
+    int where_length = 5; // length("where")
+    int lookahead = 0;
+
+    while(1) {
+        int skipped_space = 0;
+        // skip spaces
+        while(1) {
+            size_t m = ios_readprep(s, lookahead + 1);
+            if (m < lookahead + 1) return 0;
+            if (s->buf[s->bpos + lookahead] != ' ') break;
+            skipped_space = 1;
+            lookahead++;
+        }
+
+        // try to read a 'where'
+        size_t n = ios_readprep(s, lookahead + where_length);
+        if (n < lookahead + where_length) {
+            return skipped_space;
+        }
+        if(0 != strncmp(&s->buf[s->bpos + lookahead], "where", where_length)) {
+            return skipped_space;
+        }
+
+        // look beyond the 'where' we found
+        lookahead += where_length;
+        size_t m = ios_readprep(s, lookahead + 1);
+        if (m < lookahead + 1) {
+            return 0;
+        }
+        char nxt = s->buf[s->bpos + lookahead];
+        if (nxt == '\n') {
+            return 0;
+        } else if (nxt == ' ') {
+            // continue the loop
+        } else {
+            return 0;
+        }
+    }
+}
+
 extern int vasprintf(char **strp, const char *fmt, va_list ap);
 
 int ios_vprintf(ios_t *s, const char *format, va_list args)

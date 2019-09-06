@@ -734,6 +734,73 @@
       `(= ,(cadr ex) ,(add-line-number (caddr ex) `(line ,lno ,current-filename)))
       ex))
 
+;; `where` clauses after a newline have two parsing complications that both
+;; arise from the fact that `where` is not a reserved word (i.e. it is allowed
+;; as an identifier). These two complications are illustrated by the following
+;; examples:
+;;
+;; 1. function call vs. where clause:
+;;
+;;     function m(x::I) where I
+;;         where(Union{} <: I <: Any) # a function call: where(true)
+;;     end
+;;
+;;     @test m(3) == true
+;;
+;;     function n(x::I) where J
+;;         where (Union{} <: I <: Any) # a continuation of the where clause
+;;     end
+;;
+;; 2. where where where expressions:
+;;
+;;     function t0(integer::where)
+;;         where where        # where clause
+;;         where              # expression
+;;     end
+;;     function t1(integer::Int)
+;;         where where where  # expression
+;;     end
+;;
+;;    This one is highly non-local: on a single line, an _even_ number of where
+;;    represents a where clause and an _odd_ number of where represents an
+;;    expression.
+;;
+;; We attack these two issues by allowing some deeper "peek" in the case
+;; of where tokens. For this, specific functionality is part of the iostream
+;; API:
+;;
+;;     peek-number-of-where-tokens
+;;     peek-char-after-where-tokens
+;;     peek-space-after-where-tokens?
+;;
+(define (parse-where-continuation s first)
+  (if (newline? (peek-token s))
+    (begin
+      (take-token s)
+      (if (and
+            (eq? 'where (peek-token s))
+            (let* ((num-where-tokens (peek-number-of-where-tokens (ts:port s)))
+                   (char-after-where (peek-char-after-where-tokens (ts:port s)))
+                   (space-after-where (peek-space-after-where-tokens? (ts:port s))))
+              (or
+                (and
+                  ;; TODO: I swapped even/odd in the below because one of the where tokens
+                  ;; has been peeked (above) so it is not in the C buffer anymore. Better
+                  ;; to abstract that away in the token stream interface.
+                  (odd? num-where-tokens)                        ;; e.g. `where where`
+                  (memv char-after-where '(#\newline #\#)))
+                (and
+                  (even? num-where-tokens)
+                  (memv char-after-where '(#\())
+                  space-after-where)                             ;; e.g. `where (I <: J)`
+                (and
+                  (even? num-where-tokens)                       ;; e.g. `where where where A`
+                  (not (memv char-after-where '(#\newline #\#))) ;; e.g. `where where where`
+                  (identifier-start-char? char-after-where)))))
+         (parse-where-continuation s (parse-where-chain s first))
+         (parse-where-continuation s first)))
+    first))
+
 (define (parse-assignment s down)
   (let* ((ex (down s))
          (t  (peek-token s)))
@@ -1130,10 +1197,14 @@
           (if (and is-func (eq? (peek-token s) '|::|))
               (begin (take-token s)
                      `(|::| ,sig ,(parse-call s)))
-              sig)))
-    (if (eq? (peek-token s) 'where)
-        (parse-where-chain s decl-sig)
-        decl-sig)))
+              sig))
+         (decl-sig-with-inline-where
+          (if (eq? (peek-token s) 'where)
+              (parse-where-chain s decl-sig)
+              decl-sig))
+         (full-sig
+           (parse-where-continuation s decl-sig-with-inline-where)))
+    full-sig))
 
 (define (disallowed-space ex t)
   (error (string "space before \"" t "\" not allowed in \""

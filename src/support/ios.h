@@ -133,6 +133,11 @@ JL_DLLEXPORT int ios_getutf8(ios_t *s, uint32_t *pwc);
 JL_DLLEXPORT int ios_peekutf8(ios_t *s, uint32_t *pwc);
 JL_DLLEXPORT char *ios_readline(ios_t *s) JL_NOTSAFEPOINT;
 
+/* high-level stream functions - specific parser needs */
+JL_DLLEXPORT int ios_peek_number_of_where_tokens(ios_t *s);
+JL_DLLEXPORT int ios_peek_utf8_after_where_tokens(ios_t *s, uint32_t *pwc);
+JL_DLLEXPORT int ios_peek_space_after_where_tokens(ios_t *s);
+
 // discard data buffered for reading
 JL_DLLEXPORT void ios_purge(ios_t *s);
 
