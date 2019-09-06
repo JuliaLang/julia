@@ -764,10 +764,10 @@ The highest finite value representable by the given floating-point DataType `T`.
 # Examples
 ```jldoctest
 julia> floatmax(Float16)
-65500.0
+Float16(65500.0)
 
 julia> floatmax(Float32)
-3.4028235e38
+3.4028235f38
 ```
 """
 floatmax(x::T) where {T<:AbstractFloat} = floatmax(T)
@@ -790,7 +790,7 @@ julia> eps()
 2.220446049250313e-16
 
 julia> eps(Float32)
-1.1920929e-7
+1.1920929f-7
 
 julia> 1.0 + eps()
 1.0000000000000002

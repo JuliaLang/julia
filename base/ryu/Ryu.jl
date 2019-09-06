@@ -6,8 +6,8 @@ include("fixed.jl")
 include("exp.jl")
 
 neededdigits(::Type{Float64}) = 309 + 17
-neededdigits(::Type{Float32}) = 39 + 9
-neededdigits(::Type{Float16}) = 9 + 5
+neededdigits(::Type{Float32}) = 39 + 9 + 2
+neededdigits(::Type{Float16}) = 9 + 5 + 9
 
 """
     Ryu.writeshortest(x, plus=false, space=false, hash=true, precision=-1, expchar=UInt8('e'), padexp=false, decchar=UInt8('.'))
@@ -36,7 +36,6 @@ function writeshortest(x::T,
         decchar::UInt8=UInt8('.')) where {T <: Base.IEEEFloat}
     buf = Base.StringVector(neededdigits(T))
     pos = writeshortest(buf, 1, x)
-    @assert pos - 1 <= length(buf)
     return String(resize!(buf, pos - 1))
 end
 
@@ -58,7 +57,6 @@ Various options for the output format include:
 function writefixed(x::T, precision) where {T <: Base.IEEEFloat}
     buf = Base.StringVector(precision + neededdigits(T))
     pos = writefixed(buf, 1, x, false, false, false, precision)
-    @assert pos - 1 <= length(buf)
     return String(resize!(buf, pos - 1))
 end
 
@@ -81,7 +79,6 @@ Various options for the output format include:
 function writeexp(x::T, precision) where {T <: Base.IEEEFloat}
     buf = Base.StringVector(precision + neededdigits(T))
     pos = writeexp(buf, 1, x, false, false, false, precision)
-    @assert pos - 1 <= length(buf)
     return String(resize!(buf, pos - 1))
 end
 
@@ -90,10 +87,20 @@ function Base.show(io::IO, x::T) where {T <: Base.IEEEFloat}
         x = round(x, sigdigits=6)
     end
     buf = Base.StringVector(neededdigits(T))
-    pos = writeshortest(buf, 1, x)
-    @assert pos - 1 <= length(buf)
+    typed = !get(io, :compact, false) && get(io, :typeinfo, Any) != typeof(x)
+    pos = writeshortest(buf, 1, x, false, false, true, -1,
+        x isa Float32 ? UInt8('f') : UInt8('e'), false, UInt8('.'), typed)
     write(io, resize!(buf, pos - 1))
     return
 end
+
+function Base.string(x::T) where {T <: Base.IEEEFloat}
+    buf = Base.StringVector(neededdigits(T))
+    pos = writeshortest(buf, 1, x, false, false, true, -1,
+        x isa Float32 ? UInt8('f') : UInt8('e'), false, UInt8('.'), false)
+    return String(resize!(buf, pos - 1))
+end
+
+Base.print(io::IO, x::Union{Float16, Float32}) = show(IOContext(io, :compact => true), x)
 
 end # module
