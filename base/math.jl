@@ -13,7 +13,7 @@ export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
        cbrt, sqrt, significand,
        hypot, max, min, minmax, ldexp, frexp,
        clamp, clamp!, modf, ^, mod2pi, rem2pi,
-       @evalpoly
+       @evalpoly, evalpoly
 
 import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
