@@ -103,17 +103,56 @@ macro horner(x, p...)
 end
 
 """
-    horner(x, p...)
+    evalpoly(x, p...)
 
-Evaluate `p[1] + x * (p[2] + x * (...))`, i.e. a polynomial via Horner's rule.
-Should have performance parity with the `@horner` macro when constant propagation
-and inlining apply. For very high order polynomials, or polynomials whose length
-is not known at compile-time, this function will fail to inline and the performance
-of this function will suffer.
+Evaluate the polynomial ``\\sum_k p[k] x^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
+that is, the coefficients are given in ascending order by power of `x`. This function
+generates efficient code using Horner's method with loops unrolled at compile time.
 """
-horner(x) = zero(x)
-horner(x, p1) = p1
-horner(x, p1, ps...) = muladd(x, horner(x, ps...), p1)
+function evalpoly(x, p...)
+    if @generated
+        out = :(zero(x))
+        for i in 1:length(p)
+            out = :(muladd(x, $out, (p[$i])))
+        end
+        out
+    else
+        out = zero(x)
+        for i in 1:length(p)
+            out = muladd(x, out, (p[i]))
+        end
+        out
+    end
+end
+
+"""
+    evalpoly(z::Complex, p...)
+
+Evaluate the polynomial ``\\sum_k p[k] z^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
+that is, the coefficients are given in ascending order by power of `z`. This function
+generates efficient code using a Goertzel-like algorithm specialized for complex arguments
+with loops unrolled at compile time.
+"""
+@generated function evalpoly(z::Complex, p...)
+    a = :(p[end])
+    b = :(p[end-1])
+    as = []
+    for i in length(p)-2:-1:1
+        ai = Symbol("a", i)
+        push!(as, :($ai = $a))
+        a = :(muladd(r, $ai, $b))
+        b = :(p[$i] - s * $ai)
+    end
+    ai = :a0
+    push!(as, :($ai = $a))
+    C = Expr(:block,
+             :(x = real(z)),
+             :(y = imag(z)),
+             :(r = x + x),
+             :(s = muladd(x, x, y*y)),
+             as...,
+             :(muladd($ai, z, $b)))
+end
 
 # Evaluate p[1] + z*p[2] + z^2*p[3] + ... + z^(n-1)*p[n].  This uses
 # Horner's method if z is real, but for complex z it uses a more
