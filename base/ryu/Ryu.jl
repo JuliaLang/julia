@@ -94,6 +94,13 @@ function Base.show(io::IO, x::T) where {T <: Base.IEEEFloat}
     return
 end
 
+function Base.string(x::T) where {T <: Base.IEEEFloat}
+    buf = Base.StringVector(neededdigits(T))
+    pos = writeshortest(buf, 1, x, false, false, true, -1,
+        x isa Float32 ? UInt8('f') : UInt8('e'), false, UInt8('.'), false)
+    return String(resize!(buf, pos - 1))
+end
+
 Base.print(io::IO, x::Union{Float16, Float32}) = show(IOContext(io, :compact => true), x)
 
 end # module
