@@ -110,7 +110,7 @@ that is, the coefficients are given in ascending order by power of `x`. This fun
 generates efficient code using Horner's method with loops unrolled at compile time.
 """
 function evalpoly(x, p...)
-    if @generated 
+    if @generated
         ex = :(p[end])
         for i in length(p)-1:-1:1
             ex = :(muladd(x, $ex, p[$i]))
