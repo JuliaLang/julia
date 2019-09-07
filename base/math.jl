@@ -110,18 +110,18 @@ that is, the coefficients are given in ascending order by power of `x`. This fun
 generates efficient code using Horner's method with loops unrolled at compile time.
 """
 function evalpoly(x, p...)
-    if @generated
-        out = :(zero(x))
-        for i in 1:length(p)
-            out = :(muladd(x, $out, (p[$i])))
+    if @generated 
+        ex = :(p[end])
+        for i in length(p)-1:-1:1
+            ex = :(muladd(x, $ex, p[$i]))
         end
-        out
+        ex
     else
-        out = zero(x)
-        for i in 1:length(p)
-            out = muladd(x, out, (p[i]))
+        ex = p[end]
+        for i in length(p)-1:-1:1
+            ex = muladd(x, ex, p[i])
         end
-        out
+        ex
     end
 end
 
