@@ -212,7 +212,7 @@ eachindex(itrs...) = keys(itrs...)
 eachindex(A::AbstractVector) = (@_inline_meta(); axes1(A))
 
 @noinline function throw_eachindex_mismatch(::IndexLinear, A...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(LinearIndices.(A), ", ", " and "))"))
+    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(eachindex.(A), ", ", " and "))"))
 end
 @noinline function throw_eachindex_mismatch(::IndexCartesian, A...)
     throw(DimensionMismatch("all inputs to eachindex must have the same axes, got $(join(axes.(A), ", ", " and "))"))
