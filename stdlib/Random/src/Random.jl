@@ -136,8 +136,11 @@ the amount of precomputation, if applicable.
 *types* and *values*, respectively. [`Random.SamplerSimple`](@ref) can be used to store
 pre-computed values without defining extra types for only this purpose.
 """
-Sampler(rng::AbstractRNG, x, r::Repetition=Val(Inf)) = Sampler(typeof(rng), x, r)
-Sampler(rng::AbstractRNG, ::Type{X}, r::Repetition=Val(Inf)) where {X} = Sampler(typeof(rng), X, r)
+Sampler(rng::AbstractRNG, x, r::Repetition=Val(Inf)) = Sampler(typeof_rng(rng), x, r)
+Sampler(rng::AbstractRNG, ::Type{X}, r::Repetition=Val(Inf)) where {X} =
+    Sampler(typeof_rng(rng), X, r)
+
+typeof_rng(rng::AbstractRNG) = typeof(rng)
 
 Sampler(::Type{<:AbstractRNG}, sp::Sampler, ::Repetition) =
     throw(ArgumentError("Sampler for this object is not defined"))
@@ -306,8 +309,8 @@ Pick a random element or array of random elements from the set of values specifi
 * an `AbstractDict` or `AbstractSet` object,
 * a string (considered as a collection of characters), or
 * a type: the set of values to pick from is then equivalent to `typemin(S):typemax(S)` for
-  integers (this is not applicable to [`BigInt`](@ref)), and to ``[0, 1)`` for floating
-  point numbers;
+  integers (this is not applicable to [`BigInt`](@ref)), to ``[0, 1)`` for floating
+  point numbers and to ``[0, 1)+i[0, 1)]`` for complex floating point numbers;
 
 `S` defaults to [`Float64`](@ref).
 

@@ -575,4 +575,10 @@ end
     end
 end
 
+@testset "CartesianIndex handling in _modify!" begin
+    C = rand(10, 10)
+    A = rand(10, 10)
+    @test mul!(view(C, 1:10, 1:10), A, 0.5) == A * 0.5
+end
+
 end # module TestMatmul

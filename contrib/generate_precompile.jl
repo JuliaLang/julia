@@ -142,12 +142,6 @@ function generate_precompile_statements()
             push!(statements, statement)
         end
 
-        if have_repl
-            # Seems like a reasonable number right now, adjust as needed
-            # comment out if debugging script
-            @assert length(statements) > 700
-        end
-
         # Create a staging area where all the loaded packages are available
         PrecompileStagingArea = Module()
         for (_pkgid, _mod) in Base.loaded_modules
@@ -157,22 +151,23 @@ function generate_precompile_statements()
         end
 
         # Execute the collected precompile statements
+        n_succeeded = 0
         include_time = @elapsed for statement in sort(collect(statements))
             # println(statement)
-            # Workarounds for #28808
-            occursin("\"YYYY-mm-dd\\THH:MM:SS\"", statement) && continue
-            statement == "precompile(Tuple{typeof(Base.show), Base.IOContext{Base.TTY}, Type{Vararg{Any, N} where N}})" && continue
-            # check for `#x##s66` style variable names not in quotes
-            occursin(r"#\w", statement) &&
-                count(r"(?:#+\w+)+", statement) !=
-                count(r"\"(?:#+\w+)+\"", statement) && continue
             try
                 Base.include_string(PrecompileStagingArea, statement)
+                n_succeeded += 1
             catch
-                @error "Failed to precompile $statement"
-                rethrow()
+                # See #28808
+                # @error "Failed to precompile $statement"
             end
         end
+        if have_repl
+            # Seems like a reasonable number right now, adjust as needed
+            # comment out if debugging script
+            @assert n_succeeded > 3500
+        end
+
         print(" $(length(statements)) generated in ")
         tot_time = time() - start_time
         Base.time_print(tot_time * 10^9)
