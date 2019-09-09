@@ -151,8 +151,8 @@ but this is the topic of the [Methods](@ref) chapter.
 
 ### Returning nothing
 
-Some functions are used only for their side effects, and do not need to return a value.
-In these cases, the Julia convention is to return the value [`nothing`](@ref):
+For functions that do not need to return a value (functions used only for some side effects),
+the Julia convention is to return the value [`nothing`](@ref):
 
 ```julia
 function printx(x)
@@ -163,6 +163,8 @@ end
 
 This is a *convention* in the sense that `nothing` is not a Julia keyword
 but a only singleton object of type `Nothing`.
+Also, you may notice that the `printx` function example above is contrived,
+because `println` already returns `nothing`, so that the `return` line is redundant.
 
 There are two possible shortened forms for the `return nothing` expression.
 On the one hand, the `return` keyword implicitly returns `nothing`, so it can be used alone.
