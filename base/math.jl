@@ -154,6 +154,9 @@ with loops unrolled at compile time.
              :(muladd($ai, z, $b)))
 end
 
+evalpoly(z::Complex, p) = p
+
+
 # Evaluate p[1] + z*p[2] + z^2*p[3] + ... + z^(n-1)*p[n].  This uses
 # Horner's method if z is real, but for complex z it uses a more
 # efficient algorithm described in Knuth, TAOCP vol. 2, section 4.6.4,
@@ -180,6 +183,7 @@ julia> @evalpoly(2, 1, 1, 1)
 ```
 """
 macro evalpoly(z, p...)
+    length(p) == 1 && return :($(p[1]))
     a = :($(esc(p[end])))
     b = :($(esc(p[end-1])))
     as = []
