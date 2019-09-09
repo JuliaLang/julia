@@ -34,7 +34,7 @@ Standard library changes
   otherwise ([#24353]).
 * `IPAddr` subtypes now behave like scalars when used in broadcasting ([#32133]).
 * `clamp` can now handle missing values ([#31066]).
-* `isapprox` (or `≈`) now has a one-argument "curried" method which returns a function, like `==(x)` ([#32305]).
+* `isapprox` (or `≈`) now has a one-argument "curried" method `isapprox(x)` which returns a function, like `isequal` (or `==`)` ([#32305]).
 
 #### Libdl
 
