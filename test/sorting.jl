@@ -33,6 +33,7 @@ let a=[1:10;]
         @test partialsortperm(a, r, rev=true) == (11 .- [r;])
     end
 end
+@test_throws ArgumentError partialsortperm!([1,2], [2,3,1], 1:2)
 @test sum(randperm(6)) == 21
 
 @testset "searchsorted" begin
