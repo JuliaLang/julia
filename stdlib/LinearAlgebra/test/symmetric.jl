@@ -376,6 +376,7 @@ end
                     @test dot(x, Symmetric(aherm, uplo), x) ≈ dot(x, Symmetric(aherm, uplo)*x) ≈ dot(x, Matrix(Symmetric(aherm, uplo)), x)
                 end
             end
+        end
 
         @testset "dot product of symmetric and Hermitian matrices" begin
             for mtype in (Symmetric, Hermitian)
