@@ -377,6 +377,40 @@ end
                 end
             end
         end
+
+        @testset "dot product of symmetric and Hermitian matrices" begin
+            for mtype in (Symmetric, Hermitian)
+                symau = mtype(a, :U)
+                symal = mtype(a, :L)
+                msymau = Matrix(symau)
+                msymal = Matrix(symal)
+                @test_throws DimensionMismatch dot(symau, mtype(zeros(eltya, n-1, n-1)))
+                for eltyc in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
+                    creal = randn(n, n)/2
+                    cimag = randn(n, n)/2
+                    c = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(creal, cimag) : creal)
+                    symcu = mtype(c, :U)
+                    symcl = mtype(c, :L)
+                    msymcu = Matrix(symcu)
+                    msymcl = Matrix(symcl)
+                    @test dot(symau, symcu) ≈ dot(msymau, msymcu)
+                    @test dot(symau, symcl) ≈ dot(msymau, msymcl)
+                    @test dot(symal, symcu) ≈ dot(msymal, msymcu)
+                    @test dot(symal, symcl) ≈ dot(msymal, msymcl)
+                end
+
+                # block matrices
+                blockm = [eltya == Int ? rand(1:7, 3, 3) : convert(Matrix{eltya}, eltya <: Complex ? complex.(randn(3, 3)/2, randn(3, 3)/2) : randn(3, 3)/2) for _ in 1:3, _ in 1:3]
+                symblockmu = mtype(blockm, :U)
+                symblockml = mtype(blockm, :L)
+                msymblockmu = Matrix(symblockmu)
+                msymblockml = Matrix(symblockml)
+                @test dot(symblockmu, symblockmu) ≈ dot(msymblockmu, msymblockmu)
+                @test dot(symblockmu, symblockml) ≈ dot(msymblockmu, msymblockml)
+                @test dot(symblockml, symblockmu) ≈ dot(msymblockml, msymblockmu)
+                @test dot(symblockml, symblockml) ≈ dot(msymblockml, msymblockml)
+            end
+        end
     end
 end
 
