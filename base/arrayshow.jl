@@ -299,14 +299,12 @@ end
 
 # print_array: main helper functions for show(io, text/plain, array)
 # typeinfo agnostic
-
-# 0-dimensional arrays
-print_array(io::IO, X::AbstractArray{T,0} where T) =
-    isassigned(X) ? show(io, X[]) :
-                    print(io, undef_ref_str)
-
+# Note that this is for showing the content inside the array, and for `MIME"text/plain".
+# There are `show(::IO, ::A) where A<:AbstractArray` methods that don't use this
+# e.g. show_vector, show_zero_di, show_zero_dim
+print_array(io::IO, X::AbstractArray{<:Any, 0}) =
+    isassigned(X) ? show(io, X[]) : print(io, undef_ref_str)
 print_array(io::IO, X::AbstractVecOrMat) = print_matrix(io, X)
-
 print_array(io::IO, X::AbstractArray) = show_nd(io, X, print_matrix, true)
 
 # typeinfo aware
@@ -415,6 +413,7 @@ _show_empty(io, X) = nothing # by default, we don't know this constructor
 
 # typeinfo aware (necessarily)
 function show(io::IO, X::AbstractArray)
+    ndims(X) == 0 && return show_zero_dim(io, X)
     ndims(X) == 1 && return show_vector(io, X)
     prefix = typeinfo_prefix(io, X)
     io = IOContext(io, :typeinfo => eltype(X))
@@ -422,6 +421,15 @@ function show(io::IO, X::AbstractArray)
         _show_empty(io, X) :
         _show_nonempty(io, X, prefix)
 end
+
+### 0-dimensional arrays -- see https://github.com/JuliaLang/julia/issues/31481
+function show_zero_dim(io::IO, X::AbstractArray{<:Any, 0})
+    # `"undef"` not `repr(undef)` because https://github.com/JuliaLang/julia/issues/33204
+    val = isassigned(X) ? repr(X[]) : "undef"
+    print(io, "fill($val)")
+end
+# special case for when `isassigned(::AbstractArray{<:UndefInitializer}) == true`
+show_zero_dim(io::IO, X::AbstractArray{<:UndefInitializer, 0}) = print(io, "fill(undef)")
 
 ### Vector arrays
 
