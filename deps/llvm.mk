@@ -171,7 +171,12 @@ ifeq ($(BUILD_LLDB),0)
 LLVM_CMAKE += -DLLVM_TOOL_LLDB_BUILD=OFF
 endif
 
+ifeq (,$(findstring rc,$(LLVM_VER)))
 LLVM_SRC_URL := http://releases.llvm.org/$(LLVM_VER)
+else
+LLVM_VER_SPLIT := $(subst rc, ,$(LLVM_VER))
+LLVM_SRC_URL := https://prereleases.llvm.org/$(word 1,$(LLVM_VER_SPLIT))/rc$(word 2,$(LLVM_VER_SPLIT))
+endif
 
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR): | $(SRCCACHE)
