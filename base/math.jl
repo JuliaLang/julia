@@ -142,6 +142,9 @@ that is, the coefficients are given in ascending order by power of `z`. This fun
 generates efficient code using a Goertzel-like algorithm specialized for complex arguments
 with loops unrolled at compile time.
 
+The Goertzel-like algorthim is described in Knuth's Art of computer programming, 
+volume 2: Seminumerical algorithms, Sec. 4.6.4.
+
 # Example
 ```jldoctest
 julia> evalpoly(2 + im, (1, 2, 3))
