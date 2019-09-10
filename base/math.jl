@@ -89,6 +89,20 @@ function clamp!(x::AbstractArray, lo, hi)
 end
 
 """
+    @horner(x, p...)
+
+Evaluate `p[1] + x * (p[2] + x * (....))`, i.e. a polynomial via Horner's rule.
+"""
+macro horner(x, p...)
+    ex = esc(p[end])
+    for i = length(p)-1:-1:1
+        ex = :(muladd(t, $ex, $(esc(p[i]))))
+    end
+    ex = quote local r = $ex end # structure this to add exactly one line number node for the macro
+    return Expr(:block, :(local t = $(esc(x))), ex, :r)
+end
+
+"""
     evalpoly(x, p::Tuple)
 
 Evaluate the polynomial ``\\sum_k p[k] x^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
