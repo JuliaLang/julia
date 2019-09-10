@@ -1583,3 +1583,20 @@ end
     @test sdastr(2, 2) == "[2, 3]"
     @test sdastr(3, 3) == "[3, 4, 5]"
 end
+
+@testset "0-dimensional Array. Issue #31481" begin
+    for x in (zeros(Int32), collect('b'), fill(nothing), fill(undef))
+        @test eval(Meta.parse(repr(x))) == x
+    end
+    @test showstr(zeros(Int32)) == "fill(0)"
+    @test showstr(collect('b')) == "fill('b')"
+    @test showstr(fill(nothing)) == "fill(nothing)"
+    @test showstr(fill(undef)) == "fill(undef)"
+    @test showstr(Array{Any, 0}(undef)) == "fill(undef)"
+
+    @test replstr(zeros(Int32)) == "0-dimensional Array{Int32,0}:\n0"
+    @test replstr(collect('b')) == "0-dimensional Array{Char,0}:\n'b'"
+    @test replstr(fill(nothing)) == "0-dimensional Array{Nothing,0}:\nnothing"
+    @test replstr(fill(undef)) == "0-dimensional Array{UndefInitializer,0}:\n$(repr(undef))"
+    @test replstr(Array{Any, 0}(undef)) == "0-dimensional Array{Any,0}:\n#undef"
+end
