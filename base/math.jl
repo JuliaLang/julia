@@ -115,14 +115,16 @@ julia> evalpoly(2, (1, 2, 3))
 17
 ```
 """
-function evalpoly(x, p::NTuple{N}) where {N}
+function evalpoly(x, p::Tuple)
     if @generated
+        N = length(p.parameters)
         ex = :(p[end])
         for i in N-1:-1:1
             ex = :(muladd(x, $ex, p[$i]))
         end
         ex
     else
+        N = length(p)
         ex = p[end]
         for i in N-1:-1:1
             ex = muladd(x, ex, p[i])
@@ -146,7 +148,8 @@ julia> evalpoly(2 + im, (1, 2, 3))
 14 + 14im
 ```
 """
-@generated function evalpoly(z::Complex, p::NTuple{N}) where {N}
+@generated function evalpoly(z::Complex, p::Tuple)
+    N = length(p.parameters)
     a = :(p[end])
     b = :(p[end-1])
     as = []
