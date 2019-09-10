@@ -43,7 +43,7 @@ Standard library changes
 
 #### Random
 
-* `AbstractRNG`s now behave like scalars when used in broadcasting ([]).
+* `AbstractRNG`s now behave like scalars when used in broadcasting ([#33213]).
 
 #### SparseArrays
 
