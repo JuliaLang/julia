@@ -424,8 +424,9 @@ end
 
 ### 0-dimensional arrays -- see https://github.com/JuliaLang/julia/issues/31481
 function show_zero_dim(io::IO, X::AbstractArray{<:Any, 0})
-    val = isassigned(X) ? repr(X[]; context=io) : undef_ref_str
-    print(io, "fill($val)")
+    print(io, "fill(")
+    isassigned(X) ? show(io, X[]) : print(io, undef_ref_str)
+    print(io, ")")
 end
 
 ### Vector arrays
