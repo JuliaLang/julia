@@ -112,7 +112,7 @@ generates efficient code using Horner's method with loops unrolled at compile ti
 # Example
 ```jldoctest
 julia> evalpoly(2, (1, 2, 3))
-7
+17
 ```
 """
 function evalpoly(x, p::NTuple{N}) where {N}
@@ -130,8 +130,6 @@ function evalpoly(x, p::NTuple{N}) where {N}
         ex
     end
 end
-
-evalpoly(x, p::Tuple) = evalpoly(x, promote(p...))
 
 
 """
@@ -169,8 +167,7 @@ julia> evalpoly(2 + im, (1, 2, 3))
              :(muladd($ai, z, $b)))
 end
 
-evalpoly(z::Complex, p::Tuple) = evalpoly(z, promote(p...))
-evalpoly(z::Complex, p::NTuple{1}) = p[1]
+evalpoly(z::Complex, p::Tuple{T}) where {T} = p[1]
 
 
 # Evaluate p[1] + z*p[2] + z^2*p[3] + ... + z^(n-1)*p[n].  This uses
