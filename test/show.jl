@@ -1592,11 +1592,11 @@ end
     @test showstr(collect('b')) == "fill('b')"
     @test showstr(fill(nothing)) == "fill(nothing)"
     @test showstr(fill(undef)) == "fill($undef)"
-    @test showstr(Array{Any, 0}(undef)) == "fill($undef)"
+    @test showstr(Array{Any, 0}(undef)) == "fill($(Base.undef_ref_str))"
 
     @test replstr(zeros(Int32)) == "0-dimensional Array{Int32,0}:\n0"
     @test replstr(collect('b')) == "0-dimensional Array{Char,0}:\n'b'"
     @test replstr(fill(nothing)) == "0-dimensional Array{Nothing,0}:\nnothing"
-    @test replstr(fill(undef)) == "0-dimensional Array{UndefInitializer,0}:\n$(repr(undef))"
+    @test replstr(fill(undef)) == "0-dimensional Array{UndefInitializer,0}:\n$undef"
     @test replstr(Array{Any, 0}(undef)) == "0-dimensional Array{Any,0}:\n$(Base.undef_ref_str)"
 end
