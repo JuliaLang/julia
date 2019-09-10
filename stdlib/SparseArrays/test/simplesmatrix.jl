@@ -2,40 +2,40 @@ struct SimpleSMatrix{N,M,T} <: AbstractMatrix{T}
     m::Matrix{T}
 end
 
-SimpleSMatrix{N,M}(m::AbstractMatrix{T}) where {N,M,T} = 
+SimpleSMatrix{N,M}(m::AbstractMatrix{T}) where {N,M,T} =
     size(m) == (N, M) ? SimpleSMatrix{N,M,T}(m) : throw(error("Wrong matrix size"))
 
-Base.:*(a::SimpleSMatrix{N,O}, b::SimpleSMatrix{O,M}) where {N,O,M} = 
+Base.:*(a::SimpleSMatrix{N,O}, b::SimpleSMatrix{O,M}) where {N,O,M} =
     SimpleSMatrix{N,M}(a.m * b.m)
 
-Base.:*(a::LinearAlgebra.Adjoint{<:Any, <:SimpleSMatrix{O,N}}, b::SimpleSMatrix{O,M}) where {N,O,M} = 
+Base.:*(a::LinearAlgebra.Adjoint{<:Any, <:SimpleSMatrix{O,N}}, b::SimpleSMatrix{O,M}) where {N,O,M} =
     SimpleSMatrix{N,M}(adjoint(a.parent.m) * b.m)
 
-Base.:*(a::SimpleSMatrix{N,O}, b::LinearAlgebra.Adjoint{<:Any, <:SimpleSMatrix{M,O}}) where {N,O,M} = 
+Base.:*(a::SimpleSMatrix{N,O}, b::LinearAlgebra.Adjoint{<:Any, <:SimpleSMatrix{M,O}}) where {N,O,M} =
     SimpleSMatrix{N,M}(a.m * adjoint(b.parent.m))
 
-Base.:+(a::SimpleSMatrix{N,M}, b::SimpleSMatrix{N,M}) where {N,M} = 
+Base.:+(a::SimpleSMatrix{N,M}, b::SimpleSMatrix{N,M}) where {N,M} =
     SimpleSMatrix{N,M}(a.m + b.m)
 
-Base.:+(a::LinearAlgebra.Adjoint{<:Any, <:SimpleSMatrix{M,N}}, b::SimpleSMatrix{N,M}) where {N,M} = 
+Base.:+(a::LinearAlgebra.Adjoint{<:Any, <:SimpleSMatrix{M,N}}, b::SimpleSMatrix{N,M}) where {N,M} =
     SimpleSMatrix{N,M}(adjoint(a.parent.m) + b.m)
 
 Base.:+(a::LinearAlgebra.Adjoint{<:Any, <:SimpleSMatrix}, b::LinearAlgebra.Adjoint{<:Any, <:SimpleSMatrix}) =
     (a' + b')'
 
-Base.:+(a::SimpleSMatrix{N,M}, b::LinearAlgebra.Adjoint{<:Any, <:SimpleSMatrix{M,N}}) where {N,M} = 
+Base.:+(a::SimpleSMatrix{N,M}, b::LinearAlgebra.Adjoint{<:Any, <:SimpleSMatrix{M,N}}) where {N,M} =
     SimpleSMatrix{N,M}(a.m + adjoint(b.parent.m))
 
-Base.:-(a::SimpleSMatrix{N,M}, b::SimpleSMatrix{N,M}) where {N,M} = 
+Base.:-(a::SimpleSMatrix{N,M}, b::SimpleSMatrix{N,M}) where {N,M} =
     SimpleSMatrix{N,M}(a.m - b.m)
 
-Base.:-(a::LinearAlgebra.Adjoint{<:Any, <:SimpleSMatrix{M,N}}, b::SimpleSMatrix{N,M}) where {N,M} = 
+Base.:-(a::LinearAlgebra.Adjoint{<:Any, <:SimpleSMatrix{M,N}}, b::SimpleSMatrix{N,M}) where {N,M} =
     SimpleSMatrix{N,M}(adjoint(a.parent.m) - b.m)
 
 Base.:-(a::LinearAlgebra.Adjoint{<:Any, <:SimpleSMatrix}, b::LinearAlgebra.Adjoint{<:Any, <:SimpleSMatrix}) =
     (a' - b')'
 
-Base.:-(a::SimpleSMatrix{N,M}, b::LinearAlgebra.Adjoint{<:Any, <:SimpleSMatrix{M,N}}) where {N,M} = 
+Base.:-(a::SimpleSMatrix{N,M}, b::LinearAlgebra.Adjoint{<:Any, <:SimpleSMatrix{M,N}}) where {N,M} =
     SimpleSMatrix{N,M}(a.m - adjoint(b.parent.m))
 
 Base.size(a::SimpleSMatrix{N,M}) where {N,M} = (N, M)

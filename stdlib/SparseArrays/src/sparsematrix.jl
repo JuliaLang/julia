@@ -860,12 +860,12 @@ sparse(I,J,v::Number,m,n,combine::Function) = sparse(I, J, fill(v,length(I)), In
               q::AbstractVector{<:Integer}, f::Function = identity) where {Tv,TvA,Ti}
 
 Column-permute and transpose `A`, simultaneously applying `f` to each entry of `A`, storing
-the result `(f(A)Q)^T` (`map(f, transpose(A[:,q]))`) in `X`. 
+the result `(f(A)Q)^T` (`map(f, transpose(A[:,q]))`) in `X`.
 
-Element type `Tv` of `X` must match `f(::TvA)`, where `TvA` is the element type of `A`. 
-`X`'s dimensions must match those of `transpose(A)` (`size(X, 1) == size(A, 2)` and 
-`size(X, 2) == size(A, 1)`), and `X` must have enough storage to accommodate all allocated 
-entries in `A` (`length(rowvals(X)) >= nnz(A)` and `length(nonzeros(X)) >= nnz(A)`). 
+Element type `Tv` of `X` must match `f(::TvA)`, where `TvA` is the element type of `A`.
+`X`'s dimensions must match those of `transpose(A)` (`size(X, 1) == size(A, 2)` and
+`size(X, 2) == size(A, 1)`), and `X` must have enough storage to accommodate all allocated
+entries in `A` (`length(rowvals(X)) >= nnz(A)` and `length(nonzeros(X)) >= nnz(A)`).
 Column-permutation `q`'s length must match `A`'s column count (`length(q) == size(A, 2)`).
 
 This method is the parent of several methods performing transposition and permutation
@@ -955,9 +955,9 @@ function ftranspose(A::AbstractSparseMatrixCSC{TvA,Ti}, f::Function, eltype::Typ
 end
 adjoint(A::AbstractSparseMatrixCSC) = Adjoint(A)
 transpose(A::AbstractSparseMatrixCSC) = Transpose(A)
-Base.copy(A::Adjoint{<:Any,<:AbstractSparseMatrixCSC}) = 
+Base.copy(A::Adjoint{<:Any,<:AbstractSparseMatrixCSC}) =
     ftranspose(A.parent, x -> adjoint(copy(x)), eltype(A))
-Base.copy(A::Transpose{<:Any,<:AbstractSparseMatrixCSC}) = 
+Base.copy(A::Transpose{<:Any,<:AbstractSparseMatrixCSC}) =
     ftranspose(A.parent, x -> transpose(copy(x)), eltype(A))
 function Base.permutedims(A::AbstractSparseMatrixCSC, (a,b))
     (a, b) == (2, 1) && return ftranspose(A, identity)
