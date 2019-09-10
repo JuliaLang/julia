@@ -103,7 +103,7 @@ macro horner(x, p...)
 end
 
 """
-    evalpoly(x, p::NTuple{N}) where {N}
+    evalpoly(x, p::NTuple)
 
 Evaluate the polynomial ``\\sum_k p[k] x^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
 that is, the coefficients are given in ascending order by power of `x`. This function
@@ -135,7 +135,7 @@ end
 
 
 """
-    evalpoly(z::Complex, p::NTuple{N})  where {N}
+    evalpoly(z::Complex, p::Tuple)
 
 Evaluate the polynomial ``\\sum_k p[k] z^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
 that is, the coefficients are given in ascending order by power of `z`. This function
@@ -170,7 +170,7 @@ julia> evalpoly(2 + im, (1, 2, 3))
              :(muladd($ai, z, $b)))
 end
 
-evalpoly(z::Complex, p::Tuple{T}) where {T} = p[1]
+evalpoly(z::Complex, p::Tuple{<:Any}) = p[1]
 
 
 # Evaluate p[1] + z*p[2] + z^2*p[3] + ... + z^(n-1)*p[n].  This uses
