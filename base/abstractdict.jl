@@ -722,7 +722,7 @@ julia> map!(v -> v-1, values(d))
 Dict{Symbol,Int64} with 2 entries:
   :a => 0
   :b => 1
- ```
+```
 """
 function map!(f, iter::ValueIterator)
     # This is the naive fallback which requires hash evaluations
