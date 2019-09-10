@@ -416,12 +416,28 @@ function ldiv!(adjA::Adjoint{<:Any,<:LU{<:Any,<:StridedMatrix}}, B::StridedVecOr
     _apply_inverse_ipiv_rows!(A, B)
 end
 
-\(A::Adjoint{<:Any,<:LU}, B::Adjoint{<:Any,<:StridedVecOrMat}) = A \ copy(B)
-\(A::Transpose{<:Any,<:LU}, B::Transpose{<:Any,<:StridedVecOrMat}) = A \ copy(B)
-\(A::Adjoint{T,<:LU{T,<:StridedMatrix}}, B::Adjoint{T,<:StridedVecOrMat{T}}) where {T<:BlasComplex} =
+(\)(A::Adjoint{<:Any,<:LU}, B::Adjoint{<:Any,<:StridedVecOrMat}) = A \ copy(B)
+(\)(A::Transpose{<:Any,<:LU}, B::Transpose{<:Any,<:StridedVecOrMat}) = A \ copy(B)
+(\)(A::Adjoint{T,<:LU{T,<:StridedMatrix}}, B::Adjoint{T,<:StridedVecOrMat{T}}) where {T<:BlasComplex} =
     LAPACK.getrs!('C', A.parent.factors, A.parent.ipiv, copy(B))
-\(A::Transpose{T,<:LU{T,<:StridedMatrix}}, B::Transpose{T,<:StridedVecOrMat{T}}) where {T<:BlasFloat} =
+(\)(A::Transpose{T,<:LU{T,<:StridedMatrix}}, B::Transpose{T,<:StridedVecOrMat{T}}) where {T<:BlasFloat} =
     LAPACK.getrs!('T', A.parent.factors, A.parent.ipiv, copy(B))
+
+function (/)(A::AbstractMatrix, F::Adjoint{<:Any,<:LU})
+    T = promote_type(eltype(A), eltype(F))
+    return adjoint(ldiv!(F.parent, copy_oftype(adjoint(A), T)))
+end
+# To avoid ambiguities with definitions in adjtrans.jl and factorizations.jl
+(/)(adjA::Adjoint{<:Any,<:AbstractVector}, F::Adjoint{<:Any,<:LU}) = adjoint(F.parent \ adjA.parent)
+(/)(adjA::Adjoint{<:Any,<:AbstractMatrix}, F::Adjoint{<:Any,<:LU}) = adjoint(F.parent \ adjA.parent)
+function (/)(trA::Transpose{<:Any,<:AbstractVector}, F::Adjoint{<:Any,<:LU})
+    T = promote_type(eltype(trA), eltype(F))
+    return adjoint(ldiv!(F.parent, convert(AbstractVector{T}, conj(trA.parent))))
+end
+function (/)(trA::Transpose{<:Any,<:AbstractMatrix}, F::Adjoint{<:Any,<:LU})
+    T = promote_type(eltype(trA), eltype(F))
+    return adjoint(ldiv!(F.parent, convert(AbstractMatrix{T}, conj(trA.parent))))
+end
 
 function det(F::LU{T}) where T
     n = checksquare(F)
