@@ -103,7 +103,7 @@ macro horner(x, p...)
 end
 
 """
-    evalpoly(x, p::NTuple)
+    evalpoly(x, p::Tuple)
 
 Evaluate the polynomial ``\\sum_k p[k] x^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
 that is, the coefficients are given in ascending order by power of `x`. This function
