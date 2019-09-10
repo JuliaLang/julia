@@ -41,11 +41,13 @@ Standard library changes
 
 * `dot` now admits a 3-argument method `dot(x, A, y)` to compute generalized dot products `dot(x, A*y)`, but without computing and storing the intermediate result `A*y` ([#32739]).
 
+#### Random
+
+* `AbstractRNG`s now behave like scalars when used in broadcasting ([]).
+
 #### SparseArrays
 
-
 #### Dates
-
 
 #### Statistics
 

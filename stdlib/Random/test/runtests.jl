@@ -774,3 +774,7 @@ end
     @test Sampler(GLOBAL_RNG, 2:4, Val(1)) isa SamplerRangeFast
     @test Sampler(GLOBAL_RNG, 2:4, Val(Inf)) isa SamplerRangeFast
 end
+
+@testset "RNGs broadcast as scalars: T" for T in (MersenneTwister, RandomDevice)
+    @test length.(rand.(T(), 1:3)) == 1:3
+end
