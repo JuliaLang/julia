@@ -301,7 +301,7 @@ end
 # typeinfo agnostic
 # Note that this is for showing the content inside the array, and for `MIME"text/plain".
 # There are `show(::IO, ::A) where A<:AbstractArray` methods that don't use this
-# e.g. show_vector, show_zero_di, show_zero_dim
+# e.g. show_vector, show_zero_dim
 print_array(io::IO, X::AbstractArray{<:Any, 0}) =
     isassigned(X) ? show(io, X[]) : print(io, undef_ref_str)
 print_array(io::IO, X::AbstractVecOrMat) = print_matrix(io, X)
@@ -424,12 +424,9 @@ end
 
 ### 0-dimensional arrays -- see https://github.com/JuliaLang/julia/issues/31481
 function show_zero_dim(io::IO, X::AbstractArray{<:Any, 0})
-    # `"undef"` not `repr(undef)` because https://github.com/JuliaLang/julia/issues/33204
-    val = isassigned(X) ? repr(X[]) : "undef"
+    val = isassigned(X) ? repr(X[]) : repr(undef)
     print(io, "fill($val)")
 end
-# special case for when `isassigned(::AbstractArray{<:UndefInitializer}) == true`
-show_zero_dim(io::IO, X::AbstractArray{<:UndefInitializer, 0}) = print(io, "fill(undef)")
 
 ### Vector arrays
 
