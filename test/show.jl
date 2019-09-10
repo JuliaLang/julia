@@ -1541,6 +1541,13 @@ end
 Z = Array{Float64}(undef,0,0)
 @test eval(Meta.parse(repr(Z))) == Z
 
+@testset "show undef" begin
+    # issue  #33204 - Parseable `repr` for `undef`
+    @test eval(Meta.parse(repr(undef))) == undef == UndefInitializer()
+    @test showstr(undef) == "UndefInitializer()"
+    @test occursin("initializer with undefined values", replstr(undef))
+end
+
 # issue #31065, do not print parentheses for nested dot expressions
 @test sprint(Base.show_unquoted, :(foo.x.x)) == "foo.x.x"
 
