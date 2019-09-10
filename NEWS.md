@@ -43,7 +43,7 @@ Standard library changes
 
 #### SparseArrays
 
-* Products involving sparse matrices and vectors now allow sparse elements to be of more general types `T`, such as `StaticArrays` ([#33169])
+* Products involving sparse arrays now allow more general sparse `eltype`s, such as `StaticArrays` ([#33205])
 
 #### Dates
 
