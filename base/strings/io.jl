@@ -10,8 +10,6 @@ if `io` is not given) a canonical (un-decorated) text representation.
 The representation used by `print` includes minimal formatting and tries to
 avoid Julia-specific details.
 
-Printing `nothing` is not allowed and throws an error.
-
 `print` falls back to calling `show`, so most types should just define
 `show`. Define `print` if your type has a separate "plain" representation.
 For example, `show` displays strings with quotes, and `print` displays strings
