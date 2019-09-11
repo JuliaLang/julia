@@ -825,7 +825,7 @@ julia> partialsortperm!(ix, v, 2:3, initialized=true)
 2-element view(::Array{Int64,1}, 2:3) with eltype Int64:
  4
  3
-
+```
  """
 function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
                           k::Union{Int, OrdinalRange};
