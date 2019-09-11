@@ -802,12 +802,12 @@ If `initialized` is `true`, but `ix` does not contain (a permutation of) the ind
 
 (Typically, the indices of `v` will be `1:length(v)`, although if `v` has an alternative array type
 with non-one-based indices, such as an `OffsetArray`, `ix` must also be an `OffsetArray` with the same
-indices, and the contents of `ix` must be these same indices, or a permutation thereof.)
+indices, and must contain as values (a permutation of) these same indices.)
 
 Upon return, `ix` is guaranteed to have the indices `k` in their sorted positions, such that
 `v[partialsortperm!(ix, v, k)] == partialsort!(v, k)`
 
-The return value is the `k`th element of `ix` if `k` is an Integer, or view into `ix` if `k` is
+The return value is the `k`th element of `ix` if `k` is an integer, or view into `ix` if `k` is
 a range.
 
 # Examples
