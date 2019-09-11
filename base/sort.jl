@@ -817,7 +817,7 @@ julia> ix = Vector{Int}(undef, 4);
 julia> partialsortperm!(ix, v, 1)
 2
 
-julia> ix = [1:4...];
+julia> ix = [1:4;];
 
 julia> partialsortperm!(ix, v, 2:3, initialized=true)
 2-element view(::Array{Int64,1}, 2:3) with eltype Int64:
