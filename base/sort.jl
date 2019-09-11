@@ -799,7 +799,7 @@ If `initialized` is `false` (the default), then `ix` is initialized to contain t
 
 If `initialized` is `true`, but `ix` does not contain the indices of `v`, the behavior is undefined.
 
-(Typically, the indices of `v` will be `1:length(ix)`, although if `v` has an alternative array type
+(Typically, the indices of `v` will be `1:length(v)`, although if `v` has an alternative array type
 with non-one-based indices, such as an `OffsetArray`, `ix` must have the same indices.)
 
 Upon return, `ix` is guaranteed to have the indices `k` in their sorted positions, such that
