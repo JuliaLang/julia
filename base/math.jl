@@ -547,8 +547,8 @@ julia> hypot(3, 4im)
 ```
 """
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
-hypot(x::Complex, y::Complex) = hypot(promote(abs(x),abs(y))...)
-hypot(x::Integer, y::Integer) = hypot(promote(float(x), float(y))...)
+hypot(x::Complex, y::Complex) = hypot(abs(x), abs(y))
+hypot(x::Integer, y::Integer) = hypot(float(x), float(y))
 function hypot(x::T,y::T) where T<:AbstractFloat
     #Return Inf if either or both imputs is Inf (Compliance with IEEE754)
     if isinf(x) || isinf(y)
@@ -595,30 +595,6 @@ function hypot(x::T,y::T) where T<:AbstractFloat
         end
     end
     h*scale
-end
-function hypot(x::T, y::T) where T<:Number
-    ax = abs(x)
-    ay = abs(y)
-    if ax < ay
-        ax, ay = ay, ax
-    end
-    if iszero(ax)
-        r = ay / oneunit(ax)
-    else
-        r = ay / ax
-    end
-
-    rr = ax * sqrt(1 + r * r)
-
-    # Use type of rr to make sure that return type is the same for
-    # all branches
-    if isnan(r)
-        isinf(ax) && return oftype(rr, Inf)
-        isinf(ay) && return oftype(rr, Inf)
-        return oftype(rr, r)
-    else
-        return rr
-    end
 end
 
 """
