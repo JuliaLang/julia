@@ -811,7 +811,7 @@ The return value is the `k`th element of `ix` if `k` is an integer, or view into
 a range.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> v = [3, 1, 2, 1];
 
 julia> ix = Vector{Int}(undef, 4);
