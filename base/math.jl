@@ -549,10 +549,10 @@ julia> hypot(3, 4im)
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
 hypot(x::Complex, y::Complex) = hypot(abs(x), abs(y))
 hypot(x::T, y::T) where {T<:Number} = hypot(float(x), float(y))
-function hypot(x::T,y::T) where T<:AbstractFloat
+function hypot(x::T, y::T) where T<:AbstractFloat
     #Return Inf if either or both imputs is Inf (Compliance with IEEE754)
     if isinf(x) || isinf(y)
-        return convert(T,Inf)
+        return T(Inf)
     end
 
     # Order the operands
@@ -594,7 +594,7 @@ function hypot(x::T,y::T) where T<:AbstractFloat
             h -= muladd(delta,delta,muladd(ay,(4*delta-ay),2*delta*(ax-2*ay)))/(2*h)
         end
     end
-    h*scale
+    return h*scale
 end
 
 """
