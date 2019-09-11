@@ -762,7 +762,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     if isone(_add.alpha) && iszero(_add.beta)
                         copyto!(C, ib:ilim, jb:jlim, Ctile, 1:ilen, 1:jlen)
                     else
-                        C[ib:ilim, jb:jlim] .= @views _add.(C[ib:ilim, jb:jlim], Ctile[1:ilen, 1:jlen])
+                        C[ib:ilim, jb:jlim] .= @views _add.(Ctile[1:ilen, 1:jlen], C[ib:ilim, jb:jlim])
                     end
                 end
             end
