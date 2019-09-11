@@ -1042,12 +1042,12 @@ fake_repl() do stdin_write, stdout_read, repl
     sendrepl(code) = write(stdin_write, "$code\n notify($(curmod_prefix)c)\n")
     existhelp(val) = begin
         regex = Regex("is of type `$(Int)`")
-        str = sprint(show, REPL.context_module.eval(REPL._helpmode(IOBuffer(), val))::Union{Markdown.MD, Nothing})
+        str = sprint(show, REPL.context_module[].eval(REPL._helpmode(IOBuffer(), val))::Union{Markdown.MD, Nothing})
         occursin(regex, str)
     end
 
     # default context module
-    @test REPL.context_module == Main
+    @test REPL.context_module[] == Main
     sendrepl("inmodulemain = 1")
     wait(c)
     @test isdefined(Main, :inmodulemain)
@@ -1058,7 +1058,7 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # change context module
     REPL.set_context_module(REPL)
-    @test REPL.context_module == REPL
+    @test REPL.context_module[] == REPL
     sendrepl("inmodulerepl = 1")
     wait(c)
     # evaluation

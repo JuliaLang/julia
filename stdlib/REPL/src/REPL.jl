@@ -59,9 +59,9 @@ answer_color(::AbstractREPL) = ""
 
 const JULIA_PROMPT = "julia> "
 
-context_module = Main
+const context_module = Ref{Module}(Main)
 function set_context_module(mod::Module=Main)
-    global context_module = mod
+    global context_module[] = mod
 end
 
 mutable struct REPLBackend
@@ -78,21 +78,22 @@ mutable struct REPLBackend
         new(repl_channel, response_channel, in_eval)
 end
 
-function eval_user_input(@nospecialize(ast), mod::Module, backend::REPLBackend)
+function eval_user_input(@nospecialize(ast), modref::Ref{Module}, backend::REPLBackend)
+    mod = modref[]
     lasterr = nothing
     Base.sigatomic_begin()
     while true
         try
             Base.sigatomic_end()
             if lasterr !== nothing
-                put!(backend.response_channel, (lasterr, true, mod))
+                put!(backend.response_channel, (lasterr, true, modref))
             else
                 backend.in_eval = true
                 value = Core.eval(mod, ast)
                 backend.in_eval = false
                 # note: use jl_set_global to make sure value isn't passed through `expand`
                 ccall(:jl_set_global, Cvoid, (Any, Any, Any), mod, :ans, value)
-                put!(backend.response_channel, (value, false, mod))
+                put!(backend.response_channel, (value, false, modref))
             end
             break
         catch err
@@ -115,12 +116,12 @@ function start_repl_backend(repl_channel::Channel, response_channel::Channel)
         while true
             tls = task_local_storage()
             tls[:SOURCE_PATH] = nothing
-            ast, mod, show_value = take!(backend.repl_channel)
+            ast, modref, show_value = take!(backend.repl_channel)
             if show_value == -1
                 # exit flag
                 break
             end
-            eval_user_input(ast, mod, backend)
+            eval_user_input(ast, modref, backend)
         end
     end
     return backend
@@ -135,16 +136,15 @@ end
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     io = outstream(d.repl)
     get(io, :color, false) && write(io, answer_color(d.repl))
-    show(IOContext(io, :limit => true, :module => context_module), mime, x)
+    show(IOContext(io, :limit => true, :module => context_module[]), mime, x)
     println(io)
     nothing
 end
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
 function print_response(repl::AbstractREPL, @nospecialize(response), show_value::Bool, have_color::Bool)
-    _, iserr, mod = response
-    repl.waserror = iserr
-    io = IOContext(outstream(repl), :module => mod)
+    _, repl.waserror, mod = response
+    io = IOContext(outstream(repl), :module => mod[])
     print_response(io, response, show_value, have_color, specialdisplay(repl))
     nothing
 end
@@ -366,7 +366,7 @@ beforecursor(buf::IOBuffer) = String(buf.data[1:buf.ptr-1])
 function complete_line(c::REPLCompletionProvider, s)
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
-    ret, range, should_complete = completions(full, lastindex(partial), context_module)
+    ret, range, should_complete = completions(full, lastindex(partial), context_module[])
     return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 
@@ -705,7 +705,7 @@ backend(r::AbstractREPL) = r.backendref
 
 function eval_with_backend(ast, backend::REPLBackendRef)
     put!(backend.repl_channel, (ast, context_module, 1))
-    take!(backend.response_channel) # (val, iserr, mod)
+    take!(backend.response_channel) # (val, iserr, modref)
 end
 
 function respond(f, repl, main; pass_empty = false)
