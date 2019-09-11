@@ -790,7 +790,7 @@ partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
     partialsortperm!(ix, v, k; by=<transform>, lt=<comparison>, rev=false, initialized=false)
 
 Like [`partialsortperm`](@ref), but accepts a preallocated index vector `ix` the same size as
-`v`, which is used to store (a permutation of) the indices of `v`. 
+`v`, which is used to store (a permutation of) the indices of `v`.
 
 If the index vector `ix` is initialized with the indices of `v` (or a permutation thereof), `initialized` should be set to
 `true`.
