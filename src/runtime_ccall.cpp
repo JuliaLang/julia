@@ -53,15 +53,23 @@ void *jl_get_library(const char *f_lib)
     return hnd;
 }
 
+extern "C" {
+extern void *get_foreigncall_fptr(const char *fname, const char *libname);
+}
+
 extern "C" JL_DLLEXPORT
 void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd)
 {
+#ifdef _OS_EMSCRIPTEN_
+    return get_foreigncall_fptr(f_name, f_lib);
+#else
     void *handle = jl_atomic_load_acquire(hnd);
     if (!handle)
         jl_atomic_store_release(hnd, (handle = jl_get_library(f_lib)));
     void * ptr;
     jl_dlsym(handle, f_name, &ptr, 1);
     return ptr;
+#endif
 }
 
 // miscellany

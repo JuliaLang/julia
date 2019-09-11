@@ -1876,7 +1876,7 @@ JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_(void *jl_value) JL_NOTSAFEPOINT;
 #else
 JL_DLLEXPORT void jl_(jl_value_t *jl_value) JL_NOTSAFEPOINT;
-#endif 
+#endif
 
 // julia options -----------------------------------------------------------
 // NOTE: This struct needs to be kept in sync with JLOptions type in base/options.jl

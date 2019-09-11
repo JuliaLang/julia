@@ -375,7 +375,7 @@ jl_method_instance_t *jl_get_unspecialized(jl_method_instance_t *method JL_PROPA
 
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);
 jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam JL_PROPAGATES_ROOT);
-JL_DLLEXPORT void jl_foreigncall_get_syms(jl_value_t *target, jl_sym_t **fname, jl_sym_t **libname) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_foreigncall_get_syms(jl_value_t *target, jl_sym_t **fname, jl_sym_t **libname);
 JL_DLLEXPORT int jl_foreigncall_interpretable(jl_sym_t *fname, jl_sym_t *libname) JL_NOTSAFEPOINT;
 int jl_code_requires_compiler(jl_code_info_t *src);
 jl_code_info_t *jl_new_code_info_from_ast(jl_expr_t *ast);
