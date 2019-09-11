@@ -1538,7 +1538,7 @@ function *(transA::Transpose{<:Any,<:StridedMatrix{Ta}}, x::AbstractSparseVector
 end
 
 mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    mul!(y, transA, x, 1, 0)
+    mul!(y, transA, x, true, false)
 
 function mul!(y::AbstractVector, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, transA, x)
@@ -1579,7 +1579,7 @@ function *(adjA::Adjoint{<:Any,<:StridedMatrix{Ta}}, x::AbstractSparseVector{Tx}
 end
 
 mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:StridedMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    mul!(y, adjA, x, 1, 0)
+    mul!(y, adjA, x, true, false)
 
 function mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:StridedMatrix}, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, adjA, x)
@@ -1640,7 +1640,7 @@ end
 # * and mul!
 
 mul!(y::AbstractVector{Ty}, A::AbstractSparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    mul!(y, A, x, 1, 0)
+    mul!(y, A, x, true, false)
 
 function mul!(y::AbstractVector, A::AbstractSparseMatrixCSC, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, A, x)
@@ -1674,13 +1674,13 @@ end
 # * and *(Tranpose(A), B)
 
 mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = transA.parent; mul!(y, transpose(A), x, 1, 0))
+    (A = transA.parent; mul!(y, transpose(A), x, true, false))
 
 mul!(y::AbstractVector, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
     (A = transA.parent; _At_or_Ac_mul_B!((a,b) -> transpose(a) * b, y, A, x, α, β))
 
 mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = adjA.parent; mul!(y, adjoint(A), x, 1, 0))
+    (A = adjA.parent; mul!(y, adjoint(A), x, true, false))
 
 mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
     (A = adjA.parent; _At_or_Ac_mul_B!((a,b) -> adjoint(a) * b, y, A, x, α, β))
