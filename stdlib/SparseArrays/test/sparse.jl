@@ -870,6 +870,21 @@ end
         end
     end
 
+    # indexing by array of CartesianIndex (issue #30981)
+    S = sprand(10, 10, 0.4)
+    inds_sparse = S[findall(S .> 0.2)]
+    M = Matrix(S)
+    inds_dense = M[findall(M .> 0.2)]
+    @test Array(inds_sparse) == inds_dense
+    inds_out = Array([CartesianIndex(1, 1), CartesianIndex(0, 1)])
+    @test_throws BoundsError S[inds_out]
+    pop!(inds_out); push!(inds_out, CartesianIndex(1, 0))
+    @test_throws BoundsError S[inds_out]
+    pop!(inds_out); push!(inds_out, CartesianIndex(11, 1))
+    @test_throws BoundsError S[inds_out]
+    pop!(inds_out); push!(inds_out, CartesianIndex(1, 11))
+    @test_throws BoundsError S[inds_out]
+
     # workaround issue #7197: comment out let-block
     #let S = SparseMatrixCSC(3, 3, UInt8[1,1,1,1], UInt8[], Int64[])
     S1290 = SparseMatrixCSC(3, 3, UInt8[1,1,1,1], UInt8[], Int64[])
