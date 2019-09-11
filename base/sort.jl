@@ -805,7 +805,11 @@ with non-one-based indices, such as an `OffsetArray`, `ix` must also be an `Offs
 indices, and must contain as values (a permutation of) these same indices.)
 
 Upon return, `ix` is guaranteed to have the indices `k` in their sorted positions, such that
-`v[partialsortperm!(ix, v, k)] == partialsort!(v, k)`
+
+```julia
+partialsortperm!(ix, v, k);
+v[ix[k]] == partialsort(v, k)
+```
 
 The return value is the `k`th element of `ix` if `k` is an integer, or view into `ix` if `k` is
 a range.
