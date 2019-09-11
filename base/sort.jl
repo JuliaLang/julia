@@ -790,17 +790,19 @@ partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
     partialsortperm!(ix, v, k; by=<transform>, lt=<comparison>, rev=false, initialized=false)
 
 Like [`partialsortperm`](@ref), but accepts a preallocated index vector `ix` the same size as
-`v`.
+`v`, which is used to store (a permutation of) the indices of `v`. 
 
-If the index vector `ix` is initialized with the indices of `v`, `initialized` should be set to
+If the index vector `ix` is initialized with the indices of `v` (or a permutation thereof), `initialized` should be set to
 `true`.
 
 If `initialized` is `false` (the default), then `ix` is initialized to contain the indices of `v`.
 
-If `initialized` is `true`, but `ix` does not contain the indices of `v`, the behavior is undefined.
+If `initialized` is `true`, but `ix` does not contain (a permutation of) the indices of `v`, the behavior of
+`partialsortperm!` is undefined.
 
 (Typically, the indices of `v` will be `1:length(v)`, although if `v` has an alternative array type
-with non-one-based indices, such as an `OffsetArray`, `ix` must have the same indices.)
+with non-one-based indices, such as an `OffsetArray`, `ix` must also be an `OffsetArray` with the same
+indices, and the contents of `ix` must be these same indices, or a permutation thereof.)
 
 Upon return, `ix` is guaranteed to have the indices `k` in their sorted positions, such that
 `v[partialsortperm!(ix, v, k)] == partialsort!(v, k)`
