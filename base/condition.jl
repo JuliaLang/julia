@@ -166,4 +166,4 @@ const Condition = GenericCondition{AlwaysLockedST}
 lock(c::GenericCondition{AlwaysLockedST}) =
     throw(ArgumentError("`Condition` is not thread-safe. Please use `Threads.Condition` instead for multi-threaded code."))
 unlock(c::GenericCondition{AlwaysLockedST}) =
-    throw(ArgumentError("`Condition` is NOT thread-safe. Please use `Threads.Condition` instead for concurrent code."))
+    throw(ArgumentError("`Condition` is not thread-safe. Please use `Threads.Condition` instead for multi-threaded code."))
