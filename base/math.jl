@@ -548,7 +548,7 @@ julia> hypot(3, 4im)
 """
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
 hypot(x::Complex, y::Complex) = hypot(abs(x), abs(y))
-hypot(x::T, y::T) where {T<:Number} = hypot(float(x), float(y))
+hypot(x::T, y::T) where {T<:Real} = hypot(float(x), float(y))
 function hypot(x::T, y::T) where T<:AbstractFloat
     #Return Inf if either or both imputs is Inf (Compliance with IEEE754)
     if isinf(x) || isinf(y)
