@@ -1801,7 +1801,7 @@ extern int had_exception;
 
 #define JL_CATCH                                                \
     else                                                        \
-        for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0, jl_restore_excstack(__excstack_state))
+        for (i__ca=1, sanitizer_finish_switch_fiber() ,jl_eh_restore_state(&__eh); i__ca; i__ca=0, jl_restore_excstack(__excstack_state))
 
 #endif
 

@@ -330,6 +330,7 @@ static Function *gcroot_flush_func;
 static Function *gc_preserve_begin_func;
 static Function *gc_preserve_end_func;
 static Function *except_enter_func;
+static Function *finish_switch_fiber_func;
 static Function *pointer_from_objref_func;
 
 static std::map<jl_fptr_args_t, Function*> builtin_func_map;
@@ -6478,7 +6479,20 @@ static std::unique_ptr<Module> emit_function(
             handlr = BB[lname];
             workstack.push_back(lname - 1);
             come_from_bb[cursor + 1] = ctx.builder.GetInsertBlock();
+
+#ifdef JL_ASAN_ENABLED
+            BasicBlock *asan = BasicBlock::Create(jl_LLVMContext, "asan", f);
+            ctx.builder.CreateCondBr(isz, tryblk, asan);
+            ctx.builder.SetInsertPoint(asan);
+            ctx.builder.CreateCall(prepare_call(finish_switch_fiber_func), {
+                    ConstantPointerNull::get(PointerType::get(T_void, 0)),
+                    ConstantPointerNull::get(PointerType::get(T_void, 0)),
+                    ConstantPointerNull::get(PointerType::get(T_void, 0))
+                });
+            ctx.builder.CreateBr(handlr);
+#else
             ctx.builder.CreateCondBr(isz, tryblk, handlr);
+#endif
             ctx.builder.SetInsertPoint(tryblk);
         }
         else {
@@ -7611,6 +7625,13 @@ static void init_julia_llvm_env(Module *m)
                                          "julia.except_enter");
     except_enter_func->addFnAttr(Attribute::ReturnsTwice);
     add_named_global(except_enter_func, (void*)NULL, /*dllimport*/false);
+
+    finish_switch_fiber_func = Function::Create(FunctionType::get(T_void,
+                                            {PointerType::get(T_void,0), PointerType::get(T_void,0), PointerType::get(T_void,0)},
+                                            false),
+                                         Function::ExternalLinkage,
+                                         "__sanitizer_finish_switch_fiber");
+    add_named_global(finish_switch_fiber_func, (void*)NULL, /*dllimport*/false);
 
     jlgetworld_global =
         new GlobalVariable(*m, T_size,

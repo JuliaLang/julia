@@ -457,8 +457,10 @@ void JL_NORETURN throw_internal(jl_value_t *exception JL_MAYBE_UNROOTED)
         }
         assert(cur_block == eh->timing_stack);
 #endif
-        // todo sanitizer
+        jl_task_t *t = ptls->current_task;
+        sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
         jl_longjmp(eh->eh_ctx, 1);
+        assert(0);
     }
     else {
         jl_no_exc_handler(exception);

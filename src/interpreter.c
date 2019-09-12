@@ -704,14 +704,17 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                 if (!jl_setjmp(__eh.eh_ctx, 1)) {
                     return eval_body(stmts, s, next_ip, toplevel);
                 }
-                else if (s->continue_at) { // means we reached a :leave expression
-                    ip = s->continue_at;
-                    s->continue_at = 0;
-                    continue;
-                }
-                else { // a real exeception
-                    ip = catch_ip;
-                    continue;
+                else {
+                    sanitizer_finish_switch_fiber();
+                    if (s->continue_at) { // means we reached a :leave expression
+                        ip = s->continue_at;
+                        s->continue_at = 0;
+                        continue;
+                    }
+                    else { // a real exeception
+                        ip = catch_ip;
+                        continue;
+                    }
                 }
             }
             else if (head == leave_sym) {
@@ -726,7 +729,10 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                 // leave happens during normal control flow, but we must
                 // longjmp to pop the eval_body call for each enter.
                 s->continue_at = next_ip;
+                jl_task_t *t = ptls->current_task;
+                sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
                 jl_longjmp(eh->eh_ctx, 1);
+                abort(); // unreachable
             }
             else if (head == pop_exception_sym) {
                 size_t prev_state = jl_unbox_ulong(eval_value(jl_exprarg(stmt, 0), s));

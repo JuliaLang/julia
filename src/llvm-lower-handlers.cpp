@@ -50,7 +50,7 @@ using namespace llvm;
  *                 \                 /
  *              br i1 %cond, %left2, %right2
  *                 /                 \
- *           jl_pop_hander          ret
+ *           jl_pop_handler          ret
  *           ret
  *
  *    The frontend doesn't emit structures like this. However, the optimizer
