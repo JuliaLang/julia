@@ -154,12 +154,12 @@ function (*)(A::AbstractMatrix, B::AbstractMatrix)
 end
 
 @inline function mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
-                      alpha′::Number, beta′::Number) where {T<:BlasFloat}
-    alpha, beta = promote(alpha′, beta′, zero(T))
+                      α::Number, β::Number) where {T<:BlasFloat}
+    alpha, beta = promote(α, β, zero(T))
     if alpha isa T && beta isa T
         return gemm_wrapper!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
     else
-        return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha′, beta′))
+        return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(α, β))
     end
 end
 
