@@ -1940,3 +1940,5 @@ function f33135(x::T) where {C1, T}
 end
 @test f33135(0) == 1
 
+# issue #33227
+@test Meta.isexpr(Meta.lower(Main, :((@label a; @goto a))), :thunk)
