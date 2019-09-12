@@ -675,12 +675,9 @@ function getindex(A::AbstractSparseMatrixCSC{Tv,Ti}, I::AbstractVector) where {T
     rowvalB = Vector{Ti}(undef, nnzB)
     nzvalB = Vector{Tv}(undef, nnzB)
 
-    _rowcol(t::Tuple, ind) = Base._ind2sub(t, ind)
-    _rowcol(t::Tuple, ind::CartesianIndex) = (ind[1], ind[2])
-
     idxB = 1
     for i in 1:n
-        row,col = _rowcol(szA, I[i])
+        row,col = Base._ind2sub(szA, I[i])
         for r in colptrA[col]:(colptrA[col+1]-1)
             @inbounds if rowvalA[r] == row
                 if idxB <= nnzB
