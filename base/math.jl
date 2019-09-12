@@ -142,8 +142,8 @@ that is, the coefficients are given in ascending order by power of `z`. This fun
 generates efficient code using a Goertzel-like algorithm specialized for complex arguments
 with loops unrolled at compile time.
 
-The Goertzel-like algorthim is described in Knuth's Art of computer programming,
-volume 2: Seminumerical algorithms, Sec. 4.6.4.
+The Goertzel-like algorthim is described in Knuth's Art of Computer Programming,
+Volume 2: Seminumerical Slgorithms, Sec. 4.6.4.
 
 # Example
 ```jldoctest
