@@ -16,6 +16,7 @@ mutable struct ReentrantLock <: AbstractLock
     ReentrantLock() = new(nothing, GenericCondition{Threads.SpinLock}(), 0)
 end
 
+assert_havelock(l::ReentrantLock) = assert_havelock(l, l.locked_by)
 
 """
     islocked(lock) -> Status (Boolean)
@@ -162,6 +163,28 @@ function trylock(f, l::AbstractLock)
         end
     end
     return false
+end
+
+macro lock(l, expr)
+    quote
+        temp = $(esc(l))
+        lock(temp)
+        try
+            $(esc(expr))
+        finally
+            unlock(temp)
+        end
+    end
+end
+
+macro lock_nofail(l, expr)
+    quote
+        temp = $(esc(l))
+        lock(temp)
+        val = $(esc(expr))
+        unlock(temp)
+        val
+    end
 end
 
 @eval Threads begin

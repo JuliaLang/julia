@@ -444,78 +444,99 @@ function copyto!(A::T, B::T) where T<:Union{LowerTriangular,UnitLowerTriangular}
     return A
 end
 
-function mul!(A::UpperTriangular, B::UpperTriangular, c::Number)
+# Define `mul!` for (Unit){Upper,Lower}Triangular matrices times a
+# number.
+for (Trig, UnitTrig) in [(UpperTriangular, UnitUpperTriangular),
+                         (LowerTriangular, UnitLowerTriangular)]
+    for (TB, TC) in [(Trig, Number),
+                     (Number, Trig),
+                     (UnitTrig, Number),
+                     (Number, UnitTrig)]
+        @eval @inline mul!(A::$Trig, B::$TB, C::$TC, alpha::Number, beta::Number) =
+            _mul!(A, B, C, MulAddMul(alpha, beta))
+    end
+end
+
+@inline function _mul!(A::UpperTriangular, B::UpperTriangular, c::Number, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = 1:j
-            @inbounds A[i,j] = B[i,j] * c
+            @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
         end
     end
     return A
 end
-function mul!(A::UpperTriangular, c::Number, B::UpperTriangular)
+@inline function _mul!(A::UpperTriangular, c::Number, B::UpperTriangular, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = 1:j
-            @inbounds A[i,j] = c * B[i,j]
+            @inbounds _modify!(_add, c * B[i,j], A, (i,j))
         end
     end
     return A
 end
-function mul!(A::UpperTriangular, B::UnitUpperTriangular, c::Number)
+@inline function _mul!(A::UpperTriangular, B::UnitUpperTriangular, c::Number, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
-        @inbounds A[j,j] = c
+        @inbounds _modify!(_add, c, A, (j,j))
         for i = 1:(j - 1)
-            @inbounds A[i,j] = B[i,j] * c
+            @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
         end
     end
     return A
 end
-function mul!(A::UpperTriangular, c::Number, B::UnitUpperTriangular)
+@inline function _mul!(A::UpperTriangular, c::Number, B::UnitUpperTriangular, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
-        @inbounds A[j,j] = c
+        @inbounds _modify!(_add, c, A, (j,j))
         for i = 1:(j - 1)
-            @inbounds A[i,j] = c * B[i,j]
+            @inbounds _modify!(_add, c * B[i,j], A, (i,j))
         end
     end
     return A
 end
-function mul!(A::LowerTriangular, B::LowerTriangular, c::Number)
+@inline function _mul!(A::LowerTriangular, B::LowerTriangular, c::Number, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = j:n
-            @inbounds A[i,j] = B[i,j] * c
+            @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
         end
     end
     return A
 end
-function mul!(A::LowerTriangular, c::Number, B::LowerTriangular)
+@inline function _mul!(A::LowerTriangular, c::Number, B::LowerTriangular, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = j:n
-            @inbounds A[i,j] = c * B[i,j]
+            @inbounds _modify!(_add, c * B[i,j], A, (i,j))
         end
     end
     return A
 end
-function mul!(A::LowerTriangular, B::UnitLowerTriangular, c::Number)
+@inline function _mul!(A::LowerTriangular, B::UnitLowerTriangular, c::Number, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
-            @inbounds A[j,j] = c
+        @inbounds _modify!(_add, c, A, (j,j))
         for i = (j + 1):n
-            @inbounds A[i,j] = B[i,j] * c
+            @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
         end
     end
     return A
 end
-function mul!(A::LowerTriangular, c::Number, B::UnitLowerTriangular)
+@inline function _mul!(A::LowerTriangular, c::Number, B::UnitLowerTriangular, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
-            @inbounds A[j,j] = c
+        @inbounds _modify!(_add, c, A, (j,j))
         for i = (j + 1):n
-            @inbounds A[i,j] = c * B[i,j]
+            @inbounds _modify!(_add, c * B[i,j], A, (i,j))
         end
     end
     return A
@@ -523,6 +544,90 @@ end
 
 rmul!(A::Union{UpperTriangular,LowerTriangular}, c::Number) = mul!(A, A, c)
 lmul!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = mul!(A, c, A)
+
+function dot(x::AbstractVector, A::UpperTriangular, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    m = size(A, 1)
+    (length(x) == m == length(y)) || throw(DimensionMismatch())
+    if iszero(m)
+        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    end
+    x₁ = x[1]
+    r = dot(x₁, A[1,1], y[1])
+    @inbounds for j in 2:m
+        yj = y[j]
+        if !iszero(yj)
+            temp = adjoint(A[1,j]) * x₁
+            @simd for i in 2:j
+                temp += adjoint(A[i,j]) * x[i]
+            end
+            r += dot(temp, yj)
+        end
+    end
+    return r
+end
+function dot(x::AbstractVector, A::UnitUpperTriangular, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    m = size(A, 1)
+    (length(x) == m == length(y)) || throw(DimensionMismatch())
+    if iszero(m)
+        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    end
+    x₁ = first(x)
+    r = dot(x₁, y[1])
+    @inbounds for j in 2:m
+        yj = y[j]
+        if !iszero(yj)
+            temp = adjoint(A[1,j]) * x₁
+            @simd for i in 2:j-1
+                temp += adjoint(A[i,j]) * x[i]
+            end
+            r += dot(temp, yj)
+            r += dot(x[j], yj)
+        end
+    end
+    return r
+end
+function dot(x::AbstractVector, A::LowerTriangular, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    m = size(A, 1)
+    (length(x) == m == length(y)) || throw(DimensionMismatch())
+    if iszero(m)
+        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    end
+    r = zero(typeof(dot(first(x), first(A), first(y))))
+    @inbounds for j in 1:m
+        yj = y[j]
+        if !iszero(yj)
+            temp = adjoint(A[j,j]) * x[j]
+            @simd for i in j+1:m
+                temp += adjoint(A[i,j]) * x[i]
+            end
+            r += dot(temp, yj)
+        end
+    end
+    return r
+end
+function dot(x::AbstractVector, A::UnitLowerTriangular, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    m = size(A, 1)
+    (length(x) == m == length(y)) || throw(DimensionMismatch())
+    if iszero(m)
+        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    end
+    r = zero(typeof(dot(first(x), first(y))))
+    @inbounds for j in 1:m
+        yj = y[j]
+        if !iszero(yj)
+            temp = x[j]
+            @simd for i in j+1:m
+                temp += adjoint(A[i,j]) * x[i]
+            end
+            r += dot(temp, yj)
+        end
+    end
+    return r
+end
 
 fillstored!(A::LowerTriangular, x)     = (fillband!(A.data, x, 1-size(A,1), 0); A)
 fillstored!(A::UnitLowerTriangular, x) = (fillband!(A.data, x, 1-size(A,1), -1); A)
@@ -556,8 +661,10 @@ fillstored!(A::UnitUpperTriangular, x) = (fillband!(A.data, x, 1, size(A,2)-1); 
 
 lmul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B) # is this necessary?
 
-mul!(C::AbstractMatrix, A::AbstractTriangular, B::Tridiagonal) = mul!(C, copyto!(similar(parent(A)), A), B)
-mul!(C::AbstractMatrix, A::Tridiagonal, B::AbstractTriangular) = mul!(C, A, copyto!(similar(parent(B)), B))
+@inline mul!(C::AbstractMatrix, A::AbstractTriangular, B::Tridiagonal, alpha::Number, beta::Number) =
+    mul!(C, copyto!(similar(parent(A)), A), B, alpha, beta)
+@inline mul!(C::AbstractMatrix, A::Tridiagonal, B::AbstractTriangular, alpha::Number, beta::Number) =
+    mul!(C, A, copyto!(similar(parent(B)), B), alpha, beta)
 mul!(C::AbstractVector, A::AbstractTriangular, transB::Transpose{<:Any,<:AbstractVecOrMat}) =
     (B = transB.parent; lmul!(A, transpose!(C, B)))
 mul!(C::AbstractMatrix, A::AbstractTriangular, transB::Transpose{<:Any,<:AbstractVecOrMat}) =
@@ -583,10 +690,14 @@ mul!(C::AbstractMatrix  , transA::Transpose{<:Any,<:AbstractTriangular}, B::Abst
     (A = transA.parent; lmul!(transpose(A), copyto!(C, B)))
 mul!(C::AbstractVecOrMat, transA::Transpose{<:Any,<:AbstractTriangular}, B::AbstractVecOrMat) =
     (A = transA.parent; lmul!(transpose(A), copyto!(C, B)))
-mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
+@inline mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
+    mul!(C, A, copy(B), alpha, beta)
+@inline mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
+    mul!(C, A, copy(B), alpha, beta)
+@inline mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
+    mul!(C, A, copy(B), alpha, beta)
+@inline mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
+    mul!(C, A, copy(B), alpha, beta)
 mul!(C::AbstractVector, A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
 mul!(C::AbstractVector, A::Transpose{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
 
@@ -2513,7 +2624,7 @@ eigen(A::AbstractTriangular) = Eigen(eigvals(A), eigvecs(A))
 # Generic singular systems
 for func in (:svd, :svd!, :svdvals)
     @eval begin
-        ($func)(A::AbstractTriangular) = ($func)(copyto!(similar(parent(A)), A))
+        ($func)(A::AbstractTriangular; kwargs...) = ($func)(copyto!(similar(parent(A)), A); kwargs...)
     end
 end
 

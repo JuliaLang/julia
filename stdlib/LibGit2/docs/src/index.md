@@ -1,9 +1,5 @@
 # LibGit2
 
-```@meta
-DocTestSetup = :(using LibGit2)
-```
-
 The LibGit2 module provides bindings to [libgit2](https://libgit2.org/), a portable C library that
 implements core functionality for the [Git](https://git-scm.com/) version control system.
 These bindings are currently used to power Julia's package manager.
@@ -162,8 +158,4 @@ LibGit2.CachedCredentials
 LibGit2.CredentialPayload
 LibGit2.approve
 LibGit2.reject
-```
-
-```@meta
-DocTestSetup = nothing
 ```

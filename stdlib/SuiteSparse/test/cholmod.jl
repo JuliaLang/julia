@@ -6,6 +6,8 @@ using Test
 using Random
 using Serialization
 using LinearAlgebra: issuccess, PosDefException
+using SparseArrays
+using SparseArrays: getcolptr
 
 # CHOLMOD tests
 Random.seed!(123)
@@ -330,11 +332,11 @@ end
     A1Sparse = CHOLMOD.Sparse(A1)
     A2Sparse = CHOLMOD.Sparse(A2)
     A1pdSparse = CHOLMOD.Sparse(
-        A1pd.m,
-        A1pd.n,
-        SuiteSparse.decrement(A1pd.colptr),
-        SuiteSparse.decrement(A1pd.rowval),
-        A1pd.nzval)
+        size(A1pd, 1),
+        size(A1pd, 2),
+        SuiteSparse.decrement(getcolptr(A1pd)),
+        SuiteSparse.decrement(rowvals(A1pd)),
+        nonzeros(A1pd))
 
     ## High level interface
     @test isa(CHOLMOD.Sparse(3, 3, [0,1,3,4], [0,2,1,2], fill(1., 4)), CHOLMOD.Sparse) # Sparse doesn't require columns to be sorted
@@ -766,7 +768,8 @@ end
 @testset "Check inputs to Sparse. Related to #20024" for A_ in (
     SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1,2], Float64[]),
     SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1,2], Float64[1.0]))
-    @test_throws ArgumentError CHOLMOD.Sparse(size(A_)..., A_.colptr .- 1, A_.rowval .- 1, A_.nzval)
+    args = (size(A_)..., getcolptr(A_) .- 1, rowvals(A_) .- 1, nonzeros(A_))
+    @test_throws ArgumentError CHOLMOD.Sparse(args...)
     @test_throws ArgumentError CHOLMOD.Sparse(A_)
 end
 

@@ -143,8 +143,6 @@ julia> readdlm("delim_file.txt", ',')
  3.0  3.3
  4.0  4.4
 
-julia> rm("delim_file.txt")
-
 julia> z = ["a"; "b"; "c"; "d"];
 
 julia> open("delim_file.txt", "w") do io
@@ -220,6 +218,8 @@ julia> readdlm("delim_file.txt", '\\t', Int, '\\n')
  2  6
  3  7
  4  8
+
+julia> rm("delim_file.txt")
 ```
 """
 readdlm(input, dlm::AbstractChar, T::Type, eol::AbstractChar; opts...) =

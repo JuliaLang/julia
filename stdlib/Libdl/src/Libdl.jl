@@ -206,6 +206,11 @@ end
 find_library(libname::Union{Symbol,AbstractString}, extrapaths=String[]) =
     find_library([string(libname)], extrapaths)
 
+"""
+    dlpath(handle::Ptr{Cvoid})
+
+Given a library `handle` from `dlopen`, return the full path.
+"""
 function dlpath(handle::Ptr{Cvoid})
     p = ccall(:jl_pathname_for_handle, Cstring, (Ptr{Cvoid},), handle)
     s = unsafe_string(p)
@@ -213,6 +218,16 @@ function dlpath(handle::Ptr{Cvoid})
     return s
 end
 
+"""
+    dlpath(libname::Union{AbstractString, Symbol})
+
+Get the full path of the library `libname`.
+
+# Example
+```julia-repl
+julia> dlpath("libjulia")
+```
+"""
 function dlpath(libname::Union{AbstractString, Symbol})
     handle = dlopen(libname)
     path = dlpath(handle)
@@ -260,6 +275,11 @@ if (Sys.islinux() || Sys.isbsd()) && !Sys.isapple()
     end
 end
 
+"""
+    dllist()
+
+Return the paths of dynamic libraries currently loaded in a `Vector{String}`.
+"""
 function dllist()
     dynamic_libraries = Vector{String}()
 

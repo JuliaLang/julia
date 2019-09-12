@@ -777,9 +777,9 @@ end
 function intersect(r::StepRange, s::StepRange)
     if isempty(r) || isempty(s)
         return range(first(r), step=step(r), length=0)
-    elseif step(s) < 0
+    elseif step(s) < zero(step(s))
         return intersect(r, reverse(s))
-    elseif step(r) < 0
+    elseif step(r) < zero(step(r))
         return reverse(intersect(reverse(r), s))
     end
 
@@ -804,7 +804,7 @@ function intersect(r::StepRange, s::StepRange)
 
     g, x, y = gcdx(step1, step2)
 
-    if rem(start1 - start2, g) != 0
+    if !iszero(rem(start1 - start2, g))
         # Unaligned, no overlap possible.
         return range(start1, step=a, length=0)
     end
@@ -1038,3 +1038,28 @@ function +(r1::StepRangeLen{T,S}, r2::StepRangeLen{T,S}) where {T,S}
 end
 
 -(r1::StepRangeLen, r2::StepRangeLen) = +(r1, -r2)
+
+# Modular arithmetic on ranges
+
+"""
+    mod(x::Integer, r::AbstractUnitRange)
+
+Find `y` in the range `r` such that ``x ≡ y (mod n)``, where `n = length(r)`,
+i.e. `y = mod(x - first(r), n) + first(r)`.
+
+See also: [`mod1`](@ref).
+
+# Examples
+```jldoctest
+julia> mod(0, Base.OneTo(3))
+3
+
+julia> mod(3, 0:2)
+0
+```
+
+!!! compat "Julia 1.3"
+     This method requires at least Julia 1.3.
+"""
+mod(i::Integer, r::OneTo) = mod1(i, last(r))
+mod(i::Integer, r::AbstractUnitRange{<:Integer}) = mod(i-first(r), length(r)) + first(r)

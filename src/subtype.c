@@ -536,10 +536,13 @@ static void record_var_occurrence(jl_varbinding_t *vb, jl_stenv_t *e, int param)
 {
     if (vb != NULL && param) {
         // saturate counters at 2; we don't need values bigger than that
-        if (param == 2 && (vb->right ? e->Rinvdepth : e->invdepth) > vb->depth0 && vb->occurs_inv < 2)
-            vb->occurs_inv++;
-        else if (vb->occurs_cov < 2)
+        if (param == 2 && (vb->right ? e->Rinvdepth : e->invdepth) > vb->depth0) {
+            if (vb->occurs_inv < 2)
+                vb->occurs_inv++;
+        }
+        else if (vb->occurs_cov < 2) {
             vb->occurs_cov++;
+        }
     }
 }
 
@@ -1275,7 +1278,15 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             jl_value_t *tp0 = jl_tparam0(yd);
             if (!jl_is_typevar(tp0) || !jl_is_kind(x))
                 return 0;
-            return subtype((jl_value_t*)jl_type_type, y, e, param);
+            // DataType.super is special, so `DataType <: Type{T}` (T free) needs special handling.
+            // The answer is true iff `T` has full bounds (as in `Type`), but this needs to
+            // be checked at the same depth where `Type{T}` occurs --- the depth of the LHS
+            // doesn't matter because it (e.g. `DataType`) doesn't actually contain the variable.
+            int saved = e->invdepth;
+            e->invdepth = e->Rinvdepth;
+            int issub = subtype((jl_value_t*)jl_type_type, y, e, param);
+            e->invdepth = saved;
+            return issub;
         }
         while (xd != jl_any_type && xd->name != yd->name) {
             if (xd->super == NULL)
@@ -1665,6 +1676,8 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
                 assert(vy != JL_VARARG_NONE && istuple && iscov);
                 jl_value_t *a1 = (vx != JL_VARARG_NONE && i >= npx - 1) ? vxt : jl_tparam(x, i);
                 jl_value_t *b = jl_unwrap_vararg(jl_tparam(y, i));
+                if (jl_is_typevar(b) && var_occurs_inside(y, (jl_tvar_t*)b, 0, 1))
+                    return 0;
                 if (nparams_expanded_x > npy && jl_is_typevar(b) && concrete_min(a1) > 1) {
                     // diagonal rule for 2 or more elements: they must all be concrete on the LHS
                     *subtype = 0;
@@ -2677,26 +2690,16 @@ static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t 
         flip_vars(e);
         return jl_bottom_type;
     }
-    /*
-      TODO: This is a band-aid for issue #23685. A better solution would be to
-      first normalize types so that all `where` expressions in covariant position
-      are pulled out to the top level.
-    */
-    if ((jl_is_typevar(x) && !jl_is_typevar(y) && lookup(e, (jl_tvar_t*)x) == NULL) ||
-        (jl_is_typevar(y) && !jl_is_typevar(x) && lookup(e, (jl_tvar_t*)y) == NULL))
-        return ii;
     jl_value_t *root=NULL;
     jl_savedenv_t se;
     JL_GC_PUSH2(&ii, &root);
     save_env(e, &root, &se);
-    if (!subtype_in_env(x, y, e)) {
+    if (!subtype_in_env_existential(x, y, e, 0, e->invdepth)) {
         ii = NULL;
     }
     else {
-        flip_vars(e);
-        if (!subtype_in_env(y, x, e))
+        if (!subtype_in_env_existential(y, x, e, 0, e->invdepth))
             ii = NULL;
-        flip_vars(e);
     }
     restore_env(e, root, &se);
     free(se.buf);
@@ -3026,6 +3029,14 @@ static jl_value_t *intersect_types(jl_value_t *x, jl_value_t *y, int emptiness_o
     jl_stenv_t e;
     if (obviously_disjoint(x, y, 0))
         return jl_bottom_type;
+    if (jl_is_dispatch_tupletype(x) || jl_is_dispatch_tupletype(y)) {
+        if (jl_subtype(x, y))
+            return x;
+        else if (jl_subtype(y, x))
+            return y;
+        else
+            return jl_bottom_type;
+    }
     init_stenv(&e, NULL, 0);
     e.intersection = e.ignore_free = 1;
     e.emptiness_only = emptiness_only;

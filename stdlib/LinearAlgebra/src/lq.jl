@@ -35,6 +35,7 @@ julia> l, q = S; # destructuring via iteration
 
 julia> l == S.L &&  q == S.Q
 true
+```
 """
 struct LQ{T,S<:AbstractMatrix{T}} <: Factorization{T}
     factors::S
@@ -333,3 +334,8 @@ function ldiv!(A::LQ{T}, B::StridedVecOrMat{T}) where T
     lmul!(adjoint(A.Q), ldiv!(LowerTriangular(A.L),B))
     return B
 end
+
+
+# In LQ factorization, `Q` is expressed as the product of the adjoint of the
+# reflectors.  Thus, `det` has to be conjugated.
+det(Q::LQPackedQ) = conj(_det_tau(Q.τ))

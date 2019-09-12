@@ -470,7 +470,7 @@ If `count` is provided, replace at most `count` occurrences.
 `pat` may be a single character, a vector or a set of characters, a string,
 or a regular expression.
 If `r` is a function, each occurrence is replaced with `r(s)`
-where `s` is the matched substring (when `pat`is a `Regex` or `AbstractString`) or
+where `s` is the matched substring (when `pat` is a `Regex` or `AbstractString`) or
 character (when `pat` is an `AbstractChar` or a collection of `AbstractChar`).
 If `pat` is a regular expression and `r` is a [`SubstitutionString`](@ref), then capture group
 references in `r` are replaced with the corresponding matched text.

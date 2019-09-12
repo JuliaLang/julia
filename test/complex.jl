@@ -1148,3 +1148,6 @@ end
         @test isequal(ComplexF64(cscd(T(-1000, 100000))), ComplexF64(0.0, -0.0))
     end
 end
+
+# real(C) with C a Complex Unionall
+@test real(Complex{<:AbstractFloat}) == AbstractFloat

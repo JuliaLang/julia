@@ -579,7 +579,9 @@ end
 
 function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
     !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
-    val = convert(V, val)
+    if !(val isa V) # avoid a dynamic call
+        val = convert(V, val)
+    end
     if d.ndel >= ((3*length(d.ht))>>2)
         rehash!(d, max(length(d.ht)>>1, 32))
         d.ndel = 0
@@ -717,10 +719,10 @@ Dict{Symbol,Int64} with 2 entries:
   :b => 2
 
 julia> map!(v -> v-1, values(d))
-Dict{Symbol,Int64} with 2 entries:
-  :a => 0
-  :b => 1
- ```
+Base.ValueIterator for a Dict{Symbol,Int64} with 2 entries. Values:
+  0
+  1
+```
 """
 function map!(f, iter::ValueIterator)
     # This is the naive fallback which requires hash evaluations

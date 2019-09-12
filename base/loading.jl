@@ -649,15 +649,22 @@ end
 cache_file_entry(pkg::PkgId) = joinpath(
     "compiled",
     "v$(VERSION.major).$(VERSION.minor)",
-    pkg.uuid === nothing ? "$(pkg.name).ji" : joinpath(pkg.name, "$(package_slug(pkg.uuid)).ji")
-)
+    pkg.uuid === nothing ? ""       : pkg.name),
+    pkg.uuid === nothing ? pkg.name : package_slug(pkg.uuid)
 
 function find_all_in_cache_path(pkg::PkgId)
     paths = String[]
-    entry = cache_file_entry(pkg)
-    for depot in DEPOT_PATH
-        path = joinpath(depot, entry)
-        isfile_casesensitive(path) && push!(paths, path)
+    entrypath, entryfile = cache_file_entry(pkg)
+    for path in joinpath.(DEPOT_PATH, entrypath)
+        isdir(path) || continue
+        for file in readdir(path)
+            if !((pkg.uuid === nothing && file == entryfile * ".ji") ||
+                 (pkg.uuid !== nothing && startswith(file, entryfile * "_")))
+                 continue
+            end
+            filepath = joinpath(path, file)
+            isfile_casesensitive(filepath) && push!(paths, filepath)
+        end
     end
     return paths
 end
@@ -745,6 +752,10 @@ function _require_search_from_serialized(pkg::PkgId, sourcepath::String)
         staledeps = stale_cachefile(sourcepath, path_to_try)
         if staledeps === true
             continue
+        end
+        try
+            touch(path_to_try) # update timestamp of precompilation file
+        catch # file might be read-only and then we fail to update timestamp, which is fine
         end
         # finish loading module graph into staledeps
         for i in 1:length(staledeps)
@@ -1081,6 +1092,8 @@ function source_dir()
     return p === nothing ? pwd() : dirname(p)
 end
 
+# These functions are duplicated in client.jl/include(::String) for
+# nicer stacktraces. Modifications here have to be backported there
 include_relative(mod::Module, path::AbstractString) = include_relative(mod, String(path))
 function include_relative(mod::Module, _path::String)
     path, prev = _include_dependency(mod, _path)
@@ -1158,11 +1171,11 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
             eval(Meta.parse(code))
         end
         """
-    io = open(pipeline(detach(`$(julia_cmd()) -O0
-                              --output-ji $output --output-incremental=yes
-                              --startup-file=no --history-file=no --warn-overwrite=yes
-                              --color=$(have_color ? "yes" : "no")
-                              --eval $code_object`), stderr=stderr),
+    io = open(pipeline(`$(julia_cmd()) -O0
+                       --output-ji $output --output-incremental=yes
+                       --startup-file=no --history-file=no --warn-overwrite=yes
+                       --color=$(have_color ? "yes" : "no")
+                       --eval $code_object`, stderr=stderr),
               "w", stdout)
     in = io.in
     try
@@ -1209,6 +1222,18 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     return io
 end
 
+function compilecache_path(pkg::PkgId)::String
+    entrypath, entryfile = cache_file_entry(pkg)
+    cachepath = joinpath(DEPOT_PATH[1], entrypath)
+    isdir(cachepath) || mkpath(cachepath)
+    if pkg.uuid === nothing
+        abspath(cachepath, entryfile) * ".ji"
+    else
+        project_precompile_slug = slug(_crc32c(something(Base.active_project(), "")), 5)
+        abspath(cachepath, string(entryfile, "_", project_precompile_slug, ".ji"))
+    end
+end
+
 """
     Base.compilecache(module::PkgId)
 
@@ -1222,11 +1247,22 @@ function compilecache(pkg::PkgId)
     path === nothing && throw(ArgumentError("$pkg not found during precompilation"))
     return compilecache(pkg, path)
 end
+
+const MAX_NUM_PRECOMPILE_FILES = 10
+
 function compilecache(pkg::PkgId, path::String)
     # decide where to put the resulting cache file
-    cachefile = abspath(DEPOT_PATH[1], cache_file_entry(pkg))
-    cachepath = dirname(cachefile)
-    isdir(cachepath) || mkpath(cachepath)
+    cachefile = compilecache_path(pkg)
+    # prune the directory with cache files
+    if pkg.uuid !== nothing
+        cachepath = dirname(cachefile)
+        entrypath, entryfile = cache_file_entry(pkg)
+        cachefiles = filter!(x -> startswith(x, entryfile * "_"), readdir(cachepath))
+        if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES
+            idx = findmin(mtime.(joinpath.(cachepath, cachefiles)))[2]
+            rm(joinpath(cachepath, cachefiles[idx]))
+        end
+    end
     # build up the list of modules that we want the precompile process to preserve
     concrete_deps = copy(_concrete_dependencies)
     for (key, mod) in loaded_modules
@@ -1236,11 +1272,7 @@ function compilecache(pkg::PkgId, path::String)
     end
     # run the expression and cache the result
     verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
-    if isfile(cachefile)
-        @logmsg verbosity "Recompiling stale cache file $cachefile for $pkg"
-    else
-        @logmsg verbosity "Precompiling $pkg"
-    end
+    @logmsg verbosity "Precompiling $pkg"
     p = create_expr_cache(path, cachefile, concrete_deps, pkg.uuid)
     if success(p)
         # append checksum to the end of the .ji file:

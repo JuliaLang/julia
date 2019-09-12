@@ -198,7 +198,6 @@ include("c.jl")
 
 # Core I/O
 include("io.jl")
-include("iostream.jl")
 include("iobuffer.jl")
 
 # strings & printing
@@ -264,6 +263,7 @@ function randn end
 # I/O
 include("libuv.jl")
 include("asyncevent.jl")
+include("iostream.jl")
 include("stream.jl")
 include("filesystem.jl")
 using .Filesystem
@@ -303,10 +303,15 @@ function deepcopy_internal end
 include("Enums.jl")
 using .Enums
 
-# BigInts and BigFloats
+# BigInts
 include("gmp.jl")
 using .GMP
 
+# float printing: requires BigInt
+include("ryu/Ryu.jl")
+using .Ryu
+
+# BigFloats
 include("mpfr.jl")
 using .MPFR
 

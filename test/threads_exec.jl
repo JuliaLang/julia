@@ -2,7 +2,7 @@
 
 using Test
 using Base.Threads
-using Base.Threads: SpinLock, Mutex
+using Base.Threads: SpinLock
 
 # threading constructs
 
@@ -110,7 +110,6 @@ end
 
 @test threaded_add_locked(SpinLock, 0, 10000) == 10000
 @test threaded_add_locked(ReentrantLock, 0, 10000) == 10000
-@test threaded_add_locked(Mutex, 0, 10000) == 10000
 
 # Check if the recursive lock can be locked and unlocked correctly.
 let critical = ReentrantLock()
@@ -151,7 +150,21 @@ end
 
 threaded_gc_locked(SpinLock)
 threaded_gc_locked(Threads.ReentrantLock)
-threaded_gc_locked(Mutex)
+
+# Issue 33159
+# Make sure that a Threads.Condition can't be used without being locked, on any thread.
+@testset "Threads.Conditions must be locked" begin
+    c = Threads.Condition()
+    @test_throws Exception notify(c)
+    @test_throws Exception wait(c)
+
+    # If it's locked, but on the wrong thread, it should still throw an exception
+    lock(c)
+    @test_throws Exception fetch(@async notify(c))
+    @test_throws Exception fetch(@async notify(c, all=false))
+    @test_throws Exception fetch(@async wait(c))
+    unlock(c)
+end
 
 # Issue 14726
 # Make sure that eval'ing in a different module doesn't mess up other threads
@@ -647,9 +660,44 @@ function pfib(n::Int)
     if n <= 1
         return n
     end
-    t = @task pfib(n-2)
-    t.sticky = false
-    schedule(t)
+    t = Threads.@spawn pfib(n-2)
     return pfib(n-1) + fetch(t)::Int
 end
 @test pfib(20) == 6765
+
+
+# scheduling wake/sleep test (#32511)
+let timeout = 300 # this test should take about 1-10 seconds
+    t = Timer(timeout) do t
+        ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
+    end # set up a watchdog alarm
+    for _ = 1:10^5
+        @threads for idx in 1:1024; #=nothing=# end
+    end
+    close(t) # stop the watchdog
+end
+
+# issue #32575
+let ch = Channel{Char}(0), t
+    t = Task(()->for v in "hello" put!(ch, v) end)
+    t.sticky = false
+    bind(ch, t)
+    schedule(t)
+    @test String(collect(ch)) == "hello"
+end
+
+# errors inside @threads
+function _atthreads_with_error(a, err)
+    Threads.@threads for i in eachindex(a)
+        if err
+            error("failed")
+        end
+        a[i] = Threads.threadid()
+    end
+    a
+end
+@test_throws TaskFailedException _atthreads_with_error(zeros(nthreads()), true)
+let a = zeros(nthreads())
+    _atthreads_with_error(a, false)
+    @test a == [1:nthreads();]
+end
