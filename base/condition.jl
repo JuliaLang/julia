@@ -161,3 +161,8 @@ this, and can be used for level-triggered events.
 This object is NOT thread-safe. See [`Threads.Condition`](@ref) for a thread-safe version.
 """
 const Condition = GenericCondition{AlwaysLockedST}
+
+lock(c::GenericCondition{AlwaysLockedST}) =
+    throw(ArgumentError("`Condition` is not thread-safe. Please use `Threads.Condition` instead for multi-threaded code."))
+unlock(c::GenericCondition{AlwaysLockedST}) =
+    throw(ArgumentError("`Condition` is not thread-safe. Please use `Threads.Condition` instead for multi-threaded code."))

@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-show(io::IO, ::UndefInitializer) = print(io, "array initializer with undefined values")
+function show(io::IO, ::MIME"text/plain", u::UndefInitializer)
+    print(io, u, ": array initializer with undefined values")
+end
 
 # first a few multiline show functions for types defined before the MIME type:
 

@@ -737,7 +737,7 @@ julia> readdir(abspath("base"), join=true)
  "/home/JuliaUser/dev/julia/base/weakkeydict.jl"
 ```
 """
-function readdir(dir::AbstractString=pwd(); join::Bool=false)
+function readdir(dir::AbstractString; join::Bool=false)
     # Allocate space for uv_fs_t struct
     uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
 
@@ -759,6 +759,7 @@ function readdir(dir::AbstractString=pwd(); join::Bool=false)
 
     return entries
 end
+readdir(; join::Bool=false) = readdir(join ? pwd() : ".", join=join)
 
 """
     walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)

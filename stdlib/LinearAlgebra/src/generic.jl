@@ -61,12 +61,15 @@ julia> C
 """
 @inline @propagate_inbounds function _modify!(p::MulAddMul{ais1, bis0},
                                               x, C, idx′) where {ais1, bis0}
-    # Workaround for performance penalty of splatting a number (#29114):
-    idx = idx′ isa Integer ? (idx′,) : idx′
+    # `idx′` may be an integer, a tuple of integer, or a `CartesianIndex`.
+    #  Let `CartesianIndex` constructor normalize them so that it can be
+    # used uniformly.  It also acts as a workaround for performance penalty
+    # of splatting a number (#29114):
+    idx = CartesianIndex(idx′)
     if bis0
-        C[idx...] = p(x)
+        C[idx] = p(x)
     else
-        C[idx...] = p(x, C[idx...])
+        C[idx] = p(x, C[idx])
     end
     return
 end

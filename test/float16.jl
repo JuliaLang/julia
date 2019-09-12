@@ -107,7 +107,7 @@ end
     @test !isnan(Float16(2.6))
     @test NaN16 != NaN16
     @test isequal(NaN16, NaN16)
-    @test repr(NaN16) == "NaN"
+    @test repr(NaN16) == "NaN16"
     @test sprint(show, NaN16, context=:compact => true) == "NaN"
 
     @test isinf(Inf16)
@@ -119,7 +119,7 @@ end
     @test Inf16 != -Inf16
     @test -Inf16 < Inf16
     @test isequal(Inf16, Inf16)
-    @test repr(Inf16) == "Inf"
+    @test repr(Inf16) == "Inf16"
     @test sprint(show, Inf16, context=:compact => true) == "Inf"
 
     @test isnan(reinterpret(Float16,0x7c01))
@@ -129,7 +129,7 @@ end
     @test prevfloat(-Inf16) === -Inf16
 end
 
-@test repr(Float16(44099)) == "44100.0"
+@test repr(Float16(44099)) == "Float16(44100.0)"
 
 @testset "signed zeros" begin
     for z1 in (Float16(0.0), Float16(-0.0)), z2 in (Float16(0.0), Float16(-0.0))
