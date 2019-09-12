@@ -282,10 +282,10 @@ module NotPkgModule; end
         @test pathof(NotPkgModule) === nothing
     end
 
-    @testset "rootof" begin
-        @test rootof(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
-        @test rootof(Foo.SubFoo) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
-        @test rootof(NotPkgModule) === nothing
+    @testset "pkgdir" begin
+        @test pkgdir(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test pkgdir(Foo.SubFoo) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test pkgdir(NotPkgModule) === nothing
     end
 
 end

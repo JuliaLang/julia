@@ -743,7 +743,7 @@ export
     nameof,
     parentmodule,
     pathof,
-    rootof,
+    pkgdir,
     names,
     which,
     @isdefined,

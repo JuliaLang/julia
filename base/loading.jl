@@ -278,12 +278,12 @@ function pathof(m::Module)
 end
 
 """
-    rootof(m::Module)
+    pkgdir(m::Module)
 
  Return the root directory of the package that imported module `m`,
  or `nothing` if `m` was not imported from a package.
  """
-function rootof(m::Module)
+function pkgdir(m::Module)
     rootmodule = Base.moduleroot(m)
     path = pathof(rootmodule)
     path === nothing && return nothing
