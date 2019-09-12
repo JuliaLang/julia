@@ -1541,6 +1541,21 @@ end
 Z = Array{Float64}(undef,0,0)
 @test eval(Meta.parse(repr(Z))) == Z
 
+@testset "show undef" begin
+    # issue  #33204 - Parseable `repr` for `undef`
+    @test eval(Meta.parse(repr(undef))) == undef == UndefInitializer()
+    @test showstr(undef) == "UndefInitializer()"
+    @test occursin(repr(undef), replstr(undef))
+    @test occursin("initializer with undefined values", replstr(undef))
+
+    vec_undefined = Vector(undef, 2)
+    vec_initialisers = fill(undef, 2)
+    @test showstr(vec_undefined) == "Any[#undef, #undef]"
+    @test showstr(vec_initialisers) == "UndefInitializer[$undef, $undef]"
+    @test replstr(vec_undefined) == "2-element Array{Any,1}:\n #undef\n #undef"
+    @test replstr(vec_initialisers) == "2-element Array{UndefInitializer,1}:\n $undef\n $undef"
+end
+
 # issue #31065, do not print parentheses for nested dot expressions
 @test sprint(Base.show_unquoted, :(foo.x.x)) == "foo.x.x"
 
