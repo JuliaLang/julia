@@ -670,7 +670,7 @@ end
     @test @inferred(only(1)) === 1
     @test @inferred(only('a')) === 'a'
     @test @inferred(only(Ref([1, 2]))) == [1, 2]
-    @test ArgumentError only(Pair(10, 20))
+    @test_throws ArgumentError only(Pair(10, 20))
 
     @test only(1 for ii in 1:1) === 1
     @test only(1 for ii in 1:10 if ii < 2) === 1
