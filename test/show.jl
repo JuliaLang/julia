@@ -1545,6 +1545,7 @@ Z = Array{Float64}(undef,0,0)
     # issue  #33204 - Parseable `repr` for `undef`
     @test eval(Meta.parse(repr(undef))) == undef == UndefInitializer()
     @test showstr(undef) == "UndefInitializer()"
+    @test occursin(repr(undef), replstr(undef))
     @test occursin("initializer with undefined values", replstr(undef))
 
     vec_undefined = Vector(undef, 2)
