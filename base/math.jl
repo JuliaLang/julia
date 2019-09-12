@@ -143,7 +143,7 @@ generates efficient code using a Goertzel-like algorithm specialized for complex
 with loops unrolled at compile time.
 
 The Goertzel-like algorthim is described in Knuth's Art of Computer Programming,
-Volume 2: Seminumerical Slgorithms, Sec. 4.6.4.
+Volume 2: Seminumerical Algorithms, Sec. 4.6.4.
 
 # Example
 ```jldoctest
