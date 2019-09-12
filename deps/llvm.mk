@@ -171,8 +171,13 @@ ifeq ($(BUILD_LLDB),0)
 LLVM_CMAKE += -DLLVM_TOOL_LLDB_BUILD=OFF
 endif
 
+ifneq ($(LLVM_VER),svn)
 ifeq (,$(findstring rc,$(LLVM_VER)))
+ifeq ($(shell [ $(LLVM_VER_MAJ) -ge 8 -a $(LLVM_VER) != 8.0.0 ]; echo $$?),0)
+LLVM_SRC_URL := https://github.com/llvm/llvm-project/releases/download/llvmorg-$(LLVM_VER)
+else
 LLVM_SRC_URL := http://releases.llvm.org/$(LLVM_VER)
+endif
 else
 LLVM_VER_SPLIT := $(subst rc, ,$(LLVM_VER))
 LLVM_SRC_URL := https://prereleases.llvm.org/$(word 1,$(LLVM_VER_SPLIT))/rc$(word 2,$(LLVM_VER_SPLIT))
@@ -203,6 +208,7 @@ endif
 ifeq ($(BUILD_LLDB),1)
 $(LLVM_SRC_DIR)/tools/lldb:
 $(LLVM_SRC_DIR)/source-extracted: $(LLVM_SRC_DIR)/tools/lldb
+endif
 endif
 
 # LLDB still relies on plenty of python 2.x infrastructure, without checking
