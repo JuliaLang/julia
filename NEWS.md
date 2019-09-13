@@ -38,6 +38,9 @@ Standard library changes
 
 * Verbose `display` of `Char` (`text/plain` output) now shows the codepoint value in standard-conforming `"U+XXXX"` format ([#33291]).
 
+* Calling `show` or `repr` on 0-dimensional `AbstractArray`s now shows valid code for creating an equivalent 0-dimensional array, instead of only showing the contained value. ([#33206])
+
+
 #### Libdl
 
 #### LinearAlgebra
