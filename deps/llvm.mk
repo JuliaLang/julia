@@ -171,7 +171,17 @@ ifeq ($(BUILD_LLDB),0)
 LLVM_CMAKE += -DLLVM_TOOL_LLDB_BUILD=OFF
 endif
 
+ifneq ($(LLVM_VER),svn)
+ifeq (,$(findstring rc,$(LLVM_VER)))
+ifeq ($(shell [ $(LLVM_VER_MAJ) -ge 8 -a $(LLVM_VER) != 8.0.0 ]; echo $$?),0)
+LLVM_SRC_URL := https://github.com/llvm/llvm-project/releases/download/llvmorg-$(LLVM_VER)
+else
 LLVM_SRC_URL := http://releases.llvm.org/$(LLVM_VER)
+endif
+else
+LLVM_VER_SPLIT := $(subst rc, ,$(LLVM_VER))
+LLVM_SRC_URL := https://prereleases.llvm.org/$(word 1,$(LLVM_VER_SPLIT))/rc$(word 2,$(LLVM_VER_SPLIT))
+endif
 
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR): | $(SRCCACHE)
@@ -198,6 +208,7 @@ endif
 ifeq ($(BUILD_LLDB),1)
 $(LLVM_SRC_DIR)/tools/lldb:
 $(LLVM_SRC_DIR)/source-extracted: $(LLVM_SRC_DIR)/tools/lldb
+endif
 endif
 
 # LLDB still relies on plenty of python 2.x infrastructure, without checking
@@ -459,6 +470,7 @@ $(eval $(call LLVM_PATCH,llvm7-D51842-win64-byval-cc)) # remove for 8.0
 $(eval $(call LLVM_PATCH,llvm-D57118-powerpc))
 $(eval $(call LLVM_PATCH,llvm-rL349068-llvm-config)) # remove for 8.0
 $(eval $(call LLVM_PATCH,llvm7-WASM-addrspaces)) # WebAssembly
+$(eval $(call LLVM_PATCH,llvm7-revert-D44485))
 endif # LLVM_VER 7.0
 
 ifeq ($(LLVM_VER_SHORT),8.0)
@@ -472,7 +484,26 @@ $(eval $(call LLVM_PATCH,llvm-8.0-D50167-scev-umin))
 $(eval $(call LLVM_PATCH,llvm7-windows-race))
 $(eval $(call LLVM_PATCH,llvm-D57118-powerpc)) # remove for 9.0
 $(eval $(call LLVM_PATCH,llvm8-WASM-addrspaces)) # WebAssembly
+$(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
+$(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
+$(eval $(call LLVM_PATCH,llvm-8.0-D66401-mingw-reloc)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm7-revert-D44485))
 endif # LLVM_VER 8.0
+
+ifeq ($(LLVM_VER_SHORT),9.0)
+$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
+$(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
+$(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX -- warning: this fails check-llvm-codegen-nvptx
+$(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
+$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
+#$(eval $(call LLVM_PATCH,llvm7-D50010-VNCoercion-ni)) # TODO
+#$(eval $(call LLVM_PATCH,llvm7-windows-race)) # TODO
+$(eval $(call LLVM_PATCH,llvm8-WASM-addrspaces)) # WebAssembly
+$(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
+$(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
+$(eval $(call LLVM_PATCH,llvm7-revert-D44485))
+endif # LLVM_VER 9.0
+
 
 # Add a JL prefix to the version map. DO NOT REMOVE
 ifneq ($(LLVM_VER), svn)
