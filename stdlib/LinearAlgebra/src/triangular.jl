@@ -2183,13 +2183,14 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
     end
 
     # Compute accurate superdiagonal of T
-    blockpower!(A, A0, 1 / 2^s)
+    blockpower!(A, A0, (1 / 2)^s)
 
     # Compute accurate diagonal of T
     for i = 1:n
         a = A0[i,i]
         if s == 0
-            r = a - 1
+            A[i,i] = a - 1
+            continue
         end
         s0 = s
         if angle(a) >= pi / 2
@@ -2226,7 +2227,7 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
     end
 
     # Scale back
-    lmul!(2^s, Y)
+    lmul!(2.0^s, Y)
 
     # Compute accurate diagonal and superdiagonal of log(T)
     for k = 1:n-1
@@ -2242,8 +2243,12 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
             Y[k,k+1] = A0[k,k+1] * (logAkp1 - logAk) / (Akp1 - Ak)
         else
             z = (Akp1 - Ak)/(Akp1 + Ak)
-            w = atanh(z) + im * pi * (unw(logAkp1-logAk) + unw(log1p(z)-log1p(-z)))
-            Y[k,k+1] = 2 * A0[k,k+1] * w / (Akp1 - Ak)
+            if abs(z) > 1
+                Y[k,k+1] = A0[k,k+1] * (logAkp1 - logAk) / (Akp1 - Ak)
+            else
+                w = atanh(z) + im * pi * (unw(logAkp1-logAk) - unw(log1p(z)-log1p(-z)))
+                Y[k,k+1] = 2 * A0[k,k+1] * w / (Akp1 - Ak)
+            end
         end
     end
 
@@ -2396,9 +2401,13 @@ function blockpower!(A::UpperTriangular, A0::UpperTriangular, p)
             logAk = log(Ak)
             logAkp1 = log(Akp1)
             z = (Akp1 - Ak)/(Akp1 + Ak)
-            w = atanh(z) + im * pi * (unw(logAkp1-logAk) + unw(log1p(z)-log1p(-z)))
-            dd = 2 * exp(p*(logAk+logAkp1)/2) * sinh(p*w) / (Akp1 - Ak);
-            A[k,k+1] = A0[k,k+1] * dd
+            if abs(z) > 1
+                A[k,k+1] = A0[k,k+1] * (Akp1p - Akp) / (Akp1 - Ak)
+            else
+                w = atanh(z) + im * pi * (unw(logAkp1-logAk) - unw(log1p(z)-log1p(-z)))
+                dd = 2 * exp(p*(logAk+logAkp1)/2) * sinh(p*w) / (Akp1 - Ak);
+                A[k,k+1] = A0[k,k+1] * dd
+            end
         end
     end
 end
