@@ -65,36 +65,6 @@
 #  define JL_THREAD_LOCAL
 #endif
 
-#if defined(__has_feature)
-#if __has_feature(address_sanitizer)
-#define JL_ASAN_ENABLED     // Clang flavor
-#endif
-#elif defined(__SANITIZE_ADDRESS__)
-#define JL_ASAN_ENABLED     // GCC flavor
-#endif
-
-#ifdef JL_ASAN_ENABLED
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-void __sanitizer_start_switch_fiber(void**, const void*, size_t);
-void __sanitizer_finish_switch_fiber(void*, const void**, size_t*);
-#ifdef __cplusplus
-}
-#endif
-
-static inline void sanitizer_start_switch_fiber(const void* bottom, size_t size) {
-    __sanitizer_start_switch_fiber(NULL, bottom, size);
-}
-static inline void sanitizer_finish_switch_fiber() {
-    __sanitizer_finish_switch_fiber(NULL, NULL, NULL);
-}
-#else
-static inline void sanitizer_start_switch_fiber(const void* bottom, size_t size) {}
-static inline void sanitizer_finish_switch_fiber() {}
-#endif
-
 #define container_of(ptr, type, member) \
     ((type *) ((char *)(ptr) - offsetof(type, member)))
 
