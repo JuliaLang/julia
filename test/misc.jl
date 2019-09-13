@@ -753,7 +753,7 @@ end
     ex = :(@macro argument)
     @test any(arg->arg isa LineNumberNode, ex.args)
     Base.remove_linenums!(ex)
-    @test !any(arg->arg isa LineNumberNode, ex.args)
+    @test all(arg->!(arg isa LineNumberNode) || arg == LineNumberNode(1, :none), ex.args)
 end
 
 # Finalizer with immutable should throw

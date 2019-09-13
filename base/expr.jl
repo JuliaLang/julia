@@ -370,7 +370,7 @@ function remove_linenums!(ex::Expr)
         # Replace line information embedded into macro calls with `nothing`
         # Removing the argument entirely invalidates the expression
         map!(ex.args, ex.args) do arg
-            arg isa LineNumberNode ? nothing : remove_linenums!(arg)
+            arg isa LineNumberNode ? LineNumberNode(1, :none) : remove_linenums!(arg)
         end
     end
     for subex in ex.args
