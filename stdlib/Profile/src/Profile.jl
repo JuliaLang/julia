@@ -487,7 +487,7 @@ function indent(depth::Int)
     return (indent_s^div) * SubString(indent_s, 1, indent_z[rem])
 end
 
-function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int, cols::Int)
+function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int, cols::Int, showpointer::Bool)
     nindent = min(cols>>1, level)
     ndigcounts = ndigits(maximum(counts))
     ndigline = maximum([tree_format_linewidth(x) for x in lilist])
@@ -516,9 +516,17 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
                     string(li.pointer, base = 16, pad = 2*sizeof(Ptr{Cvoid})),
                     ")")
             else
-                fname = string(li.func)
                 if !li.from_c && li.linfo !== nothing
                     fname = sprint(show_spec_linfo, li)
+                else
+                    fname = string(li.func)
+                end
+                if showpointer
+                    fname = string(
+                        "0x",
+                        string(li.pointer, base = 16, pad = 2*sizeof(Ptr{Cvoid})),
+                        " ",
+                        fname)
                 end
                 strs[i] = string(base,
                     rpad(string(counts[i]), ndigcounts, " "),
@@ -668,7 +676,7 @@ function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat
         lilist = collect(frame.frame for frame in nexts)
         counts = collect(frame.count for frame in nexts)
         # Generate the string for each line
-        strs = tree_format(lilist, counts, level, cols)
+        strs = tree_format(lilist, counts, level, cols, T === UInt64)
         # Recurse to the next level
         for i in reverse(liperm(lilist))
             down = nexts[i]
