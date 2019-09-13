@@ -747,3 +747,12 @@ end
 
 # Pointer 0-arg constructor
 @test Ptr{Cvoid}() == C_NULL
+
+@testset "remove_linenums!" begin
+    # Ensure line information is removed from macro calls
+    ex = :(@macro argument)
+    @test any(arg->arg isa LineNumberNode, ex.args)
+    Base.remove_linenums!(ex)
+    @test !any(arg->arg isa LineNumberNode, ex.args)
+end
+

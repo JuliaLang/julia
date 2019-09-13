@@ -365,6 +365,12 @@ function remove_linenums!(ex::Expr)
             isa(x, LineNumberNode) && return false
             return true
         end
+    elseif ex.head === :macrocall
+        # Replace line information embedded into macro calls with `nothing`
+        # Removing the argument entirely invalidates the expression
+        map!(ex.args, ex.args) do arg
+            arg isa LineNumberNode ? nothing : remove_linenums!(arg)
+        end
     end
     for subex in ex.args
         if subex isa Expr && subex.head != :escape  # Don't recurse into esc() expr (#31334)
