@@ -1431,7 +1431,7 @@ Unsigned
 """
     Bool <: Integer
 
-Boolean type, containing the values `true` and `false`.
+Boolean type, containing the values `true` (`== 1`) and `false` (`== 0`) .
 """
 Bool
 
