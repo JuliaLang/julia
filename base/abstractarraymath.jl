@@ -50,7 +50,7 @@ _sub(t::Tuple, s::Tuple) = _sub(tail(t), tail(s))
 
 Remove the dimensions specified by `dims` from array `A`.
 Elements of `dims` must be unique and within the range `1:ndims(A)`.
-`size(A,i)` must equal 1 for all `i` in `dims`.
+`size(A, i)` must equal 1 for all `i` in `dims`.
 
 # Examples
 ```jldoctest
@@ -63,6 +63,12 @@ julia> a = reshape(Vector(1:4),(2,2,1,1))
 julia> dropdims(a; dims=3)
 2×2×1 Array{Int64,3}:
 [:, :, 1] =
+ 1  3
+ 2  4
+
+
+julia> dropdims(a; dims=(3, 4))
+2×2 Array{Int64,2}:
  1  3
  2  4
 ```
