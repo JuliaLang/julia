@@ -1397,20 +1397,9 @@ Exprs defined in two different locations will still compare equal.
 
 # Example
 ```jldoctest
-julia> a = quote 1 end
-quote
-    #= REPL[1]:1 =#
-    1
-end
+julia> a = quote 1 end;  # Line: #= REPL[1]:1 =#
 
-julia> b = quote 1 end
-quote
-    #= REPL[2]:1 =#
-    1
-end
-
-julia> a == b  # Different line number nodes
-false
+julia> b = quote 1 end;  # Line: #= REPL[2]:1 =#
 
 julia> Test.isequal_nolines(a, b)
 true
