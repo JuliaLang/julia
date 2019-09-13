@@ -7,6 +7,7 @@ module StackTraces
 
 
 import Base: hash, ==, show
+import Core: CodeInfo, MethodInstance
 
 export StackTrace, StackFrame, stacktrace
 
@@ -52,7 +53,7 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     "the line number in the file containing the execution context"
     line::Int
     "the MethodInstance or CodeInfo containing the execution context (if it could be found)"
-    linfo::Union{Core.MethodInstance, Core.CodeInfo, Nothing}
+    linfo::Union{MethodInstance, CodeInfo, Nothing}
     "true if the code is from C"
     from_c::Bool
     "true if the code is from an inlined frame"
@@ -118,7 +119,7 @@ end
 const top_level_scope_sym = Symbol("top-level scope")
 
 function lookup(ip::Base.InterpreterIP)
-    if ip.code isa Core.MethodInstance && ip.code.def isa Method
+    if ip.code isa MethodInstance && ip.code.def isa Method
         codeinfo = ip.code.uninferred
         func = ip.code.def.name
         file = ip.code.def.file
@@ -127,7 +128,7 @@ function lookup(ip::Base.InterpreterIP)
         # interpreted top-level expression with no CodeInfo
         return [StackFrame(top_level_scope_sym, empty_sym, 0, nothing, false, false, 0)]
     else
-        @assert ip.code isa Core.CodeInfo
+        @assert ip.code isa CodeInfo
         codeinfo = ip.code
         func = top_level_scope_sym
         file = empty_sym
@@ -206,7 +207,7 @@ function remove_frames!(stack::StackTrace, m::Module)
     return stack
 end
 
-is_top_level_frame(f::StackFrame) = f.linfo isa Core.CodeInfo || (f.linfo === nothing && f.func === top_level_scope_sym)
+is_top_level_frame(f::StackFrame) = f.linfo isa CodeInfo || (f.linfo === nothing && f.func === top_level_scope_sym)
 
 function show_spec_linfo(io::IO, frame::StackFrame)
     if frame.linfo === nothing
@@ -220,7 +221,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
                         :nothing
             printstyled(io, Base.demangle_function_name(string(frame.func)), color=color)
         end
-    elseif frame.linfo isa Core.MethodInstance
+    elseif frame.linfo isa MethodInstance
         def = frame.linfo.def
         if isa(def, Method)
             sig = frame.linfo.specTypes
@@ -243,7 +244,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         else
             Base.show(io, frame.linfo)
         end
-    elseif frame.linfo isa Core.CodeInfo
+    elseif frame.linfo isa CodeInfo
         print(io, "top-level scope")
     end
 end
@@ -276,7 +277,7 @@ function from(frame::StackFrame, m::Module)
     finfo = frame.linfo
     result = false
 
-    if finfo isa Core.MethodInstance
+    if finfo isa MethodInstance
         frame_m = finfo.def
         isa(frame_m, Method) && (frame_m = frame_m.module)
         result = nameof(frame_m) === nameof(m)

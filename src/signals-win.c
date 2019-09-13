@@ -297,7 +297,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
                 jl_safe_printf("UNKNOWN"); break;
         }
         jl_safe_printf(" at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
-        jl_gdblookup((uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+        jl_print_native_codeloc(ExceptionInfo->ExceptionRecord->ExceptionAddress);
 
         jl_critical_error(0, ExceptionInfo->ContextRecord,
                           ptls->bt_data, &ptls->bt_size);
@@ -344,10 +344,10 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                     break;
                 }
                 // Get backtrace data
-                bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
+                bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
                     bt_size_max - bt_size_cur - 1, &ctxThread, 0);
                 // Mark the end of this block with 0
-                bt_data_prof[bt_size_cur] = 0;
+                bt_data_prof[bt_size_cur].uintptr = 0;
                 bt_size_cur++;
             }
             if ((DWORD)-1 == ResumeThread(hMainThread)) {

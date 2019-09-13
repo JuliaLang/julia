@@ -297,7 +297,7 @@ JL_DLLEXPORT void jl_restore_excstack(size_t state)
 void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFEPOINT
 {
     assert(dest->reserved_size >= src->top);
-    memcpy(jl_excstack_raw(dest), jl_excstack_raw(src), sizeof(uintptr_t)*src->top);
+    memcpy(jl_excstack_raw(dest), jl_excstack_raw(src), sizeof(jl_bt_element_t)*src->top);
     dest->top = src->top;
 }
 
@@ -317,15 +317,16 @@ void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
 }
 
 void jl_push_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
-                       jl_value_t *exception JL_ROOTED_ARGUMENT,
-                       uintptr_t *bt_data, size_t bt_size)
+                      jl_value_t *exception JL_ROOTED_ARGUMENT,
+                      jl_bt_element_t *bt_data, size_t bt_size)
 {
     jl_reserve_excstack(stack, (*stack ? (*stack)->top : 0) + bt_size + 2);
     jl_excstack_t *s = *stack;
-    memcpy(jl_excstack_raw(s) + s->top, bt_data, sizeof(uintptr_t)*bt_size);
+    jl_bt_element_t *rawstack = jl_excstack_raw(s);
+    memcpy(rawstack + s->top, bt_data, sizeof(jl_bt_element_t)*bt_size);
     s->top += bt_size + 2;
-    jl_excstack_raw(s)[s->top-2] = bt_size;
-    jl_excstack_raw(s)[s->top-1] = (uintptr_t)exception;
+    rawstack[s->top-2].uintptr = bt_size;
+    rawstack[s->top-1].jlvalue = exception;
 }
 
 // conversion -----------------------------------------------------------------

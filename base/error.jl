@@ -62,25 +62,39 @@ rethrow(e) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
 struct InterpreterIP
     code::Union{CodeInfo,Core.MethodInstance,Nothing}
     stmt::Csize_t
+    mod::Union{Module,Nothing}
 end
 
-# convert dual arrays (ips, interpreter_frames) to a single array of locations
+# convert dual arrays (raw bt buffer, array of GC managed values) to a single
+# array of locations
 function _reformat_bt(bt, bt2)
     ret = Vector{Union{InterpreterIP,Ptr{Cvoid}}}()
     i, j = 1, 1
     while i <= length(bt)
         ip = bt[i]::Ptr{Cvoid}
-        if UInt(ip) == (-1 % UInt)
-            # The next one is really a CodeInfo
-            push!(ret, InterpreterIP(
-                bt2[j],
-                bt[i+2]))
-            j += 1
-            i += 3
-        else
-            push!(ret, Ptr{Cvoid}(ip))
+        if UInt(ip) != (-1 % UInt) # See also jl_bt_is_native
+            # native frame
+            push!(ret, ip)
             i += 1
+            continue
         end
+        # Extended backtrace entry
+        entry_metadata = reinterpret(UInt, bt[i+1])
+        njlvalues =  entry_metadata & 0x7
+        nuintvals = (entry_metadata >> 3) & 0x7
+        tag       = (entry_metadata >> 6) & 0xf
+        header    =  entry_metadata >> 10
+        if tag == 1 # JL_BT_INTERP_FRAME_TAG
+            code = bt2[j]
+            mod = njlvalues == 2 ? bt2[j+1] : nothing
+            push!(ret, InterpreterIP(code, header, mod))
+        else
+            # Tags we don't know about are an error
+            throw(ArgumentError("Unexpected extended backtrace entry tag $tag at bt[$i]"))
+        end
+        # See jl_bt_entry_size
+        j += njlvalues
+        i += Int(2 + njlvalues + nuintvals)
     end
     ret
 end

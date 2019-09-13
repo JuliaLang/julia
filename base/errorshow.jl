@@ -705,7 +705,7 @@ end
 function show(io::IO, ip::InterpreterIP)
     print(io, typeof(ip))
     if ip.code isa Core.CodeInfo
-        print(io, " in top-level CodeInfo at statement $(Int(ip.stmt))")
+        print(io, " in top-level CodeInfo for $(ip.mod) at statement $(Int(ip.stmt))")
     else
         print(io, " in $(ip.code) at statement $(Int(ip.stmt))")
     end

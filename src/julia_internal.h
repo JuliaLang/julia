@@ -590,7 +590,109 @@ jl_tupletype_t *arg_type_tuple(jl_value_t *arg1, jl_value_t **args, size_t nargs
 
 int jl_has_meta(jl_array_t *body, jl_sym_t *sym);
 
-// backtraces
+//--------------------------------------------------
+// Backtraces
+
+// Backtrace buffers:
+//
+// A backtrace buffer conceptually contains a stack of instruction pointers
+// ordered from the inner-most frame to the outermost. We store them in a
+// special raw format for two reasons:
+//
+//   * Efficiency: Every `throw()` must populate the trace so it must be as
+//     efficient as possible.
+//   * Signal safety: For signal-based exceptions such as StackOverflowError
+//     the trace buffer needs to be filled from a signal handler where most
+//     operations are not allowed (including malloc) so we choose a flat
+//     preallocated buffer.
+//
+// The raw buffer layout contains "frame entries" composed of one or several
+// values of type `jl_bt_element_t`. From the point of view of the GC, an entry
+// is either:
+//
+// 1. A single instruction pointer to native code, not GC-managed.
+// 2. An "extended entry": a mixture of raw data and pointers to julia objects
+//    which must be treated as GC roots.
+//
+// A single extended entry is seralized using multiple elements from the raw
+// buffer; if `e` is the pointer to the first slot we have:
+//
+//   e[0]  JL_BT_NON_PTR_ENTRY  - Special marker to distinguish extended entries
+//   e[1]  descriptor           - A bit packed uintptr_t containing a tag and
+//                                the number of GC- managed and non-managed values
+//   e[2+j]                     - GC managed data
+//   e[2+ngc+i]                 - Non-GC-managed data
+//
+// The format of `descriptor` is, from LSB to MSB:
+//   0:2     ngc     Number of GC-managed pointers for this frame entry
+//   3:5     nptr    Number of non-GC-managed buffer elements
+//   6:9     tag     Entry type
+//   10:...  header  Entry-specific header data
+typedef struct _jl_bt_element_t {
+    union {
+        uintptr_t   uintptr; // Metadata or native instruction ptr
+        jl_value_t* jlvalue; // Pointer to GC-managed value
+    };
+} jl_bt_element_t;
+
+#define JL_BT_NON_PTR_ENTRY (((uintptr_t)0)-1)
+// Maximum size for an extended backtrace entry (likely significantly larger
+// than the actual size of 3-4 for an interpreter frame)
+#define JL_BT_MAX_ENTRY_SIZE 16
+
+STATIC_INLINE int jl_bt_is_native(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
+{
+    return bt_entry[0].uintptr != JL_BT_NON_PTR_ENTRY;
+}
+
+// Extended backtrace entry header packing; the bit packing is done manually
+// for precise layout control for interop with julia side.
+STATIC_INLINE uintptr_t jl_bt_entry_descriptor(int ngc, int nptr,
+                                               int tag, uintptr_t header) JL_NOTSAFEPOINT
+{
+    assert(((ngc & 0x7) == ngc) && ((nptr & 0x7) == nptr) && ((tag & 0xf) == tag));
+    return (ngc & 0x7) | (nptr & 0x7) << 3 | (tag & 0xf) << 6 | header << 10;
+}
+
+// Unpacking of extended backtrace entry data
+STATIC_INLINE size_t jl_bt_num_jlvals(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
+{
+    assert(!jl_bt_is_native(bt_entry));
+    return bt_entry[1].uintptr & 0x7;
+}
+STATIC_INLINE size_t jl_bt_num_uintvals(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
+{
+    assert(!jl_bt_is_native(bt_entry));
+    return (bt_entry[1].uintptr >> 3) & 0x7;
+}
+STATIC_INLINE int jl_bt_entry_tag(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
+{
+    assert(!jl_bt_is_native(bt_entry));
+    return (bt_entry[1].uintptr >> 6) & 0xf;
+}
+STATIC_INLINE uintptr_t jl_bt_entry_header(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
+{
+    assert(!jl_bt_is_native(bt_entry));
+    return bt_entry[1].uintptr >> 10;
+}
+
+// Return `i`th GC-managed pointer for extended backtrace entry
+// The returned value is rooted for the lifetime of the parent exception stack.
+STATIC_INLINE jl_value_t *jl_bt_entry_jlvalue(jl_bt_element_t *bt_entry, size_t i) JL_NOTSAFEPOINT
+{
+    return bt_entry[2 + i].jlvalue;
+}
+
+#define JL_BT_INTERP_FRAME_TAG    1  // An interpreter frame
+
+// Number of bt elements in frame.
+STATIC_INLINE size_t jl_bt_entry_size(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
+{
+    return jl_bt_is_native(bt_entry) ?
+        1 : 2 + jl_bt_num_jlvals(bt_entry) + jl_bt_num_uintvals(bt_entry);
+}
+
+// Function metadata arising from debug info lookup of instruction pointer
 typedef struct {
     char *func_name;
     char *file_name;
@@ -634,23 +736,21 @@ typedef unw_cursor_t bt_cursor_t;
 typedef int bt_context_t;
 typedef int bt_cursor_t;
 #endif
-// Special marker in backtrace data for encoding interpreter frames
-#define JL_BT_INTERP_FRAME (((uintptr_t)0)-1)
-// Maximum number of elements of bt_data taken up by interpreter frame
-#define JL_BT_MAX_ENTRY_SIZE 3
-size_t rec_backtrace(uintptr_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
+size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
 // Record backtrace from a signal handler. `ctx` is the context of the code
 // which was asynchronously interrupted.
-size_t rec_backtrace_ctx(uintptr_t *bt_data, size_t maxsize, bt_context_t *ctx,
+size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx,
                          int add_interp_frames) JL_NOTSAFEPOINT;
 #ifdef LIBOSXUNWIND
-size_t rec_backtrace_ctx_dwarf(uintptr_t *bt_data, size_t maxsize, bt_context_t *ctx, int add_interp_frames) JL_NOTSAFEPOINT;
+size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx, int add_interp_frames) JL_NOTSAFEPOINT;
 #endif
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
-void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_t *bt_size);
+void jl_critical_error(int sig, bt_context_t *context, jl_bt_element_t *bt_data, size_t *bt_size);
 JL_DLLEXPORT void jl_raise_debugger(void);
 int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_gdblookup(uintptr_t ip) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gdblookup(void* ip) JL_NOTSAFEPOINT;
+void jl_print_native_codeloc(uintptr_t ip) JL_NOTSAFEPOINT;
+void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_data) JL_NOTSAFEPOINT;
 // *to is NULL or malloc'd pointer, from is allowed to be NULL
 STATIC_INLINE char *jl_copy_str(char **to, const char *from)
 {
@@ -666,7 +766,8 @@ STATIC_INLINE char *jl_copy_str(char **to, const char *from)
 }
 JL_DLLEXPORT int jl_is_interpreter_frame(uintptr_t ip) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_is_enter_interpreter_frame(uintptr_t ip) JL_NOTSAFEPOINT;
-JL_DLLEXPORT size_t jl_capture_interp_frame(uintptr_t *data, uintptr_t sp, uintptr_t fp, size_t space_remaining) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t jl_capture_interp_frame(jl_bt_element_t *bt_data, uintptr_t sp,
+                                            uintptr_t fp, size_t space_remaining) JL_NOTSAFEPOINT;
 
 // Exception stack: a stack of pairs of (exception,raw_backtrace).
 // The stack may be traversed and accessed with the functions below.
@@ -676,25 +777,25 @@ typedef struct _jl_excstack_t {
     // Pack all stack entries into a growable buffer to amortize allocation
     // across repeated exception handling.
     // Layout: [bt_data1... bt_size1 exc1  bt_data2... bt_size2 exc2  ..]
-    // uintptr_t data[]; // Access with jl_excstack_raw
+    // jl_bt_element_t data[]; // Access with jl_excstack_raw
 } jl_excstack_t;
 
-STATIC_INLINE uintptr_t *jl_excstack_raw(jl_excstack_t *stack) JL_NOTSAFEPOINT
+STATIC_INLINE jl_bt_element_t *jl_excstack_raw(jl_excstack_t *stack) JL_NOTSAFEPOINT
 {
-    return (uintptr_t*)(stack + 1);
+    return (jl_bt_element_t*)(stack + 1);
 }
 
 // Exception stack access
 STATIC_INLINE jl_value_t *jl_excstack_exception(jl_excstack_t *stack JL_PROPAGATES_ROOT,
                                                 size_t itr) JL_NOTSAFEPOINT
 {
-    return (jl_value_t*)(jl_excstack_raw(stack)[itr-1]);
+    return jl_excstack_raw(stack)[itr-1].jlvalue;
 }
 STATIC_INLINE size_t jl_excstack_bt_size(jl_excstack_t *stack, size_t itr) JL_NOTSAFEPOINT
 {
-    return jl_excstack_raw(stack)[itr-2];
+    return jl_excstack_raw(stack)[itr-2].uintptr;
 }
-STATIC_INLINE uintptr_t *jl_excstack_bt_data(jl_excstack_t *stack, size_t itr) JL_NOTSAFEPOINT
+STATIC_INLINE jl_bt_element_t *jl_excstack_bt_data(jl_excstack_t *stack, size_t itr) JL_NOTSAFEPOINT
 {
     return jl_excstack_raw(stack) + itr-2 - jl_excstack_bt_size(stack, itr);
 }
@@ -708,9 +809,10 @@ void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
                          size_t reserved_size);
 void jl_push_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
                       jl_value_t *exception JL_ROOTED_ARGUMENT,
-                      uintptr_t *bt_data, size_t bt_size);
+                      jl_bt_element_t *bt_data, size_t bt_size);
 void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFEPOINT;
 
+//--------------------------------------------------
 // timers
 // Returns time in nanosec
 JL_DLLEXPORT uint64_t jl_hrtime(void);

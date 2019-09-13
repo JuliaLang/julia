@@ -156,6 +156,7 @@ typedef struct {
 } jl_gc_mark_cache_t;
 
 typedef struct _jl_excstack_t jl_excstack_t;
+struct _jl_bt_element_t;
 // This includes all the thread local states we care about for a thread.
 // Changes to TLS field types must be reflected in codegen.
 #define JL_MAX_BT_SIZE 80000
@@ -193,7 +194,7 @@ struct _jl_tls_states_t {
     // Temp storage for exception thrown in signal handler. Not rooted.
     struct _jl_value_t *sig_exception;
     // Temporary backtrace buffer. Scanned for gc roots when bt_size > 0.
-    uintptr_t *bt_data; // JL_MAX_BT_SIZE + 1 elements long
+    struct _jl_bt_element_t *bt_data; // JL_MAX_BT_SIZE + 1 elements long
     size_t bt_size;    // Size for backtrace in transit in bt_data
     // Atomically set by the sender, reset by the handler.
     volatile sig_atomic_t signal_request;
