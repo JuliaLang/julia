@@ -20,7 +20,6 @@ export @test, @test_throws, @test_broken, @test_skip,
 export @testset
 # Legacy approximate testing functions, yet to be included
 export @inferred
-export isequal_nolines
 export detect_ambiguities, detect_unbound_args
 export GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
 export TestSetException
