@@ -422,10 +422,15 @@ function show(io::IO, X::AbstractArray)
         _show_nonempty(io, X, prefix)
 end
 
-### 0-dimensional arrays -- see https://github.com/JuliaLang/julia/issues/31481
-function show_zero_dim(io::IO, X::AbstractArray{<:Any, 0})
-    print(io, "fill(")
-    isassigned(X) ? show(io, X[]) : print(io, undef_ref_str)
+### 0-dimensional arrays (#31481)
+function show_zero_dim(io::IO, X::AbstractArray{T, 0}) where T
+    if isassigned(X)
+        print(io, "fill(")
+        show(io, X[])
+    else
+        print(io, "Array{$T,0}(")
+        show(io, undef)
+    end
     print(io, ")")
 end
 
