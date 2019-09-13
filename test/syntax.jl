@@ -38,13 +38,12 @@ end
 
 # issue #9704
 let a = :a
-    @test :(try
-            catch $a
-            end) == :(try
-                      catch a
-                      end)
-    @test :(module $a end) == :(module a
-                                end)
+    @test Test.isequal_nolines(:(try catch $a
+                                    end),
+                               :(try catch a
+                                    end))
+    @test Test.isequal_nolines(:(module $a end),
+                               :(module a end))
 end
 
 # string literals
