@@ -11,6 +11,7 @@ New language features
 Language changes
 ----------------
 
+* Calling `show` or `repr` on an `undef`/`UndefInitializer()` array initializer now shows valid Julia code ([#33211]).
 
 Multi-threading changes
 -----------------------
@@ -28,14 +29,12 @@ New library functions
 * The `tempname` function now takes a `cleanup::Bool` keyword argument defaulting to `true`, which causes the process to try to ensure that any file or directory at the path returned by `tempname` is deleted upon process exit ([#33090]).
 * The `readdir` function now takes a `join::Bool` keyword argument defaulting to `false`, which when set causes `readdir` to join its directory argument with each listed name ([#33113]).
 
-
 Standard library changes
 ------------------------
 
 * The methods of `mktemp` and `mktempdir` which take a function body to pass temporary paths to no longer throw errors if the path is already deleted when the function body returns ([#33091]).
 
 #### Libdl
-
 
 #### LinearAlgebra
 
