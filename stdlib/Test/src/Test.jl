@@ -20,6 +20,7 @@ export @test, @test_throws, @test_broken, @test_skip,
 export @testset
 # Legacy approximate testing functions, yet to be included
 export @inferred
+export isequal_nolines
 export detect_ambiguities, detect_unbound_args
 export GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
 export TestSetException
@@ -1387,6 +1388,39 @@ function _inferred(ex, mod, allow = :(Union{}))
             result
         end
     end)
+end
+
+"""
+    isequal_nolines(a, b)
+
+Compare two Expr trees for equality, ignoring LineNumberNodes, so that otherwise identical
+Exprs defined in two different locations will still compare equal.
+
+# Example
+```jldoctest
+julia> a = quote 1 end
+quote
+    #= REPL[1]:1 =#
+    1
+end
+
+julia> b = quote 1 end
+quote
+    #= REPL[2]:1 =#
+    1
+end
+
+julia> a == b  # Different line number nodes
+false
+
+julia> Test.isequal_nolines(a, b)
+true
+```
+
+See also: [`isapprox`](@ref) for _numerical_ approximate equality
+"""
+function isequal_nolines(a, b)
+    Base.remove_linenums!(a) == Base.remove_linenums!(b)
 end
 
 """
