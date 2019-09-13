@@ -66,7 +66,6 @@ julia> dropdims(a; dims=3)
  1  3
  2  4
 
-
 julia> dropdims(a; dims=(3, 4))
 2×2 Array{Int64,2}:
  1  3
