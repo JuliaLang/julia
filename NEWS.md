@@ -11,6 +11,7 @@ New language features
 Language changes
 ----------------
 
+* Calling `show` or `repr` on an `undef`/`UndefInitializer()` array initializer now shows valid Julia code ([#33211]).
 
 Multi-threading changes
 -----------------------
@@ -35,7 +36,6 @@ Standard library changes
 * The methods of `mktemp` and `mktempdir` which take a function body to pass temporary paths to no longer throw errors if the path is already deleted when the function body returns ([#33091]).
 
 #### Libdl
-
 
 #### LinearAlgebra
 

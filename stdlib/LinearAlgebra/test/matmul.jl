@@ -586,7 +586,7 @@ end
     A = rand(n, n)
     B = rand(n, n)
     C = zeros(n, n)
-    mul!(C, A, B, -1, 0)
+    mul!(C, A, B, -1 + 0im, 0)
     D = -A * B
     @test D ≈ C
 
