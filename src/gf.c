@@ -1800,6 +1800,19 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int
     jl_methtable_t *mt = jl_method_table_for(unw);
     if ((jl_value_t*)mt == jl_nothing)
         return jl_false; // indeterminate - ml_matches can't deal with this case
+    if (jl_is_dispatch_tupletype((jl_value_t*)types)) {
+        JL_LOCK(&mt->writelock);
+        jl_method_instance_t *sf = jl_mt_assoc_by_type(mt, types, 1, world);
+        JL_UNLOCK(&mt->writelock);
+        if (sf != NULL) {
+            jl_svec_t *m1 = jl_svec(3, types, sf->sparam_vals, sf->def.method);
+            JL_GC_PUSH1(&m1);
+            jl_array_t *ms = jl_alloc_vec_any(1);
+            jl_arrayset(ms, (jl_value_t*)m1, 0);
+            JL_GC_POP();
+            return (jl_value_t*)ms;
+        }
+    }
     return ml_matches(mt->defs, 0, types, lim, include_ambiguous, world, min_valid, max_valid);
 }
 
