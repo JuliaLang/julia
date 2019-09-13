@@ -97,7 +97,7 @@ _dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
 
 Compute reduction `f` over dimensions `dims` and drop those dimensions from the result.
 
-The reducer `f` must both accept a `dims` keyword argument, and reduce the the dimensions
+The reduction `f` must both accept a `dims` keyword argument, and reduce the the dimensions
 specified by `dims` to size 1.
 
 !!! compat "Julia 1.4"
