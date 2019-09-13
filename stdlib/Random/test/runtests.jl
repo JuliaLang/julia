@@ -33,10 +33,10 @@ end
 @test length(randn(ComplexF64, 4, 5)) == 20
 @test length(bitrand(4, 5)) == 20
 
-@test rand(MersenneTwister(0)) == 0.8236475079774124
-@test rand(MersenneTwister(42)) == 0.5331830160438613
+@test rand(MersenneTwister(0)) == 0.8236475079774125
+@test rand(MersenneTwister(42)) == 0.5331830160438614
 # Try a seed larger than 2^32
-@test rand(MersenneTwister(5294967296)) == 0.3498809918210497
+@test rand(MersenneTwister(5294967296)) == 0.3498809918210498
 
 # Test array filling, Issues #7643, #8360
 @test rand(MersenneTwister(0), 1) == [0.8236475079774124]
@@ -307,7 +307,8 @@ let mt = MersenneTwister(0)
         Random.seed!(mt, 0)
         rand(mt) # this is to fill mt.vals, cf. #9040
         rand!(mt, A) # must not segfault even if Int(pointer(A)) % 16 != 0
-        @test A[end-4:end] == [0.3371041633752143, 0.41147647589610803, 0.6063082992397912, 0.9103565379264364, 0.16456579813368521]
+        @test A[end-4:end] == [0.3371041633752143, 0.41147647589610803, 0.6063082992397912,
+                               0.9103565379264366, 0.16456579813368533]
     end
 end
 

@@ -22,17 +22,26 @@ Sampler(::Type{RNG}, ::Type{T}, n::Repetition) where {RNG<:AbstractRNG,T<:Abstra
 # generic random generation function which can be used by RNG implementors
 # it is not defined as a fallback rand method as this could create ambiguities
 
-rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen01{Float16}}) =
-    Float16(reinterpret(Float32,
-                        (rand(r, UInt10(UInt32)) << 13)  | 0x3f800000) - 1)
+function rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen01{Float16}})
+    # bias correction below is equivalent to adding eps(Float16)/2, see #33222
+    z = reinterpret(Float32, (rand(r, UInt10(UInt32)) << 13)  | 0x3f800000)
+    Float16(z - prevfloat(Float16(1)))
+end
 
-rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen01{Float32}}) =
-    reinterpret(Float32, rand(r, UInt23()) | 0x3f800000) - 1
+function rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen01{Float32}})
+    # bias correction below is equivalent to adding eps(Float32)/2, see #33222
+    reinterpret(Float32, rand(r, UInt23()) | 0x3f800000) - prevfloat(1f0)
+end
 
-rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen12_64}) =
+function rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen12_64})
+    # NOTE this has a small bias of eps()/2, see discussion in #33222
     reinterpret(Float64, 0x3ff0000000000000 | rand(r, UInt52()))
+end
 
-rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen01_64}) = rand(r, CloseOpen12()) - 1.0
+function rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen01_64})
+    # bias correction below is equivalent to adding eps()/2, see #33222
+    rand(r, CloseOpen12()) - prevfloat(1.0)
+end
 
 #### BigFloat
 
