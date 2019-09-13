@@ -504,7 +504,6 @@ JL_DLLEXPORT void jl_sig_throw(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *e = ptls->sig_exception;
-    assert(e && ptls->bt_size != 0);
     ptls->sig_exception = NULL;
     throw_internal(e);
 }
