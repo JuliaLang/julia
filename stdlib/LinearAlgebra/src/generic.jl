@@ -60,7 +60,9 @@ julia> C
 ```
 """
 @inline @propagate_inbounds function _modify!(p::MulAddMul{ais1, bis0},
-                                              x, C, idx) where {ais1, bis0}
+                                              x, C, idx′) where {ais1, bis0}
+    # Workaround for performance penalty of splatting a number (#29114):
+    idx = idx′ isa Integer ? (idx′,) : idx′
     if bis0
         C[idx...] = p(x)
     else

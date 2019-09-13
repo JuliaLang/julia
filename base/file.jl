@@ -500,8 +500,8 @@ function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
     return (filename, Base.open(filename, "r+"))
 end
 
-function tempname()
-    parent = tempdir()
+function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
+    isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
     seed::UInt32 = rand(UInt32)
     while true
         if (seed & typemax(UInt16)) == 0
@@ -509,6 +509,7 @@ function tempname()
         end
         filename = _win_tempname(parent, seed)
         if !ispath(filename)
+            cleanup && temp_cleanup_later(filename)
             return filename
         end
         seed += 1
@@ -516,13 +517,15 @@ function tempname()
 end
 
 else # !windows
+
 # Obtain a temporary filename.
-function tempname()
-    d = tempdir() # tempnam ignores TMPDIR on darwin
-    p = ccall(:tempnam, Cstring, (Cstring, Cstring), d, temp_prefix)
+function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
+    isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
+    p = ccall(:tempnam, Cstring, (Cstring, Cstring), parent, temp_prefix)
     systemerror(:tempnam, p == C_NULL)
     s = unsafe_string(p)
     Libc.free(p)
+    cleanup && temp_cleanup_later(s)
     return s
 end
 
@@ -540,16 +543,35 @@ end # os-test
 
 
 """
-    tempname()
+    tempname(parent=tempdir(); cleanup=true) -> String
 
 Generate a temporary file path. This function only returns a path; no file is
-created. The path is likely to be unique, but this cannot be guaranteed.
+created. The path is likely to be unique, but this cannot be guaranteed due to
+the very remote posibility of two simultaneous calls to `tempname` generating
+the same file name. The name is guaranteed to differ from all files already
+existing at the time of the call to `tempname`.
+
+When called with no arguments, the temporary name will be an absolute path to a
+temporary name in the system temporary directory as given by `tempdir()`. If a
+`parent` directory argument is given, the temporary path will be in that
+directory instead.
+
+The `cleanup` option controls whether the process attempts to delete the
+returned path automatically when the process exits. Note that the `tempname`
+function does not create any file or directory at the returned location, so
+there is nothing to cleanup unless you create a file or directory there. If
+you do and `clean` is `true` it will be deleted upon process termination.
+
+!!! compat "Julia 1.4"
+    The `parent` and `cleanup` arguments were added in 1.4. Prior to Julia 1.4
+    the path `tempname` would never be cleaned up at process termination.
 
 !!! warning
 
     This can lead to security holes if another process obtains the same
     file name and creates the file before you are able to. Open the file with
-    `JL_O_EXCL` if this is a concern. Using [`mktemp()`](@ref) is also recommended instead.
+    `JL_O_EXCL` if this is a concern. Using [`mktemp()`](@ref) is also
+    recommended instead.
 """
 tempname()
 
@@ -612,7 +634,7 @@ function mktemp(fn::Function, parent::AbstractString=tempdir())
     finally
         try
             close(tmp_io)
-            rm(tmp_path)
+            ispath(tmp_path) && rm(tmp_path)
         catch ex
             @error "mktemp cleanup" _group=:file exception=(ex, catch_backtrace())
             # might be possible to remove later
@@ -634,7 +656,7 @@ function mktempdir(fn::Function, parent::AbstractString=tempdir();
         fn(tmpdir)
     finally
         try
-            rm(tmpdir, recursive=true)
+            ispath(tmpdir) && rm(tmpdir, recursive=true)
         catch ex
             @error "mktempdir cleanup" _group=:file exception=(ex, catch_backtrace())
             # might be possible to remove later
@@ -649,41 +671,87 @@ struct uv_dirent_t
 end
 
 """
-    readdir(dir::AbstractString=".") -> Vector{String}
+    readdir(dir::AbstractString=pwd(); join::Bool=false) -> Vector{String}
 
-Return the files and directories in the directory `dir` (or the current working directory if not given).
+Return the names in the directory `dir` or the current working directory if not
+given. When `join` is false, `readdir` returns just the names in the directory
+as is; when `join` is true, it returns `joinpath(dir, name)` for each `name` so
+that the returned strings are full paths. If you want to get absolute paths
+back, call `readdir` with an absolute directory path and `join` set to true.
+
+!!! compat "Julia 1.4"
+    The `join` keyword argument requires at least Julia 1.4.
 
 # Examples
 ```julia-repl
-julia> readdir("/home/JuliaUser/Projects/julia")
-34-element Array{String,1}:
- ".circleci"
- ".freebsdci.sh"
+julia> cd("/home/JuliaUser/dev/julia")
+
+julia> readdir()
+30-element Array{String,1}:
+ ".appveyor.yml"
  ".git"
  ".gitattributes"
- ".github"
  ⋮
- "test"
  "ui"
  "usr"
  "usr-staging"
+
+julia> readdir(join=true)
+30-element Array{String,1}:
+ "/home/JuliaUser/dev/julia/.appveyor.yml"
+ "/home/JuliaUser/dev/julia/.git"
+ "/home/JuliaUser/dev/julia/.gitattributes"
+ ⋮
+ "/home/JuliaUser/dev/julia/ui"
+ "/home/JuliaUser/dev/julia/usr"
+ "/home/JuliaUser/dev/julia/usr-staging"
+
+julia> readdir("base")
+145-element Array{String,1}:
+ ".gitignore"
+ "Base.jl"
+ "Enums.jl"
+ ⋮
+ "version_git.sh"
+ "views.jl"
+ "weakkeydict.jl"
+
+julia> readdir("base", join=true)
+145-element Array{String,1}:
+ "base/.gitignore"
+ "base/Base.jl"
+ "base/Enums.jl"
+ ⋮
+ "base/version_git.sh"
+ "base/views.jl"
+ "base/weakkeydict.jl"```
+
+julia> readdir(abspath("base"), join=true)
+145-element Array{String,1}:
+ "/home/JuliaUser/dev/julia/base/.gitignore"
+ "/home/JuliaUser/dev/julia/base/Base.jl"
+ "/home/JuliaUser/dev/julia/base/Enums.jl"
+ ⋮
+ "/home/JuliaUser/dev/julia/base/version_git.sh"
+ "/home/JuliaUser/dev/julia/base/views.jl"
+ "/home/JuliaUser/dev/julia/base/weakkeydict.jl"
 ```
 """
-function readdir(path::AbstractString)
+function readdir(dir::AbstractString=pwd(); join::Bool=false)
     # Allocate space for uv_fs_t struct
     uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
 
     # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
     err = ccall(:uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{UInt8}, Cstring, Cint, Ptr{Cvoid}),
-                C_NULL, uv_readdir_req, path, 0, C_NULL)
-    err < 0 && throw(SystemError("unable to read directory $path", -err))
-    #uv_error("unable to read directory $path", err)
+                C_NULL, uv_readdir_req, dir, 0, C_NULL)
+    err < 0 && throw(SystemError("unable to read directory $dir", -err))
 
     # iterate the listing into entries
     entries = String[]
     ent = Ref{uv_dirent_t}()
     while Base.UV_EOF != ccall(:uv_fs_scandir_next, Cint, (Ptr{Cvoid}, Ptr{uv_dirent_t}), uv_readdir_req, ent)
-        push!(entries, unsafe_string(ent[].name))
+        name = unsafe_string(ent[].name)
+        push!(entries, join ? joinpath(dir, name) : name)
     end
 
     # Clean up the request string
@@ -691,8 +759,6 @@ function readdir(path::AbstractString)
 
     return entries
 end
-
-readdir() = readdir(".")
 
 """
     walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)

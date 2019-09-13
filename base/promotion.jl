@@ -246,7 +246,7 @@ If no arguments can be converted, an error is raised.
 # Examples
 ```jldoctest
 julia> promote(Int8(1), Float16(4.5), Float32(4.1))
-(1.0f0, 4.5f0, 4.1f0)
+(1.0, 4.5, 4.1)
 ```
 """
 function promote end

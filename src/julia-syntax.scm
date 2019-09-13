@@ -476,6 +476,7 @@
              ,(if (any kwarg? pargl) (gensy) UNUSED)
              (call (core kwftype) ,ftype)) ,kw ,@pargl ,@vararg)
           `(block
+            ,@(filter linenum? prologue)
             ,(scopenest
               keynames
               (map (lambda (v dflt)

@@ -136,6 +136,11 @@ returning the value of the expression.
 See also [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
 
+!!! note
+    For more serious benchmarking, consider the `@btime` macro from the BenchmarkTools.jl
+    package which among other things evaluates the function multiple times in order to
+    reduce noise.
+
 ```julia-repl
 julia> @time rand(10^6);
   0.001525 seconds (7 allocations: 7.630 MiB)

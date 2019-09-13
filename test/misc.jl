@@ -756,3 +756,6 @@ end
     @test !any(arg->arg isa LineNumberNode, ex.args)
 end
 
+# Finalizer with immutable should throw
+@test_throws ErrorException finalizer(x->nothing, 1)
+@test_throws ErrorException finalizer(C_NULL, 1)

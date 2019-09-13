@@ -39,6 +39,7 @@ Julia includes code from the following projects, which have their own licenses:
 
 The following components included in Julia `Base` have their own separate licenses:
 
+- base/ryu/* [Boost] (see [ryu](https://github.com/ulfjack/ryu/blob/master/LICENSE-Boost))
 - base/grisu/* [BSD-3] (see [double-conversion](https://github.com/google/double-conversion/blob/master/LICENSE))
 - base/special/{exp,rem_pio2,hyperbolic}.jl [Freely distributable with preserved copyright notice] (see [FDLIBM](https://www.netlib.org/fdlibm))
 

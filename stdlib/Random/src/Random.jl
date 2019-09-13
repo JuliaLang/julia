@@ -306,8 +306,8 @@ Pick a random element or array of random elements from the set of values specifi
 * an `AbstractDict` or `AbstractSet` object,
 * a string (considered as a collection of characters), or
 * a type: the set of values to pick from is then equivalent to `typemin(S):typemax(S)` for
-  integers (this is not applicable to [`BigInt`](@ref)), and to ``[0, 1)`` for floating
-  point numbers;
+  integers (this is not applicable to [`BigInt`](@ref)), to ``[0, 1)`` for floating
+  point numbers and to ``[0, 1)+i[0, 1)]`` for complex floating point numbers;
 
 `S` defaults to [`Float64`](@ref).
 

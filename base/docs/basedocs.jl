@@ -856,10 +856,10 @@ end
 Fields can have type restrictions, which may be parameterized:
 
 ```julia
-    struct Point{X}
-        x::X
-        y::Float64
-    end
+struct Point{X}
+    x::X
+    y::Float64
+end
 ```
 
 A struct can also declare an abstract super type via `<:` syntax:
@@ -1082,10 +1082,10 @@ Create a `Float32` from `x`. If `x` is not exactly representable then `mode` det
 # Examples
 ```jldoctest
 julia> Float32(1/3, RoundDown)
-0.3333333f0
+0.3333333
 
 julia> Float32(1/3, RoundUp)
-0.33333334f0
+0.33333334
 ```
 
 See [`RoundingMode`](@ref) for available rounding modes.

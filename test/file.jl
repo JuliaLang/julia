@@ -48,6 +48,18 @@ if !Sys.iswindows()
     cd(pwd_)
 end
 
+using Random
+
+@testset "tempname with parent" begin
+    t = tempname()
+    @test dirname(t) == tempdir()
+    mktempdir() do d
+        t = tempname(d)
+        @test dirname(t) == d
+    end
+    @test_throws ArgumentError tempname(randstring())
+end
+
 child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $code`)))
 
 @testset "mktemp/dir basic cleanup" begin
@@ -66,6 +78,14 @@ child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $co
     @test !ispath(t)
     # mktempdir with cleanup
     t = child_eval("t = mktempdir(); touch(joinpath(t, \"file.txt\")); t")
+    @test !ispath(t)
+    # tempname without cleanup
+    t = child_eval("t = tempname(cleanup=false); touch(t); t")
+    @test isfile(t)
+    rm(t, force=true)
+    @test !ispath(t)
+    # tempname with cleanup
+    t = child_eval("t = tempname(); touch(t); t")
     @test !ispath(t)
 end
 
@@ -1382,5 +1402,33 @@ end
         @test startswith(tmpdir, tmpdirbase)
         @test sizeof(tmpdir) == 6 + sizeof(tmpdirbase)
         @test sizeof(basename(tmpdir)) == 6
+    end
+end
+
+@testset "readir tests" begin
+    ≛(a, b) = sort(a) == sort(b)
+    mktempdir() do dir
+        d = cd(pwd, dir) # might resolve symlinks
+        @test isempty(readdir(d))
+        @test isempty(readdir(d, join=true))
+        cd(d) do
+            @test isempty(readdir())
+            @test isempty(readdir(join=true))
+        end
+        touch(joinpath(d, "file"))
+        mkdir(joinpath(d, "dir"))
+        names = ["dir", "file"]
+        paths = [joinpath(d, x) for x in names]
+        @test readdir(d) ≛ names
+        @test readdir(d, join=true) ≛ paths
+        cd(d) do
+            @test readdir() ≛ names
+            @test readdir(join=true) ≛ paths
+        end
+        t, b = splitdir(d)
+        cd(t) do
+            @test readdir(b) ≛ names
+            @test readdir(b, join=true) ≛ [joinpath(b, x) for x in names]
+        end
     end
 end

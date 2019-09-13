@@ -4,6 +4,7 @@ Julia v1.4 Release Notes
 New language features
 ---------------------
 
+* Structs with all isbits and isbitsunion fields are now stored inline in arrays ([#32448]).
 
 Language changes
 ----------------
@@ -20,15 +21,23 @@ Build system changes
 New library functions
 ---------------------
 
+* The `splitpath` function now accepts any `AbstractString` whereas previously it only accepted paths of type `String` ([#33012]).
+* The `tempname` function now takes an optional `parent::AbstractString` argument to give it a directory in which to attempt to produce a temporary path name ([#33090]).
+* The `tempname` function now takes a `cleanup::Bool` keyword argument defaulting to `true`, which causes the process to try to ensure that any file or directory at the path returned by `tempname` is deleted upon process exit ([#33090]).
+* The `readdir` function now takes a `join::Bool` keyword argument defaulting to `false`, which when set causes `readdir` to join its directory argument with each listed name ([#33113]).
+
 
 Standard library changes
 ------------------------
 
+* The methods of `mktemp` and `mktempdir` which take a function body to pass temporary paths to no longer throw errors if the path is already deleted when the function body returns ([#33091]).
 
 #### Libdl
 
 
 #### LinearAlgebra
+
+* `qr` and `qr!` functions support `blocksize` keyword argument ([#33053]).
 
 
 #### SparseArrays

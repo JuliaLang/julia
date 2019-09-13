@@ -275,7 +275,7 @@ julia> typeof(t.a)
 Float64
 
 julia> t.a = 4.5f0
-4.5f0
+4.5
 
 julia> typeof(t.a)
 Float32
@@ -285,7 +285,7 @@ In contrast, once `m` is constructed, the type of `m.a` cannot change:
 
 ```jldoctest myambig2
 julia> m.a = 4.5f0
-4.5f0
+4.5
 
 julia> typeof(m.a)
 Float64
@@ -306,7 +306,7 @@ julia> typeof(m.a)
 Float64
 
 julia> m.a = 4.5f0
-4.5f0
+4.5
 
 julia> typeof(m.a)
 Float32
@@ -1339,10 +1339,10 @@ such as `x-y == 0` implies `x == y`:
 julia> x = 3f-38; y = 2f-38;
 
 julia> set_zero_subnormals(true); (x - y, x == y)
-(0.0f0, false)
+(0.0, false)
 
 julia> set_zero_subnormals(false); (x - y, x == y)
-(1.0000001f-38, false)
+(1.0000001e-38, false)
 ```
 
 In some applications, an alternative to zeroing subnormal numbers is to inject a tiny bit of noise.

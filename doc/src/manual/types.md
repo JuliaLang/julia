@@ -929,7 +929,7 @@ or a type that specifies only field names:
 
 ```jldoctest
 julia> NamedTuple{(:a, :b),Tuple{Float32, String}}((1,""))
-(a = 1.0f0, b = "")
+(a = 1.0, b = "")
 
 julia> NamedTuple{(:a, :b)}((1,""))
 (a = 1, b = "")
