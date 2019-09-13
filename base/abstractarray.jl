@@ -288,7 +288,7 @@ keys(s::IndexStyle, A::AbstractArray, B::AbstractArray...) = eachindex(s, A, B..
 
 Return the last index of `collection`. If `d` is given, return the last index of `collection` along dimension `d`.
 
-The syntaxes `A[end]` and `A[end, end]` lower to `A[lastindex(A)]` and
+The syntax `A[end]` and `A[end, end]` is converted by the compiler to `A[lastindex(A)]` and
 `A[lastindex(A, 1), lastindex(A, 2)]`, respectively.
 
 # Examples
