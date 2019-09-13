@@ -531,7 +531,7 @@ abs(x::Float64) = abs_float(x)
     isnan(f) -> Bool
 
 Test whether a number value is a NaN, an indetermined value which is neither an infinity
-nor a finite number ("not a number"). 
+nor a finite number ("not a number").
 """
 isnan(x::AbstractFloat) = x != x
 isnan(x::Float16) = reinterpret(UInt16,x)&0x7fff > 0x7c00
