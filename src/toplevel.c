@@ -865,12 +865,6 @@ JL_DLLEXPORT jl_value_t *jl_infer_thunk(jl_code_info_t *thk, jl_module_t *m)
 
 JL_DLLEXPORT jl_value_t *jl_load(jl_module_t *module, const char *fname)
 {
-    if (module->istopmod) {
-        jl_printf(JL_STDOUT, "%s\r\n", fname);
-#ifdef _OS_WINDOWS_
-        jl_uv_flush(JL_STDOUT);
-#endif
-    }
     uv_stat_t stbuf;
     if (jl_stat(fname, (char*)&stbuf) != 0 || (stbuf.st_mode & S_IFMT) != S_IFREG) {
         jl_errorf("could not open file %s", fname);
