@@ -13,6 +13,8 @@ Language changes
 
 * Calling `show` or `repr` on an `undef`/`UndefInitializer()` array initializer now shows valid Julia code ([#33211]).
 
+* Calling `show` or `repr` on a 0-dimensional `AbstractArray` now shows valid code for creating an equivalent 0-dimensional array, instead of only showing the contained value. ([#33206])
+
 Multi-threading changes
 -----------------------
 
@@ -37,8 +39,6 @@ Standard library changes
 * The methods of `mktemp` and `mktempdir` which take a function body to pass temporary paths to no longer throw errors if the path is already deleted when the function body returns ([#33091]).
 
 * Verbose `display` of `Char` (`text/plain` output) now shows the codepoint value in standard-conforming `"U+XXXX"` format ([#33291]).
-
-* Calling `show` or `repr` on 0-dimensional `AbstractArray`s now shows valid code for creating an equivalent 0-dimensional array, instead of only showing the contained value. ([#33206])
 
 
 #### Libdl
