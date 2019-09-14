@@ -1432,9 +1432,10 @@ Unsigned
     Bool <: Integer
 
 Boolean type, containing the values `true` and `false`.
-Note that `Bool` is kind of number and `false` is numerically
+
+`Bool` is a kind of number: `false` is numerically
 equal to `0` and `true` is numerically equal to `1`.
-Moreover, `false` and acts as a multiplicative "strong zero":
+Moreover, `false` acts as a multiplicative "strong zero":
 
     julia> false == 0
     true
