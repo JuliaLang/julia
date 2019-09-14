@@ -54,6 +54,10 @@ Standard library changes
 
 #### Sockets
 
+#### Random
+
+* The default sampler for floats had a small bias ([#33222]), which is now fixed ([#33251]), and the default random sampler for floats now generates interior values in `(0, 1)`. The previous default sampler is available as `Random.CloseOpen01`.
+
 
 Deprecated or removed
 ---------------------
