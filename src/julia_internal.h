@@ -21,6 +21,16 @@
 #define JL_ASAN_ENABLED     // GCC flavor
 #endif
 
+#ifdef JL_ASAN_ENABLED
+#ifdef __cplusplus
+extern "C" {
+#endif
+void __sanitizer_start_switch_fiber(void**, const void*, size_t);
+void __sanitizer_finish_switch_fiber(void*, const void**, size_t*);
+#ifdef __cplusplus
+}
+#endif
+#endif
 
 #if defined(__has_feature)
 #if __has_feature(memory_sanitizer)
