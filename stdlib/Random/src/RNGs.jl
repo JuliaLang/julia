@@ -341,7 +341,7 @@ rand!(::_GLOBAL_RNG, A::AbstractArray{Float64}, I::SamplerTrivial{<:FloatInterva
 rand!(::_GLOBAL_RNG, A::Array{Float64}, I::SamplerTrivial{<:FloatInterval_64}) = rand!(default_rng(), A, I)
 for T in (Float16, Float32)
     @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerTrivial{CloseOpen12{$T}}) = rand!(default_rng(), A, I)
-    @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerTrivial{CloseOpen01{$T}}) = rand!(default_rng(), A, I)
+    @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerTrivial{OpenOpen01{$T}}) = rand!(default_rng(), A, I)
 end
 for T in BitInteger_types
     @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerType{$T}) = rand!(default_rng(), A, I)
@@ -357,8 +357,10 @@ rng_native_52(::MersenneTwister) = Float64
 
 # precondition: !mt_empty(r)
 rand_inbounds(r::MersenneTwister, ::CloseOpen12_64) = mt_pop!(r)
-rand_inbounds(r::MersenneTwister, ::CloseOpen01_64=CloseOpen01()) =
+rand_inbounds(r::MersenneTwister, ::CloseOpen01_64) =
     rand_inbounds(r, CloseOpen12()) - 1.0
+rand_inbounds(r::MersenneTwister, ::OpenOpen01_64=OpenOpen01()) =
+    rand_inbounds(r, CloseOpen12()) - prevfloat(1.0)
 
 rand_inbounds(r::MersenneTwister, ::UInt52Raw{T}) where {T<:BitInteger} =
     reinterpret(UInt64, rand_inbounds(r, CloseOpen12())) % T
@@ -457,6 +459,10 @@ function _rand_max383!(r::MersenneTwister, A::UnsafeView{Float64}, I::FloatInter
         for i=1:n
             A[i] -= 1.0
         end
+    elseif I isa OpenOpen01
+        for i in 1:n
+            A[i] -= prevfloat(1.0)
+        end
     end
     A
 end
@@ -464,6 +470,9 @@ end
 
 fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::CloseOpen01_64) =
     dsfmt_fill_array_close_open!(s, A, n)
+
+fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::OpenOpen01_64) =
+    dsfmt_fill_array_open_open!(s, A, n)
 
 fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::CloseOpen12_64) =
     dsfmt_fill_array_close1_open2!(s, A, n)
@@ -547,6 +556,15 @@ for T in (Float16, Float32)
     @eval function rand!(r::MersenneTwister, A::Array{$T}, ::SamplerTrivial{CloseOpen01{$T}})
         rand!(r, A, CloseOpen12($T))
         I32 = one(Float32)
+        for i in eachindex(A)
+            @inbounds A[i] = Float32(A[i])-I32 # faster than "A[i] -= one(T)" for T==Float16
+        end
+        A
+    end
+
+    @eval function rand!(r::MersenneTwister, A::Array{$T}, ::SamplerTrivial{OpenOpen01{$T}})
+        rand!(r, A, CloseOpen12($T))
+        I32 = one(Float32) - eps($T)/2
         for i in eachindex(A)
             @inbounds A[i] = Float32(A[i])-I32 # faster than "A[i] -= one(T)" for T==Float16
         end

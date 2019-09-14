@@ -17,31 +17,39 @@
 ### random floats
 
 Sampler(::Type{RNG}, ::Type{T}, n::Repetition) where {RNG<:AbstractRNG,T<:AbstractFloat} =
-    Sampler(RNG, CloseOpen01(T), n)
+    Sampler(RNG, OpenOpen01(T), n)
 
 # generic random generation function which can be used by RNG implementors
 # it is not defined as a fallback rand method as this could create ambiguities
 
-function rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen01{Float16}})
-    # bias correction below is equivalent to adding eps(Float16)/2, see #33222
-    z = reinterpret(Float32, (rand(r, UInt10(UInt32)) << 13)  | 0x3f800000)
+# NOTE: bias correction for OpenOpen01 samplers, see #33222
+
+function rand(r::AbstractRNG, ::SamplerTrivial{OpenOpen01{Float16}})
+    z = reinterpret(Float32, (rand(r, UInt10(UInt32)) << 13) | 0x3f800000)
     Float16(z - prevfloat(Float16(1)))
 end
 
-function rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen01{Float32}})
-    # bias correction below is equivalent to adding eps(Float32)/2, see #33222
+function rand(r::AbstractRNG, ::SamplerTrivial{OpenOpen01{Float32}})
     reinterpret(Float32, rand(r, UInt23()) | 0x3f800000) - prevfloat(1f0)
 end
 
-function rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen12_64})
-    # NOTE this has a small bias of eps()/2, see discussion in #33222
-    reinterpret(Float64, 0x3ff0000000000000 | rand(r, UInt52()))
-end
-
-function rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen01_64})
-    # bias correction below is equivalent to adding eps()/2, see #33222
+function rand(r::AbstractRNG, ::SamplerTrivial{OpenOpen01_64})
     rand(r, CloseOpen12()) - prevfloat(1.0)
 end
+
+# CloseOpen01 samplers are biased by eps(T)/2, see #33222
+
+rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen01{Float16}}) =
+    Float16(reinterpret(Float32,
+                        (rand(r, UInt10(UInt32)) << 13)  | 0x3f800000) - 1)
+
+rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen01{Float32}}) =
+    reinterpret(Float32, rand(r, UInt23()) | 0x3f800000) - 1
+
+rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen12_64}) =
+    reinterpret(Float64, 0x3ff0000000000000 | rand(r, UInt52()))
+
+rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen01_64}) = rand(r, CloseOpen12()) - 1.0
 
 #### BigFloat
 
@@ -93,6 +101,10 @@ function _rand(rng::AbstractRNG, sp::SamplerBigFloat, ::CloseOpen01{BigFloat})
               (Ref{BigFloat}, Ref{BigFloat}, Cdouble, Base.MPFR.MPFRRoundingMode),
               z, z, 0.5, Base.MPFR.ROUNDING_MODE[])
     z
+end
+
+function _rand(rng::AbstractRNG, sp::SamplerBigFloat, ::OpenOpen01{BigFloat})
+    _rand(rng, sp, CloseOpen01{BigFloat}())
 end
 
 # alternative, with 1 bit less of precision

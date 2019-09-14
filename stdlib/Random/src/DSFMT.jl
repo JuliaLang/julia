@@ -8,7 +8,7 @@ using Base.GMP.MPZ
 export DSFMT_state, dsfmt_get_min_array_size, dsfmt_get_idstring,
        dsfmt_init_gen_rand, dsfmt_init_by_array, dsfmt_gv_init_by_array,
        dsfmt_fill_array_close_open!, dsfmt_fill_array_close1_open2!,
-       win32_SystemFunction036!
+       dsfmt_fill_array_open_open!, win32_SystemFunction036!
 
 "Mersenne Exponent"
 const MEXP = 19937
@@ -84,6 +84,15 @@ function dsfmt_fill_array_close1_open2!(s::DSFMT_state, A::Ptr{Float64}, n::Int)
     @assert Csize_t(A) % 16 == 0 # the underlying C array must be 16-byte aligned
     @assert dsfmt_min_array_size <= n && iseven(n)
     ccall((:dsfmt_fill_array_close1_open2,:libdSFMT),
+          Cvoid,
+          (Ptr{Cvoid}, Ptr{Float64}, Int),
+          s.val, A, n)
+end
+
+function dsfmt_fill_array_open_open!(s::DSFMT_state, A::Ptr{Float64}, n::Int)
+    @assert Csize_t(A) % 16 == 0 # the underlying C array must be 16-byte aligned
+    @assert dsfmt_min_array_size <= n && iseven(n)
+    ccall((:dsfmt_fill_array_open_open,:libdSFMT),
           Cvoid,
           (Ptr{Cvoid}, Ptr{Float64}, Int),
           s.val, A, n)

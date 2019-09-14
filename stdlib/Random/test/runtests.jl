@@ -39,11 +39,11 @@ end
 @test rand(MersenneTwister(5294967296)) == 0.3498809918210498
 
 # Test array filling, Issues #7643, #8360
-@test rand(MersenneTwister(0), 1) == [0.8236475079774124]
+@test rand(MersenneTwister(0), 1) == [0.8236475079774125]
 let A = zeros(2, 2)
     rand!(MersenneTwister(0), A)
-    @test A == [0.8236475079774124  0.16456579813368521;
-                0.9103565379264364  0.17732884646626457]
+    @test A == [0.8236475079774125  0.16456579813368533;
+                0.9103565379264366  0.17732884646626468]
 end
 let A = zeros(2, 2)
     @test_throws ArgumentError rand!(MersenneTwister(0), A, 5)
@@ -273,15 +273,15 @@ let mt = MersenneTwister(0)
         rand!(mt, A)
         rand!(mt, B)
         @test A[end] == Any[21, 0x7b, 17385, 0x3086, -1574090021, 0xadcb4460, 6797283068698303107, 0xc8e6453e139271f3,
-                            69855512850528774484795047199183096941, Float16(0.16895), 0.21086597f0][i]
+                            69855512850528774484795047199183096941, Float16(0.1694), 0.21086603f0][i]
         @test B[end] == Any[49, 0x65, -3725, 0x719d, 814246081, 0xdf61843a, 2120308604158549401, 0xcb28c236e9c0f608,
-                            61881313582466480231846019869039259750, Float16(0.38672), 0.20027375f0][i]
+                            61881313582466480231846019869039259750, Float16(0.3872), 0.20027381f0][i]
     end
 
     Random.seed!(mt, 0)
     AF64 = Vector{Float64}(undef, Random.dsfmt_get_min_array_size()-1)
-    @test rand!(mt, AF64)[end] == 0.957735065345398
-    @test rand!(mt, AF64)[end] == 0.6492481059865669
+    @test rand!(mt, AF64)[end] == 0.9577350653453981
+    @test rand!(mt, AF64)[end] == 0.649248105986567
     resize!(AF64, 2*length(mt.vals))
     @test invoke(rand!, Tuple{MersenneTwister,AbstractArray{Float64},Random.SamplerTrivial{Random.CloseOpen01_64}},
                  mt, AF64, Random.SamplerTrivial(Random.CloseOpen01()))[end]  == 0.1142787906708973
@@ -307,8 +307,7 @@ let mt = MersenneTwister(0)
         Random.seed!(mt, 0)
         rand(mt) # this is to fill mt.vals, cf. #9040
         rand!(mt, A) # must not segfault even if Int(pointer(A)) % 16 != 0
-        @test A[end-4:end] == [0.3371041633752143, 0.41147647589610803, 0.6063082992397912,
-                               0.9103565379264366, 0.16456579813368533]
+        @test A[end-4:end] == [0.33710416337521454, 0.41147647589610803, 0.6063082992397912, 0.9103565379264366, 0.16456579813368533]
     end
 end
 
@@ -445,7 +444,7 @@ end
 # test uniform distribution of floats
 for rng in [MersenneTwister(), RandomDevice()],
     T in [Float16, Float32, Float64, BigFloat],
-        prec in (T == BigFloat ? [3, 53, 64, 100, 256, 1000] : [256])
+    prec in (T == BigFloat ? [3, 53, 64, 100, 256, 1000] : [256])
     setprecision(BigFloat, prec) do
         # array version
         counts = hist(rand(rng, T, 2000), 4)

@@ -88,13 +88,16 @@ gentype(::Type{<:UniformBits{T}}) where {T} = T
 abstract type FloatInterval{T<:AbstractFloat} end
 
 struct CloseOpen01{T<:AbstractFloat} <: FloatInterval{T} end # interval [0,1)
+struct OpenOpen01{T<:AbstractFloat} <: FloatInterval{T} end # interval (0,1)
 struct CloseOpen12{T<:AbstractFloat} <: FloatInterval{T} end # interval [1,2)
 
 const FloatInterval_64 = FloatInterval{Float64}
 const CloseOpen01_64   = CloseOpen01{Float64}
+const OpenOpen01_64   = OpenOpen01{Float64}
 const CloseOpen12_64   = CloseOpen12{Float64}
 
 CloseOpen01(::Type{T}=Float64) where {T<:AbstractFloat} = CloseOpen01{T}()
+OpenOpen01(::Type{T}=Float64) where {T<:AbstractFloat} = OpenOpen01{T}()
 CloseOpen12(::Type{T}=Float64) where {T<:AbstractFloat} = CloseOpen12{T}()
 
 gentype(::Type{<:FloatInterval{T}}) where {T<:AbstractFloat} = T
