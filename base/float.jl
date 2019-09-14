@@ -530,7 +530,7 @@ abs(x::Float64) = abs_float(x)
 """
     isnan(f) -> Bool
 
-Test whether a number value is a NaN, an indetermined value which is neither an infinity
+Test whether a number value is a NaN, an indeterminate value which is neither an infinity
 nor a finite number ("not a number").
 """
 isnan(x::AbstractFloat) = x != x
