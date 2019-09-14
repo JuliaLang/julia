@@ -338,7 +338,13 @@ static std::map<jl_fptr_args_t, Function*> builtin_func_map;
 extern "C" {
     int globalUnique = 0;
     int jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
-    jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 0, 1, jl_default_debug_info_kind, NULL, NULL, NULL, NULL, NULL};
+    jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 0,
+#ifdef _OS_WINDOWS_
+        0,
+#else
+        1,
+#endif
+        jl_default_debug_info_kind, NULL, NULL, NULL, NULL, NULL};
 }
 
 template<typename T>

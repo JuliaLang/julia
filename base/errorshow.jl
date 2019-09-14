@@ -235,15 +235,14 @@ function showerror(io::IO, ex::MethodError)
     if f_is_function && isdefined(Base, name)
         basef = getfield(Base, name)
         if basef !== ex.f && hasmethod(basef, arg_types)
-            println(io)
-            print(io, "You may have intended to import Base.", name)
+            print(io, "\nYou may have intended to import ")
+            show_unquoted(io, Expr(:., :Base, QuoteNode(name)))
         end
     end
     if (ex.world != typemax(UInt) && hasmethod(ex.f, arg_types) &&
         !hasmethod(ex.f, arg_types, world = ex.world))
         curworld = get_world_counter()
-        println(io)
-        print(io, "The applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
+        print(io, "\nThe applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
     end
     if !is_arg_types
         # Check for row vectors used where a column vector is intended.
@@ -455,8 +454,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
 
     if !isempty(lines) # Display up to three closest candidates
         Base.with_output_color(:normal, io) do io
-            println(io)
-            print(io, "Closest candidates are:")
+            print(io, "\nClosest candidates are:")
             sort!(lines, by = x -> -x[2])
             i = 0
             for line in lines

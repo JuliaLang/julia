@@ -97,6 +97,8 @@
                     file line)))
           (if (and (null? (cdadr (caddr th)))
                    (and (length= (lam:body th) 2)
+                        ;; 1-element body might be `return` or `goto` (issue #33227)
+                        (return? (cadr (lam:body th)))
                         (let ((retval (cadadr (lam:body th))))
                           (or (and (pair? retval) (eq? (car retval) 'lambda))
                               (simple-atom? retval)))))

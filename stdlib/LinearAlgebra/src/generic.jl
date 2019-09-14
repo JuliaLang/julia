@@ -61,12 +61,15 @@ julia> C
 """
 @inline @propagate_inbounds function _modify!(p::MulAddMul{ais1, bis0},
                                               x, C, idx′) where {ais1, bis0}
-    # Workaround for performance penalty of splatting a number (#29114):
-    idx = idx′ isa Integer ? (idx′,) : idx′
+    # `idx′` may be an integer, a tuple of integer, or a `CartesianIndex`.
+    #  Let `CartesianIndex` constructor normalize them so that it can be
+    # used uniformly.  It also acts as a workaround for performance penalty
+    # of splatting a number (#29114):
+    idx = CartesianIndex(idx′)
     if bis0
-        C[idx...] = p(x)
+        C[idx] = p(x)
     else
-        C[idx...] = p(x, C[idx...])
+        C[idx] = p(x, C[idx])
     end
     return
 end
@@ -874,6 +877,51 @@ function dot(x::AbstractArray, y::AbstractArray)
     s
 end
 
+"""
+    dot(x, A, y)
+
+Compute the generalized dot product `dot(x, A*y)` between two vectors `x` and `y`,
+without storing the intermediate result of `A*y`. As for the two-argument
+[`dot(_,_)`](@ref), this acts recursively. Moreover, for complex vectors, the
+first vector is conjugated.
+
+!!! compat "Julia 1.4"
+    Three-argument `dot` requires at least Julia 1.4.
+
+# Examples
+```jldoctest
+julia> dot([1; 1], [1 2; 3 4], [2; 3])
+26
+
+julia> dot(1:5, reshape(1:25, 5, 5), 2:6)
+4850
+
+julia> ⋅(1:5, reshape(1:25, 5, 5), 2:6) == dot(1:5, reshape(1:25, 5, 5), 2:6)
+true
+```
+"""
+dot(x, A, y) = dot(x, A*y) # generic fallback for cases that are not covered by specialized methods
+
+function dot(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
+    (axes(x)..., axes(y)...) == axes(A) || throw(DimensionMismatch())
+    T = typeof(dot(first(x), first(A), first(y)))
+    s = zero(T)
+    i₁ = first(eachindex(x))
+    x₁ = first(x)
+    @inbounds for j in eachindex(y)
+        yj = y[j]
+        if !iszero(yj)
+            temp = zero(adjoint(A[i₁,j]) * x₁)
+            @simd for i in eachindex(x)
+                temp += adjoint(A[i,j]) * x[i]
+            end
+            s += dot(temp, yj)
+        end
+    end
+    return s
+end
+dot(x::AbstractVector, adjA::Adjoint, y::AbstractVector) = adjoint(dot(y, adjA.parent, x))
+dot(x::AbstractVector, transA::Transpose{<:Real}, y::AbstractVector) = adjoint(dot(y, transA.parent, x))
 
 ###########################################################################################
 

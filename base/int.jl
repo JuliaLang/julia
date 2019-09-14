@@ -638,10 +638,10 @@ The lowest value representable by the given (real) numeric DataType `T`.
 # Examples
 ```jldoctest
 julia> typemin(Float16)
--Inf
+-Inf16
 
 julia> typemin(Float32)
--Inf
+-Inf32
 ```
 """
 function typemin end

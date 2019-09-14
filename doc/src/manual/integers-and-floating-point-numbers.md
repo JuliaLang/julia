@@ -280,20 +280,20 @@ entered by writing an `f` in place of `e`:
 
 ```jldoctest
 julia> 0.5f0
-0.5
+0.5f0
 
 julia> typeof(ans)
 Float32
 
 julia> 2.5f-4
-0.00025
+0.00025f0
 ```
 
 Values can be converted to [`Float32`](@ref) easily:
 
 ```jldoctest
 julia> Float32(-1.5)
--1.5
+-1.5f0
 
 julia> typeof(ans)
 Float32
@@ -324,7 +324,7 @@ julia> sizeof(Float16(4.))
 2
 
 julia> 2*Float16(4.)
-8.0
+Float16(8.0)
 ```
 
 The underscore `_` can be used as digit separator:
@@ -408,10 +408,10 @@ The [`typemin`](@ref) and [`typemax`](@ref) functions also apply to floating-poi
 
 ```jldoctest
 julia> (typemin(Float16),typemax(Float16))
-(-Inf, Inf)
+(-Inf16, Inf16)
 
 julia> (typemin(Float32),typemax(Float32))
-(-Inf, Inf)
+(-Inf32, Inf32)
 
 julia> (typemin(Float64),typemax(Float64))
 (-Inf, Inf)
@@ -428,7 +428,7 @@ floating-point value:
 
 ```jldoctest
 julia> eps(Float32)
-1.1920929e-7
+1.1920929f-7
 
 julia> eps(Float64)
 2.220446049250313e-16
@@ -468,13 +468,13 @@ the next largest or smallest representable floating-point number to the argument
 
 ```jldoctest
 julia> x = 1.25f0
-1.25
+1.25f0
 
 julia> nextfloat(x)
-1.2500001
+1.2500001f0
 
 julia> prevfloat(x)
-1.2499999
+1.2499999f0
 
 julia> bitstring(prevfloat(x))
 "00111111100111111111111111111111"
@@ -706,7 +706,7 @@ Examples:
 
 ```jldoctest
 julia> zero(Float32)
-0.0
+0.0f0
 
 julia> zero(1.0)
 0.0
