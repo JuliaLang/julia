@@ -2183,7 +2183,7 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
     end
 
     # Compute accurate superdiagonal of T
-    blockpower!(A, A0, (1 / 2)^s)
+    blockpower!(A, A0, 0.5^s)
 
     # Compute accurate diagonal of T
     for i = 1:n
