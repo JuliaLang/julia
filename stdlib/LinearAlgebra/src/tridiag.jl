@@ -419,7 +419,7 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     function Tridiagonal{T,V}(dl, d, du) where {T,V<:AbstractVector{T}}
         require_one_based_indexing(dl, d, du)
         n = length(d)
-        if (length(dl) != n-1 || length(du) != n-1)
+        if (length(dl) != n-1 || length(du) != n-1) && !(length(d) == 0 && length(dl) == 0 && length(du) == 0)
             throw(ArgumentError(string("cannot construct Tridiagonal from incompatible ",
                 "lengths of subdiagonal, diagonal and superdiagonal: ",
                 "($(length(dl)), $(length(d)), $(length(du)))")))
