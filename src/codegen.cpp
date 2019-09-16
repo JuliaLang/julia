@@ -4512,7 +4512,9 @@ static Function* gen_cfun_wrapper(
     // for now, just use a dummy field to avoid a branch in this function
     ctx.world_age_field = ctx.builder.CreateSelect(have_tls, ctx.world_age_field, dummy_world);
     Value *last_age = tbaa_decorate(tbaa_gcframe, ctx.builder.CreateLoad(ctx.world_age_field));
-    have_tls = ctx.builder.CreateAnd(have_tls, ctx.builder.CreateIsNotNull(last_age));
+    Value *valid_tls = ctx.builder.CreateIsNotNull(last_age);
+    have_tls = ctx.builder.CreateAnd(have_tls, valid_tls);
+    ctx.world_age_field = ctx.builder.CreateSelect(valid_tls, ctx.world_age_field, dummy_world);
     Value *world_v = ctx.builder.CreateLoad(prepare_global(jlgetworld_global));
 
     Value *age_ok = NULL;

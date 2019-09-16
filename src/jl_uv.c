@@ -973,7 +973,6 @@ struct work_baton {
     void      *work_args;
     void      *work_retval;
     notify_cb_t notify_func;
-    int       tid;
     int       notify_idx;
 };
 
