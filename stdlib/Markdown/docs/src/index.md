@@ -1,5 +1,3 @@
-
-
 # Markdown
 
 This section describes Julia's markdown syntax, which is enabled by the
