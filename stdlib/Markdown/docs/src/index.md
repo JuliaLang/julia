@@ -1,3 +1,5 @@
+
+
 # Markdown
 
 This section describes Julia's markdown syntax, which is enabled by the
@@ -364,12 +366,38 @@ They can be defined using the following `!!!` syntax:
     This warning admonition has a custom title: `"Beware!"`.
 ```
 
-The type of the admonition can be any word, but some types produce special styling,
+The type of the admonition can be any lowercase word, but some types produce special styling,
 namely (in order of decreasing severity): `danger`, `warning`, `info`/`note`, and `tip`.
 
 A custom title for the box can be provided as a string (in double quotes) after the admonition type.
-If no title text is specified after the admonition type, then the title used will be the type of the block,
-i.e. `"Note"` in the case of the `note` admonition.
+If no title text is specified after the admonition type, then for the default blocks mentions above
+the title used will be the type of the block, i.e. `"Note"` in the case of the `note` admonition.
+
+If you would like to define your own block, for example a `terminology`  block
+used like so:
+```
+!!! terminology julia vs Julia
+    Strictly speaking, Julia refers to the language,
+    and julia the standard implementation.
+```
+
+Then you can overwrite the default (grey) styling to (for example) yellow,
+with the word `Terminology` in the title, by adding the CSS:
+
+```
+div.admonition.terminology div.admonition-title:before {
+  content: "Terminology: ";
+  font-family: 'Lato', 'Helvetica Neue', Arial, sans-serif;
+  font-weight: bold;
+}
+div.admonition.terminology div.admonition-title {
+  background-color: #FFEC8B;
+}
+
+div.admonition.terminology div.admonition-text {
+  background-color: #FFFEDD;
+}
+```
 
 Admonitions, like most other toplevel elements, can contain other toplevel elements.
 
