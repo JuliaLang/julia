@@ -167,10 +167,6 @@ end
         return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(α, β))
     end
 end
-
-@inline mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
-             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat} =
-    gemm_wrapper!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
 # Complex Matrix times real matrix: We use that it is generally faster to reinterpret the
 # first matrix as a real matrix and carry out real matrix matrix multiply
 for elty in (Float32,Float64)
