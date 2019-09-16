@@ -621,7 +621,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
     }
 
     if (ptls->in_pure_callback) {
-        jl_eval_errorf(m, "eval cannot be used in a generated function");
+        jl_error("eval cannot be used in a generated function");
     }
 
     jl_method_instance_t *mfunc = NULL;
