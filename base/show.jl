@@ -1954,6 +1954,11 @@ function showarg(io::IO, a::Array{Union{}}, toplevel)
 end
 
 # Container specializations
+function showarg(io::IO, a::AbstractArray{T, N}, toplevel) where {T, N}
+    toplevel || print(io, "::")
+    print(io, typeof(a).name, "{eltype=", T, ", ndims=", N, "}")
+    toplevel || print(io, "")
+end
 function showarg(io::IO, v::SubArray, toplevel)
     print(io, "view(")
     showarg(io, parent(v), false)
