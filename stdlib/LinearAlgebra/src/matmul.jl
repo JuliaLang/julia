@@ -152,6 +152,10 @@ function (*)(A::AbstractMatrix, B::AbstractMatrix)
     TS = promote_op(matprod, eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A,1), size(B,2))), A, B)
 end
+function (*)(A::AbstractMatrix{<:BlasFloat}, B::AbstractMatrix{<:BlasFloat})
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
+end
 
 @inline function mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
                       α::Number, β::Number) where {T<:BlasFloat}
@@ -163,6 +167,9 @@ end
     end
 end
 
+@inline mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
+             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat} =
+    gemm_wrapper!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
 # Complex Matrix times real matrix: We use that it is generally faster to reinterpret the
 # first matrix as a real matrix and carry out real matrix matrix multiply
 for elty in (Float32,Float64)
