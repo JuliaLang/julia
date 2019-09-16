@@ -398,6 +398,7 @@ end
     touch(path::AbstractString)
 
 Update the last-modified timestamp on a file to the current time.
+If the file does not exists a new file is created.
 Return `path`.
 
 # Examples
