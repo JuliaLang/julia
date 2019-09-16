@@ -49,7 +49,12 @@ dmg/$(APP_NAME): startup.applescript julia.icns
 	-mkdir -p $@/Contents/Resources/julia
 	make -C $(JULIAHOME) binary-dist
 	tar zxf $(JULIAHOME)/$(JULIA_BINARYDIST_FILENAME).tar.gz -C $@/Contents/Resources/julia --strip-components 1
-	-codesign -s "AFB379C0B4CBD9DB9A762797FC2AB5460A2B0DBE" --deep $@
+	if [ -n "$$MACOS_CODESIGN_IDENTITY" ]; then \
+	    echo "Codesigning with identity $$MACOS_CODESIGN_IDENTITY"; \
+		codesign -s "$$MACOS_CODESIGN_IDENTITY" -v --deep $@; \
+	else \
+		true; \
+	fi
 
 ROOTFILES := $(shell ls -ld dmg/*.app *.dmg 2> /dev/null | awk '{print $$3}')
 clean:
