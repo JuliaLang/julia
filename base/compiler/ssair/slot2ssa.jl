@@ -814,6 +814,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
         elseif isa(stmt, DetachNode)
             new_code[idx] = DetachNode(stmt.syncregion, block_for_inst(cfg, stmt.label),
                                        block_for_inst(cfg, stmt.reattach))
+            ssavalmap[idx] = SSAValue(idx) # Slot to store task token
         elseif isa(stmt, ReattachNode)
             new_code[idx] = ReattachNode(stmt.syncregion, block_for_inst(cfg, stmt.label))
         elseif isa(stmt, GotoIfNot)
