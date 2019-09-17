@@ -1044,6 +1044,8 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
         error("type inference data-flow error: tried to double infer a function")
     elseif e.head === :boundscheck
         return Bool
+    elseif isa(e, DetachNode)
+        return Task
     elseif e.head === :isdefined
         sym = e.args[1]
         t = Bool
@@ -1141,6 +1143,13 @@ function typeinf_local(frame::InferenceState)
                     end
                     push!(W, l)
                     s[l] = newstate_reattach
+                end
+                # Inline abstract_eval
+                t = Task
+                if !isempty(frame.ssavalue_uses[pc])
+                    record_ssa_assign(pc, t, frame)
+                else
+                    frame.src.ssavaluetypes[pc] = t
                 end
                 pc´ = (stmt::DetachNode).label
             elseif isa(stmt, ReattachNode)

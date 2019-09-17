@@ -1,6 +1,7 @@
 # TODO:
 # - `Expr(:spawn)` should return a Task
 # - Extend `Expr(:spawn, ssize, sticky, parallel)`
+# - syncregion undefined
 # - Codegen to setjmp
 # - Slot transformation
 # - Task analysis
@@ -62,6 +63,15 @@ function f()
         end
         @sync_end token
     end
+end
+
+# In a perfect world we want `Expr(:spawn)` to return
+# a Task
+function g()
+    T = @spawn begin
+        1 + 1
+    end
+    @show typeof(T)
 end
 
 function taskloop(N)
