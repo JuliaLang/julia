@@ -340,19 +340,33 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
                 jl_serialize_value(s, jl_array_ptr_ref(ar, i));
             }
         }
+        else if (ar->flags.hasptr) {
+            const char *data = (const char*)jl_array_data(ar);
+            uint16_t elsz = ar->elsize;
+            size_t i, l = jl_array_len(ar);
+            jl_datatype_t *et = (jl_datatype_t*)jl_tparam0(jl_typeof(ar));
+            size_t j, np = et->layout->npointers;
+            for (i = 0; i < l; i++) {
+                for (j = 0; j < np; j++) {
+                    uint32_t ptr = jl_ptr_offset(et, j);
+                    jl_value_t *fld = ((jl_value_t**)data)[ptr];
+                    JL_GC_PROMISE_ROOTED(fld);
+                    jl_serialize_value(s, fld);
+                }
+                data += elsz;
+            }
+        }
     }
     else if (jl_typeis(v, jl_module_type)) {
         jl_serialize_module(s, (jl_module_t*)v);
     }
-    else {
+    else if (t->layout->nfields > 0) {
         char *data = (char*)jl_data_ptr(v);
-        size_t i, nf = jl_datatype_nfields(t);
-        for (i = 0; i < nf; i++) {
-            if (jl_field_isptr(t, i)) {
-                char *slot = data + jl_field_offset(t, i);
-                jl_value_t *fld = *(jl_value_t**)slot;
-                jl_serialize_value(s, fld);
-            }
+        size_t i, np = t->layout->npointers;
+        for (i = 0; i < np; i++) {
+            uint32_t ptr = jl_ptr_offset(t, i);
+            jl_value_t *fld = ((jl_value_t* const*)data)[ptr];
+            jl_serialize_value(s, fld);
         }
     }
 }
@@ -644,7 +658,7 @@ static void jl_write_values(jl_serializer_state *s)
             newa->flags.isshared = 0;
 
             // write data
-            if (!ar->flags.ptrarray) {
+            if (!ar->flags.ptrarray && !ar->flags.hasptr) {
                 uintptr_t data = LLT_ALIGN(ios_pos(s->const_data), 16);
                 // realign stream to max(data-align(array), sizeof(void*))
                 write_padding(s->const_data, data - ios_pos(s->const_data));
@@ -665,9 +679,35 @@ static void jl_write_values(jl_serializer_state *s)
                 newa->data = (void*)tsz; // relocation offset
                 arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_array_t, data))); // relocation location
                 arraylist_push(&s->relocs_list, (void*)(((uintptr_t)DataRef << RELOC_TAG_OFFSET) + item)); // relocation target
-                size_t i;
-                for (i = 0; i < alen; i++) {
-                    write_pointerfield(s, jl_array_ptr_ref(v, i));
+                if (ar->flags.hasptr) {
+                    // copy all of the data first
+                    const char *data = (const char*)jl_array_data(ar);
+                    ios_write(s->s, data, tot);
+                    // the rewrite all of the embedded pointers to null+relocation
+                    uint16_t elsz = ar->elsize;
+                    jl_datatype_t *et = (jl_datatype_t*)jl_tparam0(t);
+                    size_t j, np = et->layout->npointers;
+                    size_t i;
+                    for (i = 0; i < alen; i++) {
+                        for (j = 0; j < np; j++) {
+                            size_t offset = i * elsz + jl_ptr_offset(et, j) * sizeof(jl_value_t*);
+                            jl_value_t *fld = *(jl_value_t**)&data[offset];
+                            if (fld != NULL) {
+                                arraylist_push(&s->relocs_list, (void*)(uintptr_t)(reloc_offset + tsz + offset)); // relocation location
+                                arraylist_push(&s->relocs_list, (void*)backref_id(s, fld)); // relocation target
+                                memset(&s->s->buf[reloc_offset + tsz + offset], 0, sizeof(fld)); // relocation offset (none)
+                            }
+                            else {
+                                assert(*(jl_value_t**)&s->s->buf[reloc_offset + tsz + offset] == NULL);
+                            }
+                        }
+                    }
+                }
+                else {
+                    size_t i;
+                    for (i = 0; i < alen; i++) {
+                        write_pointerfield(s, jl_array_ptr_ref(v, i));
+                    }
                 }
             }
         }
@@ -689,8 +729,7 @@ static void jl_write_values(jl_serializer_state *s)
             }
         }
         else if (jl_is_string(v)) {
-            ios_write(s->s, (char*)v, sizeof(void*));
-            ios_write(s->s, jl_string_data(v), jl_string_len(v));
+            ios_write(s->s, (char*)v, sizeof(void*) + jl_string_len(v));
             write_uint8(s->s, '\0'); // null-terminated strings for easier C-compatibility
         }
         else if (jl_datatype_nfields(t) == 0) {
@@ -716,24 +755,34 @@ static void jl_write_values(jl_serializer_state *s)
             write_pointer(s->s);
         }
         else {
+            const char *data = (const char*)v;
             size_t i, nf = jl_datatype_nfields(t);
             size_t tot = 0;
             for (i = 0; i < nf; i++) {
                 size_t offset = jl_field_offset(t, i);
-                char *slot = (char*)v + offset;
+                const char *slot = data + offset;
                 write_padding(s->s, offset - tot);
                 tot = offset;
                 size_t fsz = jl_field_size(t, i);
-                if (jl_field_isptr(t, i) > 0) {
-                    write_pointerfield(s, *(jl_value_t**)slot);
-                }
-                else if (t->mutabl && jl_is_cpointer_type(jl_field_type(t, i))) {
+                if (t->mutabl && jl_is_cpointer_type(jl_field_type(t, i))) {
+                    assert(!jl_field_isptr(t, i));
                     write_pointer(s->s);
                 }
                 else if (fsz > 0) {
                     ios_write(s->s, slot, fsz);
                 }
                 tot += fsz;
+            }
+
+            size_t np = t->layout->npointers;
+            for (i = 0; i < np; i++) {
+                size_t offset = jl_ptr_offset(t, i) * sizeof(jl_value_t*);
+                jl_value_t *fld = *(jl_value_t**)&data[offset];
+                if (fld != NULL) {
+                    arraylist_push(&s->relocs_list, (void*)(uintptr_t)(offset + reloc_offset)); // relocation location
+                    arraylist_push(&s->relocs_list, (void*)backref_id(s, fld)); // relocation target
+                    memset(&s->s->buf[offset + reloc_offset], 0, sizeof(fld)); // relocation offset (none)
+                }
             }
 
             if (jl_is_method(v)) {

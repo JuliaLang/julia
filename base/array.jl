@@ -158,7 +158,7 @@ size(a::Array{<:Any,N}) where {N} = (@_inline_meta; ntuple(M -> size(a, M), Val(
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
-allocatedinline(::Type{T}) where {T} = (@_pure_meta; ccall(:jl_array_store_unboxed, Cint, (Any,), T) != Cint(0))
+allocatedinline(::Type{T}) where {T} = (@_pure_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
 
 """
     Base.isbitsunion(::Type{T})
@@ -177,14 +177,20 @@ false
 isbitsunion(u::Union) = allocatedinline(u)
 isbitsunion(x) = false
 
-function _unsetindex!(A::Array{T}, i::Int) where {T}
+@inbounds function _unsetindex!(A::Array{T}, i::Int) where {T}
     @boundscheck checkbounds(A, i)
+    t = @_gc_preserve_begin A
+    p = Ptr{Ptr{Cvoid}}(pointer(A, i))
     if !allocatedinline(T)
-        t = @_gc_preserve_begin A
-        p = Ptr{Ptr{Cvoid}}(pointer(A))
-        unsafe_store!(p, C_NULL, i)
-        @_gc_preserve_end t
+        unsafe_store!(p, C_NULL)
+    elseif T isa DataType
+        if !datatype_pointerfree(T)
+            for j = 1:(Core.sizeof(T) ÷ Core.sizeof(Ptr{Cvoid}))
+                unsafe_store!(p, C_NULL, j)
+            end
+        end
     end
+    @_gc_preserve_end t
     return A
 end
 
@@ -255,19 +261,41 @@ the same manner as C.
 function unsafe_copyto!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     t1 = @_gc_preserve_begin dest
     t2 = @_gc_preserve_begin src
-    if isbitsunion(T)
+    destp = pointer(dest, doffs)
+    srcp = pointer(src, soffs)
+    if !allocatedinline(T)
+        ccall(:jl_array_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
+              dest, destp, src, srcp, n)
+    elseif isbitstype(T)
         ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
-              pointer(dest, doffs), pointer(src, soffs), n * aligned_sizeof(T))
+              destp, srcp, n * aligned_sizeof(T))
+    elseif isbitsunion(T)
+        ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
+              destp, srcp, n * aligned_sizeof(T))
         # copy selector bytes
         ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
               ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), dest) + doffs - 1,
               ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), src) + soffs - 1,
               n)
-    elseif allocatedinline(T)
-        unsafe_copyto!(pointer(dest, doffs), pointer(src, soffs), n)
     else
-        ccall(:jl_array_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
-              dest, pointer(dest, doffs), src, pointer(src, soffs), n)
+        # handle base-case: everything else above was just optimizations
+        @inbounds if destp < srcp || destp > srcp + n
+            for i = 1:n
+                if isassigned(src, soffs + i - 1)
+                    dest[doffs + i - 1] = src[soffs + i - 1]
+                else
+                    _unsetindex!(dest, doffs + i - 1)
+                end
+            end
+        else
+            for i = n:-1:1
+                if isassigned(src, soffs + i - 1)
+                    dest[doffs + i - 1] = src[soffs + i - 1]
+                else
+                    _unsetindex!(dest, doffs + i - 1)
+                end
+            end
+        end
     end
     @_gc_preserve_end t2
     @_gc_preserve_end t1
@@ -1566,32 +1594,13 @@ function vcat(arrays::Vector{T}...) where T
         n += length(a)
     end
     arr = Vector{T}(undef, n)
-    ptr = pointer(arr)
-    if isbitsunion(T)
-        selptr = ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), arr)
-    end
-    elsz = aligned_sizeof(T)
-    t = @_gc_preserve_begin arr
+    nd = 1
     for a in arrays
         na = length(a)
-        nba = na * elsz
-        if isbitsunion(T)
-            ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
-                  ptr, a, nba)
-            # copy selector bytes
-            ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
-                  selptr, ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), a), na)
-            selptr += na
-        elseif allocatedinline(T)
-            ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
-                  ptr, a, nba)
-        else
-            ccall(:jl_array_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
-                  arr, ptr, a, pointer(a), na)
-        end
-        ptr += nba
+        @assert nd + na <= 1 + length(arr) # Concurrent modification of arrays?
+        unsafe_copyto!(arr, nd, a, 1, na)
+        nd += na
     end
-    @_gc_preserve_end t
     return arr
 end
 

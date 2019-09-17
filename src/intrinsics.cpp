@@ -149,7 +149,7 @@ static Value *uint_cnvt(jl_codectx_t &ctx, Type *to, Value *x)
 
 static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
 {
-    // assumes `jl_justbits(bt)`.
+    // assumes `jl_justbits(bt, true)`.
     // `ptr` can point to a inline field, do not read the tag from it.
     // make sure to return exactly the type specified by
     // julia_type_to_llvm as this will be assumed by the callee.
@@ -193,11 +193,11 @@ static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
     std::vector<Constant*> fields(0);
     for (size_t i = 0; i < nf; i++) {
         size_t offs = jl_field_offset(bt, i);
-        assert(!jl_field_isptr(bt, i));
         jl_value_t *ft = jl_field_type(bt, i);
         Type *lft = julia_type_to_llvm(ft);
         if (type_is_ghost(lft))
             continue;
+        assert(!jl_field_isptr(bt, i));
         unsigned llvm_idx = isa<StructType>(lt) ? convert_struct_offset(lt, offs) : i;
         while (fields.size() < llvm_idx)
             fields.push_back(UndefValue::get(lct->getTypeAtIndex(fields.size())));
@@ -270,7 +270,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
     if (e == jl_false)
         return ConstantInt::get(T_int8, 0);
     jl_value_t *bt = jl_typeof(e);
-    if (!jl_justbits(bt))
+    if (!jl_justbits(bt, true))
         return NULL;
     return julia_const_to_llvm(e, (jl_datatype_t*)bt);
 }
@@ -765,10 +765,8 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
     }
 
     Value *ifelse_result;
-    bool isboxed;
-    Type *llt1 = julia_type_to_llvm(t1, &isboxed);
-    if (t1 != t2)
-        isboxed = true;
+    bool isboxed = t1 != t2 || !deserves_stack(t1);
+    Type *llt1 = isboxed ? T_prjlvalue : julia_type_to_llvm(t1);
     if (!isboxed) {
         if (type_is_ghost(llt1))
             return x;

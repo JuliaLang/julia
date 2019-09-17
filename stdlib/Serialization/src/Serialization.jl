@@ -104,7 +104,7 @@ const TUPLE_TAG = sertag(Tuple)
 const SIMPLEVECTOR_TAG = sertag(SimpleVector)
 const SYMBOL_TAG = sertag(Symbol)
 const INT8_TAG = sertag(Int8)
-const ARRAY_TAG = sertag(Array)
+const ARRAY_TAG = findfirst(==(Array), TAGS)%Int32
 const EXPR_TAG = sertag(Expr)
 const MODULE_TAG = sertag(Module)
 const METHODINSTANCE_TAG = sertag(Core.MethodInstance)

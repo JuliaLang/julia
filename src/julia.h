@@ -159,10 +159,11 @@ typedef struct {
       3 = has a pointer to the object that owns the data
     */
     uint16_t how:2;
-    uint16_t ndims:10;
+    uint16_t ndims:9;
     uint16_t pooled:1;
-    uint16_t ptrarray:1;  // representation is pointer array
-    uint16_t isshared:1;  // data is shared by multiple Arrays
+    uint16_t ptrarray:1; // representation is pointer array
+    uint16_t hasptr:1; // representation has embedded pointers
+    uint16_t isshared:1; // data is shared by multiple Arrays
     uint16_t isaligned:1; // data allocated with memalign
 } jl_array_flags_t;
 
@@ -425,7 +426,8 @@ typedef struct {
 
 typedef struct {
     uint32_t nfields;
-    uint32_t npointers; // number of pointer
+    uint32_t npointers; // number of pointers embedded inside
+    int32_t first_ptr; // index of the first pointer (or -1)
     uint32_t alignment : 9; // strictest alignment over all fields
     uint32_t haspadding : 1; // has internal undefined bytes
     uint32_t fielddesc_type : 2; // 0 -> 8, 1 -> 16, 2 -> 32
@@ -778,13 +780,14 @@ JL_DLLEXPORT void jl_gc_use(jl_value_t *a);
 JL_DLLEXPORT void jl_clear_malloc_data(void);
 
 // GC write barriers
-JL_DLLEXPORT void jl_gc_queue_root(jl_value_t *root) JL_NOTSAFEPOINT; // root isa jl_value_t*
+JL_DLLEXPORT void jl_gc_queue_root(jl_value_t *root) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_queue_multiroot(jl_value_t *root, jl_value_t *stored) JL_NOTSAFEPOINT;
 
 STATIC_INLINE void jl_gc_wb(void *parent, void *ptr) JL_NOTSAFEPOINT
 {
     // parent and ptr isa jl_value_t*
-    if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 &&
-                   (jl_astaggedvalue(ptr)->bits.gc & 1) == 0))
+    if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 && // parent is old and not in remset
+                   (jl_astaggedvalue(ptr)->bits.gc & 1) == 0)) // ptr is young
         jl_gc_queue_root((jl_value_t*)parent);
 }
 
@@ -794,6 +797,19 @@ STATIC_INLINE void jl_gc_wb_back(void *ptr) JL_NOTSAFEPOINT // ptr isa jl_value_
     if (__unlikely(jl_astaggedvalue(ptr)->bits.gc == 3)) {
         jl_gc_queue_root((jl_value_t*)ptr);
     }
+}
+
+STATIC_INLINE void jl_gc_multi_wb(void *parent, jl_value_t *ptr) JL_NOTSAFEPOINT
+{
+    // ptr is an immutable object
+    if (__likely(jl_astaggedvalue(parent)->bits.gc != 3))
+        return; // parent is young or in remset
+    if (__likely(jl_astaggedvalue(ptr)->bits.gc == 3))
+        return; // ptr is old and not in remset (thus it does not point to young)
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(ptr);
+    const jl_datatype_layout_t *ly = dt->layout;
+    if (ly->npointers)
+        jl_gc_queue_multiroot((jl_value_t*)parent, ptr);
 }
 
 JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
@@ -856,6 +872,7 @@ STATIC_INLINE jl_value_t *jl_array_ptr_set(
 #define jl_array_ptr_data(a)  ((jl_value_t**)((jl_array_t*)(a))->data)
 STATIC_INLINE jl_value_t *jl_array_ptr_ref(void *a JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
 {
+    assert(((jl_array_t*)a)->flags.ptrarray);
     assert(i < jl_array_len(a));
     return ((jl_value_t**)(jl_array_data(a)))[i];
 }
@@ -863,6 +880,7 @@ STATIC_INLINE jl_value_t *jl_array_ptr_set(
     void *a JL_ROOTING_ARGUMENT, size_t i,
     void *x JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT
 {
+    assert(((jl_array_t*)a)->flags.ptrarray);
     assert(i < jl_array_len(a));
     ((jl_value_t**)(jl_array_data(a)))[i] = (jl_value_t*)x;
     if (x) {
@@ -996,6 +1014,8 @@ static inline const char *jl_dt_layout_ptrs(const jl_datatype_layout_t *l) JL_NO
 
 DEFINE_FIELD_ACCESSORS(offset)
 DEFINE_FIELD_ACCESSORS(size)
+#undef DEFINE_FIELD_ACCESSORS
+
 static inline int jl_field_isptr(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 {
     const jl_datatype_layout_t *ly = st->layout;
@@ -1003,7 +1023,22 @@ static inline int jl_field_isptr(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
     return ((const jl_fielddesc8_t*)(jl_dt_layout_fields(ly) + jl_fielddesc_size(ly->fielddesc_type) * i))->isptr;
 }
 
-#undef DEFINE_FIELD_ACCESSORS
+static inline uint32_t jl_ptr_offset(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
+{
+    const jl_datatype_layout_t *ly = st->layout;
+    assert(i >= 0 && (size_t)i < ly->npointers);
+    const void *ptrs = jl_dt_layout_ptrs(ly);
+    if (ly->fielddesc_type == 0) {
+        return ((const uint8_t*)ptrs)[i];
+    }
+    else if (ly->fielddesc_type == 1) {
+        return ((const uint16_t*)ptrs)[i];
+    }
+    else {
+        assert(ly->fielddesc_type == 2);
+        return ((const uint32_t*)ptrs)[i];
+    }
+}
 
 static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEPOINT
 {

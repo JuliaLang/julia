@@ -141,6 +141,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
     flddesc->haspadding = haspadding;
     flddesc->fielddesc_type = fielddesc_type;
     flddesc->npointers = npointers;
+    flddesc->first_ptr = (npointers > 0 ? pointers[0] : -1);
 
     // fill out the fields of the new descriptor
     jl_fielddesc8_t* desc8 = (jl_fielddesc8_t*)jl_dt_layout_fields(flddesc);
@@ -265,6 +266,32 @@ JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al)
     return (countbits > 0 && countbits < 127) ? countbits : 0;
 }
 
+JL_DLLEXPORT int jl_stored_inline(jl_value_t *eltype) JL_NOTSAFEPOINT
+{
+    size_t fsz = 0, al = 0;
+    return jl_islayout_inline(eltype, &fsz, &al);
+}
+
+// whether this type is unique'd by pointer
+int jl_pointer_egal(jl_value_t *t)
+{
+    if (t == (jl_value_t*)jl_any_type)
+        return 0; // when setting up the initial types, jl_is_type_type gets confused about this
+    if (t == (jl_value_t*)jl_symbol_type)
+        return 1;
+    if (jl_is_mutable_datatype(t) && // excludes abstract types
+        t != (jl_value_t*)jl_string_type && // technically mutable, but compared by contents
+        t != (jl_value_t*)jl_simplevector_type &&
+        !jl_is_kind(t))
+        return 1;
+    if (jl_is_type_type(t) && jl_is_concrete_type(jl_tparam0(t))) {
+        // need to use typeseq for most types
+        // but can compare some types by pointer
+        return 1;
+    }
+    return 0;
+}
+
 static int references_name(jl_value_t *p, jl_typename_t *name) JL_NOTSAFEPOINT
 {
     if (jl_is_uniontype(p))
@@ -331,18 +358,18 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         // if we have no fields, we can trivially skip the rest
         if (st == jl_symbol_type || st == jl_string_type) {
             // opaque layout - heap-allocated blob
-            static const jl_datatype_layout_t opaque_byte_layout = {0, 1, 1, 0, 0};
+            static const jl_datatype_layout_t opaque_byte_layout = {0, 1, -1, 1, 0, 0};
             st->layout = &opaque_byte_layout;
             return;
         }
         else if (st == jl_simplevector_type || st->name == jl_array_typename) {
-            static const jl_datatype_layout_t opaque_ptr_layout = {0, 1, sizeof(void*), 0, 0};
+            static const jl_datatype_layout_t opaque_ptr_layout = {0, 1, -1, sizeof(void*), 0, 0};
             st->layout = &opaque_ptr_layout;
             return;
         }
         else {
             // reuse the same layout for all singletons
-            static const jl_datatype_layout_t singleton_layout = {0, 0, 1, 0, 0};
+            static const jl_datatype_layout_t singleton_layout = {0, 0, -1, 1, 0, 0};
             st->layout = &singleton_layout;
         }
     }
@@ -418,6 +445,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                         haspadding = 1;
                     if (!zeroinit)
                         zeroinit = ((jl_datatype_t*)fld)->zeroinit;
+                    npointers += ((jl_datatype_t*)fld)->layout->npointers;
                 }
             }
             else {
@@ -428,6 +456,10 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                 desc[i].isptr = 1;
                 zeroinit = 1;
                 npointers++;
+                if (!jl_pointer_egal(fld)) {
+                    // this somewhat poorly named flag says whether some of the bits can be non-unique
+                    haspadding = 1;
+                }
             }
             assert(al <= JL_HEAP_ALIGNMENT && (JL_HEAP_ALIGNMENT % al) == 0);
             if (al != 0) {
@@ -464,8 +496,16 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             pointers = (uint32_t*)alloca(npointers * sizeof(uint32_t));
         size_t ptr_i = 0;
         for (i = 0; i < nfields; i++) {
+            jl_value_t *fld = jl_field_type(st, i);
+            uint32_t offset = desc[i].offset / sizeof(jl_value_t**);
             if (desc[i].isptr)
-                pointers[ptr_i++] = desc[i].offset / sizeof(jl_value_t**);
+                pointers[ptr_i++] = offset;
+            else if (jl_is_datatype(fld)) {
+                int j, npointers = ((jl_datatype_t*)fld)->layout->npointers;
+                for (j = 0; j < npointers; j++) {
+                    pointers[ptr_i++] = offset + jl_ptr_offset((jl_datatype_t*)fld, j);
+                }
+            }
         }
         assert(ptr_i == npointers);
         st->layout = jl_get_layout(nfields, npointers, alignm, haspadding, desc, pointers);
@@ -477,8 +517,13 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     }
     // now finish deciding if this instantiation qualifies for special properties
     assert(!isbitstype || st->layout->npointers == 0); // the definition of isbits
-    if (st->layout->npointers != 0)
+    if (isinlinealloc && st->layout->npointers > 0) {
+        //if (st->ninitialized != nfields)
+        //    isinlinealloc = 0;
+        //else if (st->layout->fielddesc_type != 0) // GC only implements support for this
+        //    isinlinealloc = 0;
         isinlinealloc = 0;
+    }
     st->isbitstype = isbitstype;
     st->isinlinealloc = isinlinealloc;
     jl_maybe_allocate_singleton_instance(st);
@@ -1035,7 +1080,8 @@ JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs) JL_
     size_t offs = jl_field_offset(st, i);
     if (jl_field_isptr(st, i)) {
         *(jl_value_t**)((char*)v + offs) = rhs;
-        if (rhs != NULL) jl_gc_wb(v, rhs);
+        if (rhs != NULL)
+            jl_gc_wb(v, rhs);
     }
     else {
         jl_value_t *ty = jl_field_type_concrete(st, i);
@@ -1049,6 +1095,7 @@ JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs) JL_
                 return;
         }
         jl_assign_bits((char*)v + offs, rhs);
+        jl_gc_multi_wb(v, rhs);
     }
 }
 
@@ -1056,8 +1103,13 @@ JL_DLLEXPORT int jl_field_isdefined(jl_value_t *v, size_t i)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
     size_t offs = jl_field_offset(st, i);
+    char *fld = (char*)v + offs;
     if (jl_field_isptr(st, i)) {
-        return *(jl_value_t**)((char*)v + offs) != NULL;
+        return *(jl_value_t**)fld != NULL;
+    }
+    jl_datatype_t *ft = (jl_datatype_t*)jl_field_type(st, i);
+    if (jl_is_datatype(ft) && ft->layout->first_ptr >= 0) {
+         return ((jl_value_t**)fld)[ft->layout->first_ptr] != NULL;
     }
     return 1;
 }

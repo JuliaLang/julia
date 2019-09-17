@@ -460,10 +460,11 @@ JL_DLLEXPORT jl_methtable_t *jl_method_table_for(
     jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 jl_methtable_t *jl_argument_method_table(jl_value_t *argt JL_PROPAGATES_ROOT);
 
+int jl_pointer_egal(jl_value_t *t);
 jl_value_t *jl_nth_slot_type(jl_value_t *sig JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 void jl_compute_field_offsets(jl_datatype_t *st);
 jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
-                                             int isunboxed, int isunion, int elsz);
+                                             int isunboxed, int hasptr, int isunion, int elsz);
 void jl_module_run_initializer(jl_module_t *m);
 jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_NOTSAFEPOINT;
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
@@ -959,7 +960,7 @@ JL_DLLEXPORT jl_value_t *jl_copysign_float(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_flipsign_int(jl_value_t *a, jl_value_t *b);
 
 JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a);
-int jl_array_store_unboxed(jl_value_t *el_type);
+JL_DLLEXPORT int jl_stored_inline(jl_value_t *el_type);
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i);
 
