@@ -144,11 +144,11 @@ try
                               missing, missing, missing,
                               missing, missing, 6]
 
-              let some_method = which(Base.include, (String,))
+              let some_method = which(Base.include, (Module, String,))
                     # global const some_method // FIXME: support for serializing a direct reference to an external Method not implemented
                   global const some_linfo =
                       ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt),
-                          some_method, Tuple{typeof(Base.include), String}, Core.svec(), typemax(UInt))
+                          some_method, Tuple{typeof(Base.include), Module, String}, Core.svec(), typemax(UInt))
               end
 
               g() = override(1.0)
@@ -287,10 +287,10 @@ try
                 Val{3},
                 Val{nothing}},
             0:25)
-        some_method = which(Base.include, (String,))
+        some_method = which(Base.include, (Module, String,))
         some_linfo =
                 ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt),
-                    some_method, Tuple{typeof(Base.include), String}, Core.svec(), typemax(UInt))
+                    some_method, Tuple{typeof(Base.include), Module, String}, Core.svec(), typemax(UInt))
         @test Foo.some_linfo::Core.MethodInstance === some_linfo
 
         ft = Base.datatype_fieldtypes

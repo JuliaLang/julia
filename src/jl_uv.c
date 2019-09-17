@@ -157,7 +157,7 @@ static void uv_flush_callback(uv_write_t *req, int status)
 // Turn a normal write into a blocking write (primarily for use from C and gdb).
 // Warning: This calls uv_run, so it can have unbounded side-effects.
 // Be care where you call it from! - the libuv loop is also not reentrant.
-void jl_uv_flush(uv_stream_t *stream)
+JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream)
 {
     if (stream == (void*)STDIN_FILENO ||
         stream == (void*)STDOUT_FILENO ||

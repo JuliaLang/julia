@@ -431,23 +431,24 @@ end
 
 # MainInclude exists to hide Main.include and eval from `names(Main)`.
 baremodule MainInclude
+using ..Base
 # We inline the definition of include from loading.jl/include_relative to get one-frame stacktraces.
 # include(fname::AbstractString) = Main.Base.include(Main, fname)
 function include(fname::AbstractString)
     mod = Main
-    isa(fname, String) || (fname = String(fname))
-    path, prev = Main.Base._include_dependency(mod, fname)
-    for callback in Main.Base.include_callbacks # to preserve order, must come before Core.include
-        Main.Base.invokelatest(callback, mod, path)
+    isa(fname, String) || (fname = Base.convert(String, fname))
+    path, prev = Base._include_dependency(mod, fname)
+    for callback in Base.include_callbacks # to preserve order, must come before Core.include
+        Base.invokelatest(callback, mod, path)
     end
-    tls = Main.Base.task_local_storage()
+    tls = Base.task_local_storage()
     tls[:SOURCE_PATH] = path
     local result
     try
         result = ccall(:jl_load_, Any, (Any, Any), mod, path)
     finally
         if prev === nothing
-            Main.Base.delete!(tls, :SOURCE_PATH)
+            Base.delete!(tls, :SOURCE_PATH)
         else
             tls[:SOURCE_PATH] = prev
         end
