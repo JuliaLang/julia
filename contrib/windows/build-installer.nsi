@@ -5,7 +5,8 @@ Unicode true
 !include "winmessages.nsh"
 
 OutFile "julia-installer.exe"
-SetCompress off
+SetCompressor /SOLID lzma
+SetCompressorDictSize 64
 CRCCheck off
 SetDataBlockOptimize on
 ShowInstDetails nevershow
