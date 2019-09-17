@@ -32,7 +32,7 @@ h_noinlined() = g_noinlined()
 
 function foundfunc(bt, funcname)
     for b in bt
-        for lkup in StackTraces.lookup(b)
+        for lkup in StackTraces.lookupat(b - 1)
             if lkup.func == funcname
                 return true
             end
