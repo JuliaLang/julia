@@ -1076,13 +1076,16 @@ julia> A
  2
 
 julia> S = Set([1, 2])
-Set([2, 1])
+Set{Int64} with 2 elements:
+  2
+  1
 
 julia> pop!(S)
 2
 
 julia> S
-Set([1])
+Set{Int64} with 1 element:
+  1
 
 julia> pop!(Dict(1=>2))
 1 => 2
