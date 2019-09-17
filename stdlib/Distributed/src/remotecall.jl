@@ -538,7 +538,7 @@ fetch_ref(rid, args...) = fetch(lookup_ref(rid).c, args...)
     fetch(c::RemoteChannel)
 
 Wait for and get a value from a [`RemoteChannel`](@ref). Exceptions raised are the
-same as for a `Future`. Does not remove the item fetched.
+same as for a [`Future`](@ref). Does not remove the item fetched.
 """
 fetch(r::RemoteChannel, args...) = call_on_owner(fetch_ref, r, args...)
 
