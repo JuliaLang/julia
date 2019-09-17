@@ -259,43 +259,45 @@ let _true = Ref(true), f, g, h
     @test g() == 0
 end
 
-module ReflectionTest
-using Test, Random, InteractiveUtils
+@testset "Reflection test" begin
 
-function test_ast_reflection(freflect, f, types)
-    @test !isempty(freflect(f, types))
-    nothing
+# abstract type
+@test !isempty(sprint(code_llvm, occursin, Tuple{Regex, AbstractString}))
+@test !isempty(sprint(code_llvm, occursin,      (Regex, AbstractString)))
+# leaftype signature
+@test !isempty(sprint(code_llvm, +, Tuple{Int, Int}))
+@test !isempty(sprint(code_llvm, +,      (Int, Int)))
+# incomplete types
+@test !isempty(sprint(code_llvm, +, Tuple{Array{Float32}, Array{Float32}}))
+@test !isempty(sprint(code_llvm, +,      (Array{Float32}, Array{Float32})))
+# Module() constructor (transforms to call)
+@test !isempty(sprint(code_llvm, Module, Tuple{}))
+@test !isempty(sprint(code_llvm, Module,      ()))
+# with incomplete types
+@test !isempty(sprint(code_llvm, Array{Int64}, Tuple{Array{Int32}}))
+@test !isempty(sprint(code_llvm, Array{Int64},      (Array{Int32},)))
+@test !isempty(sprint(code_llvm, muladd, Tuple{Float64, Float64, Float64}))
+@test !isempty(sprint(code_llvm, muladd,      (Float64, Float64, Float64)))
+
+# abstract type
+@test !isempty(sprint(code_native, occursin, Tuple{Regex, AbstractString}))
+@test !isempty(sprint(code_native, occursin,      (Regex, AbstractString)))
+# leaftype signature
+@test !isempty(sprint(code_native, +, Tuple{Int, Int}))
+@test !isempty(sprint(code_native, +,      (Int, Int)))
+# incomplete types
+@test !isempty(sprint(code_native, +, Tuple{Array{Float32}, Array{Float32}}))
+@test !isempty(sprint(code_native, +,      (Array{Float32}, Array{Float32})))
+# Module() constructor (transforms to call)
+@test !isempty(sprint(code_native, Module, Tuple{}))
+@test !isempty(sprint(code_native, Module,      ()))
+# with incomplete types
+@test !isempty(sprint(code_native, Array{Int64}, Tuple{Array{Int32}}))
+@test !isempty(sprint(code_native, Array{Int64},      (Array{Int32},)))
+@test !isempty(sprint(code_native, muladd, Tuple{Float64, Float64, Float64}))
+@test !isempty(sprint(code_native, muladd,      (Float64, Float64, Float64)))
+
 end
-
-function test_bin_reflection(freflect, f, types)
-    iob = IOBuffer()
-    freflect(iob, f, types)
-    str = String(take!(iob))
-    @test !isempty(str)
-    nothing
-end
-
-function test_code_reflection(freflect, f, types, tester)
-    tester(freflect, f, types)
-    tester(freflect, f, (types.parameters...,))
-    nothing
-end
-
-function test_code_reflections(tester, freflect)
-    test_code_reflection(freflect, occursin,
-                         Tuple{Regex, AbstractString}, tester) # abstract type
-    test_code_reflection(freflect, +, Tuple{Int, Int}, tester) # leaftype signature
-    test_code_reflection(freflect, +,
-                         Tuple{Array{Float32}, Array{Float32}}, tester) # incomplete types
-    test_code_reflection(freflect, Module, Tuple{}, tester) # Module() constructor (transforms to call)
-    test_code_reflection(freflect, Array{Int64}, Tuple{Array{Int32}}, tester) # with incomplete types
-    test_code_reflection(freflect, muladd, Tuple{Float64, Float64, Float64}, tester)
-end
-
-test_code_reflections(test_bin_reflection, code_llvm)
-test_code_reflections(test_bin_reflection, code_native)
-
-end # module ReflectionTest
 
 @test_throws ArgumentError("argument is not a generic function") code_llvm(===, Tuple{Int, Int})
 @test_throws ArgumentError("argument is not a generic function") code_native(===, Tuple{Int, Int})
