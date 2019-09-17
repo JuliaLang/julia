@@ -171,7 +171,7 @@ extract_imports(x) = extract_imports!(Any[], x)
 
 Execute an expression under `Main` on all `procs`.
 Errors on any of the processes are collected into a
-`CompositeException` and thrown. For example:
+[`CompositeException`](@ref) and thrown. For example:
 
     @everywhere bar = 1
 
@@ -209,9 +209,9 @@ end
 Execute an expression under module `m` on the processes
 specified in `procs`.
 Errors on any of the processes are collected into a
-`CompositeException` and thrown.
+[`CompositeException`](@ref) and thrown.
 
-See also `@everywhere`.
+See also [`@everywhere`](@ref).
 """
 function remotecall_eval(m::Module, procs, ex)
     @sync begin
