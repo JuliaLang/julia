@@ -152,15 +152,23 @@ function (*)(A::AbstractMatrix, B::AbstractMatrix)
     TS = promote_op(matprod, eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A,1), size(B,2))), A, B)
 end
-@inline mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
-             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat} =
-    gemm_wrapper!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
+
+@inline function mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
+                      α::Number, β::Number) where {T<:BlasFloat}
+    alpha, beta = promote(α, β, zero(T))
+    if alpha isa T && beta isa T
+        return gemm_wrapper!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
+    else
+        return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(α, β))
+    end
+end
+
 # Complex Matrix times real matrix: We use that it is generally faster to reinterpret the
 # first matrix as a real matrix and carry out real matrix matrix multiply
 for elty in (Float32,Float64)
     @eval begin
         @inline function mul!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, B::StridedVecOrMat{$elty},
-                         alpha::Union{$elty, Bool}, beta::Union{$elty, Bool})
+                              alpha::Real, beta::Real)
             Afl = reinterpret($elty, A)
             Cfl = reinterpret($elty, C)
             mul!(Cfl, Afl, B, alpha, beta)
@@ -762,7 +770,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     if isone(_add.alpha) && iszero(_add.beta)
                         copyto!(C, ib:ilim, jb:jlim, Ctile, 1:ilen, 1:jlen)
                     else
-                        C[ib:ilim, jb:jlim] .= @views _add.(C[ib:ilim, jb:jlim], Ctile[1:ilen, 1:jlen])
+                        C[ib:ilim, jb:jlim] .= @views _add.(Ctile[1:ilen, 1:jlen], C[ib:ilim, jb:jlim])
                     end
                 end
             end

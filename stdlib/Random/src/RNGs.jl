@@ -313,6 +313,9 @@ struct _GLOBAL_RNG <: AbstractRNG
     global const GLOBAL_RNG = _GLOBAL_RNG.instance
 end
 
+# GLOBAL_RNG currently represents a MersenneTwister
+typeof_rng(::_GLOBAL_RNG) = MersenneTwister
+
 copy!(dst::MersenneTwister, ::_GLOBAL_RNG) = copy!(dst, default_rng())
 copy!(::_GLOBAL_RNG, src::MersenneTwister) = copy!(default_rng(), src)
 copy(::_GLOBAL_RNG) = copy(default_rng())

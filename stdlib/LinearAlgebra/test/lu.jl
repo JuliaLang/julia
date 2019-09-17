@@ -316,4 +316,29 @@ end
                0 0 0 0 1 1 0 1]) ≈ 6
 end
 
+@testset "Issue #33177. No ldiv!(LU, Adjoint)" begin
+    A = [1 0; 1 1]
+    B = [1 2; 2 8]
+    F = lu(B)
+    @test (A  / F') * B == A
+    @test (A' / F') * B == A'
+
+    a = complex.(randn(2), randn(2))
+    @test (a' / F') * B ≈ a'
+    @test (transpose(a) / F') * B ≈ transpose(a)
+
+    A = complex.(randn(2, 2), randn(2, 2))
+    @test (A' / F') * B ≈ A'
+    @test (transpose(A) / F') * B ≈ transpose(A)
+end
+
+@testset "0x0 matrix" begin
+    A = ones(0, 0)
+    F = lu(A)
+    @test F.U == ones(0, 0)
+    @test F.L == ones(0, 0)
+    @test F.P == ones(0, 0)
+    @test F.p == []
+end
+
 end # module TestLU

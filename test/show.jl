@@ -25,7 +25,7 @@ end
 @test replstr(Array{Any}(undef, 2)) == "2-element Array{Any,1}:\n #undef\n #undef"
 @test replstr(Array{Any}(undef, 2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
 @test replstr(Array{Any}(undef, 2,2,2)) == "2×2×2 Array{Any,3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
-@test replstr([1f10]) == "1-element Array{Float32,1}:\n 1.0e10"
+@test replstr([1f10]) == "1-element Array{Float32,1}:\n 1.0f10"
 
 struct T5589
     names::Vector{String}
@@ -952,7 +952,7 @@ test_repr("(:).a")
 @test isa(repr("text/plain", String(UInt8[0x00:0xff;])), String)
 
 # don't use julia-specific `f` in Float32 printing (PR #18053)
-@test sprint(print, 1f-7) == "1.0e-7"
+@test sprint(print, 1f-7) == "1.0f-7"
 
 let d = TextDisplay(IOBuffer())
     @test_throws MethodError display(d, "text/foobar", [3 1 4])
@@ -1246,7 +1246,7 @@ end
     @test showstr(Set([[Int16(1)]])) == "Set(Array{Int16,1}[[1]])"
     @test showstr([Float16(1)]) == "Float16[1.0]"
     @test showstr([[Float16(1)]]) == "Array{Float16,1}[[1.0]]"
-    @test replstr(Real[Float16(1)]) == "1-element Array{Real,1}:\n 1.0"
+    @test replstr(Real[Float16(1)]) == "1-element Array{Real,1}:\n Float16(1.0)"
     @test replstr(Array{Real}[Real[1]]) == "1-element Array{Array{Real,N} where N,1}:\n [1]"
     # printing tuples (Issue #25042)
     @test replstr(fill((Int64(1), zeros(Float16, 3)), 1)) ==
@@ -1540,6 +1540,21 @@ end
 # issue #30927
 Z = Array{Float64}(undef,0,0)
 @test eval(Meta.parse(repr(Z))) == Z
+
+@testset "show undef" begin
+    # issue  #33204 - Parseable `repr` for `undef`
+    @test eval(Meta.parse(repr(undef))) == undef == UndefInitializer()
+    @test showstr(undef) == "UndefInitializer()"
+    @test occursin(repr(undef), replstr(undef))
+    @test occursin("initializer with undefined values", replstr(undef))
+
+    vec_undefined = Vector(undef, 2)
+    vec_initialisers = fill(undef, 2)
+    @test showstr(vec_undefined) == "Any[#undef, #undef]"
+    @test showstr(vec_initialisers) == "UndefInitializer[$undef, $undef]"
+    @test replstr(vec_undefined) == "2-element Array{Any,1}:\n #undef\n #undef"
+    @test replstr(vec_initialisers) == "2-element Array{UndefInitializer,1}:\n $undef\n $undef"
+end
 
 # issue #31065, do not print parentheses for nested dot expressions
 @test sprint(Base.show_unquoted, :(foo.x.x)) == "foo.x.x"

@@ -1602,7 +1602,7 @@
        ((eq? nxt '|.|)
         (if (ts:space? s) (disallowed-space word nxt))
         (take-token s)
-        (loop (cons (macrocall-to-atsym (parse-unary-prefix s)) path)))
+        (loop (cons (unquote (macrocall-to-atsym (parse-unary-prefix s))) path)))
        ((or (memv nxt '(#\newline #\; #\, :))
             (eof-object? nxt))
         (cons '|.| (reverse path)))

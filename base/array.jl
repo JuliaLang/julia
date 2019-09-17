@@ -385,10 +385,14 @@ to_dim(d::Integer) = d
 to_dim(d::OneTo) = last(d)
 
 """
-    fill(x, dims)
+    fill(x, dims::Tuple)
+    fill(x, dims...)
 
 Create an array filled with the value `x`. For example, `fill(1.0, (5,5))` returns a 5×5
 array of floats, with each element initialized to `1.0`.
+
+`dims` may be specified as either a tuple or a sequence of arguments. For example,
+the common idiom `fill(x)` creates a zero-dimensional array containing the single value `x`.
 
 # Examples
 ```jldoctest
@@ -399,17 +403,28 @@ julia> fill(1.0, (5,5))
  1.0  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0  1.0
+
+julia> fill(0.5, 1, 2)
+1×2 Array{Float64,2}:
+ 0.5  0.5
+
+julia> fill(42)
+0-dimensional Array{Int64,0}:
+42
 ```
 
 If `x` is an object reference, all elements will refer to the same object. `fill(Foo(),
 dims)` will return an array filled with the result of evaluating `Foo()` once.
 """
+function fill end
+
 fill(v, dims::DimOrInd...) = fill(v, dims)
 fill(v, dims::NTuple{N, Union{Integer, OneTo}}) where {N} = fill(v, map(to_dim, dims))
 fill(v, dims::NTuple{N, Integer}) where {N} = (a=Array{typeof(v),N}(undef, dims); fill!(a, v); a)
 fill(v, dims::Tuple{}) = (a=Array{typeof(v),0}(undef, dims); fill!(a, v); a)
 
 """
+    zeros([T=Float64,] dims::Tuple)
     zeros([T=Float64,] dims...)
 
 Create an `Array`, with element type `T`, of all zeros with size specified by `dims`.
@@ -430,6 +445,7 @@ julia> zeros(Int8, 2, 3)
 function zeros end
 
 """
+    ones([T=Float64,] dims::Tuple)
     ones([T=Float64,] dims...)
 
 Create an `Array`, with element type `T`, of all ones with size specified by `dims`.

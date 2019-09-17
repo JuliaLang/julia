@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-show(io::IO, ::UndefInitializer) = print(io, "array initializer with undefined values")
+function show(io::IO, ::MIME"text/plain", u::UndefInitializer)
+    print(io, u, ": array initializer with undefined values")
+end
 
 # first a few multiline show functions for types defined before the MIME type:
 
@@ -1512,8 +1514,15 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
         printstyled(io, demangle ? demangle_function_name(name) : name, "(...)", color=color)
         return
     end
-    sig = unwrap_unionall(sig).parameters
-    with_output_color(color, io) do io
+    tv = Any[]
+    env_io = io
+    while isa(sig, UnionAll)
+        push!(tv, sig.var)
+        env_io = IOContext(env_io, :unionall_env => sig.var)
+        sig = sig.body
+    end
+    sig = sig.parameters
+    with_output_color(color, env_io) do io
         ft = sig[1]
         uw = unwrap_unionall(ft)
         if ft <: Function && isa(uw,DataType) && isempty(uw.parameters) &&
@@ -1533,7 +1542,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
     for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")
         first = false
-        print(io, "::", sig[i])
+        print(env_io, "::", sig[i])
     end
     if kwargs !== nothing
         print(io, "; ")
@@ -1546,6 +1555,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
         end
     end
     printstyled(io, ")", color=print_style)
+    show_method_params(io, tv)
     nothing
 end
 
@@ -1675,6 +1685,10 @@ function dump(io::IOContext, x::SimpleVector, n::Int, indent)
 end
 
 function dump(io::IOContext, @nospecialize(x), n::Int, indent)
+    if x === Union{}
+        show(io, x)
+        return
+    end
     T = typeof(x)
     if isa(x, Function)
         print(io, x, " (function of type ", T, ")")

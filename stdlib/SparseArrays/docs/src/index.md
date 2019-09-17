@@ -50,15 +50,17 @@ matrix. [`dropzeros`](@ref), and the in-place [`dropzeros!`](@ref), can be used 
 remove stored zeros from the sparse matrix.
 
 ```jldoctest
-julia> A = sparse([1, 2, 3], [1, 2, 3], [0, 2, 0])
-3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
+julia> A = sparse([1, 1, 2, 3], [1, 3, 2, 3], [0, 1, 2, 0])
+3×3 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
   [1, 1]  =  0
   [2, 2]  =  2
+  [1, 3]  =  1
   [3, 3]  =  0
 
 julia> dropzeros(A)
-3×3 SparseMatrixCSC{Int64,Int64} with 1 stored entry:
+3×3 SparseMatrixCSC{Int64,Int64} with 2 stored entries:
   [2, 2]  =  2
+  [1, 3]  =  1
 ```
 
 ## Sparse Vector Storage

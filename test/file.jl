@@ -1340,7 +1340,7 @@ mktempdir() do dir
             @test basename(realpath(uppercase(path))) == path
         end
         rm(path)
-        @test_throws SystemError realpath(path)
+        @test_throws Base.IOError realpath(path)
     end
 end
 
@@ -1402,5 +1402,50 @@ end
         @test startswith(tmpdir, tmpdirbase)
         @test sizeof(tmpdir) == 6 + sizeof(tmpdirbase)
         @test sizeof(basename(tmpdir)) == 6
+    end
+end
+
+@testset "readdir tests" begin
+    ≛(a, b) = sort(a) == sort(b)
+    mktempdir() do dir
+        d = cd(pwd, dir) # might resolve symlinks
+        @test isempty(readdir(d))
+        @test isempty(readdir(d, join=true))
+        cd(d) do
+            @test isempty(readdir())
+            @test isempty(readdir(join=true))
+        end
+        touch(joinpath(d, "file"))
+        mkdir(joinpath(d, "dir"))
+        names = ["dir", "file"]
+        paths = [joinpath(d, x) for x in names]
+        @test readdir(d) ≛ names
+        @test readdir(d, join=true) ≛ paths
+        cd(d) do
+            @test readdir() ≛ names
+            @test readdir(join=true) ≛ paths
+        end
+        t, b = splitdir(d)
+        cd(t) do
+            @test readdir(b) ≛ names
+            @test readdir(b, join=true) ≛ [joinpath(b, x) for x in names]
+        end
+    end
+    if !Sys.iswindows()
+        mktempdir() do dir
+            cd(dir) do
+                d = pwd() # might resolve symlinks
+                @test isdir(d)
+                @test Base.Filesystem.samefile(d, ".")
+                @test isempty(readdir())
+                @test isempty(readdir(d))
+                @test isempty(readdir(join=true))
+                rm(d, recursive=true)
+                @test !ispath(d)
+                @test isempty(readdir())
+                @test_throws SystemError readdir(d)
+                @test_throws Base.IOError readdir(join=true)
+            end
+        end
     end
 end

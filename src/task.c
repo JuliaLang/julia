@@ -40,6 +40,18 @@
 extern "C" {
 #endif
 
+#ifdef JL_ASAN_ENABLED
+static inline void sanitizer_start_switch_fiber(const void* bottom, size_t size) {
+    __sanitizer_start_switch_fiber(NULL, bottom, size);
+}
+static inline void sanitizer_finish_switch_fiber(void) {
+    __sanitizer_finish_switch_fiber(NULL, NULL, NULL);
+}
+#else
+static inline void sanitizer_start_switch_fiber(const void* bottom, size_t size) {}
+static inline void sanitizer_finish_switch_fiber(void) {}
+#endif
+
 #if defined(_OS_WINDOWS_)
 volatile int jl_in_stackwalk = 0;
 #else
@@ -138,6 +150,8 @@ static void NOINLINE JL_NORETURN restore_stack(jl_task_t *t, jl_ptls_t ptls, cha
     }
     assert(t->stkbuf != NULL);
     memcpy_a16((uint64_t*)_x, (uint64_t*)t->stkbuf, nb); // destroys all but the current stackframe
+
+    sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
     jl_set_fiber(&t->ctx);
     abort(); // unreachable
 }
@@ -147,7 +161,9 @@ static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *lastt)
     char *_x = (char*)ptls->stackbase - nb;
     assert(t->stkbuf != NULL);
     memcpy_a16((uint64_t*)_x, (uint64_t*)t->stkbuf, nb); // destroys all but the current stackframe
+    sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
     jl_swap_fiber(&lastt->ctx, &t->ctx);
+    sanitizer_finish_switch_fiber();
 }
 #endif
 
@@ -277,6 +293,7 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
         if (lastt->copy_stack) { // save the old copy-stack
             save_stack(ptls, lastt, pt); // allocates (gc-safepoint, and can also fail)
             if (jl_setjmp(lastt->ctx.uc_mcontext, 0)) {
+                sanitizer_finish_switch_fiber();
                 // TODO: mutex unlock the thread we just switched from
                 return;
             }
@@ -318,18 +335,27 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
         }
         else
 #endif
-        if (!lastt_ctx)
-            jl_set_fiber(&t->ctx);
-        else
+        if (!lastt_ctx) {
+            sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
+            jl_set_fiber(&t->ctx); // (doesn't return)
+            abort(); // unreachable
+        } else {
+            sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
             jl_swap_fiber(lastt_ctx, &t->ctx);
+            sanitizer_finish_switch_fiber();
+        }
     }
     else {
+        sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
+        if (always_copy_stacks) {
 #ifdef COPY_STACKS
-        if (always_copy_stacks)
             jl_longjmp(ptls->base_ctx.uc_mcontext, 1);
-        else
+            abort(); // unreachable
 #endif
+        } else {
             jl_start_fiber(lastt_ctx, &t->ctx);
+            sanitizer_finish_switch_fiber();
+        }
     }
 }
 
@@ -478,7 +504,6 @@ JL_DLLEXPORT void jl_sig_throw(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *e = ptls->sig_exception;
-    assert(e && ptls->bt_size != 0);
     ptls->sig_exception = NULL;
     throw_internal(e);
 }
@@ -627,6 +652,7 @@ STATIC_OR_JS void NOINLINE JL_NORETURN start_task(void)
 #endif
 
     // this runs the first time we switch to a task
+    sanitizer_finish_switch_fiber();
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_task_t *t = ptls->current_task;
     jl_value_t *res;
@@ -724,8 +750,10 @@ static void start_basefiber(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (jl_setjmp(ptls->base_ctx.uc_mcontext, 0))
-        start_task();
+        start_task(); // sanitizer_finish_switch_fiber is part of start_task
+    sanitizer_start_switch_fiber(jl_root_task->stkbuf, jl_root_task->bufsz);
     jl_longjmp(jl_root_task->ctx.uc_mcontext, 1);
+    abort(); // unreachable
 }
 #if defined(_CPU_X86_) || defined(_CPU_X86_64_)
 #define PUSH_RET(ctx, stk) \
@@ -791,7 +819,9 @@ static void jl_init_basefiber(size_t ssize)
     char *stkbuf = jl_alloc_fiber(&ptls->base_ctx, &ssize, NULL);
     ptls->stackbase = stkbuf + ssize;
     ptls->stacksize = ssize;
+    sanitizer_start_switch_fiber(stkbuf, sksize);
     jl_start_fiber(jl_root_task, &ptls->base_ctx); // finishes initializing jl_basectx
+    sanitizer_finish_switch_fiber();
 #endif
 }
 #endif
@@ -906,7 +936,7 @@ static void start_basefiber(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (jl_setjmp(ptls->base_ctx.uc_mcontext, 0))
-        start_task();
+        start_task(); // sanitizer_finish_switch_fiber is part of start_task
 }
 static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
 {
@@ -1056,7 +1086,7 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
         ptls->stackbase = stack_hi;
         ptls->stacksize = ssize;
         if (jl_setjmp(ptls->base_ctx.uc_mcontext, 0))
-            start_task();
+            start_task(); // sanitizer_finish_switch_fiber is part of start_task
         return;
     }
 #endif

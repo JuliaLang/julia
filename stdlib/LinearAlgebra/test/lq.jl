@@ -191,4 +191,19 @@ end
     @test_throws DimensionMismatch adjoint(C) * adjoint(implicitQ)
 end
 
+@testset "det(Q::LQPackedQ)" begin
+    @testset for n in 1:3, m in 1:3
+        @testset "real" begin
+            _, Q = lq(randn(n, m))
+            @test det(Q) ≈ det(collect(Q))
+            @test abs(det(Q)) ≈ 1
+        end
+        @testset "complex" begin
+            _, Q = lq(randn(ComplexF64, n, m))
+            @test det(Q) ≈ det(collect(Q))
+            @test abs(det(Q)) ≈ 1
+        end
+    end
+end
+
 end # module TestLQ

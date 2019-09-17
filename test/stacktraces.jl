@@ -48,7 +48,7 @@ let (default, with_c, without_c) = (stacktrace(), stacktrace(true), stacktrace(f
     @test isempty(filter(frame -> frame.from_c, without_c))
 end
 
-@test StackTraces.lookup(C_NULL) == [StackTraces.UNKNOWN]
+@test StackTraces.lookupat(C_NULL) == [StackTraces.UNKNOWN] == StackTraces.lookupat(C_NULL + 1) == StackTraces.lookupat(C_NULL - 1)
 
 let ct = current_task()
     # After a task switch, there should be nothing in catch_backtrace
@@ -118,7 +118,7 @@ let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
 end
 
 let ctestptr = cglobal((:ctest, "libccalltest")),
-    ctest = StackTraces.lookup(ctestptr + 1)
+    ctest = StackTraces.lookupat(ctestptr)
 
     @test length(ctest) == 1
     @test ctest[1].func === :ctest

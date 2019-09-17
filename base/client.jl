@@ -79,8 +79,10 @@ function repl_cmd(cmd, out)
     nothing
 end
 
+# deprecated function--preserved for DocTests.jl
 function ip_matches_func(ip, func::Symbol)
-    for fr in StackTraces.lookup(ip)
+    ip isa InterpreterIP || (ip -= 1)
+    for fr in StackTraces.lookupat(ip)
         if fr === StackTraces.UNKNOWN || fr.from_c
             return false
         end
@@ -90,28 +92,28 @@ function ip_matches_func(ip, func::Symbol)
 end
 
 function scrub_repl_backtrace(bt)
-    if bt !== nothing
+    if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
+        bt = stacktrace(bt)
         # remove REPL-related frames from interactive printing
-        eval_ind = findlast(addr->ip_matches_func(addr, :eval), bt)
-        if eval_ind !== nothing
-            return bt[1:eval_ind-1]
-        end
+        eval_ind = findlast(frame -> !frame.from_c && frame.func == :eval, bt)
+        eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
     end
     return bt
 end
 
 function display_error(io::IO, er, bt)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    showerror(IOContext(io, :limit => true), er, scrub_repl_backtrace(bt))
+    bt = scrub_repl_backtrace(bt)
+    showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing)
     println(io)
 end
 function display_error(io::IO, stack::Vector)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    show_exception_stack(IOContext(io, :limit => true), Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ])
+    bt = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
+    show_exception_stack(IOContext(io, :limit => true), bt)
 end
 display_error(stack::Vector) = display_error(stderr, stack)
-display_error(er, bt) = display_error(stderr, er, bt)
-display_error(er) = display_error(er, [])
+display_error(er, bt=nothing) = display_error(stderr, er, bt)
 
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     errcount = 0
@@ -429,23 +431,24 @@ end
 
 # MainInclude exists to hide Main.include and eval from `names(Main)`.
 baremodule MainInclude
+using ..Base
 # We inline the definition of include from loading.jl/include_relative to get one-frame stacktraces.
 # include(fname::AbstractString) = Main.Base.include(Main, fname)
 function include(fname::AbstractString)
     mod = Main
-    isa(fname, String) || (fname = String(fname))
-    path, prev = Main.Base._include_dependency(mod, fname)
-    for callback in Main.Base.include_callbacks # to preserve order, must come before Core.include
-        Main.Base.invokelatest(callback, mod, path)
+    isa(fname, String) || (fname = Base.convert(String, fname))
+    path, prev = Base._include_dependency(mod, fname)
+    for callback in Base.include_callbacks # to preserve order, must come before Core.include
+        Base.invokelatest(callback, mod, path)
     end
-    tls = Main.Base.task_local_storage()
+    tls = Base.task_local_storage()
     tls[:SOURCE_PATH] = path
     local result
     try
         result = ccall(:jl_load_, Any, (Any, Any), mod, path)
     finally
         if prev === nothing
-            Main.Base.delete!(tls, :SOURCE_PATH)
+            Base.delete!(tls, :SOURCE_PATH)
         else
             tls[:SOURCE_PATH] = prev
         end

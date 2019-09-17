@@ -206,7 +206,7 @@ import ..@except_str
 global +
 +() = nothing
 err_str = @except_str 1 + 2 MethodError
-@test occursin("import Base.+", err_str)
+@test occursin("import Base.:+", err_str)
 
 err_str = @except_str Float64[](1) MethodError
 @test !occursin("import Base.Array", err_str)
@@ -577,4 +577,20 @@ let t1 = @async(error(1)),
     s = String(take!(buf))
     @test length(findall("Stacktrace:", s)) == 2
     @test occursin("[1] error(::Int", s)
+end
+
+module TestMethodShadow
+    struct Foo; x; end
+    +(a::Foo, b::Foo) = Foo(a.x + b.x)
+    ==(a::Foo, b::Foo) = Foo(a.x == b.x)
+    div(a::Foo, b::Foo) = Foo(div(a.x, b.x))
+end
+for (func,str) in ((TestMethodShadow.:+,":+"), (TestMethodShadow.:(==),":(==)"), (TestMethodShadow.:div,"div"))
+    ex = try
+        foo = TestMethodShadow.Foo(3)
+        func(foo,foo)
+    catch e
+       e
+    end::MethodError
+    @test occursin("You may have intended to import Base.$str", sprint(Base.showerror, ex))
 end

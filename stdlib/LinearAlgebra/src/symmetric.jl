@@ -414,6 +414,49 @@ function triu(A::Symmetric, k::Integer=0)
     end
 end
 
+for (T, trans, real) in [(:Symmetric, :transpose, :identity), (:Hermitian, :adjoint, :real)]
+    @eval begin
+        function dot(A::$T, B::$T)
+            n = size(A, 2)
+            if n != size(B, 2)
+                throw(DimensionMismatch("A has dimensions $(size(A)) but B has dimensions $(size(B))"))
+            end
+
+            dotprod = zero(dot(first(A), first(B)))
+            @inbounds if A.uplo == 'U' && B.uplo == 'U'
+                for j in 1:n
+                    for i in 1:(j - 1)
+                        dotprod += 2 * $real(dot(A.data[i, j], B.data[i, j]))
+                    end
+                    dotprod += dot(A[j, j], B[j, j])
+                end
+            elseif A.uplo == 'L' && B.uplo == 'L'
+                for j in 1:n
+                    dotprod += dot(A[j, j], B[j, j])
+                    for i in (j + 1):n
+                        dotprod += 2 * $real(dot(A.data[i, j], B.data[i, j]))
+                    end
+                end
+            elseif A.uplo == 'U' && B.uplo == 'L'
+                for j in 1:n
+                    for i in 1:(j - 1)
+                        dotprod += 2 * $real(dot(A.data[i, j], $trans(B.data[j, i])))
+                    end
+                    dotprod += dot(A[j, j], B[j, j])
+                end
+            else
+                for j in 1:n
+                    dotprod += dot(A[j, j], B[j, j])
+                    for i in (j + 1):n
+                        dotprod += 2 * $real(dot(A.data[i, j], $trans(B.data[j, i])))
+                    end
+                end
+            end
+            return dotprod
+        end
+    end
+end
+
 (-)(A::Symmetric) = Symmetric(-A.data, sym_uplo(A.uplo))
 (-)(A::Hermitian) = Hermitian(-A.data, sym_uplo(A.uplo))
 
@@ -456,6 +499,31 @@ end
     BLAS.hemm!('R', B.uplo, alpha, B.data, A, beta, C)
 
 *(A::HermOrSym, B::HermOrSym) = A * copyto!(similar(parent(B)), B)
+
+function dot(x::AbstractVector, A::RealHermSymComplexHerm, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    (length(x) == length(y) == size(A, 1)) || throw(DimensionMismatch())
+    data = A.data
+    r = zero(eltype(x)) * zero(eltype(A)) * zero(eltype(y))
+    if A.uplo == 'U'
+        @inbounds for j = 1:length(y)
+            r += dot(x[j], real(data[j,j]), y[j])
+            @simd for i = 1:j-1
+                Aij = data[i,j]
+                r += dot(x[i], Aij, y[j]) + dot(x[j], adjoint(Aij), y[i])
+            end
+        end
+    else # A.uplo == 'L'
+        @inbounds for j = 1:length(y)
+            r += dot(x[j], real(data[j,j]), y[j])
+            @simd for i = j+1:length(y)
+                Aij = data[i,j]
+                r += dot(x[i], Aij, y[j]) + dot(x[j], adjoint(Aij), y[i])
+            end
+        end
+    end
+    return r
+end
 
 # Fallbacks to avoid generic_matvecmul!/generic_matmatmul!
 ## Symmetric{<:Number} and Hermitian{<:Real} are invariant to transpose; peel off the t
