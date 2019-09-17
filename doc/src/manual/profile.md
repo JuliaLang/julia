@@ -64,7 +64,7 @@ available, but here we'll use the text-based display that comes with the standar
 julia> Profile.print()
 80 ./event.jl:73; (::Base.REPL.##1#2{Base.REPL.REPLBackend})()
  80 ./REPL.jl:97; macro expansion
-  80 ./REPL.jl:66; eval_user_input(::Any, ::Base.REPL.REPLBackend)
+  80 ./REPL.jl:66; eval_user_input(::Any, ::Module, ::Base.REPL.REPLBackend)
    80 ./boot.jl:235; eval(::Module, ::Any)
     80 ./<missing>:?; anonymous
      80 ./profile.jl:23; macro expansion

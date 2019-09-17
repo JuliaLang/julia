@@ -11,8 +11,7 @@ The primary function used to obtain a stack trace is [`stacktrace`](@ref):
 6-element Array{Base.StackTraces.StackFrame,1}:
  top-level scope
  eval at boot.jl:317 [inlined]
- eval(::Module, ::Expr) at REPL.jl:5
- eval_user_input(::Any, ::REPL.REPLBackend) at REPL.jl:85
+ eval_user_input(::Any, ::Module, ::REPL.REPLBackend) at REPL.jl:91
  macro expansion at REPL.jl:116 [inlined]
  (::getfield(REPL, Symbol("##28#29")){REPL.REPLBackend})() at event.jl:92
 ```
@@ -29,7 +28,7 @@ julia> example()
 7-element Array{Base.StackTraces.StackFrame,1}:
  example() at REPL[1]:1
  top-level scope
- eval at boot.jl:317 [inlined]
+ eval at boot.jl:330 [inlined]
 [...]
 
 julia> @noinline child() = stacktrace()
@@ -61,11 +60,10 @@ julia> example()
 7-element Array{Base.StackTraces.StackFrame,1}:
  example() at REPL[1]:1
  top-level scope
- eval at boot.jl:317 [inlined]
- eval(::Module, ::Expr) at REPL.jl:5
- eval_user_input(::Any, ::REPL.REPLBackend) at REPL.jl:85
- macro expansion at REPL.jl:116 [inlined]
- (::getfield(REPL, Symbol("##28#29")){REPL.REPLBackend})() at event.jl:92
+ eval at boot.jl:330 [inlined]
+ eval_user_input(::Any, ::Module, ::REPL.REPLBackend) at REPL.jl:91
+ macro expansion at REPL.jl:123 [inlined]
+ (::REPL.var"##26#27"{REPL.REPLBackend})() at task.jl:333
 ```
 
 ## Extracting useful information
@@ -217,7 +215,7 @@ Stacktrace:
  [1] error(::String) at error.jl:33
  [2] top-level scope at REPL[7]:2
  [3] eval(::Module, ::Any) at boot.jl:319
- [4] eval_user_input(::Any, ::REPL.REPLBackend) at REPL.jl:85
+ [4] eval_user_input(::Any, ::Module, ::REPL.REPLBackend) at REPL.jl:91
  [5] macro expansion at REPL.jl:117 [inlined]
  [6] (::getfield(REPL, Symbol("##26#27")){REPL.REPLBackend})() at task.jl:259
 (B) An exception while handling the exception
@@ -225,7 +223,7 @@ Stacktrace:
  [1] error(::String) at error.jl:33
  [2] top-level scope at REPL[7]:5
  [3] eval(::Module, ::Any) at boot.jl:319
- [4] eval_user_input(::Any, ::REPL.REPLBackend) at REPL.jl:85
+ [4] eval_user_input(::Any, ::Module, ::REPL.REPLBackend) at REPL.jl:91
  [5] macro expansion at REPL.jl:117 [inlined]
  [6] (::getfield(REPL, Symbol("##26#27")){REPL.REPLBackend})() at task.jl:259
 ```
