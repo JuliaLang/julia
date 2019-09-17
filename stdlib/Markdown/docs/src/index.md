@@ -374,7 +374,7 @@ the title used will be the type of the block, i.e. `"Note"` in the case of the `
 If you would like to define your own block, for example a `terminology`  block
 used like so:
 ```
-!!! terminology julia vs Julia
+!!! terminology "julia vs Julia"
     Strictly speaking, Julia refers to the language,
     and julia the standard implementation.
 ```
