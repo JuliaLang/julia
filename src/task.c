@@ -638,6 +638,10 @@ void jl_init_tasks(void) JL_GC_DISABLED
             always_copy_stacks = 1;
         else if (!strcmp(acs, "0") || !strcmp(acs, "no"))
             always_copy_stacks = 0;
+        else {
+            jl_printf(JL_STDERR, "invalid JULIA_COPY_STACKS value: %s\n", acs);
+            exit(1);
+        }
     }
 }
 
