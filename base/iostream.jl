@@ -100,7 +100,7 @@ julia> io = IOBuffer("JuliaLang is a GitHub organization.");
 julia> seek(io, 5);
 
 julia> read(io, Char)
-'L': ASCII/Unicode U+004c (category Lu: Letter, uppercase)
+'L': ASCII/Unicode U+004C (category Lu: Letter, uppercase)
 ```
 """
 function seek(s::IOStream, n::Integer)
@@ -122,12 +122,12 @@ julia> io = IOBuffer("JuliaLang is a GitHub organization.");
 julia> seek(io, 5);
 
 julia> read(io, Char)
-'L': ASCII/Unicode U+004c (category Lu: Letter, uppercase)
+'L': ASCII/Unicode U+004C (category Lu: Letter, uppercase)
 
 julia> seekstart(io);
 
 julia> read(io, Char)
-'J': ASCII/Unicode U+004a (category Lu: Letter, uppercase)
+'J': ASCII/Unicode U+004A (category Lu: Letter, uppercase)
 ```
 """
 seekstart(s::IO) = seek(s,0)

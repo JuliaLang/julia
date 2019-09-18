@@ -107,7 +107,7 @@ julia> isvalid(str, 1)
 true
 
 julia> str[1]
-'α': Unicode U+03b1 (category Ll: Letter, lowercase)
+'α': Unicode U+03B1 (category Ll: Letter, lowercase)
 
 julia> isvalid(str, 2)
 false
