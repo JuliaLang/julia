@@ -300,16 +300,15 @@ julia> stacktrace(trace, true)
 ```
 
 Individual pointers returned by [`backtrace`](@ref) can be translated into [`StackTraces.StackFrame`](@ref)
-s by passing them into [`StackTraces.lookup`](@ref):
+s by passing them into [`StackTraces.lookupat`](@ref):
 
 ```julia-repl
 julia> pointer = backtrace()[1];
 
-julia> frame = StackTraces.lookup(pointer)
+julia> frame = StackTraces.lookupat(pointer - 1)
 1-element Array{Base.StackTraces.StackFrame,1}:
  jl_apply_generic at gf.c:2167
 
 julia> println("The top frame is from $(frame[1].func)!")
 The top frame is from jl_apply_generic!
 ```
-

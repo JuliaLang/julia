@@ -332,4 +332,13 @@ end
     @test (transpose(A) / F') * B ≈ transpose(A)
 end
 
+@testset "0x0 matrix" begin
+    A = ones(0, 0)
+    F = lu(A)
+    @test F.U == ones(0, 0)
+    @test F.L == ones(0, 0)
+    @test F.P == ones(0, 0)
+    @test F.p == []
+end
+
 end # module TestLU

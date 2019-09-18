@@ -12,7 +12,7 @@
 #include "clang/StaticAnalyzer/Core/BugReporter/CommonBugCategories.h"
 #include "clang/StaticAnalyzer/Frontend/AnalysisConsumer.h"
 #include "clang/StaticAnalyzer/Checkers/SValExplainer.h"
-#if LLVM_VERSION_MAJOR >= 9
+#if LLVM_VERSION_MAJOR >= 8
 #include "clang/StaticAnalyzer/Frontend/CheckerRegistry.h"
 #else
 #include "clang/StaticAnalyzer/Core/CheckerRegistry.h"
@@ -211,7 +211,7 @@ namespace {
           }
 
           PDP VisitNode(const ExplodedNode *N,
-#if LLVM_VERSION_MAJOR <= 8
+#if LLVM_VERSION_MAJOR < 8
                         const ExplodedNode *PrevN,
 #endif
                         BugReporterContext &BRC,
@@ -242,7 +242,7 @@ namespace {
               const ExplodedNode *N, PathDiagnosticLocation Pos, BugReporterContext &BRC, BugReport &BR);
 
           PDP VisitNode(const ExplodedNode *N,
-#if LLVM_VERSION_MAJOR <= 8
+#if LLVM_VERSION_MAJOR < 8
                                                          const ExplodedNode *PrevN,
 #endif
                                                          BugReporterContext &BRC,
@@ -326,7 +326,7 @@ namespace Helpers {
 
 PDP GCChecker::GCBugVisitor::VisitNode(
   const ExplodedNode *N,
-#if LLVM_VERSION_MAJOR <= 8
+#if LLVM_VERSION_MAJOR < 8
   const ExplodedNode *,
 #endif
   BugReporterContext &BRC, BugReport &BR) {
@@ -425,7 +425,7 @@ PDP GCChecker::GCValueBugVisitor::ExplainNoPropagation(
 
 PDP GCChecker::GCValueBugVisitor::VisitNode(
   const ExplodedNode *N,
-#if LLVM_VERSION_MAJOR <= 8
+#if LLVM_VERSION_MAJOR < 8
   const ExplodedNode *,
 #endif
   BugReporterContext &BRC, BugReport &BR) {
