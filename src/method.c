@@ -424,9 +424,11 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
             // Lower the user's expression and resolve references to the type parameters
             func = jl_expand_and_resolve(ex, def->module, linfo->sparam_vals);
 
-            if (jl_is_expr(func) && ((jl_expr_t*)func)->head == error_sym) {
-                ptls->in_pure_callback = 0;
-                jl_toplevel_eval(def->module, (jl_value_t*)func);
+            if (!jl_is_code_info(func)) {
+                if (jl_is_expr(func) && ((jl_expr_t*)func)->head == error_sym) {
+                    ptls->in_pure_callback = 0;
+                    jl_toplevel_eval(def->module, (jl_value_t*)func);
+                }
                 jl_error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure or comprehension.");
             }
         }
