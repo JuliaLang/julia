@@ -787,8 +787,8 @@ let x = [], y = [], z = Base.ImmutableDict(x => y)
     push!(x, y)
     push!(y, x)
     push!(y, z)
-    @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict([Any[#= circular reference @-3 =#]] => [#= circular reference @-2 =#])]"
-    @test repr(z) == "Base.ImmutableDict([Any[Any[#= circular reference @-2 =#], Base.ImmutableDict(#= circular reference @-3 =#)]] => [Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict(#= circular reference @-2 =#)])"
+    @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict{Array{Any,1},Array{Any,1}}([Any[#= circular reference @-3 =#]] => [#= circular reference @-2 =#])]"
+    @test repr(z) == "Base.ImmutableDict{Array{Any,1},Array{Any,1}}([Any[Any[#= circular reference @-2 =#], Base.ImmutableDict{Array{Any,1},Array{Any,1}}(#= circular reference @-3 =#)]] => [Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict{Array{Any,1},Array{Any,1}}(#= circular reference @-2 =#)])"
     @test sprint(dump, x) == """
         Array{Any}((1,))
           1: Array{Any}((2,))
@@ -1058,7 +1058,7 @@ end
 
     # issue #28327
     d = Dict(Pair{Integer,Integer}(1,2)=>Pair{Integer,Integer}(1,2))
-    @test showstr(d) == "Dict((1 => 2) => (1 => 2))" # correct parenthesis
+    @test showstr(d) == "Dict{Pair{Integer,Integer},Pair{Integer,Integer}}((1 => 2) => (1 => 2))" # correct parenthesis
 
     # issue #29536
     d = Dict((+)=>1)
@@ -1263,8 +1263,8 @@ end
 
     # issue #27680
     @test replstr(Set([(1.0,1.0), (2.0,2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
-              "Set(Tuple{Float64,Float64}[(3.0, 3.0), (2.0, 2.0), (1.0, 1.0)])" :
-              "Set(Tuple{Float64,Float64}[(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])")
+              "Set([(3.0, 3.0), (2.0, 2.0), (1.0, 1.0)])" :
+              "Set([(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])")
 
     # issue #27747
     let t = (x = Integer[1, 2],)
@@ -1287,6 +1287,8 @@ end
     @test showstr(Pair{Integer,Integer}(1, 2), :typeinfo => Pair{Integer,Integer}) == "1 => 2"
     @test showstr([Pair{Integer,Integer}(1, 2)]) == "Pair{Integer,Integer}[1 => 2]"
     @test showstr(Dict{Integer,Integer}(1 => 2)) == "Dict{Integer,Integer}(1 => 2)"
+    @test showstr(Dict(true=>false)) == "Dict{Bool,Bool}(1 => 0)"
+    @test showstr(Dict((1 => 2) => (3 => 4))) == "Dict((1 => 2) => (3 => 4))"
 
     # issue #27979 (dislaying arrays of pairs containing arrays as first member)
     @test replstr([[1.0]=>1.0]) == "1-element Array{Pair{Array{Float64,1},Float64},1}:\n [1.0] => 1.0"
@@ -1551,7 +1553,7 @@ Z = Array{Float64}(undef,0,0)
     vec_undefined = Vector(undef, 2)
     vec_initialisers = fill(undef, 2)
     @test showstr(vec_undefined) == "Any[#undef, #undef]"
-    @test showstr(vec_initialisers) == "UndefInitializer[$undef, $undef]"
+    @test showstr(vec_initialisers) == "[$undef, $undef]"
     @test replstr(vec_undefined) == "2-element Array{Any,1}:\n #undef\n #undef"
     @test replstr(vec_initialisers) == "2-element Array{UndefInitializer,1}:\n $undef\n $undef"
 end
