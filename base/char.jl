@@ -304,7 +304,7 @@ function show(io::IO, ::MIME"text/plain", c::T) where {T<:AbstractChar}
         else
             u = codepoint(c)
         end
-        h = string(u, base = 16, pad = u ≤ 0xffff ? 4 : 6)
+        h = uppercase(string(u, base = 16, pad = 4))
         print(io, (isascii(c) ? "ASCII/" : ""), "Unicode U+", h)
     else
         print(io, ": Malformed UTF-8")

@@ -77,11 +77,10 @@ Julia's build process uses the following external tools:
 - [PATCHELF](https://nixos.org/patchelf.html)
 - [OBJCONV](https://www.agner.org/optimize/#objconv)
 
-Julia bundles the following external programs and libraries on some platforms:
+Julia bundles the following external programs and libraries:
 
 - [7-Zip](https://www.7-zip.org/license.txt)
 - [ZLIB](https://zlib.net/zlib_license.html)
-- [LIBEXPAT](http://expat.cvs.sourceforge.net/viewvc/expat/expat/README)
 
 On some platforms, distributions of Julia contain SSL certificate authority certificates,
 released under the [Mozilla Public License](https://en.wikipedia.org/wiki/Mozilla_Public_License).

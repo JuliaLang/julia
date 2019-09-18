@@ -3015,54 +3015,47 @@ JL_DLLEXPORT void jl_throw_out_of_memory_error(void)
 JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    maybe_collect(ptls);
-    ptls->gc_num.allocd += sz;
-    ptls->gc_num.malloc++;
-    void *b = malloc(sz);
-    if (b == NULL)
-        jl_throw(jl_memory_exception);
-    return b;
+    if (ptls && ptls->world_age) {
+        maybe_collect(ptls);
+        ptls->gc_num.allocd += sz;
+        ptls->gc_num.malloc++;
+    }
+    return malloc(sz);
 }
 
 JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    maybe_collect(ptls);
-    ptls->gc_num.allocd += nm*sz;
-    ptls->gc_num.malloc++;
-    void *b = calloc(nm, sz);
-    if (b == NULL)
-        jl_throw(jl_memory_exception);
-    return b;
+    if (ptls && ptls->world_age) {
+        maybe_collect(ptls);
+        ptls->gc_num.allocd += nm*sz;
+        ptls->gc_num.malloc++;
+    }
+    return calloc(nm, sz);
 }
 
 JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     free(p);
-    ptls->gc_num.freed += sz;
-    ptls->gc_num.freecall++;
-}
-
-// older name for jl_gc_counted_free_with_size
-JL_DLLEXPORT void jl_gc_counted_free(void *p, size_t sz)
-{
-    jl_gc_counted_free_with_size(p, sz);
+    if (ptls && ptls->world_age) {
+        ptls->gc_num.freed += sz;
+        ptls->gc_num.freecall++;
+    }
 }
 
 JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    maybe_collect(ptls);
-    if (sz < old)
-        ptls->gc_num.freed += (old - sz);
-    else
-        ptls->gc_num.allocd += (sz - old);
-    ptls->gc_num.realloc++;
-    void *b = realloc(p, sz);
-    if (b == NULL)
-        jl_throw(jl_memory_exception);
-    return b;
+    if (ptls && ptls->world_age) {
+        maybe_collect(ptls);
+        if (sz < old)
+            ptls->gc_num.freed += (old - sz);
+        else
+            ptls->gc_num.allocd += (sz - old);
+        ptls->gc_num.realloc++;
+    }
+    return realloc(p, sz);
 }
 
 // allocation wrappers that save the size of allocations, to allow using
@@ -3071,16 +3064,20 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
 JL_DLLEXPORT void *jl_malloc(size_t sz)
 {
     int64_t *p = (int64_t *)jl_gc_counted_malloc(sz + JL_SMALL_BYTE_ALIGNMENT);
+    if (p == NULL)
+        return NULL;
     p[0] = sz;
-    return (void *)(p + 2);
+    return (void *)(p + 2); // assumes JL_SMALL_BYTE_ALIGNMENT == 16
 }
 
 JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
 {
     size_t nmsz = nm*sz;
     int64_t *p = (int64_t *)jl_gc_counted_calloc(nmsz + JL_SMALL_BYTE_ALIGNMENT, 1);
+    if (p == NULL)
+        return NULL;
     p[0] = nmsz;
-    return (void *)(p + 2);
+    return (void *)(p + 2); // assumes JL_SMALL_BYTE_ALIGNMENT == 16
 }
 
 JL_DLLEXPORT void jl_free(void *p)
@@ -3105,8 +3102,10 @@ JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
         szold = pp[0] + JL_SMALL_BYTE_ALIGNMENT;
     }
     int64_t *pnew = (int64_t *)jl_gc_counted_realloc_with_old_size(pp, szold, sz + JL_SMALL_BYTE_ALIGNMENT);
+    if (pnew == NULL)
+        return NULL;
     pnew[0] = sz;
-    return (void *)(pnew + 2);
+    return (void *)(pnew + 2); // assumes JL_SMALL_BYTE_ALIGNMENT == 16
 }
 
 // allocating blocks for Arrays and Strings
