@@ -261,3 +261,9 @@ y = map(v -> (a=v.a, b=v.a + v.b), [(a=1, b=missing), (a=1, b=2)])
 @test merge((a=1, b=2), (b=3, c=4), (c=5,)) === (a=1, b=3, c=5)
 @test merge((a=1, b=2), (b=3, c=(d=1,)), (c=(d=2,),)) === (a=1, b=3, c=(d=2,))
 @test merge((a=1, b=2)) === (a=1, b=2)
+
+# issue #33270
+let n = NamedTuple{(:T,), Tuple{Type{Float64}}}((Float64,))
+    @test n isa NamedTuple{(:T,), Tuple{Type{Float64}}}
+    @test n.T === Float64
+end
