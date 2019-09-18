@@ -83,7 +83,7 @@ julia> convert(Array{Float64}, a)
  4.0  5.0  6.0
 ```
 
-Conversion isn't always possible, in which case a no method error is thrown indicating that `convert`
+Conversion isn't always possible, in which case a [`MethodError`](@ref) is thrown indicating that `convert`
 doesn't know how to perform the requested conversion:
 
 ```jldoctest
