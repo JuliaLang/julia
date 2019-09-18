@@ -40,6 +40,18 @@
 extern "C" {
 #endif
 
+#ifdef JL_ASAN_ENABLED
+static inline void sanitizer_start_switch_fiber(const void* bottom, size_t size) {
+    __sanitizer_start_switch_fiber(NULL, bottom, size);
+}
+static inline void sanitizer_finish_switch_fiber(void) {
+    __sanitizer_finish_switch_fiber(NULL, NULL, NULL);
+}
+#else
+static inline void sanitizer_start_switch_fiber(const void* bottom, size_t size) {}
+static inline void sanitizer_finish_switch_fiber(void) {}
+#endif
+
 #if defined(_OS_WINDOWS_)
 volatile int jl_in_stackwalk = 0;
 #else
@@ -492,7 +504,6 @@ JL_DLLEXPORT void jl_sig_throw(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *e = ptls->sig_exception;
-    assert(e && ptls->bt_size != 0);
     ptls->sig_exception = NULL;
     throw_internal(e);
 }

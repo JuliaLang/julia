@@ -292,3 +292,9 @@ end
 end
 
 @test_throws ErrorException("syntax: local variable name \"x\" conflicts with an argument") f30284(1)
+
+# issue #33243
+@generated function f33243()
+    :(global x33243 = 2)
+end
+@test_throws ErrorException f33243()

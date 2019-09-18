@@ -789,9 +789,48 @@ partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
 """
     partialsortperm!(ix, v, k; by=<transform>, lt=<comparison>, rev=false, initialized=false)
 
-Like [`partialsortperm`](@ref), but accepts a preallocated index vector `ix`. If `initialized` is `false`
-(the default), `ix` is initialized to contain the values `1:length(ix)`.
-"""
+Like [`partialsortperm`](@ref), but accepts a preallocated index vector `ix` the same size as
+`v`, which is used to store (a permutation of) the indices of `v`.
+
+If the index vector `ix` is initialized with the indices of `v` (or a permutation thereof), `initialized` should be set to
+`true`.
+
+If `initialized` is `false` (the default), then `ix` is initialized to contain the indices of `v`.
+
+If `initialized` is `true`, but `ix` does not contain (a permutation of) the indices of `v`, the behavior of
+`partialsortperm!` is undefined.
+
+(Typically, the indices of `v` will be `1:length(v)`, although if `v` has an alternative array type
+with non-one-based indices, such as an `OffsetArray`, `ix` must also be an `OffsetArray` with the same
+indices, and must contain as values (a permutation of) these same indices.)
+
+Upon return, `ix` is guaranteed to have the indices `k` in their sorted positions, such that
+
+```julia
+partialsortperm!(ix, v, k);
+v[ix[k]] == partialsort(v, k)
+```
+
+The return value is the `k`th element of `ix` if `k` is an integer, or view into `ix` if `k` is
+a range.
+
+# Examples
+```jldoctest
+julia> v = [3, 1, 2, 1];
+
+julia> ix = Vector{Int}(undef, 4);
+
+julia> partialsortperm!(ix, v, 1)
+2
+
+julia> ix = [1:4;];
+
+julia> partialsortperm!(ix, v, 2:3, initialized=true)
+2-element view(::Array{Int64,1}, 2:3) with eltype Int64:
+ 4
+ 3
+```
+ """
 function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
                           k::Union{Int, OrdinalRange};
                           lt::Function=isless,
@@ -799,6 +838,10 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
                           rev::Union{Bool,Nothing}=nothing,
                           order::Ordering=Forward,
                           initialized::Bool=false)
+    if axes(ix,1) != axes(v,1)
+        throw(ArgumentError("The index vector is used as a workspace and must have the " *
+                            "same length/indices as the source vector, $(axes(ix,1)) != $(axes(v,1))"))
+    end
     if !initialized
         @inbounds for i = axes(ix,1)
             ix[i] = i
@@ -897,7 +940,7 @@ function sortperm!(x::AbstractVector{<:Integer}, v::AbstractVector;
                    order::Ordering=Forward,
                    initialized::Bool=false)
     if axes(x,1) != axes(v,1)
-        throw(ArgumentError("index vector must have the same indices as the source vector, $(axes(x,1)) != $(axes(v,1))"))
+        throw(ArgumentError("index vector must have the same length/indices as the source vector, $(axes(x,1)) != $(axes(v,1))"))
     end
     if !initialized
         @inbounds for i = axes(v,1)

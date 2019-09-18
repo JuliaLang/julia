@@ -2002,6 +2002,8 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
         int32_t nw = (sz == 0 ? 1 : (sz < 0 ? -sz : sz));
         size_t nb = nw * gmp_limb_size;
         void *buf = jl_gc_counted_malloc(nb);
+        if (buf == NULL)
+            jl_throw(jl_memory_exception);
         ios_read(s->s, (char*)buf, nb);
         jl_set_nth_field(v, 0, jl_box_int32(nw));
         jl_set_nth_field(v, 1, sizefield);

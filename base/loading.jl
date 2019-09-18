@@ -1050,7 +1050,7 @@ function _require(pkg::PkgId)
             ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, uuid)
         end
         try
-            include_relative(__toplevel__, path)
+            include(__toplevel__, path)
             return
         finally
             if uuid !== old_uuid
@@ -1090,29 +1090,6 @@ end
 function source_dir()
     p = source_path(nothing)
     return p === nothing ? pwd() : dirname(p)
-end
-
-# These functions are duplicated in client.jl/include(::String) for
-# nicer stacktraces. Modifications here have to be backported there
-include_relative(mod::Module, path::AbstractString) = include_relative(mod, String(path))
-function include_relative(mod::Module, _path::String)
-    path, prev = _include_dependency(mod, _path)
-    for callback in include_callbacks # to preserve order, must come before Core.include
-        invokelatest(callback, mod, path)
-    end
-    tls = task_local_storage()
-    tls[:SOURCE_PATH] = path
-    local result
-    try
-        result = Core.include(mod, path)
-    finally
-        if prev === nothing
-            delete!(tls, :SOURCE_PATH)
-        else
-            tls[:SOURCE_PATH] = prev
-        end
-    end
-    return result
 end
 
 """
