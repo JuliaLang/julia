@@ -26,7 +26,7 @@ Sampler(::Type{RNG}, ::Type{T}, n::Repetition) where {RNG<:AbstractRNG,T<:Abstra
 
 function rand(r::AbstractRNG, ::SamplerTrivial{OpenOpen01{Float16}})
     z = reinterpret(Float32, (rand(r, UInt10(UInt32)) << 13) | 0x3f800000)
-    Float16(z - prevfloat(Float16(1)))
+    Float16(z - Float32(prevfloat(Float16(1))))
 end
 
 function rand(r::AbstractRNG, ::SamplerTrivial{OpenOpen01{Float32}})
