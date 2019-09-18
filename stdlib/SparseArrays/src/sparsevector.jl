@@ -1499,7 +1499,7 @@ function (*)(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
 end
 
 mul!(y::AbstractVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    mul!(y, A, x, 1, zero(Ty))
+    mul!(y, A, x, true, zero(Ty))
 
 function mul!(y::AbstractVector, A::StridedMatrix, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, A, x)
