@@ -25,9 +25,9 @@ function mul!(C::StridedVecOrMat, A::AbstractSparseMatrixCSC, B::Union{StridedVe
     end
     C
 end
-*(A::AbstractSparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx} =
+*(A::AbstractSparseMatrixCSC{TA}, x::StridedVector{Tx}) where {TA,Tx} =
     (T = promote_op(matprod, TA, Tx); mul!(similar(x, T, size(A, 1)), A, x, true, false))
-*(A::AbstractSparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
+*(A::AbstractSparseMatrixCSC{TA}, B::StridedMatrix{Tx}) where {TA,Tx} =
     (T = promote_op(matprod, TA, Tx); mul!(similar(B, T, (size(A, 1), size(B, 2))), A, B, true, false))
 
 function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}, α::Number, β::Number)
@@ -51,9 +51,9 @@ function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}
     end
     C
 end
-*(adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
+*(adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, x::StridedVector{Tx}) where {Tx} =
     (T = promote_op(matprod, eltype(adjA), Tx); mul!(similar(x, T, size(adjA, 1)), adjA, x, true, false))
-*(adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC{TA,S}}, B::AdjOrTransStridedMatrix{Tx}) where {TA,S,Tx} =
+*(adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, B::AdjOrTransStridedMatrix) =
     (T = promote_op(matprod, eltype(adjA), eltype(B)); mul!(similar(B, T, (size(adjA, 1), size(B, 2))), adjA, B, true, false))
 
 function mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedMatrix}, α::Number, β::Number)
@@ -77,9 +77,9 @@ function mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:AbstractSparseMatrix
     end
     C
 end
-*(transA::Transpose{<:Any,<:AbstractSparseMatrixCSC{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
+*(transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::StridedVector{Tx}) where {Tx} =
     (T = promote_op(matprod, eltype(transA), Tx); mul!(similar(x, T, size(transA, 1)), transA, x, true, false))
-*(transA::Transpose{<:Any,<:AbstractSparseMatrixCSC{TA,S}}, B::AdjOrTransStridedMatrix{Tx}) where {TA,S,Tx} =
+*(transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, B::AdjOrTransStridedMatrix) =
     (T = promote_op(matprod, eltype(transA), eltype(B)); mul!(similar(B, T, (size(transA, 1), size(B, 2))), transA, B, true, false))
 
 # For compatibility with dense multiplication API. Should be deleted when dense multiplication
@@ -106,7 +106,7 @@ function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, A::AbstractSparseM
     end
     C
 end
-*(X::AdjOrTransStridedMatrix, A::AbstractSparseMatrixCSC{TvA,TiA}) where {TvA,TiA} =
+*(X::AdjOrTransStridedMatrix, A::AbstractSparseMatrixCSC{TvA}) where {TvA} =
     (T = promote_op(matprod, eltype(X), TvA); mul!(similar(X, T, (size(X, 1), size(A, 2))), X, A, true, false))
 
 function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, α::Number, β::Number)
@@ -125,7 +125,7 @@ function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, adjA::Adjoint{<:An
     end
     C
 end
-*(X::AdjOrTransStridedMatrix, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC{TvA,TiA}}) where {TvA,TiA} =
+*(X::AdjOrTransStridedMatrix, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}) =
     (T = promote_op(matprod, eltype(X), eltype(adjA)); mul!(similar(X, T, (size(X, 1), size(adjA, 2))), X, adjA, true, false))
 
 function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, α::Number, β::Number)
@@ -144,7 +144,7 @@ function mul!(C::StridedVecOrMat, X::AdjOrTransStridedMatrix, transA::Transpose{
     end
     C
 end
-*(X::AdjOrTransStridedMatrix, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC{TvA,TiA}}) where {TvA,TiA} =
+*(X::AdjOrTransStridedMatrix, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}) =
     (T = promote_op(matprod, eltype(X), eltype(transA)); mul!(similar(X, T, (size(X, 1), size(transA, 2))), X, transA, true, false))
 
 function (*)(D::Diagonal, A::AbstractSparseMatrixCSC)
@@ -176,7 +176,7 @@ end
 # The last is faster, if more than ≈ 1/32 of the result column is nonzero.
 # TODO: extend to SparseMatrixCSCUnion to allow for SubArrays (view(X, :, r)).
 function spmatmul(A::AbstractSparseMatrixCSC{TvA,TiA}, B::AbstractSparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB}
-    Tv = promote_op(matprod, eltype(A), eltype(B)) # eltype can be different than Tv for adjoint/transpose
+    Tv = promote_op(matprod, TvA, TvB)
     Ti = promote_type(TiA, TiB)
     mA, nA = size(A)
     nB = size(B, 2)
@@ -348,8 +348,8 @@ end
 
 ## triangular sparse handling
 
-possible_adjoint(adj::Bool, a::Real ) = a
-possible_adjoint(adj::Bool, a ) = adj ? adjoint(a) : a
+possible_adjoint(adj::Bool, a::Real) = a
+possible_adjoint(adj::Bool, a) = adj ? adjoint(a) : a
 
 const UnitDiagonalTriangular = Union{UnitUpperTriangular,UnitLowerTriangular}
 
@@ -753,7 +753,6 @@ mul!(y::StridedVecOrMat, A::SparseMatrixCSCSymmHerm, x::StridedVecOrMat) = mul!(
 # C .= α * A * B + β * C
 function mul!(C::StridedVecOrMat{T}, sA::SparseMatrixCSCSymmHerm, B::StridedVecOrMat,
               α::Number, β::Number) where T
-
     fuplo = sA.uplo == 'U' ? nzrangeup : nzrangelo
     _mul!(fuplo, C, sA, B, T(α), T(β))
 end
