@@ -308,10 +308,6 @@ include("irrationals.jl")
 include("mathconstants.jl")
 using .MathConstants: ℯ, π, pi
 
-# (s)printf macros
-include("printf.jl")
-# import .Printf
-
 # metaprogramming
 include("meta.jl")
 
