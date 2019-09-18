@@ -69,11 +69,13 @@ if nameof(@__MODULE__) === :Base
 Construct a named tuple with the given `names` (a tuple of Symbols) and field types `T`
 (a `Tuple` type) from a tuple of values.
 """
-function NamedTuple{names,T}(args::Tuple) where {names, T <: Tuple}
+@eval function NamedTuple{names,T}(args::Tuple) where {names, T <: Tuple}
     if length(args) != length(names)
         throw(ArgumentError("Wrong number of arguments to named tuple constructor."))
     end
-    NamedTuple{names,T}(T(args))
+    # Note T(args) might not return something of type T; e.g.
+    # Tuple{Type{Float64}}((Float64,)) returns a Tuple{DataType}
+    $(Expr(:splatnew, :(NamedTuple{names,T}), :(T(args))))
 end
 
 """
