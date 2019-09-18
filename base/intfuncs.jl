@@ -220,6 +220,7 @@ end
 
 ^(x::T, p::T) where {T<:Integer} = power_by_squaring(x,p)
 ^(x::Number, p::Integer)  = power_by_squaring(x,p)
+Base.@pure ^(x::HWNumber,p::Int) = power_by_squaring(x,p)
 
 # x^p for any literal integer p is lowered to Base.literal_pow(^, x, Val(p))
 # to enable compile-time optimizations specialized to p.
