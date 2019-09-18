@@ -51,14 +51,14 @@ Behaves identically to the [`Array`](@ref) constructor. See [`undef`](@ref).
 ```julia-repl
 julia> BitArray(undef, 2, 2)
 2×2 BitArray{2}:
- false  false
- false  true
+ 0  0
+ 0  0
 
 julia> BitArray(undef, (3, 1))
 3×1 BitArray{2}:
- false
- true
- false
+ 0
+ 0
+ 0
 ```
 """
 BitArray(::UndefInitializer, dims::Integer...) = BitArray(undef, map(Int,dims))
@@ -77,7 +77,7 @@ length(B::BitArray) = B.len
 size(B::BitVector) = (B.len,)
 size(B::BitArray) = B.dims
 
-@inline function size(B::BitVector, d)
+@inline function size(B::BitVector, d::Integer)
     d < 1 && throw_boundserror(size(B), d)
     ifelse(d == 1, B.len, 1)
 end
@@ -741,7 +741,7 @@ function append!(B::BitVector, items::BitVector)
     return B
 end
 
-append!(B::BitVector, items::AbstractVector{Bool}) = append!(B, BitArray(items))
+append!(B::BitVector, items) = append!(B, BitArray(items))
 append!(A::Vector{Bool}, items::BitVector) = append!(A, Array(items))
 
 function prepend!(B::BitVector, items::BitVector)
@@ -761,7 +761,7 @@ function prepend!(B::BitVector, items::BitVector)
     return B
 end
 
-prepend!(B::BitVector, items::AbstractVector{Bool}) = prepend!(B, BitArray(items))
+prepend!(B::BitVector, items) = prepend!(B, BitArray(items))
 prepend!(A::Vector{Bool}, items::BitVector) = prepend!(A, Array(items))
 
 function sizehint!(B::BitVector, sz::Integer)

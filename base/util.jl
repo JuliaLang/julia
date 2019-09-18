@@ -35,8 +35,7 @@ struct GC_Diff
 end
 
 gc_total_bytes(gc_num::GC_Num) =
-    (gc_num.allocd + gc_num.deferred_alloc +
-     Int64(gc_num.collect) + Int64(gc_num.total_allocd))
+    (gc_num.allocd + gc_num.deferred_alloc + Int64(gc_num.total_allocd))
 
 function GC_Diff(new::GC_Num, old::GC_Num)
     # logic from `src/gc.c:jl_gc_total_bytes`
@@ -136,6 +135,11 @@ returning the value of the expression.
 
 See also [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
+
+!!! note
+    For more serious benchmarking, consider the `@btime` macro from the BenchmarkTools.jl
+    package which among other things evaluates the function multiple times in order to
+    reduce noise.
 
 ```julia-repl
 julia> @time rand(10^6);
@@ -677,7 +681,7 @@ _crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} whe
 _crc32c(s::String, crc::UInt32=0x00000000) = unsafe_crc32c(s, sizeof(s) % Csize_t, crc)
 
 function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
-    nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0"))
+    nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0, got $nb"))
     # use block size 24576=8192*3, since that is the threshold for
     # 3-way parallel SIMD code in the underlying jl_crc32c C function.
     buf = Vector{UInt8}(undef, min(nb, 24576))
@@ -830,7 +834,7 @@ function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
         tests = split(tests)
     end
     exit_on_error && push!(tests, "--exit-on-error")
-    seed != nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
+    seed !== nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
     try

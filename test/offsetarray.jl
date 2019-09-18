@@ -203,11 +203,13 @@ cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,5), (10,-9)))    # column
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(5,10^3), (10,-9)))    # rows fit
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,10^3), (10,-9))) # neither fits
 cmp_showf(Base.print_matrix, io, OffsetArray(reshape(range(-0.212121212121, stop=2/11, length=3*29), 3, 29), (-2, -15)); options=(:displaysize=>(53,210),))
+cmp_showf(show, io, OffsetArray(collect(1:100), (100,)))   # issue #31641
+
 targets1 = ["0-dimensional $OAs_name.OffsetArray{Float64,0,Array{Float64,0}}:\n1.0",
-            "$OAs_name.OffsetArray{Float64,1,Array{Float64,1}} with indices 2:2:\n 1.0",
-            "$OAs_name.OffsetArray{Float64,2,Array{Float64,2}} with indices 2:2×3:3:\n 1.0",
-            "$OAs_name.OffsetArray{Float64,3,Array{Float64,3}} with indices 2:2×3:3×4:4:\n[:, :, 4] =\n 1.0",
-            "$OAs_name.OffsetArray{Float64,4,Array{Float64,4}} with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
+            "1-element $OAs_name.OffsetArray{Float64,1,Array{Float64,1}} with indices 2:2:\n 1.0",
+            "1×1 $OAs_name.OffsetArray{Float64,2,Array{Float64,2}} with indices 2:2×3:3:\n 1.0",
+            "1×1×1 $OAs_name.OffsetArray{Float64,3,Array{Float64,3}} with indices 2:2×3:3×4:4:\n[:, :, 4] =\n 1.0",
+            "1×1×1×1 $OAs_name.OffsetArray{Float64,4,Array{Float64,4}} with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
 targets2 = ["(1.0, 1.0)",
             "([1.0], [1.0])",
             "([1.0], [1.0])",
@@ -335,6 +337,34 @@ a = OffsetArray(a0, (-1,2,3,4,5))
 @test_throws ArgumentError dropdims(a, dims=3)
 @test_throws ArgumentError dropdims(a, dims=4)
 @test_throws ArgumentError dropdims(a, dims=6)
+
+# push!
+v = OffsetArray(rand(4), (-3,))
+v2 = copy(v)
+@test push!(v2, 1) === v2
+@test v2[axes(v, 1)] == v
+@test v2[end] == 1
+v2 = copy(v)
+@test push!(v2, 2, 1) === v2
+@test v2[axes(v, 1)] == v
+@test v2[end-1] == 2
+@test v2[end] == 1
+
+# append! from array
+v2 = copy(v)
+@test append!(v2, [2, 1]) === v2
+@test v2[axes(v, 1)] == v
+@test v2[lastindex(v)+1:end] == [2, 1]
+# append! from HasLength iterator
+v2 = copy(v)
+@test append!(v2, (v for v in [2, 1])) === v2
+@test v2[axes(v, 1)] == v
+@test v2[lastindex(v)+1:end] == [2, 1]
+# append! from SizeUnknown iterator
+v2 = copy(v)
+@test append!(v2, (v for v in [2, 1] if true)) === v2
+@test v2[axes(v, 1)] == v
+@test v2[lastindex(v)+1:end] == [2, 1]
 
 # other functions
 v = OffsetArray(v0, (-3,))

@@ -236,6 +236,25 @@ A zero-argument anonymous function is written as `()->3`. The idea of a function
 may seem strange, but is useful for "delaying" a computation. In this usage, a block of code is
 wrapped in a zero-argument function, which is later invoked by calling it as `f`.
 
+As an example, consider this call to [`get`](@ref):
+
+```julia
+get(dict, key) do
+    # default value calculated here
+    time()
+end
+```
+
+The code above is equivalent to calling `get` with an anonymous function containing the code
+enclosed between `do` and `end`, like so:
+
+```julia
+get(()->time(), dict, key)
+```
+
+The call to [`time`](@ref) is delayed by wrapping it in a 0-argument anonymous function
+that is called only when the requested key is absent from `dict`.
+
 ## Tuples
 
 Julia has a built-in data structure called a *tuple* that is closely related to function
@@ -660,6 +679,61 @@ enclosing scope. For example, the variable `data` in the above example of
 `open...do` is captured from the outer scope. Captured variables
 can create performance challenges as discussed in [performance tips](@ref man-performance-tips).
 
+## Function composition and piping
+
+Functions in Julia can be combined by composing or piping (chaining) them together.
+
+Function composition is when you combine functions together and apply the resulting composition to arguments.
+You use the function composition operator (`∘`) to compose the functions, so `(f ∘ g)(args...)` is the same as `f(g(args...))`.
+
+You can type the composition operator at the REPL and suitably-configured editors using `\circ<tab>`.
+
+For example, the `sqrt` and `+` functions can be composed like this:
+
+```jldoctest
+julia> (sqrt ∘ +)(3, 6)
+3.0
+```
+
+This adds the numbers first, then finds the square root of the result.
+
+The next example composes three functions and maps the result over an array of strings:
+
+```jldoctest
+julia> map(first ∘ reverse ∘ uppercase, split("you can compose functions like this"))
+6-element Array{Char,1}:
+ 'U'
+ 'N'
+ 'E'
+ 'S'
+ 'E'
+ 'S'
+```
+
+Function chaining (sometimes called "piping" or "using a pipe" to send data to a subsequent function) is when you apply a function to the previous function's output:
+
+```jldoctest
+julia> 1:10 |> sum |> sqrt
+7.416198487095663
+```
+
+Here, the total produced by `sum` is passed to the `sqrt` function. The equivalent composition would be:
+
+```jldoctest
+julia> (sqrt ∘ sum)(1:10)
+7.416198487095663
+```
+
+The pipe operator can also be used with broadcasting, as `.|>`, to provide a useful combination of the chaining/piping and dot vectorization syntax (described next).
+
+```jldoctest
+julia> ["a", "list", "of", "strings"] .|> [uppercase, reverse, titlecase, length]
+4-element Array{Any,1}:
+  "A"
+  "tsil"
+  "Of"
+ 7
+```
 
 ## [Dot Syntax for Vectorizing Functions](@id man-vectorized)
 

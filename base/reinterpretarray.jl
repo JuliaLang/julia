@@ -45,6 +45,34 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S, N}} <: AbstractArray{T, N}
     end
 end
 
+# Definition of StridedArray
+StridedFastContiguousSubArray{T,N,A<:DenseArray} = FastContiguousSubArray{T,N,A}
+StridedReinterpretArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray}} = ReinterpretArray{T,N,S,A} where S
+StridedReshapedArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray,StridedReinterpretArray}} = ReshapedArray{T,N,A}
+StridedSubArray{T,N,A<:Union{DenseArray,StridedReshapedArray,StridedReinterpretArray},
+    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} = SubArray{T,N,A,I}
+StridedArray{T,N} = Union{DenseArray{T,N}, StridedSubArray{T,N}, StridedReshapedArray{T,N}, StridedReinterpretArray{T,N}}
+StridedVector{T} = Union{DenseArray{T,1}, StridedSubArray{T,1}, StridedReshapedArray{T,1}, StridedReinterpretArray{T,1}}
+StridedMatrix{T} = Union{DenseArray{T,2}, StridedSubArray{T,2}, StridedReshapedArray{T,2}, StridedReinterpretArray{T,2}}
+StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
+
+# the definition of strides for Array{T,N} is tuple() if N = 0, otherwise it is
+# a tuple containing 1 and a cumulative product of the first N-1 sizes
+# this definition is also used for StridedReshapedArray and StridedReinterpretedArray
+# which have the same memory storage as Array
+function stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, i::Int)
+    if i > ndims(a)
+        return length(a)
+    end
+    s = 1
+    for n = 1:(i-1)
+        s *= size(a, n)
+    end
+    return s
+end
+
+strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
+
 function check_readable(a::ReinterpretArray{T, N, S} where N) where {T,S}
     # See comment in check_writable
     if !a.readable && !array_subpadding(T, S)
@@ -68,6 +96,7 @@ IndexStyle(a::ReinterpretArray) = IndexStyle(a.parent)
 
 parent(a::ReinterpretArray) = a.parent
 dataids(a::ReinterpretArray) = dataids(a.parent)
+unaliascopy(a::ReinterpretArray{T}) where {T} = reinterpret(T, unaliascopy(a.parent))
 
 function size(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     psize = size(a.parent)

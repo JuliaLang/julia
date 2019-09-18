@@ -6,7 +6,7 @@ import re, sys
 # a method `platform_key_abi()` to parse uname-like output into something standarized.
 
 if len(sys.argv) < 2:
-    print("Usage: %s <host triplet> [<gcc version>]")
+    print("Usage: {} <host triplet> [<gcc version>] [<cxxabi11>]".format(sys.argv[0]))
     sys.exit(1)
 
 arch_mapping = {
@@ -36,6 +36,7 @@ gcc_version_mapping = {
     'gcc4': "-gcc4",
     'gcc7': "-gcc7",
     'gcc8': "-gcc8",
+    'gcc9': "-gcc8",
 }
 cxx_abi_mapping = {
     'blank_cxx_abi': "",
@@ -108,15 +109,23 @@ def p(x):
 # "-gcc8" tag at the end of the triplet, but only if it has otherwise
 # not been specified
 if gcc_version == "blank_gcc":
-    if len(sys.argv) == 3:
+    if len(sys.argv) >= 3:
         gcc_version = {
             "4": "gcc4",
             "5": "gcc4",
             "6": "gcc4",
             "7": "gcc7",
             "8": "gcc8",
-        }[sys.argv[2][0]]
+            "9": "gcc8",
+        }[list(filter(lambda x: re.match("\d+\.\d+(\.\d+)?", x), sys.argv[2].split()))[-1][0]]
 
+if cxx_abi == "blank_cxx_abi":
+    if len(sys.argv) == 4:
+        cxx_abi = {
+            "0": "cxx03",
+            "1": "cxx11",
+            "": "",
+        }[sys.argv[3]]
 
 print(arch+p(platform)+p(libc)+r(call_abi)+p(gcc_version)+p(cxx_abi))
 

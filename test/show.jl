@@ -25,7 +25,7 @@ end
 @test replstr(Array{Any}(undef, 2)) == "2-element Array{Any,1}:\n #undef\n #undef"
 @test replstr(Array{Any}(undef, 2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
 @test replstr(Array{Any}(undef, 2,2,2)) == "2×2×2 Array{Any,3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
-@test replstr([1f10]) == "1-element Array{Float32,1}:\n 1.0e10"
+@test replstr([1f10]) == "1-element Array{Float32,1}:\n 1.0f10"
 
 struct T5589
     names::Vector{String}
@@ -143,6 +143,9 @@ end
 @test_repr "import A: a, x, y.z"
 @test_repr "import A.B.C: a, x, y.z"
 @test_repr "import ..A: a, x, y.z"
+
+@test repr(Expr(:using, :Foo)) == ":(\$(Expr(:using, :Foo)))"
+@test repr(Expr(:using, Expr(:(.), ))) == ":(\$(Expr(:using, :(\$(Expr(:.))))))"
 
 # range syntax
 @test_repr "1:2"
@@ -347,6 +350,22 @@ end
 @test sprint(show, Symbol("foo \"bar")) == "Symbol(\"foo \\\"bar\")"
 @test sprint(show, :+) == ":+"
 @test sprint(show, :end) == ":end"
+
+# issue #32408: Printing of names which are invalid identifiers
+# Invalid identifiers which need `var` quoting:
+@test sprint(show, Expr(:call, :foo, Symbol("##")))   == ":(foo(var\"##\"))"
+@test sprint(show, Expr(:call, :foo, Symbol("a-b")))  == ":(foo(var\"a-b\"))"
+@test sprint(show, :(export var"#"))    == ":(export var\"#\")"
+@test sprint(show, :(import A: var"#")) == ":(import A: var\"#\")"
+@test sprint(show, :(macro var"#" end)) == ":(macro var\"#\" end)"
+@test sprint(show, :"x$(var"#")y") == ":(\"x\$(var\"#\")y\")"
+# Macro-like names outside macro calls
+@test sprint(show, Expr(:call, :foo, Symbol("@bar"))) == ":(foo(var\"@bar\"))"
+@test sprint(show, :(export @foo)) == ":(export @foo)"
+@test sprint(show, :(import A.B: c.@d)) == ":(import A.B: c.@d)"
+@test sprint(show, :(using A.@foo)) == ":(using A.@foo)"
+# Hidden macro names
+@test sprint(show, Expr(:macrocall, Symbol("@#"), nothing, :a)) == ":(@var\"#\" a)"
 
 # issue #12477
 @test sprint(show,  Union{Int64, Int32, Int16, Int8, Float64}) == "Union{Float64, Int16, Int32, Int64, Int8}"
@@ -557,6 +576,9 @@ end
 
 # issue #12960
 mutable struct T12960 end
+import Base.zero
+Base.zero(::Type{T12960}) = T12960()
+Base.zero(x::T12960) = T12960()
 let
     A = sparse(1.0I, 3, 3)
     B = similar(A, T12960)
@@ -574,9 +596,9 @@ function f13127()
     show(buf, f)
     String(take!(buf))
 end
-@test startswith(f13127(), "getfield($(@__MODULE__), Symbol(\"")
+@test startswith(f13127(), "$(@__MODULE__).var\"#f")
 
-@test startswith(sprint(show, typeof(x->x), context = :module=>@__MODULE__), "getfield($(@__MODULE__), Symbol(\"")
+@test startswith(sprint(show, typeof(x->x), context = :module=>@__MODULE__), "var\"")
 
 #test methodshow.jl functions
 @test Base.inbase(Base)
@@ -614,16 +636,39 @@ else
     @test occursin("https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/special/trig.jl#L", Base.url(which(sin, (Float64,))))
 end
 
-# print_matrix should be able to handle small and large objects easily, test by
-# calling show. This also indirectly tests print_matrix_row, which
-# is used repeatedly by print_matrix.
-# This fits on screen:
-@test replstr(Matrix(1.0I, 10, 10)) == "10×10 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0"
-# an array too long vertically to fit on screen, and too long horizontally:
-@test replstr(Vector(1.:100.)) == "100-element Array{Float64,1}:\n   1.0\n   2.0\n   3.0\n   4.0\n   5.0\n   6.0\n   7.0\n   8.0\n   9.0\n  10.0\n   ⋮  \n  92.0\n  93.0\n  94.0\n  95.0\n  96.0\n  97.0\n  98.0\n  99.0\n 100.0"
-@test occursin(r"1×100 (LinearAlgebra\.)?Adjoint{Float64,Array{Float64,1}}:\n 1.0  2.0  3.0  4.0  5.0  6.0  7.0  …  95.0  96.0  97.0  98.0  99.0  100.0", replstr(Vector(1.:100.)'))
-# too big in both directions to fit on screen:
-@test replstr((1.:100.)*(1:100)') == "100×100 Array{Float64,2}:\n   1.0    2.0    3.0    4.0    5.0    6.0  …    97.0    98.0    99.0    100.0\n   2.0    4.0    6.0    8.0   10.0   12.0      194.0   196.0   198.0    200.0\n   3.0    6.0    9.0   12.0   15.0   18.0      291.0   294.0   297.0    300.0\n   4.0    8.0   12.0   16.0   20.0   24.0      388.0   392.0   396.0    400.0\n   5.0   10.0   15.0   20.0   25.0   30.0      485.0   490.0   495.0    500.0\n   6.0   12.0   18.0   24.0   30.0   36.0  …   582.0   588.0   594.0    600.0\n   7.0   14.0   21.0   28.0   35.0   42.0      679.0   686.0   693.0    700.0\n   8.0   16.0   24.0   32.0   40.0   48.0      776.0   784.0   792.0    800.0\n   9.0   18.0   27.0   36.0   45.0   54.0      873.0   882.0   891.0    900.0\n  10.0   20.0   30.0   40.0   50.0   60.0      970.0   980.0   990.0   1000.0\n   ⋮                                  ⋮    ⋱                                 \n  92.0  184.0  276.0  368.0  460.0  552.0     8924.0  9016.0  9108.0   9200.0\n  93.0  186.0  279.0  372.0  465.0  558.0     9021.0  9114.0  9207.0   9300.0\n  94.0  188.0  282.0  376.0  470.0  564.0     9118.0  9212.0  9306.0   9400.0\n  95.0  190.0  285.0  380.0  475.0  570.0     9215.0  9310.0  9405.0   9500.0\n  96.0  192.0  288.0  384.0  480.0  576.0  …  9312.0  9408.0  9504.0   9600.0\n  97.0  194.0  291.0  388.0  485.0  582.0     9409.0  9506.0  9603.0   9700.0\n  98.0  196.0  294.0  392.0  490.0  588.0     9506.0  9604.0  9702.0   9800.0\n  99.0  198.0  297.0  396.0  495.0  594.0     9603.0  9702.0  9801.0   9900.0\n 100.0  200.0  300.0  400.0  500.0  600.0     9700.0  9800.0  9900.0  10000.0"
+# Method location correction (Revise integration)
+methloc = Base.methodloc_callback[]
+dummyloc(m::Method) = :nofile, 123456789
+Base.methodloc_callback[] = dummyloc
+let repr = sprint(show, "text/plain", methods(Base.inbase))
+    @test occursin("nofile:123456789", repr)
+end
+let repr = sprint(show, "text/html", methods(Base.inbase))
+    @test occursin("nofile:123456789", repr)
+end
+Base.methodloc_callback[] = methloc
+
+@testset "matrix printing" begin
+    # print_matrix should be able to handle small and large objects easily, test by
+    # calling show. This also indirectly tests print_matrix_row, which
+    # is used repeatedly by print_matrix.
+    # This fits on screen:
+                 @test replstr(Matrix(1.0I, 10, 10)) == "10×10 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0"
+    # an array too long vertically to fit on screen, and too long horizontally:
+    @test replstr(Vector(1.:100.)) == "100-element Array{Float64,1}:\n   1.0\n   2.0\n   3.0\n   4.0\n   5.0\n   6.0\n   7.0\n   8.0\n   9.0\n  10.0\n   ⋮  \n  92.0\n  93.0\n  94.0\n  95.0\n  96.0\n  97.0\n  98.0\n  99.0\n 100.0"
+    @test occursin(r"1×100 (LinearAlgebra\.)?Adjoint{Float64,Array{Float64,1}}:\n 1.0  2.0  3.0  4.0  5.0  6.0  7.0  …  95.0  96.0  97.0  98.0  99.0  100.0", replstr(Vector(1.:100.)'))
+    # too big in both directions to fit on screen:
+    @test replstr((1.:100.)*(1:100)') == "100×100 Array{Float64,2}:\n   1.0    2.0    3.0    4.0    5.0    6.0  …    97.0    98.0    99.0    100.0\n   2.0    4.0    6.0    8.0   10.0   12.0      194.0   196.0   198.0    200.0\n   3.0    6.0    9.0   12.0   15.0   18.0      291.0   294.0   297.0    300.0\n   4.0    8.0   12.0   16.0   20.0   24.0      388.0   392.0   396.0    400.0\n   5.0   10.0   15.0   20.0   25.0   30.0      485.0   490.0   495.0    500.0\n   6.0   12.0   18.0   24.0   30.0   36.0  …   582.0   588.0   594.0    600.0\n   7.0   14.0   21.0   28.0   35.0   42.0      679.0   686.0   693.0    700.0\n   8.0   16.0   24.0   32.0   40.0   48.0      776.0   784.0   792.0    800.0\n   9.0   18.0   27.0   36.0   45.0   54.0      873.0   882.0   891.0    900.0\n  10.0   20.0   30.0   40.0   50.0   60.0      970.0   980.0   990.0   1000.0\n   ⋮                                  ⋮    ⋱                                 \n  92.0  184.0  276.0  368.0  460.0  552.0     8924.0  9016.0  9108.0   9200.0\n  93.0  186.0  279.0  372.0  465.0  558.0     9021.0  9114.0  9207.0   9300.0\n  94.0  188.0  282.0  376.0  470.0  564.0     9118.0  9212.0  9306.0   9400.0\n  95.0  190.0  285.0  380.0  475.0  570.0     9215.0  9310.0  9405.0   9500.0\n  96.0  192.0  288.0  384.0  480.0  576.0  …  9312.0  9408.0  9504.0   9600.0\n  97.0  194.0  291.0  388.0  485.0  582.0     9409.0  9506.0  9603.0   9700.0\n  98.0  196.0  294.0  392.0  490.0  588.0     9506.0  9604.0  9702.0   9800.0\n  99.0  198.0  297.0  396.0  495.0  594.0     9603.0  9702.0  9801.0   9900.0\n 100.0  200.0  300.0  400.0  500.0  600.0     9700.0  9800.0  9900.0  10000.0"
+
+    # test that no spurious visual lines are added when one element spans multiple lines
+    v = fill!(Array{Any}(undef, 9), 0)
+
+    v[1] = "look I'm wide! --- " ^ 9
+    @test replstr(v) == "9-element Array{Any,1}:\n  \"look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- \"\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0"
+    @test replstr([fill(0, 9) v]) == "9×2 Array{Any,2}:\n 0  …   \"look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- \"\n 0     0\n 0     0\n 0     0\n 0     0\n 0  …  0\n 0     0\n 0     0\n 0     0"
+
+
+end
 
 # Issue 14121
 @test_repr "(A'x)'"
@@ -726,6 +771,23 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T,N}, indices::Vararg{$Int,N})")
 @test sprint(show, :(function f end)) == ":(function f end)"
 @test_repr "function g end"
 
+# Printing of macro definitions
+@test sprint(show, :(macro m end)) == ":(macro m end)"
+@test_repr "macro m end"
+@test sprint(show, Expr(:macro, Expr(:call, :m, :ex), Expr(:block, :m))) ==
+      ":(macro m(ex)\n      m\n  end)"
+@test_repr """macro identity(ex)
+    # line meta
+    esc(ex)
+end"""
+@test_repr """macro m(a,b)
+    # line meta
+    quote
+        # line meta
+        \$a + \$b
+    end
+end"""
+
 # Issue #15765 printing of continue and break
 @test sprint(show, :(continue)) == ":(continue)"
 @test sprint(show, :(break)) == ":(break)"
@@ -736,8 +798,8 @@ let x = [], y = [], z = Base.ImmutableDict(x => y)
     push!(x, y)
     push!(y, x)
     push!(y, z)
-    @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict([Any[#= circular reference @-3 =#]]=>[#= circular reference @-2 =#])]"
-    @test repr(z) == "Base.ImmutableDict([Any[Any[#= circular reference @-2 =#], Base.ImmutableDict(#= circular reference @-3 =#)]]=>[Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict(#= circular reference @-2 =#)])"
+    @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict{Array{Any,1},Array{Any,1}}([Any[#= circular reference @-3 =#]] => [#= circular reference @-2 =#])]"
+    @test repr(z) == "Base.ImmutableDict{Array{Any,1},Array{Any,1}}([Any[Any[#= circular reference @-2 =#], Base.ImmutableDict{Array{Any,1},Array{Any,1}}(#= circular reference @-3 =#)]] => [Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict{Array{Any,1},Array{Any,1}}(#= circular reference @-2 =#)])"
     @test sprint(dump, x) == """
         Array{Any}((1,))
           1: Array{Any}((2,))
@@ -882,6 +944,7 @@ test_repr("a.:(begin
 test_repr("a.:(=)")
 test_repr("a.:(:)")
 test_repr("(:).a")
+@test eval(eval(Meta.parse(repr(:`ls x y`)))) == `ls x y`
 @test repr(Expr(:., :a, :b, :c)) == ":(\$(Expr(:., :a, :b, :c)))"
 @test repr(Expr(:., :a, :b)) == ":(\$(Expr(:., :a, :b)))"
 @test repr(Expr(:., :a)) == ":(\$(Expr(:., :a)))"
@@ -900,7 +963,7 @@ test_repr("(:).a")
 @test isa(repr("text/plain", String(UInt8[0x00:0xff;])), String)
 
 # don't use julia-specific `f` in Float32 printing (PR #18053)
-@test sprint(print, 1f-7) == "1.0e-7"
+@test sprint(print, 1f-7) == "1.0f-7"
 
 let d = TextDisplay(IOBuffer())
     @test_throws MethodError display(d, "text/foobar", [3 1 4])
@@ -990,11 +1053,11 @@ end
 
 @testset "printing of Pair's" begin
     for (p, s) in (Pair(1.0,2.0)                          => "1.0 => 2.0",
-                   Pair(Pair(1,2), Pair(3,4))             => "(1=>2) => (3=>4)",
+                   Pair(Pair(1,2), Pair(3,4))             => "(1 => 2) => (3 => 4)",
                    Pair{Integer,Int64}(1, 2)              => "Pair{Integer,Int64}(1, 2)",
                    (Pair{Integer,Int64}(1, 2) => 3)       => "Pair{Integer,Int64}(1, 2) => 3",
-                   ((1+2im) => (3+4im))                   => "1+2im => 3+4im",
-                   (1 => 2 => Pair{Real,Int64}(3, 4))     => "1 => (2=>Pair{Real,Int64}(3, 4))")
+                   ((1+2im) => (3+4im))                   => "1 + 2im => 3 + 4im",
+                   (1 => 2 => Pair{Real,Int64}(3, 4))     => "1 => (2 => Pair{Real,Int64}(3, 4))")
         local s
         @test sprint(show, p) == s
     end
@@ -1006,26 +1069,26 @@ end
 
     # issue #28327
     d = Dict(Pair{Integer,Integer}(1,2)=>Pair{Integer,Integer}(1,2))
-    @test showstr(d) == "Dict((1=>2)=>(1=>2))" # correct parenthesis
+    @test showstr(d) == "Dict{Pair{Integer,Integer},Pair{Integer,Integer}}((1 => 2) => (1 => 2))" # correct parenthesis
 
     # issue #29536
     d = Dict((+)=>1)
-    @test showstr(d) == "Dict((+)=>1)"
+    @test showstr(d) == "Dict((+) => 1)"
 
     d = Dict("+"=>1)
-    @test showstr(d) == "Dict(\"+\"=>1)"
+    @test showstr(d) == "Dict(\"+\" => 1)"
 end
 
 @testset "alignment for pairs" begin  # (#22899)
-    @test replstr([1=>22,33=>4]) == "2-element Array{Pair{$Int,$Int},1}:\n  1 => 22\n 33 => 4 "
+    @test replstr([1=>22,33=>4]) == "2-element Array{Pair{$Int,$Int},1}:\n  1 => 22\n 33 => 4"
     # first field may have "=>" in its representation
     @test replstr(Pair[(1=>2)=>3, 4=>5]) ==
-        "2-element Array{Pair,1}:\n (1=>2) => 3\n      4 => 5"
+        "2-element Array{Pair,1}:\n (1 => 2) => 3\n        4 => 5"
     @test replstr(Any[Dict(1=>2)=> (3=>4), 1=>2]) ==
-        "2-element Array{Any,1}:\n Dict(1=>2) => (3=>4)\n          1 => 2     "
+        "2-element Array{Any,1}:\n Dict(1 => 2) => (3 => 4)\n            1 => 2"
     # left-alignment when not using the "=>" symbol
     @test replstr(Any[Pair{Integer,Int64}(1, 2), Pair{Integer,Int64}(33, 4)]) ==
-        "2-element Array{Any,1}:\n Pair{Integer,Int64}(1, 2) \n Pair{Integer,Int64}(33, 4)"
+        "2-element Array{Any,1}:\n Pair{Integer,Int64}(1, 2)\n Pair{Integer,Int64}(33, 4)"
 end
 
 @testset "display arrays non-compactly when size(⋅, 2) == 1" begin
@@ -1055,11 +1118,11 @@ end
 @testset "arrays printing follows the :compact property when specified" begin
     x = 3.141592653589793
     @test showstr(x) == "3.141592653589793"
-    @test showstr([x, x]) == showstr([x, x], :compact => true) == "[3.14159, 3.14159]"
-    @test showstr([x, x], :compact => false) == "[3.141592653589793, 3.141592653589793]"
-    @test showstr([x x; x x]) == showstr([x x; x x], :compact => true) ==
+    @test showstr([x, x], :compact => true) == "[3.14159, 3.14159]"
+    @test showstr([x, x]) == showstr([x, x], :compact => false) == "[3.141592653589793, 3.141592653589793]"
+    @test showstr([x x; x x], :compact => true) ==
         "[3.14159 3.14159; 3.14159 3.14159]"
-    @test showstr([x x; x x], :compact => false) ==
+    @test showstr([x x; x x]) == showstr([x x; x x], :compact => false) ==
         "[3.141592653589793 3.141592653589793; 3.141592653589793 3.141592653589793]"
     @test replstr([x, x]) == replstr([x, x], :compact => false) ==
         "2-element Array{Float64,1}:\n 3.141592653589793\n 3.141592653589793"
@@ -1110,7 +1173,7 @@ end
     @test repr(typeof(UnexportedOperators.:(==))) == "typeof($(curmod_prefix)UnexportedOperators.:(==))"
     anonfn = x->2x
     modname = string(@__MODULE__)
-    anonfn_type_repr = "getfield($modname, Symbol(\"$(typeof(anonfn).name.name)\"))"
+    anonfn_type_repr = "$modname.var\"$(typeof(anonfn).name.name)\""
     @test repr(typeof(anonfn)) == anonfn_type_repr
     @test repr(anonfn) == anonfn_type_repr * "()"
     @test repr("text/plain", anonfn) == "$(typeof(anonfn).name.mt.name) (generic function with 1 method)"
@@ -1211,8 +1274,8 @@ end
 
     # issue #27680
     @test replstr(Set([(1.0,1.0), (2.0,2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
-              "Set(Tuple{Float64,Float64}[(3.0, 3.0), (2.0, 2.0), (1.0, 1.0)])" :
-              "Set(Tuple{Float64,Float64}[(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])")
+              "Set([(3.0, 3.0), (2.0, 2.0), (1.0, 1.0)])" :
+              "Set([(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])")
 
     # issue #27747
     let t = (x = Integer[1, 2],)
@@ -1233,8 +1296,10 @@ end
     @test replstr([keys(Dict('a' => 'b'))]) == "1-element Array{Base.KeySet{Char,Dict{Char,Char}},1}:\n ['a']"
 
     @test showstr(Pair{Integer,Integer}(1, 2), :typeinfo => Pair{Integer,Integer}) == "1 => 2"
-    @test showstr([Pair{Integer,Integer}(1, 2)]) == "Pair{Integer,Integer}[1=>2]"
-    @test showstr(Dict{Integer,Integer}(1 => 2)) == "Dict{Integer,Integer}(1=>2)"
+    @test showstr([Pair{Integer,Integer}(1, 2)]) == "Pair{Integer,Integer}[1 => 2]"
+    @test showstr(Dict{Integer,Integer}(1 => 2)) == "Dict{Integer,Integer}(1 => 2)"
+    @test showstr(Dict(true=>false)) == "Dict{Bool,Bool}(1 => 0)"
+    @test showstr(Dict((1 => 2) => (3 => 4))) == "Dict((1 => 2) => (3 => 4))"
 
     # issue #27979 (dislaying arrays of pairs containing arrays as first member)
     @test replstr([[1.0]=>1.0]) == "1-element Array{Pair{Array{Float64,1},Float64},1}:\n [1.0] => 1.0"
@@ -1244,7 +1309,7 @@ end
 
     @test replstr(Vector[Any[1]]) == "1-element Array{Array{T,1} where T,1}:\n Any[1]"
     @test replstr(AbstractDict{Integer,Integer}[Dict{Integer,Integer}(1=>2)]) ==
-        "1-element Array{AbstractDict{Integer,Integer},1}:\n Dict(1=>2)"
+        "1-element Array{AbstractDict{Integer,Integer},1}:\n Dict(1 => 2)"
 end
 
 @testset "#14684: `display` should print associative types in full" begin
@@ -1262,11 +1327,30 @@ end
     end
 end
 
+function _methodsstr(f)
+    buf = IOBuffer()
+    show(buf, methods(f))
+    String(take!(buf))
+end
+
+@testset "show function methods" begin
+    @test occursin("methods for generic function \"sin\":", _methodsstr(sin))
+end
+@testset "show macro methods" begin
+    @test startswith(_methodsstr(getfield(Base,Symbol("@show"))), "# 1 method for macro \"@show\":")
+end
+@testset "show constructor methods" begin
+    @test occursin("methods for type constructor:\n", _methodsstr(Vector))
+end
+@testset "show builtin methods" begin
+    @test startswith(_methodsstr(typeof), "# built-in function; no methods")
+end
+@testset "show callable object methods" begin
+    @test occursin("methods:", _methodsstr(:))
+end
 @testset "#20111 show for function" begin
     K20111(x) = y -> x
-    buf = IOBuffer()
-    show(buf, methods(K20111(1)))
-    @test occursin(" 1 method for generic function", String(take!(buf)))
+    @test startswith(_methodsstr(K20111(1)), "# 1 method for anonymous function")
 end
 
 @generated f22798(x::Integer, y) = :x
@@ -1304,9 +1388,14 @@ end
     @test summary(Base.OneTo(BigInt(10))) == "10-element Base.OneTo{BigInt}"
 end
 
+@testset "Tuple summary" begin
+    @test summary((1,2,3)) == "(1, 2, 3)"
+    @test summary((:a, "b", 'c')) == "(:a, \"b\", 'c')"
+end
+
 # Tests for code_typed linetable annotations
 function compute_annotations(f, types)
-    src = code_typed(f, types)[1][1]
+    src = code_typed(f, types, debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
     la, lb, ll = Base.IRShow.compute_ir_line_annotations(ir)
     max_loc_method = maximum(length(s) for s in la)
@@ -1361,7 +1450,7 @@ eval(Meta.parse("""function my_fun28173(x)
         end
     return y
 end""")) # use parse to control the line numbers
-let src = code_typed(my_fun28173, (Int,))[1][1]
+let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
     fill!(src.codelocs, 0) # IRCode printing is only capable of printing partial line info
     let source_slotnames = String["my_fun28173", "x"],
@@ -1399,7 +1488,7 @@ end
 # Verify that extra instructions at the end of the IR
 # don't throw errors in the printing, but instead print
 # with as unnamed "!" BB.
-let src = code_typed(gcd, (Int, Int))[1][1]
+let src = code_typed(gcd, (Int, Int), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
     push!(ir.stmts, Core.Compiler.ReturnNode())
     lines = split(sprint(show, ir), '\n')
@@ -1407,15 +1496,19 @@ let src = code_typed(gcd, (Int, Int))[1][1]
     @test pop!(lines) == "   ! ──       unreachable::#UNDEF"
 end
 
-# issue #27352
-@test_throws ArgumentError print(nothing)
-@test_throws ArgumentError print(stdout, nothing)
-@test_throws ArgumentError string(nothing)
-@test_throws ArgumentError string(1, "", nothing)
-@test_throws ArgumentError let x = nothing; "x = $x" end
-@test let x = nothing; "x = $(repr(x))" end == "x = nothing"
-@test_throws ArgumentError `/bin/foo $nothing`
-@test_throws ArgumentError `$nothing`
+@testset "printing and interpolating nothing" begin
+    @test sprint(print, nothing) == "nothing"
+    @test string(nothing) == "nothing"
+    @test repr(nothing) == "nothing"
+    @test string(1, "", nothing) == "1nothing"
+    @test let x = nothing; "x = $x" end == "x = nothing"
+    @test let x = nothing; "x = $(repr(x))" end == "x = nothing"
+
+    # issue #27352 : No interpolating nothing into commands
+    @test_throws ArgumentError `/bin/foo $nothing`
+    @test_throws ArgumentError `$nothing`
+    @test_throws ArgumentError let x = nothing; `/bin/foo $x` end
+end
 
 struct X28004
     value::Any
@@ -1440,6 +1533,12 @@ replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color =>
 # issue #30303
 @test repr(Symbol("a\$")) == "Symbol(\"a\\\$\")"
 
+@test string(sin) == "sin"
+@test string(:) == "Colon()"
+@test string(Iterators.flatten) == "flatten"
+@test Symbol(Iterators.flatten) === :flatten
+@test startswith(string(x->x), "#")
+
 # printing of bools and bool arrays
 @testset "Bool" begin
     @test repr(true) == "true"
@@ -1450,3 +1549,35 @@ end
 
 # issue #30505
 @test repr(Union{Tuple{Char}, Tuple{Char, Char}}[('a','b')]) == "Union{Tuple{Char}, Tuple{Char,Char}}[('a', 'b')]"
+
+# issue #30927
+Z = Array{Float64}(undef,0,0)
+@test eval(Meta.parse(repr(Z))) == Z
+
+@testset "show undef" begin
+    # issue  #33204 - Parseable `repr` for `undef`
+    @test eval(Meta.parse(repr(undef))) == undef == UndefInitializer()
+    @test showstr(undef) == "UndefInitializer()"
+    @test occursin(repr(undef), replstr(undef))
+    @test occursin("initializer with undefined values", replstr(undef))
+
+    vec_undefined = Vector(undef, 2)
+    vec_initialisers = fill(undef, 2)
+    @test showstr(vec_undefined) == "Any[#undef, #undef]"
+    @test showstr(vec_initialisers) == "[$undef, $undef]"
+    @test replstr(vec_undefined) == "2-element Array{Any,1}:\n #undef\n #undef"
+    @test replstr(vec_initialisers) == "2-element Array{UndefInitializer,1}:\n $undef\n $undef"
+end
+
+# issue #31065, do not print parentheses for nested dot expressions
+@test sprint(Base.show_unquoted, :(foo.x.x)) == "foo.x.x"
+
+@testset "show_delim_array" begin
+    sdastr(f, n) =  # sda: Show Delim Array
+        sprint((io, x) -> Base.show_delim_array(io, x, "[", ",", "]", false, f, n), Iterators.take(1:f+n, f+n))
+    @test sdastr(1, 0) == "[1]"
+    @test sdastr(1, 1) == "[1]"
+    @test sdastr(1, 2) == "[1, 2]"
+    @test sdastr(2, 2) == "[2, 3]"
+    @test sdastr(3, 3) == "[3, 4, 5]"
+end

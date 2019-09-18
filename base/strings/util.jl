@@ -50,8 +50,7 @@ function startswith(a::Union{String, SubString{String}},
     cub = ncodeunits(b)
     if ncodeunits(a) < cub
         false
-    elseif ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-                 pointer(a), pointer(b), sizeof(b)) == 0
+    elseif _memcmp(a, b, sizeof(b)) == 0
         nextind(a, cub) == cub + 1
     else
         false
@@ -64,8 +63,7 @@ function endswith(a::Union{String, SubString{String}},
     astart = ncodeunits(a) - ncodeunits(b) + 1
     if astart < 1
         false
-    elseif ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-                 pointer(a, astart), pointer(b), sizeof(b)) == 0
+    elseif GC.@preserve(a, _memcmp(pointer(a, astart), b, sizeof(b))) == 0
         thisind(a, astart) == astart
     else
         false
@@ -96,6 +94,9 @@ julia> chop(a, head = 5, tail = 5)
 ```
 """
 function chop(s::AbstractString; head::Integer = 0, tail::Integer = 1)
+    if isempty(s)
+        return SubString(s)
+    end
     SubString(s, nextind(s, firstindex(s), head), prevind(s, lastindex(s), tail))
 end
 
@@ -170,7 +171,7 @@ lstrip(s::AbstractString, chars::Chars) = lstrip(in(chars), s)
 Remove trailing characters from `str`, either those specified by `chars` or those for
 which the function `pred` returns `true`.
 
-The default behaviour is to remove leading whitespace and delimiters: see
+The default behaviour is to remove trailing whitespace and delimiters: see
 [`isspace`](@ref) for precise details.
 
 The optional `chars` argument specifies which characters to remove: it can be a single
@@ -195,15 +196,20 @@ rstrip(s::AbstractString) = rstrip(isspace, s)
 rstrip(s::AbstractString, chars::Chars) = rstrip(in(chars), s)
 
 """
-    strip(str::AbstractString, [chars])
+    strip([pred=isspace,] str::AbstractString)
+    strip(str::AbstractString, chars)
 
-Remove leading and trailing characters from `str`.
+Remove leading and trailing characters from `str`, either those specified by `chars` or
+those for which the function `pred` returns `true`.
 
 The default behaviour is to remove leading whitespace and delimiters: see
 [`isspace`](@ref) for precise details.
 
-The optional `chars` argument specifies which characters to remove: it can be a single character,
-vector or set of characters, or a predicate function.
+The optional `chars` argument specifies which characters to remove: it can be a single
+character, vector or set of characters.
+
+!!! compat "Julia 1.2"
+    The method which accepts a predicate function requires Julia 1.2 or later.
 
 # Examples
 ```jldoctest
@@ -212,7 +218,8 @@ julia> strip("{3, 5}\\n", ['{', '}', '\\n'])
 ```
 """
 strip(s::AbstractString) = lstrip(rstrip(s))
-strip(s::AbstractString, chars) = lstrip(rstrip(s, chars), chars)
+strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
+strip(f, s::AbstractString) = lstrip(f, rstrip(f, s))
 
 ## string padding functions ##
 
@@ -236,7 +243,7 @@ function lpad(
     n::Integer,
     p::Union{AbstractChar,AbstractString}=' ',
 ) :: String
-    m = n - length(s)
+    m = signed(n) - length(s)
     m ≤ 0 && return string(s)
     l = length(p)
     q, r = divrem(m, l)
@@ -263,7 +270,7 @@ function rpad(
     n::Integer,
     p::Union{AbstractChar,AbstractString}=' ',
 ) :: String
-    m = n - length(s)
+    m = signed(n) - length(s)
     m ≤ 0 && return string(s)
     l = length(p)
     q, r = divrem(m, l)
@@ -419,6 +426,9 @@ replace(str::String, pat_repl::Pair{<:Union{Tuple{Vararg{<:AbstractChar}},
         count::Integer=typemax(Int)) =
     replace(str, in(first(pat_repl)) => last(pat_repl), count=count)
 
+_pat_replacer(x) = x
+_free_pat_replacer(x) = nothing
+
 function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     pattern, repl = pat_repl
     count == 0 && return str
@@ -426,6 +436,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     n = 1
     e = lastindex(str)
     i = a = firstindex(str)
+    pattern = _pat_replacer(pattern)
     r = something(findnext(pattern,str,i), 0)
     j, k = first(r), last(r)
     out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
@@ -446,6 +457,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
         j, k = first(r), last(r)
         n += 1
     end
+    _free_pat_replacer(pattern)
     write(out, SubString(str,i))
     String(take!(out))
 end
@@ -458,7 +470,7 @@ If `count` is provided, replace at most `count` occurrences.
 `pat` may be a single character, a vector or a set of characters, a string,
 or a regular expression.
 If `r` is a function, each occurrence is replaced with `r(s)`
-where `s` is the matched substring (when `pat`is a `Regex` or `AbstractString`) or
+where `s` is the matched substring (when `pat` is a `Regex` or `AbstractString`) or
 character (when `pat` is an `AbstractChar` or a collection of `AbstractChar`).
 If `pat` is a regular expression and `r` is a [`SubstitutionString`](@ref), then capture group
 references in `r` are replaced with the corresponding matched text.
@@ -602,7 +614,7 @@ function ascii(s::String)
     end
     return s
 end
-@noinline __throw_invalid_ascii(s, i) = throw(ArgumentError("invalid ASCII at index $i in $(repr(s))"))
+@noinline __throw_invalid_ascii(s::String, i::Int) = throw(ArgumentError("invalid ASCII at index $i in $(repr(s))"))
 
 """
     ascii(s::AbstractString)

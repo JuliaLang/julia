@@ -54,12 +54,15 @@ using Random
         end
     end
 end
-@testset "signed" begin
+@testset "signed and unsigned" begin
     @test signed(3) == 3
     @test signed(UInt(3)) == 3
     @test isa(signed(UInt(3)), Int)
     @test signed(UInt(0) - 1) == -1
     @test_throws InexactError signed(UInt(-3))
+    @test signed(true) == 1
+    @test unsigned(true) isa Unsigned
+    @test unsigned(true) == unsigned(1)
 end
 @testset "bswap" begin
     @test bswap(Int8(3)) == 3
@@ -297,3 +300,8 @@ struct MyInt26779 <: Integer
 end
 @test promote_type(MyInt26779, Int) == Integer
 @test_throws ErrorException MyInt26779(1) + 1
+let i = MyInt26779(1)
+    @test_throws MethodError i >> 1
+    @test_throws MethodError i << 1
+    @test_throws MethodError i >>> 1
+end

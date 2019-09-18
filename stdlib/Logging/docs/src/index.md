@@ -1,6 +1,6 @@
 # Logging
 
-The `Logging` module provides a way to record the history and progress of a
+The [`Logging`](@ref Logging.Logging) module provides a way to record the history and progress of a
 computation as a log of events.  Events are created by inserting a logging
 statement into the source code, for example:
 
@@ -232,6 +232,11 @@ julia> close(io)
 
 
 ## Reference
+
+### Logging module
+```@docs
+Logging.Logging
+```
 
 ### Creating events
 

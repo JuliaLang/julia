@@ -4,6 +4,7 @@
     Rational{T<:Integer} <: Real
 
 Rational number type, with numerator and denominator of type `T`.
+Rationals are checked for overflow.
 """
 struct Rational{T<:Integer} <: Real
     num::T
@@ -11,7 +12,7 @@ struct Rational{T<:Integer} <: Real
 
     function Rational{T}(num::Integer, den::Integer) where T<:Integer
         num == den == zero(T) && __throw_rational_argerror(T)
-        num2, den2 = (sign(den) < 0) ? divgcd(-num, -den) : divgcd(num, den)
+        num2, den2 = signbit(den) ? divgcd(-num, -den) : divgcd(num, den)
         new(num2, den2)
     end
 end
@@ -85,7 +86,7 @@ Rational(x::Rational) = x
 Bool(x::Rational) = x==0 ? false : x==1 ? true :
     throw(InexactError(:Bool, Bool, x)) # to resolve ambiguity
 (::Type{T})(x::Rational) where {T<:Integer} = (isinteger(x) ? convert(T, x.num) :
-    throw(InexactError(Symbol(string(T)), T, x)))
+    throw(InexactError(nameof(T), T, x)))
 
 AbstractFloat(x::Rational) = float(x.num)/float(x.den)
 function (::Type{T})(x::Rational{S}) where T<:AbstractFloat where S
@@ -100,6 +101,8 @@ function Rational{T}(x::AbstractFloat) where T<:Integer
 end
 Rational(x::Float64) = Rational{Int64}(x)
 Rational(x::Float32) = Rational{Int}(x)
+
+big(q::Rational) = big(numerator(q))//big(denominator(q))
 
 big(z::Complex{<:Rational{<:Integer}}) = Complex{Rational{BigInt}}(z)
 
@@ -235,7 +238,9 @@ typemax(::Type{Rational{T}}) where {T<:Integer} = one(T)//zero(T)
 
 isinteger(x::Rational) = x.den == 1
 
++(x::Rational) = (+x.num) // x.den
 -(x::Rational) = (-x.num) // x.den
+
 function -(x::Rational{T}) where T<:BitSigned
     x.num == typemin(T) && throw(OverflowError("rational numerator is typemin(T)"))
     (-x.num) // x.den
@@ -366,9 +371,10 @@ end
 trunc(::Type{T}, x::Rational) where {T} = convert(T,div(x.num,x.den))
 floor(::Type{T}, x::Rational) where {T} = convert(T,fld(x.num,x.den))
 ceil(::Type{T}, x::Rational) where {T} = convert(T,cld(x.num,x.den))
+round(::Type{T}, x::Rational, r::RoundingMode=RoundNearest) where {T} = _round_rational(T, x, r)
+round(x::Rational, r::RoundingMode) = round(Rational, x, r)
 
-
-function round(::Type{T}, x::Rational{Tr}, ::RoundingMode{:Nearest}) where {T,Tr}
+function _round_rational(::Type{T}, x::Rational{Tr}, ::RoundingMode{:Nearest}) where {T,Tr}
     if denominator(x) == zero(Tr) && T <: Integer
         throw(DivideError())
     elseif denominator(x) == zero(Tr)
@@ -382,9 +388,7 @@ function round(::Type{T}, x::Rational{Tr}, ::RoundingMode{:Nearest}) where {T,Tr
     convert(T, s)
 end
 
-round(::Type{T}, x::Rational) where {T} = round(T, x, RoundNearest)
-
-function round(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesAway}) where {T,Tr}
+function _round_rational(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesAway}) where {T,Tr}
     if denominator(x) == zero(Tr) && T <: Integer
         throw(DivideError())
     elseif denominator(x) == zero(Tr)
@@ -398,7 +402,7 @@ function round(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesAway}) whe
     convert(T, s)
 end
 
-function round(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesUp}) where {T,Tr}
+function _round_rational(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesUp}) where {T,Tr}
     if denominator(x) == zero(Tr) && T <: Integer
         throw(DivideError())
     elseif denominator(x) == zero(Tr)
@@ -412,17 +416,12 @@ function round(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesUp}) where
     convert(T, s)
 end
 
-function round(::Type{T}, x::Rational{Bool}) where T
+function round(::Type{T}, x::Rational{Bool}, ::RoundingMode=RoundNearest) where T
     if denominator(x) == false && (T <: Union{Integer, Bool})
         throw(DivideError())
     end
     convert(T, x)
 end
-
-round(::Type{T}, x::Rational{Bool}, ::RoundingMode{:Nearest}) where {T} = round(T, x)
-round(::Type{T}, x::Rational{Bool}, ::RoundingMode{:NearestTiesAway}) where {T} = round(T, x)
-round(::Type{T}, x::Rational{Bool}, ::RoundingMode{:NearestTiesUp}) where {T} = round(T, x)
-round(::Type{T}, x::Rational{Bool}, ::RoundingMode) where {T} = round(T, x)
 
 trunc(x::Rational{T}) where {T} = Rational(trunc(T,x))
 floor(x::Rational{T}) where {T} = Rational(floor(T,x))

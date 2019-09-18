@@ -208,6 +208,11 @@ end
 
 @test isa(0170141183460469231731687303715884105728,BigInt)
 
+# GMP allocation overflow should not cause crash
+if Base.GMP.ALLOC_OVERFLOW_FUNCTION[] && sizeof(Int) > 4
+  @test_throws OutOfMemoryError BigInt(2)^(typemax(Culong))
+end
+
 # exponentiating with a negative base
 @test -3^2 == -9
 @test -9223372036854775808^2 == -(9223372036854775808^2)
@@ -410,11 +415,11 @@ end
     @test repr(-NaN) == "NaN"
     @test repr(Float64(pi)) == "3.141592653589793"
     # issue 6608
-    @test sprint(show, 666666.6, context=:compact => true) == "6.66667e5"
+    @test sprint(show, 666666.6, context=:compact => true) == "666667.0"
     @test sprint(show, 666666.049, context=:compact => true) == "666666.0"
     @test sprint(show, 666665.951, context=:compact => true) == "666666.0"
     @test sprint(show, 66.66666, context=:compact => true) == "66.6667"
-    @test sprint(show, -666666.6, context=:compact => true) == "-6.66667e5"
+    @test sprint(show, -666666.6, context=:compact => true) == "-666667.0"
     @test sprint(show, -666666.049, context=:compact => true) == "-666666.0"
     @test sprint(show, -666665.951, context=:compact => true) == "-666666.0"
     @test sprint(show, -66.66666, context=:compact => true) == "-66.6667"
@@ -592,6 +597,17 @@ end
     # test x = Inf
     @test isinf(copysign(1/0,1))
     @test isinf(copysign(1/0,-1))
+
+    # with Unsigned argument
+    @test copysign(Float16(-1), 0x01) === Float16(1)
+    @test copysign(Float16(1), 0x01) === Float16(1)
+    @test copysign(-1.0f0, 0x01) === 1.0f0
+    @test copysign(1.0f0, 0x01) === 1.0f0
+    @test copysign(-1.0, 0x01) === 1.0
+    @test copysign(-1, 0x02) === 1
+    @test copysign(big(-1), 0x02) == 1
+    @test copysign(big(-1.0), 0x02) == 1.0
+    @test copysign(-1//2, 0x01) == 1//2
 end
 
 @testset "isnan/isinf/isfinite" begin
@@ -1025,6 +1041,10 @@ end
             @test isequal(i>j, Float64(i)>Float64(j))
         end
     end
+end
+
+@testset "Irrational Inverses, Issue #30882" begin
+    @test @inferred(inv(π)) ≈ 0.3183098861837907
 end
 
 @testset "Irrationals compared with Rationals and Floats" begin
@@ -2169,8 +2189,10 @@ end
     @test bswap(0x01020304) === 0x04030201
     @test reinterpret(Float64,bswap(0x000000000000f03f)) === 1.0
     @test reinterpret(Float32,bswap(0x0000c03f)) === 1.5f0
+    @test reinterpret(Float16,bswap(0x003c)) === Float16(1.0)
     @test bswap(reinterpret(Float64,0x000000000000f03f)) === 1.0
     @test bswap(reinterpret(Float32,0x0000c03f)) === 1.5f0
+    @test bswap(reinterpret(Float16,0x003e)) === Float16(1.5)
     zbuf = IOBuffer([0xbf, 0xc0, 0x00, 0x00, 0x40, 0x20, 0x00, 0x00,
                      0x40, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                      0xc0, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])

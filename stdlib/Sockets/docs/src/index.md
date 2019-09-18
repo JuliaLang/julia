@@ -1,10 +1,7 @@
 # Sockets
 
-```@meta
-DocTestSetup = :(using Sockets)
-```
-
 ```@docs
+Sockets.Sockets
 Sockets.connect(::TCPSocket, ::Integer)
 Sockets.connect(::AbstractString)
 Sockets.listen(::Any)
@@ -16,8 +13,10 @@ Sockets.getalladdrinfo
 Sockets.getnameinfo
 Sockets.getsockname
 Sockets.getpeername
+Sockets.IPAddr
 Sockets.IPv4
 Sockets.IPv6
+Sockets.@ip_str
 Sockets.TCPSocket
 Sockets.UDPSocket
 Sockets.accept
@@ -27,8 +26,6 @@ Sockets.send
 Sockets.recv
 Sockets.recvfrom
 Sockets.setopt
-```
-
-```@meta
-DocTestSetup = nothing
+Sockets.nagle
+Sockets.quickack
 ```

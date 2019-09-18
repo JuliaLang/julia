@@ -149,6 +149,14 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test_throws DimensionMismatch LinearAlgebra.lmul!(q,zeros(eltya,n1+1))
                 @test_throws DimensionMismatch LinearAlgebra.lmul!(adjoint(q), zeros(eltya,n1+1))
 
+                b = similar(a); rand!(b)
+                c = similar(a)
+                @test mul!(c, q, b) ≈ q*b
+                @test mul!(c, q', b) ≈ q'*b
+                @test mul!(c, b, q) ≈ b*q
+                @test mul!(c, b, q') ≈ b*q'
+                @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n), q, b)
+
                 qra = qr(a[:,1:n1], Val(false))
                 q, r = qra.Q, qra.R
                 @test rmul!(copy(squareQ(q)'), q) ≈ Matrix(I, n, n)
@@ -157,6 +165,12 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test_throws DimensionMismatch rmul!(Matrix{eltya}(I, n+1, n+1),adjoint(q))
                 @test_throws ErrorException size(q,-1)
                 @test_throws DimensionMismatch q * Matrix{Int8}(I, n+4, n+4)
+
+                @test mul!(c, q, b) ≈ q*b
+                @test mul!(c, q', b) ≈ q'*b
+                @test mul!(c, b, q) ≈ b*q
+                @test mul!(c, b, q') ≈ b*q'
+                @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n), q, b)
             end
         end
     end
@@ -230,6 +244,28 @@ end
     c0 = copy(c)
     @test Ac\c ≈ ldiv!(b, qr(Ac, Val(true)), c)
     @test c0 == c
+end
+
+@testset "det(Q::Union{QRCompactWYQ, QRPackedQ})" begin
+    # 40 is the number larger than the default block size 36 of QRCompactWY
+    @testset for n in [1:3; 40], m in [1:3; 40], pivot in [false, true]
+        @testset "real" begin
+            @testset for k in 0:min(n, m, 5)
+                A = cat(Array(I(k)), randn(n - k, m - k); dims=(1, 2))
+                Q, = qr(A, Val(pivot))
+                @test det(Q) ≈ det(collect(Q))
+                @test abs(det(Q)) ≈ 1
+            end
+        end
+        @testset "complex" begin
+            @testset for k in 0:min(n, m, 5)
+                A = cat(Array(I(k)), randn(ComplexF64, n - k, m - k); dims=(1, 2))
+                Q, = qr(A, Val(pivot))
+                @test det(Q) ≈ det(collect(Q))
+                @test abs(det(Q)) ≈ 1
+            end
+        end
+    end
 end
 
 end # module TestQR

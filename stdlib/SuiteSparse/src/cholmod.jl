@@ -20,6 +20,7 @@ import LinearAlgebra: (\),
                  issuccess, issymmetric, ldlt, ldlt!, logdet
 
 using SparseArrays
+using SparseArrays: getcolptr
 import Libdl
 
 export
@@ -863,39 +864,39 @@ end
 
 function Sparse{Tv}(A::SparseMatrixCSC, stype::Integer) where Tv<:VTypes
     ## Check length of input. This should never fail but see #20024
-    if length(A.colptr) <= A.n
-        throw(ArgumentError("length of colptr must be at least size(A,2) + 1 = $(A.n + 1) but was $(length(A.colptr))"))
+    if length(getcolptr(A)) <= size(A, 2)
+        throw(ArgumentError("length of colptr must be at least size(A,2) + 1 = $(size(A, 2) + 1) but was $(length(getcolptr(A)))"))
     end
-    if nnz(A) > length(A.rowval)
-        throw(ArgumentError("length of rowval is $(length(A.rowval)) but value of colptr requires length to be at least $(nnz(A))"))
+    if nnz(A) > length(rowvals(A))
+        throw(ArgumentError("length of rowval is $(length(rowvals(A))) but value of colptr requires length to be at least $(nnz(A))"))
     end
-    if nnz(A) > length(A.nzval)
-        throw(ArgumentError("length of nzval is $(length(A.nzval)) but value of colptr requires length to be at least $(nnz(A))"))
+    if nnz(A) > length(nonzeros(A))
+        throw(ArgumentError("length of nzval is $(length(nonzeros(A))) but value of colptr requires length to be at least $(nnz(A))"))
     end
 
-    o = allocate_sparse(A.m, A.n, nnz(A), true, true, stype, Tv)
+    o = allocate_sparse(size(A, 1), size(A, 2), nnz(A), true, true, stype, Tv)
     s = unsafe_load(pointer(o))
-    for i = 1:(A.n + 1)
-        unsafe_store!(s.p, A.colptr[i] - 1, i)
+    for i = 1:(size(A, 2) + 1)
+        unsafe_store!(s.p, getcolptr(A)[i] - 1, i)
     end
     for i = 1:nnz(A)
-        unsafe_store!(s.i, A.rowval[i] - 1, i)
+        unsafe_store!(s.i, rowvals(A)[i] - 1, i)
     end
     if Tv <: Complex && stype != 0
         # Need to remove any non real elements in the diagonal because, in contrast to
         # BLAS/LAPACK these are not ignored by CHOLMOD. If even tiny imaginary parts are
         # present CHOLMOD will fail with a non-positive definite/zero pivot error.
-        for j = 1:A.n
-            for ip = A.colptr[j]:A.colptr[j + 1] - 1
-                v = A.nzval[ip]
-                unsafe_store!(s.x, A.rowval[ip] == j ? Complex(real(v)) : v, ip)
+        for j = 1:size(A, 2)
+            for ip = getcolptr(A)[j]:getcolptr(A)[j + 1] - 1
+                v = nonzeros(A)[ip]
+                unsafe_store!(s.x, rowvals(A)[ip] == j ? Complex(real(v)) : v, ip)
             end
         end
-    elseif Tv == eltype(A.nzval)
-        unsafe_copyto!(s.x, pointer(A.nzval), nnz(A))
+    elseif Tv == eltype(nonzeros(A))
+        unsafe_copyto!(s.x, pointer(nonzeros(A)), nnz(A))
     else
         for i = 1:nnz(A)
-            unsafe_store!(s.x, A.nzval[i], i)
+            unsafe_store!(s.x, nonzeros(A)[i], i)
         end
     end
 
@@ -1195,12 +1196,12 @@ function getLd!(S::SparseMatrixCSC)
     fill!(d, 0)
     col = 1
     for k = 1:nnz(S)
-        while k >= S.colptr[col+1]
+        while k >= getcolptr(S)[col+1]
             col += 1
         end
-        if S.rowval[k] == col
-            d[col] = S.nzval[k]
-            S.nzval[k] = 1
+        if rowvals(S)[k] == col
+            d[col] = nonzeros(S)[k]
+            nonzeros(S)[k] = 1
         end
     end
     S, d

@@ -20,7 +20,7 @@ sleepcmd = `sleep`
 lscmd = `ls`
 havebb = false
 if Sys.iswindows()
-    busybox = download("http://frippery.org/files/busybox/busybox.exe", joinpath(tempdir(), "busybox.exe"))
+    busybox = download("https://frippery.org/files/busybox/busybox.exe", joinpath(tempdir(), "busybox.exe"))
     havebb = try # use busybox-w32 on windows, if available
         success(`$busybox`)
         true
@@ -314,7 +314,6 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(stdout, " 1\t", r
         infd = Base._fd(out.in)
         outfd = Base._fd(out.out)
         show(out, out)
-        notify(ready)
         @test isreadable(out)
         @test iswritable(out)
         close(out.in)
@@ -333,11 +332,8 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(stdout, " 1\t", r
         if Sys.iswindows()
             # WINNT kernel appears to not provide a fast mechanism for async propagation
             # of EOF for a blocking stream, so just wait for it to catch up.
-            # This shouldn't take much more than 32ms.
+            # This shouldn't take much more than 32ms more.
             Base.wait_close(out)
-            # it's closed now, but the other task is expected to be behind this task
-            # in emptying the read buffer
-            @test isreadable(out)
         end
         @test !isopen(out)
     end
@@ -420,12 +416,22 @@ end
 
 @test Base.shell_split("\"\\\\\"") == ["\\"]
 
-# issue #13616
-pcatcmd = `$catcmd _doesnt_exist__111_`
-let p = eachline(pipeline(`$catcmd _doesnt_exist__111_`, stderr=devnull))
-    @test_throws(ErrorException("failed process: Process($pcatcmd, ProcessExited(1)) [1]"),
-                 collect(p))
+# Test failing commands
+failing_cmd = `$catcmd _doesnt_exist__111_`
+failing_pipeline = pipeline(failing_cmd, stderr=devnull) # make quiet for tests
+for testrun in (failing_pipeline, pipeline(failing_pipeline, failing_pipeline))
+    try
+        run(testrun)
+    catch err
+        @test err isa ProcessFailedException
+        errmsg = sprint(showerror, err)
+        @test occursin(string(failing_cmd), errmsg)
+    end
 end
+
+# issue #13616
+@test_throws(ProcessFailedException, collect(eachline(failing_pipeline)))
+
 
 # make sure windows_verbatim strips quotes
 if Sys.iswindows()
@@ -445,6 +451,24 @@ end
 @test Base.Set([``, ``]) == Base.Set([``])
 @test Set([``, echocmd]) != Set([``, ``])
 @test Set([echocmd, ``, ``, echocmd]) == Set([echocmd, ``])
+
+# test for interpolation of Cmd
+let c = setenv(`x`, "A"=>true)
+    @test (`$c a`).env == String["A=true"]
+    @test (`"$c" a`).env == String["A=true"]
+    @test_throws ArgumentError `a $c`
+    @test (`$(c.exec) a`).env === nothing
+    @test_throws ArgumentError `"$c "`
+end
+
+# Interaction of cmd parsing with var syntax (#32408)
+let var = "x", vars="z"
+    @test `ls $var` == Cmd(["ls", "x"])
+    @test `ls $vars` == Cmd(["ls", "z"])
+    @test `ls $var"y"` == Cmd(["ls", "xy"])
+    @test `ls "'$var'"` == Cmd(["ls", "'x'"])
+    @test `ls $var "y"` == Cmd(["ls", "x", "y"])
+end
 
 # equality tests for AndCmds
 @test Base.AndCmds(`$echocmd abc`, `$echocmd def`) == Base.AndCmds(`$echocmd abc`, `$echocmd def`)
@@ -519,7 +543,7 @@ end
 
 # Logging macros should not output to finalized streams (#26687)
 let
-    cmd = `$(Base.julia_cmd()) -e 'finalizer(x->@info(x), "Hello")'`
+    cmd = `$exename --startup-file=no -e 'finalizer(x->@info(x), "Hello")'`
     output = readchomp(pipeline(cmd, stderr=catcmd))
     @test occursin("Info: Hello", output)
 end
@@ -531,6 +555,10 @@ withenv("PATH" => "$(Sys.BINDIR)$(psep)$(ENV["PATH"])") do
     @test Sys.which("julia") == realpath(julia_exe)
     @test Sys.which(julia_exe) == realpath(julia_exe)
 end
+
+# Check that which behaves correctly when passed an empty string
+@test isnothing(Base.Sys.which(""))
+
 
 mktempdir() do dir
     withenv("PATH" => "$(dir)$(psep)$(ENV["PATH"])") do
@@ -548,8 +576,15 @@ mktempdir() do dir
             @test Sys.which(foo_path) === nothing
         end
 
+    end
+
+    # Ensure these tests are done only with a PATH of known contents
+    withenv("PATH" => "$(dir)") do
         # Test that completely missing files also return nothing
         @test Sys.which("this_is_not_a_command") === nothing
+
+        # Check that which behaves correctly when passed a blank string
+        @test isnothing(Base.Sys.which(" "))
     end
 end
 
@@ -612,9 +647,16 @@ open(`$catcmd`, "r+") do f
     wait(t)
 end
 
+# issue #32193
+mktemp() do path, io
+    redirect_stderr(io) do
+        @test_throws ProcessFailedException open(identity, `$catcmd _doesnt_exist__111_`, read=true)
+    end
+end
+
 let text = "input-test-text"
     b = PipeBuffer()
-    proc = open(Base.CmdRedirect(Base.CmdRedirect(```$(Base.julia_cmd()) -E '
+    proc = open(Base.CmdRedirect(Base.CmdRedirect(```$exename --startup-file=no -E '
                     in14 = Base.open(RawFD(14))
                     out15 = Base.open(RawFD(15))
                     write(out15, in14)'```,

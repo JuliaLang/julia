@@ -107,7 +107,7 @@ function print_matrix_row(io::IO,
             sx = undef_ref_str
         end
         l = repeat(" ", A[k][1]-a[1]) # pad on left and right as needed
-        r = repeat(" ", A[k][2]-a[2])
+        r = j == axes(X, 2)[end] ? "" : repeat(" ", A[k][2]-a[2])
         prettysx = replace_in_print_matrix(X,i,j,sx)
         print(io, l, prettysx, r)
         if k < length(A); print(io, sep); end
@@ -410,14 +410,14 @@ _show_nonempty(::IO, ::AbstractVector, ::String) =
 _show_nonempty(io::IO, X::AbstractArray{T,0} where T, prefix::String) = print_array(io, X)
 
 # NOTE: it's not clear how this method could use the :typeinfo attribute
-_show_empty(io::IO, X::Array{T}) where {T} = print(io, "Array{", T, "}(", join(size(X),','), ')')
+_show_empty(io::IO, X::Array{T}) where {T} = print(io, "Array{", T, "}(undef,", join(size(X),','), ')')
 _show_empty(io, X) = nothing # by default, we don't know this constructor
 
 # typeinfo aware (necessarily)
 function show(io::IO, X::AbstractArray)
     ndims(X) == 1 && return show_vector(io, X)
     prefix = typeinfo_prefix(io, X)
-    io = IOContext(io, :typeinfo => eltype(X), :compact => get(io, :compact, true))
+    io = IOContext(io, :typeinfo => eltype(X))
     isempty(X) ?
         _show_empty(io, X) :
         _show_nonempty(io, X, prefix)
@@ -431,13 +431,14 @@ end
 function show_vector(io::IO, v, opn='[', cls=']')
     print(io, typeinfo_prefix(io, v))
     # directly or indirectly, the context now knows about eltype(v)
-    io = IOContext(io, :typeinfo => eltype(v), :compact => get(io, :compact, true))
+    io = IOContext(io, :typeinfo => eltype(v))
     limited = get(io, :limit, false)
     if limited && length(v) > 20
-        inds = axes1(v)
-        show_delim_array(io, v, opn, ",", "", false, inds[1], inds[1]+9)
+        axs1 = axes1(v)
+        f, l = first(axs1), last(axs1)
+        show_delim_array(io, v, opn, ",", "", false, f, f+9)
         print(io, "  …  ")
-        show_delim_array(io, v, "", ",", cls, false, inds[end-9], inds[end])
+        show_delim_array(io, v, "", ",", cls, false, l-9, l)
     else
         show_delim_array(io, v, opn, ",", cls, false)
     end
@@ -456,6 +457,17 @@ typeinfo_eltype(typeinfo::Type{<:AbstractArray{T}}) where {T} = eltype(typeinfo)
 typeinfo_eltype(typeinfo::Type{<:AbstractDict{K,V}}) where {K,V} = eltype(typeinfo)
 typeinfo_eltype(typeinfo::Type{<:AbstractSet{T}}) where {T} = eltype(typeinfo)
 
+# types that can be parsed back accurately from their un-decorated representations
+function typeinfo_implicit(@nospecialize(T))
+    if T === Float64 || T === Int || T === Char || T === String || T === Symbol ||
+        issingletontype(T)
+        return true
+    end
+    return isconcretetype(T) &&
+        ((T <: Array && typeinfo_implicit(eltype(T))) ||
+         ((T <: Tuple || T <: Pair) && all(typeinfo_implicit, fieldtypes(T))) ||
+         (T <: AbstractDict && typeinfo_implicit(keytype(T)) && typeinfo_implicit(valtype(T))))
+end
 
 # X not constrained, can be any iterable (cf. show_vector)
 function typeinfo_prefix(io::IO, X)
@@ -469,14 +481,14 @@ function typeinfo_prefix(io::IO, X)
     eltype_X = eltype(X)
 
     if X isa AbstractDict
-        if eltype_X == eltype_ctx || !isempty(X) && isconcretetype(keytype(X)) && isconcretetype(valtype(X))
+        if eltype_X == eltype_ctx || (!isempty(X) && typeinfo_implicit(keytype(X)) && typeinfo_implicit(valtype(X)))
             string(typeof(X).name)
         else
             string(typeof(X))
         end
     else
         # Types hard-coded here are those which are created by default for a given syntax
-        if eltype_X == eltype_ctx || !isempty(X) && eltype_X in (Float64, Int, Char, String)
+        if eltype_X == eltype_ctx || (!isempty(X) && typeinfo_implicit(eltype_X))
             ""
         elseif print_without_params(eltype_X)
             string(unwrap_unionall(eltype_X).name) # Print "Array" rather than "Array{T,N}"

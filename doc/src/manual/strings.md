@@ -88,8 +88,8 @@ julia> isvalid(Char, 0x110000)
 false
 ```
 
-As of this writing, the valid Unicode code points are `U+00` through `U+d7ff` and `U+e000` through
-`U+10ffff`. These have not all been assigned intelligible meanings yet, nor are they necessarily
+As of this writing, the valid Unicode code points are `U+0000` through `U+D7FF` and `U+E000` through
+`U+10FFFF`. These have not all been assigned intelligible meanings yet, nor are they necessarily
 interpretable by applications, but all of these values are considered to be valid Unicode characters.
 
 You can input any Unicode character in single quotes using `\u` followed by up to four hexadecimal
@@ -107,7 +107,7 @@ julia> '\u2200'
 '∀': Unicode U+2200 (category Sm: Symbol, math)
 
 julia> '\U10ffff'
-'\U10ffff': Unicode U+10ffff (category Cn: Other, not assigned)
+'\U10ffff': Unicode U+10FFFF (category Cn: Other, not assigned)
 ```
 
 Julia uses your system's locale and language settings to determine which characters can be printed
@@ -173,10 +173,10 @@ julia> str[1]
 'H': ASCII/Unicode U+0048 (category Lu: Letter, uppercase)
 
 julia> str[6]
-',': ASCII/Unicode U+002c (category Po: Punctuation, other)
+',': ASCII/Unicode U+002C (category Po: Punctuation, other)
 
 julia> str[end]
-'\n': ASCII/Unicode U+000a (category Cc: Other, control)
+'\n': ASCII/Unicode U+000A (category Cc: Other, control)
 ```
 
 Many Julia objects, including strings, can be indexed with integers. The index of the first
@@ -192,7 +192,7 @@ a normal value:
 
 ```jldoctest helloworldstring
 julia> str[end-1]
-'.': ASCII/Unicode U+002e (category Po: Punctuation, other)
+'.': ASCII/Unicode U+002E (category Po: Punctuation, other)
 
 julia> str[end÷2]
 ' ': ASCII/Unicode U+0020 (category Zs: Separator, space)
@@ -202,14 +202,13 @@ Using an index less than 1 or greater than `end` raises an error:
 
 ```jldoctest helloworldstring
 julia> str[0]
-ERROR: BoundsError: attempt to access "Hello, world.\n"
+ERROR: BoundsError: attempt to access String
   at index [0]
 [...]
 
 julia> str[end+1]
-ERROR: BoundsError: attempt to access "Hello, world.\n"
+ERROR: BoundsError: attempt to access String
   at index [15]
-Stacktrace:
 [...]
 ```
 
@@ -224,7 +223,7 @@ Notice that the expressions `str[k]` and `str[k:k]` do not give the same result:
 
 ```jldoctest helloworldstring
 julia> str[6]
-',': ASCII/Unicode U+002c (category Po: Punctuation, other)
+',': ASCII/Unicode U+002C (category Po: Punctuation, other)
 
 julia> str[6:6]
 ","
@@ -294,6 +293,27 @@ julia> s[4]
 In this case, the character `∀` is a three-byte character, so the indices 2 and 3 are invalid
 and the next character's index is 4; this next valid index can be computed by [`nextind(s,1)`](@ref),
 and the next index after that by `nextind(s,4)` and so on.
+
+Since `end` is always the last valid index into a collection, `end-1` references an invalid
+byte index if the second-to-last character is multibyte.
+
+```jldoctest unicodestring
+julia> s[end-1]
+' ': ASCII/Unicode U+0020 (category Zs: Separator, space)
+
+julia> s[end-2]
+ERROR: StringIndexError("∀ x ∃ y", 9)
+Stacktrace:
+[...]
+
+julia> s[prevind(s, end, 2)]
+'∃': Unicode U+2203 (category Sm: Symbol, math)
+```
+
+The first case works, because the last character `y` and the space are one-byte characters,
+whereas `end-2` indexes into the middle of the `∃` multibyte representation. The correct
+way for this case is using `prevind(s, lastindex(s), 2)` or, if you're using that value to index
+into `s` you can write `s[prevind(s, end, 2)]` and `end` expands to `lastindex(s)`.
 
 Extraction of a substring using range indexing also expects valid byte indices or an error is thrown:
 
@@ -396,7 +416,7 @@ julia> foreach(display, s)
 '\xc0\xa0': [overlong] ASCII/Unicode U+0020 (category Zs: Separator, space)
 '\xe2\x88': Malformed UTF-8 (category Ma: Malformed, bad data)
 '\xe2': Malformed UTF-8 (category Ma: Malformed, bad data)
-'|': ASCII/Unicode U+007c (category Sm: Symbol, math)
+'|': ASCII/Unicode U+007C (category Sm: Symbol, math)
 
 julia> isvalid.(collect(s))
 4-element BitArray{1}:
@@ -409,7 +429,7 @@ julia> s2 = "\xf7\xbf\xbf\xbf"
 "\U1fffff"
 
 julia> foreach(display, s2)
-'\U1fffff': Unicode U+1fffff (category In: Invalid, too high)
+'\U1fffff': Unicode U+1FFFFF (category In: Invalid, too high)
 ```
 
 We can see that the first two code units in the string `s` form an overlong encoding of
@@ -507,7 +527,7 @@ julia> "$greet, $whom.\n"
 ```
 
 This is more readable and convenient and equivalent to the above string concatenation -- the system
-rewrites this apparent single string literal into a concatenation of string literals with variables.
+rewrites this apparent single string literal into the call `string(greet, ", ", whom, ".\n")`.
 
 The shortest complete expression after the `$` is taken as the expression whose value is to be
 interpolated into the string. Thus, you can interpolate any expression into a string using parentheses:
@@ -518,7 +538,10 @@ julia> "1 + 2 = $(1 + 2)"
 ```
 
 Both concatenation and string interpolation call [`string`](@ref) to convert objects into string
-form. Most non-`AbstractString` objects are converted to strings closely corresponding to how
+form. However, `string` actually just returns the output of [`print`](@ref), so new types
+should add methods to [`print`](@ref) or [`show`](@ref) instead of `string`.
+
+Most non-`AbstractString` objects are converted to strings closely corresponding to how
 they are entered as literal expressions:
 
 ```jldoctest
@@ -723,7 +746,7 @@ are given in the [Metaprogramming](@ref) section.
 ## Regular Expressions
 
 Julia has Perl-compatible regular expressions (regexes), as provided by the [PCRE](http://www.pcre.org/)
-library. Regular expressions are related to strings in two ways: the obvious connection is that
+library (a description of the syntax can be found [here](http://www.pcre.org/current/doc/html/pcre2syntax.html)). Regular expressions are related to strings in two ways: the obvious connection is that
 regular expressions are used to find regular patterns in strings; the other connection is that
 regular expressions are themselves input as strings, which are parsed into a state machine that
 can be used to efficiently search for patterns in strings. In Julia, regular expressions are input

@@ -38,6 +38,8 @@
 
 @test isempty(NamedTuple())
 @test !isempty((a=1,))
+@test empty((a=1,)) === NamedTuple()
+@test isempty(empty((a=1,)))
 
 @test (a=1,b=2) === (a=1,b=2)
 @test (a=1,b=2) !== (b=1,a=2)
@@ -118,7 +120,7 @@ end
 @test get(()->0, (a=1,), :b) == 0
 @test Base.tail((a = 1, b = 2.0, c = 'x')) ≡ (b = 2.0, c = 'x')
 @test Base.tail((a = 1, )) ≡ NamedTuple()
-@test_throws MethodError Base.tail(NamedTuple())
+@test_throws ArgumentError Base.tail(NamedTuple())
 
 # syntax errors
 
@@ -259,3 +261,9 @@ y = map(v -> (a=v.a, b=v.a + v.b), [(a=1, b=missing), (a=1, b=2)])
 @test merge((a=1, b=2), (b=3, c=4), (c=5,)) === (a=1, b=3, c=5)
 @test merge((a=1, b=2), (b=3, c=(d=1,)), (c=(d=2,),)) === (a=1, b=3, c=(d=2,))
 @test merge((a=1, b=2)) === (a=1, b=2)
+
+# issue #33270
+let n = NamedTuple{(:T,), Tuple{Type{Float64}}}((Float64,))
+    @test n isa NamedTuple{(:T,), Tuple{Type{Float64}}}
+    @test n.T === Float64
+end

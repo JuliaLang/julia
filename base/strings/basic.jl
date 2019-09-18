@@ -107,7 +107,7 @@ julia> isvalid(str, 1)
 true
 
 julia> str[1]
-'α': Unicode U+03b1 (category Ll: Letter, lowercase)
+'α': Unicode U+03B1 (category Ll: Letter, lowercase)
 
 julia> isvalid(str, 2)
 false
@@ -203,6 +203,7 @@ string(s::AbstractString) = s
 (::Type{Vector{T}})(s::AbstractString) where {T<:AbstractChar} = collect(T, s)
 
 Symbol(s::AbstractString) = Symbol(String(s))
+Symbol(x...) = Symbol(string(x...))
 
 convert(::Type{T}, s::T) where {T<:AbstractString} = s
 convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)
@@ -383,12 +384,12 @@ julia> thisind("α", 3)
 3
 
 julia> thisind("α", 4)
-ERROR: BoundsError: attempt to access "α"
+ERROR: BoundsError: attempt to access String
   at index [4]
 [...]
 
 julia> thisind("α", -1)
-ERROR: BoundsError: attempt to access "α"
+ERROR: BoundsError: attempt to access String
   at index [-1]
 [...]
 ```
@@ -439,7 +440,7 @@ julia> prevind("α", 1)
 0
 
 julia> prevind("α", 0)
-ERROR: BoundsError: attempt to access "α"
+ERROR: BoundsError: attempt to access String
   at index [0]
 [...]
 
@@ -499,7 +500,7 @@ julia> nextind("α", 1)
 3
 
 julia> nextind("α", 3)
-ERROR: BoundsError: attempt to access "α"
+ERROR: BoundsError: attempt to access String
   at index [3]
 [...]
 
@@ -570,8 +571,7 @@ function map(f, s::AbstractString)
     for c in s
         c′ = f(c)
         isa(c′, AbstractChar) || throw(ArgumentError(
-            "map(f, s::AbstractString) requires f to return AbstractChar; " *
-            "try map(f, collect(s)) or a comprehension instead"))
+            "map(f, s::AbstractString) requires f to return AbstractChar; try map(f, collect(s)) or a comprehension instead"))
         write(out, c′::AbstractChar)
     end
     String(take!(out))
@@ -693,7 +693,6 @@ end
 length(s::CodeUnits) = ncodeunits(s.s)
 sizeof(s::CodeUnits{T}) where {T} = ncodeunits(s.s) * sizeof(T)
 size(s::CodeUnits) = (length(s),)
-strides(s::CodeUnits) = (1,)
 elsize(s::CodeUnits{T}) where {T} = sizeof(T)
 @propagate_inbounds getindex(s::CodeUnits, i::Int) = codeunit(s.s, i)
 IndexStyle(::Type{<:CodeUnits}) = IndexLinear()

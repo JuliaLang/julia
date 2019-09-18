@@ -1,3 +1,330 @@
+Julia v1.3 Release Notes
+========================
+
+New language features
+---------------------
+
+* Support for Unicode 12.1.0 ([#32002]).
+* Methods can now be added to an abstract type ([#31916]).
+* Support for unicode bold digits and double-struck digits 0 through 9 as valid identifiers ([#32838]).
+* Added the syntax `var"#str#"` for printing and parsing non-standard variable names ([#32408]).
+
+Language changes
+----------------
+
+
+Multi-threading changes
+-----------------------
+
+* New experimental `Threads.@spawn` macro that runs a task on any available thread ([#32600]).
+* All system-level I/O operations (e.g. files and sockets) are now thread-safe.
+  This does not include subtypes of `IO` that are entirely in-memory, such as `IOBuffer`,
+  although it specifically does include `BufferStream`.
+  ([#32309], [#32174], [#31981], [#32421]).
+* The global random number generator (`GLOBAL_RNG`) is now thread-safe (and thread-local) ([#32407]).
+* New `Channel(f::Function, spawn=true)` keyword argument to schedule the created Task on
+  any available thread, matching the behavior of `Threads.@spawn` ([#32872]).
+* Simplified the `Channel` constructor, which is now easier to read and more idiomatic julia.
+  Use of the keyword arguments `csize` and `ctype` is now discouraged ([#30855], [#32818]).
+
+Build system changes
+--------------------
+
+
+New library functions
+---------------------
+
+* `findfirst`, `findlast`, `findnext` and `findprev` now accept a character as first argument
+  to search for that character in a string passed as the second argument ([#31664]).
+* New `findall(pattern, string)` method where `pattern` is a string or regex ([#31834]).
+* `count(pattern, string)` gives the number of things `findall` would match ([#32849]).
+* `istaskfailed` is now documented and exported, like its siblings `istaskdone` and `istaskstarted` ([#32300]).
+* `RefArray` and `RefValue` objects now accept index `CartesianIndex()` in  `getindex` and `setindex!` ([#32653])
+* Added `sincosd(x)` to simultaneously compute the sine and cosine of `x`, where `x` is in degrees ([#30134]).
+* The function `nonmissingtype`, which removes `Missing` from type unions, is now exported ([#31562]).
+
+Standard library changes
+------------------------
+
+* `Pkg` can now download and install binary artifacts through the `Pkg.Artifacts`
+   submodule and supporting functions. ([#32918])
+* When `wait` (or `@sync`, or `fetch`) is called on a failing `Task`, the exception is propagated as a
+  `TaskFailedException` wrapping the task.
+  This makes it possible to see the location of the original failure inside the task (as well as the
+  location of the `wait` call, as before) ([#32814]).
+* `Regex` can now be multiplied (`*`) and exponentiated (`^`), like strings ([#23422]).
+* `Cmd` interpolation (``` `$(x::Cmd) a b c` ``` where) now propagates `x`'s process flags
+  (environment, flags, working directory, etc) if `x` is the first interpolant and errors
+  otherwise ([#24353]).
+* Zero-dimensional arrays are now consistently preserved in the return values of mathematical
+  functions that operate on the array(s) as a whole (and are not explicitly broadcasted across their elements).
+  Previously, the functions  `+`, `-`, `*`, `/`, `conj`, `real` and `imag` returned the unwrapped element
+  when operating over zero-dimensional arrays ([#32122]).
+* `IPAddr` subtypes now behave like scalars when used in broadcasting ([#32133]).
+* `Pair` is now treated as a scalar for broadcasting ([#32209]).
+* `clamp` can now handle missing values ([#31066]).
+* `empty` now accepts a `NamedTuple` ([#32534]).
+* `mod` now accepts a unit range as the second argument to easily perform offset modular arithmetic to ensure the result is inside the range ([#32628]).
+* `nothing` can now be `print`ed, and interpolated into strings etc. as the string `"nothing"`. It is still not permitted to be interpolated into Cmds (i.e. ``echo `$(nothing)` `` will still error without running anything.) ([#32148])
+* When `open` is called with a function, command, and keyword argument (e.g. ```open(`ls`, read=true) do f ...```)
+  it now correctly throws a `ProcessFailedException` like other similar calls ([#32193]).
+* `mktemp` and `mktempdir` now try, by default, to remove temporary paths they create before the process exits ([#32851]).
+* Added argument `keep` to `unescape_string` ([#27125]).
+
+#### Libdl
+
+* `dlopen()` can now be invoked in `do`-block syntax, similar to `open()`.
+
+#### LinearAlgebra
+
+* The BLAS submodule no longer exports `dot`, which conflicts with that in LinearAlgebra ([#31838]).
+* `diagm` and `spdiagm` now accept optional `m,n` initial arguments to specify a size ([#31654]).
+* `Hessenberg` factorizations `H` now support efficient shifted solves `(H+µI) \ b` and determinants, and use a specialized tridiagonal factorization for Hermitian matrices. There is also a new `UpperHessenberg` matrix type ([#31853]).
+* Added keyword argument `alg` to `svd` and `svd!` that allows one to switch between different SVD algorithms ([#31057]).
+* Five-argument `mul!(C, A, B, α, β)` now implements inplace multiplication fused with addition _C = A B α + C β_ ([#23919]).
+
+#### SparseArrays
+
+* `SparseMatrixCSC(m,n,colptr,rowval,nzval)` perform consistency checks for arguments:
+  `colptr` must be properly populated and lengths of `colptr`, `rowval`, and `nzval`
+  must be compatible with `m`, `n`, and `eltype(colptr)`.
+* `sparse(I, J, V, m, n)` verifies lengths of `I`, `J`, `V` are equal and compatible with
+  `eltype(I)` and `m`, `n`.
+
+#### Dates
+
+* `DateTime` and `Time` formatting/parsing now supports 12-hour clocks with AM/PM via `I` and `p` codes, similar to `strftime` ([#32308]).
+* Fixed `repr` such that it displays `Time` as it would be entered in Julia ([#32103]).
+
+#### Statistics
+
+* `mean` now accepts both a function argument and a `dims` keyword ([#31576]).
+
+#### Sockets
+
+* `Sockets.recvfrom` now returns both host and port as an InetAddr ([#32729]).
+* Added `InetAddr` constructor from `AbstractString`, representing IP address, and `Integer`,
+  representing port number ([#31459]).
+
+#### Miscellaneous
+
+* `foldr` and `mapfoldr` now work on any iterator that supports `Iterators.reverse`, not just arrays ([#31781]).
+
+Deprecated or removed
+---------------------
+
+* `@spawn expr` from the `Distributed` standard library should be replaced with `@spawnat :any expr` ([#32600]).
+* `Threads.Mutex` and `Threads.RecursiveSpinLock` have been removed; use `ReentrantLock` (preferred) or
+  `Threads.SpinLock` instead ([#32875]).
+
+External dependencies
+---------------------
+
+Tooling Improvements
+---------------------
+
+* The `ClangSA.jl` static analysis package has been imported, which makes use of
+  the clang static analyzer to validate GC invariants in Julia's C code. The analysis
+  may be run using `make -C src analyzegc`.
+
+<!--- generated by NEWS-update.jl: -->
+[#23422]: https://github.com/JuliaLang/julia/issues/23422
+[#23919]: https://github.com/JuliaLang/julia/issues/23919
+[#24353]: https://github.com/JuliaLang/julia/issues/24353
+[#27125]: https://github.com/JuliaLang/julia/issues/27125
+[#30134]: https://github.com/JuliaLang/julia/issues/30134
+[#30855]: https://github.com/JuliaLang/julia/issues/30855
+[#31057]: https://github.com/JuliaLang/julia/issues/31057
+[#31066]: https://github.com/JuliaLang/julia/issues/31066
+[#31459]: https://github.com/JuliaLang/julia/issues/31459
+[#31562]: https://github.com/JuliaLang/julia/issues/31562
+[#31576]: https://github.com/JuliaLang/julia/issues/31576
+[#31654]: https://github.com/JuliaLang/julia/issues/31654
+[#31664]: https://github.com/JuliaLang/julia/issues/31664
+[#31781]: https://github.com/JuliaLang/julia/issues/31781
+[#31834]: https://github.com/JuliaLang/julia/issues/31834
+[#31838]: https://github.com/JuliaLang/julia/issues/31838
+[#31853]: https://github.com/JuliaLang/julia/issues/31853
+[#31916]: https://github.com/JuliaLang/julia/issues/31916
+[#31981]: https://github.com/JuliaLang/julia/issues/31981
+[#32002]: https://github.com/JuliaLang/julia/issues/32002
+[#32103]: https://github.com/JuliaLang/julia/issues/32103
+[#32122]: https://github.com/JuliaLang/julia/issues/32122
+[#32133]: https://github.com/JuliaLang/julia/issues/32133
+[#32148]: https://github.com/JuliaLang/julia/issues/32148
+[#32174]: https://github.com/JuliaLang/julia/issues/32174
+[#32193]: https://github.com/JuliaLang/julia/issues/32193
+[#32209]: https://github.com/JuliaLang/julia/issues/32209
+[#32300]: https://github.com/JuliaLang/julia/issues/32300
+[#32308]: https://github.com/JuliaLang/julia/issues/32308
+[#32309]: https://github.com/JuliaLang/julia/issues/32309
+[#32407]: https://github.com/JuliaLang/julia/issues/32407
+[#32408]: https://github.com/JuliaLang/julia/issues/32408
+[#32421]: https://github.com/JuliaLang/julia/issues/32421
+[#32534]: https://github.com/JuliaLang/julia/issues/32534
+[#32600]: https://github.com/JuliaLang/julia/issues/32600
+[#32628]: https://github.com/JuliaLang/julia/issues/32628
+[#32653]: https://github.com/JuliaLang/julia/issues/32653
+[#32729]: https://github.com/JuliaLang/julia/issues/32729
+[#32814]: https://github.com/JuliaLang/julia/issues/32814
+[#32818]: https://github.com/JuliaLang/julia/issues/32818
+[#32838]: https://github.com/JuliaLang/julia/issues/32838
+[#32849]: https://github.com/JuliaLang/julia/issues/32849
+[#32851]: https://github.com/JuliaLang/julia/issues/32851
+[#32872]: https://github.com/JuliaLang/julia/issues/32872
+[#32875]: https://github.com/JuliaLang/julia/issues/32875
+
+Julia v1.2 Release Notes
+========================
+
+New language features
+---------------------
+
+* Argument splatting (`x...`) can now be used in calls to the `new` pseudo-function in
+  constructors ([#30577]).
+* Support for Unicode 12.0.0 ([#31561]).
+* Added `⋆` (`\star`) as unary operator ([#31604]).
+
+Language changes
+----------------
+
+* Empty entries in `JULIA_DEPOT_PATH` are now expanded to default depot entries ([#31009]).
+
+Multi-threading changes
+-----------------------
+
+* The `Condition` type now has a thread-safe replacement, accessed as `Threads.Condition`.
+  With that addition, task scheduling primitives such as `ReentrantLock` are now thread-safe ([#30061]).
+* It is possible to schedule and switch Tasks during `@threads` loops, and perform limited I/O ([#31438]).
+
+Build system changes
+--------------------
+
+* The build system now prefers downloading prebuilt binary tarballs for most dependencies on
+  supported systems, disable by setting `USE_BINARYBUILDER=0` at `make` time ([#31441]).
+
+New library functions
+---------------------
+
+* `getipaddrs()` function returns all the IP addresses of the local machine, with IPv4 addresses sorting before IPv6 addresses ([#30349, #30604]).
+* `getipaddr(addr_type)` and `getipaddrs(addr_type)` functions returns an IP address(es) of the desired type of the local machine ([#30604]).
+* Added `Base.hasproperty` and `Base.hasfield` ([#28850]).
+* One argument `!=(x)`, `>(x)`, `>=(x)`, `<(x)`, `<=(x)` have been added, returning partially-applied
+  versions of the functions, similar to the existing `==(x)` and `isequal(x)` methods ([#30915]).
+
+Standard library changes
+------------------------
+
+* `Enum` now behaves like a scalar when used in broadcasting ([#30670]).
+* If a `pipeline` is specified with `append=true` set, but no redirection, an `ArgumentError`
+  is thrown, rather than a `ErrorException` ([#27900]).
+* Functions that invoke commands (e.g. `run(::Cmd)`) now throw a `ProcessFailedException`
+  rather than an `ErrorException`, if those commands exit with non-zero exit code ([#27900]).
+* The `extrema` function now accepts a function argument in the same manner as `minimum` and
+  `maximum` ([#30323]).
+* `hasmethod` can now check for matching keyword argument names ([#30712]).
+* `startswith` and `endswith` now accept a `Regex` for the second argument ([#29790]).
+* `retry` supports arbitrary callable objects ([#30382]).
+* A no-argument constructor for `Ptr{T}` has been added which constructs a null pointer ([#30919]).
+* `strip` now accepts a function argument in the same manner as `lstrip` and `rstrip` ([#31211]).
+* `mktempdir` now accepts a `prefix` keyword argument to customize the file name ([#31230], [#22922]).
+* `keytype` and `valtype` now work on `AbstractArray`, and return the `eltype` of `keys(...)` and
+  `values(...)` respectively ([#27749]).
+* `nextfloat(::BigFloat)` and `prevfloat(::BigFloat)` now returns a value with the same precision
+  as their argument, which means that (in particular) `nextfloat(prevfloat(x)) == x` whereas
+  previously this could result in a completely different value with a different precision ([#31310]).
+* `mapreduce` now accepts multiple iterators, similar to `map` ([#31532]).
+* `filter` now supports `SkipMissing`-wrapped arrays ([#31235]).
+* Objects created by calling `skipmissing` on an array can now be indexed using indices
+  from the parent at non-missing positions. This allows functions such as
+  `findall`, `findfirst`, `argmin`/`argmax` and `findmin`/`findmax` to work with these
+  objects, returning the index of matching non-missing elements in the parent ([#31008]).
+* `inv(::Missing)` has now been added and returns `missing` ([#31451]).
+* `nextfloat(::BigFloat, n::Integer)` and `prevfloat(::BigFloat, n::Integer)` methods
+  have been added ([#31310]).
+
+#### LinearAlgebra
+* Added keyword arguments `rtol`, `atol` to `pinv` and `nullspace` ([#29998]).
+* `UniformScaling` instances are now callable such that e.g. `I(3)` will produce a `Diagonal` matrix ([#30298]).
+* Eigenvalues λ of general matrices are now sorted lexicographically by (Re λ, Im λ) ([#21598]).
+* `one` for structured matrices (`Diagonal`, `Bidiagonal`, `Tridiagonal`, `Symtridiagonal`) now preserves
+  structure and type ([#29777]).
+* `diagm(v)` is now a shorthand for `diagm(0 => v)` ([#31125]).
+
+#### SparseArrays
+* Performance improvements for sparse matrix-matrix multiplication ([#30372]).
+* Sparse vector outer products are more performant and maintain sparsity in products of the
+  form `kron(u, v')`, `u * v'`, and `u .* v'` where `u` and `v` are sparse vectors or column
+  views ([#24980]).
+* The `sprand` function is now 2 to 5 times faster ([#30494]). As a consequence of this change, the random stream of matrices produced with `sprand` and `sprandn` has changed.
+
+#### Sockets
+
+* `getipaddrs` returns IP addresses in the order provided by libuv ([#32260]).
+* `getipaddr` prefers to return the first `IPv4` interface address provided by libuv ([#32260]).
+
+#### Dates
+* Fixed `repr` such that it displays `DateTime` as it would be entered in Julia ([#30200]).
+
+#### Statistics
+* `quantile` now accepts in all cases collections whose `eltype` is not a subtype of `Number` ([#30938]).
+
+#### Miscellaneous
+* Since environment variables on Windows are case-insensitive, `ENV` now converts its keys
+  to uppercase for display, iteration, and copying ([#30593]).
+
+External dependencies
+---------------------
+
+* libgit2 has been updated to v0.27.7 ([#30584]).
+* OpenBLAS has been updated to v0.3.5 ([#30583]).
+* MbedTLS has been updated to v2.16.0 ([#30618]).
+* libunwind has been updated to v1.3.1 ([#30724]).
+
+<!--- generated by NEWS-update.jl: -->
+[#21598]: https://github.com/JuliaLang/julia/issues/21598
+[#22922]: https://github.com/JuliaLang/julia/issues/22922
+[#24980]: https://github.com/JuliaLang/julia/issues/24980
+[#27749]: https://github.com/JuliaLang/julia/issues/27749
+[#27900]: https://github.com/JuliaLang/julia/issues/27900
+[#28850]: https://github.com/JuliaLang/julia/issues/28850
+[#29777]: https://github.com/JuliaLang/julia/issues/29777
+[#29790]: https://github.com/JuliaLang/julia/issues/29790
+[#29998]: https://github.com/JuliaLang/julia/issues/29998
+[#30061]: https://github.com/JuliaLang/julia/issues/30061
+[#30200]: https://github.com/JuliaLang/julia/issues/30200
+[#30298]: https://github.com/JuliaLang/julia/issues/30298
+[#30323]: https://github.com/JuliaLang/julia/issues/30323
+[#30372]: https://github.com/JuliaLang/julia/issues/30372
+[#30382]: https://github.com/JuliaLang/julia/issues/30382
+[#30494]: https://github.com/JuliaLang/julia/issues/30494
+[#30577]: https://github.com/JuliaLang/julia/issues/30577
+[#30583]: https://github.com/JuliaLang/julia/issues/30583
+[#30584]: https://github.com/JuliaLang/julia/issues/30584
+[#30593]: https://github.com/JuliaLang/julia/issues/30593
+[#30604]: https://github.com/JuliaLang/julia/issues/30604
+[#30618]: https://github.com/JuliaLang/julia/issues/30618
+[#30670]: https://github.com/JuliaLang/julia/issues/30670
+[#30712]: https://github.com/JuliaLang/julia/issues/30712
+[#30724]: https://github.com/JuliaLang/julia/issues/30724
+[#30915]: https://github.com/JuliaLang/julia/issues/30915
+[#30919]: https://github.com/JuliaLang/julia/issues/30919
+[#30938]: https://github.com/JuliaLang/julia/issues/30938
+[#31008]: https://github.com/JuliaLang/julia/issues/31008
+[#31009]: https://github.com/JuliaLang/julia/issues/31009
+[#31125]: https://github.com/JuliaLang/julia/issues/31125
+[#31211]: https://github.com/JuliaLang/julia/issues/31211
+[#31230]: https://github.com/JuliaLang/julia/issues/31230
+[#31235]: https://github.com/JuliaLang/julia/issues/31235
+[#31310]: https://github.com/JuliaLang/julia/issues/31310
+[#31438]: https://github.com/JuliaLang/julia/issues/31438
+[#31441]: https://github.com/JuliaLang/julia/issues/31441
+[#31451]: https://github.com/JuliaLang/julia/issues/31451
+[#31532]: https://github.com/JuliaLang/julia/issues/31532
+[#31561]: https://github.com/JuliaLang/julia/issues/31561
+[#31604]: https://github.com/JuliaLang/julia/issues/31604
+[#32260]: https://github.com/JuliaLang/julia/issues/32260
+
 Julia v1.1 Release Notes
 ========================
 
@@ -3451,7 +3778,7 @@ Library improvements
 
     * The `MathConst` type has been renamed `Irrational` ([#11922]).
 
-    * `isapprox` now has simpler and more sensible default tolerances ([#12393]), supports arrays, and has synonyms `≈` ([U+2248](http://www.fileformat.info/info/unicode/char/2248/index.htm), LaTeX `\approx`) and `≉` ([U+2249](http://www.fileformat.info/info/unicode/char/2249/index.htm), LaTeX `\napprox`) for `isapprox` and `!isapprox`, respectively ([#12472]).
+    * `isapprox` now has simpler and more sensible default tolerances ([#12393]), supports arrays, and has synonyms `≈` ([U+2248](https://www.fileformat.info/info/unicode/char/2248/index.htm), LaTeX `\approx`) and `≉` ([U+2249](https://www.fileformat.info/info/unicode/char/2249/index.htm), LaTeX `\napprox`) for `isapprox` and `!isapprox`, respectively ([#12472]).
 
   * Numbers
 

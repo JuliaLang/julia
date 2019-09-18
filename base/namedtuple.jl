@@ -5,7 +5,7 @@
 
 `NamedTuple`s are, as their name suggests, named [`Tuple`](@ref)s. That is, they're a
 tuple-like collection of values, where each entry has a unique name, represented as a
-`Symbol`. Like `Tuple`s, `NamedTuple`s are immutable; neither the names nor the values
+[`Symbol`](@ref). Like `Tuple`s, `NamedTuple`s are immutable; neither the names nor the values
 can be modified in place after construction.
 
 Accessing the value associated with a name in a named tuple can be done using field
@@ -44,6 +44,20 @@ julia> collect(pairs(x))
  :a => 1
  :b => 2
 ```
+
+In a similar fashion as to how one can define keyword arguments programmatically,
+a named tuple can be created by giving a pair `name::Symbol => value` or splatting
+an iterator yielding such pairs after a semicolon inside a tuple literal:
+
+```jldoctest
+julia> (; :a => 1)
+(a = 1,)
+
+julia> keys = (:a, :b, :c); values = (1, 2, 3);
+
+julia> (; zip(keys, values)...)
+(a = 1, b = 2, c = 3)
+```
 """
 Core.NamedTuple
 
@@ -55,11 +69,13 @@ if nameof(@__MODULE__) === :Base
 Construct a named tuple with the given `names` (a tuple of Symbols) and field types `T`
 (a `Tuple` type) from a tuple of values.
 """
-function NamedTuple{names,T}(args::Tuple) where {names, T <: Tuple}
+@eval function NamedTuple{names,T}(args::Tuple) where {names, T <: Tuple}
     if length(args) != length(names)
         throw(ArgumentError("Wrong number of arguments to named tuple constructor."))
     end
-    NamedTuple{names,T}(T(args))
+    # Note T(args) might not return something of type T; e.g.
+    # Tuple{Type{Float64}}((Float64,)) returns a Tuple{DataType}
+    $(Expr(:splatnew, :(NamedTuple{names,T}), :(T(args))))
 end
 
 """
@@ -92,6 +108,7 @@ getindex(t::NamedTuple, i::Symbol) = getfield(t, i)
 indexed_iterate(t::NamedTuple, i::Int, state=1) = (getfield(t, i), i+1)
 isempty(::NamedTuple{()}) = true
 isempty(::NamedTuple) = false
+empty(::NamedTuple) = NamedTuple()
 
 convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names,T}) where {names,T<:Tuple} = nt
 convert(::Type{NamedTuple{names}}, nt::NamedTuple{names}) where {names} = nt

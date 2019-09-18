@@ -4,6 +4,10 @@ module TestUniformscaling
 
 using Test, LinearAlgebra, Random, SparseArrays
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
+
 Random.seed!(123)
 
 @testset "basic functions" begin
@@ -74,8 +78,10 @@ end
 end
 
 @test copy(UniformScaling(one(Float64))) == UniformScaling(one(Float64))
-@test sprint(show,UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{Complex{Float64}}\n(1.0 + 0.0im)*I"
-@test sprint(show,UniformScaling(one(Float32))) == "LinearAlgebra.UniformScaling{Float32}\n1.0*I"
+@test sprint(show,MIME"text/plain"(),UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{Complex{Float64}}\n(1.0 + 0.0im)*I"
+@test sprint(show,MIME"text/plain"(),UniformScaling(one(Float32))) == "LinearAlgebra.UniformScaling{Float32}\n1.0*I"
+@test sprint(show,UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{Complex{Float64}}(1.0 + 0.0im)"
+@test sprint(show,UniformScaling(one(Float32))) == "LinearAlgebra.UniformScaling{Float32}(1.0f0)"
 
 let
     λ = complex(randn(),randn())
@@ -178,15 +184,17 @@ let
                 @test @inferred(J - T) == J - Array(T)
                 @test @inferred(T\I) == inv(T)
 
-                if isa(A, Array)
-                    T = Hermitian(randn(3,3))
-                else
-                    T = Hermitian(view(randn(3,3), 1:3, 1:3))
+                for elty in (Float64, ComplexF64)
+                    if isa(A, Array)
+                        T = Hermitian(randn(elty, 3,3))
+                    else
+                        T = Hermitian(view(randn(elty, 3,3), 1:3, 1:3))
+                    end
+                    @test @inferred(T + J) == Array(T) + J
+                    @test @inferred(J + T) == J + Array(T)
+                    @test @inferred(T - J) == Array(T) - J
+                    @test @inferred(J - T) == J - Array(T)
                 end
-                @test @inferred(T + J) == Array(T) + J
-                @test @inferred(J + T) == J + Array(T)
-                @test @inferred(T - J) == Array(T) - J
-                @test @inferred(J - T) == J - Array(T)
 
                 @test @inferred(I\A) == A
                 @test @inferred(A\I) == inv(A)
@@ -298,15 +306,43 @@ end
     @test_throws MethodError I .+ [1 1; 1 1]
 end
 
-@testset "in-place mul! methods" begin
+@testset "in-place mul! and div! methods" begin
     J = randn()*I
     A = randn(4, 3)
     C = similar(A)
-    target = J * A
-    @test mul!(C, J, A) == target
-    @test mul!(C, A, J) == target
-    @test lmul!(J, copyto!(C, A)) == target
-    @test rmul!(copyto!(C, A), J) == target
+    target_mul = J * A
+    target_div = A / J
+    @test mul!(C, J, A) == target_mul
+    @test mul!(C, A, J) == target_mul
+    @test lmul!(J, copyto!(C, A)) == target_mul
+    @test rmul!(copyto!(C, A), J) == target_mul
+    @test ldiv!(J, copyto!(C, A)) == target_div
+    @test rdiv!(copyto!(C, A), J) == target_div
+
+    A = randn(4, 3)
+    C = randn!(similar(A))
+    alpha = randn()
+    beta = randn()
+    target = J * A * alpha + C * beta
+    @test mul!(copy(C), J, A, alpha, beta) ≈ target
+    @test mul!(copy(C), A, J, alpha, beta) ≈ target
+end
+
+@testset "Construct Diagonal from UniformScaling" begin
+    @test size(I(3)) === (3,3)
+    @test I(3) isa Diagonal
+    @test I(3) == [1 0 0; 0 1 0; 0 0 1]
+end
+
+@testset "generalized dot" begin
+    x = rand(-10:10, 3)
+    y = rand(-10:10, 3)
+    λ = rand(-10:10)
+    J = UniformScaling(λ)
+    @test dot(x, J, y) == λ*dot(x, y)
+    λ = Quaternion(0.44567, 0.755871, 0.882548, 0.423612)
+    x, y = Quaternion(rand(4)...), Quaternion(rand(4)...)
+    @test dot([x], λ*I, [y]) ≈ dot(x, λ, y) ≈ dot(x, λ*y)
 end
 
 end # module TestUniformscaling

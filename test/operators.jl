@@ -196,3 +196,19 @@ end
     @test fx(y) == x / y
     @test fy(x) == x / y
 end
+
+@testset "curried comparisons" begin
+    eql5 = (==)(5)
+    neq5 = (!=)(5)
+    gte5 = (>=)(5)
+    lte5 = (<=)(5)
+    gt5  = (>)(5)
+    lt5  = (<)(5)
+
+    @test eql5(5) && !eql5(0)
+    @test neq5(6) && !neq5(5)
+    @test gte5(5) && gte5(6)
+    @test lte5(5) && lte5(4)
+    @test gt5(6) && !gt5(5)
+    @test lt5(4) && !lt5(5)
+end

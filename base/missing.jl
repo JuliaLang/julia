@@ -18,40 +18,57 @@ end
 showerror(io::IO, ex::MissingException) =
     print(io, "MissingException: ", ex.msg)
 
+"""
+    nonmissingtype(T::Type)
 
-nonmissingtype(::Type{Union{T, Missing}}) where {T} = T
-nonmissingtype(::Type{Missing}) = Union{}
-nonmissingtype(::Type{T}) where {T} = T
-nonmissingtype(::Type{Any}) = Any
+If `T` is a union of types containing `Missing`, return a new type with
+`Missing` removed.
 
-for U in (:Nothing, :Missing)
-    @eval begin
-        promote_rule(::Type{$U}, ::Type{T}) where {T} = Union{T, $U}
-        promote_rule(::Type{Union{S,$U}}, ::Type{Any}) where {S} = Any
-        promote_rule(::Type{Union{S,$U}}, ::Type{T}) where {T,S} = Union{promote_type(T, S), $U}
-        promote_rule(::Type{Any}, ::Type{$U}) = Any
-        promote_rule(::Type{$U}, ::Type{Any}) = Any
-        # This definition is never actually used, but disambiguates the above definitions
-        promote_rule(::Type{$U}, ::Type{$U}) = $U
-    end
+# Examples
+```jldoctest
+julia> nonmissingtype(Union{Int64,Missing})
+Int64
+
+julia> nonmissingtype(Any)
+Any
+```
+
+!!! compat "Julia 1.3"
+  This function is exported as of Julia 1.3.
+"""
+nonmissingtype(::Type{T}) where {T} = Core.Compiler.typesubtract(T, Missing)
+
+function nonmissingtype_checked(T::Type)
+    R = nonmissingtype(T)
+    R >: T && error("could not compute non-missing type")
+    return R
 end
-promote_rule(::Type{Union{Nothing, Missing}}, ::Type{Any}) = Any
-promote_rule(::Type{Union{Nothing, Missing}}, ::Type{T}) where {T} =
-    Union{Nothing, Missing, T}
-promote_rule(::Type{Union{Nothing, Missing, S}}, ::Type{Any}) where {S} = Any
-promote_rule(::Type{Union{Nothing, Missing, S}}, ::Type{T}) where {T,S} =
-    Union{Nothing, Missing, promote_type(T, S)}
 
-convert(::Type{Union{T, Missing}}, x::Union{T, Missing}) where {T} = x
-convert(::Type{Union{T, Missing}}, x) where {T} = convert(T, x)
-# To fix ambiguities
-convert(::Type{Missing}, ::Missing) = missing
-convert(::Type{Union{Nothing, Missing}}, x::Union{Nothing, Missing}) = x
-convert(::Type{Union{Nothing, Missing, T}}, x::Union{Nothing, Missing, T}) where {T} = x
-convert(::Type{Union{Nothing, Missing}}, x) =
-    throw(MethodError(convert, (Union{Nothing, Missing}, x)))
-# To print more appropriate message than "T not defined"
-convert(::Type{Missing}, x) = throw(MethodError(convert, (Missing, x)))
+promote_rule(T::Type{Missing}, S::Type) = Union{S, Missing}
+promote_rule(T::Type{Union{Nothing, Missing}}, S::Type) = Union{S, Nothing, Missing}
+function promote_rule(T::Type{>:Union{Nothing, Missing}}, S::Type)
+    R = nonnothingtype(T)
+    R >: T && return Any
+    T = R
+    R = nonmissingtype(T)
+    R >: T && return Any
+    T = R
+    R = promote_type(T, S)
+    return Union{R, Nothing, Missing}
+end
+function promote_rule(T::Type{>:Missing}, S::Type)
+    R = nonmissingtype(T)
+    R >: T && return Any
+    T = R
+    R = promote_type(T, S)
+    return Union{R, Missing}
+end
+
+convert(::Type{T}, x::T) where {T>:Missing} = x
+convert(::Type{T}, x::T) where {T>:Union{Missing, Nothing}} = x
+convert(::Type{T}, x) where {T>:Missing} = convert(nonmissingtype_checked(T), x)
+convert(::Type{T}, x) where {T>:Union{Missing, Nothing}} = convert(nonmissingtype_checked(nonnothingtype_checked(T)), x)
+
 
 # Comparison operators
 ==(::Missing, ::Missing) = missing
@@ -74,15 +91,16 @@ isapprox(::Missing, ::Any; kwargs...) = missing
 isapprox(::Any, ::Missing; kwargs...) = missing
 
 # Unary operators/functions
-for f in (:(!), :(~), :(+), :(-), :(identity), :(zero), :(one), :(oneunit),
+for f in (:(!), :(~), :(+), :(-), :(zero), :(one), :(oneunit),
           :(isfinite), :(isinf), :(isodd),
           :(isinteger), :(isreal), :(isnan),
           :(iszero), :(transpose), :(adjoint), :(float), :(conj),
           :(abs), :(abs2), :(iseven), :(ispow2),
-          :(real), :(imag), :(sign))
+          :(real), :(imag), :(sign), :(inv))
     @eval ($f)(::Missing) = missing
 end
 for f in (:(Base.zero), :(Base.one), :(Base.oneunit))
+    @eval ($f)(::Type{Missing}) = missing
     @eval function $(f)(::Type{Union{T, Missing}}) where T
         T === Any && throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
         $f(T)
@@ -107,16 +125,25 @@ max(::Missing, ::Any)     = missing
 max(::Any,     ::Missing) = missing
 
 # Rounding and related functions
-for f in (:(ceil), :(floor), :(round), :(trunc))
+round(::Missing, ::RoundingMode=RoundNearest; sigdigits::Integer=0, digits::Integer=0, base::Integer=0) = missing
+round(::Type{>:Missing}, ::Missing, ::RoundingMode=RoundNearest) = missing
+round(::Type{T}, ::Missing, ::RoundingMode=RoundNearest) where {T} =
+    throw(MissingException("cannot convert a missing value to type $T: use Union{$T, Missing} instead"))
+round(::Type{T}, x::Any, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
+# to fix ambiguities
+round(::Type{T}, x::Rational, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
+round(::Type{T}, x::Rational{Bool}, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
+
+# Handle ceil, floor, and trunc separately as they have no RoundingMode argument
+for f in (:(ceil), :(floor), :(trunc))
     @eval begin
-        ($f)(::Missing, digits::Integer=0, base::Integer=0) = missing
+        ($f)(::Missing; sigdigits::Integer=0, digits::Integer=0, base::Integer=0) = missing
         ($f)(::Type{>:Missing}, ::Missing) = missing
         ($f)(::Type{T}, ::Missing) where {T} =
             throw(MissingException("cannot convert a missing value to type $T: use Union{$T, Missing} instead"))
-        ($f)(::Type{T}, x::Any) where {T>:Missing} = $f(nonmissingtype(T), x)
+        ($f)(::Type{T}, x::Any) where {T>:Missing} = $f(nonmissingtype_checked(T), x)
         # to fix ambiguities
-        ($f)(::Type{T}, x::Rational) where {T>:Missing} = $f(nonmissingtype(T), x)
-        ($f)(::Type{T}, x::Rational{Bool}) where {T>:Missing} = $f(nonmissingtype(T), x)
+        ($f)(::Type{T}, x::Rational) where {T>:Missing} = $f(nonmissingtype_checked(T), x)
     end
 end
 
@@ -153,6 +180,9 @@ float(A::AbstractArray{Missing}) = A
     skipmissing(itr)
 
 Return an iterator over the elements in `itr` skipping [`missing`](@ref) values.
+The returned object can be indexed using indices of `itr` if the latter is indexable.
+Indices corresponding to missing values are not valid: they are skipped by [`keys`](@ref)
+and [`eachindex`](@ref), and a `MissingException` is thrown when trying to use them.
 
 Use [`collect`](@ref) to obtain an `Array` containing the non-`missing` values in
 `itr`. Note that even if `itr` is a multidimensional array, the result will always
@@ -161,8 +191,26 @@ of the input.
 
 # Examples
 ```jldoctest
-julia> sum(skipmissing([1, missing, 2]))
+julia> x = skipmissing([1, missing, 2])
+Base.SkipMissing{Array{Union{Missing, Int64},1}}(Union{Missing, Int64}[1, missing, 2])
+
+julia> sum(x)
 3
+
+julia> x[1]
+1
+
+julia> x[2]
+ERROR: MissingException: the value at index (2,) is missing
+[...]
+
+julia> argmax(x)
+3
+
+julia> collect(keys(x))
+2-element Array{Int64,1}:
+ 1
+ 3
 
 julia> collect(skipmissing([1, missing, 2]))
 2-element Array{Int64,1}:
@@ -194,6 +242,17 @@ function iterate(itr::SkipMissing, state...)
         item, state = y
     end
     item, state
+end
+
+IndexStyle(::Type{<:SkipMissing{T}}) where {T} = IndexStyle(T)
+eachindex(itr::SkipMissing) =
+    Iterators.filter(i -> @inbounds(itr.x[i]) !== missing, eachindex(itr.x))
+keys(itr::SkipMissing) =
+    Iterators.filter(i -> @inbounds(itr.x[i]) !== missing, keys(itr.x))
+@propagate_inbounds function getindex(itr::SkipMissing, I...)
+    v = itr.x[I...]
+    v === missing && throw(MissingException("the value at index $I is missing"))
+    v
 end
 
 # Optimized mapreduce implementation
@@ -285,6 +344,37 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
             return Some(op(something(v1), something(v2)))
         end
     end
+end
+
+"""
+    filter(f, itr::SkipMissing{<:AbstractArray})
+
+Return a vector similar to the array wrapped by the given `SkipMissing` iterator
+but with all missing elements and those for which `f` returns `false` removed.
+
+!!! compat "Julia 1.2"
+    This method requires Julia 1.2 or later.
+
+# Examples
+```jldoctest
+julia> x = [1 2; missing 4]
+2×2 Array{Union{Missing, Int64},2}:
+ 1         2
+  missing  4
+
+julia> filter(isodd, skipmissing(x))
+1-element Array{Int64,1}:
+ 1
+```
+"""
+function filter(f, itr::SkipMissing{<:AbstractArray})
+    y = similar(itr.x, eltype(itr), 0)
+    for xi in itr.x
+        if xi !== missing && f(xi)
+            push!(y, xi)
+        end
+    end
+    y
 end
 
 """

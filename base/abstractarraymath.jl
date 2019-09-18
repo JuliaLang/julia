@@ -5,7 +5,6 @@
 isreal(x::AbstractArray) = all(isreal,x)
 iszero(x::AbstractArray) = all(iszero,x)
 isreal(x::AbstractArray{<:Real}) = true
-all(::typeof(isinteger), ::AbstractArray{<:Integer}) = true
 
 ## Constructors ##
 
@@ -122,7 +121,7 @@ julia> selectdim(A, 2, 3)
 """
 @inline selectdim(A::AbstractArray, d::Integer, i) = _selectdim(A, d, i, setindex(map(Slice, axes(A)), i, d))
 @noinline function _selectdim(A, d, i, idxs)
-    d >= 1 || throw(ArgumentError("dimension must be ≥ 1"))
+    d >= 1 || throw(ArgumentError("dimension must be ≥ 1, got $d"))
     nd = ndims(A)
     d > nd && (i == 1 || throw(BoundsError(A, (ntuple(k->Colon(),d-1)..., i))))
     return view(A, idxs...)
