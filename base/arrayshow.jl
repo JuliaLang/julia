@@ -107,7 +107,7 @@ function print_matrix_row(io::IO,
             sx = undef_ref_str
         end
         l = repeat(" ", A[k][1]-a[1]) # pad on left and right as needed
-        r = repeat(" ", A[k][2]-a[2])
+        r = j == axes(X, 2)[end] ? "" : repeat(" ", A[k][2]-a[2])
         prettysx = replace_in_print_matrix(X,i,j,sx)
         print(io, l, prettysx, r)
         if k < length(A); print(io, sep); end
