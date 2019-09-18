@@ -353,9 +353,16 @@ reduce(op, A::AbstractArray; kw...) = mapreduce(identity, op, A; kw...)
 
 ##### Specific reduction functions #####
 """
-    sum(A::AbstractArray; dims)
+    sum(A::AbstractArray; [dims], [weights::AbstractArray])
 
-Sum elements of an array over the given dimensions.
+Compute the sum of array `A`.
+If `dims` is provided, return an array of sums over these dimensions.
+If `weights` is provided, return the weighted sum(s). `weights` must be
+either an array of the same size as `A` if `dims` is omitted,
+or a vector with the same length as `size(A, dims)` if `dims` is provided.
+
+!!! compat "Julia 1.4"
+    The `weights` keyword argument requires at least Julia 1.4.
 
 # Examples
 ```jldoctest
@@ -372,14 +379,26 @@ julia> sum(A, dims=2)
 2×1 Array{Int64,2}:
  3
  7
+
+julia> sum(A, weights=[2 1; 2 1])
+14
+
+julia> sum(A, weights=[2, 1], dims=1)
+1×2 Array{Int64,2}:
+ 5  8
 ```
 """
 sum(A::AbstractArray; dims)
 
 """
-    sum!(r, A)
+    sum!(r, A; [weights::AbstractVector])
 
 Sum elements of `A` over the singleton dimensions of `r`, and write results to `r`.
+If `r` has only one singleton dimension `i`, `weights` can be a vector of length
+`size(v, i)` to compute the weighted mean.
+
+!!! compat "Julia 1.4"
+    The `weights` keyword argument requires at least Julia 1.4.
 
 # Examples
 ```jldoctest
@@ -645,7 +664,7 @@ julia> any!([1 1], A)
 """
 any!(r, A)
 
-for (fname, _fname, op) in [(:sum,     :_sum,     :add_sum), (:prod,    :_prod,    :mul_prod),
+for (fname, _fname, op) in [(:prod,    :_prod,    :mul_prod),
                             (:maximum, :_maximum, :max),     (:minimum, :_minimum, :min)]
     @eval begin
         # User-facing methods with keyword arguments
@@ -658,6 +677,14 @@ for (fname, _fname, op) in [(:sum,     :_sum,     :add_sum), (:prod,    :_prod, 
     end
 end
 
+# Sum is the only reduction which supports weights
+sum(a::AbstractArray; dims=:, weights::Union{AbstractArray,Nothing}=nothing) =
+    _sum(a, dims, weights)
+sum(f, a::AbstractArray; dims=:, weights::Union{AbstractArray,Nothing}=nothing) =
+    _sum(f, a, dims, weights)
+sum(a, ::Colon, weights) = _sum(identity, a, :, weights)
+sum(f, a, ::Colon, ::Nothing) = mapreduce(f, add_sum, a)
+
 any(a::AbstractArray; dims=:)              = _any(a, dims)
 any(f::Function, a::AbstractArray; dims=:) = _any(f, a, dims)
 _any(a, ::Colon)                           = _any(identity, a, :)
@@ -665,20 +692,172 @@ all(a::AbstractArray; dims=:)              = _all(a, dims)
 all(f::Function, a::AbstractArray; dims=:) = _all(f, a, dims)
 _all(a, ::Colon)                           = _all(identity, a, :)
 
-for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
+for (fname, op) in [(:prod, :mul_prod),
                     (:maximum, :max), (:minimum, :min),
                     (:all, :&),       (:any, :|)]
     fname! = Symbol(fname, '!')
+    _fname! = Symbol('_', fname, '!')
     _fname = Symbol('_', fname)
     @eval begin
+        $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) =
+            $(fname!)(identity, r, A; init=init)
         $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
-            mapreducedim!(f, $(op), initarray!(r, $(op), init, A), A)
-        $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
+            $(_fname!)(f, r, A; init=init)
 
-        $(_fname)(A, dims)    = $(_fname)(identity, A, dims)
+        # Underlying implementations using dispatch
+        $(_fname!)(f, r::AbstractArray, A::AbstractArray; init::Bool=true) =
+            mapreducedim!(f, $(op), initarray!(r, $(op), init, A), A)
+        $(_fname)(A, dims) = $(_fname)(identity, A, dims)
         $(_fname)(f, A, dims) = mapreduce(f, $(op), A, dims=dims)
     end
 end
+
+# Sum is the only reduction which supports weights
+sum!(r::AbstractArray, A::AbstractArray;
+     init::Bool=true, weights::Union{AbstractArray,Nothing}=nothing) =
+    sum!(identity, r, A; init=init, weights=weights)
+sum!(f::Function, r::AbstractArray, A::AbstractArray;
+     init::Bool=true, weights::Union{AbstractArray,Nothing}=nothing) =
+    _sum!(f, r, A, weights; init=init)
+_sum!(f, r::AbstractArray, A::AbstractArray, ::Nothing; init::Bool=true) =
+    mapreducedim!(f, add_sum, initarray!(r, add_sum, init, A), A)
+_sum(A::AbstractArray, dims, weights) = _sum(identity, A, dims, weights)
+_sum(f, A::AbstractArray, dims, ::Nothing) = mapreduce(f, add_sum, A, dims=dims)
+_sum(::typeof(identity), A::AbstractArray, dims, w::AbstractArray) =
+    _sum!(identity, reducedim_init(t -> t*zero(eltype(w)), add_sum, A, dims), A, w)
+_sum(f, A::AbstractArray, dims, w::AbstractArray) =
+    throw(ArgumentError("Passing a function is not supported with `weights`"))
+
+
+# Weighted sum
+function _sum(A::AbstractArray, dims::Colon, w::AbstractArray{<:Real})
+    sw = size(w)
+    sA = size(A)
+    if sw != sA
+        throw(DimensionMismatch("weights must have the same dimension as data (got $sw and $sA)."))
+    end
+    s0 = zero(eltype(A)) * zero(eltype(w))
+    s = add_sum(s0, s0)
+    @inbounds @simd for i in eachindex(A, w)
+        s += A[i] * w[i]
+    end
+    s
+end
+
+# Weighted sum over dimensions
+#
+#  Brief explanation of the algorithm:
+#  ------------------------------------
+#
+#  1. _wsum! provides the core implementation, which assumes that
+#     the dimensions of all input arguments are consistent, and no
+#     dimension checking is performed therein.
+#
+#     wsum and wsum! perform argument checking and call _wsum!
+#     internally.
+#
+#  2. _wsum! adopt a Cartesian based implementation for general
+#     sub types of AbstractArray. Particularly, a faster routine
+#     that keeps a local accumulator will be used when dim = 1.
+#
+#     The internal function that implements this is _wsum_general!
+#
+#  3. _wsum! is specialized for following cases:
+#     (a) A is a vector: we invoke the vector version wsum above.
+#         The internal function that implements this is _wsum1!
+#
+#     (b) A is a dense matrix with eltype <: BlasReal: we call gemv!
+#         The internal function that implements this is _wsum2_blas!
+#         (in LinearAlgebra/src/wsum.jl)
+#
+#     (c) A is a contiguous array with eltype <: BlasReal:
+#         dim == 1: treat A like a matrix of size (d1, d2 x ... x dN)
+#         dim == N: treat A like a matrix of size (d1 x ... x d(N-1), dN)
+#         otherwise: decompose A into multiple pages, and apply _wsum2_blas!
+#         for each
+#         The internal function that implements this is _wsumN!
+#         (in LinearAlgebra/src/wsum.jl)
+#
+#     (d) A is a general dense array with eltype <: BlasReal:
+#         dim <= 2: delegate to (a) and (b)
+#         otherwise, decompose A into multiple pages
+#         The internal function that implements this is _wsumN!
+#         (in LinearAlgebra/src/wsum.jl)
+
+function _wsum1!(R::AbstractArray, A::AbstractVector, w::AbstractVector, init::Bool)
+    r = _sum(A, :, w)
+    if init
+        R[1] = r
+    else
+        R[1] += r
+    end
+    return R
+end
+
+function _wsum_general!(R::AbstractArray{S}, A::AbstractArray, w::AbstractVector,
+                        dim::Int, init::Bool) where {S}
+    # following the implementation of _mapreducedim!
+    lsiz = check_reducedims(R,A)
+    !isempty(R) && init && fill!(R, zero(S))
+    isempty(A) && return R
+
+    indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(R)) # handle d=1 manually
+    keep, Idefault = Broadcast.shapeindexer(indsRt)
+    if reducedim1(R, A)
+        i1 = first(axes1(R))
+        for IA in CartesianIndices(indsAt)
+            IR = Broadcast.newindex(IA, keep, Idefault)
+            r = R[i1,IR]
+            @inbounds @simd for i in axes(A, 1)
+                r += A[i,IA] * w[dim > 1 ? IA[dim-1] : i]
+            end
+            R[i1,IR] = r
+        end
+    else
+        for IA in CartesianIndices(indsAt)
+            IR = Broadcast.newindex(IA, keep, Idefault)
+            @inbounds @simd for i in axes(A, 1)
+                R[i,IR] += A[i,IA] * w[dim > 1 ? IA[dim-1] : i]
+            end
+        end
+    end
+    return R
+end
+
+_wsum!(R::AbstractArray, A::AbstractVector, w::AbstractVector,
+       dim::Int, init::Bool) =
+    _wsum1!(R, A, w, init)
+
+_wsum!(R::AbstractArray, A::AbstractArray, w::AbstractVector,
+       dim::Int, init::Bool) =
+    _wsum_general!(R, A, w, dim, init)
+
+function _sum!(f, R::AbstractArray, A::AbstractArray{T,N}, w::AbstractArray;
+               init::Bool=true) where {T,N}
+    f === identity || throw(ArgumentError("Passing a function is not supported with `weights`"))
+    w isa AbstractVector || throw(ArgumentError("Only vector `weights` are supported"))
+
+    check_reducedims(R,A)
+    reddims = size(R) .!= size(A)
+    dim = something(findfirst(reddims), ndims(R)+1)
+    if dim > N
+        dim1 = findfirst(==(1), size(A))
+        if dim1 !== nothing
+            dim = dim1
+        end
+    end
+    if findnext(reddims, dim+1) !== nothing
+        throw(ArgumentError("reducing over more than one dimension is not supported with weights"))
+    end
+    lw = length(w)
+    ldim = size(A, dim)
+    if lw != ldim
+        throw(DimensionMismatch("weights must have the same length as the dimension " *
+                                "over which reduction is performed (got $lw and $ldim)."))
+    end
+    _wsum!(R, A, w, dim, init)
+end
+
 
 ##### findmin & findmax #####
 # The initial values of Rval are not used if the corresponding indices in Rind are 0.

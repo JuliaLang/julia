@@ -380,6 +380,7 @@ include("bitarray.jl")
 include("ldlt.jl")
 include("schur.jl")
 include("structuredbroadcast.jl")
+include("wsum.jl")
 include("deprecated.jl")
 
 const ⋅ = dot

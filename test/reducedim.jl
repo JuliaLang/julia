@@ -398,3 +398,93 @@ end
     @test_throws DimensionMismatch maximum!(fill(0, 1, 1, 2, 1), B)
     @test_throws DimensionMismatch minimum!(fill(0, 1, 1, 2, 1), B)
 end
+
+@testset "weighted sum over dimensions" begin
+    wts = ([1.4, 2.5, 10.1], [1.4f0, 2.5f0, 10.1f0], [0.0, 2.3, 5.6],
+           [NaN, 2.3, 5.6], [Inf, 2.3, 5.6],
+           [2, 1, 3], Int8[1, 2, 3], [1, 1, 1])
+
+    ainf = rand(3)
+    ainf[1] = Inf
+    anan = rand(3)
+    anan[1] = NaN
+    for a in (rand(3), rand(Float32, 3), ainf, anan,
+              rand(Int, 3), rand(Int8, 3),
+              view(rand(5), 2:4))
+        for w in wts
+            if all(isfinite, a) && all(isfinite, w)
+                expected = sum(a.*w, dims=1)
+                res = @inferred sum(a, weights=w, dims=1)
+                @test res ≈ expected
+                @test typeof(res) == typeof(expected)
+                x = rand!(similar(expected))
+                y = copy(x)
+                @inferred sum!(y, a, weights=w)
+                @test y ≈ expected
+                y = copy(x)
+                @inferred sum!(y, a, weights=w, init=false)
+                @test y ≈ x + expected
+            else
+                expected = sum(a.*w, dims=1)
+                res = @inferred sum(a, weights=w, dims=1)
+                @test isfinite.(res) == isfinite.(expected)
+                @test typeof(res) == typeof(expected)
+                x = rand!(similar(expected))
+                y = copy(x)
+                @inferred sum!(y, a, weights=w)
+                @test isfinite.(y) == isfinite.(expected)
+                y = copy(x)
+                @inferred sum!(y, a, weights=w, init=false)
+                @test isfinite.(y) == isfinite.(expected)
+            end
+        end
+    end
+
+    ainf = rand(3, 3, 3)
+    ainf[1] = Inf
+    anan = rand(3, 3, 3)
+    anan[1] = NaN
+    for a in (rand(3, 3, 3), rand(Float32, 3, 3, 3), ainf, anan,
+              rand(Int, 3, 3, 3), rand(Int8, 3, 3, 3),
+              view(rand(3, 3, 5), :, :, 2:4))
+        for w in wts
+            for (d, rw) in ((1, reshape(w, :, 1, 1)),
+                            (2, reshape(w, 1, :, 1)),
+                            (3, reshape(w, 1, 1, :)))
+                if all(isfinite, a) && all(isfinite, w)
+                    expected = sum(a.*rw, dims=d)
+                    res = @inferred sum(a, weights=w, dims=d)
+                    @test res ≈ expected
+                    @test typeof(res) == typeof(expected)
+                    x = rand!(similar(expected))
+                    y = copy(x)
+                    @inferred sum!(y, a, weights=w)
+                    @test y ≈ expected
+                    y = copy(x)
+                    @inferred sum!(y, a, weights=w, init=false)
+                    @test y ≈ x + expected
+                else
+                    expected = sum(a.*rw, dims=d)
+                    res = @inferred sum(a, weights=w, dims=d)
+                    @test isfinite.(res) == isfinite.(expected)
+                    @test typeof(res) == typeof(expected)
+                    x = rand!(similar(expected))
+                    y = copy(x)
+                    @inferred sum!(y, a, weights=w)
+                    @test isfinite.(y) == isfinite.(expected)
+                    y = copy(x)
+                    @inferred sum!(y, a, weights=w, init=false)
+                    @test isfinite.(y) == isfinite.(expected)
+                end
+            end
+
+            @test_throws DimensionMismatch sum(a, weights=w, dims=4)
+        end
+    end
+
+    # Corner case with a single row
+    @test sum([1 2], weights=[2], dims=1) == [2 4]
+
+    @test_throws ArgumentError sum(exp, [1 2], weights=[1, 10], dims=1)
+    @test_throws ArgumentError sum([1 2], weights=[1 10], dims=1)
+end
