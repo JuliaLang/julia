@@ -2129,6 +2129,29 @@ See the manual section on [Tuple Types](@ref).
 Tuple
 
 """
+    NamedTuple{names}(args::Tuple)
+
+Construct a named tuple with the given `names` (a tuple of Symbols) from a tuple of values.
+"""
+NamedTuple{names}(args::Tuple)
+
+"""
+    NamedTuple{names,T}(args::Tuple)
+
+Construct a named tuple with the given `names` (a tuple of Symbols) and field types `T`
+(a `Tuple` type) from a tuple of values.
+"""
+NamedTuple{names,T}(args::Tuple)
+
+"""
+    NamedTuple{names}(nt::NamedTuple)
+
+Construct a named tuple by selecting fields in `names` (a tuple of Symbols) from
+another named tuple.
+"""
+NamedTuple{names}(nt::NamedTuple)
+
+"""
     typeassert(x, type)
 
 Throw a [`TypeError`](@ref) unless `x isa type`.

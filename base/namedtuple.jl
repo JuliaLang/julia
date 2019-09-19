@@ -63,12 +63,6 @@ Core.NamedTuple
 
 if nameof(@__MODULE__) === :Base
 
-"""
-    NamedTuple{names,T}(args::Tuple)
-
-Construct a named tuple with the given `names` (a tuple of Symbols) and field types `T`
-(a `Tuple` type) from a tuple of values.
-"""
 @eval function NamedTuple{names,T}(args::Tuple) where {names, T <: Tuple}
     if length(args) != length(names)
         throw(ArgumentError("Wrong number of arguments to named tuple constructor."))
@@ -78,12 +72,6 @@ Construct a named tuple with the given `names` (a tuple of Symbols) and field ty
     $(Expr(:splatnew, :(NamedTuple{names,T}), :(T(args))))
 end
 
-"""
-    NamedTuple{names}(nt::NamedTuple)
-
-Construct a named tuple by selecting fields in `names` (a tuple of Symbols) from
-another named tuple.
-"""
 function NamedTuple{names}(nt::NamedTuple) where {names}
     if @generated
         types = Tuple{(fieldtype(nt, n) for n in names)...}
