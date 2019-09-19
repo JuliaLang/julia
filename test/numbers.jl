@@ -2634,10 +2634,3 @@ end
         end
     end
 end
-
-@testset "@big macro" begin
-    @test (@big 1) == BigInt(1)
-    @test (@big 1.0) == BigFloat(1.0)
-    @test (@big factorial(100)/factorial(99)) == BigFloat(100.0)
-    @test (@big 1 + 2//3) isa Rational{BigInt}
-end
