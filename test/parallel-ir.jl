@@ -4,6 +4,7 @@
 # - Codegen to setjmp
 # - Slot transformation
 # - Task analysis
+# - What to do when `syncregion` of a `detach` is undefined
 
 macro syncregion()
     Expr(:syncregion)
@@ -53,6 +54,13 @@ macro par(expr)
             @sync_end $token
         end
     end
+end
+
+function g()
+    T = @spawn begin
+        1 + 1
+    end
+    return T
 end
 
 function f()
