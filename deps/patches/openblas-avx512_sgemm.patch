@@ -1,0 +1,29 @@
+diff --git a/Makefile.system b/Makefile.system
+index fb8e7ea4..c7c4fedf 100644
+--- a/Makefile.system
++++ b/Makefile.system
+@@ -151,7 +151,8 @@ GETARCH_FLAGS	+= -DNO_AVX
+ endif
+ 
+ ifeq ($(BINARY), 32)
+-GETARCH_FLAGS	+= -DNO_AVX
++GETARCH_FLAGS	+= -DNO_AVX -DNO_AVX2 -DNO_AVX512
++NO_AVX512 = 1
+ endif
+ 
+ ifeq ($(NO_AVX2), 1)
+diff --git a/getarch.c b/getarch.c
+index 146f1f36..9db0ba74 100644
+--- a/getarch.c
++++ b/getarch.c
+@@ -91,6 +91,10 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ #include <unistd.h>
+ #endif
+ 
++#if (( defined(__GNUC__)  && __GNUC__   > 6 && defined(__AVX2__)) || (defined(__clang__) && __clang_major__ >= 6))
++#else
++#define NO_AVX512
++#endif
+ /* #define FORCE_P2		*/
+ /* #define FORCE_KATMAI		*/
+ /* #define FORCE_COPPERMINE	*/
