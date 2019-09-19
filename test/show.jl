@@ -1361,13 +1361,15 @@ end
 end
 
 @testset "Intrinsic printing" begin
-    @test sprint(show, Core.Intrinsics.arraylen) == "arraylen"
+    @test sprint(show, Core.Intrinsics.arraylen) == "Core.Intrinsics.arraylen"
+    @test repr(Core.Intrinsics.arraylen) == "Core.Intrinsics.arraylen"
     let io = IOBuffer()
         show(io, MIME"text/plain"(), Core.Intrinsics.arraylen)
         str = String(take!(io))
         @test occursin("arraylen", str)
         @test occursin("(intrinsic function", str)
     end
+    @test string(Core.Intrinsics.add_int) == "add_int"
 end
 
 @testset "repr(mime, x)" begin
