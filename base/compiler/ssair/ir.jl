@@ -316,7 +316,15 @@ function getindex(x::UseRef)
     elseif isa(stmt, GotoIfNot)
         x.op == 1 || return OOBToken()
         return stmt.cond
-    elseif isa(stmt, DetachNode) || isa(stmt, ReattachNode) || isa(stmt, SyncNode)
+    elseif isa(stmt, DetachNode)
+        if x.op == 1
+            return stmt.syncregion
+        elseif x.op == 2
+            return stmt.tasktoken
+        else
+            return OOBToken()
+        end
+    elseif isa(stmt, ReattachNode) || isa(stmt, SyncNode)
         x.op == 1 || return OOBToken()
         return stmt.syncregion
     elseif isa(stmt, ReturnNode)
@@ -374,8 +382,13 @@ function setindex!(x::UseRef, @nospecialize(v))
         x.op == 1 || throw(BoundsError())
         x.stmt = GotoIfNot(v, stmt.dest)
     elseif isa(stmt, DetachNode)
-        x.op == 1 || throw(BoundsError())
-        x.stmt = DetachNode(v, stmt.label, stmt.reattach)
+        if x.op == 1
+            x.stmt = DetachNode(v, stmt.tasktoken, stmt.label, stmt.reattach)
+        elseif x.op == 2
+            x.stmt = DetachNode(stmt.syncregion, v, stmt.label, stmt.reattach)
+        else
+            throw(BoundsError())
+        end
     elseif isa(stmt, ReattachNode)
         x.op == 1 || throw(BoundsError())
         x.stmt = ReattachNode(v, stmt.label)
@@ -938,7 +951,7 @@ function process_node!(compact::IncrementalCompact, result::Vector{Any},
         stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, late_fixup, result_idx, do_rename_ssa)
         if compact.cfg_transforms_enabled
             if isa(stmt, DetachNode)
-                stmt = DetachNode(stmt.syncregion, compact.bb_rename[stmt.label], compact.bb_rename[stmt.reattach])
+                stmt = DetachNode(stmt.syncregion, stmt.tasktoken, compact.bb_rename[stmt.label], compact.bb_rename[stmt.reattach])
             elseif isa(stmt, ReattachNode)
                 stmt = ReattachNode(stmt.syncregion, compact.bb_rename[stmt.label])
             end

@@ -278,7 +278,10 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
         syncregion = _partially_inline!(x.syncregion, slot_replacements, type_signature,
                                         static_param_values, slot_offset,
                                         statement_offset, boundscheck)
-        return Core.DetachNode(syncregion, x.label + statement_offset, x.reattach + statement_offset)
+        tasktoken = _partially_inline!(x.tasktoken, slot_replacements, type_signature,
+                                        static_param_values, slot_offset,
+                                        statement_offset, boundscheck)
+        return Core.DetachNode(syncregion, tasktoken, x.label + statement_offset, x.reattach + statement_offset)
     end
     if isa(x, Core.ReattachNode)
         syncregion = _partially_inline!(x.syncregion, slot_replacements, type_signature,

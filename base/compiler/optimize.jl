@@ -416,12 +416,16 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             body[i] = GotoNode(el.label + labelchangemap[el.label])
         elseif isa(el, DetachNode)
             syncregion = el.syncregion
+            tasktoken = el.tasktoken
             if isa(syncregion, SSAValue)
-                    syncregion = SSAValue(syncregion.id + ssachangemap[syncregion.id])
+                syncregion = SSAValue(syncregion.id + ssachangemap[syncregion.id])
+            end
+            if isa(tasktoken, SSAValue)
+                tasktoken = SSAValue(tasktoken.id + ssachangemap[tasktoken.id])
             end
             label = el.label + labelchangemap[el.label]
             reattach = el.reattach + labelchangemap[el.label]
-            body[i] = DetachNode(syncregion, label, reattach)
+            body[i] = DetachNode(syncregion, tasktoken, label, reattach)
         elseif isa(el, ReattachNode)
             syncregion = el.syncregion
             if isa(syncregion, SSAValue)

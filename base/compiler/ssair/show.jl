@@ -60,7 +60,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
     elseif stmt isa GotoNode
         print(io, "goto #", stmt.label)
     elseif stmt isa DetachNode
-        print(io, "detach within ", stmt.syncregion, ", #", stmt.label, ", #", stmt.reattach)
+        print(io, "detach ", stmt.tasktoken, " within ", stmt.syncregion, ", #", stmt.label, ", #", stmt.reattach)
     elseif stmt isa ReattachNode
         print(io, "reattach within ", stmt.syncregion, ", #", stmt.label)
     elseif stmt isa SyncNode
@@ -735,7 +735,7 @@ function show_ir(io::IO, code::CodeInfo, line_info_preprinter=DILineInfoPrinter(
         elseif stmt isa GotoNode
             stmt = GotoNode(block_for_inst(cfg, stmt.label))
         elseif isa(stmt, DetachNode)
-            stmt = DetachNode(stmt.syncregion, block_for_inst(cfg, stmt.label), block_for_inst(cfg, stmt.reattach))
+            stmt = DetachNode(stmt.syncregion, stmt.tasktoken, block_for_inst(cfg, stmt.label), block_for_inst(cfg, stmt.reattach))
         elseif isa(stmt, ReattachNode)
             stmt = ReattachNode(stmt.syncregion, block_for_inst(cfg, stmt.label))
         elseif stmt isa PhiNode

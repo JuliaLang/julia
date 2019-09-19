@@ -536,11 +536,13 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
         else if (sym == detach_sym) {
             jl_value_t* label;
             jl_value_t* reattach;
+            jl_value_t* tasktoken;
             JL_GC_PUSH2(&label, &reattach);
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
-            label = scm_to_julia_(fl_ctx, car_(cdr_(e)), mod);
-            reattach = scm_to_julia_(fl_ctx, car_(cdr_(cdr_(e))), mod);
-            temp = jl_new_struct(jl_detachnode_type, ex, label, reattach);
+            tasktoken = scm_to_julia_(fl_ctx, car_(cdr_(e)), mod);
+            label = scm_to_julia_(fl_ctx, car_(cdr_(cdr_(e))), mod);
+            reattach = scm_to_julia_(fl_ctx, car_(cdr_(cdr_(cdr_(e)))), mod);
+            temp = jl_new_struct(jl_detachnode_type, ex, tasktoken, label, reattach);
             JL_GC_POP();
         }
         else if (sym == reattach_sym) {

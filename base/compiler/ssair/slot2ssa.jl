@@ -139,7 +139,9 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
         return stmt
     end
     if isa(stmt, DetachNode)
-        return DetachNode(fixemup!(cond, rename, ir, ci, idx, stmt.syncregion), stmt.label, stmt.reattach)
+        return DetachNode(fixemup!(cond, rename, ir, ci, idx, stmt.syncregion),
+                          fixemup!(cond, rename, ir, ci, idx, stmt.tasktoken),
+                          stmt.label, stmt.reattach)
     end
     if isa(stmt, ReattachNode)
         return ReattachNode(fixemup!(cond, rename, ir, ci, idx, stmt.syncregion), stmt.label)
@@ -478,8 +480,8 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
                 result_stmts[inst_range[end]] = GotoNode(bb_rename[terminator.label])
             end
         elseif isa(terminator, DetachNode)
-            result_stmts[inst_range[end]] = DetachNode(terminator.syncregion, bb_rename[terminator.label],
-                                                       bb_rename[terminator.reattach])
+            result_stmts[inst_range[end]] = DetachNode(terminator.syncregion, terminator.tasktoken,
+                                                       bb_rename[terminator.label], bb_rename[terminator.reattach])
         elseif isa(terminator, ReattachNode)
             result_stmts[inst_range[end]] = ReattachNode(terminator.syncregion, bb_rename[terminator.label])
         elseif isa(terminator, GotoIfNot)
@@ -811,8 +813,8 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
         if isa(stmt, GotoNode)
             new_code[idx] = GotoNode(block_for_inst(cfg, stmt.label))
         elseif isa(stmt, DetachNode)
-            new_code[idx] = DetachNode(stmt.syncregion, block_for_inst(cfg, stmt.label),
-                                       block_for_inst(cfg, stmt.reattach))
+            new_code[idx] = DetachNode(stmt.syncregion, stmt.tasktoken,
+                                       block_for_inst(cfg, stmt.label), block_for_inst(cfg, stmt.reattach))
         elseif isa(stmt, ReattachNode)
             new_code[idx] = ReattachNode(stmt.syncregion, block_for_inst(cfg, stmt.label))
         elseif isa(stmt, GotoIfNot)

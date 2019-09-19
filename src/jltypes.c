@@ -2061,8 +2061,8 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_detachnode_type =
         jl_new_datatype(jl_symbol("DetachNode"), core, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(3, "syncregion", "label", "reattach"),
-                        jl_svec(3, jl_any_type, jl_long_type, jl_long_type), 0, 0, 3);
+                        jl_perm_symsvec(4, "syncregion", "tasktoken", "label", "reattach"),
+                        jl_svec(4, jl_any_type, jl_any_type, jl_long_type, jl_long_type), 0, 0, 3);
 
     jl_reattachnode_type =
         jl_new_datatype(jl_symbol("ReattachNode"), core, jl_any_type, jl_emptysvec,

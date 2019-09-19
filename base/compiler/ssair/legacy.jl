@@ -32,8 +32,9 @@ function inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
         if isa(stmt, GotoNode)
             code[i] = GotoNode(block_for_inst(cfg, stmt.label))
         elseif isa(stmt, DetachNode)
-            code[i] = DetachNode(stmt.syncregion, block_for_inst(cfg, stmt.label),
-                                                  block_for_inst(cfg, stmt.reattach))
+            code[i] = DetachNode(stmt.syncregion, stmt.tasktoken,
+                                 block_for_inst(cfg, stmt.label),
+                                 block_for_inst(cfg, stmt.reattach))
         elseif isa(stmt, ReattachNode)
             code[i] = ReattachNode(stmt.syncregion, block_for_inst(cfg, stmt.label))
         elseif isa(stmt, GotoIfNot)
@@ -83,7 +84,8 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
         if isa(stmt, GotoNode)
             ci.code[i] = GotoNode(first(ir.cfg.blocks[stmt.label].stmts))
         elseif isa(stmt, DetachNode)
-            ci.code[i] = DetachNode(stmt.syncregion, first(ir.cfg.blocks[stmt.label].stmts),
+            ci.code[i] = DetachNode(stmt.syncregion, stmt.tasktoken,
+                                    first(ir.cfg.blocks[stmt.label].stmts),
                                     first(ir.cfg.blocks[stmt.reattach].stmts))
         elseif isa(stmt, ReattachNode)
             ci.code[i] = ReattachNode(stmt.syncregion, first(ir.cfg.blocks[stmt.label].stmts))
