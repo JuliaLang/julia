@@ -527,7 +527,7 @@ the [GNU Multiple Precision Arithmetic Library (GMP)](https://gmplib.org) and th
 respectively. The [`BigInt`](@ref) and [`BigFloat`](@ref) types are available in Julia for arbitrary
 precision integer and floating point numbers respectively.
 
-Constructors exist to create these types from primitive numerical types, and [`parse`](@ref)
+Constructors exist to create these types from primitive numerical types, and the [string literal](@ref non-standard-string-literals) [`@big_str`](@ref) or [`parse`](@ref)
 can be used to construct them from `AbstractString`s.  Once created, they participate in arithmetic
 with all other numeric types thanks to Julia's [type promotion and conversion mechanism](@ref conversion-and-promotion):
 
@@ -535,8 +535,14 @@ with all other numeric types thanks to Julia's [type promotion and conversion me
 julia> BigInt(typemax(Int64)) + 1
 9223372036854775808
 
+julia> big"123456789012345678901234567890" + 1
+123456789012345678901234567891
+
 julia> parse(BigInt, "123456789012345678901234567890") + 1
 123456789012345678901234567891
+
+julia> big"1.23456789012345678901"
+1.234567890123456789010000000000000000000000000000000000000000000000000000000004
 
 julia> parse(BigFloat, "1.23456789012345678901")
 1.234567890123456789010000000000000000000000000000000000000000000000000000000004
