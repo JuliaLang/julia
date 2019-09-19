@@ -2634,12 +2634,11 @@ julia> @inferred unzip(Generator(stable, 1:4))
 ([1, 2, 3, 4], [1.0, 2.0, 3.0, 4.0], [1, 2, 3, 4], [1.0, 2.0, 3.0, 4.0], [1, 2, 3, 4], [1.0, 2.0, 3.0, 4.0])
 
 julia> unstable(x) =
-            if x == 2
-                (x, x + 0.0, x, x + 0.0)
-            else
-                (x, x + 0.0)
-
-            end;
+        if x == 2
+            (x, x + 0.0, x, x + 0.0)
+        else
+            (x, x + 0.0)
+        end;
 
 julia> unzip(Generator(unstable, 1:3))
 ([1, 2, 3], [1.0, 2.0, 3.0], Union{Missing, Int64}[missing, 2, missing], Union{Missing, Float64}[missing, 2.0, missing])
