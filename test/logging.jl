@@ -5,7 +5,7 @@ import Base.CoreLogging: BelowMinLevel, Debug, Info, Warn, Error,
     handle_message, shouldlog, min_enabled_level, catch_exceptions
 
 import Test: collect_test_logs, TestLogger
-using Base.Printf: @sprintf
+using Printf: @sprintf
 
 isdefined(Main, :MacroCalls) || @eval Main include("testhelpers/MacroCalls.jl")
 using Main.MacroCalls

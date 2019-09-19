@@ -6,7 +6,7 @@ using Test
 using SparseArrays
 using SparseArrays: getcolptr, nonzeroinds
 using LinearAlgebra
-using Base.Printf: @printf
+using Printf: @printf # for debug
 using Random
 using Test: guardseed
 using InteractiveUtils: @which
