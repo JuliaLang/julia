@@ -995,3 +995,43 @@ end
         @test getindex(x) == getindex(x, CartesianIndex()) == 10
     end
 end
+
+@testset "Unzip" begin
+    stable(x) = (x, x + 0.0, x, x + 0.0, x, x + 0.0);
+    stable_result = @inferred unzip(Base.Generator(stable, 1:2))
+    @test stable_result == (1:2, 1:2, 1:2, 1:2, 1:2, 1:2)
+    @test typeof(stable_result) ==
+        Tuple{
+            Vector{Int}, Vector{Float64}, Vector{Int}, Vector{Float64},
+            Vector{Int}, Vector{Float64}
+        }
+
+    unstable(x) =
+        if x == 2
+            (x, x + 0.0, x, x + 0.0)
+        else
+            (x, x + 0.0)
+
+        end
+
+    unstable_result_1 = unzip(Base.Generator(unstable, 1:3))
+    @test isequal(unstable_result_1, (1:3, 1:3, [missing, 2, missing], [missing, 2, missing]))
+    @test typeof(unstable_result_1) ==
+        Tuple{
+            Vector{Int}, Vector{Float64}, Vector{Union{Missing, Int}},
+            Vector{Union{Missing, Float64}}
+        }
+
+    unstable_result_2 = unzip(Iterators.filter(row -> true, Base.Generator(unstable, 1:3)))
+    @test isequal(unstable_result_2, (1:3, 1:3, [missing, 2, missing], [missing, 2, missing]))
+    @test typeof(unstable_result_2) ==
+        Tuple{
+            Vector{Int}, Vector{Float64}, Vector{Union{Missing, Int}},
+            Vector{Union{Missing, Float64}}
+        }
+
+    unstable_result_3 = unzip(Iterators.filter(row -> false, Base.Generator(unstable, 1:4)))
+    @test unstable_result_3 == ()
+
+    @test_throws DimensionMismatch Base.Rows((1:2, 1:3))
+end

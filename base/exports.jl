@@ -542,6 +542,7 @@ export
     ⊋,
     ∩,
     ∪,
+    unzip,
 
 # strings
     ascii,
