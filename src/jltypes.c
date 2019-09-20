@@ -1045,7 +1045,7 @@ static void check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, si
 arraylist_t partial_inst;
 int inside_typedef = 0;
 
-static jl_value_t *extract_wrapper(jl_value_t *t)
+static jl_value_t *extract_wrapper(jl_value_t *t JL_PROPAGATES_ROOT)
 {
     t = jl_unwrap_unionall(t);
     if (jl_is_datatype(t))
