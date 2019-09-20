@@ -909,4 +909,13 @@ end
     end
 end
 
+@testset "Matrix log PR #33245" begin
+    # edge case for divided difference
+    A1 = triu(ones(3,3),1) + diagm([1.0, -2eps()-1im, -eps()+0.75im])
+    @test exp(log(A1)) ≈ A1
+    # case where no sqrt is needed (s=0)
+    A2 = [1.01 0.01 0.01; 0 1.01 0.01; 0 0 1.01]
+    @test exp(log(A2)) ≈ A2
+end
+
 end # module TestDense
