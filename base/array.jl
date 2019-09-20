@@ -2489,17 +2489,15 @@ end
     Rows{Row, Dimension, Columns}(columns)
 end
 
-get_model(columns) = first(columns)
-get_model(::Tuple{}) = 1:0
+dummy_column(columns) = first(columns)
+dummy_column(::Tuple{}) = 1:0
 
 @propagate_inbounds Rows(columns) = Rows{
     Tuple{map_unrolled(eltype, columns)...},
-    ndims(get_model(columns))
+    ndims(dummy_column(columns))
 }(columns)
 
-parent(rows::Rows) = get_model(rows.columns)
-
-get_columns(rows::Rows) = rows.columns
+parent(rows::Rows) = dummy_column(rows.columns)
 
 axes(rows::Rows, dimensions...) = axes(parent(rows), dimensions...)
 size(rows::Rows, dimensions...) = size(parent(rows), dimensions...)
