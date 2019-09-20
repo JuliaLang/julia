@@ -451,3 +451,11 @@ end
 
 # tuple_type_tail on non-normalized vararg tuple
 @test Base.tuple_type_tail(Tuple{Vararg{T, 3}} where T<:Real) == Tuple{Vararg{T, 2}} where T<:Real
+
+@testset "unrolled" begin
+    @test @inferred Base.map_unrolled(+, (1, 1.0)) == (1, 1.0)
+    @test @inferred Base.map_unrolled(+, (1, 1.0), (1, 1.0)) == (2, 2.0)
+    @test @inferred Base.partial_map(+, 1, (1, 1.0)) == (2, 2.0)
+    @test @inferred Base.partial_map(+, 1, (1, 1.0), (1, 1.0)) == (3, 3.0)
+    @test @inferred Base.reduce_unrolled(+, 1, 1.0) == 2.0
+end

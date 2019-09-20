@@ -2468,31 +2468,6 @@ end
 intersect(itr, itrs...) = _shrink(intersect!, itr, itrs)
 setdiff(  itr, itrs...) = _shrink(setdiff!, itr, itrs)
 
-map_unrolled(call, variables::Tuple{}) = ()
-map_unrolled(call, variables) =
-    call(first(variables)), map_unrolled(call, tail(variables))...
-
-map_unrolled(call, variables1::Tuple{}, variables2::Tuple{}) = ()
-map_unrolled(call, variables1, variables2) =
-    call(first(variables1), first(variables2)),
-    map_unrolled(call, tail(variables1), tail(variables2))...
-
-partial_map(call, fixed, variables::Tuple{}) = ()
-partial_map(call, fixed, variables) =
-    call(fixed, first(variables)), partial_map(call, fixed, tail(variables))...
-
-partial_map(call, fixed, variables1::Tuple{}, variables2::Tuple{}) = ()
-partial_map(call, fixed, variables1, variables2) =
-    call(fixed, first(variables1), first(variables2)),
-    partial_map(call, fixed, tail(variables1), tail(variables2))...
-
-function reduce_unrolled(call, item)
-    item
-end
-function reduce_unrolled(call, item1, item2, rest...)
-    reduce_unrolled(call, call(item1, item2), rest...)
-end
-
 struct Rows{Row, Dimensions, Columns} <: AbstractArray{Row, Dimensions}
     columns::Columns
 end
