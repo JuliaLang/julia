@@ -2,6 +2,17 @@
 
 using Test, Printf
 
+@testset "dynamic" begin
+
+    # dynamic width and precision
+    @test (Printf.@printf("%*d", 10, 12)) == Printf.@printf("%10d", 12)
+    @test (Printf.@printf("%.*d",  4, 12)) == Printf.@printf("%.4d", 12)
+    @test (Printf.@printf("%*.*d", 10, 4, 12)) == Printf.@printf("%10.4d", 12)
+    @test (Printf.@printf("%+*.*d", 10, 4, 12)) == Printf.@printf("%+10.4d", 12)
+    @test (Printf.@printf("%0*.*d", 10, 4, 12)) == Printf.@printf("%010.4d", 12)
+end
+
+
 @testset "%p" begin
 
     # pointers
@@ -47,7 +58,7 @@ end
                     (12340000.0, "1.234e+07"))
         @test (Printf.@sprintf("%.6g", val) == res)
     end
-    for (val, res) in ((big"12345678.", "1.23457e+07"),
+    for (val, res) in ((big"12345678", "1.23457e+07"),
                     (big"1234567.8", "1.23457e+06"),
                     (big"123456.78", "123457"),
                     (big"12345.678", "12345.7"))
@@ -74,7 +85,7 @@ end
 
     # %g regression gh #14331
     @test( Printf.@sprintf( "%.5g", 42) == "42")
-    @test( Printf.@sprintf( "%#.2g", 42) == "42.")
+    @test( Printf.@sprintf( "%#.2g", 42) == "42")
     @test( Printf.@sprintf( "%#.5g", 42) == "42.000")
 
     @test Printf.@sprintf("%g", 0.00012) == "0.00012"
@@ -130,7 +141,7 @@ end
     @test Printf.@sprintf("%+ 09.1f", 1.234) == "+000001.2"
     @test Printf.@sprintf("%+ 09.1f", 1.234) == "+000001.2"
     @test Printf.@sprintf("%+ 09.0f", 1.234) == "+00000001"
-    @test Printf.@sprintf("%+ #09.0f", 1.234) == "+0000001."
+    @test Printf.@sprintf("%+ #09.0f", 1.234) == "+0000001"
 end
 
 @testset "%e" begin
