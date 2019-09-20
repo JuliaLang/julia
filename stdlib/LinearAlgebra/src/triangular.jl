@@ -50,6 +50,20 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
     end
 end
 
+for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
+          :UnitUpperTriangular)
+    @eval begin
+        adjtypes = Dict(
+            LowerTriangular => UpperTriangular,
+            UpperTriangular => LowerTriangular,
+            UnitLowerTriangular => UnitUpperTriangular,
+            UnitUpperTriangular => UnitLowerTriangular,
+        )
+        similar(A::Adjoint{TI,TV}, ::Type{T}) where{T,TI,TV<:$t} = adjtypes[$t](similar(parent(parent(A)), T))
+        similar(A::Transpose{TI,TV}, ::Type{T}) where{T,TI,TV<:$t} = adjtypes[$t](similar(parent(parent(A)), T))
+    end
+end
+
 LowerTriangular(U::UpperTriangular) = throw(ArgumentError(
     "cannot create a LowerTriangular matrix from an UpperTriangular input"))
 UpperTriangular(U::LowerTriangular) = throw(ArgumentError(
