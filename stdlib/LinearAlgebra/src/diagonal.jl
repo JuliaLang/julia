@@ -162,8 +162,10 @@ end
 (*)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
 (*)(D::Diagonal, V::AbstractVector) = D.diag .* V
 
-(*)(A::AbstractTriangular, D::Diagonal) = rmul!(copy(A), D)
-(*)(D::Diagonal, B::AbstractTriangular) = lmul!(D, copy(B))
+(*)(A::AbstractTriangular, D::Diagonal) =
+    rmul!(copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A), D)
+(*)(D::Diagonal, B::AbstractTriangular) =
+    lmul!(D, copyto!(similar(B, promote_op(*, eltype(B), eltype(D.diag))), B))
 
 (*)(A::AbstractMatrix, D::Diagonal) =
     rmul!(copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A), D)

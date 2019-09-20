@@ -453,6 +453,33 @@ end
         @test D*transpose(T) == Array(D)*transpose(Array(T))
         @test D*T   == Array(D)*Array(T)
     end
+    function _test_matrix(type)
+        if type == Int
+            return rand(1:9, 5, 5)
+        else
+            return randn(type, 5, 5)
+        end
+    end
+    types = (Float32, Float64, Int, ComplexF64)
+    for ta in types
+        D = Diagonal(_test_matrix(ta))
+        for tb in types
+            B = _test_matrix(tb)
+            Tmats = (LowerTriangular(B), UnitLowerTriangular(B), UpperTriangular(B), UnitUpperTriangular(B))
+            restypes = (LowerTriangular, LowerTriangular, UpperTriangular, UpperTriangular)
+            for (T, rtype) in zip(Tmats, restypes)
+                # Triangular * Diagonal
+                R = T * D
+                @test R == Array(T) * Array(D)
+                @test isa(R, rtype)
+
+                # Diagonal * Triangular
+                R = D * T
+                @test R == Array(D) * Array(T)
+                @test isa(R, rtype)
+            end
+        end
+    end
 end
 
 let D1 = Diagonal(rand(5)), D2 = Diagonal(rand(5))
