@@ -141,23 +141,21 @@ end
 # matrix breaks the hermiticity, if the UniformScaling is non-real.
 # However, to preserve type stability, we do not special-case a
 # UniformScaling{<:Complex} that happens to be real.
-function (+)(A::Hermitian{T,S}, J::UniformScaling{<:Complex}) where {T,S}
-    A_ = copytri!(copy(parent(A)), A.uplo)
-    B = convert(AbstractMatrix{Base._return_type(+, Tuple{eltype(A), typeof(J)})}, A_)
-    @inbounds for i in diagind(B)
-        B[i] += J
+function (+)(A::Hermitian, J::UniformScaling{<:Complex})
+    TS = Base._return_type(+, Tuple{eltype(A), typeof(J)})
+    B = copytri!(copy_oftype(parent(A), TS), A.uplo, true)
+    for i in diagind(B)
+        B[i] = A[i] + J
     end
     return B
 end
 
-function (-)(J::UniformScaling{<:Complex}, A::Hermitian{T,S}) where {T,S}
-    A_ = copytri!(copy(parent(A)), A.uplo)
-    B = convert(AbstractMatrix{Base._return_type(+, Tuple{eltype(A), typeof(J)})}, A_)
-    @inbounds for i in eachindex(B)
-        B[i] = -B[i]
-    end
-    @inbounds for i in diagind(B)
-        B[i] += J
+function (-)(J::UniformScaling{<:Complex}, A::Hermitian)
+    TS = Base._return_type(+, Tuple{eltype(A), typeof(J)})
+    B = copytri!(copy_oftype(parent(A), TS), A.uplo, true)
+    B .= .-B
+    for i in diagind(B)
+        B[i] = J - A[i]
     end
     return B
 end
@@ -215,8 +213,10 @@ end
 
 \(x::Number, J::UniformScaling) = UniformScaling(x\J.λ)
 
-mul!(C::AbstractMatrix, A::AbstractMatrix, J::UniformScaling) = mul!(C, A, J.λ)
-mul!(C::AbstractVecOrMat, J::UniformScaling, B::AbstractVecOrMat) = mul!(C, J.λ, B)
+@inline mul!(C::AbstractMatrix, A::AbstractMatrix, J::UniformScaling, alpha::Number, beta::Number) =
+    mul!(C, A, J.λ, alpha, beta)
+@inline mul!(C::AbstractVecOrMat, J::UniformScaling, B::AbstractVecOrMat, alpha::Number, beta::Number) =
+    mul!(C, J.λ, B, alpha, beta)
 rmul!(A::AbstractMatrix, J::UniformScaling) = rmul!(A, J.λ)
 lmul!(J::UniformScaling, B::AbstractVecOrMat) = lmul!(J.λ, B)
 rdiv!(A::AbstractMatrix, J::UniformScaling) = rdiv!(A, J.λ)
@@ -400,3 +400,7 @@ Array(s::UniformScaling, dims::Dims{2}) = Matrix(s, dims)
 ## Diagonal construction from UniformScaling
 Diagonal{T}(s::UniformScaling, m::Integer) where {T} = Diagonal{T}(fill(T(s.λ), m))
 Diagonal(s::UniformScaling, m::Integer) = Diagonal{eltype(s)}(s, m)
+
+dot(x::AbstractVector, J::UniformScaling, y::AbstractVector) = dot(x, J.λ, y)
+dot(x::AbstractVector, a::Number, y::AbstractVector) = sum(t -> dot(t[1], a, t[2]), zip(x, y))
+dot(x::AbstractVector, a::Union{Real,Complex}, y::AbstractVector) = a*dot(x, y)

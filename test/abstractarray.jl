@@ -865,8 +865,8 @@ for A in (rand(2), rand(2,3))
     end
     @test Array(values(A)) == A
 
-    @test keytype(A) == eltype(keys(A))
-    @test valtype(A) == eltype(values(A))
+     @test keytype(A) == keytype(typeof(A)) == eltype(keys(A))
+     @test valtype(A) == valtype(typeof(A)) == eltype(values(A))
 end
 
 # nextind and prevind
@@ -969,4 +969,29 @@ end
     @test get(A, CartesianIndex(2,2,3), :some_default) === :some_default
     @test get(11:15, CartesianIndex(6), nothing) === nothing
     @test get(11:15, CartesianIndex(5), nothing) === 15
+end
+
+@testset "IndexStyle for various types" begin
+    @test Base.IndexStyle(UpperTriangular) == IndexCartesian() # subtype of AbstractArray, not of Array
+    @test Base.IndexStyle(Vector) == IndexLinear()
+    @test Base.IndexStyle(UnitRange) == IndexLinear()
+    @test Base.IndexStyle(UpperTriangular(rand(3, 3)), [1; 2; 3]) == IndexCartesian()
+    @test Base.IndexStyle(UpperTriangular(rand(3, 3)), rand(3, 3), [1; 2; 3]) == IndexCartesian()
+    @test Base.IndexStyle(rand(3, 3), [1; 2; 3]) == IndexLinear()
+end
+
+@testset "promote_shape for Tuples and Dims" begin
+    @test promote_shape((2, 1), (2,)) == (2, 1)
+    @test_throws DimensionMismatch promote_shape((2, 3), (2,))
+    @test promote_shape(Dims((2, 1)), Dims((2,))) == (2, 1)
+    @test_throws DimensionMismatch promote_shape(Dims((2, 2)), Dims((2,)))
+    @test_throws DimensionMismatch promote_shape(Dims((2, 3, 1)), Dims((2,2)))
+end
+
+@testset "getindex and setindex! for Ref" begin
+    for x in [Ref(1), Ref([1,2,3], 1)]
+        @test getindex(x) == getindex(x, CartesianIndex()) == 1
+        x[CartesianIndex()] = 10
+        @test getindex(x) == getindex(x, CartesianIndex()) == 10
+    end
 end

@@ -61,8 +61,8 @@ function typeinf(frame::InferenceState)
     for caller in frames
         caller.min_valid = min_valid
         caller.max_valid = max_valid
-        caller.src.min_world = min_valid % Int
-        caller.src.max_world = max_valid % Int
+        caller.src.min_world = min_valid
+        caller.src.max_world = max_valid
         if cached
             cache_result(caller.result, min_valid, max_valid)
         end
@@ -176,20 +176,26 @@ function store_backedges(frame::InferenceState)
     if !toplevel && (frame.cached || frame.parent !== nothing)
         caller = frame.result.linfo
         for edges in frame.stmt_edges
-            edges === nothing && continue
-            i = 1
-            while i <= length(edges)
-                to = edges[i]
-                if isa(to, MethodInstance)
-                    ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any), to, caller)
-                    i += 1
-                else
-                    typeassert(to, Core.MethodTable)
-                    typ = edges[i + 1]
-                    ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
-                    i += 2
-                end
-            end
+            store_backedges(caller, edges)
+        end
+        store_backedges(caller, frame.src.edges)
+        frame.src.edges = nothing
+    end
+end
+
+store_backedges(caller, edges::Nothing) = nothing
+function store_backedges(caller, edges::Vector)
+    i = 1
+    while i <= length(edges)
+        to = edges[i]
+        if isa(to, MethodInstance)
+            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any), to, caller)
+            i += 1
+        else
+            typeassert(to, Core.MethodTable)
+            typ = edges[i + 1]
+            ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
+            i += 2
         end
     end
 end

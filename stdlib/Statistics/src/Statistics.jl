@@ -73,7 +73,32 @@ function mean(f, itr)
     end
     return total/count
 end
-mean(f, A::AbstractArray) = sum(f, A) / length(A)
+
+"""
+    mean(f::Function, A::AbstractArray; dims)
+
+Apply the function `f` to each element of array `A` and take the mean over dimensions `dims`.
+
+!!! compat "Julia 1.3"
+    This method requires at least Julia 1.3.
+
+```jldoctest
+julia> mean(√, [1, 2, 3])
+1.3820881233139908
+
+julia> mean([√1, √2, √3])
+1.3820881233139908
+
+julia> mean(√, [1 2 3; 4 5 6], dims=2)
+2×1 Array{Float64,2}:
+ 1.3820881233139908
+ 2.2285192400943226
+```
+"""
+mean(f, A::AbstractArray; dims=:) = _mean(f, A, dims)
+
+_mean(f, A::AbstractArray, ::Colon) = sum(f, A) / length(A)
+_mean(f, A::AbstractArray, dims) = sum(f, A, dims=dims) / mapreduce(i -> size(A, i), *, unique(dims); init=1)
 
 """
     mean!(r, v)
@@ -620,8 +645,8 @@ function corm(x::AbstractVector, mx, y::AbstractVector, my)
 
     @inbounds begin
         # Initialize the accumulators
-        xx = zero(sqrt(abs2(x[1])))
-        yy = zero(sqrt(abs2(y[1])))
+        xx = zero(sqrt(abs2(one(x[1]))))
+        yy = zero(sqrt(abs2(one(y[1]))))
         xy = zero(x[1] * y[1]')
 
         @simd for i in eachindex(x, y)
@@ -978,9 +1003,8 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::SparseMatrixCSC{Tv,Ti}, mea
     isempty(R) || fill!(R, zero(S))
     isempty(A) && return R
 
-    colptr = A.colptr
-    rowval = A.rowval
-    nzval = A.nzval
+    rowval = rowvals(A)
+    nzval = nonzeros(A)
     m = size(A, 1)
     n = size(A, 2)
 
@@ -991,8 +1015,8 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::SparseMatrixCSC{Tv,Ti}, mea
         # Reduction along rows
         @inbounds for col = 1:n
             mu = means[col]
-            r = convert(S, (m-colptr[col+1]+colptr[col])*abs2(mu))
-            @simd for j = colptr[col]:colptr[col+1]-1
+            r = convert(S, (m - length(nzrange(A, col)))*abs2(mu))
+            @simd for j = nzrange(A, col)
                 r += abs2(nzval[j] - mu)
             end
             R[1, col] = r
@@ -1001,7 +1025,7 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::SparseMatrixCSC{Tv,Ti}, mea
         # Reduction along columns
         rownz = fill(convert(Ti, n), m)
         @inbounds for col = 1:n
-            @simd for j = colptr[col]:colptr[col+1]-1
+            @simd for j = nzrange(A, col)
                 row = rowval[j]
                 R[row, 1] += abs2(nzval[j] - means[row])
                 rownz[row] -= 1
@@ -1014,7 +1038,7 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::SparseMatrixCSC{Tv,Ti}, mea
         # Reduction along a dimension > 2
         @inbounds for col = 1:n
             lastrow = 0
-            @simd for j = colptr[col]:colptr[col+1]-1
+            @simd for j = nzrange(A, col)
                 row = rowval[j]
                 for i = lastrow+1:row-1
                     R[i, col] = abs2(means[i, col])

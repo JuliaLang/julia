@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Test
 
 # code_native / code_llvm (issue #8239)
@@ -269,6 +270,10 @@ tlayout = TLayout(5,7,11)
 @test fieldtype(NamedTuple{(:a,:b)}, 2) === Any
 @test fieldtype((NamedTuple{(:a,:b),T} where T<:Tuple{Vararg{Integer}}), 2) === Integer
 @test_throws BoundsError fieldtype(NamedTuple{(:a,:b)}, 3)
+
+# issue #32697
+@test fieldtype(NamedTuple{(:x,:y), T} where T <: Tuple{Int, Union{Float64, Missing}}, :x) == Int
+@test fieldtype(NamedTuple{(:x,:y), T} where T <: Tuple{Int, Union{Float64, Missing}}, :y) == Union{Float64, Missing}
 
 @test fieldtypes(NamedTuple{(:a,:b)}) == (Any, Any)
 @test fieldtypes((NamedTuple{T,Tuple{Int,String}} where T)) === (Int, String)
@@ -870,3 +875,20 @@ function _test_at_locals2(a::Any, ::Any)
     @test @locals() == Dict{Symbol,Any}(:x=>2,:a=>a)
 end
 _test_at_locals2(1,1)
+
+@testset "issue #31687" begin
+    import InteractiveUtils._dump_function
+
+    @noinline f31687_child(i) = f31687_nonexistent(i)
+    f31687_parent() = f31687_child(0)
+    params = Base.CodegenParams(cached=false)
+    _dump_function(f31687_parent, Tuple{},
+                   #=native=#false, #=wrapper=#false, #=strip=#false,
+                   #=dump_module=#true, #=syntax=#:att, #=optimize=#false, :none,
+                   params)
+end
+
+@test nameof(Any) === :Any
+@test nameof(:) === :Colon
+@test nameof(Core.Intrinsics.mul_int) === :mul_int
+@test nameof(Core.Intrinsics.arraylen) === :arraylen

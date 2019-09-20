@@ -27,7 +27,7 @@ export TestSetException
 import Distributed: myid
 
 using Random
-using Random: AbstractRNG, GLOBAL_RNG
+using Random: AbstractRNG, default_rng
 using InteractiveUtils: gen_call_with_extracted_types
 using Core.Compiler: typesubtract
 
@@ -45,7 +45,8 @@ const DISPLAY_FAILED = (
 
 # Backtrace utility functions
 function ip_has_file_and_func(ip, file, funcs)
-    return any(fr -> (string(fr.file) == file && fr.func in funcs), StackTraces.lookup(ip))
+    ip isa Base.InterpreterIP || (ip -= 1) # convert from return stack to call stack (for inlining info)
+    return any(fr -> (string(fr.file) == file && fr.func in funcs), StackTraces.lookupat(ip))
 end
 
 function scrub_backtrace(bt)
@@ -236,6 +237,7 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
     evaled_args = evaluated.args
     quoted_args = quoted.args
     n = length(evaled_args)
+    kw_suffix = ""
     if evaluated.head == :comparison
         args = evaled_args
         while i < n
@@ -260,17 +262,9 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
         func_sym = quoted_args[1]
         if isempty(kwargs)
             quoted = Expr(:call, func_sym, args...)
-        elseif func_sym === :≈
-            # in case of `≈(x, y, atol = z)`
-            # make the display like `Evaluated: x ≈ y (atol=z)`
-            kws = [Symbol(Expr(:kw, k, v), ",") for (k, v) in kwargs]
-            kws[end] = Symbol(Expr(:kw, kwargs[end]...))
-            kws[1] = Symbol("(", kws[1])
-            kws[end] = Symbol(kws[end], ")")
-            quoted = Expr(:comparison, args[1], func_sym, args[2], kws...)
-            if length(quoted.args) & 1 == 0  # hack to fit `show_unquoted`
-                push!(quoted.args, Symbol())
-            end
+        elseif func_sym === :≈ && !res
+            quoted = Expr(:call, func_sym, args...)
+            kw_suffix = " ($(join(["$k=$v" for (k, v) in kwargs], ", ")))"
         else
             kwargs_expr = Expr(:parameters, [Expr(:kw, k, v) for (k, v) in kwargs]...)
             quoted = Expr(:call, func_sym, kwargs_expr, args...)
@@ -286,7 +280,7 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
 
     Returned(res,
              # stringify arguments in case of failure, for easy remote printing
-             res ? quoted : sprint(io->print(IOContext(io, :limit => true), quoted)),
+             res ? quoted : sprint(io->print(IOContext(io, :limit => true), quoted))*kw_suffix,
              source)
 end
 
@@ -1106,10 +1100,11 @@ function testset_beginend(args, tests, source)
         # we reproduce the logic of guardseed, but this function
         # cannot be used as it changes slightly the semantic of @testset,
         # by wrapping the body in a function
-        oldrng = copy(GLOBAL_RNG)
+        local RNG = default_rng()
+        oldrng = copy(RNG)
         try
-            # GLOBAL_RNG is re-seeded with its own seed to ease reproduce a failed test
-            Random.seed!(GLOBAL_RNG.seed)
+            # RNG is re-seeded with its own seed to ease reproduce a failed test
+            Random.seed!(RNG.seed)
             $(esc(tests))
         catch err
             err isa InterruptException && rethrow()
@@ -1117,7 +1112,7 @@ function testset_beginend(args, tests, source)
             # error in this test set
             record(ts, Error(:nontest_error, :(), err, Base.catch_stack(), $(QuoteNode(source))))
         finally
-            copy!(GLOBAL_RNG, oldrng)
+            copy!(RNG, oldrng)
         end
         pop_testset()
         finish(ts)
@@ -1176,7 +1171,7 @@ function testset_forloop(args, testloop, source)
             pop_testset()
             push!(arr, finish(ts))
             # it's 1000 times faster to copy from tmprng rather than calling Random.seed!
-            copy!(GLOBAL_RNG, tmprng)
+            copy!(RNG, tmprng)
 
         end
         ts = $(testsettype)($desc; $options...)
@@ -1195,9 +1190,10 @@ function testset_forloop(args, testloop, source)
         arr = Vector{Any}()
         local first_iteration = true
         local ts
-        local oldrng = copy(GLOBAL_RNG)
-        Random.seed!(GLOBAL_RNG.seed)
-        local tmprng = copy(GLOBAL_RNG)
+        local RNG = default_rng()
+        local oldrng = copy(RNG)
+        Random.seed!(RNG.seed)
+        local tmprng = copy(RNG)
         try
             $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
         finally
@@ -1206,7 +1202,7 @@ function testset_forloop(args, testloop, source)
                 pop_testset()
                 push!(arr, finish(ts))
             end
-            copy!(GLOBAL_RNG, oldrng)
+            copy!(RNG, oldrng)
         end
         arr
     end
@@ -1431,7 +1427,7 @@ function detect_ambiguities(mods...;
                 subambs = detect_ambiguities(f,
                     imported=imported, recursive=recursive, ambiguous_bottom=ambiguous_bottom)
                 union!(ambs, subambs)
-            elseif isa(f, DataType) && isdefined(f.name, :mt)
+            elseif isa(f, DataType) && isdefined(f.name, :mt) && f.name.mt !== Symbol.name.mt
                 mt = Base.MethodList(f.name.mt)
                 for m in mt
                     if m.ambig !== nothing
@@ -1441,6 +1437,24 @@ function detect_ambiguities(mods...;
                             end
                         end
                     end
+                end
+            end
+        end
+    end
+    function is_in_mods(m::Module)
+        while true
+            m in mods && return true
+            recursive || return false
+            p = parentmodule(m)
+            p === m && return false
+            m = parent
+        end
+    end
+    for m in Base.MethodList(Symbol.name.mt)
+        if m.ambig !== nothing && is_in_mods(m.module)
+            for m2 in m.ambig
+                if Base.isambiguous(m, m2.func, ambiguous_bottom=ambiguous_bottom)
+                    push!(ambs, sortdefs(m, m2.func))
                 end
             end
         end
@@ -1630,7 +1644,7 @@ Base.similar(A::GenericArray, s::Integer...) = GenericArray(similar(A.a, s...))
 
 "`guardseed(f)` runs the function `f()` and then restores the
 state of the global RNG as it was before."
-function guardseed(f::Function, r::AbstractRNG=GLOBAL_RNG)
+function guardseed(f::Function, r::AbstractRNG=default_rng())
     old = copy(r)
     try
         f()

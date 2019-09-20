@@ -755,7 +755,7 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer)
                                    "expected at least ",sstart,", got ",sstart-1)))
     end
     i = Int(dstart)
-    while y != nothing
+    while y !== nothing
         val, st = y
         dest[i] = val
         i += 1

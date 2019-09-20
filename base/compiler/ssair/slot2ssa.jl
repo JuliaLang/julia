@@ -653,7 +653,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
         elseif !defuse[x].any_newvar
             undef_token
         else
-            SSAValue(-1)
+            SSAValue(-2)
         end for x in 1:length(ci.slotflags)
     ]
     worklist = Tuple{Int, Int, Vector{Any}}[(1, 0, initial_incoming_vals)]
@@ -717,9 +717,10 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
         eidx = findfirst(x->x[1] == item, catch_entry_blocks)
         if eidx !== nothing
             for (slot, _, node) in phicnodes[catch_entry_blocks[eidx][2]]
-                ivalundef = incoming_vals[slot_id(slot)] === undef_token
-                unode = ivalundef ? UpsilonNode() : UpsilonNode(incoming_vals[slot_id(slot)])
-                typ = ivalundef ? MaybeUndef(Union{}) : slottypes[slot_id(slot)]
+                ival = incoming_vals[slot_id(slot)]
+                ivalundef = ival === undef_token
+                unode = ivalundef ? UpsilonNode() : UpsilonNode(ival)
+                typ = ivalundef ? MaybeUndef(Union{}) : typ_for_val(ival, ci, sptypes, -1, slottypes)
                 push!(node.values,
                     NewSSAValue(insert_node!(ir, first_insert_for_bb(code, cfg, item),
                                  typ, unode, true).id - length(ir.stmts)))

@@ -38,8 +38,8 @@
 (define prec-dot         '(|.|))
 
 (define prec-names '(prec-assignment
-                     prec-pair prec-conditional prec-lazy-or prec-lazy-and prec-arrow prec-comparison
-                     prec-pipe< prec-pipe> prec-colon prec-plus prec-bitshift prec-times prec-rational
+                     prec-pair prec-conditional prec-arrow prec-lazy-or prec-lazy-and prec-comparison
+                     prec-pipe< prec-pipe> prec-colon prec-plus prec-times prec-rational prec-bitshift
                      prec-power prec-decl prec-dot))
 
 (define trans-op (string->symbol ".'"))
@@ -102,12 +102,12 @@
                                       0))
 
 (define unary-ops (append! '(|<:| |>:|)
-                           (add-dots '(+ - ! ~ ¬ √ ∛ ∜))))
+                           (add-dots '(+ - ! ~ ¬ √ ∛ ∜ ⋆))))
 
 (define unary-op? (Set unary-ops))
 
 ; operators that are both unary and binary
-(define unary-and-binary-ops '(+ - $ & ~ |.+| |.-|))
+(define unary-and-binary-ops '(+ - $ & ~ ⋆ |.+| |.-| |.⋆|))
 
 (define unary-and-binary-op? (Set unary-and-binary-ops))
 
@@ -214,10 +214,6 @@
 
 (define-macro (with-whitespace-newline . body)
   `(with-bindings ((whitespace-newline #t))
-                  ,@body))
-
-(define-macro (without-whitespace-newline . body)
-  `(with-bindings ((whitespace-newline #f))
                   ,@body))
 
 ;; --- lexer ---
@@ -545,9 +541,10 @@
                         ((char-numeric? nextc)
                          (read-number port #t #f))
                         ((opchar? nextc)
-                         (let ((op (read-operator port c)))
-                           (if (and (eq? op '..) (opchar? (peek-char port)))
-                               (error (string "invalid operator \"" op (peek-char port) "\"" (scolno port))))
+                         (let* ((op (read-operator port c))
+                                (nx (peek-char port)))
+                           (if (and (eq? op '..) (opchar? nx) (not (memv nx '(#\' #\:))))
+                               (error (string "invalid operator \"" op nx "\"" (scolno port))))
                            op))
                         (else '|.|)))))
 
@@ -1071,10 +1068,11 @@
 ;; -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
 ;; and parse-unary from then on (to handle 2^-3)
 (define (parse-factor s)
-  (parse-factor-with-initial-ex s (parse-unary-prefix s)))
+  (let ((nxt (peek-token s)))
+    (parse-factor-with-initial-ex s (parse-unary-prefix s) nxt)))
 
-(define (parse-factor-with-initial-ex s ex0)
-  (let* ((ex (parse-decl-with-initial-ex s (parse-call-with-initial-ex s ex0)))
+(define (parse-factor-with-initial-ex s ex0 (tok #f))
+  (let* ((ex (parse-decl-with-initial-ex s (parse-call-with-initial-ex s ex0 tok)))
          (t  (peek-token s)))
     (if (is-prec-power? t)
         (begin (take-token s)
@@ -1103,10 +1101,11 @@
 ;; parse function call, indexing, dot, and transpose expressions
 ;; also handles looking for syntactic reserved words
 (define (parse-call s)
-  (parse-call-with-initial-ex s (parse-unary-prefix s)))
+  (let ((nxt (peek-token s)))
+    (parse-call-with-initial-ex s (parse-unary-prefix s) nxt)))
 
-(define (parse-call-with-initial-ex s ex)
-  (if (or (initial-reserved-word? ex) (eq? ex 'mutable) (eq? ex 'primitive) (eq? ex 'abstract))
+(define (parse-call-with-initial-ex s ex tok)
+  (if (or (initial-reserved-word? tok) (memq tok '(mutable primitive abstract)))
       (parse-resword s ex)
       (parse-call-chain s ex #f)))
 
@@ -1546,7 +1545,7 @@
 (define (parse-do s)
   (with-bindings
    ((expect-end-current-line (input-port-line (ts:port s))))
-   (without-whitespace-newline
+   (with-normal-context
     (let ((doargs (if (memv (peek-token s) '(#\newline #\;))
                       '()
                       (parse-comma-separated s parse-range))))
@@ -1603,7 +1602,7 @@
        ((eq? nxt '|.|)
         (if (ts:space? s) (disallowed-space word nxt))
         (take-token s)
-        (loop (cons (macrocall-to-atsym (parse-unary-prefix s)) path)))
+        (loop (cons (unquote (macrocall-to-atsym (parse-unary-prefix s))) path)))
        ((or (memv nxt '(#\newline #\; #\, :))
             (eof-object? nxt))
         (cons '|.| (reverse path)))
@@ -2135,11 +2134,11 @@
   (let* ((p (ts:port s))
          (c (peek-char p)))
     (cond ((identifier-start-char? c)
-           (let* ((atom (parse-atom s))
+           (let* ((t (require-token s))
                   (c (peek-char p)))
              (if (ends-interpolated-atom? c)
-                 atom
-                 (error (string "interpolated variable $" atom " ends with invalid character \"" c "\"; use \"$(" atom ")\" instead.")))))
+                 (take-token s)
+                 (error (string "interpolated variable $" t " ends with invalid character \"" c "\"; use \"$(" t ")\" instead.")))))
           ((eqv? c #\()
            (read-char p)
            (let ((ex (parse-eq* s))
@@ -2285,7 +2284,23 @@
                (begin (check-identifier t)
                       (if (closing-token? t)
                           (error (string "unexpected \"" (take-token s) "\"")))))
-           (take-token s))
+           (take-token s)
+           (if (and (eq? t 'var)
+                    (if (or (ts:pbtok s) (ts:last-tok s))
+                        (and (eqv? (peek-token s) #\") (not (ts:space? s)))
+                        ;; Hack: avoid peek-token if possible to preserve
+                        ;; (io.pos (ts:port s)) for non-greedy Meta.parse
+                        (eqv? (peek-char (ts:port s)) #\")))
+             (begin
+               ;; var"funky identifier" syntax
+               (peek-token s)
+               (take-token s) ;; leading "
+               (let ((str (parse-raw-literal s #\"))
+                     (nxt (peek-token s)))
+                 (if (and (symbol? nxt) (not (operator? nxt)) (not (ts:space? s)))
+                     (error (string "suffix not allowed after `var\"" str "\"`")))
+                 (symbol str)))
+             t))
 
           ;; parens or tuple
           ((eqv? t #\( )

@@ -14,6 +14,8 @@
 # Set to zero to turn off extra precompile (e.g. for the REPL)
 JULIA_PRECOMPILE ?= 1
 
+FORCE_ASSERTIONS ?= 0
+
 # OPENBLAS build options
 OPENBLAS_TARGET_ARCH:=
 OPENBLAS_SYMBOLSUFFIX:=
@@ -50,6 +52,8 @@ USE_SYSTEM_LIBSSH2:=0
 USE_SYSTEM_CURL:=0
 USE_SYSTEM_LIBGIT2:=0
 USE_SYSTEM_PATCHELF:=0
+USE_SYSTEM_ZLIB:=0
+USE_SYSTEM_P7ZIP:=0
 
 # Link to the LLVM shared library
 USE_LLVM_SHLIB := 1
@@ -124,11 +128,19 @@ endif
 
 # we include twice to pickup user definitions better
 # include from JULIAHOME first so that BUILDROOT can override
-ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
-include $(JULIAHOME)/Make.user
+MAYBE_HOST :=
+ifneq ($(BUILDING_HOST_TOOLS),1)
+MAKE_USER_FNAME = Make.user
+else
+MAYBE_HOST := /host
+MAKE_USER_FNAME = Make.host.user
 endif
-ifeq (exists, $(shell [ -e $(BUILDROOT)/Make.user ] && echo exists ))
-include $(BUILDROOT)/Make.user
+
+ifeq (exists, $(shell [ -e $(JULIAHOME)/$(MAKE_USER_FNAME) ] && echo exists ))
+include $(JULIAHOME)/$(MAKE_USER_FNAME)
+endif
+ifeq (exists, $(shell [ -e $(BUILDROOT)/$(MAKE_USER_FNAME) ] && echo exists ))
+include $(BUILDROOT)/$(MAKE_USER_FNAME)
 endif
 
 # disable automatic Makefile rules
@@ -182,8 +194,46 @@ endif
 # Whether to use GPL libraries or not.
 USE_GPL_LIBS ?= 1
 
+# Whether to install Julia as a framework on Darwin (Apple) platforms.
+DARWIN_FRAMEWORK ?= 0
+
+# Override in Make.user to customize the framework:
+FRAMEWORK_NAME ?= Julia
+FRAMEWORK_VERSION ?= $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION)
+
+# The prefix for all code sign identifiers.
+DARWIN_CODESIGN_ID_BASE ?= org.julialang.julia
+# The codesign id for the ui/repl (also embedded in Info.plist).
+darwin_codesign_id_julia_ui := $(DARWIN_CODESIGN_ID_BASE).ui
+# The prefix for all deps.
+darwin_codesign_id_julia_deps := $(DARWIN_CODESIGN_ID_BASE).deps
+
+# Directories and file structure of a Darwin framework:
+framework_directory:=$(FRAMEWORK_NAME).framework
+framework_versions:=$(framework_directory)/Versions
+framework_currver:=$(framework_versions)/$(FRAMEWORK_VERSION)
+framework_dylib:=$(framework_currver)/$(FRAMEWORK_NAME)
+framework_headers:=$(framework_currver)/Headers
+framework_documentation:=$(framework_currver)/Documentation
+framework_resources:=$(framework_currver)/Resources
+framework_frameworks:=$(framework_currver)/Frameworks
+framework_modules:=$(framework_currver)/Modules
+framework_helpers:=$(framework_currver)/Helpers
+framework_infoplist:=$(framework_resources)/Info.plist
+
 # Directories where said libraries get installed to
 prefix ?= $(BUILDROOT)/julia-$(JULIA_COMMIT)
+ifeq ($(DARWIN_FRAMEWORK), 1)
+bindir := $(prefix)/$(framework_helpers)
+libdir := $(prefix)/$(framework_currver)
+libexecdir := $(prefix)/$(framework_helpers)
+datarootdir := $(prefix)/$(framework_resources)
+docdir := $(prefix)/$(framework_documentation)
+mandir := $(datarootdir)/man
+man1dir := $(mandir)/man1
+includedir := $(prefix)/$(framework_headers)
+sysconfdir := $(prefix)/$(framework_resources)
+else
 bindir := $(prefix)/bin
 libdir := $(prefix)/lib
 libexecdir := $(prefix)/libexec
@@ -193,10 +243,15 @@ mandir := $(datarootdir)/man
 man1dir := $(mandir)/man1
 includedir := $(prefix)/include
 sysconfdir := $(prefix)/etc
+endif
 
 # Directories where things get built into
-build_prefix := $(BUILDROOT)/usr
+build_prefix := $(BUILDROOT)/usr$(MAYBE_HOST)
+ifeq ($(BUILDING_HOST_TOOLS), 1)
+build_staging := $(BUILDROOT)/usr-host-staging
+else
 build_staging := $(build_prefix)-staging
+endif
 build_bindir := $(build_prefix)/bin
 build_depsbindir := $(build_prefix)/tools
 build_libdir := $(build_prefix)/lib
@@ -215,7 +270,11 @@ build_libdir := $(build_prefix)/lib/$(MULTIARCH)
 endif
 
 # Private library directories
+ifeq ($(DARWIN_FRAMEWORK), 1)
+private_libdir := $(prefix)/$(framework_frameworks)
+else
 private_libdir := $(libdir)/julia
+endif
 build_private_libdir := $(build_libdir)/julia
 
 # Calculate relative paths to libdir, private_libdir, datarootdir, and sysconfdir
@@ -278,6 +337,9 @@ OPENBLAS_DYNAMIC_ARCH := 1
 override CROSS_COMPILE:=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
 override OS := WINNT
+else ifneq (,$(findstring emscripten,$(XC_HOST)))
+override OS := emscripten
+override CROSS_COMPILE:=
 else
 ifeq (,$(OS))
 $(error "unknown XC_HOST variable set, please set OS")
@@ -429,6 +491,8 @@ MACOSX_VERSION_MIN := 10.6
 CC += $(STDLIBCPP_FLAG) -mmacosx-version-min=$(MACOSX_VERSION_MIN)
 CXX += $(STDLIBCPP_FLAG) -mmacosx-version-min=$(MACOSX_VERSION_MIN)
 endif
+# export MACOSX_DEPLOYMENT_TARGET so that ld picks it up, especially for deps
+export MACOSX_DEPLOYMENT_TARGET=$(MACOSX_VERSION_MIN)
 JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
@@ -524,11 +588,11 @@ else
 LOCALBASE ?= /usr
 endif
 
-ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
-include $(JULIAHOME)/Make.user
+ifeq (exists, $(shell [ -e $(JULIAHOME)/$(MAKE_USER_FNAME) ] && echo exists ))
+include $(JULIAHOME)/$(MAKE_USER_FNAME)
 endif
-ifeq (exists, $(shell [ -e $(BUILDROOT)/Make.user ] && echo exists ))
-include $(BUILDROOT)/Make.user
+ifeq (exists, $(shell [ -e $(BUILDROOT)/$(MAKE_USER_FNAME) ] && echo exists ))
+include $(BUILDROOT)/$(MAKE_USER_FNAME)
 endif
 
 # A bit of a kludge to work around libraries linking to FreeBSD's outdated system libgcc_s
@@ -560,6 +624,12 @@ endif # FreeBSD
 
 ifneq ($(CC_BASE)$(CXX_BASE),$(shell echo $(CC) | cut -d' ' -f1)$(shell echo $(CXX) | cut -d' ' -f1))
     $(error Forgot override directive on CC or CXX in Make.user? Cowardly refusing to build)
+endif
+
+ifeq ($(DARWIN_FRAMEWORK),1)
+ifneq ($(OS), Darwin)
+	$(error Darwin framework cannot be enabled for non-Darwin OS)
+endif
 endif
 
 ifeq ($(SANITIZE),1)
@@ -736,7 +806,6 @@ JCFLAGS += -fsigned-char
 USE_BLAS64:=0
 OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV7
-USE_SYSTEM_LIBM:=1
 endif
 
 # If we are running on aarch64 (e.g. ARMv8 or ARM64), set certain options automatically
@@ -927,22 +996,37 @@ else
 endif
 
 # BinaryBuilder options.  We default to "on" for all the projects listed in BB_PROJECTS,
-# but only if contrib/normalize_triplet.py works for our requested triplet
+# but only if contrib/normalize_triplet.py works for our requested triplet.
 ifeq ($(shell python $(JULIAHOME)/contrib/normalize_triplet.py $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) >/dev/null 2>/dev/null; echo $$?),0)
-USE_BINARYBUILDER := 1
+USE_BINARYBUILDER ?= 1
 else
 ifneq ($(shell python $(JULIAHOME)/contrib/normalize_triplet.py x86_64-linux-gnu),x86_64-linux-gnu)
 $(warning python normalize_triplet.py appears to be non-functional, so BinaryBuilder disabled)
 endif
-USE_BINARYBUILDER := 0
+USE_BINARYBUILDER ?= 0
 endif
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
-BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 MPFR CURL LIBGIT2 PCRE LIBUV UNWIND
-$(foreach proj,$(BB_PROJECTS),$(if $(USE_BINARYBUILDER_$(proj)),,$(eval USE_BINARYBUILDER_$(proj) := $(USE_BINARYBUILDER))))
+BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP
+define SET_BB_DEFAULT
+# First, check to see if BB is disabled on a global setting
+ifeq ($$(USE_BINARYBUILDER),0)
+USE_BINARYBUILDER_$(1) ?= 0
+else
+# If it's not, check to see if it's disabled by a USE_SYSTEM_xxx flag
+ifeq ($$(USE_SYSTEM_$(1)),1)
+USE_BINARYBUILDER_$(1) ?= 0
+else
+USE_BINARYBUILDER_$(1) ?= 1
+endif
+endif
+endef
+$(foreach proj,$(BB_PROJECTS),$(eval $(call SET_BB_DEFAULT,$(proj))))
+
+
 
 # Use the Assertions build
-BINARYBUILDER_LLVM_ASSERTS := 0
+BINARYBUILDER_LLVM_ASSERTS ?= 0
 
 
 
@@ -969,7 +1053,7 @@ else
 endif
 
 # shared library runtime paths
-ifeq ($(OS), WINNT)
+ifneq (,$(filter $(OS),WINNT emscripten))
   RPATH :=
   RPATH_ORIGIN :=
   RPATH_ESCAPED_ORIGIN :=
@@ -980,10 +1064,7 @@ else ifeq ($(OS), Darwin)
   RPATH_ESCAPED_ORIGIN := $(RPATH_ORIGIN)
   RPATH_LIB := -Wl,-rpath,'@loader_path/julia/' -Wl,-rpath,'@loader_path/'
 else
-  RPATH := -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-rpath-link,$(build_shlibdir) -Wl,-z,origin
-ifeq ($(OS), FreeBSD)
-  RPATH += -Wl,-rpath,'$$ORIGIN/$(build_private_libdir_rel)'
-endif
+  RPATH := -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-rpath,'$$ORIGIN/$(build_private_libdir_rel)' -Wl,-rpath-link,$(build_shlibdir) -Wl,-z,origin
   RPATH_ORIGIN := -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
   RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin -Wl,-rpath-link,$(build_shlibdir)
   RPATH_LIB := -Wl,-rpath,'$$ORIGIN/julia' -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
@@ -999,26 +1080,27 @@ else ifneq ($(USEMSVC), 1)
 endif
 
 ifeq ($(OS), Linux)
-OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -Wl,--export-dynamic,--as-needed,--no-whole-archive $(LIBUNWIND)
+OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -Wl,--export-dynamic,--as-needed,--no-whole-archive
 # Detect if ifunc is supported
 IFUNC_DETECT_SRC := 'void (*f0(void))(void) { return (void(*)(void))0L; }; void f(void) __attribute__((ifunc("f0")));'
 ifeq (supported, $(shell echo $(IFUNC_DETECT_SRC) | $(CC) -Werror -x c - -S -o /dev/null > /dev/null 2>&1 && echo supported))
 JCPPFLAGS += -DJULIA_HAS_IFUNC_SUPPORT=1
 endif
+JLDFLAGS := -Wl,-Bdynamic
 ifneq ($(SANITIZE),1)
 ifneq ($(SANITIZE_MEMORY),1)
 ifneq ($(LLVM_SANITIZE),1)
 OSLIBS += -Wl,--version-script=$(JULIAHOME)/src/julia.expmap
+JLDFLAGS += -Wl,-no-undefined
 endif
 endif
 endif
-JLDFLAGS := -Wl,-Bdynamic -Wl,-no-undefined
 ifeq (-Bsymbolic-functions, $(shell $(LD) --help | grep -o -e "-Bsymbolic-functions"))
 JLIBLDFLAGS := -Wl,-Bsymbolic-functions
 else
 JLIBLDFLAGS :=
 endif
-else #Linux
+else ifneq ($(OS), Darwin)
 JLIBLDFLAGS :=
 endif
 
@@ -1037,14 +1119,13 @@ OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expma
 endif
 
 ifeq ($(OS), Darwin)
-INSTALL_NAME_CMD := install_name_tool -id $(INSTALL_NAME_ID_DIR)
-INSTALL_NAME_CHANGE_CMD := install_name_tool -change
 SHLIB_EXT := dylib
-OSLIBS += -ldl -Wl,-w -framework CoreFoundation -framework CoreServices $(LIBUNWIND)
+OSLIBS += -framework CoreFoundation $(LIBUNWIND)
 WHOLE_ARCHIVE := -Xlinker -all_load
 NO_WHOLE_ARCHIVE :=
 JLDFLAGS :=
 HAVE_SSP := 1
+JLIBLDFLAGS := -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
 endif
 
 ifeq ($(OS), WINNT)
@@ -1066,7 +1147,7 @@ endif
 
 # Threads
 ifneq ($(JULIA_THREADS), 0)
-JCPPFLAGS += -DJULIA_ENABLE_THREADING -DJULIA_NUM_THREADS=$(JULIA_THREADS)
+JCPPFLAGS += -DJULIA_NUM_THREADS=$(JULIA_THREADS)
 endif
 
 # Intel VTune Amplifier
@@ -1176,6 +1257,19 @@ LDFLAGS += -cxxlib-nostd -static-intel
 endif
 endif
 
+# Some special restrictions on BB usage:
+ifeq ($(USE_SYSTEM_BLAS),1)
+# Since the names don't line up (`BLAS` vs. `OPENBLAS`), manually gate:
+USE_BINARYBUILDER_OPENBLAS := 0
+# Disable BB SuiteSparse if we're using system BLAS
+USE_BINARYBUILDER_SUITESPARSE := 0
+endif
+
+ifeq ($(USE_SYSTEM_LIBM),1)
+# If we're using system libm, disable BB OpenLibm
+USE_BINARYBUILDER_OPENLIBM := 0
+endif
+
 # Make tricks
 
 define dir_target
@@ -1268,6 +1362,7 @@ JULCOLOR:="\033[34;1m"
 GOAL=$(subst ','\'',$(subst $(abspath $(JULIAHOME))/,,$(abspath $@)))
 
 PRINT_CC = printf '    %b %b\n' $(CCCOLOR)CC$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR); $(1)
+PRINT_ANALYZE = printf '    %b %b\n' $(CCCOLOR)ANALYZE$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_LINK = printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_PERL = printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_FLISP = printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
@@ -1276,6 +1371,7 @@ PRINT_JULIA = printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GO
 else
 QUIET_MAKE =
 PRINT_CC = echo '$(subst ','\'',$(1))'; $(1)
+PRINT_ANALYZE = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_LINK = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_PERL = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_FLISP = echo '$(subst ','\'',$(1))'; $(1)

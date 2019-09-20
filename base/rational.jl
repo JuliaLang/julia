@@ -4,6 +4,7 @@
     Rational{T<:Integer} <: Real
 
 Rational number type, with numerator and denominator of type `T`.
+Rationals are checked for overflow.
 """
 struct Rational{T<:Integer} <: Real
     num::T
@@ -11,7 +12,7 @@ struct Rational{T<:Integer} <: Real
 
     function Rational{T}(num::Integer, den::Integer) where T<:Integer
         num == den == zero(T) && __throw_rational_argerror(T)
-        num2, den2 = (sign(den) < 0) ? divgcd(-num, -den) : divgcd(num, den)
+        num2, den2 = signbit(den) ? divgcd(-num, -den) : divgcd(num, den)
         new(num2, den2)
     end
 end
@@ -237,7 +238,9 @@ typemax(::Type{Rational{T}}) where {T<:Integer} = one(T)//zero(T)
 
 isinteger(x::Rational) = x.den == 1
 
++(x::Rational) = (+x.num) // x.den
 -(x::Rational) = (-x.num) // x.den
+
 function -(x::Rational{T}) where T<:BitSigned
     x.num == typemin(T) && throw(OverflowError("rational numerator is typemin(T)"))
     (-x.num) // x.den

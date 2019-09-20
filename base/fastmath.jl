@@ -233,6 +233,15 @@ ComplexTypes = Union{ComplexF32, ComplexF64}
         (a==real(y)) & (T(0)==imag(y))
 
     ne_fast(x::T, y::T) where {T<:ComplexTypes} = !(x==y)
+
+    # Note: we use the same comparison for min, max, and minmax, so
+    # that the compiler can convert between them
+    max_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(y > x, y, x)
+    min_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(y > x, x, y)
+    minmax_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(y > x, (x,y), (y,x))
+
+    max_fast(x::T, y::T, z::T...) where {T<:FloatTypes} = max_fast(max_fast(x, y), z...)
+    min_fast(x::T, y::T, z::T...) where {T<:FloatTypes} = min_fast(min_fast(x, y), z...)
 end
 
 # fall-back implementations and type promotion
@@ -245,7 +254,7 @@ for op in (:abs, :abs2, :conj, :inv, :sign)
     end
 end
 
-for op in (:+, :-, :*, :/, :(==), :!=, :<, :<=, :cmp, :rem)
+for op in (:+, :-, :*, :/, :(==), :!=, :<, :<=, :cmp, :rem, :min, :max, :minmax)
     op_fast = fast_op[op]
     @eval begin
         # fall-back implementation for non-numeric types
@@ -304,12 +313,6 @@ sincos_fast(v) = (sin_fast(v), cos_fast(v))
 @fastmath begin
     hypot_fast(x::T, y::T) where {T<:FloatTypes} = sqrt(x*x + y*y)
 
-    # Note: we use the same comparison for min, max, and minmax, so
-    # that the compiler can convert between them
-    max_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(y > x, y, x)
-    min_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(y > x, x, y)
-    minmax_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(y > x, (x,y), (y,x))
-
     # complex numbers
 
     function cis_fast(x::T) where {T<:FloatTypes}
@@ -362,7 +365,7 @@ for f in (:acos, :acosh, :angle, :asin, :asinh, :atan, :atanh, :cbrt,
     end
 end
 
-for f in (:^, :atan, :hypot, :max, :min, :minmax, :log)
+for f in (:^, :atan, :hypot, :log)
     f_fast = fast_op[f]
     @eval begin
         # fall-back implementation for non-numeric types

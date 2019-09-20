@@ -92,12 +92,12 @@ julia> dump(Array)
 UnionAll
   var: TypeVar
     name: Symbol T
-    lb: Core.TypeofBottom Union{}
+    lb: Union{}
     ub: Any
   body: UnionAll
     var: TypeVar
       name: Symbol N
-      lb: Core.TypeofBottom Union{}
+      lb: Union{}
       ub: Any
     body: Array{T,N} <: DenseArray{T,N}
 ```
@@ -178,12 +178,12 @@ TypeName
   wrapper: UnionAll
     var: TypeVar
       name: Symbol T
-      lb: Core.TypeofBottom Union{}
+      lb: Union{}
       ub: Any
     body: UnionAll
       var: TypeVar
         name: Symbol N
-        lb: Core.TypeofBottom Union{}
+        lb: Union{}
         ub: Any
       body: Array{T,N} <: DenseArray{T,N}
   cache: SimpleVector

@@ -38,7 +38,7 @@ typedef struct {Value *gv; int32_t index;} jl_value_llvm; // uses 1-based indexi
 
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false);
-void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit = NULL);
+void** jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit = NULL);
 void* jl_get_globalvar(GlobalVariable *gv);
 GlobalVariable *jl_get_global_for(const char *cname, void *addr, Module *M);
 void jl_add_to_shadow(Module *m);
@@ -127,13 +127,19 @@ class JuliaOJIT {
     };
 
 public:
+#if JL_LLVM_VERSION >= 80000
+    typedef orc::LegacyRTDyldObjectLinkingLayer ObjLayerT;
+    typedef orc::LegacyIRCompileLayer<ObjLayerT,CompilerT> CompileLayerT;
+    typedef orc::VModuleKey ModuleHandleT;
+#elif JL_LLVM_VERSION >= 70000
     typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
     typedef orc::IRCompileLayer<ObjLayerT,CompilerT> CompileLayerT;
-    #if JL_LLVM_VERSION >= 70000
     typedef orc::VModuleKey ModuleHandleT;
-    #else
+#else
+    typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
+    typedef orc::IRCompileLayer<ObjLayerT,CompilerT> CompileLayerT;
     typedef CompileLayerT::ModuleHandleT ModuleHandleT;
-    #endif
+#endif
     typedef StringMap<void*> SymbolTableT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
 
@@ -141,7 +147,9 @@ public:
 
     void RegisterJITEventListener(JITEventListener *L);
     std::vector<JITEventListener *> EventListeners;
-    void NotifyFinalizer(const object::ObjectFile &Obj, const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo);
+    void NotifyFinalizer(RTDyldObjHandleT Key,
+                         const object::ObjectFile &Obj,
+                         const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo);
     void addGlobalMapping(StringRef Name, uint64_t Addr);
     void addGlobalMapping(const GlobalValue *GV, void *Addr);
     void *getPointerToGlobalIfAvailable(StringRef S);
@@ -183,10 +191,11 @@ private:
     SymbolTableT LocalSymbolTable;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
-JL_DLLEXPORT extern LLVMContext jl_LLVMContext;
+JL_DLLEXPORT extern LLVMContext &jl_LLVMContext;
 
 Pass *createLowerPTLSPass(bool imaging_mode);
 Pass *createCombineMulAddPass();
+Pass *createFinalLowerGCPass();
 Pass *createLateLowerGCFramePass();
 Pass *createLowerExcHandlersPass();
 Pass *createGCInvariantVerifierPass(bool Strong);

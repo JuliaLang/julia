@@ -158,6 +158,8 @@ size(a::Array{<:Any,N}) where {N} = (@_inline_meta; ntuple(M -> size(a, M), Val(
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
+allocatedinline(::Type{T}) where {T} = (@_pure_meta; ccall(:jl_array_store_unboxed, Cint, (Any,), T) != Cint(0))
+
 """
     Base.isbitsunion(::Type{T})
 
@@ -172,8 +174,20 @@ julia> Base.isbitsunion(Union{Float64, String})
 false
 ```
 """
-isbitsunion(u::Union) = (@_pure_meta; ccall(:jl_array_store_unboxed, Cint, (Any,), u) != Cint(0))
+isbitsunion(u::Union) = allocatedinline(u)
 isbitsunion(x) = false
+
+function _unsetindex!(A::Array{T}, i::Int) where {T}
+    @boundscheck checkbounds(A, i)
+    if !allocatedinline(T)
+        t = @_gc_preserve_begin A
+        p = Ptr{Ptr{Cvoid}}(pointer(A))
+        unsafe_store!(p, C_NULL, i)
+        @_gc_preserve_end t
+    end
+    return A
+end
+
 
 """
     Base.bitsunionsize(U::Union)
@@ -198,7 +212,7 @@ function bitsunionsize(u::Union)
 end
 
 length(a::Array) = arraylen(a)
-elsize(::Type{<:Array{T}}) where {T} = isbitstype(T) ? sizeof(T) : (isbitsunion(T) ? bitsunionsize(T) : sizeof(Ptr))
+elsize(::Type{<:Array{T}}) where {T} = isbitsunion(T) ? bitsunionsize(T) : (allocatedinline(T) ? sizeof(T) : sizeof(Ptr))
 sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
@@ -241,9 +255,7 @@ the same manner as C.
 function unsafe_copyto!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     t1 = @_gc_preserve_begin dest
     t2 = @_gc_preserve_begin src
-    if isbitstype(T)
-        unsafe_copyto!(pointer(dest, doffs), pointer(src, soffs), n)
-    elseif isbitsunion(T)
+    if isbitsunion(T)
         ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
               pointer(dest, doffs), pointer(src, soffs), n * Base.bitsunionsize(T))
         # copy selector bytes
@@ -251,6 +263,8 @@ function unsafe_copyto!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
               ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), dest) + doffs - 1,
               ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), src) + soffs - 1,
               n)
+    elseif allocatedinline(T)
+        unsafe_copyto!(pointer(dest, doffs), pointer(src, soffs), n)
     else
         ccall(:jl_array_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
               dest, pointer(dest, doffs), src, pointer(src, soffs), n)
@@ -371,10 +385,14 @@ to_dim(d::Integer) = d
 to_dim(d::OneTo) = last(d)
 
 """
-    fill(x, dims)
+    fill(x, dims::Tuple)
+    fill(x, dims...)
 
 Create an array filled with the value `x`. For example, `fill(1.0, (5,5))` returns a 5×5
 array of floats, with each element initialized to `1.0`.
+
+`dims` may be specified as either a tuple or a sequence of arguments. For example,
+the common idiom `fill(x)` creates a zero-dimensional array containing the single value `x`.
 
 # Examples
 ```jldoctest
@@ -385,17 +403,28 @@ julia> fill(1.0, (5,5))
  1.0  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0  1.0
+
+julia> fill(0.5, 1, 2)
+1×2 Array{Float64,2}:
+ 0.5  0.5
+
+julia> fill(42)
+0-dimensional Array{Int64,0}:
+42
 ```
 
 If `x` is an object reference, all elements will refer to the same object. `fill(Foo(),
 dims)` will return an array filled with the result of evaluating `Foo()` once.
 """
+function fill end
+
 fill(v, dims::DimOrInd...) = fill(v, dims)
 fill(v, dims::NTuple{N, Union{Integer, OneTo}}) where {N} = fill(v, map(to_dim, dims))
 fill(v, dims::NTuple{N, Integer}) where {N} = (a=Array{typeof(v),N}(undef, dims); fill!(a, v); a)
 fill(v, dims::Tuple{}) = (a=Array{typeof(v),0}(undef, dims); fill!(a, v); a)
 
 """
+    zeros([T=Float64,] dims::Tuple)
     zeros([T=Float64,] dims...)
 
 Create an `Array`, with element type `T`, of all zeros with size specified by `dims`.
@@ -416,6 +445,7 @@ julia> zeros(Int8, 2, 3)
 function zeros end
 
 """
+    ones([T=Float64,] dims::Tuple)
     ones([T=Float64,] dims...)
 
 Create an `Array`, with element type `T`, of all ones with size specified by `dims`.
@@ -827,7 +857,8 @@ _deleteat!(a::Vector, i::Integer, delta::Integer) =
 """
     push!(collection, items...) -> collection
 
-Insert one or more `items` at the end of `collection`.
+Insert one or more `items` in `collection`. If `collection` is an ordered container,
+the items are inserted at the end (in the given order).
 
 # Examples
 ```jldoctest
@@ -841,9 +872,9 @@ julia> push!([1, 2, 3], 4, 5, 6)
  6
 ```
 
-Use [`append!`](@ref) to add all the elements of another collection to
-`collection`. The result of the preceding example is equivalent to `append!([1, 2, 3], [4,
-5, 6])`.
+If `collection` is ordered, use [`append!`](@ref) to add all the elements of another
+collection to it. The result of the preceding example is equivalent to `append!([1, 2, 3], [4,
+5, 6])`. For `AbstractSet` objects, [`union!`](@ref) can be used instead.
 """
 function push! end
 
@@ -864,7 +895,7 @@ end
 """
     append!(collection, collection2) -> collection.
 
-Add the elements of `collection2` to the end of `collection`.
+For an ordered container `collection`, add the elements of `collection2` to the end of it.
 
 # Examples
 ```jldoctest
@@ -896,14 +927,14 @@ function append!(a::Vector, items::AbstractVector)
     return a
 end
 
-append!(a::Vector, iter) = _append!(a, IteratorSize(iter), iter)
-push!(a::Vector, iter...) = append!(a, iter)
+append!(a::AbstractVector, iter) = _append!(a, IteratorSize(iter), iter)
+push!(a::AbstractVector, iter...) = append!(a, iter)
 
 function _append!(a, ::Union{HasLength,HasShape}, iter)
-    require_one_based_indexing(a)
     n = length(a)
+    i = lastindex(a)
     resize!(a, n+length(iter))
-    @inbounds for (i,item) in zip(n+1:length(a), iter)
+    @inbounds for (i, item) in zip(i+1:lastindex(a), iter)
         a[i] = item
     end
     a
@@ -1267,7 +1298,7 @@ If specified, replacement values from an ordered
 collection will be spliced in place of the removed item.
 
 # Examples
-```jldoctest splice!
+```jldoctest
 julia> A = [6, 5, 4, 3, 2, 1]; splice!(A, 5)
 2
 
@@ -1338,8 +1369,8 @@ To insert `replacement` before an index `n` without removing any items, use
 `splice!(collection, n:n-1, replacement)`.
 
 # Examples
-```jldoctest splice!
-julia> splice!(A, 4:3, 2)
+```jldoctest
+julia> A = [-1, -2, -3, 5, 4, 3, -1]; splice!(A, 4:3, 2)
 0-element Array{Int64,1}
 
 julia> A
@@ -1387,7 +1418,7 @@ function empty!(a::Vector)
     return a
 end
 
-_memcmp(a, b, len) = ccall(:memcmp, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), a, b, len) % Int
+_memcmp(a, b, len) = ccall(:memcmp, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), a, b, len % Csize_t) % Int
 
 # use memcmp for cmp on byte arrays
 function cmp(a::Array{UInt8,1}, b::Array{UInt8,1})
@@ -1533,11 +1564,11 @@ function vcat(arrays::Vector{T}...) where T
     end
     arr = Vector{T}(undef, n)
     ptr = pointer(arr)
-    if isbitstype(T)
-        elsz = Core.sizeof(T)
-    elseif isbitsunion(T)
+    if isbitsunion(T)
         elsz = bitsunionsize(T)
         selptr = ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), arr)
+    elseif allocatedinline(T)
+        elsz = Core.sizeof(T)
     else
         elsz = Core.sizeof(Ptr{Cvoid})
     end
@@ -1545,16 +1576,16 @@ function vcat(arrays::Vector{T}...) where T
     for a in arrays
         na = length(a)
         nba = na * elsz
-        if isbitstype(T)
-            ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
-                  ptr, a, nba)
-        elseif isbitsunion(T)
+        if isbitsunion(T)
             ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
                   ptr, a, nba)
             # copy selector bytes
             ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
                   selptr, ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), a), na)
             selptr += na
+        elseif allocatedinline(T)
+            ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
+                  ptr, a, nba)
         else
             ccall(:jl_array_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
                   arr, ptr, a, pointer(a), na)
@@ -2325,7 +2356,34 @@ julia> filter(isodd, a)
  9
 ```
 """
-filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
+function filter(f, a::Array{T, N}) where {T, N}
+    j = 1
+    b = Vector{T}(undef, length(a))
+    for ai in a
+        @inbounds b[j] = ai
+        j = ifelse(f(ai), j+1, j)
+    end
+    resize!(b, j-1)
+    sizehint!(b, length(b))
+    b
+end
+
+function filter(f, a::AbstractArray)
+    (IndexStyle(a) != IndexLinear()) && return a[map(f, a)::AbstractArray{Bool}]
+
+    j = 1
+    idxs = Vector{Int}(undef, length(a))
+    for idx in eachindex(a)
+        @inbounds idxs[j] = idx
+        ai = @inbounds a[idx]
+        j = ifelse(f(ai), j+1, j)
+    end
+    resize!(idxs, j-1)
+    res = a[idxs]
+    empty!(idxs)
+    sizehint!(idxs, 0)
+    return res
+end
 
 """
     filter!(f, a::AbstractVector)
@@ -2345,26 +2403,20 @@ julia> filter!(isodd, Vector(1:10))
 ```
 """
 function filter!(f, a::AbstractVector)
-    idx = eachindex(a)
-    y = iterate(idx)
-    y === nothing && return a
-    i, state = y
-
-    for acurr in a
-        if f(acurr)
-            @inbounds a[i] = acurr
-            y = iterate(idx, state)
-            y === nothing && (i += 1; break)
-            i, state = y
-        end
+    j = firstindex(a)
+    for ai in a
+        @inbounds a[j] = ai
+        j = ifelse(f(ai), nextind(a, j), j)
     end
-
-    deleteat!(a, i:last(idx))
-
+    j > lastindex(a) && return a
+    if a isa Vector
+        resize!(a, j-1)
+        sizehint!(a, j-1)
+    else
+        deleteat!(a, j:lastindex(a))
+    end
     return a
 end
-
-filter(f, a::Vector) = mapfilter(f, push!, a, empty(a))
 
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.

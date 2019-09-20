@@ -3,7 +3,7 @@
 module TestDiagonal
 
 using Test, LinearAlgebra, SparseArrays, Random
-using LinearAlgebra: mul!, rmul!, lmul!, ldiv!, rdiv!, BlasFloat, BlasComplex, SingularException
+using LinearAlgebra: mul!, mul!, rmul!, lmul!, ldiv!, rdiv!, BlasFloat, BlasComplex, SingularException
 
 n=12 #Size of matrix problem to test
 Random.seed!(1)
@@ -26,6 +26,7 @@ Random.seed!(1)
             @test Diagonal(x).diag === x
             @test Diagonal{elty}(x)::Diagonal{elty,typeof(x)} == DM
             @test Diagonal{elty}(x).diag === x
+            @test Diagonal{elty}(D) === D
         end
         @test eltype(Diagonal{elty}([1,2,3,4])) == elty
         @test isa(Diagonal{elty,Vector{elty}}(GenericArray([1,2,3,4])), Diagonal{elty,Vector{elty}})
@@ -178,6 +179,19 @@ Random.seed!(1)
         qrA = qr(A)
         @test qrA \ D ≈ A \ D
 
+        # HermOrSym
+        A     = rand(elty, n, n)
+        Asym  = Symmetric(A + transpose(A), :U)
+        Aherm = Hermitian(A + adjoint(A), :U)
+        @test Array(D*Transpose(Asym)) ≈ Array(D) * Array(transpose(Asym))
+        @test Array(D*Adjoint(Asym)) ≈ Array(D) * Array(adjoint(Asym))
+        @test Array(D*Transpose(Aherm)) ≈ Array(D) * Array(transpose(Aherm))
+        @test Array(D*Adjoint(Aherm)) ≈ Array(D) * Array(adjoint(Aherm))
+        @test Array(Transpose(Asym)*Transpose(D)) ≈ Array(transpose(Asym)) * Array(transpose(D))
+        @test Array(Transpose(D)*Transpose(Asym)) ≈ Array(transpose(D)) * Array(transpose(Asym))
+        @test Array(Adjoint(Aherm)*Adjoint(D)) ≈ Array(adjoint(Aherm)) * Array(adjoint(D))
+        @test Array(Adjoint(D)*Adjoint(Aherm)) ≈ Array(adjoint(D)) * Array(adjoint(Aherm))
+
         # Performance specialisations for A*_mul_B!
         vvv = similar(vv)
         @test (r = Matrix(D) * vv   ; mul!(vvv, D, vv)  ≈ r ≈ vvv)
@@ -185,9 +199,52 @@ Random.seed!(1)
         @test (r = transpose(Matrix(D)) * vv ; mul!(vvv, transpose(D), vv) ≈ r ≈ vvv)
 
         UUU = similar(UU)
-        @test (r = Matrix(D) * UU   ; mul!(UUU, D, UU) ≈ r ≈ UUU)
-        @test (r = Matrix(D)' * UU  ; mul!(UUU, adjoint(D), UU) ≈ r ≈ UUU)
-        @test (r = transpose(Matrix(D)) * UU ; mul!(UUU, transpose(D), UU) ≈ r ≈ UUU)
+        for transformA in (identity, adjoint, transpose)
+            for transformD in (identity, Adjoint, Transpose, adjoint, transpose)
+                @test mul!(UUU, transformA(UU), transformD(D)) ≈  transformA(UU) * Matrix(transformD(D))
+                @test mul!(UUU, transformD(D), transformA(UU)) ≈  Matrix(transformD(D)) * transformA(UU)
+            end
+        end
+
+        alpha = elty(randn())  # randn(elty) does not work with BigFloat
+        beta = elty(randn())
+        @test begin
+            vvv = similar(vv)
+            vvv .= randn(size(vvv))  # randn!(vvv) does not work with BigFloat
+            r = alpha * Matrix(D) * vv + beta * vvv
+            mul!(vvv, D, vv, alpha, beta)  ≈ r ≈ vvv
+        end
+        @test begin
+            vvv = similar(vv)
+            vvv .= randn(size(vvv))  # randn!(vvv) does not work with BigFloat
+            r = alpha * Matrix(D)' * vv + beta * vvv
+            mul!(vvv, adjoint(D), vv, alpha, beta) ≈ r ≈ vvv
+        end
+        @test begin
+            vvv = similar(vv)
+            vvv .= randn(size(vvv))  # randn!(vvv) does not work with BigFloat
+            r = alpha * transpose(Matrix(D)) * vv + beta * vvv
+            mul!(vvv, transpose(D), vv, alpha, beta) ≈ r ≈ vvv
+        end
+
+        @test begin
+            UUU = similar(UU)
+            UUU .= randn(size(UUU))  # randn!(UUU) does not work with BigFloat
+            r = alpha * Matrix(D) * UU + beta * UUU
+            mul!(UUU, D, UU, alpha, beta) ≈ r ≈ UUU
+        end
+        @test begin
+            UUU = similar(UU)
+            UUU .= randn(size(UUU))  # randn!(UUU) does not work with BigFloat
+            r = alpha * Matrix(D)' * UU + beta * UUU
+            mul!(UUU, adjoint(D), UU, alpha, beta) ≈ r ≈ UUU
+        end
+        @test begin
+            UUU = similar(UU)
+            UUU .= randn(size(UUU))  # randn!(UUU) does not work with BigFloat
+            r = alpha * transpose(Matrix(D)) * UU + beta * UUU
+            mul!(UUU, transpose(D), UU, alpha, beta) ≈ r ≈ UUU
+        end
 
         # make sure that mul!(A, {Adj|Trans}(B)) works with B as a Diagonal
         VV = Array(D)
@@ -265,10 +322,15 @@ Random.seed!(1)
         @test(transpose(D) * vv == D * vv)
     end
 
-    #logdet
+    # logdet and logabsdet
     if relty <: Real
-        ld=convert(Vector{relty},rand(n))
-        @test logdet(Diagonal(ld)) ≈ logdet(Matrix(Diagonal(ld)))
+        lD = Diagonal(convert(Vector{relty}, rand(n)))
+        lM = Matrix(lD)
+        @test logdet(lD) ≈ logdet(lM)
+        d1, s1 = @inferred logabsdet(lD)
+        d2, s2 = logabsdet(lM)
+        @test d1 ≈ d2
+        @test s1 == s2
     end
 
     @testset "similar" begin
@@ -441,6 +503,15 @@ end
     @test det(D) == 4
 end
 
+@testset "linear solve for block diagonal matrices" begin
+    D = Diagonal([rand(2,2) for _ in 1:5])
+    b = [rand(2,2) for _ in 1:5]
+    B = [rand(2,2) for _ in 1:5, _ in 1:5]
+    @test ldiv!(D, copy(b)) ≈ Diagonal(inv.(D.diag)) * b
+    @test ldiv!(D, copy(B)) ≈ Diagonal(inv.(D.diag)) * B
+    @test rdiv!(copy(B), D) ≈ B * Diagonal(inv.(D.diag))
+end
+
 @testset "multiplication with Symmetric/Hermitian" begin
     for T in (Float64, ComplexF64)
         D = Diagonal(randn(T, n))
@@ -477,10 +548,10 @@ end
         M = randn(T, 5, 5)
         MM = [randn(T, 2, 2) for _ in 1:2, _ in 1:2]
         for transform in (identity, adjoint, transpose, Adjoint, Transpose)
-            @test lmul!(transform(D), copy(M)) == *(transform(Matrix(D)), M)
-            @test rmul!(copy(M), transform(D)) == *(M, transform(Matrix(D)))
-            @test lmul!(transform(DD), copy(MM)) == *(transform(fullDD), MM)
-            @test rmul!(copy(MM), transform(DD)) == *(MM, transform(fullDD))
+            @test lmul!(transform(D), copy(M)) ≈ *(transform(Matrix(D)), M)
+            @test rmul!(copy(M), transform(D)) ≈ *(M, transform(Matrix(D)))
+            @test lmul!(transform(DD), copy(MM)) ≈ *(transform(fullDD), MM)
+            @test rmul!(copy(MM), transform(DD)) ≈ *(MM, transform(fullDD))
         end
     end
 end
@@ -523,6 +594,18 @@ end
     E = eigen(D, sortby=abs) # sortby keyword supported for eigen(::Diagonal)
     @test E.values == [0.2, 0.4, -1.3]
     @test E.vectors == [0 1 0; 1 0 0; 0 0 1]
+end
+
+@testset "sum" begin
+    @test sum(Diagonal([1,2,3])) == 6
+end
+
+@testset "logabsdet for generic eltype" begin
+    d = Any[1, -2.0, -3.0]
+    D = Diagonal(d)
+    d1, s1 = logabsdet(D)
+    @test d1 ≈ sum(log ∘ abs, d)
+    @test s1 == prod(sign, d)
 end
 
 end # module TestDiagonal

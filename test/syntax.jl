@@ -1563,6 +1563,23 @@ end
         return convert(B, b)
     end
 end) == Expr(:error, "local variable name \"B\" conflicts with a static parameter")
+# issue #32620
+@test Meta.lower(@__MODULE__, quote
+    function foo(a::T) where {T}
+        for i = 1:1
+            T = 0
+        end
+    end
+end) == Expr(:error, "local variable name \"T\" conflicts with a static parameter")
+function f32620(x::T) where T
+    local y
+    let T = 3
+        T = 2
+        y = T
+    end
+    return (T, y)
+end
+@test f32620(0) === (Int, 2)
 
 # issue #28044
 code28044(x) = 10x
@@ -1848,6 +1865,80 @@ macro id28992(x) x end
 @test @id28992(2 ^ -2) == 0.25
 @test @id28992(2 .^ -2) == 0.25
 
+# issue #32121
+@test @id28992((a=1, b=2)) === (a=1, b=2)
+a32121 = 8
+b32121 = 9
+@test @id28992((a32121=a32121, b32121=b32121)) === (a32121=8, b32121=9)
+
 # issue #31596
 f31596(x; kw...) = x
 @test f31596((a=1,), b = 1.0) === (a=1,)
+
+# issue #32325
+let
+    struct a32325 end
+    a32325(x) = a32325()
+end
+@test a32325(0) === a32325()
+
+@test Meta.lower(Main, :(struct A; A() = new{Int}(); end)) == Expr(:error, "too many type parameters specified in \"new{...}\"")
+@test Meta.lower(Main, :(struct A{T, S}; A() = new{Int}(); end)) == Expr(:error, "too few type parameters specified in \"new{...}\"")
+
+# issue #32467
+let f = identity(identity() do
+                 x = 0
+                 @inbounds for i = 1:2
+                     x += i
+                 end
+                 x
+                 end)
+    @test f() == 3
+end
+
+# issue #32499
+x32499 = begin
+    struct S32499
+        function S32499(; x=1)
+            x
+        end
+    end
+    S32499(x=2)
+end
+@test x32499 == 2
+
+# issue #32626
+@test Meta.parse("'a'..'b'") == Expr(:call, :(..), 'a', 'b')
+@test Meta.parse(":a..:b") == Expr(:call, :(..), QuoteNode(:a), QuoteNode(:b))
+
+# Non-standard identifiers (PR #32408)
+@test Meta.parse("var\"#\"") == Symbol("#")
+@test_throws ParseError Meta.parse("var\"#\"x") # Reject string macro-like suffix
+@test_throws ParseError Meta.parse("var \"#\"")
+@test_throws ParseError Meta.parse("var\"for\" i = 1:10; end")
+# A few cases which would be ugly to deal with if var"#" were a string macro:
+@test Meta.parse("var\"#\".var\"a-b\"") == Expr(:., Symbol("#"), QuoteNode(Symbol("a-b")))
+@test Meta.parse("export var\"#\"") == Expr(:export, Symbol("#"))
+@test Base.remove_linenums!(Meta.parse("try a catch var\"#\" b end")) ==
+      Expr(:try, Expr(:block, :a), Symbol("#"), Expr(:block, :b))
+@test Meta.parse("(var\"function\" = 1,)") == Expr(:tuple, Expr(:(=), Symbol("function"), 1))
+# Non-standard identifiers require parens for string interpolation
+@test Meta.parse("\"\$var\\\"#\\\"\"") == Expr(:string, :var, "\"#\"")
+@test Meta.parse("\"\$(var\"#\")\"") == Expr(:string, Symbol("#"))
+# Stream positioning after parsing var
+@test Meta.parse("var'", 1, greedy=false) == (:var, 4)
+
+# quoted names in import (#33158)
+@test Meta.parse("import Base.:+") == :(import Base.+)
+@test Meta.parse("import Base.Foo.:(==).bar") == :(import Base.Foo.==.bar)
+
+# issue #33135
+function f33135(x::T) where {C1, T}
+    let C1 = 1, C2 = 2
+        C1
+    end
+end
+@test f33135(0) == 1
+
+# issue #33227
+@test Meta.isexpr(Meta.lower(Main, :((@label a; @goto a))), :thunk)

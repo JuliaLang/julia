@@ -24,7 +24,7 @@ For help on a specific function or macro, type `?` followed
 by its name, e.g. `?cos`, or `?@time`, and press enter.
 Type `;` to enter shell mode, `]` to enter package mode.
 """
-kw"help", kw"?", kw"julia", kw""
+kw"help", kw"?", kw"Julia", kw"julia", kw""
 
 """
     using
@@ -99,6 +99,29 @@ end
 ```
 """
 kw"module"
+
+"""
+    __init__
+
+`__init__()` function in your module would executes immediately *after* the module is loaded at
+runtime for the first time (i.e., it is only called once and only after all statements in the
+module have been executed). Because it is called *after* fully importing the module, `__init__`
+functions of submodules will be executed *first*. Two typical uses of __init__ are calling
+runtime initialization functions of external C libraries and initializing global constants
+that involve pointers returned by external libraries.
+See the [manual section about modules](@ref modules) for more details.
+
+# Examples
+```julia
+const foo_data_ptr = Ref{Ptr{Cvoid}}(0)
+function __init__()
+    ccall((:foo_init, :libfoo), Cvoid, ())
+    foo_data_ptr[] = ccall((:foo_data, :libfoo), Ptr{Cvoid}, ())
+    nothing
+end
+```
+"""
+kw"__init__"
 
 """
     baremodule
@@ -578,6 +601,18 @@ catch
 end
 ```
 
+or, when the file cannot be read into a variable:
+
+```julia
+lines = try
+    open("/danger", "r") do f
+        readlines(f)
+    end
+catch
+    @warn "File not found."
+end
+```
+
 The syntax `catch e` (where `e` is any variable) assigns the thrown
 exception object to the given variable within the `catch` block.
 
@@ -821,10 +856,10 @@ end
 Fields can have type restrictions, which may be parameterized:
 
 ```julia
-    struct Point{X}
-        x::X
-        y::Float64
-    end
+struct Point{X}
+    x::X
+    y::Float64
+end
 ```
 
 A struct can also declare an abstract super type via `<:` syntax:
@@ -898,6 +933,29 @@ order in which variables are substituted when a type is "applied" to parameter v
 using the syntax `T{p1, p2, ...}`.
 """
 kw"where"
+
+"""
+    var
+
+The syntax `var"#example#"` refers to a variable named `Symbol("#example#")`,
+even though `#example#` is not a valid Julia identifier name.
+
+This can be useful for interoperability with programming languages which have
+different rules for the construction of valid identifiers. For example, to
+refer to the `R` variable `draw.segments`, you can use `var"draw.segments"` in
+your Julia code.
+
+It is also used to `show` julia source code which has gone through macro
+hygiene or otherwise contains variable names which can't be parsed normally.
+
+Note that this syntax requires parser support so it is expanded directly by the
+parser rather than being implemented as a normal string macro `@var_str`.
+
+!!! compat "Julia 1.3"
+    This syntax requires at least Julia 1.3.
+
+"""
+kw"var\"name\"", kw"@var_str"
 
 """
     ans
@@ -1374,6 +1432,24 @@ Unsigned
     Bool <: Integer
 
 Boolean type, containing the values `true` and `false`.
+
+`Bool` is a kind of number: `false` is numerically
+equal to `0` and `true` is numerically equal to `1`.
+Moreover, `false` acts as a multiplicative "strong zero":
+
+```jldoctest
+julia> false == 0
+true
+
+julia> true == 1
+true
+
+julia> 0 * NaN
+NaN
+
+julia> false * NaN
+0.0
+```
 """
 Bool
 
@@ -2053,6 +2129,29 @@ See the manual section on [Tuple Types](@ref).
 Tuple
 
 """
+    NamedTuple{names}(args::Tuple)
+
+Construct a named tuple with the given `names` (a tuple of Symbols) from a tuple of values.
+"""
+NamedTuple{names}(args::Tuple)
+
+"""
+    NamedTuple{names,T}(args::Tuple)
+
+Construct a named tuple with the given `names` (a tuple of Symbols) and field types `T`
+(a `Tuple` type) from a tuple of values.
+"""
+NamedTuple{names,T}(args::Tuple)
+
+"""
+    NamedTuple{names}(nt::NamedTuple)
+
+Construct a named tuple by selecting fields in `names` (a tuple of Symbols) from
+another named tuple.
+"""
+NamedTuple{names}(nt::NamedTuple)
+
+"""
     typeassert(x, type)
 
 Throw a [`TypeError`](@ref) unless `x isa type`.
@@ -2177,5 +2276,12 @@ Main.Main
 The base library of Julia. `Base` is a module that contains basic functionality (the contents of `base/`). All modules implicitly contain `using Base`, since this is needed in the vast majority of cases.
 """
 Base.Base
+
+"""
+    QuoteNode
+
+A quoted piece of code, that does not support interpolation. See the [manual section about QuoteNodes](@ref man-quote-node) for details.
+"""
+QuoteNode
 
 end

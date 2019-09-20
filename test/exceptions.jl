@@ -83,6 +83,7 @@ end
         end
     end
     test_exc_stack_catch_return()
+
     for i=1:1
         try
             error("A")
@@ -91,6 +92,19 @@ end
             break
         end
     end
+    # Also test try-break-finally forms here. See #31766
+    for i=1:1
+        try
+            error("A")
+        catch
+            @test length(catch_stack()) == 1
+            break
+        finally
+            @test length(catch_stack()) == 0
+        end
+    end
+    @test length(catch_stack()) == 0
+
     for i=1:1
         try
             error("A")
@@ -99,6 +113,18 @@ end
             continue
         end
     end
+    for i=1:1
+        try
+            error("A")
+        catch
+            @test length(catch_stack()) == 1
+            continue
+        finally
+            @test length(catch_stack()) == 0
+        end
+    end
+    @test length(catch_stack()) == 0
+
     try
         error("A")
     catch
@@ -106,6 +132,15 @@ end
         @goto outofcatch
     end
     @label outofcatch
+    try
+        error("A")
+    catch
+        @test length(catch_stack()) == 1
+        @goto outofcatch2
+    finally
+        @test length(catch_stack()) == 0
+    end
+    @label outofcatch2
     @test length(catch_stack()) == 0
 
     # Exiting from a try block in various ways should not affect the exception
@@ -239,12 +274,12 @@ end
     @test catch_stack(t, include_bt=false) == [ErrorException("A"), ErrorException("B")]
     # Exception stacks for tasks which never get the chance to start
     t = @task nothing
-    @test try
+    @test (try
         @async Base.throwto(t, ErrorException("expected"))
         wait(t)
     catch e
         e
-    end == ErrorException("expected")
+    end).task.exception == ErrorException("expected")
     @test length(catch_stack(t)) == 1
     @test length(catch_stack(t)[1][2]) > 0 # backtrace is nonempty
     # Exception stacks should not be accessed on concurrently running tasks

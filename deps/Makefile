@@ -14,6 +14,8 @@ include $(SRCDIR)/tools/common.mk
 include $(SRCDIR)/tools/git-external.mk
 include $(SRCDIR)/tools/bb-install.mk
 
+BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
+
 # Special comments:
 #
 # all targets in here should follow the same structure,
@@ -137,6 +139,15 @@ ifeq ($(USE_SYSTEM_UTF8PROC), 0)
 DEP_LIBS += utf8proc
 endif
 
+ifeq ($(USE_SYSTEM_LIBZ), 0)
+DEP_LIBS += libz
+endif
+
+ifeq ($(USE_SYSTEM_P7ZIP), 0)
+DEP_LIBS += p7zip
+endif
+
+
 # Only compile standalone LAPACK if we are not using OpenBLAS.
 # OpenBLAS otherwise compiles LAPACK as part of its build.
 # This is useful where one wants to use the vendor BLAS, but
@@ -189,3 +200,5 @@ include $(SRCDIR)/libssh2.mk
 include $(SRCDIR)/curl.mk
 include $(SRCDIR)/libgit2.mk
 include $(SRCDIR)/libwhich.mk
+include $(SRCDIR)/zlib.mk
+include $(SRCDIR)/p7zip.mk

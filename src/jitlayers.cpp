@@ -3,6 +3,10 @@
 #include "llvm-version.h"
 #include "platform.h"
 #include "options.h"
+#if defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
+#  define JL_DISABLE_FPO
+#endif
+
 #include <iostream>
 #include <sstream>
 
@@ -126,6 +130,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             PM->add(createLowerExcHandlersPass());
             PM->add(createGCInvariantVerifierPass(false));
             PM->add(createLateLowerGCFramePass());
+            PM->add(createFinalLowerGCPass());
             PM->add(createLowerPTLSPass(dump_native));
         }
         PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "loopinfo" as LLVM parallel loop
@@ -241,6 +246,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createLowerExcHandlersPass());
         PM->add(createGCInvariantVerifierPass(false));
         PM->add(createLateLowerGCFramePass());
+        PM->add(createFinalLowerGCPass());
         // Remove dead use of ptls
         PM->add(createDeadCodeEliminationPass());
         PM->add(createLowerPTLSPass(dump_native));
@@ -315,7 +321,7 @@ void JuliaOJIT::DebugObjectRegistrar::registerObject(RTDyldObjHandleT H, const O
                                                        std::move(NewBuffer));
     }
     else {
-        JIT.NotifyFinalizer(*(SavedObject.getBinary()), *LO);
+        JIT.NotifyFinalizer(H, *(SavedObject.getBinary()), *LO);
     }
 
     SavedObjects.push_back(std::move(SavedObject));
@@ -433,9 +439,9 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
     // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve
     // symbols in the program as well. The nullptr argument to the function
     // tells DynamicLibrary to load the program, not a library.
-    std::string *ErrorStr = nullptr;
-    if (sys::DynamicLibrary::LoadLibraryPermanently(nullptr, ErrorStr))
-        report_fatal_error("FATAL: unable to dlopen self\n" + *ErrorStr);
+    std::string ErrorStr;
+    if (sys::DynamicLibrary::LoadLibraryPermanently(nullptr, &ErrorStr))
+        report_fatal_error("FATAL: unable to dlopen self\n" + ErrorStr);
 }
 
 void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
@@ -575,11 +581,17 @@ void JuliaOJIT::RegisterJITEventListener(JITEventListener *L)
     EventListeners.push_back(L);
 }
 
-void JuliaOJIT::NotifyFinalizer(const object::ObjectFile &Obj,
+void JuliaOJIT::NotifyFinalizer(RTDyldObjHandleT Key,
+                                const object::ObjectFile &Obj,
                                 const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo)
 {
     for (auto &Listener : EventListeners)
+#if JL_LLVM_VERSION >= 80000
+        Listener->notifyObjectLoaded(Key, Obj, LoadedObjectInfo);
+#else
         Listener->NotifyObjectEmitted(Obj, LoadedObjectInfo);
+    (void)Key;
+#endif
 }
 
 const DataLayout& JuliaOJIT::getDataLayout() const
@@ -814,6 +826,23 @@ bool jl_can_finalize_function(StringRef F)
 // let the JIT know this function is a WIP
 void jl_init_function(Function *F)
 {
+    // set any attributes that *must* be set on all functions
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
+    // tell Win32 to realign the stack to the next 16-byte boundary
+    // upon entry to any function. This achieves compatibility
+    // with both MinGW-GCC (which assumes an 16-byte-aligned stack) and
+    // i686 Windows (which uses a 4-byte-aligned stack)
+    AttrBuilder attr;
+    attr.addStackAlignmentAttr(16);
+    F->addAttributes(AttributeList::FunctionIndex, attr);
+#endif
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+    F->setHasUWTable(); // force NeedsWinEH
+#endif
+#ifdef JL_DISABLE_FPO
+    F->addFnAttr("no-frame-pointer-elim", "true");
+#endif
+    // record the WIP name
     incomplete_fname.insert(F->getName());
 }
 
@@ -867,7 +896,7 @@ static std::map<void*, jl_value_llvm> jl_value_to_llvm;
 //
 // then add a global mapping to the current value (usually from calloc'd space)
 // to the execution engine to make it valid for the current session (with the current value)
-void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit)
+void** jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit)
 {
     PointerType *T = cast<PointerType>(gv->getType()->getElementType()); // pointer is the only supported type here
 
@@ -890,7 +919,7 @@ void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit)
     }
 
     // make the pointer valid for this session
-    void *slot = calloc(1, sizeof(void*));
+    void **slot = (void**)calloc(1, sizeof(void*));
     jl_ExecutionEngine->addGlobalMapping(gv, slot);
     return slot;
 }
@@ -1144,7 +1173,7 @@ GlobalVariable *jl_get_global_for(const char *cname, void *addr, Module *M)
     GlobalVariable *gv = new GlobalVariable(*M, T_pjlvalue,
                            false, GlobalVariable::ExternalLinkage,
                            NULL, gvname.str());
-    *(void**)jl_emit_and_add_to_shadow(gv, addr) = addr;
+    *jl_emit_and_add_to_shadow(gv, addr) = addr;
     return gv;
 }
 

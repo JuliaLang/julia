@@ -28,7 +28,7 @@ function find_curl()
         "/usr/bin/curl"
     elseif Sys.iswindows() && Sys.isexecutable(joinpath(get(ENV, "SYSTEMROOT", "C:\\Windows"), "System32\\curl.exe"))
         joinpath(get(ENV, "SYSTEMROOT", "C:\\Windows"), "System32\\curl.exe")
-    elseif Sys.which("curl") !== nothing
+    elseif !Sys.iswindows() && Sys.which("curl") !== nothing
         "curl"
     else
         nothing
@@ -40,13 +40,23 @@ function download_curl(curl_exe::AbstractString, url::AbstractString, filename::
     process = run(pipeline(`$curl_exe -s -S -g -L -f -o $filename $url`, stderr=err), wait=false)
     if !success(process)
         error_msg = readline(err)
-        @error "Download Failed" error_msg
+        @error "Download failed: $error_msg"
         pipeline_error(process)
     end
     return filename
 end
 
+const DOWNLOAD_HOOKS = Callable[]
+
+function download_url(url::String)
+    for hook in DOWNLOAD_HOOKS
+        url = String(hook(url)::AbstractString)
+    end
+    return url
+end
+
 function download(url::AbstractString, filename::AbstractString)
+    url = download_url(url)
     curl_exe = find_curl()
     if curl_exe !== nothing
         return download_curl(curl_exe, url, filename)

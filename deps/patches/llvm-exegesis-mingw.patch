@@ -1,0 +1,24 @@
+From 9ba86352649a39b03adce98670714c4c8eb5341d Mon Sep 17 00:00:00 2001
+From: Valentin Churavy <v.churavy@gmail.com>
+Date: Wed, 24 Jul 2019 21:19:20 -0400
+Subject: [PATCH] Fix build of llvm-exegis on mingw32
+
+---
+ llvm/tools/llvm-exegesis/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tools/llvm-exegesis/CMakeLists.txt b/tools/llvm-exegesis/CMakeLists.txt
+index a59e1b74024..7a30e0ea98f 100644
+--- a/tools/llvm-exegesis/CMakeLists.txt
++++ b/tools/llvm-exegesis/CMakeLists.txt
+@@ -4,7 +4,7 @@ set(LLVM_LINK_COMPONENTS
+   native
+   )
+ 
+-add_llvm_tool(llvm-exegesis
++add_llvm_tool(llvm-exegesis DISABLE_LLVM_LINK_LLVM_DYLIB
+   llvm-exegesis.cpp
+   )
+ 
+-- 
+2.22.0

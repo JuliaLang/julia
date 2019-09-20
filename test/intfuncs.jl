@@ -117,6 +117,14 @@ end
 
         @test ndigits(146, base=-3) == 5
     end
+    @testset "ndigits with base power of 2" begin
+        @test ndigits(17, base = 2) == 5
+        @test ndigits(123, base = 4) == 4
+        @test ndigits(64, base = 8) == 3
+        @test ndigits(8436, base = 16) == 4
+        @test ndigits(159753, base = 32) == 4
+        @test ndigits(3578951, base = 64) == 4
+    end
     let (n, b) = rand(Int, 2)
         -1 <= b <= 1 && (b = 2) # invalid bases
         @test ndigits(n) == ndigits(big(n)) == ndigits(n, base=10)
@@ -181,11 +189,22 @@ end
     @test bitstring(Int128(3)) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
 end
 @testset "digits/base" begin
-    @test digits(4, base = 2) == [0, 0, 1]
     @test digits(5, base = 3) == [2, 1]
-    @test digits(5, base = Int32(2), pad=Int32(3)) == [1, 0, 1]
     @test digits(5, pad = 3) == [5, 0, 0]
     @test digits(5, pad = Int32(3)) == [5, 0, 0]
+    # The following have bases powers of 2, but don't enter the fast path
+    @test digits(-3, base = 2) == -[1, 1]
+    @test digits(-42, base = 4) == -[2, 2, 2]
+
+    @testset "digits/base with bases powers of 2" begin
+        @test digits(4, base = 2) == [0, 0, 1]
+        @test digits(5, base = Int32(2), pad=Int32(3)) == [1, 0, 1]
+        @test digits(42, base = 4) == [2, 2, 2]
+        @test digits(321, base = 8) == [1, 0, 5]
+        @test digits(0x123456789abcdef, base = 16) == 15:-1:1
+        @test digits(0x2b1a210a750, base = 64) == [16, 29, 10, 4, 34, 6, 43]
+        @test digits(0x02a01407, base = Int128(1024)) == [7, 5, 42]
+    end
 
     @testset "digits/base with negative bases" begin
         @testset "digits(n::$T, base = b)" for T in (Int, UInt, BigInt, Int32, UInt32)

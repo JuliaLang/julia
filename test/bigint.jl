@@ -440,3 +440,33 @@ end
     @test big(Int64(-9223372036854775808)) == big"-9223372036854775808"
     @test big(Int128(-170141183460469231731687303715884105728)) == big"-170141183460469231731687303715884105728"
 end
+
+@testset "conversion to Float" begin
+    x = big"2"^256 + big"2"^(256-53) + 1
+    @test Float64(x) == reinterpret(Float64, 0x4ff0000000000001)
+    @test Float64(-x) == -Float64(x)
+    x = (x >> 1) + 1
+    @test Float64(x) == reinterpret(Float64, 0x4fe0000000000001)
+    @test Float64(-x) == -Float64(x)
+
+    x = big"2"^64 + big"2"^(64-24) + 1
+    @test Float32(x) == reinterpret(Float32, 0x5f800001)
+    @test Float32(-x) == -Float32(x)
+    x = (x >> 1) + 1
+    @test Float32(x) == reinterpret(Float32, 0x5f000001)
+    @test Float32(-x) == -Float32(x)
+
+    x = big"2"^15 + big"2"^(15-11) + 1
+    @test Float16(x) == reinterpret(Float16, 0x7801)
+    @test Float16(-x) == -Float16(x)
+    x = (x >> 1) + 1
+    @test Float16(x) == reinterpret(Float16, 0x7401)
+    @test Float16(-x) == -Float16(x)
+
+    for T in (Float16, Float32, Float64)
+        n = exponent(floatmax(T))
+        @test T(big"2"^(n+1)) === T(Inf)
+        @test T(big"2"^(n+1) - big"2"^(n-precision(T))) === T(Inf)
+        @test T(big"2"^(n+1) - big"2"^(n-precision(T)) - 1) === floatmax(T)
+    end
+end
