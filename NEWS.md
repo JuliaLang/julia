@@ -48,6 +48,7 @@ Standard library changes
 
 #### SparseArrays
 
+* Products involving sparse arrays now allow more general sparse `eltype`s, such as `StaticArrays` ([#33205])
 
 #### Dates
 
