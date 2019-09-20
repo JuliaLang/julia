@@ -1,10 +1,21 @@
 # TODO:
-# - `Expr(:spawn)` should return a Task
 # - Extend `Expr(:spawn, ssize, sticky, parallel)`
 # - Codegen to setjmp
 # - Slot transformation
 # - Task analysis
 # - What to do when `syncregion` of a `detach` is undefined
+# - Treat reattach like a return and not a goto
+# - spawn needs an exception handler installed and we need to handle the result value
+#   T = Task()
+#   detach T
+#     res = try
+#         ...
+#     catch e
+#        t.exception = e
+#        e
+#     end
+#   reattach res
+#
 
 macro syncregion()
     Expr(:syncregion)
