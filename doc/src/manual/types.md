@@ -125,7 +125,7 @@ end
 Returning from this function behaves just like an assignment to a variable with a declared type:
 the value is always converted to `Float64`.
 
-## Abstract Types
+## [Abstract Types](@id man-abstract-types)
 
 Abstract types cannot be instantiated, and serve only as nodes in the type graph, thereby describing
 sets of related concrete types: those concrete types which are their descendants. We begin with
@@ -508,7 +508,7 @@ types in other languages. Declaring a function argument or a field as `Union{T, 
 setting it either to a value of type `T`, or to `nothing` to indicate that there is no value.
 See [this FAQ entry](@ref faq-nothing) for more information.
 
-## Parametric Types
+## [Parametric Types](@id man-parametric-types)
 
 An important and powerful feature of Julia's type system is that it is parametric: types can take
 parameters, so that type declarations actually introduce a whole family of new types -- one for
