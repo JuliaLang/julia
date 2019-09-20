@@ -24,7 +24,7 @@ function show(io::IO, ::MIME"text/plain", f::Function)
     ft = typeof(f)
     mt = ft.name.mt
     if isa(f, Core.IntrinsicFunction)
-        show(io, f)
+        print(io, f)
         id = Core.Intrinsics.bitcast(Int32, f)
         print(io, " (intrinsic function #$id)")
     elseif isa(f, Core.Builtin)
@@ -403,10 +403,14 @@ end
 show(io::IO, f::Function) = show_function(io, f, get(io, :compact, false))
 print(io::IO, f::Function) = show_function(io, f, true)
 
-function show(io::IO, x::Core.IntrinsicFunction)
-    name = ccall(:jl_intrinsic_name, Cstring, (Core.IntrinsicFunction,), x)
-    print(io, unsafe_string(name))
+function show(io::IO, f::Core.IntrinsicFunction)
+    if !get(io, :compact, false)
+        print(io, "Core.Intrinsics.")
+    end
+    print(io, nameof(f))
 end
+
+print(io::IO, f::Core.IntrinsicFunction) = print(io, nameof(f))
 
 show(io::IO, ::Core.TypeofBottom) = print(io, "Union{}")
 show(io::IO, ::MIME"text/plain", ::Core.TypeofBottom) = print(io, "Union{}")
