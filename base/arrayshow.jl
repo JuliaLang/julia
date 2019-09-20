@@ -121,15 +121,18 @@ of a bunch of rows for long matrices. Not only is the string vdots shown
 but it also repeated every M elements if desired.
 """
 function print_matrix_vdots(io::IO, vdots::AbstractString,
-        A::Vector, sep::AbstractString, M::Integer, m::Integer)
+                            A::Vector, sep::AbstractString, M::Integer, m::Integer,
+                            pad_right::Bool)
     for k = 1:length(A)
         w = A[k][1] + A[k][2]
         if k % M == m
             l = repeat(" ", max(0, A[k][1]-length(vdots)))
-            r = repeat(" ", max(0, w-length(vdots)-length(l)))
+            r = k == length(A) && !pad_right ?
+                "" :
+                repeat(" ", max(0, w-length(vdots)-length(l)))
             print(io, l, vdots, r)
         else
-            print(io, repeat(" ", w))
+            (k != length(A) || pad_right) && print(io, repeat(" ", w))
         end
         if k < length(A); print(io, sep); end
     end
@@ -216,7 +219,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 if i != rowsA[end] || i == rowsA[halfheight]; println(io); end
                 if i == rowsA[halfheight]
                     print(io, i == first(rowsA) ? pre : presp)
-                    print_matrix_vdots(io, vdots,A,sep,vmod,1)
+                    print_matrix_vdots(io, vdots, A, sep, vmod, 1, false)
                     print(io, i == last(rowsA) ? post : postsp * '\n')
                 end
             end
@@ -235,9 +238,9 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 if i != rowsA[end] || i == rowsA[halfheight]; println(io); end
                 if i == rowsA[halfheight]
                     print(io, i == first(rowsA) ? pre : presp)
-                    print_matrix_vdots(io, vdots,Lalign,sep,vmod,1)
+                    print_matrix_vdots(io, vdots, Lalign, sep, vmod, 1, true)
                     print(io, ddots)
-                    print_matrix_vdots(io, vdots,Ralign,sep,vmod,r)
+                    print_matrix_vdots(io, vdots, Ralign, sep, vmod, r, false)
                     print(io, i == last(rowsA) ? post : postsp * '\n')
                 end
             end
