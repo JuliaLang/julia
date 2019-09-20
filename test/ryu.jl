@@ -736,4 +736,26 @@ end
 
 end # exp
 
+@testset "compact" begin
+
+    writecompact(x) = Ryu.writeshortest(x, false, false, true, -1, UInt8('e'), false, UInt8('.'), false, true)
+
+    @test writecompact(0.49999999) == "0.5"
+    @test writecompact(0.459999999) == "0.46"
+    @test writecompact(0.20058603493384108) == "0.200586"
+    @test writecompact(0.9999999) == "1.0"
+    @test writecompact(0.1999999) == "0.2"
+    @test writecompact(123.4567) == "123.457"
+    @test writecompact(0.001234567) == "0.00123457"
+    @test writecompact(0.1234567) == "0.123457"
+    @test writecompact(1234567.0) == "123457.0"
+    @test writecompact(12345678910.0) == "1.23457e10"
+    @test writecompact(12345678.0) == "123457.0"
+    @test writecompact(0.10000049) == "0.1"
+    @test writecompact(22.89825) == "22.8983"
+    @test writecompact(0.646690981531646) == "0.646691"
+    @test writecompact(6.938893903907228e-17) == "6.93889e-17"
+
+end
+
 end # Ryu

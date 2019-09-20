@@ -1,6 +1,6 @@
 @inline function writeexp(buf, pos, v::T,
-    plus=false, space=false, hash=false,
-    precision=-1, expchar=UInt8('e'), decchar=UInt8('.'), trimtrailingzeros=false) where {T <: Base.IEEEFloat}
+    precision=-1, plus=false, space=false, hash=false,
+    expchar=UInt8('e'), decchar=UInt8('.'), trimtrailingzeros=false) where {T <: Base.IEEEFloat}
     @assert 0 < pos <= length(buf)
     x = Float64(v)
     neg = signbit(x)
