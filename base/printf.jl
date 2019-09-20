@@ -13,7 +13,7 @@ const Strings = Union{Val{'s'}, Val{'S'}}
 const Pointer = Val{'p'}
 const HexBases = Union{Val{'x'}, Val{'X'}, Val{'a'}, Val{'A'}}
 
-mutable struct Spec{T} # T => %type => Val{'type'}
+struct Spec{T} # T => %type => Val{'type'}
     leftalign::Bool
     plus::Bool
     space::Bool
@@ -37,8 +37,6 @@ Base.string(f::Spec{T}; modifier::String="") where {T} =
            modifier,
            char(T))
 
-ptrfmt(s::Spec{T}, x) where {T} =
-    Spec{Val{'x'}}(s.leftalign, s.plus, s.space, s.zero, true, s.width, sizeof(x) == 8 ? 16 : 8, s.dynamic_width, s.dynamic_precision)
 
 Base.show(io::IO, f::Spec) = print(io, string(f))
 
@@ -205,9 +203,9 @@ const HEX = b"0123456789ABCDEF"
     return pos
 end
 
-@inline function fmt(buf, pos, args, argp, spec)
+@inline function dynamic(args, argp, spec)
     dynamic_width, dynamic_precision = spec.dynamic_width, spec.dynamic_precision
-
+    width, prec = spec.width, spec.precision
     if dynamic_width
         width = args[argp]
         argp += 1
@@ -216,14 +214,17 @@ end
         prec = args[argp]
         argp += 1
     end
-    arg = args[argp]
-    argp += 1
-    return fmt(buf, pos, arg, spec), argp
+    (width, prec, argp)
 end
 
 
-@inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Chars}
-    leftalign, width = spec.leftalign, spec.width
+@inline function fmt(buf, pos, args, argp, spec::Spec{T}) where {T <: Chars}
+    leftalign = spec.leftalign
+    width, prec, argp = dynamic(args, argp, spec)
+
+    arg = args[argp]
+    argp += 1
+
     if !leftalign && width > 1
         for _ = 1:(width - 1)
             buf[pos] = UInt8(' ')
@@ -237,12 +238,17 @@ end
             pos += 1
         end
     end
-    return pos
+    return (pos, argp)
 end
 
 # strings
-@inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Strings}
-    leftalign, hash, width, prec = spec.leftalign, spec.hash, spec.width, spec.precision
+@inline function fmt(buf, pos, args, argp, spec::Spec{T}) where {T <: Strings}
+    leftalign, hash  = spec.leftalign, spec.hash
+    width, prec, argp = dynamic(args, argp, spec)
+
+    arg = args[argp]
+    argp += 1
+
     str = string(arg)
     op = p = prec == -1 ? (length(str) + (hash ? arg isa AbstractString ? 2 : 1 : 0)) : prec
     if !leftalign && width > p
@@ -277,13 +283,20 @@ end
             pos += 1
         end
     end
-    return pos
+    return (pos, argp)
 end
 
 # integers
-@inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Ints}
-    leftalign, plus, space, zero, hash, width, prec =
-        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
+    
+@inline function fmt(buf, pos, args, argp, spec::Spec{T}) where {T <: Ints}
+    leftalign, plus, space, zero, hash =
+        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash
+
+    width, prec, argp = dynamic(args, argp, spec)
+
+    arg = args[argp]
+    argp += 1
+    
     bs = base(T)
     arg2 = arg isa AbstractFloat ? Integer(trunc(arg)) : arg
     n = i = ndigits(arg2, base=bs, pad=1)
@@ -356,7 +369,7 @@ end
             pos += 1
         end
     end
-    return pos
+    return (pos, argp)
 end
 
 # floats
@@ -382,9 +395,15 @@ tofloat(x) = Float64(x)
 tofloat(x::Base.IEEEFloat) = x
 tofloat(x::BigFloat) = x
 
-@inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
-    leftalign, plus, space, zero, hash, width, prec =
-        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
+@inline function fmt(buf, pos, args, argp, spec::Spec{T}) where {T <: Floats}
+    leftalign, plus, space, zero, hash  =
+        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash
+
+    width, prec, argp = dynamic(args, argp, spec)
+
+    arg = args[argp]
+    argp += 1
+
     x = tofloat(arg)
     if x isa BigFloat && !isnan(x) && isfinite(x)
         ptr = pointer(buf, pos)
@@ -392,7 +411,7 @@ tofloat(x::BigFloat) = x
                 (Ptr{UInt8}, Culong, Ptr{UInt8}, Ref{BigFloat}),
                 ptr, length(buf), string(spec; modifier="R"), arg)
         newpos > 0 || error("invalid printf formatting for BigFloat")
-        return pos + newpos
+        return (pos + newpos, argp)
     elseif x isa BigFloat
         x = Float64(x)
     end
@@ -523,20 +542,40 @@ tofloat(x::BigFloat) = x
             end
         end
     end
-    return newpos
+    return (newpos, argp)
 end
 
 # pointers
-fmt(buf, pos, arg, spec::Spec{Pointer}) = fmt(buf, pos, arg, ptrfmt(spec, arg))
+function fmt(buf, pos, args, argp, spec::Spec{Pointer})
+    ##  given or dynamic precision is ignored
+    xpos = argp
+    if spec.dynamic_width
+        xpos += 1
+    end
+    if spec.dynamic_precision
+        xpos += 1
+    end
+    x = args[xpos]
+    precision = sizeof(x) == 8 ? 16 : 8
+    hex_spec = Spec{Val{'x'}}(spec.leftalign, spec.plus, spec.space, spec.zero, true, spec.width, precision, spec.dynamic_width, false)    
+    fmt(buf, pos, args, argp, hex_spec)
+end
+
 
 # old Printf compat
 function fix_dec end
 function ini_dec end
 
 # generic fallback
-function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
-    leftalign, plus, space, zero, hash, width, prec =
-        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
+function fmtfallback(buf, pos, args, argp, spec::Spec{T}) where {T}
+    leftalign, plus, space, zero, hash =
+        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash
+
+    width, prec, argp = dynamic(args, argp, spec)
+
+    arg = args[argp]
+    argp += 1
+
     buf2 = Base.StringVector(309 + 17 + 5)
     ise = T <: Union{Val{'e'}, Val{'E'}}
     isg = T <: Union{Val{'g'}, Val{'G'}}
@@ -653,7 +692,7 @@ function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
             pos += 1
         end
     end
-    return pos
+    return (pos, argp)
 end
 
 @inline function format(buf::Vector{UInt8}, pos::Integer, f::Format, args...)
@@ -687,48 +726,48 @@ end
     return pos
 end
 
-function plength!(f, args, argp)
-    if f.dynamic_width
-        f.width = args[argp]
-        argp += 1
-    end
-    precision = f.precision
-    if f.dynamic_precision
-        f.precision = args[argp]
-        argp += 1
-    end
+
+function plength(f::Spec{T}, args, argp) where {T <: Chars}
+    width, prec, argp = dynamic(args, argp, f)
     x = args[argp]
-    argp +=1
-    return plength(f, x), argp
+    argp =+ 1
+    max(width, 1) + (ncodeunits(x isa AbstractString ? x[1] : Char(x)) - 1), argp
+end
+
+function plength(f::Spec{Pointer}, args, argp)
+    width, prec, argp = dynamic(args, argp, f)
+    x = args[argp]
+    argp =+ 1    
+    max(width, 2 * sizeof(x) + 2), argp
 end
 
 
-function plength(f::Spec{T}, x) where {T <: Chars}
-    max(f.width, 1) + (ncodeunits(x isa AbstractString ? x[1] : Char(x)) - 1)
-end
-
-function plength(f::Spec{Pointer}, x)
-    max(f.width, 2 * sizeof(x) + 2)
-end
-
-
-function plength(f::Spec{T}, x) where {T <: Strings}
+function plength(f::Spec{T}, args, argp) where {T <: Strings}
+    width, prec, argp = dynamic(args, argp, f)
+    x = args[argp]
+    argp =+ 1
     str = string(x)
-    p = f.precision == -1 ? (length(str) + (f.hash ? (x isa Symbol ? 1 : 2) : 0)) : f.precision
-    return max(f.width, p) + (sizeof(str) - length(str))
+    p = prec == -1 ? (length(str) + (f.hash ? (x isa Symbol ? 1 : 2) : 0)) : prec
+    return max(width, p) + (sizeof(str) - length(str)), argp
 end
 
-function plength(f::Spec{T}, x) where {T <: Ints}
+function plength(f::Spec{T}, args, argp) where {T <: Ints}
+    width, prec, argp = dynamic(args, argp, f)
+    x = args[argp]
+    argp =+ 1
     x2 = x isa AbstractFloat ? Integer(trunc(x)) : x
-    return max(f.width, f.precision + ndigits(x2, base=base(T), pad=1) + 5)
+    return max(width, prec + ndigits(x2, base=base(T), pad=1) + 5), argp
 end
 
-function plength(f::Spec{T}, x) where {T <: Floats}
+function plength(f::Spec{T}, args, argp) where {T <: Floats}
+    width, prec, argp = dynamic(args, argp, f)
+    x = args[argp]
+    argp =+ 1
     x2 = tofloat(x)
     if x2 isa BigFloat
-        return Base.MPFR._calculate_buffer_size!(Base.StringVector(0), string(f), x) + 3
+        return Base.MPFR._calculate_buffer_size!(Base.StringVector(0), string(f), x) + 3, argp
     else
-        return max(f.width, f.precision + 309 + 17 + f.hash + 5)
+        return max(width, prec + 309 + 17 + f.hash + 5), argp
     end
 end
 
@@ -739,13 +778,13 @@ end
     # unroll up to 8 formats
     Base.@nexprs 8 i -> begin
         if N >= i
-            l, argp = plength!(formats[i], args, argp)
+            l, argp = plength(formats[i], args, argp)
             len += l
         end
     end
     if N > 8
         for i = 9:length(formats)
-            l, argp = plength!(formats[i], args, argp)
+            l, argp = plength(formats[i], args, argp)
             len += l
         end
     end
