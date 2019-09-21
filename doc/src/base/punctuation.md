@@ -12,7 +12,7 @@ Extended documentation for mathematical symbols & functions is [here](@ref math-
 | `=#`        | end a multi-line comment by immediately preceding the number sign with an equals sign       |
 | `$`         | the dollar sign is used for [string](@ref string-interpolation) and [expression](@ref man-expression-interpolation) interpolation |
 | `%`         | the percent symbol is the [remainder operator](@ref %)                                      |
-| `^`         | the carat is the [exponentiation operator](@ref ^).                                         |
+| `^`         | the caret is the [exponentiation operator](@ref ^).                                         |
 | `&`         | single ampersand is [bitwise and](@ref &)                                                   |
 | `&&`        | double ampersands is [short-circuiting boolean and](@ref &&)                                |
 | `\|`        | single pipe character is [bitwise or](@ref |)                                               |
