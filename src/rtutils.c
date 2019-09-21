@@ -112,7 +112,7 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname, const char *co
                                                jl_value_t *expected, jl_value_t *got)
 {
     jl_value_t *ctxt=NULL;
-    JL_GC_PUSH2(&ctxt, &got);
+    JL_GC_PUSH3(&ctxt, &expected, &got);
     ctxt = jl_pchar_to_string((char*)context, strlen(context));
     jl_value_t *ex = jl_new_struct(jl_typeerror_type, jl_symbol(fname), ctxt, expected, got);
     jl_throw(ex);
