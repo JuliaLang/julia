@@ -2616,7 +2616,6 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
         int i;
         for (i = 0; i < len; i++) {
             jl_method_t *prior_match = (jl_method_t*)jl_svecref(jl_array_ptr_ref(closure->t, i), 2);
-            jl_value_t *sig2 = (jl_value_t*)prior_match->sig;
             if (closure->include_ambiguous && (jl_value_t*)meth->ambig != jl_nothing) {
                 // check that prior sig is not actually just ambiguous with this--may need to include both
                 size_t j, l = jl_array_len(meth->ambig);
@@ -2628,7 +2627,9 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
                 if (j != l)
                     continue; // still include this match
             }
-            if (jl_subtype(closure->match.ti, sig2)) {
+            jl_value_t *prior_ti = jl_svecref(jl_array_ptr_ref(closure->t, i), 0);
+            if (jl_is_datatype(prior_ti) && ((jl_datatype_t*)prior_ti)->isdispatchtuple &&
+                jl_subtype(closure->match.ti, prior_ti)) {
                 return_this_match = 0;
                 break;
             }
