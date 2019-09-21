@@ -581,4 +581,20 @@ end
     @test mul!(view(C, 1:10, 1:10), A, 0.5) == A * 0.5
 end
 
+@testset "Issue #33214: tiled generic mul!" begin
+    n = 100
+    A = rand(n, n)
+    B = rand(n, n)
+    C = zeros(n, n)
+    mul!(C, A, B, -1 + 0im, 0)
+    D = -A * B
+    @test D ≈ C
+
+    # Just in case dispatching on the surface API `mul!` is changed in the future,
+    # let's test the function where the tiled multiplication is defined.
+    fill!(C, 0)
+    LinearAlgebra._generic_matmatmul!(C, 'N', 'N', A, B, LinearAlgebra.MulAddMul(-1, 0))
+    @test D ≈ C
+end
+
 end # module TestMatmul

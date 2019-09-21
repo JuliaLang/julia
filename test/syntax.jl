@@ -1928,6 +1928,10 @@ end
 # Stream positioning after parsing var
 @test Meta.parse("var'", 1, greedy=false) == (:var, 4)
 
+# quoted names in import (#33158)
+@test Meta.parse("import Base.:+") == :(import Base.+)
+@test Meta.parse("import Base.Foo.:(==).bar") == :(import Base.Foo.==.bar)
+
 # issue #33135
 function f33135(x::T) where {C1, T}
     let C1 = 1, C2 = 2
@@ -1935,3 +1939,6 @@ function f33135(x::T) where {C1, T}
     end
 end
 @test f33135(0) == 1
+
+# issue #33227
+@test Meta.isexpr(Meta.lower(Main, :((@label a; @goto a))), :thunk)

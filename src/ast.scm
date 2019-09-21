@@ -274,6 +274,10 @@
 
 (define (quoted? e) (memq (car e) '(quote top core globalref outerref line break inert meta)))
 (define (quotify e) `',e)
+(define (unquote e)
+  (if (and (pair? e) (memq (car e) '(quote inert)))
+      (cadr e)
+      e))
 
 (define (lam:args x) (cadr x))
 (define (lam:vars x) (llist-vars (lam:args x)))

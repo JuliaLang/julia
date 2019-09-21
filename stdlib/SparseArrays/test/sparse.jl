@@ -6,12 +6,32 @@ using Test
 using SparseArrays
 using SparseArrays: getcolptr, nonzeroinds
 using LinearAlgebra
-using Base.Printf: @printf
+using Printf: @printf # for debug
 using Random
 using Test: guardseed
 using InteractiveUtils: @which
 using Dates
 include("forbidproperties.jl")
+include("simplesmatrix.jl")
+
+@testset "Issue #33169" begin
+    m21 = sparse([1, 2], [2, 2], SimpleSMatrix{2,1}.([rand(2, 1), rand(2, 1)]), 2, 2)
+    m12 = sparse([1, 2], [2, 2], SimpleSMatrix{1,2}.([rand(1, 2), rand(1, 2)]), 2, 2)
+    m22 = sparse([1, 2], [2, 2], SimpleSMatrix{2,2}.([rand(2, 2), rand(2, 2)]), 2, 2)
+    m23 = sparse([1, 2], [2, 2], SimpleSMatrix{2,3}.([rand(2, 3), rand(2, 3)]), 2, 2)
+    v12 = sparsevec([2], SimpleSMatrix{1,2}.([rand(1, 2)]))
+    v21 = sparsevec([2], SimpleSMatrix{2,1}.([rand(2, 1)]))
+    @test m22 * m21 ≈ Matrix(m22) * Matrix(m21)
+    @test m22' * m21 ≈ Matrix(m22') * Matrix(m21)
+    @test m21' * m22 ≈ Matrix(m21') * Matrix(m22)
+    @test m23' * m22 * m21 ≈ Matrix(m23') * Matrix(m22) * Matrix(m21)
+    @test m21 * v12 ≈ Matrix(m21) * Vector(v12)
+    @test m12' * v12 ≈ Matrix(m12') * Vector(v12)
+    @test v21' * m22 ≈ Vector(v21)' * Matrix(m22)
+    @test v12' * m21' ≈ Vector(v12)' * Matrix(m21)'
+    @test v21' * v21 ≈ Vector(v21)' * Vector(v21)
+    @test v21' * m22 * v21 ≈ Vector(v21)' * Matrix(m22) * Vector(v21)
+end
 
 @testset "issparse" begin
     @test issparse(sparse(fill(1,5,5)))
@@ -869,6 +889,21 @@ end
             @test_throws BoundsError ss116[i, [end, end+1]]
         end
     end
+
+    # indexing by array of CartesianIndex (issue #30981)
+    S = sprand(10, 10, 0.4)
+    inds_sparse = S[findall(S .> 0.2)]
+    M = Matrix(S)
+    inds_dense = M[findall(M .> 0.2)]
+    @test Array(inds_sparse) == inds_dense
+    inds_out = Array([CartesianIndex(1, 1), CartesianIndex(0, 1)])
+    @test_throws BoundsError S[inds_out]
+    pop!(inds_out); push!(inds_out, CartesianIndex(1, 0))
+    @test_throws BoundsError S[inds_out]
+    pop!(inds_out); push!(inds_out, CartesianIndex(11, 1))
+    @test_throws BoundsError S[inds_out]
+    pop!(inds_out); push!(inds_out, CartesianIndex(1, 11))
+    @test_throws BoundsError S[inds_out]
 
     # workaround issue #7197: comment out let-block
     #let S = SparseMatrixCSC(3, 3, UInt8[1,1,1,1], UInt8[], Int64[])
@@ -2718,7 +2753,7 @@ end
     @test sparse(UInt8.(1:254), fill(UInt8(1), 254), fill(1, 254), 255, 255) !== nothing
 end
 
-@testset "sppromote and sparse matmul" begin
+@testset "Sparse promotion in sparse matmul" begin
     A = SparseMatrixCSC{Float32, Int8}(2, 2, Int8[1, 2, 3], Int8[1, 2], Float32[1., 2.])
     B = SparseMatrixCSC{ComplexF32, Int32}(2, 2, Int32[1, 2, 3], Int32[1, 2], ComplexF32[1. + im, 2. - im])
     @test A*transpose(B)                  ≈ Array(A) * transpose(Array(B))

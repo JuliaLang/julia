@@ -338,7 +338,13 @@ static std::map<jl_fptr_args_t, Function*> builtin_func_map;
 extern "C" {
     int globalUnique = 0;
     int jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
-    jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 0, 1, jl_default_debug_info_kind, NULL, NULL, NULL, NULL, NULL};
+    jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 0,
+#ifdef _OS_WINDOWS_
+        0,
+#else
+        1,
+#endif
+        jl_default_debug_info_kind, NULL, NULL, NULL, NULL, NULL};
 }
 
 template<typename T>
@@ -4506,7 +4512,9 @@ static Function* gen_cfun_wrapper(
     // for now, just use a dummy field to avoid a branch in this function
     ctx.world_age_field = ctx.builder.CreateSelect(have_tls, ctx.world_age_field, dummy_world);
     Value *last_age = tbaa_decorate(tbaa_gcframe, ctx.builder.CreateLoad(ctx.world_age_field));
-    have_tls = ctx.builder.CreateAnd(have_tls, ctx.builder.CreateIsNotNull(last_age));
+    Value *valid_tls = ctx.builder.CreateIsNotNull(last_age);
+    have_tls = ctx.builder.CreateAnd(have_tls, valid_tls);
+    ctx.world_age_field = ctx.builder.CreateSelect(valid_tls, ctx.world_age_field, dummy_world);
     Value *world_v = ctx.builder.CreateLoad(prepare_global(jlgetworld_global));
 
     Value *age_ok = NULL;

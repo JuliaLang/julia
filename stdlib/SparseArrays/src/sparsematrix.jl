@@ -856,16 +856,17 @@ sparse(I,J,v::Number,m,n,combine::Function) = sparse(I, J, fill(v,length(I)), In
 ## Transposition and permutation methods
 
 """
-    halfperm!(X::AbstractSparseMatrixCSC{Tv,Ti}, A::AbstractSparseMatrixCSC{Tv,Ti},
-              q::AbstractVector{<:Integer}, f::Function = identity) where {Tv,Ti}
+    halfperm!(X::AbstractSparseMatrixCSC{Tv,Ti}, A::AbstractSparseMatrixCSC{TvA,Ti},
+              q::AbstractVector{<:Integer}, f::Function = identity) where {Tv,TvA,Ti}
 
 Column-permute and transpose `A`, simultaneously applying `f` to each entry of `A`, storing
 the result `(f(A)Q)^T` (`map(f, transpose(A[:,q]))`) in `X`.
 
-`X`'s dimensions must match those of `transpose(A)` (`size(X, 1) == size(A, 2)` and `size(X, 2) == size(A, 1)`), and `X`
-must have enough storage to accommodate all allocated entries in `A` (`length(rowvals(X)) >= nnz(A)`
-and  `length(nonzeros(X)) >= nnz(A)`). Column-permutation `q`'s length must match `A`'s column
-count (`length(q) == size(A, 2)`).
+Element type `Tv` of `X` must match `f(::TvA)`, where `TvA` is the element type of `A`.
+`X`'s dimensions must match those of `transpose(A)` (`size(X, 1) == size(A, 2)` and
+`size(X, 2) == size(A, 1)`), and `X` must have enough storage to accommodate all allocated
+entries in `A` (`length(rowvals(X)) >= nnz(A)` and `length(nonzeros(X)) >= nnz(A)`).
+Column-permutation `q`'s length must match `A`'s column count (`length(q) == size(A, 2)`).
 
 This method is the parent of several methods performing transposition and permutation
 operations on [`SparseMatrixCSC`](@ref)s. As this method performs no argument checking,
@@ -876,8 +877,8 @@ algorithms for sparse matrices: multiplication and permuted transposition," ACM 
 250-269 (1978). The algorithm runs in `O(size(A, 1), size(A, 2), nnz(A))` time and requires no space
 beyond that passed in.
 """
-function halfperm!(X::AbstractSparseMatrixCSC{Tv,Ti}, A::AbstractSparseMatrixCSC{Tv,Ti},
-        q::AbstractVector{<:Integer}, f::Function = identity) where {Tv,Ti}
+function halfperm!(X::AbstractSparseMatrixCSC{Tv,Ti}, A::AbstractSparseMatrixCSC{TvA,Ti},
+        q::AbstractVector{<:Integer}, f::Function = identity) where {Tv,TvA,Ti}
     _computecolptrs_halfperm!(X, A)
     _distributevals_halfperm!(X, A, q, f)
     return X
@@ -886,7 +887,7 @@ end
 Helper method for `halfperm!`. Computes `transpose(A[:,q])`'s column pointers, storing them
 shifted one position forward in `getcolptr(X)`; `_distributevals_halfperm!` fixes this shift.
 """
-function _computecolptrs_halfperm!(X::AbstractSparseMatrixCSC{Tv,Ti}, A::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
+function _computecolptrs_halfperm!(X::AbstractSparseMatrixCSC{Tv,Ti}, A::AbstractSparseMatrixCSC{TvA,Ti}) where {Tv,TvA,Ti}
     # Compute `transpose(A[:,q])`'s column counts. Store shifted forward one position in getcolptr(X).
     fill!(getcolptr(X), 0)
     @inbounds for k in 1:nnz(A)
@@ -908,7 +909,7 @@ distributing `rowvals(A)` and `f`-transformed `nonzeros(A)` into `rowvals(X)` an
 respectively. Simultaneously fixes the one-position-forward shift in `getcolptr(X)`.
 """
 @noinline function _distributevals_halfperm!(X::AbstractSparseMatrixCSC{Tv,Ti},
-        A::AbstractSparseMatrixCSC{Tv,Ti}, q::AbstractVector{<:Integer}, f::Function) where {Tv,Ti}
+        A::AbstractSparseMatrixCSC{TvA,Ti}, q::AbstractVector{<:Integer}, f::Function) where {Tv,TvA,Ti}
     @inbounds for Xi in 1:size(A, 2)
         Aj = q[Xi]
         for Ak in nzrange(A, Aj)
@@ -944,7 +945,8 @@ end
 transpose!(X::AbstractSparseMatrixCSC{Tv,Ti}, A::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = ftranspose!(X, A, identity)
 adjoint!(X::AbstractSparseMatrixCSC{Tv,Ti}, A::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = ftranspose!(X, A, conj)
 
-function ftranspose(A::AbstractSparseMatrixCSC{Tv,Ti}, f::Function) where {Tv,Ti}
+# manually specifying eltype allows to avoid calling return_type of f on TvA
+function ftranspose(A::AbstractSparseMatrixCSC{TvA,Ti}, f::Function, eltype::Type{Tv} = TvA) where {Tv,TvA,Ti}
     X = SparseMatrixCSC(size(A, 2), size(A, 1),
                         ones(Ti, size(A, 1)+1),
                         Vector{Ti}(undef, nnz(A)),
@@ -953,8 +955,10 @@ function ftranspose(A::AbstractSparseMatrixCSC{Tv,Ti}, f::Function) where {Tv,Ti
 end
 adjoint(A::AbstractSparseMatrixCSC) = Adjoint(A)
 transpose(A::AbstractSparseMatrixCSC) = Transpose(A)
-Base.copy(A::Adjoint{<:Any,<:AbstractSparseMatrixCSC}) = ftranspose(A.parent, x -> copy(adjoint(x)))
-Base.copy(A::Transpose{<:Any,<:AbstractSparseMatrixCSC}) = ftranspose(A.parent, x -> copy(transpose(x)))
+Base.copy(A::Adjoint{<:Any,<:AbstractSparseMatrixCSC}) =
+    ftranspose(A.parent, x -> adjoint(copy(x)), eltype(A))
+Base.copy(A::Transpose{<:Any,<:AbstractSparseMatrixCSC}) =
+    ftranspose(A.parent, x -> transpose(copy(x)), eltype(A))
 function Base.permutedims(A::AbstractSparseMatrixCSC, (a,b))
     (a, b) == (2, 1) && return ftranspose(A, identity)
     (a, b) == (1, 2) && return copy(A)

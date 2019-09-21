@@ -135,7 +135,7 @@ Read the entirety of `io`, as a `String`.
 julia> io = IOBuffer("JuliaLang is a GitHub organization");
 
 julia> read(io, Char)
-'J': ASCII/Unicode U+004a (category Lu: Letter, uppercase)
+'J': ASCII/Unicode U+004A (category Lu: Letter, uppercase)
 
 julia> io = IOBuffer("JuliaLang is a GitHub organization");
 
