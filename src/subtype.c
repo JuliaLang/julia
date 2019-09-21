@@ -1049,6 +1049,10 @@ loop: // while (i <= lx) {
             yi = jl_tparam0(jl_unwrap_unionall(env->vty));
             if (!env->vvx && yi == (jl_value_t*)jl_any_type)
                 goto done;  // if y ends in `Vararg{Any}` skip checking everything
+            // var T in Vararg{T} is diagonal; an abstract type can't be a subtype of it,
+            // so avoid exponential blowup when xi is a Union.
+            if (jl_is_typevar(yi) && jl_is_uniontype(xi) && !jl_has_free_typevars(xi))
+                return 0;
         }
         if (xi == env->lastx &&
             ((yi == env->lasty && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) ||
