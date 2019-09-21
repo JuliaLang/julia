@@ -1359,7 +1359,7 @@ function copyinds!(C::AbstractSparseMatrixCSC, A::AbstractSparseMatrixCSC)
 end
 
 # multiply by diagonal matrix as vector
-function mul!(C::AbstractSparseMatrixCSC, A::AbstractSparseMatrixCSC, D::Diagonal{T, <:Vector}) where T
+function mul!(C::AbstractSparseMatrixCSC, A::AbstractSparseMatrixCSC, D::Diagonal{T, <:AbstractVector}) where T
     m, n = size(A)
     b    = D.diag
     (n==length(b) && size(A)==size(C)) || throw(DimensionMismatch())
@@ -1373,7 +1373,7 @@ function mul!(C::AbstractSparseMatrixCSC, A::AbstractSparseMatrixCSC, D::Diagona
     C
 end
 
-function mul!(C::AbstractSparseMatrixCSC, D::Diagonal{T, <:Vector}, A::AbstractSparseMatrixCSC) where T
+function mul!(C::AbstractSparseMatrixCSC, D::Diagonal{T, <:AbstractVector}, A::AbstractSparseMatrixCSC) where T
     m, n = size(A)
     b    = D.diag
     (m==length(b) && size(A)==size(C)) || throw(DimensionMismatch())
