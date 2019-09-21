@@ -141,7 +141,7 @@ julia> x = 1/3
 0.3333333333333333
 
 julia> convert(Float32, x)
-0.33333334
+0.33333334f0
 
 julia> convert(Rational{Int32}, x)
 1//3
@@ -403,11 +403,11 @@ For example,
 # Examples
 ```jldoctest
 julia> reinterpret(Float32, UInt32(7))
-1.0e-44
+1.0f-44
 
 julia> reinterpret(Float32, UInt32[1 2 3 4 5])
 1×5 reinterpret(Float32, ::Array{UInt32,2}):
- 1.0e-45  3.0e-45  4.0e-45  6.0e-45  7.0e-45
+ 1.0f-45  3.0f-45  4.0f-45  6.0f-45  7.0f-45
 ```
 """
 reinterpret(::Type{T}, x) where {T} = bitcast(T, x)

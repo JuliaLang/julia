@@ -10,8 +10,6 @@ if `io` is not given) a canonical (un-decorated) text representation.
 The representation used by `print` includes minimal formatting and tries to
 avoid Julia-specific details.
 
-Printing `nothing` is not allowed and throws an error.
-
 `print` falls back to calling `show`, so most types should just define
 `show`. Define `print` if your type has a separate "plain" representation.
 For example, `show` displays strings with quotes, and `print` displays strings
@@ -384,7 +382,8 @@ The following escape sequences are recognised:
  - Escaped backslash (`\\\\`)
  - Escaped double-quote (`\\\"`)
  - Standard C escape sequences (`\\a`, `\\b`, `\\t`, `\\n`, `\\v`, `\\f`, `\\r`, `\\e`)
- - Unicode code points (`\\u` or `\\U` prefixes with 1-4 trailing hex digits)
+ - Unicode BMP code points (`\\u` with 1-4 trailing hex digits)
+ - All Unicode code points (`\\U` with 1-8 trailing hex digits; max value = 0010ffff)
  - Hex bytes (`\\x` with 1-2 trailing hex digits)
  - Octal bytes (`\\` with 1-3 trailing octal digits)
 

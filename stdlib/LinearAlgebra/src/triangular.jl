@@ -545,6 +545,90 @@ end
 rmul!(A::Union{UpperTriangular,LowerTriangular}, c::Number) = mul!(A, A, c)
 lmul!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = mul!(A, c, A)
 
+function dot(x::AbstractVector, A::UpperTriangular, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    m = size(A, 1)
+    (length(x) == m == length(y)) || throw(DimensionMismatch())
+    if iszero(m)
+        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    end
+    x₁ = x[1]
+    r = dot(x₁, A[1,1], y[1])
+    @inbounds for j in 2:m
+        yj = y[j]
+        if !iszero(yj)
+            temp = adjoint(A[1,j]) * x₁
+            @simd for i in 2:j
+                temp += adjoint(A[i,j]) * x[i]
+            end
+            r += dot(temp, yj)
+        end
+    end
+    return r
+end
+function dot(x::AbstractVector, A::UnitUpperTriangular, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    m = size(A, 1)
+    (length(x) == m == length(y)) || throw(DimensionMismatch())
+    if iszero(m)
+        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    end
+    x₁ = first(x)
+    r = dot(x₁, y[1])
+    @inbounds for j in 2:m
+        yj = y[j]
+        if !iszero(yj)
+            temp = adjoint(A[1,j]) * x₁
+            @simd for i in 2:j-1
+                temp += adjoint(A[i,j]) * x[i]
+            end
+            r += dot(temp, yj)
+            r += dot(x[j], yj)
+        end
+    end
+    return r
+end
+function dot(x::AbstractVector, A::LowerTriangular, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    m = size(A, 1)
+    (length(x) == m == length(y)) || throw(DimensionMismatch())
+    if iszero(m)
+        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    end
+    r = zero(typeof(dot(first(x), first(A), first(y))))
+    @inbounds for j in 1:m
+        yj = y[j]
+        if !iszero(yj)
+            temp = adjoint(A[j,j]) * x[j]
+            @simd for i in j+1:m
+                temp += adjoint(A[i,j]) * x[i]
+            end
+            r += dot(temp, yj)
+        end
+    end
+    return r
+end
+function dot(x::AbstractVector, A::UnitLowerTriangular, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    m = size(A, 1)
+    (length(x) == m == length(y)) || throw(DimensionMismatch())
+    if iszero(m)
+        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    end
+    r = zero(typeof(dot(first(x), first(y))))
+    @inbounds for j in 1:m
+        yj = y[j]
+        if !iszero(yj)
+            temp = x[j]
+            @simd for i in j+1:m
+                temp += adjoint(A[i,j]) * x[i]
+            end
+            r += dot(temp, yj)
+        end
+    end
+    return r
+end
+
 fillstored!(A::LowerTriangular, x)     = (fillband!(A.data, x, 1-size(A,1), 0); A)
 fillstored!(A::UnitLowerTriangular, x) = (fillband!(A.data, x, 1-size(A,1), -1); A)
 fillstored!(A::UpperTriangular, x)     = (fillband!(A.data, x, 0, size(A,2)-1); A)

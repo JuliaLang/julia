@@ -1082,10 +1082,10 @@ Create a `Float32` from `x`. If `x` is not exactly representable then `mode` det
 # Examples
 ```jldoctest
 julia> Float32(1/3, RoundDown)
-0.3333333
+0.3333333f0
 
 julia> Float32(1/3, RoundUp)
-0.33333334
+0.33333334f0
 ```
 
 See [`RoundingMode`](@ref) for available rounding modes.
@@ -1432,6 +1432,24 @@ Unsigned
     Bool <: Integer
 
 Boolean type, containing the values `true` and `false`.
+
+`Bool` is a kind of number: `false` is numerically
+equal to `0` and `true` is numerically equal to `1`.
+Moreover, `false` acts as a multiplicative "strong zero":
+
+```jldoctest
+julia> false == 0
+true
+
+julia> true == 1
+true
+
+julia> 0 * NaN
+NaN
+
+julia> false * NaN
+0.0
+```
 """
 Bool
 
@@ -2109,6 +2127,29 @@ field names; fields are only accessed by index.
 See the manual section on [Tuple Types](@ref).
 """
 Tuple
+
+"""
+    NamedTuple{names}(args::Tuple)
+
+Construct a named tuple with the given `names` (a tuple of Symbols) from a tuple of values.
+"""
+NamedTuple{names}(args::Tuple)
+
+"""
+    NamedTuple{names,T}(args::Tuple)
+
+Construct a named tuple with the given `names` (a tuple of Symbols) and field types `T`
+(a `Tuple` type) from a tuple of values.
+"""
+NamedTuple{names,T}(args::Tuple)
+
+"""
+    NamedTuple{names}(nt::NamedTuple)
+
+Construct a named tuple by selecting fields in `names` (a tuple of Symbols) from
+another named tuple.
+"""
+NamedTuple{names}(nt::NamedTuple)
 
 """
     typeassert(x, type)

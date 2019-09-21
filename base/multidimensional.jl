@@ -156,6 +156,8 @@ module IteratorsMD
         return I
     end
 
+    Base._ind2sub(t::Tuple, ind::CartesianIndex) = Tuple(ind)
+
     # Iteration over the elements of CartesianIndex cannot be supported until its length can be inferred,
     # see #23719
     Base.iterate(::CartesianIndex) =

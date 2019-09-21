@@ -338,28 +338,6 @@ abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 
 if Sys.iswindows()
 
-function realpath(path::AbstractString)
-    h = ccall(:CreateFileW, stdcall, Int, (Cwstring, UInt32, UInt32, Ptr{Cvoid}, UInt32, UInt32, Int),
-                path, 0, 0x03, C_NULL, 3, 0x02000000, 0)
-    windowserror(:realpath, h == -1)
-    try
-        buf = Vector{UInt16}(undef, 256)
-        oldlen = len = length(buf)
-        while len >= oldlen
-            len = ccall(:GetFinalPathNameByHandleW, stdcall, UInt32, (Int, Ptr{UInt16}, UInt32, UInt32),
-                            h, buf, (oldlen=len)-1, 0x0)
-            windowserror(:realpath, iszero(len))
-            resize!(buf, len) # strips NUL terminator on last call
-        end
-        if 4 < len < 264 && 0x005c == buf[1] == buf[2] == buf[4] && 0x003f == buf[3]
-            Base._deletebeg!(buf, 4) # omit \\?\ prefix for paths < MAXPATH in length
-        end
-        return transcode(String, buf)
-    finally
-        windowserror(:realpath, iszero(ccall(:CloseHandle, stdcall, Cint, (Int,), h)))
-    end
-end
-
 function longpath(path::AbstractString)
     p = cwstring(path)
     buf = zeros(UInt16, length(p))
@@ -374,14 +352,6 @@ function longpath(path::AbstractString)
     end
 end
 
-else # !windows
-function realpath(path::AbstractString)
-    p = ccall(:realpath, Ptr{UInt8}, (Cstring, Ptr{UInt8}), path, C_NULL)
-    systemerror(:realpath, p == C_NULL)
-    str = unsafe_string(p)
-    Libc.free(p)
-    return str
-end
 end # os-test
 
 
@@ -394,8 +364,23 @@ filesystem's stored case for the path is returned.
 
 (This function throws an exception if `path` does not exist in the filesystem.)
 """
-realpath(path::AbstractString)
-
+function realpath(path::AbstractString)
+    req = Libc.malloc(_sizeof_uv_fs)
+    try
+        ret = ccall(:uv_fs_realpath, Cint,
+                    (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
+                    C_NULL, req, path, C_NULL)
+        if ret < 0
+            ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+            uv_error("realpath", ret)
+        end
+        path = unsafe_string(ccall(:jl_uv_fs_t_ptr, Cstring, (Ptr{Cvoid},), req))
+        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+        return path
+    finally
+        Libc.free(req)
+    end
+end
 
 if Sys.iswindows()
 # on windows, ~ means "temporary file"

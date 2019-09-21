@@ -395,6 +395,7 @@ Base.functionloc(::Method)
 Base.GC.gc
 Base.GC.enable
 Base.GC.@preserve
+Base.GC.safepoint
 Meta.lower
 Meta.@lower
 Meta.parse(::AbstractString, ::Int)

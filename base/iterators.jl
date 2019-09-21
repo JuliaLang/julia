@@ -12,7 +12,7 @@ using .Base:
     @inline, Pair, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
     tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
     IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange,
-    LinearIndices, (:), |, +, -, !==, !, <=, <, missing, map, any
+    LinearIndices, (:), |, +, -, !==, !, <=, <, missing, map, any, @boundscheck, @inbounds
 
 import .Base:
     first, last,
@@ -929,7 +929,6 @@ julia> collect(Iterators.partition([1,2,3,4,5], 2))
 """
 partition(c::T, n::Integer) where {T} = PartitionIterator{T}(c, Int(n))
 
-
 struct PartitionIterator{T}
     c::T
     n::Int
@@ -1094,5 +1093,42 @@ IteratorSize(::Type{Stateful{T,VS}}) where {T,VS} = IteratorSize(T) isa HasShape
 eltype(::Type{Stateful{T, VS}} where VS) where {T} = eltype(T)
 IteratorEltype(::Type{Stateful{T,VS}}) where {T,VS} = IteratorEltype(T)
 length(s::Stateful) = length(s.itr) - s.taken
+
+"""
+    only(x)
+
+Returns the one and only element of collection `x`, and throws an `ArgumentError` if the
+collection has zero or multiple elements.
+
+See also: [`first`](@ref), [`last`](@ref).
+
+!!! compat "Julia 1.4"
+    This method requires at least Julia 1.4.
+"""
+@propagate_inbounds function only(x)
+    i = iterate(x)
+    @boundscheck if i === nothing
+        throw(ArgumentError("Collection is empty, must contain exactly 1 element"))
+    end
+    (ret, state) = i
+    @boundscheck if iterate(x, state) !== nothing
+        throw(ArgumentError("Collection has multiple elements, must contain exactly 1 element"))
+    end
+    return ret
+end
+
+# Collections of known size
+only(x::Ref) = x[]
+only(x::Number) = x
+only(x::Char) = x
+only(x::Tuple{Any}) = x[1]
+only(x::Tuple) = throw(
+    ArgumentError("Tuple contains $(length(x)) elements, must contain exactly 1 element")
+)
+only(a::AbstractArray{<:Any, 0}) = @inbounds return a[]
+only(x::NamedTuple{<:Any, <:Tuple{Any}}) = first(x)
+only(x::NamedTuple) = throw(
+    ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
+)
 
 end

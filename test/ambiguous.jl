@@ -67,6 +67,19 @@ let err = try
     @test lines[6] == "  ambig(::Integer, ::Integer)"
 end
 
+ambig_with_bounds(x, ::Int, ::T) where {T<:Integer,S} = 0
+ambig_with_bounds(::Int, x, ::T) where {T<:Integer,S} = 1
+let err = try
+              ambig_with_bounds(1, 2, 3)
+          catch _e_
+              _e_
+          end
+    io = IOBuffer()
+    Base.showerror(io, err)
+    lines = split(String(take!(io)), '\n')
+    @test lines[end] == "  ambig_with_bounds(::$Int, ::$Int, ::T) where T<:Integer"
+end
+
 ## Other ways of accessing functions
 # Test that non-ambiguous cases work
 let io = IOBuffer()

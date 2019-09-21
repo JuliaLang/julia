@@ -76,39 +76,43 @@ function prettyprint_getunits(value, numunits, factor)
     return number, unit
 end
 
-function padded_nonzero_print(value,str)
+function padded_nonzero_print(value, str)
     if value != 0
-        blanks = "                "[1:18-length(str)]
-        println("$str:$blanks$value")
+        blanks = "                "[1:(18 - length(str))]
+        println(str, ":", blanks, value)
     end
 end
 
-function format_bytes(bytes)
+
+function format_bytes(bytes) # also used by InteractiveUtils
     bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))
     if mb == 1
-        Printf.@sprintf("%d %s%s", bytes, _mem_units[mb], bytes==1 ? "" : "s")
+        return string(Int(bytes), " ", _mem_units[mb], bytes==1 ? "" : "s")
     else
-        Printf.@sprintf("%.3f %s", bytes, _mem_units[mb])
+        return string(Ryu.writefixed(Float64(bytes), 3), " ", _mem_units[mb])
     end
 end
 
 function time_print(elapsedtime, bytes=0, gctime=0, allocs=0)
-    Printf.@printf("%10.6f seconds", elapsedtime/1e9)
+    timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
+    length(timestr) < 10 && print(" "^(10 - length(timestr)))
+    print(timestr, " seconds")
     if bytes != 0 || allocs != 0
         allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
         if ma == 1
-            Printf.@printf(" (%d%s allocation%s: ", allocs, _cnt_units[ma], allocs==1 ? "" : "s")
+            print(" (", Int(allocs), _cnt_units[ma], allocs==1 ? " allocation: " : " allocations: ")
         else
-            Printf.@printf(" (%.2f%s allocations: ", allocs, _cnt_units[ma])
+            print(" (", Ryu.writefixed(Float64(allocs), 2), _cnt_units[ma], " allocations: ")
         end
         print(format_bytes(bytes))
-        if gctime > 0
-            Printf.@printf(", %.2f%% gc time", 100*gctime/elapsedtime)
-        end
-        print(")")
-    elseif gctime > 0
-        Printf.@printf(", %.2f%% gc time", 100*gctime/elapsedtime)
     end
+    if gctime > 0
+        print(", ", Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
+    end
+    if bytes != 0 || allocs != 0
+        print(")")
+    end
+    nothing
 end
 
 function timev_print(elapsedtime, diff::GC_Diff)

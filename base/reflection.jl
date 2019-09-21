@@ -1149,6 +1149,11 @@ function nameof(f::Function)
     return mt.name
 end
 
+function nameof(f::Core.IntrinsicFunction)
+    name = ccall(:jl_intrinsic_name, Ptr{UInt8}, (Core.IntrinsicFunction,), f)
+    return ccall(:jl_symbol, Ref{Symbol}, (Ptr{UInt8},), name)
+end
+
 """
     parentmodule(f::Function) -> Module
 

@@ -6,9 +6,12 @@ New language features
 
 * Structs with all isbits and isbitsunion fields are now stored inline in arrays ([#32448]).
 
+* `import` now allows quoted symbols, e.g. `import Base.:+` ([#33158]).
+
 Language changes
 ----------------
 
+* Calling `show` or `repr` on an `undef`/`UndefInitializer()` array initializer now shows valid Julia code ([#33211]).
 
 Multi-threading changes
 -----------------------
@@ -25,6 +28,7 @@ New library functions
 * The `tempname` function now takes an optional `parent::AbstractString` argument to give it a directory in which to attempt to produce a temporary path name ([#33090]).
 * The `tempname` function now takes a `cleanup::Bool` keyword argument defaulting to `true`, which causes the process to try to ensure that any file or directory at the path returned by `tempname` is deleted upon process exit ([#33090]).
 * The `readdir` function now takes a `join::Bool` keyword argument defaulting to `false`, which when set causes `readdir` to join its directory argument with each listed name ([#33113]).
+* The new `only(x)` function returns the one-and-only element of a collection `x`, and throws an `ArgumentError` if `x` contains zero or multiple elements. ([#33129])
 
 Standard library changes
 ------------------------
@@ -33,15 +37,20 @@ Standard library changes
 
 * A new `dropdims(f, args...; dims, kwargs...)` method computes the reduction `f` over the region described by `dims` and then drops those dimensions from the result ([#33130]).
 
+* Verbose `display` of `Char` (`text/plain` output) now shows the codepoint value in standard-conforming `"U+XXXX"` format ([#33291]).
+
+
 #### Libdl
 
 #### LinearAlgebra
 
 * `qr` and `qr!` functions support `blocksize` keyword argument ([#33053]).
 
+* `dot` now admits a 3-argument method `dot(x, A, y)` to compute generalized dot products `dot(x, A*y)`, but without computing and storing the intermediate result `A*y` ([#32739]).
 
 #### SparseArrays
 
+* Products involving sparse arrays now allow more general sparse `eltype`s, such as `StaticArrays` ([#33205])
 
 #### Dates
 

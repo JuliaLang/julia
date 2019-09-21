@@ -775,12 +775,12 @@ let exename = Base.julia_cmd()
     @test read(p, String) == "1\n"
 end # let exename
 
-# issue #19864:
+# issue #19864
 mutable struct Error19864 <: Exception; end
 function test19864()
     @eval Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
     buf = IOBuffer()
-    fake_response = (Any[(Error19864(),[])],true)
+    fake_response = (Any[(Error19864(), Ptr{Cvoid}[])], true)
     REPL.print_response(buf, fake_response, false, false, nothing)
     return String(take!(buf))
 end
@@ -791,6 +791,7 @@ let io = IOBuffer()
     Base.display_error(io,
         try
             [][trues(6000)]
+            @assert false
         catch e
             e
         end, [])

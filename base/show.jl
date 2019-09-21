@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-show(io::IO, ::UndefInitializer) = print(io, "array initializer with undefined values")
+function show(io::IO, ::MIME"text/plain", u::UndefInitializer)
+    print(io, u, ": array initializer with undefined values")
+end
 
 # first a few multiline show functions for types defined before the MIME type:
 
@@ -22,7 +24,7 @@ function show(io::IO, ::MIME"text/plain", f::Function)
     ft = typeof(f)
     mt = ft.name.mt
     if isa(f, Core.IntrinsicFunction)
-        show(io, f)
+        print(io, f)
         id = Core.Intrinsics.bitcast(Int32, f)
         print(io, " (intrinsic function #$id)")
     elseif isa(f, Core.Builtin)
@@ -401,10 +403,14 @@ end
 show(io::IO, f::Function) = show_function(io, f, get(io, :compact, false))
 print(io::IO, f::Function) = show_function(io, f, true)
 
-function show(io::IO, x::Core.IntrinsicFunction)
-    name = ccall(:jl_intrinsic_name, Cstring, (Core.IntrinsicFunction,), x)
-    print(io, unsafe_string(name))
+function show(io::IO, f::Core.IntrinsicFunction)
+    if !get(io, :compact, false)
+        print(io, "Core.Intrinsics.")
+    end
+    print(io, nameof(f))
 end
+
+print(io::IO, f::Core.IntrinsicFunction) = print(io, nameof(f))
 
 show(io::IO, ::Core.TypeofBottom) = print(io, "Union{}")
 show(io::IO, ::MIME"text/plain", ::Core.TypeofBottom) = print(io, "Union{}")
@@ -1502,8 +1508,15 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
         printstyled(io, name, "(...)", color=color)
         return
     end
-    sig = unwrap_unionall(sig).parameters
-    with_output_color(color, io) do io
+    tv = Any[]
+    env_io = io
+    while isa(sig, UnionAll)
+        push!(tv, sig.var)
+        env_io = IOContext(env_io, :unionall_env => sig.var)
+        sig = sig.body
+    end
+    sig = sig.parameters
+    with_output_color(color, env_io) do io
         ft = sig[1]
         uw = unwrap_unionall(ft)
         if ft <: Function && isa(uw,DataType) && isempty(uw.parameters) &&
@@ -1523,9 +1536,10 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
     for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")
         first = false
-        print(io, "::", sig[i])
+        print(env_io, "::", sig[i])
     end
     printstyled(io, ")", color=print_style)
+    show_method_params(io, tv)
     nothing
 end
 
@@ -1655,6 +1669,10 @@ function dump(io::IOContext, x::SimpleVector, n::Int, indent)
 end
 
 function dump(io::IOContext, @nospecialize(x), n::Int, indent)
+    if x === Union{}
+        show(io, x)
+        return
+    end
     T = typeof(x)
     if isa(x, Function)
         print(io, x, " (function of type ", T, ")")
