@@ -329,7 +329,7 @@ DocTestSetup = nothing
 
 # Reproducibility
 
-By using an RNG parameter initialized with a given seed, you can reproduce the same pseudorandom number sequence when running your program multiple times.  However, a minor release of Julia (e.g. 1.3 to 1.4) *may change* the sequence of pseudorandom numbers generated from a specific seed.  (Even if the sequence produced by a low-level function like [`rand`](@ref) does not change, the output of higher-level functions like [`randsubseq`](@ref) may change due to algorithm updates.)   Rationale: guaranteeing that pseudorandom streams never changes prohibits many algorithmic improvements.
+By using an RNG parameter initialized with a given seed, you can reproduce the same pseudorandom number sequence when running your program multiple times.  However, a minor release of Julia (e.g. 1.3 to 1.4) *may change* the sequence of pseudorandom numbers generated from a specific seed.  (Even if the sequence produced by a low-level function like [`rand`](@ref) does not change, the output of higher-level functions like [`randsubseq`](@ref) may change due to algorithm updates.)   Rationale: guaranteeing that pseudorandom streams never change prohibits many algorithmic improvements.
 
 If you need to guarantee exact reproducibility of random data, it is advisable to simply *save the data* (e.g. as a supplementary attachment in a scientific publication).  (You can also, of course, specify a
 particular Julia version and package manifest, especially if you require bit reproducibility.)
