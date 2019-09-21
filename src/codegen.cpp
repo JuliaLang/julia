@@ -2517,11 +2517,13 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
     }
 
-    else if (f == jl_builtin__apply && nargs == 2 && ctx.vaSlot > 0) {
+    else if (((f == jl_builtin__apply && nargs == 2) ||
+              (f == jl_builtin__apply_iterate && nargs == 3)) && ctx.vaSlot > 0) {
+        int arg_start = f == jl_builtin__apply ? 2 : 3;
         // turn Core._apply(f, Tuple) ==> f(Tuple...) using the jlcall calling convention if Tuple is the va allocation
-        if (LoadInst *load = dyn_cast_or_null<LoadInst>(argv[2].V)) {
+        if (LoadInst *load = dyn_cast_or_null<LoadInst>(argv[arg_start].V)) {
             if (load->getPointerOperand() == ctx.slots[ctx.vaSlot].boxroot && ctx.argArray) {
-                Value *theF = maybe_decay_untracked(boxed(ctx, argv[1]));
+                Value *theF = maybe_decay_untracked(boxed(ctx, argv[arg_start-1]));
                 Value *nva = emit_n_varargs(ctx);
 #ifdef _P64
                 nva = ctx.builder.CreateTrunc(nva, T_int32);
@@ -7278,6 +7280,7 @@ static void init_julia_llvm_env(Module *m)
     builtin_func_map[jl_f_typeassert] = jlcall_func_to_llvm("jl_f_typeassert", &jl_f_typeassert, m);
     builtin_func_map[jl_f_ifelse] = jlcall_func_to_llvm("jl_f_ifelse", &jl_f_ifelse, m);
     builtin_func_map[jl_f__apply] = jlcall_func_to_llvm("jl_f__apply", &jl_f__apply, m);
+    builtin_func_map[jl_f__apply_iterate] = jlcall_func_to_llvm("jl_f__apply_iterate", &jl_f__apply_iterate, m);
     builtin_func_map[jl_f__apply_pure] = jlcall_func_to_llvm("jl_f__apply_pure", &jl_f__apply_pure, m);
     builtin_func_map[jl_f__apply_latest] = jlcall_func_to_llvm("jl_f__apply_latest", &jl_f__apply_latest, m);
     builtin_func_map[jl_f_throw] = jlcall_func_to_llvm("jl_f_throw", &jl_f_throw, m);
