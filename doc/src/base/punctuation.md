@@ -8,7 +8,7 @@ Extended documentation for mathematical symbols & functions is [here](@ref math-
 | `!`         | an exclamation mark is a prefix operator for [logical negation](@ref !) ("not")                       |
 | `a!`        | function names that end with an exclamation mark modify one or more of their arguments by convention |
 | `#`         | the number sign (or hash or pound) character begins single line comments                    |
-| `#=`        | when followed by an equals sign, it begins multi-line comment (these are nestable)          |
+| `#=`        | when followed by an equals sign, it begins a multi-line comment (these are nestable)          |
 | `=#`        | end a multi-line comment by immediately preceding the number sign with an equals sign       |
 | `$`         | the dollar sign is used for [string](@ref string-interpolation) and [expression](@ref man-expression-interpolation) interpolation |
 | `%`         | the percent symbol is the [remainder operator](@ref %)                                      |
