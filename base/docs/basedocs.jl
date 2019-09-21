@@ -1546,7 +1546,7 @@ tuple
     getfield(value, name::Symbol)
     getfield(value, i::Int)
 
-Extract a field from a composite `value` by a name or a position.
+Extract a field from a composite `value` by name or position.
 See also [`getproperty`](@ref Base.getproperty) and [`fieldnames`](@ref).
 
 # Examples
