@@ -1671,20 +1671,20 @@ function ==(A1::AbstractSparseMatrixCSC, A2::AbstractSparseMatrixCSC)
                 j2+=1
             else
                 if r1<r2
-                    vals1[j1]!=0 && return false
+                    !iszero(vals1[j1]) && return false
                     j1+=1
                 else
-                    vals2[j2]!=0 && return false
+                    !iszero(vals2[j2]) && return false
                     j2+=1
                 end
             end
         end
         # finish off any left-overs:
         for j = j1:last(nz1)
-            vals1[j]!=0 && return false
+            !iszero(vals1[j]) && return false
         end
         for j = j2:last(nz2)
-            vals2[j]!=0 && return false
+            !iszero(vals2[j]) && return false
         end
     end
     return true

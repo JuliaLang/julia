@@ -2764,4 +2764,46 @@ end
     @test adjoint(B)*adjoint(complex.(A)) ≈ adjoint(Array(B)) * adjoint(Array(complex.(A)))
 end
 
+# Check issue 33332.
+# The operator== is supposed to ignore comparing zero().
+# The operator= (setindex!) is supposed to not add zero() elements.
+@testset "Sparse of structure redefining zero(). Check == and = operators" begin
+    # Define a struct redefining the zero()
+    struct MP{T} <: Number λ::T end
+    Base.zero(::Type{MP{T}}) where T = MP(typemin(T))
+    Base.zero(x::MP{T})      where T = zero(typeof(x))
+
+    # The newly defined zero == MP(-Inf)
+    mp0 = zero(MP{Float64})
+
+    # Let A contain 'fake' zeros (0) and B empty.
+    # Check if operator== does not ignore comparing fake zeros.
+    A = sparse([1, 2], [1, 2], [MP(0.0), MP(0.0)])
+    @test nonzeros(A) == [MP(0.0); MP(0.0)]
+    B = spzeros(MP{Float64}, 2,2)
+    @test B == [mp0 mp0; mp0 mp0]
+    @test isempty(nonzeros(B))
+    @test A != B
+
+    # Let A contain newly defined zeros and B empty.
+    # Check if operator== ignores comparing newly defined zeros.
+    A = sparse([1, 2], [1, 2], [mp0, mp0])
+    @test nonzeros(A) == [mp0; mp0]
+    @test A == B
+
+    # Insert newly defined zero (mp0). Check if B is still empty.
+    # Insert fake zero. Check if B is not empty.
+    B[1,1] = mp0
+    @test isempty(nonzeros(B))
+    B[1,1] = MP(0.0)
+    @test nonzeros(B) == [MP(0.0)]
+
+    # Check if insertion of newly defined zeros is ignored.
+    # Check if insertion of fake zeros is taken into account.
+    A[1,2] = mp0
+    @test nonzeros(A) == [MP(-Inf); MP(-Inf)]
+    A[1,2] = MP(0.0)
+    @test nonzeros(A) == [MP(-Inf); MP(0.0); MP(-Inf)]
+end
+
 end # module
