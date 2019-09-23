@@ -241,6 +241,8 @@ end
         @test hvcat((3,2,1), C, C, I, B ,3I, 2I)::T ==
             hvcat((2,2,1), C, C, B, Matrix(3I,3,3), Matrix(2I,6,6))
         @test (hvcat((1,2), A, E, α))::T == hvcat((1,2), A, E, [α]) == hvcat((1,2), A, E, α*I)
+        @test (hvcat((2,2), α, E, F, 3I))::T == hvcat((2,2), [α], E, F, Matrix(3I, 3, 3))
+        @test (hvcat((2,2), 3I, F, E, α))::T == hvcat((2,2), Matrix(3I, 3, 3), F, E, [α])
     end
 end
 
