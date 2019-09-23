@@ -215,10 +215,17 @@ end
         B = T(rand(3,3))
         C = T(rand(0,3))
         D = T(rand(2,0))
+        E = T(rand(1,3))
+        F = T(rand(3,1))
+        α = rand()
         @test (hcat(A, 2I))::T == hcat(A, Matrix(2I, 3, 3))
+        @test (hcat(E, α))::T == hcat(E, [α])
         @test (vcat(A, 2I))::T == vcat(A, Matrix(2I, 4, 4))
+        @test (vcat(F, α))::T == vcat(F, [α])
         @test (hcat(C, 2I))::T == C
+        @test_throws DimensionMismatch hcat(C, α)
         @test (vcat(D, 2I))::T == D
+        @test_throws DimensionMismatch vcat(D, α)
         @test (hcat(I, 3I, A, 2I))::T == hcat(Matrix(I, 3, 3), Matrix(3I, 3, 3), A, Matrix(2I, 3, 3))
         @test (vcat(I, 3I, A, 2I))::T == vcat(Matrix(I, 4, 4), Matrix(3I, 4, 4), A, Matrix(2I, 4, 4))
         @test (hvcat((2,1,2), B, 2I, I, 3I, 4I))::T ==
@@ -233,6 +240,7 @@ end
             hvcat((2,2,2), B, Matrix(2I, 3, 3), C, C, Matrix(3I, 3, 3), Matrix(4I, 3, 3))
         @test hvcat((3,2,1), C, C, I, B ,3I, 2I)::T ==
             hvcat((2,2,1), C, C, B, Matrix(3I,3,3), Matrix(2I,6,6))
+        @test (hvcat((1,2), A, E, α))::T == hvcat((1,2), A, E, [α]) == hvcat((1,2), A, E, α*I)
     end
 end
 
