@@ -466,21 +466,6 @@ function entry_path(path::String, name::String)::Union{Nothing,String}
     return nothing # source not found
 end
 
-# given a project path (project directory or entry point)
-# return the project file
-function package_path_to_project_file(path::String)::Union{Nothing,String}
-    if !isdir(path)
-        dir = dirname(path)
-        basename(dir) == "src" || return nothing
-        path = dirname(dir)
-    end
-    for proj in project_names
-        project_file = joinpath(path, proj)
-        isfile_casesensitive(project_file) && return project_file
-    end
-    return nothing
-end
-
 ## explicit project & manifest API ##
 
 # find project file root or deps `name => uuid` mapping

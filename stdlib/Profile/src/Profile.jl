@@ -247,6 +247,45 @@ function flatten(data::Vector, lidict::LineInfoDict)
     return (newdata, newdict)
 end
 
+# Take a file-system path and try to form a concise representation of it
+# based on the package ecosystem
+function short_path(spath::Symbol, filenamecache::Dict{Symbol, String})
+    return get!(filenamecache, spath) do
+        path = string(spath)
+        if isabspath(path)
+            if ispath(path)
+                # try to replace the file-system prefix with a short "@Module" one,
+                # assuming that profile came from the current machine
+                # (or at least has the same file-system layout)
+                root = path
+                while !isempty(root)
+                    root, base = splitdir(root)
+                    isempty(base) && break
+                    @assert startswith(path, root)
+                    for proj in Base.project_names
+                        project_file = joinpath(root, proj)
+                        if Base.isfile_casesensitive(project_file)
+                            pkgid = Base.project_file_name_uuid(project_file, "")
+                            isempty(pkgid.name) && return path # bad Project file
+                            # return the joined the module name prefix and path suffix
+                            path = path[nextind(path, sizeof(root)):end]
+                            return string("@", pkgid.name, path)
+                        end
+                    end
+                end
+            end
+            return path
+        elseif isfile(joinpath(Sys.BINDIR::String, Base.DATAROOTDIR, "julia", "base", path))
+            # do the same mechanic for Base (or Core/Compiler) files as above,
+            # but they start from a relative path
+            return joinpath("@Base", normpath(path))
+        else
+            # for non-existent relative paths (such as "REPL[1]"), just consider simplifying them
+            return normpath(path) # drop leading "./"
+        end
+    end
+end
+
 """
     callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) -> Vector{Tuple{count, lineinfo}}
 
@@ -407,14 +446,16 @@ function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfo
         n = n[keep]
         m = m[keep]
     end
-    print_flat(io, lilist, n, m, cols, fmt)
+    filenamemap = Dict{Symbol,String}()
+    print_flat(io, lilist, n, m, cols, filenamemap, fmt)
     Base.println(io, "Total snapshots: ", totalshots)
     nothing
 end
 
 function print_flat(io::IO, lilist::Vector{StackFrame},
         n::Vector{Int}, m::Vector{Int},
-        cols::Int, fmt::ProfileFormat)
+        cols::Int, filenamemap::Dict{Symbol,String},
+        fmt::ProfileFormat)
     if fmt.sortedby == :count
         p = sortperm(n)
     elseif fmt.sortedby == :overhead
@@ -425,7 +466,7 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
     lilist = lilist[p]
     n = n[p]
     m = m[p]
-    filenames = String[string(li.file) for li in lilist]
+    filenames = String[short_path(li.file, filenamemap) for li in lilist]
     funcnames = String[string(li.func) for li in lilist]
     wcounts = max(6, ndigits(maximum(n)))
     wself = max(9, ndigits(maximum(m)))
@@ -510,7 +551,7 @@ function indent(depth::Int)
     return (indent_s^div) * SubString(indent_s, 1, indent_z[rem])
 end
 
-function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, maxes, showpointer::Bool)
+function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, maxes, filenamemap::Dict{Symbol,String}, showpointer::Bool)
     nindent = min(cols>>1, level)
     ndigoverhead = ndigits(maxes.overhead)
     ndigcounts = ndigits(maxes.count)
@@ -546,7 +587,7 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                 else
                     fname = string(li.func)
                 end
-                filename = string(li.file)
+                filename = short_path(li.file, filenamemap)
                 if showpointer
                     fname = string(
                         "0x",
@@ -702,6 +743,7 @@ end
 # avoid stack overflows.
 function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat) where T
     maxes = maxstats(bt)
+    filenamemap = Dict{Symbol,String}()
     worklist = [(bt, 0, 0, "")]
     println(io, "Overhead ╎ [+additional indent] Count File:Line; Function")
     println(io, "=========================================================")
@@ -713,7 +755,7 @@ function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat
         # Order the line information
         nexts = collect(values(bt.down))
         # Generate the string for each line
-        strs = tree_format(nexts, level, cols, maxes, T === UInt64)
+        strs = tree_format(nexts, level, cols, maxes, filenamemap, T === UInt64)
         # Recurse to the next level
         if fmt.sortedby == :count
             counts = collect(frame.count for frame in nexts)
