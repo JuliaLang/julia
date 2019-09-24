@@ -33,7 +33,7 @@ getindex(t::Tuple, c::Colon) = t
     setindex(c::Tuple, v, i::Integer)
 
 Creates a new tuple similar to `x` with the value at index `i` set to `v`.
-An out-of-bound `i` makes it a no-op.
+Throws a `BoundsError` when out of bounds.
 
 # Examples
 ```jldoctest
@@ -41,7 +41,11 @@ julia> Base.setindex((1, 2, 6), 2, 3) == (1, 2, 2)
 true
 ```
 """
-setindex(x::Tuple, v, i::Integer) = (@_inline_meta; _setindex(v, i, x...))
+function setindex(x::Tuple, v, i::Integer)
+    @boundscheck 1 <= i <= length(x) || throw(BoundsError(x, i))
+    @_inline_meta
+    _setindex(v, i, x...)
+end
 
 function _setindex(v, i::Integer, first, tail...)
     @_inline_meta
