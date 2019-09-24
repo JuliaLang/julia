@@ -915,6 +915,13 @@ un_fintrinsic(trunc_float,trunc_llvm)
 un_fintrinsic(rint_float,rint_llvm)
 un_fintrinsic(sqrt_float,sqrt_llvm)
 
+JL_DLLEXPORT jl_value_t *jl_assume_llvm(jl_value_t *cond)
+{
+    JL_TYPECHK(assume_llvm, bool, cond);
+    // TODO: evaluate cond and check if true?
+    return jl_nothing;
+}
+
 JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a)
 {
     JL_TYPECHK(arraylen, array, a);

@@ -262,7 +262,8 @@ function is_pure_intrinsic_infer(f::IntrinsicFunction)
              f === Intrinsics.llvmcall ||   # this one is never effect-free
              f === Intrinsics.arraylen ||   # this one is volatile
              f === Intrinsics.sqrt_llvm ||  # this one may differ at runtime (by a few ulps)
-             f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
+             f === Intrinsics.cglobal ||  # cglobal lookup answer changes at runtime
+             f === Intrinsics.assume_llvm)
 end
 
 # whether `f` is effect free if nothrow

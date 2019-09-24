@@ -937,6 +937,15 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         return mark_julia_type(ctx, ans, false, x.typ);
     }
 
+    case assume_llvm: {
+        const jl_cgval_t &x = argv[0];
+        if (x.typ != (jl_value_t*)jl_bool_type)
+            return emit_runtime_call(ctx, f, argv, nargs);
+        Value *assumeintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::assume);
+        ctx.builder.CreateCall(assumeintr, x.V);
+        return ghostValue(jl_void_type);
+    }
+
     default: {
         assert(nargs >= 1 && "invalid nargs for intrinsic call");
         const jl_cgval_t &xinfo = argv[0];

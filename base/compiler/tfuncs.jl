@@ -192,6 +192,7 @@ cglobal_tfunc(@nospecialize(fptr)) = Ptr{Cvoid}
 cglobal_tfunc(@nospecialize(fptr), @nospecialize(t)) = (isType(t) ? Ptr{t.parameters[1]} : Ptr)
 cglobal_tfunc(@nospecialize(fptr), t::Const) = (isa(t.val, Type) ? Ptr{t.val} : Ptr)
 add_tfunc(Core.Intrinsics.cglobal, 1, 2, cglobal_tfunc, 5)
+add_tfunc(assume_llvm, 1, 1, (@nospecialize(x)) -> Nothing, 0)
 
 function ifelse_tfunc(@nospecialize(cnd), @nospecialize(x), @nospecialize(y))
     if isa(cnd, Const)

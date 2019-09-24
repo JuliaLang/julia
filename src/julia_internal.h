@@ -855,6 +855,8 @@ JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i);
 
 JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT;
 
+JL_DLLEXPORT jl_value_t *jl_assume_llvm(jl_value_t *cond);
+
 // -- synchronization utilities -- //
 
 extern jl_mutex_t typecache_lock;
