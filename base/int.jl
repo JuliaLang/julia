@@ -321,6 +321,8 @@ xor(x::T, y::T) where {T<:BitInteger} = xor_int(x, y)
 
 Reverse the byte order of `n`.
 
+(See also [`ntoh`](@ref) and [`hton`](@ref) to convert between the current native byte order and big-endian order.)
+
 # Examples
 ```jldoctest
 julia> a = bswap(0x10203040)
