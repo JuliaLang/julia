@@ -292,7 +292,7 @@ end
 # in A to matrices of type T and sizes given by n[k:end].  n is an array
 # so that the same promotion code can be used for hvcat.  We pass the type T
 # so that we can re-use this code for sparse-matrix hcat etcetera.
-promote_to_arrays_(n::Int, ::Type, a::T) where {T<:Number} = copyto!(Vector{T}(undef, 1), a)
+promote_to_arrays_(n::Int, ::Type, a::Number) = a
 promote_to_arrays_(n::Int, ::Type{Matrix}, J::UniformScaling{T}) where {T} = copyto!(Matrix{T}(undef, n, n), J)
 promote_to_arrays_(n::Int, ::Type, A::AbstractVecOrMat) = A
 promote_to_arrays(n,k, ::Type) = ()
@@ -320,7 +320,7 @@ for (f,dim,name) in ((:hcat,1,"rows"), (:vcat,2,"cols"))
                 end
             end
             n == -1 && throw(ArgumentError($("$f of only UniformScaling objects cannot determine the matrix size")))
-            return $f(promote_to_arrays(fill(n,length(A)),1, promote_to_array_type(A), A...)...)
+            return cat(promote_to_arrays(fill(n, length(A)), 1, promote_to_array_type(A), A...)...; dims=Val($(3-dim)))
         end
     end
 end
@@ -378,7 +378,8 @@ function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScalin
             j += rows[i]
         end
     end
-    return hvcat(rows, promote_to_arrays(n, 1, promote_to_array_type(A), A...)...)
+    Amat = promote_to_arrays(n, 1, promote_to_array_type(A), A...)
+    return typed_hvcat(promote_eltypeof(Amat...), rows, Amat...)
 end
 
 ## Matrix construction from UniformScaling
