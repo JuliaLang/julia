@@ -379,7 +379,7 @@ function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScalin
         end
     end
     Amat = promote_to_arrays(n, 1, promote_to_array_type(A), A...)
-    return typed_hvcat(promote_eltypeof(Amat...), rows, Amat...)
+    return Base.typed_hvcat(Base.promote_eltypeof(Amat...), rows, Amat...)
 end
 
 ## Matrix construction from UniformScaling
