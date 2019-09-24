@@ -19,7 +19,7 @@ Multi-threading changes
 
 Build system changes
 --------------------
-
+* Windows build installer has switched to Inno Setup. Installer command line parameters have thus changed. For example, to extract the installer to a specific directory, the command line parameter is now `/DIR=x:\dirname`. Use `julia-installer.exe /?` to list all new command line parameters.
 
 New library functions
 ---------------------

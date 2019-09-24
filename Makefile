@@ -424,7 +424,7 @@ ifeq ($(DARWIN_FRAMEWORK),1)
 endif
 
 distclean:
-	-rm -fr $(BUILDROOT)/julia-*.tar.gz $(BUILDROOT)/julia*.exe $(BUILDROOT)/julia-*.7z $(BUILDROOT)/julia-$(JULIA_COMMIT)
+	-rm -fr $(BUILDROOT)/julia-*.tar.gz $(BUILDROOT)/julia*.exe $(BUILDROOT)/julia-$(JULIA_COMMIT)
 
 binary-dist: distclean
 ifeq ($(USE_SYSTEM_BLAS),0)
@@ -459,18 +459,9 @@ endif
 ifeq ($(OS), WINNT)
 	cd $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 
-	# create file listing for uninstall. note: must have Windows path separators and line endings.
-	cd $(BUILDROOT)/julia-$(JULIA_COMMIT) && find * | sed -e 's/\//\\/g' -e 's/$$/\r/g' > etc/uninstall.log
-
-	# build nsis package
-	cd $(BUILDROOT) && $(call spawn,$(JULIAHOME)/dist-extras/nsis/makensis.exe) -NOCD -DVersion=$(JULIA_VERSION) -DArch=$(ARCH) -DCommit=$(JULIA_COMMIT) -DJULIAHOME="$(call cygpath_w,$(JULIAHOME))" $(call cygpath_w,$(JULIAHOME)/contrib/windows/build-installer.nsi) | iconv -f latin1
-
-	# compress nsis installer and combine with 7zip self-extracting header
-	cd $(BUILDROOT) && $(JULIAHOME)/usr/bin/7z a -mx=9 "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" julia-installer.exe
-	cd $(BUILDROOT) && cat $(JULIAHOME)/contrib/windows/7zS.sfx $(JULIAHOME)/contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "$(JULIA_BINARYDIST_FILENAME).exe"
+	# run Inno Setup to compile installer; /O flag specifies where to place installer and /F flag the installer name
+	$(call spawn,$(JULIAHOME)/dist-extras/inno/iscc.exe /DAppVersion=$(JULIA_VERSION) /DAppSourceFiles="$(call cygpath_w,$(BUILDROOT)/julia-$(JULIA_COMMIT))" /DAppHomeFiles="$(call cygpath_w,$(JULIAHOME))" /F"$(JULIA_BINARYDIST_FILENAME)" /O"$(call cygpath_w,$(BUILDROOT))"  $(call cygpath_w,$(JULIAHOME)/contrib/windows/build-installer.iss))
 	chmod a+x "$(BUILDROOT)/$(JULIA_BINARYDIST_FILENAME).exe"
-	-rm -f $(BUILDROOT)/julia-install-$(JULIA_COMMIT)-$(ARCH).7z
-	-rm -f $(BUILDROOT)/julia-installer.exe
 else
 	cd $(BUILDROOT) && $(TAR) zcvf $(JULIA_BINARYDIST_FILENAME).tar.gz julia-$(JULIA_COMMIT)
 endif
@@ -589,10 +580,9 @@ win-extras:
 	@$(MAKE) -C $(BUILDROOT)/deps install-p7zip
 	mkdir -p $(JULIAHOME)/dist-extras
 	cd $(JULIAHOME)/dist-extras && \
-	$(JLDOWNLOAD) https://sourceforge.net/projects/nsis/files/NSIS%203/3.04/nsis-3.04-setup.exe && \
-	$(JLCHECKSUM) nsis-3.04-setup.exe && \
-	$(call spawn,$(JULIAHOME)/usr/bin/7z.exe) x -y -onsis nsis-3.04-setup.exe && \
-	chmod a+x ./nsis/makensis.exe
+	$(JLDOWNLOAD) http://www.jrsoftware.org/download.php/is.exe && \
+	chmod a+x is.exe && \
+	$(call spawn, $(JULIAHOME)/dist-extras/is.exe /DIR="$(call cygpath_w,$(JULIAHOME)/dist-extras/inno)" /PORTABLE=1 /CURRENTUSER /VERYSILENT)
 
 # various statistics about the build that may interest the user
 ifeq ($(USE_SYSTEM_LLVM), 1)
