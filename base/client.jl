@@ -81,7 +81,6 @@ end
 
 # deprecated function--preserved for DocTests.jl
 function ip_matches_func(ip, func::Symbol)
-    ip isa InterpreterIP || (ip -= 1)
     for fr in StackTraces.lookupat(ip)
         if fr === StackTraces.UNKNOWN || fr.from_c
             return false

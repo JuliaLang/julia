@@ -305,7 +305,7 @@ s by passing them into [`StackTraces.lookupat`](@ref):
 ```julia-repl
 julia> pointer = backtrace()[1];
 
-julia> frame = StackTraces.lookupat(pointer - 1)
+julia> frame = StackTraces.lookupat(pointer)
 1-element Array{Base.StackTraces.StackFrame,1}:
  jl_apply_generic at gf.c:2167
 
