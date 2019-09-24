@@ -795,6 +795,15 @@ function _kwdef!(blk, params_args, call_args)
     blk
 end
 
+"""
+    Base.assume(cond::Bool)
+
+Assume that a condition `cond` always hold. This information may be used by the compiler for
+optimization purposes.
+"""
+assume(cond::Bool) = Core.Intrinsics.assume_llvm(cond)
+
+
 # testing
 
 """
