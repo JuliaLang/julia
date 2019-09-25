@@ -224,12 +224,10 @@ using namespace llvm;
 */
 
 struct BBState {
+    // Uses in this BB
     // These do not get updated after local analysis
     BitVector Defs;
     BitVector PhiOuts;
-    //// Upward exposed uses that do not have a preceding safepoint
-    BitVector UpExposedUsesUnrooted;
-    //// All other uses
     BitVector UpExposedUses;
     // These get updated during dataflow
     BitVector LiveIn;
@@ -335,10 +333,7 @@ private:
     std::vector<int> NumberVector(State &S, Value *Vec);
     int NumberBase(State &S, Value *V, Value *Base);
     std::vector<int> NumberVectorBase(State &S, Value *Base);
-    void NoteOperandUses(State &S, BBState &BBS, User &UI, BitVector &Uses);
-    void NoteOperandUses(State &S, BBState &BBS, User &UI){
-        NoteOperandUses(S, BBS, UI, BBS.UpExposedUses);
-    }
+    void NoteOperandUses(State &S, BBState &BBS, User &UI);
     State LocalScan(Function &F);
     void ComputeLiveness(State &S);
     void ComputeLiveSets(State &S);
@@ -401,6 +396,8 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
                     return std::make_pair(CurrentV, fld_idx);
             }
         }
+        // Note that this is true:
+        //   assert(fld_idx == -1 ? CurrentV->getType()->isPointerTy() : CurrentV->getType()->isVectorPointerTy());
         if (isa<BitCastInst>(CurrentV))
             CurrentV = cast<BitCastInst>(CurrentV)->getOperand(0);
         else if (isa<AddrSpaceCastInst>(CurrentV)) {
@@ -721,7 +718,6 @@ static void MaybeResize(BBState &BBS, unsigned Idx) {
     if (BBS.Defs.size() <= Idx) {
         BBS.Defs.resize(Idx + 1);
         BBS.UpExposedUses.resize(Idx + 1);
-        BBS.UpExposedUsesUnrooted.resize(Idx + 1);
         BBS.PhiOuts.resize(Idx + 1);
     }
 }
@@ -736,7 +732,6 @@ static void NoteDef(State &S, BBState &BBS, int Num, const std::vector<int> &Saf
     assert(BBS.Defs[Num] == 0 && "SSA Violation or misnumbering?");
     BBS.Defs[Num] = 1;
     BBS.UpExposedUses[Num] = 0;
-    BBS.UpExposedUsesUnrooted[Num] = 0;
     // This value could potentially be live at any following safe point
     // if it ends up live out, so add it to the LiveIfLiveOut lists for all
     // following safepoints.
@@ -782,8 +777,6 @@ static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI) {
     // considered live at this safepoint even when they have a def earlier
     // in this BB (i.e. even when they don't participate in the dataflow
     // computation)
-    BBS.UpExposedUses |= BBS.UpExposedUsesUnrooted;
-    BBS.UpExposedUsesUnrooted.reset();
     S.LiveSets.push_back(BBS.UpExposedUses);
     S.LiveIfLiveOut.push_back(std::vector<int>{});
     return Number;
@@ -811,12 +804,13 @@ void LateLowerGCFrame::NoteUse(State &S, BBState &BBS, Value *V, BitVector &Uses
     }
 }
 
-void LateLowerGCFrame::NoteOperandUses(State &S, BBState &BBS, User &UI, BitVector &Uses) {
+void LateLowerGCFrame::NoteOperandUses(State &S, BBState &BBS, User &UI) {
     for (Use &U : UI.operands()) {
         Value *V = U;
-        if (!isSpecialPtr(V->getType()) && !isSpecialPtrVec(V->getType()))
-            continue;
-        NoteUse(S, BBS, V, Uses);
+        if (isSpecialPtr(V->getType()) || isSpecialPtrVec(V->getType()) ||
+                isUnionRep(V->getType())) {
+            NoteUse(S, BBS, V);
+        }
     }
 }
 
@@ -858,8 +852,6 @@ JL_USED_FUNC static void dumpLivenessState(Function &F, State &S) {
         dumpBitVectorValues(S, S.BBStates[&BB].Defs);
         dbgs() << "\n\tPhiOuts: ";
         dumpBitVectorValues(S, S.BBStates[&BB].PhiOuts);
-        dbgs() << "\n\tUpExposedUsesUnrooted: ";
-        dumpBitVectorValues(S, S.BBStates[&BB].UpExposedUsesUnrooted);
         dbgs() << "\n\tUpExposedUses: ";
         dumpBitVectorValues(S, S.BBStates[&BB].UpExposedUses);
         dbgs() << "\n\tLiveIn: ";
@@ -1131,14 +1123,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 else {
                     MaybeNoteDef(S, BBS, CI, BBS.Safepoints);
                 }
-                NoteOperandUses(S, BBS, I, BBS.UpExposedUses);
-                for (Use &U : CI->operands()) {
-                    Value *V = U;
-                    if (isUnionRep(V->getType())) {
-                        NoteUse(S, BBS, V);
-                        continue;
-                    }
-                }
+                NoteOperandUses(S, BBS, I);
                 if (CI->canReturnTwice()) {
                     S.ReturnsTwice.push_back(CI);
                 }
@@ -1202,7 +1187,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     cast<PointerType>(LI->getType())->getAddressSpace() != AddressSpace::Loaded) {
                     MaybeNoteDef(S, BBS, LI, BBS.Safepoints, std::move(RefinedPtr));
                 }
-                NoteOperandUses(S, BBS, I, BBS.UpExposedUsesUnrooted);
+                NoteOperandUses(S, BBS, I);
             } else if (SelectInst *SI = dyn_cast<SelectInst>(&I)) {
                 // We need to insert an extra select for the GC root
                 if (!isSpecialPtr(SI->getType()) && !isSpecialPtrVec(SI->getType()) &&
@@ -1234,7 +1219,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         };
                     }
                     MaybeNoteDef(S, BBS, SI, BBS.Safepoints, std::move(RefinedPtr));
-                    NoteOperandUses(S, BBS, I, BBS.UpExposedUsesUnrooted);
+                    NoteOperandUses(S, BBS, I);
                 }
             } else if (PHINode *Phi = dyn_cast<PHINode>(&I)) {
                 if (!isSpecialPtr(Phi->getType()) && !isSpecialPtrVec(Phi->getType()) &&
@@ -1267,8 +1252,10 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         NoteUse(S, IncomingBBS, Phi->getIncomingValue(i), IncomingBBS.PhiOuts);
                     }
                 }
-            } else if (isa<StoreInst>(&I) || isa<ReturnInst>(&I)) {
-                NoteOperandUses(S, BBS, I, BBS.UpExposedUsesUnrooted);
+            } else if (isa<StoreInst>(&I)) {
+                NoteOperandUses(S, BBS, I);
+            } else if (isa<ReturnInst>(&I)) {
+                NoteOperandUses(S, BBS, I);
             } else if (auto *ASCI = dyn_cast<AddrSpaceCastInst>(&I)) {
                 if (getValueAddrSpace(ASCI) == AddressSpace::Tracked) {
                     SmallVector<int, 1> RefinedPtr{};
@@ -1290,7 +1277,6 @@ State LateLowerGCFrame::LocalScan(Function &F) {
         }
         // Pre-seed the dataflow variables;
         BBS.LiveIn = BBS.UpExposedUses;
-        BBS.LiveIn |= BBS.UpExposedUsesUnrooted;
         BBS.Done = true;
     }
     FixUpRefinements(PHINumbers, S);
@@ -1331,7 +1317,6 @@ void LateLowerGCFrame::ComputeLiveness(State &S) {
             FlippedDefs.flip();
             NewLiveIn &= FlippedDefs;
             NewLiveIn |= BBS.UpExposedUses;
-            NewLiveIn |= BBS.UpExposedUsesUnrooted;
             if (NewLiveIn != BBS.LiveIn) {
                 AnyChanged = true;
                 BBS.LiveIn = NewLiveIn;
