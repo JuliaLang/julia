@@ -1447,7 +1447,11 @@ function nullspace(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A
     return copy(SVD.Vt[indstart:end,:]')
 end
 
-nullspace(A::AbstractVector; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol)) = nullspace(reshape(A, length(A), 1), rtol= rtol, atol= atol)
+nullspace(A::AbstractVector; kws...) = nullspace(reshape(A, length(A), 1); kws...)
+function nullspace(A::Union{Transpose{<:Any, <:AbstractVector},
+                            Adjoint{<:Any, <:AbstractVector}}; kws...)
+    return nullspace(Matrix(A); kws...)
+end
 
 """
     cond(M, p::Real=2)
