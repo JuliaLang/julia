@@ -539,7 +539,7 @@ JL_DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt, bool *isboxed)
         return t;
     }
     if (isboxed) *isboxed = true;
-    return T_pjlvalue;
+    return T_prjlvalue;
 }
 }
 
@@ -566,7 +566,7 @@ static Type *bitstype_to_llvm(jl_value_t *bt)
 // fields depend on any of the parameters of the containing type)
 static bool julia_struct_has_layout(jl_datatype_t *dt, jl_unionall_t *ua)
 {
-    if (dt->layout || dt->struct_decl || jl_justbits((jl_value_t*)dt))
+    if (dt->layout || dt->struct_decl)
         return true;
     if (ua) {
         jl_svec_t *types = jl_get_fieldtypes(dt);
@@ -628,7 +628,8 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
                     fsz += 1;
                 Type *lty;
                 if (isptr) {
-                    lty = T_pjlvalue;
+                    lty = T_prjlvalue;
+                    isvector = false;
                 }
                 else if (ty == (jl_value_t*)jl_bool_type) {
                     lty = T_int8;
@@ -668,7 +669,7 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
                 // VecElement type is unwrapped in LLVM
                 decl = latypes[0];
             }
-            else if (isTuple && isarray && lasttype != T_int1 && !type_is_ghost(lasttype)) {
+            else if (isTuple && isarray && !type_is_ghost(lasttype)) {
                 if (isvector && jl_special_vector_alignment(ntypes, jlasttype) != 0)
                     decl = VectorType::get(lasttype, ntypes);
                 else
@@ -702,7 +703,7 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
     //  lty = StructType::get(jl_LLVMContext, makeArrayRef(Elements));
     // }
     if (isboxed) *isboxed = true;
-    return T_pjlvalue;
+    return T_prjlvalue;
 }
 
 static bool is_datatype_all_pointers(jl_datatype_t *dt)
@@ -1279,8 +1280,6 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     Type *elty = julia_type_to_llvm(jltype, &isboxed);
     if (type_is_ghost(elty))
         return ghostValue(jltype);
-    if (isboxed)
-        elty = T_prjlvalue;
     Type *ptrty = PointerType::get(elty, ptr->getType()->getPointerAddressSpace());
     Value *data;
     if (ptr->getType() != ptrty)
@@ -1336,20 +1335,12 @@ static void typed_store(jl_codectx_t &ctx,
         if (parent != NULL)
             emit_write_barrier(ctx, parent, r);
     }
-    Value *data;
     Type *ptrty = PointerType::get(elty, ptr->getType()->getPointerAddressSpace());
-    if (ptr->getType() != ptrty) {
-        if (isboxed) {
-            data = emit_bitcast(ctx, ptr, T_pprjlvalue);
-        } else {
-            data = emit_bitcast(ctx, ptr, ptrty);
-        }
-    } else {
-        data = ptr;
-    }
+    if (ptr->getType() != ptrty)
+        ptr = ctx.builder.CreateBitCast(ptr, ptrty);
     if (idx_0based)
-        data = ctx.builder.CreateInBoundsGEP(r->getType(), data, idx_0based);
-    Instruction *store = ctx.builder.CreateAlignedStore(r, data, isboxed || alignment ? alignment : julia_alignment(jltype));
+        ptr = ctx.builder.CreateInBoundsGEP(r->getType(), ptr, idx_0based);
+    Instruction *store = ctx.builder.CreateAlignedStore(r, ptr, isboxed || alignment ? alignment : julia_alignment(jltype));
     if (aliasscope)
         store->setMetadata("noalias", aliasscope);
     if (tbaa)
@@ -1534,14 +1525,13 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
             *ret = jl_cgval_t();
             return true;
         }
-        assert(!jl_field_isptr(stt, 0));
         jl_value_t *jt = jl_svecref(stt->types, 0);
         Value *idx0 = emit_bounds_check(ctx, strct, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields), inbounds);
         if (strct.isghost) {
             *ret = ghostValue(jt);
             return true;
         }
-        // llvm::VectorType
+        // llvm::VectorType (from init_as_value)
         if (sizeof(void*) != sizeof(int))
             idx0 = ctx.builder.CreateTrunc(idx0, T_int32); // llvm3.3 requires this, harmless elsewhere
         Value *fld = ctx.builder.CreateExtractElement(strct.V, idx0);
@@ -1554,12 +1544,11 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
 static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &strct, unsigned idx, jl_datatype_t *jt)
 {
     jl_value_t *jfty = jl_field_type(jt, idx);
-    Type *elty = julia_type_to_llvm(jfty);
     if (jfty == jl_bottom_type) {
         raise_exception(ctx, literal_pointer_val(ctx, jl_undefref_exception));
         return jl_cgval_t(); // unreachable
     }
-    if (type_is_ghost(elty))
+    if (type_is_ghost(julia_type_to_llvm(jfty)))
         return ghostValue(jfty);
     Value *fldv = NULL;
     bool maybe_null = idx >= (unsigned)jt->ninitialized;
@@ -1596,7 +1585,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
                 addr = emit_bitcast(ctx, staddr, lt->getPointerTo());
             }
             else {
-                staddr = emit_bitcast(ctx, staddr, lt->getPointerTo());
+                staddr = maybe_bitcast(ctx, staddr, lt->getPointerTo());
                 if (isa<StructType>(lt))
                     addr = emit_struct_gep(ctx, lt, staddr, byte_offset);
                 else
@@ -1606,7 +1595,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         unsigned align = jl_field_align(jt, idx);
         if (jl_field_isptr(jt, idx)) {
             Instruction *Load = maybe_mark_load_dereferenceable(
-                    ctx.builder.CreateLoad(T_prjlvalue, emit_bitcast(ctx, addr, T_pprjlvalue)),
+                    ctx.builder.CreateLoad(T_prjlvalue, maybe_bitcast(ctx, addr, T_pprjlvalue)),
                     maybe_null, jl_field_type(jt, idx));
             Value *fldv = tbaa_decorate(strct.tbaa, Load);
             if (maybe_null)
