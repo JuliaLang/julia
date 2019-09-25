@@ -90,6 +90,11 @@ bimg  = randn(n,2)/2
                 # test empty cases
                 @test nullspace(zeros(n, 0)) == Matrix(I, 0, 0)
                 @test nullspace(zeros(0, n)) == Matrix(I, n, n)
+                # test vector cases
+                @test size(nullspace(a[:, 1])') == (n, n - 1)
+                @test size(nullspace(b[1, :])') == (n, n - 1)
+                @test size(transpose(nullspace(a[:, 1]))) == (n, n - 1)
+                @test size(transpose(nullspace(b[1, :]))) == (n, n - 1)
             end
         end
     end # for eltyb
