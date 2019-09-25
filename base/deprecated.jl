@@ -102,7 +102,7 @@ function firstcaller(bt::Vector, funcsyms)
     # Identify the calling line
     found = false
     for ip in bt
-        lkups = StackTraces.lookupat(ip)
+        lkups = StackTraces.lookup(ip)
         for lkup in lkups
             if lkup == StackTraces.UNKNOWN || lkup.from_c
                 continue

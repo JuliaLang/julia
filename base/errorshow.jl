@@ -612,7 +612,7 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
         if lkups isa StackFrame
             lkups = [lkups]
         else
-            lkups = StackTraces.lookupat(lkups)
+            lkups = StackTraces.lookup(lkups)
         end
         for lkup in lkups
             if lkup === StackTraces.UNKNOWN

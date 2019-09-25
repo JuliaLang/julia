@@ -5,11 +5,10 @@ Profiling support, main entry point is the [`@profile`](@ref) macro.
 """
 module Profile
 
-import Base.StackTraces: lookupat, UNKNOWN, show_spec_linfo, StackFrame
+import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo, StackFrame
 
 # deprecated functions: use `getdict` instead
-lookup(ip::UInt) = lookupat(convert(Ptr{Cvoid}, ip))
-lookup(ip::Ptr{Cvoid}) = lookupat(ip)
+lookup(ip::UInt) = lookup(convert(Ptr{Cvoid}, ip))
 
 export @profile
 

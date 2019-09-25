@@ -894,7 +894,7 @@ function break_21369()
         i = 1
         local fr
         while true
-            fr = Base.StackTraces.lookupat(bt[i])[end]
+            fr = Base.StackTraces.lookup(bt[i])[end]
             if !fr.from_c && fr.func !== :error
                 break
             end

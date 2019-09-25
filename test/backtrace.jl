@@ -1,15 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Base.StackTraces: lookupat
+import Base.StackTraces: lookup
 
 # Test location information for inlined code (ref issues #1334 #12544)
 module test_inline_bt
 using Test
-import ..lookupat
+import ..lookup
 
 function get_bt_frames(functionname, bt)
     for i = 1:length(bt)
-        lkup = lookupat(bt[i])
+        lkup = lookup(bt[i])
         lkup[end].func == functionname && return lkup
     end
     return StackTraces.StackFrame[]
@@ -96,13 +96,13 @@ end
 
 module BackTraceTesting
 using Test
-import ..lookupat
+import ..lookup
 
 @inline bt2() = backtrace()
 @inline bt1() = bt2()
 bt() = bt1()
 
-lkup = map(lookupat, bt())
+lkup = map(lookup, bt())
 hasbt = hasbt2 = false
 for sfs in lkup
     for sf in sfs
@@ -121,7 +121,7 @@ function btmacro()
     ret = @timed backtrace()
     ret[1]
 end
-lkup = map(lookupat, btmacro())
+lkup = map(lookup, btmacro())
 hasme = hasbtmacro = false
 for sfs in lkup
     for sf in sfs
@@ -146,7 +146,7 @@ bt = eval(quote
         catch_backtrace()
     end
 end)
-lkup = map(lookupat, bt)
+lkup = map(lookup, bt)
 hastoplevel = false
 for sfs in lkup
     for sf in sfs
@@ -174,7 +174,7 @@ let bt, found = false
     @testset begin
         bt = backtrace()
     end
-    for frame in map(lookupat, bt)
+    for frame in map(lookup, bt)
         if frame[1].line == @__LINE__() - 3 && frame[1].file == Symbol(@__FILE__)
             found = true; break
         end
@@ -186,7 +186,7 @@ end
 let bt, found = false
     @info ""
     bt = backtrace()
-    for frame in map(lookupat, bt)
+    for frame in map(lookup, bt)
         if frame[1].line == @__LINE__() - 2 && frame[1].file == Symbol(@__FILE__)
             found = true; break
         end
