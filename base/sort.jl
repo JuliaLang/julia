@@ -646,9 +646,9 @@ end
 """
     sort!(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
-Sort the vector `v` in place. `QuickSort` is used by default for numeric arrays while
-`MergeSort` is used for other arrays. You can specify an algorithm to use via the `alg`
-keyword (see Sorting Algorithms for available algorithms). The `by` keyword lets you provide
+Sort the vector `v` in place. [`QuickSort`](@ref) is used by default for numeric arrays while
+[`MergeSort`](@ref) is used for other arrays. You can specify an algorithm to use via the `alg`
+keyword (see [Sorting Algorithms](@ref) for available algorithms). The `by` keyword lets you provide
 a function that will be applied to each element before comparison; the `lt` keyword allows
 providing a custom "less than" function; use `rev=true` to reverse the sorting order. These
 options are independent and can be used together in all possible combinations: if both `by`

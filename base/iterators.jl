@@ -270,8 +270,9 @@ end
 Run multiple iterators at the same time, until any of them is exhausted. The value type of
 the `zip` iterator is a tuple of values of its subiterators.
 
-Note: `zip` orders the calls to its subiterators in such a way that stateful iterators will
-not advance when another iterator finishes in the current iteration.
+!!! note
+    `zip` orders the calls to its subiterators in such a way that stateful iterators will
+    not advance when another iterator finishes in the current iteration.
 
 # Examples
 ```jldoctest
@@ -989,7 +990,7 @@ There are several different ways to think about this iterator wrapper:
    whenever an item is produced.
 
 `Stateful` provides the regular iterator interface. Like other mutable iterators
-(e.g. [`Channel`](@ref)), if iteration is stopped early (e.g. by a `break` in a `for` loop),
+(e.g. [`Channel`](@ref)), if iteration is stopped early (e.g. by a [`break`](@ref) in a [`for`](@ref) loop),
 iteration can be resumed from the same spot by continuing to iterate over the
 same iterator object (in contrast, an immutable iterator would restart from the
 beginning).
