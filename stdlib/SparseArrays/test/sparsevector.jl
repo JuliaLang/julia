@@ -1099,7 +1099,7 @@ end
                 end
                 for tb in types
                     if tb == Int
-                        x = sparse(rand(0:4, 10))
+                        x = sparse(rand(0:4, n))
                     else
                         x = sprandn(tb, n, 0.6)
                     end
