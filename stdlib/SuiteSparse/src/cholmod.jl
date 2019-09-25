@@ -744,7 +744,7 @@ function solve(sys::Integer, F::Factor{Tv}, B::Dense{Tv}) where Tv<:VTypes
     if !issuccess(F)
         s = unsafe_load(pointer(F))
         if s.is_ll == 1
-            throw(LinearAlgebra.SingularException(s.minor))
+            throw(LinearAlgebra.PosDefException(s.minor))
         else
             throw(ArgumentError("factorized matrix has one or more zero pivots. Try using `lu` instead."))
         end
