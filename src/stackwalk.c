@@ -68,6 +68,13 @@ int jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *bt_data, size_t *bt_size,
             int have_more_frames = jl_unw_step(cursor, &return_ip, &thesp, &thefp);
             if (sp)
                 sp[n] = thesp;
+            // ARM instruction pointer encoding uses the low bit as a flag for
+            // thumb mode, which must be cleared before further use. (Note not
+            // needed for ARM AArch64.) See
+            // https://github.com/libunwind/libunwind/pull/131
+            #ifdef _CPU_ARM_
+            return_ip &= ~(uintptr_t)0x1;
+            #endif
             // For the purposes of looking up debug info for functions, we want
             // to harvest addresses for the *call* instruction `call_ip` during
             // stack walking.  However, this information isn't directly
@@ -79,8 +86,7 @@ int jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *bt_data, size_t *bt_size,
             // understand each platform ABI instruction pointer encoding and
             // calling conventions, noting that these may vary per stack frame.
             // (For example signal frames on linux x86_64 have `call_ip ==
-            // return_ip`, and ARM thumb instruction pointers use the low bit
-            // as a flag which must be cleared before further use.)
+            // return_ip`.)
             //
             // However for our current purposes it seems sufficient to assume
             // that `call_ip = return_ip-1`. See also:
