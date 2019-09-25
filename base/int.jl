@@ -175,6 +175,17 @@ div(x::Unsigned, y::BitSigned) = unsigned(flipsign(signed(div(x, unsigned(abs(y)
 rem(x::BitSigned, y::Unsigned) = flipsign(signed(rem(unsigned(abs(x)), y)), x)
 rem(x::Unsigned, y::BitSigned) = rem(x, unsigned(abs(y)))
 
+function divrem(x::BitSigned, y::Unsigned)
+    q, r = divrem(unsigned(abs(x)), y)
+    flipsign(signed(q), x), flipsign(signed(r), x)
+end
+
+function divrem(x::Unsigned, y::BitSigned)
+    q, r = divrem(x, unsigned(abs(y)))
+    unsigned(flipsign(signed(q), y)), r
+end
+
+
 """
     mod(x, y)
     rem(x, y, RoundDown)
