@@ -24,6 +24,7 @@ New library functions
 Standard library changes
 ------------------------
 
+* `filter` can now act on a `Tuple` ([#32968]).
 
 #### Libdl
 
