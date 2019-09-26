@@ -561,7 +561,16 @@ Switch to the scheduler to allow another scheduled task to run. A task that call
 function is still runnable, and will be restarted immediately if there are no other runnable
 tasks.
 """
-yield() = (enq_work(current_task()); wait())
+function yield()
+    ct = current_task()
+    enq_work(ct)
+    try
+        wait()
+    catch
+        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        rethrow()
+    end
+end
 
 """
     yield(t::Task, arg = nothing)

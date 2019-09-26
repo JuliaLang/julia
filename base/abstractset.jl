@@ -251,16 +251,15 @@ true
 issubset, ⊆, ⊇
 
 function issubset(l, r)
-    if haslength(r)
-        rlen = length(r)
-        if isa(l, AbstractSet)
-            # check l for too many unique elements
-            length(l) > rlen && return false
+    if haslength(r) && (isa(l, AbstractSet) || !hasfastin(r))
+        rlen = length(r) # conditions above make this length computed only when needed
+        # check l for too many unique elements
+        if isa(l, AbstractSet) && length(l) > rlen
+            return false
         end
-        # if r is big enough, convert it to a Set
-        # threshold empirically determined by repeatedly
-        # sampling using these two methods (see #26198)
-        if rlen > 70 && !isa(r, AbstractSet)
+        # when `in` would be too slow and r is big enough, convert it to a Set
+        # this threshold was empirically determined (cf. #26198)
+        if !hasfastin(r) && rlen > 70
             return issubset(l, Set(r))
         end
     end
@@ -269,6 +268,19 @@ function issubset(l, r)
     end
     return true
 end
+
+"""
+    hasfastin(T)
+
+Determine whether the computation `x ∈ collection` where `collection::T` can be considered
+as a "fast" operation (typically constant or logarithmic complexity).
+The definition `hasfastin(x) = hasfastin(typeof(x))` is provided for convenience so that instances
+can be passed instead of types.
+However the form that accepts a type argument should be defined for new types.
+"""
+hasfastin(::Type) = false
+hasfastin(::Union{Type{<:AbstractSet},Type{<:AbstractDict},Type{<:AbstractRange}}) = true
+hasfastin(x) = hasfastin(typeof(x))
 
 ⊇(l, r) = r ⊆ l
 

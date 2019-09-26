@@ -3,7 +3,7 @@
 using Test
 using Distributed
 import REPL
-using Base.Printf: @sprintf
+using Printf: @sprintf
 
 include("choosetests.jl")
 include("testenv.jl")

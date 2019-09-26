@@ -496,16 +496,18 @@ JL_DLLEXPORT void jl_flush_cstdio(void) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT jl_value_t *jl_stdout_obj(void) JL_NOTSAFEPOINT
 {
-    if (jl_base_module == NULL) return NULL;
-    jl_value_t *stdout_obj = jl_get_module_binding(jl_base_module, jl_symbol("stdout"))->value;
-    return stdout_obj;
+    if (jl_base_module == NULL)
+        return NULL;
+    jl_binding_t *stdout_obj = jl_get_module_binding(jl_base_module, jl_symbol("stdout"));
+    return stdout_obj ? stdout_obj->value : NULL;
 }
 
 JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT
 {
-    if (jl_base_module == NULL) return NULL;
-    jl_value_t *stderr_obj = jl_get_module_binding(jl_base_module, jl_symbol("stderr"))->value;
-    return stderr_obj;
+    if (jl_base_module == NULL)
+        return NULL;
+    jl_binding_t *stderr_obj = jl_get_module_binding(jl_base_module, jl_symbol("stderr"));
+    return stderr_obj ? stderr_obj->value : NULL;
 }
 
 // toys for debugging ---------------------------------------------------------

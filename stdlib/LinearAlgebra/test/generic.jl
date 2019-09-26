@@ -409,4 +409,32 @@ end
     @test all(!isnan, lmul!(false, Any[NaN]))
 end
 
+@testset "generalized dot #32739" begin
+    for elty in (Int, Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Complex{BigFloat})
+        n = 10
+        if elty <: Int
+            A = rand(-n:n, n, n)
+            x = rand(-n:n, n)
+            y = rand(-n:n, n)
+        elseif elty <: Real
+            A = convert(Matrix{elty}, randn(n,n))
+            x = rand(elty, n)
+            y = rand(elty, n)
+        else
+            A = convert(Matrix{elty}, complex.(randn(n,n), randn(n,n)))
+            x = rand(elty, n)
+            y = rand(elty, n)
+        end
+        @test dot(x, A, y) ≈ dot(A'x, y) ≈ *(x', A, y) ≈ (x'A)*y
+        @test dot(x, A', y) ≈ dot(A*x, y) ≈ *(x', A', y) ≈ (x'A')*y
+        elty <: Real && @test dot(x, transpose(A), y) ≈ dot(x, transpose(A)*y) ≈ *(x', transpose(A), y) ≈ (x'*transpose(A))*y
+        B = reshape([A], 1, 1)
+        x = [x]
+        y = [y]
+        @test dot(x, B, y) ≈ dot(B'x, y)
+        @test dot(x, B', y) ≈ dot(B*x, y)
+        elty <: Real && @test dot(x, transpose(B), y) ≈ dot(x, transpose(B)*y)
+    end
+end
+
 end # module TestGeneric

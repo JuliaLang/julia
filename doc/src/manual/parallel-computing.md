@@ -1143,7 +1143,7 @@ sent to the remote node to go ahead and remove its reference to the value.
 Once finalized, a reference becomes invalid and cannot be used in any further calls.
 
 
-## Local invocations(@id man-distributed-local-invocations)
+## Local invocations
 
 Data is necessarily copied over to the remote node for execution. This is the case for both
 remotecalls and when data is stored to a[`RemoteChannel`](@ref) / [`Future`](@ref Distributed.Future) on

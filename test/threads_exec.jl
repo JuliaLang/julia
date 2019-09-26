@@ -151,6 +151,21 @@ end
 threaded_gc_locked(SpinLock)
 threaded_gc_locked(Threads.ReentrantLock)
 
+# Issue 33159
+# Make sure that a Threads.Condition can't be used without being locked, on any thread.
+@testset "Threads.Conditions must be locked" begin
+    c = Threads.Condition()
+    @test_throws Exception notify(c)
+    @test_throws Exception wait(c)
+
+    # If it's locked, but on the wrong thread, it should still throw an exception
+    lock(c)
+    @test_throws Exception fetch(@async notify(c))
+    @test_throws Exception fetch(@async notify(c, all=false))
+    @test_throws Exception fetch(@async wait(c))
+    unlock(c)
+end
+
 # Issue 14726
 # Make sure that eval'ing in a different module doesn't mess up other threads
 orig_curmodule14726 = @__MODULE__
@@ -669,4 +684,20 @@ let ch = Channel{Char}(0), t
     bind(ch, t)
     schedule(t)
     @test String(collect(ch)) == "hello"
+end
+
+# errors inside @threads
+function _atthreads_with_error(a, err)
+    Threads.@threads for i in eachindex(a)
+        if err
+            error("failed")
+        end
+        a[i] = Threads.threadid()
+    end
+    a
+end
+@test_throws TaskFailedException _atthreads_with_error(zeros(nthreads()), true)
+let a = zeros(nthreads())
+    _atthreads_with_error(a, false)
+    @test a == [1:nthreads();]
 end

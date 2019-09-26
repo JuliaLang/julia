@@ -890,3 +890,5 @@ end
 
 @test nameof(Any) === :Any
 @test nameof(:) === :Colon
+@test nameof(Core.Intrinsics.mul_int) === :mul_int
+@test nameof(Core.Intrinsics.arraylen) === :arraylen

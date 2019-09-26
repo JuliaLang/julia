@@ -476,6 +476,7 @@
              ,(if (any kwarg? pargl) (gensy) UNUSED)
              (call (core kwftype) ,ftype)) ,kw ,@pargl ,@vararg)
           `(block
+            ,@(filter linenum? prologue)
             ,(scopenest
               keynames
               (map (lambda (v dflt)
@@ -938,7 +939,7 @@
           `(block
             ,.(reverse! stmts)
             (foreigncall ,name ,RT (call (core svec) ,@(reverse! T))
-                         ,(if isseq (- (length F) 1) 0) ; 0 or number of arguments before ... in definition
+                         ,(if isseq (- (length atypes) 1) 0) ; 0 or number of arguments before ... in definition
                          ',cconv
                          ,.(reverse! C)
                          ,@GC)) ; GC root ordering is arbitrary
@@ -2553,7 +2554,7 @@
                                           (append locals-nondef locals-def)
                                           ;; global declarations at the top level are not inherited
                                           (if toplevel? '() globals)
-                                          (scope:sp scope)
+                                          '()
                                           (append (map cons need-rename renamed)
                                                   (map cons need-rename-def renamed-def))
                                           scope)))

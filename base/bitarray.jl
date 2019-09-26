@@ -51,14 +51,14 @@ Behaves identically to the [`Array`](@ref) constructor. See [`undef`](@ref).
 ```julia-repl
 julia> BitArray(undef, 2, 2)
 2×2 BitArray{2}:
- false  false
- false  true
+ 0  0
+ 0  0
 
 julia> BitArray(undef, (3, 1))
 3×1 BitArray{2}:
- false
- true
- false
+ 0
+ 0
+ 0
 ```
 """
 BitArray(::UndefInitializer, dims::Integer...) = BitArray(undef, map(Int,dims))

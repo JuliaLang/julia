@@ -745,5 +745,16 @@ end
     @test sort([a, b]) == [b, a]
 end
 
+@testset "Libc.rand" begin
+    low, high = extrema(Libc.rand(Float64) for i=1:10^4)
+    # these fail with probability 2^(-10^4) ≈ 5e-3011
+    @test 0 ≤ low < 0.5
+    @test 0.5 < high < 1
+end
+
 # Pointer 0-arg constructor
 @test Ptr{Cvoid}() == C_NULL
+
+# Finalizer with immutable should throw
+@test_throws ErrorException finalizer(x->nothing, 1)
+@test_throws ErrorException finalizer(C_NULL, 1)

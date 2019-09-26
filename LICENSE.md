@@ -39,6 +39,7 @@ Julia includes code from the following projects, which have their own licenses:
 
 The following components included in Julia `Base` have their own separate licenses:
 
+- base/ryu/* [Boost] (see [ryu](https://github.com/ulfjack/ryu/blob/master/LICENSE-Boost))
 - base/grisu/* [BSD-3] (see [double-conversion](https://github.com/google/double-conversion/blob/master/LICENSE))
 - base/special/{exp,rem_pio2,hyperbolic}.jl [Freely distributable with preserved copyright notice] (see [FDLIBM](https://www.netlib.org/fdlibm))
 
@@ -76,11 +77,10 @@ Julia's build process uses the following external tools:
 - [PATCHELF](https://nixos.org/patchelf.html)
 - [OBJCONV](https://www.agner.org/optimize/#objconv)
 
-Julia bundles the following external programs and libraries on some platforms:
+Julia bundles the following external programs and libraries:
 
 - [7-Zip](https://www.7-zip.org/license.txt)
 - [ZLIB](https://zlib.net/zlib_license.html)
-- [LIBEXPAT](http://expat.cvs.sourceforge.net/viewvc/expat/expat/README)
 
 On some platforms, distributions of Julia contain SSL certificate authority certificates,
 released under the [Mozilla Public License](https://en.wikipedia.org/wiki/Mozilla_Public_License).

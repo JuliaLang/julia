@@ -196,7 +196,7 @@ function Float16(val::Float32)
     # NOTE: we maybe should ignore NaNs here, but the payload is
     # getting truncated anyway so "rounding" it might not matter
     nextbit = (f >> (sh-1)) & 1
-    if nextbit != 0
+    if nextbit != 0 && (h & 0x7C00) != 0x7C00
         # Round halfway to even or check lower bits
         if h&1 == 1 || (f & ((1<<(sh-1))-1)) != 0
             h += UInt16(1)
@@ -764,7 +764,7 @@ The highest finite value representable by the given floating-point DataType `T`.
 # Examples
 ```jldoctest
 julia> floatmax(Float16)
-Float16(6.55e4)
+Float16(65500.0)
 
 julia> floatmax(Float32)
 3.4028235f38

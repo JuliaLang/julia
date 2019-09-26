@@ -881,25 +881,38 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
         args[i] = arg == orig_i ? new_i : arg;
         argTys[i] = args[i]->getType();
     }
+    auto oldfType = call->getFunctionType();
+    auto newfType = FunctionType::get(
+            oldfType->getReturnType(),
+            makeArrayRef(argTys).slice(0, oldfType->getNumParams()),
+            oldfType->isVarArg());
 
     // Accumulate an array of overloaded types for the given intrinsic
+    // and compute the new name mangling schema
     SmallVector<Type*, 4> overloadTys;
     {
         SmallVector<Intrinsic::IITDescriptor, 8> Table;
         getIntrinsicInfoTableEntries(ID, Table);
         ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
-        auto oldfType = call->getFunctionType();
+#if JL_LLVM_VERSION >= 90000
+        auto res = Intrinsic::matchIntrinsicSignature(newfType, TableRef, overloadTys);
+        assert(res == Intrinsic::MatchIntrinsicTypes_Match);
+        (void)res;
+#else
         bool res = Intrinsic::matchIntrinsicType(oldfType->getReturnType(), TableRef, overloadTys);
         assert(!res);
-        for (auto Ty : argTys) {
+        for (auto Ty : newfType->params()) {
             res = Intrinsic::matchIntrinsicType(Ty, TableRef, overloadTys);
             assert(!res);
         }
-        res = Intrinsic::matchIntrinsicVarArg(oldfType->isVarArg(), TableRef);
-        assert(!res);
         (void)res;
+#endif
+        bool matchvararg = Intrinsic::matchIntrinsicVarArg(newfType->isVarArg(), TableRef);
+        assert(!matchvararg);
+        (void)matchvararg;
     }
     auto newF = Intrinsic::getDeclaration(call->getModule(), ID, overloadTys);
+    assert(newF->getFunctionType() == newfType);
     newF->setCallingConv(call->getCallingConv());
     auto newCall = CallInst::Create(newF, args, "", call);
     newCall->setTailCallKind(call->getTailCallKind());
