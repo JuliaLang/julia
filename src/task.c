@@ -234,10 +234,12 @@ JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *tid)
     return (void *)((char *)task->stkbuf + off);
 }
 
-static void record_backtrace(jl_ptls_t ptls) JL_NOTSAFEPOINT
+// Marked noinline so we can consistently skip the associated frame.
+// `skip` is number of additional frames to skip.
+NOINLINE static void record_backtrace(jl_ptls_t ptls, int skip) JL_NOTSAFEPOINT
 {
     // storing bt_size in ptls ensures roots in bt_data will be found
-    ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE);
+    ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE, skip + 1);
 }
 
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
@@ -484,7 +486,7 @@ JL_DLLEXPORT void jl_throw(jl_value_t *e JL_MAYBE_UNROOTED)
     assert(e != NULL);
     if (ptls->safe_restore)
         throw_internal(NULL);
-    record_backtrace(ptls);
+    record_backtrace(ptls, 1);
     throw_internal(e);
 }
 
@@ -669,7 +671,7 @@ STATIC_OR_JS void NOINLINE JL_NORETURN start_task(void)
 
     t->started = 1;
     if (t->exception != jl_nothing) {
-        record_backtrace(ptls);
+        record_backtrace(ptls, 0);
         jl_push_excstack(&t->excstack, t->exception,
                           ptls->bt_data, ptls->bt_size);
         res = t->exception;

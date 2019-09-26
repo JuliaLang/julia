@@ -638,8 +638,11 @@ typedef int bt_cursor_t;
 #define JL_BT_INTERP_FRAME (((uintptr_t)0)-1)
 // Maximum number of elements of bt_data taken up by interpreter frame
 #define JL_BT_MAX_ENTRY_SIZE 3
-size_t rec_backtrace(uintptr_t *bt_data, size_t maxsize) JL_NOTSAFEPOINT;
-size_t rec_backtrace_ctx(uintptr_t *bt_data, size_t maxsize, bt_context_t *ctx, int add_interp_frames) JL_NOTSAFEPOINT;
+size_t rec_backtrace(uintptr_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
+// Record backtrace from a signal handler. `ctx` is the context of the code
+// which was asynchronously interrupted.
+size_t rec_backtrace_ctx(uintptr_t *bt_data, size_t maxsize, bt_context_t *ctx,
+                         int add_interp_frames) JL_NOTSAFEPOINT;
 #ifdef LIBOSXUNWIND
 size_t rec_backtrace_ctx_dwarf(uintptr_t *bt_data, size_t maxsize, bt_context_t *ctx, int add_interp_frames) JL_NOTSAFEPOINT;
 #endif

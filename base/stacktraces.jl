@@ -150,35 +150,6 @@ function lookup(ip::Base.InterpreterIP)
 end
 
 """
-    backtrace()
-
-Get a backtrace object for the current program point.
-"""
-function Base.backtrace()
-    bt, bt2 = ccall(:jl_backtrace_from_here, Any, (Int32,), false)
-    if length(bt) > 2
-        # remove frames for jl_backtrace_from_here and backtrace()
-        if bt[2] == Ptr{Cvoid}(-1%UInt)
-            # backtrace() is interpreted
-            # Note: win32 is missing the top frame (see https://bugs.chromium.org/p/crashpad/issues/detail?id=53)
-            @static if Base.Sys.iswindows() && Int === Int32
-                deleteat!(bt, 1:2)
-            else
-                deleteat!(bt, 1:3)
-            end
-            pushfirst!(bt2)
-        else
-            @static if Base.Sys.iswindows() && Int === Int32
-                deleteat!(bt, 1)
-            else
-                deleteat!(bt, 1:2)
-            end
-        end
-    end
-    return Base._reformat_bt(bt, bt2)
-end
-
-"""
     stacktrace([trace::Vector{Ptr{Cvoid}},] [c_funcs::Bool=false]) -> StackTrace
 
 Returns a stack trace in the form of a vector of `StackFrame`s. (By default stacktrace
