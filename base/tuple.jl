@@ -251,16 +251,8 @@ end
 
 ## filter ##
 
-filter(f, t::Tuple) = _filter(f, t, ())
-function _filter(f, t::Tuple, r::Tuple)
-    @_inline_meta
-    if f(first(t))
-        return _filter(f, tail(t), (r..., first(t)))
-    else
-        return _filter(f, tail(t), r)
-    end
-end
-_filter(f, t::Tuple{}, r::Tuple) = r
+filter(f, xs::Tuple) = afoldl((ys, x) -> f(x) ? (ys..., x) : ys, (), xs...)
+
 # use Array for long tuples
 filter(f, t::Any16) = Tuple(filter(f, collect(t)))
 
