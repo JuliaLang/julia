@@ -48,11 +48,12 @@ Standard library changes
 
 #### Random
 
-
 * `AbstractRNG`s now behave like scalars when used in broadcasting ([#33213]).
 
 * Products involving sparse arrays now allow more general sparse `eltype`s, such as `StaticArrays` ([#33205])
 
+* The performance of `rand(::Tuple)` is improved in some cases ([#32208]). As a consequence, the
+  stream of generated values produced for a given seed has changed.
 
 #### SparseArrays
 
