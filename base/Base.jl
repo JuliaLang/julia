@@ -166,7 +166,6 @@ include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # 
 include("osutils.jl")
 include("c.jl")
 
-Sys.isjsvm() && include("jsobject.jl")
 
 # Core I/O
 include("io.jl")
@@ -325,6 +324,8 @@ using .MathConstants: ℯ, π, pi
 
 # metaprogramming
 include("meta.jl")
+
+Sys.isjsvm() && include("jsobject.jl")
 
 # concurrency and parallelism
 include("channels.jl")
