@@ -347,7 +347,6 @@ muladd(x::Number, y::Number, z::Number) = muladd(promote(x,y,z)...)
 <( x::Real, y::Real)     = (< )(promote(x,y)...)
 <=(x::Real, y::Real)     = (<=)(promote(x,y)...)
 
-div(x::Real, y::Real) = div(promote(x,y)...)
 rem(x::Real, y::Real) = rem(promote(x,y)...)
 mod(x::Real, y::Real) = mod(promote(x,y)...)
 

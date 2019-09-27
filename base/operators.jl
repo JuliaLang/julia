@@ -682,12 +682,6 @@ function >>>(x::Integer, c::Unsigned)
 end
 >>>(x::Integer, c::Int) = c >= 0 ? x >>> unsigned(c) : x << unsigned(-c)
 
-# fallback div, fld, and cld implementations
-# NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
-# so it is used here as the basis of float div().
-div(x::T, y::T) where {T<:Real} = convert(T,round((x-rem(x,y))/y))
-
-
 # operator alias
 
 """

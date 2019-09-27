@@ -252,5 +252,7 @@ function div(x::T, y::T, ::typeof(RoundUp)) where T<:Integer
 end
 
 # Real
-div(x::T, y::T, r::RoundingMode) where {T<:Real} = convert(T,round((x-rem(x,y,r))/y))
-rem(x::T, y::T, ::typeof(RoundUp)) where {T<:Real} = convert(T,x-y*ceil(x/y))
+# NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
+# so it is used here as the basis of float div().
+div(x::T, y::T, r::RoundingMode) where {T<:AbstractFloat} = convert(T,round((x-rem(x,y,r))/y))
+rem(x::T, y::T, ::typeof(RoundUp)) where {T<:AbstractFloat} = convert(T,x-y*ceil(x/y))
