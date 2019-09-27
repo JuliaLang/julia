@@ -80,6 +80,9 @@ julia-ui-release julia-ui-debug : julia-ui-% : julia-src-%
 julia-sysimg-ji : julia-stdlib julia-base julia-ui-$(JULIA_BUILD_MODE) | $(build_private_libdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-ji JULIA_EXECUTABLE='$(JULIA_EXECUTABLE)'
 
+julia-sysimg-bc : julia-stdlib julia-base julia-ui-$(JULIA_BUILD_MODE) | $(build_private_libdir)
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-bc JULIA_EXECUTABLE='$(JULIA_EXECUTABLE)'
+
 julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-sysimg-ji julia-ui-%
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-$*
 
