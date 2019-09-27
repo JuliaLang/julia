@@ -175,7 +175,7 @@ function generic_lufact!(A::StridedMatrix{T}, ::Val{Pivot} = Val(true);
             end
         end
     end
-    check && checknonsingular(info)
+    check && checknonsingular(info, Val{Pivot}())
     return LU{T,typeof(A)}(A, ipiv, convert(BlasInt, info))
 end
 
@@ -552,7 +552,7 @@ function lu!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true
         end
     end
     B = Tridiagonal{T,V}(dl, d, du, du2)
-    check && checknonsingular(info)
+    check && checknonsingular(info, pivot)
     return LU{T,Tridiagonal{T,V}}(B, ipiv, convert(BlasInt, info))
 end
 
