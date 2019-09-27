@@ -29,7 +29,7 @@ log10pow2(e) = (e * 78913) >> 18
 
 
 """
-    Ryu.log10pow2(e::Integer)
+    Ryu.log10pow5(e::Integer)
 
 Computes `floor(log10(5^e))`. This is valid for all `e < 2621`.
 """
@@ -372,40 +372,38 @@ end
 
 const POW10_OFFSET_2, MIN_BLOCK_2, POW10_SPLIT_2 = generateinversetables()
 
-bitlength(this) = Base.GMP.MPZ.sizeinbase(this, 2)
-
 @inline function pow5invsplit(::Type{Float64}, i)
     pow = big(5)^i
-    inv = div(big(1) << (bitlength(pow) - 1 + pow5_inv_bitcount(Float64)), pow) + 1
+    inv = div(big(1) << (ndigits(pow, base=2) - 1 + pow5_inv_bitcount(Float64)), pow) + 1
     return (UInt64(inv & ((big(1) << 64) - 1)), UInt64(inv >> 64))
 end
 
 @inline function pow5invsplit(::Type{Float32}, i)
     pow = big(5)^i
-    inv = div(big(1) << (bitlength(pow) - 1 + pow5_inv_bitcount(Float32)), pow) + 1
+    inv = div(big(1) << (ndigits(pow, base=2) - 1 + pow5_inv_bitcount(Float32)), pow) + 1
     return UInt64(inv)
 end
 
 @inline function pow5invsplit(::Type{Float16}, i)
     pow = big(5)^i
-    inv = div(big(1) << (bitlength(pow) - 1 + pow5_inv_bitcount(Float16)), pow) + 1
+    inv = div(big(1) << (ndigits(pow, base=2) - 1 + pow5_inv_bitcount(Float16)), pow) + 1
     return UInt32(inv)
 end
 
 @inline function pow5split(::Type{Float64}, i)
     pow = big(5)^i
-    j = bitlength(pow) - pow5_bitcount(Float64)
+    j = ndigits(pow, base=2) - pow5_bitcount(Float64)
     return (UInt64((pow >> j) & ((big(1) << 64) - 1)), UInt64(pow >> (j + 64)))
 end
 
 @inline function pow5split(::Type{Float32}, i)
     pow = big(5)^i
-    return UInt64(pow >> (bitlength(pow) - pow5_bitcount(Float32)))
+    return UInt64(pow >> (ndigits(pow, base=2) - pow5_bitcount(Float32)))
 end
 
 @inline function pow5split(::Type{Float16}, i)
     pow = big(5)^i
-    return UInt32(pow >> (bitlength(pow) - pow5_bitcount(Float16)))
+    return UInt32(pow >> (ndigits(pow, base=2) - pow5_bitcount(Float16)))
 end
 
 const DOUBLE_POW5_INV_SPLIT = map(i->pow5invsplit(Float64, i), 0:291)
