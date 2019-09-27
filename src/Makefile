@@ -168,7 +168,7 @@ release debug: %: libjulia-%
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
 
-LLVM_CONFIG_ABSOLUTE := $(shell which $(LLVM_CONFIG))
+LLVM_CONFIG_ABSOLUTE := $(shell which $(LLVM_CONFIG_HOST))
 
 # source file rules
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
