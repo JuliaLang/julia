@@ -336,4 +336,19 @@ end
     @test div(typemax(Int64), 2, RoundNearest) == 4611686018427387904
     @test div(-typemax(Int64), 2, RoundNearestTiesUp) == -4611686018427387903
     @test div(typemax(Int)-2, typemax(Int), RoundNearest) == 1
+
+    # Exhaustively test (U)Int8 to catch any overflow-style issues
+    for r in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp)
+        for T in (UInt8, Int8)
+            for x in typemin(T):typemax(T)
+                for y in typemin(T):typemax(T)
+                    if y == 0 || (T <: Signed && x == typemin(T) && y == -1)
+                        @test_throws DivideError div(x, y, r)
+                    else
+                        @test div(x, y, r) == T(div(widen(T)(x), widen(T)(y), r))
+                    end
+                end
+            end
+        end
+    end
 end
