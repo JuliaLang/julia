@@ -80,7 +80,8 @@ may trip up Julia users accustomed to MATLAB:
     `x[x.>3]` and `x = x[x.>3]`. Using [`filter!`](@ref) reduces the use of temporary arrays.
   * The analogue of extracting (or "dereferencing") all elements of a cell array, e.g. in `vertcat(A{:})`
     in MATLAB, is written using the splat operator in Julia, e.g. as `vcat(A...)`.
-
+  * In Julia, the `adjoint` function performs conjugate transposition; in MATLAB, `adjoint` provides the "adjugate" or       
+    classical adjoint, which is the transpose of the matrix of cofactors.
 ## Noteworthy differences from R
 
 One of Julia's goals is to provide an effective language for data analysis and statistical programming.
