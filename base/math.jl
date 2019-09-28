@@ -755,35 +755,6 @@ function frexp(x::T) where T<:IEEEFloat
     return reinterpret(T, xu), k
 end
 
-"""
-    rem(x, y, r::RoundingMode)
-
-Compute the remainder of `x` after integer division by `y`, with the quotient rounded
-according to the rounding mode `r`. In other words, the quantity
-
-    x - y*round(x/y,r)
-
-without any intermediate rounding.
-
-- if `r == RoundNearest`, then the result is exact, and in the interval
-  ``[-|y|/2, |y|/2]``. See also [`RoundNearest`](@ref).
-
-- if `r == RoundToZero` (default), then the result is exact, and in the interval
-  ``[0, |y|)`` if `x` is positive, or ``(-|y|, 0]`` otherwise. See also [`RoundToZero`](@ref).
-
-- if `r == RoundDown`, then the result is in the interval ``[0, y)`` if `y` is positive, or
-  ``(y, 0]`` otherwise. The result may not be exact if `x` and `y` have different signs, and
-  `abs(x) < abs(y)`. See also[`RoundDown`](@ref).
-
-- if `r == RoundUp`, then the result is in the interval `(-y,0]` if `y` is positive, or
-  `[0,-y)` otherwise. The result may not be exact if `x` and `y` have the same sign, and
-  `abs(x) < abs(y)`. See also [`RoundUp`](@ref).
-
-"""
-rem(x, y, ::RoundingMode{:ToZero}) = rem(x,y)
-rem(x, y, ::RoundingMode{:Down}) = mod(x,y)
-rem(x, y, ::RoundingMode{:Up}) = mod(x,-y)
-
 rem(x::Float64, y::Float64, ::RoundingMode{:Nearest}) =
     ccall((:remainder, libm),Float64,(Float64,Float64),x,y)
 rem(x::Float32, y::Float32, ::RoundingMode{:Nearest}) =

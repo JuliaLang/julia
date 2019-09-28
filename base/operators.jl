@@ -682,40 +682,6 @@ function >>>(x::Integer, c::Unsigned)
 end
 >>>(x::Integer, c::Int) = c >= 0 ? x >>> unsigned(c) : x << unsigned(-c)
 
-# fallback div, fld, and cld implementations
-# NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
-# so it is used here as the basis of float div().
-div(x::T, y::T) where {T<:Real} = convert(T,round((x-rem(x,y))/y))
-
-"""
-    fld(x, y)
-
-Largest integer less than or equal to `x/y`.
-
-# Examples
-```jldoctest
-julia> fld(7.3,5.5)
-1.0
-```
-"""
-fld(x::T, y::T) where {T<:Real} = convert(T,round((x-mod(x,y))/y))
-
-"""
-    cld(x, y)
-
-Smallest integer larger than or equal to `x/y`.
-
-# Examples
-```jldoctest
-julia> cld(5.5,2.2)
-3.0
-```
-"""
-cld(x::T, y::T) where {T<:Real} = convert(T,round((x-modCeil(x,y))/y))
-#rem(x::T, y::T) where {T<:Real} = convert(T,x-y*trunc(x/y))
-#mod(x::T, y::T) where {T<:Real} = convert(T,x-y*floor(x/y))
-modCeil(x::T, y::T) where {T<:Real} = convert(T,x-y*ceil(x/y))
-
 # operator alias
 
 """
