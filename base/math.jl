@@ -22,7 +22,8 @@ import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
 
 using .Base: sign_mask, exponent_mask, exponent_one,
             exponent_half, uinttype, significand_mask,
-            significand_bits, exponent_bits
+            significand_bits, exponent_bits, exponent_bias,
+            exponent_max, exponent_raw_max
 
 using Core.Intrinsics: sqrt_llvm
 
@@ -36,14 +37,6 @@ end
     throw(DomainError(x, string("Exponentiation yielding a complex result requires a ",
                                 "complex argument.\nReplace x^y with (x+0im)^y, ",
                                 "Complex(x)^y, or similar.")))
-end
-
-for T in (Float16, Float32, Float64)
-    @eval exponent_bias(::Type{$T}) = $(Int(exponent_one(T) >> significand_bits(T)))
-    # maximum float exponent
-    @eval exponent_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T))
-    # maximum float exponent without bias
-    @eval exponent_raw_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)))
 end
 
 # non-type specific math functions

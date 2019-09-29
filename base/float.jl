@@ -876,6 +876,11 @@ significand_mask(::Type{Float16}) = 0x03ff
 for T in (Float16, Float32, Float64)
     @eval significand_bits(::Type{$T}) = $(trailing_ones(significand_mask(T)))
     @eval exponent_bits(::Type{$T}) = $(sizeof(T)*8 - significand_bits(T) - 1)
+    @eval exponent_bias(::Type{$T}) = $(Int(exponent_one(T) >> significand_bits(T)))
+    # maximum float exponent
+    @eval exponent_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T))
+    # maximum float exponent without bias
+    @eval exponent_raw_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)))
 end
 
 # integer size of float
