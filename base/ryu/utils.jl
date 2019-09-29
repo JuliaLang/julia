@@ -1,24 +1,8 @@
-const MANTISSA_MASK = 0x000fffffffffffff
-const EXP_MASK = 0x00000000000007ff
+const MANTISSA_MASK = Base.significand_mask(Float64)
+const EXP_MASK = Base.exponent_mask(Float64) >> Base.significand_bits(Float64)
 
 memcpy(d, doff, s, soff, n) = ccall(:memcpy, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Int), d + doff - 1, s + soff - 1, n)
 memmove(d, doff, s, soff, n) = ccall(:memmove, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Int), d + doff - 1, s + soff - 1, n)
-
-uint(x::Float16) = Core.bitcast(UInt16, x)
-uint(x::Float32) = Core.bitcast(UInt32, x)
-uint(x::Float64) = Core.bitcast(UInt64, x)
-
-mantissabits(::Type{Float16}) = 10
-mantissabits(::Type{Float32}) = 23
-mantissabits(::Type{Float64}) = 52
-
-exponentbits(::Type{Float16}) = 5
-exponentbits(::Type{Float32}) = 8
-exponentbits(::Type{Float64}) = 11
-
-bias(::Type{Float16}) = 15
-bias(::Type{Float32}) = 127
-bias(::Type{Float64}) = 1023
 
 pow5_bitcount(::Type{Float16}) = 30
 pow5_bitcount(::Type{Float32}) = 61
@@ -36,16 +20,58 @@ qbound(::Type{Float16}) = 15
 qbound(::Type{Float32}) = 31
 qbound(::Type{Float64}) = 63
 
+"""
+    Ryu.log10pow2(e::Integer)
+
+Computes `floor(log10(2^e))`. This is valid for all `e < 1651`.
+"""
 log10pow2(e) = (e * 78913) >> 18
+
+
+"""
+    Ryu.log10pow5(e::Integer)
+
+Computes `floor(log10(5^e))`. This is valid for all `e < 2621`.
+"""
 log10pow5(e) = (e * 732923) >> 20
+
+"""
+    Ryu.pow5bits(e)
+
+Computes `e == 0 ? 1 : ceil(log2(5^e))`. This is valid for `e < 3529` (if performend in `Int32` arithmetic).
+"""
 pow5bits(e) = ((e * 1217359) >> 19) + 1
+
+""""
+     Ryu.mulshift(m::UInt64, mula, mulb, j)::UInt64
+
+Compute `(m * mul) >> j`, where `mul = mula + mulb<<64` and `j >= 64`.
+"""
 @inline mulshift(m::UInt64, mula, mulb, j) = ((((UInt128(m) * mula) >> 64) + UInt128(m) * mulb) >> (j - 64)) % UInt64
+
+""""
+     Ryu.mulshift(m::UInt32, mul, j)::UInt32
+
+Compute `(m * mul) >> j`, where `j >= 32`.
+"""
 @inline mulshift(m::UInt32, mul, j) = ((((UInt64(m) * (mul % UInt32)) >> 32) + (UInt64(m) * (mul >> 32))) >> (j - 32)) % UInt32
+
+""""
+     Ryu.mulshift(m::UInt16, mul, j)::UInt16
+
+Compute `(m * mul) >> j`, where `j >= 16`.
+"""
 @inline mulshift(m::UInt16, mul, j) = ((((UInt32(m) * (mul % UInt16)) >> 16) + (UInt32(m) * (mul >> 16))) >> (j - 16))
+
 indexforexp(e) = div(e + 15, 16)
 pow10bitsforindex(idx) = 16 * idx + 120
 lengthforindex(idx) = div(((Int64(16 * idx) * 1292913986) >> 32) + 1 + 16 + 8, 9)
 
+"""
+    Ryu.pow5(x, p)
+
+Return `true` if `5^p` is a divisor of `x`.
+"""
 @inline function pow5(x, p)
     count = 0
     while true
@@ -57,8 +83,18 @@ lengthforindex(idx) = div(((Int64(16 * idx) * 1292913986) >> 32) + 1 + 16 + 8, 9
     end
 end
 
+"""
+    Ryu.pow2(x, p)
+
+Return `true` if `2^p` is a divisor of `x`. In other words, if the trailing `p` bits of `x` are zero.
+"""
 pow2(x, p) = (x & ((Int64(1) << p) - 1)) == 0
 
+"""
+    Ryu.decimallength(v)
+
+The number of decimal digits of the integer `v`.
+"""
 @inline function decimallength(v)
     v >= 10000000000000000 && return 17
     v >= 1000000000000000 && return 16
@@ -78,7 +114,6 @@ pow2(x, p) = (x & ((Int64(1) << p) - 1)) == 0
     v >= 10 && return 2
     return 1
 end
-
 @inline function decimallength(v::UInt32)
     v >= 100000000 && return 9
     v >= 10000000 && return 8
@@ -90,7 +125,6 @@ end
     v >= 10 && return 2
     return 1
 end
-
 @inline function decimallength(v::UInt16)
     v >= 10000 && return 5
     v >= 1000 && return 4
@@ -147,6 +181,11 @@ end
     return vr, vp, vm
 end
 
+"""
+    Ryu.umul256(a::UInt128, bHi::UInt64, bLo::UInt64)::Tuple{UInt128, UInt128}
+
+Compute `p = a*b` where `b = bLo + bHi<<64`, returning the result as `pLo, pHi` where `p = pLo + pHi<<128`.
+"""
 @inline function umul256(a, bHi, bLo)
     aLo = a % UInt64
     aHi = (a >> 64) % UInt64
@@ -172,8 +211,18 @@ end
     return pLo, pHi
 end
 
+"""
+    Ryu.umul256_hi(a::UInt128, bHi::UInt64, bLo::UInt64)::UInt128
+
+Compute `pHi = (a*b)>>128` where `b = bLo + bHi<<64`.
+"""
 @inline umul256_hi(a, bHi, bLo) = umul256(a, bHi, bLo)[2]
 
+"""
+    Ryu.mulshiftmod1e9(m, mula, mulb, mulc, j)::UInt32
+
+Compute `(m * mul) >> j % 10^9` where `mul = mula + mulb<<64 + mulc<<128`, and `j >= 128`.
+"""
 @inline function mulshiftmod1e9(m, mula, mulb, mulc, j)
     b0 = UInt128(m) * mula
     b1 = UInt128(m) * mulb
@@ -323,40 +372,38 @@ end
 
 const POW10_OFFSET_2, MIN_BLOCK_2, POW10_SPLIT_2 = generateinversetables()
 
-bitlength(this) = Base.GMP.MPZ.sizeinbase(this, 2)
-
 @inline function pow5invsplit(::Type{Float64}, i)
     pow = big(5)^i
-    inv = div(big(1) << (bitlength(pow) - 1 + pow5_inv_bitcount(Float64)), pow) + 1
+    inv = div(big(1) << (ndigits(pow, base=2) - 1 + pow5_inv_bitcount(Float64)), pow) + 1
     return (UInt64(inv & ((big(1) << 64) - 1)), UInt64(inv >> 64))
 end
 
 @inline function pow5invsplit(::Type{Float32}, i)
     pow = big(5)^i
-    inv = div(big(1) << (bitlength(pow) - 1 + pow5_inv_bitcount(Float32)), pow) + 1
+    inv = div(big(1) << (ndigits(pow, base=2) - 1 + pow5_inv_bitcount(Float32)), pow) + 1
     return UInt64(inv)
 end
 
 @inline function pow5invsplit(::Type{Float16}, i)
     pow = big(5)^i
-    inv = div(big(1) << (bitlength(pow) - 1 + pow5_inv_bitcount(Float16)), pow) + 1
+    inv = div(big(1) << (ndigits(pow, base=2) - 1 + pow5_inv_bitcount(Float16)), pow) + 1
     return UInt32(inv)
 end
 
 @inline function pow5split(::Type{Float64}, i)
     pow = big(5)^i
-    j = bitlength(pow) - pow5_bitcount(Float64)
+    j = ndigits(pow, base=2) - pow5_bitcount(Float64)
     return (UInt64((pow >> j) & ((big(1) << 64) - 1)), UInt64(pow >> (j + 64)))
 end
 
 @inline function pow5split(::Type{Float32}, i)
     pow = big(5)^i
-    return UInt64(pow >> (bitlength(pow) - pow5_bitcount(Float32)))
+    return UInt64(pow >> (ndigits(pow, base=2) - pow5_bitcount(Float32)))
 end
 
 @inline function pow5split(::Type{Float16}, i)
     pow = big(5)^i
-    return UInt32(pow >> (bitlength(pow) - pow5_bitcount(Float16)))
+    return UInt32(pow >> (ndigits(pow, base=2) - pow5_bitcount(Float16)))
 end
 
 const DOUBLE_POW5_INV_SPLIT = map(i->pow5invsplit(Float64, i), 0:291)

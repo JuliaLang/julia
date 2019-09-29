@@ -1359,7 +1359,7 @@ end
 ## Basis for null space
 
 """
-    nullspace(M; atol::Real=0, rtol::Rea=atol>0 ? 0 : n*ϵ)
+    nullspace(M; atol::Real=0, rtol::Real=atol>0 ? 0 : n*ϵ)
     nullspace(M, rtol::Real) = nullspace(M; rtol=rtol) # to be deprecated in Julia 2.0
 
 Computes a basis for the nullspace of `M` by including the singular

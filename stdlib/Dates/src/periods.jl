@@ -75,12 +75,10 @@ for op in (:+, :-, :lcm, :gcd)
     @eval ($op)(x::P, y::P) where {P<:Period} = P(($op)(value(x), value(y)))
 end
 
-for op in (:/, :div, :fld)
-    @eval begin
-        ($op)(x::P, y::P) where {P<:Period} = ($op)(value(x), value(y))
-        ($op)(x::P, y::Real) where {P<:Period} = P(($op)(value(x), Int64(y)))
-    end
-end
+/(x::P, y::P) where {P<:Period} = /(value(x), value(y))
+/(x::P, y::Real) where {P<:Period} = P(/(value(x), Int64(y)))
+div(x::P, y::P, r::RoundingMode) where {P<:Period} = div(value(x), value(y), r)
+div(x::P, y::Real, r::RoundingMode) where {P<:Period} = P(div(value(x), Int64(y), r))
 
 for op in (:rem, :mod)
     @eval begin
