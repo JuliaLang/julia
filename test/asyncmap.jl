@@ -5,11 +5,35 @@ using Random
 # Test asyncmap
 @test allunique(asyncmap(x->(sleep(1.0);objectid(current_task())), 1:10))
 
-# num tasks
-@test length(unique(asyncmap(x->(yield();objectid(current_task())), 1:20; ntasks=5))) == 5
+# num tasks; note that ntasks was reinterpreted as the max allowed concurrent
+# tasks instead of the number of tasks objects.
+@test length(unique(asyncmap(x->(yield();objectid(current_task())), 1:20; ntasks=5))) == 20
+
+test_ntasks(itr, n) = let concur = 0, max_concur = 0
+    asyncmap(itr; ntasks=n) do _
+        concur += 1
+        max_concur = max(concur, max_concur)
+        yield()
+        concur -= 1
+    end
+
+    m = if n isa Function
+        n()
+    else
+        (n === 0 ? 100 : n)
+    end
+
+    max_concur, m
+end
+
+(max_concur, actual) = test_ntasks(1:20, 5)
+@test max_concur == actual
 
 # default num tasks
-@test length(unique(asyncmap(x->(yield();objectid(current_task())), 1:200))) == 100
+@test length(unique(asyncmap(x->(yield();objectid(current_task())), 1:200))) == 200
+
+(max_concur, actual) = test_ntasks(1:200, 0)
+@test max_concur == actual
 
 # ntasks as a function
 let nt=0
@@ -18,7 +42,10 @@ let nt=0
                                            # nt_func() will be called initially once and then for every
                                            # iteration
 end
-@test length(unique(asyncmap(x->(yield();objectid(current_task())), 1:200; ntasks=nt_func))) == 7
+@test length(unique(asyncmap(x->(yield();objectid(current_task())), 1:200; ntasks=nt_func))) == 200
+
+(max_concur, actual) = test_ntasks(1:200, nt_func)
+@test max_concur == actual
 
 # batch mode tests
 let ctr=0
