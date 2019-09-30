@@ -401,6 +401,29 @@ so that the `dims` argument (ordinarily a `Dims` size-tuple) can accept `Abstrac
 perhaps range-types `Ind` of your own design. For more information, see
 [Arrays with custom indices](@ref man-custom-indices).
 
+Sometimes you need to wrap a standard array into an extra type to be able to dispatch on this type but without 
+the need of any real changes to the standard array behavior.
+The following example introduces such a wrapper type and ensures that the new type will work at the same 
+speed as a standard array type.
+The key point is the `Base.@propagate_inbounds` which allows predefined functions like `sum` 
+to skip bounds checking as they do for a standard array.
+
+```jldoctest wrapperarray
+julia> mutable struct MyArray{T,N} <: AbstractArray{T,N}
+           a::Array{T,N}
+       end
+
+julia> Base.size(A::MyArray) = size(A.a)
+
+julia> Base.@propagate_inbounds Base.getindex(A::MyArray, i...) = getindex(A.
+a, i...)
+
+julia> Base.@propagate_inbounds Base.setindex!(A::MyArray, v, i...) = setinde
+x!(A.a, v, i...)
+
+julia> Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
+```
+
 ## [Strided Arrays](@id man-interface-strided-arrays)
 
 | Methods to implement                            |                                        | Brief description                                                                     |
