@@ -869,7 +869,7 @@ Return the method table for `f`.
 If `types` is specified, return an array of methods whose types match.
 If `module` is specified, return an array of methods defined in this module.
 """
-function methods(@nospecialize(f), @nospecialize(t), mod::Union{Module,Nothing})
+function methods(@nospecialize(f), @nospecialize(t), mod::Union{Module,Nothing}=nothing)
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
