@@ -22,7 +22,8 @@ import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
 
 using .Base: sign_mask, exponent_mask, exponent_one,
             exponent_half, uinttype, significand_mask,
-            significand_bits, exponent_bits
+            significand_bits, exponent_bits, exponent_bias,
+            exponent_max, exponent_raw_max
 
 using Core.Intrinsics: sqrt_llvm
 
@@ -36,14 +37,6 @@ end
     throw(DomainError(x, string("Exponentiation yielding a complex result requires a ",
                                 "complex argument.\nReplace x^y with (x+0im)^y, ",
                                 "Complex(x)^y, or similar.")))
-end
-
-for T in (Float16, Float32, Float64)
-    @eval exponent_bias(::Type{$T}) = $(Int(exponent_one(T) >> significand_bits(T)))
-    # maximum float exponent
-    @eval exponent_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T))
-    # maximum float exponent without bias
-    @eval exponent_raw_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)))
 end
 
 # non-type specific math functions
@@ -754,35 +747,6 @@ function frexp(x::T) where T<:IEEEFloat
     xu = (xu & ~exponent_mask(T)) | exponent_half(T)
     return reinterpret(T, xu), k
 end
-
-"""
-    rem(x, y, r::RoundingMode)
-
-Compute the remainder of `x` after integer division by `y`, with the quotient rounded
-according to the rounding mode `r`. In other words, the quantity
-
-    x - y*round(x/y,r)
-
-without any intermediate rounding.
-
-- if `r == RoundNearest`, then the result is exact, and in the interval
-  ``[-|y|/2, |y|/2]``. See also [`RoundNearest`](@ref).
-
-- if `r == RoundToZero` (default), then the result is exact, and in the interval
-  ``[0, |y|)`` if `x` is positive, or ``(-|y|, 0]`` otherwise. See also [`RoundToZero`](@ref).
-
-- if `r == RoundDown`, then the result is in the interval ``[0, y)`` if `y` is positive, or
-  ``(y, 0]`` otherwise. The result may not be exact if `x` and `y` have different signs, and
-  `abs(x) < abs(y)`. See also[`RoundDown`](@ref).
-
-- if `r == RoundUp`, then the result is in the interval `(-y,0]` if `y` is positive, or
-  `[0,-y)` otherwise. The result may not be exact if `x` and `y` have the same sign, and
-  `abs(x) < abs(y)`. See also [`RoundUp`](@ref).
-
-"""
-rem(x, y, ::RoundingMode{:ToZero}) = rem(x,y)
-rem(x, y, ::RoundingMode{:Down}) = mod(x,y)
-rem(x, y, ::RoundingMode{:Up}) = mod(x,-y)
 
 rem(x::Float64, y::Float64, ::RoundingMode{:Nearest}) =
     ccall((:remainder, libm),Float64,(Float64,Float64),x,y)

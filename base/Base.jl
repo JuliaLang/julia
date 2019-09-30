@@ -116,6 +116,7 @@ include("namedtuple.jl")
 include("hashing.jl")
 include("rounding.jl")
 using .Rounding
+include("div.jl")
 include("float.jl")
 include("twiceprecision.jl")
 include("complex.jl")

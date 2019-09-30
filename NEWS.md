@@ -19,7 +19,7 @@ Multi-threading changes
 
 Build system changes
 --------------------
-
+* Windows build installer has switched to Inno Setup. Installer command line parameters have thus changed. For example, to extract the installer to a specific directory, the command line parameter is now `/DIR=x:\dirname`. Use `julia-installer.exe /?` to list all new command line parameters.
 
 New library functions
 ---------------------
@@ -36,6 +36,8 @@ Standard library changes
 
 * The methods of `mktemp` and `mktempdir` which take a function body to pass temporary paths to no longer throw errors if the path is already deleted when the function body returns ([#33091]).
 
+* `div` now accepts a rounding mode as the third argument, consistent with the corresponding argument to `rem`. Support for rounding division, by passing one of the RoundNearest modes to this function, was added. For future compatibility, library authors should now extend this function, rather than extending the two-argument `fld`/`cld`/`div` directly. ([#33040])
+
 * Verbose `display` of `Char` (`text/plain` output) now shows the codepoint value in standard-conforming `"U+XXXX"` format ([#33291]).
 
 #### Libdl
@@ -48,11 +50,12 @@ Standard library changes
 
 #### Random
 
-
 * `AbstractRNG`s now behave like scalars when used in broadcasting ([#33213]).
 
 * Products involving sparse arrays now allow more general sparse `eltype`s, such as `StaticArrays` ([#33205])
 
+* The performance of `rand(::Tuple)` is improved in some cases ([#32208]). As a consequence, the
+  stream of generated values produced for a given seed has changed.
 
 #### SparseArrays
 

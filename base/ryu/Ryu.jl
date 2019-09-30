@@ -1,10 +1,17 @@
 module Ryu
 
+import .Base: significand_bits, exponent_bits, exponent_bias
+
 include("utils.jl")
 include("shortest.jl")
 include("fixed.jl")
 include("exp.jl")
 
+"""
+    Ryu.neededdigits(T)
+
+Number of digits necessary to represent type `T` in fixed-precision decimal.
+"""
 neededdigits(::Type{Float64}) = 309 + 17
 neededdigits(::Type{Float32}) = 39 + 9 + 2
 neededdigits(::Type{Float16}) = 9 + 5 + 9

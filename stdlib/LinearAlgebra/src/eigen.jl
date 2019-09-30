@@ -18,12 +18,12 @@ Iterating the decomposition produces the components `F.values` and `F.vectors`.
 ```jldoctest
 julia> F = eigen([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
 Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}
-eigenvalues:
+values:
 3-element Array{Float64,1}:
   1.0
   3.0
  18.0
-eigenvectors:
+vectors:
 3×3 Array{Float64,2}:
  1.0  0.0  0.0
  0.0  1.0  0.0
@@ -84,11 +84,11 @@ julia> B = [0 1; 1 0]
 
 julia> F = eigen(A, B)
 GeneralizedEigen{Complex{Float64},Complex{Float64},Array{Complex{Float64},2},Array{Complex{Float64},1}}
-eigenvalues:
+values:
 2-element Array{Complex{Float64},1}:
  0.0 - 1.0im
  0.0 + 1.0im
-eigenvectors:
+vectors:
 2×2 Array{Complex{Float64},2}:
   0.0+1.0im   0.0-1.0im
  -1.0+0.0im  -1.0-0.0im
@@ -202,12 +202,12 @@ accept a `sortby` keyword.
 ```jldoctest
 julia> F = eigen([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
 Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}
-eigenvalues:
+values:
 3-element Array{Float64,1}:
   1.0
   3.0
  18.0
-eigenvectors:
+vectors:
 3×3 Array{Float64,2}:
  1.0  0.0  0.0
  0.0  1.0  0.0
@@ -608,9 +608,9 @@ eigvecs(A::AbstractMatrix, B::AbstractMatrix; kws...) = eigvecs(eigen(A, B; kws.
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{Eigen,GeneralizedEigen})
     summary(io, F); println(io)
-    println(io, "eigenvalues:")
+    println(io, "values:")
     show(io, mime, F.values)
-    println(io, "\neigenvectors:")
+    println(io, "\nvectors:")
     show(io, mime, F.vectors)
 end
 

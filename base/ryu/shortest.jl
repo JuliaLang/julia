@@ -75,15 +75,15 @@
         return pos + neg + 3 + (typed && x isa Union{Float32, Float16} ? 2 : 0)
     end
 
-    bits = uint(x)
-    mant = bits & (oftype(bits, 1) << mantissabits(T) - oftype(bits, 1))
-    exp = Int((bits >> mantissabits(T)) & ((Int64(1) << exponentbits(T)) - 1))
-    m2 = oftype(bits, Int64(1) << mantissabits(T)) | mant
-    e2 = exp - bias(T) - mantissabits(T)
+    bits = reinterpret(Unsigned, x)
+    mant = bits & (oftype(bits, 1) << significand_bits(T) - oftype(bits, 1))
+    exp = Int((bits >> significand_bits(T)) & ((Int64(1) << exponent_bits(T)) - 1))
+    m2 = oftype(bits, Int64(1) << significand_bits(T)) | mant
+    e2 = exp - exponent_bias(T) - significand_bits(T)
     fraction = m2 & ((oftype(bits, 1) << -e2) - 1)
     if e2 > 0 || e2 < -52 || fraction != 0
         if exp == 0
-            e2 = 1 - bias(T) - mantissabits(T) - 2
+            e2 = 1 - exponent_bias(T) - significand_bits(T) - 2
             m2 = mant
         else
             e2 -= 2
