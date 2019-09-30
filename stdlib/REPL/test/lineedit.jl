@@ -8,12 +8,10 @@ import REPL.LineEdit: edit_insert, buffer, content, setmark, getmark, region
 include("FakeTerminals.jl")
 import .FakeTerminals.FakeTerminal
 
-const BASE_TEST_PATH = joinpath(@__DIR__, "..", "..", "..", "test")
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
-import .Main.TestHelpers
-
 # no need to have animation in tests
-REPL.GlobalOptions.region_animation_duration=0.001
+REPL.GlobalOptions.region_animation_duration=0.0001
+# tests are inserting code much faster than humans
+REPL.GlobalOptions.auto_indent_time_threshold = -0.0
 
 ## helper functions
 

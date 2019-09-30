@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <pthread.h>
+#include <errno.h>
 #if defined(_OS_DARWIN_) && !defined(MAP_ANONYMOUS)
 #define MAP_ANONYMOUS MAP_ANON
 #endif
@@ -80,6 +81,8 @@ static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *
 #endif
 }
 
+// Modify signal context `_ctx` so that `fptr` will execute when the signal
+// returns. `fptr` will execute on the signal stack, and must not return.
 static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_ctx)
 {
     // Modifying the ucontext should work but there is concern that
@@ -89,6 +92,14 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
     // checks that the syscall is made in the signal handler and that
     // the ucontext address is valid. Hopefully the value of the ucontext
     // will not be part of the validation...
+    if (!ptls->signal_stack) {
+        sigset_t sset;
+        sigemptyset(&sset);
+        sigaddset(&sset, sig);
+        sigprocmask(SIG_UNBLOCK, &sset, NULL);
+        fptr();
+        return;
+    }
     uintptr_t rsp = (uintptr_t)ptls->signal_stack + sig_stack_size;
     assert(rsp % 16 == 0);
 #if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
@@ -165,22 +176,22 @@ static void jl_throw_in_ctx(jl_ptls_t ptls, jl_value_t *e, int sig, void *sigctx
 {
     if (!ptls->safe_restore)
         ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE,
-                                          jl_to_bt_context(sigctx));
-    ptls->exception_in_transit = e;
-    jl_call_in_ctx(ptls, &jl_rethrow, sig, sigctx);
+                                          jl_to_bt_context(sigctx), 1);
+    ptls->sig_exception = e;
+    jl_call_in_ctx(ptls, &jl_sig_throw, sig, sigctx);
 }
 
 static pthread_t signals_thread;
 
 static int is_addr_on_stack(jl_ptls_t ptls, void *addr)
 {
-#ifdef COPY_STACKS
-    return ((char*)addr > (char*)ptls->stack_lo-3000000 &&
-            (char*)addr < (char*)ptls->stack_hi);
-#else
-    return ((char*)addr > (char*)ptls->current_task->stkbuf &&
-            (char*)addr < (char*)ptls->current_task->stkbuf + ptls->current_task->ssize);
-#endif
+    jl_task_t *t = ptls->current_task;
+    if (t->copy_stack)
+        return ((char*)addr > (char*)ptls->stackbase - ptls->stacksize &&
+                (char*)addr < (char*)ptls->stackbase);
+    else
+        return ((char*)addr > (char*)t->stkbuf &&
+                (char*)addr < (char*)t->stkbuf + t->bufsz);
 }
 
 static void sigdie_handler(int sig, siginfo_t *info, void *context)
@@ -226,12 +237,10 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
     assert(sig == SIGSEGV || sig == SIGBUS);
 
     if (jl_addr_is_safepoint((uintptr_t)info->si_addr)) {
-#ifdef JULIA_ENABLE_THREADING
         jl_set_gc_and_wait();
         // Do not raise sigint on worker thread
         if (ptls->tid != 0)
             return;
-#endif
         if (ptls->defer_signal) {
             jl_safepoint_defer_sigint();
         }
@@ -569,7 +578,6 @@ static void *signal_listener(void *arg)
     }
 #endif
     while (1) {
-        profile = 0;
         sig = 0;
         errno = 0;
 #ifdef HAVE_KEVENT
@@ -660,16 +668,29 @@ static void *signal_listener(void *arg)
             if (critical) {
                 bt_size += rec_backtrace_ctx(bt_data + bt_size,
                         JL_MAX_BT_SIZE / jl_n_threads - 1,
-                        signal_context);
+                        signal_context, 0);
                 bt_data[bt_size++] = 0;
             }
 
             // do backtrace for profiler
             if (profile && running) {
                 if (bt_size_cur < bt_size_max - 1) {
-                    // Get backtrace data
-                    bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
-                            bt_size_max - bt_size_cur - 1, signal_context);
+                    // unwinding can fail, so keep track of the current state
+                    // and restore from the SEGV handler if anything happens.
+                    jl_ptls_t ptls = jl_get_ptls_states();
+                    jl_jmp_buf *old_buf = ptls->safe_restore;
+                    jl_jmp_buf buf;
+
+                    ptls->safe_restore = &buf;
+                    if (jl_setjmp(buf, 0)) {
+                        jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
+                    } else {
+                        // Get backtrace data
+                        bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
+                                bt_size_max - bt_size_cur - 1, signal_context, 0);
+                    }
+                    ptls->safe_restore = old_buf;
+
                     // Mark the end of this block with 0
                     bt_data_prof[bt_size_cur++] = 0;
                 }

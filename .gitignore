@@ -3,6 +3,7 @@
 /dist
 /dist-extras
 /julia
+/julia.bat
 /usr
 /oprofile_data
 /usr-staging
@@ -23,6 +24,7 @@
 *.jl.cov
 *.jl.*.cov
 *.jl.mem
+*.jl.*.mem
 *.ji
 
 /perf*

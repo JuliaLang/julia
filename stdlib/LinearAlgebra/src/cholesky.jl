@@ -12,7 +12,7 @@
 # matrix types, the unblocked Julia implementation in _chol! is used. For cholesky
 # and cholesky! pivoting is supported through a Val(Bool) argument. A type argument is
 # necessary for type stability since the output of cholesky and cholesky! is either
-# Cholesky or PivotedCholesky. The latter is only
+# Cholesky or CholeskyPivoted. The latter is only
 # supported for the four LAPACK element types. For other types, e.g. BigFloats Val(true) will
 # give an error. It is required that the input is Hermitian (including real symmetric) either
 # through the Hermitian and Symmetric views or exact symmetric or Hermitian elements which
@@ -27,22 +27,95 @@
 # the cost would be extra unnecessary/unused fields for the unpivoted Cholesky and runtime
 # checks of those fields before calls to LAPACK to check which version of the Cholesky
 # factorization the type represents.
+"""
+    Cholesky <: Factorization
 
+Matrix factorization type of the Cholesky factorization of a dense symmetric/Hermitian
+positive definite matrix `A`. This is the return type of [`cholesky`](@ref),
+the corresponding matrix factorization function.
+
+The triangular Cholesky factor can be obtained from the factorization `F::Cholesky`
+via `F.L` and `F.U`.
+
+# Examples
+```jldoctest
+julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
+3×3 Array{Float64,2}:
+   4.0   12.0  -16.0
+  12.0   37.0  -43.0
+ -16.0  -43.0   98.0
+
+julia> C = cholesky(A)
+Cholesky{Float64,Array{Float64,2}}
+U factor:
+3×3 UpperTriangular{Float64,Array{Float64,2}}:
+ 2.0  6.0  -8.0
+  ⋅   1.0   5.0
+  ⋅    ⋅    3.0
+
+julia> C.U
+3×3 UpperTriangular{Float64,Array{Float64,2}}:
+ 2.0  6.0  -8.0
+  ⋅   1.0   5.0
+  ⋅    ⋅    3.0
+
+julia> C.L
+3×3 LowerTriangular{Float64,Array{Float64,2}}:
+  2.0   ⋅    ⋅
+  6.0  1.0   ⋅
+ -8.0  5.0  3.0
+
+julia> C.L * C.U == A
+true
+```
+"""
 struct Cholesky{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     uplo::Char
     info::BlasInt
 
     function Cholesky{T,S}(factors, uplo, info) where {T,S<:AbstractMatrix}
-        @assert !has_offset_axes(factors)
+        require_one_based_indexing(factors)
         new(factors, uplo, info)
     end
 end
-Cholesky(A::AbstractMatrix{T}, uplo::Symbol, info::BlasInt) where {T} =
+Cholesky(A::AbstractMatrix{T}, uplo::Symbol, info::Integer) where {T} =
     Cholesky{T,typeof(A)}(A, char_uplo(uplo), info)
-Cholesky(A::AbstractMatrix{T}, uplo::AbstractChar, info::BlasInt) where {T} =
+Cholesky(A::AbstractMatrix{T}, uplo::AbstractChar, info::Integer) where {T} =
     Cholesky{T,typeof(A)}(A, uplo, info)
 
+"""
+    CholeskyPivoted
+
+Matrix factorization type of the pivoted Cholesky factorization of a dense symmetric/Hermitian
+positive semi-definite matrix `A`. This is the return type of [`cholesky(_, Val(true))`](@ref),
+the corresponding matrix factorization function.
+
+The triangular Cholesky factor can be obtained from the factorization `F::CholeskyPivoted`
+via `F.L` and `F.U`.
+
+# Examples
+```jldoctest
+julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
+3×3 Array{Float64,2}:
+   4.0   12.0  -16.0
+  12.0   37.0  -43.0
+ -16.0  -43.0   98.0
+
+julia> C = cholesky(A, Val(true))
+CholeskyPivoted{Float64,Array{Float64,2}}
+U factor with rank 3:
+3×3 UpperTriangular{Float64,Array{Float64,2}}:
+ 9.89949  -4.34366  -1.61624
+  ⋅        4.25825   1.1694
+  ⋅         ⋅        0.142334
+permutation:
+3-element Array{Int64,1}:
+ 3
+ 2
+ 1
+```
+"""
 struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     uplo::Char
@@ -52,12 +125,12 @@ struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
     info::BlasInt
 
     function CholeskyPivoted{T,S}(factors, uplo, piv, rank, tol, info) where {T,S<:AbstractMatrix}
-        @assert !has_offset_axes(factors)
+        require_one_based_indexing(factors)
         new(factors, uplo, piv, rank, tol, info)
     end
 end
-function CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::Vector{BlasInt},
-                            rank::BlasInt, tol::Real, info::BlasInt) where T
+function CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::Vector{<:Integer},
+                            rank::Integer, tol::Real, info::Integer) where T
     CholeskyPivoted{T,typeof(A)}(A, uplo, piv, rank, tol, info)
 end
 
@@ -85,7 +158,7 @@ end
 
 ## Non BLAS/LAPACK element types (generic)
 function _chol!(A::AbstractMatrix, ::Type{UpperTriangular})
-    @assert !has_offset_axes(A)
+    require_one_based_indexing(A)
     n = checksquare(A)
     @inbounds begin
         for k = 1:n
@@ -109,7 +182,7 @@ function _chol!(A::AbstractMatrix, ::Type{UpperTriangular})
     return UpperTriangular(A), convert(BlasInt, 0)
 end
 function _chol!(A::AbstractMatrix, ::Type{LowerTriangular})
-    @assert !has_offset_axes(A)
+    require_one_based_indexing(A)
     n = checksquare(A)
     @inbounds begin
         for k = 1:n
@@ -171,7 +244,7 @@ julia> A = [1 2; 2 50]
  2  50
 
 julia> cholesky!(A)
-ERROR: InexactError: Int64(Int64, 6.782329983125268)
+ERROR: InexactError: Int64(6.782329983125268)
 Stacktrace:
 [...]
 ```
@@ -283,7 +356,7 @@ Compute the pivoted Cholesky factorization of a dense symmetric positive semi-de
 and return a `CholeskyPivoted` factorization. The matrix `A` can either be a [`Symmetric`](@ref)
 or [`Hermitian`](@ref) `StridedMatrix` or a *perfectly* symmetric or Hermitian `StridedMatrix`.
 The triangular Cholesky factor can be obtained from the factorization `F` with: `F.L` and `F.U`.
-The following functions are available for `PivotedCholesky` objects:
+The following functions are available for `CholeskyPivoted` objects:
 [`size`](@ref), [`\\`](@ref), [`inv`](@ref), [`det`](@ref), and [`rank`](@ref).
 The argument `tol` determines the tolerance for determining the rank.
 For negative values, the tolerance is the machine precision.
@@ -340,11 +413,11 @@ function getproperty(C::Cholesky, d::Symbol)
     Cuplo    = getfield(C, :uplo)
     info     = getfield(C, :info)
     if d == :U
-        return UpperTriangular(Symbol(Cuplo) == d ? Cfactors : copy(Cfactors'))
+        return UpperTriangular(Cuplo === char_uplo(d) ? Cfactors : copy(Cfactors'))
     elseif d == :L
-        return LowerTriangular(Symbol(Cuplo) == d ? Cfactors : copy(Cfactors'))
+        return LowerTriangular(Cuplo === char_uplo(d) ? Cfactors : copy(Cfactors'))
     elseif d == :UL
-        return (Symbol(Cuplo) == :U ? UpperTriangular(Cfactors) : LowerTriangular(Cfactors))
+        return (Cuplo === 'U' ? UpperTriangular(Cfactors) : LowerTriangular(Cfactors))
     else
         return getfield(C, d)
     end
@@ -356,9 +429,9 @@ function getproperty(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
     if d == :U
-        return UpperTriangular(Symbol(Cuplo) == d ? Cfactors : copy(Cfactors'))
+        return UpperTriangular(sym_uplo(Cuplo) == d ? Cfactors : copy(Cfactors'))
     elseif d == :L
-        return LowerTriangular(Symbol(Cuplo) == d ? Cfactors : copy(Cfactors'))
+        return LowerTriangular(sym_uplo(Cuplo) == d ? Cfactors : copy(Cfactors'))
     elseif d == :p
         return getfield(C, :piv)
     elseif d == :P
@@ -379,7 +452,7 @@ issuccess(C::Cholesky) = C.info == 0
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:AbstractMatrix})
     if issuccess(C)
-        println(io, summary(C))
+        summary(io, C); println(io)
         println(io, "$(C.uplo) factor:")
         show(io, mime, C.UL)
     else
@@ -388,7 +461,7 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:Abst
 end
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, C::CholeskyPivoted{<:Any,<:AbstractMatrix})
-    println(io, summary(C))
+    summary(io, C); println(io)
     println(io, "$(C.uplo) factor with rank $(rank(C)):")
     show(io, mime, C.uplo == 'U' ? C.U : C.L)
     println(io, "\npermutation:")
@@ -424,21 +497,56 @@ end
 function ldiv!(C::CholeskyPivoted, B::StridedVector)
     if C.uplo == 'L'
         ldiv!(adjoint(LowerTriangular(C.factors)),
-            ldiv!(LowerTriangular(C.factors), B[C.piv]))[invperm(C.piv)]
+            ldiv!(LowerTriangular(C.factors), permute!(B, C.piv)))
     else
         ldiv!(UpperTriangular(C.factors),
-            ldiv!(adjoint(UpperTriangular(C.factors)), B[C.piv]))[invperm(C.piv)]
+            ldiv!(adjoint(UpperTriangular(C.factors)), permute!(B, C.piv)))
     end
+    invpermute!(B, C.piv)
 end
 
 function ldiv!(C::CholeskyPivoted, B::StridedMatrix)
+    n = size(C, 1)
+    for i in 1:size(B, 2)
+        permute!(view(B, 1:n, i), C.piv)
+    end
     if C.uplo == 'L'
         ldiv!(adjoint(LowerTriangular(C.factors)),
-            ldiv!(LowerTriangular(C.factors), B[C.piv,:]))[invperm(C.piv),:]
+            ldiv!(LowerTriangular(C.factors), B))
     else
         ldiv!(UpperTriangular(C.factors),
-            ldiv!(adjoint(UpperTriangular(C.factors)), B[C.piv,:]))[invperm(C.piv),:]
+            ldiv!(adjoint(UpperTriangular(C.factors)), B))
     end
+    for i in 1:size(B, 2)
+        invpermute!(view(B, 1:n, i), C.piv)
+    end
+    B
+end
+
+function rdiv!(B::StridedMatrix, C::Cholesky{<:Any,<:AbstractMatrix})
+    if C.uplo == 'L'
+        return rdiv!(rdiv!(B, adjoint(LowerTriangular(C.factors))), LowerTriangular(C.factors))
+    else
+        return rdiv!(rdiv!(B, UpperTriangular(C.factors)), adjoint(UpperTriangular(C.factors)))
+    end
+end
+
+function LinearAlgebra.rdiv!(B::StridedMatrix, C::CholeskyPivoted)
+    n = size(C, 2)
+    for i in 1:size(B, 1)
+        permute!(view(B, i, 1:n), C.piv)
+    end
+    if C.uplo == 'L'
+        rdiv!(rdiv!(B, adjoint(LowerTriangular(C.factors))),
+            LowerTriangular(C.factors))
+    else
+        rdiv!(rdiv!(B, UpperTriangular(C.factors)),
+            adjoint(UpperTriangular(C.factors)))
+    end
+    for i in 1:size(B, 1)
+        invpermute!(view(B, i, 1:n), C.piv)
+    end
+    B
 end
 
 isposdef(C::Union{Cholesky,CholeskyPivoted}) = C.info == 0

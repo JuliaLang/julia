@@ -8,7 +8,7 @@ using LinearAlgebra: BlasReal, BlasFloat
 include("testutils.jl") # test_approx_eq_modphase
 
 n = 10 #Size of test matrix
-srand(1)
+Random.seed!(1)
 
 @testset for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     if relty <: AbstractFloat
@@ -44,9 +44,8 @@ srand(1)
         end
         @test eltype(Bidiagonal{elty}([1,2,3,4], [1.0f0,2.0f0,3.0f0], :U)) == elty
         @test isa(Bidiagonal{elty,Vector{elty}}(GenericArray(dv), ev, :U), Bidiagonal{elty,Vector{elty}})
-        # enable when deprecations for 0.7 are dropped
-        # @test_throws MethodError Bidiagonal(dv, GenericArray(ev), :U)
-        # @test_throws MethodError Bidiagonal(GenericArray(dv), ev, :U)
+        @test_throws MethodError Bidiagonal(dv, GenericArray(ev), :U)
+        @test_throws MethodError Bidiagonal(GenericArray(dv), ev, :U)
         BI = Bidiagonal([1,2,3,4], [1,2,3], :U)
         @test Bidiagonal(BI) === BI
         @test isa(Bidiagonal{elty}(BI), Bidiagonal{elty})
@@ -92,6 +91,12 @@ srand(1)
         @test similar(ubd, Int).uplo == ubd.uplo
         @test isa(similar(ubd, (3, 2)), SparseMatrixCSC)
         @test isa(similar(ubd, Int, (3, 2)), SparseMatrixCSC{Int})
+
+        # setindex! when off diagonal is zero bug
+        Bu = Bidiagonal(rand(elty, 10), zeros(elty, 9), 'U')
+        Bl = Bidiagonal(rand(elty, 10), zeros(elty, 9), 'L')
+        @test_throws ArgumentError Bu[5, 4] = 1
+        @test_throws ArgumentError Bl[4, 5] = 1
     end
 
     @testset "show" begin
@@ -151,6 +156,26 @@ srand(1)
             @test triu!(bidiagcopy(dv,ev,:U))    == Bidiagonal(dv,ev,:U)
             @test_throws ArgumentError triu!(bidiagcopy(dv, ev, :U), -n)
             @test_throws ArgumentError triu!(bidiagcopy(dv, ev, :U), n + 2)
+            @test !isdiag(Bidiagonal(dv,ev,:U))
+            @test !isdiag(Bidiagonal(dv,ev,:L))
+            @test isdiag(Bidiagonal(dv,zerosev,:U))
+            @test isdiag(Bidiagonal(dv,zerosev,:L))
+        end
+
+        @testset "iszero and isone" begin
+            for uplo in (:U, :L)
+                BDzero = Bidiagonal(zeros(elty, 10), zeros(elty, 9), uplo)
+                BDone = Bidiagonal(ones(elty, 10), zeros(elty, 9), uplo)
+                BDmix = Bidiagonal(zeros(elty, 10), zeros(elty, 9), uplo)
+                BDmix[end,end] = one(elty)
+
+                @test iszero(BDzero)
+                @test !isone(BDzero)
+                @test !iszero(BDone)
+                @test isone(BDone)
+                @test !iszero(BDmix)
+                @test !isone(BDmix)
+            end
         end
 
         Tfull = Array(T)
@@ -203,6 +228,9 @@ srand(1)
                 tx = Tfull \ b
                 @test_throws DimensionMismatch LinearAlgebra.naivesub!(T,Vector{elty}(undef,n+1))
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+                x = transpose(T) \ b
+                tx = transpose(Tfull) \ b
+                @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
                 @testset "Generic Mat-vec ops" begin
                     @test T*b ≈ Tfull*b
                     @test T'*b ≈ Tfull'*b
@@ -237,7 +265,7 @@ srand(1)
         @testset "Eigensystems" begin
             if relty <: AbstractFloat
                 d1, v1 = eigen(T)
-                d2, v2 = eigen(map(elty<:Complex ? ComplexF64 : Float64,Tfull))
+                d2, v2 = eigen(map(elty<:Complex ? ComplexF64 : Float64,Tfull), sortby=nothing)
                 @test (uplo == :U ? d1 : reverse(d1)) ≈ d2
                 if elty <: Real
                     test_approx_eq_modphase(v1, uplo == :U ? v2 : v2[:,n:-1:1])
@@ -282,9 +310,39 @@ srand(1)
             # test pass-through of mul! for AbstractTriangular*Bidiagonal
             Tri = UpperTriangular(diagm(1 => T.ev))
             @test Array(Tri*T) ≈ Array(Tri)*Array(T)
+            # test mul! for Diagonal*Bidiagonal
+            C = Matrix{elty}(undef, n, n)
+            Dia = Diagonal(T.dv)
+            @test mul!(C, Dia, T) ≈ Array(Dia)*Array(T)
+
+            # Issue #31870
+            # Bi/Tri/Sym times Diagonal
+            Diag = Diagonal(rand(elty, 10))
+            BidiagU = Bidiagonal(rand(elty, 10), rand(elty, 9), 'U')
+            BidiagL = Bidiagonal(rand(elty, 10), rand(elty, 9), 'L')
+            Tridiag = Tridiagonal(rand(elty, 9), rand(elty, 10), rand(elty, 9))
+            SymTri = SymTridiagonal(rand(elty, 10), rand(elty, 9))
+
+            mats = [Diag, BidiagU, BidiagL, Tridiag, SymTri]
+            for a in mats
+                for b in mats
+                    @test a*b ≈ Matrix(a)*Matrix(b)
+                end
+            end
+
+            @test typeof(BidiagU*Diag) <: Bidiagonal
+            @test typeof(BidiagL*Diag) <: Bidiagonal
+            @test typeof(Tridiag*Diag) <: Tridiagonal
+            @test typeof(SymTri*Diag)  <: Tridiagonal
+
+            @test typeof(BidiagU*Diag) <: Bidiagonal
+            @test typeof(Diag*BidiagL) <: Bidiagonal
+            @test typeof(Diag*Tridiag) <: Tridiagonal
+            @test typeof(Diag*SymTri)  <: Tridiagonal
         end
 
         @test inv(T)*Tfull ≈ Matrix(I, n, n)
+        @test factorize(T) === T
     end
     BD = Bidiagonal(dv, ev, :U)
     @test Matrix{Complex{Float64}}(BD) == BD
@@ -327,7 +385,7 @@ using LinearAlgebra: fillstored!, UnitLowerTriangular
         Bidiagonal(randn(3), randn(2), rand([:U,:L])),
         SymTridiagonal(randn(3), randn(2)),
         sparse(randn(3,4)),
-        # Diagonal(randn(5)), # Diagonal fill! deprecated, see below
+        Diagonal(randn(5)),
         sparse(rand(3)),
         # LowerTriangular(randn(3,3)), # AbstractTriangular fill! deprecated, see below
         # UpperTriangular(randn(3,3)) # AbstractTriangular fill! deprecated, see below
@@ -335,9 +393,11 @@ using LinearAlgebra: fillstored!, UnitLowerTriangular
         for A in exotic_arrays
             @test iszero(fill!(A, 0))
         end
-        # Diagonal and AbstractTriangular fill! were defined as fillstored!,
-        # not matching the general behavior of fill!, and so have been deprecated.
-        # In a future dev cycle, these fill! methods should probably be reintroduced
+
+        # Diagonal fill! is no longer deprecated. See #29780
+        # AbstractTriangular fill! was defined as fillstored!,
+        # not matching the general behavior of fill!, and so it has been deprecated.
+        # In a future dev cycle, this fill! methods should probably be reintroduced
         # with behavior matching that of fill! for other structured matrix types.
         # In the interim, equivalently test fillstored! below
         @test iszero(fillstored!(Diagonal(fill(1, 3)), 0))
@@ -348,13 +408,15 @@ using LinearAlgebra: fillstored!, UnitLowerTriangular
         val = randn()
         b = Bidiagonal(randn(1,1), :U)
         st = SymTridiagonal(randn(1,1))
-        for x in (b, st)
+        d = Diagonal(rand(1))
+        for x in (b, st, d)
             @test Array(fill!(x, val)) == fill!(Array(x), val)
         end
         b = Bidiagonal(randn(2,2), :U)
         st = SymTridiagonal(randn(3), randn(2))
         t = Tridiagonal(randn(3,3))
-        for x in (b, t, st)
+        d = Diagonal(rand(3))
+        for x in (b, t, st, d)
             @test_throws ArgumentError fill!(x, val)
             @test Array(fill!(x, 0)) == fill!(Array(x), 0)
         end
@@ -380,6 +442,30 @@ end
     bb = Any[b[1:3], b[4:6], b[7:9]]
     @test vcat((Alb\bb)...) ≈ LowerTriangular(A)\b
     @test vcat((Aub\bb)...) ≈ UpperTriangular(A)\b
+end
+
+@testset "sum" begin
+    @test sum(Bidiagonal([1,2,3], [1,2], :U)) == 9
+    @test sum(Bidiagonal([1,2,3], [1,2], :L)) == 9
+end
+
+@testset "empty sub-diagonal" begin
+    # `mul!` must use non-specialized method when sub-diagonal is empty
+    A = [1 2 3 4]'
+    @test A * Tridiagonal(ones(1, 1)) == A
+end
+
+@testset "generalized dot" begin
+    for elty in (Float64, ComplexF64)
+        dv = randn(elty, 5)
+        ev = randn(elty, 4)
+        x = randn(elty, 5)
+        y = randn(elty, 5)
+        for uplo in (:U, :L)
+            B = Bidiagonal(dv, ev, uplo)
+            @test dot(x, B, y) ≈ dot(B'x, y) ≈ dot(x, Matrix(B), y)
+        end
+    end
 end
 
 end # module TestBidiagonal

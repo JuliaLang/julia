@@ -400,7 +400,7 @@ JL_DLLEXPORT size_t jl_capture_interp_frame(uintptr_t *data, uintptr_t sp, uintp
     if (space_remaining <= 1)
         return 0;
     // Sentinel value to indicate an interpreter frame
-    data[0] = (uintptr_t)-1;
+    data[0] = JL_BT_INTERP_FRAME;
     data[1] = s->mi ? (uintptr_t)s->mi : s->src ? (uintptr_t)s->src : (uintptr_t)jl_nothing;
     data[2] = (uintptr_t)s->ip;
     return 2;

@@ -344,7 +344,7 @@ must be convertible to `Int`:
 
 ```jldoctest footype
 julia> Foo((), 23.5, 1)
-ERROR: InexactError: Int64(Int64, 23.5)
+ERROR: InexactError: Int64(23.5)
 Stacktrace:
 [...]
 ```
@@ -452,8 +452,8 @@ To recap, two essential properties define immutability in Julia:
 
 ## Declared Types
 
-The three kinds of types discussed in the previous three sections are actually all closely related.
-They share the same key properties:
+The three kinds of types (abstract, primitive, composite) discussed in the previous
+sections are actually all closely related. They share the same key properties:
 
   * They are explicitly declared.
   * They have names.
@@ -657,7 +657,7 @@ For the default constructor, exactly one argument must be supplied for each fiel
 
 ```jldoctest pointtype
 julia> Point{Float64}(1.0)
-ERROR: MethodError: Cannot `convert` an object of type Float64 to an object of type Point{Float64}
+ERROR: MethodError: no method matching Point{Float64}(::Float64)
 [...]
 
 julia> Point{Float64}(1.0,2.0,3.0)
@@ -938,7 +938,7 @@ julia> NamedTuple{(:a, :b)}((1,""))
 If field types are specified, the arguments are converted. Otherwise the types of the arguments
 are used directly.
 
-#### [Singleton Types](@id man-singleton-types)
+### [Singleton Types](@id man-singleton-types)
 
 There is a special kind of abstract parametric type that must be mentioned here: singleton types.
 For each type, `T`, the "singleton type" `Type{T}` is an abstract type whose only instance is
@@ -1123,9 +1123,9 @@ Of course, this depends on what `Int` is aliased to -- but that is predefined to
 type -- either [`Int32`](@ref) or [`Int64`](@ref).
 
 (Note that unlike `Int`, `Float` does not exist as a type alias for a specific sized
-[`AbstractFloat`](@ref). Unlike with integer registers, the floating point register sizes
-are specified by the IEEE-754 standard. Whereas the size of `Int` reflects the size of a
-native pointer on that machine.)
+[`AbstractFloat`](@ref). Unlike with integer registers, where the size of `Int`
+reflects the size of a native pointer on that machine, the floating point register sizes
+are specified by the IEEE-754 standard.)
 
 ## Operations on Types
 
@@ -1150,9 +1150,6 @@ what their types are:
 
 ```jldoctest
 julia> typeof(Rational{Int})
-DataType
-
-julia> typeof(Union{Real,Float64,Rational})
 DataType
 
 julia> typeof(Union{Real,String})
@@ -1383,7 +1380,7 @@ for cases where you don't need a more elaborate hierarchy.
 julia> struct Val{x}
        end
 
-julia> Base.@pure Val(x) = Val{x}()
+julia> Val(x) = Val{x}()
 Val
 ```
 

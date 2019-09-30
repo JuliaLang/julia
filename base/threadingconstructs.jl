@@ -18,9 +18,6 @@ on `threadid()`.
 """
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
-# Only read/written by the main thread
-const in_threaded_loop = Ref(false)
-
 function _threadsfor(iter,lbody)
     lidx = iter.args[1]         # index
     range = iter.args[2]
@@ -46,7 +43,7 @@ function _threadsfor(iter,lbody)
                 len, rem = 1, 0
             end
             # compute this thread's iterations
-            f = 1 + ((tid-1) * len)
+            f = firstindex(r) + ((tid-1) * len)
             l = f + len - 1
             # distribute remaining iterations evenly
             if rem > 0
@@ -60,24 +57,21 @@ function _threadsfor(iter,lbody)
             end
             # run this thread's iterations
             for i = f:l
-                local $(esc(lidx)) = Base.unsafe_getindex(r,i)
+                local $(esc(lidx)) = @inbounds r[i]
                 $(esc(lbody))
             end
         end
         end
-        # Hack to make nested threaded loops kinda work
-        if threadid() != 1 || in_threaded_loop[]
-            # We are in a nested threaded loop
-            threadsfor_fun(true)
+        if threadid() != 1
+            # only thread 1 can enter/exit _threadedregion
+            Base.invokelatest(threadsfor_fun, true)
         else
-            in_threaded_loop[] = true
-            # the ccall is not expected to throw
-            ccall(:jl_threading_run, Ref{Cvoid}, (Any,), threadsfor_fun)
-            in_threaded_loop[] = false
+            ccall(:jl_threading_run, Cvoid, (Any,), threadsfor_fun)
         end
         nothing
     end
 end
+
 """
     Threads.@threads
 
@@ -96,8 +90,35 @@ macro threads(args...)
         throw(ArgumentError("need an expression argument to @threads"))
     end
     if ex.head === :for
-        return _threadsfor(ex.args[1],ex.args[2])
+        return _threadsfor(ex.args[1], ex.args[2])
     else
         throw(ArgumentError("unrecognized argument to @threads"))
+    end
+end
+
+"""
+    Threads.@spawn expr
+
+Create and run a [`Task`](@ref) on any available thread. To wait for the task to
+finish, call [`wait`](@ref) on the result of this macro, or call [`fetch`](@ref)
+to wait and then obtain its return value.
+
+!!! note
+    This feature is currently considered experimental.
+
+!!! compat "Julia 1.3"
+    This macro is available as of Julia 1.3.
+"""
+macro spawn(expr)
+    thunk = esc(:(()->($expr)))
+    var = esc(Base.sync_varname)
+    quote
+        local task = Task($thunk)
+        task.sticky = false
+        if $(Expr(:isdefined, var))
+            push!($var, task)
+        end
+        schedule(task)
+        task
     end
 end

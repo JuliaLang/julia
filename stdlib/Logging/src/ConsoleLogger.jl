@@ -46,7 +46,7 @@ min_enabled_level(logger::ConsoleLogger) = logger.min_level
 showvalue(io, msg) = show(io, "text/plain", msg)
 function showvalue(io, e::Tuple{Exception,Any})
     ex,bt = e
-    showerror(io, ex, bt; backtrace = bt!=nothing)
+    showerror(io, ex, bt; backtrace = bt!==nothing)
 end
 showvalue(io, ex::Exception) = showerror(io, ex)
 
@@ -97,7 +97,7 @@ end
 
 function handle_message(logger::ConsoleLogger, level, message, _module, group, id,
                         filepath, line; maxlog=nothing, kwargs...)
-    if maxlog != nothing && maxlog isa Integer
+    if maxlog !== nothing && maxlog isa Integer
         remaining = get!(logger.message_limits, id, maxlog)
         logger.message_limits[id] = remaining - 1
         remaining > 0 || return
@@ -111,10 +111,8 @@ function handle_message(logger::ConsoleLogger, level, message, _module, group, i
         valbuf = IOBuffer()
         rows_per_value = max(1, dsize[1]÷(length(kwargs)+1))
         valio = IOContext(IOContext(valbuf, logger.stream),
-                          :displaysize=>(rows_per_value,dsize[2]-5))
-        if logger.show_limited
-            valio = IOContext(valio, :limit=>true)
-        end
+                          :displaysize => (rows_per_value,dsize[2]-5),
+                          :limit => logger.show_limited)
         for (key,val) in pairs(kwargs)
             showvalue(valio, val)
             vallines = split(String(take!(valbuf)), '\n')

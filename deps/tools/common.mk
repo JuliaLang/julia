@@ -115,6 +115,7 @@ $(eval $(call dir_target,$(SRCCACHE)))
 
 upper = $(shell echo $1 | tr a-z A-Z)
 
+
 ## A rule for calling `make install` ##
 # example usage:
 #   $(call staged-install, \
@@ -177,12 +178,46 @@ $$(build_prefix)/manifest/$(strip $1): $$(build_staging)/$2.tgz | $(build_prefix
 	echo $2 > $$@
 endef
 
+
+## A rule for "installing" via a symlink ##
+# example usage:
+#   $(call symlink_install, \
+#       1 target, \               # name
+#       2 rel-build-directory, \  # BUILDDIR-relative path to content folder
+#       3 abs-target-directory)   # absolute path to installation folder for symlink `name`
+define symlink_install # (target-name, rel-from, abs-to)
+clean-$1: uninstall-$1
+install-$1: $$(build_prefix)/manifest/$1
+reinstall-$1: install-$1
+uninstall-$1:
+ifeq ($$(BUILD_OS), WINNT)
+	-cmd //C rmdir $$(call mingw_to_dos,$3/$1,cd $3 &&)
+else
+	-rm -r $3/$1
+endif
+	-rm $$(build_prefix)/manifest/$1
+
+$$(build_prefix)/manifest/$1: $$(BUILDDIR)/$2/build-compiled | $3 $$(build_prefix)/manifest
+	+[ ! \( -e $3/$1 -o -h $3/$1 \) ] || $$(MAKE) uninstall-$1
+ifeq ($$(BUILD_OS), WINNT)
+	cmd //C mklink //J $$(call mingw_to_dos,$3/$1,cd $3 &&) $$(call mingw_to_dos,$$(BUILDDIR)/$2,)
+else ifneq (,$$(findstring CYGWIN,$$(BUILD_OS)))
+	cmd /C mklink /J $$(call cygpath_w,$3/$1) $$(call cygpath_w,$$(BUILDDIR)/$2)
+else ifdef JULIA_VAGRANT_BUILD
+	cp -R $$(BUILDDIR)/$2 $3/$1
+else
+	ln -sf $$(abspath $$(BUILDDIR)/$2) $3/$1
+endif
+	echo $2 > $$@
+endef
+
+
 ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
 #gnu tar
-UNTAR = $(TAR) -xzf
+UNTAR = $(TAR) -xmzf
 else
 #bsd tar
-UNTAR = $(TAR) -xUzf
+UNTAR = $(TAR) -xmUzf
 endif
 
 

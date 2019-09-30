@@ -1,12 +1,67 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Singular Value Decomposition
+"""
+    SVD <: Factorization
+
+Matrix factorization type of the singular value decomposition (SVD) of a matrix `A`.
+This is the return type of [`svd(_)`](@ref), the corresponding matrix factorization function.
+
+If `F::SVD` is the factorization object, `U`, `S`, `V` and `Vt` can be obtained
+via `F.U`, `F.S`, `F.V` and `F.Vt`, such that `A = U * Diagonal(S) * Vt`.
+The singular values in `S` are sorted in descending order.
+
+Iterating the decomposition produces the components `U`, `S`, and `V`.
+
+# Examples
+```jldoctest
+julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
+4×5 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0  2.0
+ 0.0  0.0  3.0  0.0  0.0
+ 0.0  0.0  0.0  0.0  0.0
+ 0.0  2.0  0.0  0.0  0.0
+
+julia> F = svd(A)
+SVD{Float64,Float64,Array{Float64,2}}
+U factor:
+4×4 Array{Float64,2}:
+ 0.0  1.0  0.0   0.0
+ 1.0  0.0  0.0   0.0
+ 0.0  0.0  0.0  -1.0
+ 0.0  0.0  1.0   0.0
+singular values:
+4-element Array{Float64,1}:
+ 3.0
+ 2.23606797749979
+ 2.0
+ 0.0
+Vt factor:
+4×5 Array{Float64,2}:
+ -0.0       0.0  1.0  -0.0  0.0
+  0.447214  0.0  0.0   0.0  0.894427
+ -0.0       1.0  0.0  -0.0  0.0
+  0.0       0.0  0.0   1.0  0.0
+
+julia> F.U * Diagonal(F.S) * F.Vt
+4×5 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0  2.0
+ 0.0  0.0  3.0  0.0  0.0
+ 0.0  0.0  0.0  0.0  0.0
+ 0.0  2.0  0.0  0.0  0.0
+
+julia> u, s, v = F; # destructuring via iteration
+
+julia> u == F.U && s == F.S && v == F.V
+true
+```
+"""
 struct SVD{T,Tr,M<:AbstractArray{T}} <: Factorization{T}
     U::M
     S::Vector{Tr}
     Vt::M
     function SVD{T,Tr,M}(U, S, Vt) where {T,Tr,M<:AbstractArray{T}}
-        @assert !has_offset_axes(U, S, Vt)
+        require_one_based_indexing(U, S, Vt)
         new{T,Tr,M}(U, S, Vt)
     end
 end
@@ -17,14 +72,19 @@ function SVD{T}(U::AbstractArray, S::AbstractVector{Tr}, Vt::AbstractArray) wher
         convert(AbstractArray{T}, Vt))
 end
 
+
 # iteration for destructuring into components
 Base.iterate(S::SVD) = (S.U, Val(:S))
 Base.iterate(S::SVD, ::Val{:S}) = (S.S, Val(:V))
 Base.iterate(S::SVD, ::Val{:V}) = (S.V, Val(:done))
 Base.iterate(S::SVD, ::Val{:done}) = nothing
 
+
+default_svd_alg(A) = DivideAndConquer()
+
+
 """
-    svd!(A; full::Bool = false) -> SVD
+    svd!(A; full::Bool = false, alg::Algorithm = default_svd_alg(A)) -> SVD
 
 `svd!` is the same as [`svd`](@ref), but saves space by
 overwriting the input `A`, instead of creating a copy.
@@ -55,25 +115,28 @@ julia> A
   0.0       0.0  -2.0  0.0  0.0
 ```
 """
-function svd!(A::StridedMatrix{T}; full::Bool = false, thin::Union{Bool,Nothing} = nothing) where T<:BlasFloat
-    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
-    if thin != nothing
-        Base.depwarn(string("the `thin` keyword argument in `svd!(A; thin = $(thin))` has ",
-            "been deprecated in favor of `full`, which has the opposite meaning, ",
-            "e.g. `svd!(A; full = $(!thin))`."), :svd!)
-        full::Bool = !thin
-    end
+function svd!(A::StridedMatrix{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where T<:BlasFloat
     m,n = size(A)
     if m == 0 || n == 0
         u,s,vt = (Matrix{T}(I, m, full ? m : n), real(zeros(T,0)), Matrix{T}(I, n, n))
     else
-        u,s,vt = LAPACK.gesdd!(full ? 'A' : 'S', A)
+        u,s,vt = _svd!(A,full,alg)
     end
     SVD(u,s,vt)
 end
 
+
+_svd!(A::StridedMatrix{T}, full::Bool, alg::Algorithm) where T<:BlasFloat = throw(ArgumentError("Unsupported value for `alg` keyword."))
+_svd!(A::StridedMatrix{T}, full::Bool, alg::DivideAndConquer) where T<:BlasFloat = LAPACK.gesdd!(full ? 'A' : 'S', A)
+function _svd!(A::StridedMatrix{T}, full::Bool, alg::QRIteration) where T<:BlasFloat
+    c = full ? 'A' : 'S'
+    u,s,vt = LAPACK.gesvd!(c, c, A)
+end
+
+
+
 """
-    svd(A; full::Bool = false) -> SVD
+    svd(A; full::Bool = false, alg::Algorithm = default_svd_alg(A)) -> SVD
 
 Compute the singular value decomposition (SVD) of `A` and return an `SVD` object.
 
@@ -89,6 +152,12 @@ If `full = false` (default), a "thin" SVD is returned. For a ``M
 and `V` is `N \\times N`, while in the thin factorization `U` is `M
 \\times K` and `V` is `N \\times K`, where `K = \\min(M,N)` is the
 number of singular values.
+
+If `alg = DivideAndConquer()` a divide-and-conquer algorithm is used to calculate the SVD.
+Another (typically slower but more accurate) option is `alg = QRIteration()`.
+
+!!! compat "Julia 1.3"
+    The `alg` keyword argument requires Julia 1.3 or later.
 
 # Examples
 ```jldoctest
@@ -107,44 +176,28 @@ julia> F.U * Diagonal(F.S) * F.Vt
  0.0  0.0  3.0  0.0  0.0
  0.0  0.0  0.0  0.0  0.0
  0.0  2.0  0.0  0.0  0.0
+
+julia> u, s, v = F; # destructuring via iteration
+
+julia> u == F.U && s == F.S && v == F.V
+true
 ```
 """
-function svd(A::StridedVecOrMat{T}; full::Bool = false, thin::Union{Bool,Nothing} = nothing) where T
-    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
-    if thin != nothing
-        Base.depwarn(string("the `thin` keyword argument in `svd(A; thin = $(thin))` has ",
-            "been deprecated in favor of `full`, which has the opposite meaning, ",
-            "e.g. `svd(A; full = $(!thin))`."), :svd)
-        full::Bool = !thin
-    end
-    svd!(copy_oftype(A, eigtype(T)), full = full)
+function svd(A::StridedVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where T
+    svd!(copy_oftype(A, eigtype(T)), full = full, alg = alg)
 end
-function svd(x::Number; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
-    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
-    if thin != nothing
-        Base.depwarn(string("the `thin` keyword argument in `svd(A; thin = $(thin))` has ",
-            "been deprecated in favor of `full`, which has the opposite meaning, ",
-            "e.g. `svd(A; full = $(!thin))`."), :svd)
-        full::Bool = !thin
-    end
-    return SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/abs(x), 1, 1), [abs(x)], fill(one(x), 1, 1))
+function svd(x::Number; full::Bool = false, alg::Algorithm = default_svd_alg(x))
+    SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/abs(x), 1, 1), [abs(x)], fill(one(x), 1, 1))
 end
-function svd(x::Integer; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
-    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
-    if thin != nothing
-        Base.depwarn(string("the `thin` keyword argument in `svd(A; thin = $(thin))` has ",
-            "been deprecated in favor of `full`, which has the opposite meaning, ",
-            "e.g. `svd(A; full = $(!thin))`."), :svd)
-        full::Bool = !thin
-    end
-    return svd(float(x), full = full)
+function svd(x::Integer; full::Bool = false, alg::Algorithm = default_svd_alg(x))
+    svd(float(x), full = full, alg = alg)
 end
-function svd(A::Adjoint; full::Bool = false)
-    s = svd(A.parent, full = full)
+function svd(A::Adjoint; full::Bool = false, alg::Algorithm = default_svd_alg(A))
+    s = svd(A.parent, full = full, alg = alg)
     return SVD(s.Vt', s.S, s.U')
 end
-function svd(A::Transpose; full::Bool = false)
-    s = svd(A.parent, full = full)
+function svd(A::Transpose; full::Bool = false, alg::Algorithm = default_svd_alg(A))
+    s = svd(A.parent, full = full, alg = alg)
     return SVD(transpose(s.Vt), s.S, transpose(s.U))
 end
 
@@ -224,7 +277,81 @@ function ldiv!(A::SVD{T}, B::StridedVecOrMat) where T
     view(A.Vt,1:k,:)' * (view(A.S,1:k) .\ (view(A.U,:,1:k)' * B))
 end
 
+function inv(F::SVD{T}) where T
+    @inbounds for i in eachindex(F.S)
+        iszero(F.S[i]) && throw(SingularException(i))
+    end
+    k = searchsortedlast(F.S, eps(T)*F.S[1], rev=true)
+    @views (F.S[1:k] .\ F.Vt[1:k, :])' * F.U[:,1:k]'
+end
+
+size(A::SVD, dim::Integer) = dim == 1 ? size(A.U, dim) : size(A.Vt, dim)
+size(A::SVD) = (size(A, 1), size(A, 2))
+
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::SVD{<:Any,<:Any,<:AbstractArray})
+    summary(io, F); println(io)
+    println(io, "U factor:")
+    show(io, mime, F.U)
+    println(io, "\nsingular values:")
+    show(io, mime, F.S)
+    println(io, "\nVt factor:")
+    show(io, mime, F.Vt)
+end
+
 # Generalized svd
+"""
+    GeneralizedSVD <: Factorization
+
+Matrix factorization type of the generalized singular value decomposition (SVD)
+of two matrices `A` and `B`, such that `A = F.U*F.D1*F.R0*F.Q'` and
+`B = F.V*F.D2*F.R0*F.Q'`. This is the return type of [`svd(_, _)`](@ref), the
+corresponding matrix factorization function.
+
+For an M-by-N matrix `A` and P-by-N matrix `B`,
+
+- `U` is a M-by-M orthogonal matrix,
+- `V` is a P-by-P orthogonal matrix,
+- `Q` is a N-by-N orthogonal matrix,
+- `D1` is a M-by-(K+L) diagonal matrix with 1s in the first K entries,
+- `D2` is a P-by-(K+L) matrix whose top right L-by-L block is diagonal,
+- `R0` is a (K+L)-by-N matrix whose rightmost (K+L)-by-(K+L) block is
+           nonsingular upper block triangular,
+
+`K+L` is the effective numerical rank of the matrix `[A; B]`.
+
+Iterating the decomposition produces the components `U`, `V`, `Q`, `D1`, `D2`, and `R0`.
+
+The entries of `F.D1` and `F.D2` are related, as explained in the LAPACK
+documentation for the
+[generalized SVD](http://www.netlib.org/lapack/lug/node36.html) and the
+[xGGSVD3](http://www.netlib.org/lapack/explore-html/d6/db3/dggsvd3_8f.html)
+routine which is called underneath (in LAPACK 3.6.0 and newer).
+
+# Examples
+```jldoctest
+julia> A = [1. 0.; 0. -1.]
+2×2 Array{Float64,2}:
+ 1.0   0.0
+ 0.0  -1.0
+
+julia> B = [0. 1.; 1. 0.]
+2×2 Array{Float64,2}:
+ 0.0  1.0
+ 1.0  0.0
+
+julia> F = svd(A, B);
+
+julia> F.U*F.D1*F.R0*F.Q'
+2×2 Array{Float64,2}:
+ 1.0   0.0
+ 0.0  -1.0
+
+julia> F.V*F.D2*F.R0*F.Q'
+2×2 Array{Float64,2}:
+ 0.0  1.0
+ 1.0  0.0
+```
+"""
 struct GeneralizedSVD{T,S} <: Factorization{T}
     U::S
     V::S

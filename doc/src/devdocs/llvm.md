@@ -42,7 +42,7 @@ The default version of LLVM is specified in `deps/Versions.make`. You can overri
 a file called `Make.user` in the top-level directory and adding a line to it such as:
 
 ```
-LLVM_VER = 3.5.0
+LLVM_VER = 6.0.1
 ```
 
 Besides the LLVM release numerals, you can also use `LLVM_VER = svn` to build against the latest
@@ -94,10 +94,10 @@ process (e.g. because it creates unserializable state). However, the resulting
 It is also possible to dump an LLVM IR module for just one Julia function,
 using:
 ```julia
-f, T = +, Tuple{Int,Int} # Substitute your function of interest here
+fun, T = +, Tuple{Int,Int} # Substitute your function of interest here
 optimize = false
-open("plus.ll", "w") do f
-    println(f, Base._dump_function(f, T, false, false, false, true, :att, optimize))
+open("plus.ll", "w") do file
+    println(file, InteractiveUtils._dump_function(fun, T, false, false, false, true, :att, optimize))
 end
 ```
 These files can be processed the same way as the unoptimized sysimg IR shown
@@ -211,6 +211,11 @@ three different address spaces (their numbers are defined in `src/codegen_shared
   future), but unlike the other pointers need not be rooted if passed to a
   call (they do still need to be rooted if they are live across another safepoint
   between the definition and the call).
+- Pointers loaded from tracked object (currently 13): This is used by arrays,
+  which themselves contain a pointer to the managed data. This data area is owned
+  by the array, but is not a GC-tracked object by itself. The compiler guarantees
+  that as long as this pointer is live, the object that this pointer was loaded
+  from will keep being live.
 
 ### Invariants
 
@@ -272,7 +277,7 @@ need to make sure that the array does stay alive while we're doing the
 [`ccall`](@ref). To understand how this is done, first recall the lowering of the
 above code:
 ```julia
-return $(Expr(:foreigncall, :(:foo), Cvoid, svec(Ptr{Float64}), :(:ccall), 1, :($(Expr(:foreigncall, :(:jl_array_ptr), Ptr{Float64}, svec(Any), :(:ccall), 1, :(A)))), :(A)))
+return $(Expr(:foreigncall, :(:foo), Cvoid, svec(Ptr{Float64}), 0, :(:ccall), Expr(:foreigncall, :(:jl_array_ptr), Ptr{Float64}, svec(Any), 0, :(:ccall), :(A)), :(A)))
 ```
 The last `:(A)`, is an extra argument list inserted during lowering that informs
 the code generator which Julia level values need to be kept alive for the

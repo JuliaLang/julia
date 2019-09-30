@@ -16,28 +16,8 @@ This operation is useful for multiple reasons.  A user may:
   * Include a `userimg.jl` file that includes packages into the system image, thereby creating a system
     image that has packages embedded into the startup environment.
 
-Julia now ships with a script that automates the tasks of building the system image, wittingly
-named `build_sysimg.jl` that lives in `DATAROOTDIR/julia/`.  That is, to include it into a current
-Julia session, type:
-
-```julia
-include(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "build_sysimg.jl"))
-```
-
-This will include a `build_sysimg` function:
-
-```@docs
-BuildSysImg.build_sysimg
-```
-
-Note that this file can also be run as a script itself, with command line arguments taking the
-place of arguments passed to the `build_sysimg` function.  For example, to build a system image
-in `/tmp/sys.{so,dll,dylib}`, with the `core2` CPU instruction set, a user image of `~/userimg.jl`
-and `force` set to `true`, one would execute:
-
-```
-julia build_sysimg.jl /tmp/sys core2 ~/userimg.jl --force
-```
+The [`PackageCompiler.jl` package](https://github.com/JuliaLang/PackageCompiler.jl) contains convenient
+wrapper functions to automate this process.
 
 ## System image optimized for multiple microarchitectures
 
@@ -46,16 +26,16 @@ under the same instruction set architecture (ISA). Multiple versions of the same
 may be created with minimum dispatch point inserted into shared functions
 in order to take advantage of different ISA extensions or other microarchitecture features.
 The version that offers the best performance will be selected automatically at runtime
-based on available features.
+based on available CPU features.
 
 ### Specifying multiple system image targets
 
-Multi-microarch system image can be enabled by passing multiple targets
+A multi-microarchitecture system image can be enabled by passing multiple targets
 during system image compilation. This can be done either with the `JULIA_CPU_TARGET` make option
 or with the `-C` command line option when running the compilation command manually.
-Multiple targets are separated by `;` in the option.
+Multiple targets are separated by `;` in the option string.
 The syntax for each target is a CPU name followed by multiple features separated by `,`.
-All features supported by LLVM is supported and a feature can be disabled with a `-` prefix.
+All features supported by LLVM are supported and a feature can be disabled with a `-` prefix.
 (`+` prefix is also allowed and ignored to be consistent with LLVM syntax).
 Additionally, a few special features are supported to control the function cloning behavior.
 
@@ -76,17 +56,35 @@ Additionally, a few special features are supported to control the function cloni
     This behavior can be changed by specifying a different base with the `base(<n>)` option.
     The `n`th target (0-based) will be used as the base target instead of the default (`0`th) one.
     The base target has to be either `0` or another `clone_all` target.
-    Specifying a non default `clone_all` target as the base target will cause an error.
+    Specifying a non-`clone_all` target as the base target will cause an error.
 
 3. `opt_size`
 
-    This cause the function for the targe to be optimize for size when there isn't a significant
+    This causes the function for the target to be optimized for size when there isn't a significant
     runtime performance impact. This corresponds to `-Os` GCC and Clang option.
 
 4. `min_size`
 
-    This cause the function for the targe to be optimize for size that might have
+    This causes the function for the target to be optimized for size that might have
     a significant runtime performance impact. This corresponds to `-Oz` Clang option.
+
+As an example, at the time of this writing, the following string is used in the creation of
+the official `x86_64` Julia binaries downloadable from julialang.org:
+
+```
+generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)
+```
+
+This creates a system image with three separate targets; one for a generic `x86_64`
+processor, one with a `sandybridge` ISA (explicitly excluding `xsaveopt`) that explicitly
+clones all functions, and one targeting the `haswell` ISA, based off of the `sandybridge`
+sysimg version, and also excluding `rdrnd`.  When a Julia implementation loads the
+generated sysimg, it will check the host processor for matching CPU capability flags,
+enabling the highest ISA level possible.  Note that the base level (`generic`) requires
+the `cx16` instruction, which is disabled in some virtualization software and must be
+enabled for the `generic` target to be loaded.  Alternatively, a sysimg could be generated
+with the target `generic,-cx16` for greater compatibility, however note that this may cause
+performance and stability problems in some code.
 
 ### Implementation overview
 

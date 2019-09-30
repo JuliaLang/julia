@@ -19,11 +19,13 @@ signbit(x::Float16) = signbit(bitcast(Int16, x))
 """
     maxintfloat(T=Float64)
 
-The largest consecutive integer that is exactly represented in the given floating-point type `T`
-(which defaults to `Float64`).
+The largest consecutive integer-valued floating-point number that is exactly represented in
+the given floating-point type `T` (which defaults to `Float64`).
 
-That is, `maxintfloat` returns the smallest positive integer `n` such that `n+1`
-is *not* exactly representable in the type `T`.
+That is, `maxintfloat` returns the smallest positive integer-valued floating-point number
+`n` such that `n+1` is *not* exactly representable in the type `T`.
+
+When an `Integer`-type value is needed, use `Integer(maxintfloat(T))`.
 """
 maxintfloat(::Type{Float64}) = 9007199254740992.
 maxintfloat(::Type{Float32}) = Float32(16777216.)
@@ -123,18 +125,34 @@ round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer} = trunc(T
 
 # NOTE: this relies on the current keyword dispatch behaviour (#9498).
 function round(x::Real, r::RoundingMode=RoundNearest;
-    digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base=10)
+               digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base::Union{Nothing,Integer}=nothing)
     isfinite(x) || return x
-    _round(x,r,digits,sigdigits,base)
+    if digits === nothing
+        if sigdigits === nothing
+            if base === nothing
+                # avoid recursive calls
+                throw(MethodError(round, (x,r)))
+            else
+                round(x,r)
+                # or throw(ArgumentError("`round` cannot use `base` argument without `digits` or `sigdigits` arguments."))
+            end
+        else
+            _round_sigdigits(x, r, sigdigits, base === nothing ? 10 : base)
+        end
+    else
+        if sigdigits === nothing
+            _round_digits(x, r, digits, base === nothing ? 10 : base)
+        else
+            throw(ArgumentError("`round` cannot use both `digits` and `sigdigits` arguments."))
+        end
+    end
 end
+
 trunc(x::Real; kwargs...) = round(x, RoundToZero; kwargs...)
 floor(x::Real; kwargs...) = round(x, RoundDown; kwargs...)
 ceil(x::Real; kwargs...)  = round(x, RoundUp; kwargs...)
 
 round(x::Integer, r::RoundingMode) = x
-
-# if we hit this method, it means that no `round(x, r)` method is defined
-_round(x::Real, r::RoundingMode, digits::Nothing, sigdigits::Nothing, base) = throw(MethodError(round, (x,r)))
 
 # round x to multiples of 1/invstep
 function _round_invstep(x, invstep, r::RoundingMode)
@@ -161,7 +179,7 @@ function _round_step(x, step, r::RoundingMode)
     return y
 end
 
-function _round(x, r::RoundingMode, digits::Integer, sigdigits::Nothing, base)
+function _round_digits(x, r::RoundingMode, digits::Integer, base)
     fx = float(x)
     if digits >= 0
         invstep = oftype(fx, base)^digits
@@ -185,13 +203,10 @@ function hidigit(x::AbstractFloat, base)
 end
 hidigit(x::Real, base) = hidigit(float(x), base)
 
-function _round(x, r::RoundingMode, digits::Nothing, sigdigits::Integer, base)
+function _round_sigdigits(x, r::RoundingMode, sigdigits::Integer, base)
     h = hidigit(x, base)
-    _round(x, r, sigdigits-h, nothing, base)
+    _round_digits(x, r, sigdigits-h, base)
 end
-
-_round(x, r::RoundingMode, digits::Integer, sigdigits::Integer, base) =
-    throw(ArgumentError("`round` cannot use both `digits` and `sigdigits` arguments."))
 
 # C-style round
 function round(x::AbstractFloat, ::RoundingMode{:NearestTiesAway})
@@ -199,9 +214,8 @@ function round(x::AbstractFloat, ::RoundingMode{:NearestTiesAway})
     ifelse(x==y,y,trunc(2*x-y))
 end
 # Java-style round
-function round(x::AbstractFloat, ::RoundingMode{:NearestTiesUp})
-    y = floor(x)
-    ifelse(x==y,y,copysign(floor(2*x-y),x))
+function round(x::T, ::RoundingMode{:NearestTiesUp}) where {T <: AbstractFloat}
+    copysign(floor((x + (T(0.25) - eps(T(0.5)))) + (T(0.25) + eps(T(0.5)))), x)
 end
 
 # isapprox: approximate equality of numbers
@@ -217,7 +231,8 @@ the square root of [`eps`](@ref) of the type of `x` or `y`, whichever is bigger 
 This corresponds to requiring equality of about half of the significand digits. Otherwise,
 e.g. for integer arguments or if an `atol > 0` is supplied, `rtol` defaults to zero.
 
-`x` and `y` may also be arrays of numbers, in which case `norm` defaults to `vecnorm` but
+`x` and `y` may also be arrays of numbers, in which case `norm` defaults to the usual
+`norm` function in LinearAlgebra, but
 may be changed by passing a `norm::Function` keyword argument. (For numbers, `norm` is the
 same thing as `abs`.) When `x` and `y` are arrays, if `norm(x-y)` is not finite (i.e. `±Inf`
 or `NaN`), the comparison falls back to checking whether all elements of `x` and `y` are

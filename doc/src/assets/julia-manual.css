@@ -1,3 +1,11 @@
 nav.toc h1 {
     display: none;
 }
+
+.admonition.compat > .admonition-title {
+ background-color: hsla(90, 60%, 50%, 1);
+}
+
+.admonition.compat {
+ background-color: hsla(90, 70%, 90%, 1);
+}

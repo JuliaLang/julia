@@ -332,3 +332,19 @@ end
     # field without dividing by 64 (i.e. the 100 above should allocate
     # only 2 UInt64 words
 end
+
+@testset "union!(::BitSet, ::AbstractUnitRange) optimization" begin
+    # check that using a:b or a:1:b gives equal results
+    a, b = minmax(rand(-1000:1000, 2)...)
+    x, y = BitSet(a:b), BitSet(a:1:b)
+    @test x == y
+    a, b = minmax(rand(-1000:1000, 2)...)
+    @test union!(x, BitSet(a:b)) == union!(y, BitSet(a:1:b))
+    x = BitSet(rand(-1000:1000, 500))
+    y = copy(x)
+    @test union!(x, BitSet(a:b)) == union!(y, BitSet(a:1:b))
+    @test_throws ArgumentError BitSet(Int128(typemin(Int))-1:typemin(Int))
+    @test_throws ArgumentError BitSet(typemax(Int):Int128(typemax(Int))+1)
+    # union! with an empty range doesn't modify the BitSet
+    @test union!(x, b:a) == y
+end

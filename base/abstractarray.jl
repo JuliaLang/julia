@@ -15,14 +15,6 @@ convert(::Type{T}, a::T) where {T<:AbstractArray} = a
 convert(::Type{AbstractArray{T}}, a::AbstractArray) where {T} = AbstractArray{T}(a)
 convert(::Type{AbstractArray{T,N}}, a::AbstractArray{<:Any,N}) where {T,N} = AbstractArray{T,N}(a)
 
-if nameof(@__MODULE__) === :Base  # avoid method overwrite
-# catch undefined constructors before the deprecation kicks in
-# TODO: remove when deprecation is removed
-function (::Type{T})(arg) where {T<:AbstractArray}
-    throw(MethodError(T, (arg,)))
-end
-end
-
 """
     size(A::AbstractArray, [dim])
 
@@ -43,7 +35,7 @@ julia> size(A, 2)
 3
 ```
 """
-size(t::AbstractArray{T,N}, d) where {T,N} = d <= N ? size(t)[d] : 1
+size(t::AbstractArray{T,N}, d) where {T,N} = d::Integer <= N ? size(t)[d] : 1
 
 """
     axes(A, d)
@@ -62,7 +54,7 @@ Base.OneTo(6)
 """
 function axes(A::AbstractArray{T,N}, d) where {T,N}
     @_inline_meta
-    d <= N ? axes(A)[d] : OneTo(1)
+    d::Integer <= N ? axes(A)[d] : OneTo(1)
 end
 
 """
@@ -94,6 +86,8 @@ has_offset_axes(A)    = _tuple_any(x->first(x)!=1, axes(A))
 has_offset_axes(A...) = _tuple_any(has_offset_axes, A)
 has_offset_axes(::Colon) = false
 
+require_one_based_indexing(A...) = !has_offset_axes(A...) || throw(ArgumentError("offset arrays are not supported but got an array with index other than 1"))
+
 # Performance optimization: get rid of a branch on `d` in `axes(A, d)`
 # for d=1. 1d arrays are heavily used, and the first dimension comes up
 # in other applications.
@@ -106,6 +100,51 @@ unsafe_indices(r::AbstractRange) = (OneTo(unsafe_length(r)),) # Ranges use check
 
 keys(a::AbstractArray) = CartesianIndices(axes(a))
 keys(a::AbstractVector) = LinearIndices(a)
+
+"""
+    keytype(T::Type{<:AbstractArray})
+    keytype(A::AbstractArray)
+
+Return the key type of an array. This is equal to the
+`eltype` of the result of `keys(...)`, and is provided
+mainly for compatibility with the dictionary interface.
+
+# Examples
+```jldoctest
+julia> keytype([1, 2, 3]) == Int
+true
+
+julia> keytype([1 2; 3 4])
+CartesianIndex{2}
+```
+
+!!! compat "Julia 1.2"
+     For arrays, this function requires at least Julia 1.2.
+"""
+keytype(a::AbstractArray) = keytype(typeof(a))
+
+keytype(A::Type{<:AbstractArray}) = CartesianIndex{ndims(A)}
+keytype(A::Type{<:AbstractVector}) = Int
+
+valtype(a::AbstractArray) = valtype(typeof(a))
+
+"""
+    valtype(T::Type{<:AbstractArray})
+    valtype(A::AbstractArray)
+
+Return the value type of an array. This is identical to `eltype` and is
+provided mainly for compatibility with the dictionary interface.
+
+# Examples
+```jldoctest
+julia> valtype(["one", "two", "three"])
+String
+```
+
+!!! compat "Julia 1.2"
+     For arrays, this function requires at least Julia 1.2.
+"""
+valtype(A::Type{<:AbstractArray}) = eltype(A)
 
 prevind(::AbstractArray, i::Integer) = Int(i)-1
 nextind(::AbstractArray, i::Integer) = Int(i)+1
@@ -171,6 +210,13 @@ eachindex(itrs...) = keys(itrs...)
 
 # eachindex iterates over all indices. IndexCartesian definitions are later.
 eachindex(A::AbstractVector) = (@_inline_meta(); axes1(A))
+
+@noinline function throw_eachindex_mismatch(::IndexLinear, A...)
+    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(eachindex.(A), ", ", " and "))"))
+end
+@noinline function throw_eachindex_mismatch(::IndexCartesian, A...)
+    throw(DimensionMismatch("all inputs to eachindex must have the same axes, got $(join(axes.(A), ", ", " and "))"))
+end
 
 """
     eachindex(A...)
@@ -362,7 +408,7 @@ function isassigned(a::AbstractArray, i::Integer...)
         if isa(e, BoundsError) || isa(e, UndefRefError)
             return false
         else
-            rethrow(e)
+            rethrow()
         end
     end
 end
@@ -561,8 +607,8 @@ elements since `BitArray`s are both mutable and can support 1-dimensional arrays
 ```julia-repl
 julia> similar(trues(10,10), 2)
 2-element BitArray{1}:
- false
- false
+ 0
+ 0
 ```
 
 Since `BitArray`s can only store elements of type [`Bool`](@ref), however, if you request a
@@ -646,6 +692,28 @@ empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
 emptymutable(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
 emptymutable(itr, ::Type{U}) where {U} = Vector{U}()
 
+"""
+    copy!(dst, src) -> dst
+
+In-place [`copy`](@ref) of `src` into `dst`, discarding any pre-existing
+elements in `dst`.
+If `dst` and `src` are of the same type, `dst == src` should hold after
+the call. If `dst` and `src` are multidimensional arrays, they must have
+equal [`axes`](@ref).
+See also [`copyto!`](@ref).
+
+!!! compat "Julia 1.1"
+    This method requires at least Julia 1.1. In Julia 1.0 this method
+    is available from the `Future` standard library as `Future.copy!`.
+"""
+copy!(dst::AbstractVector, src::AbstractVector) = append!(empty!(dst), src)
+
+function copy!(dst::AbstractArray, src::AbstractArray)
+    axes(dst) == axes(src) || throw(ArgumentError(
+        "arrays must have the same axes for copy! (consider using `copyto!`)"))
+    copyto!(dst, src)
+end
+
 ## from general iterable to any array
 
 function copyto!(dest::AbstractArray, src)
@@ -653,7 +721,7 @@ function copyto!(dest::AbstractArray, src)
     y = iterate(destiter)
     for x in src
         y === nothing &&
-            throw(ArgumentError(string("source has fewer elements than required")))
+            throw(ArgumentError("destination has fewer elements than required"))
         dest[y[1]] = x
         y = iterate(destiter, y[2])
     end
@@ -684,10 +752,10 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer)
     end
     if y === nothing
         throw(ArgumentError(string("source has fewer elements than required, ",
-                                      "expected at least ",sstart,", got ",sstart-1)))
+                                   "expected at least ",sstart,", got ",sstart-1)))
     end
     i = Int(dstart)
-    while y != nothing
+    while y !== nothing
         val, st = y
         dest[i] = val
         i += 1
@@ -1118,7 +1186,7 @@ Perform a conservative test to check if arrays `A` and `B` might share the same 
 By default, this simply checks if either of the arrays reference the same memory
 regions, as identified by their [`Base.dataids`](@ref).
 """
-mightalias(A::AbstractArray, B::AbstractArray) = !_isdisjoint(dataids(A), dataids(B))
+mightalias(A::AbstractArray, B::AbstractArray) = !isbits(A) && !isbits(B) && !_isdisjoint(dataids(A), dataids(B))
 mightalias(x, y) = false
 
 _isdisjoint(as::Tuple{}, bs::Tuple{}) = true
@@ -1152,7 +1220,7 @@ RangeVecIntList{A<:AbstractVector{Int}} = Union{Tuple{Vararg{Union{AbstractRange
     AbstractVector{UnitRange{Int}}, AbstractVector{AbstractRange{Int}}, AbstractVector{A}}
 
 get(A::AbstractArray, i::Integer, default) = checkbounds(Bool, A, i) ? A[i] : default
-get(A::AbstractArray, I::Tuple{}, default) = similar(A, typeof(default), 0)
+get(A::AbstractArray, I::Tuple{}, default) = checkbounds(Bool, A) ? A[] : default
 get(A::AbstractArray, I::Dims, default) = checkbounds(Bool, A, I...) ? A[I...] : default
 
 function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
@@ -1353,8 +1421,17 @@ end
 _cs(d, a, b) = (a == b ? a : throw(DimensionMismatch(
     "mismatch in dimension $d (expected $a got $b)")))
 
-dims2cat(::Val{n}) where {n} = ntuple(i -> (i == n), Val(n))
-dims2cat(dims) = ntuple(in(dims), maximum(dims))
+function dims2cat(::Val{n}) where {n}
+    n <= 0 && throw(ArgumentError("cat dimension must be a positive integer, but got $n"))
+    ntuple(i -> (i == n), Val(n))
+end
+
+function dims2cat(dims)
+    if any(dims .<= 0)
+        throw(ArgumentError("All cat dimensions must be positive integers, but got $dims"))
+    end
+    ntuple(in(dims), maximum(dims))
+end
 
 _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
 
@@ -1986,7 +2063,8 @@ concatenate_setindex!(R, X::AbstractArray, I...) = (R[I...] = X)
 
 function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
     for (i,j) in zip(eachindex(dest),eachindex(A))
-        dest[i] = f(A[j])
+        val = f(@inbounds A[j])
+        @inbounds dest[i] = val
     end
     return dest
 end
@@ -2020,10 +2098,15 @@ julia> map(+, [1, 2, 3], [10, 20, 30])
 """
 map(f, A) = collect(Generator(f,A))
 
+map(f, ::AbstractDict) = error("map is not defined on dictionaries")
+map(f, ::AbstractSet) = error("map is not defined on sets")
+
 ## 2 argument
 function map!(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray) where F
     for (i, j, k) in zip(eachindex(dest), eachindex(A), eachindex(B))
-        dest[i] = f(A[j], B[k])
+        @inbounds a, b = A[j], B[k]
+        val = f(a, b)
+        @inbounds dest[i] = val
     end
     return dest
 end
@@ -2031,11 +2114,18 @@ end
 ## N argument
 
 @inline ith_all(i, ::Tuple{}) = ()
-@inline ith_all(i, as) = (as[1][i], ith_all(i, tail(as))...)
+function ith_all(i, as)
+    @_propagate_inbounds_meta
+    return (as[1][i], ith_all(i, tail(as))...)
+end
 
 function map_n!(f::F, dest::AbstractArray, As) where F
-    for i = LinearIndices(As[1])
-        dest[i] = f(ith_all(i, As)...)
+    idxs1 = LinearIndices(As[1])
+    @boundscheck LinearIndices(dest) == idxs1 && all(x -> LinearIndices(x) == idxs1, As)
+    for i = idxs1
+        @inbounds I = ith_all(i, As)
+        val = f(I...)
+        @inbounds dest[i] = val
     end
     return dest
 end
@@ -2048,11 +2138,11 @@ collection. `destination` must be at least as large as the first collection.
 
 # Examples
 ```jldoctest
-julia> x = zeros(3);
+julia> a = zeros(3);
 
-julia> map!(x -> x * 2, x, [1, 2, 3]);
+julia> map!(x -> x * 2, a, [1, 2, 3]);
 
-julia> x
+julia> a
 3-element Array{Float64,1}:
  2.0
  4.0
@@ -2071,124 +2161,68 @@ push!(A, a, b, c...) = push!(push!(A, a, b), c...)
 pushfirst!(A, a, b) = pushfirst!(pushfirst!(A, b), a)
 pushfirst!(A, a, b, c...) = pushfirst!(pushfirst!(A, c...), a, b)
 
-## hashing collections ##
+## hashing AbstractArray ##
 
-const hashaa_seed = UInt === UInt64 ? 0x7f53e68ceb575e76 : 0xeb575e76
-const hashrle_seed = UInt === UInt64 ? 0x2aab8909bfea414c : 0xbfea414c
-const hashr_seed   = UInt === UInt64 ? 0x80707b6821b70087 : 0x21b70087
+function hash(A::AbstractArray, h::UInt)
+    h = hash(AbstractArray, h)
+    # Axes are themselves AbstractArrays, so hashing them directly would stack overflow
+    # Instead hash the tuple of firsts and lasts along each dimension
+    h = hash(map(first, axes(A)), h)
+    h = hash(map(last, axes(A)), h)
+    isempty(A) && return h
 
-# Efficient O(1) method equivalent to the O(N) AbstractArray fallback,
-# which works only for ranges with regular step (RangeStepRegular)
-function hash_range(r::AbstractRange, h::UInt)
-    h += hashaa_seed
-    h += hash(size(r))
+    # Goal: Hash approximately log(N) entries with a higher density of hashed elements
+    # weighted towards the end and special consideration for repeated values. Colliding
+    # hashes will often subsequently be compared by equality -- and equality between arrays
+    # works elementwise forwards and is short-circuiting. This means that a collision
+    # between arrays that differ by elements at the beginning is cheaper than one where the
+    # difference is towards the end. Furthermore, blindly choosing log(N) entries from a
+    # sparse array will likely only choose the same element repeatedly (zero in this case).
 
-    length(r) == 0 && return h
-    h = hash(first(r), h)
-    length(r) == 1 && return h
-    length(r) == 2 && return hash(last(r), h)
+    # To achieve this, we work backwards, starting by hashing the last element of the
+    # array. After hashing each element, we skip `fibskip` elements, where `fibskip`
+    # is pulled from the Fibonacci sequence -- Fibonacci was chosen as a simple
+    # ~O(log(N)) algorithm that ensures we don't hit a common divisor of a dimension
+    # and only end up hashing one slice of the array (as might happen with powers of
+    # two). Finally, we find the next distinct value from the one we just hashed.
 
-    h += hashr_seed
-    h = hash(length(r), h)
-    h = hash(last(r), h)
-end
+    # This is a little tricky since skipping an integer number of values inherently works
+    # with linear indices, but `findprev` uses `keys`. Hoist out the conversion "maps":
+    ks = keys(A)
+    key_to_linear = LinearIndices(ks) # Index into this map to compute the linear index
+    linear_to_key = vec(ks)           # And vice-versa
 
-function hash(a::AbstractArray{T}, h::UInt) where T
-    # O(1) hashing for types with regular step
-    if isa(a, AbstractRange) && isa(RangeStepStyle(a), RangeStepRegular)
-        return hash_range(a, h)
-    end
-
-    h += hashaa_seed
-    h += hash(size(a))
-
-    y1 = iterate(a)
-    y1 === nothing && return h
-    y2 = iterate(a, y1[2])
-    y2 === nothing && return hash(y1[1], h)
-    y = iterate(a, y2[2])
-    y === nothing && return hash(y2[1], hash(y1[1], h))
-    x1, x2 = y1[1], y2[1]
-
-    # For the rest of the function, we keep three elements worth of state,
-    # x1, x2, y[1], with `y` potentially being `nothing` if there's only
-    # two elements remaining
-
-    # Check whether the array is equal to a range, and hash the elements
-    # at the beginning of the array as such as long as they match this assumption
-    # This needs to be done even for non-RangeStepRegular types since they may still be equal
-    # to RangeStepRegular values (e.g. 1.0:3.0 == 1:3)
-    if isa(a, AbstractVector) && applicable(-, x2, x1)
-        n = 1
-        local step, laststep, laststate
-
-        h = hash(x1, h)
-        h += hashr_seed
-
-        while true
-            # If overflow happens with entries of the same type, a cannot be equal
-            # to a range with more than two elements because more extreme values
-            # cannot be represented. We must still hash the two first values as a
-            # range since they can always be considered as such (in a wider type)
-            if isconcretetype(T)
-                try
-                    step = x2 - x1
-                catch err
-                    isa(err, OverflowError) || rethrow(err)
-                    break
-                end
-                # If true, wraparound overflow happened
-                sign(step) == cmp(x2, x1) || break
-            else
-                applicable(-, x2, x1) || break
-                # widen() is here to ensure no overflow can happen
-                step = widen(x2) - widen(x1)
-            end
-            n > 1 && !isequal(step, laststep) && break
-            n += 1
-            laststep = step
-            if y === nothing
-                # The array matches a range exactly
-                return hash(x2, hash(n, h))
-            end
-            x1, x2 = x2, y[1]
-            y = iterate(a, y[2])
-        end
-
-        # Always hash at least the two first elements as a range (even in case of overflow)
-        if n < 2
-            h = hash(2, h)
-            h = hash(y2[1], h)
-            @assert y !== nothing
-            x1, x2 = x2, y[1]
-            y = iterate(a, y[2])
-        else
-            h = hash(n, h)
-            h = hash(x1, h)
-        end
-    end
-
-    # Hash elements which do not correspond to a range
+    # Start at the last index
+    keyidx = last(ks)
+    linidx = key_to_linear[keyidx]
+    fibskip = prevfibskip = oneunit(linidx)
+    n = 0
     while true
-        if isequal(x2, x1)
-            # For repeated elements, use run length encoding
-            # This allows efficient hashing of sparse arrays
-            runlength = 2
-            while y !== nothing
-                # No need to update x1 (it's isequal x2)
-                x2 = y[1]
-                y = iterate(a, y[2])
-                isequal(x1, x2) || break
-                runlength += 1
-            end
-            h += hashrle_seed
-            h = hash(runlength, h)
+        n += 1
+        # Hash the current key-index and its element
+        elt = A[keyidx]
+        h = hash(keyidx=>elt, h)
+
+        # Skip backwards a Fibonacci number of indices -- this is a linear index operation
+        linidx = key_to_linear[keyidx]
+        linidx <= fibskip && break
+        linidx -= fibskip
+        keyidx = linear_to_key[linidx]
+
+        # Only increase the Fibonacci skip once every N iterations. This was chosen
+        # to be big enough that all elements of small arrays get hashed while
+        # obscenely large arrays are still tractable. With a choice of N=4096, an
+        # entirely-distinct 8000-element array will have ~75% of its elements hashed,
+        # with every other element hashed in the first half of the array. At the same
+        # time, hashing a `typemax(Int64)`-length Float64 range takes about a second.
+        if rem(n, 4096) == 0
+            fibskip, prevfibskip = fibskip + prevfibskip, fibskip
         end
-        h = hash(x1, h)
-        y === nothing && break
-        x1, x2 = x2, y[1]
-        y = iterate(a, y[2])
+
+        # Find a key index with a value distinct from `elt` -- might be `keyidx` itself
+        keyidx = findprev(!isequal(elt), A, keyidx)
+        keyidx === nothing && break
     end
-    !isequal(x2, x1) && (h = hash(x2, h))
+
     return h
 end

@@ -32,7 +32,7 @@ would generate:
         end
     end
 
-If you want just a post-expression, supply `nothing` for the pre-expression. Using
+If you want just a post-expression, supply [`nothing`](@ref) for the pre-expression. Using
 parentheses and semicolons, you can supply multi-statement expressions.
 """
 macro nloops(N, itersym, rangeexpr, args...)

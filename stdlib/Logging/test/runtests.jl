@@ -8,6 +8,13 @@ import Logging: min_enabled_level, shouldlog, handle_message
 
 @testset "Logging" begin
 
+@testset "Core" begin
+    # Symbols imported from CoreLogging should appear in tab completions
+    @test :AbstractLogger in names(Logging, all=true)  # exported public type
+    @test :Info in names(Logging, all=true)            # non-exported public constant
+    @test :handle_message in names(Logging, all=true)  # non-exported public function
+end
+
 @testset "ConsoleLogger" begin
     # First pass log limiting
     @test min_enabled_level(ConsoleLogger(devnull, Logging.Debug)) == Logging.Debug
@@ -20,6 +27,26 @@ import Logging: min_enabled_level, shouldlog, handle_message
     @test shouldlog(logger, Logging.Info, Base, :group, :asdf) === true
     handle_message(logger, Logging.Info, "msg", Base, :group, :asdf, "somefile", 1, maxlog=2)
     @test shouldlog(logger, Logging.Info, Base, :group, :asdf) === false
+
+    # Check that maxlog works without an explicit ID (#28786)
+    buf = IOBuffer()
+    io = IOContext(buf, :displaysize=>(30,80), :color=>false)
+    logger = ConsoleLogger(io)
+    with_logger(logger) do
+        for i in 1:2
+            @info "test" maxlog=1
+        end
+    end
+    @test String(take!(buf)) ==
+    """
+    [ Info: test
+    """
+    with_logger(logger) do
+        for i in 1:2
+            @info "test" maxlog=0
+        end
+    end
+    @test String(take!(buf)) == ""
 
     @testset "Default metadata formatting" begin
         @test Logging.default_metafmt(Logging.Debug, Base, :g, :i, expanduser("~/somefile.jl"), 42) ==
@@ -186,7 +213,7 @@ import Logging: min_enabled_level, shouldlog, handle_message
         │     1.00001  1.00001  1.00001  1.00001  …  1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
-        │     ⋮                                   ⋱                           EOL
+        │     ⋮                                   ⋱                    EOL
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
         │   b =
@@ -194,7 +221,7 @@ import Logging: min_enabled_level, shouldlog, handle_message
         │     2.00002  2.00002  2.00002  2.00002  …  2.00002  2.00002  2.00002
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
-        │     ⋮                                   ⋱                           EOL
+        │     ⋮                                   ⋱                    EOL
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
         └ SUFFIX

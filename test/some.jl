@@ -94,3 +94,7 @@ b = [ "replacement", "replacement", nothing, missing ]
 using Base: notnothing
 @test notnothing(1) === 1
 @test_throws ArgumentError notnothing(nothing)
+
+# isnothing()
+@test !isnothing(1)
+@test isnothing(nothing)

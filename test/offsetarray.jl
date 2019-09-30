@@ -1,13 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
-using .Main.TestHelpers.OAs
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
 using DelimitedFiles
 using Random
 using LinearAlgebra
 using Statistics
 
-const OAs_name = join(fullname(OAs), ".")
+const OAs_name = join(fullname(OffsetArrays), ".")
 
 let
 # Basics
@@ -81,7 +81,7 @@ for i = 1:9 @test A_3_3[i] == i end
 @test_throws BoundsError A[CartesianIndex(1,1)]
 @test_throws BoundsError S[CartesianIndex(1,1)]
 @test eachindex(A) == 1:4
-@test eachindex(S) == CartesianIndices(axes(S)) == CartesianIndices(map(Base.Slice, (0:1,3:4)))
+@test eachindex(S) == CartesianIndices(axes(S)) == CartesianIndices(map(Base.IdentityUnitRange, (0:1,3:4)))
 
 # LinearIndices
 # issue 27986
@@ -122,13 +122,13 @@ S = view(A, :, 3)
 @test S[0] == 1
 @test S[1] == 2
 @test_throws BoundsError S[2]
-@test axes(S) === (Base.Slice(0:1),)
+@test axes(S) === (Base.IdentityUnitRange(0:1),)
 S = view(A, 0, :)
 @test S == OffsetArray([1,3], (A.offsets[2],))
 @test S[3] == 1
 @test S[4] == 3
 @test_throws BoundsError S[1]
-@test axes(S) === (Base.Slice(3:4),)
+@test axes(S) === (Base.IdentityUnitRange(3:4),)
 S = view(A, 0:0, 4)
 @test S == [3]
 @test S[1] == 3
@@ -147,17 +147,17 @@ S = view(A, :, :)
 @test S[0,4] == S[3] == 3
 @test S[1,4] == S[4] == 4
 @test_throws BoundsError S[1,1]
-@test axes(S) === Base.Slice.((0:1, 3:4))
+@test axes(S) === Base.IdentityUnitRange.((0:1, 3:4))
 # https://github.com/JuliaArrays/OffsetArrays.jl/issues/27
 g = OffsetArray(Vector(-2:3), (-3,))
 gv = view(g, -1:2)
 @test axes(gv, 1) === Base.OneTo(4)
 @test collect(gv) == -1:2
 gv = view(g, OffsetArray(-1:2, (-2,)))
-@test axes(gv, 1) === Base.Slice(-1:2)
+@test axes(gv, 1) === Base.IdentityUnitRange(-1:2)
 @test collect(gv) == -1:2
 gv = view(g, OffsetArray(-1:2, (-1,)))
-@test axes(gv, 1) === Base.Slice(0:3)
+@test axes(gv, 1) === Base.IdentityUnitRange(0:3)
 @test collect(gv) == -1:2
 
 # iteration
@@ -203,11 +203,13 @@ cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,5), (10,-9)))    # column
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(5,10^3), (10,-9)))    # rows fit
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,10^3), (10,-9))) # neither fits
 cmp_showf(Base.print_matrix, io, OffsetArray(reshape(range(-0.212121212121, stop=2/11, length=3*29), 3, 29), (-2, -15)); options=(:displaysize=>(53,210),))
+cmp_showf(show, io, OffsetArray(collect(1:100), (100,)))   # issue #31641
+
 targets1 = ["0-dimensional $OAs_name.OffsetArray{Float64,0,Array{Float64,0}}:\n1.0",
-            "$OAs_name.OffsetArray{Float64,1,Array{Float64,1}} with indices 2:2:\n 1.0",
-            "$OAs_name.OffsetArray{Float64,2,Array{Float64,2}} with indices 2:2×3:3:\n 1.0",
-            "$OAs_name.OffsetArray{Float64,3,Array{Float64,3}} with indices 2:2×3:3×4:4:\n[:, :, 4] =\n 1.0",
-            "$OAs_name.OffsetArray{Float64,4,Array{Float64,4}} with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
+            "1-element $OAs_name.OffsetArray{Float64,1,Array{Float64,1}} with indices 2:2:\n 1.0",
+            "1×1 $OAs_name.OffsetArray{Float64,2,Array{Float64,2}} with indices 2:2×3:3:\n 1.0",
+            "1×1×1 $OAs_name.OffsetArray{Float64,3,Array{Float64,3}} with indices 2:2×3:3×4:4:\n[:, :, 4] =\n 1.0",
+            "1×1×1×1 $OAs_name.OffsetArray{Float64,4,Array{Float64,4}} with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
 targets2 = ["(1.0, 1.0)",
             "([1.0], [1.0])",
             "([1.0], [1.0])",
@@ -234,26 +236,26 @@ B = similar(A, (3,4))
 @test axes(B) === (Base.OneTo(3), Base.OneTo(4))
 B = similar(A, (-3:3,1:4))
 @test isa(B, OffsetArray{Int,2})
-@test axes(B) === Base.Slice.((-3:3, 1:4))
+@test axes(B) === Base.IdentityUnitRange.((-3:3, 1:4))
 B = similar(parent(A), (-3:3,1:4))
 @test isa(B, OffsetArray{Int,2})
-@test axes(B) === Base.Slice.((-3:3, 1:4))
+@test axes(B) === Base.IdentityUnitRange.((-3:3, 1:4))
 
 # Indexing with OffsetArray indices
 i1 = OffsetArray([2,1], (-5,))
 i1 = OffsetArray([2,1], -5)
 b = A0[i1, 1]
-@test axes(b) === (Base.Slice(-4:-3),)
+@test axes(b) === (Base.IdentityUnitRange(-4:-3),)
 @test b[-4] == 2
 @test b[-3] == 1
 b = A0[1,i1]
-@test axes(b) === (Base.Slice(-4:-3),)
+@test axes(b) === (Base.IdentityUnitRange(-4:-3),)
 @test b[-4] == 3
 @test b[-3] == 1
 v = view(A0, i1, 1)
-@test axes(v) === (Base.Slice(-4:-3),)
+@test axes(v) === (Base.IdentityUnitRange(-4:-3),)
 v = view(A0, 1:1, i1)
-@test axes(v) === (Base.OneTo(1), Base.Slice(-4:-3))
+@test axes(v) === (Base.OneTo(1), Base.IdentityUnitRange(-4:-3))
 
 # copyto! and fill!
 a = OffsetArray{Int}(undef, (-3:-1,))
@@ -321,26 +323,54 @@ am = map(identity, a)
 @test isa(am, OffsetArray)
 @test am == a
 
-# squeeze
+# dropdims
 a0 = rand(1,1,8,8,1)
 a = OffsetArray(a0, (-1,2,3,4,5))
-@test @inferred(squeeze(a, dims=1)) == @inferred(squeeze(a, dims=(1,))) == OffsetArray(reshape(a, (1,8,8,1)), (2,3,4,5))
-@test @inferred(squeeze(a, dims=5)) == @inferred(squeeze(a, dims=(5,))) == OffsetArray(reshape(a, (1,1,8,8)), (-1,2,3,4))
-@test @inferred(squeeze(a, dims=(1,5))) == squeeze(a, dims=(5,1)) == OffsetArray(reshape(a, (1,8,8)), (2,3,4))
-@test @inferred(squeeze(a, dims=(1,2,5))) == squeeze(a, dims=(5,2,1)) == OffsetArray(reshape(a, (8,8)), (3,4))
-@test_throws ArgumentError squeeze(a, dims=0)
-@test_throws ArgumentError squeeze(a, dims=(1,1))
-@test_throws ArgumentError squeeze(a, dims=(1,2,1))
-@test_throws ArgumentError squeeze(a, dims=(1,1,2))
-@test_throws ArgumentError squeeze(a, dims=3)
-@test_throws ArgumentError squeeze(a, dims=4)
-@test_throws ArgumentError squeeze(a, dims=6)
+@test @inferred(dropdims(a, dims=1)) == @inferred(dropdims(a, dims=(1,))) == OffsetArray(reshape(a, (1,8,8,1)), (2,3,4,5))
+@test @inferred(dropdims(a, dims=5)) == @inferred(dropdims(a, dims=(5,))) == OffsetArray(reshape(a, (1,1,8,8)), (-1,2,3,4))
+@test @inferred(dropdims(a, dims=(1,5))) == dropdims(a, dims=(5,1)) == OffsetArray(reshape(a, (1,8,8)), (2,3,4))
+@test @inferred(dropdims(a, dims=(1,2,5))) == dropdims(a, dims=(5,2,1)) == OffsetArray(reshape(a, (8,8)), (3,4))
+@test_throws ArgumentError dropdims(a, dims=0)
+@test_throws ArgumentError dropdims(a, dims=(1,1))
+@test_throws ArgumentError dropdims(a, dims=(1,2,1))
+@test_throws ArgumentError dropdims(a, dims=(1,1,2))
+@test_throws ArgumentError dropdims(a, dims=3)
+@test_throws ArgumentError dropdims(a, dims=4)
+@test_throws ArgumentError dropdims(a, dims=6)
+
+# push!
+v = OffsetArray(rand(4), (-3,))
+v2 = copy(v)
+@test push!(v2, 1) === v2
+@test v2[axes(v, 1)] == v
+@test v2[end] == 1
+v2 = copy(v)
+@test push!(v2, 2, 1) === v2
+@test v2[axes(v, 1)] == v
+@test v2[end-1] == 2
+@test v2[end] == 1
+
+# append! from array
+v2 = copy(v)
+@test append!(v2, [2, 1]) === v2
+@test v2[axes(v, 1)] == v
+@test v2[lastindex(v)+1:end] == [2, 1]
+# append! from HasLength iterator
+v2 = copy(v)
+@test append!(v2, (v for v in [2, 1])) === v2
+@test v2[axes(v, 1)] == v
+@test v2[lastindex(v)+1:end] == [2, 1]
+# append! from SizeUnknown iterator
+v2 = copy(v)
+@test append!(v2, (v for v in [2, 1] if true)) === v2
+@test v2[axes(v, 1)] == v
+@test v2[lastindex(v)+1:end] == [2, 1]
 
 # other functions
 v = OffsetArray(v0, (-3,))
 @test lastindex(v) == 1
 @test v ≈ v
-@test axes(v') === (Base.OneTo(1),Base.Slice(-2:1))
+@test axes(v') === (Base.OneTo(1),Base.IdentityUnitRange(-2:1))
 @test parent(v) == collect(v)
 rv = reverse(v)
 @test axes(rv) == axes(v)
@@ -356,7 +386,7 @@ A = OffsetArray(rand(4,4), (-3,5))
 @test lastindex(A, 1) == 1
 @test lastindex(A, 2) == 9
 @test A ≈ A
-@test axes(A') === Base.Slice.((6:9, -2:1))
+@test axes(A') === Base.IdentityUnitRange.((6:9, -2:1))
 @test parent(copy(A')) == copy(parent(A)')
 @test collect(A) == parent(A)
 @test maximum(A) == maximum(parent(A))
@@ -434,8 +464,8 @@ amin, amax = extrema(parent(A))
 @test unique(A, dims=2) == OffsetArray(parent(A), first(axes(A, 1)) - 1, 0)
 v = OffsetArray(rand(8), (-2,))
 @test sort(v) == OffsetArray(sort(parent(v)), v.offsets)
-@test sortrows(A) == OffsetArray(sortrows(parent(A)), A.offsets)
-@test sortcols(A) == OffsetArray(sortcols(parent(A)), A.offsets)
+@test sortslices(A, dims=1) == OffsetArray(sortslices(parent(A), dims=1), A.offsets)
+@test sortslices(A, dims=2) == OffsetArray(sortslices(parent(A), dims=2), A.offsets)
 @test sort(A, dims=1) == OffsetArray(sort(parent(A), dims=1), A.offsets)
 @test sort(A, dims=2) == OffsetArray(sort(parent(A), dims=2), A.offsets)
 
@@ -466,6 +496,15 @@ A = OffsetArray(rand(4,4), (-3,5))
 A = OffsetArray(view(rand(4,4), 1:4, 4:-1:1), (-3,5))
 @test vec(A) == reshape(A, :) == reshape(A, 16) == reshape(A, Val(1)) == A[:] == vec(A.parent)
 
+# broadcast
+a = [1]
+b = OffsetArray(a, (0,))
+@test @inferred(a .+ b) == [2]
+a = OffsetArray([1, -2, 1], (-2,))
+@test a .* a' == OffsetArray([ 1 -2  1;
+                              -2  4 -2;
+                               1 -2  1], (-2,-2))
+
 end # let
 
 # Check that similar throws a MethodError rather than a
@@ -488,4 +527,26 @@ end
 @testset "Issue 28101" begin
     A = OffsetArray(reshape(16:-1:1, (4, 4)), (-3,5))
     @test maximum(A, dims=1) == OffsetArray(maximum(parent(A), dims=1), A.offsets)
+end
+
+@testset "in-place reductions with mismatched dimensionalities" begin
+    B = OffsetArray(reshape(1:24, 4, 3, 2), -5, 6, -7)
+    for R in (fill(0, -4:-1), fill(0, -4:-1, 7:7), fill(0, -4:-1, 7:7, -6:-6))
+        @test @inferred(maximum!(R, B)) == reshape(maximum(B, dims=(2,3)), axes(R)) == reshape(21:24, axes(R))
+        @test @allocated(maximum!(R, B)) <= 400
+        @test @inferred(minimum!(R, B)) == reshape(minimum(B, dims=(2,3)), axes(R)) == reshape(1:4, axes(R))
+        @test @allocated(minimum!(R, B)) <= 400
+    end
+    for R in (fill(0, -4:-4, 7:9), fill(0, -4:-4, 7:9, -6:-6))
+        @test @inferred(maximum!(R, B)) == reshape(maximum(B, dims=(1,3)), axes(R)) == reshape(16:4:24, axes(R))
+        @test @allocated(maximum!(R, B)) <= 400
+        @test @inferred(minimum!(R, B)) == reshape(minimum(B, dims=(1,3)), axes(R)) == reshape(1:4:9, axes(R))
+        @test @allocated(minimum!(R, B)) <= 400
+    end
+    @test_throws DimensionMismatch maximum!(fill(0, -4:-1, 7:7, -6:-6, 1:1), B)
+    @test_throws DimensionMismatch minimum!(fill(0, -4:-1, 7:7, -6:-6, 1:1), B)
+    @test_throws DimensionMismatch maximum!(fill(0, -4:-4, 7:9, -6:-6, 1:1), B)
+    @test_throws DimensionMismatch minimum!(fill(0, -4:-4, 7:9, -6:-6, 1:1), B)
+    @test_throws DimensionMismatch maximum!(fill(0, -4:-4, 7:7, -6:-5, 1:1), B)
+    @test_throws DimensionMismatch minimum!(fill(0, -4:-4, 7:7, -6:-5, 1:1), B)
 end

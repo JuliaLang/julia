@@ -34,7 +34,7 @@ empty(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 # by default, a Set is returned
 emptymutable(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 
-_similar_for(c::AbstractSet, T, itr, isz) = empty(c, T)
+_similar_for(c::AbstractSet, ::Type{T}, itr, isz) where {T} = empty(c, T)
 
 function show(io::IO, s::Set)
     print(io, "Set(")
@@ -66,6 +66,26 @@ empty!(s::Set) = (empty!(s.dict); s)
 rehash!(s::Set) = (rehash!(s.dict); s)
 
 iterate(s::Set, i...)       = iterate(KeySet(s.dict), i...)
+
+# In case the size(s) is smaller than size(t) its more efficient to iterate through
+# elements of s instead and only delete the ones also contained in t.
+# The threshold for this decision boils down to a tradeoff between
+# size(s) * cost(in() + delete!()) ≶ size(t) * cost(delete!())
+# Empirical observations on Ints point towards a threshold of 0.8.
+# To be on the safe side (e.g. cost(in) >>> cost(delete!) ) a
+# conservative threshold of 0.5 was chosen.
+function setdiff!(s::Set, t::Set)
+    if 2 * length(s) < length(t)
+        for x in s
+            x in t && delete!(s, x)
+        end
+    else
+        for x in t
+            delete!(s, x)
+        end
+    end
+    return s
+end
 
 """
     unique(itr)
@@ -145,36 +165,109 @@ julia> unique(x -> x^2, [1, -1, 3, -3, 4])
  4
 ```
 """
-function unique(f::Callable, C)
+function unique(f, C)
     out = Vector{eltype(C)}()
-    seen = Set()
-    for x in C
-        y = f(x)
-        if !in(y, seen)
-            push!(seen, y)
-            push!(out, x)
-        end
+
+    s = iterate(C)
+    if s === nothing
+        return out
     end
-    out
+    (x, i) = s
+    y = f(x)
+    seen = Set{typeof(y)}()
+    push!(seen, y)
+    push!(out, x)
+
+    return _unique!(f, out, C, seen, i)
 end
+
+function _unique!(f, out::AbstractVector, C, seen::Set, i)
+    s = iterate(C, i)
+    while s !== nothing
+        (x, i) = s
+        y = f(x)
+        if y ∉ seen
+            push!(out, x)
+            if y isa eltype(seen)
+                push!(seen, y)
+            else
+                seen2 = convert(Set{promote_typejoin(eltype(seen), typeof(y))}, seen)
+                push!(seen2, y)
+                return _unique!(f, out, C, seen2, i)
+            end
+        end
+        s = iterate(C, i)
+    end
+
+    return out
+end
+
+"""
+    unique!(f, A::AbstractVector)
+
+Selects one value from `A` for each unique value produced by `f` applied to
+elements of `A` , then return the modified A.
+
+!!! compat "Julia 1.1"
+    This method is available as of Julia 1.1.
+
+# Examples
+```jldoctest
+julia> unique!(x -> x^2, [1, -1, 3, -3, 4])
+3-element Array{Int64,1}:
+ 1
+ 3
+ 4
+
+julia> unique!(n -> n%3, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6])
+3-element Array{Int64,1}:
+ 5
+ 1
+ 9
+
+julia> unique!(iseven, [2, 3, 5, 7, 9])
+2-element Array{Int64,1}:
+ 2
+ 3
+```
+"""
+function unique!(f, A::AbstractVector)
+    if length(A) <= 1
+        return A
+    end
+
+    i = firstindex(A)
+    x = @inbounds A[i]
+    y = f(x)
+    seen = Set{typeof(y)}()
+    push!(seen, y)
+    return _unique!(f, A, seen, i, i+1)
+end
+
+function _unique!(f, A::AbstractVector, seen::Set, current::Integer, i::Integer)
+    while i <= lastindex(A)
+        x = @inbounds A[i]
+        y = f(x)
+        if y ∉ seen
+            current += 1
+            @inbounds A[current] = x
+            if y isa eltype(seen)
+                push!(seen, y)
+            else
+                seen2 = convert(Set{promote_typejoin(eltype(seen), typeof(y))}, seen)
+                push!(seen2, y)
+                return _unique!(f, A, seen2, current, i+1)
+            end
+        end
+        i += 1
+    end
+    return resize!(A, current - firstindex(A) + 1)
+end
+
 
 # If A is not grouped, then we will need to keep track of all of the elements that we have
 # seen so far.
-function _unique!(A::AbstractVector)
-    seen = Set{eltype(A)}()
-    idxs = eachindex(A)
-    y = iterate(idxs)
-    count = 0
-    for x in A
-        if x ∉ seen
-            push!(seen, x)
-            count += 1
-            A[y[1]] = x
-            y = iterate(idxs, y[2])
-        end
-    end
-    resize!(A, count)
-end
+_unique!(A::AbstractVector) = unique!(identity, A::AbstractVector)
 
 # If A is grouped, so that each unique element is in a contiguous group, then we only
 # need to keep track of one element at a time. We replace the elements of A with the
@@ -283,6 +376,7 @@ end
 allunique(::Set) = true
 
 allunique(r::AbstractRange{T}) where {T} = (step(r) != zero(T)) || (length(r) <= 1)
+allunique(r::StepRange{T,S}) where {T,S} = (step(r) != zero(S)) || (length(r) <= 1)
 
 filter!(f, s::Set) = unsafe_filter!(f, s)
 
@@ -362,27 +456,6 @@ function replace_pairs!(res, A, count::Int, old_new::Tuple{Vararg{Pair}})
 end
 
 """
-    replace!(pred::Function, A, new; [count::Integer])
-
-Replace all occurrences `x` in collection `A` for which `pred(x)` is true
-by `new`.
-
-# Examples
-```jldoctest
-julia> A = [1, 2, 3, 1];
-
-julia> replace!(isodd, A, 0, count=2)
-4-element Array{Int64,1}:
- 0
- 2
- 0
- 1
-```
-"""
-replace!(pred::Callable, A, new; count::Integer=typemax(Int)) =
-    replace!(x -> ifelse(pred(x), new, x), A, count=check_count(count))
-
-"""
     replace!(new::Function, A; [count::Integer])
 
 Replace each element `x` in collection `A` by `new(x)`.
@@ -460,8 +533,6 @@ promote_valuetype(x::Pair{K, V}, y::Pair...) where {K, V} =
     promote_type(V, promote_valuetype(y...))
 
 # Subtract singleton types which are going to be replaced
-@pure issingletontype(T::DataType) = isdefined(T, :instance)
-issingletontype(::Type) = false
 function subtract_singletontype(::Type{T}, x::Pair{K}) where {T, K}
     if issingletontype(K)
         Core.Compiler.typesubtract(T, K)
@@ -471,28 +542,6 @@ function subtract_singletontype(::Type{T}, x::Pair{K}) where {T, K}
 end
 subtract_singletontype(::Type{T}, x::Pair{K}, y::Pair...) where {T, K} =
     subtract_singletontype(subtract_singletontype(T, y...), x)
-
-"""
-    replace(pred::Function, A, new; [count::Integer])
-
-Return a copy of collection `A` where all occurrences `x` for which
-`pred(x)` is true are replaced by `new`.
-If `count` is specified, then replace at most `count` occurrences in total.
-
-# Examples
-```jldoctest
-julia> replace(isodd, [1, 2, 3, 1], 0, count=2)
-4-element Array{Int64,1}:
- 0
- 2
- 0
- 1
-```
-"""
-function replace(pred::Callable, A, new; count::Integer=typemax(Int))
-    T = promote_type(eltype(A), typeof(new))
-    _replace!(x -> ifelse(pred(x), new, x), _similar_or_copy(A, T), A, check_count(count))
-end
 
 """
     replace(new::Function, A; [count::Integer])

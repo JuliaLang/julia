@@ -21,13 +21,13 @@ helpmode(line::AbstractString) = helpmode(stdout, line)
 
 function _helpmode(io::IO, line::AbstractString)
     line = strip(line)
+    x = Meta.parse(line, raise = false, depwarn = false)
     expr =
-        if haskey(keywords, Symbol(line))
+        if haskey(keywords, Symbol(line)) || isexpr(x, :error) || isexpr(x, :invalid)
             # Docs for keywords must be treated separately since trying to parse a single
             # keyword such as `function` would throw a parse error due to the missing `end`.
             Symbol(line)
         else
-            x = Meta.parse(line, raise = false, depwarn = false)
             # Retrieving docs for macros requires us to make a distinction between the text
             # `@macroname` and `@macroname()`. These both parse the same, but are used by
             # the docsystem to return different results. The first returns all documentation
@@ -294,8 +294,56 @@ repl(io::IO, other) = esc(:(@doc $other))
 repl(x) = repl(stdout, x)
 
 function _repl(x)
-    if (isexpr(x, :call) && !any(isexpr(x, :(::)) for x in x.args))
-        x.args[2:end] = [:(::typeof($arg)) for arg in x.args[2:end]]
+    if isexpr(x, :call)
+        # determine the types of the values
+        kwargs = nothing
+        pargs = Any[]
+        for arg in x.args[2:end]
+            if isexpr(arg, :parameters)
+                kwargs = map(arg.args) do kwarg
+                    if kwarg isa Symbol
+                        kwarg = :($kwarg::Any)
+                    elseif isexpr(kwarg, :kw)
+                        lhs = kwarg.args[1]
+                        rhs = kwarg.args[2]
+                        if lhs isa Symbol
+                            if rhs isa Symbol
+                                kwarg.args[1] = :($lhs::(@isdefined($rhs) ? typeof($rhs) : Any))
+                            else
+                                kwarg.args[1] = :($lhs::typeof($rhs))
+                            end
+                        end
+                    end
+                    kwarg
+                end
+            elseif isexpr(arg, :kw)
+                if kwargs === nothing
+                    kwargs = Any[]
+                end
+                lhs = arg.args[1]
+                rhs = arg.args[2]
+                if lhs isa Symbol
+                    if rhs isa Symbol
+                        arg.args[1] = :($lhs::(@isdefined($rhs) ? typeof($rhs) : Any))
+                    else
+                        arg.args[1] = :($lhs::typeof($rhs))
+                    end
+                end
+                push!(kwargs, arg)
+            else
+                if arg isa Symbol
+                    arg = :($arg::(@isdefined($arg) ? typeof($arg) : Any))
+                elseif !isexpr(arg, :(::))
+                    arg = :(::typeof($arg))
+                end
+                push!(pargs, arg)
+            end
+        end
+        if kwargs === nothing
+            x.args = Any[x.args[1], pargs...]
+        else
+            x.args = Any[x.args[1], Expr(:parameters, kwargs...), pargs...]
+        end
     end
     #docs = lookup_doc(x) # TODO
     docs = esc(:(@doc $x))

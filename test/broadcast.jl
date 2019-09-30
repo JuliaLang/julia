@@ -433,7 +433,7 @@ Base.getindex(A::ArrayData, i::Integer...) = A.data[i...]
 Base.setindex!(A::ArrayData, v::Any, i::Integer...) = setindex!(A.data, v, i...)
 Base.size(A::ArrayData) = size(A.data)
 Base.similar(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{A}}, ::Type{T}) where {A,T} =
-    A(Array{T}(undef, length.(axes(bc))))
+    A(Array{T}(undef, size(bc)))
 
 struct Array19745{T,N} <: ArrayData{T,N}
     data::Array{T,N}
@@ -497,7 +497,7 @@ struct AD2DimStyle <: Broadcast.AbstractArrayStyle{2}; end
 AD2DimStyle(::Val{2}) = AD2DimStyle()
 AD2DimStyle(::Val{N}) where {N} = Broadcast.DefaultArrayStyle{N}()
 Base.similar(bc::Broadcast.Broadcasted{AD2DimStyle}, ::Type{T}) where {T} =
-    AD2Dim(Array{T}(undef, length.(axes(bc))))
+    AD2Dim(Array{T}(undef, size(bc)))
 Base.BroadcastStyle(::Type{T}) where {T<:AD2Dim} = AD2DimStyle()
 
 @testset "broadcasting for custom AbstractArray" begin
@@ -591,6 +591,18 @@ end
     @test broadcast(==, 1, AbstractArray) == false
 end
 
+@testset "broadcasting falls back to iteration (issues #26421, #19577, #23746)" begin
+    @test_throws ArgumentError broadcast(identity, Dict(1=>2))
+    @test_throws ArgumentError broadcast(identity, (a=1, b=2))
+    @test_throws ArgumentError length.(Dict(1 => BitSet(1:2), 2 => BitSet(1:3)))
+    @test_throws MethodError broadcast(identity, Base)
+
+    @test broadcast(identity, Iterators.filter(iseven, 1:10)) == 2:2:10
+    d = Dict([1,2] => 1.1, [3,2] => 0.1)
+    @test length.(keys(d)) == [2,2]
+    @test Set(exp.(Set([1,2,3]))) == Set(exp.([1,2,3]))
+end
+
 # Test that broadcasting identity where the input and output Array shapes do not match
 # yields the correct result, not merely a partial copy. See pull request #19895 for discussion.
 let N = 5
@@ -651,18 +663,36 @@ end
     @test_throws DimensionMismatch (1, 2) .+ (1, 2, 3)
 end
 
-# TODO: Enable after deprecations introduced in 0.7 are removed.
-# @testset "scalar .=" begin
-#     A = [[1,2,3],4:5,6]
-#     A[1] .= 0
-#     @test A[1] == [0,0,0]
-#     @test_throws ErrorException A[2] .= 0
-#     @test_throws MethodError A[3] .= 0
-#     A = [[1,2,3],4:5]
-#     A[1] .= 0
-#     @test A[1] == [0,0,0]
-#     @test_throws ErrorException A[2] .= 0
-# end
+@testset "broadcasted assignment from tuples and tuple styles (#33020)" begin
+    a = zeros(3)
+    @test_throws DimensionMismatch a .= (1,2)
+    @test_throws DimensionMismatch a .= sqrt.((1,2))
+    a .= (1,)
+    @test all(==(1), a)
+    a .= sqrt.((2,))
+    @test all(==(√2), a)
+    a = zeros(3, 2)
+    @test_throws DimensionMismatch a .= (1,2)
+    @test_throws DimensionMismatch a .= sqrt.((1,2))
+    a .= (1,)
+    @test all(==(1), a)
+    a .= sqrt.((2,))
+    @test all(==(√2), a)
+    a .= (1,2,3)
+    @test a == [1 1; 2 2; 3 3]
+end
+
+@testset "scalar .=" begin
+    A = [[1,2,3],4:5,6]
+    A[1] .= 0
+    @test A[1] == [0,0,0]
+    @test_throws ErrorException A[2] .= 0
+    @test_throws MethodError A[3] .= 0
+    A = [[1,2,3],4:5]
+    A[1] .= 0
+    @test A[1] == [0,0,0]
+    @test_throws ErrorException A[2] .= 0
+end
 
 # Issue #22180
 @test convert.(Any, [1, 2]) == [1, 2]
@@ -671,6 +701,15 @@ end
 let n = 1
     @test ceil.(Int, n ./ (1,)) == (1,)
     @test ceil.(Int, 1 ./ (1,)) == (1,)
+end
+
+# Issue #29266
+@testset "deprecated scalar-fill .=" begin
+    a = fill(1, 10)
+    @test_throws ArgumentError a[1:5] = 0
+
+    x = randn(10)
+    @test_throws ArgumentError x[x .> 0.0] = 0.0
 end
 
 
@@ -698,7 +737,7 @@ struct T22053
     t
 end
 Broadcast.BroadcastStyle(::Type{T22053}) = Broadcast.Style{T22053}()
-Broadcast.broadcast_axes(::T22053) = ()
+Broadcast.axes(::T22053) = ()
 Broadcast.broadcastable(t::T22053) = t
 function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{T22053}})
     all(x->isa(x, T22053), bc.args) && return 1
@@ -731,6 +770,11 @@ let
     bc = Broadcasted(+, (Broadcasted(*, (1, Broadcasted(/, (2.0, 2.5)))), Broadcasted(*, (Broadcasted(*, (3, 4)), 5))))
     @test @inferred(Broadcast.cat_nested(bc)) == (1,2.0,2.5,3,4,5)
     @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == @inferred(Broadcast.materialize(bc)) == 60.8
+end
+
+let
+  bc = Broadcasted(+, (Broadcasted(*, ([1, 2, 3], 4)), 5))
+  @test isbits(Broadcast.flatten(bc).f)
 end
 
 # Issue #26127: multiple splats in a fused dot-expression
@@ -796,3 +840,17 @@ let
     @test eltype(copy(bc)) == eltype([v for v in bc]) == eltype(collect(bc))
     @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
 end
+
+# issue #31295
+let a = rand(5), b = rand(5), c = copy(a)
+    view(identity(a), 1:3) .+= view(b, 1:3)
+    @test a == [(c+b)[1:3]; c[4:5]]
+
+    x = [1]
+    x[[1,1]] .+= 1
+    @test x == [2]
+end
+
+# treat Pair as scalar:
+@test replace.(split("The quick brown fox jumps over the lazy dog"), r"[aeiou]"i => "_") ==
+      ["Th_", "q__ck", "br_wn", "f_x", "j_mps", "_v_r", "th_", "l_zy", "d_g"]

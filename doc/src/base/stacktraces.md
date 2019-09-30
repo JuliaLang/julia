@@ -7,9 +7,9 @@ Base.StackTraces.stacktrace
 ```
 
 The following methods and types in `Base.StackTraces` are not exported and need to be called e.g.
-as `StackTraces.lookup(ptr)`.
+as `StackTraces.lookupat(ptr)`.
 
 ```@docs
-Base.StackTraces.lookup
+Base.StackTraces.lookupat
 Base.StackTraces.remove_frames!
 ```

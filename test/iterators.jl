@@ -8,17 +8,20 @@ using Random
 @test collect(Iterators.filter(x->x[1], zip([true, false, true, false],"abcd"))) == [(true,'a'),(true,'c')]
 
 let z = zip(1:2)
+    @test size(z) == (2,)
     @test collect(z) == [(1,), (2,)]
     # Issue #13979
     @test eltype(z) == Tuple{Int}
 end
 
 let z = zip(1:2, 3:4)
+    @test size(z) == (2,)
     @test collect(z) == [(1,3), (2,4)]
     @test eltype(z) == Tuple{Int,Int}
 end
 
 let z = zip(1:2, 3:4, 5:6)
+    @test size(z) == (2,)
     @test collect(z) == [(1,3,5), (2,4,6)]
     @test eltype(z) == Tuple{Int,Int,Int}
 end
@@ -69,19 +72,23 @@ let s = "hello"
     c = collect(rest(s, st))
     @test c == ['e','l','l','o']
     @test c isa Vector{Char}
+    @test rest(s, st) == rest(rest(s,4),st)
 end
-# rest with state from old iteration protocol
-@test collect(rest(1:6, start(1:6))) == collect(1:6)
 
 @test_throws MethodError collect(rest(countfrom(1), 5))
 
 # countfrom
 # ---------
-let i = 0
+let i = 0, k = 1
     for j = countfrom(0, 2)
         @test j == i*2
         i += 1
         i <= 10 || break
+    end
+    for j = countfrom()
+        @test j == k
+        k += 1
+        k <= 10 || break
     end
 end
 
@@ -175,7 +182,6 @@ end
 @test Base.IteratorEltype(repeated(0))    == Base.HasEltype()
 @test Base.IteratorEltype(repeated(0, 5)) == Base.HasEltype()
 @test Base.IteratorSize(zip(repeated(0), repeated(0))) == Base.IsInfinite()
-
 
 # product
 # -------
@@ -272,7 +278,8 @@ let iters = (1:2,
              rand(2, 2, 2),
              take(1:4, 2),
              product(1:2, 1:3),
-             product(rand(2, 2), rand(1, 1, 1))
+             product(rand(2, 2), rand(1, 1, 1)),
+             repeated([1, -1], 2)  # 28497
              )
     for method in [size, length, ndims, eltype]
         for i = 1:length(iters)
@@ -366,10 +373,13 @@ end
 @test length(flatten(zip(1:3, 4:6))) == 6
 @test length(flatten(1:6)) == 6
 @test collect(flatten(Any[])) == Any[]
+@test collect(flatten(())) == Union{}[]
 @test_throws ArgumentError length(flatten(NTuple[(1,), ()])) # #16680
 @test_throws ArgumentError length(flatten([[1], [1]]))
 
 @test Base.IteratorEltype(Base.Flatten((i for i=1:2) for j=1:1)) == Base.EltypeUnknown()
+# see #29112, #29464, #29548
+@test Base.return_types(Base.IteratorEltype, Tuple{Array}) == [Base.HasEltype]
 
 # partition(c, n)
 let v = collect(partition([1,2,3,4,5], 1))
@@ -399,7 +409,6 @@ for n in [5,6]
     @test collect(partition(enumerate([1,2,3,4,5]), n))[1] ==
           [(1,1),(2,2),(3,3),(4,4),(5,5)]
 end
-
 
 @test join(map(x->string(x...), partition("Hello World!", 5)), "|") ==
       "Hello| Worl|d!"
@@ -517,6 +526,8 @@ end
     end
     let t = (2,3,5,7,11)
         @test Iterators.reverse(Iterators.reverse(t)) === t
+        @test first(Iterators.reverse(t)) === last(t)
+        @test last(Iterators.reverse(t)) === first(t)
     end
 end
 
@@ -540,10 +551,130 @@ end
 	@test isempty(collect(zip(b,a)))
 	@test !isempty(a)
     end
+    let a = Iterators.Stateful("a"), b = "", c = Iterators.Stateful("c")
+        @test isempty(collect(zip(a,b,c)))
+        @test !isempty(a)
+        @test !isempty(c)
+        @test isempty(collect(zip(a,c,b)))
+        @test !isempty(a)
+        @test !isempty(c)
+        @test isempty(collect(zip(b,a,c)))
+        @test !isempty(a)
+        @test !isempty(c)
+        @test isempty(collect(zip(b,c,a)))
+        @test !isempty(a)
+        @test !isempty(c)
+        @test isempty(collect(zip(c,a,b)))
+        @test !isempty(a)
+        @test !isempty(c)
+        @test isempty(collect(zip(c,b,a)))
+        @test !isempty(a)
+        @test !isempty(c)
+    end
+    let a = Iterators.Stateful("aa"), b = "b", c = Iterators.Stateful("cc")
+        @test length(collect(zip(a,b,c))) == 1
+        @test !isempty(a)
+        @test !isempty(c)
+    end
+    let a = Iterators.Stateful("aa"), b = "b", c = Iterators.Stateful("cc")
+        @test length(collect(zip(a,c,b))) == 1
+        @test !isempty(a)
+        @test !isempty(c)
+    end
+    let a = Iterators.Stateful("aa"), b = "b", c = Iterators.Stateful("cc")
+        @test length(collect(zip(b,a,c))) == 1
+        @test !isempty(a)
+        @test !isempty(c)
+    end
+    let a = Iterators.Stateful("aa"), b = "b", c = Iterators.Stateful("cc")
+        @test length(collect(zip(b,c,a))) == 1
+        @test !isempty(a)
+        @test !isempty(c)
+    end
+    let a = Iterators.Stateful("aa"), b = "b", c = Iterators.Stateful("cc")
+        @test length(collect(zip(c,a,b))) == 1
+        @test !isempty(a)
+        @test !isempty(c)
+    end
+    let a = Iterators.Stateful("aa"), b = "b", c = Iterators.Stateful("cc")
+        @test length(collect(zip(c,b,a))) == 1
+        @test !isempty(a)
+        @test !isempty(c)
+    end
+    let z = zip(Iterators.Stateful("ab"), Iterators.Stateful("b"), Iterators.Stateful("c"))
+        v, s = iterate(z)
+        @test Base.isdone(z, s)
+    end
 end
 
 @testset "pair for Svec" begin
     ps = pairs(Core.svec(:a, :b))
     @test ps isa Iterators.Pairs
     @test collect(ps) == [1 => :a, 2 => :b]
+end
+
+@testset "inference for large zip #26765" begin
+    x = zip(1:2, ["a", "b"], (1.0, 2.0), Base.OneTo(2), Iterators.repeated("a"), 1.0:0.2:2.0,
+            (1 for i in 1:2), Iterators.Stateful(["a", "b", "c"]), (1.0 for i in 1:2, j in 1:3))
+    @test @inferred(length(x)) == 2
+    z = Iterators.filter(x -> x[1] >= 1, x)
+    @test @inferred(eltype(z)) <: Tuple{Int,String,Float64,Int,String,Float64,Any,String,Any}
+    @test @inferred(first(z)) == (1, "a", 1.0, 1, "a", 1.0, 1, "a", 1.0)
+    @test @inferred(first(Iterators.drop(z, 1))) == (2, "b", 2.0, 2, "a", 1.2, 1, "c", 1.0)
+end
+
+@testset "Stateful fix #30643" begin
+    @test Base.IteratorSize(1:10) isa Base.HasShape
+    a = Iterators.Stateful(1:10)
+    @test Base.IteratorSize(a) isa Base.HasLength
+    @test length(a) == 10
+    @test length(collect(a)) == 10
+    @test length(a) == 0
+    b = Iterators.Stateful(Iterators.take(1:10,3))
+    @test Base.IteratorSize(b) isa Base.HasLength
+    @test length(b) == 3
+    @test length(collect(b)) == 3
+    @test length(b) == 0
+    c = Iterators.Stateful(Iterators.countfrom(1))
+    @test Base.IteratorSize(c) isa Base.IsInfinite
+    @test length(Iterators.take(c,3)) == 3
+    @test length(collect(Iterators.take(c,3))) == 3
+    d = Iterators.Stateful(Iterators.filter(isodd,1:10))
+    @test Base.IteratorSize(d) isa Base.SizeUnknown
+    @test length(collect(Iterators.take(d,3))) == 3
+    @test length(collect(d)) == 2
+    @test length(collect(d)) == 0
+end
+
+@testset "only" begin
+    @test only([3]) === 3
+    @test_throws ArgumentError only([])
+    @test_throws ArgumentError only([3, 2])
+
+    @test @inferred(only((3,))) === 3
+    @test_throws ArgumentError only(())
+    @test_throws ArgumentError only((3, 2))
+
+    @test only(Dict(1=>3)) === (1=>3)
+    @test_throws ArgumentError only(Dict{Int,Int}())
+    @test_throws ArgumentError only(Dict(1=>3, 2=>2))
+
+    @test only(Set([3])) === 3
+    @test_throws ArgumentError only(Set(Int[]))
+    @test_throws ArgumentError only(Set([3,2]))
+
+    @test @inferred(only((;a=1))) === 1
+    @test_throws ArgumentError only(NamedTuple())
+    @test_throws ArgumentError only((a=3, b=2.0))
+
+    @test @inferred(only(1)) === 1
+    @test @inferred(only('a')) === 'a'
+    @test @inferred(only(Ref([1, 2]))) == [1, 2]
+    @test_throws ArgumentError only(Pair(10, 20))
+
+    @test only(1 for ii in 1:1) === 1
+    @test only(1 for ii in 1:10 if ii < 2) === 1
+    @test_throws ArgumentError only(1 for ii in 1:10)
+    @test_throws ArgumentError only(1 for ii in 1:10 if ii > 2)
+    @test_throws ArgumentError only(1 for ii in 1:10 if ii > 200)
 end

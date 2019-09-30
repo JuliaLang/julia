@@ -35,7 +35,7 @@ which propagate them (like standard operators). Packages should consider
 whether it makes sense to propagate missing values when defining new functions,
 and define methods appropriately if that is the case. Passing a `missing` value
 to a function for which no method accepting arguments of type `Missing` is defined
-throws a `MethodError`, just like for any other type.
+throws a [`MethodError`](@ref), just like for any other type.
 
 ## Equality and Comparison Operators
 
@@ -191,7 +191,7 @@ Control flow operators including [`if`](@ref), [`while`](@ref) and the
 [ternary operator](@ref man-conditional-evaluation) `x ? y : z`
 do not allow for missing values. This is because of the uncertainty about whether
 the actual value would be `true` or `false` if we could observe it,
-which implies that we do not know how the program should behave. A `TypeError`
+which implies that we do not know how the program should behave. A [`TypeError`](@ref)
 is thrown as soon as a `missing` value is encountered in this context
 ```jldoctest
 julia> if missing
@@ -294,20 +294,52 @@ julia> sum(skipmissing([1, missing]))
 
 This convenience function returns an iterator which filters out `missing` values
 efficiently. It can therefore be used with any function which supports iterators
-```jldoctest; setup = :(using Statistics)
-julia> maximum(skipmissing([3, missing, 2, 1]))
+```jldoctest skipmissing; setup = :(using Statistics)
+julia> x = skipmissing([3, missing, 2, 1])
+Base.SkipMissing{Array{Union{Missing, Int64},1}}(Union{Missing, Int64}[3, missing, 2, 1])
+
+julia> maximum(x)
 3
 
-julia> mean(skipmissing([3, missing, 2, 1]))
+julia> mean(x)
 2.0
 
-julia> mapreduce(sqrt, +, skipmissing([3, missing, 2, 1]))
+julia> mapreduce(sqrt, +, x)
 4.146264369941973
 ```
 
+Objects created by calling `skipmissing` on an array can be indexed using indices
+from the parent array. Indices corresponding to missing values are not valid for
+these objects and an error is thrown when trying to use them (they are also skipped
+by `keys` and `eachindex`)
+```jldoctest skipmissing
+julia> x[1]
+3
+
+julia> x[2]
+ERROR: MissingException: the value at index (2,) is missing
+[...]
+```
+
+This allows functions which operate on indices to work in combination with `skipmissing`.
+This is notably the case for search and find functions, which return indices
+valid for the object returned by `skipmissing` which are also the indices of the
+matching entries *in the parent array*
+```jldoctest skipmissing
+julia> findall(==(1), x)
+1-element Array{Int64,1}:
+ 4
+
+julia> findfirst(!iszero, x)
+1
+
+julia> argmax(x)
+1
+```
+
 Use [`collect`](@ref) to extract non-`missing` values and store them in an array
-```jldoctest
-julia> collect(skipmissing([3, missing, 2, 1]))
+```jldoctest skipmissing
+julia> collect(x)
 3-element Array{Int64,1}:
  3
  2

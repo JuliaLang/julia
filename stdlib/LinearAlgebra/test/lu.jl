@@ -3,7 +3,7 @@
 module TestLU
 
 using Test, LinearAlgebra, Random
-using LinearAlgebra: ldiv!, BlasInt, BlasFloat
+using LinearAlgebra: ldiv!, BlasInt, BlasFloat, rdiv!
 
 n = 10
 
@@ -11,7 +11,7 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-srand(1234321)
+Random.seed!(1234321)
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
@@ -128,6 +128,17 @@ dimg  = randn(n)/2
                 ldiv!(c_dest, adjoint(lua), c)
                 @test norm(b_dest - lua' \ b, 1) < ε*κ*2n
                 @test norm(c_dest - lua' \ c, 1) < ε*κ*n
+
+                if eltyb != Int && !(eltya <: Complex) || eltya <: Complex && eltyb <: Complex
+                    p = Matrix(b')
+                    q = Matrix(c')
+                    p_dest = copy(p)
+                    q_dest = copy(q)
+                    rdiv!(p_dest, lua)
+                    rdiv!(q_dest, lua)
+                    @test norm(p_dest - p / lua, 1) < ε*κ*2n
+                    @test norm(q_dest - q / lua, 1) < ε*κ*n
+                end
             end
             if eltya <: BlasFloat && eltyb <: BlasFloat
                 e = rand(eltyb,n,n)
@@ -208,7 +219,7 @@ end
 end
 
 @testset "conversion" begin
-    srand(3)
+    Random.seed!(3)
     a = Tridiagonal(rand(9),rand(10),rand(9))
     fa = Array(a)
     falu = lu(fa)
@@ -290,10 +301,44 @@ include("trickyarithmetic.jl")
 @testset "lu with type whose sum is another type" begin
     A = TrickyArithmetic.A[1 2; 3 4]
     ElT = TrickyArithmetic.D{TrickyArithmetic.C,TrickyArithmetic.C}
-    B = lu(A)
+    B = lu(A, Val(false))
     @test B isa LinearAlgebra.LU{ElT,Matrix{ElT}}
-    C = lu(A, Val(false))
-    @test C isa LinearAlgebra.LU{ElT,Matrix{ElT}}
+end
+
+@testset "Issue #30917. Determinant of integer matrix" begin
+    @test det([1 1 0 0 1 0 0 0
+               1 0 1 0 0 1 0 0
+               1 0 0 1 0 0 1 0
+               0 1 1 1 0 0 0 0
+               0 1 0 0 0 0 1 1
+               0 0 1 0 1 0 0 1
+               0 0 0 1 1 1 0 0
+               0 0 0 0 1 1 0 1]) ≈ 6
+end
+
+@testset "Issue #33177. No ldiv!(LU, Adjoint)" begin
+    A = [1 0; 1 1]
+    B = [1 2; 2 8]
+    F = lu(B)
+    @test (A  / F') * B == A
+    @test (A' / F') * B == A'
+
+    a = complex.(randn(2), randn(2))
+    @test (a' / F') * B ≈ a'
+    @test (transpose(a) / F') * B ≈ transpose(a)
+
+    A = complex.(randn(2, 2), randn(2, 2))
+    @test (A' / F') * B ≈ A'
+    @test (transpose(A) / F') * B ≈ transpose(A)
+end
+
+@testset "0x0 matrix" begin
+    A = ones(0, 0)
+    F = lu(A)
+    @test F.U == ones(0, 0)
+    @test F.L == ones(0, 0)
+    @test F.P == ones(0, 0)
+    @test F.p == []
 end
 
 end # module TestLU

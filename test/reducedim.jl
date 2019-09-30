@@ -212,6 +212,17 @@ for (tup, rval, rind) in [((1,), [NaN 3.0 6.0], [CartesianIndex(2,1) CartesianIn
     @test isequal(Base.reducedim!(max, copy(rval), A), rval)
 end
 
+# issue #28320
+@testset "reducedim issue with abstract complex arrays" begin
+let A = Complex[1.5 0.5]
+    @test mapreduce(abs2, +, A, dims=2) == reshape([2.5], 1, 1)
+    @test sum(abs2, A, dims=2) == reshape([2.5], 1, 1)
+    @test prod(abs2, A, dims=2) == reshape([0.5625], 1, 1)
+    @test maximum(abs2, A, dims=2) == reshape([2.25], 1, 1)
+    @test minimum(abs2, A, dims=2) == reshape([0.25], 1, 1)
+end
+end
+
 A = [1.0 NaN 6.0;
      NaN 2.0 4.0]
 for (tup, rval, rind) in [((1,), [NaN NaN 4.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(2,3)]),
@@ -368,4 +379,22 @@ end
     B = reshape(3^3:-1:1, (3, 3, 3))
     @test B[argmax(B, dims=[2, 3])] == maximum(B, dims=[2, 3])
     @test B[argmin(B, dims=[2, 3])] == minimum(B, dims=[2, 3])
+end
+
+@testset "in-place reductions with mismatched dimensionalities" begin
+    B = reshape(1:24, 4, 3, 2)
+    for R in (fill(0, 4), fill(0, 4, 1), fill(0, 4, 1, 1))
+        @test @inferred(maximum!(R, B)) == reshape(21:24, size(R))
+        @test @inferred(minimum!(R, B)) == reshape(1:4, size(R))
+    end
+    for R in (fill(0, 1, 3), fill(0, 1, 3, 1))
+        @test @inferred(maximum!(R, B)) == reshape(16:4:24, size(R))
+        @test @inferred(minimum!(R, B)) == reshape(1:4:9, size(R))
+    end
+    @test_throws DimensionMismatch maximum!(fill(0, 4, 1, 1, 1), B)
+    @test_throws DimensionMismatch minimum!(fill(0, 4, 1, 1, 1), B)
+    @test_throws DimensionMismatch maximum!(fill(0, 1, 3, 1, 1), B)
+    @test_throws DimensionMismatch minimum!(fill(0, 1, 3, 1, 1), B)
+    @test_throws DimensionMismatch maximum!(fill(0, 1, 1, 2, 1), B)
+    @test_throws DimensionMismatch minimum!(fill(0, 1, 1, 2, 1), B)
 end

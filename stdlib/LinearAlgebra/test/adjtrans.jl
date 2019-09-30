@@ -271,8 +271,10 @@ end
 
 @testset "Adjoint and Transpose vector vec methods" begin
     intvec = [1, 2]
-    @test vec(Adjoint(intvec)) === intvec
+    @test vec(Adjoint(intvec)) == intvec
     @test vec(Transpose(intvec)) === intvec
+    cvec = [1 + 1im]
+    @test vec(cvec')[1] == cvec[1]'
 end
 
 @testset "horizontal concatenation of Adjoint/Transpose-wrapped vectors and Numbers" begin
@@ -482,12 +484,12 @@ end
 end
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
-using .Main.TestHelpers.OAs
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
 
 @testset "offset axes" begin
     s = Base.Slice(-3:3)'
-    @test axes(s) === (Base.OneTo(1), Base.Slice(-3:3))
+    @test axes(s) === (Base.OneTo(1), Base.IdentityUnitRange(-3:3))
     @test collect(LinearIndices(s)) == reshape(1:7, 1, 7)
     @test collect(CartesianIndices(s)) == reshape([CartesianIndex(1,i) for i = -3:3], 1, 7)
     @test s[1] == -3

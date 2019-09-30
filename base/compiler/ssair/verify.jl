@@ -2,8 +2,9 @@
 
 if !isdefined(@__MODULE__, Symbol("@verify_error"))
     macro verify_error(arg)
-        arg isa String && return esc(:(println($arg)))
-        arg isa Expr && arg.head === :string || error()
+        arg isa String && return esc(:(println(stderr, $arg)))
+        (arg isa Expr && arg.head === :string) || error("verify_error macro expected a string expression")
+        pushfirst!(arg.args, GlobalRef(Core, :stderr))
         pushfirst!(arg.args, :println)
         arg.head = :call
         return esc(arg)
@@ -21,7 +22,10 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             if op.id > length(ir.stmts)
                 @assert ir.new_nodes[op.id - length(ir.stmts)].pos <= use_idx
             else
-                @assert op.id < use_idx
+                if op.id >= use_idx
+                    @verify_error "Def ($(op.id)) does not dominate use ($(use_idx)) in same BB"
+                    error()
+                end
             end
         else
             if !dominates(domtree, def_bb, use_bb) && !(bb_unreachable(domtree, def_bb) && bb_unreachable(domtree, use_bb))
@@ -55,6 +59,8 @@ function verify_ir(ir::IRCode)
     # @assert isempty(ir.new_nodes)
     # Verify CFG
     last_end = 0
+    # Verify statements
+    domtree = construct_domtree(ir.cfg)
     for (idx, block) in pairs(ir.cfg.blocks)
         if first(block.stmts) != last_end + 1
             #ranges = [(idx,first(bb.stmts),last(bb.stmts)) for (idx, bb) in pairs(ir.cfg.blocks)]
@@ -63,15 +69,19 @@ function verify_ir(ir::IRCode)
         end
         last_end = last(block.stmts)
         terminator = ir.stmts[last_end]
+
+        bb_unreachable(domtree, idx) && continue
         for p in block.preds
             p == 0 && continue
             c = count_int(idx, ir.cfg.blocks[p].succs)
             if c == 0
                 @verify_error "Predecessor $p of block $idx not in successor list"
                 error()
-            elseif c > 1
-                @verify_error "Predecessor $p of block $idx occurs too often in successor list"
-                error()
+            elseif c == 2
+                if count_int(p, block.preds) != 2
+                    @verify_error "Double edge from $p to $idx not correctly accounted"
+                    error()
+                end
             end
         end
         if isa(terminator, ReturnNode)
@@ -94,13 +104,23 @@ function verify_ir(ir::IRCode)
                 error()
             end
         elseif isexpr(terminator, :enter)
+            @label enter_check
             if length(block.succs) != 2 || (block.succs != [terminator.args[1], idx+1] && block.succs != [idx+1, terminator.args[1]])
                 @verify_error "Block $idx successors ($(block.succs)), does not match :enter terminator"
                 error()
             end
         else
             if length(block.succs) != 1 || block.succs[1] != idx + 1
-                @verify_error "Block $idx successors ($(block.succs)), does not match fall-through terminator"
+                # As a special case, we allow extra statements in the BB of an :enter
+                # statement, until we can do proper CFG manipulations during compaction.
+                for stmt in ir.stmts[first(block.stmts):last(block.stmts)]
+                    if isexpr(stmt, :enter)
+                        terminator = stmt
+                        @goto enter_check
+                    end
+                    isa(stmt, PhiNode) || break
+                end
+                @verify_error "Block $idx successors ($(block.succs)), does not match fall-through terminator ($terminator)"
                 error()
             end
         end
@@ -114,9 +134,10 @@ function verify_ir(ir::IRCode)
             end
         end
     end
-    # Verify statements
-    domtree = construct_domtree(ir.cfg)
     for (bb, idx) in bbidxiter(ir)
+        # We allow invalid IR in dead code to avoid passes having to detect when
+        # they're generating dead code.
+        bb_unreachable(domtree, bb) && continue
         stmt = ir.stmts[idx]
         stmt === nothing && continue
         if isa(stmt, PhiNode)

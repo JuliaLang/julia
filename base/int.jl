@@ -175,8 +175,15 @@ div(x::Unsigned, y::BitSigned) = unsigned(flipsign(signed(div(x, unsigned(abs(y)
 rem(x::BitSigned, y::Unsigned) = flipsign(signed(rem(unsigned(abs(x)), y)), x)
 rem(x::Unsigned, y::BitSigned) = rem(x, unsigned(abs(y)))
 
-fld(x::Signed, y::Unsigned) = div(x, y) - (signbit(x) & (rem(x, y) != 0))
-fld(x::Unsigned, y::Signed) = div(x, y) - (signbit(y) & (rem(x, y) != 0))
+function divrem(x::BitSigned, y::Unsigned)
+    q, r = divrem(unsigned(abs(x)), y)
+    flipsign(signed(q), x), flipsign(signed(r), x)
+end
+
+function divrem(x::Unsigned, y::BitSigned)
+    q, r = divrem(x, unsigned(abs(y)))
+    unsigned(flipsign(signed(q), y)), r
+end
 
 
 """
@@ -184,11 +191,7 @@ fld(x::Unsigned, y::Signed) = div(x, y) - (signbit(y) & (rem(x, y) != 0))
     rem(x, y, RoundDown)
 
 The reduction of `x` modulo `y`, or equivalently, the remainder of `x` after floored
-division by `y`, i.e.
-```julia
-x - y*fld(x,y)
-```
-if computed without intermediate rounding.
+division by `y`, i.e. `x - y*fld(x,y)` if computed without intermediate rounding.
 
 The result will have the same sign as `y`, and magnitude less than `abs(y)` (with some
 exceptions, see note below).
@@ -224,33 +227,12 @@ mod(x::BitSigned, y::Unsigned) = rem(y + unsigned(rem(x, y)), y)
 mod(x::Unsigned, y::Signed) = rem(y + signed(rem(x, y)), y)
 mod(x::T, y::T) where {T<:Unsigned} = rem(x, y)
 
-cld(x::Signed, y::Unsigned) = div(x, y) + (!signbit(x) & (rem(x, y) != 0))
-cld(x::Unsigned, y::Signed) = div(x, y) + (!signbit(y) & (rem(x, y) != 0))
-
 # Don't promote integers for div/rem/mod since there is no danger of overflow,
 # while there is a substantial performance penalty to 64-bit promotion.
 div(x::T, y::T) where {T<:BitSigned64} = checked_sdiv_int(x, y)
 rem(x::T, y::T) where {T<:BitSigned64} = checked_srem_int(x, y)
 div(x::T, y::T) where {T<:BitUnsigned64} = checked_udiv_int(x, y)
 rem(x::T, y::T) where {T<:BitUnsigned64} = checked_urem_int(x, y)
-
-
-# fld(x,y) == div(x,y) - ((x>=0) != (y>=0) && rem(x,y) != 0 ? 1 : 0)
-fld(x::T, y::T) where {T<:Unsigned} = div(x,y)
-function fld(x::T, y::T) where T<:Integer
-    d = div(x, y)
-    return d - (signbit(x ⊻ y) & (d * y != x))
-end
-
-# cld(x,y) = div(x,y) + ((x>0) == (y>0) && rem(x,y) != 0 ? 1 : 0)
-function cld(x::T, y::T) where T<:Unsigned
-    d = div(x, y)
-    return d + (d * y != x)
-end
-function cld(x::T, y::T) where T<:Integer
-    d = div(x, y)
-    return d + (((x > 0) == (y > 0)) & (d * y != x))
-end
 
 ## integer bitwise operations ##
 
@@ -324,6 +306,8 @@ xor(x::T, y::T) where {T<:BitInteger} = xor_int(x, y)
     bswap(n)
 
 Reverse the byte order of `n`.
+
+(See also [`ntoh`](@ref) and [`hton`](@ref) to convert between the current native byte order and big-endian order.)
 
 # Examples
 ```jldoctest
@@ -553,14 +537,45 @@ floor(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
 
 ## integer construction ##
 
+"""
+    @int128_str str
+    @int128_str(str)
+
+`@int128_str` parses a string into a Int128
+Throws an `ArgumentError` if the string is not a valid integer
+"""
 macro int128_str(s)
     return parse(Int128, s)
 end
 
+"""
+    @uint128_str str
+    @uint128_str(str)
+
+`@uint128_str` parses a string into a UInt128
+Throws an `ArgumentError` if the string is not a valid integer
+"""
 macro uint128_str(s)
     return parse(UInt128, s)
 end
 
+"""
+    @big_str str
+    @big_str(str)
+
+Parse a string into a [`BigInt`](@ref) or [`BigFloat`](@ref),
+and throw an `ArgumentError` if the string is not a valid number.
+For integers `_` is allowed in the string as a separator.
+
+# Examples
+```jldoctest
+julia> big"123_456"
+123456
+
+julia> big"7891.5"
+7891.5
+```
+"""
 macro big_str(s)
     if '_' in s
         # remove _ in s[2:end-1]
@@ -600,9 +615,6 @@ promote_rule(::Type{UInt16},  ::Type{Int16} ) = UInt16
 promote_rule(::Type{UInt32},  ::Type{Int32} ) = UInt32
 promote_rule(::Type{UInt64},  ::Type{Int64} ) = UInt64
 promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
-
-_default_type(::Type{Unsigned}) = UInt
-_default_type(::Union{Type{Integer},Type{Signed}}) = Int
 
 ## traits ##
 
@@ -735,23 +747,101 @@ if Core.sizeof(Int) == 4
         return (lolo & 0xffffffffffffffff) + UInt128(w1) << 64
     end
 
-    function div(x::Int128, y::Int128)
-        (x == typemin(Int128)) & (y == -1) && throw(DivideError())
-        return Int128(div(BigInt(x), BigInt(y)))
-    end
-    function div(x::UInt128, y::UInt128)
-        return UInt128(div(BigInt(x), BigInt(y)))::UInt128
+    function _setbit(x::UInt128, i)
+        # faster version of `return x | (UInt128(1) << i)`
+        j = i >> 5
+        y = UInt128(one(UInt32) << (i & 0x1f))
+        if j == 0
+            return x | y
+        elseif j == 1
+            return x | (y << 32)
+        elseif j == 2
+            return x | (y << 64)
+        elseif j == 3
+            return x | (y << 96)
+        end
+        return x
     end
 
-    function rem(x::Int128, y::Int128)
-        return Int128(rem(BigInt(x), BigInt(y)))
+    function divrem(x::UInt128, y::UInt128)
+        iszero(y) && throw(DivideError())
+        if (x >> 64) % UInt64 == 0
+            if (y >> 64) % UInt64 == 0
+                # fast path: upper 64 bits are zero, so we can fallback to UInt64 division
+                q64, x64 = divrem(x % UInt64, y % UInt64)
+                return UInt128(q64), UInt128(x64)
+            else
+                # this implies y>x, so
+                return zero(UInt128), x
+            end
+        end
+        n = leading_zeros(y) - leading_zeros(x)
+        q = zero(UInt128)
+        ys = y << n
+        while n >= 0
+            # ys == y * 2^n
+            if ys <= x
+                x -= ys
+                q = _setbit(q, n)
+                if (x >> 64) % UInt64 == 0
+                    # exit early, similar to above fast path
+                    if (y >> 64) % UInt64 == 0
+                        q64, x64 = divrem(x % UInt64, y % UInt64)
+                        q |= q64
+                        x = UInt128(x64)
+                    end
+                    return q, x
+                end
+            end
+            ys >>>= 1
+            n -= 1
+        end
+        return q, x
     end
+
+    function div(x::Int128, y::Int128)
+        (x == typemin(Int128)) & (y == -1) && throw(DivideError())
+        return Int128(div(BigInt(x), BigInt(y)))::Int128
+    end
+    div(x::UInt128, y::UInt128) = divrem(x, y)[1]
+
+    function rem(x::Int128, y::Int128)
+        return Int128(rem(BigInt(x), BigInt(y)))::Int128
+    end
+
     function rem(x::UInt128, y::UInt128)
-        return UInt128(rem(BigInt(x), BigInt(y)))
+        iszero(y) && throw(DivideError())
+        if (x >> 64) % UInt64 == 0
+            if (y >> 64) % UInt64 == 0
+                # fast path: upper 64 bits are zero, so we can fallback to UInt64 division
+                return UInt128(rem(x % UInt64, y % UInt64))
+            else
+                # this implies y>x, so
+                return x
+            end
+        end
+        n = leading_zeros(y) - leading_zeros(x)
+        ys = y << n
+        while n >= 0
+            # ys == y * 2^n
+            if ys <= x
+                x -= ys
+                if (x >> 64) % UInt64 == 0
+                    # exit early, similar to above fast path
+                    if (y >> 64) % UInt64 == 0
+                        x = UInt128(rem(x % UInt64, y % UInt64))
+                    end
+                    return x
+                end
+            end
+            ys >>>= 1
+            n -= 1
+        end
+        return x
     end
 
     function mod(x::Int128, y::Int128)
-        return Int128(mod(BigInt(x), BigInt(y)))
+        return Int128(mod(BigInt(x), BigInt(y)))::Int128
     end
 else
     *(x::T, y::T) where {T<:Union{Int128,UInt128}}  = mul_int(x, y)

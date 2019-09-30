@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 module SHA
 
 # Export convenience functions, context types, update!() and digest!() functions

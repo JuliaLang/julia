@@ -35,8 +35,7 @@ struct GC_Diff
 end
 
 gc_total_bytes(gc_num::GC_Num) =
-    (gc_num.allocd + gc_num.deferred_alloc +
-     Int64(gc_num.collect) + Int64(gc_num.total_allocd))
+    (gc_num.allocd + gc_num.deferred_alloc + Int64(gc_num.total_allocd))
 
 function GC_Diff(new::GC_Num, old::GC_Num)
     # logic from `src/gc.c:jl_gc_total_bytes`
@@ -77,39 +76,43 @@ function prettyprint_getunits(value, numunits, factor)
     return number, unit
 end
 
-function padded_nonzero_print(value,str)
+function padded_nonzero_print(value, str)
     if value != 0
-        blanks = "                "[1:18-length(str)]
-        println("$str:$blanks$value")
+        blanks = "                "[1:(18 - length(str))]
+        println(str, ":", blanks, value)
     end
 end
 
-function format_bytes(bytes)
+
+function format_bytes(bytes) # also used by InteractiveUtils
     bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))
     if mb == 1
-        Printf.@sprintf("%d %s%s", bytes, _mem_units[mb], bytes==1 ? "" : "s")
+        return string(Int(bytes), " ", _mem_units[mb], bytes==1 ? "" : "s")
     else
-        Printf.@sprintf("%.3f %s", bytes, _mem_units[mb])
+        return string(Ryu.writefixed(Float64(bytes), 3), " ", _mem_units[mb])
     end
 end
 
 function time_print(elapsedtime, bytes=0, gctime=0, allocs=0)
-    Printf.@printf("%10.6f seconds", elapsedtime/1e9)
+    timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
+    length(timestr) < 10 && print(" "^(10 - length(timestr)))
+    print(timestr, " seconds")
     if bytes != 0 || allocs != 0
         allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
         if ma == 1
-            Printf.@printf(" (%d%s allocation%s: ", allocs, _cnt_units[ma], allocs==1 ? "" : "s")
+            print(" (", Int(allocs), _cnt_units[ma], allocs==1 ? " allocation: " : " allocations: ")
         else
-            Printf.@printf(" (%.2f%s allocations: ", allocs, _cnt_units[ma])
+            print(" (", Ryu.writefixed(Float64(allocs), 2), _cnt_units[ma], " allocations: ")
         end
         print(format_bytes(bytes))
-        if gctime > 0
-            Printf.@printf(", %.2f%% gc time", 100*gctime/elapsedtime)
-        end
-        print(")")
-    elseif gctime > 0
-        Printf.@printf(", %.2f%% gc time", 100*gctime/elapsedtime)
     end
+    if gctime > 0
+        print(", ", Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
+    end
+    if bytes != 0 || allocs != 0
+        print(")")
+    end
+    nothing
 end
 
 function timev_print(elapsedtime, diff::GC_Diff)
@@ -136,6 +139,11 @@ returning the value of the expression.
 
 See also [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
+
+!!! note
+    For more serious benchmarking, consider the `@btime` macro from the BenchmarkTools.jl
+    package which among other things evaluates the function multiple times in order to
+    reduce noise.
 
 ```julia-repl
 julia> @time rand(10^6);
@@ -400,27 +408,78 @@ printstyled(io::IO, msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) 
 printstyled(msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
     printstyled(stdout, msg...; bold=bold, color=color)
 
+"""
+    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR::String, julia_exename()))
+
+Return a julia command similar to the one of the running process.
+Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-native-code`,
+`--compiled-modules`, `--inline`, `--check-bounds`, `--optimize`, `-g`,
+`--code-coverage`, and `--depwarn`
+command line arguments that are not at their default values.
+
+Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notably not propagated currently.
+
+!!! compat "Julia 1.1"
+    Only the `--cpu-target`, `--sysimage`, `--depwarn`, `--compile` and `--check-bounds` flags were propagated before Julia 1.1.
+"""
 function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
     opts = JLOptions()
     cpu_target = unsafe_string(opts.cpu_target)
     image_file = unsafe_string(opts.image_file)
-    compile = if opts.compile_enabled == 0
-                  "no"
-              elseif opts.compile_enabled == 2
-                  "all"
-              elseif opts.compile_enabled == 3
-                  "min"
-              else
-                  "yes"
-              end
-    depwarn = if opts.depwarn == 0
-                  "no"
-              elseif opts.depwarn == 2
-                  "error"
-              else
-                  "yes"
-              end
-    `$julia -C$cpu_target -J$image_file --compile=$compile --depwarn=$depwarn`
+    addflags = String[]
+    let compile = if opts.compile_enabled == 0
+                      "no"
+                  elseif opts.compile_enabled == 2
+                      "all"
+                  elseif opts.compile_enabled == 3
+                      "min"
+                  else
+                      "" # default = "yes"
+                  end
+        isempty(compile) || push!(addflags, "--compile=$compile")
+    end
+    let depwarn = if opts.depwarn == 0
+                      "no"
+                  elseif opts.depwarn == 2
+                      "error"
+                  else
+                      "" # default = "yes"
+                  end
+        isempty(depwarn) || push!(addflags, "--depwarn=$depwarn")
+    end
+    let check_bounds = if opts.check_bounds == 1
+                      "yes" # on
+                  elseif opts.check_bounds == 2
+                      "no" # off
+                  else
+                      "" # "default"
+                  end
+        isempty(check_bounds) || push!(addflags, "--check-bounds=$check_bounds")
+    end
+    opts.can_inline == 0 && push!(addflags, "--inline=no")
+    opts.use_compiled_modules == 0 && push!(addflags, "--compiled-modules=no")
+    opts.opt_level == 2 || push!(addflags, "-O$(opts.opt_level)")
+    push!(addflags, "-g$(opts.debug_level)")
+    if opts.code_coverage != 0
+        # Forward the code-coverage flag only if applicable (if the filename is pid-dependent)
+        coverage_file = (opts.output_code_coverage != C_NULL) ?  unsafe_string(opts.output_code_coverage) : ""
+        if isempty(coverage_file) || occursin("%p", coverage_file)
+            if opts.code_coverage == 1
+                push!(addflags, "--code-coverage=user")
+            elseif opts.code_coverage == 2
+                push!(addflags, "--code-coverage=all")
+            end
+            isempty(coverage_file) || push!(addflags, "--code-coverage=$coverage_file")
+        end
+    end
+    if opts.malloc_log != 0
+        if opts.malloc_log == 1
+            push!(addflags, "--track-allocation=user")
+        elseif opts.malloc_log == 2
+            push!(addflags, "--track-allocation=all")
+        end
+    end
+    return `$julia -C$cpu_target -J$image_file $addflags`
 end
 
 function julia_exename()
@@ -476,7 +535,7 @@ function getpass(input::TTY, output::IO, prompt::AbstractString)
             write(s, c)
         end
     end
-    return s
+    return seekstart(s)
 end
 else
 function getpass(input::TTY, output::IO, prompt::AbstractString)
@@ -563,11 +622,8 @@ if Sys.iswindows()
 
         #      2.3: If that failed for any reason other than the user canceling, error out.
         #           If the user canceled, just return nothing
-        if code == ERROR_CANCELLED
-            return nothing
-        elseif code != ERROR_SUCCESS
-            error(Base.Libc.FormatMessage(code))
-        end
+        code == ERROR_CANCELLED && return nothing
+        windowserror(:winprompt, code != ERROR_SUCCESS)
 
         # Step 3: Convert encrypted credentials back to plain text
         passbuf = Vector{UInt16}(undef, 1024)
@@ -579,9 +635,7 @@ if Sys.iswindows()
         succeeded = ccall((:CredUnPackAuthenticationBufferW, "credui.dll"), Bool,
             (UInt32, Ptr{Cvoid}, UInt32, Ptr{UInt16}, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}),
             0, outbuf_data[], outbuf_size[], usernamebuf, usernamelen, dummybuf, Ref{UInt32}(1024), passbuf, passlen)
-        if !succeeded
-            error(Base.Libc.FormatMessage())
-        end
+        windowserror(:winprompt, !succeeded)
 
         # Step 4: Free the encrypted buffer
         # ccall(:SecureZeroMemory, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t), outbuf_data[], outbuf_size[]) - not an actual function
@@ -608,7 +662,7 @@ _crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} whe
 _crc32c(s::String, crc::UInt32=0x00000000) = unsafe_crc32c(s, sizeof(s) % Csize_t, crc)
 
 function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
-    nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0"))
+    nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0, got $nb"))
     # use block size 24576=8192*3, since that is the threshold for
     # 3-way parallel SIMD code in the underlying jl_crc32c C function.
     buf = Vector{UInt8}(undef, min(nb, 24576))
@@ -633,6 +687,14 @@ expression. The default argument is supplied by declaring fields of the form `fi
 default` or `field = default`. If no default is provided then the keyword argument becomes
 a required keyword argument in the resulting type constructor.
 
+Inner constructors can still be defined, but at least one should accept arguments in the
+same form as the default inner constructor (i.e. one positional argument per field) in
+order to function correctly with the keyword outer constructor.
+
+!!! compat "Julia 1.1"
+    `Base.@kwdef` for parametric structs, and structs with supertypes
+    requires at least Julia 1.1.
+
 # Examples
 ```jldoctest
 julia> Base.@kwdef struct Foo
@@ -652,51 +714,82 @@ Stacktrace:
 """
 macro kwdef(expr)
     expr = macroexpand(__module__, expr) # to expand @static
+    expr isa Expr && expr.head == :struct || error("Invalid usage of @kwdef")
     T = expr.args[2]
-    params_ex = Expr(:parameters)
-    call_ex = Expr(:call, T)
-    _kwdef!(expr.args[3], params_ex, call_ex)
-    ret = quote
-        Base.@__doc__($(esc(expr)))
+    if T isa Expr && T.head == :<:
+        T = T.args[1]
     end
+
+    params_ex = Expr(:parameters)
+    call_args = Any[]
+
+    _kwdef!(expr.args[3], params_ex.args, call_args)
     # Only define a constructor if the type has fields, otherwise we'll get a stack
     # overflow on construction
     if !isempty(params_ex.args)
-        push!(ret.args, :($(esc(Expr(:call, T, params_ex))) = $(esc(call_ex))))
+        if T isa Symbol
+            kwdefs = :(($(esc(T)))($params_ex) = ($(esc(T)))($(call_args...)))
+        elseif T isa Expr && T.head == :curly
+            # if T == S{A<:AA,B<:BB}, define two methods
+            #   S(...) = ...
+            #   S{A,B}(...) where {A<:AA,B<:BB} = ...
+            S = T.args[1]
+            P = T.args[2:end]
+            Q = [U isa Expr && U.head == :<: ? U.args[1] : U for U in P]
+            SQ = :($S{$(Q...)})
+            kwdefs = quote
+                ($(esc(S)))($params_ex) =($(esc(S)))($(call_args...))
+                ($(esc(SQ)))($params_ex) where {$(esc.(P)...)} =
+                    ($(esc(SQ)))($(call_args...))
+            end
+        else
+            error("Invalid usage of @kwdef")
+        end
+    else
+        kwdefs = nothing
     end
-    ret
+    quote
+        Base.@__doc__($(esc(expr)))
+        $kwdefs
+    end
 end
 
 # @kwdef helper function
 # mutates arguments inplace
-function _kwdef!(blk, params_ex, call_ex)
+function _kwdef!(blk, params_args, call_args)
     for i in eachindex(blk.args)
         ei = blk.args[i]
-        if isa(ei, Symbol)
-            push!(params_ex.args, ei)
-            push!(call_ex.args, ei)
-        elseif !isa(ei, Expr)
-            continue
-        elseif ei.head == :(=)
-            # var::Typ = defexpr
-            dec = ei.args[1]  # var::Typ
-            if isa(dec, Expr) && dec.head == :(::)
-                var = dec.args[1]
-            else
-                var = dec
+        if ei isa Symbol
+            #  var
+            push!(params_args, ei)
+            push!(call_args, ei)
+        elseif ei isa Expr
+            if ei.head == :(=)
+                lhs = ei.args[1]
+                if lhs isa Symbol
+                    #  var = defexpr
+                    var = lhs
+                elseif lhs isa Expr && lhs.head == :(::) && lhs.args[1] isa Symbol
+                    #  var::T = defexpr
+                    var = lhs.args[1]
+                else
+                    # something else, e.g. inline inner constructor
+                    #   F(...) = ...
+                    continue
+                end
+                defexpr = ei.args[2]  # defexpr
+                push!(params_args, Expr(:kw, var, esc(defexpr)))
+                push!(call_args, var)
+                blk.args[i] = lhs
+            elseif ei.head == :(::) && ei.args[1] isa Symbol
+                # var::Typ
+                var = ei.args[1]
+                push!(params_args, var)
+                push!(call_args, var)
+            elseif ei.head == :block
+                # can arise with use of @static inside type decl
+                _kwdef!(ei, params_args, call_args)
             end
-            def = ei.args[2]  # defexpr
-            push!(params_ex.args, Expr(:kw, var, def))
-            push!(call_ex.args, var)
-            blk.args[i] = dec
-        elseif ei.head == :(::)
-            dec = ei # var::Typ
-            var = dec.args[1] # var
-            push!(params_ex.args, var)
-            push!(call_ex.args, var)
-        elseif ei.head == :block
-            # can arise with use of @static inside type decl
-            _kwdef!(ei, params_ex, call_ex)
         end
     end
     blk
@@ -722,7 +815,7 @@ function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
         tests = split(tests)
     end
     exit_on_error && push!(tests, "--exit-on-error")
-    seed != nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
+    seed !== nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
     try

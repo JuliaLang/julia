@@ -39,7 +39,7 @@ end
     n1 = div(n, 2)
     n2 = 2*n1
 
-    srand(1234321)
+    Random.seed!(1234321)
 
     areal = randn(n,n)/2
     aimg  = randn(n,n)/2
@@ -73,7 +73,7 @@ end
 
         #these tests were failing on 64-bit linux when inside the inner loop
         #for eltya = ComplexF32 and eltyb = Int. The E[i,j] had NaN32 elements
-        #but only with srand(1234321) set before the loops.
+        #but only with Random.seed!(1234321) set before the loops.
         E = abs.(apd - r'*r)
         for i=1:n, j=1:n
             @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
@@ -164,7 +164,67 @@ end
                     lpapd = cholesky(apdhL, Val(true))
                     @test norm(apd * (lpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
                     @test norm(apd * (lpapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
+                end
+            end
+        end
 
+        for eltyb in (Float64, ComplexF64)
+            Breal = convert(Matrix{BigFloat}, randn(n,n)/2)
+            Bimg  = convert(Matrix{BigFloat}, randn(n,n)/2)
+            B = (eltya <: Complex || eltyb <: Complex) ? complex.(Breal, Bimg) : Breal
+            εb = eps(abs(float(one(eltyb))))
+            ε = max(εa,εb)
+
+            for B in (B, view(B, 1:n, 1:n)) # Array and SubArray
+
+                # Test error bound on linear solver: LAWNS 14, Theorem 2.1
+                # This is a surprisingly loose bound
+                BB = copy(B)
+                ldiv!(capd, BB)
+                @test norm(apd \ B - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                @test norm(apd * BB - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                if eltya != BigFloat
+                    cpapd = cholesky(apdh, Val(true))
+                    BB = copy(B)
+                    ldiv!(cpapd, BB)
+                    @test norm(apd \ B - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                    @test norm(apd * BB - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                end
+            end
+        end
+
+        @testset "solve with generic Cholesky" begin
+            Breal = convert(Matrix{BigFloat}, randn(n,n)/2)
+            Bimg  = convert(Matrix{BigFloat}, randn(n,n)/2)
+            B = eltya <: Complex ? complex.(Breal, Bimg) : Breal
+            εb = eps(abs(float(one(eltype(B)))))
+            ε = max(εa,εb)
+
+            for B in (B, view(B, 1:n, 1:n)) # Array and SubArray
+
+                # Test error bound on linear solver: LAWNS 14, Theorem 2.1
+                # This is a surprisingly loose bound
+                cpapd = cholesky(eltya <: Complex ? apdh : apds)
+                BB = copy(B)
+                rdiv!(BB, cpapd)
+                @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                cpapd = cholesky(eltya <: Complex ? apdhL : apdsL)
+                BB = copy(B)
+                rdiv!(BB, cpapd)
+                @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                if eltya != BigFloat
+                    cpapd = cholesky(eltya <: Complex ? apdh : apds, Val(true))
+                    BB = copy(B)
+                    rdiv!(BB, cpapd)
+                    @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                    @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                    cpapd = cholesky(eltya <: Complex ? apdhL : apdsL, Val(true))
+                    BB = copy(B)
+                    rdiv!(BB, cpapd)
+                    @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                    @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
                 end
             end
         end
@@ -304,6 +364,32 @@ end
 
     # InexactError for Int
     @test_throws InexactError cholesky!(Diagonal([2, 1]))
+end
+
+@testset "constructor with non-BlasInt arguments" begin
+
+    x = rand(5,5)
+    chol = cholesky(x'x)
+
+    factors, uplo, info = chol.factors, chol.uplo, chol.info
+
+    @test Cholesky(factors, uplo, Int32(info)) == chol
+    @test Cholesky(factors, uplo, Int64(info)) == chol
+
+    cholp = cholesky(x'x, Val(true))
+
+    factors, uplo, piv, rank, tol, info =
+        cholp.factors, cholp.uplo, cholp.piv, cholp.rank, cholp.tol, cholp.info
+
+    @test CholeskyPivoted(factors, uplo, Vector{Int32}(piv), rank, tol, info) == cholp
+    @test CholeskyPivoted(factors, uplo, Vector{Int64}(piv), rank, tol, info) == cholp
+
+    @test CholeskyPivoted(factors, uplo, piv, Int32(rank), tol, info) == cholp
+    @test CholeskyPivoted(factors, uplo, piv, Int64(rank), tol, info) == cholp
+
+    @test CholeskyPivoted(factors, uplo, piv, rank, tol, Int32(info)) == cholp
+    @test CholeskyPivoted(factors, uplo, piv, rank, tol, Int64(info)) == cholp
+
 end
 
 end # module TestCholesky

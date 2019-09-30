@@ -992,6 +992,20 @@ let dt2 = _repl(:(dynamic_test(::String)))
     @test dt2.args[1].args[1] == Symbol("@doc")
     @test dt2.args[1].args[3] == :(dynamic_test(::String))
 end
+let dt3 = _repl(:(dynamic_test(a)))
+    @test dt3 isa Expr
+    @test dt3.args[1] isa Expr
+    @test dt3.args[1].head === :macrocall
+    @test dt3.args[1].args[1] == Symbol("@doc")
+    @test dt3.args[1].args[3].args[2].head == :(::) # can't test equality due to line numbers
+end
+let dt4 = _repl(:(dynamic_test(1.0,u=2.0)))
+    @test dt4 isa Expr
+    @test dt4.args[1] isa Expr
+    @test dt4.args[1].head === :macrocall
+    @test dt4.args[1].args[1] == Symbol("@doc")
+    @test dt4.args[1].args[3] == :(dynamic_test(::typeof(1.0); u::typeof(2.0)=2.0))
+end
 
 # Equality testing
 
@@ -1120,6 +1134,13 @@ struct A_20087 end
 (a::A_20087)() = a
 
 @test docstrings_equal(@doc(A_20087()), doc"a")
+
+struct B_20087 end
+
+"""b"""
+(::B_20087)() = a
+
+@test docstrings_equal(@doc(B_20087()), doc"b")
 
 # issue #27832
 

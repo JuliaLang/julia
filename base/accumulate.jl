@@ -86,11 +86,7 @@ julia> cumsum(a, dims=2)
  4  9  15
 ```
 """
-function cumsum(A::AbstractArray{T}; dims::Union{Nothing,Integer}=nothing) where T
-    if dims === nothing
-        depwarn("`cumsum(A::AbstractArray)` is deprecated, use `cumsum(A, dims=1)` instead.", :cumsum)
-        dims = 1
-    end
+function cumsum(A::AbstractArray{T}; dims::Integer) where T
     out = similar(A, promote_op(add_sum, T, T))
     cumsum!(out, A, dims=dims)
 end
@@ -162,11 +158,7 @@ julia> cumprod(a, dims=2)
  4  20  120
 ```
 """
-function cumprod(A::AbstractArray; dims::Union{Nothing,Integer}=nothing)
-    if dims === nothing
-        depwarn("`cumprod(A::AbstractArray)` is deprecated, use `cumprod(A, dims=1)` instead.", :cumprod)
-        dims = 1
-    end
+function cumprod(A::AbstractArray; dims::Integer)
     return accumulate(mul_prod, A, dims=dims)
 end
 
@@ -199,7 +191,7 @@ cumprod(x::AbstractVector) = cumprod(x, dims=1)
     accumulate(op, A; dims::Integer, [init])
 
 Cumulative operation `op` along the dimension `dims` of `A` (providing `dims` is optional
-for vectors). An inital value `init` may optionally be privided by a keyword argument. See
+for vectors). An initial value `init` may optionally be provided by a keyword argument. See
 also [`accumulate!`](@ref) to use a preallocated output array, both for performance and
 to control the precision of the output (e.g. to avoid overflow). For common operations
 there are specialized variants of `accumulate`, see: [`cumsum`](@ref), [`cumprod`](@ref)

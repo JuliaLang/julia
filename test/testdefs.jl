@@ -15,10 +15,11 @@ function runtests(name, path, isolate=true; seed=nothing)
             m = Main
         end
         @eval(m, using Test, Random)
+        println("running testset ", name, "...")
         ex = quote
             @timed @testset $"$name" begin
-                # srand(nothing) will fail
-                $seed != nothing && srand($seed)
+                # Random.seed!(nothing) will fail
+                $seed != nothing && Random.seed!($seed)
                 include($"$path.jl")
             end
         end

@@ -11,7 +11,7 @@ using LinearAlgebra: BlasFloat, errorbounds, full!, naivesub!, transpose!,
 debug && println("Triangular matrices")
 
 n = 9
-srand(123)
+Random.seed!(123)
 
 debug && println("Test basic type functionality")
 @test_throws DimensionMismatch LowerTriangular(randn(5, 4))
@@ -27,13 +27,15 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
 
         # Construct test matrix
         A1 = t1(elty1 == Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (elty1 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> cholesky(t't).U |> t -> uplo1 == :U ? t : copy(t')))
-
+        @test t1(A1) === A1
+        @test t1{elty1}(A1) === A1
 
         debug && println("elty1: $elty1, A1: $t1")
 
         # Convert
         @test convert(AbstractMatrix{elty1}, A1) == A1
         @test convert(Matrix, A1) == A1
+        @test t1{elty1}(convert(AbstractMatrix{elty1}, A1)) == A1
 
         # full!
         @test full!(copy(A1)) == A1
@@ -99,9 +101,17 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         if uplo1 == :L
             @test istril(A1)
             @test !istriu(A1)
+            @test istriu(A1')
+            @test istriu(transpose(A1))
+            @test !istril(A1')
+            @test !istril(transpose(A1))
         else
             @test istriu(A1)
             @test !istril(A1)
+            @test istril(A1')
+            @test istril(transpose(A1))
+            @test !istriu(A1')
+            @test !istriu(transpose(A1))
         end
 
         #tril/triu
@@ -109,24 +119,24 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             @test tril(A1,0)  == A1
             @test tril(A1,-1) == LowerTriangular(tril(Matrix(A1), -1))
             @test tril(A1,1)  == t1(tril(tril(Matrix(A1), 1)))
-            @test_throws ArgumentError tril!(A1, -n - 2)
-            @test_throws ArgumentError tril!(A1, n)
+            @test tril(A1, -n - 2) == zeros(size(A1))
+            @test tril(A1, n) == A1
             @test triu(A1,0)  == t1(diagm(0 => diag(A1)))
             @test triu(A1,-1) == t1(tril(triu(A1.data,-1)))
             @test triu(A1,1)  == zeros(size(A1)) # or just @test iszero(triu(A1,1))?
-            @test_throws ArgumentError triu!(A1, -n)
-            @test_throws ArgumentError triu!(A1, n + 2)
+            @test triu(A1, -n) == A1
+            @test triu(A1, n + 2) == zeros(size(A1))
         else
             @test triu(A1,0)  == A1
             @test triu(A1,1)  == UpperTriangular(triu(Matrix(A1), 1))
             @test triu(A1,-1) == t1(triu(triu(Matrix(A1), -1)))
-            @test_throws ArgumentError triu!(A1, -n)
-            @test_throws ArgumentError triu!(A1, n + 2)
+            @test triu(A1, -n) == A1
+            @test triu(A1, n + 2) == zeros(size(A1))
             @test tril(A1,0)  == t1(diagm(0 => diag(A1)))
             @test tril(A1,1)  == t1(triu(tril(A1.data,1)))
             @test tril(A1,-1) == zeros(size(A1)) # or just @test iszero(tril(A1,-1))?
-            @test_throws ArgumentError tril!(A1, -n - 2)
-            @test_throws ArgumentError tril!(A1, n)
+            @test tril(A1, -n - 2) == zeros(size(A1))
+            @test tril(A1, n) == A1
         end
 
         # factorize
@@ -204,6 +214,10 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 A2tmp = unitt(A1)
                 mul!(A1tmp, A2tmp, cr)
                 @test A1tmp == cr * A2tmp
+                A1tmp = copy(A1)
+                A2tmp = unitt(A1)
+                mul!(A1tmp, cr, A2tmp)
+                @test A1tmp == cr * A2tmp
             else
                 A1tmp = copy(A1)
                 rmul!(A1tmp, ci)
@@ -213,8 +227,23 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 @test A1tmp == ci*A1
                 A1tmp = copy(A1)
                 A2tmp = unitt(A1)
-                mul!(A1tmp, A2tmp, ci)
+                mul!(A1tmp, ci, A2tmp)
                 @test A1tmp == ci * A2tmp
+                A1tmp = copy(A1)
+                A2tmp = unitt(A1)
+                mul!(A1tmp, A2tmp, ci)
+                @test A1tmp == A2tmp*ci
+            end
+        end
+
+        # generalized dot
+        for eltyb in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
+            b1 = convert(Vector{eltyb}, (elty1 <: Complex ? real(A1) : A1)*fill(1., n))
+            b2 = convert(Vector{eltyb}, (elty1 <: Complex ? real(A1) : A1)*randn(n))
+            if elty1 in (BigFloat, Complex{BigFloat}) || eltyb in (BigFloat, Complex{BigFloat})
+                @test dot(b1, A1, b2) ≈ dot(A1'b1, b2)  atol=sqrt(max(eps(real(float(one(elty1)))),eps(real(float(one(eltyb))))))*n*n
+            else
+                @test dot(b1, A1, b2) ≈ dot(A1'b1, b2)  atol=sqrt(max(eps(real(float(one(elty1)))),eps(real(float(one(eltyb))))))*n*n
             end
         end
 
@@ -322,6 +351,13 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             if !(eltyB in (BigFloat, Complex{BigFloat})) # rand does not support BigFloat and Complex{BigFloat} as of Dec 2015
                 Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
                 @test lmul!(Tri,copy(A1)) ≈ Tri*Matrix(A1)
+                Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
+                C = Matrix{promote_type(elty1,eltyB)}(undef, n, n)
+                mul!(C, Tri, copy(A1))
+                @test C ≈ Tri*Matrix(A1)
+                Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
+                mul!(C, copy(A1), Tri)
+                @test C ≈ Matrix(A1)*Tri
             end
 
             # Triangular-dense Matrix/vector multiplication
@@ -519,8 +555,10 @@ end
 
 # dimensional correctness:
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
-using .Main.TestHelpers: Furlong
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
+LinearAlgebra.sylvester(a::Furlong,b::Furlong,c::Furlong) = -c / (a + b)
+
 let A = UpperTriangular([Furlong(1) Furlong(4); Furlong(0) Furlong(1)])
     @test sqrt(A) == Furlong{1//2}.(UpperTriangular([1 2; 0 1]))
 end

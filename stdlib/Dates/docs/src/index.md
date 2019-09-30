@@ -244,7 +244,7 @@ Date
       value: Int64 735264
 
 julia> t.instant
-Dates.UTInstant{Day}(735264 days)
+Dates.UTInstant{Day}(Day(735264))
 
 julia> Dates.value(t)
 735264
@@ -347,7 +347,7 @@ The `Dates` module approach tries to follow the simple principle of trying to ch
 little as possible when doing [`Period`](@ref) arithmetic. This approach is also often known as
 *calendrical* arithmetic or what you would probably guess if someone were to ask you the same
 calculation in a conversation. Why all the fuss about this? Let's take a classic example: add
-1 month to January 31st, 2014. What's the answer? Javascript will say [March 3](http://www.markhneedham.com/blog/2009/01/07/javascript-add-a-month-to-a-date/)
+1 month to January 31st, 2014. What's the answer? Javascript will say [March 3](https://markhneedham.com/blog/2009/01/07/javascript-add-a-month-to-a-date/)
 (assumes 31 days). PHP says [March 2](https://stackoverflow.com/questions/5760262/php-adding-months-to-a-date-while-not-exceeding-the-last-day-of-the-month)
 (assumes 30 days). The fact is, there is no right answer. In the `Dates` module, it gives
 the result of February 28th. How does it figure that out? I like to think of the classic 7-7-7
@@ -400,29 +400,29 @@ As a bonus, all period arithmetic objects work directly with ranges:
 
 ```jldoctest
 julia> dr = Date(2014,1,29):Day(1):Date(2014,2,3)
-2014-01-29:1 day:2014-02-03
+Date(2014, 1, 29):Day(1):Date(2014, 2, 3)
 
 julia> collect(dr)
 6-element Array{Date,1}:
- 2014-01-29
- 2014-01-30
- 2014-01-31
- 2014-02-01
- 2014-02-02
- 2014-02-03
+ Date(2014, 1, 29)
+ Date(2014, 1, 30)
+ Date(2014, 1, 31)
+ Date(2014, 2, 1)
+ Date(2014, 2, 2)
+ Date(2014, 2, 3)
 
 julia> dr = Date(2014,1,29):Dates.Month(1):Date(2014,07,29)
-2014-01-29:1 month:2014-07-29
+Date(2014, 1, 29):Month(1):Date(2014, 7, 29)
 
 julia> collect(dr)
 7-element Array{Date,1}:
- 2014-01-29
- 2014-02-28
- 2014-03-29
- 2014-04-29
- 2014-05-29
- 2014-06-29
- 2014-07-29
+ Date(2014, 1, 29)
+ Date(2014, 2, 28)
+ Date(2014, 3, 29)
+ Date(2014, 4, 29)
+ Date(2014, 5, 29)
+ Date(2014, 6, 29)
+ Date(2014, 7, 29)
 ```
 
 ## Adjuster Functions
@@ -492,14 +492,15 @@ julia> filter(dr) do x
            Dates.dayofweekofmonth(x) == 2
        end
 8-element Array{Date,1}:
- 2014-04-08
- 2014-05-13
- 2014-06-10
- 2014-07-08
- 2014-08-12
- 2014-09-09
- 2014-10-14
- 2014-11-11
+ Date(2014, 4, 8)
+ Date(2014, 5, 13)
+ Date(2014, 6, 10)
+ Date(2014, 7, 8)
+ Date(2014, 8, 12)
+ Date(2014, 9, 9)
+ Date(2014, 10, 14)
+ Date(2014, 11, 11)
+
 ```
 
 Additional examples and tests are available in [`stdlib/Dates/test/adjusters.jl`](https://github.com/JuliaLang/julia/blob/master/stdlib/Dates/test/adjusters.jl).
@@ -511,7 +512,8 @@ it could represent, in days, a value of 28, 29, 30, or 31 depending on the year 
 Or a year could represent 365 or 366 days in the case of a leap year. [`Period`](@ref) types are
 simple [`Int64`](@ref) wrappers and are constructed by wrapping any `Int64` convertible type, i.e. `Year(1)`
 or `Month(3.0)`. Arithmetic between [`Period`](@ref) of the same type behave like integers, and
-limited `Period-Real` arithmetic is available.
+limited `Period-Real` arithmetic is available.  You can extract the underlying integer with
+[`Dates.value`](@ref).
 
 ```jldoctest
 julia> y1 = Dates.Year(1)
@@ -537,6 +539,9 @@ julia> y3 % y2
 
 julia> div(y3,3) # mirrors integer division
 3 years
+
+julia> Dates.value(Dates.Millisecond(10))
+10
 ```
 
 ## Rounding
@@ -649,7 +654,7 @@ Dates.DateTime(::Dates.Period)
 Dates.DateTime(::Function, ::Any...)
 Dates.DateTime(::Dates.TimeType)
 Dates.DateTime(::AbstractString, ::AbstractString)
-Dates.format
+Dates.format(::Dates.TimeType, ::AbstractString)
 Dates.DateFormat
 Dates.@dateformat_str
 Dates.DateTime(::AbstractString, ::Dates.DateFormat)
@@ -740,6 +745,7 @@ Dates.toprev(::Function, ::Dates.TimeType)
 ```@docs
 Dates.Period(::Any)
 Dates.CompoundPeriod(::Vector{<:Dates.Period})
+Dates.value
 Dates.default
 ```
 

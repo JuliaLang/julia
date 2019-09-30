@@ -9,7 +9,10 @@ using LinearAlgebra
 import LinearAlgebra: Factorization, det, lu, ldiv!
 
 using SparseArrays
+using SparseArrays: getcolptr
 import SparseArrays: nnz
+
+import Serialization: AbstractSerializer, deserialize
 
 import ..increment, ..increment!, ..decrement, ..decrement!
 
@@ -149,11 +152,11 @@ The relation between `F` and `A` is
     `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}` as appropriate.
 """
 function lu(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes}; check::Bool = true)
-    zerobased = S.colptr[1] == 0
-    res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
-                    zerobased ? copy(S.colptr) : decrement(S.colptr),
-                    zerobased ? copy(S.rowval) : decrement(S.rowval),
-                    copy(S.nzval), 0)
+    zerobased = getcolptr(S)[1] == 0
+    res = UmfpackLU(C_NULL, C_NULL, size(S, 1), size(S, 2),
+                    zerobased ? copy(getcolptr(S)) : decrement(getcolptr(S)),
+                    zerobased ? copy(rowvals(S)) : decrement(rowvals(S)),
+                    copy(nonzeros(S)), 0)
     finalizer(umfpack_free_symbolic, res)
     umfpack_numeric!(res)
     check && (issuccess(res) || throw(LinearAlgebra.SingularException(0)))
@@ -190,6 +193,22 @@ end
 function show(io::IO, F::UmfpackLU)
     print(io, "UMFPACK LU Factorization of a $(size(F)) sparse matrix")
     F.numeric != C_NULL && print(io, '\n', F.numeric)
+end
+
+function deserialize(s::AbstractSerializer, t::Type{UmfpackLU{Tv,Ti}}) where {Tv,Ti}
+    symbolic = deserialize(s)
+    numeric  = deserialize(s)
+    m        = deserialize(s)
+    n        = deserialize(s)
+    colptr   = deserialize(s)
+    rowval   = deserialize(s)
+    nzval    = deserialize(s)
+    status   = deserialize(s)
+    obj      = UmfpackLU{Tv,Ti}(symbolic, numeric, m, n, colptr, rowval, nzval, status)
+
+    finalizer(umfpack_free_symbolic, obj)
+
+    return obj
 end
 
 ## Wrappers for UMFPACK functions

@@ -15,10 +15,10 @@ and follow the instructions to generate the debugging information requested.  Ta
 ## [Version/Environment info](@id dev-version-info)
 
 No matter the error, we will always need to know what version of Julia you are running. When Julia
-first starts up, a header is printed out with a version number and date. Please also include the
-output of `versioninfo()` in any report you create:
+first starts up, a header is printed out with a version number and date. Please also include the output of `versioninfo()` (exported from the [`InteractiveUtils`](@ref InteractiveUtils.versioninfo) standard library) in any report you create:
 
 ```@repl
+using InteractiveUtils
 versioninfo()
 ```
 

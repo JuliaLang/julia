@@ -1,19 +1,17 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-inflate_ir(ci::CodeInfo) = inflate_ir(ci, Core.svec(), Any[ Any for i = 1:length(ci.slotnames) ])
-
 function inflate_ir(ci::CodeInfo, linfo::MethodInstance)
-    spvals = spvals_from_meth_instance(linfo)
+    sptypes = sptypes_from_meth_instance(linfo)
     if ci.inferred
-        argtypes, _ = get_argtypes(linfo)
+        argtypes, _ = matching_cache_argtypes(linfo, nothing)
     else
-        argtypes = Any[ Any for i = 1:length(ci.slotnames) ]
+        argtypes = Any[ Any for i = 1:length(ci.slotflags) ]
     end
-    return inflate_ir(ci, spvals, argtypes)
+    return inflate_ir(ci, sptypes, argtypes)
 end
 
-function inflate_ir(ci::CodeInfo, spvals::SimpleVector, argtypes::Vector{Any})
-    code = copy_exprargs(ci.code)
+function inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
+    code = copy_exprargs(ci.code) # TODO: this is a huge hot-spot
     for i = 1:length(code)
         if isa(code[i], Expr)
             code[i] = normalize_expr(code[i])
@@ -44,22 +42,27 @@ function inflate_ir(ci::CodeInfo, spvals::SimpleVector, argtypes::Vector{Any})
             code[i] = stmt
         end
     end
-    ssavaluetypes = ci.ssavaluetypes isa Vector{Any} ? copy(ci.ssavaluetypes) : Any[ Any for i = 1:ci.ssavaluetypes ]
+    ssavaluetypes = ci.ssavaluetypes isa Vector{Any} ? copy(ci.ssavaluetypes) : Any[ Any for i = 1:(ci.ssavaluetypes::Int) ]
     ir = IRCode(code, ssavaluetypes, copy(ci.codelocs), copy(ci.ssaflags), cfg, collect(LineInfoNode, ci.linetable),
-                argtypes, Any[], spvals)
+                argtypes, Any[], sptypes)
     return ir
 end
 
 function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
     @assert isempty(ir.new_nodes)
     # All but the first `nargs` slots will now be unused
-    resize!(ci.slotnames, nargs+1)
     resize!(ci.slotflags, nargs+1)
     ci.code = ir.stmts
     ci.codelocs = ir.lines
     ci.linetable = ir.linetable
     ci.ssavaluetypes = ir.types
     ci.ssaflags = ir.flags
+    for metanode in ir.meta
+        push!(ci.code, metanode)
+        push!(ci.codelocs, 1)
+        push!(ci.ssavaluetypes, Any)
+        push!(ci.ssaflags, 0x00)
+    end
     # Translate BB Edges to statement edges
     # (and undo normalization for now)
     for i = 1:length(ci.code)
@@ -92,3 +95,6 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
         end
     end
 end
+
+# used by some tests
+inflate_ir(ci::CodeInfo) = inflate_ir(ci, Any[], Any[ Any for i = 1:length(ci.slotflags) ])

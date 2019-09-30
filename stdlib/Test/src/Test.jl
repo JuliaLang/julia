@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 """
 Simple unit testing functionality:
 
@@ -23,19 +21,32 @@ export @testset
 # Legacy approximate testing functions, yet to be included
 export @inferred
 export detect_ambiguities, detect_unbound_args
-export GenericString, GenericSet, GenericDict, GenericArray
+export GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
 export TestSetException
 
 import Distributed: myid
 
-using Random: srand, AbstractRNG, GLOBAL_RNG
+using Random
+using Random: AbstractRNG, default_rng
 using InteractiveUtils: gen_call_with_extracted_types
+using Core.Compiler: typesubtract
+
+const DISPLAY_FAILED = (
+    :isequal,
+    :isapprox,
+    :≈,
+    :occursin,
+    :startswith,
+    :endswith,
+    :isempty,
+)
 
 #-----------------------------------------------------------------------
 
 # Backtrace utility functions
 function ip_has_file_and_func(ip, file, funcs)
-    return any(fr -> (string(fr.file) == file && fr.func in funcs), StackTraces.lookup(ip))
+    ip isa Base.InterpreterIP || (ip -= 1) # convert from return stack to call stack (for inlining info)
+    return any(fr -> (string(fr.file) == file && fr.func in funcs), StackTraces.lookupat(ip))
 end
 
 function scrub_backtrace(bt)
@@ -48,6 +59,10 @@ function scrub_backtrace(bt)
         bt = bt[1:name_ind]
     end
     return bt
+end
+
+function scrub_exc_stack(stack)
+    return Any[ (x[1], scrub_backtrace(x[2])) for x in stack ]
 end
 
 """
@@ -135,14 +150,18 @@ mutable struct Error <: Result
 
     function Error(test_type, orig_expr, value, bt, source)
         if test_type === :test_error
-            bt = scrub_backtrace(bt)
+            bt = scrub_exc_stack(bt)
         end
         if test_type === :test_error || test_type === :nontest_error
-            bt_str = sprint(showerror, value, bt)
+            bt_str = sprint(Base.show_exception_stack, bt)
         else
             bt_str = ""
         end
-        new(test_type, orig_expr, repr(value), bt_str, source)
+        new(test_type,
+            orig_expr,
+            sprint(show, value, context = :limit => true),
+            bt_str,
+            source)
     end
 end
 function Base.show(io::IO, t::Error)
@@ -158,7 +177,7 @@ function Base.show(io::IO, t::Error)
         println(io, "  Expression: ", t.orig_expr)
         print(  io, "       Value: ", t.value)
     elseif t.test_type == :test_error
-        println(io, "  Test threw exception ", t.value)
+        println(io, "  Test threw exception")
         println(io, "  Expression: ", t.orig_expr)
         # Capture error message and indent to match
         print(io, join(map(line->string("  ",line),
@@ -170,7 +189,7 @@ function Base.show(io::IO, t::Error)
         println(io, " Got correct result, please change to @test if no longer broken.")
     elseif t.test_type == :nontest_error
         # we had an error outside of a @test
-        println(io, "  Got exception $(t.value) outside of a @test")
+        println(io, "  Got exception outside of a @test")
         # Capture error message and indent to match
         print(io, join(map(line->string("  ",line),
                            split(t.backtrace, "\n")), "\n"))
@@ -212,12 +231,13 @@ struct Threw <: ExecutionResult
     source::LineNumberNode
 end
 
-function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode)
+function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate::Bool=false)
     res = true
     i = 1
     evaled_args = evaluated.args
     quoted_args = quoted.args
     n = length(evaled_args)
+    kw_suffix = ""
     if evaluated.head == :comparison
         args = evaled_args
         while i < n
@@ -242,17 +262,9 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode)
         func_sym = quoted_args[1]
         if isempty(kwargs)
             quoted = Expr(:call, func_sym, args...)
-        elseif func_sym === :≈
-            # in case of `≈(x, y, atol = z)`
-            # make the display like `Evaluated: x ≈ y (atol=z)`
-            kws = [Symbol(Expr(:kw, k, v), ",") for (k, v) in kwargs]
-            kws[end] = Symbol(Expr(:kw, kwargs[end]...))
-            kws[1] = Symbol("(", kws[1])
-            kws[end] = Symbol(kws[end], ")")
-            quoted = Expr(:comparison, args[1], func_sym, args[2], kws...)
-            if length(quoted.args) & 1 == 0  # hack to fit `show_unquoted`
-                push!(quoted.args, Symbol())
-            end
+        elseif func_sym === :≈ && !res
+            quoted = Expr(:call, func_sym, args...)
+            kw_suffix = " ($(join(["$k=$v" for (k, v) in kwargs], ", ")))"
         else
             kwargs_expr = Expr(:parameters, [Expr(:kw, k, v) for (k, v) in kwargs]...)
             quoted = Expr(:call, func_sym, kwargs_expr, args...)
@@ -260,9 +272,15 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode)
     else
         throw(ArgumentError("Unhandled expression type: $(evaluated.head)"))
     end
+
+    if negate
+        res = !res
+        quoted = Expr(:call, :!, quoted)
+    end
+
     Returned(res,
              # stringify arguments in case of failure, for easy remote printing
-             res ? quoted : sprint(io->print(IOContext(io, :limit => true), quoted)),
+             res ? quoted : sprint(io->print(IOContext(io, :limit => true), quoted))*kw_suffix,
              source)
 end
 
@@ -390,6 +408,13 @@ end
 # evaluate each term in the comparison individually so the results
 # can be displayed nicely.
 function get_test_result(ex, source)
+    negate = QuoteNode(false)
+    orig_ex = ex
+    # Evaluate `not` wrapped functions separately for pretty-printing failures
+    if isa(ex, Expr) && ex.head == :call && length(ex.args) == 2 && ex.args[1] === :!
+        negate = QuoteNode(true)
+        ex = ex.args[2]
+    end
     # Normalize non-dot comparison operator calls to :comparison expressions
     is_splat = x -> isa(x, Expr) && x.head == :...
     if isa(ex, Expr) && ex.head == :call && length(ex.args) == 3 &&
@@ -405,8 +430,9 @@ function get_test_result(ex, source)
             Expr(:comparison, $(escaped_terms...)),
             Expr(:comparison, $(quoted_terms...)),
             $(QuoteNode(source)),
+            $negate,
         ))
-    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in (:isequal, :isapprox, :≈)
+    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in DISPLAY_FAILED
         escaped_func = esc(ex.args[1])
         quoted_func = QuoteNode(ex.args[1])
 
@@ -448,16 +474,17 @@ function get_test_result(ex, source)
             Expr(:call, $escaped_func, Expr(:parameters, $(escaped_kwargs...)), $(escaped_args...)),
             Expr(:call, $quoted_func),
             $(QuoteNode(source)),
+            $negate,
         ))
     else
-        testret = :(Returned($(esc(ex)), nothing, $(QuoteNode(source))))
+        testret = :(Returned($(esc(orig_ex)), nothing, $(QuoteNode(source))))
     end
     result = quote
         try
             $testret
         catch _e
-            _e isa InterruptException && rethrow(_e)
-            Threw(_e, catch_backtrace(), $(QuoteNode(source)))
+            _e isa InterruptException && rethrow()
+            Threw(_e, Base.catch_stack(), $(QuoteNode(source)))
         end
     end
     Base.remove_linenums!(result)
@@ -533,7 +560,7 @@ macro test_throws(extype, ex)
             Returned($(esc(ex)), nothing, $(QuoteNode(__source__)))
         catch _e
             if $(esc(extype)) != InterruptException && _e isa InterruptException
-                rethrow(_e)
+                rethrow()
             end
             Threw(_e, nothing, $(QuoteNode(__source__)))
         end
@@ -555,7 +582,7 @@ function do_test_throws(result::ExecutionResult, @nospecialize(orig_expr), @nosp
             if isa(exc, typeof(extype))
                 success = true
                 for fld in 1:nfields(extype)
-                    if !(getfield(extype, fld) == getfield(exc, fld))
+                    if !isequal(getfield(extype, fld), getfield(exc, fld))
                         success = false
                         break
                     end
@@ -1008,7 +1035,7 @@ method, which by default will return a list of the testset objects used in
 each iteration.
 
 Before the execution of the body of a `@testset`, there is an implicit
-call to `srand(seed)` where `seed` is the current seed of the global RNG.
+call to `Random.seed!(seed)` where `seed` is the current seed of the global RNG.
 Moreover, after the execution of the body, the state of the global RNG is
 restored to what it was before the `@testset`. This is meant to ease
 reproducibility in case of failure, and to allow seamless
@@ -1070,21 +1097,22 @@ function testset_beginend(args, tests, source)
         # which is needed for backtrace scrubbing to work correctly.
         while false; end
         push_testset(ts)
-        # we reproduce the logic of guardsrand, but this function
+        # we reproduce the logic of guardseed, but this function
         # cannot be used as it changes slightly the semantic of @testset,
         # by wrapping the body in a function
-        oldrng = copy(GLOBAL_RNG)
+        local RNG = default_rng()
+        oldrng = copy(RNG)
         try
-            # GLOBAL_RNG is re-seeded with its own seed to ease reproduce a failed test
-            srand(GLOBAL_RNG.seed)
+            # RNG is re-seeded with its own seed to ease reproduce a failed test
+            Random.seed!(RNG.seed)
             $(esc(tests))
         catch err
-            err isa InterruptException && rethrow(err)
+            err isa InterruptException && rethrow()
             # something in the test block threw an error. Count that as an
             # error in this test set
-            record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
+            record(ts, Error(:nontest_error, :(), err, Base.catch_stack(), $(QuoteNode(source))))
         finally
-            copy!(GLOBAL_RNG, oldrng)
+            copy!(RNG, oldrng)
         end
         pop_testset()
         finish(ts)
@@ -1142,8 +1170,8 @@ function testset_forloop(args, testloop, source)
         if !first_iteration
             pop_testset()
             push!(arr, finish(ts))
-            # it's 1000 times faster to copy from tmprng rather than calling srand
-            copy!(GLOBAL_RNG, tmprng)
+            # it's 1000 times faster to copy from tmprng rather than calling Random.seed!
+            copy!(RNG, tmprng)
 
         end
         ts = $(testsettype)($desc; $options...)
@@ -1152,19 +1180,20 @@ function testset_forloop(args, testloop, source)
         try
             $(esc(tests))
         catch err
-            err isa InterruptException && rethrow(err)
+            err isa InterruptException && rethrow()
             # Something in the test block threw an error. Count that as an
             # error in this test set
-            record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
+            record(ts, Error(:nontest_error, :(), err, Base.catch_stack(), $(QuoteNode(source))))
         end
     end
     quote
         arr = Vector{Any}()
         local first_iteration = true
         local ts
-        local oldrng = copy(GLOBAL_RNG)
-        srand(GLOBAL_RNG.seed)
-        local tmprng = copy(GLOBAL_RNG)
+        local RNG = default_rng()
+        local oldrng = copy(RNG)
+        Random.seed!(RNG.seed)
+        local tmprng = copy(RNG)
         try
             $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
         finally
@@ -1173,7 +1202,7 @@ function testset_forloop(args, testloop, source)
                 pop_testset()
                 push!(arr, finish(ts))
             end
-            copy!(GLOBAL_RNG, oldrng)
+            copy!(RNG, oldrng)
         end
         arr
     end
@@ -1257,54 +1286,93 @@ function get_testset_depth()
 end
 
 _args_and_call(args...; kwargs...) = (args[1:end-1], kwargs, args[end](args[1:end-1]...; kwargs...))
+_materialize_broadcasted(f, args...) = Broadcast.materialize(Broadcast.broadcasted(f, args...))
+
 """
-    @inferred f(x)
+    @inferred [AllowedType] f(x)
 
-Tests that the call expression `f(x)` returns a value of the same type
-inferred by the compiler. It is useful to check for type stability.
+Tests that the call expression `f(x)` returns a value of the same type inferred by the
+compiler. It is useful to check for type stability.
 
-`f(x)` can be any call expression.
-Returns the result of `f(x)` if the types match,
-and an `Error` `Result` if it finds different types.
+`f(x)` can be any call expression. Returns the result of `f(x)` if the types match, and an
+`Error` `Result` if it finds different types.
+
+Optionally, `AllowedType` relaxes the test, by making it pass when either the type of `f(x)`
+matches the inferred type modulo `AllowedType`, or when the return type is a subtype of
+`AllowedType`. This is useful when testing type stability of functions returning a small
+union such as `Union{Nothing, T}` or `Union{Missing, T}`.
 
 ```jldoctest; setup = :(using InteractiveUtils), filter = r"begin\\n(.|\\n)*end"
-julia> f(a,b,c) = b > 1 ? 1 : 1.0
+julia> f(a) = a > 1 ? 1 : 1.0
 f (generic function with 1 method)
 
-julia> typeof(f(1,2,3))
+julia> typeof(f(2))
 Int64
 
-julia> @code_warntype f(1,2,3)
-Body::UNION{FLOAT64, INT64}
-1 1 ─ %1 = Base.slt_int(1, %%b)::Bool
-  └──      goto 3 if not %1
-  2 ─      return 1
-  3 ─      return 1.0
+julia> @code_warntype f(2)
+Variables
+  #self#::Core.Compiler.Const(f, false)
+  a::Int64
 
-julia> @inferred f(1,2,3)
+Body::UNION{FLOAT64, INT64}
+1 ─ %1 = (a > 1)::Bool
+└──      goto #3 if not %1
+2 ─      return 1
+3 ─      return 1.0
+
+julia> @inferred f(2)
 ERROR: return type Int64 does not match inferred return type Union{Float64, Int64}
-Stacktrace:
 [...]
 
-julia> @inferred max(1,2)
+julia> @inferred max(1, 2)
 2
+
+julia> g(a) = a < 10 ? missing : 1.0
+g (generic function with 1 method)
+
+julia> @inferred g(20)
+ERROR: return type Float64 does not match inferred return type Union{Missing, Float64}
+[...]
+
+julia> @inferred Missing g(20)
+1.0
+
+julia> h(a) = a < 10 ? missing : f(a)
+h (generic function with 1 method)
+
+julia> @inferred Missing h(20)
+ERROR: return type Int64 does not match inferred return type Union{Missing, Float64, Int64}
+[...]
 ```
 """
 macro inferred(ex)
+    _inferred(ex, __module__)
+end
+macro inferred(allow, ex)
+    _inferred(ex, __module__, allow)
+end
+function _inferred(ex, mod, allow = :(Union{}))
     if Meta.isexpr(ex, :ref)
         ex = Expr(:call, :getindex, ex.args...)
     end
     Meta.isexpr(ex, :call)|| error("@inferred requires a call expression")
-
+    farg = ex.args[1]
+    if isa(farg, Symbol) && first(string(farg)) == '.'
+        farg = Symbol(string(farg)[2:end])
+        ex = Expr(:call, GlobalRef(Test, :_materialize_broadcasted),
+            farg, ex.args[2:end]...)
+    end
     Base.remove_linenums!(quote
         let
+            allow = $(esc(allow))
+            allow isa Type || throw(ArgumentError("@inferred requires a type as second argument"))
             $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
                 # Has keywords
                 args = gensym()
                 kwargs = gensym()
                 quote
                     $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
-                    inftypes = $(gen_call_with_extracted_types(__module__, Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
+                    inftypes = $(gen_call_with_extracted_types(mod, Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
                 end
             else
                 # No keywords
@@ -1315,8 +1383,8 @@ macro inferred(ex)
                 end
             end)
             @assert length(inftypes) == 1
-            rettype = isa(result, Type) ? Type{result} : typeof(result)
-            rettype == inftypes[1] || error("return type $rettype does not match inferred return type $(inftypes[1])")
+            rettype = result isa Type ? Type{result} : typeof(result)
+            rettype <: allow || rettype == typesubtract(inftypes[1], allow) || error("return type $rettype does not match inferred return type $(inftypes[1])")
             result
         end
     end)
@@ -1339,12 +1407,12 @@ function detect_ambiguities(mods...;
                             imported::Bool = false,
                             recursive::Bool = false,
                             ambiguous_bottom::Bool = false)
-    function sortdefs(m1, m2)
+    function sortdefs(m1::Method, m2::Method)
         ord12 = m1.file < m2.file
         if !ord12 && (m1.file == m2.file)
             ord12 = m1.line < m2.line
         end
-        ord12 ? (m1, m2) : (m2, m1)
+        return ord12 ? (m1, m2) : (m2, m1)
     end
     ambs = Set{Tuple{Method,Method}}()
     for mod in mods
@@ -1359,16 +1427,34 @@ function detect_ambiguities(mods...;
                 subambs = detect_ambiguities(f,
                     imported=imported, recursive=recursive, ambiguous_bottom=ambiguous_bottom)
                 union!(ambs, subambs)
-            elseif isa(f, DataType) && isdefined(f.name, :mt)
+            elseif isa(f, DataType) && isdefined(f.name, :mt) && f.name.mt !== Symbol.name.mt
                 mt = Base.MethodList(f.name.mt)
                 for m in mt
                     if m.ambig !== nothing
                         for m2 in m.ambig
-                            if Base.isambiguous(m, m2, ambiguous_bottom=ambiguous_bottom)
-                                push!(ambs, sortdefs(m, m2))
+                            if Base.isambiguous(m, m2.func, ambiguous_bottom=ambiguous_bottom)
+                                push!(ambs, sortdefs(m, m2.func))
                             end
                         end
                     end
+                end
+            end
+        end
+    end
+    function is_in_mods(m::Module)
+        while true
+            m in mods && return true
+            recursive || return false
+            p = parentmodule(m)
+            p === m && return false
+            m = parent
+        end
+    end
+    for m in Base.MethodList(Symbol.name.mt)
+        if m.ambig !== nothing && is_in_mods(m.module)
+            for m2 in m.ambig
+                if Base.isambiguous(m, m2.func, ambiguous_bottom=ambiguous_bottom)
+                    push!(ambs, sortdefs(m, m2.func))
                 end
             end
         end
@@ -1537,18 +1623,28 @@ end
 GenericArray{T}(args...) where {T} = GenericArray(Array{T}(args...))
 GenericArray{T,N}(args...) where {T,N} = GenericArray(Array{T,N}(args...))
 
+"""
+The `GenericOrder` can be used to test APIs for their support
+of generic ordered types.
+"""
+struct GenericOrder{T}
+    val::T
+end
+Base.isless(x::GenericOrder, y::GenericOrder) = isless(x.val,y.val)
+
 Base.keys(a::GenericArray) = keys(a.a)
 Base.axes(a::GenericArray) = axes(a.a)
 Base.length(a::GenericArray) = length(a.a)
 Base.size(a::GenericArray) = size(a.a)
-Base.getindex(a::GenericArray, i...) = a.a[i...]
-Base.setindex!(a::GenericArray, x, i...) = a.a[i...] = x
+Base.IndexStyle(::Type{<:GenericArray}) = IndexLinear()
+Base.getindex(a::GenericArray, i::Int) = a.a[i]
+Base.setindex!(a::GenericArray, x, i::Int) = a.a[i] = x
 
 Base.similar(A::GenericArray, s::Integer...) = GenericArray(similar(A.a, s...))
 
-"`guardsrand(f)` runs the function `f()` and then restores the
+"`guardseed(f)` runs the function `f()` and then restores the
 state of the global RNG as it was before."
-function guardsrand(f::Function, r::AbstractRNG=GLOBAL_RNG)
+function guardseed(f::Function, r::AbstractRNG=default_rng())
     old = copy(r)
     try
         f()
@@ -1557,10 +1653,10 @@ function guardsrand(f::Function, r::AbstractRNG=GLOBAL_RNG)
     end
 end
 
-"`guardsrand(f, seed)` is equivalent to running `srand(seed); f()` and
+"`guardseed(f, seed)` is equivalent to running `Random.seed!(seed); f()` and
 then restoring the state of the global RNG as it was before."
-guardsrand(f::Function, seed::Union{Vector{UInt32},Integer}) = guardsrand() do
-    srand(seed)
+guardseed(f::Function, seed::Union{Vector{UInt32},Integer}) = guardseed() do
+    Random.seed!(seed)
     f()
 end
 
@@ -1619,32 +1715,6 @@ begin
 
     test_approx_eq(va, vb, astr, bstr) =
         test_approx_eq(va, vb, 1E4*length(LinearIndices(va))*max(array_eps(va), array_eps(vb)), astr, bstr)
-
-    """
-        @test_approx_eq_eps(a, b, tol)
-
-    Test two floating point numbers `a` and `b` for equality taking into account
-    a margin of tolerance given by `tol`.
-    """
-    macro test_approx_eq_eps(a, b, c)
-        Base.depwarn(string("@test_approx_eq_eps is deprecated, use `@test ", a, " ≈ ", b, " atol=", c, "` instead"),
-                    Symbol("@test_approx_eq_eps"))
-        :(test_approx_eq($(esc(a)), $(esc(b)), $(esc(c)), $(string(a)), $(string(b))))
-    end
-    export @test_approx_eq_eps
-
-    """
-        @test_approx_eq(a, b)
-
-    Deprecated. Test two floating point numbers `a` and `b` for equality taking into
-    account small numerical errors.
-    """
-    macro test_approx_eq(a, b)
-        Base.depwarn(string("@test_approx_eq is deprecated, use `@test ", a, " ≈ ", b, "` instead"),
-                    Symbol("@test_approx_eq"))
-        :(test_approx_eq($(esc(a)), $(esc(b)), $(string(a)), $(string(b))))
-    end
-    export @test_approx_eq
 end
 
 include("logging.jl")

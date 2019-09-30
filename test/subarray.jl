@@ -24,7 +24,7 @@ function Agen_slice(A::AbstractArray, I...)
             push!(sd, i)
         end
     end
-    squeeze(B, dims=sd)
+    dropdims(B, dims=sd)
 end
 
 _Agen(A, i1) = [A[j1] for j1 in i1]
@@ -163,17 +163,16 @@ function test_bounds(@nospecialize(A))
     @test_throws BoundsError A[end+1, 1, 1, trailing3...]
     @test_throws BoundsError A[1, 0, 1, trailing3...]
     @test_throws BoundsError A[1, end+1, 1, trailing3...]
-    # TODO: PLI (re-enable after 0.7)
-    # @test_throws BoundsError A[1, 0]
-    # @test_throws BoundsError A[1, end+1]
-    # @test_throws BoundsError A[1, 1, 0]
-    # @test_throws BoundsError A[1, 1, end+1]
-    # @test_throws BoundsError A[0, 1]
-    # @test_throws BoundsError A[end+1, 1]
-    # @test_throws BoundsError A[0, 1, 1]
-    # @test_throws BoundsError A[end+1, 1, 1]
-    # @test_throws BoundsError A[1, 0, 1]
-    # @test_throws BoundsError A[1, end+1, 1]
+    @test_throws BoundsError A[1, 0]
+    @test_throws BoundsError A[1, end+1]
+    @test_throws BoundsError A[1, 1, 0]
+    @test_throws BoundsError A[1, 1, end+1]
+    @test_throws BoundsError A[0, 1]
+    @test_throws BoundsError A[end+1, 1]
+    @test_throws BoundsError A[0, 1, 1]
+    @test_throws BoundsError A[end+1, 1, 1]
+    @test_throws BoundsError A[1, 0, 1]
+    @test_throws BoundsError A[1, end+1, 1]
 end
 
 function dim_break_linindex(I)
@@ -225,11 +224,11 @@ function runsubarraytests(@nospecialize(A), I...)
     local S
     try
         S = view(A, I...)
-    catch err
+    catch
         @show typeof(A)
         @show A.indices
         @show I
-        rethrow(err)
+        rethrow()
     end
     test_linear(S, C)
     test_cartesian(S, C)
@@ -609,7 +608,7 @@ V = view(A, 1:1 ,:, 1:3, :)
 A = rand(5,5,5,5)
 V = view(A, 2:5, :, 2:5, 1:2:5)
 @test @inferred(Base.unaliascopy(V)) == V == A[2:5, :, 2:5, 1:2:5]
-@test @inferred(sum(Base.unaliascopy(V))) == sum(V) == sum(A[2:5, :, 2:5, 1:2:5])
+@test @inferred(sum(Base.unaliascopy(V))) ≈ sum(V) ≈ sum(A[2:5, :, 2:5, 1:2:5])
 
 # issue #27632
 function _test_27632(A)
@@ -620,3 +619,6 @@ function _test_27632(A)
 end
 # check that this doesn't crash
 _test_27632(view(ones(Int64, (1, 1, 1)), 1, 1, 1))
+
+# issue #29608 - views of single values can be considered contiguous
+@test Base.iscontiguous(view(ones(1), 1))

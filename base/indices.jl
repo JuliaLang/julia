@@ -13,7 +13,32 @@ Indices{N} = NTuple{N,AbstractUnitRange}
 ## Traits for array types ##
 
 abstract type IndexStyle end
+"""
+    IndexLinear()
+
+Subtype of [`IndexStyle`](@ref) used to describe arrays which
+are optimally indexed by one linear index.
+
+A linear indexing style uses one integer to describe the position in the array
+(even if it's a multidimensional array) and column-major
+ordering is used to access the elements. For example,
+if `A` were a `(2, 3)` custom matrix type with linear indexing,
+and we referenced `A[5]` (using linear style), this would
+be equivalent to referencing `A[1, 3]` (since `2*1 + 3 = 5`).
+See also [`IndexCartesian`](@ref).
+"""
 struct IndexLinear <: IndexStyle end
+"""
+    IndexCartesian()
+
+Subtype of [`IndexStyle`](@ref) used to describe arrays which
+are optimally indexed by a Cartesian index.
+
+A cartesian indexing style uses multiple integers/indices to describe the position in the array.
+For example, if `A` were a `(2, 3, 4)` custom matrix type with cartesian indexing,
+we could reference `A[2, 1, 3]` and Julia would automatically convert this into the
+correct location in the underlying memory. See also [`IndexLinear`](@ref).
+"""
 struct IndexCartesian <: IndexStyle end
 
 """
@@ -21,14 +46,14 @@ struct IndexCartesian <: IndexStyle end
     IndexStyle(typeof(A))
 
 `IndexStyle` specifies the "native indexing style" for array `A`. When
-you define a new `AbstractArray` type, you can choose to implement
-either linear indexing or cartesian indexing.  If you decide to
-implement linear indexing, then you must set this trait for your array
+you define a new [`AbstractArray`](@ref) type, you can choose to implement
+either linear indexing (with [`IndexLinear`](@ref)) or cartesian indexing.
+If you decide to implement linear indexing, then you must set this trait for your array
 type:
 
     Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
 
-The default is `IndexCartesian()`.
+The default is [`IndexCartesian()`](@ref).
 
 Julia's internal indexing machinery will automatically (and invisibly)
 convert all indexing operations into the preferred style. This allows users
@@ -206,6 +231,9 @@ function setindex_shape_check(X::AbstractArray{<:Any,2}, i::Integer, j::Integer)
     end
 end
 
+setindex_shape_check(::Any...) =
+    throw(ArgumentError("indexed assignment with a single value to many locations is not supported; perhaps use broadcasting `.=` instead?"))
+
 # convert to a supported index type (array or Int)
 """
     to_index(A, i)
@@ -221,6 +249,10 @@ simply calls the generic `to_index(i)`. This must return either an `Int` or an
 """
 to_index(A, i) = to_index(i)
 
+# This is ok for Array because values larger than
+# typemax(Int) will BoundsError anyway
+to_index(A::Array, i::UInt) = reinterpret(Int, i)
+
 """
     to_index(i)
 
@@ -231,14 +263,14 @@ indexing behaviors. This must return either an `Int` or an `AbstractArray` of
 `Int`s.
 """
 to_index(i::Integer) = convert(Int,i)::Int
-# TODO: Enable this new definition after the deprecations introduced in 0.7 are removed
-# to_index(i::Bool) = throw(ArgumentError("invalid index: $i of type $(typeof(i))"))
+to_index(i::Bool) = throw(ArgumentError("invalid index: $i of type Bool"))
 to_index(I::AbstractArray{Bool}) = LogicalIndex(I)
 to_index(I::AbstractArray) = I
+to_index(I::AbstractArray{Union{}}) = I
 to_index(I::AbstractArray{<:Union{AbstractArray, Colon}}) =
-    throw(ArgumentError("invalid index: $I of type $(typeof(I))"))
+    throw(ArgumentError("invalid index: $(limitrepr(I)) of type $(typeof(I))"))
 to_index(::Colon) = throw(ArgumentError("colons must be converted by to_indices(...)"))
-to_index(i) = throw(ArgumentError("invalid index: $i of type $(typeof(i))"))
+to_index(i) = throw(ArgumentError("invalid index: $(limitrepr(i)) of type $(typeof(i))"))
 
 # The general to_indices is mostly defined in multidimensional.jl, but this
 # definition is required for bootstrap:
@@ -274,7 +306,8 @@ _maybetail(t::Tuple) = tail(t)
 """
    Slice(indices)
 
-Represent an AbstractUnitRange of indices as a vector of the indices themselves.
+Represent an AbstractUnitRange of indices as a vector of the indices themselves,
+with special handling to signal they represent a complete slice of a dimension (:).
 
 Upon calling `to_indices`, Colons are converted to Slice objects to represent
 the indices over which the Colon spans. Slice objects are themselves unit
@@ -286,9 +319,9 @@ struct Slice{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
     indices::T
 end
 Slice(S::Slice) = S
-axes(S::Slice) = (S,)
-unsafe_indices(S::Slice) = (S,)
-axes1(S::Slice) = S
+axes(S::Slice) = (IdentityUnitRange(S.indices),)
+unsafe_indices(S::Slice) = (IdentityUnitRange(S.indices),)
+axes1(S::Slice) = IdentityUnitRange(S.indices)
 axes(S::Slice{<:OneTo}) = (S.indices,)
 unsafe_indices(S::Slice{<:OneTo}) = (S.indices,)
 axes1(S::Slice{<:OneTo}) = S.indices
@@ -303,6 +336,38 @@ getindex(S::Slice, i::AbstractUnitRange{<:Integer}) = (@_inline_meta; @boundsche
 getindex(S::Slice, i::StepRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
 show(io::IO, r::Slice) = print(io, "Base.Slice(", r.indices, ")")
 iterate(S::Slice, s...) = iterate(S.indices, s...)
+
+
+"""
+   IdentityUnitRange(range::AbstractUnitRange)
+
+Represent an AbstractUnitRange `range` as an offset vector such that `range[i] == i`.
+
+`IdentityUnitRange`s are frequently used as axes for offset arrays.
+"""
+struct IdentityUnitRange{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
+    indices::T
+end
+IdentityUnitRange(S::IdentityUnitRange) = S
+# IdentityUnitRanges are offset and thus have offset axes, so they are their own axes... but
+# we need to strip the wholedim marker because we don't know how they'll be used
+axes(S::IdentityUnitRange) = (S,)
+unsafe_indices(S::IdentityUnitRange) = (S,)
+axes1(S::IdentityUnitRange) = S
+axes(S::IdentityUnitRange{<:OneTo}) = (S.indices,)
+unsafe_indices(S::IdentityUnitRange{<:OneTo}) = (S.indices,)
+axes1(S::IdentityUnitRange{<:OneTo}) = S.indices
+
+first(S::IdentityUnitRange) = first(S.indices)
+last(S::IdentityUnitRange) = last(S.indices)
+size(S::IdentityUnitRange) = (length(S.indices),)
+length(S::IdentityUnitRange) = length(S.indices)
+unsafe_length(S::IdentityUnitRange) = unsafe_length(S.indices)
+getindex(S::IdentityUnitRange, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
+getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
+getindex(S::IdentityUnitRange, i::StepRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
+show(io::IO, r::IdentityUnitRange) = print(io, "Base.IdentityUnitRange(", r.indices, ")")
+iterate(S::IdentityUnitRange, s...) = iterate(S.indices, s...)
 
 """
     LinearIndices(A::AbstractArray)
@@ -331,7 +396,7 @@ julia> extrema(b)
 
     LinearIndices(inds::CartesianIndices) -> R
     LinearIndices(sz::Dims) -> R
-    LinearIndices(istart:istop, jstart:jstop, ...) -> R
+    LinearIndices((istart:istop, jstart:jstop, ...)) -> R
 
 Return a `LinearIndices` array with the specified shape or [`axes`](@ref).
 
@@ -390,11 +455,11 @@ function getindex(iter::LinearIndices, i::AbstractRange{<:Integer})
 end
 # More efficient iteration — predominantly for non-vector LinearIndices
 # but one-dimensional LinearIndices must be special-cased to support OffsetArrays
-iterate(iter::LinearIndices{1}, s...) = iterate(iter.indices[1], s...)
+iterate(iter::LinearIndices{1}, s...) = iterate(axes1(iter.indices[1]), s...)
 iterate(iter::LinearIndices, i=1) = i > length(iter) ? nothing : (i, i+1)
 
 # Needed since firstindex and lastindex are defined in terms of LinearIndices
 first(iter::LinearIndices) = 1
-first(iter::LinearIndices{1}) = (@_inline_meta; first(iter.indices[1]))
+first(iter::LinearIndices{1}) = (@_inline_meta; first(axes1(iter.indices[1])))
 last(iter::LinearIndices) = (@_inline_meta; length(iter))
-last(iter::LinearIndices{1}) = (@_inline_meta; last(iter.indices[1]))
+last(iter::LinearIndices{1}) = (@_inline_meta; last(axes1(iter.indices[1])))

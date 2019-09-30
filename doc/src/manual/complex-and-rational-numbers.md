@@ -1,20 +1,19 @@
 # Complex and Rational Numbers
 
-Julia ships with predefined types representing both complex and rational numbers, and supports
-all standard [Mathematical Operations and Elementary Functions](@ref) on them. [Conversion and Promotion](@ref conversion-and-promotion) are defined
+Julia includes predefined types for both complex and rational numbers, and supports
+all the standard [Mathematical Operations and Elementary Functions](@ref) on them. [Conversion and Promotion](@ref conversion-and-promotion) are defined
 so that operations on any combination of predefined numeric types, whether primitive or composite,
 behave as expected.
 
 ## Complex Numbers
 
 The global constant [`im`](@ref) is bound to the complex number *i*, representing the principal
-square root of -1. It was deemed harmful to co-opt the name `i` for a global constant, since it
-is such a popular index variable name. Since Julia allows numeric literals to be [juxtaposed with identifiers as coefficients](@ref man-numeric-literal-coefficients),
+square root of -1. (Using mathematicians' `i` or engineers' `j` for this global constant were rejected since they are such popular index variable names.) Since Julia allows numeric literals to be [juxtaposed with identifiers as coefficients](@ref man-numeric-literal-coefficients),
 this binding suffices to provide convenient syntax for complex numbers, similar to the traditional
 mathematical notation:
 
 ```jldoctest
-julia> 1 + 2im
+julia> 1+2im
 1 + 2im
 ```
 
@@ -113,7 +112,7 @@ julia> angle(1 + 2im) # phase angle in radians
 
 As usual, the absolute value ([`abs`](@ref)) of a complex number is its distance from zero.
 [`abs2`](@ref) gives the square of the absolute value, and is of particular use for complex
-numbers where it avoids taking a square root. [`angle`](@ref) returns the phase angle in radians
+numbers since it avoids taking a square root. [`angle`](@ref) returns the phase angle in radians
 (also known as the *argument* or *arg* function). The full gamut of other [Elementary Functions](@ref)
 is also defined for complex numbers:
 
@@ -157,7 +156,7 @@ julia> a = 1; b = 2; a + b*im
 1 + 2im
 ```
 
-However, this is *not* recommended; Use the [`complex`](@ref) function instead to construct
+However, this is *not* recommended. Instead, use the more efficient [`complex`](@ref) function to construct
 a complex value directly from its real and imaginary parts:
 
 ```jldoctest
@@ -247,7 +246,7 @@ julia> 6//5 / 10//7
 21//25
 ```
 
-Rationals can be easily converted to floating-point numbers:
+Rationals can easily be converted to floating-point numbers:
 
 ```jldoctest
 julia> float(3//4)
@@ -277,7 +276,7 @@ julia> typeof(ans)
 Rational{Int64}
 ```
 
-Trying to construct a [`NaN`](@ref) rational value, however, is not:
+Trying to construct a [`NaN`](@ref) rational value, however, is invalid:
 
 ```jldoctest
 julia> 0//0

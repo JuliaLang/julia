@@ -43,8 +43,11 @@ end
 
     @test Float16(3.0) < pi
     @test pi < Float16(4.0)
-    @test occursin("3.14159", sprint(show, π))
     @test widen(pi) === pi
+
+    @test occursin("3.14159", sprint(show, MIME"text/plain"(), π))
+    @test repr(Any[pi ℯ; ℯ pi]) == "Any[π ℯ; ℯ π]"
+    @test string(pi) == "π"
 end
 
 @testset "frexp,ldexp,significand,exponent" begin
@@ -56,9 +59,9 @@ end
         end
 
         for (a,b) in [(T(12.8),T(0.8)),
-                      (prevfloat(realmin(T)), prevfloat(one(T), 2)),
-                      (prevfloat(realmin(T)), prevfloat(one(T), 2)),
-                      (prevfloat(realmin(T)), nextfloat(one(T), -2)),
+                      (prevfloat(floatmin(T)), prevfloat(one(T), 2)),
+                      (prevfloat(floatmin(T)), prevfloat(one(T), 2)),
+                      (prevfloat(floatmin(T)), nextfloat(one(T), -2)),
                       (nextfloat(zero(T), 3), T(0.75)),
                       (prevfloat(zero(T), -3), T(0.75)),
                       (nextfloat(zero(T)), T(0.5))]
@@ -94,8 +97,8 @@ end
             @test ldexp(T(-0.854375), 5) === T(-27.34)
             @test ldexp(T(1.0), typemax(Int)) === T(Inf)
             @test ldexp(T(1.0), typemin(Int)) === T(0.0)
-            @test ldexp(prevfloat(realmin(T)), typemax(Int)) === T(Inf)
-            @test ldexp(prevfloat(realmin(T)), typemin(Int)) === T(0.0)
+            @test ldexp(prevfloat(floatmin(T)), typemax(Int)) === T(Inf)
+            @test ldexp(prevfloat(floatmin(T)), typemin(Int)) === T(0.0)
 
             @test ldexp(T(0.0), Int128(0)) === T(0.0)
             @test ldexp(T(-0.0), Int128(0)) === T(-0.0)
@@ -104,8 +107,8 @@ end
             @test ldexp(T(-0.854375), Int128(5)) === T(-27.34)
             @test ldexp(T(1.0), typemax(Int128)) === T(Inf)
             @test ldexp(T(1.0), typemin(Int128)) === T(0.0)
-            @test ldexp(prevfloat(realmin(T)), typemax(Int128)) === T(Inf)
-            @test ldexp(prevfloat(realmin(T)), typemin(Int128)) === T(0.0)
+            @test ldexp(prevfloat(floatmin(T)), typemax(Int128)) === T(Inf)
+            @test ldexp(prevfloat(floatmin(T)), typemin(Int128)) === T(0.0)
 
             @test ldexp(T(0.0), BigInt(0)) === T(0.0)
             @test ldexp(T(-0.0), BigInt(0)) === T(-0.0)
@@ -114,18 +117,18 @@ end
             @test ldexp(T(-0.854375), BigInt(5)) === T(-27.34)
             @test ldexp(T(1.0), BigInt(typemax(Int128))) === T(Inf)
             @test ldexp(T(1.0), BigInt(typemin(Int128))) === T(0.0)
-            @test ldexp(prevfloat(realmin(T)), BigInt(typemax(Int128))) === T(Inf)
-            @test ldexp(prevfloat(realmin(T)), BigInt(typemin(Int128))) === T(0.0)
+            @test ldexp(prevfloat(floatmin(T)), BigInt(typemax(Int128))) === T(Inf)
+            @test ldexp(prevfloat(floatmin(T)), BigInt(typemin(Int128))) === T(0.0)
 
             # Test also against BigFloat reference. Needs to be exactly rounded.
-            @test ldexp(realmin(T), -1) == T(ldexp(big(realmin(T)), -1))
-            @test ldexp(realmin(T), -2) == T(ldexp(big(realmin(T)), -2))
-            @test ldexp(realmin(T)/2, 0) == T(ldexp(big(realmin(T)/2), 0))
-            @test ldexp(realmin(T)/3, 0) == T(ldexp(big(realmin(T)/3), 0))
-            @test ldexp(realmin(T)/3, -1) == T(ldexp(big(realmin(T)/3), -1))
-            @test ldexp(realmin(T)/3, 11) == T(ldexp(big(realmin(T)/3), 11))
-            @test ldexp(realmin(T)/11, -10) == T(ldexp(big(realmin(T)/11), -10))
-            @test ldexp(-realmin(T)/11, -10) == T(ldexp(big(-realmin(T)/11), -10))
+            @test ldexp(floatmin(T), -1) == T(ldexp(big(floatmin(T)), -1))
+            @test ldexp(floatmin(T), -2) == T(ldexp(big(floatmin(T)), -2))
+            @test ldexp(floatmin(T)/2, 0) == T(ldexp(big(floatmin(T)/2), 0))
+            @test ldexp(floatmin(T)/3, 0) == T(ldexp(big(floatmin(T)/3), 0))
+            @test ldexp(floatmin(T)/3, -1) == T(ldexp(big(floatmin(T)/3), -1))
+            @test ldexp(floatmin(T)/3, 11) == T(ldexp(big(floatmin(T)/3), 11))
+            @test ldexp(floatmin(T)/11, -10) == T(ldexp(big(floatmin(T)/11), -10))
+            @test ldexp(-floatmin(T)/11, -10) == T(ldexp(big(-floatmin(T)/11), -10))
         end
     end
 end
@@ -167,6 +170,12 @@ end
             @test sqrt(x) ≈ sqrt(big(x))
             @test tan(x) ≈ tan(big(x))
             @test tanh(x) ≈ tanh(big(x))
+            @test sec(x) ≈ sec(big(x))
+            @test csc(x) ≈ csc(big(x))
+            @test secd(x) ≈ secd(big(x))
+            @test cscd(x) ≈ cscd(big(x))
+            @test sech(x) ≈ sech(big(x))
+            @test csch(x) ≈ csch(big(x))
         end
         @testset "Special values" begin
             @test isequal(T(1//4)^T(1//2), T(1//2))
@@ -188,6 +197,9 @@ end
             @test isequal(expm1(T(0)), T(0))
             @test expm1(T(1)) ≈ T(ℯ)-1 atol=10*eps(T)
             @test isequal(hypot(T(3),T(4)), T(5))
+            @test isequal(hypot(floatmax(T),T(1)),floatmax(T))
+            @test isequal(hypot(floatmin(T)*sqrt(eps(T)),T(0)),floatmin(T)*sqrt(eps(T)))
+            @test isequal(floatmin(T)*hypot(1.368423059742933,1.3510496552495361),hypot(floatmin(T)*1.368423059742933,floatmin(T)*1.3510496552495361))
             @test isequal(log(T(1)), T(0))
             @test isequal(log(ℯ,T(1)), T(0))
             @test log(T(ℯ)) ≈ T(1) atol=eps(T)
@@ -205,6 +217,12 @@ end
             @test isequal(sqrt(T(100000000)), T(10000))
             @test isequal(tan(T(0)), T(0))
             @test tan(T(pi)/4) ≈ T(1) atol=eps(T)
+            @test isequal(sec(T(pi)), -one(T))
+            @test isequal(csc(T(pi)/2), one(T))
+            @test isequal(secd(T(180)), -one(T))
+            @test isequal(cscd(T(90)), one(T))
+            @test isequal(sech(log(one(T))), one(T))
+            @test isequal(csch(zero(T)), T(Inf))
         end
         @testset "Inverses" begin
             @test acos(cos(x)) ≈ x
@@ -241,6 +259,12 @@ end
             @test sinh(x) ≈ (exp(x)-exp(-x))/2
             @test tan(x) ≈ sin(x)/cos(x)
             @test tanh(x) ≈ sinh(x)/cosh(x)
+            @test sec(x) ≈ inv(cos(x))
+            @test csc(x) ≈ inv(sin(x))
+            @test secd(x) ≈ inv(cosd(x))
+            @test cscd(x) ≈ inv(sind(x))
+            @test sech(x) ≈ inv(cosh(x))
+            @test csch(x) ≈ inv(sinh(x))
         end
         @testset "Edge cases" begin
             @test isinf(log(zero(T)))
@@ -345,9 +369,14 @@ end
 @testset "degree-based trig functions" begin
     @testset "$T" for T = (Float32,Float64,Rational{Int})
         fT = typeof(float(one(T)))
+        fTsc = typeof( (float(one(T)), float(one(T))) )
         for x = -400:40:400
             @test sind(convert(T,x))::fT ≈ convert(fT,sin(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
             @test cosd(convert(T,x))::fT ≈ convert(fT,cos(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
+
+            s,c = sincosd(convert(T,x))
+            @test s::fT ≈ convert(fT,sin(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
+            @test c::fT ≈ convert(fT,cos(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
         end
         @testset "sind" begin
             @test sind(convert(T,0.0))::fT === zero(fT)
@@ -362,6 +391,16 @@ end
             @test cosd(convert(T,270))::fT === zero(fT)
             @test cosd(convert(T,-90))::fT === zero(fT)
             @test cosd(convert(T,-270))::fT === zero(fT)
+        end
+        @testset "sincosd" begin
+            @test sincosd(convert(T,-360))::fTsc === ( -zero(fT),  one(fT) )
+            @test sincosd(convert(T,-270))::fTsc === (   one(fT), zero(fT) )
+            @test sincosd(convert(T,-180))::fTsc === ( -zero(fT), -one(fT) )
+            @test sincosd(convert(T, -90))::fTsc === (  -one(fT), zero(fT) )
+            @test sincosd(convert(T,   0))::fTsc === (  zero(fT),  one(fT) )
+            @test sincosd(convert(T,  90))::fTsc === (   one(fT), zero(fT) )
+            @test sincosd(convert(T, 180))::fTsc === (  zero(fT), -one(fT) )
+            @test sincosd(convert(T, 270))::fTsc === (  -one(fT), zero(fT) )
         end
 
         @testset "sinpi and cospi" begin
@@ -1010,8 +1049,8 @@ end
     end
 end
 
-isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using .Main.TestHelpers: Furlong
+isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
+using .Main.Furlongs
 @test hypot(Furlong(0), Furlong(0)) == Furlong(0.0)
 @test hypot(Furlong(3), Furlong(4)) == Furlong(5.0)
 @test hypot(Furlong(NaN), Furlong(Inf)) == Furlong(Inf)

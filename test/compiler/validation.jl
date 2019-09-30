@@ -21,14 +21,14 @@ end
 msig = Tuple{typeof(f22938),Int,Int,Int,Int}
 world = typemax(UInt)
 _, msp, m = Base._methods_by_ftype(msig, -1, world)[]
-mi = Core.Compiler.code_for_method(m, msig, msp, world, false)
+mi = Core.Compiler.specialize_method(m, msig, msp, false)
 c0 = Core.Compiler.retrieve_code_info(mi)
 
 @test isempty(Core.Compiler.validate_code(mi))
 @test isempty(Core.Compiler.validate_code(c0))
 
 @testset "INVALID_EXPR_HEAD" begin
-    c = Core.Compiler.copy_code_info(c0)
+    c = copy(c0)
     c.code[1] = Expr(:invalid, 1)
     errors = Core.Compiler.validate_code(c)
     @test length(errors) == 1
@@ -36,7 +36,7 @@ c0 = Core.Compiler.retrieve_code_info(mi)
 end
 
 @testset "INVALID_LVALUE" begin
-    c = Core.Compiler.copy_code_info(c0)
+    c = copy(c0)
     c.code[1] = Expr(:(=), GotoNode(1), 1)
     c.code[2] = Expr(:(=), :x, 1)
     c.code[3] = Expr(:(=), 3, 1)
@@ -46,7 +46,7 @@ end
 end
 
 @testset "INVALID_RVALUE" begin
-    c = Core.Compiler.copy_code_info(c0)
+    c = copy(c0)
     c.code[1] = Expr(:(=), SlotNumber(2), GotoNode(1))
     c.code[2] = Expr(:(=), SlotNumber(2), LineNumberNode(2))
     i = 2
@@ -59,7 +59,7 @@ end
 end
 
 @testset "INVALID_CALL_ARG" begin
-    c = Core.Compiler.copy_code_info(c0)
+    c = copy(c0)
     c.code[1] = Expr(:(=), SlotNumber(2), Expr(:call, GlobalRef(Base,:+), SlotNumber(2), GotoNode(1)))
     c.code[2] = Expr(:call, GlobalRef(Base,:-), Expr(:call, GlobalRef(Base,:sin), GotoNode(2)), 3)
     c.code[3] = Expr(:call, LineNumberNode(2))
@@ -73,7 +73,7 @@ end
 end
 
 @testset "EMPTY_SLOTNAMES" begin
-    c = Core.Compiler.copy_code_info(c0)
+    c = copy(c0)
     empty!(c.slotnames)
     errors = Core.Compiler.validate_code(c)
     @test length(errors) == 2
@@ -82,8 +82,8 @@ end
 end
 
 @testset "SLOTFLAGS_MISMATCH" begin
-    c = Core.Compiler.copy_code_info(c0)
-    push!(c.slotnames, :dummy)
+    c = copy(c0)
+    push!(c.slotflags, 0x00)
     errors = Core.Compiler.validate_code(c)
     @test length(errors) == 1
     @test errors[1].kind === Core.Compiler.SLOTFLAGS_MISMATCH
@@ -98,7 +98,7 @@ end
 end
 
 @testset "SSAVALUETYPES_MISMATCH_UNINFERRED" begin
-    c = Core.Compiler.copy_code_info(c0)
+    c = copy(c0)
     c.ssavaluetypes -= 1
     errors = Core.Compiler.validate_code(c)
     @test length(errors) == 1
@@ -115,7 +115,7 @@ end
 end
 
 @testset "NON_TOP_LEVEL_METHOD" begin
-    c = Core.Compiler.copy_code_info(c0)
+    c = copy(c0)
     c.code[1] = Expr(:method, :dummy)
     errors = Core.Compiler.validate_code(c)
     @test length(errors) == 1

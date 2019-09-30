@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
-isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using .Main.TestHelpers.OAs
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
 
 A = Int64[1, 2, 3, 4]
 B = Complex{Int64}[5+6im, 7+8im, 9+10im]
@@ -50,6 +50,27 @@ let A = collect(reshape(1:20, 5, 4))
     @test R isa StridedArray
     @test view(R, :, :) isa StridedArray
     @test reshape(R, :) isa StridedArray
+end
+
+@testset "strides" begin
+    a = rand(10)
+    b = view(a,2:2:10)
+    A = rand(10,10)
+    B = view(A, 2:2:10, 2:2:10)
+
+    @test strides(a) == (1,)
+    @test strides(b) == (2,)
+    @test strides(A) == (1,10)
+    @test strides(B) == (2,20)
+
+    for M in (a, b, A, B)
+        @inferred strides(M)
+        strides_M = strides(M)
+
+        for (i, _stride) in enumerate(collect(strides_M))
+            @test _stride == stride(M, i)
+        end
+    end
 end
 
 # IndexStyle
@@ -136,7 +157,7 @@ let a = [0.1 0.2; 0.3 0.4], at = reshape([(i,i+1) for i = 1:2:8], 2, 2)
     @test r[1,2] === reinterpret(Int64, v[1,2])
     @test r[0,3] === reinterpret(Int64, v[0,3])
     @test r[1,3] === reinterpret(Int64, v[1,3])
-    @test_throws ArgumentError("cannot reinterpret a `Float64` array to `UInt32` when the first axis is Base.Slice(0:1). Try reshaping first.") reinterpret(UInt32, v)
+    @test_throws ArgumentError("cannot reinterpret a `Float64` array to `UInt32` when the first axis is Base.IdentityUnitRange(0:1). Try reshaping first.") reinterpret(UInt32, v)
     v = OffsetArray(a, (0, 1))
     r = reinterpret(UInt32, v)
     axsv = axes(v)
@@ -155,8 +176,27 @@ let a = [0.1 0.2; 0.3 0.4], at = reshape([(i,i+1) for i = 1:2:8], 2, 2)
     offsetvt = (-2, 4)
     vt = OffsetArray(at, offsetvt)
     istr = string(Int)
-    @test_throws ArgumentError("cannot reinterpret a `Tuple{$istr,$istr}` array to `$istr` when the first axis is Base.Slice(-1:0). Try reshaping first.") reinterpret(Int, vt)
+    @test_throws ArgumentError("cannot reinterpret a `Tuple{$istr,$istr}` array to `$istr` when the first axis is Base.IdentityUnitRange(-1:0). Try reshaping first.") reinterpret(Int, vt)
     vt = reshape(vt, 1:1, axes(vt)...)
     r = reinterpret(Int, vt)
     @test r == OffsetArray(reshape(1:8, 2, 2, 2), (0, offsetvt...))
 end
+
+@testset "potentially aliased copies" begin
+    buffer = UInt8[1,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0]
+    mid = length(buffer) ÷ 2
+    x1 = reinterpret(Int64, @view buffer[1:mid])
+    x2 = reinterpret(Int64, @view buffer[mid+1:end])
+    x1 .= x2
+    @test x1 == x2 == [2]
+    @test x1[] === x2[] === Int64(2)
+end
+
+# Test 0-dimensional Arrays
+A = zeros(UInt32)
+B = reinterpret(Int32,A)
+@test size(B) == ()
+@test axes(B) == ()
+B[] = Int32(5)
+@test B[] === Int32(5)
+@test A[] === UInt32(5)

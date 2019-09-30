@@ -5,19 +5,20 @@
 #####################
 
 function rewrap(@nospecialize(t), @nospecialize(u))
-    isa(t, Const) && return t
-    isa(t, Conditional) && return t
-    return rewrap_unionall(t, u)
+    if isa(t, TypeVar) || isa(t, Type)
+        return rewrap_unionall(t, u)
+    end
+    return t
 end
 
 isType(@nospecialize t) = isa(t, DataType) && t.name === _TYPE_NAME
 
 # true if Type{T} is inlineable as constant T
 # requires that T is a singleton, s.t. T == S implies T === S
-isconstType(@nospecialize t) = isType(t) && issingletontype(t.parameters[1])
+isconstType(@nospecialize t) = isType(t) && hasuniquerep(t.parameters[1])
 
-# test whether T is a singleton type, s.t. T == S implies T === S
-function issingletontype(@nospecialize t)
+# test whether type T has a unique representation, s.t. T == S implies T === S
+function hasuniquerep(@nospecialize t)
     # typeof(Bottom) is special since even though it is a leaftype,
     # at runtime, it might be Type{Union{}} instead, so don't attempt inference of it
     t === typeof(Union{}) && return false
@@ -26,16 +27,21 @@ function issingletontype(@nospecialize t)
     iskindtype(typeof(t)) || return true # non-types are always compared by egal in the type system
     isconcretetype(t) && return true # these are also interned and pointer comparable
     if isa(t, DataType) && t.name !== Tuple.name && !isvarargtype(t) # invariant DataTypes
-        return _all(issingletontype, t.parameters)
+        return _all(hasuniquerep, t.parameters)
     end
     return false
+end
+
+function has_nontrivial_const_info(@nospecialize t)
+    isa(t, PartialStruct) && return true
+    return isa(t, Const) && !isdefined(typeof(t.val), :instance) && !(isa(t.val, Type) && hasuniquerep(t.val))
 end
 
 # Subtyping currently intentionally answers certain queries incorrectly for kind types. For
 # some of these queries, this check can be used to somewhat protect against making incorrect
 # decisions based on incorrect subtyping. Note that this check, itself, is broken for
 # certain combinations of `a` and `b` where one/both isa/are `Union`/`UnionAll` type(s)s.
-isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || issingletontype(a.parameters[1]))
+isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || hasuniquerep(a.parameters[1]))
 
 argtypes_to_type(argtypes::Array{Any,1}) = Tuple{anymap(widenconst, argtypes)...}
 
@@ -48,11 +54,11 @@ end
 function valid_tparam(@nospecialize(x))
     if isa(x, Tuple)
         for t in x
-            isa(t, Symbol) || isbitstype(typeof(t)) || return false
+            isa(t, Symbol) || isbits(t) || return false
         end
         return true
     end
-    return isa(x, Symbol) || isbitstype(typeof(x))
+    return isa(x, Symbol) || isbits(x)
 end
 
 # return an upper-bound on type `a` with type `b` removed
@@ -88,7 +94,7 @@ end
 _typename(union::UnionAll) = _typename(union.body)
 _typename(a::DataType) = Const(a.name)
 
-function tuple_tail_elem(@nospecialize(init), ct)
+function tuple_tail_elem(@nospecialize(init), ct::Vector{Any})
     # FIXME: this is broken: it violates subtyping relations and creates invalid types with free typevars
     tmerge_maybe_vararg(@nospecialize(a), @nospecialize(b)) = tmerge(a, tvar_extent(unwrapva(b)))
     t = init
@@ -98,11 +104,14 @@ function tuple_tail_elem(@nospecialize(init), ct)
     return Vararg{widenconst(t)}
 end
 
-function countunionsplit(atypes)
+function countunionsplit(atypes::Union{SimpleVector,Vector{Any}})
     nu = 1
     for ti in atypes
         if isa(ti, Union)
-            nu *= unionlen(ti::Union)
+            nu, ovf = Core.Intrinsics.checked_smul_int(nu, unionlen(ti::Union))
+            if ovf
+                return typemax(Int)
+            end
         end
     end
     return nu
@@ -137,10 +146,13 @@ end
 
 # unioncomplexity estimates the number of calls to `tmerge` to obtain the given type by
 # counting the Union instances, taking also into account those hidden in a Tuple or UnionAll
-unioncomplexity(u::Union) = 1 + unioncomplexity(u.a) + unioncomplexity(u.b)
+function unioncomplexity(u::Union)
+    inner = max(unioncomplexity(u.a), unioncomplexity(u.b))
+    return inner == 0 ? 0 : 1 + inner
+end
 function unioncomplexity(t::DataType)
     t.name === Tuple.name || return 0
-    c = 0
+    c = 1
     for ti in t.parameters
         ci = unioncomplexity(ti)
         if ci > c
@@ -151,3 +163,12 @@ function unioncomplexity(t::DataType)
 end
 unioncomplexity(u::UnionAll) = max(unioncomplexity(u.body), unioncomplexity(u.var.ub))
 unioncomplexity(@nospecialize(x)) = 0
+
+function improvable_via_constant_propagation(@nospecialize(t))
+    if isconcretetype(t) && t <: Tuple
+        for p in t.parameters
+            p === DataType && return true
+        end
+    end
+    return false
+end

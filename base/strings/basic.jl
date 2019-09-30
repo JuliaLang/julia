@@ -107,7 +107,7 @@ julia> isvalid(str, 1)
 true
 
 julia> str[1]
-'α': Unicode U+03b1 (category Ll: Letter, lowercase)
+'α': Unicode U+03B1 (category Ll: Letter, lowercase)
 
 julia> isvalid(str, 2)
 false
@@ -142,8 +142,8 @@ eltype(::Type{<:AbstractString}) = Char # some string types may use another Abst
 """
     sizeof(str::AbstractString)
 
-Size, in bytes, of the string `s`. Equal to the number of code units in `s` multiplied by
-the size, in bytes, of one code unit in `s`.
+Size, in bytes, of the string `str`. Equal to the number of code units in `str` multiplied by
+the size, in bytes, of one code unit in `str`.
 
 # Examples
 ```jldoctest
@@ -203,6 +203,7 @@ string(s::AbstractString) = s
 (::Type{Vector{T}})(s::AbstractString) where {T<:AbstractChar} = collect(T, s)
 
 Symbol(s::AbstractString) = Symbol(String(s))
+Symbol(x...) = Symbol(string(x...))
 
 convert(::Type{T}, s::T) where {T<:AbstractString} = s
 convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)
@@ -326,7 +327,7 @@ isless(a::Symbol, b::Symbol) = cmp(a, b) < 0
 
 The number of characters in string `s` from indices `i` through `j`. This is
 computed as the number of code unit indices from `i` to `j` which are valid
-character indices. Without only a single string argument, this computes the
+character indices. With only a single string argument, this computes the
 number of characters in the entire string. With `i` and `j` arguments it
 computes the number of indices between `i` and `j` inclusive that are valid
 indices in the string `s`. In addition to in-bounds values, `i` may take the
@@ -383,12 +384,12 @@ julia> thisind("α", 3)
 3
 
 julia> thisind("α", 4)
-ERROR: BoundsError: attempt to access "α"
+ERROR: BoundsError: attempt to access String
   at index [4]
 [...]
 
 julia> thisind("α", -1)
-ERROR: BoundsError: attempt to access "α"
+ERROR: BoundsError: attempt to access String
   at index [-1]
 [...]
 ```
@@ -439,7 +440,7 @@ julia> prevind("α", 1)
 0
 
 julia> prevind("α", 0)
-ERROR: BoundsError: attempt to access "α"
+ERROR: BoundsError: attempt to access String
   at index [0]
 [...]
 
@@ -499,7 +500,7 @@ julia> nextind("α", 1)
 3
 
 julia> nextind("α", 3)
-ERROR: BoundsError: attempt to access "α"
+ERROR: BoundsError: attempt to access String
   at index [3]
 [...]
 
@@ -570,8 +571,7 @@ function map(f, s::AbstractString)
     for c in s
         c′ = f(c)
         isa(c′, AbstractChar) || throw(ArgumentError(
-            "map(f, s::AbstractString) requires f to return AbstractChar; " *
-            "try map(f, collect(s)) or a comprehension instead"))
+            "map(f, s::AbstractString) requires f to return AbstractChar; try map(f, collect(s)) or a comprehension instead"))
         write(out, c′::AbstractChar)
     end
     String(take!(out))
@@ -603,7 +603,7 @@ julia> first("∀ϵ≠0: ϵ²>0", 3)
 "∀ϵ≠"
 ```
 """
-first(s::AbstractString, n::Integer) = s[1:min(end, nextind(s, 0, n))]
+first(s::AbstractString, n::Integer) = @inbounds s[1:min(end, nextind(s, 0, n))]
 
 """
     last(s::AbstractString, n::Integer)
@@ -621,7 +621,7 @@ julia> last("∀ϵ≠0: ϵ²>0", 3)
 "²>0"
 ```
 """
-last(s::AbstractString, n::Integer) = s[max(1, prevind(s, ncodeunits(s)+1, n)):end]
+last(s::AbstractString, n::Integer) = @inbounds s[max(1, prevind(s, ncodeunits(s)+1, n)):end]
 
 """
     reverseind(v, i)
@@ -693,7 +693,6 @@ end
 length(s::CodeUnits) = ncodeunits(s.s)
 sizeof(s::CodeUnits{T}) where {T} = ncodeunits(s.s) * sizeof(T)
 size(s::CodeUnits) = (length(s),)
-strides(s::CodeUnits) = (1,)
 elsize(s::CodeUnits{T}) where {T} = sizeof(T)
 @propagate_inbounds getindex(s::CodeUnits, i::Int) = codeunit(s.s, i)
 IndexStyle(::Type{<:CodeUnits}) = IndexLinear()

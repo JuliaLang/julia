@@ -236,6 +236,25 @@ A zero-argument anonymous function is written as `()->3`. The idea of a function
 may seem strange, but is useful for "delaying" a computation. In this usage, a block of code is
 wrapped in a zero-argument function, which is later invoked by calling it as `f`.
 
+As an example, consider this call to [`get`](@ref):
+
+```julia
+get(dict, key) do
+    # default value calculated here
+    time()
+end
+```
+
+The code above is equivalent to calling `get` with an anonymous function containing the code
+enclosed between `do` and `end`, like so:
+
+```julia
+get(()->time(), dict, key)
+```
+
+The call to [`time`](@ref) is delayed by wrapping it in a 0-argument anonymous function
+that is called only when the requested key is absent from `dict`.
+
 ## Tuples
 
 Julia has a built-in data structure called a *tuple* that is closely related to function
@@ -541,6 +560,10 @@ function f(x; y=0, kwargs...)
 end
 ```
 
+Inside `f`, `kwargs` will be a key-value iterator over a named tuple. Named
+tuples (as well as dictionaries with keys of `Symbol`) can be passed as keyword
+arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
+
 If a keyword argument is not assigned a default value in the method definition,
 then it is *required*: an [`UndefKeywordError`](@ref) exception will be thrown
 if the caller does not assign it a value:
@@ -551,9 +574,6 @@ end
 f(3, y=5) # ok, y is assigned
 f(3)      # throws UndefKeywordError(:y)
 ```
-
-Inside `f`, `kwargs` will be a named tuple. Named tuples (as well as dictionaries) can be passed as
-keyword arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
 
 One can also pass `key => value` expressions after a semicolon. For example, `plot(x, y; :width => 2)`
 is equivalent to `plot(x, y, width=2)`. This is useful in situations where the keyword name is computed
@@ -659,6 +679,61 @@ enclosing scope. For example, the variable `data` in the above example of
 `open...do` is captured from the outer scope. Captured variables
 can create performance challenges as discussed in [performance tips](@ref man-performance-tips).
 
+## Function composition and piping
+
+Functions in Julia can be combined by composing or piping (chaining) them together.
+
+Function composition is when you combine functions together and apply the resulting composition to arguments.
+You use the function composition operator (`∘`) to compose the functions, so `(f ∘ g)(args...)` is the same as `f(g(args...))`.
+
+You can type the composition operator at the REPL and suitably-configured editors using `\circ<tab>`.
+
+For example, the `sqrt` and `+` functions can be composed like this:
+
+```jldoctest
+julia> (sqrt ∘ +)(3, 6)
+3.0
+```
+
+This adds the numbers first, then finds the square root of the result.
+
+The next example composes three functions and maps the result over an array of strings:
+
+```jldoctest
+julia> map(first ∘ reverse ∘ uppercase, split("you can compose functions like this"))
+6-element Array{Char,1}:
+ 'U'
+ 'N'
+ 'E'
+ 'S'
+ 'E'
+ 'S'
+```
+
+Function chaining (sometimes called "piping" or "using a pipe" to send data to a subsequent function) is when you apply a function to the previous function's output:
+
+```jldoctest
+julia> 1:10 |> sum |> sqrt
+7.416198487095663
+```
+
+Here, the total produced by `sum` is passed to the `sqrt` function. The equivalent composition would be:
+
+```jldoctest
+julia> (sqrt ∘ sum)(1:10)
+7.416198487095663
+```
+
+The pipe operator can also be used with broadcasting, as `.|>`, to provide a useful combination of the chaining/piping and dot vectorization syntax (described next).
+
+```jldoctest
+julia> ["a", "list", "of", "strings"] .|> [uppercase, reverse, titlecase, length]
+4-element Array{Any,1}:
+  "A"
+  "tsil"
+  "Of"
+ 7
+```
 
 ## [Dot Syntax for Vectorizing Functions](@id man-vectorized)
 
@@ -670,7 +745,7 @@ can call fast library code written in a low-level language. In Julia, vectorized
 *not* required for performance, and indeed it is often beneficial to write your own loops (see
 [Performance Tips](@ref man-performance-tips)), but they can still be convenient. Therefore, *any* Julia function
 `f` can be applied elementwise to any array (or other collection) with the syntax `f.(A)`.
-For example `sin` can be applied to all elements in the vector `A`, like so:
+For example, `sin` can be applied to all elements in the vector `A` like so:
 
 ```jldoctest
 julia> A = [1.0, 2.0, 3.0]

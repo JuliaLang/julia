@@ -1,6 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #Period types
+"""
+    Dates.value(x::Period) -> Int64
+
+For a given period, return the value associated with that period.  For example,
+`value(Millisecond(10))` returns 10 as an integer.
+"""
 value(x::Period) = x.value
 
 # The default constructors for Periods work well in almost all cases
@@ -39,8 +45,8 @@ for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond
 end
 
 #Print/show/traits
-Base.string(x::Period) = string(value(x), _units(x))
-Base.show(io::IO,x::Period) = print(io, string(x))
+Base.print(io::IO, p::Period) = print(io, value(p), _units(p))
+Base.show(io::IO, ::MIME"text/plain", p::Period) = print(io, p)
 Base.zero(::Union{Type{P},P}) where {P<:Period} = P(0)
 Base.one(::Union{Type{P},P}) where {P<:Period} = 1  # see #16116
 Base.typemin(::Type{P}) where {P<:Period} = P(typemin(Int64))
@@ -69,12 +75,10 @@ for op in (:+, :-, :lcm, :gcd)
     @eval ($op)(x::P, y::P) where {P<:Period} = P(($op)(value(x), value(y)))
 end
 
-for op in (:/, :div, :fld)
-    @eval begin
-        ($op)(x::P, y::P) where {P<:Period} = ($op)(value(x), value(y))
-        ($op)(x::P, y::Real) where {P<:Period} = P(($op)(value(x), Int64(y)))
-    end
-end
+/(x::P, y::P) where {P<:Period} = /(value(x), value(y))
+/(x::P, y::Real) where {P<:Period} = P(/(value(x), Int64(y)))
+div(x::P, y::P, r::RoundingMode) where {P<:Period} = div(value(x), value(y), r)
+div(x::P, y::Real, r::RoundingMode) where {P<:Period} = P(div(value(x), Int64(y), r))
 
 for op in (:rem, :mod)
     @eval begin
@@ -85,18 +89,6 @@ end
 
 (*)(x::P, y::Real) where {P<:Period} = P(value(x) * Int64(y))
 (*)(y::Real, x::Period) = x * y
-for (op, Ty, Tz) in ((:*, Real, :P),
-                   (:/, :P, Float64), (:/, Real, :P))
-    @eval begin
-        function ($op)(X::StridedArray{P}, y::$Ty) where P<:Period
-            Z = similar(X, $Tz)
-            for (Idst, Isrc) in zip(eachindex(Z), eachindex(X))
-                @inbounds Z[Idst] = ($op)(X[Isrc], y)
-            end
-            return Z
-        end
-    end
-end
 
 # intfuncs
 Base.gcdx(a::T, b::T) where {T<:Period} = ((g, x, y) = gcdx(value(a), value(b)); return T(g), x, y)
@@ -355,14 +347,6 @@ Base.show(io::IO,x::CompoundPeriod) = print(io, string(x))
 
 GeneralPeriod = Union{Period, CompoundPeriod}
 (+)(x::GeneralPeriod) = x
-(+)(x::StridedArray{<:GeneralPeriod}) = x
-
-for op in (:+, :-)
-    @eval begin
-        ($op)(X::StridedArray{<:GeneralPeriod}, Y::StridedArray{<:GeneralPeriod}) =
-            reshape(CompoundPeriod[($op)(x, y) for (x, y) in zip(X, Y)], promote_shape(size(X), size(Y)))
-    end
-end
 
 (==)(x::CompoundPeriod, y::Period) = x == CompoundPeriod(y)
 (==)(x::Period, y::CompoundPeriod) = y == x
@@ -474,6 +458,7 @@ toms(c::CompoundPeriod) = isempty(c.periods) ? 0.0 : Float64(sum(toms, c.periods
 tons(x)              = toms(x) * 1000000
 tons(x::Microsecond) = value(x) * 1000
 tons(x::Nanosecond)  = value(x)
+tons(c::CompoundPeriod) = isempty(c.periods) ? 0.0 : Float64(sum(tons, c.periods))
 days(c::Millisecond) = div(value(c), 86400000)
 days(c::Second)      = div(value(c), 86400)
 days(c::Minute)      = div(value(c), 1440)

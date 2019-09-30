@@ -89,14 +89,13 @@ end
     @test powermod(2, -2, -5) == -1
 end
 @testset "nextpow/prevpow" begin
-    @test nextpow2(3) == 4
     @test nextpow(2, 3) == 4
     @test nextpow(2, 4) == 4
     @test nextpow(2, 7) == 8
     @test_throws DomainError nextpow(0, 3)
     @test_throws DomainError nextpow(3, 0)
 
-    @test prevpow2(3) == 2
+    @test prevpow(2, 3) == 2
     @test prevpow(2, 4) == 4
     @test prevpow(2, 5) == 4
     @test_throws DomainError prevpow(0, 3)
@@ -117,6 +116,14 @@ end
         @test ndigits(unsigned(17), base=-10) == 3
 
         @test ndigits(146, base=-3) == 5
+    end
+    @testset "ndigits with base power of 2" begin
+        @test ndigits(17, base = 2) == 5
+        @test ndigits(123, base = 4) == 4
+        @test ndigits(64, base = 8) == 3
+        @test ndigits(8436, base = 16) == 4
+        @test ndigits(159753, base = 32) == 4
+        @test ndigits(3578951, base = 64) == 4
     end
     let (n, b) = rand(Int, 2)
         -1 <= b <= 1 && (b = 2) # invalid bases
@@ -140,23 +147,38 @@ end
     @test iszero([Base.ndigits0z(false, b) for b in [-20:-2;2:20]])
     @test all(n -> n == 1, Base.ndigits0z(true, b) for b in [-20:-2;2:20])
     @test all(n -> n == 1, ndigits(x, base=b) for b in [-20:-2;2:20] for x in [true, false])
+
+    # issue #29148
+    @test ndigits(typemax(UInt64), base=-2) == ndigits(big(typemax(UInt64)), base=-2)
+    for T in Base.BitInteger_types
+        n = rand(T)
+        b = -rand(2:100)
+        @test ndigits(n, base=b) == ndigits(big(n), base=b)
+    end
+
 end
 @testset "bin/oct/dec/hex/bits" begin
     @test string(UInt32('3'), base = 2) == "110011"
     @test string(UInt32('3'), pad = 7, base = 2) == "0110011"
     @test string(3, base = 2) == "11"
     @test string(3, pad = 2, base = 2) == "11"
+    @test string(3, pad = Int32(2), base = Int32(2)) == "11"
     @test string(3, pad = 3, base = 2) == "011"
     @test string(-3, base = 2) == "-11"
     @test string(-3, pad = 3, base = 2) == "-011"
 
     @test string(9, base = 8) == "11"
     @test string(-9, base = 8) == "-11"
+    @test string(-9, base = 8, pad = 5) == "-00011"
+    @test string(-9, base = 8, pad = Int32(5)) == "-00011"
 
     @test string(121, base = 10) == "121"
+    @test string(121, base = 10, pad = 5) == "00121"
+    @test string(121, base = 10, pad = 5) == "00121"
 
     @test string(12, base = 16) == "c"
     @test string(-12, pad = 3, base = 16) == "-00c"
+    @test string(-12, pad = Int32(3), base = Int32(16)) == "-00c"
 
     @test string(5, pad = 7, base = 2) == "0000101"
 
@@ -167,14 +189,35 @@ end
     @test bitstring(Int128(3)) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
 end
 @testset "digits/base" begin
-    @test digits(4, base = 2) == [0, 0, 1]
     @test digits(5, base = 3) == [2, 1]
+    @test digits(5, pad = 3) == [5, 0, 0]
+    @test digits(5, pad = Int32(3)) == [5, 0, 0]
+    # The following have bases powers of 2, but don't enter the fast path
+    @test digits(-3, base = 2) == -[1, 1]
+    @test digits(-42, base = 4) == -[2, 2, 2]
+
+    @testset "digits/base with bases powers of 2" begin
+        @test digits(4, base = 2) == [0, 0, 1]
+        @test digits(5, base = Int32(2), pad=Int32(3)) == [1, 0, 1]
+        @test digits(42, base = 4) == [2, 2, 2]
+        @test digits(321, base = 8) == [1, 0, 5]
+        @test digits(0x123456789abcdef, base = 16) == 15:-1:1
+        @test digits(0x2b1a210a750, base = 64) == [16, 29, 10, 4, 34, 6, 43]
+        @test digits(0x02a01407, base = Int128(1024)) == [7, 5, 42]
+    end
 
     @testset "digits/base with negative bases" begin
-        @testset "digits(n::$T, base = b)" for T in (Int, UInt, BigInt, Int32)
+        @testset "digits(n::$T, base = b)" for T in (Int, UInt, BigInt, Int32, UInt32)
             @test digits(T(8163), base = -10) == [3, 4, 2, 2, 1]
             if !(T<:Unsigned)
                 @test digits(T(-8163), base = -10) == [7, 7, 9, 9]
+            end
+            if T !== BigInt
+                b = rand(-32:-2)
+                for n = T[rand(T), typemax(T), typemin(T)]
+                    # issue #29183
+                    @test digits(n, base=b) == digits(signed(widen(n)), base=b)
+                end
             end
         end
         @test [string(n, base = b)

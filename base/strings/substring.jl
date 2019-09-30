@@ -35,11 +35,11 @@ struct SubString{T<:AbstractString} <: AbstractString
     end
 end
 
-SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
-SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s)) = SubString(s, Int(i), Int(j))
-SubString(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, first(r), last(r))
+@propagate_inbounds SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
+@propagate_inbounds SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s)) = SubString(s, Int(i), Int(j))
+@propagate_inbounds SubString(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, first(r), last(r))
 
-function SubString(s::SubString, i::Int, j::Int)
+@propagate_inbounds function SubString(s::SubString, i::Int, j::Int)
     @boundscheck i ≤ j && checkbounds(s, i:j)
     SubString(s.string, s.offset+i, s.offset+j)
 end
@@ -82,14 +82,19 @@ function isvalid(s::SubString, i::Integer)
     @inbounds return ib && isvalid(s.string, s.offset + i)
 end
 
+byte_string_classify(s::SubString{String}) =
+    ccall(:u8_isvalid, Int32, (Ptr{UInt8}, Int), s, sizeof(s))
+
+isvalid(::Type{String}, s::SubString{String}) = byte_string_classify(s) ≠ 0
+isvalid(s::SubString{String}) = isvalid(String, s)
+
 thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
 nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
 
 function cmp(a::SubString{String}, b::SubString{String})
     na = sizeof(a)
     nb = sizeof(b)
-    c = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-              pointer(a), pointer(b), min(na, nb))
+    c = _memcmp(a, b, min(na, nb))
     return c < 0 ? -1 : c > 0 ? +1 : cmp(na, nb)
 end
 
@@ -133,28 +138,54 @@ julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
 ```
 """
 function reverse(s::Union{String,SubString{String}})::String
-    sprint(sizehint=sizeof(s)) do io
-        i, j = firstindex(s), lastindex(s)
-        while i ≤ j
-            c, j = s[j], prevind(s, j)
-            write(io, c)
-        end
+    # Read characters forwards from `s` and write backwards to `out`
+    out = _string_n(sizeof(s))
+    offs = sizeof(s) + 1
+    for c in s
+        offs -= ncodeunits(c)
+        __unsafe_string!(out, c, offs)
     end
+    return out
 end
 
-function string(a::Union{String, SubString{String}}...)
-    if length(a) == 1
-        return String(a[1])
-    end
+string(a::String)            = String(a)
+string(a::SubString{String}) = String(a)
+
+@inline function __unsafe_string!(out, c::Char, offs::Integer)
+    x = bswap(reinterpret(UInt32, c))
+    n = ncodeunits(c)
+    unsafe_store!(pointer(out, offs), x % UInt8)
+    n == 1 && return n
+    x >>= 8
+    unsafe_store!(pointer(out, offs+1), x % UInt8)
+    n == 2 && return n
+    x >>= 8
+    unsafe_store!(pointer(out, offs+2), x % UInt8)
+    n == 3 && return n
+    x >>= 8
+    unsafe_store!(pointer(out, offs+3), x % UInt8)
+    return n
+end
+
+@inline function __unsafe_string!(out, s::Union{String, SubString{String}}, offs::Integer)
+    n = sizeof(s)
+    unsafe_copyto!(pointer(out, offs), pointer(s), n)
+    return n
+end
+
+function string(a::Union{Char, String, SubString{String}}...)
     n = 0
-    for str in a
-        n += sizeof(str)
+    for v in a
+        if v isa Char
+            n += ncodeunits(v)
+        else
+            n += sizeof(v)
+        end
     end
     out = _string_n(n)
     offs = 1
-    for str in a
-        unsafe_copyto!(pointer(out,offs), pointer(str), sizeof(str))
-        offs += sizeof(str)
+    for v in a
+        offs += __unsafe_string!(out, v, offs)
     end
     return out
 end

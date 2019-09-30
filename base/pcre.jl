@@ -10,24 +10,39 @@ include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "pcre_h.jl"))  # incl
 
 const PCRE_LIB = "libpcre2-8"
 
-const JIT_STACK = RefValue{Ptr{Cvoid}}(C_NULL)
-const MATCH_CONTEXT = RefValue{Ptr{Cvoid}}(C_NULL)
+function create_match_context()
+    JIT_STACK_START_SIZE = 32768
+    JIT_STACK_MAX_SIZE = 1048576
+    jit_stack = ccall((:pcre2_jit_stack_create_8, PCRE_LIB), Ptr{Cvoid},
+                      (Cint, Cint, Ptr{Cvoid}),
+                      JIT_STACK_START_SIZE, JIT_STACK_MAX_SIZE, C_NULL)
+    ctx = ccall((:pcre2_match_context_create_8, PCRE_LIB),
+                Ptr{Cvoid}, (Ptr{Cvoid},), C_NULL)
+    ccall((:pcre2_jit_stack_assign_8, PCRE_LIB), Cvoid,
+          (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}), ctx, C_NULL, jit_stack)
+    return ctx
+end
+
+const THREAD_MATCH_CONTEXTS = Ptr{Cvoid}[C_NULL]
+
+PCRE_COMPILE_LOCK = nothing
+
+_tid() = Int(ccall(:jl_threadid, Int16, ())+1)
+_nth() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
+
+function get_local_match_context()
+    tid = _tid()
+    ctx = @inbounds THREAD_MATCH_CONTEXTS[tid]
+    if ctx == C_NULL
+        @inbounds THREAD_MATCH_CONTEXTS[tid] = ctx = create_match_context()
+    end
+    return ctx
+end
 
 function __init__()
-    try
-        JIT_STACK_START_SIZE = 32768
-        JIT_STACK_MAX_SIZE = 1048576
-        JIT_STACK[] = ccall((:pcre2_jit_stack_create_8, PCRE_LIB), Ptr{Cvoid},
-                                 (Cint, Cint, Ptr{Cvoid}),
-                                 JIT_STACK_START_SIZE, JIT_STACK_MAX_SIZE, C_NULL)
-        MATCH_CONTEXT[] = ccall((:pcre2_match_context_create_8, PCRE_LIB),
-                                     Ptr{Cvoid}, (Ptr{Cvoid},), C_NULL)
-        ccall((:pcre2_jit_stack_assign_8, PCRE_LIB), Cvoid,
-              (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}), MATCH_CONTEXT[], C_NULL, JIT_STACK[])
-    catch ex
-        Base.showerror_nostdio(ex,
-            "WARNING: Error during initialization of module PCRE")
-    end
+    resize!(THREAD_MATCH_CONTEXTS, _nth())
+    fill!(THREAD_MATCH_CONTEXTS, C_NULL)
+    global PCRE_COMPILE_LOCK = Threads.SpinLock()
 end
 
 # supported options for different use cases
@@ -37,6 +52,7 @@ const COMPILE_MASK      =
       CASELESS          |
       DOLLAR_ENDONLY    |
       DOTALL            |
+      ENDANCHORED       |
       EXTENDED          |
       FIRSTLINE         |
       MULTILINE         |
@@ -76,7 +92,7 @@ function info(regex::Ptr{Cvoid}, what::Integer, ::Type{T}) where T
     buf = RefValue{T}()
     ret = ccall((:pcre2_pattern_info_8, PCRE_LIB), Int32,
                 (Ptr{Cvoid}, Int32, Ptr{Cvoid}),
-                regex, what, buf)
+                regex, what, buf) % UInt32
     if ret != 0
         error(ret == ERROR_NULL      ? "NULL regex object" :
               ret == ERROR_BADMAGIC  ? "invalid regex object" :
@@ -86,12 +102,16 @@ function info(regex::Ptr{Cvoid}, what::Integer, ::Type{T}) where T
     buf[]
 end
 
-function get_ovec(match_data)
-    ptr = ccall((:pcre2_get_ovector_pointer_8, PCRE_LIB), Ptr{Csize_t},
-                (Ptr{Cvoid},), match_data)
+function ovec_length(match_data)
     n = ccall((:pcre2_get_ovector_count_8, PCRE_LIB), UInt32,
               (Ptr{Cvoid},), match_data)
-    unsafe_wrap(Array, ptr, 2n, own = false)
+    return 2n
+end
+
+function ovec_ptr(match_data)
+    ptr = ccall((:pcre2_get_ovector_pointer_8, PCRE_LIB), Ptr{Csize_t},
+                (Ptr{Cvoid},), match_data)
+    return ptr
 end
 
 function compile(pattern::AbstractString, options::Integer)
@@ -106,8 +126,10 @@ end
 
 function jit_compile(regex::Ptr{Cvoid})
     errno = ccall((:pcre2_jit_compile_8, PCRE_LIB), Cint,
-                  (Ptr{Cvoid}, UInt32), regex, JIT_COMPLETE)
-    errno == 0 || error("PCRE JIT error: $(err_message(errno))")
+                  (Ptr{Cvoid}, UInt32), regex, JIT_COMPLETE) % UInt32
+    errno == 0 && return true
+    errno == ERROR_JIT_BADOPTION && return false
+    error("PCRE JIT error: $(err_message(errno))")
 end
 
 free_match_data(match_data) =
@@ -129,13 +151,26 @@ function err_message(errno)
     GC.@preserve buffer unsafe_string(pointer(buffer))
 end
 
-function exec(re,subject,offset,options,match_data)
+function exec(re, subject, offset, options, match_data)
     rc = ccall((:pcre2_match_8, PCRE_LIB), Cint,
                (Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Csize_t, Cuint, Ptr{Cvoid}, Ptr{Cvoid}),
-               re, subject, sizeof(subject), offset, options, match_data, MATCH_CONTEXT[])
+               re, subject, sizeof(subject), offset, options, match_data, get_local_match_context())
     # rc == -1 means no match, -2 means partial match.
     rc < -2 && error("PCRE.exec error: $(err_message(rc))")
     rc >= 0
+end
+
+function exec_r(re, subject, offset, options)
+    match_data = create_match_data(re)
+    ans = exec(re, subject, offset, options, match_data)
+    free_match_data(match_data)
+    return ans
+end
+
+function exec_r_data(re, subject, offset, options)
+    match_data = create_match_data(re)
+    ans = exec(re, subject, offset, options, match_data)
+    return ans, match_data
 end
 
 function create_match_data(re)

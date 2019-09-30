@@ -22,9 +22,14 @@ export BINDIR,
        total_memory,
        isapple,
        isbsd,
+       isdragonfly,
+       isfreebsd,
        islinux,
+       isnetbsd,
+       isopenbsd,
        isunix,
        iswindows,
+       isjsvm,
        isexecutable,
        which
 
@@ -92,9 +97,6 @@ function __init__()
     env_threads = nothing
     if haskey(ENV, "JULIA_CPU_THREADS")
         env_threads = ENV["JULIA_CPU_THREADS"]
-    elseif haskey(ENV, "JULIA_CPU_CORES") # TODO: delete in 1.0 (deprecation)
-        Core.print("JULIA_CPU_CORES is deprecated, use JULIA_CPU_THREADS instead.\n")
-        env_threads = ENV["JULIA_CPU_CORES"]
     end
     global CPU_THREADS = if env_threads !== nothing
         env_threads = tryparse(Int, env_threads)
@@ -106,7 +108,6 @@ function __init__()
     else
         Int(ccall(:jl_cpu_threads, Int32, ()))
     end
-    global CPU_CORES = CPU_THREADS # TODO: delete in 1.0 (deprecation)
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
@@ -202,7 +203,8 @@ end
 function cpu_info()
     UVcpus = Ref{Ptr{UV_cpu_info_t}}()
     count = Ref{Int32}()
-    Base.uv_error("uv_cpu_info",ccall(:uv_cpu_info, Int32, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count))
+    err = ccall(:uv_cpu_info, Int32, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count)
+    Base.uv_error("uv_cpu_info", err)
     cpus = Vector{CPUinfo}(undef, count[])
     for i = 1:length(cpus)
         cpus[i] = CPUinfo(unsafe_load(UVcpus[], i))
@@ -218,7 +220,8 @@ Gets the current system uptime in seconds.
 """
 function uptime()
     uptime_ = Ref{Float64}()
-    Base.uv_error("uv_uptime",ccall(:uv_uptime, Int32, (Ptr{Float64},), uptime_))
+    err = ccall(:uv_uptime, Int32, (Ptr{Float64},), uptime_)
+    Base.uv_error("uv_uptime", err)
     return uptime_[]
 end
 
@@ -233,7 +236,18 @@ function loadavg()
     return loadavg_
 end
 
+"""
+    Sys.free_memory()
+
+Get the total free memory in RAM in kilobytes.
+"""
 free_memory() = ccall(:uv_get_free_memory, UInt64, ())
+
+"""
+    Sys.total_memory()
+
+Get the total memory in RAM (including that which is currently used) in kilobytes.
+"""
 total_memory() = ccall(:uv_get_total_memory, UInt64, ())
 
 """
@@ -279,6 +293,12 @@ function isunix(os::Symbol)
         return false
     elseif islinux(os) || isbsd(os)
         return true
+    elseif os === :Emscripten
+        # Emscripten implements the POSIX ABI and provides traditional
+        # Unix-style operating system functions such as file system support.
+        # Therefor, we consider it a unix, even though this need not be
+        # generally true for a jsvm embedding.
+        return true
     else
         throw(ArgumentError("unknown operating system \"$os\""))
     end
@@ -290,7 +310,7 @@ end
 Predicate for testing if the OS is a derivative of Linux.
 See documentation in [Handling Operating System Variation](@ref).
 """
-islinux(os::Symbol) = (os == :Linux)
+islinux(os::Symbol) = (os === :Linux)
 
 """
     Sys.isbsd([os])
@@ -303,7 +323,63 @@ See documentation in [Handling Operating System Variation](@ref).
     `true` on macOS systems. To exclude macOS from a predicate, use
     `Sys.isbsd() && !Sys.isapple()`.
 """
-isbsd(os::Symbol) = (os == :FreeBSD || os == :OpenBSD || os == :NetBSD || os == :DragonFly || os == :Darwin || os == :Apple)
+isbsd(os::Symbol) = (isfreebsd(os) || isopenbsd(os) || isnetbsd(os) || isdragonfly(os) || isapple(os))
+
+"""
+    Sys.isfreebsd([os])
+
+Predicate for testing if the OS is a derivative of FreeBSD.
+See documentation in [Handling Operating System Variation](@ref).
+
+!!! note
+    Not to be confused with `Sys.isbsd()`, which is `true` on FreeBSD but also on
+    other BSD-based systems. `Sys.isfreebsd()` refers only to FreeBSD.
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1.
+"""
+isfreebsd(os::Symbol) = (os === :FreeBSD)
+
+"""
+    Sys.isopenbsd([os])
+
+Predicate for testing if the OS is a derivative of OpenBSD.
+See documentation in [Handling Operating System Variation](@ref).
+
+!!! note
+    Not to be confused with `Sys.isbsd()`, which is `true` on OpenBSD but also on
+    other BSD-based systems. `Sys.isopenbsd()` refers only to OpenBSD.
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1.
+"""
+isopenbsd(os::Symbol) = (os === :OpenBSD)
+
+"""
+    Sys.isnetbsd([os])
+
+Predicate for testing if the OS is a derivative of NetBSD.
+See documentation in [Handling Operating System Variation](@ref).
+
+!!! note
+    Not to be confused with `Sys.isbsd()`, which is `true` on NetBSD but also on
+    other BSD-based systems. `Sys.isnetbsd()` refers only to NetBSD.
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1.
+"""
+isnetbsd(os::Symbol) = (os === :NetBSD)
+
+"""
+    Sys.isdragonfly([os])
+
+Predicate for testing if the OS is a derivative of DragonFly BSD.
+See documentation in [Handling Operating System Variation](@ref).
+
+!!! note
+    Not to be confused with `Sys.isbsd()`, which is `true` on DragonFly but also on
+    other BSD-based systems. `Sys.isdragonfly()` refers only to DragonFly.
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1.
+"""
+isdragonfly(os::Symbol) = (os === :DragonFly)
 
 """
     Sys.iswindows([os])
@@ -311,7 +387,7 @@ isbsd(os::Symbol) = (os == :FreeBSD || os == :OpenBSD || os == :NetBSD || os == 
 Predicate for testing if the OS is a derivative of Microsoft Windows NT.
 See documentation in [Handling Operating System Variation](@ref).
 """
-iswindows(os::Symbol) = (os == :Windows || os == :NT)
+iswindows(os::Symbol) = (os === :Windows || os === :NT)
 
 """
     Sys.isapple([os])
@@ -319,9 +395,20 @@ iswindows(os::Symbol) = (os == :Windows || os == :NT)
 Predicate for testing if the OS is a derivative of Apple Macintosh OS X or Darwin.
 See documentation in [Handling Operating System Variation](@ref).
 """
-isapple(os::Symbol) = (os == :Apple || os == :Darwin)
+isapple(os::Symbol) = (os === :Apple || os === :Darwin)
 
-for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows)
+"""
+    Sys.isjsvm([os])
+
+Predicate for testing if Julia is running in a JavaScript VM (JSVM),
+including e.g. a WebAssembly JavaScript embedding in a web browser.
+
+!!! compat "Julia 1.2"
+    This function requires at least Julia 1.2.
+"""
+isjsvm(os::Symbol) = (os === :Emscripten)
+
+for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
     @eval $f() = $(getfield(@__MODULE__, f)(KERNEL))
 end
 
@@ -372,6 +459,9 @@ for executable permissions only (with `.exe` and `.com` extensions added on
 Windows platforms); no searching of `PATH` is performed.
 """
 function which(program_name::String)
+    if isempty(program_name)
+       return nothing
+    end
     # Build a list of program names that we're going to try
     program_names = String[]
     base_pname = basename(program_name)
@@ -414,7 +504,7 @@ function which(program_name::String)
         for pname in program_names
             program_path = joinpath(path_dir, pname)
             # If we find something that matches our name and we can execute
-            if isexecutable(program_path)
+            if isfile(program_path) && isexecutable(program_path)
                 return realpath(program_path)
             end
         end

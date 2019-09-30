@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Core: LineInfoNode
-const NullLineInfo = LineInfoNode(@__MODULE__, Symbol(""), Symbol(""), 0, 0)
 
 if false
     import Base: Base, @show
@@ -103,10 +102,9 @@ function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, sv::Opt
     defuse_insts = scan_slot_def_use(nargs, ci, code)
     @timeit "domtree 1" domtree = construct_domtree(cfg)
     ir = let code = Any[nothing for _ = 1:length(code)]
-             argtypes = sv.slottypes[1:(nargs+1)]
-            IRCode(code, Any[], ci.codelocs, flags, cfg, collect(LineInfoNode, ci.linetable), argtypes, meta, sv.sp)
+            IRCode(code, Any[], ci.codelocs, flags, cfg, collect(LineInfoNode, ci.linetable), sv.slottypes, meta, sv.sptypes)
         end
-    @timeit "construct_ssa" ir = construct_ssa!(ci, code, ir, domtree, defuse_insts, nargs, sv.sp, sv.slottypes)
+    @timeit "construct_ssa" ir = construct_ssa!(ci, code, ir, domtree, defuse_insts, nargs, sv.sptypes, sv.slottypes)
     return ir
 end
 
@@ -117,9 +115,9 @@ function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     @timeit "compact 1" ir = compact!(ir)
     @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv)
     #@timeit "verify 2" verify_ir(ir)
-    @timeit "domtree 2" domtree = construct_domtree(ir.cfg)
     ir = compact!(ir)
     #@Base.show ("before_sroa", ir)
+    @timeit "domtree 2" domtree = construct_domtree(ir.cfg)
     @timeit "SROA" ir = getfield_elim_pass!(ir, domtree)
     #@Base.show ir.new_nodes
     #@Base.show ("after_sroa", ir)

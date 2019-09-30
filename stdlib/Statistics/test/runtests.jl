@@ -1,12 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Statistics, Test, Random, LinearAlgebra, SparseArrays
-using Test: guardsrand
+using Test: guardseed
+
+Random.seed!(123)
 
 @testset "middle" begin
     @test middle(3) === 3.0
     @test middle(2, 3) === 2.5
-    let x = ((realmax(1.0)/4)*3)
+    let x = ((floatmax(1.0)/4)*3)
         @test middle(x, x) === x
     end
     @test middle(1:8) === 4.5
@@ -57,10 +59,15 @@ end
     @test median!([1 2; 3 4]) == 2.5
 
     @test invoke(median, Tuple{AbstractVector}, 1:10) == median(1:10) == 5.5
+
+    @test @inferred(median(Float16[1, 2, NaN])) === Float16(NaN)
+    @test @inferred(median(Float16[1, 2, 3]))   === Float16(2)
+    @test @inferred(median(Float32[1, 2, NaN])) === NaN32
+    @test @inferred(median(Float32[1, 2, 3]))   === 2.0f0
 end
 
 @testset "mean" begin
-    @test_throws ArgumentError mean(())
+    @test_throws MethodError mean(())
     @test mean((1,2,3)) === 2.
     @test mean([0]) === 0.
     @test mean([1.]) === 1.
@@ -68,9 +75,22 @@ end
     @test mean([1,2,3]) == 2.
     @test mean([0 1 2; 4 5 6], dims=1) == [2.  3.  4.]
     @test mean([1 2 3; 4 5 6], dims=1) == [2.5 3.5 4.5]
+    @test mean(-, [1 2 3 ; 4 5 6], dims=1) == [-2.5 -3.5 -4.5]
+    @test mean(-, [1 2 3 ; 4 5 6], dims=2) == transpose([-2.0 -5.0])
+    @test mean(-, [1 2 3 ; 4 5 6], dims=(1, 2)) == -3.5 .* ones(1, 1)
+    @test mean(-, [1 2 3 ; 4 5 6], dims=(1, 1)) == [-2.5 -3.5 -4.5]
+    @test mean(-, [1 2 3 ; 4 5 6], dims=()) == Float64[-1 -2 -3 ; -4 -5 -6]
     @test mean(i->i+1, 0:2) === 2.
     @test mean(isodd, [3]) === 1.
     @test mean(x->3x, (1,1)) === 3.
+
+    # mean of iterables:
+    n = 10; a = randn(n); b = randn(n)
+    @test mean(Tuple(a)) ≈ mean(a)
+    @test mean(Tuple(a + b*im)) ≈ mean(a + b*im)
+    @test mean(cos, Tuple(a)) ≈ mean(cos, a)
+    @test mean(x->x/2, a + b*im) ≈ mean(a + b*im) / 2.
+    @test ismissing(mean(Tuple((1, 2, missing, 4, 5))))
 
     @test isnan(mean([NaN]))
     @test isnan(mean([0.0,NaN]))
@@ -86,6 +106,21 @@ end
     @test ismissing(mean([missing, NaN]))
     @test isequal(mean([missing 1.0; 2.0 3.0], dims=1), [missing 2.0])
     @test mean(skipmissing([1, missing, 2])) === 1.5
+    @test isequal(mean(Complex{Float64}[]), NaN+NaN*im)
+    @test mean(Complex{Float64}[]) isa Complex{Float64}
+    @test isequal(mean(skipmissing(Complex{Float64}[])), NaN+NaN*im)
+    @test mean(skipmissing(Complex{Float64}[])) isa Complex{Float64}
+    @test isequal(mean(abs, Complex{Float64}[]), NaN)
+    @test mean(abs, Complex{Float64}[]) isa Float64
+    @test isequal(mean(abs, skipmissing(Complex{Float64}[])), NaN)
+    @test mean(abs, skipmissing(Complex{Float64}[])) isa Float64
+    @test isequal(mean(Int[]), NaN)
+    @test mean(Int[]) isa Float64
+    @test isequal(mean(skipmissing(Int[])), NaN)
+    @test mean(skipmissing(Int[])) isa Float64
+    @test_throws MethodError mean([])
+    @test_throws MethodError mean(skipmissing([]))
+    @test_throws ArgumentError mean((1 for i in 2:1))
 
     # Check that small types are accumulated using wider type
     for T in (Int8, UInt8)
@@ -104,15 +139,17 @@ end
             @test f(2:0.1:n) ≈ f([2:0.1:n;])
         end
     end
+    @test mean(2:1) === NaN
+    @test mean(big(2):1) isa BigFloat
 end
 
 @testset "var & std" begin
     # edge case: empty vector
     # iterable; this has to throw for type stability
-    @test_throws ArgumentError var(())
-    @test_throws ArgumentError var((); corrected=false)
-    @test_throws ArgumentError var((); mean=2)
-    @test_throws ArgumentError var((); mean=2, corrected=false)
+    @test_throws MethodError var(())
+    @test_throws MethodError var((); corrected=false)
+    @test_throws MethodError var((); mean=2)
+    @test_throws MethodError var((); mean=2, corrected=false)
     # reduction
     @test isnan(var(Int[]))
     @test isnan(var(Int[]; corrected=false))
@@ -245,6 +282,18 @@ end
         @test ismissing(f([missing, NaN], missing))
         @test f(skipmissing([1, missing, 2]), 0) === f([1, 2], 0)
     end
+
+    @test isequal(var(Complex{Float64}[]), NaN)
+    @test var(Complex{Float64}[]) isa Float64
+    @test isequal(var(skipmissing(Complex{Float64}[])), NaN)
+    @test var(skipmissing(Complex{Float64}[])) isa Float64
+    @test_throws MethodError var([])
+    @test_throws MethodError var(skipmissing([]))
+    @test_throws MethodError var((1 for i in 2:1))
+    @test isequal(var(Int[]), NaN)
+    @test var(Int[]) isa Float64
+    @test isequal(var(skipmissing(Int[])), NaN)
+    @test var(skipmissing(Int[])) isa Float64
 end
 
 function safe_cov(x, y, zm::Bool, cr::Bool)
@@ -336,6 +385,12 @@ Y = [6.0  2.0;
         @test C ≈ Cxy
         @inferred cov(X, Y, dims=vd, corrected=cr)
     end
+
+    @testset "floating point accuracy for `cov` of large numbers" begin
+        A = [4.0, 7.0, 13.0, 16.0]
+        C = A .+ 1.0e10
+        @test cov(A, A) ≈ cov(C, C)
+    end
 end
 
 function safe_cor(x, y, zm::Bool)
@@ -415,6 +470,8 @@ end
     @test cor(repeat(1:17, 1, 17))[2] <= 1.0
     @test cor(1:17, 1:17) <= 1.0
     @test cor(1:17, 18:34) <= 1.0
+    @test cor(Any[1, 2], Any[1, 2]) == 1.0
+    @test isnan(cor([0], Int8[81]))
     let tmp = range(1, stop=85, length=100)
         tmp2 = Vector(tmp)
         @test cor(tmp, tmp) <= 1.0
@@ -434,12 +491,49 @@ end
     @test quantile([0,1],1e-18) == 1e-18
     @test quantile([1, 2, 3, 4],[]) == []
     @test quantile([1, 2, 3, 4], (0.5,)) == (2.5,)
-    @test quantile([4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11], (0.1, 0.2, 0.4, 0.9)) == (2.0, 3.0, 5.0, 11.0)
+    @test quantile([4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   (0.1, 0.2, 0.4, 0.9)) == (2.0, 3.0, 5.0, 11.0)
+    @test quantile(Union{Int, Missing}[4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   [0.1, 0.2, 0.4, 0.9]) == [2.0, 3.0, 5.0, 11.0]
+    @test quantile(Any[4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   [0.1, 0.2, 0.4, 0.9]) == [2.0, 3.0, 5.0, 11.0]
+    @test quantile([4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   Any[0.1, 0.2, 0.4, 0.9]) == [2.0, 3.0, 5.0, 11.0]
+    @test quantile([4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   Any[0.1, 0.2, 0.4, 0.9]) isa Vector{Float64}
+    @test quantile(Any[4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   Any[0.1, 0.2, 0.4, 0.9]) == [2, 3, 5, 11]
+    @test quantile(Any[4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   Any[0.1, 0.2, 0.4, 0.9]) isa Vector{Float64}
     @test quantile([1, 2, 3, 4], ()) == ()
+    @test isempty(quantile([1, 2, 3, 4], Float64[]))
+    @test quantile([1, 2, 3, 4], Float64[]) isa Vector{Float64}
+    @test quantile([1, 2, 3, 4], []) isa Vector{Any}
+    @test quantile([1, 2, 3, 4], [0, 1]) isa Vector{Int}
+
+    @test quantile(Any[1, 2, 3], 0.5) isa Float64
+    @test quantile(Any[1, big(2), 3], 0.5) isa BigFloat
+    @test quantile(Any[1, 2, 3], Float16(0.5)) isa Float16
+    @test quantile(Any[1, Float16(2), 3], Float16(0.5)) isa Float16
+    @test quantile(Any[1, big(2), 3], Float16(0.5)) isa BigFloat
 
     @test_throws ArgumentError quantile([1, missing], 0.5)
     @test_throws ArgumentError quantile([1, NaN], 0.5)
     @test quantile(skipmissing([1, missing, 2]), 0.5) === 1.5
+
+    # make sure that type inference works correctly in normal cases
+    for T in [Int, BigInt, Float64, Float16, BigFloat, Rational{Int}, Rational{BigInt}]
+        for S in [Float64, Float16, BigFloat, Rational{Int}, Rational{BigInt}]
+            @inferred quantile(T[1, 2, 3], S(0.5))
+            @inferred quantile(T[1, 2, 3], S(0.6))
+            @inferred quantile(T[1, 2, 3], S[0.5, 0.6])
+            @inferred quantile(T[1, 2, 3], (S(0.5), S(0.6)))
+        end
+    end
+    x = [3; 2; 1]
+    y = zeros(3)
+    @test quantile!(y, x, [0.1, 0.5, 0.9]) === y
+    @test y == [1.2, 2.0, 2.8]
 end
 
 # StatsBase issue 164
@@ -505,8 +599,8 @@ end
 
 # dimensional correctness
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
-using .Main.TestHelpers: Furlong
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
 
 Statistics.middle(x::Furlong{p}) where {p} = Furlong{p}(middle(x.val))
 Statistics.middle(x::Furlong{p}, y::Furlong{p}) where {p} = Furlong{p}(middle(x.val, y.val))
@@ -599,7 +693,7 @@ end
     n = 10
     p = 5
     np2 = div(n*p, 2)
-    nzvals, x_sparse = guardsrand(1) do
+    nzvals, x_sparse = guardseed(1) do
         if elty <: Real
             nzvals = randn(np2)
         else

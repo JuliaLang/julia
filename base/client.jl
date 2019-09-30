@@ -56,7 +56,7 @@ function repl_cmd(cmd, out)
                     # If it's intended to simulate `cd`, it should instead be doing
                     # more nearly `cd $dir && printf %s \$PWD` (with appropriate quoting),
                     # since shell `cd` does more than just `echo` the result.
-                    dir = read(`$shell -c "printf %s $(shell_escape_posixly(dir))"`, String)
+                    dir = read(`$shell -c "printf '%s' $(shell_escape_posixly(dir))"`, String)
                 end
                 cd(dir)
             end
@@ -79,8 +79,10 @@ function repl_cmd(cmd, out)
     nothing
 end
 
+# deprecated function--preserved for DocTests.jl
 function ip_matches_func(ip, func::Symbol)
-    for fr in StackTraces.lookup(ip)
+    ip isa InterpreterIP || (ip -= 1)
+    for fr in StackTraces.lookupat(ip)
         if fr === StackTraces.UNKNOWN || fr.from_c
             return false
         end
@@ -89,35 +91,42 @@ function ip_matches_func(ip, func::Symbol)
     return false
 end
 
+function scrub_repl_backtrace(bt)
+    if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
+        bt = stacktrace(bt)
+        # remove REPL-related frames from interactive printing
+        eval_ind = findlast(frame -> !frame.from_c && frame.func == :eval, bt)
+        eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
+    end
+    return bt
+end
+
 function display_error(io::IO, er, bt)
-    if !isempty(bt)
-        st = stacktrace(bt)
-        if !isempty(st)
-            io = redirect(io, log_error_to, st[1])
-        end
-    end
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    # remove REPL-related frames from interactive printing
-    eval_ind = findlast(addr->ip_matches_func(addr, :eval), bt)
-    if eval_ind !== nothing
-        bt = bt[1:eval_ind-1]
-    end
-    showerror(IOContext(io, :limit => true), er, bt)
+    bt = scrub_repl_backtrace(bt)
+    showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing)
     println(io)
 end
-display_error(er, bt) = display_error(stderr, er, bt)
-display_error(er) = display_error(er, [])
+function display_error(io::IO, stack::Vector)
+    printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
+    bt = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
+    show_exception_stack(IOContext(io, :limit => true), bt)
+end
+display_error(stack::Vector) = display_error(stderr, stack)
+display_error(er, bt=nothing) = display_error(stderr, er, bt)
 
-function eval_user_input(@nospecialize(ast), show_value::Bool)
-    errcount, lasterr, bt = 0, (), nothing
+function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
+    errcount = 0
+    lasterr = nothing
     while true
         try
             if have_color
                 print(color_normal)
             end
-            if errcount > 0
-                invokelatest(display_error, lasterr, bt)
-                errcount, lasterr = 0, ()
+            if lasterr !== nothing
+                invokelatest(display_error, errio, lasterr)
+                errcount = 0
+                lasterr = nothing
             else
                 ast = Meta.lower(Main, ast)
                 value = Core.eval(Main, ast)
@@ -128,39 +137,55 @@ function eval_user_input(@nospecialize(ast), show_value::Bool)
                     end
                     try
                         invokelatest(display, value)
-                    catch err
-                        println(stderr, "Evaluation succeeded, but an error occurred while showing value of type ", typeof(value), ":")
-                        rethrow(err)
+                    catch
+                        @error "Evaluation succeeded, but an error occurred while displaying the value" typeof(value)
+                        rethrow()
                     end
                     println()
                 end
             end
             break
-        catch err
+        catch
             if errcount > 0
-                println(stderr, "SYSTEM: show(lasterr) caused an error")
+                @error "SYSTEM: display_error(errio, lasterr) caused an error"
             end
-            errcount, lasterr = errcount+1, err
+            errcount += 1
+            lasterr = catch_stack()
             if errcount > 2
-                println(stderr, "WARNING: it is likely that something important is broken, and Julia will not be able to continue normally")
+                @error "It is likely that something important is broken, and Julia will not be able to continue normally" errcount
                 break
             end
-            bt = catch_backtrace()
         end
     end
     isa(stdin, TTY) && println()
     nothing
 end
 
+function _parse_input_line_core(s::String, filename::String)
+    ex = ccall(:jl_parse_all, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
+               s, sizeof(s), filename, sizeof(filename))
+    if ex isa Expr && ex.head === :toplevel
+        if isempty(ex.args)
+            return nothing
+        end
+        last = ex.args[end]
+        if last isa Expr && (last.head === :error || last.head === :incomplete)
+            # if a parse error happens in the middle of a multi-line input
+            # return only the error, so that none of the input is evaluated.
+            return last
+        end
+    end
+    return ex
+end
+
 function parse_input_line(s::String; filename::String="none", depwarn=true)
     # For now, assume all parser warnings are depwarns
-    ex = with_logger(depwarn ? current_logger() : NullLogger()) do
-        ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
-              s, sizeof(s), filename, sizeof(filename))
-    end
-    if ex isa Symbol && all(isequal('_'), string(ex))
-        # remove with 0.7 deprecation
-        Meta.lower(Main, ex)  # to get possible warning about using _ as an rvalue
+    ex = if depwarn
+        _parse_input_line_core(s, filename)
+    else
+        with_logger(NullLogger()) do
+            _parse_input_line_core(s, filename)
+        end
     end
     return ex
 end
@@ -231,7 +256,11 @@ function exec_options(opts)
     # Load Distributed module only if any of the Distributed options have been specified.
     distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machine_file != C_NULL)
     if distributed_mode
-        Core.eval(Main, :(using Distributed))
+        let Distributed = require(PkgId(UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
+            Core.eval(Main, :(const Distributed = $Distributed))
+            Core.eval(Main, :(using .Distributed))
+        end
+
         invokelatest(Main.Distributed.process_opts, opts)
     end
 
@@ -264,7 +293,14 @@ function exec_options(opts)
         if !is_interactive
             ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
         end
-        include(Main, PROGRAM_FILE)
+        try
+            include(Main, PROGRAM_FILE)
+        catch
+            invokelatest(display_error, catch_stack())
+            if !is_interactive
+                exit(1)
+            end
+        end
     end
     repl |= is_interactive
     if repl
@@ -290,7 +326,7 @@ function load_julia_startup()
     else
         include_ifexists(Main, abspath(BINDIR, "..", "etc", "julia", "startup.jl"))
     end
-    include_ifexists(Main, abspath(homedir(), ".julia", "config", "startup.jl"))
+    !isempty(DEPOT_PATH) && include_ifexists(Main, abspath(DEPOT_PATH[1], "config", "startup.jl"))
     return nothing
 end
 
@@ -335,14 +371,6 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
             @warn "Failed to import InteractiveUtils into module Main" exception=(ex, catch_backtrace())
         end
     end
-    try
-        let Pkg = require(PkgId(UUID(0x44cfe95a_1eb2_52ea_b672_e2afdf69b78f), "Pkg"))
-            Core.eval(Main, :(const Pkg = $Pkg))
-            Core.eval(Main, :(using .Pkg))
-        end
-    catch ex
-        @warn "Failed to import Pkg into module Main" exception=(ex, catch_backtrace())
-    end
 
     if interactive && isassigned(REPL_MODULE_REF)
         invokelatest(REPL_MODULE_REF[]) do REPL
@@ -377,11 +405,11 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
                     # if we get back a list of statements, eval them sequentially
                     # as if we had parsed them sequentially
                     for stmt in ex.args
-                        eval_user_input(stmt, true)
+                        eval_user_input(stderr, stmt, true)
                     end
                     body = ex.args
                 else
-                    eval_user_input(ex, true)
+                    eval_user_input(stderr, ex, true)
                 end
             else
                 while isopen(input) || !eof(input)
@@ -389,7 +417,11 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
                         print("julia> ")
                         flush(stdout)
                     end
-                    eval_user_input(parse_input_line(input), true)
+                    try
+                        eval_user_input(stderr, parse_input_line(input), true)
+                    catch err
+                        isa(err, InterruptException) ? print("\n\n") : rethrow()
+                    end
                 end
             end
         end
@@ -397,10 +429,33 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
     nothing
 end
 
+# MainInclude exists to hide Main.include and eval from `names(Main)`.
 baremodule MainInclude
-include(fname::AbstractString) = Main.Base.include(Main, fname)
+using ..Base
+# We inline the definition of include from loading.jl/include_relative to get one-frame stacktraces.
+# include(fname::AbstractString) = Main.Base.include(Main, fname)
+function include(fname::AbstractString)
+    mod = Main
+    isa(fname, String) || (fname = Base.convert(String, fname))
+    path, prev = Base._include_dependency(mod, fname)
+    for callback in Base.include_callbacks # to preserve order, must come before Core.include
+        Base.invokelatest(callback, mod, path)
+    end
+    tls = Base.task_local_storage()
+    tls[:SOURCE_PATH] = path
+    local result
+    try
+        result = ccall(:jl_load_, Any, (Any, Any), mod, path)
+    finally
+        if prev === nothing
+            Base.delete!(tls, :SOURCE_PATH)
+        else
+            tls[:SOURCE_PATH] = prev
+        end
+    end
+    return result
+end
 eval(x) = Core.eval(Main, x)
-Main.Base.@deprecate eval(m, x) Core.eval(m, x)
 end
 
 """
@@ -430,11 +485,14 @@ MainInclude.include
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
-    @eval Main import Base.MainInclude: eval, include
+    if ccall(:jl_generating_output, Cint, ()) != 0 && JLOptions().incremental == 0
+        # clear old invalid pointers
+        PCRE.__init__()
+    end
     try
         exec_options(JLOptions())
-    catch err
-        invokelatest(display_error, err, catch_backtrace())
+    catch
+        invokelatest(display_error, catch_stack())
         exit(1)
     end
     if is_interactive && have_color

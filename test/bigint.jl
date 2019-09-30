@@ -401,3 +401,72 @@ end
 
 # Issue #24298
 @test mod(BigInt(6), UInt(5)) == mod(6, 5)
+
+@testset "cmp has values in [-1, 0, 1], issue #28780" begin
+    # _rand produces values whose log2 is better distributed than rand
+    _rand(::Type{BigInt}, n=1000) = let x = big(2)^rand(1:rand(1:n))
+        rand(-x:x)
+    end
+    _rand(F::Type{<:AbstractFloat}) = F(_rand(BigInt, round(Int, log2(floatmax(F))))) + rand(F)
+    _rand(T) = rand(T)
+    for T in (Base.BitInteger_types..., BigInt, Float64, Float32, Float16)
+        @test cmp(big(2)^130, one(T)) === 1
+        @test cmp(-big(2)^130, one(T)) === -1
+        c = cmp(_rand(BigInt), _rand(T))
+        @test c ∈ (-1, 0, 1)
+        @test c isa Int
+        (T <: Integer && T !== BigInt) || continue
+        x = rand(T)
+        @test cmp(big(2)^130, x) === cmp(x, -big(2)^130) === 1
+        @test cmp(-big(2)^130, x) === cmp(x, big(2)^130) === -1
+        @test cmp(big(x), x) === cmp(x, big(x)) === 0
+    end
+    c = cmp(_rand(BigInt), _rand(BigInt))
+    @test c ∈ (-1, 0, 1)
+    @test c isa Int
+end
+
+@testset "generic conversion from Integer" begin
+    x = rand(Int128)
+    @test BigInt(x) % Int128 === x
+    y = rand(UInt128)
+    @test BigInt(y) % UInt128 === y
+end
+
+@testset "conversion from typemin(T)" begin
+    @test big(Int8(-128)) == big"-128"
+    @test big(Int16(-32768)) == big"-32768"
+    @test big(Int32(-2147483648)) == big"-2147483648"
+    @test big(Int64(-9223372036854775808)) == big"-9223372036854775808"
+    @test big(Int128(-170141183460469231731687303715884105728)) == big"-170141183460469231731687303715884105728"
+end
+
+@testset "conversion to Float" begin
+    x = big"2"^256 + big"2"^(256-53) + 1
+    @test Float64(x) == reinterpret(Float64, 0x4ff0000000000001)
+    @test Float64(-x) == -Float64(x)
+    x = (x >> 1) + 1
+    @test Float64(x) == reinterpret(Float64, 0x4fe0000000000001)
+    @test Float64(-x) == -Float64(x)
+
+    x = big"2"^64 + big"2"^(64-24) + 1
+    @test Float32(x) == reinterpret(Float32, 0x5f800001)
+    @test Float32(-x) == -Float32(x)
+    x = (x >> 1) + 1
+    @test Float32(x) == reinterpret(Float32, 0x5f000001)
+    @test Float32(-x) == -Float32(x)
+
+    x = big"2"^15 + big"2"^(15-11) + 1
+    @test Float16(x) == reinterpret(Float16, 0x7801)
+    @test Float16(-x) == -Float16(x)
+    x = (x >> 1) + 1
+    @test Float16(x) == reinterpret(Float16, 0x7401)
+    @test Float16(-x) == -Float16(x)
+
+    for T in (Float16, Float32, Float64)
+        n = exponent(floatmax(T))
+        @test T(big"2"^(n+1)) === T(Inf)
+        @test T(big"2"^(n+1) - big"2"^(n-precision(T))) === T(Inf)
+        @test T(big"2"^(n+1) - big"2"^(n-precision(T)) - 1) === floatmax(T)
+    end
+end

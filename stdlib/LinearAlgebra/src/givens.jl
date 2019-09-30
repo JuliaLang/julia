@@ -61,9 +61,9 @@ function Base.copy(aG::Adjoint{<:Any,<:Givens})
 end
 Base.copy(aR::Adjoint{<:Any,Rotation{T}}) where {T} = Rotation{T}(reverse!([r' for r in aR.parent.rotations]))
 
-realmin2(::Type{Float32}) = reinterpret(Float32, 0x26000000)
-realmin2(::Type{Float64}) = reinterpret(Float64, 0x21a0000000000000)
-realmin2(::Type{T}) where {T} = (twopar = 2one(T); twopar^trunc(Integer,log(realmin(T)/eps(T))/log(twopar)/twopar))
+floatmin2(::Type{Float32}) = reinterpret(Float32, 0x26000000)
+floatmin2(::Type{Float64}) = reinterpret(Float64, 0x21a0000000000000)
+floatmin2(::Type{T}) where {T} = (twopar = 2one(T); twopar^trunc(Integer,log(floatmin(T)/eps(T))/log(twopar)/twopar))
 
 # derived from LAPACK's dlartg
 # Copyright:
@@ -78,8 +78,8 @@ function givensAlgorithm(f::T, g::T) where T<:AbstractFloat
     zeropar = T0(zero(T)) # must be dimensionless
 
     # need both dimensionful and dimensionless versions of these:
-    safmn2 = realmin2(T0)
-    safmn2u = realmin2(T)
+    safmn2 = floatmin2(T0)
+    safmn2u = floatmin2(T)
     safmx2 = one(T)/safmn2
     safmx2u = oneunit(T)/safmn2
 
@@ -152,9 +152,9 @@ function givensAlgorithm(f::Complex{T}, g::Complex{T}) where T<:AbstractFloat
     czero = complex(zeropar)
 
     abs1(ff) = max(abs(real(ff)), abs(imag(ff)))
-    safmin = realmin(T0)
-    safmn2 = realmin2(T0)
-    safmn2u = realmin2(T)
+    safmin = floatmin(T0)
+    safmn2 = floatmin2(T0)
+    safmn2u = floatmin2(T)
     safmx2 = one(T)/safmn2
     safmx2u = oneunit(T)/safmn2
     scalepar = max(abs1(f), abs1(g))
@@ -248,6 +248,8 @@ function givensAlgorithm(f::Complex{T}, g::Complex{T}) where T<:AbstractFloat
     return cs, sn, r
 end
 
+givensAlgorithm(f, g) = givensAlgorithm(promote(float(f), float(g))...)
+
 """
 
     givens(f::T, g::T, i1::Integer, i2::Integer) where {T} -> (G::Givens, r::T)
@@ -335,7 +337,7 @@ function getindex(G::Givens, i::Integer, j::Integer)
 end
 
 @inline function lmul!(G::Givens, A::AbstractVecOrMat)
-    @assert !has_offset_axes(A)
+    require_one_based_indexing(A)
     m, n = size(A, 1), size(A, 2)
     if G.i2 > m
         throw(DimensionMismatch("column indices for rotation are outside the matrix"))
@@ -348,7 +350,7 @@ end
     return A
 end
 @inline function rmul!(A::AbstractMatrix, G::Givens)
-    @assert !has_offset_axes(A)
+    require_one_based_indexing(A)
     m, n = size(A, 1), size(A, 2)
     if G.i2 > n
         throw(DimensionMismatch("column indices for rotation are outside the matrix"))
