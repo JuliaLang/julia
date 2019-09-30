@@ -5,11 +5,11 @@ using Test, Printf
 @testset "dynamic" begin
 
     # dynamic width and precision
-    @test (Printf.@printf("%*d", 10, 12)) == Printf.@printf("%10d", 12)
-    @test (Printf.@printf("%.*d",  4, 12)) == Printf.@printf("%.4d", 12)
-    @test (Printf.@printf("%*.*d", 10, 4, 12)) == Printf.@printf("%10.4d", 12)
-    @test (Printf.@printf("%+*.*d", 10, 4, 12)) == Printf.@printf("%+10.4d", 12)
-    @test (Printf.@printf("%0*.*d", 10, 4, 12)) == Printf.@printf("%010.4d", 12)
+    @test (Printf.@sprintf("%*d", 10, 12))       == "        12"
+    @test (Printf.@sprintf("%.*d",  4, 12))      == "0012"
+    @test (Printf.@sprintf("%*.*d", 10, 4, 12))  == "      0012"
+    @test (Printf.@sprintf("%+*.*d", 10, 4, 12)) == "     +0012"
+    @test (Printf.@sprintf("%0*.*d", 10, 4, 12)) == "      0012"
 end
 
 

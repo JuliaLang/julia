@@ -151,7 +151,7 @@ function Format(f::AbstractString)
         # parse type
         !(b in b"diouxXDOUeEfFgGaAcCsSpn") && throw(ArgumentError("invalid format string: '$f', invalid type specifier: '$(Char(b))'"))
         type = Val{Char(b)}
-        if type <: Ints && precision > 0
+        if type <: Ints && (precision > 0 || dynamic_precision )
             zero = false
         elseif (type <: Strings || type <: Chars) && !parsedprecdigits
             precision = -1
@@ -287,7 +287,7 @@ end
 end
 
 # integers
-    
+
 @inline function fmt(buf, pos, args, argp, spec::Spec{T}) where {T <: Ints}
     leftalign, plus, space, zero, hash =
         spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash
@@ -296,7 +296,7 @@ end
 
     arg = args[argp]
     argp += 1
-    
+
     bs = base(T)
     arg2 = arg isa AbstractFloat ? Integer(trunc(arg)) : arg
     n = i = ndigits(arg2, base=bs, pad=1)
@@ -305,6 +305,7 @@ end
         (T == Val{'o'} && hash ? 2 : 0) +
         (T == Val{'x'} && hash ? 2 : 0) + (T == Val{'X'} && hash ? 2 : 0)
     arglen2 = arglen < width && prec > 0 ? arglen + min(max(0, prec - n), width - arglen) : arglen
+
     if !leftalign && !zero && arglen2 < width
         # pad left w/ spaces
         for _ = 1:(width - arglen2)
@@ -557,7 +558,7 @@ function fmt(buf, pos, args, argp, spec::Spec{Pointer})
     end
     x = args[xpos]
     precision = sizeof(x) == 8 ? 16 : 8
-    hex_spec = Spec{Val{'x'}}(spec.leftalign, spec.plus, spec.space, spec.zero, true, spec.width, precision, spec.dynamic_width, false)    
+    hex_spec = Spec{Val{'x'}}(spec.leftalign, spec.plus, spec.space, spec.zero, true, spec.width, precision, spec.dynamic_width, false)
     fmt(buf, pos, args, argp, hex_spec)
 end
 
@@ -730,14 +731,14 @@ end
 function plength(f::Spec{T}, args, argp) where {T <: Chars}
     width, prec, argp = dynamic(args, argp, f)
     x = args[argp]
-    argp =+ 1
+    argp += 1
     max(width, 1) + (ncodeunits(x isa AbstractString ? x[1] : Char(x)) - 1), argp
 end
 
 function plength(f::Spec{Pointer}, args, argp)
     width, prec, argp = dynamic(args, argp, f)
     x = args[argp]
-    argp =+ 1    
+    argp += 1
     max(width, 2 * sizeof(x) + 2), argp
 end
 
@@ -745,7 +746,7 @@ end
 function plength(f::Spec{T}, args, argp) where {T <: Strings}
     width, prec, argp = dynamic(args, argp, f)
     x = args[argp]
-    argp =+ 1
+    argp += 1
     str = string(x)
     p = prec == -1 ? (length(str) + (f.hash ? (x isa Symbol ? 1 : 2) : 0)) : prec
     return max(width, p) + (sizeof(str) - length(str)), argp
@@ -754,7 +755,7 @@ end
 function plength(f::Spec{T}, args, argp) where {T <: Ints}
     width, prec, argp = dynamic(args, argp, f)
     x = args[argp]
-    argp =+ 1
+    argp += 1
     x2 = x isa AbstractFloat ? Integer(trunc(x)) : x
     return max(width, prec + ndigits(x2, base=base(T), pad=1) + 5), argp
 end
@@ -762,7 +763,7 @@ end
 function plength(f::Spec{T}, args, argp) where {T <: Floats}
     width, prec, argp = dynamic(args, argp, f)
     x = args[argp]
-    argp =+ 1
+    argp += 1
     x2 = tofloat(x)
     if x2 isa BigFloat
         return Base.MPFR._calculate_buffer_size!(Base.StringVector(0), string(f), x) + 3, argp
