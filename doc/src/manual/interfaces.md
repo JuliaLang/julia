@@ -415,11 +415,9 @@ julia> mutable struct MyArray{T,N} <: AbstractArray{T,N}
 
 julia> Base.size(A::MyArray) = size(A.a)
 
-julia> Base.@propagate_inbounds Base.getindex(A::MyArray, i...) = getindex(A.
-a, i...)
+julia> Base.@propagate_inbounds Base.getindex(A::MyArray, i...) = getindex(A.a, i...)
 
-julia> Base.@propagate_inbounds Base.setindex!(A::MyArray, v, i...) = setinde
-x!(A.a, v, i...)
+julia> Base.@propagate_inbounds Base.setindex!(A::MyArray, v, i...) = setindex!(A.a, v, i...)
 
 julia> Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
 ```
