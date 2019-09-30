@@ -109,20 +109,17 @@ SECT_INTERP static void check_can_assign_type(jl_binding_t *b, jl_value_t *rhs)
 void jl_reinstantiate_inner_types(jl_datatype_t *t);
 void jl_reset_instantiate_inner_types(jl_datatype_t *t);
 
-SECT_INTERP void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
+SECT_INTERP void check_datatype_super(jl_value_t *super, jl_typename_t *tt_name, jl_sym_t *name)
 {
     if (!jl_is_datatype(super) || !jl_is_abstracttype(super) ||
-        tt->name == ((jl_datatype_t*)super)->name ||
+        tt_name == ((jl_datatype_t*)super)->name ||
         jl_subtype(super, (jl_value_t*)jl_vararg_type) ||
         jl_is_tuple_type(super) ||
         jl_is_namedtuple_type(super) ||
         jl_subtype(super, (jl_value_t*)jl_type_type) ||
         jl_subtype(super, (jl_value_t*)jl_builtin_type)) {
-        jl_errorf("invalid subtyping in definition of %s",
-                  jl_symbol_name(tt->name->name));
+        jl_errorf("invalid subtyping in definition of %s", jl_symbol_name(name));
     }
-    tt->super = (jl_datatype_t*)super;
-    jl_gc_wb(tt, tt->super);
 }
 
 static void eval_abstracttype(jl_expr_t *ex, interpreter_state *s)
@@ -144,7 +141,11 @@ static void eval_abstracttype(jl_expr_t *ex, interpreter_state *s)
         name = (jl_value_t*)jl_globalref_name(name);
     }
     assert(jl_is_symbol(name));
-    dt = jl_new_abstracttype(name, modu, NULL, (jl_svec_t*)para);
+    if (jl_is_globalref(args[2])) {
+        super = jl_eval_global_var(jl_globalref_mod(args[2]), jl_globalref_name(args[2]));
+        check_datatype_super(super, NULL, (jl_sym_t*)name);
+    }
+    dt = jl_new_abstracttype(name, modu, (jl_datatype_t*)super, (jl_svec_t*)para);
     w = dt->name->wrapper;
     jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name, 1);
     temp = b->value;
@@ -153,8 +154,12 @@ static void eval_abstracttype(jl_expr_t *ex, interpreter_state *s)
     jl_gc_wb_binding(b, w);
     JL_TRY {
         inside_typedef = 1;
-        super = eval_value(args[2], s);
-        jl_set_datatype_super(dt, super);
+        if (super == NULL) {
+            super = eval_value(args[2], s);
+            check_datatype_super(super, dt->name, (jl_sym_t*)name);
+            dt->super = (jl_datatype_t*)super;
+            jl_gc_wb(dt, super);
+        }
         jl_reinstantiate_inner_types(dt);
     }
     JL_CATCH {
@@ -195,7 +200,11 @@ static void eval_primitivetype(jl_expr_t *ex, interpreter_state *s)
     if (nb < 1 || nb >= (1 << 23) || (nb & 7) != 0)
         jl_errorf("invalid number of bits in primitive type %s",
                   jl_symbol_name((jl_sym_t*)name));
-    dt = jl_new_primitivetype(name, modu, NULL, (jl_svec_t*)para, nb);
+    if (jl_is_globalref(args[3])) {
+        super = jl_eval_global_var(jl_globalref_mod(args[3]), jl_globalref_name(args[3]));
+        check_datatype_super(super, NULL, (jl_sym_t*)name);
+    }
+    dt = jl_new_primitivetype(name, modu, (jl_datatype_t*)super, (jl_svec_t*)para, nb);
     w = dt->name->wrapper;
     jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name, 1);
     temp = b->value;
@@ -204,8 +213,12 @@ static void eval_primitivetype(jl_expr_t *ex, interpreter_state *s)
     jl_gc_wb_binding(b, w);
     JL_TRY {
         inside_typedef = 1;
-        super = eval_value(args[3], s);
-        jl_set_datatype_super(dt, super);
+        if (super == NULL) {
+            super = eval_value(args[3], s);
+            check_datatype_super(super, dt->name, (jl_sym_t*)name);
+            dt->super = (jl_datatype_t*)super;
+            jl_gc_wb(dt, super);
+        }
         jl_reinstantiate_inner_types(dt);
     }
     JL_CATCH {
@@ -240,7 +253,11 @@ static void eval_structtype(jl_expr_t *ex, interpreter_state *s)
     assert(jl_is_symbol(name));
     assert(jl_is_svec(para));
     temp = eval_value(args[2], s);  // field names
-    dt = jl_new_datatype((jl_sym_t*)name, modu, NULL, (jl_svec_t*)para,
+    if (jl_is_globalref(args[3])) {
+        super = jl_eval_global_var(jl_globalref_mod(args[3]), jl_globalref_name(args[3]));
+        check_datatype_super(super, NULL, (jl_sym_t*)name);
+    }
+    dt = jl_new_datatype((jl_sym_t*)name, modu, (jl_datatype_t*)super, (jl_svec_t*)para,
                          (jl_svec_t*)temp, NULL,
                          0, args[5]==jl_true ? 1 : 0, jl_unbox_long(args[6]));
     w = dt->name->wrapper;
@@ -255,8 +272,12 @@ static void eval_structtype(jl_expr_t *ex, interpreter_state *s)
     JL_TRY {
         inside_typedef = 1;
         // operations that can fail
-        super = eval_value(args[3], s);
-        jl_set_datatype_super(dt, super);
+        if (super == NULL) {
+            super = eval_value(args[3], s);
+            check_datatype_super(super, dt->name, (jl_sym_t*)name);
+            dt->super = (jl_datatype_t*)super;
+            jl_gc_wb(dt, super);
+        }
         dt->types = (jl_svec_t*)eval_value(args[4], s);
         jl_gc_wb(dt, dt->types);
         for (size_t i = 0; i < jl_svec_len(dt->types); i++) {

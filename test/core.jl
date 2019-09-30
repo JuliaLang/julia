@@ -2404,6 +2404,12 @@ for f in (:(Core.arrayref), :((::typeof(Core.arrayref))), :((::Core.IntrinsicFun
     @test_throws ErrorException("cannot add methods to a builtin function") @eval $f() = 1
 end
 
+# issue #33370: make sure user types get the right method table
+let gs = gensym()
+    @eval struct $gs <: Core.Number; end
+    @test eval(gs).name.mt === Symbol.name.mt
+end
+
 # issue #8798
 let
     npy_typestrs = Dict("b1"=>Bool,

@@ -487,16 +487,16 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     }
     else {
         tn = jl_new_typename_in((jl_sym_t*)name, module);
-        if (super == jl_function_type || super == jl_builtin_type || jl_symbol_name(name)[0] == '#') {
-            // Callable objects (including compiler-generated closures) get independent method tables
-            // as an optimization
+        if (super == jl_function_type || super == jl_builtin_type) {
+            // Anything Julia detects as declared as a Callable objects (including compiler-generated closures)
+            // should get independent method tables, as a performance optimization
             tn->mt = jl_new_method_table(name, module);
             jl_gc_wb(tn, tn->mt);
             if (jl_svec_len(parameters) > 0)
                 tn->mt->offs = 0;
         }
         else {
-            // Everything else, gets to use the unified table
+            // Everything else, must use the unified table
             tn->mt = jl_nonfunction_mt;
         }
     }
