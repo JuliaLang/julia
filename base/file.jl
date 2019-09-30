@@ -167,13 +167,20 @@ julia> pwd()
 ```
 """
 function mkdir(path::AbstractString; mode::Integer = 0o777)
-    @static if Sys.iswindows()
-        ret = ccall(:_wmkdir, Int32, (Cwstring,), path)
-    else
-        ret = ccall(:mkdir, Int32, (Cstring, UInt32), path, checkmode(mode))
+    req = Libc.malloc(_sizeof_uv_fs)
+    try
+        ret = ccall(:uv_fs_mkdir, Cint,
+                    (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Cint, Ptr{Cvoid}),
+                    C_NULL, req, path, checkmode(mode), C_NULL)
+        if ret < 0
+            ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+            uv_error("mkdir", ret)
+        end
+        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+        return path
+    finally
+        Libc.free(req)
     end
-    systemerror(:mkdir, ret != 0; extrainfo=path)
-    path
 end
 
 """
