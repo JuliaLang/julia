@@ -214,7 +214,7 @@ function bitsunionsize(u::Union)
 end
 
 length(a::Array) = arraylen(a)
-elsize(::Type{<:Array{T}}) where {T} = isbitstype(T) ? sizeof(T) : (isbitsunion(T) ? bitsunionsize(T) : sizeof(Ptr))
+elsize(::Type{<:Array{T}}) where {T} = aligned_sizeof(T)
 sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
@@ -240,7 +240,7 @@ function unsafe_copyto!(dest::Ptr{T}, src::Ptr{T}, n) where T
     # Do not use this to copy data between pointer arrays.
     # It can't be made safe no matter how carefully you checked.
     ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
-          dest, src, n*sizeof(T))
+          dest, src, n * aligned_sizeof(T))
     return dest
 end
 
@@ -261,7 +261,7 @@ function unsafe_copyto!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
         unsafe_copyto!(pointer(dest, doffs), pointer(src, soffs), n)
     elseif isbitsunion(T)
         ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
-              pointer(dest, doffs), pointer(src, soffs), n * Base.bitsunionsize(T))
+              pointer(dest, doffs), pointer(src, soffs), n * aligned_sizeof(T))
         # copy selector bytes
         ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
               ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), dest) + doffs - 1,
@@ -1549,14 +1549,10 @@ function vcat(arrays::Vector{T}...) where T
     end
     arr = Vector{T}(undef, n)
     ptr = pointer(arr)
-    if isbitstype(T)
-        elsz = Core.sizeof(T)
-    elseif isbitsunion(T)
-        elsz = bitsunionsize(T)
+    if isbitsunion(T)
         selptr = ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), arr)
-    else
-        elsz = Core.sizeof(Ptr{Cvoid})
     end
+    elsz = aligned_sizeof(T)
     t = @_gc_preserve_begin arr
     for a in arrays
         na = length(a)

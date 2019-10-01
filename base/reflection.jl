@@ -337,6 +337,23 @@ function datatype_alignment(dt::DataType)
     return Int(alignment & 0x1FF)
 end
 
+# amount of total space taken by T when stored in a container
+function aligned_sizeof(T)
+    @_pure_meta
+    if isbitsunion(T)
+        sz = Ref{Csize_t}(0)
+        algn = Ref{Csize_t}(0)
+        ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), T, sz, algn)
+        al = algn[]
+        return (sz[] + al - 1) & -al
+    elseif allocatedinline(T)
+        al = datatype_alignment(T)
+        return (Core.sizeof(T) + al - 1) & -al
+    else
+        return Core.sizeof(Ptr{Cvoid})
+    end
+end
+
 gc_alignment(sz::Integer) = Int(ccall(:jl_alignment, Cint, (Csize_t,), sz))
 gc_alignment(T::Type) = gc_alignment(Core.sizeof(T))
 
