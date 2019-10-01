@@ -152,12 +152,12 @@ end
 # takewhile
 # --------
 @testset "takewhile" begin
-    @test takewhile(x -> x<4,1:10) |> collect == [1,2,3]
+    @test collect(takewhile(x -> x<4,1:10)) == [1,2,3]
     @test takewhile(x -> x<4,Iterators.countfrom(1)) |> collect == [1,2,3]
     @test takewhile(x -> x<4,5:10) |> collect == []
-    @test takewhile(x -> true,5:10) |> collect == 5:10 |> collect
+    @test collect(takewhile(x -> true,5:10)) == 5:10
     @test takewhile(isodd,[1,1,2,3]) |> collect == [1,1]
-    @test takewhile(<(3),[1,1,2,3]) |> s->takewhile(<(2),s) |> collect == [1,1]
+    @test collect(takewhile(<(2), takewhile(<(3), [1,1,2,3]))) == [1,1]
 end
 
 
@@ -166,7 +166,7 @@ end
 @testset "dropwhile" begin
     @test dropwhile(x -> x<4, 1:10) |> collect == 4:10 |> collect
     @test (dropwhile(x -> x<4, 1:10) |> collect) isa Vector{Int}
-    @test dropwhile(x -> x<4, []) |> collect == [] |> collect
+    @test collect(dropwhile(x -> x<4, [])) == []
     @test dropwhile(_ -> false,1:3) |> collect == 1:3 |> collect
     @test dropwhile(_ -> true, 1:3) |> isempty
     @test dropwhile(isodd,[1,1,2,3]) |> collect == [2,3]

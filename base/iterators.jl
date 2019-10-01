@@ -658,7 +658,7 @@ struct TakeWhile{I}
     pred
 end
 
-iterate(ibl::TakeWhile{I},itr...) where {I} = begin
+function iterate(ibl::TakeWhile{I},itr...) where {I}
     y = iterate(ibl.xs,itr...)
     y === nothing && return nothing
     ibl.pred(y[1]) || return nothing
@@ -680,7 +680,7 @@ mutable struct DropWhile{I}
     DropWhile(xs::I,pred) where {I} = new{I}(xs,pred,false)
 end
 
-iterate(ibl::DropWhile{I},itr...) where {I} = begin
+function iterate(ibl::DropWhile{I},itr...) where {I}
     if ibl.fltd
         iterate(ibl.xs, itr...)
     else
