@@ -508,7 +508,7 @@ types in other languages. Declaring a function argument or a field as `Union{T, 
 setting it either to a value of type `T`, or to `nothing` to indicate that there is no value.
 See [this FAQ entry](@ref faq-nothing) for more information.
 
-## [Parametric Types](@id man-parametric-types)
+## Parametric Types
 
 An important and powerful feature of Julia's type system is that it is parametric: types can take
 parameters, so that type declarations actually introduce a whole family of new types -- one for

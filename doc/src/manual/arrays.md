@@ -96,7 +96,7 @@ Here, `(2, 3)` is a [`Tuple`](@ref) and the first argument — the element type 
 
 Arrays can also be directly constructed with square braces; the syntax `[A, B, C, ...]`
 creates a one dimensional array (i.e., a vector) containing the comma-separated arguments as
-its elements. The [element type](@ref eltype) of the resulting array is automatically
+its elements. The element type ([`eltype`](@ref)) of the resulting array is automatically
 determined by the types of the arguments inside the braces. If all the arguments are the
 same type, then that is its `eltype`. If they all have a common
 [promotion type](@ref conversion-and-promotion) then they get converted to that type using
