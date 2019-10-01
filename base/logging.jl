@@ -413,38 +413,49 @@ function disable_logging(level::LogLevel)
     _min_enabled_level[] = level + 1
 end
 
-let _debug_groups = Symbol[],
+let _debug_groups_include::Vector{Symbol} = Symbol[],
+    _debug_groups_exclude::Vector{Symbol} = Symbol[],
     _debug_str::String = ""
 global function env_override_minlevel(group, _module)
     debug = get(ENV, "JULIA_DEBUG", "")
     if !(debug === _debug_str)
         _debug_str = debug
-        empty!(_debug_groups)
+        empty!(_debug_groups_include)
+        empty!(_debug_groups_exclude)
         for g in split(debug, ',')
-            isempty(g) && continue
-            if g == "all"
-                empty!(_debug_groups)
-                push!(_debug_groups, :all)
-                break
+            if !isempty(g)
+                if startswith(g, "!")
+                    if !isempty(g[2:end])
+                        push!(_debug_groups_exclude, Symbol(g[2:end]))
+                    end
+                else
+                    push!(_debug_groups_include, Symbol(g))
+                end
             end
-            push!(_debug_groups, Symbol(g))
         end
+        unique!(_debug_groups_include)
+        unique!(_debug_groups_exclude)
     end
-    if isempty(_debug_groups)
-        return false
-    end
-    if _debug_groups[1] == :all
-        return true
-    end
-    if isa(group, Symbol) && group in _debug_groups
-        return true
-    end
-    if isa(_module, Module)
-        if nameof(_module) in _debug_groups
+
+    if !(:all in _debug_groups_exclude) && (:all in _debug_groups_include || !isempty(_debug_groups_exclude))
+        if isempty(_debug_groups_exclude)
+            return true
+        elseif isa(group, Symbol) && group in _debug_groups_exclude
+            return false
+        elseif isa(_module, Module) && (nameof(_module) in _debug_groups_exclude || nameof(Base.moduleroot(_module)) in _debug_groups_exclude)
+            return false
+        else
             return true
         end
-        if nameof(Base.moduleroot(_module)) in _debug_groups
+    else
+        if isempty(_debug_groups_include)
+            return false
+        elseif isa(group, Symbol) && group in _debug_groups_include
             return true
+        elseif isa(_module, Module) && (nameof(_module) in _debug_groups_include || nameof(Base.moduleroot(_module)) in _debug_groups_include)
+            return true
+        else
+            return false
         end
     end
     return false

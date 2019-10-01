@@ -545,6 +545,9 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
                 gen_only = 1;
                 st = jl_nothing;
             }
+            else if (nargs == 2 && jl_exprarg(st, 0) == (jl_value_t*)jl_symbol("nkw")) {
+                m->nkw = jl_unbox_long(jl_exprarg(st, 1));
+            }
         }
         else {
             st = resolve_globals(st, m->module, sparam_vars, 1, 0);
@@ -584,6 +587,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->line = 0;
     m->called = 0xff;
     m->nospecialize = module->nospecialize;
+    m->nkw = 0;
     m->invokes = NULL;
     m->isva = 0;
     m->nargs = 0;

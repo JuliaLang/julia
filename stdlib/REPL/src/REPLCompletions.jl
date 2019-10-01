@@ -40,7 +40,6 @@ struct MethodCompletion <: Completion
     func
     input_types::Type
     method::Method
-    kwtype # needed for printing
 end
 
 struct BslashCompletion <: Completion
@@ -62,7 +61,7 @@ completion_text(c::ModuleCompletion) = c.mod
 completion_text(c::PackageCompletion) = c.package
 completion_text(c::PropertyCompletion) = string(c.property)
 completion_text(c::FieldCompletion) = string(c.field)
-completion_text(c::MethodCompletion) = sprint(io -> show(io, c.method, kwtype=c.kwtype))
+completion_text(c::MethodCompletion) = sprint(io -> show(io, c.method))
 completion_text(c::BslashCompletion) = c.bslash
 completion_text(c::ShellCompletion) = c.text
 completion_text(c::DictCompletion) = c.key
@@ -451,13 +450,12 @@ function complete_methods(ex_org::Expr, context_module=Main)::Vector{Completion}
     t_in = Tuple{Core.Typeof(func), args_ex...} # Input types
     na = length(args_ex)+1
     ml = methods(func)
-    kwtype = isdefined(ml.mt, :kwsorter) ? typeof(ml.mt.kwsorter) : nothing
     for method in ml
         ms = method.sig
 
         # Check if the method's type signature intersects the input types
         if typeintersect(Base.rewrap_unionall(Tuple{Base.unwrap_unionall(ms).parameters[1 : min(na, end)]...}, ms), t_in) != Union{}
-            push!(out, MethodCompletion(func, t_in, method, kwtype))
+            push!(out, MethodCompletion(func, t_in, method))
         end
     end
     return out

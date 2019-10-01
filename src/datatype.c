@@ -29,7 +29,7 @@ jl_sym_t *jl_demangle_typename(jl_sym_t *s) JL_NOTSAFEPOINT
     if (end == n || end == n+1)
         len = strlen(n) - 1;
     else
-        len = (end-n) - 1;
+        len = (end-n) - 1;  // extract `f` from `#f#...`
     return jl_symbol_n(&n[1], len);
 }
 

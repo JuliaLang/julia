@@ -1676,3 +1676,7 @@ c32703(::Type{<:Str{C}}, str::Str{C}) where {C<:CSE} = str
 @testintersect(Tuple{Pair{Int, DataType}, Any},
                Tuple{Pair{A, B} where B<:Type, Int} where A,
                Tuple{Pair{Int, DataType}, Int})
+
+# issue #33337
+@test !issub(Tuple{Type{T}, T} where T<:NTuple{30, Union{Nothing, Ref}},
+             Tuple{Type{Tuple{Vararg{V, N} where N}}, Tuple{Vararg{V, N} where N}} where V)

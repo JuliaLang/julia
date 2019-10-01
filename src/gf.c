@@ -137,7 +137,7 @@ jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_a
 {
     jl_sym_t *sname = jl_symbol(name);
     if (dt == NULL) {
-        jl_value_t *f = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type, 0);
+        jl_value_t *f = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type);
         jl_set_const(jl_core_module, sname, f);
         dt = (jl_datatype_t*)jl_typeof(f);
     }
@@ -2428,21 +2428,14 @@ JL_DLLEXPORT jl_value_t *jl_get_invoke_lambda(jl_typemap_entry_t *entry, jl_valu
 }
 
 // Return value is rooted globally
-jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, int iskw)
+jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st)
 {
     // type name is function name prefixed with #
     size_t l = strlen(jl_symbol_name(name));
     char *prefixed;
-    if (iskw) {
-        prefixed = (char*)malloc(l+5);
-        strcpy(&prefixed[0], "#kw#");
-        strcpy(&prefixed[4], jl_symbol_name(name));
-    }
-    else {
-        prefixed = (char*)malloc(l+2);
-        prefixed[0] = '#';
-        strcpy(&prefixed[1], jl_symbol_name(name));
-    }
+    prefixed = (char*)malloc(l+2);
+    prefixed[0] = '#';
+    strcpy(&prefixed[1], jl_symbol_name(name));
     jl_sym_t *tname = jl_symbol(prefixed);
     free(prefixed);
     jl_datatype_t *ftype = (jl_datatype_t*)jl_new_datatype(
@@ -2466,16 +2459,23 @@ JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_value_t *ty)
     if (!mt->kwsorter) {
         JL_LOCK(&mt->writelock);
         if (!mt->kwsorter) {
-            jl_sym_t *name;
+            char *name;
             if (mt == jl_nonfunction_mt) {
-                name = mt->name;
+                name = jl_symbol_name(mt->name);
             }
             else {
                 jl_datatype_t *dt = (jl_datatype_t*)jl_argument_datatype(ty);
                 assert(jl_is_datatype(dt));
-                name = dt->name->name;
+                name = jl_symbol_name(dt->name->name);
+                if (name[0] == '#')
+                    name++;
             }
-            mt->kwsorter = jl_new_generic_function_with_supertype(name, mt->module, jl_function_type, 1);
+            size_t l = strlen(name);
+            char *suffixed = (char*)malloc(l+5);
+            strcpy(&suffixed[0], name);
+            strcpy(&suffixed[l], "##kw");
+            jl_sym_t *fname = jl_symbol(suffixed);
+            mt->kwsorter = jl_new_generic_function_with_supertype(fname, mt->module, jl_function_type);
             jl_gc_wb(mt, mt->kwsorter);
         }
         JL_UNLOCK(&mt->writelock);
@@ -2485,7 +2485,7 @@ JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_value_t *ty)
 
 jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module)
 {
-    return jl_new_generic_function_with_supertype(name, module, jl_function_type, 0);
+    return jl_new_generic_function_with_supertype(name, module, jl_function_type);
 }
 
 struct ml_matches_env {

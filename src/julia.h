@@ -303,6 +303,8 @@ typedef struct _jl_method_t {
     int32_t nargs;
     int32_t called;        // bit flags: whether each of the first 8 arguments is called
     int32_t nospecialize;  // bit flags: which arguments should not be specialized
+    int32_t nkw;           // # of leading arguments that are actually keyword arguments
+                           // of another method.
     uint8_t isva;
     uint8_t pure;
 

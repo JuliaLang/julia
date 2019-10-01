@@ -181,7 +181,7 @@ function showerror(io::IO, ex::MethodError)
     name = ft.name.mt.name
     f_is_function = false
     kwargs = ()
-    if startswith(string(ft.name.name), "#kw#")
+    if endswith(string(ft.name.name), "##kw")
         f = ex.args[2]
         ft = typeof(f)
         name = ft.name.mt.name
@@ -416,11 +416,10 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                         end
                     end
                 end
-                kwords = Symbol[]
-                if isdefined(ft.name.mt, :kwsorter)
-                    kwsorter_t = typeof(ft.name.mt.kwsorter)
-                    kwords = kwarg_decl(method, kwsorter_t)
-                    length(kwords) > 0 && print(iob, "; ", join(kwords, ", "))
+                kwords = kwarg_decl(method)
+                if !isempty(kwords)
+                    print(iob, "; ")
+                    join(iob, kwords, ", ")
                 end
                 print(iob, ")")
                 show_method_params(iob0, tv)
@@ -602,6 +601,11 @@ function show_backtrace(io::IO, t::Vector{Any})
     end
 end
 
+function is_kw_sorter_name(name::Symbol)
+    sn = string(name)
+    return !startswith(sn, '#') && endswith(sn, "##kw")
+end
+
 function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     n = 0
     last_frame = StackTraces.UNKNOWN
@@ -621,7 +625,7 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
                 continue
             end
 
-            if lkup.from_c && skipC
+            if (lkup.from_c && skipC) || is_kw_sorter_name(lkup.func)
                 continue
             end
             count += 1

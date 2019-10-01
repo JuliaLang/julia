@@ -1489,7 +1489,9 @@ end
 
 # * and mul!
 
-function (*)(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
+const _StridedOrTriangularMatrix{T} = Union{StridedMatrix{T}, LowerTriangular{T}, UnitLowerTriangular{T}, UpperTriangular{T}, UnitUpperTriangular{T}}
+
+function (*)(A::_StridedOrTriangularMatrix{Ta}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
     require_one_based_indexing(A, x)
     m, n = size(A)
     length(x) == n || throw(DimensionMismatch())
@@ -1498,10 +1500,10 @@ function (*)(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
     mul!(y, A, x)
 end
 
-mul!(y::AbstractVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
+mul!(y::AbstractVector{Ty}, A::_StridedOrTriangularMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     mul!(y, A, x, true, false)
 
-function mul!(y::AbstractVector, A::StridedMatrix, x::AbstractSparseVector, α::Number, β::Number)
+function mul!(y::AbstractVector, A::_StridedOrTriangularMatrix, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, A, x)
     m, n = size(A)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
@@ -1528,7 +1530,7 @@ end
 
 # * and mul!(C, transpose(A), B)
 
-function *(transA::Transpose{<:Any,<:StridedMatrix{Ta}}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
+function *(transA::Transpose{<:Any,<:_StridedOrTriangularMatrix{Ta}}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
     require_one_based_indexing(transA, x)
     m, n = size(transA)
     length(x) == n || throw(DimensionMismatch())
@@ -1537,10 +1539,10 @@ function *(transA::Transpose{<:Any,<:StridedMatrix{Ta}}, x::AbstractSparseVector
     mul!(y, transA, x)
 end
 
-mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
+mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     mul!(y, transA, x, true, false)
 
-function mul!(y::AbstractVector, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector, α::Number, β::Number)
+function mul!(y::AbstractVector, transA::Transpose{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, transA, x)
     m, n = size(transA)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
@@ -1569,7 +1571,7 @@ end
 
 # * and mul!(C, adjoint(A), B)
 
-function *(adjA::Adjoint{<:Any,<:StridedMatrix{Ta}}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
+function *(adjA::Adjoint{<:Any,<:_StridedOrTriangularMatrix{Ta}}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
     require_one_based_indexing(adjA, x)
     m, n = size(adjA)
     length(x) == n || throw(DimensionMismatch())
@@ -1578,10 +1580,10 @@ function *(adjA::Adjoint{<:Any,<:StridedMatrix{Ta}}, x::AbstractSparseVector{Tx}
     mul!(y, adjA, x)
 end
 
-mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:StridedMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
+mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     mul!(y, adjA, x, true, false)
 
-function mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:StridedMatrix}, x::AbstractSparseVector, α::Number, β::Number)
+function mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, adjA, x)
     m, n = size(adjA)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
