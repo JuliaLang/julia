@@ -41,6 +41,12 @@ macro macro_doctest() end
 
 @test (@doc @macro_doctest) !== nothing
 
+@test (@eval @doc $(Meta.parse("{a"))) isa Markdown.MD
+@test (@eval @doc $(Meta.parse("``"))) isa Markdown.MD
+@test (@eval @doc $(Meta.parse("``"))) == (@doc @cmd)
+@test (@eval @doc $(Meta.parse("123456789012345678901234567890"))) == (@doc @int128_str)
+@test (@eval @doc $(Meta.parse("1234567890123456789012345678901234567890"))) == (@doc @big_str)
+
 # test that random stuff interpolated into docstrings doesn't break search or other methods here
 @doc doc"""
 break me:
