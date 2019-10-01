@@ -410,7 +410,6 @@ end
 # is preserved.
 # ====================================================
 
-# Constants and utilities
 # Argument reduction
 """
     k, f = _log_range_reduction(x)
