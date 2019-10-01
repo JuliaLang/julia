@@ -1501,11 +1501,21 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     nothing
 end
 
-function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
+demangle_function_name(name::Symbol) = Symbol(demangle_function_name(string(name)))
+function demangle_function_name(name::AbstractString)
+    demangle = split(name, '#')
+    # kw sorters and impl methods use the name scheme `f#...`
+    if length(demangle) >= 2 && demangle[1] != ""
+        return demangle[1]
+    end
+    return name
+end
+
+function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwargs=nothing)
     # print a method signature tuple for a lambda definition
     color = get(io, :color, false) && get(io, :backtrace, false) ? stackframe_function_color() : :nothing
     if sig === Tuple
-        printstyled(io, name, "(...)", color=color)
+        printstyled(io, demangle ? demangle_function_name(name) : name, "(...)", color=color)
         return
     end
     tv = Any[]
@@ -1522,7 +1532,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
         if ft <: Function && isa(uw,DataType) && isempty(uw.parameters) &&
                 isdefined(uw.name.module, uw.name.mt.name) &&
                 ft == typeof(getfield(uw.name.module, uw.name.mt.name))
-            print(io, uw.name.mt.name)
+            print(io, (demangle ? demangle_function_name : identity)(uw.name.mt.name))
         elseif isa(ft, DataType) && ft.name === Type.body.name && !Core.Compiler.has_free_typevars(ft)
             f = ft.parameters[1]
             print(io, f)
@@ -1537,6 +1547,16 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
         first || print(io, ", ")
         first = false
         print(env_io, "::", sig[i])
+    end
+    if kwargs !== nothing
+        print(io, "; ")
+        first = true
+        for (k, t) in kwargs
+            first || print(io, ", ")
+            first = false
+            print(io, k, "::")
+            show(io, t)
+        end
     end
     printstyled(io, ")", color=print_style)
     show_method_params(io, tv)

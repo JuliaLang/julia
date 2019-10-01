@@ -1220,7 +1220,7 @@ function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Sym
     hasmethod(f, t, world=world) || return false
     isempty(kwnames) && return true
     m = which(f, t)
-    kws = kwarg_decl(m, Core.kwftype(typeof(f)))
+    kws = kwarg_decl(m)
     for kw in kws
         endswith(String(kw), "...") && return true
     end
