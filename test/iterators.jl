@@ -149,6 +149,30 @@ for xs in Any["abc", [1, 2, 3]]
     @test take(drop(take(xs, 3), 1), 1) === take(drop(xs, 1), 1)
 end
 
+# takewhile
+# --------
+@testset "takewhile" begin
+    @test takewhile(x -> x<4,1:10) |> collect == [1,2,3]
+    @test takewhile(x -> x<4,Iterators.countfrom(1)) |> collect == [1,2,3]
+    @test takewhile(x -> x<4,5:10) |> collect == []
+    @test takewhile(x -> true,5:10) |> collect == 5:10 |> collect
+    @test takewhile(isodd,[1,1,2,3]) |> collect == [1,1]
+    @test takewhile(<(3),[1,1,2,3]) |> s->takewhile(<(2),s) |> collect == [1,1]
+end
+
+
+# dropwhile
+# --------
+@testset "dropwhile" begin
+    @test dropwhile(x -> x<4, 1:10) |> collect == 4:10 |> collect
+    @test (dropwhile(x -> x<4, 1:10) |> collect) isa Vector{Int}
+    @test dropwhile(x -> x<4, []) |> collect == [] |> collect
+    @test dropwhile(_ -> false,1:3) |> collect == 1:3 |> collect
+    @test dropwhile(_ -> true, 1:3) |> isempty
+    @test dropwhile(isodd,[1,1,2,3]) |> collect == [2,3]
+    @test dropwhile(isodd,[1,1,2,3]) |> s->dropwhile(iseven,s) |> collect == [3]
+end
+
 # cycle
 # -----
 let i = 0
