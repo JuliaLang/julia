@@ -673,27 +673,25 @@ IteratorEltype(::Type{TakeWhile{I,P}}) where {I,P} = IteratorEltype(I)
 
 # dropwhile
 
-dropwhile(pred::Function,itr) = DropWhile(itr,pred)
-mutable struct DropWhile{I}
+struct DropWhile{I,P<:Function}
     xs::I
-    pred
-    fltd::Bool
-    DropWhile(xs::I,pred) where {I} = new{I}(xs,pred,false)
+    pred::P
 end
 
-function iterate(ibl::DropWhile{I},itr...) where {I}
-    if ibl.fltd
-        iterate(ibl.xs, itr...)
-    else
-        y = iterate(Iterators.filter(!ibl.pred, ibl.xs),itr...)
-        ibl.fltd = true
-        y
-    end
+dropwhile(pred,itr) = DropWhile(itr,pred)
+function iterate(ibl::DropWhile{I,P},itr=nothing) where {I,P}
+    (fltd,itr) = itr===nothing ? (false,()) : itr
+
+    y = fltd ?
+        iterate(ibl.xs, itr...) :
+        iterate(Iterators.filter(!ibl.pred, ibl.xs),itr...)
+
+    y !== nothing ? (y[1],(true,y[2])) : nothing
 end
 
-IteratorSize(ibl::DropWhile{I}) where {I} = SizeUnknown()
-eltype(::Type{DropWhile{I}}) where {I} = eltype(I)
-IteratorEltype(::Type{DropWhile{I}}) where {I} = IteratorEltype(I)
+IteratorSize(ibl::DropWhile{I,P}) where {I,P} = SizeUnknown()
+eltype(::Type{DropWhile{I,P}}) where {I,P} = eltype(I)
+IteratorEltype(::Type{DropWhile{I,P}}) where {I,P} = IteratorEltype(I)
 
 
 # Cycle an iterator forever
