@@ -679,8 +679,8 @@ struct DropWhile{I,P<:Function}
 end
 
 dropwhile(pred,itr) = DropWhile(itr,pred)
-function iterate(ibl::DropWhile{I,P},itr=nothing) where {I,P}
-    (fltd,itr) = itr===nothing ? (false,()) : itr
+function iterate(ibl::DropWhile,itr...)
+    (fltd,itr) = isempty(itr) ? (false,()) : itr[1]
 
     y = fltd ?
         iterate(ibl.xs, itr...) :
@@ -689,7 +689,7 @@ function iterate(ibl::DropWhile{I,P},itr=nothing) where {I,P}
     y !== nothing ? (y[1],(true,y[2])) : nothing
 end
 
-IteratorSize(::Type{<:DropWhile}) = SizeUnknown()
+IteratorSize(::Type{DropWhile}) = SizeUnknown()
 eltype(::Type{DropWhile{I,P}}) where {I,P} = eltype(I)
 IteratorEltype(::Type{DropWhile{I,P}}) where {I,P} = IteratorEltype(I)
 
