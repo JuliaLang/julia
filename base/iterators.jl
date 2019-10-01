@@ -659,14 +659,14 @@ end
 
 takewhile(pred,xs) = TakeWhile(xs,pred)
 
-function iterate(ibl::TakeWhile{I,P},itr...) where {I,P}
+function iterate(ibl::TakeWhile, itr...)
     y = iterate(ibl.xs,itr...)
     y === nothing && return nothing
     ibl.pred(y[1]) || return nothing
     y
 end
 
-IteratorSize(ibl::TakeWhile{I,P}) where {I,P} = SizeUnknown()
+IteratorSize(::Type{<:TakeWhile}) = SizeUnknown()
 eltype(::Type{TakeWhile{I,P}}) where {I,P} = eltype(I)
 IteratorEltype(::Type{TakeWhile{I,P}}) where {I,P} = IteratorEltype(I)
 
@@ -689,7 +689,7 @@ function iterate(ibl::DropWhile{I,P},itr=nothing) where {I,P}
     y !== nothing ? (y[1],(true,y[2])) : nothing
 end
 
-IteratorSize(ibl::DropWhile{I,P}) where {I,P} = SizeUnknown()
+IteratorSize(::Type{<:DropWhile}) = SizeUnknown()
 eltype(::Type{DropWhile{I,P}}) where {I,P} = eltype(I)
 IteratorEltype(::Type{DropWhile{I,P}}) where {I,P} = IteratorEltype(I)
 
