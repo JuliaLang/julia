@@ -301,6 +301,11 @@ distclean-libcxxabi:
 LLVM_CMAKE += -DCMAKE_EXE_LINKER_FLAGS="$(LLVM_LDFLAGS) $(LLVM_LIBCXX_LDFLAGS)" \
 	-DCMAKE_SHARED_LINKER_FLAGS="$(LLVM_LDFLAGS) $(LLVM_LIBCXX_LDFLAGS)"
 
+# change the SONAME of Julia's private LLVM
+# i.e. libLLVM-6.0jl.so
+# see #32462
+LLVM_CMAKE += -DLLVM_VERSION_SUFFIX:STRING="jl"
+
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 LIBCXX_DEPENDENCY := $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++.so.1.0
 get-llvm: get-libcxx get-libcxxabi
