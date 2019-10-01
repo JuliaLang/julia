@@ -2446,7 +2446,7 @@
 (define (all-local-names scope)
   (define (all-lists s)
     (if s
-        (list* (scope:args s) (scope:locals s) (all-lists (scope:prev s)))
+        (list* (scope:args s) (scope:sp s) (scope:locals s) (all-lists (scope:prev s)))
         '()))
   (apply append (all-lists scope)))
 
