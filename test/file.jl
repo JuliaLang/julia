@@ -15,14 +15,14 @@ subdir = joinpath(dir, "adir")
 mkdir(subdir)
 subdir2 = joinpath(dir, "adir2")
 mkdir(subdir2)
-@test_throws SystemError mkdir(file)
+@test_throws Base.IOError mkdir(file)
 let err = nothing
     try
         mkdir(file)
     catch err
         io = IOBuffer()
         showerror(io, err)
-        @test startswith(String(take!(io)), "SystemError (with $file): mkdir:")
+        @test startswith(String(take!(io)), "IOError: mkdir: file already exists (EEXIST)")
     end
 end
 
