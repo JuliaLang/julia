@@ -123,7 +123,7 @@ The Julia REPL makes great use of key bindings. Several control-key bindings wer
 above (`^D` to exit, `^R` and `^S` for searching), but there are many more. In addition to the
 control-key, there are also meta-key bindings. These vary more by platform, but most terminals
 default to using alt- or option- held down with a key to send the meta-key (or can be configured
-to do so).
+to do so), or pressing Esc and then the key.
 
 | Keybinding          | Description                                                                                                |
 |:------------------- |:---------------------------------------------------------------------------------------------------------- |
