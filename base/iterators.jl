@@ -649,6 +649,52 @@ end
 iterate(it::Drop, state) = iterate(it.xs, state)
 isdone(it::Drop, state) = isdone(it.xs, state)
 
+
+# takewhile
+
+takewhile(pred::Function,xs) = TakeWhile(xs,pred)
+struct TakeWhile{I}
+    xs::I
+    pred
+end
+
+iterate(ibl::TakeWhile{I},itr...) where {I} = begin
+    y = iterate(ibl.xs,itr...)
+    y === nothing && return nothing
+    ibl.pred(y[1]) || return nothing
+    y
+end
+
+IteratorSize(ibl::TakeWhile{I}) where {I} = SizeUnknown()
+eltype(::Type{TakeWhile{I}}) where {I} = eltype(I)
+IteratorEltype(::Type{TakeWhile{I}}) where {I} = IteratorEltype(I)
+
+
+# dropwhile
+
+dropwhile(pred::Function,itr) = DropWhile(itr,pred)
+mutable struct DropWhile{I}
+    xs::I
+    pred
+    fltd::Bool
+    DropWhile(xs::I,pred) where {I} = new{I}(xs,pred,false)
+end
+
+iterate(ibl::DropWhile{I},itr...) where {I} = begin
+    if ibl.fltd
+        iterate(ibl.xs, itr...)
+    else
+        y = iterate(Iterators.filter(!ibl.pred, ibl.xs),itr...)
+        ibl.fltd = true
+        y
+    end
+end
+
+IteratorSize(ibl::DropWhile{I}) where {I} = SizeUnknown()
+eltype(::Type{DropWhile{I}}) where {I} = eltype(I)
+IteratorEltype(::Type{DropWhile{I}}) where {I} = IteratorEltype(I)
+
+
 # Cycle an iterator forever
 
 struct Cycle{I}
