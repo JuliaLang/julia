@@ -674,12 +674,12 @@ Base.IteratorEltype(::Type{TakeWhile{I,P}}) where {I,P} = Base.IteratorEltype(I)
 # dropwhile
 
 struct DropWhile{I,P<:Function}
-    xs::I
     pred::P
+    xs::I
 end
 
-dropwhile(pred,itr) = DropWhile(itr,pred)
-function iterate(ibl::DropWhile,itr...)
+dropwhile(pred,itr) = DropWhile(pred,itr)
+function Base.iterate(ibl::DropWhile,itr...)
     (fltd,itr) = isempty(itr) ? (false,()) : itr[1]
 
     y = fltd ?
@@ -689,9 +689,9 @@ function iterate(ibl::DropWhile,itr...)
     y !== nothing ? (y[1],(true,y[2])) : nothing
 end
 
-IteratorSize(::Type{DropWhile}) = SizeUnknown()
-eltype(::Type{DropWhile{I,P}}) where {I,P} = eltype(I)
-IteratorEltype(::Type{DropWhile{I,P}}) where {I,P} = IteratorEltype(I)
+Base.IteratorSize(::Type{DropWhile{I,P}}) where {I,P} = Base.SizeUnknown()
+Base.eltype(::Type{DropWhile{I,P}}) where {I,P} = Base.eltype(I)
+Base.IteratorEltype(::Type{DropWhile{I,P}}) where {I,P} = Base.IteratorEltype(I)
 
 
 # Cycle an iterator forever
