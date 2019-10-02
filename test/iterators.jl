@@ -164,14 +164,15 @@ end
 # dropwhile
 # --------
 @testset "dropwhile" begin
-    @test dropwhile(x -> x<4, 1:10) |> collect == 4:10 |> collect
-    @test (dropwhile(x -> x<4, 1:10) |> collect) isa Vector{Int}
-    @test collect(dropwhile(x -> x<4, [])) == []
-    @test dropwhile(_ -> false,1:3) |> collect == 1:3 |> collect
-    @test dropwhile(_ -> true, 1:3) |> isempty
-    @test dropwhile(isodd,[1,1,2,3]) |> collect == [2,3]
+    @test collect(dropwhile(<(4), 1:10)) == 4:10
+    @test collect(dropwhile(<(4), 1:10)) isa Vector{Int}
+    @test isempty(dropwhile(<(4), []))
+    @test collect(dropwhile(_->false,1:3)) == 1:3
+    @test isempty(dropwhile(_->true, 1:3))
+    @test collect(dropwhile(isodd,[1,1,2,3])) == [2,3]
     @test dropwhile(isodd,[1,1,2,3]) |> s->dropwhile(iseven,s) |> collect == [3]
 end
+
 
 # cycle
 # -----
