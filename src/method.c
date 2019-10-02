@@ -380,6 +380,9 @@ STATIC_INLINE jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator
 
 // Lower `ex` into Julia IR, and (if it expands into a CodeInfo) resolve global-variable
 // references in light of the provided type parameters.
+// Like `jl_expand`, if there is an error expanding the provided expression, the return value
+// will be an error expression (an `Expr` with `error_sym` as its head), which should be eval'd
+// in the caller's context.
 JL_DLLEXPORT jl_code_info_t *jl_expand_and_resolve(jl_value_t *ex, jl_module_t *module,
                                                    jl_svec_t *sparam_vals) {
     jl_code_info_t *func = (jl_code_info_t*)jl_expand((jl_value_t*)ex, module);
