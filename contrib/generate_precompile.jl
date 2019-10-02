@@ -1,9 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-if !isempty(ARGS)
-    ARGS[1] == "0" && exit(0)
-end
-
+if isempty(ARGS) || ARGS[1] !== "0"
 # Prevent this from being put into the Main namespace
 @eval Module() begin
 if !isdefined(Base, :uv_eventloop)
@@ -180,3 +177,4 @@ end
 generate_precompile_statements()
 
 end # @eval
+end
