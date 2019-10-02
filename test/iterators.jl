@@ -152,11 +152,11 @@ end
 # takewhile
 # --------
 @testset "takewhile" begin
-    @test collect(takewhile(x -> x<4,1:10)) == [1,2,3]
-    @test takewhile(x -> x<4,Iterators.countfrom(1)) |> collect == [1,2,3]
-    @test takewhile(x -> x<4,5:10) |> collect == []
-    @test collect(takewhile(x -> true,5:10)) == 5:10
-    @test takewhile(isodd,[1,1,2,3]) |> collect == [1,1]
+    @test collect(takewhile(<(4),1:10)) == [1,2,3]
+    @test collect(takewhile(<(4),Iterators.countfrom(1))) == [1,2,3]
+    @test collect(takewhile(<(4),5:10)) == []
+    @test collect(takewhile(_->true,5:10)) == 5:10
+    @test collect(takewhile(isodd,[1,1,2,3])) == [1,1]
     @test collect(takewhile(<(2), takewhile(<(3), [1,1,2,3]))) == [1,1]
 end
 
