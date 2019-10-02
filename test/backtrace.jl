@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-lookup(ip) = StackTraces.lookupat(ip - 1)
-lookup(ip::Base.InterpreterIP) = StackTraces.lookupat(ip) # TODO: Base.InterpreterIP should not need a special-case
+import Base.StackTraces: lookup
 
 # Test location information for inlined code (ref issues #1334 #12544)
 module test_inline_bt
@@ -223,5 +222,39 @@ let trace = try
     @test trace[1].func == Symbol("top-level scope")
     @test trace[1].file == :a_filename
     @test trace[1].line == 2
+end
+
+# issue #29695 (see also test for #28442)
+let code = """
+    f29695(c) = g29695(c)
+    g29695(c) = c >= 1000 ? (return backtrace()) : f29695(c + 1)
+    bt = f29695(1)
+    meth_names = [ip.code.def.name for ip in bt
+                  if ip isa Base.InterpreterIP && ip.code isa Core.MethodInstance]
+    num_fs = sum(meth_names .== :f29695)
+    num_gs = sum(meth_names .== :g29695)
+    print(num_fs, ' ', num_gs)
+    """
+
+    @test read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String) == "1000 1000"
+end
+
+# Test that modules make it into InterpreterIP for top-level code
+let code = """
+    module A
+    foo() = error("Expected")
+    try
+        foo()
+    catch
+        global bt = catch_backtrace()
+    end
+    end
+
+    foreach(println, A.bt)
+    """
+
+    bt_str = read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String)
+    @test occursin("InterpreterIP in MethodInstance for foo", bt_str)
+    @test occursin("InterpreterIP in top-level CodeInfo", bt_str)
 end
 

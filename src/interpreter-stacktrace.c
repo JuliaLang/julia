@@ -397,13 +397,14 @@ JL_DLLEXPORT size_t jl_capture_interp_frame(uintptr_t *data, uintptr_t sp, uintp
 #else
     interpreter_state *s = (interpreter_state *)(sp+TOTAL_STACK_PADDING);
 #endif
-    if (space_remaining <= 1)
+    int required_space = 3;
+    if (space_remaining < required_space)
         return 0;
     // Sentinel value to indicate an interpreter frame
     data[0] = JL_BT_INTERP_FRAME;
     data[1] = s->mi ? (uintptr_t)s->mi : s->src ? (uintptr_t)s->src : (uintptr_t)jl_nothing;
     data[2] = (uintptr_t)s->ip;
-    return 2;
+    return required_space;
 }
 
 extern void * CALLBACK_ABI enter_interpreter_frame(void * CALLBACK_ABI (*callback)(interpreter_state *, void *), void *arg);
@@ -420,6 +421,7 @@ JL_DLLEXPORT int jl_is_enter_interpreter_frame(uintptr_t ip)
 
 JL_DLLEXPORT size_t jl_capture_interp_frame(uintptr_t *data, uintptr_t sp, uintptr_t fp, size_t space_remaining)
 {
+    // Leave bt_entry[0] as the native instruction ptr
     return 0;
 }
 #define CALLBACK_ABI

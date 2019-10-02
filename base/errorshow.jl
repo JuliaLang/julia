@@ -615,10 +615,8 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
         lkups = t[i]
         if lkups isa StackFrame
             lkups = [lkups]
-        elseif lkups isa Base.InterpreterIP
-            lkups = StackTraces.lookupat(lkups)
         else
-            lkups = StackTraces.lookupat(lkups - 1)
+            lkups = StackTraces.lookup(lkups)
         end
         for lkup in lkups
             if lkup === StackTraces.UNKNOWN
@@ -665,3 +663,14 @@ function show_exception_stack(io::IO, stack::Vector)
         println(io)
     end
 end
+
+# Defined here rather than error.jl for bootstrap ordering
+function show(io::IO, ip::InterpreterIP)
+    print(io, typeof(ip))
+    if ip.code isa Core.CodeInfo
+        print(io, " in top-level CodeInfo at statement $(Int(ip.stmt))")
+    else
+        print(io, " in $(ip.code) at statement $(Int(ip.stmt))")
+    end
+end
+
