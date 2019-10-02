@@ -318,6 +318,7 @@ Base.:*(::AbstractMatrix, ::AbstractMatrix)
 Base.:\(::AbstractMatrix, ::AbstractVecOrMat)
 LinearAlgebra.SingularException
 LinearAlgebra.PosDefException
+LinearAlgebra.ZeroPivotException
 LinearAlgebra.dot
 LinearAlgebra.cross
 LinearAlgebra.factorize

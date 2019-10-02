@@ -48,6 +48,8 @@ Standard library changes
 
 * `dot` now admits a 3-argument method `dot(x, A, y)` to compute generalized dot products `dot(x, A*y)`, but without computing and storing the intermediate result `A*y` ([#32739]).
 
+* `ldlt` and non-pivoted `lu` now throw a new `ZeroPivotException` type ([#33372]).
+
 #### Random
 
 * `AbstractRNG`s now behave like scalars when used in broadcasting ([#33213]).
