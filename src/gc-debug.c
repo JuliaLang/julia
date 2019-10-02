@@ -203,7 +203,7 @@ static void gc_verify_track(jl_ptls_t ptls)
         jl_gc_mark_sp_t sp;
         gc_mark_sp_init(gc_cache, &sp);
         arraylist_push(&lostval_parents_done, lostval);
-        jl_printf(JL_STDERR, "Now looking for %p =======\n", lostval);
+        jl_safe_printf("Now looking for %p =======\n", lostval);
         clear_mark(GC_CLEAN);
         gc_mark_queue_all_roots(ptls, &sp);
         gc_mark_queue_finlist(gc_cache, &sp, &to_finalize, 0);
@@ -214,7 +214,7 @@ static void gc_verify_track(jl_ptls_t ptls)
         gc_mark_queue_finlist(gc_cache, &sp, &finalizer_list_marked, 0);
         gc_mark_loop(ptls, sp);
         if (lostval_parents.len == 0) {
-            jl_printf(JL_STDERR, "Could not find the missing link. We missed a toplevel root. This is odd.\n");
+            jl_safe_printf("Could not find the missing link. We missed a toplevel root. This is odd.\n");
             break;
         }
         jl_value_t *lostval_parent = NULL;
@@ -235,9 +235,9 @@ static void gc_verify_track(jl_ptls_t ptls)
             lostval = (jl_value_t*)arraylist_pop(&lostval_parents);
         }
         else {
-            jl_printf(JL_STDERR, "Missing write barrier found !\n");
-            jl_printf(JL_STDERR, "%p was written a reference to %p that was not recorded\n", lostval_parent, lostval);
-            jl_printf(JL_STDERR, "(details above)\n");
+            jl_safe_printf("Missing write barrier found !\n");
+            jl_safe_printf("%p was written a reference to %p that was not recorded\n", lostval_parent, lostval);
+            jl_safe_printf("(details above)\n");
             lostval = NULL;
         }
         restore();
@@ -266,11 +266,11 @@ void gc_verify(jl_ptls_t ptls)
     for(int i = 0; i < clean_len + bits_save[GC_OLD].len; i++) {
         jl_taggedvalue_t *v = (jl_taggedvalue_t*)bits_save[i >= clean_len ? GC_OLD : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
         if (gc_marked(v->bits.gc)) {
-            jl_printf(JL_STDERR, "Error. Early free of %p type :", v);
+            jl_safe_printf("Error. Early free of %p type :", v);
             jl_(jl_typeof(jl_valueof(v)));
-            jl_printf(JL_STDERR, "val : ");
+            jl_safe_printf("val : ");
             jl_(jl_valueof(v));
-            jl_printf(JL_STDERR, "Let's try to backtrack the missing write barrier :\n");
+            jl_safe_printf("Let's try to backtrack the missing write barrier :\n");
             lostval = jl_valueof(v);
             break;
         }
@@ -667,44 +667,44 @@ static void objprofile_print(htable_t nums, htable_t sizes)
             size_t sz = (uintptr_t)ptrhash_get(&sizes, ty) - 1;
             static const int ptr_hex_width = 2 * sizeof(void*);
             if (sz > 2e9) {
-                jl_printf(JL_STDERR, " %6d : %*.1f GB of (%*p) ",
-                          num, 6, ((double)sz) / 1024 / 1024 / 1024,
-                          ptr_hex_width, ty);
+                jl_safe_printf(" %6d : %*.1f GB of (%*p) ",
+                               num, 6, ((double)sz) / 1024 / 1024 / 1024,
+                               ptr_hex_width, ty);
             }
             else if (sz > 2e6) {
-                jl_printf(JL_STDERR, " %6d : %*.1f MB of (%*p) ",
-                          num, 6, ((double)sz) / 1024 / 1024,
-                          ptr_hex_width, ty);
+                jl_safe_printf(" %6d : %*.1f MB of (%*p) ",
+                               num, 6, ((double)sz) / 1024 / 1024,
+                               ptr_hex_width, ty);
             }
             else if (sz > 2e3) {
-                jl_printf(JL_STDERR, " %6d : %*.1f kB of (%*p) ",
-                          num, 6, ((double)sz) / 1024,
-                          ptr_hex_width, ty);
+                jl_safe_printf(" %6d : %*.1f kB of (%*p) ",
+                               num, 6, ((double)sz) / 1024,
+                               ptr_hex_width, ty);
             }
             else {
-                jl_printf(JL_STDERR, " %6d : %*d  B of (%*p) ",
+                jl_safe_printf(" %6d : %*d  B of (%*p) ",
                           num, 6, (int)sz, ptr_hex_width, ty);
             }
             if (ty == (void*)jl_buff_tag)
-                jl_printf(JL_STDERR, "#<buffer>");
+                jl_safe_printf("#<buffer>");
             else if (ty == jl_malloc_tag)
-                jl_printf(JL_STDERR, "#<malloc>");
+                jl_safe_printf("#<malloc>");
             else if (ty == jl_singleton_tag)
-                jl_printf(JL_STDERR, "#<singletons>");
+                jl_safe_printf("#<singletons>");
             else
                 jl_static_show(JL_STDERR, (jl_value_t*)ty);
-            jl_printf(JL_STDERR, "\n");
+            jl_safe_printf("\n");
         }
     }
 }
 
 void objprofile_printall(void)
 {
-    jl_printf(JL_STDERR, "Transient mark :\n");
+    jl_safe_printf("Transient mark :\n");
     objprofile_print(obj_counts[0], obj_sizes[0]);
-    jl_printf(JL_STDERR, "Perm mark :\n");
+    jl_safe_printf("Perm mark :\n");
     objprofile_print(obj_counts[1], obj_sizes[1]);
-    jl_printf(JL_STDERR, "Remset :\n");
+    jl_safe_printf("Remset :\n");
     objprofile_print(obj_counts[2], obj_sizes[2]);
 }
 #endif
@@ -813,33 +813,33 @@ void jl_print_gc_stats(JL_STREAM *s)
     malloc_stats();
 #endif
     double ptime = jl_clock_now() - process_t0;
-    jl_printf(s, "exec time\t%.5f sec\n", ptime);
+    jl_safe_printf("exec time\t%.5f sec\n", ptime);
     if (gc_num.pause > 0) {
-        jl_printf(s, "gc time  \t%.5f sec (%2.1f%%) in %d (%d full) collections\n",
-                  jl_ns2s(gc_num.total_time),
-                  jl_ns2s(gc_num.total_time) / ptime * 100,
-                  gc_num.pause, gc_num.full_sweep);
-        jl_printf(s, "gc pause \t%.2f ms avg\n\t\t%2.0f ms max\n",
-                  jl_ns2ms(gc_num.total_time) / gc_num.pause,
-                  jl_ns2ms(max_pause));
-        jl_printf(s, "\t\t(%2d%% mark, %2d%% sweep, %2d%% finalizers)\n",
-                  (int)(total_mark_time * 100 / gc_num.total_time),
-                  (int)(total_sweep_time * 100 / gc_num.total_time),
-                  (int)(total_fin_time * 100 / gc_num.total_time));
+        jl_safe_printf("gc time  \t%.5f sec (%2.1f%%) in %d (%d full) collections\n",
+                       jl_ns2s(gc_num.total_time),
+                       jl_ns2s(gc_num.total_time) / ptime * 100,
+                       gc_num.pause, gc_num.full_sweep);
+        jl_safe_printf("gc pause \t%.2f ms avg\n\t\t%2.0f ms max\n",
+                       jl_ns2ms(gc_num.total_time) / gc_num.pause,
+                       jl_ns2ms(max_pause));
+        jl_safe_printf("\t\t(%2d%% mark, %2d%% sweep, %2d%% finalizers)\n",
+                       (int)(total_mark_time * 100 / gc_num.total_time),
+                       (int)(total_sweep_time * 100 / gc_num.total_time),
+                       (int)(total_fin_time * 100 / gc_num.total_time));
     }
     unsigned p2 = 0, p1 = 0, p0 = 0;
     gc_stats_pagetable(&p2, &p1, &p0);
-    jl_printf(s, "page table max utilization : %u (%.1f%%) - %u (%.1f%%) - %u (%.1f%%)\n",
-              p2, p2 * 100.0 / REGION2_PG_COUNT,
-              p1, p1 * 100.0 / REGION1_PG_COUNT / p2,
-              p0, p0 * 100.0 / REGION0_PG_COUNT / p1);
+    jl_safe_printf("page table max utilization : %u (%.1f%%) - %u (%.1f%%) - %u (%.1f%%)\n",
+                   p2, p2 * 100.0 / REGION2_PG_COUNT,
+                   p1, p1 * 100.0 / REGION1_PG_COUNT / p2,
+                   p0, p0 * 100.0 / REGION0_PG_COUNT / p1);
 #ifdef _OS_LINUX_
     double gct = gc_num.total_time / 1e9;
     struct mallinfo mi = mallinfo();
-    jl_printf(s, "malloc size\t%d MB\n", mi.uordblks / 1024 / 1024);
-    jl_printf(s, "max page alloc\t%ld MB\n", max_pg_count * GC_PAGE_SZ / 1024 / 1024);
-    jl_printf(s, "total freed\t%" PRIuPTR " b\n", total_freed_bytes);
-    jl_printf(s, "free rate\t%.1f MB/sec\n", (total_freed_bytes / gct) / 1024 / 1024);
+    jl_safe_printf("malloc size\t%d MB\n", mi.uordblks / 1024 / 1024);
+    jl_safe_printf("max page alloc\t%ld MB\n", max_pg_count * GC_PAGE_SZ / 1024 / 1024);
+    jl_safe_printf("total freed\t%" PRIuPTR " b\n", total_freed_bytes);
+    jl_safe_printf("free rate\t%.1f MB/sec\n", (total_freed_bytes / gct) / 1024 / 1024);
 #endif
 }
 #else
@@ -1051,15 +1051,14 @@ static size_t pool_stats(jl_gc_pool_t *p, size_t *pwaste, size_t *np,
     *np = npgs;
     *pnold = nold;
     if (npgs != 0) {
-        jl_printf(JL_STDOUT,
-                  "%4d : %7d/%7d objects (%3d%% old), %5d pages, %5d kB, %5d kB waste\n",
-                  p->osize,
-                  nused,
-                  nused+nfree,
-                  nused ? (nold*100)/nused : 0,
-                  npgs,
-                  (nused*p->osize)/1024,
-                  *pwaste/1024);
+        jl_safe_printf("%4d : %7d/%7d objects (%3d%% old), %5d pages, %5d kB, %5d kB waste\n",
+                       p->osize,
+                       nused,
+                       nused+nfree,
+                       nused ? (nold*100)/nused : 0,
+                       npgs,
+                       (nused*p->osize)/1024,
+                       *pwaste/1024);
     }
     return nused*p->osize;
 }
@@ -1079,9 +1078,8 @@ void gc_stats_all_pool(void)
             noldbytes += nol * ptls2->heap.norm_pools[i].osize;
         }
     }
-    jl_printf(JL_STDOUT,
-              "%d objects (%d%% old), %d kB (%d%% old) total allocated, %d total fragments (%d%% overhead), in %d pages\n",
-              no, (nold*100)/no, nb/1024, (noldbytes*100)/nb, tw, (tw*100)/nb, tp);
+    jl_safe_printf("%d objects (%d%% old), %d kB (%d%% old) total allocated, %d total fragments (%d%% overhead), in %d pages\n",
+                   no, (nold*100)/no, nb/1024, (noldbytes*100)/nb, tw, (tw*100)/nb, tp);
 }
 
 void gc_stats_big_obj(void)
@@ -1114,7 +1112,10 @@ void gc_stats_big_obj(void)
         ma = ma->next;
     }
 
-    jl_printf(JL_STDOUT, "%d kB (%d%% old) in %d large objects (%d%% old)\n", (nbytes + nbytes_old)/1024, nbytes + nbytes_old ? (nbytes_old*100)/(nbytes + nbytes_old) : 0, nused + nused_old, nused+nused_old ? (nused_old*100)/(nused + nused_old) : 0);
+    jl_safe_printf("%d kB (%d%% old) in %d large objects (%d%% old)\n",
+                   (nbytes + nbytes_old)/1024,
+                   nbytes + nbytes_old ? (nbytes_old*100)/(nbytes + nbytes_old) : 0,
+                   nused + nused_old, nused+nused_old ? (nused_old*100)/(nused + nused_old) : 0);
 }
 #endif //MEMPROFILE
 
@@ -1246,8 +1247,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_off
     jl_jmp_buf buf;
     ptls->safe_restore = &buf;
     if (jl_setjmp(buf, 0) != 0) {
-        jl_printf((JL_STREAM*)STDERR_FILENO,
-                  "\n!!! ERROR when unwinding gc mark loop -- ABORTING !!!\n");
+        jl_safe_printf("\n!!! ERROR when unwinding gc mark loop -- ABORTING !!!\n");
         ptls->safe_restore = old_buf;
         return;
     }
