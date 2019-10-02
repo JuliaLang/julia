@@ -659,16 +659,16 @@ end
 
 takewhile(pred,xs) = TakeWhile(pred,xs)
 
-function Base.iterate(ibl::TakeWhile, itr...)
+function iterate(ibl::TakeWhile, itr...)
     y = iterate(ibl.xs,itr...)
     y === nothing && return nothing
     ibl.pred(y[1]) || return nothing
     y
 end
 
-Base.IteratorSize(::Type{<:TakeWhile}) = Base.SizeUnknown()
-Base.eltype(::Type{TakeWhile{I,P}}) where {I,P} = Base.eltype(I)
-Base.IteratorEltype(::Type{TakeWhile{I,P}}) where {I,P} = Base.IteratorEltype(I)
+IteratorSize(::Type{<:TakeWhile}) = SizeUnknown()
+eltype(::Type{TakeWhile{I,P}}) where {I,P} = eltype(I)
+IteratorEltype(::Type{TakeWhile{I,P}}) where {I,P} = IteratorEltype(I)
 
 
 # dropwhile
@@ -679,19 +679,26 @@ struct DropWhile{I,P<:Function}
 end
 
 dropwhile(pred,itr) = DropWhile(pred,itr)
-function Base.iterate(ibl::DropWhile,itr...)
-    (fltd,itr) = isempty(itr) ? (false,()) : itr[1]
 
-    y = fltd ?
-        iterate(ibl.xs, itr...) :
-        iterate(Iterators.filter(!ibl.pred, ibl.xs),itr...)
-
-    y !== nothing ? (y[1],(true,y[2])) : nothing
+function iterate(ibl::DropWhile,itr...)
+    if isempty(itr)
+        # one could use Iterators.filter with Iterators.Stateful
+        # but filter erases last elem state and
+        # stateful did not revert propertly due to nextvalstate/taken machinery
+        y = iterate(ibl.xs)
+        while y !== nothing
+            ibl.pred(y[1]) || break
+            y = iterate(ibl.xs,y[2])
+        end
+        y
+    else
+        iterate(ibl.xs, itr...)
+    end
 end
 
-Base.IteratorSize(::Type{DropWhile{I,P}}) where {I,P} = Base.SizeUnknown()
-Base.eltype(::Type{DropWhile{I,P}}) where {I,P} = Base.eltype(I)
-Base.IteratorEltype(::Type{DropWhile{I,P}}) where {I,P} = Base.IteratorEltype(I)
+IteratorSize(::Type{DropWhile{I,P}}) where {I,P} = SizeUnknown()
+eltype(::Type{DropWhile{I,P}}) where {I,P} = eltype(I)
+IteratorEltype(::Type{DropWhile{I,P}}) where {I,P} = IteratorEltype(I)
 
 
 # Cycle an iterator forever
