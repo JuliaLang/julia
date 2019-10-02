@@ -22,7 +22,7 @@ import .Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek
 
-export enumerate, zip, rest, countfrom, take, drop, cycle, repeated, product, flatten, partition
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, partition
 
 tail_if_any(::Tuple{}) = ()
 tail_if_any(x::Tuple) = tail(x)
