@@ -534,6 +534,12 @@ function docm(source::LineNumberNode, mod::Module, meta, ex, define::Bool = true
     isexpr(x, [:function, :macro])  && !isexpr(x.args[1], :call) ? objectdoc(source, mod, meta, def, x) :
     isexpr(x, :call)                                   ? calldoc(source, mod, meta, x) :
 
+    # Parametric method "call" syntax (see #32960), i.e.
+    #
+    #   f(x::T) where {T}
+    #
+    isexpr(x, :where) && isexpr(x.args[1], :call) ? calldoc(source, mod, meta, x) :
+
     # Type definitions.
     #
     #   struct T ... end
