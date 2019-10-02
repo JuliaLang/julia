@@ -653,22 +653,22 @@ isdone(it::Drop, state) = isdone(it.xs, state)
 # takewhile
 
 struct TakeWhile{I,P<:Function}
-    xs::I
     pred::P
+    xs::I
 end
 
-takewhile(pred,xs) = TakeWhile(xs,pred)
+takewhile(pred,xs) = TakeWhile(pred,xs)
 
-function iterate(ibl::TakeWhile, itr...)
+function Base.iterate(ibl::TakeWhile, itr...)
     y = iterate(ibl.xs,itr...)
     y === nothing && return nothing
     ibl.pred(y[1]) || return nothing
     y
 end
 
-IteratorSize(::Type{<:TakeWhile}) = SizeUnknown()
-eltype(::Type{TakeWhile{I,P}}) where {I,P} = eltype(I)
-IteratorEltype(::Type{TakeWhile{I,P}}) where {I,P} = IteratorEltype(I)
+Base.IteratorSize(::Type{<:TakeWhile}) = Base.SizeUnknown()
+Base.eltype(::Type{TakeWhile{I,P}}) where {I,P} = Base.eltype(I)
+Base.IteratorEltype(::Type{TakeWhile{I,P}}) where {I,P} = Base.IteratorEltype(I)
 
 
 # dropwhile
