@@ -874,23 +874,21 @@ void gc_time_pool_end(int sweep_full)
     double sweep_pool_sec = (jl_hrtime() - pool_sweep_start) / 1e9;
     double sweep_gb = total_pages * GC_PAGE_SZ / (double)(1024 * 1024 * 1024);
     double sweep_speed = sweep_gb / sweep_pool_sec;
-    jl_printf(JL_STDOUT,
-              "GC sweep pools end %.2f ms at %.1f GB/s "
-              "(skipped %.2f %% of %" PRId64 ", swept %" PRId64 " pgs, "
-              "%" PRId64 " freed with %" PRId64 " lazily) %s\n",
-              sweep_pool_sec * 1000, sweep_speed,
-              (total_pages ? ((double)skipped_pages * 100) / total_pages : 0),
-              total_pages, total_pages - skipped_pages,
-              freed_pages, lazy_freed_pages,
-              sweep_full ? "full" : "quick");
+    jl_safe_printf("GC sweep pools end %.2f ms at %.1f GB/s "
+                   "(skipped %.2f %% of %" PRId64 ", swept %" PRId64 " pgs, "
+                   "%" PRId64 " freed with %" PRId64 " lazily) %s\n",
+                   sweep_pool_sec * 1000, sweep_speed,
+                   (total_pages ? ((double)skipped_pages * 100) / total_pages : 0),
+                   total_pages, total_pages - skipped_pages,
+                   freed_pages, lazy_freed_pages,
+                   sweep_full ? "full" : "quick");
 }
 
 void gc_time_sysimg_end(uint64_t t0)
 {
     double sweep_pool_sec = (jl_hrtime() - t0) / 1e9;
-    jl_printf(JL_STDOUT,
-              "GC sweep sysimg end %.2f ms\n",
-              sweep_pool_sec * 1000);
+    jl_safe_printf("GC sweep sysimg end %.2f ms\n",
+                   sweep_pool_sec * 1000);
 }
 
 static int64_t big_total;
@@ -916,9 +914,9 @@ void gc_time_count_big(int old_bits, int bits)
 void gc_time_big_end(void)
 {
     double t_ms = jl_ns2ms(jl_hrtime() - big_sweep_start);
-    jl_printf(JL_STDOUT, "GC sweep big %.2f ms "
-              "(freed %" PRId64 " / %" PRId64 " with %" PRId64 " rst)\n",
-              t_ms, big_freed, big_total, big_reset);
+    jl_safe_printf("GC sweep big %.2f ms "
+                   "(freed %" PRId64 " / %" PRId64 " with %" PRId64 " rst)\n",
+                   t_ms, big_freed, big_total, big_reset);
 }
 
 static int64_t mallocd_array_total;
@@ -941,9 +939,9 @@ void gc_time_count_mallocd_array(int bits)
 void gc_time_mallocd_array_end(void)
 {
     double t_ms = jl_ns2ms(jl_hrtime() - mallocd_array_sweep_start);
-    jl_printf(JL_STDOUT, "GC sweep arrays %.2f ms "
-              "(freed %" PRId64 " / %" PRId64 ")\n",
-              t_ms, mallocd_array_freed, mallocd_array_total);
+    jl_safe_printf("GC sweep arrays %.2f ms "
+                   "(freed %" PRId64 " / %" PRId64 ")\n",
+                   t_ms, mallocd_array_freed, mallocd_array_total);
 }
 
 void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
@@ -956,13 +954,13 @@ void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
         last_remset_len += ptls2->heap.last_remset->len;
         remset_nptr = ptls2->heap.remset_nptr;
     }
-    jl_printf(JL_STDOUT, "GC mark pause %.2f ms | "
-              "scanned %" PRId64 " kB = %" PRId64 " + %" PRId64 " | "
-              "remset %" PRId64 " %" PRId64 "\n",
-              jl_ns2ms(gc_premark_end - t0),
-              (scanned_bytes + perm_scanned_bytes) / 1024,
-              scanned_bytes / 1024, perm_scanned_bytes / 1024,
-              last_remset_len, remset_nptr);
+    jl_safe_printf("GC mark pause %.2f ms | "
+                   "scanned %" PRId64 " kB = %" PRId64 " + %" PRId64 " | "
+                   "remset %" PRId64 " %" PRId64 "\n",
+                   jl_ns2ms(gc_premark_end - t0),
+                   (scanned_bytes + perm_scanned_bytes) / 1024,
+                   scanned_bytes / 1024, perm_scanned_bytes / 1024,
+                   last_remset_len, remset_nptr);
 }
 
 void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
@@ -971,15 +969,15 @@ void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
 {
     uint64_t sweep_pause = gc_end_t - gc_premark_end;
     int pct = actual_allocd ? (gc_num.freed * 100) / actual_allocd : -1;
-    jl_printf(JL_STDOUT, "GC sweep pause %.2f ms live %" PRId64 " kB "
-              "(freed %" PRId64 " kB EST %" PRId64 " kB "
-              "[error %" PRId64 "] = %d%% of allocd b %" PRIu64 ") "
-              "(%.2f ms in post_mark) %s | next in %" PRId64 " kB\n",
-              jl_ns2ms(sweep_pause), live_bytes / 1024,
-              gc_num.freed / 1024, estimate_freed / 1024,
-              gc_num.freed - estimate_freed, pct, gc_num.since_sweep / 1024,
-              jl_ns2ms(gc_postmark_end - gc_premark_end),
-              sweep_full ? "full" : "quick", -gc_num.allocd / 1024);
+    jl_safe_printf("GC sweep pause %.2f ms live %" PRId64 " kB "
+                   "(freed %" PRId64 " kB EST %" PRId64 " kB "
+                   "[error %" PRId64 "] = %d%% of allocd b %" PRIu64 ") "
+                   "(%.2f ms in post_mark) %s | next in %" PRId64 " kB\n",
+                   jl_ns2ms(sweep_pause), live_bytes / 1024,
+                   gc_num.freed / 1024, estimate_freed / 1024,
+                   gc_num.freed - estimate_freed, pct, gc_num.since_sweep / 1024,
+                   jl_ns2ms(gc_postmark_end - gc_premark_end),
+                   sweep_full ? "full" : "quick", -gc_num.allocd / 1024);
 }
 #endif
 
