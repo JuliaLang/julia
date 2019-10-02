@@ -165,6 +165,49 @@ end
 
 typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
 
+function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b::DataType), color::Symbol)
+    if a.name === b.name
+        Base.show_type_name(io, a.name)
+        n = length(a.parameters)
+        print(io, '{')
+        for i = 1:n
+            if i > length(b.parameters)
+                printstyled(io, a.parameters[i], color=color)
+            else
+                print_with_compare(io::IO, a.parameters[i], b.parameters[i], color)
+            end
+            i < n && print(io, ',')
+        end
+        print(io, '}')
+    else
+        printstyled(io, a; color=color)
+    end
+end
+
+function print_with_compare(io::IO, @nospecialize(a), @nospecialize(b), color::Symbol)
+    if a === b
+        print(io, a)
+    else
+        printstyled(io, a; color=color)
+    end
+end
+
+function show_convert_error(io::IO, ex::MethodError, @nospecialize(arg_types_param))
+    # See #13033
+    T = striptype(ex.args[1])
+    if T === nothing
+        print(io, "First argument to `convert` must be a Type, got ", ex.args[1])
+    else
+        print_one_line = isa(T, DataType) && isa(arg_types_param[2], DataType) && T.name != arg_types_param[2].name
+        printstyled(io, "Cannot `convert` an object of type ")
+        print_one_line || printstyled(io, "\n  ")
+        print_with_compare(io, arg_types_param[2], T, :light_green)
+        printstyled(io, " to an object of type ")
+        print_one_line || printstyled(io, "\n  ")
+        print_with_compare(io, T, arg_types_param[2], :light_red)
+    end
+end
+
 function showerror(io::IO, ex::MethodError)
     # ex.args is a tuple type if it was thrown from `invoke` and is
     # a tuple of the arguments otherwise.
@@ -191,13 +234,7 @@ function showerror(io::IO, ex::MethodError)
     end
     if f == Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
-        # See #13033
-        T = striptype(ex.args[1])
-        if T === nothing
-            print(io, "First argument to `convert` must be a Type, got ", ex.args[1])
-        else
-            print(io, "Cannot `convert` an object of type ", arg_types_param[2], " to an object of type ", T)
-        end
+        show_convert_error(io, ex, arg_types_param)
     elseif isempty(methods(f)) && isa(f, DataType) && f.abstract
         print(io, "no constructors have been defined for ", f)
     elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
