@@ -160,7 +160,6 @@ end
     @test collect(takewhile(<(2), takewhile(<(3), [1,1,2,3]))) == [1,1]
 end
 
-
 # dropwhile
 # --------
 @testset "dropwhile" begin
@@ -170,9 +169,8 @@ end
     @test collect(dropwhile(_->false,1:3)) == 1:3
     @test isempty(dropwhile(_->true, 1:3))
     @test collect(dropwhile(isodd,[1,1,2,3])) == [2,3]
-    @test dropwhile(isodd,[1,1,2,3]) |> s->dropwhile(iseven,s) |> collect == [3]
+    @test collect(dropwhile(iseven,dropwhile(isodd,[1,1,2,3]))) == [3]
 end
-
 
 # cycle
 # -----
