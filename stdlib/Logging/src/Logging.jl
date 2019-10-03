@@ -12,10 +12,10 @@ module Logging
 # Doing it this way (rather than with import) makes these symbols accessible to
 # tab completion.
 for sym in [
-    :LogLevel, :BelowMinLevel, :Debug, :Info, :Warn, :Error, :AboveMaxLevel,
+    :AbstractLogLevel, :LogLevel, :BelowMinLevel, :Debug, :Info, :Warn, :Error, :AboveMaxLevel,
     :AbstractLogger,
     :NullLogger,
-    :handle_message, :shouldlog, :min_enabled_level, :catch_exceptions,
+    :handle_message, :importance, :shouldlog, :min_enabled_level, :catch_exceptions,
     Symbol("@debug"),
     Symbol("@info"),
     Symbol("@warn"),
@@ -58,5 +58,17 @@ include("ConsoleLogger.jl")
 function __init__()
     global_logger(ConsoleLogger(stderr))
 end
+
+# In julia 1.4 the `importance` field was added. The following declarations are
+# soft deprecations for backward compatibility with pre-1.4 logging backends.
+handle_message(logger, importance, level, msg, _module, group, id, file, line; kws...) =
+    handle_message(logger, level, msg, _module, group, id, file, line; importance=importance, kws...)
+shouldlog(logger, importance, level, _module, group, id) =
+    shouldlog(logger, level, _module, group, id)
+
+isless(a::LogLevel, b::LogLevel) = isless(a.level, b.level)
++(level::LogLevel, inc::Integer) = LogLevel(level.level+inc)
+-(level::LogLevel, inc::Integer) = LogLevel(level.level-inc)
+convert(::Type{LogLevel}, level::Integer) = LogLevel(level)
 
 end

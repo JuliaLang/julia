@@ -6,6 +6,7 @@ import Base: isless, +, -, convert, show
 
 export
     AbstractLogger,
+    AbstractLogLevel,
     LogLevel,
     NullLogger,
     @debug,
@@ -29,7 +30,7 @@ which gets to inspect the record and decide what to do with it.
 abstract type AbstractLogger ; end
 
 """
-    handle_message(logger, level, message, _module, group, id, file, line; key1=val1, ...)
+    handle_message(logger, importance, level, message, _module, group, id, file, line; key1=val1, ...)
 
 Log a message to `logger` at `level`.  The logical location at which the
 message was generated is given by module `_module` and `group`; the source
@@ -40,7 +41,7 @@ filtering.
 function handle_message end
 
 """
-    shouldlog(logger, level, _module, group, id)
+    shouldlog(logger, importance, level, _module, group, id)
 
 Return true when `logger` accepts a message at `level`, generated for
 `_module`, `group` and with unique log identifier `id`.
@@ -88,6 +89,8 @@ handle_message(::NullLogger, args...; kwargs...) =
 
 #-------------------------------------------------------------------------------
 # Standard log levels
+abstract type AbstractLogLevel ; end
+
 """
     LogLevel(level)
 
@@ -97,16 +100,24 @@ The log level provides a key against which potential log records may be
 filtered, before any other work is done to construct the log record data
 structure itself.
 """
-struct LogLevel
+struct LogLevel <: AbstractLogLevel
     level::Int32
 end
 
 LogLevel(level::LogLevel) = level
 
-isless(a::LogLevel, b::LogLevel) = isless(a.level, b.level)
-+(level::LogLevel, inc::Integer) = LogLevel(level.level+inc)
--(level::LogLevel, inc::Integer) = LogLevel(level.level-inc)
-convert(::Type{LogLevel}, level::Integer) = LogLevel(level)
+"""
+    default_importance(log_level)
+
+Return an `Int` defining the default importance level of `log_level`, as it
+will be seen by the current logger. Logging backends may choose to upgrade or
+downgrade the importance separately from the log level itself.
+
+User defined importance levels should be relative to the standard log levels
+which are defined to have importance levels of `importance.([Debug, Info, Warn,
+Error]) == [-1000, 0, 1000, 2000]`.
+"""
+default_importance(level::LogLevel) = level.level
 
 const BelowMinLevel = LogLevel(-1000001)
 const Debug         = LogLevel(   -1000)
@@ -231,7 +242,7 @@ _log_record_ids = Set{Symbol}()
 # statement itself doesn't change.
 function log_record_id(_module, level, message, log_kws)
     modname = _module === nothing ?  "" : join(fullname(_module), "_")
-    # Use an arbitriraly chosen eight hex digits here. TODO: Figure out how to
+    # Use an arbitrarily chosen eight hex digits here. TODO: Figure out how to
     # make the id exactly the same on 32 and 64 bit systems.
     h = UInt32(hash(string(modname, level, message, log_kws)) & 0xFFFFFFFF)
     while true
@@ -304,21 +315,21 @@ function logmsg_code(_module, file, line, level, message, exs...)
 
     quote
         level = $level
-        std_level = convert(LogLevel, level)
-        if std_level >= getindex(_min_enabled_level)
+        importance = default_importance(LogLevel, level)
+        if importance >= getindex(_min_enabled_level)
             group = $group
             _module = $_module
-            logger = current_logger_for_env(std_level, group, _module)
+            logger = current_logger_for_env(importance, group, _module)
             if !(logger === nothing)
                 id = $id
                 # Second chance at an early bail-out (before computing the message),
                 # based on arbitrary logger-specific logic.
-                if shouldlog(logger, level, _module, group, id)
+                if shouldlog(logger, importance, level, _module, group, id)
                     file = $file
                     line = $line
                     try
                         msg = $(esc(message))
-                        handle_message(logger, level, msg, _module, group, id, file, line; $(kwargs...))
+                        handle_message(logger, importance, level, msg, _module, group, id, file, line; $(kwargs...))
                     catch err
                         logging_error(logger, level, _module, group, id, file, line, err)
                     end
@@ -333,7 +344,7 @@ end
 @noinline function logging_error(logger, level, _module, group, id,
                                  filepath, line, @nospecialize(err))
     if !catch_exceptions(logger)
-        rethrow(err)
+        rethrow()
     end
     try
         msg = "Exception while generating log record in module $_module at $filepath:$line"
@@ -363,16 +374,16 @@ end
 
 # Global log limiting mechanism for super fast but inflexible global log
 # limiting.
-const _min_enabled_level = Ref(Debug)
+const _min_enabled_level = Ref(default_importance(Debug))
 
 # LogState - a concretely typed cache of data extracted from the logger, plus
 # the logger itself.
 struct LogState
-    min_enabled_level::LogLevel
+    min_importance::Int
     logger::AbstractLogger
 end
 
-LogState(logger) = LogState(LogLevel(min_enabled_level(logger)), logger)
+LogState(logger) = LogState(default_importance(min_enabled_level(logger)), logger)
 
 function current_logstate()
     logstate = current_task().logstate
@@ -380,9 +391,9 @@ function current_logstate()
 end
 
 # helper function to get the current logger, if enabled for the specified message type
-@noinline function current_logger_for_env(std_level::LogLevel, group, _module)
+@noinline function current_logger_for_env(importance::Int, group, _module)
     logstate = current_logstate()
-    if std_level >= logstate.min_enabled_level || env_override_minlevel(group, _module)
+    if importance >= logstate.min_importance || env_override_minlevel(group, _module)
         return logstate.logger
     end
     return nothing
@@ -410,8 +421,8 @@ Disable all log messages at log levels equal to or less than `level`.  This is
 a *global* setting, intended to make debug logging extremely cheap when
 disabled.
 """
-function disable_logging(level::LogLevel)
-    _min_enabled_level[] = level + 1
+function disable_logging(level)
+    _min_enabled_level[] = default_importance(level) + 1
 end
 
 let _debug_groups_include::Vector{Symbol} = Symbol[],
@@ -526,7 +537,7 @@ struct SimpleLogger <: AbstractLogger
 end
 SimpleLogger(stream::IO=stderr, level=Info) = SimpleLogger(stream, level, Dict{Any,Int}())
 
-shouldlog(logger::SimpleLogger, level, _module, group, id) =
+shouldlog(logger::SimpleLogger, importance, level, _module, group, id) =
     get(logger.message_limits, id, 1) > 0
 
 min_enabled_level(logger::SimpleLogger) = logger.min_level

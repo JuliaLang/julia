@@ -7,7 +7,7 @@
 Logger with formatting optimized for readability in a text console, for example
 interactive work with the Julia REPL.
 
-Log levels less than `min_level` are filtered out.
+Log levels with importance less than `min_level` are filtered out.
 
 Message formatting can be controlled by setting keyword arguments:
 
@@ -24,7 +24,7 @@ Message formatting can be controlled by setting keyword arguments:
 """
 struct ConsoleLogger <: AbstractLogger
     stream::IO
-    min_level::LogLevel
+    min_level
     meta_formatter
     show_limited::Bool
     right_justify::Int
@@ -37,8 +37,10 @@ function ConsoleLogger(stream::IO=stderr, min_level=Info;
                   show_limited, right_justify, Dict{Any,Int}())
 end
 
-shouldlog(logger::ConsoleLogger, level, _module, group, id) =
+function shouldlog(logger::ConsoleLogger, importance, level, _module, group, id)
     get(logger.message_limits, id, 1) > 0
+    # note: importance already handled in min_enabled_level
+end
 
 min_enabled_level(logger::ConsoleLogger) = logger.min_level
 
@@ -51,17 +53,19 @@ end
 showvalue(io, ex::Exception) = showerror(io, ex)
 
 function default_logcolor(level)
-    level < Info  ? Base.debug_color() :
-    level < Warn  ? Base.info_color()  :
-    level < Error ? Base.warn_color()  :
-                    Base.error_color()
+    # TODO: Should we highlight based on modified importance instead?
+    default_importance(level) < default_importance(Info)  ? Base.debug_color() :
+    default_importance(level) < default_importance(Warn)  ? Base.info_color()  :
+    default_importance(level) < default_importance(Error) ? Base.warn_color()  :
+                                                            Base.error_color()
 end
 
 function default_metafmt(level, _module, group, id, file, line)
     color = default_logcolor(level)
     prefix = (level == Warn ? "Warning" : string(level))*':'
     suffix = ""
-    Info <= level < Warn && return color, prefix, suffix
+    # Suppress line and file printing for more readable info messages
+    level == Info && return color, prefix, suffix
     _module !== nothing && (suffix *= "$(_module)")
     if file !== nothing
         _module !== nothing && (suffix *= " ")
@@ -95,7 +99,7 @@ function termlength(str)
     return N
 end
 
-function handle_message(logger::ConsoleLogger, level, message, _module, group, id,
+function handle_message(logger::ConsoleLogger, importance, level, message, _module, group, id,
                         filepath, line; maxlog=nothing, kwargs...)
     if maxlog !== nothing && maxlog isa Integer
         remaining = get!(logger.message_limits, id, maxlog)
