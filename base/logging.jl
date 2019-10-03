@@ -117,7 +117,7 @@ User defined importance levels should be relative to the standard log levels
 which are defined to have importance levels of `importance.([Debug, Info, Warn,
 Error]) == [-1000, 0, 1000, 2000]`.
 """
-default_importance(level::LogLevel) = level.level
+default_importance(level::LogLevel) = convert(Int, level.level)
 
 const BelowMinLevel = LogLevel(-1000001)
 const Debug         = LogLevel(   -1000)
@@ -315,7 +315,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
 
     quote
         level = $level
-        importance = default_importance(LogLevel, level)
+        importance = default_importance(level)
         if importance >= getindex(_min_enabled_level)
             group = $group
             _module = $_module
