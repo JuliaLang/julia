@@ -1591,7 +1591,7 @@ end
     @test showstr(zeros(Int32)) == "fill(0)"
     @test showstr(collect('b')) == "fill('b')"
     @test showstr(fill(nothing)) == "fill(nothing)"
-    @test showstr(BitArray(0)) == "fill(false)"
+    @test showstr(BitArray(0)) == "BitArray(0)"
 
     @test replstr(zeros(Int32)) == "0-dimensional Array{Int32,0}:\n0"
     @test replstr(collect('b')) == "0-dimensional Array{Char,0}:\n'b'"

@@ -423,6 +423,7 @@ function show(io::IO, X::AbstractArray)
 end
 
 ### 0-dimensional arrays (#31481)
+show_zero_dim(io::IO, X::BitArray{0}) = print(io, "BitArray(", Int(X[]), ")")
 function show_zero_dim(io::IO, X::AbstractArray{T, 0}) where T
     if isassigned(X)
         print(io, "fill(")
