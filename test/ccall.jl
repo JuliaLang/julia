@@ -1017,6 +1017,20 @@ end
 
 @test ccall(:jl_getpagesize, Clong, ()) == @threadcall(:jl_getpagesize, Clong, ())
 
+# make sure our malloc/realloc/free adapters are thread-safe and repeatable
+for i = 1:8
+    ptr = @threadcall(:jl_malloc, Ptr{Cint}, (Csize_t,), sizeof(Cint))
+    @test ptr != C_NULL
+    unsafe_store!(ptr, 3)
+    @test unsafe_load(ptr) == 3
+    ptr = @threadcall(:jl_realloc, Ptr{Cint}, (Ptr{Cint}, Csize_t,), ptr, 2 * sizeof(Cint))
+    @test ptr != C_NULL
+    unsafe_store!(ptr, 4, 2)
+    @test unsafe_load(ptr, 1) == 3
+    @test unsafe_load(ptr, 2) == 4
+    @threadcall(:jl_free, Cvoid, (Ptr{Cint},), ptr)
+end
+
 # Pointer finalizer (issue #15408)
 let A = [1]
     ccall((:set_c_int, libccalltest), Cvoid, (Cint,), 1)

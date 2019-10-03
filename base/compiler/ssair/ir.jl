@@ -1001,14 +1001,14 @@ end
 
 function finish_current_bb!(compact, active_bb, old_result_idx=compact.result_idx, unreachable=false)
     if compact.active_result_bb > length(compact.result_bbs)
-        #@assert compact.bb_rename[active_bb] == 0
+        #@assert compact.bb_rename[active_bb] == -1
         return true
     end
     bb = compact.result_bbs[compact.active_result_bb]
     # If this was the last statement in the BB and we decided to skip it, insert a
     # dummy `nothing` node, to prevent changing the structure of the CFG
     skipped = false
-    if !compact.cfg_transforms_enabled || active_bb == 0 || active_bb > length(compact.bb_rename_succ) || compact.bb_rename_succ[active_bb] != 0
+    if !compact.cfg_transforms_enabled || active_bb == 0 || active_bb > length(compact.bb_rename_succ) || compact.bb_rename_succ[active_bb] != -1
         if compact.result_idx == first(bb.stmts)
             length(compact.result) < old_result_idx && resize!(compact, old_result_idx)
             if unreachable
