@@ -386,10 +386,12 @@ STATIC_INLINE jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator
 JL_DLLEXPORT jl_code_info_t *jl_expand_and_resolve(jl_value_t *ex, jl_module_t *module,
                                                    jl_svec_t *sparam_vals) {
     jl_code_info_t *func = (jl_code_info_t*)jl_expand((jl_value_t*)ex, module);
+    JL_GC_PUSH1(&func);
     if (jl_is_code_info(func)) {
         jl_array_t *stmts = (jl_array_t*)func->code;
         jl_resolve_globals_in_ir(stmts, module, sparam_vals, 1);
     }
+    JL_GC_POP();
     return func;
 }
 
