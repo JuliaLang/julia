@@ -435,8 +435,12 @@
                   sparams)))
     (let ((kw      (gensy))
           (rkw     (if (null? restkw) (make-ssavalue) (symbol (string (car restkw) "..."))))
-          (mangled (symbol (string (if name (undot-name name) '_) "#"
-                                   (current-julia-module-counter)))))
+          (mangled (let ((und (and name (undot-name name))))
+                     (symbol (string (if (and name (= (string.char (string name) 0) #\#))
+                                         ""
+                                         "#")
+                                     (or und '_) "#"
+                                     (string (current-julia-module-counter)))))))
       ;; this is a hack: nest these statements inside a call so they get closure
       ;; converted together, allowing all needed types to be defined before any methods.
       `(call (core ifelse) false false (block
@@ -3265,7 +3269,10 @@ f(x) = yt(x)
                  (let* ((exists (get defined name #f))
                         (type-name  (or (get namemap name #f)
                                         (and name
-                                             (symbol (string "#" name "#" (current-julia-module-counter))))))
+                                             (symbol (string (if (= (string.char (string name) 0) #\#)
+                                                                 ""
+                                                                 "#")
+                                                             name "#" (current-julia-module-counter))))))
                         (alldefs (expr-find-all
                                   (lambda (ex) (and (length> ex 2) (eq? (car ex) 'method)
                                                     (not (eq? ex e))

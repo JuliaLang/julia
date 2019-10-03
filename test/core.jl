@@ -2404,6 +2404,20 @@ for f in (:(Core.arrayref), :((::typeof(Core.arrayref))), :((::Core.IntrinsicFun
     @test_throws ErrorException("cannot add methods to a builtin function") @eval $f() = 1
 end
 
+# issue #33370
+abstract type B33370 end
+
+let n = gensym(), c(x) = B33370[x][1]()
+    @eval begin
+        struct $n <: B33370
+        end
+
+        function (::$n)()
+        end
+    end
+    @test c(eval(n)()) === nothing
+end
+
 # issue #8798
 let
     npy_typestrs = Dict("b1"=>Bool,
