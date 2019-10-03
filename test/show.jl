@@ -1585,3 +1585,30 @@ end
     @test sdastr(2, 2) == "[2, 3]"
     @test sdastr(3, 3) == "[3, 4, 5]"
 end
+
+@testset "0-dimensional Array. Issue #31481" begin
+    for x in (zeros(Int32), collect('b'), fill(nothing), BitArray(0))
+        @test eval(Meta.parse(repr(x))) == x
+    end
+    @test showstr(zeros(Int32)) == "fill(0)"
+    @test showstr(collect('b')) == "fill('b')"
+    @test showstr(fill(nothing)) == "fill(nothing)"
+    @test showstr(BitArray(0)) == "BitArray(0)"
+
+    @test replstr(zeros(Int32)) == "0-dimensional Array{Int32,0}:\n0"
+    @test replstr(collect('b')) == "0-dimensional Array{Char,0}:\n'b'"
+    @test replstr(fill(nothing)) == "0-dimensional Array{Nothing,0}:\nnothing"
+    @test replstr(BitArray(0)) == "0-dimensional BitArray{0}:\n0"
+
+    # UndefInitializer
+    @test showstr(fill(undef)) == "fill($undef)"
+    @test replstr(fill(undef)) == "0-dimensional Array{UndefInitializer,0}:\n$undef"
+
+    # `#undef` values
+    @test showstr(Array{String, 0}(undef)) == "Array{String,0}($undef)"
+    @test replstr(Array{String, 0}(undef)) == "0-dimensional Array{String,0}:\n$(Base.undef_ref_str)"
+
+    # "undef" with isbits type
+    @test startswith(showstr(Array{Int32, 0}(undef)), "fill(")
+    @test startswith(replstr(Array{Int32, 0}(undef)), "0-dimensional Array{Int32,0}:\n")
+end

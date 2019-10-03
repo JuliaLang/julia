@@ -13,6 +13,8 @@ Language changes
 
 * Calling `show` or `repr` on an `undef`/`UndefInitializer()` array initializer now shows valid Julia code ([#33211]).
 
+* Calling `show` or `repr` on a 0-dimensional `AbstractArray` now shows valid code for creating an equivalent 0-dimensional array, instead of only showing the contained value. ([#33206])
+
 Multi-threading changes
 -----------------------
 
@@ -39,6 +41,7 @@ Standard library changes
 * `div` now accepts a rounding mode as the third argument, consistent with the corresponding argument to `rem`. Support for rounding division, by passing one of the RoundNearest modes to this function, was added. For future compatibility, library authors should now extend this function, rather than extending the two-argument `fld`/`cld`/`div` directly. ([#33040])
 
 * Verbose `display` of `Char` (`text/plain` output) now shows the codepoint value in standard-conforming `"U+XXXX"` format ([#33291]).
+
 
 #### Libdl
 
