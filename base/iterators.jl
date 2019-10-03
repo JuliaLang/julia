@@ -680,23 +680,17 @@ end
 
 dropwhile(pred,itr) = DropWhile(pred,itr)
 
-function iterate(ibl::DropWhile,itr...)
-    if isempty(itr)
-        # one could use Iterators.filter with Iterators.Stateful
-        # but filter erases last elem state and
-        # stateful did not revert propertly due to nextvalstate/taken machinery
-        y = iterate(ibl.xs)
-        while y !== nothing
-            ibl.pred(y[1]) || break
-            y = iterate(ibl.xs,y[2])
-        end
-        y
-    else
-        iterate(ibl.xs, itr...)
+iterate(ibl::DropWhile,itr) = iterate(ibl.xs, itr)
+function iterate(ibl::DropWhile)
+    y = iterate(ibl.xs)
+    while y !== nothing
+        ibl.pred(y[1]) || break
+        y = iterate(ibl.xs,y[2])
     end
+    y
 end
 
-IteratorSize(::Type{DropWhile{I,P}}) where {I,P} = SizeUnknown()
+IteratorSize(::Type{<:DropWhile}) = SizeUnknown()
 eltype(::Type{DropWhile{I,P}}) where {I,P} = eltype(I)
 IteratorEltype(::Type{DropWhile{I,P}}) where {I,P} = IteratorEltype(I)
 
