@@ -1007,7 +1007,7 @@ USE_BINARYBUILDER ?= 0
 endif
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
-BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM MBEDTLS LIBSSH2 CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP
+BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
@@ -1024,9 +1024,6 @@ endef
 $(foreach proj,$(BB_PROJECTS),$(eval $(call SET_BB_DEFAULT,$(proj))))
 
 
-# GMP and MPFR have serious performance regressions for now
-USE_BINARYBUILDER_GMP ?= 0
-USE_BINARYBUILDER_MPFR ?= 0
 
 # Use the Assertions build
 BINARYBUILDER_LLVM_ASSERTS ?= 0
