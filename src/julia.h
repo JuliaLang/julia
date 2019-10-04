@@ -746,7 +746,13 @@ JL_DLLEXPORT int64_t jl_gc_total_bytes(void);
 JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void);
 JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void);
 
-JL_DLLEXPORT void jl_gc_collect(int);
+typedef enum {
+    JL_GC_AUTO = 0,         // use heuristics to determine the collection type
+    JL_GC_FULL = 1,         // force a full collection
+    JL_GC_INCREMENTAL = 2,  // force an incremental collection
+} jl_gc_collection_t;
+
+JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t);
 
 JL_DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
 JL_DLLEXPORT void jl_finalize(jl_value_t *o);

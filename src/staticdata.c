@@ -1269,8 +1269,8 @@ static void jl_cleanup_serializer2(void);
 
 static void jl_save_system_image_to_stream(ios_t *f)
 {
-    jl_gc_collect(1); // full
-    jl_gc_collect(0); // incremental (sweep finalizers)
+    jl_gc_collect(JL_GC_FULL);
+    jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers
     JL_TIMING(SYSIMG_DUMP);
     int en = jl_gc_enable(0);
     jl_init_serializer2(1);

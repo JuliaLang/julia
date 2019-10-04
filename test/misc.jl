@@ -758,3 +758,12 @@ end
 # Finalizer with immutable should throw
 @test_throws ErrorException finalizer(x->nothing, 1)
 @test_throws ErrorException finalizer(C_NULL, 1)
+
+
+@testset "GC utilities" begin
+    GC.gc()
+    GC.gc(true); GC.gc(false)
+    GC.gc(GC.Auto); GC.gc(GC.Full); GC.gc(GC.Incremental)
+
+    GC.safepoint()
+end
