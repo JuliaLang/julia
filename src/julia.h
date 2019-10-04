@@ -1478,7 +1478,7 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname,
                                             jl_value_t *got JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname,
                                                const char *context,
-                                               jl_value_t *ty,
+                                               jl_value_t *ty JL_MAYBE_UNROOTED,
                                                jl_value_t *got JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var);
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error(jl_value_t *v,
