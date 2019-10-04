@@ -149,15 +149,13 @@ int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
     return need_more_space;
 }
 
-NOINLINE size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize,
+NOINLINE size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t* bt_size, size_t maxsize,
                                   bt_context_t *context, int add_interp_frames) JL_NOTSAFEPOINT
 {
     bt_cursor_t cursor;
     if (!jl_unw_init(&cursor, context))
         return 0;
-    size_t bt_size = 0;
-    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, add_interp_frames, 1);
-    return bt_size;
+    return jl_unw_stepn(&cursor, bt_data, bt_size, NULL, maxsize, 0, add_interp_frames, 1);
 }
 
 // Record backtrace into buffer `bt_data`, using a maximum of `maxsize`
@@ -165,7 +163,7 @@ NOINLINE size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize,
 //
 // The first `skip` frames are omitted, in addition to omitting the frame from
 // `rec_backtrace` itself.
-NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip)
+NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t *bt_size, size_t maxsize, int skip)
 {
     bt_context_t context;
     memset(&context, 0, sizeof(context));
@@ -173,9 +171,7 @@ NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip
     bt_cursor_t cursor;
     if (!jl_unw_init(&cursor, &context))
         return 0;
-    size_t bt_size = 0;
-    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, skip + 1, 1, 0);
-    return bt_size;
+    return jl_unw_stepn(&cursor, bt_data, bt_size, NULL, maxsize, skip + 1, 1, 0);
 }
 
 static jl_value_t *array_ptr_void_type JL_ALWAYS_LEAFTYPE = NULL;
@@ -530,15 +526,13 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintpt
 }
 
 #ifdef LIBOSXUNWIND
-NOINLINE size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize,
+NOINLINE size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t *bt_size, size_t maxsize,
                                         bt_context_t *context, int add_interp_frames)
 {
-    size_t bt_size = 0;
     bt_cursor_t cursor;
     if (unw_init_local_dwarf(&cursor, context) != UNW_ESUCCESS)
         return 0;
-    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, add_interp_frames, 1);
-    return bt_size;
+    return jl_unw_stepn(&cursor, bt_data, bt_size, NULL, maxsize, 0, add_interp_frames, 1);
 }
 #endif
 

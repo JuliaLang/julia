@@ -343,6 +343,8 @@ stop_timer() = ccall(:jl_profile_stop_timer, Cvoid, ())
 
 is_running() = ccall(:jl_profile_is_running, Cint, ())!=0
 
+did_overflow() = ccall(:jl_profile_did_overflow, Cint, ()) != 0
+
 get_data_pointer() = convert(Ptr{UInt}, ccall(:jl_profile_get_data, Ptr{UInt8}, ()))
 
 len_data() = convert(Int, ccall(:jl_profile_len_data, Csize_t, ()))
@@ -365,13 +367,12 @@ depends on the exact memory addresses used in JIT-compiling. This function is pr
 internal use; [`retrieve`](@ref) may be a better choice for most users.
 """
 function fetch()
-    maxlen = maxlen_data()
-    len = len_data()
-    if (len == maxlen)
-        @warn """The profile data buffer is full; profiling probably terminated
+    if did_overflow()
+        @warn """The time profile data buffer overflowed; profiling terminated
                  before your program finished. To profile for longer runs, call
                  `Profile.init()` with a larger buffer and/or larger delay."""
     end
+    len = len_data()
     data = Vector{UInt}(undef, len)
     GC.@preserve data unsafe_copyto!(pointer(data), get_data_pointer(), len)
     return data

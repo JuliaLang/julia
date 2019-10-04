@@ -104,7 +104,7 @@ static void JL_NORETURN start_backtrace_fiber(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     // collect the backtrace
-    ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, error_ctx, 1);
+    rec_backtrace_ctx(ptls->bt_data, &ptls->bt_size, JL_MAX_BT_SIZE, error_ctx, 1);
     // switch back to the execution fiber
     jl_setcontext(&error_return_fiber);
     abort();
@@ -130,7 +130,7 @@ void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
         assert(excpt != NULL);
         ptls->bt_size = 0;
         if (excpt != jl_stackovf_exception) {
-            ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread, 1);
+            rec_backtrace_ctx(ptls->bt_data, &ptls->bt_size, JL_MAX_BT_SIZE, ctxThread, 1);
         }
         else if (have_backtrace_fiber) {
             error_ctx = ctxThread;
@@ -327,37 +327,50 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
         return 0;
     }
     while (1) {
-        if (bt_size_cur < bt_size_max) {
-            DWORD timeout = nsecprof/GIGA;
-            timeout = min(max(timeout, tc.wPeriodMin*2), tc.wPeriodMax/2);
-            Sleep(timeout);
-            if ((DWORD)-1 == SuspendThread(hMainThread)) {
-                fputs("failed to suspend main thread. aborting profiling.", stderr);
+        assert(bt_size_cur < bt_size_max - 1);
+
+        DWORD timeout = nsecprof/GIGA;
+        timeout = min(max(timeout, tc.wPeriodMin*2), tc.wPeriodMax/2);
+        Sleep(timeout);
+        if ((DWORD)-1 == SuspendThread(hMainThread)) {
+            fputs("failed to suspend main thread. aborting profiling.", stderr);
+            break;
+        }
+
+        // Get the backtrace data
+        size_t bt_size_step;
+        int incomplete;
+        if (running) {
+            CONTEXT ctxThread;
+            memset(&ctxThread, 0, sizeof(CONTEXT));
+            ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+            if (!GetThreadContext(hMainThread, &ctxThread)) {
+                fputs("failed to get context from main thread. aborting profiling.", stderr);
                 break;
             }
-            if (running) {
-                CONTEXT ctxThread;
-                memset(&ctxThread, 0, sizeof(CONTEXT));
-                ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-                if (!GetThreadContext(hMainThread, &ctxThread)) {
-                    fputs("failed to get context from main thread. aborting profiling.", stderr);
-                    break;
-                }
-                // Get backtrace data
-                bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
-                    bt_size_max - bt_size_cur - 1, &ctxThread, 0);
-                // Mark the end of this block with 0
-                bt_data_prof[bt_size_cur].uintptr = 0;
-                bt_size_cur++;
-            }
-            if ((DWORD)-1 == ResumeThread(hMainThread)) {
-                fputs("failed to resume main thread! aborting.", stderr);
-                gc_debug_critical_error();
-                abort();
-            }
+
+            incomplete =
+                rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
+                                  &bt_size_step, bt_size_max - bt_size_cur - 1, &ctxThread, 0);
         }
-        else {
-            SuspendThread(GetCurrentThread());
+
+        if ((DWORD)-1 == ResumeThread(hMainThread)) {
+            fputs("failed to resume main thread! aborting.", stderr);
+            gc_debug_critical_error();
+            abort();
+        }
+
+        // Save the backtrace data
+        if (running) {
+            if (incomplete) {
+                bt_overflow = 1;
+                jl_profile_stop_timer();
+                break;
+            } else {
+                bt_size_cur += bt_size_step;
+                bt_data_prof[bt_size_cur++].uintptr = 0;    // mark end with 0
+                assert(bt_size_cur < bt_size_max);
+            }
         }
     }
     hBtThread = 0;
@@ -385,6 +398,7 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
     }
     return (hBtThread != NULL ? 0 : -1);
 }
+
 JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
     running = 0;

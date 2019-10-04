@@ -235,12 +235,13 @@ JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *tid)
     return (void *)((char *)task->stkbuf + off);
 }
 
-// Marked noinline so we can consistently skip the associated frame.
+// Marked inline so we don't need to skip the associated frame
+// (noinline is ignored by at least GCC for such a simple function).
 // `skip` is number of additional frames to skip.
-NOINLINE static void record_backtrace(jl_ptls_t ptls, int skip) JL_NOTSAFEPOINT
+STATIC_INLINE void record_backtrace(jl_ptls_t ptls, int skip) JL_NOTSAFEPOINT
 {
     // storing bt_size in ptls ensures roots in bt_data will be found
-    ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE, skip + 1);
+    rec_backtrace(ptls->bt_data, &ptls->bt_size, JL_MAX_BT_SIZE, skip);
 }
 
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
