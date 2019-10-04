@@ -66,9 +66,31 @@ handle_message(logger, importance, level, msg, _module, group, id, file, line; k
 shouldlog(logger, importance, level, _module, group, id) =
     shouldlog(logger, level, _module, group, id)
 
-isless(a::LogLevel, b::LogLevel) = isless(a.level, b.level)
-+(level::LogLevel, inc::Integer) = LogLevel(level.level+inc)
--(level::LogLevel, inc::Integer) = LogLevel(level.level-inc)
-convert(::Type{LogLevel}, level::Integer) = LogLevel(level)
+#=
+function Base.isless(a::LogLevel, b::LogLevel)
+    Base.depwarn("isless(a::LogLevel, b::LogLevel) is deprecated", :isless)
+    isless(a.level, b.level)
+end
+
+function Base.:+(level::LogLevel, inc::Integer)
+    Base.depwarn("+(level::LogLevel, inc::Integer) is deprecated", :+)
+    LogLevel(level.level+inc)
+end
+
+function Base.:-(level::LogLevel, inc::Integer)
+    Base.depwarn("-(level::LogLevel, inc::Integer) is deprecated", :-)
+    LogLevel(level.level-inc)
+end
+
+function Base.convert(::Type{LogLevel}, level::Integer)
+    Base.depwarn("convert(::Type{LogLevel}, level::Integer) is deprecated", :convert)
+    LogLevel(level)
+end
+=#
+
+Base.isless(a::LogLevel, b::LogLevel) = isless(a.level, b.level)
+Base.:+(level::LogLevel, inc::Integer) = LogLevel(level.level+inc)
+Base.:-(level::LogLevel, inc::Integer) = LogLevel(level.level-inc)
+Base.convert(::Type{LogLevel}, level::Integer) = LogLevel(level)
 
 end

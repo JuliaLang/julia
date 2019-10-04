@@ -22,11 +22,11 @@ end
 
     # Second pass log limiting
     logger = ConsoleLogger(devnull)
-    @test shouldlog(logger, Logging.Info, Base, :group, :asdf) === true
-    handle_message(logger, Logging.Info, "msg", Base, :group, :asdf, "somefile", 1, maxlog=2)
-    @test shouldlog(logger, Logging.Info, Base, :group, :asdf) === true
-    handle_message(logger, Logging.Info, "msg", Base, :group, :asdf, "somefile", 1, maxlog=2)
-    @test shouldlog(logger, Logging.Info, Base, :group, :asdf) === false
+    @test shouldlog(logger, 0, Logging.Info, Base, :group, :asdf) === true
+    handle_message(logger, 0, Logging.Info, "msg", Base, :group, :asdf, "somefile", 1, maxlog=2)
+    @test shouldlog(logger, 0, Logging.Info, Base, :group, :asdf) === true
+    handle_message(logger, 0, Logging.Info, "msg", Base, :group, :asdf, "somefile", 1, maxlog=2)
+    @test shouldlog(logger, 0, Logging.Info, Base, :group, :asdf) === false
 
     # Check that maxlog works without an explicit ID (#28786)
     buf = IOBuffer()
@@ -85,7 +85,7 @@ end
                                meta_formatter=meta_formatter,
                                show_limited=show_limited,
                                right_justify=right_justify)
-        Logging.handle_message(logger, level, message, _module, :a_group, :an_id,
+        Logging.handle_message(logger, 0, level, message, _module, :a_group, :an_id,
                                file, line; kws...)
         String(take!(buf))
     end

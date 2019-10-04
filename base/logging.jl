@@ -2,8 +2,6 @@
 
 module CoreLogging
 
-import Base: isless, +, -, convert, show
-
 export
     AbstractLogger,
     AbstractLogLevel,
@@ -126,7 +124,7 @@ const Warn          = LogLevel(    1000)
 const Error         = LogLevel(    2000)
 const AboveMaxLevel = LogLevel( 1000001)
 
-function show(io::IO, level::LogLevel)
+function Base.show(io::IO, level::LogLevel)
     if     level == BelowMinLevel  print(io, "BelowMinLevel")
     elseif level == Debug          print(io, "Debug")
     elseif level == Info           print(io, "Info")
