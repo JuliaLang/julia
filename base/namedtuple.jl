@@ -311,13 +311,13 @@ If `key` is already in the keys of `nt`, `val` replaces the old value.
 julia> nt = (a = 3,)
 (a = 3,)
 
-julia> setindex(nt, 33, :b)
+julia> Base.setindex(nt, 33, :b)
 (a = 3, b = 33)
 
-julia> setindex(nt, 4, :a)
+julia> Base.setindex(nt, 4, :a)
 (a = 4,)
 
-julia> setindex(nt, "a", :a)
+julia> Base.setindex(nt, "a", :a)
 (a = "a",)
 ```
 """
