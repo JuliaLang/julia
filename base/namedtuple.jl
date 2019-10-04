@@ -321,6 +321,6 @@ julia> Base.setindex(nt, "a", :a)
 (a = "a",)
 ```
 """
-function setindex(nt::NamedTuple{names}, v::V, idx::Symbol) where {names, V, K}
+function setindex(nt::NamedTuple, v, idx::Symbol)
     merge(nt, ((idx, v),))
 end
