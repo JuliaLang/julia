@@ -562,3 +562,12 @@ let f_data
     f = deserialize(IOBuffer(base64decode(f_data)))
     @test f(10,3) == 23
 end
+
+# issue #33466, IdDict
+let d = IdDict([1] => 2, [3] => 4), io = IOBuffer()
+    serialize(io, d)
+    seekstart(io)
+    ds = deserialize(io)
+    @test Dict(d) == Dict(ds)
+    @test all([k in keys(ds) for k in keys(ds)])
+end
