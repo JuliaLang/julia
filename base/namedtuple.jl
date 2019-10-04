@@ -300,3 +300,27 @@ function structdiff(a::NamedTuple{an}, b::Union{NamedTuple{bn}, Type{NamedTuple{
         NamedTuple{names,types}(map(n->getfield(a, n), names))
     end
 end
+
+"""
+    setindex(nt::NamedTuple{names}, val::V, key::K) where {names, V, K}
+
+Constructs a new `NamedTuple` with the key `key` set to `val`.
+If `key` is already in the keys of `nt`, `val` replaces the old value.
+
+```jldoctest
+julia> nt = (a = 3,)
+(a = 3,)
+
+julia> setindex(nt, 33, :b)
+(a = 3, b = 33)
+
+julia> setindex(nt, 4, :a)
+(a = 4,)
+
+julia> setindex(nt, "a", :a)
+(a = "a",)
+```
+"""
+function setindex(nt::NamedTuple{names}, v::V, idx::Symbol) where {names, V, K}
+    merge(nt, ((idx, v),))
+end
