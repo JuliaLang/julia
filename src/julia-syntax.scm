@@ -10,7 +10,7 @@
       a))
 (define (fix-arglist l (unused #t))
   (if (any vararg? (butlast l))
-      (error "invalid ... on non-final argument"))
+      (error "invalid \"...\" on non-final argument"))
   (map (lambda (a)
          (cond ((and (pair? a) (eq? (car a) 'kw))
                 `(kw ,(fill-missing-argname (cadr a) unused) ,(caddr a)))
@@ -406,7 +406,10 @@
          (restkw (let ((l (last kargl)))
                    (if (vararg? l)
                        (list (cadr l)) '())))
-         (kargl (if (null? restkw) kargl (butlast kargl)))
+         (kargl (let ((kws (if (null? restkw) kargl (butlast kargl))))
+                  (if (any vararg? kws)
+                      (error "invalid \"...\" on non-final keyword argument"))
+                  kws))
          ;; the keyword::Type expressions
          (vars     (map cadr kargl))
          ;; keyword default values
@@ -432,8 +435,12 @@
                   sparams)))
     (let ((kw      (gensy))
           (rkw     (if (null? restkw) (make-ssavalue) (symbol (string (car restkw) "..."))))
-          (mangled (symbol (string (if name (undot-name name) '_) "#"
-                                   (current-julia-module-counter)))))
+          (mangled (let ((und (and name (undot-name name))))
+                     (symbol (string (if (and name (= (string.char (string name) 0) #\#))
+                                         ""
+                                         "#")
+                                     (or und '_) "#"
+                                     (string (current-julia-module-counter)))))))
       ;; this is a hack: nest these statements inside a call so they get closure
       ;; converted together, allowing all needed types to be defined before any methods.
       `(call (core ifelse) false false (block
@@ -1390,37 +1397,25 @@
 ;; returns a pair (expr . assignments)
 ;; where 'assignments' is a list of needed assignment statements
 (define (remove-argument-side-effects e (tup #f))
-  (if
-   (not (pair? e))
-   (cons e '())
-   (let ((a '()))
-     (cons
-      (cons
-       (car e)
-       (map (lambda (x)
-              (cond ((effect-free? x)  x)
-                    ((or (eq? (car x) '...) (eq? (car x) '&))
-                     (if (effect-free? (cadr x))
-                         x
-                         (let ((g (make-ssavalue)))
-                           (begin (set! a (cons `(= ,g ,(cadr x)) a))
-                                  `(,(car x) ,g)))))
-                    ((or (eq? (car x) 'kw) (and tup (eq? (car x) '=)))
-                     (if (effect-free? (caddr x))
-                         x
-                         (let ((g (make-ssavalue)))
-                           (begin (set! a (cons `(= ,g ,(caddr x)) a))
-                                  `(,(car x) ,(cadr x) ,g)))))
-                    ((eq? (car x) 'tuple)
-                     (let ((tmp (remove-argument-side-effects x #t)))
-                       (set! a (revappend (cdr tmp) a))
-                       (car tmp)))
-                    (else
-                     (let ((g (make-ssavalue)))
-                       (begin (set! a (cons `(= ,g ,x) a))
-                              g)))))
-            (cdr e)))
-      (reverse a)))))
+  (if (not (pair? e))
+      (cons e '())
+      (let ((a '()))
+        (define (arg-to-temp x)
+          (cond ((effect-free? x)  x)
+                ((or (eq? (car x) '...) (eq? (car x) '&))
+                 `(,(car x) ,(arg-to-temp (cadr x))))
+                ((or (eq? (car x) 'kw) (and tup (eq? (car x) '=)))
+                 `(,(car x) ,(cadr x) ,(arg-to-temp (caddr x))))
+                ((eq? (car x) 'tuple)
+                 (let ((tmp (remove-argument-side-effects x #t)))
+                   (set! a (revappend (cdr tmp) a))
+                   (car tmp)))
+                (else
+                 (let ((g (make-ssavalue)))
+                   (begin (set! a (cons `(= ,g ,x) a))
+                          g)))))
+        (cons (cons (car e) (map arg-to-temp (cdr e)))
+              (reverse a)))))
 
 (define (lower-kw-call f args)
   (let* ((para (if (has-parameters? args) (cdar args) '()))
@@ -1755,6 +1750,10 @@
          (dups (has-dups names)))
     (if dups
         (error (dup-error-fn (car dups)))))
+  (define (not-vararg x)
+    (if (vararg? x)
+        (error (string "\"...\" expression cannot be used as " name-str " value"))
+        x))
   (define (to-nt n v)
     (if (null? n)
         #f
@@ -1775,6 +1774,7 @@
           (cond ((or (assignment? el) (kwarg? el))
                  (if (not (symbol? (cadr el)))
                      (error (string "invalid " name-str " name \"" (deparse (cadr el)) "\"")))
+                 (not-vararg (caddr el))
                  (loop (cdr L)
                        (cons (cadr el) current-names)
                        (cons (caddr el) current-vals)
@@ -1796,7 +1796,7 @@
                        '()
                        '()
                        (merge (merge expr (to-nt current-names current-vals))
-                              (named-tuple-expr (list (caddr el)) (list (cadddr el))))))
+                              (named-tuple-expr (list (caddr el)) (list (not-vararg (cadddr el)))))))
                 ((vararg? el)
                  (loop (cdr L)
                        '()
@@ -2446,7 +2446,7 @@
 (define (all-local-names scope)
   (define (all-lists s)
     (if s
-        (list* (scope:args s) (scope:locals s) (all-lists (scope:prev s)))
+        (list* (scope:args s) (scope:sp s) (scope:locals s) (all-lists (scope:prev s)))
         '()))
   (apply append (all-lists scope)))
 
@@ -3269,7 +3269,10 @@ f(x) = yt(x)
                  (let* ((exists (get defined name #f))
                         (type-name  (or (get namemap name #f)
                                         (and name
-                                             (symbol (string "#" name "#" (current-julia-module-counter))))))
+                                             (symbol (string (if (= (string.char (string name) 0) #\#)
+                                                                 ""
+                                                                 "#")
+                                                             name "#" (current-julia-module-counter))))))
                         (alldefs (expr-find-all
                                   (lambda (ex) (and (length> ex 2) (eq? (car ex) 'method)
                                                     (not (eq? ex e))

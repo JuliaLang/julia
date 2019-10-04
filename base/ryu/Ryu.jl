@@ -1,6 +1,6 @@
 module Ryu
 
-import .Base: significand_bits, exponent_bits, exponent_bias
+import .Base: significand_bits, exponent_bits, exponent_bias, uinttype
 
 include("utils.jl")
 include("shortest.jl")

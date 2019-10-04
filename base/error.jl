@@ -85,7 +85,19 @@ function _reformat_bt(bt, bt2)
     ret
 end
 
-function backtrace end
+"""
+    backtrace()
+
+Get a backtrace object for the current program point.
+"""
+function backtrace()
+    @_noinline_meta
+    # skip frame for backtrace(). Note that for this to work properly,
+    # backtrace() itself must not be interpreted nor inlined.
+    skip = 1
+    bt1, bt2 = ccall(:jl_backtrace_from_here, Any, (Cint,Cint), false, skip)
+    _reformat_bt(bt1, bt2)
+end
 
 """
     catch_backtrace()

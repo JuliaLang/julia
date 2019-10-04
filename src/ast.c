@@ -1183,6 +1183,7 @@ JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmod
     return expr;
 }
 
+// Lower an expression tree into Julia's intermediate-representation.
 JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule)
 {
     return jl_expand_with_loc(expr, inmodule, "none", 0);

@@ -778,7 +778,7 @@ void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT
 static inline void maybe_collect(jl_ptls_t ptls)
 {
     if (ptls->gc_num.allocd >= 0 || gc_debug_check_other()) {
-        jl_gc_collect(0);
+        jl_gc_collect(JL_GC_AUTO);
     }
     else {
         jl_gc_safepoint_(ptls);
@@ -2667,7 +2667,7 @@ static void jl_gc_queue_bt_buf(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp
 size_t jl_maxrss(void);
 
 // Only one thread should be running in this function
-static int _jl_gc_collect(jl_ptls_t ptls, int full)
+static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 {
     combine_thread_gc_counts(&gc_num);
 
@@ -2697,7 +2697,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     if (gc_cblist_root_scanner) {
         export_gc_state(ptls, &sp);
         gc_invoke_callbacks(jl_gc_cb_root_scanner_t,
-            gc_cblist_root_scanner, (full));
+            gc_cblist_root_scanner, (collection));
         import_gc_state(ptls, &sp);
     }
     gc_mark_loop(ptls, sp);
@@ -2775,12 +2775,14 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     else if (live_bytes >= last_live_bytes) {
         grown_heap_age++;
     }
-    if ((full || large_frontier ||
+    if (collection == JL_GC_INCREMENTAL) {
+        sweep_full = 0;
+    } else if ((collection == JL_GC_FULL || large_frontier ||
          ((not_freed_enough || promoted_bytes >= gc_num.interval) &&
           (promoted_bytes >= default_collect_interval || prev_sweep_full)) ||
          grown_heap_age > 1) &&
         gc_num.pause > 1) {
-        recollect = full;
+        recollect = (collection == JL_GC_FULL);
         if (large_frontier)
             gc_num.interval = last_long_collect_interval;
         if (not_freed_enough || large_frontier) {
@@ -2869,7 +2871,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     return recollect;
 }
 
-JL_DLLEXPORT void jl_gc_collect(int full)
+JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (jl_gc_disable_counter) {
@@ -2896,12 +2898,13 @@ JL_DLLEXPORT void jl_gc_collect(int full)
     // no-op for non-threading
     jl_gc_wait_for_the_world();
     gc_invoke_callbacks(jl_gc_cb_pre_gc_t,
-        gc_cblist_pre_gc, (full));
+        gc_cblist_pre_gc, (collection));
 
     if (!jl_gc_disable_counter) {
         JL_LOCK_NOGC(&finalizers_lock);
-        if (_jl_gc_collect(ptls, full)) {
-            int ret = _jl_gc_collect(ptls, 0);
+        if (_jl_gc_collect(ptls, collection)) {
+            // recollect
+            int ret = _jl_gc_collect(ptls, JL_GC_AUTO);
             (void)ret;
             assert(!ret);
         }
@@ -2922,7 +2925,7 @@ JL_DLLEXPORT void jl_gc_collect(int full)
         ptls->in_finalizer = was_in_finalizer;
     }
     gc_invoke_callbacks(jl_gc_cb_post_gc_t,
-        gc_cblist_post_gc, (full));
+        gc_cblist_post_gc, (collection));
 }
 
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_mark_sp_t *sp)
@@ -3332,7 +3335,7 @@ JL_DLLEXPORT int jl_gc_enable_conservative_gc_support(void)
             // properly. We don't have to worry about race conditions
             // for this part, as allocation itself is unproblematic and
             // a collection will wait for safepoints.
-            jl_gc_collect(1);
+            jl_gc_collect(JL_GC_FULL);
         }
         return result;
     } else {

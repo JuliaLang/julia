@@ -977,6 +977,7 @@ constrain_length:
 
 static int subtype_tuple_tail(struct subtype_tuple_env *env, int8_t R, jl_stenv_t *e, int param)
 {
+    int x_reps = 1;
 loop: // while (i <= lx) {
         if (env->i >= env->lx)
             goto done;
@@ -1045,16 +1046,22 @@ loop: // while (i <= lx) {
         else if (env->j >= env->ly) {
             return 0;
         }
+        int x_same = env->lastx && jl_egal(xi, env->lastx);
         if (env->vy) {
             yi = jl_tparam0(jl_unwrap_unionall(env->vty));
             if (!env->vvx && yi == (jl_value_t*)jl_any_type)
                 goto done;  // if y ends in `Vararg{Any}` skip checking everything
-            // var T in Vararg{T} is diagonal; an abstract type can't be a subtype of it,
-            // so avoid exponential blowup when xi is a Union.
-            if (jl_is_typevar(yi) && jl_is_uniontype(xi) && !jl_has_free_typevars(xi))
-                return 0;
+            // keep track of number of consecutive identical types compared to Vararg
+            if (x_same)
+                x_reps++;
+            else
+                x_reps = 1;
         }
-        if (xi == env->lastx &&
+        if (x_reps > 2) {
+            // an identical type on the left doesn't need to be compared to a Vararg
+            // element type on the right more than twice.
+        }
+        else if (x_same &&
             ((yi == env->lasty && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) ||
              (yi == env->lasty && !env->vx && env->vy && jl_is_concrete_type(xi)))) {
             // fast path for repeated elements

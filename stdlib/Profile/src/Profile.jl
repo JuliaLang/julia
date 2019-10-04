@@ -5,11 +5,10 @@ Profiling support, main entry point is the [`@profile`](@ref) macro.
 """
 module Profile
 
-import Base.StackTraces: lookupat, UNKNOWN, show_spec_linfo, StackFrame
+import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo, StackFrame
 
 # deprecated functions: use `getdict` instead
-lookup(ip::UInt) = lookupat(convert(Ptr{Cvoid}, ip) - 1)
-lookup(ip::Ptr{Cvoid}) = lookupat(ip - 1)
+lookup(ip::UInt) = lookup(convert(Ptr{Cvoid}, ip))
 
 export @profile
 
@@ -199,7 +198,7 @@ end
 function getdict(data::Vector{UInt})
     dict = LineInfoDict()
     for ip in data
-        get!(() -> lookupat(convert(Ptr{Cvoid}, ip)), dict, UInt64(ip))
+        get!(() -> lookup(convert(Ptr{Cvoid}, ip)), dict, UInt64(ip))
     end
     return dict
 end
@@ -375,17 +374,6 @@ function fetch()
     end
     data = Vector{UInt}(undef, len)
     GC.@preserve data unsafe_copyto!(pointer(data), get_data_pointer(), len)
-    # post-process the data to convert from a return-stack to a call-stack
-    first = true
-    for i = 1:length(data)
-        if data[i] == 0
-            first = true
-        elseif first
-            first = false
-        else
-            data[i] -= 1
-        end
-    end
     return data
 end
 

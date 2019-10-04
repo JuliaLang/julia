@@ -19,6 +19,11 @@ extern "C" {
 
 // allocating TypeNames -----------------------------------------------------------
 
+static int is10digit(char c) JL_NOTSAFEPOINT
+{
+    return (c >= '0' && c <= '9');
+}
+
 jl_sym_t *jl_demangle_typename(jl_sym_t *s) JL_NOTSAFEPOINT
 {
     char *n = jl_symbol_name(s);
@@ -30,6 +35,8 @@ jl_sym_t *jl_demangle_typename(jl_sym_t *s) JL_NOTSAFEPOINT
         len = strlen(n) - 1;
     else
         len = (end-n) - 1;  // extract `f` from `#f#...`
+    if (is10digit(n[1]))
+        return jl_symbol_n(n, len+1);
     return jl_symbol_n(&n[1], len);
 }
 
@@ -448,6 +455,14 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     jl_errorf("type %s has field offset %d that exceeds the page size", jl_symbol_name(st->name->name), descsz);
 }
 
+static int is_anonfn_typename(char *name)
+{
+    if (name[0] != '#')
+        return 0;
+    char *other = strrchr(name, '#');
+    return (name[1] != '#' && other > &name[1] && is10digit(other[1]));
+}
+
 JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
         jl_sym_t *name,
         jl_module_t *module,
@@ -487,7 +502,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     }
     else {
         tn = jl_new_typename_in((jl_sym_t*)name, module);
-        if (super == jl_function_type || super == jl_builtin_type || jl_symbol_name(name)[0] == '#') {
+        if (super == jl_function_type || super == jl_builtin_type || is_anonfn_typename(jl_symbol_name(name))) {
             // Callable objects (including compiler-generated closures) get independent method tables
             // as an optimization
             tn->mt = jl_new_method_table(name, module);
