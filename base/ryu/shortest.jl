@@ -1,50 +1,66 @@
 """
-    output, nexp = reduce_shortest(x)
+    output, nexp = reduce_shortest(f)
 
-Reduce to shortest decimal representation where `x = output * 10^nexp`
+Reduce to shortest decimal representation where `f = output * 10^nexp`
 """
-@inline function reduce_shortest(x::T) where {T}
-    bits = reinterpret(Unsigned, x)
-    mant = bits & (oftype(bits, 1) << significand_bits(T) - oftype(bits, 1))
-    exp = Int((bits >> significand_bits(T)) & ((Int64(1) << exponent_bits(T)) - 1))
-    m2 = oftype(bits, Int64(1) << significand_bits(T)) | mant
-    e2 = exp - exponent_bias(T) - significand_bits(T)
-    fraction = m2 & ((oftype(bits, 1) << -e2) - 1)
-    if e2 > 0 || e2 < -52 || fraction != 0
-        if exp == 0
-            e2 = 1 - exponent_bias(T) - significand_bits(T) - 2
-            m2 = mant
-        else
-            e2 -= 2
+@inline function reduce_shortest(f::T) where {T}
+    U = uinttype(T)
+    uf = reinterpret(U, f)
+    m = uf & significand_mask(T)
+    e = Int((uf & exponent_mask(T)) >> significand_bits(T))
+
+    ## Step 1
+    #  mf * 2^ef == f
+    mf = (one(U) << significand_bits(T)) | m
+    ef = e - exponent_bias(T) - significand_bits(T)
+    f_isinteger = mf & ((one(U) << -ef) - one(U)) == 0
+
+    if ef > 0 || ef < -52 || !f_isinteger
+        # fixup subnormals
+        if e == 0
+            ef = 1 - exponent_bias(T) - significand_bits(T)
+            mf = m
         end
-        even = (m2 & 1) == 0
-        mv = oftype(m2, 4 * m2)
-        mp = oftype(m2, mv + 2)
-        mmShift = mant != 0 || exp <= 1
-        mm = oftype(m2, mv - 1 - mmShift)
-        vmIsTrailingZeros = false
-        vrIsTrailingZeros = false
-        lastRemovedDigit = 0x00
+
+        ## Step 2
+        #  u * 2^e2 == (f + prevfloat(f))/2
+        #  v * 2^e2 == f
+        #  w * 2^e2 == (f + nextfloat(f))/2
+        e2 = ef - 2
+        mf_iseven = iseven(mf) # trailing bit of significand is zero
+
+        v = U(4) * mf
+        w = v + U(2)
+        u_shift_half = m == 0 && e > 1 # if first element of binade, other than first normal one
+        u = v - U(2) + u_shift_half
+
+        ## Step 3
+        #  a == floor(u * 2^e2 / 10^e10), exact if a_allzero
+        #  b == floor(v * 2^e2 / 10^e10), exact if b_allzero
+        #  c == floor(w * 2^e2 / 10^e10)
+        a_allzero = false
+        b_allzero = false
+        b_lastdigit = 0x00
         if e2 >= 0
             q = log10pow2(e2) - (T == Float64 ? (e2 > 3) : 0)
             e10 = q
             k = pow5_inv_bitcount(T) + pow5bits(q) - 1
             i = -e2 + q + k
-            vr, vp, vm = mulshiftinvsplit(T, mv, mp, mm, q, i)
+            a, b, c = mulshiftinvsplit(T, u, v, w, q, i)
             if T == Float32 || T == Float16
-                if q != 0 && div(vp - 1, 10) <= div(vm, 10)
+                if q != 0 && div(c - 1, 10) <= div(a, 10)
                     l = pow5_inv_bitcount(T) + pow5bits(q - 1) - 1
                     mul = T == Float32 ? FLOAT_POW5_INV_SPLIT[q] : HALF_POW5_INV_SPLIT[q]
-                    lastRemovedDigit = (mulshift(mv, mul, -e2 + q - 1 + l) % 10) % UInt8
+                    b_lastdigit = (mulshift(v, mul, -e2 + q - 1 + l) % 10) % UInt8
                 end
             end
             if q <= qinvbound(T)
-                if ((mv % UInt32) - 5 * div(mv, 5)) == 0
-                    vrIsTrailingZeros = pow5(mv, q)
-                elseif even
-                    vmIsTrailingZeros = pow5(mm, q)
+                if ((v % UInt32) - 5 * div(v, 5)) == 0
+                    b_allzero = pow5(v, q)
+                elseif mf_iseven
+                    a_allzero = pow5(u, q)
                 else
-                    vp -= pow5(mp, q)
+                    c -= pow5(w, q)
                 end
             end
         else
@@ -53,102 +69,110 @@ Reduce to shortest decimal representation where `x = output * 10^nexp`
             i = -e2 - q
             k = pow5bits(i) - pow5_bitcount(T)
             j = q - k
-            vr, vp, vm = mulshiftsplit(T, mv, mp, mm, i, j)
+            a, b, c = mulshiftsplit(T, u, v, w, i, j)
             if T == Float32 || T == Float16
-                if q != 0 && div(vp - 1, 10) <= div(vm, 10)
+                if q != 0 && div(c - 1, 10) <= div(a, 10)
                     j = q - 1 - (pow5bits(i + 1) - pow5_bitcount(T))
                     mul = T == Float32 ? FLOAT_POW5_SPLIT[i + 2] : HALF_POW5_SPLIT[i + 2]
-                    lastRemovedDigit = (mulshift(mv, mul, j) % 10) % UInt8
+                    b_lastdigit = (mulshift(v, mul, j) % 10) % UInt8
                 end
             end
             if q <= 1
-                vrIsTrailingZeros = true
-                if even
-                    vmIsTrailingZeros = mmShift
+                b_allzero = true
+                if mf_iseven
+                    a_allzero = !u_shift_half
                 else
-                    vp -= 1
+                    c -= 1
                 end
             elseif q < qbound(T)
-                vrIsTrailingZeros = pow2(mv, q - (T != Float64))
+                b_allzero = pow2(v, q - (T != Float64))
             end
         end
-        removed = 0
-        if vmIsTrailingZeros || vrIsTrailingZeros
+
+        ## Step 4: reduction
+        if a_allzero || b_allzero
             while true
-                vpDiv10 = div(vp, 10)
-                vmDiv10 = div(vm, 10)
-                vpDiv10 <= vmDiv10 && break
-                vmMod10 = (vm % UInt32) - UInt32(10) * (vmDiv10 % UInt32)
-                vrDiv10 = div(vr, 10)
-                vrMod10 = (vr % UInt32) - UInt32(10) * (vrDiv10 % UInt32)
-                vmIsTrailingZeros &= vmMod10 == 0
-                vrIsTrailingZeros &= lastRemovedDigit == 0
-                lastRemovedDigit = vrMod10 % UInt8
-                vr = vrDiv10
-                vp = vpDiv10
-                vm = vmDiv10
-                removed += 1
+                c_div10 = div(c, 10)
+                a_div10 = div(a, 10)
+                if c_div10 <= a_div10
+                    break
+                end
+                a_mod10 = (a % UInt32) - UInt32(10) * (a_div10 % UInt32)
+                b_div10 = div(b, 10)
+                b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
+                a_allzero &= a_mod10 == 0
+                b_allzero &= b_lastdigit == 0
+                b_lastdigit = b_mod10 % UInt8
+                b = b_div10
+                c = c_div10
+                a = a_div10
+                e10 += 1
             end
-            if vmIsTrailingZeros
+            if a_allzero
                 while true
-                    vmDiv10 = div(vm, 10)
-                    vmMod10 = (vm % UInt32) - UInt32(10) * (vmDiv10 % UInt32)
-                    vmMod10 != 0 && break
-                    vpDiv10 = div(vp, 10)
-                    vrDiv10 = div(vr, 10)
-                    vrMod10 = (vr % UInt32) - UInt32(10) * (vrDiv10 % UInt32)
-                    vrIsTrailingZeros &= lastRemovedDigit == 0
-                    lastRemovedDigit = vrMod10 % UInt8
-                    vr = vrDiv10
-                    vp = vpDiv10
-                    vm = vmDiv10
-                    removed += 1
+                    a_div10 = div(a, 10)
+                    a_mod10 = (a % UInt32) - UInt32(10) * (a_div10 % UInt32)
+                    if a_mod10 != 0
+                        break
+                    end
+                    c_div10 = div(c, 10)
+                    b_div10 = div(b, 10)
+                    b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
+                    b_allzero &= b_lastdigit == 0
+                    b_lastdigit = b_mod10 % UInt8
+                    b = b_div10
+                    c = c_div10
+                    a = a_div10
+                    e10 += 1
                 end
             end
-            if vrIsTrailingZeros && lastRemovedDigit == 5 && vr % 2 == 0
-                lastRemovedDigit = UInt8(4)
+            if b_allzero && b_lastdigit == 5 && b % 2 == 0
+                b_lastdigit = UInt8(4)
             end
-            output = vr + ((vr == vm && (!even || !vmIsTrailingZeros)) || lastRemovedDigit >= 5)
+            b = b + ((b == a && (!mf_iseven || !a_allzero)) || b_lastdigit >= 5)
         else
-            roundUp = false
-            vpDiv100 = div(vp, 100)
-            vmDiv100 = div(vm, 100)
-            if vpDiv100 > vmDiv100
-                vrDiv100 = div(vr, 100)
-                vrMod100 = (vr % UInt32) - UInt32(100) * (vrDiv100 % UInt32)
-                roundUp = vrMod100 >= 50
-                vr = vrDiv100
-                vp = vpDiv100
-                vm = vmDiv100
-                removed += 2
+            # we don't need to worry about tie breaking
+            roundup = false
+            c_div100 = div(c, 100)
+            a_div100 = div(a, 100)
+            if c_div100 > a_div100
+                b_div100 = div(b, 100)
+                b_mod100 = (b % UInt32) - UInt32(100) * (b_div100 % UInt32)
+                roundup = b_mod100 >= 50
+                b = b_div100
+                c = c_div100
+                a = a_div100
+                e10 += 2
             end
             while true
-                vpDiv10 = div(vp, 10)
-                vmDiv10 = div(vm, 10)
-                vpDiv10 <= vmDiv10 && break
-                vrDiv10 = div(vr, 10)
-                vrMod10 = (vr % UInt32) - UInt32(10) * (vrDiv10 % UInt32)
-                roundUp = vrMod10 >= 5
-                vr = vrDiv10
-                vp = vpDiv10
-                vm = vmDiv10
-                removed += 1
+                c_div10 = div(c, 10)
+                a_div10 = div(a, 10)
+                if c_div10 <= a_div10
+                    break
+                end
+                b_div10 = div(b, 10)
+                b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
+                roundup = b_mod10 >= 5
+                b = b_div10
+                c = c_div10
+                a = a_div10
+                e10 += 1
             end
-            output = vr + (vr == vm || roundUp || lastRemovedDigit >= 5)
+            b = b + (b == a || roundup || b_lastdigit >= 5)
         end
-        nexp = e10 + removed
     else
-        output = m2 >> -e2
-        nexp = 0
+        # f is an integer < 2^53
+        b = mf >> -ef
+        e10 = 0
         while true
-            q = div(output, 10)
-            r = (output % UInt32) - UInt32(10) * (q % UInt32)
-            r != 0 && break
-            output = q
-            nexp += 1
+            b_div10 = div(b, 10)
+            b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
+            b_mod10 != 0 && break
+            b = b_div10
+            e10 += 1
         end
     end
-    return output, nexp
+    return b, e10
 end
 
 
@@ -336,116 +360,116 @@ end
         memcpy(ptr, pos + olength - i - 4, ptr2, c1 + 1, 2)
         i += 4
     end
-if output2 >= 100
-    c = (output2 % UInt32(100)) << 1
-    output2 = div(output2, UInt32(100))
-    memcpy(ptr, pos + olength - i - 2, ptr2, c + 1, 2)
-    i += 2
-end
-if output2 >= 10
-    c = output2 << 1
-    buf[pos + 1] = DIGIT_TABLE[c + 2]
-    buf[pos - exp_form] = DIGIT_TABLE[c + 1]
-else
-    buf[pos - exp_form] = UInt8('0') + (output2 % UInt8)
-end
-
-if !exp_form
-    if pt <= 0
-        pos += olength
-        precision -= olength
-        while hash && precision > 0
-            buf[pos] = UInt8('0')
-            pos += 1
-            precision -= 1
-        end
-    elseif pt >= olength
-        pos += olength
-        precision -= olength
-        for _ = 1:nexp
-            buf[pos] = UInt8('0')
-            pos += 1
-            precision -= 1
-        end
-        if hash
-            buf[pos] = decchar
-            pos += 1
-            if precision < 0
+    if output2 >= 100
+        c = (output2 % UInt32(100)) << 1
+        output2 = div(output2, UInt32(100))
+        memcpy(ptr, pos + olength - i - 2, ptr2, c + 1, 2)
+        i += 2
+    end
+    if output2 >= 10
+        c = output2 << 1
+        buf[pos + 1] = DIGIT_TABLE[c + 2]
+        buf[pos - exp_form] = DIGIT_TABLE[c + 1]
+    else
+        buf[pos - exp_form] = UInt8('0') + (output2 % UInt8)
+    end
+    
+    if !exp_form
+        if pt <= 0
+            pos += olength
+            precision -= olength
+            while hash && precision > 0
                 buf[pos] = UInt8('0')
                 pos += 1
+                precision -= 1
             end
-            while precision > 0
+        elseif pt >= olength
+            pos += olength
+            precision -= olength
+            for _ = 1:nexp
+                buf[pos] = UInt8('0')
+                pos += 1
+                precision -= 1
+            end
+            if hash
+                buf[pos] = decchar
+                pos += 1
+                if precision < 0
+                    buf[pos] = UInt8('0')
+                    pos += 1
+                end
+                while precision > 0
+                    buf[pos] = UInt8('0')
+                    pos += 1
+                    precision -= 1
+                end
+            end
+        else
+            pointoff = olength - abs(nexp)
+            memmove(ptr, pos + pointoff + 1, ptr, pos + pointoff, olength - pointoff + 1)
+            buf[pos + pointoff] = decchar
+            pos += olength + 1
+            precision -= olength
+            while hash && precision > 0
                 buf[pos] = UInt8('0')
                 pos += 1
                 precision -= 1
             end
         end
+        if typed && x isa Float32
+            buf[pos] = UInt8('f')
+            buf[pos + 1] = UInt8('0')
+            pos += 2
+        end
     else
-        pointoff = olength - abs(nexp)
-        memmove(ptr, pos + pointoff + 1, ptr, pos + pointoff, olength - pointoff + 1)
-        buf[pos + pointoff] = decchar
-        pos += olength + 1
-        precision -= olength
+        if olength > 1 || hash
+            buf[pos] = decchar
+            pos += olength
+            precision -= olength
+        end
+        if hash && olength == 1
+            buf[pos] = UInt8('0')
+            pos += 1
+        end
         while hash && precision > 0
             buf[pos] = UInt8('0')
             pos += 1
             precision -= 1
         end
-    end
-    if typed && x isa Float32
-        buf[pos] = UInt8('f')
-        buf[pos + 1] = UInt8('0')
-        pos += 2
-    end
-else
-    if olength > 1 || hash
-        buf[pos] = decchar
-        pos += olength
-        precision -= olength
-    end
-    if hash && olength == 1
-        buf[pos] = UInt8('0')
+    
+        buf[pos] = expchar
         pos += 1
-    end
-    while hash && precision > 0
-        buf[pos] = UInt8('0')
-        pos += 1
-        precision -= 1
-    end
-
-    buf[pos] = expchar
-    pos += 1
-    exp2 = nexp + olength - 1
-    if exp2 < 0
-        buf[pos] = UInt8('-')
-        pos += 1
-        exp2 = -exp2
-    elseif padexp
-        buf[pos] = UInt8('+')
-        pos += 1
-    end
-
-    if exp2 >= 100
-        c = exp2 % 10
-        memcpy(ptr, pos, ptr2, 2 * div(exp2, 10) + 1, 2)
-        buf[pos + 2] = UInt8('0') + (c % UInt8)
-        pos += 3
-    elseif exp2 >= 10
-        memcpy(ptr, pos, ptr2, 2 * exp2 + 1, 2)
-        pos += 2
-    else
-        if padexp
-            buf[pos] = UInt8('0')
+        exp2 = nexp + olength - 1
+        if exp2 < 0
+            buf[pos] = UInt8('-')
+            pos += 1
+            exp2 = -exp2
+        elseif padexp
+            buf[pos] = UInt8('+')
             pos += 1
         end
-        buf[pos] = UInt8('0') + (exp2 % UInt8)
+    
+        if exp2 >= 100
+            c = exp2 % 10
+            memcpy(ptr, pos, ptr2, 2 * div(exp2, 10) + 1, 2)
+            buf[pos + 2] = UInt8('0') + (c % UInt8)
+            pos += 3
+        elseif exp2 >= 10
+            memcpy(ptr, pos, ptr2, 2 * exp2 + 1, 2)
+            pos += 2
+        else
+            if padexp
+                buf[pos] = UInt8('0')
+                pos += 1
+            end
+            buf[pos] = UInt8('0') + (exp2 % UInt8)
+            pos += 1
+        end
+    end
+    if typed && x isa Float16
+        buf[pos] = UInt8(')')
         pos += 1
     end
-end
-if typed && x isa Float16
-    buf[pos] = UInt8(')')
-    pos += 1
-end
-
-return pos
+    
+    return pos
 end
