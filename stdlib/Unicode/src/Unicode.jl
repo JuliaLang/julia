@@ -50,10 +50,22 @@ julia> Unicode.normalize("JuLiA", casefold=true)
 julia> Unicode.normalize("JúLiA", stripmark=true)
 "JuLiA"
 ```
+
+You can also passing a `custom_func` to the `normalize` to do custom normalization
+by calling `Unicode.normalize(s::AbstractString, nf::Symbol, custom_func)` or
+`Unicode.normalize(s::AbstractString, custom_func, custom_data)`
+where custom function should be in `custom_func(codepoint)::Cint` and return a new codepoint.
+
 """
 function normalize end
 normalize(s::AbstractString, nf::Symbol) = Base.Unicode.normalize(s, nf)
 normalize(s::AbstractString; kwargs...) = Base.Unicode.normalize(s; kwargs...)
+normalize(s::AbstractString, nf::Symbol, custom_func) =
+    Base.Unicode.normalize(s, nf, custom_func)
+normalize(s::AbstractString, custom_func; kwargs...) =
+    Base.Unicode.normalize(s, custom_func; kwargs...)
+
+
 
 """
     Unicode.isassigned(c) -> Bool

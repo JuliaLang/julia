@@ -145,7 +145,7 @@ function utf8proc_map(str::String, options::Integer)
     nwords = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
                    str, sizeof(str), C_NULL, 0, options)
     nwords < 0 && utf8proc_error(nwords)
-    buffer = Base.StringVector(nwords*4)
+    buffer = Base.StringVector(nwords*sizeof(Int32))
     nwords = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
                    str, sizeof(str), buffer, nwords, options)
     nwords < 0 && utf8proc_error(nwords)
@@ -156,22 +156,40 @@ end
 
 utf8proc_map(s::AbstractString, flags::Integer) = utf8proc_map(String(s), flags)
 
-# Documented in Unicode module
-function normalize(
-    s::AbstractString;
-    stable::Bool=false,
-    compat::Bool=false,
-    compose::Bool=true,
-    decompose::Bool=false,
-    stripignore::Bool=false,
-    rejectna::Bool=false,
-    newline2ls::Bool=false,
-    newline2ps::Bool=false,
-    newline2lf::Bool=false,
-    stripcc::Bool=false,
-    casefold::Bool=false,
-    lump::Bool=false,
-    stripmark::Bool=false,
+
+custom_func_wrapper(codepoint::Int32, custom_func::Any) = Int32(custom_func(codepoint))
+
+function utf8proc_map(str::String, options::Integer, custom_func)
+    ccustom_func = @cfunction(custom_func_wrapper, Int32, (Int32, Any))
+
+    nwords = ccall(:utf8proc_decompose_custom, Int,
+                   (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Any),
+                   str, sizeof(str), C_NULL, 0, options, ccustom_func, custom_func)
+    nwords < 0 && utf8proc_error(nwords)
+    buffer = Base.StringVector(nwords*sizeof(Int32))
+    nwords = ccall(:utf8proc_decompose_custom, Int,
+                   (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Any),
+                   str, sizeof(str), buffer, nwords, options, ccustom_func, custom_func)
+    nwords < 0 && utf8proc_error(nwords)
+    nbytes = ccall(:utf8proc_reencode, Int, (Ptr{UInt8}, Int, Cint), buffer, nwords, options)
+    nbytes < 0 && utf8proc_error(nbytes)
+    return String(resize!(buffer, nbytes))
+end
+
+function _compute_options(
+    stable::Bool,
+    compat::Bool,
+    compose::Bool,
+    decompose::Bool,
+    stripignore::Bool,
+    rejectna::Bool,
+    newline2ls::Bool,
+    newline2ps::Bool,
+    newline2lf::Bool,
+    stripcc::Bool,
+    casefold::Bool,
+    lump::Bool,
+    stripmark::Bool,
 )
     flags = 0
     stable && (flags = flags | UTF8PROC_STABLE)
@@ -194,18 +212,90 @@ function normalize(
     casefold && (flags = flags | UTF8PROC_CASEFOLD)
     lump && (flags = flags | UTF8PROC_LUMP)
     stripmark && (flags = flags | UTF8PROC_STRIPMARK)
+    flags
+end
+
+_compute_options(nf::Symbol) =
+    nf == :NFC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE) :
+    nf == :NFD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE) :
+    nf == :NFKC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE | UTF8PROC_COMPAT) :
+    nf == :NFKD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE | UTF8PROC_COMPAT) :
+    throw(ArgumentError(":$nf is not one of :NFC, :NFD, :NFKC, :NFKD"))
+
+# Documented in Unicode module
+function normalize(
+    s::AbstractString;
+    stable::Bool=false,
+    compat::Bool=false,
+    compose::Bool=true,
+    decompose::Bool=false,
+    stripignore::Bool=false,
+    rejectna::Bool=false,
+    newline2ls::Bool=false,
+    newline2ps::Bool=false,
+    newline2lf::Bool=false,
+    stripcc::Bool=false,
+    casefold::Bool=false,
+    lump::Bool=false,
+    stripmark::Bool=false,
+)
+    flags = _compute_options(
+        stable,
+        compat,
+        compose,
+        decompose,
+        stripignore,
+        rejectna,
+        newline2ls,
+        newline2ps,
+        newline2lf,
+        stripcc,
+        casefold,
+        lump,
+        stripmark,
+    )
     utf8proc_map(s, flags)
 end
 
-function normalize(s::AbstractString, nf::Symbol)
-    utf8proc_map(s, nf == :NFC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE) :
-                    nf == :NFD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE) :
-                    nf == :NFKC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE
-                                   | UTF8PROC_COMPAT) :
-                    nf == :NFKD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE
-                                   | UTF8PROC_COMPAT) :
-                    throw(ArgumentError(":$nf is not one of :NFC, :NFD, :NFKC, :NFKD")))
+normalize(s::AbstractString, nf::Symbol) = utf8proc_map(s, _compute_options(nf))
+
+function normalize(
+    s::AbstractString,
+    custom_func;
+    stable::Bool=false,
+    compat::Bool=false,
+    compose::Bool=true,
+    decompose::Bool=false,
+    stripignore::Bool=false,
+    rejectna::Bool=false,
+    newline2ls::Bool=false,
+    newline2ps::Bool=false,
+    newline2lf::Bool=false,
+    stripcc::Bool=false,
+    casefold::Bool=false,
+    lump::Bool=false,
+    stripmark::Bool=false,
+)
+    flags = _compute_options(
+        stable,
+        compat,
+        compose,
+        decompose,
+        stripignore,
+        rejectna,
+        newline2ls,
+        newline2ps,
+        newline2lf,
+        stripcc,
+        casefold,
+        lump,
+        stripmark,
+    )
+    utf8proc_map(s, flags, custom_func)
 end
+
+normalize(s::AbstractString, nf::Symbol, custom_func) =
+    utf8proc_map(s, _compute_options(nf), custom_func)
 
 ############################################################################
 

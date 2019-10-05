@@ -972,3 +972,12 @@ let x = SubString("ab", 1, 1)
     @test y === x
     chop("ab") === chop.(["ab"])[1]
 end
+
+# custom unicode normalize function
+let d = Dict{Cint, Cint}(Cint('a')=>Cint('\u6666'))
+    function mycustom(uc)::Cint
+        @show d
+        get(d, uc, Cint('\u2721'))
+    end
+    @test Unicode.normalize("abcd",:NFKC, mycustom) == "\u6666\u2721\u2721\u2721"
+end
