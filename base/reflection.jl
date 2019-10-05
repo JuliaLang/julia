@@ -147,7 +147,7 @@ function fieldname(t::DataType, i::Integer)
         throw(ArgumentError("type does not have definite field names"))
     end
     names = _fieldnames(t)
-    n_fields = length(names)
+    n_fields = length(names)::Int
     field_label = n_fields == 1 ? "field" : "fields"
     i > n_fields && throw(ArgumentError("Cannot access field $i since type $t only has $n_fields $field_label."))
     i < 1 && throw(ArgumentError("Field numbers must be positive integers. $i is invalid."))
