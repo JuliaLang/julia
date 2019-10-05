@@ -31,7 +31,7 @@ Serializer(io::IO) = Serializer{typeof(io)}(io)
 
 const n_int_literals = 33
 const n_reserved_slots = 24
-const n_reserved_tags = 12
+const n_reserved_tags = 11
 
 const TAGS = Any[
     Symbol, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128,
@@ -56,6 +56,7 @@ const TAGS = Any[
     Symbol, # REF_OBJECT_TAG
     Symbol, # FULL_GLOBALREF_TAG
     Symbol, # HEADER_TAG
+    Symbol, # IDDICT_TAG
     fill(Symbol, n_reserved_tags)...,
 
     (), Bool, Any, Bottom, Core.TypeofBottom, Type, svec(), Tuple{}, false, true, nothing,
@@ -75,7 +76,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 8 # do not make changes without bumping the version #!
+const ser_version = 9 # do not make changes without bumping the version #!
 
 const NTAGS = length(TAGS)
 
@@ -133,6 +134,7 @@ const OBJECT_TAG           = Int32(o0+12)
 const REF_OBJECT_TAG       = Int32(o0+13)
 const FULL_GLOBALREF_TAG   = Int32(o0+14)
 const HEADER_TAG           = Int32(o0+15)
+const IDDICT_TAG           = Int32(o0+16)
 
 writetag(s::IO, tag) = (write(s, UInt8(tag)); nothing)
 
@@ -327,13 +329,24 @@ function serialize(s::AbstractSerializer, ex::Expr)
     end
 end
 
-function serialize(s::AbstractSerializer, d::Dict)
-    serialize_cycle_header(s, d) && return
+function serialize_dict_data(s::AbstractSerializer, d::AbstractDict)
     write(s.io, Int32(length(d)))
     for (k,v) in d
         serialize(s, k)
         serialize(s, v)
     end
+end
+
+function serialize(s::AbstractSerializer, d::Dict)
+    serialize_cycle_header(s, d) && return
+    serialize_dict_data(s, d)
+end
+
+function serialize(s::AbstractSerializer, d::IdDict)
+    serialize_cycle(s, d) && return
+    writetag(s.io, IDDICT_TAG)
+    serialize_type_data(s, typeof(d))
+    serialize_dict_data(s, d)
 end
 
 function serialize_mod_names(s::AbstractSerializer, m::Module)
@@ -851,6 +864,11 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return read(s.io, Float64)
     elseif b == INT8_TAG+13
         return read(s.io, Char)
+    elseif b == IDDICT_TAG
+        slot = s.counter; s.counter += 1
+        push!(s.pending_refs, slot)
+        t = deserialize(s)
+        return deserialize_dict(s, t)
     end
     t = desertag(b)::DataType
     if t.mutable && length(t.types) > 0  # manual specialization of fieldcount
@@ -1303,7 +1321,7 @@ function deserialize(s::AbstractSerializer, t::DataType)
     end
 end
 
-function deserialize(s::AbstractSerializer, T::Type{Dict{K,V}}) where {K,V}
+function deserialize_dict(s::AbstractSerializer, T::Type{<:AbstractDict})
     n = read(s.io, Int32)
     t = T(); sizehint!(t, n)
     deserialize_cycle(s, t)
@@ -1313,6 +1331,10 @@ function deserialize(s::AbstractSerializer, T::Type{Dict{K,V}}) where {K,V}
         t[k] = v
     end
     return t
+end
+
+function deserialize(s::AbstractSerializer, T::Type{Dict{K,V}}) where {K,V}
+    return deserialize_dict(s, T)
 end
 
 deserialize(s::AbstractSerializer, ::Type{BigInt}) = parse(BigInt, deserialize(s), base = 62)
