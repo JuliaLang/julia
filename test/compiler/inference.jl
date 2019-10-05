@@ -2442,3 +2442,6 @@ f31974(n::Int) = f31974(1:n)
 # This query hangs if type inference improperly attempts to const prop
 # call cycles.
 @test code_typed(f31974, Tuple{Int}) !== nothing
+
+f_overly_abstract_complex() = Complex(Ref{Number}(1)[])
+@test Base.return_types(f_overly_abstract_complex, Tuple{}) == [Complex]
