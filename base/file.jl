@@ -777,6 +777,17 @@ struct uv_dirent_t
     typ::Cint
 end
 
+UV_FS_FILETYPES = (
+    :unknown,
+    :file,
+    :dir,
+    :link,
+    :fifo,
+    :socket,
+    :char,
+    :block
+)
+
 """
     readdir(dir::AbstractString=pwd();
         join::Bool = false,
@@ -792,6 +803,8 @@ back, call `readdir` with an absolute directory path and `join` set to true.
 By default, `readdir` sorts the list of names it returns. If you want to skip
 sorting the names and get them in the order that the file system lists them,
 you can use `readdir(dir, sort=false)` to opt out of sorting.
+
+See `Base.Filesystem._readdir` for a limited memory alternative.
 
 !!! compat "Julia 1.4"
     The `join` and `sort` keyword arguments require at least Julia 1.4.
@@ -852,6 +865,51 @@ julia> readdir(abspath("base"), join=true)
 ```
 """
 function readdir(dir::AbstractString; join::Bool=false, sort::Bool=true)
+    entries = String[]
+    _readdir(dir) do ent
+        name = unsafe_string(ent.name)
+        push!(entries, join ? joinpath(dir, name) : name)
+        nothing
+    end
+
+    # sort entries unless opted out
+    sort && sort!(entries)
+end
+readdir(; join::Bool=false, sort::Bool=true) =
+    readdir(join ? pwd() : ".", join=join, sort=sort)
+
+"""
+    _readdir(f::Function, dir::AbstractString)
+
+This is the underlying function from `readdir`. It takes a function `f` which is applied to every
+filesystem entry in `dir`. This allows the directory to be traversed with limited memory.
+
+The input argument to `f` is an object of type `Base.Filesystem.uv_dirent_t`. If `f` returns `false`,
+the loop terminates early.
+
+!!! compat "Julia 1.9"
+    `Base.Filesystem._readdir` requires at least Julia 1.9.
+
+# Examples
+```julia-repl
+julia> jldirs = String[];
+
+julia> Base.Filesystem._readdir("julia/base") do ent
+           if Base.Filesystem.UV_FS_FILETYPES[1 + ent.typ] == :dir
+               push!(jldirs, unsafe_string(ent.name))
+           end
+       end
+
+julia> jldirs
+5-element Vector{String}:
+ "compiler"
+ "docs"
+ "ryu"
+ "special"
+ "strings"
+```
+"""
+function _readdir(f::Function, dir::AbstractString)
     # Allocate space for uv_fs_t struct
     req = Libc.malloc(_sizeof_uv_fs)
     try
@@ -861,26 +919,20 @@ function readdir(dir::AbstractString; join::Bool=false, sort::Bool=true)
         err < 0 && uv_error("readdir($(repr(dir)))", err)
 
         # iterate the listing into entries
-        entries = String[]
         ent = Ref{uv_dirent_t}()
         while Base.UV_EOF != ccall(:uv_fs_scandir_next, Cint, (Ptr{Cvoid}, Ptr{uv_dirent_t}), req, ent)
-            name = unsafe_string(ent[].name)
-            push!(entries, join ? joinpath(dir, name) : name)
+            cbreturn = f(ent[])
+            if cbreturn == false
+                break
+            end
         end
 
         # Clean up the request string
         uv_fs_req_cleanup(req)
-
-        # sort entries unless opted out
-        sort && sort!(entries)
-
-        return entries
     finally
         Libc.free(req)
     end
 end
-readdir(; join::Bool=false, sort::Bool=true) =
-    readdir(join ? pwd() : ".", join=join, sort=sort)
 
 """
     walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)

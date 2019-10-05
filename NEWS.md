@@ -45,6 +45,10 @@ Library changes
   tasks mutating the dictionary or set ([#44534]).
 * Predicate function negation `!f` now returns a composed function `(!) ∘ f` instead of an anonymous function ([#44752]).
 * `RoundFromZero` now works for non-`BigFloat` types ([#41246]).
+* `Base.Filesystem._readdir` implements the directory traversal from `readdir`, except instead
+  of accumulating a `Vector{String}`, it takes a function to process each entry. This enables
+  limited-memory traversal. The function is also given a filetype, and it's possible to avoid
+  copying filename strings if unnecessary.
 
 
 Standard library changes
