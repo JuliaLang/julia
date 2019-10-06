@@ -892,11 +892,23 @@ end
     v = [1, 2, 3]
     v2 = empty(v)
     v3 = empty(v, Float64)
+    v4 = empty(typeof(v))
+    v5 = empty(typeof(v), Float64)
     @test !isempty(v)
     empty!(v)
     @test isempty(v)
     @test isempty(v2::Vector{Int})
     @test isempty(v3::Vector{Float64})
+    @test isempty(v4::Vector{Int})
+    @test isempty(v5::Vector{Float64})
+
+    m = [1 2; 3 4]
+    # These call `empty(typeof(m))`, so we don't test that case.
+    m2 = empty(m)
+    m3 = empty(m, Float64)
+    @test !isempty(m)
+    @test isempty(m2::Matrix{Int})
+    @test isempty(m3::Matrix{Float64})
 end
 
 @testset "CartesianIndices" begin
