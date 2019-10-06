@@ -186,10 +186,15 @@ For example
 defines the `⊗` (otimes) function to be the Kronecker product,
 and one can call it as binary operator using infix syntax:
 ```C = A ⊗ B```
-as well as with the usual postfix syntax
+as well as with the usual prefix syntax
 ```C = ⊗(A,B)```.
 
 Other characters that support such extensions include
 \odot `⊙`
 and
 \oplus `⊕`
+
+The complete list is here:
+https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm#L29
+and looks like this:
+`* / ÷ % & ⋅ ∘ × |\\| ∩ ∧ ⊗ ⊘ ⊙ ⊚ ⊛ ⊠ ⊡ ⊓ ∗ ∙ ∤ ⅋ ≀ ⊼ ⋄ ⋆ ⋇ ⋉ ⋊ ⋋ ⋌ ⋏ ⋒ ⟑ ⦸ ⦼ ⦾ ⦿ ⧶ ⧷ ⨇ ⨰ ⨱ ⨲ ⨳ ⨴ ⨵ ⨶ ⨷ ⨸ ⨻ ⨼ ⨽ ⩀ ⩃ ⩄ ⩋ ⩍ ⩎ ⩑ ⩓ ⩕ ⩘ ⩚ ⩜ ⩞ ⩟ ⩠ ⫛ ⊍ ▷ ⨝ ⟕ ⟖ ⟗`
