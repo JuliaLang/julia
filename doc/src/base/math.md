@@ -176,3 +176,20 @@ Base.widemul
 Base.Math.@evalpoly
 Base.FastMath.@fastmath
 ```
+
+## Customizable binary operators
+
+Some unicode characters can be used to define new binary operators
+that support infix notation.
+For example
+```⊗(x,y) = kron(x,y)```
+defines the `⊗` (otimes) function to be the Kronecker product,
+and one can call it as binary operator using infix syntax:
+```C = A ⊗ B```
+as well as with the usual postfix syntax
+```C = ⊗(A,B)```.
+
+Other characters that support such extensions include
+\odot `⊙`
+and
+\oplus `⊕`
