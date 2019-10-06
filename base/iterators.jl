@@ -657,6 +657,32 @@ struct TakeWhile{I,P<:Function}
     xs::I
 end
 
+"""
+    takewhile(pred, iter)
+
+An iterator that generates element from `iter` as long as predicate `pred` is true,
+afterwards, drops every element.
+
+!!! compat "Julia 1.3"
+     This function requires at least Julia 1.3.
+
+# Examples
+
+```jldoctest
+julia> s = collect(1:5)
+5-element Array{Int64,1}:
+  1
+  2
+  3
+  4
+  5
+
+julia> collect(Iterators.takewhile(<(3),s))
+2-element Array{Int64,1}:
+  1
+  2
+```
+"""
 takewhile(pred,xs) = TakeWhile(pred,xs)
 
 function iterate(ibl::TakeWhile, itr...)
@@ -678,6 +704,33 @@ struct DropWhile{I,P<:Function}
     xs::I
 end
 
+"""
+    dropwhile(pred, iter)
+
+An iterator that drops element from `iter` as long as predicate `pred` is true,
+afterwards, returns every element.
+
+!!! compat "Julia 1.3"
+     This function requires at least Julia 1.3.
+
+# Examples
+
+```jldoctest
+julia> s = collect(1:5)
+5-element Array{Int64,1}:
+  1
+  2
+  3
+  4
+  5
+
+julia> collect(Iterators.dropwhile(<(3),s))
+3-element Array{Int64,1}:
+  3
+  4
+  5
+```
+"""
 dropwhile(pred,itr) = DropWhile(pred,itr)
 
 iterate(ibl::DropWhile,itr) = iterate(ibl.xs, itr)
