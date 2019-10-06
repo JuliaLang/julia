@@ -671,16 +671,16 @@ afterwards, drops every element.
 ```jldoctest
 julia> s = collect(1:5)
 5-element Array{Int64,1}:
-  1
-  2
-  3
-  4
-  5
+ 1
+ 2
+ 3
+ 4
+ 5
 
 julia> collect(Iterators.takewhile(<(3),s))
 2-element Array{Int64,1}:
-  1
-  2
+ 1
+ 2
 ```
 """
 takewhile(pred,xs) = TakeWhile(pred,xs)
@@ -718,17 +718,17 @@ afterwards, returns every element.
 ```jldoctest
 julia> s = collect(1:5)
 5-element Array{Int64,1}:
-  1
-  2
-  3
-  4
-  5
+ 1
+ 2
+ 3
+ 4
+ 5
 
 julia> collect(Iterators.dropwhile(<(3),s))
 3-element Array{Int64,1}:
-  3
-  4
-  5
+ 3
+ 4
+ 5
 ```
 """
 dropwhile(pred,itr) = DropWhile(pred,itr)
