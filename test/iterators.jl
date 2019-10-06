@@ -151,7 +151,7 @@ end
 
 # takewhile
 # --------
-@testset "takewhile" begin
+@testset begin
     @test collect(takewhile(<(4),1:10)) == [1,2,3]
     @test collect(takewhile(<(4),Iterators.countfrom(1))) == [1,2,3]
     @test collect(takewhile(<(4),5:10)) == []
@@ -162,7 +162,7 @@ end
 
 # dropwhile
 # --------
-@testset "dropwhile" begin
+@testset begin
     @test collect(dropwhile(<(4), 1:10)) == 4:10
     @test collect(dropwhile(<(4), 1:10)) isa Vector{Int}
     @test isempty(dropwhile(<(4), []))
