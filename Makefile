@@ -299,7 +299,7 @@ endif
 else
 
 	# Install `7z` into libexec/
-	$(INSTALL_M) $(build_bindir)/7z $(DESTDIR)$(libexecdir)/
+	$(INSTALL_M) $(build_bindir)/7z$(EXE) $(DESTDIR)$(libexecdir)/
 
 # Copy over .dSYM directories directly for Darwin
 ifneq ($(DARWIN_FRAMEWORK),1)
