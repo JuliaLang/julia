@@ -664,7 +664,7 @@ An iterator that generates element from `iter` as long as predicate `pred` is tr
 afterwards, drops every element.
 
 !!! compat "Julia 1.3"
-     This function requires at least Julia 1.3.
+    This function requires at least Julia 1.3.
 
 # Examples
 
