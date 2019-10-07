@@ -663,8 +663,8 @@ end
 An iterator that generates element from `iter` as long as predicate `pred` is true,
 afterwards, drops every element.
 
-!!! compat "Julia 1.3"
-    This function requires at least Julia 1.3.
+!!! compat "Julia 1.4"
+    This function requires at least Julia 1.4.
 
 # Examples
 
@@ -710,8 +710,8 @@ end
 An iterator that drops element from `iter` as long as predicate `pred` is true,
 afterwards, returns every element.
 
-!!! compat "Julia 1.3"
-    This function requires at least Julia 1.3.
+!!! compat "Julia 1.4"
+    This function requires at least Julia 1.4.
 
 # Examples
 
