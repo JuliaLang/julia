@@ -523,7 +523,7 @@ end
 function show_datatype(io::IO, x::DataType)
     istuple = x.name === Tuple.name
     if (!isempty(x.parameters) || istuple) && x !== Tuple
-        n = length(x.parameters)
+        n = length(x.parameters)::Int
 
         # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
         if istuple && n > 3 && all(i -> (x.parameters[1] === i), x.parameters)

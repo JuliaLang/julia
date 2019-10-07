@@ -64,7 +64,7 @@ Core.NamedTuple
 if nameof(@__MODULE__) === :Base
 
 @eval function NamedTuple{names,T}(args::Tuple) where {names, T <: Tuple}
-    if length(args) != length(names)
+    if length(args) != length(names::Tuple)
         throw(ArgumentError("Wrong number of arguments to named tuple constructor."))
     end
     # Note T(args) might not return something of type T; e.g.
@@ -251,8 +251,8 @@ julia> merge((a=1, b=2, c=3), [:b=>4, :d=>5])
 function merge(a::NamedTuple, itr)
     names = Symbol[]
     vals = Any[]
-    inds = IdDict()
-    for (k,v) in itr
+    inds = IdDict{Symbol,Int}()
+    for (k::Symbol, v) in itr
         oldind = get(inds, k, 0)
         if oldind > 0
             vals[oldind] = v
