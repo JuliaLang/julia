@@ -163,7 +163,7 @@ NOINLINE size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t* bt_size, siz
 //
 // The first `skip` frames are omitted, in addition to omitting the frame from
 // `rec_backtrace` itself.
-NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t *bt_size, size_t maxsize, int skip)
+NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t *bt_size, size_t maxsize, int skip, int add_interp_frames)
 {
     bt_context_t context;
     memset(&context, 0, sizeof(context));
@@ -171,7 +171,7 @@ NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t *bt_size, size_t 
     bt_cursor_t cursor;
     if (!jl_unw_init(&cursor, &context))
         return 0;
-    return jl_unw_stepn(&cursor, bt_data, bt_size, NULL, maxsize, skip + 1, 1, 0);
+    return jl_unw_stepn(&cursor, bt_data, bt_size, NULL, maxsize, skip + 1, add_interp_frames, 0);
 }
 
 static jl_value_t *array_ptr_void_type JL_ALWAYS_LEAFTYPE = NULL;

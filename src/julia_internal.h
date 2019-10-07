@@ -738,7 +738,7 @@ typedef unw_cursor_t bt_cursor_t;
 typedef int bt_context_t;
 typedef int bt_cursor_t;
 #endif
-size_t rec_backtrace(jl_bt_element_t *bt_data, size_t *bt_size, size_t maxsize, int skip) JL_NOTSAFEPOINT;
+size_t rec_backtrace(jl_bt_element_t *bt_data, size_t *bt_size, size_t maxsize, int skip, int add_interp_frames) JL_NOTSAFEPOINT;
 // Record backtrace from a signal handler. `ctx` is the context of the code
 // which was asynchronously interrupted.
 size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t *bt_size, size_t maxsize,
