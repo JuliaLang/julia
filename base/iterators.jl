@@ -711,7 +711,7 @@ An iterator that drops element from `iter` as long as predicate `pred` is true,
 afterwards, returns every element.
 
 !!! compat "Julia 1.3"
-     This function requires at least Julia 1.3.
+    This function requires at least Julia 1.3.
 
 # Examples
 
