@@ -139,8 +139,8 @@ ifeq ($(USE_SYSTEM_UTF8PROC), 0)
 DEP_LIBS += utf8proc
 endif
 
-ifeq ($(USE_SYSTEM_LIBZ), 0)
-DEP_LIBS += libz
+ifeq ($(USE_SYSTEM_ZLIB), 0)
+DEP_LIBS += zlib
 endif
 
 ifeq ($(USE_SYSTEM_P7ZIP), 0)
