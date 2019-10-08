@@ -834,6 +834,43 @@ function setindex!(A::Array{T}, X::Array{T}, c::Colon) where T
     return A
 end
 
+"""
+    setindex(collection, value, key...)
+
+Create a new collection with the element/elements of the location specified by `key`
+replaced with `value`(s).
+
+# Implementation
+
+`setindex(collection, value, key...)` must have the property such that
+
+```julia
+y1 = setindex(x, value, key...)
+
+y2 = deepcopy(x)
+setindex!(y2, value, key...)
+
+@assert isequal′(y1, y2)
+```
+
+with a suitable definition of `isequal′` (e.g., elements are approximately but possibly
+not exactly equal), _if_ `setindex!` supports given arguments.
+
+`setindex` should support more combinations of arguments by widening collection
+type as required.
+"""
+function setindex end
+
+function setindex(xs::AbstractArray, v, I...)
+    T = promote_type(eltype(xs), typeof(v))
+    ys = similar(xs, T)
+    if eltype(xs) !== Union{}
+        copy!(ys, xs)
+    end
+    ys[I...] = v
+    return ys
+end
+
 # efficiently grow an array
 
 _growbeg!(a::Vector, delta::Integer) =

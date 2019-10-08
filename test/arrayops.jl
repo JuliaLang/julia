@@ -2650,3 +2650,11 @@ end
 
 # Throws ArgumentError for negative dimensions in Array
 @test_throws ArgumentError fill('a', -10)
+
+@testset "setindex" begin
+    ==ₜ(_, _) = false
+    ==ₜ(x::T, y::T) where T = x == y
+
+    @test Base.setindex(Int[1, 2], 3.0, 2) ==ₜ [1.0, 3.0]
+    @test Base.setindex(Int[1, 2, 3], :two, 2) ==ₜ [1, :two, 3]
+end

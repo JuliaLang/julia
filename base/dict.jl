@@ -391,6 +391,15 @@ function setindex!(h::Dict{K,V}, v0, key::K) where V where K
     return h
 end
 
+function setindex(d0::Dict, v, k)
+    K = promote_type(keytype(d0), typeof(k))
+    V = promote_type(valtype(d0), typeof(v))
+    d = Dict{K, V}()
+    copy!(d, d0)
+    d[k] = v
+    return d
+end
+
 """
     get!(collection, key, default)
 
