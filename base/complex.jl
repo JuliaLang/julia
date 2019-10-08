@@ -185,7 +185,7 @@ function show(io::IO, z::Complex)
     show(io, r)
     if signbit(i) && !isnan(i)
         print(io, compact ? "-" : " - ")
-        if isa(i,Signed) && !isa(i,BigInt) && i === typemin(typeof(i))
+        if isa(i,Signed) && !isa(i,BigInt) && i == typemin(typeof(i))
             show(io, -widen(i))
         else
             show(io, -i)
