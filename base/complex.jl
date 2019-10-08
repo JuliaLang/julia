@@ -184,6 +184,9 @@ function show(io::IO, z::Complex)
     compact = get(io, :compact, false)
     show(io, r)
     if signbit(i) && !isnan(i)
+        if isa(i,Integer) && !isa(i,BigInt)
+            i = BigInt(i)
+        end
         i = -i
         print(io, compact ? "-" : " - ")
     else
