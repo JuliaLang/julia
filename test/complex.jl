@@ -14,6 +14,7 @@ end
 #show
 @test sprint(show, complex(1, 0), context=:compact => true) == "1+0im"
 @test sprint(show, complex(true, true)) == "Complex(true,true)"
+@test sprint(show, Complex{Int8}(0, typemin(Int8))) == "0 - 128im"
 
 @testset "unary operator on complex boolean" begin
     @test +Complex(true, true) === Complex(1, 1)
