@@ -26,7 +26,7 @@ requesting [`eachindex`](@ref) from an array that is `IndexLinear` will return
 a simple one-dimensional range, even if it is multidimensional.
 
 A custom array that reports its `IndexStyle` as `IndexLinear` only needs
-to implement indexing (and indexed assingment) with a single `Int` index;
+to implement indexing (and indexed assignment) with a single `Int` index;
 all other indexing expressions — including multidimensional accesses — will
 be recomputed to the linear index.  For example, if `A` were a `2×3` custom
 matrix with linear indexing, and we referenced `A[1, 3]`, this would be
@@ -49,7 +49,7 @@ requesting [`eachindex`](@ref) from an array that is `IndexCartesian` will retur
 a range of [`CartesianIndices`](@ref).
 
 A `N`-dimensional custom array that reports its `IndexStyle` as `IndexCartesian` needs
-to implement indexing (and indexed assingment) with exactly `N` `Int` indices;
+to implement indexing (and indexed assignment) with exactly `N` `Int` indices;
 all other indexing expressions — including linear indexing — will
 be recomputed to the equivalent Cartesian location.  For example, if `A` were a `2×3` custom
 matrix with linear indexing, and we referenced `A[5]`, this would be
