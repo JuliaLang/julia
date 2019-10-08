@@ -52,7 +52,7 @@ first component is always the empty string.
 splitdrive(path::AbstractString)
 
 """
-    homedir() -> AbstractString
+    homedir() -> String
 
 Return the current user's home directory.
 
@@ -356,7 +356,7 @@ end # os-test
 
 
 """
-    realpath(path::AbstractString) -> AbstractString
+    realpath(path::AbstractString) -> String
 
 Canonicalize a path by expanding symbolic links and removing "." and ".." entries.
 On case-insensitive case-preserving filesystems (typically Mac and Windows), the
