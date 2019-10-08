@@ -3668,9 +3668,9 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
         bool allunbox;
         size_t min_align, nbytes;
         dest = try_emit_union_alloca(ctx, ((jl_uniontype_t*)phiType), allunbox, min_align, nbytes);
-        Value *phi = try_emit_union_alloca(ctx, ((jl_uniontype_t*)phiType), allunbox, min_align, nbytes);
-        Value *ptr = NULL;
         if (dest) {
+            Instruction *phi = dest->clone();
+            phi->insertAfter(dest);
             PHINode *Tindex_phi = PHINode::Create(T_int8, jl_array_len(edges), "tindex_phi");
             BB->getInstList().insert(InsertPt, Tindex_phi);
             PHINode *ptr_phi = PHINode::Create(T_prjlvalue, jl_array_len(edges), "ptr_phi");
@@ -3684,7 +3684,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             ctx.builder.CreateMemCpy(phi, dest, nbytes, min_align, false);
 #endif
             ctx.builder.CreateLifetimeEnd(dest);
-            ptr = ctx.builder.CreateSelect(isboxed,
+            Value *ptr = ctx.builder.CreateSelect(isboxed,
                 maybe_bitcast(ctx, decay_derived(ptr_phi), T_pint8),
                 maybe_bitcast(ctx, decay_derived(phi), T_pint8));
             jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, tbaa_stack); // XXX: this TBAA is wrong for ptr_phi
@@ -3720,6 +3720,8 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
     jl_cgval_t slot;
     PHINode *value_phi = NULL;
     if (vtype->isAggregateType()) {
+        // the value will be moved into dest in the predecessor critical block.
+        // here it's moved into phi in the successor (from dest)
         dest = emit_static_alloca(ctx, vtype);
         Value *phi = emit_static_alloca(ctx, vtype);
 #if JL_LLVM_VERSION >= 70000
@@ -6516,7 +6518,7 @@ static std::unique_ptr<Module> emit_function(
     };
 
     // Codegen Phi nodes
-    std::map<std::pair<BasicBlock *, BasicBlock*>, BasicBlock*> BB_rewrite_map;
+    std::map<std::pair<BasicBlock*, BasicBlock*>, BasicBlock*> BB_rewrite_map;
     std::vector<llvm::PHINode*> ToDelete;
     for (auto &tup : ctx.PhiNodes) {
         jl_cgval_t phi_result;
@@ -6529,112 +6531,67 @@ static std::unique_ptr<Module> emit_function(
         jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(r, 0);
         jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(r, 1);
         PHINode *TindexN = cast_or_null<PHINode>(phi_result.TIndex);
+        DenseSet<BasicBlock*> preds;
         for (size_t i = 0; i < jl_array_len(edges); ++i) {
             size_t edge = jl_unbox_long(jl_array_ptr_ref(edges, i));
             jl_value_t *value = jl_array_ptr_ref(values, i);
-            Value *V = NULL;
-            BasicBlock *IncomingBB = come_from_bb[edge];
-            BasicBlock *FromBB = IncomingBB;
-            std::pair<BasicBlock *, BasicBlock*> LookupKey(IncomingBB, PhiBB);
-            if (BB_rewrite_map.count(LookupKey)) {
-                FromBB = BB_rewrite_map[LookupKey];
-            }
+            // This edge value is undef, handle it the same as if the edge wasn't listed at all
+            if (!value)
+                continue;
+            BasicBlock *FromBB = come_from_bb[edge];
             // This edge was statically unreachable. Don't codegen it.
             if (!FromBB)
                 continue;
-            // We folded this branch to an unconditional branch, only codegen it once
-            if (cast<BranchInst>(FromBB->getTerminator())->isUnconditional()) {
-                bool found = false;
+            // see if this edge has already been rewritten
+            // (we'll continue appending blocks to the current end)
+            std::pair<BasicBlock*, BasicBlock*> LookupKey(FromBB, PhiBB);
+            if (BB_rewrite_map.count(LookupKey)) {
+                FromBB = BB_rewrite_map[LookupKey];
+            }
+            if (!preds.insert(FromBB).second) {
+                // Only codegen this branch once for each PHI (the expression must be the same on all branches)
+#ifndef NDEBUG
                 for (size_t j = 0; j < i; ++j) {
                     size_t j_edge = jl_unbox_long(jl_array_ptr_ref(edges, j));
                     if (j_edge == edge) {
-                        found = true;
                         assert(jl_egal(value, jl_array_ptr_ref(values, j)));
                     }
                 }
-                if (found)
-                    continue;
-            }
-#ifndef JL_NDEBUG
-            if (FromBB) {
-                bool found_pred = false;
-                for (BasicBlock *pred : predecessors(PhiBB)) {
-                    found_pred = pred == FromBB;
-                    if (found_pred)
-                        break;
-                }
-                assert(found_pred);
-            }
 #endif
-            ctx.builder.SetInsertPoint(FromBB->getTerminator());
-            if (dest)
-                ctx.builder.CreateLifetimeStart(dest);
-            jl_cgval_t val;
-            if (!value || jl_is_ssavalue(value)) {
-                ssize_t idx = value ? ((jl_ssavalue_t*)value)->id : 0;
-                idx -= 1;
-                if (!value || !ctx.ssavalue_assigned.at(idx)) {
-                    Value *RTindex = TindexN ? UndefValue::get(T_int8) : NULL;
-                    if (VN) { // otherwise, it's all-unboxed
-                        Value *undef;
-                        if (isa<PointerType>(VN->getType())) {
-                            bool isboxed;
-                            Type *lphity = julia_type_to_llvm(phiType, &isboxed);
-                            if (!isboxed) {
-                                // the emit_phinode_assign emitted a memcpy in this case,
-                                // so this needs to ensure the pointer is valid, while the contents are undef
-                                undef = decay_derived(emit_static_alloca(ctx, lphity));
-                            }
-                            else {
-                                // but make sure gc pointers (including ptr_phi of union-split) are NULL
-                                undef = ConstantPointerNull::get(cast<PointerType>(VN->getType()));
-                                if (TindexN) // let the runtime / optimizer know this is unknown / boxed / null, so that it won't try to union_move / copy it later
-                                    RTindex = ConstantInt::get(T_int8, 0x80);
-                            }
-                        }
-                        else {
-                            undef = undef_value_for_type(phiType, VN->getType());
-                        }
-                        VN->addIncoming(undef, FromBB);
-                    }
-                    if (TindexN)
-                        TindexN->addIncoming(RTindex, FromBB);
-                    continue;
-                }
-                val = ctx.SAvalues.at(idx);
+                continue;
             }
-            else {
-                val = emit_expr(ctx, value);
-            }
-            if (val.constant)
-                val = mark_julia_const(val.constant); // be over-conservative at making sure `.typ` is set concretely, not tindex
+            assert(find(pred_begin(PhiBB), pred_end(PhiBB), FromBB) != pred_end(PhiBB)); // consistency check
             TerminatorInst *terminator = FromBB->getTerminator();
-            if (!isa<BranchInst>(terminator) ||
-                (cast<BranchInst>(terminator)->isConditional() &&
-                 !(terminator->getSuccessor(0) == terminator->getSuccessor(1)))) {
-                bool found = false;
-                for (size_t i = 0; i < terminator->getNumSuccessors(); ++i) {
-                    if (terminator->getSuccessor(i) == PhiBB) {
-                        // Can't use `llvm::SplitCriticalEdge` here because
-                        // we may have invalid phi nodes in the destination.
-                        BasicBlock *NewBB = BasicBlock::Create(terminator->getContext(),
-                           FromBB->getName() + "." + PhiBB->getName() + "_crit_edge");
-                        terminator->setSuccessor(i, NewBB);
-                        Function::iterator FBBI = FromBB->getIterator();
-                        ctx.f->getBasicBlockList().insert(++FBBI, NewBB);
-                        ctx.builder.SetInsertPoint(NewBB);
-                        terminator = BranchInst::Create(PhiBB);
-                        found = true;
-                        break;
-                    }
+            if (!terminator->getParent()->getUniqueSuccessor()) {
+                // Can't use `llvm::SplitCriticalEdge` here because
+                // we may have invalid phi nodes in the destination.
+                BasicBlock *NewBB = BasicBlock::Create(terminator->getContext(),
+                   FromBB->getName() + "." + PhiBB->getName() + "_crit_edge");
+                Function::iterator FBBI = FromBB->getIterator();
+                ctx.f->getBasicBlockList().insert(++FBBI, NewBB); // insert after existing block
+#if JL_LLVM_VERSION >= 90000
+                terminator->replaceSuccessorWith(PhiBB, NewBB);
+#else
+                for (unsigned Idx = 0, NumSuccessors = terminator->getNumSuccessors(); Idx != NumSuccessors; ++Idx) {
+                    if (terminator->getSuccessor(Idx) == PhiBB)
+                      terminator->setSuccessor(Idx, NewBB);
                 }
-                assert(found);
-                (void)found;
+#endif
+                DebugLoc Loc = terminator->getDebugLoc();
+                terminator = BranchInst::Create(PhiBB);
+                terminator->setDebugLoc(Loc);
+                ctx.builder.SetInsertPoint(NewBB);
             }
             else {
                 terminator->removeFromParent();
                 ctx.builder.SetInsertPoint(FromBB);
             }
+            if (dest)
+                ctx.builder.CreateLifetimeStart(dest);
+            Value *V = NULL;
+            jl_cgval_t val = emit_expr(ctx, value);
+            if (val.constant)
+                val = mark_julia_const(val.constant); // be over-conservative at making sure `.typ` is set concretely, not tindex
             if (!jl_is_uniontype(phiType) || !TindexN) {
                 if (VN) {
                     // XXX: this code assumes that `val` is of type `phiType` statically,
@@ -6717,24 +6674,32 @@ static std::unique_ptr<Module> emit_function(
                 if (TindexN)
                     TindexN->addIncoming(RTindex, ctx.builder.GetInsertBlock());
             }
+            // put the branch back at the end of our current basic block
             ctx.builder.Insert(terminator);
-            // Check any phi nodes in the Phi block to see if by splitting the edges,
-            // we made things inconsistent
-            if (FromBB != ctx.builder.GetInsertBlock()) {
-                BB_rewrite_map[LookupKey] = ctx.builder.GetInsertBlock();
+            // Record the current tail of this Phi edge in the rewrite map and
+            // check any phi nodes in the Phi block to see if by emitting on the edges
+            // we made things inconsistent.
+            BasicBlock *NewBB = ctx.builder.GetInsertBlock();
+            if (FromBB != NewBB) {
+                BB_rewrite_map[LookupKey] = NewBB;
+                preds.insert(NewBB);
+#if JL_LLVM_VERSION >= 90000
+                PhiBB->replacePhiUsesWith(FromBB, NewBB);
+#else
                 for (BasicBlock::iterator I = PhiBB->begin(); isa<PHINode>(I); ++I) {
                     PHINode *PN = cast<PHINode>(I);
                     ssize_t BBIdx = PN->getBasicBlockIndex(FromBB);
                     if (BBIdx == -1)
                         continue;
-                    PN->setIncomingBlock(BBIdx, ctx.builder.GetInsertBlock());
+                    PN->setIncomingBlock(BBIdx, NewBB);
                 }
+#endif
             }
+            ctx.builder.ClearInsertionPoint();
         }
         // In LLVM IR it is illegal to have phi nodes without incoming values, even if
-        // there are no operands, so delete any such phi nodes
-        if (pred_begin(PhiBB) == pred_end(PhiBB))
-        {
+        // there are no operands (no incoming branches), so delete any such phi nodes
+        if (pred_empty(PhiBB)) {
             if (VN)
                 ToDelete.push_back(VN);
             if (TindexN)
@@ -6742,28 +6707,33 @@ static std::unique_ptr<Module> emit_function(
             continue;
         }
         // Julia PHINodes may be incomplete with respect to predecessors, LLVM's may not
-        Value *VNUndef = nullptr;
-        if (VN || TindexN) {
-            for (auto *pred : predecessors(PhiBB)) {
-                PHINode *PhiN = VN ? VN : TindexN;
-                bool found = false;
-                for (size_t i = 0; i < PhiN->getNumIncomingValues(); ++i) {
-                    found = pred == PhiN->getIncomingBlock(i);
-                    if (found)
-                        break;
+        for (auto *FromBB : predecessors(PhiBB)) {
+            if (preds.count(FromBB))
+                continue;
+            ctx.builder.SetInsertPoint(FromBB->getTerminator());
+            // PHI is undef on this branch. But still may need to put a valid pointer in place.
+            Value *RTindex = TindexN ? UndefValue::get(T_int8) : NULL;
+            if (VN) {
+                bool isboxed;
+                (void)julia_type_to_llvm(phiType, &isboxed);
+                Value *undef;
+                if (isboxed || TindexN) {
+                    // make sure gc pointers (including ptr_phi of union-split) are NULL
+                    assert(VN->getType() == T_prjlvalue);
+                    undef = ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
+                    if (TindexN) // let the runtime / optimizer know this is unknown / boxed / null, so that it won't try to union_move / copy it later
+                        RTindex = ConstantInt::get(T_int8, 0x80);
                 }
-                if (!found) {
-                    if (VN) {
-                        if (!VNUndef) {
-                            VNUndef = undef_value_for_type(phiType, VN->getType());
-                        }
-                        VN->addIncoming(VNUndef, pred);
-                    }
-                    if (TindexN) {
-                        TindexN->addIncoming(UndefValue::get(TindexN->getType()), pred);
-                    }
+                else {
+                    undef = UndefValue::get(VN->getType());
                 }
+                VN->addIncoming(undef, FromBB);
             }
+            if (TindexN)
+                TindexN->addIncoming(RTindex, FromBB);
+            if (dest)
+                ctx.builder.CreateLifetimeStart(dest);
+            ctx.builder.ClearInsertionPoint();
         }
     }
 
