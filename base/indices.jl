@@ -35,7 +35,7 @@ Subtype of [`IndexStyle`](@ref) used to describe arrays which
 are optimally indexed by a Cartesian index.
 
 A cartesian indexing style uses multiple integers/indices to describe the position in the array.
-For example, if `A` were a `(2, 3, 4)` custom matrix type with cartesian indexing,
+For example, if `A` were a `(2, 3, 4)` custom array type with cartesian indexing,
 we could reference `A[2, 1, 3]` and Julia would automatically convert this into the
 correct location in the underlying memory. See also [`IndexLinear`](@ref).
 """
