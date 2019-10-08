@@ -411,7 +411,7 @@ outer local `x`.
 
 ### For Loops and Comprehensions
 
-`for` loops, `while` loops, and [Comprehensions](@ref) have the following behavior: any new variables
+`for` loops, `while` loops, and [comprehensions](@ref man-comprehensions) have the following behavior: any new variables
 introduced in their body scopes are freshly allocated for each loop iteration, as if the loop body
 were surrounded by a `let` block:
 
