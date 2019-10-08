@@ -184,15 +184,16 @@ function show(io::IO, z::Complex)
     compact = get(io, :compact, false)
     show(io, r)
     if signbit(i) && !isnan(i)
-        if isa(i,Integer) && !isa(i,BigInt)
-            i = BigInt(i)
-        end
         i = -i
         print(io, compact ? "-" : " - ")
     else
         print(io, compact ? "+" : " + ")
     end
-    show(io, i)
+    if isa(i,Signed) && !isa(i,BigInt) && i === typemin(typeof(i))
+        show(io, -widen(i))
+    else
+        show(io, i)
+    end
     if !(isa(i,Integer) && !isa(i,Bool) || isa(i,AbstractFloat) && isfinite(i))
         print(io, "*")
     end
