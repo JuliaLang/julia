@@ -4,7 +4,7 @@ module Printf
 
 using Base.Ryu
 
-export @printf, @sprintf, Format, format, @format, tofloat
+export @printf, @sprintf, Format, format, @format_str, tofloat
 
 const Ints = Union{Val{'d'}, Val{'i'}, Val{'u'}, Val{'x'}, Val{'X'}, Val{'o'}}
 const Floats = Union{Val{'e'}, Val{'E'}, Val{'f'}, Val{'F'}, Val{'g'}, Val{'G'}, Val{'a'}, Val{'A'}}
@@ -717,7 +717,7 @@ See also: [`@sprintf`](@ref)
 julia> @printf("%f %F %f %F\\n", Inf, Inf, NaN, NaN)
 Inf Inf NaN NaN\n
 julia> @printf "%.0f %.1f %f\\n" 0.5 0.025 -0.0078125
-1 0.0 -0.007813
+1 0.0 -0.007812
 ```
 """
 macro printf(io_or_fmt, args...)
@@ -738,9 +738,8 @@ end
 Return `@printf` formatted output as string.
 # Examples
 ```jldoctest
-julia> s = @sprintf "this is a %s %15.1f" "test" 34.567;
-julia> println(s)
-this is a test            34.6
+julia> @sprintf "this is a %s %15.1f" "test" 34.567
+"this is a test            34.6"
 ```
 """
 macro sprintf(fmt, args...)
