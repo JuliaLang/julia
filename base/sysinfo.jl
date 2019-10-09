@@ -431,56 +431,37 @@ windows_version
 
 const WINDOWS_VISTA_VER = v"6.0"
 
-"""
-    Sys.isexecutable(path::AbstractString) -> Bool
 
-Return `true` if the given `path` has executable permissions.
-"""
-isexecutable
+if iswindows()
+    function isexecutable(file::String)
+        !isfile(file) && return error(ArgumentError("$file is not a file."))
 
-if Sys.iswindows()
-    let
-        # https://docs.microsoft.com/en-us/windows/win32/api/shellapi/ns-shellapi-shfileinfoa
-        struct ShellFileType
-            hIcon::Ptr{Cvoid}
-            iIcon::Int32
-            dwAttributes::UInt32
-            szDisplayName::NTuple{260, Cchar}
-            szTypeName::NTuple{80, Cchar}
-            ShellFileType()  = new()
-        end
         SHGFI_EXETYPE = 0x0002000
         FILE_ATTRIBUTE_NORMAL = 0x000080
 
-        global function isexecutable(file::String)
-            !isfile(file) && return error(ArgumentError("$file is not a file"))
+        shinfo = ShellFileType()
+        cwfile = Base.cwstring(file)
 
-            shinfo = ShellFileType()
-            cwfile = Base.cwstring(file)
-            out = UInt(ccall((:SHGetFileInfoW ,:shell32), Ptr{UInt}, (Ptr{UInt16}, UInt32, Ref{ShellFileType}, UInt32, UInt32), pointer(cwfile) , FILE_ATTRIBUTE_NORMAL, shinfo, sizeof(shinfo), SHGFI_EXETYPE))
+        pout = UInt(ccall((:SHGetFileInfoW ,:shell32), Ptr{UInt}, (Ptr{UInt16}, UInt32, Ptr{Cvoid}, UInt32, UInt32), pointer(cwfile) , FILE_ATTRIBUTE_NORMAL, C_NULL, 0, SHGFI_EXETYPE))
+        pout != 0 || return false
 
-            out != 0 || return false
+        loword = pout & 0xffff
+        hiword = pout >> 16
 
-            loWord = out & 0xffff
-            hiWord = out >> 16
-
-            return if hiWord == 0x0000 && loWord == 0x5a4d
-                # MS-DOS .exe or .com file
-                true
-            elseif hiWord == 0x0000 && loWord == 0x4500
-                # Console application or .bat file
-                true
-            elseif loWord == 0x454E || loWord == 0x4550 || loWord == 0x454C
-                # Windows application
-                true
-            else
-                false
-            end
+        return if hiword == 0x0000 && loword == 0x5a4d
+            # MS-DOS .exe or .com file
+            true
+        elseif hiword == 0x0000 && loword == 0x4500
+            # Console application or .bat file
+            true
+        elseif loword == 0x454E || loword == 0x4550 || loword == 0x454C # ignore version, since some exe's don't set a minimum
+            # Windows application
+            true
+        else
+            false
         end
     end
-
 else
-
     function isexecutable(path::String)
         # We use `access()` and `X_OK` to determine if a given path is
         # executable by the current user.  `X_OK` comes from `unistd.h`.
@@ -489,6 +470,11 @@ else
     end
 end
 
+"""
+    Sys.isexecutable(path::AbstractString) -> Bool
+
+Return `true` if the given `path` has executable permissions.
+"""
 isexecutable(path::AbstractString) = isexecutable(String(path))
 
 
