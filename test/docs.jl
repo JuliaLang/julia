@@ -159,6 +159,18 @@ t(::Int, ::Any)
 "t-3"
 t{S <: Integer}(::S)
 
+# Docstrings to parametric methods after definition using where syntax (#32960):
+tw(x::T) where T = nothing
+tw(x::T, y::U) where {T, U <: Integer} = nothing
+tw(x::T, y::U, z::V) where T where U <: Integer where V <: AbstractFloat = nothing
+
+"tw-1"
+tw(x::T) where T
+"tw-2"
+tw(x::T, y::U) where {T, U <: Integer}
+"tw-3"
+tw(x::T, y::U, z::V) where T where U <: Integer where V <: AbstractFloat
+
 "FieldDocs"
 mutable struct FieldDocs
     "one"
