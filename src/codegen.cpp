@@ -332,6 +332,10 @@ static Function *gc_preserve_end_func;
 static Function *except_enter_func;
 static Function *pointer_from_objref_func;
 
+// task functions
+static Function *jlfinishtask_func; 
+static Function *jlstarttask_func; 
+
 static std::map<jl_fptr_args_t, Function*> builtin_func_map;
 
 // --- code generation ---
@@ -6633,15 +6637,24 @@ static std::unique_ptr<Module> emit_function(
         }
         if (jl_is_detachnode(stmt)) {
             int lname = jl_detachnode_label(stmt);
+            int rname = jl_detachnode_reattach(stmt);
             come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
-            ctx.builder.CreateBr(BB[lname]);
+            Value *task = boxed(ctx, emit_expr(ctx, jl_reattachnode_task(stmt)));
+            Value *val  = ctx.builder.CreateCall(prepare_call(jlstarttask_func), { task });
+
+            Value *isz = ctx.builder.CreateICmpEQ(val, ConstantInt::get(T_int32, 0));
+            ctx.builder.CreateCondBr(isz, BB[rname], BB[lname]);
             find_next_stmt(lname - 1);
             continue;
         }
         if (jl_is_reattachnode(stmt)) {
             int lname = jl_reattachnode_label(stmt);
             come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
-            ctx.builder.CreateBr(BB[lname]);
+            Value *task   = boxed(ctx, emit_expr(ctx, jl_reattachnode_task(stmt)));
+            Value *retval = boxed(ctx, emit_expr(ctx, jl_reattachnode_retval(stmt)));
+            ctx.builder.CreateCall(prepare_call(jlfinishtask_func), { task, retval });
+            // unreachable
+             ctx.builder.CreateBr(BB[lname]);
             find_next_stmt(lname - 1);
             continue;
         }
@@ -7781,6 +7794,24 @@ static void init_julia_llvm_env(Module *m)
                            false, GlobalVariable::ExternalLinkage,
                            NULL, "jl_world_counter");
     add_named_global(jlgetworld_global, &jl_world_counter);
+
+    // task functions
+    std::vector<Type*> args_finishtask(0);
+    args_finishtask.push_back(T_prjlvalue);
+    args_finishtask.push_back(T_prjlvalue);
+    jlfinishtask_func =
+        Function::Create(FunctionType::get(T_void, args_finishtask, false),
+                         Function::ExternalLinkage,
+                         "jl_finish_task");
+    jlfinishtask_func->setDoesNotReturn();
+
+    std::vector<Type*> args_starttask(0);
+    args_starttask.push_back(T_prjlvalue);
+    jlstarttask_func =
+        Function::Create(FunctionType::get(T_int32, args_starttask, false),
+                         Function::ExternalLinkage,
+                         "jl_start_task_internal");
+    jlstarttask_func->addFnAttr(Attribute::ReturnsTwice);
 
     jl_globalPM = new legacy::PassManager();
     addTargetPasses(jl_globalPM, jl_TargetMachine);

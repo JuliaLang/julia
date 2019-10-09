@@ -171,7 +171,7 @@ static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *lastt)
 /* Rooted by the base module */
 static jl_function_t *task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
 
-void JL_NORETURN jl_finish_task(jl_task_t *t, jl_value_t *resultval JL_MAYBE_UNROOTED)
+JL_DLLEXPORT void JL_NORETURN jl_finish_task(jl_task_t *t, jl_value_t *resultval JL_MAYBE_UNROOTED)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_SIGATOMIC_BEGIN();
@@ -646,6 +646,35 @@ void jl_init_tasks(void) JL_GC_DISABLED
         }
     }
 }
+
+// used by codegen as an alternative to the below
+JL_DLLEXPORT int jl_start_task_internal(jl_value_t* task)
+{
+    if (jl_setjmp(((jl_task_t*)task)->ctx.uc_mcontext, 0)) {
+        jl_ptls_t ptls = jl_get_ptls_states();
+        jl_task_t *t = ptls->current_task;
+
+#ifdef MIGRATE_TASKS
+        jl_task_t *pt = ptls->previous_task;
+        if (!pt->sticky && !pt->copy_stack)
+            pt->tid = -1;
+#endif
+
+        // todo push this into codegen?
+        t->started = 1;
+        if (t->exception != jl_nothing) {
+            record_backtrace(ptls, 0);
+            jl_push_excstack(&t->excstack, t->exception,
+                              ptls->bt_data, ptls->bt_size);
+            jl_finish_task(t, t->exception);
+            gc_debug_critical_error();
+            abort();
+        }
+        return 1;
+    } 
+    return 0;
+}
+
 
 STATIC_OR_JS void NOINLINE JL_NORETURN start_task(void)
 {
