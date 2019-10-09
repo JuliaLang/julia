@@ -8,7 +8,7 @@ struct StructuredMatrixStyle{T} <: Broadcast.AbstractArrayStyle{2} end
 StructuredMatrixStyle{T}(::Val{2}) where {T} = StructuredMatrixStyle{T}()
 StructuredMatrixStyle{T}(::Val{N}) where {T,N} = Broadcast.DefaultArrayStyle{N}()
 
-const StructuredMatrix = Union{Diagonal,Bidiagonal,SymTridiagonal,Tridiagonal,LowerTriangular,UnitLowerTriangular,UpperTriangular,UnitUpperTriangular}
+const StructuredMatrix = Union{Matrix,Diagonal,Bidiagonal,SymTridiagonal,Tridiagonal,LowerTriangular,UnitLowerTriangular,UpperTriangular,UnitUpperTriangular}
 Broadcast.BroadcastStyle(::Type{T}) where {T<:StructuredMatrix} = StructuredMatrixStyle{T}()
 
 # Promotion of broadcasts between structured matrices. This is slightly unusual
@@ -40,6 +40,11 @@ Broadcast.BroadcastStyle(::StructuredMatrixStyle{<:UnitLowerTriangular}, ::Struc
 Broadcast.BroadcastStyle(::StructuredMatrixStyle{<:UnitUpperTriangular}, ::StructuredMatrixStyle{<:Union{Diagonal,UpperTriangular,UnitUpperTriangular}}) =
     StructuredMatrixStyle{UpperTriangular}()
 
+Broadcast.BroadcastStyle(::StructuredMatrixStyle{<:Union{LowerTriangular,UnitLowerTriangular}}, ::StructuredMatrixStyle{<:Union{UpperTriangular,UnitUpperTriangular}}) =
+    StructuredMatrixStyle{Matrix}()
+Broadcast.BroadcastStyle(::StructuredMatrixStyle{<:Union{UpperTriangular,UnitUpperTriangular}}, ::StructuredMatrixStyle{<:Union{LowerTriangular,UnitLowerTriangular}}) =
+    StructuredMatrixStyle{Matrix}()
+
 # All other combinations fall back to the default style
 Broadcast.BroadcastStyle(::StructuredMatrixStyle, ::StructuredMatrixStyle) = DefaultArrayStyle{2}()
 
@@ -69,6 +74,8 @@ structured_broadcast_alloc(bc, ::Type{<:UnitLowerTriangular}, ::Type{ElType}, n)
     UnitLowerTriangular(Array{ElType}(undef, n, n))
 structured_broadcast_alloc(bc, ::Type{<:UnitUpperTriangular}, ::Type{ElType}, n) where {ElType} =
     UnitUpperTriangular(Array{ElType}(undef, n, n))
+structured_broadcast_alloc(bc, ::Type{<:Matrix}, ::Type{ElType}, n) where {ElType} =
+    Matrix(Array{ElType}(undef, n, n))
 
 # A _very_ limited list of structure-preserving functions known at compile-time. This list is
 # derived from the formerly-implemented `broadcast` methods in 0.6. Note that this must
@@ -86,7 +93,7 @@ fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && _iszero(v))
 # Very conservatively only allow Numbers and Types in this speculative zero-test pass
 fzero(x::Number) = x
 fzero(::Type{T}) where T = T
-fzero(S::StructuredMatrix) = zero(eltype(S))
+fzero(S::Union{Diagonal,Bidiagonal,SymTridiagonal,Tridiagonal,LowerTriangular,UnitLowerTriangular,UpperTriangular,UnitUpperTriangular}) = zero(eltype(S))
 fzero(x) = missing
 function fzero(bc::Broadcast.Broadcasted)
     args = map(fzero, bc.args)
