@@ -142,15 +142,14 @@ alabel:
 ; CHECK: %aboxed = extractvalue { %jl_value_t addrspace(10)*, i8 } %u, 0
     %aboxed = extractvalue { %jl_value_t addrspace(10)*, i8 } %u, 0
     %adecayed = addrspacecast %jl_value_t addrspace(10)* %aboxed to i64 addrspace(12)*
-; CHECK: extractvalue { %jl_value_t addrspace(10)*, i8 } %u, 0
-; CHECK-NEXT: br label %common
+; CHECK: br label %common
     br label %common
 blabel:
     %bboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %b)
     %bdecayed = addrspacecast %jl_value_t addrspace(10)* %bboxed to i64 addrspace(12)*
     br label %common
 common:
-; CHECK: %gclift = phi %jl_value_t addrspace(10)* [ %{{.*}}, %alabel ], [ %bboxed, %blabel ]
+; CHECK: %gclift = phi %jl_value_t addrspace(10)* [ %aboxed, %alabel ], [ %bboxed, %blabel ]
     %phi = phi i64 addrspace(12)* [ %adecayed, %alabel ], [ %bdecayed, %blabel ]
     call void @one_arg_decayed(i64 addrspace(12)* %phi)
     ret void
