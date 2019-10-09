@@ -141,5 +141,9 @@ end
     @test UnitL .+ UnitU .+ D == UnitL + UnitU + D
     @test U .+ UnitL .+ D == U + UnitL + D
     @test L .+ UnitU .+ D == L + UnitU + D
+    @test L .+ U .+ L .+ U == L + U + L + U
+    @test U .+ L .+ U .+ L == U + L + U + L
+    @test L .+ UnitL .+ UnitU .+ U .+ D == L + UnitL + UnitU + U + D
+    @test L .+ U .+ D .+ D .+ D .+ D == L + U + D + D + D + D
 end
 end
