@@ -434,32 +434,11 @@ const WINDOWS_VISTA_VER = v"6.0"
 
 if iswindows()
     function isexecutable(file::String)
-        !isfile(file) && return error(ArgumentError("$file is not a file."))
-
-        SHGFI_EXETYPE = 0x0002000
-        FILE_ATTRIBUTE_NORMAL = 0x000080
-
-        shinfo = ShellFileType()
+        !isfile(file) && return error(ArgumentError("$file is not a file"))
         cwfile = Base.cwstring(file)
-
-        pout = UInt(ccall((:SHGetFileInfoW ,:shell32), Ptr{UInt}, (Ptr{UInt16}, UInt32, Ptr{Cvoid}, UInt32, UInt32), pointer(cwfile) , FILE_ATTRIBUTE_NORMAL, C_NULL, 0, SHGFI_EXETYPE))
-        pout != 0 || return false
-
-        loword = pout & 0xffff
-        hiword = pout >> 16
-
-        return if hiword == 0x0000 && loword == 0x5a4d
-            # MS-DOS .exe or .com file
-            true
-        elseif hiword == 0x0000 && loword == 0x4500
-            # Console application or .bat file
-            true
-        elseif loword == 0x454E || loword == 0x4550 || loword == 0x454C # ignore version, since some exe's don't set a minimum
-            # Windows application
-            true
-        else
-            false
-        end
+        ret = Ref{Culong}()
+        bool = ccall((:GetBinaryTypeW , :kernel32), Cint, (Ptr{UInt16}, Ref{Culong}), pointer(cwfile), ret)
+        return bool != 0
     end
 else
     function isexecutable(path::String)
