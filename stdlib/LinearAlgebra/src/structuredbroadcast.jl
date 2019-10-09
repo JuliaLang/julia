@@ -8,7 +8,7 @@ struct StructuredMatrixStyle{T} <: Broadcast.AbstractArrayStyle{2} end
 StructuredMatrixStyle{T}(::Val{2}) where {T} = StructuredMatrixStyle{T}()
 StructuredMatrixStyle{T}(::Val{N}) where {T,N} = Broadcast.DefaultArrayStyle{N}()
 
-const StructuredMatrix = Union{Matrix,Diagonal,Bidiagonal,SymTridiagonal,Tridiagonal,LowerTriangular,UnitLowerTriangular,UpperTriangular,UnitUpperTriangular}
+const StructuredMatrix = Union{Diagonal,Bidiagonal,SymTridiagonal,Tridiagonal,LowerTriangular,UnitLowerTriangular,UpperTriangular,UnitUpperTriangular}
 Broadcast.BroadcastStyle(::Type{T}) where {T<:StructuredMatrix} = StructuredMatrixStyle{T}()
 
 # Promotion of broadcasts between structured matrices. This is slightly unusual
@@ -93,7 +93,7 @@ fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && _iszero(v))
 # Very conservatively only allow Numbers and Types in this speculative zero-test pass
 fzero(x::Number) = x
 fzero(::Type{T}) where T = T
-fzero(S::Union{Diagonal,Bidiagonal,SymTridiagonal,Tridiagonal,LowerTriangular,UnitLowerTriangular,UpperTriangular,UnitUpperTriangular}) = zero(eltype(S))
+fzero(S::StructuredMatrix) = zero(eltype(S))
 fzero(x) = missing
 function fzero(bc::Broadcast.Broadcasted)
     args = map(fzero, bc.args)
