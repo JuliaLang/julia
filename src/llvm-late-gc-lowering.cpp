@@ -409,7 +409,7 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
         else if (isa<GetElementPtrInst>(CurrentV)) {
             CurrentV = cast<GetElementPtrInst>(CurrentV)->getOperand(0);
             // GEP can make vectors from a single base pointer
-            if (fld_idx != -1 && !isSpecialPtrVec(CurrentV->getType())) {
+            if (fld_idx != -1 && !isa<VectorType>(CurrentV->getType())) {
                 fld_idx = -1;
             }
         } else if (isa<ExtractValueInst>(CurrentV)) {
