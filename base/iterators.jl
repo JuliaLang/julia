@@ -474,9 +474,9 @@ last(z::Zip) = getindex.(z.is, minimum(Base.map(lastindex, z.is)))
 # unzip
 
 """
-    unzip(itrs) -> Vector{<:Vector}
+    unzip(itrs) -> NTuple{length(first(itrs)), Vector}
 
-The `unzip` function takes an iterator of iterators and returns a vector of
+The `unzip` function takes an iterator of iterators and returns a tuple of
 vectors such that the first vector contains the first element yielded by each
 iterator, the second vector the second element yielded by each iterator, etc.
 `unzip` is sort of an inverse to the `zip` operation, as the name suggests.
@@ -498,14 +498,10 @@ associated with iteration because it is the inverse of `zip`.
 
 ```jldoctest
 julia> unzip(enumerate("Hello"))
-2-element Array{Array{T,1} where T,1}:
- [1, 2, 3]
- ['a', 'b', 'c']
+([1, 2, 3, 4, 5], ['H', 'e', 'l', 'l', 'o'])
 
-julia> unzip([[1, 'a'], [2.5, 'z'], [0, 'x']])
-2-element Array{Array{T,1} where T,1}:
- Real[1, 2.5, 0]
- ['a', 'z', 'x']
+julia> unzip([[1, "apple"], [2.5, "orange"], [0, "mango"]])
+(Real[1, 2.5, 0], ["apple", "orange", "mango"])
 ```
 """
 function unzip(itrs)
@@ -530,7 +526,7 @@ function unzip(itrs)
         length(first(vecs)) == length(last(vecs)) ||
             throw(ArgumentError("unzip called with uneven iterators"))
     end
-    return vecs
+    return Tuple(vecs)
 end
 
 # filter
