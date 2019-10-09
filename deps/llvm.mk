@@ -173,7 +173,7 @@ endif
 
 ifneq ($(LLVM_VER),svn)
 ifeq (,$(findstring rc,$(LLVM_VER)))
-ifeq ($(shell [ $(LLVM_VER_MAJ) -ge 8 -a $(LLVM_VER) != 8.0.0 ]; echo $$?),0)
+ifeq ($(shell [ x"$(LLVM_VER)" = x"8.0.1" ]; echo $$?),0)
 LLVM_SRC_URL := https://github.com/llvm/llvm-project/releases/download/llvmorg-$(LLVM_VER)
 else
 LLVM_SRC_URL := http://releases.llvm.org/$(LLVM_VER)
