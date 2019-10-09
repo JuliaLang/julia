@@ -35,7 +35,7 @@ import .Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek, intersect
 
-export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap
+export enumerate, zip, unzip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap
 
 if Base !== Core.Compiler
 export partition
@@ -470,6 +470,68 @@ zip_iteratoreltype(a, tail...) = and_iteratoreltype(a, zip_iteratoreltype(tail..
 
 reverse(z::Zip) = Zip(Base.map(reverse, z.is)) # n.b. we assume all iterators are the same length
 last(z::Zip) = getindex.(z.is, minimum(Base.map(lastindex, z.is)))
+
+# unzip
+
+"""
+    unzip(itrs) -> Vector{<:Vector}
+
+The `unzip` function takes an iterator of iterators and returns a vector of
+vectors such that the first vector contains the first element yielded by each
+iterator, the second vector the second element yielded by each iterator, etc.
+`unzip` is sort of an inverse to the `zip` operation, as the name suggests.
+In particular, if we define
+
+    ≐(a, b) = collect(collect.(a)) == collect(collect.(b))
+
+then the following identities relating `zip` and `unzip` hold for any `itrs`
+that is is an iterator of iterators:
+
+    unzip(zip(itrs...)) ≐ itrs
+    zip(unzip(itrs)...) ≐ itrs
+
+Note that `unzip` does not return an iterator: it always consumes all of
+its argument and all of each iterator yielded by its argument. It is only
+associated with iteration because it is the inverse of `zip`.
+
+# Examples
+
+```jldoctest
+julia> unzip(enumerate("Hello"))
+2-element Array{Array{T,1} where T,1}:
+ [1, 2, 3]
+ ['a', 'b', 'c']
+
+julia> unzip([[1, 'a'], [2.5, 'z'], [0, 'x']])
+2-element Array{Array{T,1} where T,1}:
+ Real[1, 2.5, 0]
+ ['a', 'z', 'x']
+```
+"""
+function unzip(itrs)
+    n = Base.haslength(itrs) ? length(itrs) : -1
+    vecs = Vector[]
+    for itr in itrs
+        for (j, x) in enumerate(itr)
+            if length(vecs) < j
+                v = [x]
+                push!(vecs, v)
+                n ≥ 0 && sizehint!(v, n)
+            else
+                v = vecs[j]
+                if !(x isa eltype(v))
+                    T = Base.promote_typejoin(typeof(x), eltype(v))
+                    v = vecs[j] = copyto!(similar(v, T), v)
+                    n ≥ 0 && sizehint!(v, n)
+                end
+                push!(v, x)
+            end
+        end
+        length(first(vecs)) == length(last(vecs)) ||
+            throw(ArgumentError("unzip called with uneven iterators"))
+    end
+    return vecs
+end
 
 # filter
 

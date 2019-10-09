@@ -666,6 +666,7 @@ export
     iterate,
     enumerate,  # re-exported from Iterators
     zip,
+    unzip,
     only,
 
 # object identity and equality
