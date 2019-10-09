@@ -432,21 +432,66 @@ windows_version
 const WINDOWS_VISTA_VER = v"6.0"
 
 """
-    Sys.isexecutable(path::String)
+    Sys.isexecutable(path::AbstractString) -> Bool
 
 Return `true` if the given `path` has executable permissions.
 """
-function isexecutable(path::String)
-    if iswindows()
-        return isfile(path)
-    else
+isexecutable
+
+if Sys.iswindows()
+    let
+        # https://docs.microsoft.com/en-us/windows/win32/api/shellapi/ns-shellapi-shfileinfoa
+        struct ShellFileType
+            hIcon::Ptr{Cvoid}
+            iIcon::Int32
+            dwAttributes::UInt32
+            szDisplayName::NTuple{260, Cchar}
+            szTypeName::NTuple{80, Cchar}
+            ShellFileType()  = new()
+        end
+        SHGFI_EXETYPE = 0x0002000
+        FILE_ATTRIBUTE_NORMAL = 0x000080
+
+        global function isexecutable(file::String)
+            !isfile(file) && return error(ArgumentError("$file is not a file"))
+
+            shinfo = ShellFileType()
+            cwfile = Base.cwstring(file)
+            out = UInt(ccall((:SHGetFileInfoW ,:shell32), Ptr{UInt}, (Ptr{UInt16}, UInt32, Ref{ShellFileType}, UInt32, UInt32), pointer(cwfile) , FILE_ATTRIBUTE_NORMAL, shinfo, sizeof(shinfo), SHGFI_EXETYPE))
+
+            out != 0 || return false
+
+            loWord = out & 0xffff
+            hiWord = out >> 16
+
+            return if hiWord == 0x0000 && loWord == 0x5a4d
+                # MS-DOS .exe or .com file
+                true
+            elseif hiWord == 0x0000 && loWord == 0x4500
+                # Console application or .bat file
+                true
+            elseif loWord == 0x454E || loWord == 0x4550 || loWord == 0x454C
+                # Windows application
+                true
+            else
+                false
+            end
+        end
+    end
+
+else
+
+    function isexecutable(path::String)
         # We use `access()` and `X_OK` to determine if a given path is
         # executable by the current user.  `X_OK` comes from `unistd.h`.
         X_OK = 0x01
         ccall(:access, Cint, (Ptr{UInt8}, Cint), path, X_OK) == 0
     end
 end
+
 isexecutable(path::AbstractString) = isexecutable(String(path))
+
+
 
 """
     Sys.which(program_name::String)
