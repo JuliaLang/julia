@@ -11,19 +11,20 @@ export SpinLock
 # Atomic Locks
 ##########################################
 
-# Test-and-test-and-set spin locks are quickest up to about 30ish
-# contending threads. If you have more contention than that, perhaps
-# a lock is the wrong way to synchronize.
 """
     SpinLock()
 
-Create a non-reentrant lock.
+Create a non-reentrant, test-and-test-and-set spin lock.
 Recursive use will result in a deadlock.
+This kind of lock should only be used around code that takes little time
+to execute and does not block (e.g. perform I/O).
+In general, [`ReentrantLock`](@ref) should be used instead.
+
 Each [`lock`](@ref) must be matched with an [`unlock`](@ref).
 
 Test-and-test-and-set spin locks are quickest up to about 30ish
-contending threads. If you have more contention than that, perhaps
-a lock is the wrong way to synchronize.
+contending threads. If you have more contention than that, different
+synchronization approaches should be considered.
 """
 struct SpinLock <: AbstractLock
     handle::Atomic{Int}
