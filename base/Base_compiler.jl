@@ -350,7 +350,7 @@ include("iddict.jl")
 include("idset.jl")
 include("ntuple.jl")
 include("iterators.jl")
-using .Iterators: zip, enumerate, only
+using .Iterators: zip, unzip, enumerate, only
 using .Iterators: Flatten, Filter, product  # for generators
 using .Iterators: Stateful    # compat (was formerly used in reinterpretarray.jl)
 include("namedtuple.jl")
