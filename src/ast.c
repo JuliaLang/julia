@@ -534,10 +534,10 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             temp = jl_new_struct(jl_gotonode_type, ex);
         }
         else if (sym == detach_sym) {
+            jl_value_t* tasktoken;
             jl_value_t* label;
             jl_value_t* reattach;
-            jl_value_t* tasktoken;
-            JL_GC_PUSH3(&label, &reattach, &tasktoken);
+            JL_GC_PUSH3(&tasktoken, &label, &reattach);
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
             tasktoken = scm_to_julia_(fl_ctx, car_(cdr_(e)), mod);
             label = scm_to_julia_(fl_ctx, car_(cdr_(cdr_(e))), mod);
@@ -546,11 +546,15 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             JL_GC_POP();
         }
         else if (sym == reattach_sym) {
+            jl_value_t* tasktoken;
+            jl_value_t* retval;
+            jl_value_t* label;
+            JL_GC_PUSH3(&tasktoken, &retval, &label);
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
-            jl_value_t* retval = scm_to_julia_(fl_ctx, car_(cdr_(e)), mod); // token
-            jl_value_t* label = scm_to_julia_(fl_ctx, car_(cdr_(cdr_(e))), mod);
-            JL_GC_PUSH2(&label, &retval);
-            temp = jl_new_struct(jl_reattachnode_type, ex, label);
+            tasktoken = scm_to_julia_(fl_ctx, car_(cdr_(e)), mod);
+            retval = scm_to_julia_(fl_ctx, car_(cdr_(cdr_(e))), mod);
+            label = scm_to_julia_(fl_ctx, car_(cdr_(cdr_(cdr_(e)))), mod);
+            temp = jl_new_struct(jl_reattachnode_type, ex, tasktoken, retval, label);
             JL_GC_POP();
         }
         else if (sym == sync_sym) {

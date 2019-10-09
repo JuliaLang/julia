@@ -139,6 +139,8 @@
 
 #struct ReattachNode
 #    syncregion
+#    tasktoken
+#    retval
 #    label::Int
 #end
 
@@ -398,7 +400,7 @@ eval(Core, :(LineInfoNode(@nospecialize(method), file::Symbol, line::Int, inline
              $(Expr(:new, :LineInfoNode, :method, :file, :line, :inlined_at))))
 eval(Core, :(SyncNode(token) = $(Expr(:new, :SyncNode, :token))))
 eval(Core, :(DetachNode(token, tasktoken, bb::Int, reattach::Int) = $(Expr(:new, :DetachNode, :token, :tasktoken, :bb, :reattach))))
-eval(Core, :(ReattachNode(token, bb::Int) = $(Expr(:new, :ReattachNode, :token, :bb))))
+eval(Core, :(ReattachNode(token, tasktoken, retval, bb::Int) = $(Expr(:new, :ReattachNode, :token, :tasktoken, :retval, :bb))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 

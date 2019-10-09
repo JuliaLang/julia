@@ -144,7 +144,10 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
                           stmt.label, stmt.reattach)
     end
     if isa(stmt, ReattachNode)
-        return ReattachNode(fixemup!(cond, rename, ir, ci, idx, stmt.syncregion), stmt.label)
+        return ReattachNode(fixemup!(cond, rename, ir, ci, idx, stmt.syncregion),
+                            fixemup!(cond, rename, ir, ci, idx, stmt.tasktoken),
+                            fixemup!(cond, rename, ir, ci, idx, stmt.retval),
+                            stmt.label)
     end
     if isa(stmt, SyncNode)
         return SyncNode(fixemup!(cond, rename, ir, ci, idx, stmt.syncregion))
@@ -483,7 +486,8 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             result_stmts[inst_range[end]] = DetachNode(terminator.syncregion, terminator.tasktoken,
                                                        bb_rename[terminator.label], bb_rename[terminator.reattach])
         elseif isa(terminator, ReattachNode)
-            result_stmts[inst_range[end]] = ReattachNode(terminator.syncregion, bb_rename[terminator.label])
+            result_stmts[inst_range[end]] = ReattachNode(terminator.syncregion, terminator.tasktoken, terminator.retval,
+                                                         bb_rename[terminator.label])
         elseif isa(terminator, GotoIfNot)
             # Check if we need to break the critical edge
             if bb_rename[bb + 1] != new_bb + 1
@@ -816,7 +820,8 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
             new_code[idx] = DetachNode(stmt.syncregion, stmt.tasktoken,
                                        block_for_inst(cfg, stmt.label), block_for_inst(cfg, stmt.reattach))
         elseif isa(stmt, ReattachNode)
-            new_code[idx] = ReattachNode(stmt.syncregion, block_for_inst(cfg, stmt.label))
+            new_code[idx] = ReattachNode(stmt.syncregion, stmt.tasktoken, stmt.retval,
+                                         block_for_inst(cfg, stmt.label))
         elseif isa(stmt, GotoIfNot)
             new_dest = block_for_inst(cfg, stmt.dest)
             if new_dest == bb+1

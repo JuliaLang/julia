@@ -1072,7 +1072,7 @@ show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = show_sym(io, sym, allo
 show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto %", ex.label)
 show_unquoted(io::IO, ex::DetachNode, ::Int, ::Int)     = print(io, "detach %", ex.tasktoken, " within ", ex.syncregion, " %", ex.label, " %", ex.reattach)
-show_unquoted(io::IO, ex::ReattachNode, ::Int, ::Int)   = print(io, "reattach within ", ex.syncregion, " %", ex.label)
+show_unquoted(io::IO, ex::ReattachNode, ::Int, ::Int)   = print(io, "reattach%", ex.tasktoken ," with ", ex.retval, " within ", ex.syncregion, " %", ex.label)
 show_unquoted(io::IO, ex::SyncNode, ::Int, ::Int)       = print(io, "sync within ", ex.syncregion)
 show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = show_globalref(io, ex)
 
