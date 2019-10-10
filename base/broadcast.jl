@@ -916,6 +916,7 @@ end
 @inline function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
     axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
     ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
+    length(dest) < 256 && return invoke(copyto!, Tuple{AbstractArray, Broadcasted{Nothing}}, dest, bc)
     tmp = Vector{Bool}(undef, bitcache_size)
     destc = dest.chunks
     ind = cind = 1
