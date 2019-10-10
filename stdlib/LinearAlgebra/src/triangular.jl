@@ -50,6 +50,16 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
     end
 end
 
+similar(A::Union{Adjoint{Ti,Tv}, Transpose{Ti,Tv}}, ::Type{T}) where {T,Ti,Tv<:LowerTriangular} =
+    UpperTriangular(similar(parent(parent(A)), T))
+similar(A::Union{Adjoint{Ti,Tv}, Transpose{Ti,Tv}}, ::Type{T}) where {T,Ti,Tv<:UnitLowerTriangular} =
+    UnitUpperTriangular(similar(parent(parent(A)), T))
+similar(A::Union{Adjoint{Ti,Tv}, Transpose{Ti,Tv}}, ::Type{T}) where {T,Ti,Tv<:UpperTriangular} =
+    LowerTriangular(similar(parent(parent(A)), T))
+similar(A::Union{Adjoint{Ti,Tv}, Transpose{Ti,Tv}}, ::Type{T}) where {T,Ti,Tv<:UnitUpperTriangular} =
+    UnitLowerTriangular(similar(parent(parent(A)), T))
+
+
 LowerTriangular(U::UpperTriangular) = throw(ArgumentError(
     "cannot create a LowerTriangular matrix from an UpperTriangular input"))
 UpperTriangular(U::LowerTriangular) = throw(ArgumentError(
