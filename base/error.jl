@@ -70,7 +70,7 @@ function _reformat_bt(bt, bt2)
     i, j = 1, 1
     while i <= length(bt)
         ip = bt[i]::Ptr{Cvoid}
-        if ip == Ptr{Cvoid}(-1%UInt)
+        if UInt(ip) == (-1 % UInt)
             # The next one is really a CodeInfo
             push!(ret, InterpreterIP(
                 bt2[j],
@@ -95,8 +95,8 @@ function backtrace()
     # skip frame for backtrace(). Note that for this to work properly,
     # backtrace() itself must not be interpreted nor inlined.
     skip = 1
-    bt1, bt2 = ccall(:jl_backtrace_from_here, Any, (Cint,Cint), false, skip)
-    _reformat_bt(bt1, bt2)
+    bt1, bt2 = ccall(:jl_backtrace_from_here, Ref{SimpleVector}, (Cint, Cint), false, skip)
+    return _reformat_bt(bt1::Vector{Ptr{Cvoid}}, bt2::Vector{Any})
 end
 
 """
@@ -105,10 +105,8 @@ end
 Get the backtrace of the current exception, for use within `catch` blocks.
 """
 function catch_backtrace()
-    bt = Ref{Any}(nothing)
-    bt2 = Ref{Any}(nothing)
-    ccall(:jl_get_backtrace, Cvoid, (Ref{Any}, Ref{Any}), bt, bt2)
-    return _reformat_bt(bt[], bt2[])
+    bt, bt2 = ccall(:jl_get_backtrace, Ref{SimpleVector}, ())
+    return _reformat_bt(bt::Vector{Ptr{Cvoid}}, bt2::Vector{Any})
 end
 
 """
