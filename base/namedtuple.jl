@@ -302,7 +302,7 @@ function structdiff(a::NamedTuple{an}, b::Union{NamedTuple{bn}, Type{NamedTuple{
 end
 
 """
-    setindex(nt::NamedTuple{names}, val::V, key::K) where {names, V, K}
+    setindex(nt::NamedTuple, val, key::Symbol)
 
 Constructs a new `NamedTuple` with the key `key` set to `val`.
 If `key` is already in the keys of `nt`, `val` replaces the old value.
