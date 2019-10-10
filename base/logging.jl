@@ -313,10 +313,10 @@ function logmsg_code(_module, file, line, level, message, exs...)
 
     quote
         level = $level
-        importance = default_importance(level)
-        if importance >= getindex(_min_enabled_level)
+        if logging_enabled(level)
             group = $group
             _module = $_module
+            importance = default_importance(level)
             logger = current_logger_for_env(importance, group, _module)
             if !(logger === nothing)
                 id = $id
@@ -372,7 +372,11 @@ end
 
 # Global log limiting mechanism for super fast but inflexible global log
 # limiting.
-const _min_enabled_level = Ref(default_importance(Debug))
+const _min_enabled_importance = Ref(default_importance(Debug))
+
+function logging_enabled(level)
+    default_importance(level) >= getindex(_min_enabled_importance)
+end
 
 # LogState - a concretely typed cache of data extracted from the logger, plus
 # the logger itself.
@@ -415,12 +419,28 @@ end
 """
     disable_logging(level)
 
-Disable all log messages at log levels equal to or less than `level`.  This is
-a *global* setting, intended to make debug logging extremely cheap when
+Disable all log messages at log level importance equal to or less than `level`.
+This is a *global* setting, intended to make debug logging extremely cheap when
 disabled.
 """
-function disable_logging(level)
-    _min_enabled_level[] = default_importance(level) + 1
+function disable_logging(level::AbstractLogLevel)
+    _min_enabled_importance[] = default_importance(level) + 1
+end
+
+"""
+    disable_logging(::Type{LevelType}, disabled=true)
+
+Globally disable all log messages of the given log level type `LevelType`, or
+enable them if the optional argument `disabled=false`.
+
+!!! note
+    This will force dynamic recompilation of all methods which emit log
+    messages of type `LevelType` and should be used sparingly to enable
+    expensive or verbose log levels which one normally desires to compile
+    away completely.
+"""
+function disable_logging(::Type{T}, disabled::Bool=true) where {T<:AbstractLogLevel}
+    Base.eval(:(CoreLogging.logging_enabled(::$T) = $(!disabled)))
 end
 
 let _debug_groups_include::Vector{Symbol} = Symbol[],
