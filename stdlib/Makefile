@@ -21,8 +21,8 @@ STDLIBS = Base64 CRC32c Dates DelimitedFiles Distributed FileWatching \
 STDLIBS_EXT = Pkg Statistics
 PKG_GIT_URL := git://github.com/JuliaLang/Pkg.jl.git
 PKG_TAR_URL = https://api.github.com/repos/JuliaLang/Pkg.jl/tarball/$1
-STATISTICS_GIT_URL := git://github.com/JuliaStats/Statistics.jl.git
-STATISTICS_TAR_URL = https://api.github.com/repos/JuliaStats/Statistics.jl/tarball/$1
+STATISTICS_GIT_URL := git://github.com/JuliaLang/Statistics.jl.git
+STATISTICS_TAR_URL = https://api.github.com/repos/JuliaLang/Statistics.jl/tarball/$1
 
 $(foreach module, $(STDLIBS_EXT), $(eval $(call stdlib-external,$(module),$(shell echo $(module) | tr a-z A-Z))))
 
