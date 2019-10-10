@@ -238,11 +238,11 @@ function splitpath(p::String)
     return out
 end
 
-joinpath(path::AbstractString) = String(path)
+joinpath(path::String) = String(path)
 
 if Sys.iswindows()
 
-function joinpath(path::AbstractString, paths::AbstractString...)
+function joinpath(path::String, paths::String...)
     result_drive, result_path = splitdrive(path)
 
     local p_drive, p_path
@@ -284,7 +284,7 @@ end
 
 else
 
-function joinpath(path::AbstractString, paths::AbstractString...)
+function joinpath(path::String, paths::String...)
     for p in paths
         if isabspath(p)
             path = p
@@ -312,7 +312,7 @@ julia> joinpath("/home/myuser", "example.jl")
 "/home/myuser/example.jl"
 ```
 """
-joinpath
+joinpath(parts::AbstractString...) = joinpath(String.(parts)...)
 
 """
     normpath(path::AbstractString) -> AbstractString
