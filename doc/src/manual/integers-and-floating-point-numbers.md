@@ -370,6 +370,9 @@ these floating-point values are the results of certain arithmetic operations:
 julia> 1/Inf
 0.0
 
+julia> Inf*0
+0.0
+
 julia> 1/0
 Inf
 
