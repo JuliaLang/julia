@@ -748,14 +748,16 @@ end # exp
     @test writecompact(123.4567) == "123.457"
     @test writecompact(0.001234567) == "0.00123457"
     @test writecompact(0.1234567) == "0.123457"
-    @test writecompact(1234567.0) == "123457.0"
+    @test writecompact(1234567.0) == "1.23457e6"
     @test writecompact(12345678910.0) == "1.23457e10"
-    @test writecompact(12345678.0) == "123457.0"
+    @test writecompact(12345678.0) == "1.23457e7"
     @test writecompact(0.10000049) == "0.1"
     @test writecompact(22.89825) == "22.8983"
     @test writecompact(0.646690981531646) == "0.646691"
     @test writecompact(6.938893903907228e-17) == "6.93889e-17"
-
+    @test writecompact(1.015625) == "1.01562"
+    @test writecompact(1.046875) == "1.04688"
+    @test writecompact(0.025621074) == "0.0256211"
 end
 
 end # Ryu

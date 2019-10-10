@@ -1,9 +1,10 @@
 """
-    output, nexp = reduce_shortest(f)
+    b, e10 = reduce_shortest(f[, maxsignif])
 
-Reduce to shortest decimal representation where `f = output * 10^nexp`
+Reduce to shortest decimal representation where `abs(f) == b * 10^e10` and `b` is an
+integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
 """
-@inline function reduce_shortest(f::T) where {T}
+@inline function reduce_shortest(f::T, maxsignif=nothing) where {T}
     U = uinttype(T)
     uf = reinterpret(U, f)
     m = uf & significand_mask(T)
@@ -15,7 +16,7 @@ Reduce to shortest decimal representation where `f = output * 10^nexp`
     ef = e - exponent_bias(T) - significand_bits(T)
     f_isinteger = mf & ((one(U) << -ef) - one(U)) == 0
 
-    if ef > 0 || ef < -52 || !f_isinteger
+    if ef > 0 || ef < -52 || !f_isinteger || maxsignif !== nothing
         # fixup subnormals
         if e == 0
             ef = 1 - exponent_bias(T) - significand_bits(T)
@@ -91,6 +92,7 @@ Reduce to shortest decimal representation where `f = output * 10^nexp`
 
         ## Step 4: reduction
         if a_allzero || b_allzero
+            # a) slow loop
             while true
                 c_div10 = div(c, 10)
                 a_div10 = div(a, 10)
@@ -112,7 +114,7 @@ Reduce to shortest decimal representation where `f = output * 10^nexp`
                 while true
                     a_div10 = div(a, 10)
                     a_mod10 = (a % UInt32) - UInt32(10) * (a_div10 % UInt32)
-                    if a_mod10 != 0
+                    if a_mod10 != 0 && (maxsignif === nothing || b < maxsignif)
                         break
                     end
                     c_div10 = div(c, 10)
@@ -126,13 +128,13 @@ Reduce to shortest decimal representation where `f = output * 10^nexp`
                     e10 += 1
                 end
             end
-            if b_allzero && b_lastdigit == 5 && b % 2 == 0
+            if b_allzero && b_lastdigit == 5 && iseven(b)
                 b_lastdigit = UInt8(4)
             end
-            b = b + ((b == a && (!mf_iseven || !a_allzero)) || b_lastdigit >= 5)
+            roundup = (b == a && (!mf_iseven || !a_allzero)) || b_lastdigit >= 5
         else
-            # we don't need to worry about tie breaking
-            roundup = false
+            # b) specialized for common case (99% Float64, 96% Float32)
+            roundup = b_lastdigit >= 5
             c_div100 = div(c, 100)
             a_div100 = div(a, 100)
             if c_div100 > a_div100
@@ -158,16 +160,45 @@ Reduce to shortest decimal representation where `f = output * 10^nexp`
                 a = a_div10
                 e10 += 1
             end
-            b = b + (b == a || roundup || b_lastdigit >= 5)
+            roundup = (b == a || roundup)
+        end
+        if maxsignif !== nothing && b > maxsignif
+            while true
+                b_div10 = div(b, 10)
+                b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
+                if b <= maxsignif
+                    break
+                end
+                b = b_div10
+                roundup = (b_allzero && iseven(b)) ? b_mod10 > 5 : b_mod10 >= 5
+                b_allzero &= b_mod10 == 0
+                e10 += 1
+            end
+            b = b + roundup
+
+            # remove trailing zeros
+            while true
+                b_div10 = div(b, 10)
+                b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
+                if b_mod10 != 0
+                    break
+                end
+                b = b_div10
+                e10 += 1
+            end
+        else
+            b = b + roundup
         end
     else
-        # f is an integer < 2^53
+        # c) specialized f an integer < 2^53
         b = mf >> -ef
         e10 = 0
         while true
             b_div10 = div(b, 10)
             b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
-            b_mod10 != 0 && break
+            if b_mod10 != 0
+                break
+            end
             b = b_div10
             e10 += 1
         end
@@ -253,7 +284,7 @@ end
         return pos + neg + 3 + (typed && x isa Union{Float32, Float16} ? 2 : 0)
     end
 
-    output, nexp = reduce_shortest(x)
+    output, nexp = reduce_shortest(x, compact ? 999_999 : nothing)
 
     if typed && x isa Float16
         buf[pos] = UInt8('F')
@@ -275,36 +306,6 @@ end
     elseif space
         buf[pos] = UInt8(' ')
         pos += 1
-    end
-
-    if compact && output > 999999
-        lastdigit = output % 10
-        while true
-            output = div(output, 10)
-            nexp += nexp != 0
-            output > 999999 || break
-            lastdigit = output % 10
-        end
-        if lastdigit == 9
-            output += 1
-            lastdigit = 0
-        end
-        if lastdigit == 9
-            while true
-                output = div(output, 10)
-                nexp += nexp != 0
-                output % 10 == 9 || break
-            end
-            output += 1
-        elseif output % 10 == 0
-            while true
-                output = div(output, 10)
-                nexp += nexp != 0
-                output % 10 == 0 || break
-            end
-        else
-            output += lastdigit > 4
-        end
     end
 
     olength = decimallength(output)
@@ -373,7 +374,7 @@ end
     else
         buf[pos - exp_form] = UInt8('0') + (output2 % UInt8)
     end
-    
+
     if !exp_form
         if pt <= 0
             pos += olength
@@ -436,7 +437,7 @@ end
             pos += 1
             precision -= 1
         end
-    
+
         buf[pos] = expchar
         pos += 1
         exp2 = nexp + olength - 1
@@ -448,7 +449,7 @@ end
             buf[pos] = UInt8('+')
             pos += 1
         end
-    
+
         if exp2 >= 100
             c = exp2 % 10
             memcpy(ptr, pos, ptr2, 2 * div(exp2, 10) + 1, 2)
@@ -470,6 +471,6 @@ end
         buf[pos] = UInt8(')')
         pos += 1
     end
-    
+
     return pos
 end
