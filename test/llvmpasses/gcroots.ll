@@ -182,6 +182,21 @@ define %jl_value_t addrspace(10)* @ret_use(i64 %a, i64 %b) {
     ret %jl_value_t addrspace(10)* %aboxed
 }
 
+define {%jl_value_t addrspace(10)*, i8} @ret_use_struct() {
+; CHECK-LABEL: @ret_use_struct
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
+    %ptls = call %jl_value_t*** @julia.ptls_states()
+; CHECK: %aunion = call { %jl_value_t addrspace(10)*, i8 } @union_ret()
+    %aunion = call { %jl_value_t addrspace(10)*, i8 } @union_ret()
+; CHECK-DAG: [[GEP0:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 [[GEPSLOT0:[0-9]+]]
+; CHECK-DAG: [[EXTRACT:%.*]] = extractvalue { %jl_value_t addrspace(10)*, i8 } %aunion, 0
+; CHECK-NEXT: store %jl_value_t addrspace(10)* [[EXTRACT]], %jl_value_t addrspace(10)** [[GEP0]]
+; CHECK-NEXT: call void @jl_safepoint()
+    call void @jl_safepoint()
+    ret {%jl_value_t addrspace(10)*, i8} %aunion
+}
+
+
 define i8 @nosafepoint(%jl_value_t addrspace(10)* dereferenceable(16)) {
 ; CHECK-LABEL: @nosafepoint
 ; CHECK-NOT: %gcframe
