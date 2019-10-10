@@ -322,5 +322,5 @@ julia> Base.setindex(nt, "a", :a)
 ```
 """
 function setindex(nt::NamedTuple, v, idx::Symbol)
-    merge(nt, ((idx, v),))
+    merge(nt, (; idx => v))
 end
