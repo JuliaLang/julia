@@ -22,7 +22,7 @@ import .Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek
 
-export enumerate, zip, rest, countfrom, take, drop, cycle, repeated, product, flatten, partition
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, partition
 
 tail_if_any(::Tuple{}) = ()
 tail_if_any(x::Tuple) = tail(x)
@@ -649,6 +649,105 @@ function iterate(it::Drop)
 end
 iterate(it::Drop, state) = iterate(it.xs, state)
 isdone(it::Drop, state) = isdone(it.xs, state)
+
+
+# takewhile
+
+struct TakeWhile{I,P<:Function}
+    pred::P
+    xs::I
+end
+
+"""
+    takewhile(pred, iter)
+
+An iterator that generates element from `iter` as long as predicate `pred` is true,
+afterwards, drops every element.
+
+!!! compat "Julia 1.4"
+    This function requires at least Julia 1.4.
+
+# Examples
+
+```jldoctest
+julia> s = collect(1:5)
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia> collect(Iterators.takewhile(<(3),s))
+2-element Array{Int64,1}:
+ 1
+ 2
+```
+"""
+takewhile(pred,xs) = TakeWhile(pred,xs)
+
+function iterate(ibl::TakeWhile, itr...)
+    y = iterate(ibl.xs,itr...)
+    y === nothing && return nothing
+    ibl.pred(y[1]) || return nothing
+    y
+end
+
+IteratorSize(::Type{<:TakeWhile}) = SizeUnknown()
+eltype(::Type{TakeWhile{I,P}}) where {I,P} = eltype(I)
+IteratorEltype(::Type{TakeWhile{I,P}}) where {I,P} = IteratorEltype(I)
+
+
+# dropwhile
+
+struct DropWhile{I,P<:Function}
+    pred::P
+    xs::I
+end
+
+"""
+    dropwhile(pred, iter)
+
+An iterator that drops element from `iter` as long as predicate `pred` is true,
+afterwards, returns every element.
+
+!!! compat "Julia 1.4"
+    This function requires at least Julia 1.4.
+
+# Examples
+
+```jldoctest
+julia> s = collect(1:5)
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia> collect(Iterators.dropwhile(<(3),s))
+3-element Array{Int64,1}:
+ 3
+ 4
+ 5
+```
+"""
+dropwhile(pred,itr) = DropWhile(pred,itr)
+
+iterate(ibl::DropWhile,itr) = iterate(ibl.xs, itr)
+function iterate(ibl::DropWhile)
+    y = iterate(ibl.xs)
+    while y !== nothing
+        ibl.pred(y[1]) || break
+        y = iterate(ibl.xs,y[2])
+    end
+    y
+end
+
+IteratorSize(::Type{<:DropWhile}) = SizeUnknown()
+eltype(::Type{DropWhile{I,P}}) where {I,P} = eltype(I)
+IteratorEltype(::Type{DropWhile{I,P}}) where {I,P} = IteratorEltype(I)
+
 
 # Cycle an iterator forever
 
