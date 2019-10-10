@@ -435,10 +435,10 @@ const WINDOWS_VISTA_VER = v"6.0"
 if iswindows()
     function isexecutable(file::String)
         !isfile(file) && return error(ArgumentError("$file is not a file"))
-        cwfile = Base.cwstring(file)
-        ret = Ref{Culong}()
-        bool = ccall((:GetBinaryTypeW , :kernel32), Cint, (Ptr{UInt16}, Ref{Culong}), pointer(cwfile), ret)
-        return bool != 0
+        appname = Base.cwstring(file)
+        type = Ref{Culong}()
+        ret = ccall((:GetBinaryTypeW , :kernel32), Cint, (Ptr{Cwstring}, Ref{Culong}), pointer(appname), type)
+        return ret != 0
     end
 else
     function isexecutable(path::String)
