@@ -717,7 +717,7 @@ See also: [`@sprintf`](@ref)
 julia> @printf("%f %F %f %F\\n", Inf, Inf, NaN, NaN)
 Inf Inf NaN NaN\n
 julia> @printf "%.0f %.1f %f\\n" 0.5 0.025 -0.0078125
-1 0.0 -0.007812
+0 0.0 -0.007812
 ```
 """
 macro printf(io_or_fmt, args...)
