@@ -454,5 +454,5 @@ See also [`eachrow`](@ref), [`eachcol`](@ref), and [`selectdim`](@ref).
     dim <= ndims(A) || throw(DimensionMismatch("A doesn't have $dim dimensions"))
     inds_before = ntuple(d->(:), dim-1)
     inds_after = ntuple(d->(:), ndims(A)-dim)
-    return (view(A, inds_before, i, inds_after) for i in axes(A, dim))
+    return (view(A, inds_before..., i, inds_after...) for i in axes(A, dim))
 end
