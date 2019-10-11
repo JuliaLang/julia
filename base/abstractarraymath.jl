@@ -178,7 +178,7 @@ function reverse(A::AbstractArray; dims::Integer)
 end
 
 function circshift(a::AbstractArray, shiftamt::Real)
-    return circshift!(similar(a), a, (Integer(shiftamt),))
+    circshift!(similar(a), a, (Integer(shiftamt),))
 end
 circshift(a::AbstractArray, shiftamt::DimsInteger) = circshift!(similar(a), a, shiftamt)
 """
