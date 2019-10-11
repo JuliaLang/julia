@@ -204,18 +204,11 @@ function map(f, t1::Any16, t2::Any16, ts::Any16...)
     (A...,)
 end
 
-# mapafoldl, based on afold in operators.jl
-mapafoldl(F,op,a) = a
-mapafoldl(F,op,a,b) = op(a,F(b))
-mapafoldl(F,op,a,b,c...) = mapafoldl(F, op, op(a,F(b)), c...)
-function mapafoldl(F,op,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,qs...)
-    y = op(op(op(op(op(op(op(op(op(op(op(op(op(op(op(a,F(b)),F(c)),F(d)),F(e)),F(f)),F(g)),F(h)),F(i)),F(j)),F(k)),F(l)),F(m)),F(n)),F(o)),F(p))
-    for x in qs; y = op(y,F(x)); end
-    y
+function _foldl_impl(op, nt, itr::Tuple)
+    init = get(nt, :init, _InitialValue())
+    y = afoldl(op, init, itr...)
+    return y isa _InitialValue ? reduce_empty_iter(op, itr) : y
 end
-mapfoldl_impl(f, op, nt::NamedTuple{(:init,)}, t::Tuple) = mapafoldl(f, op, nt.init, t...)
-mapfoldl_impl(f, op, nt::NamedTuple{()}, t::Tuple) = mapafoldl(f, op, f(t[1]), tail(t)...)
-mapfoldl_impl(f, op, nt::NamedTuple{()}, t::Tuple{}) = mapreduce_empty_iter(f, op, t, IteratorEltype(t))
 
 # type-stable padding
 fill_to_length(t::NTuple{N,Any}, val, ::Val{N}) where {N} = t
