@@ -88,9 +88,10 @@ function Base.convert(::Type{LogLevel}, level::Integer)
 end
 =#
 
-Base.isless(a::LogLevel, b::LogLevel) = isless(a.level, b.level)
-Base.:+(level::LogLevel, inc::Integer) = LogLevel(level.level+inc)
-Base.:-(level::LogLevel, inc::Integer) = LogLevel(level.level-inc)
-Base.convert(::Type{LogLevel}, level::Integer) = LogLevel(level)
+Base.isless(a::LogLevel, b::LogLevel) = isless(default_importance(a), default_importance(b))
+# Hrm, following seem a bit nonsensical
+Base.:+(level::LogLevel, inc::Integer) = LogLevel{default_importance(level)+inc}()
+Base.:-(level::LogLevel, inc::Integer) = LogLevel{default_importance(level)-inc}()
+Base.convert(::Type{LogLevel}, level::Integer) = LogLevel{level}()
 
 end

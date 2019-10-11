@@ -90,21 +90,6 @@ handle_message(::NullLogger, args...; kwargs...) =
 abstract type AbstractLogLevel ; end
 
 """
-    LogLevel(level)
-
-Severity/verbosity of a log record.
-
-The log level provides a key against which potential log records may be
-filtered, before any other work is done to construct the log record data
-structure itself.
-"""
-struct LogLevel <: AbstractLogLevel
-    level::Int32
-end
-
-LogLevel(level::LogLevel) = level
-
-"""
     default_importance(log_level)
 
 Return an `Int` defining the default importance level of `log_level`, as it
@@ -115,26 +100,37 @@ User defined importance levels should be relative to the standard log levels
 which are defined to have importance levels of `importance.([Debug, Info, Warn,
 Error]) == [-1000, 0, 1000, 2000]`.
 """
-default_importance(level::LogLevel) = convert(Int, level.level)
-
-const BelowMinLevel = LogLevel(-1000001)
-const Debug         = LogLevel(   -1000)
-const Info          = LogLevel(       0)
-const Warn          = LogLevel(    1000)
-const Error         = LogLevel(    2000)
-const AboveMaxLevel = LogLevel( 1000001)
-
-function Base.show(io::IO, level::LogLevel)
-    if     level == BelowMinLevel  print(io, "BelowMinLevel")
-    elseif level == Debug          print(io, "Debug")
-    elseif level == Info           print(io, "Info")
-    elseif level == Warn           print(io, "Warn")
-    elseif level == Error          print(io, "Error")
-    elseif level == AboveMaxLevel  print(io, "AboveMaxLevel")
-    else                           print(io, "LogLevel($(level.level))")
-    end
+function default_importance
 end
 
+"""
+    LogLevel(level)
+
+Severity/verbosity of a log record.
+
+The log level provides a key against which potential log records may be
+filtered, before any other work is done to construct the log record data
+structure itself.
+"""
+struct LogLevel{Label} <: AbstractLogLevel
+end
+
+const BelowMinLevel =  LogLevel{:BelowMinLevel}()
+const Debug         =  LogLevel{:Debug}()
+const Info          =  LogLevel{:Info}()
+const Warn          =  LogLevel{:Warn}()
+const Error         =  LogLevel{:Error}()
+const AboveMaxLevel =  LogLevel{:AboveMaxLevel}()
+
+default_importance(::LogLevel{:BelowMinLevel}) = -1000001
+default_importance(::LogLevel{:Debug})         =    -1000
+default_importance(::LogLevel{:Info})          =        0
+default_importance(::LogLevel{:Warn})          =     1000
+default_importance(::LogLevel{:Error})         =     2000
+default_importance(::LogLevel{:AboveMaxLevel}) =  1000001
+
+Base.show(io::IO, ::LogLevel{label}) where {label} = print(io, label)
+Base.show(io::IO, ::typeof(Warn)) = print(io, "Warning")
 
 #-------------------------------------------------------------------------------
 # Logging macros

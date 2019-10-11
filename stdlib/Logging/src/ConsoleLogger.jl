@@ -62,7 +62,7 @@ end
 
 function default_metafmt(level, _module, group, id, file, line)
     color = default_logcolor(level)
-    prefix = (level == Warn ? "Warning" : string(level))*':'
+    prefix = string(level)*':'
     suffix = ""
     # Suppress line and file printing for more readable info messages
     level == Info && return color, prefix, suffix
