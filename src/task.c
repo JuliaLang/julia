@@ -55,7 +55,6 @@ static inline void sanitizer_finish_switch_fiber(void) {}
 #if defined(_OS_WINDOWS_)
 volatile int jl_in_stackwalk = 0;
 #else
-#include <sys/mman.h> // mmap
 #ifdef JL_HAVE_UCONTEXT
 #include <ucontext.h>
 #endif

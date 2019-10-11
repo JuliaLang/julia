@@ -383,7 +383,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     jl_fielddesc32_t *desc;
     int should_malloc = descsz >= jl_page_size;
     if (should_malloc)
-        desc = (jl_fielddesc32_t*)malloc(descsz);
+        desc = (jl_fielddesc32_t*)malloc_s(descsz);
     else
         desc = (jl_fielddesc32_t*)alloca(descsz);
     int haspadding = 0;
@@ -447,11 +447,13 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     if (st->size > sz)
         haspadding = 1;
     st->layout = jl_get_layout(nfields, alignm, haspadding, desc);
-    if (should_malloc) free(desc);
+    if (should_malloc)
+        free(desc);
     jl_allocate_singleton_instance(st);
     return;
  throw_ovf:
-    if (should_malloc) free(desc);
+    if (should_malloc)
+        free(desc);
     jl_errorf("type %s has field offset %d that exceeds the page size", jl_symbol_name(st->name->name), descsz);
 }
 

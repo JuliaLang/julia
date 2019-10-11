@@ -332,17 +332,11 @@ restart_switch:
         case 'L': // load
         {
             size_t sz = strlen(optarg) + 1;
-            char *arg = (char*)malloc(sz + 1);
+            char *arg = (char*)malloc_s(sz + 1);
             const char **newcmds;
-            if (!arg)
-                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
             arg[0] = c;
             memcpy(arg + 1, optarg, sz);
-            newcmds = (const char**)realloc(cmds, (ncmds + 2) * sizeof(char*));
-            if (!newcmds) {
-                free(cmds);
-                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
-            }
+            newcmds = (const char**)realloc_s(cmds, (ncmds + 2) * sizeof(char*));
             cmds = newcmds;
             cmds[ncmds] = arg;
             ncmds++;
