@@ -298,9 +298,6 @@ endif
 	-$(INSTALL_M) $(build_bindir)/libopenlibm.dll.a $(DESTDIR)$(libdir)/
 else
 
-	# Install `7z` into libexec/
-	$(INSTALL_M) $(build_bindir)/7z$(EXE) $(DESTDIR)$(libexecdir)/
-
 # Copy over .dSYM directories directly for Darwin
 ifneq ($(DARWIN_FRAMEWORK),1)
 ifeq ($(OS),Darwin)
@@ -330,6 +327,7 @@ ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/sys-debug.dylib.dSYM $(build_private_libdir)/sys-debug.dylib
 endif
 endif
+
 	for suffix in $(JL_PRIVATE_LIBS-0) ; do \
 		for lib in $(build_libdir)/$${suffix}.*$(SHLIB_EXT)*; do \
 			if [ "$${lib##*.}" != "dSYM" ]; then \
@@ -342,6 +340,8 @@ endif
 		$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
 	done
 endif
+	# Install `7z` into libexec/
+	$(INSTALL_M) $(build_bindir)/7z$(EXE) $(DESTDIR)$(libexecdir)/
 
 	# Copy public headers
 	cp -R -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia
