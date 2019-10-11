@@ -240,18 +240,17 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
     return bt;
 }
 
+// note: btout and bt2out must be GC roots
 void decode_backtrace(uintptr_t *bt_data, size_t bt_size,
                       jl_array_t **btout, jl_array_t **bt2out)
 {
-    jl_array_t *bt = NULL;
-    jl_array_t *bt2 = NULL;
-    JL_GC_PUSH2(&bt, &bt2);
+    jl_array_t *bt, *bt2;
     if (array_ptr_void_type == NULL) {
         array_ptr_void_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_voidpointer_type, jl_box_long(1));
     }
-    bt = jl_alloc_array_1d(array_ptr_void_type, bt_size);
+    bt = *btout = jl_alloc_array_1d(array_ptr_void_type, bt_size);
     memcpy(bt->data, bt_data, bt_size * sizeof(void*));
-    bt2 = jl_alloc_array_1d(jl_array_any_type, 0);
+    bt2 = *bt2out = jl_alloc_array_1d(jl_array_any_type, 0);
     // Scan the stack for any interpreter frames
     size_t n = 0;
     while (n < bt_size) {
@@ -261,12 +260,9 @@ void decode_backtrace(uintptr_t *bt_data, size_t bt_size,
         }
         n++;
     }
-    *btout = bt;
-    *bt2out = bt2;
-    JL_GC_POP();
 }
 
-JL_DLLEXPORT void jl_get_backtrace(jl_array_t **btout, jl_array_t **bt2out)
+JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
 {
     jl_excstack_t *s = jl_get_ptls_states()->current_task->excstack;
     uintptr_t *bt_data = NULL;
@@ -275,7 +271,12 @@ JL_DLLEXPORT void jl_get_backtrace(jl_array_t **btout, jl_array_t **bt2out)
         bt_data = jl_excstack_bt_data(s, s->top);
         bt_size = jl_excstack_bt_size(s, s->top);
     }
-    decode_backtrace(bt_data, bt_size, btout, bt2out);
+    jl_array_t *bt = NULL, *bt2 = NULL;
+    JL_GC_PUSH2(&bt, &bt2);
+    decode_backtrace(bt_data, bt_size, &bt, &bt2);
+    jl_svec_t *pair = jl_svec2(bt, bt2);
+    JL_GC_POP();
+    return (jl_value_t*)pair;
 }
 
 // Return data from the exception stack for `task` as an array of Any, starting
