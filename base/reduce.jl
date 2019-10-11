@@ -48,14 +48,17 @@ function _foldl_impl(op, nt, itr)
     # Unroll the while loop once; if init is known, the call to op may
     # be evaluated at compile time
     y = iterate(itr)
-    y === nothing && return init
+    if y === nothing
+        init isa _InitialValue && return reduce_empty_iter(op, itr)
+        return init
+    end
     v = op(init, y[1])
     while true
         y = iterate(itr, y[2])
         y === nothing && break
         v = op(v, y[1])
     end
-    v isa _InitialValue && reduce_empty_iter(op, itr, IteratorEltype(itr))
+    v isa _InitialValue && return reduce_empty_iter(op, itr)
     return v
 end
 
@@ -304,6 +307,7 @@ mapreduce_empty(f::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
 mapreduce_empty_iter(f, op, itr, ItrEltype) =
     reduce_empty_iter(MappingRF(f, op), itr, ItrEltype)
 
+reduce_empty_iter(op, itr) = reduce_empty_iter(op, itr, IteratorEltype(itr))
 reduce_empty_iter(op, itr, ::HasEltype) = reduce_empty(op, eltype(itr))
 reduce_empty_iter(op, itr, ::EltypeUnknown) = _empty_reduce_error()
 
