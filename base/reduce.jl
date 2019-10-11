@@ -68,7 +68,7 @@ struct BottomRF{T}
     rf::T
 end
 
-@inline (op::BottomRF)(::_InitialValue, x) = x
+@inline (op::BottomRF)(::_InitialValue, x) = reduce_first(op.rf, x)
 @inline (op::BottomRF)(acc, x) = op.rf(acc, x)
 
 struct MappingRF{F, T}
