@@ -307,8 +307,8 @@ mapreduce_empty(f::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
 mapreduce_empty_iter(f, op, itr, ItrEltype) =
     reduce_empty_iter(MappingRF(f, op), itr, ItrEltype)
 
-reduce_empty_iter(op, itr) = reduce_empty_iter(op, itr, IteratorEltype(itr))
-reduce_empty_iter(op, itr, ::HasEltype) = reduce_empty(op, eltype(itr))
+@inline reduce_empty_iter(op, itr) = reduce_empty_iter(op, itr, IteratorEltype(itr))
+@inline reduce_empty_iter(op, itr, ::HasEltype) = reduce_empty(op, eltype(itr))
 reduce_empty_iter(op, itr, ::EltypeUnknown) = _empty_reduce_error()
 
 # handling of single-element iterators
