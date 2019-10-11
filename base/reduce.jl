@@ -140,8 +140,10 @@ foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
 
 ## foldr & mapfoldr
 
-mapfoldr_impl(f, op, nt::NamedTuple{(:init,)}, itr) =
-    mapfoldl_impl(f, FlipArgs(op), nt, Iterators.reverse(itr))
+function mapfoldr_impl(f, op, nt, itr)
+    op′, itr′ = _xfadjoint(BottomRF(FlipArgs(op)), Generator(f, itr))
+    return _foldl_impl(op′, nt, Iterators.reverse(itr′))
+end
 
 struct FlipArgs{F}
     f::F
