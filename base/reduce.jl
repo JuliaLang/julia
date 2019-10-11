@@ -64,6 +64,13 @@ end
 
 struct _InitialValue end
 
+"""
+    BottomRF(rf) -> rf′
+
+"Bottom" reducing function.  This is a thin wrapper around the `op` argument
+passed to `foldl`-like functions for handling the initial invocation to call
+[`reduce_first`](@ref).
+"""
 struct BottomRF{T}
     rf::T
 end
@@ -71,6 +78,11 @@ end
 @inline (op::BottomRF)(::_InitialValue, x) = reduce_first(op.rf, x)
 @inline (op::BottomRF)(acc, x) = op.rf(acc, x)
 
+"""
+    MappingRF(f, rf) -> rf′
+
+Create a mapping reducing function `rf′(acc, x) = rf(acc, f(x))`.
+"""
 struct MappingRF{F, T}
     f::F
     rf::T
@@ -78,6 +90,11 @@ end
 
 @inline (op::MappingRF)(acc, x) = op.rf(acc, op.f(x))
 
+"""
+    FilteringRF(f, rf) -> rf′
+
+Create a filtering reducing function `rf′(acc, x) = f(x) ? rf(acc, x) : acc`.
+"""
 struct FilteringRF{F, T}
     f::F
     rf::T
@@ -91,9 +108,9 @@ end
 Given a pair of reducing function `op` and an iterator `itr`, return a pair
 `(op′, itr′)` of similar types.  If the iterator `itr` is transformed by an
 iterator transform `ixf` whose adjoint transducer `xf` is known, `op′ = xf(op)`
-and `itr′ = "parent" of itr` is returned.  Otherwise, `op` and `itr` are
-returned as-is.  For example, transducer `rf -> MappingRF(f, rf)` is the
-adjoint of iterator transform `itr -> Generator(f, itr)`.
+and `itr′ = ixf⁻¹(itr)` is returned.  Otherwise, `op` and `itr` are returned
+as-is.  For example, transducer `rf -> MappingRF(f, rf)` is the adjoint of
+iterator transform `itr -> Generator(f, itr)`.
 
 Nested iterator transforms are converted recursively.  That is to say,
 given `op` and
