@@ -2,8 +2,8 @@
 
  ## Basic functions ##
 
-isreal(x::AbstractArray) = all(isreal, x)
-iszero(x::AbstractArray) = all(iszero, x)
+isreal(x::AbstractArray) = all(isreal,x)
+iszero(x::AbstractArray) = all(iszero,x)
 isreal(x::AbstractArray{<:Real}) = true
 
 ## Constructors ##
@@ -239,7 +239,7 @@ julia> circshift(a, -1)
 See also [`circshift!`](@ref).
 """
 function circshift(a::AbstractArray, shiftamt)
-    return circshift!(similar(a), a, map(Integer, (shiftamt...,)))
+    circshift!(similar(a), a, map(Integer, (shiftamt...,)))
 end
 
 ## Other array functions ##
@@ -449,7 +449,7 @@ See also [`eachrow`](@ref), [`eachcol`](@ref), and [`selectdim`](@ref).
      This function requires at least Julia 1.1.
 """
 @inline function eachslice(A::AbstractArray; dims)
-    length(dims) == 1 || throw(ArgumentError("only single dimensions are supported in eachslice"))
+    length(dims) == 1 || throw(ArgumentError("only single dimensions are supported"))
     dim = first(dims)
     dim <= ndims(A) || throw(DimensionMismatch("A doesn't have $dim dimensions"))
     inds_before = ntuple(d->(:), dim-1)
