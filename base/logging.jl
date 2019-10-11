@@ -428,10 +428,11 @@ function disable_logging(level::AbstractLogLevel)
 end
 
 """
-    disable_logging(::Type{LevelType}, disabled=true)
+    @disable_logging T disabled=true
 
 Globally disable all log messages of the given log level type `LevelType`, or
-enable them if the optional argument `disabled=false`.
+enable them if the optional argument `disabled=false`. This macro must only be
+used at top-level.
 
 !!! note
     This will force dynamic recompilation of all methods which emit log
@@ -439,8 +440,18 @@ enable them if the optional argument `disabled=false`.
     expensive or verbose log levels which one normally desires to compile
     away completely.
 """
-function disable_logging(::Type{T}, disabled::Bool=true) where {T<:AbstractLogLevel}
-    Base.eval(:(CoreLogging.logging_enabled(::$T) = $(!disabled)))
+macro disable_logging(T, disabled=true)
+    quote
+        T = $(esc(T))
+        if T isa Type && T <: AbstractLogLevel
+            function CoreLogging.logging_enabled(::T)
+                !$(esc(disabled))
+            end
+        else
+            throw(ArgumentError("Expected an AbstractLogLevel, got $T"))
+        end
+        nothing
+    end
 end
 
 let _debug_groups_include::Vector{Symbol} = Symbol[],
