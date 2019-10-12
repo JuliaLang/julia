@@ -204,11 +204,7 @@ function map(f, t1::Any16, t2::Any16, ts::Any16...)
     (A...,)
 end
 
-function _foldl_impl(op, nt, itr::Tuple)
-    init = get(nt, :init, _InitialValue())
-    y = afoldl(op, init, itr...)
-    return y isa _InitialValue ? reduce_empty_iter(op, itr) : y
-end
+_foldl_impl(op, init, itr::Tuple) = afoldl(op, init, itr...)
 
 # type-stable padding
 fill_to_length(t::NTuple{N,Any}, val, ::Val{N}) where {N} = t

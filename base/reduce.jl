@@ -36,29 +36,28 @@ mul_prod(x::Real, y::Real)::Real = x * y
 
 ## foldl && mapfoldl
 
-mapfoldl_impl(f, op, nt, itr) = foldl_impl(op, nt, Generator(f, itr))
-
-function foldl_impl(op, nt, itr)
-    op′, itr′ = _xfadjoint(BottomRF(op), itr)
-    return _foldl_impl(op′, nt, itr′)
+function mapfoldl_impl(f, op, nt, itr)
+    op′, itr′ = _xfadjoint(BottomRF(op), Generator(f, itr))
+    return foldl_impl(op′, nt, itr′)
 end
 
-function _foldl_impl(op, nt, itr)
-    init = get(nt, :init, _InitialValue())
+function foldl_impl(op, nt, itr)
+    v = _foldl_impl(op, get(nt, :init, _InitialValue()), itr)
+    v isa _InitialValue && return reduce_empty_iter(op, itr)
+    return v
+end
+
+function _foldl_impl(op, init, itr)
     # Unroll the while loop once; if init is known, the call to op may
     # be evaluated at compile time
     y = iterate(itr)
-    if y === nothing
-        init isa _InitialValue && return reduce_empty_iter(op, itr)
-        return init
-    end
+    y === nothing && return init
     v = op(init, y[1])
     while true
         y = iterate(itr, y[2])
         y === nothing && break
         v = op(v, y[1])
     end
-    v isa _InitialValue && return reduce_empty_iter(op, itr)
     return v
 end
 
@@ -103,6 +102,18 @@ end
 @inline (op::FilteringRF)(acc, x) = op.f(x) ? op.rf(acc, x) : acc
 
 """
+    FlatteningRF(rf) -> rf′
+
+Create a flattening reducing function that is roughly equivalent to
+`rf′(acc, x) = foldl(rf, x; init=acc)`.
+"""
+struct FlatteningRF{T}
+    rf::T
+end
+
+@inline (op::FlatteningRF)(acc, x) = _foldl_impl(op.rf, acc, x)
+
+"""
     _xfadjoint(op, itr) -> op′, itr′
 
 Given a pair of reducing function `op` and an iterator `itr`, return a pair
@@ -130,6 +141,8 @@ _xfadjoint(op, itr::Generator) =
     end
 _xfadjoint(op, itr::Filter) =
     _xfadjoint(FilteringRF(itr.flt, op), itr.itr)
+_xfadjoint(op, itr::Flatten) =
+    _xfadjoint(FlatteningRF(op), itr.it)
 
 """
     mapfoldl(f, op, itr; [init])
@@ -162,7 +175,7 @@ foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
 
 function mapfoldr_impl(f, op, nt, itr)
     op′, itr′ = _xfadjoint(BottomRF(FlipArgs(op)), Generator(f, itr))
-    return _foldl_impl(op′, nt, Iterators.reverse(itr′))
+    return foldl_impl(op′, nt, Iterators.reverse(itr′))
 end
 
 struct FlipArgs{F}
