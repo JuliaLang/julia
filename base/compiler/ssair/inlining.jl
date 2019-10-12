@@ -592,11 +592,11 @@ function spec_lambda(@nospecialize(atype), sv::OptimizationState, @nospecialize(
 end
 
 # This assumes the caller has verified that all arguments to the _apply call are Tuples.
-function rewrite_apply_exprargs!(ir::IRCode, idx::Int, argexprs::Vector{Any}, atypes::Vector{Any})
-    new_argexprs = Any[argexprs[2]]
-    new_atypes = Any[atypes[2]]
+function rewrite_apply_exprargs!(ir::IRCode, idx::Int, argexprs::Vector{Any}, atypes::Vector{Any}, arg_start::Int)
+    new_argexprs = Any[argexprs[arg_start]]
+    new_atypes = Any[atypes[arg_start]]
     # loop over original arguments and flatten any known iterators
-    for i in 3:length(argexprs)
+    for i in (arg_start+1):length(argexprs)
         def = argexprs[i]
         def_type = atypes[i]
         if def_type isa PartialStruct
@@ -882,11 +882,12 @@ end
 
 function inline_apply!(ir::IRCode, idx::Int, sig::Signature, params::Params)
     stmt = ir.stmts[idx]
-    while sig.f === Core._apply
+    while sig.f === Core._apply || sig.f === Core._apply_iterate
+        arg_start = sig.f === Core._apply ? 2 : 3
         atypes = sig.atypes
         # Try to figure out the signature of the function being called
         # and if rewrite_apply_exprargs can deal with this form
-        for i = 3:length(atypes)
+        for i = (arg_start + 1):length(atypes)
             # TODO: We could basically run the iteration protocol here
             if !is_valid_type_for_apply_rewrite(atypes[i], params)
                 return nothing
@@ -894,13 +895,13 @@ function inline_apply!(ir::IRCode, idx::Int, sig::Signature, params::Params)
         end
         # Independent of whether we can inline, the above analysis allows us to rewrite
         # this apply call to a regular call
-        ft = atypes[2]
-        if length(atypes) == 3 && ft isa Const && ft.val === Core.tuple && atypes[3] ⊑ Tuple
+        ft = atypes[arg_start]
+        if length(atypes) == arg_start+1 && ft isa Const && ft.val === Core.tuple && atypes[arg_start+1] ⊑ Tuple
             # rewrite `((t::Tuple)...,)` to `t`
-            ir.stmts[idx] = stmt.args[3]
+            ir.stmts[idx] = stmt.args[arg_start+1]
             return nothing
         end
-        stmt.args, atypes = rewrite_apply_exprargs!(ir, idx, stmt.args, atypes)
+        stmt.args, atypes = rewrite_apply_exprargs!(ir, idx, stmt.args, atypes, arg_start)
         has_free_typevars(ft) && return nothing
         f = singleton_type(ft)
         sig = Signature(f, ft, atypes)
