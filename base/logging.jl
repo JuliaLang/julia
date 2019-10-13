@@ -423,6 +423,13 @@ function disable_logging(level::AbstractLogLevel)
     _min_enabled_importance[] = default_importance(level) + 1
 end
 
+function _check_loglevel_type(T)
+    if !(T isa Type && T <: AbstractLogLevel)
+        throw(ArgumentError("Expected an AbstractLogLevel, got $T"))
+    end
+    T
+end
+
 """
     @disable_logging T disabled=true
 
@@ -438,15 +445,9 @@ used at top-level.
 """
 macro disable_logging(T, disabled=true)
     quote
-        T = $(esc(T))
-        if T isa Type && T <: AbstractLogLevel
-            function CoreLogging.logging_enabled(::T)
-                !$(esc(disabled))
-            end
-        else
-            throw(ArgumentError("Expected an AbstractLogLevel, got $T"))
+        function CoreLogging.logging_enabled(::_check_loglevel_type($(esc(T))))
+            !$(esc(disabled))
         end
-        nothing
     end
 end
 
