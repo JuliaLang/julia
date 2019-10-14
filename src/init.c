@@ -719,7 +719,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
 
-    arraylist_new(&partial_inst, 0);
     if (jl_options.image_file) {
         jl_restore_system_image(jl_options.image_file);
     }
