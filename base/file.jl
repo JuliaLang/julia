@@ -678,7 +678,10 @@ struct uv_dirent_t
 end
 
 """
-    readdir(dir::AbstractString=pwd(); join::Bool=false) -> Vector{String}
+    readdir(dir::AbstractString=pwd();
+        join::Bool = false,
+        sort::Bool = true,
+    ) -> Vector{String}
 
 Return the names in the directory `dir` or the current working directory if not
 given. When `join` is false, `readdir` returns just the names in the directory
@@ -686,8 +689,12 @@ as is; when `join` is true, it returns `joinpath(dir, name)` for each `name` so
 that the returned strings are full paths. If you want to get absolute paths
 back, call `readdir` with an absolute directory path and `join` set to true.
 
+By default, `readdir` sorts the list of names it returns. If you want to skip
+sorting the names and get them in the order that the file system lists them,
+you can use `readir(dir, sort=false)` to opt out of sorting.
+
 !!! compat "Julia 1.4"
-    The `join` keyword argument requires at least Julia 1.4.
+    The `join` and `sort` keyword arguments require at least Julia 1.4.
 
 # Examples
 ```julia-repl
@@ -744,7 +751,7 @@ julia> readdir(abspath("base"), join=true)
  "/home/JuliaUser/dev/julia/base/weakkeydict.jl"
 ```
 """
-function readdir(dir::AbstractString; join::Bool=false)
+function readdir(dir::AbstractString; join::Bool=false, sort::Bool=true)
     # Allocate space for uv_fs_t struct
     uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
 
@@ -764,9 +771,13 @@ function readdir(dir::AbstractString; join::Bool=false)
     # Clean up the request string
     ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{UInt8},), uv_readdir_req)
 
+    # sort entries unless opted out
+    sort && sort!(entries)
+
     return entries
 end
-readdir(; join::Bool=false) = readdir(join ? pwd() : ".", join=join)
+readdir(; join::Bool=false, sort::Bool=true) =
+    readdir(join ? pwd() : ".", join=join, sort=sort)
 
 """
     walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)
