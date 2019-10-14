@@ -29,6 +29,12 @@ Random.seed!(1234321)
             @test_throws ArgumentError cond(a,3)
         end
     end
+    @testset "Singular matrices" for p in (1, 2, Inf)
+        @test cond(zeros(Int, 2, 2), p) == Inf
+        @test cond(zeros(2, 2), p) == Inf
+        @test cond([0 0; 1 1], p) == Inf
+        @test cond([0. 0.; 1. 1.], p) == Inf
+    end
 end
 
 areal = randn(n,n)/2

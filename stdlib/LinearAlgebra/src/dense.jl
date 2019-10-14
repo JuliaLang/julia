@@ -1418,7 +1418,7 @@ function cond(A::AbstractMatrix, p::Real=2)
     if p == 2
         v = svdvals(A)
         maxv = maximum(v)
-        return maxv == 0.0 ? oftype(real(A[1,1]),Inf) : maxv / minimum(v)
+        return iszero(maxv) ? oftype(real(maxv), Inf) : maxv / minimum(v)
     elseif p == 1 || p == Inf
         checksquare(A)
         try
@@ -1426,7 +1426,9 @@ function cond(A::AbstractMatrix, p::Real=2)
             return opnorm(A, p)*opnorm(Ainv, p)
         catch e
             if isa(e, LAPACKException) || isa(e, SingularException)
-                return convert(real(eltype(A)), Inf)
+                TA = real(eltype(A))
+                Tout = typeof((one(TA)*zero(TA) + one(TA)*zero(TA))/one(TA))
+                return convert(Tout, Inf)
             else
                 rethrow()
             end
