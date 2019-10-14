@@ -16,7 +16,7 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
     ef = e - exponent_bias(T) - significand_bits(T)
     f_isinteger = mf & ((one(U) << -ef) - one(U)) == 0
 
-    if ef > 0 || ef < -52 || !f_isinteger || maxsignif !== nothing
+    if ef > 0 || ef < -52 || !f_isinteger
         # fixup subnormals
         if e == 0
             ef = 1 - exponent_bias(T) - significand_bits(T)
@@ -163,6 +163,7 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
             roundup = (b == a || roundup)
         end
         if maxsignif !== nothing && b > maxsignif
+            # reduce to max significant digits
             while true
                 b_div10 = div(b, 10)
                 b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
@@ -193,6 +194,23 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
         # c) specialized f an integer < 2^53
         b = mf >> -ef
         e10 = 0
+
+        if maxsignif !== nothing && b > maxsignif
+            b_allzero = true
+            # reduce to max significant digits
+            while true
+                b_div10 = div(b, 10)
+                b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
+                if b <= maxsignif
+                    break
+                end
+                b = b_div10
+                roundup = (b_allzero && iseven(b)) ? b_mod10 > 5 : b_mod10 >= 5
+                b_allzero &= b_mod10 == 0
+                e10 += 1
+            end
+            b = b + roundup
+        end
         while true
             b_div10 = div(b, 10)
             b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
@@ -209,7 +227,8 @@ end
 
 @inline function writeshortest(buf::Vector{UInt8}, pos, x::T,
                                plus=false, space=false, hash=true,
-                               precision=-1, expchar=UInt8('e'), padexp=false, decchar=UInt8('.'), typed=false, compact=false) where {T}
+                               precision=-1, expchar=UInt8('e'), padexp=false, decchar=UInt8('.'),
+                               typed=false, compact=false) where {T}
     @assert 0 < pos <= length(buf)
     neg = signbit(x)
     # special cases
@@ -311,7 +330,7 @@ end
     olength = decimallength(output)
     exp_form = true
     pt = nexp + olength
-    if -4 < pt <= (precision == -1 ? (T == Float16 ? 5 : 6) : precision)
+    if -4 < pt <= (precision == -1 ? (T == Float16 ? 3 : 6) : precision)
         exp_form = false
         if pt <= 0
             buf[pos] = UInt8('0')
