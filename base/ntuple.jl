@@ -55,12 +55,13 @@ ntuple(f, ::Val{3}) = (@_inline_meta; (f(1), f(2), f(3)))
     end
 end
 
-@inline function fill_to_length(t::Tuple, val, ::Val{N}) where {N}
+@inline function fill_to_length(t::Tuple, val, ::Val{_N}) where {_N}
     M = length(t)
+    N = _N::Int
     M > N && throw(ArgumentError("input tuple of length $M, requested $N"))
     if @generated
         quote
-            (t..., $(fill(:val, N-length(t.parameters))...))
+            (t..., $(fill(:val, (_N::Int) - length(t.parameters))...))
         end
     else
         (t..., fill(val, N-M)...)
