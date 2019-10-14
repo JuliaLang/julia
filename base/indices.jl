@@ -52,7 +52,7 @@ A `N`-dimensional custom array that reports its `IndexStyle` as `IndexCartesian`
 to implement indexing (and indexed assignment) with exactly `N` `Int` indices;
 all other indexing expressions — including linear indexing — will
 be recomputed to the equivalent Cartesian location.  For example, if `A` were a `2×3` custom
-matrix with linear indexing, and we referenced `A[5]`, this would be
+matrix with cartesian indexing, and we referenced `A[5]`, this would be
 recomputed to the equivalent Cartesian index and call `A[1, 3]` since `5 = 2*1 + 3`.
 
 It is significantly more expensive to compute Cartesian indices from a linear index than it is
