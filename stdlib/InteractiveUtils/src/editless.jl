@@ -84,16 +84,6 @@ function edit(path::AbstractString, line::Integer=0)
     nothing
 end
 
-# Workaround for https://github.com/JuliaLang/julia/issues/26314
-const BUILDBOT_STDLIB_PATH = dirname(abspath(joinpath(functionloc(eval)[1]), "..", "..", ".."))
-function functionloc_stdlib_workaround(args...)
-    loc, line = functionloc(args...)
-    if loc !== nothing
-        loc = replace(loc, BUILDBOT_STDLIB_PATH => Sys.STDLIB)
-    end
-    return loc, line
-end
-
 """
     edit(function, [types])
     edit(module)
@@ -108,8 +98,8 @@ method to edit. For modules, open the main source file. The module needs to be l
 The editor can be changed by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment
 variable.
 """
-edit(f)                   = edit(functionloc_stdlib_workaround(f)...)
-edit(f, @nospecialize t)  = edit(functionloc_stdlib_workaround(f,t)...)
+edit(f)                   = edit(functionloc(f)...)
+edit(f, @nospecialize t)  = edit(functionloc(f,t)...)
 edit(file, line::Integer) = error("could not find source file for function")
 edit(m::Module) = edit(pathof(m))
 
@@ -144,6 +134,6 @@ less(file::AbstractString) = less(file, 1)
 Show the definition of a function using the default pager, optionally specifying a tuple of
 types to indicate which method to see.
 """
-less(f)                   = less(functionloc_stdlib_workaround(f)...)
-less(f, @nospecialize t)  = less(functionloc_stdlib_workaround(f,t)...)
+less(f)                   = less(functionloc(f)...)
+less(f, @nospecialize t)  = less(functionloc(f,t)...)
 less(file, line::Integer) = error("could not find source file for function")

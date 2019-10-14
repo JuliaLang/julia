@@ -122,6 +122,16 @@ end
 default_methodloc(method::Method) = method.file, method.line
 const methodloc_callback = Ref{Function}(default_methodloc)
 
+# This function does the method location updating
+function updated_methodloc(m)
+    file, line = invokelatest(methodloc_callback[], m)
+    if file !== nothing && isdefined(@__MODULE__, :Sys)
+        # BUILD_STDLIB_PATH gets defined in sysinfo.jl
+        file = replace(String(file), normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB))
+    end
+    return Symbol(file), line
+end
+
 functionloc(m::Core.MethodInstance) = functionloc(m.def)
 
 """
@@ -130,7 +140,7 @@ functionloc(m::Core.MethodInstance) = functionloc(m.def)
 Returns a tuple `(filename,line)` giving the location of a `Method` definition.
 """
 function functionloc(m::Method)
-    file, ln = invokelatest(methodloc_callback[], m)
+    file, ln = updated_methodloc(m)
     if ln <= 0
         error("could not determine location of method definition")
     end
@@ -196,7 +206,7 @@ function show(io::IO, m::Method)
     print(io, " in ", m.module)
     if line > 0
         try
-            file, line = invokelatest(methodloc_callback[], m)
+            file, line = updated_methodloc(m)
         catch
         end
         print(io, " at ", file, ":", line)
@@ -249,7 +259,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
             show(io, meth)
             file, line = meth.file, meth.line
             try
-                file, line = invokelatest(methodloc_callback[], meth)
+                file, line = updated_methodloc(m)
             catch
             end
             push!(LAST_SHOWN_LINE_INFOS, (string(file), line))
@@ -362,7 +372,7 @@ function show(io::IO, ::MIME"text/html", m::Method)
     print(io, " in ", m.module)
     if line > 0
         try
-            file, line = invokelatest(methodloc_callback[], m)
+            file, line = updated_methodloc(m)
         catch
         end
         u = url(m)
@@ -400,7 +410,7 @@ function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
         show(io, m)
         file, line = m.file, m.line
         try
-            file, line = invokelatest(methodloc_callback[], m)
+            file, line = updated_methodloc(m)
         catch
         end
         push!(LAST_SHOWN_LINE_INFOS, (string(file), line))
