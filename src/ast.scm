@@ -350,6 +350,9 @@
 (define (globalref? e)
   (and (pair? e) (eq? (car e) 'globalref)))
 
+(define (outerref? e)
+  (and (pair? e) (eq? (car e) 'outerref)))
+
 (define (symbol-like? e)
   (or (and (symbol? e) (not (eq? e 'true)) (not (eq? e 'false)))
       (ssavalue? e)))

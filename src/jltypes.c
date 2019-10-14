@@ -1295,7 +1295,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     if (ftypes == NULL || dt->super == NULL) {
         // in the process of creating this type definition:
         // need to instantiate the super and types fields later
-        assert((inside_typedef || primarydt->super) && !istuple && !isnamedtuple);
+        //assert((inside_typedef || primarydt->super) && !istuple && !isnamedtuple);
         arraylist_push(&partial_inst, ndt);
     }
     else if (!isnamedtuple && !istuple) {

@@ -112,6 +112,7 @@ void jl_reset_instantiate_inner_types(jl_datatype_t *t);
 SECT_INTERP void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
     if (!jl_is_datatype(super) || !jl_is_abstracttype(super) ||
+        tt->super != NULL ||
         tt->name == ((jl_datatype_t*)super)->name ||
         jl_subtype(super, (jl_value_t*)jl_vararg_type) ||
         jl_is_tuple_type(super) ||
@@ -125,65 +126,29 @@ SECT_INTERP void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
     jl_gc_wb(tt, tt->super);
 }
 
-static void eval_abstracttype(jl_expr_t *ex, interpreter_state *s)
+static jl_value_t *eval_abstracttype(jl_expr_t *ex, interpreter_state *s)
 {
     jl_value_t **args = jl_array_ptr_data(ex->args);
     if (inside_typedef)
         jl_error("cannot eval a new abstract type definition while defining another type");
-    jl_value_t *name = args[0];
+    jl_value_t *name = jl_quotenode_value(args[0]);
     jl_value_t *para = eval_value(args[1], s);
-    jl_value_t *super = NULL;
-    jl_value_t *temp = NULL;
-    jl_datatype_t *dt = NULL;
-    jl_value_t *w = NULL;
-    jl_module_t *modu = s->module;
-    JL_GC_PUSH5(&para, &super, &temp, &w, &dt);
-    assert(jl_is_svec(para));
-    if (jl_is_globalref(name)) {
-        modu = jl_globalref_mod(name);
-        name = (jl_value_t*)jl_globalref_name(name);
-    }
+    JL_GC_PUSH1(&para);
     assert(jl_is_symbol(name));
-    dt = jl_new_abstracttype(name, modu, NULL, (jl_svec_t*)para);
-    w = dt->name->wrapper;
-    jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name, 1);
-    temp = b->value;
-    check_can_assign_type(b, w);
-    b->value = w;
-    jl_gc_wb_binding(b, w);
-    JL_TRY {
-        inside_typedef = 1;
-        super = eval_value(args[2], s);
-        jl_set_datatype_super(dt, super);
-        jl_reinstantiate_inner_types(dt);
-    }
-    JL_CATCH {
-        jl_reset_instantiate_inner_types(dt);
-        b->value = temp;
-        jl_rethrow();
-    }
-    b->value = temp;
-    if (temp == NULL || !equiv_type(dt, (jl_datatype_t*)jl_unwrap_unionall(temp))) {
-        jl_checked_assignment(b, w);
-    }
+    assert(jl_is_svec(para));
+    jl_datatype_t *dt = jl_new_abstracttype(name, s->module, NULL, (jl_svec_t*)para);
     JL_GC_POP();
+    return dt->name->wrapper;
 }
 
-static void eval_primitivetype(jl_expr_t *ex, interpreter_state *s)
+static jl_value_t *eval_primitivetype(jl_expr_t *ex, interpreter_state *s)
 {
     jl_value_t **args = (jl_value_t**)jl_array_ptr_data(ex->args);
     if (inside_typedef)
         jl_error("cannot eval a new primitive type definition while defining another type");
-    jl_value_t *name = args[0];
-    jl_value_t *super = NULL, *para = NULL, *vnb = NULL, *temp = NULL;
-    jl_datatype_t *dt = NULL;
-    jl_value_t *w = NULL;
-    jl_module_t *modu = s->module;
-    JL_GC_PUSH5(&para, &super, &temp, &w, &dt);
-    if (jl_is_globalref(name)) {
-        modu = jl_globalref_mod(name);
-        name = (jl_value_t*)jl_globalref_name(name);
-    }
+    jl_value_t *name = jl_quotenode_value(args[0]);
+    jl_value_t *para = NULL, *vnb = NULL;
+    JL_GC_PUSH1(&para);
     assert(jl_is_symbol(name));
     para = eval_value(args[1], s);
     assert(jl_is_svec(para));
@@ -195,70 +160,54 @@ static void eval_primitivetype(jl_expr_t *ex, interpreter_state *s)
     if (nb < 1 || nb >= (1 << 23) || (nb & 7) != 0)
         jl_errorf("invalid number of bits in primitive type %s",
                   jl_symbol_name((jl_sym_t*)name));
-    dt = jl_new_primitivetype(name, modu, NULL, (jl_svec_t*)para, nb);
-    w = dt->name->wrapper;
-    jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name, 1);
-    temp = b->value;
-    check_can_assign_type(b, w);
-    b->value = w;
-    jl_gc_wb_binding(b, w);
-    JL_TRY {
-        inside_typedef = 1;
-        super = eval_value(args[3], s);
-        jl_set_datatype_super(dt, super);
-        jl_reinstantiate_inner_types(dt);
-    }
-    JL_CATCH {
-        jl_reset_instantiate_inner_types(dt);
-        b->value = temp;
-        jl_rethrow();
-    }
-    b->value = temp;
-    if (temp == NULL || !equiv_type(dt, (jl_datatype_t*)jl_unwrap_unionall(temp))) {
-        jl_checked_assignment(b, w);
-    }
+    jl_datatype_t *dt = jl_new_primitivetype(name, s->module, NULL, (jl_svec_t*)para, nb);
+    JL_GC_POP();
+    return dt->name->wrapper;
+}
+
+static void eval_set_supertype(jl_expr_t *ex, interpreter_state *s)
+{
+    jl_value_t **args = jl_array_ptr_data(ex->args);
+    jl_value_t *w = NULL;
+    jl_datatype_t *dt = NULL;
+    jl_value_t *su = NULL;
+    JL_GC_PUSH2(&w, &su);
+    w = eval_value(args[0], s);
+    dt = (jl_datatype_t*)jl_unwrap_unionall(w);
+    su = eval_value(args[1], s);
+    jl_set_datatype_super(dt, su);
     JL_GC_POP();
 }
 
-static void eval_structtype(jl_expr_t *ex, interpreter_state *s)
+static void eval_typeassign(jl_expr_t *ex, interpreter_state *s)
 {
     jl_value_t **args = jl_array_ptr_data(ex->args);
-    if (inside_typedef)
-        jl_error("cannot eval a new struct type definition while defining another type");
-    jl_value_t *name = args[0];
-    jl_value_t *para = eval_value(args[1], s);
-    jl_value_t *temp = NULL;
-    jl_value_t *super = NULL;
-    jl_datatype_t *dt = NULL;
     jl_value_t *w = NULL;
+    jl_datatype_t *dt = NULL;
+    jl_value_t *ft = NULL;
     jl_module_t *modu = s->module;
-    JL_GC_PUSH5(&para, &super, &temp, &w, &dt);
-    if (jl_is_globalref(name)) {
-        modu = jl_globalref_mod(name);
-        name = (jl_value_t*)jl_globalref_name(name);
+    jl_sym_t *name;
+    JL_GC_PUSH2(&w, &ft);
+    w = eval_value(args[1], s);
+    dt = (jl_datatype_t*)jl_unwrap_unionall(w);
+    if (jl_expr_nargs(ex) == 3)
+        ft = eval_value(args[2], s);
+    if (jl_is_globalref(args[0])) {
+        modu = jl_globalref_mod(args[0]);
+        name = jl_globalref_name(args[0]);
     }
-    assert(jl_is_symbol(name));
-    assert(jl_is_svec(para));
-    temp = eval_value(args[2], s);  // field names
-    dt = jl_new_datatype((jl_sym_t*)name, modu, NULL, (jl_svec_t*)para,
-                         (jl_svec_t*)temp, NULL,
-                         0, args[5]==jl_true ? 1 : 0, jl_unbox_long(args[6]));
-    w = dt->name->wrapper;
+    else {
+        assert(jl_is_symbol(args[0]));
+        modu = s->module;
+        name = (jl_sym_t*)args[0];
+    }
 
     jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name, 1);
-    temp = b->value;  // save old value
-    // temporarily assign so binding is available for field types
     check_can_assign_type(b, w);
-    b->value = w;
-    jl_gc_wb_binding(b, w);
 
-    JL_TRY {
-        inside_typedef = 1;
-        // operations that can fail
-        super = eval_value(args[3], s);
-        jl_set_datatype_super(dt, super);
-        dt->types = (jl_svec_t*)eval_value(args[4], s);
-        jl_gc_wb(dt, dt->types);
+    if (ft) {
+        dt->types = (jl_svec_t*)ft;
+        jl_gc_wb(dt, ft);
         for (size_t i = 0; i < jl_svec_len(dt->types); i++) {
             jl_value_t *elt = jl_svecref(dt->types, i);
             if ((!jl_is_type(elt) && !jl_is_typevar(elt)) || jl_is_vararg_type(elt)) {
@@ -267,21 +216,42 @@ static void eval_structtype(jl_expr_t *ex, interpreter_state *s)
                                  (jl_value_t*)jl_type_type, elt);
             }
         }
+    }
+
+    JL_TRY {
         jl_reinstantiate_inner_types(dt);
     }
     JL_CATCH {
         jl_reset_instantiate_inner_types(dt);
-        b->value = temp;
         jl_rethrow();
     }
-    jl_compute_field_offsets(dt);
 
-    b->value = temp;
-    if (temp == NULL || !equiv_type(dt, (jl_datatype_t*)jl_unwrap_unionall(temp))) {
+    if (jl_is_structtype(dt))
+        jl_compute_field_offsets(dt);
+
+    if (b->value == NULL || !equiv_type(dt, (jl_datatype_t*)jl_unwrap_unionall(b->value)))
         jl_checked_assignment(b, w);
-    }
 
     JL_GC_POP();
+}
+
+static jl_value_t *eval_structtype(jl_expr_t *ex, interpreter_state *s)
+{
+    jl_value_t **args = jl_array_ptr_data(ex->args);
+    if (inside_typedef)
+        jl_error("cannot eval a new struct type definition while defining another type");
+    jl_value_t *name = jl_quotenode_value(args[0]);
+    jl_value_t *para = eval_value(args[1], s);
+    jl_value_t *fieldnames = NULL;
+    jl_datatype_t *dt = NULL;
+    JL_GC_PUSH2(&para, &fieldnames);
+    assert(jl_is_svec(para));
+    fieldnames = eval_value(args[2], s);
+    dt = jl_new_datatype((jl_sym_t*)name, s->module, NULL, (jl_svec_t*)para,
+                         (jl_svec_t*)fieldnames, NULL,
+                         0, args[3]==jl_true ? 1 : 0, jl_unbox_long(args[4]));
+    JL_GC_POP();
+    return dt->name->wrapper;
 }
 
 // method definition form
@@ -516,6 +486,15 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == method_sym && nargs == 1) {
         return eval_methoddef(ex, s);
     }
+    else if (head == structtype_sym) {
+        return eval_structtype(ex, s);
+    }
+    else if (head == abstracttype_sym) {
+        return eval_abstracttype(ex, s);
+    }
+    else if (head == primtype_sym) {
+        return eval_primitivetype(ex, s);
+    }
     jl_errorf("unsupported or misplaced expression %s", jl_symbol_name(head));
     abort();
 }
@@ -736,14 +715,11 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                 if (head == method_sym && jl_expr_nargs(stmt) > 1) {
                     eval_methoddef((jl_expr_t*)stmt, s);
                 }
-                else if (head == abstracttype_sym) {
-                    eval_abstracttype((jl_expr_t*)stmt, s);
+                else if (head == typeassign_sym) {
+                    eval_typeassign((jl_expr_t*)stmt, s);
                 }
-                else if (head == primtype_sym) {
-                    eval_primitivetype((jl_expr_t*)stmt, s);
-                }
-                else if (head == structtype_sym) {
-                    eval_structtype((jl_expr_t*)stmt, s);
+                else if (head == setsupertype_sym) {
+                    eval_set_supertype((jl_expr_t*)stmt, s);
                 }
                 else if (jl_is_toplevel_only_expr(stmt)) {
                     jl_toplevel_eval(s->module, stmt);

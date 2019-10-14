@@ -1949,3 +1949,13 @@ end
 @test Meta.lower(Main, :((a=a,b=b...))) == Expr(:error, "\"...\" expression cannot be used as named tuple field value")
 @test Meta.lower(Main, :(f(;a...,b...)=0)) == Expr(:error, "invalid \"...\" on non-final keyword argument")
 @test Meta.lower(Main, :(f(;a...,b=0)=0)) == Expr(:error, "invalid \"...\" on non-final keyword argument")
+
+# global declarations from the top level are not inherited by functions.
+# don't allow such a declaration to override an outer local, since it's not
+# clear what it should do.
+@test Meta.lower(Main, :(let
+                           x = 1
+                           let
+                             global x
+                           end
+                         end)) == Expr(:error, "`global x`: x is a local variable in its enclosing scope")
