@@ -775,6 +775,7 @@ static void start_basefiber(void)
 #endif
 static char *jl_alloc_fiber(unw_context_t *t, size_t *ssize, jl_task_t *owner)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     char *stkbuf = (char*)jl_malloc_stack(ssize, owner);
     if (stkbuf == NULL)
         return NULL;
@@ -814,6 +815,7 @@ static void jl_set_fiber(unw_context_t *t)
 }
 static void jl_init_basefiber(size_t ssize)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     int r = unw_getcontext(&ptls->base_ctx);
     if (r != 0)
         jl_error("unw_getcontext failed");
@@ -821,12 +823,11 @@ static void jl_init_basefiber(size_t ssize)
     if (r != 0)
         jl_error("unw_init_local failed");
 #ifdef COPY_STACKS
-    jl_ptls_t ptls = jl_get_ptls_states();
     char *stkbuf = jl_alloc_fiber(&ptls->base_ctx, &ssize, NULL);
     ptls->stackbase = stkbuf + ssize;
     ptls->stacksize = ssize;
-    sanitizer_start_switch_fiber(stkbuf, sksize);
-    jl_start_fiber(jl_root_task, &ptls->base_ctx); // finishes initializing jl_basectx
+    sanitizer_start_switch_fiber(stkbuf, ssize);
+    jl_start_fiber(jl_root_task->uc_mcontext, &ptls->base_ctx); // finishes initializing jl_basectx
     sanitizer_finish_switch_fiber();
 #endif
 }
