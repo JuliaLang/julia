@@ -639,3 +639,17 @@ function getindex(r::RemoteChannel, args...)
     end
     return remotecall_fetch(getindex, r.where, r, args...)
 end
+
+function Base.iterate(c::RemoteChannel, state=nothing)
+    try
+        return (take!(c), nothing)
+    catch e
+        if isa(e, InvalidStateException) && e.state == :closed
+            return nothing
+        else
+            rethrow()
+        end
+    end
+end
+
+Base.IteratorSize(::Type{<:RemoteChannel}) = Base.SizeUnknown()

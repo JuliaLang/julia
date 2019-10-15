@@ -304,6 +304,19 @@ test_indexing(Future(id_other))
 test_indexing(RemoteChannel())
 test_indexing(RemoteChannel(id_other))
 
+let ch = RemoteChannel(),
+    f = remotecall(default_worker_pool()) do
+        for i in 1:3
+            put!(ch, i)
+        end
+        close(ch)
+        nothing
+    end
+    @test collect(ch) == 1:3
+    @test collect(ch) == []
+    @test fetch(f) === nothing
+end
+
 # Test ser/deser to non-ClusterSerializer objects.
 function test_regular_io_ser(ref::Distributed.AbstractRemoteRef)
     io = IOBuffer()
