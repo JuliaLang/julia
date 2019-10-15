@@ -262,14 +262,15 @@ void jl_init_threadtls(int16_t tid)
                                     sizeof(size_t));
     }
     ptls->defer_signal = 0;
-    void *bt_data = malloc(sizeof(uintptr_t) * (JL_MAX_BT_SIZE + 1));
+    jl_bt_element_t *bt_data = (jl_bt_element_t*)
+        malloc(sizeof(jl_bt_element_t) * (JL_MAX_BT_SIZE + 1));
     if (bt_data == NULL) {
         jl_printf(JL_STDERR, "could not allocate backtrace buffer\n");
         gc_debug_critical_error();
         abort();
     }
-    memset(bt_data, 0, sizeof(uintptr_t) * (JL_MAX_BT_SIZE + 1));
-    ptls->bt_data = (uintptr_t*)bt_data;
+    memset(bt_data, 0, sizeof(jl_bt_element_t) * (JL_MAX_BT_SIZE + 1));
+    ptls->bt_data = bt_data;
     ptls->sig_exception = NULL;
     ptls->previous_exception = NULL;
 #ifdef _OS_WINDOWS_
