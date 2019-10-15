@@ -839,7 +839,15 @@ julia> map(uppercase∘first, ["apple", "banana", "carrot"])
  'B'
  'C'
 
-julia> fs = (x -> 2x, x -> x/2, x -> x-1, x -> x+1); f = ∘(fs...); f(3) == 3
+julia> fs = [
+           x -> 2x
+           x -> x/2
+           x -> x-1
+           x -> x+1
+       ];
+
+julia> ∘(fs...)(3)
+3.0
 true
 ```
 """
