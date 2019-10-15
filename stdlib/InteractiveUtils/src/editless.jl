@@ -54,7 +54,7 @@ given editor.  It should take 2 or 3 arguments, as follows:
 * `command` - an array of strings representing the editor command. It can be
   safely interpolated into a command created using backtick notation.
 * `path`  - the path to the source file to open
-* `line` - the optional line number to open to; if specified the returned 
+* `line` - the optional line number to open to; if specified the returned
    command must open the file at the given line.
 
 `fn` must return either an appropriate `Cmd` object to open a file, a
