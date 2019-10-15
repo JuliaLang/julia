@@ -829,7 +829,7 @@ entered in the Julia REPL (and most editors, appropriately configured) by typing
 
 Function composition also works in prefix form: `∘(f,g)` is the same as `f ∘ g`.
 The prefix form also supports multiple function composition: `∘(f,g,h) = f ∘ g ∘ h`
-and splatting for an iterable with functions `∘(fs...)`
+and splatting `∘(fs...)` for an iterable.
 
 # Examples
 ```jldoctest
@@ -844,11 +844,8 @@ true
 ```
 """
 ∘(f, g) = (x...)->f(g(x...))
-
 ∘(f, g, h) = ∘(f ∘ g, h)
 ∘(f, g, h, is...) = ∘(∘(f, g), h, is...)
-
-
 
 """
     !f::Function
