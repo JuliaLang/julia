@@ -783,6 +783,7 @@ is_id_start_char(c::AbstractChar) = ccall(:jl_id_start_char, Cint, (UInt32,), c)
 is_id_char(c::AbstractChar) = ccall(:jl_id_char, Cint, (UInt32,), c) != 0
 function isidentifier(s::AbstractString)
     isempty(s) && return false
+    (s == "true" || s == "false") && return false
     c, rest = Iterators.peel(s)
     is_id_start_char(c) || return false
     return all(is_id_char, rest)
