@@ -55,7 +55,7 @@ function find_curblock(domtree::DomTree, allblocks::Vector{Int}, curblock::Int)
     # TODO: This can be much faster by looking at current level and only
     # searching for those blocks in a sorted order
     while !(curblock in allblocks)
-        curblock = domtree.idoms[curblock]
+        curblock = domtree.idoms_bb[curblock]
     end
     return curblock
 end
