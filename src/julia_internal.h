@@ -1048,8 +1048,6 @@ struct _jl_sysimg_fptrs_t;
 void jl_register_fptrs(uint64_t sysimage_base, const struct _jl_sysimg_fptrs_t *fptrs,
                        jl_method_instance_t **linfos, size_t n);
 
-extern arraylist_t partial_inst;
-
 #if jl_has_builtin(__builtin_unreachable) || defined(_COMPILER_GCC_) || defined(_COMPILER_INTEL_)
 #  define jl_unreachable() __builtin_unreachable()
 #else

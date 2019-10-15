@@ -34,8 +34,6 @@ int jl_is_toplevel_only_expr(jl_value_t *e);
 
 // type definition forms
 
-extern int inside_typedef;
-
 // this is a heuristic for allowing "redefining" a type to something identical
 SECT_INTERP static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
 {
@@ -107,7 +105,6 @@ SECT_INTERP static void check_can_assign_type(jl_binding_t *b, jl_value_t *rhs)
 }
 
 void jl_reinstantiate_inner_types(jl_datatype_t *t);
-void jl_reset_instantiate_inner_types(jl_datatype_t *t);
 
 SECT_INTERP void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
@@ -129,8 +126,6 @@ SECT_INTERP void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 static jl_value_t *eval_abstracttype(jl_expr_t *ex, interpreter_state *s)
 {
     jl_value_t **args = jl_array_ptr_data(ex->args);
-    if (inside_typedef)
-        jl_error("cannot eval a new abstract type definition while defining another type");
     jl_value_t *name = jl_quotenode_value(args[0]);
     jl_value_t *para = eval_value(args[1], s);
     JL_GC_PUSH1(&para);
@@ -144,8 +139,6 @@ static jl_value_t *eval_abstracttype(jl_expr_t *ex, interpreter_state *s)
 static jl_value_t *eval_primitivetype(jl_expr_t *ex, interpreter_state *s)
 {
     jl_value_t **args = (jl_value_t**)jl_array_ptr_data(ex->args);
-    if (inside_typedef)
-        jl_error("cannot eval a new primitive type definition while defining another type");
     jl_value_t *name = jl_quotenode_value(args[0]);
     jl_value_t *para = NULL, *vnb = NULL;
     JL_GC_PUSH1(&para);
@@ -222,7 +215,7 @@ static void eval_typeassign(jl_expr_t *ex, interpreter_state *s)
         jl_reinstantiate_inner_types(dt);
     }
     JL_CATCH {
-        jl_reset_instantiate_inner_types(dt);
+        dt->name->partial = NULL;
         jl_rethrow();
     }
 
@@ -238,8 +231,6 @@ static void eval_typeassign(jl_expr_t *ex, interpreter_state *s)
 static jl_value_t *eval_structtype(jl_expr_t *ex, interpreter_state *s)
 {
     jl_value_t **args = jl_array_ptr_data(ex->args);
-    if (inside_typedef)
-        jl_error("cannot eval a new struct type definition while defining another type");
     jl_value_t *name = jl_quotenode_value(args[0]);
     jl_value_t *para = eval_value(args[1], s);
     jl_value_t *fieldnames = NULL;
