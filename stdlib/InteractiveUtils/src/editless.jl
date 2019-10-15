@@ -69,7 +69,7 @@ match the value of `EDITOR`, `VISUAL` or `JULIA_EDITOR`.  For strings, only
 whole words can match (i.e. "vi" doesn't match "vim -g" but will match
 "/usr/bin/vi -m").
 
-If multiple defined editors match the one most recently defined will be
+If multiple defined editors match, the one most recently defined will be
 used.
 
 By default julia does not wait for the editor to close, running it in the
