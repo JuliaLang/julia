@@ -255,3 +255,25 @@ let m = Meta.@lower 1 + 1
     ret_2 = ir.stmts[ir.cfg.blocks[3].stmts[end]]
     @test isa(ret_2, Core.Compiler.ReturnNode) && ret_2.val == 2
 end
+
+# Issue #29213
+function f_29213()
+    while true
+        try
+            break
+        finally
+        end
+    end
+
+    while 1==1
+        try
+            ed = (_not_defined,)
+        finally
+            break
+        end
+    end
+
+    ed = string(ed)
+end
+
+@test_throws UndefVarError f_29213()
