@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Base.Meta
 using Core.IR
 const Compiler = Core.Compiler
 
@@ -135,7 +136,6 @@ end
 @test f32579(0, false) === false
 
 # Test for bug caused by renaming blocks improperly, related to PR #32145
-using Base.Meta
 let ci = (Meta.@lower 1 + 1).args[1]
     ci.code = [
         # block 1
@@ -166,7 +166,6 @@ let ci = (Meta.@lower 1 + 1).args[1]
 end
 
 # Test that GlobalRef in value position is non-canonical
-using Base.Meta
 let ci = (Meta.@lower 1 + 1).args[1]
     ci.code = [
         Expr(:call, GlobalRef(Main, :something_not_defined_please))
@@ -179,4 +178,41 @@ let ci = (Meta.@lower 1 + 1).args[1]
     ir = Core.Compiler.inflate_ir(ci)
     ir = Core.Compiler.compact!(ir, true)
     @test_throws ErrorException Core.Compiler.verify_ir(ir, false)
+end
+
+# Issue #29107
+let ci = (Meta.@lower 1 + 1).args[1]
+    ci.code = [
+        # Block 1
+        Core.Compiler.GotoNode(6),
+        # Block 2
+        # The following phi node gets deleted because it only has one edge, so
+        # the call to `something` is made to use the value of `something2()`,
+        # even though this value is defined after it. We don't want this to
+        # happen even though this block is dead because subsequent optimization
+        # passes may look at all code, dead or not.
+        Core.PhiNode(Any[2], Any[Core.SSAValue(4)]),
+        Expr(:call, :something, Core.SSAValue(2)),
+        Expr(:call, :something2),
+        Core.Compiler.GotoNode(2),
+        # Block 3
+        Core.Compiler.ReturnNode(1000)
+    ]
+    nstmts = length(ci.code)
+    ci.ssavaluetypes = nstmts
+    ci.codelocs = fill(Int32(1), nstmts)
+    ci.ssaflags = fill(Int32(0), nstmts)
+    ir = Core.Compiler.inflate_ir(ci)
+    ir = Core.Compiler.compact!(ir, true)
+    # Make sure that if there is a call to `something` (block 2 should be
+    # removed entirely with working DCE), it doesn't use any SSA values that
+    # come after it.
+    for i in 1:length(ir.stmts)
+        s = ir.stmts[i]
+        if isa(s, Expr) && s.head == :call && s.args[1] == :something
+            if isa(s.args[2], SSAValue)
+                @test s.args[2].id <= i
+            end
+        end
+    end
 end
