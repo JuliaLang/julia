@@ -597,4 +597,13 @@ end
     @test D ≈ C
 end
 
+@testset "multiplication of empty matrices without calling zero" begin
+    r, c = rand(0:9, 2)
+    A = collect(Number, rand(r, c))
+    B = rand(c, 0)
+    C = A * B
+    @test size(C) == (r, 0)
+    @test_throws MethodError zero(eltype(C))
+end
+
 end # module TestMatmul
