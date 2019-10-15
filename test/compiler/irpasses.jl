@@ -277,3 +277,16 @@ function f_29213()
 end
 
 @test_throws UndefVarError f_29213()
+
+function test_29253(K)
+    if true
+        try
+            error()
+        catch e
+        end
+    end
+    size(K,1)
+end
+let K = rand(2,2)
+    @test test_29253(K) == 2
+end

@@ -236,6 +236,13 @@ typedef struct _jl_llvm_functions_t {
 
 typedef struct _jl_method_instance_t jl_method_instance_t;
 
+typedef struct _jl_line_info_node_t {
+    jl_value_t *method;
+    jl_sym_t *file;
+    intptr_t line;
+    intptr_t inlined_at;
+} jl_line_info_node_t;
+
 // This type describes a single function body
 typedef struct _jl_code_info_t {
     // ssavalue-indexed arrays of properties:

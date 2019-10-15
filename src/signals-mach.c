@@ -448,10 +448,10 @@ void *mach_profile_listener(void *arg)
 
                 if (forceDwarf == 0) {
                     // Save the backtrace
-                    bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, 0);
+                    bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, 0);
                 }
                 else if (forceDwarf == 1) {
-                    bt_size_cur += rec_backtrace_ctx_dwarf((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, 0);
+                    bt_size_cur += rec_backtrace_ctx_dwarf((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, 0);
                 }
                 else if (forceDwarf == -1) {
                     jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
@@ -459,11 +459,11 @@ void *mach_profile_listener(void *arg)
 
                 forceDwarf = -2;
 #else
-                bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, 0);
+                bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, 0);
 #endif
 
                 // Mark the end of this block with 0
-                bt_data_prof[bt_size_cur++] = 0;
+                bt_data_prof[bt_size_cur++].uintptr = 0;
 
                 // Reset the alarm
                 kern_return_t ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);

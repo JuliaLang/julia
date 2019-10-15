@@ -243,10 +243,8 @@ macro propagate_inbounds(ex)
     if isa(ex, Expr)
         pushmeta!(ex, :inline)
         pushmeta!(ex, :propagate_inbounds)
-        esc(ex)
-    else
-        esc(ex)
     end
+    esc(ex)
 end
 
 """

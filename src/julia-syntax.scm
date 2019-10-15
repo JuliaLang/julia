@@ -2096,7 +2096,7 @@
                                            (tuple-wrap (cdr a) '())))
                                 (tuple-wrap (cdr a) (cons x run))))))
                     (expand-forms
-                     `(call (core _apply) ,f ,@(tuple-wrap argl '())))))
+                     `(call (core _apply_iterate) (top iterate) ,f ,@(tuple-wrap argl '())))))
 
                  ((and (eq? (identifier-name f) '^) (length= e 4) (integer? (cadddr e)))
                   (expand-forms
