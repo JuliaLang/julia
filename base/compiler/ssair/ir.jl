@@ -500,9 +500,11 @@ mutable struct IncrementalCompact
     ir::IRCode
     result::InstructionStream
     result_bbs::Vector{BasicBlock}
+
     ssa_rename::Vector{Any}
     bb_rename_pred::Vector{Int}
     bb_rename_succ::Vector{Int}
+
     used_ssas::Vector{Int}
     late_fixup::Vector{Int}
     perm::Vector{Int}
@@ -512,6 +514,7 @@ mutable struct IncrementalCompact
     # TODO: Switch these two to a min-heap of some sort
     pending_nodes::NewNodeStream  # New nodes that were after the compaction point at insertion time
     pending_perm::Vector{Int}
+
     # State
     idx::Int
     result_idx::Int
@@ -519,6 +522,7 @@ mutable struct IncrementalCompact
     renamed_new_nodes::Bool
     cfg_transforms_enabled::Bool
     fold_constant_branches::Bool
+
     function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=false)
         # Sort by position with attach after nodes after regular ones
         perm = my_sortperm(Int[let new_node = code.new_nodes.info[i]
@@ -871,7 +875,8 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
     # Note: We recursively kill as many edges as are obviously dead. However, this
     # may leave dead loops in the IR. We kill these later in a CFG cleanup pass (or
     # worstcase during codegen).
-    preds, succs = compact.result_bbs[compact.bb_rename_succ[to]].preds, compact.result_bbs[compact.bb_rename_pred[from]].succs
+    preds = compact.result_bbs[compact.bb_rename_succ[to]].preds
+    succs = compact.result_bbs[compact.bb_rename_pred[from]].succs
     deleteat!(preds, findfirst(x->x === compact.bb_rename_pred[from], preds)::Int)
     deleteat!(succs, findfirst(x->x === compact.bb_rename_succ[to], succs)::Int)
     # Check if the block is now dead
@@ -985,7 +990,15 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         result_idx += 1
     elseif isa(stmt, PhiNode)
         values = process_phinode_values(stmt.values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas, do_rename_ssa)
-        if length(stmt.edges) == 1 && isassigned(values, 1) &&
+        # Don't remove the phi node if it is before the definition of its value
+        # because doing so can create forward references. This should only
+        # happen with dead loops, but can cause problems when optimization
+        # passes look at all code, dead or not. This check should be
+        # unnecessary when DCE can remove those dead loops entirely, so this is
+        # just to be safe.
+        before_def = isassigned(values, 1) && isa(values[1], OldSSAValue) &&
+            idx < values[1].id
+        if length(stmt.edges) == 1 && isassigned(values, 1) && !before_def &&
                 length(compact.cfg_transforms_enabled ?
                     compact.result_bbs[compact.bb_rename_succ[active_bb]].preds :
                     compact.ir.cfg.blocks[active_bb].preds) == 1
