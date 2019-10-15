@@ -397,3 +397,13 @@ let io = IOBuffer()
     code_llvm(io, Base.vect, Tuple{Vararg{Union{Float64, Int64}}})
     @test !occursin("__apply", String(take!(io)))
 end
+
+function f1_30093(r)
+    while r[]>0
+        try
+        finally
+        end
+    end
+end
+
+@test f1_30093(Ref(0)) == nothing
