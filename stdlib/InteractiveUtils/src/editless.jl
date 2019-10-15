@@ -54,14 +54,14 @@ given editor.  It should take 2 or 3 arguments, as follows:
 * `command` - an array of strings representing the editor command. It can be
   safely interpolated into a command created using backtick notation.
 * `path`  - the path to the source file to open
-* `line` - the optional line number to open to; if specified the returned command
-  must open the file at the given line.
+* `line` - the optional line number to open to; if specified the returned 
+   command must open the file at the given line.
 
-`fn` must return either an appropriate `Cmd` object to open a
-file, a function (taking 0 arguments) that will open the file directly
-(returning a `Cmd` is the preferred approach), or `nothing`. Use `nothing`
-to indicate that this editor is not appropriate for the current environment
-and another editor should be attempted.
+`fn` must return either an appropriate `Cmd` object to open a file, a
+zero-argument function that will open the file directly, or `nothing`.
+Returning a `Cmd` is preferred over returning a function. Use `nothing` to
+indicate that this editor is not appropriate for the current environment and
+another editor should be attempted.
 
 The `pattern` argument is a string, regular expression, or an array of strings
 and regular expressions. For the `fn` to be called one of the patterns must
@@ -69,7 +69,7 @@ match the value of `EDITOR`, `VISUAL` or `JULIA_EDITOR`.  For strings, only
 whole words can match (i.e. "vi" doesn't match "vim -g" but will match
 "/usr/bin/vi -m").
 
-If multiple defined editors match, the one most recently defined will be
+If multiple defined editors match the one most recently defined will be
 used.
 
 By default julia does not wait for the editor to close, running it in the
@@ -79,8 +79,8 @@ set `wait=true` and julia will wait for the editor to close before resuming.
 If no editor entry can be found, then a file is opened by running
 `\$command \$path`.
 
-Note that a number of default editors (all priority 0) are already defined. All
-of the following commands should already work:
+Note that many editors are already defined. All of the following commands
+should already work:
 
 - emacs
 - vim
@@ -149,7 +149,8 @@ function define_default_editors()
         end
         define_editor("open") do cmd, path, line
             function()
-                @static if Sys.iswindows() # don't emit this ccall on other platforms
+                # don't emit this ccall on other platforms
+                @static if Sys.iswindows() 
                     result = ccall((:ShellExecuteW, "shell32"), stdcall,
                                    Int, (Ptr{Cvoid}, Cwstring, Cwstring,
                                          Ptr{Cvoid}, Ptr{Cvoid}, Cint),
