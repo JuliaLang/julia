@@ -255,3 +255,16 @@ let m = Meta.@lower 1 + 1
     ret_2 = ir.stmts[ir.cfg.blocks[3].stmts[end]]
     @test isa(ret_2, Core.Compiler.ReturnNode) && ret_2.val == 2
 end
+
+function test_29253(K)
+    if true
+        try
+            error()
+        catch e
+        end
+    end
+    size(K,1)
+end
+let K = rand(2,2)
+    @test test_29253(K) == 2
+end
