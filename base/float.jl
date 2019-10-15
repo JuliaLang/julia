@@ -765,7 +765,7 @@ The highest finite value representable by the given floating-point DataType `T`.
 # Examples
 ```jldoctest
 julia> floatmax(Float16)
-Float16(65500.0)
+Float16(6.55e4)
 
 julia> floatmax(Float32)
 3.4028235f38
