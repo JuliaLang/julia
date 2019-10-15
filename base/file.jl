@@ -399,7 +399,7 @@ end
 
 Update the last-modified timestamp on a file to the current time.
 
-If the file does not exists a new file is created.
+If the file does not exist a new file is created.
 
 Return `path`.
 
