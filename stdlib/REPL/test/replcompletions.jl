@@ -1013,3 +1013,8 @@ let s = "prevind(\"θ\",1,"
     @test r == 1:7
     @test s[r] == "prevind"
 end
+
+let s = "@undefmacro_27184.",
+    c, _ = test_complete(s)
+    @test isempty(c)
+end

@@ -418,6 +418,7 @@ function get_type(sym::Expr, fn::Module)
     # try to analyze nests of calls. if this fails, try using the expanded form.
     val, found = try_get_type(sym, fn)
     found && return val, found
+    sym.head == :macrocall && return (Any, false)
     return try_get_type(Meta.lower(fn, sym), fn)
 end
 
