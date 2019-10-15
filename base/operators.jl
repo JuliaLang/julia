@@ -838,12 +838,16 @@ julia> map(uppercase∘first, ["apple", "banana", "carrot"])
  'A'
  'B'
  'C'
+
+julia> fs = (x -> 2x, x -> x/2, x -> x-1, x -> x+1); f = ∘(fs...); f(3) == 3
+true
 ```
 """
 ∘(f, g) = (x...)->f(g(x...))
 
-∘(f::Function, g::Function, h::Function) = ∘(f, ∘(g, h))
-∘(f::Function, g::Function, h::Function, is::Function...) = ∘(∘(f, g), h, is...)
+∘(f, g, h) = ∘(f ∘ g, h)
+∘(f, g, h, is...) = ∘(∘(f, g), h, is...)
+
 
 
 """
