@@ -2455,4 +2455,4 @@ const DenseIdx = Union{IntRange,Integer}
     foo_26724(result, I...)
 @inline foo_26724(result, r::IntRange, I::DenseIdx...) =
     foo_26724((result..., length(r)), I...)
-@test @inferred(foo_26724((), 1:4, 1:5, 1:6)) === (3, 4, 5)
+@test @inferred(foo_26724((), 1:4, 1:5, 1:6)) === (4, 5, 6)
