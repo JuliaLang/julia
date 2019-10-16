@@ -8,11 +8,6 @@ New language features
 
 * `import` now allows quoted symbols, e.g. `import Base.:+` ([#33158]).
 
-* Function composition now supports multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
-and splatting `∘(fs...)` for composing an iterable collection of functions ([#33568]).
-
-* Function composition `∘` now has an ASCII alias `compose` ([#33573]).
-
 Language changes
 ----------------
 
@@ -38,6 +33,9 @@ New library functions
 * `readdir` output is now guaranteed to be sorted. The `sort` keyword allows opting out of sorting to get names in OS-native order ([#33542]).
 * The new `only(x)` function returns the one-and-only element of a collection `x`, and throws an `ArgumentError` if `x` contains zero or multiple elements. ([#33129])
 * `takewhile` and `dropwhile` have been added to the Iterators submodule ([#33437]).
+* Function composition now supports multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
+  and splatting `∘(fs...)` for composing an iterable collection of functions ([#33568]).
+* Function composition `∘` now has an ASCII alias `compose` ([#33573]).
 
 
 Standard library changes
