@@ -703,5 +703,5 @@ end
 end
 
 @testset "flatten empty tuple" begin
-    @test collect(Iterators.flatten(())) == 0
+    @test isempty(collect(Iterators.flatten(())))
 end
