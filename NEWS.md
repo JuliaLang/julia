@@ -11,6 +11,8 @@ New language features
 * Function composition now supports multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
 and splatting `∘(fs...)` for composing an iterable collection of functions ([#33568]).
 
+* Function composition `∘` now has an ASCII alias `compose`.
+
 Language changes
 ----------------
 

@@ -111,6 +111,7 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
     @test ∘(x -> x-2, x -> x-3, x -> x+5)(7) == 7
     fs = [x -> x[1:2], uppercase, lowercase]
     @test ∘(fs...)("ABC") == "AB"
+    @test ∘(fs...) === compose(fs...)
 end
 @testset "function negation" begin
     str = randstring(20)

@@ -763,6 +763,7 @@ export
 # misc
     atexit,
     atreplinit,
+    compose,
     exit,
     ntuple,
 

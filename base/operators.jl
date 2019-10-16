@@ -823,6 +823,7 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
 
 """
     f ∘ g
+    compose(f, g)
 
 Compose functions: i.e. `(f ∘ g)(args...)` means `f(g(args...))`. The `∘` symbol can be
 entered in the Julia REPL (and most editors, appropriately configured) by typing `\\circ<tab>`.
@@ -832,7 +833,7 @@ The prefix form supports composition of multiple functions: `∘(f, g, h) = f �
 and splatting `∘(fs...)` for composing an iterable collection of functions.
 
 !!!compat "Julia 1.4"
-    Multiple function composition requires at least Julia 1.4.
+    Multiple function composition and ASCII alias `compose` require at least Julia 1.4.
 
 # Examples
 ```jldoctest
@@ -851,10 +852,14 @@ julia> fs = [
 
 julia> ∘(fs...)(3)
 3.0
+
+julia> ∘(fs...) === compose(fs...)
+true
 ```
 """
 ∘(f, g) = (x...)->f(g(x...))
 ∘(f, g, h...) = ∘(f ∘ g, h...)
+const compose = ∘
 
 """
     !f::Function
