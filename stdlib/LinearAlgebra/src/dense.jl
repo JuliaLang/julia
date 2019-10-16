@@ -1426,9 +1426,7 @@ function cond(A::AbstractMatrix, p::Real=2)
             return opnorm(A, p)*opnorm(Ainv, p)
         catch e
             if isa(e, LAPACKException) || isa(e, SingularException)
-                TA = real(eltype(A))
-                Tout = typeof((one(TA)*zero(TA) + one(TA)*zero(TA))/one(TA))
-                return convert(Tout, Inf)
+                return convert(float(real(eltype(A))), Inf)
             else
                 rethrow()
             end

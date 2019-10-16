@@ -337,13 +337,4 @@ end
     @test F.p == []
 end
 
-@testset "Issue #33547, condition number of 2x2 matrix" begin
-    M = [1.0 -2.0; -2.0 -1.5]
-    @test cond(M, 1) ≈ 2.227272727272727
-end
-@testset "Issue #33297, condition number of singular matrix" begin
-    M = [1. 1.; 0. 0.]
-    @test cond(M, 1) == Inf
-end
-
 end # module TestLU
