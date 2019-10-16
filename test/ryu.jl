@@ -758,6 +758,11 @@ end # exp
     @test stringcompact(1.015625) == "1.01562"
     @test stringcompact(1.046875) == "1.04688"
     @test stringcompact(0.025621074) == "0.0256211"
+
+    # subnormals
+    @test stringcompact(eps(0.0)) == "5.0e-324"
+    @test stringcompact(eps(0f0)) == "1.0f-45"
+    @test stringcompact(eps(Float16(0.0))) == "6.0e-8"
 end
 
 end # Ryu
