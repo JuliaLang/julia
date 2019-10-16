@@ -16,7 +16,7 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
     ef = e - exponent_bias(T) - significand_bits(T)
     f_isinteger = mf & ((one(U) << -ef) - one(U)) == 0
 
-    if ef > 0 || ef < -52 || !f_isinteger
+    if ef > 0 || ef < -Base.significand_bits(T) || !f_isinteger
         # fixup subnormals
         if e == 0
             ef = 1 - exponent_bias(T) - significand_bits(T)
