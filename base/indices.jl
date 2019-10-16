@@ -108,14 +108,14 @@ promote_shape(::Tuple{}, ::Tuple{}) = ()
 
 function promote_shape(a::Tuple{Int,}, b::Tuple{Int,})
     if a[1] != b[1]
-        throw(DimensionMismatch("dimensions must match"))
+        throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b"))
     end
     return a
 end
 
 function promote_shape(a::Tuple{Int,Int}, b::Tuple{Int,})
     if a[1] != b[1] || a[2] != 1
-        throw(DimensionMismatch("dimensions must match"))
+        throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b"))
     end
     return a
 end
@@ -124,7 +124,7 @@ promote_shape(a::Tuple{Int,}, b::Tuple{Int,Int}) = promote_shape(b, a)
 
 function promote_shape(a::Tuple{Int, Int}, b::Tuple{Int, Int})
     if a[1] != b[1] || a[2] != b[2]
-        throw(DimensionMismatch("dimensions must match"))
+        throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b"))
     end
     return a
 end
@@ -154,12 +154,12 @@ function promote_shape(a::Dims, b::Dims)
     end
     for i=1:length(b)
         if a[i] != b[i]
-            throw(DimensionMismatch("dimensions must match"))
+            throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b, mismatch at $i"))
         end
     end
     for i=length(b)+1:length(a)
         if a[i] != 1
-            throw(DimensionMismatch("dimensions must match"))
+            throw(DimensionMismatch("dimensions must match: a has dims $a, must have singleton at dim $i"))
         end
     end
     return a
@@ -175,12 +175,12 @@ function promote_shape(a::Indices, b::Indices)
     end
     for i=1:length(b)
         if a[i] != b[i]
-            throw(DimensionMismatch("dimensions must match"))
+            throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b, mismatch at $i"))
         end
     end
     for i=length(b)+1:length(a)
         if a[i] != 1:1
-            throw(DimensionMismatch("dimensions must match"))
+            throw(DimensionMismatch("dimensions must match: a has dims $a, must have singleton at dim $i"))
         end
     end
     return a
