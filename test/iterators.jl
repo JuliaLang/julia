@@ -701,3 +701,7 @@ end
     @test_throws ArgumentError only(1 for ii in 1:10 if ii > 2)
     @test_throws ArgumentError only(1 for ii in 1:10 if ii > 200)
 end
+
+@testset "flatten empty tuple" begin
+    @test isempty(collect(Iterators.flatten(())))
+end
