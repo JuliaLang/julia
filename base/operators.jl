@@ -832,7 +832,7 @@ The prefix form supports composition of multiple functions: `∘(f, g, h) = f �
 and splatting `∘(fs...)` for composing an iterable collection of functions.
 
 !!!compat "Julia 1.4"
-    Multiple function composition requires at least Julia 1.4.    
+    Multiple function composition requires at least Julia 1.4.
 
 # Examples
 ```jldoctest
