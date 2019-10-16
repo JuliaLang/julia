@@ -384,6 +384,52 @@ end
     end
 end
 
+@testset "multiplication of sparse matrix and triangular matrix" begin
+    function _sparse_test_matrix(n, T)
+        if T == Int
+            return sparse(rand(0:4, n, n))
+        else
+            return sprandn(T, n, n, 0.6)
+        end
+    end
+    function _triangular_test_matrix(n, TA, T)
+        if T == Int
+            return TA(rand(0:9, n, n))
+        else
+            return TA(randn(T, n, n))
+        end
+    end
+
+    n = 5
+    for T1 in (Int, Float64, ComplexF32)
+        S = _sparse_test_matrix(n, T1)
+        MS = Matrix(S)
+        for T2 in (Int, Float64, ComplexF32)
+            for TM in (LowerTriangular, UnitLowerTriangular, UpperTriangular, UnitLowerTriangular)
+                T = _triangular_test_matrix(n, TM, T2)
+                MT = Matrix(T)
+                @test T * S ≈ MT * MS
+                @test isa(T * S, DenseMatrix)
+                @test T' * S ≈ MT' * MS
+                @test transpose(T) * S ≈ transpose(MT) * MS
+                @test T * S' ≈ MT * MS'
+                @test T * transpose(S) ≈ MT * transpose(MS)
+                @test T' * transpose(S) ≈ MT' * transpose(MS)
+                @test transpose(T) * S' ≈ transpose(MT) * S'
+
+                @test S * T ≈ MS * MT
+                @test isa(S * T, DenseMatrix)
+                @test S * T' ≈ MS * MT'
+                @test S * transpose(T) ≈ MS * transpose(MT)
+                @test S' * T ≈ MS' * MT
+                @test transpose(S) * T ≈ transpose(MS) * MT
+                @test S' * transpose(T) ≈ MS' * transpose(MT)
+                @test transpose(S) * T' ≈ transpose(MS) * MT'
+            end
+        end
+    end
+end
+
 @testset "Issue #30502" begin
     @test nnz(sprand(UInt8(16), UInt8(16), 1.0)) == 256
     @test nnz(sprand(UInt8(16), UInt8(16), 1.0, ones)) == 256
