@@ -9,7 +9,7 @@ New language features
 * `import` now allows quoted symbols, e.g. `import Base.:+` ([#33158]).
 
 * Function composition now supports multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
-and splatting `∘(fs...)` with an iterable collection of functions `fs` ([#33568]). 
+and splatting `∘(fs...)` for composing an iterable collection of functions ([#33568]). 
 
 Language changes
 ----------------
