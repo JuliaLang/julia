@@ -150,7 +150,7 @@ function define_default_editors()
         define_editor("open") do cmd, path, line
             function()
                 # don't emit this ccall on other platforms
-                @static if Sys.iswindows() 
+                @static if Sys.iswindows()
                     result = ccall((:ShellExecuteW, "shell32"), stdcall,
                                    Int, (Ptr{Cvoid}, Cwstring, Cwstring,
                                          Ptr{Cvoid}, Ptr{Cvoid}, Cint),
