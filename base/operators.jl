@@ -853,8 +853,8 @@ julia> fs = [
 julia> ∘(fs...)(3)
 3.0
 
-julia> ∘(fs...) === compose(fs...)
-true
+julia> compose(fs...)(3)
+3.0
 ```
 """
 ∘(f, g) = (x...)->f(g(x...))
