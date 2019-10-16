@@ -193,7 +193,9 @@ Similarly, the environment variable can be used to enable debug logging of
 modules, such as `Pkg`, or module roots (see [`Base.moduleroot`](@ref)). To
 enable all debug logging, use the special value `all`.
 
-To turn debug logging on in REPL, set the environment variable to module `Main`:
+To turn debug logging on from the REPL, set `ENV["JULIA_DEBUG"]` to the
+name of the module of interest. Functions defined in the REPL belong to 
+module `Main`; logging for them can be enabled like this:
 ```julia-repl
 julia> foo() = @debug "foo"
 foo (generic function with 1 method)
