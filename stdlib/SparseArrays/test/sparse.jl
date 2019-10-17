@@ -386,7 +386,7 @@ end
 
 @testset "multiplication of sparse matrix and triangular matrix" begin
     _sparse_test_matrix(n, T) =  T == Int ? sparse(rand(0:4, n, n)) : sprandn(T, n, n, 0.6)
-    _triangular_test_matrix(n, TA, T) = T == Int ? TA(rand(0:9), n, n) : TA(randn(T, n, n))
+    _triangular_test_matrix(n, TA, T) = T == Int ? TA(rand(0:9, n, n)) : TA(randn(T, n, n))
 
     n = 5
     for T1 in (Int, Float64, ComplexF32)
@@ -396,23 +396,12 @@ end
             for TM in (LowerTriangular, UnitLowerTriangular, UpperTriangular, UnitLowerTriangular)
                 T = _triangular_test_matrix(n, TM, T2)
                 MT = Matrix(T)
-                @test T * S ≈ MT * MS
                 @test isa(T * S, DenseMatrix)
-                @test T' * S ≈ MT' * MS
-                @test transpose(T) * S ≈ transpose(MT) * MS
-                @test T * S' ≈ MT * MS'
-                @test T * transpose(S) ≈ MT * transpose(MS)
-                @test T' * transpose(S) ≈ MT' * transpose(MS)
-                @test transpose(T) * S' ≈ transpose(MT) * S'
-
-                @test S * T ≈ MS * MT
                 @test isa(S * T, DenseMatrix)
-                @test S * T' ≈ MS * MT'
-                @test S * transpose(T) ≈ MS * transpose(MT)
-                @test S' * T ≈ MS' * MT
-                @test transpose(S) * T ≈ transpose(MS) * MT
-                @test S' * transpose(T) ≈ MS' * transpose(MT)
-                @test transpose(S) * T' ≈ transpose(MS) * MT'
+                for transT in (identity, adjoint, transpose), transS in (identity, adjoint, transpose)
+                    @test transT(T) * transS(S) ≈ transT(MT) * transS(MS)
+                    @test transS(S) * transT(T) ≈ transS(MS) * transT(MT)
+                end
             end
         end
     end
