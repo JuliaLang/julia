@@ -361,9 +361,9 @@ function copyto!(A::DenseMatrix{T}, B::AbstractSparseMatrixCSC) where {T}
     fill!(A, zero(T))
     offset = first(CartesianIndices(A)) - CartesianIndex(1, 1)
     @inbounds for col in 1:size(B, 2), ptr in nzrange(B, col)
-            row = rowvals(B)[ptr]
-            val = nonzeros(B)[ptr]
-            A[offset + CartesianIndex((row, col))] = val
+        row = rowvals(B)[ptr]
+        val = nonzeros(B)[ptr]
+        A[offset + CartesianIndex((row, col))] = val
     end
     return A
 end
