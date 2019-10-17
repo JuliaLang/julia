@@ -344,6 +344,9 @@ struct StepRangeLen{T,R,S} <: AbstractRange{T}
     offset::Int  # the index of ref
 
     function StepRangeLen{T,R,S}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S}
+        if T <: Integer && !isinteger(step)
+            throw(ArgumentError("StepRangeLen{<:Integer} cannot have non-integer step"))
+        end
         len >= 0 || throw(ArgumentError("length cannot be negative, got $len"))
         1 <= offset <= max(1,len) || throw(ArgumentError("StepRangeLen: offset must be in [1,$len], got $offset"))
         new(ref, step, len, offset)
