@@ -354,6 +354,20 @@ function copyto!(A::AbstractSparseMatrixCSC, B::AbstractSparseMatrixCSC)
     return A
 end
 
+function copyto!(A::AbstractMatrix{T}, B::AbstractSparseMatrixCSC) where {T}
+    if size(A) != size(B)
+        throw(ArgumentError("source and destination must have same size (got $(size(B)) and $(size(A)))"))
+    end
+    fill!(A, zero(T))
+    offset = first(CartesianIndices(A)) - CartesianIndex(1, 1)
+    @inbounds for col in 1:size(B, 2), ptr in nzrange(B, col)
+            row = rowvals(B)[ptr]
+            val = nonzeros(B)[ptr]
+            A[offset + CartesianIndex((row, col))] = val
+    end
+    return A
+end
+
 ## similar
 #
 # parent method for similar that preserves stored-entry structure (for when new and old dims match)
