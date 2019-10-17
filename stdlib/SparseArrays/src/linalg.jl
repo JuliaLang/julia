@@ -28,7 +28,7 @@ function mul!(C::StridedVecOrMat, A::AbstractSparseMatrixCSC, B::Union{StridedVe
 end
 *(A::AbstractSparseMatrixCSC{TA}, x::StridedVector{Tx}) where {TA,Tx} =
     (T = promote_op(matprod, TA, Tx); mul!(similar(x, T, size(A, 1)), A, x, true, false))
-*(A::AbstractSparseMatrixCSC{TA}, B::Union{StridedOrTriangularMatrix{Tx},Adjoint{<:Any,<:StridedOrTriangularMatrix{Tx}},Transpose{<:Any,<:StridedOrTriangularMatrix{Tx}}}) where {TA,Tx} =
+*(A::AbstractSparseMatrixCSC{TA}, B::AdjOrTransStridedOrTriangularMatrix{Tx}) where {TA,Tx} =
     (T = promote_op(matprod, TA, Tx); mul!(similar(B, T, (size(A, 1), size(B, 2))), A, B, true, false))
 
 function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedOrTriangularMatrix}, α::Number, β::Number)
