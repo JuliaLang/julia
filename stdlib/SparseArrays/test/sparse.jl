@@ -385,20 +385,8 @@ end
 end
 
 @testset "multiplication of sparse matrix and triangular matrix" begin
-    function _sparse_test_matrix(n, T)
-        if T == Int
-            return sparse(rand(0:4, n, n))
-        else
-            return sprandn(T, n, n, 0.6)
-        end
-    end
-    function _triangular_test_matrix(n, TA, T)
-        if T == Int
-            return TA(rand(0:9, n, n))
-        else
-            return TA(randn(T, n, n))
-        end
-    end
+    _sparse_test_matrix(n, T) =  T == Int ? sparse(rand(0:4, n, n)) : sprandn(T, n, n, 0.6)
+    _triangular_test_matrix(n, TA, T) = T == Int ? TA(rand(0:9), n, n) : TA(randn(T, n, n))
 
     n = 5
     for T1 in (Int, Float64, ComplexF32)
