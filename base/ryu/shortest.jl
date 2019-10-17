@@ -51,7 +51,7 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
             if T == Float32 || T == Float16
                 if q != 0 && div(c - 1, 10) <= div(a, 10)
                     l = pow5_inv_bitcount(T) + pow5bits(q - 1) - 1
-                    mul = T == Float32 ? FLOAT_POW5_INV_SPLIT[q] : HALF_POW5_INV_SPLIT[q]
+                    mul = pow5invsplit_lookup(T, q-1)
                     b_lastdigit = (mulshift(v, mul, -e2 + q - 1 + l) % 10) % UInt8
                 end
             end
@@ -74,7 +74,7 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
             if T == Float32 || T == Float16
                 if q != 0 && div(c - 1, 10) <= div(a, 10)
                     j = q - 1 - (pow5bits(i + 1) - pow5_bitcount(T))
-                    mul = T == Float32 ? FLOAT_POW5_SPLIT[i + 2] : HALF_POW5_SPLIT[i + 2]
+                    mul = pow5split_lookup(T, i+1)
                     b_lastdigit = (mulshift(v, mul, j) % 10) % UInt8
                 end
             end
