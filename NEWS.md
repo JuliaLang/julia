@@ -58,6 +58,8 @@ Standard library changes
 
 * `ldlt` and non-pivoted `lu` now throw a new `ZeroPivotException` type ([#33372]).
 
+* `cond(A, p)` with `p=1` or `p=Inf` now computes the exact condition number instead of an estimate ([#33547]).
+
 #### Random
 
 * `AbstractRNG`s now behave like scalars when used in broadcasting ([#33213]).

@@ -478,13 +478,6 @@ inv!(A::LU{T,<:StridedMatrix}) where {T} =
     ldiv!(A.factors, copy(A), Matrix{T}(I, size(A, 1), size(A, 1)))
 inv(A::LU{<:BlasFloat,<:StridedMatrix}) = inv!(copy(A))
 
-function _cond1Inf(A::LU{<:BlasFloat,<:StridedMatrix}, p::Number, normA::Real)
-    if p != 1 && p != Inf
-        throw(ArgumentError("p must be either 1 or Inf"))
-    end
-    return inv(LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, normA))
-end
-
 # Tridiagonal
 
 # See dgttrf.f
