@@ -556,6 +556,10 @@ end
     B = sparse(rand(Float32, 3, 3))
     copyto!(A, B)
     @test A == B
+    B = sprand(5, 5, 0.2)
+    A = Matrix(B)
+    A´ = similar(A)
+    @test copyto!(A, B) == copyto!(A´, Matrix(B))
 end
 
 @testset "conj" begin
