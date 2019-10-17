@@ -488,21 +488,10 @@ end
                 for B in (BU, BL)
                     MB = Matrix(B)
                     MT = Matrix(T)
-                    @test B * T ≈ MB * MT
-                    @test B * T' ≈ MB * MT'
-                    @test B * transpose(T) ≈ MB * transpose(MT)
-                    @test B' * T ≈ MB' * MT
-                    @test transpose(B) * T ≈ transpose(MB) * MT
-                    @test B' * T' ≈ MB' * MT'
-                    @test transpose(B) * transpose(T) ≈ transpose(MB) * transpose(MT)
-
-                    @test T * B ≈ MT * MB
-                    @test T * B' ≈ MT * MB'
-                    @test T * transpose(B) ≈ MT * transpose(MB)
-                    @test T' * B ≈ MT' * MB
-                    @test transpose(T) * B ≈ transpose(MT) * MB
-                    @test T' * B' ≈ MT' * MB'
-                    @test transpose(T) * transpose(B) ≈ transpose(MT) * transpose(MB)
+                    for transB in (identity, adjoint, transpose), transT in (identity, adjoint, transpose)
+                        @test transB(B) * transT(T) ≈ transB(MB) * transT(MT)
+                        @test transT(T) * transB(B) ≈ transT(MT) * transB(MB)
+                    end
                 end
             end
         end
