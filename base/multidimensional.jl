@@ -912,8 +912,8 @@ end
 function copyto!(dest::AbstractArray{T1,N1}, Rdest::CartesianIndices{N1},
                   src::AbstractArray{T2,N2}, Rsrc::CartesianIndices{N2}) where {T1,T2,N1,N2}
     isempty(Rdest) && return dest
-    if size(Rdest) != size(Rsrc)
-        throw(ArgumentError("source and destination must have same size (got $(size(Rsrc)) and $(size(Rdest)))"))
+    if length(Rdest) != length(Rsrc)
+        throw(ArgumentError("source and destination must have same length (got $(length(Rsrc)) and $(length(Rdest)))"))
     end
     checkbounds(dest, first(Rdest))
     checkbounds(dest, last(Rdest))
