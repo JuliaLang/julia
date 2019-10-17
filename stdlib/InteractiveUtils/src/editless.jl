@@ -108,7 +108,11 @@ edit(m::Module) = edit(pathof(m))
 if Sys.iswindows()
     function less(file::AbstractString, line::Integer)
         pager = shell_split(get(ENV, "PAGER", "more"))
-        g = pager[1] == "more" ? "" : "g"
+        g = "g"
+        if pager[1]=="more"
+            g = ""
+            line -= 1
+        end
         run(Cmd(`$pager +$(line)$(g) \"$file\"`, windows_verbatim = true))
         nothing
     end
