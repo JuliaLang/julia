@@ -354,7 +354,11 @@ function copyto!(A::AbstractSparseMatrixCSC, B::AbstractSparseMatrixCSC)
     return A
 end
 
-function copyto!(A::DenseMatrix{T}, B::AbstractSparseMatrixCSC) where {T}
+copyto!(A::AbstractMatrix, B::AbstractSparseMatrixCSC) = _sparse_copyto!(A, B)
+# Ambiguity resolution
+copyto!(A::PermutedDimsArray, B::AbstractSparseMatrixCSC) = _sparse_copyto!(A, B)
+
+function _sparse_copyto!(A::AbstractMatrix{T}, B::AbstractSparseMatrixCSC) where {T}
     if size(A) != size(B)
         throw(ArgumentError("source and destination must have same size (got $(size(B)) and $(size(A)))"))
     end
