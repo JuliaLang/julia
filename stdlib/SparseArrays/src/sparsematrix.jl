@@ -354,7 +354,7 @@ function copyto!(A::AbstractSparseMatrixCSC, B::AbstractSparseMatrixCSC)
     return A
 end
 
-function copyto!(A::AbstractMatrix{T}, B::AbstractSparseMatrixCSC) where {T}
+function copyto!(A::DenseMatrix{T}, B::AbstractSparseMatrixCSC) where {T}
     if size(A) != size(B)
         throw(ArgumentError("source and destination must have same size (got $(size(B)) and $(size(A)))"))
     end
