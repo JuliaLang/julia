@@ -64,6 +64,12 @@ end
         B[5:7,2:3] .= 0
         @test all(x->x==0, B)
     end
+    let A = collect(reshape(1:12, 3, 2, 2)), B = collect(reshape(65:128, 8,8))
+        copyto!(B, CartesianIndices((5:7,2:3)), A, CartesianIndices((1:3, 2:2, 1:2)))
+        @test vec(B[5:7,2:3]) == vec(A[1:3, 2:2, 1:2])
+        copyto!(A, CartesianIndices((1:3,1:2, 1:1)), B, CartesianIndices((4:5, 3:5)))
+        @test vec(A[1:3,1:2, 1:1]) == vec(B[4:5, 3:5])
+    end
 end
 
 @testset "shallow and deep copying" begin

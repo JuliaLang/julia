@@ -909,8 +909,8 @@ function copyto!(dest::AbstractArray{T1,N}, src::AbstractArray{T2,N}) where {T1,
     dest
 end
 
-function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
-                  src::AbstractArray{T2,N}, Rsrc::CartesianIndices{N}) where {T1,T2,N}
+function copyto!(dest::AbstractArray{T1,N1}, Rdest::CartesianIndices{N1},
+                  src::AbstractArray{T2,N2}, Rsrc::CartesianIndices{N2}) where {T1,T2,N1,N2}
     isempty(Rdest) && return dest
     if size(Rdest) != size(Rsrc)
         throw(ArgumentError("source and destination must have same size (got $(size(Rsrc)) and $(size(Rdest)))"))
@@ -920,16 +920,24 @@ function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
     checkbounds(src, first(Rsrc))
     checkbounds(src, last(Rsrc))
     src′ = unalias(dest, src)
-    ΔI = first(Rdest) - first(Rsrc)
     if @generated
-        quote
-            @nloops $N i (n->Rsrc.indices[n]) begin
-                @inbounds @nref($N,dest,n->i_n+ΔI[n]) = @nref($N,src′,i)
+        if N1 == N2
+            ΔI = first(Rdest) - first(Rsrc)
+            quote
+                @nloops $N1 i (n->Rsrc.indices[n]) begin
+                    @inbounds @nref($N1,dest,n->i_n+ΔI[n]) = @nref($N1,src′,i)
+                end
+            end
+        else
+            quote
+                for (Is, Id) in zip(Rsrc, Rdest)
+                    @inbounds dest[Id] = src′[Is]
+                end
             end
         end
     else
-        for I in Rsrc
-            @inbounds dest[I + ΔI] = src′[I]
+        for (Is, Id) in zip(Rsrc, Rdest)
+            @inbounds dest[Id] = src′[Is]
         end
     end
     dest
@@ -939,7 +947,8 @@ end
     copyto!(dest, Rdest::CartesianIndices, src, Rsrc::CartesianIndices) -> dest
 
 Copy the block of `src` in the range of `Rsrc` to the block of `dest`
-in the range of `Rdest`. The sizes of the two regions must match.
+in the range of `Rdest`. The sizes of the two ranges must match, but the ranks of `src` and
+`dest` may differ.
 """
 copyto!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
 
