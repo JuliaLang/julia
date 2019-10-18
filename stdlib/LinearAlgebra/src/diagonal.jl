@@ -672,6 +672,15 @@ end
 cholesky(A::Diagonal, ::Val{false} = Val(false); check::Bool = true) =
     cholesky!(cholcopy(A), Val(false); check = check)
 
+function getproperty(C::Cholesky{<:Any,<:Diagonal}, d::Symbol)
+    Cfactors = getfield(C, :factors)
+    if d in (:U, :L, :UL)
+        return Cfactors
+    else
+        return getfield(C, d)
+    end
+end
+
 Base._sum(A::Diagonal, ::Colon) = sum(A.diag)
 
 function logabsdet(A::Diagonal)
