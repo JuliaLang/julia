@@ -358,11 +358,11 @@ copyto!(A::AbstractMatrix, B::AbstractSparseMatrixCSC) = _sparse_copyto!(A, B)
 # Ambiguity resolution
 copyto!(A::PermutedDimsArray, B::AbstractSparseMatrixCSC) = _sparse_copyto!(A, B)
 
-function _sparse_copyto!(dest::AbstractMatrix{T}, src::AbstractSparseMatrixCSC) where {T}
+function _sparse_copyto!(dest::AbstractMatrix, src::AbstractSparseMatrixCSC{T}) where {T}
     dest === src && return dest
     checkbounds(dest, axes(src)...)
     fill!(dest, zero(T))
-    @inbounds for col in eachcol(src), ptr in nzrange(src, col)
+    @inbounds for col in 1:size(src, 2), ptr in nzrange(src, col)
         row = rowvals(src)[ptr]
         val = nonzeros(src)[ptr]
         dest[row, col] = val
@@ -380,7 +380,7 @@ function copyto!(dest::AbstractMatrix{T}, Rdest::CartesianIndices{2},
     checkbounds(dest, last(Rdest))
     checkbounds(src, first(Rsrc))
     checkbounds(src, last(Rsrc))
-    src′ = unalias(dest, src)
+    src′ = Base.unalias(dest, src)
     for I in Rdest
         @inbounds dest[I] = zero(T)
     end

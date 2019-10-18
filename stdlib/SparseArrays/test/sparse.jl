@@ -557,9 +557,16 @@ end
     copyto!(A, B)
     @test A == B
     B = sprand(5, 5, 0.2)
-    A = Matrix(B)
+    A = rand(5,5)
     A´ = similar(A)
     @test copyto!(A, B) == copyto!(A´, Matrix(B))
+    A = rand(5,5)
+    A´ = similar(A)
+    Rsrc = CartesianIndices((3:4, 2:3))
+    Rdest = CartesianIndices((2:3, 1:2))
+    copyto!(A, Rdest, B, Rsrc)
+    copyto!(A´, Rdest, Matrix(B), Rsrc)
+    @test A[Rdest] == A´[Rdest] == Matrix(B)[Rsrc]
 end
 
 @testset "conj" begin
