@@ -48,7 +48,7 @@
             @test joinpath(S("C:"),S("foo"),S("D:bar"),S("baz")) == "D:bar$(sep)baz"
 
             # relative folders and case-insensitive drive letters
-            @test joinpath(S("C:\\a\\b"), S("c:c\\e")) == "c:\\a\\b\\c\\e"
+            @test joinpath(S("C:\\a\\b"), S("c:c\\e")) == "C:\\a\\b\\c\\e"
 
             # UNC paths
             @test joinpath(S("\\\\server"), S("share")) == "\\\\server\\share"

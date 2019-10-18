@@ -263,7 +263,6 @@ function joinpath(path::AbstractString, paths::AbstractString...)::String
                 result_path = p_path
                 continue
             end
-            result_drive = p_drive # same drive in different case
         end
 
         # second path is relative to the first
@@ -305,6 +304,11 @@ end # os-test
 Join path components into a full path. If some argument is an absolute path or
 (on Windows) has a drive specification that doesn't match the drive computed for
 the join of the preceding paths, then prior components are dropped.
+
+Note on Windows since there is a current directory for each drive, `joinpath("c:", "foo")`
+represents a path relative to the current directory on drive "c:" so this is equal to "c:foo",
+not "c:\\foo". Furthermore, `joinpath` treats this as a non-absolute path and ignores the drive
+letter casing, hence `joinpath("C:\\A","c:b") = "C:\\A\\b"`.
 
 # Examples
 ```jldoctest
