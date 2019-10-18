@@ -893,7 +893,8 @@ JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz)
         jl_throw(jl_memory_exception);
     gc_invoke_callbacks(jl_gc_cb_notify_external_alloc_t,
         gc_cblist_notify_external_alloc, (v, allocsz));
-    ptls->gc_num.allocd += allocsz;
+    jl_gc_count_allocd(jl_valueof(&v->header), allocsz, JL_MEMPROF_TAG_DOMAIN_CPU |
+                                                        JL_MEMPROF_TAG_ALLOC_BIGALLOC);
     ptls->gc_num.bigalloc++;
 #ifdef MEMDEBUG
     memset(v, 0xee, allocsz);
@@ -933,7 +934,8 @@ static bigval_t **sweep_big_list(int sweep_full, bigval_t **pv) JL_NOTSAFEPOINT
             *pv = nxt;
             if (nxt)
                 nxt->prev = pv;
-            gc_num.freed += v->sz&~3;
+            jl_gc_count_freed(jl_valueof(&v->header), v->sz&~3, JL_MEMPROF_TAG_DOMAIN_CPU |
+                                                                JL_MEMPROF_TAG_ALLOC_BIGALLOC);
 #ifdef MEMDEBUG
             memset(v, 0xbb, v->sz&~3);
 #endif
@@ -984,10 +986,44 @@ void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a) JL_NOTSAFEPOINT
     ptls->heap.mallocarrays = ma;
 }
 
-void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT
+void jl_gc_count_allocd(void * addr, size_t sz, uint16_t tag) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     ptls->gc_num.allocd += sz;
+
+    if (__unlikely(jl_memprofile_is_running())) {
+        jl_memprofile_track_alloc(addr, tag, sz);
+    }
+}
+
+void jl_gc_count_freed(void * addr, size_t sz, uint16_t tag) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    ptls->gc_num.freed += sz;
+
+    if (__unlikely(jl_memprofile_is_running())) {
+        jl_memprofile_track_dealloc(addr, tag);
+    }
+}
+
+void jl_gc_count_reallocd(void * oldaddr, size_t oldsz, void * newaddr, size_t newsz, uint16_t tag) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (oldsz < newsz) {
+        ptls->gc_num.allocd += newsz - oldsz;
+    } else {
+        ptls->gc_num.freed += oldsz - newsz;
+    }
+
+    // Our memprofile does not yet have a way to represent "realloc", so we just
+    // represent this as a free immediately followed by a malloc.  This makes the
+    // absolute value of the memory deltas look larger than the Julia GC's statistics
+    // would have you believe, as the Julia GC shows only the difference between
+    // the two values when realloc'ing.
+    if (__unlikely(jl_memprofile_is_running())) {
+        jl_memprofile_track_dealloc(oldaddr, tag);
+        jl_memprofile_track_alloc(newaddr, tag, newsz);
+    }
 }
 
 static void combine_thread_gc_counts(jl_gc_num_t *dest) JL_NOTSAFEPOINT
@@ -1048,7 +1084,7 @@ static void jl_gc_free_array(jl_array_t *a) JL_NOTSAFEPOINT
             jl_free_aligned(d);
         else
             free(d);
-        gc_num.freed += array_nbytes(a);
+        jl_gc_count_freed(d, array_nbytes(a), JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_STDALLOC);
     }
 }
 
@@ -1140,7 +1176,6 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
     return jl_gc_big_alloc(ptls, osize);
 #endif
     maybe_collect(ptls);
-    ptls->gc_num.allocd += osize;
     ptls->gc_num.poolalloc++;
     // first try to use the freelist
     jl_taggedvalue_t *v = p->freelist;
@@ -1155,6 +1190,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
             pg->nfree = 0;
             pg->has_young = 1;
         }
+        jl_gc_count_allocd(jl_valueof(v), osize, JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_POOLALLOC);
         return jl_valueof(v);
     }
     // if the freelist is empty we reuse empty but not freed pages
@@ -1179,6 +1215,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
         next = (jl_taggedvalue_t*)((char*)v + osize);
     }
     p->newpages = next;
+    jl_gc_count_allocd(jl_valueof(v), osize, JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_POOLALLOC);
     return jl_valueof(v);
 }
 
@@ -1203,8 +1240,6 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
     uint8_t *ages = pg->ages;
     jl_taggedvalue_t *v = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
     char *lim = (char*)v + GC_PAGE_SZ - GC_PAGE_OFFSET - osize;
-    size_t old_nfree = pg->nfree;
-    size_t nfree;
 
     int freedall = 1;
     int pg_skpd = 1;
@@ -1223,7 +1258,6 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
         else {
             jl_gc_free_page(data);
         }
-        nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / osize;
         goto done;
     }
     // For quick sweep, we might be able to skip the page if the page doesn't
@@ -1238,7 +1272,6 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
                 pfl = (jl_taggedvalue_t**)page_pfl_end(pg);
             }
             freedall = 0;
-            nfree = pg->nfree;
             goto done;
         }
     }
@@ -1304,11 +1337,9 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
             pg->prev_nold = prev_nold;
         }
     }
-    nfree = pg->nfree;
 
 done:
     gc_time_count_page(freedall, pg_skpd);
-    gc_num.freed += (nfree - old_nfree) * osize;
     return pfl;
 }
 
@@ -2602,6 +2633,8 @@ JL_DLLEXPORT int jl_gc_enable(int on)
     if (on && !prev) {
         // disable -> enable
         if (jl_atomic_fetch_add(&jl_gc_disable_counter, -1) == 1) {
+            // This to restore the value of `allocd` that was clobbered in `jl_gc_collect()`
+            // when `jl_gc_disable_counter` is nonzero.
             gc_num.allocd += gc_num.deferred_alloc;
             gc_num.deferred_alloc = 0;
         }
@@ -2703,10 +2736,8 @@ static void jl_gc_queue_remset(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp
     ptls2->heap.rem_bindings.len = n_bnd_refyoung;
 }
 
-static void jl_gc_queue_bt_buf(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp, jl_ptls_t ptls2)
+static void jl_gc_queue_bt_buf(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp, jl_bt_element_t* bt_data, size_t bt_size)
 {
-    jl_bt_element_t *bt_data = ptls2->bt_data;
-    size_t bt_size = ptls2->bt_size;
     for (size_t i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
         jl_bt_element_t *bt_entry = bt_data + i;
         if (jl_bt_is_native(bt_entry))
@@ -2715,6 +2746,61 @@ static void jl_gc_queue_bt_buf(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp
         for (size_t j = 0; j < njlvals; j++)
             gc_mark_queue_obj(gc_cache, sp, jl_bt_entry_jlvalue(bt_entry, j));
     }
+}
+
+static void gc_track_pool_frees(void)
+{
+    // TODO: this is too costly, inline in sweep_page again
+
+    // Iterate over the three levels of our pagetable.  We collapse indentation here
+    // to make it more readable, especially as we do essentially the same thing
+    // three times with just slightly changed variable names:
+    for (int pg2_i = 0; pg2_i < (REGION2_PG_COUNT + 31) / 32; pg2_i++) {
+        uint32_t line2 = memory_map.allocmap1[pg2_i];
+        if (line2) {
+            for (int j = 0; j < 32; j++) {
+                if ((line2 >> j) & 1) {
+                    pagetable1_t * pagetable1 = memory_map.meta1[pg2_i * 32 + j];
+
+    for (int pg1_i = 0; pg1_i < REGION1_PG_COUNT / 32; pg1_i++) {
+        uint32_t line1 = pagetable1->allocmap0[pg1_i];
+        if (line1) {
+            for (int k = 0; k < 32; k++) {
+                if ((line1 >> k) & 1) {
+                    pagetable0_t * pagetable0 = pagetable1->meta0[pg1_i * 32 + k];
+
+    for (int pg0_i = 0; pg0_i < REGION0_PG_COUNT / 32; pg0_i++) {
+        uint32_t line0 = pagetable0->allocmap[pg0_i];
+        if (line0) {
+            for (int l = 0; l < 32; l++) {
+                if ((line0 >> l) & 1) {
+                    jl_gc_pagemeta_t * pg = pagetable0->meta[pg0_i * 32 + l];
+
+                    // Once we have an actual page, iterate over the cells:
+                    jl_taggedvalue_t *v = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
+                    char *lim = (char*)v + GC_PAGE_SZ - GC_PAGE_OFFSET - pg->osize;
+
+                    while ((char *)v <= lim) {
+                        // If this object is live but unmarked, then it's about to be freed,
+                        // so track that via jl_gc_count_freed().
+                        if (v->bits.gc == GC_CLEAN) {
+                            jl_value_t * ptr = jl_gc_internal_obj_base_ptr(v);
+                            if (ptr != NULL) {
+                                jl_gc_count_freed(ptr, pg->osize, JL_MEMPROF_TAG_DOMAIN_CPU |
+                                                                  JL_MEMPROF_TAG_ALLOC_POOLALLOC);
+                            }
+                        }
+
+                        // Move to next cell in the page
+                        v = (jl_taggedvalue_t*)((char*)v + pg->osize);
+                    }
+
+    // Region 0
+    }}}}
+    // Region 1
+    }}}}
+    // Region 2
+    }}}}
 }
 
 size_t jl_maxrss(void);
@@ -2741,8 +2827,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         jl_gc_queue_remset(gc_cache, &sp, ptls2);
         // 2.2. mark every thread local root
         jl_gc_queue_thread_local(gc_cache, &sp, ptls2);
-        // 2.3. mark any managed objects in the backtrace buffer
-        jl_gc_queue_bt_buf(gc_cache, &sp, ptls2);
+        // 2.3. mark any managed objects in the backtrace buffers,
+        // so that things like Interpreter frame objects do not disappear.
+        jl_gc_queue_bt_buf(gc_cache, &sp, ptls2->bt_data, ptls2->bt_size);
+        jl_gc_queue_bt_buf(gc_cache, &sp, (jl_bt_element_t *)jl_profile_get_data(), jl_profile_len_data());
     }
 
     // 3. walk roots
@@ -2866,6 +2954,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_sweep_other(ptls, sweep_full);
     gc_scrub();
     gc_verify_tags();
+    gc_track_pool_frees();
     gc_sweep_pool(sweep_full);
     if (sweep_full)
         gc_sweep_perm_alloc();
@@ -3079,23 +3168,27 @@ JL_DLLEXPORT void jl_throw_out_of_memory_error(void)
 JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (ptls && ptls->world_age) {
+    if (ptls && ptls->world_age)
         maybe_collect(ptls);
-        ptls->gc_num.allocd += sz;
+    void *b = malloc(sz);
+    if (ptls && ptls->world_age) {
+        jl_gc_count_allocd(b, sz, JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_STDALLOC);
         ptls->gc_num.malloc++;
     }
-    return malloc(sz);
+    return b;
 }
 
 JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (ptls && ptls->world_age) {
+    if (ptls && ptls->world_age)
         maybe_collect(ptls);
-        ptls->gc_num.allocd += nm*sz;
+    void *b = calloc(nm, sz);
+    if (ptls && ptls->world_age) {
+        jl_gc_count_allocd(b, nm*sz, JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_STDALLOC);
         ptls->gc_num.malloc++;
     }
-    return calloc(nm, sz);
+    return b;
 }
 
 JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
@@ -3103,7 +3196,7 @@ JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
     jl_ptls_t ptls = jl_get_ptls_states();
     free(p);
     if (ptls && ptls->world_age) {
-        ptls->gc_num.freed += sz;
+        jl_gc_count_freed(p, sz, JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_STDALLOC);
         ptls->gc_num.freecall++;
     }
 }
@@ -3111,15 +3204,14 @@ JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (ptls && ptls->world_age) {
+    if (ptls && ptls->world_age)
         maybe_collect(ptls);
-        if (sz < old)
-            ptls->gc_num.freed += (old - sz);
-        else
-            ptls->gc_num.allocd += (sz - old);
+    void *b = realloc(p, sz);
+    if (ptls && ptls->world_age) {
+        jl_gc_count_reallocd(p, old, b, sz, JL_MEMPROF_TAG_DOMAIN_CPU);
         ptls->gc_num.realloc++;
     }
-    return realloc(p, sz);
+    return b;
 }
 
 // allocation wrappers that save the size of allocations, to allow using
@@ -3181,8 +3273,6 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
     size_t allocsz = LLT_ALIGN(sz, JL_CACHE_BYTE_ALIGNMENT);
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
-    ptls->gc_num.allocd += allocsz;
-    ptls->gc_num.malloc++;
     int last_errno = errno;
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
@@ -3190,6 +3280,8 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
     void *b = malloc_cache_align(allocsz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
+    jl_gc_count_allocd(b, allocsz, JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_STDALLOC);
+    ptls->gc_num.malloc++;
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
 #endif
@@ -3207,15 +3299,8 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
 
-    if (jl_astaggedvalue(owner)->bits.gc == GC_OLD_MARKED) {
-        ptls->gc_cache.perm_scanned_bytes += allocsz - oldsz;
-        live_bytes += allocsz - oldsz;
-    }
-    else if (allocsz < oldsz)
-        ptls->gc_num.freed += (oldsz - allocsz);
-    else
-        ptls->gc_num.allocd += (allocsz - oldsz);
-    ptls->gc_num.realloc++;
+    // realloc can free `d`, so access `owner` first.
+    int marked = jl_astaggedvalue(owner)->bits.gc == GC_OLD_MARKED;
 
     int last_errno = errno;
 #ifdef _OS_WINDOWS_
@@ -3228,6 +3313,15 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
         b = realloc(d, allocsz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
+
+    if (marked) {
+        ptls->gc_cache.perm_scanned_bytes += allocsz - oldsz;
+        live_bytes += allocsz - oldsz;
+    }
+    else
+        jl_gc_count_reallocd(d, oldsz, b, allocsz, JL_MEMPROF_TAG_DOMAIN_CPU);
+    ptls->gc_num.realloc++;
+
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
 #endif

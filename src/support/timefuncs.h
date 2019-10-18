@@ -12,8 +12,8 @@ struct jl_timeval {
     int64_t usec;   /* microseconds */
 };
 
-JL_DLLEXPORT int jl_gettimeofday(struct jl_timeval *jtv);
-JL_DLLEXPORT double jl_clock_now(void);
+JL_DLLEXPORT int jl_gettimeofday(struct jl_timeval *jtv) JL_NOTSAFEPOINT;
+JL_DLLEXPORT double jl_clock_now(void) JL_NOTSAFEPOINT;
 void sleep_ms(int ms);
 
 #ifdef __cplusplus

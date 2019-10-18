@@ -130,6 +130,7 @@ llvm::Function *JuliaPassContext::getOrDeclare(
 namespace jl_intrinsics {
     static const char *GET_GC_FRAME_SLOT_NAME = "julia.get_gc_frame_slot";
     static const char *GC_ALLOC_BYTES_NAME = "julia.gc_alloc_bytes";
+    static const char *GC_SET_TYPEOF_NAME = "julia.gc_set_typeof";
     static const char *NEW_GC_FRAME_NAME = "julia.new_gc_frame";
     static const char *PUSH_GC_FRAME_NAME = "julia.push_gc_frame";
     static const char *POP_GC_FRAME_NAME = "julia.pop_gc_frame";
@@ -170,6 +171,20 @@ namespace jl_intrinsics {
                 GC_ALLOC_BYTES_NAME);
 
             return addGCAllocAttributes(intrinsic, context.getLLVMContext());
+        });
+
+    const IntrinsicDescription GCSetTypeof(
+        GC_SET_TYPEOF_NAME,
+        [](const JuliaPassContext &context) {
+            auto intrinsic = Function::Create(
+                FunctionType::get(
+                    Type::getVoidTy(context.getLLVMContext()),
+                    { context.T_prjlvalue, context.T_prjlvalue },
+                    false),
+                Function::ExternalLinkage,
+                GC_SET_TYPEOF_NAME);
+            intrinsic->addAttribute(AttributeList::FunctionIndex, Attribute::InaccessibleMemOnly);
+            return intrinsic;
         });
 
     const IntrinsicDescription newGCFrame(
@@ -228,6 +243,7 @@ namespace jl_well_known {
     static const char *GC_BIG_ALLOC_NAME = "jl_gc_big_alloc";
     static const char *GC_POOL_ALLOC_NAME = "jl_gc_pool_alloc";
     static const char *GC_QUEUE_ROOT_NAME = "jl_gc_queue_root";
+    static const char *MEMPROFILE_SET_TYPEOF_NAME = "jl_memprofile_set_typeof";
 
     using jl_intrinsics::addGCAllocAttributes;
 
@@ -269,6 +285,20 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_QUEUE_ROOT_NAME);
+            func->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
+            return func;
+        });
+
+    const WellKnownFunctionDescription MemProfileSetTypeof(
+        MEMPROFILE_SET_TYPEOF_NAME,
+        [](const JuliaPassContext &context) {
+            auto func = Function::Create(
+                FunctionType::get(
+                    Type::getVoidTy(context.getLLVMContext()),
+                    { context.T_prjlvalue, context.T_prjlvalue },
+                    false),
+                Function::ExternalLinkage,
+                MEMPROFILE_SET_TYPEOF_NAME);
             func->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
             return func;
         });

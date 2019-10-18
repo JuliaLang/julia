@@ -98,6 +98,7 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
         tsz += tot;
         tsz = JL_ARRAY_ALIGN(tsz, JL_SMALL_BYTE_ALIGNMENT); // align whole object
         a = (jl_array_t*)jl_gc_alloc(ptls, tsz, atype);
+        jl_memprofile_set_typeof(a, atype);
         // No allocation or safepoint allowed after this
         a->flags.how = 0;
         data = (char*)a + doffs;
@@ -107,12 +108,14 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
     else {
         tsz = JL_ARRAY_ALIGN(tsz, JL_CACHE_BYTE_ALIGNMENT); // align whole object
         data = jl_gc_managed_malloc(tot);
+        jl_memprofile_set_typeof(data, atype);
         // Allocate the Array **after** allocating the data
         // to make sure the array is still young
         a = (jl_array_t*)jl_gc_alloc(ptls, tsz, atype);
         // No allocation or safepoint allowed after this
         a->flags.how = 2;
         jl_gc_track_malloced_array(ptls, a);
+        jl_memprofile_set_typeof(a, atype);
         if (!isunboxed || isunion)
             // need to zero out isbits union array selector bytes to ensure a valid type index
             memset(data, 0, tot);
@@ -334,7 +337,9 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
     if (own_buffer) {
         a->flags.how = 2;
         jl_gc_track_malloced_array(ptls, a);
-        jl_gc_count_allocd(nel*elsz + (elsz == 1 ? 1 : 0));
+        jl_gc_count_allocd(a, nel*elsz + (elsz == 1 ? 1 : 0),
+                           JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_STDALLOC);
+        jl_memprofile_set_typeof(a, atype);
     }
     else {
         a->flags.how = 0;
@@ -401,7 +406,9 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
     if (own_buffer) {
         a->flags.how = 2;
         jl_gc_track_malloced_array(ptls, a);
-        jl_gc_count_allocd(nel*elsz + (elsz == 1 ? 1 : 0));
+        jl_gc_count_allocd(a, nel*elsz + (elsz == 1 ? 1 : 0),
+                           JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_STDALLOC);
+        jl_memprofile_set_typeof(a, atype);
     }
     else {
         a->flags.how = 0;
@@ -669,6 +676,7 @@ static int NOINLINE array_resize_buffer(jl_array_t *a, size_t newlen)
             a->flags.how = 1;
             jl_gc_wb_buf(a, a->data, nbytes);
         }
+        jl_memprofile_set_typeof(a->data, jl_typeof(a));
     }
     if (JL_ARRAY_IMPL_NUL && elsz == 1 && !isbitsunion)
         memset((char*)a->data + oldnbytes - 1, 0, nbytes - oldnbytes + 1);

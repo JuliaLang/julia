@@ -65,8 +65,16 @@ struct InterpreterIP
     mod::Union{Module,Nothing}
 end
 
-# formatted backtrace buffers can contain all types of objects (none for now though)
-const BackTraceEntry = Union{Ptr{Nothing}, InterpreterIP}
+struct AllocationInfo
+    T::Union{Nothing,Type}
+    address::Ptr{Cvoid}
+    time::Float64
+    allocsz::Csize_t
+    tag::UInt16
+end
+
+# formatted backtrace buffers can contain all types of objects
+const BackTraceEntry = Union{Ptr{Nothing}, InterpreterIP, AllocationInfo}
 # but only some correspond with actual instruction pointers
 const InstructionPointer = Union{Ptr{Nothing}, InterpreterIP}
 
@@ -113,6 +121,18 @@ function _reformat_bt(bt, Wanted::Type=BackTraceEntry)
                     nothing
                 end
                 push!(ret, InterpreterIP(code, header, mod))
+            end
+        elseif tag == 2 # JL_BT_ALLOCINFO_FRAME_TAG
+            if AllocationInfo <: Wanted
+                #@assert header == 0
+                #@assert njlvalues == 1
+                type = unsafe_pointer_to_objref(convert(Ptr{Any}, bt[i+2]))
+                #@assert nuintvals == 4
+                address = reinterpret(Ptr{Cvoid}, bt[i+3])
+                time = reinterpret(Cdouble, bt[i+4])
+                allocsz = reinterpret(UInt, bt[i+5])
+                tag = reinterpret(UInt, bt[i+6])
+                push!(ret, AllocationInfo(type, address, time, allocsz, tag))
             end
         else
             # Tags we don't know about are an error
