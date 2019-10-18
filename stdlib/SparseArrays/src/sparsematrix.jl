@@ -358,18 +358,15 @@ copyto!(A::AbstractMatrix, B::AbstractSparseMatrixCSC) = _sparse_copyto!(A, B)
 # Ambiguity resolution
 copyto!(A::PermutedDimsArray, B::AbstractSparseMatrixCSC) = _sparse_copyto!(A, B)
 
-function _sparse_copyto!(A::AbstractMatrix{T}, B::AbstractSparseMatrixCSC) where {T}
-    if size(A) != size(B)
-        throw(ArgumentError("source and destination must have same size (got $(size(B)) and $(size(A)))"))
+function _sparse_copyto!(dest::AbstractMatrix{T}, src::AbstractSparseMatrixCSC) where {T}
+    checkbounds(dest, axes(src)...)
+    fill!(dest, zero(T))
+    @inbounds for col in eachcol(src), ptr in nzrange(src, col)
+        row = rowvals(src)[ptr]
+        val = nonzeros(src)[ptr]
+        dest[row, col] = val
     end
-    fill!(A, zero(T))
-    offset = first(CartesianIndices(A)) - CartesianIndex(1, 1)
-    @inbounds for col in 1:size(B, 2), ptr in nzrange(B, col)
-        row = rowvals(B)[ptr]
-        val = nonzeros(B)[ptr]
-        A[offset + CartesianIndex((row, col))] = val
-    end
-    return A
+    return dest
 end
 
 ## similar
