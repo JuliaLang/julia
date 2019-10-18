@@ -359,12 +359,40 @@ copyto!(A::AbstractMatrix, B::AbstractSparseMatrixCSC) = _sparse_copyto!(A, B)
 copyto!(A::PermutedDimsArray, B::AbstractSparseMatrixCSC) = _sparse_copyto!(A, B)
 
 function _sparse_copyto!(dest::AbstractMatrix{T}, src::AbstractSparseMatrixCSC) where {T}
+    dest === src && return dest
     checkbounds(dest, axes(src)...)
     fill!(dest, zero(T))
     @inbounds for col in eachcol(src), ptr in nzrange(src, col)
         row = rowvals(src)[ptr]
         val = nonzeros(src)[ptr]
         dest[row, col] = val
+    end
+    return dest
+end
+
+function copyto!(dest::AbstractMatrix{T}, Rdest::CartesianIndices{2},
+                 src::AbstractSparseMatrixCSC, Rsrc::CartesianIndices{2}) where {T}
+    isempty(Rdest) && return dest
+    if size(Rdest) != size(Rsrc)
+        throw(ArgumentError("source and destination must have same size (got $(size(Rsrc)) and $(size(Rdest)))"))
+    end
+    checkbounds(dest, first(Rdest))
+    checkbounds(dest, last(Rdest))
+    checkbounds(src, first(Rsrc))
+    checkbounds(src, last(Rsrc))
+    src′ = unalias(dest, src)
+    for I in Rdest
+        @inbounds dest[I] = zero(T)
+    end
+    rows, cols = Rsrc.indices
+    lin = LinearIndices(Base.IdentityUnitRange.(Rsrc.indices))
+    @inbounds for col in cols, ptr in nzrange(src′, col)
+        row = rowvals(src′)[ptr]
+        if row in rows
+            val = nonzeros(src′)[ptr]
+            I = Rdest[lin[row, col]]
+            dest[I] = val
+        end
     end
     return dest
 end
