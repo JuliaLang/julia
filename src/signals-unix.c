@@ -422,6 +422,7 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
         return -2;
 
     // Start the timer
+    uint64_t nsecprof = jl_profile_delay_nsec();
     itsprof.it_interval.tv_sec = nsecprof/GIGA;
     itsprof.it_interval.tv_nsec = nsecprof%GIGA;
     itsprof.it_value.tv_sec = nsecprof/GIGA;
@@ -429,15 +430,15 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
     if (timer_settime(timerprof, 0, &itsprof, NULL) == -1)
         return -3;
 
-    running = 1;
+    profile_running = 1;
     return 0;
 }
 
 JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
-    if (running)
+    if (profile_running)
         timer_delete(timerprof);
-    running = 0;
+    profile_running = 0;
 }
 
 #elif defined(HAVE_ITIMER)
@@ -448,6 +449,7 @@ struct itimerval timerprof;
 
 JL_DLLEXPORT int jl_profile_start_timer(void)
 {
+    uint64_t nsecprof = jl_profile_delay_nsec();
     timerprof.it_interval.tv_sec = nsecprof/GIGA;
     timerprof.it_interval.tv_usec = (nsecprof%GIGA)/1000;
     timerprof.it_value.tv_sec = nsecprof/GIGA;
@@ -455,18 +457,18 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
     if (setitimer(ITIMER_PROF, &timerprof, 0) == -1)
         return -3;
 
-    running = 1;
+    profile_running = 1;
 
     return 0;
 }
 
 JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
-    if (running) {
+    if (profile_running) {
         memset(&timerprof, 0, sizeof(timerprof));
         setitimer(ITIMER_PROF, &timerprof, 0);
     }
-    running = 0;
+    profile_running = 0;
 }
 
 #else
@@ -675,7 +677,7 @@ static void *signal_listener(void *arg)
             }
 
             // do backtrace for profiler
-            if (profile && running) {
+            if (profile && profile_running) {
                 if (bt_size_cur < bt_size_max - 1) {
                     size_t bt_size_step = 0;
                     int incomplete = 0;

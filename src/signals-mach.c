@@ -425,7 +425,7 @@ void *mach_profile_listener(void *arg)
 
             unw_context_t *uc;
             jl_thread_suspend_and_get_state(i, &uc);
-            if (running) {
+            if (profile_running) {
                 // Get the backtrace
                 size_t bt_size_step = 0;
                 int incomplete = 0;
@@ -512,10 +512,11 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
         profile_started = 1;
     }
 
+    uint64_t nsecprof = jl_profile_delay_nsec();
     timerprof.tv_sec = nsecprof/GIGA;
     timerprof.tv_nsec = nsecprof%GIGA;
 
-    running = 1;
+    profile_running = 1;
     ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);
     HANDLE_MACH_ERROR("clock_alarm", ret);
 
@@ -524,5 +525,5 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
 
 JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
-    running = 0;
+    profile_running = 0;
 }

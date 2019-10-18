@@ -329,6 +329,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
     while (1) {
         assert(bt_size_cur < bt_size_max - 1);
 
+        uint64_t nsecprof = jl_profile_delay_nsec();
         DWORD timeout = nsecprof/GIGA;
         timeout = min(max(timeout, tc.wPeriodMin*2), tc.wPeriodMax/2);
         Sleep(timeout);
@@ -340,7 +341,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
         // Get the backtrace data
         size_t bt_size_step;
         int incomplete;
-        if (running) {
+        if (profile_running) {
             CONTEXT ctxThread;
             memset(&ctxThread, 0, sizeof(CONTEXT));
             ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
@@ -361,7 +362,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
         }
 
         // Save the backtrace data
-        if (running) {
+        if (profile_running) {
             if (incomplete) {
                 bt_overflow = 1;
                 jl_profile_stop_timer();
@@ -379,7 +380,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
 
 JL_DLLEXPORT int jl_profile_start_timer(void)
 {
-    running = 1;
+    profile_running = 1;
     if (hBtThread == 0) {
         hBtThread = CreateThread(
             NULL,                   // default security attributes
@@ -401,7 +402,7 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
 
 JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
-    running = 0;
+    profile_running = 0;
 }
 
 void jl_install_default_signal_handlers(void)

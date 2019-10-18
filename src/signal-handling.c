@@ -17,17 +17,19 @@ extern "C" {
 
 #include <threading.h>
 
-// Profiler control variables //
-static volatile jl_bt_element_t *bt_data_prof = NULL;
-static volatile size_t bt_size_max = 0;
-static volatile size_t bt_size_cur = 0;
-static volatile uint8_t bt_overflow = 0;
-static volatile uint64_t nsecprof = 0;
-static volatile int running = 0;
-static const    uint64_t GIGA = 1000000000ULL;
+extern volatile jl_bt_element_t *bt_data_prof;
+extern volatile size_t bt_size_max;
+extern volatile size_t bt_size_cur;
+extern volatile uint8_t bt_overflow;
+
+extern volatile int profile_running;
+
+extern uint64_t jl_profile_delay_nsec(void);
+static const uint64_t GIGA = 1000000000ULL;
+
 // Timers to take samples at intervals
-JL_DLLEXPORT void jl_profile_stop_timer(void);
-JL_DLLEXPORT int jl_profile_start_timer(void);
+void _jl_profile_stop_timer(void);
+int _jl_profile_start_timer(void);
 
 static uint64_t jl_last_sigint_trigger = 0;
 static uint64_t jl_disable_sigint_time = 0;
@@ -242,60 +244,6 @@ void jl_critical_error(int sig, bt_context_t *context, jl_bt_element_t *bt_data,
     }
     gc_debug_print_status();
     gc_debug_critical_error();
-}
-
-///////////////////////
-// Utility functions //
-///////////////////////
-
-JL_DLLEXPORT void jl_profile_clear_data(void)
-{
-    bt_size_cur = 0;
-    bt_overflow = 0;
-}
-
-JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
-{
-    bt_size_max = maxsize;
-    nsecprof = delay_nsec;
-    if (bt_data_prof != NULL)
-        free((void*)bt_data_prof);
-    bt_data_prof = (jl_bt_element_t*) calloc(maxsize, sizeof(jl_bt_element_t));
-    if (bt_data_prof == NULL && maxsize > 0)
-        return -1;
-
-    jl_profile_clear_data();
-    return 0;
-}
-
-JL_DLLEXPORT uint8_t *jl_profile_get_data(void)
-{
-    return (uint8_t*) bt_data_prof;
-}
-
-JL_DLLEXPORT size_t jl_profile_len_data(void)
-{
-    return bt_size_cur;
-}
-
-JL_DLLEXPORT size_t jl_profile_maxlen_data(void)
-{
-    return bt_size_max;
-}
-
-JL_DLLEXPORT uint64_t jl_profile_delay_nsec(void)
-{
-    return nsecprof;
-}
-
-JL_DLLEXPORT int jl_profile_is_running(void)
-{
-    return running;
-}
-
-JL_DLLEXPORT int jl_profile_did_overflow(void)
-{
-    return bt_overflow;
 }
 
 #ifdef __cplusplus
