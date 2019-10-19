@@ -504,4 +504,26 @@ using .Main.OffsetArrays
     @test_throws BoundsError s[1, 4]
 end
 
+@testset "specialized conj of Adjoint/Transpose" begin
+    realmat = [1 2; 3 4]
+    complexmat = ComplexF64[1+im 2; 3 4-im]
+    nested = [[complexmat] [-complexmat]; [0complexmat] [3complexmat]]
+    @testset "AdjOrTrans{...,$(typeof(i))}" for i in (
+                                                      realmat, vec(realmat),
+                                                      complexmat, vec(complexmat),
+                                                      nested, vec(nested),
+                                                     )
+        t = transpose(i)
+        @test conj(t) isa Adjoint
+        @test conj(t) == conj(collect(t))
+        @test conj(conj(t)) === t
+
+        a = adjoint(i)
+        @test conj(a) isa Transpose
+        @test conj(a) == conj(collect(a))
+        @test conj(conj(a)) === a
+    end
+end
+
+
 end # module TestAdjointTranspose
