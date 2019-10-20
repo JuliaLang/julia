@@ -28,6 +28,8 @@ end
 @test -10 <= rand(-10:5) <= 5
 @test minimum([rand(Int32(1):Int32(7^7)) for i = 1:100000]) > 0
 @test typeof(rand(false:true)) === Bool
+@test typeof(rand(Nothing)) === Nothing
+@test typeof(rand(Missing)) === Missing
 @test typeof(rand(Char)) === Char
 @test length(randn(4, 5)) == 20
 @test length(randn(ComplexF64, 4, 5)) == 20
@@ -320,7 +322,7 @@ end
 for rng in ([], [MersenneTwister(0)], [RandomDevice()])
     ftypes = [Float16, Float32, Float64]
     cftypes = [ComplexF16, ComplexF32, ComplexF64, ftypes...]
-    types = [Bool, Char, BigFloat, Base.BitInteger_types..., ftypes...]
+    types = [Bool, Char, Missing, Nothing, BigFloat, Base.BitInteger_types..., ftypes...]
     randset = Set(rand(Int, 20))
     randdict = Dict(zip(rand(Int,10), rand(Int, 10)))
     collections = [BitSet(rand(1:100, 20))          => Int,
@@ -388,7 +390,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
     end
     for f! in [rand!, randn!, randexp!]
         for T in functypes[f!]
-            X = T == Bool ? T[0,1] : T[0,1,2]
+            X = T == Missing ? [missing] : T == Nothing ? [nothing] : T == Bool ? T[0,1] : T[0,1,2]
             for A in (Vector{T}(undef, 5),
                       Matrix{T}(undef, 2, 3),
                       GenericArray{T}(undef, 5),
@@ -399,7 +401,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
                 f!(rng..., A)                    ::typeof(A)
                 if f! === rand!
                     f!(rng..., A, X)             ::typeof(A)
-                    if A isa Array && T !== Char # Char/Integer comparison
+                    if A isa Array && T ∉ (Char, Nothing, Missing) # T/Integer comparison
                         f!(rng..., sparse(A))    ::typeof(sparse(A))
                         f!(rng..., sparse(A), X) ::typeof(sparse(A))
                     end
@@ -743,7 +745,7 @@ end
         x = Random.SamplerTrivial(T())
         @test rand(GLOBAL_RNG, x) === rand(mt, x)
     end
-    for T in (Int64, UInt64, Int128, UInt128, Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32)
+    for T in (Int64, UInt64, Int128, UInt128, Bool, Missing, Nothing, Int8, UInt8, Int16, UInt16, Int32, UInt32)
         x = Random.SamplerType{T}()
         @test rand(GLOBAL_RNG, x) === rand(mt, x)
     end

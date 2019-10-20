@@ -14,6 +14,11 @@
 
 ## from types: rand(::Type, [dims...])
 
+### singleton types
+
+rand(r::AbstractRNG, ::SamplerType{Nothing}) = nothing
+rand(r::AbstractRNG, ::SamplerType{Missing}) = missing
+
 ### random floats
 
 Sampler(::Type{RNG}, ::Type{T}, n::Repetition) where {RNG<:AbstractRNG,T<:AbstractFloat} =
