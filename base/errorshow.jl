@@ -359,8 +359,10 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
         end
     end
 
-    for (func, arg_types_param) in funcs
-        for method in methods(func)
+    for (f, arg_types_param) in funcs
+        f2 = f isa UnionAll ? unwrap_unionall(unwrap_unionall(f).name.wrapper) : f
+        for method in methods(f2)
+            func, tv, decls, file, line = decl_parts(method)
             buf = IOBuffer()
             iob0 = iob = IOContext(buf, io)
             tv = Any[]
@@ -372,16 +374,8 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
             end
             s1 = sig0.parameters[1]
             sig = sig0.parameters[2:end]
-            print(iob, "  ")
-            if !isa(func, rewrap_unionall(s1, method.sig))
-                # function itself doesn't match
-                continue
-            else
-                # TODO: use the methodshow logic here
-                use_constructor_syntax = isa(func, Type)
-                print(iob, use_constructor_syntax ? func : typeof(func).name.mt.name)
-            end
-            print(iob, "(")
+            print(iob, "  ", func, "(")
+
             t_i = copy(arg_types_param)
             right_matches = 0
             for i = 1 : min(length(t_i), length(sig))

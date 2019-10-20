@@ -48,6 +48,37 @@ function method_argnames(m::Method)
     return argnames[1:m.nargs]
 end
 
+function decl_parts(m::Method, html::Bool=false)
+    tv, decls, file, line = arg_decl_parts(m)
+    sig = unwrap_unionall(m.sig)
+    ft0 = sig.parameters[1]
+    ft = unwrap_unionall(ft0)
+    d1 = decls[1]
+    function _func2(d1, html::Bool)
+        b1, b2 = html ? ( "<b>", "</b>") : ("", "")
+        string("(", d1[1], "::", b1, d1[2], b2, ")")
+    end
+
+    if sig === Tuple
+        func = string(m.name)
+        decls = Any[(), ("...", "")]
+    elseif ft <: Function && isa(ft, DataType) &&
+            isdefined(ft.name.module, ft.name.mt.name) &&
+                # TODO: more accurate test? (tn.name === "#" name)
+            ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
+        func = string(ft.name.mt.name)
+    elseif isa(ft, DataType) && ft.name === Type.body.name
+        f = ft.parameters[1]
+        if isa(f, DataType) && isempty(f.parameters)
+            func = string(f)
+        else
+            func = _func2(d1, html)
+        end
+    else
+        func = _func2(d1, html)
+    end
+    func, tv, decls, file, line
+end
 function arg_decl_parts(m::Method)
     tv = Any[]
     sig = m.sig
@@ -159,31 +190,10 @@ function functionloc(@nospecialize(f))
     return functionloc(first(mt))
 end
 
+
 function show(io::IO, m::Method)
-    tv, decls, file, line = arg_decl_parts(m)
-    sig = unwrap_unionall(m.sig)
-    ft0 = sig.parameters[1]
-    ft = unwrap_unionall(ft0)
-    d1 = decls[1]
-    if sig === Tuple
-        print(io, m.name)
-        decls = Any[(), ("...", "")]
-    elseif ft <: Function && isa(ft, DataType) &&
-            isdefined(ft.name.module, ft.name.mt.name) &&
-                # TODO: more accurate test? (tn.name === "#" name)
-            ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
-        print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && ft.name === Type.body.name
-        f = ft.parameters[1]
-        if isa(f, DataType) && isempty(f.parameters)
-            print(io, f)
-        else
-            print(io, "(", d1[1], "::", d1[2], ")")
-        end
-    else
-        print(io, "(", d1[1], "::", d1[2], ")")
-    end
-    print(io, "(")
+    func, tv, decls, file, line = decl_parts(m, false)
+    print(io, func, "(")
     join(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
                  ", ", ", ")
     kwargs = kwarg_decl(m)
@@ -325,26 +335,8 @@ function url(m::Method)
 end
 
 function show(io::IO, ::MIME"text/html", m::Method)
-    tv, decls, file, line = arg_decl_parts(m)
-    sig = unwrap_unionall(m.sig)
-    ft0 = sig.parameters[1]
-    ft = unwrap_unionall(ft0)
-    d1 = decls[1]
-    if ft <: Function && isa(ft, DataType) &&
-            isdefined(ft.name.module, ft.name.mt.name) &&
-            ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
-        print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && ft.name === Type.body.name
-        f = ft.parameters[1]
-        if isa(f, DataType) && isempty(f.parameters)
-            print(io, f)
-        else
-            print(io, "(", d1[1], "::<b>", d1[2], "</b>)")
-        end
-    else
-        print(io, "(", d1[1], "::<b>", d1[2], "</b>)")
-    end
-    print(io, "(")
+    func, tv, decls, file, line = decl_parts(m, true)
+    print(io, func, "(")
     join(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
                       for d in decls[2:end]], ", ", ", ")
     kwargs = kwarg_decl(m)

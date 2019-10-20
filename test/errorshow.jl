@@ -30,7 +30,7 @@ Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, 1)))
 # matches the implicit constructor -> convert method
 Base.show_method_candidates(buf, Base.MethodError(Tuple{}, (1, 1, 1)))
 let mc = String(take!(buf))
-    @test occursin("\nClosest candidates are:\n  Tuple{}", mc)
+    @test occursin("\nClosest candidates are:\n  (::Type{T})(::Any) where T<:Tuple", mc)
     @test !occursin(cfile, mc)
 end
 
@@ -80,10 +80,10 @@ PR16155line2 = @__LINE__() + 1
 (::Type{T})(arg::Any) where {T<:PR16155} = "replace call-to-convert method from sysimg"
 
 Base.show_method_candidates(buf, MethodError(PR16155,(1.0, 2.0, Int64(3))))
-@test String(take!(buf)) == "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(!Matched::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2"
+@test String(take!(buf)) == "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(!Matched::Int64, ::Any)$cfile$PR16155line\n  (::Type{T})(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2"
 
 Base.show_method_candidates(buf, MethodError(PR16155,(Int64(3), 2.0, Int64(3))))
-@test String(take!(buf)) == "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2"
+@test String(take!(buf)) == "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  (::Type{T})(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2"
 
 c6line = @__LINE__
 method_c6(; x=1) = x
@@ -594,3 +594,27 @@ for (func,str) in ((TestMethodShadow.:+,":+"), (TestMethodShadow.:(==),":(==)"),
     end::MethodError
     @test occursin("You may have intended to import Base.$str", sprint(Base.showerror, ex))
 end
+
+# issue #33539
+
+c33539line = @__LINE__() + 2
+struct Foo33539{S,T}
+    a::S
+    b::T
+end
+function ex_call(f::Function)
+    try
+        f()
+        nothing
+    catch ex
+        ex
+    end
+end
+let ex, buf = IOBuffer()
+    ex = ex_call() do
+        Foo33539{Int}(1)
+    end
+    Base.show_method_candidates(buf, ex)
+    @test String(take!(buf)) == "\nClosest candidates are:\n  (::Type{$(curmod_prefix)Foo33539})(::S, !Matched::T) where {S, T}$cfile$c33539line\n  (::Type{$(curmod_prefix)Foo33539{S,T}})(::Any, !Matched::Any) where {S, T}$cfile$c33539line"
+end
+
