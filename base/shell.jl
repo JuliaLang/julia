@@ -292,7 +292,7 @@ end
 
 
 """
-     shell_escaped_winsomely(args::Union{Cmd,AbstractString...})::String
+     shell_escaped_winsomely(args::Union{Cmd,AbstractString...}) -> String
 
 Convert the collection of strings `args` into single string suitable for passing as the argument
 string for a Windows command line. Windows passes the entire command line as a single string to
@@ -312,3 +312,69 @@ julia> println(shell_escaped_winsomely("A B\\", "C"))
 """
 shell_escape_winsomely(args::AbstractString...) =
     sprint(print_shell_escaped_winsomely, args..., sizehint=(sum(length, args)) + 3*length(args))
+
+function print_shell_escaped_CMDly(io::IO, arg::AbstractString)
+    any(c -> c in ('\r', '\n'), arg) && throw(ArgumentError("Encountered unsupported character by CMD."))
+    # include " so to avoid toggling behavior of ^
+    arg = replace(arg, r"[%!^\"<>&|]" => s"^\0")
+    print(io, arg)
+end
+
+"""
+     shell_escape_CMDly(arg::AbstractString) -> String
+
+The unexported `shell_escape_CMDly` function takes a string and escapes any special characters
+in such a way that it is safe to pass it as an argument to some `CMD.exe`. This may be useful
+in concert with the `windows_verbatim` flag to [`Cmd`](@ref) when constructing process
+pipelines.
+
+See also [`shell_escape_PWSHly`](@ref).
+
+# Example
+```jldoctest
+julia> println(shell_escape_CMDly("\"A B\\\" & C"))
+^"A B\\^" ^& C
+
+!important
+    Due to a peculiar behavior of the CMD, each command after a literal `|` character
+    (indicating a command pipeline) must have `shell_escape_CMDly` applied twice. For example:
+    ```
+    to_print = "All for 1 & 1 for all!"
+    run(Cmd(Cmd(["cmd /c \"break | echo \$(shell_escape_CMDly(shell_escape_CMDly(to_print)))"]), windows_verbatim=true))
+    ```
+"""
+shell_escape_CMDly(arg::AbstractString) = sprint(print_shell_escaped_CMDly, arg)
+
+function print_shell_escaped_PWSHly(io::IO, arg::AbstractString)
+    # escape several characters that usually have special meaning
+    arg = replace(arg, r"[`\"\$#;|><&(){}=]" => s"`\0")
+    # escape special control chars
+    arg = replace(replace(replace(arg, '\r' => "`r"), '\t' => "`t"), '\t' => "`t")
+    print(io, arg)
+end
+
+"""
+     shell_escape_PWSHly(arg::AbstractString) -> String
+
+Escapes special characters so they can be appropriately used with PowerShell.
+
+See also [`shell_escape_CMDly`](@ref).
+"""
+shell_escape_PWSHly(arg::AbstractString) = sprint(print_shell_escaped_PWSHly, arg)
+
+function print_shell_escaped_PWSH_cmdlet_ly(io::IO, args::AbstractString...)
+    # often the shortest way to escape a powershell string is to double any single quotes and then wrap the whole thing in single quotes
+    # (alternatively, we could prefix all the non-word characters with a back-tick and replace newlines with `r and `n)
+    # but skip the escaping for common cases we always know are safe (e.g. so that named parameters are typically still interpreted correctly)
+    isword(c::AbstractChar) = '0' <= c <= '9' || 'a' <= c <= 'z' || 'A' <= c <= 'Z' || c == '_' || c == '\\' || c == ':' || c == '/' || c == '-'
+    join(io, (all(isword, arg) ? arg : string("'", replace(arg, "'" => "''"), "'") for arg in args), " ")
+end
+
+"""
+    shell_escape_PWSH_cmdlet_ly(args::AbstractString...) -> String
+
+Escapes special characters so they can be appropriately used with a PowerShell cmdlet (such as `echo`).
+
+See also [`shell_escape_PWSHly`](@ref) and [`shell_escape_winsomely`](@ref).
+"""
+shell_escape_PWSH_cmdlet_ly(args::AbstractString...) = sprint(print_shell_escaped_PWSH_cmdlet_ly, args...)

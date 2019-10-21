@@ -31,24 +31,26 @@ stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bol
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
 function repl_cmd(cmd, out)
-    shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
+    shell_env = get(ENV, "JULIA_SHELL", nothing)
+    if shell_env === nothing || isempty(shell_env)
+        shell_env = Sys.iswindows() ? "cmd" : get(ENV, "SHELL", "/bin/sh")
+    end
+    shell = shell_split(shell_env)
     shell_name = Base.basename(shell[1])
+    Sys.iswindows() && (shell_name = lowercase(splitext(shell_name)[1])) # canonicalize for comparisons below
 
     # Immediately expand all arguments, so that typing e.g. ~/bin/foo works.
     cmd.exec .= expanduser.(cmd.exec)
+    isempty(cmd.exec) && throw(ArgumentError("no cmd to execute"))
 
-    if isempty(cmd.exec)
-        throw(ArgumentError("no cmd to execute"))
-    elseif cmd.exec[1] == "cd"
+    if cmd.exec[1] == "cd"
         new_oldpwd = pwd()
         if length(cmd.exec) > 2
             throw(ArgumentError("cd method only takes one argument"))
         elseif length(cmd.exec) == 2
             dir = cmd.exec[2]
             if dir == "-"
-                if !haskey(ENV, "OLDPWD")
-                    error("cd: OLDPWD not set")
-                end
+                !haskey(ENV, "OLDPWD") && error("cd: OLDPWD not set")
                 cd(ENV["OLDPWD"])
             else
                 @static if !Sys.iswindows()
@@ -66,17 +68,49 @@ function repl_cmd(cmd, out)
         ENV["OLDPWD"] = new_oldpwd
         println(out, pwd())
     else
-        @static if !Sys.iswindows()
+        local command
+        if Sys.iswindows()
+            if shell_name == "cmd"
+                command = _CMD_execute(cmd)
+            elseif shell_name in ("powershell", "pwsh")
+                command = _powershell_execute(cmd)
+            elseif shell_name == "busybox"
+                command = `$shell sh -c $(shell_escape_posixly(cmd))`
+            else
+                command = `$shell $cmd`
+            end
+        else
             if shell_name == "fish"
                 shell_escape_cmd = "begin; $(shell_escape_posixly(cmd)); and true; end"
+            elseif shell_name == "pwsh"
+                command = _powershell_execute(cmd)
             else
                 shell_escape_cmd = "($(shell_escape_posixly(cmd))) && true"
             end
-            cmd = `$shell -c $shell_escape_cmd`
+            command = `$shell -c $shell_escape_cmd`
         end
-        run(ignorestatus(cmd))
+        run(ignorestatus(command))
     end
     nothing
+end
+
+# process cmd's passed to CMD
+_CMD_execute(cmd) = Cmd(`$shell /c $(shell_escape_CMDly(shell_escape_winsomely(cmd)))`, windows_verbatim=true)
+
+function _powershell_execute(cmd)
+    # process cmd's passed to powershell
+    CommandType = nothing
+    try
+        CommandType = readchomp(`$shell -Command "Get-Command -- $(shell_escape_PWSH_cmdlet_ly(cmd.exec[1])) | Select-Object -ExpandProperty CommandType"`)
+    catch
+    end
+    # TODO: while CommandType == "Alias"; CommandType = ...; end
+    if CommandType == "Application"
+        command = Cmd(`$shell -Command "& $(shell_escape_PWSHly(shell_escape_winsomely(cmd)))"`)
+    else # handle Function and Cmdlet # TODO: what is the proper handling for the other types (ExternalScript, Script, Workflow, Configuration, and Filter)
+        command = Cmd(`$shell -Command "& $(shell_escape_PWSH_cmdlet_ly(cmd))"`)
+    end
+    return command
 end
 
 # deprecated function--preserved for DocTests.jl

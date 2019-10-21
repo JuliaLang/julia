@@ -98,12 +98,10 @@ end
 hash(x::AndCmds, h::UInt) = hash(x.a, hash(x.b, h))
 ==(x::AndCmds, y::AndCmds) = x.a == y.a && x.b == y.b
 
-shell_escape(cmd::Cmd; special::AbstractString="") =
-    shell_escape(cmd.exec..., special=special)
-shell_escape_posixly(cmd::Cmd) =
-    shell_escape_posixly(cmd.exec...)
-shell_escape_winsomely(cmd::Cmd) =
-    shell_escape_winsomely(cmd.exec...)
+shell_escape(cmd::Cmd; special::AbstractString="") = shell_escape(cmd.exec..., special=special)
+shell_escape_posixly(cmd::Cmd) = shell_escape_posixly(cmd.exec...)
+shell_escape_winsomely(cmd::Cmd) = shell_escape_winsomely(cmd.exec...)
+shell_escape_PWSH_cmdlet_ly(cmd::Cmd) = shell_escape_PWSH_cmdlet_ly(cmd.exec...)
 
 function show(io::IO, cmd::Cmd)
     print_env = cmd.env !== nothing
