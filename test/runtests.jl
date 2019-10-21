@@ -136,6 +136,18 @@ cd(@__DIR__) do
         end
     end
 
+    function print_testworker_errored(name, wrkr)
+        lock(print_lock)
+        try
+            printstyled(name, color=:red)
+            printstyled(lpad("($wrkr)", name_align - textwidth(name) + 1, " "), " |",
+                " "^elapsed_align, " failed at $(now())\n", color=:red)
+        finally
+            unlock(print_lock)
+        end
+    end
+
+
     all_tests = [tests; node1_tests]
 
     local stdin_monitor
@@ -174,10 +186,11 @@ cd(@__DIR__) do
                             resp = remotecall_fetch(runtests, wrkr, test, test_path(test); seed=seed)
                         catch e
                             isa(e, InterruptException) && return
-                            resp = [e]
+                            resp = Any[e]
                         end
                         push!(results, (test, resp))
                         if resp[1] isa Exception
+                            print_testworker_errored(test, wrkr)
                             if exit_on_error
                                 skipped = length(tests)
                                 empty!(tests)
@@ -216,7 +229,7 @@ cd(@__DIR__) do
                 resp = eval(Expr(:call, () -> runtests(t, test_path(t), isolate, seed=seed))) # runtests is defined by the include above
                 print_testworker_stats(t, 1, resp)
             catch e
-                resp = [e]
+                resp = Any[e]
             end
             push!(results, (t, resp))
         end
@@ -265,63 +278,65 @@ cd(@__DIR__) do
     o_ts = Test.DefaultTestSet("Overall")
     Test.push_testset(o_ts)
     completed_tests = Set{String}()
-    for res in results
-        push!(completed_tests, res[1])
-        if isa(res[2][1], Test.DefaultTestSet)
-            Test.push_testset(res[2][1])
-            Test.record(o_ts, res[2][1])
+    for (testname, (resp,)) in results
+        push!(completed_tests, testname)
+        if isa(resp, Test.DefaultTestSet)
+            Test.push_testset(resp)
+            Test.record(o_ts, resp)
             Test.pop_testset()
-        elseif isa(res[2][1], Tuple{Int,Int})
-            fake = Test.DefaultTestSet(res[1])
-            for i in 1:res[2][1][1]
+        elseif isa(resp, Tuple{Int,Int})
+            fake = Test.DefaultTestSet(testname)
+            for i in 1:resp[1]
                 Test.record(fake, Test.Pass(:test, nothing, nothing, nothing))
             end
-            for i in 1:res[2][1][2]
+            for i in 1:resp[2]
                 Test.record(fake, Test.Broken(:test, nothing))
             end
             Test.push_testset(fake)
             Test.record(o_ts, fake)
             Test.pop_testset()
-        elseif isa(res[2][1], RemoteException) && isa(res[2][1].captured.ex, Test.TestSetException)
-            println("Worker $(res[2][1].pid) failed running test $(res[1]):")
-            Base.showerror(stdout,res[2][1].captured)
-            fake = Test.DefaultTestSet(res[1])
-            for i in 1:res[2][1].captured.ex.pass
+        elseif isa(resp, RemoteException) && isa(resp.captured.ex, Test.TestSetException)
+            println("Worker $(resp.pid) failed running test $(testname):")
+            Base.showerror(stdout, resp.captured)
+            println()
+            fake = Test.DefaultTestSet(testname)
+            for i in 1:resp.captured.ex.pass
                 Test.record(fake, Test.Pass(:test, nothing, nothing, nothing))
             end
-            for i in 1:res[2][1].captured.ex.broken
+            for i in 1:resp.captured.ex.broken
                 Test.record(fake, Test.Broken(:test, nothing))
             end
-            for t in res[2][1].captured.ex.errors_and_fails
+            for t in resp.captured.ex.errors_and_fails
                 Test.record(fake, t)
             end
             Test.push_testset(fake)
             Test.record(o_ts, fake)
             Test.pop_testset()
-        elseif isa(res[2][1], Exception)
+        else
+            if !isa(resp, Exception)
+                resp = ErrorException(string("Unknown result type : ", typeof(resp)))
+            end
             # If this test raised an exception that is not a remote testset exception,
             # i.e. not a RemoteException capturing a TestSetException that means
             # the test runner itself had some problem, so we may have hit a segfault,
             # deserialization errors or something similar.  Record this testset as Errored.
-            fake = Test.DefaultTestSet(res[1])
-            Test.record(fake, Test.Error(:test_error, res[1], res[2][1], [], LineNumberNode(1)))
+            fake = Test.DefaultTestSet(testname)
+            Test.record(fake, Test.Error(:test_error, testname, nothing, Any[(resp, [])], LineNumberNode(1)))
             Test.push_testset(fake)
             Test.record(o_ts, fake)
             Test.pop_testset()
-        else
-            error(string("Unknown result type : ", typeof(res)))
         end
     end
     for test in all_tests
         (test in completed_tests) && continue
         fake = Test.DefaultTestSet(test)
-        Test.record(fake, Test.Error(:test_interrupted, test, InterruptException(), [], LineNumberNode(1)))
+        Test.record(fake, Test.Error(:test_interrupted, test, nothing, [("skipped", [])], LineNumberNode(1)))
         Test.push_testset(fake)
         Test.record(o_ts, fake)
         Test.pop_testset()
     end
     println()
-    Test.print_test_results(o_ts,1)
+    Test.print_test_results(o_ts, 1)
     if !o_ts.anynonpass
         println("    \033[32;1mSUCCESS\033[0m")
     else
