@@ -251,8 +251,6 @@ struct State {
     // for derived values
     std::map<Value *, int> AllPtrNumbering;
     std::map<Value *, std::vector<int>> AllVectorNumbering;
-    // Numbering of pointers. This only includes Defs
-    std::map<Value *, int> PtrNumbering;
     // The reverse of the previous maps
     std::map<int, Value *> ReversePtrNumbering;
     // Neighbors in the coloring interference graph. I.e. for each value, the
@@ -327,7 +325,7 @@ private:
         NoteUse(S, BBS, V, BBS.UpExposedUses);
     }
     Value *MaybeExtractUnion(std::pair<Value*,int> Val, Instruction *InsertBefore);
-    void LiftPhi(State &S, PHINode *Phi, SmallVector<int, 16> &PHINumbers);
+    void LiftPhi(State &S, PHINode *Phi, SmallVector<int, 8> &PHINumbers);
     bool LiftSelect(State &S, SelectInst *SI);
     int Number(State &S, Value *V);
     std::vector<int> NumberVector(State &S, Value *Vec);
@@ -353,10 +351,7 @@ private:
 };
 
 static unsigned getValueAddrSpace(Value *V) {
-    Type *Ty = V->getType();
-    if (isa<VectorType>(Ty))
-        Ty = cast<VectorType>(V->getType())->getElementType();
-    return cast<PointerType>(Ty)->getAddressSpace();
+    return V->getType()->getScalarType()->getPointerAddressSpace();
 }
 
 static bool isSpecialPtr(Type *Ty) {
@@ -409,7 +404,7 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
         else if (isa<GetElementPtrInst>(CurrentV)) {
             CurrentV = cast<GetElementPtrInst>(CurrentV)->getOperand(0);
             // GEP can make vectors from a single base pointer
-            if (fld_idx != -1 && !isSpecialPtrVec(CurrentV->getType())) {
+            if (fld_idx != -1 && !isa<VectorType>(CurrentV->getType())) {
                 fld_idx = -1;
             }
         } else if (isa<ExtractValueInst>(CurrentV)) {
@@ -516,7 +511,7 @@ bool LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
               "gclift", SI);
             int Number = ++S.MaxPtrNumber;
             Numbers.push_back(Number);
-            S.PtrNumbering[LSI] = S.AllPtrNumbering[LSI] = Number;
+            S.AllPtrNumbering[LSI] = Number;
             S.ReversePtrNumbering[Number] = LSI;
         }
         S.AllVectorNumbering[SI] = Numbers;
@@ -532,14 +527,13 @@ bool LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
         Value *SelectBase = SelectInst::Create(SI->getCondition(),
             TrueBase, FalseBase, "gclift", SI);
         int Number = ++S.MaxPtrNumber;
-        S.PtrNumbering[SelectBase] = S.AllPtrNumbering[SelectBase] =
-            S.AllPtrNumbering[SI] = Number;
+        S.AllPtrNumbering[SelectBase] = S.AllPtrNumbering[SI] = Number;
         S.ReversePtrNumbering[Number] = SelectBase;
     }
     return true;
 }
 
-void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi, SmallVector<int, 16> &PHINumbers)
+void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi, SmallVector<int, 8> &PHINumbers)
 {
     if (isSpecialPtrVec(Phi->getType())) {
         VectorType *VT = cast<VectorType>(Phi->getType());
@@ -563,7 +557,7 @@ void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi, SmallVector<int, 16> &PHI
             int Number = ++S.MaxPtrNumber;
             PHINumbers.push_back(Number);
             Numbers.push_back(Number);
-            S.PtrNumbering[lifted[i]] = S.AllPtrNumbering[lifted[i]] = Number;
+            S.AllPtrNumbering[lifted[i]] = Number;
             S.ReversePtrNumbering[Number] = lifted[i];
         }
         S.AllVectorNumbering[Phi] = Numbers;
@@ -581,8 +575,7 @@ void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi, SmallVector<int, 16> &PHI
         }
         int Number = ++S.MaxPtrNumber;
         PHINumbers.push_back(Number);
-        S.PtrNumbering[lift] = S.AllPtrNumbering[lift] =
-            S.AllPtrNumbering[Phi] = Number;
+        S.AllPtrNumbering[lift] = S.AllPtrNumbering[Phi] = Number;
         S.ReversePtrNumbering[Number] = lift;
     }
 }
@@ -612,7 +605,7 @@ int LateLowerGCFrame::NumberBase(State &S, Value *V, Value *CurrentV)
             Number = S.AllPtrNumbering[V] = S.AllPtrNumbering.at(CurrentV);
         return Number;
     } else if (isa<PHINode>(CurrentV) && !isUnion && getValueAddrSpace(CurrentV) != AddressSpace::Tracked) {
-        SmallVector<int, 16> PHINumbers;
+        SmallVector<int, 8> PHINumbers;
         LiftPhi(S, cast<PHINode>(CurrentV), PHINumbers);
         Number = S.AllPtrNumbering[V] = S.AllPtrNumbering.at(CurrentV);
         return Number;
@@ -627,7 +620,7 @@ int LateLowerGCFrame::NumberBase(State &S, Value *V, Value *CurrentV)
         Number = ++S.MaxPtrNumber;
         S.ReversePtrNumbering[Number] = CurrentV;
     }
-    S.PtrNumbering[CurrentV] = S.AllPtrNumbering[CurrentV] = S.AllPtrNumbering[V] = Number;
+    S.AllPtrNumbering[CurrentV] = S.AllPtrNumbering[V] = Number;
     return Number;
 }
 
@@ -651,7 +644,7 @@ std::vector<int> LateLowerGCFrame::NumberVectorBase(State &S, Value *CurrentV) {
         ((isa<Argument>(CurrentV) || isa<AllocaInst>(CurrentV) ||
          isa<AddrSpaceCastInst>(CurrentV)) &&
          getValueAddrSpace(CurrentV) != AddressSpace::Tracked)) {
-        Numbers.resize(cast<VectorType>(CurrentV->getType())->getNumElements(), -1);
+        Numbers.resize(CurrentV->getType()->getVectorNumElements(), -1);
     }
     /* We (the frontend) don't insert either of these, but it would be legal -
        though a bit strange, considering they're pointers - for the optimizer to
@@ -677,7 +670,7 @@ std::vector<int> LateLowerGCFrame::NumberVectorBase(State &S, Value *CurrentV) {
         LiftSelect(S, cast<SelectInst>(CurrentV));
         Numbers = S.AllVectorNumbering[CurrentV];
     } else if (isa<PHINode>(CurrentV) && getValueAddrSpace(CurrentV) != AddressSpace::Tracked) {
-        SmallVector<int, 16> PHINumbers;
+        SmallVector<int, 8> PHINumbers;
         LiftPhi(S, cast<PHINode>(CurrentV), PHINumbers);
         Numbers = S.AllVectorNumbering[CurrentV];
     } else if (isa<LoadInst>(CurrentV) || isa<CallInst>(CurrentV) || isa<PHINode>(CurrentV) ||
@@ -932,15 +925,15 @@ JL_USED_FUNC static void DumpRefinements(State *S)
         int Num = kv.first;
         if (Num < 0)
             continue;
-        jl_safe_printf("Refinements for %d  --  ", Num);
+        dbgs() << "Refinements for " << Num << "  --  ";
         auto V = S->ReversePtrNumbering[Num];
         llvm_dump(V);
         for (auto refine: kv.second) {
             if (refine < 0) {
-                jl_safe_printf("  %d\n", refine);
+                dbgs() << "  " << (int)refine;
                 continue;
             }
-            jl_safe_printf("  %d: ", refine);
+            dbgs() << "  " << (int)refine << ": ";
             auto R = S->ReversePtrNumbering[refine];
             llvm_dump(R);
         }
@@ -1098,7 +1091,7 @@ void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
 
 State LateLowerGCFrame::LocalScan(Function &F) {
     State S(F);
-    SmallVector<int, 16> PHINumbers;
+    SmallVector<int, 8> PHINumbers;
     for (BasicBlock &BB : F) {
         BBState &BBS = S.BBStates[&BB];
         for (auto it = BB.rbegin(); it != BB.rend(); ++it) {
@@ -1173,8 +1166,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 if (isLoadFromImmut(LI) && isSpecialPtr(LI->getPointerOperand()->getType())) {
                     RefinedPtr.push_back(Number(S, LI->getPointerOperand()));
                 } else if (LI->getType()->isPointerTy() &&
-                    isSpecialPtr(LI->getType()) &&
-                    LooksLikeFrameRef(LI->getPointerOperand())) {
+                        isSpecialPtr(LI->getType()) &&
+                        LooksLikeFrameRef(LI->getPointerOperand())) {
                     // Loads from a jlcall argument array
                     RefinedPtr.push_back(-1);
                 }
@@ -1184,7 +1177,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     RefinedPtr.push_back(-2);
                 }
                 if (!LI->getType()->isPointerTy() ||
-                    cast<PointerType>(LI->getType())->getAddressSpace() != AddressSpace::Loaded) {
+                        LI->getType()->getPointerAddressSpace() != AddressSpace::Loaded) {
                     MaybeNoteDef(S, BBS, LI, BBS.Safepoints, std::move(RefinedPtr));
                 }
                 NoteOperandUses(S, BBS, I);
@@ -1686,7 +1679,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
         Frame = new AllocaInst(T_prjlvalue, 0,
             ConstantInt::get(T_int32, maxframeargs), "", StartOff);
     }
-    SmallVector<CallInst*, 16> write_barriers;
+    std::vector<CallInst*> write_barriers;
     for (BasicBlock &BB : F) {
         for (auto it = BB.begin(); it != BB.end();) {
             Instruction *I = &*it;
