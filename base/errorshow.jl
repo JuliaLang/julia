@@ -343,7 +343,6 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
     # Displays the closest candidates of the given function by looping over the
     # functions methods and counting the number of matching arguments.
     f = ex.f
-    ft = typeof(f)
     lines = []
     # These functions are special cased to only show if first argument is matched.
     special = f in [convert, getindex, setindex!]
@@ -359,8 +358,14 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
         end
     end
 
+    function unwrap(f)
+        isa(f, UnionAll) || return f
+        fu = unwrap_unionall(typename(f).wrapper)
+        isa(fu, DataType) ? fu : f
+    end
+
     for (f, arg_types_param) in funcs
-        f2 = f isa UnionAll ? unwrap_unionall(unwrap_unionall(f).name.wrapper) : f
+        f2 = unwrap(f)
         for method in methods(f2)
             func, tv, decls, file, line = decl_parts(method)
             buf = IOBuffer()
