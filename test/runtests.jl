@@ -86,23 +86,24 @@ cd(@__DIR__) do
     #pretty print the information about gc and mem usage
     testgroupheader = "Test"
     workerheader = "(Worker)"
-    name_align    = maximum([length(testgroupheader) + length(" ") + length(workerheader); map(x -> length(x) + 3 + ndigits(nworkers()), tests)])
-    elapsed_align = length("Time (s)")
-    gc_align      = length("GC (s)")
-    percent_align = length("GC %")
-    alloc_align   = length("Alloc (MB)")
-    rss_align     = length("RSS (MB)")
+    name_align    = maximum([textwidth(testgroupheader) + textwidth(" ") + textwidth(workerheader); map(x -> textwidth(x) + 3 + ndigits(nworkers()), tests)])
+    elapsed_align = textwidth("Time (s)")
+    gc_align      = textwidth("GC (s)")
+    percent_align = textwidth("GC %")
+    alloc_align   = textwidth("Alloc (MB)")
+    rss_align     = textwidth("RSS (MB)")
     printstyled(testgroupheader, color=:white)
-    printstyled(lpad(workerheader, name_align - length(testgroupheader) + 1), " | ", color=:white)
+    printstyled(lpad(workerheader, name_align - textwidth(testgroupheader) + 1), " | ", color=:white)
     printstyled("Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)\n", color=:white)
     results=[]
     print_lock = ReentrantLock()
 
     function print_testworker_stats(test, wrkr, resp)
+        @nospecialize resp
         lock(print_lock)
         try
             printstyled(test, color=:white)
-            printstyled(lpad("($wrkr)", name_align - length(test) + 1, " "), " | ", color=:white)
+            printstyled(lpad("($wrkr)", name_align - textwidth(test) + 1, " "), " | ", color=:white)
             time_str = @sprintf("%7.2f",resp[2])
             printstyled(lpad(time_str, elapsed_align, " "), " | ", color=:white)
             gc_str = @sprintf("%5.2f", resp[5].total_time / 10^9)
@@ -122,10 +123,10 @@ cd(@__DIR__) do
     end
 
     global print_testworker_started = (name, wrkr)->begin
-    lock(print_lock)
+        lock(print_lock)
         try
             printstyled(name, color=:white)
-            printstyled(lpad("($wrkr)", name_align - length(name) + 1, " "), " |",
+            printstyled(lpad("($wrkr)", name_align - textwidth(name) + 1, " "), " |",
                 " "^elapsed_align, "started at $(now())\n", color=:white)
         finally
             unlock(print_lock)
