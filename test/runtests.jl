@@ -194,18 +194,27 @@ cd(@__DIR__) do
                             if exit_on_error
                                 skipped = length(tests)
                                 empty!(tests)
-                            end
-                        elseif resp[end] > max_worker_rss
-                            if n > 1
+                            elseif n > 1
+                                # the worker encountered some failure, recycle it
+                                # so future tests get a fresh environment
                                 rmprocs(wrkr, waitfor=30)
                                 p = addprocs_with_testenv(1)[1]
                                 remotecall_fetch(include, p, "testdefs.jl")
-                            else # single process testing
-                                error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
                             end
-                        end
-
-                        !isa(resp[1], Exception) && print_testworker_stats(test, wrkr, resp)
+                        else
+                            print_testworker_stats(test, wrkr, resp)
+                            if resp[end] > max_worker_rss
+                                # the worker has reached the max-rss limit, recycle it
+                                # so future tests start with a smaller working set
+                                if n > 1
+                                    rmprocs(wrkr, waitfor=30)
+                                    p = addprocs_with_testenv(1)[1]
+                                    remotecall_fetch(include, p, "testdefs.jl")
+                                else # single process testing
+                                    error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
+                                end
+                            end
+                       end
                     end
                     if p != 1
                         # Free up memory =)
