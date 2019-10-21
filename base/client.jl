@@ -82,12 +82,13 @@ function repl_cmd(cmd, out)
         else
             if shell_name == "fish"
                 shell_escape_cmd = "begin; $(shell_escape_posixly(cmd)); and true; end"
+                command = `$shell -c $shell_escape_cmd`
             elseif shell_name == "pwsh"
                 command = _powershell_execute(cmd)
             else
                 shell_escape_cmd = "($(shell_escape_posixly(cmd))) && true"
+                command = `$shell -c $shell_escape_cmd`
             end
-            command = `$shell -c $shell_escape_cmd`
         end
         run(ignorestatus(command))
     end
