@@ -95,8 +95,11 @@ cd(@__DIR__) do
     printstyled(testgroupheader, color=:white)
     printstyled(lpad(workerheader, name_align - textwidth(testgroupheader) + 1), " | ", color=:white)
     printstyled("Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)\n", color=:white)
-    results=[]
-    print_lock = ReentrantLock()
+    results = []
+    print_lock = stdout isa Base.LibuvStream ? stdout.lock : ReentrantLock()
+    if stderr isa Base.LibuvStream
+        stderr.lock = print_lock
+    end
 
     function print_testworker_stats(test, wrkr, resp)
         @nospecialize resp
