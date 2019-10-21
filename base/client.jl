@@ -71,9 +71,9 @@ function repl_cmd(cmd, out)
         local command
         if Sys.iswindows()
             if shell_name == "cmd"
-                command = _CMD_execute(cmd)
+                command = _CMD_execute(shell, cmd)
             elseif shell_name in ("powershell", "pwsh")
-                command = _powershell_execute(cmd)
+                command = _powershell_execute(shell, cmd)
             elseif shell_name == "busybox"
                 command = `$shell sh -c $(shell_escape_posixly(cmd))`
             else
@@ -84,7 +84,7 @@ function repl_cmd(cmd, out)
                 shell_escape_cmd = "begin; $(shell_escape_posixly(cmd)); and true; end"
                 command = `$shell -c $shell_escape_cmd`
             elseif shell_name == "pwsh"
-                command = _powershell_execute(cmd)
+                command = _powershell_execute(shell, cmd)
             else
                 shell_escape_cmd = "($(shell_escape_posixly(cmd))) && true"
                 command = `$shell -c $shell_escape_cmd`
@@ -96,9 +96,9 @@ function repl_cmd(cmd, out)
 end
 
 # process cmd's passed to CMD
-_CMD_execute(cmd) = Cmd(`$shell /c $(shell_escape_CMDly(shell_escape_winsomely(cmd)))`, windows_verbatim=true)
+_CMD_execute(shell, cmd) = Cmd(`$shell /c $(shell_escape_CMDly(shell_escape_winsomely(cmd)))`, windows_verbatim=true)
 
-function _powershell_execute(cmd)
+function _powershell_execute(shell, cmd)
     # process cmd's passed to powershell
     CommandType = nothing
     try
