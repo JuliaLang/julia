@@ -329,6 +329,19 @@ define %jl_value_t addrspace(10)* @vec_loadobj() {
   ret %jl_value_t addrspace(10)* %v7
 }
 
+define %jl_value_t addrspace(10)* @vec_gep() {
+; CHECK-LABEL: @vec_gep
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
+  %v4 = call %jl_value_t*** @julia.ptls_states()
+  %obj = call %jl_value_t addrspace(10) *@alloc()
+  %obj1 = bitcast %jl_value_t addrspace(10) * %obj to %jl_value_t addrspace(10)* addrspace(10)*
+  %v1 = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)* addrspace(10)* %obj1, <2 x i32> < i32 0, i32 0 >
+  call void @jl_safepoint()
+  %obj2 = extractelement <2 x %jl_value_t addrspace(10)* addrspace(10)*> %v1, i32 0
+  %obj3 = bitcast %jl_value_t addrspace(10)* addrspace(10)* %obj2 to %jl_value_t addrspace(10)*
+  ret %jl_value_t addrspace(10)* %obj3
+}
+
 declare i1 @check_property(%jl_value_t addrspace(10)* %val)
 define void @loopyness(i1 %cond1, %jl_value_t addrspace(10) *%arg) {
 ; CHECK-LABEL: @loopyness
