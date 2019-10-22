@@ -1292,7 +1292,7 @@ julia> addprocs(3)
 
 julia> @everywhere using SharedArrays
 
-julia> S = SharedArray{Int,2}((3,4), init = S -> S[localindices(S)] = myid())
+julia> S = SharedArray{Int,2}((3,4), init = S -> S[localindices(S)] = repeat([myid()], length(localindices(S))))
 3×4 SharedArray{Int64,2}:
  2  2  3  4
  2  3  3  4
@@ -1313,7 +1313,7 @@ convenient for splitting up tasks among processes. You can, of course, divide th
 you wish:
 
 ```julia-repl
-julia> S = SharedArray{Int,2}((3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = myid())
+julia> S = SharedArray{Int,2}((3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = repeat([myid()], length( indexpids(S):length(procs(S)):length(S))))
 3×4 SharedArray{Int64,2}:
  2  2  2  2
  3  3  3  3
