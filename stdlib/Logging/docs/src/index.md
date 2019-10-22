@@ -194,7 +194,7 @@ modules, such as `Pkg`, or module roots (see [`Base.moduleroot`](@ref)). To
 enable all debug logging, use the special value `all`.
 
 To turn debug logging on from the REPL, set `ENV["JULIA_DEBUG"]` to the
-name of the module of interest. Functions defined in the REPL belong to 
+name of the module of interest. Functions defined in the REPL belong to
 module `Main`; logging for them can be enabled like this:
 ```julia-repl
 julia> foo() = @debug "foo"
