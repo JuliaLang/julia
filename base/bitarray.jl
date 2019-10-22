@@ -1730,7 +1730,7 @@ function hcat(B::BitVector...)
     height = length(B[1])
     for j = 2:length(B)
         length(B[j]) == height ||
-            throw(DimensionMismatch("dimensions must match"))
+            throw(DimensionMismatch("dimensions must match: $j-th element has length $(length(B[j])), should have $height"))
     end
     M = BitMatrix(undef, height, length(B))
     for j = 1:length(B)
@@ -1763,7 +1763,7 @@ function hcat(A::Union{BitMatrix,BitVector}...)
         nd = ndims(Aj)
         ncols += (nd==2 ? size(Aj,2) : 1)
         size(Aj, 1) == nrows ||
-            throw(DimensionMismatch("row lengths must match"))
+            throw(DimensionMismatch("row lengths must match: $j-th element has first dim $(size(Aj, 1)), should have $nrows"))
     end
 
     B = BitMatrix(undef, nrows, ncols)
@@ -1784,7 +1784,7 @@ function vcat(A::BitMatrix...)
     ncols = size(A[1], 2)
     for j = 2:nargs
         size(A[j], 2) == ncols ||
-            throw(DimensionMismatch("column lengths must match"))
+        throw(DimensionMismatch("column lengths must match: $j-th element has second dim $(size(A[j], 2)), should have $ncols"))
     end
     B = BitMatrix(undef, nrows, ncols)
     Bc = B.chunks
