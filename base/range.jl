@@ -1010,14 +1010,14 @@ function _define_range_op(@nospecialize f)
         function $f(r1::OrdinalRange, r2::OrdinalRange)
             r1l = length(r1)
             (r1l == length(r2) ||
-             throw(DimensionMismatch("argument dimensions must match")))
+             throw(DimensionMismatch("argument dimensions must match: length of r1 is $r1l, length of r2 is $(length(r2))")))
             range($f(first(r1), first(r2)), step=$f(step(r1), step(r2)), length=r1l)
         end
 
         function $f(r1::LinRange{T}, r2::LinRange{T}) where T
             len = r1.len
             (len == r2.len ||
-             throw(DimensionMismatch("argument dimensions must match")))
+             throw(DimensionMismatch("argument dimensions must match: length of r1 is $len, length of r2 is $(r2.len)")))
             LinRange{T}(convert(T, $f(first(r1), first(r2))),
                         convert(T, $f(last(r1), last(r2))), len)
         end
@@ -1033,7 +1033,7 @@ _define_range_op(:-)
 function +(r1::StepRangeLen{T,S}, r2::StepRangeLen{T,S}) where {T,S}
     len = length(r1)
     (len == length(r2) ||
-        throw(DimensionMismatch("argument dimensions must match")))
+     throw(DimensionMismatch("argument dimensions must match: length of r1 is $len, length of r2 is $(length(r2))")))
     StepRangeLen(first(r1)+first(r2), step(r1)+step(r2), len)
 end
 
