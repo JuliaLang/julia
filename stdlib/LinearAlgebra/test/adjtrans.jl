@@ -513,17 +513,13 @@ end
                                                       complexmat, vec(complexmat),
                                                       nested, vec(nested),
                                                      )
-        t = transpose(i)
-        @test conj(t) isa Adjoint
-        @test conj(t) == conj(collect(t))
-        @test conj(conj(t)) === t
-
-        a = adjoint(i)
-        @test conj(a) isa Transpose
-        @test conj(a) == conj(collect(a))
-        @test conj(conj(a)) === a
+        for (t,type) in ((transpose, Adjoint), (adjoint, Transpose))
+            M = t(i)
+            @test conj(M) isa type
+            @test conj(M) == conj(collect(M))
+            @test conj(conj(M)) === M
+        end
     end
 end
-
 
 end # module TestAdjointTranspose
