@@ -369,7 +369,7 @@ struct ConstrainedType{T,N,M}
     A::Array{T,N}
     B::Array{T,M}
     function ConstrainedType(A::Array{T,N}, B::Array{T,M}) where {T,N,M}
-        N == M || throw(ArgumentError("second argument should have one more axis" ))
+        N + 1 == M || throw(ArgumentError("second argument should have one more axis" ))
         new{T,N,M}(A, B)
     end
 end
