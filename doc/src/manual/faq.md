@@ -352,6 +352,33 @@ julia> sqrt(-2.0+0im)
 0.0 + 1.4142135623730951im
 ```
 
+### How can I constrain or compute type parameters?
+
+Julia does not support a special syntax for expressing constraints for type parameters, but these can be enforced in [constructors](@ref man-constructors).
+
+As an example, consider
+```julia
+struct ConstrainedType{T,N,N+1} # NOTE: INVALID SYNTAX
+    A::Array{T,N}
+    B::Array{T,N+1}
+end
+```
+where the user would like to enforce that the third type parameter is always the second plus one. This can be implemented with an explicit type parameter that is checked by an [inner constructor method](@ref man-inner-constructor-methods) (where it can be combined with other checks):
+```jldoctest
+struct ConstrainedType{T,N,M}
+    A::Array{T,N}
+    B::Array{T,M}
+    function ConstrainedType(A::Array{T,N}, B::Array{T,M}) where {T,N,M}
+        N == M || throw(ArgumentError("second argument should have one more axis" ))
+        new{T,N,M}(A, B)
+    end
+end
+```
+This check is usually *costless*, as the compiler can elide the check for valid concrete types. If the second argument is also computed, it may be advantageous to provide an [outer constructor method](@ref man-outer-constructor-methods) that performs this calculation:
+```jldoctest
+ConstrainedType(A) = ConstrainedType(A, compute_B(A))
+```
+
 ### [Why does Julia use native machine integer arithmetic?](@id faq-integer-arithmetic)
 
 Julia uses machine arithmetic for integer computations. This means that the range of `Int` values
