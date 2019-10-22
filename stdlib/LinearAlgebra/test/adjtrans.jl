@@ -520,6 +520,9 @@ end
             @test conj(conj(M)) === M
         end
     end
+    # test if `conj(transpose(::Hermitian))` is a no-op
+    hermitian = Hermitian([1 2+im; 2-im 3])
+    @test conj(transpose(hermitian)) === hermitian
 end
 
 end # module TestAdjointTranspose
