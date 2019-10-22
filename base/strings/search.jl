@@ -185,7 +185,8 @@ function _searchindex(s::ByteArray, t::ByteArray, i::Integer)
     end
 
     w = m - n
-    if w < 0 || i - 1 > w
+    i = i > 0 ? i-1 : 0
+    if w < 0 || i > w
         return 0
     end
 
@@ -199,7 +200,6 @@ function _searchindex(s::ByteArray, t::ByteArray, i::Integer)
         end
     end
 
-    i -= 1
     while i <= w
         if _nthbyte(s,i+n) == tlast
             # check candidate
