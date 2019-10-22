@@ -354,7 +354,19 @@ julia> sqrt(-2.0+0im)
 
 ### How can I constrain or compute type parameters?
 
-Julia does not support a special syntax for expressing constraints for type parameters, but these can be enforced in [constructors](@ref man-constructors).
+The parameters of a [parametric type](@ref man-parametric-types) can hold either
+types or bits values, and the type itself chooses how it makes use of these parameters.
+For example, `Array{Float64, 2}` is parameterized by the type `Float64` to express its
+element type and the integer value `2` to express its number of dimensions.  When
+defining your own parametric type, you can use subtype constraints to declare that a
+certain parameter must be a subtype ([`<:`](@ref)) of some abstract type or a previous
+type parameter.  There is not, however, a dedicated syntax to declare that a parameter
+must be a _value_ of a given type — that is, you cannot directly declare that a
+dimensionality-like parameter [`isa`](@ref) `Int` within the `struct` definition, for
+example.  Similarly, you cannot do computations (including simple things like addition
+or subtraction) on type parameters.  Instead, these sorts of constraints and
+relationships may be expressed through additional type parameters that are computed
+and enforced within the type's [constructors](@ref man-constructors).
 
 As an example, consider
 ```julia
