@@ -309,7 +309,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
 
     quote
         level = $level
-        if logging_enabled(level)
+        if shouldlog(level)
             group = $group
             _module = $_module
             importance = default_importance(level)
@@ -370,7 +370,7 @@ end
 # limiting.
 const _min_enabled_importance = Ref(default_importance(Debug))
 
-function logging_enabled(level)
+function shouldlog(level::AbstractLogLevel)
     default_importance(level) >= getindex(_min_enabled_importance)
 end
 
@@ -445,7 +445,7 @@ used at top-level.
 """
 macro disable_logging(T, disabled=true)
     quote
-        function CoreLogging.logging_enabled(::_check_loglevel_type($(esc(T))))
+        function CoreLogging.shouldlog(::_check_loglevel_type($(esc(T))))
             !$(esc(disabled))
         end
     end
