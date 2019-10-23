@@ -777,7 +777,8 @@ name a few). The alternative to column-major ordering is row-major ordering, whi
 adopted by C and Python (`numpy`) among other languages. Remembering the ordering of arrays can
 have significant performance effects when looping over arrays. A rule of thumb to keep in mind
 is that with column-major arrays, the first index changes most rapidly. Essentially this means
-that looping will be faster if the inner-most loop index is the first to appear in a slice expression. Keep in mind that accessing an array with `:` is a loop.
+that looping will be faster if the inner-most loop index is the first to appear in a slice expression.
+Keep in mind that accessing an array with `:` is a loop.
 
 Consider the following contrived example. Imagine we wanted to write a function that accepts a
 [`Vector`](@ref) and returns a square [`Matrix`](@ref) with either the rows or the columns filled with copies
