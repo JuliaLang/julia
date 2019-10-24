@@ -29,10 +29,6 @@ ifeq ($(BUILD_LLDB), 1)
 LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);lldb
 endif
 
-ifeq ($(LLVM_VER),svn)
-LLVM_CMAKE += -DLLVM_ENABLE_PROJECTS="$(LLVM_ENABLE_PROJECTS)"
-endif
-
 include $(SRCDIR)/llvm-options.mk
 LLVM_LIB_FILE := libLLVMCodeGen.a
 
@@ -68,6 +64,11 @@ LLVM_CXXFLAGS :=
 LLVM_CPPFLAGS :=
 LLVM_LDFLAGS :=
 LLVM_CMAKE :=
+
+# MONOREPO
+ifeq ($(LLVM_VER),svn)
+LLVM_CMAKE += -DLLVM_ENABLE_PROJECTS="$(LLVM_ENABLE_PROJECTS)"
+endif
 
 # Allow adding LLVM specific flags
 LLVM_CFLAGS += $(CFLAGS)
