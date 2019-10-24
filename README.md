@@ -42,7 +42,7 @@ and installing Julia, below.
 - **YouTube:** <https://www.youtube.com/user/JuliaLanguage>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
-New developers may find the notes in
+New developer may find the notes in
 [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md)
 helpful to start contributing to the Julia codebase.
 
