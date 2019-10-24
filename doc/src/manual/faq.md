@@ -376,7 +376,7 @@ struct ConstrainedType{T,N,N+1} # NOTE: INVALID SYNTAX
 end
 ```
 where the user would like to enforce that the third type parameter is always the second plus one. This can be implemented with an explicit type parameter that is checked by an [inner constructor method](@ref man-inner-constructor-methods) (where it can be combined with other checks):
-```jldoctest
+```julia
 struct ConstrainedType{T,N,M}
     A::Array{T,N}
     B::Array{T,M}
@@ -387,7 +387,7 @@ struct ConstrainedType{T,N,M}
 end
 ```
 This check is usually *costless*, as the compiler can elide the check for valid concrete types. If the second argument is also computed, it may be advantageous to provide an [outer constructor method](@ref man-outer-constructor-methods) that performs this calculation:
-```jldoctest
+```julia
 ConstrainedType(A) = ConstrainedType(A, compute_B(A))
 ```
 
