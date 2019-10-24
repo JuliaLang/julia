@@ -2,14 +2,7 @@
 include $(SRCDIR)/llvm-ver.make
 
 ifneq ($(USE_BINARYBUILDER_LLVM), 1)
-LLVM_GIT_URL_BASE ?= http://llvm.org/git
-LLVM_GIT_URL_LLVM ?= $(LLVM_GIT_URL_BASE)/llvm.git
-LLVM_GIT_URL_CLANG ?= $(LLVM_GIT_URL_BASE)/clang.git
-LLVM_GIT_URL_COMPILER_RT ?= $(LLVM_GIT_URL_BASE)/compiler-rt.git
-LLVM_GIT_URL_LLDB ?= $(LLVM_GIT_URL_BASE)/lldb.git
-LLVM_GIT_URL_LIBCXX ?= $(LLVM_GIT_URL_BASE)/libcxx.git
-LLVM_GIT_URL_LIBCXXABI ?= $(LLVM_GIT_URL_BASE)/libcxxabi.git
-LLVM_GIT_URL_POLLY ?= $(LLVM_GIT_URL_BASE)/polly.git
+LLVM_GIT_URL ?= https://github.com/llvm/llvm-project.git
 
 ifeq ($(BUILD_LLDB), 1)
 BUILD_LLVM_CLANG := 1
@@ -22,6 +15,22 @@ ifneq ($(LLVM_VER),svn)
 $(error USE_POLLY=1 requires LLVM_VER=svn)
 endif
 endif
+endif
+
+# for Monorepo
+LLVM_ENABLE_PROJECTS :=
+ifeq ($(BUILD_LLVM_CLANG), 1)
+LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);clang;compiler-rt
+endif
+ifeq ($(USE_POLLY), 1)
+LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);polly
+endif
+ifeq ($(BUILD_LLDB), 1)
+LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);lldb
+endif
+
+ifeq ($(LLVM_VER),svn)
+LLVM_CMAKE += -DLLVM_ENABLE_PROJECTS="$(LLVM_ENABLE_PROJECTS)"
 endif
 
 include $(SRCDIR)/llvm-options.mk
@@ -332,12 +341,12 @@ ifneq ($(LLVM_VER),svn)
 	mkdir -p $(LLVM_SRC_DIR)
 	$(TAR) -C $(LLVM_SRC_DIR) --strip-components 1 -xf $(LLVM_TAR)
 else
-	([ ! -d $(LLVM_SRC_DIR) ] && \
-		git clone $(LLVM_GIT_URL_LLVM) $(LLVM_SRC_DIR) ) || \
-		(cd $(LLVM_SRC_DIR) && \
+	([ ! -d $(LLVM_MONOSRC_DIR) ] && \
+		git clone $(LLVM_GIT_URL) $(LLVM_MONOSRC_DIR) ) || \
+		(cd $(LLVM_MONOSRC_DIR) && \
 		git pull --ff-only)
 ifneq ($(LLVM_GIT_VER),)
-	(cd $(LLVM_SRC_DIR) && \
+	(cd $(LLVM_MONOSRC_DIR) && \
 		git checkout $(LLVM_GIT_VER))
 endif # LLVM_GIT_VER
 	# Debug output only. Disable pager and ignore error.
@@ -357,41 +366,6 @@ ifneq ($(LLVM_LLDB_TAR),)
 	mkdir -p $(LLVM_SRC_DIR)/tools/lldb
 	$(TAR) -C $(LLVM_SRC_DIR)/tools/lldb --strip-components 1 -xf $(LLVM_LLDB_TAR)
 endif # LLVM_LLDB_TAR
-else # LLVM_VER
-ifeq ($(BUILD_LLVM_CLANG),1)
-	([ ! -d $(LLVM_SRC_DIR)/tools/clang ] && \
-		git clone $(LLVM_GIT_URL_CLANG) $(LLVM_SRC_DIR)/tools/clang  ) || \
-		(cd $(LLVM_SRC_DIR)/tools/clang  && \
-		git pull --ff-only)
-	([ ! -d $(LLVM_SRC_DIR)/projects/compiler-rt ] && \
-		git clone $(LLVM_GIT_URL_COMPILER_RT) $(LLVM_SRC_DIR)/projects/compiler-rt  ) || \
-		(cd $(LLVM_SRC_DIR)/projects/compiler-rt  && \
-		git pull --ff-only)
-ifneq ($(LLVM_GIT_VER_CLANG),)
-	(cd $(LLVM_SRC_DIR)/tools/clang && \
-		git checkout $(LLVM_GIT_VER_CLANG))
-endif # LLVM_GIT_VER_CLANG
-endif # BUILD_LLVM_CLANG
-ifeq ($(BUILD_LLDB),1)
-	([ ! -d $(LLVM_SRC_DIR)/tools/lldb ] && \
-		git clone $(LLVM_GIT_URL_LLDB) $(LLVM_SRC_DIR)/tools/lldb  ) || \
-		(cd $(LLVM_SRC_DIR)/tools/lldb  && \
-		git pull --ff-only)
-ifneq ($(LLVM_GIT_VER_LLDB),)
-	(cd $(LLVM_SRC_DIR)/tools/lldb && \
-		git checkout $(LLVM_GIT_VER_LLDB))
-endif # LLVM_GIT_VER_CLANG
-endif # BUILD_LLDB
-ifeq ($(USE_POLLY),1)
-	([ ! -d $(LLVM_SRC_DIR)/tools/polly ] && \
-		git clone $(LLVM_GIT_URL_POLLY) $(LLVM_SRC_DIR)/tools/polly  ) || \
-		(cd $(LLVM_SRC_DIR)/tools/polly  && \
-		git pull --ff-only)
-ifneq ($(LLVM_GIT_VER_POLLY),)
-	(cd $(LLVM_SRC_DIR)/tools/polly && \
-		git checkout $(LLVM_GIT_VER_POLLY))
-endif # LLVM_GIT_VER_POLLY
-endif # USE_POLLY
 endif # LLVM_VER
 	# touch some extra files to ensure bisect works pretty well
 	touch -c $(LLVM_SRC_DIR).extracted
@@ -588,13 +562,7 @@ check-llvm: $(LLVM_BUILDDIR_withtype)/build-checked
 
 ifeq ($(LLVM_VER),svn)
 update-llvm:
-	(cd $(LLVM_SRC_DIR); git pull --ff-only)
-	([ -d "$(LLVM_SRC_DIR)/tools/clang"  ] || exit 0;          cd $(LLVM_SRC_DIR)/tools/clang; git pull --ff-only)
-	([ -d "$(LLVM_SRC_DIR)/projects/compiler-rt" ] || exit 0;  cd $(LLVM_SRC_DIR)/projects/compiler-rt; git pull --ff-only)
-	([ -d "$(LLVM_SRC_DIR)/tools/lldb" ] || exit 0;            cd $(LLVM_SRC_DIR)/tools/lldb; git pull --ff-only)
-ifeq ($(USE_POLLY),1)
-	([ -d "$(LLVM_SRC_DIR)/tools/polly" ] || exit 0;           cd $(LLVM_SRC_DIR)/tools/polly; git pull --ff-only)
-endif
+	(cd $(LLVM_MONOSRC_DIR); git pull --ff-only)
 endif
 else # USE_BINARYBUILDER_LLVM
 LLVM_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LLVM-v$(LLVM_VER)-$(LLVM_BB_REL)
