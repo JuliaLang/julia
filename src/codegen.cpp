@@ -6870,8 +6870,10 @@ static std::unique_ptr<Module> emit_function(
 std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr, bool isConstant=false)
 {
     MDBuilder mbuilder(jl_LLVMContext);
-    if (tbaa_root == nullptr)
-        tbaa_root = mbuilder.createTBAARoot("jtbaa");
+    if (tbaa_root == nullptr) {
+        MDNode *jtbaa = mbuilder.createTBAARoot("jtbaa");
+        tbaa_root = mbuilder.createTBAAScalarTypeNode("jtbaa", jtbaa);
+    }
     MDNode *scalar = mbuilder.createTBAAScalarTypeNode(name, parent ? parent : tbaa_root);
     MDNode *n = mbuilder.createTBAAStructTagNode(scalar, scalar, 0, isConstant);
     return std::make_pair(n, scalar);
