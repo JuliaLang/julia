@@ -1168,13 +1168,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             sep = ", "
         end
         head !== :row && print(io, op)
-        if !isempty(args) && Meta.isexpr(args[1], :parameters)
-            show_list(io, args[2:end], sep, indent)
-            print(io, "; ")
-            show_list(io, args[1].args, sep, indent)
-        else
-            show_list(io, args, sep, indent)
-        end
+        show_list(io, args, sep, indent)
         if nargs == 1
             if head === :tuple
                 print(io, ',')

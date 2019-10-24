@@ -753,9 +753,6 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T,N}, indices::Vararg{$Int,N})")
 @test_repr "[a;]"
 @test_repr "[a; b]"
 
-# Issue #32775, printing ; in a tuple
-@test sprint(show, :((a,;b))) == ":((a; b))"
-
 # other brackets and braces
 @test_repr "[a]"
 @test_repr "[a,b]"
