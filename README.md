@@ -24,7 +24,7 @@ Documentation:
 
 ## The Julia Language
 
-Julia is a high-level, high-performance dynamic language for technical
+Julia is high-level, high-performance dynamic language for technical
 computing.  The main homepage for Julia can be found at
 [julialang.org](https://julialang.org/).  This is the GitHub
 repository of Julia source code, including instructions for compiling
@@ -94,7 +94,7 @@ Building Julia requires 2GiB of disk space and approximately 4GiB of virtual mem
 
 Once it is built, you can run the `julia` executable after you enter your julia directory and run
 
-    ./julia
+ ./julia
 
 Your first test of Julia determines whether your build is working
 properly. From the UNIX/Windows command prompt inside the `julia`
@@ -133,7 +133,7 @@ The Julia source code is organized as follows:
 
 ## Terminal, Editors and IDEs
 
-The Julia REPL is quite powerful.  See the section in the manual on
+The Julia REPL is quite powerful. See the section in the manual on
 [the Julia REPL](https://docs.julialang.org/en/latest/stdlib/REPL/)
 for more details.
 
