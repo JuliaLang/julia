@@ -855,3 +855,18 @@ end
         @test !issuccess(ldlt!(F, M; check = false))
     end
 end
+
+@testset "Issue #27860" begin
+    A = sparse(Float64[2.0 0.1; 0.1 2.0])
+    B = sparse(ComplexF64[2.0 0.1; 0.1 2.0])
+    R = randn(2, 2)
+    for M in (A, B)
+        @test M \ R' ≈ Matrix(M) \ R'
+        @test M \ transpose(R) ≈ Matrix(M) \ transpose(R)
+    end
+    r = randn(1, 2)
+    for M in (A, B)
+        @test M \ r' ≈ Matrix(M) \ r'
+        @test M \ transpose(r) ≈ Matrix(M) \ transpose(r)
+    end
+end

@@ -804,7 +804,15 @@ function Dense{T}(A::StridedVecOrMat) where T<:VTypes
     end
     d
 end
-function Dense(A::StridedVecOrMat)
+function Dense{T}(A::Union{Adjoint{<:Any, <:StridedVecOrMat}, Transpose{<:Any, <:StridedVecOrMat}}) where T<:VTypes
+    d = allocate_dense(size(A, 1), size(A, 2), size(A, 1), T)
+    s = unsafe_load(pointer(d))
+    for i in 1:length(A)
+        unsafe_store!(s.x, A[i], i)
+    end
+    d
+end
+function Dense(A::Union{StridedVecOrMat, Adjoint{<:Any, <:StridedVecOrMat}, Transpose{<:Any, <:StridedVecOrMat}})
     T = promote_type(eltype(A), Float64)
     return Dense{T}(A)
 end
@@ -1679,9 +1687,21 @@ end
 # Explicit typevars are necessary to avoid ambiguities with defs in linalg/factorizations.jl
 # Likewise the two following explicit Vector and Matrix defs (rather than a single VecOrMat)
 (\)(L::Factor{T}, B::Vector{Complex{T}}) where {T<:Float64} = complex.(L\real(B), L\imag(B))
+(\)(L::Factor{T}, B::Adjoint{<:Any, <:Vector{Complex{T}}}) where {T<:Float64} = complex.(L\real(B), L\imag(B))
+(\)(L::Factor{T}, B::Transpose{<:Any, <:Vector{Complex{T}}}) where {T<:Float64} = complex.(L\real(B), L\imag(B))
+
 (\)(L::Factor{T}, B::Matrix{Complex{T}}) where {T<:Float64} = complex.(L\real(B), L\imag(B))
+(\)(L::Factor{T}, B::Adjoint{<:Any, <:Matrix{Complex{T}}}) where {T<:Float64} = complex.(L\real(B), L\imag(B))
+(\)(L::Factor{T}, B::Transpose{<:Any, <:Matrix{Complex{T}}}) where {T<:Float64} = complex.(L\real(B), L\imag(B))
+
 (\)(L::Factor{T}, b::StridedVector) where {T<:VTypes} = Vector(L\Dense{T}(b))
+(\)(L::Factor{T}, b::Adjoint{<:Any, <:StridedVector}) where {T<:VTypes} = Vector(L\Dense{T}(b))
+(\)(L::Factor{T}, b::Transpose{<:Any, <:StridedVector}) where {T<:VTypes} = Vector(L\Dense{T}(b))
+
 (\)(L::Factor{T}, B::StridedMatrix) where {T<:VTypes} = Matrix(L\Dense{T}(B))
+(\)(L::Factor{T}, B::Adjoint{<:Any, <:StridedMatrix}) where {T<:VTypes} = Matrix(L\Dense{T}(B))
+(\)(L::Factor{T}, B::Transpose{<:Any, <:StridedMatrix}) where {T<:VTypes} = Matrix(L\Dense{T}(B))
+
 (\)(L::Factor, B::Sparse) = spsolve(CHOLMOD_A, L, B)
 # When right hand side is sparse, we have to ensure that the rhs is not marked as symmetric.
 (\)(L::Factor, B::SparseVecOrMat) = sparse(spsolve(CHOLMOD_A, L, Sparse(B, 0)))
@@ -1703,7 +1723,8 @@ const RealHermSymComplexHermF64SSL = Union{
     Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
     Hermitian{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
     Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}}
-function \(A::RealHermSymComplexHermF64SSL, B::StridedVecOrMat)
+const StridedVecOrMatInclAdjAndTrans = Union{StridedVecOrMat, Adjoint{<:Any, <:StridedVecOrMat}, Transpose{<:Any, <:StridedVecOrMat}}
+function \(A::RealHermSymComplexHermF64SSL, B::StridedVecOrMatInclAdjAndTrans)
     F = cholesky(A; check = false)
     if issuccess(F)
         return \(F, B)
@@ -1716,7 +1737,7 @@ function \(A::RealHermSymComplexHermF64SSL, B::StridedVecOrMat)
         end
     end
 end
-function \(adjA::Adjoint{<:Any,<:RealHermSymComplexHermF64SSL}, B::StridedVecOrMat)
+function \(adjA::Adjoint{<:Any, <:RealHermSymComplexHermF64SSL}, B::StridedVecOrMatInclAdjAndTrans)
     A = adjA.parent
     F = cholesky(A; check = false)
     if issuccess(F)
