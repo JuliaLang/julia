@@ -80,7 +80,7 @@ Then, acquire the source code by cloning the git repository:
     git clone git://github.com/JuliaLang/julia.git
 
 By default you will be building the latest unstable version of
-Julia. However, most users should use the most recent stable version
+Julia. However, most users should use most recent stable version
 of Julia. You can get this version by changing to the Julia directory
 and running:
 
