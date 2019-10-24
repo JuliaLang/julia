@@ -354,7 +354,7 @@ julia> sqrt(-2.0+0im)
 
 ### How can I constrain or compute type parameters?
 
-The parameters of a [parametric type](@ref man-parametric-types) can hold either
+The parameters of a [parametric type](@ref Parametric-Types) can hold either
 types or bits values, and the type itself chooses how it makes use of these parameters.
 For example, `Array{Float64, 2}` is parameterized by the type `Float64` to express its
 element type and the integer value `2` to express its number of dimensions.  When
