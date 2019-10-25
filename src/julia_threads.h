@@ -213,6 +213,10 @@ struct _jl_tls_states_t {
     // callbacks (such as generated functions)
     // as it may make compilation undecidable
     int in_pure_callback;
+    // If currently_tracking_dispatches, we record the MethodInstances dispatched-to by
+    // jl_invoke into tracked_dynamic_dispatches.
+    int currently_tracking_dispatches;
+    arraylist_t tracked_dynamic_dispatches;
     // Counter to disable finalizer **on the current thread**
     int finalizers_inhibited;
     arraylist_t finalizers;

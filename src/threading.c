@@ -272,6 +272,7 @@ void jl_init_threadtls(int16_t tid)
     memset(bt_data, 0, sizeof(jl_bt_element_t) * (JL_MAX_BT_SIZE + 1));
     ptls->bt_data = bt_data;
     ptls->sig_exception = NULL;
+    ptls->currently_tracking_dispatches = 0;
     ptls->previous_exception = NULL;
 #ifdef _OS_WINDOWS_
     ptls->needs_resetstkoflw = 0;

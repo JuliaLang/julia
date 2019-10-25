@@ -2121,18 +2121,52 @@ STATIC_INLINE jl_value_t *verify_type(jl_value_t *v) JL_NOTSAFEPOINT
     return v;
 }
 
+// TODO(nhdaly): I'm sure there's a better place for these functions.
+// TODO(nhdaly): Comment this code better.
+JL_DLLEXPORT int jl_start_tracking_dispatches() {
+    jl_ptls_t ptls = jl_get_ptls_states();
+    ptls->currently_tracking_dispatches = 1;
+    arraylist_new(&ptls->tracked_dynamic_dispatches, 0);
+    return ptls->currently_tracking_dispatches;
+}
+JL_DLLEXPORT jl_array_t* jl_finish_tracking_dispatches() {
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_array_t *a = jl_alloc_array_1d(jl_array_any_type, 0);
+    JL_GC_PUSH1(&a);
+    jl_value_t* mi = (jl_value_t*)arraylist_pop(&ptls->tracked_dynamic_dispatches);
+    while (mi != NULL) {
+        jl_array_ptr_1d_push(a, mi);
+        mi = (jl_value_t*)arraylist_pop(&ptls->tracked_dynamic_dispatches);
+    }
+    arraylist_free(&ptls->tracked_dynamic_dispatches);
+    jl_get_ptls_states()->currently_tracking_dispatches = 0;
+    JL_GC_POP();
+    return a;
+}
+
+void _record_dynamic_dispatches_if_tracking(jl_method_instance_t* def) {
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (ptls->currently_tracking_dispatches) {
+        arraylist_push(&ptls->tracked_dynamic_dispatches, def);
+    }
+}
+
 STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc, size_t world)
 {
     // manually inline key parts of jl_compile_method_internal:
     jl_code_instance_t *codeinst = mfunc->cache;
+    // Find an applicable codeinst on the method instance, if one is available, otherwise compile one.
     while (codeinst) {
         if (codeinst->min_world <= world && world <= codeinst->max_world && codeinst->invoke != NULL) {
+            _record_dynamic_dispatches_if_tracking(codeinst->def);
             jl_value_t *res = codeinst->invoke(F, args, nargs, codeinst);
             return verify_type(res);
         }
         codeinst = codeinst->next;
     }
     codeinst = jl_compile_method_internal(mfunc, world);
+
+    _record_dynamic_dispatches_if_tracking(codeinst->def);
     jl_value_t *res = codeinst->invoke(F, args, nargs, codeinst);
     return verify_type(res);
 }
