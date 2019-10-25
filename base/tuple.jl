@@ -267,6 +267,11 @@ _totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
 
 end
 
+## construction with one element ##
+
+Tuple(x::Ref) = tuple(getindex(x))
+Tuple(x::Array{T,0}) where {T} = tuple(getindex(x))
+
 ## comparison ##
 
 isequal(t1::Tuple, t2::Tuple) = (length(t1) == length(t2)) && _isequal(t1, t2)
