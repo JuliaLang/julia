@@ -189,7 +189,7 @@ macro enum(T, syms...)
         Enums.namemap(::Type{$(esc(typename))}) = $(esc(namemap))
         Base.typemin(x::Type{$(esc(typename))}) = $(esc(typename))($lo)
         Base.typemax(x::Type{$(esc(typename))}) = $(esc(typename))($hi)
-        let insts = ntuple(i->$(esc(typename))($values[i]), $(length(values)))
+        let insts = (Any[ $(esc(typename))(v) for v in $values ]...,)
             Base.instances(::Type{$(esc(typename))}) = insts
         end
     end

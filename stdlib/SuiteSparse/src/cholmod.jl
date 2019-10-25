@@ -746,7 +746,7 @@ function solve(sys::Integer, F::Factor{Tv}, B::Dense{Tv}) where Tv<:VTypes
         if s.is_ll == 1
             throw(LinearAlgebra.PosDefException(s.minor))
         else
-            throw(ArgumentError("factorized matrix has one or more zero pivots. Try using `lu` instead."))
+            throw(LinearAlgebra.ZeroPivotException(s.minor))
         end
     end
     Dense(ccall((@cholmod_name("solve"),:libcholmod), Ptr{C_Dense{Tv}},
@@ -1446,7 +1446,7 @@ function ldlt!(F::Factor{Tv}, A::Sparse{Tv};
     # Compute the numerical factorization
     factorize_p!(A, shift, F, cm)
 
-    check && (issuccess(F) || throw(LinearAlgebra.PosDefException(1)))
+    check && (issuccess(F) || throw(LinearAlgebra.ZeroPivotException(1)))
     return F
 end
 

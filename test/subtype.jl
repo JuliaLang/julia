@@ -1680,3 +1680,10 @@ c32703(::Type{<:Str{C}}, str::Str{C}) where {C<:CSE} = str
 # issue #33337
 @test !issub(Tuple{Type{T}, T} where T<:NTuple{30, Union{Nothing, Ref}},
              Tuple{Type{Tuple{Vararg{V, N} where N}}, Tuple{Vararg{V, N} where N}} where V)
+@test  issub(Tuple{Type{Any}, NTuple{4,Union{Int,Nothing}}},
+             Tuple{Type{V}, Tuple{Vararg{V, N} where N}} where V)
+
+# issue #26065
+t26065 = Ref{Tuple{T,Ref{Union{Ref{Tuple{Ref{Union{Ref{Ref{Tuple{Ref{Tuple{Union{Tuple{Ref{Ref{T}},T}, T},T}},T}}}, T}},T}}, Ref{T}, T}}}} where T
+s26065 = Ref{Tuple{T,Ref{Union{Ref{Tuple{Ref{Union{Ref{Ref{Tuple{Ref{Tuple{Union{Tuple{Ref{Ref{T}},T}, T},T}},T}}}, T}},T}}, Ref{T}, T}}}} where T
+@test t26065 <: s26065

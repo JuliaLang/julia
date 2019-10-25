@@ -113,6 +113,8 @@ macro _propagate_inbounds_meta()
     return Expr(:meta, :inline, :propagate_inbounds)
 end
 
+function iterate end
+
 """
     convert(T, x)
 

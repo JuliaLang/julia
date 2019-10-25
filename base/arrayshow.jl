@@ -302,14 +302,12 @@ end
 
 # print_array: main helper functions for show(io, text/plain, array)
 # typeinfo agnostic
-
-# 0-dimensional arrays
-print_array(io::IO, X::AbstractArray{T,0} where T) =
-    isassigned(X) ? show(io, X[]) :
-                    print(io, undef_ref_str)
-
+# Note that this is for showing the content inside the array, and for `MIME"text/plain".
+# There are `show(::IO, ::A) where A<:AbstractArray` methods that don't use this
+# e.g. show_vector, show_zero_dim
+print_array(io::IO, X::AbstractArray{<:Any, 0}) =
+    isassigned(X) ? show(io, X[]) : print(io, undef_ref_str)
 print_array(io::IO, X::AbstractVecOrMat) = print_matrix(io, X)
-
 print_array(io::IO, X::AbstractArray) = show_nd(io, X, print_matrix, true)
 
 # typeinfo aware
@@ -418,12 +416,26 @@ _show_empty(io, X) = nothing # by default, we don't know this constructor
 
 # typeinfo aware (necessarily)
 function show(io::IO, X::AbstractArray)
+    ndims(X) == 0 && return show_zero_dim(io, X)
     ndims(X) == 1 && return show_vector(io, X)
     prefix = typeinfo_prefix(io, X)
     io = IOContext(io, :typeinfo => eltype(X))
     isempty(X) ?
         _show_empty(io, X) :
         _show_nonempty(io, X, prefix)
+end
+
+### 0-dimensional arrays (#31481)
+show_zero_dim(io::IO, X::BitArray{0}) = print(io, "BitArray(", Int(X[]), ")")
+function show_zero_dim(io::IO, X::AbstractArray{T, 0}) where T
+    if isassigned(X)
+        print(io, "fill(")
+        show(io, X[])
+    else
+        print(io, "Array{$T,0}(")
+        show(io, undef)
+    end
+    print(io, ")")
 end
 
 ### Vector arrays

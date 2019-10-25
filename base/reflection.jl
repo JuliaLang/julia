@@ -147,7 +147,7 @@ function fieldname(t::DataType, i::Integer)
         throw(ArgumentError("type does not have definite field names"))
     end
     names = _fieldnames(t)
-    n_fields = length(names)
+    n_fields = length(names)::Int
     field_label = n_fields == 1 ? "field" : "fields"
     i > n_fields && throw(ArgumentError("Cannot access field $i since type $t only has $n_fields $field_label."))
     i < 1 && throw(ArgumentError("Field numbers must be positive integers. $i is invalid."))
@@ -335,6 +335,23 @@ function datatype_alignment(dt::DataType)
     dt.layout == C_NULL && throw(UndefRefError())
     alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
     return Int(alignment & 0x1FF)
+end
+
+# amount of total space taken by T when stored in a container
+function aligned_sizeof(T)
+    @_pure_meta
+    if isbitsunion(T)
+        sz = Ref{Csize_t}(0)
+        algn = Ref{Csize_t}(0)
+        ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), T, sz, algn)
+        al = algn[]
+        return (sz[] + al - 1) & -al
+    elseif allocatedinline(T)
+        al = datatype_alignment(T)
+        return (Core.sizeof(T) + al - 1) & -al
+    else
+        return Core.sizeof(Ptr{Cvoid})
+    end
 end
 
 gc_alignment(sz::Integer) = Int(ccall(:jl_alignment, Cint, (Csize_t,), sz))
@@ -1220,7 +1237,7 @@ function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Sym
     hasmethod(f, t, world=world) || return false
     isempty(kwnames) && return true
     m = which(f, t)
-    kws = kwarg_decl(m, Core.kwftype(typeof(f)))
+    kws = kwarg_decl(m)
     for kw in kws
         endswith(String(kw), "...") && return true
     end

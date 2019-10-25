@@ -23,7 +23,11 @@ $(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-15-Enhanced-encryption-strength.patch-appli
 	cd $(dir $@) && patch -p4 -f < $(SRCDIR)/patches/p7zip-15-Enhanced-encryption-strength.patch
 	echo 1 > $@
 
-$(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-15-Enhanced-encryption-strength.patch-applied
+$(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-Windows_ErrorMsg.patch-applied: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-15-Enhanced-encryption-strength.patch-applied
+	cd $(dir $@) && patch -p0 -f < $(SRCDIR)/patches/p7zip-Windows_ErrorMsg.patch
+	echo 1 > $@
+
+$(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-Windows_ErrorMsg.patch-applied
 $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-compiled: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured
 	$(MAKE) -C $(dir $<) $(MAKE_COMMON) CC="$(CC)" CXX="$(CXX)" 7za
 	echo 1 > $@

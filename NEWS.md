@@ -8,10 +8,15 @@ New language features
 
 * `import` now allows quoted symbols, e.g. `import Base.:+` ([#33158]).
 
+* Function composition now supports multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
+and splatting `∘(fs...)` for composing an iterable collection of functions ([#33568]).
+
 Language changes
 ----------------
 
 * Calling `show` or `repr` on an `undef`/`UndefInitializer()` array initializer now shows valid Julia code ([#33211]).
+
+* Calling `show` or `repr` on a 0-dimensional `AbstractArray` now shows valid code for creating an equivalent 0-dimensional array, instead of only showing the contained value. ([#33206])
 
 Multi-threading changes
 -----------------------
@@ -28,7 +33,9 @@ New library functions
 * The `tempname` function now takes an optional `parent::AbstractString` argument to give it a directory in which to attempt to produce a temporary path name ([#33090]).
 * The `tempname` function now takes a `cleanup::Bool` keyword argument defaulting to `true`, which causes the process to try to ensure that any file or directory at the path returned by `tempname` is deleted upon process exit ([#33090]).
 * The `readdir` function now takes a `join::Bool` keyword argument defaulting to `false`, which when set causes `readdir` to join its directory argument with each listed name ([#33113]).
+* `readdir` output is now guaranteed to be sorted. The `sort` keyword allows opting out of sorting to get names in OS-native order ([#33542]).
 * The new `only(x)` function returns the one-and-only element of a collection `x`, and throws an `ArgumentError` if `x` contains zero or multiple elements. ([#33129])
+* `takewhile` and `dropwhile` have been added to the Iterators submodule ([#33437]).
 * `filter` can now act on a `Tuple` ([#32968]).
 
 Standard library changes
@@ -38,6 +45,7 @@ Standard library changes
 * `div` now accepts a rounding mode as the third argument, consistent with the corresponding argument to `rem`. Support for rounding division, by passing one of the RoundNearest modes to this function, was added. For future compatibility, library authors should now extend this function, rather than extending the two-argument `fld`/`cld`/`div` directly. ([#33040])
 * Verbose `display` of `Char` (`text/plain` output) now shows the codepoint value in standard-conforming `"U+XXXX"` format ([#33291]).
 
+
 #### Libdl
 
 #### LinearAlgebra
@@ -45,6 +53,10 @@ Standard library changes
 * `qr` and `qr!` functions support `blocksize` keyword argument ([#33053]).
 
 * `dot` now admits a 3-argument method `dot(x, A, y)` to compute generalized dot products `dot(x, A*y)`, but without computing and storing the intermediate result `A*y` ([#32739]).
+
+* `ldlt` and non-pivoted `lu` now throw a new `ZeroPivotException` type ([#33372]).
+
+* `cond(A, p)` with `p=1` or `p=Inf` now computes the exact condition number instead of an estimate ([#33547]).
 
 #### Random
 

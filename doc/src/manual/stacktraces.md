@@ -300,12 +300,12 @@ julia> stacktrace(trace, true)
 ```
 
 Individual pointers returned by [`backtrace`](@ref) can be translated into [`StackTraces.StackFrame`](@ref)
-s by passing them into [`StackTraces.lookupat`](@ref):
+s by passing them into [`StackTraces.lookup`](@ref):
 
 ```julia-repl
 julia> pointer = backtrace()[1];
 
-julia> frame = StackTraces.lookupat(pointer - 1)
+julia> frame = StackTraces.lookup(pointer)
 1-element Array{Base.StackTraces.StackFrame,1}:
  jl_apply_generic at gf.c:2167
 

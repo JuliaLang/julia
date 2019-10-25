@@ -45,8 +45,7 @@ const DISPLAY_FAILED = (
 
 # Backtrace utility functions
 function ip_has_file_and_func(ip, file, funcs)
-    ip isa Base.InterpreterIP || (ip -= 1) # convert from return stack to call stack (for inlining info)
-    return any(fr -> (string(fr.file) == file && fr.func in funcs), StackTraces.lookupat(ip))
+    return any(fr -> (string(fr.file) == file && fr.func in funcs), StackTraces.lookup(ip))
 end
 
 function scrub_backtrace(bt)

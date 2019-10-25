@@ -586,7 +586,12 @@ function *(A::AbstractTriangular, B::Union{SymTridiagonal, Tridiagonal})
     A_mul_B_td!(zeros(TS, size(A)...), A, B)
 end
 
-function *(A::UpperTriangular, B::Bidiagonal)
+const UpperOrUnitUpperTriangular = Union{UpperTriangular, UnitUpperTriangular}
+const LowerOrUnitLowerTriangular = Union{LowerTriangular, UnitLowerTriangular}
+const AdjOrTransUpperOrUnitUpperTriangular = Union{Adjoint{<:Any, <:UpperOrUnitUpperTriangular}, Transpose{<:Any, <:UpperOrUnitUpperTriangular}}
+const AdjOrTransLowerOrUnitLowerTriangular = Union{Adjoint{<:Any, <:LowerOrUnitLowerTriangular}, Transpose{<:Any, <:LowerOrUnitLowerTriangular}}
+
+function *(A::UpperOrUnitUpperTriangular, B::Bidiagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
     if B.uplo == 'U'
         A_mul_B_td!(UpperTriangular(zeros(TS, size(A)...)), A, B)
@@ -595,10 +600,28 @@ function *(A::UpperTriangular, B::Bidiagonal)
     end
 end
 
-function *(A::LowerTriangular, B::Bidiagonal)
+function *(A::AdjOrTransUpperOrUnitUpperTriangular, B::Bidiagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
     if B.uplo == 'L'
         A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
+    else
+        A_mul_B_td!(zeros(TS, size(A)...), A, B)
+    end
+end
+
+function *(A::LowerOrUnitLowerTriangular, B::Bidiagonal)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    if B.uplo == 'L'
+        A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
+    else
+        A_mul_B_td!(zeros(TS, size(A)...), A, B)
+    end
+end
+
+function *(A::AdjOrTransLowerOrUnitLowerTriangular, B::Bidiagonal)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    if B.uplo == 'U'
+        A_mul_B_td!(UpperTriangular(zeros(TS, size(A)...)), A, B)
     else
         A_mul_B_td!(zeros(TS, size(A)...), A, B)
     end
@@ -609,7 +632,7 @@ function *(A::Union{SymTridiagonal, Tridiagonal}, B::AbstractTriangular)
     A_mul_B_td!(zeros(TS, size(A)...), A, B)
 end
 
-function *(A::Bidiagonal, B::UpperTriangular)
+function *(A::Bidiagonal, B::UpperOrUnitUpperTriangular)
     TS = promote_op(matprod, eltype(A), eltype(B))
     if A.uplo == 'U'
         A_mul_B_td!(UpperTriangular(zeros(TS, size(A)...)), A, B)
@@ -618,10 +641,28 @@ function *(A::Bidiagonal, B::UpperTriangular)
     end
 end
 
-function *(A::Bidiagonal, B::LowerTriangular)
+function *(A::Bidiagonal, B::AdjOrTransUpperOrUnitUpperTriangular)
     TS = promote_op(matprod, eltype(A), eltype(B))
     if A.uplo == 'L'
         A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
+    else
+        A_mul_B_td!(zeros(TS, size(A)...), A, B)
+    end
+end
+
+function *(A::Bidiagonal, B::LowerOrUnitLowerTriangular)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    if A.uplo == 'L'
+        A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
+    else
+        A_mul_B_td!(zeros(TS, size(A)...), A, B)
+    end
+end
+
+function *(A::Bidiagonal, B::AdjOrTransLowerOrUnitLowerTriangular)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    if A.uplo == 'U'
+        A_mul_B_td!(UpperTriangular(zeros(TS, size(A)...)), A, B)
     else
         A_mul_B_td!(zeros(TS, size(A)...), A, B)
     end

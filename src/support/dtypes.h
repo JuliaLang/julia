@@ -227,7 +227,7 @@ STATIC_INLINE unsigned int next_power_of_two(unsigned int val) JL_NOTSAFEPOINT
     return val;
 }
 
-#define LLT_ALIGN(x, sz) (((x) + (sz)-1) & -(sz))
+#define LLT_ALIGN(x, sz) (((x) + (sz)-1) & ~((sz)-1))
 
 // branch prediction annotations
 #ifdef __GNUC__

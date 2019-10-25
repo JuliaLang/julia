@@ -317,7 +317,9 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
         tag = 10;
     }
 
-    if (strncmp(jl_symbol_name(dt->name->name), "#kw#", 4) == 0 && !internal && tag != 0) {
+    char *dtname = jl_symbol_name(dt->name->name);
+    size_t dtnl = strlen(dtname);
+    if (dtnl > 4 && strcmp(&dtname[dtnl - 4], "##kw") == 0 && !internal && tag != 0) {
         /* XXX: yuck, this is horrible, but the auto-generated kw types from the serializer isn't a real type, so we *must* be very careful */
         assert(tag == 6); // other struct types should never exist
         tag = 9;
@@ -335,6 +337,8 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
             prefixed = (char*)malloc(l + 2);
             prefixed[0] = '#';
             strcpy(&prefixed[1], jl_symbol_name(mt->name));
+            // remove ##kw suffix
+            prefixed[l-3] = 0;
             jl_sym_t *tname = jl_symbol(prefixed);
             free(prefixed);
             jl_value_t *primarydt = jl_get_global(mt->module, tname);
@@ -821,6 +825,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         write_int32(s->s, m->called);
         write_int32(s->s, m->nargs);
         write_int32(s->s, m->nospecialize);
+        write_int32(s->s, m->nkw);
         write_int8(s->s, m->isva);
         write_int8(s->s, m->pure);
         jl_serialize_value(s, (jl_value_t*)m->module);
@@ -1692,6 +1697,7 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     m->called = read_int32(s->s);
     m->nargs = read_int32(s->s);
     m->nospecialize = read_int32(s->s);
+    m->nkw = read_int32(s->s);
     m->isva = read_int8(s->s);
     m->pure = read_int8(s->s);
     m->module = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&m->module);

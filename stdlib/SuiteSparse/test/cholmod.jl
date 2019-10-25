@@ -5,7 +5,7 @@ using DelimitedFiles
 using Test
 using Random
 using Serialization
-using LinearAlgebra: issuccess, PosDefException
+using LinearAlgebra: issuccess, PosDefException, ZeroPivotException
 using SparseArrays
 using SparseArrays: getcolptr
 
@@ -384,8 +384,8 @@ end
     b = fill(1., size(A1, 1))
     @test_throws PosDefException cholesky(C - 2λmaxC*I)
     @test_throws PosDefException cholesky(C, shift=-2λmaxC)
-    @test_throws PosDefException ldlt(C - C[1,1]*I)
-    @test_throws PosDefException ldlt(C, shift=-real(C[1,1]))
+    @test_throws ZeroPivotException ldlt(C - C[1,1]*I)
+    @test_throws ZeroPivotException ldlt(C, shift=-real(C[1,1]))
     @test !isposdef(cholesky(C - 2λmaxC*I; check = false))
     @test !isposdef(cholesky(C, shift=-2λmaxC; check = false))
     @test !issuccess(ldlt(C - C[1,1]*I; check = false))
@@ -849,8 +849,8 @@ end
     B = sparse(ComplexF64[0 0; 0 0])
     for M in (A, B, Symmetric(A), Hermitian(B))
         F = ldlt(M; check = false)
-        @test_throws PosDefException ldlt(M)
-        @test_throws PosDefException ldlt!(F, M)
+        @test_throws ZeroPivotException ldlt(M)
+        @test_throws ZeroPivotException ldlt!(F, M)
         @test !issuccess(ldlt(M; check = false))
         @test !issuccess(ldlt!(F, M; check = false))
     end

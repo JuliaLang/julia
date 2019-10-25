@@ -391,3 +391,19 @@ end
 # Warm up
 f_dict_hash_alloc(); g_dict_hash_alloc();
 @test (@allocated f_dict_hash_alloc()) == (@allocated g_dict_hash_alloc())
+
+let io = IOBuffer()
+    # Test for the f(args...) = g(args...) generic codegen optimization
+    code_llvm(io, Base.vect, Tuple{Vararg{Union{Float64, Int64}}})
+    @test !occursin("__apply", String(take!(io)))
+end
+
+function f1_30093(r)
+    while r[]>0
+        try
+        finally
+        end
+    end
+end
+
+@test f1_30093(Ref(0)) == nothing

@@ -5,11 +5,10 @@ Profiling support, main entry point is the [`@profile`](@ref) macro.
 """
 module Profile
 
-import Base.StackTraces: lookupat, UNKNOWN, show_spec_linfo, StackFrame
+import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo, StackFrame
 
 # deprecated functions: use `getdict` instead
-lookup(ip::UInt) = lookupat(convert(Ptr{Cvoid}, ip) - 1)
-lookup(ip::Ptr{Cvoid}) = lookupat(ip - 1)
+lookup(ip::UInt) = lookup(convert(Ptr{Cvoid}, ip))
 
 export @profile
 
@@ -199,7 +198,7 @@ end
 function getdict(data::Vector{UInt})
     dict = LineInfoDict()
     for ip in data
-        get!(() -> lookupat(convert(Ptr{Cvoid}, ip)), dict, UInt64(ip))
+        get!(() -> lookup(convert(Ptr{Cvoid}, ip)), dict, UInt64(ip))
     end
     return dict
 end
@@ -245,6 +244,45 @@ function flatten(data::Vector, lidict::LineInfoDict)
         end
     end
     return (newdata, newdict)
+end
+
+# Take a file-system path and try to form a concise representation of it
+# based on the package ecosystem
+function short_path(spath::Symbol, filenamecache::Dict{Symbol, String})
+    return get!(filenamecache, spath) do
+        path = string(spath)
+        if isabspath(path)
+            if ispath(path)
+                # try to replace the file-system prefix with a short "@Module" one,
+                # assuming that profile came from the current machine
+                # (or at least has the same file-system layout)
+                root = path
+                while !isempty(root)
+                    root, base = splitdir(root)
+                    isempty(base) && break
+                    @assert startswith(path, root)
+                    for proj in Base.project_names
+                        project_file = joinpath(root, proj)
+                        if Base.isfile_casesensitive(project_file)
+                            pkgid = Base.project_file_name_uuid(project_file, "")
+                            isempty(pkgid.name) && return path # bad Project file
+                            # return the joined the module name prefix and path suffix
+                            path = path[nextind(path, sizeof(root)):end]
+                            return string("@", pkgid.name, path)
+                        end
+                    end
+                end
+            end
+            return path
+        elseif isfile(joinpath(Sys.BINDIR::String, Base.DATAROOTDIR, "julia", "base", path))
+            # do the same mechanic for Base (or Core/Compiler) files as above,
+            # but they start from a relative path
+            return joinpath("@Base", normpath(path))
+        else
+            # for non-existent relative paths (such as "REPL[1]"), just consider simplifying them
+            return normpath(path) # drop leading "./"
+        end
+    end
 end
 
 """
@@ -336,17 +374,6 @@ function fetch()
     end
     data = Vector{UInt}(undef, len)
     GC.@preserve data unsafe_copyto!(pointer(data), get_data_pointer(), len)
-    # post-process the data to convert from a return-stack to a call-stack
-    first = true
-    for i = 1:length(data)
-        if data[i] == 0
-            first = true
-        elseif first
-            first = false
-        else
-            data[i] -= 1
-        end
-    end
     return data
 end
 
@@ -407,14 +434,16 @@ function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfo
         n = n[keep]
         m = m[keep]
     end
-    print_flat(io, lilist, n, m, cols, fmt)
+    filenamemap = Dict{Symbol,String}()
+    print_flat(io, lilist, n, m, cols, filenamemap, fmt)
     Base.println(io, "Total snapshots: ", totalshots)
     nothing
 end
 
 function print_flat(io::IO, lilist::Vector{StackFrame},
         n::Vector{Int}, m::Vector{Int},
-        cols::Int, fmt::ProfileFormat)
+        cols::Int, filenamemap::Dict{Symbol,String},
+        fmt::ProfileFormat)
     if fmt.sortedby == :count
         p = sortperm(n)
     elseif fmt.sortedby == :overhead
@@ -425,28 +454,33 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
     lilist = lilist[p]
     n = n[p]
     m = m[p]
+    filenames = String[short_path(li.file, filenamemap) for li in lilist]
+    funcnames = String[string(li.func) for li in lilist]
     wcounts = max(6, ndigits(maximum(n)))
     wself = max(9, ndigits(maximum(m)))
     maxline = 1
     maxfile = 6
     maxfunc = 10
-    for li in lilist
+    for i in 1:length(lilist)
+        li = lilist[i]
         maxline = max(maxline, li.line)
-        maxfile = max(maxfile, length(string(li.file)))
-        maxfunc = max(maxfunc, length(string(li.func)))
+        maxfunc = max(maxfunc, length(funcnames[i]))
+        maxfile = max(maxfile, length(filenames[i]))
     end
     wline = max(5, ndigits(maxline))
     ntext = max(20, cols - wcounts - wself - wline - 3)
     maxfunc += 25 # for type signatures
     if maxfile + maxfunc <= ntext
         wfile = maxfile
-        wfunc = maxfunc
+        wfunc = ntext - maxfunc # take the full width (for type sig)
     else
         wfile = 2*ntext÷5
         wfunc = 3*ntext÷5
     end
     println(io, lpad("Count", wcounts, " "), " ", lpad("Overhead", wself, " "), " ",
-            rpad("File", wfile, " "), " ", lpad("Line", wline, " "), " ", rpad("Function", wfunc, " "))
+            rpad("File", wfile, " "), " ", lpad("Line", wline, " "), " Function")
+    println(io, lpad("=====", wcounts, " "), " ", lpad("========", wself, " "), " ",
+            rpad("====", wfile, " "), " ", lpad("====", wline, " "), " ========")
     for i = 1:length(n)
         n[i] < fmt.mincount && continue
         li = lilist[i]
@@ -459,16 +493,16 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
                 Base.print(io, "[any unknown stackframes]")
             end
         else
-            file = string(li.file)
+            file = filenames[i]
             isempty(file) && (file = "[unknown file]")
             Base.print(io, rpad(rtruncto(file, wfile), wfile, " "), " ")
             Base.print(io, lpad(li.line > 0 ? string(li.line) : "?", wline, " "), " ")
-            fname = string(li.func)
+            fname = funcnames[i]
             if !li.from_c && li.linfo !== nothing
                 fname = sprint(show_spec_linfo, li)
             end
             isempty(fname) && (fname = "[unknown function]")
-            Base.print(io, rpad(ltruncto(fname, wfunc), wfunc, " "))
+            Base.print(io, ltruncto(fname, wfunc))
         end
         println(io)
     end
@@ -476,9 +510,27 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
 end
 
 ## A tree representation
-tree_format_linewidth(x::StackFrame) = ndigits(x.line) + 6
 
-const indent_s = "  ╎  "^10
+# Representation of a prefix trie of backtrace counts
+mutable struct StackFrameTree{T} # where T <: Union{UInt64, StackFrame}
+    # content fields:
+    frame::StackFrame
+    count::Int          # number of frames this appeared in
+    overhead::Int       # number frames where this was the code being executed
+    flat_count::Int     # number of times this frame was in the flattened representation (unlike count, this'll sum to 100% of parent)
+    max_recur::Int      # maximum number of times this frame was the *top* of the recursion in the stack
+    count_recur::Int    # sum of the number of times this frame was the *top* of the recursion in a stack (divide by count to get an average)
+    down::Dict{T, StackFrameTree{T}}
+    # construction workers:
+    recur::Int
+    builder_key::Vector{UInt64}
+    builder_value::Vector{StackFrameTree{T}}
+    up::StackFrameTree{T}
+    StackFrameTree{T}() where {T} = new(UNKNOWN, 0, 0, 0, 0, 0, Dict{T, StackFrameTree{T}}(), 0, UInt64[], StackFrameTree{T}[])
+end
+
+
+const indent_s = "    ╎"^10
 const indent_z = collect(eachindex(indent_s))
 function indent(depth::Int)
     depth < 1 && return ""
@@ -487,32 +539,34 @@ function indent(depth::Int)
     return (indent_s^div) * SubString(indent_s, 1, indent_z[rem])
 end
 
-function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int, cols::Int, showpointer::Bool)
+function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, maxes, filenamemap::Dict{Symbol,String}, showpointer::Bool)
     nindent = min(cols>>1, level)
-    ndigcounts = ndigits(maximum(counts))
-    ndigline = maximum([tree_format_linewidth(x) for x in lilist])
-    ntext = max(20, cols - nindent - ndigcounts - ndigline - 5)
-    widthfile = 2*ntext÷5
-    widthfunc = 3*ntext÷5
-    strs = Vector{String}(undef, length(lilist))
+    ndigoverhead = ndigits(maxes.overhead)
+    ndigcounts = ndigits(maxes.count)
+    ndigline = ndigits(maximum(frame.frame.line for frame in frames)) + 6
+    ntext = max(30, cols - ndigoverhead - nindent - ndigcounts - ndigline - 6)
+    widthfile = 2*ntext÷5 # min 12
+    widthfunc = 3*ntext÷5 # min 18
+    strs = Vector{String}(undef, length(frames))
     showextra = false
     if level > nindent
         nextra = level - nindent
         nindent -= ndigits(nextra) + 2
         showextra = true
     end
-    for i = 1:length(lilist)
-        li = lilist[i]
+    for i = 1:length(frames)
+        frame = frames[i]
+        li = frame.frame
+        stroverhead = lpad(frame.overhead > 0 ? string(frame.overhead) : "", ndigoverhead, " ")
+        base = nindent == 0 ? "" : indent(nindent - 1) * " "
+        if showextra
+            base = string(base, "+", nextra, " ")
+        end
+        strcount = rpad(string(frame.count), ndigcounts, " ")
         if li != UNKNOWN
-            base = nindent == 0 ? "" : indent(nindent - 1) * " "
-            if showextra
-                base = string(base, "+", nextra, " ")
-            end
             if li.line == li.pointer
-                strs[i] = string(base,
-                    rpad(string(counts[i]), ndigcounts, " "),
-                    " ",
-                    "unknown function (pointer: 0x",
+                strs[i] = string(stroverhead, "╎", base, strcount, " ",
+                    "[unknown function] (pointer: 0x",
                     string(li.pointer, base = 16, pad = 2*sizeof(Ptr{Cvoid})),
                     ")")
             else
@@ -521,6 +575,7 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
                 else
                     fname = string(li.func)
                 end
+                filename = short_path(li.file, filenamemap)
                 if showpointer
                     fname = string(
                         "0x",
@@ -528,34 +583,18 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
                         " ",
                         fname)
                 end
-                strs[i] = string(base,
-                    rpad(string(counts[i]), ndigcounts, " "),
-                    " ",
-                    rtruncto(string(li.file), widthfile),
+                strs[i] = string(stroverhead, "╎", base, strcount, " ",
+                    rtruncto(filename, widthfile),
                     ":",
                     li.line == -1 ? "?" : string(li.line),
                     "; ",
                     ltruncto(fname, widthfunc))
             end
         else
-            strs[i] = ""
+            strs[i] = string(stroverhead, "╎", base, strcount, " [unknown stackframe]")
         end
     end
     return strs
-end
-
-# Construct a prefix trie of backtrace counts
-mutable struct StackFrameTree{T} # where T <: Union{UInt64, StackFrame}
-    # content fields:
-    frame::StackFrame
-    count::Int
-    down::Dict{T, StackFrameTree{T}}
-    # construction workers:
-    recur::Bool
-    builder_key::Vector{UInt64}
-    builder_value::Vector{StackFrameTree{T}}
-    up::StackFrameTree{T}
-    StackFrameTree{T}() where {T} = new(UNKNOWN, 0, Dict{T, StackFrameTree{T}}(), false, UInt64[], StackFrameTree{T}[])
 end
 
 # turn a list of backtraces into a tree (implicitly separated by NULL markers)
@@ -569,20 +608,29 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
         if ip == 0
             # sentinel value indicates the start of a new backtrace
             empty!(build)
+            root.recur = 0
             if recur !== :off
                 # We mark all visited nodes to so we'll only count those branches
                 # once for each backtrace. Reset that now for the next backtrace.
                 push!(tops, parent)
                 for top in tops
-                    while top.recur
-                        top.recur = false
+                    while top.recur != 0
+                        top.max_recur < top.recur && (top.max_recur = top.recur)
+                        top.recur = 0
                         top = top.up
                     end
                 end
                 empty!(tops)
             end
+            let this = parent
+                while this !== root
+                    this.flat_count += 1
+                    this = this.up
+                end
+            end
+            parent.overhead += 1
             parent = root
-            parent.count += 1
+            root.count += 1
             startframe = i
         else
             pushfirst!(build, parent)
@@ -594,10 +642,12 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
                         if recur === :flat # if not flattening C frames, check that now
                             frames = lidict[ip]
                             frame = (frames isa Vector ? frames[1] : frames)
-                            frame.from_c && break
+                            frame.from_c && break # not flattening this frame
                         end
                         push!(tops, parent)
                         parent = build[j]
+                        parent.recur += 1
+                        parent.count_recur += 1
                         found = true
                         break
                     end
@@ -614,12 +664,10 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
                 # note that we may even have this === parent (if we're ignoring this frame ip)
                 this = builder_value[fastkey]
                 let this = this
-                    if recur === :off || !this.recur
-                        while this !== parent && !this.recur
-                            this.count += 1
-                            this.recur = true
-                            this = this.up
-                        end
+                    while this !== parent && (recur === :off || this.recur == 0)
+                        this.count += 1
+                        this.recur = 1
+                        this = this.up
                     end
                 end
                 parent = this
@@ -634,11 +682,11 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
                 !C && frame.from_c && continue
                 key = (T === UInt64 ? ip : frame)
                 this = get!(StackFrameTree{T}, parent.down, key)
-                if recur === :off || !this.recur
+                if recur === :off || this.recur == 0
                     this.frame = frame
                     this.up = parent
                     this.count += 1
-                    this.recur = true
+                    this.recur = 1
                 end
                 parent = this
             end
@@ -651,7 +699,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
         stack = [node]
         while !isempty(stack)
             node = pop!(stack)
-            node.recur = false
+            node.recur = 0
             empty!(node.builder_key)
             empty!(node.builder_value)
             append!(stack, values(node.down))
@@ -662,10 +710,31 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
     return root
 end
 
+function maxstats(root::StackFrameTree)
+    maxcount = Ref(0)
+    maxflatcount = Ref(0)
+    maxoverhead = Ref(0)
+    maxmaxrecur = Ref(0)
+    stack = [root]
+    while !isempty(stack)
+        node = pop!(stack)
+        maxcount[] = max(maxcount[], node.count)
+        maxoverhead[] = max(maxoverhead[], node.overhead)
+        maxflatcount[] = max(maxflatcount[], node.flat_count)
+        maxmaxrecur[] = max(maxmaxrecur[], node.max_recur)
+        append!(stack, values(node.down))
+    end
+    return (count=maxcount[], count_flat=maxflatcount[], overhead=maxoverhead[], max_recur=maxmaxrecur[])
+end
+
 # Print the stack frame tree starting at a particular root. Uses a worklist to
 # avoid stack overflows.
 function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat) where T
+    maxes = maxstats(bt)
+    filenamemap = Dict{Symbol,String}()
     worklist = [(bt, 0, 0, "")]
+    println(io, "Overhead ╎ [+additional indent] Count File:Line; Function")
+    println(io, "=========================================================")
     while !isempty(worklist)
         (bt, level, noisefloor, str) = popfirst!(worklist)
         isempty(str) || println(io, str)
@@ -673,18 +742,28 @@ function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat
         isempty(bt.down) && continue
         # Order the line information
         nexts = collect(values(bt.down))
-        lilist = collect(frame.frame for frame in nexts)
-        counts = collect(frame.count for frame in nexts)
         # Generate the string for each line
-        strs = tree_format(lilist, counts, level, cols, T === UInt64)
+        strs = tree_format(nexts, level, cols, maxes, filenamemap, T === UInt64)
         # Recurse to the next level
-        for i in reverse(liperm(lilist))
+        if fmt.sortedby == :count
+            counts = collect(frame.count for frame in nexts)
+            p = sortperm(counts)
+        elseif fmt.sortedby == :overhead
+            m = collect(frame.overhead for frame in nexts)
+            p = sortperm(m)
+        elseif fmt.sortedby == :flat_count
+            m = collect(frame.flat_count for frame in nexts)
+            p = sortperm(m)
+        else
+            lilist = collect(frame.frame for frame in nexts)
+            p = liperm(lilist)
+        end
+        for i in reverse(p)
             down = nexts[i]
             count = down.count
             count < fmt.mincount && continue
             count < noisefloor && continue
             str = strs[i]
-            isempty(str) && (str = "$count unknown stackframe")
             noisefloor_down = fmt.noisefloor > 0 ? floor(Int, fmt.noisefloor * sqrt(count)) : 0
             pushfirst!(worklist, (down, level + 1, noisefloor_down, str))
         end

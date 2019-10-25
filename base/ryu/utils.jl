@@ -4,6 +4,8 @@ const EXP_MASK = Base.exponent_mask(Float64) >> Base.significand_bits(Float64)
 memcpy(d, doff, s, soff, n) = ccall(:memcpy, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Int), d + doff - 1, s + soff - 1, n)
 memmove(d, doff, s, soff, n) = ccall(:memmove, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Int), d + doff - 1, s + soff - 1, n)
 
+# Note: these are smaller than the values given in Figure 4 from the paper
+# see https://github.com/ulfjack/ryu/issues/119
 pow5_bitcount(::Type{Float16}) = 30
 pow5_bitcount(::Type{Float32}) = 61
 pow5_bitcount(::Type{Float64}) = 121
@@ -43,25 +45,15 @@ Computes `e == 0 ? 1 : ceil(log2(5^e))`. This is valid for `e < 3529` (if perfor
 pow5bits(e) = ((e * 1217359) >> 19) + 1
 
 """"
-     Ryu.mulshift(m::UInt64, mula, mulb, j)::UInt64
+     Ryu.mulshift(m::U, mula, j) where {U<:Unsigned}
 
-Compute `(m * mul) >> j`, where `mul = mula + mulb<<64` and `j >= 64`.
+Compute `(m * mul) >> j`, where `j >= 8*sizeof(U)`. The type of the results is the larger of `U` or `UInt32`.
 """
-@inline mulshift(m::UInt64, mula, mulb, j) = ((((UInt128(m) * mula) >> 64) + UInt128(m) * mulb) >> (j - 64)) % UInt64
-
-""""
-     Ryu.mulshift(m::UInt32, mul, j)::UInt32
-
-Compute `(m * mul) >> j`, where `j >= 32`.
-"""
-@inline mulshift(m::UInt32, mul, j) = ((((UInt64(m) * (mul % UInt32)) >> 32) + (UInt64(m) * (mul >> 32))) >> (j - 32)) % UInt32
-
-""""
-     Ryu.mulshift(m::UInt16, mul, j)::UInt16
-
-Compute `(m * mul) >> j`, where `j >= 16`.
-"""
-@inline mulshift(m::UInt16, mul, j) = ((((UInt32(m) * (mul % UInt16)) >> 16) + (UInt32(m) * (mul >> 16))) >> (j - 16))
+@inline function mulshift(m::U, mul, j) where {U<:Unsigned}
+    W = widen(U)
+    nbits = 8*sizeof(U)
+    return ((((W(m) * (mul % U)) >> nbits) + W(m) * (mul >> nbits)) >> (j - nbits)) % promote_type(U,UInt32)
+end
 
 indexforexp(e) = div(e + 15, 16)
 pow10bitsforindex(idx) = 16 * idx + 120
@@ -133,48 +125,16 @@ end
     return 1
 end
 
-@inline function mulshiftinvsplit(::Type{Float64}, mv, mp, mm, i, j)
-    @inbounds mula, mulb = DOUBLE_POW5_INV_SPLIT[i + 1]
-    vr = mulshift(mv, mula, mulb, j)
-    vp = mulshift(mp, mula, mulb, j)
-    vm = mulshift(mm, mula, mulb, j)
-    return vr, vp, vm
-end
-
-@inline function mulshiftinvsplit(::Type{Float32}, mv, mp, mm, i, j)
-    @inbounds mul = FLOAT_POW5_INV_SPLIT[i + 1]
+@inline function mulshiftinvsplit(::Type{T}, mv, mp, mm, i, j) where {T}
+    mul = pow5invsplit_lookup(T, i)
     vr = mulshift(mv, mul, j)
     vp = mulshift(mp, mul, j)
     vm = mulshift(mm, mul, j)
     return vr, vp, vm
 end
 
-@inline function mulshiftinvsplit(::Type{Float16}, mv, mp, mm, i, j)
-    @inbounds mul = HALF_POW5_INV_SPLIT[i + 1]
-    vr = mulshift(mv, mul, j)
-    vp = mulshift(mp, mul, j)
-    vm = mulshift(mm, mul, j)
-    return vr, vp, vm
-end
-
-@inline function mulshiftsplit(::Type{Float64}, mv, mp, mm, i, j)
-    @inbounds mula, mulb = DOUBLE_POW5_SPLIT[i + 1]
-    vr = mulshift(mv, mula, mulb, j)
-    vp = mulshift(mp, mula, mulb, j)
-    vm = mulshift(mm, mula, mulb, j)
-    return vr, vp, vm
-end
-
-@inline function mulshiftsplit(::Type{Float32}, mv, mp, mm, i, j)
-    @inbounds mul = FLOAT_POW5_SPLIT[i + 1]
-    vr = mulshift(mv, mul, j)
-    vp = mulshift(mp, mul, j)
-    vm = mulshift(mm, mul, j)
-    return vr, vp, vm
-end
-
-@inline function mulshiftsplit(::Type{Float16}, mv, mp, mm, i, j)
-    @inbounds mul = HALF_POW5_SPLIT[i + 1]
+@inline function mulshiftsplit(::Type{T}, mv, mp, mm, i, j) where {T}
+    mul = pow5split_lookup(T, i)
     vr = mulshift(mv, mul, j)
     vp = mulshift(mp, mul, j)
     vm = mulshift(mm, mul, j)
@@ -372,47 +332,59 @@ end
 
 const POW10_OFFSET_2, MIN_BLOCK_2, POW10_SPLIT_2 = generateinversetables()
 
-@inline function pow5invsplit(::Type{Float64}, i)
+"""
+    Ryu.pow5invsplit(T, i)
+
+Compute `floor(2^k/5^i)+1`, where `k = pow5bits(i) - 1 + pow5_inv_bitcount(T)`. The result
+is an unsigned integer twice as wide as `T` (i.e. a `UInt128` if `T == Float64`), with
+`pow5_inv_bitcount(T)` significant bits.
+"""
+function pow5invsplit(::Type{T}, i) where {T<:AbstractFloat}
+    W = widen(uinttype(T))
     pow = big(5)^i
-    inv = div(big(1) << (ndigits(pow, base=2) - 1 + pow5_inv_bitcount(Float64)), pow) + 1
-    return (UInt64(inv & ((big(1) << 64) - 1)), UInt64(inv >> 64))
+    inv = div(big(1) << (ndigits(pow, base=2) - 1 + pow5_inv_bitcount(T)), pow) + 1
+    return W(inv)
 end
 
-@inline function pow5invsplit(::Type{Float32}, i)
-    pow = big(5)^i
-    inv = div(big(1) << (ndigits(pow, base=2) - 1 + pow5_inv_bitcount(Float32)), pow) + 1
-    return UInt64(inv)
+"""
+    Ryu.pow5invsplit_lookup(T, i)
+
+[`pow5invsplit`](@ref) computed via lookup table.
+"""
+function pow5invsplit_lookup end
+for T in (Float64, Float32, Float16)
+    e2_max = exponent_max(T) - precision(T) - 2
+    i_max = log10pow2(e2_max)
+    table = [pow5invsplit(T, i) for i = 0:i_max]
+    @eval pow5invsplit_lookup(::Type{$T}, i) = @inbounds($table[i+1])
 end
 
-@inline function pow5invsplit(::Type{Float16}, i)
+
+"""
+    Ryu.pow5split(T, i)
+
+Compute `floor(5^i/2^k)`, where `k = pow5bits(i) - pow5_bitcount(T)`. The result is an
+unsigned integer twice as wide as `T` (i.e. a `UInt128` if `T == Float64`), with
+`pow5_bitcount(T)` significant bits.
+"""
+function pow5split(::Type{T}, i) where {T<:AbstractFloat}
+    W = widen(uinttype(T))
     pow = big(5)^i
-    inv = div(big(1) << (ndigits(pow, base=2) - 1 + pow5_inv_bitcount(Float16)), pow) + 1
-    return UInt32(inv)
+    return W(pow >> (ndigits(pow, base=2) - pow5_bitcount(T)))
 end
 
-@inline function pow5split(::Type{Float64}, i)
-    pow = big(5)^i
-    j = ndigits(pow, base=2) - pow5_bitcount(Float64)
-    return (UInt64((pow >> j) & ((big(1) << 64) - 1)), UInt64(pow >> (j + 64)))
+"""
+    Ryu.pow5split_lookup(T, i)
+
+[`pow5split`](@ref) computed via lookup table.
+"""
+function pow5split_lookup end
+for T in (Float64, Float32, Float16)
+    e2_min = 1 - exponent_bias(T) - significand_bits(T) - 2
+    i_max = 1 - e2_min - log10pow5(-e2_min)
+    table = [pow5split(T, i) for i = 0:i_max]
+    @eval pow5split_lookup(::Type{$T}, i) = @inbounds($table[i+1])
 end
-
-@inline function pow5split(::Type{Float32}, i)
-    pow = big(5)^i
-    return UInt64(pow >> (ndigits(pow, base=2) - pow5_bitcount(Float32)))
-end
-
-@inline function pow5split(::Type{Float16}, i)
-    pow = big(5)^i
-    return UInt32(pow >> (ndigits(pow, base=2) - pow5_bitcount(Float16)))
-end
-
-const DOUBLE_POW5_INV_SPLIT = map(i->pow5invsplit(Float64, i), 0:291)
-const FLOAT_POW5_INV_SPLIT = map(i->pow5invsplit(Float32, i), 0:30)
-const HALF_POW5_INV_SPLIT = map(i->pow5invsplit(Float16, i), 0:17)
-
-const DOUBLE_POW5_SPLIT = map(i->pow5split(Float64, i), 0:325)
-const FLOAT_POW5_SPLIT = map(i->pow5split(Float32, i), 0:46)
-const HALF_POW5_SPLIT = map(i->pow5split(Float16, i), 0:23)
 
 const DIGIT_TABLE = UInt8[
   '0','0','0','1','0','2','0','3','0','4','0','5','0','6','0','7','0','8','0','9',

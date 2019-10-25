@@ -555,7 +555,7 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 @inline function _newindexer(indsA::Tuple)
     ind1 = indsA[1]
     keep, Idefault = _newindexer(tail(indsA))
-    (Base.length(ind1)!=1, keep...), (first(ind1), Idefault...)
+    (Base.length(ind1)::Integer != 1, keep...), (first(ind1), Idefault...)
 end
 
 @inline function Base.getindex(bc::Broadcasted, I::Union{Integer,CartesianIndex})
@@ -916,6 +916,7 @@ end
 @inline function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
     axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
     ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
+    length(dest) < 256 && return invoke(copyto!, Tuple{AbstractArray, Broadcasted{Nothing}}, dest, bc)
     tmp = Vector{Bool}(undef, bitcache_size)
     destc = dest.chunks
     ind = cind = 1

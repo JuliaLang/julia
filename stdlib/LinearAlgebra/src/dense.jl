@@ -1418,15 +1418,22 @@ function cond(A::AbstractMatrix, p::Real=2)
     if p == 2
         v = svdvals(A)
         maxv = maximum(v)
-        return maxv == 0.0 ? oftype(real(A[1,1]),Inf) : maxv / minimum(v)
+        return iszero(maxv) ? oftype(real(maxv), Inf) : maxv / minimum(v)
     elseif p == 1 || p == Inf
         checksquare(A)
-        return _cond1Inf(A, p)
+        try
+            Ainv = inv(A)
+            return opnorm(A, p)*opnorm(Ainv, p)
+        catch e
+            if isa(e, LAPACKException) || isa(e, SingularException)
+                return convert(float(real(eltype(A))), Inf)
+            else
+                rethrow()
+            end
+        end
     end
     throw(ArgumentError("p-norm must be 1, 2 or Inf, got $p"))
 end
-_cond1Inf(A::StridedMatrix{<:BlasFloat}, p::Real) = _cond1Inf(lu(A), p, opnorm(A, p))
-_cond1Inf(A::AbstractMatrix, p::Real)             = opnorm(A, p)*opnorm(inv(A), p)
 
 ## Lyapunov and Sylvester equation
 

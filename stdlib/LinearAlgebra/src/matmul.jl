@@ -708,7 +708,10 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
     if size(C,1) != mA || size(C,2) != nB
         throw(DimensionMismatch("result C has dimensions $(size(C)), needs ($mA,$nB)"))
     end
-    if isempty(A) || isempty(B) || iszero(_add.alpha)
+    if isempty(A) || isempty(B)
+        return C
+    end
+    if iszero(_add.alpha)
         return _rmul_or_fill!(C, _add.beta)
     end
 

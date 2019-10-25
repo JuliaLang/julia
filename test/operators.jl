@@ -105,9 +105,12 @@ Base.convert(::Type{T19714}, ::Int) = T19714()
 Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
 @test T19714()/1 === 1/T19714() === T19714()
 
-# pr #17155
+# pr #17155 and #33568
 @testset "function composition" begin
     @test (uppercase∘(x->string(x,base=16)))(239487) == "3A77F"
+    @test ∘(x -> x-2, x -> x-3, x -> x+5)(7) == 7
+    fs = [x -> x[1:2], uppercase, lowercase]
+    @test ∘(fs...)("ABC") == "AB"
 end
 @testset "function negation" begin
     str = randstring(20)

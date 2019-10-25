@@ -373,7 +373,7 @@ function allunique(C)
     true
 end
 
-allunique(::Set) = true
+allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange{T}) where {T} = (step(r) != zero(T)) || (length(r) <= 1)
 allunique(r::StepRange{T,S}) where {T,S} = (step(r) != zero(S)) || (length(r) <= 1)

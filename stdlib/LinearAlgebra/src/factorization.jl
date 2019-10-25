@@ -16,7 +16,9 @@ size(F::Adjoint{<:Any,<:Factorization}) = reverse(size(parent(F)))
 size(F::Transpose{<:Any,<:Factorization}) = reverse(size(parent(F)))
 
 checkpositivedefinite(info) = info == 0 || throw(PosDefException(info))
-checknonsingular(info) = info == 0 || throw(SingularException(info))
+checknonsingular(info, pivoted::Val{true}) = info == 0 || throw(SingularException(info))
+checknonsingular(info, pivoted::Val{false}) = info == 0 || throw(ZeroPivotException(info))
+checknonsingular(info) = checknonsingular(info, Val{true}())
 
 """
     issuccess(F::Factorization)

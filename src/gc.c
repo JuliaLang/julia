@@ -778,7 +778,7 @@ void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT
 static inline void maybe_collect(jl_ptls_t ptls)
 {
     if (ptls->gc_num.allocd >= 0 || gc_debug_check_other()) {
-        jl_gc_collect(0);
+        jl_gc_collect(JL_GC_AUTO);
     }
     else {
         jl_gc_safepoint_(ptls);
@@ -2059,34 +2059,41 @@ excstack: {
         gc_mark_excstack_t *stackitr = gc_pop_markdata(&sp, gc_mark_excstack_t);
         jl_excstack_t *excstack = stackitr->s;
         size_t itr = stackitr->itr;
-        size_t i = stackitr->i;
+        size_t bt_index = stackitr->bt_index;
+        size_t jlval_index = stackitr->jlval_index;
         while (itr > 0) {
             size_t bt_size = jl_excstack_bt_size(excstack, itr);
-            uintptr_t *bt_data = jl_excstack_bt_data(excstack, itr);
-            while (i+2 < bt_size) {
-                if (bt_data[i] != JL_BT_INTERP_FRAME) {
-                    i++;
+            jl_bt_element_t *bt_data = jl_excstack_bt_data(excstack, itr);
+            for (; bt_index < bt_size; bt_index += jl_bt_entry_size(bt_data + bt_index)) {
+                jl_bt_element_t *bt_entry = bt_data + bt_index;
+                if (jl_bt_is_native(bt_entry))
                     continue;
-                }
-                // found an interpreter frame to mark
-                new_obj = (jl_value_t*)bt_data[i+1];
-                uintptr_t nptr = 0;
-                i += 3;
-                if (gc_try_setmark(new_obj, &nptr, &tag, &bits)) {
-                    stackitr->i = i;
-                    stackitr->itr = itr;
-                    gc_repush_markdata(&sp, gc_mark_excstack_t);
-                    goto mark;
+                // Found an extended backtrace entry: iterate over any
+                // GC-managed values inside.
+                size_t njlvals = jl_bt_num_jlvals(bt_entry);
+                while (jlval_index < njlvals) {
+                    new_obj = jl_bt_entry_jlvalue(bt_entry, jlval_index);
+                    uintptr_t nptr = 0;
+                    jlval_index += 1;
+                    if (gc_try_setmark(new_obj, &nptr, &tag, &bits)) {
+                        stackitr->itr = itr;
+                        stackitr->bt_index = bt_index;
+                        stackitr->jlval_index = jlval_index;
+                        gc_repush_markdata(&sp, gc_mark_excstack_t);
+                        goto mark;
+                    }
                 }
             }
-            // mark the exception
+            // The exception comes last - mark it
             new_obj = jl_excstack_exception(excstack, itr);
             itr = jl_excstack_next(excstack, itr);
-            i = 0;
+            bt_index = 0;
+            jlval_index = 0;
             uintptr_t nptr = 0;
             if (gc_try_setmark(new_obj, &nptr, &tag, &bits)) {
-                stackitr->i = i;
                 stackitr->itr = itr;
+                stackitr->bt_index = bt_index;
+                stackitr->jlval_index = jlval_index;
                 gc_repush_markdata(&sp, gc_mark_excstack_t);
                 goto mark;
             }
@@ -2359,7 +2366,7 @@ mark: {
             if (ta->excstack) {
                 gc_setmark_buf_(ptls, ta->excstack, bits, sizeof(jl_excstack_t) +
                                 sizeof(uintptr_t)*ta->excstack->reserved_size);
-                gc_mark_excstack_t stackdata = {ta->excstack, ta->excstack->top, 0};
+                gc_mark_excstack_t stackdata = {ta->excstack, ta->excstack->top, 0, 0};
                 gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(excstack),
                                    &stackdata, sizeof(stackdata), 1);
             }
@@ -2654,20 +2661,22 @@ static void jl_gc_queue_remset(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp
 
 static void jl_gc_queue_bt_buf(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp, jl_ptls_t ptls2)
 {
-    size_t n = 0;
-    while (n+2 < ptls2->bt_size) {
-        if (ptls2->bt_data[n] == JL_BT_INTERP_FRAME) {
-            gc_mark_queue_obj(gc_cache, sp, (jl_value_t*)ptls2->bt_data[n+1]);
-            n += 2;
-        }
-        n++;
+    jl_bt_element_t *bt_data = ptls2->bt_data;
+    size_t bt_size = ptls2->bt_size;
+    for (size_t i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
+        jl_bt_element_t *bt_entry = bt_data + i;
+        if (jl_bt_is_native(bt_entry))
+            continue;
+        size_t njlvals = jl_bt_num_jlvals(bt_entry);
+        for (size_t j = 0; j < njlvals; j++)
+            gc_mark_queue_obj(gc_cache, sp, jl_bt_entry_jlvalue(bt_entry, j));
     }
 }
 
 size_t jl_maxrss(void);
 
 // Only one thread should be running in this function
-static int _jl_gc_collect(jl_ptls_t ptls, int full)
+static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 {
     combine_thread_gc_counts(&gc_num);
 
@@ -2697,7 +2706,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     if (gc_cblist_root_scanner) {
         export_gc_state(ptls, &sp);
         gc_invoke_callbacks(jl_gc_cb_root_scanner_t,
-            gc_cblist_root_scanner, (full));
+            gc_cblist_root_scanner, (collection));
         import_gc_state(ptls, &sp);
     }
     gc_mark_loop(ptls, sp);
@@ -2775,12 +2784,14 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     else if (live_bytes >= last_live_bytes) {
         grown_heap_age++;
     }
-    if ((full || large_frontier ||
+    if (collection == JL_GC_INCREMENTAL) {
+        sweep_full = 0;
+    } else if ((collection == JL_GC_FULL || large_frontier ||
          ((not_freed_enough || promoted_bytes >= gc_num.interval) &&
           (promoted_bytes >= default_collect_interval || prev_sweep_full)) ||
          grown_heap_age > 1) &&
         gc_num.pause > 1) {
-        recollect = full;
+        recollect = (collection == JL_GC_FULL);
         if (large_frontier)
             gc_num.interval = last_long_collect_interval;
         if (not_freed_enough || large_frontier) {
@@ -2869,7 +2880,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     return recollect;
 }
 
-JL_DLLEXPORT void jl_gc_collect(int full)
+JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (jl_gc_disable_counter) {
@@ -2896,12 +2907,13 @@ JL_DLLEXPORT void jl_gc_collect(int full)
     // no-op for non-threading
     jl_gc_wait_for_the_world();
     gc_invoke_callbacks(jl_gc_cb_pre_gc_t,
-        gc_cblist_pre_gc, (full));
+        gc_cblist_pre_gc, (collection));
 
     if (!jl_gc_disable_counter) {
         JL_LOCK_NOGC(&finalizers_lock);
-        if (_jl_gc_collect(ptls, full)) {
-            int ret = _jl_gc_collect(ptls, 0);
+        if (_jl_gc_collect(ptls, collection)) {
+            // recollect
+            int ret = _jl_gc_collect(ptls, JL_GC_AUTO);
             (void)ret;
             assert(!ret);
         }
@@ -2922,7 +2934,7 @@ JL_DLLEXPORT void jl_gc_collect(int full)
         ptls->in_finalizer = was_in_finalizer;
     }
     gc_invoke_callbacks(jl_gc_cb_post_gc_t,
-        gc_cblist_post_gc, (full));
+        gc_cblist_post_gc, (collection));
 }
 
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_mark_sp_t *sp)
@@ -3332,7 +3344,7 @@ JL_DLLEXPORT int jl_gc_enable_conservative_gc_support(void)
             // properly. We don't have to worry about race conditions
             // for this part, as allocation itself is unproblematic and
             // a collection will wait for safepoints.
-            jl_gc_collect(1);
+            jl_gc_collect(JL_GC_FULL);
         }
         return result;
     } else {

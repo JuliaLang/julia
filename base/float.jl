@@ -530,7 +530,8 @@ abs(x::Float64) = abs_float(x)
 """
     isnan(f) -> Bool
 
-Test whether a floating point number is not a number (NaN).
+Test whether a number value is a NaN, an indeterminate value which is neither an infinity
+nor a finite number ("not a number").
 """
 isnan(x::AbstractFloat) = x != x
 isnan(x::Float16) = reinterpret(UInt16,x)&0x7fff > 0x7c00
@@ -764,7 +765,7 @@ The highest finite value representable by the given floating-point DataType `T`.
 # Examples
 ```jldoctest
 julia> floatmax(Float16)
-Float16(65500.0)
+Float16(6.55e4)
 
 julia> floatmax(Float32)
 3.4028235f38

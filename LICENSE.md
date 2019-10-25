@@ -35,7 +35,7 @@ Julia includes code from the following projects, which have their own licenses:
 - [MUSL](https://git.musl-libc.org/cgit/musl/tree/COPYRIGHT) (for getopt implementation on Windows) [MIT]
 - [MINGW](https://sourceforge.net/p/mingw/mingw-org-wsl/ci/legacy/tree/mingwrt/mingwex/dirname.c) (for dirname implementation on Windows) [MIT]
 - [NetBSD](https://www.netbsd.org/about/redistribution.html) (for setjmp, longjmp, and strptime implementations on Windows) [BSD-3]
-- [Python](https://docs.python.org/2/license.html) (for strtod implementation on Windows) [BSD-3, effectively]
+- [Python](https://docs.python.org/2/license.html) (for strtod and joinpath implementation on Windows) [BSD-3, effectively]
 
 The following components included in Julia `Base` have their own separate licenses:
 

@@ -175,7 +175,7 @@ function generic_lufact!(A::StridedMatrix{T}, ::Val{Pivot} = Val(true);
             end
         end
     end
-    check && checknonsingular(info)
+    check && checknonsingular(info, Val{Pivot}())
     return LU{T,typeof(A)}(A, ipiv, convert(BlasInt, info))
 end
 
@@ -478,13 +478,6 @@ inv!(A::LU{T,<:StridedMatrix}) where {T} =
     ldiv!(A.factors, copy(A), Matrix{T}(I, size(A, 1), size(A, 1)))
 inv(A::LU{<:BlasFloat,<:StridedMatrix}) = inv!(copy(A))
 
-function _cond1Inf(A::LU{<:BlasFloat,<:StridedMatrix}, p::Number, normA::Real)
-    if p != 1 && p != Inf
-        throw(ArgumentError("p must be either 1 or Inf"))
-    end
-    return inv(LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, normA))
-end
-
 # Tridiagonal
 
 # See dgttrf.f
@@ -552,7 +545,7 @@ function lu!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true
         end
     end
     B = Tridiagonal{T,V}(dl, d, du, du2)
-    check && checknonsingular(info)
+    check && checknonsingular(info, pivot)
     return LU{T,Tridiagonal{T,V}}(B, ipiv, convert(BlasInt, info))
 end
 
