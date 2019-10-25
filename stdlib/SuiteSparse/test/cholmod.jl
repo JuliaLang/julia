@@ -857,16 +857,11 @@ end
 end
 
 @testset "Issue #27860" begin
-    A = sparse(Float64[2.0 0.1; 0.1 2.0])
-    B = sparse(ComplexF64[2.0 0.1; 0.1 2.0])
-    R = randn(2, 2)
-    for M in (A, B)
-        @test M \ R' ≈ Matrix(M) \ R'
-        @test M \ transpose(R) ≈ Matrix(M) \ transpose(R)
-    end
-    r = randn(1, 2)
-    for M in (A, B)
-        @test M \ r' ≈ Matrix(M) \ r'
-        @test M \ transpose(r) ≈ Matrix(M) \ transpose(r)
+    for typeA in (Float64, ComplexF64), typeB in (Float64, ComplexF64), transform in (adjoint, transpose)
+        A = sparse(typeA[2.0 0.1; 0.1 2.0])
+        B = randn(typeB, 2, 2)
+        b = randn(typeB, 1, 2)
+        @test A \ transform(B) ≈ cholesky(A) \ transform(B) ≈ Matrix(A) \ transform(B)
+        @test A \ transform(b) ≈ cholesky(A) \ transform(b) ≈ Matrix(A) \ transform(b)
     end
 end
