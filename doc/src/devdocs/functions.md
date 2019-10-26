@@ -101,10 +101,8 @@ currently share a method table via special arrangement.
 
 The "builtin" functions, defined in the `Core` module, are:
 
-```
-=== typeof sizeof <: isa typeassert throw tuple getfield setfield! fieldtype
-nfields isdefined arrayref arrayset arraysize applicable invoke apply_type _apply
-_expr svec
+```@eval
+[n for n in names(Core;all=true) if getfield(Core,n) isa Core.Builtin]
 ```
 
 These are all singleton objects whose types are subtypes of `Builtin`, which is a subtype of
