@@ -821,6 +821,7 @@ function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
     try
         run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR::String,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
+        nothing
     catch
         buf = PipeBuffer()
         Base.require(Base, :InteractiveUtils).versioninfo(buf)
