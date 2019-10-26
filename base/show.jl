@@ -994,7 +994,7 @@ end
 # * Print valid identifiers & operators literally; also macros names if allow_macroname=true
 # * Escape invalid identifiers with var"" syntax
 function show_sym(io::IO, sym; allow_macroname=false)
-    if isidentifier(sym) || (isoperator(sym) && sym !== :var"'")
+    if isidentifier(sym) || (isoperator(sym) && sym !== Symbol("'"))
         print(io, sym)
     elseif allow_macroname && (sym_str = string(sym); startswith(sym_str, '@'))
         print(io, '@')
@@ -1050,7 +1050,7 @@ end
 function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, prec::Int)
     if isa(value, Symbol) && !(value in quoted_syms)
         s = string(value)
-        if isidentifier(s) || (isoperator(value) && value !== :var"'")
+        if isidentifier(s) || (isoperator(value) && value !== Symbol("'"))
             print(io, ":")
             print(io, value)
         else
