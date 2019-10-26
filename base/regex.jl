@@ -44,9 +44,12 @@ end
 
 function Regex(pattern::AbstractString, flags::AbstractString)
     options = DEFAULT_COMPILER_OPTS
+    match_options = DEFAULT_MATCH_OPTS
     for f in flags
         if f == 'a'
             options &= ~PCRE.UCP
+        elseif f == 'p'
+            match_options |= PCRE.PARTIAL_SOFT
         else
             options |= f=='i' ? PCRE.CASELESS  :
                        f=='m' ? PCRE.MULTILINE :
@@ -55,8 +58,9 @@ function Regex(pattern::AbstractString, flags::AbstractString)
                        throw(ArgumentError("unknown regex flag: $f"))
         end
     end
-    Regex(pattern, options, DEFAULT_MATCH_OPTS)
+    Regex(pattern, options, match_options)
 end
+
 Regex(pattern::AbstractString) = Regex(pattern, DEFAULT_COMPILER_OPTS, DEFAULT_MATCH_OPTS)
 
 function compile(regex::Regex)
@@ -96,6 +100,8 @@ listed after the ending quote, to change its behaviour:
 - `a` disables `UCP` mode (enables ASCII mode). By default `\\B`, `\\b`, `\\D`, `\\d`, `\\S`,
   `\\s`, `\\W`, `\\w`, etc. match based on Unicode character properties. With this option,
   these sequences only match ASCII characters.
+- `p` enables partial matching: if the string is potentially the prefix of a matching string,
+  it is considered as a match.
 
 See `Regex` if interpolation is needed.
 
@@ -137,6 +143,7 @@ struct RegexMatch
     offset::Int
     offsets::Vector{Int}
     regex::Regex
+    partial::Bool
 end
 
 function show(io::IO, m::RegexMatch)
@@ -255,7 +262,8 @@ end
 Search for the first match of the regular expression `r` in `s` and return a `RegexMatch`
 object containing the match, or nothing if the match failed. The matching substring can be
 retrieved by accessing `m.match` and the captured sequences can be retrieved by accessing
-`m.captures` The optional `idx` argument specifies an index at which to start the search.
+`m.captures`. In case of a partial match (with the `Regex` constructor flag `p`), `m.partial`
+ is set to `true`. The optional `idx` argument specifies an index at which to start the search.
 
 # Examples
 ```jldoctest
@@ -282,18 +290,20 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, a
     compile(re)
     opts = re.match_options | add_opts
     matched, data = PCRE.exec_r_data(re.regex, str, idx-1, opts)
-    if !matched
+
+    if matched === false
         PCRE.free_match_data(data)
         return nothing
     end
-    n = div(PCRE.ovec_length(data), 2) - 1
+    # when the match is partial, only the first pair of offsets (for the partial match) is stored in data
+    n = matched === missing ? 0 : div(PCRE.ovec_length(data), 2) - 1
     p = PCRE.ovec_ptr(data)
     mat = SubString(str, unsafe_load(p, 1)+1, prevind(str, unsafe_load(p, 2)+1))
     cap = Union{Nothing,SubString{String}}[unsafe_load(p,2i+1) == PCRE.UNSET ? nothing :
                                         SubString(str, unsafe_load(p,2i+1)+1,
                                                   prevind(str, unsafe_load(p,2i+2)+1)) for i=1:n]
     off = Int[ unsafe_load(p,2i+1)+1 for i=1:n ]
-    result = RegexMatch(mat, cap, unsafe_load(p,1)+1, off, re)
+    result = RegexMatch(mat, cap, unsafe_load(p,1)+1, off, re, ismissing(matched))
     PCRE.free_match_data(data)
     return result
 end
