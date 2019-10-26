@@ -533,6 +533,8 @@ for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
     end
 end
 
+const var"'" = adjoint
+
 """
     \\(x, y)
 

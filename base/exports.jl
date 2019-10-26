@@ -455,6 +455,7 @@ export
     startswith,
 
 # linear algebra
+    var"'",
     adjoint,
     transpose,
     kron,
