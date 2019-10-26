@@ -120,8 +120,10 @@ To extend `round` to new numeric types, it is typically sufficient to define `Ba
 """
 round(T::Type, x)
 
-round(::Type{T}, x::AbstractFloat, r::RoundingMode{:ToZero}) where {T<:Integer} = trunc(T, x)
-round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer} = trunc(T, round(x,r))
+function round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer}
+    r != RoundToZero && (x = round(x,r))
+    trunc(T, x)
+end
 
 # NOTE: this relies on the current keyword dispatch behaviour (#9498).
 function round(x::Real, r::RoundingMode=RoundNearest;
