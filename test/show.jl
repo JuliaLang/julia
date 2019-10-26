@@ -351,6 +351,10 @@ end
 @test sprint(show, :+) == ":+"
 @test sprint(show, :end) == ":end"
 
+# make sure :var"'" prints correctly
+@test sprint(show, Symbol("'")) == "Symbol(\"'\")"
+@test_repr "var\"'\" = 5"
+
 # issue #32408: Printing of names which are invalid identifiers
 # Invalid identifiers which need `var` quoting:
 @test sprint(show, Expr(:call, :foo, Symbol("##")))   == ":(foo(var\"##\"))"
