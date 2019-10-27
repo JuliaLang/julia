@@ -31,6 +31,8 @@ The following things *are* covered by the SemVer garentee (many other things als
  - 
  
  
-## TODO CLassify these:
+## TODO Classify these:
   - The serialization format used by `Base.serialize`; except when dealing with stored values that are of types that were allowed to be changed.
   - The stream of random numbers given by the default random number generator for a given seed.
+  - Behavour after reassigning a constant
+  - Behavour while engaging in type-piracy
