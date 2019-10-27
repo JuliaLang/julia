@@ -364,7 +364,7 @@ They can be defined using the following `!!!` syntax:
     This warning admonition has a custom title: `"Beware!"`.
 ```
 
-The type of the admonition can be any lowercase word, but some types produce special styling,
+The type of the admonition can be any word made up of only lowercase Latin characters (a-z), but some types produce special styling,
 namely (in order of decreasing severity): `danger`, `warning`, `info`, `note`, and `tip`.
 
 A custom title for the box can be provided as a string (in double quotes) after the admonition type.
