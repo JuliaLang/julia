@@ -860,8 +860,6 @@ end
     for typeA in (Float64, ComplexF64), typeB in (Float64, ComplexF64), transform in (adjoint, transpose)
         A = sparse(typeA[2.0 0.1; 0.1 2.0])
         B = randn(typeB, 2, 2)
-        b = randn(typeB, 1, 2)
         @test A \ transform(B) ≈ cholesky(A) \ transform(B) ≈ Matrix(A) \ transform(B)
-        @test A \ transform(b) ≈ cholesky(A) \ transform(b) ≈ Matrix(A) \ transform(b)
     end
 end
