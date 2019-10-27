@@ -800,8 +800,8 @@ function Dense{T}(A::StridedVecOrMat) where T<:VTypes
     d = allocate_dense(size(A, 1), size(A, 2), stride(A, 2), T)
     GC.@preserve d begin
         s = unsafe_load(pointer(d))
-        for i in eachindex(A)
-            unsafe_store!(s.x, A[i], i)
+        for (i, c) in enumerate(eachindex(A))
+            unsafe_store!(s.x, A[c], i)
         end
     end
     d
