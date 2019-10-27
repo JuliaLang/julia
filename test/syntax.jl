@@ -1949,3 +1949,6 @@ end
 @test Meta.lower(Main, :((a=a,b=b...))) == Expr(:error, "\"...\" expression cannot be used as named tuple field value")
 @test Meta.lower(Main, :(f(;a...,b...)=0)) == Expr(:error, "invalid \"...\" on non-final keyword argument")
 @test Meta.lower(Main, :(f(;a...,b=0)=0)) == Expr(:error, "invalid \"...\" on non-final keyword argument")
+
+# issue #31547
+@test Meta.lower(Main, :(a := 1)) == Expr(:error, "unsupported assignment operator \":=\"")
