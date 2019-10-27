@@ -1687,17 +1687,11 @@ end
 # Explicit typevars are necessary to avoid ambiguities with defs in linalg/factorizations.jl
 # Likewise the two following explicit Vector and Matrix defs (rather than a single VecOrMat)
 (\)(L::Factor{T}, B::Vector{Complex{T}}) where {T<:Float64} = complex.(L\real(B), L\imag(B))
-(\)(L::Factor{T}, B::Adjoint{<:Any, <:Vector{Complex{T}}}) where {T<:Float64} = complex.(L\real(B), L\imag(B))
-(\)(L::Factor{T}, B::Transpose{<:Any, <:Vector{Complex{T}}}) where {T<:Float64} = complex.(L\real(B), L\imag(B))
-
 (\)(L::Factor{T}, B::Matrix{Complex{T}}) where {T<:Float64} = complex.(L\real(B), L\imag(B))
 (\)(L::Factor{T}, B::Adjoint{<:Any, <:Matrix{Complex{T}}}) where {T<:Float64} = complex.(L\real(B), L\imag(B))
 (\)(L::Factor{T}, B::Transpose{<:Any, <:Matrix{Complex{T}}}) where {T<:Float64} = complex.(L\real(B), L\imag(B))
 
 (\)(L::Factor{T}, b::StridedVector) where {T<:VTypes} = Vector(L\Dense{T}(b))
-(\)(L::Factor{T}, b::Adjoint{<:Any, <:StridedVector}) where {T<:VTypes} = Vector(L\Dense{T}(b))
-(\)(L::Factor{T}, b::Transpose{<:Any, <:StridedVector}) where {T<:VTypes} = Vector(L\Dense{T}(b))
-
 (\)(L::Factor{T}, B::StridedMatrix) where {T<:VTypes} = Matrix(L\Dense{T}(B))
 (\)(L::Factor{T}, B::Adjoint{<:Any, <:StridedMatrix}) where {T<:VTypes} = Matrix(L\Dense{T}(B))
 (\)(L::Factor{T}, B::Transpose{<:Any, <:StridedMatrix}) where {T<:VTypes} = Matrix(L\Dense{T}(B))
