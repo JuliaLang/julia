@@ -339,7 +339,32 @@ julia> B = [0. 1.; 1. 0.]
  0.0  1.0
  1.0  0.0
 
-julia> F = svd(A, B);
+julia> F = svd(A, B)
+GeneralizedSVD{Float64,Array{Float64,2}}
+U factor:
+2×2 Array{Float64,2}:
+ 1.0  0.0
+ 0.0  1.0
+V factor:
+2×2 Array{Float64,2}:
+ -0.0  -1.0
+  1.0   0.0
+Q factor:
+2×2 Array{Float64,2}:
+ 1.0  0.0
+ 0.0  1.0
+D1 factor:
+2×2 SparseArrays.SparseMatrixCSC{Float64,Int64} with 2 stored entries:
+  [1, 1]  =  0.707107
+  [2, 2]  =  0.707107
+D2 factor:
+2×2 SparseArrays.SparseMatrixCSC{Float64,Int64} with 2 stored entries:
+  [1, 1]  =  0.707107
+  [2, 2]  =  0.707107
+R0 factor:
+2×2 Array{Float64,2}:
+ 1.41421   0.0
+ 0.0      -1.41421
 
 julia> F.U*F.D1*F.R0*F.Q'
 2×2 Array{Float64,2}:
@@ -369,6 +394,22 @@ end
 function GeneralizedSVD(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T},
                         a::Vector, b::Vector, k::Int, l::Int, R::AbstractMatrix{T}) where T
     GeneralizedSVD{T,typeof(U)}(U, V, Q, a, b, k, l, R)
+end
+
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::GeneralizedSVD{<:Any,<:AbstractArray})
+    summary(io, F); println(io)
+    println(io, "U factor:")
+    show(io, mime, F.U)
+    println(io, "\nV factor:")
+    show(io, mime, F.V)
+    println(io, "\nQ factor:")
+    show(io, mime, F.Q)
+    println(io, "\nD1 factor:")
+    show(io, mime, F.D1)
+    println(io, "\nD2 factor:")
+    show(io, mime, F.D2)
+    println(io, "\nR0 factor:")
+    show(io, mime, F.R0)
 end
 
 # iteration for destructuring into components
