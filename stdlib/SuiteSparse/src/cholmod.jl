@@ -798,17 +798,21 @@ get_perm(FC::FactorComponent) = get_perm(Factor(FC))
 # Conversion/construction
 function Dense{T}(A::StridedVecOrMat) where T<:VTypes
     d = allocate_dense(size(A, 1), size(A, 2), stride(A, 2), T)
-    s = unsafe_load(pointer(d))
-    for i in eachindex(A)
-        unsafe_store!(s.x, A[i], i)
+    GC.@preserve d begin
+        s = unsafe_load(pointer(d))
+        for i in eachindex(A)
+            unsafe_store!(s.x, A[i], i)
+        end
     end
     d
 end
 function Dense{T}(A::Union{Adjoint{<:Any, <:StridedVecOrMat}, Transpose{<:Any, <:StridedVecOrMat}}) where T<:VTypes
     d = allocate_dense(size(A, 1), size(A, 2), size(A, 1), T)
-    GC.@preserve d s = unsafe_load(pointer(d))
-    for (i, c) in enumerate(eachindex(A))
-        unsafe_store!(s.x, A[c], i)
+    GC.@preserve d begin
+        s = unsafe_load(pointer(d))
+        for (i, c) in enumerate(eachindex(A))
+            unsafe_store!(s.x, A[c], i)
+        end
     end
     d
 end
