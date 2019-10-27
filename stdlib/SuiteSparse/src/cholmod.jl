@@ -806,7 +806,7 @@ function Dense{T}(A::StridedVecOrMat) where T<:VTypes
 end
 function Dense{T}(A::Union{Adjoint{<:Any, <:StridedVecOrMat}, Transpose{<:Any, <:StridedVecOrMat}}) where T<:VTypes
     d = allocate_dense(size(A, 1), size(A, 2), size(A, 1), T)
-    s = unsafe_load(pointer(d))
+    GC.@preserve d s = unsafe_load(pointer(d))
     for (i, c) in enumerate(eachindex(A))
         unsafe_store!(s.x, A[c], i)
     end
