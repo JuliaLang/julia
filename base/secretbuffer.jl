@@ -166,7 +166,7 @@ function read(io::SecretBuffer, ::Type{UInt8})
 end
 
 function final_shred!(s::SecretBuffer)
-    !isshredded(s) && @warn("a SecretBuffer was `shred!`ed by the GC; use `shred!` manually after use to minimize exposure.")
+    !isshredded(s) && @async @warn("a SecretBuffer was `shred!`ed by the GC; use `shred!` manually after use to minimize exposure.")
     shred!(s)
 end
 
