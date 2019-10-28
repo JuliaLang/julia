@@ -868,14 +868,19 @@ Return the method table for `f`.
 
 If `types` is specified, return an array of methods whose types match.
 If `module` is specified, return an array of methods defined in this module.
+A list of modules can also be specified as an array or tuple.
 """
-function methods(@nospecialize(f), @nospecialize(t), mod::Union{Module,Nothing}=nothing)
+function methods(@nospecialize(f), @nospecialize(t),
+                 @nospecialize(mod::Union{Module,AbstractArray{Module},Tuple{Vararg{Module}}}=()))
+    if mod isa Module
+        mod = (mod,)
+    end
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
     t = to_tuple_type(t)
     world = typemax(UInt)
-    MethodList(Method[m[3] for m in _methods(f, t, -1, world) if mod === nothing || m[3].module == mod],
+    MethodList(Method[m[3] for m in _methods(f, t, -1, world) if isempty(mod) || m[3].module in mod],
                typeof(f).name.mt)
 end
 
@@ -890,7 +895,8 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     return MethodList(Method[m[3] for m in ms], typeof(f).name.mt)
 end
 
-function methods(@nospecialize(f), mod::Union{Module,Nothing}=nothing)
+function methods(@nospecialize(f),
+                 @nospecialize(mod::Union{Module,AbstractArray{Module},Tuple{Vararg{Module}}}=()))
     # return all matches
     return methods(f, Tuple{Vararg{Any}}, mod)
 end
