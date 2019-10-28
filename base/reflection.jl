@@ -869,6 +869,9 @@ Return the method table for `f`.
 If `types` is specified, return an array of methods whose types match.
 If `module` is specified, return an array of methods defined in this module.
 A list of modules can also be specified as an array or tuple.
+
+!!! compat "Julia 1.4"
+    At least Julia 1.4 is required for specifying a module.
 """
 function methods(@nospecialize(f), @nospecialize(t),
                  @nospecialize(mod::Union{Module,AbstractArray{Module},Tuple{Vararg{Module}}}=()))

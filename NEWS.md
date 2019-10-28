@@ -52,6 +52,8 @@ Standard library changes
 * Sets are now displayed less compactly in the REPL, as a column of elements, like vectors
   and dictionaries ([#33300]).
 
+* `methods` now accepts passing a module (or a list thereof) to filter methods defined in it ([#33403]).
+
 #### Libdl
 
 #### LinearAlgebra
