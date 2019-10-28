@@ -111,7 +111,7 @@ end
 
 function slot2reg(ir::IRCode, ci::CodeInfo, nargs::Int, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
-    @timeit "domtree 1" domtree = construct_domtree(ir.cfg)
+    @timeit "domtree 1" domtree = construct_domtree(ir.cfg.blocks)
     defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.inst)
     @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, nargs, sv.sptypes, sv.slottypes) # consumes `ir`
     return ir

@@ -66,7 +66,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
     # Verify CFG
     last_end = 0
     # Verify statements
-    domtree = construct_domtree(ir.cfg)
+    domtree = construct_domtree(ir.cfg.blocks)
     for (idx, block) in pairs(ir.cfg.blocks)
         if first(block.stmts) != last_end + 1
             #ranges = [(idx,first(bb.stmts),last(bb.stmts)) for (idx, bb) in pairs(ir.cfg.blocks)]
