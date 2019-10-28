@@ -418,7 +418,7 @@ julia> function f()
 f (generic function with 1 method)
 
 julia> f() # the correct result is 1000
-1017
+1000
 
 julia> function g()
            a = zeros(1000)
