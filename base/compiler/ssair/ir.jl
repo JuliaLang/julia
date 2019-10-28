@@ -553,8 +553,9 @@ mutable struct IncrementalCompact
         if allow_cfg_transforms
             bb_rename = Vector{Int}(undef, length(blocks))
             cur_bb = 1
+            domtree = construct_domtree(blocks)
             for i = 1:length(bb_rename)
-                if i != 1 && length(blocks[i].preds) == 0
+                if bb_unreachable(domtree, i)
                     bb_rename[i] = -1
                 else
                     bb_rename[i] = cur_bb
@@ -1201,8 +1202,8 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
         resize!(compact, old_result_idx)
     end
     bb = compact.ir.cfg.blocks[active_bb]
-    if compact.cfg_transforms_enabled && active_bb > 1 && active_bb <= length(compact.bb_rename_succ) && length(bb.preds) == 0
-        # No predecessors, kill the entire block.
+    if compact.cfg_transforms_enabled && active_bb > 1 && active_bb <= length(compact.bb_rename_succ) && compact.bb_rename_succ[active_bb] == -1
+        # Dead block, so kill the entire block.
         compact.idx = last(bb.stmts)
         # Pop any remaining insertion nodes
         while compact.new_nodes_idx <= length(compact.perm)
