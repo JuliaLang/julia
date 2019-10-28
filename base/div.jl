@@ -4,10 +4,11 @@
     div(x, y, r::RoundingMode=RoundToZero)
 
 The quotient from Euclidean division. Computes x/y, rounded to an integer according
-to the rounding mode `r`. In other words, the following quantity:
+to the rounding mode `r`. In other words, the quantity
 
     round(x/y,r)
 
+without any intermediate rounding.
 
 See also: [`fld`](@ref), [`cld`](@ref) which are special cases of this function
 
