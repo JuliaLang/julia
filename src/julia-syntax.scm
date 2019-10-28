@@ -4012,6 +4012,11 @@ f(x) = yt(x)
                (if (and tail (not have-ret?))
                    (emit-return '(null)))
                '(null)))
+
+            ;; unsupported assignment operators
+            ((≔ ⩴ ≕ :=)
+             (error (string "unsupported assignment operator \"" (deparse (car e)) "\"")))
+
             ((error)
              (error (cadr e)))
             (else
