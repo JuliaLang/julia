@@ -341,13 +341,12 @@ filter!(f, s::BitSet) = unsafe_filter!(f, s)
 @inline in(n::Integer, s::BitSet) = _is_convertible_Int(n) ? in(Int(n), s) : false
 
 function iterate(s::BitSet, (word, idx) = (CHK0, 0))
-    while (b = trailing_zeros(word)) == 64 # word == 0
+    while word == 0
         idx == length(s.bits) && return nothing
         idx += 1
         word = @inbounds s.bits[idx]
     end
-    word ⊻= one(UInt64) << (b % UInt) # cancel bit b for next iteration
-    b + (idx - 1 + s.offset) << 6, (word, idx)
+    trailing_zeros(word) + (idx - 1 + s.offset) << 6, (_blsr(word), idx)
 end
 
 @noinline _throw_bitset_notempty_error() =
