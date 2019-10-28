@@ -319,7 +319,7 @@ julia> joinpath("/home/myuser", "example.jl")
 joinpath
 
 """
-    normpath(path::AbstractString) -> AbstractString
+    normpath(path::AbstractString) -> String
 
 Normalize a path, removing "." and ".." entries.
 
@@ -364,7 +364,7 @@ function normpath(path::String)
 end
 
 """
-    normpath(path::AbstractString, paths::AbstractString...) -> AbstractString
+    normpath(path::AbstractString, paths::AbstractString...) -> String
 
 Convert a set of paths to a normalized path by joining them together and removing
 "." and ".." entries. Equivalent to `normpath(joinpath(path, paths...))`.
@@ -372,7 +372,7 @@ Convert a set of paths to a normalized path by joining them together and removin
 normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 
 """
-    abspath(path::AbstractString) -> AbstractString
+    abspath(path::AbstractString) -> String
 
 Convert a path to an absolute path by adding the current directory if necessary.
 Also normalizes the path as in [`normpath`](@ref).
@@ -380,7 +380,7 @@ Also normalizes the path as in [`normpath`](@ref).
 abspath(a::String) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
 
 """
-    abspath(path::AbstractString, paths::AbstractString...) -> AbstractString
+    abspath(path::AbstractString, paths::AbstractString...) -> String
 
 Convert a set of paths to an absolute path by joining them together and adding the
 current directory if necessary. Equivalent to `abspath(joinpath(path, paths...))`.
