@@ -396,22 +396,6 @@ function GeneralizedSVD(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractM
     GeneralizedSVD{T,typeof(U)}(U, V, Q, a, b, k, l, R)
 end
 
-function show(io::IO, mime::MIME{Symbol("text/plain")}, F::GeneralizedSVD{<:Any,<:AbstractArray})
-    summary(io, F); println(io)
-    println(io, "U factor:")
-    show(io, mime, F.U)
-    println(io, "\nV factor:")
-    show(io, mime, F.V)
-    println(io, "\nQ factor:")
-    show(io, mime, F.Q)
-    println(io, "\nD1 factor:")
-    show(io, mime, F.D1)
-    println(io, "\nD2 factor:")
-    show(io, mime, F.D2)
-    println(io, "\nR0 factor:")
-    show(io, mime, F.R0)
-end
-
 # iteration for destructuring into components
 Base.iterate(S::GeneralizedSVD) = (S.U, Val(:V))
 Base.iterate(S::GeneralizedSVD, ::Val{:V}) = (S.V, Val(:Q))
@@ -575,6 +559,22 @@ end
 
 Base.propertynames(F::GeneralizedSVD) =
     (:alpha, :beta, :vals, :S, :D1, :D2, :R0, fieldnames(typeof(F))...)
+
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::GeneralizedSVD{<:Any,<:AbstractArray})
+    summary(io, F); println(io)
+    println(io, "U factor:")
+    show(io, mime, F.U)
+    println(io, "\nV factor:")
+    show(io, mime, F.V)
+    println(io, "\nQ factor:")
+    show(io, mime, F.Q)
+    println(io, "\nD1 factor:")
+    show(io, mime, F.D1)
+    println(io, "\nD2 factor:")
+    show(io, mime, F.D2)
+    println(io, "\nR0 factor:")
+    show(io, mime, F.R0)
+end
 
 """
     svdvals!(A, B)
