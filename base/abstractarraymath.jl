@@ -50,7 +50,7 @@ _sub(t::Tuple, s::Tuple) = _sub(tail(t), tail(s))
 
 Remove the dimensions specified by `dims` from array `A`.
 Elements of `dims` must be unique and within the range `1:ndims(A)`.
-`size(A,i)` must equal 1 for all `i` in `dims`.
+`size(A, i)` must equal 1 for all `i` in `dims`.
 
 # Examples
 ```jldoctest
@@ -63,6 +63,11 @@ julia> a = reshape(Vector(1:4),(2,2,1,1))
 julia> dropdims(a; dims=3)
 2×2×1 Array{Int64,3}:
 [:, :, 1] =
+ 1  3
+ 2  4
+
+julia> dropdims(a; dims=(3, 4))
+2×2 Array{Int64,2}:
  1  3
  2  4
 ```
@@ -84,7 +89,41 @@ function _dropdims(A::AbstractArray, dims::Dims)
     end
     reshape(A, d::typeof(_sub(axes(A), dims)))
 end
+
 _dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
+
+"""
+    dropdims(f, args...; dims, kwargs...)
+
+Compute reduction `f` over dimensions `dims` and drop those dimensions from the result.
+
+The reduction `f` must both accept a `dims` keyword argument, and reduce the the dimensions
+specified by `dims` to size 1.
+
+!!! compat "Julia 1.4"
+    This method requires at least Julia 1.4.
+
+# Examples
+```jldoctest
+julia> a = [3.0  2.0  6.0  8.0
+            6.0  1.0  4.0  2.0
+            3.0  0.0  7.0  6.0];
+
+julia> dropdims(sum, a, dims=1)
+4-element Array{Float64,1}:
+ 12.0
+  3.0
+ 17.0
+ 16.0
+
+julia> dropdims(sum, abs2, a, dims=2)
+3-element Array{Float64,1}:
+ 113.0
+  57.0
+  94.0
+```
+"""
+dropdims(f, args...; dims, kwargs...) = _dropdims(f(args...; kwargs..., dims=dims), dims)
 
 ## Unary operators ##
 

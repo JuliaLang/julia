@@ -303,6 +303,37 @@ end
     @test_throws ArgumentError dropdims(a, dims=4)
     @test_throws ArgumentError dropdims(a, dims=6)
 
+    # dropdims with reductions. issue #16606
+    @test (@inferred(dropdims(sum, a, dims=1)) ==
+           @inferred(dropdims(sum, a, dims=(1,))) ==
+           reshape(sum(a, dims=1), (1, 8, 8, 1)))
+    @test (@inferred(dropdims(sum, a, dims=3)) ==
+           @inferred(dropdims(sum, a, dims=(3,))) ==
+           reshape(sum(a, dims=3), (1, 1, 8, 1)))
+    @test (@inferred(dropdims(sum, a, dims=4)) ==
+           @inferred(dropdims(sum, a, dims=(4,))) ==
+           reshape(sum(a, dims=4), (1, 1, 8, 1)))
+    @test (@inferred(dropdims(sum, a, dims=(1, 5))) ==
+           dropdims(sum, a, dims=(5, 1)) ==
+           reshape(sum(a, dims=(5, 1)), (1, 8, 8)))
+    @test (@inferred(dropdims(sum, a, dims=(1, 2, 5))) ==
+           dropdims(sum, a, dims=(5, 2, 1)) ==
+           reshape(sum(a, dims=(5, 2, 1)), (8, 8)))
+    @test (@inferred(dropdims(sum, abs2, a, dims=1)) ==
+           @inferred(dropdims(sum, abs2, a, dims=(1,))) ==
+           reshape(sum(abs2, a, dims=1), (1, 8, 8, 1)))
+    _sumplus(x; dims, plus) = sum(x; dims=dims) .+ plus  # reduction with keywords
+    @test (@inferred(dropdims(_sumplus, a, dims=4, plus=1)) ==
+           @inferred(dropdims(_sumplus, a, dims=(4,), plus=1)) ==
+           reshape(sum(a, dims=4) .+ 1, (1, 1, 8, 1)))
+    @test_throws UndefKeywordError dropdims(sum, a)
+    @test_throws UndefKeywordError dropdims(sum, a, 1)
+    @test_throws ArgumentError dropdims(sum, a, dims=0)
+    @test_throws ArgumentError dropdims(sum, a, dims=(1, 1))
+    @test_throws ArgumentError dropdims(sum, a, dims=(1, 2, 1))
+    @test_throws ArgumentError dropdims(sum, a, dims=(1, 1, 2))
+    @test_throws ArgumentError dropdims(sum, a, dims=6)
+
     sz = (5,8,7)
     A = reshape(1:prod(sz),sz...)
     @test A[2:6] == [2:6;]
