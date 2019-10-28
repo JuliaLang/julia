@@ -7,7 +7,7 @@
 Logger with formatting optimized for readability in a text console, for example
 interactive work with the Julia REPL.
 
-Log levels with importance less than `min_level` are filtered out.
+Log levels with severity less than `severity(min_level)` are filtered out.
 
 Message formatting can be controlled by setting keyword arguments:
 
@@ -37,9 +37,9 @@ function ConsoleLogger(stream::IO=stderr, min_level=Info;
                   show_limited, right_justify, Dict{Any,Int}())
 end
 
-function shouldlog(logger::ConsoleLogger, importance, level, _module, group, id)
+function shouldlog(logger::ConsoleLogger, severity, level, _module, group, id)
     get(logger.message_limits, id, 1) > 0
-    # note: importance already handled in min_enabled_level
+    # note: severity already handled in min_enabled_level
 end
 
 min_enabled_level(logger::ConsoleLogger) = logger.min_level
@@ -53,11 +53,11 @@ end
 showvalue(io, ex::Exception) = showerror(io, ex)
 
 function default_logcolor(level)
-    # TODO: Should we highlight based on modified importance instead?
-    default_importance(level) < default_importance(Info)  ? Base.debug_color() :
-    default_importance(level) < default_importance(Warn)  ? Base.info_color()  :
-    default_importance(level) < default_importance(Error) ? Base.warn_color()  :
-                                                            Base.error_color()
+    # TODO: Should we highlight based on modified severity instead?
+    severity(level) < severity(Info)  ? Base.debug_color() :
+    severity(level) < severity(Warn)  ? Base.info_color()  :
+    severity(level) < severity(Error) ? Base.warn_color()  :
+                                        Base.error_color()
 end
 
 function default_metafmt(level, _module, group, id, file, line)
@@ -99,7 +99,7 @@ function termlength(str)
     return N
 end
 
-function handle_message(logger::ConsoleLogger, importance, level, message, _module, group, id,
+function handle_message(logger::ConsoleLogger, sev, level, message, _module, group, id,
                         filepath, line; maxlog=nothing, kwargs...)
     if maxlog !== nothing && maxlog isa Integer
         remaining = get!(logger.message_limits, id, maxlog)

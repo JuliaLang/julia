@@ -15,7 +15,7 @@ for sym in [
     :AbstractLogLevel, :LogLevel, :BelowMinLevel, :Debug, :Info, :Warn, :Error, :AboveMaxLevel,
     :AbstractLogger,
     :NullLogger,
-    :handle_message, :default_importance, :shouldlog, :min_enabled_level, :catch_exceptions,
+    :handle_message, :severity, :shouldlog, :min_enabled_level, :catch_exceptions,
     Symbol("@debug"),
     Symbol("@info"),
     Symbol("@warn"),
@@ -88,10 +88,10 @@ function Base.convert(::Type{LogLevel}, level::Integer)
 end
 =#
 
-Base.isless(a::LogLevel, b::LogLevel) = isless(default_importance(a), default_importance(b))
+Base.isless(a::LogLevel, b::LogLevel) = isless(severity(a), severity(b))
 # Hrm, following seem a bit nonsensical
-Base.:+(level::LogLevel, inc::Integer) = LogLevel{default_importance(level)+inc}()
-Base.:-(level::LogLevel, inc::Integer) = LogLevel{default_importance(level)-inc}()
+Base.:+(level::LogLevel, inc::Integer) = LogLevel{severity(level)+inc}()
+Base.:-(level::LogLevel, inc::Integer) = LogLevel{severity(level)-inc}()
 Base.convert(::Type{LogLevel}, level::Integer) = LogLevel{level}()
 
 end
