@@ -654,11 +654,9 @@ end
 
 function cholesky!(A::Diagonal, ::Val{false} = Val(false); check::Bool = true)
     info = 0
-    diagonal = A.diag
-    for i in axes(diagonal, 1)
-        d = diagonal[i]
-        if !(d == 0 || (isreal(d) && d < 0))
-            diagonal[i] = √d
+    for (i, di) in enumerate(A.diag)
+        if isreal(di) && real(di) > 0
+            A.diag[i] = √di
         elseif check
             throw(PosDefException(i))
         else
