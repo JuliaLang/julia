@@ -144,7 +144,7 @@ function DFS!(D::DFSTree, blocks::Vector{BasicBlock})
             to_visit[end] = (current_node_bb, parent_pre, true)
 
             # Push children to the stack
-            for succ_bb in cfg.blocks[current_node_bb].succs
+            for succ_bb in blocks[current_node_bb].succs
                 push!(to_visit, (succ_bb, pre_num, false))
             end
 
@@ -200,11 +200,11 @@ function DomTree()
     return DomTree(DFSTree(0), SNCAData[], BBNumber[], DomTreeNode[])
 end
 
-function construct_domtree(cfg::CFG)
-    return update_domtree!(cfg, DomTree(), true, 0)
+function construct_domtree(blocks::Vector{BasicBlock})
+    return update_domtree!(blocks, DomTree(), true, 0)
 end
 
-function update_domtree!(cfg::CFG, domtree::DomTree,
+function update_domtree!(blocks::Vector{BasicBlock}, domtree::DomTree,
                          recompute_dfs::Bool, max_pre::PreNumber)
     if recompute_dfs
         DFS!(domtree.dfs_tree, blocks)
@@ -214,7 +214,7 @@ function update_domtree!(cfg::CFG, domtree::DomTree,
         max_pre = length(domtree.dfs_tree)
     end
 
-    SNCA!(domtree, cfg, max_pre)
+    SNCA!(domtree, blocks, max_pre)
     compute_domtree_nodes!(domtree)
     return domtree
 end
@@ -249,11 +249,11 @@ pseudocode in [LG05] is not entirely accurate. The best way to understand
 what's happening is to read [LT79], then the description of SLT in [LG05]
 (warning: inconsistent notation), then the description of Semi-NCA.
 """
-function SNCA!(domtree::DomTree, cfg::CFG, max_pre::PreNumber)
+function SNCA!(domtree::DomTree, blocks::Vector{BasicBlock}, max_pre::PreNumber)
     D = domtree.dfs_tree
     state = domtree.snca_state
     # There may be more blocks than are reachable in the DFS / dominator tree
-    n_blocks = length(cfg.blocks)
+    n_blocks = length(blocks)
     n_nodes = length(D)
 
     # `label` is initialized to the identity mapping (though the paper doesn't
@@ -275,7 +275,7 @@ function SNCA!(domtree::DomTree, cfg::CFG, max_pre::PreNumber)
         # worst we'll discover it below). Save a memory reference here.
         semi_w = typemax(PreNumber)
         last_linked = PreNumber(w + 1)
-        for v ∈ cfg.blocks[D.from_pre[w]].preds
+        for v ∈ blocks[D.from_pre[w]].preds
             # For the purpose of the domtree, ignore virtual predecessors into
             # catch blocks.
             v == 0 && continue
@@ -373,8 +373,8 @@ function snca_compress_worklist!(
     end
 end
 
-"Given an updated CFG, update the given dominator tree with an inserted edge."
-function domtree_insert_edge!(domtree::DomTree, cfg::CFG,
+"Given updated blocks, update the given dominator tree with an inserted edge."
+function domtree_insert_edge!(domtree::DomTree, blocks::Vector{BasicBlock},
                               from::BBNumber, to::BBNumber)
     # Implements Section 3.1 of [GI16]
     dt        = domtree.dfs_tree
@@ -385,23 +385,23 @@ function domtree_insert_edge!(domtree::DomTree, cfg::CFG,
     if to_pre == 0 || (from_pre < to_pre && from_post < to_post)
         # The DFS tree is invalidated by the edge insertion, so run from
         # scratch
-        update_domtree!(cfg, domtree, true, 0)
+        update_domtree!(blocks, domtree, true, 0)
     else
         # DFS tree is still valid, so update only affected nodes
-        update_domtree!(cfg, domtree, false, to_pre)
+        update_domtree!(blocks, domtree, false, to_pre)
     end
 
     return domtree
 end
 
-"Given an updated CFG, update the given dominator tree with a deleted edge."
-function domtree_delete_edge!(domtree::DomTree, cfg::CFG,
+"Given updated blocks, update the given dominator tree with a deleted edge."
+function domtree_delete_edge!(domtree::DomTree, blocks::Vector{BasicBlock},
                               from::BBNumber, to::BBNumber)
     # Implements Section 3.1 of [GI16]
     if is_parent(domtree.dfs_tree, from, to)
         # The `from` block is the parent of the `to` block in the DFS tree, so
         # deleting the edge invalidates the DFS tree, so start from scratch
-        update_domtree!(cfg, domtree, true, 0)
+        update_domtree!(blocks, domtree, true, 0)
     elseif on_semidominator_path(domtree, from, to)
         # Recompute semidominators for blocks with preorder number up to that
         # of `to` block. Semidominators for blocks with preorder number greater
@@ -410,7 +410,7 @@ function domtree_delete_edge!(domtree::DomTree, cfg::CFG,
         # `to` would be lower than those of these blocks, and `to` is not their
         # parent in the DFS tree).
         to_pre = domtree.dfs_tree.to_pre[to]
-        update_domtree!(cfg, domtree, false, to_pre)
+        update_domtree!(blocks, domtree, false, to_pre)
     end
     # Otherwise, dominator tree is not affected
 
@@ -490,8 +490,8 @@ function iterate(doms::DominatedBlocks, state::Nothing=nothing)
     return (bb, nothing)
 end
 
-function naive_idoms(cfg::CFG)
-    nblocks = length(cfg.blocks)
+function naive_idoms(blocks::Vector{BasicBlock})
+    nblocks = length(blocks)
     # The extra +1 helps us detect unreachable blocks below
     dom_all = BitSet(1:nblocks+1)
     dominators = BitSet[n == 1 ? BitSet(1) : copy(dom_all) for n = 1:nblocks]
@@ -499,10 +499,10 @@ function naive_idoms(cfg::CFG)
     while changed
         changed = false
         for n = 2:nblocks
-            if isempty(cfg.blocks[n].preds)
+            if isempty(blocks[n].preds)
                 continue
             end
-            firstp, rest = Iterators.peel(Iterators.filter(p->p != 0, cfg.blocks[n].preds))
+            firstp, rest = Iterators.peel(Iterators.filter(p->p != 0, blocks[n].preds))
             new_doms = copy(dominators[firstp])
             for p in rest
                 intersect!(new_doms, dominators[p])
