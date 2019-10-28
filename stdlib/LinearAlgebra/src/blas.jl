@@ -576,12 +576,13 @@ for (fname, elty) in ((:dgemv_,:Float64),
                        beta::Union{($elty), Bool}, Y::AbstractVector{$elty})
             require_one_based_indexing(A, X, Y)
             m,n = size(A,1),size(A,2)
-            if trans == 'N' && (length(X) != n || length(Y) != m)
-                throw(DimensionMismatch("A has dimensions $(size(A)), X has length $(length(X)) and Y has length $(length(Y))"))
-            elseif trans == 'C' && (length(X) != m || length(Y) != n)
-                throw(DimensionMismatch("the adjoint of A has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
-            elseif trans == 'T' && (length(X) != m || length(Y) != n)
-                throw(DimensionMismatch("the transpose of A has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
+            lx, ly = length(X), length(Y)
+            if trans == 'N' && (lx != n || ly != m)
+                throw(DimensionMismatch(()->"A has dimensions $m x $n, X has length $lx and Y has length $ly"))
+            elseif trans == 'C' && (lx != m || ly != n)
+                throw(DimensionMismatch(()->"the adjoint of A has dimensions $n x $m, X has length $lx and Y has length $ly"))
+            elseif trans == 'T' && (lx != m || ly != n)
+                throw(DimensionMismatch(()->"the transpose of A has dimensions $n x $m, X has length $lx and Y has length $ly"))
             end
             chkstride1(A)
             ccall((@blasfunc($fname), libblas), Cvoid,
@@ -1132,8 +1133,9 @@ for (gemm, elty) in
             ka = size(A, transA == 'N' ? 2 : 1)
             kb = size(B, transB == 'N' ? 1 : 2)
             n = size(B, transB == 'N' ? 2 : 1)
-            if ka != kb || m != size(C,1) || n != size(C,2)
-                throw(DimensionMismatch("A has size ($m,$ka), B has size ($kb,$n), C has size $(size(C))"))
+            sC = size(C)
+            if ka != kb || m != sC[1] || n != sC[2]
+                throw(DimensionMismatch(()->"A has size ($m,$ka), B has size ($kb,$n), C has size $sC"))
             end
             chkstride1(A)
             chkstride1(B)
@@ -1613,10 +1615,10 @@ end # module
 function copyto!(dest::Array{T}, rdest::Union{UnitRange{Ti},AbstractRange{Ti}},
                  src::Array{T}, rsrc::Union{UnitRange{Ti},AbstractRange{Ti}}) where {T<:BlasFloat,Ti<:Integer}
     if minimum(rdest) < 1 || maximum(rdest) > length(dest)
-        throw(ArgumentError("range out of bounds for dest, of length $(length(dest))"))
+        throw(ArgumentError(()->"range out of bounds for dest, of length $(length(dest))"))
     end
     if minimum(rsrc) < 1 || maximum(rsrc) > length(src)
-        throw(ArgumentError("range out of bounds for src, of length $(length(src))"))
+        throw(ArgumentError(()->"range out of bounds for src, of length $(length(src))"))
     end
     if length(rdest) != length(rsrc)
         throw(DimensionMismatch("ranges must be of the same length"))

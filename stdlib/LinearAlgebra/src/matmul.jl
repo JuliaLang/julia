@@ -11,7 +11,7 @@ dot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVect
 
 function dot(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasReal,TI<:Integer}
     if length(rx) != length(ry)
-        throw(DimensionMismatch("length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
+        throw(DimensionMismatch(()->"length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
     end
     if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError(x, rx))
@@ -24,7 +24,7 @@ end
 
 function dot(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasComplex,TI<:Integer}
     if length(rx) != length(ry)
-        throw(DimensionMismatch("length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
+        throw(DimensionMismatch(()->"length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
     end
     if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError(x, rx))
@@ -439,7 +439,7 @@ end
             A[i,j] = conjugate ? adjoint(A[j,i]) : transpose(A[j,i])
         end
     else
-        throw(ArgumentError("uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))
+        throw(ArgumentError(()->"uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))
     end
     A
 end
@@ -448,10 +448,10 @@ function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::
                alpha::Union{T, Bool} = true, beta::Union{T, Bool} = false) where T<:BlasFloat
     mA, nA = lapack_size(tA, A)
     if nA != length(x)
-        throw(DimensionMismatch("second dimension of A, $nA, does not match length of x, $(length(x))"))
+        throw(DimensionMismatch(()->"second dimension of A, $nA, does not match length of x, $(length(x))"))
     end
     if mA != length(y)
-        throw(DimensionMismatch("first dimension of A, $mA, does not match length of y, $(length(y))"))
+        throw(DimensionMismatch(()->"first dimension of A, $mA, does not match length of y, $(length(y))"))
     end
     if mA == 0
         return y
@@ -476,7 +476,7 @@ function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat
         tAt = 'T'
     end
     if nC != mA
-        throw(DimensionMismatch("output matrix has size: $(nC), but should have size $(mA)"))
+        throw(DimensionMismatch(()->"output matrix has size: $(nC), but should have size $(mA)"))
     end
     if mA == 0 || nA == 0 || iszero(_add.alpha)
         return _rmul_or_fill!(C, _add.beta)
@@ -505,7 +505,7 @@ function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA
         tAt = 'C'
     end
     if nC != mA
-        throw(DimensionMismatch("output matrix has size: $(nC), but should have size $(mA)"))
+        throw(DimensionMismatch(()->"output matrix has size: $(nC), but should have size $(mA)"))
     end
     if mA == 0 || nA == 0
         return _rmul_or_fill!(C, _add.beta)
@@ -542,7 +542,7 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar
     mB, nB = lapack_size(tB, B)
 
     if nA != mB
-        throw(DimensionMismatch("A has dimensions ($mA,$nA) but B has dimensions ($mB,$nB)"))
+        throw(DimensionMismatch(()->"A has dimensions ($mA,$nA) but B has dimensions ($mB,$nB)"))
     end
 
     if C === A || B === C
@@ -551,7 +551,7 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar
 
     if mA == 0 || nA == 0 || nB == 0 || iszero(_add.alpha)
         if size(C) != (mA, nB)
-            throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
+            throw(DimensionMismatch(()->"C has dimensions $(size(C)), should have ($mA,$nB)"))
         end
         return _rmul_or_fill!(C, _add.beta)
     end
@@ -606,10 +606,10 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
     mB = length(B)
     mA, nA = lapack_size(tA, A)
     if mB != nA
-        throw(DimensionMismatch("matrix A has dimensions ($mA,$nA), vector B has length $mB"))
+        throw(DimensionMismatch(()->"matrix A has dimensions ($mA,$nA), vector B has length $mB"))
     end
     if mA != length(C)
-        throw(DimensionMismatch("result C has length $(length(C)), needs length $mA"))
+        throw(DimensionMismatch(()->"result C has length $(length(C)), needs length $mA"))
     end
 
     Astride = size(A, 1)
@@ -703,10 +703,10 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     if mB != nA
-        throw(DimensionMismatch("matrix A has dimensions ($mA,$nA), matrix B has dimensions ($mB,$nB)"))
+        throw(DimensionMismatch(()->"matrix A has dimensions ($mA,$nA), matrix B has dimensions ($mB,$nB)"))
     end
     if size(C,1) != mA || size(C,2) != nB
-        throw(DimensionMismatch("result C has dimensions $(size(C)), needs ($mA,$nB)"))
+        throw(DimensionMismatch(()->"result C has dimensions $(size(C)), needs ($mA,$nB)"))
     end
     if isempty(A) || isempty(B)
         return C
@@ -879,12 +879,17 @@ function matmul2x2(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,
     matmul2x2!(similar(B, promote_op(matprod, T, S), 2, 2), tA, tB, A, B)
 end
 
+function check_sizes(A, B, C, expected)
+    sA = size(A); sB = size(B); sC = size(C)
+    if !(sA == sB == sC == expected)
+        throw(DimensionMismatch(()->"A has size $sA, B has size $sB, C has size $sC"))
+    end
+end
+
 function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
                     _add::MulAddMul = MulAddMul())
     require_one_based_indexing(C, A, B)
-    if !(size(A) == size(B) == size(C) == (2,2))
-        throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
-    end
+    check_sizes(A, B, C, (2,2))
     @inbounds begin
     if tA == 'T'
         # TODO making these lazy could improve perf
@@ -925,9 +930,7 @@ end
 function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
                     _add::MulAddMul = MulAddMul())
     require_one_based_indexing(C, A, B)
-    if !(size(A) == size(B) == size(C) == (3,3))
-        throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
-    end
+    check_sizes(A, B, C, (3,3))
     @inbounds begin
     if tA == 'T'
         # TODO making these lazy could improve perf

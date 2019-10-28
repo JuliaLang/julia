@@ -255,7 +255,7 @@ end
 struct InterruptException <: Exception end
 struct DomainError <: Exception
     val
-    msg::AbstractString
+    msg
     DomainError(@nospecialize(val)) = (@_noinline_meta; new(val, ""))
     DomainError(@nospecialize(val), @nospecialize(msg)) = (@_noinline_meta; new(val, msg))
 end
@@ -285,8 +285,9 @@ struct OverflowError <: Exception
 end
 
 struct ArgumentError <: Exception
-    msg::AbstractString
+    msg::Any
 end
+
 struct UndefKeywordError <: Exception
     var::Symbol
 end
