@@ -53,18 +53,18 @@ julia> A = SymTridiagonal(fill([1 2; 3 4], 3), fill([1 2; 3 4], 2));
 
 julia> A[1,1]
 2×2 Symmetric{Int64,Array{Int64,2}}:
-1  2
-2  4
+ 1  2
+ 2  4
 
 julia> A[1,2]
 2×2 Array{Int64,2}:
-1  2
-3  4
+ 1  2
+ 3  4
 
 julia> A[2,1]
 2×2 Array{Int64,2}:
-1  3
-2  4
+ 1  3
+ 2  4
 ```
 """
 SymTridiagonal(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{T}(dv, ev)
