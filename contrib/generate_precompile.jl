@@ -57,6 +57,7 @@ if Pkg !== nothing
 end
 
 function generate_precompile_statements()
+    rm(joinpath(@__DIR__, "precompile.jl"); force=true)
     start_time = time()
     debug_output = devnull # or stdout
 
@@ -177,6 +178,7 @@ function generate_precompile_statements()
             # comment out if debugging script
             @assert n_succeeded > 3500
         end
+        cp(precompile_file, joinpath(@__DIR__, "precompile.jl"))
 
         print(" $(length(statements)) generated in ")
         tot_time = time() - start_time

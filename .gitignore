@@ -11,6 +11,7 @@
 /julia-*
 /source-dist.tmp
 /source-dist.tmp1
+/contrib/precompile.jl
 
 *.exe
 *.dll

@@ -80,6 +80,7 @@ $$(build_private_libdir)/sys$1-o.a $$(build_private_libdir)/sys$1-bc.a : $$(buil
 		false; \
 	fi )
 	@mv $$@.tmp $$@
+	mv $$(call cygpath_w,$$(JULIAHOME)/contrib/precompile.jl) $(build_datarootdir)/julia/precompile.jl
 .SECONDARY: $$(build_private_libdir)/sys$1-o.a $(build_private_libdir)/sys$1-bc.a # request Make to keep these files around
 endef
 $(eval $(call sysimg_builder,,-O3,$(JULIA_EXECUTABLE_release)))
