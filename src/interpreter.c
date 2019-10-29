@@ -97,13 +97,6 @@ SECT_INTERP static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
     return 0;
 }
 
-SECT_INTERP static void check_can_assign_type(jl_binding_t *b, jl_value_t *rhs)
-{
-    if (b->constp && b->value != NULL && jl_typeof(b->value) != jl_typeof(rhs))
-        jl_errorf("invalid redefinition of constant %s",
-                  jl_symbol_name(b->name));
-}
-
 void jl_reinstantiate_inner_types(jl_datatype_t *t);
 
 SECT_INTERP void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
@@ -195,9 +188,6 @@ static void eval_typeassign(jl_expr_t *ex, interpreter_state *s)
         name = (jl_sym_t*)args[0];
     }
 
-    jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name, 1);
-    check_can_assign_type(b, w);
-
     if (ft) {
         dt->types = (jl_svec_t*)ft;
         jl_gc_wb(dt, ft);
@@ -221,6 +211,8 @@ static void eval_typeassign(jl_expr_t *ex, interpreter_state *s)
 
     if (jl_is_structtype(dt))
         jl_compute_field_offsets(dt);
+
+    jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name, 1);
 
     if (b->value == NULL || !equiv_type(dt, (jl_datatype_t*)jl_unwrap_unionall(b->value)))
         jl_checked_assignment(b, w);

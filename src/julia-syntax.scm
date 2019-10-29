@@ -866,7 +866,11 @@
                                (call (core svec) ,@(map quotify field-names))
                                ,mut ,min-initialized))
          (set_supertype ,name ,super)
-         (type_assign (outerref ,name) ,name (call (core svec) ,@field-types))))
+         (= (|.| ,name (inert types)) (call check_field_types (call (core svec) ,@field-types)))
+         (if (&& (isdefined (outerref ,name))
+                 (call equiv_type ,name (outerref ,name)))
+             (null)
+             (= (outerref ,name) ,name))))
        ;; "inner" constructors
        (scope-block
         (block
