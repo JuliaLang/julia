@@ -6,13 +6,12 @@
     DimensionMismatch([msg])
 
 The objects called do not have matching dimensionality. Optional argument `msg` is a
-descriptive error string or closure returning a string.
+descriptive error string.
 """
 struct DimensionMismatch <: Exception
-    msg::Any
+    msg::AbstractString
 end
-DimensionMismatch(str::String) = DimensionMismatch(()->str)
-DimensionMismatch() = DimensionMismatch(nothing)
+DimensionMismatch() = DimensionMismatch("")
 
 ## Type aliases for convenience ##
 """

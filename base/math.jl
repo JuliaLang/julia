@@ -30,11 +30,11 @@ using Core.Intrinsics: sqrt_llvm
 using .Base: IEEEFloat
 
 @noinline function throw_complex_domainerror(f::Symbol, x)
-    throw(DomainError(x, ()->string("$f will only return a complex result if called with a ",
+    throw(DomainError(x, string("$f will only return a complex result if called with a ",
                                 "complex argument. Try $f(Complex(x)).")))
 end
 @noinline function throw_exp_domainerror(x)
-    throw(DomainError(x, ()->string("Exponentiation yielding a complex result requires a ",
+    throw(DomainError(x, string("Exponentiation yielding a complex result requires a ",
                                 "complex argument.\nReplace x^y with (x+0im)^y, ",
                                 "Complex(x)^y, or similar.")))
 end

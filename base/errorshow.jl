@@ -104,7 +104,7 @@ function showerror(io::IO, ex::DomainError)
         print(io, "DomainError with ", ex.val)
     end
     if isdefined(ex, :msg)
-        print(io, ":\n", isa(ex.msg, AbstractString) ? ex.msg : ex.msg())
+        print(io, ":\n", ex.msg)
     end
     nothing
 end
@@ -139,7 +139,7 @@ showerror(io::IO, ex::KeyError) = (print(io, "KeyError: key ");
                                    show(io, ex.key);
                                    print(io, " not found"))
 showerror(io::IO, ex::InterruptException) = print(io, "InterruptException:")
-showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: ", isa(ex.msg, AbstractString) ? ex.msg : ex.msg())
+showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: ", ex.msg)
 showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: ", ex.msg)
 showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: ", ex.msg)
 
@@ -161,14 +161,6 @@ function showerror(io::IO, ex::InexactError)
     print(io, "InexactError: ", ex.func, '(')
     nameof(ex.T) === ex.func || print(io, ex.T, ", ")
     print(io, ex.val, ')')
-end
-
-function showerror(io::IO, ex::DimensionMismatch)
-    if ex.msg === nothing
-        print(io, "DimensionMismatch()")
-    else
-        print(io, "DimensionMismatch: ", ex.format())
-    end
 end
 
 typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
