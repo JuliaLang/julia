@@ -156,6 +156,7 @@ julia> @time begin
 """
 macro time(ex)
     quote
+        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
         local stats = gc_num()
         local elapsedtime = time_ns()
         local val = $(esc(ex))
@@ -189,6 +190,7 @@ malloc() calls:    1
 """
 macro timev(ex)
     quote
+        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
         local stats = gc_num()
         local elapsedtime = time_ns()
         local val = $(esc(ex))
@@ -214,9 +216,10 @@ julia> @elapsed sleep(0.3)
 """
 macro elapsed(ex)
     quote
+        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
         local t0 = time_ns()
-        local val = $(esc(ex))
-        (time_ns()-t0)/1e9
+        $(esc(ex))
+        (time_ns() - t0) / 1e9
     end
 end
 
@@ -280,6 +283,7 @@ julia> memallocs.total_time
 """
 macro timed(ex)
     quote
+        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
         local stats = gc_num()
         local elapsedtime = time_ns()
         local val = $(esc(ex))
