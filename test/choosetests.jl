@@ -60,6 +60,7 @@ function choosetests(choices = [])
     tests = []
     skip_tests = []
     exit_on_error = false
+    use_revise = false
     seed = rand(RandomDevice(), UInt128)
 
     for (i, t) in enumerate(choices)
@@ -68,6 +69,8 @@ function choosetests(choices = [])
             break
         elseif t == "--exit-on-error"
             exit_on_error = true
+        elseif t == "--revise"
+            use_revise = true
         elseif startswith(t, "--seed=")
             seed = parse(UInt128, t[8:end])
         else
@@ -183,5 +186,5 @@ function choosetests(choices = [])
     # Filter out tests from the test groups in the stdlibs
     filter!(!in(skip_tests), tests)
 
-    tests, net_on, exit_on_error, seed
+    tests, net_on, exit_on_error, use_revise, seed
 end

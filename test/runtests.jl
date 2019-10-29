@@ -9,8 +9,12 @@ using Printf: @sprintf
 include("choosetests.jl")
 include("testenv.jl")
 
-tests, net_on, exit_on_error, seed = choosetests(ARGS)
+tests, net_on, exit_on_error, use_revise, seed = choosetests(ARGS)
 tests = unique(tests)
+
+if use_revise
+    using Revise
+end
 
 const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
     parse(Int, ENV["JULIA_TEST_MAXRSS_MB"]) * 2^20
@@ -70,6 +74,14 @@ cd(@__DIR__) do
     skipped = 0
 
     @everywhere include("testdefs.jl")
+
+    if use_revise
+        @everywhere begin
+            Revise.track(Core.Compiler)
+            Revise.track(Base)
+            Revise.revise()
+        end
+    end
 
     #pretty print the information about gc and mem usage
     testgroupheader = "Test"
