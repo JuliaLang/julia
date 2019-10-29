@@ -60,9 +60,6 @@ end
 # total time spend in garbage collection, in nanoseconds
 gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
 
-# total number of bytes allocated so far
-gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
-
 # print elapsed time, return expression value
 const _mem_units = ["byte", "KiB", "MiB", "GiB", "TiB", "PiB"]
 const _cnt_units = ["", " k", " M", " G", " T", " P"]
@@ -223,21 +220,14 @@ macro elapsed(ex)
     end
 end
 
-# measure bytes allocated without *most* contamination from compilation
-# Note: This reports a different value from the @time macros, because
-# it wraps the call in a function, however, this means that things
-# like:  @allocated y = foo()
-# will not work correctly, because it will set y in the context of
-# the local function made by the macro, not the current function
+# total number of bytes allocated so far
+gc_bytes(b::Ref{Int64}) = ccall(:jl_gc_get_total_bytes, Cvoid, (Ptr{Int64},), b)
+
 """
     @allocated
 
 A macro to evaluate an expression, discarding the resulting value, instead returning the
-total number of bytes allocated during evaluation of the expression. Note: the expression is
-evaluated inside a local function, instead of the current context, in order to eliminate the
-effects of compilation, however, there still may be some allocations due to JIT compilation.
-This also makes the results inconsistent with the `@time` macros, which do not try to adjust
-for the effects of compilation.
+total number of bytes allocated during evaluation of the expression.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@elapsed`](@ref).
@@ -249,15 +239,13 @@ julia> @allocated rand(10^6)
 """
 macro allocated(ex)
     quote
-        let
-            local f
-            function f()
-                b0 = gc_bytes()
-                $(esc(ex))
-                gc_bytes() - b0
-            end
-            f()
-        end
+        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
+        local b0 = Ref{Int64}(0)
+        local b1 = Ref{Int64}(0)
+        gc_bytes(b0)
+        $(esc(ex))
+        gc_bytes(b1)
+        b1[] - b0[]
     end
 end
 

@@ -2625,23 +2625,26 @@ JL_DLLEXPORT int jl_gc_enable(int on)
     }
     return prev;
 }
+
 JL_DLLEXPORT int jl_gc_is_enabled(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     return !ptls->disable_gc;
 }
 
-JL_DLLEXPORT int64_t jl_gc_total_bytes(void)
+JL_DLLEXPORT void jl_gc_get_total_bytes(int64_t *bytes)
 {
     jl_gc_num_t num = gc_num;
     combine_thread_gc_counts(&num);
     // Sync this logic with `base/util.jl:GC_Diff`
-    return (num.total_allocd + num.deferred_alloc + num.allocd);
+    *bytes = (num.total_allocd + num.deferred_alloc + num.allocd);
 }
+
 JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void)
 {
     return gc_num.total_time;
 }
+
 JL_DLLEXPORT jl_gc_num_t jl_gc_num(void)
 {
     jl_gc_num_t num = gc_num;
@@ -2649,14 +2652,20 @@ JL_DLLEXPORT jl_gc_num_t jl_gc_num(void)
     return num;
 }
 
+// TODO: these were supposed to be thread local
 JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void)
 {
     int64_t oldtb = last_gc_total_bytes;
-    int64_t newtb = jl_gc_total_bytes();
+    int64_t newtb;
+    jl_gc_get_total_bytes(&newtb);
     last_gc_total_bytes = newtb;
     return newtb - oldtb;
 }
-void jl_gc_sync_total_bytes(void) {last_gc_total_bytes = jl_gc_total_bytes();}
+
+void jl_gc_sync_total_bytes(void)
+{
+    jl_gc_get_total_bytes(&last_gc_total_bytes);
+}
 
 static void jl_gc_premark(jl_ptls_t ptls2)
 {
