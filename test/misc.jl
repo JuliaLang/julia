@@ -206,6 +206,11 @@ end
 @test summarysize(Vector{Nothing}(undef, 16)) == summarysize(Vector{Nothing}(undef, 32))
 @test summarysize(S32881()) == sizeof(Int)
 
+# issue #33675
+let vec = vcat(missing, ones(100000))
+    @test length(unique(summarysize(vec) for i = 1:20)) == 1
+end
+
 # issue #13021
 let ex = try
     Main.x13021 = 0
