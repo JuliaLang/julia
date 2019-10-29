@@ -330,7 +330,7 @@ function dot(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T}
     require_one_based_indexing(DX, DY)
     n = length(DX)
     if n != length(DY)
-        throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
+        throw(DimensionMismatch(lazy"dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
     GC.@preserve DX DY dot(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
 end
@@ -338,7 +338,7 @@ function dotc(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T
     require_one_based_indexing(DX, DY)
     n = length(DX)
     if n != length(DY)
-        throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
+        throw(DimensionMismatch(lazy"dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
     GC.@preserve DX DY dotc(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
 end
@@ -346,7 +346,7 @@ function dotu(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T
     require_one_based_indexing(DX, DY)
     n = length(DX)
     if n != length(DY)
-        throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
+        throw(DimensionMismatch(lazy"dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
     GC.@preserve DX DY dotu(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
 end
@@ -461,7 +461,7 @@ for (fname, elty) in ((:daxpy_,:Float64),
 end
 function axpy!(alpha::Number, x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where T<:BlasFloat
     if length(x) != length(y)
-        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+        throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
     end
     GC.@preserve x y axpy!(length(x), convert(T,alpha), pointer(x), stride(x, 1), pointer(y), stride(y, 1))
     y
@@ -473,10 +473,10 @@ function axpy!(alpha::Number, x::Array{T}, rx::Union{UnitRange{Ti},AbstractRange
         throw(DimensionMismatch("ranges of differing lengths"))
     end
     if minimum(rx) < 1 || maximum(rx) > length(x)
-        throw(ArgumentError("range out of bounds for x, of length $(length(x))"))
+        throw(lazy"range out of bounds for x, of length $(length(x))")
     end
     if minimum(ry) < 1 || maximum(ry) > length(y)
-        throw(ArgumentError("range out of bounds for y, of length $(length(y))"))
+        throw(lazy"range out of bounds for y, of length $(length(y))")
     end
     GC.@preserve x y axpy!(length(rx), convert(T, alpha), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
     y
@@ -526,7 +526,7 @@ end
 function axpby!(alpha::Number, x::Union{DenseArray{T},AbstractVector{T}}, beta::Number, y::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasFloat
     require_one_based_indexing(x, y)
     if length(x) != length(y)
-        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+        throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
     end
     GC.@preserve x y axpby!(length(x), convert(T,alpha), pointer(x), stride(x, 1), convert(T,beta), pointer(y), stride(y, 1))
     y
@@ -577,11 +577,11 @@ for (fname, elty) in ((:dgemv_,:Float64),
             require_one_based_indexing(A, X, Y)
             m,n = size(A,1),size(A,2)
             if trans == 'N' && (length(X) != n || length(Y) != m)
-                throw(DimensionMismatch("A has dimensions $(size(A)), X has length $(length(X)) and Y has length $(length(Y))"))
+                throw(DimensionMismatch(lazy"A has dimensions $(size(A)), X has length $(length(X)) and Y has length $(length(Y))"))
             elseif trans == 'C' && (length(X) != m || length(Y) != n)
-                throw(DimensionMismatch("the adjoint of A has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
+                throw(DimensionMismatch(lazy"the adjoint of A has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
             elseif trans == 'T' && (length(X) != m || length(Y) != n)
-                throw(DimensionMismatch("the transpose of A has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
+                throw(DimensionMismatch(lazy"the transpose of A has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
             end
             chkstride1(A)
             ccall((@blasfunc($fname), libblas), Cvoid,
@@ -715,13 +715,13 @@ for (fname, elty, lib) in ((:dsymv_,:Float64,libblas),
             require_one_based_indexing(A, x, y)
             m, n = size(A)
             if m != n
-                throw(DimensionMismatch("matrix A is $m by $n but must be square"))
+                throw(DimensionMismatch(lazy"matrix A is $m by $n but must be square"))
             end
             if n != length(x)
-                throw(DimensionMismatch("A has size $(size(A)), and x has length $(length(x))"))
+                throw(DimensionMismatch(lazy"A has size $(size(A)), and x has length $(length(x))"))
             end
             if m != length(y)
-                throw(DimensionMismatch("A has size $(size(A)), and y has length $(length(y))"))
+                throw(DimensionMismatch(lazy"A has size $(size(A)), and y has length $(length(y))"))
             end
             chkstride1(A)
             ccall((@blasfunc($fname), $lib), Cvoid,
@@ -767,13 +767,13 @@ for (fname, elty) in ((:zhemv_,:ComplexF64),
             require_one_based_indexing(A, x, y)
             m, n = size(A)
             if m != n
-                throw(DimensionMismatch("matrix A is $m by $n but must be square"))
+                throw(DimensionMismatch(lazy"matrix A is $m by $n but must be square"))
             end
             if n != length(x)
-                throw(DimensionMismatch("A has size $(size(A)), and x has length $(length(x))"))
+                throw(DimensionMismatch(lazy"A has size $(size(A)), and x has length $(length(x))"))
             end
             if m != length(y)
-                throw(DimensionMismatch("A has size $(size(A)), and y has length $(length(y))"))
+                throw(DimensionMismatch(lazy"A has size $(size(A)), and y has length $(length(y))"))
             end
             chkstride1(A)
             lda = max(1, stride(A, 2))
@@ -932,7 +932,7 @@ for (fname, elty) in ((:dtrmv_,:Float64),
             require_one_based_indexing(A, x)
             n = checksquare(A)
             if n != length(x)
-                throw(DimensionMismatch("A has size ($n,$n), x has length $(length(x))"))
+                throw(DimensionMismatch(lazy"A has size ($n,$n), x has length $(length(x))"))
             end
             chkstride1(A)
             ccall((@blasfunc($fname), libblas), Cvoid,
@@ -986,7 +986,7 @@ for (fname, elty) in ((:dtrsv_,:Float64),
             require_one_based_indexing(A, x)
             n = checksquare(A)
             if n != length(x)
-                throw(DimensionMismatch("size of A is $n != length(x) = $(length(x))"))
+                throw(DimensionMismatch(lazy"size of A is $n != length(x) = $(length(x))"))
             end
             chkstride1(A)
             ccall((@blasfunc($fname), libblas), Cvoid,
@@ -1020,7 +1020,7 @@ for (fname, elty) in ((:dger_,:Float64),
             require_one_based_indexing(A, x, y)
             m, n = size(A)
             if m != length(x) || n != length(y)
-                throw(DimensionMismatch("A has size ($m,$n), x has length $(length(x)), y has length $(length(y))"))
+                throw(DimensionMismatch(lazy"A has size ($m,$n), x has length $(length(x)), y has length $(length(y))"))
             end
             ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{BlasInt}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
@@ -1053,7 +1053,7 @@ for (fname, elty, lib) in ((:dsyr_,:Float64,libblas),
             require_one_based_indexing(A, x)
             n = checksquare(A)
             if length(x) != n
-                throw(DimensionMismatch("A has size ($n,$n), x has length $(length(x))"))
+                throw(DimensionMismatch(lazy"A has size ($n,$n), x has length $(length(x))"))
             end
             ccall((@blasfunc($fname), $lib), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
@@ -1083,7 +1083,7 @@ for (fname, elty, relty) in ((:zher_,:ComplexF64, :Float64),
             require_one_based_indexing(A, x)
             n = checksquare(A)
             if length(x) != n
-                throw(DimensionMismatch("A has size ($n,$n), x has length $(length(x))"))
+                throw(DimensionMismatch(lazy"A has size ($n,$n), x has length $(length(x))"))
             end
             ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{$relty}, Ptr{$elty},
@@ -1133,7 +1133,7 @@ for (gemm, elty) in
             kb = size(B, transB == 'N' ? 1 : 2)
             n = size(B, transB == 'N' ? 2 : 1)
             if ka != kb || m != size(C,1) || n != size(C,2)
-                throw(DimensionMismatch("A has size ($m,$ka), B has size ($kb,$n), C has size $(size(C))"))
+                throw(DimensionMismatch(lazy"A has size ($m,$ka), B has size ($kb,$n), C has size $(size(C))"))
             end
             chkstride1(A)
             chkstride1(B)
@@ -1193,10 +1193,10 @@ for (mfname, elty) in ((:dsymm_,:Float64),
             m, n = size(C)
             j = checksquare(A)
             if j != (side == 'L' ? m : n)
-                throw(DimensionMismatch("A has size $(size(A)), C has size ($m,$n)"))
+                throw(DimensionMismatch(lazy"A has size $(size(A)), C has size ($m,$n)"))
             end
             if size(B,2) != n
-                throw(DimensionMismatch("B has second dimension $(size(B,2)) but needs to match second dimension of C, $n"))
+                throw(DimensionMismatch(lazy"B has second dimension $(size(B,2)) but needs to match second dimension of C, $n"))
             end
             chkstride1(A)
             chkstride1(B)
@@ -1264,10 +1264,10 @@ for (mfname, elty) in ((:zhemm_,:ComplexF64),
             m, n = size(C)
             j = checksquare(A)
             if j != (side == 'L' ? m : n)
-                throw(DimensionMismatch("A has size $(size(A)), C has size ($m,$n)"))
+                throw(DimensionMismatch(lazy"A has size $(size(A)), C has size ($m,$n)"))
             end
             if size(B,2) != n
-                throw(DimensionMismatch("B has second dimension $(size(B,2)) but needs to match second dimension of C, $n"))
+                throw(DimensionMismatch(lazy"B has second dimension $(size(B,2)) but needs to match second dimension of C, $n"))
             end
             chkstride1(A)
             chkstride1(B)
@@ -1329,7 +1329,7 @@ for (fname, elty) in ((:dsyrk_,:Float64),
            require_one_based_indexing(A, C)
            n = checksquare(C)
            nn = size(A, trans == 'N' ? 1 : 2)
-           if nn != n throw(DimensionMismatch("C has size ($n,$n), corresponding dimension of A is $nn")) end
+           if nn != n throw(DimensionMismatch(lazy"C has size ($n,$n), corresponding dimension of A is $nn")) end
            k  = size(A, trans == 'N' ? 2 : 1)
            chkstride1(A)
            chkstride1(C)
@@ -1388,7 +1388,7 @@ for (fname, elty, relty) in ((:zherk_, :ComplexF64, :Float64),
            n = checksquare(C)
            nn = size(A, trans == 'N' ? 1 : 2)
            if nn != n
-               throw(DimensionMismatch("the matrix to update has dimension $n but the implied dimension of the update is $(size(A, trans == 'N' ? 1 : 2))"))
+               throw(DimensionMismatch(lazy"the matrix to update has dimension $n but the implied dimension of the update is $(size(A, trans == 'N' ? 1 : 2))"))
            end
            chkstride1(A)
            chkstride1(C)
@@ -1431,7 +1431,7 @@ for (fname, elty) in ((:dsyr2k_,:Float64),
             require_one_based_indexing(A, B, C)
             n = checksquare(C)
             nn = size(A, trans == 'N' ? 1 : 2)
-            if nn != n throw(DimensionMismatch("C has size ($n,$n), corresponding dimension of A is $nn")) end
+            if nn != n throw(DimensionMismatch(lazy"C has size ($n,$n), corresponding dimension of A is $nn")) end
             k  = size(A, trans == 'N' ? 2 : 1)
             chkstride1(A)
             chkstride1(B)
@@ -1472,7 +1472,7 @@ for (fname, elty1, elty2) in ((:zher2k_,:ComplexF64,:Float64), (:cher2k_,:Comple
            require_one_based_indexing(A, B, C)
            n = checksquare(C)
            nn = size(A, trans == 'N' ? 1 : 2)
-           if nn != n throw(DimensionMismatch("C has size ($n,$n), corresponding dimension of A is $nn")) end
+           if nn != n throw(DimensionMismatch(lazy"C has size ($n,$n), corresponding dimension of A is $nn")) end
            chkstride1(A)
            chkstride1(B)
            chkstride1(C)
@@ -1561,7 +1561,7 @@ for (mmname, smname, elty) in
             m, n = size(B)
             nA = checksquare(A)
             if nA != (side == 'L' ? m : n)
-                throw(DimensionMismatch("size of A, $(size(A)), doesn't match $side size of B with dims, $(size(B))"))
+                throw(DimensionMismatch(lazy"size of A, $(size(A)), doesn't match $side size of B with dims, $(size(B))"))
             end
             chkstride1(A)
             chkstride1(B)
@@ -1589,7 +1589,7 @@ for (mmname, smname, elty) in
             m, n = size(B)
             k = checksquare(A)
             if k != (side == 'L' ? m : n)
-                throw(DimensionMismatch("size of A is ($k,$k), size of B is ($m,$n), side is $side, and transa='$transa'"))
+                throw(DimensionMismatch(lazy"size of A is ($k,$k), size of B is ($m,$n), side is $side, and transa='$transa'"))
             end
             chkstride1(A)
             chkstride1(B)
@@ -1613,13 +1613,13 @@ end # module
 function copyto!(dest::Array{T}, rdest::Union{UnitRange{Ti},AbstractRange{Ti}},
                  src::Array{T}, rsrc::Union{UnitRange{Ti},AbstractRange{Ti}}) where {T<:BlasFloat,Ti<:Integer}
     if minimum(rdest) < 1 || maximum(rdest) > length(dest)
-        throw(ArgumentError("range out of bounds for dest, of length $(length(dest))"))
+        throw(lazy"range out of bounds for dest, of length $(length(dest))")
     end
     if minimum(rsrc) < 1 || maximum(rsrc) > length(src)
-        throw(ArgumentError("range out of bounds for src, of length $(length(src))"))
+        throw(lazy"range out of bounds for src, of length $(length(src))")
     end
     if length(rdest) != length(rsrc)
-        throw(DimensionMismatch("ranges must be of the same length"))
+        throw(DimensionMismatch(lazy"ranges must be of the same length"))
     end
     GC.@preserve src dest BLAS.blascopy!(length(rsrc),
                                               pointer(src) + (first(rsrc) - 1) * sizeof(T),

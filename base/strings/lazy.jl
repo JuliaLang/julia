@@ -21,14 +21,14 @@ macro lazy_str(string)
         lastidx < idx && push!(parts, string[lastidx:idx-1])
         idx += 1
         expr, idx = Meta.parse(string, idx; greedy=false, raise=false)
-        push!(parts, expr)
+        push!(parts, esc(expr))
         lastidx = idx
     end
     lastidx <= lastindex(string) && push!(parts, string[lastidx:end])
     :(LazyString($(parts...)))
 end
 
-function print(io::IO, s::LazyString)
+function show(io::IO, s::LazyString)
     for part in s.parts
         print(io, part)
     end

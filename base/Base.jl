@@ -94,6 +94,9 @@ include("refpointer.jl")
 include("checked.jl")
 using .Checked
 
+# Lazy strings
+include("strings/lazy.jl")
+
 # array structures
 include("indices.jl")
 include("array.jl")
@@ -154,11 +157,11 @@ include("dict.jl")
 include("abstractset.jl")
 include("set.jl")
 
+# Strings
 include("char.jl")
 include("strings/basic.jl")
 include("strings/string.jl")
 include("strings/substring.jl")
-include("strings/lazy.jl")
 
 # For OS specific stuff
 include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
