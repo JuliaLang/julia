@@ -510,6 +510,7 @@ $(eval $(call LLVM_PATCH,llvm8-WASM-addrspaces)) # WebAssembly
 $(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm7-revert-D44485))
+$(eval $(call LLVM_PATCH,llvm8-AMDGPU-addrspaces)) # AMDGPU
 endif # LLVM_VER 9.0
 
 
