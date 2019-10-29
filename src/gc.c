@@ -878,7 +878,7 @@ static void sweep_weak_refs(void)
 // big value list
 
 // Size includes the tag and the tag is not cleared!!
-JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz)
+JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz, void *ty)
 {
     maybe_collect(ptls);
     size_t offs = offsetof(bigval_t, header);
@@ -893,8 +893,8 @@ JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz)
         jl_throw(jl_memory_exception);
     gc_invoke_callbacks(jl_gc_cb_notify_external_alloc_t,
         gc_cblist_notify_external_alloc, (v, allocsz));
-    jl_gc_count_allocd(jl_valueof(&v->header), allocsz, JL_MEMPROF_TAG_DOMAIN_CPU |
-                                                        JL_MEMPROF_TAG_ALLOC_BIGALLOC);
+    jl_gc_count_allocd(jl_valueof(&v->header), allocsz, ty,
+                                  JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_BIGALLOC);
     ptls->gc_num.bigalloc++;
 #ifdef MEMDEBUG
     memset(v, 0xee, allocsz);
@@ -986,13 +986,13 @@ void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a) JL_NOTSAFEPOINT
     ptls->heap.mallocarrays = ma;
 }
 
-void jl_gc_count_allocd(void * addr, size_t sz, uint16_t tag) JL_NOTSAFEPOINT
+void jl_gc_count_allocd(void * addr, size_t sz, void *ty, uint16_t tag) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     ptls->gc_num.allocd += sz;
 
     if (__unlikely(jl_memprofile_is_running())) {
-        jl_memprofile_track_alloc(addr, tag, sz);
+        jl_memprofile_track_alloc(addr, tag, sz, ty);
     }
 }
 
@@ -1006,7 +1006,8 @@ void jl_gc_count_freed(void * addr, size_t sz, uint16_t tag) JL_NOTSAFEPOINT
     }
 }
 
-void jl_gc_count_reallocd(void * oldaddr, size_t oldsz, void * newaddr, size_t newsz, uint16_t tag) JL_NOTSAFEPOINT
+void jl_gc_count_reallocd(void * oldaddr, size_t oldsz, void * newaddr, size_t newsz,
+                          void *newty, uint16_t tag) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (oldsz < newsz) {
@@ -1022,7 +1023,7 @@ void jl_gc_count_reallocd(void * oldaddr, size_t oldsz, void * newaddr, size_t n
     // the two values when realloc'ing.
     if (__unlikely(jl_memprofile_is_running())) {
         jl_memprofile_track_dealloc(oldaddr, tag);
-        jl_memprofile_track_alloc(newaddr, tag, newsz);
+        jl_memprofile_track_alloc(newaddr, tag, newsz, newty);
     }
 }
 
@@ -1165,7 +1166,7 @@ static NOINLINE jl_taggedvalue_t *add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
 
 // Size includes the tag and the tag is not cleared!!
 JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
-                                          int osize)
+                                          int osize, void *ty)
 {
     // Use the pool offset instead of the pool address as the argument
     // to workaround a llvm bug.
@@ -1173,7 +1174,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
     jl_gc_pool_t *p = (jl_gc_pool_t*)((char*)ptls + pool_offset);
     assert(ptls->gc_state == 0);
 #ifdef MEMDEBUG
-    return jl_gc_big_alloc(ptls, osize);
+    return jl_gc_big_alloc(ptls, osize, ty);
 #endif
     maybe_collect(ptls);
     ptls->gc_num.poolalloc++;
@@ -1190,7 +1191,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
             pg->nfree = 0;
             pg->has_young = 1;
         }
-        jl_gc_count_allocd(jl_valueof(v), osize, JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_POOLALLOC);
+        jl_gc_count_allocd(jl_valueof(v), osize, ty, JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_POOLALLOC);
         return jl_valueof(v);
     }
     // if the freelist is empty we reuse empty but not freed pages
@@ -1215,7 +1216,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
         next = (jl_taggedvalue_t*)((char*)v + osize);
     }
     p->newpages = next;
-    jl_gc_count_allocd(jl_valueof(v), osize, JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_POOLALLOC);
+    jl_gc_count_allocd(jl_valueof(v), osize, ty, JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_POOLALLOC);
     return jl_valueof(v);
 }
 
@@ -3172,7 +3173,7 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
         maybe_collect(ptls);
     void *b = malloc(sz);
     if (ptls && ptls->world_age) {
-        jl_gc_count_allocd(b, sz, JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_STDALLOC);
+        jl_gc_count_allocd(b, sz, NULL, JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_STDALLOC);
         ptls->gc_num.malloc++;
     }
     return b;
@@ -3185,7 +3186,7 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
         maybe_collect(ptls);
     void *b = calloc(nm, sz);
     if (ptls && ptls->world_age) {
-        jl_gc_count_allocd(b, nm*sz, JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_STDALLOC);
+        jl_gc_count_allocd(b, nm*sz, NULL, JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_STDALLOC);
         ptls->gc_num.malloc++;
     }
     return b;
@@ -3208,7 +3209,7 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
         maybe_collect(ptls);
     void *b = realloc(p, sz);
     if (ptls && ptls->world_age) {
-        jl_gc_count_reallocd(p, old, b, sz, JL_MEMPROF_TAG_DOMAIN_CPU);
+        jl_gc_count_reallocd(p, old, b, sz, NULL, JL_MEMPROF_TAG_DOMAIN_CPU);
         ptls->gc_num.realloc++;
     }
     return b;
@@ -3280,7 +3281,7 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
     void *b = malloc_cache_align(allocsz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
-    jl_gc_count_allocd(b, allocsz, JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_STDALLOC);
+    jl_gc_count_allocd(b, allocsz, NULL, JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_STDALLOC);
     ptls->gc_num.malloc++;
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
@@ -3319,7 +3320,7 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
         live_bytes += allocsz - oldsz;
     }
     else
-        jl_gc_count_reallocd(d, oldsz, b, allocsz, JL_MEMPROF_TAG_DOMAIN_CPU);
+        jl_gc_count_reallocd(d, oldsz, b, allocsz, NULL, JL_MEMPROF_TAG_DOMAIN_CPU);
     ptls->gc_num.realloc++;
 
 #ifdef _OS_WINDOWS_

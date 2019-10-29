@@ -337,9 +337,8 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
     if (own_buffer) {
         a->flags.how = 2;
         jl_gc_track_malloced_array(ptls, a);
-        jl_gc_count_allocd(a, nel*elsz + (elsz == 1 ? 1 : 0),
+        jl_gc_count_allocd(a, nel*elsz + (elsz == 1 ? 1 : 0), atype,
                            JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_STDALLOC);
-        jl_memprofile_set_typeof(a, atype);
     }
     else {
         a->flags.how = 0;
@@ -406,9 +405,8 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
     if (own_buffer) {
         a->flags.how = 2;
         jl_gc_track_malloced_array(ptls, a);
-        jl_gc_count_allocd(a, nel*elsz + (elsz == 1 ? 1 : 0),
+        jl_gc_count_allocd(a, nel*elsz + (elsz == 1 ? 1 : 0), atype,
                            JL_MEMPROF_TAG_DOMAIN_CPU | JL_MEMPROF_TAG_ALLOC_STDALLOC);
-        jl_memprofile_set_typeof(a, atype);
     }
     else {
         a->flags.how = 0;

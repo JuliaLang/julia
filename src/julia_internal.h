@@ -135,8 +135,8 @@ JL_DLLEXPORT extern int jl_lineno;
 JL_DLLEXPORT extern const char *jl_filename;
 
 JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
-                                          int osize);
-JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t allocsz);
+                                          int osize, void *ty);
+JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t allocsz, void *ty);
 int jl_gc_classify_pools(size_t sz, int *osize);
 extern jl_mutex_t gc_perm_lock;
 void *jl_gc_perm_alloc_nolock(size_t sz, int zero,
@@ -252,7 +252,7 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass(unsigned sz)
 #define JL_MEMPROF_TAG_DEALLOC              0x8000
 
 // Necessary memory profiler prototypes
-JL_DLLEXPORT void jl_memprofile_track_alloc(void *v, uint16_t tag, size_t allocsz) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_memprofile_track_alloc(void *v, uint16_t tag, size_t allocsz, void *ty) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_memprofile_track_dealloc(void *v, uint16_t tag) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_memprofile_is_running(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_memprofile_set_typeof(void * v, void * ty) JL_NOTSAFEPOINT;
@@ -275,12 +275,12 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
         int pool_id = jl_gc_szclass(allocsz);
         jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
         int osize = jl_gc_sizeclasses[pool_id];
-        v = jl_gc_pool_alloc(ptls, (char*)p - (char*)ptls, osize);
+        v = jl_gc_pool_alloc(ptls, (char*)p - (char*)ptls, osize, ty);
     }
     else {
         if (allocsz < sz) // overflow in adding offs, size was "negative"
             jl_throw(jl_memory_exception);
-        v = jl_gc_big_alloc(ptls, allocsz);
+        v = jl_gc_big_alloc(ptls, allocsz, ty);
     }
     jl_set_typeof(v, ty);
     jl_memprofile_set_typeof(v, ty);
@@ -348,9 +348,10 @@ JL_DLLEXPORT void JL_NORETURN jl_throw_out_of_memory_error(void);
 JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void);
 void jl_gc_sync_total_bytes(void);
 void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a) JL_NOTSAFEPOINT;
-void jl_gc_count_allocd(void * addr, size_t sz, uint16_t tag) JL_NOTSAFEPOINT;
+void jl_gc_count_allocd(void * addr, size_t sz, void *ty, uint16_t tag) JL_NOTSAFEPOINT;
 void jl_gc_count_freed(void * addr, size_t sz, uint16_t tag) JL_NOTSAFEPOINT;
-void jl_gc_count_reallocd(void * oldaddr, size_t oldsz, void * newaddr, size_t newsz, uint16_t tag) JL_NOTSAFEPOINT;
+void jl_gc_count_reallocd(void * oldaddr, size_t oldsz, void * newaddr, size_t newsz,
+                          void *newty, uint16_t tag) JL_NOTSAFEPOINT;
 void jl_gc_run_all_finalizers(jl_ptls_t ptls);
 
 void gc_queue_binding(jl_binding_t *bnd) JL_NOTSAFEPOINT;

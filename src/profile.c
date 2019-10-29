@@ -143,7 +143,7 @@ JL_DLLEXPORT jl_array_t * jl_memprofile_find_malloc_array(void * adata)
     return NULL;
 }
 
-JL_DLLEXPORT void jl_memprofile_track_alloc(void *v, uint16_t tag, size_t allocsz) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_memprofile_track_alloc(void *v, uint16_t tag, size_t allocsz, void *ty) JL_NOTSAFEPOINT
 {
     // Filter out this call with our tag filter
     if ((tag & memprof_tag_filter) != tag)
@@ -171,9 +171,8 @@ JL_DLLEXPORT void jl_memprofile_track_alloc(void *v, uint16_t tag, size_t allocs
     jl_bt_element_t *bt_entry = (jl_bt_element_t*) bt_data_prof + bt_size_cur + bt_size_step;
     bt_entry[0].uintptr = JL_BT_NON_PTR_ENTRY;
     bt_entry[1].uintptr = entry_tags;
-    // The location of the type information for this chunk of memory (tracked value).
-    // Initially set to nothing, populated later by `jl_memprofile_set_typeof()`
-    bt_entry[2].jlvalue = (jl_value_t*)jl_nothing;
+    // The location of the type information for this chunk of memory (tracked value)
+    bt_entry[2].jlvalue = (jl_value_t*)(ty ? ty : jl_nothing);
     // The location of the data in memory, used to match allocations with deallocations.
     bt_entry[3].uintptr = (uintptr_t) v;
     // The time at which this happened
@@ -207,5 +206,5 @@ JL_DLLEXPORT void jl_memprofile_set_typeof(void * v, void * ty) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT void jl_memprofile_track_dealloc(void *v, uint16_t tag) JL_NOTSAFEPOINT
 {
-    jl_memprofile_track_alloc(v, tag | JL_MEMPROF_TAG_DEALLOC, 0);
+    jl_memprofile_track_alloc(v, tag | JL_MEMPROF_TAG_DEALLOC, 0, NULL);
 }
