@@ -158,6 +158,7 @@ include("char.jl")
 include("strings/basic.jl")
 include("strings/string.jl")
 include("strings/substring.jl")
+include("strings/lazy.jl")
 
 # For OS specific stuff
 include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
