@@ -79,7 +79,7 @@ function instanceof_tfunc(@nospecialize(t))
         t′ = unwrap_unionall(t)
         t′′, isexact = instanceof_tfunc(t′)
         tr = rewrap_unionall(t′′, t)
-        if t′′ isa DataType && !has_free_typevars(tr)
+        if t′′ isa DataType && !has_free_typevars(tr) && t′′.name !== NamedTuple.body.body.name
             # a real instance must be within the declared bounds of the type,
             # so we can intersect with the original wrapper.
             tr = typeintersect(tr, t′′.name.wrapper)

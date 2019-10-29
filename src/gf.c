@@ -167,7 +167,7 @@ jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_a
     JL_GC_POP();
     return dt;
 }
-
+    //#define TRACE_INFERENCE
 // run type inference on lambda "mi" for given argument types.
 // returns the inferred source, and may cache the result in mi
 // if successful, also updates the mi argument to describe the validity of this src
@@ -205,6 +205,7 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
     ptls->world_age = jl_typeinf_world;
     mi->inInference = 1;
     in_inference++;
+    //uint64_t t0 = jl_hrtime();
     JL_TRY {
         src = (jl_code_info_t*)jl_apply(fargs, 3);
     }
@@ -215,6 +216,7 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
         jlbacktrace(); // written to STDERR_FILENO
         src = NULL;
     }
+    //printf("%.3f\n", (jl_hrtime() - t0)/1.0e9);
     ptls->world_age = last_age;
     in_inference--;
     mi->inInference = 0;
@@ -1259,7 +1261,20 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
     // ok: record that this method definition is being partially replaced
     // (either with a real definition, or an ambiguity error)
     if (shadowed) {
-        if (closure->shadowed == NULL) {
+        jl_method_t *mambig = oldentry->func.method;
+        int was_already_ambiguous = 0;
+        if (jl_is_array(mambig->ambig)) {
+            for (size_t i = 0; i < jl_array_len(mambig->ambig); i++) {
+                jl_method_t *otherm = (jl_method_t*)jl_array_ptr_ref(mambig->ambig, i);
+                if (otherm != closure->newentry->func.method && jl_subtype((jl_value_t*)isect, (jl_value_t*)otherm->sig)) {
+                    //was_already_ambiguous = 1;
+                    break;
+                }
+            }
+        }
+        if (was_already_ambiguous) {
+        }
+        else if (closure->shadowed == NULL) {
             closure->shadowed = (jl_value_t*)oldentry;
         }
         else if (!jl_is_array(closure->shadowed)) {
@@ -1439,6 +1454,10 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
 {
     struct invalidate_conflicting_env *closure = container_of(closure0, struct invalidate_conflicting_env, match);
     jl_method_instance_t *replaced_linfo = oldentry->func.linfo;
+    if (JL_DEBUG_METHOD_INVALIDATION) {
+        jl_static_show(JL_STDOUT, (jl_value_t*)oldentry->func.linfo);
+        jl_uv_puts(JL_STDOUT, "\n", 1);
+    }
     JL_LOCK_NOGC(&replaced_linfo->def.method->writelock);
     jl_array_t *backedges = replaced_linfo->backedges;
     if (backedges) {
@@ -1536,7 +1555,7 @@ static int invalidate_mt_cache(jl_typemap_entry_t *oldentry, void *closure0)
         }
         if (intersects) {
             if (JL_DEBUG_METHOD_INVALIDATION) {
-                jl_uv_puts(JL_STDOUT, "-- ", 4);
+                jl_uv_puts(JL_STDOUT, "-- ", 3);
                 jl_static_show(JL_STDOUT, (jl_value_t*)mi);
                 jl_uv_puts(JL_STDOUT, "\n", 1);
             }
@@ -1592,19 +1611,28 @@ JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *metho
     JL_UNLOCK(&mt->writelock);
 }
 
+int jl_is_function_call_ambiguous(jl_value_t *types JL_PROPAGATES_ROOT, size_t world);
+
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype)
 {
     JL_TIMING(ADD_METHOD);
     assert(jl_is_method(method));
     assert(jl_is_mtable(mt));
     jl_value_t *type = method->sig;
-    jl_value_t *oldvalue = NULL;
+    jl_value_t *oldvalue = NULL, *isect = NULL;
     if (method->primary_world == 1)
         method->primary_world = ++jl_world_counter;
+    if (JL_DEBUG_METHOD_INVALIDATION) {
+        jl_uv_puts(JL_STDOUT, ">> ", 3);
+        jl_static_show(JL_STDOUT, (jl_value_t*)method);
+        jl_uv_puts(JL_STDOUT, " ", 1);
+        jl_static_show(JL_STDOUT, (jl_value_t*)type);
+        jl_uv_puts(JL_STDOUT, "\n", 1);
+    }
     struct invalidate_conflicting_env env;
     env.invalidated = 0;
     env.max_world = method->primary_world - 1;
-    JL_GC_PUSH1(&oldvalue);
+    JL_GC_PUSH2(&oldvalue, &isect);
     JL_LOCK(&mt->writelock);
     // first delete the existing entry (we'll disable it later)
     jl_typemap_entry_t *oldentry = jl_typemap_assoc_by_type(mt->defs, type, NULL, /*subtype*/0, 0, method->primary_world, /*max_world_mask*/0);
@@ -1628,9 +1656,19 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
             size_t ins = 0;
             for (i = 1; i < na; i += 2) {
                 jl_value_t *backedgetyp = backedges[i - 1];
-                if (!jl_has_empty_intersection(backedgetyp, (jl_value_t*)type)) {
+                isect = jl_type_intersection(backedgetyp, (jl_value_t*)type);
+                if (isect != jl_bottom_type /*&& !jl_is_function_call_ambiguous(isect, env.max_world)*/) {
                     jl_method_instance_t *backedge = (jl_method_instance_t*)backedges[i];
                     invalidate_method_instance(backedge, env.max_world, 0);
+                    /*
+                    if (!env.invalidated && JL_DEBUG_METHOD_INVALIDATION) {
+                        jl_uv_puts(JL_STDOUT, ">> ", 3);
+                        jl_static_show(JL_STDOUT, (jl_value_t*)method);
+                        jl_uv_puts(JL_STDOUT, " ", 1);
+                        jl_static_show(JL_STDOUT, (jl_value_t*)type);
+                        jl_uv_puts(JL_STDOUT, "\n", 1);
+                    }
+                    */
                     env.invalidated = 1;
                 }
                 else {
@@ -1684,16 +1722,35 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
             }
         }
     }
-    if (env.invalidated && JL_DEBUG_METHOD_INVALIDATION) {
-        jl_uv_puts(JL_STDOUT, ">> ", 3);
-        jl_static_show(JL_STDOUT, (jl_value_t*)method);
-        jl_uv_puts(JL_STDOUT, " ", 1);
-        jl_static_show(JL_STDOUT, (jl_value_t*)type);
-        jl_uv_puts(JL_STDOUT, "\n", 1);
-    }
     update_max_args(mt, type);
     JL_UNLOCK(&mt->writelock);
     JL_GC_POP();
+}
+
+JL_DLLEXPORT int jl_is_call_ambiguous(jl_value_t *types, jl_method_t *m)
+{
+    if (m->ambig == jl_nothing)
+        return 0;
+    for (size_t i = 0; i < jl_array_len(m->ambig); i++) {
+        jl_typemap_entry_t *mambig = (jl_typemap_entry_t*)jl_array_ptr_ref(m->ambig, i);
+        if (mambig->min_world <= jl_world_counter && jl_world_counter <= mambig->max_world)
+            if (jl_subtype((jl_value_t*)types, (jl_value_t*)mambig->sig))
+                return 1;
+    }
+    return 0;
+}
+
+int jl_is_function_call_ambiguous(jl_value_t *types JL_PROPAGATES_ROOT, size_t world)
+{
+    jl_methtable_t *mt = jl_first_argument_datatype(types)->name->mt;
+    jl_svec_t *env = jl_emptysvec;
+    JL_GC_PUSH1(&env);
+    jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(
+            mt->defs, types, /*env*/&env, /*subtype*/1, /*offs*/0, world, /*max_world_mask*/0);
+    JL_GC_POP();
+    if (!entry)
+        return 0;
+    return jl_is_call_ambiguous(types, entry->func.method);
 }
 
 static void JL_NORETURN jl_method_error_bare(jl_function_t *f, jl_value_t *args, size_t world)

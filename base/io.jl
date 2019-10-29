@@ -451,7 +451,7 @@ function readline(filename::AbstractString; keep::Bool=false)
 end
 
 function readline(s::IO=stdin; keep::Bool=false)::String
-    line = readuntil(s, 0x0a, keep=true)
+    line = readuntil(s, 0x0a, keep=true)::Vector{UInt8}
     i = length(line)
     if keep || i == 0 || line[i] != 0x0a
         return String(line)
