@@ -524,7 +524,7 @@ function perform_lifting!(compact::IncrementalCompact,
 end
 
 assertion_counter = 0
-function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
+function getfield_elim_pass!(ir::IRCode)
     compact = IncrementalCompact(ir)
     insertions = Vector{Any}()
     defuses = IdDict{Int, Tuple{IdSet{Int}, SSADefUse}}()
@@ -721,6 +721,13 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
     used_ssas = copy(compact.used_ssas)
     simple_dce!(compact)
     ir = complete(compact)
+
+    # Compute domtree, needed below, now that we have finished compacting the
+    # IR. This needs to be after we iterate through the IR with
+    # `IncrementalCompact` because removing dead blocks can invalidate the
+    # domtree.
+    @timeit "domtree 2" domtree = construct_domtree(ir.cfg)
+
     # Now go through any mutable structs and see which ones we can eliminate
     for (idx, (intermediaries, defuse)) in defuses
         intermediaries = collect(intermediaries)
