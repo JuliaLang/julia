@@ -3,10 +3,10 @@
 """
     div(x, y, r::RoundingMode=RoundToZero)
 
-Compute the remainder of `x` after integer division by `y`, with the quotient rounded
-according to the rounding mode `r`. In other words, the quantity
+The quotient from Euclidean division. Computes x/y, rounded to an integer according
+to the rounding mode `r`. In other words, the quantity
 
-    y*round(x/y,r)
+    round(x/y,r)
 
 without any intermediate rounding.
 
