@@ -989,7 +989,41 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         result[result_idx][:inst] = renumber_ssa2!(stmt, ssa_rename, used_ssas, late_fixup, result_idx, do_rename_ssa)
         result_idx += 1
     elseif isa(stmt, PhiNode)
-        values = process_phinode_values(stmt.values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas, do_rename_ssa)
+        if compact.cfg_transforms_enabled
+            # Rename phi node edges
+            map!(i -> compact.bb_rename_pred[i], stmt.edges, stmt.edges)
+
+            # Remove edges and values associated with dead blocks. Entries in
+            # `values` can be undefined when the phi node refers to something
+            # that is not defined. (This is not a sign that the compiler is
+            # unintentionally leaving some entries in `values` uninitialized.)
+            # For example, consider a reference to a variable that is only
+            # defined if some branch is taken.
+            #
+            # In order to leave undefined values undefined (undefined-ness is
+            # not a value we can copy), we copy only the edges and (defined)
+            # values we want to keep to new arrays initialized with undefined
+            # elements.
+            edges = Vector{Any}(undef, length(stmt.edges))
+            values = Vector{Any}(undef, length(stmt.values))
+            new_index = 1
+            for old_index in 1:length(stmt.edges)
+                if stmt.edges[old_index] != -1
+                    edges[new_index] = stmt.edges[old_index]
+                    if isassigned(stmt.values, old_index)
+                        values[new_index] = stmt.values[old_index]
+                    end
+                    new_index += 1
+                end
+            end
+            resize!(edges, new_index-1)
+            resize!(values, new_index-1)
+        else
+            edges = stmt.edges
+            values = stmt.values
+        end
+
+        values = process_phinode_values(values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas, do_rename_ssa)
         # Don't remove the phi node if it is before the definition of its value
         # because doing so can create forward references. This should only
         # happen with dead loops, but can cause problems when optimization
@@ -998,14 +1032,13 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         # just to be safe.
         before_def = isassigned(values, 1) && isa(values[1], OldSSAValue) &&
             idx < values[1].id
-        if length(stmt.edges) == 1 && isassigned(values, 1) && !before_def &&
+        if length(edges) == 1 && isassigned(values, 1) && !before_def &&
                 length(compact.cfg_transforms_enabled ?
                     compact.result_bbs[compact.bb_rename_succ[active_bb]].preds :
                     compact.ir.cfg.blocks[active_bb].preds) == 1
             # There's only one predecessor left - just replace it
             ssa_rename[idx] = values[1]
         else
-            edges = compact.cfg_transforms_enabled ? map!(i->compact.bb_rename_pred[i], stmt.edges, stmt.edges) : stmt.edges
             result[result_idx][:inst] = PhiNode(edges, values)
             result_idx += 1
         end

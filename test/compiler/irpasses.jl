@@ -180,8 +180,7 @@ let m = Meta.@lower 1 + 1
     src.ssaflags = fill(Int32(0), nstmts)
     ir = Core.Compiler.inflate_ir(src, Any[], Any[Any, Any])
     @test Core.Compiler.verify_ir(ir) === nothing
-    domtree = Core.Compiler.construct_domtree(ir.cfg)
-    ir = @test_nowarn Core.Compiler.getfield_elim_pass!(ir, domtree)
+    ir = @test_nowarn Core.Compiler.getfield_elim_pass!(ir)
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
