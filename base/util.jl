@@ -3,20 +3,20 @@
 
 # This type must be kept in sync with the C struct in src/gc.h
 struct GC_Num
-    allocd      ::Int64 # GC internal
-    deferred_alloc::Int64 # GC internal
-    freed       ::Int64 # GC internal
-    malloc      ::UInt64
-    realloc     ::UInt64
-    poolalloc   ::UInt64
-    bigalloc    ::UInt64
-    freecall    ::UInt64
-    total_time  ::UInt64
-    total_allocd::UInt64 # GC internal
-    since_sweep ::UInt64 # GC internal
-    collect     ::Csize_t # GC internal
-    pause       ::Cint
-    full_sweep  ::Cint
+    allocd          ::Int64 # GC internal
+    deferred_alloc  ::Int64 # GC internal
+    freed           ::Int64 # GC internal
+    malloc          ::Int64
+    realloc         ::Int64
+    poolalloc       ::Int64
+    bigalloc        ::Int64
+    freecall        ::Int64
+    total_time      ::Int64
+    total_allocd    ::Int64 # GC internal
+    since_sweep     ::Int64 # GC internal
+    collect         ::Csize_t # GC internal
+    pause           ::Cint
+    full_sweep      ::Cint
 end
 
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
@@ -35,21 +35,21 @@ struct GC_Diff
 end
 
 gc_total_bytes(gc_num::GC_Num) =
-    (gc_num.allocd + gc_num.deferred_alloc + Int64(gc_num.total_allocd))
+    gc_num.allocd + gc_num.deferred_alloc + gc_num.total_allocd
 
 function GC_Diff(new::GC_Num, old::GC_Num)
     # logic from `src/gc.c:jl_gc_total_bytes`
     old_allocd = gc_total_bytes(old)
     new_allocd = gc_total_bytes(new)
     return GC_Diff(new_allocd - old_allocd,
-                   Int64(new.malloc       - old.malloc),
-                   Int64(new.realloc      - old.realloc),
-                   Int64(new.poolalloc    - old.poolalloc),
-                   Int64(new.bigalloc     - old.bigalloc),
-                   Int64(new.freecall     - old.freecall),
-                   Int64(new.total_time   - old.total_time),
-                   new.pause              - old.pause,
-                   new.full_sweep         - old.full_sweep)
+                   new.malloc       - old.malloc,
+                   new.realloc      - old.realloc,
+                   new.poolalloc    - old.poolalloc,
+                   new.bigalloc     - old.bigalloc,
+                   new.freecall     - old.freecall,
+                   new.total_time   - old.total_time,
+                   new.pause        - old.pause,
+                   new.full_sweep   - old.full_sweep)
 end
 
 function gc_alloc_count(diff::GC_Diff)
