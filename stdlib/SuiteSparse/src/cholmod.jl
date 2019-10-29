@@ -1712,7 +1712,6 @@ const RealHermSymComplexHermF64SSL = Union{
     Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
     Hermitian{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
     Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}}
-const StridedVecOrMatInclAdjAndTrans = Union{StridedVecOrMat, Adjoint{<:Any, <:StridedVecOrMat}, Transpose{<:Any, <:StridedVecOrMat}}
 function \(A::RealHermSymComplexHermF64SSL, B::StridedVecOrMatInclAdjAndTrans)
     F = cholesky(A; check = false)
     if issuccess(F)
