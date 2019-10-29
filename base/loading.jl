@@ -1191,7 +1191,10 @@ function compilecache_path(pkg::PkgId)::String
     if pkg.uuid === nothing
         abspath(cachepath, entryfile) * ".ji"
     else
-        project_precompile_slug = slug(_crc32c(something(Base.active_project(), "")), 5)
+        crc = _crc32c(something(Base.active_project(), ""))
+        crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
+        crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
+        project_precompile_slug = slug(crc, 5)
         abspath(cachepath, string(entryfile, "_", project_precompile_slug, ".ji"))
     end
 end
