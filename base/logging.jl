@@ -134,8 +134,8 @@ severity(::LogLevel{:Warn})          =     1000
 severity(::LogLevel{:Error})         =     2000
 severity(::LogLevel{:AboveMaxLevel}) =  1000001
 
-Base.show(io::IO, ::LogLevel{label}) where {label} = print(io, label)
-Base.show(io::IO, ::typeof(Warn)) = print(io, "Warning")
+Base.print(io::IO, ::LogLevel{label}) where {label} = print(io, label)
+Base.print(io::IO, ::typeof(Warn)) = print(io, "Warning")
 
 #-------------------------------------------------------------------------------
 # Logging macros
