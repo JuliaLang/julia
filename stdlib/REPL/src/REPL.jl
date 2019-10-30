@@ -126,13 +126,18 @@ end
 
 ==(a::REPLDisplay, b::REPLDisplay) = a.repl === b.repl
 
+printheader(::IO, ::AbstractREPL, ::MIME, ::Any) = nothing
+
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     io = outstream(d.repl)
     get(io, :color, false) && write(io, answer_color(d.repl))
-    show(IOContext(io, :limit => true, :module => Main), mime, x)
+    io = IOContext(io, :limit => true, :module => Main)
+    printheader(io, d.repl, mime, x)
+    show(io, mime, x)
     println(io)
     nothing
 end
+
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
 function print_response(repl::AbstractREPL, @nospecialize(response), show_value::Bool, have_color::Bool)
@@ -283,6 +288,7 @@ mutable struct Options
     auto_indent_bracketed_paste::Bool # set to true if terminal knows paste mode
     # cancel auto-indent when next character is entered within this time frame :
     auto_indent_time_threshold::Float64
+    show_type::Bool
 end
 
 Options(;
@@ -299,13 +305,15 @@ Options(;
         auto_indent = true,
         auto_indent_tmp_off = false,
         auto_indent_bracketed_paste = false,
-        auto_indent_time_threshold = 0.005) =
+        auto_indent_time_threshold = 0.005,
+        show_type = false) =
             Options(hascolor, extra_keymap, tabwidth,
                     kill_ring_max, region_animation_duration,
                     beep_duration, beep_blink, beep_maxduration,
                     beep_colors, beep_use_current,
                     backspace_align, backspace_adjust, confirm_exit,
-                    auto_indent, auto_indent_tmp_off, auto_indent_bracketed_paste, auto_indent_time_threshold)
+                    auto_indent, auto_indent_tmp_off, auto_indent_bracketed_paste,
+                    auto_indent_time_threshold, show_type)
 
 # for use by REPLs not having an options field
 const GlobalOptions = Options()
@@ -349,6 +357,13 @@ LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
         hascolor ? Base.text_colors[:yellow] : "",
         false, false, false, envcolors
     )
+
+function printheader(io::IO, repl::LineEditREPL, ::MIME"text/plain", x)
+    if repl.options.show_type
+        printstyled(io, "TYPE: ", typeof(x), "\n\n", bold=true, color=:yellow)
+    end
+    nothing
+end
 
 mutable struct REPLCompletionProvider <: CompletionProvider end
 mutable struct ShellCompletionProvider <: CompletionProvider end
