@@ -352,6 +352,45 @@ julia> sqrt(-2.0+0im)
 0.0 + 1.4142135623730951im
 ```
 
+### How can I constrain or compute type parameters?
+
+The parameters of a [parametric type](@ref Parametric-Types) can hold either
+types or bits values, and the type itself chooses how it makes use of these parameters.
+For example, `Array{Float64, 2}` is parameterized by the type `Float64` to express its
+element type and the integer value `2` to express its number of dimensions.  When
+defining your own parametric type, you can use subtype constraints to declare that a
+certain parameter must be a subtype ([`<:`](@ref)) of some abstract type or a previous
+type parameter.  There is not, however, a dedicated syntax to declare that a parameter
+must be a _value_ of a given type — that is, you cannot directly declare that a
+dimensionality-like parameter [`isa`](@ref) `Int` within the `struct` definition, for
+example.  Similarly, you cannot do computations (including simple things like addition
+or subtraction) on type parameters.  Instead, these sorts of constraints and
+relationships may be expressed through additional type parameters that are computed
+and enforced within the type's [constructors](@ref man-constructors).
+
+As an example, consider
+```julia
+struct ConstrainedType{T,N,N+1} # NOTE: INVALID SYNTAX
+    A::Array{T,N}
+    B::Array{T,N+1}
+end
+```
+where the user would like to enforce that the third type parameter is always the second plus one. This can be implemented with an explicit type parameter that is checked by an [inner constructor method](@ref man-inner-constructor-methods) (where it can be combined with other checks):
+```julia
+struct ConstrainedType{T,N,M}
+    A::Array{T,N}
+    B::Array{T,M}
+    function ConstrainedType(A::Array{T,N}, B::Array{T,M}) where {T,N,M}
+        N + 1 == M || throw(ArgumentError("second argument should have one more axis" ))
+        new{T,N,M}(A, B)
+    end
+end
+```
+This check is usually *costless*, as the compiler can elide the check for valid concrete types. If the second argument is also computed, it may be advantageous to provide an [outer constructor method](@ref man-outer-constructor-methods) that performs this calculation:
+```julia
+ConstrainedType(A) = ConstrainedType(A, compute_B(A))
+```
+
 ### [Why does Julia use native machine integer arithmetic?](@id faq-integer-arithmetic)
 
 Julia uses machine arithmetic for integer computations. This means that the range of `Int` values
