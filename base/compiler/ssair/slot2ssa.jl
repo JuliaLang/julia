@@ -269,10 +269,10 @@ end
 # subset of those backedges from a subtree rooted at `A` (out outside the subtree rooted
 # at `A`). Note however that this does not work the other way. Thus, the algorithm
 # needs to make sure that we always visit `B` before `A`.
-function idf(cfg::CFG, liveness::BlockLiveness, domtree::DomTree)
+function idf(cfg::CFG, liveness::BlockLiveness)
     # This should be a priority queue, but TODO - sorted array for now
     defs = liveness.def_bbs
-    pq = Tuple{Int, Int}[(defs[i], domtree.nodes[defs[i]].level) for i in 1:length(defs)]
+    pq = Tuple{Int, Int}[(defs[i], cfg.domtree.nodes[defs[i]].level) for i in 1:length(defs)]
     sort!(pq, by=x->x[2])
     phiblocks = Int[]
     # This bitset makes sure we only add a phi node to a given block once.
@@ -296,7 +296,7 @@ function idf(cfg::CFG, liveness::BlockLiveness, domtree::DomTree)
                 # since at this point we know that there is an edge from `node`'s
                 # subtree to `succ`, we know that if succ's level is greater than
                 # that of `node`, it must be dominated by `node`.
-                succ_level = domtree.nodes[succ].level
+                succ_level = cfg.domtree.nodes[succ].level
                 succ_level > level && continue
                 # We don't dominate succ. We need to place a phinode,
                 # unless liveness said otherwise.
@@ -317,7 +317,7 @@ function idf(cfg::CFG, liveness::BlockLiveness, domtree::DomTree)
                 end
             end
             # Recurse down the current subtree
-            for child in domtree.nodes[active].children
+            for child in cfg.domtree.nodes[active].children
                 child in visited && continue
                 push!(visited, child)
                 push!(worklist, child)
@@ -373,7 +373,7 @@ end
     RPO traversal and in particular, any use of an SSA value must come after (by linear
     order) its definition.
 """
-function domsort_ssa!(ir::IRCode, domtree::DomTree)
+function domsort_ssa!(ir::IRCode)
     # First compute the new order of basic blocks
     result_order = Int[]
     stack = Int[]
@@ -382,7 +382,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
     nnewfallthroughs = 0
     while node !== -1
         push!(result_order, node)
-        cs = domtree.nodes[node].children
+        cs = ir.cfg.domtree.nodes[node].children
         terminator = ir.stmts[last(ir.cfg.blocks[node].stmts)][:inst]
         iscondbr = isa(terminator, GotoIfNot)
         let old_node = node + 1
@@ -581,8 +581,8 @@ function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode
     return new_typ
 end
 
-function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, nargs::Int, sptypes::Vector{Any},
-                        slottypes::Vector{Any})
+function construct_ssa!(ci::CodeInfo, ir::IRCode, defuse, nargs::Int,
+                        sptypes::Vector{Any}, slottypes::Vector{Any})
     code = ir.stmts.inst
     cfg = ir.cfg
     left = Int[]
@@ -599,7 +599,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
     for (enter_block, exc) in catch_entry_blocks
         exc_handlers[enter_block+1] = (enter_block, exc)
         # TODO: Cut off here if the terminator is a leave corresponding to this enter
-        for block in dominated(domtree, enter_block+1)
+        for block in dominated(cfg.domtree, enter_block+1)
             exc_handlers[block] = (enter_block, exc)
         end
     end
@@ -651,7 +651,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
                 end
             end
         end
-        phiblocks = idf(cfg, live, domtree)
+        phiblocks = idf(cfg, live)
         for block in phiblocks
             push!(phi_slots[block], idx)
             node = PhiNode()
@@ -895,6 +895,6 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
         local node = new_nodes.stmts[i]
         node[:inst] = new_to_regular(renumber_ssa!(node[:inst], ssavalmap), nstmts)
     end
-    @timeit "domsort" ir = domsort_ssa!(ir, domtree)
+    @timeit "domsort" ir = domsort_ssa!(ir)
     return ir
 end

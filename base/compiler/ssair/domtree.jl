@@ -173,6 +173,8 @@ struct SNCAData
     label::PreNumber
 end
 
+copy(d::SNCAData) = SNCAData(d.semi, d.label)
+
 "Represents a Basic Block, in the DomTree"
 struct DomTreeNode
     # How deep we are in the DomTree
@@ -182,6 +184,8 @@ struct DomTreeNode
 end
 
 DomTreeNode() = DomTreeNode(1, Vector{BBNumber}())
+
+copy(n::DomTreeNode) = DomTreeNode(n.level, copy(n.children))
 
 "Data structure that encodes which basic block dominates which."
 struct DomTree
@@ -196,9 +200,12 @@ struct DomTree
     nodes::Vector{DomTreeNode}
 end
 
-function DomTree()
-    return DomTree(DFSTree(0), SNCAData[], BBNumber[], DomTreeNode[])
-end
+DomTree() = DomTree(DFSTree(0), SNCAData[], BBNumber[], DomTreeNode[])
+
+copy(d::DomTree) = DomTree(copy(d.dfs_tree),
+                           copy(d.snca_state),
+                           copy(d.idoms_bb),
+                           copy(d.nodes))
 
 function construct_domtree(blocks::Vector{BasicBlock})
     return update_domtree!(blocks, DomTree(), true, 0)
