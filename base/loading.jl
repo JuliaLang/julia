@@ -646,7 +646,7 @@ end
 
 cache_file_entry(pkg::PkgId) = joinpath(
     "compiled",
-    "v$(VERSION.major).$(VERSION.minor)",
+    "v$(VERSION.major).$(VERSION.minor)" * (ccall(:jl_is_debugbuild, Cint, ()) > 0 ? "-debug" : ""),
     pkg.uuid === nothing ? ""       : pkg.name),
     pkg.uuid === nothing ? pkg.name : package_slug(pkg.uuid)
 
