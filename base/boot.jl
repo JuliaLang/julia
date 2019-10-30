@@ -130,6 +130,15 @@
 #    name::Symbol
 #end
 
+#struct SlotNumber
+#    id::Int
+#end
+
+#struct TypedSlot
+#    id::Int
+#    typ
+#end
+
 #mutable struct Task
 #    parent::Task
 #    storage::Any
@@ -177,6 +186,8 @@ export
 
 const getproperty = getfield
 const setproperty! = setfield!
+
+const Slot = Union{SlotNumber, TypedSlot}
 
 abstract type Number end
 abstract type Real     <: Number end
