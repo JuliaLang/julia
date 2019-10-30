@@ -1170,6 +1170,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         head !== :row && print(io, op)
         if !isempty(args) && isa(args[1], Expr) && args[1].head === :parameters
             show_list(io, args[2:end], sep, indent)
+            if length(args) == 2
+                print(io, ",")
+            end
             print(io, "; ")
             show_list(io, args[1].args, sep, indent)
         else
