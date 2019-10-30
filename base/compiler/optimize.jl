@@ -101,7 +101,8 @@ const TOP_TUPLE = GlobalRef(Core, :tuple)
 
 _topmod(sv::OptimizationState) = _topmod(sv.mod)
 
-function update_valid_age!(min_valid::UInt, max_valid::UInt, sv::OptimizationState)
+function update_valid_age!(
+        min_valid::UInt, max_valid::UInt, sv::OptimizationState)
     sv.min_valid = max(sv.min_valid, min_valid)
     sv.max_valid = min(sv.max_valid, max_valid)
     @assert(sv.min_valid <= sv.params.world <= sv.max_valid,

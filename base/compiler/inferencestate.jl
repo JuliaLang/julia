@@ -187,7 +187,7 @@ end
 _topmod(sv::InferenceState) = _topmod(sv.mod)
 
 # work towards converging the valid age range for sv
-function update_valid_age!(min_valid::UInt, max_valid::UInt, sv::InferenceState)
+function update_valid_age!(interp::AbstractInterpreter, min_valid::UInt, max_valid::UInt, sv::InferenceState)
     sv.min_valid = max(sv.min_valid, min_valid)
     sv.max_valid = min(sv.max_valid, max_valid)
     @assert(sv.min_valid <= sv.params.world <= sv.max_valid,
@@ -195,7 +195,7 @@ function update_valid_age!(min_valid::UInt, max_valid::UInt, sv::InferenceState)
     nothing
 end
 
-update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(edge.min_valid, edge.max_valid, sv)
+update_valid_age!(interp::AbstractInterpreter, edge::InferenceState, sv::InferenceState) = update_valid_age!(interp, edge.min_valid, edge.max_valid, sv)
 
 function record_ssa_assign(ssa_id::Int, @nospecialize(new), frame::InferenceState)
     old = frame.src.ssavaluetypes[ssa_id]
@@ -215,8 +215,8 @@ function record_ssa_assign(ssa_id::Int, @nospecialize(new), frame::InferenceStat
     nothing
 end
 
-function add_cycle_backedge!(frame::InferenceState, caller::InferenceState, currpc::Int)
-    update_valid_age!(frame, caller)
+function add_cycle_backedge!(interp::AbstractInterpreter, frame::InferenceState, caller::InferenceState, currpc::Int)
+    update_valid_age!(interp, frame, caller)
     backedge = (caller, currpc)
     contains_is(frame.cycle_backedges, backedge) || push!(frame.cycle_backedges, backedge)
     add_backedge!(frame.linfo, caller)

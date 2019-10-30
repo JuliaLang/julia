@@ -1,0 +1,8 @@
+name = "CompilerTools"
+uuid = "3268542b-3047-4bde-910b-7b1c98f22bfa"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

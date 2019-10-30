@@ -106,6 +106,7 @@ include("compiler/typelimits.jl")
 include("compiler/typelattice.jl")
 include("compiler/tfuncs.jl")
 
+include("compiler/abstractinterpreter.jl")
 include("compiler/abstractinterpretation.jl")
 include("compiler/typeinfer.jl")
 include("compiler/optimize.jl") # TODO: break this up further + extract utilities

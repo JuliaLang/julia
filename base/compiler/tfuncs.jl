@@ -57,12 +57,12 @@ function add_tfunc(f::Function, minarg::Int, maxarg::Int, @nospecialize(tfunc), 
     push!(T_FFUNC_COST, cost)
 end
 
-add_tfunc(throw, 1, 1, (@nospecialize(x)) -> Bottom, 0)
+add_tfunc(throw, 1, 1, (interp::AbstractInterpreter, @nospecialize(x)) -> Bottom, 0)
 
 # the inverse of typeof_tfunc
 # returns (type, isexact)
 # if isexact is false, the actual runtime type may (will) be a subtype of t
-function instanceof_tfunc(@nospecialize(t))
+function instanceof_tfunc(interp::AbstractInterpreter, @nospecialize(t))
     if isa(t, Const)
         if isa(t.val, Type)
             return t.val, true
@@ -95,12 +95,12 @@ function instanceof_tfunc(@nospecialize(t))
     end
     return Any, false
 end
-bitcast_tfunc(@nospecialize(t), @nospecialize(x)) = instanceof_tfunc(t)[1]
-math_tfunc(@nospecialize(x)) = widenconst(x)
-math_tfunc(@nospecialize(x), @nospecialize(y)) = widenconst(x)
-math_tfunc(@nospecialize(x), @nospecialize(y), @nospecialize(z)) = widenconst(x)
-fptoui_tfunc(@nospecialize(t), @nospecialize(x)) = bitcast_tfunc(t, x)
-fptosi_tfunc(@nospecialize(t), @nospecialize(x)) = bitcast_tfunc(t, x)
+bitcast_tfunc(interp::AbstractInterpreter, @nospecialize(t), @nospecialize(x)) = instanceof_tfunc(t)[1]
+math_tfunc(interp::AbstractInterpreter, @nospecialize(x)) = widenconst(x)
+math_tfunc(interp::AbstractInterpreter, @nospecialize(x), @nospecialize(y)) = widenconst(x)
+math_tfunc(interp::AbstractInterpreter, @nospecialize(x), @nospecialize(y), @nospecialize(z)) = widenconst(x)
+fptoui_tfunc(interp::AbstractInterpreter, @nospecialize(t), @nospecialize(x)) = bitcast_tfunc(t, x)
+fptosi_tfunc(interp::AbstractInterpreter, @nospecialize(t), @nospecialize(x)) = bitcast_tfunc(t, x)
 
     ## conversion ##
 add_tfunc(bitcast, 2, 2, bitcast_tfunc, 1)
@@ -165,7 +165,7 @@ add_tfunc(trunc_llvm, 1, 1, math_tfunc, 10)
 add_tfunc(rint_llvm, 1, 1, math_tfunc, 10)
 add_tfunc(sqrt_llvm, 1, 1, math_tfunc, 20)
     ## same-type comparisons ##
-cmp_tfunc(@nospecialize(x), @nospecialize(y)) = Bool
+cmp_tfunc(interp::AbstractInterpreter, @nospecialize(x), @nospecialize(y)) = Bool
 add_tfunc(eq_int, 2, 2, cmp_tfunc, 1)
 add_tfunc(ne_int, 2, 2, cmp_tfunc, 1)
 add_tfunc(slt_int, 2, 2, cmp_tfunc, 1)
@@ -184,7 +184,7 @@ add_tfunc(lt_float_fast, 2, 2, cmp_tfunc, 1)
 add_tfunc(le_float_fast, 2, 2, cmp_tfunc, 1)
 
     ## checked arithmetic ##
-chk_tfunc(@nospecialize(x), @nospecialize(y)) = Tuple{widenconst(x), Bool}
+chk_tfunc(interp::AbstractInterpreter, @nospecialize(x), @nospecialize(y)) = Tuple{widenconst(x), Bool}
 add_tfunc(checked_sadd_int, 2, 2, chk_tfunc, 10)
 add_tfunc(checked_uadd_int, 2, 2, chk_tfunc, 10)
 add_tfunc(checked_ssub_int, 2, 2, chk_tfunc, 10)
@@ -199,7 +199,7 @@ cglobal_tfunc(@nospecialize(fptr), @nospecialize(t)) = (isType(t) ? Ptr{t.parame
 cglobal_tfunc(@nospecialize(fptr), t::Const) = (isa(t.val, Type) ? Ptr{t.val} : Ptr)
 add_tfunc(Core.Intrinsics.cglobal, 1, 2, cglobal_tfunc, 5)
 
-function ifelse_tfunc(@nospecialize(cnd), @nospecialize(x), @nospecialize(y))
+function ifelse_tfunc(interp::AbstractInterpreter, @nospecialize(cnd), @nospecialize(x), @nospecialize(y))
     if isa(cnd, Const)
         if cnd.val === true
             return x
@@ -217,7 +217,7 @@ function ifelse_tfunc(@nospecialize(cnd), @nospecialize(x), @nospecialize(y))
 end
 add_tfunc(ifelse, 3, 3, ifelse_tfunc, 1)
 
-function egal_tfunc(@nospecialize(x), @nospecialize(y))
+function egal_tfunc(interp::AbstractInterpreter, @nospecialize(x), @nospecialize(y))
     xx = widenconditional(x)
     yy = widenconditional(y)
     if isa(x, Conditional) && isa(yy, Const)
@@ -329,7 +329,7 @@ function _const_sizeof(@nospecialize(x))
         end
     return Const(size)
 end
-function sizeof_tfunc(@nospecialize(x),)
+function sizeof_tfunc(interp::AbstractInterpreter, @nospecialize(x),)
     isa(x, Const) && return _const_sizeof(x.val)
     isa(x, Conditional) && return _const_sizeof(Bool)
     isconstType(x) && return _const_sizeof(x.parameters[1])
@@ -342,7 +342,7 @@ function sizeof_tfunc(@nospecialize(x),)
     return Int
 end
 add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 0)
-function nfields_tfunc(@nospecialize(x))
+function nfields_tfunc(interp::AbstractInterpreter, @nospecialize(x))
     isa(x, Const) && return Const(nfields(x.val))
     isa(x, Conditional) && return Const(0)
     x = widenconst(x)
@@ -355,7 +355,7 @@ function nfields_tfunc(@nospecialize(x))
 end
 add_tfunc(nfields, 1, 1, nfields_tfunc, 0)
 add_tfunc(Core._expr, 1, INT_INF, (@nospecialize args...)->Expr, 100)
-function typevar_tfunc(@nospecialize(n), @nospecialize(lb_arg), @nospecialize(ub_arg))
+function typevar_tfunc(interp::AbstractInterpreter, @nospecialize(n), @nospecialize(lb_arg), @nospecialize(ub_arg))
     lb = Union{}
     ub = Any
     ub_certain = lb_certain = true
@@ -400,10 +400,10 @@ function typevar_nothrow(n, lb, ub)
 end
 add_tfunc(Core._typevar, 3, 3, typevar_tfunc, 100)
 add_tfunc(applicable, 1, INT_INF, (@nospecialize(f), args...)->Bool, 100)
-add_tfunc(Core.Intrinsics.arraylen, 1, 1, @nospecialize(x)->Int, 4)
-add_tfunc(arraysize, 2, 2, (@nospecialize(a), @nospecialize(d))->Int, 4)
+add_tfunc(Core.Intrinsics.arraylen, 1, 1, (interp::AbstractInterpreter, @nospecialize(x))->Int, 4)
+add_tfunc(arraysize, 2, 2, (interp::AbstractInterpreter, @nospecialize(a), @nospecialize(d))->Int, 4)
 add_tfunc(pointerref, 3, 3,
-          function (@nospecialize(a), @nospecialize(i), @nospecialize(align))
+          function (interp::AbstractInterpreter, @nospecialize(a), @nospecialize(i), @nospecialize(align))
               a = widenconst(a)
               if a <: Ptr
                   if isa(a,DataType) && isa(a.parameters[1],Type)
@@ -417,7 +417,7 @@ add_tfunc(pointerref, 3, 3,
               end
               return Any
           end, 4)
-add_tfunc(pointerset, 4, 4, (@nospecialize(a), @nospecialize(v), @nospecialize(i), @nospecialize(align)) -> a, 5)
+add_tfunc(pointerset, 4, 4, (interp::AbstractInterpreter, @nospecialize(a), @nospecialize(v), @nospecialize(i), @nospecialize(align)) -> a, 5)
 
 # more accurate typeof_tfunc for vararg tuples abstract only in length
 function typeof_concrete_vararg(t::DataType)
@@ -436,7 +436,7 @@ function typeof_concrete_vararg(t::DataType)
     return nothing
 end
 
-function typeof_tfunc(@nospecialize(t))
+function typeof_tfunc(interp::AbstractInterpreter, @nospecialize(t))
     isa(t, Const) && return Const(typeof(t.val))
     t = widenconst(t)
     if isType(t)
@@ -457,11 +457,11 @@ function typeof_tfunc(@nospecialize(t))
             return Type{<:t}
         end
     elseif isa(t, Union)
-        a = widenconst(typeof_tfunc(t.a))
-        b = widenconst(typeof_tfunc(t.b))
+        a = widenconst(typeof_tfunc(interp, t.a))
+        b = widenconst(typeof_tfunc(interp, t.b))
         return Union{a, b}
     elseif isa(t, TypeVar) && !(Any === t.ub)
-        return typeof_tfunc(t.ub)
+        return typeof_tfunc(interp, t.ub)
     elseif isa(t, UnionAll)
         u = unwrap_unionall(t)
         if isa(u, DataType) && !u.abstract
@@ -480,7 +480,7 @@ function typeof_tfunc(@nospecialize(t))
 end
 add_tfunc(typeof, 1, 1, typeof_tfunc, 0)
 
-function typeassert_tfunc(@nospecialize(v), @nospecialize(t))
+function typeassert_tfunc(interp::AbstractInterpreter, @nospecialize(v), @nospecialize(t))
     t = instanceof_tfunc(t)[1]
     t === Any && return v
     if isa(v, Const)
@@ -498,7 +498,7 @@ function typeassert_tfunc(@nospecialize(v), @nospecialize(t))
 end
 add_tfunc(typeassert, 2, 2, typeassert_tfunc, 4)
 
-function isa_tfunc(@nospecialize(v), @nospecialize(tt))
+function isa_tfunc(interp::AbstractInterpreter, @nospecialize(v), @nospecialize(tt))
     t, isexact = instanceof_tfunc(tt)
     if t === Bottom
         # check if t could be equivalent to typeof(Bottom), since that's valid in `isa`, but the set of `v` is empty
@@ -535,7 +535,7 @@ function isa_tfunc(@nospecialize(v), @nospecialize(tt))
 end
 add_tfunc(isa, 2, 2, isa_tfunc, 0)
 
-function subtype_tfunc(@nospecialize(a), @nospecialize(b))
+function subtype_tfunc(interp::AbstractInterpreter, @nospecialize(a), @nospecialize(b))
     a, isexact_a = instanceof_tfunc(a)
     b, isexact_b = instanceof_tfunc(b)
     if !has_free_typevars(a) && !has_free_typevars(b)
@@ -675,9 +675,9 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), @nospecialize
     return false
 end
 
-getfield_tfunc(@nospecialize(s00), @nospecialize(name), @nospecialize(inbounds)) =
+getfield_tfunc(interp::AbstractInterpreter, @nospecialize(s00), @nospecialize(name), @nospecialize(inbounds)) =
     getfield_tfunc(s00, name)
-function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
+function getfield_tfunc(interp::AbstractInterpreter, @nospecialize(s00), @nospecialize(name))
     s = unwrap_unionall(s00)
     if isa(s, Union)
         return tmerge(getfield_tfunc(rewrap(s.a,s00), name),
@@ -716,7 +716,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
                 end
             end
             if isa(sv, Module) && isa(nv, Symbol)
-                return abstract_eval_global(sv, nv)
+                return abstract_eval_global(interp, sv, nv)
             end
             if !(isa(nv,Symbol) || isa(nv,Int))
                 return Bottom
@@ -1023,7 +1023,7 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
                           :_N, :_O, :_P, :_Q, :_R, :_S, :_T, :_U, :_V, :_W, :_X, :_Y, :_Z]
 
 # TODO: handle e.g. apply_type(T, R::Union{Type{Int32},Type{Float64}})
-function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
+function apply_type_tfunc(interp::AbstractInterpreter, @nospecialize(headtypetype), @nospecialize args...)
     if isa(headtypetype, Const)
         headtype = headtypetype.val
     elseif isconstType(headtypetype)
@@ -1300,7 +1300,7 @@ function builtin_nothrow(@nospecialize(f), argtypes::Array{Any, 1}, @nospecializ
     return _builtin_nothrow(f, argtypes, rt)
 end
 
-function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
+function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Array{Any,1},
                            sv::Union{InferenceState,Nothing}, params::Params = sv.params)
     isva = !isempty(argtypes) && isvarargtype(argtypes[end])
     if f === tuple
@@ -1388,7 +1388,7 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
         # wrong # of args
         return Bottom
     end
-    return tf[3](argtypes...)
+    return tf[3](interp, argtypes...)
 end
 
 # Query whether the given intrinsic is nothrow
@@ -1427,7 +1427,7 @@ end
 # TODO: this function is a very buggy and poor model of the return_type function
 # since abstract_call_gf_by_type is a very inaccurate model of _method and of typeinf_type,
 # while this assumes that it is an absolutely precise and accurate and exact model of both
-function return_type_tfunc(argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
+function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
     if length(argtypes) == 3
         tt = argtypes[3]
         if isa(tt, Const) || (isType(tt) && !has_free_typevars(tt))
@@ -1442,9 +1442,9 @@ function return_type_tfunc(argtypes::Vector{Any}, vtypes::VarTable, sv::Inferenc
                     end
                     astype = argtypes_to_type(argtypes_vec)
                     if isa(aft, Const)
-                        rt = abstract_call(aft.val, nothing, argtypes_vec, vtypes, sv, -1)
+                        rt = abstract_call(interp, aft.val, nothing, argtypes_vec, vtypes, sv, -1)
                     elseif isconstType(aft)
-                        rt = abstract_call(aft.parameters[1], nothing, argtypes_vec, vtypes, sv, -1)
+                        rt = abstract_call(interp, aft.parameters[1], nothing, argtypes_vec, vtypes, sv, -1)
                     else
                         rt = abstract_call_gf_by_type(nothing, argtypes_vec, astype, sv, -1)
                     end

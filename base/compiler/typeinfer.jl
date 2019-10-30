@@ -8,8 +8,9 @@ function typeinf(result::InferenceResult, cached::Bool, params::Params)
     return typeinf(frame)
 end
 
-function typeinf(frame::InferenceState)
-    typeinf_nocycle(frame) || return false # frame is now part of a higher cycle
+typeinf(frame::InferenceState) = typeinf(TypeInference(), frame)
+function typeinf(interp::AbstractInterpreter, frame::InferenceState)
+    typeinf_nocycle(interp, frame) || return false # frame is now part of a higher cycle
     # with no active ip's, frame is done
     frames = frame.callers_in_cycle
     isempty(frames) && push!(frames, frame)
@@ -64,7 +65,7 @@ function typeinf(frame::InferenceState)
         caller.src.min_world = min_valid
         caller.src.max_world = max_valid
         if cached
-            cache_result(caller.result, min_valid, max_valid)
+            cache_result(interp, caller.result, min_valid, max_valid)
         end
         if max_valid == typemax(UInt)
             # if we aren't cached, we don't need this edge
@@ -81,7 +82,7 @@ end
 
 # inference completed on `me`
 # update the MethodInstance and notify the edges
-function cache_result(result::InferenceResult, min_valid::UInt, max_valid::UInt)
+function cache_result(interp::AbstractInterpreter, result::InferenceResult, min_valid::UInt, max_valid::UInt)
     def = result.linfo.def
     toplevel = !isa(result.linfo.def, Method)
     if toplevel
@@ -151,6 +152,7 @@ function finish(me::InferenceState)
     else
         # annotate fulltree with type information
         type_annotate!(me)
+        #=
         run_optimizer = (me.cached || me.parent !== nothing)
         if run_optimizer
             # construct the optimizer for later use, if we're building this IR to cache it
@@ -158,6 +160,7 @@ function finish(me::InferenceState)
             opt = OptimizationState(me)
             me.result.src = opt
         end
+        =#
     end
     me.result.result = me.bestguess
     nothing
@@ -394,13 +397,13 @@ function union_caller_cycle!(a::InferenceState, b::InferenceState)
     return
 end
 
-function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, child::InferenceState, limited::Bool)
+function merge_call_chain!(interp::AbstractInterpreter, parent::InferenceState, ancestor::InferenceState, child::InferenceState, limited::Bool)
     # add backedge of parent <- child
     # then add all backedges of parent <- parent.parent
     # and merge all of the callers into ancestor.callers_in_cycle
     # and ensure that walking the parent list will get the same result (DAG) from everywhere
     while true
-        add_cycle_backedge!(child, parent, parent.currpc)
+        add_cycle_backedge!(interp, child, parent, parent.currpc)
         union_caller_cycle!(ancestor, child)
         child = parent
         parent = child.parent
@@ -420,7 +423,7 @@ end
 # frame's `callers_in_cycle` field and adding the appropriate backedges. Finally,
 # we return `linfo`'s pre-existing frame. If no cycles are found, `nothing` is
 # returned instead.
-function resolve_call_cycle!(linfo::MethodInstance, parent::InferenceState)
+function resolve_call_cycle!(interp::AbstractInterpreter, linfo::MethodInstance, parent::InferenceState)
     frame = parent
     uncached = false
     limited = false
@@ -435,7 +438,7 @@ function resolve_call_cycle!(linfo::MethodInstance, parent::InferenceState)
                 poison_callstack(parent, frame, false)
                 return true
             end
-            merge_call_chain!(parent, frame, frame, limited)
+            merge_call_chain!(interp, parent, frame, frame, limited)
             return frame
         end
         for caller in frame.callers_in_cycle
@@ -444,7 +447,7 @@ function resolve_call_cycle!(linfo::MethodInstance, parent::InferenceState)
                     poison_callstack(parent, frame, false)
                     return true
                 end
-                merge_call_chain!(parent, frame, caller, limited)
+                merge_call_chain!(interp, parent, frame, caller, limited)
                 return caller
             end
         end
@@ -454,11 +457,11 @@ function resolve_call_cycle!(linfo::MethodInstance, parent::InferenceState)
 end
 
 # compute (and cache) an inferred AST and return the current best estimate of the result type
-function typeinf_edge(method::Method, @nospecialize(atypes), sparams::SimpleVector, caller::InferenceState)
+function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atypes), sparams::SimpleVector, caller::InferenceState)
     mi = specialize_method(method, atypes, sparams)::MethodInstance
     code = inf_for_methodinstance(mi, caller.params.world)
     if code isa CodeInstance # return existing rettype if the code is already inferred
-        update_valid_age!(min_world(code), max_world(code), caller)
+        update_valid_age!(interp, min_world(code), max_world(code), caller)
         if isdefined(code, :rettype_const)
             return Const(code.rettype_const), mi
         else
@@ -470,7 +473,7 @@ function typeinf_edge(method::Method, @nospecialize(atypes), sparams::SimpleVect
         # (if we asked resolve_call_cyle, it might instead detect that there is a cycle that it can't merge)
         frame = false
     else
-        frame = resolve_call_cycle!(mi, caller)
+        frame = resolve_call_cycle!(interp, mi, caller)
     end
     if frame === false
         # completely new
@@ -485,8 +488,8 @@ function typeinf_edge(method::Method, @nospecialize(atypes), sparams::SimpleVect
         if caller.cached || caller.limited # don't involve uncached functions in cycle resolution
             frame.parent = caller
         end
-        typeinf(frame)
-        update_valid_age!(frame, caller)
+        typeinf(interp, frame)
+        update_valid_age!(interp, frame, caller)
         return widenconst_bestguess(frame.bestguess), frame.inferred ? mi : nothing
     elseif frame === true
         # unresolvable cycle
@@ -494,7 +497,7 @@ function typeinf_edge(method::Method, @nospecialize(atypes), sparams::SimpleVect
     end
     # return the current knowledge about this cycle
     frame = frame::InferenceState
-    update_valid_age!(frame, caller)
+    update_valid_age!(interp, frame, caller)
     return widenconst_bestguess(frame.bestguess), nothing
 end
 
