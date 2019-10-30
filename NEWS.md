@@ -47,6 +47,8 @@ Standard library changes
 
 * Verbose `display` of `Char` (`text/plain` output) now shows the codepoint value in standard-conforming `"U+XXXX"` format ([#33291]).
 
+* Sets are now displayed less compactly in the REPL, as a column of elements, like vectors
+  and dictionaries ([#33300]).
 
 #### Libdl
 

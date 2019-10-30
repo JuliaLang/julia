@@ -456,9 +456,6 @@ let a = Expr(:quote,Expr(:$,:x8d003))
     @test eval(eval(Meta.parse(repr(a)))) == 2
 end
 
-# issue #9865
-@test occursin(r"^Set\(\[.+….+\]\)$", replstr(Set(1:100)))
-
 # issue #11413
 @test string(:(*{1, 2})) == "*{1, 2}"
 @test string(:(*{1, x})) == "*{1, x}"
@@ -1278,7 +1275,7 @@ end
     @test replstr(view(A, [1], :)) == "1×1 view(::Array{Float64,2}, [1], :) with eltype Float64:\n 0.0"
 
     # issue #27680
-    @test replstr(Set([(1.0,1.0), (2.0,2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
+    @test showstr(Set([(1.0,1.0), (2.0,2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
               "Set([(3.0, 3.0), (2.0, 2.0), (1.0, 1.0)])" :
               "Set([(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])")
 
@@ -1587,6 +1584,21 @@ end
     @test sdastr(1, 2) == "[1, 2]"
     @test sdastr(2, 2) == "[2, 3]"
     @test sdastr(3, 3) == "[3, 4, 5]"
+end
+
+@testset "show Set" begin
+    s = Set{Int}(1:22)
+    str = showstr(s)
+    @test startswith(str, "Set([")
+    @test endswith(str, "])")
+    @test occursin("  …  ", str)
+
+    str = replstr(s)
+    @test startswith(str, "Set{$Int} with 22 elements:\n")
+    @test endswith(str, "\n  ⋮ ")
+    @test count(==('\n'), str) == 20
+
+    @test replstr(Set(['a'^100])) == "Set{String} with 1 element:\n  \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa…"
 end
 
 @testset "0-dimensional Array. Issue #31481" begin

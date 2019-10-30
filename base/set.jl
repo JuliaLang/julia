@@ -439,7 +439,10 @@ julia> replace!([1, 2, 1, 3], 1=>0, 2=>4, count=2)
  3
 
 julia> replace!(Set([1, 2, 3]), 1=>0)
-Set([0, 2, 3])
+Set{Int64} with 3 elements:
+  0
+  2
+  3
 ```
 """
 replace!(A, old_new::Pair...; count::Integer=typemax(Int)) =
@@ -479,7 +482,9 @@ Dict{Int64,Int64} with 2 entries:
   1 => 3
 
 julia> replace!(x->2x, Set([3, 6]))
-Set([6, 12])
+Set{Int64} with 2 elements:
+  6
+  12
 ```
 """
 replace!(new::Callable, A; count::Integer=typemax(Int)) =

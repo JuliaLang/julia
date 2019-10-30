@@ -113,7 +113,10 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
 
     for (i, (k, v)) in enumerate(t)
         print(io, "\n  ")
-        i == rows < length(t) && (print(io, rpad("⋮", keylen), " => ⋮"); break)
+        if i == rows < length(t)
+            print(io, rpad("⋮", keylen), " => ⋮")
+            break
+        end
 
         if limit
             key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
@@ -126,6 +129,48 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         if limit
             val = _truncate_at_width_or_chars(vs[i], cols - keylen, "\r\n")
             print(io, val)
+        else
+            show(recur_io, v)
+        end
+    end
+end
+
+function summary(io::IO, t::AbstractSet)
+    n = length(t)
+    showarg(io, t, true)
+    print(io, " with ", n, (n==1 ? " element" : " elements"))
+end
+
+function show(io::IO, ::MIME"text/plain", t::AbstractSet{T}) where T
+    # show more descriptively, with one line per value
+    recur_io = IOContext(io, :SHOWN_SET => t)
+    limit::Bool = get(io, :limit, false)
+
+    summary(io, t)
+    isempty(t) && return
+    print(io, ":")
+    show_circular(io, t) && return
+    if limit
+        sz = displaysize(io)
+        rows, cols = sz[1] - 3, sz[2]
+        rows < 2   && (print(io, " …"); return)
+        cols -= 2 # Subtract the width of prefix "  "
+        cols < 4  && (cols = 4) # Minimum widths of 4 for value
+        rows -= 1 # Subtract the summary
+    else
+        rows = cols = typemax(Int)
+    end
+
+    for (i, v) in enumerate(t)
+        print(io, "\n  ")
+        if i == rows < length(t)
+            print(io, rpad("⋮", 2))
+            break
+        end
+
+        if limit
+            str = sprint(show, v, context=recur_io, sizehint=0)
+            print(io, _truncate_at_width_or_chars(str, cols, "\r\n"))
         else
             show(recur_io, v)
         end
