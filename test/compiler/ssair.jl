@@ -70,7 +70,7 @@ let cfg = CFG(BasicBlock[
     dfs = Compiler.DFS(cfg.blocks)
     @test dfs.from_pre[dfs.to_parent_pre[dfs.to_pre[5]]] == 4
     let correct_idoms = Compiler.naive_idoms(cfg.blocks)
-        @test Compiler.construct_domtree(cfg.blocks).idoms_bb == correct_idoms
+        @test cfg.domtree.idoms_bb == correct_idoms
         # For completeness, reverse the order of pred/succ in the CFG and verify
         # the answer doesn't change (it does change the which node is chosen
         # as the semi-dominator, since it changes the DFS numbering).
@@ -259,53 +259,42 @@ let cfg = CFG(BasicBlock[
         make_bb([2, 6], []),
         make_bb([4],    [5, 3]),
     ], Int[])
-    domtree = Compiler.construct_domtree(cfg.blocks)
-    @test domtree.dfs_tree.to_pre == [1, 2, 4, 5, 3, 6]
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
+    @test cfg.domtree.dfs_tree.to_pre == [1, 2, 4, 5, 3, 6]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
 
     # Test removal of edge between a parent and child in the DFS tree, which
     # should trigger complete recomputation of domtree (first case in algorithm
     # for removing edge from domtree dynamically)
     Compiler.cfg_delete_edge!(cfg, 2, 5)
-    Compiler.domtree_delete_edge!(domtree, cfg.blocks, 2, 5)
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 6, 4]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 6, 4]
     # Add edge back (testing first case for insertion)
     Compiler.cfg_insert_edge!(cfg, 2, 5)
-    Compiler.domtree_insert_edge!(domtree, cfg.blocks, 2, 5)
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
 
     # Test second case in algorithm for removing edges from domtree, in which
     # `from` is on a semidominator path from the semidominator of `to` to `to`
     Compiler.cfg_delete_edge!(cfg, 6, 5)
-    Compiler.domtree_delete_edge!(domtree, cfg.blocks, 6, 5)
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 2, 4]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 2, 4]
     # Add edge back (testing second case for insertion)
     Compiler.cfg_insert_edge!(cfg, 6, 5)
-    Compiler.domtree_insert_edge!(domtree, cfg.blocks, 6, 5)
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
 
     # Test last case for removing edges, in which edge does not satisfy either
     # of the above conditions
     Compiler.cfg_delete_edge!(cfg, 6, 3)
-    Compiler.domtree_delete_edge!(domtree, cfg.blocks, 6, 3)
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
     # Add edge back (testing second case for insertion)
     Compiler.cfg_insert_edge!(cfg, 6, 3)
-    Compiler.domtree_insert_edge!(domtree, cfg.blocks, 6, 3)
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
 
     # Try removing all edges from root
     Compiler.cfg_delete_edge!(cfg, 1, 2)
-    Compiler.domtree_delete_edge!(domtree, cfg.blocks, 1, 2)
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 0, 1, 3, 6, 4]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 0, 1, 3, 6, 4]
     Compiler.cfg_delete_edge!(cfg, 1, 3)
-    Compiler.domtree_delete_edge!(domtree, cfg.blocks, 1, 3)
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 0, 0, 0, 0, 0]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 0, 0, 0, 0, 0]
     # Add edges back
     Compiler.cfg_insert_edge!(cfg, 1, 2)
-    Compiler.domtree_insert_edge!(domtree, cfg.blocks, 1, 2)
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 0, 0, 2, 0]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 0, 0, 2, 0]
     Compiler.cfg_insert_edge!(cfg, 1, 3)
-    Compiler.domtree_insert_edge!(domtree, cfg.blocks, 1, 3)
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
 end

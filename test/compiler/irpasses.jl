@@ -34,8 +34,7 @@ let m = Meta.@lower 1 + 1
     src.ssaflags = fill(Int32(0), nstmts)
     ir = Core.Compiler.inflate_ir(src)
     Core.Compiler.verify_ir(ir)
-    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
-    ir = Core.Compiler.domsort_ssa!(ir, domtree)
+    ir = Core.Compiler.domsort_ssa!(ir)
     Core.Compiler.verify_ir(ir)
     phi = ir.stmts.inst[3]
     @test isa(phi, Core.PhiNode) && length(phi.edges) == 1
@@ -62,8 +61,7 @@ let m = Meta.@lower 1 + 1
     src.ssaflags = fill(Int32(0), nstmts)
     ir = Core.Compiler.inflate_ir(src)
     Core.Compiler.verify_ir(ir)
-    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
-    ir = Core.Compiler.domsort_ssa!(ir, domtree)
+    ir = Core.Compiler.domsort_ssa!(ir)
     Core.Compiler.verify_ir(ir)
 end
 
