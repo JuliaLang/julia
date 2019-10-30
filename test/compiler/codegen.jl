@@ -407,3 +407,11 @@ function f1_30093(r)
 end
 
 @test f1_30093(Ref(0)) == nothing
+
+# issue 33590
+function f33590(b, x)
+    y = b ? nothing : (x[1] + 1,)
+    return something(ifelse(b, x, y))
+end
+@test f33590(true, (3,)) == (3,)
+@test f33590(false, (3,)) == (4,)
