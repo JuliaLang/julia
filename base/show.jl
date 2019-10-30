@@ -1825,6 +1825,10 @@ function dump(io::IOContext, x::DataType, n::Int, indent)
                 tvar_io = IOContext(tvar_io, :unionall_env => tparam)
             end
         end
+        if x.name === NamedTuple_typename && !(x.parameters[1] isa Tuple)
+            # named tuple type with unknown field names
+            return
+        end
         fields = fieldnames(x)
         fieldtypes = datatype_fieldtypes(x)
         for idx in 1:length(fields)
