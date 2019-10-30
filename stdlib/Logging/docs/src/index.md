@@ -63,7 +63,7 @@ automatically extracted. Let's examine the user-defined data first:
   These events are disabled by default.
   - `Info` is for general information to the user.
   Think of it as an alternative to using `println` directly.
-  - `Warn` means something is wrong and action is likely required 
+  - `Warn` means something is wrong and action is likely required
   but that for now the program is still working.
   - `Error` means something is wrong and it is unlikely to be recovered,
   at least by this part of the code.
