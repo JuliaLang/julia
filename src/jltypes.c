@@ -995,17 +995,19 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt)
     size_t i, l = jl_nparams(dt);
     for (i = 0; i < l; i++) {
         jl_value_t *p = jl_tparam(dt, i);
-        if (!dt->hasfreetypevars)
+        if (!dt->hasfreetypevars) {
             dt->hasfreetypevars = jl_has_free_typevars(p);
+            if (dt->hasfreetypevars)
+                dt->isconcretetype = 0;
+        }
         if (istuple && dt->isconcretetype)
             dt->isconcretetype = (jl_is_datatype(p) && ((jl_datatype_t*)p)->isconcretetype) || p == jl_bottom_type;
-        if (dt->isdispatchtuple)
+        if (dt->isdispatchtuple) {
             dt->isdispatchtuple = jl_is_datatype(p) &&
                 ((!jl_is_kind(p) && ((jl_datatype_t*)p)->isconcretetype) ||
                  (((jl_datatype_t*)p)->name == jl_type_typename && !((jl_datatype_t*)p)->hasfreetypevars));
+        }
     }
-    if (dt->hasfreetypevars)
-        dt->isconcretetype = 0;
 }
 
 static void check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, size_t np)
@@ -1273,6 +1275,12 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     ndt->ditype = NULL;
     ndt->size = 0;
     jl_precompute_memoized_dt(ndt);
+    if (istuple)
+        ndt->ninitialized = ntp - isvatuple;
+    else if (isnamedtuple)
+        ndt->ninitialized = jl_svec_len(ndt->types);
+    else
+        ndt->ninitialized = dt->ninitialized;
 
     // assign uid as early as possible
     if (cacheable && !ndt->abstract)
@@ -1313,21 +1321,15 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             jl_gc_wb(ndt, ndt->types);
         }
     }
+
     if (jl_is_primitivetype(dt)) {
         ndt->size = dt->size;
         ndt->layout = dt->layout;
-        ndt->isbitstype = ndt->isinlinealloc = (!ndt->hasfreetypevars);
+        ndt->isbitstype = ndt->isinlinealloc = ndt->isconcretetype;
     }
     else if (cacheable && ndt->types != NULL && !ndt->abstract) {
         jl_compute_field_offsets(ndt);
     }
-
-    if (istuple)
-        ndt->ninitialized = ntp - isvatuple;
-    else if (isnamedtuple)
-        ndt->ninitialized = jl_svec_len(ndt->types);
-    else
-        ndt->ninitialized = dt->ninitialized;
 
     if (cacheable) {
         JL_UNLOCK(&typecache_lock); // Might GC
