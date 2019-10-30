@@ -216,7 +216,7 @@ end
 function summarize(io::IO, @nospecialize(T), binding)
     println(io, "`", binding, "` is of type `", typeof(T), "`.\n")
     if isa(T, UnionAll)
-        while hasproperty(T, :body)
+        while isa(T, UnionAll)
             T = T.body
         end
     else
