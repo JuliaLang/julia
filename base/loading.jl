@@ -265,7 +265,7 @@ end
 """
     pathof(m::Module)
 
-Return the path of `m.jl` file that was used to `import` module `m`,
+Return the path of the `m.jl` file that was used to `import` module `m`,
 or `nothing` if `m` was not imported from a package.
 
 Use [`dirname`](@ref) to get the directory part and [`basename`](@ref)
@@ -275,6 +275,19 @@ function pathof(m::Module)
     pkgid = get(Base.module_keys, m, nothing)
     pkgid === nothing && return nothing
     return Base.locate_package(pkgid)
+end
+
+"""
+    pkgdir(m::Module)
+
+ Return the root directory of the package that imported module `m`,
+ or `nothing` if `m` was not imported from a package.
+ """
+function pkgdir(m::Module)
+    rootmodule = Base.moduleroot(m)
+    path = pathof(rootmodule)
+    path === nothing && return nothing
+    return dirname(dirname(path))
 end
 
 ## generic project & manifest API ##
