@@ -34,12 +34,22 @@ struct CFG
     blocks::Vector{BasicBlock}
     index::Vector{Int} # map from instruction => basic-block number
                        # TODO: make this O(1) instead of O(log(n_blocks))?
+    domtree
 end
+
+function CFG(blocks::Vector{BasicBlock}, index::Vector{Int})
+    return CFG(blocks, index, construct_domtree(blocks))
+end
+
+copy(c::CFG) = CFG(BasicBlock[copy(b) for b in c.blocks],
+                   copy(c.index),
+                   copy(c.domtree))
 
 function cfg_insert_edge!(cfg::CFG, from::Int, to::Int)
     # Assumes that this edge does not already exist
     push!(cfg.blocks[to].preds, from)
     push!(cfg.blocks[from].succs, to)
+    domtree_insert_edge!(cfg.domtree, cfg.blocks, from, to)
     nothing
 end
 
@@ -49,6 +59,7 @@ function cfg_delete_edge!(cfg::CFG, from::Int, to::Int)
     # Assumes that blocks appear at most once in preds and succs
     deleteat!(preds, findfirst(x->x === from, preds)::Int)
     deleteat!(succs, findfirst(x->x === to, succs)::Int)
+    domtree_delete_edge!(cfg.domtree, cfg.blocks, from, to)
     nothing
 end
 
@@ -553,9 +564,8 @@ mutable struct IncrementalCompact
         if allow_cfg_transforms
             bb_rename = Vector{Int}(undef, length(blocks))
             cur_bb = 1
-            domtree = construct_domtree(blocks)
             for i = 1:length(bb_rename)
-                if bb_unreachable(domtree, i)
+                if bb_unreachable(code.cfg.domtree, i)
                     bb_rename[i] = -1
                 else
                     bb_rename[i] = cur_bb

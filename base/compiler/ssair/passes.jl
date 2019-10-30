@@ -69,8 +69,8 @@ function val_for_def_expr(ir::IRCode, def::Int, fidx::Int)
     end
 end
 
-function compute_value_for_block(ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, curblock::Int)
-    curblock = find_curblock(domtree, allblocks, curblock)
+function compute_value_for_block(ir::IRCode, allblocks::Vector{Int}, du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, curblock::Int)
+    curblock = find_curblock(ir.cfg.domtree, allblocks, curblock)
     def = 0
     for stmt in du.defs
         if block_for_inst(ir.cfg, stmt) == curblock
@@ -80,10 +80,10 @@ function compute_value_for_block(ir::IRCode, domtree::DomTree, allblocks::Vector
     def == 0 ? phinodes[curblock] : val_for_def_expr(ir, def, fidx)
 end
 
-function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, use_idx::Int)
+function compute_value_for_use(ir::IRCode, allblocks::Vector{Int}, du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, use_idx::Int)
     # Find the first dominating def
     curblock = stmtblock = block_for_inst(ir.cfg, use_idx)
-    curblock = find_curblock(domtree, allblocks, curblock)
+    curblock = find_curblock(ir.cfg.domtree, allblocks, curblock)
     defblockdefs = Int[stmt for stmt in du.defs if block_for_inst(ir.cfg, stmt) == curblock]
     def = 0
     if !isempty(defblockdefs)
@@ -105,7 +105,7 @@ function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{I
         if !haskey(phinodes, curblock)
             # If this happens, we need to search the predecessors for defs. Which
             # one doesn't matter - if it did, we'd have had a phinode
-            return compute_value_for_block(ir, domtree, allblocks, du, phinodes, fidx, first(ir.cfg.blocks[stmtblock].preds))
+            return compute_value_for_block(ir, allblocks, du, phinodes, fidx, first(ir.cfg.blocks[stmtblock].preds))
         end
         # The use is the phinode
         return phinodes[curblock]
@@ -721,13 +721,6 @@ function getfield_elim_pass!(ir::IRCode)
     used_ssas = copy(compact.used_ssas)
     simple_dce!(compact)
     ir = complete(compact)
-
-    # Compute domtree, needed below, now that we have finished compacting the
-    # IR. This needs to be after we iterate through the IR with
-    # `IncrementalCompact` because removing dead blocks can invalidate the
-    # domtree.
-    @timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks)
-
     # Now go through any mutable structs and see which ones we can eliminate
     for (idx, (intermediaries, defuse)) in defuses
         intermediaries = collect(intermediaries)
@@ -794,7 +787,7 @@ function getfield_elim_pass!(ir::IRCode)
                 ldu = compute_live_ins(ir.cfg, du)
                 phiblocks = Int[]
                 if !isempty(ldu.live_in_bbs)
-                    phiblocks = idf(ir.cfg, ldu, domtree)
+                    phiblocks = idf(ir.cfg, ldu)
                 end
                 phinodes = IdDict{Int, SSAValue}()
                 for b in phiblocks
@@ -804,19 +797,19 @@ function getfield_elim_pass!(ir::IRCode)
                 # Now go through all uses and rewrite them
                 allblocks = sort(vcat(phiblocks, ldu.def_bbs))
                 for stmt in du.uses
-                    ir[SSAValue(stmt)] = compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, stmt)
+                    ir[SSAValue(stmt)] = compute_value_for_use(ir, allblocks, du, phinodes, fidx, stmt)
                 end
                 if !isbitstype(fieldtype(typ, fidx))
                     for (use, list) in preserve_uses
-                        push!(list, compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, use))
+                        push!(list, compute_value_for_use(ir, allblocks, du, phinodes, fidx, use))
                     end
                 end
                 for b in phiblocks
                     for p in ir.cfg.blocks[b].preds
                         n = ir[phinodes[b]]
                         push!(n.edges, p)
-                        push!(n.values, compute_value_for_block(ir, domtree,
-                            allblocks, du, phinodes, fidx, p))
+                        push!(n.values, compute_value_for_block(
+                            ir, allblocks, du, phinodes, fidx, p))
                     end
                 end
             end

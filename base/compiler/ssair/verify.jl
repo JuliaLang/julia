@@ -11,7 +11,7 @@ if !isdefined(@__MODULE__, Symbol("@verify_error"))
     end
 end
 
-function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, print::Bool)
+function check_op(ir::IRCode, @nospecialize(op), use_bb::Int, use_idx::Int, print::Bool)
     if isa(op, SSAValue)
         if op.id > length(ir.stmts)
             def_bb = block_for_inst(ir.cfg, ir.new_nodes[op.id - length(ir.stmts)].pos)
@@ -28,7 +28,7 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
                 end
             end
         else
-            if !dominates(domtree, def_bb, use_bb) && !(bb_unreachable(domtree, def_bb) && bb_unreachable(domtree, use_bb))
+            if !dominates(ir.cfg.domtree, def_bb, use_bb) && !(bb_unreachable(ir.cfg.domtree, def_bb) && bb_unreachable(ir.cfg.domtree, use_bb))
                 # At the moment, we allow GC preserve tokens outside the standard domination notion
                 #@Base.show ir
                 @verify_error "Basic Block $def_bb does not dominate block $use_bb (tried to use value $(op.id))"
@@ -61,12 +61,23 @@ function count_int(val::Int, arr::Vector{Int})
 end
 
 function verify_ir(ir::IRCode, print::Bool=true)
+    # Verify domtree
+    if ir.cfg.domtree.idoms_bb != construct_domtree(ir.cfg.blocks).idoms_bb
+        # Dynamically updating the domtree made it incorrect?
+        @verify_error "Dominator tree does not match recomputed one"
+        error()
+    end
+    # Verify domtree by comparing with naive algorithm, but only if there
+    # aren't too many blocks for it to handle
+    if length(ir.cfg.blocks) < 1000 && ir.cfg.domtree.idoms_bb != naive_idoms(ir.cfg.blocks)
+        @verify_error "Dominator tree does not match immediate dominators computed by naive algorithm"
+        error()
+    end
     # For now require compact IR
     # @assert isempty(ir.new_nodes)
     # Verify CFG
     last_end = 0
     # Verify statements
-    domtree = construct_domtree(ir.cfg.blocks)
     for (idx, block) in pairs(ir.cfg.blocks)
         if first(block.stmts) != last_end + 1
             #ranges = [(idx,first(bb.stmts),last(bb.stmts)) for (idx, bb) in pairs(ir.cfg.blocks)]
@@ -76,7 +87,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
         last_end = last(block.stmts)
         terminator = ir.stmts[last_end][:inst]
 
-        bb_unreachable(domtree, idx) && continue
+        bb_unreachable(ir.cfg.domtree, idx) && continue
         for p in block.preds
             p == 0 && continue
             c = count_int(idx, ir.cfg.blocks[p].succs)
@@ -144,7 +155,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
     for (bb, idx) in bbidxiter(ir)
         # We allow invalid IR in dead code to avoid passes having to detect when
         # they're generating dead code.
-        bb_unreachable(domtree, bb) && continue
+        bb_unreachable(ir.cfg.domtree, bb) && continue
         stmt = ir.stmts[idx][:inst]
         stmt === nothing && continue
         if isa(stmt, PhiNode)
@@ -174,7 +185,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
                     @verify_error "GlobalRefs and Exprs are not allowed as PhiNode values"
                     error()
                 end
-                check_op(ir, domtree, val, edge, last(ir.cfg.blocks[stmt.edges[i]].stmts)+1, print)
+                check_op(ir, val, edge, last(ir.cfg.blocks[stmt.edges[i]].stmts)+1, print)
             end
         elseif isa(stmt, PhiCNode)
             for i = 1:length(stmt.values)
@@ -211,7 +222,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
             end
             for op in userefs(stmt)
                 op = op[]
-                check_op(ir, domtree, op, bb, idx, print)
+                check_op(ir, op, bb, idx, print)
             end
         end
     end
