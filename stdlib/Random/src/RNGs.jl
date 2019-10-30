@@ -586,8 +586,10 @@ function rand!(r::MersenneTwister, A::UnsafeView{UInt128}, ::SamplerType{UInt128
 end
 
 for T in BitInteger_types
-    @eval rand!(r::MersenneTwister, A::Array{$T}, sp::SamplerType{$T}) =
-        (GC.@preserve A rand!(r, UnsafeView(pointer(A), length(A)), sp); A)
+    @eval function rand!(r::MersenneTwister, A::Array{$T}, sp::SamplerType{$T})
+        GC.@preserve A rand!(r, UnsafeView(pointer(A), length(A)), sp)
+        A
+    end
 
     T == UInt128 && continue
 
@@ -601,6 +603,17 @@ for T in BitInteger_types
         A
     end
 end
+
+
+#### arrays of Bool
+
+function rand!(r::MersenneTwister, A::Array{Bool}, sp::SamplerType{Bool})
+    GC.@preserve A rand!(r,
+                         UnsafeView(Ptr{UInt8}(pointer(A)), length(A)),
+                         SamplerType{UInt8}())
+    A
+end
+
 
 ### randjump
 
