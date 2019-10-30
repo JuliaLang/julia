@@ -49,7 +49,6 @@ int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
                  uintptr_t *sp, size_t maxsize, int skip, int add_interp_frames,
                  int from_signal_handler) JL_NOTSAFEPOINT
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     volatile size_t n = 0;
     volatile int need_more_space = 0;
     uintptr_t return_ip = 0;
@@ -65,6 +64,7 @@ int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
     }
 #endif
 #if !defined(_OS_WINDOWS_)
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_jmp_buf *old_buf = ptls->safe_restore;
     jl_jmp_buf buf;
     if (!jl_setjmp(buf, 0)) {

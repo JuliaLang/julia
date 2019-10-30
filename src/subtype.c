@@ -145,11 +145,11 @@ static void save_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se)
         len++;
         v = v->prev;
     }
-    *root = (jl_value_t*)jl_alloc_svec(len*3);
-    se->buf = (int8_t*)(len ? malloc(len*2) : NULL);
+    *root = (jl_value_t*)jl_alloc_svec(len * 3);
+    se->buf = (int8_t*)(len ? malloc_s(len * 2) : NULL);
 #ifdef __clang_analyzer__
     if (len)
-        memset(se->buf, 0, len*2);
+        memset(se->buf, 0, len * 2);
 #endif
     int i=0, j=0; v = e->vars;
     while (v != NULL) {
@@ -2121,7 +2121,7 @@ static int subtype_in_env_existential(jl_value_t *x, jl_value_t *y, jl_stenv_t *
         len++;
         v = v->prev;
     }
-    int8_t *rs = (int8_t*)malloc(len);
+    int8_t *rs = (int8_t*)malloc_s(len);
     int n = 0;
     v = e->vars;
     while (n < len) {

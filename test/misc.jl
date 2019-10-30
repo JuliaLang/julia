@@ -438,6 +438,30 @@ let buf = IOBuffer()
     @test Base.prompt(IOBuffer("blah\n"), buf, "baz", default="foobar") == "blah"
 end
 
+# these tests are not in a test block so that they will compile separately
+@static if Sys.iswindows()
+    SetLastError(code) = ccall(:SetLastError, stdcall, Cvoid, (UInt32,), code)
+else
+    SetLastError(_) = nothing
+end
+@test Libc.errno(0xc0ffee) === nothing
+@test SetLastError(0xc0def00d) === nothing
+let finalized = false
+    function closefunc(_)
+        Libc.errno(0)
+        SetLastError(0)
+        finalized = true
+    end
+    @eval (finalizer($closefunc, zeros()); nothing)
+    GC.gc(); GC.gc(); GC.gc(); GC.gc()
+    @test finalized
+end
+@static if Sys.iswindows()
+    @test ccall(:GetLastError, stdcall, UInt32, ()) == 0xc0def00d
+    @test Libc.GetLastError() == 0xc0def00d
+end
+@test Libc.errno() == 0xc0ffee
+
 # Test that we can VirtualProtect jitted code to writable
 @noinline function WeVirtualProtectThisToRWX(x, y)
     return x + y
@@ -450,7 +474,7 @@ end
         err18083 = ccall(:VirtualProtect, stdcall, Cint,
             (Ptr{Cvoid}, Csize_t, UInt32, Ptr{UInt32}),
             addr, 4096, PAGE_EXECUTE_READWRITE, oldPerm)
-        err18083 == 0 && error(Libc.GetLastError())
+        err18083 == 0 && Base.windowserror(:VirtualProtect)
     end
 end
 

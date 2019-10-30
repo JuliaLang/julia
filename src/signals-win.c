@@ -297,7 +297,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
                 jl_safe_printf("UNKNOWN"); break;
         }
         jl_safe_printf(" at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
-        jl_print_native_codeloc(ExceptionInfo->ExceptionRecord->ExceptionAddress);
+        jl_print_native_codeloc((uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
 
         jl_critical_error(0, ExceptionInfo->ContextRecord,
                           ptls->bt_data, &ptls->bt_size);

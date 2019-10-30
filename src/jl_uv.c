@@ -173,7 +173,7 @@ JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream)
         uv_buf_t buf;
         buf.base = (char*)(&buf + 1);
         buf.len = 0;
-        uv_write_t *write_req = (uv_write_t*)malloc(sizeof(uv_write_t));
+        uv_write_t *write_req = (uv_write_t*)malloc_s(sizeof(uv_write_t));
         write_req->data = (void*)&fired;
         if (uv_write(write_req, stream, &buf, 1, uv_flush_callback) != 0) {
             JL_UV_UNLOCK();
@@ -260,7 +260,7 @@ JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
     }
 
     if (handle->type == UV_NAMED_PIPE || handle->type == UV_TCP || handle->type == UV_TTY) {
-        uv_write_t *req = (uv_write_t*)malloc(sizeof(uv_write_t));
+        uv_write_t *req = (uv_write_t*)malloc_s(sizeof(uv_write_t));
         req->handle = (uv_stream_t*)handle;
         jl_uv_flush_close_callback(req, 0);
         JL_UV_UNLOCK();
@@ -532,9 +532,9 @@ JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n)
     }
     else {
         // Write to libuv stream...
-        uv_write_t *req = (uv_write_t*)malloc(sizeof(uv_write_t)+n);
-        char *data = (char*)(req+1);
-        memcpy(data,str,n);
+        uv_write_t *req = (uv_write_t*)malloc_s(sizeof(uv_write_t) + n);
+        char *data = (char*)(req + 1);
+        memcpy(data, str, n);
         uv_buf_t buf[1];
         buf[0].base = data;
         buf[0].len = n;
@@ -610,6 +610,10 @@ JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...) JL_NOTSAFEPOINT
 {
     static char buf[1000];
     buf[0] = '\0';
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
 
     va_list args;
     va_start(args, fmt);
@@ -621,6 +625,10 @@ JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...) JL_NOTSAFEPOINT
     if (write(STDERR_FILENO, buf, strlen(buf)) < 0) {
         // nothing we can do; ignore the failure
     }
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
 }
 
 JL_DLLEXPORT void jl_exit(int exitcode)
@@ -836,7 +844,7 @@ JL_DLLEXPORT int jl_tcp_connect(uv_tcp_t *handle, void *host, uint16_t port,
 {
     uv_sockaddr_in addr;
     jl_sockaddr_fill(&addr, port, host, ipv6);
-    uv_connect_t *req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
+    uv_connect_t *req = (uv_connect_t*)malloc_s(sizeof(uv_connect_t));
     req->data = NULL;
     int r = uv_tcp_connect(req, handle, &addr.in, cb);
     if (r)
@@ -996,7 +1004,7 @@ void jl_work_notifier(uv_work_t *req, int status)
 JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *work_args, void *work_retval,
                                notify_cb_t notify_func, int notify_idx)
 {
-    struct work_baton *baton = (struct work_baton*) malloc(sizeof(struct work_baton));
+    struct work_baton *baton = (struct work_baton*)malloc_s(sizeof(struct work_baton));
     baton->req.data = (void*) baton;
     baton->work_func = work_func;
     baton->work_args = work_args;

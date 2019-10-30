@@ -71,7 +71,7 @@ JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOT
 }
 
 // This is only used after the tls is already initialized on the thread
-static JL_CONST_FUNC jl_ptls_t jl_get_ptls_states_fast(void)
+static JL_CONST_FUNC jl_ptls_t jl_get_ptls_states_fast(void) JL_NOTSAFEPOINT
 {
     return (jl_ptls_t)pthread_getspecific(jl_tls_key);
 }
@@ -113,7 +113,24 @@ BOOLEAN WINAPI DllMain(IN HINSTANCE hDllHandle, IN DWORD nReason,
 
 JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED
 {
-    return (jl_ptls_t)TlsGetValue(jl_tls_key);
+#if defined(_CPU_X86_64_)
+    DWORD *plast_error = (DWORD*)(__readgsqword(0x30) + 0x68);
+    DWORD last_error = *plast_error;
+#elif defined(_CPU_X86_)
+    DWORD *plast_error = (DWORD*)(__readfsdword(0x18) + 0x34);
+    DWORD last_error = *plast_error;
+#else
+    DWORD last_error = GetLastError();
+#endif
+    jl_ptls_t state = (jl_ptls_t)TlsGetValue(jl_tls_key);
+#if defined(_CPU_X86_64_)
+    *plast_error = last_error;
+#elif defined(_CPU_X86_)
+    *plast_error = last_error;
+#else
+    SetLastError(last_error);
+#endif
+    return state;
 }
 
 jl_get_ptls_states_func jl_get_ptls_states_getter(void)
@@ -263,12 +280,7 @@ void jl_init_threadtls(int16_t tid)
     }
     ptls->defer_signal = 0;
     jl_bt_element_t *bt_data = (jl_bt_element_t*)
-        malloc(sizeof(jl_bt_element_t) * (JL_MAX_BT_SIZE + 1));
-    if (bt_data == NULL) {
-        jl_printf(JL_STDERR, "could not allocate backtrace buffer\n");
-        gc_debug_critical_error();
-        abort();
-    }
+        malloc_s(sizeof(jl_bt_element_t) * (JL_MAX_BT_SIZE + 1));
     memset(bt_data, 0, sizeof(jl_bt_element_t) * (JL_MAX_BT_SIZE + 1));
     ptls->bt_data = bt_data;
     ptls->sig_exception = NULL;
@@ -448,7 +460,7 @@ void jl_start_threads(void)
     uv_barrier_init(&thread_init_done, nthreads);
 
     for (i = 1; i < nthreads; ++i) {
-        jl_threadarg_t *t = (jl_threadarg_t*)malloc(sizeof(jl_threadarg_t)); // ownership will be passed to the thread
+        jl_threadarg_t *t = (jl_threadarg_t*)malloc_s(sizeof(jl_threadarg_t)); // ownership will be passed to the thread
         t->tid = i;
         t->barrier = &thread_init_done;
         uv_thread_create(&uvtid, jl_threadfun, t);

@@ -412,7 +412,7 @@ void *mach_profile_listener(void *arg)
 #ifdef LIBOSXUNWIND
     mach_profiler_thread = mach_thread_self();
 #endif
-    mig_reply_error_t *bufRequest = (mig_reply_error_t *) malloc(max_size);
+    mig_reply_error_t *bufRequest = (mig_reply_error_t*)malloc_s(max_size);
     while (1) {
         kern_return_t ret = mach_msg(&bufRequest->Head, MACH_RCV_MSG,
                                      0, max_size, profile_port,
