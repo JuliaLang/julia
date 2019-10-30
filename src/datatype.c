@@ -311,6 +311,18 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         // based on whether its definition is self-referential
         if (w->types != NULL) {
             st->isbitstype = st->isinlinealloc = st->isconcretetype && !st->mutabl;
+            if (st->isinlinealloc) {
+                size_t i, nf = jl_svec_len(w->types);
+                for (i = 0; i < nf; i++) {
+                    jl_value_t *fld = jl_svecref(w->types, i);
+                    if (references_name(fld, w->name)) {
+                        st->isinlinealloc = 0;
+                        st->isbitstype = 0;
+                        st->zeroinit = 1;
+                        break;
+                    }
+                }
+            }
             size_t i, nf = jl_svec_len(st->types);
             for (i = 0; i < nf; i++) {
                 jl_value_t *fld = jl_svecref(st->types, i);
@@ -325,18 +337,6 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                         st->has_concrete_subtype = 0;
                     else
                         st->has_concrete_subtype &= !jl_is_datatype(fld) || ((jl_datatype_t *)fld)->has_concrete_subtype;
-                }
-            }
-            if (st->isinlinealloc) {
-                size_t i, nf = jl_svec_len(w->types);
-                for (i = 0; i < nf; i++) {
-                    jl_value_t *fld = jl_svecref(w->types, i);
-                    if (references_name(fld, w->name)) {
-                        st->isinlinealloc = 0;
-                        st->isbitstype = 0;
-                        st->zeroinit = 1;
-                        break;
-                    }
                 }
             }
         }

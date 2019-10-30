@@ -5924,6 +5924,14 @@ let x = UnionFieldInlineStruct(1, 3.14)
     @test CInlineUnion[end] == x
 end
 
+# issue 33709
+struct A33709
+    a::Union{Nothing,A33709}
+end
+let a33709 = A33709(A33709(nothing))
+    @test isnothing(a33709.a.a)
+end
+
 # issue 31583
 a31583 = "a"
 f31583() = a31583 === "a"
