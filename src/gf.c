@@ -2145,8 +2145,9 @@ JL_DLLEXPORT jl_array_t* jl_finish_tracking_dispatches() {
 }
 
 void _record_dynamic_dispatches_if_tracking(jl_method_instance_t* def) {
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (__unlikely(ptls->currently_tracking_dispatches)) {
-        arraylist_push(&jl_get_ptls_states()->tracked_dynamic_dispatches, def);
+        arraylist_push(&ptls->tracked_dynamic_dispatches, def);
     }
 }
 
