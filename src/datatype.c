@@ -138,6 +138,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
     }
 
     // allocate a new descriptor
+    // TODO: lots of these are the same--take advantage of the fact these are immutable to combine them
     uint32_t fielddesc_size = jl_fielddesc_size(fielddesc_type);
     int has_padding = nfields && npointers;
     jl_datatype_layout_t *flddesc =
@@ -365,6 +366,8 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         }
         // compute layout for the wrapper object if the field types have no free variables
         if (!st->isconcretetype) {
+            if (st != w)
+                return; // otherwise we would leak memory
             for (i = 0; i < nfields; i++) {
                 if (jl_has_free_typevars(jl_field_type(st, i)))
                     return; // not worthwhile computing the rest
