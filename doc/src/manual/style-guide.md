@@ -1,6 +1,6 @@
 # Style Guide
 
-The following sections explain a few aspects of idiomatic Julia coding style. None of these rules
+The following sections explain a few aspects of the idiomatic Julia coding style. None of these rules
 are absolute; they are only suggestions to help familiarize you with the language and to help
 you choose among alternative designs.
 
@@ -17,7 +17,7 @@ on global variables (aside from constants like [`pi`](@ref)).
 
 ## Avoid writing overly-specific types
 
-Code should be as generic as possible. Instead of writing:
+The code should be as generic as possible. Instead of writing:
 
 ```julia
 Complex{Float64}(x)
@@ -33,7 +33,7 @@ The second version will convert `x` to an appropriate type, instead of always th
 
 This style point is especially relevant to function arguments. For example, don't declare an argument
 to be of type `Int` or [`Int32`](@ref) if it really could be any integer, expressed with the abstract
-type [`Integer`](@ref). In fact, in many cases you can omit the argument type altogether,
+type [`Integer`](@ref). In fact, in many cases, you can omit the argument type altogether,
 unless it is needed to disambiguate from other method definitions, since a
 [`MethodError`](@ref) will be thrown anyway if a type is passed that does not support any
 of the requisite operations. (This is known as
@@ -52,7 +52,7 @@ addone(x) = x + oneunit(x)             # any type supporting + and oneunit
 The last definition of `addone` handles any type supporting [`oneunit`](@ref) (which returns 1 in
 the same type as `x`, which avoids unwanted type promotion) and the [`+`](@ref) function with
 those arguments. The key thing to realize is that there is *no performance penalty* to defining
-*only* the general `addone(x) = x + oneunit(x)`, because Julia will automatically compile specialized
+*only* the general `addone(x) = x + oneunit(x)` because Julia will automatically compile specialized
 versions as needed. For example, the first time you call `addone(12)`, Julia will automatically
 compile a specialized `addone` function for `x::Int` arguments, with the call to `oneunit`
 replaced by its inlined value `1`. Therefore, the first three definitions of `addone` above are
@@ -79,7 +79,7 @@ end
 foo(Int(x), Int(y))
 ```
 
-This is better style because `foo` does not really accept numbers of all types; it really needs
+This is a better style because `foo` does not really accept numbers of all types; it needs
 `Int` s.
 
 One issue here is that if a function inherently requires integers, it might be better to force
@@ -412,4 +412,4 @@ julia> h(1)
 ```
 
 Thus, use `Int` literals when possible, with `Rational{Int}` for literal non-integer numbers,
-in order to make it easier to use your code.
+to make it easier to use your code.
