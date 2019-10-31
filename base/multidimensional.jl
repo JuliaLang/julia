@@ -487,12 +487,20 @@ module IteratorsMD
         return I, (I, n+1)
     end
 
-    simd_outer_range(iter::CartesianPartition{CartesianIndex{2}}) = @inbounds CartesianIndices((iter[1][2]:iter[end][2],))
     @inline function simd_outer_range(iter::CartesianPartition)
+        # In general, the Cartesian Partition might start and stop in the middle of the outer
+        # dimensions — thus the outer range of a CartesianPartition is itself a
+        # CartesianPartition.
         t = tail(iter.parent.parent.indices)
         ci = CartesianIndices(t)
         li = LinearIndices(t)
         return @inbounds view(ci, li[tail(iter[1].I)...]:li[tail(iter[end].I)...])
+    end
+    function simd_outer_range(iter::CartesianPartition{CartesianIndex{2}})
+        # But for two-dimensional Partitions the above is just a simple one-dimensional range
+        # over the second dimension; we don't need to worry about non-rectangular staggers in
+        # higher dimensions.
+        return @inbounds CartesianIndices((iter[1][2]:iter[end][2],))
     end
     @inline function simd_inner_length(iter::CartesianPartition, I::CartesianIndex)
         inner = iter.parent.parent.indices[1]
@@ -503,8 +511,12 @@ module IteratorsMD
         return inner_end - inner_start + 1
     end
     @inline function simd_index(iter::CartesianPartition, Ilast::CartesianIndex, I1::Int)
+        # I1 is the 0-based distance from the first dimension's offest
+        offset = first(iter.parent.parent.indices[1]) # (this is 1 for 1-based arrays)
+        # In the first column we need to also add in the iter's starting point (branchlessly)
         f = @inbounds iter[1]
-        CartesianIndex((I1+first(iter.parent.parent.indices[1])+(Ilast.I==tail(f.I))*(f[1]-1), Ilast.I...))
+        startoffset = (Ilast.I == tail(f.I))*(f[1] - 1)
+        CartesianIndex((I1 + offset + startoffset, Ilast.I...))
     end
 end  # IteratorsMD
 
