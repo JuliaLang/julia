@@ -308,7 +308,7 @@ If all three of the following conditions are met:
 Then Julia will instead exit with exit code `exitcode`.
 
 If multiple exit hooks (each with nonzero `exitcode`) throw
-exceptions, then Julia will use the `change_exit_hook` of the first called
+exceptions, then Julia will use the `exitcode` of the first called
 exit hook to throw an exception. (Because exit hooks are called in LIFO order,
 "first called" is equivalent to "last registered.")
 """
