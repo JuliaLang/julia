@@ -9,7 +9,7 @@ you choose among alternative designs.
 Writing code as a series of steps at the top level is a quick way to get started solving a problem,
 but you should try to divide a program into functions as soon as possible. Functions are more
 reusable and testable, and clarify what steps are being done and what their inputs and outputs
-are. Furthermore, code inside functions tends to run much faster than top level code, due to how
+are. Furthermore, code inside functions tends to run much faster than the top-level code, due to how
 Julia's compiler works.
 
 It is also worth emphasizing that functions should take arguments, instead of operating directly
