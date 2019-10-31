@@ -607,11 +607,40 @@ end
 
 #### arrays of Bool
 
-function rand!(r::MersenneTwister, A::Array{Bool}, sp::SamplerType{Bool})
-    GC.@preserve A rand!(r,
-                         UnsafeView(Ptr{UInt8}(pointer(A)), length(A)),
-                         SamplerType{UInt8}())
-    A
+# similar to Array{UInt8}, but we need to mask the result so that only the LSB
+# in each byte can be non-zero
+
+function rand!(r::MersenneTwister, A1::Array{Bool}, sp::SamplerType{Bool})
+    n1 = length(A1)
+    n128 = n1 ÷ 16
+
+    GC.@preserve A1 begin
+        A = UnsafeView{UInt128}(pointer(A1), n128)
+        rand!(r, UnsafeView{Float64}(A.ptr, 2*n128), CloseOpen12())
+        # without masking, non-zero bits could be observed in other
+        # positions than the LSB of each byte
+        mask = 0x01010101010101010101010101010101
+        if n128 > 0
+            # we need up to 15 bits of entropy for the last loop;
+            # A[1] % UInt64 contains 52 bits of entropy, but 8
+            # of them will be used for A[i] itself (the first of
+            # each byte). To compensate, we xor with (A[1] >> 65),
+            # which gets the entropy from the second bit of each byte
+            # of the upper-half of A[i].
+            bits = (A[1] % UInt64) ⊻ (A[1] >> 65) % UInt64
+        else
+            bits = rand(r, UInt52Raw())
+        end
+        for i = 1:n128
+            # << 5 to randomize the first bit of the 8th byte
+            A[i] = (A[i] ⊻ A[i] << 5) & mask
+        end
+    end
+    for i = 16*n128+1:n1
+        @inbounds A1[i] = bits % Bool
+        bits >>= 1
+    end
+    A1
 end
 
 
