@@ -19,23 +19,24 @@ if Sys.iswindows()
     end
 else # !windows
     struct RandomDevice <: AbstractRNG
-        file::IOStream
         unlimited::Bool
 
-        RandomDevice(; unlimited::Bool=true) =
-            new(open(unlimited ? "/dev/urandom" : "/dev/random"), unlimited)
+        RandomDevice(; unlimited::Bool=true) = new(unlimited)
     end
 
-    rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read( rd.file, sp[])
+    rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read(getfile(rd), sp[])
 
-    function serialize(s::AbstractSerializer, rd::RandomDevice)
-        Serialization.serialize_type(s, typeof(rd))
-        serialize(s, rd.unlimited)
+    function getfile(rd::RandomDevice)
+        devrandom = rd.unlimited ? DEV_URANDOM : DEV_RANDOM
+        if isassigned(devrandom)
+            devrandom[]
+        else
+            devrandom[] = open(rd.unlimited ? "/dev/urandom" : "/dev/random")
+        end
     end
-    function deserialize(s::AbstractSerializer, t::Type{RandomDevice})
-        unlimited = deserialize(s)
-        return RandomDevice(unlimited=unlimited)
-    end
+
+    const DEV_RANDOM  = Ref{IOStream}()
+    const DEV_URANDOM = Ref{IOStream}()
 
 end # os-test
 
@@ -48,7 +49,7 @@ for T in (Bool, BitInteger_types...)
             A
         end
     else
-        @eval rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T}) = read!(rd.file, A)
+        @eval rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T}) = read!(getfile(rd), A)
     end
 end
 
@@ -67,7 +68,6 @@ RandomDevice
 RandomDevice(::Nothing) = RandomDevice()
 seed!(rng::RandomDevice) = rng
 
-const RANDOM_DEVICE = RandomDevice()
 
 ## MersenneTwister
 
@@ -307,15 +307,6 @@ const THREAD_RNGs = MersenneTwister[]
 end
 function __init__()
     resize!(empty!(THREAD_RNGs), Threads.nthreads()) # ensures that we didn't save a bad object
-
-    if !Sys.iswindows()
-        # open /dev/urandom "in-place" (in RANDOM_DEVICE.file)
-        RANDOM_DEVICE.file.handle = pointer(RANDOM_DEVICE.file.ios)
-        systemerror("opening file /dev/urandom",
-                    ccall(:ios_file, Ptr{Cvoid},
-                          (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
-                          RANDOM_DEVICE.file.ios, "/dev/urandom", 1, 0, 0, 0) == C_NULL)
-    end
 end
 
 
