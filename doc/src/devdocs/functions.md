@@ -125,7 +125,7 @@ end
 
 import Markdown
 fs = [string(n) for n in names(Core;all=true) if getfield(Core,n) isa Core.Builtin]
-x = Markdown.parse("```$(lines(fs))\n```")
+x = Markdown.parse("```\n$(lines(fs))\n```")
 
 
 ```
