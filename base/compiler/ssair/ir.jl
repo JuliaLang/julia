@@ -527,7 +527,7 @@ mutable struct IncrementalCompact
     cfg_transforms_enabled::Bool
     fold_constant_branches::Bool
 
-    function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=false)
+    function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=true)
         # Sort by position with attach after nodes after regular ones
         perm = my_sortperm(Int[let new_node = code.new_nodes.info[i]
             (new_node.pos * 2 + Int(new_node.attach_after))
@@ -1416,7 +1416,7 @@ function complete(compact::IncrementalCompact)
     return IRCode(compact.ir, compact.result, cfg, compact.new_new_nodes)
 end
 
-function compact!(code::IRCode, allow_cfg_transforms::Bool=false)
+function compact!(code::IRCode, allow_cfg_transforms::Bool=true)
     compact = IncrementalCompact(code, allow_cfg_transforms)
     # Just run through the iterator without any processing
     for _ in compact; end # _ isa Pair{Int, Any}
