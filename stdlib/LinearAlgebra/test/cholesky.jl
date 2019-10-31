@@ -336,9 +336,10 @@ end
     d = abs.(randn(3)) .+ 0.1
     D = Diagonal(d)
     CD = cholesky(D)
+    CM = cholesky(Matrix(D))
     @test CD isa Cholesky{Float64}
-    @test CD.U isa UpperTriangular{Float64}
-    @test CD.U == Diagonal(.√d)
+    @test CD.U == Diagonal(.√d) == CM.U
+    @test D ≈ CD.L * CD.U
     @test CD.info == 0
 
     # real, failing
@@ -347,13 +348,12 @@ end
     @test Dnpd.info == 2
 
     # complex
-    d = cis.(rand(3) .* 2*π)
-    d .*= abs.(randn(3) .+ 0.1)
-    D = Diagonal(d)
+    D = complex(D)
     CD = cholesky(D)
+    CM = cholesky(Matrix(D))
     @test CD isa Cholesky{Complex{Float64}}
-    @test CD.U isa UpperTriangular{Complex{Float64}}
-    @test CD.U == Diagonal(.√d)
+    @test CD.U == Diagonal(.√d) == CM.U
+    @test D ≈ CD.L * CD.U
     @test CD.info == 0
 
     # complex, failing

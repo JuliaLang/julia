@@ -411,7 +411,6 @@ size(C::Union{Cholesky, CholeskyPivoted}, d::Integer) = size(C.factors, d)
 function getproperty(C::Cholesky, d::Symbol)
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
-    info     = getfield(C, :info)
     if d == :U
         return UpperTriangular(Cuplo === char_uplo(d) ? Cfactors : copy(Cfactors'))
     elseif d == :L
