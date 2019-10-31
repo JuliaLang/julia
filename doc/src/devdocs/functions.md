@@ -102,7 +102,32 @@ currently share a method table via special arrangement.
 The "builtin" functions, defined in the `Core` module, are:
 
 ```@eval
-[n for n in names(Core;all=true) if getfield(Core,n) isa Core.Builtin]
+
+lines(words) = begin
+    io = IOBuffer()
+    linelen = 0
+    for word in words
+        if linelen+length(word) > 80
+            print(io, '\n', word)
+            linelen = length(word)
+        elseif linelen == 0
+            print(io, word);
+            linelen += length(word)
+        else
+            print(io, ' ', word);
+            linelen += length(word)+1
+        end
+    end
+    String(take!(io))
+end
+
+
+
+import Markdown
+fs = [string(n) for n in names(Core;all=true) if getfield(Core,n) isa Core.Builtin]
+x = Markdown.parse("```$(lines(fs))\n```")
+
+
 ```
 
 These are all singleton objects whose types are subtypes of `Builtin`, which is a subtype of
