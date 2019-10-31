@@ -221,7 +221,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     On the other hand, the function `g(x=[1,2]) = push!(x,3)` returns `[1,2,3]` every time it is called
     as `g()`.
   * In Julia, keyword arguments must be passed using keywords, unlike python in which it is usually possible
-    to pass them positionally. Attempting to pass a keyword argument positionally alters the method 
+    to pass them positionally. Attempting to pass a keyword argument positionally alters the method
     signature leading to a `MethodError` or calling of the wrong method.
   * In Julia `%` is the remainder operator, whereas in Python it is the modulus.
   * The commonly used `Int` type corresponds to the machine integer type (`Int32` or `Int64`).
