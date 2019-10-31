@@ -4,7 +4,6 @@ abstract type AbstractCartesianIndex{N} end # This is a hacky forward declaratio
 const ViewIndex = Union{Real, AbstractArray}
 const ScalarIndex = Real
 
-# L is true if the view itself supports fast linear indexing
 """
     SubArray{T,N,P,I,L} <: AbstractArray{T,N}
 
