@@ -119,8 +119,25 @@ end
 # In case the line numbers in the source code have changed since the code was compiled,
 # allow packages to set a callback function that corrects them.
 # (Used by Revise and perhaps other packages.)
-default_methodloc(method::Method) = method.file, method.line
-const methodloc_callback = Ref{Function}(default_methodloc)
+const methodloc_callback = Ref{Union{Function, Nothing}}(nothing)
+
+# This function does the method location updating
+function updated_methodloc(m::Method)::Tuple{String, Int32}
+    file, line = m.file, m.line
+    if methodloc_callback[] !== nothing
+        try
+            file, line = invokelatest(methodloc_callback[], m)
+        catch
+        end
+    end
+    # The file defining Base.Sys gets included after this file is included so make sure
+    # this function is valid even in this intermediary state
+    if isdefined(@__MODULE__, :Sys) && Sys.BUILD_STDLIB_PATH != Sys.STDLIB
+        # BUILD_STDLIB_PATH gets defined in sysinfo.jl
+        file = replace(string(file), normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB))
+    end
+    return string(file), line
+end
 
 functionloc(m::Core.MethodInstance) = functionloc(m.def)
 
@@ -130,7 +147,7 @@ functionloc(m::Core.MethodInstance) = functionloc(m.def)
 Returns a tuple `(filename,line)` giving the location of a `Method` definition.
 """
 function functionloc(m::Method)
-    file, ln = invokelatest(methodloc_callback[], m)
+    file, ln = updated_methodloc(m)
     if ln <= 0
         error("could not determine location of method definition")
     end
@@ -195,10 +212,7 @@ function show(io::IO, m::Method)
     show_method_params(io, tv)
     print(io, " in ", m.module)
     if line > 0
-        try
-            file, line = invokelatest(methodloc_callback[], m)
-        catch
-        end
+        file, line = updated_methodloc(m)
         print(io, " at ", file, ":", line)
     end
 end
@@ -247,11 +261,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
             println(io)
             print(io, "[$(n)] ")
             show(io, meth)
-            file, line = meth.file, meth.line
-            try
-                file, line = invokelatest(methodloc_callback[], meth)
-            catch
-            end
+            file, line = updated_methodloc(meth)
             push!(LAST_SHOWN_LINE_INFOS, (string(file), line))
         else
             rest += 1
@@ -361,10 +371,7 @@ function show(io::IO, ::MIME"text/html", m::Method)
     end
     print(io, " in ", m.module)
     if line > 0
-        try
-            file, line = invokelatest(methodloc_callback[], m)
-        catch
-        end
+        file, line = updated_methodloc(m)
         u = url(m)
         if isempty(u)
             print(io, " at ", file, ":", line)
@@ -398,11 +405,7 @@ function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
         first = false
         print(io, "[$(i)] ")
         show(io, m)
-        file, line = m.file, m.line
-        try
-            file, line = invokelatest(methodloc_callback[], m)
-        catch
-        end
+        file, line = updated_methodloc(m)
         push!(LAST_SHOWN_LINE_INFOS, (string(file), line))
     end
 end

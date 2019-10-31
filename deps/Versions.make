@@ -33,11 +33,11 @@ LIBUV_BB_REL = 0
 OBJCONV_VER = 2.49.0
 OBJCONV_BB_REL = 0
 ZLIB_VER = 1.2.11
-ZLIB_BB_REL = 3
+ZLIB_BB_REL = 6
 P7ZIP_VER = 16.2.0
 P7ZIP_BB_REL = 1
 
 # Specify the version of the Mozilla CA Certificate Store to obtain.
 # The versions of cacert.pem are identified by the date (YYYY-MM-DD) of their changes.
 # See https://curl.haxx.se/docs/caextract.html for more details.
-MOZILLA_CACERT_VERSION := 2019-05-15
+MOZILLA_CACERT_VERSION := 2019-10-16

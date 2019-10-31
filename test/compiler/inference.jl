@@ -2445,3 +2445,14 @@ f31974(n::Int) = f31974(1:n)
 
 f_overly_abstract_complex() = Complex(Ref{Number}(1)[])
 @test Base.return_types(f_overly_abstract_complex, Tuple{}) == [Complex]
+
+# Issue 26724
+const IntRange = AbstractUnitRange{<:Integer}
+const DenseIdx = Union{IntRange,Integer}
+@inline foo_26724(result) =
+    (result...,)
+@inline foo_26724(result, i::Integer, I::DenseIdx...) =
+    foo_26724(result, I...)
+@inline foo_26724(result, r::IntRange, I::DenseIdx...) =
+    foo_26724((result..., length(r)), I...)
+@test @inferred(foo_26724((), 1:4, 1:5, 1:6)) === (4, 5, 6)

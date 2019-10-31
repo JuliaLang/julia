@@ -198,14 +198,6 @@ function splitext(path::String)
     a*m.captures[1], String(m.captures[2])
 end
 
-function pathsep(paths::AbstractString...)
-    for path in paths
-        m = match(path_separator_re, String(path))
-        m !== nothing && return m.match[1:1]
-    end
-    return path_separator
-end
-
 """
     splitpath(path::AbstractString) -> Vector{String}
 
@@ -246,12 +238,77 @@ function splitpath(p::String)
     return out
 end
 
+joinpath(path::AbstractString)::String = path
+
+if Sys.iswindows()
+
+function joinpath(path::AbstractString, paths::AbstractString...)::String
+    result_drive, result_path = splitdrive(path)
+
+    local p_drive, p_path
+    for p in paths
+        p_drive, p_path = splitdrive(p)
+
+        if startswith(p_path, ('\\', '/'))
+            # second path is absolute
+            if !isempty(p_drive) || !isempty(result_drive)
+                result_drive = p_drive
+            end
+            result_path = p_path
+            continue
+        elseif !isempty(p_drive) && p_drive != result_drive
+            if lowercase(p_drive) != lowercase(result_drive)
+                # different drives, ignore the first path entirely
+                result_drive = p_drive
+                result_path = p_path
+                continue
+            end
+        end
+
+        # second path is relative to the first
+        if !isempty(result_path) && result_path[end] ∉ ('\\', '/')
+            result_path *= "\\"
+        end
+
+        result_path = result_path * p_path
+    end
+
+    # add separator between UNC and non-absolute path
+    if !isempty(p_path) && result_path[1] ∉ ('\\', '/') && !isempty(result_drive) && result_drive[end] != ':'
+        return result_drive * "\\" * result_path
+    end
+
+    return result_drive * result_path
+end
+
+else
+
+function joinpath(path::AbstractString, paths::AbstractString...)::String
+    for p in paths
+        if isabspath(p)
+            path = p
+        elseif isempty(path) || path[end] == '/'
+            path *= p
+        else
+            path *= "/" * p
+        end
+    end
+    return path
+end
+
+end # os-test
+
 """
-    joinpath(parts...) -> AbstractString
+    joinpath(parts::AbstractString...) -> String
 
 Join path components into a full path. If some argument is an absolute path or
 (on Windows) has a drive specification that doesn't match the drive computed for
 the join of the preceding paths, then prior components are dropped.
+
+Note on Windows since there is a current directory for each drive, `joinpath("c:", "foo")`
+represents a path relative to the current directory on drive "c:" so this is equal to "c:foo",
+not "c:\\foo". Furthermore, `joinpath` treats this as a non-absolute path and ignores the drive
+letter casing, hence `joinpath("C:\\A","c:b") = "C:\\A\\b"`.
 
 # Examples
 ```jldoctest
@@ -259,20 +316,7 @@ julia> joinpath("/home/myuser", "example.jl")
 "/home/myuser/example.jl"
 ```
 """
-joinpath(a::AbstractString, b::AbstractString, c::AbstractString...) = joinpath(joinpath(a,b), c...)
-joinpath(a::AbstractString) = a
-
-function joinpath(a::String, b::String)
-    isabspath(b) && return b
-    A, a = splitdrive(a)
-    B, b = splitdrive(b)
-    !isempty(B) && A != B && return string(B,b)
-    C = isempty(B) ? A : B
-    isempty(a)                              ? string(C,b) :
-    occursin(path_separator_re, a[end:end]) ? string(C,a,b) :
-                                              string(C,a,pathsep(a,b),b)
-end
-joinpath(a::AbstractString, b::AbstractString) = joinpath(String(a), String(b))
+joinpath
 
 """
     normpath(path::AbstractString) -> AbstractString

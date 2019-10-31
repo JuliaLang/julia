@@ -36,7 +36,7 @@ void jl_print_timings(void)
 
 void jl_init_timing(void)
 {
-    jl_root_timing = (jl_timing_block_t*)malloc(sizeof(jl_timing_block_t));
+    jl_root_timing = (jl_timing_block_t*)malloc_s(sizeof(jl_timing_block_t));
     _jl_timing_block_init(jl_root_timing, JL_TIMING_ROOT);
     jl_root_timing->prev = NULL;
 }

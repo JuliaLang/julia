@@ -474,7 +474,7 @@ void STATIC_INLINE _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t 
 
 static jl_function_t *jl_iterate_func JL_GLOBALLY_ROOTED;
 
-JL_CALLABLE(jl_f__apply)
+static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_value_t *iterate)
 {
     JL_NARGSV(apply, 1);
     jl_function_t *f = args[0];
@@ -516,10 +516,13 @@ JL_CALLABLE(jl_f__apply)
             extra += 1;
         }
     }
-    if (extra && jl_iterate_func == NULL) {
-        jl_iterate_func = jl_get_function(jl_top_module, "iterate");
-        if (jl_iterate_func == NULL)
-            jl_undefined_var_error(jl_symbol("iterate"));
+    if (extra && iterate == NULL) {
+        if (jl_iterate_func == NULL) {
+            jl_iterate_func = jl_get_function(jl_top_module, "iterate");
+            if (jl_iterate_func == NULL)
+                jl_undefined_var_error(jl_symbol("iterate"));
+        }
+        iterate = jl_iterate_func;
     }
     // allocate space for the argument array and gc roots for it
     // based on our previous estimates
@@ -599,7 +602,7 @@ JL_CALLABLE(jl_f__apply)
             assert(extra > 0);
             jl_value_t *args[2];
             args[0] = ai;
-            jl_value_t *next = jl_apply_generic(jl_iterate_func, args, 1);
+            jl_value_t *next = jl_apply_generic(iterate, args, 1);
             while (next != jl_nothing) {
                 roots[stackalloc] = next;
                 jl_value_t *value = jl_get_nth_field_checked(next, 0);
@@ -614,7 +617,7 @@ JL_CALLABLE(jl_f__apply)
                 roots[stackalloc + 1] = NULL;
                 JL_GC_ASSERT_LIVE(state);
                 args[1] = state;
-                next = jl_apply_generic(jl_iterate_func, args, 2);
+                next = jl_apply_generic(iterate, args, 2);
             }
             roots[stackalloc] = NULL;
             extra -= 1;
@@ -627,6 +630,16 @@ JL_CALLABLE(jl_f__apply)
     jl_value_t *result = jl_apply(newargs, n);
     JL_GC_POP();
     return result;
+}
+
+JL_CALLABLE(jl_f__apply_iterate)
+{
+    return do_apply(F, args+1, nargs-1, args[0]);
+}
+
+JL_CALLABLE(jl_f__apply)
+{
+    return do_apply(F, args, nargs, NULL);
 }
 
 // this is like `_apply`, but with quasi-exact checks to make sure it is pure
@@ -1301,6 +1314,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     // internal functions
     jl_builtin_apply_type = add_builtin_func("apply_type", jl_f_apply_type);
     jl_builtin__apply = add_builtin_func("_apply", jl_f__apply);
+    jl_builtin__apply_iterate = add_builtin_func("_apply_iterate", jl_f__apply_iterate);
     jl_builtin__expr = add_builtin_func("_expr", jl_f__expr);
     jl_builtin_svec = add_builtin_func("svec", jl_f_svec);
     add_builtin_func("_apply_pure", jl_f__apply_pure);

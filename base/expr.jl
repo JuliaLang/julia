@@ -67,8 +67,9 @@ function copy(c::CodeInfo)
     cnew.slotflags = copy(cnew.slotflags)
     cnew.codelocs  = copy(cnew.codelocs)
     cnew.linetable = copy(cnew.linetable)
-    cnew.ssaflags = copy(cnew.ssaflags)
-    ssavaluetypes = cnew.ssavaluetypes
+    cnew.ssaflags  = copy(cnew.ssaflags)
+    cnew.edges     = cnew.edges === nothing ? nothing : copy(cnew.edges)
+    ssavaluetypes  = cnew.ssavaluetypes
     ssavaluetypes isa Vector{Any} && (cnew.ssavaluetypes = copy(ssavaluetypes))
     return cnew
 end
@@ -196,7 +197,7 @@ end
 """
     @noinline
 
-Prevent the compiler from inlining a function.
+Give a hint to the compiler that it should not inline a function.
 
 Small functions are typically inlined automatically.
 By using `@noinline` on small functions, auto-inlining can be
@@ -208,6 +209,8 @@ prevented. This is shown in the following example:
         Function Definition
     =#
 end
+
+If the function is trivial (for example returning a constant) it might get inlined anyway.
 ```
 """
 macro noinline(ex)
@@ -242,10 +245,8 @@ macro propagate_inbounds(ex)
     if isa(ex, Expr)
         pushmeta!(ex, :inline)
         pushmeta!(ex, :propagate_inbounds)
-        esc(ex)
-    else
-        esc(ex)
     end
+    esc(ex)
 end
 
 """

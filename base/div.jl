@@ -3,10 +3,10 @@
 """
     div(x, y, r::RoundingMode=RoundToZero)
 
-Compute the remainder of `x` after integer division by `y`, with the quotient rounded
-according to the rounding mode `r`. In other words, the quantity
+The quotient from Euclidean division. Computes x/y, rounded to an integer according
+to the rounding mode `r`. In other words, the quantity
 
-    y*round(x/y,r)
+    round(x/y,r)
 
 without any intermediate rounding.
 
@@ -231,7 +231,15 @@ fld(x::T, y::T) where {T<:Real} = throw(MethodError(div, (x, y, RoundDown)))
 cld(x::T, y::T) where {T<:Real} = throw(MethodError(div, (x, y, RoundUp)))
 
 # Promotion
-div(x::Real, y::Real, r::RoundingMode) = div(promote(x, y)..., r)
+function div(x::Real, y::Real, r::RoundingMode)
+    typeof(x) === typeof(y) && throw(MethodError(div, (x, y, r)))
+    if r == RoundToZero
+        # For compat. Remove in 2.0.
+        div(promote(x, y)...)
+    else
+        div(promote(x, y)..., r)
+    end
+end
 
 # Integers
 # fld(x,y) == div(x,y) - ((x>=0) != (y>=0) && rem(x,y) != 0 ? 1 : 0)
