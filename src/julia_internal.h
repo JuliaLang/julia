@@ -308,12 +308,6 @@ jl_svec_t *jl_perm_symsvec(size_t n, ...);
         }), __VA_ARGS__)
 #endif
 
-// Returns a int32 where the high 16 bits are a lower bound of the number of non-pointer fields
-// at the beginning of the type and the low 16 bits are a lower bound on the number of non-pointer
-// fields at the end of the type. This field only exists for a layout that has at least one
-// pointer fields.
-#define jl_datatype_layout_n_nonptr(layout) ((uint32_t*)(layout))[-1]
-
 jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz);
 JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz);
 

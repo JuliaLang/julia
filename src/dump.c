@@ -393,13 +393,10 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
         write_uint8(s->s, layout);
         if (layout == 0) {
             uint32_t nf = dt->layout->nfields;
-            write_int32(s->s, nf);
-            uint32_t alignment = ((uint32_t*)dt->layout)[1];
-            write_int32(s->s, alignment);
-            if (dt->layout->npointers && nf)
-                write_int32(s->s, ((uint32_t*)dt->layout)[-1]);
+            uint32_t np = dt->layout->npointers;
             size_t fieldsize = jl_fielddesc_size(dt->layout->fielddesc_type);
-            ios_write(s->s, (char*)(&dt->layout[1]), nf * fieldsize);
+            ios_write(s->s, (const char*)dt->layout, sizeof(*dt->layout));
+            ios_write(s->s, (const char*)(dt->layout + 1), nf * fieldsize + (np << dt->layout->fielddesc_type));
         }
     }
 
@@ -1441,29 +1438,17 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
         }
         else {
             assert(layout == 0);
-            uint32_t nf = read_int32(s->s);
-            uint32_t alignment = read_int32(s->s);
-            union {
-                struct {
-                    uint32_t nf;
-                    uint32_t alignment;
-                } buffer;
-                jl_datatype_layout_t layout;
-            } header;
-            header.buffer.nf = nf;
-            header.buffer.alignment = alignment;
-            int has_padding = header.layout.npointers && nf;
-            uint8_t fielddesc_type = header.layout.fielddesc_type;
+            jl_datatype_layout_t buffer;
+            ios_read(s->s, (char*)&buffer, sizeof(buffer));
+            uint32_t nf = buffer.nfields;
+            uint32_t np = buffer.npointers;
+            uint8_t fielddesc_type = buffer.fielddesc_type;
             size_t fielddesc_size = nf > 0 ? jl_fielddesc_size(fielddesc_type) : 0;
             jl_datatype_layout_t *layout = (jl_datatype_layout_t*)jl_gc_perm_alloc(
-                    sizeof(jl_datatype_layout_t) + nf * fielddesc_size +
-                    (has_padding ? sizeof(uint32_t) : 0), 0, 4, 0);
-            if (has_padding) {
-                layout = (jl_datatype_layout_t*)(((char*)layout) + sizeof(uint32_t));
-                jl_datatype_layout_n_nonptr(layout) = read_int32(s->s);
-            }
-            *layout = header.layout;
-            ios_read(s->s, (char*)&layout[1], nf * fielddesc_size);
+                    sizeof(jl_datatype_layout_t) + nf * fielddesc_size + (np << fielddesc_type),
+                    0, 4, 0);
+            *layout = buffer;
+            ios_read(s->s, (char*)(layout + 1), nf * fielddesc_size + (np << fielddesc_type));
             dt->layout = layout;
         }
     }

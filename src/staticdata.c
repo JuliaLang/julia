@@ -808,24 +808,12 @@ static void jl_write_values(jl_serializer_state *s)
                 newdt->ditype = NULL;
                 if (dt->layout != NULL) {
                     size_t nf = dt->layout->nfields;
+                    size_t np = dt->layout->npointers;
                     size_t fieldsize = jl_fielddesc_size(dt->layout->fielddesc_type);
-                    int has_padding = dt->layout->npointers && nf;
                     char *flddesc = (char*)dt->layout;
-                    size_t fldsize = sizeof(jl_datatype_layout_t) + nf * fieldsize;
-                    uintptr_t layout_unaligned = LLT_ALIGN(ios_pos(s->const_data), sizeof(uint32_t));
+                    size_t fldsize = sizeof(jl_datatype_layout_t) + nf * fieldsize + (np << dt->layout->fielddesc_type);
                     uintptr_t layout = LLT_ALIGN(ios_pos(s->const_data), sizeof(void*));
-                    if (has_padding) {
-                        if (layout == layout_unaligned) {
-                            layout += sizeof(void*);
-                            layout_unaligned = layout - sizeof(uint32_t);
-                        }
-                        flddesc -= sizeof(uint32_t);
-                        fldsize += sizeof(uint32_t);
-                        write_padding(s->const_data, layout_unaligned - ios_pos(s->const_data)); // realign stream
-                    }
-                    else {
-                        write_padding(s->const_data, layout - ios_pos(s->const_data)); // realign stream
-                    }
+                    write_padding(s->const_data, layout - ios_pos(s->const_data)); // realign stream
                     newdt->layout = NULL; // relocation offset
                     layout /= sizeof(void*);
                     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_datatype_t, layout))); // relocation location

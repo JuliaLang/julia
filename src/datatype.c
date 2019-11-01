@@ -99,29 +99,22 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
 }
 
 static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
+                                           uint32_t npointers,
                                            uint32_t alignment,
                                            int haspadding,
-                                           jl_fielddesc32_t desc[]) JL_NOTSAFEPOINT
+                                           jl_fielddesc32_t desc[],
+                                           uint32_t pointers[]) JL_NOTSAFEPOINT
 {
     // compute the smallest fielddesc type that can hold the layout description
     int fielddesc_type = 0;
-    uint32_t npointers = 0;
-    // First pointer field
-    uint32_t first_ptr = (uint32_t)-1;
-    // Last pointer field
-    uint32_t last_ptr = 0;
     if (nfields > 0) {
         uint32_t max_size = 0;
         uint32_t max_offset = desc[nfields - 1].offset;
+        if (npointers > 0 && pointers[npointers - 1] > max_offset)
+            max_offset = pointers[npointers - 1];
         for (size_t i = 0; i < nfields; i++) {
             if (desc[i].size > max_size)
                 max_size = desc[i].size;
-            if (desc[i].isptr) {
-                npointers++;
-                if (first_ptr == (uint32_t)-1)
-                    first_ptr = i;
-                last_ptr = i;
-            }
         }
         jl_fielddesc8_t maxdesc8 = { 0, max_size, max_offset };
         jl_fielddesc16_t maxdesc16 = { 0, max_size, max_offset };
@@ -140,24 +133,14 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
     // allocate a new descriptor
     // TODO: lots of these are the same--take advantage of the fact these are immutable to combine them
     uint32_t fielddesc_size = jl_fielddesc_size(fielddesc_type);
-    int has_padding = nfields && npointers;
-    jl_datatype_layout_t *flddesc =
-        (jl_datatype_layout_t*)jl_gc_perm_alloc(sizeof(jl_datatype_layout_t) +
-                                                nfields * fielddesc_size +
-                                                (has_padding ? sizeof(uint32_t) : 0), 0, 4, 0);
-    if (has_padding) {
-        if (first_ptr > UINT16_MAX)
-            first_ptr = UINT16_MAX;
-        last_ptr = nfields - last_ptr - 1;
-        if (last_ptr > UINT16_MAX)
-            last_ptr = UINT16_MAX;
-        flddesc = (jl_datatype_layout_t*)(((char*)flddesc) + sizeof(uint32_t));
-        jl_datatype_layout_n_nonptr(flddesc) = (first_ptr << 16) | last_ptr;
-    }
+    jl_datatype_layout_t *flddesc = (jl_datatype_layout_t*)jl_gc_perm_alloc(
+                sizeof(jl_datatype_layout_t) + nfields * fielddesc_size + (npointers << fielddesc_type),
+                0, 4, 0);
     flddesc->nfields = nfields;
     flddesc->alignment = alignment;
     flddesc->haspadding = haspadding;
     flddesc->fielddesc_type = fielddesc_type;
+    flddesc->npointers = npointers;
 
     // fill out the fields of the new descriptor
     jl_fielddesc8_t* desc8 = (jl_fielddesc8_t*)jl_dt_layout_fields(flddesc);
@@ -180,12 +163,20 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
             desc32[i].isptr = desc[i].isptr;
         }
     }
-    uint32_t nexp = 0;
-    while (npointers >= 0x10000) {
-        nexp++;
-        npointers = npointers >> 1;
+    uint8_t* ptrs8 = (uint8_t*)jl_dt_layout_ptrs(flddesc);
+    uint16_t* ptrs16 = (uint16_t*)jl_dt_layout_ptrs(flddesc);
+    uint32_t* ptrs32 = (uint32_t*)jl_dt_layout_ptrs(flddesc);
+    for (size_t i = 0; i < npointers; i++) {
+        if (fielddesc_type == 0) {
+            ptrs8[i] = pointers[i];
+        }
+        else if (fielddesc_type == 1) {
+            ptrs16[i] = pointers[i];
+        }
+        else {
+            ptrs32[i] = pointers[i];
+        }
     }
-    flddesc->npointers = npointers | (nexp << 16);
     return flddesc;
 }
 
@@ -340,18 +331,18 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         // if we have no fields, we can trivially skip the rest
         if (st == jl_symbol_type || st == jl_string_type) {
             // opaque layout - heap-allocated blob
-            static const jl_datatype_layout_t opaque_byte_layout = {0, 1, 0, 1, 0};
+            static const jl_datatype_layout_t opaque_byte_layout = {0, 1, 1, 0, 0};
             st->layout = &opaque_byte_layout;
             return;
         }
         else if (st == jl_simplevector_type || st->name == jl_array_typename) {
-            static const jl_datatype_layout_t opaque_ptr_layout = {0, sizeof(void*), 0, 1, 0};
+            static const jl_datatype_layout_t opaque_ptr_layout = {0, 1, sizeof(void*), 0, 0};
             st->layout = &opaque_ptr_layout;
             return;
         }
         else {
             // reuse the same layout for all singletons
-            static const jl_datatype_layout_t singleton_layout = {0, 1, 0, 0, 0};
+            static const jl_datatype_layout_t singleton_layout = {0, 0, 1, 0, 0};
             st->layout = &singleton_layout;
         }
     }
@@ -396,6 +387,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     if (st->layout == NULL) {
         size_t descsz = nfields * sizeof(jl_fielddesc32_t);
         jl_fielddesc32_t *desc;
+        uint32_t *pointers;
         int should_malloc = descsz >= jl_page_size;
         if (should_malloc)
             desc = (jl_fielddesc32_t*)malloc_s(descsz);
@@ -406,6 +398,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         int zeroinit = 0;
         int haspadding = 0;
         int homogeneous = 1;
+        uint32_t npointers = 0;
         jl_value_t *firstty = jl_field_type(st, 0);
         for (i = 0; i < nfields; i++) {
             jl_value_t *fld = jl_field_type(st, i);
@@ -434,6 +427,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                 al = fsz;
                 desc[i].isptr = 1;
                 zeroinit = 1;
+                npointers++;
             }
             assert(al <= JL_HEAP_ALIGNMENT && (JL_HEAP_ALIGNMENT % al) == 0);
             if (al != 0) {
@@ -464,9 +458,22 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         st->size = LLT_ALIGN(sz, alignm);
         if (st->size > sz)
             haspadding = 1;
-        st->layout = jl_get_layout(nfields, alignm, haspadding, desc);
-        if (should_malloc)
+        if (should_malloc && npointers)
+            pointers = (uint32_t*)malloc_s(npointers * sizeof(uint32_t));
+        else
+            pointers = (uint32_t*)alloca(npointers * sizeof(uint32_t));
+        size_t ptr_i = 0;
+        for (i = 0; i < nfields; i++) {
+            if (desc[i].isptr)
+                pointers[ptr_i++] = desc[i].offset / sizeof(jl_value_t**);
+        }
+        assert(ptr_i == npointers);
+        st->layout = jl_get_layout(nfields, npointers, alignm, haspadding, desc, pointers);
+        if (should_malloc) {
             free(desc);
+            if (npointers)
+                free(pointers);
+        }
     }
     // now finish deciding if this instantiation qualifies for special properties
     assert(!isbitstype || st->layout->npointers == 0); // the definition of isbits
@@ -577,7 +584,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
         alignm = MAX_ALIGN;
     bt->isbitstype = bt->isinlinealloc = (parameters == jl_emptysvec);
     bt->size = nbytes;
-    bt->layout = jl_get_layout(0, alignm, 0, NULL);
+    bt->layout = jl_get_layout(0, 0, alignm, 0, NULL, NULL);
     bt->instance = NULL;
     return bt;
 }
