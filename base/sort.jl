@@ -91,7 +91,7 @@ issorted(itr;
     lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
     issorted(itr, ord(lt,by,rev,order))
 
-function partialsort!(v::AbstractVector, k::Union{Int,OrdinalRange}, o::Ordering)
+function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
     inds = axes(v, 1)
     sort!(v, first(inds), last(inds), PartialQuickSort(k), o)
     maybeview(v, k)
@@ -151,7 +151,7 @@ julia> a
  1
 ```
 """
-partialsort!(v::AbstractVector, k::Union{Int,OrdinalRange};
+partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange};
              lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
     partialsort!(v, k, ord(lt,by,rev,order))
 
@@ -161,7 +161,7 @@ partialsort!(v::AbstractVector, k::Union{Int,OrdinalRange};
 Variant of [`partialsort!`](@ref) which copies `v` before partially sorting it, thereby returning the
 same thing as `partialsort!` but leaving `v` unmodified.
 """
-partialsort(v::AbstractVector, k::Union{Int,OrdinalRange}; kws...) =
+partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
     partialsort!(copymutable(v), k; kws...)
 
 
@@ -387,7 +387,7 @@ struct QuickSortAlg     <: Algorithm end
 struct MergeSortAlg     <: Algorithm end
 
 """
-    PartialQuickSort{T <: Union{Int,OrdinalRange}}
+    PartialQuickSort{T <: Union{Integer,OrdinalRange}}
 
 Indicate that a sorting function should use the partial quick sort
 algorithm. Partial quick sort returns the smallest `k` elements sorted from smallest
@@ -400,7 +400,7 @@ Characteristics:
   * *in-place* in memory.
   * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
 """
-struct PartialQuickSort{T <: Union{Int,OrdinalRange}} <: Algorithm
+struct PartialQuickSort{T <: Union{Integer,OrdinalRange}} <: Algorithm
     k::T
 end
 
@@ -460,7 +460,7 @@ const DEFAULT_STABLE   = MergeSort
 const SMALL_ALGORITHM  = InsertionSort
 const SMALL_THRESHOLD  = 20
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, ::InsertionSortAlg, o::Ordering)
+function sort!(v::AbstractVector, lo::Integer, hi::Integer, ::InsertionSortAlg, o::Ordering)
     @inbounds for i = lo+1:hi
         j = i
         x = v[i]
@@ -485,7 +485,7 @@ end
 # Upon return, the pivot is in v[lo], and v[hi] is guaranteed to be
 # greater than the pivot
 
-@inline function selectpivot!(v::AbstractVector, lo::Int, hi::Int, o::Ordering)
+@inline function selectpivot!(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
     @inbounds begin
         mi = (lo+hi)>>>1
 
@@ -511,7 +511,7 @@ end
 #
 # select a pivot, and partition v according to the pivot
 
-function partition!(v::AbstractVector, lo::Int, hi::Int, o::Ordering)
+function partition!(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
     pivot = selectpivot!(v, lo, hi, o)
     # pivot == v[lo], v[hi] > pivot
     i, j = lo, hi
@@ -530,7 +530,7 @@ function partition!(v::AbstractVector, lo::Int, hi::Int, o::Ordering)
     return j
 end
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering)
+function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::QuickSortAlg, o::Ordering)
     @inbounds while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
         j = partition!(v, lo, hi, o)
@@ -548,7 +548,7 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering
     return v
 end
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering, t=similar(v,0))
+function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::MergeSortAlg, o::Ordering, t=similar(v,0))
     @inbounds if lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
@@ -586,7 +586,7 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering
     return v
 end
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort{Int},
+function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort{<:Integer},
                o::Ordering)
     @inbounds while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
@@ -609,7 +609,7 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort{Int},
 end
 
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort{T},
+function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort{T},
                o::Ordering) where T<:OrdinalRange
     @inbounds while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
@@ -832,7 +832,7 @@ julia> partialsortperm!(ix, v, 2:3, initialized=true)
 ```
  """
 function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
-                          k::Union{Int, OrdinalRange};
+                          k::Union{Integer, OrdinalRange};
                           lt::Function=isless,
                           by::Function=identity,
                           rev::Union{Bool,Nothing}=nothing,
@@ -901,8 +901,9 @@ function sortperm(v::AbstractVector;
             end
         end
     end
-    p = similar(Vector{Int}, axes(v, 1))
-    for (i,ind) in zip(eachindex(p), axes(v, 1))
+    ax = axes(v, 1)
+    p = similar(Vector{eltype(ax)}, ax)
+    for (i,ind) in zip(eachindex(p), ax)
         p[i] = ind
     end
     sort!(p, alg, Perm(ordr,v))
@@ -1112,9 +1113,9 @@ lt(::Left, x::T, y::T) where {T<:Floats} = slt_int(y, x)
 lt(::Right, x::T, y::T) where {T<:Floats} = slt_int(x, y)
 
 isnan(o::DirectOrdering, x::Floats) = (x!=x)
-isnan(o::Perm, i::Int) = isnan(o.order,o.data[i])
+isnan(o::Perm, i::Integer) = isnan(o.order,o.data[i])
 
-function nans2left!(v::AbstractVector, o::Ordering, lo::Int=first(axes(v,1)), hi::Int=last(axes(v,1)))
+function nans2left!(v::AbstractVector, o::Ordering, lo::Integer=first(axes(v,1)), hi::Integer=last(axes(v,1)))
     i = lo
     @inbounds while i <= hi && isnan(o,v[i])
         i += 1
@@ -1129,7 +1130,7 @@ function nans2left!(v::AbstractVector, o::Ordering, lo::Int=first(axes(v,1)), hi
     end
     return i, hi
 end
-function nans2right!(v::AbstractVector, o::Ordering, lo::Int=first(axes(v,1)), hi::Int=last(axes(v,1)))
+function nans2right!(v::AbstractVector, o::Ordering, lo::Integer=first(axes(v,1)), hi::Integer=last(axes(v,1)))
     i = hi
     @inbounds while lo <= i && isnan(o,v[i])
         i -= 1
@@ -1147,12 +1148,12 @@ end
 
 nans2end!(v::AbstractVector, o::ForwardOrdering) = nans2right!(v,o)
 nans2end!(v::AbstractVector, o::ReverseOrdering) = nans2left!(v,o)
-nans2end!(v::AbstractVector{Int}, o::Perm{<:ForwardOrdering}) = nans2right!(v,o)
-nans2end!(v::AbstractVector{Int}, o::Perm{<:ReverseOrdering}) = nans2left!(v,o)
+nans2end!(v::AbstractVector{<:Integer}, o::Perm{<:ForwardOrdering}) = nans2right!(v,o)
+nans2end!(v::AbstractVector{<:Integer}, o::Perm{<:ReverseOrdering}) = nans2left!(v,o)
 
 issignleft(o::ForwardOrdering, x::Floats) = lt(o, x, zero(x))
 issignleft(o::ReverseOrdering, x::Floats) = lt(o, x, -zero(x))
-issignleft(o::Perm, i::Int) = issignleft(o.order, o.data[i])
+issignleft(o::Perm, i::Integer) = issignleft(o.order, o.data[i])
 
 function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
     i, j = lo, hi = nans2end!(v,o)
