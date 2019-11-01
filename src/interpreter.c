@@ -128,6 +128,7 @@ SECT_INTERP void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 static void eval_abstracttype(jl_expr_t *ex, interpreter_state *s)
 {
     jl_value_t **args = jl_array_ptr_data(ex->args);
+    JL_LOCK(&codegen_lock);
     if (inside_typedef)
         jl_error("cannot eval a new abstract type definition while defining another type");
     jl_value_t *name = args[0];
@@ -156,9 +157,11 @@ static void eval_abstracttype(jl_expr_t *ex, interpreter_state *s)
         super = eval_value(args[2], s);
         jl_set_datatype_super(dt, super);
         jl_reinstantiate_inner_types(dt);
+        JL_UNLOCK(&codegen_lock);
     }
     JL_CATCH {
         jl_reset_instantiate_inner_types(dt);
+        JL_UNLOCK(&codegen_lock);
         b->value = temp;
         jl_rethrow();
     }
@@ -172,6 +175,7 @@ static void eval_abstracttype(jl_expr_t *ex, interpreter_state *s)
 static void eval_primitivetype(jl_expr_t *ex, interpreter_state *s)
 {
     jl_value_t **args = (jl_value_t**)jl_array_ptr_data(ex->args);
+    JL_LOCK(&codegen_lock);
     if (inside_typedef)
         jl_error("cannot eval a new primitive type definition while defining another type");
     jl_value_t *name = args[0];
@@ -207,9 +211,11 @@ static void eval_primitivetype(jl_expr_t *ex, interpreter_state *s)
         super = eval_value(args[3], s);
         jl_set_datatype_super(dt, super);
         jl_reinstantiate_inner_types(dt);
+        JL_UNLOCK(&codegen_lock);
     }
     JL_CATCH {
         jl_reset_instantiate_inner_types(dt);
+        JL_UNLOCK(&codegen_lock);
         b->value = temp;
         jl_rethrow();
     }
@@ -223,6 +229,7 @@ static void eval_primitivetype(jl_expr_t *ex, interpreter_state *s)
 static void eval_structtype(jl_expr_t *ex, interpreter_state *s)
 {
     jl_value_t **args = jl_array_ptr_data(ex->args);
+    JL_LOCK(&codegen_lock);
     if (inside_typedef)
         jl_error("cannot eval a new struct type definition while defining another type");
     jl_value_t *name = args[0];
@@ -268,9 +275,11 @@ static void eval_structtype(jl_expr_t *ex, interpreter_state *s)
             }
         }
         jl_reinstantiate_inner_types(dt);
+        JL_UNLOCK(&codegen_lock);
     }
     JL_CATCH {
         jl_reset_instantiate_inner_types(dt);
+        JL_UNLOCK(&codegen_lock);
         b->value = temp;
         jl_rethrow();
     }
