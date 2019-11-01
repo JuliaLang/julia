@@ -928,6 +928,20 @@ else
 PCRE_CONFIG := $(build_depsbindir)/pcre2-config
 endif
 
+ifeq ($(USE_SYSTEM_PATCHELF), 1)
+PATCHELF := patchelf
+else
+PATCHELF := $(build_depsbindir)/patchelf
+endif
+
+# On aarch64 and powerpc64le, we assume the page size is 64K.  Our binutils linkers
+# and such already assume this, but `patchelf` seems to be behind the times.  We
+# explicitly tell it to use this large page size so that when we rewrite rpaths and
+# such, we don't accidentally create incorrectly-aligned sections in our ELF files.
+ifneq (,$(filter $(ARCH),aarch64 powerpc64le))
+PATCHELF += --page-size=65536
+endif
+
 # Use ILP64 BLAS interface when building openblas from source on 64-bit architectures
 ifeq ($(BINARY), 64)
 ifeq ($(USE_SYSTEM_BLAS), 1)
