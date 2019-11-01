@@ -73,6 +73,8 @@ Standard library changes
 
 #### SparseArrays
 
+* `lu!` accepts `UmfpackLU` as an argument to make use of its symbolic factorization.
+
 #### Dates
 
 #### Statistics
