@@ -401,7 +401,12 @@ end
 add_tfunc(Core._typevar, 3, 3, typevar_tfunc, 100)
 add_tfunc(applicable, 1, INT_INF, (@nospecialize(f), args...)->Bool, 100)
 add_tfunc(Core.Intrinsics.arraylen, 1, 1, (interp::AbstractInterpreter, @nospecialize(x))->Int, 4)
-add_tfunc(arraysize, 2, 2, (interp::AbstractInterpreter, @nospecialize(a), @nospecialize(d))->Int, 4)
+
+function arraysize_tfunc(interp::AbstractInterpreter, @nospecialize(a), @nospecialize(d))
+    return Int
+end
+
+add_tfunc(arraysize, 2, 2, arraysize_tfunc, 4)
 add_tfunc(pointerref, 3, 3,
           function (interp::AbstractInterpreter, @nospecialize(a), @nospecialize(i), @nospecialize(align))
               a = widenconst(a)
@@ -438,7 +443,7 @@ end
 
 function typeof_tfunc(interp::AbstractInterpreter, @nospecialize(t))
     isa(t, Const) && return Const(typeof(t.val))
-    t = widenconst(t)
+    t = widenconst(interp, t)
     if isType(t)
         tp = t.parameters[1]
         if hasuniquerep(tp)
@@ -824,9 +829,12 @@ function getfield_tfunc(interp::AbstractInterpreter, @nospecialize(s00), @nospec
     return rewrap_unionall(R, s00)
 end
 add_tfunc(getfield, 2, 3, getfield_tfunc, 1)
-add_tfunc(setfield!, 3, 3, (@nospecialize(o), @nospecialize(f), @nospecialize(v)) -> v, 3)
-fieldtype_tfunc(@nospecialize(s0), @nospecialize(name), @nospecialize(inbounds)) =
-    fieldtype_tfunc(s0, name)
+function setfield!_tfunc(interp::AbstractInterpreter, @nospecialize(o), @nospecialize(f), @nospecialize(v))
+    v
+end
+add_tfunc(setfield!, 3, 3, setfield!_tfunc, 3)
+fieldtype_tfunc(interp::AbstractInterpreter, @nospecialize(s0), @nospecialize(name), @nospecialize(inbounds)) =
+    fieldtype_tfunc(interp, s0, name)
 
 function fieldtype_nothrow(@nospecialize(s0), @nospecialize(name))
     s0 === Bottom && return true # unreachable
@@ -881,7 +889,7 @@ function _fieldtype_nothrow(@nospecialize(s), exact::Bool, name::Const)
     return true
 end
 
-function fieldtype_tfunc(@nospecialize(s0), @nospecialize(name))
+function fieldtype_tfunc(interp::AbstractInterpreter, @nospecialize(s0), @nospecialize(name))
     if s0 === Bottom
         return Bottom
     end
@@ -898,8 +906,8 @@ function fieldtype_tfunc(@nospecialize(s0), @nospecialize(name))
 
     su = unwrap_unionall(s0)
     if isa(su, Union)
-        return tmerge(fieldtype_tfunc(rewrap(su.a, s0), name),
-                      fieldtype_tfunc(rewrap(su.b, s0), name))
+        return tmerge(fieldtype_tfunc(interp, rewrap(su.a, s0), name),
+                      fieldtype_tfunc(interp, rewrap(su.b, s0), name))
     end
 
     s, exact = instanceof_tfunc(s0)
@@ -1170,7 +1178,7 @@ end
 
 # convert the dispatch tuple type argtype to the real (concrete) type of
 # the tuple of those values
-function tuple_tfunc(atypes::Vector{Any})
+function tuple_tfunc(interp::AbstractInterpreter, atypes::Vector{Any})
     atypes = anymap(widenconditional, atypes)
     all_are_const = true
     for i in 1:length(atypes)
@@ -1193,7 +1201,7 @@ function tuple_tfunc(atypes::Vector{Any})
         if isa(x, Const)
             params[i] = typeof(x.val)
         else
-            x = widenconst(x)
+            x = widenconst(interp, x)
             if isType(x)
                 xparam = x.parameters[1]
                 if hasuniquerep(xparam) || xparam === Bottom
@@ -1300,11 +1308,33 @@ function builtin_nothrow(@nospecialize(f), argtypes::Array{Any, 1}, @nospecializ
     return _builtin_nothrow(f, argtypes, rt)
 end
 
+function intrinsic_tfunction(interp::AbstractInterpreter, f::IntrinsicFunction, argtypes::Array{Any, 1})
+    if is_pure_intrinsic_infer(f) && _all(@nospecialize(a) -> isa(a, Const), argtypes)
+        argvals = anymap(a::Const -> a.val, argtypes)
+        try
+            return Const(f(argvals...))
+        catch
+        end
+    end
+    iidx = Int(reinterpret(Int32, f)) + 1
+    if iidx < 0 || iidx > length(T_IFUNC)
+        # invalid intrinsic
+        return Any
+    end
+    tf = T_IFUNC[iidx]
+    tf = tf::Tuple{Int, Int, Any}
+    if !(tf[1] <= length(argtypes) <= tf[2])
+        # wrong # of args
+        return Bottom
+    end
+    return tf[3](interp, argtypes...)
+end
+
 function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Array{Any,1},
                            sv::Union{InferenceState,Nothing}, params::Params = sv.params)
     isva = !isempty(argtypes) && isvarargtype(argtypes[end])
     if f === tuple
-        return tuple_tfunc(argtypes)
+        return tuple_tfunc(interp, argtypes)
     elseif f === svec
         return SimpleVector
     elseif f === arrayset
@@ -1318,7 +1348,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
             isva && return Any
             return Bottom
         end
-        a = widenconst(argtypes[2])
+        a = widenconst(interp, argtypes[2])
         if a <: Array
             if isa(a, DataType) && (isa(a.parameters[1], Type) || isa(a.parameters[1], TypeVar))
                 # TODO: the TypeVar case should not be needed here
@@ -1362,19 +1392,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
         return Any
     end
     if isa(f, IntrinsicFunction)
-        if is_pure_intrinsic_infer(f) && _all(@nospecialize(a) -> isa(a, Const), argtypes)
-            argvals = anymap(a::Const -> a.val, argtypes)
-            try
-                return Const(f(argvals...))
-            catch
-            end
-        end
-        iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
-        if iidx < 0 || iidx > length(T_IFUNC)
-            # invalid intrinsic
-            return Any
-        end
-        tf = T_IFUNC[iidx]
+        return intrinsic_tfunction(interp, f, argtypes)
     else
         fidx = find_tfunc(f)
         if fidx === nothing
@@ -1440,7 +1458,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, v
                     if contains_is(argtypes_vec, Union{})
                         return Const(Union{})
                     end
-                    astype = argtypes_to_type(argtypes_vec)
+                    astype = argtypes_to_type(interp, argtypes_vec)
                     if isa(aft, Const)
                         rt = abstract_call(interp, aft.val, nothing, argtypes_vec, vtypes, sv, -1)
                     elseif isconstType(aft)

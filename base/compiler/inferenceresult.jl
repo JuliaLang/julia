@@ -8,8 +8,8 @@ mutable struct InferenceResult
     overridden_by_const::BitVector
     result # ::Type, or InferenceState if WIP
     src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
-    function InferenceResult(linfo::MethodInstance, given_argtypes = nothing)
-        argtypes, overridden_by_const = matching_cache_argtypes(linfo, given_argtypes)
+    function InferenceResult(interp::AbstractInterpreter, linfo::MethodInstance, given_argtypes = nothing)
+        argtypes, overridden_by_const = matching_cache_argtypes(interp, linfo, given_argtypes)
         return new(linfo, argtypes, overridden_by_const, Any, nothing)
     end
 end
@@ -20,14 +20,14 @@ function is_argtype_match(@nospecialize(given_argtype),
     if isa(given_argtype, Const) || isa(given_argtype, PartialStruct)
         return is_lattice_equal(given_argtype, cache_argtype)
     end
-    return !overridden_by_const
+    return isa(given_argtype, Type) && !overridden_by_const
 end
 
 # In theory, there could be a `cache` containing a matching `InferenceResult`
 # for the provided `linfo` and `given_argtypes`. The purpose of this function is
 # to return a valid value for `cache_lookup(linfo, argtypes, cache).argtypes`,
 # so that we can construct cache-correct `InferenceResult`s in the first place.
-function matching_cache_argtypes(linfo::MethodInstance, given_argtypes::Vector)
+function matching_cache_argtypes(interp::AbstractInterpreter, linfo::MethodInstance, given_argtypes::Vector)
     @assert isa(linfo.def, Method) # ensure the next line works
     nargs::Int = linfo.def.nargs
     @assert length(given_argtypes) >= (nargs - 1)
@@ -37,10 +37,10 @@ function matching_cache_argtypes(linfo::MethodInstance, given_argtypes::Vector)
         for i = 1:(nargs - 1)
             isva_given_argtypes[i] = given_argtypes[i]
         end
-        isva_given_argtypes[nargs] = tuple_tfunc(given_argtypes[nargs:end])
+        isva_given_argtypes[nargs] = tuple_tfunc(interp, given_argtypes[nargs:end])
         given_argtypes = isva_given_argtypes
     end
-    cache_argtypes, overridden_by_const = matching_cache_argtypes(linfo, nothing)
+    cache_argtypes, overridden_by_const = matching_cache_argtypes(interp, linfo, nothing)
     if nargs === length(given_argtypes)
         for i in 1:nargs
             given_argtype = given_argtypes[i]
@@ -55,7 +55,7 @@ function matching_cache_argtypes(linfo::MethodInstance, given_argtypes::Vector)
     return cache_argtypes, overridden_by_const
 end
 
-function matching_cache_argtypes(linfo::MethodInstance, ::Nothing)
+function matching_cache_argtypes(interp::AbstractInterpreter, linfo::MethodInstance, ::Nothing)
     toplevel = !isa(linfo.def, Method)
     linfo_argtypes = Any[unwrap_unionall(linfo.specTypes).parameters...]
     nargs::Int = toplevel ? 0 : linfo.def.nargs
@@ -139,7 +139,7 @@ function matching_cache_argtypes(linfo::MethodInstance, ::Nothing)
     return cache_argtypes, falses(length(cache_argtypes))
 end
 
-function cache_lookup(linfo::MethodInstance, given_argtypes::Vector{Any}, cache::Vector{InferenceResult})
+function cache_lookup(interp::AbstractInterpreter, linfo::MethodInstance, given_argtypes::Vector{Any}, cache::Vector{InferenceResult})
     method = linfo.def::Method
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
@@ -158,7 +158,7 @@ function cache_lookup(linfo::MethodInstance, given_argtypes::Vector{Any}, cache:
             end
         end
         if method.isva && cache_match
-            cache_match = is_argtype_match(tuple_tfunc(given_argtypes[(nargs + 1):end]),
+            cache_match = is_argtype_match(tuple_tfunc(interp, given_argtypes[(nargs + 1):end]),
                                            cache_argtypes[end],
                                            cache_overridden_by_const[end])
         end

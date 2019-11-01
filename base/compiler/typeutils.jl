@@ -43,7 +43,7 @@ end
 # certain combinations of `a` and `b` where one/both isa/are `Union`/`UnionAll` type(s)s.
 isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || hasuniquerep(a.parameters[1]))
 
-argtypes_to_type(argtypes::Array{Any,1}) = Tuple{anymap(widenconst, argtypes)...}
+argtypes_to_type(interp::AbstractInterpreter, argtypes::Array{Any,1}) = Tuple{anymap(x->widenconst(interp, x), argtypes)...}
 
 function isknownlength(t::DataType)
     isvatuple(t) || return true
