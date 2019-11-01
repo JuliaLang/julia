@@ -316,7 +316,7 @@ Pick a random element or array of random elements from the set of values specifi
 
 `S` defaults to [`Float64`](@ref).
 When only one argument is passed besides the optional `rng` and is a `Tuple`, it is interpreted
-as `S` and not as `dims`.
+as a collection of values (`S`) and not as `dims`.
 
 
 !!! compat "Julia 1.1"
