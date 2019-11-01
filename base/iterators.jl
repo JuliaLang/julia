@@ -1022,37 +1022,56 @@ Iterate over a collection `n` elements at a time.
 # Examples
 ```jldoctest
 julia> collect(Iterators.partition([1,2,3,4,5], 2))
-3-element Array{Array{Int64,1},1}:
+3-element Array{SubArray{Int64,1,Array{Int64,1},Tuple{UnitRange{Int64}},true},1}:
  [1, 2]
  [3, 4]
  [5]
 ```
 """
-partition(c::T, n::Integer) where {T} = PartitionIterator{T}(c, Int(n))
+function partition(c, n::Integer)
+    n < 1 && throw(ArgumentError("cannot create partitions of length $n"))
+    return PartitionIterator(c, Int(n))
+end
 
 struct PartitionIterator{T}
     c::T
     n::Int
 end
+# Partitions are explicitly a linear indexing operation, so reshape to 1-d immediately
+PartitionIterator(A::AbstractArray, n::Int) = PartitionIterator(vec(A), n)
+PartitionIterator(v::AbstractVector, n::Int) = PartitionIterator{typeof(v)}(v, n)
 
 eltype(::Type{PartitionIterator{T}}) where {T} = Vector{eltype(T)}
+# Arrays use a generic `view`-of-a-`vec`, so we cannot exactly predict what we'll get back
+eltype(::Type{PartitionIterator{T}}) where {T<:AbstractArray} = AbstractVector{eltype(T)}
+# But for some common implementations in Base we know the answer exactly
+eltype(::Type{PartitionIterator{T}}) where {T<:Vector} = SubArray{eltype(T), 1, T, Tuple{UnitRange{Int}}, true}
+
+IteratorEltype(::Type{<:PartitionIterator{T}}) where {T} = IteratorEltype(T)
+IteratorEltype(::Type{<:PartitionIterator{T}}) where {T<:AbstractArray} = EltypeUnknown()
+IteratorEltype(::Type{<:PartitionIterator{T}}) where {T<:Vector} = IteratorEltype(T)
+
 partition_iteratorsize(::HasShape) = HasLength()
 partition_iteratorsize(isz) = isz
 function IteratorSize(::Type{PartitionIterator{T}}) where {T}
     partition_iteratorsize(IteratorSize(T))
 end
 
-IteratorEltype(::Type{<:PartitionIterator{T}}) where {T} = IteratorEltype(T)
-
 function length(itr::PartitionIterator)
     l = length(itr.c)
     return div(l, itr.n) + ((mod(l, itr.n) > 0) ? 1 : 0)
 end
 
-function iterate(itr::PartitionIterator{<:Vector}, state=1)
+function iterate(itr::PartitionIterator{<:AbstractRange}, state=1)
     state > length(itr.c) && return nothing
     r = min(state + itr.n - 1, length(itr.c))
-    return view(itr.c, state:r), r + 1
+    return @inbounds itr.c[state:r], r + 1
+end
+
+function iterate(itr::PartitionIterator{<:AbstractArray}, state=1)
+    state > length(itr.c) && return nothing
+    r = min(state + itr.n - 1, length(itr.c))
+    return @inbounds view(itr.c, state:r), r + 1
 end
 
 struct IterationCutShort; end
