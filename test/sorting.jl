@@ -2,45 +2,62 @@
 
 module SortingTests
 
-using Base.Order: Forward
+using Base.Order
 using Random
 using Test
 
-@test sort([2,3,1]) == [1,2,3]
-@test sort([2,3,1], rev=true) == [3,2,1]
-@test sort(['z':-1:'a';]) == ['a':'z';]
-@test sort(['a':'z';], rev=true) == ['z':-1:'a';]
-@test sortperm([2,3,1]) == [3,1,2]
-@test sortperm!([1,2,3], [2,3,1]) == [3,1,2]
-let s = view([1,2,3,4], 1:3),
-    r = sortperm!(s, [2,3,1])
-    @test r == [3,1,2]
-    @test r === s
+@testset "Order" begin
+    @test Forward == ForwardOrdering()
+    @test ReverseOrdering(Forward) == ReverseOrdering() == Reverse
 end
-@test_throws ArgumentError sortperm!(view([1,2,3,4], 1:4), [2,3,1])
-@test !issorted([2,3,1])
-@test issorted([1,2,3])
-@test reverse([2,3,1]) == [1,3,2]
-@test partialsort([3,6,30,1,9],3) == 6
-@test partialsort([3,6,30,1,9],3:4) == [6,9]
-@test partialsortperm([3,6,30,1,9], 3:4) == [2,5]
-@test partialsortperm!(Vector(1:5), [3,6,30,1,9], 3:4) == [2,5]
-let a=[1:10;]
-    for r in Any[2:4, 1:2, 10:10, 4:2, 2:1, 4:-1:2, 2:-1:1, 10:-1:10, 4:1:3, 1:2:8, 10:-3:1, UInt(2):UInt(5)]
-        @test partialsort(a, r) == [r;]
-        @test partialsortperm(a, r) == [r;]
-        @test partialsort(a, r, rev=true) == (11 .- [r;])
-        @test partialsortperm(a, r, rev=true) == (11 .- [r;])
-    end
-    for i in (2, UInt(2), Int128(1), big(10))
-        @test partialsort(a, i) == i
-        @test partialsortperm(a, i) == i
-        @test partialsort(a, i, rev=true) == (11 - i)
-        @test partialsortperm(a, i, rev=true) == (11 - i)
-    end
+
+
+@testset "sort" begin
+    @test sort([2,3,1]) == [1,2,3] == sort([2,3,1]; order=Forward)
+    @test sort([2,3,1], rev=true) == [3,2,1] == sort([2,3,1], order=Reverse)
+    @test sort(['z':-1:'a';]) == ['a':'z';]
+    @test sort(['a':'z';], rev=true) == ['z':-1:'a';]
 end
-@test_throws ArgumentError partialsortperm!([1,2], [2,3,1], 1:2)
-@test sum(randperm(6)) == 21
+
+@testset "sortperm" begin
+    @test sortperm([2,3,1]) == [3,1,2]
+    @test sortperm!([1,2,3], [2,3,1]) == [3,1,2]
+    let s = view([1,2,3,4], 1:3),
+        r = sortperm!(s, [2,3,1])
+        @test r == [3,1,2]
+        @test r === s
+    end
+    @test_throws ArgumentError sortperm!(view([1,2,3,4], 1:4), [2,3,1])
+end
+
+@testset "misc sorting" begin
+    @test !issorted([2,3,1])
+    @test issorted([1,2,3])
+    @test reverse([2,3,1]) == [1,3,2]
+    @test sum(randperm(6)) == 21
+end
+
+@testset "partialsort" begin
+    @test partialsort([3,6,30,1,9],3) == 6
+    @test partialsort([3,6,30,1,9],3:4) == [6,9]
+    @test partialsortperm([3,6,30,1,9], 3:4) == [2,5]
+    @test partialsortperm!(Vector(1:5), [3,6,30,1,9], 3:4) == [2,5]
+    let a=[1:10;]
+        for r in Any[2:4, 1:2, 10:10, 4:2, 2:1, 4:-1:2, 2:-1:1, 10:-1:10, 4:1:3, 1:2:8, 10:-3:1, UInt(2):UInt(5)]
+            @test partialsort(a, r) == [r;]
+            @test partialsortperm(a, r) == [r;]
+            @test partialsort(a, r, rev=true) == (11 .- [r;])
+            @test partialsortperm(a, r, rev=true) == (11 .- [r;])
+        end
+        for i in (2, UInt(2), Int128(1), big(10))
+            @test partialsort(a, i) == i
+            @test partialsortperm(a, i) == i
+            @test partialsort(a, i, rev=true) == (11 - i)
+            @test partialsortperm(a, i, rev=true) == (11 - i)
+        end
+    end
+    @test_throws ArgumentError partialsortperm!([1,2], [2,3,1], 1:2)
+end
 
 @testset "searchsorted" begin
     numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
