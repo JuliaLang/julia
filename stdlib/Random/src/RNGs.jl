@@ -27,16 +27,18 @@ else # !windows
     rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read(getfile(rd), sp[])
 
     function getfile(rd::RandomDevice)
+        tid = Threads.threadid()
         devrandom = rd.unlimited ? DEV_URANDOM : DEV_RANDOM
-        if isassigned(devrandom)
-            devrandom[]
+        @assert 0 < tid <= length(devrandom)
+        @inbounds if isassigned(devrandom, tid)
+            devrandom[tid]
         else
-            devrandom[] = open(rd.unlimited ? "/dev/urandom" : "/dev/random")
+            devrandom[tid] = open(rd.unlimited ? "/dev/urandom" : "/dev/random")
         end
     end
 
-    const DEV_RANDOM  = Ref{IOStream}()
-    const DEV_URANDOM = Ref{IOStream}()
+    const DEV_RANDOM  = IOStream[]
+    const DEV_URANDOM = IOStream[]
 
 end # os-test
 
@@ -305,8 +307,13 @@ const THREAD_RNGs = MersenneTwister[]
     end
     return MT
 end
+
 function __init__()
     resize!(empty!(THREAD_RNGs), Threads.nthreads()) # ensures that we didn't save a bad object
+    if !Sys.iswindows()
+        resize!(empty!(DEV_RANDOM), Threads.nthreads())
+        resize!(empty!(DEV_URANDOM), Threads.nthreads())
+    end
 end
 
 
