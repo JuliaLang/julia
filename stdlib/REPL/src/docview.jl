@@ -526,7 +526,7 @@ const builtins = ["abstract type", "baremodule", "begin", "break",
                   "elseif", "end", "export", "finally", "for", "function",
                   "global", "if", "import", "let",
                   "local", "macro", "module", "mutable struct", "primitive type",
-                  "quote", "return", "struct", "try", "using", "while"]
+                  "quote", "return", "struct", "try", "using", "while","(",")","[","]","@","!","#","=","'",'"',".","$","{","}","?",":"]
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
