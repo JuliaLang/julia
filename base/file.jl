@@ -504,13 +504,13 @@ function _win_tempname(temppath::AbstractString, uunique::UInt32)
     return transcode(String, tname)
 end
 
-function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
+function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=false)
     filename = _win_tempname(parent, UInt32(0))
     cleanup && temp_cleanup_later(filename)
     return (filename, Base.open(filename, "r+"))
 end
 
-function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
+function tempname(parent::AbstractString=tempdir(); cleanup::Bool=false)
     isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
     seed::UInt32 = rand(UInt32)
     while true
@@ -529,7 +529,7 @@ end
 else # !windows
 
 # Obtain a temporary filename.
-function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
+function tempname(parent::AbstractString=tempdir(); cleanup::Bool=false)
     isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
     p = ccall(:tempnam, Cstring, (Cstring, Cstring), parent, temp_prefix)
     systemerror(:tempnam, p == C_NULL)
@@ -540,7 +540,7 @@ function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
 end
 
 # Create and return the name of a temporary file along with an IOStream
-function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
+function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=false)
     b = joinpath(parent, temp_prefix * "XXXXXX")
     p = ccall(:mkstemp, Int32, (Cstring,), b) # modifies b
     systemerror(:mktemp, p == -1)
@@ -553,7 +553,7 @@ end # os-test
 
 
 """
-    tempname(parent=tempdir(); cleanup=true) -> String
+    tempname(parent=tempdir(); cleanup=false) -> String
 
 Generate a temporary file path. This function only returns a path; no file is
 created. The path is likely to be unique, but this cannot be guaranteed due to
@@ -573,8 +573,8 @@ there is nothing to cleanup unless you create a file or directory there. If
 you do and `clean` is `true` it will be deleted upon process termination.
 
 !!! compat "Julia 1.4"
-    The `parent` and `cleanup` arguments were added in 1.4. Prior to Julia 1.4
-    the path `tempname` would never be cleaned up at process termination.
+    The `parent` and `cleanup` arguments were added in 1.4.
+    In a future version, the `cleanup` parameter may start to default to true.
 
 !!! warning
 
@@ -595,7 +595,7 @@ the temporary file is automatically deleted when the process exits.
 mktemp(parent)
 
 """
-    mktempdir(parent=tempdir(); prefix=$(repr(temp_prefix)), cleanup=true) -> path
+    mktempdir(parent=tempdir(); prefix=$(repr(temp_prefix)), cleanup=false) -> path
 
 Create a temporary directory in the `parent` directory with a name
 constructed from the given prefix and a random suffix, and return its path.
@@ -604,7 +604,7 @@ If `parent` does not exist, throw an error. The `cleanup` option controls whethe
 the temporary directory is automatically deleted when the process exits.
 """
 function mktempdir(parent::AbstractString=tempdir();
-    prefix::AbstractString=temp_prefix, cleanup::Bool=true)
+    prefix::AbstractString=temp_prefix, cleanup::Bool=false)
     if isempty(parent) || occursin(path_separator_re, parent[end:end])
         # append a path_separator only if parent didn't already have one
         tpath = "$(parent)$(prefix)XXXXXX"
