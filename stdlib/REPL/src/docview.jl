@@ -520,13 +520,50 @@ end
 print_correction(word) = print_correction(stdout, word)
 
 # Completion data
+"""
+@ - the at-symbol invokes macro. 
 
+' - a trailing apostrophe is the adjoint (that is, the complex transpose) operator Aᴴ
+
+* - the asterisk is used for multiplication, including matrix multiplication and string concatenation
+
+/ - forward slash divides the argument on its left by the one on its right
+
+\ - backslash operator divides the argument on its right by the one on its left, commonly used to solve matrix equations
+
+() - parentheses with no arguments constructs an empty Tuple
+
+[] - are used for array expressions
+
+{} - curly braces can also be used to group multiple where expressions in function declarations
+
+; - semicolons separate statements
+
+, - commas separate function arguments or tuple or array components
+
+? - the question mark delimits the ternary conditional operator (used like: conditional ? if_true : if_false)
+
+" "	- the single double-quote character delimits String literals
+
+""" """ - three double-quote characters delimits string literals that may contain " and ignore leading indentation
+
+' ' - the single-quote character delimits Char (that is, character) literals
+
+...	- triple periods are a postfix operator that "splat" their arguments' contents into many arguments of a function call or declare a varargs function that "slurps" up many arguments into a single tuple
+
+. - single periods access named fields in objects/modules (calling [getproperty](@ref Base.getproperty) or [setproperty!](@ref Base.setproperty!))
+
+: -	when used by themselves, Colons represent all indices within a dimension, frequently combined with [indexing](@ref man-array-indexing)
+
+:: - double-colons represent a type annotation or typeassert, depending on context, frequently used when declaring function arguments
+
+"""
 const builtins = ["abstract type", "baremodule", "begin", "break",
                   "catch", "ccall", "const", "continue", "do", "else",
                   "elseif", "end", "export", "finally", "for", "function",
                   "global", "if", "import", "let",
                   "local", "macro", "module", "mutable struct", "primitive type",
-                  "quote", "return", "struct", "try", "using", "while","(",")","[","]","@","!","#","=","'",'"',".","$","{","}","?",":"]
+                  "quote", "return", "struct", "try", "using", "while"]
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
