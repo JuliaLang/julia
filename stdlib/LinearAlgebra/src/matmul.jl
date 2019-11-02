@@ -450,7 +450,7 @@ end
 end
 
 promote_unless_bool(α::Number, ::Type{T}) where {T<:Number} = first(promote(α, zero(T)))
-promote_unless_bool(α::Bool, ::Type) = α
+promote_unless_bool(α::Bool, ::Type{T}) where {T<:Number} = α
 
 function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::StridedVector{T},
                α::Number=true, β::Number=false) where {T<:BlasFloat}
