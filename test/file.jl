@@ -1404,3 +1404,31 @@ end
         @test sizeof(basename(tmpdir)) == 6
     end
 end
+
+@testset "readir tests" begin
+    ≛(a, b) = sort(a) == sort(b)
+    mktempdir() do dir
+        d = cd(pwd, dir) # might resolve symlinks
+        @test isempty(readdir(d))
+        @test isempty(readdir(d, join=true))
+        cd(d) do
+            @test isempty(readdir())
+            @test isempty(readdir(join=true))
+        end
+        touch(joinpath(d, "file"))
+        mkdir(joinpath(d, "dir"))
+        names = ["dir", "file"]
+        paths = [joinpath(d, x) for x in names]
+        @test readdir(d) ≛ names
+        @test readdir(d, join=true) ≛ paths
+        cd(d) do
+            @test readdir() ≛ names
+            @test readdir(join=true) ≛ paths
+        end
+        t, b = splitdir(d)
+        cd(t) do
+            @test readdir(b) ≛ names
+            @test readdir(b, join=true) ≛ [joinpath(b, x) for x in names]
+        end
+    end
+end
