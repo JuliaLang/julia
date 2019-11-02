@@ -174,6 +174,7 @@ to do so), or pressing Esc and then the key.
 | `^Q`                | Write a number in REPL and press `^Q` to open editor at corresponding stackframe or method                 |
 | `meta-Left Arrow`   | indent the current line on the left                                                                        |
 | `meta-Right Arrow`  | indent the current line on the right                                                                       |
+| `meta-.`            | insert last word from previous history entry                                                               |
 
 
 ### Customizing keybindings
