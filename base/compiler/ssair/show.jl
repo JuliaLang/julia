@@ -20,6 +20,14 @@ function Base.show(io::IO, cfg::CFG)
     end
 end
 
+function print_flags(io::IO, flags)
+    printstyled(io, (flags & IR_FLAG_EFFECT_FREE) != 0 ? "e" : " ", color=:green)
+    printstyled(io, (flags & IR_FLAG_PURE) != 0 ? "p" : " ", color=:yellow)
+    printstyled(io, (flags & IR_FLAG_INBOUNDS) != 0 ? "i" : " ", color=:red)
+    printstyled(io, (flags & IR_FLAG_NOTHROW) != 0 ? "n" : " ", color=:green)
+    printstyled(io, (flags & IR_FLAG_AFFECTS_PURITY) != 0 ? "a" : " ", color=:yellow)
+end
+
 function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxlength_idx::Int, color::Bool, show_type::Bool)
     if idx in used
         idx_s = string(idx)
@@ -626,6 +634,7 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
             print_sep = true
             floop = false
             show_type = should_print_ssa_type(new_node.node)
+            print_flags(io, new_node.flags)
             with_output_color(:green, io) do io′
                 print_stmt(io′, node_idx, new_node.node, used, maxlength_idx, false, show_type)
             end
@@ -650,6 +659,7 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
             bb_idx += 1
         end
         show_type = should_print_ssa_type(stmt)
+        print_flags(io, code.flags[idx])
         print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type)
         if !isassigned(types, idx)
             # This is an error, but can happen if passes don't update their type information

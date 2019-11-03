@@ -105,7 +105,7 @@ function fixup_slot!(ir::IRCode, ci::CodeInfo, idx::Int, slot::Int, @nospecializ
     # We don't really have the information here to get rid of these.
     # We'll do so later
     if ssa === undef_token
-        insert_node!(ir, idx, Any, Expr(:throw_undef_if_not, ci.slotnames[slot], false))
+        insert_node!(ir, idx, Union{}, Expr(:throw_undef_if_not, ci.slotnames[slot], false))
         return undef_token
     end
     if !isa(ssa, Argument) && !(ssa === nothing) && ((ci.slotflags[slot] & SLOT_USEDUNDEF) != 0)
@@ -120,7 +120,11 @@ end
 
 function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt))
     if isa(stmt, Union{SlotNumber, TypedSlot}) && cond(stmt)
-        return fixup_slot!(ir, ci, idx, slot_id(stmt), stmt, rename(stmt))
+        x = fixup_slot!(ir, ci, idx, slot_id(stmt), stmt, rename(stmt))
+        if x === undef_token
+            return nothing
+        end
+        return x
     end
     if isexpr(stmt, :(=))
         stmt.args[2] = fixemup!(cond, rename, ir, ci, idx, stmt.args[2])
@@ -501,7 +505,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             renumber_ssa!(isa(entry.node, PhiNode) ?
                 rename_phinode_edges(entry.node, block_for_inst(ir.cfg, entry.pos), result_order, bb_rename) : entry.node,
                 inst_rename, true),
-            entry.line)
+            entry.line, entry.flags)
     end
     new_ir = IRCode(ir, result_stmts, result_types, result_ltable, result_flags, cfg, new_new_nodes)
     return new_ir
@@ -703,7 +707,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
                 push!(type_refine_phi, ssaval.id)
             end
             new_typ = isa(typ, DelayedTyp) ? Union{} : tmerge(old_entry.typ, typ)
-            ir.new_nodes[ssaval.id] = NewNode(old_entry.pos, old_entry.attach_after, new_typ, node, old_entry.line)
+            ir.new_nodes[ssaval.id] = NewNode(old_entry.pos, old_entry.attach_after, new_typ, node, old_entry.line, old_entry.flags)
             incoming_vals[slot] = ssaval
         end
         (item in visited) && continue
@@ -723,7 +727,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
                 typ = ivalundef ? MaybeUndef(Union{}) : typ_for_val(ival, ci, sptypes, -1, slottypes)
                 push!(node.values,
                     NewSSAValue(insert_node!(ir, first_insert_for_bb(code, cfg, item),
-                                 typ, unode, true).id - length(ir.stmts)))
+                                 typ, unode; attach_after=true).id - length(ir.stmts)))
             end
         end
         push!(visited, item)
@@ -764,7 +768,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
                                 typ = MaybeUndef(Union{})
                             end
                             push!(phicnodes[exc][cidx][3].values,
-                                NewSSAValue(insert_node!(ir, idx, typ, node, true).id - length(ir.stmts)))
+                                NewSSAValue(insert_node!(ir, idx, typ, node; attach_after=true).id - length(ir.stmts)))
                         end
                     end
                 end
@@ -834,7 +838,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
                 end
                 new_typ = tmerge(new_typ, typ)
             end
-            ir.new_nodes[new_idx] = NewNode(node.pos, node.attach_after, new_typ, node.node, node.line)
+            ir.new_nodes[new_idx] = NewNode(node.pos, node.attach_after, new_typ, node.node, node.line, node.flags)
         end
     end
     # This is a bit awkward, because it basically duplicates what type
@@ -847,7 +851,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
             node = ir.new_nodes[new_idx]
             new_typ = recompute_type(node.node, ci, ir, sptypes, slottypes)
             if !(node.typ ⊑ new_typ) || !(new_typ ⊑ node.typ)
-                ir.new_nodes[new_idx] = NewNode(node.pos, node.attach_after, new_typ, node.node, node.line)
+                ir.new_nodes[new_idx] = NewNode(node.pos, node.attach_after, new_typ, node.node, node.line, node.flags)
                 changed = true
             end
         end
@@ -855,14 +859,14 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
     result_types = Any[isa(result_types[i], DelayedTyp) ? types(ir)[result_types[i].phi::NewSSAValue] : result_types[i] for i in 1:length(result_types)]
     new_nodes = NewNode[let node = ir.new_nodes[i]
             typ = isa(node.typ, DelayedTyp) ? types(ir)[node.typ.phi::NewSSAValue] : node.typ
-            NewNode(node.pos, node.attach_after, typ, node.node, node.line)
+            NewNode(node.pos, node.attach_after, typ, node.node, node.line, node.flags)
         end for i in 1:length(ir.new_nodes)]
     # Renumber SSA values
     new_code = Any[new_to_regular(renumber_ssa!(new_code[i], ssavalmap), length(ir.stmts)) for i in 1:length(new_code)]
     new_nodes = NewNode[let node = new_nodes[i]
             NewNode(node.pos, node.attach_after, node.typ,
             new_to_regular(renumber_ssa!(node.node, ssavalmap), length(ir.stmts)),
-            node.line)
+            node.line, node.flags)
         end for i in 1:length(new_nodes)]
     ir = IRCode(ir, new_code, result_types, ir.lines, ir.flags, ir.cfg, new_nodes)
     @timeit "domsort" ir = domsort_ssa!(ir, domtree)

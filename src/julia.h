@@ -272,6 +272,7 @@ typedef struct _jl_code_info_t {
     uint8_t inlineable;
     uint8_t propagate_inbounds;
     uint8_t pure;
+    uint8_t nothrow;
 } jl_code_info_t;
 
 // This type describes a single method definition, and stores data

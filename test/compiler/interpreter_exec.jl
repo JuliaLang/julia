@@ -20,6 +20,7 @@ let m = Meta.@lower 1 + 1
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
+    src.ssaflags = UInt8[ 0x00 for _ = 1:nstmts ]
     src.codelocs = fill(Int32(1), nstmts)
     src.inferred = true
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
@@ -62,6 +63,7 @@ let m = Meta.@lower 1 + 1
     src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
     src.codelocs = fill(Int32(1), nstmts)
     src.inferred = true
+    src.ssaflags = UInt8[ 0x00 for _ = 1:nstmts ]
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
     global test29262 = true
     @test (:b, :a, :c, :c) === @eval $m
@@ -97,6 +99,7 @@ let m = Meta.@lower 1 + 1
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
+    src.ssaflags = UInt8[ 0x00 for _ = 1:nstmts ]
     src.codelocs = fill(Int32(1), nstmts)
     src.inferred = true
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))

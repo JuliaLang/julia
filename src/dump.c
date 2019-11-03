@@ -2515,7 +2515,8 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
         NULL
     };
 
-    uint8_t flags = (code->inferred << 3)
+    uint8_t flags = (code->nothrow << 4)
+                  | (code->inferred << 3)
                   | (code->inlineable << 2)
                   | (code->propagate_inbounds << 1)
                   | (code->pure << 0);
@@ -2605,6 +2606,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_code_instance_
     code->inlineable = !!(flags & (1 << 2));
     code->propagate_inbounds = !!(flags & (1 << 1));
     code->pure = !!(flags & (1 << 0));
+    code->nothrow = !!(flags & (1 << 4));
 
     size_t nslots = read_int32(&src);
     code->slotflags = jl_alloc_array_1d(jl_array_uint8_type, nslots);

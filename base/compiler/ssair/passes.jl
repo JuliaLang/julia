@@ -355,11 +355,11 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                         # If there's the potential for an undefref error on access, we cannot insert a getfield
                         if field > typ.ninitialized && !isbits(fieldtype(typ, field))
                             return nothing
-                            lifted_leaves[leaf] = RefValue{Any}(insert_node!(compact, leaf, make_MaybeUndef(result_t), Expr(:call, :unchecked_getfield, SSAValue(leaf.id), field), true))
+                            lifted_leaves[leaf] = RefValue{Any}(insert_node!(compact, leaf, make_MaybeUndef(result_t), Expr(:call, :unchecked_getfield, SSAValue(leaf.id), field); attach_after=true))
                             maybe_undef = true
                         else
                             return nothing
-                            lifted_leaves[leaf] = RefValue{Any}(insert_node!(compact, leaf, result_t, Expr(:call, getfield, SSAValue(leaf.id), field), true))
+                            lifted_leaves[leaf] = RefValue{Any}(insert_node!(compact, leaf, result_t, Expr(:call, getfield, SSAValue(leaf.id), field); attach_after=true))
                         end
                         continue
                     end
@@ -559,7 +559,7 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
             # for the backend.
             pi = insert_node_here!(compact,
                 PiNode(stmt.args[2], compact.result_types[idx]), compact.result_types[idx],
-                compact.result_lines[idx], true)
+                compact.result_lines[idx], compact.result_flags[idx]; reverse_affinity=true)
             compact.ssa_rename[compact.idx-1] = pi
             continue
         elseif is_known_call(stmt, (===), compact)

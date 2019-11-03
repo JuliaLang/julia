@@ -140,6 +140,11 @@ function verify_ir(ir::IRCode)
         bb_unreachable(domtree, bb) && continue
         stmt = ir.stmts[idx]
         stmt === nothing && continue
+        if (ir.flags[idx] & IR_FLAG_EFFECT_FREE) != 0
+            if !stmt_effect_free(stmt, ir.types[idx], ir, ir.sptypes)
+                @verify_error "Statement $(stmt) not effect free despite flag to the contrary."
+            end
+        end
         if isa(stmt, PhiNode)
             @assert length(stmt.edges) == length(stmt.values)
             for i = 1:length(stmt.edges)

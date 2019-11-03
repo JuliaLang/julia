@@ -105,15 +105,22 @@ function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, sv::Opt
             IRCode(code, Any[], ci.codelocs, flags, cfg, collect(LineInfoNode, ci.linetable), sv.slottypes, meta, sv.sptypes)
         end
     @timeit "construct_ssa" ir = construct_ssa!(ci, code, ir, domtree, defuse_insts, nargs, sv.sptypes, sv.slottypes)
+    # Mark all effect free stmts
+    for i = 1:length(ir.stmts)
+        if stmt_effect_free(ir.stmts[i], ir.types[i], ir, sv.sptypes)
+            ir.flags[i] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_PURE
+        end
+    end
     return ir
 end
 
 function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     ir = just_construct_ssa(ci, copy_exprargs(ci.code), nargs, sv)
-    #@Base.show ("after_construct", ir)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)
+    #Core.Main.Base.display(ir)
     @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv)
+    #Core.Main.Base.display(ir)
     #@timeit "verify 2" verify_ir(ir)
     ir = compact!(ir)
     #@Base.show ("before_sroa", ir)

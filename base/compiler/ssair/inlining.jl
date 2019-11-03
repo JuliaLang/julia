@@ -373,7 +373,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                             compact_exprtype(inline_compact, val)
                         insert_node_here!(inline_compact, GotoNode(post_bb_id),
                                           Any, compact.result_lines[idx′],
-                                          true)
+                                          reverse_affinity=true)
                         push!(pn.values, SSAValue(idx′))
                     else
                         push!(pn.values, val)
@@ -906,7 +906,10 @@ function inline_apply!(ir::IRCode, idx::Int, sig::Signature, params::Params)
         f = singleton_type(ft)
         sig = Signature(f, ft, atypes)
     end
-    sig
+    # TODO: Ideally, we'd discover these properties earlier, making this
+    # unnecessary
+    ir.flags[idx] |= compute_flags(ir, ir.stmts[idx], ir.types[idx])
+    return sig
 end
 
 # TODO: this test is wrong if we start to handle Unions of function types later

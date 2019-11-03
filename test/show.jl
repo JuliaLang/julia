@@ -1464,10 +1464,10 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     end
     lines1 = split(repr(ir), '\n')
     @test isempty(pop!(lines1))
-    Core.Compiler.insert_node!(ir, 1, Val{1}, QuoteNode(1), false)
-    Core.Compiler.insert_node!(ir, 1, Val{2}, QuoteNode(2), true)
-    Core.Compiler.insert_node!(ir, length(ir.stmts), Val{3}, QuoteNode(3), false)
-    Core.Compiler.insert_node!(ir, length(ir.stmts), Val{4}, QuoteNode(4), true)
+    Core.Compiler.insert_node!(ir, 1, Val{1}, QuoteNode(1); attach_after=false)
+    Core.Compiler.insert_node!(ir, 1, Val{2}, QuoteNode(2); attach_after=true)
+    Core.Compiler.insert_node!(ir, length(ir.stmts), Val{3}, QuoteNode(3); attach_after=false)
+    Core.Compiler.insert_node!(ir, length(ir.stmts), Val{4}, QuoteNode(4); attach_after=true)
     lines2 = split(repr(ir), '\n')
     @test isempty(pop!(lines2))
     @test popfirst!(lines2) == "2  1 ──       $(QuoteNode(1))"
