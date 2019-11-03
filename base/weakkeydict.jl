@@ -6,7 +6,7 @@
     WeakKeyDict([itr])
 
 `WeakKeyDict()` constructs a hash table where the keys are weak
-references to objects, and thus may be garbage collected even when
+references to objects which may be garbage collected even when
 referenced in a hash table.
 
 See [`Dict`](@ref) for further help.  Note, unlike [`Dict`](@ref),
