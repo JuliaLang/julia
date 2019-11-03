@@ -449,8 +449,8 @@ end
     A
 end
 
-promote_unless_bool(α::Number, ::Type{T}) where {T<:Number} = first(promote(α, zero(T)))
-promote_unless_bool(α::Bool, ::Type{T}) where {T<:Number} = α
+# promote_unless_bool(α::Number, ::Type{T}) where {T<:Number} = first(promote(α, zero(T)))
+# promote_unless_bool(α::Bool, ::Type{T}) where {T<:Number} = α
 
 function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::StridedVector{T},
                α::Number=true, β::Number=false) where {T<:BlasFloat}
@@ -467,8 +467,10 @@ function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::
     if nA == 0
         return _rmul_or_fill!(y, β)
     end
-    alpha = promote_unless_bool(α, T)
-    beta = promote_unless_bool(β, T)
+
+    # alpha = promote_unless_bool(α, T)
+    # beta = promote_unless_bool(β, T)
+    alpha, beta = promote(α, β, zero(T))
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T} && stride(A, 1) == 1 && stride(A, 2) >= size(A, 1)
         return BLAS.gemv!(tA, alpha, A, x, beta, y)
     else
@@ -499,8 +501,9 @@ function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat
         return matmul3x3!(C, tA, tAt, A, A, MulAddMul(α, β))
     end
 
-    alpha = promote_unless_bool(α, T)
-    beta = promote_unless_bool(β, T)
+    # alpha = promote_unless_bool(α, T)
+    # beta = promote_unless_bool(β, T)
+    alpha, beta = promote(α, β, zero(T))
     if (alpha isa Union{Bool,T} &&
         beta isa Union{Bool,T} &&
         stride(A, 1) == stride(C, 1) == 1 &&
@@ -537,8 +540,9 @@ function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA
     # Result array does not need to be initialized as long as beta==0
     #    C = Matrix{T}(undef, mA, mA)
 
-    alpha = promote_unless_bool(α, T)
-    beta = promote_unless_bool(β, T)
+    # alpha = promote_unless_bool(α, T)
+    # beta = promote_unless_bool(β, T)
+    alpha, beta = promote(α, β, zero(T))
     if (alpha isa Union{Bool,T} &&
         beta isa Union{Bool,T} &&
         stride(A, 1) == stride(C, 1) == 1 &&
@@ -586,8 +590,9 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar
         return matmul3x3!(C, tA, tB, A, B, MulAddMul(α, β))
     end
 
-    alpha = promote_unless_bool(α, T)
-    beta = promote_unless_bool(β, T)
+    # alpha = promote_unless_bool(α, T)
+    # beta = promote_unless_bool(β, T)
+    alpha, beta = promote(α, β, zero(T))
     if (alpha isa Union{Bool,T} &&
         beta isa Union{Bool,T} &&
         stride(A, 1) == stride(B, 1) == stride(C, 1) == 1 &&
