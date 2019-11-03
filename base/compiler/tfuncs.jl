@@ -997,7 +997,7 @@ function apply_type_nothrow(argtypes::Array{Any, 1}, @nospecialize(rt))
     for i = 2:length(argtypes)
         isa(u, UnionAll) || return false
         ai = widenconditional(argtypes[i])
-        if ai === TypeVar
+        if ai ⊑ TypeVar
             # We don't know anything about the bounds of this typevar, but as
             # long as the UnionAll is not constrained, that's ok.
             if !(u.var.lb === Union{} && u.var.ub === Any)
