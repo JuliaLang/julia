@@ -508,7 +508,7 @@ function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat
             return copytri!(BLAS.syrk!('U', tA, alpha, A, beta, C), 'U')
         end
     end
-    return generic_matmatmul!(C, tA, tAt, A, A, MulAddMul(α, β))
+    return gemm_wrapper!(C, tA, tAt, A, A, α, β)
 end
 
 function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA::AbstractChar, A::Union{StridedVecOrMat{T}, StridedVecOrMat{Complex{T}}},
@@ -537,15 +537,17 @@ function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA
     # Result array does not need to be initialized as long as beta==0
     #    C = Matrix{T}(undef, mA, mA)
 
-    alpha, beta = promote(α, β, zero(T))
-    if (alpha isa Union{Bool,T} &&
-        beta isa Union{Bool,T} &&
-        stride(A, 1) == stride(C, 1) == 1 &&
-        stride(A, 2) >= size(A, 1) &&
-        stride(C, 2) >= size(C, 1))
-        return copytri!(BLAS.herk!('U', tA, alpha, A, beta, C), 'U', true)
+    if iszero(β) || issymmetric(C)
+        alpha, beta = promote(α, β, zero(T))
+        if (alpha isa Union{Bool,T} &&
+            beta isa Union{Bool,T} &&
+            stride(A, 1) == stride(C, 1) == 1 &&
+            stride(A, 2) >= size(A, 1) &&
+            stride(C, 2) >= size(C, 1))
+            return copytri!(BLAS.herk!('U', tA, alpha, A, beta, C), 'U', true)
+        end
     end
-    return generic_matmatmul!(C, tA, tAt, A, A, MulAddMul(α, β))
+    return gemm_wrapper!(C, tA, tAt, A, A, α, β)
 end
 
 function gemm_wrapper(tA::AbstractChar, tB::AbstractChar,
