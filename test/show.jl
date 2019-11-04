@@ -907,6 +907,7 @@ let a = Vector{Any}(undef, 10000)
     repr = sprint(dump, a; context=(:limit => true), sizehint=0)
     @test repr == "Array{Any}((10000,))\n  1: #undef\n  2: String \"elemA\"\n  3: #undef\n  4: String \"elemB\"\n  5: #undef\n  ...\n  9996: #undef\n  9997: #undef\n  9998: #undef\n  9999: #undef\n  10000: #undef\n"
 end
+@test occursin("NamedTuple", sprint(dump, NamedTuple))
 
 # issue #17338
 @test repr(Core.svec(1, 2)) == "svec(1, 2)"
