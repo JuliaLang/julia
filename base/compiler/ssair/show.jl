@@ -22,10 +22,7 @@ end
 
 function print_flags(io::IO, flags)
     printstyled(io, (flags & IR_FLAG_EFFECT_FREE) != 0 ? "e" : " ", color=:green)
-    printstyled(io, (flags & IR_FLAG_PURE) != 0 ? "p" : " ", color=:yellow)
     printstyled(io, (flags & IR_FLAG_INBOUNDS) != 0 ? "i" : " ", color=:red)
-    printstyled(io, (flags & IR_FLAG_NOTHROW) != 0 ? "n" : " ", color=:green)
-    printstyled(io, (flags & IR_FLAG_AFFECTS_PURITY) != 0 ? "a" : " ", color=:yellow)
 end
 
 function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxlength_idx::Int, color::Bool, show_type::Bool)

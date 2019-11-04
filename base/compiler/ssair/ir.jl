@@ -669,7 +669,7 @@ end
 function compute_flags(ir, @nospecialize(stmt), @nospecialize(typ))
     flags = 0x00
     if stmt_effect_free(stmt, typ, ir, isa(ir, IRCode) ? ir.sptypes : ir.ir.sptypes)
-        flags |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_PURE
+        flags |= IR_FLAG_EFFECT_FREE
     end
     flags
 end

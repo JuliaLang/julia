@@ -108,7 +108,7 @@ function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, sv::Opt
     # Mark all effect free stmts
     for i = 1:length(ir.stmts)
         if stmt_effect_free(ir.stmts[i], ir.types[i], ir, sv.sptypes)
-            ir.flags[i] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_PURE
+            ir.flags[i] |= IR_FLAG_EFFECT_FREE
         end
     end
     return ir

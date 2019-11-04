@@ -1047,7 +1047,6 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     ci.inlineable = deserialize(s)
     ci.propagate_inbounds = deserialize(s)
     ci.pure = deserialize(s)
-    ci.nothrow = deserialize(s)
     return ci
 end
 
