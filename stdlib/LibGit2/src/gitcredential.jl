@@ -122,7 +122,7 @@ function Base.read!(io::IO, cred::GitCredential)
             end
         elseif key in GIT_CRED_ATTRIBUTES
             field = getproperty(cred, Symbol(key))
-            field !== nothing && Symbol(key) == :password && Base.shred!(field)
+            field !== nothing && Symbol(key) === :password && Base.shred!(field)
             setproperty!(cred, Symbol(key), value)
         elseif !all(isspace, key)
             @warn "Unknown git credential attribute found: $(repr(key))"

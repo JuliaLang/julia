@@ -296,7 +296,7 @@ fileurl(file) = let f = find_source_file(file); f === nothing ? "" : "file://"*f
 
 function url(m::Method)
     M = m.module
-    (m.file == :null || m.file == :string) && return ""
+    (m.file === :null || m.file === :string) && return ""
     file = string(m.file)
     line = m.line
     line <= 0 || occursin(r"In\[[0-9]+\]", file) && return ""

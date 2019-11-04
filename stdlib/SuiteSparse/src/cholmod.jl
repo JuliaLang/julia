@@ -375,12 +375,12 @@ mutable struct FactorComponent{Tv,S} <: AbstractMatrix{Tv}
     function FactorComponent{Tv,S}(F::Factor{Tv}) where {Tv,S}
         s = unsafe_load(pointer(F))
         if s.is_ll != 0
-            if !(S == :L || S == :U || S == :PtL || S == :UP)
+            if !(S === :L || S === :U || S === :PtL || S === :UP)
                 throw(CHOLMODException(string(S, " not supported for sparse ",
                     "LLt matrices; try :L, :U, :PtL, or :UP")))
             end
-        elseif !(S == :L || S == :U || S == :PtL || S == :UP ||
-                S == :D || S == :LD || S == :DU || S == :PtLD || S == :DUP)
+        elseif !(S === :L || S === :U || S === :PtL || S === :UP ||
+                S === :D || S === :LD || S === :DU || S === :PtLD || S === :DUP)
             throw(CHOLMODException(string(S, " not supported for sparse LDLt ",
                 "matrices; try :L, :U, :PtL, :UP, :D, :LD, :DU, :PtLD, or :DUP")))
         end
@@ -1182,9 +1182,9 @@ function getindex(A::Sparse{T}, i0::Integer, i1::Integer) where T
 end
 
 @inline function getproperty(F::Factor, sym::Symbol)
-    if sym == :p
+    if sym === :p
         return get_perm(F)
-    elseif sym == :ptr
+    elseif sym === :ptr
         return getfield(F, :ptr)
     else
         return FactorComponent(F, sym)

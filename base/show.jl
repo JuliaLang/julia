@@ -195,7 +195,7 @@ end
 
 function show(io::IO, ::MIME"text/plain", t::Task)
     show(io, t)
-    if t.state == :failed
+    if t.state === :failed
         println(io)
         showerror(io, CapturedException(t.result, t.backtrace))
     end
@@ -495,7 +495,7 @@ function show(io::IO, @nospecialize(x::Type))
         return show(io, unwrap_unionall(x).name)
     end
 
-    if x.var.name == :_ || io_has_tvar_name(io, x.var.name, x)
+    if x.var.name === :_ || io_has_tvar_name(io, x.var.name, x)
         counter = 1
         while true
             newname = Symbol(x.var.name, counter)
@@ -1013,7 +1013,7 @@ end
 function show_call(io::IO, head, func, func_args, indent)
     op, cl = expr_calls[head]
     if (isa(func, Symbol) && func !== :(:) && !(head === :. && isoperator(func))) ||
-            (isa(func, Expr) && (func.head == :. || func.head == :curly || func.head == :macroname)) ||
+            (isa(func, Expr) && (func.head === :. || func.head === :curly || func.head === :macroname)) ||
             isa(func, GlobalRef)
         show_unquoted(io, func, indent)
     else
@@ -1021,7 +1021,7 @@ function show_call(io::IO, head, func, func_args, indent)
         show_unquoted(io, func, indent)
         print(io, ')')
     end
-    if head == :(.)
+    if head === :(.)
         print(io, '.')
     end
     if !isempty(func_args) && isa(func_args[1], Expr) && func_args[1].head === :parameters
@@ -1152,7 +1152,7 @@ function show_import_path(io::IO, ex)
         end
     elseif ex.head === :(.)
         for i = 1:length(ex.args)
-            if i > 1 && ex.args[i-1] != :(.)
+            if i > 1 && ex.args[i-1] !== :(.)
                 print(io, '.')
             end
             show_sym(io, ex.args[i], allow_macroname=(i==length(ex.args)))
@@ -1287,7 +1287,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     # other call-like expressions ("A[1,2]", "T{X,Y}", "f.(X,Y)")
     elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl/:(.)
-        funcargslike = head == :(.) ? args[2].args : args[2:end]
+        funcargslike = head === :(.) ? args[2].args : args[2:end]
         show_call(io, head, args[1], funcargslike, indent)
 
     # comprehensions
@@ -1350,7 +1350,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     elseif (head === :if || head === :elseif) && nargs == 3
         show_block(io, head, args[1], args[2], indent)
-        if isa(args[3],Expr) && args[3].head == :elseif
+        if isa(args[3],Expr) && args[3].head === :elseif
             show_unquoted(io, args[3], indent, prec)
         else
             show_block(io, "else", args[3], indent)
@@ -1613,7 +1613,7 @@ resolvebinding(@nospecialize(ex)) = ex
 resolvebinding(ex::QuoteNode) = ex.value
 resolvebinding(ex::Symbol) = resolvebinding(GlobalRef(Main, ex))
 function resolvebinding(ex::Expr)
-    if ex.head == :. && isa(ex.args[2], Symbol)
+    if ex.head === :. && isa(ex.args[2], Symbol)
         parent = resolvebinding(ex.args[1])
         if isa(parent, Module)
             return resolvebinding(GlobalRef(parent, ex.args[2]))
@@ -1630,7 +1630,7 @@ function resolvebinding(ex::GlobalRef)
 end
 
 function ismodulecall(ex::Expr)
-    return ex.head == :call && (ex.args[1] === GlobalRef(Base,:getfield) ||
+    return ex.head === :call && (ex.args[1] === GlobalRef(Base,:getfield) ||
                                 ex.args[1] === GlobalRef(Core,:getfield)) &&
            isa(resolvebinding(ex.args[2]), Module)
 end
@@ -1687,7 +1687,7 @@ module IRShow
         :none => src -> Base.IRShow.lineinfo_disabled,
         )
     const default_debuginfo = Ref{Symbol}(:none)
-    debuginfo(sym) = sym == :default ? default_debuginfo[] : sym
+    debuginfo(sym) = sym === :default ? default_debuginfo[] : sym
 end
 
 function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)

@@ -1334,7 +1334,7 @@ end
 
 for f in [:sum, :maximum, :minimum], op in [:abs, :abs2]
     SV = :AbstractSparseVector
-    if f == :minimum
+    if f === :minimum
         @eval ($f)(::typeof($op), x::$SV{T}) where {T<:Number} = nnz(x) < length(x) ? ($op)(zero(T)) : ($f)($op, nonzeros(x))
     else
         @eval ($f)(::typeof($op), x::$SV) = ($f)($op, nonzeros(x))

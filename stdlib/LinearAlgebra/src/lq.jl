@@ -124,9 +124,9 @@ Base.copy(F::Adjoint{T,<:LQ{T}}) where {T} =
 
 function getproperty(F::LQ, d::Symbol)
     m, n = size(F)
-    if d == :L
+    if d === :L
         return tril!(getfield(F, :factors)[1:m, 1:min(m,n)])
-    elseif d == :Q
+    elseif d === :Q
         return LQPackedQ(getfield(F, :factors), getfield(F, :τ))
     else
         return getfield(F, d)

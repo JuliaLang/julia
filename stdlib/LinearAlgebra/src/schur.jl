@@ -149,9 +149,9 @@ schur(A::LowerTriangular) = schur(copyto!(similar(parent(A)), A))
 schur(A::Tridiagonal) = schur(Matrix(A))
 
 function getproperty(F::Schur, d::Symbol)
-    if d == :Schur
+    if d === :Schur
         return getfield(F, :T)
-    elseif d == :vectors
+    elseif d === :vectors
         return getfield(F, :Z)
     else
         getfield(F, d)
@@ -305,15 +305,15 @@ ordschur(gschur::GeneralizedSchur, select::Union{Vector{Bool},BitVector}) =
     GeneralizedSchur(_ordschur(gschur.S, gschur.T, gschur.Q, gschur.Z, select)...)
 
 function getproperty(F::GeneralizedSchur, d::Symbol)
-    if d == :values
+    if d === :values
         return getfield(F, :α) ./ getfield(F, :β)
-    elseif d == :alpha
+    elseif d === :alpha
         return getfield(F, :α)
-    elseif d == :beta
+    elseif d === :beta
         return getfield(F, :β)
-    elseif d == :left
+    elseif d === :left
         return getfield(F, :Q)
-    elseif d == :right
+    elseif d === :right
         return getfield(F, :Z)
     else
         getfield(F, d)
