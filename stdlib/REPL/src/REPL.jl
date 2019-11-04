@@ -59,7 +59,8 @@ import ..LineEdit:
     terminal,
     MIState,
     PromptState,
-    TextInterface
+    TextInterface,
+    mode_idx
 
 include("REPLCompletions.jl")
 using .REPLCompletions
@@ -599,14 +600,6 @@ function hist_from_file(hp::REPLHistoryProvider, path::String)
     end
     hp.start_idx = length(hp.history)
     return hp
-end
-
-function mode_idx(hist::REPLHistoryProvider, mode::TextInterface)
-    c = :julia
-    for (k,v) in hist.mode_mapping
-        isequal(v, mode) && (c = k)
-    end
-    return c
 end
 
 function add_history(hist::REPLHistoryProvider, s::PromptState)
