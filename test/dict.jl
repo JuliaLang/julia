@@ -1057,8 +1057,11 @@ end
                 new{keytype(d), valtype(d)}(d)
             end
         end
+        Base.Dict(td::TestDict) = td.dict
+        Base.haskey(td::TestDict, key) = haskey(td.dict, key)
         Base.setindex!(td::TestDict, args...) = setindex!(td.dict, args...)
         Base.getindex(td::TestDict, args...) = getindex(td.dict, args...)
+        Base.delete!(td::TestDict, key) = delete!(td.dict, key)
         Base.pairs(D::TestDict) = pairs(D.dict)
         testdict = TestDict(:a=>1, :b=>2)
         map!(v->v-1, values(testdict))
@@ -1070,5 +1073,53 @@ end
         map!(v->v-1, values(testdict))
         @test testdict[:a] == 0
         @test testdict[:b] == 1
+    end
+end
+
+@testset "modify!(f, ::$constructor, key)" for constructor in [
+    Dict,
+    TestDict,
+]
+    @testset "update" begin
+        dict = constructor(Dict("a" => 1))
+
+        @test modify!(dict, "a") do val
+            Some(val === nothing ? 1 : something(val) + 1)
+        end == Some(2)
+
+        @test Dict(dict) == Dict("a" => 2)
+    end
+
+    @testset "insert" begin
+        dict = constructor(Dict())
+
+        @test modify!(dict, "a") do val
+            Some(val === nothing ? 1 : something(val) + 1)
+        end == Some(1)
+
+        @test Dict(dict) == Dict("a" => 1)
+    end
+
+    @testset "delete" begin
+        dict = constructor(Dict("a" => 1))
+        @test modify!(_ -> nothing, dict, "a") === nothing
+        @test Dict(dict) == Dict()
+    end
+
+    @testset "no-op" begin
+        dict = constructor(Dict("a" => 1))
+        @test modify!(_ -> nothing, dict, "b") === nothing
+        @test Dict(dict) == Dict("a" => 1)
+    end
+
+    @testset "mutation inside `f`" begin
+        dict = constructor(Dict())
+
+        @test modify!(dict, "a") do val
+            dict["a"] = 0
+            Some(val === nothing ? 1 : something(val) + 1)
+        end == Some(1)
+
+        @test Dict(dict) == Dict("a" => 1)
     end
 end

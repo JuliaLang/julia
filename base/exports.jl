@@ -514,6 +514,7 @@ export
     mapreduce,
     merge!,
     merge,
+    modify!,
     pairs,
     reduce,
     setdiff!,

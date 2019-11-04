@@ -465,6 +465,63 @@ function hash(a::AbstractDict, h::UInt)
     hash(hv, h)
 end
 
+"""
+    modify!(f, d::AbstractDict{K, V}, key)
+
+Lookup and then update, insert or delete in one go without re-computing the hash.
+
+`f` is a callable object that must accept `Union{Some{V}, Nothing}` and return
+`Union{T, Some{T}, Nothing}` where `T` is a type [`convert`](@ref)-able to the value type
+`V`.  The value `Some(d[key])` is passed to `f` if `haskey(d, key)`; otherwise `nothing`
+is passed.  If `f` returns `nothing`, corresponding entry in the dictionary `d`  is removed.
+If `f` returns non-`nothing` value `x`, `something(x)` is inserted to `d`.
+
+`modify!` returns whatever `f` returns as-is.
+
+# Examples
+```jldoctest
+julia> dict = Dict("a" => 1);
+
+julia> modify!(dict, "a") do val
+           Some(val === nothing ? 1 : something(val) + 1)
+       end
+Some(2)
+
+julia> dict
+Dict{String,Int64} with 1 entry:
+  "a" => 2
+
+julia> dict = Dict();
+
+julia> modify!(dict, "a") do val
+           Some(val === nothing ? 1 : something(val) + 1)
+       end
+Some(1)
+
+julia> dict
+Dict{Any,Any} with 1 entry:
+  "a" => 1
+
+julia> modify!(_ -> nothing, dict, "a")
+
+julia> dict
+Dict{Any,Any} with 0 entries
+```
+"""
+function modify!(f, dict::AbstractDict, key)
+    if haskey(dict, key)
+        val = f(Some(dict[key]))
+    else
+        val = f(nothing)
+    end
+    if val === nothing
+        delete!(dict, key)
+    else
+        dict[key] = something(val)
+    end
+    return val
+end
+
 function getindex(t::AbstractDict, key)
     v = get(t, key, secret_table_token)
     if v === secret_table_token

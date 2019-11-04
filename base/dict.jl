@@ -391,6 +391,45 @@ function setindex!(h::Dict{K,V}, v0, key::K) where V where K
     return h
 end
 
+function modify!(f, h::Dict{K}, key0) where K
+    key = convert(K, key0)
+    if !isequal(key, key0)
+        throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
+    end
+
+    # Ideally, to improve performance for the case that requires
+    # resizing, we should use something like `ht_keyindex` while
+    # keeping computed hash value and then do something like
+    # `ht_keyindex2!` if `f` returns non-`nothing`.
+    idx = ht_keyindex2!(h, key)
+
+    age0 = h.age
+    if idx > 0
+        @inbounds vold = h.vals[idx]
+        vnew = f(Some(vold))
+    else
+        vnew = f(nothing)
+    end
+    if h.age != age0
+        idx = ht_keyindex2!(h, key)
+    end
+
+    if vnew === nothing
+        if idx > 0
+            _delete!(h, idx)
+        end
+    else
+        if idx > 0
+            h.age += 1
+            @inbounds h.keys[idx] = key
+            @inbounds h.vals[idx] = something(vnew)
+        else
+            @inbounds _setindex!(h, something(vnew), key, -idx)
+        end
+    end
+    return vnew
+end
+
 """
     get!(collection, key, default)
 
