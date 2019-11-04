@@ -542,8 +542,8 @@ end
         return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
     end
 end
-@inline mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix},
-             α::Number, β::Number) where {T<:BlasComplex} =
+@inline function mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix},
+             α::Number, β::Number) where {T<:BlasComplex}
     alpha, beta = promote(α, β, zero(T))
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
         return BLAS.hemm!('R', B.uplo, alpha, B.data, A, beta, C)
