@@ -618,6 +618,23 @@ function serialize(s::AbstractSerializer, u::UnionAll)
     end
 end
 
+function serialize(s::AbstractSerializer, c::CodeInfo)
+    serialize_cycle(s, c) && return
+    serialize_type(s, CodeInfo, true)
+    flags_field = Base.fieldindex(CodeInfo, :ssaflags)
+    for i in 1:nf
+        if isdefined(x, i)
+            if i === flags_field
+                serialize(s, map(x->x & Core.Compiler.IR_FLAG_INBOUNDS, getfield(x, i)))
+            else
+                serialize(s, getfield(x, i))
+            end
+        else
+            writetag(s.io, UNDEFREF_TAG)
+        end
+    end
+end
+
 serialize(s::AbstractSerializer, @nospecialize(x)) = serialize_any(s, x)
 
 function serialize_any(s::AbstractSerializer, @nospecialize(x))

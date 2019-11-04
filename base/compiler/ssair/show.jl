@@ -656,7 +656,11 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
             bb_idx += 1
         end
         show_type = should_print_ssa_type(stmt)
-        print_flags(io, code.flags[idx])
+        if isassigned(code.flags, idx)
+            print_flags(io, code.flags[idx])
+        else
+            printstyled(io, "EE", color=:red)
+        end
         print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type)
         if !isassigned(types, idx)
             # This is an error, but can happen if passes don't update their type information
@@ -674,6 +678,7 @@ function show_ir(io::IO, code::CodeInfo, line_info_preprinter=DILineInfoPrinter(
     used = BitSet()
     stmts = code.code
     types = code.ssavaluetypes
+    flags = code.ssaflags
     cfg = compute_basic_blocks(stmts)
     max_bb_idx_size = length(string(length(cfg.blocks)))
     for stmt in stmts
@@ -739,6 +744,11 @@ function show_ir(io::IO, code::CodeInfo, line_info_preprinter=DILineInfoPrinter(
             stmt = PhiNode(Any[block_for_inst(cfg, e[i]) for i in 1:length(e)], stmt.values)
         end
         show_type = types isa Vector{Any} && should_print_ssa_type(stmt)
+        if isassigned(flags, idx)
+            print_flags(io, flags[idx])
+        else
+            printstyled(io, "EE", color=:red)
+        end
         print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type)
         if types isa Vector{Any} # ignore types for pre-inference code
             if !isassigned(types, idx)

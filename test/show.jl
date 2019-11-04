@@ -1470,13 +1470,18 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     Core.Compiler.insert_node!(ir, length(ir.stmts), Val{4}, QuoteNode(4); attach_after=true)
     lines2 = split(repr(ir), '\n')
     @test isempty(pop!(lines2))
-    @test popfirst!(lines2) == "2  1 ──       $(QuoteNode(1))"
-    @test popfirst!(lines2) == "   │          $(QuoteNode(2))" # TODO: this should print after the next statement
+    let line1 = popfirst!(lines2)
+        line2 = popfirst!(lines2)
+        @test startswith(line1, "2  1 ── ")
+        @test startswith(line2, "   │    ")
+        @test endswith(line1, "\$(QuoteNode(1))")
+        @test endswith(line2, "\$(QuoteNode(2))") # TODO: this should print after the next statement
+    end
     let line1 = popfirst!(lines1)
         line2 = popfirst!(lines2)
         @test startswith(line1, "2  1 ── ")
         @test startswith(line2, "   │    ")
-        @test line2[12:end] == line2[12:end]
+        @test collect(line1)[9:end] == collect(line2)[9:end]
     end
     let line1 = pop!(lines1)
         line2 = pop!(lines2)
@@ -1484,8 +1489,13 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
         @test startswith(line2, "   ")
         @test line1[3:end] == line2[3:end]
     end
-    @test pop!(lines2) == "   │          \$(QuoteNode(4))"
-    @test pop!(lines2) == "17 │          \$(QuoteNode(3))" # TODO: this should print after the next statement
+    let line1 = pop!(lines2)
+        line2 = pop!(lines2)
+        @test startswith(line1, "   │")
+        @test startswith(line2, "17 │")
+        @test endswith(line1, "\$(QuoteNode(4))")
+        @test endswith(line2, "\$(QuoteNode(3))") # TODO: this should print after the next statement
+    end
     @test lines1 == lines2
 end
 
@@ -1497,7 +1507,7 @@ let src = code_typed(gcd, (Int, Int), debuginfo=:source)[1][1]
     push!(ir.stmts, Core.Compiler.ReturnNode())
     lines = split(sprint(show, ir), '\n')
     @test isempty(pop!(lines))
-    @test pop!(lines) == "   ! ──       unreachable::#UNDEF"
+    @test pop!(lines) == "   ! ── EE      unreachable::#UNDEF"
 end
 
 @testset "printing and interpolating nothing" begin
