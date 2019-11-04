@@ -48,6 +48,20 @@ if !Sys.iswindows()
     cd(pwd_)
 end
 
+@testset "that temp names are actually unique" begin
+    temps = [tempname(cleanup=false) for _ = 1:1000]
+    @test allunique(temps)
+    temps = map(1:1000) do _
+        path, io = mktemp(cleanup=false)
+        close(io)
+        return path
+    end
+    @test allunique(temps)
+    for path in temps
+        rm(path, force=true)
+    end
+end
+
 using Random
 
 @testset "tempname with parent" begin
