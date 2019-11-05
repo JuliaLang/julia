@@ -405,8 +405,15 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     while moreinput
         line = readline(buf, keep=true)
         moreinput = endswith(line, "\n")
+        if rows == 1 && line_pos <= sizeof(line) - moreinput
+            # we special case rows == 1, as otherwise by the time the cursor is seen to
+            # be in the current line, it's too late to chop the '\n' away
+            lastline = true
+            curs_row = 1
+            curs_pos = lindent + line_pos
+        end
         if moreinput && lastline # we want to print only one "visual" line, so
-            line = line[1:end-1] # don't include the trailing "\n"
+            line = chomp(line)   # don't include the trailing "\n"
         end
         # We need to deal with on-screen characters, so use textwidth to compute occupied columns
         llength = textwidth(line)
