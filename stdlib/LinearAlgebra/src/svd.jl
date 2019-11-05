@@ -202,7 +202,7 @@ function svd(A::Transpose; full::Bool = false, alg::Algorithm = default_svd_alg(
 end
 
 function getproperty(F::SVD, d::Symbol)
-    if d == :V
+    if d === :V
         return getfield(F, :Vt)'
     else
         return getfield(F, d)
@@ -526,13 +526,13 @@ svd(x::Number, y::Number) = svd(fill(x, 1, 1), fill(y, 1, 1))
     FV = getfield(F, :V)
     FQ = getfield(F, :Q)
     FR = getfield(F, :R)
-    if d == :alpha
+    if d === :alpha
         return Fa
-    elseif d == :beta
+    elseif d === :beta
         return Fb
-    elseif d == :vals || d == :S
+    elseif d === :vals || d === :S
         return Fa[1:Fk + Fl] ./ Fb[1:Fk + Fl]
-    elseif d == :D1
+    elseif d === :D1
         m = size(FU, 1)
         if m - Fk - Fl >= 0
             return [Matrix{T}(I, Fk, Fk)  zeros(T, Fk, Fl)            ;
@@ -541,7 +541,7 @@ svd(x::Number, y::Number) = svd(fill(x, 1, 1), fill(y, 1, 1))
         else
             return [Matrix{T}(I, m, Fk) [zeros(T, Fk, m - Fk); Diagonal(Fa[Fk + 1:m])] zeros(T, m, Fk + Fl - m)]
         end
-    elseif d == :D2
+    elseif d === :D2
         m = size(FU, 1)
         p = size(FV, 1)
         if m - Fk - Fl >= 0
@@ -549,7 +549,7 @@ svd(x::Number, y::Number) = svd(fill(x, 1, 1), fill(y, 1, 1))
         else
             return [zeros(T, p, Fk) [Diagonal(Fb[Fk + 1:m]); zeros(T, Fk + p - m, m - Fk)] [zeros(T, m - Fk, Fk + Fl - m); Matrix{T}(I, Fk + p - m, Fk + Fl - m)]]
         end
-    elseif d == :R0
+    elseif d === :R0
         n = size(FQ, 1)
         return [zeros(T, Fk + Fl, n - Fk - Fl) FR]
     else
