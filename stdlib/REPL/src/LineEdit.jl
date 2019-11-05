@@ -375,11 +375,13 @@ refresh_multi_line(s::ModeState; kw...) = refresh_multi_line(terminal(s), s; kw.
 refresh_multi_line(termbuf::TerminalBuffer, s::ModeState; kw...) = refresh_multi_line(termbuf, terminal(s), s; kw...)
 refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState; kw...) = (@assert term == terminal(s); refresh_multi_line(termbuf,s; kw...))
 
-function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf::IOBuffer, state::InputAreaState, prompt = "";
+function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf::IOBuffer,
+                            state::InputAreaState, prompt = "";
                             indent = 0, region_active = false)
     _clear_input_area(termbuf, state)
 
     cols = width(terminal)
+    rows = height(terminal)
     curs_row = -1 # relative to prompt (1-based)
     curs_pos = -1 # 1-based column position of the cursor
     cur_row = 0   # count of the number of rows
@@ -395,16 +397,24 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     # Now go through the buffer line by line
     seek(buf, 0)
     moreinput = true # add a blank line if there is a trailing newline on the last line
+    lastline = false # indicates when to stop printing lines, even when there are potentially
+                     # more (for the case where rows is too small to print everything)
+                     # Note: when there are too many lines for rows, we still print the first lines
+                     # even if they are going to not be visible in the end: for simplicity, but
+                     # also because it does the 'right thing' when the window is resized
     while moreinput
-        l = readline(buf, keep=true)
-        moreinput = endswith(l, "\n")
+        line = readline(buf, keep=true)
+        moreinput = endswith(line, "\n")
+        if moreinput && lastline # we want to print only one "visual" line, so
+            line = line[1:end-1] # don't include the trailing "\n"
+        end
         # We need to deal with on-screen characters, so use textwidth to compute occupied columns
-        llength = textwidth(l)
-        slength = sizeof(l)
+        llength = textwidth(line)
+        slength = sizeof(line)
         cur_row += 1
         # lwrite: what will be written to termbuf
-        lwrite = region_active ? highlight_region(l, regstart, regstop, written, slength) :
-                                 l
+        lwrite = region_active ? highlight_region(line, regstart, regstop, written, slength) :
+                                 line
         written += slength
         cmove_col(termbuf, lindent + 1)
         write(termbuf, lwrite)
@@ -414,7 +424,9 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
             line_pos -= slength # '\n' gets an extra pos
             # in this case, we haven't yet written the cursor position
             if line_pos < 0 || !moreinput
-                num_chars = (line_pos >= 0 ? llength : textwidth(l[1:prevind(l, line_pos + slength + 1)]))
+                num_chars = line_pos >= 0 ?
+                                llength :
+                                textwidth(line[1:prevind(line, line_pos + slength + 1)])
                 curs_row, curs_pos = divrem(lindent + num_chars - 1, cols)
                 curs_row += cur_row
                 curs_pos += 1
@@ -434,6 +446,12 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
         end
         cur_row += div(max(lindent + llength + miscountnl - 1, 0), cols)
         lindent = indent < 0 ? lindent : indent
+
+        lastline && break
+        if curs_row >= 0 && cur_row + 1 >= rows &&             # when too many lines,
+                            cur_row - curs_row + 1 >= rows ÷ 2 # center the cursor
+            lastline = true
+        end
     end
     seek(buf, buf_pos)
 
