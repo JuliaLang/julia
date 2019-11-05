@@ -1363,7 +1363,7 @@ end
     nullspace(M, rtol::Real) = nullspace(M; rtol=rtol) # to be deprecated in Julia 2.0
 
 Computes a basis for the nullspace of `M` by including the singular
-vectors of A whose singular values have magnitudes that are greater than `max(atol, rtol*σ₁)`,
+vectors of `M` whose singular values have magnitudes greater than `max(atol, rtol*σ₁)`,
 where `σ₁` is `M`'s largest singular value.
 
 By default, the relative tolerance `rtol` is `n*ϵ`, where `n`
