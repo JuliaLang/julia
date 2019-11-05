@@ -545,10 +545,10 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     t.state == :runnable || Base.error("schedule: Task not runnable")
     if error
         t.queue === nothing || Base.list_deletefirst!(t.queue, t)
-        t.exception = arg
+        setfield!(t, :exception, arg)
     else
         t.queue === nothing || Base.error("schedule: Task not runnable")
-        t.result = arg
+        setfield!(t, :result, arg)
     end
     enq_work(t)
     return t
