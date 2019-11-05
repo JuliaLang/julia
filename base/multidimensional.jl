@@ -912,7 +912,9 @@ end
 function copyto!(dest::AbstractArray{T1,N1}, Rdest::CartesianIndices{N1},
                   src::AbstractArray{T2,N2}, Rsrc::CartesianIndices{N2}) where {T1,T2,N1,N2}
     isempty(Rdest) && return dest
-    if length(Rdest) != length(Rsrc)
+    if N1 == N2 && size(Rdest) != size(Rsrc)
+        throw(ArgumentError("source and destination must have same size (got $(size(Rsrc)) and $(size(Rdest)))"))
+    elseif length(Rdest) != length(Rsrc)
         throw(ArgumentError("source and destination must have same length (got $(length(Rsrc)) and $(length(Rdest)))"))
     end
     checkbounds(dest, first(Rdest))
@@ -920,25 +922,8 @@ function copyto!(dest::AbstractArray{T1,N1}, Rdest::CartesianIndices{N1},
     checkbounds(src, first(Rsrc))
     checkbounds(src, last(Rsrc))
     src′ = unalias(dest, src)
-    if @generated
-        if N1 == N2
-            ΔI = first(Rdest) - first(Rsrc)
-            quote
-                @nloops $N1 i (n->Rsrc.indices[n]) begin
-                    @inbounds @nref($N1,dest,n->i_n+ΔI[n]) = @nref($N1,src′,i)
-                end
-            end
-        else
-            quote
-                for (Is, Id) in zip(Rsrc, Rdest)
-                    @inbounds dest[Id] = src′[Is]
-                end
-            end
-        end
-    else
-        for (Is, Id) in zip(Rsrc, Rdest)
-            @inbounds dest[Id] = src′[Is]
-        end
+    for (Is, Id) in zip(Rsrc, Rdest)
+        @inbounds dest[Id] = src′[Is]
     end
     dest
 end

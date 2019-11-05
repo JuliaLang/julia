@@ -70,6 +70,9 @@ end
         copyto!(A, CartesianIndices((1:3,1:2, 1:1)), B, CartesianIndices((4:5, 3:5)))
         @test vec(A[1:3,1:2, 1:1]) == vec(B[4:5, 3:5])
     end
+    let A = collect(reshape(1:36, 6, 6)), B = zeros(6,6)
+        @test_throws ArgumentError copyto!(B, CartesianIndices((2:4, 2:5)), A, CartesianIndices((2:5, 2:4)))
+    end
 end
 
 @testset "shallow and deep copying" begin
