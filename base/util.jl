@@ -304,7 +304,7 @@ end
 
 ## printing with color ##
 
-const text_colors = AnyDict(
+const text_colors = Dict{Union{Symbol,Int},String}(
     :black         => "\033[30m",
     :red           => "\033[31m",
     :green         => "\033[32m",
@@ -334,7 +334,7 @@ for i in 0:255
     text_colors[i] = "\033[38;5;$(i)m"
 end
 
-const disable_text_style = AnyDict(
+const disable_text_style = Dict{Symbol,String}(
     :bold      => "\033[22m",
     :underline => "\033[24m",
     :blink     => "\033[25m",

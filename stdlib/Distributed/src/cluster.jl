@@ -445,7 +445,7 @@ function addprocs(manager::ClusterManager; kwargs...)
 end
 
 function addprocs_locked(manager::ClusterManager; kwargs...)
-    params = merge(default_addprocs_params(), AnyDict(kwargs))
+    params = merge(default_addprocs_params(), Dict{Symbol,Any}(kwargs))
     topology(Symbol(params[:topology]))
 
     if PGRP.topology !== :all_to_all
@@ -510,7 +510,7 @@ function set_valid_processes(plist::Array{Int})
     end
 end
 
-default_addprocs_params() = AnyDict(
+default_addprocs_params() = Dict{Symbol,Any}(
     :topology => :all_to_all,
     :dir      => pwd(),
     :exename  => joinpath(Sys.BINDIR, julia_exename()),
