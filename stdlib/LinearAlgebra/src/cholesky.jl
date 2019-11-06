@@ -396,7 +396,8 @@ Array(C::Cholesky) = Matrix(C)
 
 function AbstractMatrix(F::CholeskyPivoted)
     ip = invperm(F.p)
-    (F.L * F.U)[ip,ip]
+    U = F.U[1:F.rank,ip]
+    U'U
 end
 AbstractArray(F::CholeskyPivoted) = AbstractMatrix(F)
 Matrix(F::CholeskyPivoted) = Array(AbstractArray(F))
