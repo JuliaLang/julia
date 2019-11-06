@@ -395,11 +395,10 @@ end
 @testset "issue #33704, casting low-rank CholeskyPivoted to Matrix" begin
     T = Float64
     n = 8
-    tol = 1e-8
     A = randn(T, (n,1))
     B = A*A'
-    C = cholesky(B, Val(true), tol = tol, check=false)
-    @test maximum(abs, B-Matrix(C)) < tol
+    C = cholesky(B, Val(true), check=false)
+    @test B ≈ Matrix(C)
 end
 
 end # module TestCholesky
