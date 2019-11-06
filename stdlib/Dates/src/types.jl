@@ -124,7 +124,7 @@ end
 """
 struct Time <: TimeType
     instant::Nanosecond
-    Time(instant::Nanosecond) = new(instant)
+    Time(instant::Nanosecond) = new(mod(instant, 86400000000000))
 end
 
 # Convert y,m,d to # of Rata Die days
@@ -397,11 +397,6 @@ Base.promote_rule(::Type{Date}, x::Type{DateTime}) = DateTime
 Base.isless(x::T, y::T) where {T<:TimeType} = isless(value(x), value(y))
 Base.isless(x::TimeType, y::TimeType) = isless(promote(x, y)...)
 (==)(x::T, y::T) where {T<:TimeType} = (==)(value(x), value(y))
-function ==(a::Time, b::Time)
-    return hour(a) == hour(b) && minute(a) == minute(b) &&
-        second(a) == second(b) && millisecond(a) == millisecond(b) &&
-        microsecond(a) == microsecond(b) && nanosecond(a) == nanosecond(b)
-end
 (==)(x::TimeType, y::TimeType) = (===)(promote(x, y)...)
 Base.min(x::AbstractTime) = x
 Base.max(x::AbstractTime) = x

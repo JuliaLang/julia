@@ -76,6 +76,7 @@ Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
         T_prjlvalue,
         0,
         ConstantInt::get(T_int32, nRoots + 2));
+    gcframe->setAlignment(16);
     gcframe->insertAfter(target);
     gcframe->takeName(target);
 
@@ -88,17 +89,20 @@ Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
         Value *args[4] = {
             tempSlot_i8, // dest
             ConstantInt::get(Type::getInt8Ty(F.getContext()), 0), // val
-            ConstantInt::get(T_int32, sizeof(jl_value_t*)*(nRoots+2)), // len
+            ConstantInt::get(T_int32, sizeof(jl_value_t*) * (nRoots + 2)), // len
             ConstantInt::get(Type::getInt1Ty(F.getContext()), 0)}; // volatile
 #else
         Value *args[5] = {
             tempSlot_i8, // dest
             ConstantInt::get(Type::getInt8Ty(F.getContext()), 0), // val
-            ConstantInt::get(T_int32, sizeof(jl_value_t*)*(nRoots+2)), // len
-            ConstantInt::get(T_int32, 0), // align
+            ConstantInt::get(T_int32, sizeof(jl_value_t*) * (nRoots + 2)), // len
+            ConstantInt::get(T_int32, 16), // align
             ConstantInt::get(Type::getInt1Ty(F.getContext()), 0)}; // volatile
 #endif
     CallInst *zeroing = CallInst::Create(memset, makeArrayRef(args));
+#if JL_LLVM_VERSION >= 70000
+     cast<MemSetInst>(zeroing)->setDestAlignment(16);
+#endif
     zeroing->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     zeroing->insertAfter(tempSlot_i8);
 

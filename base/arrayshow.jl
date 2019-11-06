@@ -121,15 +121,18 @@ of a bunch of rows for long matrices. Not only is the string vdots shown
 but it also repeated every M elements if desired.
 """
 function print_matrix_vdots(io::IO, vdots::AbstractString,
-        A::Vector, sep::AbstractString, M::Integer, m::Integer)
+                            A::Vector, sep::AbstractString, M::Integer, m::Integer,
+                            pad_right::Bool)
     for k = 1:length(A)
         w = A[k][1] + A[k][2]
         if k % M == m
             l = repeat(" ", max(0, A[k][1]-length(vdots)))
-            r = repeat(" ", max(0, w-length(vdots)-length(l)))
+            r = k == length(A) && !pad_right ?
+                "" :
+                repeat(" ", max(0, w-length(vdots)-length(l)))
             print(io, l, vdots, r)
         else
-            print(io, repeat(" ", w))
+            (k != length(A) || pad_right) && print(io, repeat(" ", w))
         end
         if k < length(A); print(io, sep); end
     end
@@ -216,7 +219,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 if i != rowsA[end] || i == rowsA[halfheight]; println(io); end
                 if i == rowsA[halfheight]
                     print(io, i == first(rowsA) ? pre : presp)
-                    print_matrix_vdots(io, vdots,A,sep,vmod,1)
+                    print_matrix_vdots(io, vdots, A, sep, vmod, 1, false)
                     print(io, i == last(rowsA) ? post : postsp * '\n')
                 end
             end
@@ -235,9 +238,9 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 if i != rowsA[end] || i == rowsA[halfheight]; println(io); end
                 if i == rowsA[halfheight]
                     print(io, i == first(rowsA) ? pre : presp)
-                    print_matrix_vdots(io, vdots,Lalign,sep,vmod,1)
+                    print_matrix_vdots(io, vdots, Lalign, sep, vmod, 1, true)
                     print(io, ddots)
-                    print_matrix_vdots(io, vdots,Ralign,sep,vmod,r)
+                    print_matrix_vdots(io, vdots, Ralign, sep, vmod, r, false)
                     print(io, i == last(rowsA) ? post : postsp * '\n')
                 end
             end
@@ -299,14 +302,12 @@ end
 
 # print_array: main helper functions for show(io, text/plain, array)
 # typeinfo agnostic
-
-# 0-dimensional arrays
-print_array(io::IO, X::AbstractArray{T,0} where T) =
-    isassigned(X) ? show(io, X[]) :
-                    print(io, undef_ref_str)
-
+# Note that this is for showing the content inside the array, and for `MIME"text/plain".
+# There are `show(::IO, ::A) where A<:AbstractArray` methods that don't use this
+# e.g. show_vector, show_zero_dim
+print_array(io::IO, X::AbstractArray{<:Any, 0}) =
+    isassigned(X) ? show(io, X[]) : print(io, undef_ref_str)
 print_array(io::IO, X::AbstractVecOrMat) = print_matrix(io, X)
-
 print_array(io::IO, X::AbstractArray) = show_nd(io, X, print_matrix, true)
 
 # typeinfo aware
@@ -415,12 +416,26 @@ _show_empty(io, X) = nothing # by default, we don't know this constructor
 
 # typeinfo aware (necessarily)
 function show(io::IO, X::AbstractArray)
+    ndims(X) == 0 && return show_zero_dim(io, X)
     ndims(X) == 1 && return show_vector(io, X)
     prefix = typeinfo_prefix(io, X)
     io = IOContext(io, :typeinfo => eltype(X))
     isempty(X) ?
         _show_empty(io, X) :
         _show_nonempty(io, X, prefix)
+end
+
+### 0-dimensional arrays (#31481)
+show_zero_dim(io::IO, X::BitArray{0}) = print(io, "BitArray(", Int(X[]), ")")
+function show_zero_dim(io::IO, X::AbstractArray{T, 0}) where T
+    if isassigned(X)
+        print(io, "fill(")
+        show(io, X[])
+    else
+        print(io, "Array{$T,0}(")
+        show(io, undef)
+    end
+    print(io, ")")
 end
 
 ### Vector arrays

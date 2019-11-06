@@ -40,6 +40,8 @@ Supertype for random number generators such as [`MersenneTwister`](@ref) and [`R
 """
 abstract type AbstractRNG end
 
+Base.broadcastable(x::AbstractRNG) = Ref(x)
+
 gentype(::Type{X}) where {X} = eltype(X)
 gentype(x) = gentype(typeof(x))
 

@@ -153,9 +153,10 @@ typedef struct {
 
 // Exception stack data
 typedef struct {
-    jl_excstack_t *s;  // Stack of exceptions
-    size_t itr;        // Iterator into exception stack
-    size_t i;          // Iterator into backtrace data for exception
+    jl_excstack_t *s;   // Stack of exceptions
+    size_t itr;         // Iterator into exception stack
+    size_t bt_index;    // Current backtrace buffer entry index
+    size_t jlval_index; // Index into GC managed values for current bt entry
 } gc_mark_excstack_t;
 
 // Module bindings. This is also the beginning of module scanning.

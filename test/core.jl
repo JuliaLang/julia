@@ -2404,6 +2404,20 @@ for f in (:(Core.arrayref), :((::typeof(Core.arrayref))), :((::Core.IntrinsicFun
     @test_throws ErrorException("cannot add methods to a builtin function") @eval $f() = 1
 end
 
+# issue #33370
+abstract type B33370 end
+
+let n = gensym(), c(x) = B33370[x][1]()
+    @eval begin
+        struct $n <: B33370
+        end
+
+        function (::$n)()
+        end
+    end
+    @test c(eval(n)()) === nothing
+end
+
 # issue #8798
 let
     npy_typestrs = Dict("b1"=>Bool,
@@ -5910,6 +5924,14 @@ let x = UnionFieldInlineStruct(1, 3.14)
     @test CInlineUnion[end] == x
 end
 
+# issue 33709
+struct A33709
+    a::Union{Nothing,A33709}
+end
+let a33709 = A33709(A33709(nothing))
+    @test isnothing(a33709.a.a)
+end
+
 # issue 31583
 a31583 = "a"
 f31583() = a31583 === "a"
@@ -6459,6 +6481,31 @@ let A=[0, missing], B=[missing, 0], C=Vector{Union{Int, Missing}}(undef, 6)
     copyto!(C, 1, A)
     copyto!(C, 4, B)
     @test isequal(C, [0, missing, missing, missing, 0, missing])
+end
+
+# non-power-of-2 element sizes, issue #26026
+primitive type TypeWith24Bits 24 end
+TypeWith24Bits(x::UInt32) = Core.Intrinsics.trunc_int(TypeWith24Bits, x)
+let x = TypeWith24Bits(0x112233), y = TypeWith24Bits(0x445566), z = TypeWith24Bits(0x778899)
+    a = [x, x]
+    Core.arrayset(true, a, y, 2)
+    @test a == [x, y]
+    a[2] = z
+    @test a == [x, z]
+    @test pointer(a, 2) - pointer(a, 1) == 4
+
+    b = [(x, x), (x, x)]
+    Core.arrayset(true, b, (x, y), 2)
+    @test b == [(x, x), (x, y)]
+    b[2] = (y, z)
+    @test b == [(x, x), (y, z)]
+
+    V = Vector{TypeWith24Bits}(undef, 1000)
+    p = Ptr{UInt8}(pointer(V))
+    for i = 1:sizeof(V)
+        unsafe_store!(p, i % UInt8, i)
+    end
+    @test V[1:4] == [TypeWith24Bits(0x030201), TypeWith24Bits(0x070605), TypeWith24Bits(0x0b0a09), TypeWith24Bits(0x0f0e0d)]
 end
 
 # issue #29718
@@ -7060,3 +7107,8 @@ function f32820(refs)
     x
 end
 @test f32820(Any[1,2]) == Any[1, 1]
+
+# Splatting with bad iterate
+struct SplatBadIterate; end
+Base.iterate(s::SplatBadIterate, args...) = ()
+@test_throws BoundsError (SplatBadIterate()...,)

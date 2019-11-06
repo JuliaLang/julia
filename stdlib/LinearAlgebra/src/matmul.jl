@@ -152,6 +152,17 @@ function (*)(A::AbstractMatrix, B::AbstractMatrix)
     TS = promote_op(matprod, eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A,1), size(B,2))), A, B)
 end
+# optimization for dispatching to BLAS, e.g. *(::Matrix{Float32}, ::Matrix{Float64})
+# but avoiding the case *(::Matrix{<:BlasComplex}, ::Matrix{<:BlasReal})
+# which is better handled by reinterpreting rather than promotion
+function (*)(A::StridedMatrix{<:BlasReal}, B::StridedMatrix{<:BlasFloat})
+    TS = promote_type(eltype(A), eltype(B))
+    mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
+end
+function (*)(A::StridedMatrix{<:BlasComplex}, B::StridedMatrix{<:BlasComplex})
+    TS = promote_type(eltype(A), eltype(B))
+    mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
+end
 
 @inline function mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
                       α::Number, β::Number) where {T<:BlasFloat}
@@ -162,7 +173,6 @@ end
         return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(α, β))
     end
 end
-
 # Complex Matrix times real matrix: We use that it is generally faster to reinterpret the
 # first matrix as a real matrix and carry out real matrix matrix multiply
 for elty in (Float32,Float64)
@@ -708,7 +718,10 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
     if size(C,1) != mA || size(C,2) != nB
         throw(DimensionMismatch("result C has dimensions $(size(C)), needs ($mA,$nB)"))
     end
-    if isempty(A) || isempty(B) || iszero(_add.alpha)
+    if isempty(A) || isempty(B)
+        return C
+    end
+    if iszero(_add.alpha)
         return _rmul_or_fill!(C, _add.beta)
     end
 

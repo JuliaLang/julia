@@ -31,7 +31,7 @@ mutable struct Channel{T} <: AbstractChannel{T}
     cond_wait::Threads.Condition                 # waiting for data to become maybe available
     cond_put::Threads.Condition                  # waiting for a writeable slot
     state::Symbol
-    excp::Union{Exception, Nothing}      # exception to be thrown when state != :open
+    excp::Union{Exception, Nothing}      # exception to be thrown when state !== :open
 
     data::Vector{T}
     sz_max::Int                          # maximum size of channel
@@ -189,7 +189,7 @@ function close(c::Channel, excp::Exception=closed_exception())
     end
     nothing
 end
-isopen(c::Channel) = (c.state == :open)
+isopen(c::Channel) = (c.state === :open)
 
 """
     bind(chnl::Channel, task::Task)
@@ -459,7 +459,7 @@ function iterate(c::Channel, state=nothing)
     try
         return (take!(c), nothing)
     catch e
-        if isa(e, InvalidStateException) && e.state == :closed
+        if isa(e, InvalidStateException) && e.state === :closed
             return nothing
         else
             rethrow()

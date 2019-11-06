@@ -242,19 +242,19 @@ end
 function set_action!(s::MIState, command::Symbol)
     # if a command is already running, don't update the current_action field,
     # as the caller is used as a helper function
-    s.current_action == :unknown || return
+    s.current_action === :unknown || return
 
     ## handle activeness of the region
     is_shift_move(cmd) = startswith(String(cmd), "shift_")
     if is_shift_move(command)
-        if region_active(s) != :shift
+        if region_active(s) !== :shift
             setmark(s, false)
             activate_region(s, :shift)
             # NOTE: if the region was already active from a non-shift
             # move (e.g. ^Space^Space), the region is visibly changed
         end
     elseif !(preserve_active(command) ||
-             command_group(command) == :movement && region_active(s) == :mark)
+             command_group(command) === :movement && region_active(s) === :mark)
         # if we move after a shift-move, the region is de-activated
         # (e.g. like emacs behavior)
         deactivate_region(s)
@@ -647,7 +647,7 @@ function edit_move_down(s)
 end
 
 function edit_shift_move(s::MIState, move_function::Function)
-    @assert command_group(move_function) == :movement
+    @assert command_group(move_function) === :movement
     set_action!(s, Symbol(:shift_, move_function))
     return move_function(s)
 end
@@ -999,7 +999,7 @@ function edit_transpose_words(buf::IOBuffer, mode=:emacs)
     mode in [:readline, :emacs] ||
         throw(ArgumentError("`mode` must be `:readline` or `:emacs`"))
     pos = position(buf)
-    if mode == :emacs
+    if mode === :emacs
         char_move_word_left(buf)
         char_move_word_right(buf)
     end
@@ -2013,7 +2013,7 @@ end
 
 function edit_abort(s, confirm::Bool=options(s).confirm_exit; key="^D")
     set_action!(s, :edit_abort)
-    if !confirm || s.last_action == :edit_abort
+    if !confirm || s.last_action === :edit_abort
         println(terminal(s))
         return :abort
     else
@@ -2403,7 +2403,7 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
                 transition(s, old_state)
                 status = :done
             end
-            status != :ignore && (s.last_action = s.current_action)
+            status !== :ignore && (s.last_action = s.current_action)
             if status === :abort
                 return buffer(s), false, false
             elseif status === :done

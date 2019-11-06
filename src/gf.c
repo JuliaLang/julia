@@ -137,7 +137,7 @@ jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_a
 {
     jl_sym_t *sname = jl_symbol(name);
     if (dt == NULL) {
-        jl_value_t *f = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type, 0);
+        jl_value_t *f = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type);
         jl_set_const(jl_core_module, sname, f);
         dt = (jl_datatype_t*)jl_typeof(f);
     }
@@ -201,6 +201,10 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
     }
 #endif
     jl_ptls_t ptls = jl_get_ptls_states();
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
     size_t last_age = ptls->world_age;
     ptls->world_age = jl_typeinf_world;
     mi->inInference = 1;
@@ -218,6 +222,10 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
     ptls->world_age = last_age;
     in_inference--;
     mi->inInference = 0;
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
 
     if (src && !jl_is_code_info(src)) {
         src = NULL;
@@ -1714,7 +1722,7 @@ static void JL_NORETURN jl_method_error_bare(jl_function_t *f, jl_value_t *args,
         jl_static_show((JL_STREAM*)STDERR_FILENO,(jl_value_t*)f); jl_printf((JL_STREAM*)STDERR_FILENO," world %u\n", (unsigned)world);
         jl_static_show((JL_STREAM*)STDERR_FILENO,args); jl_printf((JL_STREAM*)STDERR_FILENO,"\n");
         jl_ptls_t ptls = jl_get_ptls_states();
-        ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE);
+        ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE, 0);
         jl_critical_error(0, NULL, ptls->bt_data, &ptls->bt_size);
         abort();
     }
@@ -1899,6 +1907,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     jl_generate_fptr(codeinst);
     return codeinst;
 }
+
 
 JL_DLLEXPORT jl_value_t *jl_fptr_const_return(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
 {
@@ -2132,7 +2141,15 @@ STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t 
         }
         codeinst = codeinst->next;
     }
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
     codeinst = jl_compile_method_internal(mfunc, world);
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
     jl_value_t *res = codeinst->invoke(F, args, nargs, codeinst);
     return verify_type(res);
 }
@@ -2428,21 +2445,14 @@ JL_DLLEXPORT jl_value_t *jl_get_invoke_lambda(jl_typemap_entry_t *entry, jl_valu
 }
 
 // Return value is rooted globally
-jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, int iskw)
+jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st)
 {
     // type name is function name prefixed with #
     size_t l = strlen(jl_symbol_name(name));
     char *prefixed;
-    if (iskw) {
-        prefixed = (char*)malloc(l+5);
-        strcpy(&prefixed[0], "#kw#");
-        strcpy(&prefixed[4], jl_symbol_name(name));
-    }
-    else {
-        prefixed = (char*)malloc(l+2);
-        prefixed[0] = '#';
-        strcpy(&prefixed[1], jl_symbol_name(name));
-    }
+    prefixed = (char*)malloc_s(l+2);
+    prefixed[0] = '#';
+    strcpy(&prefixed[1], jl_symbol_name(name));
     jl_sym_t *tname = jl_symbol(prefixed);
     free(prefixed);
     jl_datatype_t *ftype = (jl_datatype_t*)jl_new_datatype(
@@ -2466,16 +2476,23 @@ JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_value_t *ty)
     if (!mt->kwsorter) {
         JL_LOCK(&mt->writelock);
         if (!mt->kwsorter) {
-            jl_sym_t *name;
+            char *name;
             if (mt == jl_nonfunction_mt) {
-                name = mt->name;
+                name = jl_symbol_name(mt->name);
             }
             else {
                 jl_datatype_t *dt = (jl_datatype_t*)jl_argument_datatype(ty);
                 assert(jl_is_datatype(dt));
-                name = dt->name->name;
+                name = jl_symbol_name(dt->name->name);
+                if (name[0] == '#')
+                    name++;
             }
-            mt->kwsorter = jl_new_generic_function_with_supertype(name, mt->module, jl_function_type, 1);
+            size_t l = strlen(name);
+            char *suffixed = (char*)malloc_s(l+5);
+            strcpy(&suffixed[0], name);
+            strcpy(&suffixed[l], "##kw");
+            jl_sym_t *fname = jl_symbol(suffixed);
+            mt->kwsorter = jl_new_generic_function_with_supertype(fname, mt->module, jl_function_type);
             jl_gc_wb(mt, mt->kwsorter);
         }
         JL_UNLOCK(&mt->writelock);
@@ -2485,7 +2502,7 @@ JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_value_t *ty)
 
 jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module)
 {
-    return jl_new_generic_function_with_supertype(name, module, jl_function_type, 0);
+    return jl_new_generic_function_with_supertype(name, module, jl_function_type);
 }
 
 struct ml_matches_env {

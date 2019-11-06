@@ -563,18 +563,19 @@ end
 /(A::Symmetric, x::Number) = Symmetric(A.data/x, sym_uplo(A.uplo))
 /(A::Hermitian, x::Real) = Hermitian(A.data/x, sym_uplo(A.uplo))
 
-function factorize(A::HermOrSym{T}) where T
+factorize(A::HermOrSym) = _factorize(A)
+function _factorize(A::HermOrSym{T}; check::Bool=true) where T
     TT = typeof(sqrt(oneunit(T)))
     if TT <: BlasFloat
-        return bunchkaufman(A)
+        return bunchkaufman(A; check=check)
     else # fallback
-        return lu(A)
+        return lu(A; check=check)
     end
 end
 
-det(A::RealHermSymComplexHerm) = real(det(factorize(A)))
-det(A::Symmetric{<:Real}) = det(factorize(A))
-det(A::Symmetric) = det(factorize(A))
+det(A::RealHermSymComplexHerm) = real(det(_factorize(A; check=false)))
+det(A::Symmetric{<:Real}) = det(_factorize(A; check=false))
+det(A::Symmetric) = det(_factorize(A; check=false))
 
 \(A::HermOrSym{<:Any,<:StridedMatrix}, B::AbstractVector) = \(factorize(A), B)
 # Bunch-Kaufman solves can not utilize BLAS-3 for multiple right hand sides

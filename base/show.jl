@@ -113,7 +113,10 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
 
     for (i, (k, v)) in enumerate(t)
         print(io, "\n  ")
-        i == rows < length(t) && (print(io, rpad("⋮", keylen), " => ⋮"); break)
+        if i == rows < length(t)
+            print(io, rpad("⋮", keylen), " => ⋮")
+            break
+        end
 
         if limit
             key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
@@ -126,6 +129,48 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         if limit
             val = _truncate_at_width_or_chars(vs[i], cols - keylen, "\r\n")
             print(io, val)
+        else
+            show(recur_io, v)
+        end
+    end
+end
+
+function summary(io::IO, t::AbstractSet)
+    n = length(t)
+    showarg(io, t, true)
+    print(io, " with ", n, (n==1 ? " element" : " elements"))
+end
+
+function show(io::IO, ::MIME"text/plain", t::AbstractSet{T}) where T
+    # show more descriptively, with one line per value
+    recur_io = IOContext(io, :SHOWN_SET => t)
+    limit::Bool = get(io, :limit, false)
+
+    summary(io, t)
+    isempty(t) && return
+    print(io, ":")
+    show_circular(io, t) && return
+    if limit
+        sz = displaysize(io)
+        rows, cols = sz[1] - 3, sz[2]
+        rows < 2   && (print(io, " …"); return)
+        cols -= 2 # Subtract the width of prefix "  "
+        cols < 4  && (cols = 4) # Minimum widths of 4 for value
+        rows -= 1 # Subtract the summary
+    else
+        rows = cols = typemax(Int)
+    end
+
+    for (i, v) in enumerate(t)
+        print(io, "\n  ")
+        if i == rows < length(t)
+            print(io, rpad("⋮", 2))
+            break
+        end
+
+        if limit
+            str = sprint(show, v, context=recur_io, sizehint=0)
+            print(io, _truncate_at_width_or_chars(str, cols, "\r\n"))
         else
             show(recur_io, v)
         end
@@ -150,7 +195,7 @@ end
 
 function show(io::IO, ::MIME"text/plain", t::Task)
     show(io, t)
-    if t.state == :failed
+    if t.state === :failed
         println(io)
         showerror(io, CapturedException(t.result, t.backtrace))
     end
@@ -450,7 +495,7 @@ function show(io::IO, @nospecialize(x::Type))
         return show(io, unwrap_unionall(x).name)
     end
 
-    if x.var.name == :_ || io_has_tvar_name(io, x.var.name, x)
+    if x.var.name === :_ || io_has_tvar_name(io, x.var.name, x)
         counter = 1
         while true
             newname = Symbol(x.var.name, counter)
@@ -523,7 +568,7 @@ end
 function show_datatype(io::IO, x::DataType)
     istuple = x.name === Tuple.name
     if (!isempty(x.parameters) || istuple) && x !== Tuple
-        n = length(x.parameters)
+        n = length(x.parameters)::Int
 
         # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
         if istuple && n > 3 && all(i -> (x.parameters[1] === i), x.parameters)
@@ -783,6 +828,7 @@ is_id_start_char(c::AbstractChar) = ccall(:jl_id_start_char, Cint, (UInt32,), c)
 is_id_char(c::AbstractChar) = ccall(:jl_id_char, Cint, (UInt32,), c) != 0
 function isidentifier(s::AbstractString)
     isempty(s) && return false
+    (s == "true" || s == "false") && return false
     c, rest = Iterators.peel(s)
     is_id_start_char(c) || return false
     return all(is_id_char, rest)
@@ -967,7 +1013,7 @@ end
 function show_call(io::IO, head, func, func_args, indent)
     op, cl = expr_calls[head]
     if (isa(func, Symbol) && func !== :(:) && !(head === :. && isoperator(func))) ||
-            (isa(func, Expr) && (func.head == :. || func.head == :curly || func.head == :macroname)) ||
+            (isa(func, Expr) && (func.head === :. || func.head === :curly || func.head === :macroname)) ||
             isa(func, GlobalRef)
         show_unquoted(io, func, indent)
     else
@@ -975,7 +1021,7 @@ function show_call(io::IO, head, func, func_args, indent)
         show_unquoted(io, func, indent)
         print(io, ')')
     end
-    if head == :(.)
+    if head === :(.)
         print(io, '.')
     end
     if !isempty(func_args) && isa(func_args[1], Expr) && func_args[1].head === :parameters
@@ -993,7 +1039,7 @@ end
 # * Print valid identifiers & operators literally; also macros names if allow_macroname=true
 # * Escape invalid identifiers with var"" syntax
 function show_sym(io::IO, sym; allow_macroname=false)
-    if isidentifier(sym) || isoperator(sym)
+    if isidentifier(sym) || (isoperator(sym) && sym !== Symbol("'"))
         print(io, sym)
     elseif allow_macroname && (sym_str = string(sym); startswith(sym_str, '@'))
         print(io, '@')
@@ -1049,7 +1095,7 @@ end
 function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, prec::Int)
     if isa(value, Symbol) && !(value in quoted_syms)
         s = string(value)
-        if isidentifier(s) || isoperator(value)
+        if isidentifier(s) || (isoperator(value) && value !== Symbol("'"))
             print(io, ":")
             print(io, value)
         else
@@ -1106,7 +1152,7 @@ function show_import_path(io::IO, ex)
         end
     elseif ex.head === :(.)
         for i = 1:length(ex.args)
-            if i > 1 && ex.args[i-1] != :(.)
+            if i > 1 && ex.args[i-1] !== :(.)
                 print(io, '.')
             end
             show_sym(io, ex.args[i], allow_macroname=(i==length(ex.args)))
@@ -1241,7 +1287,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     # other call-like expressions ("A[1,2]", "T{X,Y}", "f.(X,Y)")
     elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl/:(.)
-        funcargslike = head == :(.) ? args[2].args : args[2:end]
+        funcargslike = head === :(.) ? args[2].args : args[2:end]
         show_call(io, head, args[1], funcargslike, indent)
 
     # comprehensions
@@ -1304,7 +1350,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     elseif (head === :if || head === :elseif) && nargs == 3
         show_block(io, head, args[1], args[2], indent)
-        if isa(args[3],Expr) && args[3].head == :elseif
+        if isa(args[3],Expr) && args[3].head === :elseif
             show_unquoted(io, args[3], indent, prec)
         else
             show_block(io, "else", args[3], indent)
@@ -1501,11 +1547,21 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     nothing
 end
 
-function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
+demangle_function_name(name::Symbol) = Symbol(demangle_function_name(string(name)))
+function demangle_function_name(name::AbstractString)
+    demangle = split(name, '#')
+    # kw sorters and impl methods use the name scheme `f#...`
+    if length(demangle) >= 2 && demangle[1] != ""
+        return demangle[1]
+    end
+    return name
+end
+
+function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwargs=nothing)
     # print a method signature tuple for a lambda definition
     color = get(io, :color, false) && get(io, :backtrace, false) ? stackframe_function_color() : :nothing
     if sig === Tuple
-        printstyled(io, name, "(...)", color=color)
+        printstyled(io, demangle ? demangle_function_name(name) : name, "(...)", color=color)
         return
     end
     tv = Any[]
@@ -1522,7 +1578,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
         if ft <: Function && isa(uw,DataType) && isempty(uw.parameters) &&
                 isdefined(uw.name.module, uw.name.mt.name) &&
                 ft == typeof(getfield(uw.name.module, uw.name.mt.name))
-            print(io, uw.name.mt.name)
+            print(io, (demangle ? demangle_function_name : identity)(uw.name.mt.name))
         elseif isa(ft, DataType) && ft.name === Type.body.name && !Core.Compiler.has_free_typevars(ft)
             f = ft.parameters[1]
             print(io, f)
@@ -1538,6 +1594,16 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
         first = false
         print(env_io, "::", sig[i])
     end
+    if kwargs !== nothing
+        print(io, "; ")
+        first = true
+        for (k, t) in kwargs
+            first || print(io, ", ")
+            first = false
+            print(io, k, "::")
+            show(io, t)
+        end
+    end
     printstyled(io, ")", color=print_style)
     show_method_params(io, tv)
     nothing
@@ -1547,7 +1613,7 @@ resolvebinding(@nospecialize(ex)) = ex
 resolvebinding(ex::QuoteNode) = ex.value
 resolvebinding(ex::Symbol) = resolvebinding(GlobalRef(Main, ex))
 function resolvebinding(ex::Expr)
-    if ex.head == :. && isa(ex.args[2], Symbol)
+    if ex.head === :. && isa(ex.args[2], Symbol)
         parent = resolvebinding(ex.args[1])
         if isa(parent, Module)
             return resolvebinding(GlobalRef(parent, ex.args[2]))
@@ -1564,7 +1630,7 @@ function resolvebinding(ex::GlobalRef)
 end
 
 function ismodulecall(ex::Expr)
-    return ex.head == :call && (ex.args[1] === GlobalRef(Base,:getfield) ||
+    return ex.head === :call && (ex.args[1] === GlobalRef(Base,:getfield) ||
                                 ex.args[1] === GlobalRef(Core,:getfield)) &&
            isa(resolvebinding(ex.args[2]), Module)
 end
@@ -1621,7 +1687,7 @@ module IRShow
         :none => src -> Base.IRShow.lineinfo_disabled,
         )
     const default_debuginfo = Ref{Symbol}(:none)
-    debuginfo(sym) = sym == :default ? default_debuginfo[] : sym
+    debuginfo(sym) = sym === :default ? default_debuginfo[] : sym
 end
 
 function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
@@ -1758,6 +1824,10 @@ function dump(io::IOContext, x::DataType, n::Int, indent)
             if isa(tparam, TypeVar)
                 tvar_io = IOContext(tvar_io, :unionall_env => tparam)
             end
+        end
+        if x.name === NamedTuple_typename && !(x.parameters[1] isa Tuple)
+            # named tuple type with unknown field names
+            return
         end
         fields = fieldnames(x)
         fieldtypes = datatype_fieldtypes(x)

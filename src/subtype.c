@@ -145,11 +145,11 @@ static void save_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se)
         len++;
         v = v->prev;
     }
-    *root = (jl_value_t*)jl_alloc_svec(len*3);
-    se->buf = (int8_t*)(len ? malloc(len*2) : NULL);
+    *root = (jl_value_t*)jl_alloc_svec(len * 3);
+    se->buf = (int8_t*)(len ? malloc_s(len * 2) : NULL);
 #ifdef __clang_analyzer__
     if (len)
-        memset(se->buf, 0, len*2);
+        memset(se->buf, 0, len * 2);
 #endif
     int i=0, j=0; v = e->vars;
     while (v != NULL) {
@@ -977,6 +977,7 @@ constrain_length:
 
 static int subtype_tuple_tail(struct subtype_tuple_env *env, int8_t R, jl_stenv_t *e, int param)
 {
+    int x_reps = 1;
 loop: // while (i <= lx) {
         if (env->i >= env->lx)
             goto done;
@@ -1045,12 +1046,22 @@ loop: // while (i <= lx) {
         else if (env->j >= env->ly) {
             return 0;
         }
+        int x_same = env->lastx && jl_egal(xi, env->lastx);
         if (env->vy) {
             yi = jl_tparam0(jl_unwrap_unionall(env->vty));
             if (!env->vvx && yi == (jl_value_t*)jl_any_type)
                 goto done;  // if y ends in `Vararg{Any}` skip checking everything
+            // keep track of number of consecutive identical types compared to Vararg
+            if (x_same)
+                x_reps++;
+            else
+                x_reps = 1;
         }
-        if (xi == env->lastx &&
+        if (x_reps > 2) {
+            // an identical type on the left doesn't need to be compared to a Vararg
+            // element type on the right more than twice.
+        }
+        else if (x_same &&
             ((yi == env->lasty && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) ||
              (yi == env->lasty && !env->vx && env->vy && jl_is_concrete_type(xi)))) {
             // fast path for repeated elements
@@ -2110,7 +2121,7 @@ static int subtype_in_env_existential(jl_value_t *x, jl_value_t *y, jl_stenv_t *
         len++;
         v = v->prev;
     }
-    int8_t *rs = (int8_t*)malloc(len);
+    int8_t *rs = (int8_t*)malloc_s(len);
     int n = 0;
     v = e->vars;
     while (n < len) {

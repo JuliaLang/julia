@@ -77,7 +77,8 @@ function keys end
 
 Return an iterator over all keys in a dictionary.
 `collect(keys(a))` returns an array of keys.
-Since the keys are stored internally in a hash table,
+When the keys are stored internally in a hash table,
+as is the case for `Dict`,
 the order in which they are returned may vary.
 But `keys(a)` and `values(a)` both iterate `a` and
 return the elements in the same order.
@@ -102,7 +103,8 @@ keys(a::AbstractDict) = KeySet(a)
 
 Return an iterator over all values in a collection.
 `collect(values(a))` returns an array of values.
-Since the values are stored internally in a hash table,
+When the values are stored internally in a hash table,
+as is the case for `Dict`,
 the order in which they are returned may vary.
 But `keys(a)` and `values(a)` both iterate `a` and
 return the elements in the same order.

@@ -199,7 +199,7 @@ julia> typeof(ex)
 Expr
 ```
 
-### Interpolation
+### [Interpolation](@id man-expression-interpolation)
 
 Direct construction of [`Expr`](@ref) objects with value arguments is powerful, but `Expr` constructors
 can be tedious compared to "normal" Julia syntax. As an alternative, Julia allows *interpolation* of

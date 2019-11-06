@@ -995,3 +995,7 @@ end
         @test getindex(x) == getindex(x, CartesianIndex()) == 10
     end
 end
+
+@testset "vcat with mixed elements" begin
+    @test vcat(Nothing[], [missing], [1.0], [Int8(1)]) isa Vector{Union{Missing, Nothing, Float64}}
+end

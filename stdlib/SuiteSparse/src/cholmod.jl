@@ -375,12 +375,12 @@ mutable struct FactorComponent{Tv,S} <: AbstractMatrix{Tv}
     function FactorComponent{Tv,S}(F::Factor{Tv}) where {Tv,S}
         s = unsafe_load(pointer(F))
         if s.is_ll != 0
-            if !(S == :L || S == :U || S == :PtL || S == :UP)
+            if !(S === :L || S === :U || S === :PtL || S === :UP)
                 throw(CHOLMODException(string(S, " not supported for sparse ",
                     "LLt matrices; try :L, :U, :PtL, or :UP")))
             end
-        elseif !(S == :L || S == :U || S == :PtL || S == :UP ||
-                S == :D || S == :LD || S == :DU || S == :PtLD || S == :DUP)
+        elseif !(S === :L || S === :U || S === :PtL || S === :UP ||
+                S === :D || S === :LD || S === :DU || S === :PtLD || S === :DUP)
             throw(CHOLMODException(string(S, " not supported for sparse LDLt ",
                 "matrices; try :L, :U, :PtL, :UP, :D, :LD, :DU, :PtLD, or :DUP")))
         end
@@ -746,7 +746,7 @@ function solve(sys::Integer, F::Factor{Tv}, B::Dense{Tv}) where Tv<:VTypes
         if s.is_ll == 1
             throw(LinearAlgebra.PosDefException(s.minor))
         else
-            throw(ArgumentError("factorized matrix has one or more zero pivots. Try using `lu` instead."))
+            throw(LinearAlgebra.ZeroPivotException(s.minor))
         end
     end
     Dense(ccall((@cholmod_name("solve"),:libcholmod), Ptr{C_Dense{Tv}},
@@ -1182,9 +1182,9 @@ function getindex(A::Sparse{T}, i0::Integer, i1::Integer) where T
 end
 
 @inline function getproperty(F::Factor, sym::Symbol)
-    if sym == :p
+    if sym === :p
         return get_perm(F)
-    elseif sym == :ptr
+    elseif sym === :ptr
         return getfield(F, :ptr)
     else
         return FactorComponent(F, sym)
@@ -1224,11 +1224,12 @@ function *(A::Sparse{Tv}, adjB::Adjoint{Tv,Sparse{Tv}}) where Tv<:VRealTypes
     ## A->stype == 0 (storage of upper and lower parts). If necessary
     ## the matrix A is first converted to stype == 0
     s = unsafe_load(pointer(A))
+    fset = s.ncol == 0 ? SuiteSparse_long[] : SuiteSparse_long[0:s.ncol-1;]
     if s.stype != 0
         aa1 = copy(A, 0, 1)
-        return aat(aa1, SuiteSparse_long[0:s.ncol-1;], 1)
+        return aat(aa1, fset, 1)
     else
-        return aat(A, SuiteSparse_long[0:s.ncol-1;], 1)
+        return aat(A, fset, 1)
     end
 end
 
@@ -1446,7 +1447,7 @@ function ldlt!(F::Factor{Tv}, A::Sparse{Tv};
     # Compute the numerical factorization
     factorize_p!(A, shift, F, cm)
 
-    check && (issuccess(F) || throw(LinearAlgebra.PosDefException(1)))
+    check && (issuccess(F) || throw(LinearAlgebra.ZeroPivotException(1)))
     return F
 end
 

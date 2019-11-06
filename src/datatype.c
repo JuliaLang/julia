@@ -19,6 +19,11 @@ extern "C" {
 
 // allocating TypeNames -----------------------------------------------------------
 
+static int is10digit(char c) JL_NOTSAFEPOINT
+{
+    return (c >= '0' && c <= '9');
+}
+
 jl_sym_t *jl_demangle_typename(jl_sym_t *s) JL_NOTSAFEPOINT
 {
     char *n = jl_symbol_name(s);
@@ -29,7 +34,9 @@ jl_sym_t *jl_demangle_typename(jl_sym_t *s) JL_NOTSAFEPOINT
     if (end == n || end == n+1)
         len = strlen(n) - 1;
     else
-        len = (end-n) - 1;
+        len = (end-n) - 1;  // extract `f` from `#f#...`
+    if (is10digit(n[1]))
+        return jl_symbol_n(n, len+1);
     return jl_symbol_n(&n[1], len);
 }
 
@@ -304,6 +311,18 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         // based on whether its definition is self-referential
         if (w->types != NULL) {
             st->isbitstype = st->isinlinealloc = st->isconcretetype && !st->mutabl;
+            if (st->isinlinealloc) {
+                size_t i, nf = jl_svec_len(w->types);
+                for (i = 0; i < nf; i++) {
+                    jl_value_t *fld = jl_svecref(w->types, i);
+                    if (references_name(fld, w->name)) {
+                        st->isinlinealloc = 0;
+                        st->isbitstype = 0;
+                        st->zeroinit = 1;
+                        break;
+                    }
+                }
+            }
             size_t i, nf = jl_svec_len(st->types);
             for (i = 0; i < nf; i++) {
                 jl_value_t *fld = jl_svecref(st->types, i);
@@ -318,18 +337,6 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                         st->has_concrete_subtype = 0;
                     else
                         st->has_concrete_subtype &= !jl_is_datatype(fld) || ((jl_datatype_t *)fld)->has_concrete_subtype;
-                }
-            }
-            if (st->isinlinealloc) {
-                size_t i, nf = jl_svec_len(w->types);
-                for (i = 0; i < nf; i++) {
-                    jl_value_t *fld = jl_svecref(w->types, i);
-                    if (references_name(fld, w->name)) {
-                        st->isinlinealloc = 0;
-                        st->isbitstype = 0;
-                        st->zeroinit = 1;
-                        break;
-                    }
                 }
             }
         }
@@ -376,7 +383,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     jl_fielddesc32_t *desc;
     int should_malloc = descsz >= jl_page_size;
     if (should_malloc)
-        desc = (jl_fielddesc32_t*)malloc(descsz);
+        desc = (jl_fielddesc32_t*)malloc_s(descsz);
     else
         desc = (jl_fielddesc32_t*)alloca(descsz);
     int haspadding = 0;
@@ -440,12 +447,22 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     if (st->size > sz)
         haspadding = 1;
     st->layout = jl_get_layout(nfields, alignm, haspadding, desc);
-    if (should_malloc) free(desc);
+    if (should_malloc)
+        free(desc);
     jl_allocate_singleton_instance(st);
     return;
  throw_ovf:
-    if (should_malloc) free(desc);
+    if (should_malloc)
+        free(desc);
     jl_errorf("type %s has field offset %d that exceeds the page size", jl_symbol_name(st->name->name), descsz);
+}
+
+static int is_anonfn_typename(char *name)
+{
+    if (name[0] != '#')
+        return 0;
+    char *other = strrchr(name, '#');
+    return (name[1] != '#' && other > &name[1] && is10digit(other[1]));
 }
 
 JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
@@ -487,7 +504,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     }
     else {
         tn = jl_new_typename_in((jl_sym_t*)name, module);
-        if (super == jl_function_type || super == jl_builtin_type || jl_symbol_name(name)[0] == '#') {
+        if (super == jl_function_type || super == jl_builtin_type || is_anonfn_typename(jl_symbol_name(name))) {
             // Callable objects (including compiler-generated closures) get independent method tables
             // as an optimization
             tn->mt = jl_new_method_table(name, module);

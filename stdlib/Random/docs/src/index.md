@@ -326,3 +326,14 @@ The non-mutating array method of `rand` will automatically call this specializat
 ```@meta
 DocTestSetup = nothing
 ```
+
+# Reproducibility
+
+By using an RNG parameter initialized with a given seed, you can reproduce the same pseudorandom number sequence when running your program multiple times.  However, a minor release of Julia (e.g. 1.3 to 1.4) *may change* the sequence of pseudorandom numbers generated from a specific seed.  (Even if the sequence produced by a low-level function like [`rand`](@ref) does not change, the output of higher-level functions like [`randsubseq`](@ref) may change due to algorithm updates.)   Rationale: guaranteeing that pseudorandom streams never change prohibits many algorithmic improvements.
+
+If you need to guarantee exact reproducibility of random data, it is advisable to simply *save the data* (e.g. as a supplementary attachment in a scientific publication).  (You can also, of course, specify a
+particular Julia version and package manifest, especially if you require bit reproducibility.)
+
+Software tests that rely on *specific* "random" data should also generally save the data or embed it into the test code.  On the other hand, tests that should pass for *most* random data (e.g. testing `A \ (A*x) ≈ x` for a random matrix `A = randn(n,n)`) can use an RNG with a fixed seed to ensure that simply running the test many times does not encounter a failure due to very improbable data (e.g. an extremely ill-conditioned matrix).
+
+The statistical *distribution* from which random samples are drawn *is* guaranteed to be the same across any minor Julia releases.

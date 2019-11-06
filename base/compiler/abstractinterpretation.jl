@@ -427,7 +427,7 @@ end
 # refine its type to an array of element types.
 # Union of Tuples of the same length is converted to Tuple of Unions.
 # returns an array of types
-function precise_container_type(@nospecialize(typ), vtypes::VarTable, sv::InferenceState)
+function precise_container_type(@nospecialize(itft), @nospecialize(typ), vtypes::VarTable, sv::InferenceState)
     if isa(typ, PartialStruct) && typ.typ.name === Tuple.name
         return typ.fields
     end
@@ -489,17 +489,24 @@ function precise_container_type(@nospecialize(typ), vtypes::VarTable, sv::Infere
     elseif tti0 <: Array
         return Any[Vararg{eltype(tti0)}]
     else
-        return abstract_iteration(typ, vtypes, sv)
+        return abstract_iteration(itft, typ, vtypes, sv)
     end
 end
 
 # simulate iteration protocol on container type up to fixpoint
-function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::InferenceState)
+function abstract_iteration(@nospecialize(itft), @nospecialize(itertype), vtypes::VarTable, sv::InferenceState)
     if !isdefined(Main, :Base) || !isdefined(Main.Base, :iterate) || !isconst(Main.Base, :iterate)
         return Any[Vararg{Any}]
     end
-    iteratef = getfield(Main.Base, :iterate)
-    stateordonet = abstract_call(iteratef, nothing, Any[Const(iteratef), itertype], vtypes, sv)
+    if itft === nothing
+        iteratef = getfield(Main.Base, :iterate)
+        itft = Const(iteratef)
+    elseif isa(itft, Const)
+        iteratef = itft.val
+    else
+        return Any[Vararg{Any}]
+    end
+    stateordonet = abstract_call(iteratef, nothing, Any[itft, itertype], vtypes, sv)
     # Return Bottom if this is not an iterator.
     # WARNING: Changes to the iteration protocol must be reflected here,
     # this is not just an optimization.
@@ -543,7 +550,7 @@ function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::Infer
 end
 
 # do apply(af, fargs...), where af is a function value
-function abstract_apply(@nospecialize(aft), aargtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState,
+function abstract_apply(@nospecialize(itft), @nospecialize(aft), aargtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState,
                         max_methods = sv.params.MAX_METHODS)
     aftw = widenconst(aft)
     if !isa(aft, Const) && (!isType(aftw) || has_free_typevars(aftw))
@@ -561,7 +568,7 @@ function abstract_apply(@nospecialize(aft), aargtypes::Vector{Any}, vtypes::VarT
     for i = 1:nargs
         ctypes´ = []
         for ti in (splitunions ? uniontypes(aargtypes[i]) : Any[aargtypes[i]])
-            cti = precise_container_type(ti, vtypes, sv)
+            cti = precise_container_type(itft, ti, vtypes, sv)
             if _any(t -> t === Bottom, cti)
                 continue
             end
@@ -634,7 +641,9 @@ end
 
 function abstract_call(@nospecialize(f), fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState, max_methods = sv.params.MAX_METHODS)
     if f === _apply
-        return abstract_apply(argtypes[2], argtypes[3:end], vtypes, sv, max_methods)
+        return abstract_apply(nothing, argtypes[2], argtypes[3:end], vtypes, sv, max_methods)
+    elseif f === _apply_iterate
+        return abstract_apply(argtypes[2], argtypes[3], argtypes[4:end], vtypes, sv, max_methods)
     end
 
     la = length(argtypes)
@@ -662,7 +671,7 @@ function abstract_call(@nospecialize(f), fargs::Union{Nothing,Vector{Any}}, argt
         end
         rt = builtin_tfunction(f, argtypes[2:end], sv)
         if f === getfield && isa(fargs, Vector{Any}) && length(argtypes) == 3 && isa(argtypes[3], Const) && isa(argtypes[3].val, Int) && argtypes[2] ⊑ Tuple
-            cti = precise_container_type(argtypes[2], vtypes, sv)
+            cti = precise_container_type(nothing, argtypes[2], vtypes, sv)
             idx = argtypes[3].val
             if 1 <= idx <= length(cti)
                 rt = unwrapva(cti[idx])
