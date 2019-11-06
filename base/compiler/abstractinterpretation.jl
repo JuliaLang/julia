@@ -797,6 +797,8 @@ function abstract_call(@nospecialize(f), fargs::Union{Nothing,Vector{Any}}, argt
             return ret
         end
         return Any
+    elseif f === Tuple && la == 2 && !isconcretetype(widenconst(argtypes[2]))
+        return Tuple
     elseif is_return_type(f)
         rt_rt = return_type_tfunc(argtypes, vtypes, sv)
         if rt_rt !== nothing
@@ -842,6 +844,8 @@ function abstract_call(@nospecialize(f), fargs::Union{Nothing,Vector{Any}}, argt
         end
     elseif length(argtypes) == 2 && istopfunction(f, :typename)
         return typename_static(argtypes[2])
+    elseif max_methods > 1 && istopfunction(f, :copyto!)
+        max_methods = 1
     end
 
     atype = argtypes_to_type(argtypes)

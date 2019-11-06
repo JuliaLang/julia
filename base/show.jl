@@ -377,8 +377,8 @@ show(io::IO, @nospecialize(x)) = show_default(io, x)
 show_default(io::IO, @nospecialize(x)) = _show_default(io, inferencebarrier(x))
 
 function _show_default(io::IO, @nospecialize(x))
-    t = typeof(x)::DataType
-    show(io, t)
+    t = typeof(x)
+    show(io, inferencebarrier(t))
     print(io, '(')
     nf = nfields(x)
     nb = sizeof(x)
@@ -1135,7 +1135,7 @@ function show_generator(io, ex, indent)
 end
 
 function valid_import_path(@nospecialize ex)
-    return Meta.isexpr(ex, :(.)) && length(ex.args) > 0 && all(a->isa(a,Symbol), ex.args)
+    return Meta.isexpr(ex, :(.)) && length((ex::Expr).args) > 0 && all(a->isa(a,Symbol), (ex::Expr).args)
 end
 
 function show_import_path(io::IO, ex)
@@ -1514,7 +1514,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     elseif (head === :import || head === :using) && nargs == 1 &&
             (valid_import_path(args[1]) ||
-             (Meta.isexpr(args[1], :(:)) && length(args[1].args) > 1 && all(valid_import_path, args[1].args)))
+             (Meta.isexpr(args[1], :(:)) && length((args[1]::Expr).args) > 1 && all(valid_import_path, (args[1]::Expr).args)))
         print(io, head)
         print(io, ' ')
         first = true
