@@ -513,20 +513,45 @@ function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
     return (filename, Base.open(filename, "r+"))
 end
 
+# GUID  win32 api (consider # TODO: refactor)
+struct GUID
+    l1::Culong
+    w1::Cushort
+    w2::Cushort
+    b::NTuple{8,Cuchar}
+end
+
+# generates a random temporary string based on a UUID
+function _uiud_string()
+    id = Ref{GUID}()
+    r = ccall((:UuidCreate,:Rpcrt4), stdcall, Cint, (Ref{GUID},), id)
+    # ignore expected errors that we don't care about (these shouldn't even be an issue after Vista)
+    RPC_S_UUID_LOCAL_ONLY = 1824
+    RPC_S_UUID_NO_ADDRESS = 1739
+    if !(r == 0 || r == RPC_S_UUID_LOCAL_ONLY || r == RPC_S_UUID_NO_ADDRESS)
+        windowserror("UuidCreate", r % UInt32) # Throw on unexpected errors. Note, a RPC_STATUS is just a WINERROR with a different signedness of the type.
+    end
+
+    nameptr = Ref{Ptr{Cwchar_t}}()
+    r = ccall((:UuidToStringW, :Rpcrt4), stdcall, Cint, (Ref{GUID}, Ref{Ptr{Cwchar_t}}), id, nameptr)
+    r == 0 || windowserror("UuidToString", r % UInt32) # a RPC_STATUS is just a WINERROR with a different signedness of the type
+
+    namebuf = unsafe_wrap(Vector{Cwchar_t}, nameptr[], ccall(:wcslen, UInt, (Ptr{Cwchar_t},), nameptr[]))
+    name = transcode(String, namebuf)
+
+    ccall((:RpcStringFreeW, :Rpcrt4), stdcall, Cint, (Ref{Ptr{Cwchar_t}},), nameptr)
+
+    name = filter(!=('-'), name)
+    return name
+end
+
 function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
     isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
-    seed::UInt32 = rand(UInt32)
-    while true
-        if (seed & typemax(UInt16)) == 0
-            seed += 1
-        end
-        filename = _win_tempname(parent, seed)
-        if !ispath(filename)
-            cleanup && temp_cleanup_later(filename)
-            return filename
-        end
-        seed += 1
-    end
+    name = _uiud_string()
+    filename = joinpath(parent, temp_prefix * name * ".tmp")
+    @assert !ispath(filename)
+    cleanup && temp_cleanup_later(filename)
+    return filename
 end
 
 else # !windows
