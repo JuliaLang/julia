@@ -143,9 +143,9 @@ end
 function print(io::IO, data::Vector{<:Unsigned}, lidict::Union{LineInfoDict, LineInfoFlatDict}, fmt::ProfileFormat, format::Symbol)
     cols::Int = Base.displaysize(io)[2]
     data = convert(Vector{UInt64}, data)
-    if format == :tree
+    if format === :tree
         tree(io, data, lidict, cols, fmt)
-    elseif format == :flat
+    elseif format === :flat
         flat(io, data, lidict, cols, fmt)
     else
         throw(ArgumentError("output format $(repr(format)) not recognized"))
@@ -390,7 +390,7 @@ function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int},
         n = n[keep]
         lilist = lilist[keep]
     end
-    if fmt.sortedby == :count
+    if fmt.sortedby === :count
         p = sortperm(n)
         n = n[p]
         lilist = lilist[p]

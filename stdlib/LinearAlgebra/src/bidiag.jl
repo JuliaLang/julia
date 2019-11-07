@@ -99,7 +99,7 @@ julia> Bidiagonal(A, :L) # contains the main diagonal and first subdiagonal of A
 ```
 """
 function Bidiagonal(A::AbstractMatrix, uplo::Symbol)
-    Bidiagonal(diag(A, 0), diag(A, uplo == :U ? 1 : -1), uplo)
+    Bidiagonal(diag(A, 0), diag(A, uplo === :U ? 1 : -1), uplo)
 end
 
 Bidiagonal(A::Bidiagonal) = A

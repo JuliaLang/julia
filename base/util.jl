@@ -368,7 +368,7 @@ function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args.
         if !iscolor
             print(io, str)
         else
-            bold && color == :bold && (color = :nothing)
+            bold && color === :bold && (color = :nothing)
             enable_ansi  = get(text_colors, color, text_colors[:default]) *
                                (bold ? text_colors[:bold] : "")
             disable_ansi = (bold ? disable_text_style[:bold] : "") *
@@ -705,9 +705,9 @@ Stacktrace:
 """
 macro kwdef(expr)
     expr = macroexpand(__module__, expr) # to expand @static
-    expr isa Expr && expr.head == :struct || error("Invalid usage of @kwdef")
+    expr isa Expr && expr.head === :struct || error("Invalid usage of @kwdef")
     T = expr.args[2]
-    if T isa Expr && T.head == :<:
+    if T isa Expr && T.head === :<:
         T = T.args[1]
     end
 
@@ -720,13 +720,13 @@ macro kwdef(expr)
     if !isempty(params_ex.args)
         if T isa Symbol
             kwdefs = :(($(esc(T)))($params_ex) = ($(esc(T)))($(call_args...)))
-        elseif T isa Expr && T.head == :curly
+        elseif T isa Expr && T.head === :curly
             # if T == S{A<:AA,B<:BB}, define two methods
             #   S(...) = ...
             #   S{A,B}(...) where {A<:AA,B<:BB} = ...
             S = T.args[1]
             P = T.args[2:end]
-            Q = [U isa Expr && U.head == :<: ? U.args[1] : U for U in P]
+            Q = [U isa Expr && U.head === :<: ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
             kwdefs = quote
                 ($(esc(S)))($params_ex) =($(esc(S)))($(call_args...))
@@ -755,12 +755,12 @@ function _kwdef!(blk, params_args, call_args)
             push!(params_args, ei)
             push!(call_args, ei)
         elseif ei isa Expr
-            if ei.head == :(=)
+            if ei.head === :(=)
                 lhs = ei.args[1]
                 if lhs isa Symbol
                     #  var = defexpr
                     var = lhs
-                elseif lhs isa Expr && lhs.head == :(::) && lhs.args[1] isa Symbol
+                elseif lhs isa Expr && lhs.head === :(::) && lhs.args[1] isa Symbol
                     #  var::T = defexpr
                     var = lhs.args[1]
                 else
@@ -772,12 +772,12 @@ function _kwdef!(blk, params_args, call_args)
                 push!(params_args, Expr(:kw, var, esc(defexpr)))
                 push!(call_args, var)
                 blk.args[i] = lhs
-            elseif ei.head == :(::) && ei.args[1] isa Symbol
+            elseif ei.head === :(::) && ei.args[1] isa Symbol
                 # var::Typ
                 var = ei.args[1]
                 push!(params_args, var)
                 push!(call_args, var)
-            elseif ei.head == :block
+            elseif ei.head === :block
                 # can arise with use of @static inside type decl
                 _kwdef!(ei, params_args, call_args)
             end
