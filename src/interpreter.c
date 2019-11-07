@@ -157,11 +157,9 @@ static void eval_abstracttype(jl_expr_t *ex, interpreter_state *s)
         super = eval_value(args[2], s);
         jl_set_datatype_super(dt, super);
         jl_reinstantiate_inner_types(dt);
-        JL_UNLOCK(&codegen_lock);
     }
     JL_CATCH {
         jl_reset_instantiate_inner_types(dt);
-        JL_UNLOCK(&codegen_lock);
         b->value = temp;
         jl_rethrow();
     }
@@ -170,6 +168,7 @@ static void eval_abstracttype(jl_expr_t *ex, interpreter_state *s)
         jl_checked_assignment(b, w);
     }
     JL_GC_POP();
+    JL_UNLOCK(&codegen_lock);
 }
 
 static void eval_primitivetype(jl_expr_t *ex, interpreter_state *s)
@@ -211,11 +210,9 @@ static void eval_primitivetype(jl_expr_t *ex, interpreter_state *s)
         super = eval_value(args[3], s);
         jl_set_datatype_super(dt, super);
         jl_reinstantiate_inner_types(dt);
-        JL_UNLOCK(&codegen_lock);
     }
     JL_CATCH {
         jl_reset_instantiate_inner_types(dt);
-        JL_UNLOCK(&codegen_lock);
         b->value = temp;
         jl_rethrow();
     }
@@ -224,6 +221,7 @@ static void eval_primitivetype(jl_expr_t *ex, interpreter_state *s)
         jl_checked_assignment(b, w);
     }
     JL_GC_POP();
+    JL_UNLOCK(&codegen_lock);
 }
 
 static void eval_structtype(jl_expr_t *ex, interpreter_state *s)
@@ -275,11 +273,9 @@ static void eval_structtype(jl_expr_t *ex, interpreter_state *s)
             }
         }
         jl_reinstantiate_inner_types(dt);
-        JL_UNLOCK(&codegen_lock);
     }
     JL_CATCH {
         jl_reset_instantiate_inner_types(dt);
-        JL_UNLOCK(&codegen_lock);
         b->value = temp;
         jl_rethrow();
     }
@@ -291,6 +287,7 @@ static void eval_structtype(jl_expr_t *ex, interpreter_state *s)
     }
 
     JL_GC_POP();
+    JL_UNLOCK(&codegen_lock);
 }
 
 // method definition form
