@@ -465,7 +465,10 @@ const TEMP_CLEANUP_LOCK = ReentrantLock()
 
 function temp_cleanup_later(path::AbstractString; asap::Bool=false)
     lock(TEMP_CLEANUP_LOCK)
-    TEMP_CLEANUP[path] = asap
+    # each path should only be inserted here once, but if there
+    # is a collision, let !asap win over asap: if any user might
+    # still be using the path, don't delete it until process exit
+    TEMP_CLEANUP[path] = get(TEMP_CLEANUP, path, true) & asap
     if length(TEMP_CLEANUP) > TEMP_CLEANUP_MAX[]
         temp_cleanup_purge(false)
         TEMP_CLEANUP_MAX[] = max(TEMP_CLEANUP_MIN[], 2*length(TEMP_CLEANUP))
