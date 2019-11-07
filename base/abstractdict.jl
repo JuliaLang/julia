@@ -470,11 +470,12 @@ end
 
 Lookup and then update, insert or delete in one go without re-computing the hash.
 
-`f` is a callable object that must accept `Union{Some{V}, Nothing}` and return
-`Union{T, Some{T}, Nothing}` where `T` is a type [`convert`](@ref)-able to the value type
+`f` is a callable object that must take a single `Union{Some{V}, Nothing}` argument and return
+a `Union{T, Some{T}, Nothing}` value, where `T` is a type [`convert`](@ref)-able to the value type
 `V`.  The value `Some(d[key])` is passed to `f` if `haskey(d, key)`; otherwise `nothing`
 is passed.  If `f` returns `nothing`, corresponding entry in the dictionary `d`  is removed.
-If `f` returns non-`nothing` value `x`, `something(x)` is inserted to `d`.
+If `f` returns non-`nothing` value `x`, `key => something(x)` is inserted or updated in `d`
+(equivalent to `d[key] = something(x)` but more efficient).
 
 `modify!` returns whatever `f` returns as-is.
 
@@ -494,7 +495,7 @@ Dict{String,Int64} with 1 entry:
 julia> dict = Dict();
 
 julia> modify!(dict, "a") do val
-           Some(val === nothing ? 1 : something(val) + 1)
+           Some(something(val, 0) + 1)
        end
 Some(1)
 
