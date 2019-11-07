@@ -34,6 +34,13 @@ int jl_is_toplevel_only_expr(jl_value_t *e);
 
 // type definition forms
 
+// TODO: separate the codegen and toplevel locks
+//   currently using a coarser lock seems like
+//   the best way to avoid acquisition priority
+//   ordering violations
+//static jl_mutex_t toplevel_lock;
+#define toplevel_lock codegen_lock
+
 extern int inside_typedef;
 
 // this is a heuristic for allowing "redefining" a type to something identical
@@ -128,7 +135,7 @@ SECT_INTERP void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 static void eval_abstracttype(jl_expr_t *ex, interpreter_state *s)
 {
     jl_value_t **args = jl_array_ptr_data(ex->args);
-    JL_LOCK(&codegen_lock);
+    JL_LOCK(&toplevel_lock);
     if (inside_typedef)
         jl_error("cannot eval a new abstract type definition while defining another type");
     jl_value_t *name = args[0];
@@ -168,13 +175,13 @@ static void eval_abstracttype(jl_expr_t *ex, interpreter_state *s)
         jl_checked_assignment(b, w);
     }
     JL_GC_POP();
-    JL_UNLOCK(&codegen_lock);
+    JL_UNLOCK(&toplevel_lock);
 }
 
 static void eval_primitivetype(jl_expr_t *ex, interpreter_state *s)
 {
     jl_value_t **args = (jl_value_t**)jl_array_ptr_data(ex->args);
-    JL_LOCK(&codegen_lock);
+    JL_LOCK(&toplevel_lock);
     if (inside_typedef)
         jl_error("cannot eval a new primitive type definition while defining another type");
     jl_value_t *name = args[0];
@@ -221,13 +228,13 @@ static void eval_primitivetype(jl_expr_t *ex, interpreter_state *s)
         jl_checked_assignment(b, w);
     }
     JL_GC_POP();
-    JL_UNLOCK(&codegen_lock);
+    JL_UNLOCK(&toplevel_lock);
 }
 
 static void eval_structtype(jl_expr_t *ex, interpreter_state *s)
 {
     jl_value_t **args = jl_array_ptr_data(ex->args);
-    JL_LOCK(&codegen_lock);
+    JL_LOCK(&toplevel_lock);
     if (inside_typedef)
         jl_error("cannot eval a new struct type definition while defining another type");
     jl_value_t *name = args[0];
@@ -287,7 +294,7 @@ static void eval_structtype(jl_expr_t *ex, interpreter_state *s)
     }
 
     JL_GC_POP();
-    JL_UNLOCK(&codegen_lock);
+    JL_UNLOCK(&toplevel_lock);
 }
 
 // method definition form
