@@ -351,6 +351,10 @@ end
 @test sprint(show, :+) == ":+"
 @test sprint(show, :end) == ":end"
 
+# make sure :var"'" prints correctly
+@test sprint(show, Symbol("'")) == "Symbol(\"'\")"
+@test_repr "var\"'\" = 5"
+
 # issue #32408: Printing of names which are invalid identifiers
 # Invalid identifiers which need `var` quoting:
 @test sprint(show, Expr(:call, :foo, Symbol("##")))   == ":(foo(var\"##\"))"
@@ -451,9 +455,6 @@ let a = Expr(:quote,Expr(:$,:x8d003))
     @test eval(Meta.parse(repr(a))) == a
     @test eval(eval(Meta.parse(repr(a)))) == 2
 end
-
-# issue #9865
-@test occursin(r"^Set\(\[.+….+\]\)$", replstr(Set(1:100)))
 
 # issue #11413
 @test string(:(*{1, 2})) == "*{1, 2}"
@@ -906,6 +907,7 @@ let a = Vector{Any}(undef, 10000)
     repr = sprint(dump, a; context=(:limit => true), sizehint=0)
     @test repr == "Array{Any}((10000,))\n  1: #undef\n  2: String \"elemA\"\n  3: #undef\n  4: String \"elemB\"\n  5: #undef\n  ...\n  9996: #undef\n  9997: #undef\n  9998: #undef\n  9999: #undef\n  10000: #undef\n"
 end
+@test occursin("NamedTuple", sprint(dump, NamedTuple))
 
 # issue #17338
 @test repr(Core.svec(1, 2)) == "svec(1, 2)"
@@ -1274,7 +1276,7 @@ end
     @test replstr(view(A, [1], :)) == "1×1 view(::Array{Float64,2}, [1], :) with eltype Float64:\n 0.0"
 
     # issue #27680
-    @test replstr(Set([(1.0,1.0), (2.0,2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
+    @test showstr(Set([(1.0,1.0), (2.0,2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
               "Set([(3.0, 3.0), (2.0, 2.0), (1.0, 1.0)])" :
               "Set([(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])")
 
@@ -1583,6 +1585,21 @@ end
     @test sdastr(1, 2) == "[1, 2]"
     @test sdastr(2, 2) == "[2, 3]"
     @test sdastr(3, 3) == "[3, 4, 5]"
+end
+
+@testset "show Set" begin
+    s = Set{Int}(1:22)
+    str = showstr(s)
+    @test startswith(str, "Set([")
+    @test endswith(str, "])")
+    @test occursin("  …  ", str)
+
+    str = replstr(s)
+    @test startswith(str, "Set{$Int} with 22 elements:\n")
+    @test endswith(str, "\n  ⋮ ")
+    @test count(==('\n'), str) == 20
+
+    @test replstr(Set(['a'^100])) == "Set{String} with 1 element:\n  \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa…"
 end
 
 @testset "0-dimensional Array. Issue #31481" begin

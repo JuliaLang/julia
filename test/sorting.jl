@@ -26,11 +26,17 @@ end
 @test partialsortperm([3,6,30,1,9], 3:4) == [2,5]
 @test partialsortperm!(Vector(1:5), [3,6,30,1,9], 3:4) == [2,5]
 let a=[1:10;]
-    for r in Any[2:4, 1:2, 10:10, 4:2, 2:1, 4:-1:2, 2:-1:1, 10:-1:10, 4:1:3, 1:2:8, 10:-3:1]
+    for r in Any[2:4, 1:2, 10:10, 4:2, 2:1, 4:-1:2, 2:-1:1, 10:-1:10, 4:1:3, 1:2:8, 10:-3:1, UInt(2):UInt(5)]
         @test partialsort(a, r) == [r;]
         @test partialsortperm(a, r) == [r;]
         @test partialsort(a, r, rev=true) == (11 .- [r;])
         @test partialsortperm(a, r, rev=true) == (11 .- [r;])
+    end
+    for i in (2, UInt(2), Int128(1), big(10))
+        @test partialsort(a, i) == i
+        @test partialsortperm(a, i) == i
+        @test partialsort(a, i, rev=true) == (11 - i)
+        @test partialsortperm(a, i, rev=true) == (11 - i)
     end
 end
 @test_throws ArgumentError partialsortperm!([1,2], [2,3,1], 1:2)
@@ -397,6 +403,34 @@ end
             @test searchsorted(T_30763{$T}(1):T_30763{$T}(3), T_30763{$T}(2)) == 2:2
         end
     end
+end
+
+@testset "sorting of views with strange axes" for T in (Int, UInt, Int128, UInt128, BigInt)
+    a = [8,6,7,5,3,0,9]
+    b = @view a[T(2):T(5)]
+    @test issorted(sort!(b))
+    @test b == [3,5,6,7]
+    @test a == [8,3,5,6,7,0,9]
+
+    a = [8,6,7,5,3,0,9]
+    b = @view a[T(2):T(5)]
+    c = sort(b)
+    @test issorted(c)
+    @test c == [3,5,6,7]
+    @test a == [8,6,7,5,3,0,9]
+
+    a = [8,6,7,NaN,5,3,0,9]
+    b = @view a[T(2):T(5)]
+    @test issorted(sort!(b))
+    @test isequal(b, [5,6,7,NaN])
+    @test isequal(a, [8,5,6,7,NaN,3,0,9])
+
+    a = [8,6,7,NaN,5,3,0,9]
+    b = @view a[T(2):T(5)]
+    c = sort(b)
+    @test issorted(c)
+    @test isequal(c, [5,6,7,NaN])
+    @test isequal(a, [8,6,7,NaN,5,3,0,9])
 end
 
 end

@@ -312,11 +312,11 @@ julia> F.pcol
 ```
 """
 @inline function Base.getproperty(F::QRSparse, d::Symbol)
-    if d == :Q
+    if d === :Q
         return QRSparseQ(F.factors, F.τ, size(F, 2))
-    elseif d == :prow
+    elseif d === :prow
         return invperm(F.rpivinv)
-    elseif d == :pcol
+    elseif d === :pcol
         return F.cpiv
     else
         getfield(F, d)

@@ -269,7 +269,7 @@ endef
 ifeq (,$(findstring $(OS),FreeBSD WINNT))
 julia-base: $(build_libdir)/libgfortran*.$(SHLIB_EXT)*
 $(build_libdir)/libgfortran*.$(SHLIB_EXT)*: | $(build_libdir) julia-deps
-	-$(CUSTOM_LD_LIBRARY_PATH) PATH="$(PATH):$(build_depsbindir)" $(JULIAHOME)/contrib/fixup-libgfortran.sh --verbose $(build_libdir)
+	-$(CUSTOM_LD_LIBRARY_PATH) PATH="$(PATH):$(build_depsbindir)" PATCHELF="$(PATCHELF)" $(JULIAHOME)/contrib/fixup-libgfortran.sh --verbose $(build_libdir)
 JL_PRIVATE_LIBS-0 += libgfortran libgcc_s libquadmath
 endif
 
@@ -392,7 +392,7 @@ ifneq ($(DARWIN_FRAMEWORK),1)
 endif
 else ifneq (,$(findstring $(OS),Linux FreeBSD))
 	for j in $(JL_TARGETS) ; do \
-		patchelf --set-rpath '$$ORIGIN/$(private_libdir_rel):$$ORIGIN/$(libdir_rel)' $(DESTDIR)$(bindir)/$$j; \
+		$(PATCHELF) --set-rpath '$$ORIGIN/$(private_libdir_rel):$$ORIGIN/$(libdir_rel)' $(DESTDIR)$(bindir)/$$j; \
 	done
 endif
 
@@ -412,15 +412,15 @@ endif
 endif
 	# On FreeBSD, remove the build's libdir from each library's RPATH
 ifeq ($(OS),FreeBSD)
-	$(JULIAHOME)/contrib/fixup-rpath.sh $(build_depsbindir)/patchelf $(DESTDIR)$(libdir) $(build_libdir)
-	$(JULIAHOME)/contrib/fixup-rpath.sh $(build_depsbindir)/patchelf $(DESTDIR)$(private_libdir) $(build_libdir)
-	$(JULIAHOME)/contrib/fixup-rpath.sh $(build_depsbindir)/patchelf $(DESTDIR)$(bindir) $(build_libdir)
+	$(JULIAHOME)/contrib/fixup-rpath.sh "$(PATCHELF)" $(DESTDIR)$(libdir) $(build_libdir)
+	$(JULIAHOME)/contrib/fixup-rpath.sh "$(PATCHELF)" $(DESTDIR)$(private_libdir) $(build_libdir)
+	$(JULIAHOME)/contrib/fixup-rpath.sh "$(PATCHELF)" $(DESTDIR)$(bindir) $(build_libdir)
 	# Set libgfortran's RPATH to ORIGIN instead of GCCPATH. It's only libgfortran that
 	# needs to be fixed here, as libgcc_s and libquadmath don't have RPATHs set. If we
 	# don't set libgfortran's RPATH, it won't be able to find its friends on systems
 	# that don't have the exact GCC port installed used for the build.
 	for lib in $(DESTDIR)$(private_libdir)/libgfortran*$(SHLIB_EXT)*; do \
-		$(build_depsbindir)/patchelf --set-rpath '$$ORIGIN' $$lib; \
+		$(PATCHELF) --set-rpath '$$ORIGIN' $$lib; \
 	done
 endif
 
@@ -580,7 +580,12 @@ testall1: check-whitespace $(JULIA_BUILD_MODE)
 	@env JULIA_CPU_THREADS=1 $(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test all JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 test-%: check-whitespace $(JULIA_BUILD_MODE)
+	@([ $$(( $$(date +%s) - $$(date +%s -r $(build_private_libdir)/sys.$(SHLIB_EXT)) )) -le 100 ] && \
+		printf '\033[93m    HINT The system image was recently rebuilt. Are you aware of the test-revise-* targets? See CONTRIBUTING.md. \033[0m\n') || true
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test $* JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
+
+test-revise-%:
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test revise-$* JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 # download target for some hardcoded windows dependencies
 .PHONY: win-extras wine_path

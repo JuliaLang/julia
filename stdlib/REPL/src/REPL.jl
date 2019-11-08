@@ -243,7 +243,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
                 end
             end
             ast = Base.parse_input_line(line)
-            (isa(ast,Expr) && ast.head == :incomplete) || break
+            (isa(ast,Expr) && ast.head === :incomplete) || break
         end
         if !isempty(line)
             response = eval_with_backend(ast, backend)
@@ -955,7 +955,7 @@ function setup_interface(
                     end
                 end
                 ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false)
-                if (isa(ast, Expr) && (ast.head == :error || ast.head == :incomplete)) ||
+                if (isa(ast, Expr) && (ast.head === :error || ast.head === :incomplete)) ||
                         (pos > ncodeunits(input) && !endswith(input, '\n'))
                     # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
                     # Insert all the remaining text as one line (might be empty)

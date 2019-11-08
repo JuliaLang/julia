@@ -7,6 +7,9 @@
 #include <stddef.h> // double include of stddef.h fixes #3421
 #include <stdint.h>
 #include <string.h> // memcpy
+#include <errno.h>
+#include <stdlib.h>
+#include <stdio.h>
 #if defined(_COMPILER_INTEL_)
 #include <mathimf.h>
 #else
@@ -344,5 +347,42 @@ STATIC_INLINE void jl_store_unaligned_i16(void *ptr, uint16_t val) JL_NOTSAFEPOI
     memcpy(ptr, &val, 2);
 }
 
+#ifdef _OS_WINDOWS_
+#include <errhandlingapi.h>
+#endif
+
+STATIC_INLINE void *malloc_s(size_t sz) JL_NOTSAFEPOINT {
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
+    void *p = malloc(sz);
+    if (p == NULL) {
+        perror("(julia) malloc");
+        abort();
+    }
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
+    return p;
+}
+
+STATIC_INLINE void *realloc_s(void *p, size_t sz) JL_NOTSAFEPOINT {
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
+    p = realloc(p, sz);
+    if (p == NULL) {
+        perror("(julia) realloc");
+        abort();
+    }
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
+    return p;
+}
 
 #endif /* DTYPES_H */

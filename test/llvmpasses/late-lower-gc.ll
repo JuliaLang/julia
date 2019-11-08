@@ -65,11 +65,11 @@ top:
     %v = call noalias %jl_value_t addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, i64 8, %jl_value_t addrspace(10)* @tag)
 ; CHECK-NEXT: %v64 = bitcast %jl_value_t addrspace(10)* %v to i64 addrspace(10)*
     %v64 = bitcast %jl_value_t addrspace(10)* %v to i64 addrspace(10)*
-; CHECK-NEXT: %loadedval = load i64, i64 addrspace(10)* %v64, align 8, !range !4
+; CHECK-NEXT: %loadedval = load i64, i64 addrspace(10)* %v64, align 8, !range !5
     %loadedval = load i64, i64 addrspace(10)* %v64, align 8, !range !0, !invariant.load !1
-; CHECK-NEXT: store i64 %loadedval, i64 addrspace(10)* %v64, align 8, !noalias !5
+; CHECK-NEXT: store i64 %loadedval, i64 addrspace(10)* %v64, align 8, !noalias !6
     store i64 %loadedval, i64 addrspace(10)* %v64, align 8, !noalias !2
-; CHECK-NEXT: %lv2 = load i64, i64 addrspace(10)* %v64, align 8, !tbaa !6, !range !4
+; CHECK-NEXT: %lv2 = load i64, i64 addrspace(10)* %v64, align 8, !tbaa !7, !range !5
     %lv2 = load i64, i64 addrspace(10)* %v64, align 8, !range !0, !tbaa !4
 ; CHECK-NEXT: ret void
     ret void
@@ -85,9 +85,10 @@ top:
 ; CHECK:      !0 = !{!1, !1, i64 0}
 ; CHECK-NEXT: !1 = !{!"jtbaa_tag", !2, i64 0}
 ; CHECK-NEXT: !2 = !{!"jtbaa_data", !3, i64 0}
-; CHECK-NEXT: !3 = !{!"jtbaa"}
-; CHECK-NEXT: !4 = !{i64 0, i64 23}
-; CHECK-NEXT: !5 = distinct !{!5}
-; CHECK-NEXT: !6 = !{!7, !7, i64 0}
-; CHECK-NEXT: !7 = !{!"jtbaa_const", !8}
-; CHECK-NEXT: !8 = !{!"jtbaa"}
+; CHECK-NEXT: !3 = !{!"jtbaa", !4, i64 0}
+; CHECK-NEXT: !4 = !{!"jtbaa"}
+; CHECK-NEXT: !5 = !{i64 0, i64 23}
+; CHECK-NEXT: !6 = distinct !{!6}
+; CHECK-NEXT: !7 = !{!8, !8, i64 0}
+; CHECK-NEXT: !8 = !{!"jtbaa_const", !9}
+; CHECK-NEXT: !9 = !{!"jtbaa"}

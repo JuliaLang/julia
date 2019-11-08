@@ -386,7 +386,7 @@ JL_DLLEXPORT jl_nullable_float64_t jl_try_substrtod(char *str, size_t offset, si
             newstr = (char*)alloca(len + 1);
         }
         else {
-            newstr = tofree = (char*)malloc(len + 1);
+            newstr = tofree = (char*)malloc_s(len + 1);
         }
         memcpy(newstr, bstr, len);
         newstr[len] = 0;
@@ -445,7 +445,7 @@ JL_DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset, si
             newstr = (char*)alloca(len + 1);
         }
         else {
-            newstr = tofree = (char*)malloc(len + 1);
+            newstr = tofree = (char*)malloc_s(len + 1);
         }
         memcpy(newstr, bstr, len);
         newstr[len] = 0;

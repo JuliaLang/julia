@@ -503,7 +503,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
         See [Working with LLVM](@ref Working-with-LLVM) for where these are derived from and how they get handled.
 
 
-### Method
+### [Method](@id ast-lowered-method)
 
 A unique'd container describing the shared metadata for a single method.
 

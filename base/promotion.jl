@@ -104,7 +104,9 @@ function typejoin(@nospecialize(a), @nospecialize(b))
                 if ai === bi || (isa(ai,Type) && isa(bi,Type) && ai <: bi && bi <: ai)
                     aprimary = aprimary{ai}
                 else
-                    pushfirst!(vars, aprimary.var)
+                    # pushfirst!(vars, aprimary.var)
+                    _growbeg!(vars, 1)
+                    arrayset(false, vars, aprimary.var, 1)
                     aprimary = aprimary.body
                 end
             end

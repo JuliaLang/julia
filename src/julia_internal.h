@@ -111,6 +111,9 @@ STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
     return a;  // identity hashing seems to work well enough here
 }
 
+
+// -- gc.c -- //
+
 #define GC_CLEAN  0 // freshly allocated
 #define GC_MARKED 1 // reachable and young
 #define GC_OLD    2 // if it is reachable it will be marked as old
@@ -316,29 +319,6 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz);
 
 JL_DLLEXPORT void JL_NORETURN jl_throw_out_of_memory_error(void);
 
-jl_code_info_t *jl_type_infer(jl_method_instance_t *li, size_t world, int force);
-jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *meth JL_PROPAGATES_ROOT, size_t world);
-void jl_generate_fptr(jl_code_instance_t *codeinst);
-jl_code_instance_t *jl_compile_linfo(
-        jl_method_instance_t *li JL_PROPAGATES_ROOT,
-        jl_code_info_t *src JL_MAYBE_UNROOTED,
-        size_t world,
-        const jl_cgparams_t *params);
-JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
-        jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_value_t *rettype,
-        size_t min_world, size_t max_world);
-jl_method_instance_t *jl_get_unspecialized(jl_method_instance_t *method JL_PROPAGATES_ROOT);
-
-JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);
-jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam JL_PROPAGATES_ROOT);
-int jl_code_requires_compiler(jl_code_info_t *src);
-jl_code_info_t *jl_new_code_info_from_ast(jl_expr_t *ast);
-JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void);
-
-jl_value_t *jl_argtype_with_function(jl_function_t *f, jl_value_t *types);
-
-JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t nargs);
-
 void jl_gc_sync_total_bytes(void);
 void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a) JL_NOTSAFEPOINT;
 void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT;
@@ -374,6 +354,31 @@ int  jl_get_t_uid_ctr(void);
 void jl_set_t_uid_ctr(int i);
 uint32_t jl_get_gs_ctr(void);
 void jl_set_gs_ctr(uint32_t ctr);
+
+// -- functions -- //
+
+jl_code_info_t *jl_type_infer(jl_method_instance_t *li, size_t world, int force);
+jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *meth JL_PROPAGATES_ROOT, size_t world);
+void jl_generate_fptr(jl_code_instance_t *codeinst);
+jl_code_instance_t *jl_compile_linfo(
+        jl_method_instance_t *li JL_PROPAGATES_ROOT,
+        jl_code_info_t *src JL_MAYBE_UNROOTED,
+        size_t world,
+        const jl_cgparams_t *params);
+JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
+        jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_value_t *rettype,
+        size_t min_world, size_t max_world);
+jl_method_instance_t *jl_get_unspecialized(jl_method_instance_t *method JL_PROPAGATES_ROOT);
+
+JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);
+jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam JL_PROPAGATES_ROOT);
+int jl_code_requires_compiler(jl_code_info_t *src);
+jl_code_info_t *jl_new_code_info_from_ast(jl_expr_t *ast);
+JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void);
+
+jl_value_t *jl_argtype_with_function(jl_function_t *f, jl_value_t *types);
+
+JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t nargs);
 
 void JL_NORETURN jl_method_error(jl_function_t *f, jl_value_t **args, size_t na, size_t world);
 jl_value_t *jl_get_exceptionf(jl_datatype_t *exception_type, const char *fmt, ...);
@@ -480,6 +485,8 @@ extern char jl_using_oprofile_jitevents;
 extern char jl_using_perf_jitevents;
 #endif
 extern size_t jl_arr_xtralloc_limit;
+
+// -- init.c -- //
 
 void jl_init_types(void) JL_GC_DISABLED;
 void jl_init_box_caches(void);
@@ -760,7 +767,7 @@ STATIC_INLINE char *jl_copy_str(char **to, const char *from)
         return NULL;
     }
     size_t len = strlen(from) + 1;
-    *to = (char*)realloc(*to, len);
+    *to = (char*)realloc_s(*to, len);
     memcpy(*to, from, len);
     return *to;
 }
@@ -968,57 +975,8 @@ extern jl_mutex_t typecache_lock;
 extern jl_mutex_t codegen_lock;
 extern jl_mutex_t safepoint_lock;
 
-// -- gc.c -- //
-
 #if defined(__APPLE__)
 void jl_mach_gc_end(void);
-#endif
-
-#if defined(_OS_WINDOWS_)
-STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
-{
-    return _aligned_malloc(sz ? sz : 1, align);
-}
-STATIC_INLINE void *jl_realloc_aligned(void *p, size_t sz, size_t oldsz,
-                                       size_t align)
-{
-    (void)oldsz;
-    return _aligned_realloc(p, sz ? sz : 1, align);
-}
-STATIC_INLINE void jl_free_aligned(void *p) JL_NOTSAFEPOINT
-{
-    _aligned_free(p);
-}
-#else
-STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
-{
-#if defined(_P64) || defined(__APPLE__)
-    if (align <= 16)
-        return malloc(sz);
-#endif
-    void *ptr;
-    if (posix_memalign(&ptr, align, sz))
-        return NULL;
-    return ptr;
-}
-STATIC_INLINE void *jl_realloc_aligned(void *d, size_t sz, size_t oldsz,
-                                       size_t align)
-{
-#if defined(_P64) || defined(__APPLE__)
-    if (align <= 16)
-        return realloc(d, sz);
-#endif
-    void *b = jl_malloc_aligned(sz, align);
-    if (b != NULL) {
-        memcpy(b, d, oldsz > sz ? sz : oldsz);
-        free(d);
-    }
-    return b;
-}
-STATIC_INLINE void jl_free_aligned(void *p) JL_NOTSAFEPOINT
-{
-    free(p);
-}
 #endif
 
 // -- typemap.c -- //

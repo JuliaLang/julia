@@ -81,9 +81,9 @@ colwidths(rows; len = length, min = 0) =
     reduce((x,y) -> max.(x,y), [min; convert(Vector{Vector{Int}}, mapmap(len, rows))])
 
 padding(width, twidth, a) =
-    a == :l ? (0, twidth - width) :
-    a == :r ? (twidth - width, 0) :
-    a == :c ? (floor(Int, (twidth-width)/2), ceil(Int, (twidth-width)/2)) :
+    a === :l ? (0, twidth - width) :
+    a === :r ? (twidth - width, 0) :
+    a === :c ? (floor(Int, (twidth-width)/2), ceil(Int, (twidth-width)/2)) :
     error("Invalid alignment $a")
 
 function padcells!(rows, align; len = length, min = 0)
@@ -97,9 +97,9 @@ function padcells!(rows, align; len = length, min = 0)
 end
 
 _dash(width, align) =
-    align == :l ? ":" * "-"^width * " " :
-    align == :r ? " " * "-"^width * ":" :
-    align == :c ? ":" * "-"^width * ":" :
+    align === :l ? ":" * "-"^width * " " :
+    align === :r ? " " * "-"^width * ":" :
+    align === :c ? ":" * "-"^width * ":" :
     throw(ArgumentError("Invalid alignment $align"))
 
 function plain(io::IO, md::Table)
