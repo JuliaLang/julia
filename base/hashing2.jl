@@ -13,16 +13,19 @@ function hash_integer(n::Integer, h::UInt)
     return h
 end
 
-function hash_integer(n::BigInt, h::UInt)
-    s = n.size
-    s == 0 && return hash_integer(0, h)
-    p = convert(Ptr{UInt}, n.d)
-    b = unsafe_load(p)
-    h ⊻= hash_uint(ifelse(s < 0, -b, b) ⊻ h)
-    for k = 2:abs(s)
-        h ⊻= hash_uint(unsafe_load(p, k) ⊻ h)
+if GMP.Limb === UInt
+    # used e.g. for Rational{BigInt}
+    function hash_integer(n::BigInt, h::UInt)
+        s = n.size
+        s == 0 && return hash_integer(0, h)
+        p = convert(Ptr{UInt}, n.d)
+        b = unsafe_load(p)
+        h ⊻= hash_uint(ifelse(s < 0, -b, b) ⊻ h)
+        for k = 2:abs(s)
+            h ⊻= hash_uint(unsafe_load(p, k) ⊻ h)
+        end
+        return h
     end
-    return h
 end
 
 ## generic hashing for rational values ##
@@ -70,6 +73,60 @@ function hash(x::Real, h::UInt)
     h = hash_integer(pow, h)
     h = hash_integer(num, h)
     return h
+end
+
+## streamlined hashing for BigInt, by avoiding allocation from shifts ##
+
+if GMP.Limb === UInt
+    _divLimb(n) = UInt === UInt64 ? n >>> 6 : n >>> 5
+    _modLimb(n) = UInt === UInt64 ? n & 63 : n & 31
+
+    function hash(x::BigInt, h::UInt)
+        sz = x.size
+        sz == 0 && return hash(0, h)
+        ptr = Ptr{UInt}(x.d)
+        if sz == 1
+            return hash(unsafe_load(ptr), h)
+        elseif sz == -1
+            limb = unsafe_load(ptr)
+            limb <= typemin(Int) % UInt && return hash(-(limb % Int), h)
+        end
+        pow = trailing_zeros(x)
+        nd = ndigits0z(x, 2)
+        idx = _divLimb(pow) + 1
+        shift = _modLimb(pow) % UInt
+        upshift = GMP.BITS_PER_LIMB - shift
+        asz = abs(sz)
+        if shift == 0
+            limb = unsafe_load(ptr, idx)
+        else
+            limb1 = unsafe_load(ptr, idx)
+            limb2 = idx < asz ? unsafe_load(ptr, idx+1) : UInt(0)
+            limb = limb2 << upshift | limb1 >> shift
+        end
+        if nd <= 1024 && nd - pow <= 53
+            return hash(ldexp(flipsign(Float64(limb), sz), pow), h)
+        end
+        h = hash_integer(1, h)
+        h = hash_integer(pow, h)
+        h ⊻= hash_uint(flipsign(limb, sz) ⊻ h)
+        for idx = idx+1:asz
+            if shift == 0
+                limb = unsafe_load(ptr, idx)
+            else
+                limb1 = limb2
+                if idx == asz
+                    limb = limb1 >> shift
+                    limb == 0 && break # don't hash leading zeros
+                else
+                    limb2 = unsafe_load(ptr, idx+1)
+                    limb = limb2 << upshift | limb1 >> shift
+                end
+            end
+            h ⊻= hash_uint(limb ⊻ h)
+        end
+        return h
+    end
 end
 
 #=
