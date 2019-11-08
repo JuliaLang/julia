@@ -328,4 +328,9 @@ end
     @test Base.has_bottom_parameter(Ref{<:Union{}})
 end
 
+# issue #33789
+f33789(x::I, ft::Function, use::Type{U}, ignore::Type{I}) where {U, I} = 0
+f33789(x::U, ft::Function, use::Type{U}, ignore::Type{I}) where {U, I} = 1
+@test f33789(1.0f0, identity, Number, Float32) in (0, 1)
+
 nothing # don't return a module from the remote include

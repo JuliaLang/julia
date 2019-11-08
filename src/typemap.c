@@ -1074,8 +1074,7 @@ static void jl_typemap_list_insert_sorted(
         if (!l->isleafsig) { // quickly ignore all of the leafsig entries (these were handled by caller)
             if (jl_type_morespecific((jl_value_t*)newrec->sig, (jl_value_t*)l->sig)) {
                 if (l->simplesig == (void*)jl_nothing ||
-                    newrec->simplesig != (void*)jl_nothing ||
-                    !jl_types_equal((jl_value_t*)l->sig, (jl_value_t*)newrec->sig)) {
+                    newrec->simplesig != (void*)jl_nothing) {
                     // might need to insert multiple entries for a lookup differing only by their simplesig
                     // when simplesig contains a kind
                     // TODO: make this test more correct or figure out a better way to compute this

@@ -1179,13 +1179,13 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
         if (closure->after)
             reorder = 1;
     }
-    else if (jl_type_morespecific_no_subtype((jl_value_t*)type, (jl_value_t*)sig)) {
+    else if (jl_type_morespecific_no_subtype_with_intersection((jl_value_t*)type, (jl_value_t*)sig, isect)) {
         // new entry is more specific
         if (!closure->after)
             reorder = 1;
         shadowed = 1;
     }
-    else if (jl_type_morespecific_no_subtype((jl_value_t*)sig, (jl_value_t*)type)) {
+    else if (jl_type_morespecific_no_subtype_with_intersection((jl_value_t*)sig, (jl_value_t*)type, isect)) {
         // old entry is more specific
         if (closure->after)
             reorder = 1;
@@ -1336,7 +1336,7 @@ static int check_disabled_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct
         if (jl_types_equal(type, isect2)) {
             jl_method_t *beforem = before->func.method;
             jl_method_t *afterm = oldentry->func.method;
-            int msp = jl_type_morespecific((jl_value_t*)sig, (jl_value_t*)before->sig);
+            int msp = jl_type_morespecific_with_intersection((jl_value_t*)sig, (jl_value_t*)before->sig, isect2);
             if (msp) {
                 if ((jl_value_t*)beforem->resorted == jl_nothing) {
                     beforem->resorted = (jl_value_t*)jl_alloc_vec_any(0);
@@ -1344,7 +1344,7 @@ static int check_disabled_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct
                 }
                 jl_array_ptr_1d_push((jl_array_t*)beforem->resorted, (jl_value_t*)oldentry);
             }
-            else if (!jl_type_morespecific((jl_value_t*)before->sig, (jl_value_t*)sig)) {
+            else if (!jl_type_morespecific_with_intersection((jl_value_t*)before->sig, (jl_value_t*)sig, isect2)) {
                 if ((jl_value_t*)beforem->ambig == jl_nothing) {
                     beforem->ambig = (jl_value_t*)jl_alloc_vec_any(0);
                     jl_gc_wb(beforem, beforem->ambig);

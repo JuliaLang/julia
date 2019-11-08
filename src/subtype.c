@@ -3142,6 +3142,35 @@ jl_value_t *switch_union_tuple(jl_value_t *a, jl_value_t *b)
     return ans;
 }
 
+jl_value_t *intersect_signatures(jl_value_t *a, jl_value_t *b, jl_stenv_t *e, int *approx)
+{
+    jl_value_t *ans = intersect_all(a, b, e);
+    jl_value_t *ans_unwrapped = NULL;
+    if (approx) *approx = 0;
+    if (ans == jl_bottom_type)
+        return jl_bottom_type;
+    JL_GC_PUSH2(&ans, &ans_unwrapped);
+    // TODO: code dealing with method signatures is not able to handle unions, so if
+    // `a` and `b` are both tuples, we need to be careful and may not return a union,
+    // even if `intersect` produced one
+    if (jl_is_tuple_type(jl_unwrap_unionall(a)) && jl_is_tuple_type(jl_unwrap_unionall(b)) &&
+        !jl_is_datatype(jl_unwrap_unionall(ans))) {
+        ans_unwrapped = jl_unwrap_unionall(ans);
+        if (jl_is_uniontype(ans_unwrapped)) {
+            ans_unwrapped = switch_union_tuple(((jl_uniontype_t*)ans_unwrapped)->a, ((jl_uniontype_t*)ans_unwrapped)->b);
+            if (ans_unwrapped != NULL) {
+                ans = jl_rewrap_unionall(ans_unwrapped, ans);
+            }
+        }
+        if (!jl_is_datatype(jl_unwrap_unionall(ans))) {
+            ans = b;
+            if (approx) *approx = 1;
+        }
+    }
+    JL_GC_POP();
+    return ans;
+}
+
 // sets *issubty to 1 iff `a` is a subtype of `b`
 jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t **penv, int *issubty)
 {
@@ -3174,29 +3203,9 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
         if (szb)
             memset(env, 0, szb*sizeof(void*));
         e.envsz = szb;
-        *ans = intersect_all(a, b, &e);
-        if (*ans == jl_bottom_type) goto bot;
-        // TODO: code dealing with method signatures is not able to handle unions, so if
-        // `a` and `b` are both tuples, we need to be careful and may not return a union,
-        // even if `intersect` produced one
-        int env_from_subtype = 1;
-        if (jl_is_tuple_type(jl_unwrap_unionall(a)) && jl_is_tuple_type(jl_unwrap_unionall(b)) &&
-            !jl_is_datatype(jl_unwrap_unionall(*ans))) {
-            jl_value_t *ans_unwrapped = jl_unwrap_unionall(*ans);
-            JL_GC_PUSH1(&ans_unwrapped);
-            if (jl_is_uniontype(ans_unwrapped)) {
-                ans_unwrapped = switch_union_tuple(((jl_uniontype_t*)ans_unwrapped)->a, ((jl_uniontype_t*)ans_unwrapped)->b);
-                if (ans_unwrapped != NULL) {
-                    *ans = jl_rewrap_unionall(ans_unwrapped, *ans);
-                }
-            }
-            JL_GC_POP();
-            if (!jl_is_datatype(jl_unwrap_unionall(*ans))) {
-                *ans = b;
-                env_from_subtype = 0;
-            }
-        }
-        if (env_from_subtype) {
+        int approx;
+        *ans = intersect_signatures(a, b, &e, &approx);
+        if (!approx) {
             sz = szb;
             // TODO: compute better `env` directly during intersection.
             // for now, we attempt to compute env by using subtype on the intersection result
@@ -3693,7 +3702,48 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
     return 0;
 }
 
-JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b)
+// Given two types not ordered by specificity, and their intersection, decide whether
+// `a` is more specific using an arbitrary-but-consistent rule.
+// This is needed in the case where the intersection equals one of the signatures due
+// to imprecision in intersection. This avoids giving an ambiguity error where the
+// suggestion is to define a method that actually already exists.
+static int resolve_intersection_ambiguity(jl_value_t *a, jl_value_t *b, jl_value_t *isect)
+{
+    return (jl_types_equal(a, isect) || jl_types_equal(b, isect)) &&
+        jl_object_id(a) < jl_object_id(b);
+}
+
+JL_DLLEXPORT int jl_type_morespecific_no_subtype_with_intersection(jl_value_t *a, jl_value_t *b, jl_value_t *isect)
+{
+    if (type_morespecific_(a, b, 0, NULL))
+        return 1;
+    if (jl_is_dispatch_tupletype(a) || jl_is_dispatch_tupletype(b))
+        return 0;
+    if (type_morespecific_(b, a, 0, NULL))
+        return 0;
+    return resolve_intersection_ambiguity(a, b, isect);
+}
+
+JL_DLLEXPORT int jl_type_morespecific_no_subtype(jl_value_t *a, jl_value_t *b)
+{
+    if (type_morespecific_(a, b, 0, NULL))
+        return 1;
+    if (jl_is_dispatch_tupletype(a) || jl_is_dispatch_tupletype(b))
+        return 0;
+    if (type_morespecific_(b, a, 0, NULL))
+        return 0;
+    jl_value_t *isect = NULL;
+    JL_GC_PUSH1(&isect);
+    jl_stenv_t e;
+    init_stenv(&e, NULL, 0);
+    e.intersection = e.ignore_free = 1;
+    isect = intersect_signatures(a, b, &e, NULL);
+    int ans = resolve_intersection_ambiguity(a, b, isect);
+    JL_GC_POP();
+    return ans;
+}
+
+JL_DLLEXPORT int jl_type_morespecific_with_intersection(jl_value_t *a, jl_value_t *b, jl_value_t *isect)
 {
     if (obviously_disjoint(a, b, 1))
         return 0;
@@ -3701,12 +3751,15 @@ JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b)
         return 0;
     if (jl_subtype(a, b))
         return 1;
-    return type_morespecific_(a, b, 0, NULL);
+    if (isect)
+        return jl_type_morespecific_no_subtype_with_intersection(a, b, isect);
+    else
+        return jl_type_morespecific_no_subtype(a, b);
 }
 
-JL_DLLEXPORT int jl_type_morespecific_no_subtype(jl_value_t *a, jl_value_t *b)
+JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b)
 {
-    return type_morespecific_(a, b, 0, NULL);
+    return jl_type_morespecific_with_intersection(a, b, NULL);
 }
 
 #ifdef __cplusplus
