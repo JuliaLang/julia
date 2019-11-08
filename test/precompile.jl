@@ -252,11 +252,11 @@ try
             Dict(let m = Base.root_module(Base, s)
                      Base.PkgId(m) => Base.module_build_id(m)
                  end for s in
-                [:Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching, :Markdown,
-                 :Future, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
-                 :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
-                 :Unicode, :REPL, :InteractiveUtils, :Pkg, :LibGit2, :SHA, :UUIDs, :Sockets,
-                 :Statistics, ]),
+                [:Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching,
+                 :Markdown, :Future, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
+                 :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays,
+                 :SuiteSparse, :Test, :Unicode, :REPL, :InteractiveUtils, :Tar, :Pkg,
+                 :LibGit2, :SHA, :UUIDs, :Sockets, :Statistics, ]),
                 # Plus precompilation module generated at build time
                 let id = Base.PkgId("__PackagePrecompilationStatementModule")
                     Dict(id => Base.module_build_id(Base.root_module(id)))

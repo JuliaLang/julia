@@ -1,3 +1,5 @@
-/srccache
-/Pkg-*
-/Pkg
+/srccache/
+/Pkg-*/
+/Pkg/
+/Tar-*/
+/Tar/

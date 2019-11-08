@@ -32,6 +32,8 @@ let
             :LibGit2,
             :Logging,
             :Sockets,
+            :Tar,
+            # Some deps
             :Profile,
             :Dates,
             :DelimitedFiles,
