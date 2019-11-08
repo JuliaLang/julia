@@ -483,7 +483,10 @@ function temp_cleanup_purge(all::Bool=true)
         if (all || asap) && ispath(path)
             need_gc && GC.gc(true)
             need_gc = false
-            rm(path, recursive=true, force=true)
+            try rm(path, recursive=true, force=true)
+            catch ex
+                @warn "temp cleanup" _group=:file exception=(ex, catch_backtrace())
+            end
         end
         !ispath(path) && delete!(TEMP_CLEANUP, path)
     end
