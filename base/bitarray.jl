@@ -72,7 +72,7 @@ const BitMatrix = BitArray{2}
 BitVector() = BitArray{1}(undef, 0)
 
 """
-    BitVector(nt::NTuple{N, Bool})
+    BitVector(nt::Tuple{Vararg{Bool}})
 
 Construct a `BitVector` from a tuple of `Bool`.
 # Examples
@@ -88,7 +88,7 @@ julia> BitVector(nt)
  0
 ```
 """
-function BitVector(nt::NTuple{N, Bool}) where {N}
+function BitVector(nt::Tuple{Vararg{Bool}}) where {N}
     bv = BitVector(undef, N)
     bv .= nt
 end
