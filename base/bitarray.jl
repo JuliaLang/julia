@@ -88,8 +88,8 @@ julia> BitVector(nt)
  0
 ```
 """
-function BitVector(nt::Tuple{Vararg{Bool}}) where {N}
-    bv = BitVector(undef, N)
+function BitVector(nt::Tuple{Vararg{Bool}})
+    bv = BitVector(undef, length(nt))
     bv .= nt
 end
 
