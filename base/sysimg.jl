@@ -29,7 +29,6 @@ let
             :Libdl,
             :Printf,
             :Markdown,
-            :MbedTLS,
             :LibGit2,
             :Logging,
             :Sockets,
