@@ -393,10 +393,8 @@ end
 end
 
 @testset "issue #33704, casting low-rank CholeskyPivoted to Matrix" begin
-    T = Float64
-    n = 8
-    A = randn(T, (n,1))
-    B = A*A'
+    A = randn(1,8)
+    B = A'A
     C = cholesky(B, Val(true), check=false)
     @test B ≈ Matrix(C)
 end
