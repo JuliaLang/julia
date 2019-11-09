@@ -892,6 +892,7 @@ function require(into::Module, mod::Symbol)
             - If you have $(where.name) checked out for development and have
               added $mod as a dependency but haven't updated your primary
               environment's manifest file, try `Pkg.resolve()`.
+            - Check the imported package name for typos.
             - Otherwise you may need to report an issue with $(where.name)"""
 
             uuidkey = identify_package(PkgId(string(into)), String(mod))
