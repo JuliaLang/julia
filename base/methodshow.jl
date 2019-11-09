@@ -63,10 +63,10 @@ function arg_decl_parts(m::Method)
         for t in tv
             show_env = ImmutableDict(show_env, :unionall_env => t)
         end
-        decls = Any[argtype_decl(show_env, argnames[i], sig, i, m.nargs, m.isva)
+        decls = Tuple{String,String}[argtype_decl(show_env, argnames[i], sig, i, m.nargs, m.isva)
                     for i = 1:m.nargs]
     else
-        decls = Any[("", "") for i = 1:length(sig.parameters)]
+        decls = Tuple{String,String}[("", "") for i = 1:length(sig.parameters::SimpleVector)]
     end
     return tv, decls, file, line
 end
@@ -162,9 +162,11 @@ function show(io::IO, m::Method; kwtype::Union{DataType, Nothing}=nothing)
     ft = unwrap_unionall(ft0)
     d1 = decls[1]
     if sig === Tuple
-        print(io, m.name)
-        decls = Any[(), ("...", "")]
-    elseif ft <: Function && isa(ft, DataType) &&
+        # Builtin
+        print(io, m.name, "(...) in ", m.module)
+        return
+    end
+    if ft <: Function && isa(ft, DataType) &&
             isdefined(ft.name.module, ft.name.mt.name) &&
                 # TODO: more accurate test? (tn.name === "#" name)
             ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
@@ -180,7 +182,7 @@ function show(io::IO, m::Method; kwtype::Union{DataType, Nothing}=nothing)
         print(io, "(", d1[1], "::", d1[2], ")")
     end
     print(io, "(")
-    join(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
+    join(io, String[isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
                  ", ", ", ")
     if kwtype !== nothing
         kwargs = kwarg_decl(m, kwtype)
@@ -244,7 +246,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
         if max==-1 || n<max
             n += 1
             println(io)
-            print(io, "[$(n)] ")
+            print(io, "[$n] ")
             show(io, meth; kwtype=kwtype)
             file, line = meth.file, meth.line
             try
@@ -329,6 +331,11 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Union{DataType, Noth
     ft0 = sig.parameters[1]
     ft = unwrap_unionall(ft0)
     d1 = decls[1]
+    if sig === Tuple
+        # Builtin
+        print(io, m.name, "(...) in ", m.module)
+        return
+    end
     if ft <: Function && isa(ft, DataType) &&
             isdefined(ft.name.module, ft.name.mt.name) &&
             ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
@@ -344,7 +351,7 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Union{DataType, Noth
         print(io, "(", d1[1], "::<b>", d1[2], "</b>)")
     end
     print(io, "(")
-    join(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
+    join(io, String[isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
                       for d in decls[2:end]], ", ", ", ")
     if kwtype !== nothing
         kwargs = kwarg_decl(m, kwtype)
