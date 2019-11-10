@@ -115,6 +115,14 @@ Random.seed!(1)
                 @test ldiv!(D, copy(U)) ≈ DM\U atol=atol_three
                 @test ldiv!(transpose(D), copy(U)) ≈ DM\U atol=atol_three
                 @test ldiv!(adjoint(conj(D)), copy(U)) ≈ DM\U atol=atol_three
+
+                @test ldiv!(zero(v), D, copy(v)) ≈ DM\v atol=atol_two
+                @test ldiv!(zero(v), transpose(D), copy(v)) ≈ DM\v atol=atol_two
+                @test ldiv!(zero(v), adjoint(conj(D)), copy(v)) ≈ DM\v atol=atol_two
+                @test ldiv!(zero(U), D, copy(U)) ≈ DM\U atol=atol_three
+                @test ldiv!(zero(U), transpose(D), copy(U)) ≈ DM\U atol=atol_three
+                @test ldiv!(zero(U), adjoint(conj(D)), copy(U)) ≈ DM\U atol=atol_three
+
                 Uc = copy(U')
                 target = rmul!(Uc, Diagonal(inv.(D.diag)))
                 @test rdiv!(Uc, D) ≈ target atol=atol_three

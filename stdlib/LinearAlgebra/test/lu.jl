@@ -268,7 +268,7 @@ end
 @testset "REPL printing" begin
         bf = IOBuffer()
         show(bf, "text/plain", lu(Matrix(I, 4, 4)))
-        seekstart(bf)
+    seekstart(bf)
         @test String(take!(bf)) == """
 LinearAlgebra.LU{Float64,Array{Float64,2}}
 L factor:
