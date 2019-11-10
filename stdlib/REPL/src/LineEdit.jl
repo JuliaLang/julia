@@ -2222,6 +2222,8 @@ const prefix_history_keymap = merge!(
         "\e[*" => "*",
         "\eO*"  => "*",
         "\e[1;5*" => "*", # Ctrl-Arrow
+        "\e[1;2*" => "*", # Shift-Arrow
+        "\e[1;3*" => "*", # Meta-Arrow
         "\e[200~" => "*"
     ),
     # VT220 editing commands

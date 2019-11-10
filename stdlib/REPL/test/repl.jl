@@ -246,7 +246,7 @@ fake_repl() do stdin_write, stdout_read, repl
         write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         Base.print_shell_escaped(stdin_write, Base.julia_cmd().exec..., special=Base.shell_special)
-        write(stdin_write, """ -e "println(\\"HI\\")\"""")
+        write(stdin_write, """ -e "println(\\"HI\\")\" """)
         readuntil(stdout_read, ")\"")
         proc_stdout_read, proc_stdout = redirect_stdout()
         get_stdout = @async read(proc_stdout_read, String)
@@ -324,8 +324,16 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "\e[B\n")
     readuntil(stdout_read, s2)
 
-    # Close REPL ^D
-    write(stdin_write, '\x04')
+    # test that prefix history search "passes through" key bindings to parent mode
+    write(stdin_write, "0x321\n")
+    readuntil(stdout_read, "0x321")
+    write(stdin_write, "\e[A\e[1;3C|||") # uparrow (go up history) and then Meta-rightarrow (indent right)
+    s2 = readuntil(stdout_read, "|||", keep=true)
+    @test endswith(s2, " 0x321\r\e[13C|||") # should have a space (from Meta-rightarrow) and not
+                                            # have a spurious C before ||| (the one here is not spurious!)
+
+    # Delete line (^U) and close REPL (^D)
+    write(stdin_write, "\x15\x04")
     Base.wait(repltask)
 
     nothing
