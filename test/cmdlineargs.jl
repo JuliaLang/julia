@@ -234,9 +234,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isempty(v[2])
         # Can't load REPL if it's outside the sysimg if we break the load path.
         # Need to rewrite this test nicer
-        # ┌ Warning: REPL provider not available: using basic fallback
-        # └ @ Base client.jl:459
-        @test_broken startswith(v[3], "┌ Warning: Failed to import InteractiveUtils into module Main\n")
+        # ⎡ Warning: REPL provider not available: using basic fallback
+        # ⎣ @ Base client.jl:459
+        @test_broken startswith(v[3], "⎡ Warning: Failed to import InteractiveUtils into module Main\n")
     end
     real_threads = string(ccall(:jl_cpu_threads, Int32, ()))
     for nc in ("0", "-2", "x", "2x", " ", "")

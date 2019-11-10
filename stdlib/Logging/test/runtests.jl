@@ -120,29 +120,29 @@ end
     @test genmsg("line1\nline2", level=Logging.Warn, _module=Base,
                  file="other.jl", line=42, meta_formatter=Logging.default_metafmt) ==
     """
-    ┌ Warning: line1
-    │ line2
-    └ @ Base other.jl:42
+    ⎡ Warning: line1
+    ⎜ line2
+    ⎣ @ Base other.jl:42
     """
     # Full metadata formatting
     @test genmsg("msg", level=Logging.Debug,
                  meta_formatter=(level, _module, group, id, file, line)->
                                 (:white,"Foo!", "$level $_module $group $id $file $line")) ==
     """
-    ┌ Foo! msg
-    └ Debug Main a_group an_id some/path.jl 101
+    ⎡ Foo! msg
+    ⎣ Debug Main a_group an_id some/path.jl 101
     """
 
     @testset "Prefix and suffix layout" begin
         @test genmsg("") ==
         replace("""
-        ┌ PREFIX EOL
-        └ SUFFIX
+        ⎡ PREFIX EOL
+        ⎣ SUFFIX
         """, "EOL"=>"")
         @test genmsg("msg") ==
         """
-        ┌ PREFIX msg
-        └ SUFFIX
+        ⎡ PREFIX msg
+        ⎣ SUFFIX
         """
         # Behavior with empty prefix / suffix
         @test genmsg("msg", meta_formatter=(args...)->(:white, "PREFIX", "")) ==
@@ -151,8 +151,8 @@ end
         """
         @test genmsg("msg", meta_formatter=(args...)->(:white, "", "SUFFIX")) ==
         """
-        ┌ msg
-        └ SUFFIX
+        ⎡ msg
+        ⎣ SUFFIX
         """
     end
 
@@ -163,29 +163,29 @@ end
         """
         @test genmsg("xxx\nxxx", width=20, right_justify=200) ==
         """
-        ┌ PREFIX xxx
-        └ xxx         SUFFIX
+        ⎡ PREFIX xxx
+        ⎣ xxx         SUFFIX
         """
         # When adding the suffix would overflow the display width, add it on
         # the next line:
         @test genmsg("xxxx", width=20, right_justify=200) ==
         """
-        ┌ PREFIX xxxx
-        └             SUFFIX
+        ⎡ PREFIX xxxx
+        ⎣             SUFFIX
         """
         # Same for multiline messages
         @test genmsg("""xxx
                         xxxxxxxxxx""", width=20, right_justify=200) ==
         """
-        ┌ PREFIX xxx
-        └ xxxxxxxxxx  SUFFIX
+        ⎡ PREFIX xxx
+        ⎣ xxxxxxxxxx  SUFFIX
         """
         @test genmsg("""xxx
                         xxxxxxxxxxx""", width=20, right_justify=200) ==
         """
-        ┌ PREFIX xxx
-        │ xxxxxxxxxxx
-        └             SUFFIX
+        ⎡ PREFIX xxx
+        ⎜ xxxxxxxxxxx
+        ⎣             SUFFIX
         """
         # min(right_justify,width) is used
         @test genmsg("xxx", width=200, right_justify=20) ==
@@ -194,25 +194,25 @@ end
         """
         @test genmsg("xxxx", width=200, right_justify=20) ==
         """
-        ┌ PREFIX xxxx
-        └             SUFFIX
+        ⎡ PREFIX xxxx
+        ⎣             SUFFIX
         """
     end
 
     # Keywords
     @test genmsg("msg", a=1, b="asdf") ==
     """
-    ┌ PREFIX msg
-    │   a = 1
-    │   b = "asdf"
-    └ SUFFIX
+    ⎡ PREFIX msg
+    ⎜   a = 1
+    ⎜   b = "asdf"
+    ⎣ SUFFIX
     """
     # Exceptions shown with showerror
     @test genmsg("msg", exception=DivideError()) ==
     """
-    ┌ PREFIX msg
-    │   exception = DivideError: integer division error
-    └ SUFFIX
+    ⎡ PREFIX msg
+    ⎜   exception = DivideError: integer division error
+    ⎣ SUFFIX
     """
 
     # Execute backtrace once before checking formatting, see #3885
@@ -222,61 +222,61 @@ end
     bt = func1()
     @test startswith(genmsg("msg", exception=(DivideError(),bt)),
     """
-    ┌ PREFIX msg
-    │   exception =
-    │    DivideError: integer division error
-    │    Stacktrace:
-    │      [1] func1()""")
+    ⎡ PREFIX msg
+    ⎜   exception =
+    ⎜    DivideError: integer division error
+    ⎜    Stacktrace:
+    ⎜      [1] func1()""")
 
 
     @testset "Limiting large data structures" begin
         @test genmsg("msg", a=fill(1.00001, 100,100), b=fill(2.00002, 10,10)) ==
         replace("""
-        ┌ PREFIX msg
-        │   a =
-        │    100×100 Matrix{Float64}:
-        │     1.00001  1.00001  1.00001  1.00001  …  1.00001  1.00001  1.00001
-        │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
-        │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
-        │     ⋮                                   ⋱                    EOL
-        │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
-        │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
-        │   b =
-        │    10×10 Matrix{Float64}:
-        │     2.00002  2.00002  2.00002  2.00002  …  2.00002  2.00002  2.00002
-        │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
-        │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
-        │     ⋮                                   ⋱                    EOL
-        │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
-        │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
-        └ SUFFIX
+        ⎡ PREFIX msg
+        ⎜   a =
+        ⎜    100×100 Matrix{Float64}:
+        ⎜     1.00001  1.00001  1.00001  1.00001  …  1.00001  1.00001  1.00001
+        ⎜     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
+        ⎜     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
+        ⎜     ⋮                                   ⋱                    EOL
+        ⎜     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
+        ⎜     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
+        ⎜   b =
+        ⎜    10×10 Matrix{Float64}:
+        ⎜     2.00002  2.00002  2.00002  2.00002  …  2.00002  2.00002  2.00002
+        ⎜     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
+        ⎜     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
+        ⎜     ⋮                                   ⋱                    EOL
+        ⎜     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
+        ⎜     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
+        ⎣ SUFFIX
         """, "EOL"=>"") # EOL hack to work around git whitespace errors
         # Limiting the amount which is printed
         @test genmsg("msg", a=fill(1.00001, 10,10), show_limited=false) ==
         """
-        ┌ PREFIX msg
-        │   a =
-        │    10×10 Matrix{Float64}:
-        │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
-        │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
-        │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
-        │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
-        │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
-        │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
-        │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
-        │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
-        │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
-        │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
-        └ SUFFIX
+        ⎡ PREFIX msg
+        ⎜   a =
+        ⎜    10×10 Matrix{Float64}:
+        ⎜     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
+        ⎜     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
+        ⎜     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
+        ⎜     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
+        ⎜     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
+        ⎜     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
+        ⎜     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
+        ⎜     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
+        ⎜     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
+        ⎜     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
+        ⎣ SUFFIX
         """
     end
 
     # Basic colorization test
     @test genmsg("line1\nline2", color=true) ==
     """
-    \e[36m\e[1m┌ \e[22m\e[39m\e[36m\e[1mPREFIX \e[22m\e[39mline1
-    \e[36m\e[1m│ \e[22m\e[39mline2
-    \e[36m\e[1m└ \e[22m\e[39m\e[90mSUFFIX\e[39m
+    \e[36m\e[1m⎡ \e[22m\e[39m\e[36m\e[1mPREFIX \e[22m\e[39mline1
+    \e[36m\e[1m⎜ \e[22m\e[39mline2
+    \e[36m\e[1m⎣ \e[22m\e[39m\e[90mSUFFIX\e[39m
     """
 
 end
