@@ -52,7 +52,7 @@ without any intermediate rounding.
 
 - if `r == RoundDown`, then the result is in the interval ``[0, y)`` if `y` is positive, or
   ``(y, 0]`` otherwise. The result may not be exact if `x` and `y` have different signs, and
-  `abs(x) < abs(y)`. See also[`RoundDown`](@ref).
+  `abs(x) < abs(y)`. See also [`RoundDown`](@ref).
 
 - if `r == RoundUp`, then the result is in the interval `(-y,0]` if `y` is positive, or
   `[0,-y)` otherwise. The result may not be exact if `x` and `y` have the same sign, and
