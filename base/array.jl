@@ -1773,7 +1773,8 @@ findfirst(testf::Function, A::Union{AbstractArray, AbstractString}) =
     findnext(testf, A, first(keys(A)))
 
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
-    first(r) <= p.x <= last(r) || return nothing
+    isempty(r) && return nothing
+    minimum(r) <= p.x <= maximum(r) || return nothing
     d = convert(S, p.x - first(r))
     iszero(d % step(r)) || return nothing
     return d ÷ step(r) + 1
