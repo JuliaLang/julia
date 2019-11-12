@@ -681,68 +681,6 @@ to the much smaller problem of implementing a conversion operation from each typ
 plus a table of preferred pair-wise promotion rules.
 
 
-### Output-type computation
-
-The discussion of trait-based promotion provides a transition into our next design pattern:
-computing the output element type for a matrix operation.
-
-For implementing primitive operations, such as addition,
-we use the [`promote_type`](@ref) function to compute the desired output type.
-(As before, we saw this at work in the `promote` call in the call to `+`).
-
-For more complex functions on matrices, it may be necessary to compute the expected return
-type for a more complex sequence of operations.
-This is often performed by the following steps:
-
-1. Write a small function `op` that expresses the set of operations performed by the kernel of the algorithm.
-2. Compute the element type `R` of the result matrix as `promote_op(op, argument_types...)`,
-   where `argument_types` is computed from `eltype` applied to each input array.
-3. Build the output matrix as `similar(R, dims)`, where `dims` are the desired dimensions of the output array.
-
-For a more specific example, a generic square-matrix multiply pseudo-code might look like:
-
-```julia
-function matmul(a::AbstractMatrix, b::AbstractMatrix)
-    op = (ai, bi) -> ai * bi + ai * bi
-
-    ## this is insufficient because it assumes `one(eltype(a))` is constructable:
-    # R = typeof(op(one(eltype(a)), one(eltype(b))))
-
-    ## this fails because it assumes `a[1]` exists and is representative of all elements of the array
-    # R = typeof(op(a[1], b[1]))
-
-    ## this is incorrect because it assumes that `+` calls `promote_type`
-    ## but this is not true for some types, such as Bool:
-    # R = promote_type(ai, bi)
-
-    # this is wrong, since depending on the return value
-    # of type-inference is very brittle (as well as not being optimizable):
-    # R = Base.return_types(op, (eltype(a), eltype(b)))
-
-    ## but, finally, this works:
-    R = promote_op(op, eltype(a), eltype(b))
-    ## although sometimes it may give a larger type than desired
-    ## it will always give a correct type
-
-    output = similar(b, R, (size(a, 1), size(b, 2)))
-    if size(a, 2) > 0
-        for j in 1:size(b, 2)
-            for i in 1:size(a, 1)
-                ## here we don't use `ab = zero(R)`,
-                ## since `R` might be `Any` and `zero(Any)` is not defined
-                ## we also must declare `ab::R` to make the type of `ab` constant in the loop,
-                ## since it is possible that typeof(a * b) != typeof(a * b + a * b) == R
-                ab::R = a[i, 1] * b[1, j]
-                for k in 2:size(a, 2)
-                    ab += a[i, k] * b[k, j]
-                end
-                output[i, j] = ab
-            end
-        end
-    end
-    return output
-end
-```
 
 ### Separate convert and kernel logic
 
