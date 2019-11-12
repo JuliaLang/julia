@@ -27,7 +27,7 @@ using namespace llvm;
 static std::map<std::string, void*> libMap;
 static jl_mutex_t libmap_lock;
 extern "C"
-void *jl_get_library(const char *f_lib)
+void *jl_get_library_(const char *f_lib, int throw_err)
 {
     void *hnd;
 #ifdef _OS_WINDOWS_
@@ -47,7 +47,7 @@ void *jl_get_library(const char *f_lib)
     if (hnd != NULL)
         return hnd;
     // We might run this concurrently on two threads but it doesn't matter.
-    hnd = jl_load_dynamic_library(f_lib, JL_RTLD_DEFAULT, 1);
+    hnd = jl_load_dynamic_library(f_lib, JL_RTLD_DEFAULT, throw_err);
     if (hnd != NULL)
         jl_atomic_store_release(map_slot, hnd);
     return hnd;
