@@ -218,7 +218,7 @@ too.
 
 # [Multi-Threading (Experimental)](@id man-multithreading)
 
-In addition to tasks Julia forwards natively supports multi-threading.
+In addition to tasks Julia natively supports multi-threading.
 Note that this section is experimental and the interfaces may change in the future.
 
 ## Setup
