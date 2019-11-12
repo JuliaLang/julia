@@ -2334,7 +2334,7 @@ mark: {
                 }
                 goto pop;
             }
-            if (!flags.ptrarray || a->data == NULL)
+            if (!flags.ptrarray || a->data == NULL || jl_array_len(a) == 0)
                 goto pop;
             size_t l = jl_array_len(a);
             uintptr_t nptr = (l << 2) | (bits & GC_OLD);
