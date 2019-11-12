@@ -2722,12 +2722,14 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                                 ConstantInt::get(T_size, jl_field_offset(sty, i) + jl_field_size(sty, i) - 1))));
             }
         }
-        bool need_wb = false;
         // TODO: verify that nargs <= nf (currently handled by front-end)
         for (size_t i = 0; i < nargs; i++) {
             const jl_cgval_t &rhs = argv[i];
-            if (jl_field_isptr(sty, i) && !rhs.isboxed)
-                need_wb = true;
+            bool need_wb; // set to true if the store might cause the allocation of a box newer than the struct
+            if (jl_field_isptr(sty, i))
+                need_wb = !rhs.isboxed;
+            else
+                need_wb = false;
             emit_typecheck(ctx, rhs, jl_svecref(sty->types, i), "new");
             emit_setfield(ctx, sty, strctinfo, i, rhs, false, need_wb);
         }
