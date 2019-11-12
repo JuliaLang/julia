@@ -80,6 +80,8 @@ Standard library changes
 
 #### SparseArrays
 
+* Display sparse matrices by showing their structure with braille patterns.
+
 #### Dates
 
 #### Statistics

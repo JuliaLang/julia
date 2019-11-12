@@ -2205,52 +2205,61 @@ end
 
 @testset "show" begin
     io = IOBuffer()
+    show(io, MIME"text/plain"(), spzeros(Float64, Int64, 0, 0))
+    @test String(take!(io)) == "0×0 SparseArrays.SparseMatrixCSC{Float64,Int64} with 0 stored entries"
     show(io, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
-    @test String(take!(io)) == "1×1 SparseArrays.SparseMatrixCSC{Float64,Int64} with 1 stored entry:\n  [1, 1]  =  1.0"
+    @test String(take!(io)) == "1×1 SparseArrays.SparseMatrixCSC{Float64,Int64} with 1 stored entry:\n⠁"
     show(io, MIME"text/plain"(), spzeros(Float32, Int64, 2, 2))
-    @test String(take!(io)) == "2×2 SparseArrays.SparseMatrixCSC{Float32,Int64} with 0 stored entries"
+    @test String(take!(io)) == "2×2 SparseArrays.SparseMatrixCSC{Float32,Int64} with 0 stored entries:\n" * Char(10240)
 
+    show(io, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
+    @test String(take!(io)) == "1×1 SparseArrays.SparseMatrixCSC{Float64,Int64} with 1 stored entry:\n⠁"
+    show(io, MIME"text/plain"(), sparse(Int64[1, 1], Int64[1, 2], [1.0, 2.0]))
+    @test String(take!(io)) == "1×2 SparseArrays.SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n⠉"
+
+    # every 1-dot braille pattern
+    for (i, b) in enumerate(split("⠁⠂⠄⡀⠈⠐⠠⢀", ""))
+        A = spzeros(Int64, Int64, 4, 2)
+        A[i] = 1
+        show(io, MIME"text/plain"(), A)
+        @test String(take!(io)) == "4×2 SparseArrays.SparseMatrixCSC{Int64,Int64} with 1 stored entry:\n" * b
+    end
+
+    A = sparse(Int64[1, 2, 4, 2, 3], Int64[1, 1, 1, 2, 2], Int64[1, 1, 1, 1, 1], 4, 2)
+    show(io, MIME"text/plain"(), A)
+    @test String(take!(io)) == "4×2 SparseArrays.SparseMatrixCSC{Int64,Int64} with 5 stored entries:\n⡳"
+
+    A = sparse(Int64[1, 3, 2, 4], Int64[1, 1, 2, 2], Int64[1, 1, 1, 1], 7, 3)
+    show(io, MIME"text/plain"(), A)
+    @test String(take!(io)) == "7×3 SparseArrays.SparseMatrixCSC{Int64,Int64} with 4 stored entries:\n⢕" * Char(10240) * "\n" * Char(10240) * Char(10240)
+
+    A = sparse(Int64[1:10;], Int64[1:10;], fill(Float64(1), 10))
+    show(io, MIME"text/plain"(), A)
+    brailleString = "⠑⢄" * Char(10240)^3 * "\n" * Char(10240)^2 * "⠑⢄" * Char(10240) * "\n" * Char(10240)^4 * "⠑"
+    @test String(take!(io)) == "10×10 SparseArrays.SparseMatrixCSC{Float64,Int64} with 10 stored entries:\n" * brailleString
+
+    function _filled_sparse(m::Integer, n::Integer)
+        C = CartesianIndices(zeros(m, n))[:]
+        Is = [Int64(x[1]) for x in C]
+        Js = [Int64(x[2]) for x in C]
+        return sparse(Is, Js, true, m, n)
+    end
+
+    # vertical scaling
     ioc = IOContext(io, :displaysize => (5, 80), :limit => true)
-    show(ioc, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
-    @test String(take!(io)) == "1×1 SparseArrays.SparseMatrixCSC{Float64,Int64} with 1 stored entry:\n  [1, 1]  =  1.0"
-    show(ioc, MIME"text/plain"(), sparse(Int64[1, 1], Int64[1, 2], [1.0, 2.0]))
-    @test String(take!(io)) == "1×2 SparseArrays.SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  ⋮"
+    show(ioc, MIME"text/plain"(), _filled_sparse(10, 10))
+    @test String(take!(io)) == "10×10 SparseArrays.SparseMatrixCSC{Bool,Int64} with 100 stored entries:\n" * "⣿⣿"
 
-    # even number of rows
-    ioc = IOContext(io, :displaysize => (8, 80), :limit => true)
-    show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4], Int64[1,1,2,2], [1.0,2.0,3.0,4.0]))
-    @test String(take!(io)) == string("4×2 SparseArrays.SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]",
-                                      "  =  1.0\n  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0")
+    show(ioc, MIME"text/plain"(), _filled_sparse(20, 10))
+    @test String(take!(io)) == "20×10 SparseArrays.SparseMatrixCSC{Bool,Int64} with 200 stored entries:\n" * "⣿"
 
-    show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5], Int64[1,1,2,2,3], [1.0,2.0,3.0,4.0,5.0]))
-    @test String(take!(io)) ==  string("5×3 SparseArrays.SparseMatrixCSC{Float64,Int64} with 5 stored entries:\n  [1, 1]",
-                                       "  =  1.0\n  ⋮\n  [4, 2]  =  4.0\n  [5, 3]  =  5.0")
+    # horizontal scaling
+    ioc = IOContext(io, :displaysize => (80, 4), :limit => true)
+    show(ioc, MIME"text/plain"(), _filled_sparse(8, 8))
+    @test String(take!(io)) == "8×8 SparseArrays.SparseMatrixCSC{Bool,Int64} with 64 stored entries:\n" * "⣿⣿"
 
-    show(ioc, MIME"text/plain"(), sparse(fill(1.,5,3)))
-    @test String(take!(io)) ==  string("5×3 SparseArrays.SparseMatrixCSC{Float64,$Int} with 15 stored entries:\n  [1, 1]",
-                                       "  =  1.0\n  ⋮\n  [4, 3]  =  1.0\n  [5, 3]  =  1.0")
-
-    # odd number of rows
-    ioc = IOContext(io, :displaysize => (9, 80), :limit => true)
-    show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5], Int64[1,1,2,2,3], [1.0,2.0,3.0,4.0,5.0]))
-    @test String(take!(io)) == string("5×3 SparseArrays.SparseMatrixCSC{Float64,Int64} with 5 stored entries:\n  [1, 1]",
-                                      "  =  1.0\n  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0\n  [5, 3]  =  5.0")
-
-    show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5,6], Int64[1,1,2,2,3,3], [1.0,2.0,3.0,4.0,5.0,6.0]))
-    @test String(take!(io)) ==  string("6×3 SparseArrays.SparseMatrixCSC{Float64,Int64} with 6 stored entries:\n  [1, 1]",
-                                       "  =  1.0\n  [2, 1]  =  2.0\n  ⋮\n  [5, 3]  =  5.0\n  [6, 3]  =  6.0")
-
-    show(ioc, MIME"text/plain"(), sparse(fill(1.,6,3)))
-    @test String(take!(io)) ==  string("6×3 SparseArrays.SparseMatrixCSC{Float64,$Int} with 18 stored entries:\n  [1, 1]",
-                                       "  =  1.0\n  [2, 1]  =  1.0\n  ⋮\n  [5, 3]  =  1.0\n  [6, 3]  =  1.0")
-
-    ioc = IOContext(io, :displaysize => (9, 80))
-    show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5,6], Int64[1,1,2,2,3,3], [1.0,2.0,3.0,4.0,5.0,6.0]))
-    @test String(take!(io)) ==  string("6×3 SparseArrays.SparseMatrixCSC{Float64,Int64} with 6 stored entries:\n  [1, 1]  =  1.0\n",
-        "  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0\n  [5, 3]  =  5.0\n  [6, 3]  =  6.0")
-
-    # issue #30589
-    @test repr("text/plain", sparse([true true])) == "1×2 SparseArrays.SparseMatrixCSC{Bool,$Int} with 2 stored entries:\n  [1, 1]  =  1\n  [1, 2]  =  1"
+    show(ioc, MIME"text/plain"(), _filled_sparse(8, 16))
+    @test String(take!(io)) == "8×16 SparseArrays.SparseMatrixCSC{Bool,Int64} with 128 stored entries:\n" * "⠛⠛"
 end
 
 @testset "check buffers" for n in 1:3
