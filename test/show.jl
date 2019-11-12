@@ -583,11 +583,11 @@ Base.zero(x::T12960) = T12960()
 let
     A = sparse(1.0I, 3, 3)
     B = similar(A, T12960)
-    @test sprint(show, B)  == "\n  [1, 1]  =  #undef\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
-    @test sprint(print, B) == "\n  [1, 1]  =  #undef\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
+    @test sprint(show, B)  == "\n⠑⠄"
+    @test sprint(print, B) == "\n⠑⠄"
     B[1,2] = T12960()
-    @test sprint(show, B)  == "\n  [1, 1]  =  #undef\n  [1, 2]  =  T12960()\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
-    @test sprint(print, B) == "\n  [1, 1]  =  #undef\n  [1, 2]  =  T12960()\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
+    @test sprint(show, B)  == "\n⠙⠄"
+    @test sprint(print, B) == "\n⠙⠄"
 end
 
 # issue #13127
