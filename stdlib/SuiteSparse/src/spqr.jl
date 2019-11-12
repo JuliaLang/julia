@@ -153,8 +153,8 @@ solve least squares or underdetermined problems with [`\\`](@ref). The function 
 !!! note
     `qr(A::SparseMatrixCSC)` uses the SPQR library that is part of SuiteSparse.
     As this library only supports sparse matrices with [`Float64`](@ref) or
-    `ComplexF64` elements, `qr` converts `A` into a copy that is of type
-    `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}` as appropriate.
+    `ComplexF64` elements, as of Julia v1.4 `qr` converts `A` into a copy that is
+     of type `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}` as appropriate.
 
 # Examples
 ```jldoctest
@@ -222,10 +222,6 @@ LinearAlgebra.qr(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}};
     "sparse floating point QR using SPQR or qr(Array(A)) for generic ",
     "dense QR.")))
 LinearAlgebra.qr(A::SparseMatrixCSC; tol=_default_tol(A)) = qr(float(A); tol=tol)
-# function LinearAlgebra.qr(A::SparseMatrixCSC; tol=_default_tol(A))
-#     error("QR factorization of sparse matrices supports only Float64 and "*
-#             "Complex{Float64} eltypes")
-# end
 
 function LinearAlgebra.lmul!(Q::QRSparseQ, A::StridedVecOrMat)
     if size(A, 1) != size(Q, 1)
