@@ -639,11 +639,33 @@ function pure_eval_call(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(a
     end
 end
 
+function argtype_by_index(argtypes::Vector{Any}, i::Int)
+    n = length(argtypes)
+    if isvarargtype(argtypes[n])
+        return i >= n ? unwrapva(argtypes[n]) : argtypes[i]
+    else
+        return i > n ? Bottom : argtypes[i]
+    end
+end
+
+function argtype_tail(argtypes::Vector{Any}, i::Int)
+    n = length(argtypes)
+    if isvarargtype(argtypes[n]) && i > n
+        i = n
+    end
+    return argtypes[i:n]
+end
+
 function abstract_call(@nospecialize(f), fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState, max_methods = sv.params.MAX_METHODS)
     if f === _apply
-        return abstract_apply(nothing, argtypes[2], argtypes[3:end], vtypes, sv, max_methods)
+        ft = argtype_by_index(argtypes, 2)
+        ft === Bottom && return Bottom
+        return abstract_apply(nothing, ft, argtype_tail(argtypes, 3), vtypes, sv, max_methods)
     elseif f === _apply_iterate
-        return abstract_apply(argtypes[2], argtypes[3], argtypes[4:end], vtypes, sv, max_methods)
+        itft = argtype_by_index(argtypes, 2)
+        ft = argtype_by_index(argtypes, 3)
+        (itft === Bottom || ft === Bottom) && return Bottom
+        return abstract_apply(itft, ft, argtype_tail(argtypes, 4), vtypes, sv, max_methods)
     end
 
     la = length(argtypes)

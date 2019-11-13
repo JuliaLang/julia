@@ -2464,3 +2464,21 @@ let N = TypeVar(:N)
         Core.Compiler.PartialTypeVar(N, true, true),
         Core.Compiler.Const(Any)], Type{Tuple{Vararg{Any,N}}})
 end
+
+# issue #33768
+function f33768()
+    Core._apply()
+end
+function g33768()
+    a = Any[iterate, tuple, (1,)]
+    Core._apply_iterate(a...)
+end
+function h33768()
+    Core._apply_iterate()
+end
+@test_throws ArgumentError f33768()
+@test Base.return_types(f33768, ()) == Any[Union{}]
+@test g33768() === (1,)
+@test Base.return_types(g33768, ()) == Any[Any]
+@test_throws ArgumentError h33768()
+@test Base.return_types(h33768, ()) == Any[Union{}]
