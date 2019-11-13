@@ -101,7 +101,7 @@ static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnnam
     // GC safe
     DWORD mod_size = 0;
 #if defined(_CPU_X86_64_)
-    PRUNTIME_FUNCTION tbl = (PRUNTIME_FUNCTION)malloc(sizeof(RUNTIME_FUNCTION));
+    PRUNTIME_FUNCTION tbl = (PRUNTIME_FUNCTION)malloc_s(sizeof(RUNTIME_FUNCTION));
     tbl->BeginAddress = (DWORD)(Code - Section);
     tbl->EndAddress = (DWORD)(Code - Section + Size);
     tbl->UnwindData = (DWORD)(UnwindData - Section);
@@ -168,11 +168,13 @@ public:
 
     jl_method_instance_t *lookupLinfo(size_t pointer)
     {
-        auto linfo = linfomap.lower_bound(pointer);
-        if (linfo != linfomap.end() && pointer < linfo->first + linfo->second.first)
-            return linfo->second.second;
-        else
-            return NULL;
+        uv_rwlock_rdlock(&threadsafe);
+        auto region = linfomap.lower_bound(pointer);
+        jl_method_instance_t *linfo = NULL;
+        if (region != linfomap.end() && pointer < region->first + region->second.first)
+            linfo = region->second.second;
+        uv_rwlock_rdunlock(&threadsafe);
+        return linfo;
     }
 
     virtual void NotifyObjectEmitted(const object::ObjectFile &obj,
@@ -190,7 +192,6 @@ public:
         // This function modify codeinst->fptr in GC safe region.
         // This should be fine since the GC won't scan this field.
         int8_t gc_state = jl_gc_safe_enter(ptls);
-        uv_rwlock_wrlock(&threadsafe);
         object::section_iterator Section = debugObj.section_begin();
         object::section_iterator EndSection = debugObj.section_end();
 
@@ -324,8 +325,6 @@ public:
 #endif // defined(_OS_X86_64_)
 #endif // defined(_OS_WINDOWS_)
 
-        std::vector<std::pair<jl_code_instance_t*, uintptr_t>> def_spec;
-        std::vector<std::pair<jl_code_instance_t*, uintptr_t>> def_invoke;
         auto symbols = object::computeSymbolSizes(debugObj);
         bool first = true;
         for (const auto &sym_size : symbols) {
@@ -366,21 +365,8 @@ public:
             if (linfo_it != ncode_in_flight.end()) {
                 codeinst = linfo_it->second;
                 ncode_in_flight.erase(linfo_it);
-                const char *F = codeinst->functionObjectsDecls.functionObject;
-                const char *specF = codeinst->functionObjectsDecls.specFunctionObject;
-                if (codeinst->invoke == NULL) {
-                    if (specF && sName.equals(specF)) {
-                        def_spec.push_back({codeinst, Addr});
-                        if (!strcmp(F, "jl_fptr_args"))
-                            def_invoke.push_back({codeinst, (uintptr_t)&jl_fptr_args});
-                        else if (!strcmp(F, "jl_fptr_sparam"))
-                            def_invoke.push_back({codeinst, (uintptr_t)&jl_fptr_sparam});
-                    }
-                    else if (sName.equals(F)) {
-                        def_invoke.push_back({codeinst, Addr});
-                    }
-                }
             }
+            uv_rwlock_wrlock(&threadsafe);
             if (codeinst)
                 linfomap[Addr] = std::make_pair(Size, codeinst->def);
             if (first) {
@@ -391,18 +377,9 @@ public:
                     };
                 objectmap[SectionLoadAddr] = tmp;
                 first = false;
-           }
-       }
-       // now process these in order, so we ensure the closure values are updated before enabling the invoke pointer
-       // TODO: this sets these pointers a bit too early, allowing other threads to see
-       // the addresses before the code has been filled in.
-       /*
-       for (auto &def : def_spec)
-           def.first->specptr.fptr = (void*)def.second;
-       for (auto &def : def_invoke)
-           def.first->invoke = (jl_callptr_t)def.second;
-       */
-        uv_rwlock_wrunlock(&threadsafe);
+            }
+            uv_rwlock_wrunlock(&threadsafe);
+        }
         jl_gc_safe_leave(ptls, gc_state);
     }
 
@@ -450,7 +427,7 @@ static std::pair<char *, bool> jl_demangle(const char *name)
     }
     if (end <= start)
         goto done;
-    ret = (char*)malloc(end - start + 1);
+    ret = (char*)malloc_s(end - start + 1);
     memcpy(ret, start, end - start);
     ret[end - start] = '\0';
     return std::make_pair(ret, true);
@@ -597,7 +574,14 @@ static debug_link_info getDebuglink(const object::ObjectFile &Obj)
         StringRef sName;
         if (!Section.getName(sName) && sName == ".gnu_debuglink") {
             StringRef Contents;
-            if (!Section.getContents(Contents)) {
+#if JL_LLVM_VERSION >= 90000
+            auto found = Section.getContents();
+            if (found)
+                Contents = *found;
+#else
+            bool found = !Section.getContents(Contents);
+#endif
+            if (found) {
                 size_t length = Contents.find('\0');
                 info.filename = Contents.substr(0, length);
                 info.crc32 = *(const uint32_t*)Contents.substr(LLT_ALIGN(length + 1, 4), 4).data();
@@ -777,7 +761,7 @@ static void get_function_name_and_base(const object::ObjectFile *object, bool in
                 if (auto name_or_err = sym_found.getName()) {
                     auto nameref = name_or_err.get();
                     size_t len = nameref.size();
-                    *name = (char*)realloc(*name, len + 1);
+                    *name = (char*)realloc_s(*name, len + 1);
                     (*name)[len] = 0;
                     memcpy(*name, nameref.data(), len);
                     needs_name = false;

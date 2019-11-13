@@ -11,7 +11,7 @@ if Sys.isapple()
         # with clipboards.  Luckily, the `reattach-to-user-namespace` utility
         # dodges these issues quite nicely, so we automatically utilize it if
         # it is installed.
-        if Sys.which("reattach-to-user-namespace") != nothing
+        if Sys.which("reattach-to-user-namespace") !== nothing
             pbcopy_cmd = `reattach-to-user-namespace pbcopy`
         end
 
@@ -23,7 +23,7 @@ if Sys.isapple()
         pbpaste_cmd = `pbpaste`
 
         # See above comment in `clipboard(x)`
-        if Sys.which("reattach-to-user-namespace") != nothing
+        if Sys.which("reattach-to-user-namespace") !== nothing
             pbcopy_cmd = `reattach-to-user-namespace pbpaste`
         end
         read(pbpaste_cmd, String)

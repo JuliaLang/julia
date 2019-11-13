@@ -78,7 +78,13 @@ function instanceof_tfunc(@nospecialize(t))
     elseif isa(t, UnionAll)
         t′ = unwrap_unionall(t)
         t′′, isexact = instanceof_tfunc(t′)
-        return rewrap_unionall(t′′, t), isexact
+        tr = rewrap_unionall(t′′, t)
+        if t′′ isa DataType && !has_free_typevars(tr)
+            # a real instance must be within the declared bounds of the type,
+            # so we can intersect with the original wrapper.
+            tr = typeintersect(tr, t′′.name.wrapper)
+        end
+        return tr, isexact
     elseif isa(t, Union)
         ta, isexact_a = instanceof_tfunc(t.a)
         tb, isexact_b = instanceof_tfunc(t.b)
@@ -991,7 +997,7 @@ function apply_type_nothrow(argtypes::Array{Any, 1}, @nospecialize(rt))
     for i = 2:length(argtypes)
         isa(u, UnionAll) || return false
         ai = widenconditional(argtypes[i])
-        if ai === TypeVar
+        if ai ⊑ TypeVar
             # We don't know anything about the bounds of this typevar, but as
             # long as the UnionAll is not constrained, that's ok.
             if !(u.var.lb === Union{} && u.var.ub === Any)

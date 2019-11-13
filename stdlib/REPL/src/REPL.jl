@@ -243,7 +243,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
                 end
             end
             ast = Base.parse_input_line(line)
-            (isa(ast,Expr) && ast.head == :incomplete) || break
+            (isa(ast,Expr) && ast.head === :incomplete) || break
         end
         if !isempty(line)
             response = eval_with_backend(ast, backend)
@@ -765,15 +765,21 @@ setup_interface(
     repl::LineEditREPL;
     # those keyword arguments may be deprecated eventually in favor of the Options mechanism
     hascolor::Bool = repl.options.hascolor,
-    extra_repl_keymap::Union{Dict,Vector{<:Dict}} = repl.options.extra_keymap
+    extra_repl_keymap::Any = repl.options.extra_keymap
 ) = setup_interface(repl, hascolor, extra_repl_keymap)
 
 # This non keyword method can be precompiled which is important
 function setup_interface(
     repl::LineEditREPL,
     hascolor::Bool,
-    extra_repl_keymap::Union{Dict,Vector{<:Dict}},
+    extra_repl_keymap::Any, # Union{Dict,Vector{<:Dict}},
 )
+    # The precompile statement emitter has problem outputting valid syntax for the
+    # type of `Union{Dict,Vector{<:Dict}}` (see #28808).
+    # This function is however important to precompile for REPL startup time, therefore,
+    # make the type Any and just assert that we have the correct type below.
+    @assert extra_repl_keymap isa Union{Dict,Vector{<:Dict}}
+
     ###
     #
     # This function returns the main interface that describes the REPL
@@ -949,7 +955,7 @@ function setup_interface(
                     end
                 end
                 ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false)
-                if (isa(ast, Expr) && (ast.head == :error || ast.head == :incomplete)) ||
+                if (isa(ast, Expr) && (ast.head === :error || ast.head === :incomplete)) ||
                         (pos > ncodeunits(input) && !endswith(input, '\n'))
                     # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
                     # Insert all the remaining text as one line (might be empty)

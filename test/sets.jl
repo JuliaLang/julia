@@ -347,6 +347,24 @@ end
     # symdiff must NOT uniquify
     @test symdiff([1, 2, 1]) == symdiff!([1, 2, 1]) == [2]
     @test symdiff([1, 2, 1], [2, 2]) == symdiff!([1, 2, 1], [2, 2]) == [2]
+
+    # Base.hasfastin
+    @test all(Base.hasfastin, Any[Dict(1=>2), Set(1), BitSet(1), 1:9, 1:2:9,
+                                  Dict, Set, BitSet, UnitRange, StepRange])
+    @test !any(Base.hasfastin, Any[[1, 2, 3], "123",
+                                   Array, String])
+
+    # tests for Dict
+    d1 = Dict(1=>nothing, 2=>nothing)
+    d2 = Dict(1=>nothing, 3=>nothing)
+    d3 = Dict(1=>nothing, 2=>nothing, 3=>nothing)
+    @test d3 == merge(d1, d2)
+    @test !issubset(d1, d2)
+    @test !issubset(d2, d1)
+    @test !issubset(d3, d1)
+    @test !issubset(d3, d2)
+    @test issubset(d1, d3)
+    @test issubset(d2, d3)
 end
 
 @testset "unique" begin

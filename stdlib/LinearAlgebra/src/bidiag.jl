@@ -99,7 +99,7 @@ julia> Bidiagonal(A, :L) # contains the main diagonal and first subdiagonal of A
 ```
 """
 function Bidiagonal(A::AbstractMatrix, uplo::Symbol)
-    Bidiagonal(diag(A, 0), diag(A, uplo == :U ? 1 : -1), uplo)
+    Bidiagonal(diag(A, 0), diag(A, uplo === :U ? 1 : -1), uplo)
 end
 
 Bidiagonal(A::Bidiagonal) = A
@@ -586,7 +586,12 @@ function *(A::AbstractTriangular, B::Union{SymTridiagonal, Tridiagonal})
     A_mul_B_td!(zeros(TS, size(A)...), A, B)
 end
 
-function *(A::UpperTriangular, B::Bidiagonal)
+const UpperOrUnitUpperTriangular = Union{UpperTriangular, UnitUpperTriangular}
+const LowerOrUnitLowerTriangular = Union{LowerTriangular, UnitLowerTriangular}
+const AdjOrTransUpperOrUnitUpperTriangular = Union{Adjoint{<:Any, <:UpperOrUnitUpperTriangular}, Transpose{<:Any, <:UpperOrUnitUpperTriangular}}
+const AdjOrTransLowerOrUnitLowerTriangular = Union{Adjoint{<:Any, <:LowerOrUnitLowerTriangular}, Transpose{<:Any, <:LowerOrUnitLowerTriangular}}
+
+function *(A::UpperOrUnitUpperTriangular, B::Bidiagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
     if B.uplo == 'U'
         A_mul_B_td!(UpperTriangular(zeros(TS, size(A)...)), A, B)
@@ -595,10 +600,28 @@ function *(A::UpperTriangular, B::Bidiagonal)
     end
 end
 
-function *(A::LowerTriangular, B::Bidiagonal)
+function *(A::AdjOrTransUpperOrUnitUpperTriangular, B::Bidiagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
     if B.uplo == 'L'
         A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
+    else
+        A_mul_B_td!(zeros(TS, size(A)...), A, B)
+    end
+end
+
+function *(A::LowerOrUnitLowerTriangular, B::Bidiagonal)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    if B.uplo == 'L'
+        A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
+    else
+        A_mul_B_td!(zeros(TS, size(A)...), A, B)
+    end
+end
+
+function *(A::AdjOrTransLowerOrUnitLowerTriangular, B::Bidiagonal)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    if B.uplo == 'U'
+        A_mul_B_td!(UpperTriangular(zeros(TS, size(A)...)), A, B)
     else
         A_mul_B_td!(zeros(TS, size(A)...), A, B)
     end
@@ -609,7 +632,7 @@ function *(A::Union{SymTridiagonal, Tridiagonal}, B::AbstractTriangular)
     A_mul_B_td!(zeros(TS, size(A)...), A, B)
 end
 
-function *(A::Bidiagonal, B::UpperTriangular)
+function *(A::Bidiagonal, B::UpperOrUnitUpperTriangular)
     TS = promote_op(matprod, eltype(A), eltype(B))
     if A.uplo == 'U'
         A_mul_B_td!(UpperTriangular(zeros(TS, size(A)...)), A, B)
@@ -618,10 +641,28 @@ function *(A::Bidiagonal, B::UpperTriangular)
     end
 end
 
-function *(A::Bidiagonal, B::LowerTriangular)
+function *(A::Bidiagonal, B::AdjOrTransUpperOrUnitUpperTriangular)
     TS = promote_op(matprod, eltype(A), eltype(B))
     if A.uplo == 'L'
         A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
+    else
+        A_mul_B_td!(zeros(TS, size(A)...), A, B)
+    end
+end
+
+function *(A::Bidiagonal, B::LowerOrUnitLowerTriangular)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    if A.uplo == 'L'
+        A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
+    else
+        A_mul_B_td!(zeros(TS, size(A)...), A, B)
+    end
+end
+
+function *(A::Bidiagonal, B::AdjOrTransLowerOrUnitLowerTriangular)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    if A.uplo == 'U'
+        A_mul_B_td!(UpperTriangular(zeros(TS, size(A)...)), A, B)
     else
         A_mul_B_td!(zeros(TS, size(A)...), A, B)
     end
@@ -645,6 +686,36 @@ end
 function *(A::SymTridiagonal, B::Diagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
     A_mul_B_td!(Tridiagonal(zeros(TS, size(A, 1)-1), zeros(TS, size(A, 1)), zeros(TS, size(A, 1)-1)), A, B)
+end
+
+function dot(x::AbstractVector, B::Bidiagonal, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    nx, ny = length(x), length(y)
+    (nx == size(B, 1) == ny) || throw(DimensionMismatch())
+    if iszero(nx)
+        return dot(zero(eltype(x)), zero(eltype(B)), zero(eltype(y)))
+    end
+    ev, dv = B.ev, B.dv
+    if B.uplo == 'U'
+        x₀ = x[1]
+        r = dot(x[1], dv[1], y[1])
+        @inbounds for j in 2:nx-1
+            x₋, x₀ = x₀, x[j]
+            r += dot(adjoint(ev[j-1])*x₋ + adjoint(dv[j])*x₀, y[j])
+        end
+        r += dot(adjoint(ev[nx-1])*x₀ + adjoint(dv[nx])*x[nx], y[nx])
+        return r
+    else # B.uplo == 'L'
+        x₀ = x[1]
+        x₊ = x[2]
+        r = dot(adjoint(dv[1])*x₀ + adjoint(ev[1])*x₊, y[1])
+        @inbounds for j in 2:nx-1
+            x₀, x₊ = x₊, x[j+1]
+            r += dot(adjoint(dv[j])*x₀ + adjoint(ev[j])*x₊, y[j])
+        end
+        r += dot(x₊, dv[nx], y[nx])
+        return r
+    end
 end
 
 #Linear solvers

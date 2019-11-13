@@ -5,7 +5,7 @@ getfield(getfield(Main, :Core), :eval)(getfield(Main, :Core), :(baremodule Compi
 using Core.Intrinsics, Core.IR
 
 import Core: print, println, show, write, unsafe_write, stdout, stderr,
-             _apply, svec, apply_type, Builtin, IntrinsicFunction, MethodInstance, CodeInstance
+             _apply, _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction, MethodInstance, CodeInstance
 
 const getproperty = getfield
 const setproperty! = setfield!

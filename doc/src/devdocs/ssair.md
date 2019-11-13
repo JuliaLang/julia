@@ -28,7 +28,7 @@ struct PhiNode
 end
 ```
 where we ensure that both vectors always have the same length. In the canonical representation (the one
-handles by codegen and the interpreter), the edge values indicate come-from statement numbers (i.e.
+handled by codegen and the interpreter), the edge values indicate come-from statement numbers (i.e.
 if edge has an entry of `15`, there must be a `goto`, `gotoifnot` or implicit fall through from
 statement `15` that targets this phi node). Values are either SSA values or constants. It is also
 possible for a value to be unassigned if the variable was not defined on this path. However, undefinedness

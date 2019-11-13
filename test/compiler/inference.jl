@@ -2442,3 +2442,25 @@ f31974(n::Int) = f31974(1:n)
 # This query hangs if type inference improperly attempts to const prop
 # call cycles.
 @test code_typed(f31974, Tuple{Int}) !== nothing
+
+f_overly_abstract_complex() = Complex(Ref{Number}(1)[])
+@test Base.return_types(f_overly_abstract_complex, Tuple{}) == [Complex]
+
+# Issue 26724
+const IntRange = AbstractUnitRange{<:Integer}
+const DenseIdx = Union{IntRange,Integer}
+@inline foo_26724(result) =
+    (result...,)
+@inline foo_26724(result, i::Integer, I::DenseIdx...) =
+    foo_26724(result, I...)
+@inline foo_26724(result, r::IntRange, I::DenseIdx...) =
+    foo_26724((result..., length(r)), I...)
+@test @inferred(foo_26724((), 1:4, 1:5, 1:6)) === (4, 5, 6)
+
+# Non uniformity in expresions with PartialTypeVar
+@test Core.Compiler.:⊑(Core.Compiler.PartialTypeVar(TypeVar(:N), true, true), TypeVar)
+let N = TypeVar(:N)
+    @test Core.Compiler.apply_type_nothrow([Core.Compiler.Const(NTuple),
+        Core.Compiler.PartialTypeVar(N, true, true),
+        Core.Compiler.Const(Any)], Type{Tuple{Vararg{Any,N}}})
+end

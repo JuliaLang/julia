@@ -67,6 +67,19 @@ let err = try
     @test lines[6] == "  ambig(::Integer, ::Integer)"
 end
 
+ambig_with_bounds(x, ::Int, ::T) where {T<:Integer,S} = 0
+ambig_with_bounds(::Int, x, ::T) where {T<:Integer,S} = 1
+let err = try
+              ambig_with_bounds(1, 2, 3)
+          catch _e_
+              _e_
+          end
+    io = IOBuffer()
+    Base.showerror(io, err)
+    lines = split(String(take!(io)), '\n')
+    @test lines[end] == "  ambig_with_bounds(::$Int, ::$Int, ::T) where T<:Integer"
+end
+
 ## Other ways of accessing functions
 # Test that non-ambiguous cases work
 let io = IOBuffer()
@@ -156,6 +169,16 @@ ambs = detect_ambiguities(Ambig5)
 @test detect_ambiguities(Core, Base; imported=true, recursive=true, ambiguous_bottom=false) == []
 # some ambiguities involving Union{} type parameters are expected, but not required
 @test !isempty(detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=true))
+
+module AmbigStdlib
+using Test
+
+# List standard libraries.  Exclude modules such as Main.
+modules = [mod for (pkg, mod) in Base.loaded_modules if pkg.uuid !== nothing]
+
+# not using isempty so this prints more information when it fails
+@test detect_ambiguities(modules...; imported=true, recursive=true) == []
+end  # module
 
 amb_1(::Int8, ::Int) = 1
 amb_1(::Integer, x) = 2

@@ -9,6 +9,7 @@ using LinearAlgebra
 import LinearAlgebra: Factorization, det, lu, ldiv!
 
 using SparseArrays
+using SparseArrays: getcolptr
 import SparseArrays: nnz
 
 import Serialization: AbstractSerializer, deserialize
@@ -151,11 +152,11 @@ The relation between `F` and `A` is
     `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}` as appropriate.
 """
 function lu(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes}; check::Bool = true)
-    zerobased = S.colptr[1] == 0
-    res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
-                    zerobased ? copy(S.colptr) : decrement(S.colptr),
-                    zerobased ? copy(S.rowval) : decrement(S.rowval),
-                    copy(S.nzval), 0)
+    zerobased = getcolptr(S)[1] == 0
+    res = UmfpackLU(C_NULL, C_NULL, size(S, 1), size(S, 2),
+                    zerobased ? copy(getcolptr(S)) : decrement(getcolptr(S)),
+                    zerobased ? copy(rowvals(S)) : decrement(rowvals(S)),
+                    copy(nonzeros(S)), 0)
     finalizer(umfpack_free_symbolic, res)
     umfpack_numeric!(res)
     check && (issuccess(res) || throw(LinearAlgebra.SingularException(0)))
@@ -213,7 +214,7 @@ end
 ## Wrappers for UMFPACK functions
 
 # generate the name of the C function according to the value and integer types
-umf_nm(nm,Tv,Ti) = "umfpack_" * (Tv == :Float64 ? "d" : "z") * (Ti == :Int64 ? "l_" : "i_") * nm
+umf_nm(nm,Tv,Ti) = "umfpack_" * (Tv === :Float64 ? "d" : "z") * (Ti === :Int64 ? "l_" : "i_") * nm
 
 for itype in UmfpackIndexTypes
     sym_r = umf_nm("symbolic", :Float64, itype)
@@ -486,20 +487,20 @@ end
 
 
 @inline function getproperty(lu::UmfpackLU, d::Symbol)
-    if d == :L || d == :U || d == :p || d == :q || d == :Rs || d == :(:)
+    if d === :L || d === :U || d === :p || d === :q || d === :Rs || d === :(:)
         # Guard the call to umf_extract behaind a branch to avoid infinite recursion
         L, U, p, q, Rs = umf_extract(lu)
-        if d == :L
+        if d === :L
             return L
-        elseif d == :U
+        elseif d === :U
             return U
-        elseif d == :p
+        elseif d === :p
             return p
-        elseif d == :q
+        elseif d === :q
             return q
-        elseif d == :Rs
+        elseif d === :Rs
             return Rs
-        elseif d == :(:)
+        elseif d === :(:)
             return (L, U, p, q, Rs)
         end
     else

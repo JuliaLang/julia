@@ -682,40 +682,6 @@ function >>>(x::Integer, c::Unsigned)
 end
 >>>(x::Integer, c::Int) = c >= 0 ? x >>> unsigned(c) : x << unsigned(-c)
 
-# fallback div, fld, and cld implementations
-# NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
-# so it is used here as the basis of float div().
-div(x::T, y::T) where {T<:Real} = convert(T,round((x-rem(x,y))/y))
-
-"""
-    fld(x, y)
-
-Largest integer less than or equal to `x/y`.
-
-# Examples
-```jldoctest
-julia> fld(7.3,5.5)
-1.0
-```
-"""
-fld(x::T, y::T) where {T<:Real} = convert(T,round((x-mod(x,y))/y))
-
-"""
-    cld(x, y)
-
-Smallest integer larger than or equal to `x/y`.
-
-# Examples
-```jldoctest
-julia> cld(5.5,2.2)
-3.0
-```
-"""
-cld(x::T, y::T) where {T<:Real} = convert(T,round((x-modCeil(x,y))/y))
-#rem(x::T, y::T) where {T<:Real} = convert(T,x-y*trunc(x/y))
-#mod(x::T, y::T) where {T<:Real} = convert(T,x-y*floor(x/y))
-modCeil(x::T, y::T) where {T<:Real} = convert(T,x-y*ceil(x/y))
-
 # operator alias
 
 """
@@ -752,6 +718,9 @@ julia> 9 ÷ 4
 
 julia> -5 ÷ 3
 -1
+
+julia> 5.0 ÷ 2
+2.0
 ```
 """
 div
@@ -861,6 +830,13 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
 Compose functions: i.e. `(f ∘ g)(args...)` means `f(g(args...))`. The `∘` symbol can be
 entered in the Julia REPL (and most editors, appropriately configured) by typing `\\circ<tab>`.
 
+Function composition also works in prefix form: `∘(f, g)` is the same as `f ∘ g`.
+The prefix form supports composition of multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
+and splatting `∘(fs...)` for composing an iterable collection of functions.
+
+!!! compat "Julia 1.4"
+    Multiple function composition requires at least Julia 1.4.
+
 # Examples
 ```jldoctest
 julia> map(uppercase∘first, ["apple", "banana", "carrot"])
@@ -868,10 +844,20 @@ julia> map(uppercase∘first, ["apple", "banana", "carrot"])
  'A'
  'B'
  'C'
+
+julia> fs = [
+           x -> 2x
+           x -> x/2
+           x -> x-1
+           x -> x+1
+       ];
+
+julia> ∘(fs...)(3)
+3.0
 ```
 """
 ∘(f, g) = (x...)->f(g(x...))
-
+∘(f, g, h...) = ∘(f ∘ g, h...)
 
 """
     !f::Function

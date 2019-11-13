@@ -25,6 +25,10 @@ $(TESTS):
 	@cd $(SRCDIR) && \
 	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no ./runtests.jl $@)
 
+$(addprefix revise-, $(TESTS)):
+	@cd $(SRCDIR) && \
+    $(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no ./runtests.jl --revise $(subst revise-,,$@))
+
 embedding:
 	@$(MAKE) -C $(SRCDIR)/$@ check $(EMBEDDING_ARGS)
 

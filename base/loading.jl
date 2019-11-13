@@ -265,7 +265,7 @@ end
 """
     pathof(m::Module)
 
-Return the path of `m.jl` file that was used to `import` module `m`,
+Return the path of the `m.jl` file that was used to `import` module `m`,
 or `nothing` if `m` was not imported from a package.
 
 Use [`dirname`](@ref) to get the directory part and [`basename`](@ref)
@@ -275,6 +275,19 @@ function pathof(m::Module)
     pkgid = get(Base.module_keys, m, nothing)
     pkgid === nothing && return nothing
     return Base.locate_package(pkgid)
+end
+
+"""
+    pkgdir(m::Module)
+
+ Return the root directory of the package that imported module `m`,
+ or `nothing` if `m` was not imported from a package.
+ """
+function pkgdir(m::Module)
+    rootmodule = Base.moduleroot(m)
+    path = pathof(rootmodule)
+    path === nothing && return nothing
+    return dirname(dirname(path))
 end
 
 ## generic project & manifest API ##
@@ -466,21 +479,6 @@ function entry_path(path::String, name::String)::Union{Nothing,String}
     return nothing # source not found
 end
 
-# given a project path (project directory or entry point)
-# return the project file
-function package_path_to_project_file(path::String)::Union{Nothing,String}
-    if !isdir(path)
-        dir = dirname(path)
-        basename(dir) == "src" || return nothing
-        path = dirname(dir)
-    end
-    for proj in project_names
-        project_file = joinpath(path, proj)
-        isfile_casesensitive(project_file) && return project_file
-    end
-    return nothing
-end
-
 ## explicit project & manifest API ##
 
 # find project file root or deps `name => uuid` mapping
@@ -492,15 +490,15 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{No
         state = :top
         for line in eachline(io)
             if occursin(re_section, line)
-                state == :top && root_name == name && return root_uuid
+                state === :top && root_name == name && return root_uuid
                 state = occursin(re_section_deps, line) ? :deps : :other
-            elseif state == :top
+            elseif state === :top
                 if (m = match(re_name_to_string, line)) !== nothing
                     root_name = String(m.captures[1])
                 elseif (m = match(re_uuid_to_string, line)) !== nothing
                     root_uuid = UUID(m.captures[1])
                 end
-            elseif state == :deps
+            elseif state === :deps
                 if (m = match(re_key_to_string, line)) !== nothing
                     m.captures[1] == name && return UUID(m.captures[2])
                 end
@@ -525,7 +523,7 @@ function explicit_manifest_deps_get(project_file::String, where::UUID, name::Str
                 uuid == where && break
                 uuid = deps = nothing
                 state = :stanza
-            elseif state == :stanza
+            elseif state === :stanza
                 if (m = match(re_uuid_to_string, line)) !== nothing
                     uuid = UUID(m.captures[1])
                 elseif (m = match(re_deps_to_any, line)) !== nothing
@@ -535,7 +533,7 @@ function explicit_manifest_deps_get(project_file::String, where::UUID, name::Str
                 elseif occursin(re_section, line)
                     state = :other
                 end
-            elseif state == :deps && uuid == where
+            elseif state === :deps && uuid == where
                 # [deps] section format gives both name and uuid
                 if (m = match(re_key_to_string, line)) !== nothing
                     m.captures[1] == name && return UUID(m.captures[2])
@@ -1050,7 +1048,7 @@ function _require(pkg::PkgId)
             ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, uuid)
         end
         try
-            include_relative(__toplevel__, path)
+            include(__toplevel__, path)
             return
         finally
             if uuid !== old_uuid
@@ -1090,27 +1088,6 @@ end
 function source_dir()
     p = source_path(nothing)
     return p === nothing ? pwd() : dirname(p)
-end
-
-include_relative(mod::Module, path::AbstractString) = include_relative(mod, String(path))
-function include_relative(mod::Module, _path::String)
-    path, prev = _include_dependency(mod, _path)
-    for callback in include_callbacks # to preserve order, must come before Core.include
-        invokelatest(callback, mod, path)
-    end
-    tls = task_local_storage()
-    tls[:SOURCE_PATH] = path
-    local result
-    try
-        result = Core.include(mod, path)
-    finally
-        if prev === nothing
-            delete!(tls, :SOURCE_PATH)
-        else
-            tls[:SOURCE_PATH] = prev
-        end
-    end
-    return result
 end
 
 """
@@ -1220,6 +1197,21 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     return io
 end
 
+function compilecache_path(pkg::PkgId)::String
+    entrypath, entryfile = cache_file_entry(pkg)
+    cachepath = joinpath(DEPOT_PATH[1], entrypath)
+    isdir(cachepath) || mkpath(cachepath)
+    if pkg.uuid === nothing
+        abspath(cachepath, entryfile) * ".ji"
+    else
+        crc = _crc32c(something(Base.active_project(), ""))
+        crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
+        crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
+        project_precompile_slug = slug(crc, 5)
+        abspath(cachepath, string(entryfile, "_", project_precompile_slug, ".ji"))
+    end
+end
+
 """
     Base.compilecache(module::PkgId)
 
@@ -1238,19 +1230,16 @@ const MAX_NUM_PRECOMPILE_FILES = 10
 
 function compilecache(pkg::PkgId, path::String)
     # decide where to put the resulting cache file
-    entrypath, entryfile = cache_file_entry(pkg)
-    cachepath = joinpath(DEPOT_PATH[1], entrypath)
-    isdir(cachepath) || mkpath(cachepath)
-    if pkg.uuid === nothing
-        cachefile = abspath(cachepath, entryfile) * ".ji"
-    else
-        candidates = filter!(x -> startswith(x, entryfile * "_"), readdir(cachepath))
-        if length(candidates) >= MAX_NUM_PRECOMPILE_FILES
-            idx = findmin(mtime.(joinpath.(cachepath, candidates)))[2]
-            rm(joinpath(cachepath, candidates[idx]))
+    cachefile = compilecache_path(pkg)
+    # prune the directory with cache files
+    if pkg.uuid !== nothing
+        cachepath = dirname(cachefile)
+        entrypath, entryfile = cache_file_entry(pkg)
+        cachefiles = filter!(x -> startswith(x, entryfile * "_"), readdir(cachepath))
+        if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES
+            idx = findmin(mtime.(joinpath.(cachepath, cachefiles)))[2]
+            rm(joinpath(cachepath, cachefiles[idx]))
         end
-        project_precompile_slug = slug(_crc32c(something(Base.active_project(), "")), 5)
-        cachefile = abspath(cachepath, string(entryfile, "_", project_precompile_slug, ".ji"))
     end
     # build up the list of modules that we want the precompile process to preserve
     concrete_deps = copy(_concrete_dependencies)

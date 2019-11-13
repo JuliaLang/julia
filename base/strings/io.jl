@@ -10,8 +10,6 @@ if `io` is not given) a canonical (un-decorated) text representation.
 The representation used by `print` includes minimal formatting and tries to
 avoid Julia-specific details.
 
-Printing `nothing` is not allowed and throws an error.
-
 `print` falls back to calling `show`, so most types should just define
 `show`. Define `print` if your type has a separate "plain" representation.
 For example, `show` displays strings with quotes, and `print` displays strings
@@ -109,11 +107,22 @@ function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     String(resize!(s.data, s.size))
 end
 
-tostr_sizehint(x) = 8
-tostr_sizehint(x::AbstractString) = lastindex(x)
-tostr_sizehint(x::Union{String,SubString{String}}) = sizeof(x)
-tostr_sizehint(x::Float64) = 20
-tostr_sizehint(x::Float32) = 12
+# CategoricalArrays extends this
+function tostr_sizehint end
+
+function _str_sizehint(x)
+    if x isa Float64
+        return 20
+    elseif x isa Float32
+        return 12
+    elseif x isa String || x isa SubString{String}
+        return sizeof(x)
+    elseif x isa Char
+        return ncodeunits(x)
+    else
+        return 8
+    end
+end
 
 function print_to_string(xs...)
     if isempty(xs)
@@ -121,7 +130,7 @@ function print_to_string(xs...)
     end
     siz::Int = 0
     for x in xs
-        siz += tostr_sizehint(x)
+        siz += _str_sizehint(x)
     end
     # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
@@ -137,7 +146,7 @@ function string_with_env(env, xs...)
     end
     siz::Int = 0
     for x in xs
-        siz += tostr_sizehint(x)
+        siz += _str_sizehint(x)
     end
     # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
@@ -384,7 +393,8 @@ The following escape sequences are recognised:
  - Escaped backslash (`\\\\`)
  - Escaped double-quote (`\\\"`)
  - Standard C escape sequences (`\\a`, `\\b`, `\\t`, `\\n`, `\\v`, `\\f`, `\\r`, `\\e`)
- - Unicode code points (`\\u` or `\\U` prefixes with 1-4 trailing hex digits)
+ - Unicode BMP code points (`\\u` with 1-4 trailing hex digits)
+ - All Unicode code points (`\\U` with 1-8 trailing hex digits; max value = 0010ffff)
  - Hex bytes (`\\x` with 1-2 trailing hex digits)
  - Octal bytes (`\\` with 1-3 trailing octal digits)
 

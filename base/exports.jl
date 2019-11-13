@@ -628,6 +628,7 @@ export
 
     enumerate,  # re-exported from Iterators
     zip,
+    only,
 
 # object identity and equality
     copy,
@@ -743,6 +744,7 @@ export
     nameof,
     parentmodule,
     pathof,
+    pkgdir,
     names,
     which,
     @isdefined,

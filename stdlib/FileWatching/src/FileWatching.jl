@@ -620,7 +620,7 @@ function wait(m::FolderMonitor)
                 take!(m.notify)
             catch ex
                 unpreserve_handle(m)
-                if ex isa InvalidStateException && ex.state == :closed
+                if ex isa InvalidStateException && ex.state === :closed
                     rethrow(EOFError()) # `wait(::Channel)` throws the wrong exception
                 end
                 rethrow()
@@ -719,7 +719,7 @@ function watch_folder(s::String, timeout_s::Real=-1)
     end
     if timeout_s >= 0 && !isready(fm.notify)
         if timeout_s <= 0.010
-            # for very small timeouts, we can just sleep for the timeout-interval
+            # for very small timeouts, we can just sleep for the whole timeout-interval
             (timeout_s == 0) ? yield() : sleep(timeout_s)
             if !isready(fm.notify)
                 return "" => FileEvent() # timeout

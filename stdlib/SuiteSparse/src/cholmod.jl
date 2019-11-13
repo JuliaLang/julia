@@ -20,6 +20,7 @@ import LinearAlgebra: (\),
                  issuccess, issymmetric, ldlt, ldlt!, logdet
 
 using SparseArrays
+using SparseArrays: getcolptr
 import Libdl
 
 export
@@ -374,12 +375,12 @@ mutable struct FactorComponent{Tv,S} <: AbstractMatrix{Tv}
     function FactorComponent{Tv,S}(F::Factor{Tv}) where {Tv,S}
         s = unsafe_load(pointer(F))
         if s.is_ll != 0
-            if !(S == :L || S == :U || S == :PtL || S == :UP)
+            if !(S === :L || S === :U || S === :PtL || S === :UP)
                 throw(CHOLMODException(string(S, " not supported for sparse ",
                     "LLt matrices; try :L, :U, :PtL, or :UP")))
             end
-        elseif !(S == :L || S == :U || S == :PtL || S == :UP ||
-                S == :D || S == :LD || S == :DU || S == :PtLD || S == :DUP)
+        elseif !(S === :L || S === :U || S === :PtL || S === :UP ||
+                S === :D || S === :LD || S === :DU || S === :PtLD || S === :DUP)
             throw(CHOLMODException(string(S, " not supported for sparse LDLt ",
                 "matrices; try :L, :U, :PtL, :UP, :D, :LD, :DU, :PtLD, or :DUP")))
         end
@@ -745,7 +746,7 @@ function solve(sys::Integer, F::Factor{Tv}, B::Dense{Tv}) where Tv<:VTypes
         if s.is_ll == 1
             throw(LinearAlgebra.PosDefException(s.minor))
         else
-            throw(ArgumentError("factorized matrix has one or more zero pivots. Try using `lu` instead."))
+            throw(LinearAlgebra.ZeroPivotException(s.minor))
         end
     end
     Dense(ccall((@cholmod_name("solve"),:libcholmod), Ptr{C_Dense{Tv}},
@@ -863,39 +864,39 @@ end
 
 function Sparse{Tv}(A::SparseMatrixCSC, stype::Integer) where Tv<:VTypes
     ## Check length of input. This should never fail but see #20024
-    if length(A.colptr) <= A.n
-        throw(ArgumentError("length of colptr must be at least size(A,2) + 1 = $(A.n + 1) but was $(length(A.colptr))"))
+    if length(getcolptr(A)) <= size(A, 2)
+        throw(ArgumentError("length of colptr must be at least size(A,2) + 1 = $(size(A, 2) + 1) but was $(length(getcolptr(A)))"))
     end
-    if nnz(A) > length(A.rowval)
-        throw(ArgumentError("length of rowval is $(length(A.rowval)) but value of colptr requires length to be at least $(nnz(A))"))
+    if nnz(A) > length(rowvals(A))
+        throw(ArgumentError("length of rowval is $(length(rowvals(A))) but value of colptr requires length to be at least $(nnz(A))"))
     end
-    if nnz(A) > length(A.nzval)
-        throw(ArgumentError("length of nzval is $(length(A.nzval)) but value of colptr requires length to be at least $(nnz(A))"))
+    if nnz(A) > length(nonzeros(A))
+        throw(ArgumentError("length of nzval is $(length(nonzeros(A))) but value of colptr requires length to be at least $(nnz(A))"))
     end
 
-    o = allocate_sparse(A.m, A.n, nnz(A), true, true, stype, Tv)
+    o = allocate_sparse(size(A, 1), size(A, 2), nnz(A), true, true, stype, Tv)
     s = unsafe_load(pointer(o))
-    for i = 1:(A.n + 1)
-        unsafe_store!(s.p, A.colptr[i] - 1, i)
+    for i = 1:(size(A, 2) + 1)
+        unsafe_store!(s.p, getcolptr(A)[i] - 1, i)
     end
     for i = 1:nnz(A)
-        unsafe_store!(s.i, A.rowval[i] - 1, i)
+        unsafe_store!(s.i, rowvals(A)[i] - 1, i)
     end
     if Tv <: Complex && stype != 0
         # Need to remove any non real elements in the diagonal because, in contrast to
         # BLAS/LAPACK these are not ignored by CHOLMOD. If even tiny imaginary parts are
         # present CHOLMOD will fail with a non-positive definite/zero pivot error.
-        for j = 1:A.n
-            for ip = A.colptr[j]:A.colptr[j + 1] - 1
-                v = A.nzval[ip]
-                unsafe_store!(s.x, A.rowval[ip] == j ? Complex(real(v)) : v, ip)
+        for j = 1:size(A, 2)
+            for ip = getcolptr(A)[j]:getcolptr(A)[j + 1] - 1
+                v = nonzeros(A)[ip]
+                unsafe_store!(s.x, rowvals(A)[ip] == j ? Complex(real(v)) : v, ip)
             end
         end
-    elseif Tv == eltype(A.nzval)
-        unsafe_copyto!(s.x, pointer(A.nzval), nnz(A))
+    elseif Tv == eltype(nonzeros(A))
+        unsafe_copyto!(s.x, pointer(nonzeros(A)), nnz(A))
     else
         for i = 1:nnz(A)
-            unsafe_store!(s.x, A.nzval[i], i)
+            unsafe_store!(s.x, nonzeros(A)[i], i)
         end
     end
 
@@ -1181,9 +1182,9 @@ function getindex(A::Sparse{T}, i0::Integer, i1::Integer) where T
 end
 
 @inline function getproperty(F::Factor, sym::Symbol)
-    if sym == :p
+    if sym === :p
         return get_perm(F)
-    elseif sym == :ptr
+    elseif sym === :ptr
         return getfield(F, :ptr)
     else
         return FactorComponent(F, sym)
@@ -1195,12 +1196,12 @@ function getLd!(S::SparseMatrixCSC)
     fill!(d, 0)
     col = 1
     for k = 1:nnz(S)
-        while k >= S.colptr[col+1]
+        while k >= getcolptr(S)[col+1]
             col += 1
         end
-        if S.rowval[k] == col
-            d[col] = S.nzval[k]
-            S.nzval[k] = 1
+        if rowvals(S)[k] == col
+            d[col] = nonzeros(S)[k]
+            nonzeros(S)[k] = 1
         end
     end
     S, d
@@ -1223,11 +1224,12 @@ function *(A::Sparse{Tv}, adjB::Adjoint{Tv,Sparse{Tv}}) where Tv<:VRealTypes
     ## A->stype == 0 (storage of upper and lower parts). If necessary
     ## the matrix A is first converted to stype == 0
     s = unsafe_load(pointer(A))
+    fset = s.ncol == 0 ? SuiteSparse_long[] : SuiteSparse_long[0:s.ncol-1;]
     if s.stype != 0
         aa1 = copy(A, 0, 1)
-        return aat(aa1, SuiteSparse_long[0:s.ncol-1;], 1)
+        return aat(aa1, fset, 1)
     else
-        return aat(A, SuiteSparse_long[0:s.ncol-1;], 1)
+        return aat(A, fset, 1)
     end
 end
 
@@ -1445,7 +1447,7 @@ function ldlt!(F::Factor{Tv}, A::Sparse{Tv};
     # Compute the numerical factorization
     factorize_p!(A, shift, F, cm)
 
-    check && (issuccess(F) || throw(LinearAlgebra.PosDefException(1)))
+    check && (issuccess(F) || throw(LinearAlgebra.ZeroPivotException(1)))
     return F
 end
 
