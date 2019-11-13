@@ -236,9 +236,10 @@ function Base.show(io::IOContext, S::AbstractSparseMatrixCSC)
         return (k, l, p)
     end
 
+    rvals = rowvals(S)
     @inbounds for j = 1:size(S, 2)
         for x in nzrange(S, j)
-            si, sj = _scale_index(rowvals(S)[x], j, S, scaleHeight, scaleWidth)
+            si, sj = _scale_index(rvals[x], j, S, scaleHeight, scaleWidth)
             k, l, p = _to_braille_grid_space(si, sj)
             brailleGrid[k, l] |= brailleBlocks[p]
         end
