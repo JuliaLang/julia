@@ -744,20 +744,20 @@ along with a summary of the test results.
 """
 mutable struct DefaultTestSet <: AbstractTestSet
     description::AbstractString
-    parent::WeakRef
+    parent::Union{Nothing,AbstractTestSet}
     results::Vector
     n_passed::Int
     anynonpass::Bool
 end
 DefaultTestSet(desc, parent=nothing) =
-    DefaultTestSet(desc, WeakRef(parent), [], 0, false)
+    DefaultTestSet(desc, parent, [], 0, false)
 
 function printdescription(io, ts::DefaultTestSet)
     descs = AbstractString[ts.description]
-    parent = ts.parent.value
+    parent = ts.parent
     while parent isa DefaultTestSet
         push!(descs, parent.description)
-        parent = parent.parent.value
+        parent = parent.parent
     end
     printstyled(io, "Test Set:", bold=true, color=:white)
     if length(descs) == 1

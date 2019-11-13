@@ -924,8 +924,8 @@ end
         @testset "first level" begin
             @testset "second level" begin
                 ts = Test.get_testset()
-                @test ts.parent.value.description === "first level"
-                @test ts.parent.value.parent.value === rootts
+                @test ts.parent.description === "first level"
+                @test ts.parent.parent === rootts
             end
         end
     end
@@ -934,8 +934,8 @@ end
         @testset "i = $i" for i in 1:3
             @testset "j = $j" for j in 1:3
                 ts = Test.get_testset()
-                @test ts.parent.value.description[1:3] == "i ="
-                @test ts.parent.value.parent.value === rootts
+                @test ts.parent.description[1:3] == "i ="
+                @test ts.parent.parent === rootts
             end
         end
     end
