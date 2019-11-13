@@ -216,7 +216,7 @@ end
 
 If you don't care that the build is potentially incompatible with the WinRPM
 ecosystem (or happen to be on opensuse), use the following steps to cross-
-compile julia:
+compile Julia:
 
 First, you will need to ensure your system has the required dependencies.  We
 need wine (>=1.7.5), a system compiler, and some downloaders.
@@ -294,8 +294,8 @@ running the resulting installer.
  - When attaching to the julia process, GDB may not be attaching to the right
    thread.  Use `info threads` command to show all the threads and
    `thread <threadno>` to switch threads.
- - Be sure to use a 32 bit version of GDB to debug a 32 bit build of Julia, or
-   a 64 bit version of GDB to debug a 64 bit build of Julia.
+ - Be sure to use a 32-bit version of GDB to debug a 32-bit build of Julia, or
+   a 64-bit version of GDB to debug a 64-bit build of Julia.
 
 ### Build process is slow/eats memory/hangs my computer
 
