@@ -476,7 +476,6 @@ static jl_function_t *jl_iterate_func JL_GLOBALLY_ROOTED;
 
 static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_value_t *iterate)
 {
-    JL_NARGSV(apply, 1);
     jl_function_t *f = args[0];
     if (nargs == 2) {
         // some common simple cases
@@ -634,11 +633,13 @@ static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl
 
 JL_CALLABLE(jl_f__apply_iterate)
 {
+    JL_NARGSV(_apply_iterate, 2);
     return do_apply(F, args+1, nargs-1, args[0]);
 }
 
 JL_CALLABLE(jl_f__apply)
 {
+    JL_NARGSV(_apply, 1);
     return do_apply(F, args, nargs, NULL);
 }
 
