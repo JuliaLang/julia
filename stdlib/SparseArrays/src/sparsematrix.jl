@@ -196,12 +196,24 @@ Base.show(io::IO, S::AbstractSparseMatrixCSC) = Base.show(convert(IOContext, io)
 function Base.show(io::IOContext, S::AbstractSparseMatrixCSC)
     m, n = size(S)
     (m == 0 || n == 0) && return show(io, MIME("text/plain"), S)
+
+    # The maximal number of characters we allow to display the matrix
     maxHeight = displaysize(io)[1] - 4 # -4 from [Prompt, header, newline after elements, new prompt]
     maxWidth = displaysize(io)[2] ÷ 2
 
-    # Determine if scaling is needed and set the scaling factors accordingly
+    # In the process of generating the braille pattern to display the nonzero
+    # structure of `S`, we need to be able to scale the matrix `S` to a
+    # smaller matrix with the same aspect ratio as `S`, but fits on the
+    # available screen space. The size of that smaller matrix is stored
+    # in the variables `scaleHeight` and `scaleWidth`. If no scaling is needed,
+    # we can use the size `m × n` of `S` directly.
     scaleHeight = m
     scaleWidth = n
+
+    # Determine if scaling is needed and set the scaling factors
+    # `scaleHeight` and `scaleWidth` accordingly. Note that each available
+    # character can contain up to 4 braille dots in its height (⡇) and up to
+    # 2 braille dots in its width (⠉).
     if get(io, :limit, true) && (m > 4maxHeight || n > 2maxWidth)
         s = (m * 2maxWidth ÷ n, n * 4maxHeight ÷ m)
         if s[1] <= 4maxHeight
@@ -214,21 +226,27 @@ function Base.show(io::IOContext, S::AbstractSparseMatrixCSC)
     end
 
     brailleBlocks = split("⠁⠂⠄⡀⠈⠐⠠⢀", "") .|> x -> Int(x[1])
-    brailleGrid = fill(10240, (scaleWidth - 1) ÷ 2 + 2, (scaleHeight - 1) ÷ 4 + 1)
-    brailleGrid[end, :] .= 10
 
-    # Given an index `(i, j)` of a matrix `S`, find the corresponding
-    # index `(a, b)` of a matrix of size `height × width`
+    # `brailleGrid` is used to store the needed braille characters for
+    # the matrix `S`. Each row of the braille pattern to print is stored
+    # in a column of `brailleGrid`.
+    brailleGrid = fill(10240, (scaleWidth - 1) ÷ 2 + 2, (scaleHeight - 1) ÷ 4 + 1)
+    brailleGrid[end, :] .= Int('\n')
+
+    # Let `(i, j)` be an index pair of a matrix `S`. Consider a matrix `B`
+    # of size `height × width`. This method calculates an index pair `(a, b)`,
+    # such that the position of the element `B[a, b]` in `B` corresponds
+    # the best to the position of the element `S[i, j]` in `S`.
     @inline function _scale_index(i::Integer, j::Integer, S::AbstractSparseMatrixCSC, height::Integer, width::Integer)
         a = size(S, 1) <= 1 || height <= 1 ? 1.0 : (i - 1) / (size(S, 1) - 1) * (height - 1) + 1
         b = size(S, 2) <= 1 || width <= 1 ? 1.0 : (j - 1) / (size(S, 2) - 1) * (width - 1) + 1
         return round.(Int, (a, b))
     end
 
-    # Given an index `(i, j)` of a matrix, find the corresponding triple
+    # Given an index pair `(i, j)` of a matrix, find the corresponding triple
     # `(k, l, p)` such that the element at `(i, j)` can be found at
     # position `(k, l)` in the braille grid `brailleGrid` and corresponds
-    # to the 1-dot braille pattern `brailleBlocks[p]`
+    # to the 1-dot braille character `brailleBlocks[p]`
     @inline function _to_braille_grid_space(i::Integer, j::Integer)
         k = (j - 1) ÷ 2 + 1
         l = (i - 1) ÷ 4 + 1
