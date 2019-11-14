@@ -177,7 +177,7 @@ lu(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}};
 lu(A::SparseMatrixCSC; check::Bool = true) = lu(float(A); check = check)
 
 """
-    lu!(F::UmfpackLU, A::SparseMatrixCSC; check = true) -> F::UmfpackLU
+    lu!(F::UmfpackLU, A::SparseMatrixCSC; check=true) -> F::UmfpackLU
 
 Compute the LU factorization of a sparse matrix `A`, reusing the symbolic
 factorization of an already existing LU factorization stored in `F`. The
@@ -213,7 +213,7 @@ julia> F \\ ones(2)
  1.0
 ```
 """
-function lu!(F::UmfpackLU, S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes}; check::Bool = true)
+function lu!(F::UmfpackLU, S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes}; check::Bool=true)
     zerobased = getcolptr(S)[1] == 0
     F.m = size(S, 1)
     F.n = size(S, 2)
