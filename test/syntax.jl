@@ -1952,3 +1952,8 @@ end
 
 # issue #31547
 @test Meta.lower(Main, :(a := 1)) == Expr(:error, "unsupported assignment operator \":=\"")
+
+# issue #33841
+let a(; b) = b
+    @test a(b=3) == 3
+end
