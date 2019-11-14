@@ -799,7 +799,7 @@ end
 
 """
     Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_THREADS / 2),
-                  exit_on_error=false, [seed])
+                  exit_on_error=false, [seed], [regex::AbstractString], [depths])
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
 strings, using `ncores` processors. If `exit_on_error` is `false`, when one test
@@ -807,10 +807,18 @@ fails, all remaining tests in other files will still be run; they are otherwise 
 when `exit_on_error == true`.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
+If a `regex` string is provided, it is used to create a `Regex` object and to filter
+testsets which are run based on their description string
+(i.e. `@testset "description" ...` is run if and only if `occursin(Regex(regex), "description")`).
+By default, only top-level testsets are filtered.
+If `depths` is provided, as an integer or as a collection thereof, the regex filtering occurs
+only for testsets whose nesting depth matches `depths` (top-level is 1).
 """
 function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
-                  exit_on_error=false,
-                  seed::Union{BitInteger,Nothing}=nothing)
+                  exit_on_error::Bool=false,
+                  seed::Union{BitInteger,Nothing}=nothing,
+                  regex::Union{Nothing,AbstractString}=nothing,
+                  depths=nothing)
     if isa(tests,AbstractString)
         tests = split(tests)
     end
@@ -818,6 +826,21 @@ function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
     seed !== nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
+    if regex !== nothing
+        ENV2["JULIA_TESTSET_REGEX"] = regex
+    end
+    ENV2["JULIA_TESTSET_DEPTHS"] = if depths === nothing
+        # by default, we want to apply a filtering regex at level 2, as all test files are implicitly wrapped in a @testset
+        get(ENV2, "JULIA_TESTSET_DEPTHS", "2")
+    else
+        if depths isa Integer
+            depths = [depths]
+        end
+        depths = Int.(depths)
+        any(<=(0), depths) && throw(ArgumentError("depths must be >= 1"))
+        join(string.(depths .+ 1), ',') # +1 to account for implicit level 1, see comment above
+    end
+
     try
         run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR::String,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))

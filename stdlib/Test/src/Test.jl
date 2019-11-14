@@ -1098,26 +1098,33 @@ function testset_beginend(args, tests, source)
         # this empty loop is here to force the block to be compiled,
         # which is needed for backtrace scrubbing to work correctly.
         while false; end
-        push_testset(ts)
-        # we reproduce the logic of guardseed, but this function
-        # cannot be used as it changes slightly the semantic of @testset,
-        # by wrapping the body in a function
-        local RNG = default_rng()
-        oldrng = copy(RNG)
-        try
-            # RNG is re-seeded with its own seed to ease reproduce a failed test
-            Random.seed!(RNG.seed)
-            $(esc(tests))
-        catch err
-            err isa InterruptException && rethrow()
-            # something in the test block threw an error. Count that as an
-            # error in this test set
-            record(ts, Error(:nontest_error, :(), err, Base.catch_stack(), $(QuoteNode(source))))
-        finally
-            copy!(RNG, oldrng)
+
+        rx = get(ENV, "JULIA_TESTSET_REGEX", nothing)
+        depths = get(ENV, "JULIA_TESTSET_DEPTHS", "1")
+        depths = parse.(Int, split(depths, ',')) .- 1
+
+        if get_testset_depth() ∉ depths || rx === nothing || occursin(Regex(rx), $desc)
+            push_testset(ts)
+            # we reproduce the logic of guardseed, but this function
+            # cannot be used as it changes slightly the semantic of @testset,
+            # by wrapping the body in a function
+            local RNG = default_rng()
+            oldrng = copy(RNG)
+            try
+                # RNG is re-seeded with its own seed to ease reproduce a failed test
+                Random.seed!(RNG.seed)
+                $(esc(tests))
+            catch err
+                err isa InterruptException && rethrow()
+                # something in the test block threw an error. Count that as an
+                # error in this test set
+                record(ts, Error(:nontest_error, :(), err, Base.catch_stack(), $(QuoteNode(source))))
+            finally
+                copy!(RNG, oldrng)
+            end
+            pop_testset()
+            finish(ts)
         end
-        pop_testset()
-        finish(ts)
     end
     # preserve outer location if possible
     if tests isa Expr && tests.head === :block && !isempty(tests.args) && tests.args[1] isa LineNumberNode
@@ -1169,23 +1176,24 @@ function testset_forloop(args, testloop, source)
         _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
         # Trick to handle `break` and `continue` in the test code before
         # they can be handled properly by `finally` lowering.
-        if !first_iteration
-            pop_testset()
-            push!(arr, finish(ts))
-            # it's 1000 times faster to copy from tmprng rather than calling Random.seed!
-            copy!(RNG, tmprng)
-
-        end
-        ts = $(testsettype)($desc; $options...)
-        push_testset(ts)
-        first_iteration = false
-        try
-            $(esc(tests))
-        catch err
-            err isa InterruptException && rethrow()
-            # Something in the test block threw an error. Count that as an
-            # error in this test set
-            record(ts, Error(:nontest_error, :(), err, Base.catch_stack(), $(QuoteNode(source))))
+        if rx === nothing || occursin(rx, $desc)
+            if !first_iteration
+                pop_testset()
+                push!(arr, finish(ts))
+                # it's 1000 times faster to copy from tmprng rather than calling Random.seed!
+                copy!(RNG, tmprng)
+            end
+            ts = $(testsettype)($desc; $options...)
+            push_testset(ts)
+            first_iteration = false
+            try
+                $(esc(tests))
+            catch err
+                err isa InterruptException && rethrow()
+                # Something in the test block threw an error. Count that as an
+                # error in this test set
+                record(ts, Error(:nontest_error, :(), err, Base.catch_stack(), $(QuoteNode(source))))
+            end
         end
     end
     quote
@@ -1196,6 +1204,15 @@ function testset_forloop(args, testloop, source)
         local oldrng = copy(RNG)
         Random.seed!(RNG.seed)
         local tmprng = copy(RNG)
+        local rx = get(ENV, "JULIA_TESTSET_REGEX", nothing)
+        local depths = get(ENV, "JULIA_TESTSET_DEPTHS", "1")
+        if get_testset_depth()+1 ∉ parse.(Int, split(depths, ','))
+            rx = nothing
+        end
+        if rx !== nothing
+            rx = Regex(rx)
+        end
+
         try
             $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
         finally
