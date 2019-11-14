@@ -1103,7 +1103,7 @@ function edit_lower_case(s)
 end
 function edit_title_case(s)
     set_action!(s, :edit_title_case)
-    return edit_replace_word_right(s, uppercasefirst)
+    return edit_replace_word_right(s, titlecase)
 end
 
 function edit_replace_word_right(s, replace::Function)
