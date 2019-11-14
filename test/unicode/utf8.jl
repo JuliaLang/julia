@@ -2,7 +2,7 @@
 
 @testset "string indexing" begin
     let str = "this is a test\xed\x80"
-        @test next(str, 15) == (reinterpret(Char, 0xed800000), 17)
+        @test iterate(str, 15) == (reinterpret(Char, 0xed800000), 17)
         @test_throws BoundsError getindex(str, 0:3)
         @test_throws BoundsError getindex(str, 17:18)
         @test_throws BoundsError getindex(str, 2:17)

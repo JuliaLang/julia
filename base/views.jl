@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 """
     replace_ref_end!(ex)
 
@@ -16,11 +18,11 @@ replace_ref_end!(ex) = replace_ref_end_!(ex, nothing)[1]
 # replace_ref_end_!(ex,withex) returns (new ex, whether withex was used)
 function replace_ref_end_!(ex, withex)
     used_withex = false
-    if isa(ex,Symbol) && ex == :end
+    if isa(ex,Symbol) && ex === :end
         withex === nothing && error("Invalid use of end")
         return withex, true
     elseif isa(ex,Expr)
-        if ex.head == :ref
+        if ex.head === :ref
             ex.args[1], used_withex = replace_ref_end_!(ex.args[1],withex)
             S = isa(ex.args[1],Symbol) ? ex.args[1]::Symbol : gensym(:S) # temp var to cache ex.args[1] if needed
             used_S = false # whether we actually need S
@@ -38,7 +40,7 @@ function replace_ref_end_!(ex, withex)
                     exj, used = replace_ref_end_!(ex.args[j],:($lastindex($S,$n)))
                     used_S |= used
                     ex.args[j] = exj
-                    if isa(exj,Expr) && exj.head == :...
+                    if isa(exj,Expr) && exj.head === :...
                         # splatted object
                         exjs = exj.args[1]
                         n = :($n + length($exjs))
@@ -75,6 +77,7 @@ reference expression (e.g. `@view A[1,2:end]`), and should *not* be used as the 
 an assignment (e.g. `@view(A[1,2:end]) = ...`).  See also [`@views`](@ref)
 to switch an entire block of code to use views for slicing.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -138,7 +141,7 @@ function _views(ex::Expr)
         Expr(ex.head, Meta.isexpr(lhs, :ref) ?
                       Expr(:ref, _views.(lhs.args)...) : _views(lhs),
              _views(ex.args[2]))
-    elseif ex.head == :ref
+    elseif ex.head === :ref
         Expr(:call, maybeview, _views.(ex.args)...)
     else
         h = string(ex.head)
@@ -183,7 +186,7 @@ end
 Convert every array-slicing operation in the given expression
 (which may be a `begin`/`end` block, loop, function, etc.)
 to return a view. Scalar indices, non-array types, and
-explicit `getindex` calls (as opposed to `array[...]`) are
+explicit [`getindex`](@ref) calls (as opposed to `array[...]`) are
 unaffected.
 
 !!! note
@@ -197,7 +200,7 @@ julia> A = zeros(3, 3);
 
 julia> @views for row in 1:3
            b = A[row, :]
-           b[:] = row
+           b[:] .= row
        end
 
 julia> A

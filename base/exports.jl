@@ -10,6 +10,7 @@ export
     Threads,
     Iterators,
     Broadcast,
+    MathConstants,
 
 # Types
     AbstractChannel,
@@ -84,6 +85,7 @@ export
     StridedVector,
     SubArray,
     SubString,
+    SubstitutionString,
     Timer,
     UnitRange,
     Val,
@@ -115,14 +117,15 @@ export
     Cwstring,
 
 # Exceptions
-    DimensionMismatch,
     CapturedException,
     CompositeException,
+    DimensionMismatch,
     EOFError,
     InvalidStateException,
     KeyError,
     MissingException,
-    ParseError,
+    ProcessFailedException,
+    TaskFailedException,
     SystemError,
     StringIndexError,
 
@@ -212,7 +215,6 @@ export
     asind,
     asinh,
     atan,
-    atan2,
     atand,
     atanh,
     big,
@@ -261,7 +263,6 @@ export
     floor,
     fma,
     frexp,
-    gamma,
     gcd,
     gcdx,
     hypot,
@@ -285,8 +286,6 @@ export
     ldexp,
     leading_ones,
     leading_zeros,
-    lfact,
-    lgamma,
     log,
     log10,
     log1p,
@@ -299,7 +298,6 @@ export
     muladd,
     nextfloat,
     nextpow,
-    nextpow2,
     nextprod,
     numerator,
     one,
@@ -307,12 +305,11 @@ export
     powermod,
     prevfloat,
     prevpow,
-    prevpow2,
     rad2deg,
     rationalize,
     real,
-    realmax,
-    realmin,
+    floatmax,
+    floatmin,
     reim,
     reinterpret,
     rem,
@@ -328,6 +325,7 @@ export
     sin,
     sinc,
     sincos,
+    sincosd,
     sind,
     sinh,
     sinpi,
@@ -348,10 +346,6 @@ export
     ∛,
     ≈,
     ≉,
-
-# specfun
-    beta,
-    lbeta,
 
 # arrays
     axes,
@@ -374,7 +368,10 @@ export
     cumsum!,
     accumulate,
     accumulate!,
+    eachcol,
     eachindex,
+    eachrow,
+    eachslice,
     extrema,
     fill!,
     fill,
@@ -419,17 +416,14 @@ export
     rot180,
     rotl90,
     rotr90,
-    shuffle,
-    shuffle!,
     size,
     selectdim,
     sort!,
     sort,
-    sortcols,
     sortperm,
     sortperm!,
-    sortrows,
-    squeeze,
+    sortslices,
+    dropdims,
     step,
     stride,
     strides,
@@ -616,9 +610,6 @@ export
     summary,
 
 # logging
-    info,
-    logging,
-    warn,
     @debug,
     @info,
     @warn,
@@ -632,28 +623,12 @@ export
     get_zero_subnormals,
     set_zero_subnormals,
 
-# statistics
-    cor,
-    cov,
-    mean!,
-    mean,
-    median!,
-    median,
-    middle,
-    quantile!,
-    quantile,
-    std,
-    stdm,
-    var,
-    varm,
-
 # iteration
-    done,
-    next,
-    start,
+    iterate,
 
     enumerate,  # re-exported from Iterators
     zip,
+    only,
 
 # object identity and equality
     copy,
@@ -674,6 +649,7 @@ export
     islocked,
     istaskdone,
     istaskstarted,
+    istaskfailed,
     lock,
     notify,
     ReentrantLock,
@@ -700,6 +676,9 @@ export
     ismissing,
     missing,
     skipmissing,
+    something,
+    isnothing,
+    nonmissingtype,
 
 # time
     sleep,
@@ -719,13 +698,16 @@ export
 
 # types
     convert,
-    # getproperty,
-    # setproperty!,
+    getproperty,
+    setproperty!,
     fieldoffset,
     fieldname,
     fieldnames,
     fieldcount,
-    # propertynames,
+    fieldtypes,
+    hasfield,
+    propertynames,
+    hasproperty,
     isabstracttype,
     isbitstype,
     isprimitivetype,
@@ -761,6 +743,8 @@ export
     methods,
     nameof,
     parentmodule,
+    pathof,
+    pkgdir,
     names,
     which,
     @isdefined,
@@ -780,7 +764,6 @@ export
 # misc
     atexit,
     atreplinit,
-    clipboard,
     exit,
     ntuple,
 
@@ -863,6 +846,7 @@ export
     splitdir,
     splitdrive,
     splitext,
+    splitpath,
 
 # filesystem operations
     cd,
@@ -971,7 +955,6 @@ export
     @allocated,
 
     # tasks
-    @schedule,
     @sync,
     @async,
     @task,
@@ -991,6 +974,7 @@ export
     @inline,
     @noinline,
     @nospecialize,
+    @specialize,
     @polly,
 
     @assert,

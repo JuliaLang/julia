@@ -8,7 +8,7 @@ using LinearAlgebra: BlasReal, BlasFloat
 include("testutils.jl") # test_approx_eq_modphase
 
 n = 10 #Size of test matrix
-srand(1)
+Random.seed!(1)
 
 @testset for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     if relty <: AbstractFloat
@@ -42,9 +42,13 @@ srand(1)
             @test Bidiagonal(ubd, :U) == Bidiagonal(Matrix(ubd), :U) == ubd
             @test Bidiagonal(lbd, :L) == Bidiagonal(Matrix(lbd), :L) == lbd
         end
-        # enable when deprecations for 0.7 are dropped
-        # @test_throws MethodError Bidiagonal(dv, GenericArray(ev), :U)
-        # @test_throws MethodError Bidiagonal(GenericArray(dv), ev, :U)
+        @test eltype(Bidiagonal{elty}([1,2,3,4], [1.0f0,2.0f0,3.0f0], :U)) == elty
+        @test isa(Bidiagonal{elty,Vector{elty}}(GenericArray(dv), ev, :U), Bidiagonal{elty,Vector{elty}})
+        @test_throws MethodError Bidiagonal(dv, GenericArray(ev), :U)
+        @test_throws MethodError Bidiagonal(GenericArray(dv), ev, :U)
+        BI = Bidiagonal([1,2,3,4], [1,2,3], :U)
+        @test Bidiagonal(BI) === BI
+        @test isa(Bidiagonal{elty}(BI), Bidiagonal{elty})
     end
 
     @testset "getindex, setindex!, size, and similar" begin
@@ -87,6 +91,12 @@ srand(1)
         @test similar(ubd, Int).uplo == ubd.uplo
         @test isa(similar(ubd, (3, 2)), SparseMatrixCSC)
         @test isa(similar(ubd, Int, (3, 2)), SparseMatrixCSC{Int})
+
+        # setindex! when off diagonal is zero bug
+        Bu = Bidiagonal(rand(elty, 10), zeros(elty, 9), 'U')
+        Bl = Bidiagonal(rand(elty, 10), zeros(elty, 9), 'L')
+        @test_throws ArgumentError Bu[5, 4] = 1
+        @test_throws ArgumentError Bl[4, 5] = 1
     end
 
     @testset "show" begin
@@ -146,6 +156,26 @@ srand(1)
             @test triu!(bidiagcopy(dv,ev,:U))    == Bidiagonal(dv,ev,:U)
             @test_throws ArgumentError triu!(bidiagcopy(dv, ev, :U), -n)
             @test_throws ArgumentError triu!(bidiagcopy(dv, ev, :U), n + 2)
+            @test !isdiag(Bidiagonal(dv,ev,:U))
+            @test !isdiag(Bidiagonal(dv,ev,:L))
+            @test isdiag(Bidiagonal(dv,zerosev,:U))
+            @test isdiag(Bidiagonal(dv,zerosev,:L))
+        end
+
+        @testset "iszero and isone" begin
+            for uplo in (:U, :L)
+                BDzero = Bidiagonal(zeros(elty, 10), zeros(elty, 9), uplo)
+                BDone = Bidiagonal(ones(elty, 10), zeros(elty, 9), uplo)
+                BDmix = Bidiagonal(zeros(elty, 10), zeros(elty, 9), uplo)
+                BDmix[end,end] = one(elty)
+
+                @test iszero(BDzero)
+                @test !isone(BDzero)
+                @test !iszero(BDone)
+                @test isone(BDone)
+                @test !iszero(BDmix)
+                @test !isone(BDmix)
+            end
         end
 
         Tfull = Array(T)
@@ -198,6 +228,9 @@ srand(1)
                 tx = Tfull \ b
                 @test_throws DimensionMismatch LinearAlgebra.naivesub!(T,Vector{elty}(undef,n+1))
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+                x = transpose(T) \ b
+                tx = transpose(Tfull) \ b
+                @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
                 @testset "Generic Mat-vec ops" begin
                     @test T*b ≈ Tfull*b
                     @test T'*b ≈ Tfull'*b
@@ -231,8 +264,8 @@ srand(1)
 
         @testset "Eigensystems" begin
             if relty <: AbstractFloat
-                d1, v1 = eig(T)
-                d2, v2 = eig(map(elty<:Complex ? ComplexF64 : Float64,Tfull))
+                d1, v1 = eigen(T)
+                d2, v2 = eigen(map(elty<:Complex ? ComplexF64 : Float64,Tfull), sortby=nothing)
                 @test (uplo == :U ? d1 : reverse(d1)) ≈ d2
                 if elty <: Real
                     test_approx_eq_modphase(v1, uplo == :U ? v2 : v2[:,n:-1:1])
@@ -242,16 +275,16 @@ srand(1)
 
         @testset "Singular systems" begin
             if (elty <: BlasReal)
-                @test AbstractArray(svdfact(T)) ≈ AbstractArray(svdfact!(copy(Tfull)))
+                @test AbstractArray(svd(T)) ≈ AbstractArray(svd!(copy(Tfull)))
                 @test svdvals(Tfull) ≈ svdvals(T)
                 u1, d1, v1 = svd(Tfull)
                 u2, d2, v2 = svd(T)
                 @test d1 ≈ d2
                 if elty <: Real
                     test_approx_eq_modphase(u1, u2)
-                    test_approx_eq_modphase(v1, v2)
+                    test_approx_eq_modphase(copy(v1), copy(v2))
                 end
-                @test 0 ≈ vecnorm(u2*Diagonal(d2)*v2'-Tfull) atol=n*max(n^2*eps(relty),vecnorm(u1*Diagonal(d1)*v1'-Tfull))
+                @test 0 ≈ norm(u2*Diagonal(d2)*v2'-Tfull) atol=n*max(n^2*eps(relty),norm(u1*Diagonal(d1)*v1'-Tfull))
                 @inferred svdvals(T)
                 @inferred svd(T)
             end
@@ -277,9 +310,39 @@ srand(1)
             # test pass-through of mul! for AbstractTriangular*Bidiagonal
             Tri = UpperTriangular(diagm(1 => T.ev))
             @test Array(Tri*T) ≈ Array(Tri)*Array(T)
+            # test mul! for Diagonal*Bidiagonal
+            C = Matrix{elty}(undef, n, n)
+            Dia = Diagonal(T.dv)
+            @test mul!(C, Dia, T) ≈ Array(Dia)*Array(T)
+
+            # Issue #31870
+            # Bi/Tri/Sym times Diagonal
+            Diag = Diagonal(rand(elty, 10))
+            BidiagU = Bidiagonal(rand(elty, 10), rand(elty, 9), 'U')
+            BidiagL = Bidiagonal(rand(elty, 10), rand(elty, 9), 'L')
+            Tridiag = Tridiagonal(rand(elty, 9), rand(elty, 10), rand(elty, 9))
+            SymTri = SymTridiagonal(rand(elty, 10), rand(elty, 9))
+
+            mats = [Diag, BidiagU, BidiagL, Tridiag, SymTri]
+            for a in mats
+                for b in mats
+                    @test a*b ≈ Matrix(a)*Matrix(b)
+                end
+            end
+
+            @test typeof(BidiagU*Diag) <: Bidiagonal
+            @test typeof(BidiagL*Diag) <: Bidiagonal
+            @test typeof(Tridiag*Diag) <: Tridiagonal
+            @test typeof(SymTri*Diag)  <: Tridiagonal
+
+            @test typeof(BidiagU*Diag) <: Bidiagonal
+            @test typeof(Diag*BidiagL) <: Bidiagonal
+            @test typeof(Diag*Tridiag) <: Tridiagonal
+            @test typeof(Diag*SymTri)  <: Tridiagonal
         end
 
         @test inv(T)*Tfull ≈ Matrix(I, n, n)
+        @test factorize(T) === T
     end
     BD = Bidiagonal(dv, ev, :U)
     @test Matrix{Complex{Float64}}(BD) == BD
@@ -322,7 +385,7 @@ using LinearAlgebra: fillstored!, UnitLowerTriangular
         Bidiagonal(randn(3), randn(2), rand([:U,:L])),
         SymTridiagonal(randn(3), randn(2)),
         sparse(randn(3,4)),
-        # Diagonal(randn(5)), # Diagonal fill! deprecated, see below
+        Diagonal(randn(5)),
         sparse(rand(3)),
         # LowerTriangular(randn(3,3)), # AbstractTriangular fill! deprecated, see below
         # UpperTriangular(randn(3,3)) # AbstractTriangular fill! deprecated, see below
@@ -330,11 +393,13 @@ using LinearAlgebra: fillstored!, UnitLowerTriangular
         for A in exotic_arrays
             @test iszero(fill!(A, 0))
         end
-        # Diagonal and AbstractTriangular fill! were defined as fillstored!,
-        # not matching the general behavior of fill!, and so have been deprecated.
-        # In a future dev cycle, these fill! methods should probably be reintroduced
+
+        # Diagonal fill! is no longer deprecated. See #29780
+        # AbstractTriangular fill! was defined as fillstored!,
+        # not matching the general behavior of fill!, and so it has been deprecated.
+        # In a future dev cycle, this fill! methods should probably be reintroduced
         # with behavior matching that of fill! for other structured matrix types.
-        # In the interm, equivalently test fillstored! below
+        # In the interim, equivalently test fillstored! below
         @test iszero(fillstored!(Diagonal(fill(1, 3)), 0))
         @test iszero(fillstored!(LowerTriangular(fill(1, 3, 3)), 0))
         @test iszero(fillstored!(UpperTriangular(fill(1, 3, 3)), 0))
@@ -343,13 +408,15 @@ using LinearAlgebra: fillstored!, UnitLowerTriangular
         val = randn()
         b = Bidiagonal(randn(1,1), :U)
         st = SymTridiagonal(randn(1,1))
-        for x in (b, st)
+        d = Diagonal(rand(1))
+        for x in (b, st, d)
             @test Array(fill!(x, val)) == fill!(Array(x), val)
         end
         b = Bidiagonal(randn(2,2), :U)
         st = SymTridiagonal(randn(3), randn(2))
         t = Tridiagonal(randn(3,3))
-        for x in (b, t, st)
+        d = Diagonal(rand(3))
+        for x in (b, t, st, d)
             @test_throws ArgumentError fill!(x, val)
             @test Array(fill!(x, 0)) == fill!(Array(x), 0)
         end
@@ -363,6 +430,72 @@ end
     @test promote_type(Tridiagonal{Int}, Bidiagonal{Tuple{S}} where S<:Integer) <: Tridiagonal
     @test promote_type(Tridiagonal{Tuple{T}} where T<:Integer, Bidiagonal{Tuple{S}} where S<:Integer) <: Tridiagonal
     @test promote_type(Tridiagonal{Tuple{T}} where T<:Integer, Bidiagonal{Int}) <: Tridiagonal
+end
+
+@testset "solve with matrix elements" begin
+    A = triu(tril(randn(9, 9), 3), -3)
+    b = randn(9)
+    Alb = Bidiagonal(Any[tril(A[1:3,1:3]), tril(A[4:6,4:6]), tril(A[7:9,7:9])],
+                     Any[triu(A[4:6,1:3]), triu(A[7:9,4:6])], 'L')
+    Aub = Bidiagonal(Any[triu(A[1:3,1:3]), triu(A[4:6,4:6]), triu(A[7:9,7:9])],
+                     Any[tril(A[1:3,4:6]), tril(A[4:6,7:9])], 'U')
+    bb = Any[b[1:3], b[4:6], b[7:9]]
+    @test vcat((Alb\bb)...) ≈ LowerTriangular(A)\b
+    @test vcat((Aub\bb)...) ≈ UpperTriangular(A)\b
+end
+
+@testset "sum" begin
+    @test sum(Bidiagonal([1,2,3], [1,2], :U)) == 9
+    @test sum(Bidiagonal([1,2,3], [1,2], :L)) == 9
+end
+
+@testset "empty sub-diagonal" begin
+    # `mul!` must use non-specialized method when sub-diagonal is empty
+    A = [1 2 3 4]'
+    @test A * Tridiagonal(ones(1, 1)) == A
+end
+
+@testset "generalized dot" begin
+    for elty in (Float64, ComplexF64)
+        dv = randn(elty, 5)
+        ev = randn(elty, 4)
+        x = randn(elty, 5)
+        y = randn(elty, 5)
+        for uplo in (:U, :L)
+            B = Bidiagonal(dv, ev, uplo)
+            @test dot(x, B, y) ≈ dot(B'x, y) ≈ dot(x, Matrix(B), y)
+        end
+    end
+end
+
+@testset "multiplication of bidiagonal and triangular matrix" begin
+    n = 5
+    for eltyB in (Int, ComplexF64)
+        if eltyB == Int
+            BU = Bidiagonal(rand(1:7, n), rand(1:7, n - 1), :U)
+            BL = Bidiagonal(rand(1:7, n), rand(1:7, n - 1), :L)
+        else
+            BU = Bidiagonal(randn(eltyB, n), randn(eltyB, n - 1), :U)
+            BL = Bidiagonal(randn(eltyB, n), randn(eltyB, n - 1), :L)
+        end
+        for eltyT in (Int, ComplexF64)
+            for TriT in (LowerTriangular, UnitLowerTriangular, UpperTriangular, UnitUpperTriangular)
+                if eltyT == Int
+                    T = TriT(rand(1:7, n, n))
+                else
+                    T = TriT(randn(eltyT, n, n))
+                end
+                for B in (BU, BL)
+                    MB = Matrix(B)
+                    MT = Matrix(T)
+                    for transB in (identity, adjoint, transpose), transT in (identity, adjoint, transpose)
+                        @test transB(B) * transT(T) ≈ transB(MB) * transT(MT)
+                        @test transT(T) * transB(B) ≈ transT(MT) * transB(MB)
+                    end
+                end
+            end
+        end
+    end
 end
 
 end # module TestBidiagonal

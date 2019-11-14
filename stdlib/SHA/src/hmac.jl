@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 struct HMAC_CTX{CTX<:SHA_CTX}
     context::CTX
     outer::Vector{UInt8}

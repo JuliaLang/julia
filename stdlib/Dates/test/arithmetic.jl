@@ -299,6 +299,17 @@ end
         @test dt - Dates.Day(100) == Dates.Date(1999, 9, 18)
         @test dt - Dates.Day(1000) == Dates.Date(1997, 4, 1)
     end
+    @testset "Date-Time arithmetic" begin
+        dt = Dates.Date(1999, 12, 27)
+        @test dt + Dates.Time(0, 0, 0) == Dates.DateTime(1999, 12, 27, 0, 0, 0)
+        @test dt + Dates.Time(1, 0, 0) == Dates.DateTime(1999, 12, 27, 1, 0, 0)
+        @test dt + Dates.Time(0, 1, 0) == Dates.DateTime(1999, 12, 27, 0, 1, 0)
+        @test dt + Dates.Time(0, 0, 1) == Dates.DateTime(1999, 12, 27, 0, 0, 1)
+        @test Dates.Time(0, 0, 1) + dt == Dates.DateTime(1999, 12, 27, 0, 0, 1)
+
+        t = Dates.Time(0, 0, 0) + Dates.Hour(24)
+        @test dt + t == Dates.DateTime(1999, 12, 27, 0, 0, 0)
+    end
 end
 @testset "Time-TimePeriod arithmetic" begin
     t = Dates.Time(0)
@@ -314,6 +325,15 @@ end
     @test t + Dates.Millisecond(1) == Dates.Time(0, 0, 0, 1)
     @test t + Dates.Microsecond(1) == Dates.Time(0, 0, 0, 0, 1)
     @test_throws MethodError t + Dates.Day(1)
+    @testset "Time-TimePeriod arithmetic inequalities" begin
+        t = Dates.Time(4, 20)
+        @test t - Dates.Nanosecond(1) < t
+        @test t + Dates.Nanosecond(1) > t
+        @test t + Dates.Hour(24) < typemax(Dates.Time)
+        @test t - Dates.Hour(24) > typemin(Dates.Time)
+        @test t + Dates.Hour(23) < t
+        @test t + Dates.Hour(25) > t
+    end
 end
 @testset "Month arithmetic and non-associativity" begin
     # Month arithmetic minimizes "edit distance", or number of changes
@@ -408,10 +428,6 @@ end
         @test t1 .- Dates.Date(2010, 1, 1) == [Dates.Day(-365) Dates.Day(-364) Dates.Day(-363); Dates.Day(-334) Dates.Day(-333) Dates.Day(-332)]
         @test Dates.DateTime(2009, 1, 1) .- t3 == [Dates.Millisecond(0), Dates.Millisecond(-86400000), Dates.Millisecond(-172800000)]
         @test t3 .- Dates.DateTime(2009, 1, 1) == [Dates.Millisecond(0), Dates.Millisecond(86400000), Dates.Millisecond(172800000)]
-        @test Dates.Date(2010, 1, 1) - t1 == [Dates.Day(365) Dates.Day(364) Dates.Day(363); Dates.Day(334) Dates.Day(333) Dates.Day(332)]
-        @test t1 - Dates.Date(2010, 1, 1) == [Dates.Day(-365) Dates.Day(-364) Dates.Day(-363); Dates.Day(-334) Dates.Day(-333) Dates.Day(-332)]
-        @test Dates.DateTime(2009, 1, 1) - t3 == [Dates.Millisecond(0), Dates.Millisecond(-86400000), Dates.Millisecond(-172800000)]
-        @test t3 - Dates.DateTime(2009, 1, 1) == [Dates.Millisecond(0), Dates.Millisecond(86400000), Dates.Millisecond(172800000)]
         @test Dates.Time(2) .- t5 == [Dates.Nanosecond(7200000000000) Dates.Nanosecond(7199000000000) Dates.Nanosecond(7198000000000);
                                       Dates.Nanosecond(7140000000000) Dates.Nanosecond(7080000000000) Dates.Nanosecond(7020000000000)]
     end
@@ -420,47 +436,55 @@ end
         @test Dates.Hour(1) .+ t3 == [Dates.DateTime(2009, 1, 1, 1), Dates.DateTime(2009, 1, 2, 1), Dates.DateTime(2009, 1, 3, 1)]
         @test t1 .+ Dates.Day(1) == [Dates.Date(2009, 1, 2) Dates.Date(2009, 1, 3) Dates.Date(2009, 1, 4); Dates.Date(2009, 2, 2) Dates.Date(2009, 2, 3) Dates.Date(2009, 2, 4)]
         @test t3 .+ Dates.Hour(1) == [Dates.DateTime(2009, 1, 1, 1), Dates.DateTime(2009, 1, 2, 1), Dates.DateTime(2009, 1, 3, 1)]
-        @test Dates.Day(1) + t1 == [Dates.Date(2009, 1, 2) Dates.Date(2009, 1, 3) Dates.Date(2009, 1, 4); Dates.Date(2009, 2, 2) Dates.Date(2009, 2, 3) Dates.Date(2009, 2, 4)]
-        @test Dates.Hour(1) + t3 == [Dates.DateTime(2009, 1, 1, 1), Dates.DateTime(2009, 1, 2, 1), Dates.DateTime(2009, 1, 3, 1)]
-        @test t1 + Dates.Day(1) == [Dates.Date(2009, 1, 2) Dates.Date(2009, 1, 3) Dates.Date(2009, 1, 4); Dates.Date(2009, 2, 2) Dates.Date(2009, 2, 3) Dates.Date(2009, 2, 4)]
-        @test t3 + Dates.Hour(1) == [Dates.DateTime(2009, 1, 1, 1), Dates.DateTime(2009, 1, 2, 1), Dates.DateTime(2009, 1, 3, 1)]
-        @test t5 + Dates.Hour(1) == [Dates.Time(1, 0, 0) Dates.Time(1, 0, 1) Dates.Time(1, 0, 2); Dates.Time(1, 1, 0) Dates.Time(1, 2, 0) Dates.Time(1, 3, 0)]
 
         @test (Dates.Month(1) + Dates.Day(1)) .+ t1 == [Dates.Date(2009, 2, 2) Dates.Date(2009, 2, 3) Dates.Date(2009, 2, 4); Dates.Date(2009, 3, 2) Dates.Date(2009, 3, 3) Dates.Date(2009, 3, 4)]
         @test (Dates.Hour(1) + Dates.Minute(1)) .+ t3 == [Dates.DateTime(2009, 1, 1, 1, 1), Dates.DateTime(2009, 1, 2, 1, 1), Dates.DateTime(2009, 1, 3, 1, 1)]
         @test t1 .+ (Dates.Month(1) + Dates.Day(1)) == [Dates.Date(2009, 2, 2) Dates.Date(2009, 2, 3) Dates.Date(2009, 2, 4); Dates.Date(2009, 3, 2) Dates.Date(2009, 3, 3) Dates.Date(2009, 3, 4)]
         @test t3 .+ (Dates.Hour(1) + Dates.Minute(1)) == [Dates.DateTime(2009, 1, 1, 1, 1), Dates.DateTime(2009, 1, 2, 1, 1), Dates.DateTime(2009, 1, 3, 1, 1)]
-        @test (Dates.Month(1) + Dates.Day(1)) + t1 == [Dates.Date(2009, 2, 2) Dates.Date(2009, 2, 3) Dates.Date(2009, 2, 4); Dates.Date(2009, 3, 2) Dates.Date(2009, 3, 3) Dates.Date(2009, 3, 4)]
-        @test (Dates.Hour(1) + Dates.Minute(1)) + t3 == [Dates.DateTime(2009, 1, 1, 1, 1), Dates.DateTime(2009, 1, 2, 1, 1), Dates.DateTime(2009, 1, 3, 1, 1)]
-        @test t1 + (Dates.Month(1) + Dates.Day(1)) == [Dates.Date(2009, 2, 2) Dates.Date(2009, 2, 3) Dates.Date(2009, 2, 4); Dates.Date(2009, 3, 2) Dates.Date(2009, 3, 3) Dates.Date(2009, 3, 4)]
-        @test t3 + (Dates.Hour(1) + Dates.Minute(1)) == [Dates.DateTime(2009, 1, 1, 1, 1), Dates.DateTime(2009, 1, 2, 1, 1), Dates.DateTime(2009, 1, 3, 1, 1)]
 
         @test t1 .- Dates.Day(1) == [Dates.Date(2008, 12, 31) Dates.Date(2009, 1, 1) Dates.Date(2009, 1, 2); Dates.Date(2009, 1, 31) Dates.Date(2009, 2, 1) Dates.Date(2009, 2, 2)]
         @test t3 .- Dates.Hour(1) == [Dates.DateTime(2008, 12, 31, 23), Dates.DateTime(2009, 1, 1, 23), Dates.DateTime(2009, 1, 2, 23)]
-        @test t1 - Dates.Day(1) == [Dates.Date(2008, 12, 31) Dates.Date(2009, 1, 1) Dates.Date(2009, 1, 2); Dates.Date(2009, 1, 31) Dates.Date(2009, 2, 1) Dates.Date(2009, 2, 2)]
-        @test t3 - Dates.Hour(1) == [Dates.DateTime(2008, 12, 31, 23), Dates.DateTime(2009, 1, 1, 23), Dates.DateTime(2009, 1, 2, 23)]
 
         @test t1 .- (Dates.Month(1) + Dates.Day(1)) == [Dates.Date(2008, 11, 30) Dates.Date(2008, 12, 1) Dates.Date(2008, 12, 2); Dates.Date(2008, 12, 31) Dates.Date(2009, 1, 1) Dates.Date(2009, 1, 2)]
         @test t3 .- (Dates.Hour(1) + Dates.Minute(1)) == [Dates.DateTime(2008, 12, 31, 22, 59), Dates.DateTime(2009, 1, 1, 22, 59), Dates.DateTime(2009, 1, 2, 22, 59)]
-        @test t1 - (Dates.Month(1) + Dates.Day(1)) == [Dates.Date(2008, 11, 30) Dates.Date(2008, 12, 1) Dates.Date(2008, 12, 2); Dates.Date(2008, 12, 31) Dates.Date(2009, 1, 1) Dates.Date(2009, 1, 2)]
-        @test t3 - (Dates.Hour(1) + Dates.Minute(1)) == [Dates.DateTime(2008, 12, 31, 22, 59), Dates.DateTime(2009, 1, 1, 22, 59), Dates.DateTime(2009, 1, 2, 22, 59)]
-    end
-    @testset "Array{TimeType}, Array{TimeType}" begin
-        @test t2 - t1 == [Dates.Day(1) Dates.Day(31) Dates.Day(365); Dates.Day(365) Dates.Day(28) Dates.Day(1)]
-        @test t4 - t3 == [Dates.Millisecond(1000), Dates.Millisecond(60000), Dates.Millisecond(3600000)]
-        @test (Dates.Date(2009, 1, 1):Dates.Week(1):Dates.Date(2009, 1, 21)) - (Dates.Date(2009, 1, 1):Dates.Day(1):Dates.Date(2009, 1, 3)) == [Dates.Day(0), Dates.Day(6), Dates.Day(12)]
-        @test (Dates.DateTime(2009, 1, 1, 1, 1, 1):Dates.Second(1):Dates.DateTime(2009, 1, 1, 1, 1, 3)) - (Dates.DateTime(2009, 1, 1, 1, 1):Dates.Second(1):Dates.DateTime(2009, 1, 1, 1, 1, 2)) == [Dates.Second(1), Dates.Second(1), Dates.Second(1)]
     end
     @testset "#20205" begin
         # ensure commutative subtraction methods are not defined
         @test_throws MethodError Dates.Day(1) .- t1
         @test_throws MethodError Dates.Hour(1) .- t3
-        @test_throws MethodError Dates.Day(1) - t1
-        @test_throws MethodError Dates.Hour(1) - t3
         @test_throws MethodError (Dates.Month(1) + Dates.Day(1)) .- t1
         @test_throws MethodError (Dates.Hour(1) + Dates.Minute(1)) .- t3
+    end
+    @testset "deprecated" begin
+        @test Dates.Date(2010, 1, 1) - t1 == [Dates.Day(365) Dates.Day(364) Dates.Day(363); Dates.Day(334) Dates.Day(333) Dates.Day(332)]
+        @test t1 - Dates.Date(2010, 1, 1) == [Dates.Day(-365) Dates.Day(-364) Dates.Day(-363); Dates.Day(-334) Dates.Day(-333) Dates.Day(-332)]
+        @test Dates.DateTime(2009, 1, 1) - t3 == [Dates.Millisecond(0), Dates.Millisecond(-86400000), Dates.Millisecond(-172800000)]
+        @test t3 - Dates.DateTime(2009, 1, 1) == [Dates.Millisecond(0), Dates.Millisecond(86400000), Dates.Millisecond(172800000)]
+        @test Dates.Day(1) + t1 == [Dates.Date(2009, 1, 2) Dates.Date(2009, 1, 3) Dates.Date(2009, 1, 4); Dates.Date(2009, 2, 2) Dates.Date(2009, 2, 3) Dates.Date(2009, 2, 4)]
+        @test Dates.Hour(1) + t3 == [Dates.DateTime(2009, 1, 1, 1), Dates.DateTime(2009, 1, 2, 1), Dates.DateTime(2009, 1, 3, 1)]
+        @test t1 + Dates.Day(1) == [Dates.Date(2009, 1, 2) Dates.Date(2009, 1, 3) Dates.Date(2009, 1, 4); Dates.Date(2009, 2, 2) Dates.Date(2009, 2, 3) Dates.Date(2009, 2, 4)]
+        @test t3 + Dates.Hour(1) == [Dates.DateTime(2009, 1, 1, 1), Dates.DateTime(2009, 1, 2, 1), Dates.DateTime(2009, 1, 3, 1)]
+        @test t5 + Dates.Hour(1) == [Dates.Time(1, 0, 0) Dates.Time(1, 0, 1) Dates.Time(1, 0, 2); Dates.Time(1, 1, 0) Dates.Time(1, 2, 0) Dates.Time(1, 3, 0)]
+        @test (Dates.Month(1) + Dates.Day(1)) + t1 == [Dates.Date(2009, 2, 2) Dates.Date(2009, 2, 3) Dates.Date(2009, 2, 4); Dates.Date(2009, 3, 2) Dates.Date(2009, 3, 3) Dates.Date(2009, 3, 4)]
+        @test (Dates.Hour(1) + Dates.Minute(1)) + t3 == [Dates.DateTime(2009, 1, 1, 1, 1), Dates.DateTime(2009, 1, 2, 1, 1), Dates.DateTime(2009, 1, 3, 1, 1)]
+        @test t1 + (Dates.Month(1) + Dates.Day(1)) == [Dates.Date(2009, 2, 2) Dates.Date(2009, 2, 3) Dates.Date(2009, 2, 4); Dates.Date(2009, 3, 2) Dates.Date(2009, 3, 3) Dates.Date(2009, 3, 4)]
+        @test t3 + (Dates.Hour(1) + Dates.Minute(1)) == [Dates.DateTime(2009, 1, 1, 1, 1), Dates.DateTime(2009, 1, 2, 1, 1), Dates.DateTime(2009, 1, 3, 1, 1)]
+        @test t1 - Dates.Day(1) == [Dates.Date(2008, 12, 31) Dates.Date(2009, 1, 1) Dates.Date(2009, 1, 2); Dates.Date(2009, 1, 31) Dates.Date(2009, 2, 1) Dates.Date(2009, 2, 2)]
+        @test t3 - Dates.Hour(1) == [Dates.DateTime(2008, 12, 31, 23), Dates.DateTime(2009, 1, 1, 23), Dates.DateTime(2009, 1, 2, 23)]
+        @test t1 - (Dates.Month(1) + Dates.Day(1)) == [Dates.Date(2008, 11, 30) Dates.Date(2008, 12, 1) Dates.Date(2008, 12, 2); Dates.Date(2008, 12, 31) Dates.Date(2009, 1, 1) Dates.Date(2009, 1, 2)]
+        @test t3 - (Dates.Hour(1) + Dates.Minute(1)) == [Dates.DateTime(2008, 12, 31, 22, 59), Dates.DateTime(2009, 1, 1, 22, 59), Dates.DateTime(2009, 1, 2, 22, 59)]
+        @test t2 - t1 == [Dates.Day(1) Dates.Day(31) Dates.Day(365); Dates.Day(365) Dates.Day(28) Dates.Day(1)]
+        @test t4 - t3 == [Dates.Millisecond(1000), Dates.Millisecond(60000), Dates.Millisecond(3600000)]
+        @test (Dates.Date(2009, 1, 1):Dates.Week(1):Dates.Date(2009, 1, 21)) - (Dates.Date(2009, 1, 1):Dates.Day(1):Dates.Date(2009, 1, 3)) == [Dates.Day(0), Dates.Day(6), Dates.Day(12)]
+        @test (Dates.DateTime(2009, 1, 1, 1, 1, 1):Dates.Second(1):Dates.DateTime(2009, 1, 1, 1, 1, 3)) - (Dates.DateTime(2009, 1, 1, 1, 1):Dates.Second(1):Dates.DateTime(2009, 1, 1, 1, 1, 2)) == [Dates.Second(1), Dates.Second(1), Dates.Second(1)]
+        @test_throws MethodError Dates.Day(1) - t1
+        @test_throws MethodError Dates.Hour(1) - t3
         @test_throws MethodError (Dates.Month(1) + Dates.Day(1)) - t1
         @test_throws MethodError (Dates.Hour(1) + Dates.Minute(1)) - t3
+    end
+    @testset "TimeZone" begin
+        # best we can get in Dates as there is no other tz functionality
+        @test ((a, b) -> now(typeof(a))).(UTC(), [1,2,3]) isa Vector{DateTime}
     end
 end
 

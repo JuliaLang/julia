@@ -1,0 +1,15 @@
+diff --git a/tools/llvm-config/CMakeLists.txt b/tools/llvm-config/CMakeLists.txt
+index f59402ac4b0..5de4c6febe7 100644
+--- a/tools/llvm-config/CMakeLists.txt
++++ b/tools/llvm-config/CMakeLists.txt
+@@ -77,5 +77,10 @@ if(CMAKE_CROSSCOMPILING AND NOT LLVM_CONFIG_PATH)
+   add_custom_target(NativeLLVMConfig DEPENDS ${LLVM_CONFIG_PATH})
+   add_dependencies(NativeLLVMConfig CONFIGURE_LLVM_NATIVE)
+ 
++  # Add a dependency on the host tblgen, which uses the same working
++  # directory and with which we're otherwise racing to build some
++  # of the utility libraries.
++  add_dependencies(NativeLLVMConfig LLVM-tablegen-host)
++
+   add_dependencies(llvm-config NativeLLVMConfig)
+ endif()

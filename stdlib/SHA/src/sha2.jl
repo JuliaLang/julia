@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 function transform!(context::T) where {T<:Union{SHA2_224_CTX,SHA2_256_CTX}}
     pbuf = buffer_pointer(context)
     # Initialize registers with the previous intermediate values (our state)

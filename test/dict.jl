@@ -6,15 +6,12 @@ using Random
     p = Pair(10,20)
     @test p == (10=>20)
     @test isequal(p,10=>20)
-    @test start(p) == 1
-    @test next(p, 1) == (10,2)
-    @test !done(p, 1)
-    @test !done(p,2)
-    @test done(p,3)
-    @test !done(p,0)
+    @test iterate(p)[1] == 10
+    @test iterate(p, iterate(p)[2])[1] == 20
+    @test iterate(p, iterate(p, iterate(p)[2])[2]) == nothing
     @test lastindex(p) == length(p) == 2
-    @test Base.indexed_next(p, 1, (1,2)) == (10,2)
-    @test Base.indexed_next(p, 2, (1,2)) == (20,3)
+    @test Base.indexed_iterate(p, 1, nothing) == (10,2)
+    @test Base.indexed_iterate(p, 2, nothing) == (20,3)
     @test (1=>2) < (2=>3)
     @test (2=>2) < (2=>3)
     @test !((2=>3) < (2=>3))
@@ -304,6 +301,13 @@ end
     @test d == Dict(8=>19, 19=>2, 42=>4)
 end
 
+@testset "getkey" begin
+   h = Dict(1=>2, 3 => 6, 5=>10)
+   @test getkey(h, 1, 7) == 1
+   @test getkey(h, 4, 6) == 6
+   @test getkey(h, "1", 8) == 8
+end
+
 @testset "show" begin
     for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
               Dict(string(i) => i for i = 1:30),
@@ -531,9 +535,6 @@ end
     @test 1 == @inferred get(d, 1, 1)
     @test pop!(d, -111, nothing) == nothing
     @test 1 == @inferred pop!(d, 1)
-    i = @inferred start(d)
-    @inferred next(d, i)
-    @inferred done(d, i)
 
     # get! and delete!
     d = @inferred IdDict(Pair(:a,1), Pair(:b,2), Pair(3,3))
@@ -564,6 +565,27 @@ end
     @test_throws ArgumentError IdDict([1, 2, 3, 4])
     # test rethrow of error in ctor
     @test_throws DomainError   IdDict((sqrt(p[1]), sqrt(p[2])) for p in zip(-1:2, -1:2))
+end
+
+@testset "issue 30165, get! for IdDict" begin
+    f(x) = x^2
+    d = IdDict(8=>19)
+    @test get!(d, 8, 5) == 19
+    @test get!(d, 19, 2) == 2
+
+    @test get!(d, 42) do  # d is updated with f(2)
+        f(2)
+    end == 4
+
+    @test get!(d, 42) do  # d is not updated
+        f(200)
+    end == 4
+
+    @test get(d, 13) do   # d is not updated
+        f(4)
+    end == 16
+
+    @test d == IdDict(8=>19, 19=>2, 42=>4)
 end
 
 @testset "issue #26833, deletion from IdDict" begin
@@ -713,13 +735,13 @@ const global hashoffset = [UInt(190)]
 
 Base.hash(s::MyString) = hash(s.str) + hashoffset[]
 Base.lastindex(s::MyString) = lastindex(s.str)
-Base.next(s::MyString, v::Int) = next(s.str, v)
+Base.iterate(s::MyString, v::Int=1) = iterate(s.str, v)
 Base.isequal(a::MyString, b::MyString) = isequal(a.str, b.str)
 ==(a::MyString, b::MyString) = (a.str == b.str)
 
 Base.hash(v::MyInt) = v.val + hashoffset[]
 Base.lastindex(v::MyInt) = lastindex(v.val)
-Base.next(v::MyInt, i::Int) = next(v.val, i)
+Base.iterate(v::MyInt, i...) = iterate(v.val, i...)
 Base.isequal(a::MyInt, b::MyInt) = isequal(a.val, b.val)
 ==(a::MyInt, b::MyInt) = (a.val == b.val)
 @testset "issue #15077" begin
@@ -789,12 +811,6 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     A = [1]
     B = [2]
     C = [3]
-    local x = 0
-    local y = 0
-    local z = 0
-    finalizer(a->(x+=1), A)
-    finalizer(b->(y+=1), B)
-    finalizer(c->(z+=1), C)
 
     # construction
     wkd = WeakKeyDict()
@@ -810,6 +826,8 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test WeakKeyDict(a=>i+1 for (i,a) in enumerate([A,B,C]) ) == wkd
     @test WeakKeyDict([(A,2), (B,3), (C,4)]) == wkd
     @test WeakKeyDict(Pair(A,2), Pair(B,3), Pair(C,4)) == wkd
+    @test isa(WeakKeyDict(Pair(A,2), Pair(B,3.0), Pair(C,4)), WeakKeyDict{Array{Int,1},Any})
+    @test isa(WeakKeyDict(Pair(convert(Vector{Number}, A),2), Pair(B,3), Pair(C,4)), WeakKeyDict{Any,Int})
     @test copy(wkd) == wkd
 
     @test length(wkd) == 3
@@ -835,6 +853,28 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test isa(wkd, WeakKeyDict)
 
     @test_throws ArgumentError WeakKeyDict([1, 2, 3])
+
+    wkd = WeakKeyDict(A=>1)
+    @test delete!(wkd, A) == empty(wkd)
+
+    # issue #26939
+    d26939 = WeakKeyDict()
+    d26939[big"1.0" + 1.1] = 1
+    GC.gc() # make sure this doesn't segfault
+
+    # WeakKeyDict does not convert keys on setting
+    @test_throws ArgumentError WeakKeyDict{Vector{Int},Any}([5.0]=>1)
+    wkd = WeakKeyDict(A=>2)
+    @test_throws ArgumentError get!(wkd, [2.0], 2)
+    @test_throws ArgumentError get!(wkd, [1.0], 2) # get! fails even if the key is only
+                                                   # used for getting and not setting
+
+    # WeakKeyDict does convert on getting
+    wkd = WeakKeyDict(A=>2)
+    @test keytype(wkd)==Vector{Int}
+    @test wkd[[1.0]] == 2
+    @test haskey(wkd, [1.0])
+    @test pop!(wkd, [1.0]) == 2
 end
 
 @testset "issue #19995, hash of dicts" begin
@@ -898,6 +938,23 @@ end
     @test d1 == Dict("A" => 1, "B" => 18, "C" => 32)
     @inferred merge!(-, d1, d2)
     @test d1 == Dict("A" => 1, "B" => 15, "C" => 28)
+end
+
+@testset "Dict reduce merge" begin
+    function check_merge(i::Vector{<:Dict}, o)
+        r1 = reduce(merge, i)
+        r2 = merge(i...)
+        t = typeof(o)
+        @test r1 == o
+        @test r2 == o
+        @test typeof(r1) == t
+        @test typeof(r2) == t
+    end
+    check_merge([Dict(1=>2), Dict(1.0=>2.0)], Dict(1.0=>2.0))
+    check_merge([Dict(1=>2), Dict(2=>Complex(1.0, 1.0))],
+      Dict(2=>Complex(1.0, 1.0), 1=>Complex(2.0, 0.0)))
+    check_merge([Dict(1=>2), Dict(3=>4)], Dict(3=>4, 1=>2))
+    check_merge([Dict(3=>4), Dict(:a=>5)], Dict(:a => 5, 3 => 4))
 end
 
 @testset "misc error/io" begin
@@ -979,4 +1036,39 @@ end
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
         "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 3 entries. Keys:\n  5\n  ⋮"
+end
+
+@testset "copy!" begin
+    s = Dict(1=>2, 2=>3)
+    for a = ([3=>4], [0x3=>0x4], [3=>4, 5=>6, 7=>8], Pair{UInt,UInt}[3=>4, 5=>6, 7=>8])
+        @test s === copy!(s, Dict(a)) == Dict(a)
+        if length(a) == 1 # current limitation of Base.ImmutableDict
+            @test s === copy!(s, Base.ImmutableDict(a[])) == Dict(a[])
+        end
+    end
+end
+
+@testset "map!(f, values(dict))" begin
+    @testset "AbstractDict & Fallback" begin
+        mutable struct TestDict{K, V}  <: AbstractDict{K, V}
+            dict::Dict{K, V}
+            function TestDict(args...)
+                d = Dict(args...)
+                new{keytype(d), valtype(d)}(d)
+            end
+        end
+        Base.setindex!(td::TestDict, args...) = setindex!(td.dict, args...)
+        Base.getindex(td::TestDict, args...) = getindex(td.dict, args...)
+        Base.pairs(D::TestDict) = pairs(D.dict)
+        testdict = TestDict(:a=>1, :b=>2)
+        map!(v->v-1, values(testdict))
+        @test testdict[:a] == 0
+        @test testdict[:b] == 1
+    end
+    @testset "Dict" begin
+        testdict = Dict(:a=>1, :b=>2)
+        map!(v->v-1, values(testdict))
+        @test testdict[:a] == 0
+        @test testdict[:b] == 1
+    end
 end

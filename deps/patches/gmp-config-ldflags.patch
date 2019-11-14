@@ -1,0 +1,381 @@
+--- gmp-6.1.2/configure	2019-03-25 17:58:41.928471374 -0400
++++ gmp-6.1.2-LDFLAGS/configure	2019-03-26 13:08:07.756316866 -0400
+@@ -5880,7 +5880,7 @@ if test "$gmp_prog_cc_works" = yes; then
+ int main () { return 0; }
+ EOF
+   echo "Test compile: " >&5
+-  gmp_compile="$cc $cflags $cppflags conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -5934,7 +5934,7 @@ void *f() { return g(); }
+ int main () { return 0; }
+ EOF
+   echo "Test compile: function pointer return" >&5
+-  gmp_compile="$cc $cflags $cppflags conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -5990,7 +5990,7 @@ int cmov () { return (n >= 0 ? n : 0); }
+ int main () { return 0; }
+ EOF
+   echo "Test compile: cmov instruction" >&5
+-  gmp_compile="$cc $cflags $cppflags conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -6047,7 +6047,7 @@ unsigned long gcc303 () { return (unsign
+ int main () { return 0; }
+ EOF
+   echo "Test compile: double -> ulong conversion" >&5
+-  gmp_compile="$cc $cflags $cppflags conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -6102,7 +6102,7 @@ unsigned long fneg () { return -fneg_dat
+ int main () { return 0; }
+ EOF
+   echo "Test compile: double negation" >&5
+-  gmp_compile="$cc $cflags $cppflags conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -6158,7 +6158,7 @@ float ftod () { return (float) ftod_data
+ int main () { return 0; }
+ EOF
+   echo "Test compile: double -> float conversion" >&5
+-  gmp_compile="$cc $cflags $cppflags conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -6243,7 +6243,7 @@ param_init ()
+ int main () { return 0; }
+ EOF
+   echo "Test compile: gnupro alpha ev6 char spilling" >&5
+-  gmp_compile="$cc $cflags $cppflags conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -6294,7 +6294,7 @@ if test "$gmp_prog_cc_works" = yes; then
+ int k; int foo () { __builtin_alloca (k); }
+ EOF
+   echo "Test compile: __builtin_alloca availability" >&5
+-  gmp_compile="$cc $cflags $cppflags conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -6340,7 +6340,7 @@ int foo ()
+ int main () { return 0; }
+ EOF
+   echo "Test compile: alloca array" >&5
+-  gmp_compile="$cc $cflags $cppflags conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -6418,7 +6418,7 @@ int f ()
+ int main () { return 0; }
+ EOF
+   echo "Test compile: abs int -> double conversion" >&5
+-  gmp_compile="$cc $cflags $cppflags conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -6483,7 +6483,7 @@ int dummy;
+ int main () { return 0; }
+ EOF
+   echo "Test compile: long long reliability test 1" >&5
+-  gmp_compile="$cc $cflags $cppflags conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -6544,7 +6544,7 @@ int dummy;
+ int main () { return 0; }
+ EOF
+   echo "Test compile: long long reliability test 2" >&5
+-  gmp_compile="$cc $cflags $cppflags conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -6605,7 +6605,7 @@ int dummy;
+ int main () { return 0; }
+ EOF
+   echo "Test compile: freebsd hacked gcc" >&5
+-  gmp_compile="$cc $cflags $cppflags conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -6704,7 +6704,7 @@ main ()
+ 
+ EOF
+   echo "Test compile: mpn_lshift_com optimization" >&5
+-  gmp_compile="$cc $cflags $cppflags conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -6813,7 +6813,7 @@ main ()
+ 
+ EOF
+   echo "Test compile: mpn_lshift_com optimization 2" >&5
+-  gmp_compile="$cc $cflags $cppflags conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -7325,7 +7325,7 @@ _main:
+ 	xorl	%eax, %eax
+ 	ret
+ EOF
+-  gmp_compile="$cc $cflags $cppflags conftest.s -o conftest >&5"
++  gmp_compile="$cc $cflags $cppflags $LDFLAGS conftest.s -o conftest >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -7390,7 +7390,7 @@ $as_echo_n "checking compiler $cc $cflag
+   cat >conftest.c <<EOF
+ int main () { return 0; }
+ EOF
+-  gmp_compile="$cc $cflags -no-cpp-precomp conftest.c >conftest.out 2>&1"
++  gmp_compile="$cc $cflags $LDFLAGS -no-cpp-precomp conftest.c >conftest.out 2>&1"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -7498,7 +7498,7 @@ if test "$gmp_prog_cc_works" = yes; then
+ int main () { return 0; }
+ EOF
+   echo "Test compile: " >&5
+-  gmp_compile="$cc $cflags $cppflags $flag conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $flag $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -7552,7 +7552,7 @@ void *f() { return g(); }
+ int main () { return 0; }
+ EOF
+   echo "Test compile: function pointer return" >&5
+-  gmp_compile="$cc $cflags $cppflags $flag conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $flag $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -7608,7 +7608,7 @@ int cmov () { return (n >= 0 ? n : 0); }
+ int main () { return 0; }
+ EOF
+   echo "Test compile: cmov instruction" >&5
+-  gmp_compile="$cc $cflags $cppflags $flag conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $flag $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -7665,7 +7665,7 @@ unsigned long gcc303 () { return (unsign
+ int main () { return 0; }
+ EOF
+   echo "Test compile: double -> ulong conversion" >&5
+-  gmp_compile="$cc $cflags $cppflags $flag conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $flag $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -7720,7 +7720,7 @@ unsigned long fneg () { return -fneg_dat
+ int main () { return 0; }
+ EOF
+   echo "Test compile: double negation" >&5
+-  gmp_compile="$cc $cflags $cppflags $flag conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $flag $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -7776,7 +7776,7 @@ float ftod () { return (float) ftod_data
+ int main () { return 0; }
+ EOF
+   echo "Test compile: double -> float conversion" >&5
+-  gmp_compile="$cc $cflags $cppflags $flag conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $flag $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -7861,7 +7861,7 @@ param_init ()
+ int main () { return 0; }
+ EOF
+   echo "Test compile: gnupro alpha ev6 char spilling" >&5
+-  gmp_compile="$cc $cflags $cppflags $flag conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $flag $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -7912,7 +7912,7 @@ if test "$gmp_prog_cc_works" = yes; then
+ int k; int foo () { __builtin_alloca (k); }
+ EOF
+   echo "Test compile: __builtin_alloca availability" >&5
+-  gmp_compile="$cc $cflags $cppflags $flag conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $flag $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -7958,7 +7958,7 @@ int foo ()
+ int main () { return 0; }
+ EOF
+   echo "Test compile: alloca array" >&5
+-  gmp_compile="$cc $cflags $cppflags $flag conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $flag $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -8036,7 +8036,7 @@ int f ()
+ int main () { return 0; }
+ EOF
+   echo "Test compile: abs int -> double conversion" >&5
+-  gmp_compile="$cc $cflags $cppflags $flag conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $flag $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -8101,7 +8101,7 @@ int dummy;
+ int main () { return 0; }
+ EOF
+   echo "Test compile: long long reliability test 1" >&5
+-  gmp_compile="$cc $cflags $cppflags $flag conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $flag $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -8162,7 +8162,7 @@ int dummy;
+ int main () { return 0; }
+ EOF
+   echo "Test compile: long long reliability test 2" >&5
+-  gmp_compile="$cc $cflags $cppflags $flag conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $flag $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -8223,7 +8223,7 @@ int dummy;
+ int main () { return 0; }
+ EOF
+   echo "Test compile: freebsd hacked gcc" >&5
+-  gmp_compile="$cc $cflags $cppflags $flag conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $flag $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -8322,7 +8322,7 @@ main ()
+ 
+ EOF
+   echo "Test compile: mpn_lshift_com optimization" >&5
+-  gmp_compile="$cc $cflags $cppflags $flag conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $flag $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -8431,7 +8431,7 @@ main ()
+ 
+ EOF
+   echo "Test compile: mpn_lshift_com optimization 2" >&5
+-  gmp_compile="$cc $cflags $cppflags $flag conftest.c >&5"
++  gmp_compile="$cc $cflags $cppflags $flag $LDFLAGS conftest.c >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -9987,7 +9987,7 @@ main ()
+   return 0;
+ }
+ EOF
+-gmp_compile="$CC_FOR_BUILD conftest.c"
++gmp_compile="$CC_FOR_BUILD $LDFLAGS conftest.c"
+ cc_for_build_works=no
+ if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+@@ -10019,7 +10019,7 @@ main ()
+   return 0;
+ }
+ EOF
+-gmp_compile="$HOST_CC conftest.c"
++gmp_compile="$HOST_CC $LDFLAGS conftest.c"
+ cc_for_build_works=no
+ if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+@@ -10052,7 +10052,7 @@ main ()
+   return 0;
+ }
+ EOF
+-gmp_compile="$i conftest.c"
++gmp_compile="$i $LDFLAGS conftest.c"
+ cc_for_build_works=no
+ if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+@@ -10132,7 +10132,7 @@ main ()
+ }
+ EOF
+ for i in .exe ,ff8 ""; do
+-  gmp_compile="$CC_FOR_BUILD conftest.c -o conftest$i"
++  gmp_compile="$CC_FOR_BUILD $LDFLAGS conftest.c -o conftest$i"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -10168,7 +10168,7 @@ main (int argc, char **argv)
+   return 0;
+ }
+ EOF
+-gmp_compile="$CC_FOR_BUILD conftest.c"
++gmp_compile="$CC_FOR_BUILD $LDFLAGS conftest.c"
+ if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -10210,7 +10210,7 @@ foo ()
+   return log (d);
+ }
+ EOF
+-gmp_compile="$CC_FOR_BUILD conftest.c -lm"
++gmp_compile="$CC_FOR_BUILD $LDFLAGS conftest.c -lm"
+ if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+@@ -10543,7 +10543,7 @@ if test "$gmp_prog_cxx_works" = yes; the
+ int main (void) { return 0; }
+ EOF
+   echo "Test compile: " >&5
+-  gmp_cxxcompile="$CXX $CPPFLAGS $CXXFLAGS conftest.cc >&5"
++  gmp_cxxcompile="$CXX $CPPFLAGS $CXXFLAGS $LDFLAGS conftest.cc >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_cxxcompile\""; } >&5
+   (eval $gmp_cxxcompile) 2>&5
+   ac_status=$?
+@@ -10583,7 +10583,7 @@ using namespace foo;
+ int main (void) { return 0; }
+ EOF
+   echo "Test compile: namespace" >&5
+-  gmp_cxxcompile="$CXX $CPPFLAGS $CXXFLAGS conftest.cc >&5"
++  gmp_cxxcompile="$CXX $CPPFLAGS $CXXFLAGS $LDFLAGS conftest.cc >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_cxxcompile\""; } >&5
+   (eval $gmp_cxxcompile) 2>&5
+   ac_status=$?
+@@ -10629,7 +10629,7 @@ void someoutput (void) { std::cout << 12
+ int main (void) { return 0; }
+ EOF
+   echo "Test compile: std iostream" >&5
+-  gmp_cxxcompile="$CXX $CPPFLAGS $CXXFLAGS conftest.cc >&5"
++  gmp_cxxcompile="$CXX $CPPFLAGS $CXXFLAGS $LDFLAGS conftest.cc >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_cxxcompile\""; } >&5
+   (eval $gmp_cxxcompile) 2>&5
+   ac_status=$?
+@@ -27095,7 +27095,7 @@ for tmp_underscore in "" "_"; do
+ ${tmp_gsym_prefix}main$gmp_cv_asm_label_suffix
+ 	addl	$ ${tmp_underscore}_GLOBAL_OFFSET_TABLE_, %ebx
+ EOF
+-  gmp_compile="$CCAS $CFLAGS $CPPFLAGS $lt_prog_compiler_pic conftest.s >&5 && $CC $CFLAGS $CPPFLAGS $lt_prog_compiler_pic conftest.$OBJEXT >&5"
++  gmp_compile="$CCAS $CFLAGS $CPPFLAGS $lt_prog_compiler_pic conftest.s >&5 && $CC $CFLAGS $CPPFLAGS $LDFLAGS $lt_prog_compiler_pic conftest.$OBJEXT >&5"
+   if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$gmp_compile\""; } >&5
+   (eval $gmp_compile) 2>&5
+   ac_status=$?
+

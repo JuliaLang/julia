@@ -7,8 +7,8 @@ import REPL.LineEdit
 using Markdown
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
-import .Main.TestHelpers
+isdefined(Main, :FakePTYs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FakePTYs.jl"))
+import .Main.FakePTYs: with_fake_pty
 
 # For curmod_*
 include(joinpath(BASE_TEST_PATH, "testenv.jl"))
@@ -16,8 +16,27 @@ include(joinpath(BASE_TEST_PATH, "testenv.jl"))
 include("FakeTerminals.jl")
 import .FakeTerminals.FakeTerminal
 
+
+function kill_timer(delay)
+    # Give ourselves a generous timer here, just to prevent
+    # this causing e.g. a CI hang when there's something unexpected in the output.
+    # This is really messy and leaves the process in an undefined state.
+    # the proper and correct way to do this in real code would be to destroy the
+    # IO handles: `close(stdout_read); close(stdin_write)`
+    test_task = current_task()
+    function kill_test(t)
+        # **DON'T COPY ME.**
+        # The correct way to handle timeouts is to close the handle:
+        # e.g. `close(stdout_read); close(stdin_write)`
+        test_task.queue === nothing || Base.list_deletefirst!(test_task.queue, test_task)
+        schedule(test_task, "hard kill repl test"; error=true)
+        print(stderr, "WARNING: attempting hard kill of repl test after exceeding timeout\n")
+    end
+    return Timer(kill_test, delay)
+end
+
 # REPL tests
-function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
+function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_exit=false))
     # Use pipes so we can easily do blocking reads
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
@@ -31,6 +50,7 @@ function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
     repl = REPL.LineEditREPL(FakeTerminal(input.out, output.in, err.in), true)
     repl.options = options
 
+    hard_kill = kill_timer(900) # Your debugging session starts now. You have 15 minutes. Go.
     f(input.in, output.out, repl)
     t = @async begin
         close(input.in)
@@ -39,7 +59,8 @@ function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
     end
     @test read(err.out, String) == ""
     #display(read(output.out, String))
-    Base._wait(t)
+    Base.wait(t)
+    close(hard_kill)
     nothing
 end
 
@@ -83,35 +104,56 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "\\alpha\t")
     readuntil(stdout_read,"α")
     write(stdin_write, '\x03')
-    # Test cd feature in shell mode.  We limit to 40 characters when
-    # calling readuntil() to suppress the warning it (currently) gives for
-    # long strings.
+    # Test cd feature in shell mode.
     origpwd = pwd()
     mktempdir() do tmpdir
-        write(stdin_write, ";")
-        readuntil(stdout_read, "shell> ")
-        write(stdin_write, "cd $(escape_string(tmpdir))\n")
-        readuntil(stdout_read, "cd $(escape_string(tmpdir))"[max(1,end-39):end])
-        readuntil(stdout_read, realpath(tmpdir)[max(1,end-39):end])
-        readuntil(stdout_read, "\n")
-        readuntil(stdout_read, "\n")
-        @test pwd() == realpath(tmpdir)
-        write(stdin_write, ";")
-        readuntil(stdout_read, "shell> ")
-        write(stdin_write, "cd -\n")
-        readuntil(stdout_read, origpwd[max(1,end-39):end])
-        readuntil(stdout_read, "\n")
-        readuntil(stdout_read, "\n")
-        @test pwd() == origpwd
-        write(stdin_write, ";")
-        readuntil(stdout_read, "shell> ")
-        write(stdin_write, "cd\n")
-        readuntil(stdout_read, realpath(homedir())[max(1,end-39):end])
-        readuntil(stdout_read, "\n")
-        readuntil(stdout_read, "\n")
-        @test pwd() == realpath(homedir())
+        try
+            samefile = Base.Filesystem.samefile
+            tmpdir_pwd = cd(pwd, tmpdir)
+            homedir_pwd = cd(pwd, homedir())
+
+            # Test `cd`'ing to an absolute path
+            write(stdin_write, ";")
+            readuntil(stdout_read, "shell> ")
+            write(stdin_write, "cd $(escape_string(tmpdir))\n")
+            readuntil(stdout_read, "cd $(escape_string(tmpdir))")
+            readuntil(stdout_read, tmpdir_pwd)
+            readuntil(stdout_read, "\n")
+            readuntil(stdout_read, "\n")
+            @test samefile(".", tmpdir)
+
+            # Test using `cd` to move to the home directory
+            write(stdin_write, ";")
+            readuntil(stdout_read, "shell> ")
+            write(stdin_write, "cd\n")
+            readuntil(stdout_read, homedir_pwd)
+            readuntil(stdout_read, "\n")
+            readuntil(stdout_read, "\n")
+            @test samefile(".", homedir_pwd)
+
+            # Test using `-` to jump backward to tmpdir
+            write(stdin_write, ";")
+            readuntil(stdout_read, "shell> ")
+            write(stdin_write, "cd -\n")
+            readuntil(stdout_read, tmpdir_pwd)
+            readuntil(stdout_read, "\n")
+            readuntil(stdout_read, "\n")
+            @test samefile(".", tmpdir)
+
+            # Test using `~` (Base.expanduser) in `cd` commands
+            if !Sys.iswindows()
+                write(stdin_write, ";")
+                readuntil(stdout_read, "shell> ")
+                write(stdin_write, "cd ~\n")
+                readuntil(stdout_read, homedir_pwd)
+                readuntil(stdout_read, "\n")
+                readuntil(stdout_read, "\n")
+                @test samefile(".", homedir_pwd)
+            end
+        finally
+            cd(origpwd)
+        end
     end
-    cd(origpwd)
 
     # issue #20482
     #if !Sys.iswindows()
@@ -136,6 +178,30 @@ fake_repl() do stdin_write, stdout_read, repl
         s = readuntil(stdout_read, "\n\n")
         @test startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n [1] ") ||
               startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n [1] ")
+    end
+
+    # issue #27293
+    if Sys.isunix()
+        let s, old_stdout = stdout
+            write(stdin_write, ";")
+            readuntil(stdout_read, "shell> ")
+            write(stdin_write, "echo ~")
+            s = readuntil(stdout_read, "~")
+
+            proc_stdout_read, proc_stdout = redirect_stdout()
+            get_stdout = @async read(proc_stdout_read, String)
+            try
+                write(stdin_write, "\n")
+                readuntil(stdout_read, "\n")
+                s = readuntil(stdout_read, "\n")
+            finally
+                redirect_stdout(old_stdout)
+            end
+            @test s == "\e[0m" # the child has exited
+            close(proc_stdout)
+            # check for the correct, expanded response
+            @test occursin(expanduser("~"), fetch(get_stdout))
+        end
     end
 
     # issues #22176 & #20482
@@ -201,14 +267,12 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "1+1\n") # populate history with a trivial input
     readline(stdout_read)
     write(stdin_write, "\e[A\n")
-    t = Timer(10) do t
-        isopen(t) || return
-        error("Stuck waiting for the repl to write `1+1`")
+    let t = kill_timer(60)
+        # yield make sure this got processed
+        readuntil(stdout_read, "1+1")
+        readuntil(stdout_read, "\n\n")
+        close(t) # cancel timeout
     end
-    # yield make sure this got processed
-    readuntil(stdout_read, "1+1")
-    close(t)
-    readuntil(stdout_read, "\n\n")
 
     # Issue #10222
     # Test ignoring insert key in standard and prefix search modes
@@ -230,10 +294,6 @@ fake_repl() do stdin_write, stdout_read, repl
     # Test down arrow to go back to history
     # populate history with a trivial input
 
-    t = Timer(10) do t
-        isopen(t) || return
-        error("Stuck waiting for history test")
-    end
     s1 = "12345678"; s2 = "23456789"
     write(stdin_write, s1, '\n')
     readuntil(stdout_read, s1)
@@ -245,11 +305,12 @@ fake_repl() do stdin_write, stdout_read, repl
     # Now, down arrow, enter, should get us back to 2
     write(stdin_write, "\e[B\n")
     readuntil(stdout_read, s2)
-    close(t)
 
     # Close REPL ^D
     write(stdin_write, '\x04')
-    Base._wait(repltask)
+    Base.wait(repltask)
+
+    nothing
 end
 
 function buffercontents(buf::IOBuffer)
@@ -548,6 +609,16 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         @test buffercontents(LineEdit.buffer(s)) == "x ΔxΔ"
         @test position(LineEdit.buffer(s)) == 0
 
+        LineEdit.edit_clear(s)
+        LineEdit.enter_search(s, histp, true)
+        ss = LineEdit.state(s, histp)
+        write(ss.query_buffer, "Å") # should not be in history
+        LineEdit.update_display_buffer(ss, ss)
+        @test buffercontents(ss.response_buffer) == ""
+        @test position(ss.response_buffer) == 0
+        LineEdit.history_next_result(s, ss) # should not throw BoundsError
+        LineEdit.accept_result(s, histp)
+
         # Try entering search mode while in custom repl mode
         LineEdit.enter_search(s, custom_histp, true)
     end
@@ -618,7 +689,7 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # Close repl
     write(stdin_write, '\x04')
-    Base._wait(repltask)
+    Base.wait(repltask)
 end
 
 # Simple non-standard REPL tests
@@ -658,31 +729,51 @@ fake_repl() do stdin_write, stdout_read, repl
     @test wait(c) == "a"
     # Close REPL ^D
     write(stdin_write, '\x04')
-    Base._wait(repltask)
+    Base.wait(repltask)
 end
 
 ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
 
 let exename = Base.julia_cmd()
     # Test REPL in dumb mode
-    if !Sys.iswindows()
-        TestHelpers.with_fake_pty() do slave, master
-            nENV = copy(ENV)
-            nENV["TERM"] = "dumb"
-            p = run(setenv(`$exename --startup-file=no -q`,nENV),slave,slave,slave,wait=false)
-            output = readuntil(master,"julia> ",keep=true)
-            if ccall(:jl_running_on_valgrind,Cint,()) == 0
-                # If --trace-children=yes is passed to valgrind, we will get a
-                # valgrind banner here, not just the prompt.
-                @test output == "julia> "
-            end
-            write(master,"1\nexit()\n")
-
-            wait(p)
-            output = readuntil(master,' ',keep=true)
-            @test output == "1\r\nexit()\r\n1\r\n\r\njulia> "
-            @test bytesavailable(master) == 0
+    with_fake_pty() do pty_slave, pty_master
+        nENV = copy(ENV)
+        nENV["TERM"] = "dumb"
+        p = run(detach(setenv(`$exename --startup-file=no -q`, nENV)), pty_slave, pty_slave, pty_slave, wait=false)
+        Base.close_stdio(pty_slave)
+        output = readuntil(pty_master, "julia> ", keep=true)
+        if ccall(:jl_running_on_valgrind, Cint,()) == 0
+            # If --trace-children=yes is passed to valgrind, we will get a
+            # valgrind banner here, not just the prompt.
+            @test output == "julia> "
         end
+        write(pty_master, "1\nexit()\n")
+
+        output = readuntil(pty_master, ' ', keep=true)
+        if Sys.iswindows()
+	    # Our fake pty is actually a pipe, and thus lacks the input echo feature of posix
+            @test output == "1\n\njulia> "
+        else
+            @test output == "1\r\nexit()\r\n1\r\n\r\njulia> "
+        end
+        @test bytesavailable(pty_master) == 0
+        @test if Sys.iswindows() || Sys.isbsd()
+                eof(pty_master)
+            else
+                # Some platforms (such as linux) report EIO instead of EOF
+                # possibly consume child-exited notification
+                # for example, see discussion in https://bugs.python.org/issue5380
+                try
+                    eof(pty_master) && !Sys.islinux()
+                catch ex
+                    (ex isa Base.IOError && ex.code == Base.UV_EIO) || rethrow()
+                    @test_throws ex eof(pty_master) # make sure the error is sticky
+                    pty_master.readerror = nothing
+                    eof(pty_master)
+                end
+            end
+        @test read(pty_master, String) == ""
+        wait(p)
     end
 
     # Test stream mode
@@ -691,12 +782,13 @@ let exename = Base.julia_cmd()
     @test read(p, String) == "1\n"
 end # let exename
 
-# issue #19864:
+# issue #19864
 mutable struct Error19864 <: Exception; end
 function test19864()
     @eval Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
     buf = IOBuffer()
-    REPL.print_response(buf, Error19864(), [], false, false, nothing)
+    fake_response = (Any[(Error19864(), Ptr{Cvoid}[])], true)
+    REPL.print_response(buf, fake_response, false, false, nothing)
     return String(take!(buf))
 end
 @test occursin("correct19864", test19864())
@@ -706,6 +798,7 @@ let io = IOBuffer()
     Base.display_error(io,
         try
             [][trues(6000)]
+            @assert false
         catch e
             e
         end, [])
@@ -829,7 +922,7 @@ for keys = [altkeys, merge(altkeys...)],
 
             # Close REPL ^D
             write(stdin_write, '\x04')
-            Base._wait(repltask)
+            Base.wait(repltask)
 
             # Close the history file
             # (otherwise trying to delete it fails on Windows)
@@ -885,7 +978,7 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # Close REPL ^D
     write(stdin_write, '\x04')
-    Base._wait(repltask)
+    Base.wait(repltask)
 end
 
 # Docs.helpmode tests: we test whether the correct expressions are being generated here,
@@ -906,5 +999,44 @@ for (line, expr) in Pair[
     ]
     #@test REPL._helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(119, doc_util_path), stdout, expr)
     buf = IOBuffer()
-    @test eval(Base, REPL._helpmode(buf, line)) isa Union{Markdown.MD,Nothing}
+    @test Base.eval(REPL._helpmode(buf, line)) isa Union{Markdown.MD,Nothing}
+end
+
+# PR 30754, Issues #22013, #24871, #26933, #29282, #29361, #30348
+for line in ["′", "abstract", "type", "|=", ".="]
+    @test occursin("No documentation found.",
+        sprint(show, Base.eval(REPL._helpmode(IOBuffer(), line))::Union{Markdown.MD,Nothing}))
+end
+
+# PR #27562
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "Expr(:call, GlobalRef(Base.Math, :float), Core.SlotNumber(1))\n")
+    readline(stdout_read)
+    @test readline(stdout_read) == "\e[0m:(Base.Math.float(_1))"
+    write(stdin_write, "ans\n")
+    readline(stdout_read)
+    readline(stdout_read)
+    @test readline(stdout_read) == "\e[0m:(Base.Math.float(_1))"
+    write(stdin_write, '\x04')
+    Base.wait(repltask)
+end
+
+# issue #31352
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "struct Errs end\n")
+    readline(stdout_read)
+    readline(stdout_read)
+    write(stdin_write, "Base.show(io::IO, ::Errs) = throw(Errs())\n")
+    readline(stdout_read)
+    readline(stdout_read)
+    write(stdin_write, "Errs()\n")
+    write(stdin_write, '\x04')
+    wait(repltask)
+    @test istaskdone(repltask)
 end

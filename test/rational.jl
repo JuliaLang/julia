@@ -70,12 +70,12 @@ using Test
     @test 0.1 == 3602879701896397//36028797018963968
     @test Inf == 1//0 == 2//0 == typemax(Int)//0
     @test -Inf == -1//0 == -2//0 == -typemax(Int)//0
-    @test realmin() != 1//(BigInt(2)^1022+1)
-    @test realmin() == 1//(BigInt(2)^1022)
-    @test realmin() != 1//(BigInt(2)^1022-1)
-    @test realmin()/2 != 1//(BigInt(2)^1023+1)
-    @test realmin()/2 == 1//(BigInt(2)^1023)
-    @test realmin()/2 != 1//(BigInt(2)^1023-1)
+    @test floatmin() != 1//(BigInt(2)^1022+1)
+    @test floatmin() == 1//(BigInt(2)^1022)
+    @test floatmin() != 1//(BigInt(2)^1022-1)
+    @test floatmin()/2 != 1//(BigInt(2)^1023+1)
+    @test floatmin()/2 == 1//(BigInt(2)^1023)
+    @test floatmin()/2 != 1//(BigInt(2)^1023-1)
     @test nextfloat(0.0) != 1//(BigInt(2)^1074+1)
     @test nextfloat(0.0) == 1//(BigInt(2)^1074)
     @test nextfloat(0.0) != 1//(BigInt(2)^1074-1)
@@ -96,6 +96,11 @@ using Test
     @test !(1//3 < NaN)
     @test !(1//3 == NaN)
     @test !(1//3 > NaN)
+
+    # PR 29561
+    @test abs(one(Rational{UInt})) === one(Rational{UInt})
+    @test abs(one(Rational{Int})) === one(Rational{Int})
+    @test abs(-one(Rational{Int})) === one(Rational{Int})
 end
 
 @testset "Rational methods" begin
@@ -283,8 +288,8 @@ end
     @test convert(Rational{BigInt},zero(BigFloat)) == 0
     @test convert(Rational{BigInt},-zero(BigFloat)) == 0
     @test convert(Rational{BigInt},5e-324) == 5e-324
-    @test convert(Rational{BigInt},realmin(Float64)) == realmin(Float64)
-    @test convert(Rational{BigInt},realmax(Float64)) == realmax(Float64)
+    @test convert(Rational{BigInt},floatmin(Float64)) == floatmin(Float64)
+    @test convert(Rational{BigInt},floatmax(Float64)) == floatmax(Float64)
 
     @test isa(convert(Float64, big(1)//2), Float64)
 end
@@ -362,3 +367,13 @@ end
 
 # issue #16282
 @test_throws MethodError 3 // 4.5im
+
+# issue #31396
+@test round(1//2, RoundNearestTiesUp) === 1//1
+
+@testset "Unary plus on Rational (issue #30749)" begin
+   @test +Rational(true) == 1//1
+   @test +Rational(false) == 0//1
+   @test -Rational(true) == -1//1
+   @test -Rational(false) == 0//1
+end

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Type hierarchy to aid in splitting up of SHA2 algorithms
 # as SHA224/256 are similar, and SHA-384/512 are similar
 abstract type SHA_CTX end

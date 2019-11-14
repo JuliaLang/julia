@@ -2,6 +2,8 @@
 
 module Error
 
+import ..LibGit2: ensure_initialized
+
 export GitError
 
 @enum(Code, GIT_OK          = Cint(0),   # no error
@@ -71,6 +73,7 @@ end
 Base.show(io::IO, err::GitError) = print(io, "GitError(Code:$(err.code), Class:$(err.class), $(err.msg))")
 
 function last_error()
+    ensure_initialized()
     err = ccall((:giterr_last, :libgit2), Ptr{ErrorStruct}, ())
     if err != C_NULL
         err_obj   = unsafe_load(err)

@@ -52,6 +52,7 @@ endif # LLVM_VER != svn
 
 # Figure out which targets to build
 LLVM_TARGETS := host;NVPTX;AMDGPU
+LLVM_EXPERIMENTAL_TARGETS := WebAssembly
 
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
@@ -64,12 +65,14 @@ LLVM_CFLAGS += $(CFLAGS)
 LLVM_CXXFLAGS += $(CXXFLAGS)
 LLVM_CPPFLAGS += $(CPPFLAGS)
 LLVM_LDFLAGS += $(LDFLAGS)
-LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
-LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_LIBXML2=OFF
+LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD="$(LLVM_EXPERIMENTAL_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
+LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_HOST_TRIPLE="$(or $(XC_HOST),$(BUILD_MACHINE))"
 ifeq ($(USE_POLLY_ACC),1)
 LLVM_CMAKE += -DPOLLY_ENABLE_GPGPU_CODEGEN=ON
 endif
 LLVM_CMAKE += -DLLVM_TOOLS_INSTALL_DIR=$(shell $(JULIAHOME)/contrib/relative_path.sh $(build_prefix) $(build_depsbindir))
+LLVM_CMAKE += -DLLVM_UTILS_INSTALL_DIR=$(shell $(JULIAHOME)/contrib/relative_path.sh $(build_prefix) $(build_depsbindir))
+LLVM_CMAKE += -DLLVM_INCLUDE_UTILS=ON -DLLVM_INSTALL_UTILS=ON
 LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERMINFO=Off -DHAVE_HISTEDIT_H=Off -DHAVE_LIBEDIT=Off
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_CMAKE += -DLLVM_ENABLE_ASSERTIONS:BOOL=ON
@@ -85,6 +88,9 @@ ifneq ($(BUILD_OS),WINNT)
 LLVM_CMAKE += -DCROSS_TOOLCHAIN_FLAGS_NATIVE=-DCMAKE_TOOLCHAIN_FILE=$(SRCDIR)/NATIVE.cmake
 endif # BUILD_OS != WINNT
 endif # OS == WINNT
+ifeq ($(OS), emscripten)
+LLVM_CMAKE += -DCMAKE_TOOLCHAIN_FILE=$(EMSCRIPTEN)/cmake/Modules/Platform/Emscripten.cmake -DCROSS_TOOLCHAIN_FLAGS_NATIVE=-DCMAKE_TOOLCHAIN_FILE=$(SRCDIR)/NATIVE.cmake -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_BUILD_TOOLS=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_ENABLE_THREADS=OFF -DLLVM_BUILD_UTILS=OFF
+endif # OS == emscripten
 ifeq ($(USE_LLVM_SHLIB),1)
 # NOTE: we could also --disable-static here (on the condition we link tools
 #       against libLLVM) but there doesn't seem to be a CMake counterpart option
@@ -97,6 +103,10 @@ endif # USE_INTEL_JITEVENTS
 ifeq ($(USE_OPROFILE_JITEVENTS), 1)
 LLVM_CMAKE += -DLLVM_USE_OPROFILE:BOOL=ON
 endif # USE_OPROFILE_JITEVENTS
+
+ifeq ($(USE_PERF_JITEVENTS), 1)
+	LLVM_CMAKE += -DLLVM_USE_PERF:BOOL=ON
+endif # USE_PERF_JITEVENTS
 
 ifeq ($(BUILD_LLDB),1)
 ifeq ($(USECLANG),0)
@@ -131,6 +141,10 @@ LLVM_CPPFLAGS += -flto
 LLVM_LDFLAGS += -flto
 endif # LLVM_LTO
 
+ifeq ($(fPIC),)
+LLVM_CMAKE += -DLLVM_ENABLE_PIC=OFF
+endif
+
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 LLVM_LDFLAGS += -Wl,-rpath,$(build_libdir)
 LLVM_CPPFLAGS += -I$(build_includedir)
@@ -157,7 +171,17 @@ ifeq ($(BUILD_LLDB),0)
 LLVM_CMAKE += -DLLVM_TOOL_LLDB_BUILD=OFF
 endif
 
+ifneq ($(LLVM_VER),svn)
+ifeq (,$(findstring rc,$(LLVM_VER)))
+ifeq ($(shell [ x"$(LLVM_VER)" = x"8.0.1" ]; echo $$?),0)
+LLVM_SRC_URL := https://github.com/llvm/llvm-project/releases/download/llvmorg-$(LLVM_VER)
+else
 LLVM_SRC_URL := http://releases.llvm.org/$(LLVM_VER)
+endif
+else
+LLVM_VER_SPLIT := $(subst rc, ,$(LLVM_VER))
+LLVM_SRC_URL := https://prereleases.llvm.org/$(word 1,$(LLVM_VER_SPLIT))/rc$(word 2,$(LLVM_VER_SPLIT))
+endif
 
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR): | $(SRCCACHE)
@@ -184,6 +208,7 @@ endif
 ifeq ($(BUILD_LLDB),1)
 $(LLVM_SRC_DIR)/tools/lldb:
 $(LLVM_SRC_DIR)/source-extracted: $(LLVM_SRC_DIR)/tools/lldb
+endif
 endif
 
 # LLDB still relies on plenty of python 2.x infrastructure, without checking
@@ -275,6 +300,11 @@ distclean-libcxxabi:
 # error on a fresh build
 LLVM_CMAKE += -DCMAKE_EXE_LINKER_FLAGS="$(LLVM_LDFLAGS) $(LLVM_LIBCXX_LDFLAGS)" \
 	-DCMAKE_SHARED_LINKER_FLAGS="$(LLVM_LDFLAGS) $(LLVM_LIBCXX_LDFLAGS)"
+
+# change the SONAME of Julia's private LLVM
+# i.e. libLLVM-6.0jl.so
+# see #32462
+LLVM_CMAKE += -DLLVM_VERSION_SUFFIX:STRING="jl"
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 LIBCXX_DEPENDENCY := $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++.so.1.0
@@ -369,140 +399,128 @@ endif # LLVM_VER
 	touch -c $(LLVM_SRC_DIR)/CMakeLists.txt
 	echo 1 > $@
 
-# Apply version-specific LLVM patches
+# Apply version-specific LLVM patches sequentially
 LLVM_PATCH_PREV :=
 define LLVM_PATCH
 $$(LLVM_SRC_DIR)/$1.patch-applied: $$(LLVM_SRC_DIR)/source-extracted | $$(SRCDIR)/patches/$1.patch $$(LLVM_PATCH_PREV)
 	cd $$(LLVM_SRC_DIR) && patch -p1 < $$(SRCDIR)/patches/$1.patch
 	echo 1 > $$@
+# declare that applying any patch must re-run the compile step
+$$(LLVM_BUILDDIR_withtype)/build-compiled: $$(LLVM_SRC_DIR)/$1.patch-applied
 LLVM_PATCH_PREV := $$(LLVM_SRC_DIR)/$1.patch-applied
 endef
 
-ifeq ($(LLVM_VER_SHORT),3.9)
-$(eval $(call LLVM_PATCH,llvm-PR22923)) # Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-arm-fix-prel31)) # Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D25865-cmakeshlib)) # Remove for 4.0
-# Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
-$(eval $(call LLVM_PATCH,llvm-3.9.0_threads))
-$(eval $(call LLVM_PATCH,llvm-3.9.0_win64-reloc-dwarf)) # modified version applied as R290809, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-3.9.0_D27296-libssp))
-$(eval $(call LLVM_PATCH,llvm-D27609-AArch64-UABS_G3)) # Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model))
-$(eval $(call LLVM_PATCH,llvm-NVPTX-addrspaces)) # NVPTX
-$(eval $(call LLVM_PATCH,llvm-D9168_argument_alignment)) # NVPTX, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D23597_sdag_names))     # NVPTX, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D24300_ptx_intrinsics)) # NVPTX, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D27389)) # Julia issue #19792, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D27397)) # Julia issue #19792, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D28009)) # Julia issue #19792, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D28215_FreeBSD_shlib))
-$(eval $(call LLVM_PATCH,llvm-D28221-avx512)) # mentioned in issue #19797
-$(eval $(call LLVM_PATCH,llvm-PR276266)) # Issue #19976, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-PR278088)) # Issue #19976, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-PR277939)) # Issue #19976, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-PR278321)) # Issue #19976, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-PR278923)) # Issue #19976, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D28759-loopclearance))
-$(eval $(call LLVM_PATCH,llvm-D28786-callclearance))
-$(eval $(call LLVM_PATCH,llvm-rL293230-icc17-cmake)) # Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D32593))
-$(eval $(call LLVM_PATCH,llvm-D33179))
-$(eval $(call LLVM_PATCH,llvm-PR29010-i386-xmm)) # Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-3.9.0-D37576-NVPTX-sm_70)) # NVPTX, Remove for 6.0
-$(eval $(call LLVM_PATCH,llvm-D37939-Mem2Reg-Also-handle-memcpy))
-$(eval $(call LLVM_PATCH,llvm-D31524-sovers_4.0)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D42262-jumpthreading-not-i1))
-$(eval $(call LLVM_PATCH,llvm-3.9-c_api_nullptr))
-$(eval $(call LLVM_PATCH,llvm-PPC-addrspaces)) # PPC
-$(eval $(call LLVM_PATCH,llvm-D30114)) # PPC remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-PR36292)) # PPC fixes #26249, remove for 6.0
-$(eval $(call LLVM_PATCH,llvm-D39297-musl-dynamiclibrary-pre5)) # Remove for 6.0
-$(eval $(call LLVM_PATCH,llvm-D28476-musl-targetlibraryinfo_3.9)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D46460))
-ifeq ($(BUILD_LLVM_CLANG),1)
-$(eval $(call LLVM_PATCH,compiler_rt-3.9-glibc_2.25.90)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,clang-D28477)) # Remove for 5.0
+ifeq ($(LLVM_VER_SHORT),6.0)
+ifeq ($(LLVM_VER_PATCH), 0)
+$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_4.0))
+else
+$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
 endif
-else ifeq ($(LLVM_VER_SHORT),4.0)
-# Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
-$(eval $(call LLVM_PATCH,llvm-4.0.0_threads))
-$(eval $(call LLVM_PATCH,llvm-3.9.0_D27296-libssp))
-$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_4.0))
-$(eval $(call LLVM_PATCH,llvm-D28215_FreeBSD_shlib)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D28759-loopclearance)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D28786-callclearance_4.0)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D32593)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D33179)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D32203-SORA-non-integral)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D33110-codegen-prepare-inttoptr))
-$(eval $(call LLVM_PATCH,llvm-D30478-VNCoercion)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-VNCoercion-signatures)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-VNCoercion-template)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D32196-LIR-non-integral)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D32208-coerce-non-integral)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D32623-GVN-non-integral)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D33129-scevexpander-non-integral)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-Yet-another-fix))
-$(eval $(call LLVM_PATCH,llvm-NVPTX-addrspaces)) # NVPTX
-$(eval $(call LLVM_PATCH,llvm-4.0.0-D37576-NVPTX-sm_70)) # NVPTX, Remove for 6.0
-$(eval $(call LLVM_PATCH,llvm-loadcse-addrspace_4.0))
-$(eval $(call LLVM_PATCH,llvm-D31524-sovers_4.0)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D42262-jumpthreading-not-i1))
-$(eval $(call LLVM_PATCH,llvm-PPC-addrspaces)) # PPC
-$(eval $(call LLVM_PATCH,llvm-D30114)) # PPC remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-PR36292)) # PPC fixes #26249, remove for 6.0
-$(eval $(call LLVM_PATCH,llvm-D39297-musl-dynamiclibrary-pre5)) # Remove for 6.0
-$(eval $(call LLVM_PATCH,llvm-D28476-musl-targetlibraryinfo_4.0)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D46460))
-ifeq ($(BUILD_LLVM_CLANG),1)
-$(eval $(call LLVM_PATCH,compiler_rt-3.9-glibc_2.25.90)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,clang-D28477)) # Remove for 5.0
-endif
-else ifeq ($(LLVM_VER_SHORT),5.0)
-# Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
-$(eval $(call LLVM_PATCH,llvm-5.0.0_threads))
-$(eval $(call LLVM_PATCH,llvm-3.9.0_D27296-libssp))
-$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_4.0))
-$(eval $(call LLVM_PATCH,llvm-loadcse-addrspace_5.0))
-$(eval $(call LLVM_PATCH,llvm-D34078-vectorize-fdiv))
-$(eval $(call LLVM_PATCH,llvm-5.0-NVPTX-addrspaces)) # NVPTX
-$(eval $(call LLVM_PATCH,llvm-4.0.0-D37576-NVPTX-sm_70)) # NVPTX, Remove for 6.0
-$(eval $(call LLVM_PATCH,llvm-D38765-gvn_5.0)) # Remove for 6.0
-$(eval $(call LLVM_PATCH,llvm-D42262-jumpthreading-not-i1)) # remove for 7.0
-$(eval $(call LLVM_PATCH,llvm-PPC-addrspaces)) # PPC
-$(eval $(call LLVM_PATCH,llvm-PR36292-5.0)) # PPC fixes #26249, remove for 6.0
-$(eval $(call LLVM_PATCH,llvm-D39297-musl-dynamiclibrary)) # Remove for 6.0
-$(eval $(call LLVM_PATCH,llvm-D46460))
-else ifeq ($(LLVM_VER_SHORT),6.0)
-$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_4.0))
 $(eval $(call LLVM_PATCH,llvm-D34078-vectorize-fdiv))
 $(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX
 $(eval $(call LLVM_PATCH,llvm-D42262-jumpthreading-not-i1)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-PPC-addrspaces)) # remove for 7.0
+ifeq ($(LLVM_VER_PATCH), 0)
 $(eval $(call LLVM_PATCH,llvm-D42260)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-rL326843-missing-header)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-6.0-r327540)) # remove for 7.0
+endif
 $(eval $(call LLVM_PATCH,llvm-6.0.0_D27296-libssp)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-6.0-D44650)) # mingw32 build fix
+ifeq ($(LLVM_VER_PATCH), 0)
 $(eval $(call LLVM_PATCH,llvm-D45008)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-D45070)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-6.0.0-ifconv-D45819)) # remove for 7.0
+endif
 $(eval $(call LLVM_PATCH,llvm-D46460))
-endif # LLVM_VER
+ifeq ($(LLVM_VER_PATCH), 0)
+$(eval $(call LLVM_PATCH,llvm-rL332680)) # remove for 7.0
+$(eval $(call LLVM_PATCH,llvm-rL332682)) # remove for 7.0
+$(eval $(call LLVM_PATCH,llvm-rL332302)) # remove for 7.0
+$(eval $(call LLVM_PATCH,llvm-rL332694)) # remove for 7.0
+endif
+$(eval $(call LLVM_PATCH,llvm-rL327898)) # remove for 7.0
+$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
+$(eval $(call LLVM_PATCH,llvm-OProfile-line-num))
+$(eval $(call LLVM_PATCH,llvm-D44892-Perf-integration))
+$(eval $(call LLVM_PATCH,llvm-D49832-SCEVPred)) # Remove for 7.0
+$(eval $(call LLVM_PATCH,llvm-rL323946-LSRTy)) # Remove for 7.0
+$(eval $(call LLVM_PATCH,llvm-D50010-VNCoercion-ni))
+$(eval $(call LLVM_PATCH,llvm-D50167-scev-umin))
+$(eval $(call LLVM_PATCH,llvm-rL326967-aligned-load)) # remove for 7.0
+ifeq ($(LLVM_VER_PATCH), 0)
+$(eval $(call LLVM_PATCH,llvm-windows-race))
+endif
+$(eval $(call LLVM_PATCH,llvm-D51842-win64-byval-cc))
+$(eval $(call LLVM_PATCH,llvm-D57118-powerpc))
+$(eval $(call LLVM_PATCH,llvm-r355582-avxminmax)) # remove for 8.0
+$(eval $(call LLVM_PATCH,llvm-rL349068-llvm-config)) # remove for 8.0
+$(eval $(call LLVM_PATCH,llvm-6.0-D63688-wasm-isLocal))
+$(eval $(call LLVM_PATCH,llvm-6.0-D64032-cmake-cross))
+$(eval $(call LLVM_PATCH,llvm-6.0-D64225-cmake-cross2))
+$(eval $(call LLVM_PATCH,llvm6-WASM-addrspaces)) # WebAssembly
+endif # LLVM_VER 6.0
 
-# Remove hardcoded OS X requirements in compilter-rt cmake build
-ifeq ($(LLVM_VER_SHORT),3.9)
-ifeq ($(BUILD_LLVM_CLANG),1)
-$(eval $(call LLVM_PATCH,llvm-3.9-osx-10.12))
+ifeq ($(LLVM_VER_SHORT),7.0)
+$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
+$(eval $(call LLVM_PATCH,llvm-D34078-vectorize-fdiv))
+$(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX -- warning: this fails check-llvm-codegen-nvptx
+$(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
+$(eval $(call LLVM_PATCH,llvm-D46460))
+$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
+$(eval $(call LLVM_PATCH,llvm7-D50010-VNCoercion-ni))
+$(eval $(call LLVM_PATCH,llvm-7.0-D50167-scev-umin))
+$(eval $(call LLVM_PATCH,llvm7-windows-race))
+$(eval $(call LLVM_PATCH,llvm7-D51842-win64-byval-cc)) # remove for 8.0
+$(eval $(call LLVM_PATCH,llvm-D57118-powerpc))
+$(eval $(call LLVM_PATCH,llvm-rL349068-llvm-config)) # remove for 8.0
+$(eval $(call LLVM_PATCH,llvm7-WASM-addrspaces)) # WebAssembly
+$(eval $(call LLVM_PATCH,llvm7-revert-D44485))
+endif # LLVM_VER 7.0
+
+ifeq ($(LLVM_VER_SHORT),8.0)
+$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
+$(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
+$(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX -- warning: this fails check-llvm-codegen-nvptx
+$(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
+$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
+$(eval $(call LLVM_PATCH,llvm7-D50010-VNCoercion-ni))
+$(eval $(call LLVM_PATCH,llvm-8.0-D50167-scev-umin))
+$(eval $(call LLVM_PATCH,llvm7-windows-race))
+$(eval $(call LLVM_PATCH,llvm-D57118-powerpc)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm8-WASM-addrspaces)) # WebAssembly
+$(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
+$(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
+$(eval $(call LLVM_PATCH,llvm-8.0-D66401-mingw-reloc)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm7-revert-D44485))
+endif # LLVM_VER 8.0
+
+ifeq ($(LLVM_VER_SHORT),9.0)
+$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
+$(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
+$(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX -- warning: this fails check-llvm-codegen-nvptx
+$(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
+$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
+#$(eval $(call LLVM_PATCH,llvm7-D50010-VNCoercion-ni)) # TODO
+#$(eval $(call LLVM_PATCH,llvm7-windows-race)) # TODO
+$(eval $(call LLVM_PATCH,llvm8-WASM-addrspaces)) # WebAssembly
+$(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
+$(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
+$(eval $(call LLVM_PATCH,llvm7-revert-D44485))
+endif # LLVM_VER 9.0
+
+
+# Add a JL prefix to the version map. DO NOT REMOVE
+ifneq ($(LLVM_VER), svn)
+ifeq ($(LLVM_VER_SHORT), 6.0)
+$(eval $(call LLVM_PATCH,llvm-symver-jlprefix))
+else
+$(eval $(call LLVM_PATCH,llvm7-symver-jlprefix))
 endif
 endif
 
-# Independent to the llvm version add a JL prefix to the version map
-# Depends on `llvm-D31524-sovers_4.0` for LLVM_VER==3.9
-$(eval $(call LLVM_PATCH,llvm-symver-jlprefix)) # DO NOT REMOVE
-
-
-$(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_PATCH_PREV)
+# declare that all patches must be applied before running ./configure
+$(LLVM_BUILDDIR_withtype)/build-configured: | $(LLVM_PATCH_PREV)
 
 $(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_SRC_DIR)/source-extracted | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
 	mkdir -p $(dir $@)
@@ -531,9 +549,15 @@ endif
 $(build_prefix)/manifest/llvm: | $(llvm_python_workaround)
 
 LLVM_INSTALL = \
-	cd $1 && $$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
+	cd $1 && mkdir -p $2$$(build_depsbindir) && \
+    cp -r $$(LLVM_SRC_DIR)/utils/lit $2$$(build_depsbindir)/ && \
+    $$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
 ifeq ($(OS), WINNT)
 LLVM_INSTALL += && cp $2$$(build_shlibdir)/LLVM.dll $2$$(build_depsbindir)
+endif
+ifeq ($(OS),Darwin)
+# https://github.com/JuliaLang/julia/issues/29981
+LLVM_INSTALL += && ln -s libLLVM.dylib $2$$(build_shlibdir)/libLLVM-$$(LLVM_VER_SHORT).dylib
 endif
 
 $(eval $(call staged-install,llvm,llvm-$$(LLVM_VER)/build_$$(LLVM_BUILDTYPE), \
@@ -573,30 +597,13 @@ ifeq ($(USE_POLLY),1)
 endif
 endif
 else # USE_BINARYBUILDER_LLVM
-LLVM_BB_URL_BASE := https://github.com/staticfloat/LLVMBuilder/releases/download
-LLVM_BB_URL := $(LLVM_BB_URL_BASE)/v$(LLVM_VER)-$(LLVM_BB_REL)/LLVM.$(BINARYBUILDER_TRIPLET).tar.gz
+LLVM_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LLVM-v$(LLVM_VER)-$(LLVM_BB_REL)
+ifneq ($(BINARYBUILDER_LLVM_ASSERTS), 1)
+LLVM_BB_NAME := LLVM.v$(LLVM_VER)
+else
+LLVM_BB_NAME := LLVM.asserts.v$(LLVM_VER)
+endif
 
-$(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL):
-	mkdir -p $@
+$(eval $(call bb-install,llvm,LLVM,true))
 
-$(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL)/LLVM.$(BINARYBUILDER_TRIPLET).tar.gz: | $(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL)
-	$(JLDOWNLOAD) $@ $(LLVM_BB_URL)
-
-$(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL)/build-compiled: | $(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL)/LLVM.$(BINARYBUILDER_TRIPLET).tar.gz
-	echo 1 > $@
-
-$(eval $(call staged-install,llvm,llvm-$$(LLVM_VER)-$$(LLVM_BB_REL),,,,))
-
-#Override provision of stage tarball
-$(build_staging)/llvm-$(LLVM_VER)-$(LLVM_BB_REL).tgz: $(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL)/LLVM.$(BINARYBUILDER_TRIPLET).tar.gz
-	cp $< $@
-
-clean-llvm:
-distclean-llvm:
-get-llvm:  $(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL)/LLVM.$(BINARYBUILDER_TRIPLET).tar.gz
-extract-llvm:
-configure-llvm:
-compile-llvm:
-fastcheck-llvm:
-check-llvm:
 endif # USE_BINARYBUILDER_LLVM

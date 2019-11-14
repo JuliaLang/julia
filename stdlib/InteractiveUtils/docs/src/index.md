@@ -1,9 +1,5 @@
 # Interactive Utilities
 
-```@meta
-DocTestSetup = :(using InteractiveUtils)
-```
-
 ```@docs
 InteractiveUtils.apropos
 InteractiveUtils.varinfo
@@ -26,8 +22,5 @@ InteractiveUtils.code_llvm
 InteractiveUtils.@code_llvm
 InteractiveUtils.code_native
 InteractiveUtils.@code_native
-```
-
-```@meta
-DocTestSetup = nothing
+InteractiveUtils.clipboard
 ```

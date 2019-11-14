@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Enum for escaped (multi-byte) keys such as the arrows or the home/end keys
 @enum(Key,
     ARROW_LEFT = 1000,

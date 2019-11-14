@@ -2,7 +2,7 @@
 
 module Consts
 
-import ..LibGit2: version
+import ..LibGit2: version, ensure_initialized
 
 const HEAD_FILE  = "HEAD"
 const FETCH_HEAD  = "FETCH_HEAD"

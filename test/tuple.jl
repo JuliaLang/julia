@@ -86,6 +86,16 @@ end
     end
 
     @test empty((1, 2.0, "c")) === ()
+
+    # issue #28915
+    @test convert(Union{Tuple{}, Tuple{Int}}, (1,)) === (1,)
+
+    @testset "one-element containers" begin
+        r = Ref(3)
+        @test (3,) === @inferred Tuple(r)
+        z = Array{Float64,0}(undef); z[] = 3.0
+        @test (3.0,) === @inferred Tuple(z)
+    end
 end
 
 @testset "size" begin
@@ -94,6 +104,7 @@ end
     @test length((1,2)) === 2
 
     @test_throws ArgumentError Base.front(())
+    @test_throws ArgumentError Base.tail(())
     @test_throws ArgumentError first(())
 
     @test lastindex(()) === 0
@@ -129,6 +140,9 @@ end
     @test_throws BoundsError getindex((5,6,7,8), [true, false, false, true, true])
 
     @test getindex((5,6,7,8), []) === ()
+    @test getindex((1,9,9,3),:) === (1,9,9,3)
+    @test getindex((),:) === ()
+    @test getindex((1,),:) === (1,)
 
     @testset "boolean arrays" begin
         # issue #19719
@@ -153,16 +167,13 @@ end
 end
 
 @testset "iterating" begin
-    @test start((1,2,3)) === 1
-
-    @test done((), 1)
-    @test !done((1,2,3), 3)
-    @test done((1,2,3), 4)
-
-    @test next((5,6,7), 1) === (5, 2)
-    @test next((5,6,7), 3) === (7, 4)
-    @test_throws BoundsError next((5,6,7), 0)
-    @test_throws BoundsError next((), 1)
+    @test iterate(()) === nothing
+    t = (1,2,3)
+    y1 = iterate(t)
+    y2 = iterate(t, y1[2])
+    y3 = iterate(t, y2[2])
+    @test y3 !== nothing
+    @test iterate(t, y3[2]) === nothing
 
     @test eachindex((2,5,"foo")) === Base.OneTo(3)
     @test eachindex((2,5,"foo"), (1,2,5,7)) === Base.OneTo(4)
@@ -232,6 +243,15 @@ end
         @test_throws BoundsError map(foo, (), (1,), (1,))
         @test_throws BoundsError map(foo, (1,), (1,), ())
     end
+end
+
+@testset "mapfoldl" begin
+    @test (((1=>2)=>3)=>4) == foldl(=>, (1,2,3,4)) ==
+          mapfoldl(identity, =>, (1,2,3,4)) == mapfoldl(abs, =>, (-1,-2,-3,-4))
+    @test mapfoldl(abs, =>, (-1,-2,-3,-4), init=-10) == ((((-10=>1)=>2)=>3)=>4)
+    @test mapfoldl(abs, =>, (), init=-10) == -10
+    @test mapfoldl(abs, Pair{Any,Any}, (-30:-1...,)) == mapfoldl(abs, Pair{Any,Any}, [-30:-1...,])
+    @test_throws ArgumentError mapfoldl(abs, =>, ())
 end
 
 @testset "comparison and hash" begin
@@ -427,3 +447,14 @@ end
     @test findnext(isequal(1), (2, 3), 1) === nothing
     @test findprev(isequal(1), (2, 3), 2) === nothing
 end
+
+@testset "properties" begin
+    ttest = (:a, :b, :c)
+    @test propertynames(ttest) == (1, 2, 3)
+    @test getproperty(ttest, 2) == :b
+    @test map(p->getproperty(ttest, p), propertynames(ttest)) == ttest
+    @test_throws ErrorException setproperty!(ttest, 1, :d)
+end
+
+# tuple_type_tail on non-normalized vararg tuple
+@test Base.tuple_type_tail(Tuple{Vararg{T, 3}} where T<:Real) == Tuple{Vararg{T, 2}} where T<:Real

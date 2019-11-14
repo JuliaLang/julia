@@ -9,6 +9,6 @@
 #define JL_LLVM_VERSION (LLVM_VERSION_MAJOR * 10000 + LLVM_VERSION_MINOR * 100 \
                         + LLVM_VERSION_PATCH)
 
-#if JL_LLVM_VERSION < 30901
-    #error Only LLVM versions >= 3.9.1 are supported by Julia
+#if JL_LLVM_VERSION < 60000
+    #error Only LLVM versions >= 6.0.0 are supported by Julia
 #endif

@@ -32,7 +32,7 @@ docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
 
 @doc "Doc abstract type"
 abstract type C74685{T,N} <: AbstractArray{T,N} end
-@test repr("text/plain", Docs.doc(C74685))=="  Doc abstract type\n"
+@test repr("text/plain", Docs.doc(C74685))=="  Doc abstract type"
 @test string(Docs.doc(C74685))=="Doc abstract type\n"
 
 macro macro_doctest() end
@@ -40,6 +40,12 @@ macro macro_doctest() end
 :@macro_doctest
 
 @test (@doc @macro_doctest) !== nothing
+
+@test (@eval @doc $(Meta.parse("{a"))) isa Markdown.MD
+@test (@eval @doc $(Meta.parse("``"))) isa Markdown.MD
+@test (@eval @doc $(Meta.parse("``"))) == (@doc @cmd)
+@test (@eval @doc $(Meta.parse("123456789012345678901234567890"))) == (@doc @int128_str)
+@test (@eval @doc $(Meta.parse("1234567890123456789012345678901234567890"))) == (@doc @big_str)
 
 # test that random stuff interpolated into docstrings doesn't break search or other methods here
 @doc doc"""
@@ -152,6 +158,18 @@ t(::AbstractString)
 t(::Int, ::Any)
 "t-3"
 t{S <: Integer}(::S)
+
+# Docstrings to parametric methods after definition using where syntax (#32960):
+tw(x::T) where T = nothing
+tw(x::T, y::U) where {T, U <: Integer} = nothing
+tw(x::T, y::U, z::V) where T where U <: Integer where V <: AbstractFloat = nothing
+
+"tw-1"
+tw(x::T) where T
+"tw-2"
+tw(x::T, y::U) where {T, U <: Integer}
+"tw-3"
+tw(x::T, y::U, z::V) where T where U <: Integer where V <: AbstractFloat
 
 "FieldDocs"
 mutable struct FieldDocs
@@ -669,7 +687,6 @@ end
 @test (@repl :@r_str) !== nothing
 
 # Simple tests for apropos:
-@test occursin("cor", sprint(apropos, "pearson"))
 @test occursin("eachindex", sprint(apropos, r"ind(exes|ices)"))
 using Profile
 @test occursin("Profile.print", sprint(apropos, "print"))
@@ -993,6 +1010,20 @@ let dt2 = _repl(:(dynamic_test(::String)))
     @test dt2.args[1].args[1] == Symbol("@doc")
     @test dt2.args[1].args[3] == :(dynamic_test(::String))
 end
+let dt3 = _repl(:(dynamic_test(a)))
+    @test dt3 isa Expr
+    @test dt3.args[1] isa Expr
+    @test dt3.args[1].head === :macrocall
+    @test dt3.args[1].args[1] == Symbol("@doc")
+    @test dt3.args[1].args[3].args[2].head == :(::) # can't test equality due to line numbers
+end
+let dt4 = _repl(:(dynamic_test(1.0,u=2.0)))
+    @test dt4 isa Expr
+    @test dt4.args[1] isa Expr
+    @test dt4.args[1].head === :macrocall
+    @test dt4.args[1].args[1] == Symbol("@doc")
+    @test dt4.args[1].args[3] == :(dynamic_test(::typeof(1.0); u::typeof(2.0)=2.0))
+end
 
 # Equality testing
 
@@ -1121,3 +1152,28 @@ struct A_20087 end
 (a::A_20087)() = a
 
 @test docstrings_equal(@doc(A_20087()), doc"a")
+
+struct B_20087 end
+
+"""b"""
+(::B_20087)() = a
+
+@test docstrings_equal(@doc(B_20087()), doc"b")
+
+# issue #27832
+
+_last_atdoc = Core.atdoc
+Core.atdoc!(Core.Compiler.CoreDocs.docm)  # test bootstrap doc system
+
+"""
+"""
+module M27832
+macro foo(x)
+    repr(x)
+end
+for fn in (:isdone,)
+    global xs = @foo $fn
+end
+end
+@test M27832.xs == ":(\$(Expr(:\$, :fn)))"
+Core.atdoc!(_last_atdoc)

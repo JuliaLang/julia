@@ -64,7 +64,7 @@ specified, other workers will connect to this worker at the specified `bind_addr
 `port`.
 
 `count` is the number of workers to be launched on the specified host. If specified as
-`:auto` it will launch as many workers as the number of cores on the specific host.
+`:auto` it will launch as many workers as the number of CPU threads on the specific host.
 
 Keyword arguments:
 
@@ -124,9 +124,9 @@ function launch(manager::SSHManager, params::Dict, launched::Array, launch_ntfy:
     # Wait for all launches to complete.
     launch_tasks = Vector{Any}(undef, length(manager.machines))
 
-    for (i,(machine, cnt)) in enumerate(manager.machines)
+    for (i, (machine, cnt)) in enumerate(manager.machines)
         let machine=machine, cnt=cnt
-            launch_tasks[i] = @schedule try
+            launch_tasks[i] = @async try
                     launch_on_machine(manager, machine, cnt, params, launched, launch_ntfy)
                 catch e
                     print(stderr, "exception launching on machine $(machine) : $(e)\n")
@@ -135,7 +135,7 @@ function launch(manager::SSHManager, params::Dict, launched::Array, launch_ntfy:
     end
 
     for t in launch_tasks
-        wait(t)
+        wait(t::Task)
     end
 
     notify(launch_ntfy)
@@ -226,7 +226,7 @@ end
 
 
 function manage(manager::SSHManager, id::Integer, config::WorkerConfig, op::Symbol)
-    if op == :interrupt
+    if op === :interrupt
         ospid = config.ospid
         if ospid !== nothing
             host = notnothing(config.host)
@@ -287,20 +287,20 @@ end
 
 # LocalManager
 struct LocalManager <: ClusterManager
-    np::Integer
+    np::Int
     restrict::Bool  # Restrict binding to 127.0.0.1 only
 end
 
 """
     addprocs(; kwargs...) -> List of process identifiers
 
-Equivalent to `addprocs(Sys.CPU_CORES; kwargs...)`
+Equivalent to `addprocs(Sys.CPU_THREADS; kwargs...)`
 
 Note that workers do not run a `.julia/config/startup.jl` startup script, nor do they synchronize
 their global state (such as global variables, new method definitions, and loaded modules) with any
 of the other running processes.
 """
-addprocs(; kwargs...) = addprocs(Sys.CPU_CORES; kwargs...)
+addprocs(; kwargs...) = addprocs(Sys.CPU_THREADS; kwargs...)
 
 """
     addprocs(np::Integer; restrict=true, kwargs...) -> List of process identifiers
@@ -340,7 +340,7 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
 end
 
 function manage(manager::LocalManager, id::Integer, config::WorkerConfig, op::Symbol)
-    if op == :interrupt
+    if op === :interrupt
         kill(config.process, 2)
     end
 end
@@ -373,7 +373,7 @@ manage
 struct DefaultClusterManager <: ClusterManager
 end
 
-const tunnel_hosts_map = Dict{AbstractString, Semaphore}()
+const tunnel_hosts_map = Dict{String, Semaphore}()
 
 """
     connect(manager::ClusterManager, pid::Int, config::WorkerConfig) -> (instrm::IO, outstrm::IO)
@@ -395,16 +395,16 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
     # master connecting to workers
     if config.io !== nothing
         (bind_addr, port) = read_worker_host_port(config.io)
-        pubhost = coalesce(config.host, bind_addr)
+        pubhost = something(config.host, bind_addr)
         config.host = pubhost
         config.port = port
     else
         pubhost = notnothing(config.host)
         port = notnothing(config.port)
-        bind_addr = coalesce(config.bind_addr, pubhost)
+        bind_addr = something(config.bind_addr, pubhost)
     end
 
-    tunnel = coalesce(config.tunnel, false)
+    tunnel = something(config.tunnel, false)
 
     s = split(pubhost,'@')
     user = ""
@@ -422,7 +422,7 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 
     if tunnel
         if !haskey(tunnel_hosts_map, pubhost)
-            tunnel_hosts_map[pubhost] = Semaphore(coalesce(config.max_parallel, typemax(Int)))
+            tunnel_hosts_map[pubhost] = Semaphore(something(config.max_parallel, typemax(Int)))
         end
         sem = tunnel_hosts_map[pubhost]
 
@@ -484,10 +484,15 @@ function socket_reuse_port()
     end
 end
 
-function bind_client_port(s)
-    err = ccall(:jl_tcp_bind, Int32, (Ptr{Cvoid}, UInt16, UInt32, Cuint),
-                            s.handle, hton(client_port[]), hton(UInt32(0)), 0)
-    uv_error("bind() failed", err)
+# TODO: this doesn't belong here, it belongs in Sockets
+function bind_client_port(s::TCPSocket)
+    Sockets.iolock_begin()
+    @assert s.status == Sockets.StatusInit
+    host_in = Ref(hton(UInt32(0))) # IPv4 0.0.0.0
+    err = ccall(:jl_tcp_bind, Int32, (Ptr{Cvoid}, UInt16, Ptr{Cvoid}, Cuint, Cint),
+                s, hton(client_port[]), host_in, 0, false)
+    Sockets.iolock_end()
+    uv_error("tcp_bind", err)
 
     _addr, port = getsockname(s)
     client_port[] = port

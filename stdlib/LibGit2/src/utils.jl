@@ -2,6 +2,10 @@
 
 # Parse "GIT URLs" syntax (URLs and a scp-like syntax). For details see:
 # https://git-scm.com/docs/git-clone#_git_urls_a_id_urls_a
+# Note that using a Regex like this is inherently insecure with regards to its
+# handling of passwords; we are unable to deterministically and securely erase
+# the passwords from memory after use.
+# TODO: reimplement with a Julian parser instead of leaning on this regex
 const URL_REGEX = r"""
 ^(?:(?<scheme>ssh|git|https?)://)?+
 (?:
@@ -17,7 +21,7 @@ const URL_REGEX = r"""
     :?
 )
 (?<path>
-    # Require path to be preceeded by '/'. Alternatively, ':' when using scp-like syntax.
+    # Require path to be preceded by '/'. Alternatively, ':' when using scp-like syntax.
     (?<=(?(<scheme>)/|:))
     .*
 )?
@@ -107,6 +111,11 @@ provided the URL produced will use the alternative [scp-like syntax](https://git
     provided. Cannot be specified when using the scp-like syntax.
   * `path::AbstractString=""`: the path to use in the output if provided.
 
+!!! warning
+    Avoid using passwords in URLs. Unlike the credential objects, Julia is not able
+    to securely zero or destroy the sensitive data after use and the password may
+    remain in memory; possibly to be exposed by an uninitialized memory.
+
 # Examples
 ```jldoctest
 julia> LibGit2.git_url(username="git", host="github.com", path="JuliaLang/julia.git")
@@ -122,37 +131,36 @@ julia> LibGit2.git_url(scheme="ssh", username="git", host="github.com", port=222
 function git_url(;
         scheme::AbstractString="",
         username::AbstractString="",
-        password::AbstractString="",
         host::AbstractString="",
-        port::Union{AbstractString,Integer}="",
+        port::Union{AbstractString, Integer}="",
         path::AbstractString="")
 
-    port_str = string(port)
+    port_str = port isa Integer ? string(port) : port
     scp_syntax = isempty(scheme)
 
     isempty(host) && throw(ArgumentError("A host needs to be specified"))
     scp_syntax && !isempty(port_str) && throw(ArgumentError("Port cannot be specified when using scp-like syntax"))
 
     io = IOBuffer()
-    !isempty(scheme) && print(io, scheme, "://")
+    !isempty(scheme) && write(io, scheme, "://")
 
-    if !isempty(username) || !isempty(password)
-        print(io, username)
-        !isempty(password) && print(io, ':', password)
-        print(io, '@')
+    if !isempty(username)
+        write(io, username)
+        write(io, '@')
     end
 
-    print(io, host)
-    !isempty(port_str) && print(io, ':', port_str)
+    write(io, host)
+    !isempty(port_str) && write(io, ':', port_str)
 
     if !isempty(path)
         if scp_syntax
-            print(io, ':')
+            write(io, ':')
         elseif !startswith(path, '/')
-            print(io, '/')
+            write(io, '/')
         end
-        print(io, path)
+        write(io, path)
     end
+    seekstart(io)
 
     return String(take!(io))
 end
@@ -163,7 +171,7 @@ end
 
 function credential_identifier(url::AbstractString)
     m = match(URL_REGEX, url)
-    scheme = coalesce(m[:scheme], "")
+    scheme = something(m[:scheme], "")
     host = m[:host]
     credential_identifier(scheme, host)
 end

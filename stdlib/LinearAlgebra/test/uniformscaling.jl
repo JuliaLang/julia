@@ -4,7 +4,11 @@ module TestUniformscaling
 
 using Test, LinearAlgebra, Random, SparseArrays
 
-srand(123)
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
+
+Random.seed!(123)
 
 @testset "basic functions" begin
     @test I[1,1] == 1 # getindex
@@ -20,7 +24,7 @@ srand(123)
     @test -one(UniformScaling(2)) == UniformScaling(-1)
     @test sparse(3I,4,5) == sparse(1:4, 1:4, 3, 4, 5)
     @test sparse(3I,5,4) == sparse(1:4, 1:4, 3, 5, 4)
-    @test norm(UniformScaling(1+im)) ≈ sqrt(2)
+    @test opnorm(UniformScaling(1+im)) ≈ sqrt(2)
 end
 
 @testset "conjugation of UniformScaling" begin
@@ -30,13 +34,18 @@ end
     @test conj(UniformScaling(1.0+1.0im))::UniformScaling{Complex{Float64}} == UniformScaling(1.0-1.0im)
 end
 
-@testset "istriu, istril, issymmetric, ishermitian, isapprox" begin
+@testset "isdiag, istriu, istril, issymmetric, ishermitian, isposdef, isapprox" begin
+    @test isdiag(I)
     @test istriu(I)
     @test istril(I)
     @test issymmetric(I)
     @test issymmetric(UniformScaling(complex(1.0,1.0)))
     @test ishermitian(I)
     @test !ishermitian(UniformScaling(complex(1.0,1.0)))
+    @test isposdef(I)
+    @test !isposdef(-I)
+    @test isposdef(UniformScaling(complex(1.0, 0.0)))
+    @test !isposdef(UniformScaling(complex(1.0, 1.0)))
     @test UniformScaling(4.00000000000001) ≈ UniformScaling(4.0)
     @test UniformScaling(4.32) ≈ UniformScaling(4.3) rtol=0.1 atol=0.01
     @test UniformScaling(4.32) ≈ 4.3 * [1 0; 0 1] rtol=0.1 atol=0.01
@@ -69,8 +78,10 @@ end
 end
 
 @test copy(UniformScaling(one(Float64))) == UniformScaling(one(Float64))
-@test sprint(show,UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{Complex{Float64}}\n(1.0 + 0.0im)*I"
-@test sprint(show,UniformScaling(one(Float32))) == "LinearAlgebra.UniformScaling{Float32}\n1.0*I"
+@test sprint(show,MIME"text/plain"(),UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{Complex{Float64}}\n(1.0 + 0.0im)*I"
+@test sprint(show,MIME"text/plain"(),UniformScaling(one(Float32))) == "LinearAlgebra.UniformScaling{Float32}\n1.0*I"
+@test sprint(show,UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{Complex{Float64}}(1.0 + 0.0im)"
+@test sprint(show,UniformScaling(one(Float32))) == "LinearAlgebra.UniformScaling{Float32}(1.0f0)"
 
 let
     λ = complex(randn(),randn())
@@ -84,6 +95,13 @@ let
         @test inv(J) == UniformScaling(inv(λ))
         @test cond(I) == 1
         @test cond(J) == (λ ≠ zero(λ) ? one(real(λ)) : oftype(real(λ), Inf))
+    end
+
+    @testset "copyto!" begin
+        A = Matrix{Int}(undef, (3,3))
+        @test copyto!(A, I) == one(A)
+        B = Matrix{ComplexF64}(undef, (1,2))
+        @test copyto!(B, J) == [λ zero(λ)]
     end
 
     @testset "binary ops with matrices" begin
@@ -166,6 +184,18 @@ let
                 @test @inferred(J - T) == J - Array(T)
                 @test @inferred(T\I) == inv(T)
 
+                for elty in (Float64, ComplexF64)
+                    if isa(A, Array)
+                        T = Hermitian(randn(elty, 3,3))
+                    else
+                        T = Hermitian(view(randn(elty, 3,3), 1:3, 1:3))
+                    end
+                    @test @inferred(T + J) == Array(T) + J
+                    @test @inferred(J + T) == J + Array(T)
+                    @test @inferred(T - J) == Array(T) - J
+                    @test @inferred(J - T) == J - Array(T)
+                end
+
                 @test @inferred(I\A) == A
                 @test @inferred(A\I) == inv(A)
                 @test @inferred(λ\I) === UniformScaling(1/λ)
@@ -183,20 +213,26 @@ end
     for T in (Matrix, SparseMatrixCSC)
         A = T(rand(3,4))
         B = T(rand(3,3))
+        C = T(rand(0,3))
+        D = T(rand(2,0))
         @test (hcat(A, 2I))::T == hcat(A, Matrix(2I, 3, 3))
         @test (vcat(A, 2I))::T == vcat(A, Matrix(2I, 4, 4))
+        @test (hcat(C, 2I))::T == C
+        @test (vcat(D, 2I))::T == D
         @test (hcat(I, 3I, A, 2I))::T == hcat(Matrix(I, 3, 3), Matrix(3I, 3, 3), A, Matrix(2I, 3, 3))
         @test (vcat(I, 3I, A, 2I))::T == vcat(Matrix(I, 4, 4), Matrix(3I, 4, 4), A, Matrix(2I, 4, 4))
         @test (hvcat((2,1,2), B, 2I, I, 3I, 4I))::T ==
             hvcat((2,1,2), B, Matrix(2I, 3, 3), Matrix(I, 6, 6), Matrix(3I, 3, 3), Matrix(4I, 3, 3))
-    end
-end
-
-@testset "chol" begin
-    for T in (Float64, ComplexF32, BigFloat, Int)
-        λ = T(4)
-        @test chol(λ*I) ≈ √λ*I
-        @test_throws LinearAlgebra.PosDefException chol(-λ*I)
+        @test hvcat((3,1), C, C, I, 3I)::T == hvcat((2,1), C, C, Matrix(3I, 6,6))
+        @test hvcat((2,2,2), I, 2I, 3I, 4I, C, C)::T ==
+            hvcat((2,2,2), Matrix(I, 3, 3), Matrix(2I, 3,3 ), Matrix(3I, 3,3), Matrix(4I, 3,3), C, C)
+        @test hvcat((2,2,4), C, C, I, 2I, 3I, 4I, 5I, D)::T ==
+            hvcat((2,2,4), C, C, Matrix(I, 3, 3), Matrix(2I,3,3),
+                Matrix(3I, 2, 2), Matrix(4I, 2, 2), Matrix(5I,2,2), D)
+        @test (hvcat((2,3,2), B, 2I, C, C, I, 3I, 4I))::T ==
+            hvcat((2,2,2), B, Matrix(2I, 3, 3), C, C, Matrix(3I, 3, 3), Matrix(4I, 3, 3))
+        @test hvcat((3,2,1), C, C, I, B ,3I, 2I)::T ==
+            hvcat((2,2,1), C, C, B, Matrix(3I,3,3), Matrix(2I,6,6))
     end
 end
 
@@ -257,6 +293,56 @@ end
     @test eltype(fill(Float16(1), 2, 2)I) == Float16
     @test eltype(fill(Int8(1), 2, 2) + I) == Int8
     @test eltype(fill(Float16(1), 2, 2) + I) == Float16
+end
+
+@testset "test that UniformScaling is applied correctly for matrices of matrices" begin
+    LL = Bidiagonal(fill(0*I, 3), fill(1*I, 2), :L)
+    @test (I - LL')\[[0], [0], [1]] == (I - LL)'\[[0], [0], [1]] == fill([1], 3)
+end
+
+# Ensure broadcasting of I is an error (could be made to work in the future)
+@testset "broadcasting of I (#23197)" begin
+    @test_throws MethodError I .+ 1
+    @test_throws MethodError I .+ [1 1; 1 1]
+end
+
+@testset "in-place mul! and div! methods" begin
+    J = randn()*I
+    A = randn(4, 3)
+    C = similar(A)
+    target_mul = J * A
+    target_div = A / J
+    @test mul!(C, J, A) == target_mul
+    @test mul!(C, A, J) == target_mul
+    @test lmul!(J, copyto!(C, A)) == target_mul
+    @test rmul!(copyto!(C, A), J) == target_mul
+    @test ldiv!(J, copyto!(C, A)) == target_div
+    @test rdiv!(copyto!(C, A), J) == target_div
+
+    A = randn(4, 3)
+    C = randn!(similar(A))
+    alpha = randn()
+    beta = randn()
+    target = J * A * alpha + C * beta
+    @test mul!(copy(C), J, A, alpha, beta) ≈ target
+    @test mul!(copy(C), A, J, alpha, beta) ≈ target
+end
+
+@testset "Construct Diagonal from UniformScaling" begin
+    @test size(I(3)) === (3,3)
+    @test I(3) isa Diagonal
+    @test I(3) == [1 0 0; 0 1 0; 0 0 1]
+end
+
+@testset "generalized dot" begin
+    x = rand(-10:10, 3)
+    y = rand(-10:10, 3)
+    λ = rand(-10:10)
+    J = UniformScaling(λ)
+    @test dot(x, J, y) == λ*dot(x, y)
+    λ = Quaternion(0.44567, 0.755871, 0.882548, 0.423612)
+    x, y = Quaternion(rand(4)...), Quaternion(rand(4)...)
+    @test dot([x], λ*I, [y]) ≈ dot(x, λ, y) ≈ dot(x, λ*y)
 end
 
 end # module TestUniformscaling

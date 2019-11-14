@@ -12,15 +12,16 @@ let nextidx = 0
     end
 end
 
-spawnat(p, thunk) = sync_add(remotecall(thunk, p))
+spawnat(p, thunk) = remotecall(thunk, p)
 
 spawn_somewhere(thunk) = spawnat(nextproc(),thunk)
 
 """
-    @spawn
+    @spawn expr
 
 Create a closure around an expression and run it on an automatically-chosen process,
 returning a [`Future`](@ref) to the result.
+This macro is deprecated; `@spawnat :any expr` should be used instead.
 
 # Examples
 ```julia-repl
@@ -38,40 +39,72 @@ Future(3, 1, 7, nothing)
 julia> fetch(f)
 3
 ```
+
+!!! compat "Julia 1.3"
+    As of Julia 1.3 this macro is deprecated. Use `@spawnat :any` instead.
 """
 macro spawn(expr)
     thunk = esc(:(()->($expr)))
-    :(spawn_somewhere($thunk))
+    var = esc(Base.sync_varname)
+    quote
+        local ref = spawn_somewhere($thunk)
+        if $(Expr(:isdefined, var))
+            push!($var, ref)
+        end
+        ref
+    end
 end
 
 """
-    @spawnat
+    @spawnat p expr
 
 Create a closure around an expression and run the closure
 asynchronously on process `p`. Return a [`Future`](@ref) to the result.
-Accepts two arguments, `p` and an expression.
+If `p` is the quoted literal symbol `:any`, then the system will pick a
+processor to use automatically.
 
 # Examples
 ```julia-repl
-julia> addprocs(1);
+julia> addprocs(3);
 
 julia> f = @spawnat 2 myid()
 Future(2, 1, 3, nothing)
 
 julia> fetch(f)
 2
+
+julia> f = @spawnat :any myid()
+Future(3, 1, 7, nothing)
+
+julia> fetch(f)
+3
 ```
+
+!!! compat "Julia 1.3"
+    The `:any` argument is available as of Julia 1.3.
 """
 macro spawnat(p, expr)
     thunk = esc(:(()->($expr)))
-    :(spawnat($(esc(p)), $thunk))
+    var = esc(Base.sync_varname)
+    if p === QuoteNode(:any)
+        spawncall = :(spawn_somewhere($thunk))
+    else
+        spawncall = :(spawnat($(esc(p)), $thunk))
+    end
+    quote
+        local ref = $spawncall
+        if $(Expr(:isdefined, var))
+            push!($var, ref)
+        end
+        ref
+    end
 end
 
 """
-    @fetch
+    @fetch expr
 
-Equivalent to `fetch(@spawn expr)`.
-See [`fetch`](@ref) and [`@spawn`](@ref).
+Equivalent to `fetch(@spawnat :any expr)`.
+See [`fetch`](@ref) and [`@spawnat`](@ref).
 
 # Examples
 ```julia-repl
@@ -121,38 +154,30 @@ end
 extract_imports!(imports, x) = imports
 function extract_imports!(imports, ex::Expr)
     if Meta.isexpr(ex, (:import, :using))
-        m = ex.args[1]
-        if isa(m, Expr) && m.head === :(:)
-            push!(imports, m.args[1].args[1])
-        else
-            for a in ex.args
-                push!(imports, a.args[1])
-            end
-        end
+        push!(imports, ex)
     elseif Meta.isexpr(ex, :let)
         extract_imports!(imports, ex.args[2])
     elseif Meta.isexpr(ex, (:toplevel, :block))
-        for i in eachindex(ex.args)
-            extract_imports!(imports, ex.args[i])
+        for arg in ex.args
+            extract_imports!(imports, arg)
         end
     end
     return imports
 end
-extract_imports(x) = extract_imports!(Symbol[], x)
+extract_imports(x) = extract_imports!(Any[], x)
 
 """
     @everywhere [procs()] expr
 
 Execute an expression under `Main` on all `procs`.
 Errors on any of the processes are collected into a
-`CompositeException` and thrown. For example:
+[`CompositeException`](@ref) and thrown. For example:
 
     @everywhere bar = 1
 
 will define `Main.bar` on all processes.
 
-Unlike [`@spawn`](@ref) and [`@spawnat`](@ref),
-`@everywhere` does not capture any local variables.
+Unlike [`@spawnat`](@ref), `@everywhere` does not capture any local variables.
 Instead, local variables can be broadcast using interpolation:
 
     foo = 1
@@ -165,11 +190,11 @@ Equivalent to calling `remotecall_eval(Main, procs, expr)`.
 """
 macro everywhere(ex)
     procs = GlobalRef(@__MODULE__, :procs)
-    return esc(:(@everywhere $procs() $ex))
+    return esc(:($(Distributed).@everywhere $procs() $ex))
 end
 
 macro everywhere(procs, ex)
-    imps = [Expr(:import, m) for m in extract_imports(ex)]
+    imps = extract_imports(ex)
     return quote
         $(isempty(imps) ? nothing : Expr(:toplevel, imps...)) # run imports locally first
         let ex = $(Expr(:quote, ex)), procs = $(esc(procs))
@@ -184,9 +209,9 @@ end
 Execute an expression under module `m` on the processes
 specified in `procs`.
 Errors on any of the processes are collected into a
-`CompositeException` and thrown.
+[`CompositeException`](@ref) and thrown.
 
-See also `@everywhere`.
+See also [`@everywhere`](@ref).
 """
 function remotecall_eval(m::Module, procs, ex)
     @sync begin
@@ -195,7 +220,7 @@ function remotecall_eval(m::Module, procs, ex)
             if pid == myid()
                 run_locally += 1
             else
-                @async remotecall_wait(Core.eval, pid, m, ex)
+                @sync_add remotecall(Core.eval, pid, m, ex)
             end
         end
         yield() # ensure that the remotecall_fetch have had a chance to start
@@ -237,7 +262,7 @@ end
 
 function preduce(reducer, f, R)
     N = length(R)
-    chunks = splitrange(N, nworkers())
+    chunks = splitrange(Int(N), nworkers())
     all_w = workers()[1:length(chunks)]
 
     w_exec = Task[]
@@ -250,7 +275,9 @@ function preduce(reducer, f, R)
 end
 
 function pfor(f, R)
-    [@spawn f(R, first(c), last(c)) for c in splitrange(length(R), nworkers())]
+    @async @sync for c in splitrange(length(R), nworkers())
+        @spawnat :any f(R, first(c), last(c))
+    end
 end
 
 function make_preduce_body(var, body)
@@ -316,9 +343,15 @@ macro distributed(args...)
     r = loop.args[1].args[2]
     body = loop.args[2]
     if na==1
-        thecall = :(pfor($(make_pfor_body(var, body)), $(esc(r))))
+        syncvar = esc(Base.sync_varname)
+        return quote
+            local ref = pfor($(make_pfor_body(var, body)), $(esc(r)))
+            if $(Expr(:isdefined, syncvar))
+                push!($syncvar, ref)
+            end
+            ref
+        end
     else
-        thecall = :(preduce($(esc(reducer)), $(make_preduce_body(var, body)), $(esc(r))))
+        return :(preduce($(esc(reducer)), $(make_preduce_body(var, body)), $(esc(r))))
     end
-    thecall
 end

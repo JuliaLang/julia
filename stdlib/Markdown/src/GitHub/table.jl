@@ -81,9 +81,9 @@ colwidths(rows; len = length, min = 0) =
     reduce((x,y) -> max.(x,y), [min; convert(Vector{Vector{Int}}, mapmap(len, rows))])
 
 padding(width, twidth, a) =
-    a == :l ? (0, twidth - width) :
-    a == :r ? (twidth - width, 0) :
-    a == :c ? (floor(Int, (twidth-width)/2), ceil(Int, (twidth-width)/2)) :
+    a === :l ? (0, twidth - width) :
+    a === :r ? (twidth - width, 0) :
+    a === :c ? (floor(Int, (twidth-width)/2), ceil(Int, (twidth-width)/2)) :
     error("Invalid alignment $a")
 
 function padcells!(rows, align; len = length, min = 0)
@@ -97,9 +97,9 @@ function padcells!(rows, align; len = length, min = 0)
 end
 
 _dash(width, align) =
-    align == :l ? ":" * "-"^width * " " :
-    align == :r ? " " * "-"^width * ":" :
-    align == :c ? ":" * "-"^width * ":" :
+    align === :l ? ":" * "-"^width * " " :
+    align === :r ? " " * "-"^width * ":" :
+    align === :c ? ":" * "-"^width * ":" :
     throw(ArgumentError("Invalid alignment $align"))
 
 function plain(io::IO, md::Table)
@@ -138,15 +138,18 @@ function rst(io::IO, md::Table)
 end
 
 function term(io::IO, md::Table, columns)
+    margin_str = " "^margin
     cells = mapmap(x -> terminline_string(io, x), md.rows)
     padcells!(cells, md.align, len = ansi_length)
     for i = 1:length(cells)
+        print(io, margin_str)
         join(io, cells[i], " ")
-        println(io)
         if i == 1
-            join(io, ["–"^ansi_length(cells[i][j]) for j = 1:length(cells[1])], " ")
             println(io)
+            print(io, margin_str)
+            join(io, ["–"^ansi_length(cells[i][j]) for j = 1:length(cells[1])], " ")
         end
+        i < length(cells) && println(io)
     end
 end
 

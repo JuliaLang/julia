@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 module Libdl
 @doc """
 Interface to libdl. Provides dynamic linking support.
@@ -52,23 +50,31 @@ applicable.
 
 Look up a symbol from a shared library handle, return callable function pointer on success.
 """
-function dlsym(hnd::Ptr, s::Union{Symbol,AbstractString})
+function dlsym(hnd::Ptr, s::Union{Symbol,AbstractString}; throw_error::Bool = true)
     hnd == C_NULL && throw(ArgumentError("NULL library handle"))
-    ccall(:jl_dlsym, Ptr{Cvoid}, (Ptr{Cvoid}, Cstring), hnd, s)
+    val = Ref(Ptr{Cvoid}(0))
+    symbol_found = ccall(:jl_dlsym, Cint,
+        (Ptr{Cvoid}, Cstring, Ref{Ptr{Cvoid}}, Cint),
+        hnd, s, val, Int64(throw_error)
+    )
+    if symbol_found == 0
+        return nothing
+    end
+    return val[]
 end
 
 """
     dlsym_e(handle, sym)
 
-Look up a symbol from a shared library handle, silently return `NULL` pointer on lookup failure.
+Look up a symbol from a shared library handle, silently return `C_NULL` on lookup failure.
+This method is now deprecated in favor of `dlsym(handle, sym; throw_error=false)`.
 """
 function dlsym_e(hnd::Ptr, s::Union{Symbol,AbstractString})
-    hnd == C_NULL && throw(ArgumentError("NULL library handle"))
-    ccall(:jl_dlsym_e, Ptr{Cvoid}, (Ptr{Cvoid}, Cstring), hnd, s)
+    return something(dlsym(hnd, s; throw_error=false), C_NULL)
 end
 
 """
-    dlopen(libfile::AbstractString [, flags::Integer])
+    dlopen(libfile::AbstractString [, flags::Integer]; throw_error:Bool = true)
 
 Load a shared library, returning an opaque handle.
 
@@ -90,27 +96,57 @@ exported symbols and if the bound references are put into process local or globa
 instance `RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL` allows the library's symbols to be available
 for usage in other shared libraries, addressing situations where there are dependencies
 between shared libraries.
+
+If the library cannot be found, this method throws an error, unless the keyword argument
+`throw_error` is set to `false`, in which case this method returns `nothing`.
 """
 function dlopen end
 
-dlopen(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
-    dlopen(string(s), flags)
+dlopen(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND; kwargs...) =
+    dlopen(string(s), flags; kwargs...)
 
-dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
-    ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Cstring,UInt32), s, flags)
+function dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND; throw_error::Bool = true)
+    ret = ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Cstring,UInt32,Cint), s, flags, Cint(throw_error))
+    if ret == C_NULL
+        return nothing
+    end
+    return ret
+end
+
+"""
+    dlopen(f::Function, args...; kwargs...)
+
+Wrapper for usage with `do` blocks to automatically close the dynamic library once
+control flow leaves the `do` block scope.
+
+# Example
+```julia
+vendor = dlopen("libblas") do lib
+    if Libdl.dlsym(lib, :openblas_set_num_threads; throw_error=false) !== nothing
+        return :openblas
+    else
+        return :other
+    end
+end
+```
+"""
+function dlopen(f::Function, args...; kwargs...)
+    hdl = nothing
+    try
+        hdl = dlopen(args...; kwargs...)
+        f(hdl)
+    finally
+        dlclose(hdl)
+    end
+end
 
 """
     dlopen_e(libfile::AbstractString [, flags::Integer])
 
-Similar to [`dlopen`](@ref), except returns a `NULL` pointer instead of raising errors.
+Similar to [`dlopen`](@ref), except returns `C_NULL` instead of raising errors.
+This method is now deprecated in favor of `dlopen(libfile::AbstractString [, flags::Integer]; throw_error=false)`.
 """
-function dlopen_e end
-
-dlopen_e(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
-    dlopen_e(string(s), flags)
-
-dlopen_e(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
-    ccall(:jl_load_dynamic_library_e, Ptr{Cvoid}, (Cstring,UInt32), s, flags)
+dlopen_e(args...) = something(dlopen(args...; throw_error=false), C_NULL)
 
 """
     dlclose(handle)
@@ -119,6 +155,25 @@ Close shared library referenced by handle.
 """
 function dlclose(p::Ptr)
     0 == ccall(:jl_dlclose, Cint, (Ptr{Cvoid},), p)
+end
+
+"""
+    dlclose(::Nothing)
+
+For the very common pattern usage pattern of
+
+    try
+        hdl = dlopen(library_name)
+        ... do something
+    finally
+        dlclose(hdl)
+    end
+
+We define a `dlclose()` method that accepts a parameter of type `Nothing`, so
+that user code does not have to change its behavior for the case that `library_name`
+was not found.
+"""
+function dlclose(p::Nothing)
 end
 
 """
@@ -134,14 +189,14 @@ function find_library(libnames, extrapaths=String[])
     for lib in libnames
         for path in extrapaths
             l = joinpath(path, lib)
-            p = dlopen_e(l, RTLD_LAZY)
-            if p != C_NULL
+            p = dlopen(l, RTLD_LAZY; throw_error=false)
+            if p !== nothing
                 dlclose(p)
                 return l
             end
         end
-        p = dlopen_e(lib, RTLD_LAZY)
-        if p != C_NULL
+        p = dlopen(lib, RTLD_LAZY; throw_error=false)
+        if p !== nothing
             dlclose(p)
             return lib
         end
@@ -151,6 +206,11 @@ end
 find_library(libname::Union{Symbol,AbstractString}, extrapaths=String[]) =
     find_library([string(libname)], extrapaths)
 
+"""
+    dlpath(handle::Ptr{Cvoid})
+
+Given a library `handle` from `dlopen`, return the full path.
+"""
 function dlpath(handle::Ptr{Cvoid})
     p = ccall(:jl_pathname_for_handle, Cstring, (Ptr{Cvoid},), handle)
     s = unsafe_string(p)
@@ -158,6 +218,16 @@ function dlpath(handle::Ptr{Cvoid})
     return s
 end
 
+"""
+    dlpath(libname::Union{AbstractString, Symbol})
+
+Get the full path of the library `libname`.
+
+# Example
+```julia-repl
+julia> dlpath("libjulia")
+```
+"""
 function dlpath(libname::Union{AbstractString, Symbol})
     handle = dlopen(libname)
     path = dlpath(handle)
@@ -181,7 +251,7 @@ File extension for dynamic libraries (e.g. dll, dylib, so) on the current platfo
 """
 dlext
 
-if Sys.islinux()
+if (Sys.islinux() || Sys.isbsd()) && !Sys.isapple()
     struct dl_phdr_info
         # Base address of object
         addr::Cuint
@@ -196,50 +266,22 @@ if Sys.islinux()
         phnum::Cshort
     end
 
-    # This callback function called by dl_iterate_phdr() on Linux
-    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dynamic_libraries::Array{AbstractString,1})
-        # Skip over objects without a path (as they represent this own object)
-        name = unsafe_string(di.name)
-        if !isempty(name)
-            push!(dynamic_libraries, name)
-        end
-        return convert(Cint, 0)::Cint
-    end
-end # linux-only
-
-if Sys.isbsd() && !Sys.isapple()
+    # This callback function called by dl_iterate_phdr() on Linux and BSD's
     # DL_ITERATE_PHDR(3) on freebsd
-    struct dl_phdr_info
-        # Base address of object
-        addr::Cuint
-
-        # Null-terminated name of object
-        name::Ptr{UInt8}
-
-        # Pointer to array of ELF program headers for this object
-        phdr::Ptr{Cvoid}
-
-        # Number of program headers for this object
-        phnum::Cshort
-    end
-
-    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dy_libs::Vector{AbstractString})
+    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dynamic_libraries::Array{String,1})
         name = unsafe_string(di.name)
-        if !isempty(name)
-            push!(dy_libs, name)
-        end
-        return convert(Cint, 0)::Cint
+        push!(dynamic_libraries, name)
+        return Cint(0)
     end
-end # bsd family
+end
 
+"""
+    dllist()
+
+Return the paths of dynamic libraries currently loaded in a `Vector{String}`.
+"""
 function dllist()
-    dynamic_libraries = Vector{AbstractString}()
-
-    @static if Sys.islinux()
-        callback = @cfunction(dl_phdr_info_callback, Cint,
-                              (Ref{dl_phdr_info}, Csize_t, Ref{Vector{AbstractString}}))
-        ccall(:dl_iterate_phdr, Cint, (Ptr{Cvoid}, Ref{Vector{AbstractString}}), callback, dynamic_libraries)
-    end
+    dynamic_libraries = Vector{String}()
 
     @static if Sys.isapple()
         numImages = ccall(:_dyld_image_count, Cint, ())
@@ -249,17 +291,16 @@ function dllist()
             name = unsafe_string(ccall(:_dyld_get_image_name, Cstring, (UInt32,), i))
             push!(dynamic_libraries, name)
         end
-    end
-
-    @static if Sys.iswindows()
-        ccall(:jl_dllist, Cint, (Any,), dynamic_libraries)
-    end
-
-    @static if Sys.isbsd() && !Sys.isapple()
+    elseif Sys.islinux() || Sys.isbsd()
         callback = @cfunction(dl_phdr_info_callback, Cint,
-                              (Ref{dl_phdr_info}, Csize_t, Ref{Vector{AbstractString}}))
-        ccall(:dl_iterate_phdr, Cint, (Ptr{Cvoid}, Ref{Vector{AbstractString}}), callback, dynamic_libraries)
+                              (Ref{dl_phdr_info}, Csize_t, Ref{Vector{String}}))
+        ccall(:dl_iterate_phdr, Cint, (Ptr{Cvoid}, Ref{Vector{String}}), callback, dynamic_libraries)
         popfirst!(dynamic_libraries)
+        filter!(!isempty, dynamic_libraries)
+    elseif Sys.iswindows()
+        ccall(:jl_dllist, Cint, (Any,), dynamic_libraries)
+    else
+        # unimplemented
     end
 
     return dynamic_libraries

@@ -41,7 +41,7 @@
 
 struct ABI_PPC64leLayout : AbiLayout {
 
-// count the homogeneous floating agregate size (saturating at max count of 8)
+// count the homogeneous floating aggregate size (saturating at max count of 8)
 unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva) const
 {
     size_t i, l = ty->layout->nfields;

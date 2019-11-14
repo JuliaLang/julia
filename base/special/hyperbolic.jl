@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # sinh, cosh, tanh, asinh, acosh, and atanh are heavily based on FDLIBM code:
 # e_sinh.c, e_sinhf, e_cosh.c, e_coshf, s_tanh.c, s_tanhf.c, s_asinh.c,
 # s_asinhf.c, e_acosh.c, e_coshf.c, e_atanh.c, and e_atanhf.c
@@ -11,10 +13,6 @@
 # software is freely granted, provided that this notice
 # is preserved.
 # ====================================================
-
-_ldexp_exp(x::Float64, i::T) where T = ccall(("__ldexp_exp", libm), Float64, (Float64, T), x, i)
-_ldexp_exp(x::Float32, i::T) where T = ccall(("__ldexp_expf",libm), Float32, (Float32, T), x, i)
-_ldexp_exp(x::Real, i) = _ldexp_exp(float(x, i))
 
 # Hyperbolic functions
 # sinh methods
@@ -74,7 +72,7 @@ function sinh(x::T) where T <: Union{Float32, Float64}
     end
     # in d)
     if absx < H_OVERFLOW_X(T)
-        return h*T(2)*_ldexp_exp(absx, -1)
+        return h*T(2)*_ldexp_exp(absx, Int32(-1))
     end
     # in e)
     return copysign(T(Inf), x)
@@ -127,7 +125,7 @@ function cosh(x::T) where T <: Union{Float32, Float64}
     end
     # in e)
     if absx < H_OVERFLOW_X(T)
-        return _ldexp_exp(absx, -1)
+        return _ldexp_exp(absx, Int32(-1))
     end
     # in f)
     return T(Inf)

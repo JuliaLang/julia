@@ -9,6 +9,7 @@ leading newlines removed). If `raw` is `true`, the message is not stripped
 of any such newlines.
 """
 function message(c::GitCommit, raw::Bool=false)
+    ensure_initialized()
     GC.@preserve c begin
         local msg_ptr::Cstring
         msg_ptr = raw ? ccall((:git_commit_message_raw, :libgit2), Cstring, (Ptr{Cvoid},), c.ptr) :
@@ -28,6 +29,7 @@ Return the `Signature` of the author of the commit `c`. The author is
 the person who made changes to the relevant file(s). See also [`committer`](@ref).
 """
 function author(c::GitCommit)
+    ensure_initialized()
     GC.@preserve c begin
         ptr = ccall((:git_commit_author, :libgit2), Ptr{SignatureStruct}, (Ptr{Cvoid},), c.ptr)
         @assert ptr != C_NULL
@@ -45,6 +47,7 @@ need not be the same as the `author`, for example, if the `author` emailed a pat
 a `committer` who committed it.
 """
 function committer(c::GitCommit)
+    ensure_initialized()
     GC.@preserve c begin
         ptr = ccall((:git_commit_committer, :libgit2), Ptr{SignatureStruct}, (Ptr{Cvoid},), c.ptr)
         sig = Signature(ptr)
@@ -65,6 +68,7 @@ function commit(repo::GitRepo,
                 committer::GitSignature,
                 tree::GitTree,
                 parents::GitCommit...)
+    ensure_initialized()
     commit_id_ptr = Ref(GitHash())
     nparents = length(parents)
     parentptrs = Ptr{Cvoid}[c.ptr for c in parents]
@@ -83,7 +87,7 @@ end
 """
     commit(repo::GitRepo, msg::AbstractString; kwargs...) -> GitHash
 
-Wrapper around [`git_commit_create`](https://libgit2.github.com/libgit2/#HEAD/group/commit/git_commit_create).
+Wrapper around [`git_commit_create`](https://libgit2.org/libgit2/#HEAD/group/commit/git_commit_create).
 Create a commit in the repository `repo`. `msg` is the commit message. Return the OID of the new commit.
 
 The keyword arguments are:
@@ -91,7 +95,7 @@ The keyword arguments are:
     the new commit. For example, `"HEAD"` will update the HEAD of the current branch. If the reference does
     not yet exist, it will be created.
   * `author::Signature = Signature(repo)` is a `Signature` containing information about the person who authored the commit.
-  * `committer::Signature = Signature(repo)` is a `Signature` containing information about the person who commited the commit to
+  * `committer::Signature = Signature(repo)` is a `Signature` containing information about the person who committed the commit to
     the repository. Not necessarily the same as `author`, for instance if `author` emailed a patch to
     `committer` who committed it.
   * `tree_id::GitHash = GitHash()` is a git tree to use to create the commit, showing its ancestry and relationship with
@@ -114,6 +118,7 @@ function commit(repo::GitRepo, msg::AbstractString;
     if isempty(parent_ids)
         try # if throws then HEAD not found -> empty repo
             Base.push!(parent_ids, GitHash(repo, refname))
+        catch
         end
     end
 

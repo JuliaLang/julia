@@ -27,6 +27,7 @@
 
 #include "utils.h"
 #include "utf8.h"
+#include "utf8proc.h"
 #include "ios.h"
 #include "timefuncs.h"
 
@@ -536,10 +537,6 @@ int64_t ios_pos(ios_t *s)
     return fdpos;
 }
 
-#if defined(_OS_WINDOWS)
-#include <io.h>
-#endif /* _OS_WINDOWS_ */
-
 int ios_trunc(ios_t *s, size_t size)
 {
     if (s->bm == bm_mem) {
@@ -858,6 +855,7 @@ static void _ios_init(ios_t *s)
     s->ndirty = 0;
     s->fpos = -1;
     s->lineno = 1;
+    s->u_colno = 0;
     s->fd = -1;
     s->ownbuf = 1;
     s->ownfd = 0;
@@ -1020,14 +1018,14 @@ ios_t *ios_stderr = NULL;
 
 void ios_init_stdstreams(void)
 {
-    ios_stdin = (ios_t*)malloc(sizeof(ios_t));
+    ios_stdin = (ios_t*)malloc_s(sizeof(ios_t));
     ios_fd(ios_stdin, STDIN_FILENO, 0, 0);
 
-    ios_stdout = (ios_t*)malloc(sizeof(ios_t));
+    ios_stdout = (ios_t*)malloc_s(sizeof(ios_t));
     ios_fd(ios_stdout, STDOUT_FILENO, 0, 0);
     ios_stdout->bm = bm_line;
 
-    ios_stderr = (ios_t*)malloc(sizeof(ios_t));
+    ios_stderr = (ios_t*)malloc_s(sizeof(ios_t));
     ios_fd(ios_stderr, STDERR_FILENO, 0, 0);
     ios_stderr->bm = bm_none;
 }
@@ -1107,6 +1105,10 @@ int ios_getutf8(ios_t *s, uint32_t *pwc)
     c0 = (char)c;
     if ((unsigned char)c0 < 0x80) {
         *pwc = (uint32_t)(unsigned char)c0;
+        if (c == '\n')
+            s->u_colno = 0;
+        else
+            s->u_colno += utf8proc_charwidth(*pwc);
         return 1;
     }
     sz = u8_seqlen(&c0);
@@ -1117,6 +1119,7 @@ int ios_getutf8(ios_t *s, uint32_t *pwc)
         return IOS_EOF;
     size_t i = s->bpos;
     *pwc = u8_nextchar(s->buf, &i);
+    s->u_colno += utf8proc_charwidth(*pwc);
     ios_read(s, buf, sz);
     return 1;
 }

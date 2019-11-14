@@ -154,3 +154,17 @@ function f15561()
     @label crater
 end
 @test f15561() === nothing
+
+# issue #28077
+function foo28077()
+    s = 0
+    i = 0
+    @label L
+    i += 1
+    s += i
+    if i < 10
+        @goto L
+    end
+    return s
+end
+@test foo28077() == 55

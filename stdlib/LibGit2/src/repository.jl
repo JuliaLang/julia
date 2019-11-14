@@ -6,6 +6,7 @@
 Open a git repository at `path`.
 """
 function GitRepo(path::AbstractString)
+    ensure_initialized()
     repo_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_repository_open, :libgit2), Cint,
                  (Ptr{Ptr{Cvoid}}, Cstring), repo_ptr_ptr, path)
@@ -19,6 +20,7 @@ Open a git repository at `path` with extended controls (for instance, if the cur
 user must be a member of a special access group to read `path`).
 """
 function GitRepoExt(path::AbstractString, flags::Cuint = Cuint(Consts.REPOSITORY_OPEN_DEFAULT))
+    ensure_initialized()
     separator = @static Sys.iswindows() ? ";" : ":"
     repo_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_repository_open_ext, :libgit2), Cint,
@@ -29,6 +31,7 @@ end
 
 function cleanup(r::GitRepo)
     if r.ptr != C_NULL
+        ensure_initialized()
         ccall((:git_repository__cleanup, :libgit2), Cvoid, (Ptr{Cvoid},), r.ptr)
     end
 end
@@ -41,6 +44,7 @@ the working tree will be created in `path/.git`. If `bare`
 is `true`, no working directory will be created.
 """
 function init(path::AbstractString, bare::Bool=false)
+    ensure_initialized()
     repo_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_repository_init, :libgit2), Cint,
                 (Ptr{Ptr{Cvoid}}, Cstring, Cuint), repo_ptr_ptr, path, bare)
@@ -91,6 +95,7 @@ in the `.git` subdirectory. This means that there is nowhere to check out the wo
 tree, and no tracking information for remote branches or configurations is present.
 """
 function isbare(repo::GitRepo)
+    ensure_initialized()
     @assert repo.ptr != C_NULL
     return ccall((:git_repository_is_bare, :libgit2), Cint, (Ptr{Cvoid},), repo.ptr) == 1
 end
@@ -102,6 +107,7 @@ Determine if `repo` is detached - that is, whether its HEAD points to a commit
 (detached) or whether HEAD points to a branch tip (attached).
 """
 function isattached(repo::GitRepo)
+    ensure_initialized()
     @assert repo.ptr != C_NULL
     ccall((:git_repository_head_detached, :libgit2), Cint, (Ptr{Cvoid},), repo.ptr) != 1
 end
@@ -130,6 +136,7 @@ Return a `$T` object from `repo` specified by `hash`/`spec`.
 end
 
 function (::Type{T})(repo::GitRepo, spec::AbstractString) where T<:GitObject
+    ensure_initialized()
     obj_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @assert repo.ptr != C_NULL
     @check ccall((:git_revparse_single, :libgit2), Cint,
@@ -143,6 +150,7 @@ function (::Type{T})(repo::GitRepo, spec::AbstractString) where T<:GitObject
 end
 
 function (::Type{T})(repo::GitRepo, oid::GitHash) where T<:GitObject
+    ensure_initialized()
     oid_ptr  = Ref(oid)
     obj_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
 
@@ -154,6 +162,7 @@ function (::Type{T})(repo::GitRepo, oid::GitHash) where T<:GitObject
     return T(repo, obj_ptr_ptr[])
 end
 function (::Type{T})(repo::GitRepo, oid::GitShortHash) where T<:GitObject
+    ensure_initialized()
     oid_ptr  = Ref(oid.hash)
     obj_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
 
@@ -179,6 +188,7 @@ Return the location of the "git" files of `repo`:
 See also [`workdir`](@ref), [`path`](@ref).
 """
 function gitdir(repo::GitRepo)
+    ensure_initialized()
     @assert repo.ptr != C_NULL
     return unsafe_string(ccall((:git_repository_path, :libgit2), Cstring,
                         (Ptr{Cvoid},), repo.ptr))
@@ -199,6 +209,7 @@ This will throw an error for bare repositories.
 See also [`gitdir`](@ref), [`path`](@ref).
 """
 function workdir(repo::GitRepo)
+    ensure_initialized()
     @assert repo.ptr != C_NULL
     sptr = ccall((:git_repository_workdir, :libgit2), Cstring,
                 (Ptr{Cvoid},), repo.ptr)
@@ -241,6 +252,7 @@ then `obj` will be peeled until the type changes.
 - A `GitCommit` will be peeled to a `GitTree`.
 """
 function peel(::Type{T}, obj::GitObject) where T<:GitObject
+    ensure_initialized()
     new_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
 
     @check ccall((:git_object_peel, :libgit2), Cint,
@@ -258,7 +270,7 @@ contains detailed information about it based on the keyword argument:
 
   * `options::DescribeOptions=DescribeOptions()`
 
-A git decription of a `commitish` object looks for the tag (by default, annotated,
+A git description of a `commitish` object looks for the tag (by default, annotated,
 although a search of all tags can be performed) which can be reached from `commitish`
 which is most recent. If the tag is pointing to `commitish`, then only the tag is
 included in the description. Otherwise, a suffix is included which contains the
@@ -271,6 +283,7 @@ information.
 """
 function GitDescribeResult(commitish::GitObject;
                            options::DescribeOptions=DescribeOptions())
+    ensure_initialized()
     result_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_describe_commit, :libgit2), Cint,
                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{DescribeOptions}),
@@ -296,6 +309,7 @@ Equivalent to `git describe`. See [`DescribeOptions`](@ref) for more
 information.
 """
 function GitDescribeResult(repo::GitRepo; options::DescribeOptions=DescribeOptions())
+    ensure_initialized()
     result_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @assert repo.ptr != C_NULL
     @check ccall((:git_describe_workdir, :libgit2), Cint,
@@ -313,6 +327,7 @@ Formatting options are controlled by the keyword argument:
   * `options::DescribeFormatOptions=DescribeFormatOptions()`
 """
 function format(result::GitDescribeResult; options::DescribeFormatOptions=DescribeFormatOptions())
+    ensure_initialized()
     buf_ref = Ref(Buffer())
     @check ccall((:git_describe_format, :libgit2), Cint,
                  (Ptr{Buffer}, Ptr{Cvoid}, Ptr{DescribeFormatOptions}),
@@ -338,6 +353,7 @@ be performed. See [`CheckoutOptions`](@ref) for more information.
 """
 function checkout_tree(repo::GitRepo, obj::GitObject;
                        options::CheckoutOptions = CheckoutOptions())
+    ensure_initialized()
     @assert repo.ptr != C_NULL
     @check ccall((:git_checkout_tree, :libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{CheckoutOptions}),
@@ -353,6 +369,7 @@ See [`CheckoutOptions`](@ref) for more information.
 """
 function checkout_index(repo::GitRepo, idx::Union{GitIndex, Nothing} = nothing;
                         options::CheckoutOptions = CheckoutOptions())
+    ensure_initialized()
     @assert repo.ptr != C_NULL
     @check ccall((:git_checkout_index, :libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{CheckoutOptions}),
@@ -372,6 +389,7 @@ Update the index and working tree of `repo` to match the commit pointed to by HE
     conflicts.
 """
 function checkout_head(repo::GitRepo; options::CheckoutOptions = CheckoutOptions())
+    ensure_initialized()
     @assert repo.ptr != C_NULL
     @check ccall((:git_checkout_head, :libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{CheckoutOptions}),
@@ -390,6 +408,7 @@ The keyword argument `options` sets checkout and merge options for the cherrypic
     call [`commit`](@ref) yourself.
 """
 function cherrypick(repo::GitRepo, commit::GitCommit; options::CherrypickOptions = CherrypickOptions())
+    ensure_initialized()
     @assert repo.ptr != C_NULL
     @check ccall((:git_cherrypick, :libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{CherrypickOptions}),
@@ -398,6 +417,7 @@ end
 
 """Updates some entries, determined by the `pathspecs`, in the index from the target commit tree."""
 function reset!(repo::GitRepo, obj::Union{GitObject, Nothing}, pathspecs::AbstractString...)
+    ensure_initialized()
     @assert repo.ptr != C_NULL
     @check ccall((:git_reset_default, :libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{StrArrayStruct}),
@@ -410,6 +430,7 @@ end
 """Sets the current head to the specified commit oid and optionally resets the index and working tree to match."""
 function reset!(repo::GitRepo, obj::GitObject, mode::Cint;
                checkout_opts::CheckoutOptions = CheckoutOptions())
+    ensure_initialized()
     @assert repo.ptr != C_NULL
     @check ccall((:git_reset, :libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{Cvoid}, Cint, Ptr{CheckoutOptions}),
@@ -432,6 +453,7 @@ repo = LibGit2.clone(repo_url, "/home/me/projects/Example")
 """
 function clone(repo_url::AbstractString, repo_path::AbstractString,
                clone_opts::CloneOptions)
+    ensure_initialized()
     clone_opts_ref = Ref(clone_opts)
     repo_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_clone, :libgit2), Cint,
@@ -464,6 +486,7 @@ false
 ```
 """
 function fetchheads(repo::GitRepo)
+    ensure_initialized()
     fh = FetchHead[]
     ffcb = fetchhead_foreach_cb()
     @assert repo.ptr != C_NULL
@@ -479,6 +502,7 @@ end
 Return a vector of the names of the remotes of `repo`.
 """
 function remotes(repo::GitRepo)
+    ensure_initialized()
     sa_ref = Ref(StrArrayStruct())
     @assert repo.ptr != C_NULL
     @check ccall((:git_remote_list, :libgit2), Cint,

@@ -11,6 +11,7 @@ end
 Signature(sig::GitSignature) = Signature(sig.ptr)
 
 function Signature(name::AbstractString, email::AbstractString)
+    ensure_initialized()
     sig_ptr_ptr = Ref{Ptr{SignatureStruct}}(C_NULL)
     @check ccall((:git_signature_now, :libgit2), Cint,
                  (Ptr{Ptr{SignatureStruct}}, Cstring, Cstring), sig_ptr_ptr, name, email)
@@ -28,6 +29,7 @@ function Signature(repo::GitRepo)
 end
 
 function Base.convert(::Type{GitSignature}, sig::Signature)
+    ensure_initialized()
     sig_ptr_ptr = Ref{Ptr{SignatureStruct}}(C_NULL)
     @check ccall((:git_signature_new, :libgit2), Cint,
                  (Ptr{Ptr{SignatureStruct}}, Cstring, Cstring, Int64, Cint),
@@ -62,6 +64,7 @@ end
 
 """Return signature object. Free it after use."""
 function default_signature(repo::GitRepo)
+    ensure_initialized()
     sig_ptr_ptr = Ref{Ptr{SignatureStruct}}(C_NULL)
     @check ccall((:git_signature_default, :libgit2), Cint,
                  (Ptr{Ptr{SignatureStruct}}, Ptr{Cvoid}), sig_ptr_ptr, repo.ptr)

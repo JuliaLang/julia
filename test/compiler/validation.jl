@@ -3,6 +3,13 @@
 using Test, Core.IR
 
 function f22938(a, b, x...)
+    nothing
+    nothing
+    nothing
+    nothing
+    nothing
+    nothing
+    nothing
     d = 1
     a = d
     for i in 1:b
@@ -14,50 +21,51 @@ end
 msig = Tuple{typeof(f22938),Int,Int,Int,Int}
 world = typemax(UInt)
 _, msp, m = Base._methods_by_ftype(msig, -1, world)[]
-mi = Core.Compiler.code_for_method(m, msig, msp, world, false)
+mi = Core.Compiler.specialize_method(m, msig, msp, false)
 c0 = Core.Compiler.retrieve_code_info(mi)
 
 @test isempty(Core.Compiler.validate_code(mi))
 @test isempty(Core.Compiler.validate_code(c0))
 
 @testset "INVALID_EXPR_HEAD" begin
-    c = Core.Compiler.copy_code_info(c0)
-    insert!(c.code, 4, Expr(:invalid, 1))
+    c = copy(c0)
+    c.code[1] = Expr(:invalid, 1)
     errors = Core.Compiler.validate_code(c)
     @test length(errors) == 1
     @test errors[1].kind === Core.Compiler.INVALID_EXPR_HEAD
 end
 
 @testset "INVALID_LVALUE" begin
-    c = Core.Compiler.copy_code_info(c0)
-    insert!(c.code, 4, Expr(:(=), LabelNode(1), 1))
-    insert!(c.code, 2, Expr(:(=), :x, 1))
-    insert!(c.code, 10, Expr(:(=), 3, 1))
+    c = copy(c0)
+    c.code[1] = Expr(:(=), GotoNode(1), 1)
+    c.code[2] = Expr(:(=), :x, 1)
+    c.code[3] = Expr(:(=), 3, 1)
     errors = Core.Compiler.validate_code(c)
     @test length(errors) == 3
     @test all(e.kind === Core.Compiler.INVALID_LVALUE for e in errors)
 end
 
 @testset "INVALID_RVALUE" begin
-    c = Core.Compiler.copy_code_info(c0)
-    insert!(c.code, 2, Expr(:(=), SlotNumber(2), GotoNode(1)))
-    insert!(c.code, 4, Expr(:(=), SlotNumber(2), LabelNode(2)))
-    insert!(c.code, 10, Expr(:(=), SlotNumber(2), LineNumberNode(2)))
+    c = copy(c0)
+    c.code[1] = Expr(:(=), SlotNumber(2), GotoNode(1))
+    c.code[2] = Expr(:(=), SlotNumber(2), LineNumberNode(2))
+    i = 2
     for h in (:gotoifnot, :line, :const, :meta)
-        push!(c.code, Expr(:(=), SlotNumber(2), Expr(h)))
+        c.code[i+=1] = Expr(:(=), SlotNumber(2), Expr(h))
     end
     errors = Core.Compiler.validate_code(c)
-    @test length(errors) == 7
-    @test count(e.kind === Core.Compiler.INVALID_RVALUE for e in errors) == 7
+    @test length(errors) == 6
+    @test count(e.kind === Core.Compiler.INVALID_RVALUE for e in errors) == 6
 end
 
 @testset "INVALID_CALL_ARG" begin
-    c = Core.Compiler.copy_code_info(c0)
-    insert!(c.code, 2, Expr(:(=), SlotNumber(2), Expr(:call, GlobalRef(Base,:+), SlotNumber(2), GotoNode(1))))
-    insert!(c.code, 4, Expr(:call, GlobalRef(Base,:-), Expr(:call, GlobalRef(Base,:sin), LabelNode(2)), 3))
-    insert!(c.code, 10, Expr(:call, LineNumberNode(2)))
+    c = copy(c0)
+    c.code[1] = Expr(:(=), SlotNumber(2), Expr(:call, GlobalRef(Base,:+), SlotNumber(2), GotoNode(1)))
+    c.code[2] = Expr(:call, GlobalRef(Base,:-), Expr(:call, GlobalRef(Base,:sin), GotoNode(2)), 3)
+    c.code[3] = Expr(:call, LineNumberNode(2))
+    i = 3
     for h in (:gotoifnot, :line, :const, :meta)
-        push!(c.code, Expr(:call, GlobalRef(@__MODULE__,:f), Expr(h)))
+        c.code[i+=1] = Expr(:call, GlobalRef(@__MODULE__,:f), Expr(h))
     end
     errors = Core.Compiler.validate_code(c)
     @test length(errors) == 7
@@ -65,7 +73,7 @@ end
 end
 
 @testset "EMPTY_SLOTNAMES" begin
-    c = Core.Compiler.copy_code_info(c0)
+    c = copy(c0)
     empty!(c.slotnames)
     errors = Core.Compiler.validate_code(c)
     @test length(errors) == 2
@@ -74,27 +82,11 @@ end
 end
 
 @testset "SLOTFLAGS_MISMATCH" begin
-    c = Core.Compiler.copy_code_info(c0)
-    push!(c.slotnames, :dummy)
+    c = copy(c0)
+    push!(c.slotflags, 0x00)
     errors = Core.Compiler.validate_code(c)
     @test length(errors) == 1
     @test errors[1].kind === Core.Compiler.SLOTFLAGS_MISMATCH
-end
-
-@testset "SLOTTYPES_MISMATCH" begin
-    c = code_typed(f22938, (Int,Int,Int,Int))[1][1]
-    pop!(c.slottypes)
-    errors = Core.Compiler.validate_code(c)
-    @test length(errors) == 1
-    @test errors[1].kind === Core.Compiler.SLOTTYPES_MISMATCH
-end
-
-@testset "SLOTTYPES_MISMATCH_UNINFERRED" begin
-    c = Core.Compiler.copy_code_info(c0)
-    c.slottypes = 1
-    errors = Core.Compiler.validate_code(c)
-    @test length(errors) == 1
-    @test errors[1].kind === Core.Compiler.SLOTTYPES_MISMATCH_UNINFERRED
 end
 
 @testset "SSAVALUETYPES_MISMATCH" begin
@@ -106,7 +98,7 @@ end
 end
 
 @testset "SSAVALUETYPES_MISMATCH_UNINFERRED" begin
-    c = Core.Compiler.copy_code_info(c0)
+    c = copy(c0)
     c.ssavaluetypes -= 1
     errors = Core.Compiler.validate_code(c)
     @test length(errors) == 1
@@ -123,8 +115,8 @@ end
 end
 
 @testset "NON_TOP_LEVEL_METHOD" begin
-    c = Core.Compiler.copy_code_info(c0)
-    push!(c.code, Expr(:method, :dummy))
+    c = copy(c0)
+    c.code[1] = Expr(:method, :dummy)
     errors = Core.Compiler.validate_code(c)
     @test length(errors) == 1
     @test errors[1].kind === Core.Compiler.NON_TOP_LEVEL_METHOD

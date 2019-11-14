@@ -6,6 +6,7 @@ Function sets `+refs/*:refs/*` refspecs and `mirror` flag for remote reference.
 """
 function mirror_callback(remote::Ptr{Ptr{Cvoid}}, repo_ptr::Ptr{Cvoid},
                          name::Cstring, url::Cstring, payload::Ptr{Cvoid})
+    ensure_initialized()
     # Create the remote with a mirroring url
     fetch_spec = "+refs/*:refs/*"
     err = ccall((:git_remote_create_with_fetchspec, :libgit2), Cint,
@@ -40,6 +41,7 @@ function is_passphrase_required(private_key::AbstractString)
 end
 
 function user_abort()
+    ensure_initialized()
     # Note: Potentially it could be better to just throw a Julia error.
     ccall((:giterr_set_str, :libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
@@ -48,6 +50,7 @@ function user_abort()
 end
 
 function prompt_limit()
+    ensure_initialized()
     ccall((:giterr_set_str, :libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "Aborting, maximum number of prompts reached.")
@@ -55,6 +58,7 @@ function prompt_limit()
 end
 
 function exhausted_abort()
+    ensure_initialized()
     ccall((:giterr_set_str, :libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "All authentication methods have failed.")
@@ -62,10 +66,11 @@ function exhausted_abort()
 end
 
 function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload, username_ptr)
+    ensure_initialized()
     cred = p.credential::SSHCredential
     revised = false
 
-    # Use a filled credential as-is on the first pass. Reset password on sucessive calls.
+    # Use a filled credential as-is on the first pass. Reset password on successive calls.
     if p.first_pass && isfilled(cred)
         revised = true
     elseif !p.first_pass
@@ -151,7 +156,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
                 response === nothing && return user_abort()
                 cred.pass = response[2]
             else
-                response = Base.prompt("Passphrase for $(cred.prvkey)", password=true)
+                response = Base.getpass("Passphrase for $(cred.prvkey)")
                 response === nothing && return user_abort()
                 cred.pass = response
                 isempty(cred.pass) && return user_abort()  # Ambiguous if EOF or newline
@@ -167,17 +172,17 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
     if !revised
         return exhausted_abort()
     end
-
     return ccall((:git_cred_ssh_key_new, :libgit2), Cint,
                  (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cstring, Cstring),
                  libgit2credptr, cred.user, cred.pubkey, cred.prvkey, cred.pass)
 end
 
 function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload)
+    ensure_initialized()
     cred = p.credential::UserPasswordCredential
     revised = false
 
-    # Use a filled credential as-is on the first pass. Reset password on sucessive calls.
+    # Use a filled credential as-is on the first pass. Reset password on successive calls.
     if p.first_pass && isfilled(cred)
         revised = true
     elseif !p.first_pass
@@ -187,10 +192,10 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPay
     if p.use_git_helpers && (!revised || !isfilled(cred))
         git_cred = GitCredential(p.config, p.url)
 
-        # Use `deepcopy` to ensure zeroing the `git_cred` doesn't also zero the `cred`s copy
-        cred.user = deepcopy(coalesce(git_cred.username, ""))
-        cred.pass = deepcopy(coalesce(git_cred.password, ""))
-        securezero!(git_cred)
+         # Use `deepcopy` to ensure shredding the `git_cred` does not shred the `cred`s copy
+        cred.user = something(git_cred.username, "")
+        cred.pass = deepcopy(something(git_cred.password, ""))
+        Base.shred!(git_cred)
         revised = true
 
         p.use_git_helpers = false
@@ -211,7 +216,7 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPay
             cred.user = response
 
             url = git_url(scheme=p.scheme, host=p.host, username=cred.user)
-            response = Base.prompt("Password for '$url'", password=true)
+            response = Base.getpass("Password for '$url'")
             response === nothing && return user_abort()
             cred.pass = response
             isempty(cred.pass) && return user_abort()  # Ambiguous if EOF or newline
@@ -257,7 +262,7 @@ authentication was successful or not. To avoid an infinite loop from repeatedly
 using the same faulty credentials, we will keep track of state using the payload.
 
 For addition details see the LibGit2 guide on
-[authenticating against a server](https://libgit2.github.com/docs/guides/authentication/).
+[authenticating against a server](https://libgit2.org/docs/guides/authentication/).
 """
 function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
                               username_ptr::Cstring, allowed_types::Cuint,
@@ -270,8 +275,8 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
         p.url = unsafe_string(url_ptr)
         m = match(URL_REGEX, p.url)
 
-        p.scheme = coalesce(m[:scheme], "")
-        p.username = coalesce(m[:user], "")
+        p.scheme = something(m[:scheme], "")
+        p.username = something(m[:user], "")
         p.host = m[:host]
 
         # When an explicit credential is supplied we will make sure to use the given
@@ -327,6 +332,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
     # with the requested authentication method.
     if err == 0
         if p.explicit !== nothing
+            ensure_initialized()
             ccall((:giterr_set_str, :libgit2), Cvoid, (Cint, Cstring), Cint(Error.Callback),
                   "The explicitly provided credential is incompatible with the requested " *
                   "authentication methods.")
@@ -338,7 +344,7 @@ end
 
 function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
                               username_ptr::Cstring, allowed_types::Cuint,
-                              payloads::Dict)
+                              payloads::Dict{Symbol, Any})
     p = payloads[:credentials]
     return credentials_callback(libgit2credptr, url_ptr, username_ptr, allowed_types, p)
 end

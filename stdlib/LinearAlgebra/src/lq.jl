@@ -1,64 +1,112 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # LQ Factorizations
+"""
+    LQ <: Factorization
 
-struct LQ{T,S<:AbstractMatrix} <: Factorization{T}
+Matrix factorization type of the `LQ` factorization of a matrix `A`. The `LQ`
+decomposition is the `QR` decomposition of `transpose(A)`. This is the return
+type of [`lq`](@ref), the corresponding matrix factorization function.
+
+If `S::LQ` is the factorization object, the lower triangular component can be
+obtained via `S.L`, and the orthogonal/unitary component via `S.Q`, such that
+`A ≈ S.L*S.Q`.
+
+Iterating the decomposition produces the components `S.L` and `S.Q`.
+
+# Examples
+```jldoctest
+julia> A = [5. 7.; -2. -4.]
+2×2 Array{Float64,2}:
+  5.0   7.0
+ -2.0  -4.0
+
+julia> S = lq(A)
+LQ{Float64,Array{Float64,2}} with factors L and Q:
+[-8.60233 0.0; 4.41741 -0.697486]
+[-0.581238 -0.813733; -0.813733 0.581238]
+
+julia> S.L * S.Q
+2×2 Array{Float64,2}:
+  5.0   7.0
+ -2.0  -4.0
+
+julia> l, q = S; # destructuring via iteration
+
+julia> l == S.L &&  q == S.Q
+true
+```
+"""
+struct LQ{T,S<:AbstractMatrix{T}} <: Factorization{T}
     factors::S
     τ::Vector{T}
-    LQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
+
+    function LQ{T,S}(factors, τ) where {T,S<:AbstractMatrix{T}}
+        require_one_based_indexing(factors)
+        new{T,S}(factors, τ)
+    end
 end
+LQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQ{T,typeof(factors)}(factors, τ)
+function LQ{T}(factors::AbstractMatrix, τ::AbstractVector) where {T}
+    LQ(convert(AbstractMatrix{T}, factors), convert(Vector{T}, τ))
+end
+
+# iteration for destructuring into components
+Base.iterate(S::LQ) = (S.L, Val(:Q))
+Base.iterate(S::LQ, ::Val{:Q}) = (S.Q, Val(:done))
+Base.iterate(S::LQ, ::Val{:done}) = nothing
 
 struct LQPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     factors::Matrix{T}
     τ::Vector{T}
     LQPackedQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
-
-LQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQ{T,typeof(factors)}(factors, τ)
 LQPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQPackedQ{T,typeof(factors)}(factors, τ)
 
+
 """
-    lqfact!(A) -> LQ
+    lq!(A) -> LQ
 
 Compute the LQ factorization of `A`, using the input
 matrix as a workspace. See also [`lq`](@ref).
 """
-lqfact!(A::StridedMatrix{<:BlasFloat}) = LQ(LAPACK.gelqf!(A)...)
+lq!(A::StridedMatrix{<:BlasFloat}) = LQ(LAPACK.gelqf!(A)...)
 """
-    lqfact(A) -> LQ
+    lq(A) -> S::LQ
 
-Compute the LQ factorization of `A`. See also [`lq`](@ref).
+Compute the LQ decomposition of `A`. The decomposition's lower triangular
+component can be obtained from the `LQ` object `S` via `S.L`, and the
+orthogonal/unitary component via `S.Q`, such that `A ≈ S.L*S.Q`.
+
+Iterating the decomposition produces the components `S.L` and `S.Q`.
+
+The LQ decomposition is the QR decomposition of `transpose(A)`.
+
+# Examples
+```jldoctest
+julia> A = [5. 7.; -2. -4.]
+2×2 Array{Float64,2}:
+  5.0   7.0
+ -2.0  -4.0
+
+julia> S = lq(A)
+LQ{Float64,Array{Float64,2}} with factors L and Q:
+[-8.60233 0.0; 4.41741 -0.697486]
+[-0.581238 -0.813733; -0.813733 0.581238]
+
+julia> S.L * S.Q
+2×2 Array{Float64,2}:
+  5.0   7.0
+ -2.0  -4.0
+
+julia> l, q = S; # destructuring via iteration
+
+julia> l == S.L &&  q == S.Q
+true
+```
 """
-lqfact(A::StridedMatrix{<:BlasFloat})  = lqfact!(copy(A))
-lqfact(x::Number) = lqfact(fill(x,1,1))
-
-"""
-    lq(A; full = false) -> L, Q
-
-Perform an LQ factorization of `A` such that `A = L*Q`. The default (`full = false`)
-computes a factorization with possibly-rectangular `L` and `Q`, commonly the "thin"
-factorization. The LQ factorization is the QR factorization of `transpose(A)`. If the explicit,
-full/square form of `Q` is requested via `full = true`, `L` is not extended with zeros.
-
-!!! note
-    While in QR factorization the "thin" factorization is so named due to yielding
-    either a square or "tall"/"thin" rectangular factor `Q`, in LQ factorization the
-    "thin" factorization somewhat confusingly produces either a square or "short"/"wide"
-    rectangular factor `Q`. "Thin" factorizations more broadly are also
-    referred to as "reduced" factorizatons.
-"""
-function lq(A::Union{Number,AbstractMatrix}; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
-    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
-    if thin != nothing
-        Base.depwarn(string("the `thin` keyword argument in `lq(A; thin = $(thin))` has ",
-            "been deprecated in favor of `full`, which has the opposite meaning, ",
-            "e.g. `lq(A; full = $(!thin))`."), :lq)
-        full::Bool = !thin
-    end
-    F = lqfact(A)
-    L, Q = F.L, F.Q
-    return L, !full ? Array(Q) : lmul!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 2), size(Q.factors, 2)))
-end
+lq(A::StridedMatrix{<:BlasFloat})  = lq!(copy(A))
+lq(x::Number) = lq(fill(x,1,1))
 
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
 
@@ -76,9 +124,9 @@ Base.copy(F::Adjoint{T,<:LQ{T}}) where {T} =
 
 function getproperty(F::LQ, d::Symbol)
     m, n = size(F)
-    if d == :L
+    if d === :L
         return tril!(getfield(F, :factors)[1:m, 1:min(m,n)])
-    elseif d == :Q
+    elseif d === :Q
         return LQPackedQ(getfield(F, :factors), getfield(F, :τ))
     else
         return getfield(F, d)
@@ -91,8 +139,9 @@ Base.propertynames(F::LQ, private::Bool=false) =
 getindex(A::LQPackedQ, i::Integer, j::Integer) =
     lmul!(A, setindex!(zeros(eltype(A), size(A, 2)), 1, j))[i]
 
-function show(io::IO, C::LQ)
-    println(io, "$(typeof(C)) with factors L and Q:")
+function show(io::IO, ::MIME"text/plain", C::LQ)
+    println(io, typeof(C), " with factors L and Q:")
+    io = IOContext(io, :compact => true)
     show(io, C.L)
     println(io)
     show(io, C.Q)
@@ -100,7 +149,9 @@ end
 
 LQPackedQ{T}(Q::LQPackedQ) where {T} = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
 AbstractMatrix{T}(Q::LQPackedQ) where {T} = LQPackedQ{T}(Q)
-Matrix(A::LQPackedQ) = LAPACK.orglq!(copy(A.factors),A.τ)
+Matrix{T}(A::LQPackedQ) where {T} = convert(Matrix{T}, LAPACK.orglq!(copy(A.factors),A.τ))
+Matrix(A::LQPackedQ{T}) where {T} = Matrix{T}(A)
+Array{T}(A::LQPackedQ{T}) where {T} = Matrix{T}(A)
 Array(A::LQPackedQ) = Matrix(A)
 
 size(F::LQ, dim::Integer) = size(getfield(F, :factors), dim)
@@ -271,6 +322,7 @@ end
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
 function (\)(F::LQ{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
+    require_one_based_indexing(B)
     c2r = reshape(copy(transpose(reinterpret(T, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
     x = ldiv!(F, c2r)
     return reshape(copy(reinterpret(Complex{T}, copy(transpose(reshape(x, div(length(x), 2), 2))))),
@@ -282,3 +334,8 @@ function ldiv!(A::LQ{T}, B::StridedVecOrMat{T}) where T
     lmul!(adjoint(A.Q), ldiv!(LowerTriangular(A.L),B))
     return B
 end
+
+
+# In LQ factorization, `Q` is expressed as the product of the adjoint of the
+# reflectors.  Thus, `det` has to be conjugated.
+det(Q::LQPackedQ) = conj(_det_tau(Q.τ))

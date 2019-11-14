@@ -3,6 +3,7 @@
 struct Params
     cache::Vector{InferenceResult}
     world::UInt
+    global_cache::Bool
 
     # optimization
     inlining::Bool
@@ -27,7 +28,6 @@ struct Params
     MAX_APPLY_UNION_ENUM::Int
 
     # parameters limiting large (tuple) types
-    MAX_TUPLETYPE_LEN::Int
     TUPLE_COMPLEXITY_LIMIT_DEPTH::Int
 
     # when attempting to inlining _apply, abort the optimization if the tuple
@@ -35,20 +35,38 @@ struct Params
     MAX_TUPLE_SPLAT::Int
 
     # reasonable defaults
-    function Params(world::UInt;
+    global function CustomParams(world::UInt,
+                    ;
                     inlining::Bool = inlining_enabled(),
-                    inline_cost_threshold::Int = 100,
-                    inline_nonleaf_penalty::Int = 1000,
-                    inline_tupleret_bonus::Int = 400,
-                    max_methods::Int = 4,
-                    tupletype_len::Int = 15,
-                    tupletype_depth::Int = 3,
-                    tuple_splat::Int = 16,
-                    union_splitting::Int = 4,
-                    apply_union_enum::Int = 8)
+                    inline_cost_threshold::Int = DEFAULT_PARAMS.inline_cost_threshold,
+                    inline_nonleaf_penalty::Int = DEFAULT_PARAMS.inline_nonleaf_penalty,
+                    inline_tupleret_bonus::Int = DEFAULT_PARAMS.inline_tupleret_bonus,
+                    ipo_constant_propagation::Bool = true,
+                    aggressive_constant_propagation::Bool = false,
+                    max_methods::Int = DEFAULT_PARAMS.MAX_METHODS,
+                    tupletype_depth::Int = DEFAULT_PARAMS.TUPLE_COMPLEXITY_LIMIT_DEPTH,
+                    tuple_splat::Int = DEFAULT_PARAMS.MAX_TUPLE_SPLAT,
+                    union_splitting::Int = DEFAULT_PARAMS.MAX_UNION_SPLITTING,
+                    apply_union_enum::Int = DEFAULT_PARAMS.MAX_APPLY_UNION_ENUM)
         return new(Vector{InferenceResult}(),
-                   world, inlining, true, false, inline_cost_threshold, inline_nonleaf_penalty,
-                   inline_tupleret_bonus, max_methods, union_splitting, apply_union_enum,
-                   tupletype_len, tupletype_depth, tuple_splat)
+                   world, false,
+                   inlining, ipo_constant_propagation, aggressive_constant_propagation,
+                   inline_cost_threshold, inline_nonleaf_penalty, inline_tupleret_bonus,
+                   max_methods, union_splitting, apply_union_enum, tupletype_depth,
+                   tuple_splat)
+    end
+    function Params(world::UInt)
+        world == typemax(UInt) && (world = get_world_counter()) # workaround for bad callers
+        @assert world <= get_world_counter()
+        inlining = inlining_enabled()
+        return new(Vector{InferenceResult}(),
+                   world, true,
+                   #=inlining, ipo_constant_propagation, aggressive_constant_propagation, inline_cost_threshold, inline_nonleaf_penalty,=#
+                   inlining, true, false, 100, 1000,
+                   #=inline_tupleret_bonus, max_methods, union_splitting, apply_union_enum=#
+                   400, 4, 4, 8,
+                   #=tupletype_depth, tuple_splat=#
+                   3, 32)
     end
 end
+const DEFAULT_PARAMS = Params(UInt(0))

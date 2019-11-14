@@ -9,8 +9,12 @@
 #include "llvm-version.h"
 #include "support/dtypes.h"
 
+#include <llvm-c/Core.h>
+#include <llvm-c/Types.h>
+
 #include <llvm/Pass.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Constants.h>
@@ -18,7 +22,6 @@
 #include <llvm/Analysis/LoopInfo.h>
 #include <llvm/Analysis/CallGraph.h>
 #include <llvm/IR/LegacyPassManager.h>
-#include <llvm/IR/MDBuilder.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
 #include <llvm/Transforms/Utils/Cloning.h>
@@ -814,6 +817,7 @@ void CloneCtx::fix_inst_uses()
                     std::tie(id, slot) = get_reloc_slot(orig_f);
                     Instruction *ptr = new LoadInst(T_pvoidfunc, slot, "", false, insert_before);
                     ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+                    ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(ctx, None));
                     ptr = new BitCastInst(ptr, F->getType(), "", insert_before);
                     use_i->setOperand(info.use->getOperandNo(),
                                       rewrite_inst_use(uses.get_stack(), ptr,
@@ -1076,4 +1080,9 @@ static RegisterPass<MultiVersioning> X("JuliaMultiVersioning", "JuliaMultiVersio
 Pass *createMultiVersioningPass()
 {
     return new MultiVersioning();
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddMultiVersioningPass(LLVMPassManagerRef PM)
+{
+    unwrap(PM)->add(createMultiVersioningPass());
 }

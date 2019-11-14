@@ -15,8 +15,10 @@
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/CallSite.h>
+#include <llvm/IR/DebugInfo.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/GlobalValue.h>
+#include <llvm/IR/Instruction.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Support/TargetSelect.h>
@@ -84,6 +86,12 @@ extern "C" JL_DLLEXPORT LLVMBool LLVMExtraInitializeNativeDisassembler()
     return InitializeNativeTargetDisassembler();
 }
 
+// Exporting the Barrier LLVM pass
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddBarrierNoopPass(LLVMPassManagerRef PM)
+{
+    unwrap(PM)->add(createBarrierNoopPass());
+}
 
 // Infrastructure for writing LLVM passes in Julia
 
@@ -212,11 +220,20 @@ extern "C" JL_DLLEXPORT LLVMContextRef LLVMExtraGetValueContext(LLVMValueRef V)
     return wrap(&unwrap(V)->getContext());
 }
 
+
+#if JL_LLVM_VERSION < 80000
 extern ModulePass *createNVVMReflectPass();
-extern "C" JL_DLLEXPORT void LLVMExtraAddMVVMReflectPass(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddNVVMReflectPass(LLVMPassManagerRef PM)
 {
-    createNVVMReflectPass();
+    unwrap(PM)->add(createNVVMReflectPass());
 }
+#else
+FunctionPass *createNVVMReflectPass(unsigned int SmVersion);
+extern "C" JL_DLLEXPORT void LLVMExtraAddNVVMReflectFunctionPass(LLVMPassManagerRef PM, unsigned int SmVersion)
+{
+    unwrap(PM)->add(createNVVMReflectPass(SmVersion));
+}
+#endif
 
 extern "C" JL_DLLEXPORT void
 LLVMExtraAddTargetLibraryInfoByTiple(const char *T, LLVMPassManagerRef PM)
@@ -235,6 +252,38 @@ extern "C" JL_DLLEXPORT void LLVMExtraAddInternalizePassWithExportList(
         return false;
     };
     unwrap(PM)->add(createInternalizePass(PreserveFobj));
+}
+
+
+// Awaiting D46627
+
+extern "C" JL_DLLEXPORT int LLVMExtraGetSourceLocation(LLVMValueRef V, int index,
+                                                        const char** Name,
+                                                        const char** Filename,
+                                                        unsigned int* Line,
+                                                        unsigned int* Column)
+{
+    if (auto I = dyn_cast<Instruction>(unwrap(V))) {
+        const DILocation* DIL = I->getDebugLoc();
+        if (!DIL)
+            return 0;
+
+        for (int i = index; i > 0; i--) {
+            DIL = DIL->getInlinedAt();
+            if (!DIL)
+                return 0;
+        }
+
+        *Name = DIL->getScope()->getName().data();
+        *Filename = DIL->getScope()->getFilename().data();
+        *Line = DIL->getLine();
+        *Column = DIL->getColumn();
+
+        return 1;
+
+    } else {
+        jl_exceptionf(jl_argumenterror_type, "Can only get source location information of instructions");
+    }
 }
 
 } // namespace llvm

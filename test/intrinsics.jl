@@ -10,9 +10,19 @@ include("testenv.jl")
 @test isa(convert(Char, 65), Char)
 
 # runtime intrinsics
-let f = Any[Core.Intrinsics.add_int, Core.Intrinsics.sub_int]
-    @test f[1](1, 1) == 2
-    @test f[2](1, 1) == 0
+@testset "runtime intrinsics" begin
+    @test Core.Intrinsics.add_int(1, 1) == 2
+    @test Core.Intrinsics.sub_int(1, 1) == 0
+    @test_throws ErrorException("fpext: output bitsize must be > input bitsize")    Core.Intrinsics.fpext(Int32, 0x0000_0000)
+    @test_throws ErrorException("fpext: output bitsize must be > input bitsize")    Core.Intrinsics.fpext(Int32, 0x0000_0000_0000_0000)
+    @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Int32, 0x0000_0000)
+    @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Int64, 0x0000_0000)
+    @test_throws ErrorException("ZExt: output bitsize must be > input bitsize")     Core.Intrinsics.zext_int(Int8, 0x00)
+    @test_throws ErrorException("SExt: output bitsize must be > input bitsize")     Core.Intrinsics.sext_int(Int8, 0x00)
+    @test_throws ErrorException("ZExt: output bitsize must be > input bitsize")     Core.Intrinsics.zext_int(Int8, 0x0000)
+    @test_throws ErrorException("SExt: output bitsize must be > input bitsize")     Core.Intrinsics.sext_int(Int8, 0x0000)
+    @test_throws ErrorException("Trunc: output bitsize must be < input bitsize")    Core.Intrinsics.trunc_int(Int8, 0x00)
+    @test_throws ErrorException("Trunc: output bitsize must be < input bitsize")    Core.Intrinsics.trunc_int(Int16, 0x00)
 end
 
 # issue #4581
@@ -90,3 +100,9 @@ let f = Core.Intrinsics.ashr_int
     @test f(Int32(-1), -10) == -1
     @test f(Int32(2), -1) == 0
 end
+
+# issue #29929
+@test unsafe_store!(Ptr{Nothing}(C_NULL), nothing) === Ptr{Nothing}(0)
+@test unsafe_load(Ptr{Nothing}(0)) === nothing
+struct GhostStruct end
+@test unsafe_load(Ptr{GhostStruct}(rand(Int))) === GhostStruct()

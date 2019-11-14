@@ -19,36 +19,6 @@ using Test
         @test a - b === -c
         @test b - a === c
     end
-    @testset "RoundToZero" begin
-        setrounding(Float64,RoundToZero) do
-            @test a + b === d
-            @test - a - b === -d
-            @test a - b === -c
-            @test b - a === c
-        end
-        # Sanity check to see if we have returned to RoundNearest
-        @test a + b === 1.
-        @test - a - b === -1.
-        @test a - b == -c
-        @test b - a == c
-    end
-
-    @testset "RoundUp" begin
-        setrounding(Float64,RoundUp) do
-            @test a + b === 1.
-            @test - a - b === -d
-            @test a - b === -c
-            @test b - a === c
-        end
-    end
-    @testset "RoundDown" begin
-        setrounding(Float64,RoundDown) do
-            @test a + b === d
-            @test - a - b === -1.
-            @test a - b === -c
-            @test b - a === c
-        end
-    end
 end
 
 @testset "Float32 checks" begin
@@ -63,49 +33,24 @@ end
         @test a32 - b32 === -c32
         @test b32 - a32 === c32
     end
-    @testset "RoundToZero" begin
-        setrounding(Float32,RoundToZero) do
-            @test a32 + b32 === d32
-            @test - a32 - b32 === -d32
-            @test a32 - b32 === -c32
-            @test b32 - a32 === c32
-        end
-
-        # Sanity check to see if we have returned to RoundNearest
-        @test a32 + b32 === 1.0f0
-        @test - a32 - b32 === -1.0f0
-        @test a32 - b32 == -c32
-        @test b32 - a32 == c32
-    end
-    @testset "RoundUp" begin
-        setrounding(Float32,RoundUp) do
-            @test a32 + b32 === 1.0f0
-            @test - a32 - b32 === -d32
-            @test a32 - b32 === -c32
-            @test b32 - a32 === c32
-        end
-    end
-    @testset "RoundDown" begin
-        setrounding(Float32,RoundDown) do
-            @test a32 + b32 === d32
-            @test - a32 - b32 === -1.0f0
-            @test a32 - b32 === -c32
-            @test b32 - a32 === c32
-        end
-    end
 end
 
 @testset "convert with rounding" begin
     for v = [sqrt(2),-1/3,nextfloat(1.0),prevfloat(1.0),nextfloat(-1.0),
              prevfloat(-1.0),nextfloat(0.0),prevfloat(0.0)]
+
         pn = Float32(v,RoundNearest)
         @test pn == convert(Float32,v)
+
         pz = Float32(v,RoundToZero)
-        @test pz == setrounding(()->convert(Float32,v), Float64, RoundToZero)
+        @test abs(pz) <= abs(v) < nextfloat(abs(pz))
+        @test signbit(pz) == signbit(v)
+
         pd = Float32(v,RoundDown)
-        @test pd == setrounding(()->convert(Float32,v), Float64, RoundDown)
+        @test pd <= v < nextfloat(pd)
+
         pu = Float32(v,RoundUp)
-        @test pu == setrounding(()->convert(Float32,v), Float64, RoundUp)
+        @test prevfloat(pu) < v <= pu
 
         @test pn == pd || pn == pu
         @test v > 0 ? pz == pd : pz == pu
@@ -146,8 +91,49 @@ end
     @test_throws DivideError round(Int64,badness,RoundNearestTiesUp)
 end
 
+@testset "rounding properties" for Tf in [Float16,Float32,Float64]
+    # these should hold for all u, but we just test the smallest and largest
+    # of each binade
+
+    for i in exponent(floatmin(Tf)):exponent(floatmax(Tf))
+        for u in [ldexp(Tf(1.0), i), -ldexp(Tf(1.0), i),
+                  ldexp(prevfloat(Tf(2.0)), i), -ldexp(prevfloat(Tf(2.0)), i)]
+
+            r = round(u, RoundNearest)
+            if isfinite(u)
+                @test isfinite(r)
+                @test isinteger(r)
+                @test abs(r-u) < 0.5 || abs(r-u) == 0.5 && isinteger(r/2)
+                @test signbit(u) == signbit(r)
+            else
+                @test u === r
+            end
+
+            r = round(u, RoundNearestTiesAway)
+            if isfinite(u)
+                @test isfinite(r)
+                @test isinteger(r)
+                @test abs(r-u) < 0.5 || (r-u) == copysign(0.5,u)
+                @test signbit(u) == signbit(r)
+            else
+                @test u === r
+            end
+
+            r = round(u, RoundNearestTiesUp)
+            if isfinite(u)
+                @test isfinite(r)
+                @test isinteger(r)
+                @test -0.5 < r-u <= 0.5
+                @test signbit(u) == signbit(r)
+            else
+                @test u === r
+            end
+        end
+    end
+end
+
 @testset "rounding difficult values" begin
-    for x = 2^53-10:2^53+10
+    for x = Int64(2)^53-10:Int64(2)^53+10
         y = Float64(x)
         i = trunc(Int64,y)
         @test Int64(trunc(y)) == i
@@ -266,6 +252,7 @@ end
 # custom rounding and significant-digit ops
 @testset "rounding to digits relative to the decimal point" begin
     @test round(pi) ≈ 3.
+    @test round(pi, base=10) ≈ 3.
     @test round(pi, digits=0) ≈ 3.
     @test round(pi, digits=1) ≈ 3.1
     @test round(pi, digits=3, base=2) ≈ 3.125

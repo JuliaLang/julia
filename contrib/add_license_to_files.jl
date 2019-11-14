@@ -25,6 +25,7 @@ const rootdirs = [
 const excludedirs = [
     # see: https://github.com/JuliaLang/julia/pull/11073#issuecomment-98090053
     "../base/grisu",
+    "../base/ryu",
     "../src/flisp",
 ]
 
@@ -138,6 +139,7 @@ function add_license_line!(unprocessed::Vector, src::AbstractString, new_license
                 isempty(lines) && (push!(unprocessed, path); continue)
                 isempty(old_license) || check_lines!(path, lines, old_license, prefix, true)
                 check_lines!(path, lines, new_license, prefix, false)
+                isempty(lines) && continue  # file consisting of just license header
                 # check shebang file
                 linenum = license_linenum(lines[1])
                 if !isempty(strip(lines[linenum]))
@@ -162,7 +164,7 @@ end
 function abspaths(A::Vector)
     abs_A = []
     for p in A
-        abs_p = isabspath(p) ? normpath(p) : normpath(joinpath(dirname(@__FILE__), p))
+        abs_p = isabspath(p) ? normpath(p) : normpath(joinpath(@__DIR__, p))
         ispath(abs_p) || error(string("`abs_p` seems not to be an existing path. ",
                                       "Adjust your configuration: <", p, "> : ", abs_p, "\n"))
         push!(abs_A, abs_p)

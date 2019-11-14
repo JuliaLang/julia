@@ -15,7 +15,7 @@ using Random
 let nt=0
     global nt_func
     nt_func() = (v=div(nt, 25); nt+=1; v)  # increment number of tasks by 1 for every 25th call.
-                                           # nt_func() will be called initally once and then for every
+                                           # nt_func() will be called initially once and then for every
                                            # iteration
 end
 @test length(unique(asyncmap(x->(yield();objectid(current_task())), 1:200; ntasks=nt_func))) == 7

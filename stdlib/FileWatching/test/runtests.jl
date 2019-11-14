@@ -30,20 +30,14 @@ end
 function pfd_tst_reads(idx, intvl)
     global ready += 1
     wait(ready_c)
-    t_elapsed = @elapsed begin
-        start_evt2 = Condition()
-        evt2 = @async (notify(start_evt2); poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false))
-        wait(start_evt2); yield() # make sure the async poll_fd is pumping events
-        evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
-    end
+    start_evt2 = Condition()
+    evt2 = @async (notify(start_evt2); poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false))
+    wait(start_evt2); yield() # make sure the async poll_fd is pumping events
+    evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
     @test !evt.timedout
     @test evt.readable
     @test !evt.writable
     @test evt === fetch(evt2)
-
-    # println("Expected ", intvl, ", actual ", t_elapsed, ", diff ", t_elapsed - intvl)
-    # Disabled since this assertion fails randomly, notably on build VMs (issue #12824)
-    # @test t_elapsed <= (intvl + 1)
 
     dout = zeros(UInt8, 1)
     @static if Sys.iswindows()
@@ -58,22 +52,15 @@ end
 function pfd_tst_timeout(idx, intvl)
     global ready += 1
     wait(ready_c)
-    t_elapsed = @elapsed begin
-        start_evt2 = Condition()
-        evt2 = @async (notify(start_evt2); poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false))
-        wait(start_evt2); yield() # make sure the async poll_fd is pumping events
-        evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
-        @test evt.timedout
-        @test !evt.readable
-        @test !evt.writable
-        @test evt === fetch(evt2)
-    end
-
-    # Disabled since these assertions fail randomly, notably on build VMs (issue #12824)
-    # @test intvl <= t_elapsed
-    # @test t_elapsed <= (intvl + 1)
+    start_evt2 = Condition()
+    evt2 = @async (notify(start_evt2); poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false))
+    wait(start_evt2); yield() # make sure the async poll_fd is pumping events
+    evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
+    @test evt.timedout
+    @test !evt.readable
+    @test !evt.writable
+    @test evt === fetch(evt2)
 end
-
 
 # Odd numbers trigger reads, even numbers timeout
 for (i, intvl) in enumerate(intvls)
@@ -110,7 +97,7 @@ for (i, intvl) in enumerate(intvls)
         end
         notify(ready_c, all=true)
         for idx in 1:n
-            Base._wait(t[idx])
+            Base.wait(t[idx])
         end
     end
 end
@@ -176,24 +163,24 @@ file = joinpath(dir, "afile.txt")
 # initialize a watch_folder instance and create afile.txt
 function test_init_afile()
     @test isempty(FileWatching.watched_folders)
-    @test @elapsed(@test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))) <= 2
-    @test @elapsed(@test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))) <= 0.3
+    @test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))
+    @test @elapsed(@test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))) <= 0.5
     @test length(FileWatching.watched_folders) == 1
     @test unwatch_folder(dir) === nothing
     @test isempty(FileWatching.watched_folders)
-    @test 0.001 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent()))) <= 2
-    @test 0.001 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent()))) <= 0.3
+    @test 0.002 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent())))
+    @test 0.002 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent()))) <= 0.5
     @test unwatch_folder(dir) === nothing
-    @test 0.9 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent()))) <= 4
-    @test 0.9 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent()))) <= 1.3
+    @test 0.99 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent())))
+    @test 0.99 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent())))
     # like touch, but lets the operating system update the timestamp
     # for greater precision on some platforms (windows)
     @test close(open(file, "w")) === nothing
-    @test @elapsed(@test(watch_folder(dir) == (F_PATH => FileWatching.FileEvent(FileWatching.UV_RENAME)))) <= 0.3
+    @test(watch_folder(dir) == (F_PATH => FileWatching.FileEvent(FileWatching.UV_RENAME)))
     @test close(open(file, "w")) === nothing
     sleep(3)
     let c
-        @test @elapsed(c = watch_folder(dir, 0)) <= 0.3
+        c = watch_folder(dir, 0)
         if F_GETPATH
             @test c.first == F_PATH
             @test c.second.changed ⊻ c.second.renamed
@@ -205,8 +192,8 @@ function test_init_afile()
         end
     end
     @test unwatch_folder(dir) === nothing
-    @test @elapsed(@test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))) <= 0.3
-    @test 0.9 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent()))) <= 1.3
+    @test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))
+    @test 0.9 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent())))
     @test length(FileWatching.watched_folders) == 1
     nothing
 end
@@ -321,8 +308,8 @@ function test_dirmonitor_wait2(tval)
     end
     @sync begin
         @async begin
-            sleep(tval)
             for i = 1:3
+                sleep(tval)
                 rm("$file$i")
             end
         end
@@ -384,8 +371,8 @@ mv(file * "~", file)
 let changes = []
     while true
         let c
-            timeout = Sys.iswindows() ? 0.1 : 0.0
-            @test @elapsed(c = watch_folder(dir, timeout)) < 0.3
+            Sys.iswindows() && sleep(0.1)
+            @test @elapsed(c = watch_folder(dir, 0.0)) < 0.5
             push!(changes, c)
             (c.second::FileWatching.FileEvent).timedout && break
         end
@@ -398,11 +385,17 @@ let changes = []
     @test pop!(changes) == ("" => FileWatching.FileEvent())
     if F_GETPATH
         Sys.iswindows() && @test pop!(changes) == (F_PATH => FileWatching.FileEvent(FileWatching.UV_CHANGE))
-        @test pop!(changes) == (F_PATH => FileWatching.FileEvent(FileWatching.UV_RENAME))
+        p = pop!(changes)
+        if !Sys.isapple()
+            @test p == (F_PATH => FileWatching.FileEvent(FileWatching.UV_RENAME))
+        end
         while changes[end][1] == F_PATH
             @test pop!(changes)[2] == FileWatching.FileEvent(FileWatching.UV_RENAME)
         end
-        @test pop!(changes) == (F_PATH * "~" => FileWatching.FileEvent(FileWatching.UV_RENAME))
+        p = pop!(changes)
+        if !Sys.isapple()
+            @test p == (F_PATH * "~" => FileWatching.FileEvent(FileWatching.UV_RENAME))
+        end
         while changes[end][1] == F_PATH * "~"
             @test pop!(changes)[2] == FileWatching.FileEvent(FileWatching.UV_RENAME)
         end
@@ -414,16 +407,19 @@ let changes = []
                 while changes[end - 1][1] == "$F_PATH$i"
                     @test let x = pop!(changes)[2]; x.changed ⊻ x.renamed; end
                 end
-                @test pop!(changes) == ("$F_PATH$i" => FileWatching.FileEvent(FileWatching.UV_RENAME))
+                p = pop!(changes)
+                if !Sys.isapple()
+                    @test p == ("$F_PATH$i" => FileWatching.FileEvent(FileWatching.UV_RENAME))
+                end
             end
         end
     end
     @test all(x -> (isa(x, Pair) && x[1] == F_PATH && (x[2].changed ⊻ x[2].renamed)), changes) || changes
 end
 
-@test_throws(Base.UVError("FileMonitor (start)", Base.UV_ENOENT),
+@test_throws(Base._UVError("FileMonitor (start)", Base.UV_ENOENT),
              watch_file("____nonexistent_file", 10))
-@test_throws(Base.UVError("FolderMonitor (start)", Base.UV_ENOENT),
+@test_throws(Base._UVError("FolderMonitor (start)", Base.UV_ENOENT),
              watch_folder("____nonexistent_file", 10))
 @test(@elapsed(
     @test(poll_file("____nonexistent_file", 1, 3.1) ===

@@ -95,8 +95,8 @@ let str = "aa\u2200\u2222bb"
     @test String(take!(b)) == "\u2200\u2222"
 
     @test_throws StringIndexError SubString(str, 4, 5)
-    @test_throws BoundsError next(u, 0)
-    @test_throws BoundsError next(u, 7)
+    @test_throws BoundsError iterate(u, 0)
+    @test_throws BoundsError iterate(u, 8)
     @test_throws BoundsError getindex(u, 0)
     @test_throws BoundsError getindex(u, 7)
     @test_throws BoundsError getindex(u, 0:1)
@@ -193,10 +193,10 @@ let rng = MersenneTwister(1), strs = ["∀∃∀"*String(rand(rng, UInt8, 40))*"
                                       String(rand(rng, UInt8, 50))]
     for s in strs
         a = 0
-        while !done(s, a)
+        while a <= ncodeunits(s)
             a = nextind(s, a)
             b = a - 1
-            while !done(s, b)
+            while b <= ncodeunits(s)
                 ss = SubString(s, a:b)
                 s2 = s[a:b]
                 @test ncodeunits(ss) == ncodeunits(s2)
@@ -322,4 +322,12 @@ let
     @test C_NULL == nullstr
     @test cstring != C_NULL
     @test C_NULL != cstring
+end
+
+# issue #31381: eltype(Cstring) != Cchar
+let
+    s = Cstring(C_NULL)
+    @test eltype(Cstring) == Cchar
+    @test eltype(s) == Cchar
+    @test pointer(s) isa Ptr{Cchar}
 end

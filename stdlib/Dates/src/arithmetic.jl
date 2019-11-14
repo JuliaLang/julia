@@ -16,12 +16,8 @@ The addition of a `Date` with a `Time` produces a `DateTime`. The hour, minute, 
 the `Time` are used along with the year, month, and day of the `Date` to create the new `DateTime`.
 Non-zero microseconds or nanoseconds in the `Time` type will result in an `InexactError` being thrown.
 """
-function (+)(dt::Date, t::Time)
-    (microsecond(t) > 0 || nanosecond(t) > 0) && throw(InexactError(:+, DateTime, t))
-    y, m, d = yearmonthday(dt)
-    return DateTime(y, m, d, hour(t), minute(t), second(t), millisecond(t))
-end
-(+)(t::Time, dt::Date) = dt + t
+(+)(dt::Date, t::Time) = DateTime(dt ,t)
+(+)(t::Time, dt::Date) = DateTime(dt, t)
 
 # TimeType-Year arithmetic
 function (+)(dt::DateTime, y::Year)
@@ -83,20 +79,10 @@ end
 (-)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) - tons(y)))
 (+)(y::Period, x::TimeType) = x + y
 
-(+)(x::AbstractArray{<:TimeType}, y::GeneralPeriod) = x .+ y
-(+)(x::StridedArray{<:GeneralPeriod}, y::TimeType) = x .+ y
-(+)(y::GeneralPeriod, x::AbstractArray{<:TimeType}) = x .+ y
-(+)(y::TimeType, x::StridedArray{<:GeneralPeriod}) = x .+ y
-(-)(x::AbstractArray{<:TimeType}, y::GeneralPeriod) = x .- y
-(-)(x::StridedArray{<:GeneralPeriod}, y::TimeType) = x .- y
-
-# TimeType, AbstractArray{TimeType}
-(-)(x::AbstractArray{T}, y::T) where {T<:TimeType} = x .- y
-(-)(y::T, x::AbstractArray{T}) where {T<:TimeType} = y .- x
-
 # AbstractArray{TimeType}, AbstractArray{TimeType}
 (-)(x::OrdinalRange{T}, y::OrdinalRange{T}) where {T<:TimeType} = Vector(x) - Vector(y)
 (-)(x::AbstractRange{T}, y::AbstractRange{T}) where {T<:TimeType} = Vector(x) - Vector(y)
 
-# Allow dates and times to broadcast as unwrapped scalars
+# Allow dates, times, and time zones to broadcast as unwrapped scalars
 Base.Broadcast.broadcastable(x::AbstractTime) = Ref(x)
+Base.Broadcast.broadcastable(x::TimeZone) = Ref(x)

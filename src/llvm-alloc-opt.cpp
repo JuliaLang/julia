@@ -4,11 +4,15 @@
 #undef DEBUG
 #include "llvm-version.h"
 
+#include <llvm-c/Core.h>
+#include <llvm-c/Types.h>
+
 #include <llvm/ADT/SmallSet.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/CFG.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -37,27 +41,12 @@ namespace {
 
 static void copyMetadata(Instruction *dest, const Instruction *src)
 {
-#if JL_LLVM_VERSION < 40000
-    if (!src->hasMetadata())
-        return;
-    SmallVector<std::pair<unsigned,MDNode*>,4> TheMDs;
-    src->getAllMetadataOtherThanDebugLoc(TheMDs);
-    for (const auto &MD : TheMDs)
-        dest->setMetadata(MD.first, MD.second);
-    dest->setDebugLoc(src->getDebugLoc());
-#else
     dest->copyMetadata(*src);
-#endif
 }
 
 static bool isBundleOperand(CallInst *call, unsigned idx)
 {
-#if JL_LLVM_VERSION < 40000
-    return call->hasOperandBundles() && idx >= call->getBundleOperandsStartIndex() &&
-        idx < call->getBundleOperandsEndIndex();
-#else
     return call->isBundleOperand(idx);
-#endif
 }
 
 static void removeGCPreserve(CallInst *call, Instruction *val)
@@ -329,7 +318,7 @@ private:
     CheckInst::Stack check_stack;
     Lifetime::Stack lifetime_stack;
     ReplaceUses::Stack replace_stack;
-    std::map<BasicBlock*,Instruction*> first_safepoint;
+    std::map<BasicBlock*, llvm::WeakVH> first_safepoint;
 };
 
 void Optimizer::pushInstruction(Instruction *I)
@@ -423,8 +412,11 @@ bool Optimizer::isSafepoint(Instruction *inst)
 Instruction *Optimizer::getFirstSafepoint(BasicBlock *bb)
 {
     auto it = first_safepoint.find(bb);
-    if (it != first_safepoint.end())
-        return it->second;
+    if (it != first_safepoint.end()) {
+        Value *Val = it->second;
+        if (Val)
+            return cast<Instruction>(Val);
+    }
     Instruction *first = nullptr;
     for (auto &I: *bb) {
         if (isSafepoint(&I)) {
@@ -597,7 +589,11 @@ void Optimizer::checkInst(Instruction *I)
             if (auto II = dyn_cast<IntrinsicInst>(call)) {
                 if (auto id = II->getIntrinsicID()) {
                     if (id == Intrinsic::memset) {
+#if JL_LLVM_VERSION < 70000
                         assert(call->getNumArgOperands() == 5);
+#else
+                        assert(call->getNumArgOperands() == 4);
+#endif
                         use_info.hasmemset = true;
                         if (cur.offset == UINT32_MAX ||
                             !isa<ConstantInt>(call->getArgOperand(2)) ||
@@ -885,38 +881,44 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
         args[i] = arg == orig_i ? new_i : arg;
         argTys[i] = args[i]->getType();
     }
+    auto oldfType = call->getFunctionType();
+    auto newfType = FunctionType::get(
+            oldfType->getReturnType(),
+            makeArrayRef(argTys).slice(0, oldfType->getNumParams()),
+            oldfType->isVarArg());
 
     // Accumulate an array of overloaded types for the given intrinsic
+    // and compute the new name mangling schema
     SmallVector<Type*, 4> overloadTys;
     {
         SmallVector<Intrinsic::IITDescriptor, 8> Table;
         getIntrinsicInfoTableEntries(ID, Table);
         ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
-        auto oldfType = call->getFunctionType();
+#if JL_LLVM_VERSION >= 90000
+        auto res = Intrinsic::matchIntrinsicSignature(newfType, TableRef, overloadTys);
+        assert(res == Intrinsic::MatchIntrinsicTypes_Match);
+        (void)res;
+#else
         bool res = Intrinsic::matchIntrinsicType(oldfType->getReturnType(), TableRef, overloadTys);
         assert(!res);
-        for (auto Ty : argTys) {
+        for (auto Ty : newfType->params()) {
             res = Intrinsic::matchIntrinsicType(Ty, TableRef, overloadTys);
             assert(!res);
         }
-        res = Intrinsic::matchIntrinsicVarArg(oldfType->isVarArg(), TableRef);
-        assert(!res);
         (void)res;
+#endif
+        bool matchvararg = Intrinsic::matchIntrinsicVarArg(newfType->isVarArg(), TableRef);
+        assert(!matchvararg);
+        (void)matchvararg;
     }
     auto newF = Intrinsic::getDeclaration(call->getModule(), ID, overloadTys);
+    assert(newF->getFunctionType() == newfType);
     newF->setCallingConv(call->getCallingConv());
     auto newCall = CallInst::Create(newF, args, "", call);
     newCall->setTailCallKind(call->getTailCallKind());
     auto old_attrs = call->getAttributes();
-#if JL_LLVM_VERSION >= 50000
     newCall->setAttributes(AttributeList::get(*pass.ctx, old_attrs.getFnAttributes(),
                                               old_attrs.getRetAttributes(), {}));
-#else
-    AttributeSet attr;
-    attr = attr.addAttributes(*pass.ctx, AttributeSet::ReturnIndex, old_attrs.getRetAttributes())
-        .addAttributes(*pass.ctx, AttributeSet::FunctionIndex, old_attrs.getFnAttributes());
-    newCall->setAttributes(attr);
-#endif
     newCall->setDebugLoc(call->getDebugLoc());
     call->replaceAllUsesWith(newCall);
     call->eraseFromParent();
@@ -1477,13 +1479,8 @@ bool AllocOpt::doInitialization(Module &M)
     T_size = sizeof(void*) == 8 ? T_int64 : T_int32;
     T_pint8 = PointerType::get(T_int8, 0);
 
-#if JL_LLVM_VERSION >= 50000
     lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { T_pint8 });
     lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { T_pint8 });
-#else
-    lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start);
-    lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end);
-#endif
 
     MDNode *tbaa_data;
     MDNode *tbaa_data_scalar;
@@ -1513,4 +1510,9 @@ static RegisterPass<AllocOpt> X("AllocOpt", "Promote heap allocation to stack",
 Pass *createAllocOptPass()
 {
     return new AllocOpt();
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddAllocOptPass(LLVMPassManagerRef PM)
+{
+    unwrap(PM)->add(createAllocOptPass());
 }

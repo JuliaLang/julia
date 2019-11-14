@@ -13,162 +13,127 @@ else
 end
 
 """
-    Base.add_sum(x,y)
+    Base.add_sum(x, y)
 
 The reduction operator used in `sum`. The main difference from [`+`](@ref) is that small
 integers are promoted to `Int`/`UInt`.
 """
-add_sum(x,y) = x + y
-add_sum(x::SmallSigned,y::SmallSigned) = Int(x) + Int(y)
-add_sum(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) + UInt(y)
+add_sum(x, y) = x + y
+add_sum(x::SmallSigned, y::SmallSigned) = Int(x) + Int(y)
+add_sum(x::SmallUnsigned, y::SmallUnsigned) = UInt(x) + UInt(y)
+add_sum(x::Real, y::Real)::Real = x + y
 
 """
-    Base.mul_prod(x,y)
+    Base.mul_prod(x, y)
 
 The reduction operator used in `prod`. The main difference from [`*`](@ref) is that small
 integers are promoted to `Int`/`UInt`.
 """
-mul_prod(x,y) = x * y
-mul_prod(x::SmallSigned,y::SmallSigned) = Int(x) * Int(y)
-mul_prod(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) * UInt(y)
+mul_prod(x, y) = x * y
+mul_prod(x::SmallSigned, y::SmallSigned) = Int(x) * Int(y)
+mul_prod(x::SmallUnsigned, y::SmallUnsigned) = UInt(x) * UInt(y)
+mul_prod(x::Real, y::Real)::Real = x * y
 
 ## foldl && mapfoldl
 
-@noinline function mapfoldl_impl(f, op, v0, itr, i)
-    # Unroll the while loop once; if v0 is known, the call to op may
+function mapfoldl_impl(f, op, nt::NamedTuple{(:init,)}, itr, i...)
+    init = nt.init
+    # Unroll the while loop once; if init is known, the call to op may
     # be evaluated at compile time
-    if done(itr, i)
-        return v0
-    else
-        (x, i) = next(itr, i)
-        v = op(v0, f(x))
-        while !done(itr, i)
-            @inbounds (x, i) = next(itr, i)
-            v = op(v, f(x))
-        end
-        return v
+    y = iterate(itr, i...)
+    y === nothing && return init
+    v = op(init, f(y[1]))
+    while true
+        y = iterate(itr, y[2])
+        y === nothing && break
+        v = op(v, f(y[1]))
     end
+    return v
 end
 
-"""
-    mapfoldl(f, op, v0, itr)
-
-Like [`mapreduce`](@ref), but with guaranteed left associativity, as in [`foldl`](@ref).
-`v0` will be used exactly once.
-"""
-mapfoldl(f, op, v0, itr) = mapfoldl_impl(f, op, v0, itr, start(itr))
-
-"""
-    mapfoldl(f, op, itr)
-
-Like `mapfoldl(f, op, v0, itr)`, but using the first element of `itr` to generate `v0`.
-Specifically, `mapfoldl(f, op, itr)` produces the same result as
-`mapfoldl(f, op, f(first(itr)), drop(itr, 1))`.
-In general, this cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
-"""
-function mapfoldl(f, op, itr)
-    i = start(itr)
-    if done(itr, i)
+function mapfoldl_impl(f, op, nt::NamedTuple{()}, itr)
+    y = iterate(itr)
+    if y === nothing
         return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
-    (x, i) = next(itr, i)
-    v0 = mapreduce_first(f, op, x)
-    mapfoldl_impl(f, op, v0, itr, i)
+    x, i = y
+    init = mapreduce_first(f, op, x)
+    return mapfoldl_impl(f, op, (init=init,), itr, i)
 end
 
-"""
-    foldl(op, v0, itr)
-
-Like [`reduce`](@ref), but with guaranteed left associativity. `v0` will be used
-exactly once.
-
-```jldoctest
-julia> foldl(=>, 0, 1:4)
-(((0=>1)=>2)=>3) => 4
-```
-"""
-foldl(op, v0, itr) = mapfoldl(identity, op, v0, itr)
 
 """
-    foldl(op, itr)
+    mapfoldl(f, op, itr; [init])
 
-Like `foldl(op, v0, itr)`, but using the first element of `itr` as `v0`. In general, this
-cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
+Like [`mapreduce`](@ref), but with guaranteed left associativity, as in [`foldl`](@ref).
+If provided, the keyword argument `init` will be used exactly once. In general, it will be
+necessary to provide `init` to work with empty collections.
+"""
+mapfoldl(f, op, itr; kw...) = mapfoldl_impl(f, op, kw.data, itr)
 
+"""
+    foldl(op, itr; [init])
+
+Like [`reduce`](@ref), but with guaranteed left associativity. If provided, the keyword
+argument `init` will be used exactly once. In general, it will be necessary to provide
+`init` to work with empty collections.
+
+# Examples
 ```jldoctest
 julia> foldl(=>, 1:4)
-((1=>2)=>3) => 4
+((1 => 2) => 3) => 4
+
+julia> foldl(=>, 1:4; init=0)
+(((0 => 1) => 2) => 3) => 4
 ```
 """
-foldl(op, itr) = mapfoldl(identity, op, itr)
+foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
 
 ## foldr & mapfoldr
 
-function mapfoldr_impl(f, op, v0, itr, i::Integer)
-    # Unroll the while loop once; if v0 is known, the call to op may
-    # be evaluated at compile time
-    if isempty(itr) || i == 0
-        return v0
-    else
-        x = itr[i]
-        v  = op(f(x), v0)
-        while i > 1
-            x = itr[i -= 1]
-            v = op(f(x), v)
-        end
-        return v
-    end
-end
+mapfoldr_impl(f, op, nt::NamedTuple{(:init,)}, itr) =
+    mapfoldl_impl(f, (x,y) -> op(y,x), nt, Iterators.reverse(itr))
 
-"""
-    mapfoldr(f, op, v0, itr)
-
-Like [`mapreduce`](@ref), but with guaranteed right associativity, as in [`foldr`](@ref).
-`v0` will be used exactly once.
-"""
-mapfoldr(f, op, v0, itr) = mapfoldr_impl(f, op, v0, itr, lastindex(itr))
-
-"""
-    mapfoldr(f, op, itr)
-
-Like `mapfoldr(f, op, v0, itr)`, but using the first element of `itr` to generate `v0`.
-Specifically, `mapfoldr(f, op, itr)` produces the same result as
-`mapfoldr(f, op, f(last(itr)), take(itr, length(itr)-1))`.
-In general, this cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
-"""
-function mapfoldr(f, op, itr)
-    i = lastindex(itr)
-    if isempty(itr)
+# we can't just call mapfoldl_impl with (x,y) -> op(y,x), because
+# we need to use the type of op for mapreduce_empty_iter and mapreduce_first.
+function mapfoldr_impl(f, op, nt::NamedTuple{()}, itr)
+    ritr = Iterators.reverse(itr)
+    y = iterate(ritr)
+    if y === nothing
         return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
-    return mapfoldr_impl(f, op, mapreduce_first(f, op, itr[i]), itr, i-1)
+    x, i = y
+    init = mapreduce_first(f, op, x)
+    return mapfoldl_impl(f, (x,y) -> op(y,x), (init=init,), ritr, i)
 end
 
 """
-    foldr(op, v0, itr)
+    mapfoldr(f, op, itr; [init])
 
-Like [`reduce`](@ref), but with guaranteed right associativity. `v0` will be used
-exactly once.
-
-```jldoctest
-julia> foldr(=>, 0, 1:4)
-1 => (2=>(3=>(4=>0)))
-```
+Like [`mapreduce`](@ref), but with guaranteed right associativity, as in [`foldr`](@ref). If
+provided, the keyword argument `init` will be used exactly once. In general, it will be
+necessary to provide `init` to work with empty collections.
 """
-foldr(op, v0, itr) = mapfoldr(identity, op, v0, itr)
+mapfoldr(f, op, itr; kw...) = mapfoldr_impl(f, op, kw.data, itr)
+
 
 """
-    foldr(op, itr)
+    foldr(op, itr; [init])
 
-Like `foldr(op, v0, itr)`, but using the last element of `itr` as `v0`. In general, this
-cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
+Like [`reduce`](@ref), but with guaranteed right associativity. If provided, the keyword
+argument `init` will be used exactly once. In general, it will be necessary to provide
+`init` to work with empty collections.
 
+# Examples
 ```jldoctest
 julia> foldr(=>, 1:4)
-1 => (2=>(3=>4))
+1 => (2 => (3 => 4))
+
+julia> foldr(=>, 1:4; init=0)
+1 => (2 => (3 => (4 => 0)))
 ```
 """
-foldr(op, itr) = mapfoldr(identity, op, itr)
+foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
 
 ## reduce & mapreduce
 
@@ -206,24 +171,22 @@ mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer) =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
 """
-    mapreduce(f, op, itr)
+    mapreduce(f, op, itrs...; [init])
 
-Like `mapreduce(f, op, v0, itr)`. In general, this cannot be used with empty collections
-(see `reduce(op, itr)`).
-"""
-mapreduce(f, op, itr) = mapfoldl(f, op, itr)
+Apply function `f` to each element(s) in `itrs`, and then reduce the result using the binary
+function `op`. If provided, `init` must be a neutral element for `op` that will be returned
+for empty collections. It is unspecified whether `init` is used for non-empty collections.
+In general, it will be necessary to provide `init` to work with empty collections.
 
-"""
-    mapreduce(f, op, v0, itr)
+[`mapreduce`](@ref) is functionally equivalent to calling
+`reduce(op, map(f, itr); init=init)`, but will in general execute faster since no
+intermediate collection needs to be created. See documentation for [`reduce`](@ref) and
+[`map`](@ref).
 
-Apply function `f` to each element in `itr`, and then reduce the result using the binary
-function `op`. `v0` must be a neutral element for `op` that will be returned for empty
-collections. It is unspecified whether `v0` is used for non-empty collections.
+!!! compat "Julia 1.2"
+    `mapreduce` with multiple iterators requires Julia 1.2 or later.
 
-[`mapreduce`](@ref) is functionally equivalent to calling `reduce(op, v0,
-map(f, itr))`, but will in general execute faster since no intermediate collection needs to
-be created. See documentation for [`reduce`](@ref) and [`map`](@ref).
-
+# Examples
 ```jldoctest
 julia> mapreduce(x->x^2, +, [1:3;]) # == 1 + 4 + 9
 14
@@ -234,7 +197,8 @@ implementations may reuse the return value of `f` for elements that appear multi
 `itr`. Use [`mapfoldl`](@ref) or [`mapfoldr`](@ref) instead for
 guaranteed left or right associativity and invocation of `f` for every value.
 """
-mapreduce(f, op, v0, itr) = mapfoldl(f, op, v0, itr)
+mapreduce(f, op, itr; kw...) = mapfoldl(f, op, itr; kw...)
+mapreduce(f, op, itrs...; kw...) = reduce(op, Generator(f, itrs...); kw...)
 
 # Note: sum_seq usually uses four or more accumulators after partial
 # unrolling, so each accumulator gets at most 256 numbers
@@ -336,10 +300,10 @@ function _mapreduce(f, op, ::IndexLinear, A::AbstractArray{T}) where T
     if n == 0
         return mapreduce_empty(f, op, T)
     elseif n == 1
-        @inbounds a1 = A[inds[1]]
+        @inbounds a1 = A[first(inds)]
         return mapreduce_first(f, op, a1)
     elseif n < 16 # process short array here, avoid mapreduce_impl() compilation
-        @inbounds i = inds[1]
+        @inbounds i = first(inds)
         @inbounds a1 = A[i]
         @inbounds a2 = A[i+=1]
         s = op(f(a1), f(a2))
@@ -358,11 +322,15 @@ mapreduce(f, op, a::Number) = mapreduce_first(f, op, a)
 _mapreduce(f, op, ::IndexCartesian, A::AbstractArray) = mapfoldl(f, op, A)
 
 """
-    reduce(op, v0, itr)
+    reduce(op, itr; [init])
 
-Reduce the given collection `itr` with the given binary operator `op`. `v0` must be a
-neutral element for `op` that will be returned for empty collections. It is unspecified
-whether `v0` is used for non-empty collections.
+Reduce the given collection `itr` with the given binary operator `op`. If provided, the
+initial value `init` must be a neutral element for `op` that will be returned for empty
+collections. It is unspecified whether `init` is used for non-empty collections.
+
+For empty collections, providing `init` will be necessary, except for some special cases
+(e.g. when `op` is one of `+`, `*`, `max`, `min`, `&`, `|`) when Julia can determine the
+neutral element of `op`.
 
 Reductions for certain commonly-used operators may have special implementations, and
 should be used instead: `maximum(itr)`, `minimum(itr)`, `sum(itr)`, `prod(itr)`,
@@ -379,26 +347,16 @@ elements are not reordered if you use an ordered collection.
 
 # Examples
 ```jldoctest
-julia> reduce(*, 1, [2; 3; 4])
-24
-```
-"""
-reduce(op, v0, itr) = mapreduce(identity, op, v0, itr)
-
-"""
-    reduce(op, itr)
-
-Like `reduce(op, v0, itr)`. This cannot be used with empty collections, except for some
-special cases (e.g. when `op` is one of `+`, `*`, `max`, `min`, `&`, `|`) when Julia can
-determine the neutral element of `op`.
-
-```jldoctest
 julia> reduce(*, [2; 3; 4])
 24
+
+julia> reduce(*, [2; 3; 4]; init=-1)
+-24
 ```
 """
-reduce(op, itr) = mapreduce(identity, op, itr)
-reduce(op, a::Number) = a
+reduce(op, itr; kw...) = mapreduce(identity, op, itr; kw...)
+
+reduce(op, a::Number) = a  # Do we want this?
 
 ###### Specific reduction functions ######
 
@@ -413,6 +371,7 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
+# Examples
 ```jldoctest
 julia> sum(abs2, [2; 3; 4])
 29
@@ -444,6 +403,7 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
+# Examples
 ```jldoctest
 julia> sum(1:20)
 210
@@ -462,6 +422,7 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
+# Examples
 ```jldoctest
 julia> prod(abs2, [2; 3; 4])
 576
@@ -478,6 +439,7 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
+# Examples
 ```jldoctest
 julia> prod(1:20)
 2432902008176640000
@@ -486,29 +448,100 @@ julia> prod(1:20)
 prod(a) = mapreduce(identity, mul_prod, a)
 
 ## maximum & minimum
+_fast(::typeof(min),x,y) = min(x,y)
+_fast(::typeof(max),x,y) = max(x,y)
+function _fast(::typeof(max), x::AbstractFloat, y::AbstractFloat)
+    ifelse(isnan(x),
+        x,
+        ifelse(x > y, x, y))
+end
+
+function _fast(::typeof(min),x::AbstractFloat, y::AbstractFloat)
+    ifelse(isnan(x),
+        x,
+        ifelse(x < y, x, y))
+end
+
+isbadzero(::typeof(max), x::AbstractFloat) = (x == zero(x)) & signbit(x)
+isbadzero(::typeof(min), x::AbstractFloat) = (x == zero(x)) & !signbit(x)
+isbadzero(op, x) = false
+isgoodzero(::typeof(max), x) = isbadzero(min, x)
+isgoodzero(::typeof(min), x) = isbadzero(max, x)
 
 function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
                         A::AbstractArray, first::Int, last::Int)
-    # locate the first non NaN number
-    @inbounds a1 = A[first]
-    v = mapreduce_first(f, op, a1)
-    i = first + 1
-    while (v == v) && (i <= last)
+    a1 = @inbounds A[first]
+    v1 = mapreduce_first(f, op, a1)
+    v2 = v3 = v4 = v1
+    chunk_len = 256
+    start = first + 1
+    simdstop  = start + chunk_len - 4
+    while simdstop <= last - 3
+        # short circuit in case of NaN
+        v1 == v1 || return v1
+        v2 == v2 || return v2
+        v3 == v3 || return v3
+        v4 == v4 || return v4
+        @inbounds for i in start:4:simdstop
+            v1 = _fast(op, v1, f(A[i+0]))
+            v2 = _fast(op, v2, f(A[i+1]))
+            v3 = _fast(op, v3, f(A[i+2]))
+            v4 = _fast(op, v4, f(A[i+3]))
+        end
+        checkbounds(A, simdstop+3)
+        start += chunk_len
+        simdstop += chunk_len
+    end
+    v = op(op(v1,v2),op(v3,v4))
+    for i in start:last
         @inbounds ai = A[i]
         v = op(v, f(ai))
-        i += 1
     end
-    v
+
+    # enforce correct order of 0.0 and -0.0
+    # e.g. maximum([0.0, -0.0]) === 0.0
+    # should hold
+    if isbadzero(op, v)
+        for i in first:last
+            x = @inbounds A[i]
+            isgoodzero(op,x) && return x
+        end
+    end
+    return v
 end
 
-maximum(f::Callable, a) = mapreduce(f, max, a)
-minimum(f::Callable, a) = mapreduce(f, min, a)
+"""
+    maximum(f, itr)
+
+Returns the largest result of calling function `f` on each element of `itr`.
+
+# Examples
+```jldoctest
+julia> maximum(length, ["Julion", "Julia", "Jule"])
+6
+```
+"""
+maximum(f, a) = mapreduce(f, max, a)
+
+"""
+    minimum(f, itr)
+
+Returns the smallest result of calling function `f` on each element of `itr`.
+
+# Examples
+```jldoctest
+julia> minimum(length, ["Julion", "Julia", "Jule"])
+4
+```
+"""
+minimum(f, a) = mapreduce(f, min, a)
 
 """
     maximum(itr)
 
 Returns the largest element in a collection.
 
+# Examples
 ```jldoctest
 julia> maximum(-20.5:10)
 9.5
@@ -524,6 +557,7 @@ maximum(a) = mapreduce(identity, max, a)
 
 Returns the smallest element in a collection.
 
+# Examples
 ```jldoctest
 julia> minimum(-20.5:10)
 -20.5
@@ -533,37 +567,6 @@ julia> minimum([1,2,3])
 ```
 """
 minimum(a) = mapreduce(identity, min, a)
-
-## extrema
-
-extrema(r::AbstractRange) = (minimum(r), maximum(r))
-extrema(x::Real) = (x, x)
-
-"""
-    extrema(itr) -> Tuple
-
-Compute both the minimum and maximum element in a single pass, and return them as a 2-tuple.
-
-```jldoctest
-julia> extrema(2:10)
-(2, 10)
-
-julia> extrema([9,pi,4.5])
-(3.141592653589793, 9.0)
-```
-"""
-function extrema(itr)
-    s = start(itr)
-    done(itr, s) && throw(ArgumentError("collection must be non-empty"))
-    (v, s) = next(itr, s)
-    vmin = vmax = v
-    while !done(itr, s)
-        (x, s) = next(itr, s)
-        vmax = max(x, vmax)
-        vmin = min(x, vmin)
-    end
-    return (vmin, vmax)
-end
 
 ## all & any
 
@@ -577,13 +580,14 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `false` (or equivalently, if the input contains no `true` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
+# Examples
 ```jldoctest
 julia> a = [true,false,false,true]
 4-element Array{Bool,1}:
-  true
- false
- false
-  true
+ 1
+ 0
+ 0
+ 1
 
 julia> any(a)
 true
@@ -611,13 +615,14 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `true` (or equivalently, if the input contains no `false` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
+# Examples
 ```jldoctest
 julia> a = [true,false,false,true]
 4-element Array{Bool,1}:
-  true
- false
- false
-  true
+ 1
+ 0
+ 0
+ 1
 
 julia> all(a)
 false
@@ -647,6 +652,7 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `false` (or equivalently, if the input contains no `true` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
+# Examples
 ```jldoctest
 julia> any(i->(4<=i<=6), [3,5,7])
 true
@@ -694,6 +700,7 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `true` (or equivalently, if the input contains no `false` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
+# Examples
 ```jldoctest
 julia> all(i->(4<=i<=6), [4,5,6])
 true
@@ -732,76 +739,8 @@ function _all(f, itr, ::Colon)
     return anymissing ? missing : true
 end
 
-
-## in & contains
-in(x, itr) = any(y -> y == x, itr)
-const ∈ = in
-∋(itr, x) = ∈(x, itr)
-∉(x, itr) = !∈(x, itr)
-∌(itr, x) = !∋(itr, x)
-
-"""
-    in(item, collection) -> Bool
-    ∈(item, collection) -> Bool
-    ∋(collection, item) -> Bool
-
-Determine whether an item is in the given collection, in the sense that it is
-[`==`](@ref) to one of the values generated by iterating over the collection.
-Returns a `Bool` value, except if `item` is [`missing`](@ref) or `collection`
-contains `missing` but not `item`, in which case `missing` is returned
-([three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
-matching the behavior of [`any`](@ref) and [`==`](@ref)).
-
-Some collections follow a slightly different definition. For example,
-[`Set`](@ref)s check whether the item [`isequal`](@ref) to one of the elements.
-[`Dict`](@ref)s look for `key=>value` pairs, and the key is compared using
-[`isequal`](@ref). To test for the presence of a key in a dictionary,
-use [`haskey`](@ref) or `k in keys(dict)`. For these collections, the result
-is always a `Bool` and never `missing`.
-
-```jldoctest
-julia> a = 1:3:20
-1:3:19
-
-julia> 4 in a
-true
-
-julia> 5 in a
-false
-
-julia> missing in [1, 2]
-missing
-
-julia> 1 in [2, missing]
-missing
-
-julia> 1 in [1, missing]
-true
-
-julia> missing in Set([1, 2])
-false
-```
-"""
-in, ∋
-
-"""
-    ∉(item, collection) -> Bool
-    ∌(collection, item) -> Bool
-
-Negation of `∈` and `∋`, i.e. checks that `item` is not in `collection`.
-
-# Examples
-```jldoctest
-julia> 1 ∉ 2:4
-true
-
-julia> 1 ∉ 1:3
-false
-```
-"""
-∉, ∌
-
 ## count
+
 """
     count(p, itr) -> Integer
     count(itr) -> Integer
@@ -810,6 +749,7 @@ Count the number of elements in `itr` for which predicate `p` returns `true`.
 If `p` is omitted, counts the number of `true` elements in `itr` (which
 should be a collection of boolean values).
 
+# Examples
 ```jldoctest
 julia> count(i->(4<=i<=6), [2,3,4,5,6])
 3

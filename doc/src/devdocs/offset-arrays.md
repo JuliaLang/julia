@@ -1,17 +1,25 @@
 # [Arrays with custom indices](@id man-custom-indices)
 
-Julia 0.5 adds experimental support for arrays with arbitrary indices. Conventionally, Julia's
+Conventionally, Julia's
 arrays are indexed starting at 1, whereas some other languages start numbering at 0, and yet others
 (e.g., Fortran) allow you to specify arbitrary starting indices.  While there is much merit in
 picking a standard (i.e., 1 for Julia), there are some algorithms which simplify considerably
-if you can index outside the range `1:size(A,d)` (and not just `0:size(A,d)-1`, either). Such
-array types are expected to be supplied through packages.
+if you can index outside the range `1:size(A,d)` (and not just `0:size(A,d)-1`, either).
+To facilitate such computations, Julia supports arrays with arbitrary indices.
 
 The purpose of this page is to address the question, "what do I have to do to support such arrays
 in my own code?"  First, let's address the simplest case: if you know that your code will never
 need to handle arrays with unconventional indexing, hopefully the answer is "nothing." Old code,
 on conventional arrays, should function essentially without alteration as long as it was using
 the exported interfaces of Julia.
+If you find it more convenient to just force your users to supply traditional arrays where indexing starts at one, you can add
+
+```julia
+Base.require_one_based_indexing(arrays...)
+```
+
+where `arrays...` is a list of the array objects that you wish to check for anything that
+violates 1-based indexing.
 
 ## Generalizing existing code
 
@@ -19,16 +27,16 @@ As an overview, the steps are:
 
   * replace many uses of `size` with `axes`
   * replace `1:length(A)` with `eachindex(A)`, or in some cases `LinearIndices(A)`
-  * replace `length(A)` with `length(LinearIndices(A))`
-  * replace explicit allocations like `Array{Int}(size(B))` with `similar(Array{Int}, axes(B))`
+  * replace explicit allocations like `Array{Int}(undef, size(B))` with `similar(Array{Int}, axes(B))`
 
 These are described in more detail below.
 
-### Background
+### Things to watch out for
 
-Because unconventional indexing breaks deeply-held assumptions throughout the Julia ecosystem,
-early adopters running code that has not been updated are likely to experience errors.  The most
-frustrating bugs would be incorrect results or segfaults (total crashes of Julia).  For example,
+Because unconventional indexing breaks many people's assumptions that all arrays start indexing with 1, there is always the chance that using such arrays will trigger errors.
+The most
+frustrating bugs would be incorrect results or segfaults (total crashes of Julia).
+For example,
 consider the following function:
 
 ```julia
@@ -42,15 +50,9 @@ function mycopy!(dest::AbstractVector, src::AbstractVector)
 end
 ```
 
-This code implicitly assumes that vectors are indexed from 1. Previously that was a safe assumption,
-so this code was fine, but (depending on what types the user passes to this function) it may no
-longer be safe.  If this code continued to work when passed a vector with non-1 indices, it would
-either produce an incorrect answer or it would segfault.  (If you do get segfaults, to help locate
+This code implicitly assumes that vectors are indexed from 1; if `dest` starts at a different index than `src`, there is a chance that this code would trigger a segfault.
+(If you do get segfaults, to help locate
 the cause try running julia with the option `--check-bounds=yes`.)
-
-To ensure that such errors are caught, in Julia 0.5 both `length` and `size`**should** throw an
-error when passed an array with non-1 indexing.  This is designed to force users of such arrays
-to check the code, and inspect it for whether it needs to be generalized.
 
 ### Using `axes` for bounds checks and loop iteration
 
@@ -62,14 +64,7 @@ is `axes(A, d)`.
 Base implements a custom range type, `OneTo`, where `OneTo(n)` means the same thing as `1:n` but
 in a form that guarantees (via the type system) that the lower index is 1. For any new [`AbstractArray`](@ref)
 type, this is the default returned by `axes`, and it indicates that this array type uses "conventional"
-1-based indexing.  Note that if you don't want to be bothered supporting arrays with non-1 indexing,
-you can add the following line:
-
-```julia
-@assert all(x->isa(x, Base.OneTo), axes(A))
-```
-
-at the top of any function.
+1-based indexing.
 
 For bounds checking, note that there are dedicated functions `checkbounds` and `checkindex` which
 can sometimes simplify such tests.
@@ -106,7 +101,7 @@ underlying "conventional" behavior you'd like, e.g., `Array{Int}` or `BitArray` 
 a convenient way of producing an all-zeros array that matches the indices of A is simply `zeros(A)`.
 
 Let's walk through a couple of explicit examples. First, if `A` has conventional indices, then
-`similar(Array{Int}, axes(A))` would end up calling `Array{Int}(size(A))`, and thus return
+`similar(Array{Int}, axes(A))` would end up calling `Array{Int}(undef, size(A))`, and thus return
 an array.  If `A` is an `AbstractArray` type with unconventional indexing, then `similar(Array{Int}, axes(A))`
 should return something that "behaves like" an `Array{Int}` but with a shape (including indices)
 that matches `A`.  (The most obvious implementation is to allocate an `Array{Int}(undef, size(A))` and
@@ -115,39 +110,10 @@ then "wrap" it in a type that shifts the indices.)
 Note also that `similar(Array{Int}, (axes(A, 2),))` would allocate an `AbstractVector{Int}`
 (i.e., 1-dimensional array) that matches the indices of the columns of `A`.
 
-### Deprecations
-
-In generalizing Julia's code base, at least one deprecation was unavoidable: earlier versions
-of Julia defined `first(::Colon) = 1`, meaning that the first index along a dimension indexed
-by `:` is 1. This definition can no longer be justified, so it was deprecated. There is no provided
-replacement, because the proper replacement depends on what you are doing and might need to know
-more about the array. However, it appears that many uses of `first(::Colon)` are really about
-computing an index offset; when that is the case, a candidate replacement is:
-
-```julia
-indexoffset(r::AbstractVector) = first(r) - 1
-indexoffset(::Colon) = 0
-```
-
-In other words, while `first(:)` does not itself make sense, in general you can say that the offset
-associated with a colon-index is zero.
-
 ## Writing custom array types with non-1 indexing
 
 Most of the methods you'll need to define are standard for any `AbstractArray` type, see [Abstract Arrays](@ref man-interface-array).
 This page focuses on the steps needed to define unconventional indexing.
-
-### Do **not** implement `size` or `length`
-
-Perhaps the majority of pre-existing code that uses `size` will not work properly for arrays with
-non-1 indices.  For that reason, it is much better to avoid implementing these methods, and use
-the resulting `MethodError` to identify code that needs to be audited and perhaps generalized.
-
-### Do **not** annotate bounds checks
-
-Julia 0.5 includes `@boundscheck` to annotate code that can be removed for callers that exploit
-`@inbounds`. Initially, it seems far preferable to run with bounds checking always enabled (i.e.,
-omit the `@boundscheck` annotation so the check always runs).
 
 ### Custom `AbstractUnitRange` types
 
@@ -184,13 +150,13 @@ axes(A::AbstractArray{T,N}, d) where {T,N} = d <= N ? axes(A)[d] : OneTo(1)
 ```
 
 may not be what you want: you may need to specialize it to return something other than `OneTo(1)`
-when `d > ndims(A)`.  Likewise, in `Base` there is a dedicated function `indices1` which is equivalent
+when `d > ndims(A)`.  Likewise, in `Base` there is a dedicated function `axes1` which is equivalent
 to `axes(A, 1)` but which avoids checking (at runtime) whether `ndims(A) > 0`. (This is purely
 a performance optimization.)  It is defined as:
 
 ```julia
-indices1(A::AbstractArray{T,0}) where {T} = OneTo(1)
-indices1(A::AbstractArray) = axes(A)[1]
+axes1(A::AbstractArray{T,0}) where {T} = OneTo(1)
+axes1(A::AbstractArray) = axes(A)[1]
 ```
 
 If the first of these (the zero-dimensional case) is problematic for your custom array type, be
@@ -223,15 +189,21 @@ Base.reshape(A::AbstractArray, shape::Tuple{ZeroRange,Vararg{ZeroRange}}) = ...
 
 and you can `reshape` an array so that the result has custom indices.
 
-## Summary
+### For objects that mimic AbstractArray but are not subtypes
 
-Writing code that doesn't make assumptions about indexing requires a few extra abstractions, but
-hopefully the necessary changes are relatively straightforward.
+`has_offset_axes` depends on having `axes` defined for the objects you call it on. If there is
+some reason you don't have an `axes` method defined for your object, consider defining a method
+```julia
+Base.has_offset_axes(obj::MyNon1IndexedArraylikeObject) = true
+```
+This will allow code that assumes 1-based indexing to detect a problem
+and throw a helpful error, rather than returning incorrect results or
+segfaulting julia.
 
-As a reminder, this support is still experimental. While much of Julia's base code has been updated
-to support unconventional indexing, without a doubt there are many omissions that will be discovered
-only through usage.  Moreover, at the time of this writing, most packages do not support unconventional
-indexing.  As a consequence, early adopters should be prepared to identify and/or fix bugs.  On
-the other hand, only through practical usage will it become clear whether this experimental feature
-should be retained in future versions of Julia; consequently, interested parties are encouraged
-to accept some ownership for putting it through its paces.
+### Catching errors
+
+If your new array type triggers errors in other code, one helpful debugging step can be to comment out `@boundscheck` in your `getindex` and `setindex!` implementation.
+This will ensure that every element access checks bounds. Or, restart julia with `--check-bounds=yes`.
+
+In some cases it may also be helpful to temporarily disable `size` and `length` for your new array type,
+since code that makes incorrect assumptions frequently uses these functions.

@@ -16,10 +16,8 @@ inline uint64_t RoundUpToAlignment(uint64_t Value, uint64_t Align, uint64_t Skew
     return alignTo(Value, Align, Skew);
 }
 
-#if JL_LLVM_VERSION >= 50000
 const unsigned int integerPartWidth = llvm::APInt::APINT_BITS_PER_WORD;
 const unsigned int host_char_bit = 8;
-#endif
 
 /* create "APInt s" from "integerPart *ps" */
 #define CREATE(s) \
@@ -351,11 +349,7 @@ void LLVMFPtoInt(unsigned numbits, integerPart *pa, unsigned onumbits, integerPa
         APFloat::roundingMode rounding_mode = APFloat::rmNearestTiesToEven;
         unsigned nbytes = RoundUpToAlignment(onumbits, integerPartWidth) / host_char_bit;
         integerPart *parts = (integerPart*)alloca(nbytes);
-#if JL_LLVM_VERSION >= 50000
         APFloat::opStatus status = a.convertToInteger(MutableArrayRef<integerPart>(parts, nbytes), onumbits, isSigned, rounding_mode, &isVeryExact);
-#else
-        APFloat::opStatus status = a.convertToInteger(parts, onumbits, isSigned, rounding_mode, &isVeryExact);
-#endif
         memcpy(pr, parts, onumbytes);
         if (isExact)
             *isExact = (status == APFloat::opOK);
@@ -418,7 +412,8 @@ void LLVMUItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPar
 
 extern "C" JL_DLLEXPORT
 void LLVMSExt(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
-    assert(inumbits < onumbits);
+    if (!(onumbits > inumbits))
+        jl_error("SExt: output bitsize must be > input bitsize");
     unsigned inumbytes = RoundUpToAlignment(inumbits, host_char_bit) / host_char_bit;
     unsigned onumbytes = RoundUpToAlignment(onumbits, host_char_bit) / host_char_bit;
     int bits = (0 - inumbits) % host_char_bit;
@@ -436,7 +431,8 @@ void LLVMSExt(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart
 
 extern "C" JL_DLLEXPORT
 void LLVMZExt(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
-    assert(inumbits < onumbits);
+    if (!(onumbits > inumbits))
+        jl_error("ZExt: output bitsize must be > input bitsize");
     unsigned inumbytes = RoundUpToAlignment(inumbits, host_char_bit) / host_char_bit;
     unsigned onumbytes = RoundUpToAlignment(onumbits, host_char_bit) / host_char_bit;
     int bits = (0 - inumbits) % host_char_bit;
@@ -452,7 +448,8 @@ void LLVMZExt(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart
 
 extern "C" JL_DLLEXPORT
 void LLVMTrunc(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
-    assert(inumbits > onumbits);
+    if (!(onumbits < inumbits))
+        jl_error("Trunc: output bitsize must be < input bitsize");
     unsigned onumbytes = RoundUpToAlignment(onumbits, host_char_bit) / host_char_bit;
     memcpy(pr, pa, onumbytes);
 }

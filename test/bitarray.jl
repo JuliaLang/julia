@@ -73,6 +73,14 @@ allsizes = [((), BitArray{0}), ((v1,), BitVector),
     @test !any(d)
     @test all(b)
     @test sz == size(d)
+    @test !isassigned(a, 0)
+    @test !isassigned(b, 0)
+    for ii in 1:prod(sz)
+        @test isassigned(a, ii)
+        @test isassigned(b, ii)
+    end
+    @test !isassigned(a, length(a) + 1)
+    @test !isassigned(b, length(b) + 1)
 end
 
 
@@ -217,10 +225,9 @@ timesofar("constructors")
             @check_bit_operation setindex!(b1, true)  T
             @check_bit_operation setindex!(b1, false) T
         else
-            # TODO: Re-enable after PLI deprecation is removed
-            # @test_throws getindex(b1)
-            # @test_throws setindex!(b1, true)
-            # @test_throws setindex!(b1, false)
+            @test_throws BoundsError getindex(b1)
+            @test_throws BoundsError setindex!(b1, true)
+            @test_throws BoundsError setindex!(b1, false)
         end
     end
 
@@ -546,8 +553,17 @@ timesofar("indexing")
         b2 = bitrand(m2)
         i1 = Array(b1)
         i2 = Array(b2)
+        # Append from array
         @test isequal(Array(append!(b1, b2)), append!(i1, i2))
         @test isequal(Array(append!(b1, i2)), append!(i1, b2))
+        @test bitcheck(b1)
+        # Append from HasLength iterator
+        @test isequal(Array(append!(b1, (v for v in b2))), append!(i1, i2))
+        @test isequal(Array(append!(b1, (v for v in i2))), append!(i1, b2))
+        @test bitcheck(b1)
+        # Append from SizeUnknown iterator
+        @test isequal(Array(append!(b1, (v for v in b2 if true))), append!(i1, i2))
+        @test isequal(Array(append!(b1, (v for v in i2 if true))), append!(i1, b2))
         @test bitcheck(b1)
     end
 
@@ -640,9 +656,16 @@ timesofar("indexing")
         @test bitcheck(b1)
     end
     @test length(b1) == 0
+
     b1 = bitrand(v1)
     @test_throws ArgumentError deleteat!(b1, [1, 1, 2])
     @test_throws BoundsError deleteat!(b1, [1, length(b1)+1])
+
+    @test_throws BoundsError deleteat!(BitVector(), 1)
+    @test_throws BoundsError deleteat!(BitVector(), [1])
+    @test_throws BoundsError deleteat!(BitVector(), [2])
+    @test deleteat!(BitVector(), []) == BitVector()
+    @test deleteat!(BitVector(), Bool[]) == BitVector()
 
     b1 = bitrand(v1)
     i1 = Array(b1)
@@ -1160,9 +1183,30 @@ timesofar("datamove")
         @test findnextnot((.~(b1 >> i)) .⊻ submask, j) == i+1
     end
 
+    # Do a few more thorough tests for findall
     b1 = bitrand(n1, n2)
     @check_bit_operation findall(b1) Vector{CartesianIndex{2}}
     @check_bit_operation findall(!iszero, b1) Vector{CartesianIndex{2}}
+
+    # tall-and-skinny (test index overflow logic in findall)
+    @check_bit_operation findall(bitrand(1, 1, 1, 250)) Vector{CartesianIndex{4}}
+
+    # empty dimensions
+    @check_bit_operation findall(bitrand(0, 0, 10)) Vector{CartesianIndex{3}}
+
+    # sparse (test empty 64-bit chunks in findall)
+    b1 = falses(8, 8, 8)
+    b1[3,3,3] = b1[6,6,6] = true
+    @check_bit_operation findall(b1) Vector{CartesianIndex{3}}
+
+    # BitArrays of various dimensions
+    for dims = 0:8
+        t = Tuple(fill(2, dims))
+        ret_type = Vector{dims == 1 ? Int : CartesianIndex{dims}}
+        @check_bit_operation findall(trues(t)) ret_type
+        @check_bit_operation findall(falses(t)) ret_type
+        @check_bit_operation findall(bitrand(t)) ret_type
+    end
 end
 
 timesofar("find")
@@ -1305,6 +1349,8 @@ timesofar("reductions")
         b2 = bitrand(l)
         @test map(~, b1) == map(x->~x, b1) == broadcast(~, b1)
         @test map(identity, b1) == map(x->x, b1) == b1
+        @test map(zero, b1) == map(x->false, b1) == falses(l)
+        @test map(one, b1) == map(x->true, b1) == trues(l)
 
         @test map(&, b1, b2) == map((x,y)->x&y, b1, b2) == broadcast(&, b1, b2)
         @test map(|, b1, b2) == map((x,y)->x|y, b1, b2) == broadcast(|, b1, b2)
@@ -1405,14 +1451,14 @@ timesofar("permutedims")
     b1 = bitrand(s1, s2, s3, s4)
     b2 = bitrand(s1, s3, s3, s4)
     b3 = bitrand(s1, s2, s3, s1)
-    @check_bit_operation cat(2, b1, b2) BitArray{4}
-    @check_bit_operation cat(4, b1, b3) BitArray{4}
-    @check_bit_operation cat(6, b1, b1) BitArray{6}
+    @check_bit_operation cat(b1, b2, dims=2) BitArray{4}
+    @check_bit_operation cat(b1, b3, dims=4) BitArray{4}
+    @check_bit_operation cat(b1, b1, dims=6) BitArray{6}
 
     b1 = bitrand(1, v1, 1)
-    @check_bit_operation cat(2, 0, b1, 1, 1, b1) Array{Int,3}
-    @check_bit_operation cat(2, 3, b1, 4, 5, b1) Array{Int,3}
-    @check_bit_operation cat(2, false, b1, true, true, b1) BitArray{3}
+    @check_bit_operation cat(0, b1, 1, 1, b1, dims=2) Array{Int,3}
+    @check_bit_operation cat(3, b1, 4, 5, b1, dims=2) Array{Int,3}
+    @check_bit_operation cat(false, b1, true, true, b1, dims=2) BitArray{3}
 
     b1 = bitrand(n1, n2)
     for m1 = 1:(n1-1), m2 = 1:(n2-1)
@@ -1467,8 +1513,10 @@ timesofar("cat")
     @check_bit_operation diff(b1, dims=2) Matrix{Int}
 
     b1 = bitrand(n1, n1)
-    @check_bit_operation svd(b1)
-    @check_bit_operation qr(b1)
+    @test ((svdb1, svdb1A) = (svd(b1), svd(Array(b1)));
+            svdb1.U == svdb1A.U && svdb1.S == svdb1A.S && svdb1.V == svdb1A.V)
+    @test ((qrb1, qrb1A) = (qr(b1), qr(Array(b1)));
+            qrb1.Q == qrb1A.Q && qrb1.R == qrb1A.R)
 
     b1 = bitrand(v1)
     @check_bit_operation diagm(0 => b1) BitMatrix
@@ -1491,6 +1539,8 @@ timesofar("linalg")
     for b1 in [falses(v1), trues(v1),
                BitArray([1,0,1,1,0]),
                BitArray([0,0,1,1,0]),
+               BitArray([1 0; 1 1]),
+               BitArray([0 0; 1 1]),
                bitrand(v1)]
         @check_bit_operation findmin(b1)
         @check_bit_operation findmax(b1)
@@ -1572,4 +1622,14 @@ end
             end
         end
     end
+end
+
+@testset "SIMD violations (issue #27482)" begin
+    @test all(any!(falses(10), trues(10, 10)))
+    @check_bit_operation any!(falses(10), trues(10, 10))
+    @check_bit_operation any!(falses(100), trues(100, 100))
+    @check_bit_operation any!(falses(1000), trues(1000, 100))
+    @check_bit_operation all!(falses(10), trues(10, 10))
+    @check_bit_operation all!(falses(100), trues(100, 100))
+    @check_bit_operation all!(falses(1000), trues(1000, 100))
 end

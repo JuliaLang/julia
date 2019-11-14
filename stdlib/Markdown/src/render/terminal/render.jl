@@ -2,14 +2,13 @@
 
 include("formatting.jl")
 
-const margin = 2
 cols(io) = displaysize(io)[2]
 
 function term(io::IO, content::Vector, cols)
     isempty(content) && return
     for md in content[1:end-1]
         term(io, md, cols)
-        println(io)
+        print(io, '\n', '\n')
     end
     term(io, content[end], cols)
 end
@@ -17,72 +16,79 @@ end
 term(io::IO, md::MD, columns = cols(io)) = term(io, md.content, columns)
 
 function term(io::IO, md::Paragraph, columns)
-    print(io, " "^margin)
-    print_wrapped(io, width = columns-2margin, pre = " "^margin) do io
+    print(io, ' '^margin)
+    print_wrapped(io, width = columns-2margin, pre = ' '^margin) do io
         terminline(io, md.content)
     end
 end
 
 function term(io::IO, md::BlockQuote, columns)
     s = sprint(term, md.content, columns - 10; context=io)
-    for line in split(rstrip(s), "\n")
-        println(io, " "^margin, "│", line)
+    lines = split(rstrip(s), '\n')
+    print(io, ' '^margin, '│', lines[1])
+    for i = 2:length(lines)
+        print(io, '\n', ' '^margin, '│', lines[i])
     end
 end
 
 function term(io::IO, md::Admonition, columns)
     col = :default
     # If the types below are modified, the page manual/documentation.md must be updated accordingly.
-    if lowercase(md.title) == "danger"
+    if md.category == "danger"
         col = Base.error_color()
-    elseif lowercase(md.title) == "warning"
+    elseif md.category == "warning"
         col = Base.warn_color()
-    elseif lowercase(md.title) in ("info", "note")
+    elseif md.category in ("info", "note")
         col = Base.info_color()
-    elseif lowercase(md.title) == "tip"
+    elseif md.category == "tip"
         col = :green
     end
-    printstyled(io, " "^margin, "│ "; color=col, bold=true)
+    printstyled(io, ' '^margin, "│ "; color=col, bold=true)
     printstyled(io, isempty(md.title) ? md.category : md.title; color=col, bold=true)
-    printstyled(io, "\n", " "^margin, "│", "\n"; color=col, bold=true)
+    printstyled(io, '\n', ' '^margin, '│', '\n'; color=col, bold=true)
     s = sprint(term, md.content, columns - 10; context=io)
-    for line in split(rstrip(s), "\n")
-        printstyled(io, " "^margin, "│"; color=col, bold=true)
-        println(io, line)
+    lines = split(rstrip(s), '\n')
+    for i in eachindex(lines)
+        printstyled(io, ' '^margin, '│'; color=col, bold=true)
+        print(io, lines[i])
+        i < lastindex(lines) && println(io)
     end
 end
 
 function term(io::IO, f::Footnote, columns)
-    print(io, " "^margin, "│ ")
+    print(io, ' '^margin, "│ ")
     printstyled(io, "[^$(f.id)]", bold=true)
-    println(io, "\n", " "^margin, "│")
+    println(io, '\n', ' '^margin, '│')
     s = sprint(term, f.text, columns - 10; context=io)
-    for line in split(rstrip(s), "\n")
-        println(io, " "^margin, "│", line)
+    lines = split(rstrip(s), '\n')
+    for i in eachindex(lines)
+        print(io, ' '^margin, '│', lines[i])
+        i < lastindex(lines) && println(io)
     end
 end
 
 function term(io::IO, md::List, columns)
     for (i, point) in enumerate(md.items)
-        print(io, " "^2margin, isordered(md) ? "$(i + md.ordered - 1). " : "•  ")
-        print_wrapped(io, width = columns-(4margin+2), pre = " "^(2margin+2),
+        print(io, ' '^2margin, isordered(md) ? "$(i + md.ordered - 1). " : "•  ")
+        print_wrapped(io, width = columns-(4margin+2), pre = ' '^(2margin+2),
                           i = 2margin+2) do io
             term(io, point, columns - 10)
         end
+        i < lastindex(md.items) && print(io, '\n', '\n')
     end
 end
 
 function _term_header(io::IO, md, char, columns)
     text = terminline_string(io, md.text)
     with_output_color(:bold, io) do io
-        print(io, " "^(margin))
+        print(io, ' '^margin)
         line_no, lastline_width = print_wrapped(io, text,
                                                 width=columns - 4margin; pre=" ")
         line_width = min(1 + lastline_width, columns)
         if line_no > 1
             line_width = max(line_width, div(columns, 3))
         end
-        char != ' ' && println(io, " "^(margin), string(char) ^ line_width)
+        char != ' ' && print(io, '\n', ' '^(margin), char^line_width)
     end
 end
 
@@ -96,19 +102,18 @@ end
 
 function term(io::IO, md::Code, columns)
     with_output_color(:cyan, io) do io
-        for line in lines(md.code)
-            print(io, " "^margin)
-            println(io, line)
+        L = lines(md.code)
+        for i in eachindex(L)
+            print(io, ' '^margin, L[i])
+            i < lastindex(L) && println(io)
         end
     end
 end
 
-function term(io::IO, br::LineBreak, columns)
-   println(io)
-end
+term(io::IO, br::LineBreak, columns) = nothing # line breaks already printed between subsequent elements
 
 function term(io::IO, br::HorizontalRule, columns)
-   println(io, " " ^ margin, "─" ^ (columns - 2margin))
+   print(io, ' '^margin, '─'^(columns - 2margin))
 end
 
 term(io::IO, x, _) = show(io, MIME"text/plain"(), x)
@@ -126,7 +131,7 @@ function terminline(io::IO, content::Vector)
 end
 
 function terminline(io::IO, md::AbstractString)
-    print(io, replace(md, r"[\s\t\n]+" => " "))
+    print(io, replace(md, r"[\s\t\n]+" => ' '))
 end
 
 function terminline(io::IO, md::Bold)

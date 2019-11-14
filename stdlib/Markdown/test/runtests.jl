@@ -226,11 +226,11 @@ World""" |> plain == "Hello\n\n---\n\nWorld\n"
 # Terminal (markdown) output
 
 # multiple whitespace is ignored
-@test sprint(term, md"a  b") == "  a b\n"
-@test sprint(term, md"[x](https://julialang.org)") == "  x (https://julialang.org)\n"
-@test sprint(term, md"[x](@ref)") == "  x\n"
-@test sprint(term, md"[x](@ref something)") == "  x\n"
-@test sprint(term, md"![x](https://julialang.org)") == "  (Image: x)\n"
+@test sprint(term, md"a  b") == "  a b"
+@test sprint(term, md"[x](https://julialang.org)") == "  x (https://julialang.org)"
+@test sprint(term, md"[x](@ref)") == "  x"
+@test sprint(term, md"[x](@ref something)") == "  x"
+@test sprint(term, md"![x](https://julialang.org)") == "  (Image: x)"
 
 # enumeration is normalized
 let doc = Markdown.parse(
@@ -243,6 +243,21 @@ let doc = Markdown.parse(
     @test occursin("2. ", sprint(term, doc))
     @test !occursin("3. ", sprint(term, doc))
 end
+
+# Testing margin when printing Tables to the terminal.
+@test sprint(term, md"""
+| R |
+|---|
+| L |
+""") == "  R\n  –\n  L"
+
+@test sprint(term, md"""
+!!! note "Tables in admonitions"
+
+    | R |
+    |---|
+    | L |
+""") == "  │ Tables in admonitions\n  │\n  │  R\n  │  –\n  │  L"
 
 # HTML output
 @test md"foo *bar* baz" |> html == "<p>foo <em>bar</em> baz</p>\n"
@@ -312,7 +327,7 @@ table = md"""
 # mime output
 let out =
     @test sprint(show, "text/plain", book) ==
-        "  Title\n  ≡≡≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  ===================\n\n  Some bolded\n\n    •    list1\n      \n    •    list2\n      \n"
+        "  Title\n  ≡≡≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  ===================\n\n  Some bolded\n\n    •    list1\n\n    •    list2"
     @test sprint(show, "text/markdown", book) ==
         """
         # Title
@@ -427,20 +442,20 @@ end
 
 ref(x) = Reference(x)
 
-ref(mean)
+ref(sum)
 
 show(io::IO, m::MIME"text/plain", r::Reference) =
     print(io, "$(r.ref) (see Julia docs)")
 
-mean_ref = md"Behaves like $(ref(mean))"
-@test plain(mean_ref) == "Behaves like mean (see Julia docs)\n"
-@test html(mean_ref) == "<p>Behaves like mean &#40;see Julia docs&#41;</p>\n"
+sum_ref = md"Behaves like $(ref(sum))"
+@test plain(sum_ref) == "Behaves like sum (see Julia docs)\n"
+@test html(sum_ref) == "<p>Behaves like sum &#40;see Julia docs&#41;</p>\n"
 
 show(io::IO, m::MIME"text/html", r::Reference) =
     Markdown.withtag(io, :a, :href=>"test") do
         Markdown.htmlesc(io, Markdown.plaininline(r))
     end
-@test html(mean_ref) == "<p>Behaves like <a href=\"test\">mean &#40;see Julia docs&#41;</a></p>\n"
+@test html(sum_ref) == "<p>Behaves like <a href=\"test\">sum &#40;see Julia docs&#41;</a></p>\n"
 
 @test md"""
 ````julia
@@ -1073,11 +1088,11 @@ end
 let buf = IOBuffer()
     @test typeof(sprint(Markdown.term, Markdown.parse(" "))) == String
     show(buf, "text/plain", md"*emph*")
-    @test String(take!(buf)) == "  emph\n"
+    @test String(take!(buf)) == "  emph"
     show(buf, "text/markdown", md"*emph*")
     @test String(take!(buf)) == "*emph*\n"
     show(IOContext(buf, :color=>true), "text/plain", md"*emph*")
-    @test String(take!(buf)) == "  \e[4memph\e[24m\n"
+    @test String(take!(buf)) == "  \e[4memph\e[24m"
 end
 
 # table rendering with term #25213
@@ -1085,7 +1100,7 @@ t = """
     a   |   b
     :-- | --:
     1   |   2"""
-@test sprint(Markdown.term, Markdown.parse(t), 0) == "a b\n– –\n1 2\n"
+@test sprint(Markdown.term, Markdown.parse(t), 0) == "  a b\n  – –\n  1 2"
 
 # test Base.copy
 let
@@ -1107,4 +1122,10 @@ let
     @test !v.content[3].loose
     @test v.content[5].loose
     @test !v.content[7].loose
+end
+
+# issue #29995
+let m = Markdown.parse("---"), io = IOBuffer()
+    show(io, "text/latex", m)
+    @test String(take!(io)) == "\\rule{\\textwidth}{1pt}\n"
 end

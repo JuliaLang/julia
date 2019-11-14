@@ -22,6 +22,14 @@ Base.Matrix(::UndefInitializer, ::Any, ::Any)
 Base.Matrix(::Nothing, ::Any, ::Any)
 Base.Matrix(::Missing, ::Any, ::Any)
 Base.VecOrMat
+Core.DenseArray
+Base.DenseVector
+Base.DenseMatrix
+Base.DenseVecOrMat
+Base.StridedArray
+Base.StridedVector
+Base.StridedMatrix
+Base.StridedVecOrMat
 Base.getindex(::Type, ::Any...)
 Base.zeros
 Base.ones
@@ -45,6 +53,8 @@ Base.axes(::AbstractArray, ::Any)
 Base.length(::AbstractArray)
 Base.eachindex
 Base.IndexStyle
+Base.IndexLinear
+Base.IndexCartesian
 Base.conj!
 Base.stride
 Base.strides
@@ -66,12 +76,13 @@ Base.@__dot__
 For specializing broadcast on custom types, see
 ```@docs
 Base.BroadcastStyle
-Base.broadcast_similar
-Base.broadcast_axes
 Base.Broadcast.AbstractArrayStyle
 Base.Broadcast.ArrayStyle
 Base.Broadcast.DefaultArrayStyle
 Base.Broadcast.broadcastable
+Base.Broadcast.combine_axes
+Base.Broadcast.combine_styles
+Base.Broadcast.result_style
 ```
 
 ## Indexing and assignment
@@ -84,6 +95,7 @@ Base.isassigned
 Base.Colon
 Base.CartesianIndex
 Base.CartesianIndices
+Base.Dims
 Base.LinearIndices
 Base.to_indices
 Base.checkbounds
@@ -101,7 +113,7 @@ Base.parentindices
 Base.selectdim
 Base.reinterpret
 Base.reshape
-Base.squeeze
+Base.dropdims
 Base.vec
 ```
 
@@ -147,6 +159,9 @@ Base.rot180
 Base.rotl90
 Base.rotr90
 Base.mapslices
+Base.eachrow
+Base.eachcol
+Base.eachslice
 ```
 
 ## Combinatorics

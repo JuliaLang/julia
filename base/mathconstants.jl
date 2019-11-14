@@ -23,6 +23,7 @@ Base.@irrational catalan  0.91596559417721901505  catalan
 
 The constant pi.
 
+# Examples
 ```jldoctest
 julia> pi
 π = 3.1415926535897...
@@ -36,6 +37,7 @@ julia> pi
 
 The constant ℯ.
 
+# Examples
 ```jldoctest
 julia> ℯ
 ℯ = 2.7182818284590...
@@ -49,6 +51,7 @@ julia> ℯ
 
 Euler's constant.
 
+# Examples
 ```jldoctest
 julia> Base.MathConstants.eulergamma
 γ = 0.5772156649015...
@@ -62,6 +65,7 @@ julia> Base.MathConstants.eulergamma
 
 The golden ratio.
 
+# Examples
 ```jldoctest
 julia> Base.MathConstants.golden
 φ = 1.6180339887498...
@@ -74,6 +78,7 @@ julia> Base.MathConstants.golden
 
 Catalan's constant.
 
+# Examples
 ```jldoctest
 julia> Base.MathConstants.catalan
 catalan = 0.9159655941772...

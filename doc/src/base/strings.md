@@ -21,7 +21,10 @@ Base.codeunit
 Base.codeunits
 Base.ascii
 Base.@r_str
+Base.SubstitutionString
+Base.@s_str
 Base.@raw_str
+Base.@b_str
 Base.Docs.@html_str
 Base.Docs.@text_str
 Base.isvalid(::Any)
@@ -36,7 +39,9 @@ Base.lpad
 Base.rpad
 Base.findfirst(::AbstractString, ::AbstractString)
 Base.findnext(::AbstractString, ::AbstractString, ::Integer)
+Base.findnext(::AbstractChar, ::AbstractString, ::Integer)
 Base.findlast(::AbstractString, ::AbstractString)
+Base.findlast(::AbstractChar, ::AbstractString)
 Base.findprev(::AbstractString, ::AbstractString, ::Integer)
 Base.occursin
 Base.reverse(::Union{String,SubString{String}})
@@ -73,7 +78,6 @@ Base.ispunct
 Base.isspace
 Base.isuppercase
 Base.isxdigit
-Core.Symbol
 Base.escape_string
 Base.unescape_string
 ```

@@ -92,7 +92,7 @@ int main()
 
         checked_eval_string("my_func(x) = 2 * x");
 
-        jl_function_t *func = jl_get_function(jl_current_module, "my_func");
+        jl_function_t *func = jl_get_function(jl_main_module, "my_func");
         jl_value_t* arg = jl_box_float64(5.0);
         double ret = jl_unbox_float64(jl_call1(func, arg));
 
@@ -167,6 +167,12 @@ int main()
         );
         checked_eval_string("import LocalModule");
         checked_eval_string("LocalModule.myapp()");
+    }
+
+    {
+        // Main.include and Main.eval exist (#28825)
+        checked_eval_string("include(\"include_and_eval.jl\")");
+        checked_eval_string("f28825()");
     }
 
     int ret = 0;

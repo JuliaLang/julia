@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Check to make sure types are imported properly
 @test RadioMenu <: TerminalMenus.AbstractMenu
 

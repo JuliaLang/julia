@@ -15,7 +15,7 @@ mutable struct ClusterSerializer{I<:IO} <: AbstractSerializer
 
     pid::Int                                     # Worker we are connected to.
     tn_obj_sent::Set{UInt64}                     # TypeName objects sent
-    glbs_sent::Dict{UInt64, UInt64}              # (key,value) -> (objectid, hash_value)
+    glbs_sent::Dict{Symbol, Tuple{UInt64, UInt64}}   # (key,value) -> (symbol, (hash_value, objectid))
     glbs_in_tnobj::Dict{UInt64, Vector{Symbol}}  # Track globals referenced in
                                                  # anonymous functions.
     anonfunc_id::UInt64
@@ -116,23 +116,26 @@ function serialize(s::ClusterSerializer, g::GlobalRef)
     invoke(serialize, Tuple{AbstractSerializer, GlobalRef}, s, g)
 end
 
-# Send/resend a global object if
-# a) has not been sent previously, i.e., we are seeing this objectid for the first time, or,
+# Send/resend a global binding if
+# a) has not been sent previously, i.e., we are seeing this binding for the first time, or,
 # b) hash value has changed or
-# c) is a bits type
+# c) hash value is same but of a different object, i.e. objectid has changed or
+# d) is a bits type
 function syms_2b_sent(s::ClusterSerializer, identifier)
     lst = Symbol[]
     check_syms = get(s.glbs_in_tnobj, identifier, [])
     for sym in check_syms
         v = getfield(Main, sym)
 
-        if isbitstype(typeof(v))
+        if isbits(v)
             push!(lst, sym)
         else
-            oid = objectid(v)
-            if haskey(s.glbs_sent, oid)
-                # We have sent this object before, see if it has changed.
-                s.glbs_sent[oid] != hash(sym, hash(v)) && push!(lst, sym)
+            if haskey(s.glbs_sent, sym)
+                # We have sent this binding before, see if it has changed.
+                hval, oid = s.glbs_sent[sym]
+                if hval != hash(sym, hash(v)) || oid != objectid(v)
+                    push!(lst, sym)
+                end
             else
                 push!(lst, sym)
             end
@@ -144,26 +147,9 @@ end
 function serialize_global_from_main(s::ClusterSerializer, sym)
     v = getfield(Main, sym)
 
-    oid = objectid(v)
-    record_v = true
-    if isbitstype(typeof(v))
-        record_v = false
-    elseif !haskey(s.glbs_sent, oid)
-        # set up a finalizer the first time this object is sent
-        try
-            finalizer(v) do x
-                delete_global_tracker(s,x)
-            end
-        catch ex
-            # Do not track objects that cannot be finalized.
-            if isa(ex, ErrorException)
-                record_v = false
-            else
-                rethrow(ex)
-            end
-        end
+    if !isbits(v)
+        s.glbs_sent[sym] = (hash(sym, hash(v)), objectid(v))
     end
-    record_v && (s.glbs_sent[oid] = hash(sym, hash(v)))
 
     serialize(s, isconst(Main, sym))
     serialize(s, v)
@@ -172,22 +158,21 @@ end
 function deserialize_global_from_main(s::ClusterSerializer, sym)
     sym_isconst = deserialize(s)
     v = deserialize(s)
+    if isdefined(Main, sym) && (sym_isconst || isconst(Main, sym))
+        if isequal(getfield(Main, sym), v)
+            # same value; ok
+            return nothing
+        else
+            @warn "Cannot transfer global variable $sym; it already has a value."
+            return nothing
+        end
+    end
     if sym_isconst
-        @eval Main const $sym = $v
+        ccall(:jl_set_const, Cvoid, (Any, Any, Any), Main, sym, v)
     else
-        @eval Main $sym = $v
+        ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, sym, v)
     end
-end
-
-function delete_global_tracker(s::ClusterSerializer, v)
-    oid = objectid(v)
-    if haskey(s.glbs_sent, oid)
-        delete!(s.glbs_sent, oid)
-    end
-
-    # TODO: A global binding is released and gc'ed here but it continues
-    # to occupy memory on the remote node. Would be nice to release memory
-    # if possible.
+    return nothing
 end
 
 function cleanup_tname_glbs(s::ClusterSerializer, identifier)
@@ -212,6 +197,7 @@ function original_ex(s::ClusterSerializer, ex_str, remote_stktrace)
     local pid_str = ""
     try
         pid_str = string(" from worker ", worker_id_from_socket(s.io))
+    catch
     end
 
     stk_str = remote_stktrace ? "Remote" : "Local"
@@ -249,7 +235,7 @@ end
     clear!(syms, pids=workers(); mod=Main)
 
 Clears global bindings in modules by initializing them to `nothing`.
-`syms` should be of type `Symbol` or a collection of `Symbol`s . `pids` and `mod`
+`syms` should be of type [`Symbol`](@ref) or a collection of `Symbol`s . `pids` and `mod`
 identify the processes and the module in which global variables are to be
 reinitialized. Only those names found to be defined under `mod` are cleared.
 
@@ -257,7 +243,7 @@ An exception is raised if a global constant is requested to be cleared.
 """
 function clear!(syms, pids=workers(); mod=Main)
     @sync for p in pids
-        @async remotecall_wait(clear_impl!, p, syms, mod)
+        @sync_add remotecall(clear_impl!, p, syms, mod)
     end
 end
 clear!(sym::Symbol, pid::Int; mod=Main) = clear!([sym], [pid]; mod=mod)

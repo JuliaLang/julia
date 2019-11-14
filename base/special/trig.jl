@@ -55,13 +55,13 @@ sin(x::Real) = sin(float(x))
 # Coefficients in 13th order polynomial approximation on [0; π/4]
 #     sin(x) ≈ x + S1*x³ + S2*x⁵ + S3*x⁷ + S4*x⁹ + S5*x¹¹ + S6*x¹³
 # D for double, S for sin, number is the order of x-1
-
 const DS1 = -1.66666666666666324348e-01
 const DS2 = 8.33333333332248946124e-03
 const DS3 = -1.98412698298579493134e-04
 const DS4 = 2.75573137070700676789e-06
 const DS5 = -2.50507602534068634195e-08
 const DS6 = 1.58969099521155010221e-10
+
 """
     sin_kernel(yhi, ylo)
 
@@ -245,7 +245,7 @@ tan(x::Real) = tan(float(x))
     #       Callers may do the optimization tan(y) ~ y for tiny y.
     #    3. tan(y) is approximated by a odd polynomial of degree 27 on
     #       [0,0.67434]
-    #                       3             27
+    #                            3             27
     #           tan(y) ~ y + T1*y + ... + T13*y ≡ P(y)
     #       where
     #
@@ -564,7 +564,7 @@ ATAN2_PI_LO(::Type{Float64}) = 1.2246467991473531772E-16
 ATAN2_RATIO_BIT_SHIFT(::Type{Float64}) = 20
 ATAN2_RATIO_THRESHOLD(::Type{Float64}) = 60
 
-function atan2(y::T, x::T) where T<:Union{Float32, Float64}
+function atan(y::T, x::T) where T<:Union{Float32, Float64}
     # Method :
     #    M1) Reduce y to positive by atan2(y,x)=-atan2(-y,x).
     #    M2) Reduce x to positive by (if x and y are unexceptional):
@@ -966,17 +966,17 @@ for (finv, f, finvh, fh, finvd, fd, fn) in ((:sec, :cos, :sech, :cosh, :secd, :c
             $($name)(x)
 
         Compute the $($fn) of `x`, where `x` is in radians.
-        """ ($finv)(z::T) where {T<:Number} = one(T) / (($f)(z))
+        """ ($finv)(z::Number) = inv(($f)(z))
         @doc """
             $($hname)(x)
 
         Compute the hyperbolic $($fn) of `x`.
-        """ ($finvh)(z::T) where {T<:Number} = one(T) / (($fh)(z))
+        """ ($finvh)(z::Number) = inv(($fh)(z))
         @doc """
             $($dname)(x)
 
         Compute the $($fn) of `x`, where `x` is in degrees.
-        """ ($finvd)(z::T) where {T<:Number} = one(T) / (($fd)(z))
+        """ ($finvd)(z::Number) = inv(($fd)(z))
     end
 end
 
@@ -988,10 +988,10 @@ for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
     @eval begin
         @doc """
             $($tname)(x)
-        Compute the inverse $($fn) of `x`, where the output is in radians. """ ($tfa)(y::T) where {T<:Number} = ($tfainv)(one(T) / y)
+        Compute the inverse $($fn) of `x`, where the output is in radians. """ ($tfa)(y::Number) = ($tfainv)(inv(y))
         @doc """
             $($hname)(x)
-        Compute the inverse hyperbolic $($fn) of `x`. """ ($hfa)(y::T) where {T<:Number} = ($hfainv)(one(T) / y)
+        Compute the inverse hyperbolic $($fn) of `x`. """ ($hfa)(y::Number) = ($hfainv)(inv(y))
     end
 end
 
@@ -1073,6 +1073,28 @@ end
 
 tand(x::Real) = sind(x) / cosd(x)
 
+"""
+    sincosd(x)
+
+Simultaneously compute the sine and cosine of `x`, where `x` is in degrees.
+
+!!! compat "Julia 1.3"
+    This function requires at least Julia 1.3.
+"""
+function sincosd(x::Real)
+    if isinf(x)
+        return throw(DomainError(x, "sincosd(x) is only defined for finite `x`."))
+    elseif isnan(x)
+        return (oftype(x,NaN), oftype(x,NaN))
+    end
+
+    # It turns out that calling those functions separately yielded better
+    # performance than considering each case and calling `sincos_kernel`.
+    return (sind(x), cosd(x))
+end
+
+sincosd(::Missing) = (missing, missing)
+
 for (fd, f, fn) in ((:sind, :sin, "sine"), (:cosd, :cos, "cosine"), (:tand, :tan, "tangent"))
     name = string(fd)
     @eval begin
@@ -1082,7 +1104,7 @@ for (fd, f, fn) in ((:sind, :sin, "sine"), (:cosd, :cos, "cosine"), (:tand, :tan
     end
 end
 
-for (fd, f, fn) in ((:asind, :asin, "sine"), (:acosd, :acos, "cosine"), (:atand, :atan, "tangent"),
+for (fd, f, fn) in ((:asind, :asin, "sine"), (:acosd, :acos, "cosine"),
                     (:asecd, :asec, "secant"), (:acscd, :acsc, "cosecant"), (:acotd, :acot, "cotangent"))
     name = string(fd)
     @eval begin
@@ -1092,3 +1114,12 @@ for (fd, f, fn) in ((:asind, :asin, "sine"), (:acosd, :acos, "cosine"), (:atand,
         Compute the inverse $($fn) of `x`, where the output is in degrees. """ ($fd)(y) = rad2deg(($f)(y))
     end
 end
+
+"""
+    atand(y)
+    atand(y,x)
+
+Compute the inverse tangent of `y` or `y/x`, respectively, where the output is in degrees.
+"""
+atand(y)    = rad2deg(atan(y))
+atand(y, x) = rad2deg(atan(y,x))

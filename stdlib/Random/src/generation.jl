@@ -16,8 +16,8 @@
 
 ### random floats
 
-Sampler(rng::AbstractRNG, ::Type{T}, n::Repetition) where {T<:AbstractFloat} =
-    Sampler(rng, CloseOpen01(T), n)
+Sampler(::Type{RNG}, ::Type{T}, n::Repetition) where {RNG<:AbstractRNG,T<:AbstractFloat} =
+    Sampler(RNG, CloseOpen01(T), n)
 
 # generic random generation function which can be used by RNG implementors
 # it is not defined as a fallback rand method as this could create ambiguities
@@ -53,7 +53,7 @@ struct SamplerBigFloat{I<:FloatInterval{BigFloat}} <: Sampler{BigFloat}
     end
 end
 
-Sampler(::AbstractRNG, I::FloatInterval{BigFloat}, ::Repetition) =
+Sampler(::Type{<:AbstractRNG}, I::FloatInterval{BigFloat}, ::Repetition) =
     SamplerBigFloat{typeof(I)}(precision(BigFloat))
 
 function _rand(rng::AbstractRNG, sp::SamplerBigFloat)
@@ -81,7 +81,7 @@ function _rand(rng::AbstractRNG, sp::SamplerBigFloat, ::CloseOpen01{BigFloat})
     z.exp = 0
     randbool &&
         ccall((:mpfr_sub_d, :libmpfr), Int32,
-              (Ref{BigFloat}, Ref{BigFloat}, Cdouble, Int32),
+              (Ref{BigFloat}, Ref{BigFloat}, Cdouble, Base.MPFR.MPFRRoundingMode),
               z, z, 0.5, Base.MPFR.ROUNDING_MODE[])
     z
 end
@@ -90,7 +90,7 @@ end
 # TODO: make an API for requesting full or not-full precision
 function _rand(rng::AbstractRNG, sp::SamplerBigFloat, ::CloseOpen01{BigFloat}, ::Nothing)
     z = _rand(rng, sp, CloseOpen12(BigFloat))
-    ccall((:mpfr_sub_ui, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, Int32),
+    ccall((:mpfr_sub_ui, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, Base.MPFR.MPFRRoundingMode),
           z, z, 1, Base.MPFR.ROUNDING_MODE[])
     z
 end
@@ -196,7 +196,7 @@ function SamplerRangeFast(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
     isempty(r) && throw(ArgumentError("range must be non-empty"))
     m = (last(r) - first(r)) % unsigned(T) % U # % unsigned(T) to not propagate sign bit
     bw = (sizeof(U) << 3 - leading_zeros(m)) % UInt # bit-width
-    mask = (1 % U << bw) - (1 % U)
+    mask = ((1 % U) << bw) - (1 % U)
     SamplerRangeFast{U,T}(first(r), bw, m, mask)
 end
 
@@ -274,7 +274,7 @@ function SamplerRangeInt(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
     SamplerRangeInt{T,U}(a, bw, k, mult) # overflow ok
 end
 
-Sampler(::AbstractRNG, r::AbstractUnitRange{T},
+Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{T},
         ::Repetition) where {T<:BitInteger} = SamplerRangeInt(r)
 
 
@@ -306,10 +306,10 @@ struct SamplerBigInt <: Sampler{BigInt}
     mask::Limb        # applied to the highest limb
 end
 
-function Sampler(::AbstractRNG, r::AbstractUnitRange{BigInt}, ::Repetition)
+function Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{BigInt}, ::Repetition)
     m = last(r) - first(r)
     m < 0 && throw(ArgumentError("range must be non-empty"))
-    nd = ndigits(m, 2)
+    nd = ndigits(m, base=2)
     nlimbs, highbits = divrem(nd, 8*sizeof(Limb))
     highbits > 0 && (nlimbs += 1)
     mask = highbits == 0 ? ~zero(Limb) : one(Limb)<<highbits - one(Limb)
@@ -339,8 +339,8 @@ end
 
 ## random values from AbstractArray
 
-Sampler(rng::AbstractRNG, r::AbstractArray, n::Repetition) =
-    SamplerSimple(r, Sampler(rng, firstindex(r):lastindex(r), n))
+Sampler(::Type{RNG}, r::AbstractArray, n::Repetition) where {RNG<:AbstractRNG} =
+    SamplerSimple(r, Sampler(RNG, firstindex(r):lastindex(r), n))
 
 rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractArray,<:Sampler}) =
     @inbounds return sp[][rand(rng, sp.data)]
@@ -348,11 +348,11 @@ rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractArray,<:Sampler}) =
 
 ## random values from Dict
 
-function Sampler(rng::AbstractRNG, t::Dict, ::Repetition)
+function Sampler(::Type{RNG}, t::Dict, ::Repetition) where RNG<:AbstractRNG
     isempty(t) && throw(ArgumentError("collection must be non-empty"))
     # we use Val(Inf) below as rand is called repeatedly internally
     # even for generating only one random value from t
-    SamplerSimple(t, Sampler(rng, LinearIndices(t.slots), Val(Inf)))
+    SamplerSimple(t, Sampler(RNG, LinearIndices(t.slots), Val(Inf)))
 end
 
 function rand(rng::AbstractRNG, sp::SamplerSimple{<:Dict,<:Sampler})
@@ -364,16 +364,16 @@ end
 
 ## random values from Set
 
-Sampler(rng::AbstractRNG, t::Set{T}, n::Repetition) where {T} =
-    SamplerTag{Set{T}}(Sampler(rng, t.dict, n))
+Sampler(::Type{RNG}, t::Set{T}, n::Repetition) where {RNG<:AbstractRNG,T} =
+    SamplerTag{Set{T}}(Sampler(RNG, t.dict, n))
 
 rand(rng::AbstractRNG, sp::SamplerTag{<:Set,<:Sampler}) = rand(rng, sp.data).first
 
 ## random values from BitSet
 
-function Sampler(rng::AbstractRNG, t::BitSet, n::Repetition)
+function Sampler(RNG::Type{<:AbstractRNG}, t::BitSet, n::Repetition)
     isempty(t) && throw(ArgumentError("collection must be non-empty"))
-    SamplerSimple(t, Sampler(rng, minimum(t):maximum(t), Val(Inf)))
+    SamplerSimple(t, Sampler(RNG, minimum(t):maximum(t), Val(Inf)))
 end
 
 function rand(rng::AbstractRNG, sp::SamplerSimple{BitSet,<:Sampler})
@@ -386,15 +386,15 @@ end
 ## random values from AbstractDict/AbstractSet
 
 # we defer to _Sampler to avoid ambiguities with a call like Sampler(rng, Set(1), Val(1))
-Sampler(rng::AbstractRNG, t::Union{AbstractDict,AbstractSet}, n::Repetition) =
-    _Sampler(rng, t, n)
+Sampler(RNG::Type{<:AbstractRNG}, t::Union{AbstractDict,AbstractSet}, n::Repetition) =
+    _Sampler(RNG, t, n)
 
 # avoid linear complexity for repeated calls
-_Sampler(rng::AbstractRNG, t::Union{AbstractDict,AbstractSet}, n::Val{Inf}) =
-    Sampler(rng, collect(t), n)
+_Sampler(RNG::Type{<:AbstractRNG}, t::Union{AbstractDict,AbstractSet}, n::Val{Inf}) =
+    Sampler(RNG, collect(t), n)
 
 # when generating only one element, avoid the call to collect
-_Sampler(::AbstractRNG, t::Union{AbstractDict,AbstractSet}, ::Val{1}) =
+_Sampler(::Type{<:AbstractRNG}, t::Union{AbstractDict,AbstractSet}, ::Val{1}) =
     SamplerTrivial(t)
 
 function nth(iter, n::Integer)::eltype(iter)
@@ -411,12 +411,12 @@ rand(rng::AbstractRNG, sp::SamplerTrivial{<:Union{AbstractDict,AbstractSet}}) =
 
 # we use collect(str), which is most of the time more efficient than specialized methods
 # (except maybe for very small arrays)
-Sampler(rng::AbstractRNG, str::AbstractString, n::Val{Inf}) = Sampler(rng, collect(str), n)
+Sampler(RNG::Type{<:AbstractRNG}, str::AbstractString, n::Val{Inf}) = Sampler(RNG, collect(str), n)
 
 # when generating only one char from a string, the specialized method below
 # is usually more efficient
-Sampler(rng::AbstractRNG, str::AbstractString, ::Val{1}) =
-    SamplerSimple(str, Sampler(rng, 1:_lastindex(str), Val(Inf)))
+Sampler(RNG::Type{<:AbstractRNG}, str::AbstractString, ::Val{1}) =
+    SamplerSimple(str, Sampler(RNG, 1:_lastindex(str), Val(Inf)))
 
 isvalid_unsafe(s::String, i) = !Base.is_valid_continuation(GC.@preserve s unsafe_load(pointer(s), i))
 isvalid_unsafe(s::AbstractString, i) = isvalid(s, i)
@@ -428,5 +428,61 @@ function rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractString,<:Sampler})::
     while true
         pos = rand(rng, sp.data)
         isvalid_unsafe(str, pos) && return str[pos]
+    end
+end
+
+
+## random elements from tuples
+
+### 1
+
+Sampler(::Type{<:AbstractRNG}, t::Tuple{A}, ::Repetition) where {A} =
+    SamplerTrivial(t)
+
+rand(rng::AbstractRNG, sp::SamplerTrivial{Tuple{A}}) where {A} =
+    @inbounds return sp[][1]
+
+### 2
+
+Sampler(RNG::Type{<:AbstractRNG}, t::Tuple{A,B}, n::Repetition) where {A,B} =
+    SamplerSimple(t, Sampler(RNG, Bool, n))
+
+rand(rng::AbstractRNG, sp::SamplerSimple{Tuple{A,B}}) where {A,B} =
+    @inbounds return sp[][1 + rand(rng, sp.data)]
+
+### 3
+
+Sampler(RNG::Type{<:AbstractRNG}, t::Tuple{A,B,C}, n::Repetition) where {A,B,C} =
+    SamplerSimple(t, Sampler(RNG, UInt52(), n))
+
+function rand(rng::AbstractRNG, sp::SamplerSimple{Tuple{A,B,C}}) where {A,B,C}
+    local r
+    while true
+        r = rand(rng, sp.data)
+        r != 0x000fffffffffffff && break # _very_ likely
+    end
+    @inbounds return sp[][1 + r ÷ 0x0005555555555555]
+end
+
+### n
+
+@generated function Sampler(RNG::Type{<:AbstractRNG}, t::Tuple, n::Repetition)
+    l = fieldcount(t)
+    if l < typemax(UInt32) && ispow2(l)
+        :(SamplerSimple(t, Sampler(RNG, UInt32, n)))
+    else
+        :(SamplerSimple(t, Sampler(RNG, Base.OneTo(length(t)), n)))
+    end
+end
+
+@generated function rand(rng::AbstractRNG, sp::SamplerSimple{T}) where T<:Tuple
+    l = fieldcount(T)
+    if l < typemax(UInt32) && ispow2(l)
+        quote
+            r = rand(rng, sp.data) & ($l-1)
+            @inbounds return sp[][1 + r]
+        end
+    else
+        :(@inbounds return sp[][rand(rng, sp.data)])
     end
 end

@@ -120,8 +120,10 @@ cmove_line_up(t::UnixTerminal, n) = (cmove_up(t, n); cmove_col(t, 1))
 cmove_line_down(t::UnixTerminal, n) = (cmove_down(t, n); cmove_col(t, 1))
 cmove_col(t::UnixTerminal, n) = (write(t.out_stream, '\r'); n > 1 && cmove_right(t, n-1))
 
+const is_precompiling = Ref(false)
 if Sys.iswindows()
     function raw!(t::TTYTerminal,raw::Bool)
+        is_precompiling[] && return true
         check_open(t.in_stream)
         if Base.ispty(t.in_stream)
             run((raw ? `stty raw -echo onlcr -ocrnl opost` : `stty sane`),
@@ -156,7 +158,7 @@ else
     function hascolor(t::TTYTerminal)
         startswith(t.term_type, "xterm") && return true
         try
-            @static if Sys.KERNEL == :FreeBSD
+            @static if Sys.KERNEL === :FreeBSD
                 return success(`tput AF 0`)
             else
                 return success(`tput setaf 0`)

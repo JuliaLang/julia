@@ -2,7 +2,7 @@
 
 using LibGit2: AbstractCredential, UserPasswordCredential, SSHCredential,
     CachedCredentials, CredentialPayload
-using Base: coalesce
+using Base: something
 
 const DEFAULT_PAYLOAD = CredentialPayload(allow_ssh_agent=false, allow_git_helpers=false)
 
@@ -29,7 +29,7 @@ function credential_loop(
     err = Cint(0)
     while err == 0
         err = ccall(cb, Cint, (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cuint, Any),
-                    libgitcred_ptr_ptr, url, coalesce(user, C_NULL),
+                    libgitcred_ptr_ptr, url, something(user, C_NULL),
                     allowed_types, payload)
         num_authentications += 1
 

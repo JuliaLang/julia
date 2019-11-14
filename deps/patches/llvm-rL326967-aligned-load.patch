@@ -1,0 +1,301 @@
+commit b398d8e1fa5a5a914957fa22d0a64db97f6c265e
+Author: Craig Topper <craig.topper@intel.com>
+Date:   Thu Mar 8 00:21:17 2018 +0000
+
+    [X86] Fix some isel patterns that used aligned vector load instructions with unaligned predicates.
+    
+    These patterns weren't checking the alignment of the load, but were using the aligned instructions. This will cause a GP fault if the data isn't aligned.
+    
+    I believe these were introduced in r312450.
+    
+    git-svn-id: https://llvm.org/svn/llvm-project/llvm/trunk@326967 91177308-0d34-0410-b5e6-96231b3b80d8
+
+diff --git a/lib/Target/X86/X86InstrVecCompiler.td b/lib/Target/X86/X86InstrVecCompiler.td
+index db3dfe56531..50c7763a2c3 100644
+--- a/lib/Target/X86/X86InstrVecCompiler.td
++++ b/lib/Target/X86/X86InstrVecCompiler.td
+@@ -261,10 +261,10 @@ let Predicates = [HasVLX] in {
+ // will zero the upper bits.
+ // TODO: Is there a safe way to detect whether the producing instruction
+ // already zeroed the upper bits?
+-multiclass subvector_zero_lowering<string MoveStr, RegisterClass RC,
+-                                   ValueType DstTy, ValueType SrcTy,
+-                                   ValueType ZeroTy, PatFrag memop,
+-                                   SubRegIndex SubIdx> {
++multiclass subvector_zero_lowering<string MoveStr, string LoadStr,
++                                   RegisterClass RC, ValueType DstTy,
++                                   ValueType SrcTy, ValueType ZeroTy,
++                                   PatFrag memop, SubRegIndex SubIdx> {
+   def : Pat<(DstTy (insert_subvector (bitconvert (ZeroTy immAllZerosV)),
+                                      (SrcTy RC:$src), (iPTR 0))),
+             (SUBREG_TO_REG (i64 0),
+@@ -274,91 +274,91 @@ multiclass subvector_zero_lowering<string MoveStr, RegisterClass RC,
+                                      (SrcTy (bitconvert (memop addr:$src))),
+                                      (iPTR 0))),
+             (SUBREG_TO_REG (i64 0),
+-             (!cast<Instruction>("VMOV"#MoveStr#"rm") addr:$src), SubIdx)>;
++             (!cast<Instruction>("VMOV"#LoadStr#"rm") addr:$src), SubIdx)>;
+ }
+ 
+ let Predicates = [HasAVX, NoVLX] in {
+-  defm : subvector_zero_lowering<"APD", VR128, v4f64, v2f64, v8i32, loadv2f64,
+-                                 sub_xmm>;
+-  defm : subvector_zero_lowering<"APS", VR128, v8f32, v4f32, v8i32, loadv4f32,
+-                                 sub_xmm>;
+-  defm : subvector_zero_lowering<"DQA", VR128, v4i64, v2i64, v8i32, loadv2i64,
+-                                 sub_xmm>;
+-  defm : subvector_zero_lowering<"DQA", VR128, v8i32, v4i32, v8i32, loadv2i64,
+-                                 sub_xmm>;
+-  defm : subvector_zero_lowering<"DQA", VR128, v16i16, v8i16, v8i32, loadv2i64,
+-                                 sub_xmm>;
+-  defm : subvector_zero_lowering<"DQA", VR128, v32i8, v16i8, v8i32, loadv2i64,
+-                                 sub_xmm>;
+-}
+-
+-let Predicates = [HasVLX] in {
+-  defm : subvector_zero_lowering<"APDZ128", VR128X, v4f64, v2f64, v8i32,
++  defm : subvector_zero_lowering<"APD", "UPD", VR128, v4f64, v2f64, v8i32,
+                                  loadv2f64, sub_xmm>;
+-  defm : subvector_zero_lowering<"APSZ128", VR128X, v8f32, v4f32, v8i32,
++  defm : subvector_zero_lowering<"APS", "UPS", VR128, v8f32, v4f32, v8i32,
+                                  loadv4f32, sub_xmm>;
+-  defm : subvector_zero_lowering<"DQA64Z128", VR128X, v4i64, v2i64, v8i32,
++  defm : subvector_zero_lowering<"DQA", "DQU", VR128, v4i64, v2i64, v8i32,
+                                  loadv2i64, sub_xmm>;
+-  defm : subvector_zero_lowering<"DQA64Z128", VR128X, v8i32, v4i32, v8i32,
++  defm : subvector_zero_lowering<"DQA", "DQU", VR128, v8i32, v4i32, v8i32,
+                                  loadv2i64, sub_xmm>;
+-  defm : subvector_zero_lowering<"DQA64Z128", VR128X, v16i16, v8i16, v8i32,
++  defm : subvector_zero_lowering<"DQA", "DQU", VR128, v16i16, v8i16, v8i32,
+                                  loadv2i64, sub_xmm>;
+-  defm : subvector_zero_lowering<"DQA64Z128", VR128X, v32i8, v16i8, v8i32,
+-                                 loadv2i64, sub_xmm>;
+-
+-  defm : subvector_zero_lowering<"APDZ128", VR128X, v8f64, v2f64, v16i32,
+-                                 loadv2f64, sub_xmm>;
+-  defm : subvector_zero_lowering<"APSZ128", VR128X, v16f32, v4f32, v16i32,
+-                                 loadv4f32, sub_xmm>;
+-  defm : subvector_zero_lowering<"DQA64Z128", VR128X, v8i64, v2i64, v16i32,
+-                                 loadv2i64, sub_xmm>;
+-  defm : subvector_zero_lowering<"DQA64Z128", VR128X, v16i32, v4i32, v16i32,
+-                                 loadv2i64, sub_xmm>;
+-  defm : subvector_zero_lowering<"DQA64Z128", VR128X, v32i16, v8i16, v16i32,
+-                                 loadv2i64, sub_xmm>;
+-  defm : subvector_zero_lowering<"DQA64Z128", VR128X, v64i8, v16i8, v16i32,
++  defm : subvector_zero_lowering<"DQA", "DQU", VR128, v32i8, v16i8, v8i32,
+                                  loadv2i64, sub_xmm>;
++}
+ 
+-  defm : subvector_zero_lowering<"APDZ256", VR256X, v8f64, v4f64, v16i32,
+-                                 loadv4f64, sub_ymm>;
+-  defm : subvector_zero_lowering<"APSZ256", VR256X, v16f32, v8f32, v16i32,
+-                                 loadv8f32, sub_ymm>;
+-  defm : subvector_zero_lowering<"DQA64Z256", VR256X, v8i64, v4i64, v16i32,
+-                                 loadv4i64, sub_ymm>;
+-  defm : subvector_zero_lowering<"DQA64Z256", VR256X, v16i32, v8i32, v16i32,
+-                                 loadv4i64, sub_ymm>;
+-  defm : subvector_zero_lowering<"DQA64Z256", VR256X, v32i16, v16i16, v16i32,
+-                                 loadv4i64, sub_ymm>;
+-  defm : subvector_zero_lowering<"DQA64Z256", VR256X, v64i8, v32i8, v16i32,
+-                                 loadv4i64, sub_ymm>;
++let Predicates = [HasVLX] in {
++  defm : subvector_zero_lowering<"APDZ128", "UPDZ128", VR128X, v4f64,
++                                 v2f64, v8i32, loadv2f64, sub_xmm>;
++  defm : subvector_zero_lowering<"APSZ128", "UPSZ128", VR128X, v8f32,
++                                 v4f32, v8i32, loadv4f32, sub_xmm>;
++  defm : subvector_zero_lowering<"DQA64Z128", "DQU64Z128", VR128X, v4i64,
++                                 v2i64, v8i32, loadv2i64, sub_xmm>;
++  defm : subvector_zero_lowering<"DQA64Z128", "DQU64Z128", VR128X, v8i32,
++                                 v4i32, v8i32, loadv2i64, sub_xmm>;
++  defm : subvector_zero_lowering<"DQA64Z128", "DQU64Z128", VR128X, v16i16,
++                                 v8i16, v8i32, loadv2i64, sub_xmm>;
++  defm : subvector_zero_lowering<"DQA64Z128", "DQU64Z128", VR128X, v32i8,
++                                 v16i8, v8i32, loadv2i64, sub_xmm>;
++
++  defm : subvector_zero_lowering<"APDZ128", "UPDZ128", VR128X, v8f64,
++                                 v2f64, v16i32, loadv2f64, sub_xmm>;
++  defm : subvector_zero_lowering<"APSZ128", "UPSZ128", VR128X, v16f32,
++                                 v4f32, v16i32, loadv4f32, sub_xmm>;
++  defm : subvector_zero_lowering<"DQA64Z128", "DQU64Z128", VR128X, v8i64,
++                                 v2i64, v16i32, loadv2i64, sub_xmm>;
++  defm : subvector_zero_lowering<"DQA64Z128", "DQU64Z128", VR128X, v16i32,
++                                 v4i32, v16i32, loadv2i64, sub_xmm>;
++  defm : subvector_zero_lowering<"DQA64Z128", "DQU64Z128", VR128X, v32i16,
++                                 v8i16, v16i32, loadv2i64, sub_xmm>;
++  defm : subvector_zero_lowering<"DQA64Z128", "DQU64Z128", VR128X, v64i8,
++                                 v16i8, v16i32, loadv2i64, sub_xmm>;
++
++  defm : subvector_zero_lowering<"APDZ256", "UPDZ256", VR256X, v8f64,
++                                 v4f64, v16i32, loadv4f64, sub_ymm>;
++  defm : subvector_zero_lowering<"APSZ256", "UPDZ256", VR256X, v16f32,
++                                 v8f32, v16i32, loadv8f32, sub_ymm>;
++  defm : subvector_zero_lowering<"DQA64Z256", "DQU64Z256", VR256X, v8i64,
++                                 v4i64, v16i32, loadv4i64, sub_ymm>;
++  defm : subvector_zero_lowering<"DQA64Z256", "DQU64Z256", VR256X, v16i32,
++                                 v8i32, v16i32, loadv4i64, sub_ymm>;
++  defm : subvector_zero_lowering<"DQA64Z256", "DQU64Z256", VR256X, v32i16,
++                                 v16i16, v16i32, loadv4i64, sub_ymm>;
++  defm : subvector_zero_lowering<"DQA64Z256", "DQU64Z256", VR256X, v64i8,
++                                 v32i8, v16i32, loadv4i64, sub_ymm>;
+ }
+ 
+ let Predicates = [HasAVX512, NoVLX] in {
+-  defm : subvector_zero_lowering<"APD", VR128, v8f64, v2f64, v16i32, loadv2f64,
+-                                 sub_xmm>;
+-  defm : subvector_zero_lowering<"APS", VR128, v16f32, v4f32, v16i32, loadv4f32,
+-                                 sub_xmm>;
+-  defm : subvector_zero_lowering<"DQA", VR128, v8i64, v2i64, v16i32, loadv2i64,
+-                                 sub_xmm>;
+-  defm : subvector_zero_lowering<"DQA", VR128, v16i32, v4i32, v16i32, loadv2i64,
+-                                 sub_xmm>;
+-  defm : subvector_zero_lowering<"DQA", VR128, v32i16, v8i16, v16i32, loadv2i64,
+-                                 sub_xmm>;
+-  defm : subvector_zero_lowering<"DQA", VR128, v64i8, v16i8, v16i32, loadv2i64,
+-                                 sub_xmm>;
+-
+-  defm : subvector_zero_lowering<"APDY", VR256, v8f64, v4f64, v16i32,
+-                                 loadv4f64, sub_ymm>;
+-  defm : subvector_zero_lowering<"APSY", VR256, v16f32, v8f32, v16i32,
+-                                 loadv8f32, sub_ymm>;
+-  defm : subvector_zero_lowering<"DQAY", VR256, v8i64, v4i64, v16i32,
+-                                 loadv4i64, sub_ymm>;
+-  defm : subvector_zero_lowering<"DQAY", VR256, v16i32, v8i32, v16i32,
+-                                 loadv4i64, sub_ymm>;
+-  defm : subvector_zero_lowering<"DQAY", VR256, v32i16, v16i16, v16i32,
+-                                 loadv4i64, sub_ymm>;
+-  defm : subvector_zero_lowering<"DQAY", VR256, v64i8, v32i8, v16i32,
+-                                 loadv4i64, sub_ymm>;
++  defm : subvector_zero_lowering<"APD", "UPD", VR128, v8f64, v2f64,
++                                 v16i32,loadv2f64, sub_xmm>;
++  defm : subvector_zero_lowering<"APS", "UPS", VR128, v16f32, v4f32,
++                                 v16i32, loadv4f32, sub_xmm>;
++  defm : subvector_zero_lowering<"DQA", "DQU", VR128, v8i64, v2i64,
++                                 v16i32, loadv2i64, sub_xmm>;
++  defm : subvector_zero_lowering<"DQA", "DQU", VR128, v16i32, v4i32,
++                                 v16i32, loadv2i64, sub_xmm>;
++  defm : subvector_zero_lowering<"DQA", "DQU", VR128, v32i16, v8i16,
++                                 v16i32, loadv2i64, sub_xmm>;
++  defm : subvector_zero_lowering<"DQA", "DQU", VR128, v64i8, v16i8,
++                                 v16i32, loadv2i64, sub_xmm>;
++
++  defm : subvector_zero_lowering<"APDY", "UPDY", VR256, v8f64, v4f64,
++                                 v16i32, loadv4f64, sub_ymm>;
++  defm : subvector_zero_lowering<"APSY", "UPSY", VR256, v16f32, v8f32,
++                                 v16i32, loadv8f32, sub_ymm>;
++  defm : subvector_zero_lowering<"DQAY", "DQUY", VR256, v8i64, v4i64,
++                                 v16i32, loadv4i64, sub_ymm>;
++  defm : subvector_zero_lowering<"DQAY", "DQUY", VR256, v16i32, v8i32,
++                                 v16i32, loadv4i64, sub_ymm>;
++  defm : subvector_zero_lowering<"DQAY", "DQUY", VR256, v32i16, v16i16,
++                                 v16i32, loadv4i64, sub_ymm>;
++  defm : subvector_zero_lowering<"DQAY", "DQUY", VR256, v64i8, v32i8,
++                                 v16i32, loadv4i64, sub_ymm>;
+ }
+ 
+ // List of opcodes that guaranteed to zero the upper elements of vector regs.
+diff --git a/test/CodeGen/X86/merge-consecutive-loads-256.ll b/test/CodeGen/X86/merge-consecutive-loads-256.ll
+index 6ecd8116443..0f2cf594b1c 100644
+--- a/test/CodeGen/X86/merge-consecutive-loads-256.ll
++++ b/test/CodeGen/X86/merge-consecutive-loads-256.ll
+@@ -28,13 +28,13 @@ define <4 x double> @merge_4f64_2f64_23(<2 x double>* %ptr) nounwind uwtable noi
+ define <4 x double> @merge_4f64_2f64_2z(<2 x double>* %ptr) nounwind uwtable noinline ssp {
+ ; AVX-LABEL: merge_4f64_2f64_2z:
+ ; AVX:       # %bb.0:
+-; AVX-NEXT:    vmovaps 32(%rdi), %xmm0
++; AVX-NEXT:    vmovups 32(%rdi), %xmm0
+ ; AVX-NEXT:    retq
+ ;
+ ; X32-AVX-LABEL: merge_4f64_2f64_2z:
+ ; X32-AVX:       # %bb.0:
+ ; X32-AVX-NEXT:    movl {{[0-9]+}}(%esp), %eax
+-; X32-AVX-NEXT:    vmovaps 32(%eax), %xmm0
++; X32-AVX-NEXT:    vmovups 32(%eax), %xmm0
+ ; X32-AVX-NEXT:    retl
+   %ptr0 = getelementptr inbounds <2 x double>, <2 x double>* %ptr, i64 2
+   %val0 = load <2 x double>, <2 x double>* %ptr0
+@@ -109,13 +109,13 @@ define <4 x double> @merge_4f64_f64_34uu(double* %ptr) nounwind uwtable noinline
+ define <4 x double> @merge_4f64_f64_45zz(double* %ptr) nounwind uwtable noinline ssp {
+ ; AVX-LABEL: merge_4f64_f64_45zz:
+ ; AVX:       # %bb.0:
+-; AVX-NEXT:    vmovaps 32(%rdi), %xmm0
++; AVX-NEXT:    vmovups 32(%rdi), %xmm0
+ ; AVX-NEXT:    retq
+ ;
+ ; X32-AVX-LABEL: merge_4f64_f64_45zz:
+ ; X32-AVX:       # %bb.0:
+ ; X32-AVX-NEXT:    movl {{[0-9]+}}(%esp), %eax
+-; X32-AVX-NEXT:    vmovaps 32(%eax), %xmm0
++; X32-AVX-NEXT:    vmovups 32(%eax), %xmm0
+ ; X32-AVX-NEXT:    retl
+   %ptr0 = getelementptr inbounds double, double* %ptr, i64 4
+   %ptr1 = getelementptr inbounds double, double* %ptr, i64 5
+@@ -155,13 +155,13 @@ define <4 x double> @merge_4f64_f64_34z6(double* %ptr) nounwind uwtable noinline
+ define <4 x i64> @merge_4i64_2i64_3z(<2 x i64>* %ptr) nounwind uwtable noinline ssp {
+ ; AVX-LABEL: merge_4i64_2i64_3z:
+ ; AVX:       # %bb.0:
+-; AVX-NEXT:    vmovaps 48(%rdi), %xmm0
++; AVX-NEXT:    vmovups 48(%rdi), %xmm0
+ ; AVX-NEXT:    retq
+ ;
+ ; X32-AVX-LABEL: merge_4i64_2i64_3z:
+ ; X32-AVX:       # %bb.0:
+ ; X32-AVX-NEXT:    movl {{[0-9]+}}(%esp), %eax
+-; X32-AVX-NEXT:    vmovaps 48(%eax), %xmm0
++; X32-AVX-NEXT:    vmovups 48(%eax), %xmm0
+ ; X32-AVX-NEXT:    retl
+   %ptr0 = getelementptr inbounds <2 x i64>, <2 x i64>* %ptr, i64 3
+   %val0 = load <2 x i64>, <2 x i64>* %ptr0
+@@ -217,13 +217,13 @@ define <4 x i64> @merge_4i64_i64_1zzu(i64* %ptr) nounwind uwtable noinline ssp {
+ define <4 x i64> @merge_4i64_i64_23zz(i64* %ptr) nounwind uwtable noinline ssp {
+ ; AVX-LABEL: merge_4i64_i64_23zz:
+ ; AVX:       # %bb.0:
+-; AVX-NEXT:    vmovaps 16(%rdi), %xmm0
++; AVX-NEXT:    vmovups 16(%rdi), %xmm0
+ ; AVX-NEXT:    retq
+ ;
+ ; X32-AVX-LABEL: merge_4i64_i64_23zz:
+ ; X32-AVX:       # %bb.0:
+ ; X32-AVX-NEXT:    movl {{[0-9]+}}(%esp), %eax
+-; X32-AVX-NEXT:    vmovaps 16(%eax), %xmm0
++; X32-AVX-NEXT:    vmovups 16(%eax), %xmm0
+ ; X32-AVX-NEXT:    retl
+   %ptr0 = getelementptr inbounds i64, i64* %ptr, i64 2
+   %ptr1 = getelementptr inbounds i64, i64* %ptr, i64 3
+diff --git a/test/CodeGen/X86/merge-consecutive-loads-512.ll b/test/CodeGen/X86/merge-consecutive-loads-512.ll
+index 62102eb382c..3c6eaf65292 100644
+--- a/test/CodeGen/X86/merge-consecutive-loads-512.ll
++++ b/test/CodeGen/X86/merge-consecutive-loads-512.ll
+@@ -106,13 +106,13 @@ define <8 x double> @merge_8f64_f64_23uuuuu9(double* %ptr) nounwind uwtable noin
+ define <8 x double> @merge_8f64_f64_12zzuuzz(double* %ptr) nounwind uwtable noinline ssp {
+ ; ALL-LABEL: merge_8f64_f64_12zzuuzz:
+ ; ALL:       # %bb.0:
+-; ALL-NEXT:    vmovaps 8(%rdi), %xmm0
++; ALL-NEXT:    vmovups 8(%rdi), %xmm0
+ ; ALL-NEXT:    retq
+ ;
+ ; X32-AVX512F-LABEL: merge_8f64_f64_12zzuuzz:
+ ; X32-AVX512F:       # %bb.0:
+ ; X32-AVX512F-NEXT:    movl {{[0-9]+}}(%esp), %eax
+-; X32-AVX512F-NEXT:    vmovaps 8(%eax), %xmm0
++; X32-AVX512F-NEXT:    vmovups 8(%eax), %xmm0
+ ; X32-AVX512F-NEXT:    retl
+   %ptr0 = getelementptr inbounds double, double* %ptr, i64 1
+   %ptr1 = getelementptr inbounds double, double* %ptr, i64 2
+@@ -190,7 +190,7 @@ define <8 x i64> @merge_8i64_4i64_z3(<4 x i64>* %ptr) nounwind uwtable noinline
+ define <8 x i64> @merge_8i64_i64_56zz9uzz(i64* %ptr) nounwind uwtable noinline ssp {
+ ; ALL-LABEL: merge_8i64_i64_56zz9uzz:
+ ; ALL:       # %bb.0:
+-; ALL-NEXT:    vmovaps 40(%rdi), %xmm0
++; ALL-NEXT:    vmovups 40(%rdi), %xmm0
+ ; ALL-NEXT:    vmovsd {{.*#+}} xmm1 = mem[0],zero
+ ; ALL-NEXT:    vinsertf64x4 $1, %ymm1, %zmm0, %zmm0
+ ; ALL-NEXT:    retq
+@@ -198,7 +198,7 @@ define <8 x i64> @merge_8i64_i64_56zz9uzz(i64* %ptr) nounwind uwtable noinline s
+ ; X32-AVX512F-LABEL: merge_8i64_i64_56zz9uzz:
+ ; X32-AVX512F:       # %bb.0:
+ ; X32-AVX512F-NEXT:    movl {{[0-9]+}}(%esp), %eax
+-; X32-AVX512F-NEXT:    vmovaps 40(%eax), %xmm0
++; X32-AVX512F-NEXT:    vmovups 40(%eax), %xmm0
+ ; X32-AVX512F-NEXT:    vmovsd {{.*#+}} xmm1 = mem[0],zero
+ ; X32-AVX512F-NEXT:    vinsertf64x4 $1, %ymm1, %zmm0, %zmm0
+ ; X32-AVX512F-NEXT:    retl

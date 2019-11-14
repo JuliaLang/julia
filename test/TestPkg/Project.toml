@@ -1,0 +1,6 @@
+name = "TestPkg"
+uuid = "69145d58-7df6-11e8-0660-cf7622583916"
+
+
+[deps]
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"

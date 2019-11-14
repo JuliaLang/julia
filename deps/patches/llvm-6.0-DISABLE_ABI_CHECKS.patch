@@ -1,0 +1,39 @@
+From d793ba4bacae51ae25be19c1636fcf38707938fd Mon Sep 17 00:00:00 2001
+From: Valentin Churavy <v.churavy@gmail.com>
+Date: Fri, 1 Jun 2018 17:43:55 -0400
+Subject: [PATCH] fix LLVM_DISABLE_ABI_BREAKING_CHECKS_ENFORCING
+
+---
+ cmake/modules/HandleLLVMOptions.cmake    | 2 +-
+ include/llvm/Config/abi-breaking.h.cmake | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/cmake/modules/HandleLLVMOptions.cmake b/cmake/modules/HandleLLVMOptions.cmake
+index 3d2dd48018c..b67ee6a896e 100644
+--- a/cmake/modules/HandleLLVMOptions.cmake
++++ b/cmake/modules/HandleLLVMOptions.cmake
+@@ -572,7 +572,7 @@ if (LLVM_ENABLE_WARNINGS AND (LLVM_COMPILER_IS_GCC_COMPATIBLE OR CLANG_CL))
+ 
+   if (LLVM_ENABLE_PEDANTIC AND LLVM_COMPILER_IS_GCC_COMPATIBLE)
+     append("-pedantic" CMAKE_C_FLAGS CMAKE_CXX_FLAGS)
+-    append("-Wno-long-long" CMAKE_C_FLAGS CMAKE_CXX_FLAGS)
++    append("-Wno-long-long -Wundef" CMAKE_C_FLAGS CMAKE_CXX_FLAGS)
+   endif()
+ 
+   add_flag_if_supported("-Wcovered-switch-default" COVERED_SWITCH_DEFAULT_FLAG)
+diff --git a/include/llvm/Config/abi-breaking.h.cmake b/include/llvm/Config/abi-breaking.h.cmake
+index 7ae401e5b8a..d52c4609101 100644
+--- a/include/llvm/Config/abi-breaking.h.cmake
++++ b/include/llvm/Config/abi-breaking.h.cmake
+@@ -20,7 +20,7 @@
+ 
+ /* Allow selectively disabling link-time mismatch checking so that header-only
+    ADT content from LLVM can be used without linking libSupport. */
+-#if !LLVM_DISABLE_ABI_BREAKING_CHECKS_ENFORCING
++#ifndef LLVM_DISABLE_ABI_BREAKING_CHECKS_ENFORCING
+ 
+ // ABI_BREAKING_CHECKS protection: provides link-time failure when clients build
+ // mismatch with LLVM
+-- 
+2.17.0
+

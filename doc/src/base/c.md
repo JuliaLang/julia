@@ -4,6 +4,7 @@
 ccall
 Core.Intrinsics.cglobal
 Base.@cfunction
+Base.CFunction
 Base.unsafe_convert
 Base.cconvert
 Base.unsafe_load
@@ -18,11 +19,13 @@ Base.unsafe_pointer_to_objref
 Base.disable_sigint
 Base.reenable_sigint
 Base.systemerror
+Base.windowserror
 Core.Ptr
 Core.Ref
 Base.Cchar
 Base.Cuchar
 Base.Cshort
+Base.Cstring
 Base.Cushort
 Base.Cint
 Base.Cuint
@@ -36,6 +39,7 @@ Base.Csize_t
 Base.Cssize_t
 Base.Cptrdiff_t
 Base.Cwchar_t
+Base.Cwstring
 Base.Cfloat
 Base.Cdouble
 ```

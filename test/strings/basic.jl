@@ -29,6 +29,12 @@ using Random
     @test "ab"  !== "abc"
     @test string("ab", 'c') === "abc"
     @test string() === ""
+    @test string(SubString("123", 2)) === "23"
+    @test string("∀∃", SubString("1∀∃", 2)) === "∀∃∀∃"
+    @test string("∀∃", "1∀∃") === "∀∃1∀∃"
+    @test string(SubString("∀∃"), SubString("1∀∃", 2)) === "∀∃∀∃"
+    @test string(s"123") === s"123"
+    @test string("123", 'α', SubString("1∀∃", 2), 'a', "foo") === "123α∀∃afoo"
     codegen_egal_of_strings(x, y) = (x===y, x!==y)
     @test codegen_egal_of_strings(string("ab", 'c'), "abc") === (true, false)
     let strs = ["", "a", "a b c", "до свидания"]
@@ -51,9 +57,71 @@ end
     @test !endswith("cd", "abcd")
     @test startswith("ab\0cd", "ab\0c")
     @test !startswith("ab\0cd", "ab\0d")
+    x = "∀"
+    y = String(codeunits(x)[1:2])
+    z = String(codeunits(x)[1:1])
+    @test !startswith(x, y)
+    @test !startswith(x, z)
+    @test !startswith(y, z)
+    @test startswith(x, x)
+    @test startswith(y, y)
+    @test startswith(z, z)
+    x = SubString(x)
+    y = SubString(y)
+    z = SubString(z)
+    @test !startswith(x, y)
+    @test !startswith(x, z)
+    @test !startswith(y, z)
+    @test startswith(x, x)
+    @test startswith(y, y)
+    @test startswith(z, z)
+    x = "x∀y"
+    y = SubString("x\xe2\x88y", 1, 2)
+    z = SubString("x\xe2y", 1, 2)
+    @test !startswith(x, y)
+    @test !startswith(x, z)
+    @test !startswith(y, z)
+    @test startswith(x, x)
+    @test startswith(y, y)
+    @test startswith(z, z)
+    x = "∀"
+    y = String(codeunits(x)[2:3])
+    z = String(codeunits(x)[3:3])
+    @test !endswith(x, y)
+    @test !endswith(x, z)
+    @test endswith(y, z)
+    @test endswith(x, x)
+    @test endswith(y, y)
+    @test endswith(z, z)
+    x = SubString(x)
+    y = SubString(y)
+    z = SubString(z)
+    @test !endswith(x, y)
+    @test !endswith(x, z)
+    @test endswith(y, z)
+    @test endswith(x, x)
+    @test endswith(y, y)
+    @test endswith(z, z)
+    x = "x∀y"
+    y = SubString("x\x88\x80y", 2, 4)
+    z = SubString("x\x80y", 2, 3)
+    @test !endswith(x, y)
+    @test !endswith(x, z)
+    @test endswith(y, z)
+    @test endswith(x, x)
+    @test endswith(y, y)
+    @test endswith(z, z)
 end
 
-@test filter(x -> x ∈ ['f', 'o'], "foobar") == "foo"
+@testset "filter specialization on String issue #32460" begin
+     @test filter(x -> x ∉ ['작', 'Ï', 'z', 'ξ'],
+                  GenericString("J'étais n작작é pour plaiÏre à toute âξme un peu fière")) ==
+                  "J'étais né pour plaire à toute âme un peu fière"
+     @test filter(x -> x ∉ ['작', 'Ï', 'z', 'ξ'],
+                  "J'étais n작작é pour plaiÏre à toute âξme un peu fière") ==
+                  "J'étais né pour plaire à toute âme un peu fière"
+     @test filter(x -> x ∈ ['f', 'o'], GenericString("foobar")) == "foo"
+end
 
 @testset "string iteration, and issue #1454" begin
     str = "é"
@@ -71,7 +139,7 @@ end
 end
 
 # issue #3597
-@test string(GenericString("Test")[1:1], "X") == "TX"
+@test string(GenericString("Test")[1:1], "X") === "TX"
 
 @testset "parsing Int types" begin
     let b, n
@@ -90,7 +158,7 @@ end
     @test String(sym) == string(Char(0xdcdb))
     @test Meta.lower(Main, sym) === sym
     res = string(Meta.parse(string(Char(0xdcdb)," = 1"),1,raise=false)[1])
-    @test res == """\$(Expr(:error, "invalid character \\\"\\udcdb\\\"\"))"""
+    @test res == """\$(Expr(:error, "invalid character \\\"\\udcdb\\\" near column 1\"))"""
 end
 
 @testset "Symbol and gensym" begin
@@ -187,8 +255,8 @@ let
 
     @test lastindex(srep) == 7
 
-    @test next(srep, 3) == ('β',5)
-    @test next(srep, 7) == ('β',9)
+    @test iterate(srep, 3) == ('β',5)
+    @test iterate(srep, 7) == ('β',9)
 
     @test srep[7] == 'β'
     @test_throws BoundsError srep[8]
@@ -230,8 +298,8 @@ end
     @test_throws MethodError codeunit(tstr, true)
     @test_throws MethodError isvalid(tstr, 1)
     @test_throws MethodError isvalid(tstr, true)
-    @test_throws MethodError next(tstr, 1)
-    @test_throws MethodError next(tstr, true)
+    @test_throws MethodError iterate(tstr, 1)
+    @test_throws MethodError iterate(tstr, true)
     @test_throws MethodError lastindex(tstr)
 
     gstr = GenericString("12")
@@ -251,7 +319,7 @@ end
     @test first(eachindex("foobar")) === 1
     @test first(eachindex("")) === 1
     @test last(eachindex("foobar")) === lastindex("foobar")
-    @test done(eachindex("foobar"),7)
+    @test iterate(eachindex("foobar"),7) === nothing
     @test Int == eltype(Base.EachStringIndex) ==
                  eltype(Base.EachStringIndex{String}) ==
                  eltype(Base.EachStringIndex{GenericString}) ==
@@ -315,6 +383,12 @@ end
     @test tryparse(Float64, "64o") === nothing
     @test tryparse(Float32, "32") == 32.0f0
     @test tryparse(Float32, "32o") === nothing
+end
+
+@testset "tryparse invalid chars" begin
+    # #32314: tryparse shouldn't throw, even given strings with invalid Chars
+    @test tryparse(UInt8, "\xb5")    === nothing
+    @test tryparse(UInt8, "100\xb5") === nothing  # Code path for numeric overflow
 end
 
 import Unicode
@@ -407,9 +481,17 @@ end
             end
         end
     end
+    # Check for short three-byte sequences
+    @test isvalid(String, UInt8[0xe0]) == false
+    for (rng, flg) in ((0x00:0x9f, false), (0xa0:0xbf, true), (0xc0:0xff, false))
+        for cont in rng
+            @test isvalid(String, UInt8[0xe0, cont]) == false
+            @test isvalid(String, UInt8[0xe0, cont, 0x80]) == flg
+        end
+    end
     # Check three-byte sequences
-    for r1 in (0xe0:0xec, 0xee:0xef)
-        for byt = r1
+    for r1 in (0xe1:0xec, 0xee:0xef)
+        for byt in r1
             # Check for short sequence
             @test isvalid(String, UInt8[byt]) == false
             for (rng,flg) in ((0x00:0x7f, false), (0x80:0xbf, true), (0xc0:0xff, false))
@@ -455,7 +537,8 @@ end
     end
     # Check seven-byte sequences, should be invalid
     @test isvalid(String, UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]) == false
-
+    @test isvalid(lstrip("blablabla")) == true
+    @test isvalid(SubString(String(UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]), 1,2)) == false
     # invalid Chars
     @test  isvalid('a')
     @test  isvalid('柒')
@@ -490,7 +573,7 @@ end
 @testset "issue #18280: next/nextind must return past String's underlying data" begin
     for s in ("Hello", "Σ", "こんにちは", "😊😁")
         local s
-        @test next(s, lastindex(s))[2] > sizeof(s)
+        @test iterate(s, lastindex(s))[2] > sizeof(s)
         @test nextind(s, lastindex(s)) > sizeof(s)
     end
 end
@@ -501,9 +584,8 @@ mutable struct CharStr <: AbstractString
     chars::Vector{Char}
     CharStr(x) = new(collect(x))
 end
-Base.start(x::CharStr) = start(x.chars)
-Base.next(x::CharStr, i::Int) = next(x.chars, i)
-Base.done(x::CharStr, i::Int) = done(x.chars, i)
+Base.iterate(x::CharStr) = iterate(x.chars)
+Base.iterate(x::CharStr, i::Int) = iterate(x.chars, i)
 Base.lastindex(x::CharStr) = lastindex(x.chars)
 @testset "cmp without UTF-8 indexing" begin
     # Simple case, with just ANSI Latin 1 characters
@@ -517,10 +599,10 @@ end
 
 @testset "repeat" begin
     @inferred repeat(GenericString("x"), 1)
-    @test repeat("xx",3) == repeat("x",6) == repeat('x',6) == repeat(GenericString("x"), 6) == "xxxxxx"
-    @test repeat("αα",3) == repeat("α",6) == repeat('α',6) == repeat(GenericString("α"), 6) == "αααααα"
-    @test repeat("x",1) == repeat('x',1) == "x"^1 == 'x'^1 == GenericString("x")^1 == "x"
-    @test repeat("x",0) == repeat('x',0) == "x"^0 == 'x'^0 == GenericString("x")^0 == ""
+    @test repeat("xx",3) === repeat(SubString("xx", 2),6) === repeat("x",6) === repeat('x',6) === repeat(GenericString("x"), 6) === "xxxxxx"
+    @test repeat("αα",3) === repeat(SubString("αα", 3),6) === repeat("α",6) === repeat('α',6) === repeat(GenericString("α"), 6) === "αααααα"
+    @test repeat("x",1) === repeat('x',1) === "x"^1 == 'x'^1 === GenericString("x")^1 === "x"
+    @test repeat("x",0) === repeat('x',0) === "x"^0 == 'x'^0 === GenericString("x")^0 === ""
 
     for S in ["xxx", "ååå", "∀∀∀", "🍕🍕🍕"]
         c = S[1]
@@ -528,16 +610,18 @@ end
         @test_throws ArgumentError repeat(c, -1)
         @test_throws ArgumentError repeat(s, -1)
         @test_throws ArgumentError repeat(S, -1)
-        @test repeat(c, 0) == ""
-        @test repeat(s, 0) == ""
-        @test repeat(S, 0) == ""
-        @test repeat(c, 1) == s
-        @test repeat(s, 1) == s
-        @test repeat(S, 1) == S
-        @test repeat(c, 3) == S
-        @test repeat(s, 3) == S
-        @test repeat(S, 3) == S*S*S
+        @test repeat(c, 0) === ""
+        @test repeat(s, 0) === ""
+        @test repeat(S, 0) === ""
+        @test repeat(c, 1) === s
+        @test repeat(s, 1) === s
+        @test repeat(S, 1) === S
+        @test repeat(c, 3) === S
+        @test repeat(s, 3) === S
+        @test repeat(S, 3) === S*S*S
     end
+    # Issue #32160 (string allocation unsigned overflow)
+    @test_throws OutOfMemoryError repeat('x', typemax(Csize_t))
 end
 @testset "issue #12495: check that logical indexing attempt raises ArgumentError" begin
     @test_throws ArgumentError "abc"[[true, false, true]]
@@ -565,6 +649,7 @@ end
         for s in strs
             @test_throws BoundsError thisind(s, -2)
             @test_throws BoundsError thisind(s, -1)
+            @test thisind(s, Int8(0)) == 0
             @test thisind(s, 0) == 0
             @test thisind(s, 1) == 1
             @test thisind(s, 2) == 1
@@ -596,6 +681,7 @@ end
         @test_throws BoundsError prevind(s, 0, 0)
         @test_throws BoundsError prevind(s, 0, 1)
         @test prevind(s, 1) == 0
+        @test prevind(s, Int8(1), Int8(1)) == 0
         @test prevind(s, 1, 1) == 0
         @test prevind(s, 1, 0) == 1
         @test prevind(s, 2) == 1
@@ -627,9 +713,11 @@ end
         @test_throws BoundsError nextind(s, -1, 0)
         @test_throws BoundsError nextind(s, -1, 1)
         @test nextind(s, 0, 2) == 4
+        @test nextind(s, Int8(0), Int8(2)) == 4
         @test nextind(s, 0, 20) == 26
         @test nextind(s, 0, 10) == 15
         @test nextind(s, 1) == 4
+        @test nextind(s, Int8(1)) == 4
         @test nextind(s, 1, 1) == 4
         @test nextind(s, 1, 2) == 6
         @test nextind(s, 1, 9) == 15
@@ -737,100 +825,100 @@ end
 
 @test unsafe_wrap(Vector{UInt8},"\xcc\xdd\xee\xff\x80") == [0xcc,0xdd,0xee,0xff,0x80]
 
-@test next("a", 1)[2] == 2
+@test iterate("a", 1)[2] == 2
 @test nextind("a", 1) == 2
-@test next("az", 1)[2] == 2
+@test iterate("az", 1)[2] == 2
 @test nextind("az", 1) == 2
-@test next("a\xb1", 1)[2] == 2
+@test iterate("a\xb1", 1)[2] == 2
 @test nextind("a\xb1", 1) == 2
-@test next("a\xb1z", 1)[2] == 2
+@test iterate("a\xb1z", 1)[2] == 2
 @test nextind("a\xb1z", 1) == 2
-@test next("a\xb1\x83", 1)[2] == 2
+@test iterate("a\xb1\x83", 1)[2] == 2
 @test nextind("a\xb1\x83", 1) == 2
-@test next("a\xb1\x83\x84", 1)[2] == 2
+@test iterate("a\xb1\x83\x84", 1)[2] == 2
 @test nextind("a\xb1\x83\x84", 1) == 2
-@test next("a\xb1\x83\x84z", 1)[2] == 2
+@test iterate("a\xb1\x83\x84z", 1)[2] == 2
 @test nextind("a\xb1\x83\x84z", 1) == 2
 
-@test next("\x81", 1)[2] == 2
+@test iterate("\x81", 1)[2] == 2
 @test nextind("\x81", 1) == 2
-@test next("\x81z", 1)[2] == 2
+@test iterate("\x81z", 1)[2] == 2
 @test nextind("\x81z", 1) == 2
-@test next("\x81\xb1", 1)[2] == 2
+@test iterate("\x81\xb1", 1)[2] == 2
 @test nextind("\x81\xb1", 1) == 2
-@test next("\x81\xb1z", 1)[2] == 2
+@test iterate("\x81\xb1z", 1)[2] == 2
 @test nextind("\x81\xb1z", 1) == 2
-@test next("\x81\xb1\x83", 1)[2] == 2
+@test iterate("\x81\xb1\x83", 1)[2] == 2
 @test nextind("\x81\xb1\x83", 1) == 2
-@test next("\x81\xb1\x83\x84", 1)[2] == 2
+@test iterate("\x81\xb1\x83\x84", 1)[2] == 2
 @test nextind("\x81\xb1\x83\x84", 1) == 2
-@test next("\x81\xb1\x83\x84z", 1)[2] == 2
+@test iterate("\x81\xb1\x83\x84z", 1)[2] == 2
 @test nextind("\x81\xb1\x83\x84z", 1) == 2
 
-@test next("\xce", 1)[2] == 2
+@test iterate("\xce", 1)[2] == 2
 @test nextind("\xce", 1) == 2
-@test next("\xcez", 1)[2] == 2
+@test iterate("\xcez", 1)[2] == 2
 @test nextind("\xcez", 1) == 2
-@test next("\xce\xb1", 1)[2] == 3
+@test iterate("\xce\xb1", 1)[2] == 3
 @test nextind("\xce\xb1", 1) == 3
-@test next("\xce\xb1z", 1)[2] == 3
+@test iterate("\xce\xb1z", 1)[2] == 3
 @test nextind("\xce\xb1z", 1) == 3
-@test next("\xce\xb1\x83", 1)[2] == 3
+@test iterate("\xce\xb1\x83", 1)[2] == 3
 @test nextind("\xce\xb1\x83", 1) == 3
-@test next("\xce\xb1\x83\x84", 1)[2] == 3
+@test iterate("\xce\xb1\x83\x84", 1)[2] == 3
 @test nextind("\xce\xb1\x83\x84", 1) == 3
-@test next("\xce\xb1\x83\x84z", 1)[2] == 3
+@test iterate("\xce\xb1\x83\x84z", 1)[2] == 3
 @test nextind("\xce\xb1\x83\x84z", 1) == 3
 
-@test next("\xe2", 1)[2] == 2
+@test iterate("\xe2", 1)[2] == 2
 @test nextind("\xe2", 1) == 2
-@test next("\xe2z", 1)[2] == 2
+@test iterate("\xe2z", 1)[2] == 2
 @test nextind("\xe2z", 1) == 2
-@test next("\xe2\x88", 1)[2] == 3
+@test iterate("\xe2\x88", 1)[2] == 3
 @test nextind("\xe2\x88", 1) == 3
-@test next("\xe2\x88z", 1)[2] == 3
+@test iterate("\xe2\x88z", 1)[2] == 3
 @test nextind("\xe2\x88z", 1) == 3
-@test next("\xe2\x88\x83", 1)[2] == 4
+@test iterate("\xe2\x88\x83", 1)[2] == 4
 @test nextind("\xe2\x88\x83", 1) == 4
-@test next("\xe2\x88\x83z", 1)[2] == 4
+@test iterate("\xe2\x88\x83z", 1)[2] == 4
 @test nextind("\xe2\x88\x83z", 1) == 4
-@test next("\xe2\x88\x83\x84", 1)[2] == 4
+@test iterate("\xe2\x88\x83\x84", 1)[2] == 4
 @test nextind("\xe2\x88\x83\x84", 1) == 4
-@test next("\xe2\x88\x83\x84z", 1)[2] == 4
+@test iterate("\xe2\x88\x83\x84z", 1)[2] == 4
 @test nextind("\xe2\x88\x83\x84z", 1) == 4
 
-@test next("\xf0", 1)[2] == 2
+@test iterate("\xf0", 1)[2] == 2
 @test nextind("\xf0", 1) == 2
-@test next("\xf0z", 1)[2] == 2
+@test iterate("\xf0z", 1)[2] == 2
 @test nextind("\xf0z", 1) == 2
-@test next("\xf0\x9f", 1)[2] == 3
+@test iterate("\xf0\x9f", 1)[2] == 3
 @test nextind("\xf0\x9f", 1) == 3
-@test next("\xf0\x9fz", 1)[2] == 3
+@test iterate("\xf0\x9fz", 1)[2] == 3
 @test nextind("\xf0\x9fz", 1) == 3
-@test next("\xf0\x9f\x98", 1)[2] == 4
+@test iterate("\xf0\x9f\x98", 1)[2] == 4
 @test nextind("\xf0\x9f\x98", 1) == 4
-@test next("\xf0\x9f\x98z", 1)[2] == 4
+@test iterate("\xf0\x9f\x98z", 1)[2] == 4
 @test nextind("\xf0\x9f\x98z", 1) == 4
-@test next("\xf0\x9f\x98\x84", 1)[2] == 5
+@test iterate("\xf0\x9f\x98\x84", 1)[2] == 5
 @test nextind("\xf0\x9f\x98\x84", 1) == 5
-@test next("\xf0\x9f\x98\x84z", 1)[2] == 5
+@test iterate("\xf0\x9f\x98\x84z", 1)[2] == 5
 @test nextind("\xf0\x9f\x98\x84z", 1) == 5
 
-@test next("\xf8", 1)[2] == 2
+@test iterate("\xf8", 1)[2] == 2
 @test nextind("\xf8", 1) == 2
-@test next("\xf8z", 1)[2] == 2
+@test iterate("\xf8z", 1)[2] == 2
 @test nextind("\xf8z", 1) == 2
-@test next("\xf8\x9f", 1)[2] == 2
+@test iterate("\xf8\x9f", 1)[2] == 2
 @test nextind("\xf8\x9f", 1) == 2
-@test next("\xf8\x9fz", 1)[2] == 2
+@test iterate("\xf8\x9fz", 1)[2] == 2
 @test nextind("\xf8\x9fz", 1) == 2
-@test next("\xf8\x9f\x98", 1)[2] == 2
+@test iterate("\xf8\x9f\x98", 1)[2] == 2
 @test nextind("\xf8\x9f\x98", 1) == 2
-@test next("\xf8\x9f\x98z", 1)[2] == 2
+@test iterate("\xf8\x9f\x98z", 1)[2] == 2
 @test nextind("\xf8\x9f\x98z", 1) == 2
-@test next("\xf8\x9f\x98\x84", 1)[2] == 2
+@test iterate("\xf8\x9f\x98\x84", 1)[2] == 2
 @test nextind("\xf8\x9f\x98\x84", 1) == 2
-@test next("\xf8\x9f\x98\x84z", 1)[2] == 2
+@test iterate("\xf8\x9f\x98\x84z", 1)[2] == 2
 @test nextind("\xf8\x9f\x98\x84z", 1) == 2
 
 # codeunit vectors
@@ -854,6 +942,10 @@ let v = unsafe_wrap(Vector{UInt8}, "abc")
     s = String(v)
     @test_throws BoundsError v[1]
     push!(v, UInt8('x'))
+    @test s == "abc"
+    s = "abc"
+    v = Vector{UInt8}(s)
+    v[1] = 0x40
     @test s == "abc"
 end
 

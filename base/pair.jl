@@ -12,7 +12,7 @@ struct Pair{A, B}
         return new(a, b)
     end
 end
-Pair(a::A, b::B) where {A, B} = Pair{A, B}(a, b)
+Pair(a, b) = Pair{typeof(a), typeof(b)}(a, b)
 const => = Pair
 
 """
@@ -21,7 +21,7 @@ const => = Pair
 
 Construct a `Pair` object with type `Pair{typeof(x), typeof(y)}`. The elements
 are stored in the fields `first` and `second`. They can also be accessed via
-iteration.
+iteration (but a `Pair` is treated as a single "scalar" for broadcasting operations).
 
 See also: [`Dict`](@ref)
 
@@ -45,12 +45,9 @@ foo
 """
 Pair, =>
 
-start(p::Pair) = 1
-done(p::Pair, i) = i>2
-next(p::Pair, i) = (getfield(p, i), i+1)
 eltype(p::Type{Pair{A, B}}) where {A, B} = Union{A, B}
-
-indexed_next(p::Pair, i::Int, state) = (getfield(p, i), i+1)
+iterate(p::Pair, i=1) = i > 2 ? nothing : (getfield(p, i), i + 1)
+indexed_iterate(p::Pair, i::Int, state=1) = (getfield(p, i), i + 1)
 
 hash(p::Pair, h::UInt) = hash(p.second, hash(p.first, h))
 

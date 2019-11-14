@@ -5,7 +5,7 @@ module TestBLAS
 using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasReal, BlasComplex
 
-srand(100)
+Random.seed!(100)
 ## BLAS tests - testing the interface code to BLAS routines
 @testset for elty in [Float32, Float64, ComplexF32, ComplexF64]
     @testset "syr2k!" begin
@@ -343,9 +343,6 @@ Base.getindex(A::WrappedArray{T, N}, I::Vararg{Int, N}) where {T, N} = A.A[I...]
 Base.setindex!(A::WrappedArray, v, i::Int) = setindex!(A.A, v, i)
 Base.setindex!(A::WrappedArray{T, N}, v, I::Vararg{Int, N}) where {T, N} = setindex!(A.A, v, I...)
 Base.unsafe_convert(::Type{Ptr{T}}, A::WrappedArray{T}) where T = Base.unsafe_convert(Ptr{T}, A.A)
-
-@test_deprecated strides(WrappedArray(rand(5)))
-@test_deprecated stride(WrappedArray(rand(5)), 1)
 
 Base.stride(A::WrappedArray, i::Int) = stride(A.A, i)
 

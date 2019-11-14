@@ -71,7 +71,7 @@ struct JoinPGRPMsg <: AbstractMsg
     lazy::Bool
 end
 struct JoinCompleteMsg <: AbstractMsg
-    cpu_cores::Int
+    cpu_threads::Int
     ospid::Int
 end
 
@@ -174,6 +174,9 @@ end
 
 function send_msg_(w::Worker, header, msg, now::Bool)
     check_worker_state(w)
+    if myid() != 1 && !isa(msg, IdentifySocketMsg) && !isa(msg, IdentifySocketAckMsg)
+        wait(w.initialized)
+    end
     io = w.w_stream
     lock(io.lock)
     try
@@ -201,7 +204,7 @@ function flush_gc_msgs()
         end
     catch e
         bt = catch_backtrace()
-        @schedule showerror(stderr, e, bt)
+        @async showerror(stderr, e, bt)
     end
 end
 

@@ -41,13 +41,13 @@ chnlprod(x) = Channel(c->for i in x; put!(c,i); end)
 
         @test_throws ArgumentError copyto!(dest, 1, src(), 1, -1)
 
-        @test_throws BoundsError copyto!(dest, bigsrc())
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, bigsrc())
 
-        @test_throws BoundsError copyto!(dest, 3, src())
-        @test_throws BoundsError copyto!(dest, 3, src(), 1)
-        @test_throws BoundsError copyto!(dest, 3, src(), 1, 2)
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 3, src())
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 3, src(), 1)
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 3, src(), 1, 2)
 
-        @test_throws BoundsError copyto!(dest, 1, src(), 2, 2)
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 1, src(), 2, 2)
     end
 end
 
@@ -83,6 +83,28 @@ end
     c = deepcopy(b)
     @test c[1] === c[2]
 end
+
+@testset "issue #31309" begin
+    rgx1 = match(deepcopy(r""), "")
+    @test rgx1.regex == r""
+    @test rgx1.offset == 1
+    @test rgx1.match == ""
+    @test isempty(rgx1.offsets)
+    @test isempty(rgx1.captures)
+end
+
+@testset "deepcopy for bits types" begin
+    struct Immutable; x::Int; end
+    mutable struct Mutable; x::Int; end
+
+    @test deepcopy(Immutable(2)) === Immutable(2)
+    @test deepcopy(Mutable(2))   !== Mutable(2)
+    @inferred deepcopy(Immutable(2))
+    @inferred deepcopy(Mutable(2))
+end
+
+# issue #30911
+@test deepcopy(Array{Int,N} where N) == Array{Int,N} where N
 
 # issue #14027
 struct Nullable14027{T}
@@ -163,4 +185,21 @@ end
             @test haskey(d, k)
         end
     end
+end
+
+# issue #17149
+mutable struct Bar17149
+end
+let x = Bar17149()
+    @test deepcopy(x) !== x
+end
+
+@testset "copying CodeInfo" begin
+    _testfunc() = nothing
+    ci,_ = code_typed(_testfunc, ())[1]
+    ci.edges = [_testfunc]
+
+    ci2 = copy(ci)
+    # Test that edges are not shared
+    @test ci2.edges !== ci.edges
 end

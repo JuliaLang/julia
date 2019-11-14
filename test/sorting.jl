@@ -1,7 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module SortingTests
+
 using Base.Order: Forward
 using Random
+using Test
 
 @test sort([2,3,1]) == [1,2,3]
 @test sort([2,3,1], rev=true) == [3,2,1]
@@ -23,13 +26,20 @@ end
 @test partialsortperm([3,6,30,1,9], 3:4) == [2,5]
 @test partialsortperm!(Vector(1:5), [3,6,30,1,9], 3:4) == [2,5]
 let a=[1:10;]
-    for r in Any[2:4, 1:2, 10:10, 4:2, 2:1, 4:-1:2, 2:-1:1, 10:-1:10, 4:1:3, 1:2:8, 10:-3:1]
+    for r in Any[2:4, 1:2, 10:10, 4:2, 2:1, 4:-1:2, 2:-1:1, 10:-1:10, 4:1:3, 1:2:8, 10:-3:1, UInt(2):UInt(5)]
         @test partialsort(a, r) == [r;]
         @test partialsortperm(a, r) == [r;]
         @test partialsort(a, r, rev=true) == (11 .- [r;])
         @test partialsortperm(a, r, rev=true) == (11 .- [r;])
     end
+    for i in (2, UInt(2), Int128(1), big(10))
+        @test partialsort(a, i) == i
+        @test partialsortperm(a, i) == i
+        @test partialsort(a, i, rev=true) == (11 - i)
+        @test partialsortperm(a, i, rev=true) == (11 - i)
+    end
 end
+@test_throws ArgumentError partialsortperm!([1,2], [2,3,1], 1:2)
 @test sum(randperm(6)) == 21
 
 @testset "searchsorted" begin
@@ -227,7 +237,7 @@ function randn_with_nans(n,p)
 end
 
 @testset "advanced sorting" begin
-    srand(0xdeadbeef)
+    Random.seed!(0xdeadbeef)
     for n in [0:10; 100; 101; 1000; 1001]
         local r
         r = -5:5
@@ -371,3 +381,56 @@ end
 end
 # https://discourse.julialang.org/t/sorting-big-int-with-v-0-6/1241
 @test sort([big(3), big(2)]) == [big(2), big(3)]
+
+@testset "issue #30763" begin
+    for T in [:Int8, :Int16, :Int32, :Int64, :Int128, :UInt8, :UInt16, :UInt32, :UInt64, :UInt128]
+        @eval begin
+            struct T_30763{T}
+                n::T
+            end
+
+            Base.zero(::T_30763{$T}) = T_30763{$T}(0)
+            Base.convert(::Type{T_30763{$T}}, n::Integer) = T_30763{$T}($T(n))
+            Base.isless(a::T_30763{$T}, b::T_30763{$T}) = isless(a.n, b.n)
+            Base.:(-)(a::T_30763{$T}, b::T_30763{$T}) = T_30763{$T}(a.n - b.n)
+            Base.:(+)(a::T_30763{$T}, b::T_30763{$T}) = T_30763{$T}(a.n + b.n)
+            Base.:(*)(n::Integer, a::T_30763{$T}) = T_30763{$T}(n * a.n)
+            Base.rem(a::T_30763{$T}, b::T_30763{$T}) = T_30763{$T}(rem(a.n, b.n))
+
+            # The important part of this test is that the return type of length might be different from Int
+            Base.length(r::StepRange{T_30763{$T},T_30763{$T}}) = $T((last(r).n - first(r).n) ÷ step(r).n)
+
+            @test searchsorted(T_30763{$T}(1):T_30763{$T}(3), T_30763{$T}(2)) == 2:2
+        end
+    end
+end
+
+@testset "sorting of views with strange axes" for T in (Int, UInt, Int128, UInt128, BigInt)
+    a = [8,6,7,5,3,0,9]
+    b = @view a[T(2):T(5)]
+    @test issorted(sort!(b))
+    @test b == [3,5,6,7]
+    @test a == [8,3,5,6,7,0,9]
+
+    a = [8,6,7,5,3,0,9]
+    b = @view a[T(2):T(5)]
+    c = sort(b)
+    @test issorted(c)
+    @test c == [3,5,6,7]
+    @test a == [8,6,7,5,3,0,9]
+
+    a = [8,6,7,NaN,5,3,0,9]
+    b = @view a[T(2):T(5)]
+    @test issorted(sort!(b))
+    @test isequal(b, [5,6,7,NaN])
+    @test isequal(a, [8,5,6,7,NaN,3,0,9])
+
+    a = [8,6,7,NaN,5,3,0,9]
+    b = @view a[T(2):T(5)]
+    c = sort(b)
+    @test issorted(c)
+    @test isequal(c, [5,6,7,NaN])
+    @test isequal(a, [8,6,7,NaN,5,3,0,9])
+end
+
+end
