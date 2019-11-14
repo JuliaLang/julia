@@ -164,6 +164,7 @@ add_tfunc(floor_llvm, 1, 1, math_tfunc, 10)
 add_tfunc(trunc_llvm, 1, 1, math_tfunc, 10)
 add_tfunc(rint_llvm, 1, 1, math_tfunc, 10)
 add_tfunc(sqrt_llvm, 1, 1, math_tfunc, 20)
+add_tfunc(sqrt_llvm_fast, 1, 1, math_tfunc, 20)
     ## same-type comparisons ##
 cmp_tfunc(@nospecialize(x), @nospecialize(y)) = Bool
 add_tfunc(eq_int, 2, 2, cmp_tfunc, 1)
