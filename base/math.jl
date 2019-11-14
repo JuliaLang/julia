@@ -986,6 +986,11 @@ This function computes a floating point representation of the modulus after divi
 numerically exact `2π`, and is therefore not exactly the same as `mod(x,2π)`, which would
 compute the modulus of `x` relative to division by the floating-point number `2π`.
 
+!!! note
+    Depending on how your machine represents floats, `2π` may be less than the numerically
+    exact value used in this calculation. So in certain applications `mod2pi(2π)` will not
+    return 0. See [`rem2pi`](@ref) for more refined control of this behavior.
+
 # Examples
 ```jldoctest
 julia> mod2pi(9*pi/4)
