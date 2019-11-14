@@ -69,7 +69,7 @@ end
 for elty in (Float32,Float64)
     @eval begin
         @inline function mul!(y::StridedVector{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, x::StridedVector{$elty},
-                              alpha::Number, beta::Number)
+                              alpha::Real, beta::Real)
             Afl = reinterpret($elty, A)
             yfl = reinterpret($elty, y)
             mul!(yfl, Afl, x, alpha, beta)
@@ -329,7 +329,7 @@ end
 for elty in (Float32,Float64)
     @eval begin
         @inline function mul!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, transB::Transpose{<:Any,<:StridedVecOrMat{$elty}},
-                         alpha::Number, beta::Number)
+                         alpha::Real, beta::Real)
             Afl = reinterpret($elty, A)
             Cfl = reinterpret($elty, C)
             mul!(Cfl, Afl, transB, alpha, beta)
