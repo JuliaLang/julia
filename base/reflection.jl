@@ -589,7 +589,9 @@ end
 Compute a type that contains the intersection of `T` and `S`. Usually this will be the
 smallest such type or one close to it.
 """
-typeintersect(@nospecialize(a),@nospecialize(b)) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any,Any), a, b))
+typeintersect(@nospecialize(a), @nospecialize(b)) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any, Any), a, b))
+
+morespecific(@nospecialize(a), @nospecialize(b)) = ccall(:jl_type_morespecific, Cint, (Any, Any), a, b) != 0
 
 """
     fieldoffset(type, i)
