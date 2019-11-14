@@ -862,6 +862,7 @@ end
         B = randn(typeB, 2, 2)
         @test A \ transform(B) ≈ cholesky(A) \ transform(B) ≈ Matrix(A) \ transform(B)
     end
+end
 
 @testset "Issue #33365" begin
     A = Sparse(spzeros(0, 0))
