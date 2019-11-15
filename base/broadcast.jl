@@ -1144,12 +1144,12 @@ Base.@propagate_inbounds dotview(args...) = Base.maybeview(args...)
 dottable(x) = false # avoid dotting spliced objects (e.g. view calls inserted by @view)
 # don't add dots to dot operators
 dottable(x::Symbol) = (!isoperator(x) || first(string(x)) != '.' || x === :..) && x !== :(:)
-dottable(x::Expr) = x.head != :$
+dottable(x::Expr) = x.head !== :$
 undot(x) = x
 function undot(x::Expr)
-    if x.head == :.=
+    if x.head === :.=
         Expr(:(=), x.args...)
-    elseif x.head == :block # occurs in for x=..., y=...
+    elseif x.head === :block # occurs in for x=..., y=...
         Expr(:block, map(undot, x.args)...)
     else
         x
@@ -1158,22 +1158,22 @@ end
 __dot__(x) = x
 function __dot__(x::Expr)
     dotargs = map(__dot__, x.args)
-    if x.head == :call && dottable(x.args[1])
+    if x.head === :call && dottable(x.args[1])
         Expr(:., dotargs[1], Expr(:tuple, dotargs[2:end]...))
-    elseif x.head == :comparison
+    elseif x.head === :comparison
         Expr(:comparison, (iseven(i) && dottable(arg) && arg isa Symbol && isoperator(arg) ?
                                Symbol('.', arg) : arg for (i, arg) in pairs(dotargs))...)
-    elseif x.head == :$
+    elseif x.head === :$
         x.args[1]
-    elseif x.head == :let # don't add dots to `let x=...` assignments
+    elseif x.head === :let # don't add dots to `let x=...` assignments
         Expr(:let, undot(dotargs[1]), dotargs[2])
-    elseif x.head == :for # don't add dots to for x=... assignments
+    elseif x.head === :for # don't add dots to for x=... assignments
         Expr(:for, undot(dotargs[1]), dotargs[2])
-    elseif (x.head == :(=) || x.head == :function || x.head == :macro) &&
+    elseif (x.head === :(=) || x.head === :function || x.head === :macro) &&
            Meta.isexpr(x.args[1], :call) # function or macro definition
         Expr(x.head, x.args[1], dotargs[2])
     else
-        if x.head == :&& || x.head == :||
+        if x.head === :&& || x.head === :||
             error("""
                 Using `&&` and `||` is disallowed in `@.` expressions.
                 Use `&` or `|` for elementwise logical operations.

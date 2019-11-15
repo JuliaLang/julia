@@ -141,7 +141,7 @@ julia> istaskdone(b)
 true
 ```
 """
-istaskdone(t::Task) = ((t.state == :done) | istaskfailed(t))
+istaskdone(t::Task) = ((t.state === :done) | istaskfailed(t))
 
 """
     istaskstarted(t::Task) -> Bool
@@ -182,7 +182,7 @@ julia> istaskfailed(b)
 true
 ```
 """
-istaskfailed(t::Task) = (t.state == :failed)
+istaskfailed(t::Task) = (t.state === :failed)
 
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
 
@@ -390,7 +390,7 @@ function task_done_hook(t::Task)
 
     if err && !handled && Threads.threadid() == 1
         if isa(result, InterruptException) && isdefined(Base, :active_repl_backend) &&
-            active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
+            active_repl_backend.backend_task.state === :runnable && isempty(Workqueue) &&
             active_repl_backend.in_eval
             throwto(active_repl_backend.backend_task, result) # this terminates the task
         end
@@ -405,7 +405,7 @@ function task_done_hook(t::Task)
         # issue #19467
         if Threads.threadid() == 1 &&
             isa(e, InterruptException) && isdefined(Base, :active_repl_backend) &&
-            active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
+            active_repl_backend.backend_task.state === :runnable && isempty(Workqueue) &&
             active_repl_backend.in_eval
             throwto(active_repl_backend.backend_task, e)
         else
@@ -482,7 +482,7 @@ function __preinit_threads__()
 end
 
 function enq_work(t::Task)
-    (t.state == :runnable && t.queue === nothing) || error("schedule: Task not runnable")
+    (t.state === :runnable && t.queue === nothing) || error("schedule: Task not runnable")
     tid = Threads.threadid(t)
     # Note there are three reasons a Task might be put into a sticky queue
     # even if t.sticky == false:
@@ -542,13 +542,13 @@ true
 """
 function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
-    t.state == :runnable || Base.error("schedule: Task not runnable")
+    t.state === :runnable || Base.error("schedule: Task not runnable")
     if error
         t.queue === nothing || Base.list_deletefirst!(t.queue, t)
-        t.exception = arg
+        setfield!(t, :exception, arg)
     else
         t.queue === nothing || Base.error("schedule: Task not runnable")
-        t.result = arg
+        setfield!(t, :result, arg)
     end
     enq_work(t)
     return t
@@ -624,7 +624,7 @@ end
 function ensure_rescheduled(othertask::Task)
     ct = current_task()
     W = Workqueues[Threads.threadid()]
-    if ct !== othertask && othertask.state == :runnable
+    if ct !== othertask && othertask.state === :runnable
         # we failed to yield to othertask
         # return it to the head of a queue to be retried later
         tid = Threads.threadid(othertask)
@@ -641,7 +641,7 @@ end
 function trypoptask(W::StickyWorkqueue)
     isempty(W) && return
     t = popfirst!(W)
-    if t.state != :runnable
+    if t.state !== :runnable
         # assume this somehow got queued twice,
         # probably broken now, but try discarding this switch and keep going
         # can't throw here, because it's probably not the fault of the caller to wait

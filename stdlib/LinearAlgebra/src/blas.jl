@@ -91,7 +91,7 @@ end
 const _vendor = determine_vendor()
 vendor() = _vendor
 
-if vendor() == :openblas64
+if vendor() === :openblas64
     macro blasfunc(x)
         return Expr(:quote, Symbol(x, "64_"))
     end
@@ -110,11 +110,11 @@ Set the number of threads the BLAS library should use.
 """
 function set_num_threads(n::Integer)
     blas = vendor()
-    if blas == :openblas
+    if blas === :openblas
         return ccall((:openblas_set_num_threads, libblas), Cvoid, (Int32,), n)
-    elseif blas == :openblas64
+    elseif blas === :openblas64
         return ccall((:openblas_set_num_threads64_, libblas), Cvoid, (Int32,), n)
-    elseif blas == :mkl
+    elseif blas === :mkl
         # MKL may let us set the number of threads in several ways
         return ccall((:MKL_Set_Num_Threads, libblas), Cvoid, (Cint,), n)
     end
@@ -130,7 +130,7 @@ end
 const _testmat = [1.0 0.0; 0.0 -1.0]
 function check()
     blas = vendor()
-    if blas == :openblas || blas == :openblas64
+    if blas === :openblas || blas === :openblas64
         openblas_config = openblas_get_config()
         openblas64 = occursin(r".*USE64BITINT.*", openblas_config)
         if Base.USE_BLAS64 != openblas64
@@ -148,7 +148,7 @@ function check()
             println("Quitting.")
             exit()
         end
-    elseif blas == :mkl
+    elseif blas === :mkl
         if Base.USE_BLAS64
             ENV["MKL_INTERFACE_LAYER"] = "ILP64"
         end

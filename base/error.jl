@@ -62,7 +62,7 @@ function _reformat_bt(bt, bt2)
     i, j = 1, 1
     while i <= length(bt)
         ip = bt[i]::Ptr{Cvoid}
-        if ip == Ptr{Cvoid}(-1%UInt)
+        if UInt(ip) == (-1 % UInt)
             # The next one is really a CodeInfo
             push!(ret, InterpreterIP(
                 bt2[j],

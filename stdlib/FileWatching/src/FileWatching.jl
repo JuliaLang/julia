@@ -620,7 +620,7 @@ function wait(m::FolderMonitor)
                 take!(m.notify)
             catch ex
                 unpreserve_handle(m)
-                if ex isa InvalidStateException && ex.state == :closed
+                if ex isa InvalidStateException && ex.state === :closed
                     rethrow(EOFError()) # `wait(::Channel)` throws the wrong exception
                 end
                 rethrow()

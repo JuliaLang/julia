@@ -337,6 +337,23 @@ function datatype_alignment(dt::DataType)
     return Int(alignment & 0x1FF)
 end
 
+# amount of total space taken by T when stored in a container
+function aligned_sizeof(T)
+    @_pure_meta
+    if isbitsunion(T)
+        sz = Ref{Csize_t}(0)
+        algn = Ref{Csize_t}(0)
+        ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), T, sz, algn)
+        al = algn[]
+        return (sz[] + al - 1) & -al
+    elseif allocatedinline(T)
+        al = datatype_alignment(T)
+        return (Core.sizeof(T) + al - 1) & -al
+    else
+        return Core.sizeof(Ptr{Cvoid})
+    end
+end
+
 gc_alignment(sz::Integer) = Int(ccall(:jl_alignment, Cint, (Csize_t,), sz))
 gc_alignment(T::Type) = gc_alignment(Core.sizeof(T))
 
@@ -775,10 +792,10 @@ Note that an error will be thrown if `types` are not leaf types when `generated`
 function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=true, debuginfo::Symbol=:default)
     if @isdefined(IRShow)
         debuginfo = IRShow.debuginfo(debuginfo)
-    elseif debuginfo == :default
+    elseif debuginfo === :default
         debuginfo = :source
     end
-    if debuginfo != :source && debuginfo != :none
+    if debuginfo !== :source && debuginfo !== :none
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     return map(method_instances(f, t)) do m
@@ -792,7 +809,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
             end
         end
         code = uncompressed_ast(m.def::Method)
-        debuginfo == :none && remove_linenums!(code)
+        debuginfo === :none && remove_linenums!(code)
         return code
     end
 end
@@ -1062,10 +1079,10 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
     end
     if @isdefined(IRShow)
         debuginfo = IRShow.debuginfo(debuginfo)
-    elseif debuginfo == :default
+    elseif debuginfo === :default
         debuginfo = :source
     end
-    if debuginfo != :source && debuginfo != :none
+    if debuginfo !== :source && debuginfo !== :none
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     types = to_tuple_type(types)
@@ -1074,7 +1091,7 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
         meth = func_for_method_checked(x[3], types, x[2])
         (code, ty) = Core.Compiler.typeinf_code(meth, x[1], x[2], optimize, params)
         code === nothing && error("inference not successful") # inference disabled?
-        debuginfo == :none && remove_linenums!(code)
+        debuginfo === :none && remove_linenums!(code)
         push!(asts, code => ty)
     end
     return asts

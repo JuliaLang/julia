@@ -615,7 +615,7 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
             end
 
             if lkup.from_c && skipC; continue; end
-            if i == 1 && lkup.func == :error; continue; end
+            if i == 1 && lkup.func === :error; continue; end
             count += 1
             if count > limit; break; end
 

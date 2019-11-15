@@ -107,11 +107,22 @@ function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     String(resize!(s.data, s.size))
 end
 
-tostr_sizehint(x) = 8
-tostr_sizehint(x::AbstractString) = lastindex(x)
-tostr_sizehint(x::Union{String,SubString{String}}) = sizeof(x)
-tostr_sizehint(x::Float64) = 20
-tostr_sizehint(x::Float32) = 12
+# CategoricalArrays extends this
+function tostr_sizehint end
+
+function _str_sizehint(x)
+    if x isa Float64
+        return 20
+    elseif x isa Float32
+        return 12
+    elseif x isa String || x isa SubString{String}
+        return sizeof(x)
+    elseif x isa Char
+        return ncodeunits(x)
+    else
+        return 8
+    end
+end
 
 function print_to_string(xs...)
     if isempty(xs)
@@ -119,7 +130,7 @@ function print_to_string(xs...)
     end
     siz::Int = 0
     for x in xs
-        siz += tostr_sizehint(x)
+        siz += _str_sizehint(x)
     end
     # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
@@ -135,7 +146,7 @@ function string_with_env(env, xs...)
     end
     siz::Int = 0
     for x in xs
-        siz += tostr_sizehint(x)
+        siz += _str_sizehint(x)
     end
     # specialized for performance reasons
     s = IOBuffer(sizehint=siz)

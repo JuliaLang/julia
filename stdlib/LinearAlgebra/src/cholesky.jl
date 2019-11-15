@@ -412,11 +412,11 @@ function getproperty(C::Cholesky, d::Symbol)
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
     info     = getfield(C, :info)
-    if d == :U
+    if d === :U
         return UpperTriangular(Cuplo === char_uplo(d) ? Cfactors : copy(Cfactors'))
-    elseif d == :L
+    elseif d === :L
         return LowerTriangular(Cuplo === char_uplo(d) ? Cfactors : copy(Cfactors'))
-    elseif d == :UL
+    elseif d === :UL
         return (Cuplo === 'U' ? UpperTriangular(Cfactors) : LowerTriangular(Cfactors))
     else
         return getfield(C, d)
@@ -428,13 +428,13 @@ Base.propertynames(F::Cholesky, private::Bool=false) =
 function getproperty(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
-    if d == :U
+    if d === :U
         return UpperTriangular(sym_uplo(Cuplo) == d ? Cfactors : copy(Cfactors'))
-    elseif d == :L
+    elseif d === :L
         return LowerTriangular(sym_uplo(Cuplo) == d ? Cfactors : copy(Cfactors'))
-    elseif d == :p
+    elseif d === :p
         return getfield(C, :piv)
-    elseif d == :P
+    elseif d === :P
         n = size(C, 1)
         P = zeros(T, n, n)
         for i = 1:n

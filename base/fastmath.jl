@@ -91,7 +91,7 @@ const rewrite_op =
 function make_fastmath(expr::Expr)
     if expr.head === :quote
         return expr
-    elseif expr.head == :call && expr.args[1] == :^ && expr.args[3] isa Integer
+    elseif expr.head === :call && expr.args[1] === :^ && expr.args[3] isa Integer
         # mimic Julia's literal_pow lowering of literal integer powers
         return Expr(:call, :(Base.FastMath.pow_fast), make_fastmath(expr.args[2]), Val{expr.args[3]}())
     end

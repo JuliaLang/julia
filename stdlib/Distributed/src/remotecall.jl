@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+abstract type AbstractRemoteRef end
+
 """
     client_refs
 
@@ -8,9 +10,7 @@ Tracks whether a particular `AbstractRemoteRef`
 
 The `client_refs` lock is also used to synchronize access to `.refs` and associated `clientset` state.
 """
-const client_refs = WeakKeyDict{Any, Nothing}() # used as a WeakKeySet
-
-abstract type AbstractRemoteRef end
+const client_refs = WeakKeyDict{AbstractRemoteRef, Nothing}() # used as a WeakKeySet
 
 """
     Future(w::Int, rrid::RRID, v::Union{Some, Nothing}=nothing)
