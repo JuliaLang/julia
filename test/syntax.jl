@@ -1994,3 +1994,73 @@ end
     end
     pop = 1
 end == 1
+
+# optional soft scope: #28789, #33864
+
+@test @eval begin
+    $(Expr(:softscope, true))
+    x28789 = 0   # new global included in same expression
+    for i = 1:2
+        x28789 += i
+    end
+    x28789
+end == 3
+
+y28789 = 1  # new global defined in separate top-level input
+@eval begin
+    $(Expr(:softscope, true))
+    for i = 1:10
+        y28789 += i
+    end
+end
+@test y28789 == 56
+
+@eval begin
+    $(Expr(:softscope, true))
+    for i = 10:10
+        z28789 = i
+    end
+    @test z28789 == 10
+    z28789 = 0  # new global assigned after loop but in same soft scope
+end
+
+@eval begin
+    $(Expr(:softscope, true))
+    let y28789 = 0  # shadowing with let
+        y28789 = 1
+    end
+end
+@test y28789 == 56
+
+@eval begin
+    $(Expr(:softscope, true))
+    let y28789 = 0
+        let x = 2
+            let y = 3
+                z28789 = 42  # assign to global despite several lets
+            end
+        end
+    end
+end
+@test z28789 == 42
+
+@eval begin
+    $(Expr(:softscope, true))
+    let x = 0
+        ww28789 = 88  # not global
+        let y = 3
+            ww28789 = 89
+        end
+        @test ww28789 == 89
+    end
+end
+@test !@isdefined(ww28789)
+
+@eval begin
+    $(Expr(:softscope, true))
+    function f28789()
+        z28789 = 43
+    end
+    f28789()
+end
+@test z28789 == 42
