@@ -503,15 +503,21 @@ end
 
 @testset "evalpoly real" begin
     for x in -1.0:2.0, p1 in -3.0:3.0, p2 in -3.0:3.0, p3 in -3.0:3.0
-        @test evalpoly(x, (p1, p2, p3)) == @evalpoly(x, p1, p2, p3)
+        evpm = @evalpoly(x, p1, p2, p3)
+        @test evalpoly(x, (p1, p2, p3)) == evpm
+        @test evalpoly(x, [p1, p2, p3]) == evpm
     end
 end
 
 @testset "evalpoly complex" begin
     for x in -1.0:2.0, y in -1.0:2.0, p1 in -3.0:3.0, p2 in -3.0:3.0, p3 in -3.0:3.0
-        @test evalpoly(x + y*im, (p1, p2, p3)) == @evalpoly(x + y*im, p1, p2, p3)
+        z = x + im * y
+        evpm = @evalpoly(z, p1, p2, p3)
+        @test evalpoly(z, (p1, p2, p3)) == evpm
+        @test evalpoly(z, [p1, p2, p3]) == evpm
     end
     @test evalpoly(1+im, (2,)) == 2
+    @test evalpoly(1+im, [2,]) == 2
 end
 
 @testset "cis" begin
