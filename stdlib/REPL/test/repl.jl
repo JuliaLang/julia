@@ -66,6 +66,24 @@ end
 
 # Writing ^C to the repl will cause sigint, so let's not die on that
 ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 0)
+
+# make sure `run_interface` can normally handle `eof`
+# without any special handling by the user
+fake_repl() do stdin_write, stdout_read, repl
+    panel = LineEdit.Prompt("test";
+        prompt_prefix = "",
+        prompt_suffix = Base.text_colors[:white],
+        on_enter = s -> true)
+    panel.on_done = (s, buf, ok) -> begin
+        @test !ok
+        @test bytesavailable(buf) == position(buf) == 0
+        nothing
+    end
+    repltask = @async REPL.run_interface(repl.t, LineEdit.ModalInterface(Any[panel]))
+    close(stdin_write)
+    Base.wait(repltask)
+end
+
 # These are integration tests. If you want to unit test test e.g. completion, or
 # exact LineEdit behavior, put them in the appropriate test files.
 # Furthermore since we are emulating an entire terminal, there may be control characters
@@ -708,16 +726,17 @@ fake_repl() do stdin_write, stdout_read, repl
         LineEdit.default_keymap, LineEdit.escape_defaults])
 
     c = Condition()
-    panel.on_done = (s,buf,ok)->begin
+    panel.on_done = (s, buf, ok) -> begin
         if !ok
-            LineEdit.transition(s,:abort)
+            LineEdit.transition(s, :abort)
         end
         line = strip(String(take!(buf)))
         LineEdit.reset_state(s)
-        return notify(c,line)
+        notify(c, line)
+        nothing
     end
 
-    repltask = @async REPL.run_interface(repl.t, LineEdit.ModalInterface([panel,search_prompt]))
+    repltask = @async REPL.run_interface(repl.t, LineEdit.ModalInterface(Any[panel, search_prompt]))
 
     write(stdin_write,"a\n")
     @test wait(c) == "a"

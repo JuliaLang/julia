@@ -1352,9 +1352,17 @@ struct KeyAlias
     KeyAlias(seq) = new(normalize_key(seq))
 end
 
-function match_input(k::Function, s, term, cs, keymap)
+function match_input(f::Function, s, term, cs, keymap)
     update_key_repeats(s, cs)
-    return keymap_fcn(k, String(cs))
+    c = String(cs)
+    return function (s, p)
+        r = Base.invokelatest(f, s, p, c)
+        if isa(r, Symbol)
+            return r
+        else
+            return :ok
+        end
+    end
 end
 
 match_input(k::Nothing, s, term, cs, keymap) = (s,p) -> return :ok
@@ -1364,27 +1372,15 @@ match_input(k::KeyAlias, s, term, cs, keymap) =
 function match_input(k::Dict, s, term=terminal(s), cs=Char[], keymap = k)
     # if we run out of characters to match before resolving an action,
     # return an empty keymap function
-    eof(term) && return keymap_fcn(nothing, "")
+    eof(term) && return (s, p) -> :abort
     c = read(term, Char)
     # Ignore any `wildcard` as this is used as a
     # placeholder for the wildcard (see normalize_key("*"))
-    c == wildcard && return keymap_fcn(nothing, "")
+    c == wildcard && return (s, p) -> :ok
     push!(cs, c)
     key = haskey(k, c) ? c : wildcard
     # if we don't match on the key, look for a default action then fallback on 'nothing' to ignore
     return match_input(get(k, key, nothing), s, term, cs, keymap)
-end
-
-keymap_fcn(f::Nothing, c) = (s, p) -> return :ok
-function keymap_fcn(f::Function, c)
-    return function (s, p)
-        r = Base.invokelatest(f, s, p, c)
-        if isa(r, Symbol)
-            return r
-        else
-            return :ok
-        end
-    end
 end
 
 update_key_repeats(s, keystroke) = nothing
@@ -2430,6 +2426,7 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
             end
             status !== :ignore && (s.last_action = s.current_action)
             if status === :abort
+                s.aborted = true
                 return buffer(s), false, false
             elseif status === :done
                 return buffer(s), true, false
