@@ -95,11 +95,10 @@ handle_message(::NullLogger, args...; kwargs...) =
 abstract type AbstractLogLevel ; end
 
 """
-    severity(log_level)
+    severity(level)
 
-Return an `Int` defining the default severity level of `log_level`, as it
-will be seen by the current logger. Logging backends may choose to upgrade or
-downgrade the severity separately from the log level itself.
+Return an `Int` defining the severity of a log `level` to be used as the
+primary log filtering mechanism.
 
 Severity of user defined log levels should be relative to the standard log
 levels which are defined to have `severity.([Debug, Info, Warn, Error]) ==
