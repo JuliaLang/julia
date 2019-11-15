@@ -6,12 +6,32 @@ using Test
 using SparseArrays
 using SparseArrays: getcolptr, nonzeroinds
 using LinearAlgebra
-using Base.Printf: @printf
+using Printf: @printf # for debug
 using Random
 using Test: guardseed
 using InteractiveUtils: @which
 using Dates
 include("forbidproperties.jl")
+include("simplesmatrix.jl")
+
+@testset "Issue #33169" begin
+    m21 = sparse([1, 2], [2, 2], SimpleSMatrix{2,1}.([rand(2, 1), rand(2, 1)]), 2, 2)
+    m12 = sparse([1, 2], [2, 2], SimpleSMatrix{1,2}.([rand(1, 2), rand(1, 2)]), 2, 2)
+    m22 = sparse([1, 2], [2, 2], SimpleSMatrix{2,2}.([rand(2, 2), rand(2, 2)]), 2, 2)
+    m23 = sparse([1, 2], [2, 2], SimpleSMatrix{2,3}.([rand(2, 3), rand(2, 3)]), 2, 2)
+    v12 = sparsevec([2], SimpleSMatrix{1,2}.([rand(1, 2)]))
+    v21 = sparsevec([2], SimpleSMatrix{2,1}.([rand(2, 1)]))
+    @test m22 * m21 ≈ Matrix(m22) * Matrix(m21)
+    @test m22' * m21 ≈ Matrix(m22') * Matrix(m21)
+    @test m21' * m22 ≈ Matrix(m21') * Matrix(m22)
+    @test m23' * m22 * m21 ≈ Matrix(m23') * Matrix(m22) * Matrix(m21)
+    @test m21 * v12 ≈ Matrix(m21) * Vector(v12)
+    @test m12' * v12 ≈ Matrix(m12') * Vector(v12)
+    @test v21' * m22 ≈ Vector(v21)' * Matrix(m22)
+    @test v12' * m21' ≈ Vector(v12)' * Matrix(m21)'
+    @test v21' * v21 ≈ Vector(v21)' * Vector(v21)
+    @test v21' * m22 * v21 ≈ Vector(v21)' * Matrix(m22) * Vector(v21)
+end
 
 @testset "issparse" begin
     @test issparse(sparse(fill(1,5,5)))
@@ -361,6 +381,29 @@ end
         c = sprandn(ComplexF32, n, n, q)
         @test Array(sA*c') ≈ Array(sA)*Array(c)'
         @test Array(c'*sA) ≈ Array(c)'*Array(sA)
+    end
+end
+
+@testset "multiplication of sparse matrix and triangular matrix" begin
+    _sparse_test_matrix(n, T) =  T == Int ? sparse(rand(0:4, n, n)) : sprandn(T, n, n, 0.6)
+    _triangular_test_matrix(n, TA, T) = T == Int ? TA(rand(0:9, n, n)) : TA(randn(T, n, n))
+
+    n = 5
+    for T1 in (Int, Float64, ComplexF32)
+        S = _sparse_test_matrix(n, T1)
+        MS = Matrix(S)
+        for T2 in (Int, Float64, ComplexF32)
+            for TM in (LowerTriangular, UnitLowerTriangular, UpperTriangular, UnitLowerTriangular)
+                T = _triangular_test_matrix(n, TM, T2)
+                MT = Matrix(T)
+                @test isa(T * S, DenseMatrix)
+                @test isa(S * T, DenseMatrix)
+                for transT in (identity, adjoint, transpose), transS in (identity, adjoint, transpose)
+                    @test transT(T) * transS(S) ≈ transT(MT) * transS(MS)
+                    @test transS(S) * transT(T) ≈ transS(MS) * transT(MT)
+                end
+            end
+        end
     end
 end
 
@@ -2733,7 +2776,7 @@ end
     @test sparse(UInt8.(1:254), fill(UInt8(1), 254), fill(1, 254), 255, 255) !== nothing
 end
 
-@testset "sppromote and sparse matmul" begin
+@testset "Sparse promotion in sparse matmul" begin
     A = SparseMatrixCSC{Float32, Int8}(2, 2, Int8[1, 2, 3], Int8[1, 2], Float32[1., 2.])
     B = SparseMatrixCSC{ComplexF32, Int32}(2, 2, Int32[1, 2, 3], Int32[1, 2], ComplexF32[1. + im, 2. - im])
     @test A*transpose(B)                  ≈ Array(A) * transpose(Array(B))

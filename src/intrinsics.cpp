@@ -70,6 +70,7 @@ static void jl_init_intrinsic_functions_codegen(Module *m)
     float_func[trunc_llvm] = true;
     float_func[rint_llvm] = true;
     float_func[sqrt_llvm] = true;
+    float_func[sqrt_llvm_fast] = true;
 }
 
 extern "C"
@@ -1263,6 +1264,10 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     case sqrt_llvm: {
         Value *sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, makeArrayRef(t));
         return ctx.builder.CreateCall(sqrtintr, x);
+    }
+    case sqrt_llvm_fast: {
+        Value *sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, makeArrayRef(t));
+        return math_builder(ctx, true)().CreateCall(sqrtintr, x);
     }
 
     default:

@@ -1,6 +1,6 @@
 @inline function writefixed(buf, pos, v::T,
-    plus=false, space=false, hash=false,
-    precision=-1, decchar=UInt8('.'), trimtrailingzeros=false) where {T <: Base.IEEEFloat}
+    precision=-1, plus=false, space=false, hash=false,
+    decchar=UInt8('.'), trimtrailingzeros=false) where {T <: Base.IEEEFloat}
     @assert 0 < pos <= length(buf)
     x = Float64(v)
     neg = signbit(x)

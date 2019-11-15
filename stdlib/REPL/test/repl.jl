@@ -107,45 +107,52 @@ fake_repl() do stdin_write, stdout_read, repl
     # Test cd feature in shell mode.
     origpwd = pwd()
     mktempdir() do tmpdir
-        # Test `cd`'ing to an absolute path
-        write(stdin_write, ";")
-        readuntil(stdout_read, "shell> ")
-        write(stdin_write, "cd $(escape_string(tmpdir))\n")
-        readuntil(stdout_read, "cd $(escape_string(tmpdir))")
-        readuntil(stdout_read, realpath(tmpdir))
-        readuntil(stdout_read, "\n")
-        readuntil(stdout_read, "\n")
-        @test pwd() == realpath(tmpdir)
+        try
+            samefile = Base.Filesystem.samefile
+            tmpdir_pwd = cd(pwd, tmpdir)
+            homedir_pwd = cd(pwd, homedir())
 
-        # Test using `cd` to move to the home directory
-        write(stdin_write, ";")
-        readuntil(stdout_read, "shell> ")
-        write(stdin_write, "cd\n")
-        readuntil(stdout_read, realpath(homedir()))
-        readuntil(stdout_read, "\n")
-        readuntil(stdout_read, "\n")
-        @test pwd() == realpath(homedir())
-
-        # Test using `-` to jump backward to tmpdir
-        write(stdin_write, ";")
-        readuntil(stdout_read, "shell> ")
-        write(stdin_write, "cd -\n")
-        readuntil(stdout_read, tmpdir)
-        readuntil(stdout_read, "\n")
-        readuntil(stdout_read, "\n")
-        @test pwd() == realpath(tmpdir)
-
-        # Test using `~` in `cd` commands
-        if !Sys.iswindows()
+            # Test `cd`'ing to an absolute path
             write(stdin_write, ";")
             readuntil(stdout_read, "shell> ")
-            write(stdin_write, "cd ~\n")
-            readuntil(stdout_read, realpath(homedir()))
+            write(stdin_write, "cd $(escape_string(tmpdir))\n")
+            readuntil(stdout_read, "cd $(escape_string(tmpdir))")
+            readuntil(stdout_read, tmpdir_pwd)
             readuntil(stdout_read, "\n")
             readuntil(stdout_read, "\n")
-            @test pwd() == realpath(homedir())
+            @test samefile(".", tmpdir)
+
+            # Test using `cd` to move to the home directory
+            write(stdin_write, ";")
+            readuntil(stdout_read, "shell> ")
+            write(stdin_write, "cd\n")
+            readuntil(stdout_read, homedir_pwd)
+            readuntil(stdout_read, "\n")
+            readuntil(stdout_read, "\n")
+            @test samefile(".", homedir_pwd)
+
+            # Test using `-` to jump backward to tmpdir
+            write(stdin_write, ";")
+            readuntil(stdout_read, "shell> ")
+            write(stdin_write, "cd -\n")
+            readuntil(stdout_read, tmpdir_pwd)
+            readuntil(stdout_read, "\n")
+            readuntil(stdout_read, "\n")
+            @test samefile(".", tmpdir)
+
+            # Test using `~` (Base.expanduser) in `cd` commands
+            if !Sys.iswindows()
+                write(stdin_write, ";")
+                readuntil(stdout_read, "shell> ")
+                write(stdin_write, "cd ~\n")
+                readuntil(stdout_read, homedir_pwd)
+                readuntil(stdout_read, "\n")
+                readuntil(stdout_read, "\n")
+                @test samefile(".", homedir_pwd)
+            end
+        finally
+            cd(origpwd)
         end
-        cd(origpwd)
     end
 
     # issue #20482

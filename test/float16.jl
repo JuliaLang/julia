@@ -129,7 +129,7 @@ end
     @test prevfloat(-Inf16) === -Inf16
 end
 
-@test repr(Float16(44099)) == "Float16(44100.0)"
+@test repr(Float16(44099)) == "Float16(4.41e4)"
 
 @testset "signed zeros" begin
     for z1 in (Float16(0.0), Float16(-0.0)), z2 in (Float16(0.0), Float16(-0.0))
@@ -159,7 +159,7 @@ end
 end
 
 # issue #5948
-@test string(reinterpret(Float16, 0x7bff)) == "65500.0"
+@test string(reinterpret(Float16, 0x7bff)) == "6.55e4"
 
 #  #9939 (and #9897)
 @test rationalize(Float16(0.1)) == 1//10

@@ -444,14 +444,54 @@ end
 @test Matrix(1.0I, 5, 5) \ Diagonal(fill(1.,5)) == Matrix(I, 5, 5)
 
 @testset "Triangular and Diagonal" begin
-    for T in (LowerTriangular(randn(5,5)), LinearAlgebra.UnitLowerTriangular(randn(5,5)))
-        D = Diagonal(randn(5))
-        @test T*D   == Array(T)*Array(D)
-        @test T'D   == Array(T)'*Array(D)
-        @test transpose(T)*D  == transpose(Array(T))*Array(D)
-        @test D*T'  == Array(D)*Array(T)'
-        @test D*transpose(T) == Array(D)*transpose(Array(T))
-        @test D*T   == Array(D)*Array(T)
+    function _test_matrix(type)
+        if type == Int
+            return rand(1:9, 5, 5)
+        else
+            return randn(type, 5, 5)
+        end
+    end
+    types = (Float64, Int, ComplexF64)
+    for ta in types
+        D = Diagonal(_test_matrix(ta))
+        for tb in types
+            B = _test_matrix(tb)
+            Tmats = (LowerTriangular(B), UnitLowerTriangular(B), UpperTriangular(B), UnitUpperTriangular(B))
+            restypes = (LowerTriangular, LowerTriangular, UpperTriangular, UpperTriangular)
+            for (T, rtype) in zip(Tmats, restypes)
+                adjtype = (rtype == LowerTriangular) ? UpperTriangular : LowerTriangular
+
+                # Triangular * Diagonal
+                R = T * D
+                @test R == Array(T) * Array(D)
+                @test isa(R, rtype)
+
+                # Diagonal * Triangular
+                R = D * T
+                @test R == Array(D) * Array(T)
+                @test isa(R, rtype)
+
+                # Adjoint of Triangular * Diagonal
+                R = T' * D
+                @test R == Array(T)' * Array(D)
+                @test isa(R, adjtype)
+
+                # Diagonal * Adjoint of Triangular
+                R = D * T'
+                @test R == Array(D) * Array(T)'
+                @test isa(R, adjtype)
+
+                # Transpose of Triangular * Diagonal
+                R = transpose(T) * D
+                @test R == transpose(Array(T)) * Array(D)
+                @test isa(R, adjtype)
+
+                # Diagonal * Transpose of Triangular
+                R = D * transpose(T)
+                @test R == Array(D) * transpose(Array(T))
+                @test isa(R, adjtype)
+            end
+        end
     end
 end
 

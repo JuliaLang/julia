@@ -14,16 +14,16 @@ extern "C" {
 // Marking callbacks for global roots and tasks, respectively. These,
 // along with custom mark functions must not alter the GC state except
 // through calling jl_gc_mark_queue_obj() and jl_gc_mark_queue_objarray().
-typedef void (*jl_gc_cb_root_scanner_t)(int full);
-typedef void (*jl_gc_cb_task_scanner_t)(jl_task_t *task, int full);
+typedef void (*jl_gc_cb_root_scanner_t)(int full) JL_NOTSAFEPOINT;
+typedef void (*jl_gc_cb_task_scanner_t)(jl_task_t *task, int full) JL_NOTSAFEPOINT;
 
 // Callbacks that are invoked before and after a collection.
-typedef void (*jl_gc_cb_pre_gc_t)(int full);
-typedef void (*jl_gc_cb_post_gc_t)(int full);
+typedef void (*jl_gc_cb_pre_gc_t)(int full) JL_NOTSAFEPOINT;
+typedef void (*jl_gc_cb_post_gc_t)(int full) JL_NOTSAFEPOINT;
 
 // Callbacks to track external object allocations.
-typedef void (*jl_gc_cb_notify_external_alloc_t)(void *addr, size_t size);
-typedef void (*jl_gc_cb_notify_external_free_t)(void *addr);
+typedef void (*jl_gc_cb_notify_external_alloc_t)(void *addr, size_t size) JL_NOTSAFEPOINT;
+typedef void (*jl_gc_cb_notify_external_free_t)(void *addr) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_gc_set_cb_root_scanner(jl_gc_cb_root_scanner_t cb, int enable);
 JL_DLLEXPORT void jl_gc_set_cb_task_scanner(jl_gc_cb_task_scanner_t cb, int enable);

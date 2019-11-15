@@ -349,6 +349,57 @@ For other purposes, `:( ... )` and `quote .. end` blocks are treated identically
 kw"quote"
 
 """
+    {}
+
+Curly braces are used to specify [type parameters](@ref man-parametric-types).
+
+Type parameters allow a single type declaration to introduce a whole family of
+new types — one for each possible combination of parameter values. For example,
+the [`Set`](@ref) type describes many possible types of sets; it uses one type
+parameter to describe the type of the elements it contains. The specific _parameterized_
+types `Set{Float64}` and `Set{Int64}` describe two _concrete_ types: both are
+subtypes ([`<:`](@ref)) of `Set`, but the former has `Float64` elements and the latter
+has `Int64` elements.
+"""
+kw"{", kw"{}", kw"}"
+
+"""
+    []
+
+Square braces are used for [indexing](@ref man-array-indexing), [indexed assignment](@ref man-indexed-assignment),
+[array literals](@ref man-array-literals), and [array comprehensions](@ref man-comprehensions).
+"""
+kw"[", kw"[]", kw"]"
+
+"""
+    ()
+
+Parentheses are used to group expressions, call functions, and construct [tuples](@ref Tuple) and [named tuples](@ref NamedTuple).
+"""
+kw"(", kw"()", kw")"
+
+"""
+    #
+
+The number sign (or hash) character is used to begin a single-line comment.
+"""
+kw"#"
+
+"""
+    #= =#
+
+A multi-line comment begins with `#=` and ends with `=#`, and may be nested.
+"""
+kw"#=", kw"=#"
+
+"""
+    ;
+
+Semicolons are used as statement separators and mark the beginning of keyword arguments in function declarations or calls.
+"""
+kw";"
+
+"""
     Expr(head::Symbol, args...)
 
 A type representing compound expressions in parsed julia code (ASTs).
@@ -894,7 +945,8 @@ kw"mutable struct"
 
 Special function available to inner constructors which created a new object
 of the type.
-See the manual section on [Inner Constructor Methods](@ref) for more information.
+See the manual section on [Inner Constructor Methods](@ref man-inner-constructor-methods)
+for more information.
 """
 kw"new"
 
@@ -1544,9 +1596,10 @@ tuple
 
 """
     getfield(value, name::Symbol)
+    getfield(value, i::Int)
 
-Extract a named field from a `value` of composite type.
-See also [`getproperty`](@ref Base.getproperty).
+Extract a field from a composite `value` by name or position.
+See also [`getproperty`](@ref Base.getproperty) and [`fieldnames`](@ref).
 
 # Examples
 ```jldoctest
@@ -1557,6 +1610,9 @@ julia> getfield(a, :num)
 1
 
 julia> a.num
+1
+
+julia> getfield(a, 1)
 1
 ```
 """
@@ -2127,6 +2183,29 @@ field names; fields are only accessed by index.
 See the manual section on [Tuple Types](@ref).
 """
 Tuple
+
+"""
+    NamedTuple{names}(args::Tuple)
+
+Construct a named tuple with the given `names` (a tuple of Symbols) from a tuple of values.
+"""
+NamedTuple{names}(args::Tuple)
+
+"""
+    NamedTuple{names,T}(args::Tuple)
+
+Construct a named tuple with the given `names` (a tuple of Symbols) and field types `T`
+(a `Tuple` type) from a tuple of values.
+"""
+NamedTuple{names,T}(args::Tuple)
+
+"""
+    NamedTuple{names}(nt::NamedTuple)
+
+Construct a named tuple by selecting fields in `names` (a tuple of Symbols) from
+another named tuple.
+"""
+NamedTuple{names}(nt::NamedTuple)
 
 """
     typeassert(x, type)

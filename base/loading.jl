@@ -265,7 +265,7 @@ end
 """
     pathof(m::Module)
 
-Return the path of `m.jl` file that was used to `import` module `m`,
+Return the path of the `m.jl` file that was used to `import` module `m`,
 or `nothing` if `m` was not imported from a package.
 
 Use [`dirname`](@ref) to get the directory part and [`basename`](@ref)
@@ -275,6 +275,19 @@ function pathof(m::Module)
     pkgid = get(Base.module_keys, m, nothing)
     pkgid === nothing && return nothing
     return Base.locate_package(pkgid)
+end
+
+"""
+    pkgdir(m::Module)
+
+ Return the root directory of the package that imported module `m`,
+ or `nothing` if `m` was not imported from a package.
+ """
+function pkgdir(m::Module)
+    rootmodule = Base.moduleroot(m)
+    path = pathof(rootmodule)
+    path === nothing && return nothing
+    return dirname(dirname(path))
 end
 
 ## generic project & manifest API ##
@@ -466,21 +479,6 @@ function entry_path(path::String, name::String)::Union{Nothing,String}
     return nothing # source not found
 end
 
-# given a project path (project directory or entry point)
-# return the project file
-function package_path_to_project_file(path::String)::Union{Nothing,String}
-    if !isdir(path)
-        dir = dirname(path)
-        basename(dir) == "src" || return nothing
-        path = dirname(dir)
-    end
-    for proj in project_names
-        project_file = joinpath(path, proj)
-        isfile_casesensitive(project_file) && return project_file
-    end
-    return nothing
-end
-
 ## explicit project & manifest API ##
 
 # find project file root or deps `name => uuid` mapping
@@ -492,15 +490,15 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{No
         state = :top
         for line in eachline(io)
             if occursin(re_section, line)
-                state == :top && root_name == name && return root_uuid
+                state === :top && root_name == name && return root_uuid
                 state = occursin(re_section_deps, line) ? :deps : :other
-            elseif state == :top
+            elseif state === :top
                 if (m = match(re_name_to_string, line)) !== nothing
                     root_name = String(m.captures[1])
                 elseif (m = match(re_uuid_to_string, line)) !== nothing
                     root_uuid = UUID(m.captures[1])
                 end
-            elseif state == :deps
+            elseif state === :deps
                 if (m = match(re_key_to_string, line)) !== nothing
                     m.captures[1] == name && return UUID(m.captures[2])
                 end
@@ -525,7 +523,7 @@ function explicit_manifest_deps_get(project_file::String, where::UUID, name::Str
                 uuid == where && break
                 uuid = deps = nothing
                 state = :stanza
-            elseif state == :stanza
+            elseif state === :stanza
                 if (m = match(re_uuid_to_string, line)) !== nothing
                     uuid = UUID(m.captures[1])
                 elseif (m = match(re_deps_to_any, line)) !== nothing
@@ -535,7 +533,7 @@ function explicit_manifest_deps_get(project_file::String, where::UUID, name::Str
                 elseif occursin(re_section, line)
                     state = :other
                 end
-            elseif state == :deps && uuid == where
+            elseif state === :deps && uuid == where
                 # [deps] section format gives both name and uuid
                 if (m = match(re_key_to_string, line)) !== nothing
                     m.captures[1] == name && return UUID(m.captures[2])
@@ -1206,7 +1204,10 @@ function compilecache_path(pkg::PkgId)::String
     if pkg.uuid === nothing
         abspath(cachepath, entryfile) * ".ji"
     else
-        project_precompile_slug = slug(_crc32c(something(Base.active_project(), "")), 5)
+        crc = _crc32c(something(Base.active_project(), ""))
+        crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
+        crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
+        project_precompile_slug = slug(crc, 5)
         abspath(cachepath, string(entryfile, "_", project_precompile_slug, ".ji"))
     end
 end

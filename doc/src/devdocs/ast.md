@@ -384,7 +384,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `abstract_type`
 
     A 3-argument expression that defines a new abstract type. The
-    arguments are the same as the first three arguments of
+    arguments are the same as arguments 1, 2, and 4 of
     `struct_type` expressions.
 
   * `primitive_type`
@@ -503,7 +503,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
         See [Working with LLVM](@ref Working-with-LLVM) for where these are derived from and how they get handled.
 
 
-### Method
+### [Method](@id ast-lowered-method)
 
 A unique'd container describing the shared metadata for a single method.
 

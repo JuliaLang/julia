@@ -88,12 +88,12 @@ function _dump_function_linfo(linfo::Core.MethodInstance, world::UInt, native::B
                               strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol,
                               optimize::Bool, debuginfo::Symbol=:default,
                               params::CodegenParams=CodegenParams())
-    if syntax != :att && syntax != :intel
+    if syntax !== :att && syntax !== :intel
         throw(ArgumentError("'syntax' must be either :intel or :att"))
     end
-    if debuginfo == :default
+    if debuginfo === :default
         debuginfo = :source
-    elseif debuginfo != :source && debuginfo != :none
+    elseif debuginfo !== :source && debuginfo !== :none
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     if native

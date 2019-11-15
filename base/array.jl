@@ -212,7 +212,7 @@ function bitsunionsize(u::Union)
 end
 
 length(a::Array) = arraylen(a)
-elsize(::Type{<:Array{T}}) where {T} = isbitsunion(T) ? bitsunionsize(T) : (allocatedinline(T) ? sizeof(T) : sizeof(Ptr))
+elsize(::Type{<:Array{T}}) where {T} = aligned_sizeof(T)
 sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
@@ -238,7 +238,7 @@ function unsafe_copyto!(dest::Ptr{T}, src::Ptr{T}, n) where T
     # Do not use this to copy data between pointer arrays.
     # It can't be made safe no matter how carefully you checked.
     ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
-          dest, src, n*sizeof(T))
+          dest, src, n * aligned_sizeof(T))
     return dest
 end
 
@@ -257,7 +257,7 @@ function unsafe_copyto!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     t2 = @_gc_preserve_begin src
     if isbitsunion(T)
         ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
-              pointer(dest, doffs), pointer(src, soffs), n * Base.bitsunionsize(T))
+              pointer(dest, doffs), pointer(src, soffs), n * aligned_sizeof(T))
         # copy selector bytes
         ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
               ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), dest) + doffs - 1,
@@ -1076,13 +1076,16 @@ julia> A
  2
 
 julia> S = Set([1, 2])
-Set([2, 1])
+Set{Int64} with 2 elements:
+  2
+  1
 
 julia> pop!(S)
 2
 
 julia> S
-Set([1])
+Set{Int64} with 1 element:
+  1
 
 julia> pop!(Dict(1=>2))
 1 => 2
@@ -1554,7 +1557,7 @@ function hcat(V::Vector{T}...) where T
             throw(DimensionMismatch("vectors must have same lengths"))
         end
     end
-    return [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
+    return T[ V[j][i] for i=1:length(V[1]), j=1:length(V) ]
 end
 
 function vcat(arrays::Vector{T}...) where T
@@ -1565,13 +1568,9 @@ function vcat(arrays::Vector{T}...) where T
     arr = Vector{T}(undef, n)
     ptr = pointer(arr)
     if isbitsunion(T)
-        elsz = bitsunionsize(T)
         selptr = ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), arr)
-    elseif allocatedinline(T)
-        elsz = Core.sizeof(T)
-    else
-        elsz = Core.sizeof(Ptr{Cvoid})
     end
+    elsz = aligned_sizeof(T)
     t = @_gc_preserve_begin arr
     for a in arrays
         na = length(a)
@@ -1774,7 +1773,8 @@ findfirst(testf::Function, A::Union{AbstractArray, AbstractString}) =
     findnext(testf, A, first(keys(A)))
 
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
-    first(r) <= p.x <= last(r) || return nothing
+    isempty(r) && return nothing
+    minimum(r) <= p.x <= maximum(r) || return nothing
     d = convert(S, p.x - first(r))
     iszero(d % step(r)) || return nothing
     return d ÷ step(r) + 1

@@ -27,26 +27,30 @@ end
 # parallel loop with parallel atomic addition
 function threaded_loop(a, r, x)
     @threads for i in r
-        a[i] = 1 + atomic_add!(x, 1)
+        j = i - firstindex(r) + 1
+        a[j] = 1 + atomic_add!(x, 1)
     end
 end
 
 function test_threaded_loop_and_atomic_add()
-    x = Atomic()
-    a = zeros(Int,10000)
-    threaded_loop(a,1:10000,x)
-    found = zeros(Bool,10000)
-    was_inorder = true
-    for i=1:length(a)
-        was_inorder &= a[i]==i
-        found[a[i]] = true
-    end
-    @test x[] == 10000
-    # Next test checks that all loop iterations ran,
-    # and were unique (via pigeon-hole principle).
-    @test !(false in found)
-    if was_inorder && nthreads() > 1
-        println(stderr, "Warning: threaded loop executed in order")
+    for r in [1:10000, collect(1:10000), Base.IdentityUnitRange(-500:500), (1,2,3,4,5,6,7,8,9,10)]
+        n = length(r)
+        x = Atomic()
+        a = zeros(Int, n)
+        threaded_loop(a,r,x)
+        found = zeros(Bool,n)
+        was_inorder = true
+        for i=1:length(a)
+            was_inorder &= a[i]==i
+            found[a[i]] = true
+        end
+        @test x[] == n
+        # Next test checks that all loop iterations ran,
+        # and were unique (via pigeon-hole principle).
+        @test !(false in found)
+        if was_inorder && nthreads() > 1
+            println(stderr, "Warning: threaded loop executed in order")
+        end
     end
 end
 

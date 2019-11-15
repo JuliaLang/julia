@@ -241,6 +241,7 @@ value_t fl_julia_strip_op_suffix(fl_context_t *fl_ctx, value_t *args, uint32_t n
     if (!op[i]) return args[0]; // no suffix to strip
     if (!i) return args[0]; // only suffix chars --- might still be a valid identifier
     char *opnew = strncpy((char*)malloc(i+1), op, i);
+    // TODO: if argument to opnew == NULL
     opnew[i] = 0;
     value_t opnew_symbol = symbol(fl_ctx, opnew);
     free(opnew);

@@ -63,14 +63,8 @@ Core.NamedTuple
 
 if nameof(@__MODULE__) === :Base
 
-"""
-    NamedTuple{names,T}(args::Tuple)
-
-Construct a named tuple with the given `names` (a tuple of Symbols) and field types `T`
-(a `Tuple` type) from a tuple of values.
-"""
 @eval function NamedTuple{names,T}(args::Tuple) where {names, T <: Tuple}
-    if length(args) != length(names)
+    if length(args) != length(names::Tuple)
         throw(ArgumentError("Wrong number of arguments to named tuple constructor."))
     end
     # Note T(args) might not return something of type T; e.g.
@@ -78,12 +72,6 @@ Construct a named tuple with the given `names` (a tuple of Symbols) and field ty
     $(Expr(:splatnew, :(NamedTuple{names,T}), :(T(args))))
 end
 
-"""
-    NamedTuple{names}(nt::NamedTuple)
-
-Construct a named tuple by selecting fields in `names` (a tuple of Symbols) from
-another named tuple.
-"""
 function NamedTuple{names}(nt::NamedTuple) where {names}
     if @generated
         types = Tuple{(fieldtype(nt, n) for n in names)...}
@@ -263,8 +251,8 @@ julia> merge((a=1, b=2, c=3), [:b=>4, :d=>5])
 function merge(a::NamedTuple, itr)
     names = Symbol[]
     vals = Any[]
-    inds = IdDict()
-    for (k,v) in itr
+    inds = IdDict{Symbol,Int}()
+    for (k::Symbol, v) in itr
         oldind = get(inds, k, 0)
         if oldind > 0
             vals[oldind] = v
@@ -311,4 +299,28 @@ function structdiff(a::NamedTuple{an}, b::Union{NamedTuple{bn}, Type{NamedTuple{
         types = Tuple{Any[ fieldtype(typeof(a), n) for n in names ]...}
         NamedTuple{names,types}(map(n->getfield(a, n), names))
     end
+end
+
+"""
+    setindex(nt::NamedTuple, val, key::Symbol)
+
+Constructs a new `NamedTuple` with the key `key` set to `val`.
+If `key` is already in the keys of `nt`, `val` replaces the old value.
+
+```jldoctest
+julia> nt = (a = 3,)
+(a = 3,)
+
+julia> Base.setindex(nt, 33, :b)
+(a = 3, b = 33)
+
+julia> Base.setindex(nt, 4, :a)
+(a = 4,)
+
+julia> Base.setindex(nt, "a", :a)
+(a = "a",)
+```
+"""
+function setindex(nt::NamedTuple, v, idx::Symbol)
+    merge(nt, (; idx => v))
 end

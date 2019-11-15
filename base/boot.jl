@@ -210,6 +210,7 @@ else
     const UInt = UInt32
 end
 
+function iterate end
 function Typeof end
 ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       Core, quote
@@ -541,11 +542,6 @@ end
 
 NamedTuple() = NamedTuple{(),Tuple{}}(())
 
-"""
-    NamedTuple{names}(args::Tuple)
-
-Construct a named tuple with the given `names` (a tuple of Symbols) from a tuple of values.
-"""
 NamedTuple{names}(args::Tuple) where {names} = NamedTuple{names,typeof(args)}(args)
 
 using .Intrinsics: sle_int, add_int

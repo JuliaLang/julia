@@ -1,9 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-if !isempty(ARGS)
-    ARGS[1] == "0" && exit(0)
-end
-
+if isempty(ARGS) || ARGS[1] !== "0"
 # Prevent this from being put into the Main namespace
 @eval Module() begin
 if !isdefined(Base, :uv_eventloop)
@@ -38,6 +35,19 @@ julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
 
 have_repl =  haskey(Base.loaded_modules,
                     Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
+
+Distributed = get(Base.loaded_modules,
+          Base.PkgId(Base.UUID("8ba89e20-285c-5b6f-9357-94700520ee1b"), "Distributed"),
+          nothing)
+if Distributed !== nothing
+    precompile_script *= """
+    using Distributed
+    addprocs(2)
+    pmap(x->iseven(x) ? 1 : 0, 1:4)
+    @distributed (+) for i = 1:100 Int(rand(Bool)) end
+    """
+end
+
 Pkg = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"),
           nothing)
@@ -134,7 +144,7 @@ function generate_precompile_statements()
         close(pty_master)
         write(debug_output, "\n#### FINISHED ####\n")
 
-        # Extract the precompile statements from stderr
+        # Extract the precompile statements from the precompile file
         statements = Set{String}()
         for statement in eachline(precompile_file_h)
             # Main should be completely clean
@@ -180,3 +190,4 @@ end
 generate_precompile_statements()
 
 end # @eval
+end

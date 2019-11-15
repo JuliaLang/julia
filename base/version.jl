@@ -237,7 +237,13 @@ catch e
     VersionNumber(0)
 end
 
-const libllvm_version = VersionNumber(libllvm_version_string)
+const libllvm_version = if endswith(libllvm_version_string, "jl")
+    # strip the "jl" SONAME suffix (JuliaLang/julia#33058)
+    # (LLVM does never report a prerelease version anyway)
+    VersionNumber(libllvm_version_string[1:end-2])
+else
+    VersionNumber(libllvm_version_string)
+end
 
 function banner(io::IO = stdout)
     if GIT_VERSION_INFO.tagged_commit
