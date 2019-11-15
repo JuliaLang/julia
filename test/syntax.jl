@@ -1845,8 +1845,7 @@ end
 @testset "closure conversion in testsets" begin
     p = (2, 3, 4)
     @test p == (2, 3, 4)
-    identity(p)
-    allocs = @allocated identity(p)
+    allocs = (() -> @allocated identity(p))()
     @test allocs == 0
 end
 
