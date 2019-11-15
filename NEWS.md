@@ -30,6 +30,7 @@ Multi-threading changes
 Build system changes
 --------------------
 
+* The constant `Base.LIBEXECDIR` has been added, which points to the libexec folder. This is to be used to generate a path to locate the  7z executable, e.g. `joinpath(Sys.BINDIR, Base.LIBEXECDIR)` ([#33687])
 
 New library functions
 ---------------------
@@ -172,3 +173,4 @@ Tooling Improvements
 [#32851]: https://github.com/JuliaLang/julia/issues/32851
 [#32872]: https://github.com/JuliaLang/julia/issues/32872
 [#32875]: https://github.com/JuliaLang/julia/issues/32875
+[#33687]: https://github.com/JuliaLang/julia/issues/33687
