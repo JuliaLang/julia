@@ -12,6 +12,13 @@ Language changes
   where it used to be incorrectly allowed. This is because `NTuple` refers only to homogeneous
   tuples (this meaning has not changed) ([#34272]).
 
+* The interactive REPL now uses "soft scope" for top-level expressions: an assignment inside a
+  scope block such as a `for` loop automatically assigns to a global variable if one has been
+  defined already. This matches the behavior of Julia versions 0.6 and prior, as well as
+  [IJulia](https://github.com/JuliaLang/IJulia.jl).
+  Note that this only affects expressions interactively typed or pasted directly into the
+  default REPL.
+
 Multi-threading changes
 -----------------------
 

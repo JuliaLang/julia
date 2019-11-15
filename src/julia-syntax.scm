@@ -2447,12 +2447,20 @@
 (define (find-local-def-decls e) (find-decls 'local-def e))
 (define (find-global-decls e) (find-decls 'global e))
 
+(define (find-softscope e)
+  (expr-contains-p
+   (lambda (x) (and (pair? x) (eq? (car x) 'softscope) x))
+   e
+   (lambda (x) (not (and (pair? x)
+                         (memq (car x) '(lambda scope-block module toplevel)))))))
+
 (define (check-valid-name e)
   (or (valid-name? e)
       (error (string "invalid identifier name \"" e "\""))))
 
-(define (make-scope (lam #f) (args '()) (locals '()) (globals '()) (sp '()) (renames '()) (prev #f))
-  (vector lam args locals globals sp renames prev))
+(define (make-scope (lam #f) (args '()) (locals '()) (globals '()) (sp '()) (renames '()) (prev #f) (soft? #f)
+                    (implicit-globals '()) (warn-vars #f))
+  (vector lam args locals globals sp renames prev soft? implicit-globals warn-vars))
 (define (scope:lam s)     (aref s 0))
 (define (scope:args s)    (aref s 1))
 (define (scope:locals s)  (aref s 2))
@@ -2460,6 +2468,9 @@
 (define (scope:sp s)      (aref s 4))
 (define (scope:renames s) (aref s 5))
 (define (scope:prev s)    (aref s 6))
+(define (scope:soft? s)   (aref s 7))
+(define (scope:implicit-globals s) (aref s 8))
+(define (scope:warn-vars s) (aref s 9))
 
 (define (var-kind var scope)
   (if scope
@@ -2472,6 +2483,14 @@
 
 (define (in-scope? var scope) (not (eq? (var-kind var scope) 'none)))
 
+(define (warn-var?! v scope)
+  (and scope
+       (let ((w (scope:warn-vars scope)))
+         (if (and w (has? w v))
+             (begin (del! w v)
+                    #t)
+             (warn-var?! v (scope:prev scope))))))
+
 (define (all-local-names scope)
   (define (all-lists s)
     (if s
@@ -2480,7 +2499,7 @@
   (apply append (all-lists scope)))
 
 ;; returns lambdas in the form (lambda (args...) (locals...) body)
-(define (resolve-scopes- e scope (sp '()))
+(define (resolve-scopes- e scope (sp '()) (loc #f))
   (cond ((symbol? e)
          (let lookup ((scope scope))
            (if scope
@@ -2508,6 +2527,8 @@
         ((eq? (car e) 'require-existing-local)
          (if (not (in-scope? (cadr e) scope))
              (error "no outer local variable declaration exists for \"for outer\""))
+         '(null))
+        ((eq? (car e) 'softscope)
          '(null))
         ((eq? (car e) 'locals)
          (let* ((names (filter (lambda (v)
@@ -2537,20 +2558,32 @@
          (let* ((blok            (cadr e)) ;; body of scope-block expression
                 (lam             (scope:lam scope))
                 (argnames        (lam:vars lam))
+                (toplevel?       (and (null? argnames) (eq? e (lam:body lam))))
                 (current-locals  (caddr lam)) ;; locals created so far in our lambda
                 (globals         (find-global-decls blok))
+                (assigned        (find-assigned-vars blok))
                 (locals-def      (find-local-def-decls blok))
                 (local-decls     (find-local-decls blok))
-                (toplevel?       (and (null? argnames) (eq? e (lam:body lam))))
+                (soft?           (and (null? argnames)
+                                      (let ((ss (find-softscope blok)))
+                                        (cond ((not ss) (scope:soft? scope))
+                                              ((equal? (cadr ss) '(true))  #t)
+                                              ((equal? (cadr ss) '(false)) #f)
+                                              (else (scope:soft? scope))))))
+                (nonloc-assigned (filter (lambda (v) (and (not (memq v locals-def))
+                                                          (not (memq v local-decls))))
+                                         assigned))
+                (implicit-globals (if toplevel? nonloc-assigned '()))
                 (implicit-locals
                  (filter (if toplevel?
                              ;; make only assigned gensyms implicitly local at top level
                              some-gensym?
                              (lambda (v) (and (memq (var-kind v scope) '(none static-parameter))
-                                              (not (memq v locals-def))
-                                              (not (memq v local-decls))
+                                              (not (and soft?
+                                                        (or (memq v (scope:implicit-globals scope))
+                                                            (defined-julia-global v))))
                                               (not (memq v globals)))))
-                         (find-assigned-vars blok)))
+                         nonloc-assigned))
                 (locals-nondef   (delete-duplicates (append local-decls implicit-locals)))
                 (need-rename?    (lambda (vars)
                                    (filter (lambda (v) (or (memq v current-locals) (in-scope? v scope)))
@@ -2561,7 +2594,22 @@
                 (renamed         (map named-gensy need-rename))
                 (renamed-def     (map named-gensy need-rename-def))
                 (newnames        (append (diff locals-nondef need-rename) renamed))
-                (newnames-def    (append (diff locals-def need-rename-def) renamed-def)))
+                (newnames-def    (append (diff locals-def need-rename-def) renamed-def))
+                (warn-vars
+                 (and (not toplevel?) (null? argnames) (not soft?)
+                      (let ((vars (filter (lambda (v)
+                                            (and (or (memq v (scope:implicit-globals scope))
+                                                     (defined-julia-global v))
+                                                 (eq? (var-kind v scope) 'none)
+                                                 (not (memq v globals))))
+                                          nonloc-assigned)))
+                        (if (pair? vars)
+                            (let ((t (table)))
+                              (for-each (lambda (v) (put! t v #t))
+                                        vars)
+                              t)
+                            #f)))))
+
            (for-each (lambda (v)
                        (if (or (memq v locals-def) (memq v local-decls))
                            (error (string "variable \"" v "\" declared both local and global"))))
@@ -2591,7 +2639,14 @@
                                           '()
                                           (append (map cons need-rename renamed)
                                                   (map cons need-rename-def renamed-def))
-                                          scope)))
+                                          scope
+                                          (and soft? (null? argnames))
+                                          (if toplevel?
+                                              implicit-globals
+                                              (scope:implicit-globals scope))
+                                          warn-vars)
+                              '()
+                              loc))
             (append! (map (lambda (v) `(local ,v)) newnames)
                      (map (lambda (v) `(local-def ,v)) newnames-def)))
            ))
@@ -2599,10 +2654,10 @@
          (error "\"module\" expression not at top level"))
         ((eq? (car e) 'break-block)
          `(break-block ,(cadr e) ;; ignore type symbol of break-block expression
-                       ,(resolve-scopes- (caddr e) scope))) ;; body of break-block expression
+                       ,(resolve-scopes- (caddr e) scope '() loc))) ;; body of break-block expression
         ((eq? (car e) 'with-static-parameters)
          `(with-static-parameters
-           ,(resolve-scopes- (cadr e) scope (cddr e))
+           ,(resolve-scopes- (cadr e) scope (cddr e) loc)
            ,@(cddr e)))
         ((and (eq? (car e) 'method) (length> e 2))
          `(method
@@ -2610,8 +2665,25 @@
            ,(resolve-scopes- (caddr  e) scope)
            ,(resolve-scopes- (cadddr e) scope (method-expr-static-parameters e))))
         (else
+         (if (and (eq? (car e) '=) (symbol? (cadr e))
+                  scope (null? (lam:vars (scope:lam scope)))
+                  (warn-var?! (cadr e) scope))
+             (let* ((v    (cadr e))
+                    (loc  (extract-line-file loc))
+                    (line (if (= (car loc) 0) (julia-current-line) (car loc)))
+                    (file (if (eq? (cadr loc) 'none) (julia-current-file) (cadr loc))))
+               (julia-logmsg
+                1000 'warn (symbol (string file line)) file line
+                (string "Assignment to `" v "` in top-level block is ambiguous "
+                        "because an outer global binding by the same name already exists."
+                        " Use `global " v "` to assign to the outer global `" v
+                        "` variable or use `local " v "` to force a new "
+                        "local by the same name."))))
          (cons (car e)
-               (map (lambda (x) (resolve-scopes- x scope))
+               (map (lambda (x)
+                      (if (linenum? x)
+                          (set! loc x))
+                      (resolve-scopes- x scope '() loc))
                     (cdr e))))))
 
 (define (resolve-scopes e) (resolve-scopes- e #f))
