@@ -987,9 +987,10 @@ numerically exact `2π`, and is therefore not exactly the same as `mod(x,2π)`, 
 compute the modulus of `x` relative to division by the floating-point number `2π`.
 
 !!! note
-    Depending on how your machine represents floats, `2π` may be less than the numerically
-    exact value used in this calculation. So in certain applications `mod2pi(2π)` will not
-    return 0. See [`rem2pi`](@ref) for more refined control of this behavior.
+    Depending on the format of the input value, the closest representable value to 2π may
+    be less than 2π. For example, the expression `mod2pi(2π)` will not return `0`, because
+    the intermediate value of `2*π` is a `Float64` and `2*Float64(π) < 2*big(π)`. See
+    [`rem2pi`](@ref) for more refined control of this behavior.
 
 # Examples
 ```jldoctest
