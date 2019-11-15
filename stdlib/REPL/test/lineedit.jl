@@ -606,7 +606,7 @@ end
 
 @testset "change case on the right" begin
     local buf = IOBuffer()
-    edit_insert(buf, "aa bb CC")
+    edit_insert(buf, "aa bB CC")
     seekstart(buf)
     LineEdit.edit_upper_case(buf)
     LineEdit.edit_title_case(buf)
