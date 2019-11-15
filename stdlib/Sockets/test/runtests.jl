@@ -2,6 +2,26 @@
 
 using Sockets, Random, Test
 
+# set up a watchdog alarm for 10 minutes
+# so that we can attempt to get a "friendly" backtrace if something gets stuck
+# (although this'll also terminate any attempted debugging session)
+# expected test duration is about 5-10 seconds
+function killjob(d)
+    Core.print(Core.stderr, d)
+    if Sys.islinux()
+        SIGINFO = 10
+    elseif Sys.isbsd()
+        SIGINFO = 29
+    end
+    if @isdefined(SIGINFO)
+        ccall(:uv_kill, Cint, (Cint, Cint), getpid(), SIGINFO)
+        sleep(1)
+    end
+    ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
+    nothing
+end
+Timer(t -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"), 600)
+
 @testset "parsing" begin
     @test ip"127.0.0.1" == IPv4(127,0,0,1)
     @test ip"192.0" == IPv4(192,0,0,0)
