@@ -87,12 +87,7 @@ end
 Evaluate `p[1] + x * (p[2] + x * (....))`, i.e. a polynomial via Horner's rule.
 """
 macro horner(x, p...)
-    ex = esc(p[end])
-    for i = length(p)-1:-1:1
-        ex = :(muladd(t, $ex, $(esc(p[i]))))
-    end
-    ex = quote local r = $ex end # structure this to add exactly one line number node for the macro
-    return Expr(:block, :(local t = $(esc(x))), ex, :r)
+    esc(:(evalpoly(($x)::Real, $p)))
 end
 
 """
@@ -246,29 +241,7 @@ julia> @evalpoly(2, 1, 1, 1)
 ```
 """
 macro evalpoly(z, p...)
-    length(p) == 1 && return :($(p[1]))
-    a = :($(esc(p[end])))
-    b = :($(esc(p[end-1])))
-    as = []
-    for i = length(p)-2:-1:1
-        ai = Symbol("a", i)
-        push!(as, :($ai = $a))
-        a = :(muladd(r, $ai, $b))
-        b = :($(esc(p[i])) - s * $ai) # see issue #15985 on fused mul-subtract
-    end
-    ai = :a0
-    push!(as, :($ai = $a))
-    C = Expr(:block,
-             :(x = real(tt)),
-             :(y = imag(tt)),
-             :(r = x + x),
-             :(s = muladd(x, x, y*y)),
-             as...,
-             :(muladd($ai, tt, $b)))
-    R = Expr(:macrocall, Symbol("@horner"), (), :tt, map(esc, p)...)
-    :(let tt = $(esc(z))
-          isa(tt, Complex) ? $C : $R
-      end)
+   esc(:(evalpoly($z, $p)))
 end
 
 """
