@@ -1444,8 +1444,10 @@ void jl_generate_fptr(jl_code_instance_t *output)
                     break;
                 ucache = ucache->next;
             }
-            if (codeinst->invoke)
+            if (codeinst->invoke) {
+                JL_UNLOCK(&codegen_lock);
                 return;
+            }
             if (ucache != NULL) {
                 codeinst->specptr = ucache->specptr;
                 codeinst->rettype_const = ucache->rettype_const;
