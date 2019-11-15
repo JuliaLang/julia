@@ -171,6 +171,7 @@ function _reshape(v::AbstractVector, dims::Dims{1})
 end
 # General reshape
 function _reshape(parent::AbstractArray, dims::Dims)
+    require_one_based_indexing(parent)
     n = length(parent)
     prod(dims) == n || _throw_dmrs(n, "size", dims)
     __reshape((parent, IndexStyle(parent)), dims)
