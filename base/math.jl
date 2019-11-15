@@ -97,11 +97,9 @@ end
 
 """
     evalpoly(x, p::Tuple)
-
 Evaluate the polynomial ``\\sum_k p[k] x^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
 that is, the coefficients are given in ascending order by power of `x`. This function
 generates efficient code using Horner's method with loops unrolled at compile time.
-
 # Example
 ```jldoctest
 julia> evalpoly(2, (1, 2, 3))
@@ -117,57 +115,110 @@ function evalpoly(x, p::Tuple)
         end
         ex
     else
-        N = length(p)
-        ex = p[end]
-        for i in N-1:-1:1
-            ex = muladd(x, ex, p[i])
-        end
-        ex
+        _evalpoly(x, p)
     end
 end
 
+"""
+    evalpoly(x, p::AbstractVector)
+Evaluate the polynomial ``\\sum_k p[k] x^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
+that is, the coefficients are given in ascending order by power of `x`. This function
+uses Horner's method *without* loops unrolled at compile time. Use this method when the
+number of coefficients is not known at compile time.
+# Example
+```jldoctest
+julia> evalpoly(2, [1, 2, 3])
+17
+```
+"""
+evalpoly(x, p::AbstractVector) = _evalpoly(x, p)
+
+function _evalpoly(x, p)
+    N = length(p)
+    ex = p[end]
+    for i in N-1:-1:1
+        ex = muladd(x, ex, p[i])
+    end
+    ex
+end
 
 """
     evalpoly(z::Complex, p::Tuple)
-
 Evaluate the polynomial ``\\sum_k p[k] z^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
 that is, the coefficients are given in ascending order by power of `z`. This function
 generates efficient code using a Goertzel-like algorithm specialized for complex arguments
 with loops unrolled at compile time.
-
 The Goertzel-like algorthim is described in Knuth's Art of Computer Programming,
 Volume 2: Seminumerical Algorithms, Sec. 4.6.4.
-
 # Example
 ```jldoctest
 julia> evalpoly(2 + im, (1, 2, 3))
 14 + 14im
 ```
 """
-@generated function evalpoly(z::Complex, p::Tuple)
-    N = length(p.parameters)
-    a = :(p[end])
-    b = :(p[end-1])
-    as = []
-    for i in N-2:-1:1
-        ai = Symbol("a", i)
+function evalpoly(z::Complex, p::Tuple)
+    if @generated
+        N = length(p.parameters)
+        a = :(p[end])
+        b = :(p[end-1])
+        as = []
+        for i in N-2:-1:1
+            ai = Symbol("a", i)
+            push!(as, :($ai = $a))
+            a = :(muladd(r, $ai, $b))
+            b = :(p[$i] - s * $ai)
+        end
+        ai = :a0
         push!(as, :($ai = $a))
-        a = :(muladd(r, $ai, $b))
-        b = :(p[$i] - s * $ai)
+        C = Expr(:block,
+                 :(x = real(z)),
+                 :(y = imag(z)),
+                 :(r = x + x),
+                 :(s = muladd(x, x, y*y)),
+                 as...,
+                 :(muladd($ai, z, $b)))
+    else
+        _evalpoly(z, p)
     end
-    ai = :a0
-    push!(as, :($ai = $a))
-    C = Expr(:block,
-             :(x = real(z)),
-             :(y = imag(z)),
-             :(r = x + x),
-             :(s = muladd(x, x, y*y)),
-             as...,
-             :(muladd($ai, z, $b)))
 end
-
 evalpoly(z::Complex, p::Tuple{<:Any}) = p[1]
 
+
+"""
+    evalpoly(z::Complex, p::Tuple)
+Evaluate the polynomial ``\\sum_k p[k] z^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
+that is, the coefficients are given in ascending order by power of `z`. This function
+generates efficient code using a Goertzel-like algorithm specialized for complex arguments
+,*without* loops unrolled at compile time. Use this method when the number of coefficients
+is not known at compile time.
+The Goertzel-like algorthim is described in Knuth's Art of Computer Programming,
+Volume 2: Seminumerical Algorithms, Sec. 4.6.4.
+# Example
+```jldoctest
+julia> evalpoly(2 + im, (1, 2, 3))
+14 + 14im
+```
+"""
+evalpoly(z::Complex, p::AbstractVector) = _evalpoly(z, p)
+
+function _evalpoly(z::Complex, p)
+    length(p) == 1 && return p[1]
+    N = length(p)
+    a = p[end]
+    b = p[end-1]
+
+    x = real(z)
+    y = imag(z)
+    r = 2x
+    s = muladd(x, x, y*y)
+    for i in N-2:-1:1
+        ai = a
+        a = muladd(r, ai, b)
+        b = p[i] - s * ai
+    end
+    ai = a
+    muladd(ai, z, b)
+end
 
 # Evaluate p[1] + z*p[2] + z^2*p[3] + ... + z^(n-1)*p[n].  This uses
 # Horner's method if z is real, but for complex z it uses a more
