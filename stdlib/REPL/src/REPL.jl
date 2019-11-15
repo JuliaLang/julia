@@ -73,6 +73,24 @@ mutable struct REPLBackend
         new(repl_channel, response_channel, in_eval)
 end
 
+function softscope!(ex)
+    if ex isa Expr
+        h = ex.head
+        if h === :toplevel
+            for i = 1:length(ex.args)
+                ex.args[i] = softscope!(ex.args[i])
+            end
+        elseif h in (:meta, :import, :using, :export, :module, :error, :incomplete, :thunk)
+            return ex
+        else
+            return Expr(:block, Expr(:softscope, true), ex)
+        end
+    end
+    return ex
+end
+
+const repl_ast_transforms = Any[softscope!]
+
 function eval_user_input(@nospecialize(ast), backend::REPLBackend)
     lasterr = nothing
     Base.sigatomic_begin()
@@ -83,6 +101,9 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
                 put!(backend.response_channel, (lasterr,true))
             else
                 backend.in_eval = true
+                for xf in repl_ast_transforms
+                    ast = xf(ast)
+                end
                 value = Core.eval(Main, ast)
                 backend.in_eval = false
                 # note: use jl_set_global to make sure value isn't passed through `expand`
