@@ -122,15 +122,19 @@ end
 
 # `methodswith` -- shows a list of methods using the type given
 """
-    methodswith(typ[, module or function]; supertypes::Bool=false])
+    methodswith(typ[, module or function]; supertypes::Bool=false, all::Bool=false, submodules::Bool=false)
 
 Return an array of methods with an argument of type `typ`.
 
-The optional second argument restricts the search to a particular module or function
-(the default is all top-level modules).
+The optional second argument restricts the search to a particular module or function.
+By default, only top-level modules and modules loaded into Main are examined.
+Set `submodules=true` if you want to include inner modules.
 
 If keyword `supertypes` is `true`, also return arguments with a parent type of `typ`,
 excluding type `Any`.
+
+By default, the results include only exported functions.
+Set `all=true` if you want to include non-exported functions.
 """
 function methodswith(t::Type, f::Function, meths = Method[]; supertypes::Bool=false)
     for d in methods(f)
@@ -149,27 +153,35 @@ function methodswith(t::Type, f::Function, meths = Method[]; supertypes::Bool=fa
     return meths
 end
 
-function _methodswith(t::Type, m::Module, supertypes::Bool)
-    meths = Method[]
-    for nm in names(m)
+function methodswith!(meths, checking, t::Type, m::Module;
+                      supertypes::Bool=false, all::Bool=false, submodules::Bool=false)
+    push!(checking, m) # block recursion with submodules (nameof(m) ∈ names(m))
+    for nm in names(m; all = all)
         if isdefined(m, nm)
             f = getfield(m, nm)
             if isa(f, Function)
                 methodswith(t, f, meths; supertypes = supertypes)
+            elseif submodules && isa(f, Module) && f ∉ checking
+                methodswith!(meths, checking, t, f; supertypes = supertypes,
+                             all = all, submodules = true)
             end
         end
     end
-    return unique(meths)
+    return meths
 end
 
-methodswith(t::Type, m::Module; supertypes::Bool=false) = _methodswith(t, m, supertypes)
+function methodswith(t::Type, m::Module; kwargs...)
+    meths, checking = Set{Method}(), Set{Module}()
+    methodswith!(meths, checking, t, m; kwargs...)
+    return collect(meths)
+end
 
-function methodswith(t::Type; supertypes::Bool=false)
-    meths = Method[]
+function methodswith(t::Type; kwargs...)
+    meths, checking = Set{Method}(), Set{Module}()
     for mod in Base.loaded_modules_array()
-        append!(meths, _methodswith(t, mod, supertypes))
+        methodswith!(meths, checking, t, mod; kwargs...)
     end
-    return unique(meths)
+    return collect(meths)
 end
 
 # subtypes

@@ -12,6 +12,30 @@ struct Type4Union end
 func4union(::Union{Type4Union,Int}) = ()
 @test !isempty(methodswith(Type4Union, @__MODULE__))
 
+module MWM
+export f, SubModule
+struct C end
+f(::C) = 1
+g(::C) = 1
+
+module SubModule
+using ..MWM: C
+export h
+h(::C) = 1
+end
+
+end
+
+@test methodswith(MWM.C, MWM) == [which(MWM.f, Tuple{MWM.C})]
+@test Set(methodswith(MWM.C, MWM; all=true)) == Set([which(MWM.f, Tuple{MWM.C}),
+                                                     which(MWM.g, Tuple{MWM.C})])
+@test Set(methodswith(MWM.C, MWM; submodules=true)) == Set([which(MWM.f, Tuple{MWM.C}),
+                                                            which(MWM.SubModule.h, Tuple{MWM.C})])
+@test Set(methodswith(MWM.C, MWM; all=true, submodules=true)) ==
+    Set([which(MWM.f, Tuple{MWM.C}),
+         which(MWM.g, Tuple{MWM.C}),
+         which(MWM.SubModule.h, Tuple{MWM.C})])
+
 # PR #19964
 @test isempty(subtypes(Float64))
 
