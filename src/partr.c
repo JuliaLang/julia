@@ -377,7 +377,7 @@ static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
 {
     jl_gc_safepoint();
     jl_value_t *args[2] = { trypoptask, q };
-    jl_task_t *task = (jl_task_t*)jl_apply(&args, 2);
+    jl_task_t *task = (jl_task_t*)jl_apply(args, 2);
     if (jl_typeis(task, jl_task_type)) {
         int self = jl_get_ptls_states()->tid;
         jl_set_task_tid(task, self);
