@@ -94,10 +94,10 @@ options(s::PromptState) =
     end
 
 function setmark(s::MIState, guess_region_active::Bool=true)
-    was_active = is_region_active(s)
-    guess_region_active && activate_region(s, s.key_repeats > 0 ? :mark : :off)
+    refresh = set_action!(s, :setmark)
+    s.current_action === :setmark && s.key_repeats > 0 && activate_region(s, :mark)
     mark(buffer(s))
-    was_active && refresh_line(s)
+    refresh && refresh_line(s)
     nothing
 end
 
@@ -239,30 +239,35 @@ function preserve_active(command::Symbol)
     command ∈ [:edit_indent, :edit_transpose_lines_down!, :edit_transpose_lines_up!]
 end
 
+# returns whether the "active region" status changed visibly,
+# i.e. whether there should be a visual refresh
 function set_action!(s::MIState, command::Symbol)
     # if a command is already running, don't update the current_action field,
     # as the caller is used as a helper function
-    s.current_action === :unknown || return
+    s.current_action === :unknown || return false
+
+    active = region_active(s)
+
+    ## record current action
+    s.current_action = command
 
     ## handle activeness of the region
-    is_shift_move(cmd) = startswith(String(cmd), "shift_")
-    if is_shift_move(command)
-        if region_active(s) !== :shift
-            setmark(s, false)
+    if startswith(String(command), "shift_") # shift-move command
+        if active !== :shift
+            setmark(s) # s.current_action must already have been set
             activate_region(s, :shift)
             # NOTE: if the region was already active from a non-shift
             # move (e.g. ^Space^Space), the region is visibly changed
+            return active !== :off # active status is reset
         end
     elseif !(preserve_active(command) ||
              command_group(command) === :movement && region_active(s) === :mark)
         # if we move after a shift-move, the region is de-activated
         # (e.g. like emacs behavior)
         deactivate_region(s)
+        return active !== :off
     end
-
-    ## record current action
-    s.current_action = command
-    nothing
+    false
 end
 
 set_action!(s, command::Symbol) = nothing

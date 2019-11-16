@@ -1064,3 +1064,21 @@ fake_repl() do stdin_write, stdout_read, repl
     wait(repltask)
     @test istaskdone(repltask)
 end
+
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "anything\x15\x19\x19") # ^u^y^y : kill line backwards + 2 yanks
+    s1 = readuntil(stdout_read, "anything") # typed
+    s2 = readuntil(stdout_read, "anything") # yanked (first ^y)
+    s3 = readuntil(stdout_read, "anything") # previous yanked refreshed (from second ^y)
+    s4 = readuntil(stdout_read, "anything", keep=true) # last yanked
+    # necessary to read at least some part of the buffer,
+    # for the "region_active" to have time to be updated
+
+    @test LineEdit.state(repl.mistate).region_active == :off
+    @test s4 == "anything" # no control characters between the last two occurences of "anything"
+    write(stdin_write, "\x15\x04")
+    Base.wait(repltask)
+end
