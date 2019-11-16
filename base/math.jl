@@ -213,7 +213,7 @@ end
 Evaluate `p[1] + x * (p[2] + x * (....))`, i.e. a polynomial via Horner's rule.
 """
 macro horner(x, p...)
-    :(evalpoly($x, ($(p...),)))
+    esc(:(evalpoly($x, ($(p...),))))
 end
 
 # Evaluate p[1] + z*p[2] + z^2*p[3] + ... + z^(n-1)*p[n].  This uses
@@ -242,7 +242,7 @@ julia> @evalpoly(2, 1, 1, 1)
 ```
 """
 macro evalpoly1(z, p...)
-    :(evalpoly($z, ($(p...),)))
+    esc(:(evalpoly($z, ($(p...),))))
 end
 
 """
