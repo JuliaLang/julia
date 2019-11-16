@@ -122,7 +122,7 @@ end
 
 # `methodswith` -- shows a list of methods using the type given
 """
-    methodswith(typ[, module or function]; supertypes::Bool=false, all::Bool=false, submodules::Bool=false)
+    methodswith(typ[, module or function]; supertypes::Bool=false, subtypes::Bool=false, all::Bool=false, submodules::Bool=false)
 
 Return an array of methods with an argument of type `typ`.
 
@@ -132,18 +132,28 @@ Set `submodules=true` if you want to include inner modules.
 
 If keyword `supertypes` is `true`, also return arguments with a parent type of `typ`,
 excluding type `Any`.
+If keyword `subtypes` is `true`, include methods with arguments that are subtypes of `typ`.
+You may not set both to be true.
 
 By default, the results include only exported functions.
 Set `all=true` if you want to include non-exported functions.
 """
-function methodswith(t::Type, f::Function, meths = Method[]; supertypes::Bool=false)
+function methodswith(t::Type, f::Function, meths = Method[]; supertypes::Bool=false, subtypes::Bool=false)
+    supertypes && subtypes && throw(ArgumentError("supertypes and subtypes cannot both be true"))
     for d in methods(f)
         if any(function (x)
+                   if subtypes
+                       let x = unwrap_unionall(x)
+                           isa(x, DataType) && return x <: t
+                           return false
+                       end
+                   end
                    let x = rewrap_unionall(x, d.sig)
                        (type_close_enough(x, t) ||
+                        (subtypes ? x <: t :
                         (supertypes ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
                          (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
-                        x != Any)
+                        x != Any))
                    end
                end,
                unwrap_unionall(d.sig).parameters)
@@ -154,16 +164,17 @@ function methodswith(t::Type, f::Function, meths = Method[]; supertypes::Bool=fa
 end
 
 function methodswith!(meths, checking, t::Type, m::Module;
-                      supertypes::Bool=false, all::Bool=false, submodules::Bool=false)
+                      supertypes::Bool=false, subtypes::Bool=false,
+                      all::Bool=false, submodules::Bool=false)
     push!(checking, m) # block recursion with submodules (nameof(m) ∈ names(m))
     for nm in names(m; all = all)
         if isdefined(m, nm)
             f = getfield(m, nm)
             if isa(f, Function)
-                methodswith(t, f, meths; supertypes = supertypes)
+                methodswith(t, f, meths; supertypes = supertypes, subtypes = subtypes)
             elseif submodules && isa(f, Module) && f ∉ checking
                 methodswith!(meths, checking, t, f; supertypes = supertypes,
-                             all = all, submodules = true)
+                             subtypes = subtypes, all = all, submodules = true)
             end
         end
     end

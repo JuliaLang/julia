@@ -15,7 +15,22 @@ func4union(::Union{Type4Union,Int}) = ()
 module MWM
 export f, SubModule
 struct C end
+abstract type Super end
+struct Sub <: Super end
+abstract type SuperP{A<:AbstractArray} end
+abstract type SubP{A<:AbstractVector} <: SuperP{A} end
 f(::C) = 1
+f(::Super) = 2
+f(::Sub)   = 3
+f(::SuperP) = 4
+f(::SubP)   = 5
+f(::SubP{Vector{Int}}) = 6
+
+f1(::Vector) = 1
+f2(::Vector{Int}) = 1
+f3(::Vector{I}) where I = 1
+f4(::Vector{<:Integer}) = 1
+
 g(::C) = 1
 
 module SubModule
@@ -35,6 +50,18 @@ end
     Set([which(MWM.f, Tuple{MWM.C}),
          which(MWM.g, Tuple{MWM.C}),
          which(MWM.SubModule.h, Tuple{MWM.C})])
+
+@test methodswith(MWM.Super, MWM) == [which(MWM.f, Tuple{MWM.Super})]
+@test Set(methodswith(MWM.Super, MWM; subtypes=true)) == Set(methods(MWM.f, Tuple{MWM.Super}))
+
+@test Set(methodswith(MWM.SuperP, MWM; subtypes=true)) == Set(methods(MWM.f, Tuple{MWM.SuperP}))
+@test Set(methodswith(MWM.SubP, MWM; subtypes=true)) == Set(methods(MWM.f, Tuple{MWM.SubP}))
+@test Set(methodswith(MWM.SubP{Vector{Int}}, MWM; subtypes=true)) == Set(methods(MWM.f, Tuple{MWM.SubP{Vector{Int}}}))
+
+for f in (MWM.f1, MWM.f2, MWM.f3, MWM.f4)
+    @test Set(methodswith(Vector, f; subtypes=true)) == Set(methods(f, Tuple{Vector}))
+end
+
 
 # PR #19964
 @test isempty(subtypes(Float64))
