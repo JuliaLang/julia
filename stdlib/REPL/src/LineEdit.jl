@@ -1963,6 +1963,25 @@ function move_line_end(buf::IOBuffer)
     nothing
 end
 
+edit_insert_last_word(s::MIState) =
+    edit_insert(s, get_last_word(IOBuffer(mode(s).hist.history[end])))
+
+function get_last_word(buf::IOBuffer)
+    move_line_end(buf)
+    char_move_word_left(buf)
+    posbeg = position(buf)
+    char_move_word_right(buf)
+    posend = position(buf)
+    buf = take!(buf)
+    word = String(buf[posbeg+1:posend])
+    rest = String(buf[posend+1:end])
+    lp, rp, lb, rb = count.(.==(('(', ')', '[', ']')), rest)
+    special = any(in.(('\'', '"', '`'), rest))
+    !special && lp == rp && lb == rb ?
+        word *= rest :
+        word
+end
+
 function commit_line(s)
     cancel_beep(s)
     move_input_end(s)
@@ -2101,6 +2120,7 @@ AnyDict(
     "\eOc" => "\ef",
     # Meta Enter
     "\e\r" => (s,o...)->edit_insert_newline(s),
+    "\e." =>  (s,o...)->edit_insert_last_word(s),
     "\e\n" => "\e\r",
     "^_" => (s,o...)->edit_undo!(s),
     "\e_" => (s,o...)->edit_redo!(s),

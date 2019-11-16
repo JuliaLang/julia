@@ -440,6 +440,11 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         s = LineEdit.init_state(repl.t, repl.interface)
         LineEdit.edit_insert(s, "wip")
 
+        # LineEdit functions related to history
+        LineEdit.edit_insert_last_word(s)
+        @test buffercontents(LineEdit.buffer(s)) == "wip2"
+        LineEdit.edit_backspace(s) # remove the "2"
+
         # Test that navigating history skips invalid modes
         # (in both directions)
         LineEdit.history_prev(s, hp)
