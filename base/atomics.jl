@@ -23,7 +23,7 @@ else
                       UInt8, UInt16, UInt32, UInt64, UInt128)
 end
 const floattypes = (Float16, Float32, Float64)
-const arithmetictypes = (inttypes..., floattypes...)
+const arithmetictypes = (inttypes..., floattypes..., Ptr)
 # TODO: Support Ptr
 const atomictypes = (arithmetictypes..., Bool)
 const IntTypes = Union{inttypes...}
@@ -63,6 +63,7 @@ Atomic operations use an `atomic_` prefix, such as [`atomic_add!`](@ref),
 """
 mutable struct Atomic{T<:AtomicTypes}
     value::T
+    Atomic{T}() where {T <: Ptr} = new(T())
     Atomic{T}() where {T<:AtomicTypes} = new(zero(T))
     Atomic{T}(value) where {T<:AtomicTypes} = new(value)
 end
@@ -327,11 +328,13 @@ const llvmtypes = IdDict{Any,String}(
     Float16 => "i16", # half
     Float32 => "float",
     Float64 => "double",
+    Ptr => "i$WORD_SIZE",
 )
 inttype(::Type{T}) where {T<:Integer} = T
 inttype(::Type{Float16}) = Int16
 inttype(::Type{Float32}) = Int32
 inttype(::Type{Float64}) = Int64
+inttype(::Type{V}) where {V <: Ptr} = Int
 
 
 import ..Base.gc_alignment
@@ -344,29 +347,29 @@ for typ in atomictypes
     ilt = llvmtypes[inttype(typ)]
     rt = "$lt, $lt*"
     irt = "$ilt, $ilt*"
-    @eval getindex(x::Atomic{$typ}) =
+    @eval getindex(x::Atomic{V}) where {V <: $typ} =
         llvmcall($"""
                  %ptr = inttoptr i$WORD_SIZE %0 to $lt*
                  %rv = load atomic $rt %ptr acquire, align $(gc_alignment(typ))
                  ret $lt %rv
-                 """, $typ, Tuple{Ptr{$typ}}, unsafe_convert(Ptr{$typ}, x))
-    @eval setindex!(x::Atomic{$typ}, v::$typ) =
+                 """, V, Tuple{Ptr{V}}, unsafe_convert(Ptr{V}, x))
+    @eval setindex!(x::Atomic{V}, v::V) where {V <: $typ} =
         llvmcall($"""
                  %ptr = inttoptr i$WORD_SIZE %0 to $lt*
                  store atomic $lt %1, $lt* %ptr release, align $(gc_alignment(typ))
                  ret void
-                 """, Cvoid, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
+                 """, Cvoid, Tuple{Ptr{V}, V}, unsafe_convert(Ptr{V}, x), v)
 
     # Note: atomic_cas! succeeded (i.e. it stored "new") if and only if the result is "cmp"
-    if typ <: Integer
-        @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
+    if typ <: Union{Integer, Ptr}
+        @eval atomic_cas!(x::Atomic{V}, cmp::V, new::V) where {V <: $typ} =
             llvmcall($"""
                      %ptr = inttoptr i$WORD_SIZE %0 to $lt*
                      %rs = cmpxchg $lt* %ptr, $lt %1, $lt %2 acq_rel acquire
                      %rv = extractvalue { $lt, i1 } %rs, 0
                      ret $lt %rv
-                     """, $typ, Tuple{Ptr{$typ},$typ,$typ},
-                     unsafe_convert(Ptr{$typ}, x), cmp, new)
+                     """, V, Tuple{Ptr{V}, V, V},
+                     unsafe_convert(Ptr{V}, x), cmp, new)
     else
         @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
             llvmcall($"""
@@ -377,7 +380,7 @@ for typ in atomictypes
                      %irv = extractvalue { $ilt, i1 } %irs, 0
                      %rv = bitcast $ilt %irv to $lt
                      ret $lt %rv
-                     """, $typ, Tuple{Ptr{$typ},$typ,$typ},
+                     """, $typ, Tuple{Ptr{$typ}, $typ, $typ},
                      unsafe_convert(Ptr{$typ}, x), cmp, new)
     end
 
@@ -385,18 +388,18 @@ for typ in atomictypes
     for rmwop in [arithmetic_ops..., :xchg, :and, :nand, :or, :xor, :max, :min]
         rmw = string(rmwop)
         fn = Symbol("atomic_", rmw, "!")
-        if (rmw == "max" || rmw == "min") && typ <: Unsigned
+        if (rmw == "max" || rmw == "min") && typ <: Union{Unsigned, Ptr}
             # LLVM distinguishes signedness in the operation, not the integer type.
             rmw = "u" * rmw
         end
         if rmwop in arithmetic_ops && !(typ <: ArithmeticTypes) continue end
-        if typ <: Integer
-            @eval $fn(x::Atomic{$typ}, v::$typ) =
+        if typ <: Union{Integer, Ptr}
+            @eval $fn(x::Atomic{V}, v::V) where {V <: $typ} =
                 llvmcall($"""
                          %ptr = inttoptr i$WORD_SIZE %0 to $lt*
                          %rv = atomicrmw $rmw $lt* %ptr, $lt %1 acq_rel
                          ret $lt %rv
-                         """, $typ, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
+                         """, V, Tuple{Ptr{V}, V}, unsafe_convert(Ptr{V}, x), v)
         else
             rmwop === :xchg || continue
             @eval $fn(x::Atomic{$typ}, v::$typ) =

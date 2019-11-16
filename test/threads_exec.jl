@@ -225,8 +225,27 @@ function test_atomic_bools()
     x = Atomic{Bool}(true)
     @test true == atomic_and!(x, false); @test x[] == false
 end
-
 test_atomic_bools()
+
+# test atomic pointer methods
+function test_atomic_ptr()
+    ptr1 = Ptr{Int}()
+    ptr2 = Ptr{Int}(4)
+    x = Atomic{Ptr{Int}}(ptr1)
+    @test x[] == ptr1
+    # xchg
+    @test ptr1 == atomic_xchg!(x, ptr2); @test x[] == ptr2
+
+    x = Atomic{Ptr{Int}}(ptr1)
+    # failed cas
+    @test ptr1 == atomic_cas!(x, ptr2, ptr2); @test x[] == ptr1
+    # successful cas
+    @test ptr1 == atomic_cas!(x, ptr1, ptr2); @test x[] == ptr2
+
+    x = Atomic{Ptr{Int}}(ptr1)
+    @test ptr1 == atomic_max!(x, ptr2); @test x[] == ptr2
+end
+test_atomic_ptr()
 
 # Test atomic memory ordering with load/store
 mutable struct CommBuf
