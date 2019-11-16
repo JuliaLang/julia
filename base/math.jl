@@ -241,7 +241,7 @@ julia> @evalpoly(2, 1, 1, 1)
 7
 ```
 """
-macro evalpoly1(z, p...)
+macro evalpoly(z, p...)
     esc(:(evalpoly($z, ($(p...),))))
 end
 
