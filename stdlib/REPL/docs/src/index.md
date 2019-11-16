@@ -181,8 +181,11 @@ to do so), or pressing Esc and then the key.
 Julia's REPL keybindings may be fully customized to a user's preferences by passing a dictionary
 to `REPL.setup_interface`. The keys of this dictionary may be characters or strings. The key
 `'*'` refers to the default action. Control plus character `x` bindings are indicated with `"^x"`.
-Meta plus `x` can be written `"\\Mx"`. The values of the custom keymap must be `nothing` (indicating
-that the input should be ignored) or functions that accept the signature `(PromptState, AbstractREPL, Char)`.
+Meta plus `x` can be written `"\\M-x"` or `"\ex"`, and Control plus `x` can be written
+`"\\C-x"` or `"^x"`.
+The values of the custom keymap must be `nothing` (indicating
+that the input should be ignored) or functions that accept the signature
+`(PromptState, AbstractREPL, Char)`.
 The `REPL.setup_interface` function must be called before the REPL is initialized, by registering
 the operation with [`atreplinit`](@ref) . For example, to bind the up and down arrow keys to move through
 history without prefix search, one could put the following code in `~/.julia/config/startup.jl`:

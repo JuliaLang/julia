@@ -1295,12 +1295,12 @@ function normalize_key(key::AbstractString)
             c, i = iterate(key, i)
             if c == 'C'
                 c, i = iterate(key, i)
-                @assert c == '-'
+                c == '-' || error("the Control key specifier must start with \"\\\\C-\"")
                 c, i = iterate(key, i)
                 write(buf, uppercase(c)-64)
             elseif c == 'M'
                 c, i = iterate(key, i)
-                @assert c == '-'
+                c == '-' || error("the Meta key specifier must start with \"\\\\M-\"")
                 c, i = iterate(key, i)
                 write(buf, '\e')
                 write(buf, c)
