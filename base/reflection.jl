@@ -874,7 +874,7 @@ A list of modules can also be specified as an array or tuple.
     At least Julia 1.4 is required for specifying a module.
 """
 function methods(@nospecialize(f), @nospecialize(t),
-                 @nospecialize(mod::Union{Module,AbstractArray{Module},Tuple{Vararg{Module}}}=()))
+                 @nospecialize(mod::Union{Module,AbstractArray{Module},Tuple{Vararg{Module}},Nothing}=nothing))
     if mod isa Module
         mod = (mod,)
     end
@@ -883,7 +883,7 @@ function methods(@nospecialize(f), @nospecialize(t),
     end
     t = to_tuple_type(t)
     world = typemax(UInt)
-    MethodList(Method[m[3] for m in _methods(f, t, -1, world) if isempty(mod) || m[3].module in mod],
+    MethodList(Method[m[3] for m in _methods(f, t, -1, world) if mod === nothing || m[3].module in mod],
                typeof(f).name.mt)
 end
 
@@ -899,7 +899,7 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
 end
 
 function methods(@nospecialize(f),
-                 @nospecialize(mod::Union{Module,AbstractArray{Module},Tuple{Vararg{Module}}}=()))
+                 @nospecialize(mod::Union{Module,AbstractArray{Module},Tuple{Vararg{Module}},Nothing}=nothing))
     # return all matches
     return methods(f, Tuple{Vararg{Any}}, mod)
 end
