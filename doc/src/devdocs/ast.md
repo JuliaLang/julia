@@ -356,20 +356,20 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
       * `args[2]`
 
-        A `call` expression that creates `SimpleVector` specifying its parameters
+        A `call` expression that creates a `SimpleVector` specifying its parameters
 
       * `args[3]`
 
-        A `call` expression that creates `SimpleVector` specifying its fieldnames
+        A `call` expression that creates a `SimpleVector` specifying its fieldnames
 
       * `args[4]`
 
-        A `Symbol` or `GlobalRef` specifying the supertype (e.g., `:Integer` or
-        `GlobalRef(Core, :Any)`)
+        A `Symbol`, `GlobalRef`, or `Expr` specifying the supertype (e.g., `:Integer`,
+        `GlobalRef(Core, :Any)`, or `:(Core.apply_type(AbstractArray, T, N))`)
 
       * `args[5]`
 
-        A `call` expression that creates `SimpleVector` specifying its fieldtypes
+        A `call` expression that creates a `SimpleVector` specifying its fieldtypes
 
       * `args[6]`
 
