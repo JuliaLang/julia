@@ -52,6 +52,38 @@ If it is enabled, you can try it out by pasting the code block above this paragr
 the REPL. This feature does not work on the standard Windows command prompt due to its limitation
 at detecting when a paste occurs.
 
+Objects are printed at the REPL using the [`show`](@ref) function with a specific [`IOContext`](@ref).
+In particular, the `:limit` attribute is set to `true`.
+Other attributes can receive in certain `show` methods a default value if it's not already set,
+like `:compact`.
+It's possible, as an experimental feature, to specify the attributes used by the REPL via the
+`Base.active_repl.options.iocontext` dictionary (associating values to attributes). For example:
+
+```julia-repl
+julia> rand(2, 2)
+2×2 Array{Float64,2}:
+ 0.8833    0.329197
+ 0.719708  0.59114
+
+julia> show(IOContext(stdout, :compact => false), "text/plain", rand(2, 2))
+ 0.43540323669187075  0.15759787870609387
+ 0.2540832269192739   0.4597637838786053
+julia> Base.active_repl.options.iocontext[:compact] = false;
+
+julia> rand(2, 2)
+2×2 Array{Float64,2}:
+ 0.2083967319174056  0.13330606013126012
+ 0.6244375177790158  0.9777957560761545
+```
+
+In order to define automatically the values of this dictionary at startup time, one can use the
+[`atreplinit`](@ref) function in the `~/.julia/config/startup.jl` file, for example:
+```julia
+atreplinit() do repl
+    repl.options.iocontext[:compact] = false
+end
+```
+
 ### Help mode
 
 When the cursor is at the beginning of the line, the prompt can be changed to a help mode by typing
@@ -175,7 +207,6 @@ to do so), or pressing Esc and then the key.
 | `meta-Left Arrow`   | indent the current line on the left                                                                        |
 | `meta-Right Arrow`  | indent the current line on the right                                                                       |
 | `meta-.`            | insert last word from previous history entry                                                               |
-
 
 ### Customizing keybindings
 

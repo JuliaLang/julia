@@ -73,6 +73,11 @@ Standard library changes
 * The performance of `rand(::Tuple)` is improved in some cases ([#32208]). As a consequence, the
   stream of generated values produced for a given seed has changed.
 
+#### REPL
+
+* The attributes of the implicit `IOContext` used by the REPL to display objects can be
+  modified by the user (experimental feature) ([#29249]).
+
 #### SparseArrays
 
 #### Dates
