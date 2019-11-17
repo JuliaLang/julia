@@ -63,6 +63,7 @@ show(io::IO, x::Prompt) = show(io, string("Prompt(\"", prompt_string(x.prompt), 
 
 mutable struct MIState
     interface::ModalInterface
+    active_module::Module
     current_mode::TextInterface
     aborted::Bool
     mode_state::IdDict{TextInterface,ModeState}
@@ -74,7 +75,7 @@ mutable struct MIState
     current_action::Symbol
 end
 
-MIState(i, c, a, m) = MIState(i, c, a, m, String[], 0, Char[], 0, :none, :none)
+MIState(i, mod, c, a, m) = MIState(i, mod, c, a, m, String[], 0, Char[], 0, :none, :none)
 
 const BufferLike = Union{MIState,ModeState,IOBuffer}
 const State = Union{MIState,ModeState}
@@ -175,7 +176,10 @@ struct EmptyHistoryProvider <: HistoryProvider end
 
 reset_state(::EmptyHistoryProvider) = nothing
 
-complete_line(c::EmptyCompletionProvider, s) = String[], "", true
+complete_line(c::EmptyCompletionProvider, s, mod) = String[], "", true
+
+# for Pkg which specializes complete_line with only 2 arguments
+complete_line(c::CompletionProvider, s, ::Module) = complete_line(c, s)
 
 terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
@@ -343,7 +347,7 @@ end
 # Prompt Completions
 function complete_line(s::MIState)
     set_action!(s, :complete_line)
-    if complete_line(state(s), s.key_repeats)
+    if complete_line(state(s), s.key_repeats, s.active_module)
         return refresh_line(s)
     else
         beep(s)
@@ -351,8 +355,8 @@ function complete_line(s::MIState)
     end
 end
 
-function complete_line(s::PromptState, repeats::Int)
-    completions, partial, should_complete = complete_line(s.p.complete, s)::Tuple{Vector{String},String,Bool}
+function complete_line(s::PromptState, repeats::Int, mod::Module)
+    completions, partial, should_complete = complete_line(s.p.complete, s, mod)::Tuple{Vector{String},String,Bool}
     isempty(completions) && return false
     if !should_complete
         # should_complete is false for cases where we only want to show
@@ -1962,8 +1966,8 @@ setmodifiers!(p::Prompt, m::Modifiers) = setmodifiers!(p.complete, m)
 setmodifiers!(c) = nothing
 
 # Search Mode completions
-function complete_line(s::SearchState, repeats)
-    completions, partial, should_complete = complete_line(s.histprompt.complete, s)
+function complete_line(s::SearchState, repeats, mod::Module)
+    completions, partial, should_complete = complete_line(s.histprompt.complete, s, mod)
     # For now only allow exact completions in search mode
     if length(completions) == 1
         prev_pos = position(s)
@@ -2537,7 +2541,7 @@ init_state(terminal, prompt::Prompt) =
                 #=indent(spaces)=# -1, Threads.SpinLock(), 0.0, -Inf, nothing)
 
 function init_state(terminal, m::ModalInterface)
-    s = MIState(m, m.modes[1], false, IdDict{Any,Any}())
+    s = MIState(m, Main, m.modes[1], false, IdDict{Any,Any}())
     for mode in m.modes
         s.mode_state[mode] = init_state(terminal, mode)
     end
