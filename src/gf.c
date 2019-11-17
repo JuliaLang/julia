@@ -271,7 +271,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
 }
 
 JL_DLLEXPORT jl_code_instance_t *jl_set_method_inferred(
-        jl_method_instance_t *mi, jl_value_t *rettype,
+        jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_value_t *rettype,
         jl_value_t *inferred_const, jl_value_t *inferred,
         int32_t const_flags, size_t min_world, size_t max_world
         /*, jl_array_t *edges, int absolute_max*/)
@@ -1825,6 +1825,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
 {
     jl_code_instance_t *codeinst;
     codeinst = mi->cache;
+
     while (codeinst) {
         if (codeinst->min_world <= world && world <= codeinst->max_world && codeinst->invoke != NULL) {
             return codeinst;
@@ -1861,6 +1862,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         }
     }
 
+    JL_LOCK(&codegen_lock);
     codeinst = mi->cache;
     while (codeinst) {
         if (codeinst->min_world <= world && world <= codeinst->max_world && codeinst->functionObjectsDecls.functionObject != NULL)
@@ -1885,6 +1887,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                 jl_generate_fptr(ucache);
             if (ucache->invoke != jl_fptr_sparam &&
                 ucache->invoke != jl_fptr_interpret_call) {
+                JL_UNLOCK(&codegen_lock);
                 return ucache;
             }
             jl_code_instance_t *codeinst = jl_set_method_inferred(mi, (jl_value_t*)jl_any_type, NULL, NULL,
@@ -1892,10 +1895,12 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
             codeinst->specptr = ucache->specptr;
             codeinst->rettype_const = ucache->rettype_const;
             jl_atomic_store_release(&codeinst->invoke, ucache->invoke);
+            JL_UNLOCK(&codegen_lock);
             return codeinst;
         }
     }
 
+    JL_UNLOCK(&codegen_lock);
     jl_generate_fptr(codeinst);
     return codeinst;
 }
