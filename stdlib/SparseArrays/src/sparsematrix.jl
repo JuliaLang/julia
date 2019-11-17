@@ -215,14 +215,9 @@ function Base.show(io::IOContext, S::AbstractSparseMatrixCSC)
     # character can contain up to 4 braille dots in its height (⡇) and up to
     # 2 braille dots in its width (⠉).
     if get(io, :limit, true) && (m > 4maxHeight || n > 2maxWidth)
-        s = (m * 2maxWidth ÷ n, n * 4maxHeight ÷ m)
-        if s[1] <= 4maxHeight
-            scaleHeight = s[1]
-            scaleWidth = 2maxWidth
-        else
-            scaleHeight = 4maxHeight
-            scaleWidth = s[2]
-        end
+        s = min(2maxWidth / n, 4maxHeight / m)
+        scaleHeight = floor(Int, s * m)
+        scaleWidth = floor(Int, s * n)
     end
 
     brailleBlocks = split("⠁⠂⠄⡀⠈⠐⠠⢀", "") .|> x -> Int(x[1])
