@@ -228,32 +228,27 @@ function Base.show(io::IOContext, S::AbstractSparseMatrixCSC)
     brailleGrid = fill(UInt16(10240), (scaleWidth - 1) ÷ 2 + 2, (scaleHeight - 1) ÷ 4 + 1)
     brailleGrid[end, :] .= '\n'
 
-    # Let `(i, j)` be an index pair of a matrix `S`. Consider a matrix `B`
-    # of size `height × width`. This method calculates an index pair `(a, b)`,
-    # such that the position of the element `B[a, b]` in `B` corresponds
-    # the best to the position of the element `S[i, j]` in `S`.
-    @inline function _scale_index(i::Integer, j::Integer, S::AbstractSparseMatrixCSC, height::Integer, width::Integer)
-        a = size(S, 1) <= 1 || height <= 1 ? 1.0 : (i - 1) / (size(S, 1) - 1) * (height - 1) + 1
-        b = size(S, 2) <= 1 || width <= 1 ? 1.0 : (j - 1) / (size(S, 2) - 1) * (width - 1) + 1
-        return round.(Int, (a, b))
-    end
-
-    # Given an index pair `(i, j)` of a matrix, find the corresponding triple
-    # `(k, l, p)` such that the element at `(i, j)` can be found at
-    # position `(k, l)` in the braille grid `brailleGrid` and corresponds
-    # to the 1-dot braille character `brailleBlocks[p]`
-    @inline function _to_braille_grid_space(i::Integer, j::Integer)
-        k = (j - 1) ÷ 2 + 1
-        l = (i - 1) ÷ 4 + 1
-        p = ((j - 1) % 2) * 4 + ((i - 1) % 4 + 1)
-        return (k, l, p)
-    end
-
     rvals = rowvals(S)
+    rowscale = max(1, scaleHeight - 1) / max(1, size(S, 1) - 1)
+    colscale = max(1, scaleWidth - 1) / max(1, size(S, 2) - 1)
     @inbounds for j = 1:size(S, 2)
+        # Scale the column index `j` to the best matching column index
+        # of a matrix of size `scaleHeight × scaleWidth`
+        sj = round(Int, (j - 1) * colscale + 1)
         for x in nzrange(S, j)
-            si, sj = _scale_index(rvals[x], j, S, scaleHeight, scaleWidth)
-            k, l, p = _to_braille_grid_space(si, sj)
+            # Scale the row index `i` to the best matching row index
+            # of a matrix of size `scaleHeight × scaleWidth`
+            si = round(Int, (rvals[x] - 1) * rowscale + 1)
+
+            # Given the index pair `(si, sj)` of the scaled matrix,
+            # calculate the corresponding triple `(k, l, p)` such that the
+            # element at `(si, sj)` can be found at position `(k, l)` in the
+            # braille grid `brailleGrid` and corresponds to the 1-dot braille
+            # character `brailleBlocks[p]`
+            k = (sj - 1) ÷ 2 + 1
+            l = (si - 1) ÷ 4 + 1
+            p = ((sj - 1) % 2) * 4 + ((si - 1) % 4 + 1)
+
             brailleGrid[k, l] |= brailleBlocks[p]
         end
     end
