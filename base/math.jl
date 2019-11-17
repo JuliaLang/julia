@@ -172,7 +172,7 @@ evalpoly(z::Complex, p::Tuple{<:Any}) = p[1]
 
 
 """
-    evalpoly(z::Complex, p::Tuple)
+    evalpoly(z::Complex, p::AbstractVector)
 Evaluate the polynomial ``\\sum_k p[k] z^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
 that is, the coefficients are given in ascending order by power of `z`. This function
 generates efficient code using a Goertzel-like algorithm specialized for complex arguments
