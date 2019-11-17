@@ -226,7 +226,7 @@ function Base.show(io::IOContext, S::AbstractSparseMatrixCSC)
     # the matrix `S`. Each row of the braille pattern to print is stored
     # in a column of `brailleGrid`.
     brailleGrid = fill(UInt16(10240), (scaleWidth - 1) ÷ 2 + 2, (scaleHeight - 1) ÷ 4 + 1)
-    brailleGrid[end, :] .= Int('\n')
+    brailleGrid[end, :] .= '\n'
 
     # Let `(i, j)` be an index pair of a matrix `S`. Consider a matrix `B`
     # of size `height × width`. This method calculates an index pair `(a, b)`,
