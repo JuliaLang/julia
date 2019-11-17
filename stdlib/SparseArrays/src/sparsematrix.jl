@@ -257,7 +257,8 @@ function Base.show(io::IOContext, S::AbstractSparseMatrixCSC)
             brailleGrid[k, l] |= brailleBlocks[p]
         end
     end
-    print(io, "\n", join(Char.(brailleGrid[1:end-1])))
+    println(io)
+    foreach(c -> print(io, Char(c)), @view brailleGrid[1:end-1])
 end
 
 ## Reshape
