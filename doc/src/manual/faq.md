@@ -615,6 +615,9 @@ have, it ends up having a substantial cost due to compilers (LLVM and GCC) not g
 around the added overflow checks. If this improves in the future, we could consider defaulting
 to checked integer arithmetic in Julia, but for now, we have to live with the possibility of overflow.
 
+In the meantime, safe integer operations can be achieved trough the use of external libraries such as [safeInteger.jl](https://github.com/JeffreySarnoff/SaferIntegers.jl). Note that, as stated previously, the use of these libraries signically increases the execution time of Julia. You can follow the status of the discussion [here](https://github.com/JuliaLang/julia/issues/855).
+
+
 ### What are the possible causes of an `UndefVarError` during remote execution?
 
 As the error states, an immediate cause of an `UndefVarError` on a remote node is that a binding
