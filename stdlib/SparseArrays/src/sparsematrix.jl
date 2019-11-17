@@ -193,6 +193,8 @@ function Base.show(io::IO, ::MIME"text/plain", S::AbstractSparseMatrixCSC)
 end
 
 Base.show(io::IO, S::AbstractSparseMatrixCSC) = Base.show(convert(IOContext, io), S::AbstractSparseMatrixCSC)
+
+const brailleBlocks = UInt16['⠁', '⠂', '⠄', '⡀', '⠈', '⠐', '⠠', '⢀']
 function Base.show(io::IOContext, S::AbstractSparseMatrixCSC)
     m, n = size(S)
     (m == 0 || n == 0) && return show(io, MIME("text/plain"), S)
@@ -219,8 +221,6 @@ function Base.show(io::IOContext, S::AbstractSparseMatrixCSC)
         scaleHeight = floor(Int, s * m)
         scaleWidth = floor(Int, s * n)
     end
-
-    brailleBlocks = split("⠁⠂⠄⡀⠈⠐⠠⢀", "") .|> x -> Int(x[1])
 
     # `brailleGrid` is used to store the needed braille characters for
     # the matrix `S`. Each row of the braille pattern to print is stored
