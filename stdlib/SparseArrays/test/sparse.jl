@@ -4,7 +4,7 @@ module SparseTests
 
 using Test
 using SparseArrays
-using SparseArrays: getcolptr, nonzeroinds
+using SparseArrays: getcolptr, nonzeroinds, isstored, _show_with_braille_patterns
 using LinearAlgebra
 using Printf: @printf # for debug
 using Random
@@ -2201,6 +2201,22 @@ end
     A = sparse([1], [1], [Vector{Float64}(undef, 3)], 3, 3)
     A[1,1] = [1.0, 2.0, 3.0]
     @test A[1,1] == [1.0, 2.0, 3.0]
+end
+
+@testset "isstored" begin
+    m = 5
+    n = 4
+    I = [1, 2, 5, 3]
+    J = [2, 3, 4, 2]
+    A = sparse(I, J, [1, 2, 3, 4], m, n)
+    stored_indices = [CartesianIndex(i, j) for (i, j) in zip(I, J)]
+    unstored_indices = [c for c in CartesianIndices((m, n)) if !(c in stored_indices)]
+    for c in stored_indices
+        @test isstored(A, c[1], c[2]) == true
+    end
+    for c in unstored_indices
+        @test isstored(A, c[1], c[2]) == false
+    end
 end
 
 @testset "show" begin
