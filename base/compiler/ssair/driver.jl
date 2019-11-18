@@ -121,7 +121,6 @@ function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     ir = convert_to_ircode(ci, copy_exprargs(ci.code), preserve_coverage, nargs, sv)
     ir = slot2reg(ir, ci, nargs, sv)
     #@Base.show ("after_construct", ir)
-    # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)
     @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv)
     #@timeit "verify 2" verify_ir(ir)

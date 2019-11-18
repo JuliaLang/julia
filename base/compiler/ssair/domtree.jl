@@ -270,7 +270,26 @@ function SNCA!(domtree::DomTree, blocks::Vector{BasicBlock}, max_pre::PreNumber)
     # we wanted to.
     resize!(state, n_nodes)
     for w in 1:max_pre
+        # Only reset semidominators for nodes we want to recompute
         state[w] = SNCAData(typemax(PreNumber), w)
+    end
+
+    # If we are only recomputing some of the semidominators, the remaining
+    # labels should be reset, because they may have become inapplicable to the
+    # node/semidominator we are currently processing/recomputing. They can
+    # become inapplicable because of path compressions that were triggered by
+    # nodes that should only be processed after the current one (but were
+    # processed the last time `SNCA!` was run).
+    #
+    # So, for every node that is not being reprocessed, we reset its label to
+    # its semidominator, which is the value that its label assumes once its
+    # semidominator is computed. If this was too conservative, i.e. if the
+    # label would have been updated before we process the current node in a
+    # situation where all semidominators were recomputed, then path compression
+    # will produce the correct label.
+    for w in max_pre+1:n_nodes
+        semi = state[w].semi
+        state[w] = SNCAData(semi, semi)
     end
 
     # Calculate semidominators, but only for blocks with preorder number up to
@@ -383,6 +402,11 @@ end
 "Given updated blocks, update the given dominator tree with an inserted edge."
 function domtree_insert_edge!(domtree::DomTree, blocks::Vector{BasicBlock},
                               from::BBNumber, to::BBNumber)
+    # `from` is unreachable, so `from` and `to` aren't in domtree
+    if bb_unreachable(domtree, from)
+        return domtree
+    end
+
     # Implements Section 3.1 of [GI16]
     dt        = domtree.dfs_tree
     from_pre  = dt.to_pre[from]
@@ -404,6 +428,11 @@ end
 "Given updated blocks, update the given dominator tree with a deleted edge."
 function domtree_delete_edge!(domtree::DomTree, blocks::Vector{BasicBlock},
                               from::BBNumber, to::BBNumber)
+    # `from` is unreachable, so `from` and `to` aren't in domtree
+    if bb_unreachable(domtree, from)
+        return domtree
+    end
+
     # Implements Section 3.1 of [GI16]
     if is_parent(domtree.dfs_tree, from, to)
         # The `from` block is the parent of the `to` block in the DFS tree, so
@@ -454,6 +483,68 @@ function on_semidominator_path(domtree::DomTree, x::BBNumber, y::BBNumber)
         current_block = domtree.snca_state[current_block].semi
     end
     return false
+end
+
+"""
+Rename basic block numbers in a dominator tree, removing the block if it is
+renamed to -1.
+"""
+function rename_nodes!(domtree::DomTree, rename_bb::Vector{BBNumber})
+    # Rename DFS tree
+    rename_nodes!(domtree.dfs_tree, rename_bb)
+
+    # `snca_state` is indexed by preorder number, so should be unchanged
+
+    # Rename `idoms_bb` and `nodes`
+    old_idoms_bb = copy(domtree.idoms_bb)
+    old_nodes = copy(domtree.nodes)
+    for (old_bb, new_bb) in enumerate(rename_bb)
+        if new_bb != -1
+            domtree.idoms_bb[new_bb] = (new_bb == 1) ?
+                0 : rename_bb[old_idoms_bb[old_bb]]
+            domtree.nodes[new_bb] = old_nodes[old_bb]
+            map!(i -> rename_bb[i],
+                 domtree.nodes[new_bb].children,
+                 domtree.nodes[new_bb].children)
+        end
+    end
+
+    # length of `to_pre` after renaming DFS tree is new number of basic blocks
+    resize!(domtree.idoms_bb, length(domtree.dfs_tree.to_pre))
+    resize!(domtree.nodes, length(domtree.dfs_tree.to_pre))
+    return domtree
+end
+
+"""
+Rename basic block numbers in a DFS tree, removing the block if it is renamed
+to -1.
+"""
+function rename_nodes!(D::DFSTree, rename_bb::Vector{BBNumber})
+    n_blocks = length(D.to_pre)
+    n_reachable_blocks = length(D.from_pre)
+
+    old_to_pre = copy(D.to_pre)
+    old_from_pre = copy(D.from_pre)
+    old_to_post = copy(D.to_post)
+    old_from_post = copy(D.from_post)
+    max_new_bb = 0
+    for (old_bb, new_bb) in enumerate(rename_bb)
+        if new_bb != -1
+            D.to_pre[new_bb] = old_to_pre[old_bb]
+            D.from_pre[old_to_pre[old_bb]] = new_bb
+            D.to_post[new_bb] = old_to_post[old_bb]
+            D.from_post[old_to_post[old_bb]] = new_bb
+
+            # Keep track of highest BB number to resize arrays with
+            if new_bb > max_new_bb
+                max_new_bb = new_bb
+            end
+        end
+    end
+    resize!(D.to_pre, max_new_bb)
+    resize!(D.to_post, max_new_bb)
+    # `to_parent_pre` should be unchanged
+    return D
 end
 
 """
