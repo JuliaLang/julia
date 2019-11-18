@@ -181,6 +181,17 @@ column. In conjunction with [`nonzeros`](@ref) and
 nzrange(S::AbstractSparseMatrixCSC, col::Integer) = getcolptr(S)[col]:(getcolptr(S)[col+1]-1)
 nzrange(S::SparseMatrixCSCView, col::Integer) = nzrange(S.parent, S.indices[2][col])
 
+function isstored(A::AbstractSparseMatrixCSC, i::Integer, j::Integer)
+    rows = rowvals(A)
+    for istored in nzrange(A, j) # could do binary search if the row indices are sorted?
+        i == rows[istored] && return true
+    end
+    return false
+end
+
+Base.replace_in_print_matrix(A::AbstractSparseMatrix, i::Integer, j::Integer, s::AbstractString) =
+    isstored(A, i, j) ? s : Base.replace_with_centered_mark(s)
+
 function Base.show(io::IO, ::MIME"text/plain", S::AbstractSparseMatrixCSC)
     xnnz = nnz(S)
     m, n = size(S)
@@ -195,7 +206,7 @@ end
 Base.show(io::IO, S::AbstractSparseMatrixCSC) = Base.show(convert(IOContext, io), S::AbstractSparseMatrixCSC)
 
 const brailleBlocks = UInt16['⠁', '⠂', '⠄', '⡀', '⠈', '⠐', '⠠', '⢀']
-function Base.show(io::IOContext, S::AbstractSparseMatrixCSC)
+function _show_with_braille_patterns(io::IOContext, S::AbstractSparseMatrixCSC)
     m, n = size(S)
     (m == 0 || n == 0) && return show(io, MIME("text/plain"), S)
 
@@ -254,6 +265,16 @@ function Base.show(io::IOContext, S::AbstractSparseMatrixCSC)
     end
     println(io)
     foreach(c -> print(io, Char(c)), @view brailleGrid[1:end-1])
+end
+
+function Base.show(io::IOContext, S::AbstractSparseMatrixCSC)
+    if size(S, 1) <= 20 && size(S, 2) <= 20
+        ioc = IOContext(io, :compact => true)
+        println(ioc)
+        Base.print_matrix(ioc, S)
+        return
+    end
+    _show_with_braille_patterns(io, S)
 end
 
 ## Reshape
