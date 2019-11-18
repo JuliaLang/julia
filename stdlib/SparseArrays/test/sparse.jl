@@ -2228,9 +2228,11 @@ end
     show(io, MIME"text/plain"(), spzeros(Float32, Int64, 2, 2))
     @test String(take!(io)) == "2×2 SparseArrays.SparseMatrixCSC{Float32,Int64} with 0 stored entries:\n  ⋅    ⋅ \n  ⋅    ⋅ "
 
-    show(io, MIME"text/plain"(), sparse(Int64[1, 1], Int64[1, 2], [1.0, 2.0]))
-    # @test String(take!(io)) == "1×2 SparseArrays.SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n⠉"
+    A = sparse(Int64[1, 1], Int64[1, 2], [1.0, 2.0])
+    show(io, MIME"text/plain"(), A)
     @test String(take!(io)) == "1×2 SparseArrays.SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n 1.0  2.0"
+    _show_with_braille_patterns(convert(IOContext, io), A)
+    @test String(take!(io)) == "\n⠉"
 
     # every 1-dot braille pattern
     for (i, b) in enumerate(split("⠁⠂⠄⡀⠈⠐⠠⢀", ""))
@@ -2263,7 +2265,7 @@ end
     @test String(take!(io)) == "\n" * brailleString
 
     function _filled_sparse(m::Integer, n::Integer)
-        C = CartesianIndices(zeros(m, n))[:]
+        C = CartesianIndices((m, n))[:]
         Is = [Int64(x[1]) for x in C]
         Js = [Int64(x[2]) for x in C]
         return sparse(Is, Js, true, m, n)
