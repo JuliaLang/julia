@@ -425,14 +425,19 @@ typedef struct {
 
 typedef struct {
     uint32_t nfields;
+    uint32_t npointers; // number of pointer
     uint32_t alignment : 9; // strictest alignment over all fields
     uint32_t haspadding : 1; // has internal undefined bytes
-    uint32_t npointers : 20; // number of pointer fields, top 4 bits are exponent (under-approximation)
     uint32_t fielddesc_type : 2; // 0 -> 8, 1 -> 16, 2 -> 32
     // union {
-    //     jl_fielddesc8_t field8[];
-    //     jl_fielddesc16_t field16[];
-    //     jl_fielddesc32_t field32[];
+    //     jl_fielddesc8_t field8[nfields];
+    //     jl_fielddesc16_t field16[nfields];
+    //     jl_fielddesc32_t field32[nfields];
+    // };
+    // union { // offsets relative to data start in words
+    //     uint8_t ptr8[npointers];
+    //     uint16_t ptr16[npointers];
+    //     uint32_t ptr32[npointers];
     // };
 } jl_datatype_layout_t;
 
@@ -952,7 +957,25 @@ STATIC_INLINE char *jl_symbol_name_(jl_sym_t *s) JL_NOTSAFEPOINT
 }
 #define jl_symbol_name(s) jl_symbol_name_(s)
 
+static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type) JL_NOTSAFEPOINT
+{
+    return 2 << fielddesc_type;
+    //if (fielddesc_type == 0) {
+    //    return sizeof(jl_fielddesc8_t);
+    //}
+    //else if (fielddesc_type == 1) {
+    //    return sizeof(jl_fielddesc16_t);
+    //}
+    //else {
+    //    return sizeof(jl_fielddesc32_t);
+    //}
+}
+
 #define jl_dt_layout_fields(d) ((const char*)(d) + sizeof(jl_datatype_layout_t))
+static inline const char *jl_dt_layout_ptrs(const jl_datatype_layout_t *l) JL_NOTSAFEPOINT
+{
+    return jl_dt_layout_fields(l) + jl_fielddesc_size(l->fielddesc_type) * l->nfields;
+}
 
 #define DEFINE_FIELD_ACCESSORS(f)                                             \
     static inline uint32_t jl_field_##f(jl_datatype_t *st,                    \
@@ -977,20 +1000,7 @@ static inline int jl_field_isptr(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 {
     const jl_datatype_layout_t *ly = st->layout;
     assert(i >= 0 && (size_t)i < ly->nfields);
-    return ((const jl_fielddesc8_t*)(jl_dt_layout_fields(ly) + (i << (ly->fielddesc_type + 1))))->isptr;
-}
-
-static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type) JL_NOTSAFEPOINT
-{
-    if (fielddesc_type == 0) {
-        return sizeof(jl_fielddesc8_t);
-    }
-    else if (fielddesc_type == 1) {
-        return sizeof(jl_fielddesc16_t);
-    }
-    else {
-        return sizeof(jl_fielddesc32_t);
-    }
+    return ((const jl_fielddesc8_t*)(jl_dt_layout_fields(ly) + jl_fielddesc_size(ly->fielddesc_type) * i))->isptr;
 }
 
 #undef DEFINE_FIELD_ACCESSORS
