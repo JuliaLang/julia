@@ -298,6 +298,7 @@ function finish_cfg_inline!(state::CFGInliningState)
     end
 end
 
+# NOTE: The domtree is not kept up-to-date with changes this makes
 function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
                          linetable::Vector{LineInfoNode}, item::InliningTodo,
                          boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
@@ -415,6 +416,7 @@ end
 
 const fatal_type_bound_error = ErrorException("fatal error in type inference (type bound)")
 
+# NOTE: The domtree is not kept up-to-date with changes this makes
 function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
                                argexprs::Vector{Any}, linetable::Vector{LineInfoNode},
                                item::UnionSplit, boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
@@ -497,7 +499,9 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
 end
 
 function batch_inline!(todo::Vector{Any}, ir::IRCode, linetable::Vector{LineInfoNode}, propagate_inbounds::Bool)
-    # Compute the new CFG first (modulo statement ranges, which will be computed below)
+    # Compute the new CFG first (modulo statement ranges, which will be
+    # computed below, and the domtree, which will be updated below before we
+    # iterate through the statements)
     state = CFGInliningState(ir)
     for item in todo
         if isa(item, UnionSplit)
@@ -518,6 +522,9 @@ function batch_inline!(todo::Vector{Any}, ir::IRCode, linetable::Vector{LineInfo
 
     let compact = IncrementalCompact(ir, false)
         compact.result_bbs = state.new_cfg_blocks
+        # Recompute the domtree now that the CFG has been modified
+        compact.result_domtree = construct_domtree(compact.result_bbs)
+
         # This needs to be a minimum and is more of a size hint
         nn = 0
         for item in todo
@@ -572,7 +579,6 @@ function batch_inline!(todo::Vector{Any}, ir::IRCode, linetable::Vector{LineInfo
                 compact[idx] = PhiNode(Any[edge == length(state.bb_rename) ? length(state.new_cfg_blocks) : state.bb_rename[edge+1]-1 for edge in stmt.edges], stmt.values)
             end
         end
-
         ir = finish(compact)
     end
     return ir

@@ -385,7 +385,6 @@ function domsort_ssa!(ir::IRCode)
         push!(result_order, node)
         cs = ir.cfg.domtree.nodes[node].children
         terminator = ir.stmts[last(ir.cfg.blocks[node].stmts)][:inst]
-        iscondbr = isa(terminator, GotoIfNot)
         let old_node = node + 1
             if length(cs) >= 1
                 # Adding the nodes in reverse sorted order attempts to retain
@@ -499,7 +498,17 @@ function domsort_ssa!(ir::IRCode)
     for i in 1:length(result)
         result[i][:inst] = renumber_ssa!(result[i][:inst], inst_rename, true)
     end
-    cfg = CFG(new_bbs, Int[first(bb.stmts) for bb in new_bbs[2:end]])
+    # Recompute domtree from scratch because adding the new nodes for retaining
+    # fallthrough can be a significant change to the CFG, and recomputing the
+    # whole thing is probably faster than making many updates. If not for these
+    # new nodes, we could use
+    #
+    # domtree = rename_blocks!(
+    #     ir.cfg.domtree,
+    #     Int[haskey(bb_rename, old_bb) ? bb_rename[old_bb] : -1
+    #         for old_bb in 1:length(ir.cfg.blocks)])
+    domtree = construct_domtree(new_bbs)
+    cfg = CFG(new_bbs, Int[first(bb.stmts) for bb in new_bbs[2:end]], domtree)
     new_new_nodes = NewNodeStream(length(ir.new_nodes))
     for i = 1:length(ir.new_nodes)
         new_info = ir.new_nodes.info[i]
