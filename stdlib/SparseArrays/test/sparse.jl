@@ -2224,35 +2224,43 @@ end
     show(io, MIME"text/plain"(), spzeros(Float64, Int64, 0, 0))
     @test String(take!(io)) == "0×0 SparseArrays.SparseMatrixCSC{Float64,Int64} with 0 stored entries"
     show(io, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
-    @test String(take!(io)) == "1×1 SparseArrays.SparseMatrixCSC{Float64,Int64} with 1 stored entry:\n⠁"
+    @test String(take!(io)) == "1×1 SparseArrays.SparseMatrixCSC{Float64,Int64} with 1 stored entry:\n 1.0"
     show(io, MIME"text/plain"(), spzeros(Float32, Int64, 2, 2))
-    @test String(take!(io)) == "2×2 SparseArrays.SparseMatrixCSC{Float32,Int64} with 0 stored entries:\n" * Char(10240)
+    @test String(take!(io)) == "2×2 SparseArrays.SparseMatrixCSC{Float32,Int64} with 0 stored entries:\n  ⋅    ⋅ \n  ⋅    ⋅ "
 
-    show(io, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
-    @test String(take!(io)) == "1×1 SparseArrays.SparseMatrixCSC{Float64,Int64} with 1 stored entry:\n⠁"
     show(io, MIME"text/plain"(), sparse(Int64[1, 1], Int64[1, 2], [1.0, 2.0]))
-    @test String(take!(io)) == "1×2 SparseArrays.SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n⠉"
+    # @test String(take!(io)) == "1×2 SparseArrays.SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n⠉"
+    @test String(take!(io)) == "1×2 SparseArrays.SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n 1.0  2.0"
 
     # every 1-dot braille pattern
     for (i, b) in enumerate(split("⠁⠂⠄⡀⠈⠐⠠⢀", ""))
         A = spzeros(Int64, Int64, 4, 2)
         A[i] = 1
-        show(io, MIME"text/plain"(), A)
-        @test String(take!(io)) == "4×2 SparseArrays.SparseMatrixCSC{Int64,Int64} with 1 stored entry:\n" * b
+        _show_with_braille_patterns(convert(IOContext, io), A)
+        @test String(take!(io)) == "\n" * b
     end
+
+    # empty braille pattern Char(10240)
+    A = spzeros(Int64, Int64, 4, 2)
+    _show_with_braille_patterns(convert(IOContext, io), A)
+    @test String(take!(io)) == "\n" * Char(10240)
 
     A = sparse(Int64[1, 2, 4, 2, 3], Int64[1, 1, 1, 2, 2], Int64[1, 1, 1, 1, 1], 4, 2)
     show(io, MIME"text/plain"(), A)
-    @test String(take!(io)) == "4×2 SparseArrays.SparseMatrixCSC{Int64,Int64} with 5 stored entries:\n⡳"
+    @test String(take!(io)) == "4×2 SparseArrays.SparseMatrixCSC{Int64,Int64} with 5 stored entries:\n 1  ⋅\n 1  1\n ⋅  1\n 1  ⋅"
+    _show_with_braille_patterns(convert(IOContext, io), A)
+    @test String(take!(io)) == "\n⡳"
 
     A = sparse(Int64[1, 3, 2, 4], Int64[1, 1, 2, 2], Int64[1, 1, 1, 1], 7, 3)
     show(io, MIME"text/plain"(), A)
-    @test String(take!(io)) == "7×3 SparseArrays.SparseMatrixCSC{Int64,Int64} with 4 stored entries:\n⢕" * Char(10240) * "\n" * Char(10240) * Char(10240)
+    @test String(take!(io)) == "7×3 SparseArrays.SparseMatrixCSC{Int64,Int64} with 4 stored entries:\n 1  ⋅  ⋅\n ⋅  1  ⋅\n 1  ⋅  ⋅\n ⋅  1  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅"
+    _show_with_braille_patterns(convert(IOContext, io), A)
+    @test String(take!(io)) == "\n⢕" * Char(10240) * "\n" * Char(10240)^2
 
     A = sparse(Int64[1:10;], Int64[1:10;], fill(Float64(1), 10))
-    show(io, MIME"text/plain"(), A)
+    _show_with_braille_patterns(convert(IOContext, io), A)
     brailleString = "⠑⢄" * Char(10240)^3 * "\n" * Char(10240)^2 * "⠑⢄" * Char(10240) * "\n" * Char(10240)^4 * "⠑"
-    @test String(take!(io)) == "10×10 SparseArrays.SparseMatrixCSC{Float64,Int64} with 10 stored entries:\n" * brailleString
+    @test String(take!(io)) == "\n" * brailleString
 
     function _filled_sparse(m::Integer, n::Integer)
         C = CartesianIndices(zeros(m, n))[:]
@@ -2263,19 +2271,19 @@ end
 
     # vertical scaling
     ioc = IOContext(io, :displaysize => (5, 80), :limit => true)
-    show(ioc, MIME"text/plain"(), _filled_sparse(10, 10))
-    @test String(take!(io)) == "10×10 SparseArrays.SparseMatrixCSC{Bool,Int64} with 100 stored entries:\n" * "⣿⣿"
+    _show_with_braille_patterns(ioc, _filled_sparse(10, 10))
+    @test String(take!(io)) == "\n" * "⣿⣿"
 
-    show(ioc, MIME"text/plain"(), _filled_sparse(20, 10))
-    @test String(take!(io)) == "20×10 SparseArrays.SparseMatrixCSC{Bool,Int64} with 200 stored entries:\n" * "⣿"
+    _show_with_braille_patterns(ioc, _filled_sparse(20, 10))
+    @test String(take!(io)) == "\n" * "⣿"
 
     # horizontal scaling
     ioc = IOContext(io, :displaysize => (80, 4), :limit => true)
-    show(ioc, MIME"text/plain"(), _filled_sparse(8, 8))
-    @test String(take!(io)) == "8×8 SparseArrays.SparseMatrixCSC{Bool,Int64} with 64 stored entries:\n" * "⣿⣿"
+    _show_with_braille_patterns(ioc, _filled_sparse(8, 8))
+    @test String(take!(io)) == "\n" * "⣿⣿"
 
-    show(ioc, MIME"text/plain"(), _filled_sparse(8, 16))
-    @test String(take!(io)) == "8×16 SparseArrays.SparseMatrixCSC{Bool,Int64} with 128 stored entries:\n" * "⠛⠛"
+    _show_with_braille_patterns(ioc, _filled_sparse(8, 16))
+    @test String(take!(io)) == "\n" * "⠛⠛"
 end
 
 @testset "check buffers" for n in 1:3
