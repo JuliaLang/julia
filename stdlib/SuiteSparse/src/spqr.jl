@@ -160,7 +160,10 @@ solve least squares or underdetermined problems with [`\\`](@ref). The function 
 ```jldoctest
 julia> A = sparse([1,2,3,4], [1,1,2,2], [1.0,1.0,1.0,1.0])
 4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
-⢣
+ 1.0   ⋅
+ 1.0   ⋅
+  ⋅   1.0
+  ⋅   1.0
 
 julia> qr(A)
 Base.SparseArrays.SPQR.QRSparse{Float64,Int64}
@@ -172,7 +175,8 @@ Q factor:
  -0.707107   0.0        0.0        0.707107
 R factor:
 2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:
-⠑
+ -1.41421    ⋅
+   ⋅       -1.41421
 Row permutation:
 4-element Array{Int64,1}:
  1
@@ -301,7 +305,10 @@ julia> F.Q
 
 julia> F.R
 4×4 SparseMatrixCSC{Float64,Int64} with 5 stored entries:
-⠑⢔
+ 3.0   ⋅    ⋅    ⋅
+  ⋅   4.0   ⋅   2.0
+  ⋅    ⋅   5.0   ⋅
+  ⋅    ⋅    ⋅   1.0
 
 julia> F.prow
 4-element Array{Int64,1}:
@@ -426,7 +433,10 @@ when the problem is underdetermined.
 ```jldoctest
 julia> A = sparse([1,2,4], [1,1,1], [1.0,1.0,1.0], 4, 2)
 4×2 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
-⡃
+ 1.0   ⋅
+ 1.0   ⋅
+  ⋅    ⋅
+ 1.0   ⋅
 
 julia> qr(A)\\fill(1.0, 4)
 2-element Array{Float64,1}:
