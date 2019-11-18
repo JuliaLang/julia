@@ -246,9 +246,9 @@ function _show_with_braille_patterns(io::IOContext, S::AbstractSparseMatrixCSC)
     brailleGrid[end, :] .= '\n'
 
     rvals = rowvals(S)
-    rowscale = max(1, scaleHeight - 1) / max(1, size(S, 1) - 1)
-    colscale = max(1, scaleWidth - 1) / max(1, size(S, 2) - 1)
-    @inbounds for j = 1:size(S, 2)
+    rowscale = max(1, scaleHeight - 1) / max(1, m - 1)
+    colscale = max(1, scaleWidth - 1) / max(1, n - 1)
+    @inbounds for j = 1:n
         # Scale the column index `j` to the best matching column index
         # of a matrix of size `scaleHeight × scaleWidth`
         sj = round(Int, (j - 1) * colscale + 1)
