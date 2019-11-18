@@ -226,10 +226,7 @@ function _show_with_braille_patterns(io::IOContext, S::AbstractSparseMatrixCSC)
     # available screen space. The size of that smaller matrix is stored
     # in the variables `scaleHeight` and `scaleWidth`. If no scaling is needed,
     # we can use the size `m × n` of `S` directly.
-    scaleHeight = m
-    scaleWidth = n
-
-    # Determine if scaling is needed and set the scaling factors
+    # We determine if scaling is needed and set the scaling factors
     # `scaleHeight` and `scaleWidth` accordingly. Note that each available
     # character can contain up to 4 braille dots in its height (⡇) and up to
     # 2 braille dots in its width (⠉).
@@ -237,6 +234,9 @@ function _show_with_braille_patterns(io::IOContext, S::AbstractSparseMatrixCSC)
         s = min(2maxWidth / n, 4maxHeight / m)
         scaleHeight = floor(Int, s * m)
         scaleWidth = floor(Int, s * n)
+    else
+        scaleHeight = m
+        scaleWidth = n
     end
 
     # `brailleGrid` is used to store the needed braille characters for
