@@ -44,9 +44,9 @@ RUNTIME_C_SRCS := \
 	dlload sys init task array dump staticdata toplevel jl_uv datatype \
 	simplevector runtime_intrinsics precompile \
 	threading partr stackwalk gc gc-debug gc-pages gc-stacks method \
-	jlapi signal-handling safepoint jloptions timing subtype \
+	jlapi signal-handling safepoint timing subtype \
 	crc32c
-RUNTIME_SRCS := APInt-C runtime_ccall processor rtutils $(RUNTIME_C_SRCS)
+RUNTIME_SRCS := APInt-C runtime_ccall processor rtutils jloptions $(RUNTIME_C_SRCS)
 SRCS := $(RUNTIME_SRCS)
 
 ifeq ($(USEMSVC), 1)
@@ -347,7 +347,7 @@ clean-support:
 
 cleanall: clean clean-flisp clean-support clean-analyzegc
 
-$(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/GCChecker.cpp
+$(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/GCChecker.cpp $(LLVM_CONFIG_ABSOLUTE)
 	@$(call PRINT_CC, $(CXX) -g $(fPIC) -shared -o $@ -DCLANG_PLUGIN -I$(build_includedir) $(shell $(LLVM_CONFIG_HOST) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(LDFLAGS) $(CXXLDFLAGS) -L$(build_libdir) $< $(CLANGLINK))
 
 # Throw an error if a proper version of `clang` is not available.
