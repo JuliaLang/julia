@@ -487,13 +487,6 @@ end
 
 @testset "evalpoly" begin
     @test @evalpoly(2,3,4,5,6) == 3+2*(4+2*(5+2*6)) == @evalpoly(2+0im,3,4,5,6)
-    @test let evalcounts=0
-              @evalpoly(begin
-                            evalcounts += 1
-                            4
-                        end, 1,2,3,4,5)
-              evalcounts
-          end == 1
     a0 = 1
     a1 = 2
     c = 3
