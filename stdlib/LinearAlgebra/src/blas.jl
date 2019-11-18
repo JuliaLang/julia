@@ -422,7 +422,7 @@ asum(x::Union{AbstractVector,DenseArray}) = GC.@preserve x asum(length(x), point
 """
     axpy!(a, X, Y)
 
-Overwrite `Y` with `a*X + Y`, where `a` is a scalar. Return `Y`.
+Overwrite `Y` with `X*a + Y`, where `a` is a scalar. Return `Y`.
 
 # Examples
 ```jldoctest
