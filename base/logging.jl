@@ -33,8 +33,9 @@ abstract type AbstractLogger ; end
 
 Log a message to `logger` at `level`.  The logical location at which the
 message was generated is given by module `_module` and `group`; the source
-location by `file` and `line`. `id` is an arbitrary unique [`Symbol`](@ref) to be used
-as a key to identify the log statement when filtering.
+location by `file` and `line`. `id` is an arbitrary unique value (typically a
+[`Symbol`](@ref)) to be used as a key to identify the log statement when
+filtering.
 """
 function handle_message end
 
@@ -260,20 +261,20 @@ function logmsg_code(_module, file, line, level, message, exs...)
             end
             k = ex.args[1]
             # Recognize several special keyword arguments
-            if k == :_id
+            if k === :_id
                 # id may be overridden if you really want several log
                 # statements to share the same id (eg, several pertaining to
                 # the same progress step).  In those cases it may be wise to
                 # manually call log_record_id to get a unique id in the same
                 # format.
                 id = esc(v)
-            elseif k == :_module
+            elseif k === :_module
                 _module = esc(v)
-            elseif k == :_line
+            elseif k === :_line
                 line = esc(v)
-            elseif k == :_file
+            elseif k === :_file
                 file = esc(v)
-            elseif k == :_group
+            elseif k === :_group
                 group = esc(v)
             else
                 # Copy across key value pairs for structured log records

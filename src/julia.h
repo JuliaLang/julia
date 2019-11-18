@@ -749,9 +749,6 @@ extern void JL_GC_POP() JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT int jl_gc_enable(int on);
 JL_DLLEXPORT int jl_gc_is_enabled(void);
-JL_DLLEXPORT int64_t jl_gc_total_bytes(void);
-JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void);
-JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void);
 
 typedef enum {
     JL_GC_AUTO = 0,         // use heuristics to determine the collection type
@@ -1797,9 +1794,7 @@ extern int had_exception;
 #define JL_STDERR jl_uv_stderr
 #define JL_STDIN  jl_uv_stdin
 
-JL_DLLEXPORT void jl_run_event_loop(uv_loop_t *loop);
-JL_DLLEXPORT int jl_run_once(uv_loop_t *loop);
-JL_DLLEXPORT int jl_process_events(uv_loop_t *loop);
+JL_DLLEXPORT int jl_process_events(void);
 
 JL_DLLEXPORT uv_loop_t *jl_global_event_loop(void);
 

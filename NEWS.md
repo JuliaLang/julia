@@ -47,6 +47,10 @@ Standard library changes
 
 * Verbose `display` of `Char` (`text/plain` output) now shows the codepoint value in standard-conforming `"U+XXXX"` format ([#33291]).
 
+* `Iterators.partition` now uses views (or smartly re-computed ranges) for partitions of all `AbstractArray`s ([#33533]).
+
+* Sets are now displayed less compactly in the REPL, as a column of elements, like vectors
+  and dictionaries ([#33300]).
 
 #### Libdl
 
@@ -68,6 +72,11 @@ Standard library changes
 
 * The performance of `rand(::Tuple)` is improved in some cases ([#32208]). As a consequence, the
   stream of generated values produced for a given seed has changed.
+
+#### REPL
+
+* The attributes of the implicit `IOContext` used by the REPL to display objects can be
+  modified by the user (experimental feature) ([#29249]).
 
 #### SparseArrays
 

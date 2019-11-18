@@ -1397,7 +1397,7 @@ static void jl_save_system_image_to_stream(ios_t *f)
 
 JL_DLLEXPORT ios_t *jl_create_system_image(void)
 {
-    ios_t *f = (ios_t*)malloc(sizeof(ios_t));
+    ios_t *f = (ios_t*)malloc_s(sizeof(ios_t));
     ios_mem(f, 0);
     jl_save_system_image_to_stream(f);
     return f;

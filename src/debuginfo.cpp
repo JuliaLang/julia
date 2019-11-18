@@ -101,7 +101,7 @@ static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnnam
     // GC safe
     DWORD mod_size = 0;
 #if defined(_CPU_X86_64_)
-    PRUNTIME_FUNCTION tbl = (PRUNTIME_FUNCTION)malloc(sizeof(RUNTIME_FUNCTION));
+    PRUNTIME_FUNCTION tbl = (PRUNTIME_FUNCTION)malloc_s(sizeof(RUNTIME_FUNCTION));
     tbl->BeginAddress = (DWORD)(Code - Section);
     tbl->EndAddress = (DWORD)(Code - Section + Size);
     tbl->UnwindData = (DWORD)(UnwindData - Section);
@@ -427,7 +427,7 @@ static std::pair<char *, bool> jl_demangle(const char *name)
     }
     if (end <= start)
         goto done;
-    ret = (char*)malloc(end - start + 1);
+    ret = (char*)malloc_s(end - start + 1);
     memcpy(ret, start, end - start);
     ret[end - start] = '\0';
     return std::make_pair(ret, true);
@@ -761,7 +761,7 @@ static void get_function_name_and_base(const object::ObjectFile *object, bool in
                 if (auto name_or_err = sym_found.getName()) {
                     auto nameref = name_or_err.get();
                     size_t len = nameref.size();
-                    *name = (char*)realloc(*name, len + 1);
+                    *name = (char*)realloc_s(*name, len + 1);
                     (*name)[len] = 0;
                     memcpy(*name, nameref.data(), len);
                     needs_name = false;

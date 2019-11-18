@@ -214,7 +214,7 @@ end
 ## Wrappers for UMFPACK functions
 
 # generate the name of the C function according to the value and integer types
-umf_nm(nm,Tv,Ti) = "umfpack_" * (Tv == :Float64 ? "d" : "z") * (Ti == :Int64 ? "l_" : "i_") * nm
+umf_nm(nm,Tv,Ti) = "umfpack_" * (Tv === :Float64 ? "d" : "z") * (Ti === :Int64 ? "l_" : "i_") * nm
 
 for itype in UmfpackIndexTypes
     sym_r = umf_nm("symbolic", :Float64, itype)
@@ -487,20 +487,20 @@ end
 
 
 @inline function getproperty(lu::UmfpackLU, d::Symbol)
-    if d == :L || d == :U || d == :p || d == :q || d == :Rs || d == :(:)
+    if d === :L || d === :U || d === :p || d === :q || d === :Rs || d === :(:)
         # Guard the call to umf_extract behaind a branch to avoid infinite recursion
         L, U, p, q, Rs = umf_extract(lu)
-        if d == :L
+        if d === :L
             return L
-        elseif d == :U
+        elseif d === :U
             return U
-        elseif d == :p
+        elseif d === :p
             return p
-        elseif d == :q
+        elseif d === :q
             return q
-        elseif d == :Rs
+        elseif d === :Rs
             return Rs
-        elseif d == :(:)
+        elseif d === :(:)
             return (L, U, p, q, Rs)
         end
     else

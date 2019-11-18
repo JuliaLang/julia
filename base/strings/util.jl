@@ -104,7 +104,7 @@ end
 # chop(s::AbstractString) = SubString(s, firstindex(s), prevind(s, lastindex(s)))
 
 """
-    chomp(s::AbstractString)
+    chomp(s::AbstractString) -> SubString
 
 Remove a single trailing newline from a string.
 
@@ -133,8 +133,8 @@ function chomp(s::String)
 end
 
 """
-    lstrip([pred=isspace,] str::AbstractString)
-    lstrip(str::AbstractString, chars)
+    lstrip([pred=isspace,] str::AbstractString) -> SubString
+    lstrip(str::AbstractString, chars) -> SubString
 
 Remove leading characters from `str`, either those specified by `chars` or those for
 which the function `pred` returns `true`.
@@ -165,8 +165,8 @@ lstrip(s::AbstractString) = lstrip(isspace, s)
 lstrip(s::AbstractString, chars::Chars) = lstrip(in(chars), s)
 
 """
-    rstrip([pred=isspace,] str::AbstractString)
-    rstrip(str::AbstractString, chars)
+    rstrip([pred=isspace,] str::AbstractString) -> SubString
+    rstrip(str::AbstractString, chars) -> SubString
 
 Remove trailing characters from `str`, either those specified by `chars` or those for
 which the function `pred` returns `true`.
@@ -196,8 +196,8 @@ rstrip(s::AbstractString) = rstrip(isspace, s)
 rstrip(s::AbstractString, chars::Chars) = rstrip(in(chars), s)
 
 """
-    strip([pred=isspace,] str::AbstractString)
-    strip(str::AbstractString, chars)
+    strip([pred=isspace,] str::AbstractString) -> SubString
+    strip(str::AbstractString, chars) -> SubString
 
 Remove leading and trailing characters from `str`, either those specified by `chars` or
 those for which the function `pred` returns `true`.

@@ -305,6 +305,8 @@ end
         @test findfirst(==(7), 1:2:10) == 4
         @test findfirst(==(10), 1:2:10) == nothing
         @test findfirst(==(11), 1:2:10) == nothing
+        @test findfirst(==(-7), 1:-1:-10) == 9
+        @test findfirst(==(2),1:-1:2) == nothing
     end
     @testset "reverse" begin
         @test reverse(reverse(1:10)) == 1:10
@@ -1490,8 +1492,6 @@ end
 end
 
 @testset "allocation of TwicePrecision call" begin
-    0:286.493442:360
-    0:286:360
     @test @allocated(0:286.493442:360) == 0
     @test @allocated(0:286:360) == 0
 end

@@ -654,11 +654,9 @@ end
 
 function cholesky!(A::Diagonal, ::Val{false} = Val(false); check::Bool = true)
     info = 0
-    diagonal = A.diag
-    for i in axes(diagonal, 1)
-        d = diagonal[i]
-        if !(d == 0 || (isreal(d) && d < 0))
-            diagonal[i] = √d
+    for (i, di) in enumerate(A.diag)
+        if isreal(di) && real(di) > 0
+            A.diag[i] = √di
         elseif check
             throw(PosDefException(i))
         else
@@ -671,6 +669,15 @@ end
 
 cholesky(A::Diagonal, ::Val{false} = Val(false); check::Bool = true) =
     cholesky!(cholcopy(A), Val(false); check = check)
+
+function getproperty(C::Cholesky{<:Any,<:Diagonal}, d::Symbol)
+    Cfactors = getfield(C, :factors)
+    if d in (:U, :L, :UL)
+        return Cfactors
+    else
+        return getfield(C, d)
+    end
+end
 
 Base._sum(A::Diagonal, ::Colon) = sum(A.diag)
 

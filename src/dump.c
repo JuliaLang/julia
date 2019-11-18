@@ -334,7 +334,7 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
             jl_methtable_t *mt = dt->name->mt;
             size_t l = strlen(jl_symbol_name(mt->name));
             char *prefixed;
-            prefixed = (char*)malloc(l + 2);
+            prefixed = (char*)malloc_s(l + 2);
             prefixed[0] = '#';
             strcpy(&prefixed[1], jl_symbol_name(mt->name));
             // remove ##kw suffix
@@ -1523,7 +1523,7 @@ static jl_value_t *jl_deserialize_value_symbol(jl_serializer_state *s, uint8_t t
         len = read_uint8(s->s);
     else
         len = read_int32(s->s);
-    char *name = (char*)(len >= 256 ? malloc(len + 1) : alloca(len + 1));
+    char *name = (char*)(len >= 256 ? malloc_s(len + 1) : alloca(len + 1));
     ios_read(s->s, name, len);
     name[len] = '\0';
     jl_value_t *sym = (jl_value_t*)jl_symbol(name);
@@ -3225,7 +3225,7 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
 
     arraylist_t *tracee_list = NULL;
     if (jl_newmeth_tracer)
-        tracee_list = arraylist_new((arraylist_t*)malloc(sizeof(arraylist_t)), 0);
+        tracee_list = arraylist_new((arraylist_t*)malloc_s(sizeof(arraylist_t)), 0);
 
     // at this point, the AST is fully reconstructed, but still completely disconnected
     // now all of the interconnects will be created

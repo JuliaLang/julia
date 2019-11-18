@@ -304,15 +304,15 @@ end
 
 function getproperty(F::LU{T,<:StridedMatrix}, d::Symbol) where T
     m, n = size(F)
-    if d == :L
+    if d === :L
         L = tril!(getfield(F, :factors)[1:m, 1:min(m,n)])
         for i = 1:min(m,n); L[i,i] = one(T); end
         return L
-    elseif d == :U
+    elseif d === :U
         return triu!(getfield(F, :factors)[1:min(m,n), 1:n])
-    elseif d == :p
+    elseif d === :p
         return ipiv2perm(getfield(F, :ipiv), m)
-    elseif d == :P
+    elseif d === :P
         return Matrix{T}(I, m, m)[:,invperm(F.p)]
     else
         getfield(F, d)
@@ -553,7 +553,7 @@ factorize(A::Tridiagonal) = lu(A)
 
 function getproperty(F::LU{T,Tridiagonal{T,V}}, d::Symbol) where {T,V}
     m, n = size(F)
-    if d == :L
+    if d === :L
         dl = getfield(getfield(F, :factors), :dl)
         L = Array(Bidiagonal(fill!(similar(dl, n), one(T)), dl, d))
         for i = 2:n
@@ -562,15 +562,15 @@ function getproperty(F::LU{T,Tridiagonal{T,V}}, d::Symbol) where {T,V}
             L[i, 1:i - 1] = tmp
         end
         return L
-    elseif d == :U
+    elseif d === :U
         U = Array(Bidiagonal(getfield(getfield(F, :factors), :d), getfield(getfield(F, :factors), :du), d))
         for i = 1:n - 2
             U[i,i + 2] = getfield(getfield(F, :factors), :du2)[i]
         end
         return U
-    elseif d == :p
+    elseif d === :p
         return ipiv2perm(getfield(F, :ipiv), m)
-    elseif d == :P
+    elseif d === :P
         return Matrix{T}(I, m, m)[:,invperm(F.p)]
     end
     return getfield(F, d)

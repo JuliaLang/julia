@@ -433,6 +433,85 @@ for n in [5,6]
           [(1,1),(2,2),(3,3),(4,4),(5,5)]
 end
 
+function iterate_length(iter)
+    n=0
+    for i in iter
+        n += 1
+    end
+    return n
+end
+function simd_iterate_length(iter)
+    n=0
+    @simd for i in iter
+        n += 1
+    end
+    return n
+end
+function simd_trip_count(iter)
+    return sum(Base.SimdLoop.simd_inner_length(iter, i) for i in Base.SimdLoop.simd_outer_range(iter))
+end
+function iterate_elements(iter)
+    vals = Vector{eltype(iter)}(undef, length(iter))
+    i = 1
+    for v in iter
+        @inbounds vals[i] = v
+        i += 1
+    end
+    return vals
+end
+function simd_iterate_elements(iter)
+    vals = Vector{eltype(iter)}(undef, length(iter))
+    i = 1
+    @simd for v in iter
+        @inbounds vals[i] = v
+        i += 1
+    end
+    return vals
+end
+function index_elements(iter)
+    vals = Vector{eltype(iter)}(undef, length(iter))
+    i = 1
+    for j in eachindex(iter)
+        @inbounds vals[i] = iter[j]
+        i += 1
+    end
+    return vals
+end
+
+@testset "CartesianPartition optimizations" for dims in ((1,), (64,), (101,),
+                                                         (1,1), (8,8), (11, 13),
+                                                         (1,1,1), (8, 4, 2), (11, 13, 17)),
+                                                part in (1, 7, 8, 11, 63, 64, 65, 142, 143, 144)
+    P = partition(CartesianIndices(dims), part)
+    for I in P
+        @test length(I) == iterate_length(I) == simd_iterate_length(I) == simd_trip_count(I)
+        @test collect(I) == iterate_elements(I) == simd_iterate_elements(I) == index_elements(I)
+    end
+    @test all(Base.splat(==), zip(Iterators.flatten(map(collect, P)), CartesianIndices(dims)))
+end
+@testset "empty/invalid partitions" begin
+    @test_throws ArgumentError partition(1:10, 0)
+    @test_throws ArgumentError partition(1:10, -1)
+    @test_throws ArgumentError partition(1:0, 0)
+    @test_throws ArgumentError partition(1:0, -1)
+    @test isempty(partition(1:0, 1))
+    @test isempty(partition(CartesianIndices((0,1)), 1))
+end
+@testset "exact partition eltypes" for a in (Base.OneTo(24), 1:24, 1:1:24, LinRange(1,10,24), .1:.1:2.4, Vector(1:24),
+                                             CartesianIndices((4, 6)), Dict((1:24) .=> (1:24)))
+    P = partition(a, 2)
+    @test eltype(P) === typeof(first(P))
+    @test Iterators.IteratorEltype(P) == Iterators.HasEltype()
+    if a isa AbstractArray
+        P = partition(vec(a), 2)
+        @test eltype(P) === typeof(first(P))
+        P = partition(reshape(a, 6, 4), 2)
+        @test eltype(P) === typeof(first(P))
+        P = partition(reshape(a, 2, 3, 4), 2)
+        @test eltype(P) === typeof(first(P))
+    end
+end
+
 @test join(map(x->string(x...), partition("Hello World!", 5)), "|") ==
       "Hello| Worl|d!"
 

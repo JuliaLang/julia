@@ -5019,13 +5019,15 @@ end
 # when calculating total allocation size.
 @noinline function f17255(n)
     GC.enable(false)
-    b0 = Base.gc_bytes()
+    b0 = Ref{Int64}(0)
+    b1 = Ref{Int64}(0)
+    Base.gc_bytes(b0)
     local a
     for i in 1:n
         a, t, allocd = @timed [Ref(1) for i in 1:1000]
         @test allocd > 0
-        b1 = Base.gc_bytes()
-        if b1 < b0
+        Base.gc_bytes(b1)
+        if b1[] < b0[]
             return false, a
         end
     end
@@ -5922,6 +5924,14 @@ let x = UnionFieldInlineStruct(1, 3.14)
     CInlineUnion = vcat(AInlineUnion, BInlineUnion)
     @test sizeof(CInlineUnion) == sizeof(UnionFieldInlineStruct) * 20
     @test CInlineUnion[end] == x
+end
+
+# issue 33709
+struct A33709
+    a::Union{Nothing,A33709}
+end
+let a33709 = A33709(A33709(nothing))
+    @test isnothing(a33709.a.a)
 end
 
 # issue 31583

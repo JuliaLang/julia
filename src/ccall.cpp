@@ -672,7 +672,8 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     else {
         rt = (jl_value_t*)jl_voidpointer_type;
     }
-    Type *lrt = julia_type_to_llvm(rt);
+    Type *lrt = T_size;
+    assert(lrt == julia_type_to_llvm(rt));
 
     interpret_symbol_arg(ctx, sym, args[1], "cglobal", false);
 
@@ -917,10 +918,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         jl_value_t *tti = jl_svecref(tt,i);
         bool toboxed;
         Type *t = julia_type_to_llvm(tti, &toboxed);
-        if (toboxed)
-            argtypes.push_back(T_prjlvalue);
-        else
-            argtypes.push_back(t);
+        argtypes.push_back(t);
         if (4 + i > nargs) {
             jl_error("Missing arguments to llvmcall!");
         }
@@ -935,8 +933,6 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     Function *f;
     bool retboxed;
     Type *rettype = julia_type_to_llvm(rtt, &retboxed);
-    if (retboxed)
-        rettype = T_prjlvalue;
     if (isString) {
         // Make sure to find a unique name
         std::string ir_name;
@@ -1194,8 +1190,6 @@ std::string generate_func_sig(const char *fname)
             }
 
             t = julia_struct_to_llvm(tti, unionall_env, &isboxed);
-            if (isboxed)
-                t = T_prjlvalue;
             if (t == NULL || t == T_void) {
                 return make_errmsg(fname, i + 1, " doesn't correspond to a C type");
             }
@@ -1339,8 +1333,6 @@ static const std::string verify_ccall_sig(jl_value_t *&rt, jl_value_t *at,
     lrt = julia_struct_to_llvm(rt, unionall_env, &retboxed);
     if (lrt == NULL)
         return "return type doesn't correspond to a C type";
-    else if (retboxed)
-        lrt = T_prjlvalue;
 
     // is return type fully statically known?
     if (unionall_env == NULL) {
@@ -1965,9 +1957,6 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     }
     else {
         Type *jlrt = julia_type_to_llvm(rt, &jlretboxed); // compute the real "julian" return type and compute whether it is boxed
-        if (jlretboxed) {
-            jlrt = T_prjlvalue;
-        }
         if (type_is_ghost(jlrt)) {
             return ghostValue(rt);
         }
