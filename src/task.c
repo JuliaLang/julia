@@ -365,24 +365,18 @@ static jl_ptls_t NOINLINE refetch_ptls(void)
     return jl_get_ptls_states();
 }
 
-JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
+JL_DLLEXPORT void jl_check_can_block(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_task_t *t = *pt;
-    jl_task_t *ct = ptls->current_task;
-    if (t == ct) {
-        return;
-    }
-    if (t->state == done_sym || t->state == failed_sym ||
-            (t->started && t->stkbuf == NULL)) {
-        ct->exception = t->exception;
-        ct->result = t->result;
-        return;
-    }
     if (ptls->in_finalizer)
         jl_error("task switch not allowed from inside gc finalizer");
     if (ptls->in_pure_callback)
         jl_error("task switch not allowed from inside staged nor pure functions");
+}
+
+JL_DLLEXPORT void jl_check_can_switch_to(jl_task_t *t)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (t->sticky && jl_atomic_load_acquire(&t->tid) == -1) {
         // manually yielding to a task
         if (jl_atomic_compare_exchange(&t->tid, -1, ptls->tid) != -1)
@@ -390,6 +384,16 @@ JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
     }
     else if (t->tid != ptls->tid) {
         jl_error("cannot switch to task running on another thread");
+    }
+}
+
+JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *t = *pt;
+    jl_task_t *ct = ptls->current_task;
+    if (t == ct) {
+        return;
     }
     sig_atomic_t defer_signal = ptls->defer_signal;
     int8_t gc_state = jl_gc_unsafe_enter(ptls);

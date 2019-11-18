@@ -455,4 +455,5 @@ end
 let t = @async nothing
     wait(t)
     @test_throws ErrorException("schedule: Task not runnable") schedule(t, nothing)
+    @test_throws ErrorException("yield: Task not runnable") yield(t)
 end

@@ -484,8 +484,8 @@ function __preinit_threads__()
     nothing
 end
 
-function enq_work(t::Task)
-    (t.state === :runnable && t.queue === nothing) || error("schedule: Task not runnable")
+# insert `t` into scheduler queue assuming it is ok to do so
+function unsafe_schedule(t::Task)
     tid = Threads.threadid(t)
     # Note there are three reasons a Task might be put into a sticky queue
     # even if t.sticky == false:
@@ -511,7 +511,14 @@ function enq_work(t::Task)
     return t
 end
 
-schedule(t::Task) = enq_work(t)
+check_can_block() = ccall(:jl_check_can_block, Cvoid, ())
+
+check_can_switch_to(t::Task) = ccall(:jl_check_can_switch_to, Cvoid, (Any,), t)
+
+function schedule(t::Task)
+    (t.state === :runnable && t.queue === nothing) || error("schedule: Task not runnable")
+    unsafe_schedule(t)
+end
 
 """
     schedule(t::Task, [val]; error=false)
@@ -553,7 +560,7 @@ function schedule(t::Task, @nospecialize(arg); error=false)
         t.queue === nothing || Base.error("schedule: Task not runnable")
         setfield!(t, :result, arg)
     end
-    enq_work(t)
+    unsafe_schedule(t)
     return t
 end
 
@@ -565,14 +572,10 @@ function is still runnable, and will be restarted immediately if there are no ot
 tasks.
 """
 function yield()
-    ct = current_task()
-    enq_work(ct)
-    try
-        wait()
-    catch
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
-        rethrow()
-    end
+    check_can_block()
+    unsafe_schedule(current_task())
+    unsafe_wait()
+    nothing
 end
 
 """
@@ -582,9 +585,16 @@ A fast, unfair-scheduling version of `schedule(t, arg); yield()` which
 immediately yields to `t` before calling the scheduler.
 """
 function yield(t::Task, @nospecialize(x=nothing))
+    check_can_block()
+    (t.state === :runnable && t.queue === nothing) || error("yield: Task not runnable")
+    ct = current_task()
+    if t === ct
+        return x
+    end
+    check_can_switch_to(t)
     t.result = x
-    enq_work(current_task())
-    return try_yieldto(ensure_rescheduled, Ref(t))
+    unsafe_schedule(ct)
+    return unsafe_yieldto(Ref(t))
 end
 
 """
@@ -596,17 +606,28 @@ call to `yieldto`. This is a low-level call that only switches tasks, not consid
 or scheduling in any way. Its use is discouraged.
 """
 function yieldto(t::Task, @nospecialize(x=nothing))
+    check_can_block()
+    # TODO: propagating an exception here is the legacy behavior, but doesn't
+    # necessarily make sense. This should perhaps throw a state error like
+    # `schedule` does instead.
+    if t.state === :done
+        return nothing
+    elseif t.state === :failed
+        throw(t.exception)
+    end
+    check_can_switch_to(t)
     t.result = x
-    return try_yieldto(identity, Ref(t))
+    return unsafe_yieldto(Ref(t))
 end
 
-function try_yieldto(undo, reftask::Ref{Task})
-    try
-        ccall(:jl_switchto, Cvoid, (Any,), reftask)
-    catch
-        undo(reftask[])
-        rethrow()
-    end
+# yield to a task, throwing an exception in it
+function throwto(t::Task, @nospecialize exc)
+    t.exception = exc
+    return yieldto(t)
+end
+
+function unsafe_yieldto(reftask::Ref{Task})
+    ccall(:jl_switchto, Cvoid, (Any,), reftask)
     ct = current_task()
     exc = ct.exception
     if exc !== nothing
@@ -616,29 +637,6 @@ function try_yieldto(undo, reftask::Ref{Task})
     result = ct.result
     ct.result = nothing
     return result
-end
-
-# yield to a task, throwing an exception in it
-function throwto(t::Task, @nospecialize exc)
-    t.exception = exc
-    return yieldto(t)
-end
-
-function ensure_rescheduled(othertask::Task)
-    ct = current_task()
-    W = Workqueues[Threads.threadid()]
-    if ct !== othertask && othertask.state === :runnable
-        # we failed to yield to othertask
-        # return it to the head of a queue to be retried later
-        tid = Threads.threadid(othertask)
-        Wother = tid == 0 ? W : Workqueues[tid]
-        pushfirst!(Wother, othertask)
-    end
-    # if the current task was queued,
-    # also need to return it to the runnable state
-    # before throwing an error
-    list_deletefirst!(W, ct)
-    nothing
 end
 
 function trypoptask(W::StickyWorkqueue)
@@ -664,13 +662,18 @@ end
     return Ref(task)
 end
 
-function wait()
+function unsafe_wait()
     W = Workqueues[Threads.threadid()]
     reftask = poptaskref(W)
-    result = try_yieldto(ensure_rescheduled, reftask)
+    result = unsafe_yieldto(reftask)
     Sys.isjsvm() || process_events()
     # return when we come out of the queue
     return result
+end
+
+function wait()
+    check_can_block()
+    unsafe_wait()
 end
 
 if Sys.iswindows()
