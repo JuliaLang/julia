@@ -36,6 +36,8 @@ function has_nontrivial_const_info(@nospecialize t)
     isa(t, PartialStruct) && return true
     return isa(t, Const) && !isdefined(typeof(t.val), :instance) && !(isa(t.val, Type) && hasuniquerep(t.val))
 end
+has_nontrivial_const_info(interp::AbstractInterpreter, @nospecialize t) =
+    has_nontrivial_const_info(t)
 
 # Subtyping currently intentionally answers certain queries incorrectly for kind types. For
 # some of these queries, this check can be used to somewhat protect against making incorrect

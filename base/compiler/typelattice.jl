@@ -210,7 +210,7 @@ widenconst(m::MaybeUndef) = widenconst(m.typ)
 widenconst(c::PartialTypeVar) = TypeVar
 widenconst(t::PartialStruct) = t.typ
 widenconst(@nospecialize(t)) = t
-widenconst(interp::TypeInference, @nospecialize(t)) = widenconst(t)
+widenconst(interp::AbstractInterpreter, @nospecialize(t)) = widenconst(t)
 
 issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)
 

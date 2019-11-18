@@ -14,15 +14,6 @@ struct Dummy <: Compiler.AbstractInterpreter
 end
 Dummy() = Dummy(Dict{MethodInstance, Any}())
 
-struct Symbolic
-    sym
-end
-
-
-struct ArraySize
-    size::Tuple
-end
-
 f(A) = A*A
 
 function test_it()
@@ -30,9 +21,8 @@ function test_it()
     method = first(methods(f))
     interp = Dummy()
     mi = specialize_method(method, Tuple{typeof(f), Matrix{Float64}}, Core.svec())::MethodInstance
-    symT = ArraySize((Symbolic(symbols("x")),Symbolic(symbols("y"))))
-    result = InferenceResult(interp, mi, Any[typeof(f), symT])
-   @show result.argtypes
+    result = InferenceResult(interp, mi)
+    @show result.argtypes
     frame = InferenceState(result, #=cached=#true, Core.Compiler.CustomParams(typemax(UInt64)))
     @show frame.slottypes
     Core.Compiler.typeinf_local(interp, frame)
@@ -83,6 +73,16 @@ function Core.Compiler.cache_result(interp::Dummy, result::InferenceResult, min_
     interp.cache[result.linfo] = (result.result, result.src)
     ninferred[] += 1
     nothing
+end
+
+#=
+struct Symbolic
+    sym
+end
+
+
+struct ArraySize
+    size::Tuple
 end
 
 function Core.Compiler.widenconst(interp::Dummy, @nospecialize(t))
@@ -209,6 +209,7 @@ function Core.Compiler.intrinsic_tfunction(interp::Dummy, f::IntrinsicFunction, 
     end
     return tf[3](interp, argtypes...)
 end
+=#
 
 
 end

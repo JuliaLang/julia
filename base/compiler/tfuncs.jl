@@ -194,9 +194,9 @@ add_tfunc(checked_umul_int, 2, 2, chk_tfunc, 10)
     ## other, misc intrinsics ##
 add_tfunc(Core.Intrinsics.llvmcall, 3, INT_INF,
           (@nospecialize(fptr), @nospecialize(rt), @nospecialize(at), a...) -> instanceof_tfunc(rt)[1], 10)
-cglobal_tfunc(@nospecialize(fptr)) = Ptr{Cvoid}
-cglobal_tfunc(@nospecialize(fptr), @nospecialize(t)) = (isType(t) ? Ptr{t.parameters[1]} : Ptr)
-cglobal_tfunc(@nospecialize(fptr), t::Const) = (isa(t.val, Type) ? Ptr{t.val} : Ptr)
+cglobal_tfunc(interp::AbstractInterpreter, @nospecialize(fptr)) = Ptr{Cvoid}
+cglobal_tfunc(interp::AbstractInterpreter, @nospecialize(fptr), @nospecialize(t)) = (isType(t) ? Ptr{t.parameters[1]} : Ptr)
+cglobal_tfunc(interp::AbstractInterpreter, @nospecialize(fptr), t::Const) = (isa(t.val, Type) ? Ptr{t.val} : Ptr)
 add_tfunc(Core.Intrinsics.cglobal, 1, 2, cglobal_tfunc, 5)
 
 function ifelse_tfunc(interp::AbstractInterpreter, @nospecialize(cnd), @nospecialize(x), @nospecialize(y))
@@ -246,6 +246,7 @@ function isdefined_nothrow(argtypes::Array{Any, 1})
         (argtypes[2] ⊑ Symbol || argtypes[2] ⊑ Int) :
          argtypes[2] ⊑ Symbol
 end
+
 function isdefined_tfunc(@nospecialize(args...))
     arg1 = args[1]
     if isa(arg1, Const)
@@ -1157,7 +1158,7 @@ function apply_type_tfunc(interp::AbstractInterpreter, @nospecialize(headtypetyp
 end
 add_tfunc(apply_type, 1, INT_INF, apply_type_tfunc, 10)
 
-function invoke_tfunc(@nospecialize(ft), @nospecialize(types), @nospecialize(argtype), sv::InferenceState)
+function invoke_tfunc(interp::AbstractInterpreter, @nospecialize(ft), @nospecialize(types), @nospecialize(argtype), sv::InferenceState)
     argtype = typeintersect(types, argtype)
     argtype === Bottom && return Bottom
     argtype isa DataType || return Any # other cases are not implemented below
@@ -1171,7 +1172,7 @@ function invoke_tfunc(@nospecialize(ft), @nospecialize(types), @nospecialize(arg
     # XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
     meth = entry.func
     (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), argtype, meth.sig)::SimpleVector
-    rt, edge = typeinf_edge(meth::Method, ti, env, sv)
+    rt, edge = typeinf_edge(interp, meth::Method, ti, env, sv)
     edge !== nothing && add_backedge!(edge::MethodInstance, sv)
     return rt
 end
@@ -1383,7 +1384,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
                 sigty = nothing
             end
             if isa(sigty, Type) && !has_free_typevars(sigty) && sigty <: Tuple
-                return invoke_tfunc(ft, sigty, argtypes_to_type(argtypes[3:end]), sv)
+                return invoke_tfunc(interp, ft, sigty, argtypes_to_type(interp, argtypes[3:end]), sv)
             end
         end
         return Any

@@ -166,12 +166,12 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter,
 end
 
 
-function const_prop_profitable(@nospecialize(arg))
+function const_prop_profitable(interp::AbstractInterpreter, @nospecialize(arg))
     # have new information from argtypes that wasn't available from the signature
     if isa(arg, PartialStruct)
         for b in arg.fields
             isconstType(b) && return true
-            const_prop_profitable(b) && return true
+            const_prop_profitable(interp, b) && return true
         end
     elseif !isa(arg, Const) || (isa(arg.val, Symbol) || isa(arg.val, Type) || (!isa(arg.val, String) && isimmutable(arg.val)))
         # don't consider mutable values or Strings useful constants
@@ -509,12 +509,12 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
     elseif tti0 <: Array
         return Any[Vararg{eltype(tti0)}]
     else
-        return abstract_iteration(itft, typ, vtypes, sv)
+        return abstract_iteration(interp, itft, typ, vtypes, sv)
     end
 end
 
 # simulate iteration protocol on container type up to fixpoint
-function abstract_iteration(@nospecialize(itft), @nospecialize(itertype), vtypes::VarTable, sv::InferenceState)
+function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @nospecialize(itertype), vtypes::VarTable, sv::InferenceState)
     if !isdefined(Main, :Base) || !isdefined(Main.Base, :iterate) || !isconst(Main.Base, :iterate)
         return Any[Vararg{Any}]
     end
@@ -526,7 +526,7 @@ function abstract_iteration(@nospecialize(itft), @nospecialize(itertype), vtypes
     else
         return Any[Vararg{Any}]
     end
-    stateordonet = abstract_call(iteratef, nothing, Any[itft, itertype], vtypes, sv)
+    stateordonet = abstract_call(interp, iteratef, nothing, Any[itft, itertype], vtypes, sv)
     # Return Bottom if this is not an iterator.
     # WARNING: Changes to the iteration protocol must be reflected here,
     # this is not just an optimization.
@@ -545,7 +545,7 @@ function abstract_iteration(@nospecialize(itft), @nospecialize(itertype), vtypes
         valtype = stateordonet.parameters[1]
         statetype = stateordonet.parameters[2]
         push!(ret, valtype)
-        stateordonet = abstract_call(iteratef, nothing, Any[Const(iteratef), itertype, statetype], vtypes, sv)
+        stateordonet = abstract_call(interp, iteratef, nothing, Any[Const(iteratef), itertype, statetype], vtypes, sv)
         stateordonet = widenconst(stateordonet)
     end
     if stateordonet === Nothing
@@ -562,8 +562,8 @@ function abstract_iteration(@nospecialize(itft), @nospecialize(itertype), vtypes
         end
         valtype = tmerge(valtype, nounion.parameters[1])
         statetype = tmerge(statetype, nounion.parameters[2])
-        stateordonet = abstract_call(iteratef, nothing, Any[Const(iteratef), itertype, statetype], vtypes, sv)
-        stateordonet = widenconst(stateordonet)
+        stateordonet = abstract_call(interp, iteratef, nothing, Any[Const(iteratef), itertype, statetype], vtypes, sv)
+        stateordonet = widenconst(interp, stateordonet)
     end
     push!(ret, Vararg{valtype})
     return ret
@@ -983,7 +983,7 @@ function abstract_eval(interp::AbstractInterpreter, @nospecialize(e), vtypes::Va
             for i = 2:length(e.args)
                 at = abstract_eval(interp, e.args[i], vtypes, sv)
                 if !anyconst
-                    anyconst = has_nontrivial_const_info(at)
+                    anyconst = has_nontrivial_const_info(interp, at)
                 end
                 ats[i-1] = at
                 if at === Bottom
