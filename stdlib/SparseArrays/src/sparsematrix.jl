@@ -217,6 +217,8 @@ function _show_with_braille_patterns(io::IOContext, S::AbstractSparseMatrixCSC)
     (m == 0 || n == 0) && return show(io, MIME("text/plain"), S)
 
     # The maximal number of characters we allow to display the matrix
+    local maxHeight::Int
+    local maxWidth::Int
     maxHeight = displaysize(io)[1] - 4 # -4 from [Prompt, header, newline after elements, new prompt]
     maxWidth = displaysize(io)[2] ÷ 2
 
