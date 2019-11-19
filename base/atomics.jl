@@ -24,7 +24,6 @@ else
 end
 const floattypes = (Float16, Float32, Float64)
 const arithmetictypes = (inttypes..., floattypes..., Ptr)
-# TODO: Support Ptr
 const atomictypes = (arithmetictypes..., Bool)
 const IntTypes = Union{inttypes...}
 const FloatTypes = Union{floattypes...}
@@ -39,7 +38,8 @@ accessed atomically, i.e. in a thread-safe manner.
 
 Only certain "simple" types can be used atomically, namely the
 primitive boolean, integer, and float-point types. These are `Bool`,
-`Int8`...`Int128`, `UInt8`...`UInt128`, and `Float16`...`Float64`.
+`Int8`...`Int128`, `UInt8`...`UInt128`, and `Float16`...`Float64`. 
+Additionally, atomic operations on `Ptr` are also supported.
 
 New atomic objects can be created from a non-atomic values; if none is
 specified, the atomic object is initialized with zero.
