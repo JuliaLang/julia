@@ -155,7 +155,6 @@ typedef struct {
     jl_gc_mark_data_t *data_stack;
 } jl_gc_mark_cache_t;
 
-typedef struct _jl_excstack_t jl_excstack_t;
 struct _jl_bt_element_t;
 // This includes all the thread local states we care about for a thread.
 // Changes to TLS field types must be reflected in codegen.
