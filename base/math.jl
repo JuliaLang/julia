@@ -182,7 +182,10 @@ The Goertzel-like algorthim is described in Knuth's Art of Computer Programming,
 Volume 2: Seminumerical Algorithms, Sec. 4.6.4.
 # Example
 ```jldoctest
-julia> evalpoly(2 + im, (1, 2, 3))
+julia> evalpoly(2 + im, [1, 2, 3])
+14 + 14im
+
+julia> evalpoly(2 + im, 1:3)
 14 + 14im
 ```
 """
