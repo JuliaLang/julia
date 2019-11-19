@@ -271,7 +271,6 @@ function _show_with_braille_patterns(io::IOContext, S::AbstractSparseMatrixCSC)
             brailleGrid[k, l] |= brailleBlocks[p]
         end
     end
-    println(io)
     foreach(c -> print(io, Char(c)), @view brailleGrid[1:end-1])
 end
 
@@ -282,6 +281,7 @@ function Base.show(io::IOContext, S::AbstractSparseMatrixCSC)
         Base.print_matrix(ioc, S)
         return
     end
+    println(io)
     _show_with_braille_patterns(io, S)
 end
 
