@@ -220,6 +220,8 @@ dataids(A::ReshapedArray) = dataids(A.parent)
     d, r = divrem(ind, strds[1])
     (_ind2sub_rs(front(ax), tail(strds), r)..., d + first(ax[end]))
 end
+offset_if_vec(i::Integer, axs::Tuple{<:AbstractUnitRange}) = i + first(axs[1]) - 1
+offset_if_vec(i::Integer, axs::Tuple) = i
 
 @inline function getindex(A::ReshapedArrayLF, index::Int)
     @boundscheck checkbounds(A, index)
@@ -237,8 +239,9 @@ end
 end
 
 @inline function _unsafe_getindex(A::ReshapedArray{T,N}, indices::Vararg{Int,N}) where {T,N}
-    i = Base._sub2ind(size(A), indices...)
-    I = ind2sub_rs(axes(A.parent), A.mi, i)
+    axp = axes(A.parent)
+    i = offset_if_vec(Base._sub2ind(size(A), indices...), axp)
+    I = ind2sub_rs(axp, A.mi, i)
     _unsafe_getindex_rs(parent(A), I)
 end
 @inline _unsafe_getindex_rs(A, i::Integer) = (@inbounds ret = A[i]; ret)
@@ -260,7 +263,9 @@ end
 end
 
 @inline function _unsafe_setindex!(A::ReshapedArray{T,N}, val, indices::Vararg{Int,N}) where {T,N}
-    @inbounds parent(A)[ind2sub_rs(axes(A.parent), A.mi, Base._sub2ind(size(A), indices...))...] = val
+    axp = axes(A.parent)
+    i = offset_if_vec(Base._sub2ind(size(A), indices...), axp)
+    @inbounds parent(A)[ind2sub_rs(axes(A.parent), A.mi, i)...] = val
     val
 end
 
