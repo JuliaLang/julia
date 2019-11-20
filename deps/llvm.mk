@@ -554,7 +554,8 @@ check-llvm: $(LLVM_BUILDDIR_withtype)/build-checked
 
 ifeq ($(LLVM_VER),svn)
 update-llvm:
-	(cd $(LLVM_MONOSRC_DIR); git pull --ff-only)
+	cd $(LLVM_MONOSRC_DIR) && \
+		git pull --ff-only
 endif
 else # USE_BINARYBUILDER_LLVM
 LLVM_BB_URL_BASE := https://github.com/staticfloat/LLVMBuilder/releases/download/v$(LLVM_VER)+$(LLVM_BB_REL)
