@@ -681,6 +681,10 @@ for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
 end
 
 ##### findmin & findmax #####
+
+# Helper function, which returns an index never used.
+_get_unused_index(A::AbstractArray) = map((x) -> first(x)-1, axes(A)) |> CartesianIndex
+
 # The initial values of Rval are not used if the corresponding indices in Rind are 0.
 #
 function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
@@ -695,7 +699,7 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     keep, Idefault = Broadcast.shapeindexer(indsRt)
     ks = keys(A)
     y = iterate(ks)
-    zi = zero(eltype(ks))
+    zi = _get_unused_index(A)
     if reducedim1(Rval, A)
         i1 = first(axes1(Rval))
         @inbounds for IA in CartesianIndices(indsAt)
@@ -742,7 +746,7 @@ dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 """
 function findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
-    findminmax!(isless, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
+    findminmax!(isless, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind, _get_unused_index(A)), A)
 end
 
 """
@@ -773,10 +777,10 @@ function _findmin(A, region)
         if prod(map(length, reduced_indices(A, region))) != 0
             throw(ArgumentError("collection slices must be non-empty"))
         end
-        (similar(A, ri), zeros(eltype(keys(A)), ri))
+        (similar(A, ri), fill(_get_unused_index(A), ri))
     else
         findminmax!(isless, fill!(similar(A, ri), first(A)),
-                    zeros(eltype(keys(A)), ri), A)
+                    fill(_get_unused_index(A), ri), A)
     end
 end
 
@@ -822,10 +826,10 @@ function _findmax(A, region)
         if prod(map(length, reduced_indices(A, region))) != 0
             throw(ArgumentError("collection slices must be non-empty"))
         end
-        similar(A, ri), zeros(eltype(keys(A)), ri)
+        similar(A, ri), fill(_get_unused_index(A), ri)
     else
         findminmax!(isgreater, fill!(similar(A, ri), first(A)),
-                    zeros(eltype(keys(A)), ri), A)
+                    fill(_get_unused_index(A), ri), A)
     end
 end
 
