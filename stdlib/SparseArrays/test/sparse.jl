@@ -2264,6 +2264,9 @@ end
     brailleString = "⠑⢄" * Char(10240)^3 * "\n" * Char(10240)^2 * "⠑⢄" * Char(10240) * "\n" * Char(10240)^4 * "⠑"
     @test String(take!(io)) == brailleString
 
+    # Issue #30589
+    @test repr("text/plain", sparse([true true])) == "1×2 SparseArrays.SparseMatrixCSC{Bool,$Int} with 2 stored entries:\n 1  1"
+
     function _filled_sparse(m::Integer, n::Integer)
         C = CartesianIndices((m, n))[:]
         Is = [Int64(x[1]) for x in C]
