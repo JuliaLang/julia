@@ -607,6 +607,7 @@ static void jl_write_values(jl_serializer_state *s)
 
     for (i = 0, len = backref_table_numel * 2; i < len; i += 2) {
         jl_value_t *v = (jl_value_t*)objects_list.items[i];
+        JL_GC_PROMISE_ROOTED(v);
         uintptr_t item = (uintptr_t)objects_list.items[i + 1];
         jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
         assert((t->instance == NULL || t->instance == v) && "detected singleton construction corruption");

@@ -597,7 +597,7 @@ ifeq ($(USE_POLLY),1)
 endif
 endif
 else # USE_BINARYBUILDER_LLVM
-LLVM_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LLVM-v$(LLVM_VER)-$(LLVM_BB_REL)
+LLVM_BB_URL_BASE := https://github.com/staticfloat/LLVMBuilder/releases/download/v$(LLVM_VER)+$(LLVM_BB_REL)
 ifneq ($(BINARYBUILDER_LLVM_ASSERTS), 1)
 LLVM_BB_NAME := LLVM.v$(LLVM_VER)
 else

@@ -1045,7 +1045,7 @@ static void check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, si
 arraylist_t partial_inst;
 int inside_typedef = 0;
 
-static jl_value_t *extract_wrapper(jl_value_t *t)
+static jl_value_t *extract_wrapper(jl_value_t *t JL_PROPAGATES_ROOT)
 {
     t = jl_unwrap_unionall(t);
     if (jl_is_datatype(t))
@@ -1114,7 +1114,9 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
                     jl_types_equal(pi, tw)) {
                 if (jl_is_vararg_type(iparams[i])) {
                     tw = jl_wrap_vararg(tw, jl_tparam1(jl_unwrap_unionall(iparams[i])));
+                    JL_GC_PUSH1(&tw);
                     tw = jl_rewrap_unionall(tw, iparams[i]);
+                    JL_GC_POP();
                 }
                 iparams[i] = tw;
                 if (p) jl_gc_wb(p, tw);
