@@ -417,6 +417,14 @@ pmax, ipmax = findmax(parent(A))
 @test amax == pmax
 @test A[iamax] == amax
 @test amax == parent(A)[ipmax]
+M = OffsetArray([1 2; 1 2], -1, -1)
+@test M[argmin(M, dims=2)] == reshape([1,1], 0:1, 0:0)
+M = OffsetArray([1 2; 1 2], -2, -1)
+@test M[argmin(M, dims=2)] == reshape([1,1], -1:0, 0:0)
+M = OffsetArray([2 1; 2 1], -1, -1)
+@test M[argmax(M, dims=2)] == reshape([2,2], 0:1, 0:0)
+M = OffsetArray([2 1; 2 1], -2, -1)
+@test M[argmax(M, dims=2)] == reshape([2,2], -1:0, 0:0)
 z = OffsetArray([0 0; 2 0; 0 0; 0 0], (-3,-1))
 I = findall(!iszero, z)
 @test I == [CartesianIndex(-1, 0)]
