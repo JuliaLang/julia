@@ -829,7 +829,7 @@ function diff(a::AbstractArray{T,N}; dims::Integer) where {T,N}
     r0 = ntuple(i -> i == dims ? UnitRange(first(r[i]), last(r[i]) - 1) : UnitRange(r[i]), N)
     r1 = ntuple(i -> i == dims ? UnitRange(first(r[i]) + 1, last(r[i])) : UnitRange(r[i]), N)
 
-    return view(a, r1...) .- view(a, r0...)
+    return reshape(view(a, r1...) .- view(a, r0...), r0)
 end
 
 ### from abstractarray.jl
