@@ -190,9 +190,18 @@ function size(F::UmfpackLU, dim::Integer)
     end
 end
 
-function show(io::IO, F::UmfpackLU)
-    print(io, "UMFPACK LU Factorization of a $(size(F)) sparse matrix")
-    F.numeric != C_NULL && print(io, '\n', F.numeric)
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::UmfpackLU)
+    if F.numeric != C_NULL
+        if issuccess(F)
+            summary(io, F); println(io)
+            println(io, "L factor:")
+            show(io, mime, F.L)
+            println(io, "\nU factor:")
+            show(io, mime, F.U)
+        else
+            print(io, "Failed factorization of type $(typeof(F))")
+        end
+    end
 end
 
 function deserialize(s::AbstractSerializer, t::Type{UmfpackLU{Tv,Ti}}) where {Tv,Ti}
