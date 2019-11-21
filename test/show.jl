@@ -966,7 +966,8 @@ test_repr("(:).a")
 @test isa(repr("text/plain", String(UInt8[0x00:0xff;])), String)
 
 # don't use julia-specific `f` in Float32 printing (PR #18053)
-@test sprint(print, 1f-7) == "1.0f-7"
+@test sprint(print, 1f-7) == "1.0e-7"
+@test string(1f-7) == "1.0e-7"
 
 let d = TextDisplay(IOBuffer())
     @test_throws MethodError display(d, "text/foobar", [3 1 4])
