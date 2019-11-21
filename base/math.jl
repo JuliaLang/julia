@@ -83,11 +83,19 @@ end
 
 
 """
-    evalpoly(x, p::Tuple)
+    evalpoly(x, p)
 
 Evaluate the polynomial ``\\sum_k p[k] x^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
-that is, the coefficients are given in ascending order by power of `x`. This function
-generates efficient code using Horner's method with loops unrolled at compile time.
+that is, the coefficients are given in ascending order by power of `x`.
+Loops are unrolled at compile time if the number of coefficients is statically known, i.e.
+when `p` is a `Tuple`.
+This function generates efficient code using Horner's method if `x` is real, or using
+a Goertzel-like algorithm if `x` is complex.
+The Goertzel-like algorthim is described in Knuth's _Art of Computer Programming_,
+Volume 2: Seminumerical Algorithms, Sec. 4.6.4.
+
+!!! compat "Julia 1.4"
+    This function requires Julia 1.4 or later.
 
 # Example
 ```jldoctest
@@ -108,20 +116,6 @@ function evalpoly(x, p::Tuple)
     end
 end
 
-"""
-    evalpoly(x, p::AbstractVector)
-
-Evaluate the polynomial ``\\sum_k p[k] x^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
-that is, the coefficients are given in ascending order by power of `x`. This function
-uses Horner's method *without* loops unrolled at compile time. Use this method when the
-number of coefficients is not known at compile time.
-
-# Example
-```jldoctest
-julia> evalpoly(2, [1, 2, 3])
-17
-```
-"""
 evalpoly(x, p::AbstractVector) = _evalpoly(x, p)
 
 function _evalpoly(x, p)
@@ -133,22 +127,6 @@ function _evalpoly(x, p)
     ex
 end
 
-"""
-    evalpoly(z::Complex, p::Tuple)
-
-Evaluate the polynomial ``\\sum_k p[k] z^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
-that is, the coefficients are given in ascending order by power of `z`. This function
-generates efficient code using a Goertzel-like algorithm specialized for complex arguments
-with loops unrolled at compile time.
-The Goertzel-like algorthim is described in Knuth's Art of Computer Programming,
-Volume 2: Seminumerical Algorithms, Sec. 4.6.4.
-
-# Example
-```jldoctest
-julia> evalpoly(2 + im, (1, 2, 3))
-14 + 14im
-```
-"""
 function evalpoly(z::Complex, p::Tuple)
     if @generated
         N = length(p.parameters)
@@ -177,26 +155,6 @@ end
 evalpoly(z::Complex, p::Tuple{<:Any}) = p[1]
 
 
-"""
-    evalpoly(z::Complex, p::AbstractVector)
-
-Evaluate the polynomial ``\\sum_k p[k] z^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
-that is, the coefficients are given in ascending order by power of `z`. This function
-generates efficient code using a Goertzel-like algorithm specialized for complex arguments
-,*without* loops unrolled at compile time. Use this method when the number of coefficients
-is not known at compile time.
-The Goertzel-like algorthim is described in Knuth's Art of Computer Programming,
-Volume 2: Seminumerical Algorithms, Sec. 4.6.4.
-
-# Example
-```jldoctest
-julia> evalpoly(2 + im, [1, 2, 3])
-14 + 14im
-
-julia> evalpoly(2 + im, 1:3)
-14 + 14im
-```
-"""
 evalpoly(z::Complex, p::AbstractVector) = _evalpoly(z, p)
 
 function _evalpoly(z::Complex, p)
