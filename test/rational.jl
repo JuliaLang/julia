@@ -377,3 +377,13 @@ end
    @test -Rational(true) == -1//1
    @test -Rational(false) == 0//1
 end
+
+# issue #27039
+@testset "gcd, lcm, gcdx for Rational" begin
+    a = 6 // 35
+    b = 10 // 21
+    @test gcd(a, b) == 2//105
+    @test lcm(a, b) == 30 // 7
+    @test gcdx(a, b) == (2//105, -11, 4)
+end
+
