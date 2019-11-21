@@ -84,9 +84,11 @@ end
 
 """
     evalpoly(x, p::Tuple)
+
 Evaluate the polynomial ``\\sum_k p[k] x^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
 that is, the coefficients are given in ascending order by power of `x`. This function
 generates efficient code using Horner's method with loops unrolled at compile time.
+
 # Example
 ```jldoctest
 julia> evalpoly(2, (1, 2, 3))
@@ -108,10 +110,12 @@ end
 
 """
     evalpoly(x, p::AbstractVector)
+
 Evaluate the polynomial ``\\sum_k p[k] x^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
 that is, the coefficients are given in ascending order by power of `x`. This function
 uses Horner's method *without* loops unrolled at compile time. Use this method when the
 number of coefficients is not known at compile time.
+
 # Example
 ```jldoctest
 julia> evalpoly(2, [1, 2, 3])
@@ -131,12 +135,14 @@ end
 
 """
     evalpoly(z::Complex, p::Tuple)
+
 Evaluate the polynomial ``\\sum_k p[k] z^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
 that is, the coefficients are given in ascending order by power of `z`. This function
 generates efficient code using a Goertzel-like algorithm specialized for complex arguments
 with loops unrolled at compile time.
 The Goertzel-like algorthim is described in Knuth's Art of Computer Programming,
 Volume 2: Seminumerical Algorithms, Sec. 4.6.4.
+
 # Example
 ```jldoctest
 julia> evalpoly(2 + im, (1, 2, 3))
@@ -173,6 +179,7 @@ evalpoly(z::Complex, p::Tuple{<:Any}) = p[1]
 
 """
     evalpoly(z::Complex, p::AbstractVector)
+
 Evaluate the polynomial ``\\sum_k p[k] z^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
 that is, the coefficients are given in ascending order by power of `z`. This function
 generates efficient code using a Goertzel-like algorithm specialized for complex arguments
@@ -180,6 +187,7 @@ generates efficient code using a Goertzel-like algorithm specialized for complex
 is not known at compile time.
 The Goertzel-like algorthim is described in Knuth's Art of Computer Programming,
 Volume 2: Seminumerical Algorithms, Sec. 4.6.4.
+
 # Example
 ```jldoctest
 julia> evalpoly(2 + im, [1, 2, 3])
