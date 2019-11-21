@@ -463,10 +463,12 @@ static uint64_t compute_obj_symsize(const object::ObjectFile *obj, uint64_t offs
     bool setlo = false;
     for (const object::SectionRef &Section : obj->sections()) {
         uint64_t SAddr, SSize;
-        if (!Section.isText()) continue;
+        if (!Section.isText() || Section.isVirtual())
+            continue;
         SAddr = Section.getAddress();
         SSize = Section.getSize();
-        if (offset < SAddr || offset >= SAddr + SSize) continue;
+        if (offset < SAddr || offset >= SAddr + SSize)
+            continue;
         assert(hi == 0);
 
         // test for lower and upper symbol bounds relative to other symbols
@@ -544,6 +546,23 @@ jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant,
     return jl_pchar_to_string(stream.str().data(), stream.str().size());
 }
 
+
+#if JL_LLVM_VERSION >= 90000
+// from llvm::SymbolizableObjectFile
+uint64_t getModuleSectionIndexForAddress(const object::ObjectFile *obj, uint64_t Address)
+{
+  for (object::SectionRef Sec : obj->sections()) {
+    if (!Sec.isText() || Sec.isVirtual())
+      continue;
+
+    if (Address >= Sec.getAddress() &&
+        Address < Sec.getAddress() + Sec.getSize())
+      return Sec.getIndex();
+  }
+
+  return object::SectionedAddress::UndefSection;
+}
+#endif
 
 namespace {
 #define FuncMCView ArrayRef<uint8_t>
@@ -761,7 +780,12 @@ static void jl_dump_asm_internal(
     std::unique_ptr<MCStreamer> Streamer;
     SourceMgr SrcMgr;
 
-    std::unique_ptr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TheTriple.str()), TheTriple.str()));
+    MCTargetOptions Options;
+    std::unique_ptr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TheTriple.str()), TheTriple.str()
+#if JL_LLVM_VERSION >= 100000
+            , Options
+#endif
+        ));
     assert(MAI && "Unable to create target asm info!");
 
     std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TheTriple.str()));
@@ -797,7 +821,6 @@ static void jl_dump_asm_internal(
     std::unique_ptr<MCAsmBackend> MAB = 0;
     if (ShowEncoding) {
         CE = std::unique_ptr<MCCodeEmitter>(TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx));
-        MCTargetOptions Options;
         MAB = std::unique_ptr<MCAsmBackend>(TheTarget->createMCAsmBackend(*STI, *MRI, Options));
     }
 #else
@@ -805,7 +828,6 @@ static void jl_dump_asm_internal(
     MCAsmBackend* MAB = 0;
     if (ShowEncoding) {
         CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx);
-        MCTargetOptions Options;
         MAB = TheTarget->createMCAsmBackend(*STI, *MRI, Options);
     }
 #endif
@@ -813,8 +835,8 @@ static void jl_dump_asm_internal(
     // createAsmStreamer expects a unique_ptr to a formatted stream, which means
     // it will destruct the stream when it is done. We cannot have this, so we
     // start out with a raw stream, and create formatted stream from it here.
-    // LLVM will desctruct the formatted stream, and we keep the raw stream.
-    auto ustream = llvm::make_unique<formatted_raw_ostream>(rstream);
+    // LLVM will destroy the formatted stream, and we keep the raw stream.
+    std::unique_ptr<formatted_raw_ostream> ustream(new formatted_raw_ostream(rstream));
 #if JL_LLVM_VERSION >= 70000
     Streamer.reset(TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/true,
                                                 /*useDwarfDirectory*/ true,
@@ -832,7 +854,7 @@ static void jl_dump_asm_internal(
 
     DILineInfoTable di_lineinfo;
     if (di_ctx)
-        di_lineinfo = di_ctx->getLineInfoForAddressRange(makeAddress(Fptr + slide), Fsize);
+        di_lineinfo = di_ctx->getLineInfoForAddressRange(makeAddress(object, Fptr + slide), Fsize);
     if (!di_lineinfo.empty()) {
         auto cur_addr = di_lineinfo[0].first;
         auto nlineinfo = di_lineinfo.size();
@@ -902,7 +924,7 @@ static void jl_dump_asm_internal(
                     std::string buf;
                     DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::Default,
                                                  DILineInfoSpecifier::FunctionNameKind::ShortName);
-                    DIInliningInfo dbg = di_ctx->getInliningInfoForAddress(makeAddress(Index + Fptr + slide), infoSpec);
+                    DIInliningInfo dbg = di_ctx->getInliningInfoForAddress(makeAddress(object, Index + Fptr + slide), infoSpec);
                     if (dbg.getNumberOfFrames()) {
                         dbgctx.emit_lineinfo(buf, dbg);
                     }

@@ -952,12 +952,12 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
         // The ccall root and GC preserve handling below makes sure that
         // the alloca isn't optimized out.
         buff = prolog_builder.CreateAlloca(pass.T_prjlvalue);
-        buff->setAlignment(align);
+        buff->setAlignment(Align(align));
         ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, pass.T_pint8));
     }
     else {
         buff = prolog_builder.CreateAlloca(Type::getIntNTy(*pass.ctx, sz * 8));
-        buff->setAlignment(align);
+        buff->setAlignment(Align(align));
         ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, pass.T_pint8));
     }
     insertLifetime(ptr, ConstantInt::get(pass.T_int64, sz), orig_inst);

@@ -291,7 +291,6 @@ JuliaOJIT::DebugObjectRegistrar::DebugObjectRegistrar(JuliaOJIT &JIT)
 
 JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
                                          const object::ObjectFile &obj,
-                                         const object::ObjectFile &debugObj,
                                          const RuntimeDyld::LoadedObjectInfo &L,
                                          RTDyldMemoryManager *memmgr);
 
@@ -305,28 +304,8 @@ void JuliaOJIT::DebugObjectRegistrar::registerObject(RTDyldObjHandleT H, const O
     const ObjT& Object = Obj;
 #endif
 
-    object::OwningBinary<object::ObjectFile> SavedObject = LO->getObjectForDebug(*Object);
-
-    // If the debug object is unavailable, save (a copy of) the original object
-    // for our backtraces
-    if (!SavedObject.getBinary()) {
-        // This is unfortunate, but there doesn't seem to be a way to take
-        // ownership of the original buffer
-        auto NewBuffer = MemoryBuffer::getMemBufferCopy(Object->getData(),
-                                                        Object->getFileName());
-        auto NewObj = object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef());
-        assert(NewObj);
-        SavedObject = object::OwningBinary<object::ObjectFile>(std::move(*NewObj),
-                                                       std::move(NewBuffer));
-    }
-    else {
-        JIT.NotifyFinalizer(H, *(SavedObject.getBinary()), *LO);
-    }
-
-    SavedObjects.push_back(std::move(SavedObject));
-
+    JIT.NotifyFinalizer(H, *Object, *LO);
     ORCNotifyObjectEmitted(JuliaListener.get(), *Object,
-                           *SavedObjects.back().getBinary(),
                            *LO, JIT.MemMgr.get());
 
     // record all of the exported symbols defined in this object
@@ -1115,7 +1094,7 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
             ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));
         addComdat(new GlobalVariable(*sysimage, data->getType(), false,
                                      GlobalVariable::ExternalLinkage,
-                                     data, "jl_system_image_data"))->setAlignment(64);
+                                     data, "jl_system_image_data"))->setAlignment(Align(64));
         Constant *len = ConstantInt::get(T_size, sysimg_len);
         addComdat(new GlobalVariable(*sysimage, len->getType(), true,
                                      GlobalVariable::ExternalLinkage,
