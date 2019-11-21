@@ -2,12 +2,12 @@
 
 ## efficient value-based hashing of integers ##
 
-function hash_integer(n::Integer, h::UInt)
-    h ⊻= hash_uint((n % UInt) ⊻ h)
+function hash_integer(n::Integer, h)
+    h = hash(n % UInt,  h)
     n = abs(n)
     n >>>= sizeof(UInt) << 3
     while n != 0
-        h ⊻= hash_uint((n % UInt) ⊻ h)
+        h = hash(n % UInt, h)
         n >>>= sizeof(UInt) << 3
     end
     return h
@@ -34,7 +34,7 @@ end
 
 ## generic hashing for rational values ##
 
-function hash(x::Real, h::UInt)
+function hash(x::Real, h)
     # decompose x as num*2^pow/den
     num, pow, den = decompose(x)
 
