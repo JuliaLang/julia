@@ -110,7 +110,7 @@ function transpose_f!(f, B::AbstractMatrix, A::AbstractMatrix)
     end
     return B
 end
-function transposeblock!(f, B::AbstractMatrix, A::AbstractMatrix, m::Int, n::Int, offseti::Int, offsetj::Int)
+function transposeblock!(f, B::AbstractMatrix, A::AbstractMatrix, m::Integer, n::Integer, offseti::Integer, offsetj::Integer)
     if m*n<=transposebaselength
         @inbounds begin
             for j = offsetj .+ (1:n)
