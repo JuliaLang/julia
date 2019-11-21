@@ -1520,22 +1520,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif head === :quote && nargs == 1 && isa(args[1], Symbol)
         show_unquoted_quote_expr(io, args[1]::Symbol, indent, 0, quote_level+1)
     elseif head === :quote && nargs == 1 && Meta.isexpr(args[1], :block)
-        if length(args[1].args) == 1
-            # one argument: Expr(:quote, Expr(:block, a_single_arg))
-            if isa(args[1].args[1], Symbol)
-                show_unquoted_quote_expr(io, args[1].args[1]::Symbol, indent,
-                                         0, quote_level+1)
-            else
-                print(io, ":(")
-                show_unquoted(io, args[1].args[1], indent+2, 0, quote_level+1)
-                print(io, ")")
-            end
-        else
-            # multiple arguments: Expr(:quote, Expr(:block, many_args...))
-            show_block(io, "quote", Expr(:quote, args[1].args...), indent,
-                       quote_level+1)
-            print(io, "end")
-        end
+        show_block(io, "quote", Expr(:quote, args[1].args...), indent,
+                   quote_level+1)
+        print(io, "end")
     elseif head === :quote && nargs == 1
         print(io, ":(")
         show_unquoted(io, args[1], indent+2, 0, quote_level+1)

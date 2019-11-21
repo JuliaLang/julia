@@ -64,14 +64,35 @@ function test_repr(x::String)
     x2 = eval(Meta.parse(repr(x1)))
     x3 = eval(Meta.parse(repr(x2)))
     if ! (x1 == x2 == x3)
-        error(string(
+        # error(string(
+        print(string(
             "repr test failed:",
             "\noriginal: ", x,
+            "\n\npreparsed: ", x1, "\n", sprint(dump, x1),
             "\n\nparsed: ", x2, "\n", sprint(dump, x2),
             "\n\nreparsed: ", x3, "\n", sprint(dump, x3)
             ))
     end
     @test x1 == x2 == x3
+
+    x4 = Base.remove_linenums!(Meta.parse(x))
+    x5 = eval(Base.remove_linenums!(Meta.parse(repr(x4))))
+    x6 = eval(Base.remove_linenums!(Meta.parse(repr(x5))))
+    if ! (x4 == x5 == x6)
+        error(string(
+            "repr test without line numbers failed:",
+            "\noriginal: ", x,
+            "\n\npreparsed: ", x4, "\n", sprint(dump, x4),
+            "\n\nparsed: ", x5, "\n", sprint(dump, x5),
+            "\n\nreparsed: ", x6, "\n", sprint(dump, x6)
+            ))
+    end
+    @test x4 == x5 == x6
+
+    @test Base.remove_linenums!(x1) ==
+          Base.remove_linenums!(x2) ==
+          Base.remove_linenums!(x3) ==
+          x4 == x5 == x6
 end
 
 # primitive types
@@ -849,7 +870,9 @@ end""")) ==
 end"""))) ==
 """
 :(macro m(a, b)
-      :(\$a + \$b)
+      quote
+          \$a + \$b
+      end
   end)"""
 @test repr(Meta.parse(
 """macro m(a, b)
@@ -922,7 +945,6 @@ end"""
 
 # nested quotes and blocks
 @test_repr "Expr(:quote, Expr(:block, :a, :b))"
-# @test_repr repr(Expr(:quote, Expr(:block, :a, :b)))
 @test_repr repr(Expr(:quote, Expr(:block, LineNumberNode(0, :none), :a, LineNumberNode(0, :none), :b)))
 @test repr(Expr(:quote, Expr(:block, :a, :b))) ==
 ":(quote
@@ -930,17 +952,23 @@ end"""
       b
   end)"
 @test_repr "Expr(:quote, Expr(:block, :a))"
-@test_repr repr(Expr(:quote, Expr(:block, :a)))
-@test repr(Expr(:quote, Expr(:block, :a))) == ":(:a)"
+@test_repr repr(Expr(:quote, Expr(:block, LineNumberNode(0, :none), :a)))
+@test repr(Expr(:quote, Expr(:block, :a))) ==
+":(quote
+      a
+  end)"
 @test_repr "Expr(:quote, Expr(:block, :(a + b)))"
-@test_repr repr(Expr(:quote, Expr(:block, :(a + b))))
-@test repr(Expr(:quote, Expr(:block, :(a + b)))) == ":(:(a + b))"
+@test_repr repr(Expr(:quote, Expr(:block, LineNumberNode(0, :none), :(a + b))))
+@test repr(Expr(:quote, Expr(:block, :(a + b)))) ==
+":(quote
+      a + b
+  end)"
 
 # QuoteNode + quotes and unquotes
 @test_repr "QuoteNode(\$x)"
 @test_repr "QuoteNode(\$\$x)"
 @test_repr ":(QuoteNode(\$x))"
-@test_repr ":(:(QuoteNode(\$\$x))"
+@test_repr ":(:(QuoteNode(\$\$x)))"
 @test repr(QuoteNode(Expr(:$, :x))) == ":(\$(QuoteNode(:(\$(Expr(:\$, :x))))))"
 @test repr(QuoteNode(Expr(:quote, Expr(:$, :x)))) == ":(\$(QuoteNode(:(:(\$x)))))"
 @test repr(Expr(:quote, QuoteNode(Expr(:$, :x)))) == ":(:(\$(QuoteNode(:(\$(Expr(:\$, :x)))))))"
