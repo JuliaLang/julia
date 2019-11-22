@@ -110,8 +110,8 @@ end
     # gives us bounds for r = t^3/x.
 
     r = (t*t)*(t/x)
-    t *= (@horner(r, 1.87595182427177009643, -1.88497979543377169875, 1.621429720105354466140) +
-          r^3 * @horner(r, -0.758397934778766047437, 0.145996192886612446982))
+    t *= (evalpoly(r, (1.87595182427177009643, -1.88497979543377169875, 1.621429720105354466140)) +
+          r^3 * evalpoly(r, (-0.758397934778766047437, 0.145996192886612446982)))
 
     # Round t away from zero to 23 bits (sloppily except for ensuring that
     # the result is larger in magnitude than cbrt(x) but not much more than

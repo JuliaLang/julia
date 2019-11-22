@@ -49,11 +49,11 @@ MAX_EXP(::Type{Float32}) = 88.72283905206835f0      # log 2^127 *(2-2^-23)
 MIN_EXP(::Type{Float64}) = -7.451332191019412076235e2 # log 2^-1075
 MIN_EXP(::Type{Float32}) = -103.97207708f0            # log 2^-150
 
-@inline exp_kernel(x::Float64) = @horner(x, 1.66666666666666019037e-1,
-    -2.77777777770155933842e-3, 6.61375632143793436117e-5,
-    -1.65339022054652515390e-6, 4.13813679705723846039e-8)
+@inline exp_kernel(x::Float64) = evalpoly(x, (1.66666666666666019037e-1,
+                                              -2.77777777770155933842e-3, 6.61375632143793436117e-5,
+                                              -1.65339022054652515390e-6, 4.13813679705723846039e-8))
 
-@inline exp_kernel(x::Float32) = @horner(x, 1.6666625440f-1, -2.7667332906f-3)
+@inline exp_kernel(x::Float32) = evalpoly(x, (1.6666625440f-1, -2.7667332906f-3))
 
 # for values smaller than this threshold just use a Taylor expansion
 @eval exp_small_thres(::Type{Float64}) = $(2.0^-28)

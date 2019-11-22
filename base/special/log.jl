@@ -9,7 +9,6 @@
 # Does not currently handle floating point flags (inexact, div-by-zero, etc).
 
 import .Base.unsafe_trunc
-import .Base.Math.@horner
 
 # Float64 lookup table.
 # to generate values:
@@ -170,9 +169,8 @@ end
     ## Step 3' (alternative)
     u = (2.0f)/(y+F)
     v = u*u
-    q = u*v*@horner(v,
-                    0.08333333333303913,
-                    0.012500053168098584)
+    q = u*v*evalpoly(v,(0.08333333333303913,
+                        0.012500053168098584))
 
     ## Step 4
     l_hi + (u + (q + l_lo))
@@ -186,11 +184,10 @@ end
     v = u*u
 
     ## Step 2
-    q = u*v*@horner(v,
-                    0.08333333333333179,
-                    0.012500000003771751,
-                    0.0022321399879194482,
-                    0.0004348877777076146)
+    q = u*v*evalpoly(v, (0.08333333333333179,
+                         0.012500000003771751,
+                         0.0022321399879194482,
+                         0.0004348877777076146))
 
     ## Step 3
     # based on:
@@ -239,9 +236,8 @@ end
     v = u*u
 
     ## Step 2
-    q = u*v*@horner(v,
-                    0.08333332f0,
-                    0.012512346f0)
+    q = u*v*evalpoly(v, (0.08333332f0,
+                         0.012512346f0))
 
     ## Step 3: not required
 

@@ -346,7 +346,6 @@ end
     @test expm1(complex(-10.0,-10.0)) ≈ exp(complex(-10.0,-10.0))-1
 end
 
-import Base.Math.@horner
 @testset "log1p" begin
     @test isequal(log1p(complex(Inf, 3)), complex(Inf, +0.))
     @test isequal(log1p(complex(Inf, -3)), complex(Inf, -0.))
@@ -362,7 +361,7 @@ import Base.Math.@horner
     @test isequal(log1p(complex(1, -Inf)), complex(Inf, -pi/2))
 
     for z in (1e-10+1e-9im, 1e-10-1e-9im, -1e-10+1e-9im, -1e-10-1e-9im)
-        @test log1p(z) ≈ @horner(z, 0, 1, -0.5, 1/3, -0.25, 0.2)
+        @test log1p(z) ≈ invoke(evalpoly, Tuple{Any, Tuple}, z, (0.0, 1.0, -0.5, 1/3, -0.25, 0.2))
     end
     for z in (15+4im, 0.2+3im, 0.08-0.9im)
         @test log1p(z) ≈ log(1+z)

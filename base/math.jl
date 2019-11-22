@@ -176,16 +176,6 @@ function _evalpoly(z::Complex, p)
     muladd(ai, z, b)
 end
 
-"""
-    @horner(x, p...)
-
-Evaluate `p[1] + x * (p[2] + x * (....))`, i.e. a polynomial via Horner's rule.
-"""
-macro horner(x, p...)
-     xesc, pesc = esc(x), esc.(p)
-    :(invoke(evalpoly, Tuple{Any, Tuple}, $xesc, ($(pesc...),)))
-end
-
 # Evaluate p[1] + z*p[2] + z^2*p[3] + ... + z^(n-1)*p[n].  This uses
 # Horner's method if z is real, but for complex z it uses a more
 # efficient algorithm described in Knuth, TAOCP vol. 2, section 4.6.4,
