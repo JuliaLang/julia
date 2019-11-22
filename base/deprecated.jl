@@ -191,9 +191,5 @@ MPFR.BigFloat(x::Real, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding
     Base.@deprecate_binding Mutex ReentrantLock
 end
 
-@eval Math begin
-    Base.@deprecare_binding (@horner) evalpoly
-end
-    
 
 # END 1.3 deprecations
