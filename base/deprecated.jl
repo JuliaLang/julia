@@ -192,4 +192,12 @@ MPFR.BigFloat(x::Real, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding
 end
 
 
+@eval Math begin
+    macro horner(x, p...)
+        @warn "The `@horner` macro is deprecated. Use the `evalpoly` function instead."
+        xesc, pesc = esc(x), esc.(p)
+        :(invoke(evalpoly, Tuple{Any, Tuple}, $xesc, ($(pesc...),)))
+    end
+end
+
 # END 1.3 deprecations
