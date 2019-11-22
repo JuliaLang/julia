@@ -173,6 +173,7 @@ Base.invmod
 Base.powermod
 Base.ndigits
 Base.widemul
+Base.Math.evalpoly
 Base.Math.@evalpoly
 Base.FastMath.@fastmath
 ```
