@@ -112,6 +112,7 @@ reshape(parent::AbstractArray, shp::Tuple{Union{Integer,OneTo}, Vararg{Union{Int
 reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 
 # Allow missing dimensions with Colon():
+reshape(parent::AbstractVector, ::Colon) = parent
 reshape(parent::AbstractArray, dims::Int...) = reshape(parent, dims)
 reshape(parent::AbstractArray, dims::Union{Int,Colon}...) = reshape(parent, dims)
 reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = _reshape(parent, _reshape_uncolon(parent, dims))

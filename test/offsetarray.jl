@@ -497,6 +497,7 @@ A = OffsetArray(view(rand(4,4), 1:4, 4:-1:1), (-3,5))
 @test vec(A) == reshape(A, :) == reshape(A, 16) == reshape(A, Val(1)) == A[:] == vec(A.parent)
 # issue #33614
 A = OffsetArray(-1:0, (-2,))
+@test reshape(A, :) === A
 Arsc = reshape(A, :, 1)
 Arss = reshape(A, 2, 1)
 @test Arsc[1,1] == Arss[1,1] == -1
