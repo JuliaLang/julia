@@ -23,8 +23,8 @@ else
                       UInt8, UInt16, UInt32, UInt64, UInt128)
 end
 const floattypes = (Float16, Float32, Float64)
-const arithmetictypes = (inttypes..., floattypes..., Ptr)
-const atomictypes = (arithmetictypes..., Bool)
+const arithmetictypes = (inttypes..., floattypes...)
+const atomictypes = (arithmetictypes..., Bool, Ptr)
 const IntTypes = Union{inttypes...}
 const FloatTypes = Union{floattypes...}
 const ArithmeticTypes = Union{arithmetictypes...}
@@ -38,7 +38,7 @@ accessed atomically, i.e. in a thread-safe manner.
 
 Only certain "simple" types can be used atomically, namely the
 primitive boolean, integer, and float-point types. These are `Bool`,
-`Int8`...`Int128`, `UInt8`...`UInt128`, and `Float16`...`Float64`. 
+`Int8`...`Int128`, `UInt8`...`UInt128`, and `Float16`...`Float64`.
 Additionally, atomic operations on `Ptr` are also supported.
 
 New atomic objects can be created from a non-atomic values; if none is
@@ -414,8 +414,18 @@ for typ in atomictypes
     end
 end
 
-# Provide atomic floating-point operations via atomic_cas!
 const opnames = Dict{Symbol, Symbol}(:+ => :add, :- => :sub)
+# define atomic pointer +/- integer operations
+for op in [:add, :sub]
+    @eval $(Symbol("atomic_", op, "!"))(x::Atomic{V}, i::T) where {V <: Ptr, T <: Integer} =
+        llvmcall($"""
+                  %ptr = inttoptr i$WORD_SIZE %0 to i$WORD_SIZE*
+                  %rv = atomicrmw $op i$WORD_SIZE* %ptr, i$WORD_SIZE %1 acq_rel
+                  ret i$WORD_SIZE %rv
+                  """, V, Tuple{Ptr{V}, UInt}, unsafe_convert(Ptr{V}, x), (i % UInt) % UInt)
+end
+
+# Provide atomic floating-point operations via atomic_cas!
 for op in [:+, :-, :max, :min]
     opname = get(opnames, op, op)
     @eval function $(Symbol("atomic_", opname, "!"))(var::Atomic{T}, val::T) where T<:FloatTypes

@@ -229,7 +229,7 @@ test_atomic_bools()
 
 # test atomic pointer methods
 function test_atomic_ptr()
-    ptr1 = Ptr{Int}()
+    ptr1 = Ptr{Int}(0)
     ptr2 = Ptr{Int}(4)
     x = Atomic{Ptr{Int}}(ptr1)
     @test x[] == ptr1
@@ -244,6 +244,11 @@ function test_atomic_ptr()
 
     x = Atomic{Ptr{Int}}(ptr1)
     @test ptr1 == atomic_max!(x, ptr2); @test x[] == ptr2
+
+    # test atomic_add!/sub!(::Ptr, ::Integer)
+    x = Atomic{Ptr{Int}}(ptr1)
+    @test ptr1 == atomic_add!(x, 4); @test x[] == Ptr{Int}(4)
+    @test Ptr{Int}(4) == atomic_sub!(x, 2); @test x[] == Ptr{Int}(2)
 end
 test_atomic_ptr()
 
