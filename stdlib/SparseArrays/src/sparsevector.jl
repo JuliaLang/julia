@@ -14,20 +14,20 @@ import LinearAlgebra: promote_to_array_type, promote_to_arrays_
 
 Vector type for storing sparse vectors.
 """
-struct SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
+struct SparseVector{Tv,Ti<:Integer,NZInd<:AbstractVector{Ti},NZVal<:AbstractVector{Tv}} <: AbstractSparseVector{Tv,Ti}
     n::Int              # Length of the sparse vector
-    nzind::Vector{Ti}   # Indices of stored values
-    nzval::Vector{Tv}   # Stored values, typically nonzeros
+    nzind::NZInd   # Indices of stored values
+    nzval::NZVal   # Stored values, typically nonzeros
 
-    function SparseVector{Tv,Ti}(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv}) where {Tv,Ti<:Integer}
+    function SparseVector{Tv,Ti}(n::Integer, nzind::AbstractVector{Ti}, nzval::AbstractVector{Tv}) where {Tv,Ti<:Integer}
         n >= 0 || throw(ArgumentError("The number of elements must be non-negative."))
         length(nzind) == length(nzval) ||
             throw(ArgumentError("index and value vectors must be the same length"))
-        new(convert(Int, n), nzind, nzval)
+        new{Tv, Ti, typeof(nzind), typeof(nzval)}(convert(Int, n), nzind, nzval)
     end
 end
 
-SparseVector(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv}) where {Tv,Ti} =
+SparseVector(n::Integer, nzind::AbstractVector{Ti}, nzval::AbstractVector{Tv}) where {Tv,Ti} =
     SparseVector{Tv,Ti}(n, nzind, nzval)
 
 # Define an alias for a view of a whole column of a SparseMatrixCSC. Many methods can be written for the

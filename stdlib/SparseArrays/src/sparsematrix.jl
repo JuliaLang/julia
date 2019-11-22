@@ -16,23 +16,26 @@ Matrix type for storing sparse matrices in the
 of constructing SparseMatrixCSC is through the [`sparse`](@ref) function.
 See also [`spzeros`](@ref), [`spdiagm`](@ref) and [`sprand`](@ref).
 """
-struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrixCSC{Tv,Ti}
+struct SparseMatrixCSC{Tv,Ti<:Integer,
+        ColPtr <: AbstractVector{Ti},
+        RowVal <: AbstractVector{Ti},
+        NZVal <: AbstractVector{Tv}} <: AbstractSparseMatrixCSC{Tv,Ti}
     m::Int                  # Number of rows
     n::Int                  # Number of columns
-    colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)
-    rowval::Vector{Ti}      # Row indices of stored values
-    nzval::Vector{Tv}       # Stored values, typically nonzeros
+    colptr::ColPtr      # Column i is in colptr[i]:(colptr[i+1]-1)
+    rowval::RowVal      # Row indices of stored values
+    nzval::NZVal       # Stored values, typically nonzeros
 
-    function SparseMatrixCSC{Tv,Ti}(m::Integer, n::Integer, colptr::Vector{Ti},
-                            rowval::Vector{Ti}, nzval::Vector{Tv}) where {Tv,Ti<:Integer}
+    function SparseMatrixCSC{Tv,Ti}(m::Integer, n::Integer, colptr::AbstractVector{Ti},
+                            rowval::AbstractVector{Ti}, nzval::AbstractVector{Tv}) where {Tv,Ti<:Integer}
         @noinline throwsz(str, lbl, k) =
             throw(ArgumentError("number of $str ($lbl) must be ≥ 0, got $k"))
         m < 0 && throwsz("rows", 'm', m)
         n < 0 && throwsz("columns", 'n', n)
-        new(Int(m), Int(n), colptr, rowval, nzval)
+        new{Tv, Ti, typeof(colptr), typeof(rowval), typeof(nzval)}(Int(m), Int(n), colptr, rowval, nzval)
     end
 end
-function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector, rowval::Vector, nzval::Vector)
+function SparseMatrixCSC(m::Integer, n::Integer, colptr::AbstractVector, rowval::AbstractVector, nzval::AbstractVector)
     Tv = eltype(nzval)
     Ti = promote_type(eltype(colptr), eltype(rowval))
     sparse_check_Ti(m, n, Ti)
@@ -52,7 +55,7 @@ function sparse_check_Ti(m::Integer, n::Integer, Ti::Type)
         0 ≤ n && (!isbitstype(Ti) || n ≤ typemax(Ti)) || throwTi("number of columns", "n", n)
 end
 
-function sparse_check(n::Integer, colptr::Vector{Ti}, rowval, nzval) where Ti
+function sparse_check(n::Integer, colptr::AbstractVector{Ti}, rowval, nzval) where Ti
     sparse_check_length("colptr", colptr, n+1, String) # don't check upper bound
     ckp = Ti(1)
     ckp == colptr[1] || throw(ArgumentError("$ckp == colptr[1] != 1"))
@@ -248,9 +251,9 @@ end
 
 ## Reshape
 
-function sparse_compute_reshaped_colptr_and_rowval(colptrS::Vector{Ti}, rowvalS::Vector{Ti},
-                                                   mS::Int, nS::Int, colptrA::Vector{Ti},
-                                                   rowvalA::Vector{Ti}, mA::Int, nA::Int) where Ti
+function sparse_compute_reshaped_colptr_and_rowval(colptrS::AbstractVector{Ti}, rowvalS::AbstractVector{Ti},
+                                                   mS::Int, nS::Int, colptrA::AbstractVector{Ti},
+                                                   rowvalA::AbstractVector{Ti}, mA::Int, nA::Int) where Ti
     lrowvalA = length(rowvalA)
     maxrowvalA = (lrowvalA > 0) ? maximum(rowvalA) : zero(Ti)
     ((length(colptrA) == (nA+1)) && (maximum(colptrA) <= (lrowvalA+1)) && (maxrowvalA <= mA)) || throw(BoundsError())
@@ -3468,11 +3471,15 @@ function _spdiagm(size, kv::Pair{<:Integer,<:AbstractVector}...)
 end
 
 ## expand a colptr or rowptr into a dense index vector
-function expandptr(V::Vector{<:Integer})
-    if V[1] != 1 throw(ArgumentError("first index must be one")) end
+function expandptr(V::AbstractVector{<:Integer})
+    if V[1] != 1
+        throw(ArgumentError("first index must be one"))
+    end
     res = similar(V, (Int64(V[end]-1),))
-    for i in 1:(length(V)-1), j in V[i]:(V[i+1] - 1); res[j] = i end
-    res
+    for i in 1:(length(V)-1), j in V[i]:(V[i+1] - 1)
+        res[j] = i
+    end
+    return res
 end
 
 
