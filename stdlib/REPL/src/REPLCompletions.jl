@@ -184,7 +184,7 @@ function complete_keyword(s::Union{String,SubString{String}})::Vector{Completion
     map(KeywordCompletion, sorted_keywords[r])
 end
 
-function complete_path(path::AbstractString, pos; use_envpath=false)::Completions
+function complete_path(path::AbstractString, pos; use_envpath=false, shell_escape=false)::Completions
     if Base.Sys.isunix() && occursin(r"^~(?:/|$)", path)
         # if the path is just "~", don't consider the expanded username as a prefix
         if path == "~"
@@ -259,7 +259,7 @@ function complete_path(path::AbstractString, pos; use_envpath=false)::Completion
         end
     end
 
-    matchList = Completion[PathCompletion(replace(s, r"\s" => "\\ ")) for s in matches]
+    matchList = Completion[PathCompletion(shell_escape ? replace(s, r"\s" => s"\\\0") : s) for s in matches]
     startpos = pos - lastindex(prefix) + 1 - count(isequal(' '), prefix)
     # The pos - lastindex(prefix) + 1 is correct due to `lastindex(prefix)-lastindex(prefix)==0`,
     # hence we need to add one to get the first index. This is also correct when considering
@@ -728,7 +728,7 @@ function shell_completions(string, pos)::Completions
         # Also try looking into the env path if the user wants to complete the first argument
         use_envpath = !ignore_last_word && length(args.args) < 2
 
-        return complete_path(prefix, pos, use_envpath=use_envpath)
+        return complete_path(prefix, pos, use_envpath=use_envpath, shell_escape=true)
     elseif isexpr(arg, :incomplete) || isexpr(arg, :error)
         partial = scs[last_parse]
         ret, range = completions(partial, lastindex(partial))
