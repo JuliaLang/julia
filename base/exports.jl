@@ -125,6 +125,7 @@ export
     KeyError,
     MissingException,
     ProcessFailedException,
+    TaskFailedException,
     SystemError,
     StringIndexError,
 
@@ -195,6 +196,7 @@ export
 
 # scalar math
     @evalpoly,
+    evalpoly,
     abs,
     abs2,
     acos,
@@ -324,6 +326,7 @@ export
     sin,
     sinc,
     sincos,
+    sincosd,
     sind,
     sinh,
     sinpi,
@@ -626,6 +629,7 @@ export
 
     enumerate,  # re-exported from Iterators
     zip,
+    only,
 
 # object identity and equality
     copy,
@@ -675,6 +679,7 @@ export
     skipmissing,
     something,
     isnothing,
+    nonmissingtype,
 
 # time
     sleep,
@@ -740,6 +745,7 @@ export
     nameof,
     parentmodule,
     pathof,
+    pkgdir,
     names,
     which,
     @isdefined,

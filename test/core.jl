@@ -1447,7 +1447,7 @@ struct Foo2509; foo::Int; end
 # issue #2517
 struct Foo2517; end
 @test repr(Foo2517()) == "$(curmod_prefix)Foo2517()"
-@test repr(Vector{Foo2517}(undef, 1)) == "$(curmod_prefix)Foo2517[$(curmod_prefix)Foo2517()]"
+@test repr(Vector{Foo2517}(undef, 1)) == "[$(curmod_prefix)Foo2517()]"
 @test Foo2517() === Foo2517()
 
 # issue #1474
@@ -2402,6 +2402,20 @@ for f in (:Any, :Function, :(Core.Builtin), :(Union{Nothing, Type}), :(Union{typ
 end
 for f in (:(Core.arrayref), :((::typeof(Core.arrayref))), :((::Core.IntrinsicFunction)))
     @test_throws ErrorException("cannot add methods to a builtin function") @eval $f() = 1
+end
+
+# issue #33370
+abstract type B33370 end
+
+let n = gensym(), c(x) = B33370[x][1]()
+    @eval begin
+        struct $n <: B33370
+        end
+
+        function (::$n)()
+        end
+    end
+    @test c(eval(n)()) === nothing
 end
 
 # issue #8798
@@ -5005,13 +5019,15 @@ end
 # when calculating total allocation size.
 @noinline function f17255(n)
     GC.enable(false)
-    b0 = Base.gc_bytes()
+    b0 = Ref{Int64}(0)
+    b1 = Ref{Int64}(0)
+    Base.gc_bytes(b0)
     local a
     for i in 1:n
         a, t, allocd = @timed [Ref(1) for i in 1:1000]
         @test allocd > 0
-        b1 = Base.gc_bytes()
-        if b1 < b0
+        Base.gc_bytes(b1)
+        if b1[] < b0[]
             return false, a
         end
     end
@@ -5852,9 +5868,9 @@ let
     b3 = B23367[b][1] # copy b via array assignment
     addr(@nospecialize x) = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
     @test addr(b)  == addr(b)
-    @test addr(b)  == addr(b2)
-    @test addr(b)  == addr(b3)
-    @test addr(b2) == addr(b3)
+    # @test addr(b)  == addr(b2)
+    # @test addr(b)  == addr(b3)
+    # @test addr(b2) == addr(b3)
 
     @test b === b2 === b3 === b
     @test egal(b, b2) && egal(b2, b3) && egal(b3, b)
@@ -5863,7 +5879,7 @@ let
     @test b.x === Int8(91)
     @test b.z === Int8(23)
     @test b.y === A23367((Int8(1), Int8(2), Int8(3), Int8(4), Int8(5), Int8(6), Int8(7)))
-    @test sizeof(b) == sizeof(Int) * 3
+    @test sizeof(b) == 12
     @test A23367(Int8(1)).x === Int8(1)
     @test A23367(Int8(0)).x === Int8(0)
     @test A23367(Int16(1)).x === Int16(1)
@@ -5889,6 +5905,33 @@ for U in boxedunions
         @test sizeof(A) == sizeof(Int) * (10^N)
         @test !isassigned(A, 1)
     end
+end
+
+struct UnionFieldInlineStruct
+    x::Int64
+    y::Union{Float64, Missing}
+end
+
+@test sizeof(Vector{UnionFieldInlineStruct}(undef, 2)) == sizeof(UnionFieldInlineStruct) * 2
+
+let x = UnionFieldInlineStruct(1, 3.14)
+    AInlineUnion = [x for i = 1:10]
+    @test sizeof(AInlineUnion) == sizeof(UnionFieldInlineStruct) * 10
+    BInlineUnion = Vector{UnionFieldInlineStruct}(undef, 10)
+    copyto!(BInlineUnion, AInlineUnion)
+    @test AInlineUnion == BInlineUnion
+    @test BInlineUnion[end] == x
+    CInlineUnion = vcat(AInlineUnion, BInlineUnion)
+    @test sizeof(CInlineUnion) == sizeof(UnionFieldInlineStruct) * 20
+    @test CInlineUnion[end] == x
+end
+
+# issue 33709
+struct A33709
+    a::Union{Nothing,A33709}
+end
+let a33709 = A33709(A33709(nothing))
+    @test isnothing(a33709.a.a)
 end
 
 # issue 31583
@@ -6440,6 +6483,31 @@ let A=[0, missing], B=[missing, 0], C=Vector{Union{Int, Missing}}(undef, 6)
     copyto!(C, 1, A)
     copyto!(C, 4, B)
     @test isequal(C, [0, missing, missing, missing, 0, missing])
+end
+
+# non-power-of-2 element sizes, issue #26026
+primitive type TypeWith24Bits 24 end
+TypeWith24Bits(x::UInt32) = Core.Intrinsics.trunc_int(TypeWith24Bits, x)
+let x = TypeWith24Bits(0x112233), y = TypeWith24Bits(0x445566), z = TypeWith24Bits(0x778899)
+    a = [x, x]
+    Core.arrayset(true, a, y, 2)
+    @test a == [x, y]
+    a[2] = z
+    @test a == [x, z]
+    @test pointer(a, 2) - pointer(a, 1) == 4
+
+    b = [(x, x), (x, x)]
+    Core.arrayset(true, b, (x, y), 2)
+    @test b == [(x, x), (x, y)]
+    b[2] = (y, z)
+    @test b == [(x, x), (y, z)]
+
+    V = Vector{TypeWith24Bits}(undef, 1000)
+    p = Ptr{UInt8}(pointer(V))
+    for i = 1:sizeof(V)
+        unsafe_store!(p, i % UInt8, i)
+    end
+    @test V[1:4] == [TypeWith24Bits(0x030201), TypeWith24Bits(0x070605), TypeWith24Bits(0x0b0a09), TypeWith24Bits(0x0f0e0d)]
 end
 
 # issue #29718
@@ -7041,3 +7109,8 @@ function f32820(refs)
     x
 end
 @test f32820(Any[1,2]) == Any[1, 1]
+
+# Splatting with bad iterate
+struct SplatBadIterate; end
+Base.iterate(s::SplatBadIterate, args...) = ()
+@test_throws BoundsError (SplatBadIterate()...,)

@@ -722,6 +722,7 @@ end
     @test Random.seed!(GLOBAL_RNG, nothing) === LOCAL_RNG
     @test Random.seed!(GLOBAL_RNG, UInt32[0]) === LOCAL_RNG
     @test Random.seed!(GLOBAL_RNG, 0) === LOCAL_RNG
+    @test Random.seed!(GLOBAL_RNG) === LOCAL_RNG
 
     mt = MersenneTwister(1)
     @test copy!(mt, GLOBAL_RNG) === mt
@@ -769,4 +770,11 @@ end
         B = fill!(B, 1.0)
         @test rand!(GLOBAL_RNG, A, x) === A == rand!(mt, B, x) === B
     end
+    # issue #33170
+    @test Sampler(GLOBAL_RNG, 2:4, Val(1)) isa SamplerRangeFast
+    @test Sampler(GLOBAL_RNG, 2:4, Val(Inf)) isa SamplerRangeFast
+end
+
+@testset "RNGs broadcast as scalars: T" for T in (MersenneTwister, RandomDevice)
+    @test length.(rand.(T(), 1:3)) == 1:3
 end

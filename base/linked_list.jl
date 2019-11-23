@@ -100,7 +100,7 @@ function list_deletefirst!(q::InvasiveLinkedList{T}, val::T) where T
         head_next = head.next
         while head_next !== val
             head = head_next
-            head_next = head.next
+            head_next = head.next::Union{T, Nothing}
         end
         if q.tail::T === val
             head.next = nothing

@@ -12,12 +12,21 @@
 #include "clang/StaticAnalyzer/Core/BugReporter/CommonBugCategories.h"
 #include "clang/StaticAnalyzer/Frontend/AnalysisConsumer.h"
 #include "clang/StaticAnalyzer/Checkers/SValExplainer.h"
-#if LLVM_VERSION_MAJOR >= 9
+#if LLVM_VERSION_MAJOR >= 8
 #include "clang/StaticAnalyzer/Frontend/CheckerRegistry.h"
 #else
 #include "clang/StaticAnalyzer/Core/CheckerRegistry.h"
 #endif
 #include <iostream>
+
+#if defined(__GNUC__)
+#  define USED_FUNC __attribute__((used))
+#elif defined(_COMPILER_MICROSOFT_)
+// Does MSVC have this?
+#  define USED_FUNC
+#else
+#  define USED_FUNC
+#endif
 
 namespace {
     using namespace clang;
@@ -164,7 +173,6 @@ namespace {
 
         static bool isGCTrackedType(QualType Type);
         bool isGloballyRootedType(QualType Type) const;
-        bool isBundleOfGCValues(QualType QT) const;
         static void dumpState(const ProgramStateRef &State);
         static bool declHasAnnotation(const clang::Decl *D, const char *which);
         static bool isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD);
@@ -211,7 +219,7 @@ namespace {
           }
 
           PDP VisitNode(const ExplodedNode *N,
-#if LLVM_VERSION_MAJOR <= 8
+#if LLVM_VERSION_MAJOR < 8
                         const ExplodedNode *PrevN,
 #endif
                         BugReporterContext &BRC,
@@ -242,7 +250,7 @@ namespace {
               const ExplodedNode *N, PathDiagnosticLocation Pos, BugReporterContext &BRC, BugReport &BR);
 
           PDP VisitNode(const ExplodedNode *N,
-#if LLVM_VERSION_MAJOR <= 8
+#if LLVM_VERSION_MAJOR < 8
                                                          const ExplodedNode *PrevN,
 #endif
                                                          BugReporterContext &BRC,
@@ -287,12 +295,6 @@ SymbolRef GCChecker::walkToRoot(callback f, const ProgramStateRef &State, const 
 
 
 namespace Helpers {
-  static SymbolRef trySuperRegion(SValExplainer &Ex, ProgramStateRef State, SVal Val) {
-      const MemRegion *R = Val.getAsRegion();
-      const SubRegion *SR = R->getAs<SubRegion>();
-      return SR ? State->getSVal(SR->getSuperRegion()).getAsSymbol() : nullptr;
-  }
-
   static const VarRegion *walk_back_to_global_VR(const MemRegion *Region) {
     if (!Region)
         return nullptr;
@@ -326,7 +328,7 @@ namespace Helpers {
 
 PDP GCChecker::GCBugVisitor::VisitNode(
   const ExplodedNode *N,
-#if LLVM_VERSION_MAJOR <= 8
+#if LLVM_VERSION_MAJOR < 8
   const ExplodedNode *,
 #endif
   BugReporterContext &BRC, BugReport &BR) {
@@ -425,7 +427,7 @@ PDP GCChecker::GCValueBugVisitor::ExplainNoPropagation(
 
 PDP GCChecker::GCValueBugVisitor::VisitNode(
   const ExplodedNode *N,
-#if LLVM_VERSION_MAJOR <= 8
+#if LLVM_VERSION_MAJOR < 8
   const ExplodedNode *,
 #endif
   BugReporterContext &BRC, BugReport &BR) {
@@ -451,7 +453,7 @@ PDP GCChecker::GCValueBugVisitor::VisitNode(
             if (NewValueState->FD) {
                 bool isFunctionSafepoint = !isFDAnnotatedNotSafepoint(NewValueState->FD);
                 bool maybeUnrooted = declHasAnnotation(NewValueState->PVD, "julia_maybe_unrooted");
-                assert(isFunctionSafepoint || maybeUnrooted);
+                assert(isFunctionSafepoint || maybeUnrooted); (void)maybeUnrooted;
                 Pos = PathDiagnosticLocation{NewValueState->PVD,
                                              BRC.getSourceManager()};
                 if (!isFunctionSafepoint)
@@ -684,14 +686,6 @@ bool GCChecker::isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD) {
     return declHasAnnotation(FD, "julia_not_safepoint");
 }
 
-bool GCChecker::isBundleOfGCValues(QualType QT) const {
-    return isJuliaType([](StringRef Name) {
-      if (Name.endswith_lower("typemap_intersection_env"))
-          return true;
-      return false;
-    }, QT);
-}
-
 bool GCChecker::isGCTrackedType(QualType QT) {
     return isValueCollection(QT) || isJuliaType([](StringRef Name) {
         if (Name.endswith_lower("jl_value_t") ||
@@ -749,23 +743,8 @@ bool GCChecker::isGloballyRootedType(QualType QT) const {
 bool GCChecker::isSafepoint(const CallEvent &Call) const
 {
   bool isCalleeSafepoint = true;
-  if (Call.isGlobalCFunction("malloc") ||
-      Call.isGlobalCFunction("memcpy") ||
-      Call.isGlobalCFunction("memset") ||
-      Call.isGlobalCFunction("memcmp") ||
-      Call.isGlobalCFunction("mmap") ||
-      Call.isGlobalCFunction("munmap") ||
-      Call.isGlobalCFunction("mprotect") ||
-      Call.isGlobalCFunction("madvise") ||
-      Call.isGlobalCFunction("write") ||
-      Call.isGlobalCFunction("vasprintf") ||
-      Call.isGlobalCFunction("strrchr") ||
-      Call.isGlobalCFunction("free") ||
-      Call.isGlobalCFunction("__assert_fail") ||
-      Call.isGlobalCFunction("fflush") ||
-      Call.isGlobalCFunction("__isnan") ||
-      Call.isGlobalCFunction("__isnanf"))
-  {
+  if (Call.isInSystemHeader()) {
+      // defined by -isystem per https://clang.llvm.org/docs/UsersManual.html#controlling-diagnostics-in-system-headers
       isCalleeSafepoint = false;
   } else {
     auto *Decl = Call.getDecl();
@@ -1149,7 +1128,7 @@ void GCChecker::checkPostStmt(const UnaryOperator *UO, CheckerContext &C) const
     }
 }
 
-void GCChecker::dumpState(const ProgramStateRef &State) {
+USED_FUNC void GCChecker::dumpState(const ProgramStateRef &State) {
     GCValueMapTy AMap = State->get<GCValueMap>();
     llvm::raw_ostream &Out = llvm::outs();
     Out << "State: " << "\n";

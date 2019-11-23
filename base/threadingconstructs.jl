@@ -18,9 +18,6 @@ on `threadid()`.
 """
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
-# Only read/written by the main thread
-const in_threaded_loop = Ref(false)
-
 function _threadsfor(iter,lbody)
     lidx = iter.args[1]         # index
     range = iter.args[2]
@@ -46,7 +43,7 @@ function _threadsfor(iter,lbody)
                 len, rem = 1, 0
             end
             # compute this thread's iterations
-            f = 1 + ((tid-1) * len)
+            f = firstindex(r) + ((tid-1) * len)
             l = f + len - 1
             # distribute remaining iterations evenly
             if rem > 0
@@ -60,20 +57,16 @@ function _threadsfor(iter,lbody)
             end
             # run this thread's iterations
             for i = f:l
-                local $(esc(lidx)) = Base.unsafe_getindex(r,i)
+                local $(esc(lidx)) = @inbounds r[i]
                 $(esc(lbody))
             end
         end
         end
-        # Hack to make nested threaded loops kinda work
-        if threadid() != 1 || in_threaded_loop[]
-            # We are in a nested threaded loop
+        if threadid() != 1
+            # only thread 1 can enter/exit _threadedregion
             Base.invokelatest(threadsfor_fun, true)
         else
-            in_threaded_loop[] = true
-            # the ccall is not expected to throw
             ccall(:jl_threading_run, Cvoid, (Any,), threadsfor_fun)
-            in_threaded_loop[] = false
         end
         nothing
     end

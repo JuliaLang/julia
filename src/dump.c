@@ -317,7 +317,9 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
         tag = 10;
     }
 
-    if (strncmp(jl_symbol_name(dt->name->name), "#kw#", 4) == 0 && !internal && tag != 0) {
+    char *dtname = jl_symbol_name(dt->name->name);
+    size_t dtnl = strlen(dtname);
+    if (dtnl > 4 && strcmp(&dtname[dtnl - 4], "##kw") == 0 && !internal && tag != 0) {
         /* XXX: yuck, this is horrible, but the auto-generated kw types from the serializer isn't a real type, so we *must* be very careful */
         assert(tag == 6); // other struct types should never exist
         tag = 9;
@@ -332,9 +334,11 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
             jl_methtable_t *mt = dt->name->mt;
             size_t l = strlen(jl_symbol_name(mt->name));
             char *prefixed;
-            prefixed = (char*)malloc(l + 2);
+            prefixed = (char*)malloc_s(l + 2);
             prefixed[0] = '#';
             strcpy(&prefixed[1], jl_symbol_name(mt->name));
+            // remove ##kw suffix
+            prefixed[l-3] = 0;
             jl_sym_t *tname = jl_symbol(prefixed);
             free(prefixed);
             jl_value_t *primarydt = jl_get_global(mt->module, tname);
@@ -389,13 +393,10 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
         write_uint8(s->s, layout);
         if (layout == 0) {
             uint32_t nf = dt->layout->nfields;
-            write_int32(s->s, nf);
-            uint32_t alignment = ((uint32_t*)dt->layout)[1];
-            write_int32(s->s, alignment);
-            if (dt->layout->npointers && nf)
-                write_int32(s->s, ((uint32_t*)dt->layout)[-1]);
+            uint32_t np = dt->layout->npointers;
             size_t fieldsize = jl_fielddesc_size(dt->layout->fielddesc_type);
-            ios_write(s->s, (char*)(&dt->layout[1]), nf * fieldsize);
+            ios_write(s->s, (const char*)dt->layout, sizeof(*dt->layout));
+            ios_write(s->s, (const char*)(dt->layout + 1), nf * fieldsize + (np << dt->layout->fielddesc_type));
         }
     }
 
@@ -810,13 +811,18 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         jl_serialize_value(s, (jl_value_t*)m->name);
         jl_serialize_value(s, (jl_value_t*)m->file);
         write_int32(s->s, m->line);
-        if (external_mt)
+        if (external_mt) {
             jl_serialize_value(s, jl_nothing);
-        else
+            jl_serialize_value(s, jl_nothing);
+        }
+        else {
             jl_serialize_value(s, (jl_value_t*)m->ambig);
+            jl_serialize_value(s, (jl_value_t*)m->resorted);
+        }
         write_int32(s->s, m->called);
         write_int32(s->s, m->nargs);
         write_int32(s->s, m->nospecialize);
+        write_int32(s->s, m->nkw);
         write_int8(s->s, m->isva);
         write_int8(s->s, m->pure);
         jl_serialize_value(s, (jl_value_t*)m->module);
@@ -1432,29 +1438,17 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
         }
         else {
             assert(layout == 0);
-            uint32_t nf = read_int32(s->s);
-            uint32_t alignment = read_int32(s->s);
-            union {
-                struct {
-                    uint32_t nf;
-                    uint32_t alignment;
-                } buffer;
-                jl_datatype_layout_t layout;
-            } header;
-            header.buffer.nf = nf;
-            header.buffer.alignment = alignment;
-            int has_padding = header.layout.npointers && nf;
-            uint8_t fielddesc_type = header.layout.fielddesc_type;
+            jl_datatype_layout_t buffer;
+            ios_read(s->s, (char*)&buffer, sizeof(buffer));
+            uint32_t nf = buffer.nfields;
+            uint32_t np = buffer.npointers;
+            uint8_t fielddesc_type = buffer.fielddesc_type;
             size_t fielddesc_size = nf > 0 ? jl_fielddesc_size(fielddesc_type) : 0;
             jl_datatype_layout_t *layout = (jl_datatype_layout_t*)jl_gc_perm_alloc(
-                    sizeof(jl_datatype_layout_t) + nf * fielddesc_size +
-                    (has_padding ? sizeof(uint32_t) : 0), 0, 4, 0);
-            if (has_padding) {
-                layout = (jl_datatype_layout_t*)(((char*)layout) + sizeof(uint32_t));
-                jl_datatype_layout_n_nonptr(layout) = read_int32(s->s);
-            }
-            *layout = header.layout;
-            ios_read(s->s, (char*)&layout[1], nf * fielddesc_size);
+                    sizeof(jl_datatype_layout_t) + nf * fielddesc_size + (np << fielddesc_type),
+                    0, 4, 0);
+            *layout = buffer;
+            ios_read(s->s, (char*)(layout + 1), nf * fielddesc_size + (np << fielddesc_type));
             dt->layout = layout;
         }
     }
@@ -1514,7 +1508,7 @@ static jl_value_t *jl_deserialize_value_symbol(jl_serializer_state *s, uint8_t t
         len = read_uint8(s->s);
     else
         len = read_int32(s->s);
-    char *name = (char*)(len >= 256 ? malloc(len + 1) : alloca(len + 1));
+    char *name = (char*)(len >= 256 ? malloc_s(len + 1) : alloca(len + 1));
     ios_read(s->s, name, len);
     name[len] = '\0';
     jl_value_t *sym = (jl_value_t*)jl_symbol(name);
@@ -1683,9 +1677,12 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     m->deleted_world = ~(size_t)0;
     m->ambig = jl_deserialize_value(s, (jl_value_t**)&m->ambig);
     jl_gc_wb(m, m->ambig);
+    m->resorted = jl_deserialize_value(s, (jl_value_t**)&m->resorted);
+    jl_gc_wb(m, m->resorted);
     m->called = read_int32(s->s);
     m->nargs = read_int32(s->s);
     m->nospecialize = read_int32(s->s);
+    m->nkw = read_int32(s->s);
     m->isva = read_int8(s->s);
     m->pure = read_int8(s->s);
     m->module = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&m->module);
@@ -1996,6 +1993,8 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
         int32_t nw = (sz == 0 ? 1 : (sz < 0 ? -sz : sz));
         size_t nb = nw * gmp_limb_size;
         void *buf = jl_gc_counted_malloc(nb);
+        if (buf == NULL)
+            jl_throw(jl_memory_exception);
         ios_read(s->s, (char*)buf, nb);
         jl_set_nth_field(v, 0, jl_box_int32(nw));
         jl_set_nth_field(v, 1, sizefield);
@@ -2805,7 +2804,8 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     for (i = 0; i < len; i++) {
         jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_array, i);
         assert(jl_is_module(m));
-        jl_collect_lambdas_from_mod(lambdas, m);
+        if (m->parent == m) // some toplevel modules (really just Base) aren't actually
+            jl_collect_lambdas_from_mod(lambdas, m);
     }
     jl_collect_methtable_from_mod(lambdas, jl_type_type_mt);
     jl_collect_missing_backedges_to_mod(jl_type_type_mt);
@@ -3210,7 +3210,7 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
 
     arraylist_t *tracee_list = NULL;
     if (jl_newmeth_tracer)
-        tracee_list = arraylist_new((arraylist_t*)malloc(sizeof(arraylist_t)), 0);
+        tracee_list = arraylist_new((arraylist_t*)malloc_s(sizeof(arraylist_t)), 0);
 
     // at this point, the AST is fully reconstructed, but still completely disconnected
     // now all of the interconnects will be created

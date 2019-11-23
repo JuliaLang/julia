@@ -129,7 +129,7 @@ end
     valsstring = sprint((t, s) -> show(t, "text/plain", s), e.values)
     vecsstring = sprint((t, s) -> show(t, "text/plain", s), e.vectors)
     factstring = sprint((t, s) -> show(t, "text/plain", s), e)
-    @test factstring == "$(summary(e))\neigenvalues:\n$valsstring\neigenvectors:\n$vecsstring"
+    @test factstring == "$(summary(e))\nvalues:\n$valsstring\nvectors:\n$vecsstring"
 end
 
 @testset "eigen of an Adjoint" begin

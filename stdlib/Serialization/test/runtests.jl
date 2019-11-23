@@ -361,12 +361,12 @@ end
 struct MyErrorTypeTest <: Exception end
 create_serialization_stream() do s # user-defined type array
     t = Task(()->throw(MyErrorTypeTest()))
-    @test_throws MyErrorTypeTest Base.wait(schedule(t))
+    @test_throws TaskFailedException(t) Base.wait(schedule(t))
+    @test isa(t.exception, MyErrorTypeTest)
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
     @test r.state == :failed
-    @test isa(t.exception, MyErrorTypeTest)
 end
 
 # corner case: undefined inside immutable struct
@@ -561,4 +561,13 @@ let f_data
     end
     f = deserialize(IOBuffer(base64decode(f_data)))
     @test f(10,3) == 23
+end
+
+# issue #33466, IdDict
+let d = IdDict([1] => 2, [3] => 4), io = IOBuffer()
+    serialize(io, d)
+    seekstart(io)
+    ds = deserialize(io)
+    @test Dict(d) == Dict(ds)
+    @test all([k in keys(ds) for k in keys(ds)])
 end

@@ -1,6 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Printf: @sprintf
 using Random
 
 @generated function staged_t1(a,b)
@@ -32,7 +31,7 @@ stagediobuf = IOBuffer()
     :(nothing)
 end
 
-const intstr = @sprintf("%s", Int)
+const intstr = string(Int)
 splat2(1)
 @test String(take!(stagediobuf)) == "($intstr,)"
 splat2(1, 3)
@@ -292,3 +291,9 @@ end
 end
 
 @test_throws ErrorException("syntax: local variable name \"x\" conflicts with an argument") f30284(1)
+
+# issue #33243
+@generated function f33243()
+    :(global x33243 = 2)
+end
+@test_throws ErrorException f33243()

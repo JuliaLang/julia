@@ -10,6 +10,7 @@ using Test
 using SparseArrays
 using LinearAlgebra
 using Random
+include("forbidproperties.jl")
 
 @testset "map[!] implementation specialized for a single (input) sparse vector/matrix" begin
     N, M = 10, 12

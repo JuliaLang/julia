@@ -474,9 +474,8 @@ void STATIC_INLINE _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t 
 
 static jl_function_t *jl_iterate_func JL_GLOBALLY_ROOTED;
 
-JL_CALLABLE(jl_f__apply)
+static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_value_t *iterate)
 {
-    JL_NARGSV(apply, 1);
     jl_function_t *f = args[0];
     if (nargs == 2) {
         // some common simple cases
@@ -516,10 +515,13 @@ JL_CALLABLE(jl_f__apply)
             extra += 1;
         }
     }
-    if (extra && jl_iterate_func == NULL) {
-        jl_iterate_func = jl_get_function(jl_top_module, "iterate");
-        if (jl_iterate_func == NULL)
-            jl_undefined_var_error(jl_symbol("iterate"));
+    if (extra && iterate == NULL) {
+        if (jl_iterate_func == NULL) {
+            jl_iterate_func = jl_get_function(jl_top_module, "iterate");
+            if (jl_iterate_func == NULL)
+                jl_undefined_var_error(jl_symbol("iterate"));
+        }
+        iterate = jl_iterate_func;
     }
     // allocate space for the argument array and gc roots for it
     // based on our previous estimates
@@ -531,7 +533,7 @@ JL_CALLABLE(jl_f__apply)
     size_t n_alloc;
     jl_value_t **roots;
     JL_GC_PUSHARGS(roots, stackalloc + (extra ? 2 : 0));
-    jl_value_t **newargs = NULL;
+    jl_value_t **newargs;
     jl_svec_t *arg_heap = NULL;
     if (onstack) {
         newargs = roots;
@@ -539,7 +541,9 @@ JL_CALLABLE(jl_f__apply)
     }
     else {
         // put arguments on the heap if there are too many
+        newargs = NULL;
         n_alloc = 0;
+        assert(precount > 0); // let optimizer know this won't overflow
         _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, precount, extra);
     }
     newargs[0] = f;
@@ -552,6 +556,7 @@ JL_CALLABLE(jl_f__apply)
             size_t j, al = jl_svec_len(t);
             precount = (precount > al) ? precount - al : 0;
             _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, n + precount + al, extra);
+            assert(newargs != NULL); // inform GCChecker that we didn't write a NULL here
             for (j = 0; j < al; j++) {
                 newargs[n++] = jl_svecref(t, j);
                 // GC Note: here we assume that the return value of `jl_svecref`
@@ -564,6 +569,7 @@ JL_CALLABLE(jl_f__apply)
             size_t j, al = jl_nfields(ai);
             precount = (precount > al) ? precount - al : 0;
             _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, n + precount + al, extra);
+            assert(newargs != NULL); // inform GCChecker that we didn't write a NULL here
             for (j = 0; j < al; j++) {
                 // jl_fieldref may allocate.
                 newargs[n++] = jl_fieldref(ai, j);
@@ -576,6 +582,7 @@ JL_CALLABLE(jl_f__apply)
             size_t j, al = jl_array_len(aai);
             precount = (precount > al) ? precount - al : 0;
             _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, n + precount + al, extra);
+            assert(newargs != NULL); // inform GCChecker that we didn't write a NULL here
             if (aai->flags.ptrarray) {
                 for (j = 0; j < al; j++) {
                     jl_value_t *arg = jl_array_ptr_ref(aai, j);
@@ -599,12 +606,12 @@ JL_CALLABLE(jl_f__apply)
             assert(extra > 0);
             jl_value_t *args[2];
             args[0] = ai;
-            jl_value_t *next = jl_apply_generic(jl_iterate_func, args, 1);
+            jl_value_t *next = jl_apply_generic(iterate, args, 1);
             while (next != jl_nothing) {
                 roots[stackalloc] = next;
-                jl_value_t *value = jl_fieldref(next, 0);
+                jl_value_t *value = jl_get_nth_field_checked(next, 0);
                 roots[stackalloc + 1] = value;
-                jl_value_t *state = jl_fieldref(next, 1);
+                jl_value_t *state = jl_get_nth_field_checked(next, 1);
                 roots[stackalloc] = state;
                 _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, n + precount + 1, extra);
                 JL_GC_ASSERT_LIVE(value);
@@ -614,7 +621,7 @@ JL_CALLABLE(jl_f__apply)
                 roots[stackalloc + 1] = NULL;
                 JL_GC_ASSERT_LIVE(state);
                 args[1] = state;
-                next = jl_apply_generic(jl_iterate_func, args, 2);
+                next = jl_apply_generic(iterate, args, 2);
             }
             roots[stackalloc] = NULL;
             extra -= 1;
@@ -627,6 +634,18 @@ JL_CALLABLE(jl_f__apply)
     jl_value_t *result = jl_apply(newargs, n);
     JL_GC_POP();
     return result;
+}
+
+JL_CALLABLE(jl_f__apply_iterate)
+{
+    JL_NARGSV(_apply_iterate, 2);
+    return do_apply(F, args+1, nargs-1, args[0]);
+}
+
+JL_CALLABLE(jl_f__apply)
+{
+    JL_NARGSV(_apply, 1);
+    return do_apply(F, args, nargs, NULL);
 }
 
 // this is like `_apply`, but with quasi-exact checks to make sure it is pure
@@ -1293,7 +1312,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_applicable = add_builtin_func("applicable", jl_f_applicable);
     jl_builtin_invoke = add_builtin_func("invoke", jl_f_invoke);
     jl_typename_t *itn = ((jl_datatype_t*)jl_typeof(jl_builtin_invoke))->name;
-    jl_value_t *ikws = jl_new_generic_function_with_supertype(itn->name, jl_core_module, jl_builtin_type, 1);
+    jl_value_t *ikws = jl_new_generic_function_with_supertype(itn->name, jl_core_module, jl_builtin_type);
     itn->mt->kwsorter = ikws;
     jl_gc_wb(itn->mt, ikws);
     jl_mk_builtin_func((jl_datatype_t*)jl_typeof(ikws), jl_symbol_name(jl_gf_name(ikws)), jl_f_invoke_kwsorter);
@@ -1301,6 +1320,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     // internal functions
     jl_builtin_apply_type = add_builtin_func("apply_type", jl_f_apply_type);
     jl_builtin__apply = add_builtin_func("_apply", jl_f__apply);
+    jl_builtin__apply_iterate = add_builtin_func("_apply_iterate", jl_f__apply_iterate);
     jl_builtin__expr = add_builtin_func("_expr", jl_f__expr);
     jl_builtin_svec = add_builtin_func("svec", jl_f_svec);
     add_builtin_func("_apply_pure", jl_f__apply_pure);

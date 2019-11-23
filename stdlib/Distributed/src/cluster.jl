@@ -146,7 +146,7 @@ end
 function check_worker_state(w::Worker)
     if w.state == W_CREATED
         if !isclusterlazy()
-            if PGRP.topology == :all_to_all
+            if PGRP.topology === :all_to_all
                 # Since higher pids connect with lower pids, the remote worker
                 # may not have connected to us yet. Wait for some time.
                 wait_for_conn(w)
@@ -361,6 +361,8 @@ process as a worker using TCP/IP sockets for transport.
 `cookie` is a [`cluster_cookie`](@ref).
 """
 function init_worker(cookie::AbstractString, manager::ClusterManager=DefaultClusterManager())
+    myrole!(:worker)
+
     # On workers, the default cluster manager connects via TCP sockets. Custom
     # transports will need to call this function with their own manager.
     global cluster_manager
@@ -443,10 +445,10 @@ function addprocs(manager::ClusterManager; kwargs...)
 end
 
 function addprocs_locked(manager::ClusterManager; kwargs...)
-    params = merge(default_addprocs_params(), AnyDict(kwargs))
+    params = merge(default_addprocs_params(), Dict{Symbol,Any}(kwargs))
     topology(Symbol(params[:topology]))
 
-    if PGRP.topology != :all_to_all
+    if PGRP.topology !== :all_to_all
         params[:lazy] = false
     end
 
@@ -508,7 +510,7 @@ function set_valid_processes(plist::Array{Int})
     end
 end
 
-default_addprocs_params() = AnyDict(
+default_addprocs_params() = Dict{Symbol,Any}(
     :topology => :all_to_all,
     :dir      => pwd(),
     :exename  => joinpath(Sys.BINDIR, julia_exename()),
@@ -614,7 +616,7 @@ function create_worker(manager, wconfig)
     # - On master, receiving a JoinCompleteMsg triggers rr_ntfy_join (signifies that worker setup is complete)
 
     join_list = []
-    if PGRP.topology == :all_to_all
+    if PGRP.topology === :all_to_all
         # need to wait for lower worker pids to have completed connecting, since the numerical value
         # of pids is relevant to the connection process, i.e., higher pids connect to lower pids and they
         # require the value of config.connect_at which is set only upon connection completion
@@ -625,7 +627,7 @@ function create_worker(manager, wconfig)
             end
         end
 
-    elseif PGRP.topology == :custom
+    elseif PGRP.topology === :custom
         # wait for requested workers to be up before connecting to them.
         filterfunc(x) = (x.id != 1) && isdefined(x, :config) &&
             (notnothing(x.config.ident) in something(wconfig.connect_idents, []))
@@ -783,11 +785,18 @@ end
 
 # globals
 const LPROC = LocalProcess()
+const LPROCROLE = Ref{Symbol}(:master)
 const HDR_VERSION_LEN=16
 const HDR_COOKIE_LEN=16
 const map_pid_wrkr = Dict{Int, Union{Worker, LocalProcess}}()
 const map_sock_wrkr = IdDict()
 const map_del_wrkr = Set{Int}()
+
+# whether process is a master or worker in a distributed setup
+myrole() = LPROCROLE[]
+function myrole!(proctype::Symbol)
+    LPROCROLE[] = proctype
+end
 
 # cluster management related API
 """
@@ -823,7 +832,7 @@ julia> workers()
 ```
 """
 function nprocs()
-    if myid() == 1 || (PGRP.topology == :all_to_all && !isclusterlazy())
+    if myid() == 1 || (PGRP.topology === :all_to_all && !isclusterlazy())
         n = length(PGRP.workers)
         # filter out workers in the process of being setup/shutdown.
         for jw in PGRP.workers
@@ -876,7 +885,7 @@ julia> procs()
 ```
 """
 function procs()
-    if myid() == 1 || (PGRP.topology == :all_to_all  && !isclusterlazy())
+    if myid() == 1 || (PGRP.topology === :all_to_all  && !isclusterlazy())
         # filter out workers in the process of being setup/shutdown.
         return Int[x.id for x in PGRP.workers if isa(x, LocalProcess) || (x.state == W_CONNECTED)]
     else
@@ -885,7 +894,7 @@ function procs()
 end
 
 function id_in_procs(id)  # faster version of `id in procs()`
-    if myid() == 1 || (PGRP.topology == :all_to_all  && !isclusterlazy())
+    if myid() == 1 || (PGRP.topology === :all_to_all  && !isclusterlazy())
         for x in PGRP.workers
             if (x.id::Int) == id && (isa(x, LocalProcess) || (x::Worker).state == W_CONNECTED)
                 return true
@@ -1108,10 +1117,10 @@ function deregister_worker(pg, pid)
             end
         end
 
-        if myid() == 1 && isdefined(w, :config)
+        if myid() == 1 && (myrole() === :master) && isdefined(w, :config)
             # Notify the cluster manager of this workers death
             manage(w.manager, w.id, w.config, :deregister)
-            if PGRP.topology != :all_to_all || isclusterlazy()
+            if PGRP.topology !== :all_to_all || isclusterlazy()
                 for rpid in workers()
                     try
                         remote_do(deregister_worker, rpid, pid)

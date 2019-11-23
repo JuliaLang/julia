@@ -28,7 +28,25 @@ getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex
 getindex(t::Tuple, c::Colon) = t
 
 # returns new tuple; N.B.: becomes no-op if i is out-of-bounds
-setindex(x::Tuple, v, i::Integer) = (@_inline_meta; _setindex(v, i, x...))
+
+"""
+    setindex(c::Tuple, v, i::Integer)
+
+Creates a new tuple similar to `x` with the value at index `i` set to `v`.
+Throws a `BoundsError` when out of bounds.
+
+# Examples
+```jldoctest
+julia> Base.setindex((1, 2, 6), 2, 3) == (1, 2, 2)
+true
+```
+"""
+function setindex(x::Tuple, v, i::Integer)
+    @boundscheck 1 <= i <= length(x) || throw(BoundsError(x, i))
+    @_inline_meta
+    _setindex(v, i, x...)
+end
+
 function _setindex(v, i::Integer, first, tail...)
     @_inline_meta
     return (ifelse(i == 1, v, first), _setindex(v, i - 1, tail...)...)
@@ -216,6 +234,9 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 if nameof(@__MODULE__) === :Base
 
 (::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x)  # still use `convert` for tuples
+
+Tuple(x::Ref) = tuple(getindex(x))  # faster than iterator for one element
+Tuple(x::Array{T,0}) where {T} = tuple(getindex(x))
 
 (::Type{T})(itr) where {T<:Tuple} = _totuple(T, itr)
 

@@ -210,7 +210,7 @@ targets1 = ["0-dimensional $OAs_name.OffsetArray{Float64,0,Array{Float64,0}}:\n1
             "1×1 $OAs_name.OffsetArray{Float64,2,Array{Float64,2}} with indices 2:2×3:3:\n 1.0",
             "1×1×1 $OAs_name.OffsetArray{Float64,3,Array{Float64,3}} with indices 2:2×3:3×4:4:\n[:, :, 4] =\n 1.0",
             "1×1×1×1 $OAs_name.OffsetArray{Float64,4,Array{Float64,4}} with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
-targets2 = ["(1.0, 1.0)",
+targets2 = ["(fill(1.0), fill(1.0))",
             "([1.0], [1.0])",
             "([1.0], [1.0])",
             "([1.0], [1.0])",
@@ -533,15 +533,15 @@ end
     B = OffsetArray(reshape(1:24, 4, 3, 2), -5, 6, -7)
     for R in (fill(0, -4:-1), fill(0, -4:-1, 7:7), fill(0, -4:-1, 7:7, -6:-6))
         @test @inferred(maximum!(R, B)) == reshape(maximum(B, dims=(2,3)), axes(R)) == reshape(21:24, axes(R))
-        @test @allocated(maximum!(R, B)) <= 400
+        @test @allocated(maximum!(R, B)) <= 800
         @test @inferred(minimum!(R, B)) == reshape(minimum(B, dims=(2,3)), axes(R)) == reshape(1:4, axes(R))
-        @test @allocated(minimum!(R, B)) <= 400
+        @test @allocated(minimum!(R, B)) <= 800
     end
     for R in (fill(0, -4:-4, 7:9), fill(0, -4:-4, 7:9, -6:-6))
         @test @inferred(maximum!(R, B)) == reshape(maximum(B, dims=(1,3)), axes(R)) == reshape(16:4:24, axes(R))
-        @test @allocated(maximum!(R, B)) <= 400
+        @test @allocated(maximum!(R, B)) <= 800
         @test @inferred(minimum!(R, B)) == reshape(minimum(B, dims=(1,3)), axes(R)) == reshape(1:4:9, axes(R))
-        @test @allocated(minimum!(R, B)) <= 400
+        @test @allocated(minimum!(R, B)) <= 800
     end
     @test_throws DimensionMismatch maximum!(fill(0, -4:-1, 7:7, -6:-6, 1:1), B)
     @test_throws DimensionMismatch minimum!(fill(0, -4:-1, 7:7, -6:-6, 1:1), B)

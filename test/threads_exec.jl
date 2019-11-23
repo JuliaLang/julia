@@ -2,7 +2,7 @@
 
 using Test
 using Base.Threads
-using Base.Threads: SpinLock, Mutex
+using Base.Threads: SpinLock
 
 # threading constructs
 
@@ -27,26 +27,30 @@ end
 # parallel loop with parallel atomic addition
 function threaded_loop(a, r, x)
     @threads for i in r
-        a[i] = 1 + atomic_add!(x, 1)
+        j = i - firstindex(r) + 1
+        a[j] = 1 + atomic_add!(x, 1)
     end
 end
 
 function test_threaded_loop_and_atomic_add()
-    x = Atomic()
-    a = zeros(Int,10000)
-    threaded_loop(a,1:10000,x)
-    found = zeros(Bool,10000)
-    was_inorder = true
-    for i=1:length(a)
-        was_inorder &= a[i]==i
-        found[a[i]] = true
-    end
-    @test x[] == 10000
-    # Next test checks that all loop iterations ran,
-    # and were unique (via pigeon-hole principle).
-    @test !(false in found)
-    if was_inorder && nthreads() > 1
-        println(stderr, "Warning: threaded loop executed in order")
+    for r in [1:10000, collect(1:10000), Base.IdentityUnitRange(-500:500), (1,2,3,4,5,6,7,8,9,10)]
+        n = length(r)
+        x = Atomic()
+        a = zeros(Int, n)
+        threaded_loop(a,r,x)
+        found = zeros(Bool,n)
+        was_inorder = true
+        for i=1:length(a)
+            was_inorder &= a[i]==i
+            found[a[i]] = true
+        end
+        @test x[] == n
+        # Next test checks that all loop iterations ran,
+        # and were unique (via pigeon-hole principle).
+        @test !(false in found)
+        if was_inorder && nthreads() > 1
+            println(stderr, "Warning: threaded loop executed in order")
+        end
     end
 end
 
@@ -110,7 +114,6 @@ end
 
 @test threaded_add_locked(SpinLock, 0, 10000) == 10000
 @test threaded_add_locked(ReentrantLock, 0, 10000) == 10000
-@test threaded_add_locked(Mutex, 0, 10000) == 10000
 
 # Check if the recursive lock can be locked and unlocked correctly.
 let critical = ReentrantLock()
@@ -151,7 +154,21 @@ end
 
 threaded_gc_locked(SpinLock)
 threaded_gc_locked(Threads.ReentrantLock)
-threaded_gc_locked(Mutex)
+
+# Issue 33159
+# Make sure that a Threads.Condition can't be used without being locked, on any thread.
+@testset "Threads.Conditions must be locked" begin
+    c = Threads.Condition()
+    @test_throws Exception notify(c)
+    @test_throws Exception wait(c)
+
+    # If it's locked, but on the wrong thread, it should still throw an exception
+    lock(c)
+    @test_throws Exception fetch(@async notify(c))
+    @test_throws Exception fetch(@async notify(c, all=false))
+    @test_throws Exception fetch(@async wait(c))
+    unlock(c)
+end
 
 # Issue 14726
 # Make sure that eval'ing in a different module doesn't mess up other threads
@@ -671,4 +688,20 @@ let ch = Channel{Char}(0), t
     bind(ch, t)
     schedule(t)
     @test String(collect(ch)) == "hello"
+end
+
+# errors inside @threads
+function _atthreads_with_error(a, err)
+    Threads.@threads for i in eachindex(a)
+        if err
+            error("failed")
+        end
+        a[i] = Threads.threadid()
+    end
+    a
+end
+@test_throws TaskFailedException _atthreads_with_error(zeros(nthreads()), true)
+let a = zeros(nthreads())
+    _atthreads_with_error(a, false)
+    @test a == [1:nthreads();]
 end

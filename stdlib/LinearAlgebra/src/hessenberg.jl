@@ -284,6 +284,37 @@ function logabsdet(F::UpperHessenberg; shift::Number=false)
     return (logdeterminant, P)
 end
 
+function dot(x::AbstractVector, H::UpperHessenberg, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    m = size(H, 1)
+    (length(x) == m == length(y)) || throw(DimensionMismatch())
+    if iszero(m)
+        return dot(zero(eltype(x)), zero(eltype(H)), zero(eltype(y)))
+    end
+    x₁ = x[1]
+    r = dot(x₁, H[1,1], y[1])
+    r += dot(x[2], H[2,1], y[1])
+    @inbounds for j in 2:m-1
+        yj = y[j]
+        if !iszero(yj)
+            temp = adjoint(H[1,j]) * x₁
+            @simd for i in 2:j+1
+                temp += adjoint(H[i,j]) * x[i]
+            end
+            r += dot(temp, yj)
+        end
+    end
+    ym = y[m]
+    if !iszero(ym)
+        temp = adjoint(H[1,m]) * x₁
+        @simd for i in 2:m
+            temp += adjoint(H[i,m]) * x[i]
+        end
+        r += dot(temp, ym)
+    end
+    return r
+end
+
 ######################################################################################
 # Hessenberg factorizations Q(H+μI)Q' of A+μI:
 
@@ -362,7 +393,18 @@ julia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]
  4.0  4.0  1.0
  4.0  3.0  2.0
 
-julia> F = hessenberg(A);
+julia> F = hessenberg(A)
+Hessenberg{Float64,UpperHessenberg{Float64,Array{Float64,2}},Array{Float64,2},Array{Float64,1},Bool}
+Q factor:
+3×3 LinearAlgebra.HessenbergQ{Float64,Array{Float64,2},Array{Float64,1},false}:
+ 1.0   0.0        0.0
+ 0.0  -0.707107  -0.707107
+ 0.0  -0.707107   0.707107
+H factor:
+3×3 UpperHessenberg{Float64,Array{Float64,2}}:
+  4.0      -11.3137       -1.41421
+ -5.65685    5.0           2.0
+   ⋅        -8.88178e-16   1.0
 
 julia> F.Q * F.H * F.Q'
 3×3 Array{Float64,2}:
@@ -411,7 +453,7 @@ HessenbergQ(F::Hessenberg{<:Any,<:UpperHessenberg,S,W}) where {S,W} = Hessenberg
 HessenbergQ(F::Hessenberg{<:Any,<:SymTridiagonal,S,W}) where {S,W} = HessenbergQ{eltype(F.factors),S,W,true}(F.uplo, F.factors, F.τ)
 
 function getproperty(F::Hessenberg, d::Symbol)
-    d == :Q && return HessenbergQ(F)
+    d === :Q && return HessenbergQ(F)
     return getfield(F, d)
 end
 

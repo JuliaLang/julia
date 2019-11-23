@@ -1327,9 +1327,18 @@ end
 @test Meta.parse("-(x;;;)^2")  == Expr(:call, :-, Expr(:call, :^, Expr(:block, :x), 2))
 @test Meta.parse("+((1,2))")   == Expr(:call, :+, Expr(:tuple, 1, 2))
 
-@test_throws ParseError("space before \"(\" not allowed in \"+ (\"") Meta.parse("1 -+ (a=1, b=2)")
+@test_throws ParseError("space before \"(\" not allowed in \"+ (\" at none:1") Meta.parse("1 -+ (a=1, b=2)")
 # issue #29781
-@test_throws ParseError("space before \"(\" not allowed in \"sin. (\"") Meta.parse("sin. (1)")
+@test_throws ParseError("space before \"(\" not allowed in \"sin. (\" at none:1") Meta.parse("sin. (1)")
+# Parser errors for disallowed space contain line numbers
+@test_throws ParseError("space before \"[\" not allowed in \"f() [\" at none:2") Meta.parse("\nf() [i]")
+@test_throws ParseError("space before \"(\" not allowed in \"f() (\" at none:2") Meta.parse("\nf() (i)")
+@test_throws ParseError("space before \".\" not allowed in \"f() .\" at none:2") Meta.parse("\nf() .i")
+@test_throws ParseError("space before \"{\" not allowed in \"f() {\" at none:2") Meta.parse("\nf() {i}")
+@test_throws ParseError("space before \"m\" not allowed in \"@ m\" at none:2") Meta.parse("\n@ m")
+@test_throws ParseError("space before \".\" not allowed in \"a .\" at none:2") Meta.parse("\nusing a .b")
+@test_throws ParseError("space before \".\" not allowed in \"a .\" at none:2") Meta.parse("\nusing a .b")
+@test_throws ParseError("space before \"(\" not allowed in \"+ (\" at none:2") Meta.parse("\n+ (x, y)")
 
 @test Meta.parse("1 -+(a=1, b=2)") == Expr(:call, :-, 1,
                                            Expr(:call, :+, Expr(:kw, :a, 1), Expr(:kw, :b, 2)))
@@ -1845,8 +1854,7 @@ end
 @testset "closure conversion in testsets" begin
     p = (2, 3, 4)
     @test p == (2, 3, 4)
-    identity(p)
-    allocs = @allocated identity(p)
+    allocs = (() -> @allocated identity(p))()
     @test allocs == 0
 end
 
@@ -1910,3 +1918,50 @@ end
 # issue #32626
 @test Meta.parse("'a'..'b'") == Expr(:call, :(..), 'a', 'b')
 @test Meta.parse(":a..:b") == Expr(:call, :(..), QuoteNode(:a), QuoteNode(:b))
+
+# Non-standard identifiers (PR #32408)
+@test Meta.parse("var\"#\"") == Symbol("#")
+@test_throws ParseError Meta.parse("var\"#\"x") # Reject string macro-like suffix
+@test_throws ParseError Meta.parse("var \"#\"")
+@test_throws ParseError Meta.parse("var\"for\" i = 1:10; end")
+# A few cases which would be ugly to deal with if var"#" were a string macro:
+@test Meta.parse("var\"#\".var\"a-b\"") == Expr(:., Symbol("#"), QuoteNode(Symbol("a-b")))
+@test Meta.parse("export var\"#\"") == Expr(:export, Symbol("#"))
+@test Base.remove_linenums!(Meta.parse("try a catch var\"#\" b end")) ==
+      Expr(:try, Expr(:block, :a), Symbol("#"), Expr(:block, :b))
+@test Meta.parse("(var\"function\" = 1,)") == Expr(:tuple, Expr(:(=), Symbol("function"), 1))
+# Non-standard identifiers require parens for string interpolation
+@test Meta.parse("\"\$var\\\"#\\\"\"") == Expr(:string, :var, "\"#\"")
+@test Meta.parse("\"\$(var\"#\")\"") == Expr(:string, Symbol("#"))
+# Stream positioning after parsing var
+@test Meta.parse("var'", 1, greedy=false) == (:var, 4)
+
+# quoted names in import (#33158)
+@test Meta.parse("import Base.:+") == :(import Base.+)
+@test Meta.parse("import Base.Foo.:(==).bar") == :(import Base.Foo.==.bar)
+
+# issue #33135
+function f33135(x::T) where {C1, T}
+    let C1 = 1, C2 = 2
+        C1
+    end
+end
+@test f33135(0) == 1
+
+# issue #33227
+@test Meta.isexpr(Meta.lower(Main, :((@label a; @goto a))), :thunk)
+
+# issue #33250
+@test Meta.lower(Main, :(f(b=b...))) == Expr(:error, "\"...\" expression cannot be used as keyword argument value")
+@test Meta.lower(Main, :(f(;a=a,b=b...))) == Expr(:error, "\"...\" expression cannot be used as keyword argument value")
+@test Meta.lower(Main, :((a=a,b=b...))) == Expr(:error, "\"...\" expression cannot be used as named tuple field value")
+@test Meta.lower(Main, :(f(;a...,b...)=0)) == Expr(:error, "invalid \"...\" on non-final keyword argument")
+@test Meta.lower(Main, :(f(;a...,b=0)=0)) == Expr(:error, "invalid \"...\" on non-final keyword argument")
+
+# issue #31547
+@test Meta.lower(Main, :(a := 1)) == Expr(:error, "unsupported assignment operator \":=\"")
+
+# issue #33841
+let a(; b) = b
+    @test a(b=3) == 3
+end
