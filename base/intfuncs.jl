@@ -63,12 +63,30 @@ julia> lcm(-2,3)
 6
 ```
 """
-function lcm(a::T, b::T) where T<:Integer
+lcm(a::T, b::T) where T<:Integer = _lcm(a, b, *)
+
+"""
+    widelcm(x,y)
+
+Least common (non-negative) multiple, giving the result as a larger type.
+
+!!! compat "Julia 1.4"
+    This function is available as of Julia 1.4.
+
+# Examples
+```jldoctest
+julia> widelcm(typemax(UInt32), typemax(UInt32)-UInt32(1))
+0xfffffffd00000002
+```
+"""
+widelcm(a::T, b::T) where T<:Integer = _lcm(a, b, widemul)
+
+function _lcm(a::T, b::T, mul::Function) where T<:Integer
     # explicit a==0 test is to handle case of lcm(0,0) correctly
     if a == 0
         return a
     else
-        return checked_abs(a * div(b, gcd(b,a)))
+        return checked_abs(mul(a, div(b, gcd(b,a))))
     end
 end
 
@@ -76,6 +94,7 @@ gcd(a::Integer) = a
 lcm(a::Integer) = a
 gcd(a::Integer, b::Integer) = gcd(promote(a,b)...)
 lcm(a::Integer, b::Integer) = lcm(promote(a,b)...)
+widelcm(a::Integer, b::Integer) = widelcm(promote(a,b)...)
 gcd(a::Integer, b::Integer...) = gcd(a, gcd(b...))
 lcm(a::Integer, b::Integer...) = lcm(a, lcm(b...))
 

@@ -342,6 +342,7 @@ export
     typemin,
     unsigned,
     widemul,
+    widelcm,
     zero,
     √,
     ∛,

@@ -4,6 +4,7 @@
 
 import Base: checked_abs, checked_neg, checked_add, checked_sub, checked_mul,
              checked_div, checked_rem, checked_fld, checked_mod, checked_cld,
+             checked_lcm,
              add_with_overflow, sub_with_overflow, mul_with_overflow
 
 # checked operations
@@ -166,6 +167,11 @@ import Base: checked_abs, checked_neg, checked_add, checked_sub, checked_mul,
     @test checked_cld(typemin(T), T(1)) === typemin(T)
     @test_throws DivideError checked_cld(typemin(T), T(0))
     @test_throws DivideError checked_cld(typemin(T), T(-1))
+
+    @test checked_lcm(T(-4), T(-6)) === T(12)
+    @test_throws OverflowError checked_lcm(typemax(T), T(2))
+    @test checked_lcm(T[2, 4, 6]) === T(12)
+
 end
 
 @testset for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
@@ -332,5 +338,4 @@ end
 
     @test checked_mul(UInt128(3), UInt128(4)) === UInt128(12)
     @test_throws OverflowError checked_mul(UInt128(2)^127, UInt128(2))
-
 end

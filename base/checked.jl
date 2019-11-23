@@ -6,6 +6,7 @@ module Checked
 
 export checked_neg, checked_abs, checked_add, checked_sub, checked_mul,
        checked_div, checked_rem, checked_fld, checked_mod, checked_cld,
+       checked_lcm,
        add_with_overflow, sub_with_overflow, mul_with_overflow
 
 import Core.Intrinsics:
@@ -24,6 +25,7 @@ checked_rem(x::Integer, y::Integer) = checked_rem(promote(x,y)...)
 checked_fld(x::Integer, y::Integer) = checked_fld(promote(x,y)...)
 checked_mod(x::Integer, y::Integer) = checked_mod(promote(x,y)...)
 checked_cld(x::Integer, y::Integer) = checked_cld(promote(x,y)...)
+checked_lcm(x::Integer, y::Integer) = checked_lcm(promote(x,y)...)
 
 # fallback catchall rules to prevent infinite recursion if promotion succeeds,
 # but no method exists to handle those types
@@ -303,6 +305,26 @@ checked_mul(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T) where {T} =
     checked_mul(checked_mul(x1, x2), x3, x4, x5, x6, x7)
 checked_mul(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) where {T} =
     checked_mul(checked_mul(x1, x2), x3, x4, x5, x6, x7, x8)
+
+"""
+    Base.checked_lcm(x, y[, ...])
+
+Calculates least common multiple of `x` and `y`, checking for overflow errors.
+
+The overflow protection may impose a perceptible performance penalty.
+
+!!! compat "Julia 1.4"
+    This function is available as of Julia 1.4.
+
+```jldoctest
+julia> checked_lcm((1:45)...)
+ERROR: OverflowError: 219060189739591200 * 43 overflowed for type Int64
+
+```
+"""
+checked_lcm(a::T, b::T) where T<:Integer = Base._lcm(a, b, checked_mul)
+checked_lcm(a::AbstractArray{T,1}) where T<:Integer = foldl(checked_lcm, a, init=T(1))
+checked_lcm(a...) = foldl(checked_lcm, a)
 
 """
     Base.checked_div(x, y)
