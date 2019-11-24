@@ -40,9 +40,6 @@ JL_DLLEXPORT char *dirname(char *);
 #endif
 
 #ifdef _OS_WINDOWS_
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <io.h>
 extern int needsSymRefreshModuleList;
 extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 #else
@@ -153,7 +150,7 @@ struct uv_shutdown_queue { struct uv_shutdown_queue_item *first; struct uv_shutd
 
 static void jl_uv_exitcleanup_add(uv_handle_t *handle, struct uv_shutdown_queue *queue)
 {
-    struct uv_shutdown_queue_item *item = (struct uv_shutdown_queue_item*)malloc(sizeof(struct uv_shutdown_queue_item));
+    struct uv_shutdown_queue_item *item = (struct uv_shutdown_queue_item*)malloc_s(sizeof(struct uv_shutdown_queue_item));
     item->h = handle;
     item->next = NULL;
     if (queue->last)
@@ -371,7 +368,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
         jl_errorf("error initializing %s in uv_dup: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
     switch(uv_guess_handle(fd)) {
     case UV_TTY:
-        handle = malloc(sizeof(uv_tty_t));
+        handle = malloc_s(sizeof(uv_tty_t));
         if ((err = uv_tty_init(jl_io_loop, (uv_tty_t*)handle, fd, 0))) {
             jl_errorf("error initializing %s in uv_tty_init: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
@@ -401,7 +398,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
         // ...and continue on as in the UV_FILE case
         JL_FALLTHROUGH;
     case UV_FILE:
-        handle = malloc(sizeof(jl_uv_file_t));
+        handle = malloc_s(sizeof(jl_uv_file_t));
         {
             jl_uv_file_t *file = (jl_uv_file_t*)handle;
             file->loop = jl_io_loop;
@@ -411,7 +408,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
         }
         break;
     case UV_NAMED_PIPE:
-        handle = malloc(sizeof(uv_pipe_t));
+        handle = malloc_s(sizeof(uv_pipe_t));
         if ((err = uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle, 0))) {
             jl_errorf("error initializing %s in uv_pipe_init: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
@@ -421,7 +418,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
         ((uv_pipe_t*)handle)->data = NULL;
         break;
     case UV_TCP:
-        handle = malloc(sizeof(uv_tcp_t));
+        handle = malloc_s(sizeof(uv_tcp_t));
         if ((err = uv_tcp_init(jl_io_loop, (uv_tcp_t*)handle))) {
             jl_errorf("error initializing %s in uv_tcp_init: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
@@ -479,9 +476,7 @@ static char *abspath(const char *in, int nprefix)
     if (out) {
         if (nprefix > 0) {
             size_t sz = strlen(out) + 1;
-            char *cpy = (char*)malloc(sz + nprefix);
-            if (!cpy)
-                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            char *cpy = (char*)malloc_s(sz + nprefix);
             memcpy(cpy, in, nprefix);
             memcpy(cpy + nprefix, out, sz);
             free(out);
@@ -491,22 +486,16 @@ static char *abspath(const char *in, int nprefix)
     else {
         size_t sz = strlen(in + nprefix) + 1;
         if (in[nprefix] == PATHSEPSTRING[0]) {
-            out = (char*)malloc(sz + nprefix);
-            if (!out)
-                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            out = (char*)malloc_s(sz + nprefix);
             memcpy(out, in, sz + nprefix);
         }
         else {
             size_t path_size = PATH_MAX;
-            char *path = (char*)malloc(PATH_MAX);
-            if (!path)
-                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            char *path = (char*)malloc_s(PATH_MAX);
             if (uv_cwd(path, &path_size)) {
                 jl_error("fatal error: unexpected error while retrieving current working directory");
             }
-            out = (char*)malloc(path_size + 1 + sz + nprefix);
-            if (!out)
-                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            out = (char*)malloc_s(path_size + 1 + sz + nprefix);
             memcpy(out, in, nprefix);
             memcpy(out + nprefix, path, path_size);
             out[nprefix + path_size] = PATHSEPSTRING[0];
@@ -519,9 +508,7 @@ static char *abspath(const char *in, int nprefix)
     if (n <= 0) {
         jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
     }
-    char *out = (char*)malloc(n + nprefix);
-    if (!out)
-        jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+    char *out = (char*)malloc_s(n + nprefix);
     DWORD m = GetFullPathName(in + nprefix, n, out + nprefix, NULL);
     if (n != m + 1) {
         jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
@@ -548,9 +535,7 @@ static const char *absformat(const char *in)
     size_t i, fmt_size = 0;
     for (i = 0; i < path_size; i++)
         fmt_size += (path[i] == '%' ? 2 : 1);
-    char *out = (char*)malloc(fmt_size + 1 + sz);
-    if (!out)
-        jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+    char *out = (char*)malloc_s(fmt_size + 1 + sz);
     fmt_size = 0;
     for (i = 0; i < path_size; i++) { // copy-replace pwd portion
         char c = path[i];
@@ -571,19 +556,15 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     // note: if you care about lost memory, you should call the appropriate `free()` function
     // on the original pointer for each `char*` you've inserted into `jl_options`, after
     // calling `julia_init()`
-    char *free_path = (char*)malloc(PATH_MAX);
+    char *free_path = (char*)malloc_s(PATH_MAX);
     size_t path_size = PATH_MAX;
-    if (!free_path)
-        jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
     if (uv_exepath(free_path, &path_size)) {
         jl_error("fatal error: unexpected error while retrieving exepath");
     }
     if (path_size >= PATH_MAX) {
         jl_error("fatal error: jl_options.julia_bin path too long");
     }
-    jl_options.julia_bin = (char*)malloc(path_size+1);
-    if (!jl_options.julia_bin)
-        jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+    jl_options.julia_bin = (char*)malloc_s(path_size + 1);
     memcpy((char*)jl_options.julia_bin, free_path, path_size);
     ((char*)jl_options.julia_bin)[path_size] = '\0';
     if (!jl_options.julia_bindir) {
@@ -599,9 +580,7 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     if (jl_options.image_file) {
         if (rel == JL_IMAGE_JULIA_HOME && !isabspath(jl_options.image_file)) {
             // build time path, relative to JULIA_BINDIR
-            free_path = (char*)malloc(PATH_MAX);
-            if (!free_path)
-                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            free_path = (char*)malloc_s(PATH_MAX);
             int n = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%s",
                              jl_options.julia_bindir, jl_options.image_file);
             if (n >= PATH_MAX || n < 0) {

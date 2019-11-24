@@ -235,6 +235,9 @@ if nameof(@__MODULE__) === :Base
 
 (::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x)  # still use `convert` for tuples
 
+Tuple(x::Ref) = tuple(getindex(x))  # faster than iterator for one element
+Tuple(x::Array{T,0}) where {T} = tuple(getindex(x))
+
 (::Type{T})(itr) where {T<:Tuple} = _totuple(T, itr)
 
 _totuple(::Type{Tuple{}}, itr, s...) = ()

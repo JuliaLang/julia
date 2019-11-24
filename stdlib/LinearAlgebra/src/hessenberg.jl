@@ -453,7 +453,7 @@ HessenbergQ(F::Hessenberg{<:Any,<:UpperHessenberg,S,W}) where {S,W} = Hessenberg
 HessenbergQ(F::Hessenberg{<:Any,<:SymTridiagonal,S,W}) where {S,W} = HessenbergQ{eltype(F.factors),S,W,true}(F.uplo, F.factors, F.τ)
 
 function getproperty(F::Hessenberg, d::Symbol)
-    d == :Q && return HessenbergQ(F)
+    d === :Q && return HessenbergQ(F)
     return getfield(F, d)
 end
 

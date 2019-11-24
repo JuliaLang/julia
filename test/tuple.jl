@@ -89,6 +89,13 @@ end
 
     # issue #28915
     @test convert(Union{Tuple{}, Tuple{Int}}, (1,)) === (1,)
+
+    @testset "one-element containers" begin
+        r = Ref(3)
+        @test (3,) === @inferred Tuple(r)
+        z = Array{Float64,0}(undef); z[] = 3.0
+        @test (3.0,) === @inferred Tuple(z)
+    end
 end
 
 @testset "size" begin

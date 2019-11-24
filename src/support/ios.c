@@ -537,10 +537,6 @@ int64_t ios_pos(ios_t *s)
     return fdpos;
 }
 
-#if defined(_OS_WINDOWS)
-#include <io.h>
-#endif /* _OS_WINDOWS_ */
-
 int ios_trunc(ios_t *s, size_t size)
 {
     if (s->bm == bm_mem) {
@@ -1022,14 +1018,14 @@ ios_t *ios_stderr = NULL;
 
 void ios_init_stdstreams(void)
 {
-    ios_stdin = (ios_t*)malloc(sizeof(ios_t));
+    ios_stdin = (ios_t*)malloc_s(sizeof(ios_t));
     ios_fd(ios_stdin, STDIN_FILENO, 0, 0);
 
-    ios_stdout = (ios_t*)malloc(sizeof(ios_t));
+    ios_stdout = (ios_t*)malloc_s(sizeof(ios_t));
     ios_fd(ios_stdout, STDOUT_FILENO, 0, 0);
     ios_stdout->bm = bm_line;
 
-    ios_stderr = (ios_t*)malloc(sizeof(ios_t));
+    ios_stderr = (ios_t*)malloc_s(sizeof(ios_t));
     ios_fd(ios_stderr, STDERR_FILENO, 0, 0);
     ios_stderr->bm = bm_none;
 }

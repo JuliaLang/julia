@@ -37,15 +37,18 @@ static int endswith_extension(const char *path)
         return 0;
     size_t len = strlen(path);
     // Skip the first one since it is empty
-    for (size_t i = 1;i < N_EXTENSIONS;i++) {
+    for (size_t i = 1; i < N_EXTENSIONS; i++) {
         const char *ext = extensions[i];
         size_t extlen = strlen(ext);
-        if (len < extlen) return 0;
+        if (len < extlen)
+            return 0;
         // Skip version extensions if present
-        size_t j = len-1;
+        size_t j = len - 1;
         while (j > 0) {
-            if (path[j] == '.' || (path[j] >= '0' && path[j] <= '9')) j--;
-            else break;
+            if (path[j] == '.' || (path[j] >= '0' && path[j] <= '9'))
+                j--;
+            else
+                break;
         }
         if ((j == len-1 || path[j+1] == '.') && memcmp(ext, path + j - extlen + 1, extlen) == 0) {
             return 1;
@@ -54,25 +57,39 @@ static int endswith_extension(const char *path)
     return 0;
 }
 
-#define PATHBUF 512
+#define PATHBUF 4096
 
 extern char *julia_bindir;
 
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
 
-static const char * jl_dlerror(void)
-{
 #ifdef _OS_WINDOWS_
-    static JL_THREAD_LOCAL CHAR reason[256];
-    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-            NULL, GetLastError(),
-            MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
-            reason, sizeof(reason) / sizeof(reason[0]), NULL);
-    return (const char *)&reason[0];
-#else
-    return dlerror();
-#endif
+static void win32_formatmessage(DWORD code, char *reason, int len)
+{
+    DWORD res;
+    LPWSTR errmsg;
+    res = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER |
+                         FORMAT_MESSAGE_FROM_SYSTEM |
+                         FORMAT_MESSAGE_IGNORE_INSERTS |
+                         FORMAT_MESSAGE_MAX_WIDTH_MASK,
+                         NULL, code,
+                         MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
+                         (LPWSTR)&errmsg, 0, NULL);
+    if (!res && (GetLastError() == ERROR_MUI_FILE_NOT_FOUND ||
+                 GetLastError() == ERROR_RESOURCE_TYPE_NOT_FOUND)) {
+      res = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER |
+                           FORMAT_MESSAGE_FROM_SYSTEM |
+                           FORMAT_MESSAGE_IGNORE_INSERTS |
+                           FORMAT_MESSAGE_MAX_WIDTH_MASK,
+                           NULL, code,
+                           0, (LPWSTR)&errmsg, 0, NULL);
+    }
+    res = WideCharToMultiByte(CP_UTF8, 0, errmsg, -1, reason, len, NULL, NULL);
+    assert(res > 0 || GetLastError() == ERROR_INSUFFICIENT_BUFFER);
+    reason[len - 1] = '\0';
+    LocalFree(errmsg);
 }
+#endif
 
 JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags)
 {
@@ -121,6 +138,9 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
 {
     char path[PATHBUF];
     int i;
+#ifdef _OS_WINDOWS_
+    int err;
+#endif
     uv_stat_t stbuf;
     void *handle;
     int abspath;
@@ -163,16 +183,23 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
                 size_t len = strlen(dl_path);
                 if (len == 0)
                     continue;
-                for (i=0; i < n_extensions; i++) {
+                for (i = 0; i < n_extensions; i++) {
                     const char *ext = extensions[i];
                     path[0] = '\0';
                     if (dl_path[len-1] == PATHSEPSTRING[0])
                         snprintf(path, PATHBUF, "%s%s%s", dl_path, modname, ext);
                     else
                         snprintf(path, PATHBUF, "%s" PATHSEPSTRING "%s%s", dl_path, modname, ext);
-                    handle = jl_dlopen(path, flags);
-                    if (handle)
-                        goto done;
+#ifdef _OS_WINDOWS_
+                    if (i == 0) { // LoadLibrary already tested the extensions, we just need to check the `stat` result
+#endif
+                        handle = jl_dlopen(path, flags);
+                        if (handle)
+                            goto done;
+#ifdef _OS_WINDOWS_
+                        err = GetLastError();
+                    }
+#endif
                     // bail out and show the error if file actually exists
                     if (jl_stat(path, (char*)&stbuf) == 0)
                         goto notfound;
@@ -182,21 +209,30 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
     }
 
     // now fall back and look in default library paths, for all extensions
-    for(i=0; i < n_extensions; i++) {
+    for (i = 0; i < n_extensions; i++) {
         const char *ext = extensions[i];
         path[0] = '\0';
         snprintf(path, PATHBUF, "%s%s", modname, ext);
         handle = jl_dlopen(path, flags);
         if (handle)
             goto done;
+#ifdef _OS_WINDOWS_
+        err = GetLastError();
+        break; // LoadLibrary already tested the rest
+#endif
     }
 
 notfound:
     if (throw_err) {
-        const char * reason = jl_dlerror();
+#ifdef _OS_WINDOWS_
+        char reason[256];
+        win32_formatmessage(err, reason, sizeof(reason));
+#else
+        const char *reason = dlerror();
+#endif
         jl_errorf("could not load library \"%s\"\n%s", modname, reason);
     }
-    return NULL;
+    handle = NULL;
 
 done:
     return handle;
@@ -216,20 +252,19 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
 
     /* Next, check for errors.  On Windows, a NULL pointer means the symbol
      * was not found.  On everything else, we can have NULL symbols, so we check
-     * for non-NULL returns from dlerror().  Note that we unconditionally call
-     * jl_dlerror() on POSIX systems, but on Windows systems we only call it
-     * when we have been returned a NULL symbol.*/
-    const char * err = NULL;
+     * for non-NULL returns from dlerror().  Note that means we unconditionally
+     * call dlerror() on POSIX systems.*/
 #ifdef _OS_WINDOWS_
     symbol_found = *value != NULL;
 #else
-    err = jl_dlerror();
+    const char *err = dlerror();
     symbol_found = err == NULL;
 #endif
 
     if (!symbol_found && throw_err) {
 #ifdef _OS_WINDOWS_
-        err = jl_dlerror();
+        char err[256];
+        win32_formatmessage(GetLastError(), err, sizeof(err));
 #endif
         jl_errorf("could not load symbol \"%s\":\n%s", symbol, err);
     }

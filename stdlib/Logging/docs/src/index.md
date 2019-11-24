@@ -58,13 +58,18 @@ automatically extracted. Let's examine the user-defined data first:
 * The *log level* is a broad category for the message that is used for early
   filtering. There are several standard levels of type [`LogLevel`](@ref);
   user-defined levels are also possible.
-  - Use `Debug` for verbose information that could be useful when debugging an
-    application or module. These events are disabled by default.
-  - Use `Info` to inform the user about the normal operation of the program.
-  - Use `Warn` when a potential problem is detected.
-  - Use `Error` to report errors where the code has enough context to recover
-    and continue.  (When the code doesn't have enough context, an exception or
-    early return is more appropriate.)
+  Each is distinct in purpose:
+  - `Debug` is information intended for the developer of the program.
+  These events are disabled by default.
+  - `Info` is for general information to the user.
+  Think of it as an alternative to using `println` directly.
+  - `Warn` means something is wrong and action is likely required
+  but that for now the program is still working.
+  - `Error` means something is wrong and it is unlikely to be recovered,
+  at least by this part of the code.
+  Often this log-level is unneeded as throwing an exception can convey
+  all the required information.
+
 * The *message*  is an object describing the event. By convention
   `AbstractString`s passed as messages are assumed to be in markdown format.
   Other types will be displayed using `show(io,mime,obj)` according to the

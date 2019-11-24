@@ -398,7 +398,7 @@ for typ in atomictypes
                          ret $lt %rv
                          """, $typ, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
         else
-            rmwop == :xchg || continue
+            rmwop === :xchg || continue
             @eval $fn(x::Atomic{$typ}, v::$typ) =
                 llvmcall($"""
                          %iptr = inttoptr i$WORD_SIZE %0 to $ilt*

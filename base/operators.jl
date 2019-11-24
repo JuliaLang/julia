@@ -718,6 +718,9 @@ julia> 9 ÷ 4
 
 julia> -5 ÷ 3
 -1
+
+julia> 5.0 ÷ 2
+2.0
 ```
 """
 div
@@ -831,7 +834,7 @@ Function composition also works in prefix form: `∘(f, g)` is the same as `f �
 The prefix form supports composition of multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
 and splatting `∘(fs...)` for composing an iterable collection of functions.
 
-!!!compat "Julia 1.4"
+!!! compat "Julia 1.4"
     Multiple function composition requires at least Julia 1.4.
 
 # Examples

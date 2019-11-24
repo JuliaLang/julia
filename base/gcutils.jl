@@ -12,7 +12,7 @@ Register a function `f(x)` to be called when there are no program-accessible ref
 this function is unpredictable.
 
 `f` must not cause a task switch, which excludes most I/O operations such as `println`.
-`@schedule println("message")` or `ccall(:jl_, Void, (Any,), "message")` may be helpful for
+`@schedule println("message")` or `ccall(:jl_, Cvoid, (Any,), "message")` may be helpful for
 debugging purposes.
 """
 function finalizer(@nospecialize(f), @nospecialize(o))
