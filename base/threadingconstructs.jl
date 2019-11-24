@@ -18,7 +18,7 @@ on `threadid()`.
 """
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
-function _threadsfor(iter,lbody)
+function _threadsfor(iter,lbody;simd=false)
     lidx = iter.args[1]         # index
     range = iter.args[2]
     quote
@@ -56,9 +56,16 @@ function _threadsfor(iter,lbody)
                 end
             end
             # run this thread's iterations
-            for i = f:l
-                local $(esc(lidx)) = @inbounds r[i]
-                $(esc(lbody))
+            if $simd == true
+                @simd for i = f:l
+                    local $(esc(lidx)) = @inbounds r[i]
+                    $(esc(lbody))
+                end
+            else
+                for i = f:l
+                    local $(esc(lidx)) = @inbounds r[i]
+                    $(esc(lbody))
+                end
             end
         end
         end
@@ -91,6 +98,8 @@ macro threads(args...)
     end
     if ex.head === :for
         return _threadsfor(ex.args[1], ex.args[2])
+    elseif ex.head === :macrocall && ex.args[1] === Symbol("@simd") && isa(ex.args[3], Expr) && ex.args[3].head === :for
+        return _threadsfor(ex.args[3].args[1], ex.args[3].args[2]; simd=true)
     else
         throw(ArgumentError("unrecognized argument to @threads"))
     end
