@@ -120,6 +120,33 @@ function reverse(A::Array{T}; dims::Integer) where T
 end
 
 """
+    reverse!(A::AbstractArray; dims::Integer)
+In-place version of `reverse(A::AbstractArray; dims::Integer)`.
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+julia> reverse!(A; dims=1);
+julia> A
+2×2 Array{Int64,2}:
+ 2  1
+ 4  3
+```
+"""
+function reverse!(A::AbstractArray; dims::Integer)
+    nd = ndims(A); d = dims
+    1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
+    isempty(A) && return A
+
+    for v in eachslice(A; dims=dims)
+        reverse!(v)
+    end
+    return A
+end
+
+"""
     rotl90(A)
 
 Rotate matrix `A` left 90 degrees.
