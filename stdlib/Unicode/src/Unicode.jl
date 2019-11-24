@@ -5,10 +5,14 @@ module Unicode
 export graphemes
 
 """
+    Unicode.normalize(s::AbstractString; kwargs...)
     Unicode.normalize(s::AbstractString, normalform::Symbol)
 
-Normalize the string `s` according to one of the four "normal forms" of the Unicode
-standard: `normalform` can be `:NFC`, `:NFD`, `:NFKC`, or `:NFKD`.  Normal forms C
+Normalize the string `s`. By default, canonical composition is performed without ensuring
+Unicode versioning stability (equivalent to passing `compose=true`).
+
+Alternatively, one of the four "normal forms" of the Unicode standard can be specified:
+`normalform` can be `:NFC`, `:NFD`, `:NFKC`, or `:NFKD`.  Normal forms C
 (canonical composition) and D (canonical decomposition) convert different visually identical
 representations of the same abstract string into a single canonical form, with form C being
 more compact.  Normal forms KC and KD additionally canonicalize "compatibility equivalents":
@@ -41,6 +45,9 @@ For example, NFKC corresponds to the options `compose=true, compat=true, stable=
 
 # Examples
 ```jldoctest
+julia> "é" == Unicode.normalize("é") #LHS: Unicode U+00e9, RHS: U+0065 & U+0065
+true
+
 julia> "μ" == Unicode.normalize("µ", compat=true) #LHS: Unicode U+03bc, RHS: Unicode U+00b5
 true
 
