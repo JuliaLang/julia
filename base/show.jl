@@ -797,9 +797,15 @@ const ExprNode = Union{Expr, QuoteNode, Slot, LineNumberNode, SSAValue,
                        Core.Compiler.GotoIfNot, Core.Compiler.ReturnNode}
 # Operators have precedence levels from 1-N, and show_unquoted defaults to a
 # precedence level of 0 (the fourth argument). The top-level print and show
-# methods use a precedence of -1 to specially allow space-separated macro syntax
-print(        io::IO, ex::ExprNode)    = (show_unquoted(io, ex, 0, -1); nothing)
-show(         io::IO, ex::ExprNode)    = show_unquoted_quote_expr(io, ex, 0, -1, 0)
+# methods use a precedence of -1 to specially allow space-separated macro syntax.
+# IOContext(io, :unquote_fallback => false) tells show_unquoted to treat any
+# Expr whose head is :$ as if it is inside a quote, preventing fallback to the
+# "unhandled" case: this is used by print/string to be lawful to Rule 1 above.
+# On the countrary, show/repr have to follow Rule 2, requiring any Expr whose
+# head is :$ and which is not inside a quote to fallback to the "unhandled" case:
+# this is behavior is triggered by IOContext(io, :unquote_fallback => true)
+print(        io::IO, ex::ExprNode)    = (show_unquoted(IOContext(io, :unquote_fallback => false), ex, 0, -1); nothing)
+show(         io::IO, ex::ExprNode)    = show_unquoted_quote_expr(IOContext(io, :unquote_fallback => true), ex, 0, -1, 0)
 show_unquoted(io::IO, ex)              = show_unquoted(io, ex, 0, 0)
 show_unquoted(io::IO, ex, indent::Int) = show_unquoted(io, ex, indent, 0)
 show_unquoted(io::IO, ex, ::Int,::Int) = show(io, ex)
@@ -1569,7 +1575,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         if head === :$
             quote_level -= 1
         end
-        if head === :$ && quote_level < 0
+        if head === :$ && quote_level < 0 && get(io, :unquote_fallback, true)
             unhandled = true
         else
             print(io, head)

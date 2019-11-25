@@ -53,7 +53,11 @@ macro test_repr(x)
     # this is a macro instead of function so we can avoid getting useful backtraces :)
     return :(test_repr($(esc(x))))
 end
-function test_repr(x::String)
+macro weak_test_repr(x)
+    # this is a macro instead of function so we can avoid getting useful backtraces :)
+    return :(test_repr($(esc(x)), true))
+end
+function test_repr(x::String, remove_linenums::Bool = false)
     # Note: We can't just compare x1 and x2 because interpolated
     # strings get converted to string Exprs by the first show().
     # This could produce a few false positives, but until string
@@ -64,14 +68,13 @@ function test_repr(x::String)
     x2 = eval(Meta.parse(repr(x1)))
     x3 = eval(Meta.parse(repr(x2)))
     if ! (x1 == x2 == x3)
-        # error(string(
-        print(string(
-            "repr test failed:",
+        error(string(
+            "\nrepr test (Rule 2) failed:",
             "\noriginal: ", x,
             "\n\npreparsed: ", x1, "\n", sprint(dump, x1),
             "\n\nparsed: ", x2, "\n", sprint(dump, x2),
-            "\n\nreparsed: ", x3, "\n", sprint(dump, x3)
-            ))
+            "\n\nreparsed: ", x3, "\n", sprint(dump, x3),
+            "\n\n"))
     end
     @test x1 == x2 == x3
 
@@ -80,12 +83,12 @@ function test_repr(x::String)
     x6 = eval(Base.remove_linenums!(Meta.parse(repr(x5))))
     if ! (x4 == x5 == x6)
         error(string(
-            "repr test without line numbers failed:",
+            "\nrepr test (Rule 2) without line numbers failed:",
             "\noriginal: ", x,
             "\n\npreparsed: ", x4, "\n", sprint(dump, x4),
             "\n\nparsed: ", x5, "\n", sprint(dump, x5),
-            "\n\nreparsed: ", x6, "\n", sprint(dump, x6)
-            ))
+            "\n\nreparsed: ", x6, "\n", sprint(dump, x6),
+            "\n\n"))
     end
     @test x4 == x5 == x6
 
@@ -93,6 +96,34 @@ function test_repr(x::String)
           Base.remove_linenums!(x2) ==
           Base.remove_linenums!(x3) ==
           x4 == x5 == x6
+
+    if isa(x1, Expr) && remove_linenums
+        if Base.remove_linenums!(Meta.parse(string(x1))) != x1
+            error(string(
+                "\nstring test (Rule 1) failed:",
+                "\noriginal: ", x,
+                "\n\npreparsed: ", x1, "\n", sprint(dump, x4),
+                "\n\nstring(preparsed): ", string(x1),
+                "\n\nBase.remove_linenums!(Meta.parse(string(preparsed))): ",
+                Base.remove_linenums!(Meta.parse(string(x1))), "\n",
+                sprint(dump, Base.remove_linenums!(Meta.parse(string(x1)))),
+                "\n\n"))
+        end
+        @test Base.remove_linenums!(Meta.parse(string(x1))) == x1
+    elseif isa(x1, Expr)
+        if Meta.parse(string(x1)) != x1
+            error(string(
+                "\nstring test (Rule 1) failed:",
+                "\noriginal: ", x,
+                "\n\npreparsed: ", x1, "\n", sprint(dump, x4),
+                "\n\nstring(preparsed): ", string(x1),
+                "\n\nMeta.parse(string(preparsed)): ",
+                Meta.parse(string(x1)), "\n",
+                sprint(dump, Meta.parse(string(x1))),
+                "\n\n"))
+        end
+        @test Meta.parse(string(x1)) == x1
+    end
 end
 
 # primitive types
@@ -207,7 +238,7 @@ end
 
 
 # control structures (shamelessly stolen from base/bitarray.jl)
-@test_repr """mutable struct BitArray{N} <: AbstractArray{Bool, N}
+@weak_test_repr """mutable struct BitArray{N} <: AbstractArray{Bool, N}
     # line meta
     chunks::Vector{UInt64}
     # line meta
@@ -254,7 +285,7 @@ end
     end
 end"""
 
-@test_repr """function copy_chunks(dest::Vector{UInt64}, pos_d::Integer, src::Vector{UInt64}, pos_s::Integer, numbits::Integer)
+@weak_test_repr """function copy_chunks(dest::Vector{UInt64}, pos_d::Integer, src::Vector{UInt64}, pos_s::Integer, numbits::Integer)
     # line meta
     if numbits == 0
         # line meta
@@ -333,13 +364,13 @@ end"""
     return
 end"""
 
-@test_repr """if a
+@weak_test_repr """if a
 # line meta
 b
 end
 """
 
-@test_repr """if a
+@weak_test_repr """if a
 # line meta
 b
 elseif c
@@ -348,7 +379,7 @@ d
 end
 """
 
-@test_repr """if a
+@weak_test_repr """if a
 # line meta
 b
 elseif c
@@ -360,7 +391,7 @@ e
 end
 """
 
-@test_repr """if a
+@weak_test_repr """if a
 # line meta
 b
 elseif c
@@ -372,7 +403,7 @@ f
 end
 """
 
-@test_repr """f(x, y) do z, w
+@weak_test_repr """f(x, y) do z, w
 # line meta
 a
 # line meta
@@ -380,7 +411,7 @@ b
 end
 """
 
-@test_repr """f(x, y) do z
+@weak_test_repr """f(x, y) do z
 # line meta
 a
 # line meta
@@ -441,7 +472,7 @@ end
 
 @test_repr "[1 2 3; 4 5 6; 7 8 9]'"
 
-@test_repr "baremodule X
+@weak_test_repr "baremodule X
 # line meta
 # line meta
 import ...B.c
@@ -450,7 +481,7 @@ import D
 # line meta
 import B.C.D.E.F.g
 end"
-@test_repr "baremodule Y
+@weak_test_repr "baremodule Y
 # line meta
 # line meta
 export A, B, C
@@ -837,11 +868,11 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T,N}, indices::Vararg{$Int,N})")
 @test_repr "macro m end"
 @test sprint(show, Expr(:macro, Expr(:call, :m, :ex), Expr(:block, :m))) ==
       ":(macro m(ex)\n      m\n  end)"
-@test_repr """macro identity(ex)
+@weak_test_repr """macro identity(ex)
     # line meta
     esc(ex)
 end"""
-@test_repr """macro m(a,b)
+@weak_test_repr """macro m(a,b)
     # line meta
     quote
         # line meta
@@ -897,7 +928,7 @@ end""")) ==
           \$\$x
       end
   end)"""
-@test_repr """
+@weak_test_repr """
 quote
     #= none:2 =#
     quote
@@ -907,7 +938,7 @@ quote
 end"""
 
 # fallback printing + nested quotes and unquotes
-@test_repr repr(Expr(:block, LineNumberNode(0, :none),
+@weak_test_repr repr(Expr(:block, LineNumberNode(0, :none),
                      Expr(:exotic_head, Expr(:$, :x))))
 @test_repr repr(Expr(:exotic_head, Expr(:call, :+, 1, Expr(:quote, Expr(:$, Expr(:$, :y))))))
 @test_repr repr(Expr(:quote, Expr(:$, Expr(:exotic_head, Expr(:call, :+, 1, Expr(:$, :y))))))
@@ -945,20 +976,20 @@ end"""
 
 # nested quotes and blocks
 @test_repr "Expr(:quote, Expr(:block, :a, :b))"
-@test_repr repr(Expr(:quote, Expr(:block, LineNumberNode(0, :none), :a, LineNumberNode(0, :none), :b)))
+@weak_test_repr repr(Expr(:quote, Expr(:block, LineNumberNode(0, :none), :a, LineNumberNode(0, :none), :b)))
 @test repr(Expr(:quote, Expr(:block, :a, :b))) ==
 ":(quote
       a
       b
   end)"
 @test_repr "Expr(:quote, Expr(:block, :a))"
-@test_repr repr(Expr(:quote, Expr(:block, LineNumberNode(0, :none), :a)))
+@weak_test_repr repr(Expr(:quote, Expr(:block, LineNumberNode(0, :none), :a)))
 @test repr(Expr(:quote, Expr(:block, :a))) ==
 ":(quote
       a
   end)"
 @test_repr "Expr(:quote, Expr(:block, :(a + b)))"
-@test_repr repr(Expr(:quote, Expr(:block, LineNumberNode(0, :none), :(a + b))))
+@weak_test_repr repr(Expr(:quote, Expr(:block, LineNumberNode(0, :none), :(a + b))))
 @test repr(Expr(:quote, Expr(:block, :(a + b)))) ==
 ":(quote
       a + b
@@ -976,12 +1007,12 @@ end"""
 # unquoting
 @test_repr "\$y"
 @test_repr "\$\$y"
-@test_repr """
+@weak_test_repr """
 begin
     # line meta
     \$y
 end"""
-@test_repr """
+@weak_test_repr """
 begin
     # line meta
     \$\$y
@@ -1223,7 +1254,7 @@ test_repr("(+).:-")
 test_repr("(!).:~")
 test_repr("a.:(begin
         #= none:3 =#
-    end)")
+    end)", true)
 test_repr("a.:(=)")
 test_repr("a.:(:)")
 test_repr("(:).a")
