@@ -256,6 +256,30 @@ let m = Meta.@lower 1 + 1
     @test isa(ret_2, Core.Compiler.ReturnNode) && ret_2.val == 2
 end
 
+let m = Meta.@lower 1 + 1
+    # Test that CFG simplify doesn't try to merge every block in a loop into
+    # its predecessor
+    @assert Meta.isexpr(m, :thunk)
+    src = m.args[1]::Core.CodeInfo
+    src.code = Any[
+        # Block 1
+        Core.Compiler.GotoNode(2),
+        # Block 2
+        Core.Compiler.GotoNode(3),
+        # Block 3
+        Core.Compiler.GotoNode(1)
+    ]
+    nstmts = length(src.code)
+    src.ssavaluetypes = nstmts
+    src.codelocs = fill(Int32(1), nstmts)
+    src.ssaflags = fill(Int32(0), nstmts)
+    ir = Core.Compiler.inflate_ir(src)
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    @test length(ir.cfg.blocks) == 1
+end
+
 # Issue #29213
 function f_29213()
     while true
