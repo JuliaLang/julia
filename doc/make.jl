@@ -172,6 +172,8 @@ else
         canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/v1/" : nothing,
         assets = ["assets/julia-manual.css", ],
         analytics = "UA-28835595-6",
+        collapselevel = 1,
+        sidebar_sitename = false,
     )
 end
 
