@@ -222,12 +222,14 @@ end
 # nodes
 let ci = make_ci([
         # Block 1
-        Core.Compiler.GotoNode(3),
-        # Block 2 (no predecessors)
-        Core.Compiler.ReturnNode(3),
-        # Block 3
-        Core.PhiNode(Any[1, 2], Any[100, 200]),
-        Core.Compiler.ReturnNode(Core.SSAValue(3))
+        Core.Compiler.GotoIfNot(Expr(:call, GlobalRef(Main, :something)), 4),
+        # Block 2
+        Core.Compiler.GotoNode(4),
+        # Block 3 (no predecessors)
+        Core.Compiler.GotoNode(4),
+        # Block 4
+        Core.PhiNode(Any[1, 2, 3], Any[100, 200, 300]),
+        Core.Compiler.ReturnNode(Core.SSAValue(4))
     ])
     ir = Core.Compiler.inflate_ir(ci)
     ir = Core.Compiler.compact!(ir, true)

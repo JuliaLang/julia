@@ -586,10 +586,10 @@ mutable struct IncrementalCompact
                 end
             end
             let blocks = blocks
-                result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
+                result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks)
+                                        if bb_rename[i] != -1]
             end
-            result_domtree = copy(code.cfg.domtree)
-            rename_nodes!(result_domtree, bb_rename)
+            result_domtree = rename_blocks!(copy(code.cfg.domtree), bb_rename)
         else
             bb_rename = Vector{Int}()
             result_bbs = code.cfg.blocks
