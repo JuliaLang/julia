@@ -238,26 +238,9 @@ Partially implemented by:
 A set is a collection of elements, just like an array or dictionary, with no duplicated elements.
 
 The two important differences between a set and other types of collection is that in a set you can have only one of each element, and, in a set, the order of elements isn't important (whereas an array can have multiple copies of an element and their order is remembered).
-
-You can create and fill sets in one go:
 ```julia
-julia> colors = Set{String}(["red","green","blue","yellow"])
+julia> colors = Set(["yellow", "blue", "green", "red"])
 Set(["yellow", "blue", "green", "red"])
-```
-
-or you can let Julia "guess the type":
-```julia
-julia> colors = Set(["red","green","blue","yellow"])
-Set(["yellow", "blue", "green", "red"])
-```
-
-You can create an empty set using the [`Set`](@ref) constructor function:
-```julia
-julia> primes = Set{Int64}() # type specified
-Set(Int64[])
-
-julia> everything = Set() # type not specified
-Set(Any[])
 ```
 
 You can use [`push!`](@Ref) to add elements to a set:
