@@ -344,6 +344,7 @@ v2 = copy(v)
 @test push!(v2, 1) === v2
 @test v2[axes(v, 1)] == v
 @test v2[end] == 1
+@test v2[begin] == v[begin] == v[-2]
 v2 = copy(v)
 @test push!(v2, 2, 1) === v2
 @test v2[axes(v, 1)] == v
