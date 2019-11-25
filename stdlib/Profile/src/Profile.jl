@@ -444,9 +444,9 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
         n::Vector{Int}, m::Vector{Int},
         cols::Int, filenamemap::Dict{Symbol,String},
         fmt::ProfileFormat)
-    if fmt.sortedby == :count
+    if fmt.sortedby === :count
         p = sortperm(n)
-    elseif fmt.sortedby == :overhead
+    elseif fmt.sortedby === :overhead
         p = sortperm(m)
     else
         p = liperm(lilist)
@@ -634,7 +634,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
             startframe = i
         else
             pushfirst!(build, parent)
-            if recur === :flat || recur == :flatc
+            if recur === :flat || recur === :flatc
                 # Rewind the `parent` tree back, if this exact ip was already present *higher* in the current tree
                 found = false
                 for j in 1:(startframe - i)
@@ -745,13 +745,13 @@ function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat
         # Generate the string for each line
         strs = tree_format(nexts, level, cols, maxes, filenamemap, T === UInt64)
         # Recurse to the next level
-        if fmt.sortedby == :count
+        if fmt.sortedby === :count
             counts = collect(frame.count for frame in nexts)
             p = sortperm(counts)
-        elseif fmt.sortedby == :overhead
+        elseif fmt.sortedby === :overhead
             m = collect(frame.overhead for frame in nexts)
             p = sortperm(m)
-        elseif fmt.sortedby == :flat_count
+        elseif fmt.sortedby === :flat_count
             m = collect(frame.flat_count for frame in nexts)
             p = sortperm(m)
         else

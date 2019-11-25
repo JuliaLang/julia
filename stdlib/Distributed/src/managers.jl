@@ -226,7 +226,7 @@ end
 
 
 function manage(manager::SSHManager, id::Integer, config::WorkerConfig, op::Symbol)
-    if op == :interrupt
+    if op === :interrupt
         ospid = config.ospid
         if ospid !== nothing
             host = notnothing(config.host)
@@ -340,7 +340,7 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
 end
 
 function manage(manager::LocalManager, id::Integer, config::WorkerConfig, op::Symbol)
-    if op == :interrupt
+    if op === :interrupt
         kill(config.process, 2)
     end
 end

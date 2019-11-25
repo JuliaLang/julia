@@ -35,7 +35,10 @@ julia> union([4, 2], 1:2)
  1
 
 julia> union(Set([1, 2]), 2:3)
-Set([2, 3, 1])
+Set{Int64} with 3 elements:
+  2
+  3
+  1
 ```
 """
 function union end
@@ -60,7 +63,12 @@ julia> a = Set([1, 3, 4, 5]);
 julia> union!(a, 1:2:8);
 
 julia> a
-Set([7, 4, 3, 5, 1])
+Set{Int64} with 5 elements:
+  7
+  4
+  3
+  5
+  1
 ```
 """
 function union!(s::AbstractSet, sets...)
@@ -105,7 +113,8 @@ julia> intersect([1, 4, 4, 5, 6], [4, 6, 6, 7, 8])
  6
 
 julia> intersect(Set([1, 2]), BitSet([2, 3]))
-Set([2])
+Set{Int64} with 1 element:
+  2
 ```
 """
 intersect(s::AbstractSet, itr, itrs...) = intersect!(intersect(s, itr), itrs...)
@@ -160,7 +169,8 @@ julia> a = Set([1, 3, 4, 5]);
 julia> setdiff!(a, 1:2:6);
 
 julia> a
-Set([4])
+Set{Int64} with 1 element:
+  4
 ```
 """
 function setdiff!(s::AbstractSet, itrs...)

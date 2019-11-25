@@ -36,7 +36,7 @@ mul_prod(x::Real, y::Real)::Real = x * y
 
 ## foldl && mapfoldl
 
-function mapfoldl_impl(f, op, nt::NamedTuple{(:init,)}, itr, i...)
+function mapfoldl_impl(f::F, op::OP, nt::NamedTuple{(:init,)}, itr, i...) where {F,OP}
     init = nt.init
     # Unroll the while loop once; if init is known, the call to op may
     # be evaluated at compile time
@@ -51,7 +51,7 @@ function mapfoldl_impl(f, op, nt::NamedTuple{(:init,)}, itr, i...)
     return v
 end
 
-function mapfoldl_impl(f, op, nt::NamedTuple{()}, itr)
+function mapfoldl_impl(f::F, op::OP, nt::NamedTuple{()}, itr) where {F,OP}
     y = iterate(itr)
     if y === nothing
         return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))

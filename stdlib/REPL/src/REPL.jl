@@ -129,7 +129,12 @@ end
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     io = outstream(d.repl)
     get(io, :color, false) && write(io, answer_color(d.repl))
-    show(IOContext(io, :limit => true, :module => Main), mime, x)
+    if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)
+        # this can override the :limit property set initially
+        io = foldl(IOContext, d.repl.options.iocontext,
+                   init=IOContext(io, :limit => true, :module => Main))
+    end
+    show(io, mime, x)
     println(io)
     nothing
 end
@@ -243,7 +248,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
                 end
             end
             ast = Base.parse_input_line(line)
-            (isa(ast,Expr) && ast.head == :incomplete) || break
+            (isa(ast,Expr) && ast.head === :incomplete) || break
         end
         if !isempty(line)
             response = eval_with_backend(ast, backend)
@@ -283,6 +288,8 @@ mutable struct Options
     auto_indent_bracketed_paste::Bool # set to true if terminal knows paste mode
     # cancel auto-indent when next character is entered within this time frame :
     auto_indent_time_threshold::Float64
+    # default IOContext settings at the REPL
+    iocontext::Dict{Symbol,Any}
 end
 
 Options(;
@@ -299,13 +306,16 @@ Options(;
         auto_indent = true,
         auto_indent_tmp_off = false,
         auto_indent_bracketed_paste = false,
-        auto_indent_time_threshold = 0.005) =
+        auto_indent_time_threshold = 0.005,
+        iocontext = Dict{Symbol,Any}()) =
             Options(hascolor, extra_keymap, tabwidth,
                     kill_ring_max, region_animation_duration,
                     beep_duration, beep_blink, beep_maxduration,
                     beep_colors, beep_use_current,
                     backspace_align, backspace_adjust, confirm_exit,
-                    auto_indent, auto_indent_tmp_off, auto_indent_bracketed_paste, auto_indent_time_threshold)
+                    auto_indent, auto_indent_tmp_off, auto_indent_bracketed_paste,
+                    auto_indent_time_threshold,
+                    iocontext)
 
 # for use by REPLs not having an options field
 const GlobalOptions = Options()
@@ -955,7 +965,7 @@ function setup_interface(
                     end
                 end
                 ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false)
-                if (isa(ast, Expr) && (ast.head == :error || ast.head == :incomplete)) ||
+                if (isa(ast, Expr) && (ast.head === :error || ast.head === :incomplete)) ||
                         (pos > ncodeunits(input) && !endswith(input, '\n'))
                     # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
                     # Insert all the remaining text as one line (might be empty)

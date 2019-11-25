@@ -41,6 +41,7 @@ function repl_cmd(cmd, out)
 
     # Immediately expand all arguments, so that typing e.g. ~/bin/foo works.
     cmd.exec .= expanduser.(cmd.exec)
+  
     isempty(cmd.exec) && throw(ArgumentError("no cmd to execute"))
 
     if cmd.exec[1] == "cd"
@@ -50,18 +51,12 @@ function repl_cmd(cmd, out)
         elseif length(cmd.exec) == 2
             dir = cmd.exec[2]
             if dir == "-"
-                !haskey(ENV, "OLDPWD") && error("cd: OLDPWD not set")
-                cd(ENV["OLDPWD"])
-            else
-                @static if !Sys.iswindows()
-                    # TODO: this is a rather expensive way to copy a string, remove?
-                    # If it's intended to simulate `cd`, it should instead be doing
-                    # more nearly `cd $dir && printf %s \$PWD` (with appropriate quoting),
-                    # since shell `cd` does more than just `echo` the result.
-                    dir = read(`$shell -c "printf '%s' $(shell_escape_posixly(dir))"`, String)
+                if !haskey(ENV, "OLDPWD")
+                    error("cd: OLDPWD not set")
                 end
-                cd(dir)
+                dir = ENV["OLDPWD"]
             end
+            cd(dir)
         else
             cd()
         end
@@ -129,7 +124,7 @@ function scrub_repl_backtrace(bt)
     if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
         bt = stacktrace(bt)
         # remove REPL-related frames from interactive printing
-        eval_ind = findlast(frame -> !frame.from_c && frame.func == :eval, bt)
+        eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval, bt)
         eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
     end
     return bt

@@ -45,11 +45,10 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintpt
 //
 // jl_unw_stepn will return 1 if there are more frames to come. The number of
 // elements written to bt_data (and sp if non-NULL) are returned in bt_size.
-int jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *bt_data, size_t *bt_size,
+int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
                  uintptr_t *sp, size_t maxsize, int skip, int add_interp_frames,
                  int from_signal_handler) JL_NOTSAFEPOINT
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     volatile size_t n = 0;
     volatile int need_more_space = 0;
     uintptr_t return_ip = 0;
@@ -65,6 +64,7 @@ int jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *bt_data, size_t *bt_size,
     }
 #endif
 #if !defined(_OS_WINDOWS_)
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_jmp_buf *old_buf = ptls->safe_restore;
     jl_jmp_buf buf;
     if (!jl_setjmp(buf, 0)) {
@@ -117,17 +117,17 @@ int jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *bt_data, size_t *bt_size,
                 // normal frame
                 call_ip -= 1;
             }
-            if (call_ip == JL_BT_INTERP_FRAME) {
+            if (call_ip == JL_BT_NON_PTR_ENTRY) {
                 // Never leave special marker in the bt data as it can corrupt the GC.
                 call_ip = 0;
             }
-            uintptr_t *bt_entry = bt_data + n;
+            jl_bt_element_t *bt_entry = bt_data + n;
             size_t entry_sz = 0;
             if (add_interp_frames && jl_is_enter_interpreter_frame(call_ip) &&
                 (entry_sz = jl_capture_interp_frame(bt_entry, thesp, thefp, maxsize-n)) != 0) {
                 n += entry_sz;
             } else {
-                *bt_entry = call_ip;
+                bt_entry->uintptr = call_ip;
                 n++;
             }
         }
@@ -149,7 +149,7 @@ int jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *bt_data, size_t *bt_size,
     return need_more_space;
 }
 
-NOINLINE size_t rec_backtrace_ctx(uintptr_t *bt_data, size_t maxsize,
+NOINLINE size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize,
                                   bt_context_t *context, int add_interp_frames) JL_NOTSAFEPOINT
 {
     bt_cursor_t cursor;
@@ -165,7 +165,7 @@ NOINLINE size_t rec_backtrace_ctx(uintptr_t *bt_data, size_t maxsize,
 //
 // The first `skip` frames are omitted, in addition to omitting the frame from
 // `rec_backtrace` itself.
-NOINLINE size_t rec_backtrace(uintptr_t *bt_data, size_t maxsize, int skip)
+NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip)
 {
     bt_context_t context;
     memset(&context, 0, sizeof(context));
@@ -217,7 +217,7 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
                 jl_array_grow_end(sp, maxincr);
             }
             size_t size_incr = 0;
-            have_more_frames = jl_unw_stepn(&cursor, (uintptr_t*)jl_array_data(ip) + offset,
+            have_more_frames = jl_unw_stepn(&cursor, (jl_bt_element_t*)jl_array_data(ip) + offset,
                                             &size_incr, sp_ptr, maxincr, skip, 1, 0);
             skip = 0;
             offset += size_incr;
@@ -227,12 +227,18 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
             jl_array_del_end(sp, jl_array_len(sp) - offset);
 
         size_t n = 0;
+        jl_bt_element_t *bt_data = (jl_bt_element_t*)jl_array_data(ip);
         while (n < jl_array_len(ip)) {
-            if ((uintptr_t)jl_array_ptr_ref(ip, n) == JL_BT_INTERP_FRAME) {
-                jl_array_ptr_1d_push(bt2, jl_array_ptr_ref(ip, n+1));
-                n += 2;
+            jl_bt_element_t *bt_entry = bt_data + n;
+            if (!jl_bt_is_native(bt_entry)) {
+                size_t njlvals = jl_bt_num_jlvals(bt_entry);
+                for (size_t j = 0; j < njlvals; j++) {
+                    jl_value_t *v = jl_bt_entry_jlvalue(bt_entry, j);
+                    JL_GC_PROMISE_ROOTED(v);
+                    jl_array_ptr_1d_push(bt2, v);
+                }
             }
-            n++;
+            n += jl_bt_entry_size(bt_entry);
         }
     }
     jl_value_t *bt = returnsp ? (jl_value_t*)jl_svec(3, ip, bt2, sp) : (jl_value_t*)jl_svec(2, ip, bt2);
@@ -240,32 +246,37 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
     return bt;
 }
 
-// note: btout and bt2out must be GC roots
-void decode_backtrace(uintptr_t *bt_data, size_t bt_size,
-                      jl_array_t **btout, jl_array_t **bt2out)
+void decode_backtrace(jl_bt_element_t *bt_data, size_t bt_size,
+                      jl_array_t **btout JL_REQUIRE_ROOTED_SLOT,
+                      jl_array_t **bt2out JL_REQUIRE_ROOTED_SLOT)
 {
     jl_array_t *bt, *bt2;
     if (array_ptr_void_type == NULL) {
         array_ptr_void_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_voidpointer_type, jl_box_long(1));
     }
     bt = *btout = jl_alloc_array_1d(array_ptr_void_type, bt_size);
-    memcpy(bt->data, bt_data, bt_size * sizeof(void*));
+    static_assert(sizeof(jl_bt_element_t) == sizeof(void*),
+                  "jl_bt_element_t is presented as Ptr{Cvoid} on julia side");
+    memcpy(bt->data, bt_data, bt_size * sizeof(jl_bt_element_t));
     bt2 = *bt2out = jl_alloc_array_1d(jl_array_any_type, 0);
-    // Scan the stack for any interpreter frames
-    size_t n = 0;
-    while (n < bt_size) {
-        if (bt_data[n] == JL_BT_INTERP_FRAME) {
-            jl_array_ptr_1d_push(bt2, (jl_value_t*)bt_data[n+1]);
-            n += 2;
+    // Scan the backtrace buffer for any gc-managed values
+    for (size_t i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
+        jl_bt_element_t* bt_entry = bt_data + i;
+        if (jl_bt_is_native(bt_entry))
+            continue;
+        size_t njlvals = jl_bt_num_jlvals(bt_entry);
+        for (size_t j = 0; j < njlvals; j++) {
+            jl_value_t *v = jl_bt_entry_jlvalue(bt_entry, j);
+            JL_GC_PROMISE_ROOTED(v);
+            jl_array_ptr_1d_push(bt2, v);
         }
-        n++;
     }
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
 {
     jl_excstack_t *s = jl_get_ptls_states()->current_task->excstack;
-    uintptr_t *bt_data = NULL;
+    jl_bt_element_t *bt_data = NULL;
     size_t bt_size = 0;
     if (s && s->top) {
         bt_data = jl_excstack_bt_data(s, s->top);
@@ -519,7 +530,7 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintpt
 }
 
 #ifdef LIBOSXUNWIND
-NOINLINE size_t rec_backtrace_ctx_dwarf(uintptr_t *bt_data, size_t maxsize,
+NOINLINE size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize,
                                         bt_context_t *context, int add_interp_frames)
 {
     size_t bt_size = 0;
@@ -577,8 +588,22 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
     return rs;
 }
 
-//for looking up functions from gdb:
-JL_DLLEXPORT void jl_gdblookup(uintptr_t ip)
+void jl_safe_print_codeloc(const char* func_name, const char* file_name,
+                           int line, int inlined) JL_NOTSAFEPOINT
+{
+    const char *inlined_str = inlined ? " [inlined]" : "";
+    if (line != -1) {
+        jl_safe_printf("%s at %s:%d%s\n", func_name, file_name, line, inlined_str);
+    }
+    else {
+        jl_safe_printf("%s at %s (unknown line)%s\n", func_name, file_name, inlined_str);
+    }
+}
+
+// Print function, file and line containing native instruction pointer `ip` by
+// looking up debug info. Prints multiple such frames when `ip` points to
+// inlined code.
+void jl_print_native_codeloc(uintptr_t ip) JL_NOTSAFEPOINT
 {
     // This function is not allowed to reference any TLS variables since
     // it can be called from an unmanaged thread on OSX.
@@ -593,15 +618,7 @@ JL_DLLEXPORT void jl_gdblookup(uintptr_t ip)
             jl_safe_printf("unknown function (ip: %p)\n", (void*)ip);
         }
         else {
-            const char *inlined = frame.inlined ? " [inlined]" : "";
-            if (frame.line != -1) {
-                jl_safe_printf("%s at %s:%" PRIuPTR "%s\n", frame.func_name,
-                    frame.file_name, (uintptr_t)frame.line, inlined);
-            }
-            else {
-                jl_safe_printf("%s at %s (unknown line)%s\n", frame.func_name,
-                    frame.file_name, inlined);
-            }
+            jl_safe_print_codeloc(frame.func_name, frame.file_name, frame.line, frame.inlined);
             free(frame.func_name);
             free(frame.file_name);
         }
@@ -609,22 +626,70 @@ JL_DLLEXPORT void jl_gdblookup(uintptr_t ip)
     free(frames);
 }
 
+// Print code location for backtrace buffer entry at *bt_entry
+void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
+{
+    if (jl_bt_is_native(bt_entry)) {
+        jl_print_native_codeloc(bt_entry[0].uintptr);
+    }
+    else if (jl_bt_entry_tag(bt_entry) == JL_BT_INTERP_FRAME_TAG) {
+        size_t ip = jl_bt_entry_header(bt_entry);
+        jl_value_t *code = jl_bt_entry_jlvalue(bt_entry, 0);
+        if (jl_is_method_instance(code)) {
+            // When interpreting a method instance, need to unwrap to find the code info
+            code = ((jl_method_instance_t*)code)->uninferred;
+        }
+        if (jl_is_code_info(code)) {
+            jl_code_info_t *src = (jl_code_info_t*)code;
+            // See also the debug info handling in codegen.cpp.
+            // NB: debuginfoloc is 1-based!
+            intptr_t debuginfoloc = ((int32_t*)jl_array_data(src->codelocs))[ip];
+            while (debuginfoloc != 0) {
+                jl_line_info_node_t *locinfo = (jl_line_info_node_t*)
+                    jl_array_ptr_ref(src->linetable, debuginfoloc - 1);
+                assert(jl_typeis(locinfo, jl_lineinfonode_type));
+                jl_value_t *method = locinfo->method;
+                if (jl_is_method_instance(method)) {
+                    method = ((jl_method_instance_t*)method)->def.value;
+                    if (jl_is_method(method))
+                        method = (jl_value_t*)((jl_method_t*)method)->name;
+                }
+                const char *func_name = jl_is_symbol(method) ?
+                                        jl_symbol_name((jl_sym_t*)method) : "Unknown";
+                jl_safe_print_codeloc(func_name, jl_symbol_name(locinfo->file),
+                                      locinfo->line, locinfo->inlined_at);
+                debuginfoloc = locinfo->inlined_at;
+            }
+        }
+        else {
+            // If we're using this function something bad has already happened;
+            // be a bit defensive to avoid crashing while reporting the crash.
+            jl_safe_printf("No code info - unknown interpreter state!\n");
+        }
+    }
+    else {
+        jl_safe_printf("Non-native bt entry with tag and header bits 0x%" PRIxPTR "\n",
+                       bt_entry[1].uintptr);
+    }
+}
+
+//--------------------------------------------------
+// Tools for interactive debugging in gdb
+JL_DLLEXPORT void jl_gdblookup(void* ip)
+{
+    jl_print_native_codeloc((uintptr_t)ip);
+}
+
+// Print backtrace for current exception in catch block
 JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT
 {
     jl_excstack_t *s = jl_get_ptls_states()->current_task->excstack;
     if (!s)
         return;
     size_t bt_size = jl_excstack_bt_size(s, s->top);
-    uintptr_t *bt_data = jl_excstack_bt_data(s, s->top);
-    for (size_t i = 0; i < bt_size; ) {
-        if (bt_data[i] == JL_BT_INTERP_FRAME) {
-            jl_safe_printf("Interpreter frame (ip: %d)\n", (int)bt_data[i+2]);
-            jl_static_show(JL_STDERR, (jl_value_t*)bt_data[i+1]);
-            i += 3;
-        } else {
-            jl_gdblookup(bt_data[i] - 1);
-            i += 1;
-        }
+    jl_bt_element_t *bt_data = jl_excstack_bt_data(s, s->top);
+    for (size_t i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
+        jl_print_bt_entry_codeloc(bt_data + i);
     }
 }
 

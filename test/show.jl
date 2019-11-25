@@ -351,6 +351,10 @@ end
 @test sprint(show, :+) == ":+"
 @test sprint(show, :end) == ":end"
 
+# make sure :var"'" prints correctly
+@test sprint(show, Symbol("'")) == "Symbol(\"'\")"
+@test_repr "var\"'\" = 5"
+
 # issue #32408: Printing of names which are invalid identifiers
 # Invalid identifiers which need `var` quoting:
 @test sprint(show, Expr(:call, :foo, Symbol("##")))   == ":(foo(var\"##\"))"
@@ -451,9 +455,6 @@ let a = Expr(:quote,Expr(:$,:x8d003))
     @test eval(Meta.parse(repr(a))) == a
     @test eval(eval(Meta.parse(repr(a)))) == 2
 end
-
-# issue #9865
-@test occursin(r"^Set\(\[.+….+\]\)$", replstr(Set(1:100)))
 
 # issue #11413
 @test string(:(*{1, 2})) == "*{1, 2}"
@@ -637,7 +638,6 @@ else
 end
 
 # Method location correction (Revise integration)
-methloc = Base.methodloc_callback[]
 dummyloc(m::Method) = :nofile, 123456789
 Base.methodloc_callback[] = dummyloc
 let repr = sprint(show, "text/plain", methods(Base.inbase))
@@ -646,7 +646,7 @@ end
 let repr = sprint(show, "text/html", methods(Base.inbase))
     @test occursin("nofile:123456789", repr)
 end
-Base.methodloc_callback[] = methloc
+Base.methodloc_callback[] = nothing
 
 @testset "matrix printing" begin
     # print_matrix should be able to handle small and large objects easily, test by
@@ -907,6 +907,7 @@ let a = Vector{Any}(undef, 10000)
     repr = sprint(dump, a; context=(:limit => true), sizehint=0)
     @test repr == "Array{Any}((10000,))\n  1: #undef\n  2: String \"elemA\"\n  3: #undef\n  4: String \"elemB\"\n  5: #undef\n  ...\n  9996: #undef\n  9997: #undef\n  9998: #undef\n  9999: #undef\n  10000: #undef\n"
 end
+@test occursin("NamedTuple", sprint(dump, NamedTuple))
 
 # issue #17338
 @test repr(Core.svec(1, 2)) == "svec(1, 2)"
@@ -965,7 +966,8 @@ test_repr("(:).a")
 @test isa(repr("text/plain", String(UInt8[0x00:0xff;])), String)
 
 # don't use julia-specific `f` in Float32 printing (PR #18053)
-@test sprint(print, 1f-7) == "1.0f-7"
+@test sprint(print, 1f-7) == "1.0e-7"
+@test string(1f-7) == "1.0e-7"
 
 let d = TextDisplay(IOBuffer())
     @test_throws MethodError display(d, "text/foobar", [3 1 4])
@@ -1275,7 +1277,7 @@ end
     @test replstr(view(A, [1], :)) == "1×1 view(::Array{Float64,2}, [1], :) with eltype Float64:\n 0.0"
 
     # issue #27680
-    @test replstr(Set([(1.0,1.0), (2.0,2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
+    @test showstr(Set([(1.0,1.0), (2.0,2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
               "Set([(3.0, 3.0), (2.0, 2.0), (1.0, 1.0)])" :
               "Set([(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])")
 
@@ -1586,6 +1588,21 @@ end
     @test sdastr(3, 3) == "[3, 4, 5]"
 end
 
+@testset "show Set" begin
+    s = Set{Int}(1:22)
+    str = showstr(s)
+    @test startswith(str, "Set([")
+    @test endswith(str, "])")
+    @test occursin("  …  ", str)
+
+    str = replstr(s)
+    @test startswith(str, "Set{$Int} with 22 elements:\n")
+    @test endswith(str, "\n  ⋮ ")
+    @test count(==('\n'), str) == 20
+
+    @test replstr(Set(['a'^100])) == "Set{String} with 1 element:\n  \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa…"
+end
+
 @testset "0-dimensional Array. Issue #31481" begin
     for x in (zeros(Int32), collect('b'), fill(nothing), BitArray(0))
         @test eval(Meta.parse(repr(x))) == x
@@ -1612,3 +1629,9 @@ end
     @test startswith(showstr(Array{Int32, 0}(undef)), "fill(")
     @test startswith(replstr(Array{Int32, 0}(undef)), "0-dimensional Array{Int32,0}:\n")
 end
+
+# issue #31402, Print Symbol("true") as Symbol("true") instead of :true
+@test sprint(show, Symbol(true)) == "Symbol(\"true\")"
+@test sprint(show, Symbol("true")) == "Symbol(\"true\")"
+@test sprint(show, Symbol(false)) == "Symbol(\"false\")"
+@test sprint(show, Symbol("false")) == "Symbol(\"false\")"

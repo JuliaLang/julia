@@ -168,6 +168,8 @@ function ⊑(@nospecialize(a), @nospecialize(b))
             return a.instance === b.val
         end
         return false
+    elseif isa(a, PartialTypeVar) && b === TypeVar
+        return true
     elseif !(isa(a, Type) || isa(a, TypeVar)) ||
            !(isa(b, Type) || isa(b, TypeVar))
         return a === b
