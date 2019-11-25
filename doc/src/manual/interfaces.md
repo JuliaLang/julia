@@ -182,8 +182,7 @@ julia> Squares(100)[23]
 ```
 
 Additionally, to support the syntax `S[begin]` and `S[end]`, we must define [`firstindex`](@ref) and
-[`lastindex`](@ref) to specify the first and last valid
-index, respectively:
+[`lastindex`](@ref) to specify the first and last valid indices, respectively:
 
 ```jldoctest squaretype
 julia> Base.firstindex(S::Squares) = 1
