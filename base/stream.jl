@@ -917,7 +917,7 @@ function readuntil(x::LibuvStream, c::UInt8; keep::Bool=false)
     return bytes
 end
 
-uv_write(s::LibuvStream, p::Vector{UInt8}) = uv_write(s, pointer(p), UInt(sizeof(p)))
+uv_write(s::LibuvStream, p::Vector{UInt8}) = GC.@preserve p uv_write(s, pointer(p), UInt(sizeof(p)))
 
 # caller must have acquired the iolock
 function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)

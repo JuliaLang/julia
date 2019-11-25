@@ -442,7 +442,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
     while j != 0
         if i == a || i <= k
-            unsafe_write(out, pointer(str, i), UInt(j-i))
+            GC.@preserve str unsafe_write(out, pointer(str, i), UInt(j-i))
             _replace(out, repl, str, r, pattern)
         end
         if k < j
