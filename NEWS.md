@@ -38,6 +38,7 @@ New library functions
 * `istaskfailed` is now documented and exported, like its siblings `istaskdone` and `istaskstarted` ([#32300]).
 * `RefArray` and `RefValue` objects now accept index `CartesianIndex()` in  `getindex` and `setindex!` ([#32653])
 * Added `sincosd(x)` to simultaneously compute the sine and cosine of `x`, where `x` is in degrees ([#30134]).
+* Added integer bitwise rotation functions `rol` and `ror` ([#33938]).
 
 Standard library changes
 ------------------------
