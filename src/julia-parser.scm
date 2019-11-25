@@ -160,7 +160,10 @@
                          struct
                          module baremodule using import export))
 
-(define initial-reserved-word? (Set initial-reserved-words))
+(define initial-reserved-word?
+  (let ((reserved? (Set initial-reserved-words)))
+    (lambda (s) (and (reserved? s)
+                     (not (and (eq? s 'begin) end-symbol)))))) ; begin == firstindex inside [...]
 
 (define reserved-words (append initial-reserved-words '(end else elseif catch finally true false))) ;; todo: make this more complete
 
