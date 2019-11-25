@@ -489,9 +489,9 @@ end
 Rename basic block numbers in a dominator tree, removing the block if it is
 renamed to -1.
 """
-function rename_nodes!(domtree::DomTree, rename_bb::Vector{BBNumber})
+function rename_blocks!(domtree::DomTree, rename_bb::Vector{BBNumber})
     # Rename DFS tree
-    rename_nodes!(domtree.dfs_tree, rename_bb)
+    rename_blocks!(domtree.dfs_tree, rename_bb)
 
     # `snca_state` is indexed by preorder number, so should be unchanged
 
@@ -519,7 +519,7 @@ end
 Rename basic block numbers in a DFS tree, removing the block if it is renamed
 to -1.
 """
-function rename_nodes!(D::DFSTree, rename_bb::Vector{BBNumber})
+function rename_blocks!(D::DFSTree, rename_bb::Vector{BBNumber})
     n_blocks = length(D.to_pre)
     n_reachable_blocks = length(D.from_pre)
 
@@ -544,6 +544,91 @@ function rename_nodes!(D::DFSTree, rename_bb::Vector{BBNumber})
     resize!(D.to_pre, max_new_bb)
     resize!(D.to_post, max_new_bb)
     # `to_parent_pre` should be unchanged
+    return D
+end
+
+"""
+Combine two blocks `from` and `to`. It is assumed that there is an edge from
+`from` to `to`, and that the sole successor of `from` is `to` and the sole
+predecessor of `to` is `from`. This does not remove the `to` node, which is
+then considered to have no edges.
+"""
+function combine_blocks!(domtree::DomTree, from::BBNumber, to::BBNumber)
+    orig_pre_of_to = domtree.dfs_tree.to_pre[to]
+
+    # Combine nodes in DFS tree
+    combine_blocks!(domtree.dfs_tree, from, to)
+
+    # Update `snca_state`
+    deleteat!(domtree.snca_state, orig_pre_of_to)
+    for pre in 1:length(domtree.snca_state)
+        # If semidominator was `to`, set it to `from` instead
+        if domtree.snca_state[pre].semi == orig_pre_of_to
+            label = domtree.snca_state[pre].label
+            domtree.snca_state[pre] = SNCAData(orig_pre_of_to - 1, label)
+        end
+        # Labels will be reset anyway, so no need to update them
+    end
+
+    # Update `idoms_bb`
+    for bb in 1:length(domtree.idoms_bb)
+        # If immediate dominator was `to`, set it to `from` instead
+        if domtree.idoms_bb[bb] == to
+            domtree.idoms_bb[bb] = from
+        end
+    end
+
+    # Update `nodes`
+    copy!(domtree.nodes[from].children, domtree.nodes[to].children)
+    domtree.nodes[to] = DomTreeNode()
+    # Recursively decrement level of the affected children
+    worklist = domtree.nodes[from].children
+    while !isempty(worklist)
+        node = pop!(worklist)
+        domtree.nodes[node] = DomTreeNode(domtree.nodes[node].level-1,
+                                          domtree.nodes[node].children)
+        foreach(child -> push!(worklist, child),
+                domtree.nodes[node].children)
+    end
+
+    return domtree
+end
+
+function combine_blocks!(D::DFSTree, from::BBNumber, to::BBNumber)
+    # Reassignment of preorder and postorder numbers depend on these
+    # conditions, which should hold if `from` has only one successor `to` and
+    # `to` has only one predecessor `from`.
+    @assert D.to_pre[from] + 1 == D.to_pre[to]
+    @assert D.to_post[from] == D.to_post[to] + 1
+
+    # Set preorder number of `to` to 0,
+    # decrement preorder numbers greater than original preorder number of `to`.
+    # Set postorder number of `to` to 0,
+    # decrement postorder numbers greater than original preorder number of `to`.
+
+    orig_pre_of_to = D.to_pre[to]
+    orig_post_of_to = D.to_post[to]
+
+    D.to_pre[to] = 0
+    D.to_post[to] = 0
+    for bb in 1:length(D.to_pre)
+        if D.to_pre[bb] > orig_pre_of_to
+            D.to_pre[bb] -= 1
+        end
+        if D.to_post[bb] > orig_post_of_to
+            D.to_post[bb] -= 1
+        end
+    end
+    deleteat!(D.from_pre, orig_pre_of_to)
+    deleteat!(D.from_post, orig_post_of_to)
+
+    deleteat!(D.to_parent_pre, orig_pre_of_to)
+    for pre in 1:length(D.to_parent_pre)
+        if D.to_parent_pre[pre] > orig_pre_of_to
+            D.to_parent_pre[pre] -= 1
+        end
+    end
+
     return D
 end
 

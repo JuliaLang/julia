@@ -1032,6 +1032,9 @@ end
 
 function cfg_simplify!(ir::IRCode)
     bbs = ir.cfg.blocks
+    old_domtree = ir.cfg.domtree
+    new_domtree = copy(old_domtree)
+
     merge_into = zeros(Int, length(bbs))
     merged_succ = zeros(Int, length(bbs))
     function follow_merge_into(idx::Int)
@@ -1055,6 +1058,13 @@ function cfg_simplify!(ir::IRCode)
                 # Prevent cycles by making sure we don't end up back at `idx`
                 # by following what is to be merged into `succ`
                 if follow_merged_succ(succ) != idx
+                    # Update domtree, by combining the block that `idx` is
+                    # going to be merged into with the block that `succ` was
+                    # going to be merged into (before this merge)
+                    combine_blocks!(new_domtree,
+                                    follow_merge_into(idx),
+                                    follow_merge_into(succ))
+
                     merge_into[succ] = idx
                     merged_succ[idx] = succ
                 end
@@ -1066,12 +1076,8 @@ function cfg_simplify!(ir::IRCode)
     max_bb_num = 1
     bb_rename_succ = zeros(Int, length(bbs))
     for i = 1:length(bbs)
-        # Drop blocks that will be merged away
-        if merge_into[i] != 0
-            bb_rename_succ[i] = -1
-        end
-        # Drop blocks with no predecessors
-        if i != 1 && length(ir.cfg.blocks[i].preds) == 0
+        # Drop blocks that will be merged away or are unreachable
+        if merge_into[i] != 0 || bb_unreachable(old_domtree, i)
             bb_rename_succ[i] = -1
         end
 
@@ -1160,6 +1166,7 @@ function cfg_simplify!(ir::IRCode)
     compact.bb_rename_succ = bb_rename_succ
     compact.bb_rename_pred = bb_rename_pred
     compact.result_bbs = cresult_bbs
+    compact.result_domtree = rename_blocks!(new_domtree, bb_rename_succ)
     result_idx = 1
     for (idx, orig_bb) in enumerate(result_bbs)
         ms = orig_bb
