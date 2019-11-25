@@ -1036,8 +1036,9 @@ function write(s::LibuvStream, b::UInt8)
     if buf !== nothing
         iolock_begin()
         if bytesavailable(buf) + 1 < buf.maxsize
+            n = write(buf, b)
             iolock_end()
-            return write(buf, b)
+            return n
         end
         iolock_end()
     end
