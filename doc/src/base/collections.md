@@ -234,6 +234,71 @@ Partially implemented by:
   * [`Iterators.Pairs`](@ref)
 
 ## Set-Like Collections
+A set is a collection of elements, just like an array or dictionary, with no duplicated elements.
+
+The two important differences between a set and other types of collection is that in a set you can have only one of each element, and, in a set, the order of elements isn't important (whereas an array can have multiple copies of an element and their order is remembered).
+
+You can create an empty set using the [`Set`](@ref) constructor function:
+```julia
+julia> colors = Set()
+Set(Any[])
+```
+
+As elsewhere in Julia, you can specify the type:
+```julia
+julia> primes = Set{Int64}()
+Set(Int64[])
+```
+
+You can create and fill sets in one go:
+```julia
+julia> colors = Set{String}(["red","green","blue","yellow"])
+Set(["yellow", "blue", "green", "red"])
+```
+
+or you can let Julia "guess the type":
+```julia
+julia> colors = Set(["red","green","blue","yellow"])
+Set(["yellow", "blue", "green", "red"])
+```
+
+Quite a few of the functions that work with arrays also work with sets. Adding elements to sets, for example, is a bit like adding elements to arrays. You can use [`push!`](@Ref)
+```julia
+julia> push!(colors, "black")
+Set(["yellow", "blue", "green", "black", "red"])
+```
+
+But you can't use [`pushfirst!`](@Ref), because that works only for things that have a concept of "first", like arrays.
+
+What happens if you try to add something to the set that's already there? Absolutely nothing. You don't get a copy added, because it's a set, not an array, and sets don't store repeated elements.
+
+To see if something is in the set, you can use [`in`](@Ref):
+```julia
+julia> in("green", colors)
+true
+```
+
+There are some standard operations you can do with sets, namely find their `union`, `intersection`, and `difference`, with the functions, [`union`](@Ref), [`intersect`](@Ref), and [`setdiff`](@Ref):
+```julia
+julia> rainbow = Set(["red","orange","yellow","green","blue","indigo","violet"])
+Set(["indigo", "yellow", "orange", "blue", "violet", "green", "red"])
+```
+The union of two sets is the set of everything that is in one or the other sets. The result is another set- so you can't have two "yellow"s here, even though we've got a "yellow" in each set:
+```julia
+julia> union(colors, rainbow)
+Set(["indigo", "yellow", "orange", "blue", "violet", "green", "black", "red"])
+```
+The intersection of two sets is the set that contains every element that belongs to both sets:
+```julia
+julia> intersect(colors, rainbow)
+Set(["yellow", "blue", "green", "red"])
+```
+The difference between two sets is the set of elements that are in the first set, but not in the second. This time, the order in which you supply the sets matters. The [`setdiff`](@Ref) function finds the elements that are in the first set, `colors`, but not in the second set, `rainbow`:
+```julia
+julia> setdiff(colors, rainbow)
+Set(["black"])
+ ```
+[Ref.](https://en.wikibooks.org/wiki/Introducing_Julia/Dictionaries_and_sets#Sets)
 
 ```@docs
 Base.AbstractSet
