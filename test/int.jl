@@ -190,6 +190,51 @@ end
         end
     end
 end
+@testset "rol/ror" begin
+    for T in Base.BitSigned_types
+        for (base, shift, res) in [(0, 1, 0),
+                                   (0, 0, 0),
+                                   (0, 5, 0),
+                                   (0, typemin(Int), 0),
+                                   (13, 0, 13),
+                                   (13, 1, 26),
+                                   (13, 3, 104),
+                                   (13, typemin(Int), 13)]
+            tbase = T(base)
+            # Test result is correct
+            @test rol(tbase, shift) == res
+
+            # Test signed is same as unsigned
+            @test rol(unsigned(tbase), shift) == unsigned(res)
+
+            # Rotating left by negative amount is right rotation and vice versa
+            @test ror(tbase, -shift) == res
+            @test rol(tbase, -shift) == ror(tbase, shift)
+
+            # Test correctness when rotating more than one round
+            bits = sizeof(T) << 3
+            @test rol(tbase, shift + 2bits) == res
+            @test ror(tbase, shift + 2bits) == rol(tbase, -shift)
+
+            # Rotating bits-N left is same as rotating N right and vice versa
+            @test rol(tbase, bits - shift) == ror(tbase, shift)
+            @test ror(tbase, bits - shift) == rol(tbase, shift)
+
+            # Test typemax(Int)
+            @test rol(tbase, typemax(Int)) == ror(tbase, 1)
+            @test ror(tbase, typemax(Int)) == rol(tbase, 1)
+        end
+    end
+    # Extra tests where it only partially wraps around
+    for (T, base, f, shift, result) in [(Int8, 13, rol, 5, -95),
+                                     (Int8, 13, rol, 6, 67),
+                                     (Int, -501, ror, 3, 9223372036854775745),
+                                     (Int, 875, rol, 60, -5764607523034234826)]
+        @test f(T(base), shift) == T(result)
+        @test f(unsigned(T(base)), shift) == unsigned(T(result))
+        @test f(T(base), shift + (sizeof(T) << 3)) == T(result)
+    end
+end
 @testset "widen/widemul" begin
     @test widen(UInt8(3)) === UInt16(3)
     @test widen(UInt16(3)) === UInt32(3)

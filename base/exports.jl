@@ -314,6 +314,8 @@ export
     reinterpret,
     rem,
     rem2pi,
+    rol,
+    ror,
     round,
     sec,
     secd,

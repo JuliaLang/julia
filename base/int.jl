@@ -448,6 +448,45 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 >>>(x::BitInteger, y::Int) =
     ifelse(0 <= y, x >>> unsigned(y), x << unsigned(-y))
 
+# integer rotation
+"""
+    rol(x::Integer, s::Int) -> Integer
+
+Rotate the bits of `x` left by `s` steps.
+
+# Examples
+```jldoctest
+julia> rol(10, 2)
+40
+
+julia> rol(0x1a, 4)
+0xa1
+```
+"""
+function rol(x::BitInteger, s::Int)
+    mask = sizeof(x) << 3 - 1
+    return (x << (s & mask)) | (x >>> (-s & mask))
+end
+
+"""
+    ror(x::Integer, s::Int) -> Integer
+
+Rotate the bits of `x` right by `s` steps.
+
+# Examples
+```jldoctest
+julia> ror(10, 2)
+-9223372036854775806
+
+julia> ror(0x1a, 6)
+0x68
+```
+"""
+function ror(x::BitInteger, s::Int)
+    mask = sizeof(x) << 3 - 1
+    return (x >>> (s & mask)) | (x << (-s & mask))
+end
+
 for to in BitInteger_types, from in (BitInteger_types..., Bool)
     if !(to === from)
         if to.size < from.size
