@@ -87,10 +87,12 @@ Dict{Int64,Int64} with 5 entries:
   1 => 1
  ```
 
-Create an empty dictionary using:
+You can also create and fill dictionaries dynamically (will be slower than the other ways).
+
+First, you need to create an empty dictionary using:
 ```jldoctest
-julia> Dict{String,Float32}()  # type specified
-Dict{String,Float32} with 0 entries
+julia> Dict{Int64,Any}()  # type specified
+Dict{String,Any} with 0 entries
 
 julia> dict = Dict()  # type not specified
 Dict{Any,Any} with 0 entries
@@ -98,8 +100,9 @@ Dict{Any,Any} with 0 entries
 
 After creating an empty dictionary, you can fill it via a for loop:
 ```jldoctest
-animals = ["cat", "fish", "elephant"]
 mydict = Dict{Int64,Any}()
+
+animals = ["cat", "fish", "elephant"]
 for (i, x) in enumerate(animals)
    mydict[i] = [x, length(x)]
 end
