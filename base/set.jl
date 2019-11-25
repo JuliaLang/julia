@@ -26,7 +26,7 @@ Set(["cat","fish","dog","bird"])
 
 You can let Julia guess the type:
 ```julia
-julia> animals = Set{String}(["cat","fish","dog","bird"])
+julia> animals = Set(["cat","fish","dog","bird"])
 Set(["cat","fish","dog","bird"])
 
 julia>typeof(animals)

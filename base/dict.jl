@@ -69,10 +69,19 @@ Dict{String,Int64} with 2 entries:
 Alternatively, a sequence of pair arguments may be passed.
 
 ```jldoctest
-julia> Dict("A"=>1, "B"=>2)
+julia> d = Dict("A"=>1, "B"=>2)
 Dict{String,Int64} with 2 entries:
   "B" => 2
   "A" => 1
+```
+
+After creation of a Dict you can use `d[x]` for getting the values and `d[x]=y` for changing the values.
+```jldoctest
+julia> d["A"]
+1
+
+julia> d["B"] = 3
+3
 ```
 
 You can use [Generator](https://docs.julialang.org/en/v1/manual/arrays/#Generator-Expressions-1) and [Comprehension][https://docs.julialang.org/en/v1/manual/arrays/#Comprehensions-1] syntax to create dictionaries:
@@ -85,14 +94,14 @@ Dict{Int64,Int64} with 5 entries:
   2 => 4
   3 => 9
   1 => 1
- ```
+```
 
 You can also create and fill dictionaries dynamically (will be slower than the other ways).
 
 First, you need to create an empty dictionary using:
 ```jldoctest
 julia> Dict{Int64,Any}()  # type specified
-Dict{String,Any} with 0 entries
+Dict{Int64,Any} with 0 entries
 
 julia> dict = Dict()  # type not specified
 Dict{Any,Any} with 0 entries
