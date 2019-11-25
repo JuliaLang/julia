@@ -74,6 +74,44 @@ Dict{String,Int64} with 2 entries:
   "B" => 2
   "A" => 1
 ```
+
+You can use [Generator](https://docs.julialang.org/en/v1/manual/arrays/#Generator-Expressions-1) and [Comprehension][https://docs.julialang.org/en/v1/manual/arrays/#Comprehensions-1] syntax to create dictionaries:
+
+```jldoctest
+julia> Dict(x => x^2 for x = 0:1:4)
+Dict{Int64,Int64} with 5 entries:
+  0 => 0
+  4 => 16
+  2 => 4
+  3 => 9
+  1 => 1
+ ```
+
+Create an empty dictionary using:
+```jldoctest
+julia> Dict{String,Float32}()  # type specified
+Dict{String,Float32} with 0 entries
+
+julia> dict = Dict()  # type not specified
+Dict{Any,Any} with 0 entries
+```
+
+After creating an empty dictionary, you can fill it via a for loop:
+```jldoctest
+animals = ["cat", "fish", "elephant"]
+mydict = Dict{Int64,Any}()
+for (i, x) in enumerate(animals)
+   mydict[i] = [x, length(x)]
+end
+```
+
+```jldoctest
+julia> mydict
+Dict{Int64,Any} with 3 entries:
+  2 => Any["fish", 4]
+  3 => Any["elephant", 8]
+  1 => Any["cat", 3]
+```
 """
 mutable struct Dict{K,V} <: AbstractDict{K,V}
     slots::Array{UInt8,1}
@@ -492,6 +530,12 @@ julia> get(d, "a", 3)
 
 julia> get(d, "c", 3)
 3
+```
+
+Using `get()` is the same as using `d[x]` syntax when the key exists in the collection:
+```
+julia> d["a"]
+1
 ```
 """
 get(collection, key, default)
