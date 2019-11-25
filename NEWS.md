@@ -11,6 +11,9 @@ New language features
 * Function composition now supports multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
 and splatting `∘(fs...)` for composing an iterable collection of functions ([#33568]).
 
+  * `a[begin]` can now be used to address the first element of an integer-indexed collection `a`.
+    The index is computed by `firstindex(a)` ([#23554]).
+
 Language changes
 ----------------
 
