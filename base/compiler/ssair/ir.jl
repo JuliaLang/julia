@@ -515,6 +515,9 @@ mutable struct IncrementalCompact
     result_domtree::DomTree
 
     ssa_rename::Vector{Any}
+    # `bb_rename_pred` is for renaming predecessors to the blocks they have
+    # been merged into (differs from `bb_rename_succ` only if blocks are
+    # combined), `bb_rename_succ` is how blocks are actually renamed
     bb_rename_pred::Vector{Int}
     bb_rename_succ::Vector{Int}
 
@@ -891,8 +894,8 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
     preds = compact.result_bbs[renamed_to].preds
     succs = compact.result_bbs[renamed_from].succs
 
-    deleteat!(preds, findfirst(x->x === renamed_from, preds)::Int)
-    deleteat!(succs, findfirst(x->x === renamed_to, succs)::Int)
+    deleteat!(preds, findfirst(x -> x === renamed_from, preds)::Int)
+    deleteat!(succs, findfirst(x -> x === renamed_to, succs)::Int)
 
     domtree_delete_edge!(compact.result_domtree,
                          compact.result_bbs,
@@ -909,7 +912,7 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
             # of this loop
             if succ in compact.result_bbs[renamed_to].succs
                 kill_edge!(compact, active_bb, to,
-                           findfirst(x->x === succ, compact.bb_rename_pred))
+                           findfirst(x -> x === succ, compact.bb_rename_pred))
             end
         end
 
@@ -935,9 +938,12 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
         idx = first(stmts)
         while idx <= last(stmts)
             stmt = compact.result[idx][:inst]
-            stmt === nothing && continue
+            if stmt === nothing
+                idx += 1
+                continue
+            end
             isa(stmt, PhiNode) || break
-            i = findfirst(x-> x === renamed_from, stmt.edges)
+            i = findfirst(x -> x === renamed_from, stmt.edges)
             if i !== nothing
                 deleteat!(stmt.edges, i)
                 deleteat!(stmt.values, i)
@@ -949,7 +955,7 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
         for stmt in CompactPeekIterator(compact, first(stmts), last(stmts))
             stmt === nothing && continue
             isa(stmt, PhiNode) || break
-            i = findfirst(x-> x === from, stmt.edges)
+            i = findfirst(x -> x === from, stmt.edges)
             if i !== nothing
                 deleteat!(stmt.edges, i)
                 deleteat!(stmt.values, i)
