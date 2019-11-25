@@ -1319,8 +1319,6 @@
 
 ;; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
-  (if (and (eq? word 'begin) end-symbol)
-      (parser-depwarn s "\"begin\" inside indexing expression" ""))
   (with-bindings
    ((expect-end-current-line (input-port-line (ts:port s))))
    (with-normal-context
