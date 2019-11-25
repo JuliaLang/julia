@@ -258,6 +258,11 @@ To see if something is in the set, you can use [`in`](@Ref):
 julia> in("green", colors)
 true
 ```
+or using infix notation
+```julia
+julia> "green" in colors
+true
+```
 
 There are some standard operations you can do with sets, namely find their `union`, `intersection`, and `difference`, with the functions, [`union`](@Ref), [`intersect`](@Ref), and [`setdiff`](@Ref):
 ```julia
