@@ -493,26 +493,6 @@ const temp_prefix = "jl_"
 
 if Sys.iswindows()
 
-function _win_tempname(temppath::AbstractString, uunique::UInt32)
-    tempp = cwstring(temppath)
-    temppfx = cwstring(temp_prefix)
-    tname = Vector{UInt16}(undef, 32767)
-    uunique = ccall(:GetTempFileNameW, stdcall, UInt32,
-                    (Ptr{UInt16}, Ptr{UInt16}, UInt32, Ptr{UInt16}),
-                    tempp, temppfx, uunique, tname)
-    windowserror("GetTempFileName", uunique == 0)
-    lentname = something(findfirst(iszero, tname))
-    @assert lentname > 0
-    resize!(tname, lentname - 1)
-    return transcode(String, tname)
-end
-
-function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
-    filename = _win_tempname(parent, UInt32(0))
-    cleanup && temp_cleanup_later(filename)
-    return (filename, Base.open(filename, "r+"))
-end
-
 # GUID  win32 api (consider # TODO: refactor)
 struct GUID
     l1::Culong
@@ -552,6 +532,13 @@ function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
     @assert !ispath(filename)
     cleanup && temp_cleanup_later(filename)
     return filename
+end
+
+function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
+    filename = tempname(parent; cleanup=false)
+    io = Base.open(filename, "w+")
+    cleanup && temp_cleanup_later(filename)
+    return (filename, io)
 end
 
 else # !windows
