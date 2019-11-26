@@ -5,7 +5,7 @@ module Unicode
 export graphemes
 
 """
-    Unicode.normalize(s::AbstractString; kwargs...)
+    Unicode.normalize(s::AbstractString; keywords...)
     Unicode.normalize(s::AbstractString, normalform::Symbol)
 
 Normalize the string `s`. By default, canonical composition (`compose=true`) is performed without ensuring
@@ -46,7 +46,7 @@ For example, NFKC corresponds to the options `compose=true, compat=true, stable=
 
 # Examples
 ```jldoctest
-julia> "é" == Unicode.normalize("é") #LHS: Unicode U+00e9, RHS: U+0065 & U+0065
+julia> "é" == Unicode.normalize("é") #LHS: Unicode U+00e9, RHS: U+0065 & U+0301
 true
 
 julia> "μ" == Unicode.normalize("µ", compat=true) #LHS: Unicode U+03bc, RHS: Unicode U+00b5
