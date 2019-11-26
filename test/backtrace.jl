@@ -233,6 +233,18 @@ let code = """
                   if ip isa Base.InterpreterIP && ip.code isa Core.MethodInstance]
     num_fs = sum(meth_names .== :f29695)
     num_gs = sum(meth_names .== :g29695)
+    if num_fs != 1000 || num_gs != 1000
+        # Dump backtrace info to ease debugging via CI logs
+        println(stderr, "Raw backtrace dump")
+        for ip in bt
+            println(stderr, ip)
+            for frame in StackTraces.lookup(ip)
+                println(stderr, "  ", frame)
+            end
+        end
+        println(stderr, "Formatted backtrace dump")
+        Base.show_backtrace(stderr, bt)
+    end
     print(num_fs, ' ', num_gs)
     """
 
