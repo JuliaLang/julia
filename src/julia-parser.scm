@@ -558,7 +558,7 @@
 
 ;; --- token stream ---
 
-(define (make-token-stream s) (vector #f s #t #f #f))
+(define (make-token-stream s) (vector #f s #t #f #f (io.pos s) #f))
 (define-macro (ts:port s)       `(aref ,s 1))
 (define-macro (ts:last-tok s)   `(aref ,s 0))
 (define-macro (ts:set-tok! s t) `(aset! ,s 0 ,t))
@@ -568,16 +568,20 @@
   (if (ts:pbtok s)
       (error "too many pushed-back tokens (internal error)")
       (begin (aset! s 3 t)
-             (aset! s 4 spc))))
+             (aset! s 4 spc)
+             (let ((p (aref s 5)) (q (aref s 6)))
+                  (aset! s 5 q) (aset! s 6 p)))))
 
 (define (peek-token s)
   (or (ts:pbtok s)
       (ts:last-tok s)
-      (begin (ts:set-tok! s (next-token (ts:port s) s))
+      (begin (aset! s 5 (io.pos (ts:port s)))
+             (ts:set-tok! s (next-token (ts:port s) s))
              (ts:last-tok s))))
 
 (define (require-token s)
-  (let ((t (or (ts:pbtok s) (ts:last-tok s) (next-token (ts:port s) s))))
+  (let ((t (or (ts:pbtok s) (ts:last-tok s)
+        (begin (aset! s 5 (io.pos (ts:port s))) (next-token (ts:port s) s)))))
     (if (eof-object? t)
         (error "incomplete: premature end of input") ; NOTE: changing this may affect code in base/client.jl
         (if (newline? t)
@@ -589,9 +593,13 @@
 (define (take-token s)
   (or
    (begin0 (ts:pbtok s)
-           (aset! s 3 #f))
+           (aset! s 3 #f)
+           (let ((p (aref s 5)) (q (aref s 6)))
+                (aset! s 5 q) (aset! s 6 p)))
    (begin0 (ts:last-tok s)
-           (ts:set-tok! s #f))))
+           (ts:set-tok! s #f)
+           (aset! s 6 (aref s 5))
+           (aset! s 5 (io.pos (ts:port s))))))
 
 (define (space-before-next-token? s)
   (or (skip-ws (ts:port s) #f) (eqv? #\newline (peek-char (ts:port s)))))
@@ -2465,5 +2473,5 @@
                (begin (take-token s) (skip-loop (peek-token s)))))
          (if (eof-object? (peek-token s))
              (eof-object)
-             ((if (null? production) parse-stmts (car production))
-              s)))))
+             (let ((res ((if (null? production) parse-stmts (car production))
+              s))) (io.seek (ts:port s) (aref s 5)) res)))))
