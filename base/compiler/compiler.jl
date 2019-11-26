@@ -94,11 +94,11 @@ using .Sort
 # compiler #
 ############
 
+include("compiler/types.jl")
 include("compiler/utilities.jl")
 include("compiler/validation.jl")
 
 include("compiler/inferenceresult.jl")
-include("compiler/params.jl")
 include("compiler/inferencestate.jl")
 
 include("compiler/typeutils.jl")

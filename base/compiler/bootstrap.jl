@@ -6,7 +6,9 @@
 # since we won't be able to specialize & infer them at runtime
 
 let fs = Any[typeinf_ext, typeinf, typeinf_edge, pure_eval_call, run_passes],
-    world = get_world_counter()
+    world = get_world_counter(),
+    interp = NativeInterpreter(world)
+
     for x in T_FFUNC_VAL
         push!(fs, x[3])
     end
@@ -27,7 +29,7 @@ let fs = Any[typeinf_ext, typeinf, typeinf_edge, pure_eval_call, run_passes],
                     typ[i] = typ[i].ub
                 end
             end
-            typeinf_type(m[3], Tuple{typ...}, m[2], Params(world))
+            typeinf_type(interp, m[3], Tuple{typ...}, m[2])
         end
     end
 end
