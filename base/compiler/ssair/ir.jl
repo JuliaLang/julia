@@ -893,10 +893,13 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
             compact.result[last(stmts)][:inst] = ReturnNode()
         end
     else
-        # We need to remove this edge from any phi nodes
+        # Remove this edge from all phi nodes in `to` block
+        # NOTE: It is possible for `to` to contain only `nothing` statements,
+        #       so we must be careful to stop at its last statement
         if to < active_bb
-            idx = first(compact.result_bbs[compact.bb_rename_succ[to]].stmts)
-            while idx < length(compact.result)
+            stmts = compact.result_bbs[compact.bb_rename_succ[to]].stmts
+            idx = first(stmts)
+            while idx <= last(stmts)
                 stmt = compact.result[idx][:inst]
                 stmt === nothing && continue
                 isa(stmt, PhiNode) || break
@@ -908,8 +911,8 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
                 idx += 1
             end
         else
-            idx = first(compact.ir.cfg.blocks[to].stmts)
-            for stmt in CompactPeekIterator(compact, idx)
+            stmts = compact.ir.cfg.blocks[to].stmts
+            for stmt in CompactPeekIterator(compact, first(stmts), last(stmts))
                 stmt === nothing && continue
                 isa(stmt, PhiNode) || break
                 i = findfirst(x-> x === from, stmt.edges)
@@ -1131,10 +1134,19 @@ end
 struct CompactPeekIterator
     compact::IncrementalCompact
     start_idx::Int
+    end_idx::Int
+end
+
+function CompactPeekIterator(compact::IncrementalCompact, start_idx::Int)
+    return CompactPeekIterator(compact, start_idx, 0)
 end
 
 entry_at_idx(entry::NewNodeInfo, idx::Int) = entry.attach_after ? entry.pos == idx - 1 : entry.pos == idx
 function iterate(it::CompactPeekIterator, (idx, aidx, bidx)::NTuple{3, Int}=(it.start_idx, it.compact.new_nodes_idx, 1))
+    if it.end_idx > 0 && idx > it.end_idx
+        return nothing
+    end
+
     # TODO: Take advantage of the fact that these arrays are sorted
     # TODO: this return value design is horrible
     compact = it.compact
