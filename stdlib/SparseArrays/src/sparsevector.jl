@@ -829,7 +829,7 @@ end
 
 getindex(x::AbstractSparseVector, ::Colon) = copy(x)
 
-function isstored(x::AbstractSparseVector, i::Integer)
+function Base.isstored(x::AbstractSparseVector, i::Integer)
     return i in nonzeroinds(x)
 end
 
