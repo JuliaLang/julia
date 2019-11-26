@@ -1,13 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    ConsoleLogger(stream=stderr, min_level=Info; meta_formatter=default_metafmt,
+    ConsoleLogger(stream=stderr, min_severity=Info; meta_formatter=default_metafmt,
                   show_limited=true, right_justify=0)
 
 Logger with formatting optimized for readability in a text console, for example
 interactive work with the Julia REPL.
 
-Log levels less than `min_level` are filtered out.
+Log levels with severity less than `min_severity` are filtered out. For
+convenience, a log level can be passed in place of `min_severity` if desired.
 
 Message formatting can be controlled by setting keyword arguments:
 
@@ -24,23 +25,25 @@ Message formatting can be controlled by setting keyword arguments:
 """
 struct ConsoleLogger <: AbstractLogger
     stream::IO
-    min_level::LogLevel
+    min_severity::Int
     meta_formatter
     show_limited::Bool
     right_justify::Int
     message_limits::Dict{Any,Int}
 end
-function ConsoleLogger(stream::IO=stderr, min_level=Info;
+function ConsoleLogger(stream::IO=stderr, min_severity=Info;
                        meta_formatter=default_metafmt, show_limited=true,
                        right_justify=0)
-    ConsoleLogger(stream, min_level, meta_formatter,
+    ConsoleLogger(stream, severity(min_severity), meta_formatter,
                   show_limited, right_justify, Dict{Any,Int}())
 end
 
-shouldlog(logger::ConsoleLogger, level, _module, group, id) =
+function shouldlog(logger::ConsoleLogger, level, _module, group, id)
     get(logger.message_limits, id, 1) > 0
+    # note: severity already handled in min_enabled_level
+end
 
-min_enabled_level(logger::ConsoleLogger) = logger.min_level
+min_enabled_level(logger::ConsoleLogger) = logger.min_severity
 
 # Formatting of values in key value pairs
 showvalue(io, msg) = show(io, "text/plain", msg)
@@ -51,17 +54,19 @@ end
 showvalue(io, ex::Exception) = showerror(io, ex)
 
 function default_logcolor(level)
-    level < Info  ? Base.debug_color() :
-    level < Warn  ? Base.info_color()  :
-    level < Error ? Base.warn_color()  :
-                    Base.error_color()
+    sev = severity(level)
+    sev < severity(Info)  ? Base.debug_color() :
+    sev < severity(Warn)  ? Base.info_color()  :
+    sev < severity(Error) ? Base.warn_color()  :
+                            Base.error_color()
 end
 
 function default_metafmt(level, _module, group, id, file, line)
     color = default_logcolor(level)
-    prefix = (level == Warn ? "Warning" : string(level))*':'
+    prefix = string(level)*':'
     suffix = ""
-    Info <= level < Warn && return color, prefix, suffix
+    # Suppress line and file printing for more readable info messages
+    level == Info && return color, prefix, suffix
     _module !== nothing && (suffix *= "$(_module)")
     if file !== nothing
         _module !== nothing && (suffix *= " ")

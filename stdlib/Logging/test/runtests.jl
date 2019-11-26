@@ -2,7 +2,9 @@
 
 using Test, Logging
 
-import Logging: min_enabled_level, shouldlog, handle_message
+import Test: collect_test_logs
+
+import Logging: min_enabled_level, shouldlog, handle_message, severity
 
 @noinline func1() = backtrace()
 
@@ -17,8 +19,8 @@ end
 
 @testset "ConsoleLogger" begin
     # First pass log limiting
-    @test min_enabled_level(ConsoleLogger(devnull, Logging.Debug)) == Logging.Debug
-    @test min_enabled_level(ConsoleLogger(devnull, Logging.Error)) == Logging.Error
+    @test min_enabled_level(ConsoleLogger(devnull, Logging.Debug)) == severity(Logging.Debug)
+    @test min_enabled_level(ConsoleLogger(devnull, Logging.Error)) == severity(Logging.Error)
 
     # Second pass log limiting
     logger = ConsoleLogger(devnull)
@@ -254,6 +256,31 @@ end
     \e[36m\e[1m└ \e[22m\e[39m\e[90mSUFFIX\e[39m
     """
 
+end
+
+
+# Soft Deprecations
+# Test the old log level interface still works.
+@eval module LogLevelTest
+    using Logging
+
+    # The new version of this is tested with the CoreLogging tests
+    struct OldLevelType
+        level::Int
+    end
+
+    Base.convert(::Type{LogLevel}, l::OldLevelType) = LogLevel(l.level)
+
+    const critical = OldLevelType(10000)
+    const debug_verbose = OldLevelType(-10000)
+end
+
+@testset "Deprecated functionality" begin
+    @test_logs (LogLevelTest.critical, "blah") @logmsg LogLevelTest.critical "blah"
+    logs,_ = collect_test_logs(min_level=Logging.Debug) do
+        @logmsg LogLevelTest.debug_verbose "blah"
+    end
+    @test length(logs) == 0
 end
 
 end

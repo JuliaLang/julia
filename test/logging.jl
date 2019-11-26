@@ -2,7 +2,7 @@
 
 using Test, Base.CoreLogging
 import Base.CoreLogging: BelowMinLevel, Debug, Info, Warn, Error,
-    handle_message, shouldlog, min_enabled_level, catch_exceptions
+    handle_message, shouldlog, severity, min_enabled_level, catch_exceptions
 
 import Test: collect_test_logs, TestLogger
 using Printf: @sprintf
@@ -226,8 +226,8 @@ end
                            )
                 ENV["JULIA_DEBUG"] = e
                 @test CoreLogging.env_override_minlevel(:Main, Base.Filesystem) === r
-                @test CoreLogging.current_logger_for_env(BelowMinLevel, :Main, Base.Filesystem) === (r ? logger : nothing)
-                @test CoreLogging.current_logger_for_env(Info, :Main, Base.Filesystem) === logger
+                @test CoreLogging.current_logger_for_env(severity(BelowMinLevel), :Main, Base.Filesystem) === (r ? logger : nothing)
+                @test CoreLogging.current_logger_for_env(severity(Info), :Main, Base.Filesystem) === logger
             end
         end
     end
@@ -280,11 +280,12 @@ end
 @eval module LogLevelTest
     using Base.CoreLogging
 
-    struct MyLevel
+    struct MyLevel <: AbstractLogLevel
         level::Int
     end
 
-    Base.convert(::Type{LogLevel}, l::MyLevel) = LogLevel(l.level)
+    CoreLogging.severity(l::MyLevel) = l.level
+    #Base.convert(::Type{LogLevel}, l::MyLevel) = LogLevel(l.level) # FIXME - put test in Logging without AbstractLogLevel
 
     const critical = MyLevel(10000)
     const debug_verbose = MyLevel(-10000)
@@ -303,8 +304,8 @@ end
 
 @testset "SimpleLogger" begin
     # Log level limiting
-    @test min_enabled_level(SimpleLogger(devnull, Debug)) == Debug
-    @test min_enabled_level(SimpleLogger(devnull, Error)) == Error
+    @test min_enabled_level(SimpleLogger(devnull, Debug)) == severity(Debug)
+    @test min_enabled_level(SimpleLogger(devnull, Error)) == severity(Error)
 
     # Log limiting
     logger = SimpleLogger(devnull)
