@@ -4,7 +4,7 @@ module SparseVectorTests
 
 using Test
 using SparseArrays
-using SparseArrays: nonzeroinds, getcolptr
+using SparseArrays: nonzeroinds, getcolptr, isstored
 using LinearAlgebra
 using Random
 include("forbidproperties.jl")
@@ -33,6 +33,18 @@ x1_full[SparseArrays.nonzeroinds(spv_x1)] = nonzeros(spv_x1)
     @test SparseArrays.nonzeroinds(x) == [2, 5, 6]
     @test nonzeros(x) == [1.25, -0.75, 3.5]
     @test count(SparseVector(8, [2, 5, 6], [true,false,true])) == 2
+end
+
+@testset "isstored" begin
+    x = spv_x1
+    stored_inds = [2, 5, 6]
+    nonstored_inds = [1, 3, 4, 7, 8]
+    for i in stored_inds
+        @test isstored(x, i) == true
+    end
+    for i in nonstored_inds
+        @test isstored(x, i) == false
+    end
 end
 
 @testset "conversion to dense Array" begin

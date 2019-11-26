@@ -829,6 +829,10 @@ end
 
 getindex(x::AbstractSparseVector, ::Colon) = copy(x)
 
+function isstored(x::AbstractSparseVector, i::Integer)
+    return i in nonzeroinds(x)
+end
+
 ### show and friends
 
 function show(io::IO, ::MIME"text/plain", x::AbstractSparseVector)
