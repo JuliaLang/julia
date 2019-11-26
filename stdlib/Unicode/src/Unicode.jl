@@ -8,8 +8,9 @@ export graphemes
     Unicode.normalize(s::AbstractString; kwargs...)
     Unicode.normalize(s::AbstractString, normalform::Symbol)
 
-Normalize the string `s`. By default, canonical composition is performed without ensuring
-Unicode versioning stability (equivalent to passing `compose=true`).
+Normalize the string `s`. By default, canonical composition (`compose=true`) is performed without ensuring
+Unicode versioning stability (`compat=false`), which produces the shortest possible equivalent string
+but may introduce composition characters not present in earlier Unicode versions.
 
 Alternatively, one of the four "normal forms" of the Unicode standard can be specified:
 `normalform` can be `:NFC`, `:NFD`, `:NFKC`, or `:NFKD`.  Normal forms C
@@ -39,7 +40,7 @@ options (which all default to `false` except for `compose`) are specified:
   spaces; newlines are also converted to spaces unless a newline-conversion flag was
   specified
 * `rejectna=true`: throw an error if unassigned code points are found
-* `stable=true`: enforce Unicode Versioning Stability
+* `stable=true`: enforce Unicode versioning stability (never introduce characters missing from earlier Unicode versions)
 
 For example, NFKC corresponds to the options `compose=true, compat=true, stable=true`.
 
