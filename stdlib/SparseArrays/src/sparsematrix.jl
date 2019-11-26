@@ -197,7 +197,7 @@ function Base.isstored(A::AbstractSparseMatrixCSC, i::Integer, j::Integer)
 end
 
 Base.replace_in_print_matrix(A::AbstractSparseMatrix, i::Integer, j::Integer, s::AbstractString) =
-    isstored(A, i, j) ? s : Base.replace_with_centered_mark(s)
+    Base.isstored(A, i, j) ? s : Base.replace_with_centered_mark(s)
 
 function Base.show(io::IO, ::MIME"text/plain", S::AbstractSparseMatrixCSC)
     xnnz = nnz(S)
