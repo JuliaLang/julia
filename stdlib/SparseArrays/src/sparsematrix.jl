@@ -188,6 +188,7 @@ nzrange(S::AbstractSparseMatrixCSC, col::Integer) = getcolptr(S)[col]:(getcolptr
 nzrange(S::SparseMatrixCSCView, col::Integer) = nzrange(S.parent, S.indices[2][col])
 
 function Base.isstored(A::AbstractSparseMatrixCSC, i::Integer, j::Integer)
+    @boundscheck checkbounds(A, i, j)
     rows = rowvals(A)
     for istored in nzrange(A, j) # could do binary search if the row indices are sorted?
         i == rows[istored] && return true

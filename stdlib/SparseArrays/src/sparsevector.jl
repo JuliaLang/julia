@@ -830,6 +830,7 @@ end
 getindex(x::AbstractSparseVector, ::Colon) = copy(x)
 
 function Base.isstored(x::AbstractSparseVector, i::Integer)
+    @boundscheck checkbounds(x, i)
     return i in nonzeroinds(x)
 end
 
