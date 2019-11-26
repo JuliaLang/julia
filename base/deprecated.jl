@@ -194,9 +194,9 @@ end
 
 @eval Math begin
     macro horner(x, p...)
-        @warn "The `@horner` macro is deprecated. Use the `evalpoly` function instead."
+        @warn "The `@horner` macro is deprecated. Use the `evalpoly` function or `@evalpoly` macro instead."
         xesc, pesc = esc(x), esc.(p)
-        :(invoke(evalpoly, Tuple{Any, Tuple}, $xesc, ($(pesc...),)))
+        :(@evalpoly $xesc, $(pesc...),))
     end
 end
 
