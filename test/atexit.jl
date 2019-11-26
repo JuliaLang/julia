@@ -52,7 +52,7 @@ using Test
             """ => 1,
             # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
             """
-            atexit(() -> println("No error"))
+            atexit(() -> ("No error"))
             atexit(() -> exit(1))
             exit(22)
             """ => 1,
@@ -87,7 +87,7 @@ using Test
             """ => 13,
             # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
             """
-            atexit(() -> println("No error"))
+            atexit(() -> ("No error"))
             atexit(() -> exit(5))
             exit(22)
             """ => 5,
