@@ -111,7 +111,7 @@ JL_DLLEXPORT size_t ios_readprep(ios_t *from, size_t n);
 
 /* stream creation */
 JL_DLLEXPORT
-ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int trunc) JL_NOTSAFEPOINT;
+ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int trunc, int excl) JL_NOTSAFEPOINT;
 JL_DLLEXPORT ios_t *ios_mkstemp(ios_t *f, char *fname);
 JL_DLLEXPORT ios_t *ios_mem(ios_t *s, size_t initsize) JL_NOTSAFEPOINT;
 ios_t *ios_str(ios_t *s, char *str);

@@ -2856,7 +2856,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
                 const char *depstr = jl_string_data(dep);
                 if (!depstr[0])
                     continue;
-                ios_t *srctp = ios_file(&srctext, depstr, 1, 0, 0, 0);
+                ios_t *srctp = ios_file(&srctext, depstr, 1, 0, 0, 0, 0);
                 if (!srctp) {
                     jl_printf(JL_STDERR, "WARNING: could not cache source text for \"%s\".\n",
                               jl_string_data(dep));
@@ -3256,7 +3256,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t
 JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *mod_array)
 {
     ios_t f;
-    if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
+    if (ios_file(&f, fname, 1, 0, 0, 0, 0) == NULL) {
         return jl_get_exceptionf(jl_errorexception_type,
             "Cache file \"%s\" not found.\n", fname);
     }

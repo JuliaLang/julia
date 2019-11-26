@@ -223,25 +223,30 @@ fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)
 """
     open(filename::AbstractString; keywords...) -> IOStream
 
-Open a file in a mode specified by five boolean keyword arguments:
+Open a file in a mode specified by six boolean keyword arguments:
 
-| Keyword    | Description             | Default                                 |
-|:-----------|:-----------------------|:----------------------------------------|
-| `read`     | open for reading       | `!write`                                |
-| `write`    | open for writing       | `truncate \\| append`                   |
-| `create`   | create if non-existent | `!read & write \\| truncate \\| append` |
-| `truncate` | truncate to zero size  | `!read & write`                         |
-| `append`   | seek to end            | `false`                                 |
+| Keyword     | Description            | Default                                 |
+|:------------|:-----------------------|:----------------------------------------|
+| `read`      | open for reading       | `!write`                                |
+| `write`     | open for writing       | `truncate \\| append`                   |
+| `create`    | create if non-existent | `!read & write \\| truncate \\| append` |
+| `truncate`  | truncate to zero size  | `!read & write`                         |
+| `append`    | seek to end            | `false`                                 |
+| `exclusive` | ensure file creation   | `false`                                 |
 
 The default when no keywords are passed is to open files for reading only.
 Returns a stream for accessing the opened file.
+
+!!! compat "Julia 1.4"
+    The `exclusive` keyword argument requires Julia 1.4 or later.
 """
 function open(fname::AbstractString;
-    read     :: Union{Bool,Nothing} = nothing,
-    write    :: Union{Bool,Nothing} = nothing,
-    create   :: Union{Bool,Nothing} = nothing,
-    truncate :: Union{Bool,Nothing} = nothing,
-    append   :: Union{Bool,Nothing} = nothing,
+    read      :: Union{Bool,Nothing} = nothing,
+    write     :: Union{Bool,Nothing} = nothing,
+    create    :: Union{Bool,Nothing} = nothing,
+    truncate  :: Union{Bool,Nothing} = nothing,
+    append    :: Union{Bool,Nothing} = nothing,
+    exclusive :: Union{Bool,Nothing} = nothing,
 )
     flags = open_flags(
         read = read,
@@ -249,12 +254,13 @@ function open(fname::AbstractString;
         create = create,
         truncate = truncate,
         append = append,
+        exclusive = exclusive,
     )
     s = IOStream(string("<file ",fname,">"))
     systemerror("opening file $(repr(fname))",
                 ccall(:ios_file, Ptr{Cvoid},
-                      (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
-                      s.ios, fname, flags.read, flags.write, flags.create, flags.truncate) == C_NULL)
+                      (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint, Cint),
+                      s.ios, fname, flags.read, flags.write, flags.create, flags.truncate, flags.exclusive) == C_NULL)
     if flags.append
         systemerror("seeking to end of file $fname", ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0)
     end
@@ -264,7 +270,7 @@ end
 """
     open(filename::AbstractString, [mode::AbstractString]) -> IOStream
 
-Alternate syntax for open, where a string-based mode specifier is used instead of the five
+Alternate syntax for open, where a string-based mode specifier is used instead of the six
 booleans. The values of `mode` correspond to those from `fopen(3)` or Perl `open`, and are
 equivalent to setting the following boolean groups:
 

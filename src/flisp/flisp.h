@@ -426,7 +426,7 @@ struct _fl_context_t {
     int SCR_WIDTH;
     int HPOS, VPOS;
 
-    value_t iostreamsym, rdsym, wrsym, apsym, crsym, truncsym;
+    value_t iostreamsym, rdsym, wrsym, apsym, crsym, truncsym, exclsym;
     value_t instrsym, outstrsym;
     fltype_t *iostreamtype;
 

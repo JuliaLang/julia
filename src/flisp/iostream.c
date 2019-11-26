@@ -77,19 +77,20 @@ value_t fl_file(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     if (nargs < 1)
         argcount(fl_ctx, "file", nargs, 1);
-    int i, r=0, w=0, c=0, t=0, a=0;
+    int i, r=0, w=0, c=0, t=0, a=0, e=0;
     for(i=1; i < (int)nargs; i++) {
         if      (args[i] == fl_ctx->wrsym)    w = 1;
         else if (args[i] == fl_ctx->apsym)    { a = 1; w = 1; }
         else if (args[i] == fl_ctx->crsym)    { c = 1; w = 1; }
         else if (args[i] == fl_ctx->truncsym) { t = 1; w = 1; }
         else if (args[i] == fl_ctx->rdsym)    r = 1;
+        else if (args[i] == fl_ctx->exclsym)  e = 1;
     }
     if ((r|w|c|t|a) == 0) r = 1;  // default to reading
     value_t f = cvalue(fl_ctx, fl_ctx->iostreamtype, sizeof(ios_t));
     char *fname = tostring(fl_ctx, args[0], "file");
     ios_t *s = value2c(ios_t*, f);
-    if (ios_file(s, fname, r, w, c, t) == NULL)
+    if (ios_file(s, fname, r, w, c, t, e) == NULL)
         lerrorf(fl_ctx, fl_ctx->IOError, "file: could not open \"%s\"", fname);
     if (a) ios_seek_end(s);
     return f;
@@ -445,6 +446,7 @@ void iostream_init(fl_context_t *fl_ctx)
     fl_ctx->apsym = symbol(fl_ctx, ":append");
     fl_ctx->crsym = symbol(fl_ctx, ":create");
     fl_ctx->truncsym = symbol(fl_ctx, ":truncate");
+    fl_ctx->exclsym = symbol(fl_ctx, ":exclusive");
     fl_ctx->instrsym = symbol(fl_ctx, "*input-stream*");
     fl_ctx->outstrsym = symbol(fl_ctx, "*output-stream*");
     fl_ctx->iostreamtype = define_opaque_type(fl_ctx->iostreamsym, sizeof(ios_t),
