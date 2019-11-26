@@ -4,7 +4,7 @@ module SparseVectorTests
 
 using Test
 using SparseArrays
-using SparseArrays: nonzeroinds, getcolptr, isstored
+using SparseArrays: nonzeroinds, getcolptr
 using LinearAlgebra
 using Random
 include("forbidproperties.jl")
@@ -40,10 +40,10 @@ end
     stored_inds = [2, 5, 6]
     nonstored_inds = [1, 3, 4, 7, 8]
     for i in stored_inds
-        @test isstored(x, i) == true
+        @test Base.isstored(x, i) == true
     end
     for i in nonstored_inds
-        @test isstored(x, i) == false
+        @test Base.isstored(x, i) == false
     end
 end
 

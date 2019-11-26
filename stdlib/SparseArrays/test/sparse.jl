@@ -4,7 +4,7 @@ module SparseTests
 
 using Test
 using SparseArrays
-using SparseArrays: getcolptr, nonzeroinds, isstored, _show_with_braille_patterns
+using SparseArrays: getcolptr, nonzeroinds, _show_with_braille_patterns
 using LinearAlgebra
 using Printf: @printf # for debug
 using Random
@@ -2212,10 +2212,10 @@ end
     stored_indices = [CartesianIndex(i, j) for (i, j) in zip(I, J)]
     unstored_indices = [c for c in CartesianIndices((m, n)) if !(c in stored_indices)]
     for c in stored_indices
-        @test isstored(A, c[1], c[2]) == true
+        @test Base.isstored(A, c[1], c[2]) == true
     end
     for c in unstored_indices
-        @test isstored(A, c[1], c[2]) == false
+        @test Base.isstored(A, c[1], c[2]) == false
     end
 end
 
