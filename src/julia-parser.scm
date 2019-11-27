@@ -1128,7 +1128,7 @@
                   (error (string "invalid name \"" ex "\""))
                   (parse-call-chain s ex #f)))
          (decl-sig
-          (if (and is-func (eq? (peek-token s) '|::|))
+          (if (and (not anon) is-func (eq? (peek-token s) '|::|))
               (begin (take-token s)
                      `(|::| ,sig ,(parse-call s)))
               sig)))
