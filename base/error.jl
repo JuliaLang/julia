@@ -60,6 +60,7 @@ rethrow() = ccall(:jl_rethrow, Bottom, ())
 rethrow(e) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
 
 struct InterpreterIP
+    native_ip::Ptr{Cvoid}
     code::Union{CodeInfo,Core.MethodInstance,Nothing}
     stmt::Csize_t
     mod::Union{Module,Nothing}
@@ -87,7 +88,8 @@ function _reformat_bt(bt, bt2)
         if tag == 1 # JL_BT_INTERP_FRAME_TAG
             code = bt2[j]
             mod = njlvalues == 2 ? bt2[j+1] : nothing
-            push!(ret, InterpreterIP(code, header, mod))
+            native_ip = bt[i + 2 + njlvalues]
+            push!(ret, InterpreterIP(native_ip, code, header, mod))
         else
             # Tags we don't know about are an error
             throw(ArgumentError("Unexpected extended backtrace entry tag $tag at bt[$i]"))
