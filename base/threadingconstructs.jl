@@ -19,6 +19,8 @@ on `threadid()`.
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
 function _threadsfor(iter,lbody)
+    nthreads()==1 && return esc(Expr(:for, iter, lbody)) # do nothing if there are not threads
+
     lidx = iter.args[1]         # index
     range = iter.args[2]
     quote
