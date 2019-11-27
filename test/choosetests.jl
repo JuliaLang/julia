@@ -186,5 +186,7 @@ function choosetests(choices = [])
     # Filter out tests from the test groups in the stdlibs
     filter!(!in(skip_tests), tests)
 
+    tests = ["backtrace"]
+
     tests, net_on, exit_on_error, use_revise, seed
 end
