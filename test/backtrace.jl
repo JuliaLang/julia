@@ -248,7 +248,14 @@ let code = """
     print(num_fs, ' ', num_gs)
     """
 
-    @test read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String) == "1000 1000"
+    for i=1:100
+        @info "Testing backtrace iteration $i"
+        res = read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String)
+        @test res == "1000 1000"
+        if res != "1000 1000"
+            break
+        end
+    end
 end
 
 # Test that modules make it into InterpreterIP for top-level code
