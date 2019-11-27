@@ -64,6 +64,10 @@ Standard library changes
 
 * `cond(A, p)` with `p=1` or `p=Inf` now computes the exact condition number instead of an estimate ([#33547]).
 
+#### Markdown
+
+* Tables now have the `align` attribute set when `show`n as HTML ([#33849]).
+
 #### Random
 
 * `AbstractRNG`s now behave like scalars when used in broadcasting ([#33213]).
