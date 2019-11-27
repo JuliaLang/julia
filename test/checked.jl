@@ -4,7 +4,6 @@
 
 import Base: checked_abs, checked_neg, checked_add, checked_sub, checked_mul,
              checked_div, checked_rem, checked_fld, checked_mod, checked_cld,
-             checked_lcm,
              add_with_overflow, sub_with_overflow, mul_with_overflow
 
 # checked operations
@@ -167,10 +166,6 @@ import Base: checked_abs, checked_neg, checked_add, checked_sub, checked_mul,
     @test checked_cld(typemin(T), T(1)) === typemin(T)
     @test_throws DivideError checked_cld(typemin(T), T(0))
     @test_throws DivideError checked_cld(typemin(T), T(-1))
-
-    @test checked_lcm(T(-4), T(-6)) === T(12)
-    @test_throws OverflowError checked_lcm(typemax(T), T(2))
-    @test checked_lcm(T[2, 4, 6]) === T(12)
 
 end
 
