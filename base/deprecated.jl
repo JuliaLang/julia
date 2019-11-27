@@ -196,7 +196,7 @@ end
     macro horner(x, p...)
         @warn "The `@horner` macro is deprecated. Use the `evalpoly` function or `@evalpoly` macro instead."
         xesc, pesc = esc(x), esc.(p)
-        :(@evalpoly $xesc, $(pesc...),))
+        :(@evalpoly($xesc, $(pesc...),)))
     end
 end
 
