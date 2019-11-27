@@ -182,7 +182,6 @@ end
 
 
 @testset "tokenizing juxtaposed numbers and dotted operators/identifiers" begin
-    @test (t->t.val=="1234"    && t.kind == Tokens.INTEGER )(tok("1234.+1"))
     @test (t->t.val=="1234"    && t.kind == Tokens.INTEGER )(tok("1234 .+1"))
     @test (t->t.val=="1234.0"  && t.kind == Tokens.FLOAT   )(tok("1234.0.+1"))
     @test (t->t.val=="1234.0"  && t.kind == Tokens.FLOAT   )(tok("1234.0 .+1"))
@@ -355,8 +354,6 @@ end
     @test tok("1.").kind == Tokens.FLOAT
     @test tok("1.\"text\" ").kind == Tokens.FLOAT
 
-    @test tok("1.+ ").kind == Tokens.INTEGER
-    @test tok("1.⤋").kind  == Tokens.INTEGER
     @test tok("1..").kind  == Tokens.INTEGER
     @test T.kind.(collect(tokenize("1f0./1"))) == [T.FLOAT, T.OP, T.INTEGER, T.ENDMARKER]
 end
@@ -405,7 +402,6 @@ end
     @test tok("2f+0").kind   == Tokens.FLOAT
     @test tok("2048f0").kind == Tokens.FLOAT
     @test tok("1.:0").kind == Tokens.FLOAT
-    @test tok("1.?").kind == Tokens.FLOAT
     @test tok("0x00p2").kind == Tokens.FLOAT
     @test tok("0x00P2").kind == Tokens.FLOAT
     @test tok("0x0.00p23").kind == Tokens.FLOAT
@@ -551,4 +547,15 @@ end
     @test Tokens.isoperator(tok(s, 1).kind)
     @test untokenize(collect(tokenize(s, Tokens.RawToken))[1], s) == s
 end
+
+@testset "invalid float juxt" begin 
+    s = "1.+2"
+    @test tok(s, 1).kind == Tokens.ERROR
+    @test Tokens.isoperator(tok(s, 2).kind) 
+    @test (t->t.val=="1234."    && t.kind == Tokens.ERROR )(tok("1234.+1")) # requires space before '.'
+    @test tok("1.+ ").kind == Tokens.ERROR 
+    @test tok("1.⤋").kind  == Tokens.ERROR
+    @test tok("1.?").kind == Tokens.ERROR
+end
+
 
