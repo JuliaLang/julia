@@ -611,6 +611,9 @@ function lex_digit(l::Lexer, kind)
     if pc == '.'
         if ppc == '.'
             return emit(l, kind)
+        elseif is_operator_start_char(ppc) && ppc !== ':'
+            readchar(l)
+            return emit_error(l)
         elseif (!(isdigit(ppc) ||
             iswhitespace(ppc) ||
             is_identifier_start_char(ppc)
