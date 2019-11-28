@@ -136,6 +136,11 @@ If we also wanted to test the debug messages, these need to be enabled with the
 
     @test_logs (:info,"Doing foo with n=2") (:debug,"Iteration 1") (:debug,"Iteration 2") min_level=Debug foo(2)
 
+In case the logs get huge probably we want to test if only a particular set of
+messages is contained, here the `match_mode` keyword becomes useful:
+
+    @test_logs (:info,) (:debug,"Iteration 42") min_level=Debug match_mode=:any foo(100)
+
 The macro may be chained with `@test` to also test the returned value:
 
     @test (@test_logs (:info,"Doing foo with n=2") foo(2)) == 42
