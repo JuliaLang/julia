@@ -18,7 +18,7 @@ on `threadid()`.
 """
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
-function _threadsfor(iter,lbody;simd=false)
+function _threadsfor(iter,lbody;simd=false,ivdep=false)
     lidx = iter.args[1]         # index
     range = iter.args[2]
     quote
@@ -56,7 +56,12 @@ function _threadsfor(iter,lbody;simd=false)
                 end
             end
             # run this thread's iterations
-            if $simd == true
+            if $simd == true && $ivdep == true
+                @simd ivdep for i = f:l
+                    local $(esc(lidx)) = @inbounds r[i]
+                    $(esc(lbody))
+                end
+            elseif $simd == true
                 @simd for i = f:l
                     local $(esc(lidx)) = @inbounds r[i]
                     $(esc(lbody))
@@ -98,8 +103,14 @@ macro threads(args...)
     end
     if ex.head === :for
         return _threadsfor(ex.args[1], ex.args[2])
-    elseif ex.head === :macrocall && ex.args[1] === Symbol("@simd") && isa(ex.args[3], Expr) && ex.args[3].head === :for
-        return _threadsfor(ex.args[3].args[1], ex.args[3].args[2]; simd=true)
+    elseif ex.head === :macrocall && ex.args[1] === Symbol("@simd")
+        if isa(ex.args[3], Expr) && ex.args[3].head === :for
+            return _threadsfor(ex.args[3].args[1], ex.args[3].args[2]; simd=true)
+        elseif ex.args[3] === :ivdep && isa(ex.args[4], Expr) && ex.args[4].head === :for
+            return _threadsfor(ex.args[4].args[1], ex.args[4].args[2]; simd=true, ivdep=true)
+        else
+            throw(ArgumentError("unrecognized argument to @threads"))
+        end
     else
         throw(ArgumentError("unrecognized argument to @threads"))
     end
