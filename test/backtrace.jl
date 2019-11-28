@@ -237,11 +237,7 @@ let code = """
         # Dump backtrace info to ease debugging via CI logs
         println(stderr, "Raw backtrace dump")
         for ip in bt
-            if ip isa Base.InterpreterIP
-                println(stderr, ip, " at ", ip.native_ip)
-            else
-                println(stderr, ip)
-            end
+            println(stderr, ip)
             for frame in StackTraces.lookup(ip)
                 println(stderr, "  ", frame)
             end

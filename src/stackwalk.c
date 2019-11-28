@@ -124,7 +124,7 @@ int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
             jl_bt_element_t *bt_entry = bt_data + n;
             size_t entry_sz = 0;
             if (add_interp_frames && jl_is_enter_interpreter_frame(call_ip) &&
-                (entry_sz = jl_capture_interp_frame(bt_entry, call_ip, thesp, thefp, maxsize-n)) != 0) {
+                (entry_sz = jl_capture_interp_frame(bt_entry, thesp, thefp, maxsize-n)) != 0) {
                 n += entry_sz;
             } else {
                 bt_entry->uintptr = call_ip;
