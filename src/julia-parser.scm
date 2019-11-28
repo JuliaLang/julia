@@ -2473,5 +2473,6 @@
                (begin (take-token s) (skip-loop (peek-token s)))))
          (if (eof-object? (peek-token s))
              (eof-object)
-             (let ((res ((if (null? production) parse-stmts (car production))
-              s))) (io.seek (ts:port s) (aref s 5)) res)))))
+             (let ((res ((if (null? production) parse-stmts (car production)) s)))
+               (io.seek (ts:port s) (aref s 5))
+               res)))))
