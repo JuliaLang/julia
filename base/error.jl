@@ -99,6 +99,8 @@ function _reformat_bt(bt, bt2)
     ret
 end
 
+_previous_bt = nothing
+
 """
     backtrace()
 
@@ -109,7 +111,9 @@ function backtrace()
     # skip frame for backtrace(). Note that for this to work properly,
     # backtrace() itself must not be interpreted nor inlined.
     skip = 1
-    bt1, bt2 = ccall(:jl_backtrace_from_here, Ref{SimpleVector}, (Cint, Cint), false, skip)
+    bts = ccall(:jl_backtrace_from_here, Ref{SimpleVector}, (Cint, Cint), false, skip)
+    bt1,bt2 = bts
+    global _previous_bt = bts
     return _reformat_bt(bt1::Vector{Ptr{Cvoid}}, bt2::Vector{Any})
 end
 

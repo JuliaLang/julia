@@ -269,15 +269,15 @@ let code = raw"""
     end
 
     f29695(c) = g29695(c)
-    g29695(c) = c >= 1000 ? (return raw_bt()) : f29695(c + 1)
-    bt1,bt2 = f29695(1)
-    bt = Base._reformat_bt(bt1, bt2)
+    g29695(c) = c >= 1000 ? (return backtrace()) : f29695(c + 1)
+    bt = f29695(1)
     meth_names = [ip.code.def.name for ip in bt
                   if ip isa Base.InterpreterIP && ip.code isa Core.MethodInstance]
     num_fs = sum(meth_names .== :f29695)
     num_gs = sum(meth_names .== :g29695)
     if num_fs != 1000 || num_gs != 1000
         # Dump backtrace info to ease debugging via CI logs
+        bt1,bt2 = Base._previous_bt
         dump_bt(bt1,bt2)
         println(stderr, "Formatted backtrace dump")
         Base.show_backtrace(stderr, bt)
