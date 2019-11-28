@@ -225,23 +225,60 @@ let trace = try
 end
 
 # issue #29695 (see also test for #28442)
-let code = """
+let code = raw"""
+    raw_bt() = ccall(:jl_backtrace_from_here, Ref{Core.SimpleVector}, (Cint, Cint), false, 0)
+    function dump_bt(bt, bt2)
+        i, j = 1, 1
+        while i <= length(bt)
+            ip = bt[i]::Ptr{Cvoid}
+            if UInt(ip) != (-1 % UInt) # See also jl_bt_is_native
+                # native frame
+                println(ip)
+                for frame in StackTraces.lookup(ip)
+                    println(stderr, "  ", frame)
+                end
+                i += 1
+                continue
+            end
+            # Extended backtrace entry
+            entry_metadata = reinterpret(UInt, bt[i+1])
+            njlvalues =  entry_metadata & 0x7
+            nuintvals = (entry_metadata >> 3) & 0x7
+            tag       = (entry_metadata >> 6) & 0xf
+            header    =  entry_metadata >> 10
+            if tag == 1 # JL_BT_INTERP_FRAME_TAG
+                code = bt2[j]
+                mod = njlvalues == 2 ? bt2[j+1] : nothing
+                interp_ip = Base.InterpreterIP(code, header, mod)
+                println(stderr, interp_ip)
+                N = Int(2 + njlvalues + nuintvals)
+                for k=0:N-1
+                    println(stderr, "- ", bt[i+k])
+                end
+                for frame in StackTraces.lookup(interp_ip)
+                    println(stderr, "  ", frame)
+                end
+            else
+                # Tags we don't know about are an error
+                throw(ArgumentError("Unexpected extended backtrace entry tag $tag at bt[$i]"))
+            end
+            # See jl_bt_entry_size
+            j += njlvalues
+            i += Int(2 + njlvalues + nuintvals)
+        end
+    end
+
     f29695(c) = g29695(c)
-    g29695(c) = c >= 1000 ? (return backtrace()) : f29695(c + 1)
-    bt = f29695(1)
+    g29695(c) = c >= 1000 ? (return raw_bt()) : f29695(c + 1)
+    bt1,bt2 = f29695(1)
+    bt = Base._reformat_bt(bt1, bt2)
     meth_names = [ip.code.def.name for ip in bt
                   if ip isa Base.InterpreterIP && ip.code isa Core.MethodInstance]
     num_fs = sum(meth_names .== :f29695)
     num_gs = sum(meth_names .== :g29695)
     if num_fs != 1000 || num_gs != 1000
         # Dump backtrace info to ease debugging via CI logs
-        println(stderr, "Raw backtrace dump")
-        for ip in bt
-            println(stderr, ip)
-            for frame in StackTraces.lookup(ip)
-                println(stderr, "  ", frame)
-            end
-        end
+        dump_bt(bt1,bt2)
         println(stderr, "Formatted backtrace dump")
         Base.show_backtrace(stderr, bt)
     end
@@ -252,9 +289,6 @@ let code = """
         @info "Testing backtrace iteration $i"
         res = read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String)
         @test res == "1000 1000"
-        if res != "1000 1000"
-            break
-        end
     end
 end
 
