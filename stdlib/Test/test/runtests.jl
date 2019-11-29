@@ -1,5 +1,4 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-
 using Test, Distributed, Random
 using Test: guardseed
 
@@ -127,6 +126,12 @@ let fails = @testset NoThrowTestSet begin
         @test startswith(str1, str2)
         # 20 - Fail - endswith
         @test endswith(str1, str2)
+        # 21 - Fail - isa
+        @test str1 isa Int
+        # 22 - Fail - isa
+        @test !(Complex isa Type{Complex})
+        # 23 - Fail - isa
+        @test !(Pair{(:a,), Pair{(:a,),Tuple{Int}}} isa Type{Pair{names,T}} where {names, T<:Pair{names,<:Tuple}})
     end
     for fail in fails
         @test fail isa Test.Fail
@@ -230,6 +235,21 @@ let fails = @testset NoThrowTestSet begin
     let str = sprint(show, fails[20])
         @test occursin("Expression: endswith(str1, str2)", str)
         @test occursin("Evaluated: endswith(\"Hello\", \"World\")", str)
+    end
+
+    let str = sprint(show, fails[21])
+        @test occursin("Expression: str1 isa Int", str)
+        @test occursin("Evaluated: String <: Int64", str)
+    end
+
+    let str = sprint(show, fails[22])
+        @test occursin("Expression: !(Complex isa Type{Complex})", str)
+        @test occursin("Evaluated: !(UnionAll <: Type{Complex})", str)
+    end
+
+    let str = sprint(show, fails[23])
+        @test occursin("Expression: !(Pair{(:a,), Pair{(:a,), Tuple{Int}}} isa (Type{Pair{names, T}} where {names, T <: Pair{names, <:Tuple}}))", str)
+        @test occursin("Evaluated: !(DataType <: Type{Pair{names,T}} where T<:(Pair{names,", str)
     end
 end
 

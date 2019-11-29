@@ -247,6 +247,10 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
             end
             quoted_args[i] = a
             quoted_args[i+2] = b
+            if op==isa
+                quoted.args[1] = typeof(a)
+                quoted.args[2] = :(<:)
+            end
             i += 2
         end
 
