@@ -226,14 +226,21 @@ end
 
 # issue #29695 (see also test for #28442)
 let code = raw"""
-    raw_bt() = ccall(:jl_backtrace_from_here, Ref{Core.SimpleVector}, (Cint, Cint), false, 0)
+    f29695(c) = g29695(c)
+    g29695(c) = c >= 1000 ? (return backtrace()) : f29695(c + 1)
+    bt = f29695(1)
+    meth_names = [ip.code.def.name for ip in bt
+                  if ip isa Base.InterpreterIP && ip.code isa Core.MethodInstance]
+    num_fs = sum(meth_names .== :f29695)
+    num_gs = sum(meth_names .== :g29695)
+
     function dump_bt(bt, bt2)
         i, j = 1, 1
         while i <= length(bt)
             ip = bt[i]::Ptr{Cvoid}
             if UInt(ip) != (-1 % UInt) # See also jl_bt_is_native
                 # native frame
-                println(ip)
+                println(stderr, ip)
                 for frame in StackTraces.lookup(ip)
                     println(stderr, "  ", frame)
                 end
@@ -268,13 +275,6 @@ let code = raw"""
         end
     end
 
-    f29695(c) = g29695(c)
-    g29695(c) = c >= 1000 ? (return backtrace()) : f29695(c + 1)
-    bt = f29695(1)
-    meth_names = [ip.code.def.name for ip in bt
-                  if ip isa Base.InterpreterIP && ip.code isa Core.MethodInstance]
-    num_fs = sum(meth_names .== :f29695)
-    num_gs = sum(meth_names .== :g29695)
     if num_fs != 1000 || num_gs != 1000
         # Dump backtrace info to ease debugging via CI logs
         bt1,bt2 = Base._previous_bt
