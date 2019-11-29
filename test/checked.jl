@@ -332,4 +332,5 @@ end
 
     @test checked_mul(UInt128(3), UInt128(4)) === UInt128(12)
     @test_throws OverflowError checked_mul(UInt128(2)^127, UInt128(2))
+  
 end
