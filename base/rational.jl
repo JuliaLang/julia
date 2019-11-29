@@ -13,11 +13,13 @@ struct Rational{T<:Integer} <: Real
     function Rational{T}(num::Integer, den::Integer) where T<:Integer
         num == den == zero(T) && __throw_rational_argerror_zero(T)
         # issue #32569
-        if T <: Signed
-            signbit(den) && signbit(-den) && __throw_rational_argerror_typemin(T)
+        if T<:Signed && signbit(den)
+            den = -den
+            signbit(den) && __throw_rational_argerror_typemin(T)
+            num = -num
         end
-        num2, den2 = signbit(den) ? divgcd(-num, -den) : divgcd(num, den)
-        new(num2, den2)
+        num2, den2 = divgcd(num, den)
+        return new(num2, den2)
     end
 end
 @noinline __throw_rational_argerror_zero(T) = throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
