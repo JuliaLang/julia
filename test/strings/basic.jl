@@ -20,6 +20,11 @@ using Random
     @test s == "ab"
 
     @test isempty(string())
+    @test !isempty("abc")
+    @test !isempty("∀∃")
+    @test !isempty(GenericString("∀∃"))
+    @test isempty(GenericString(""))
+    @test !isempty(GenericString("abc"))
     @test eltype(GenericString) == Char
     @test firstindex("abc") == 1
     @test cmp("ab","abc") == -1
