@@ -40,6 +40,10 @@
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
 #endif
 
+#if JL_LLVM_VERSION >= 100000
+#include <llvm/Support/CodeGen.h>
+#endif
+
 namespace llvm {
     extern Pass *createLowerSimdLoopPass();
 }
@@ -72,6 +76,10 @@ using namespace llvm;
 #include "julia_internal.h"
 #include "jitlayers.h"
 #include "julia_assert.h"
+
+#if JL_LLVM_VERSION < 100000
+static const TargetMachine::CodeGenFileType CGFT_ObjectFile = TargetMachine::CGFT_ObjectFile;
+#endif
 
 RTDyldMemoryManager* createRTDyldMemoryManager(void);
 
@@ -1029,11 +1037,11 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
         PM.add(createBitcodeWriterPass(bc_OS));
 #if JL_LLVM_VERSION >= 70000
     if (obj_fname)
-        if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, TargetMachine::CGFT_ObjectFile, false))
+        if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CGFT_ObjectFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
 #else
     if (obj_fname)
-        if (TM->addPassesToEmitFile(PM, obj_OS, TargetMachine::CGFT_ObjectFile, false))
+        if (TM->addPassesToEmitFile(PM, obj_OS, CGFT_ObjectFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
 #endif
 
