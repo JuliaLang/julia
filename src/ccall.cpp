@@ -1189,7 +1189,7 @@ std::string generate_func_sig(const char *fname)
                 }
             }
 
-            t = julia_struct_to_llvm(tti, unionall_env, &isboxed);
+            t = julia_struct_to_llvm(tti, unionall_env, &isboxed, llvmcall);
             if (t == NULL || t == T_void) {
                 return make_errmsg(fname, i + 1, " doesn't correspond to a C type");
             }
@@ -1320,7 +1320,7 @@ static bool verify_ref_type(jl_codectx_t &ctx, jl_value_t* ref, jl_unionall_t *u
 
 static const std::string verify_ccall_sig(jl_value_t *&rt, jl_value_t *at,
                                           jl_unionall_t *unionall_env, jl_svec_t *sparam_vals,
-                                          Type *&lrt, bool &retboxed, bool &static_rt)
+                                          Type *&lrt, bool &retboxed, bool &static_rt, bool llvmcall=false)
 {
     JL_TYPECHK(ccall, type, rt);
     JL_TYPECHK(ccall, simplevector, at);
@@ -1330,7 +1330,7 @@ static const std::string verify_ccall_sig(jl_value_t *&rt, jl_value_t *at,
         rt = (jl_value_t*)jl_any_type;
     }
 
-    lrt = julia_struct_to_llvm(rt, unionall_env, &retboxed);
+    lrt = julia_struct_to_llvm(rt, unionall_env, &retboxed, llvmcall);
     if (lrt == NULL)
         return "return type doesn't correspond to a C type";
 
@@ -1451,7 +1451,9 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
       rt, at, unionall,
       ctx.spvals_ptr == NULL ? ctx.linfo->sparam_vals : NULL,
       /* outputs: */
-      lrt, retboxed, static_rt);
+      lrt, retboxed, static_rt,
+      /* optional arguments */
+      llvmcall);
     if (err.empty()) {
         // some extra checks for ccall
         if (!retboxed && static_rt) {
@@ -1508,7 +1510,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             isboxed = false;
         }
         else {
-            largty = julia_struct_to_llvm(tti, unionall, &isboxed);
+            largty = julia_struct_to_llvm(tti, unionall, &isboxed, llvmcall);
         }
         if (isboxed) {
             ary = boxed(ctx, argv[0]);
