@@ -12,7 +12,6 @@ struct Rational{T<:Integer} <: Real
 
     function Rational{T}(num::Integer, den::Integer) where T<:Integer
         num == den == zero(T) && __throw_rational_argerror_zero(T)
-        # issue #32569
         if T<:Signed && signbit(den)
             den = -den
             signbit(den) && __throw_rational_argerror_typemin(T)
