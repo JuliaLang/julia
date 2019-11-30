@@ -1711,19 +1711,18 @@ g26826(x) = getfield26826(x, :a, :b)
 # If this test is broken (especially if inference is getting a correct, but loose result,
 # like a Union) then it's potentially an indication that the optimizer isn't hitting the
 # InferenceResult cache properly for varargs methods.
-typed_code = Core.Compiler.code_typed(f26826, (Float64,))[1].first
-found_well_typed_getfield_call = false
-let i
+let ct = Core.Compiler.code_typed(f26826, (Float64,))[1]
+    typed_code, retty = ct.first, ct.second
+    found_poorly_typed_getfield_call = false
     for i = 1:length(typed_code.code)
         stmt = typed_code.code[i]
         rhs = Meta.isexpr(stmt, :(=)) ? stmt.args[2] : stmt
-        if Meta.isexpr(rhs, :call) && rhs.args[1] == GlobalRef(Base, :getfield) && typed_code.ssavaluetypes[i] === Float64
-            global found_well_typed_getfield_call = true
+        if Meta.isexpr(rhs, :call) && rhs.args[1] == GlobalRef(Base, :getfield) && typed_code.ssavaluetypes[i] !== Float64
+            found_poorly_typed_getfield_call = true
         end
     end
+    @test !found_poorly_typed_getfield_call && retty === Float64
 end
-
-@test found_well_typed_getfield_call
 
 # 27059 fix fieldtype vararg and union handling
 
@@ -2482,3 +2481,7 @@ end
 @test Base.return_types(g33768, ()) == Any[Any]
 @test_throws ArgumentError h33768()
 @test Base.return_types(h33768, ()) == Any[Union{}]
+
+# constant prop of `Symbol("")`
+f_getf_computed_symbol(p) = getfield(p, Symbol("first"))
+@test Base.return_types(f_getf_computed_symbol, Tuple{Pair{Int8,String}}) == [Int8]
