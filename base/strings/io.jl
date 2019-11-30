@@ -107,9 +107,6 @@ function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     String(resize!(s.data, s.size))
 end
 
-# CategoricalArrays extends this
-function tostr_sizehint end
-
 function _str_sizehint(x)
     if x isa Float64
         return 20
