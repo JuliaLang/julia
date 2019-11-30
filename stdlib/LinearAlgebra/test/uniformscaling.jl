@@ -345,4 +345,37 @@ end
     @test dot([x], λ*I, [y]) ≈ dot(x, λ, y) ≈ dot(x, λ*y)
 end
 
+@testset "Factorization solutions" begin
+    J = complex(randn(),randn()) * I
+    qrp = A -> qr(A, Val(true))
+
+    # thin matrices
+    X = randn(3,2)
+    Z = pinv(X)
+    for fac in (qr,qrp,svd)
+        F = fac(X)
+        @test @inferred(F \ I) ≈ Z
+        @test @inferred(F \ J) ≈ Z * J
+    end
+
+    # square matrices
+    X = randn(3,3)
+    X = X'X + rand()I # make positive definite for cholesky
+    Z = pinv(X)
+    for fac in (bunchkaufman,cholesky,lu,qr,qrp,svd)
+        F = fac(X)
+        @test @inferred(F \ I) ≈ Z
+        @test @inferred(F \ J) ≈ Z * J
+    end
+
+    # fat matrices - only rank-revealing variants
+    X = randn(2,3)
+    Z = pinv(X)
+    for fac in (qrp,svd)
+        F = fac(X)
+        @test @inferred(F \ I) ≈ Z
+        @test @inferred(F \ J) ≈ Z * J
+    end
+end
+
 end # module TestUniformscaling
