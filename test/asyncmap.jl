@@ -5,11 +5,35 @@ using Random
 # Test asyncmap
 @test allunique(asyncmap(x->(sleep(1.0);objectid(current_task())), 1:10))
 
-# num tasks
-@test length(unique(asyncmap(x->(yield();objectid(current_task())), 1:20; ntasks=5))) == 5
+# num tasks; note that ntasks was reinterpreted as the max allowed concurrent
+# tasks instead of the number of tasks objects.
+@test length(unique(asyncmap(x->(yield();objectid(current_task())), 1:20; ntasks=5))) == 20
+
+test_ntasks(itr, n) = let concur = 0, max_concur = 0
+    asyncmap(itr; ntasks=n) do _
+        concur += 1
+        max_concur = max(concur, max_concur)
+        yield()
+        concur -= 1
+    end
+
+    m = if n isa Function
+        n()
+    else
+        (n === 0 ? 100 : n)
+    end
+
+    max_concur, m
+end
+
+(max_concur, actual) = test_ntasks(1:20, 5)
+@test max_concur == actual
 
 # default num tasks
-@test length(unique(asyncmap(x->(yield();objectid(current_task())), 1:200))) == 100
+@test length(unique(asyncmap(x->(yield();objectid(current_task())), 1:200))) == 200
+
+(max_concur, actual) = test_ntasks(1:200, 0)
+@test max_concur == actual
 
 # ntasks as a function
 let nt=0
@@ -18,7 +42,10 @@ let nt=0
                                            # nt_func() will be called initially once and then for every
                                            # iteration
 end
-@test length(unique(asyncmap(x->(yield();objectid(current_task())), 1:200; ntasks=nt_func))) == 7
+@test length(unique(asyncmap(x->(yield();objectid(current_task())), 1:200; ntasks=nt_func))) == 200
+
+(max_concur, actual) = test_ntasks(1:200, nt_func)
+@test max_concur == actual
 
 # batch mode tests
 let ctr=0
@@ -61,3 +88,28 @@ generic_map_tests(asyncmap, asyncmap!)
 run_map_equivalence_tests(asyncmap)
 using Base.Unicode: uppercase
 @test asyncmap(uppercase, "Hello World!") == map(uppercase, "Hello World!")
+
+# Inner exceptions
+@test_throws CompositeException asyncmap(_ -> error("foo"), 1:5)
+@test_throws CompositeException asyncmap(_ -> error("foo"), 1:5, ntasks=2)
+@test_throws CompositeException asyncmap(x -> x == 3 && error("foo"), 1:5, ntasks=2)
+@test_throws CompositeException asyncmap(1:4, batch_size=2) do v
+    map(u -> iseven(u) && error("foo"), v)
+end
+
+unpack(ex::CapturedException) = unpack(ex.ex)
+unpack(ex::TaskFailedException) = unpack(ex.task.exception)
+unpack(ex) = ex
+
+# Make sure exceptions are thrown in the order they happen
+chnl = Channel()
+try
+    asyncmap(1:2) do i
+        i == 1 && take!(chnl)
+        close(chnl)
+        error("first")
+    end
+catch ex
+    @test length(ex.exceptions) == 2
+    @test unpack(ex.exceptions[1]).msg == "first"
+end
