@@ -35,3 +35,6 @@ getall get: $(addprefix get-, $(STDLIBS_EXT))
 install: $(addprefix install-, $(STDLIBS_EXT)) $(STDLIBS_LINK_TARGETS)
 clean: $(addprefix clean-, $(STDLIBS_EXT)) $(CLEAN_TARGETS)
 distclean: $(addprefix distclean-, $(STDLIBS_EXT)) clean
+
+DEP_LIBS_STAGED := $(STDLIBS_EXT)
+include $(JULIAHOME)/deps/tools/uninstallers.mk
