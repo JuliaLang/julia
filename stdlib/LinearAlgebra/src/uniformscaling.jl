@@ -122,7 +122,7 @@ isposdef(J::UniformScaling) = isposdef(J.λ)
 (-)(J::UniformScaling, B::BitArray{2})      = J - Array(B)
 (-)(A::AbstractMatrix, J::UniformScaling)   = A + (-J)
 
-(^)(A::UniformScaling, x::Number)           = (A.λ)^x * I
+(^)(A::UniformScaling, x::Number)           = UniformScaling((A.λ)^x)
 
 # Unit{Lower/Upper}Triangular matrices become {Lower/Upper}Triangular under
 # addition with a UniformScaling
