@@ -1160,7 +1160,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
             }
             void *fptr;
             if (fvars.hascloning) {
-                fptr = (void*)(base + offset);
+                fptr = (void*)(fbase + offset);
             } else {
                 fptr = ((void**)fbase)[i];
             }
