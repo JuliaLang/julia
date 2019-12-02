@@ -56,7 +56,9 @@ Module.initialize_jscall_runtime = function() {
     jl_true = jl_get_global(main_module, "true")
     jl_false = jl_get_global(main_module, "false")
 
-    let js_module = jl_get_global(main_module, "JS");
+    let base_module = jl_get_global(main_module, "Base");
+    assert(base_module != 0);
+    let js_module = jl_get_global(base_module, "JS");
     assert(js_module != 0);
     jl_jsundefined_type = jl_get_global(js_module, "JSUndefined")
     jl_jsundefined = jl_get_global(js_module, "undefined")
