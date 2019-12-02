@@ -261,14 +261,14 @@ julia> x = :(1 + 2);
 julia> e = quote quote $x end end
 quote
     #= none:1 =#
-    $(Expr(:quote, quote
-    #= none:1 =#
-    $(Expr(:$, :x))
-end))
+    quote
+        #= none:1 =#
+        $x
+    end
 end
 ```
 
-Notice that the result contains `Expr(:$, :x)`, which means that `x` has not been
+Notice that the result contains `$x`, which means that `x` has not been
 evaluated yet.
 In other words, the `$` expression "belongs to" the inner quote expression, and
 so its argument is only evaluated when the inner quote expression is:
@@ -289,14 +289,14 @@ This is done with multiple `$`s:
 julia> e = quote quote $$x end end
 quote
     #= none:1 =#
-    $(Expr(:quote, quote
-    #= none:1 =#
-    $(Expr(:$, :(1 + 2)))
-end))
+    quote
+        #= none:1 =#
+        $(1 + 2)
+    end
 end
 ```
 
-Notice that `:(1 + 2)` now appears in the result instead of the symbol `:x`.
+Notice that `(1 + 2)` now appears in the result instead of the symbol `x`.
 Evaluating this expression yields an interpolated `3`:
 
 ```jldoctest interp1
@@ -553,7 +553,7 @@ julia> macro twostep(arg)
 @twostep (macro with 1 method)
 
 julia> ex = macroexpand(Main, :(@twostep :(1, 2, 3)) );
-I execute at parse time. The argument is: $(Expr(:quote, :((1, 2, 3))))
+I execute at parse time. The argument is: :((1, 2, 3))
 ```
 
 The first call to [`println`](@ref) is executed when [`macroexpand`](@ref) is called. The
