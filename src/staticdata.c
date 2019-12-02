@@ -190,7 +190,11 @@ static jl_sysimg_fptrs_t sysimg_fptrs;
 
 static inline uintptr_t *sysimg_gvars(uintptr_t *base, size_t idx)
 {
-    return base + sysimg_gvars_offsets[idx] / sizeof(base[0]);
+    if (sysimg_gvars_offsets) {
+        return base + sysimg_gvars_offsets[idx] / sizeof(base[0]);
+    } else {
+        return ((void***)base)[idx];
+    }
 }
 
 JL_DLLEXPORT int jl_running_on_valgrind(void)
@@ -245,6 +249,7 @@ size_t jl_system_image_size __attribute__((weak)) = 0;
 
 #include <stdio.h>
 void jl_load_sysimg_static() {
+    sysimg_fptrs.hascloning = 0;
     sysimg_fptrs.base = jl_sysimg_fvars;
     sysimg_gvars_base = jl_sysimg_gvars;
     jl_restore_system_image_data(jl_system_image_data, jl_system_image_size);
@@ -1153,8 +1158,12 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
                     offset = fvars.clone_offsets[clone_idx];
                 break;
             }
-            //void *fptr = (void*)(base + offset);
-            void *fptr = ((void**)fbase)[i];
+            void *fptr;
+            if (fvars.hascloning) {
+                fptr = (void*)(base + offset);
+            } else {
+                fptr = ((void**)fbase)[i];
+            }
             if (specfunc)
                 codeinst->specptr.fptr = fptr;
             else
@@ -1179,8 +1188,7 @@ static void jl_update_all_gvars(jl_serializer_state *s)
         uint32_t offset = load_uint32(&gvars);
         if (offset) {
             uintptr_t v = get_item_for_reloc(s, base, size, offset);
-            *((void***)sysimg_gvars_base)[gvname_index] = v;
-            //*sysimg_gvars(sysimg_gvars_base, gvname_index) = v;
+            *sysimg_gvars(sysimg_gvars_base, gvname_index) = v;
         }
         gvname_index += 1;
     }
@@ -1437,7 +1445,7 @@ extern void jl_gc_set_permalloc_region(void *start, void *end);
 // Takes in a path of the form "usr/lib/julia/sys.so" (jl_restore_system_image should be passed the same string)
 JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 {
-    if (jl_sysimg_handle || jl_system_image_data)
+    if (jl_sysimg_handle || jl_system_image_size)
         return; // embedded target already called jl_set_sysimg_so
 
     char *dot = (char*) strrchr(fname, '.');
@@ -1591,13 +1599,13 @@ JL_DLLEXPORT void jl_restore_system_image(const char *fname)
 #ifndef JL_NDEBUG
     char *dot = fname ? (char*)strrchr(fname, '.') : NULL;
     int is_ji = (dot && !strcmp(dot, ".ji"));
-    assert((is_ji || jl_sysimg_handle || jl_system_image_data) && "System image file not preloaded");
+    assert((is_ji || jl_sysimg_handle || jl_system_image_size) && "System image file not preloaded");
 #endif
 
     if (jl_sysimg_handle) {
         // load the pre-compiled sysimage from jl_sysimg_handle
         jl_load_sysimg_so();
-    } else if (jl_system_image_data) {
+    } else if (jl_system_image_size) {
         // load the pre-compiled sysimage statically compiled into this executable
         jl_load_sysimg_static();
     } else {

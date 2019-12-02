@@ -135,6 +135,8 @@ typedef struct _jl_sysimg_fptrs_t {
     uint32_t noffsets;
     // function pointer offsets
     const int32_t *offsets;
+    // Whether sysimage has cloning enabled
+    int8_t hascloning;
 
     // Following fields contains the information about the selected target.
     // All of these fields are 0 if the selected targets have all the functions cloned.
