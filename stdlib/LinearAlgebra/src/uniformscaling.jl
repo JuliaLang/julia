@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base: copy, adjoint, getindex, show, transpose, one, zero, inv,
-             hcat, vcat, hvcat
+             hcat, vcat, hvcat, ^
 
 """
     UniformScaling{T<:Number}
@@ -121,6 +121,8 @@ isposdef(J::UniformScaling) = isposdef(J.λ)
 (-)(B::BitArray{2}, J::UniformScaling)      = Array(B) - J
 (-)(J::UniformScaling, B::BitArray{2})      = J - Array(B)
 (-)(A::AbstractMatrix, J::UniformScaling)   = A + (-J)
+
+(^)(A::UniformScaling, x::Number)           = (A.λ)^x * I
 
 # Unit{Lower/Upper}Triangular matrices become {Lower/Upper}Triangular under
 # addition with a UniformScaling
