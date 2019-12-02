@@ -235,61 +235,9 @@ let code = """
     num_gs = sum(meth_names .== :g29695)
     print(num_fs, ' ', num_gs)
     """
-    code2 = raw"""
-    begin
-    function dump_bt(bt, bt2)
-        i, j = 1, 1
-        while i <= length(bt)
-            ip = bt[i]::Ptr{Cvoid}
-            if UInt(ip) != (-1 % UInt) # See also jl_bt_is_native
-                # native frame
-                println(stderr, ip)
-                for frame in StackTraces.lookup(ip)
-                    println(stderr, "  ", frame)
-                end
-                i += 1
-                continue
-            end
-            # Extended backtrace entry
-            entry_metadata = reinterpret(UInt, bt[i+1])
-            njlvalues =  entry_metadata & 0x7
-            nuintvals = (entry_metadata >> 3) & 0x7
-            tag       = (entry_metadata >> 6) & 0xf
-            header    =  entry_metadata >> 10
-            if tag == 1 # JL_BT_INTERP_FRAME_TAG
-                code = bt2[j]
-                mod = njlvalues == 2 ? bt2[j+1] : nothing
-                interp_ip = Base.InterpreterIP(code, header, mod)
-                println(stderr, interp_ip)
-                N = Int(2 + njlvalues + nuintvals)
-                for k=0:N-1
-                    println(stderr, "- ", bt[i+k])
-                end
-                for frame in StackTraces.lookup(interp_ip)
-                    println(stderr, "  ", frame)
-                end
-            else
-                # Tags we don't know about are an error
-                throw(ArgumentError("Unexpected extended backtrace entry tag $tag at bt[$i]"))
-            end
-            # See jl_bt_entry_size
-            j += njlvalues
-            i += Int(2 + njlvalues + nuintvals)
-        end
-    end
-    if num_fs != 1000 || num_gs != 1000
-        # Dump backtrace info to ease debugging via CI logs
-        bt1,bt2 = Base._previous_bt
-        dump_bt(bt1, bt2)
-        println(stderr, "Formatted backtrace dump")
-        Base.show_backtrace(stderr, bt)
-    end
-    end
-    """
     for i = 1:100
-        @info "Testing backtrace iteration $i"
-        res = read(pipeline(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code -e 'eval(Meta.parse(read(stdin, String)))'`, stdin=IOBuffer(code2)), String)
-        @test res == "1000 1000"
+    @info "Testing backtrace iteration $i"
+    @test read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String) == "1000 1000"
     end
 end
 
