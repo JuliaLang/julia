@@ -288,7 +288,7 @@ let code = raw"""
     """
     for i=1:100
         @info "Testing backtrace iteration $i"
-        res = read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code -e $code2`, String)
+        res = read(pipeline(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code -e 'eval(Meta.parse(read(stdin, String)))'`, stdin=IOBuffer(code2)), String)
         @test res == "1000 1000"
     end
 end
