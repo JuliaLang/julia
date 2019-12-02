@@ -52,6 +52,8 @@ Standard library changes
 * Sets are now displayed less compactly in the REPL, as a column of elements, like vectors
   and dictionaries ([#33300]).
 
+* A 1-d `Zip` iterator (where `Base.IteratorSize` is `Base.HasShape{1}()`) with defined length of `n` has now also size of `(n,)` (instead of throwing an error) ([#29927]).
+
 #### Libdl
 
 #### LinearAlgebra
@@ -90,10 +92,6 @@ Standard library changes
 
 Deprecated or removed
 ---------------------
-
-
-* A 1-d `Zip` iterator (where `Base.IteratorSize`
-is `Base.HasShape{1}()`) with defined length of `n` has now also size of `(n,)` (instead of throwing an error) ([#29927]).
 
 External dependencies
 ---------------------
