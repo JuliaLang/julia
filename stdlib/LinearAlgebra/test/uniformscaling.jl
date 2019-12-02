@@ -67,9 +67,9 @@ end
     @test α * UniformScaling(1.0) == UniformScaling(1.0) * α
     @test UniformScaling(α)/α == UniformScaling(1.0)
 
-    @test (α*I)^2 == α^2 * I
-    @test (α*I)^(-2) = α^(-2) * I
-    @test (α*I)^(.5) = α^(.5) * I
+    @test (α*I)^2    == α^2 * I
+    @test (α*I)^(-2) == α^(-2) * I
+    @test (α*I)^(.5) == α^(.5) * I
 end
 
 @testset "det and logdet" begin
