@@ -2390,6 +2390,7 @@ mark: {
                 s = ta->gcstack;
 #ifdef COPY_STACKS
                 if (ta->copy_stack) {
+                    assert(tid != -1 && ptls2 != NULL);
                     ub = (uintptr_t)ptls2->stackbase;
                     lb = ub - ta->copy_stack;
                     offset = (uintptr_t)stkbuf - lb;
