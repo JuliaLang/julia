@@ -87,6 +87,9 @@ function cflags(doframework)
         include = shell_escape(includeDir())
         print(flags, " -I", include)
     end
+    if threadingOn()
+        print(flags, " -DJULIA_ENABLE_THREADING=1")
+    end
     if Sys.isunix()
         print(flags, " -fPIC")
     end

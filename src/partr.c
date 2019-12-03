@@ -28,9 +28,11 @@ static const int16_t not_sleeping = 0;
 static const int16_t sleeping = 1;
 
 
+#ifdef JULIA_ENABLE_THREADING
+
 // GC functions used
 extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
-                                         jl_gc_mark_sp_t *sp, jl_value_t *obj) JL_NOTSAFEPOINT;
+                                         jl_gc_mark_sp_t *sp, jl_value_t *obj);
 
 // multiq
 // ---
@@ -322,6 +324,21 @@ static void wake_thread(int16_t tid)
     }
 }
 
+#else // JULIA_ENABLE_THREADING
+
+static int sleep_check_now(int16_t tid)
+{
+    (void)tid;
+    return 1;
+}
+
+static int sleep_check_after_threshold(uint64_t *start_cycles)
+{
+    (void)start_cycles;
+    return 1;
+}
+
+#endif
 
 /* ensure thread tid is awake if necessary */
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
@@ -336,6 +353,7 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
         if (uvlock == system_self)
             uv_stop(jl_global_event_loop());
     }
+#ifdef JULIA_ENABLE_THREADING
     else {
         // something added to the sticky-queue: notify that thread
         wake_thread(tid);
@@ -360,6 +378,7 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
             }
         }
     }
+#endif
 }
 
 
@@ -384,7 +403,11 @@ static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
         return task;
     }
     jl_gc_safepoint();
+#ifdef JULIA_ENABLE_THREADING
     return multiq_deletemin();
+#else
+    return NULL;
+#endif
 }
 
 static int may_sleep(jl_ptls_t ptls)
@@ -405,12 +428,14 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
         if (task)
             return task;
 
+#ifdef JULIA_ENABLE_THREADING
         // quick, race-y check to see if there seems to be any stuff in there
         jl_cpu_pause();
         if (!multiq_check_empty()) {
             start_cycles = 0;
             continue;
         }
+#endif
 
         jl_cpu_pause();
         if (sleep_check_after_threshold(&start_cycles) || (!_threadedregion && ptls->tid == 0)) {

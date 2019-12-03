@@ -66,19 +66,20 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
 #ifdef _OS_WINDOWS_
     (void)ismaster;
     // https://en.wikipedia.org/wiki/Win32_Thread_Information_Block
-#  ifdef _P64
+#ifdef _P64
     *stack_hi = (void**)__readgsqword(0x08); // Stack Base / Bottom of stack (high address)
     *stack_lo = (void**)__readgsqword(0x10); // Stack Limit / Ceiling of stack (low address)
-#  else // !_P64
+#else
     *stack_hi = (void**)__readfsdword(0x04); // Stack Base / Bottom of stack (high address)
     *stack_lo = (void**)__readfsdword(0x08); // Stack Limit / Ceiling of stack (low address)
-#  endif // _P64
-#else // !_OS_WINDOWS_
+#endif
+#else
+#  ifdef JULIA_ENABLE_THREADING
     // Only use pthread_*_np functions to get stack address for non-master
     // threads since it seems to return bogus values for master thread on Linux
     // and possibly OSX.
     if (!ismaster) {
-#  if defined(_OS_LINUX_)
+#    if defined(_OS_LINUX_)
         pthread_attr_t attr;
         pthread_getattr_np(pthread_self(), &attr);
         void *stackaddr;
@@ -88,7 +89,7 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
         *stack_lo = (void*)stackaddr;
         *stack_hi = (void*)&stacksize;
         return;
-#  elif defined(_OS_DARWIN_)
+#    elif defined(_OS_DARWIN_)
         extern void *pthread_get_stackaddr_np(pthread_t thread);
         extern size_t pthread_get_stacksize_np(pthread_t thread);
         pthread_t thread = pthread_self();
@@ -97,7 +98,7 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
         *stack_lo = (void*)stackaddr;
         *stack_hi = (void*)&stacksize;
         return;
-#  elif defined(_OS_FREEBSD_)
+#    elif defined(_OS_FREEBSD_)
         pthread_attr_t attr;
         pthread_attr_init(&attr);
         pthread_attr_get_np(pthread_self(), &attr);
@@ -108,10 +109,13 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
         *stack_lo = (void*)stackaddr;
         *stack_hi = (void*)&stacksize;
         return;
-#  else
+#    else
 #      warning "Getting precise stack size for thread is not supported."
-#  endif
+#    endif
     }
+#  else
+    (void)ismaster;
+#  endif
     struct rlimit rl;
     getrlimit(RLIMIT_STACK, &rl);
     size_t stacksize = rl.rlim_cur;
@@ -626,8 +630,10 @@ static void jl_set_io_wait(int v)
 void _julia_init(JL_IMAGE_SEARCH rel)
 {
     jl_init_timing();
+#ifdef JULIA_ENABLE_THREADING
     // Make sure we finalize the tls callback before starting any threads.
     jl_get_ptls_states_getter();
+#endif
     jl_ptls_t ptls = jl_get_ptls_states();
     (void)ptls; assert(ptls); // make sure early that we have initialized ptls
     jl_safepoint_init();
