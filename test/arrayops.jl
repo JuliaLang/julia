@@ -2650,3 +2650,10 @@ end
 
 # Throws ArgumentError for negative dimensions in Array
 @test_throws ArgumentError fill('a', -10)
+
+@testset "Issue 33919" begin
+    A = Array[rand(2, 3), rand(3, 1)]
+    B = Array[rand(2, 2), rand(1, 4)]
+    C = hcat(A, B)
+    @test typeof(C) == Array{Array{Float64,2},2}
+end

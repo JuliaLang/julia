@@ -24,7 +24,7 @@ for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond
     # Period accessors
     typs = period in (:Microsecond, :Nanosecond) ? ["Time"] :
            period in (:Hour, :Minute, :Second, :Millisecond) ? ["Time", "DateTime"] : ["Date", "DateTime"]
-    reference = period == :Week ? " For details see [`$accessor_str(::Union{Date, DateTime})`](@ref)." : ""
+    reference = period === :Week ? " For details see [`$accessor_str(::Union{Date, DateTime})`](@ref)." : ""
     for typ_str in typs
         @eval begin
             @doc """

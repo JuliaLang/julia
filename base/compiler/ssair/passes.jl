@@ -571,7 +571,7 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
             (isa(c1, Const) && isa(c2, Const)) && continue
             lift_comparison!(compact, idx, c1, c2, stmt, lifting_cache)
             continue
-        elseif isexpr(stmt, :call) && stmt.args[1] == :unchecked_getfield
+        elseif isexpr(stmt, :call) && stmt.args[1] === :unchecked_getfield
             is_getfield = true
             is_unchecked = true
         elseif isexpr(stmt, :foreigncall)

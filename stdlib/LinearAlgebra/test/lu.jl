@@ -265,10 +265,6 @@ end
     @test_throws DomainError logdet([1 1; 1 -1])
 end
 
-@testset "Issue 21453" begin
-    @test_throws ArgumentError LinearAlgebra._cond1Inf(lu(randn(5,5)), 2, 2.0)
-end
-
 @testset "REPL printing" begin
         bf = IOBuffer()
         show(bf, "text/plain", lu(Matrix(I, 4, 4)))

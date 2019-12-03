@@ -539,7 +539,7 @@ function pipeline_error(procs::ProcessChain)
 end
 
 """
-    kill(p::Process, signum=SIGTERM)
+    kill(p::Process, signum=Base.SIGTERM)
 
 Send a signal to a process. The default is to terminate the process.
 Returns successfully if the process has already exited, but throws an

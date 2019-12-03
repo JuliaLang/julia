@@ -45,7 +45,7 @@ function _nloops(N::Int, itersym::Symbol, arraysym::Symbol, args::Expr...)
 end
 
 function _nloops(N::Int, itersym::Symbol, rangeexpr::Expr, args::Expr...)
-    if rangeexpr.head != :->
+    if rangeexpr.head !== :->
         throw(ArgumentError("second argument must be an anonymous function expression to compute the range"))
     end
     if !(1 <= length(args) <= 3)
@@ -167,7 +167,7 @@ evaluate to `true`.
 can be convenient for bounds-checking.
 """
 macro nall(N::Int, criterion::Expr)
-    if criterion.head != :->
+    if criterion.head !== :->
         throw(ArgumentError("second argument must be an anonymous function expression yielding the criterion"))
     end
     conds = Any[ Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N ]
@@ -183,7 +183,7 @@ evaluate to `true`.
 `@nany 3 d->(i_d > 1)` would generate the expression `(i_1 > 1 || i_2 > 1 || i_3 > 1)`.
 """
 macro nany(N::Int, criterion::Expr)
-    if criterion.head != :->
+    if criterion.head !== :->
         error("Second argument must be an anonymous function expression yielding the criterion")
     end
     conds = Any[ Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N ]
@@ -233,7 +233,7 @@ end
 
 # Simplify expressions like :(d->3:size(A,d)-3) given an explicit value for d
 function inlineanonymous(ex::Expr, val)
-    if ex.head != :->
+    if ex.head !== :->
         throw(ArgumentError("not an anonymous function"))
     end
     if !isa(ex.args[1], Symbol)
@@ -313,7 +313,7 @@ end
 
 function lreplace!(ex::Expr, r::LReplace)
     # Curly-brace notation, which acts like parentheses
-    if ex.head == :curly && length(ex.args) == 2 && isa(ex.args[1], Symbol) && endswith(string(ex.args[1]), "_")
+    if ex.head === :curly && length(ex.args) == 2 && isa(ex.args[1], Symbol) && endswith(string(ex.args[1]), "_")
         excurly = exprresolve(lreplace!(ex.args[2], r))
         if isa(excurly, Number)
             return Symbol(ex.args[1],excurly)
@@ -333,12 +333,12 @@ lreplace!(arg, r::LReplace) = arg
 
 poplinenum(arg) = arg
 function poplinenum(ex::Expr)
-    if ex.head == :block
+    if ex.head === :block
         if length(ex.args) == 1
             return ex.args[1]
         elseif length(ex.args) == 2 && isa(ex.args[1], LineNumberNode)
             return ex.args[2]
-        elseif (length(ex.args) == 2 && isa(ex.args[1], Expr) && ex.args[1].head == :line)
+        elseif (length(ex.args) == 2 && isa(ex.args[1], Expr) && ex.args[1].head === :line)
             return ex.args[2]
         end
     end
@@ -353,7 +353,7 @@ const exprresolve_cond_dict = Dict{Symbol,Function}(:(==) => ==,
     :(<) => <, :(>) => >, :(<=) => <=, :(>=) => >=)
 
 function exprresolve_arith(ex::Expr)
-    if ex.head == :call && haskey(exprresolve_arith_dict, ex.args[1]) && all([isa(ex.args[i], Number) for i = 2:length(ex.args)])
+    if ex.head === :call && haskey(exprresolve_arith_dict, ex.args[1]) && all([isa(ex.args[i], Number) for i = 2:length(ex.args)])
         return true, exprresolve_arith_dict[ex.args[1]](ex.args[2:end]...)
     end
     false, 0
@@ -362,7 +362,7 @@ exprresolve_arith(arg) = false, 0
 
 exprresolve_conditional(b::Bool) = true, b
 function exprresolve_conditional(ex::Expr)
-    if ex.head == :call && ex.args[1] ∈ keys(exprresolve_cond_dict) && isa(ex.args[2], Number) && isa(ex.args[3], Number)
+    if ex.head === :call && ex.args[1] ∈ keys(exprresolve_cond_dict) && isa(ex.args[2], Number) && isa(ex.args[3], Number)
         return true, exprresolve_cond_dict[ex.args[1]](ex.args[2], ex.args[3])
     end
     false, false
@@ -378,12 +378,12 @@ function exprresolve(ex::Expr)
     can_eval, result = exprresolve_arith(ex)
     if can_eval
         return result
-    elseif ex.head == :call && (ex.args[1] == :+ || ex.args[1] == :-) && length(ex.args) == 3 && ex.args[3] == 0
+    elseif ex.head === :call && (ex.args[1] === :+ || ex.args[1] === :-) && length(ex.args) == 3 && ex.args[3] == 0
         # simplify x+0 and x-0
         return ex.args[2]
     end
     # Resolve array references
-    if ex.head == :ref && isa(ex.args[1], Array)
+    if ex.head === :ref && isa(ex.args[1], Array)
         for i = 2:length(ex.args)
             if !isa(ex.args[i], Real)
                 return ex
@@ -392,7 +392,7 @@ function exprresolve(ex::Expr)
         return ex.args[1][ex.args[2:end]...]
     end
     # Resolve conditionals
-    if ex.head == :if
+    if ex.head === :if
         can_eval, tf = exprresolve_conditional(ex.args[1])
         if can_eval
             ex = tf ? ex.args[2] : ex.args[3]

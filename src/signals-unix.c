@@ -551,7 +551,7 @@ static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
 
 static void *signal_listener(void *arg)
 {
-    static uintptr_t bt_data[JL_MAX_BT_SIZE + 1];
+    static jl_bt_element_t bt_data[JL_MAX_BT_SIZE + 1];
     static size_t bt_size = 0;
     sigset_t sset;
     int sig, critical, profile;
@@ -669,7 +669,7 @@ static void *signal_listener(void *arg)
                 bt_size += rec_backtrace_ctx(bt_data + bt_size,
                         JL_MAX_BT_SIZE / jl_n_threads - 1,
                         signal_context, 0);
-                bt_data[bt_size++] = 0;
+                bt_data[bt_size++].uintptr = 0;
             }
 
             // do backtrace for profiler
@@ -686,13 +686,13 @@ static void *signal_listener(void *arg)
                         jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
                     } else {
                         // Get backtrace data
-                        bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
+                        bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
                                 bt_size_max - bt_size_cur - 1, signal_context, 0);
                     }
                     ptls->safe_restore = old_buf;
 
                     // Mark the end of this block with 0
-                    bt_data_prof[bt_size_cur++] = 0;
+                    bt_data_prof[bt_size_cur++].uintptr = 0;
                 }
                 if (bt_size_cur >= bt_size_max - 1) {
                     // Buffer full: Delete the timer

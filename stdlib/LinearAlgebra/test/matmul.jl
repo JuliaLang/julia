@@ -178,6 +178,18 @@ end
     end
 end
 
+@testset "mixed Blas-non-Blas matmul" begin
+    AA = rand(-10:10,6,6)
+    BB = rand(Float64,6,6)
+    CC = zeros(Float64,6,6)
+    for A in (copy(AA), view(AA, 1:6, 1:6)), B in (copy(BB), view(BB, 1:6, 1:6)), C in (copy(CC), view(CC, 1:6, 1:6))
+        @test LinearAlgebra.mul!(C, A, B) == A*B
+        @test LinearAlgebra.mul!(C, transpose(A), transpose(B)) == transpose(A)*transpose(B)
+        @test LinearAlgebra.mul!(C, A, adjoint(B)) == A*transpose(B)
+        @test LinearAlgebra.mul!(C, adjoint(A), B) == transpose(A)*B
+    end
+end
+
 @testset "matrix algebra with subarrays of floats (stride != 1)" begin
     A = reshape(map(Float64,1:20),5,4)
     Aref = A[1:2:end,1:2:end]
@@ -595,6 +607,21 @@ end
     fill!(C, 0)
     LinearAlgebra._generic_matmatmul!(C, 'N', 'N', A, B, LinearAlgebra.MulAddMul(-1, 0))
     @test D ≈ C
+end
+
+@testset "multiplication of empty matrices without calling zero" begin
+    r, c = rand(0:9, 2)
+    A = collect(Number, rand(r, c))
+    B = rand(c, 0)
+    C = A * B
+    @test size(C) == (r, 0)
+    @test_throws MethodError zero(eltype(C))
+end
+
+@testset "Issue #33873: genmatmul! with empty operands" begin
+    @test Matrix{Any}(undef, 0, 2) * Matrix{Any}(undef, 2, 3) == Matrix{Any}(undef, 0, 3)
+    @test_throws MethodError Matrix{Any}(undef, 2, 0) * Matrix{Any}(undef, 0, 3)
+    @test Matrix{Int}(undef, 2, 0) * Matrix{Int}(undef, 0, 3) == zeros(Int, 2, 3)
 end
 
 end # module TestMatmul

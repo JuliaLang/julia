@@ -36,18 +36,18 @@ mul_prod(x::Real, y::Real)::Real = x * y
 
 ## foldl && mapfoldl
 
-function mapfoldl_impl(f, op, nt, itr)
+function mapfoldl_impl(f::F, op::OP, nt, itr) where {F,OP}
     op′, itr′ = _xfadjoint(BottomRF(op), Generator(f, itr))
     return foldl_impl(op′, nt, itr′)
 end
 
-function foldl_impl(op, nt, itr)
+function foldl_impl(op::OP, nt, itr) where {OP}
     v = _foldl_impl(op, get(nt, :init, _InitialValue()), itr)
     v isa _InitialValue && return reduce_empty_iter(op, itr)
     return v
 end
 
-function _foldl_impl(op, init, itr)
+function _foldl_impl(op::OP, init, itr) where {OP}
     # Unroll the while loop once; if init is known, the call to op may
     # be evaluated at compile time
     y = iterate(itr)

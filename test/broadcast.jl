@@ -854,3 +854,6 @@ end
 # treat Pair as scalar:
 @test replace.(split("The quick brown fox jumps over the lazy dog"), r"[aeiou]"i => "_") ==
       ["Th_", "q__ck", "br_wn", "f_x", "j_mps", "_v_r", "th_", "l_zy", "d_g"]
+
+# 28680
+@test 1 .+ 1 .+  (1, 2) == (3, 4)

@@ -412,7 +412,7 @@ void *mach_profile_listener(void *arg)
 #ifdef LIBOSXUNWIND
     mach_profiler_thread = mach_thread_self();
 #endif
-    mig_reply_error_t *bufRequest = (mig_reply_error_t *) malloc(max_size);
+    mig_reply_error_t *bufRequest = (mig_reply_error_t*)malloc_s(max_size);
     while (1) {
         kern_return_t ret = mach_msg(&bufRequest->Head, MACH_RCV_MSG,
                                      0, max_size, profile_port,
@@ -448,10 +448,10 @@ void *mach_profile_listener(void *arg)
 
                 if (forceDwarf == 0) {
                     // Save the backtrace
-                    bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, 0);
+                    bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, 0);
                 }
                 else if (forceDwarf == 1) {
-                    bt_size_cur += rec_backtrace_ctx_dwarf((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, 0);
+                    bt_size_cur += rec_backtrace_ctx_dwarf((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, 0);
                 }
                 else if (forceDwarf == -1) {
                     jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
@@ -459,11 +459,11 @@ void *mach_profile_listener(void *arg)
 
                 forceDwarf = -2;
 #else
-                bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, 0);
+                bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, 0);
 #endif
 
                 // Mark the end of this block with 0
-                bt_data_prof[bt_size_cur++] = 0;
+                bt_data_prof[bt_size_cur++].uintptr = 0;
 
                 // Reset the alarm
                 kern_return_t ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);

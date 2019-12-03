@@ -487,17 +487,30 @@ end
 
 @testset "evalpoly" begin
     @test @evalpoly(2,3,4,5,6) == 3+2*(4+2*(5+2*6)) == @evalpoly(2+0im,3,4,5,6)
-    @test let evalcounts=0
-              @evalpoly(begin
-                            evalcounts += 1
-                            4
-                        end, 1,2,3,4,5)
-              evalcounts
-          end == 1
     a0 = 1
     a1 = 2
     c = 3
     @test @evalpoly(c, a0, a1) == 7
+    @test @evalpoly(1, 2) == 2
+end
+
+@testset "evalpoly real" begin
+    for x in -1.0:2.0, p1 in -3.0:3.0, p2 in -3.0:3.0, p3 in -3.0:3.0
+        evpm = @evalpoly(x, p1, p2, p3)
+        @test evalpoly(x, (p1, p2, p3)) == evpm
+        @test evalpoly(x, [p1, p2, p3]) == evpm
+    end
+end
+
+@testset "evalpoly complex" begin
+    for x in -1.0:2.0, y in -1.0:2.0, p1 in -3.0:3.0, p2 in -3.0:3.0, p3 in -3.0:3.0
+        z = x + im * y
+        evpm = @evalpoly(z, p1, p2, p3)
+        @test evalpoly(z, (p1, p2, p3)) == evpm
+        @test evalpoly(z, [p1, p2, p3]) == evpm
+    end
+    @test evalpoly(1+im, (2,)) == 2
+    @test evalpoly(1+im, [2,]) == 2
 end
 
 @testset "cis" begin

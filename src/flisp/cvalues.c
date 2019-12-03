@@ -136,6 +136,7 @@ value_t cvalue(fl_context_t *fl_ctx, fltype_t *type, size_t sz)
         pcv = (cvalue_t*)alloc_words(fl_ctx, CVALUE_NWORDS);
         pcv->type = type;
         pcv->data = malloc(sz);
+        // TODO: if pcv->data == NULL
         autorelease(fl_ctx, pcv);
         fl_ctx->malloc_pressure += sz;
     }
@@ -220,6 +221,7 @@ void cv_pin(fl_context_t *fl_ctx, cvalue_t *cv)
     size_t sz = cv_len(cv);
     if (cv_isstr(fl_ctx, cv)) sz++;
     void *data = malloc(sz);
+    // TODO: if data == NULL
     memcpy(data, cv_data(cv), sz);
     cv->data = data;
     autorelease(fl_ctx, cv);
@@ -570,6 +572,7 @@ value_t cvalue_copy(fl_context_t *fl_ctx, value_t v)
         size_t len = cv_len(cv);
         if (cv_isstr(fl_ctx, cv)) len++;
         ncv->data = malloc(len);
+        // TODO: if ncv->data == NULL
         memcpy(ncv->data, cv_data(cv), len);
         autorelease(fl_ctx, ncv);
         if (hasparent(cv)) {
@@ -778,6 +781,7 @@ value_t fl_builtin(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 value_t cbuiltin(fl_context_t *fl_ctx, const char *name, builtin_t f)
 {
     cvalue_t *cv = (cvalue_t*)malloc(CVALUE_NWORDS * sizeof(value_t));
+    // TODO: if cv->data == NULL
     cv->type = fl_ctx->builtintype;
     cv->data = &cv->_space[0];
     cv->len = sizeof(value_t);

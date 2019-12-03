@@ -945,7 +945,8 @@ kw"mutable struct"
 
 Special function available to inner constructors which created a new object
 of the type.
-See the manual section on [Inner Constructor Methods](@ref) for more information.
+See the manual section on [Inner Constructor Methods](@ref man-inner-constructor-methods)
+for more information.
 """
 kw"new"
 
