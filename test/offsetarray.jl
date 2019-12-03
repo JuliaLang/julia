@@ -467,6 +467,19 @@ A = OffsetArray(rand(4,4), (-3,5))
 @test vec(A) == reshape(A, :) == reshape(A, 16) == reshape(A, Val(1)) == A[:] == vec(A.parent)
 A = OffsetArray(view(rand(4,4), 1:4, 4:-1:1), (-3,5))
 @test vec(A) == reshape(A, :) == reshape(A, 16) == reshape(A, Val(1)) == A[:] == vec(A.parent)
+# issue #33614
+A = OffsetArray(-1:0, (-2,))
+@test reshape(A, :) === A
+Arsc = reshape(A, :, 1)
+Arss = reshape(A, 2, 1)
+@test Arsc[1,1] == Arss[1,1] == -1
+@test Arsc[2,1] == Arss[2,1] == 0
+@test_throws BoundsError Arsc[0,1]
+@test_throws BoundsError Arss[0,1]
+A = OffsetArray([-1,0], (-2,))
+Arsc = reshape(A, :, 1)
+Arsc[1,1] = 5
+@test first(A) == 5
 
 # broadcast
 a = [1]
