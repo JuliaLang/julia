@@ -351,6 +351,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
     f = ex.f
     ft = typeof(f)
     lines = []
+    lines_no_match = []
     # These functions are special cased to only show if first argument is matched.
     special = f in [convert, getindex, setindex!]
     funcs = Any[(f, arg_types_param)]
@@ -436,60 +437,62 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 end
             end
 
-            if right_matches > 0 || length(arg_types_param) < 2
-                if length(t_i) < length(sig)
-                    # If the methods args is longer than input then the method
-                    # arguments is printed as not a match
-                    for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
-                        sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
-                        if Base.isvarargtype(sigtype)
-                            sigstr = (sigtype.parameters[1], "...")
-                        else
-                            sigstr = (sigtype,)
-                        end
-                        if !((min(length(t_i), length(sig)) == 0) && k==1)
-                            print(iob, ", ")
-                        end
-                        if get(io, :color, false)
-                            Base.with_output_color(Base.error_color(), iob) do iob
-                                print(iob, "::", sigstr...)
-                            end
-                        else
-                            print(iob, "!Matched::", sigstr...)
-                        end
+            if length(t_i) < length(sig)
+                # If the methods args is longer than input then the method
+                # arguments is printed as not a match
+                for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
+                    sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
+                    if Base.isvarargtype(sigtype)
+                        sigstr = (sigtype.parameters[1], "...")
+                    else
+                        sigstr = (sigtype,)
                     end
-                end
-                kwords = kwarg_decl(method)
-                if !isempty(kwords)
-                    print(iob, "; ")
-                    join(iob, kwords, ", ")
-                end
-                print(iob, ")")
-                show_method_params(iob0, tv)
-                print(iob, " at ", method.file, ":", method.line)
-                if !isempty(kwargs)
-                    unexpected = Symbol[]
-                    if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
-                        for (k, v) in kwargs
-                            if !(k in kwords)
-                                push!(unexpected, k)
-                            end
-                        end
+                    if !((min(length(t_i), length(sig)) == 0) && k==1)
+                        print(iob, ", ")
                     end
-                    if !isempty(unexpected)
+                    if get(io, :color, false)
                         Base.with_output_color(Base.error_color(), iob) do iob
-                            plur = length(unexpected) > 1 ? "s" : ""
-                            print(iob, " got unsupported keyword argument$plur \"", join(unexpected, "\", \""), "\"")
+                            print(iob, "::", sigstr...)
+                        end
+                    else
+                        print(iob, "!Matched::", sigstr...)
+                    end
+                end
+            end
+            kwords = kwarg_decl(method)
+            if !isempty(kwords)
+                print(iob, "; ")
+                join(iob, kwords, ", ")
+            end
+            print(iob, ")")
+            show_method_params(iob0, tv)
+            print(iob, " at ", method.file, ":", method.line)
+            if !isempty(kwargs)
+                unexpected = Symbol[]
+                if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
+                    for (k, v) in kwargs
+                        if !(k in kwords)
+                            push!(unexpected, k)
                         end
                     end
                 end
-                if ex.world < reinterpret(UInt, method.primary_world)
-                    print(iob, " (method too new to be called from this world context.)")
-                elseif ex.world > reinterpret(UInt, method.deleted_world)
-                    print(iob, " (method deleted before this world age.)")
+                if !isempty(unexpected)
+                    Base.with_output_color(Base.error_color(), iob) do iob
+                        plur = length(unexpected) > 1 ? "s" : ""
+                        print(iob, " got unsupported keyword argument$plur \"", join(unexpected, "\", \""), "\"")
+                    end
                 end
-                # TODO: indicate if it's in the wrong world
+            end
+            if ex.world < reinterpret(UInt, method.primary_world)
+                print(iob, " (method too new to be called from this world context.)")
+            elseif ex.world > reinterpret(UInt, method.deleted_world)
+                print(iob, " (method deleted before this world age.)")
+            end
+            # TODO: indicate if it's in the wrong world
+            if right_matches > 0 || length(arg_types_param) < 2
                 push!(lines, (buf, right_matches))
+            else
+                push!(lines_no_match, (buf, right_matches))
             end
         end
     end
@@ -507,6 +510,17 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 end
                 i += 1
                 print(io, String(take!(line[1])))
+            end
+            if i < 3
+                for line in lines_no_match
+                    println(io)
+                    if i >= 3
+                        print(io, "  ...")
+                        break
+                    end
+                    i += 1
+                    print(io, String(take!(line[1])))
+                end
             end
         end
     end
