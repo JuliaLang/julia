@@ -172,12 +172,16 @@ public:
 
     jl_method_instance_t *lookupLinfo(size_t pointer)
     {
+#ifndef JL_DISABLE_LIBUV
         uv_rwlock_rdlock(&threadsafe);
+#endif
         auto region = linfomap.lower_bound(pointer);
         jl_method_instance_t *linfo = NULL;
         if (region != linfomap.end() && pointer < region->first + region->second.first)
             linfo = region->second.second;
+#ifndef JL_DISABLE_LIBUV
         uv_rwlock_rdunlock(&threadsafe);
+#endif
         return linfo;
     }
 

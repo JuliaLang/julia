@@ -458,6 +458,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
             // although none are allowed to create new ones
             // outside of threaded regions, all IO is permitted,
             // but only on thread 1
+#ifndef JL_DISABLE_LIBUV
             int uvlock = 0;
             if (_threadedregion) {
                 uvlock = jl_mutex_trylock(&jl_uv_mutex);
@@ -511,22 +512,21 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
             }
             uv_mutex_unlock(&ptls->sleep_lock);
             jl_gc_safe_leave(ptls, gc_state); // contains jl_gc_safepoint
+#endif
             start_cycles = 0;
         }
         else {
+#ifndef JL_DISABLE_LIBUV
 #ifndef JL_HAVE_ASYNCIFY
             // maybe check the kernel for new messages too
             if (jl_atomic_load(&jl_uv_n_waiters) == 0)
 #endif
-#ifndef JL_DISABLE_LIBUV
                 jl_process_events();
 #else
             // Yield back to browser event loop
             return ptls->root_task;
 #endif
-#ifdef JULIA_ENABLE_THREADING
         }
-#endif
     }
 }
 
