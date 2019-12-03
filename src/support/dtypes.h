@@ -346,6 +346,11 @@ STATIC_INLINE void jl_store_unaligned_i16(void *ptr, uint16_t val) JL_NOTSAFEPOI
 {
     memcpy(ptr, &val, 2);
 }
+STATIC_INLINE void jl_store_unaligned_ptr(void *ptr, void *val) JL_NOTSAFEPOINT
+{
+    memcpy(ptr, &val, sizeof(void*));
+}
+
 
 #ifdef _OS_WINDOWS_
 #include <errhandlingapi.h>

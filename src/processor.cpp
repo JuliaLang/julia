@@ -620,7 +620,7 @@ static inline std::vector<TargetData<n>> &get_cmdline_targets(F &&feature_cb)
 template<typename F>
 static inline jl_sysimg_fptrs_t parse_sysimg(void *hdl, F &&callback)
 {
-    jl_sysimg_fptrs_t res = {nullptr, 0, nullptr, 0, nullptr, nullptr};
+    jl_sysimg_fptrs_t res = {nullptr, 0, nullptr, 1, 0, nullptr, nullptr};
 
     // .data base
     char *data_base;
