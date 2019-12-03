@@ -1149,17 +1149,17 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
             assert(jl_is_method(codeinst->def->def.method) && codeinst->invoke != jl_fptr_const_return);
             assert(specfunc ? codeinst->invoke != NULL : codeinst->invoke == NULL);
             jl_store_unaligned_ptr(&linfos[i], codeinst->def);
-            int32_t offset = fvars.offsets[i];
-            for (; clone_idx < fvars.nclones; clone_idx++) {
-                uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;
-                if (idx < i)
-                    continue;
-                if (idx == i)
-                    offset = fvars.clone_offsets[clone_idx];
-                break;
-            }
             void *fptr;
             if (fvars.hascloning) {
+                int32_t offset = fvars.offsets[i];
+                for (; clone_idx < fvars.nclones; clone_idx++) {
+                    uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;
+                    if (idx < i)
+                        continue;
+                    if (idx == i)
+                        offset = fvars.clone_offsets[clone_idx];
+                    break;
+                }
                 fptr = (void*)(fbase + offset);
             } else {
                 fptr = ((void**)fbase)[i];
