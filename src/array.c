@@ -954,7 +954,6 @@ STATIC_INLINE void jl_array_shrink(jl_array_t *a, size_t dec)
             typetagdata = (char*)malloc(a->nrows);
             memcpy(typetagdata, jl_array_typetagdata(a), a->nrows);
         }
-        size_t oldoffsnb = a->offset * elsz;
         char * originaldata = (char*) a->data - a->offset * a->elsize;
         char * newdata = (char*) jl_gc_alloc_buf(jl_get_ptls_states(), newbytes);
         jl_gc_wb_buf(a, a->data, newbytes);
@@ -964,7 +963,7 @@ STATIC_INLINE void jl_array_shrink(jl_array_t *a, size_t dec)
             memcpy(newtypetagdata, typetagdata, a->nrows);
             free(typetagdata);
         }
-        memcpy(a->data, originaldata, newbytes);
+        memcpy(newdata, originaldata, newbytes);
         a->data = newdata + a->offset*a->elsize;
     }
     else if (a->flags.how == 2) {
