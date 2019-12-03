@@ -334,7 +334,7 @@ inttype(::Type{T}) where {T<:Integer} = T
 inttype(::Type{Float16}) = Int16
 inttype(::Type{Float32}) = Int32
 inttype(::Type{Float64}) = Int64
-inttype(::Type{V}) where {V <: Ptr} = Int
+inttype(::Type{<: Ptr}) = Int
 
 
 import ..Base.gc_alignment
@@ -415,7 +415,7 @@ for typ in atomictypes
 end
 
 const opnames = Dict{Symbol, Symbol}(:+ => :add, :- => :sub)
-# define atomic pointer +/- integer operations
+# Define atomic pointer +/- integer operations separately because they take `Integer`s as the rhs.
 for op in [:add, :sub]
     @eval $(Symbol("atomic_", op, "!"))(x::Atomic{V}, i::T) where {V <: Ptr, T <: Integer} =
         llvmcall($"""
