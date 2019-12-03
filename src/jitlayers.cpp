@@ -134,8 +134,10 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             PM->add(createLowerPTLSPass(dump_native));
         }
         PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "loopinfo" as LLVM parallel loop
+#if !defined(_OS_EMSCRIPTEN_)
         if (dump_native)
             PM->add(createMultiVersioningPass());
+#endif
         return;
     }
     PM->add(createPropagateJuliaAddrspaces());
@@ -161,8 +163,10 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // Now that SROA has cleaned up for front-end mess, a lot of control flow should
     // be more evident - try to clean it up.
     PM->add(createCFGSimplificationPass());    // Merge & remove BBs
+#if !defined(_OS_EMSCRIPTEN_)
     if (dump_native)
         PM->add(createMultiVersioningPass());
+#endif
     PM->add(createSROAPass());                 // Break up aggregate allocas
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
     PM->add(createJumpThreadingPass());        // Thread jumps.

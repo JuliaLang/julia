@@ -191,7 +191,11 @@ static jl_sysimg_fptrs_t sysimg_fptrs;
 
 static inline uintptr_t *sysimg_gvars(uintptr_t *base, size_t idx)
 {
-    return base + sysimg_gvars_offsets[idx] / sizeof(base[0]);
+    if (sysimg_gvars_offsets) {
+        return base + sysimg_gvars_offsets[idx] / sizeof(base[0]);
+    } else {
+        return ((void***)base)[idx];
+    }
 }
 
 JL_DLLEXPORT int jl_running_on_valgrind(void)
@@ -235,6 +239,19 @@ static void jl_load_sysimg_so(void)
     size_t *plen;
     jl_dlsym(jl_sysimg_handle, "jl_system_image_size", (void **)&plen, 1);
     jl_restore_system_image_data(sysimg_data, *plen);
+}
+
+const char jl_system_image_data[] __attribute__((weak));
+void *jl_sysimg_fvars[] __attribute__((weak));
+void *jl_sysimg_gvars[] __attribute__((weak));
+size_t jl_system_image_size __attribute__((weak)) = 0;
+
+#include <stdio.h>
+void jl_load_sysimg_static() {
+    sysimg_fptrs.hascloning = 0;
+    sysimg_fptrs.base = jl_sysimg_fvars;
+    sysimg_gvars_base = jl_sysimg_gvars;
+    jl_restore_system_image_data(jl_system_image_data, jl_system_image_size);
 }
 
 
@@ -1107,7 +1124,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
     for (i = 0; i < sysimg_fvars_max; i++) {
         uintptr_t val = (uintptr_t)&linfos[i];
         uint32_t offset = load_uint32(&val);
-        linfos[i] = NULL;
+        jl_store_unaligned_ptr(&linfos[i], NULL);
         if (offset != 0) {
             int specfunc = 1;
             if (offset & ((uintptr_t)1 << (8 * sizeof(uint32_t) - 1))) {
@@ -1116,20 +1133,25 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
                 offset = ~offset;
             }
             jl_code_instance_t *codeinst = (jl_code_instance_t*)(base + offset);
-            uintptr_t base = (uintptr_t)fvars.base;
+            uintptr_t fbase = (uintptr_t)fvars.base;
             assert(jl_is_method(codeinst->def->def.method) && codeinst->invoke != jl_fptr_const_return);
             assert(specfunc ? codeinst->invoke != NULL : codeinst->invoke == NULL);
-            linfos[i] = codeinst->def;
-            int32_t offset = fvars.offsets[i];
-            for (; clone_idx < fvars.nclones; clone_idx++) {
-                uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;
-                if (idx < i)
-                    continue;
-                if (idx == i)
-                    offset = fvars.clone_offsets[clone_idx];
-                break;
+            jl_store_unaligned_ptr(&linfos[i], codeinst->def);
+            void *fptr;
+            if (fvars.hascloning) {
+                int32_t offset = fvars.offsets[i];
+                for (; clone_idx < fvars.nclones; clone_idx++) {
+                    uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;
+                    if (idx < i)
+                        continue;
+                    if (idx == i)
+                        offset = fvars.clone_offsets[clone_idx];
+                    break;
+                }
+                fptr = (void*)(fbase + offset);
+            } else {
+                fptr = ((void**)fbase)[i];
             }
-            void *fptr = (void*)(base + offset);
             if (specfunc)
                 codeinst->specptr.fptr = fptr;
             else
@@ -1411,7 +1433,7 @@ extern void jl_gc_set_permalloc_region(void *start, void *end);
 // Takes in a path of the form "usr/lib/julia/sys.so" (jl_restore_system_image should be passed the same string)
 JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 {
-    if (jl_sysimg_handle)
+    if (jl_sysimg_handle || jl_system_image_size)
         return; // embedded target already called jl_set_sysimg_so
 
     char *dot = (char*) strrchr(fname, '.');
@@ -1488,7 +1510,8 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     size_t i;
     for (i = 0; tags[i] != NULL; i++) {
         jl_value_t **tag = tags[i];
-        *tag = jl_read_value(&s);
+        jl_value_t *v = jl_read_value(&s);
+        *tag = v;
     }
     s.ptls->root_task = (jl_task_t*)jl_gc_alloc(s.ptls, sizeof(jl_task_t), jl_task_type);
     memset(s.ptls->root_task, 0, sizeof(jl_task_t));
@@ -1564,14 +1587,16 @@ JL_DLLEXPORT void jl_restore_system_image(const char *fname)
 #ifndef JL_NDEBUG
     char *dot = fname ? (char*)strrchr(fname, '.') : NULL;
     int is_ji = (dot && !strcmp(dot, ".ji"));
-    assert((is_ji || jl_sysimg_handle) && "System image file not preloaded");
+    assert((is_ji || jl_sysimg_handle || jl_system_image_size) && "System image file not preloaded");
 #endif
 
     if (jl_sysimg_handle) {
         // load the pre-compiled sysimage from jl_sysimg_handle
         jl_load_sysimg_so();
-    }
-    else {
+    } else if (jl_system_image_size) {
+        // load the pre-compiled sysimage statically compiled into this executable
+        jl_load_sysimg_static();
+    } else {
         ios_t f;
         if (ios_file(&f, fname, 1, 0, 0, 0) == NULL)
             jl_errorf("System image file \"%s\" not found.", fname);
