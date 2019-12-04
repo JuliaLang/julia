@@ -233,10 +233,7 @@ let code = raw"""
                   if ip isa Base.InterpreterIP && ip.code isa Core.MethodInstance]
     num_fs = sum(meth_names .== :f29695)
     num_gs = sum(meth_names .== :g29695)
-    print(num_fs, ' ', num_gs)
-    """
-    code2 = raw"""
-    
+
     function dump_bt(bt, bt2)
         i, j = 1, 1
         while i <= length(bt)
@@ -285,10 +282,12 @@ let code = raw"""
         println(stderr, "Formatted backtrace dump")
         Base.show_backtrace(stderr, bt)
     end
+    print(num_fs, ' ', num_gs)
     """
+
     for i=1:100
         @info "Testing backtrace iteration $i"
-        res = read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code -e $code2`, String)
+        res = read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String)
         @test res == "1000 1000"
     end
 end
