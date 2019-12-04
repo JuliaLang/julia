@@ -556,10 +556,12 @@ end
     B = sparse(rand(Float32, 3, 3))
     copyto!(A, B)
     @test A == B
-    B = sprand(5, 5, 0.2)
+    # Test copyto!(dense, sparse)
+    B = sprand(5, 5, 1.0)
     A = rand(5,5)
     A´ = similar(A)
     @test copyto!(A, B) == copyto!(A´, Matrix(B))
+    # Test copyto!(dense, Rdest, sparse, Rsrc)
     A = rand(5,5)
     A´ = similar(A)
     Rsrc = CartesianIndices((3:4, 2:3))
@@ -567,6 +569,14 @@ end
     copyto!(A, Rdest, B, Rsrc)
     copyto!(A´, Rdest, Matrix(B), Rsrc)
     @test A[Rdest] == A´[Rdest] == Matrix(B)[Rsrc]
+    # Test unaliasing of B´
+    B´ = copy(B)
+    copyto!(B´, Rdest, B´, Rsrc)
+    @test Matrix(B´)[Rdest] == Matrix(B)[Rsrc]
+    # Test impossible conversion even for empty sparse source
+    A = sprand(4, 4, 0.0); B = fill("", 4,4);
+    @test_throws MethodError copyto!(B, A)
+    @test_throws MethodError copyto!(B, Rdest, A, Rsrc)
 end
 
 @testset "conj" begin
