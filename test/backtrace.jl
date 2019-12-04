@@ -225,7 +225,7 @@ let trace = try
 end
 
 # issue #29695 (see also test for #28442)
-let code = """
+let code = raw"""
     f29695(c) = g29695(c)
     g29695(c) = c >= 1000 ? (return backtrace()) : f29695(c + 1)
     bt = f29695(1)
@@ -236,7 +236,7 @@ let code = """
     print(num_fs, ' ', num_gs)
     """
     code2 = raw"""
-    begin
+    
     function dump_bt(bt, bt2)
         i, j = 1, 1
         while i <= length(bt)
@@ -277,16 +277,16 @@ let code = """
             i += Int(2 + njlvalues + nuintvals)
         end
     end
+
     if num_fs != 1000 || num_gs != 1000
         # Dump backtrace info to ease debugging via CI logs
         bt1,bt2 = Base._previous_bt
-        dump_bt(bt1, bt2)
+        dump_bt(bt1,bt2)
         println(stderr, "Formatted backtrace dump")
         Base.show_backtrace(stderr, bt)
     end
-    end
     """
-    for i = 1:100
+    for i=1:100
         @info "Testing backtrace iteration $i"
         res = read(pipeline(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code -e 'eval(Meta.parse(read(stdin, String)))'`, stdin=IOBuffer(code2)), String)
         @test res == "1000 1000"
