@@ -1,6 +1,7 @@
 var julia_boxed_heap = {
     table: new WebAssembly.Table({initial: 4096, element: "anyref"}),
     allocated: new WeakMap(),
+    allocated_primitives: new Map(),
     freelist: -1,
     max_allocated: 0,
     proxies: new Map()
@@ -21,12 +22,22 @@ function allocate_index() {
 }
 
 function box_jsval(val) {
-    var idx = julia_boxed_heap.allocated[val];
+    var idx = julia_boxed_heap.allocated.get(val);
     if (idx !== undefined)
         return idx;
     var idx = allocate_index();
     julia_boxed_heap.table.set(idx, val);
-    julia_boxed_heap.allocated[val] = idx;
+    julia_boxed_heap.allocated.set(val, idx);
+    return idx;
+}
+
+function box_primitive(val) {
+    var idx = julia_boxed_heap.allocated_primitives.get(val);
+    if (idx !== undefined)
+        return idx;
+    var idx = allocate_index();
+    julia_boxed_heap.table.set(idx, val);
+    julia_boxed_heap.allocated_primitives.set(val, idx);
     return idx;
 }
 
@@ -41,6 +52,7 @@ var jl_jsnull_type; var jl_jsnull;
 var jl_jsobject_type;
 var jl_jsstring_type;
 var jl_jssymbol_type;
+var jl_jsfunction_type;
 
 Module.initialize_jscall_runtime = function() {
     // TODO: Should this be base?
@@ -67,11 +79,12 @@ Module.initialize_jscall_runtime = function() {
     jl_jsobject_type = jl_get_global(js_module, "JSObject")
     jl_jsstring_type = jl_get_global(js_module, "JSString")
     jl_jssymbol_type = jl_get_global(js_module, "JSSymbol")
+    jl_jsfunction_type = jl_get_global(js_module, "JSFunction")
     Module["_free"](name_buf);
 }
 
 function jl_typeof(arg_ptr) {
-    return HEAP32[(arg_ptr >> 2) - 1] & 0xfffffffb;
+    return HEAP32[(arg_ptr >> 2) - 1] & 0xfffffff8;
 }
 
 function jlboxed_to_js(arg_ptr) {
@@ -87,7 +100,8 @@ function jlboxed_to_js(arg_ptr) {
     } else {
         assert(arg_type == jl_jsobject_type ||
                 arg_type == jl_jsstring_type ||
-                arg_type == jl_jssymbol_type);
+                arg_type == jl_jssymbol_type ||
+                arg_type == jl_jsfunction_type);
         obj_idx = HEAP32[arg_ptr >> 2];
         return get_boxed_jsval(obj_idx);
     }
@@ -162,16 +176,22 @@ function js_to_jlboxed(val) {
         return val ? jl_true : jl_false;
     } else if (JLProxy.isJlProxy(val)) {
         return JLProxy.getPtr(val);
+    } else if (typeof val == 'string' || typeof val == 'symbol') {
+        let idx = box_primitive(val);
+        let ptls = Module['_jl_get_ptls_states']()
+        let ptr = Module['_jl_gc_alloc'](ptls, 2,
+            typeof val == 'string'   ? jl_jsstring_type   :
+                                       jl_jssymbol_type)
+        HEAP32[ptr >> 2] = idx;
+        return ptr;
     } else {
-        assert (typeof val == 'string' ||
-                typeof val == 'symbol' ||
-                typeof val == 'object');
+        assert (typeof val == 'object' ||
+                typeof val == 'function');
         let idx = box_jsval(val);
         let ptls = Module['_jl_get_ptls_states']()
         let ptr = Module['_jl_gc_alloc'](ptls, 2,
-            typeof val == 'string' ? jl_jsstring_type :
-            typeof val == 'symbol' ? jl_jssymbol_type :
-                                     jl_jsobject_type);
+            typeof val == 'function' ? jl_jsfunction_type :
+                                       jl_jsobject_type);
         HEAP32[ptr >> 2] = idx;
         return ptr;
     }

@@ -316,6 +316,11 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
     else if (head == foreigncall_sym) {
         jl_sym_t *fname = NULL, *libname = NULL;
         jl_foreigncall_get_syms(jl_exprarg(e, 0), &fname, &libname);
+        jl_sym_t *cc = *(jl_value_t**)jl_exprarg(e, 3);
+        if (cc == jl_symbol("jscall")) {
+            // jscall is always interpretable
+            return;
+        }
         if (fname == NULL || !jl_foreigncall_interpretable(fname, libname))
             *has_intrinsics = 1;
         return;

@@ -386,6 +386,8 @@ jl_sym_t *get_sym_or_global_if_const(jl_value_t *arg)
         if (!jl_is_symbol(jl_quotenode_value(arg)))
             return NULL;
         return (jl_sym_t*)jl_quotenode_value(arg);
+    } else {
+        return NULL;
     }
 }
 

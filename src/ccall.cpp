@@ -1251,28 +1251,34 @@ std::string generate_func_sig(const char *fname)
 }
 };
 
-static std::pair<CallingConv::ID, bool> convert_cconv(jl_sym_t *lhd)
+// TODO: Use std::option here when enabling C++17
+static llvm::Optional<std::pair<CallingConv::ID, bool>> convert_cconv(jl_sym_t *lhd)
 {
     // check for calling convention specifier
     if (lhd == jl_symbol("stdcall")) {
-        return std::make_pair(CallingConv::X86_StdCall, false);
+        return llvm::Optional<std::pair<CallingConv::ID, bool>>(
+            std::make_pair(CallingConv::X86_StdCall, false));
     }
     else if (lhd == jl_symbol("cdecl") || lhd == jl_symbol("ccall")) {
         // `ccall` calling convention is a placeholder for when there isn't one provided
         // it is not by itself a valid calling convention name to be specified in the surface
         // syntax.
-        return std::make_pair(CallingConv::C, false);
+        return llvm::Optional<std::pair<CallingConv::ID, bool>>(
+            std::make_pair(CallingConv::C, false));
     }
     else if (lhd == jl_symbol("fastcall")) {
-        return std::make_pair(CallingConv::X86_FastCall, false);
+        return llvm::Optional<std::pair<CallingConv::ID, bool>>(
+            std::make_pair(CallingConv::X86_FastCall, false));
     }
     else if (lhd == jl_symbol("thiscall")) {
-        return std::make_pair(CallingConv::X86_ThisCall, false);
+        return llvm::Optional<std::pair<CallingConv::ID, bool>>(
+            std::make_pair(CallingConv::X86_ThisCall, false));
     }
     else if (lhd == jl_symbol("llvmcall")) {
-        return std::make_pair(CallingConv::C, true);
+        return llvm::Optional<std::pair<CallingConv::ID, bool>>(
+            std::make_pair(CallingConv::C, true));
     }
-    jl_errorf("ccall: invalid calling convention %s", jl_symbol_name(lhd));
+    return llvm::Optional<std::pair<CallingConv::ID, bool>>();
 }
 
 static bool verify_ref_type(jl_codectx_t &ctx, jl_value_t* ref, jl_unionall_t *unionall_env, int n, const char *fname)
@@ -1367,8 +1373,13 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 
     CallingConv::ID cc = CallingConv::C;
     bool llvmcall = false;
-    std::tie(cc, llvmcall) = convert_cconv(cc_sym);
-
+    auto cc_or_err = convert_cconv(cc_sym);
+    if (!cc_or_err) {
+        emit_error(ctx, "ccall: invalid calling convention");
+        JL_GC_POP();
+        return jl_cgval_t();
+    }
+    std::tie(cc, llvmcall) = *cc_or_err;
     interpret_symbol_arg(ctx, symarg, args[1], "ccall", llvmcall);
     Value *&jl_ptr = symarg.jl_ptr;
     void (*&fptr)(void) = symarg.fptr;
