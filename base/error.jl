@@ -65,14 +65,13 @@ struct InterpreterIP
     mod::Union{Module,Nothing}
 end
 
-const _previous_bt = Array{Any,1}(undef, 2)
+_previous_bt = nothing
 
 # convert dual arrays (raw bt buffer, array of GC managed values) to a single
 # array of locations
 function _reformat_bt(bt, bt2)
     global _previous_bt
-    _previous_bt[1] = bt
-    _previous_bt[2] = bt2
+    _previous_bt = bt
     ret = Vector{Union{InterpreterIP,Ptr{Cvoid}}}()
     i, j = 1, 1
     while i <= length(bt)
@@ -114,7 +113,7 @@ function backtrace()
     # skip frame for backtrace(). Note that for this to work properly,
     # backtrace() itself must not be interpreted nor inlined.
     skip = 1
-    bt1,bt2 = ccall(:jl_backtrace_from_here, Ref{SimpleVector}, (Cint, Cint), false, skip)
+    bt1, bt2 = ccall(:jl_backtrace_from_here, Ref{SimpleVector}, (Cint, Cint), false, skip)
     return _reformat_bt(bt1::Vector{Ptr{Cvoid}}, bt2::Vector{Any})
 end
 
@@ -124,7 +123,7 @@ end
 Get the backtrace of the current exception, for use within `catch` blocks.
 """
 function catch_backtrace()
-    bt,bt2 = ccall(:jl_get_backtrace, Ref{SimpleVector}, ())
+    bt, bt2 = ccall(:jl_get_backtrace, Ref{SimpleVector}, ())
     return _reformat_bt(bt::Vector{Ptr{Cvoid}}, bt2::Vector{Any})
 end
 

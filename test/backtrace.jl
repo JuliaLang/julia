@@ -254,8 +254,8 @@ let code = raw"""
             tag       = (entry_metadata >> 6) & 0xf
             header    =  entry_metadata >> 10
             if tag == 1 # JL_BT_INTERP_FRAME_TAG
-                code = bt2[j]
-                mod = njlvalues == 2 ? bt2[j+1] : nothing
+                code = nothing # bt2[j]
+                mod = nothing # njlvalues == 2 ? bt2[j+1] : nothing
                 interp_ip = Base.InterpreterIP(code, header, mod)
                 println(stderr, interp_ip)
                 N = Int(2 + njlvalues + nuintvals)
@@ -277,8 +277,7 @@ let code = raw"""
 
     if num_fs != 1000 || num_gs != 1000
         # Dump backtrace info to ease debugging via CI logs
-        bt1,bt2 = Base._previous_bt
-        dump_bt(bt1,bt2)
+        dump_bt(Base._previous_bt,[])
         println(stderr, "Formatted backtrace dump")
         Base.show_backtrace(stderr, bt)
     end
