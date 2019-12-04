@@ -247,6 +247,7 @@ void jl_load_sysimg_static() {
     sysimg_fptrs.base = jl_sysimg_fvars;
     sysimg_gvars_base = jl_sysimg_gvars;
     sysimg_gvars_offsets = jl_sysimg_gvars_offsets;
+    sysimg_gvars_offsets += 1;
     jl_restore_system_image_data(jl_system_image_data, jl_system_image_size);
 }
 
