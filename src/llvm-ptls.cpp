@@ -257,7 +257,7 @@ bool LowerPTLS::runOnModule(Module &_M)
     T_pint8 = T_int8->getPointerTo();
     if (imaging_mode) {
         ptls_slot = create_aliased_global(T_ptls_getter, "jl_get_ptls_states_slot");
-        ptls_offset = create_aliased_global(T_size, "jl_tls_offset");
+        ptls_offset = create_aliased_global(T_size, "jl_tls_offset_idx");
     }
 
     for (auto it = ptls_getter->user_begin(); it != ptls_getter->user_end();) {

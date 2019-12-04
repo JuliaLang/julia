@@ -212,7 +212,7 @@ static void jl_load_sysimg_so(void)
         jl_dlsym(jl_sysimg_handle, "jl_get_ptls_states_slot", (void **)&tls_getter_slot, 1);
         *tls_getter_slot = (uintptr_t)jl_get_ptls_states_getter();
         size_t *tls_offset_idx;
-        jl_dlsym(jl_sysimg_handle, "jl_tls_offset", (void **)&tls_offset_idx, 1);
+        jl_dlsym(jl_sysimg_handle, "jl_tls_offset_idx", (void **)&tls_offset_idx, 1);
         *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
 
 #ifdef _OS_WINDOWS_
@@ -243,7 +243,6 @@ void *jl_sysimg_gvars[] __attribute__((weak));
 void *jl_sysimg_gvars_offsets[] __attribute__((weak));
 size_t jl_system_image_size __attribute__((weak)) = 0;
 
-#include <stdio.h>
 void jl_load_sysimg_static() {
     sysimg_fptrs.base = jl_sysimg_fvars;
     sysimg_gvars_base = jl_sysimg_gvars;
