@@ -40,7 +40,7 @@ function choosetests(choices = [])
         "arrayops", "tuple", "reduce", "reducedim", "abstractarray",
         "intfuncs", "simdloop", "vecelement", "rational",
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
-        "operators", "path", "ccall", "parse", "loading", "bigint",
+        "operators", "path", "ccall", "parse", "loading", "gmp",
         "sorting", "spawn", "backtrace", "exceptions",
         "file", "read", "version", "namedtuple",
         "mpfr", "broadcast", "complex",
@@ -54,7 +54,7 @@ function choosetests(choices = [])
         "checked", "bitset", "floatfuncs", "precompile",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
         "channels", "iostream", "secretbuffer", "specificity",
-        "reinterpretarray", "syntax", "logging", "missing", "asyncmap"
+        "reinterpretarray", "syntax", "logging", "missing", "asyncmap", "atexit"
     ]
 
     tests = []

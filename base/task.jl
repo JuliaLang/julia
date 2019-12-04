@@ -244,6 +244,22 @@ function _wait(t::Task)
     nothing
 end
 
+# have `waiter` wait for `t`
+function _wait2(t::Task, waiter::Task)
+    if !istaskdone(t)
+        lock(t.donenotify)
+        if !istaskdone(t)
+            push!(t.donenotify.waitq, waiter)
+            unlock(t.donenotify)
+            return nothing
+        else
+            unlock(t.donenotify)
+        end
+    end
+    schedule(waiter)
+    nothing
+end
+
 function wait(t::Task)
     t === current_task() && error("deadlock detected: cannot wait on current task")
     _wait(t)
@@ -334,7 +350,7 @@ macro async(expr)
     var = esc(sync_varname)
     quote
         local task = Task($thunk)
-        if $(Expr(:isdefined, var))
+        if $(Expr(:islocal, var))
             push!($var, task)
         end
         schedule(task)
@@ -350,12 +366,6 @@ macro sync_add(expr)
         push!($var, ref)
         ref
     end
-end
-
-function register_taskdone_hook(t::Task, hook)
-    tls = get_task_tls(t)
-    push!(get!(tls, :TASKDONE_HOOKS, []), hook)
-    return t
 end
 
 # runtime system hook called when a task finishes
@@ -379,13 +389,6 @@ function task_done_hook(t::Task)
         finally
             unlock(donenotify)
         end
-    end
-
-    # Execute any other hooks registered in the TLS
-    if isa(t.storage, IdDict) && haskey(t.storage, :TASKDONE_HOOKS)
-        foreach(hook -> hook(t), t.storage[:TASKDONE_HOOKS])
-        delete!(t.storage, :TASKDONE_HOOKS)
-        handled = true
     end
 
     if err && !handled && Threads.threadid() == 1
@@ -656,8 +659,7 @@ end
 @noinline function poptaskref(W::StickyWorkqueue)
     task = trypoptask(W)
     if !(task isa Task)
-        gettask = () -> trypoptask(W)
-        task = ccall(:jl_task_get_next, Any, (Any,), gettask)::Task
+        task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any), trypoptask, W)
     end
     return Ref(task)
 end

@@ -94,10 +94,10 @@ options(s::PromptState) =
     end
 
 function setmark(s::MIState, guess_region_active::Bool=true)
-    was_active = is_region_active(s)
-    guess_region_active && activate_region(s, s.key_repeats > 0 ? :mark : :off)
+    refresh = set_action!(s, :setmark)
+    s.current_action === :setmark && s.key_repeats > 0 && activate_region(s, :mark)
     mark(buffer(s))
-    was_active && refresh_line(s)
+    refresh && refresh_line(s)
     nothing
 end
 
@@ -239,30 +239,35 @@ function preserve_active(command::Symbol)
     command ∈ [:edit_indent, :edit_transpose_lines_down!, :edit_transpose_lines_up!]
 end
 
+# returns whether the "active region" status changed visibly,
+# i.e. whether there should be a visual refresh
 function set_action!(s::MIState, command::Symbol)
     # if a command is already running, don't update the current_action field,
     # as the caller is used as a helper function
-    s.current_action === :unknown || return
+    s.current_action === :unknown || return false
+
+    active = region_active(s)
+
+    ## record current action
+    s.current_action = command
 
     ## handle activeness of the region
-    is_shift_move(cmd) = startswith(String(cmd), "shift_")
-    if is_shift_move(command)
-        if region_active(s) !== :shift
-            setmark(s, false)
+    if startswith(String(command), "shift_") # shift-move command
+        if active !== :shift
+            setmark(s) # s.current_action must already have been set
             activate_region(s, :shift)
             # NOTE: if the region was already active from a non-shift
             # move (e.g. ^Space^Space), the region is visibly changed
+            return active !== :off # active status is reset
         end
     elseif !(preserve_active(command) ||
              command_group(command) === :movement && region_active(s) === :mark)
         # if we move after a shift-move, the region is de-activated
         # (e.g. like emacs behavior)
         deactivate_region(s)
+        return active !== :off
     end
-
-    ## record current action
-    s.current_action = command
-    nothing
+    false
 end
 
 set_action!(s, command::Symbol) = nothing
@@ -1103,7 +1108,7 @@ function edit_lower_case(s)
 end
 function edit_title_case(s)
     set_action!(s, :edit_title_case)
-    return edit_replace_word_right(s, uppercasefirst)
+    return edit_replace_word_right(s, titlecase)
 end
 
 function edit_replace_word_right(s, replace::Function)
@@ -1295,12 +1300,12 @@ function normalize_key(key::AbstractString)
             c, i = iterate(key, i)
             if c == 'C'
                 c, i = iterate(key, i)
-                @assert c == '-'
+                c == '-' || error("the Control key specifier must start with \"\\\\C-\"")
                 c, i = iterate(key, i)
                 write(buf, uppercase(c)-64)
             elseif c == 'M'
                 c, i = iterate(key, i)
-                @assert c == '-'
+                c == '-' || error("the Meta key specifier must start with \"\\\\M-\"")
                 c, i = iterate(key, i)
                 write(buf, '\e')
                 write(buf, c)
@@ -1352,9 +1357,17 @@ struct KeyAlias
     KeyAlias(seq) = new(normalize_key(seq))
 end
 
-function match_input(k::Function, s, term, cs, keymap)
+function match_input(f::Function, s, term, cs, keymap)
     update_key_repeats(s, cs)
-    return keymap_fcn(k, String(cs))
+    c = String(cs)
+    return function (s, p)
+        r = Base.invokelatest(f, s, p, c)
+        if isa(r, Symbol)
+            return r
+        else
+            return :ok
+        end
+    end
 end
 
 match_input(k::Nothing, s, term, cs, keymap) = (s,p) -> return :ok
@@ -1364,27 +1377,15 @@ match_input(k::KeyAlias, s, term, cs, keymap) =
 function match_input(k::Dict, s, term=terminal(s), cs=Char[], keymap = k)
     # if we run out of characters to match before resolving an action,
     # return an empty keymap function
-    eof(term) && return keymap_fcn(nothing, "")
+    eof(term) && return (s, p) -> :abort
     c = read(term, Char)
     # Ignore any `wildcard` as this is used as a
     # placeholder for the wildcard (see normalize_key("*"))
-    c == wildcard && return keymap_fcn(nothing, "")
+    c == wildcard && return (s, p) -> :ok
     push!(cs, c)
     key = haskey(k, c) ? c : wildcard
     # if we don't match on the key, look for a default action then fallback on 'nothing' to ignore
     return match_input(get(k, key, nothing), s, term, cs, keymap)
-end
-
-keymap_fcn(f::Nothing, c) = (s, p) -> return :ok
-function keymap_fcn(f::Function, c)
-    return function (s, p)
-        r = Base.invokelatest(f, s, p, c)
-        if isa(r, Symbol)
-            return r
-        else
-            return :ok
-        end
-    end
 end
 
 update_key_repeats(s, keystroke) = nothing
@@ -1967,6 +1968,25 @@ function move_line_end(buf::IOBuffer)
     nothing
 end
 
+edit_insert_last_word(s::MIState) =
+    edit_insert(s, get_last_word(IOBuffer(mode(s).hist.history[end])))
+
+function get_last_word(buf::IOBuffer)
+    move_line_end(buf)
+    char_move_word_left(buf)
+    posbeg = position(buf)
+    char_move_word_right(buf)
+    posend = position(buf)
+    buf = take!(buf)
+    word = String(buf[posbeg+1:posend])
+    rest = String(buf[posend+1:end])
+    lp, rp, lb, rb = count.(.==(('(', ')', '[', ']')), rest)
+    special = any(in.(('\'', '"', '`'), rest))
+    !special && lp == rp && lb == rb ?
+        word *= rest :
+        word
+end
+
 function commit_line(s)
     cancel_beep(s)
     move_input_end(s)
@@ -2105,6 +2125,7 @@ AnyDict(
     "\eOc" => "\ef",
     # Meta Enter
     "\e\r" => (s,o...)->edit_insert_newline(s),
+    "\e." =>  (s,o...)->edit_insert_last_word(s),
     "\e\n" => "\e\r",
     "^_" => (s,o...)->edit_undo!(s),
     "\e_" => (s,o...)->edit_redo!(s),
@@ -2201,6 +2222,8 @@ const prefix_history_keymap = merge!(
         "\e[*" => "*",
         "\eO*"  => "*",
         "\e[1;5*" => "*", # Ctrl-Arrow
+        "\e[1;2*" => "*", # Shift-Arrow
+        "\e[1;3*" => "*", # Meta-Arrow
         "\e[200~" => "*"
     ),
     # VT220 editing commands
@@ -2430,6 +2453,7 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
             end
             status !== :ignore && (s.last_action = s.current_action)
             if status === :abort
+                s.aborted = true
                 return buffer(s), false, false
             elseif status === :done
                 return buffer(s), true, false

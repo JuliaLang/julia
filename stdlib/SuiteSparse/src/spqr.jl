@@ -143,35 +143,18 @@ Matrix{T}(Q::QRSparseQ) where {T} = lmul!(Q, Matrix{T}(I, size(Q, 1), min(size(Q
 _default_tol(A::SparseMatrixCSC) =
     20*sum(size(A))*eps(real(eltype(A)))*maximum(norm(view(A, :, i)) for i in 1:size(A, 2))
 
-function LinearAlgebra.qr(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where {Tv <: CHOLMOD.VTypes}
-    R     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()
-    E     = Ref{Ptr{CHOLMOD.SuiteSparse_long}}()
-    H     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()
-    HPinv = Ref{Ptr{CHOLMOD.SuiteSparse_long}}()
-    HTau  = Ref{Ptr{CHOLMOD.C_Dense{Tv}}}(C_NULL)
-
-    # SPQR doesn't accept symmetric matrices so we explicitly set the stype
-    r, p, hpinv = _qr!(ORDERING_DEFAULT, tol, 0, 0, Sparse(A, 0),
-        C_NULL, C_NULL, C_NULL, C_NULL,
-        R, E, H, HPinv, HTau)
-
-    R_ = SparseMatrixCSC(Sparse(R[]))
-    return QRSparse(SparseMatrixCSC(Sparse(H[])),
-                    vec(Array(CHOLMOD.Dense(HTau[]))),
-                    SparseMatrixCSC(min(size(A)...),
-                                    size(R_, 2),
-                                    getcolptr(R_),
-                                    rowvals(R_),
-                                    nonzeros(R_)),
-                    p, hpinv)
-end
-
 """
     qr(A) -> QRSparse
 
 Compute the `QR` factorization of a sparse matrix `A`. Fill-reducing row and column permutations
 are used such that `F.R = F.Q'*A[F.prow,F.pcol]`. The main application of this type is to
 solve least squares or underdetermined problems with [`\\`](@ref). The function calls the C library SPQR.
+
+!!! note
+    `qr(A::SparseMatrixCSC)` uses the SPQR library that is part of SuiteSparse.
+    As this library only supports sparse matrices with [`Float64`](@ref) or
+    `ComplexF64` elements, as of Julia v1.4 `qr` converts `A` into a copy that is
+    of type `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}` as appropriate.
 
 # Examples
 ```jldoctest
@@ -206,7 +189,39 @@ Column permutation:
  2
 ```
 """
-LinearAlgebra.qr(A::SparseMatrixCSC; tol = _default_tol(A)) = qr(A, Val{true}, tol = tol)
+function LinearAlgebra.qr(A::SparseMatrixCSC{Tv}; tol=_default_tol(A)) where {Tv <: CHOLMOD.VTypes}
+    R     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()
+    E     = Ref{Ptr{CHOLMOD.SuiteSparse_long}}()
+    H     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()
+    HPinv = Ref{Ptr{CHOLMOD.SuiteSparse_long}}()
+    HTau  = Ref{Ptr{CHOLMOD.C_Dense{Tv}}}(C_NULL)
+
+    # SPQR doesn't accept symmetric matrices so we explicitly set the stype
+    r, p, hpinv = _qr!(ORDERING_DEFAULT, tol, 0, 0, Sparse(A, 0),
+        C_NULL, C_NULL, C_NULL, C_NULL,
+        R, E, H, HPinv, HTau)
+
+    R_ = SparseMatrixCSC(Sparse(R[]))
+    return QRSparse(SparseMatrixCSC(Sparse(H[])),
+                    vec(Array(CHOLMOD.Dense(HTau[]))),
+                    SparseMatrixCSC(min(size(A)...),
+                                    size(R_, 2),
+                                    getcolptr(R_),
+                                    rowvals(R_),
+                                    nonzeros(R_)),
+                    p, hpinv)
+end
+LinearAlgebra.qr(A::SparseMatrixCSC{<:Union{Float16,Float32}}; tol=_default_tol(A)) =
+    qr(convert(SparseMatrixCSC{Float64}, A); tol=tol)
+LinearAlgebra.qr(A::SparseMatrixCSC{<:Union{ComplexF16,ComplexF32}}; tol=_default_tol(A)) =
+    qr(convert(SparseMatrixCSC{ComplexF64}, A); tol=tol)
+LinearAlgebra.qr(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}};
+   tol=_default_tol(A)) where {T<:AbstractFloat} =
+    throw(ArgumentError(string("matrix type ", typeof(A), "not supported. ",
+    "Try qr(convert(SparseMatrixCSC{Float64/ComplexF64,Int}, A)) for ",
+    "sparse floating point QR using SPQR or qr(Array(A)) for generic ",
+    "dense QR.")))
+LinearAlgebra.qr(A::SparseMatrixCSC; tol=_default_tol(A)) = qr(float(A); tol=tol)
 
 function LinearAlgebra.lmul!(Q::QRSparseQ, A::StridedVecOrMat)
     if size(A, 1) != size(Q, 1)

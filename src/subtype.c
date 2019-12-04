@@ -294,7 +294,7 @@ int jl_obviously_unequal(jl_value_t *a, jl_value_t *b)
     return obviously_unequal(a, b);
 }
 
-static int in_union(jl_value_t *u, jl_value_t *x)
+static int in_union(jl_value_t *u, jl_value_t *x) JL_NOTSAFEPOINT
 {
     if (u == x) return 1;
     if (!jl_is_uniontype(u)) return 0;
@@ -800,6 +800,7 @@ static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e)
     jl_varbinding_t *btemp = e->vars;
     // if the var for this unionall (based on identity) already appears somewhere
     // in the environment, rename to get a fresh var.
+    JL_GC_PUSH1(&u);
     while (btemp != NULL) {
         if (btemp->var == u->var ||
             // outer var can only refer to inner var if bounds changed
@@ -810,6 +811,7 @@ static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e)
         }
         btemp = btemp->prev;
     }
+    JL_GC_POP();
     return u;
 }
 
@@ -819,7 +821,8 @@ struct subtype_unionall_env {
 };
 
 static int subtype_unionall_callback(struct subtype_unionall_env *env, int8_t R, jl_stenv_t *s, int param) {
-    JL_GC_PROMISE_ROOTED(env->t); JL_GC_PROMISE_ROOTED(env->ubody);
+    JL_GC_PROMISE_ROOTED(env->t);
+    JL_GC_PROMISE_ROOTED(env->ubody);
     if (R) {
         return subtype(env->t, env->ubody, s, param);
     }
@@ -833,7 +836,10 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
 {
     u = unalias_unionall(u, e);
     struct subtype_unionall_env env = {t, u->body};
-    return with_tvar((tvar_callback)subtype_unionall_callback, (void*)&env, u, R, e, param);
+    JL_GC_PUSH1(&u);
+    int res = with_tvar((tvar_callback)subtype_unionall_callback, (void*)&env, u, R, e, param);
+    JL_GC_POP();
+    return res;
 }
 
 // unwrap <=1 layers of UnionAlls, leaving the var in *p1 the body
@@ -998,7 +1004,10 @@ loop: // while (i <= lx) {
                     u = unalias_unionall(u, e);
                     env->vtx = (jl_value_t*)u;
                     // goto loop, but with the tvar introduced
-                    return with_tvar((tvar_callback)subtype_tuple_tail, env, u, 0, e, param);
+                    JL_GC_PUSH1(&u);
+                    int res = with_tvar((tvar_callback)subtype_tuple_tail, env, u, 0, e, param);
+                    JL_GC_POP();
+                    return res;
                 }
                 env->vtx = xi;
             }
@@ -1018,7 +1027,10 @@ loop: // while (i <= lx) {
                         u = unalias_unionall(u, e);
                         env->vty = (jl_value_t*)u;
                         // goto loop, but with the tvar introduced
-                        return with_tvar((tvar_callback)subtype_tuple_tail, env, u, 1, e, param);
+                        JL_GC_PUSH1(&u);
+                        int res = with_tvar((tvar_callback)subtype_tuple_tail, env, u, 1, e, param);
+                        JL_GC_POP();
+                        return res;
                     }
                     env->vty = yi;
                 }
@@ -2096,7 +2108,7 @@ static int try_subtype_in_env(jl_value_t *a, jl_value_t *b, jl_stenv_t *e, int R
     return ret;
 }
 
-static void set_bound(jl_value_t **bound, jl_value_t *val, jl_tvar_t *v, jl_stenv_t *e)
+static void set_bound(jl_value_t **bound, jl_value_t *val, jl_tvar_t *v, jl_stenv_t *e) JL_NOTSAFEPOINT
 {
     if (in_union(val, (jl_value_t*)v))
         return;
@@ -2202,15 +2214,16 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     }
     else if (bb->concrete || bb->constraintkind == 1) {
         jl_value_t *ub = R ? intersect_aside(a, bb->ub, e, 1, d) : intersect_aside(bb->ub, a, e, 0, d);
+        if (ub == jl_bottom_type)
+            return jl_bottom_type;
         JL_GC_PUSH1(&ub);
-        if (ub == jl_bottom_type ||
+        if (!R && !subtype_bounds_in_env(bb->lb, a, e, 0, d)) {
             // this fixes issue #30122. TODO: better fix for R flag.
-            (!R && !subtype_bounds_in_env(bb->lb, a, e, 0, d))) {
             JL_GC_POP();
             return jl_bottom_type;
         }
-        set_bound(&bb->ub, ub, b, e);
         JL_GC_POP();
+        set_bound(&bb->ub, ub, b, e);
         return (jl_value_t*)b;
     }
     else if (bb->constraintkind == 2) {
@@ -2233,7 +2246,7 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         return (jl_value_t*)b;
     if (ub == a) {
         if (bb->lb == jl_bottom_type) {
-            set_bound(&bb->ub, ub, b, e);
+            set_bound(&bb->ub, a, b, e);
             return (jl_value_t*)b;
         }
         return ub;

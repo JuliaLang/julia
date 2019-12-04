@@ -1444,8 +1444,10 @@ void jl_generate_fptr(jl_code_instance_t *output)
                     break;
                 ucache = ucache->next;
             }
-            if (codeinst->invoke)
+            if (codeinst->invoke) {
+                JL_UNLOCK(&codegen_lock);
                 return;
+            }
             if (ucache != NULL) {
                 codeinst->specptr = ucache->specptr;
                 codeinst->rettype_const = ucache->rettype_const;
@@ -5207,7 +5209,7 @@ static Function *jl_cfunction_object(jl_value_t *ff, jl_value_t *declrt, jl_tupl
 }
 
 // generate a julia-callable function that calls f (AKA lam)
-static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlretty, const jl_returninfo_t &f, StringRef funcName, Module *M)
+static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlretty, const jl_returninfo_t &f, int retarg, StringRef funcName, Module *M)
 {
     Function *w = Function::Create(jl_func_sig, GlobalVariable::ExternalLinkage, funcName, M);
     add_return_attr(w, Attribute::NonNull);
@@ -5232,7 +5234,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     ctx.builder.SetCurrentDebugLocation(noDbg);
     allocate_gc_frame(ctx, b0);
 
-    // TODO: replace this with emit_call_specfun_other
+    // TODO: replace this with emit_call_specfun_other?
     FunctionType *ftype = f.decl->getFunctionType();
     size_t nfargs = ftype->getNumParams();
     Value **args = (Value**) alloca(nfargs * sizeof(Value*));
@@ -5268,7 +5270,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
             theArg = funcArg;
         }
         else {
-            Value *argPtr = ctx.builder.CreateInBoundsGEP(argArray, ConstantInt::get(T_size, i - 1));
+            Value *argPtr = ctx.builder.CreateConstInBoundsGEP1_32(T_prjlvalue, argArray, i - 1);
             theArg = maybe_mark_load_dereferenceable(ctx.builder.CreateLoad(argPtr), false, ty);
         }
         if (!isboxed) {
@@ -5284,28 +5286,38 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     call->setAttributes(f.decl->getAttributes());
 
     jl_cgval_t retval;
-    switch (f.cc) {
-    case jl_returninfo_t::Boxed:
-        retval = mark_julia_type(ctx, call, true, jlretty);
-        break;
-    case jl_returninfo_t::Register:
-        retval = mark_julia_type(ctx, call, false, jlretty);
-        break;
-    case jl_returninfo_t::SRet:
-        retval = mark_julia_slot(result, jlretty, NULL, tbaa_stack);
-        break;
-    case jl_returninfo_t::Union:
-        // result is technically not right here, but `boxed` will only look at it
-        // for the unboxed values, so it's ok.
-        retval = mark_julia_slot(result,
-                                 jlretty,
-                                 ctx.builder.CreateExtractValue(call, 1),
-                                 tbaa_stack);
-        retval.Vboxed = ctx.builder.CreateExtractValue(call, 0);
-        break;
-    case jl_returninfo_t::Ghosts:
-        retval = mark_julia_slot(NULL, jlretty, call, tbaa_stack);
-        break;
+    if (retarg != -1) {
+        Value *theArg;
+        if (retarg == 0)
+            theArg = funcArg;
+        else
+            theArg = ctx.builder.CreateLoad(ctx.builder.CreateConstInBoundsGEP1_32(T_prjlvalue, argArray, retarg - 1));
+        retval = mark_julia_type(ctx, theArg, true, jl_any_type);
+    }
+    else {
+        switch (f.cc) {
+        case jl_returninfo_t::Boxed:
+            retval = mark_julia_type(ctx, call, true, jlretty);
+            break;
+        case jl_returninfo_t::Register:
+            retval = mark_julia_type(ctx, call, false, jlretty);
+            break;
+        case jl_returninfo_t::SRet:
+            retval = mark_julia_slot(result, jlretty, NULL, tbaa_stack);
+            break;
+        case jl_returninfo_t::Union:
+            // result is technically not right here, but `boxed` will only look at it
+            // for the unboxed values, so it's ok.
+            retval = mark_julia_slot(result,
+                                     jlretty,
+                                     ctx.builder.CreateExtractValue(call, 1),
+                                     tbaa_stack);
+            retval.Vboxed = ctx.builder.CreateExtractValue(call, 0);
+            break;
+        case jl_returninfo_t::Ghosts:
+            retval = mark_julia_slot(NULL, jlretty, call, tbaa_stack);
+            break;
+        }
     }
     ctx.builder.CreateRet(boxed(ctx, retval));
     assert(!ctx.roots);
@@ -5639,9 +5651,31 @@ static std::unique_ptr<Module> emit_function(
         has_sret = (returninfo.cc == jl_returninfo_t::SRet || returninfo.cc == jl_returninfo_t::Union);
         jl_init_function(f);
 
+        // common pattern: see if all return statements are an argument in that
+        // case the apply-generic call can re-use the original box for the return
+        int retarg = [stmts, nreq]() {
+            int retarg = -1;
+            for (size_t i = 0; i < jl_array_len(stmts); ++i) {
+                jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
+                if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == return_sym) {
+                    stmt = jl_exprarg(stmt, 0);
+                    if (!jl_is_slot(stmt))
+                        return -1;
+                    unsigned sl = jl_slot_number(stmt) - 1;
+                    if (sl >= nreq)
+                        return -1;
+                    if (retarg == -1)
+                        retarg = sl;
+                    else if ((unsigned)retarg != sl)
+                        return -1;
+                }
+            }
+            return retarg;
+        }();
+
         std::stringstream wrapName;
         wrapName << "jfptr_" << unadorned_name << "_" << globalUnique;
-        Function *fwrap = gen_invoke_wrapper(lam, jlrettype, returninfo, wrapName.str(), M);
+        Function *fwrap = gen_invoke_wrapper(lam, jlrettype, returninfo, retarg, wrapName.str(), M);
         declarations->functionObject = strdup(fwrap->getName().str().c_str());
     }
     else {
@@ -6197,7 +6231,7 @@ static std::unique_ptr<Module> emit_function(
     std::vector<Metadata*> scope_stack;
     std::vector<MDNode*> scope_list_stack;
     {
-        size_t nstmts = jl_array_len(src->code);
+        size_t nstmts = jl_array_len(stmts);
         aliasscopes.resize(nstmts + 1, nullptr);
         MDBuilder mbuilder(jl_LLVMContext);
         MDNode *alias_domain = mbuilder.createAliasScopeDomain(ctx.name);

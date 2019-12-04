@@ -476,7 +476,6 @@ static jl_function_t *jl_iterate_func JL_GLOBALLY_ROOTED;
 
 static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_value_t *iterate)
 {
-    JL_NARGSV(apply, 1);
     jl_function_t *f = args[0];
     if (nargs == 2) {
         // some common simple cases
@@ -534,7 +533,7 @@ static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl
     size_t n_alloc;
     jl_value_t **roots;
     JL_GC_PUSHARGS(roots, stackalloc + (extra ? 2 : 0));
-    jl_value_t **newargs = NULL;
+    jl_value_t **newargs;
     jl_svec_t *arg_heap = NULL;
     if (onstack) {
         newargs = roots;
@@ -542,7 +541,9 @@ static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl
     }
     else {
         // put arguments on the heap if there are too many
+        newargs = NULL;
         n_alloc = 0;
+        assert(precount > 0); // let optimizer know this won't overflow
         _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, precount, extra);
     }
     newargs[0] = f;
@@ -555,6 +556,7 @@ static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl
             size_t j, al = jl_svec_len(t);
             precount = (precount > al) ? precount - al : 0;
             _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, n + precount + al, extra);
+            assert(newargs != NULL); // inform GCChecker that we didn't write a NULL here
             for (j = 0; j < al; j++) {
                 newargs[n++] = jl_svecref(t, j);
                 // GC Note: here we assume that the return value of `jl_svecref`
@@ -567,6 +569,7 @@ static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl
             size_t j, al = jl_nfields(ai);
             precount = (precount > al) ? precount - al : 0;
             _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, n + precount + al, extra);
+            assert(newargs != NULL); // inform GCChecker that we didn't write a NULL here
             for (j = 0; j < al; j++) {
                 // jl_fieldref may allocate.
                 newargs[n++] = jl_fieldref(ai, j);
@@ -579,6 +582,7 @@ static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl
             size_t j, al = jl_array_len(aai);
             precount = (precount > al) ? precount - al : 0;
             _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, n + precount + al, extra);
+            assert(newargs != NULL); // inform GCChecker that we didn't write a NULL here
             if (aai->flags.ptrarray) {
                 for (j = 0; j < al; j++) {
                     jl_value_t *arg = jl_array_ptr_ref(aai, j);
@@ -634,11 +638,13 @@ static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl
 
 JL_CALLABLE(jl_f__apply_iterate)
 {
+    JL_NARGSV(_apply_iterate, 2);
     return do_apply(F, args+1, nargs-1, args[0]);
 }
 
 JL_CALLABLE(jl_f__apply)
 {
+    JL_NARGSV(_apply, 1);
     return do_apply(F, args, nargs, NULL);
 }
 

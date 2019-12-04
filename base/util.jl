@@ -3,20 +3,20 @@
 
 # This type must be kept in sync with the C struct in src/gc.h
 struct GC_Num
-    allocd      ::Int64 # GC internal
-    deferred_alloc::Int64 # GC internal
-    freed       ::Int64 # GC internal
-    malloc      ::UInt64
-    realloc     ::UInt64
-    poolalloc   ::UInt64
-    bigalloc    ::UInt64
-    freecall    ::UInt64
-    total_time  ::UInt64
-    total_allocd::UInt64 # GC internal
-    since_sweep ::UInt64 # GC internal
-    collect     ::Csize_t # GC internal
-    pause       ::Cint
-    full_sweep  ::Cint
+    allocd          ::Int64 # GC internal
+    deferred_alloc  ::Int64 # GC internal
+    freed           ::Int64 # GC internal
+    malloc          ::Int64
+    realloc         ::Int64
+    poolalloc       ::Int64
+    bigalloc        ::Int64
+    freecall        ::Int64
+    total_time      ::Int64
+    total_allocd    ::Int64 # GC internal
+    since_sweep     ::Int64 # GC internal
+    collect         ::Csize_t # GC internal
+    pause           ::Cint
+    full_sweep      ::Cint
 end
 
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
@@ -35,21 +35,21 @@ struct GC_Diff
 end
 
 gc_total_bytes(gc_num::GC_Num) =
-    (gc_num.allocd + gc_num.deferred_alloc + Int64(gc_num.total_allocd))
+    gc_num.allocd + gc_num.deferred_alloc + gc_num.total_allocd
 
 function GC_Diff(new::GC_Num, old::GC_Num)
     # logic from `src/gc.c:jl_gc_total_bytes`
     old_allocd = gc_total_bytes(old)
     new_allocd = gc_total_bytes(new)
     return GC_Diff(new_allocd - old_allocd,
-                   Int64(new.malloc       - old.malloc),
-                   Int64(new.realloc      - old.realloc),
-                   Int64(new.poolalloc    - old.poolalloc),
-                   Int64(new.bigalloc     - old.bigalloc),
-                   Int64(new.freecall     - old.freecall),
-                   Int64(new.total_time   - old.total_time),
-                   new.pause              - old.pause,
-                   new.full_sweep         - old.full_sweep)
+                   new.malloc       - old.malloc,
+                   new.realloc      - old.realloc,
+                   new.poolalloc    - old.poolalloc,
+                   new.bigalloc     - old.bigalloc,
+                   new.freecall     - old.freecall,
+                   new.total_time   - old.total_time,
+                   new.pause        - old.pause,
+                   new.full_sweep   - old.full_sweep)
 end
 
 function gc_alloc_count(diff::GC_Diff)
@@ -59,9 +59,6 @@ end
 
 # total time spend in garbage collection, in nanoseconds
 gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
-
-# total number of bytes allocated so far
-gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
 
 # print elapsed time, return expression value
 const _mem_units = ["byte", "KiB", "MiB", "GiB", "TiB", "PiB"]
@@ -159,6 +156,7 @@ julia> @time begin
 """
 macro time(ex)
     quote
+        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
         local stats = gc_num()
         local elapsedtime = time_ns()
         local val = $(esc(ex))
@@ -192,6 +190,7 @@ malloc() calls:    1
 """
 macro timev(ex)
     quote
+        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
         local stats = gc_num()
         local elapsedtime = time_ns()
         local val = $(esc(ex))
@@ -217,27 +216,21 @@ julia> @elapsed sleep(0.3)
 """
 macro elapsed(ex)
     quote
+        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
         local t0 = time_ns()
-        local val = $(esc(ex))
-        (time_ns()-t0)/1e9
+        $(esc(ex))
+        (time_ns() - t0) / 1e9
     end
 end
 
-# measure bytes allocated without *most* contamination from compilation
-# Note: This reports a different value from the @time macros, because
-# it wraps the call in a function, however, this means that things
-# like:  @allocated y = foo()
-# will not work correctly, because it will set y in the context of
-# the local function made by the macro, not the current function
+# total number of bytes allocated so far
+gc_bytes(b::Ref{Int64}) = ccall(:jl_gc_get_total_bytes, Cvoid, (Ptr{Int64},), b)
+
 """
     @allocated
 
 A macro to evaluate an expression, discarding the resulting value, instead returning the
-total number of bytes allocated during evaluation of the expression. Note: the expression is
-evaluated inside a local function, instead of the current context, in order to eliminate the
-effects of compilation, however, there still may be some allocations due to JIT compilation.
-This also makes the results inconsistent with the `@time` macros, which do not try to adjust
-for the effects of compilation.
+total number of bytes allocated during evaluation of the expression.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@elapsed`](@ref).
@@ -249,15 +242,13 @@ julia> @allocated rand(10^6)
 """
 macro allocated(ex)
     quote
-        let
-            local f
-            function f()
-                b0 = gc_bytes()
-                $(esc(ex))
-                gc_bytes() - b0
-            end
-            f()
-        end
+        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
+        local b0 = Ref{Int64}(0)
+        local b1 = Ref{Int64}(0)
+        gc_bytes(b0)
+        $(esc(ex))
+        gc_bytes(b1)
+        b1[] - b0[]
     end
 end
 
@@ -292,6 +283,7 @@ julia> memallocs.total_time
 """
 macro timed(ex)
     quote
+        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
         local stats = gc_num()
         local elapsedtime = time_ns()
         local val = $(esc(ex))

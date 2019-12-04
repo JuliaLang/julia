@@ -504,7 +504,7 @@ static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
 
 // --- mapping between julia and llvm types ---
 
-static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua_env, bool *isboxed);
+static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua_env, bool *isboxed, bool llvmcall=false);
 
 static unsigned convert_struct_offset(Type *lty, unsigned byte_offset)
 {
@@ -546,7 +546,7 @@ JL_DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt, bool *isboxed)
 }
 
 // converts a julia bitstype into the equivalent LLVM bitstype
-static Type *bitstype_to_llvm(jl_value_t *bt)
+static Type *bitstype_to_llvm(jl_value_t *bt, bool llvmcall = false)
 {
     assert(jl_is_primitivetype(bt));
     if (bt == (jl_value_t*)jl_bool_type)
@@ -555,6 +555,8 @@ static Type *bitstype_to_llvm(jl_value_t *bt)
         return T_int32;
     if (bt == (jl_value_t*)jl_int64_type)
         return T_int64;
+    if (llvmcall && (bt == (jl_value_t*)jl_float16_type))
+        return T_float16;
     if (bt == (jl_value_t*)jl_float32_type)
         return T_float32;
     if (bt == (jl_value_t*)jl_float64_type)
@@ -590,7 +592,7 @@ static unsigned jl_field_align(jl_datatype_t *dt, size_t i)
     return std::min(al, jl_datatype_align(dt));
 }
 
-static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isboxed)
+static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isboxed, bool llvmcall)
 {
     // this function converts a Julia Type into the equivalent LLVM struct
     // use this where C-compatible (unboxed) structs are desired
@@ -599,11 +601,12 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
     if (jt == (jl_value_t*)jl_bottom_type)
         return T_void;
     if (jl_is_primitivetype(jt))
-        return bitstype_to_llvm(jt);
+        return bitstype_to_llvm(jt, llvmcall);
     if (jl_is_structtype(jt)) {
         jl_datatype_t *jst = (jl_datatype_t*)jt;
         bool isTuple = jl_is_tuple_type(jt);
-        if (jst->struct_decl != NULL)
+        // don't use pre-filled struct_decl for llvmcall
+        if (!llvmcall && (jst->struct_decl != NULL))
             return (Type*)jst->struct_decl;
         if (jl_is_structtype(jt) && !(jst->layout && jl_is_layout_opaque(jst->layout))) {
             jl_svec_t *ftypes = jl_get_fieldtypes(jst);
@@ -654,7 +657,7 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
                     continue;
                 }
                 else {
-                    lty = julia_struct_to_llvm(ty, NULL, &isptr);
+                    lty = julia_struct_to_llvm(ty, NULL, &isptr, llvmcall);
                     assert(!isptr);
                 }
                 if (lasttype != NULL && lasttype != lty)
@@ -2722,12 +2725,14 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                                 ConstantInt::get(T_size, jl_field_offset(sty, i) + jl_field_size(sty, i) - 1))));
             }
         }
-        bool need_wb = false;
         // TODO: verify that nargs <= nf (currently handled by front-end)
         for (size_t i = 0; i < nargs; i++) {
             const jl_cgval_t &rhs = argv[i];
-            if (jl_field_isptr(sty, i) && !rhs.isboxed)
-                need_wb = true;
+            bool need_wb; // set to true if the store might cause the allocation of a box newer than the struct
+            if (jl_field_isptr(sty, i))
+                need_wb = !rhs.isboxed;
+            else
+                need_wb = false;
             emit_typecheck(ctx, rhs, jl_svecref(sty->types, i), "new");
             emit_setfield(ctx, sty, strctinfo, i, rhs, false, need_wb);
         }

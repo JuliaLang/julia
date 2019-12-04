@@ -885,6 +885,9 @@ function inline_apply!(ir::IRCode, idx::Int, sig::Signature, params::Params)
     while sig.f === Core._apply || sig.f === Core._apply_iterate
         arg_start = sig.f === Core._apply ? 2 : 3
         atypes = sig.atypes
+        if arg_start > length(atypes)
+            return nothing
+        end
         # Try to figure out the signature of the function being called
         # and if rewrite_apply_exprargs can deal with this form
         for i = (arg_start + 1):length(atypes)
