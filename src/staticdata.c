@@ -237,6 +237,20 @@ static void jl_load_sysimg_so(void)
     jl_restore_system_image_data(sysimg_data, *plen);
 }
 
+const char jl_system_image_data[] __attribute__((weak));
+void *jl_sysimg_fvars[] __attribute__((weak));
+void *jl_sysimg_gvars[] __attribute__((weak));
+void *jl_sysimg_gvars_offsets[] __attribute__((weak));
+size_t jl_system_image_size __attribute__((weak)) = 0;
+
+#include <stdio.h>
+void jl_load_sysimg_static() {
+    sysimg_fptrs.base = jl_sysimg_fvars;
+    sysimg_gvars_base = jl_sysimg_gvars;
+    sysimg_gvars_offsets = jl_sysimg_gvars_offsets;
+    jl_restore_system_image_data(jl_system_image_data, jl_system_image_size);
+}
+
 
 // --- serializer ---
 
@@ -1411,7 +1425,7 @@ extern void jl_gc_set_permalloc_region(void *start, void *end);
 // Takes in a path of the form "usr/lib/julia/sys.so" (jl_restore_system_image should be passed the same string)
 JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 {
-    if (jl_sysimg_handle)
+    if (jl_sysimg_handle || jl_system_image_size)
         return; // embedded target already called jl_set_sysimg_so
 
     char *dot = (char*) strrchr(fname, '.');
@@ -1564,14 +1578,16 @@ JL_DLLEXPORT void jl_restore_system_image(const char *fname)
 #ifndef JL_NDEBUG
     char *dot = fname ? (char*)strrchr(fname, '.') : NULL;
     int is_ji = (dot && !strcmp(dot, ".ji"));
-    assert((is_ji || jl_sysimg_handle) && "System image file not preloaded");
+    assert((is_ji || jl_sysimg_handle || jl_system_image_size) && "System image file not preloaded");
 #endif
 
     if (jl_sysimg_handle) {
         // load the pre-compiled sysimage from jl_sysimg_handle
         jl_load_sysimg_so();
-    }
-    else {
+    } else if (jl_system_image_size) {
+        // load the pre-compiled sysimage statically compiled into this executable
+        jl_load_sysimg_static();
+    } else {
         ios_t f;
         if (ios_file(&f, fname, 1, 0, 0, 0) == NULL)
             jl_errorf("System image file \"%s\" not found.", fname);
