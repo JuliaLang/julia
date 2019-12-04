@@ -135,7 +135,7 @@ what is returned is `itr′` and
 _xfadjoint(op, itr) = (op, itr)
 _xfadjoint(op, itr::Generator) =
     if itr.f === identity
-        op, itr.iter
+        _xfadjoint(op, itr.iter)
     else
         _xfadjoint(MappingRF(itr.f, op), itr.iter)
     end
