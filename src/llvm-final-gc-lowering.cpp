@@ -119,7 +119,7 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
     builder.SetInsertPoint(&*(++BasicBlock::iterator(target)));
     Instruction *inst =
         builder.CreateStore(
-            ConstantInt::get(T_size, nRoots << 1),
+            ConstantInt::get(T_size, nRoots << 2),
             builder.CreateBitCast(
                 builder.CreateConstGEP1_32(gcframe, 0),
                 T_size->getPointerTo()));

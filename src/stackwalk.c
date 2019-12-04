@@ -27,6 +27,26 @@ extern "C" {
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context) JL_NOTSAFEPOINT;
 static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintptr_t *fp) JL_NOTSAFEPOINT;
 
+static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintptr_t sp) JL_NOTSAFEPOINT
+{
+    jl_gcframe_t *pgcstack = *ppgcstack;
+    while (pgcstack != NULL) {
+        jl_gcframe_t *prev = pgcstack->prev;
+        if (pgcstack->nroots & 2) { // tagged frame
+            uintptr_t frame_fp = ((uintptr_t*)pgcstack)[-1];
+            if (frame_fp == 0)
+                continue; // frame wasn't fully initialized yet
+            if (frame_fp >= sp)
+                break; // stack grows up, so frame pointer is monotonically increasing
+            *ppgcstack = prev;
+            return pgcstack;
+        }
+        *ppgcstack = pgcstack = prev;
+    }
+    return NULL;
+}
+
+
 // Record backtrace entries into bt_data by stepping cursor with jl_unw_step
 // until the outermost frame is encountered or the buffer bt_data is (close to)
 // full. Returned instruction pointers are adjusted to point to the address of
@@ -37,7 +57,7 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintpt
 // entries.  If `sp != NULL`, the stack pointer corresponding `bt_data[i]` is
 // stored in `sp[i]`.
 //
-// Flag `add_interp_frames==1` should be set to record an extended backtrace
+// `pgcstack` should be given if you want to record extended backtrace
 // entries in `bt_data` for each julia interpreter frame.
 //
 // Flag `from_signal_handler==1` should be set if the cursor was obtained by
@@ -46,7 +66,7 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintpt
 // jl_unw_stepn will return 1 if there are more frames to come. The number of
 // elements written to bt_data (and sp if non-NULL) are returned in bt_size.
 int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
-                 uintptr_t *sp, size_t maxsize, int skip, int add_interp_frames,
+                 uintptr_t *sp, size_t maxsize, int skip, jl_gcframe_t **ppgcstack,
                  int from_signal_handler) JL_NOTSAFEPOINT
 {
     volatile size_t n = 0;
@@ -72,7 +92,7 @@ int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
 #endif
         int have_more_frames = 1;
         while (have_more_frames) {
-            if (n + JL_BT_MAX_ENTRY_SIZE > maxsize) {
+            if (n + JL_BT_MAX_ENTRY_SIZE + 1 > maxsize) {
                 // Postpone advancing the cursor: may need more space
                 need_more_space = 1;
                 break;
@@ -122,15 +142,25 @@ int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
                 call_ip = 0;
             }
             jl_bt_element_t *bt_entry = bt_data + n;
-            size_t entry_sz = 0;
-            if (add_interp_frames && jl_is_enter_interpreter_frame(call_ip) &&
-                (entry_sz = jl_capture_interp_frame(bt_entry, thesp, thefp, maxsize-n)) != 0) {
-                n += entry_sz;
-            } else {
-                bt_entry->uintptr = call_ip;
-                n++;
+            jl_gcframe_t *pgcstack;
+            if ((pgcstack = is_enter_interpreter_frame(ppgcstack, thesp))) {
+                size_t add = jl_capture_interp_frame(bt_entry, pgcstack, maxsize - n);
+                n += add;
+                bt_entry += add;
+                while ((pgcstack = is_enter_interpreter_frame(ppgcstack, thesp))) {
+                    // If the compiler got inlining-happy, or the user tried to
+                    // push multiple frames (or the unwinder got very
+                    // confused), we could end up here. That doesn't happen
+                    // now, so just ignore this possibility. If we want this,
+                    // we can work on adding support for it later.
+                }
             }
+            bt_entry->uintptr = call_ip;
+            n++;
         }
+        // TODO: if we have some pgcstack entries remaining (because the
+        // unwinder failed and returned !have_more_frames early), we could
+        // still append those frames here
 #if !defined(_OS_WINDOWS_)
     }
     else {
@@ -150,13 +180,13 @@ int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
 }
 
 NOINLINE size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize,
-                                  bt_context_t *context, int add_interp_frames) JL_NOTSAFEPOINT
+                                  bt_context_t *context, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT
 {
     bt_cursor_t cursor;
     if (!jl_unw_init(&cursor, context))
         return 0;
     size_t bt_size = 0;
-    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, add_interp_frames, 1);
+    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1);
     return bt_size;
 }
 
@@ -170,11 +200,12 @@ NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip
     bt_context_t context;
     memset(&context, 0, sizeof(context));
     jl_unw_get(&context);
+    jl_gcframe_t *pgcstack = jl_pgcstack;
     bt_cursor_t cursor;
     if (!jl_unw_init(&cursor, &context))
         return 0;
     size_t bt_size = 0;
-    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, skip + 1, 1, 0);
+    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, skip + 1, &pgcstack, 0);
     return bt_size;
 }
 
@@ -204,6 +235,7 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
     bt_cursor_t cursor;
     memset(&context, 0, sizeof(context));
     jl_unw_get(&context);
+    jl_gcframe_t *pgcstack = jl_pgcstack;
     if (jl_unw_init(&cursor, &context)) {
         // Skip frame for jl_backtrace_from_here itself
         skip += 1;
@@ -218,7 +250,7 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
             }
             size_t size_incr = 0;
             have_more_frames = jl_unw_stepn(&cursor, (jl_bt_element_t*)jl_array_data(ip) + offset,
-                                            &size_incr, sp_ptr, maxincr, skip, 1, 0);
+                                            &size_incr, sp_ptr, maxincr, skip, &pgcstack, 0);
             skip = 0;
             offset += size_incr;
         }
@@ -442,8 +474,7 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintpt
 #ifndef _CPU_X86_64_
     *ip = (uintptr_t)cursor->stackframe.AddrPC.Offset;
     *sp = (uintptr_t)cursor->stackframe.AddrStack.Offset;
-    if (fp)
-        *fp = (uintptr_t)cursor->stackframe.AddrFrame.Offset;
+    *fp = (uintptr_t)cursor->stackframe.AddrFrame.Offset;
     if (*ip == 0) {
         if (!readable_pointer((LPCVOID)*sp))
             return 0;
@@ -458,8 +489,7 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintpt
 #else
     *ip = (uintptr_t)cursor->Rip;
     *sp = (uintptr_t)cursor->Rsp;
-    if (fp)
-        *fp = (uintptr_t)cursor->Rbp;
+    *fp = 0;
     if (*ip == 0) {
         if (!readable_pointer((LPCVOID)*sp))
             return 0;
@@ -517,27 +547,19 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintpt
     if (unw_get_reg(cursor, UNW_REG_SP, &reg) < 0)
         return 0;
     *sp = reg;
-#ifdef UNW_REG_FP
-    if (unw_get_reg(cursor, UNW_REG_FP, &reg) < 0)
-        return 0;
-    if (fp)
-        *fp = reg;
-#else
-    if (fp)
-        *fp = 0;
-#endif
+    *fp = 0;
     return unw_step(cursor) > 0;
 }
 
 #ifdef LIBOSXUNWIND
 NOINLINE size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize,
-                                        bt_context_t *context, int add_interp_frames)
+                                        bt_context_t *context, jl_gcframe_t *pgcstack)
 {
     size_t bt_size = 0;
     bt_cursor_t cursor;
     if (unw_init_local_dwarf(&cursor, context) != UNW_ESUCCESS)
         return 0;
-    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, add_interp_frames, 1);
+    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1);
     return bt_size;
 }
 #endif
