@@ -615,25 +615,20 @@ static inline std::vector<TargetData<n>> &get_cmdline_targets(F &&feature_cb)
     return targets;
 }
 
-// Load sysimg, use the `callback` for dispatch and perform all relocations
-// for the selected target.
+// Load the sysimg from a shared library, use the callback
 template<typename F>
 static inline jl_sysimg_fptrs_t parse_sysimg(void *hdl, F &&callback)
 {
-    jl_sysimg_fptrs_t res = {nullptr, 0, nullptr, 0, nullptr, nullptr};
-
     // .data base
     char *data_base;
     jl_dlsym(hdl, "jl_sysimg_gvars_base", (void**)&data_base, 1);
+
     // .text base
     char *text_base;
     jl_dlsym(hdl, "jl_sysimg_fvars_base", (void**)&text_base, 1);
-    res.base = text_base;
 
     int32_t *offsets;
     jl_dlsym(hdl, "jl_sysimg_fvars_offsets", (void**)&offsets, 1);
-    uint32_t nfunc = offsets[0];
-    res.offsets = offsets + 1;
 
     void *ids;
     jl_dlsym(hdl, "jl_dispatch_target_ids", &ids, 1);
@@ -641,12 +636,31 @@ static inline jl_sysimg_fptrs_t parse_sysimg(void *hdl, F &&callback)
 
     int32_t *reloc_slots;
     jl_dlsym(hdl, "jl_dispatch_reloc_slots", (void **)&reloc_slots, 1);
-    const uint32_t nreloc = reloc_slots[0];
-    reloc_slots += 1;
+
     uint32_t *clone_idxs;
     int32_t *clone_offsets;
     jl_dlsym(hdl, "jl_dispatch_fvars_idxs", (void**)&clone_idxs, 1);
     jl_dlsym(hdl, "jl_dispatch_fvars_offsets", (void**)&clone_offsets, 1);
+
+    return relocate_sysimg(data_base, text_base, offsets, target_idx, reloc_slots, clone_idxs, clone_offsets);
+}
+
+// Perform all relocations for the selected target.
+static inline jl_sysimg_fptrs_t relocate_sysimg(char *data_base, char *text_base,
+                                                int32_t *offsets, uint32_t target_idx,
+                                                int32_t *reloc_slots,
+                                                uint32_t *clone_idxs, int32_t *clone_offsets)
+{
+    jl_sysimg_fptrs_t res = {nullptr, 0, nullptr, 1, 0, nullptr, nullptr};
+
+    res.base = text_base;
+
+    uint32_t nfunc = offsets[0];
+    res.offsets = offsets + 1;
+
+    const uint32_t nreloc = reloc_slots[0];
+    reloc_slots += 1;
+
     uint32_t tag_len = clone_idxs[0];
     clone_idxs += 1;
 
