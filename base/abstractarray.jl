@@ -803,8 +803,9 @@ function copyto!(::IndexStyle, dest::AbstractArray, ::IndexStyle, src::AbstractA
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
     isempty(srcinds) || (checkbounds(Bool, destinds, first(srcinds)) && checkbounds(Bool, destinds, last(srcinds))) ||
         throw(BoundsError(dest, srcinds))
+    src´ = Base.unalias(dest, src)
     @inbounds for i in srcinds
-        dest[i] = src[i]
+        dest[i] = src´[i]
     end
     return dest
 end

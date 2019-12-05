@@ -193,3 +193,10 @@ end
 let x = Bar17149()
     @test deepcopy(x) !== x
 end
+
+@testset "issue #34025" begin
+    a = copyto!(zeros(Int, 4, 4), reshape(1:9, 3, 3)')
+    b = copyto!(zeros(Int, 4, 4), Matrix(transpose(reshape(1:9, 3, 3))))
+    @test a == b
+    @test a[4, 1] = 2
+end
