@@ -167,13 +167,20 @@ julia> pwd()
 ```
 """
 function mkdir(path::AbstractString; mode::Integer = 0o777)
-    @static if Sys.iswindows()
-        ret = ccall(:_wmkdir, Int32, (Cwstring,), path)
-    else
-        ret = ccall(:mkdir, Int32, (Cstring, UInt32), path, checkmode(mode))
+    req = Libc.malloc(_sizeof_uv_fs)
+    try
+        ret = ccall(:uv_fs_mkdir, Cint,
+                    (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Cint, Ptr{Cvoid}),
+                    C_NULL, req, path, checkmode(mode), C_NULL)
+        if ret < 0
+            ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+            uv_error("mkdir", ret)
+        end
+        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+        return path
+    finally
+        Libc.free(req)
     end
-    systemerror(:mkdir, ret != 0; extrainfo=path)
-    path
 end
 
 """
@@ -391,6 +398,9 @@ end
     touch(path::AbstractString)
 
 Update the last-modified timestamp on a file to the current time.
+
+If the file does not exist a new file is created.
+
 Return `path`.
 
 # Examples
@@ -455,7 +465,10 @@ const TEMP_CLEANUP_LOCK = ReentrantLock()
 
 function temp_cleanup_later(path::AbstractString; asap::Bool=false)
     lock(TEMP_CLEANUP_LOCK)
-    TEMP_CLEANUP[path] = asap
+    # each path should only be inserted here once, but if there
+    # is a collision, let !asap win over asap: if any user might
+    # still be using the path, don't delete it until process exit
+    TEMP_CLEANUP[path] = get(TEMP_CLEANUP, path, true) & asap
     if length(TEMP_CLEANUP) > TEMP_CLEANUP_MAX[]
         temp_cleanup_purge(false)
         TEMP_CLEANUP_MAX[] = max(TEMP_CLEANUP_MIN[], 2*length(TEMP_CLEANUP))
@@ -467,12 +480,16 @@ end
 function temp_cleanup_purge(all::Bool=true)
     need_gc = Sys.iswindows()
     for (path, asap) in TEMP_CLEANUP
-        if (all || asap) && ispath(path)
-            need_gc && GC.gc(true)
-            need_gc = false
-            rm(path, recursive=true, force=true)
+        try
+            if (all || asap) && ispath(path)
+                need_gc && GC.gc(true)
+                need_gc = false
+                rm(path, recursive=true, force=true)
+            end
+            !ispath(path) && delete!(TEMP_CLEANUP, path)
+        catch ex
+            @warn "temp cleanup" _group=:file exception=(ex, catch_backtrace())
         end
-        !ispath(path) && delete!(TEMP_CLEANUP, path)
     end
 end
 
@@ -671,7 +688,10 @@ struct uv_dirent_t
 end
 
 """
-    readdir(dir::AbstractString=pwd(); join::Bool=false) -> Vector{String}
+    readdir(dir::AbstractString=pwd();
+        join::Bool = false,
+        sort::Bool = true,
+    ) -> Vector{String}
 
 Return the names in the directory `dir` or the current working directory if not
 given. When `join` is false, `readdir` returns just the names in the directory
@@ -679,8 +699,12 @@ as is; when `join` is true, it returns `joinpath(dir, name)` for each `name` so
 that the returned strings are full paths. If you want to get absolute paths
 back, call `readdir` with an absolute directory path and `join` set to true.
 
+By default, `readdir` sorts the list of names it returns. If you want to skip
+sorting the names and get them in the order that the file system lists them,
+you can use `readir(dir, sort=false)` to opt out of sorting.
+
 !!! compat "Julia 1.4"
-    The `join` keyword argument requires at least Julia 1.4.
+    The `join` and `sort` keyword arguments require at least Julia 1.4.
 
 # Examples
 ```julia-repl
@@ -737,7 +761,7 @@ julia> readdir(abspath("base"), join=true)
  "/home/JuliaUser/dev/julia/base/weakkeydict.jl"
 ```
 """
-function readdir(dir::AbstractString; join::Bool=false)
+function readdir(dir::AbstractString; join::Bool=false, sort::Bool=true)
     # Allocate space for uv_fs_t struct
     uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
 
@@ -757,9 +781,13 @@ function readdir(dir::AbstractString; join::Bool=false)
     # Clean up the request string
     ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{UInt8},), uv_readdir_req)
 
+    # sort entries unless opted out
+    sort && sort!(entries)
+
     return entries
 end
-readdir(; join::Bool=false) = readdir(join ? pwd() : ".", join=join)
+readdir(; join::Bool=false, sort::Bool=true) =
+    readdir(join ? pwd() : ".", join=join, sort=sort)
 
 """
     walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)

@@ -207,10 +207,10 @@ end
     @test_throws SingularException lu!(copy(A); check = true)
     @test !issuccess(lu(A; check = false))
     @test !issuccess(lu!(copy(A); check = false))
-    @test_throws SingularException lu(A, Val(false))
-    @test_throws SingularException lu!(copy(A), Val(false))
-    @test_throws SingularException lu(A, Val(false); check = true)
-    @test_throws SingularException lu!(copy(A), Val(false); check = true)
+    @test_throws ZeroPivotException lu(A, Val(false))
+    @test_throws ZeroPivotException lu!(copy(A), Val(false))
+    @test_throws ZeroPivotException lu(A, Val(false); check = true)
+    @test_throws ZeroPivotException lu!(copy(A), Val(false); check = true)
     @test !issuccess(lu(A, Val(false); check = false))
     @test !issuccess(lu!(copy(A), Val(false); check = false))
     F = lu(A; check = false)
@@ -263,10 +263,6 @@ end
 @testset "logdet" begin
     @test @inferred(logdet(ComplexF32[1.0f0 0.5f0; 0.5f0 -1.0f0])) === 0.22314355f0 + 3.1415927f0im
     @test_throws DomainError logdet([1 1; 1 -1])
-end
-
-@testset "Issue 21453" begin
-    @test_throws ArgumentError LinearAlgebra._cond1Inf(lu(randn(5,5)), 2, 2.0)
 end
 
 @testset "REPL printing" begin

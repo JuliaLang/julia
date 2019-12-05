@@ -15,7 +15,7 @@ end
 #       symbol '=' range
 #       symbol 'in' range
 function parse_iteration_space(x)
-    (isa(x, Expr) && (x.head == :(=) || x.head == :in)) || throw(SimdError("= or in expected"))
+    (isa(x, Expr) && (x.head === :(=) || x.head === :in)) || throw(SimdError("= or in expected"))
     length(x.args) == 2 || throw(SimdError("simd range syntax is wrong"))
     isa(x.args[1], Symbol) || throw(SimdError("simd loop index must be a symbol"))
     x.args # symbol, range
@@ -23,7 +23,7 @@ end
 
 # reject invalid control flow statements in @simd loop body
 function check_body!(x::Expr)
-    if x.head === :break || x.head == :continue
+    if x.head === :break || x.head === :continue
         throw(SimdError("$(x.head) is not allowed inside a @simd loop body"))
     elseif x.head === :macrocall && x.args[1] === Symbol("@goto")
         throw(SimdError("$(x.args[1]) is not allowed inside a @simd loop body"))
@@ -55,7 +55,7 @@ simd_outer_range(r) = 0:0
 
 # Compile Expr x in context of @simd.
 function compile(x, ivdep)
-    (isa(x, Expr) && x.head == :for) || throw(SimdError("for loop expected"))
+    (isa(x, Expr) && x.head === :for) || throw(SimdError("for loop expected"))
     length(x.args) == 2 || throw(SimdError("1D for loop expected"))
     check_body!(x)
 
@@ -129,7 +129,7 @@ macro simd(forloop)
 end
 
 macro simd(ivdep, forloop)
-    if ivdep == :ivdep
+    if ivdep === :ivdep
         esc(compile(forloop, Symbol("julia.ivdep")))
     else
         throw(SimdError("Only ivdep is valid as the first argument to @simd"))

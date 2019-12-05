@@ -200,3 +200,13 @@ end
     @test a == b
     @test a[4, 1] = 2
 end
+
+@testset "copying CodeInfo" begin
+    _testfunc() = nothing
+    ci,_ = code_typed(_testfunc, ())[1]
+    ci.edges = [_testfunc]
+
+    ci2 = copy(ci)
+    # Test that edges are not shared
+    @test ci2.edges !== ci.edges
+end

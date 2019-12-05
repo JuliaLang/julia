@@ -284,17 +284,17 @@ julia> F.U*F.D*F.U' - F.P*A*F.P'
 """
 function getproperty(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
     n = size(B, 1)
-    if d == :p
+    if d === :p
         return _ipiv2perm_bk(getfield(B, :ipiv), n, getfield(B, :uplo), B.rook)
-    elseif d == :P
+    elseif d === :P
         return Matrix{T}(I, n, n)[:,invperm(B.p)]
-    elseif d == :L || d == :U || d == :D
+    elseif d === :L || d === :U || d === :D
         if getfield(B, :rook)
             LUD, od = LAPACK.syconvf_rook!(getfield(B, :uplo), 'C', copy(getfield(B, :LD)), getfield(B, :ipiv))
         else
             LUD, od = LAPACK.syconv!(getfield(B, :uplo), copy(getfield(B, :LD)), getfield(B, :ipiv))
         end
-        if d == :D
+        if d === :D
             if getfield(B, :uplo) == 'L'
                 odl = od[1:n - 1]
                 return Tridiagonal(odl, diag(LUD), getfield(B, :symmetric) ? odl : conj.(odl))
@@ -302,7 +302,7 @@ function getproperty(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
                 odu = od[2:n]
                 return Tridiagonal(getfield(B, :symmetric) ? odu : conj.(odu), diag(LUD), odu)
             end
-        elseif d == :L
+        elseif d === :L
             if getfield(B, :uplo) == 'L'
                 return UnitLowerTriangular(LUD)
             else

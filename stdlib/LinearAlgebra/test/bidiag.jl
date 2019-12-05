@@ -468,4 +468,34 @@ end
     end
 end
 
+@testset "multiplication of bidiagonal and triangular matrix" begin
+    n = 5
+    for eltyB in (Int, ComplexF64)
+        if eltyB == Int
+            BU = Bidiagonal(rand(1:7, n), rand(1:7, n - 1), :U)
+            BL = Bidiagonal(rand(1:7, n), rand(1:7, n - 1), :L)
+        else
+            BU = Bidiagonal(randn(eltyB, n), randn(eltyB, n - 1), :U)
+            BL = Bidiagonal(randn(eltyB, n), randn(eltyB, n - 1), :L)
+        end
+        for eltyT in (Int, ComplexF64)
+            for TriT in (LowerTriangular, UnitLowerTriangular, UpperTriangular, UnitUpperTriangular)
+                if eltyT == Int
+                    T = TriT(rand(1:7, n, n))
+                else
+                    T = TriT(randn(eltyT, n, n))
+                end
+                for B in (BU, BL)
+                    MB = Matrix(B)
+                    MT = Matrix(T)
+                    for transB in (identity, adjoint, transpose), transT in (identity, adjoint, transpose)
+                        @test transB(B) * transT(T) ≈ transB(MB) * transT(MT)
+                        @test transT(T) * transB(B) ≈ transT(MT) * transB(MB)
+                    end
+                end
+            end
+        end
+    end
+end
+
 end # module TestBidiagonal

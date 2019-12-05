@@ -30,7 +30,7 @@ setproperty!(x::Type, f::Symbol, v) = setfield!(x, f, v)
 getproperty(x::Tuple, f::Int) = getfield(x, f)
 setproperty!(x::Tuple, f::Int, v) = setfield!(x, f, v) # to get a decent error
 
-getproperty(Core.@nospecialize(x), f::Symbol) = getfield(x, f)
+getproperty(x, f::Symbol) = getfield(x, f)
 setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
 
 include("coreio.jl")
@@ -116,6 +116,7 @@ include("namedtuple.jl")
 include("hashing.jl")
 include("rounding.jl")
 using .Rounding
+include("div.jl")
 include("float.jl")
 include("twiceprecision.jl")
 include("complex.jl")

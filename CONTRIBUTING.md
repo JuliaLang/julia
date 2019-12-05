@@ -264,6 +264,12 @@ If you need to restart your Julia session, just start at step 2 above.
 built and incorporate them automatically. You only need to rebuild
 Julia if you made code-changes that Revise cannot handle.
 
+For convenience, there are also `test-revise-*` targets for every `test-*`
+target that use Revise to load any modifications to Base into the current
+process before running the corresponding test. This can be useful as a shortcut
+on the command line (since tests aren't always designed to be run outside the
+runtest harness).
+
 ### Code Formatting Guidelines
 
 #### General Formatting Guidelines for Julia code contributions

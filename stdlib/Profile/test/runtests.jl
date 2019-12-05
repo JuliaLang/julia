@@ -22,6 +22,7 @@ end
     end
 end
 
+busywait(0, 0) # compile
 @profile busywait(1, 20)
 
 let r = Profile.retrieve()

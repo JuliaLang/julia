@@ -64,13 +64,13 @@ Factorization{T}(F::LDLt) where {T} = LDLt{T}(F)
 
 function getproperty(F::LDLt, d::Symbol)
     Fdata = getfield(F, :data)
-    if d == :d
+    if d === :d
         return Fdata.dv
-    elseif d == :D
+    elseif d === :D
         return Diagonal(Fdata.dv)
-    elseif d == :L
+    elseif d === :L
         return UnitLowerTriangular(Fdata)
-    elseif d == :Lt
+    elseif d === :Lt
         return UnitUpperTriangular(Fdata)
     else
         return getfield(F, d)

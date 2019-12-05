@@ -223,12 +223,11 @@ JL_DLLEXPORT double jl_strtod_c(const char *nptr, char **endptr)
         char *copy, *c;
         /* Create a copy of the input, with the '.' converted to the
            locale-specific decimal point */
-        copy = (char *)malloc(end - digits_pos +
-                                    1 + decimal_point_len);
+        copy = (char *)malloc(end - digits_pos + 1 + decimal_point_len);
         if (copy == NULL) {
             *endptr = (char *)nptr;
             errno = ENOMEM;
-            return val;
+            return -1.0;
         }
 
         c = copy;

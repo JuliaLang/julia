@@ -1566,10 +1566,11 @@ end
 
 # Issue # 22865
 # Must be run on a new cluster, i.e., all workers must be in the same state.
-rmprocs(workers())
+@assert nprocs() == 1
 p1,p2 = addprocs_with_testenv(2)
 @everywhere f22865(p) = remotecall_fetch(x->x.*2, p, fill(1.,2))
 @test fill(2.,2) == remotecall_fetch(f22865, p1, p2)
+rmprocs(p1, p2)
 
 function reuseport_tests()
     # Run the test on all processes.
@@ -1606,9 +1607,9 @@ end
 
 # Test that the client port is reused. SO_REUSEPORT may not be supported on
 # all UNIX platforms, Linux kernels prior to 3.9 and older versions of OSX
+@assert nprocs() == 1
+addprocs_with_testenv(4; lazy=false)
 if ccall(:jl_has_so_reuseport, Int32, ()) == 1
-    rmprocs(workers())
-    addprocs_with_testenv(4; lazy=false)
     reuseport_tests()
 else
     @info "SO_REUSEPORT is unsupported, skipping reuseport tests"

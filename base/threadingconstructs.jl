@@ -43,7 +43,7 @@ function _threadsfor(iter,lbody)
                 len, rem = 1, 0
             end
             # compute this thread's iterations
-            f = 1 + ((tid-1) * len)
+            f = firstindex(r) + ((tid-1) * len)
             l = f + len - 1
             # distribute remaining iterations evenly
             if rem > 0
@@ -57,7 +57,7 @@ function _threadsfor(iter,lbody)
             end
             # run this thread's iterations
             for i = f:l
-                local $(esc(lidx)) = Base.unsafe_getindex(r,i)
+                local $(esc(lidx)) = @inbounds r[i]
                 $(esc(lbody))
             end
         end
@@ -115,7 +115,7 @@ macro spawn(expr)
     quote
         local task = Task($thunk)
         task.sticky = false
-        if $(Expr(:isdefined, var))
+        if $(Expr(:islocal, var))
             push!($var, task)
         end
         schedule(task)

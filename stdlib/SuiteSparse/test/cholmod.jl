@@ -5,7 +5,7 @@ using DelimitedFiles
 using Test
 using Random
 using Serialization
-using LinearAlgebra: issuccess, PosDefException
+using LinearAlgebra: issuccess, PosDefException, ZeroPivotException
 using SparseArrays
 using SparseArrays: getcolptr
 
@@ -384,8 +384,8 @@ end
     b = fill(1., size(A1, 1))
     @test_throws PosDefException cholesky(C - 2λmaxC*I)
     @test_throws PosDefException cholesky(C, shift=-2λmaxC)
-    @test_throws PosDefException ldlt(C - C[1,1]*I)
-    @test_throws PosDefException ldlt(C, shift=-real(C[1,1]))
+    @test_throws ZeroPivotException ldlt(C - C[1,1]*I)
+    @test_throws ZeroPivotException ldlt(C, shift=-real(C[1,1]))
     @test !isposdef(cholesky(C - 2λmaxC*I; check = false))
     @test !isposdef(cholesky(C, shift=-2λmaxC; check = false))
     @test !issuccess(ldlt(C - C[1,1]*I; check = false))
@@ -849,9 +849,29 @@ end
     B = sparse(ComplexF64[0 0; 0 0])
     for M in (A, B, Symmetric(A), Hermitian(B))
         F = ldlt(M; check = false)
-        @test_throws PosDefException ldlt(M)
-        @test_throws PosDefException ldlt!(F, M)
+        @test_throws ZeroPivotException ldlt(M)
+        @test_throws ZeroPivotException ldlt!(F, M)
         @test !issuccess(ldlt(M; check = false))
         @test !issuccess(ldlt!(F, M; check = false))
     end
+end
+
+@testset "Issue #27860" begin
+    for typeA in (Float64, ComplexF64), typeB in (Float64, ComplexF64), transform in (adjoint, transpose)
+        A = sparse(typeA[2.0 0.1; 0.1 2.0])
+        B = randn(typeB, 2, 2)
+        @test A \ transform(B) ≈ cholesky(A) \ transform(B) ≈ Matrix(A) \ transform(B)
+    end
+end
+
+@testset "Issue #33365" begin
+    A = Sparse(spzeros(0, 0))
+    @test A * A' == A
+    @test A' * A == A
+    B = Sparse(spzeros(0, 4))
+    @test B * B' == Sparse(spzeros(0, 0))
+    @test B' * B == Sparse(spzeros(4, 4))
+    C = Sparse(spzeros(3, 0))
+    @test C * C' == Sparse(spzeros(3, 3))
+    @test C' * C == Sparse(spzeros(0, 0))
 end

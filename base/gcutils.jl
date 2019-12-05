@@ -12,7 +12,7 @@ Register a function `f(x)` to be called when there are no program-accessible ref
 this function is unpredictable.
 
 `f` must not cause a task switch, which excludes most I/O operations such as `println`.
-`@schedule println("message")` or `ccall(:jl_, Void, (Any,), "message")` may be helpful for
+`@schedule println("message")` or `ccall(:jl_, Cvoid, (Any,), "message")` may be helpful for
 debugging purposes.
 """
 function finalizer(@nospecialize(f), @nospecialize(o))
@@ -49,15 +49,29 @@ Module with garbage collection utilities.
 """
 module GC
 
-"""
-    GC.gc()
+# @enum-like structure
+struct CollectionType
+    x::Int
+end
+Base.cconvert(::Type{Cint}, collection::CollectionType) = Cint(collection.x)
 
-Perform garbage collection.
+const Auto          = CollectionType(0)
+const Full          = CollectionType(1)
+const Incremental   = CollectionType(2)
+
+"""
+    GC.gc(full::Bool=true)
+    GC.gc(collection::CollectionType)
+
+Perform garbage collection. The argument `full` determines whether a full, but more costly
+collection is performed. Otherwise, heuristics are used to determine which type of
+collection is needed. For exact control, pass an argument of type `CollectionType`.
 
 !!! warning
     Excessive use will likely lead to poor performance.
 """
-gc(full::Bool=true) = ccall(:jl_gc_collect, Cvoid, (Int32,), full)
+gc(full::Bool=true) = ccall(:jl_gc_collect, Cvoid, (Cint,), full)
+gc(collection::CollectionType) = ccall(:jl_gc_collect, Cvoid, (Cint,), collection)
 
 """
     GC.enable(on::Bool)

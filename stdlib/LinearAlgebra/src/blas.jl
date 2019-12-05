@@ -91,7 +91,7 @@ end
 const _vendor = determine_vendor()
 vendor() = _vendor
 
-if vendor() == :openblas64
+if vendor() === :openblas64
     macro blasfunc(x)
         return Expr(:quote, Symbol(x, "64_"))
     end
@@ -110,11 +110,11 @@ Set the number of threads the BLAS library should use.
 """
 function set_num_threads(n::Integer)
     blas = vendor()
-    if blas == :openblas
+    if blas === :openblas
         return ccall((:openblas_set_num_threads, libblas), Cvoid, (Int32,), n)
-    elseif blas == :openblas64
+    elseif blas === :openblas64
         return ccall((:openblas_set_num_threads64_, libblas), Cvoid, (Int32,), n)
-    elseif blas == :mkl
+    elseif blas === :mkl
         # MKL may let us set the number of threads in several ways
         return ccall((:MKL_Set_Num_Threads, libblas), Cvoid, (Cint,), n)
     end
@@ -130,7 +130,7 @@ end
 const _testmat = [1.0 0.0; 0.0 -1.0]
 function check()
     blas = vendor()
-    if blas == :openblas || blas == :openblas64
+    if blas === :openblas || blas === :openblas64
         openblas_config = openblas_get_config()
         openblas64 = occursin(r".*USE64BITINT.*", openblas_config)
         if Base.USE_BLAS64 != openblas64
@@ -148,7 +148,7 @@ function check()
             println("Quitting.")
             exit()
         end
-    elseif blas == :mkl
+    elseif blas === :mkl
         if Base.USE_BLAS64
             ENV["MKL_INTERFACE_LAYER"] = "ILP64"
         end
@@ -422,7 +422,7 @@ asum(x::Union{AbstractVector,DenseArray}) = GC.@preserve x asum(length(x), point
 """
     axpy!(a, X, Y)
 
-Overwrite `Y` with `a*X + Y`, where `a` is a scalar. Return `Y`.
+Overwrite `Y` with `X*a + Y`, where `a` is a scalar. Return `Y`.
 
 # Examples
 ```jldoctest
@@ -760,6 +760,15 @@ Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
 symv(ul, A, x)
 
 ### hemv
+"""
+    hemv!(ul, alpha, A, x, beta, y)
+
+Update the vector `y` as `alpha*A*x + beta*y`. `A` is assumed to be Hermitian.
+Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
+`alpha` and `beta` are scalars. Return the updated `y`.
+"""
+function hemv! end
+
 for (fname, elty) in ((:zhemv_,:ComplexF64),
                       (:chemv_,:ComplexF32))
     @eval begin
@@ -796,6 +805,23 @@ for (fname, elty) in ((:zhemv_,:ComplexF64),
         end
     end
 end
+
+"""
+    hemv(ul, alpha, A, x)
+
+Return `alpha*A*x`. `A` is assumed to be Hermitian.
+Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
+`alpha` is a scalar.
+"""
+hemv(ul, alpha, A, x)
+
+"""
+    hemv(ul, A, x)
+
+Return `A*x`. `A` is assumed to be Hermitian.
+Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
+"""
+hemv(ul, A, x)
 
 ### sbmv, (SB) symmetric banded matrix-vector multiplication
 for (fname, elty) in ((:dsbmv_,:Float64),
@@ -1290,13 +1316,39 @@ for (mfname, elty) in ((:zhemm_,:ComplexF64),
     end
 end
 
+"""
+    hemm(side, ul, alpha, A, B)
+
+Return `alpha*A*B` or `alpha*B*A` according to [`side`](@ref stdlib-blas-side).
+`A` is assumed to be Hermitian. Only the [`ul`](@ref stdlib-blas-uplo) triangle
+of `A` is used.
+"""
+hemm(side, ul, alpha, A, B)
+
+"""
+    hemm(side, ul, A, B)
+
+Return `A*B` or `B*A` according to [`side`](@ref stdlib-blas-side). `A` is assumed
+to be Hermitian. Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
+"""
+hemm(side, ul, A, B)
+
+"""
+    hemm!(side, ul, alpha, A, B, beta, C)
+
+Update `C` as `alpha*A*B + beta*C` or `alpha*B*A + beta*C` according to
+[`side`](@ref stdlib-blas-side). `A` is assumed to be Hermitian. Only the
+[`ul`](@ref stdlib-blas-uplo) triangle of `A` is used. Return the updated `C`.
+"""
+hemm!
+
 ## syrk
 
 """
     syrk!(uplo, trans, alpha, A, beta, C)
 
-Rank-k update of the symmetric matrix `C` as `alpha*A*transpose(A) + beta*C` or `alpha*transpose(A)*A +
-beta*C` according to [`trans`](@ref stdlib-blas-trans).
+Rank-k update of the symmetric matrix `C` as `alpha*A*transpose(A) + beta*C` or
+`alpha*transpose(A)*A + beta*C` according to [`trans`](@ref stdlib-blas-trans).
 Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is used. Returns `C`.
 """
 function syrk! end
@@ -1354,19 +1406,17 @@ syrk(uplo::AbstractChar, trans::AbstractChar, A::AbstractVecOrMat) = syrk(uplo, 
 """
     herk!(uplo, trans, alpha, A, beta, C)
 
-Methods for complex arrays only. Rank-k update of the Hermitian matrix `C` as `alpha*A*A' +
-beta*C` or `alpha*A'*A + beta*C` according to [`trans`](@ref stdlib-blas-trans).
-Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is updated.
-Returns `C`.
+Methods for complex arrays only. Rank-k update of the Hermitian matrix `C` as
+`alpha*A*A' + beta*C` or `alpha*A'*A + beta*C` according to [`trans`](@ref stdlib-blas-trans).
+Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is updated. Returns `C`.
 """
 function herk! end
 
 """
     herk(uplo, trans, alpha, A)
 
-Methods for complex arrays only.
-Returns the [`uplo`](@ref stdlib-blas-uplo) triangle of `alpha*A*A'` or `alpha*A'*A`,
-according to [`trans`](@ref stdlib-blas-trans).
+Methods for complex arrays only. Returns the [`uplo`](@ref stdlib-blas-uplo)
+triangle of `alpha*A*A'` or `alpha*A'*A`, according to [`trans`](@ref stdlib-blas-trans).
 """
 function herk end
 
@@ -1447,11 +1497,37 @@ for (fname, elty) in ((:dsyr2k_,:Float64),
         end
     end
 end
+
+"""
+    syr2k!(uplo, trans, alpha, A, B, beta, C)
+
+Rank-2k update of the symmetric matrix `C` as
+`alpha*A*transpose(B) + alpha*B*transpose(A) + beta*C` or
+`alpha*transpose(A)*B + alpha*transpose(B)*A + beta*C`
+according to [`trans`](@ref stdlib-blas-trans).
+Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is used. Returns `C`.
+"""
+function syr2k! end
+
+"""
+    syr2k(uplo, trans, alpha, A, B)
+
+Returns the [`uplo`](@ref stdlib-blas-uplo) triangle of
+`alpha*A*transpose(B) + alpha*B*transpose(A)` or
+`alpha*transpose(A)*B + alpha*transpose(B)*A`,
+according to [`trans`](@ref stdlib-blas-trans).
+"""
 function syr2k(uplo::AbstractChar, trans::AbstractChar, alpha::Number, A::AbstractVecOrMat, B::AbstractVecOrMat)
     T = eltype(A)
     n = size(A, trans == 'N' ? 1 : 2)
     syr2k!(uplo, trans, convert(T,alpha), A, B, zero(T), similar(A, T, (n, n)))
 end
+"""
+    syr2k(uplo, trans, A, B)
+
+Returns the [`uplo`](@ref stdlib-blas-uplo) triangle of `A*transpose(B) + B*transpose(A)`
+or `transpose(A)*B + transpose(B)*A`, according to [`trans`](@ref stdlib-blas-trans).
+"""
 syr2k(uplo::AbstractChar, trans::AbstractChar, A::AbstractVecOrMat, B::AbstractVecOrMat) = syr2k(uplo, trans, one(eltype(A)), A, B)
 
 for (fname, elty1, elty2) in ((:zher2k_,:ComplexF64,:Float64), (:cher2k_,:ComplexF32,:Float32))
@@ -1493,6 +1569,32 @@ for (fname, elty1, elty2) in ((:zher2k_,:ComplexF64,:Float64), (:cher2k_,:Comple
        her2k(uplo::AbstractChar, trans::AbstractChar, A::AbstractVecOrMat{$elty1}, B::AbstractVecOrMat{$elty1}) = her2k(uplo, trans, one($elty1), A, B)
    end
 end
+
+"""
+    her2k!(uplo, trans, alpha, A, B, beta, C)
+
+Rank-2k update of the Hermitian matrix `C` as
+`alpha*A*B' + alpha*B*A' + beta*C` or `alpha*A'*B + alpha*B'*A + beta*C`
+according to [`trans`](@ref stdlib-blas-trans). The scalar `beta` has to be real.
+Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is used. Returns `C`.
+"""
+function her2k! end
+
+"""
+    her2k(uplo, trans, alpha, A, B)
+
+Returns the [`uplo`](@ref stdlib-blas-uplo) triangle of `alpha*A*B' + alpha*B*A'`
+or `alpha*A'*B + alpha*B'*A`, according to [`trans`](@ref stdlib-blas-trans).
+"""
+her2k(uplo, trans, alpha, A, B)
+
+"""
+    her2k(uplo, trans, A, B)
+
+Returns the [`uplo`](@ref stdlib-blas-uplo) triangle of `A*B' + B*A'`
+or `A'*B + B'*A`, according to [`trans`](@ref stdlib-blas-trans).
+"""
+her2k(uplo, trans, A, B)
 
 ## (TR) Triangular matrix and vector multiplication and solution
 

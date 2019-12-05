@@ -71,6 +71,28 @@ const BitMatrix = BitArray{2}
 
 BitVector() = BitArray{1}(undef, 0)
 
+"""
+    BitVector(nt::Tuple{Vararg{Bool}})
+
+Construct a `BitVector` from a tuple of `Bool`.
+# Examples
+```julia-repl
+julia> nt = (true, false, true, false)
+(true, false, true, false)
+
+julia> BitVector(nt)
+4-element BitArray{1}:
+ 1
+ 0
+ 1
+ 0
+```
+"""
+function BitVector(nt::Tuple{Vararg{Bool}})
+    bv = BitVector(undef, length(nt))
+    bv .= nt
+end
+
 ## utility functions ##
 
 length(B::BitArray) = B.len
