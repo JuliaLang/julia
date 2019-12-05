@@ -1112,7 +1112,7 @@ end
 """
     parent(A)
 
-Returns the "parent array" of an array view type (e.g., `SubArray`), or the array itself if
+Return the "parent array" of an array view (e.g. a `SubArray`), or the array itself if
 it is not a view.
 
 # Examples
