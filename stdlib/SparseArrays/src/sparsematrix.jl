@@ -358,10 +358,16 @@ copyto!(A::AbstractMatrix, B::AbstractSparseMatrixCSC) = _sparse_copyto!(A, B)
 # Ambiguity resolution
 copyto!(A::PermutedDimsArray, B::AbstractSparseMatrixCSC) = _sparse_copyto!(A, B)
 
-function _sparse_copyto!(dest::AbstractMatrix, src::AbstractSparseMatrixCSC{T}) where {T}
+function _sparse_copyto!(dest::AbstractMatrix, src::AbstractSparseMatrixCSC)
     dest === src && return dest
     checkbounds(dest, axes(src)...)
-    fill!(dest, zero(T)) # implicitly convert to eltype(dest), throw if not possible
+    # If src is not dense, zero out only the portion of dest spanned by the axes of src
+    if length(src) > nnz(src)
+        z = convert(eltype(dest), zero(eltype(src))) # should throw if not possible
+        for I in eachindex(IndexStyle(src, dest), src)
+            @inbounds dest[I] = z
+        end
+    end
     @inbounds for col in 1:size(src, 2), ptr in nzrange(src, col)
         row = rowvals(src)[ptr]
         val = nonzeros(src)[ptr]
@@ -588,15 +594,8 @@ SparseMatrixCSC{Tv,Ti}(M::Transpose{<:Any,<:AbstractSparseMatrixCSC}) where {Tv,
 
 # converting from SparseMatrixCSC to other matrix types
 function Matrix(S::AbstractSparseMatrixCSC{Tv}) where Tv
-    # Handle cases where zero(Tv) is not defined but the array is dense.
-    A = length(S) == nnz(S) ? Matrix{Tv}(undef, size(S, 1), size(S, 2)) : zeros(Tv, size(S, 1), size(S, 2))
-    for Sj in 1:size(S, 2)
-        for Sk in nzrange(S, Sj)
-            Si = rowvals(S)[Sk]
-            Sv = nonzeros(S)[Sk]
-            A[Si, Sj] = Sv
-        end
-    end
+    A = Matrix{Tv}(undef, size(S, 1), size(S, 2))
+    copyto!(A, S)
     return A
 end
 Array(S::AbstractSparseMatrixCSC) = Matrix(S)

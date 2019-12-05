@@ -577,6 +577,10 @@ end
     A = sprand(4, 4, 0.0); B = fill("", 4,4);
     @test_throws MethodError copyto!(B, A)
     @test_throws MethodError copyto!(B, Rdest, A, Rsrc)
+    # Test that only overlapping axes are overwritten
+    A = sprand(3, 3, 1.0); B = ones(4, 4)
+    copyto!(B, A)
+    @test B[:, 4] == B[4, :] == ones(4)
 end
 
 @testset "conj" begin
