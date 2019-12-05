@@ -545,14 +545,14 @@ function _uiud_string()
 
     ccall((:RpcStringFreeW, :Rpcrt4), stdcall, Cint, (Ref{Ptr{Cwchar_t}},), nameptr)
 
-    name = filter(!=('-'), name)
+    name = replace(name, '-' => '_')
     return name
 end
 
 function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
     isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
     name = _uiud_string()
-    filename = joinpath(parent, temp_prefix * name * ".tmp")
+    filename = joinpath(parent, temp_prefix * name)
     @assert !ispath(filename)
     cleanup && temp_cleanup_later(filename)
     return filename
