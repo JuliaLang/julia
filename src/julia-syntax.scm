@@ -2495,6 +2495,10 @@
                                    (call (top setindex!) ,d ,var (quote ,v)))))
                           names)
                    ,d)))
+        ((eq? (car e) 'islocal)
+         (if (memq (var-kind (cadr e) scope) '(global none))
+             'false
+             'true))
         ((eq? (car e) 'lambda)
          (let* ((args (lam:vars e))
                 (body (resolve-scopes- (lam:body e) (make-scope e args '() '() sp '() scope))))

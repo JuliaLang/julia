@@ -406,15 +406,17 @@
   e)
 
 (define (vararg? x) (and (pair? x) (eq? (car x) '...)))
-(define (varargexpr? x) (and
-                         (pair? x)
-                         (eq? (car x) '::)
-                         (or
-                          (eq? (caddr x) 'Vararg)
-                          (and
-                           (pair? (caddr x))
-                           (length> (caddr x) 1)
-                           (eq? (cadr (caddr x)) 'Vararg)))))
+(define (vararg-type-expr? x)
+  (or (eq? x 'Vararg)
+      (and (length> x 1)
+           (or (and (eq? (car x) 'curly)
+                    (vararg-type-expr? (cadr x)))
+               (and (eq? (car x) 'where)
+                    (vararg-type-expr? (cadr x)))))))
+(define (varargexpr? x)
+  (and (pair? x)
+       (eq? (car x) '::)
+       (vararg-type-expr? (caddr x))))
 (define (linenum? x) (and (pair? x) (eq? (car x) 'line)))
 
 (define (make-assignment l r) `(= ,l ,r))

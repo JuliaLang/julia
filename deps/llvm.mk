@@ -421,9 +421,9 @@ $(eval $(call LLVM_PATCH,llvm-D51842-win64-byval-cc))
 $(eval $(call LLVM_PATCH,llvm-D57118-powerpc))
 $(eval $(call LLVM_PATCH,llvm-r355582-avxminmax)) # remove for 8.0
 $(eval $(call LLVM_PATCH,llvm-rL349068-llvm-config)) # remove for 8.0
-$(eval $(call LLVM_PATCH,llvm-6.0-D63688-wasm-isLocal))
-$(eval $(call LLVM_PATCH,llvm-6.0-D64032-cmake-cross))
-$(eval $(call LLVM_PATCH,llvm-6.0-D64225-cmake-cross2))
+$(eval $(call LLVM_PATCH,llvm-6.0-D63688-wasm-isLocal)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm-6.0-D64032-cmake-cross)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm-6.0-D64225-cmake-cross2)) # remove for 9.0
 $(eval $(call LLVM_PATCH,llvm6-WASM-addrspaces)) # WebAssembly
 endif # LLVM_VER 6.0
 
@@ -459,6 +459,7 @@ $(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm-8.0-D66401-mingw-reloc)) # remove for 9.0
 $(eval $(call LLVM_PATCH,llvm7-revert-D44485))
+$(eval $(call LLVM_PATCH,llvm-8.0-D63688-wasm-isLocal)) # remove for 9.0
 endif # LLVM_VER 8.0
 
 ifeq ($(LLVM_VER_SHORT),9.0)
@@ -554,7 +555,8 @@ check-llvm: $(LLVM_BUILDDIR_withtype)/build-checked
 
 ifeq ($(LLVM_VER),svn)
 update-llvm:
-	(cd $(LLVM_MONOSRC_DIR); git pull --ff-only)
+	cd $(LLVM_MONOSRC_DIR) && \
+		git pull --ff-only
 endif
 else # USE_BINARYBUILDER_LLVM
 LLVM_BB_URL_BASE := https://github.com/staticfloat/LLVMBuilder/releases/download/v$(LLVM_VER)+$(LLVM_BB_REL)

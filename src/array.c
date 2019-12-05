@@ -933,8 +933,8 @@ STATIC_INLINE void jl_array_shrink(jl_array_t *a, size_t dec)
     if (a->flags.how == 0) return;
 
     size_t elsz = a->elsize;
-    int newbytes = (a->maxsize - dec) * a->elsize;
-    int oldnbytes = (a->maxsize) * a->elsize;
+    size_t newbytes = (a->maxsize - dec) * a->elsize;
+    size_t oldnbytes = (a->maxsize) * a->elsize;
     int isbitsunion = jl_array_isbitsunion(a);
     if (isbitsunion) {
         newbytes += a->maxsize - dec;
@@ -1107,7 +1107,7 @@ JL_DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz)
 {
     size_t n = jl_array_nrows(a);
 
-    int min = a->offset + a->length;
+    size_t min = a->offset + a->length;
     sz = (sz < min) ? min : sz;
 
     if (sz <= a->maxsize) {

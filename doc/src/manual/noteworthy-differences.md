@@ -210,7 +210,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     to continue is to wrap it in parentheses.
   * Julia arrays are column major (Fortran ordered) whereas NumPy arrays are row major (C-ordered)
     by default. To get optimal performance when looping over arrays, the order of the loops should
-    be reversed in Julia relative to NumPy (see relevant section of [Performance Tips](@ref man-performance-tips)).
+    be reversed in Julia relative to NumPy (see [relevant section of Performance Tips](@ref man-performance-column-major)).
   * Julia's updating operators (e.g. `+=`, `-=`, ...) are *not in-place* whereas NumPy's are. This
     means `A = [1, 1]; B = A; B += [3, 3]` doesn't change values in `A`, it rather rebinds the name `B`
     to the result of the right-hand side `B = B + 3`, which is a new array. For in-place operation, use `B .+= 3`
@@ -236,7 +236,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     which rebinds the left-hand side to the result of the right-hand side expression.
   * Julia arrays are column major (Fortran ordered) whereas C/C++ arrays are row major ordered by
     default. To get optimal performance when looping over arrays, the order of the loops should be
-    reversed in Julia relative to C/C++ (see relevant section of [Performance Tips](@ref man-performance-tips)).
+    reversed in Julia relative to C/C++ (see [relevant section of Performance Tips](@ref man-performance-column-major)).
   * Julia values are not copied when assigned or passed to a function. If a function modifies an array, the changes
     will be visible in the caller.
   * In Julia, whitespace is significant, unlike C/C++, so care must be taken when adding/removing
