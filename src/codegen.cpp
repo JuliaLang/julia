@@ -7775,8 +7775,12 @@ extern "C" void *jl_init_llvm(void)
     jl_ExecutionEngine = new JuliaOJIT(*jl_TargetMachine);
 
     // Mark our address spaces as non-integral
+#ifdef _CPU_X86_ // Hack to make i686 look like wasm
+    std::string DL = "e-m:e-p:32:32-i64:64-n32:64-S128-ni:10:11:12:13:256";
+#else
     jl_data_layout = jl_ExecutionEngine->getDataLayout();
     std::string DL = jl_data_layout.getStringRepresentation() + "-ni:10:11:12:13";
+#endif
     jl_data_layout.reset(DL);
 
 // Register GDB event listener
