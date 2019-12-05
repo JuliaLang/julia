@@ -52,6 +52,8 @@ Standard library changes
 * Sets are now displayed less compactly in the REPL, as a column of elements, like vectors
   and dictionaries ([#33300]).
 
+* `pmap` now defaults to using a `CachingPool` ([#33892]).
+
 #### Libdl
 
 #### LinearAlgebra
