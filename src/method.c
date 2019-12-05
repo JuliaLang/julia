@@ -91,7 +91,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 return expr;
             }
             if (e->head == foreigncall_sym) {
-                JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, cc, narg)
+                JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, nreq, cc, narg)
                 jl_value_t *rt = jl_exprarg(e, 1);
                 jl_value_t *at = jl_exprarg(e, 2);
                 if (!jl_is_type(rt)) {

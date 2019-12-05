@@ -484,9 +484,11 @@ function entry_point_and_project_file(dir::String, name::String)::Union{Tuple{No
     isfile_casesensitive(path) && return path, nothing
     dir = joinpath(dir, name)
     path, project_file = entry_point_and_project_file_inside(dir, name)
+    Sys.isjsvm() && (project_file = nothing)
     path === nothing || return path, project_file
     dir = dir * ".jl"
     path, project_file = entry_point_and_project_file_inside(dir, name)
+    Sys.isjsvm() && (project_file = nothing)
     path === nothing || return path, project_file
     return nothing, nothing
 end
@@ -672,6 +674,7 @@ cache_file_entry(pkg::PkgId) = joinpath(
 
 function find_all_in_cache_path(pkg::PkgId)
     paths = String[]
+    Sys.isjsvm() && return paths
     entrypath, entryfile = cache_file_entry(pkg)
     for path in joinpath.(DEPOT_PATH, entrypath)
         isdir(path) || continue

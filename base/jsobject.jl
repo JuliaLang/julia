@@ -43,7 +43,7 @@ macro jscall(expr)
     atypes = [JSAny for _ in converted_args]
     quote
         $b
-        $(Expr(:foreigncall, target, JSAny, Core.svec(atypes...), QuoteNode(:jscall),
+        $(Expr(:foreigncall, target, JSAny, Core.svec(atypes...), length(atypes), QuoteNode(:jscall),
             length(atypes), converted_args...))
     end
 end
