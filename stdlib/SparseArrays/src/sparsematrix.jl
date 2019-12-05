@@ -364,7 +364,7 @@ function _sparse_copyto!(dest::AbstractMatrix, src::AbstractSparseMatrixCSC)
     # If src is not dense, zero out only the portion of dest spanned by the axes of src
     if length(src) > nnz(src)
         z = convert(eltype(dest), zero(eltype(src))) # should throw if not possible
-        for I in eachindex(IndexStyle(src, dest), src)
+        for I in eachindex(IndexStyle(dest), src)
             @inbounds dest[I] = z
         end
     end
