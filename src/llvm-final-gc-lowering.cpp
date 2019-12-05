@@ -39,6 +39,7 @@ private:
     Function *queueRootFunc;
     Function *poolAllocFunc;
     Function *bigAllocFunc;
+    Function *memprofileSetTypeofFunc;
     CallInst *ptlsStates;
 
     bool doInitialization(Module &M) override;
@@ -59,6 +60,9 @@ private:
 
     // Lowers a `julia.gc_alloc_bytes` intrinsic.
     Value *lowerGCAllocBytes(CallInst *target, Function &F);
+
+    // Lowers a `julia.gc_set_typeof` intrinsic.
+    Value *lowerGCSetTypeof(CallInst *target, Function &F);
 
     // Lowers a `julia.queue_gc_root` intrinsic.
     Value *lowerQueueGCRoot(CallInst *target, Function &F);
@@ -216,6 +220,13 @@ Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
     return newI;
 }
 
+Value *FinalLowerGC::lowerGCSetTypeof(CallInst *target, Function &F)
+{
+    assert(target->getNumArgOperands() == 2);
+    target->setCalledFunction(memprofileSetTypeofFunc);
+    return target;
+}
+
 bool FinalLowerGC::doInitialization(Module &M) {
     // Initialize platform-agnostic references.
     initAll(M);
@@ -224,8 +235,9 @@ bool FinalLowerGC::doInitialization(Module &M) {
     queueRootFunc = getOrDeclare(jl_well_known::GCQueueRoot);
     poolAllocFunc = getOrDeclare(jl_well_known::GCPoolAlloc);
     bigAllocFunc = getOrDeclare(jl_well_known::GCBigAlloc);
+    memprofileSetTypeofFunc = getOrDeclare(jl_well_known::MemProfileSetTypeof);
 
-    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc};
+    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc, memprofileSetTypeofFunc};
     unsigned j = 0;
     for (unsigned i = 0; i < sizeof(functionList) / sizeof(void*); i++) {
         if (!functionList[i])
@@ -305,6 +317,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
     auto popGCFrameFunc = getOrNull(jl_intrinsics::popGCFrame);
     auto getGCFrameSlotFunc = getOrNull(jl_intrinsics::getGCFrameSlot);
     auto GCAllocBytesFunc = getOrNull(jl_intrinsics::GCAllocBytes);
+    auto GCSetTypeofFunc = getOrNull(jl_intrinsics::GCSetTypeof);
     auto queueGCRootFunc = getOrNull(jl_intrinsics::queueGCRoot);
 
     // Lower all calls to supported intrinsics.
@@ -334,6 +347,9 @@ bool FinalLowerGC::runOnFunction(Function &F)
             }
             else if (callee == GCAllocBytesFunc) {
                 replaceInstruction(CI, lowerGCAllocBytes(CI, F), it);
+            }
+            else if (callee == GCSetTypeofFunc) {
+                replaceInstruction(CI, lowerGCSetTypeof(CI, F), it);
             }
             else if (callee == queueGCRootFunc) {
                 replaceInstruction(CI, lowerQueueGCRoot(CI, F), it);

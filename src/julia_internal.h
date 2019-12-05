@@ -135,8 +135,8 @@ JL_DLLEXPORT extern int jl_lineno;
 JL_DLLEXPORT extern const char *jl_filename;
 
 JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
-                                          int osize);
-JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t allocsz);
+                                          int osize, void *ty);
+JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t allocsz, void *ty);
 int jl_gc_classify_pools(size_t sz, int *osize);
 extern jl_mutex_t gc_perm_lock;
 void *jl_gc_perm_alloc_nolock(size_t sz, int zero,
@@ -230,6 +230,37 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass(unsigned sz)
     return klass + N;
 }
 
+// Flags that determine when a certain buffer has overrun itself
+#define JL_MEMPROF_BT_OVERFLOW     0x01
+#define JL_MEMPROF_ALLOC_OVERFLOW  0x02
+
+// Tags applied to memory allocations to specify which domain the memory is
+// stored on, and also which "kind" of memory allocator was used.
+// When filtering, a filter tag value of `0xffff` means "accept everything".
+// We support the "CPU", "GPU" and "External" (e.g. "other") domains.
+#define JL_MEMPROF_TAG_DOMAIN_CPU           0x0001
+#define JL_MEMPROF_TAG_DOMAIN_GPU           0x0002
+#define JL_MEMPROF_TAG_DOMAIN_EXTERNAL      0x0080
+// We differentiate between just normal "standard" allocation by malloc, versus
+// the "pool" allocator, and finally "bigalloc" for special big things as
+// that's often what we're most interested in, which are the pieces of memory
+// allocated by `jl_gc_big_alloc()`.
+#define JL_MEMPROF_TAG_ALLOC_STDALLOC       0x0100
+#define JL_MEMPROF_TAG_ALLOC_POOLALLOC      0x0200
+#define JL_MEMPROF_TAG_ALLOC_BIGALLOC       0x0400
+// We denote a free() by setting yet another tag
+#define JL_MEMPROF_TAG_DEALLOC              0x8000
+
+// Necessary memory profiler prototypes
+JL_DLLEXPORT void jl_memprofile_track_alloc(void *v, uint16_t tag, size_t allocsz, void *ty) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_memprofile_track_dealloc(void *v, uint16_t tag) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_memprofile_is_running(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_memprofile_set_typeof(void * v, void * ty) JL_NOTSAFEPOINT;
+
+// Necessary time profiler prototypes
+JL_DLLEXPORT uint8_t *jl_profile_get_data(void);
+JL_DLLEXPORT size_t jl_profile_len_data(void);
+
 #define JL_SMALL_BYTE_ALIGNMENT 16
 #define JL_CACHE_BYTE_ALIGNMENT 64
 // JL_HEAP_ALIGNMENT is the maximum alignment that the GC can provide
@@ -244,14 +275,15 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
         int pool_id = jl_gc_szclass(allocsz);
         jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
         int osize = jl_gc_sizeclasses[pool_id];
-        v = jl_gc_pool_alloc(ptls, (char*)p - (char*)ptls, osize);
+        v = jl_gc_pool_alloc(ptls, (char*)p - (char*)ptls, osize, ty);
     }
     else {
         if (allocsz < sz) // overflow in adding offs, size was "negative"
             jl_throw(jl_memory_exception);
-        v = jl_gc_big_alloc(ptls, allocsz);
+        v = jl_gc_big_alloc(ptls, allocsz, ty);
     }
     jl_set_typeof(v, ty);
+    jl_memprofile_set_typeof(v, ty);
     return v;
 }
 JL_DLLEXPORT jl_value_t *jl_gc_alloc(jl_ptls_t ptls, size_t sz, void *ty);
@@ -316,7 +348,10 @@ JL_DLLEXPORT void JL_NORETURN jl_throw_out_of_memory_error(void);
 JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void);
 void jl_gc_sync_total_bytes(void);
 void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a) JL_NOTSAFEPOINT;
-void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT;
+void jl_gc_count_allocd(void * addr, size_t sz, void *ty, uint16_t tag) JL_NOTSAFEPOINT;
+void jl_gc_count_freed(void * addr, size_t sz, uint16_t tag) JL_NOTSAFEPOINT;
+void jl_gc_count_reallocd(void * oldaddr, size_t oldsz, void * newaddr, size_t newsz,
+                          void *newty, uint16_t tag) JL_NOTSAFEPOINT;
 void jl_gc_run_all_finalizers(jl_ptls_t ptls);
 
 void gc_queue_binding(jl_binding_t *bnd) JL_NOTSAFEPOINT;
@@ -686,6 +721,7 @@ STATIC_INLINE jl_value_t *jl_bt_entry_jlvalue(jl_bt_element_t *bt_entry, size_t 
 }
 
 #define JL_BT_INTERP_FRAME_TAG    1  // An interpreter frame
+#define JL_BT_ALLOCINFO_FRAME_TAG 2  // An allocation information frame
 
 // Number of bt elements in frame.
 STATIC_INLINE size_t jl_bt_entry_size(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
@@ -738,13 +774,14 @@ typedef unw_cursor_t bt_cursor_t;
 typedef int bt_context_t;
 typedef int bt_cursor_t;
 #endif
-size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
+size_t rec_backtrace(jl_bt_element_t *bt_data, size_t *bt_size, size_t maxsize, int skip, int add_interp_frames) JL_NOTSAFEPOINT;
 // Record backtrace from a signal handler. `ctx` is the context of the code
 // which was asynchronously interrupted.
-size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx,
-                         int add_interp_frames) JL_NOTSAFEPOINT;
+size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t *bt_size, size_t maxsize,
+                         bt_context_t *ctx, int add_interp_frames) JL_NOTSAFEPOINT;
 #ifdef LIBOSXUNWIND
-size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx, int add_interp_frames) JL_NOTSAFEPOINT;
+size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t *bt_size, size_t maxsize,
+                               bt_context_t *ctx, int add_interp_frames) JL_NOTSAFEPOINT;
 #endif
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
 void jl_critical_error(int sig, bt_context_t *context, jl_bt_element_t *bt_data, size_t *bt_size);

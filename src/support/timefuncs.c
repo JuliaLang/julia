@@ -28,7 +28,7 @@
 extern "C" {
 #endif
 
-JL_DLLEXPORT int jl_gettimeofday(struct jl_timeval *jtv)
+JL_DLLEXPORT int jl_gettimeofday(struct jl_timeval *jtv) JL_NOTSAFEPOINT
 {
 #if defined(_OS_WINDOWS_)
     struct __timeb64 tb;
@@ -44,7 +44,7 @@ JL_DLLEXPORT int jl_gettimeofday(struct jl_timeval *jtv)
     return code;
 }
 
-JL_DLLEXPORT double jl_clock_now(void)
+JL_DLLEXPORT double jl_clock_now(void) JL_NOTSAFEPOINT
 {
     struct jl_timeval now;
     jl_gettimeofday(&now);

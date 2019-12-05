@@ -45,7 +45,7 @@ RUNTIME_C_SRCS := \
 	simplevector runtime_intrinsics precompile \
 	threading partr stackwalk gc gc-debug gc-pages gc-stacks method \
 	jlapi signal-handling safepoint timing subtype \
-	crc32c
+	crc32c profile
 RUNTIME_SRCS := APInt-C runtime_ccall processor rtutils jloptions $(RUNTIME_C_SRCS)
 SRCS := $(RUNTIME_SRCS)
 

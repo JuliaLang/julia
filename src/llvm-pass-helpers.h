@@ -121,6 +121,9 @@ namespace jl_intrinsics {
     // passed as an argument.
     extern const IntrinsicDescription GCAllocBytes;
 
+    // `julia.gc_set_typeof`: an intrinsic that tags an allocation with a type.
+    extern const IntrinsicDescription GCSetTypeof;
+
     // `julia.new_gc_frame`: an intrinsic that creates a new GC frame.
     extern const IntrinsicDescription newGCFrame;
 
@@ -152,6 +155,9 @@ namespace jl_well_known {
 
     // `jl_gc_queue_root`: queues a GC root.
     extern const WellKnownFunctionDescription GCQueueRoot;
+
+    // `jl_memprofile_set_typeof`: informs the memory profiler about a type.
+    extern const WellKnownFunctionDescription MemProfileSetTypeof;
 }
 
 #endif

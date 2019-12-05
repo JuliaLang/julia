@@ -65,19 +65,47 @@ struct InterpreterIP
     mod::Union{Module,Nothing}
 end
 
-# convert dual arrays (raw bt buffer, array of GC managed values) to a single
-# array of locations
-function _reformat_bt(bt, bt2)
-    ret = Vector{Union{InterpreterIP,Ptr{Cvoid}}}()
-    i, j = 1, 1
+struct AllocationInfo
+    T::Union{Nothing,Type}
+    address::Ptr{Cvoid}
+    time::Float64
+    allocsz::Csize_t
+    tag::UInt16
+end
+
+# formatted backtrace buffers can contain all types of objects
+const BackTraceEntry = Union{Ptr{Nothing}, InterpreterIP, AllocationInfo}
+# but only some correspond with actual instruction pointers
+const InstructionPointer = Union{Ptr{Nothing}, InterpreterIP}
+
+# convert an array of raw backtrace entries to array of usable objects
+# (either native pointers, InterpreterIP objects, or AllocationInfo objects)
+function _reformat_bt(bt, Wanted::Type=BackTraceEntry)
+    # NOTE: Ptr{Cvoid} is always part of the output container type,
+    #       as end-of-block markers are encoded as a NULL pointer
+    # TODO: use Nothing/nothing for that?
+    ret = Vector{Union{Ptr{Cvoid}, Wanted}}()
+    i = 1
     while i <= length(bt)
         ip = bt[i]::Ptr{Cvoid}
-        if UInt(ip) != (-1 % UInt) # See also jl_bt_is_native
-            # native frame
+
+        # end-of-block marker
+        if UInt(ip) == 0
             push!(ret, ip)
             i += 1
             continue
         end
+
+        # native frame
+        if UInt(ip) != (-1 % UInt)
+            # See also jl_bt_is_native
+            if Ptr{Cvoid} <: Wanted
+                push!(ret, ip)
+                i += 1
+            end
+            continue
+        end
+
         # Extended backtrace entry
         entry_metadata = reinterpret(UInt, bt[i+1])
         njlvalues =  entry_metadata & 0x7
@@ -85,15 +113,32 @@ function _reformat_bt(bt, bt2)
         tag       = (entry_metadata >> 6) & 0xf
         header    =  entry_metadata >> 10
         if tag == 1 # JL_BT_INTERP_FRAME_TAG
-            code = bt2[j]
-            mod = njlvalues == 2 ? bt2[j+1] : nothing
-            push!(ret, InterpreterIP(code, header, mod))
+            if InterpreterIP <: Wanted
+                code = unsafe_pointer_to_objref(convert(Ptr{Any}, bt[i+2]))
+                mod = if njlvalues == 2
+                    unsafe_pointer_to_objref(convert(Ptr{Any}, bt[i+3]))
+                else
+                    nothing
+                end
+                push!(ret, InterpreterIP(code, header, mod))
+            end
+        elseif tag == 2 # JL_BT_ALLOCINFO_FRAME_TAG
+            if AllocationInfo <: Wanted
+                #@assert header == 0
+                #@assert njlvalues == 1
+                type = unsafe_pointer_to_objref(convert(Ptr{Any}, bt[i+2]))
+                #@assert nuintvals == 4
+                address = reinterpret(Ptr{Cvoid}, bt[i+3])
+                time = reinterpret(Cdouble, bt[i+4])
+                allocsz = reinterpret(UInt, bt[i+5])
+                tag = reinterpret(UInt, bt[i+6])
+                push!(ret, AllocationInfo(type, address, time, allocsz, tag))
+            end
         else
             # Tags we don't know about are an error
             throw(ArgumentError("Unexpected extended backtrace entry tag $tag at bt[$i]"))
         end
         # See jl_bt_entry_size
-        j += njlvalues
         i += Int(2 + njlvalues + nuintvals)
     end
     ret
@@ -110,7 +155,10 @@ function backtrace()
     # backtrace() itself must not be interpreted nor inlined.
     skip = 1
     bt1, bt2 = ccall(:jl_backtrace_from_here, Ref{SimpleVector}, (Cint, Cint), false, skip)
-    return _reformat_bt(bt1::Vector{Ptr{Cvoid}}, bt2::Vector{Any})
+    t = @_gc_preserve_begin bt2
+    bt = _reformat_bt(bt1::Vector{Ptr{Cvoid}}, InstructionPointer)
+    @_gc_preserve_end t
+    return bt
 end
 
 """
@@ -119,8 +167,11 @@ end
 Get the backtrace of the current exception, for use within `catch` blocks.
 """
 function catch_backtrace()
-    bt, bt2 = ccall(:jl_get_backtrace, Ref{SimpleVector}, ())
-    return _reformat_bt(bt::Vector{Ptr{Cvoid}}, bt2::Vector{Any})
+    bt1, bt2 = ccall(:jl_get_backtrace, Ref{SimpleVector}, ())
+    t = @_gc_preserve_begin bt2
+    bt = _reformat_bt(bt1::Vector{Ptr{Cvoid}}, InstructionPointer)
+    @_gc_preserve_end t
+    return bt
 end
 
 """
@@ -146,7 +197,14 @@ function catch_stack(task=current_task(); include_bt=true)
     stride = include_bt ? 3 : 1
     for i = reverse(1:stride:length(raw))
         e = raw[i]
-        push!(formatted, include_bt ? (e,Base._reformat_bt(raw[i+1],raw[i+2])) : e)
+        if include_bt
+            bt1, bt2 = raw[i+1], raw[i+2]
+            t = @_gc_preserve_begin bt2
+            push!(formatted, (e, Base._reformat_bt(bt1, InstructionPointer)))
+            @_gc_preserve_end t
+        else
+            push!(formatted, e)
+        end
     end
     formatted
 end

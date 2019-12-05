@@ -1902,6 +1902,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                     EmitTagPtr(builder, T_prjlvalue, newI));
                 store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
 
+                auto setTypeofIntrinsic = getOrDeclare(jl_intrinsics::GCSetTypeof);
+                builder.CreateCall(setTypeofIntrinsic, {newI, CI->getArgOperand(2)});
+
                 // Replace uses of the call to `julia.gc_alloc_obj` with the call to
                 // `julia.gc_alloc_bytes`.
                 CI->replaceAllUsesWith(newI);
