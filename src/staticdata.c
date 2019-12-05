@@ -238,16 +238,22 @@ static void jl_load_sysimg_so(void)
 }
 
 const char jl_system_image_data[] __attribute__((weak));
-void *jl_sysimg_fvars[] __attribute__((weak));
-void *jl_sysimg_gvars[] __attribute__((weak));
-void *jl_sysimg_gvars_offsets[] __attribute__((weak));
-size_t jl_system_image_size __attribute__((weak)) = 0;
+size_t jl_system_image_size   __attribute__((weak)) = 0;
 
-void jl_load_sysimg_static() {
-    sysimg_fptrs.base = jl_sysimg_fvars;
-    sysimg_gvars_base = jl_sysimg_gvars;
-    sysimg_gvars_offsets = jl_sysimg_gvars_offsets;
-    sysimg_gvars_offsets += 1;
+char     *jl_sysimg_gvars_base      __attribute__((weak)) = NULL;
+char     *jl_sysimg_fvars_base      __attribute__((weak)) = NULL;
+int32_t  *jl_sysimg_gvars_offsets   __attribute__((weak)) = NULL;
+int32_t  *jl_sysimg_fvars_offsets   __attribute__((weak)) = NULL;
+void     *jl_dispatch_target_ids    __attribute__((weak)) = NULL;
+int32_t  *jl_dispatch_reloc_slots   __attribute__((weak)) = NULL;
+uint32_t *jl_dispatch_fvars_idxs    __attribute__((weak)) = NULL;
+int32_t  *jl_dispatch_fvars_offsets __attribute__((weak)) = NULL;
+
+void jl_load_sysimg_static(void) {
+#ifndef JL_NDEBUG
+    assert(jl_system_image_size > 0 && "load sysimg static despite 0 size");
+#endif
+    sysimg_fptrs = jl_init_processor_sysimg(NULL);
     jl_restore_system_image_data(jl_system_image_data, jl_system_image_size);
 }
 

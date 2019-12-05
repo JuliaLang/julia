@@ -509,6 +509,16 @@ extern const int jl_tls_elf_support;
 void jl_init_threading(void);
 void jl_start_threads(void);
 
+// -- staticdata.c -- //
+extern char     *jl_sysimg_gvars_base;
+extern char     *jl_sysimg_fvars_base;
+extern int32_t  *jl_sysimg_gvars_offsets;
+extern int32_t  *jl_sysimg_fvars_offsets;
+extern void     *jl_dispatch_target_ids;
+extern int32_t  *jl_dispatch_reloc_slots;
+extern uint32_t *jl_dispatch_fvars_idxs;
+extern int32_t  *jl_dispatch_fvars_offsets;
+
 // Whether the GC is running
 extern char *jl_safepoint_pages;
 STATIC_INLINE int jl_addr_is_safepoint(uintptr_t addr)

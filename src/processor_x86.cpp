@@ -872,7 +872,11 @@ jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl)
 {
     if (!jit_targets.empty())
         jl_error("JIT targets already initialized");
-    return parse_sysimg(hdl, sysimg_init_cb);
+    if (hdl) {
+        return parse_sysimg(hdl, sysimg_init_cb);
+    } else {
+        return parse_static_sysimg(sysimg_init_cb);
+    }
 }
 
 std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)

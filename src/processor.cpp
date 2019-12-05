@@ -615,6 +615,10 @@ static inline std::vector<TargetData<n>> &get_cmdline_targets(F &&feature_cb)
     return targets;
 }
 
+// Forward declaration
+static inline jl_sysimg_fptrs_t relocate_sysimg(char*, char*, int32_t*, uint32_t,
+                                                int32_t*, uint32_t*, int32_t*);
+
 // Load the sysimg from a shared library, use the callback
 template<typename F>
 static inline jl_sysimg_fptrs_t parse_sysimg(void *hdl, F &&callback)
@@ -642,7 +646,20 @@ static inline jl_sysimg_fptrs_t parse_sysimg(void *hdl, F &&callback)
     jl_dlsym(hdl, "jl_dispatch_fvars_idxs", (void**)&clone_idxs, 1);
     jl_dlsym(hdl, "jl_dispatch_fvars_offsets", (void**)&clone_offsets, 1);
 
-    return relocate_sysimg(data_base, text_base, offsets, target_idx, reloc_slots, clone_idxs, clone_offsets);
+    return relocate_sysimg(data_base, text_base, offsets, target_idx,
+                           reloc_slots, clone_idxs, clone_offsets);
+}
+
+// Load the sysimg from through weak symbols, use the callback
+template<typename F>
+static inline jl_sysimg_fptrs_t parse_static_sysimg(F &&callback)
+{
+    uint32_t target_idx = callback(jl_dispatch_target_ids);
+    return relocate_sysimg(jl_sysimg_gvars_base, jl_sysimg_fvars_base,
+                           jl_sysimg_fvars_offsets, target_idx,
+                           jl_dispatch_reloc_slots, jl_dispatch_fvars_idxs,
+                           jl_dispatch_fvars_offsets);
+
 }
 
 // Perform all relocations for the selected target.
@@ -651,7 +668,7 @@ static inline jl_sysimg_fptrs_t relocate_sysimg(char *data_base, char *text_base
                                                 int32_t *reloc_slots,
                                                 uint32_t *clone_idxs, int32_t *clone_offsets)
 {
-    jl_sysimg_fptrs_t res = {nullptr, 0, nullptr, 1, 0, nullptr, nullptr};
+    jl_sysimg_fptrs_t res = {nullptr, 0, nullptr, 0, nullptr, nullptr};
 
     res.base = text_base;
 
