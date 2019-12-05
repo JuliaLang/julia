@@ -573,14 +573,10 @@ end
     B´ = copy(B)
     copyto!(B´, Rdest, B´, Rsrc)
     @test Matrix(B´)[Rdest] == Matrix(B)[Rsrc]
-    # Test impossible conversion even for empty sparse source
-    A = sprand(4, 4, 0.0); B = fill("", 4,4);
-    @test_throws MethodError copyto!(B, A)
-    @test_throws MethodError copyto!(B, Rdest, A, Rsrc)
-    # Test that only overlapping axes are overwritten
+    # Test that only elements at overlapping linear indices are overwritten
     A = sprand(3, 3, 1.0); B = ones(4, 4)
     copyto!(B, A)
-    @test B[:, 4] == B[4, :] == ones(4)
+    @test B[4, :] != B[:, 4] == ones(4)
 end
 
 @testset "conj" begin

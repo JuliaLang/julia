@@ -360,18 +360,20 @@ copyto!(A::PermutedDimsArray, B::AbstractSparseMatrixCSC) = _sparse_copyto!(A, B
 
 function _sparse_copyto!(dest::AbstractMatrix, src::AbstractSparseMatrixCSC)
     dest === src && return dest
-    checkbounds(dest, axes(src)...)
-    # If src is not dense, zero out only the portion of dest spanned by the axes of src
+    isrc = LinearIndices(src)
+    checkbounds(dest, first(isrc))
+    checkbounds(dest, last(isrc))
+    # If src is not dense, zero out the portion of dest spanned by isrc
     if length(src) > nnz(src)
         z = convert(eltype(dest), zero(eltype(src))) # should throw if not possible
-        for I in eachindex(IndexStyle(dest), src)
-            @inbounds dest[I] = z
+        for i in isrc
+            @inbounds dest[i] = z
         end
     end
     @inbounds for col in 1:size(src, 2), ptr in nzrange(src, col)
         row = rowvals(src)[ptr]
         val = nonzeros(src)[ptr]
-        dest[row, col] = val
+        dest[isrc[row, col]] = val
     end
     return dest
 end
