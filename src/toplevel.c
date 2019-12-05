@@ -335,6 +335,8 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
             return;
         }
     }
+    else if (head == meta_sym && jl_exprarg(e, 0) == (jl_value_t*)waitcompile_sym)
+        return;
     int i;
     for (i = 0; i < jl_array_len(e->args); i++) {
         jl_value_t *a = jl_exprarg(e, i);
