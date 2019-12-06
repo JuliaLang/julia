@@ -37,7 +37,7 @@ static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintpt
             if (frame_fp == 0)
                 continue; // frame wasn't fully initialized yet
             if (frame_fp >= sp)
-                break; // stack grows up, so frame pointer is monotonically increasing
+                break; // stack grows down, so frame pointer is monotonically increasing
             *ppgcstack = prev;
             return pgcstack;
         }
