@@ -75,7 +75,7 @@ $(build_private_libdir)/sys.ji: $(build_private_libdir)/corecompiler.ji $(JULIAH
 ifeq (1,$(JULIA_PRECOMPILE))
 JULIA_PRECOMPILE_FILE=$(call cygpath_w,$(JULIAHOME)/contrib/generate_precompile.jl)
 else
-JULIA_PRECOMPILE_FILE=
+JULIA_PRECOMPILE_FILE=-e 'quit();'
 endif
 
 define sysimg_builder
