@@ -183,18 +183,18 @@ let fails = @testset NoThrowTestSet begin
     end
 
     let str = sprint(show, fails[11])
-        @test occursin("Expression: isapprox(1 / 2, 2 / 1, atol=1 / 1)", str)
-        @test occursin("Evaluated: isapprox(0.5, 2.0; atol=1.0)", str)
+        @test occursin("Expression: isapprox(1 / 2, 2 / 1, atol = 1 / 1)", str)
+        @test occursin("Evaluated: isapprox(0.5, 2.0; atol = 1.0)", str)
     end
 
     let str = sprint(show, fails[12])
-        @test occursin("Expression: isapprox(1 - 2, 2 - 1; atol=1 - 1)", str)
-        @test occursin("Evaluated: isapprox(-1, 1; atol=0)", str)
+        @test occursin("Expression: isapprox(1 - 2, 2 - 1; atol = 1 - 1)", str)
+        @test occursin("Evaluated: isapprox(-1, 1; atol = 0)", str)
     end
 
     let str = sprint(show, fails[13])
         @test occursin("Expression: isapprox(1, 2; k...)", str)
-        @test occursin("Evaluated: isapprox(1, 2; atol=0, nans=true)", str)
+        @test occursin("Evaluated: isapprox(1, 2; atol = 0, nans = true)", str)
     end
 
     let str = sprint(show, fails[14])

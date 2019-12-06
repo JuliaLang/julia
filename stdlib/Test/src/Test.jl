@@ -363,7 +363,7 @@ Test Broken
 
 julia> @test_broken 1 == 2 atol=0.1
 Test Broken
-  Expression: ==(1, 2, atol=0.1)
+  Expression: ==(1, 2, atol = 0.1)
 ```
 """
 macro test_broken(ex, kws...)
@@ -392,7 +392,7 @@ Test Broken
 
 julia> @test_skip 1 == 2 atol=0.1
 Test Broken
-  Skipped: ==(1, 2, atol=0.1)
+  Skipped: ==(1, 2, atol = 0.1)
 ```
 """
 macro test_skip(ex, kws...)

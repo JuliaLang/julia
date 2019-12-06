@@ -202,6 +202,36 @@ end
 @test_repr "import ..A: a, x, y.z"
 @test_repr "import A.B, C.D"
 
+# keyword args (issue #34023 and #32775)
+@test_repr "f(a, b=c)"
+@test_repr "f(a, b! = c)"
+@test_repr "T{x=1}"
+@test_repr "[a=1]"
+@test_repr "a[x=1]"
+@test_repr "f(; a=1)"
+@test_repr "f(b=2; a=1)"
+@test_repr "@f(1, y=3)"
+@test_repr "n + (x=1)"
+@test_repr "(;x=1)"
+@test_repr "(x,;x=1)"
+@test_repr "(a=1,;x=1)"
+@test_repr "(a=1,b=2;x=1,y,:z=>2)"
+@test repr(:((a,;b))) == ":((a,; b))"
+@test repr(:((a=1,;x=2))) == ":((a = 1,; x = 2))"
+@test repr(:((a=1,3;x=2))) == ":((a = 1, 3; x = 2))"
+@test repr(:(g(a,; b))) == ":(g(a; b))"
+for ex in [Expr(:call, :f, Expr(:(=), :x, 1)),
+           Expr(:ref, :f, Expr(:(=), :x, 1)),
+           Expr(:vect, 1, 2, Expr(:kw, :x, 1)),
+           Expr(:kw, :a, :b),
+           Expr(:curly, :T, Expr(:kw, :x, 1)),
+           Expr(:call, :+, :n, Expr(:kw, :x, 1)),
+           :((a=1,; $(Expr(:(=), :x, 2)))),
+           :(($(Expr(:(=), :a, 1)),; x = 2)),
+           Expr(:tuple, Expr(:parameters))]
+    @test eval(Meta.parse(repr(ex))) == ex
+end
+
 @test repr(Expr(:using, :Foo)) == ":(\$(Expr(:using, :Foo)))"
 @test repr(Expr(:using, Expr(:(.), ))) == ":(\$(Expr(:using, :(\$(Expr(:.))))))"
 @test repr(Expr(:import, :Foo)) == ":(\$(Expr(:import, :Foo)))"
