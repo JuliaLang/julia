@@ -243,11 +243,12 @@ Compute the `read`, `write`, `create`, `truncate`, `append` flag value for
 a given set of keyword arguments to [`open`](@ref) a [`NamedTuple`](@ref).
 """
 function open_flags(;
-    read     :: Union{Bool,Nothing} = nothing,
-    write    :: Union{Bool,Nothing} = nothing,
-    create   :: Union{Bool,Nothing} = nothing,
-    truncate :: Union{Bool,Nothing} = nothing,
-    append   :: Union{Bool,Nothing} = nothing,
+    read      :: Union{Bool,Nothing} = nothing,
+    write     :: Union{Bool,Nothing} = nothing,
+    create    :: Union{Bool,Nothing} = nothing,
+    truncate  :: Union{Bool,Nothing} = nothing,
+    append    :: Union{Bool,Nothing} = nothing,
+    exclusive :: Union{Bool,Nothing} = nothing,
 )
     if write === true && read !== true && append !== true
         create   === nothing && (create   = true)
@@ -259,11 +260,12 @@ function open_flags(;
         create === nothing && (create = true)
     end
 
-    write    === nothing && (write    = false)
-    read     === nothing && (read     = !write)
-    create   === nothing && (create   = false)
-    truncate === nothing && (truncate = false)
-    append   === nothing && (append   = false)
+    write     === nothing && (write     = false)
+    read      === nothing && (read      = !write)
+    create    === nothing && (create    = false)
+    truncate  === nothing && (truncate  = false)
+    append    === nothing && (append    = false)
+    exclusive === nothing && (exclusive = false)
 
     return (
         read = read,
@@ -271,6 +273,7 @@ function open_flags(;
         create = create,
         truncate = truncate,
         append = append,
+        exclusive = exclusive,
     )
 end
 

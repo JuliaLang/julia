@@ -902,7 +902,7 @@ static int open_cloexec(const char *path, int flags, mode_t mode)
 }
 #endif
 
-ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int trunc)
+ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int trunc, int excl)
 {
     int flags;
     int fd;
@@ -911,6 +911,7 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
         goto open_file_err;
     flags = wr ? (rd ? O_RDWR : O_WRONLY) : O_RDONLY;
     if (create) flags |= O_CREAT;
+    if (create && excl) flags |= O_EXCL;
     if (trunc)  flags |= O_TRUNC;
 #if defined(_OS_WINDOWS_)
     size_t wlen = MultiByteToWideChar(CP_UTF8, 0, fname, -1, NULL, 0);

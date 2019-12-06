@@ -1313,7 +1313,7 @@ jl_code_instance_t *jl_compile_linfo(jl_method_instance_t *mi, jl_code_info_t *s
                 if (!strncmp(t, "stderr", 6))
                     s_precompile = JL_STDERR;
                 else {
-                    if (ios_file(&f_precompile, t, 1, 1, 1, 1) == NULL)
+                    if (ios_file(&f_precompile, t, 1, 1, 1, 1, 0) == NULL)
                         jl_errorf("cannot open precompile statement file \"%s\" for writing", t);
                     s_precompile = (JL_STREAM*) &f_precompile;
                 }

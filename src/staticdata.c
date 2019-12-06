@@ -1396,7 +1396,7 @@ JL_DLLEXPORT size_t ios_write_direct(ios_t *dest, ios_t *src);
 JL_DLLEXPORT void jl_save_system_image(const char *fname)
 {
     ios_t f;
-    if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
+    if (ios_file(&f, fname, 1, 1, 1, 1, 0) == NULL) {
         jl_errorf("cannot open system image file \"%s\" for writing", fname);
     }
     JL_SIGATOMIC_BEGIN();
@@ -1573,7 +1573,7 @@ JL_DLLEXPORT void jl_restore_system_image(const char *fname)
     }
     else {
         ios_t f;
-        if (ios_file(&f, fname, 1, 0, 0, 0) == NULL)
+        if (ios_file(&f, fname, 1, 0, 0, 0, 0) == NULL)
             jl_errorf("System image file \"%s\" not found.", fname);
         ios_bufmode(&f, bm_none);
         JL_SIGATOMIC_BEGIN();

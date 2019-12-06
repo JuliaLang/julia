@@ -81,7 +81,7 @@ void jl_write_compiler_output(void)
             }
             else {
                 ios_t f;
-                if (ios_file(&f, jl_options.outputji, 1, 1, 1, 1) == NULL)
+                if (ios_file(&f, jl_options.outputji, 1, 1, 1, 1, 0) == NULL)
                     jl_errorf("cannot open system image file \"%s\" for writing", jl_options.outputji);
                 ios_write(&f, (const char*)s->buf, (size_t)s->size);
                 ios_close(&f);

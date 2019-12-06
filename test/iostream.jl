@@ -82,7 +82,7 @@ end
     end
 end
 
-@test Base.open_flags(read=false, write=true, append=false) == (read=false, write=true, create=true, truncate=true, append=false)
+@test Base.open_flags(read=false, write=true, append=false) == (read=false, write=true, create=true, truncate=true, append=false, exclusive=false)
 
 @testset "issue #30978" begin
     mktemp() do path, io
@@ -107,5 +107,11 @@ end
         y = zeros(UInt8, 101)
         open(f -> readbytes!(f, y, 102, all=false), path)
         @test y == [x; 0]
+    end
+end
+
+@testset "exclusive flag" begin
+    mktemp() do path, io
+        @test_throws SystemError open(path, create=true, exclusive=true)
     end
 end
