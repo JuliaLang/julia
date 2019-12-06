@@ -279,7 +279,7 @@ end
 
 Create a function that compares its argument to `x` using `≈`, i.e. a function equivalent to `y -> y ≈ x`.
 
-The keyword arguments supported here are the same as those in [`isapprox`](@ref).
+The keyword arguments supported here are the same as those in the 2-argument `isapprox`.
 """
 isapprox(y; kwargs...) = x -> isapprox(x, y; kwargs...)
 
