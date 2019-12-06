@@ -79,6 +79,7 @@ typedef struct jl_varbinding_t {
     // array of typevars that our bounds depend on, whose UnionAlls need to be
     // moved outside ours.
     jl_array_t *innervars;
+    int intvalued;      // must be integer-valued; i.e. occurs as N in Vararg{_,N}
     struct jl_varbinding_t *prev;
 } jl_varbinding_t;
 
@@ -692,7 +693,7 @@ typedef int (*tvar_callback)(void*, int8_t, jl_stenv_t *, int);
 static int with_tvar(tvar_callback callback, void *context, jl_unionall_t *u, int8_t R, jl_stenv_t *e, int param)
 {
     jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, NULL, 0, 0, 0, 0,
-                           R ? e->Rinvdepth : e->invdepth, 0, NULL, e->vars };
+                           R ? e->Rinvdepth : e->invdepth, 0, NULL, 0, e->vars };
     JL_GC_PUSH4(&u, &vb.lb, &vb.ub, &vb.innervars);
     e->vars = &vb;
     int ans;
@@ -2318,6 +2319,19 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         varval = vb->ub;
     }
 
+    if (vb->intvalued) {
+        if ((varval && jl_is_long(varval)) ||
+            (vb->lb == jl_bottom_type && vb->ub == (jl_value_t*)jl_any_type) ||
+            (jl_is_typevar(vb->lb) && vb->ub == vb->lb)) {
+            // int-valued typevar must either be an Int, or have Bottom-Any bounds,
+            // or be set equal to another typevar.
+        }
+        else {
+            JL_GC_POP();
+            return jl_bottom_type;
+        }
+    }
+
     if (!varval && (vb->lb != vb->var->lb || vb->ub != vb->var->ub))
         newvar = jl_new_typevar(vb->var->name, vb->lb, vb->ub);
 
@@ -2492,7 +2506,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
     jl_value_t *res=NULL, *res2=NULL, *save=NULL, *save2=NULL;
     jl_savedenv_t se, se2;
     jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, NULL, 0, 0, 0, 0,
-                           R ? e->Rinvdepth : e->invdepth, 0, NULL, e->vars };
+                           R ? e->Rinvdepth : e->invdepth, 0, NULL, 0, e->vars };
     JL_GC_PUSH6(&res, &save2, &vb.lb, &vb.ub, &save, &vb.innervars);
     save_env(e, &save, &se);
     res = intersect_unionall_(t, u, e, R, param, &vb);
@@ -2925,6 +2939,7 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                     return jl_bottom_type;
                 jl_value_t *i2=NULL, *ii = intersect(xp1, yp1, e, 1);
                 if (ii == jl_bottom_type) return jl_bottom_type;
+                JL_GC_PUSH2(&ii, &i2);
                 if (jl_is_typevar(xp1)) {
                     jl_varbinding_t *xb = lookup(e, (jl_tvar_t*)xp1);
                     if (xb && is_leaf_typevar(xb->var)) xb->concrete = 1;
@@ -2933,10 +2948,19 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                     jl_varbinding_t *yb = lookup(e, (jl_tvar_t*)yp1);
                     if (yb && is_leaf_typevar(yb->var)) yb->concrete = 1;
                 }
-                JL_GC_PUSH2(&ii, &i2);
+                if (jl_is_typevar(xp2)) {
+                    jl_varbinding_t *xb = lookup(e, (jl_tvar_t*)xp2);
+                    if (xb) xb->intvalued = 1;
+                }
+                if (jl_is_typevar(yp2)) {
+                    jl_varbinding_t *yb = lookup(e, (jl_tvar_t*)yp2);
+                    if (yb) yb->intvalued = 1;
+                }
                 // Vararg{T,N} <: Vararg{T2,N2}; equate N and N2
                 i2 = intersect_invariant(xp2, yp2, e);
-                if (i2 == NULL || i2 == jl_bottom_type || (jl_is_long(i2) && jl_unbox_long(i2) < 0))
+                if (i2 == NULL || i2 == jl_bottom_type || (jl_is_long(i2) && jl_unbox_long(i2) < 0) ||
+                    !((jl_is_typevar(i2) && ((jl_tvar_t*)i2)->lb == jl_bottom_type &&
+                       ((jl_tvar_t*)i2)->ub == (jl_value_t*)jl_any_type) || jl_is_long(i2)))
                     ii = jl_bottom_type;
                 else
                     ii = jl_apply_type2((jl_value_t*)jl_vararg_type, ii, i2);
