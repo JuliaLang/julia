@@ -89,10 +89,7 @@ extern void jl_gc_enable_finalizers(jl_ptls_t, int);
 extern void jl_wakeup_thread(int16_t);
 extern int jl_gc_enable(int);
 extern int jl_gc_is_enabled(void);
-extern int64_t jl_gc_total_bytes(void);
-extern uint64_t jl_gc_total_hrtime(void);
-extern int64_t jl_gc_diff_total_bytes(void);
-extern void jl_gc_collect(int);
+extern void jl_gc_collect(jl_gc_collection_t);
 extern void jl_gc_add_finalizer(jl_value_t *, jl_function_t *);
 extern void jl_finalize(jl_value_t *);
 extern jl_weakref_t * jl_gc_new_weakref(jl_value_t *);
@@ -146,7 +143,7 @@ extern jl_value_t * jl_new_structv(jl_datatype_t *, jl_value_t **, uint32_t);
 extern jl_value_t * jl_new_structt(jl_datatype_t *, jl_value_t *);
 extern jl_value_t * jl_new_struct_uninit(jl_datatype_t *);
 extern jl_method_instance_t * jl_new_method_instance_uninit(void);
-extern jl_svec_t * jl_svec(size_t, ...);
+extern jl_svec_t * (jl_svec)(size_t, ...);
 extern jl_svec_t * jl_svec1(void *);
 extern jl_svec_t * jl_svec2(void *, void *);
 extern jl_svec_t * jl_alloc_svec(size_t);
@@ -399,6 +396,7 @@ extern jl_value_t * jl_gc_big_alloc(jl_ptls_t, size_t);
 extern int jl_alignment(size_t);
 extern void * jl_gc_counted_malloc(size_t);
 extern void jl_throw_out_of_memory_error(void);
+extern int64_t jl_gc_diff_total_bytes(void);
 extern jl_code_instance_t * jl_get_method_inferred(jl_method_instance_t *, jl_value_t *, size_t, size_t);
 extern int jl_compile_hint(jl_tupletype_t *);
 extern void jl_foreigncall_get_syms(jl_value_t *, jl_sym_t **, jl_sym_t **);
@@ -418,18 +416,17 @@ extern jl_methtable_t * jl_method_table_for(jl_value_t *);
 extern jl_value_t * jl_dump_fptr_asm(uint64_t, int, const char *, const char *);
 extern jl_array_t * jl_idtable_rehash(jl_array_t *, size_t);
 extern jl_methtable_t * jl_new_method_table(jl_sym_t *, jl_module_t *);
-extern int jl_has_call_ambiguities(jl_value_t *, jl_method_t *);
 extern jl_value_t * jl_rettype_inferred(jl_method_instance_t *, size_t, size_t);
 extern jl_value_t * jl_methtable_lookup(jl_methtable_t *, jl_value_t *, size_t);
 extern jl_method_instance_t * jl_specializations_get_linfo(jl_method_t *, jl_value_t *, jl_svec_t *);
 extern void jl_method_instance_add_backedge(jl_method_instance_t *, jl_method_instance_t *);
 extern void jl_method_table_add_backedge(jl_methtable_t *, jl_value_t *, jl_value_t *);
-extern void jl_get_backtrace(jl_array_t **, jl_array_t **);
+extern jl_value_t * jl_get_backtrace(void);
 extern void jl_raise_debugger(void);
-extern void jl_gdblookup(uintptr_t);
+extern void jl_gdblookup(void *);
 extern int jl_is_interpreter_frame(uintptr_t);
 extern int jl_is_enter_interpreter_frame(uintptr_t);
-extern size_t jl_capture_interp_frame(uintptr_t *, uintptr_t, uintptr_t, size_t);
+extern size_t jl_capture_interp_frame(jl_bt_element_t *, uintptr_t, uintptr_t, size_t);
 extern uint64_t jl_hrtime(void);
 extern void * jl_load_and_lookup(const char *, const char *, void **);
 extern jl_value_t * jl_get_cfunction_trampoline(jl_value_t *, jl_datatype_t *, htable_t *, jl_svec_t *, void *(*)(void *, void **), jl_unionall_t *, jl_value_t **);
@@ -508,6 +505,7 @@ extern jl_value_t * jl_floor_llvm(jl_value_t *);
 extern jl_value_t * jl_trunc_llvm(jl_value_t *);
 extern jl_value_t * jl_rint_llvm(jl_value_t *);
 extern jl_value_t * jl_sqrt_llvm(jl_value_t *);
+extern jl_value_t * jl_sqrt_llvm_fast(jl_value_t *);
 extern jl_value_t * jl_abs_float(jl_value_t *);
 extern jl_value_t * jl_copysign_float(jl_value_t *, jl_value_t *);
 extern jl_value_t * jl_flipsign_int(jl_value_t *, jl_value_t *);
@@ -533,6 +531,7 @@ extern void * jl_mmap(void *, size_t, int, int, int, int64_t);
 extern long jl_ios_fd(ios_t *);
 extern int32_t jl_nb_available(ios_t *);
 extern jl_value_t * jl_readuntil(ios_t *, uint8_t, uint8_t, uint8_t);
+extern int jl_ios_buffer_n(ios_t *, const size_t);
 extern uint64_t jl_ios_get_nbyte_int(ios_t *, const size_t);
 extern void jl_native_alignment(uint_t *, uint_t *, uint_t *, uint_t *, uint_t *, uint_t *);
 extern jl_value_t * jl_is_char_signed(void);
@@ -548,6 +547,7 @@ extern jl_value_t * jl_f_isa(jl_value_t *, jl_value_t **, uint32_t);
 extern jl_value_t * jl_f__apply(jl_value_t *, jl_value_t **, uint32_t);
 extern jl_value_t * jl_f__apply_pure(jl_value_t *, jl_value_t **, uint32_t);
 extern jl_value_t * jl_f__apply_latest(jl_value_t *, jl_value_t **, uint32_t);
+extern jl_value_t * jl_f__apply_iterate(jl_value_t *, jl_value_t **, uint32_t);
 extern jl_value_t * jl_f_isdefined(jl_value_t *, jl_value_t **, uint32_t);
 extern jl_value_t * jl_f_nfields(jl_value_t *, jl_value_t **, uint32_t);
 extern jl_value_t * jl_f_svec(jl_value_t *, jl_value_t **, uint32_t);
@@ -636,10 +636,11 @@ extern void jl_gc_add_ptr_finalizer(jl_ptls_t, jl_value_t *, void *);
 extern void jl_gc_add_finalizer_th(jl_ptls_t, jl_value_t *, jl_function_t *);
 extern void jl_finalize_th(jl_ptls_t, jl_value_t *);
 extern jl_weakref_t * jl_gc_new_weakref_th(jl_ptls_t, jl_value_t *);
+extern void jl_gc_get_total_bytes(int64_t *);
+extern uint64_t jl_gc_total_hrtime(void);
 extern jl_gc_num_t jl_gc_num(void);
 extern void * jl_gc_counted_calloc(size_t, size_t);
 extern void jl_gc_counted_free_with_size(void *, size_t);
-extern void jl_gc_counted_free(void *, size_t);
 extern void * jl_gc_counted_realloc_with_old_size(void *, size_t, size_t);
 extern void * jl_malloc(size_t);
 extern void * jl_calloc(size_t, size_t);
@@ -694,7 +695,6 @@ extern void jl_set_typeinf_func(jl_value_t *);
 extern int jl_isa_compileable_sig(jl_tupletype_t *, jl_method_t *);
 extern void jl_method_table_disable(jl_methtable_t *, jl_method_t *);
 extern jl_value_t * jl_get_spec_lambda(jl_tupletype_t *, size_t, size_t *, size_t *);
-extern int jl_is_call_ambiguous(jl_value_t *, jl_method_t *);
 extern jl_value_t * jl_gf_invoke_lookup(jl_value_t *, size_t);
 extern jl_value_t * jl_get_invoke_lambda(jl_typemap_entry_t *, jl_value_t *);
 extern void jl_typeinf_begin(void);
@@ -703,7 +703,7 @@ extern jl_value_t * jl_get_current_task(void);
 extern int jl_is_task_started(jl_task_t *);
 extern int16_t jl_get_task_tid(jl_task_t *);
 extern void jl_set_task_tid(jl_task_t *, int);
-extern jl_task_t * jl_task_get_next(jl_value_t *);
+extern jl_task_t * jl_task_get_next(jl_value_t *, jl_value_t *);
 extern int pcre2_config_8(uint32_t, void *);
 struct pcre2_real_general_context_8;
 typedef struct pcre2_real_general_context_8 pcre2_general_context_8;
@@ -2006,6 +2006,7 @@ extern int emscripten_run_preload_plugins(const char *, em_str_callback_func, em
 typedef void *em_run_preload_plugins_data_onload_func;
 typedef void *em_arg_callback_func;
 extern void emscripten_run_preload_plugins_data(char *, int, const char *, void *, em_run_preload_plugins_data_onload_func, em_arg_callback_func);
+extern void emscripten_lazy_load_code(void);
 typedef int worker_handle;
 extern worker_handle emscripten_create_worker(const char *);
 extern void emscripten_destroy_worker(worker_handle);
@@ -2023,6 +2024,10 @@ extern char * emscripten_get_preloaded_image_data_from_FILE(FILE *, int *, int *
 extern void emscripten_log(int, ...);
 extern int emscripten_get_callstack(int, char *, int);
 extern int emscripten_print_double(double, char *, int);
+typedef void *em_scan_func;
+extern void emscripten_scan_registers(em_scan_func);
+typedef void *em_scan_func;
+extern void emscripten_scan_stack(em_scan_func);
 extern void emscripten_sleep(unsigned int);
 extern void emscripten_sleep_with_yield(unsigned int);
 typedef void * emscripten_coroutine;
@@ -2585,18 +2590,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_gc_is_enabled") == 0) {
 	int result = jl_gc_is_enabled();
 	return jl_box_int32(result);
-} else if (strcmp(target, "jl_gc_total_bytes") == 0) {
-	int64_t result = jl_gc_total_bytes();
-	return jl_box_long(result);
-} else if (strcmp(target, "jl_gc_total_hrtime") == 0) {
-	uint64_t result = jl_gc_total_hrtime();
-	return jl_box_uint32(result);
-} else if (strcmp(target, "jl_gc_diff_total_bytes") == 0) {
-	int64_t result = jl_gc_diff_total_bytes();
-	return jl_box_long(result);
 } else if (strcmp(target, "jl_gc_collect") == 0) {
 	jl_gc_collect(
-			(int) jl_unbox_int32(eval_value(args[5], s))
+			(jl_gc_collection_t) jl_unbox_int32(eval_value(args[5], s))
 		);
 	return jl_nothing;
 } else if (strcmp(target, "jl_gc_add_finalizer") == 0) {
@@ -2927,7 +2923,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	jl_method_instance_t * result = jl_new_method_instance_uninit();
 	return result;
 } else if (strcmp(target, "jl_svec") == 0) {
-	jl_svec_t * result = jl_svec(
+	jl_svec_t * result = (jl_svec)(
 			(size_t) jl_unbox_uint32(eval_value(args[5], s))
 		);
 	return result;
@@ -4396,6 +4392,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_throw_out_of_memory_error") == 0) {
 	jl_throw_out_of_memory_error();
 	return jl_nothing;
+} else if (strcmp(target, "jl_gc_diff_total_bytes") == 0) {
+	int64_t result = jl_gc_diff_total_bytes();
+	return jl_box_long(result);
 } else if (strcmp(target, "jl_get_method_inferred") == 0) {
 	jl_code_instance_t * result = jl_get_method_inferred(
 			(jl_method_instance_t *) eval_value(args[5], s),
@@ -4517,12 +4516,6 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_module_t *) eval_value(args[6], s)
 		);
 	return result;
-} else if (strcmp(target, "jl_has_call_ambiguities") == 0) {
-	int result = jl_has_call_ambiguities(
-			(jl_value_t *) eval_value(args[5], s),
-			(jl_method_t *) eval_value(args[6], s)
-		);
-	return jl_box_int32(result);
 } else if (strcmp(target, "jl_rettype_inferred") == 0) {
 	jl_value_t * result = jl_rettype_inferred(
 			(jl_method_instance_t *) eval_value(args[5], s),
@@ -4558,17 +4551,14 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 		);
 	return jl_nothing;
 } else if (strcmp(target, "jl_get_backtrace") == 0) {
-	jl_get_backtrace(
-			(jl_array_t **) jl_unbox_voidpointer(eval_value(args[5], s)),
-			(jl_array_t **) jl_unbox_voidpointer(eval_value(args[6], s))
-		);
-	return jl_nothing;
+	jl_value_t * result = jl_get_backtrace();
+	return result;
 } else if (strcmp(target, "jl_raise_debugger") == 0) {
 	jl_raise_debugger();
 	return jl_nothing;
 } else if (strcmp(target, "jl_gdblookup") == 0) {
 	jl_gdblookup(
-			(uintptr_t) jl_unbox_uint32(eval_value(args[5], s))
+			(void *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	return jl_nothing;
 } else if (strcmp(target, "jl_is_interpreter_frame") == 0) {
@@ -4583,7 +4573,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return jl_box_int32(result);
 } else if (strcmp(target, "jl_capture_interp_frame") == 0) {
 	size_t result = jl_capture_interp_frame(
-			(uintptr_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(jl_bt_element_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
 			(uintptr_t) jl_unbox_uint32(eval_value(args[6], s)),
 			(uintptr_t) jl_unbox_uint32(eval_value(args[7], s)),
 			(size_t) jl_unbox_uint32(eval_value(args[8], s))
@@ -5059,6 +5049,11 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_value_t *) eval_value(args[5], s)
 		);
 	return result;
+} else if (strcmp(target, "jl_sqrt_llvm_fast") == 0) {
+	jl_value_t * result = jl_sqrt_llvm_fast(
+			(jl_value_t *) eval_value(args[5], s)
+		);
+	return result;
 } else if (strcmp(target, "jl_abs_float") == 0) {
 	jl_value_t * result = jl_abs_float(
 			(jl_value_t *) eval_value(args[5], s)
@@ -5240,6 +5235,12 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(uint8_t) jl_unbox_uint8(eval_value(args[8], s))
 		);
 	return result;
+} else if (strcmp(target, "jl_ios_buffer_n") == 0) {
+	int result = jl_ios_buffer_n(
+			(ios_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(const size_t) jl_unbox_uint32(eval_value(args[6], s))
+		);
+	return jl_box_int32(result);
 } else if (strcmp(target, "jl_ios_get_nbyte_int") == 0) {
 	uint64_t result = jl_ios_get_nbyte_int(
 			(ios_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
@@ -5326,6 +5327,13 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return result;
 } else if (strcmp(target, "jl_f__apply_latest") == 0) {
 	jl_value_t * result = jl_f__apply_latest(
+			(jl_value_t *) eval_value(args[5], s),
+			(jl_value_t **) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(uint32_t) jl_unbox_uint32(eval_value(args[7], s))
+		);
+	return result;
+} else if (strcmp(target, "jl_f__apply_iterate") == 0) {
+	jl_value_t * result = jl_f__apply_iterate(
 			(jl_value_t *) eval_value(args[5], s),
 			(jl_value_t **) jl_unbox_voidpointer(eval_value(args[6], s)),
 			(uint32_t) jl_unbox_uint32(eval_value(args[7], s))
@@ -5836,6 +5844,14 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_value_t *) eval_value(args[6], s)
 		);
 	return result;
+} else if (strcmp(target, "jl_gc_get_total_bytes") == 0) {
+	jl_gc_get_total_bytes(
+			(int64_t *) jl_unbox_voidpointer(eval_value(args[5], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "jl_gc_total_hrtime") == 0) {
+	uint64_t result = jl_gc_total_hrtime();
+	return jl_box_uint32(result);
 } else if (strcmp(target, "jl_gc_num") == 0) {
 	jl_gc_num_t result = jl_gc_num();
 	jl_ptls_t ptls = jl_get_ptls_states();
@@ -5859,12 +5875,6 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 
 } else if (strcmp(target, "jl_gc_counted_free_with_size") == 0) {
 	jl_gc_counted_free_with_size(
-			(void *) jl_unbox_voidpointer(eval_value(args[5], s)),
-			(size_t) jl_unbox_uint32(eval_value(args[6], s))
-		);
-	return jl_nothing;
-} else if (strcmp(target, "jl_gc_counted_free") == 0) {
-	jl_gc_counted_free(
 			(void *) jl_unbox_voidpointer(eval_value(args[5], s)),
 			(size_t) jl_unbox_uint32(eval_value(args[6], s))
 		);
@@ -6190,12 +6200,6 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(size_t *) jl_unbox_voidpointer(eval_value(args[8], s))
 		);
 	return result;
-} else if (strcmp(target, "jl_is_call_ambiguous") == 0) {
-	int result = jl_is_call_ambiguous(
-			(jl_value_t *) eval_value(args[5], s),
-			(jl_method_t *) eval_value(args[6], s)
-		);
-	return jl_box_int32(result);
 } else if (strcmp(target, "jl_gf_invoke_lookup") == 0) {
 	jl_value_t * result = jl_gf_invoke_lookup(
 			(jl_value_t *) eval_value(args[5], s),
@@ -6235,7 +6239,8 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return jl_nothing;
 } else if (strcmp(target, "jl_task_get_next") == 0) {
 	jl_task_t * result = jl_task_get_next(
-			(jl_value_t *) eval_value(args[5], s)
+			(jl_value_t *) eval_value(args[5], s),
+			(jl_value_t *) eval_value(args[6], s)
 		);
 	return result;
 } else if (strcmp(target, "pcre2_config_8") == 0) {
@@ -12926,6 +12931,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(em_arg_callback_func) jl_unbox_voidpointer(eval_value(args[10], s))
 		);
 	return jl_nothing;
+} else if (strcmp(target, "emscripten_lazy_load_code") == 0) {
+	emscripten_lazy_load_code();
+	return jl_nothing;
 } else if (strcmp(target, "emscripten_create_worker") == 0) {
 	worker_handle result = emscripten_create_worker(
 			(const char *) jl_unbox_voidpointer(eval_value(args[5], s))
@@ -13016,6 +13024,16 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(int) jl_unbox_int32(eval_value(args[7], s))
 		);
 	return jl_box_int32(result);
+} else if (strcmp(target, "emscripten_scan_registers") == 0) {
+	emscripten_scan_registers(
+			(em_scan_func) jl_unbox_voidpointer(eval_value(args[5], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "emscripten_scan_stack") == 0) {
+	emscripten_scan_stack(
+			(em_scan_func) jl_unbox_voidpointer(eval_value(args[5], s))
+		);
+	return jl_nothing;
 } else if (strcmp(target, "emscripten_sleep") == 0) {
 	emscripten_sleep(
 			(unsigned int) jl_unbox_uint32(eval_value(args[5], s))
@@ -13217,12 +13235,6 @@ else if (strcmp(target, "jl_gc_enable") == 0) {
 return (void*)&jl_gc_enable; } 
 else if (strcmp(target, "jl_gc_is_enabled") == 0) {
 return (void*)&jl_gc_is_enabled; } 
-else if (strcmp(target, "jl_gc_total_bytes") == 0) {
-return (void*)&jl_gc_total_bytes; } 
-else if (strcmp(target, "jl_gc_total_hrtime") == 0) {
-return (void*)&jl_gc_total_hrtime; } 
-else if (strcmp(target, "jl_gc_diff_total_bytes") == 0) {
-return (void*)&jl_gc_diff_total_bytes; } 
 else if (strcmp(target, "jl_gc_collect") == 0) {
 return (void*)&jl_gc_collect; } 
 else if (strcmp(target, "jl_gc_add_finalizer") == 0) {
@@ -13823,6 +13835,8 @@ else if (strcmp(target, "jl_gc_counted_malloc") == 0) {
 return (void*)&jl_gc_counted_malloc; } 
 else if (strcmp(target, "jl_throw_out_of_memory_error") == 0) {
 return (void*)&jl_throw_out_of_memory_error; } 
+else if (strcmp(target, "jl_gc_diff_total_bytes") == 0) {
+return (void*)&jl_gc_diff_total_bytes; } 
 else if (strcmp(target, "jl_get_method_inferred") == 0) {
 return (void*)&jl_get_method_inferred; } 
 else if (strcmp(target, "jl_compile_hint") == 0) {
@@ -13861,8 +13875,6 @@ else if (strcmp(target, "jl_idtable_rehash") == 0) {
 return (void*)&jl_idtable_rehash; } 
 else if (strcmp(target, "jl_new_method_table") == 0) {
 return (void*)&jl_new_method_table; } 
-else if (strcmp(target, "jl_has_call_ambiguities") == 0) {
-return (void*)&jl_has_call_ambiguities; } 
 else if (strcmp(target, "jl_rettype_inferred") == 0) {
 return (void*)&jl_rettype_inferred; } 
 else if (strcmp(target, "jl_methtable_lookup") == 0) {
@@ -14041,6 +14053,8 @@ else if (strcmp(target, "jl_rint_llvm") == 0) {
 return (void*)&jl_rint_llvm; } 
 else if (strcmp(target, "jl_sqrt_llvm") == 0) {
 return (void*)&jl_sqrt_llvm; } 
+else if (strcmp(target, "jl_sqrt_llvm_fast") == 0) {
+return (void*)&jl_sqrt_llvm_fast; } 
 else if (strcmp(target, "jl_abs_float") == 0) {
 return (void*)&jl_abs_float; } 
 else if (strcmp(target, "jl_copysign_float") == 0) {
@@ -14089,6 +14103,8 @@ else if (strcmp(target, "jl_nb_available") == 0) {
 return (void*)&jl_nb_available; } 
 else if (strcmp(target, "jl_readuntil") == 0) {
 return (void*)&jl_readuntil; } 
+else if (strcmp(target, "jl_ios_buffer_n") == 0) {
+return (void*)&jl_ios_buffer_n; } 
 else if (strcmp(target, "jl_ios_get_nbyte_int") == 0) {
 return (void*)&jl_ios_get_nbyte_int; } 
 else if (strcmp(target, "jl_native_alignment") == 0) {
@@ -14119,6 +14135,8 @@ else if (strcmp(target, "jl_f__apply_pure") == 0) {
 return (void*)&jl_f__apply_pure; } 
 else if (strcmp(target, "jl_f__apply_latest") == 0) {
 return (void*)&jl_f__apply_latest; } 
+else if (strcmp(target, "jl_f__apply_iterate") == 0) {
+return (void*)&jl_f__apply_iterate; } 
 else if (strcmp(target, "jl_f_isdefined") == 0) {
 return (void*)&jl_f_isdefined; } 
 else if (strcmp(target, "jl_f_nfields") == 0) {
@@ -14279,14 +14297,16 @@ else if (strcmp(target, "jl_finalize_th") == 0) {
 return (void*)&jl_finalize_th; } 
 else if (strcmp(target, "jl_gc_new_weakref_th") == 0) {
 return (void*)&jl_gc_new_weakref_th; } 
+else if (strcmp(target, "jl_gc_get_total_bytes") == 0) {
+return (void*)&jl_gc_get_total_bytes; } 
+else if (strcmp(target, "jl_gc_total_hrtime") == 0) {
+return (void*)&jl_gc_total_hrtime; } 
 else if (strcmp(target, "jl_gc_num") == 0) {
 return (void*)&jl_gc_num; } 
 else if (strcmp(target, "jl_gc_counted_calloc") == 0) {
 return (void*)&jl_gc_counted_calloc; } 
 else if (strcmp(target, "jl_gc_counted_free_with_size") == 0) {
 return (void*)&jl_gc_counted_free_with_size; } 
-else if (strcmp(target, "jl_gc_counted_free") == 0) {
-return (void*)&jl_gc_counted_free; } 
 else if (strcmp(target, "jl_gc_counted_realloc_with_old_size") == 0) {
 return (void*)&jl_gc_counted_realloc_with_old_size; } 
 else if (strcmp(target, "jl_malloc") == 0) {
@@ -14393,8 +14413,6 @@ else if (strcmp(target, "jl_method_table_disable") == 0) {
 return (void*)&jl_method_table_disable; } 
 else if (strcmp(target, "jl_get_spec_lambda") == 0) {
 return (void*)&jl_get_spec_lambda; } 
-else if (strcmp(target, "jl_is_call_ambiguous") == 0) {
-return (void*)&jl_is_call_ambiguous; } 
 else if (strcmp(target, "jl_gf_invoke_lookup") == 0) {
 return (void*)&jl_gf_invoke_lookup; } 
 else if (strcmp(target, "jl_get_invoke_lambda") == 0) {
@@ -16345,6 +16363,8 @@ else if (strcmp(target, "emscripten_run_preload_plugins") == 0) {
 return (void*)&emscripten_run_preload_plugins; } 
 else if (strcmp(target, "emscripten_run_preload_plugins_data") == 0) {
 return (void*)&emscripten_run_preload_plugins_data; } 
+else if (strcmp(target, "emscripten_lazy_load_code") == 0) {
+return (void*)&emscripten_lazy_load_code; } 
 else if (strcmp(target, "emscripten_create_worker") == 0) {
 return (void*)&emscripten_create_worker; } 
 else if (strcmp(target, "emscripten_destroy_worker") == 0) {
@@ -16371,6 +16391,10 @@ else if (strcmp(target, "emscripten_get_callstack") == 0) {
 return (void*)&emscripten_get_callstack; } 
 else if (strcmp(target, "emscripten_print_double") == 0) {
 return (void*)&emscripten_print_double; } 
+else if (strcmp(target, "emscripten_scan_registers") == 0) {
+return (void*)&emscripten_scan_registers; } 
+else if (strcmp(target, "emscripten_scan_stack") == 0) {
+return (void*)&emscripten_scan_stack; } 
 else if (strcmp(target, "emscripten_sleep") == 0) {
 return (void*)&emscripten_sleep; } 
 else if (strcmp(target, "emscripten_sleep_with_yield") == 0) {
