@@ -588,14 +588,15 @@ SECT_INTERP jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         if (cc_sym == jl_symbol("jscall")) {
 #ifdef _OS_EMSCRIPTEN_
             jl_value_t **ev_args;
-            JL_GC_PUSHARGS(ev_args, nargs-5);
-            for (int i = 5; i < nargs; ++i)
-                ev_args[i-5] = eval_value(args[i], s);
+            JL_GC_PUSHARGS(ev_args, nargs-6);
+            for (int i = 6; i < nargs; ++i) {
+                ev_args[i-6] = eval_value(args[i], s);
+            }
             jl_value_t *result =
                 jl_do_jscall(libname ? jl_symbol_name(libname) : NULL,
                             jl_symbol_name(fname),
                             ev_args,
-                            nargs-5);
+                            nargs-6);
             JL_GC_POP();
             // For now
             if (!result)
