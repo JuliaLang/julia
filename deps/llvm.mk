@@ -460,6 +460,9 @@ $(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm-8.0-D66401-mingw-reloc)) # remove for 9.0
 $(eval $(call LLVM_PATCH,llvm7-revert-D44485))
 $(eval $(call LLVM_PATCH,llvm-8.0-D63688-wasm-isLocal)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm-8.0-D55758-tablegen-cond)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm-8.0-D59389-refactor-wmma)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm-8.0-D59393-mma-ptx63-fix)) # remove for 9.0
 endif # LLVM_VER 8.0
 
 ifeq ($(LLVM_VER_SHORT),9.0)
