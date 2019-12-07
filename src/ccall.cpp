@@ -1541,7 +1541,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(!isVa && !llvmcall && nccallargs == 0);
 #ifdef __MIC__
         // TODO
-#elif defined(_CPU_X86_64_) || defined(_CPU_X86_)  /* !__MIC__ */
+#elif 0 // defined(_CPU_X86_64_) || defined(_CPU_X86_)  /* !__MIC__ */
         static auto pauseinst = InlineAsm::get(FunctionType::get(T_void, false), "pause",
                                                "~{memory}", true);
         ctx.builder.CreateCall(pauseinst);

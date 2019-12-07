@@ -135,8 +135,8 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         }
         PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "loopinfo" as LLVM parallel loop
 #if !defined(_OS_EMSCRIPTEN_)
-        if (dump_native)
-            PM->add(createMultiVersioningPass());
+        //if (dump_native)
+        //    PM->add(createMultiVersioningPass());
 #endif
         return;
     }
@@ -164,8 +164,8 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // be more evident - try to clean it up.
     PM->add(createCFGSimplificationPass());    // Merge & remove BBs
 #if !defined(_OS_EMSCRIPTEN_)
-    if (dump_native)
-        PM->add(createMultiVersioningPass());
+    //if (dump_native)
+    //    PM->add(createMultiVersioningPass());
 #endif
     PM->add(createSROAPass());                 // Break up aggregate allocas
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
@@ -1065,7 +1065,12 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
     // Reset the target triple to make sure it matches the new target machine
     shadow_output->setTargetTriple(TM->getTargetTriple().str());
     DataLayout DL = TM->createDataLayout();
+#ifdef _CPU_X86_ // Hack to make i686 look like wasm
+    DL.reset("e-m:e-p:32:32-i64:64-n32:64-S128-ni:10:11:12:13:256");
+#else
     DL.reset(DL.getStringRepresentation() + "-ni:10:11:12:13");
+#endif
+
     shadow_output->setDataLayout(DL);
 
     // add metadata information

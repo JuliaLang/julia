@@ -583,7 +583,7 @@ SECT_INTERP jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         jl_sym_t *fname = NULL, *libname = NULL;
         jl_foreigncall_get_syms(args[0], &fname, &libname);
 
-        jl_sym_t *cc_sym = *(jl_sym_t**)args[3];
+        jl_sym_t *cc_sym = *(jl_sym_t**)args[4];
         assert(jl_is_symbol(cc_sym));
         if (cc_sym == jl_symbol("jscall")) {
 #ifdef _OS_EMSCRIPTEN_

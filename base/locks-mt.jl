@@ -33,6 +33,11 @@ end
 
 import Base.Sys.WORD_SIZE
 
+if Sys.isjsvm()
+_xchg!(x::SpinLock, v::Int) = (old = x.handle; x.handle = v; old)
+_get(x::SpinLock) = x.handle
+_set!(x::SpinLock, v::Int) = (x.handle = v; nothing)
+else
 @eval _xchg!(x::SpinLock, v::Int) =
     llvmcall($"""
              %ptr = inttoptr i$WORD_SIZE %0 to i$WORD_SIZE*
@@ -53,6 +58,7 @@ import Base.Sys.WORD_SIZE
              store atomic i$WORD_SIZE %1, i$WORD_SIZE* %ptr release, align $(gc_alignment(Int))
              ret void
              """, Cvoid, Tuple{Ptr{Int}, Int}, unsafe_convert(Ptr{Int}, pointer_from_objref(x)), v)
+end
 
 # Note: this cannot assert that the lock is held by the correct thread, because we do not
 # track which thread locked it. Users beware.

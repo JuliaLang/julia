@@ -1177,8 +1177,10 @@ JL_CALLABLE(jl_f_intrinsic_call)
     if (f == cglobal && nargs == 1)
         f = cglobal_auto;
     unsigned fargs = intrinsic_nargs[f];
-    if (!fargs)
+    if (!fargs) {
+        jl_printf(JL_STDOUT, "Failed to run intrinsic %s\n", jl_intrinsic_name((int)f));
         jl_error("this intrinsic must be compiled to be called");
+    }
     JL_NARGS(intrinsic_call, fargs, fargs);
 
     union {

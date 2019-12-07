@@ -82,9 +82,10 @@ JL_DLLEXPORT void jl_uv_puts(JL_STREAM *stream, const char *str, size_t n)
         // Write to file descriptor...
         write(fd, str, n);
 				return;
+    } else {
+        write(STDOUT_FILENO, str, n);
+        return;
     }
-
-    ios_write((ios_t*)stream, str, n);
 }
 
 JL_DLLEXPORT void jl_uv_putb(JL_STREAM *stream, uint8_t b)
