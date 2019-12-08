@@ -707,7 +707,7 @@ the arguments of the user function are initialized.
 A `do` block, like any other inner function, can "capture" variables from its
 enclosing scope. For example, the variable `data` in the above example of
 `open...do` is captured from the outer scope. Captured variables
-can create performance challenges as discussed in [performance tips](@ref man-performance-tips).
+can create performance challenges as discussed in [performance tips](@ref man-performance-captured).
 
 ## Function composition and piping
 

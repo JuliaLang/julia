@@ -48,7 +48,7 @@ macro spawn(expr)
     var = esc(Base.sync_varname)
     quote
         local ref = spawn_somewhere($thunk)
-        if $(Expr(:isdefined, var))
+        if $(Expr(:islocal, var))
             push!($var, ref)
         end
         ref
@@ -93,7 +93,7 @@ macro spawnat(p, expr)
     end
     quote
         local ref = $spawncall
-        if $(Expr(:isdefined, var))
+        if $(Expr(:islocal, var))
             push!($var, ref)
         end
         ref
@@ -346,7 +346,7 @@ macro distributed(args...)
         syncvar = esc(Base.sync_varname)
         return quote
             local ref = pfor($(make_pfor_body(var, body)), $(esc(r)))
-            if $(Expr(:isdefined, syncvar))
+            if $(Expr(:islocal, syncvar))
                 push!($syncvar, ref)
             end
             ref
