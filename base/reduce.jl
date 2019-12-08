@@ -836,6 +836,8 @@ end
 
 ## count
 
+_bool(f::Function) = x->f(x)::Bool
+
 """
     count(p, itr) -> Integer
     count(itr) -> Integer
@@ -853,21 +855,9 @@ julia> count([true, false, true, true])
 3
 ```
 """
-function count(pred, itr)
-    n = 0
-    for x in itr
-        n += pred(x)::Bool
-    end
-    return n
-end
-function count(pred, a::AbstractArrayOrBroadcasted)
-    n = 0
-    for i in eachindex(a)
-        @inbounds n += pred(a[i])::Bool
-    end
-    return n
-end
 count(itr) = count(identity, itr)
+
+count(f, itr) = mapreduce(_bool(f), add_sum, itr, init=0)
 
 function count(::typeof(identity), x::Array{Bool})
     n = 0

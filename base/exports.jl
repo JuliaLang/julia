@@ -485,6 +485,7 @@ export
     any,
     firstindex,
     collect,
+    count!,
     count,
     delete!,
     deleteat!,
