@@ -19,6 +19,7 @@ The reduction operator used in `sum`. The main difference from [`+`](@ref) is th
 integers are promoted to `Int`/`UInt`.
 """
 add_sum(x, y) = x + y
+add_sum(x::Bool, y::Bool) = Int(x) + Int(y)
 add_sum(x::SmallSigned, y::SmallSigned) = Int(x) + Int(y)
 add_sum(x::SmallUnsigned, y::SmallUnsigned) = UInt(x) + UInt(y)
 add_sum(x::Real, y::Real)::Real = x + y
@@ -498,7 +499,6 @@ julia> sum(1:20)
 ```
 """
 sum(a) = sum(identity, a)
-sum(a::AbstractArray{Bool}) = count(a)
 
 ## prod
 """
