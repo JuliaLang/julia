@@ -184,7 +184,8 @@ function atomic_sub! end
 
 Atomically bitwise-and `x` with `val`
 
-Performs `x[] &= val` atomically. Returns the **old** value.
+Performs `x[] &= val` atomically. Returns the **old** value. Not defined
+for `Atomic{Ptr}`.
 
 For further details, see LLVM's `atomicrmw and` instruction.
 
@@ -207,7 +208,8 @@ function atomic_and! end
 
 Atomically bitwise-nand (not-and) `x` with `val`
 
-Performs `x[] = ~(x[] & val)` atomically. Returns the **old** value.
+Performs `x[] = ~(x[] & val)` atomically. Returns the **old** value. Not
+defined for `Atomic{Ptr}`.
 
 For further details, see LLVM's `atomicrmw nand` instruction.
 
@@ -230,7 +232,8 @@ function atomic_nand! end
 
 Atomically bitwise-or `x` with `val`
 
-Performs `x[] |= val` atomically. Returns the **old** value.
+Performs `x[] |= val` atomically. Returns the **old** value. Not defined
+for `Atomic{Ptr}`.
 
 For further details, see LLVM's `atomicrmw or` instruction.
 
@@ -253,7 +256,8 @@ function atomic_or! end
 
 Atomically bitwise-xor (exclusive-or) `x` with `val`
 
-Performs `x[] \$= val` atomically. Returns the **old** value.
+Performs `x[] \$= val` atomically. Returns the **old** value. Not defined
+for `Atomic{Ptr}`.
 
 For further details, see LLVM's `atomicrmw xor` instruction.
 
