@@ -300,3 +300,59 @@ let cfg = CFG(BasicBlock[
     Compiler.cfg_insert_edge!(cfg, 1, 3)
     @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
 end
+
+# Make sure killing edges while iterating through an `IncrementalCompact` kills
+# all the statements in the dead blocks too.
+#
+# Block that becomes unreachable is before the active BB
+let ci = make_ci([
+        # Block 1
+        Core.Compiler.GotoNode(4),
+        # Block 2
+        Core.Compiler.PhiNode(Any[2, 4], Any[100, 200]),
+        Core.Compiler.GotoNode(2),
+        # Block 3
+        Core.Compiler.GotoIfNot(Expr(:call, GlobalRef(Main, :something)), 2),
+        # Block 4
+        Core.Compiler.ReturnNode(0)
+    ])
+    ir = Core.Compiler.inflate_ir(ci)
+    compact = Core.Compiler.IncrementalCompact(ir, true)
+    Core.Compiler.foreach(x -> begin
+                              # Delete edge to block 2 when at statement 4
+                              if x.first == 4
+                                  Core.Compiler.kill_edge!(
+                                      compact, compact.active_result_bb, 3, 2)
+                                  compact.result[4] = Core.Compiler.GotoNode(4)
+                              end
+                          end, compact)
+    ir = Core.Compiler.finish(compact)
+    @test Core.Compiler.verify_ir(ir) === nothing
+    @test ir.stmts[2][:inst] === nothing
+end
+# Block that becomes unreachable is after the active BB
+let ci = make_ci([
+        # Block 1
+        Core.Compiler.GotoIfNot(Expr(:call, GlobalRef(Main, :something)), 3),
+        # Block 2
+        Core.Compiler.GotoNode(5),
+        # Block 3
+        Core.Compiler.PhiNode(Any[2, 3], Any[100, 200]),
+        Core.Compiler.GotoNode(3),
+        # Block 4
+        Core.Compiler.ReturnNode(0)
+    ])
+    ir = Core.Compiler.inflate_ir(ci)
+    compact = Core.Compiler.IncrementalCompact(ir, true)
+    Core.Compiler.foreach(x -> begin
+                              # Delete edge to block 3 when at statement 1
+                              if x.first == 1
+                                  Core.Compiler.kill_edge!(
+                                      compact, compact.active_result_bb, 1, 3)
+                                  compact.result[1] = Core.Compiler.GotoNode(2)
+                              end
+                          end, compact)
+    ir = Core.Compiler.finish(compact)
+    @test Core.Compiler.verify_ir(ir) === nothing
+    @test ir.stmts[3][:inst] === nothing
+end
