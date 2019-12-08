@@ -30,6 +30,8 @@ using .Main.OffsetArrays
 
 @test Base.mapfoldr(abs2, -, 2:5) == -14
 @test Base.mapfoldr(abs2, -, 2:5; init=10) == -4
+@test @inferred(mapfoldr(x -> x + 1, (x, y) -> (x, y...), (1, 2.0, '3');
+                         init = ())) == (2, 3.0, '4')
 
 @test foldr((x, y) -> ('⟨' * x * '|' * y * '⟩'), "λ 🐨.α") == "⟨λ|⟨ |⟨🐨|⟨.|α⟩⟩⟩⟩" # issue #31780
 let x = rand(10)

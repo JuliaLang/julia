@@ -389,3 +389,7 @@ if Sys.iswindows() || Sys.isapple()
         @test clipboard() == str
     end
 end
+
+# buildbot path updating
+file, ln = functionloc(versioninfo, Tuple{})
+@test isfile(file)

@@ -464,20 +464,25 @@ function rand(rng::AbstractRNG, sp::SamplerSimple{Tuple{A,B,C}}) where {A,B,C}
     @inbounds return sp[][1 + r ÷ 0x0005555555555555]
 end
 
-### 4
-
-Sampler(RNG::Type{<:AbstractRNG}, t::Tuple{A,B,C,D}, n::Repetition) where {A,B,C,D} =
-    SamplerSimple(t, Sampler(RNG, UInt52Raw(Int), n))
-
-function rand(rng::AbstractRNG, sp::SamplerSimple{Tuple{A,B,C,D}}) where {A,B,C,D}
-    r = rand(rng, sp.data) & 3
-    @inbounds return sp[][1 + r]
-end
-
 ### n
 
-Sampler(RNG::Type{<:AbstractRNG}, t::Tuple, n::Repetition) =
-    SamplerSimple(t, Sampler(RNG, Base.OneTo(length(t)), n))
+@generated function Sampler(RNG::Type{<:AbstractRNG}, t::Tuple, n::Repetition)
+    l = fieldcount(t)
+    if l < typemax(UInt32) && ispow2(l)
+        :(SamplerSimple(t, Sampler(RNG, UInt32, n)))
+    else
+        :(SamplerSimple(t, Sampler(RNG, Base.OneTo(length(t)), n)))
+    end
+end
 
-rand(rng::AbstractRNG, sp::SamplerSimple{<:Tuple}) =
-    @inbounds return sp[][rand(rng, sp.data)]
+@generated function rand(rng::AbstractRNG, sp::SamplerSimple{T}) where T<:Tuple
+    l = fieldcount(T)
+    if l < typemax(UInt32) && ispow2(l)
+        quote
+            r = rand(rng, sp.data) & ($l-1)
+            @inbounds return sp[][1 + r]
+        end
+    else
+        :(@inbounds return sp[][rand(rng, sp.data)])
+    end
+end

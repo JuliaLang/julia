@@ -151,7 +151,7 @@ the performance of your code:
   * `@code_warntype` generates a representation of your code that can be helpful in finding expressions
     that result in type uncertainty. See [`@code_warntype`](@ref) below.
 
-## Avoid containers with abstract type parameters
+## [Avoid containers with abstract type parameters](@id man-performance-abstract-container)
 
 When working with parameterized types, including arrays, it is best to avoid parameterizing with
 abstract types where possible.
@@ -481,6 +481,65 @@ c = (b + 1.0f0)::Complex{T}
 does not hinder performance (but does not help either) since the compiler can determine the type of `c`
 at the time `k` is compiled.
 
+### Be aware of when Julia avoids specializing
+
+As a heuristic, Julia avoids automatically specializing on argument type parameters in three
+specific cases: `Type`, `Function`, and `Vararg`. Julia will always specialize when the argument is
+used within the method, but not if the argument is just passed through to another function. This
+usually has no performance impact at runtime and
+[improves compiler performance](@ref compiler-efficiency-issues). If you find it does have a
+performance impact at runtime in your case, you can trigger specialization by adding a type
+parameter to the method declaration. Here are some examples:
+
+This will not specialize:
+
+```julia
+function f_type(t)  # or t::Type
+    x = ones(t, 10)
+    return sum(map(sin, x))
+end
+```
+
+but this will:
+
+```julia
+function g_type(t::Type{T}) where T
+    x = ones(T, 10)
+    return sum(map(sin, x))
+end
+```
+
+These will not specialize:
+
+```julia
+f_func(f, num) = ntuple(f, div(num, 2))
+g_func(g::Function, num) = ntuple(g, div(num, 2))
+```
+
+but this will:
+
+```julia
+h_func(h::H, num) where {H} = ntuple(h, div(num, 2))
+```
+
+This will not specialize:
+
+```julia
+f_vararg(x::Int...) = tuple(x...)
+```
+
+but this will:
+
+```julia
+g_vararg(x::Vararg{Int, N}) where {N} = tuple(x...)
+```
+
+Note that [`@code_typed`](@ref) and friends will always show you specialized code, even if Julia
+would not normally specialize that method call. You need to check the
+[method internals](@ref ast-lowered-method) if you want to see whether specializations are generated
+when argument types are changed, i.e., if `(@which f(...)).specializations` contains specializations
+for the argument in question.
+
 ## Break functions into multiple definitions
 
 Writing a function as many small definitions allows the compiler to directly call the most applicable
@@ -615,7 +674,7 @@ or the [`fill!`](@ref) function, which we could have used instead of writing our
 Functions like `strange_twos` occur when dealing with data of uncertain type, for example data
 loaded from an input file that might contain either integers, floats, strings, or something else.
 
-## Types with values-as-parameters
+## [Types with values-as-parameters](@id man-performance-value-type)
 
 Let's say you want to create an `N`-dimensional array that has size 3 along each axis. Such arrays
 can be created like this:
@@ -752,7 +811,7 @@ or thousands of variants compiled for it. Each of these increases the size of th
 code, the length of internal lists of methods, etc. Excess enthusiasm for values-as-parameters
 can easily waste enormous resources.
 
-## Access arrays in memory order, along columns
+## [Access arrays in memory order, along columns](@id man-performance-column-major)
 
 Multidimensional arrays in Julia are stored in column-major order. This means that arrays are
 stacked one column at a time. This can be verified using the `vec` function or the syntax `[:]`

@@ -555,7 +555,7 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 @inline function _newindexer(indsA::Tuple)
     ind1 = indsA[1]
     keep, Idefault = _newindexer(tail(indsA))
-    (Base.length(ind1)!=1, keep...), (first(ind1), Idefault...)
+    (Base.length(ind1)::Integer != 1, keep...), (first(ind1), Idefault...)
 end
 
 @inline function Base.getindex(bc::Broadcasted, I::Union{Integer,CartesianIndex})
@@ -916,22 +916,22 @@ end
 @inline function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
     axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
     ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
+    length(dest) < 256 && return invoke(copyto!, Tuple{AbstractArray, Broadcasted{Nothing}}, dest, bc)
     tmp = Vector{Bool}(undef, bitcache_size)
     destc = dest.chunks
-    ind = cind = 1
+    cind = 1
     bc′ = preprocess(dest, bc)
-    @simd for I in eachindex(bc′)
-        @inbounds tmp[ind] = bc′[I]
-        ind += 1
-        if ind > bitcache_size
-            dumpbitcache(destc, cind, tmp)
-            cind += bitcache_chunks
-            ind = 1
+    for P in Iterators.partition(eachindex(bc′), bitcache_size)
+        ind = 1
+        @simd for I in P
+            @inbounds tmp[ind] = bc′[I]
+            ind += 1
         end
-    end
-    if ind > 1
-        @inbounds tmp[ind:bitcache_size] .= false
+        @simd for i in ind:bitcache_size
+            @inbounds tmp[i] = false
+        end
         dumpbitcache(destc, cind, tmp)
+        cind += bitcache_chunks
     end
     return dest
 end
@@ -1144,12 +1144,12 @@ Base.@propagate_inbounds dotview(args...) = Base.maybeview(args...)
 dottable(x) = false # avoid dotting spliced objects (e.g. view calls inserted by @view)
 # don't add dots to dot operators
 dottable(x::Symbol) = (!isoperator(x) || first(string(x)) != '.' || x === :..) && x !== :(:)
-dottable(x::Expr) = x.head != :$
+dottable(x::Expr) = x.head !== :$
 undot(x) = x
 function undot(x::Expr)
-    if x.head == :.=
+    if x.head === :.=
         Expr(:(=), x.args...)
-    elseif x.head == :block # occurs in for x=..., y=...
+    elseif x.head === :block # occurs in for x=..., y=...
         Expr(:block, map(undot, x.args)...)
     else
         x
@@ -1158,22 +1158,22 @@ end
 __dot__(x) = x
 function __dot__(x::Expr)
     dotargs = map(__dot__, x.args)
-    if x.head == :call && dottable(x.args[1])
+    if x.head === :call && dottable(x.args[1])
         Expr(:., dotargs[1], Expr(:tuple, dotargs[2:end]...))
-    elseif x.head == :comparison
+    elseif x.head === :comparison
         Expr(:comparison, (iseven(i) && dottable(arg) && arg isa Symbol && isoperator(arg) ?
                                Symbol('.', arg) : arg for (i, arg) in pairs(dotargs))...)
-    elseif x.head == :$
+    elseif x.head === :$
         x.args[1]
-    elseif x.head == :let # don't add dots to `let x=...` assignments
+    elseif x.head === :let # don't add dots to `let x=...` assignments
         Expr(:let, undot(dotargs[1]), dotargs[2])
-    elseif x.head == :for # don't add dots to for x=... assignments
+    elseif x.head === :for # don't add dots to for x=... assignments
         Expr(:for, undot(dotargs[1]), dotargs[2])
-    elseif (x.head == :(=) || x.head == :function || x.head == :macro) &&
+    elseif (x.head === :(=) || x.head === :function || x.head === :macro) &&
            Meta.isexpr(x.args[1], :call) # function or macro definition
         Expr(x.head, x.args[1], dotargs[2])
     else
-        if x.head == :&& || x.head == :||
+        if x.head === :&& || x.head === :||
             error("""
                 Using `&&` and `||` is disallowed in `@.` expressions.
                 Use `&` or `|` for elementwise logical operations.

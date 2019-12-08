@@ -15,14 +15,14 @@ subdir = joinpath(dir, "adir")
 mkdir(subdir)
 subdir2 = joinpath(dir, "adir2")
 mkdir(subdir2)
-@test_throws SystemError mkdir(file)
+@test_throws Base.IOError mkdir(file)
 let err = nothing
     try
         mkdir(file)
     catch err
         io = IOBuffer()
         showerror(io, err)
-        @test startswith(String(take!(io)), "SystemError (with $file): mkdir:")
+        @test startswith(String(take!(io)), "IOError: mkdir: file already exists (EEXIST)")
     end
 end
 
@@ -1276,6 +1276,20 @@ cd(dirwalk) do
     @test files == ["file_dir2"]
 end
 rm(dirwalk, recursive=true)
+
+###################
+#     readdir     #
+###################
+@testset "readdir is sorted" begin
+    mktempdir() do dir
+        cd(dir) do
+            for k in 1:10
+                touch(randstring())
+            end
+            @test issorted(readdir())
+        end
+    end
+end
 
 ############
 # Clean up #

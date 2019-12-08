@@ -44,9 +44,9 @@ RUNTIME_C_SRCS := \
 	dlload sys init task array dump staticdata toplevel jl_uv datatype \
 	simplevector runtime_intrinsics precompile \
 	threading partr stackwalk gc gc-debug gc-pages gc-stacks method \
-	jlapi signal-handling safepoint jloptions timing subtype \
+	jlapi signal-handling safepoint timing subtype \
 	crc32c
-RUNTIME_SRCS := APInt-C runtime_ccall processor rtutils $(RUNTIME_C_SRCS)
+RUNTIME_SRCS := APInt-C runtime_ccall processor rtutils jloptions $(RUNTIME_C_SRCS)
 SRCS := $(RUNTIME_SRCS)
 
 ifeq ($(USEMSVC), 1)
@@ -107,6 +107,10 @@ ifeq ($(USE_LLVM_SHLIB),1)
 FLAGS += -DLLVM_SHLIB
 endif # USE_LLVM_SHLIB == 1
 endif
+
+CLANGLINK :=
+CLANGLINK += -lclangAnalysis -lclangStaticAnalyzerCore -lclangASTMatchers -lclangAST -lclangLex -lclangBasic
+CLANGLINK += $(LLVMLINK)
 
 COMMON_LIBS := -L$(build_shlibdir) -L$(build_libdir) $(LIBUV) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LLVMLINK) $(OSLIBS) $(LIBUNWIND)
 DEBUG_LIBS := $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp-debug.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport-debug.a $(COMMON_LIBS)
@@ -206,26 +210,34 @@ $(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm flisp/aliase
 		$(call cygpath_w,$(SRCDIR)/mk_julia_flisp_boot.scm) $(call cygpath_w,$(dir $<)) $(notdir $<) $(call cygpath_w,$@))
 
 # additional dependency links
-$(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc $(SRCDIR)/flisp/*.h
-$(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,\
-	intrinsics.cpp jitlayers.h intrinsics.h codegen_shared.h cgutils.cpp ccall.cpp abi_*.cpp processor.h)
-$(BUILDDIR)/processor.o $(BUILDDIR)/processor.dbg.obj: $(addprefix $(SRCDIR)/,processor_*.cpp processor.h features_*.h)
-$(BUILDDIR)/interpreter.o $(BUILDDIR)/interpreter.dbg.obj: $(SRCDIR)/interpreter-stacktrace.c
 $(BUILDDIR)/anticodegen.o $(BUILDDIR)/anticodegen.dbg.obj: $(SRCDIR)/intrinsics.h
-$(BUILDDIR)/debuginfo.o $(BUILDDIR)/debuginfo.dbg.obj: \
-	$(addprefix $(SRCDIR)/,debuginfo.h processor.h)
+$(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc $(SRCDIR)/flisp/*.h
+$(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: $(SRCDIR)/table.c $(SRCDIR)/builtin_proto.h
+$(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,\
+	intrinsics.cpp jitlayers.h intrinsics.h codegen_shared.h cgutils.cpp ccall.cpp abi_*.cpp processor.h builtin_proto.h)
+$(BUILDDIR)/debuginfo.o $(BUILDDIR)/debuginfo.dbg.obj: $(addprefix $(SRCDIR)/,debuginfo.h processor.h)
 $(BUILDDIR)/disasm.o $(BUILDDIR)/disasm.dbg.obj: $(SRCDIR)/debuginfo.h $(SRCDIR)/processor.h
-$(BUILDDIR)/jitlayers.o $(BUILDDIR)/jitlayers.dbg.obj: $(SRCDIR)/jitlayers.h
-$(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: $(SRCDIR)/table.c
-$(BUILDDIR)/staticdata.o $(BUILDDIR)/staticdata.dbg.obj: $(SRCDIR)/processor.h
-$(BUILDDIR)/llvm-final-gc-lowering.o $(BUILDDIR)/llvm-final-gc-lowering.dbg.obj: $(SRCDIR)/llvm-pass-helpers.h
-$(BUILDDIR)/llvm-late-gc-lowering.o $(BUILDDIR)/llvm-late-gc-lowering.dbg.obj: $(SRCDIR)/llvm-pass-helpers.h
-$(BUILDDIR)/llvm-pass-helpers.o $(BUILDDIR)/llvm-pass-helpers.dbg.obj: $(SRCDIR)/llvm-pass-helpers.h
-$(BUILDDIR)/gc.o $(BUILDDIR)/gc.dbg.obj: $(SRCDIR)/gc.h
+$(BUILDDIR)/dump.o $(BUILDDIR)/dump.dbg.obj: $(addprefix $(SRCDIR)/,common_symbols1.inc common_symbols2.inc builtin_proto.h)
 $(BUILDDIR)/gc-debug.o $(BUILDDIR)/gc-debug.dbg.obj: $(SRCDIR)/gc.h
 $(BUILDDIR)/gc-pages.o $(BUILDDIR)/gc-pages.dbg.obj: $(SRCDIR)/gc.h
+$(BUILDDIR)/gc.o $(BUILDDIR)/gc.dbg.obj: $(SRCDIR)/gc.h
+$(BUILDDIR)/init.o $(BUILDDIR)/init.dbg.obj: $(SRCDIR)/builtin_proto.h
+$(BUILDDIR)/interpreter.o $(BUILDDIR)/interpreter.dbg.obj: $(SRCDIR)/interpreter-stacktrace.c $(SRCDIR)/builtin_proto.h
+$(BUILDDIR)/jitlayers.o $(BUILDDIR)/jitlayers.dbg.obj: $(SRCDIR)/jitlayers.h $(SRCDIR)/codegen_shared.h
+$(BUILDDIR)/jltypes.o $(BUILDDIR)/jltypes.dbg.obj: $(SRCDIR)/builtin_proto.h
+$(BUILDDIR)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/codegen_shared.h
+$(BUILDDIR)/llvm-alloc-opt.o $(BUILDDIR)/llvm-alloc-opt.dbg.obj: $(SRCDIR)/codegen_shared.h
+$(BUILDDIR)/llvm-final-gc-lowering.o $(BUILDDIR)/llvm-final-gc-lowering.dbg.obj: $(SRCDIR)/llvm-pass-helpers.h
+$(BUILDDIR)/llvm-gc-invariant-verifier.o $(BUILDDIR)/llvm-gc-invariant-verifier.dbg.obj: $(SRCDIR)/codegen_shared.h
+$(BUILDDIR)/llvm-late-gc-lowering.o $(BUILDDIR)/llvm-late-gc-lowering.dbg.obj: $(SRCDIR)/llvm-pass-helpers.h
+$(BUILDDIR)/llvm-multiversioning.o $(BUILDDIR)/llvm-multiversioning.dbg.obj: $(SRCDIR)/codegen_shared.h
+$(BUILDDIR)/llvm-pass-helpers.o $(BUILDDIR)/llvm-pass-helpers.dbg.obj: $(SRCDIR)/llvm-pass-helpers.h $(SRCDIR)/codegen_shared.h
+$(BUILDDIR)/llvm-ptls.o $(BUILDDIR)/llvm-ptls.dbg.obj: $(SRCDIR)/codegen_shared.h
+$(BUILDDIR)/processor.o $(BUILDDIR)/processor.dbg.obj: $(addprefix $(SRCDIR)/,processor_*.cpp processor.h features_*.h)
 $(BUILDDIR)/signal-handling.o $(BUILDDIR)/signal-handling.dbg.obj: $(addprefix $(SRCDIR)/,signals-*.c)
-$(BUILDDIR)/dump.o $(BUILDDIR)/dump.dbg.obj: $(addprefix $(SRCDIR)/,common_symbols1.inc common_symbols2.inc)
+$(BUILDDIR)/staticdata.o $(BUILDDIR)/staticdata.dbg.obj: $(SRCDIR)/processor.h $(SRCDIR)/builtin_proto.h
+$(BUILDDIR)/toplevel.o $(BUILDDIR)/toplevel.dbg.obj: $(SRCDIR)/builtin_proto.h
+
 $(addprefix $(BUILDDIR)/,threading.o threading.dbg.obj gc.o gc.dbg.obj init.c init.dbg.obj task.o task.dbg.obj): $(addprefix $(SRCDIR)/,threading.h)
 $(addprefix $(BUILDDIR)/,APInt-C.o APInt-C.dbg.obj runtime_intrinsics.o runtime_intrinsics.dbg.obj): $(SRCDIR)/APInt-C.h
 
@@ -335,8 +347,8 @@ clean-support:
 
 cleanall: clean clean-flisp clean-support clean-analyzegc
 
-$(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/GCChecker.cpp
-	@$(call PRINT_CC, $(CXX) -g $(fPIC) -shared -o $@ -DCLANG_PLUGIN -I$(build_includedir) $(shell $(LLVM_CONFIG_HOST) --cxxflags) $(CPPFLAGS) $(CFLAGS) $< $(shell $(LLVM_CONFIG_HOST) --ldflags) $(LDFLAGS) -L$(build_libdir) -lclangAnalysis -lclangStaticAnalyzerCore -lclangASTMatchers -lclangAST -lclangLex -lclangBasic)
+$(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/GCChecker.cpp $(LLVM_CONFIG_ABSOLUTE)
+	@$(call PRINT_CC, $(CXX) -g $(fPIC) -shared -o $@ -DCLANG_PLUGIN -I$(build_includedir) $(shell $(LLVM_CONFIG_HOST) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(LDFLAGS) $(CXXLDFLAGS) -L$(build_libdir) $< $(CLANGLINK))
 
 # Throw an error if a proper version of `clang` is not available.
 # Note that for a default install, you will need to have run the following
@@ -346,24 +358,22 @@ $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/GCChecker.c
 analyzegc-deps-check: $(BUILDDIR)/julia_version.h $(BUILDDIR)/julia_flisp.boot.inc
 ifeq ($(USE_BINARYBUILDER_LLVM),0)
 ifneq ($(BUILD_LLVM_CLANG),1)
-	$(error Clang must be available to use the clang analyzer. Either build it (BUILD_LLVM_CLANG) or use BinaryBuilder)
+	$(error Clang must be available to use the clang analyzer. Either build it (BUILD_LLVM_CLANG=1) or use BinaryBuilder)
 endif
 endif
 
 
-define CLANG_ANALYZE
-clang-sa-$(1): $$(build_shlibdir)/libGCCheckerPlugin.$$(SHLIB_EXT) | analyzegc-deps-check
-	@$$(call PRINT_ANALYZE, $$(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $$(build_shlibdir)/libGCCheckerPlugin.$$(SHLIB_EXT) $$(CPPFLAGS) $$(CFLAGS) $$(DEBUGFLAGS) -Xclang -analyzer-checker=core$$(COMMA)julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c $$(SRCDIR)/$(1).c)
-.PHONY: clang-sa-$(1)
+CLANGSA_FLAGS :=
+ifeq ($(OS), Darwin) # on new XCode, the files are hidden
+CLANGSA_FLAGS += -isysroot $(shell xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
+endif
+clang-sa-%: $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) | analyzegc-deps-check
+	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) $(CLANGSA_FLAGS) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c $(SRCDIR)/$*.c)
 
-# Add this as a target of `analyzegc`
-analyzegc: clang-sa-$(1)
-endef
-
-# Build a Makefile target for each file we want to analyze
-$(foreach S,$(RUNTIME_C_SRCS),$(eval $(call CLANG_ANALYZE,$(S))))
+# Add C files as a target of `analyzegc`
+analyzegc: $(addprefix clang-sa-,$(RUNTIME_C_SRCS))
 
 clean-analyzegc:
 	rm -f $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
 
-.PHONY: default all debug release clean cleanall clean-* libccalltest libllvmcalltest julia_flisp.boot.inc.phony analyzegc
+.PHONY: default all debug release clean cleanall clean-* libccalltest libllvmcalltest julia_flisp.boot.inc.phony analyzegc clang-sa-*

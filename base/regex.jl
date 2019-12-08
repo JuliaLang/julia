@@ -643,7 +643,7 @@ function *(r1::Union{Regex,AbstractString,AbstractChar}, rs::Union{Regex,Abstrac
     shared = mask
     for r in (r1, rs...)
         r isa Regex || continue
-        if match_opts == nothing
+        if match_opts === nothing
             match_opts = r.match_options
             compile_opts = r.compile_options & ~mask
         else

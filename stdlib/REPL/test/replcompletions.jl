@@ -717,7 +717,7 @@ mktempdir() do path
             s = Sys.iswindows() ? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
             c, r = test_complete(s)
             @test r == lastindex(s)-4:lastindex(s)
-            @test "space\\ .file\"" in c
+            @test "space .file\"" in c
         end
         # Test for issue #10324
         s = "cd(\"$dir_space"

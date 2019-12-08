@@ -953,27 +953,21 @@ end
 setprecision(f::Function, prec::Integer) = setprecision(f, BigFloat, prec)
 
 function string_mpfr(x::BigFloat, fmt::String)
-    buf = Base.StringVector(0)
-    s = _calculate_buffer_size!(buf, fmt, x)
-    resize!(buf, s)
-    _fill_buffer!(buf, fmt, x)
-    String(buf)
-end
-
-function _calculate_buffer_size!(buf, fmt, x::BigFloat)
-    ccall((:mpfr_snprintf,:libmpfr),
-        Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ref{BigFloat}...),
-        buf, 0, fmt, x)
-end
-
-function _fill_buffer!(buf, fmt, x::BigFloat)
-    s = length(buf)
-    # we temporarily need one more item in buffer to capture null termination
-    resize!(buf, s + 1)
-    n = ccall((:mpfr_sprintf,:libmpfr), Int32, (Ptr{UInt8}, Ptr{UInt8}, Ref{BigFloat}...), buf, fmt, x)
-    @assert n + 1 == length(buf)
-    @assert last(buf) == 0x00
-    resize!(buf, s)
+    pc = Ref{Ptr{UInt8}}()
+    n = ccall((:mpfr_asprintf,:libmpfr), Cint,
+              (Ptr{Ptr{UInt8}}, Ptr{UInt8}, Ref{BigFloat}...),
+              pc, fmt, x)
+    p = pc[]
+    # convert comma decimal separator to dot
+    for i = 1:n
+        if unsafe_load(p, i) == UInt8(',')
+            unsafe_store!(p, '.', i)
+            break
+        end
+    end
+    str = unsafe_string(p)
+    ccall((:mpfr_free_str, :libmpfr), Cvoid, (Ptr{UInt8},), p)
+    return str
 end
 
 function _prettify_bigfloat(s::String)::String

@@ -1,5 +1,5 @@
-LLVM_VER = 6.0.1
-LLVM_BB_REL = 7+nowasm
+LLVM_VER = 8.0.1
+LLVM_BB_REL = 3
 PCRE_VER = 10.31
 PCRE_BB_REL = 0
 DSFMT_VER = 2.2.3
@@ -16,9 +16,9 @@ UNWIND_BB_REL = 4
 OSXUNWIND_VER = 0.0.5
 OSXUNWIND_BB_REL = 0
 GMP_VER = 6.1.2
-GMP_BB_REL = 1
+GMP_BB_REL = 3
 MPFR_VER = 4.0.2
-MPFR_BB_REL = 1
+MPFR_BB_REL = 0
 PATCHELF_VER = 0.9
 MBEDTLS_VER = 2.16.0
 MBEDTLS_BB_REL = v0.17.0
@@ -33,11 +33,11 @@ LIBUV_BB_REL = 0
 OBJCONV_VER = 2.49.0
 OBJCONV_BB_REL = 0
 ZLIB_VER = 1.2.11
-ZLIB_BB_REL = 3
+ZLIB_BB_REL = 6
 P7ZIP_VER = 16.2.0
 P7ZIP_BB_REL = 1
 
 # Specify the version of the Mozilla CA Certificate Store to obtain.
 # The versions of cacert.pem are identified by the date (YYYY-MM-DD) of their changes.
 # See https://curl.haxx.se/docs/caextract.html for more details.
-MOZILLA_CACERT_VERSION := 2019-05-15
+MOZILLA_CACERT_VERSION := 2019-10-16

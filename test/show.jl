@@ -53,21 +53,76 @@ macro test_repr(x)
     # this is a macro instead of function so we can avoid getting useful backtraces :)
     return :(test_repr($(esc(x))))
 end
-function test_repr(x::String)
+macro weak_test_repr(x)
+    # this is a macro instead of function so we can avoid getting useful backtraces :)
+    return :(test_repr($(esc(x)), true))
+end
+function test_repr(x::String, remove_linenums::Bool = false)
     # Note: We can't just compare x1 and x2 because interpolated
     # strings get converted to string Exprs by the first show().
     # This could produce a few false positives, but until string
     # interpolation works we don't really have a choice.
+    #
+    # Rectification: comparing x1 and x2 seems to be working
     x1 = Meta.parse(x)
     x2 = eval(Meta.parse(repr(x1)))
     x3 = eval(Meta.parse(repr(x2)))
-    if x3 != x1
+    if ! (x1 == x2 == x3)
         error(string(
-            "repr test failed:",
+            "\nrepr test (Rule 2) failed:",
             "\noriginal: ", x,
+            "\n\npreparsed: ", x1, "\n", sprint(dump, x1),
             "\n\nparsed: ", x2, "\n", sprint(dump, x2),
-            "\n\nreparsed: ", x3, "\n", sprint(dump, x3)
-            ))
+            "\n\nreparsed: ", x3, "\n", sprint(dump, x3),
+            "\n\n"))
+    end
+    @test x1 == x2 == x3
+
+    x4 = Base.remove_linenums!(Meta.parse(x))
+    x5 = eval(Base.remove_linenums!(Meta.parse(repr(x4))))
+    x6 = eval(Base.remove_linenums!(Meta.parse(repr(x5))))
+    if ! (x4 == x5 == x6)
+        error(string(
+            "\nrepr test (Rule 2) without line numbers failed:",
+            "\noriginal: ", x,
+            "\n\npreparsed: ", x4, "\n", sprint(dump, x4),
+            "\n\nparsed: ", x5, "\n", sprint(dump, x5),
+            "\n\nreparsed: ", x6, "\n", sprint(dump, x6),
+            "\n\n"))
+    end
+    @test x4 == x5 == x6
+
+    @test Base.remove_linenums!(x1) ==
+          Base.remove_linenums!(x2) ==
+          Base.remove_linenums!(x3) ==
+          x4 == x5 == x6
+
+    if isa(x1, Expr) && remove_linenums
+        if Base.remove_linenums!(Meta.parse(string(x1))) != x1
+            error(string(
+                "\nstring test (Rule 1) failed:",
+                "\noriginal: ", x,
+                "\n\npreparsed: ", x1, "\n", sprint(dump, x4),
+                "\n\nstring(preparsed): ", string(x1),
+                "\n\nBase.remove_linenums!(Meta.parse(string(preparsed))): ",
+                Base.remove_linenums!(Meta.parse(string(x1))), "\n",
+                sprint(dump, Base.remove_linenums!(Meta.parse(string(x1)))),
+                "\n\n"))
+        end
+        @test Base.remove_linenums!(Meta.parse(string(x1))) == x1
+    elseif isa(x1, Expr)
+        if Meta.parse(string(x1)) != x1
+            error(string(
+                "\nstring test (Rule 1) failed:",
+                "\noriginal: ", x,
+                "\n\npreparsed: ", x1, "\n", sprint(dump, x4),
+                "\n\nstring(preparsed): ", string(x1),
+                "\n\nMeta.parse(string(preparsed)): ",
+                Meta.parse(string(x1)), "\n",
+                sprint(dump, Meta.parse(string(x1))),
+                "\n\n"))
+        end
+        @test Meta.parse(string(x1)) == x1
     end
 end
 
@@ -143,9 +198,29 @@ end
 @test_repr "import A: a, x, y.z"
 @test_repr "import A.B.C: a, x, y.z"
 @test_repr "import ..A: a, x, y.z"
+@test_repr "import A.B, C.D"
 
 @test repr(Expr(:using, :Foo)) == ":(\$(Expr(:using, :Foo)))"
 @test repr(Expr(:using, Expr(:(.), ))) == ":(\$(Expr(:using, :(\$(Expr(:.))))))"
+@test repr(Expr(:import, :Foo)) == ":(\$(Expr(:import, :Foo)))"
+@test repr(Expr(:import, Expr(:(.), ))) == ":(\$(Expr(:import, :(\$(Expr(:.))))))"
+
+@test repr(Expr(:using, Expr(:(.), :A))) == ":(using A)"
+@test repr(Expr(:using, Expr(:(.), :A),
+                        Expr(:(.), :B))) == ":(using A, B)"
+@test repr(Expr(:using, Expr(:(.), :A),
+                        Expr(:(.), :B, :C),
+                        Expr(:(.), :D))) == ":(using A, B.C, D)"
+@test repr(Expr(:using, Expr(:(.), :A, :B),
+                        Expr(:(.), :C, :D))) == ":(using A.B, C.D)"
+@test repr(Expr(:import, Expr(:(.), :A))) == ":(import A)"
+@test repr(Expr(:import, Expr(:(.), :A),
+                         Expr(:(.), :B))) == ":(import A, B)"
+@test repr(Expr(:import, Expr(:(.), :A),
+                         Expr(:(.), :B, :(C)),
+                         Expr(:(.), :D))) == ":(import A, B.C, D)"
+@test repr(Expr(:import, Expr(:(.), :A, :B),
+                         Expr(:(.), :C, :D))) == ":(import A.B, C.D)"
 
 # range syntax
 @test_repr "1:2"
@@ -163,7 +238,7 @@ end
 
 
 # control structures (shamelessly stolen from base/bitarray.jl)
-@test_repr """mutable struct BitArray{N} <: AbstractArray{Bool, N}
+@weak_test_repr """mutable struct BitArray{N} <: AbstractArray{Bool, N}
     # line meta
     chunks::Vector{UInt64}
     # line meta
@@ -210,7 +285,7 @@ end
     end
 end"""
 
-@test_repr """function copy_chunks(dest::Vector{UInt64}, pos_d::Integer, src::Vector{UInt64}, pos_s::Integer, numbits::Integer)
+@weak_test_repr """function copy_chunks(dest::Vector{UInt64}, pos_d::Integer, src::Vector{UInt64}, pos_s::Integer, numbits::Integer)
     # line meta
     if numbits == 0
         # line meta
@@ -289,13 +364,13 @@ end"""
     return
 end"""
 
-@test_repr """if a
+@weak_test_repr """if a
 # line meta
 b
 end
 """
 
-@test_repr """if a
+@weak_test_repr """if a
 # line meta
 b
 elseif c
@@ -304,7 +379,7 @@ d
 end
 """
 
-@test_repr """if a
+@weak_test_repr """if a
 # line meta
 b
 elseif c
@@ -316,7 +391,7 @@ e
 end
 """
 
-@test_repr """if a
+@weak_test_repr """if a
 # line meta
 b
 elseif c
@@ -328,7 +403,7 @@ f
 end
 """
 
-@test_repr """f(x, y) do z, w
+@weak_test_repr """f(x, y) do z, w
 # line meta
 a
 # line meta
@@ -336,7 +411,7 @@ b
 end
 """
 
-@test_repr """f(x, y) do z
+@weak_test_repr """f(x, y) do z
 # line meta
 a
 # line meta
@@ -350,6 +425,10 @@ end
 @test sprint(show, Symbol("foo \"bar")) == "Symbol(\"foo \\\"bar\")"
 @test sprint(show, :+) == ":+"
 @test sprint(show, :end) == ":end"
+
+# make sure :var"'" prints correctly
+@test sprint(show, Symbol("'")) == "Symbol(\"'\")"
+@test_repr "var\"'\" = 5"
 
 # issue #32408: Printing of names which are invalid identifiers
 # Invalid identifiers which need `var` quoting:
@@ -393,7 +472,7 @@ end
 
 @test_repr "[1 2 3; 4 5 6; 7 8 9]'"
 
-@test_repr "baremodule X
+@weak_test_repr "baremodule X
 # line meta
 # line meta
 import ...B.c
@@ -402,7 +481,7 @@ import D
 # line meta
 import B.C.D.E.F.g
 end"
-@test_repr "baremodule Y
+@weak_test_repr "baremodule Y
 # line meta
 # line meta
 export A, B, C
@@ -451,9 +530,6 @@ let a = Expr(:quote,Expr(:$,:x8d003))
     @test eval(Meta.parse(repr(a))) == a
     @test eval(eval(Meta.parse(repr(a)))) == 2
 end
-
-# issue #9865
-@test occursin(r"^Set\(\[.+….+\]\)$", replstr(Set(1:100)))
 
 # issue #11413
 @test string(:(*{1, 2})) == "*{1, 2}"
@@ -637,7 +713,6 @@ else
 end
 
 # Method location correction (Revise integration)
-methloc = Base.methodloc_callback[]
 dummyloc(m::Method) = :nofile, 123456789
 Base.methodloc_callback[] = dummyloc
 let repr = sprint(show, "text/plain", methods(Base.inbase))
@@ -646,7 +721,7 @@ end
 let repr = sprint(show, "text/html", methods(Base.inbase))
     @test occursin("nofile:123456789", repr)
 end
-Base.methodloc_callback[] = methloc
+Base.methodloc_callback[] = nothing
 
 @testset "matrix printing" begin
     # print_matrix should be able to handle small and large objects easily, test by
@@ -655,19 +730,21 @@ Base.methodloc_callback[] = methloc
     # This fits on screen:
                  @test replstr(Matrix(1.0I, 10, 10)) == "10×10 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0"
     # an array too long vertically to fit on screen, and too long horizontally:
-    @test replstr(Vector(1.:100.)) == "100-element Array{Float64,1}:\n   1.0\n   2.0\n   3.0\n   4.0\n   5.0\n   6.0\n   7.0\n   8.0\n   9.0\n  10.0\n   ⋮  \n  92.0\n  93.0\n  94.0\n  95.0\n  96.0\n  97.0\n  98.0\n  99.0\n 100.0"
+    @test replstr(Vector(1.:100.)) == "100-element Array{Float64,1}:\n   1.0\n   2.0\n   3.0\n   4.0\n   5.0\n   6.0\n   7.0\n   8.0\n   9.0\n  10.0\n   ⋮\n  92.0\n  93.0\n  94.0\n  95.0\n  96.0\n  97.0\n  98.0\n  99.0\n 100.0"
     @test occursin(r"1×100 (LinearAlgebra\.)?Adjoint{Float64,Array{Float64,1}}:\n 1.0  2.0  3.0  4.0  5.0  6.0  7.0  …  95.0  96.0  97.0  98.0  99.0  100.0", replstr(Vector(1.:100.)'))
     # too big in both directions to fit on screen:
-    @test replstr((1.:100.)*(1:100)') == "100×100 Array{Float64,2}:\n   1.0    2.0    3.0    4.0    5.0    6.0  …    97.0    98.0    99.0    100.0\n   2.0    4.0    6.0    8.0   10.0   12.0      194.0   196.0   198.0    200.0\n   3.0    6.0    9.0   12.0   15.0   18.0      291.0   294.0   297.0    300.0\n   4.0    8.0   12.0   16.0   20.0   24.0      388.0   392.0   396.0    400.0\n   5.0   10.0   15.0   20.0   25.0   30.0      485.0   490.0   495.0    500.0\n   6.0   12.0   18.0   24.0   30.0   36.0  …   582.0   588.0   594.0    600.0\n   7.0   14.0   21.0   28.0   35.0   42.0      679.0   686.0   693.0    700.0\n   8.0   16.0   24.0   32.0   40.0   48.0      776.0   784.0   792.0    800.0\n   9.0   18.0   27.0   36.0   45.0   54.0      873.0   882.0   891.0    900.0\n  10.0   20.0   30.0   40.0   50.0   60.0      970.0   980.0   990.0   1000.0\n   ⋮                                  ⋮    ⋱                                 \n  92.0  184.0  276.0  368.0  460.0  552.0     8924.0  9016.0  9108.0   9200.0\n  93.0  186.0  279.0  372.0  465.0  558.0     9021.0  9114.0  9207.0   9300.0\n  94.0  188.0  282.0  376.0  470.0  564.0     9118.0  9212.0  9306.0   9400.0\n  95.0  190.0  285.0  380.0  475.0  570.0     9215.0  9310.0  9405.0   9500.0\n  96.0  192.0  288.0  384.0  480.0  576.0  …  9312.0  9408.0  9504.0   9600.0\n  97.0  194.0  291.0  388.0  485.0  582.0     9409.0  9506.0  9603.0   9700.0\n  98.0  196.0  294.0  392.0  490.0  588.0     9506.0  9604.0  9702.0   9800.0\n  99.0  198.0  297.0  396.0  495.0  594.0     9603.0  9702.0  9801.0   9900.0\n 100.0  200.0  300.0  400.0  500.0  600.0     9700.0  9800.0  9900.0  10000.0"
+    @test replstr((1.:100.)*(1:100)') == "100×100 Array{Float64,2}:\n   1.0    2.0    3.0    4.0    5.0    6.0  …    97.0    98.0    99.0    100.0\n   2.0    4.0    6.0    8.0   10.0   12.0      194.0   196.0   198.0    200.0\n   3.0    6.0    9.0   12.0   15.0   18.0      291.0   294.0   297.0    300.0\n   4.0    8.0   12.0   16.0   20.0   24.0      388.0   392.0   396.0    400.0\n   5.0   10.0   15.0   20.0   25.0   30.0      485.0   490.0   495.0    500.0\n   6.0   12.0   18.0   24.0   30.0   36.0  …   582.0   588.0   594.0    600.0\n   7.0   14.0   21.0   28.0   35.0   42.0      679.0   686.0   693.0    700.0\n   8.0   16.0   24.0   32.0   40.0   48.0      776.0   784.0   792.0    800.0\n   9.0   18.0   27.0   36.0   45.0   54.0      873.0   882.0   891.0    900.0\n  10.0   20.0   30.0   40.0   50.0   60.0      970.0   980.0   990.0   1000.0\n   ⋮                                  ⋮    ⋱                          \n  92.0  184.0  276.0  368.0  460.0  552.0     8924.0  9016.0  9108.0   9200.0\n  93.0  186.0  279.0  372.0  465.0  558.0     9021.0  9114.0  9207.0   9300.0\n  94.0  188.0  282.0  376.0  470.0  564.0     9118.0  9212.0  9306.0   9400.0\n  95.0  190.0  285.0  380.0  475.0  570.0     9215.0  9310.0  9405.0   9500.0\n  96.0  192.0  288.0  384.0  480.0  576.0  …  9312.0  9408.0  9504.0   9600.0\n  97.0  194.0  291.0  388.0  485.0  582.0     9409.0  9506.0  9603.0   9700.0\n  98.0  196.0  294.0  392.0  490.0  588.0     9506.0  9604.0  9702.0   9800.0\n  99.0  198.0  297.0  396.0  495.0  594.0     9603.0  9702.0  9801.0   9900.0\n 100.0  200.0  300.0  400.0  500.0  600.0     9700.0  9800.0  9900.0  10000.0"
 
     # test that no spurious visual lines are added when one element spans multiple lines
     v = fill!(Array{Any}(undef, 9), 0)
-
     v[1] = "look I'm wide! --- " ^ 9
     @test replstr(v) == "9-element Array{Any,1}:\n  \"look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- \"\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0"
     @test replstr([fill(0, 9) v]) == "9×2 Array{Any,2}:\n 0  …   \"look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- \"\n 0     0\n 0     0\n 0     0\n 0     0\n 0  …  0\n 0     0\n 0     0\n 0     0"
-
-
+    # test vertical/diagonal ellipsis
+    v = fill!(Array{Any}(undef, 50), 0)
+    v[1] = "look I'm wide! --- " ^ 9
+    @test replstr(v) == "50-element Array{Any,1}:\n  \"look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- \"\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n ⋮\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0"
+    @test replstr([fill(0, 50) v]) == "50×2 Array{Any,2}:\n 0  …   \"look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- \"\n 0     0\n 0     0\n 0     0\n 0     0\n 0  …  0\n 0     0\n 0     0\n 0     0\n 0     0\n ⋮  ⋱  \n 0     0\n 0     0\n 0     0\n 0     0\n 0  …  0\n 0     0\n 0     0\n 0     0\n 0     0"
 end
 
 # Issue 14121
@@ -767,6 +844,21 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T,N}, indices::Vararg{$Int,N})")
 @test_repr "{a b c}"
 @test_repr "{a b; c d}"
 
+# typed vcat and hcat
+@test_repr "T[a]"
+@test_repr "T[a,b]"
+@test_repr "T[a;b;c]"
+@test_repr "T[a b]"
+@test_repr "T[a b;]"
+@test_repr "T[a b c]"
+@test_repr "T[a b; c d]"
+@test_repr repr(Expr(:quote, Expr(:typed_vcat, Expr(:$, :a), 1)))
+@test_repr repr(Expr(:quote, Expr(:typed_hcat, Expr(:$, :a), 1)))
+@test_repr "Expr(:quote, Expr(:typed_vcat, Expr(:\$, :a), 1))"
+@test_repr "Expr(:quote, Expr(:typed_hcat, Expr(:\$, :a), 1))"
+@test repr(Expr(:quote, Expr(:typed_vcat, Expr(:$, :a), 1))) == ":(:(\$a[1;]))"
+@test repr(Expr(:quote, Expr(:typed_hcat, Expr(:$, :a), 1))) == ":(:(\$a[1]))"
+
 # Printing of :(function f end)
 @test sprint(show, :(function f end)) == ":(function f end)"
 @test_repr "function g end"
@@ -776,17 +868,238 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T,N}, indices::Vararg{$Int,N})")
 @test_repr "macro m end"
 @test sprint(show, Expr(:macro, Expr(:call, :m, :ex), Expr(:block, :m))) ==
       ":(macro m(ex)\n      m\n  end)"
-@test_repr """macro identity(ex)
+@weak_test_repr """macro identity(ex)
     # line meta
     esc(ex)
 end"""
-@test_repr """macro m(a,b)
+@weak_test_repr """macro m(a,b)
     # line meta
     quote
         # line meta
         \$a + \$b
     end
 end"""
+@test repr(Meta.parse(
+"""macro m(a, b)
+    quote
+        \$a + \$b
+    end
+end""")) ==
+"""
+:(macro m(a, b)
+      #= none:2 =#
+      quote
+          #= none:3 =#
+          \$a + \$b
+      end
+  end)"""
+@test repr(Base.remove_linenums!(Meta.parse(
+"""macro m(a, b)
+    quote
+        \$a + \$b
+    end
+end"""))) ==
+"""
+:(macro m(a, b)
+      quote
+          \$a + \$b
+      end
+  end)"""
+@test repr(Meta.parse(
+"""macro m(a, b)
+    :(\$a + \$b)
+end""")) ==
+":(macro m(a, b)\n      #= none:2 =#\n      :(\$a + \$b)\n  end)"
+@test repr(Expr(:macro, Expr(:call, :m, :x), Expr(:quote, Expr(:call, :+, Expr(:($), :x), 1)))) ==
+":(macro m(x)\n      :(\$x + 1)\n  end)"
+
+# nested quotes and interpolations
+@test repr(Meta.parse(
+"""quote
+    quote
+        \$\$x
+    end
+end""")) ==
+"""
+:(quote
+      #= none:2 =#
+      quote
+          #= none:3 =#
+          \$\$x
+      end
+  end)"""
+@weak_test_repr """
+quote
+    #= none:2 =#
+    quote
+        #= none:3 =#
+        \$\$x
+    end
+end"""
+
+# fallback printing + nested quotes and unquotes
+@weak_test_repr repr(Expr(:block, LineNumberNode(0, :none),
+                     Expr(:exotic_head, Expr(:$, :x))))
+@test_repr repr(Expr(:exotic_head, Expr(:call, :+, 1, Expr(:quote, Expr(:$, Expr(:$, :y))))))
+@test_repr repr(Expr(:quote, Expr(:$, Expr(:exotic_head, Expr(:call, :+, 1, Expr(:$, :y))))))
+@test_repr repr(Expr(:$, Expr(:exotic_head, Expr(:call, :+, 1, Expr(:$, :y)))))
+@test_repr "Expr(:block, LineNumberNode(0, :none), Expr(:exotic_head, Expr(:\$, :x)))"
+@test_repr "Expr(:exotic_head, Expr(:call, :+, 1, \$y))"
+@test_repr "Expr(:exotic_head, Expr(:call, :+, 1, \$\$y))"
+@test_repr ":(Expr(:exotic_head, Expr(:call, :+, 1, \$y)))"
+@test_repr ":(:(Expr(:exotic_head, Expr(:call, :+, 1, \$\$y))))"
+@test repr(Expr(:block, LineNumberNode(0, :none),
+                Expr(:exotic_head, Expr(:$, :x)))) ==
+"""
+quote
+    #= none:0 =#
+    \$(Expr(:exotic_head, :(\$x)))
+end"""
+@test repr(Expr(:exotic_head, Expr(:call, :+, 1, :(Expr(:$, :y))))) ==
+    ":(\$(Expr(:exotic_head, :(1 + Expr(:\$, :y)))))"
+@test repr(Expr(:exotic_head, Expr(:call, :+, 1, Expr(:quote, Expr(:$, :y))))) ==
+    ":(\$(Expr(:exotic_head, :(1 + :(\$y)))))"
+@test repr(Expr(:quote, Expr(:exotic_head, Expr(:call, :+, 1, Expr(:$, :y))))) ==
+    ":(:(\$(Expr(:exotic_head, :(1 + \$y)))))"
+@test repr(Expr(:block, Expr(:(=), :y, 2),
+                        Expr(:quote, Expr(:exotic_head,
+                                          Expr(:call, :+, 1, Expr(:$, :y)))))) ==
+"""
+quote
+    y = 2
+    :(\$(Expr(:exotic_head, :(1 + \$y))))
+end"""
+@test repr(eval(Expr(:block, Expr(:(=), :y, 2),
+                        Expr(:quote, Expr(:exotic_head,
+                                          Expr(:call, :+, 1, Expr(:$, :y))))))) ==
+    ":(\$(Expr(:exotic_head, :(1 + 2))))"
+
+# nested quotes and blocks
+@test_repr "Expr(:quote, Expr(:block, :a, :b))"
+@weak_test_repr repr(Expr(:quote, Expr(:block, LineNumberNode(0, :none), :a, LineNumberNode(0, :none), :b)))
+@test repr(Expr(:quote, Expr(:block, :a, :b))) ==
+":(quote
+      a
+      b
+  end)"
+@test_repr "Expr(:quote, Expr(:block, :a))"
+@weak_test_repr repr(Expr(:quote, Expr(:block, LineNumberNode(0, :none), :a)))
+@test repr(Expr(:quote, Expr(:block, :a))) ==
+":(quote
+      a
+  end)"
+@test_repr "Expr(:quote, Expr(:block, :(a + b)))"
+@weak_test_repr repr(Expr(:quote, Expr(:block, LineNumberNode(0, :none), :(a + b))))
+@test repr(Expr(:quote, Expr(:block, :(a + b)))) ==
+":(quote
+      a + b
+  end)"
+
+# QuoteNode + quotes and unquotes
+@test_repr "QuoteNode(\$x)"
+@test_repr "QuoteNode(\$\$x)"
+@test_repr ":(QuoteNode(\$x))"
+@test_repr ":(:(QuoteNode(\$\$x)))"
+@test repr(QuoteNode(Expr(:$, :x))) == ":(\$(QuoteNode(:(\$(Expr(:\$, :x))))))"
+@test repr(QuoteNode(Expr(:quote, Expr(:$, :x)))) == ":(\$(QuoteNode(:(:(\$x)))))"
+@test repr(Expr(:quote, QuoteNode(Expr(:$, :x)))) == ":(:(\$(QuoteNode(:(\$(Expr(:\$, :x)))))))"
+
+# unquoting
+@test_repr "\$y"
+@test_repr "\$\$y"
+@weak_test_repr """
+begin
+    # line meta
+    \$y
+end"""
+@weak_test_repr """
+begin
+    # line meta
+    \$\$y
+end"""
+@test_repr ":(\$\$y)"
+@test_repr repr(Expr(:$, :y))
+
+# with reference to https://github.com/JuliaLang/julia/commit/9ef17207d5f99c7a0019cbbe0e58f77e7c4c1d21
+y856739 = 2
+x856739 = :y856739
+z856739 = [:a, :b]
+@test_repr repr(:(:(f($$x856739))))
+@test repr(:(:(f($$x856739)))) == ":(:(f(\$y856739)))"
+@test repr(eval(:(:(f($$x856739))))) == ":(f(2))"
+@test_repr repr(:(:(f($x856739))))
+@test repr(:(:(f($x856739)))) == ":(:(f(\$x856739)))"
+@test repr(eval(:(:(f($x856739))))) == ":(f(y856739))"
+@test_repr repr(:(:(f($(($z856739)...)))))
+@test repr(:(:(f($(($z856739)...))))) == ":(:(f(\$([:a, :b]...))))"
+@test repr(eval(:(:(f($(($z856739)...)))))) == ":(f(a, b))"
+
+# string interpolation, if this is what the comment in test_rep function
+# definition talk about
+@test repr(Expr(:string, "foo", :x, "bar")) == ":(\"foo\$(x)bar\")"
+@test Meta.parse(string(Expr(:string, "foo", :x, "bar"))) == Expr(:string, "foo", :x, "bar")
+@test repr(Meta.parse("\"foo\$(x)bar\"")) == ":(\"foo\$(x)bar\")"
+@test_repr "\"foo\$(x)bar\""
+
+# Printing of macrocall expressions with qualified macroname argument
+@test sprint(show, Expr(:macrocall,
+                   GlobalRef(Base, Symbol("@m")),
+                   LineNumberNode(0, :none), :a, :b)) ==
+    ":(#= none:0 =# Base.@m a b)"
+@test sprint(show, Expr(:macrocall,
+                   Expr(:(.), :Base, Expr(:quote, Symbol("@m"))),
+                   LineNumberNode(0, :none), :a, :b)) ==
+    ":(#= none:0 =# Base.@m a b)"
+@test sprint(show, Expr(:macrocall,
+                   Expr(:(.), Base, Expr(:quote, Symbol("@m"))),
+                   LineNumberNode(0, :none), :a, :b)) ==
+    ":(#= none:0 =# (Base).@m a b)"
+@test sprint(show, Expr(:macrocall,
+                   Expr(:(.), :Base, QuoteNode(Symbol("@m"))),
+                   LineNumberNode(0, :none), :a, :b)) ==
+    ":(#= none:0 =# Base.@m a b)"
+@test sprint(show, Expr(:macrocall,
+                   Expr(:(.), Base, QuoteNode(Symbol("@m"))),
+                   LineNumberNode(0, :none), :a, :b)) ==
+    ":(#= none:0 =# (Base).@m a b)"
+
+# Printing of special macro syntaxes
+# `a b c`
+@test sprint(show, Expr(:macrocall,
+                   GlobalRef(Core, Symbol("@cmd")),
+                   LineNumberNode(0, :none), "a b c")) == ":(`a b c`)"
+@test sprint(show, Expr(:macrocall,
+                        Expr(:(.), :Core, Expr(:quote, Symbol("@cmd"))),
+                        LineNumberNode(0, :none), "a b c")) == ":(#= none:0 =# Core.@cmd \"a b c\")"
+@test sprint(show, Expr(:macrocall,
+                        Expr(:(.), Core, Expr(:quote, Symbol("@cmd"))),
+                        LineNumberNode(0, :none), "a b c")) == ":(#= none:0 =# (Core).@cmd \"a b c\")"
+@test sprint(show, Expr(:macrocall,
+                        Expr(:(.), :Core, QuoteNode(Symbol("@cmd"))),
+                        LineNumberNode(0, :none), "a b c")) == ":(#= none:0 =# Core.@cmd \"a b c\")"
+@test sprint(show, Expr(:macrocall,
+                        Expr(:(.), Core, QuoteNode(Symbol("@cmd"))),
+                        LineNumberNode(0, :none), "a b c")) == ":(#= none:0 =# (Core).@cmd \"a b c\")"
+@test_repr "`a b c`"
+@test sprint(show, Meta.parse("`a b c`")) == ":(`a b c`)"
+# a"b" and a"b"c
+@test_repr "a\"b\""
+@test_repr "a\"b\"c"
+@test_repr "aa\"b\""
+@test_repr "a\"b\"cc"
+@test sprint(show, Meta.parse("a\"b\"")) == ":(a\"b\")"
+@test sprint(show, Meta.parse("a\"b\"c")) == ":(a\"b\"c)"
+@test sprint(show, Meta.parse("aa\"b\"")) == ":(aa\"b\")"
+@test sprint(show, Meta.parse("a\"b\"cc")) == ":(a\"b\"cc)"
+# 11111111111111111111, 0xfffffffffffffffff, 1111...many digits...
+@test sprint(show, Meta.parse("11111111111111111111")) == ":(11111111111111111111)"
+# @test_repr "Base.@int128_str \"11111111111111111111\""
+@test sprint(show, Meta.parse("Base.@int128_str \"11111111111111111111\"")) ==
+    ":(#= none:1 =# Base.@int128_str \"11111111111111111111\")"
+@test sprint(show, Meta.parse("11111111111111111111")) == ":(11111111111111111111)"
+@test sprint(show, Meta.parse("0xfffffffffffffffff")) == ":(0xfffffffffffffffff)"
+@test sprint(show, Meta.parse("11111111111111111111111111111111111111111111111111111111111111")) ==
+":(11111111111111111111111111111111111111111111111111111111111111)"
 
 # Issue #15765 printing of continue and break
 @test sprint(show, :(continue)) == ":(continue)"
@@ -905,6 +1218,7 @@ let a = Vector{Any}(undef, 10000)
     repr = sprint(dump, a; context=(:limit => true), sizehint=0)
     @test repr == "Array{Any}((10000,))\n  1: #undef\n  2: String \"elemA\"\n  3: #undef\n  4: String \"elemB\"\n  5: #undef\n  ...\n  9996: #undef\n  9997: #undef\n  9998: #undef\n  9999: #undef\n  10000: #undef\n"
 end
+@test occursin("NamedTuple", sprint(dump, NamedTuple))
 
 # issue #17338
 @test repr(Core.svec(1, 2)) == "svec(1, 2)"
@@ -940,7 +1254,7 @@ test_repr("(+).:-")
 test_repr("(!).:~")
 test_repr("a.:(begin
         #= none:3 =#
-    end)")
+    end)", true)
 test_repr("a.:(=)")
 test_repr("a.:(:)")
 test_repr("(:).a")
@@ -963,7 +1277,8 @@ test_repr("(:).a")
 @test isa(repr("text/plain", String(UInt8[0x00:0xff;])), String)
 
 # don't use julia-specific `f` in Float32 printing (PR #18053)
-@test sprint(print, 1f-7) == "1.0f-7"
+@test sprint(print, 1f-7) == "1.0e-7"
+@test string(1f-7) == "1.0e-7"
 
 let d = TextDisplay(IOBuffer())
     @test_throws MethodError display(d, "text/foobar", [3 1 4])
@@ -1154,11 +1469,11 @@ end
     @test arrstr(zeros(4, 30), 4) == "4×30 Array{Float64,2}: …"
     @test arrstr(zeros(4, 3), 5)  == "4×3 Array{Float64,2}:\n ⋮      ⋱  "
     @test arrstr(zeros(4, 30), 5) == "4×30 Array{Float64,2}:\n ⋮      ⋱  "
-    @test arrstr(zeros(4, 3), 6)  == "4×3 Array{Float64,2}:\n 0.0  0.0  0.0\n ⋮            "
+    @test arrstr(zeros(4, 3), 6)  == "4×3 Array{Float64,2}:\n 0.0  0.0  0.0\n ⋮         "
     @test arrstr(zeros(4, 30), 6) ==
               string("4×30 Array{Float64,2}:\n",
                      " 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  …  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n",
-                     " ⋮                        ⋮              ⋱            ⋮                      ")
+                     " ⋮                        ⋮              ⋱            ⋮                   ")
 end
 
 module UnexportedOperators
@@ -1273,7 +1588,7 @@ end
     @test replstr(view(A, [1], :)) == "1×1 view(::Array{Float64,2}, [1], :) with eltype Float64:\n 0.0"
 
     # issue #27680
-    @test replstr(Set([(1.0,1.0), (2.0,2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
+    @test showstr(Set([(1.0,1.0), (2.0,2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
               "Set([(3.0, 3.0), (2.0, 2.0), (1.0, 1.0)])" :
               "Set([(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])")
 
@@ -1361,13 +1676,15 @@ end
 end
 
 @testset "Intrinsic printing" begin
-    @test sprint(show, Core.Intrinsics.arraylen) == "arraylen"
+    @test sprint(show, Core.Intrinsics.arraylen) == "Core.Intrinsics.arraylen"
+    @test repr(Core.Intrinsics.arraylen) == "Core.Intrinsics.arraylen"
     let io = IOBuffer()
         show(io, MIME"text/plain"(), Core.Intrinsics.arraylen)
         str = String(take!(io))
         @test occursin("arraylen", str)
         @test occursin("(intrinsic function", str)
     end
+    @test string(Core.Intrinsics.add_int) == "add_int"
 end
 
 @testset "repr(mime, x)" begin
@@ -1581,3 +1898,51 @@ end
     @test sdastr(2, 2) == "[2, 3]"
     @test sdastr(3, 3) == "[3, 4, 5]"
 end
+
+@testset "show Set" begin
+    s = Set{Int}(1:22)
+    str = showstr(s)
+    @test startswith(str, "Set([")
+    @test endswith(str, "])")
+    @test occursin("  …  ", str)
+
+    str = replstr(s)
+    @test startswith(str, "Set{$Int} with 22 elements:\n")
+    @test endswith(str, "\n  ⋮ ")
+    @test count(==('\n'), str) == 20
+
+    @test replstr(Set(['a'^100])) == "Set{String} with 1 element:\n  \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa…"
+end
+
+@testset "0-dimensional Array. Issue #31481" begin
+    for x in (zeros(Int32), collect('b'), fill(nothing), BitArray(0))
+        @test eval(Meta.parse(repr(x))) == x
+    end
+    @test showstr(zeros(Int32)) == "fill(0)"
+    @test showstr(collect('b')) == "fill('b')"
+    @test showstr(fill(nothing)) == "fill(nothing)"
+    @test showstr(BitArray(0)) == "BitArray(0)"
+
+    @test replstr(zeros(Int32)) == "0-dimensional Array{Int32,0}:\n0"
+    @test replstr(collect('b')) == "0-dimensional Array{Char,0}:\n'b'"
+    @test replstr(fill(nothing)) == "0-dimensional Array{Nothing,0}:\nnothing"
+    @test replstr(BitArray(0)) == "0-dimensional BitArray{0}:\n0"
+
+    # UndefInitializer
+    @test showstr(fill(undef)) == "fill($undef)"
+    @test replstr(fill(undef)) == "0-dimensional Array{UndefInitializer,0}:\n$undef"
+
+    # `#undef` values
+    @test showstr(Array{String, 0}(undef)) == "Array{String,0}($undef)"
+    @test replstr(Array{String, 0}(undef)) == "0-dimensional Array{String,0}:\n$(Base.undef_ref_str)"
+
+    # "undef" with isbits type
+    @test startswith(showstr(Array{Int32, 0}(undef)), "fill(")
+    @test startswith(replstr(Array{Int32, 0}(undef)), "0-dimensional Array{Int32,0}:\n")
+end
+
+# issue #31402, Print Symbol("true") as Symbol("true") instead of :true
+@test sprint(show, Symbol(true)) == "Symbol(\"true\")"
+@test sprint(show, Symbol("true")) == "Symbol(\"true\")"
+@test sprint(show, Symbol(false)) == "Symbol(\"false\")"
+@test sprint(show, Symbol("false")) == "Symbol(\"false\")"

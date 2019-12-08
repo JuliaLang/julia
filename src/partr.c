@@ -373,10 +373,11 @@ JL_DLLEXPORT void jl_set_task_tid(jl_task_t *task, int tid) JL_NOTSAFEPOINT
 }
 
 // get the next runnable task from the multiq
-static jl_task_t *get_next_task(jl_value_t *getsticky)
+static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
 {
     jl_gc_safepoint();
-    jl_task_t *task = (jl_task_t*)jl_apply(&getsticky, 1);
+    jl_value_t *args[2] = { trypoptask, q };
+    jl_task_t *task = (jl_task_t*)jl_apply(args, 2);
     if (jl_typeis(task, jl_task_type)) {
         int self = jl_get_ptls_states()->tid;
         jl_set_task_tid(task, self);
@@ -393,14 +394,14 @@ static int may_sleep(jl_ptls_t ptls)
 
 extern volatile unsigned _threadedregion;
 
-JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
+JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     uint64_t start_cycles = 0;
     jl_task_t *task;
 
     while (1) {
-        task = get_next_task(getsticky);
+        task = get_next_task(trypoptask, q);
         if (task)
             return task;
 
@@ -416,7 +417,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
             if (!sleep_check_now(ptls->tid))
                 continue;
             jl_atomic_store(&ptls->sleep_check_state, sleeping); // acquire sleep-check lock
-            task = get_next_task(getsticky);
+            task = get_next_task(trypoptask, q);
             if (task)
                 return task;
             // one thread should win this race and watch the event loop
@@ -483,7 +484,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
 #ifndef JL_HAVE_ASYNCIFY
             // maybe check the kernel for new messages too
             if (jl_atomic_load(&jl_uv_n_waiters) == 0)
-                jl_process_events(jl_global_event_loop());
+                jl_process_events();
 #else
             // Yield back to browser event loop
             return ptls->root_task;
