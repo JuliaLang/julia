@@ -3,6 +3,8 @@
 @inline isexpr(@nospecialize(stmt), head::Symbol) = isa(stmt, Expr) && stmt.head === head
 Core.PhiNode() = Core.PhiNode(Any[], Any[])
 
+isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode)
+
 """
 Like UnitRange{Int}, but can handle the `last` field, being temporarily
 < first (this can happen during compacting)
@@ -925,16 +927,21 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
                            findfirst(x->x === succ, compact.bb_rename_pred))
             end
         end
-        if to < active_bb
-            # Kill all statements in the block
+
+        # Kill all statements in dead successor if it has already been
+        # processed. Also kill statements if dead successor is the active BB,
+        # in order to kill statements that have already been processed,
+        # although statements in the current BB that have not been processed
+        # will be killed in `process_node!`. Statements in dead blocks that
+        # have not yet been processed (`to` > `active_bb`) will be killed in
+        # `process_node!`.
+        if to <= active_bb
             stmts = compact.result_bbs[renamed_to].stmts
             for stmt in stmts
                 compact.result[stmt][:inst] = nothing
             end
             compact.result[last(stmts)][:inst] = ReturnNode()
         end
-
-        # TODO: kill statements in blocks past `active_bb`
     end
 
     # Remove this edge from any phi nodes
@@ -974,7 +981,19 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
     late_fixup = compact.late_fixup
     used_ssas = compact.used_ssas
     ssa_rename[idx] = SSAValue(result_idx)
-    if stmt === nothing
+    if compact.cfg_transforms_enabled &&
+            # Don't kill statements in blocks renamed to -1 because
+            # `cfg_simplify!` renames blocks that have been merged into others
+            # to -1, but the statements in them are not dead. Unreachable
+            # blocks detected in the constructor of `IncrementalCompact` are
+            # removed then, so we never encounter statements from them here.
+            compact.bb_rename_succ[active_bb] != -1 &&
+            bb_unreachable(compact.result_domtree,
+                           compact.bb_rename_succ[active_bb])
+        # Kill statements in dead blocks
+        result[result_idx][:inst] = isterminator(stmt) ? ReturnNode() : nothing
+        result_idx += 1
+    elseif stmt === nothing
         ssa_rename[idx] = stmt
     elseif isa(stmt, OldSSAValue)
         ssa_rename[idx] = ssa_rename[stmt.id]
@@ -1272,7 +1291,6 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
     # result_idx is not, incremented, but that's ok and expected
     compact.result[old_result_idx] = compact.ir.stmts[idx]
     result_idx = process_node!(compact, old_result_idx, compact.ir.stmts[idx], idx, idx, active_bb, true)
-    stmt_if_any = old_result_idx == result_idx ? nothing : compact.result[old_result_idx][:inst]
     compact.result_idx = result_idx
     if idx == last(bb.stmts) && !attach_after_stmt_after(compact, idx)
         finish_current_bb!(compact, active_bb, old_result_idx)
