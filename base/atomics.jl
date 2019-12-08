@@ -24,9 +24,11 @@ else
 end
 const floattypes = (Float16, Float32, Float64)
 const arithmetictypes = (inttypes..., floattypes...)
-const atomictypes = (arithmetictypes..., Bool, Ptr)
+const logicaltypes = (arithmetictypes..., Bool)
+const atomictypes = (logicaltypes..., Ptr)
 const IntTypes = Union{inttypes...}
 const FloatTypes = Union{floattypes...}
+const LogicalTypes = Union{logicaltypes...}
 const ArithmeticTypes = Union{arithmetictypes...}
 const AtomicTypes = Union{atomictypes...}
 
@@ -385,7 +387,8 @@ for typ in atomictypes
     end
 
     arithmetic_ops = [:add, :sub]
-    for rmwop in [arithmetic_ops..., :xchg, :and, :nand, :or, :xor, :max, :min]
+    logical_ops = [:and, :nand, :or, :xor]
+    for rmwop in [arithmetic_ops..., logical_ops..., :xchg, :max, :min]
         rmw = string(rmwop)
         fn = Symbol("atomic_", rmw, "!")
         if (rmw == "max" || rmw == "min") && typ <: Union{Unsigned, Ptr}
@@ -393,6 +396,7 @@ for typ in atomictypes
             rmw = "u" * rmw
         end
         if rmwop in arithmetic_ops && !(typ <: ArithmeticTypes) continue end
+        if rmwop in logical_ops && !(typ <: LogicalTypes) continue end
         if typ <: Union{Integer, Ptr}
             @eval $fn(x::Atomic{V}, v::V) where {V <: $typ} =
                 llvmcall($"""

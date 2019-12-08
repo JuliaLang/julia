@@ -232,6 +232,18 @@ function test_atomic_ptr()
     ptr1 = Ptr{Int}(0)
     ptr2 = Ptr{Int}(4)
     x = Atomic{Ptr{Int}}(ptr1)
+
+    # arithmetic functions are not defined.
+    @test_throws MethodError atomic_add!(x, ptr2)
+    @test_throws MethodError atomic_sub!(x, ptr2)
+    # logical functions are not defined
+    @test_throws MethodError atomic_or!(x, ptr2)
+    @test_throws MethodError atomic_xor!(x, ptr2)
+    @test_throws MethodError atomic_and!(x, ptr2)
+    @test_throws MethodError atomic_nand!(x, ptr2)
+
+    x = Atomic{Ptr{Int}}(ptr1)
+
     @test x[] == ptr1
     # xchg
     @test ptr1 == atomic_xchg!(x, ptr2); @test x[] == ptr2
