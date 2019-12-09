@@ -443,7 +443,6 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
             start_cycles = 0;
             continue;
         }
-#endif
 
         jl_cpu_pause();
         if (sleep_check_after_threshold(&start_cycles) || (!_threadedregion && ptls->tid == 0)) {
@@ -516,8 +515,8 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
             start_cycles = 0;
         }
         else {
-#ifndef JL_DISABLE_LIBUV
 #ifndef JL_HAVE_ASYNCIFY
+#ifndef JL_DISABLE_LIBUV
             // maybe check the kernel for new messages too
             if (jl_atomic_load(&jl_uv_n_waiters) == 0)
 #endif
@@ -527,6 +526,9 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
             return ptls->root_task;
 #endif
         }
+#else // JULIA_ENABLE_THREADING
+    return ptls->root_task;
+#endif
     }
 }
 
