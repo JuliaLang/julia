@@ -75,7 +75,20 @@ function parse_call_expr(expr)
     end
 end
 
-macro js(expr)
+macro js(args...)
+    if args[1] == :await
+        length(args) == 1 || :(error("`@js await` expects only one additional argument"))
+        expr = args[2]
+        isexpr(expr, :call) || :(error("`@js await` expects a call"))
+        call = parse_call_expr(expr)
+        return quote
+            promise = $call
+            wait_promise(promise)
+        end
+    else
+        length(args) == 1 || :(error("@js macro expects only one argument"))
+        expr = args[1]
+    end
     if isexpr(expr, :call)
         return parse_call_expr(expr)
     elseif isexpr(expr, :braces)
@@ -125,5 +138,10 @@ function __init__()
 end
 
 JSObject() = jsnew(Object, EmptyArray)::JSObject
+
+function wait_promise(promise::JSObject)
+    @js enq_wait_promise(promise)
+    wait()
+end
 
 end

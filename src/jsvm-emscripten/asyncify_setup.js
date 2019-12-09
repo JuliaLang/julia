@@ -158,6 +158,7 @@ function maybe_schedule_next() {
 }
 
 function enq_wait_promise(promise) {
+    promise = Promise.resolve(promise)
     Asyncify.handleSleep(function (wakeUpOk, wakeUpFail) {
         promise.then(wakeUpOk, wakeUpFail);
     }, true);
