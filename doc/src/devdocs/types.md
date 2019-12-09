@@ -82,7 +82,7 @@ f3(A::Array{T}) where {T<:Any} = 3
 f4(A::Array{Any}) = 4
 ```
 
-The signature - as decribed in [Function calls](@ref) - of `f3` is a `UnionAll` type wrapping a tuple type: `Tuple{typeof(f3), Array{T}} where T`.
+The signature - as described in [Function calls](@ref) - of `f3` is a `UnionAll` type wrapping a tuple type: `Tuple{typeof(f3), Array{T}} where T`.
 All but `f4` can be called with `a = [1,2]`; all but `f2` can be called with `b = Any[1,2]`.
 
 Let's look at these types a little more closely:
