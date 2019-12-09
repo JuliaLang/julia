@@ -4,7 +4,7 @@
 
 // Map from symbol name (in a certain library) to its GV in sysimg and the
 // DL handle address in the current session.
-typedef StringMap<std::pair<GlobalVariable*,void*>> SymMapGV;
+typedef StringMap<GlobalVariable*> SymMapGV;
 static StringMap<std::pair<GlobalVariable*,SymMapGV>> libMapGV;
 #ifdef _OS_WINDOWS_
 static SymMapGV symMapExe;
@@ -43,65 +43,48 @@ lazyModule(Func &&func)
 
 // Find or create the GVs for the library and symbol lookup.
 // Return `runtime_lib` (whether the library name is a string)
-// Optionally return the symbol address in the current session
-// when `symaddr != nullptr`.
 // The `lib` and `sym` GV returned may not be in the current module.
 template<typename MT>
 static bool runtime_sym_gvs(const char *f_lib, const char *f_name, MT &&M,
-                            GlobalVariable *&lib, GlobalVariable *&sym,
-                            void **symaddr=nullptr)
+                            GlobalVariable *&lib, GlobalVariable *&sym)
 {
-    void *libsym = NULL;
     bool runtime_lib = false;
     GlobalVariable *libptrgv;
     SymMapGV *symMap;
 #ifdef _OS_WINDOWS_
     if ((intptr_t)f_lib == 1) {
         libptrgv = jlexe_var;
-        libsym = jl_exe_handle;
         symMap = &symMapExe;
     }
     else if ((intptr_t)f_lib == 2) {
         libptrgv = jldll_var;
-        libsym = jl_dl_handle;
         symMap = &symMapDl;
     }
     else
 #endif
     if (f_lib == NULL) {
         libptrgv = jlRTLD_DEFAULT_var;
-        libsym = jl_RTLD_DEFAULT_handle;
         symMap = &symMapDefault;
     }
     else {
         std::string name = "ccalllib_";
         name += f_lib;
         runtime_lib = true;
-        auto iter = libMapGV.find(f_lib);
-        if (iter == libMapGV.end()) {
+        auto &libgv = libMapGV[f_lib];
+        if (libgv.first == NULL) {
             libptrgv = new GlobalVariable(*M, T_pint8, false,
                                           GlobalVariable::ExternalLinkage,
-                                          NULL, name);
-            auto &libgv = libMapGV[f_lib];
-            libgv = std::make_pair(global_proto(libptrgv), SymMapGV());
-            symMap = &libgv.second;
-            libsym = jl_get_library(f_lib);
-            assert(libsym != NULL);
-            *jl_emit_and_add_to_shadow(libptrgv) = libsym;
+                                          Constant::getNullValue(T_pint8), name);
+            libgv.first = global_proto(libptrgv);
         }
         else {
-            libptrgv = iter->second.first;
-            symMap = &iter->second.second;
+            libptrgv = libgv.first;
         }
+        symMap = &libgv.second;
     }
-    if (libsym == NULL) {
-        libsym = *(void**)jl_get_globalvar(libptrgv);
-    }
-    assert(libsym != NULL);
 
-    GlobalVariable *llvmgv;
-    auto sym_iter = symMap->find(f_name);
-    if (sym_iter == symMap->end()) {
+    GlobalVariable *&llvmgv = (*symMap)[f_name];
+    if (llvmgv == NULL) {
         // MCJIT forces this to have external linkage eventually, so we would clobber
         // the symbol of the actual function.
         std::string name = "ccall_";
@@ -109,19 +92,9 @@ static bool runtime_sym_gvs(const char *f_lib, const char *f_name, MT &&M,
         name += "_";
         name += std::to_string(globalUnique++);
         llvmgv = new GlobalVariable(*M, T_pvoidfunc, false,
-                                    GlobalVariable::ExternalLinkage, NULL, name);
+                                    GlobalVariable::ExternalLinkage,
+                                    Constant::getNullValue(T_pvoidfunc), name);
         llvmgv = global_proto(llvmgv);
-        void *addr;
-        jl_dlsym(libsym, f_name, &addr, 0);
-        (*symMap)[f_name] = std::make_pair(llvmgv, addr);
-        if (symaddr)
-            *symaddr = addr;
-        *jl_emit_and_add_to_shadow(llvmgv) = addr;
-    }
-    else {
-        if (symaddr)
-            *symaddr = sym_iter->second.second;
-        llvmgv = sym_iter->second.first;
     }
 
     lib = libptrgv;
@@ -218,7 +191,7 @@ static GlobalVariable *emit_plt_thunk(
         const AttributeList &attrs,
         CallingConv::ID cc, const char *f_lib, const char *f_name,
         GlobalVariable *libptrgv, GlobalVariable *llvmgv,
-        void *symaddr, bool runtime_lib)
+        bool runtime_lib)
 {
     PointerType *funcptype = PointerType::get(functype, 0);
     libptrgv = prepare_global_in(M, libptrgv);
@@ -237,8 +210,7 @@ static GlobalVariable *emit_plt_thunk(
     auto gname = funcName.str();
     GlobalVariable *got = new GlobalVariable(*M, T_pvoidfunc, false,
                                              GlobalVariable::ExternalLinkage,
-                                             nullptr, gname);
-    *jl_emit_and_add_to_shadow(got) = symaddr;
+                                             ConstantExpr::getBitCast(plt, T_pvoidfunc), gname);
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", plt);
     IRBuilder<> irbuilder(b0);
     Value *ptr = runtime_sym_lookup(irbuilder, funcptype, f_lib, f_name, plt, libptrgv,
@@ -274,6 +246,7 @@ static GlobalVariable *emit_plt_thunk(
         }
     }
     irbuilder.ClearInsertionPoint();
+
     got = global_proto(got); // exchange got for the permanent global before jl_finalize_module destroys it
     jl_finalize_module(M, true);
 
@@ -297,21 +270,19 @@ static Value *emit_plt(
     assert(!functype->isVarArg());
     GlobalVariable *libptrgv;
     GlobalVariable *llvmgv;
-    void *symaddr;
     auto LM = lazyModule([&] {
             Module *m = new Module(f_name, jl_LLVMContext);
             jl_setup_module(m);
             return m;
         });
-    bool runtime_lib = runtime_sym_gvs(f_lib, f_name, LM,
-                                       libptrgv, llvmgv, &symaddr);
+    bool runtime_lib = runtime_sym_gvs(f_lib, f_name, LM, libptrgv, llvmgv);
     PointerType *funcptype = PointerType::get(functype, 0);
 
     auto &pltMap = allPltMap[attrs];
     auto key = std::make_tuple(llvmgv, functype, cc);
     GlobalVariable *&shadowgot = pltMap[key];
     if (!shadowgot) {
-        shadowgot = emit_plt_thunk(LM.get(), functype, attrs, cc, f_lib, f_name, libptrgv, llvmgv, symaddr, runtime_lib);
+        shadowgot = emit_plt_thunk(LM.get(), functype, attrs, cc, f_lib, f_name, libptrgv, llvmgv, runtime_lib);
     }
     else {
         // `runtime_sym_gvs` shouldn't have created anything in a new module
