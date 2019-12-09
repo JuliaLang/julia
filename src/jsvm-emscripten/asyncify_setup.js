@@ -1,7 +1,7 @@
 Module.preRun.push(function() {
     if (typeof Asyncify !== "undefined") {
         Asyncify.instrumentWasmExports = function (exports) { return exports; };
-        Asyncify.handleSleep = function (startAsync) {
+        Asyncify.handleSleep = function (startAsync, nowait) {
             if (ABORT) return;
             Module['noExitRuntime'] = true;
             if (Asyncify.state === Asyncify.State.Normal) {
@@ -12,19 +12,27 @@ Module.preRun.push(function() {
                 var reachedCallback = false;
                 var reachedAfterCallback = false;
                 var task = get_current_task();
-                startAsync(function(returnValue) {
-                assert(!returnValue || typeof returnValue === 'number'); // old emterpretify API supported other stuff
-                if (ABORT) return;
-                Asyncify.returnValue = returnValue || 0;
-                reachedCallback = true;
-                if (!reachedAfterCallback) {
-                    // We are happening synchronously, so no need for async.
-                    return;
-                }
-                schedule_and_wait(task);
+                    startAsync(function(value) {
+                    if (ABORT) return;
+                    Asyncify.returnValue = 0;
+                    reachedCallback = true;
+                    if (!reachedAfterCallback) {
+                        // We are happening synchronously, so no need for async.
+                        return;
+                    }
+                    schedule_and_wait(task, js_to_jlboxed(value), 0);
+                },function(value) {
+                    if (ABORT) return;
+                    Asyncify.returnValue = 1;
+                    reachedCallback = true;
+                    if (!reachedAfterCallback) {
+                        // We are happening synchronously, so no need for async.
+                        return;
+                    }
+                    schedule_and_wait(task, js_to_jlboxed(value), 1);
                 });
                 reachedAfterCallback = true;
-                if (!reachedCallback) {
+                if (!reachedCallback && (typeof nowait == "undefined" || !nowait)) {
                     Module['_jl_task_wait']();
                 }
             } else if (Asyncify.state === Asyncify.State.Rewinding) {
@@ -85,8 +93,14 @@ function do_start_task(old_stack)
     maybe_schedule_next();
 }
 
-function schedule_and_wait(task) {
-    Module['_jl_schedule_task'](task);
+function schedule_and_wait(task, result, error) {
+    if (typeof result == "undefined") {
+        result = 0;
+    }
+    if (typeof error == "undefined") {
+        error = 0;
+    }
+    Module['_jl_schedule_task'](task, result, error);
     Module['_jl_task_wait']();
 }
 
@@ -141,4 +155,10 @@ function maybe_schedule_next() {
         return;
     }
     schedule_next()
+}
+
+function enq_wait_promise(promise) {
+    Asyncify.handleSleep(function (wakeUpOk, wakeUpFail) {
+        promise.then(wakeUpOk, wakeUpFail);
+    }, true);
 }

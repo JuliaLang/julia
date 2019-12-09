@@ -511,6 +511,7 @@ function enq_work(t::Task)
     return t
 end
 
+# N.B.: Also called from jl_schedule_task in C
 schedule(t::Task) = enq_work(t)
 
 """
@@ -544,6 +545,11 @@ true
 ```
 """
 function schedule(t::Task, @nospecialize(arg); error=false)
+    _schedule(t, arg, error)
+end
+
+# N.B.: Also called from jl_schedule_task in C
+function _schedule(t::Task, @nospecialize(arg), error::Bool)
     # schedule a task to be (re)started with the given value or exception
     t.state === :runnable || Base.error("schedule: Task not runnable")
     if error

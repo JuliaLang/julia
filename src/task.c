@@ -619,16 +619,28 @@ void JL_DLLEXPORT jl_task_wait()
     jl_get_ptls_states()->world_age = last_age;
 }
 
-void JL_DLLEXPORT jl_schedule_task(jl_task_t *task)
+void JL_DLLEXPORT jl_schedule_task(jl_task_t *task, jl_value_t *result, uint8_t error)
 {
-    static jl_function_t *sched_func = NULL;
-    if (!sched_func) {
-        sched_func = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("schedule"));
-    }
     size_t last_age = jl_get_ptls_states()->world_age;
     jl_get_ptls_states()->world_age = jl_get_world_counter();
-    jl_value_t *args[] = {(jl_value_t*)sched_func, (jl_value_t*)task};
-    jl_apply(args, 2);
+    if (result == NULL) {
+        assert(!error);
+        static jl_function_t *sched_func = NULL;
+        if (!sched_func) {
+            sched_func = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("schedule"));
+        }
+        jl_value_t *args[] = {(jl_value_t*)sched_func, (jl_value_t*)task};
+        jl_apply(args, 2);
+    } else {
+        static jl_function_t *_sched_func = NULL;
+        if (!_sched_func) {
+            JL_GC_PUSH1(result);
+            _sched_func = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_schedule"));
+            JL_GC_POP();
+        }
+        jl_value_t *args[] = {(jl_value_t*)_sched_func, (jl_value_t*)task, result, jl_box_bool(error)};
+        jl_apply(args, 4);
+    }
     jl_get_ptls_states()->world_age = last_age;
 }
 #endif
