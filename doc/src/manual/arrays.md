@@ -310,7 +310,7 @@ inner functions used elsewhere in the language, variables from the enclosing sco
 "captured" in the inner function.  For example, `sum(p[i] - q[i] for i=1:n)`
 captures the three variables `p`, `q` and `n` from the enclosing scope.
 Captured variables can present performance challenges; see
-[performance tips](@ref man-performance-tips).
+[performance tips](@ref man-performance-captured).
 
 
 Ranges in generators and comprehensions can depend on previous ranges by writing multiple `for`
@@ -974,8 +974,8 @@ the length of the tuple returned by [`size`](@ref). For more details on defining
 `AbstractArray` implementations, see the [array interface guide in the interfaces chapter](@ref man-interface-array).
 
 `DenseArray` is an abstract subtype of `AbstractArray` intended to include all arrays where
-elements are stored contiguously in column-major order (see additional notes in
-[Performance Tips](@ref man-performance-tips)). The [`Array`](@ref) type is a specific instance
+elements are stored contiguously in column-major order (see [additional notes in
+Performance Tips](@ref man-performance-column-major)). The [`Array`](@ref) type is a specific instance
 of `DenseArray`;  [`Vector`](@ref) and [`Matrix`](@ref) are aliases for the 1-d and 2-d cases.
 Very few operations are implemented specifically for `Array` beyond those that are required
 for all `AbstractArray`s; much of the array library is implemented in a generic

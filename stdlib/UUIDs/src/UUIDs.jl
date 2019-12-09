@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+This module provides universally unique identifiers (UUIDs),
+along with functions creating the different variants.
+"""
 module UUIDs
 
 using Random
