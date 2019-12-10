@@ -864,9 +864,7 @@ function setindex end
 function setindex(xs::AbstractArray, v, I...)
     T = promote_type(eltype(xs), typeof(v))
     ys = similar(xs, T)
-    if eltype(xs) !== Union{}
-        copy!(ys, xs)
-    end
+    copy!(ys, xs)
     ys[I...] = v
     return ys
 end
