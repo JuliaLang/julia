@@ -66,6 +66,7 @@ struct ObjectInfo {
     const object::ObjectFile *object;
     size_t SectionSize;
     ptrdiff_t slide;
+    object::SectionRef Section;
     DIContext *context;
 };
 
@@ -411,7 +412,8 @@ public:
                 ObjectInfo tmp = {&debugObj,
                     (size_t)SectionSize,
                     (ptrdiff_t)(SectionAddr - SectionLoadAddr),
-                    DWARFContext::create(debugObj).release(),
+                    *Section,
+                    nullptr,
                     };
                 objectmap[SectionLoadAddr] = tmp;
                 first = false;
@@ -483,13 +485,13 @@ JITEventListener *CreateJuliaJITEventListener()
 // with for the current frame. here we'll try to expand it using debug info
 // func_name and file_name are either NULL or malloc'd pointers
 static int lookup_pointer(
-        const object::ObjectFile *object, DIContext *context,
-        jl_frame_t **frames, size_t pointer,
-        int demangle, int noInline)
+        object::SectionRef Section, DIContext *context,
+        jl_frame_t **frames, size_t pointer, int64_t slide,
+        bool demangle, bool noInline)
 {
     // This function is not allowed to reference any TLS variables
     // since it can be called from an unmanaged thread on OSX.
-    if (!context || !object) {
+    if (!context || !Section.getObject()) {
         if (demangle) {
             char *oldname = (*frames)[0].func_name;
             if (oldname != NULL) {
@@ -512,14 +514,14 @@ static int lookup_pointer(
     DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath,
                                  DILineInfoSpecifier::FunctionNameKind::ShortName);
 
-    auto inlineInfo = context->getInliningInfoForAddress(makeAddress(object, pointer), infoSpec);
+    auto inlineInfo = context->getInliningInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
 
     int fromC = (*frames)[0].fromC;
     int n_frames = inlineInfo.getNumberOfFrames();
     if (n_frames == 0) {
         jl_mutex_unlock_maybe_nogc(&codegen_lock);
         // no line number info available in the context, return without the context
-        return lookup_pointer(NULL, NULL, frames, pointer, demangle, noInline);
+        return lookup_pointer(object::SectionRef(), NULL, frames, pointer, slide, demangle, noInline);
     }
     if (noInline)
         n_frames = 1;
@@ -536,7 +538,7 @@ static int lookup_pointer(
             info = inlineInfo.getFrame(i);
         }
         else {
-            info = context->getLineInfoForAddress(makeAddress(object, pointer), infoSpec);
+            info = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
         }
 
         jl_frame_t *frame = &(*frames)[i];
@@ -585,7 +587,6 @@ typedef struct {
     const llvm::object::ObjectFile *obj;
     DIContext *ctx;
     int64_t slide;
-    int64_t section_slide;
 } objfileentry_t;
 typedef std::map<uint64_t, objfileentry_t, revcomp> obfiletype;
 static obfiletype objfilemap;
@@ -750,9 +751,8 @@ static inline void ignoreError(T &err)
 #endif
 }
 
-static void get_function_name_and_base(const object::ObjectFile *object, bool insysimage,
-                                       void **saddr, char **name, size_t pointer,
-                                       int64_t slide, bool untrusted_dladdr)
+static void get_function_name_and_base(llvm::object::SectionRef Section, size_t pointer, int64_t slide, bool insysimage,
+                                       void **saddr, char **name, bool untrusted_dladdr)
 {
     // Assume we only need base address for sysimg for now
     if (!insysimage || !sysimg_fptrs.base)
@@ -779,10 +779,12 @@ static void get_function_name_and_base(const object::ObjectFile *object, bool in
         }
 #endif
     }
-    if (object && (needs_saddr || needs_name)) {
+    if (Section.getObject() && (needs_saddr || needs_name)) {
         size_t distance = (size_t)-1;
         SymRef sym_found;
-        for (auto sym: object->symbols()) {
+        for (auto sym : Section.getObject()->symbols()) {
+            if (!Section.containsSymbol(sym))
+                continue;
             auto addr = sym.getAddress();
             if (!addr)
                 continue;
@@ -1009,11 +1011,9 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname)
         }
 
         int64_t slide = 0;
-        int64_t section_slide = 0;
         if (auto *OF = dyn_cast<const object::COFFObjectFile>(debugobj)) {
             assert(iswindows);
             slide = OF->getImageBase() - fbase;
-            section_slide = 0; // Since LLVM 3.8+ addresses are adjusted correctly
         }
         else {
             slide = -(int64_t)fbase;
@@ -1024,7 +1024,7 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname)
         binary.first.release();
         binary.second.release();
         // update cache
-        entry = {debugobj, context, slide, section_slide};
+        entry = {debugobj, context, slide};
     }
     else {
         // TODO: report the error instead of silently consuming it?
@@ -1034,14 +1034,25 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname)
     return entry;
 }
 
+// from llvm::SymbolizableObjectFile
+static object::SectionRef getModuleSectionForAddress(const object::ObjectFile *obj, uint64_t Address)
+{
+  for (object::SectionRef Sec : obj->sections()) {
+      if (!Sec.isText() || Sec.isVirtual())
+          continue;
+      if (Address >= Sec.getAddress() && Address < Sec.getAddress() + Sec.getSize())
+          return Sec;
+  }
+  return object::SectionRef();
+}
+
+
 extern "C" void jl_refresh_dbg_module_list(void);
-bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, llvm::DIContext **context, int64_t *slide, int64_t *section_slide,
+bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *slide, llvm::DIContext **context,
     bool onlySysImg, bool *isSysImg, void **saddr, char **name, char **filename)
 {
-    *obj = NULL;
+    *Section = object::SectionRef();
     *context = NULL;
-    *slide = 0;
-    *section_slide = 0;
     // On Windows and FreeBSD, `dladdr` (or its equivalent) returns the closest exported symbol
     // without checking the size.
     // This causes the lookup to return incorrect non-NULL result for local functions
@@ -1119,12 +1130,11 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
     fname = dlinfo.dli_fname;
 #endif // ifdef _OS_WINDOWS_
     auto &entry = find_object_file(fbase, fname);
-    *obj = entry.obj;
-    *context = entry.ctx;
     *slide = entry.slide;
-    *section_slide = entry.section_slide;
-    get_function_name_and_base(entry.obj, insysimage, saddr, name, pointer, entry.slide,
-                               untrusted_dladdr);
+    *context = entry.ctx;
+    if (entry.obj)
+        *Section = getModuleSectionForAddress(entry.obj, pointer + entry.slide);
+    get_function_name_and_base(*Section, pointer, entry.slide, insysimage, saddr, name, untrusted_dladdr);
     return true;
 }
 
@@ -1153,12 +1163,12 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
     }
     jl_in_stackwalk = 0;
 #endif
-    const object::ObjectFile *object;
+    object::SectionRef Section;
     llvm::DIContext *context = NULL;
+    int64_t slide;
     bool isSysImg;
     void *saddr;
-    int64_t slide, section_slide;
-    if (!jl_dylib_DI_for_fptr(pointer, &object, &context, &slide, &section_slide, skipC, &isSysImg, &saddr, &frame0->func_name, &frame0->file_name)) {
+    if (!jl_dylib_DI_for_fptr(pointer, &Section, &slide, &context, skipC, &isSysImg, &saddr, &frame0->func_name, &frame0->file_name)) {
         frame0->fromC = 1;
         return 1;
     }
@@ -1180,80 +1190,30 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
             }
         }
     }
-    return lookup_pointer(object, context, frames, pointer + slide, isSysImg, noInline);
+    return lookup_pointer(Section, context, frames, pointer, slide, isSysImg, noInline);
 }
 
-int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide, int64_t *section_slide,
-                      const object::ObjectFile **object,
-                      llvm::DIContext **context
-                      )
+int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
+        object::SectionRef *Section, llvm::DIContext **context) JL_NOTSAFEPOINT
 {
     int found = 0;
-    *slide = 0;
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator fit = objmap.lower_bound(fptr);
 
+    if (symsize)
+        *symsize = 0;
     if (fit != objmap.end() && fptr < fit->first + fit->second.SectionSize) {
-        if (symsize)
-            *symsize = 0;
-        if (section_slide)
-            *section_slide = fit->second.slide;
-        *object = fit->second.object;
+        *slide = fit->second.slide;
+        *Section = fit->second.Section;
         if (context) {
+            if (fit->second.context == nullptr)
+                fit->second.context = DWARFContext::create(*fit->second.object).release();
             *context = fit->second.context;
         }
         found = 1;
     }
     uv_rwlock_rdunlock(&threadsafe);
     return found;
-}
-
-extern "C"
-JL_DLLEXPORT jl_value_t *jl_get_dobj_data(uint64_t fptr)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    // Used by Gallium.jl
-    const object::ObjectFile *object = NULL;
-    DIContext *context;
-    int64_t slide, section_slide;
-    int8_t gc_state = jl_gc_safe_enter(ptls);
-    if (!jl_DI_for_fptr(fptr, NULL, &slide, NULL, &object, NULL))
-        if (!jl_dylib_DI_for_fptr(fptr, &object, &context, &slide, &section_slide, false, NULL, NULL, NULL, NULL)) {
-            jl_gc_safe_leave(ptls, gc_state);
-            return jl_nothing;
-        }
-    jl_gc_safe_leave(ptls, gc_state);
-    if (object == NULL)
-        return jl_nothing;
-    return (jl_value_t*)jl_ptr_to_array_1d((jl_value_t*)jl_array_uint8_type,
-        const_cast<char*>(object->getData().data()),
-        object->getData().size(), false);
-}
-
-extern "C"
-JL_DLLEXPORT uint64_t jl_get_section_start(uint64_t fptr)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    // Used by Gallium.jl
-    int8_t gc_state = jl_gc_safe_enter(ptls);
-    std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
-    std::map<size_t, ObjectInfo, revcomp>::iterator fit = objmap.lower_bound(fptr);
-
-    uint64_t ret = 0;
-    if (fit != objmap.end() && fptr < fit->first + fit->second.SectionSize) {
-        ret = fit->first;
-    }
-    else {
-       obfiletype::iterator objit = objfilemap.lower_bound(fptr);
-       // Ideally we'd have a containment check here, but we can't really
-       // get the shared library size easily.
-       if (objit != objfilemap.end()) {
-           ret = objit->first;
-       }
-    }
-    uv_rwlock_rdunlock(&threadsafe);
-    jl_gc_safe_leave(ptls, gc_state);
-    return ret;
 }
 
 // Set *name and *filename to either NULL or malloc'd string
@@ -1267,12 +1227,12 @@ int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int n
     *frames_out = frames;
 
     llvm::DIContext *context;
-    const object::ObjectFile *object;
+    object::SectionRef Section;
+    int64_t slide;
     uint64_t symsize;
-    int64_t slide = 0;
-    if (jl_DI_for_fptr(pointer, &symsize, &slide, NULL, &object, &context)) {
+    if (jl_DI_for_fptr(pointer, &symsize, &slide, &Section, &context)) {
         frames[0].linfo = jl_jit_events->lookupLinfo(pointer);
-        int nf = lookup_pointer(object, context, frames_out, pointer+slide, 1, noInline);
+        int nf = lookup_pointer(Section, context, frames_out, pointer, slide, true, noInline);
         return nf;
     }
     return jl_getDylibFunctionInfo(frames_out, pointer, skipC, noInline);
