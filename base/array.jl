@@ -847,14 +847,14 @@ replaced with `value`(s).
 ```julia
 y1 = setindex(x, value, key...)
 
-y2 = deepcopy(x)
-setindex!(y2, value, key...)
+y2 = copy′(x)
+@assert convert.(eltype(y2), x) == y2
 
-@assert isequal′(y1, y2)
+y2[key...] = value
+@assert convert.(eltype(y2), y1) == y2
 ```
 
-with a suitable definition of `isequal′` (e.g., elements are approximately but possibly
-not exactly equal), _if_ `setindex!` supports given arguments.
+with a suitable definition of `copy′` such that `y2[key...] = value` succeeds.
 
 `setindex` should support more combinations of arguments by widening collection
 type as required.
