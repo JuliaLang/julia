@@ -33,7 +33,8 @@ Edit a file or directory optionally providing a line number to edit the file at.
 Return to the `julia` prompt when you quit the editor. The editor can be changed
 by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 """
-function edit(path::AbstractString, line::Integer=0)
+function edit(path::AbstractString, line::Integer=0, column::Integer=0)
+    line >= 0 && column >= 0 || throw(ArgumentError("line and column must be >= 0"))
     command = editor()
     name = basename(first(command))
     if endswith(path, ".jl")
@@ -43,12 +44,21 @@ function edit(path::AbstractString, line::Integer=0)
     background = true
     line_unsupported = false
     if startswith(name, "vim.") || name == "vi" || name == "vim" || name == "nvim" ||
-            name == "mvim" || name == "nano" ||
-            name == "emacs" && any(c -> c in ["-nw", "--no-window-system" ], command) ||
-            name == "emacsclient" && any(c -> c in ["-nw", "-t", "-tty"], command)
-        cmd = line != 0 ? `$command +$line $path` : `$command $path`
+            name == "mvim" || startswith(name, "gvim")
+        cmd = line == 0 ? `$command $path` :
+            column == 0 ? `$command +$line $path` :
+            `$command "+normal $(line)G$(column)|" $path`
+        background = startswith(name, "gvim")
+    elseif name == "nano"
+        cmd = `$command +$line,$column $path`
         background = false
-    elseif startswith(name, "emacs") || name == "gedit" || startswith(name, "gvim")
+    elseif name == "emacs" && any(in(["-nw", "--no-window-system"]), command) ||
+            name == "emacsclient" && any(in(["-nw", "-t", "-tty"]), command)
+        cmd = `$command +$line:$column $path`
+        background = false
+    elseif startswith(name, "emacs")
+        cmd = `$command +$line:$column $path`
+    elseif name == "gedit"
         cmd = line != 0 ? `$command +$line $path` : `$command $path`
     elseif name == "textmate" || name == "mate" || name == "kate"
         cmd = line != 0 ? `$command $path -l $line` : `$command $path`
