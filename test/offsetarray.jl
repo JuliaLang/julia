@@ -495,6 +495,19 @@ A = OffsetArray(rand(4,4), (-3,5))
 @test vec(A) == reshape(A, :) == reshape(A, 16) == reshape(A, Val(1)) == A[:] == vec(A.parent)
 A = OffsetArray(view(rand(4,4), 1:4, 4:-1:1), (-3,5))
 @test vec(A) == reshape(A, :) == reshape(A, 16) == reshape(A, Val(1)) == A[:] == vec(A.parent)
+# issue #33614
+A = OffsetArray(-1:0, (-2,))
+@test reshape(A, :) === A
+Arsc = reshape(A, :, 1)
+Arss = reshape(A, 2, 1)
+@test Arsc[1,1] == Arss[1,1] == -1
+@test Arsc[2,1] == Arss[2,1] == 0
+@test_throws BoundsError Arsc[0,1]
+@test_throws BoundsError Arss[0,1]
+A = OffsetArray([-1,0], (-2,))
+Arsc = reshape(A, :, 1)
+Arsc[1,1] = 5
+@test first(A) == 5
 
 # broadcast
 a = [1]
@@ -533,15 +546,15 @@ end
     B = OffsetArray(reshape(1:24, 4, 3, 2), -5, 6, -7)
     for R in (fill(0, -4:-1), fill(0, -4:-1, 7:7), fill(0, -4:-1, 7:7, -6:-6))
         @test @inferred(maximum!(R, B)) == reshape(maximum(B, dims=(2,3)), axes(R)) == reshape(21:24, axes(R))
-        @test @allocated(maximum!(R, B)) <= 400
+        @test @allocated(maximum!(R, B)) <= 800
         @test @inferred(minimum!(R, B)) == reshape(minimum(B, dims=(2,3)), axes(R)) == reshape(1:4, axes(R))
-        @test @allocated(minimum!(R, B)) <= 400
+        @test @allocated(minimum!(R, B)) <= 800
     end
     for R in (fill(0, -4:-4, 7:9), fill(0, -4:-4, 7:9, -6:-6))
         @test @inferred(maximum!(R, B)) == reshape(maximum(B, dims=(1,3)), axes(R)) == reshape(16:4:24, axes(R))
-        @test @allocated(maximum!(R, B)) <= 400
+        @test @allocated(maximum!(R, B)) <= 800
         @test @inferred(minimum!(R, B)) == reshape(minimum(B, dims=(1,3)), axes(R)) == reshape(1:4:9, axes(R))
-        @test @allocated(minimum!(R, B)) <= 400
+        @test @allocated(minimum!(R, B)) <= 800
     end
     @test_throws DimensionMismatch maximum!(fill(0, -4:-1, 7:7, -6:-6, 1:1), B)
     @test_throws DimensionMismatch minimum!(fill(0, -4:-1, 7:7, -6:-6, 1:1), B)

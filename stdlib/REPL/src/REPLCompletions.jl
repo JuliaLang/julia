@@ -184,7 +184,7 @@ function complete_keyword(s::Union{String,SubString{String}})::Vector{Completion
     map(KeywordCompletion, sorted_keywords[r])
 end
 
-function complete_path(path::AbstractString, pos; use_envpath=false)::Completions
+function complete_path(path::AbstractString, pos; use_envpath=false, shell_escape=false)::Completions
     if Base.Sys.isunix() && occursin(r"^~(?:/|$)", path)
         # if the path is just "~", don't consider the expanded username as a prefix
         if path == "~"
@@ -259,7 +259,7 @@ function complete_path(path::AbstractString, pos; use_envpath=false)::Completion
         end
     end
 
-    matchList = Completion[PathCompletion(replace(s, r"\s" => "\\ ")) for s in matches]
+    matchList = Completion[PathCompletion(shell_escape ? replace(s, r"\s" => s"\\\0") : s) for s in matches]
     startpos = pos - lastindex(prefix) + 1 - count(isequal(' '), prefix)
     # The pos - lastindex(prefix) + 1 is correct due to `lastindex(prefix)-lastindex(prefix)==0`,
     # hence we need to add one to get the first index. This is also correct when considering
@@ -337,7 +337,7 @@ end
 # will show it consist of Expr, QuoteNode's and Symbol's which all needs to
 # be handled differently to iterate down to get the value of whitespace_chars.
 function get_value(sym::Expr, fn)
-    sym.head != :. && return (nothing, false)
+    sym.head !== :. && return (nothing, false)
     for ex in sym.args
         fn, found = get_value(ex, fn)
         !found && return (nothing, false)
@@ -552,12 +552,12 @@ function project_deps_get_completion_candidates(pkgstarts::String, project_file:
         for line in eachline(io)
             if occursin(Base.re_section, line)
                 state = occursin(Base.re_section_deps, line) ? :deps : :other
-            elseif state == :top
+            elseif state === :top
                 if (m = match(Base.re_name_to_string, line)) !== nothing
                     root_name = String(m.captures[1])
                     startswith(root_name, pkgstarts) && push!(loading_candidates, root_name)
                 end
-            elseif state == :deps
+            elseif state === :deps
                 if (m = match(Base.re_key_to_string, line)) !== nothing
                     dep_name = m.captures[1]
                     startswith(dep_name, pkgstarts) && push!(loading_candidates, dep_name)
@@ -592,7 +592,7 @@ function completions(string, pos, context_module=Main)::Completions
 
         paths, r, success = complete_path(replace(string[r], r"\\ " => " "), pos)
 
-        if inc_tag == :string &&
+        if inc_tag === :string &&
            length(paths) == 1 &&  # Only close if there's a single choice,
            !isdir(expanduser(replace(string[startpos:prevind(string, first(r))] * paths[1].path,
                                      r"\\ " => " "))) &&  # except if it's a directory
@@ -610,7 +610,7 @@ function completions(string, pos, context_module=Main)::Completions
 
     # Make sure that only bslash_completions is working on strings
     inc_tag==:string && return String[], 0:-1, false
-    if inc_tag == :other && should_method_complete(partial)
+    if inc_tag === :other && should_method_complete(partial)
         frange, method_name_end = find_start_brace(partial)
         ex = Meta.parse(partial[frange] * ")", raise=false, depwarn=false)
 
@@ -621,7 +621,7 @@ function completions(string, pos, context_module=Main)::Completions
                 return complete_methods(ex, context_module), first(frange):(method_name_end - 1), false
             end
         end
-    elseif inc_tag == :comment
+    elseif inc_tag === :comment
         return Completion[], 0:-1, false
     end
 
@@ -728,7 +728,7 @@ function shell_completions(string, pos)::Completions
         # Also try looking into the env path if the user wants to complete the first argument
         use_envpath = !ignore_last_word && length(args.args) < 2
 
-        return complete_path(prefix, pos, use_envpath=use_envpath)
+        return complete_path(prefix, pos, use_envpath=use_envpath, shell_escape=true)
     elseif isexpr(arg, :incomplete) || isexpr(arg, :error)
         partial = scs[last_parse]
         ret, range = completions(partial, lastindex(partial))

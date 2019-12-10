@@ -390,20 +390,29 @@ JL_DLLEXPORT int jl_is_enter_interpreter_frame(uintptr_t ip)
     return enter_interpreter_frame_start <= ip && ip <= enter_interpreter_frame_end;
 }
 
-JL_DLLEXPORT size_t jl_capture_interp_frame(uintptr_t *data, uintptr_t sp, uintptr_t fp, size_t space_remaining)
+JL_DLLEXPORT size_t jl_capture_interp_frame(jl_bt_element_t *bt_entry, uintptr_t sp,
+                                            uintptr_t fp, size_t space_remaining)
 {
 #ifdef FP_CAPTURE_OFFSET
     interpreter_state *s = (interpreter_state *)(fp-FP_CAPTURE_OFFSET);
 #else
     interpreter_state *s = (interpreter_state *)(sp+TOTAL_STACK_PADDING);
 #endif
-    int required_space = 3;
+    int need_module = !s->mi;
+    int required_space = need_module ? 4 : 3;
     if (space_remaining < required_space)
-        return 0;
-    // Sentinel value to indicate an interpreter frame
-    data[0] = JL_BT_INTERP_FRAME;
-    data[1] = s->mi ? (uintptr_t)s->mi : s->src ? (uintptr_t)s->src : (uintptr_t)jl_nothing;
-    data[2] = (uintptr_t)s->ip;
+        return 0; // Should not happen
+    size_t njlvalues = need_module ? 2 : 1;
+    uintptr_t entry_tags = jl_bt_entry_descriptor(njlvalues, 0, JL_BT_INTERP_FRAME_TAG, s->ip);
+    bt_entry[0].uintptr = JL_BT_NON_PTR_ENTRY;
+    bt_entry[1].uintptr = entry_tags;
+    bt_entry[2].jlvalue = s->mi  ? (jl_value_t*)s->mi  :
+                          s->src ? (jl_value_t*)s->src : (jl_value_t*)jl_nothing;
+    if (need_module) {
+        // If we only have a CodeInfo (s->src), we are in a top level thunk and
+        // need to record the module separately.
+        bt_entry[3].jlvalue = (jl_value_t*)s->module;
+    }
     return required_space;
 }
 
@@ -419,7 +428,8 @@ JL_DLLEXPORT int jl_is_enter_interpreter_frame(uintptr_t ip)
     return 0;
 }
 
-JL_DLLEXPORT size_t jl_capture_interp_frame(uintptr_t *data, uintptr_t sp, uintptr_t fp, size_t space_remaining)
+JL_DLLEXPORT size_t jl_capture_interp_frame(jl_bt_element_t *bt_entry, uintptr_t sp,
+                                            uintptr_t fp, size_t space_remaining)
 {
     // Leave bt_entry[0] as the native instruction ptr
     return 0;

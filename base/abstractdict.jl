@@ -77,7 +77,8 @@ function keys end
 
 Return an iterator over all keys in a dictionary.
 `collect(keys(a))` returns an array of keys.
-Since the keys are stored internally in a hash table,
+When the keys are stored internally in a hash table,
+as is the case for `Dict`,
 the order in which they are returned may vary.
 But `keys(a)` and `values(a)` both iterate `a` and
 return the elements in the same order.
@@ -102,7 +103,8 @@ keys(a::AbstractDict) = KeySet(a)
 
 Return an iterator over all values in a collection.
 `collect(values(a))` returns an array of values.
-Since the values are stored internally in a hash table,
+When the values are stored internally in a hash table,
+as is the case for `Dict`,
 the order in which they are returned may vary.
 But `keys(a)` and `values(a)` both iterate `a` and
 return the elements in the same order.
@@ -708,8 +710,8 @@ end
     map!(f, values(dict::AbstractDict))
 
 Modifies `dict` by transforming each value from `val` to `f(val)`.
-Note that the type of `dict` cannot be changed: if `f(val)` is not an instance of the key type
-of `dict` then it will be converted to the key type if possible and otherwise raise an error.
+Note that the type of `dict` cannot be changed: if `f(val)` is not an instance of the value type
+of `dict` then it will be converted to the value type if possible and otherwise raise an error.
 
 # Examples
 ```jldoctest

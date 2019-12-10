@@ -1116,8 +1116,7 @@
               (cond
                ((eventually-call? (cadar binds))
                 ;; f() = c
-                (let ((asgn (butlast (expand-forms (car binds))))
-                      (name (assigned-name (cadar binds))))
+                (let ((name (assigned-name (cadar binds))))
                   (if (not (symbol? name))
                       (error "invalid let syntax"))
                   (loop (cdr binds)
@@ -1126,7 +1125,7 @@
                            ,(if (expr-contains-eq name (caddar binds))
                                 `(local ,name) ;; might need a Box for recursive functions
                                 `(local-def ,name))
-                           ,asgn
+                           ,(car binds)
                            ,blk)))))
                ((or (symbol? (cadar binds))
                     (decl?   (cadar binds)))
@@ -2096,7 +2095,7 @@
                                            (tuple-wrap (cdr a) '())))
                                 (tuple-wrap (cdr a) (cons x run))))))
                     (expand-forms
-                     `(call (core _apply) ,f ,@(tuple-wrap argl '())))))
+                     `(call (core _apply_iterate) (top iterate) ,f ,@(tuple-wrap argl '())))))
 
                  ((and (eq? (identifier-name f) '^) (length= e 4) (integer? (cadddr e)))
                   (expand-forms
@@ -2496,6 +2495,10 @@
                                    (call (top setindex!) ,d ,var (quote ,v)))))
                           names)
                    ,d)))
+        ((eq? (car e) 'islocal)
+         (if (memq (var-kind (cadr e) scope) '(global none))
+             'false
+             'true))
         ((eq? (car e) 'lambda)
          (let* ((args (lam:vars e))
                 (body (resolve-scopes- (lam:body e) (make-scope e args '() '() sp '() scope))))
@@ -4012,6 +4015,11 @@ f(x) = yt(x)
                (if (and tail (not have-ret?))
                    (emit-return '(null)))
                '(null)))
+
+            ;; unsupported assignment operators
+            ((≔ ⩴ ≕ :=)
+             (error (string "unsupported assignment operator \"" (deparse (car e)) "\"")))
+
             ((error)
              (error (cadr e)))
             (else

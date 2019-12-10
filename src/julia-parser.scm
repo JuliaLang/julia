@@ -1046,10 +1046,11 @@
           ((eqv? next #\( )
            (take-token s)
            (let* ((opspc  (ts:space? s))
+                  (lno    (input-port-line (ts:port s)))
                   (parens (parse-paren- s #t)))
              (if (cdr parens) ;; found an argument list
                  (if opspc
-                     (disallowed-space op #\( )
+                     (disallowed-space-error lno op #\( )
                      (parse-factor-with-initial-ex
                       s
                       (fix-syntactic-unary (cons op (tuple-to-arglist (car parens))))))
@@ -1135,9 +1136,14 @@
         (parse-where-chain s decl-sig)
         decl-sig)))
 
-(define (disallowed-space ex t)
+(define (disallowed-space-error lno ex t)
   (error (string "space before \"" t "\" not allowed in \""
-                 (deparse ex) " " t "\"")))
+                 (deparse ex) " " t "\" at "
+                 current-filename ":" lno)))
+
+(define (disallow-space s ex t)
+  (if (ts:space? s)
+      (disallowed-space-error (input-port-line (ts:port s)) ex t)))
 
 ;; string macro suffix for given delimiter t
 (define (macsuffix t)
@@ -1156,7 +1162,7 @@
           ex
           (case t
             ((#\( )
-             (if (ts:space? s) (disallowed-space ex t))
+             (disallow-space s ex t)
              (take-token s)
              (let ((c (let ((al (parse-call-arglist s #\) )))
                         (receive
@@ -1177,7 +1183,7 @@
                         c)
                    (loop c))))
             ((#\[ )
-             (if (ts:space? s) (disallowed-space ex t))
+             (disallow-space s ex t)
              (take-token s)
              ;; ref is syntax, so we can distinguish
              ;; a[i] = x  from
@@ -1197,14 +1203,13 @@
                           (loop (list* 'typed_comprehension ex (cdr al))))
                          (else (error "unknown parse-cat result (internal error)")))))))
             ((|.|)
-             (if (ts:space? s) (disallowed-space ex t))
+             (disallow-space s ex t)
              (take-token s)
              (loop
               (cond ((eqv? (peek-token s) #\()
                      (begin
                        (if (ts:space? s)
-                           (error (string "space before \"(\" not allowed in \""
-                                          (deparse ex) ". (\"")))
+                           (disallow-space s `(|.| ,ex (quote ||)) #\())
                        (take-token s)
                        `(|.| ,ex (tuple ,@(parse-call-arglist s #\) )))))
                     ((eqv? (peek-token s) ':)
@@ -1231,7 +1236,7 @@
              (loop (list t ex)))
             ((|.'|) (error "the \".'\" operator is discontinued"))
             ((#\{ )
-             (if (ts:space? s) (disallowed-space ex t))
+             (disallow-space s ex t)
              (take-token s)
              (loop (list* 'curly ex (parse-call-arglist s #\} ))))
             ((#\" #\`)
@@ -1600,7 +1605,7 @@
     (let ((nxt (peek-token s)))
       (cond
        ((eq? nxt '|.|)
-        (if (ts:space? s) (disallowed-space word nxt))
+        (disallow-space s (car path) nxt)
         (take-token s)
         (loop (cons (unquote (macrocall-to-atsym (parse-unary-prefix s))) path)))
        ((or (memv nxt '(#\newline #\; #\, :))
@@ -2342,8 +2347,7 @@
           ((eqv? t #\@)
            (take-token s)
            (let ((nxt (peek-token s)))
-             (if (ts:space? s)
-                 (disallowed-space '@ nxt)))
+             (disallow-space s '@ nxt))
            (with-space-sensitive
             (let ((startloc  (line-number-node s))
                   (head (if (eq? (peek-token s) '|.|)

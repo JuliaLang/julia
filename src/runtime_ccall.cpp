@@ -195,13 +195,22 @@ static void *trampoline_alloc()
 {
     const int sz = 64; // oversized for most platforms. todo: use precise value?
     if (!trampoline_freelist) {
+        int last_errno = errno;
 #ifdef _OS_WINDOWS_
+        DWORD last_error = GetLastError();
         void *mem = VirtualAlloc(NULL, jl_page_size,
                 MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+        if (mem == NULL)
+            jl_throw(jl_memory_exception);
+        SetLastError(last_error);
 #else
         void *mem = mmap(0, jl_page_size, PROT_READ | PROT_WRITE | PROT_EXEC,
                 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        errno = last_errno;
+        if (mem == MAP_FAILED)
+            jl_throw(jl_memory_exception);
 #endif
+        errno = last_errno;
         void *next = NULL;
         for (size_t i = 0; i + sz <= jl_page_size; i += sz) {
             void **curr = (void**)((char*)mem + i);
@@ -260,7 +269,7 @@ jl_value_t *jl_get_cfunction_trampoline(
         htable_t **cache2 = (htable_t**)ptrhash_bp(cache, (void*)vals);
         cache = *cache2;
         if (cache == HT_NOTFOUND) {
-            cache = htable_new((htable_t*)malloc(sizeof(htable_t)), 1);
+            cache = htable_new((htable_t*)malloc_s(sizeof(htable_t)), 1);
             *cache2 = cache;
         }
     }
@@ -272,7 +281,7 @@ jl_value_t *jl_get_cfunction_trampoline(
 
     // not found, allocate a new one
     size_t n = jl_svec_len(fill);
-    void **nval = (void**)malloc(sizeof(void*) * (n + 1));
+    void **nval = (void**)malloc_s(sizeof(void*) * (n + 1));
     nval[0] = (void*)fobj;
     jl_value_t *result;
     JL_TRY {

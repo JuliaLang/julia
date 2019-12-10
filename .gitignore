@@ -17,6 +17,7 @@
 *.dwo
 *.do
 *.o
+*.o.tmp
 *.obj
 *.so
 *.dylib

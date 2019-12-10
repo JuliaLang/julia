@@ -332,17 +332,11 @@ restart_switch:
         case 'L': // load
         {
             size_t sz = strlen(optarg) + 1;
-            char *arg = (char*)malloc(sz + 1);
+            char *arg = (char*)malloc_s(sz + 1);
             const char **newcmds;
-            if (!arg)
-                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
             arg[0] = c;
             memcpy(arg + 1, optarg, sz);
-            newcmds = (const char**)realloc(cmds, (ncmds + 2) * sizeof(char*));
-            if (!newcmds) {
-                free(cmds);
-                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
-            }
+            newcmds = (const char**)realloc_s(cmds, (ncmds + 2) * sizeof(char*));
             cmds = newcmds;
             cmds[ncmds] = arg;
             ncmds++;
@@ -626,26 +620,6 @@ restart_switch:
     int proc_args = *argcp < optind ? *argcp : optind;
     *argvp += proc_args;
     *argcp -= proc_args;
-}
-
-JL_DLLEXPORT void jl_set_ARGS(int argc, char **argv)
-{
-    if (jl_core_module != NULL) {
-        jl_array_t *args = (jl_array_t*)jl_get_global(jl_core_module, jl_symbol("ARGS"));
-        if (args == NULL) {
-            args = jl_alloc_vec_any(0);
-            JL_GC_PUSH1(&args);
-            jl_set_const(jl_core_module, jl_symbol("ARGS"), (jl_value_t*)args);
-            JL_GC_POP();
-        }
-        assert(jl_array_len(args) == 0);
-        jl_array_grow_end(args, argc);
-        int i;
-        for (i=0; i < argc; i++) {
-            jl_value_t *s = (jl_value_t*)jl_cstr_to_string(argv[i]);
-            jl_arrayset(args, s, i);
-        }
-    }
 }
 
 JL_DLLEXPORT ssize_t jl_sizeof_jl_options(void)

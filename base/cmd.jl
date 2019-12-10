@@ -102,6 +102,8 @@ shell_escape(cmd::Cmd; special::AbstractString="") =
     shell_escape(cmd.exec..., special=special)
 shell_escape_posixly(cmd::Cmd) =
     shell_escape_posixly(cmd.exec...)
+shell_escape_winsomely(cmd::Cmd) =
+    shell_escape_winsomely(cmd.exec...)
 
 function show(io::IO, cmd::Cmd)
     print_env = cmd.env !== nothing

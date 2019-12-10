@@ -21,7 +21,7 @@ other string macros and pass them to the `@doc` macro just as well.
 !!! note
     Markdown support is implemented in the `Markdown` standard library
     and for a full list of supported syntax see the
-    [documentation](@ref Markdown).
+    [documentation](@ref markdown_stdlib).
 
 Here is a more complex example, still using Markdown:
 

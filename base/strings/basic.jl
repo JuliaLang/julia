@@ -565,7 +565,6 @@ isascii(s::AbstractString) = all(isascii, s)
 isascii(c::AbstractChar) = UInt32(c) < 0x80
 
 ## string map, filter, has ##
-
 function map(f, s::AbstractString)
     out = IOBuffer(sizehint=sizeof(s))
     for c in s
@@ -575,6 +574,22 @@ function map(f, s::AbstractString)
         write(out, c′::AbstractChar)
     end
     String(take!(out))
+end
+
+function map(f, s::String)
+    out = StringVector(max(4, sizeof(s)÷sizeof(codeunit(s))))
+    index = UInt(1)
+    for c in s
+        c′ = f(c)
+        isa(c′, Char) || throw(ArgumentError(
+            "map(f, s::String) requires f to return Char; " *
+            "try map(f, collect(s)) or a comprehension instead"))
+        index + 3 > length(out) && resize!(out, unsigned(2 * length(out)))
+        index += __unsafe_string!(out, c′, index)
+    end
+    resize!(out, index-1)
+    sizehint!(out, index-1)
+    return String(out)
 end
 
 function filter(f, s::AbstractString)

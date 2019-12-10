@@ -213,7 +213,6 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 
     // Run instcombine after redundancy elimination to exploit opportunities
     // opened up by them.
-    PM->add(createSinkingPass()); ////////////// ****
 #if JL_LLVM_VERSION < 70000
     // This pass is a subset of InstructionCombiningPass in LLVM 7
     // and therefore not required.

@@ -317,10 +317,10 @@ datatype_fieldtypes(x::DataType) = ccall(:jl_get_fieldtypes, Any, (Any,), x)
 
 struct DataTypeLayout
     nfields::UInt32
+    npointers::UInt32
     alignment::UInt32
-    # alignment : 28;
+    # alignment : 9;
     # haspadding : 1;
-    # pointerfree : 1;
     # fielddesc_type : 2;
 end
 
@@ -380,8 +380,8 @@ Can be called on any `isconcretetype`.
 function datatype_pointerfree(dt::DataType)
     @_pure_meta
     dt.layout == C_NULL && throw(UndefRefError())
-    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
-    return (alignment >> 10) & 0xFFFFF == 0
+    npointers = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).npointers
+    return npointers == 0
 end
 
 """
@@ -397,7 +397,7 @@ function datatype_fielddesc_type(dt::DataType)
     @_pure_meta
     dt.layout == C_NULL && throw(UndefRefError())
     alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
-    return (alignment >> 30) & 3
+    return (alignment >> 10) & 3
 end
 
 """
@@ -589,7 +589,9 @@ end
 Compute a type that contains the intersection of `T` and `S`. Usually this will be the
 smallest such type or one close to it.
 """
-typeintersect(@nospecialize(a),@nospecialize(b)) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any,Any), a, b))
+typeintersect(@nospecialize(a), @nospecialize(b)) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any, Any), a, b))
+
+morespecific(@nospecialize(a), @nospecialize(b)) = ccall(:jl_type_morespecific, Cint, (Any, Any), a, b) != 0
 
 """
     fieldoffset(type, i)
@@ -792,10 +794,10 @@ Note that an error will be thrown if `types` are not leaf types when `generated`
 function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=true, debuginfo::Symbol=:default)
     if @isdefined(IRShow)
         debuginfo = IRShow.debuginfo(debuginfo)
-    elseif debuginfo == :default
+    elseif debuginfo === :default
         debuginfo = :source
     end
-    if debuginfo != :source && debuginfo != :none
+    if debuginfo !== :source && debuginfo !== :none
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     return map(method_instances(f, t)) do m
@@ -809,7 +811,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
             end
         end
         code = uncompressed_ast(m.def::Method)
-        debuginfo == :none && remove_linenums!(code)
+        debuginfo === :none && remove_linenums!(code)
         return code
     end
 end
@@ -1079,10 +1081,10 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
     end
     if @isdefined(IRShow)
         debuginfo = IRShow.debuginfo(debuginfo)
-    elseif debuginfo == :default
+    elseif debuginfo === :default
         debuginfo = :source
     end
-    if debuginfo != :source && debuginfo != :none
+    if debuginfo !== :source && debuginfo !== :none
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     types = to_tuple_type(types)
@@ -1091,7 +1093,7 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
         meth = func_for_method_checked(x[3], types, x[2])
         (code, ty) = Core.Compiler.typeinf_code(meth, x[1], x[2], optimize, params)
         code === nothing && error("inference not successful") # inference disabled?
-        debuginfo == :none && remove_linenums!(code)
+        debuginfo === :none && remove_linenums!(code)
         push!(asts, code => ty)
     end
     return asts

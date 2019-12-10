@@ -164,6 +164,7 @@ add_tfunc(floor_llvm, 1, 1, math_tfunc, 10)
 add_tfunc(trunc_llvm, 1, 1, math_tfunc, 10)
 add_tfunc(rint_llvm, 1, 1, math_tfunc, 10)
 add_tfunc(sqrt_llvm, 1, 1, math_tfunc, 20)
+add_tfunc(sqrt_llvm_fast, 1, 1, math_tfunc, 20)
     ## same-type comparisons ##
 cmp_tfunc(@nospecialize(x), @nospecialize(y)) = Bool
 add_tfunc(eq_int, 2, 2, cmp_tfunc, 1)
@@ -997,7 +998,7 @@ function apply_type_nothrow(argtypes::Array{Any, 1}, @nospecialize(rt))
     for i = 2:length(argtypes)
         isa(u, UnionAll) || return false
         ai = widenconditional(argtypes[i])
-        if ai === TypeVar
+        if ai ⊑ TypeVar
             # We don't know anything about the bounds of this typevar, but as
             # long as the UnionAll is not constrained, that's ok.
             if !(u.var.lb === Union{} && u.var.ub === Any)
@@ -1440,14 +1441,7 @@ function return_type_tfunc(argtypes::Vector{Any}, vtypes::VarTable, sv::Inferenc
                     if contains_is(argtypes_vec, Union{})
                         return Const(Union{})
                     end
-                    astype = argtypes_to_type(argtypes_vec)
-                    if isa(aft, Const)
-                        rt = abstract_call(aft.val, nothing, argtypes_vec, vtypes, sv, -1)
-                    elseif isconstType(aft)
-                        rt = abstract_call(aft.parameters[1], nothing, argtypes_vec, vtypes, sv, -1)
-                    else
-                        rt = abstract_call_gf_by_type(nothing, argtypes_vec, astype, sv, -1)
-                    end
+                    rt = abstract_call(nothing, argtypes_vec, vtypes, sv, -1)
                     if isa(rt, Const)
                         # output was computed to be constant
                         return Const(typeof(rt.val))

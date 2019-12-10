@@ -188,7 +188,7 @@ for op in (:neg, :com, :sqrt, :set)
         $op!(x::BigInt, a::BigInt) = (ccall($(gmpz(op)), Cvoid, (mpz_t, mpz_t), x, a); x)
         $op(a::BigInt) = $op!(BigInt(), a)
     end
-    op == :set && continue # MPZ.set!(x) would make no sense
+    op === :set && continue # MPZ.set!(x) would make no sense
     @eval $op!(x::BigInt) = $op!(x, x)
 end
 

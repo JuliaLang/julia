@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module MiniCassette
     # A minimal demonstration of the cassette mechanism. Doesn't support all the
     # fancy features, but sufficient to exercise this code path in the compiler.

@@ -157,7 +157,7 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
         return !(t ⊑ Bool)
     end
     if isa(stmt, Expr)
-        return stmt.head != :loopinfo && stmt.head != :enter
+        return stmt.head !== :loopinfo && stmt.head !== :enter
     end
     return true
 end
@@ -167,7 +167,7 @@ function optimize(opt::OptimizationState, @nospecialize(result))
     def = opt.linfo.def
     nargs = Int(opt.nargs) - 1
     @timeit "optimizer" ir = run_passes(opt.src, nargs, opt)
-    force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] == :noinline, ir.meta)
+    force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
 
     # compute inlining and other related optimizations
     if (isa(result, Const) || isconstType(result))
@@ -262,6 +262,7 @@ function is_pure_intrinsic_infer(f::IntrinsicFunction)
              f === Intrinsics.llvmcall ||   # this one is never effect-free
              f === Intrinsics.arraylen ||   # this one is volatile
              f === Intrinsics.sqrt_llvm ||  # this one may differ at runtime (by a few ulps)
+             f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
              f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
 end
 

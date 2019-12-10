@@ -55,7 +55,6 @@ static inline void sanitizer_finish_switch_fiber(void) {}
 #if defined(_OS_WINDOWS_)
 volatile int jl_in_stackwalk = 0;
 #else
-#include <sys/mman.h> // mmap
 #ifdef JL_HAVE_UCONTEXT
 #include <ucontext.h>
 #endif
@@ -148,8 +147,9 @@ static void NOINLINE JL_NORETURN restore_stack(jl_task_t *t, jl_ptls_t ptls, cha
         }
         restore_stack(t, ptls, p); // pass p to ensure the compiler can't tailcall this or avoid the alloca
     }
-    assert(t->stkbuf != NULL);
-    memcpy_a16((uint64_t*)_x, (uint64_t*)t->stkbuf, nb); // destroys all but the current stackframe
+    void *_y = t->stkbuf;
+    assert(_x != NULL && _y != NULL);
+    memcpy_a16((uint64_t*)_x, (uint64_t*)_y, nb); // destroys all but the current stackframe
 
     sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
     jl_set_fiber(&t->ctx);
@@ -159,8 +159,9 @@ static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *lastt)
 {
     size_t nb = t->copy_stack;
     char *_x = (char*)ptls->stackbase - nb;
-    assert(t->stkbuf != NULL);
-    memcpy_a16((uint64_t*)_x, (uint64_t*)t->stkbuf, nb); // destroys all but the current stackframe
+    void *_y = t->stkbuf;
+    assert(_x != NULL && _y != NULL);
+    memcpy_a16((uint64_t*)_x, (uint64_t*)_y, nb); // destroys all but the current stackframe
     sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
     jl_swap_fiber(&lastt->ctx, &t->ctx);
     sanitizer_finish_switch_fiber();
@@ -262,9 +263,8 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
         arraylist_new(locks, 0);
     }
 
-    int started = t->started;
     int killed = (lastt->state == done_sym || lastt->state == failed_sym);
-    if (!started && !t->copy_stack) {
+    if (!t->started && !t->copy_stack) {
         // may need to allocate the stack
         if (t->stkbuf == NULL) {
             t->stkbuf = jl_alloc_fiber(&t->ctx, &t->bufsz, t);
@@ -325,7 +325,7 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
         // after restoring the stack
         lastt_ctx = NULL;
 #endif
-    if (started) {
+    if (t->started) {
 #ifdef COPY_STACKS
         if (t->copy_stack) {
             if (lastt_ctx)
@@ -518,7 +518,7 @@ JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
     if (!excstack || excstack->top == 0)
         jl_error("rethrow(exc) not allowed outside a catch block");
     // overwrite exception on top of stack. see jl_excstack_exception
-    jl_excstack_raw(excstack)[excstack->top-1] = (uintptr_t)e;
+    jl_excstack_raw(excstack)[excstack->top-1].jlvalue = e;
     JL_GC_PROMISE_ROOTED(e);
     throw_internal(NULL);
 }
@@ -673,7 +673,7 @@ STATIC_OR_JS void NOINLINE JL_NORETURN start_task(void)
     if (t->exception != jl_nothing) {
         record_backtrace(ptls, 0);
         jl_push_excstack(&t->excstack, t->exception,
-                          ptls->bt_data, ptls->bt_size);
+                         ptls->bt_data, ptls->bt_size);
         res = t->exception;
     }
     else {

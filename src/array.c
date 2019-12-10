@@ -933,8 +933,8 @@ STATIC_INLINE void jl_array_shrink(jl_array_t *a, size_t dec)
     if (a->flags.how == 0) return;
 
     size_t elsz = a->elsize;
-    int newbytes = (a->maxsize - dec) * a->elsize;
-    int oldnbytes = (a->maxsize) * a->elsize;
+    size_t newbytes = (a->maxsize - dec) * a->elsize;
+    size_t oldnbytes = (a->maxsize) * a->elsize;
     int isbitsunion = jl_array_isbitsunion(a);
     if (isbitsunion) {
         newbytes += a->maxsize - dec;
@@ -954,12 +954,12 @@ STATIC_INLINE void jl_array_shrink(jl_array_t *a, size_t dec)
         char *typetagdata;
         char *newtypetagdata;
         if (isbitsunion) {
-            typetagdata = (char*)malloc(a->nrows);
+            typetagdata = (char*)malloc_s(a->nrows);
             memcpy(typetagdata, jl_array_typetagdata(a), a->nrows);
         }
         size_t oldoffsnb = a->offset * elsz;
-        a->data = ((char*) jl_gc_managed_realloc(originalptr, newbytes, oldnbytes,
-                                        a->flags.isaligned, (jl_value_t*) a)) + oldoffsnb;
+        a->data = ((char*)jl_gc_managed_realloc(originalptr, newbytes, oldnbytes,
+                a->flags.isaligned, (jl_value_t*) a)) + oldoffsnb;
         a->maxsize -= dec;
         if (isbitsunion) {
             newtypetagdata = jl_array_typetagdata(a);
@@ -1107,7 +1107,7 @@ JL_DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz)
 {
     size_t n = jl_array_nrows(a);
 
-    int min = a->offset + a->length;
+    size_t min = a->offset + a->length;
     sz = (sz < min) ? min : sz;
 
     if (sz <= a->maxsize) {

@@ -510,6 +510,7 @@ let text =
     """,
     table = Markdown.parse(text)
     @test text == Markdown.plain(table)
+    @test Markdown.html(table) == """<table><tr><th align="left">Markdown</th><th align="center">Table</th><th align="right">Test</th></tr><tr><td align="left">foo</td><td align="center"><code>bar</code></td><td align="right"><em>baz</em></td></tr><tr><td align="left"><code>bar</code></td><td align="center">baz</td><td align="right"><em>foo</em></td></tr></table>\n"""
 end
 let text =
     """
@@ -519,6 +520,7 @@ let text =
     """,
     table = Markdown.parse(text)
     @test text == Markdown.plain(table)
+    @test Markdown.html(table) == """<table><tr><th align="left">a</th><th align="right">b</th></tr><tr><td align="left"><code>x | y</code></td><td align="right">2</td></tr></table>\n"""
 end
 
 # LaTeX extension
