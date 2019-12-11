@@ -600,6 +600,7 @@ static void *signal_listener(void *arg)
         if (sigwait(&sset, &sig)) {
             sig = SIGABRT; // this branch can't occur, unless we had stack memory corruption of sset
         }
+#ifdef _OS_DARWIN_
         else if (!sig || errno == EINTR) {
             // This should never happen, but it has been observed to occur
             // when this thread gets used to handle run a signal handler (without SA_RESTART).
@@ -612,6 +613,7 @@ static void *signal_listener(void *arg)
             // So signals really do seem to always just be lose-lose.
             continue;
         }
+#endif
 #ifndef HAVE_MACH
 #  ifdef HAVE_ITIMER
         profile = (sig == SIGPROF);
