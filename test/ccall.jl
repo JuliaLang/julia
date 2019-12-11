@@ -1537,9 +1537,8 @@ let
 end
 
 # issue #34061
-sysimg = unsafe_string(Base.JLOptions().image_file)
 o_file = tempname()
-run(`$(Base.julia_cmd()) -J$sysimg --output-o=$o_file -e 'Base.reinit_stdio();
+run(`$(Base.julia_cmd()) --output-o=$o_file -e 'Base.reinit_stdio();
     f() = ccall((:dne, :does_not_exist), Cvoid, ());
     precompile(f, ())'`)
 @test isfile(o_file)
