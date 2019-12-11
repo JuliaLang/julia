@@ -67,7 +67,7 @@ function test_repr(x::String, remove_linenums::Bool = false)
     x1 = Meta.parse(x)
     x2 = eval(Meta.parse(repr(x1)))
     x3 = eval(Meta.parse(repr(x2)))
-    if ! (x1 == x2 == x3)
+    if ! (Base.remove_linenums!(x1) == Base.remove_linenums!(x2) == Base.remove_linenums!(x3))
         error(string(
             "\nrepr test (Rule 2) failed:",
             "\noriginal: ", x,
@@ -1946,3 +1946,10 @@ end
 @test sprint(show, Symbol("true")) == "Symbol(\"true\")"
 @test sprint(show, Symbol(false)) == "Symbol(\"false\")"
 @test sprint(show, Symbol("false")) == "Symbol(\"false\")"
+
+# begin/end indices
+@test_repr "a[begin, end, (begin; end)]"
+@test repr(Base.remove_linenums!(:(a[begin, end, (begin; end)]))) == ":(a[begin, end, (begin;\n          end)])"
+@test_repr "a[begin, end, let x=1; (x+1;); end]"
+@test repr(Base.remove_linenums!(:(a[begin, end, let x=1; (x+1;); end]))) ==
+        ":(a[begin, end, let x = 1\n          begin\n              x + 1\n          end\n      end])"
