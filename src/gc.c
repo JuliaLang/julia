@@ -2413,8 +2413,7 @@ mark: {
             }
             const jl_datatype_layout_t *layout = jl_task_type->layout;
             assert(layout->fielddesc_type == 0);
-            size_t nfields = layout->nfields;
-            assert(nfields > 0);
+            assert(layout->nfields > 0);
             uint32_t npointers = layout->npointers;
             obj8_begin = (uint8_t*)jl_dt_layout_ptrs(layout);
             obj8_end = obj8_begin + npointers;
