@@ -67,16 +67,18 @@ function test_repr(x::String, remove_linenums::Bool = false)
     x1 = Meta.parse(x)
     x2 = eval(Meta.parse(repr(x1)))
     x3 = eval(Meta.parse(repr(x2)))
-    if ! (Base.remove_linenums!(x1) == Base.remove_linenums!(x2) == Base.remove_linenums!(x3))
-        error(string(
-            "\nrepr test (Rule 2) failed:",
-            "\noriginal: ", x,
-            "\n\npreparsed: ", x1, "\n", sprint(dump, x1),
-            "\n\nparsed: ", x2, "\n", sprint(dump, x2),
-            "\n\nreparsed: ", x3, "\n", sprint(dump, x3),
-            "\n\n"))
+    if !remove_linenums
+        if ! (x1 == x2 == x3)
+            error(string(
+                "\nrepr test (Rule 2) failed:",
+                "\noriginal: ", x,
+                "\n\npreparsed: ", x1, "\n", sprint(dump, x1),
+                "\n\nparsed: ", x2, "\n", sprint(dump, x2),
+                "\n\nreparsed: ", x3, "\n", sprint(dump, x3),
+                "\n\n"))
+        end
+        @test x1 == x2 == x3
     end
-    @test x1 == x2 == x3
 
     x4 = Base.remove_linenums!(Meta.parse(x))
     x5 = eval(Base.remove_linenums!(Meta.parse(repr(x4))))
@@ -1948,8 +1950,8 @@ end
 @test sprint(show, Symbol("false")) == "Symbol(\"false\")"
 
 # begin/end indices
-@test_repr "a[begin, end, (begin; end)]"
+@weak_test_repr "a[begin, end, (begin; end)]"
 @test repr(Base.remove_linenums!(:(a[begin, end, (begin; end)]))) == ":(a[begin, end, (begin;\n          end)])"
-@test_repr "a[begin, end, let x=1; (x+1;); end]"
+@weak_test_repr "a[begin, end, let x=1; (x+1;); end]"
 @test repr(Base.remove_linenums!(:(a[begin, end, let x=1; (x+1;); end]))) ==
         ":(a[begin, end, let x = 1\n          begin\n              x + 1\n          end\n      end])"
