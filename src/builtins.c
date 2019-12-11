@@ -629,7 +629,9 @@ static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl
     }
     if (arg_heap) {
         // optimization: keep only the first root, free the others
-        ((void**)roots)[-2] = (void*)(((size_t)1) << 2);
+#ifndef __clang_analyzer__
+        ((void**)roots)[-2] = (void*)JL_GC_ENCODE_PUSHARGS(1);
+#endif
     }
     jl_value_t *result = jl_apply(newargs, n);
     JL_GC_POP();

@@ -341,7 +341,7 @@ static void finalize_object(arraylist_t *list, jl_value_t *o,
 static void jl_gc_push_arraylist(jl_ptls_t ptls, arraylist_t *list)
 {
     void **items = list->items;
-    items[0] = (void*)(((uintptr_t)list->len - 2) << 2);
+    items[0] = (void*)JL_GC_ENCODE_PUSHARGS(list->len - 2);
     items[1] = ptls->pgcstack;
     ptls->pgcstack = (jl_gcframe_t*)items;
 }

@@ -23,9 +23,19 @@ typedef struct {
     size_t ip; // Leak the currently-evaluating statement index to backtrace capture
     int preevaluation; // use special rules for pre-evaluating expressions (deprecated--only for ccall handling)
     int continue_at; // statement index to jump to after leaving exception handler (0 if none)
-    void *associated_frame_pointer;
-    jl_gcframe_t frame;
 } interpreter_state;
+
+
+// general alloca rules are incompatible on C and C++, so define a macro that deals with the difference
+#ifdef __cplusplus
+#define JL_CPPALLOCA(var,n)                                                         \
+  var = (decltype(var))alloca((n))
+#else
+#define JL_CPPALLOCA(var,n)                                                         \
+  JL_GCC_IGNORE_START("-Wc++-compat")                                               \
+  var = alloca((n));                                                                \
+  JL_GCC_IGNORE_STOP
+#endif
 
 #ifdef __clang_analyzer__
 
@@ -33,25 +43,27 @@ extern void JL_GC_ENABLEFRAME(interpreter_state*) JL_NOTSAFEPOINT;
 
 // This is necessary, because otherwise the analyzer considers this undefined
 // behavior and terminates the exploration
-#define JL_GC_PUSHFRAME(frame, n)     \
-  frame = (interpreter_state*)alloca(sizeof(*frame) + sizeof(void*) * (n)); \
+#define JL_GC_PUSHFRAME(frame,n)     \
+  JL_CPPALLOCA(frame, sizeof(*frame)+((n) * sizeof(jl_value_t*)));                  \
   memset(&frame[1], 0, sizeof(void*) * n); \
   _JL_GC_PUSHARGS((jl_value_t**)&frame[1], n);
 
 #else
 
+#define JL_GC_ENCODE_PUSHFRAME(n)  ((((size_t)(n))<<2)|2)
+
 #define JL_GC_PUSHFRAME(frame,n)                                                    \
-  frame = (interpreter_state*)alloca(sizeof(*frame)+((n)*sizeof(jl_value_t*)));     \
-  ((void**)&frame[1])[-3] = NULL;                                                   \
-  ((void**)&frame[1])[-2] = (void*)((((size_t)(n))<<2)|2);                          \
-  ((void**)&frame[1])[-1] = jl_pgcstack;                                            \
-  memset((void*)&frame[1], 0, (n)*sizeof(jl_value_t*));                             \
-  jl_pgcstack = (jl_gcframe_t*)&(((void**)&frame[1])[-2])
+  JL_CPPALLOCA(frame, sizeof(*frame)+(((n)+3)*sizeof(jl_value_t*)));                \
+  ((void**)&frame[1])[0] = NULL;                                                    \
+  ((void**)&frame[1])[1] = (void*)JL_GC_ENCODE_PUSHFRAME(n);                        \
+  ((void**)&frame[1])[2] = jl_pgcstack;                                             \
+  memset(&((void**)&frame[1])[3], 0, (n)*sizeof(jl_value_t*));                      \
+  jl_pgcstack = (jl_gcframe_t*)&(((void**)&frame[1])[1])
 
 // we define this separately so that we can populate the frame before we add it to the backtrace
 // it's recommended to mark the containing function with NOINLINE, though not essential
 #define JL_GC_ENABLEFRAME(frame) \
-  ((void**)&frame[1])[-3] = __builtin_frame_address(0);
+  ((void**)&frame[1])[0] = __builtin_frame_address(0);
 
 #endif
 
@@ -851,7 +863,7 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     assert(jl_typeis(stmts, jl_array_any_type));
     unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src) + 2;
     JL_GC_PUSHFRAME(s, nroots);
-    jl_value_t **locals = (jl_value_t**)&s[1];
+    jl_value_t **locals = (jl_value_t**)&s[1] + 3;
     locals[0] = (jl_value_t*)src;
     locals[1] = (jl_value_t*)stmts;
     s->locals = locals + 2;
@@ -891,7 +903,7 @@ jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t 
     jl_array_t *stmts = src->code;
     assert(jl_typeis(stmts, jl_array_any_type));
     s->src = src;
-    s->locals = (jl_value_t**)&s[1];
+    s->locals = (jl_value_t**)&s[1] + 3;
     s->module = m;
     s->sparam_vals = jl_emptysvec;
     s->continue_at = 0;
@@ -927,7 +939,7 @@ jl_value_t *NOINLINE jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e
 JL_DLLEXPORT size_t jl_capture_interp_frame(jl_bt_element_t *bt_entry,
         jl_gcframe_t *frame, size_t space_remaining)
 {
-    interpreter_state *s = container_of(frame, interpreter_state, frame);
+    interpreter_state *s = (interpreter_state*)((char*)frame - sizeof(jl_value_t*) - sizeof(interpreter_state));
     int need_module = !s->mi;
     int required_space = need_module ? 4 : 3;
     if (space_remaining < required_space)

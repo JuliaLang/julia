@@ -57,7 +57,7 @@ static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintpt
 // entries.  If `sp != NULL`, the stack pointer corresponding `bt_data[i]` is
 // stored in `sp[i]`.
 //
-// `pgcstack` should be given if you want to record extended backtrace
+// `*ppgcstack` should be given if you want to record extended backtrace
 // entries in `bt_data` for each julia interpreter frame.
 //
 // Flag `from_signal_handler==1` should be set if the cursor was obtained by
