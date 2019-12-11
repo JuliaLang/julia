@@ -1389,7 +1389,7 @@ end
 # Module name cannot be a reserved word.
 @test_throws ParseError Meta.parse("module module end")
 
-@test Meta.lower(@__MODULE__, :(global true)) == Expr(:error, "invalid identifier name \"true\"")
+@test Meta.lower(@__MODULE__, :(global true)) == Expr(:error, "invalid syntax in \"global\" declaration")
 @test Meta.lower(@__MODULE__, :(let ccall end)) == Expr(:error, "invalid identifier name \"ccall\"")
 @test Meta.lower(@__MODULE__, :(cglobal = 0)) == Expr(:error, "invalid assignment location \"cglobal\"")
 
@@ -1920,7 +1920,9 @@ end
 @test Meta.parse(":a..:b") == Expr(:call, :(..), QuoteNode(:a), QuoteNode(:b))
 
 # Non-standard identifiers (PR #32408)
-@test Meta.parse("var\"#\"") == Symbol("#")
+@test Meta.parse("var\"#\"") === Symbol("#")
+@test Meta.parse("var\"true\"") === Symbol("true")
+@test Meta.parse("var\"false\"") === Symbol("false")
 @test_throws ParseError Meta.parse("var\"#\"x") # Reject string macro-like suffix
 @test_throws ParseError Meta.parse("var \"#\"")
 @test_throws ParseError Meta.parse("var\"for\" i = 1:10; end")
