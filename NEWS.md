@@ -65,6 +65,8 @@ Standard library changes
 
 * `cond(A, p)` with `p=1` or `p=Inf` now computes the exact condition number instead of an estimate ([#33547]).
 
+* `UniformScaling` objects may now be exponentiated such that `(a*I)^x = a^x * I`.
+
 #### Markdown
 
 * Tables now have the `align` attribute set when `show`n as HTML ([#33849]).

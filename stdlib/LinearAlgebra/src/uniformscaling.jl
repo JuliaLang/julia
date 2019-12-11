@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base: copy, adjoint, getindex, show, transpose, one, zero, inv,
-             hcat, vcat, hvcat
+             hcat, vcat, hvcat, ^
 
 """
     UniformScaling{T<:Number}
@@ -226,6 +226,14 @@ Broadcast.broadcasted(::typeof(*), x::Number,J::UniformScaling) = UniformScaling
 Broadcast.broadcasted(::typeof(*), J::UniformScaling,x::Number) = UniformScaling(J.λ*x)
 
 Broadcast.broadcasted(::typeof(/), J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
+
+(^)(J::UniformScaling, x::Number) = UniformScaling((J.λ)^x)
+Base.literal_pow(::typeof(^), J::UniformScaling, x::Val) = UniformScaling(Base.literal_pow(^, J.λ, x))
+
+Broadcast.broadcasted(::typeof(^), J::UniformScaling, x::Number) = UniformScaling(J.λ^x)
+function Broadcast.broadcasted(::typeof(Base.literal_pow), ::typeof(^), J::UniformScaling, x::Val)
+    UniformScaling(Base.literal_pow(^, J.λ, x))
+end
 
 ==(J1::UniformScaling,J2::UniformScaling) = (J1.λ == J2.λ)
 
