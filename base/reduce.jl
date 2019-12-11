@@ -862,7 +862,7 @@ function count(pred, a::AbstractArray)
 end
 count(itr) = count(identity, itr)
 
-function count(x::Array{Bool})
+function count(::typeof(identity), x::Array{Bool})
     n = 0
     chunks = length(x) ÷ sizeof(UInt)
     mask = 0x0101010101010101 % UInt
