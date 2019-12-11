@@ -2657,6 +2657,12 @@ end
 
     @test Base.setindex(Int[1, 2], 3.0, 2) ==ₜ [1.0, 3.0]
     @test Base.setindex(Int[1, 2, 3], :two, 2) ==ₜ [1, :two, 3]
+
+    @testset "no mutation" begin
+        arr = [1]
+        @test Base.setindex(arr, 2, 1) ==ₜ [2]
+        @test arr == [1]
+    end
 end
 
 @testset "Issue 33919" begin
