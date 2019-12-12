@@ -1306,7 +1306,7 @@
   (if (reserved-word? (peek-token s))
       (error (string "invalid type name \"" (take-token s) "\"")))
   (let ((sig (parse-subtype-spec s)))
-    (begin0 (list 'struct (if mut? 'true 'false) sig (parse-block s))
+    (begin0 (list 'struct (if mut? '(true) '(false)) sig (parse-block s))
             (expect-end s word))))
 
 ;; consume any number of line endings from a token stream
@@ -1472,8 +1472,8 @@
             (take-token s)
             (cond
              ((eq? nxt 'end)
-              (list* 'try try-block (or catchv 'false)
-                     (or catchb (if finalb 'false (error "try without catch or finally")))
+              (list* 'try try-block (or catchv '(false))
+                     (or catchb (if finalb '(false) (error "try without catch or finally")))
                      (if finalb (list finalb) '())))
              ((and (eq? nxt 'catch)
                    (not catchb))
@@ -1487,8 +1487,7 @@
                           finalb)
                     (let* ((loc (line-number-node s))
                            (var (if nl #f (parse-eq* s)))
-                           (var? (and (not nl) (or (and (symbol? var) (not (eq? var 'false))
-                                                        (not (eq? var 'true)))
+                           (var? (and (not nl) (or (symbol? var)
                                                    (and (length= var 2) (eq? (car var) '$))
                                                    (error (string "invalid syntax \"catch " (deparse var) "\"")))))
                            (catch-block (if (eq? (require-token s) 'finally)
@@ -1502,7 +1501,7 @@
                                                    (linenum? (cadr catch-block)))
                                               '()
                                               (cdr catch-block))))
-                            (if var? var 'false)
+                            (if var? var '(false))
                             finalb)))))
              ((and (eq? nxt 'finally)
                    (not finalb))
@@ -1533,7 +1532,7 @@
           (if (reserved-word? name)
               (error (string "invalid module name \"" name "\"")))
           (expect-end s word)
-          (list 'module (if (eq? word 'module) 'true 'false) name
+          (list 'module (if (eq? word 'module) '(true) '(false)) name
                 `(block ,loc ,@(cdr body)))))
        ((export)
         (let ((es (map macrocall-to-atsym
@@ -2290,22 +2289,23 @@
                       (if (closing-token? t)
                           (error (string "unexpected \"" (take-token s) "\"")))))
            (take-token s)
-           (if (and (eq? t 'var)
-                    (if (or (ts:pbtok s) (ts:last-tok s))
-                        (and (eqv? (peek-token s) #\") (not (ts:space? s)))
-                        ;; Hack: avoid peek-token if possible to preserve
-                        ;; (io.pos (ts:port s)) for non-greedy Meta.parse
-                        (eqv? (peek-char (ts:port s)) #\")))
-             (begin
-               ;; var"funky identifier" syntax
-               (peek-token s)
-               (take-token s) ;; leading "
-               (let ((str (parse-raw-literal s #\"))
-                     (nxt (peek-token s)))
-                 (if (and (symbol? nxt) (not (operator? nxt)) (not (ts:space? s)))
-                     (error (string "suffix not allowed after `var\"" str "\"`")))
-                 (symbol str)))
-             t))
+           (cond ((and (eq? t 'var)
+                       (if (or (ts:pbtok s) (ts:last-tok s))
+                           (and (eqv? (peek-token s) #\") (not (ts:space? s)))
+                           ;; Hack: avoid peek-token if possible to preserve
+                           ;; (io.pos (ts:port s)) for non-greedy Meta.parse
+                           (eqv? (peek-char (ts:port s)) #\")))
+                  ;; var"funky identifier" syntax
+                  (peek-token s)
+                  (take-token s) ;; leading "
+                  (let ((str (parse-raw-literal s #\"))
+                        (nxt (peek-token s)))
+                    (if (and (symbol? nxt) (not (operator? nxt)) (not (ts:space? s)))
+                        (error (string "suffix not allowed after `var\"" str "\"`")))
+                    (symbol str)))
+                 ((eq? t 'true)  '(true))
+                 ((eq? t 'false) '(false))
+                 (else t)))
 
           ;; parens or tuple
           ((eqv? t #\( )
