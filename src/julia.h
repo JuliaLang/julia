@@ -571,6 +571,7 @@ extern JL_DLLEXPORT jl_datatype_t *jl_datatype_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_uniontype_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_unionall_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_tvar_type JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_datatype_t *jl_jsfunction_type JL_GLOBALLY_ROOTED;
 
 extern JL_DLLEXPORT jl_datatype_t *jl_any_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_unionall_t *jl_type_type JL_GLOBALLY_ROOTED;
@@ -1064,10 +1065,25 @@ static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEP
 
 JL_DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b);
 
+STATIC_INLINE int jl_is_jsfunction_type(jl_value_t *v) JL_NOTSAFEPOINT
+{
+#if 1
+    return jl_jsfunction_type != 0 && v == (jl_value_t*)jl_jsfunction_type;
+#else
+    return 0;
+#endif
+}
+
+STATIC_INLINE int jl_is_jsfunction(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    return jl_is_jsfunction_type(jl_typeof(v));
+}
+
 STATIC_INLINE int jl_is_kind(jl_value_t *v) JL_NOTSAFEPOINT
 {
     return (v==(jl_value_t*)jl_uniontype_type || v==(jl_value_t*)jl_datatype_type ||
-            v==(jl_value_t*)jl_unionall_type || v==(jl_value_t*)jl_typeofbottom_type);
+            v==(jl_value_t*)jl_unionall_type || v==(jl_value_t*)jl_typeofbottom_type ||
+            jl_is_jsfunction_type(v));
 }
 
 STATIC_INLINE int jl_is_type(jl_value_t *v) JL_NOTSAFEPOINT

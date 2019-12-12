@@ -26,5 +26,8 @@ mergeInto(LibraryManager.library, {
   },
   jl_init_jscall: function() {
     initialize_runtime()
+  },
+  jl_js_instanceof: function (x, y) {
+    return jlboxed_to_js(x) instanceof jlboxed_to_js(y)
   }
 });

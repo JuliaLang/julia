@@ -144,6 +144,7 @@ global Object = nothing
 global EmptyArray = nothing
 function __init__()
     global Object, EmptyArray
+    ccall(:jl_set_jsfunction_type, Cvoid, (Any,), JSFunction)
     # TODO: Without the eval, this gets codegen'ed into the system image,
     # where we don't yet support this calling convention.
     Core.eval(JS, quote

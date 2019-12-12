@@ -591,6 +591,8 @@ extern int8_t jl_gc_safe_enter(void);
 #undef jl_gc_safe_leave
 extern void jl_gc_safe_leave(int8_t);
 extern void jl_get_fenv_consts(int *);
+extern jl_array_t * jl_find_free_typevars(jl_value_t *);
+extern void jl_set_jsfunction_type(jl_value_t *);
 extern jl_value_t * jl_eqtable_pop(jl_array_t *, jl_value_t *, jl_value_t *, int *);
 extern size_t jl_eqtable_nextind(jl_array_t *, size_t);
 extern jl_value_t * jl_get_keyword_sorter(jl_value_t *);
@@ -5546,6 +5548,16 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_get_fenv_consts") == 0) {
 	jl_get_fenv_consts(
 			(int *) jl_unbox_voidpointer(eval_value(args[5], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "jl_find_free_typevars") == 0) {
+	jl_array_t * result = jl_find_free_typevars(
+			(jl_value_t *) eval_value(args[5], s)
+		);
+	return result;
+} else if (strcmp(target, "jl_set_jsfunction_type") == 0) {
+	jl_set_jsfunction_type(
+			(jl_value_t *) eval_value(args[5], s)
 		);
 	return jl_nothing;
 } else if (strcmp(target, "jl_eqtable_pop") == 0) {
@@ -14207,6 +14219,10 @@ else if (strcmp(target, "jl_gc_safe_leave") == 0) {
 return (void*)&jl_gc_safe_leave; } 
 else if (strcmp(target, "jl_get_fenv_consts") == 0) {
 return (void*)&jl_get_fenv_consts; } 
+else if (strcmp(target, "jl_find_free_typevars") == 0) {
+return (void*)&jl_find_free_typevars; } 
+else if (strcmp(target, "jl_set_jsfunction_type") == 0) {
+return (void*)&jl_set_jsfunction_type; } 
 else if (strcmp(target, "jl_eqtable_pop") == 0) {
 return (void*)&jl_eqtable_pop; } 
 else if (strcmp(target, "jl_eqtable_nextind") == 0) {

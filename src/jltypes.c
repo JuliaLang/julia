@@ -44,6 +44,7 @@ jl_datatype_t *jl_unionall_type;
 jl_datatype_t *jl_datatype_type;
 jl_datatype_t *jl_function_type;
 jl_datatype_t *jl_builtin_type;
+jl_datatype_t *jl_jsfunction_type;
 
 jl_datatype_t *jl_typeofbottom_type;
 jl_value_t *jl_bottom_type;
@@ -1677,6 +1678,11 @@ static jl_tvar_t *tvar(const char *name)
 {
     return jl_new_typevar(jl_symbol(name), (jl_value_t*)jl_bottom_type,
                           (jl_value_t*)jl_any_type);
+}
+
+JL_DLLEXPORT void jl_set_jsfunction_type(jl_value_t *jsfunction)
+{
+    jl_jsfunction_type = jsfunction;
 }
 
 void jl_init_types(void) JL_GC_DISABLED
