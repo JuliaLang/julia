@@ -1062,14 +1062,16 @@ show_unquoted(io::IO, val::SSAValue, ::Int, ::Int)      = print(io, "%", val.id)
 show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = show_sym(io, sym, allow_macroname=false)
 show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto %", ex.label)
-function show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)
+show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = show_globalref(io, ex)
+
+function show_globalref(io::IO, ex::GlobalRef; allow_macroname=false)
     print(io, ex.mod)
     print(io, '.')
     quoted = !isidentifier(ex.name) && !startswith(string(ex.name), "@")
     parens = quoted && (!isoperator(ex.name) || (ex.name in quoted_syms))
     quoted && print(io, ':')
     parens && print(io, '(')
-    show_sym(io, ex.name, allow_macroname=true)
+    show_sym(io, ex.name, allow_macroname=allow_macroname)
     parens && print(io, ')')
     nothing
 end
@@ -1175,8 +1177,8 @@ end
 # Wrap symbols for macro names to allow them to be printed literally
 function allow_macroname(ex)
     if (ex isa Symbol && first(string(ex)) == '@') ||
+       ex isa GlobalRef ||
        (is_expr(ex, :(.)) && length(ex.args) == 2 &&
-        (ex.args[1] isa Symbol || ex.args[1] isa Module) &&
         (is_expr(ex.args[2], :quote) || ex.args[2] isa QuoteNode))
        return Expr(:macroname, ex)
     else
@@ -1483,15 +1485,18 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         arg1 = args[1]
         if arg1 isa Symbol
             show_sym(io, arg1, allow_macroname=true)
+        elseif arg1 isa GlobalRef
+            show_globalref(io, arg1, allow_macroname=true)
         elseif is_expr(arg1, :(.)) && length(arg1.args) == 2
-            if arg1.args[1] isa Module
-                print(io, '(')
-                print(io, arg1.args[1])
-                print(io, ").")
+            m = arg1.args[1]
+            if m isa Symbol || m isa GlobalRef || is_expr(m, :(.), 2)
+                show_unquoted(io, m)
             else
-                print(io, arg1.args[1])
-                print(io, '.')
+                print(io, "(")
+                show_unquoted(io, m)
+                print(io, ")")
             end
+            print(io, '.')
             if is_expr(arg1.args[2], :quote)
                 mname = arg1.args[2].args[1]
             else
