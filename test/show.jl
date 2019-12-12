@@ -1063,6 +1063,13 @@ z856739 = [:a, :b]
                    LineNumberNode(0, :none), :a, :b)) ==
     ":(#= none:0 =# (Base).@m a b)"
 
+# issue #34080
+@test endswith(repr(:(a.b.@c x y)), "a.b.@c x y)")
+@test endswith(repr(:((1+2).@x a)), "(1 + 2).@x a)")
+@test repr(Expr(:(.),
+                Expr(:(.), :Base, QuoteNode(Symbol("Enums"))),
+                QuoteNode(Symbol("@enum")))) == ":(Base.Enums.var\"@enum\")"
+
 # Printing of special macro syntaxes
 # `a b c`
 @test sprint(show, Expr(:macrocall,
