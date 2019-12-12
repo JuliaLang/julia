@@ -40,6 +40,10 @@
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
 #endif
 
+#if JL_LLVM_VERSION >= 100000
+#include <llvm/Support/CodeGen.h>
+#endif
+
 namespace llvm {
     extern Pass *createLowerSimdLoopPass();
 }
@@ -72,6 +76,10 @@ using namespace llvm;
 #include "julia_internal.h"
 #include "jitlayers.h"
 #include "julia_assert.h"
+
+#if JL_LLVM_VERSION < 100000
+static const TargetMachine::CodeGenFileType CGFT_ObjectFile = TargetMachine::CGFT_ObjectFile;
+#endif
 
 RTDyldMemoryManager* createRTDyldMemoryManager(void);
 
@@ -291,7 +299,6 @@ JuliaOJIT::DebugObjectRegistrar::DebugObjectRegistrar(JuliaOJIT &JIT)
 
 JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
                                          const object::ObjectFile &obj,
-                                         const object::ObjectFile &debugObj,
                                          const RuntimeDyld::LoadedObjectInfo &L,
                                          RTDyldMemoryManager *memmgr);
 
@@ -305,28 +312,8 @@ void JuliaOJIT::DebugObjectRegistrar::registerObject(RTDyldObjHandleT H, const O
     const ObjT& Object = Obj;
 #endif
 
-    object::OwningBinary<object::ObjectFile> SavedObject = LO->getObjectForDebug(*Object);
-
-    // If the debug object is unavailable, save (a copy of) the original object
-    // for our backtraces
-    if (!SavedObject.getBinary()) {
-        // This is unfortunate, but there doesn't seem to be a way to take
-        // ownership of the original buffer
-        auto NewBuffer = MemoryBuffer::getMemBufferCopy(Object->getData(),
-                                                        Object->getFileName());
-        auto NewObj = object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef());
-        assert(NewObj);
-        SavedObject = object::OwningBinary<object::ObjectFile>(std::move(*NewObj),
-                                                       std::move(NewBuffer));
-    }
-    else {
-        JIT.NotifyFinalizer(H, *(SavedObject.getBinary()), *LO);
-    }
-
-    SavedObjects.push_back(std::move(SavedObject));
-
+    JIT.NotifyFinalizer(H, *Object, *LO);
     ORCNotifyObjectEmitted(JuliaListener.get(), *Object,
-                           *SavedObjects.back().getBinary(),
                            *LO, JIT.MemMgr.get());
 
     // record all of the exported symbols defined in this object
@@ -1050,11 +1037,11 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
         PM.add(createBitcodeWriterPass(bc_OS));
 #if JL_LLVM_VERSION >= 70000
     if (obj_fname)
-        if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, TargetMachine::CGFT_ObjectFile, false))
+        if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CGFT_ObjectFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
 #else
     if (obj_fname)
-        if (TM->addPassesToEmitFile(PM, obj_OS, TargetMachine::CGFT_ObjectFile, false))
+        if (TM->addPassesToEmitFile(PM, obj_OS, CGFT_ObjectFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
 #endif
 
@@ -1115,7 +1102,7 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
             ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));
         addComdat(new GlobalVariable(*sysimage, data->getType(), false,
                                      GlobalVariable::ExternalLinkage,
-                                     data, "jl_system_image_data"))->setAlignment(64);
+                                     data, "jl_system_image_data"))->setAlignment(Align(64));
         Constant *len = ConstantInt::get(T_size, sysimg_len);
         addComdat(new GlobalVariable(*sysimage, len->getType(), true,
                                      GlobalVariable::ExternalLinkage,

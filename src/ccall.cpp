@@ -1981,7 +1981,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                     // ARM and AArch64 can use a LLVM type larger than the julia type.
                     // When this happens, cast through memory.
                     auto slot = emit_static_alloca(ctx, resultTy);
-                    slot->setAlignment(boxalign);
+                    slot->setAlignment(Align(boxalign));
                     ctx.builder.CreateAlignedStore(result, slot, boxalign);
                     emit_memcpy(ctx, strct, tbaa, slot, tbaa, rtsz, boxalign, tbaa);
                 }

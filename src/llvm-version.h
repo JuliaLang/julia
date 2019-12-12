@@ -12,3 +12,6 @@
 #if JL_LLVM_VERSION < 60000
     #error Only LLVM versions >= 6.0.0 are supported by Julia
 #endif
+#if JL_LLVM_VERSION < 100000
+#define Align(a) (a)
+#endif
