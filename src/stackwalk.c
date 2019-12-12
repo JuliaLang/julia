@@ -25,7 +25,7 @@ extern "C" {
 #endif
 
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context) JL_NOTSAFEPOINT;
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintptr_t *fp) JL_NOTSAFEPOINT;
+static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp) JL_NOTSAFEPOINT;
 
 static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintptr_t sp) JL_NOTSAFEPOINT
 {
@@ -73,7 +73,6 @@ int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
     volatile int need_more_space = 0;
     uintptr_t return_ip = 0;
     uintptr_t thesp = 0;
-    uintptr_t thefp = 0;
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
     assert(!jl_in_stackwalk);
     jl_in_stackwalk = 1;
@@ -97,7 +96,7 @@ int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
                 need_more_space = 1;
                 break;
             }
-            have_more_frames = jl_unw_step(cursor, &return_ip, &thesp, &thefp);
+            have_more_frames = jl_unw_step(cursor, &return_ip, &thesp);
             if (skip > 0) {
                 skip--;
                 continue;
@@ -144,7 +143,7 @@ int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
             jl_bt_element_t *bt_entry = bt_data + n;
             jl_gcframe_t *pgcstack;
             if ((pgcstack = is_enter_interpreter_frame(ppgcstack, thesp))) {
-                size_t add = jl_capture_interp_frame(bt_entry, pgcstack, maxsize - n);
+                size_t add = jl_capture_interp_frame(bt_entry, (void*)((char*)pgcstack - sizeof(void*)), maxsize - n);
                 n += add;
                 bt_entry += add;
                 while ((pgcstack = is_enter_interpreter_frame(ppgcstack, thesp))) {
@@ -158,9 +157,9 @@ int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
             bt_entry->uintptr = call_ip;
             n++;
         }
-        // TODO: if we have some pgcstack entries remaining (because the
+        // NOTE: if we have some pgcstack entries remaining (because the
         // unwinder failed and returned !have_more_frames early), we could
-        // still append those frames here
+        // consider still appending those frames here
 #if !defined(_OS_WINDOWS_)
     }
     else {
@@ -468,13 +467,12 @@ static int readable_pointer(LPCVOID pointer)
     return 1;
 }
 
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintptr_t *fp)
+static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
 {
     // Might be called from unmanaged thread.
 #ifndef _CPU_X86_64_
     *ip = (uintptr_t)cursor->stackframe.AddrPC.Offset;
     *sp = (uintptr_t)cursor->stackframe.AddrStack.Offset;
-    *fp = (uintptr_t)cursor->stackframe.AddrFrame.Offset;
     if (*ip == 0) {
         if (!readable_pointer((LPCVOID)*sp))
             return 0;
@@ -489,7 +487,6 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintpt
 #else
     *ip = (uintptr_t)cursor->Rip;
     *sp = (uintptr_t)cursor->Rsp;
-    *fp = 0;
     if (*ip == 0) {
         if (!readable_pointer((LPCVOID)*sp))
             return 0;
@@ -538,7 +535,7 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
     return unw_init_local(cursor, context) == 0;
 }
 
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintptr_t *fp)
+static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
 {
     unw_word_t reg;
     if (unw_get_reg(cursor, UNW_REG_IP, &reg) < 0)
@@ -547,7 +544,6 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintpt
     if (unw_get_reg(cursor, UNW_REG_SP, &reg) < 0)
         return 0;
     *sp = reg;
-    *fp = 0;
     return unw_step(cursor) > 0;
 }
 
@@ -571,7 +567,7 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
     return 0;
 }
 
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintptr_t *fp)
+static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
 {
     return 0;
 }

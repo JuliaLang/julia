@@ -937,9 +937,9 @@ jl_value_t *NOINLINE jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e
 }
 
 JL_DLLEXPORT size_t jl_capture_interp_frame(jl_bt_element_t *bt_entry,
-        jl_gcframe_t *frame, size_t space_remaining)
+        void *stateend, size_t space_remaining)
 {
-    interpreter_state *s = (interpreter_state*)((char*)frame - sizeof(jl_value_t*) - sizeof(interpreter_state));
+    interpreter_state *s = &((interpreter_state*)stateend)[-1];
     int need_module = !s->mi;
     int required_space = need_module ? 4 : 3;
     if (space_remaining < required_space)

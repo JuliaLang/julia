@@ -768,7 +768,7 @@ STATIC_INLINE char *jl_copy_str(char **to, const char *from)
 }
 
 JL_DLLEXPORT size_t jl_capture_interp_frame(jl_bt_element_t *bt_data,
-        jl_gcframe_t *frame, size_t space_remaining) JL_NOTSAFEPOINT;
+        void *frameend, size_t space_remaining) JL_NOTSAFEPOINT;
 
 // Exception stack: a stack of pairs of (exception,raw_backtrace).
 // The stack may be traversed and accessed with the functions below.
