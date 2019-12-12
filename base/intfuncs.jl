@@ -68,7 +68,7 @@ function lcm(a::T, b::T) where T<:Integer
     if a == 0
         return a
     else
-        return checked_abs(a * div(b, gcd(b,a)))
+        return checked_abs(checked_mul(a, div(b, gcd(b,a))))
     end
 end
 
