@@ -18,6 +18,9 @@ Language changes
 
 * Calling `show` or `repr` on a 0-dimensional `AbstractArray` now shows valid code for creating an equivalent 0-dimensional array, instead of only showing the contained value. ([#33206])
 
+* The syntax `(;)`, which used to parse as an empty block expression, is deprecated.
+  In the future it will indicate an empty named tuple ([#30115]).
+
 Multi-threading changes
 -----------------------
 

@@ -1910,7 +1910,7 @@
 ;; convert an arglist to a tuple or block expr
 ;; leading-semi? means we saw (; ...)
 ;; comma? means there was a comma after the first expression
-(define (arglist-to-tuple leading-semi? comma? args . first)
+(define (arglist-to-tuple s leading-semi? comma? args . first)
   (if (and (pair? first) (null? args) (not leading-semi?) (not comma?))
       `(block ,@first)  ;; this case is (x;)
       (or (and (not comma?) (length= args 1) (pair? (car args)) (eq? (caar args) 'parameters)
@@ -1918,9 +1918,14 @@
                  (and blk (or (and (not leading-semi?)
                                    `(block ,@first ,@blk))
                               (and (null? first) (null? blk)
-                                   `(block))))))  ;; all semicolons inside ()
+                                   ;; all semicolons inside ()
+                                   (if (length= (car args) 1)
+                                       (begin (parser-depwarn s "(;)" "begin end")
+                                              ;; should eventually be (tuple (parameters))
+                                              `(block))
+                                       `(block)))))))
           (and (null? first) (null? args) (not comma?)
-               `(block))  ;; this case is (;)
+               (error "unreachable"))
           (rm-linenums
            (if (and (pair? args) (pair? (car args)) (eq? (caar args) 'parameters))
                `(tuple ,(car args) ,@first ,@(map kw-to-= (cdr args)))
@@ -1974,7 +1979,7 @@
        (take-token s)  ;; take #\)
        '(|::| . #f))
       ((eqv? nxt #\;)
-       (let ((ex (arglist-to-tuple #t #f (parse-arglist s #\) ))))
+       (let ((ex (arglist-to-tuple s #t #f (parse-arglist s #\) ))))
          (cons ex (eq? (car ex) 'tuple))))
       (else
        ;; here we parse the first subexpression separately, so
@@ -1991,10 +1996,11 @@
                ((eqv? t #\,)
                 ;; tuple (x,) (x,y) etc.
                 (take-token s)
-                (cons (arglist-to-tuple #f #t (parse-arglist s #\) ) ex)
+                (cons (arglist-to-tuple s #f #t (parse-arglist s #\) ) ex)
                       #t))
                ((eqv? t #\;)
                 (cons (arglist-to-tuple
+                       s
                        #f
                        ;; consider `(x...; ` the start of an arglist, since it's not useful as a block
                        (vararg? ex)

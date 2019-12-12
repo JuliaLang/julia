@@ -1768,7 +1768,9 @@
              (current-vals  '())
              (expr          #f))
     (if (null? L)
-        (merge expr (to-nt current-names current-vals))
+        (or (merge expr (to-nt current-names current-vals))
+            ;; if that result is #f the named tuple is empty
+            '(call (core NamedTuple)))
         (let ((el (car L)))
           (cond ((or (assignment? el) (kwarg? el))
                  (if (not (symbol? (cadr el)))
