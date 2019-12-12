@@ -45,6 +45,7 @@ jl_sym_t *splatnew_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
 jl_sym_t *abstracttype_sym; jl_sym_t *primtype_sym;
 jl_sym_t *structtype_sym;   jl_sym_t *foreigncall_sym;
+jl_sym_t *splatforeigncall_sym;
 jl_sym_t *global_sym; jl_sym_t *list_sym;
 jl_sym_t *dot_sym;    jl_sym_t *newvar_sym;
 jl_sym_t *boundscheck_sym; jl_sym_t *inbounds_sym;
@@ -302,6 +303,7 @@ void jl_init_frontend(void)
     call_sym = jl_symbol("call");
     invoke_sym = jl_symbol("invoke");
     foreigncall_sym = jl_symbol("foreigncall");
+    splatforeigncall_sym = jl_symbol("splatforeigncall");
     cfunction_sym = jl_symbol("cfunction");
     quote_sym = jl_symbol("quote");
     inert_sym = jl_symbol("inert");

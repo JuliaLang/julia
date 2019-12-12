@@ -13,6 +13,11 @@ primitive type JSFunction <: JSBoxed 32 end
 struct JSUndefined; end
 struct JSNull; end
 
+struct JSBoundFunction
+    this::JSObject
+    f::JSFunction
+end
+
 const JSNumber = Float64
 
 const undefined = JSUndefined.instance
@@ -70,8 +75,7 @@ function parse_call_expr(expr)
     atypes = [:JSAny for _ in converted_args]
     quote
         $b
-        $(Expr(:foreigncall, target, :JSAny, Core.svec(atypes...), length(atypes), QuoteNode(:jscall),
-            length(atypes), converted_args...))
+        $(Expr(:foreigncall, target, :JSAny, Core.svec(atypes...), length(atypes), QuoteNode(:jscall), converted_args...))
     end
 end
 
@@ -103,11 +107,21 @@ jsnew(f::JSFunction, args::JSObject) = @js Reflect.construct(f, args)
 jsconvert(x) = convert(JSAny, x)
 
 function Base.getproperty(this::JSObject, sym::Symbol)
-    @js Reflect.get(this, sym)
+    result = @js Reflect.get(this, sym)
+    if isa(result, JSFunction)
+        return JSBoundFunction(this, result)
+    end
+    return result
 end
 
 function Base.setproperty!(this::JSObject, sym::Symbol, val)
     @js Reflect.set(this, sym, val)
+end
+
+@eval function (f::JSBoundFunction)(args...)
+    ff = f.f
+    this = f.this
+    $(Expr(:splatforeigncall, :ff, JSAny, Core.svec(JSAny, Vararg{JSAny}), 1, QuoteNode(:jscall), 2, Expr(:tuple, :this), :args))
 end
 
 # Yes, we're converting a pointer to Float64 here, but at least in
@@ -116,6 +130,8 @@ end
 jsconvert(x::Ptr) = convert(JSNumber, convert(UInt32, x))
 jsconvert(x::AbstractString) = convert(JSString, x)
 jsconvert(x::Symbol) = jsconvert(string(x))
+# This isn't too hard, use Function.prototype.bind()
+jsconvert(x::JSBoundFunction) = error("Not implemented yet.")
 
 function convert(::Type{JSString}, x::String)
     @GC.preserve x begin

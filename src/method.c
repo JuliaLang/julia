@@ -90,7 +90,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 JL_TYPECHK(cfunction method definition, symbol, *(jl_value_t**)jl_exprarg(e, 4));
                 return expr;
             }
-            if (e->head == foreigncall_sym) {
+            if (e->head == foreigncall_sym || e->head == splatforeigncall_sym) {
                 JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, nreq, cc, narg)
                 jl_value_t *rt = jl_exprarg(e, 1);
                 jl_value_t *at = jl_exprarg(e, 2);
@@ -99,6 +99,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
                     }
                     JL_CATCH {
+                        jl_(jl_current_exception());
                         if (jl_typeis(jl_current_exception(), jl_errorexception_type))
                             jl_error("could not evaluate ccall return type (it might depend on a local variable)");
                         else

@@ -431,6 +431,7 @@ SECT_INTERP __attribute__((weak)) jl_value_t *eval_foreigncall(jl_sym_t *fname, 
 
 #ifdef _OS_EMSCRIPTEN_
 extern jl_value_t *jl_do_jscall(char *libname, char *fname, jl_value_t **args, size_t nargs);
+extern jl_value_t *jl_do_f_jscall(jl_value_t *f, jl_value_t *this, jl_value_t **args, size_t nargs);
 #endif
 
 SECT_INTERP jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
@@ -590,15 +591,15 @@ SECT_INTERP jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         if (cc_sym == jl_symbol("jscall")) {
 #ifdef _OS_EMSCRIPTEN_
             jl_value_t **ev_args;
-            JL_GC_PUSHARGS(ev_args, nargs-6);
-            for (int i = 6; i < nargs; ++i) {
-                ev_args[i-6] = eval_value(args[i], s);
+            JL_GC_PUSHARGS(ev_args, nargs-5);
+            for (int i = 5; i < nargs; ++i) {
+                ev_args[i-5] = eval_value(args[i], s);
             }
             jl_value_t *result =
                 jl_do_jscall(libname ? jl_symbol_name(libname) : NULL,
                             jl_symbol_name(fname),
                             ev_args,
-                            nargs-6);
+                            nargs-5);
             JL_GC_POP();
             // For now
             if (!result)
@@ -615,6 +616,57 @@ SECT_INTERP jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             jl_error("Encountered unsupported foreigncall in interpreter (this should not happen on supported platforms).");
         }
         return result;
+    } else if (head == splatforeigncall_sym) {
+        jl_sym_t *cc_sym = *(jl_sym_t**)args[4];
+        assert(jl_is_symbol(cc_sym));
+        if (cc_sym == jl_symbol("jscall")) {
+#ifdef _OS_EMSCRIPTEN_
+            jl_value_t *val = eval_value(args[0], s);
+            size_t nsplat_args = jl_unbox_long(args[5]);
+
+            if (jl_is_tuple(val) || jl_is_symbol(val)) {
+                jl_error("splatforeigncall: Not implemented yet!");
+            }
+
+            jl_value_t **ev_args;
+            JL_GC_PUSHARGS(ev_args, nsplat_args);
+
+            size_t ntotalargs = 0;
+
+            for (int i = 0; i < nsplat_args; ++i) {
+                jl_value_t *val = eval_value(args[i+6], s);
+                if (!jl_is_tuple(val))
+                    jl_error("splatforeigncall: Not a tuple");
+                ntotalargs += jl_nfields(val);
+                ev_args[i] = val;
+            }
+
+            jl_value_t **call_args;
+            JL_GC_PUSHARGS(call_args, ntotalargs);
+
+            size_t j = 0;
+            for (int i = 0; i < nsplat_args; ++i) {
+                jl_value_t *tup = ev_args[i];
+                for (size_t k = 0; k < jl_nfields(tup); ++k)
+                    call_args[j++] = jl_fieldref(tup, k);
+            }
+
+            jl_value_t *result =
+                jl_do_f_jscall(val,
+                               call_args[0],
+                               call_args+1,
+                               ntotalargs-1);
+            JL_GC_POP();
+            JL_GC_POP();
+            // For now
+            if (!result)
+                result = jl_nothing;
+            return result;
+#else
+            jl_error("jscall calling convention is only supported on jsvm targets");
+#endif
+        }
+        jl_error("splatforeigncall: unsupported");
     }
     jl_errorf("unsupported or misplaced expression %s", jl_symbol_name(head));
     abort();

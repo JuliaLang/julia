@@ -502,6 +502,42 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
         The additional objects that may need to be gc-rooted for the duration of the call.
         See [Working with LLVM](@ref Working-with-LLVM) for where these are derived from and how they get handled.
 
+* `splatforeigncall`
+
+  Like `foreigncall`, but arguments get splatted
+
+    * `args[1]` : name
+
+      The expression that'll be parsed for the foreign function.
+
+    * `args[2]::Type` : RT
+
+      The (literal) return type, computed statically when the containing method was defined.
+
+    * `args[3]::SimpleVector` (of Types) : AT
+
+      The (literal) vector of argument types, computed statically when the containing method was defined.
+
+    * `args[4]::Int` : nreq
+
+      The number of required arguments for a varargs function definition.
+
+    * `args[5]::QuoteNode{Symbol}` : calling convention
+
+      The calling convention for the call.
+
+    * `args[6]::Int` : nargs
+
+      The number of arguments to be splatted
+
+    * `args[7:7+nargs-1]` : arguments
+
+      Each argument is a container that will be splatted to construct the argument list
+
+    * `args[7+nargs:end]` : gc-roots
+
+      The additional objects that may need to be gc-rooted for the duration of the call.
+      See [Working with LLVM](@ref Working-with-LLVM) for where these are derived from and how they get handled.
 
 ### [Method](@id ast-lowered-method)
 

@@ -4113,6 +4113,10 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
     else if (head == foreigncall_sym) {
         return emit_ccall(ctx, args, jl_array_dim0(ex->args));
     }
+    else if (head == splatforeigncall_sym) {
+        emit_error(ctx, "splatforeigncall: Not currently allowed in code generator.");
+        return jl_cgval_t();
+    }
     else if (head == cfunction_sym) {
         jl_cgval_t fexpr_rt = emit_expr(ctx, args[1]);
         return emit_cfunction(ctx, args[0], fexpr_rt, args[2], (jl_svec_t*)args[3]);

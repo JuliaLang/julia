@@ -3470,7 +3470,7 @@ f(x) = yt(x)
   (or (ssavalue? lhs)
       (valid-ir-argument? e)
       (and (symbol? lhs) (pair? e)
-           (memq (car e) '(new splatnew the_exception isdefined call invoke foreigncall cfunction gc_preserve_begin copyast)))))
+           (memq (car e) '(new splatnew the_exception isdefined call invoke foreigncall splatforeigncall cfunction gc_preserve_begin copyast)))))
 
 (define (valid-ir-return? e)
   ;; returning lambda directly is needed for @generated
@@ -3660,7 +3660,7 @@ f(x) = yt(x)
                   ((and (pair? e1) (eq? (car e1) 'globalref)) (emit e1) #f) ;; keep globals for undefined-var checking
                   (else #f)))
           (case (car e)
-            ((call new splatnew foreigncall cfunction)
+            ((call new splatnew foreigncall splatforeigncall cfunction)
              (let* ((args
                      (cond ((eq? (car e) 'foreigncall)
                             ;; NOTE: 2nd to 5th arguments of ccall must be left in place

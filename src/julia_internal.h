@@ -1094,6 +1094,7 @@ extern jl_sym_t *pop_exception_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *primtype_sym;
 extern jl_sym_t *structtype_sym;   extern jl_sym_t *foreigncall_sym;
+extern jl_sym_t *splatforeigncall_sym;
 extern jl_sym_t *global_sym; extern jl_sym_t *list_sym;
 extern jl_sym_t *dot_sym;    extern jl_sym_t *newvar_sym;
 extern jl_sym_t *boundscheck_sym; extern jl_sym_t *inbounds_sym;

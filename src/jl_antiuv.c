@@ -67,10 +67,12 @@ JL_DLLEXPORT void jl_uv_flush(JL_STREAM *stream) {
 
 JL_DLLEXPORT void jl_uv_puts(JL_STREAM *stream, const char *str, size_t n)
 {
+    fwrite(str, 1, n, stdout);
+    /*
     assert(stream);
 
-		int fd = -1;
-		// Fallback for output during early initialisation...
+	int fd = -1;
+	// Fallback for output during early initialisation...
     if (stream == (void*)STDOUT_FILENO) {
         fd = STDOUT_FILENO;
     }
@@ -81,11 +83,12 @@ JL_DLLEXPORT void jl_uv_puts(JL_STREAM *stream, const char *str, size_t n)
     if ((ssize_t)fd != -1) {
         // Write to file descriptor...
         write(fd, str, n);
-				return;
+		return;
     } else {
         write(STDOUT_FILENO, str, n);
         return;
     }
+    */
 }
 
 JL_DLLEXPORT void jl_uv_putb(JL_STREAM *stream, uint8_t b)
