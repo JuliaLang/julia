@@ -1003,14 +1003,16 @@ show_unquoted(io::IO, val::SSAValue, ::Int, ::Int)      = print(io, "%", val.id)
 show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = show_sym(io, sym)
 show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto %", ex.label)
-function show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)
+show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = show_globalref(io, ex)
+
+function show_globalref(io::IO, ex::GlobalRef; allow_macroname=false)
     print(io, ex.mod)
     print(io, '.')
     quoted = !isidentifier(ex.name) && !startswith(string(ex.name), "@")
     parens = quoted && (!isoperator(ex.name) || (ex.name in quoted_syms))
     quoted && print(io, ':')
     parens && print(io, '(')
-    show_sym(io, ex.name, allow_macroname=true)
+    show_sym(io, ex.name, allow_macroname=allow_macroname)
     parens && print(io, ')')
     nothing
 end
@@ -1111,8 +1113,16 @@ function show_import_path(io::IO, ex)
 end
 
 # Wrap symbols for macro names to allow them to be printed literally
-allow_macroname(ex) = ex isa Symbol && first(string(ex)) == '@' ?
-                      Expr(:macroname, ex) : ex
+function allow_macroname(ex)
+    if (ex isa Symbol && first(string(ex)) == '@') ||
+       ex isa GlobalRef ||
+       (is_expr(ex, :(.)) && length(ex.args) == 2 &&
+        (is_expr(ex.args[2], :quote) || ex.args[2] isa QuoteNode))
+       return Expr(:macroname, ex)
+    else
+        ex
+    end
+end
 
 # TODO: implement interpolated strings
 function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
@@ -1372,6 +1382,28 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         arg1 = args[1]
         if arg1 isa Symbol
             show_sym(io, arg1, allow_macroname=true)
+        elseif arg1 isa GlobalRef
+            show_globalref(io, arg1, allow_macroname=true)
+        elseif is_expr(arg1, :(.)) && length(arg1.args) == 2
+            m = arg1.args[1]
+            if m isa Symbol || m isa GlobalRef || is_expr(m, :(.), 2)
+                show_unquoted(io, m)
+            else
+                print(io, "(")
+                show_unquoted(io, m)
+                print(io, ")")
+            end
+            print(io, '.')
+            if is_expr(arg1.args[2], :quote)
+                mname = arg1.args[2].args[1]
+            else
+                mname = arg1.args[2].value
+            end
+            if mname isa Symbol
+                show_sym(io, mname, allow_macroname=true)
+            else
+                show_unquoted(io, mname)
+            end
         else
             show_unquoted(io, arg1)
         end

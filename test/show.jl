@@ -777,6 +777,35 @@ end"""
     end
 end"""
 
+# Printing of macrocall expressions with qualified macroname argument
+@test sprint(show, Expr(:macrocall,
+                   GlobalRef(Base, Symbol("@m")),
+                   LineNumberNode(0, :none), :a, :b)) ==
+    ":(#= none:0 =# Base.@m a b)"
+@test sprint(show, Expr(:macrocall,
+                   Expr(:(.), :Base, Expr(:quote, Symbol("@m"))),
+                   LineNumberNode(0, :none), :a, :b)) ==
+    ":(#= none:0 =# Base.@m a b)"
+@test sprint(show, Expr(:macrocall,
+                   Expr(:(.), Base, Expr(:quote, Symbol("@m"))),
+                   LineNumberNode(0, :none), :a, :b)) ==
+    ":(#= none:0 =# (Base).@m a b)"
+@test sprint(show, Expr(:macrocall,
+                   Expr(:(.), :Base, QuoteNode(Symbol("@m"))),
+                   LineNumberNode(0, :none), :a, :b)) ==
+    ":(#= none:0 =# Base.@m a b)"
+@test sprint(show, Expr(:macrocall,
+                   Expr(:(.), Base, QuoteNode(Symbol("@m"))),
+                   LineNumberNode(0, :none), :a, :b)) ==
+    ":(#= none:0 =# (Base).@m a b)"
+
+# issue #34080
+@test endswith(repr(:(a.b.@c x y)), "a.b.@c x y)")
+@test endswith(repr(:((1+2).@x a)), "(1 + 2).@x a)")
+@test repr(Expr(:(.),
+                Expr(:(.), :Base, QuoteNode(Symbol("Enums"))),
+                QuoteNode(Symbol("@enum")))) == ":(Base.Enums.var\"@enum\")"
+
 # Issue #15765 printing of continue and break
 @test sprint(show, :(continue)) == ":(continue)"
 @test sprint(show, :(break)) == ":(break)"
