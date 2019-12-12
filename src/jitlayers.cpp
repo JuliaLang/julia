@@ -460,13 +460,13 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
 {
 #ifndef JL_NDEBUG
     // validate the relocations for M
-    for (Module::iterator I = M->begin(), E = M->end(); I != E; ) {
-        Function *F = &*I;
+    for (Module::global_object_iterator I = M->global_object_begin(), E = M->global_object_end(); I != E; ) {
+        GlobalObject *F = &*I;
         ++I;
         if (F->isDeclaration()) {
             if (F->use_empty())
                 F->eraseFromParent();
-            else if (!(isIntrinsicFunction(F) ||
+            else if (!((isa<Function>(F) && isIntrinsicFunction(cast<Function>(F))) ||
                        findUnmangledSymbol(F->getName()) ||
                        SectionMemoryManager::getSymbolAddressInProcess(
                            getMangledName(F->getName())))) {
@@ -495,9 +495,10 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
 #endif
     // Force LLVM to emit the module so that we can register the symbols
     // in our lookup table.
-    auto Err = CompileLayer.emitAndFinalize(key);
+    Error Err = CompileLayer.emitAndFinalize(key);
     // Check for errors to prevent LLVM from crashing the program.
-    assert(!Err);
+    if (Err)
+        report_fatal_error(std::move(Err));
 }
 
 void JuliaOJIT::removeModule(ModuleHandleT H)
@@ -770,12 +771,15 @@ static void jl_merge_recursive(Module *m, Module *collector)
     // since the declarations may get destroyed by the jl_merge_module call.
     // this is also why we copy the Name string, rather than save a StringRef
     SmallVector<std::string, 8> to_finalize;
-    for (Module::iterator I = m->begin(), E = m->end(); I != E; ++I) {
-        Function *F = &*I;
+    for (Module::global_object_iterator I = m->global_object_begin(), E = m->global_object_end(); I != E; ++I) {
+        GlobalObject *F = &*I;
         if (!F->isDeclaration()) {
             module_for_fname.erase(F->getName());
         }
-        else if (!isIntrinsicFunction(F)) {
+        else if (isa<Function>(F) && !isIntrinsicFunction(cast<Function>(F))) {
+            to_finalize.push_back(F->getName().str());
+        }
+        else if (isa<GlobalValue>(F) && module_for_fname.count(F->getName())) {
             to_finalize.push_back(F->getName().str());
         }
     }
@@ -838,11 +842,13 @@ void jl_finalize_module(Module *m, bool shadow)
 {
     // record the function names that are part of this Module
     // so it can be added to the JIT when needed
-    for (Module::iterator I = m->begin(), E = m->end(); I != E; ++I) {
-        Function *F = &*I;
+    for (Module::global_object_iterator I = m->global_object_begin(), E = m->global_object_end(); I != E; ++I) {
+        GlobalObject *F = &*I;
         if (!F->isDeclaration()) {
-            bool known = incomplete_fname.erase(F->getName());
-            (void)known; // TODO: assert(known); // llvmcall gets this wrong
+            if (isa<Function>(F)) {
+                bool known = incomplete_fname.erase(F->getName());
+                (void)known; // TODO: assert(known); // llvmcall gets this wrong
+            }
             module_for_fname[F->getName()] = m;
         }
     }
