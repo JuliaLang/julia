@@ -34,6 +34,8 @@ using Test
     @test_throws InexactError rationalize(Int, NaN)
     # issue 32569
     @test_throws ArgumentError 1 // typemin(Int)
+    @test -2 // typemin(Int) == -1 // (typemin(Int) >> 1)
+    @test 2 // typemin(Int) == 1 // (typemin(Int) >> 1)
 
     for a = -5:5, b = -5:5
         if a == b == 0; continue; end

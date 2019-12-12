@@ -12,12 +12,12 @@ struct Rational{T<:Integer} <: Real
 
     function Rational{T}(num::Integer, den::Integer) where T<:Integer
         num == den == zero(T) && __throw_rational_argerror_zero(T)
-        if T<:Signed && signbit(den)
-            den = -den
-            signbit(den) && __throw_rational_argerror_typemin(T)
-            num = -num
-        end
         num2, den2 = divgcd(num, den)
+        if T<:Signed && signbit(den2)
+            den2 = -den2
+            signbit(den2) && __throw_rational_argerror_typemin(T)
+            num2 = -num2
+        end
         return new(num2, den2)
     end
 end
